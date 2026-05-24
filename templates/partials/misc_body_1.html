@@ -17114,6 +17114,30 @@ window._showSimProgress = function(opts, onDone){
      sorteado, y muestra «JUGADORES FUERA» en lugar de un día de
      ENTRENAMIENTO. */
   try { window._mundialQualifiers = _mundialQualifiers; } catch(_){}
+  /* Set de nombres de las 8 mejores terceras (mismo comparador que
+     `_mundialQualifiers` para mantener coherencia visual con el cuadro
+     real de Dieciseisavos). Usado por el render de las tablas de grupo
+     para pintar el 3º en azul cuando clasifica. Petición usuario
+     2026-05-24. */
+  function _mundialBestThirdNameSet(cfg, slices){
+    var thirds = [];
+    for (var g = 0; g < slices.length; g++) {
+      var sl = slices[g];
+      if (sl.length < 3) continue;
+      var rs = _tourComputeStandings(sl, cfg.groupFixtures[g], cfg.results, 'g'+g+'_');
+      if (rs[2]) thirds.push({ team:sl[rs[2].idx], pts:rs[2].pts, dif:rs[2].dif, gf:rs[2].gf });
+    }
+    thirds.sort(function(a,b){
+      return (b.pts-a.pts) || (b.dif-a.dif) || (b.gf-a.gf) ||
+             String((a.team&&a.team.name)||'').localeCompare(String((b.team&&b.team.name)||''));
+    });
+    var set = {};
+    thirds.slice(0, 8).forEach(function(x){
+      var nm = x.team && x.team.name;
+      if (nm) set[nm] = true;
+    });
+    return set;
+  }
   function _mundialBackBtn(tourId){
     return '<div style="margin-bottom:10px;"><button type="button" '
       + 'onclick="window._mundialGo(\''+tourId+'\',\'menu\')" '
@@ -17293,7 +17317,7 @@ window._showSimProgress = function(opts, onDone){
      posición, escudo, nombre + icono humano, PTS destacado y
      PJ/V/E/P/GF/GC. Los clasificados directos (top advancePerGroup)
      llevan zona resaltada en cian. */
-  function _mundialClasTableHtml(rows, slice, advancePerGroup){
+  function _mundialClasTableHtml(rows, slice, advancePerGroup, bestThirdNames){
     var cells = '<thead><tr style="background:linear-gradient(90deg,#001f2a,#003a52,#001f2a);border-bottom:1px solid rgba(77,208,225,.40);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:rgba(255,255,255,.7);">'
       + '<th style="text-align:left;padding:8px 6px 8px 10px;">EQUIPO</th>'
       + '<th style="padding:8px 4px;">PTS</th>'
@@ -17318,9 +17342,20 @@ window._showSimProgress = function(opts, onDone){
         }
       } catch(_){}
       var isAdv = (pos <= advancePerGroup);
-      var rowBg  = isAdv ? 'rgba(77,208,225,.10)' : 'transparent';
-      var rowBd  = isAdv ? '#4dd0e1' : 'transparent';
-      var posCol = isAdv ? '#4dd0e1' : 'rgba(255,255,255,.45)';
+      /* En el Mundial, el 3º clasifica si está entre las 8 mejores
+         terceras globales — `bestThirdNames` lleva ese set. Mismo
+         color cian que 1º y 2º (petición usuario 2026-05-24). */
+      var isBestThird = !isAdv
+        && bestThirdNames
+        && t && t.name
+        && bestThirdNames[t.name] === true;
+      var qual = isAdv || isBestThird;
+      var rowBg  = qual ? 'rgba(77,208,225,.10)' : 'transparent';
+      var rowBd  = qual ? '#4dd0e1' : 'transparent';
+      /* Eliminados: número de posición en blanco brillante (mismo tono
+         que PJ/V/E/P), NO en gris. Solo se distinguen del clasificado
+         por el acento cian en bg + borde (petición usuario 2026-05-24). */
+      var posCol = qual ? '#4dd0e1' : 'rgba(255,255,255,.85)';
       cells += '<tr style="background:'+rowBg+';border-left:3px solid '+rowBd+';border-bottom:1px solid rgba(255,255,255,.05);">'
         + '<td style="padding:8px 6px 8px 7px;"><div style="display:flex;align-items:center;gap:6px;">'
         +   '<span style="font-family:\'Bebas Neue\',sans-serif;color:'+posCol+';width:16px;text-align:center;font-size:15px;">'+pos+'</span>'
@@ -17404,6 +17439,7 @@ window._showSimProgress = function(opts, onDone){
     var html = _mundialBackBtn(tourId);
     var advancePerGroup = 2;   /* mundial: 1º+2º directos (los 8 mejores
                                   3os se calculan al cerrar la fase). */
+    var bestThirdNames = _mundialBestThirdNameSet(cfg, gs.slices);
     for (var g = 0; g < gs.slices.length; g++) {
       var slice = gs.slices[g];
       if (slice.length < 2) continue;
@@ -17429,7 +17465,7 @@ window._showSimProgress = function(opts, onDone){
         +   '<span>GRUPO '+letter+'</span>'
         +   '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.6);letter-spacing:.5px;">'+prog.done+' / '+prog.tot+'</span>'
         + '</div>';
-      html += _mundialClasTableHtml(rows, slice, advancePerGroup);
+      html += _mundialClasTableHtml(rows, slice, advancePerGroup, bestThirdNames);
       html += '<div style="padding:10px 12px 12px;">';
       html += '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(77,208,225,.85);margin:0 0 8px;padding:0 2px;">JORNADAS · GRUPO '+letter+'</div>';
       fix.forEach(function(jor, ji){

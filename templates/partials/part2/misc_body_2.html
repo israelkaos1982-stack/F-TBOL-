@@ -14416,6 +14416,29 @@
         var stad;
         if (_gm._isSc && _gm._scStadium) {
           stad = _gm._scStadium;
+        } else if (typeof window._selFinStadiumFor === 'function' && (function(){
+          /* Mundial · 48 selecciones: detectamos el torneo por la
+             config cacheada (format === 'mundial-48') — abrirTorneo
+             pasa comp='torneo' genérico, no 'sel-fin'. Petición
+             usuario 2026-05-24. */
+          if (_gm.comp === 'sel-fin') return true;
+          try {
+            if (_gm._isTour && _gm._tourId && typeof window._tourLoadCachedSync === 'function') {
+              var _cfgM = window._tourLoadCachedSync(_gm._tourId);
+              if (_cfgM && _cfgM.format === 'mundial-48') return true;
+            }
+          } catch(_){}
+          return false;
+        })()) {
+          /* 4 sedes neutrales elegidas por el admin
+             (sel_fin_stadiums_v1). Rotación determinista por hash del
+             partido (preferimos _tourKey, que es único por partido del
+             torneo). */
+          var _sfMk = _gm._tourKey || (String(_gm.j||'') + '|' + String(_gm.home||'') + '|' + String(_gm.away||''));
+          stad = window._selFinStadiumFor(_sfMk)
+              || ((typeof window.getTeamStadium === 'function')
+                    ? (window.getTeamStadium(_gm.home) || 'eFootball Stadium')
+                    : 'eFootball Stadium');
         } else {
           stad = (typeof window.getTeamStadium === 'function')
             ? (window.getTeamStadium(_gm.home) || 'eFootball Stadium')
@@ -26029,6 +26052,25 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!wrap) return;
     var nmEl = wrap.querySelector('.ml-venue-bar .ml-venue-name');
     if (!nmEl) return;
+    /* Mundial · 48 selecciones: el wrap es de un cal-mf-* (compKey
+       sel-fin) — campo NEUTRAL de las 4 sedes elegidas, gana SIEMPRE
+       sobre el estadio del local. Detección por matchKey del wrap:
+       el wrap id es 'mlw-<matchKey>'. Petición usuario 2026-05-24. */
+    try {
+      if (wrap.id && typeof window._selFinStadiumFor === 'function') {
+        var _wmk = wrap.id.replace(/^mlw-/, '');
+        /* Mapeamos a sel-fin igual que en bundle.js (jid.startsWith
+           'cal-mf-'). El matchKey de cal-mf-* lo emite el motor del
+           torneo; si su contenedor padre es cal-mf-*, también vale. */
+        var _isSelFinWrap = false;
+        var par = wrap.closest && wrap.closest('[id^="cal-mf-"]');
+        if (par) _isSelFinWrap = true;
+        if (_isSelFinWrap) {
+          var _sfStad = window._selFinStadiumFor(_wmk);
+          if (_sfStad) { nmEl.textContent = _sfStad; return; }
+        }
+      }
+    } catch(_){}
     var current = (nmEl.textContent || '').trim().toLowerCase();
     /* Solo reemplazamos el valor por defecto. Si el usuario o otro
        código ya puso un estadio real (no "eFootball"), no tocamos. */

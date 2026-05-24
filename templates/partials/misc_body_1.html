@@ -13747,6 +13747,33 @@ window._showSimProgress = function(opts, onDone){
   #tour-editor-overlay input:focus,#tour-editor-overlay select:focus,#tour-editor-overlay textarea:focus{
     outline:none;border-color:rgba(240,192,64,.55);
   }
+  /* Picker de las 4 sedes del Mundial · 48 selecciones (fase final).
+     Filas tipo "tap-to-pick" que abren el overlay de STADIUM_DB. */
+  #selfin-stadiums-box .selfin-st-row{
+    display:flex;align-items:center;gap:10px;padding:8px 10px;margin-top:6px;
+    background:rgba(255,255,255,.04);border:1px solid rgba(120,180,255,.25);
+    border-radius:7px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+    transition:background .14s,border-color .14s;
+  }
+  #selfin-stadiums-box .selfin-st-row:hover,
+  #selfin-stadiums-box .selfin-st-row:active{
+    background:rgba(120,180,255,.10);border-color:rgba(120,180,255,.55);
+  }
+  #selfin-stadiums-box .selfin-st-num{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:22px;height:22px;border-radius:50%;font-family:Oswald,sans-serif;
+    font-size:11px;background:rgba(120,180,255,.18);color:#9cc6ff;flex:0 0 auto;
+  }
+  #selfin-stadiums-box .selfin-st-name{
+    flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#eee;
+  }
+  #selfin-stadiums-box .selfin-st-act{
+    font-size:13px;opacity:.7;flex:0 0 auto;
+  }
+  /* Bloque .minfo dedicado a las sedes (calendar cards cal-mf-*). */
+  .jmatches .minfo.selfin-venues{
+    background:rgba(120,180,255,.08);border-left:3px solid rgba(120,180,255,.55);
+  }
   /* Casillas de "Formato" (sustituyen al <select> nativo, que no
      respondía en algunos móviles). Selección exclusiva tipo radio. */
   .tour-ed-fmt-opts{display:flex;flex-direction:column;gap:6px;}
@@ -14310,6 +14337,242 @@ window._showSimProgress = function(opts, onDone){
              bestThirds:8, koExtraTimePens:true };
   }
   window._mundialFormatConfig = _mundialFormatConfig;
+
+  /* ── Estadios sede del Mundial · 48 selecciones (fase final) ────
+     Petición usuario 2026-05-24: el admin elige 4 estadios sede
+     desde el editor del torneo Mundial · 48 selecciones. Cada partido
+     individual de la fase final (cal-mf-*, compKey 'sel-fin') se
+     juega en UNO de esos 4 estadios (rotando por hash determinista
+     del matchKey). Las cards del calendario muestran los 4 estadios
+     como sedes del torneo.
+
+     Storage:
+       · localStorage 'sel_fin_stadiums_v1' (JSON {stadiums:[s0..s3]})
+       · Mirror a /api/kv/sel_fin_stadiums_v1 (sync background).
+
+     Lectura: window._selFinStadiumsLoad() → array de 4 strings.
+     Resolución por partido: window._selFinStadiumFor(matchKey). */
+  var _SELFIN_KEY = 'sel_fin_stadiums_v1';
+  window._selFinStadiumsLoad = function(){
+    try {
+      var raw = localStorage.getItem(_SELFIN_KEY);
+      if (raw) {
+        var d = JSON.parse(raw);
+        if (d && Array.isArray(d.stadiums)) {
+          var out = [];
+          for (var i = 0; i < 4; i++) out.push(d.stadiums[i] || '');
+          return out;
+        }
+      }
+    } catch(_){}
+    return ['','','',''];
+  };
+  window._selFinStadiumsSave = function(arr){
+    arr = (arr || []).slice(0, 4);
+    while (arr.length < 4) arr.push('');
+    try { localStorage.setItem(_SELFIN_KEY, JSON.stringify({stadiums:arr})); } catch(_){}
+    /* Sync a servidor en 2º plano (mismo patrón que ball_by_comp_v1). */
+    try {
+      if (typeof fetch === 'function') {
+        fetch('/api/kv/' + _SELFIN_KEY, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({value:{stadiums:arr}})
+        }).catch(function(){});
+      }
+    } catch(_){}
+    /* Repintar cards del calendario para reflejar el cambio. */
+    try { window._selFinHydrateCalendar && window._selFinHydrateCalendar(); } catch(_){}
+    return arr;
+  };
+  /* Hash sencillo y determinista de un string a entero positivo. */
+  function _selFinHash(s){
+    s = String(s || '');
+    var h = 5381, i;
+    for (i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+    return (h < 0) ? -h : h;
+  }
+  window._selFinStadiumFor = function(matchKey){
+    var pool = window._selFinStadiumsLoad();
+    /* Solo los huecos rellenados — si menos de 1, devolvemos null. */
+    var picks = pool.filter(function(s){ return !!s; });
+    if (!picks.length) return '';
+    var idx = _selFinHash(matchKey) % picks.length;
+    return picks[idx];
+  };
+  /* Hidrata los placeholders `.minfo` de los bloques cal-mf-* del
+     calendario para mostrar las 4 sedes elegidas. Se llama cuando se
+     guardan estadios y cuando se entra a s-calendario. */
+  window._selFinHydrateCalendar = function(){
+    var pool = window._selFinStadiumsLoad();
+    var picks = pool.filter(function(s){ return !!s; });
+    /* Cubrimos los 6 bloques cal-mf-* declarados estáticamente en
+       templates/partials/screens/s-calendario.html. */
+    var blocks = ['cal-mf-g1','cal-mf-g2','cal-mf-g3','cal-mf-g4','cal-mf-rep','cal-mf-fin'];
+    blocks.forEach(function(bid){
+      var blk = document.getElementById(bid);
+      if (!blk) return;
+      /* Marcamos/usamos un .minfo dedicado para sedes para no chocar
+         con el .minfo del balón (que la regla "balón sel J9+" ya
+         maneja). Si no existe, lo insertamos antes del .minfo del
+         balón. */
+      var venueMI = blk.querySelector('.minfo.selfin-venues');
+      if (!venueMI) {
+        venueMI = document.createElement('div');
+        venueMI.className = 'minfo selfin-venues';
+        blk.insertBefore(venueMI, blk.firstChild || null);
+      }
+      if (!picks.length) {
+        venueMI.innerHTML = '🏟 <i style="opacity:.65">Sin sedes elegidas — Mundial · 48 selecciones · editor</i>';
+      } else {
+        var safe = picks.map(function(s){
+          return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        });
+        venueMI.innerHTML = '🏟 ' + safe.join(' · ');
+      }
+    });
+  };
+
+  /* Picker overlay: lista STADIUM_DB completa para elegir un estadio
+     y asignarlo al slot activo (0-3). Reusable; se crea perezosamente
+     en la 1ª apertura. */
+  window._selFinStadiumPickerOpen = function(slot){
+    slot = parseInt(slot, 10) || 0;
+    if (slot < 0 || slot > 3) slot = 0;
+    var db = (window.STADIUM_DB && window.STADIUM_DB.length) ? window.STADIUM_DB.slice() : [];
+    if (!db.length) { alert('STADIUM_DB no está cargado.'); return; }
+    var pool = window._selFinStadiumsLoad();
+    var ov = document.getElementById('selfin-stadium-picker-ov');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'selfin-stadium-picker-ov';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px;';
+      ov.innerHTML = '<div id="selfin-sp-card" style="background:#101522;color:#eee;width:100%;max-width:520px;max-height:88vh;border-radius:12px;border:1px solid rgba(120,180,255,.4);display:flex;flex-direction:column;overflow:hidden;">'+
+        '<div style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);">'+
+          '<div style="flex:1;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#9cc6ff;">🏟️ <span id="selfin-sp-title">SEDE 1</span></div>'+
+          '<button id="selfin-sp-x" style="background:rgba(255,80,80,.18);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:6px;padding:4px 10px;font-size:13px;cursor:pointer;">✕</button>'+
+        '</div>'+
+        '<div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08);">'+
+          '<input id="selfin-sp-q" type="text" placeholder="🔍 Buscar estadio o ciudad…" autocomplete="off" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;padding:8px 12px;font-family:Rajdhani,sans-serif;font-size:13px;outline:none;">'+
+        '</div>'+
+        '<div id="selfin-sp-list" style="flex:1;overflow:auto;padding:6px 8px;"></div>'+
+        '<div style="padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:8px;">'+
+          '<button id="selfin-sp-clear" style="flex:1;background:rgba(255,80,80,.14);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:6px;padding:9px;font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer;">✖ VACIAR HUECO</button>'+
+        '</div>'+
+      '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) ov.style.display = 'none'; });
+    }
+    var titleEl = ov.querySelector('#selfin-sp-title');
+    var qEl     = ov.querySelector('#selfin-sp-q');
+    var listEl  = ov.querySelector('#selfin-sp-list');
+    var xEl     = ov.querySelector('#selfin-sp-x');
+    var clrEl   = ov.querySelector('#selfin-sp-clear');
+    titleEl.textContent = 'SEDE ' + (slot + 1);
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function render(){
+      var q = (qEl.value || '').toLowerCase().trim();
+      var taken = {};
+      pool.forEach(function(s, i){ if (s && i !== slot) taken[s.toLowerCase()] = 1; });
+      var rows = db.filter(function(s){
+        if (!q) return true;
+        return (s.name||'').toLowerCase().indexOf(q) !== -1 ||
+               (s.city||'').toLowerCase().indexOf(q) !== -1 ||
+               (s.tipo||'').toLowerCase().indexOf(q) !== -1;
+      }).map(function(s){
+        var isT = !!taken[(s.name||'').toLowerCase()];
+        var isCur = (pool[slot] && pool[slot] === s.name);
+        var bg = isCur ? 'rgba(120,180,255,.18)' : (isT ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.05)');
+        var bd = isCur ? '1px solid rgba(120,180,255,.7)' : '1px solid rgba(255,255,255,.08)';
+        var op = isT ? '.45' : '1';
+        var tag = isT ? '<span style="font-size:10px;color:#ffa07a;margin-left:6px;">(ya en otro hueco)</span>' : '';
+        var cur = isCur ? '<span style="font-size:10px;color:#9cc6ff;margin-left:6px;">✓ actual</span>' : '';
+        return '<div class="selfin-sp-row" data-name="'+esc(s.name)+'"'+
+          ' style="display:flex;align-items:center;gap:10px;padding:9px 10px;margin:4px 0;background:'+bg+';border:'+bd+';border-radius:7px;cursor:pointer;opacity:'+op+';">'+
+          '<span style="font-size:14px;">🏟️</span>'+
+          '<span style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#eee;">'+esc(s.name)+
+            ' <span style="opacity:.6;font-size:11px;">· '+esc(s.city||'')+'</span>'+tag+cur+
+          '</span>'+
+          '<span style="font-size:10px;color:'+(s.status==='ELITE'?'#ffd700':s.status==='REGIONAL'?'#60aaff':s.status==='NEUTRAL'?'#aa80ff':'#aaa')+';">'+esc(s.status||'')+'</span>'+
+        '</div>';
+      }).join('');
+      listEl.innerHTML = rows || '<div style="padding:14px;text-align:center;opacity:.55;font-size:12px;">Sin resultados.</div>';
+    }
+    qEl.oninput = render;
+    listEl.onclick = function(e){
+      var r = e.target.closest && e.target.closest('.selfin-sp-row');
+      if (!r) return;
+      var name = r.getAttribute('data-name');
+      if (!name) return;
+      pool[slot] = name;
+      window._selFinStadiumsSave(pool);
+      ov.style.display = 'none';
+      try { window._tourEdRepaintFmt && window._tourEdRepaintFmt(); } catch(_){}
+    };
+    clrEl.onclick = function(){
+      pool[slot] = '';
+      window._selFinStadiumsSave(pool);
+      ov.style.display = 'none';
+      try { window._tourEdRepaintFmt && window._tourEdRepaintFmt(); } catch(_){}
+    };
+    xEl.onclick = function(){ ov.style.display = 'none'; };
+    qEl.value = '';
+    render();
+    ov.style.display = 'flex';
+    setTimeout(function(){ try { qEl.focus(); } catch(_){} }, 80);
+  };
+
+  /* Hidrata el calendario al cargar (DOMContentLoaded) y cada vez
+     que el usuario navega a s-calendario. También baja del server la
+     lista de sedes cuando localStorage está vacía (cross-device). */
+  (function(){
+    var _selFinSrvHydrated = false;
+    function _selFinHydrateFromServer(){
+      if (_selFinSrvHydrated) return;
+      _selFinSrvHydrated = true;
+      try {
+        if (typeof fetch !== 'function') return;
+        fetch('/api/kv/' + _SELFIN_KEY, { credentials:'same-origin', headers:{'Cache-Control':'no-store'} })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(j){
+            if (j && j.ok && j.value && Array.isArray(j.value.stadiums)) {
+              /* Si la cache local está vacía, hidratamos con la del server.
+                 Si el admin acaba de escribir local, mantenemos lo local
+                 (más fresco). Detección: ¿hay >=1 sede no vacía local? */
+              var local = window._selFinStadiumsLoad();
+              var hasLocal = local.some(function(s){ return !!s; });
+              if (!hasLocal) {
+                try { localStorage.setItem(_SELFIN_KEY, JSON.stringify({stadiums:j.value.stadiums})); } catch(_){}
+                try { window._selFinHydrateCalendar && window._selFinHydrateCalendar(); } catch(_){}
+              }
+            }
+          }).catch(function(){});
+      } catch(_){}
+    }
+    function _selFinHydrateOnReady(){
+      _selFinHydrateFromServer();
+      try { window._selFinHydrateCalendar && window._selFinHydrateCalendar(); } catch(_){}
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _selFinHydrateOnReady);
+    } else {
+      setTimeout(_selFinHydrateOnReady, 50);
+    }
+    /* Re-hidrata al entrar a s-calendario por si los placeholders se
+       rebuilt entre tanto. Hook al window.go (router). */
+    try {
+      var _prevGo = window.go;
+      if (typeof _prevGo === 'function' && !_prevGo._selFinWrapped) {
+        var wrapped = function(id){
+          var r = _prevGo.apply(this, arguments);
+          if (id === 's-calendario') setTimeout(_selFinHydrateOnReady, 30);
+          return r;
+        };
+        wrapped._selFinWrapped = true;
+        window.go = wrapped;
+      }
+    } catch(_){}
+  }());
 
   /* Migración (2026-05-08): torneos guardados antes con
      `format='ko'` + `formatConfig.twoLegs=true` se convierten al
@@ -15173,12 +15436,30 @@ window._showSimProgress = function(opts, onDone){
           'selecciones a la <b>Ronda Final</b> elegida arriba (sustituye su roster actual).'+
         '</div>';
     } else if (fmt === 'mundial-48') {
+      var _sf = (window._selFinStadiumsLoad && window._selFinStadiumsLoad()) || ['','','',''];
+      function _stEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+      function _stRow(i){
+        var v = _sf[i] || '';
+        var lbl = v ? _stEsc(v) : '<i style="opacity:.5">— sin elegir —</i>';
+        return '<div class="selfin-st-row" data-idx="'+i+'" onclick="window._selFinStadiumPickerOpen&&window._selFinStadiumPickerOpen('+i+')">'+
+          '<span class="selfin-st-num">'+(i+1)+'</span>'+
+          '<span class="selfin-st-name">'+lbl+'</span>'+
+          '<span class="selfin-st-act">🔍</span>'+
+        '</div>';
+      }
       box.innerHTML =
         '<div style="padding:9px 11px;background:rgba(45,212,191,.10);border:1px dashed rgba(45,212,191,.45);border-radius:6px;font-size:11px;color:#2dd4bf;line-height:1.55;text-transform:none;letter-spacing:0;">'+
           '<b>Mundial · 48 selecciones</b> · formato fijo:<br>'+
           '12 grupos de 4 · clasifican 1º y 2º (24) + los 8 mejores terceros = <b>32</b>.<br>'+
           'Cuadro: Dieciseisavos (1/32) → Octavos → Cuartos → Semis → Final.<br>'+
           'Coloca las 48 selecciones con <b>✅ CONFIRMAR · COLOCAR EQUIPOS</b> (puedes rellenarlas al azar desde la plantilla).'+
+        '</div>'+
+        '<div id="selfin-stadiums-box" style="margin-top:10px;padding:10px 11px;background:rgba(120,180,255,.08);border:1px dashed rgba(120,180,255,.45);border-radius:6px;text-transform:none;letter-spacing:0;">'+
+          '<div style="font-size:11px;color:#9cc6ff;line-height:1.45;margin-bottom:8px;">'+
+            '🏟️ <b>Estadios sede (4)</b> · cada partido del Mundial se juega en uno de estos 4 estadios (rotando). '+
+            'Toca un hueco para elegir.'+
+          '</div>'+
+          _stRow(0) + _stRow(1) + _stRow(2) + _stRow(3) +
         '</div>';
     }
   }
@@ -15281,6 +15562,15 @@ window._showSimProgress = function(opts, onDone){
   window._tourEdFmtChange = function(){
     if (!_open) return;
     window._tourEdFmtPick(_tourEdFmtSelected());
+  };
+  /* Re-renderiza el bloque de subconfig del editor (#tour-ed-fmt-cfg)
+     manteniendo el formato actual. Lo consume el picker de sedes del
+     Mundial · 48 selecciones tras elegir un estadio, para refrescar
+     los nombres de las 4 sedes en la UI. NO-OP si el editor está
+     cerrado. */
+  window._tourEdRepaintFmt = function(){
+    if (!_open) return;
+    try { _renderFmtCfg(); } catch(_){}
   };
 
   function _prizesToText(p){

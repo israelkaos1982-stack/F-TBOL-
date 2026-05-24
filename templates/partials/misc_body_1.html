@@ -39832,11 +39832,18 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   #mu-msg-ov .mmo-sub.on{ color:#fff; border-color:#F6EB61;
     background:linear-gradient(135deg,rgba(200,16,46,.55),rgba(246,235,97,.16)); }
   #mu-msg-ov .mmo-actions{ margin-left:auto;
-    padding:5px 10px; background:rgba(180,40,40,.18);
-    border:1px solid rgba(220,80,80,.40); border-radius:6px;
-    color:#ffd6d6; font-family:'Oswald',sans-serif;
-    font-size:10.5px; letter-spacing:1px; cursor:pointer;
-    -webkit-tap-highlight-color:transparent; }
+    padding:6px 12px;
+    background:linear-gradient(135deg, rgba(220,40,50,.78), rgba(140,15,25,.85));
+    border:1px solid rgba(255,140,140,.65);
+    border-radius:6px;
+    color:#fff; font-family:'Oswald',sans-serif;
+    font-size:11px; letter-spacing:1.2px; font-weight:700;
+    cursor:pointer; -webkit-tap-highlight-color:transparent;
+    box-shadow:0 0 8px rgba(220,40,50,.35), inset 0 1px 0 rgba(255,255,255,.10);
+    text-shadow:0 1px 1px rgba(0,0,0,.5);
+    text-transform:uppercase; line-height:1;
+  }
+  #mu-msg-ov .mmo-actions:active{ transform:scale(.96); }
   #mu-msg-ov .mmo-actions[hidden]{ display:none; }
 
   /* Lista de mensajes */
@@ -40229,8 +40236,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       };
     });
     document.getElementById('mu-msg-clear').onclick = function(){
-      if (confirm('¿Borrar todos los mensajes leídos?'))
-        clearReadAll();
+      var n = 0;
+      try {
+        var dd = _read();
+        n = (dd && dd.msgs) ? dd.msgs.filter(function(m){ return m && m.read; }).length : 0;
+      } catch(_){}
+      if (!n) return;
+      var q = (n === 1)
+        ? '¿Borrar el mensaje leído?'
+        : '¿Borrar los ' + n + ' mensajes leídos?';
+      if (confirm(q)) clearReadAll();
     };
   }
   function _openPop(){
@@ -40287,10 +40302,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     ov.querySelectorAll('.mmo-sub').forEach(function(t){
       t.classList.toggle('on', t.getAttribute('data-kind') === _ui.readTab);
     });
+    /* Botón "🗑 BORRAR TODOS" — sólo visible en sub-pestaña LEÍDOS y
+       si hay al menos un mensaje leído. Texto con contador para que el
+       usuario sepa cuántos se van a borrar antes de confirmar. */
     var clr = document.getElementById('mu-msg-clear');
     if (clr){
-      if (_ui.readTab === 'read') clr.removeAttribute('hidden');
-      else clr.setAttribute('hidden','');
+      var readN = 0;
+      try {
+        var allD = _read();
+        readN = (allD && allD.msgs) ? allD.msgs.filter(function(m){ return m && m.read; }).length : 0;
+      } catch(_){}
+      if (_ui.readTab === 'read' && readN > 0){
+        clr.textContent = '🗑 BORRAR TODOS (' + readN + ')';
+        clr.removeAttribute('hidden');
+      } else {
+        clr.setAttribute('hidden','');
+      }
     }
     /* Lista (unificada Liverpool + Selección Francia) */
     var body = document.getElementById('mu-msg-body');

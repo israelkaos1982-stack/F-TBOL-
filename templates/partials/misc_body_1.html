@@ -35576,22 +35576,91 @@ Tottenham
   /* Reinicia el cursor del calendario al 1 de Mayo (inicio de
      temporada). Borra el cursor (dayIdx=0), los partidos resueltos
      (done) y los rivales asignados (rivals). 2026-05-24: además
-     pone a 0 la valoración 💼 y el presupuesto 🪙 del HUD, y limpia
-     los memos `objRating`/`objMoney` de aportación por objetivos —
+     pone a 0 la valoración 💼 y el presupuesto 🪙 del HUD, limpia
+     los memos `objRating`/`objMoney` y borra los resultados ya
+     simulados de torneos de Selecciones (Mundial Grupo, etc.) —
      sin esto, las ganancias de la temporada anterior (0,33💼 + 50€
-     por objetivo) quedaban grabadas en el override y aparecían en
-     el HUD del 1 May aunque los checkboxes ya estuviesen a 0.
-     `ratingTarget` / `moneyTarget` / `pi` son config del admin → se
-     conservan. */
+     por objetivo) quedaban grabadas en el override, y los partidos
+     del Mundial Grupo aparecían como FIN aunque el calendario
+     estuviera en el día 1. `ratingTarget` / `moneyTarget` / `pi`
+     son config del admin → se conservan. */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día y los partidos ya resueltos, y se pondrán a 0 la valoración 💼 y el presupuesto 🪙 (los objetivos suman desde 0 en la nueva temporada). Los Puntos de Fisio 💊 y los objetivos del club se conservan.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos ya resueltos (pretemporada y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Los Puntos de Fisio 💊, los objetivos del club, las plantillas y la configuración de los torneos se conservan.')) return;
     try { if (typeof window._psResetCalendar === 'function') window._psResetCalendar(); } catch(_){}
+
+    /* HUD: triple-asalto contra cualquier capa que pueda revivir
+       el 0.66/350. (a) merge del override → sync localStorage +
+       cookie + IDB + cache + state legacy + apply. (b) escritura
+       directa al state legacy por si la cadena (a) falló. (c)
+       multi-apply diferido para vencer cualquier updateHud o
+       _render encadenado por _psResetCalendar. */
     try {
       if (typeof window._bayernHudMerge === 'function') {
         window._bayernHudMerge({ rating: 0, money: 0, objRating: 0, objMoney: 0 });
       }
     } catch(_){}
+    try {
+      var _legSt = window._bayernLegacyState;
+      if (_legSt) { _legSt.rating = 0; _legSt.budgetSpent = 0; }
+    } catch(_){}
+    try {
+      var _rEl = document.getElementById('ath-pts-val');
+      if (_rEl) _rEl.textContent = '0.00';
+      var _mEl = document.getElementById('ath-money-val');
+      if (_mEl) _mEl.textContent = '0';
+      var _barP = document.getElementById('ath-bar-pts');
+      if (_barP) _barP.style.width = '0%';
+      var _barM = document.getElementById('ath-bar-money');
+      if (_barM) _barM.style.width = '0%';
+    } catch(_){}
     try { if (typeof window.updateHud === 'function') window.updateHud(); } catch(_){}
+    try { if (typeof window._bayernHudReapply === 'function') window._bayernHudReapply(); } catch(_){}
+    /* Otros componentes (legacy IIFE, _render) pueden escribir
+       después; re-aplicamos el override en t=80/240/600ms. */
+    [80, 240, 600].forEach(function(t){
+      setTimeout(function(){
+        try { if (typeof window._bayernHudReapply === 'function') window._bayernHudReapply(); } catch(_){}
+      }, t);
+    });
+
+    /* MUNDIAL / SELECCIONES: borra resultados ya simulados (cfg.results)
+       de cualquier slot sfn*/spv* (Rondas Finales / Previas). Conserva
+       teams/groupFixtures/format/koCurrentRound=0 para que la
+       configuración del torneo no se pierda — solo se replican los
+       partidos. Idempotente. */
+    try {
+      var SEL_SLOTS = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10',
+                       'spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10'];
+      SEL_SLOTS.forEach(function(sid){
+        try {
+          var lsKey = 'tour_' + sid + '_v1';
+          var raw = localStorage.getItem(lsKey);
+          if (!raw) return;
+          var cfg = JSON.parse(raw);
+          if (!cfg || typeof cfg !== 'object') return;
+          var touched = false;
+          if (cfg.results && Object.keys(cfg.results).length) { cfg.results = {}; touched = true; }
+          if (cfg.currentJornadaByGroup && Object.keys(cfg.currentJornadaByGroup).length) { cfg.currentJornadaByGroup = {}; touched = true; }
+          if (cfg.koCurrentRound) { cfg.koCurrentRound = 0; touched = true; }
+          if (!touched) return;
+          cfg.updatedAt = new Date().toISOString();
+          try { localStorage.setItem(lsKey, JSON.stringify(cfg)); } catch(_){}
+          try {
+            if (window._TOUR_CACHE) window._TOUR_CACHE[sid] = cfg;
+          } catch(_){}
+          /* Persistir en servidor de forma silenciosa. */
+          try {
+            if (typeof window._tourSave === 'function') {
+              Promise.resolve(window._tourSave(sid, cfg)).catch(function(){});
+            }
+          } catch(_){}
+        } catch(_){}
+      });
+      /* Invalidar cache de fechas del Mundial para que el hub recompute
+         el "próximo partido" sin el resultado simulado. */
+      try { if (typeof window._mundialDateCacheInvalidate === 'function') window._mundialDateCacheInvalidate(); } catch(_){}
+    } catch(_){}
+
     window._bayernEditValuesClose();
   };
   /* Helper público: sincroniza el `state` del IIFE de la agenda

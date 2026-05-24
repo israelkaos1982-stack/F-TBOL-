@@ -1939,13 +1939,15 @@ def _purge_pre_june(data):
 
 
 # PRE-VERANO en MAYO (01–31). Mundial de Selecciones: 8 partidos
-# (J1/J2/J3/Repesca/Octavos/Cuartos/Semis/Final) + 23 descansos.
-# Petición usuario 2026-05-20.
+# (J1/J2/J3/Dieciseisavos/Octavos/Cuartos/Semis/Final) + 23 descansos.
+# Petición usuario 2026-05-20. 2026-05-24: renombrado "Repesca J3"
+# → "Dieciseisavos" (la ronda es Dieciseisavos = 1/32 = 32 selecciones
+# según _mundialFormatConfig en misc_body_1.html).
 _PREVERANO_MAY_MATCHES = [
     (3,  "Mundial Grupo — J1",          "☀️"),
     (7,  "Mundial Grupo — J2",          "🌧"),
     (11, "Mundial Grupo — J3",          "☀️"),
-    (15, "Mundial Repesca J3",          "☀️"),
+    (15, "Mundial Dieciseisavos",       "☀️"),
     (19, "Mundial Octavos",             "☀️"),
     (23, "Mundial Cuartos",             "☀️"),
     (27, "Mundial Semis",               "☀️"),

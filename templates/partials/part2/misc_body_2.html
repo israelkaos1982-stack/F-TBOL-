@@ -30833,6 +30833,103 @@ document.addEventListener('DOMContentLoaded', function() {
      canvas 24×24) corre como mucho 1 vez por equipo, sin observers ni
      intervalos nuevos — respeta el precedente del cronómetro. */
   var _CREST_COLOR_CACHE = {};
+  /* ── window.extractColors: lector real de color dominante del escudo ─
+     Carga la imagen en un canvas 24×24 y cuantiza los pixeles por
+     buckets de 4 bits/canal (4096 buckets). Descarta píxeles
+     transparentes, casi-blancos, casi-negros y grises planos. Devuelve
+     un array de hex `[primary, secondary]`. Si la imagen es CORS-tainted
+     o la carga falla, vuelve por `cb([seed])`. Se cachea por URL para
+     no repetir el trabajo en cada paint. NO crea observers ni
+     intervalos — respeta el precedente del cronómetro 2026-05-10. */
+  if (typeof window.extractColors !== 'function'){
+    var _EX_CACHE = {};
+    var _EX_PENDING = {};
+    window.extractColors = function(url, seed, cb){
+      if (!url){ try { cb([seed]); } catch(_){} return; }
+      if (_EX_CACHE[url]){ try { cb(_EX_CACHE[url]); } catch(_){} return; }
+      if (_EX_PENDING[url]){ _EX_PENDING[url].push(cb); return; }
+      _EX_PENDING[url] = [cb];
+      var done = function(cols){
+        _EX_CACHE[url] = cols;
+        var qs = _EX_PENDING[url] || [];
+        _EX_PENDING[url] = null;
+        for (var i = 0; i < qs.length; i++){
+          try { qs[i](cols); } catch(_){}
+        }
+      };
+      var img = new Image();
+      var triedNoCors = false;
+      img.crossOrigin = 'anonymous';
+      img.onload = function(){
+        try {
+          var W = 24, H = 24;
+          var canvas = document.createElement('canvas');
+          canvas.width = W; canvas.height = H;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, W, H);
+          var data;
+          try { data = ctx.getImageData(0, 0, W, H).data; }
+          catch(_e){
+            /* canvas tainted: si aún no hemos probado sin CORS, recarga. */
+            if (!triedNoCors){
+              triedNoCors = true;
+              img.crossOrigin = '';
+              img.src = url + (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
+              return;
+            }
+            done([seed]); return;
+          }
+          var buckets = {};
+          for (var p = 0; p < data.length; p += 4){
+            var a = data[p+3];
+            if (a < 200) continue;
+            var r = data[p], g = data[p+1], b = data[p+2];
+            var mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+            /* descarta casi-blanco, casi-negro y grises (saturación baja). */
+            if (mx > 235 && mn > 215) continue;
+            if (mx < 35) continue;
+            if (mx - mn < 22) continue;
+            var qr = r >> 4, qg = g >> 4, qb = b >> 4;
+            var key = (qr << 8) | (qg << 4) | qb;
+            var slot = buckets[key];
+            if (slot){ slot.n++; slot.r += r; slot.g += g; slot.b += b; }
+            else { buckets[key] = { n:1, r:r, g:g, b:b }; }
+          }
+          var arr = [];
+          for (var k in buckets){ if (buckets.hasOwnProperty(k)){ arr.push(buckets[k]); } }
+          if (!arr.length){ done([seed]); return; }
+          arr.sort(function(x, y){ return y.n - x.n; });
+          var toHex = function(slot){
+            var R = Math.round(slot.r / slot.n);
+            var G = Math.round(slot.g / slot.n);
+            var B = Math.round(slot.b / slot.n);
+            var s = ((1 << 24) | (R << 16) | (G << 8) | B).toString(16).slice(1);
+            return '#' + s;
+          };
+          var primary = toHex(arr[0]);
+          /* secundario: bucket dominante con tono diferente al primario. */
+          var sec = primary;
+          for (var i = 1; i < arr.length; i++){
+            var dr = Math.abs(arr[i].r/arr[i].n - arr[0].r/arr[0].n);
+            var dg = Math.abs(arr[i].g/arr[i].n - arr[0].g/arr[0].n);
+            var db = Math.abs(arr[i].b/arr[i].n - arr[0].b/arr[0].n);
+            if (dr + dg + db > 90){ sec = toHex(arr[i]); break; }
+          }
+          done([primary, sec]);
+        } catch(_){ done([seed]); }
+      };
+      img.onerror = function(){
+        if (!triedNoCors){
+          triedNoCors = true;
+          img.crossOrigin = '';
+          img.src = url;
+          return;
+        }
+        done([seed]);
+      };
+      try { img.src = url; } catch(_){ done([seed]); }
+    };
+  }
   function _resolveShieldUrl(name, hintEl){
     try {
       if (hintEl){
@@ -30872,45 +30969,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   function _applyCardTheme(wrap){
-    if (!wrap || wrap._mlThemed) return;
+    if (!wrap) return;
     var mk = wrap.id.replace(/^mlw-/, '');
     var comp = _compFromMk(mk);
-    if (comp){
+    if (comp && !wrap.classList.contains('is-comp-' + comp)){
       wrap.classList.add('is-comp-' + comp);
     }
     /* AÑADIR EVENTO bicolor: izquierda = color del escudo LOCAL,
        derecha = color del escudo VISITANTE. Color real del escudo
        renderizado (no tabla hardcodeada). Pintamos con el seed y
-       repintamos al resolver la extracción del escudo. */
+       repintamos al resolver la extracción del escudo. Firma por
+       comp+home+away para idempotencia (repinta si cambian los
+       equipos, evita bucle infinito del scanner cada 300 ms). */
     var st = (typeof window._calMlSt === 'function') ? window._calMlSt(mk) : null;
-    var home = st && st.home, away = st && st.away;
-    if (home || away){
-      var shields = wrap.querySelectorAll('.ml-shield-wrap');
-      var hintH = shields[0] || null, hintA = shields[1] || null;
-      function _cardPaint(p1, p2, q1, q2){
-        wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .92));
-        wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .70));
-        wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .70));
-        wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .92));
-        wrap.setAttribute('data-team-colors', '1');
-      }
-      var ca = _teamColors(home);
-      var cb = _teamColors(away);
-      _cardPaint((ca && (ca.bg || ca.primary)) || '#3a0008',
-                 (ca && (ca.secondary || ca.bg || ca.primary)) || '#1a0004',
-                 (cb && (cb.bg || cb.primary)) || '#3a0008',
-                 (cb && (cb.secondary || cb.bg || cb.primary)) || '#1a0004');
-      _crestPrimary(home, hintH, function(rh){
-        _crestPrimary(away, hintA, function(rA){
-          var ph = rh ? rh.primary : '#3a0008';
-          var ps = rh ? (rh.secondary || rh.primary) : '#1a0004';
-          var qh = rA ? rA.primary : '#3a0008';
-          var qs = rA ? (rA.secondary || rA.primary) : '#1a0004';
-          _cardPaint(ph, ps, qh, qs);
-        });
-      });
+    var home = (st && st.home) || '';
+    var away = (st && st.away) || '';
+    if (!home && !away) return;
+    var sig = (comp||'') + '|' + home + '|' + away;
+    if (wrap._mlThemeSig === sig) return;
+    wrap._mlThemeSig = sig;
+    var shields = wrap.querySelectorAll('.ml-shield-wrap');
+    var hintH = shields[0] || null, hintA = shields[1] || null;
+    function _cardPaint(p1, p2, q1, q2){
+      wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .92));
+      wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .70));
+      wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .70));
+      wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .92));
+      wrap.setAttribute('data-team-colors', '1');
     }
-    wrap._mlThemed = true;
+    var ca = _teamColors(home);
+    var cb = _teamColors(away);
+    _cardPaint((ca && (ca.bg || ca.primary)) || '#3a0008',
+               (ca && (ca.secondary || ca.bg || ca.primary)) || '#1a0004',
+               (cb && (cb.bg || cb.primary)) || '#3a0008',
+               (cb && (cb.secondary || cb.bg || cb.primary)) || '#1a0004');
+    _crestPrimary(home, hintH, function(rh){
+      if (wrap._mlThemeSig !== sig) return;
+      _crestPrimary(away, hintA, function(rA){
+        if (wrap._mlThemeSig !== sig) return;
+        var ph = rh ? rh.primary : '#3a0008';
+        var ps = rh ? (rh.secondary || rh.primary) : '#1a0004';
+        var qh = rA ? rA.primary : '#3a0008';
+        var qs = rA ? (rA.secondary || rA.primary) : '#1a0004';
+        _cardPaint(ph, ps, qh, qs);
+      });
+    });
   }
 
   /* ── (1) JUGAR · highlight del botón cronómetro cuando está en 0' ──

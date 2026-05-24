@@ -5810,10 +5810,35 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var env = document.getElementById('pp-env');
     /* Supercopa España (_ppCompKey 'sc'/'sc-final'): campo NEUTRAL
        elegido por el admin en sc_state_v1.stadium — pasado vía
-       _ppPreviaTeams.stadium. NO usar el local. */
+       _ppPreviaTeams.stadium. NO usar el local.
+       Mundial · 48 selecciones (_ppCompKey 'sel-fin'): campo NEUTRAL
+       de las 4 sedes elegidas por el admin (sel_fin_stadiums_v1).
+       Rotación determinista por hash del matchKey vía
+       window._selFinStadiumFor. Petición usuario 2026-05-24. */
     var _ppStadium;
+    /* Mundial · 48 selecciones: el partido es en una de las 4 sedes
+       elegidas (rotación por hash). Cubre los 2 caminos: card del
+       calendario (compKey 'sel-fin') y card del torneo (compKey
+       'torneo' + cfg.format === 'mundial-48'). */
+    function _isSelFinPreviaCtx(){
+      if (_ppCompKey === 'sel-fin') return true;
+      try {
+        var pt = window._ppPreviaTeams;
+        if (pt && pt.tourId && typeof window._tourLoadCachedSync === 'function') {
+          var _cfgP = window._tourLoadCachedSync(pt.tourId);
+          if (_cfgP && _cfgP.format === 'mundial-48') return true;
+        }
+      } catch(_){}
+      return false;
+    }
     if ((_ppCompKey === 'sc' || _ppCompKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
       _ppStadium = window._ppPreviaTeams.stadium;
+    } else if (typeof window._selFinStadiumFor === 'function' && _isSelFinPreviaCtx()) {
+      var _sfHashKey = (window._ppPreviaTeams && window._ppPreviaTeams.tourKey)
+                       || _ppMatchKey
+                       || ((window._ppPreviaTeams && window._ppPreviaTeams.home) || '') + '|' + ((window._ppPreviaTeams && window._ppPreviaTeams.away) || '');
+      var _sfSt = window._selFinStadiumFor(_sfHashKey);
+      _ppStadium = _sfSt || ((typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || 'eFootball Stadium') : 'eFootball Stadium');
     } else {
       _ppStadium = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || 'eFootball Stadium') : 'eFootball Stadium';
     }
@@ -10376,6 +10401,31 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
        vez de Maracanã (reportado por usuario 2026-05-05). */
     if ((compKey === 'sc' || compKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
       stadiumName = window._ppPreviaTeams.stadium;
+    } else if (typeof window._selFinStadiumFor === 'function' && (function(){
+      /* Mundial · 48 selecciones: 2 caminos — cal-mf-* (compKey
+         'sel-fin') o partido de torneo cuyo cfg.format === 'mundial-48'.
+         Petición usuario 2026-05-24. */
+      if (compKey === 'sel-fin') return true;
+      try {
+        var pt = window._ppPreviaTeams;
+        if (pt && pt.tourId && typeof window._tourLoadCachedSync === 'function') {
+          var cfgM = window._tourLoadCachedSync(pt.tourId);
+          if (cfgM && cfgM.format === 'mundial-48') return true;
+        }
+      } catch(_){}
+      return false;
+    })()) {
+      /* Campo NEUTRAL de las 4 sedes elegidas (sel_fin_stadiums_v1).
+         Rotación determinista por hash. */
+      var _sfHash = (window._ppPreviaTeams && window._ppPreviaTeams.tourKey)
+                    || matchKey
+                    || ((window._ppPreviaTeams && window._ppPreviaTeams.home) || '') + '|' + ((window._ppPreviaTeams && window._ppPreviaTeams.away) || '');
+      var _sfSt2 = window._selFinStadiumFor(_sfHash);
+      if (_sfSt2) stadiumName = _sfSt2;
+      else if (typeof window.getTeamStadium === 'function') {
+        var s0 = window.getTeamStadium(homeTeamForStadium);
+        if (s0) stadiumName = s0;
+      }
     } else if (typeof window.getTeamStadium === 'function') {
       var s = window.getTeamStadium(homeTeamForStadium);
       if (s) stadiumName = s;

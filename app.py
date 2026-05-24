@@ -2997,6 +2997,12 @@ _KV_ALLOWED_EXACT = {
     # es solo cache; el server es la fuente de verdad para que la
     # plantilla creada en PC aparezca en el móvil (2026-05-22).
     "selecciones_squad_v1",
+    # 4 estadios sede del Mundial · 48 selecciones (fase final). El
+    # admin los elige desde el editor del torneo Mundial · 48
+    # selecciones; cada partido se juega en uno de los 4 (rotación por
+    # hash). Sync server para que las sedes elegidas en PC aparezcan
+    # en el móvil (2026-05-24).
+    "sel_fin_stadiums_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

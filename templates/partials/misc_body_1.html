@@ -17103,7 +17103,8 @@ window._showSimProgress = function(opts, onDone){
        sacada del calendario global (#s-agenda). data-jor-pinned hace
        que el auto-injector de fechas (misc_body_2.html) NO toque el
        texto ni la fecha. */
-    function row(view, emoji, title, badge, locked, roundKey){
+    function row(view, emoji, title, badge, locked, roundKey, done){
+      var cls = 'jbtn c-mundial' + (done ? ' done' : '');
       var lockStyle = locked
         ? 'opacity:.45;cursor:not-allowed;filter:grayscale(.55);'
         : '';
@@ -17118,7 +17119,7 @@ window._showSimProgress = function(opts, onDone){
         ? '<span class="jor-date'+(badge?'':' is-solo')+'" style="margin-left:'+(badge?'6px':'auto')+';">'+dt+'</span>'
         : '';
       return '<div class="jblock">'
-        + '<button type="button" class="jbtn c-mundial" data-jor-pinned="1"'+click
+        + '<button type="button" class="'+cls+'" data-jor-pinned="1"'+click
         + (lockStyle ? ' style="'+lockStyle+'"' : '')+'>'
         + emoji+' <b>Mundial</b>&nbsp;&nbsp;'+title
         + bdg
@@ -17126,28 +17127,29 @@ window._showSimProgress = function(opts, onDone){
         + '</button></div>';
     }
     function koRow(r, emoji, title, roundKey){
-      var locked, badge;
+      var locked, badge, done = false;
       if (!gs.allGroupsDone) {
         locked = true; badge = '🔒';
       } else if (r === 0 || koBracket[r]) {
         locked = false;
         var bt = koBracket[r];
         if (bt && bt.length) {
-          var tot = Math.floor(bt.length/2), done = 0;
+          var tot = Math.floor(bt.length/2), nDone = 0;
           for (var i = 0; i < tot; i++) {
             var rr = cfg.results['ko_'+r+'_'+i];
-            if (rr && rr.played) done++;
+            if (rr && rr.played) nDone++;
           }
           badge = (r === lastR && champTeam)
             ? '🏆 ' + ((champTeam && champTeam.name) || '')
-            : (done + '/' + tot);
+            : (nDone + '/' + tot);
+          done = (tot > 0 && nDone === tot);
         } else {
           badge = '○';
         }
       } else {
         locked = true; badge = '🔒';
       }
-      return row('ko'+r, emoji, title, badge, locked, roundKey);
+      return row('ko'+r, emoji, title, badge, locked, roundKey, done);
     }
     /* Todos los iconos del Mundial son 🌐 (excepto Estadísticas, que
        conserva su 📊). Petición usuario 2026-05-22. */
@@ -17158,7 +17160,7 @@ window._showSimProgress = function(opts, onDone){
     html += koRow(2, '🌐', 'Cuartos',       'cuartos');
     html += koRow(1, '🌐', 'Octavos',       'octavos');
     html += koRow(0, '🌐', 'Dieciseisavos', 'dieciseisavos');
-    html += row('groups', '🌐', 'Fase de Grupos', (gTot ? gDone+'/'+gTot : '12×4'), false, 'grupos');
+    html += row('groups', '🌐', 'Fase de Grupos', (gTot ? gDone+'/'+gTot : '12×4'), false, 'grupos', (gTot > 0 && gDone === gTot));
     html += row('stats',  '📊', 'Estadísticas',  '', false, '');
     html += '</div>';
     return html;

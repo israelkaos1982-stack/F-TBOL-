@@ -21513,9 +21513,47 @@ window.goLiveMatches = function() {
     }
     return d;
   }
+  /* ── Cash pool por usuario (2026-05-24) ────────────────────────
+     Toñín juega en el Liverpool, así que su CASH de ISRAMAX es la
+     CAJA REAL del Liverpool (`_bayernHudGet().money`) — no una bolsa
+     interna separada. Stakes y devoluciones se aplican directamente
+     al presupuesto del club vía `_bayernHudCreditMoney`. El resto de
+     humanos aún no tiene su caja propia montada; usan la bolsa
+     interna `d.users[userId].cash` con default `ISRAMAX_INITIAL_CASH`. */
+  function _isramaxGetCash(userId){
+    if (userId === 'tonin'){
+      try {
+        var o = (typeof window._bayernHudGet === 'function') ? window._bayernHudGet() : null;
+        if (o && o.money != null) return Number(o.money) || 0;
+      } catch(_){}
+    }
+    var d = _isramaxLoad();
+    var u = d.users && d.users[userId];
+    if (u && typeof u.cash === 'number') return Number(u.cash) || 0;
+    return ISRAMAX_INITIAL_CASH;
+  }
+  /* Suma `delta` a la caja del pool indicado. `pool` puede ser 'hub'
+     (caja real del Liverpool de Toñín) o 'cash' (bolsa interna del
+     usuario). Mutates `d` para el pool 'cash'; el caller persiste. */
+  function _isramaxAdjustPool(d, userId, pool, delta){
+    delta = Number(delta) || 0;
+    if (!delta) return;
+    if (pool === 'hub'){
+      if (typeof window._bayernHudCreditMoney === 'function'){
+        try { window._bayernHudCreditMoney(delta); } catch(_){}
+      }
+      return;
+    }
+    if (!d.users) d.users = {};
+    if (!d.users[userId]) d.users[userId] = { cash: ISRAMAX_INITIAL_CASH, invested: 0, balance: 0 };
+    var next = (Number(d.users[userId].cash)||0) + delta;
+    d.users[userId].cash = Math.max(0, next);
+  }
+  function _isramaxPoolFor(userId){
+    return userId === 'tonin' ? 'hub' : 'cash';
+  }
   function _isramaxStats(userId){
     var d = _isramaxLoad();
-    var u = (d.users && d.users[userId]) || { cash: ISRAMAX_INITIAL_CASH, invested: 0, balance: 0 };
     /* Recalcular invested + balance desde bets activas/resueltas. */
     var invested = 0, won = 0, lost = 0;
     (d.bets || []).forEach(function(b){
@@ -21527,12 +21565,12 @@ window.goLiveMatches = function() {
       } else if (b.status === 'lost'){
         lost += Number(b.stake)||0;
       }
+      /* 'void' no afecta — el stake ya se devolvió al cash. */
     });
-    var balance = won - lost;
     return {
-      cash: Number(u.cash)||0,
+      cash: _isramaxGetCash(userId),
       invested: invested,
-      balance: balance
+      balance: won - lost
     };
   }
 
@@ -21625,6 +21663,7 @@ window.goLiveMatches = function() {
         '#isramax-ov .isr-bet-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);}' +
         '#isramax-ov .isr-bet-row.won{border-color:rgba(95,224,138,.50);background:rgba(95,224,138,.08);}' +
         '#isramax-ov .isr-bet-row.lost{border-color:rgba(255,128,128,.40);background:rgba(255,128,128,.06);opacity:.85;}' +
+        '#isramax-ov .isr-bet-row.void{border-color:rgba(180,180,200,.40);background:rgba(180,180,200,.06);opacity:.80;}' +
         '#isramax-ov .isr-bet-meta{font-size:10px;color:rgba(255,255,255,.55);}' +
         '#isramax-ov .isr-bet-stake{font-family:"Bebas Neue",sans-serif;font-size:16px;color:#ffd54a;}' +
         '#isramax-ov .isr-bet-cuota{font-family:Oswald,sans-serif;font-size:10px;color:#9fdcff;letter-spacing:1px;}' +
@@ -21733,25 +21772,24 @@ window.goLiveMatches = function() {
     });
     var html = '<div class="isr-pick-comp-hdr">📋 TUS APUESTAS</div>';
     bets.forEach(function(b){
-      var stCls = b.status === 'won' ? 'won' : (b.status === 'lost' ? 'lost' : '');
-      var stIco = b.status === 'won' ? '✅' : (b.status === 'lost' ? '❌' : '⏳');
+      var stCls = b.status === 'won'  ? 'won'
+                : b.status === 'lost' ? 'lost'
+                : b.status === 'void' ? 'void' : '';
+      var stIco = b.status === 'won'  ? '✅'
+                : b.status === 'lost' ? '❌'
+                : b.status === 'void' ? '↩️' : '⏳';
       html += '<div class="isr-bet-row ' + stCls + '">'
             +   '<div>'
             +     '<div>' + _escHtml(b.home) + ' vs ' + _escHtml(b.away) + ' <span class="isr-bet-cuota">@' + (Number(b.cuota)||0).toFixed(2) + '€</span></div>'
-            +     '<div class="isr-bet-meta">' + _escHtml(b.comp || '') + ' · ' + _escHtml(b.label || '') + '</div>'
+            +     '<div class="isr-bet-meta">' + _escHtml(b.comp || '') + ' · ' + _escHtml(b.label || '')
+            +       (b.status === 'void' ? ' · ANULADA (stake devuelto)' : '')
+            +     '</div>'
             +   '</div>'
             +   '<span class="isr-bet-stake">' + (Number(b.stake)||0).toFixed(0) + '€</span>'
             +   '<span style="font-size:18px;">' + stIco + '</span>'
             + '</div>';
-      /* Botones de resolución manual para tus apuestas abiertas (los
-         mercados de córners/tarjetas/etc. no se liquidan solos). */
-      if (b.status === 'open' && _isramaxSession && !_isramaxSession.isGuest
-          && b.userId === _isramaxSession.userId){
-        html += '<div class="isr-bet-actions">'
-              +   '<button class="isr-bet-act won" onclick="window._isramaxMarkBet(\'' + b.id + '\',\'won\')">✅ Gané</button>'
-              +   '<button class="isr-bet-act lost" onclick="window._isramaxMarkBet(\'' + b.id + '\',\'lost\')">❌ Perdí</button>'
-              + '</div>';
-      }
+      /* Sin botones manuales — la realidad del partido decide
+         (petición usuario 2026-05-24). */
     });
     return html;
   }
@@ -21856,9 +21894,12 @@ window.goLiveMatches = function() {
     var all = _isramaxScanDerbys();
     /* Filtros: estado pending o playing (no apostar a finalizados),
        y excluir partidos donde el propio user juegue. */
+    /* Solo partidos PENDING — en cuanto el cronómetro de simulación
+       arranca (estado 'playing') el partido queda bloqueado para
+       apuestas nuevas. Petición usuario 2026-05-24. */
     var pickable = all.filter(function(it){
       if (!it || !it.home || !it.away) return false;
-      if (it.state === 'finished') return false;
+      if (it.state !== 'pending') return false;
       if (it.home === myTeam || it.away === myTeam) return false;
       return true;
     });
@@ -22235,13 +22276,11 @@ window.goLiveMatches = function() {
       +   '<div class="isr-stake-row"><span>Cuota</span><span class="isr-stake-val">' + oddStr + '€</span></div>'
       +   '<div class="isr-stake-row"><span>Cash disponible</span><span class="isr-stake-val">' + stats.cash.toFixed(0) + '€</span></div>'
       +   '<label class="isr-stake-lbl">Importe a apostar (€)</label>'
-      +   '<input id="isramax-stake" class="isr-stake-input" type="number" min="1" max="' + stats.cash.toFixed(0) + '" value="10" inputmode="numeric"/>'
+      +   '<input id="isramax-stake" class="isr-stake-input" type="number" min="10" max="30" step="10" value="10" inputmode="numeric" readonly/>'
       +   '<div class="isr-stake-presets">'
       +     '<button onclick="window._isramaxStakeSet(10)">10€</button>'
-      +     '<button onclick="window._isramaxStakeSet(25)">25€</button>'
-      +     '<button onclick="window._isramaxStakeSet(50)">50€</button>'
-      +     '<button onclick="window._isramaxStakeSet(100)">100€</button>'
-      +     '<button onclick="window._isramaxStakeSet(' + Math.floor(stats.cash) + ')">MAX</button>'
+      +     '<button onclick="window._isramaxStakeSet(20)">20€</button>'
+      +     '<button onclick="window._isramaxStakeSet(30)">30€</button>'
       +   '</div>'
       +   '<div id="isramax-stake-preview" class="isr-stake-preview"></div>'
       +   '<button class="isr-add-bet" onclick="window._isramaxConfirmBet&&window._isramaxConfirmBet()">✅ CONFIRMAR APUESTA</button>'
@@ -22274,24 +22313,26 @@ window.goLiveMatches = function() {
     if (!_isramaxPendingBet || !_isramaxCurrentMatch || !_isramaxSession) return;
     var inp = document.getElementById('isramax-stake');
     var stake = parseFloat(inp ? inp.value : 0) || 0;
-    if (stake < 1){ alert('⚠️ Importe mínimo: 1€'); return; }
+    /* Importes permitidos: 10 / 20 / 30 — petición usuario 2026-05-24. */
+    if (stake !== 10 && stake !== 20 && stake !== 30){
+      alert('⚠️ Importe permitido: 10€, 20€ o 30€.');
+      return;
+    }
+    var userId = _isramaxSession.userId;
     var d = _isramaxLoad();
     if (!d.users) d.users = {};
     if (!d.bets) d.bets = [];
-    var u = d.users[_isramaxSession.userId];
-    if (!u){
-      d.users[_isramaxSession.userId] = { cash: ISRAMAX_INITIAL_CASH, invested:0, balance:0 };
-      u = d.users[_isramaxSession.userId];
-    }
-    if (stake > u.cash){
-      alert('⚠️ No tienes suficiente cash. Tienes ' + u.cash.toFixed(0) + '€.');
+    var cash = _isramaxGetCash(userId);
+    if (stake > cash){
+      alert('⚠️ No tienes suficiente cash. Tienes ' + cash.toFixed(0) + '€.');
       return;
     }
-    u.cash = u.cash - stake;
+    var pool = _isramaxPoolFor(userId);
+    _isramaxAdjustPool(d, userId, pool, -stake);
     var m = _isramaxCurrentMatch;
     d.bets.push({
       id: 'b-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7),
-      userId: _isramaxSession.userId,
+      userId: userId,
       matchKey: _isramaxMatchKey(m),
       home: m.home, away: m.away,
       comp: (m.comp && m.comp.name) || '',
@@ -22302,6 +22343,7 @@ window.goLiveMatches = function() {
       cuota: _isramaxPendingBet.cuota,
       stake: stake,
       status: 'open',
+      cashPool: pool,
       createdAt: new Date().toISOString()
     });
     _isramaxSave(d);
@@ -22311,32 +22353,79 @@ window.goLiveMatches = function() {
   };
 
   /* ═══════════════════════════════════════════════════════════════
-     LIQUIDACIÓN DE APUESTAS · automatiza el presupuesto del Liverpool
+     LIQUIDACIÓN DE APUESTAS · automatizada por la realidad del partido
      ───────────────────────────────────────────────────────────────
-     Las apuestas se guardan como `open`. Cuando el partido apostado
-     termina (lo detecta `_scanAllDerbies` con state 'finished' + su
-     marcador) se liquidan AUTOMÁTICAMENTE los mercados deducibles del
-     RESULTADO: 1X2, doble oportunidad, total goles y ambos marcan.
-     Los mercados que necesitan datos que el motor no persiste
-     (córners, tarjetas, rojas, tiros, goles 1ª parte) quedan `open` y
-     se resuelven con los botones manuales ✅/❌ del dashboard.
+     Petición usuario 2026-05-24: el HUMANO no marca si una apuesta
+     se ha ganado o perdido — lo decide la REALIDAD del partido
+     (eventos del acta, marcador, matchStats). Cuando el partido
+     finaliza, todas las apuestas abiertas se liquidan automáticamente:
 
-     Cuando una apuesta de TOÑÍN (entrenador del Liverpool) resulta
-     GANADA, su ganancia neta (stake × (cuota−1)) se suma al 🪙
-     Presupuesto del hub vía `_bayernHudCreditMoney`. Idempotente:
-     cada apuesta acreditada queda marcada con `hubCredited`. */
-  function _isramaxSettleMarket(b, ga, gv){
-    ga = Number(ga)||0; gv = Number(gv)||0;
-    var tot = ga + gv;
+       • 1X2, doble oportunidad, total goles, ambos marcan → del
+         marcador (siempre auto-resolvibles).
+       • Goles 1ª parte, tarjetas, rojas → de `res.events` (Liga EA
+         Sports tiene el acta detallada por minuto).
+       • Córners, tiros a puerta → de `res.matchStats`.
+
+     Si el partido no tiene events/matchStats persistidos (típico de
+     KO de Copa o Champions cuando aún no se ha jugado en vivo) y la
+     apuesta no se puede deducir del marcador, se marca como `void`
+     (anulada) y el stake se DEVUELVE al cash del usuario. Decisión
+     justa cuando el sistema no puede verificar el resultado real.
+
+     Pool de cash: Toñín → caja del Liverpool (`_bayernHudGet().money`)
+     vía `_bayernHudCreditMoney`. Resto de humanos → bolsa interna
+     `d.users[userId].cash`. El pool se persiste por bet en
+     `b.cashPool` ('hub' | 'cash') al crear la apuesta. */
+
+  /* Lookup de datos extendidos del partido (events + matchStats)
+     para apuestas que necesitan más que el marcador. Por ahora solo
+     Liga EA Sports tiene acta accesible vía `loadResults()`. Para
+     otras competiciones se devuelve solo gh/ga. */
+  function _isramaxFetchMatchData(it, b){
+    if (!it) return null;
+    var gh = Number(it.score && it.score.a) || 0;
+    var ga = Number(it.score && it.score.b) || 0;
+    var data = { gh: gh, ga: ga, events: null, matchStats: null, hasDetail: false };
+    try {
+      if (typeof window.loadResults === 'function'){
+        var results = window.loadResults() || {};
+        var rk = (it.j||b.j||0) + '|' + (it.home||b.home) + '|' + (it.away||b.away);
+        var r = results[rk];
+        if (r){
+          if (typeof r.gh === 'number') data.gh = r.gh;
+          if (typeof r.ga === 'number') data.ga = r.ga;
+          if (Array.isArray(r.events)) data.events = r.events;
+          if (r.matchStats) data.matchStats = r.matchStats;
+          if (data.events || data.matchStats) data.hasDetail = true;
+        }
+      }
+    } catch(_){}
+    return data;
+  }
+
+  function _isramaxParseLine(label){
+    /* Extrae el número del label "Más 1.5" / "Menos 2.5" → 1.5 / 2.5 */
+    var m = String(label||'').match(/(\d+(?:[.,]\d+)?)/);
+    return m ? parseFloat(m[1].replace(',','.')) : null;
+  }
+
+  /* Decide outcome: 'won' | 'lost' | 'void' | null (sin datos aún) */
+  function _isramaxSettleMarket(b, md){
+    if (!md) return null;
+    var gh = Number(md.gh)||0;
+    var gv = Number(md.ga)||0;
+    var tot = gh + gv;
+    var ev = md.events;
+    var ms = md.matchStats;
     switch (b.market){
       case '1x2': {
-        var res = ga > gv ? 'home' : (ga < gv ? 'away' : 'draw');
+        var res = gh > gv ? 'home' : (gh < gv ? 'away' : 'draw');
         return b.option === res ? 'won' : 'lost';
       }
       case 'dbl': {
-        var ok = b.option === 'homeE' ? (ga >= gv)
-               : b.option === 'awayE' ? (gv >= ga)
-               : b.option === 'homeA' ? (ga !== gv) : false;
+        var ok = b.option === 'homeE' ? (gh >= gv)
+               : b.option === 'awayE' ? (gv >= gh)
+               : b.option === 'homeA' ? (gh !== gv) : false;
         return ok ? 'won' : 'lost';
       }
       case 'gtp': {
@@ -22345,77 +22434,107 @@ window.goLiveMatches = function() {
         return (over ? (tot > line) : (tot < line)) ? 'won' : 'lost';
       }
       case 'amb': {
-        var btts = (ga > 0 && gv > 0);
+        var btts = (gh > 0 && gv > 0);
         return ((b.option === 'si') === btts) ? 'won' : 'lost';
       }
+      case 'g1p': {
+        if (!Array.isArray(ev)) return 'void';
+        var g1 = 0;
+        ev.forEach(function(e){
+          if (!e || !e.type) return;
+          var mn = Number(e.min)||0;
+          if (mn > 45) return;
+          if (e.type === 'gol' || e.type === 'pen-gol' || e.type === 'falta-gol' || e.type === 'propia') g1++;
+        });
+        var l1 = (String(b.option).indexOf('25') !== -1) ? 2.5 : 1.5;
+        var over1 = String(b.option).indexOf('mas') === 0;
+        return (over1 ? (g1 > l1) : (g1 < l1)) ? 'won' : 'lost';
+      }
+      case 'cor': {
+        if (!ms || !ms.a || !ms.b) return 'void';
+        var ca = Number(ms.a.corners)||0;
+        var cb = Number(ms.b.corners)||0;
+        var totC = ca + cb;
+        if (b.option === 'mas35')    return totC > 3.5 ? 'won' : 'lost';
+        if (b.option === 'menos45')  return totC < 4.5 ? 'won' : 'lost';
+        if (b.option === 'maslocal') return ca > cb ? 'won' : 'lost';
+        if (b.option === 'masvisit') return cb > ca ? 'won' : 'lost';
+        return 'void';
+      }
+      case 'tar': {
+        if (!Array.isArray(ev)) return 'void';
+        var yel = 0;
+        ev.forEach(function(e){
+          if (!e || !e.type) return;
+          if (e.type === 'amarilla' || e.type === 'd-amarilla') yel++;
+        });
+        var ln = _isramaxParseLine(b.label);
+        if (ln == null) return 'void';
+        var overY = String(b.option).indexOf('mas') === 0;
+        return (overY ? (yel > ln) : (yel < ln)) ? 'won' : 'lost';
+      }
+      case 'roj': {
+        if (!Array.isArray(ev)) return 'void';
+        var hasRed = ev.some(function(e){
+          return e && (e.type === 'roja' || e.type === 'd-amarilla');
+        });
+        return ((b.option === 'si') === hasRed) ? 'won' : 'lost';
+      }
+      case 'tir': {
+        if (!ms || !ms.a || !ms.b) return 'void';
+        var sa = Number(ms.a.tiros)||0;
+        var sb = Number(ms.b.tiros)||0;
+        if (b.option === 'maslocal') return sa > sb ? 'won' : 'lost';
+        if (b.option === 'masvisit') return sb > sa ? 'won' : 'lost';
+        return 'void';
+      }
       default:
-        return null;   /* g1p / cor / tar / roj / tir → manual */
+        return 'void';
     }
   }
-  /* Acredita al presupuesto del Liverpool la ganancia neta de las
-     apuestas GANADAS de Toñín aún no acreditadas. Marca el objeto en
-     memoria (`hubCredited`); el caller persiste. Devuelve true si
-     marcó alguna. */
-  function _isramaxCreditHubFromBets(d){
-    var total = 0, marked = false;
-    (d.bets || []).forEach(function(b){
-      if (!b || b.userId !== 'tonin' || b.status !== 'won' || b.hubCredited) return;
-      var profit = (Number(b.stake)||0) * ((Number(b.cuota)||0) - 1);
-      if (profit > 0) total += profit;
-      b.hubCredited = true;
-      marked = true;
-    });
-    if (marked && total > 0 && typeof window._bayernHudCreditMoney === 'function'){
-      try { window._bayernHudCreditMoney(Math.round(total)); } catch(_){}
-    }
-    return marked;
-  }
+
   /* Recorre las apuestas open, liquida las que tengan partido
-     finalizado + mercado deducible del marcador, y acredita al hub.
-     Pull-based, idempotente y barato. Devuelve true si algo cambió. */
+     finalizado y devuelve la ganancia/devolución al pool correcto.
+     Pull-based, idempotente. Devuelve true si algo cambió. */
   function _isramaxSettleOpenBets(){
     var d = _isramaxLoad();
     if (!d || !Array.isArray(d.bets) || !d.bets.length) return false;
     var changed = false;
-    if (d.bets.some(function(b){ return b && b.status === 'open'; })){
-      var byKey = {};
-      try {
-        _isramaxScanDerbys().forEach(function(it){ byKey[_isramaxMatchKey(it)] = it; });
-      } catch(_){}
-      d.bets.forEach(function(b){
-        if (!b || b.status !== 'open') return;
-        var it = byKey[b.matchKey];
-        if (!it || it.state !== 'finished' || !it.score) return;
-        var outcome = _isramaxSettleMarket(b, it.score.a, it.score.b);
-        if (!outcome) return;
-        b.status = outcome;
-        b.settledAt = new Date().toISOString();
-        b.settledScore = String(it.score.a) + '-' + String(it.score.b);
-        b.settledAuto = true;
-        changed = true;
-      });
-    }
-    /* Acreditar al hub las ganadas de Toñín pendientes (recién
-       liquidadas, manuales o de versiones previas). */
-    if (_isramaxCreditHubFromBets(d)) changed = true;
+    var hasOpen = d.bets.some(function(b){ return b && b.status === 'open'; });
+    if (!hasOpen) return false;
+    var byKey = {};
+    try {
+      _isramaxScanDerbys().forEach(function(it){ byKey[_isramaxMatchKey(it)] = it; });
+    } catch(_){}
+    d.bets.forEach(function(b){
+      if (!b || b.status !== 'open') return;
+      var it = byKey[b.matchKey];
+      if (!it || it.state !== 'finished' || !it.score) return;
+      var md = _isramaxFetchMatchData(it, b);
+      var outcome = _isramaxSettleMarket(b, md);
+      if (!outcome) return;
+      b.status = outcome;
+      b.settledAt = new Date().toISOString();
+      b.settledScore = String(md.gh) + '-' + String(md.ga);
+      b.settledAuto = true;
+      /* Pool: si la bet se creó con `cashPool` definido, devolvemos ahí.
+         Bets legacy (sin cashPool) → 'cash' (bolsa interna donde se
+         dedujo el stake en el modelo antiguo). */
+      var pool = b.cashPool || 'cash';
+      if (outcome === 'won'){
+        _isramaxAdjustPool(d, b.userId, pool, (Number(b.stake)||0) * (Number(b.cuota)||0));
+      } else if (outcome === 'void'){
+        _isramaxAdjustPool(d, b.userId, pool, Number(b.stake)||0);
+      }
+      changed = true;
+    });
     if (changed) _isramaxSave(d);
     return changed;
   }
-  /* Resolución MANUAL de una apuesta (botones ✅/❌ del dashboard).
-     Necesaria para mercados no deducibles del marcador. */
-  window._isramaxMarkBet = function(betId, outcome){
-    if (outcome !== 'won' && outcome !== 'lost') return;
-    if (!_isramaxSession || _isramaxSession.isGuest) return;
-    var d = _isramaxLoad();
-    var b = (d.bets||[]).filter(function(x){ return x && x.id === betId; })[0];
-    if (!b || b.status !== 'open' || b.userId !== _isramaxSession.userId) return;
-    b.status = outcome;
-    b.settledAt = new Date().toISOString();
-    b.settledManual = true;
-    _isramaxCreditHubFromBets(d);
-    _isramaxSave(d);
-    _isramaxRenderDashboard();
-  };
+  /* `_isramaxMarkBet` se eliminó del flujo activo (petición usuario
+     2026-05-24: el humano NO marca; la realidad del partido decide).
+     Dejamos un stub no-op por si algún caller legacy lo invoca. */
+  window._isramaxMarkBet = function(){ /* deprecated */ };
   window._isramaxSettleOpenBets = _isramaxSettleOpenBets;
 
   /* Crea el div.screen#s-derbys en body si no existe. */

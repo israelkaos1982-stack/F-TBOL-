@@ -13239,6 +13239,24 @@ window._showSimProgress = function(opts, onDone){
     filter:drop-shadow(0 0 3px rgba(95,224,138,.55));
   }
   .tour-match.is-locked{opacity:.55;cursor:not-allowed;}
+  /* Jornadas desplegables (foto 2, 2026-05-24): el header `.tour-jor-h`
+     actúa como botón; los partidos viven dentro de `.tour-jor-body`
+     que solo se muestra cuando el padre `.tour-jor` tiene `.is-open`.
+     El estado lo persiste `_jorToggle` en `jor_collapse_v1` para que
+     sobreviva a re-renders (al simular / cambiar de pantalla). */
+  .tour-jor-h{cursor:pointer;user-select:none;-webkit-user-select:none;}
+  .tour-jor-chev{
+    margin-left:auto;font-family:Oswald,sans-serif;font-size:13px;
+    color:rgba(255,255,255,.45);transition:transform .15s ease;
+    flex-shrink:0;width:14px;text-align:center;
+  }
+  .tour-jor.is-open .tour-jor-chev{transform:rotate(180deg);color:rgba(255,255,255,.85);}
+  .tour-jor-body{display:none;}
+  .tour-jor.is-open .tour-jor-body{display:block;}
+  /* Cuando la jornada está cerrada, colapsamos el padding inferior y
+     el margin del header para que el box quede compacto. */
+  .tour-jor:not(.is-open){padding-bottom:0;}
+  .tour-jor:not(.is-open) .tour-jor-h{margin-bottom:0;border-radius:8px;border-bottom-color:transparent;}
 </style>
 
 <!-- ═══ OVERLAY PICKER DE EQUIPO HUMANO ═══
@@ -15469,14 +15487,26 @@ window._showSimProgress = function(opts, onDone){
       var isFuture = (j > actualCur);
       var isPast = (j < actualCur);
       var lblTxt = (opts.shortLabel ? 'J' : 'Jornada ') + (j+1);
+      /* Cada jornada es desplegable (foto 2, 2026-05-24): header
+         clicable + body con los partidos. La actual se abre por
+         defecto; el resto cerrada. El estado lo persiste `_jorToggle`
+         para que sobreviva a re-renders. */
+      var jid = 'tour-jm-' + tourId + '-' + (prefix||'') + j;
+      var collapsed = window._jorIsCollapsed && window._jorIsCollapsed(jid);
+      var jOpen = isCurrent && !collapsed;
       var cls = 'tour-jor';
       if (isCurrent) cls += ' is-current';
       if (isFuture) cls += ' is-future';
       if (isPast) cls += ' is-past';
+      if (jOpen) cls += ' is-open';
       var _jd = _cfgFC ? _tourGroupJorDate(_cfgFC, j) : '';
-      html += '<div class="'+cls+'"><div class="tour-jor-h"><span class="tour-jor-tag">'+lblTxt+'</span>'
-        + (_jd ? '<span class="tour-jor-date">📅 '+_jd+'</span>' : '')
-        + '</div>';
+      html += '<div class="'+cls+'">'
+        + '<div class="tour-jor-h" onclick="_jorToggle(\''+jid+'\')">'
+        +   '<span class="tour-jor-tag">'+lblTxt+'</span>'
+        +   (_jd ? '<span class="tour-jor-date">📅 '+_jd+'</span>' : '')
+        +   '<span class="tour-jor-chev">▾</span>'
+        + '</div>'
+        + '<div class="tour-jor-body' + (jOpen ? ' open' : '') + '" id="'+jid+'">';
       var allPlayedJ = true;
       /* Orden de partidos: por defecto el del fixture; con
          opts.humansFirst los partidos con equipo humano van arriba
@@ -15535,7 +15565,7 @@ window._showSimProgress = function(opts, onDone){
           + '▶ SIMULAR JORNADA'
           + '</button></div>';
       }
-      html += '</div>';
+      html += '</div></div>';   /* cierra .tour-jor-body + .tour-jor */
     });
     return html;
   }
@@ -16141,12 +16171,17 @@ window._showSimProgress = function(opts, onDone){
         });
         var isCurrent = (ji === curJg);
         var jid = 'mn-j-' + tourId + '-' + g + '-' + ji;
+        /* La jornada actual se abre por defecto, salvo que el usuario
+           la haya colapsado a mano (persistido en `jor_collapse_v1`).
+           Sin esto, simular un partido re-pintaba la pantalla y la
+           jornada actual volvía a abrirse sola — foto 1, 2026-05-24. */
+        var jOpen = isCurrent && !window._jorIsCollapsed(jid);
         html += '<div class="jblock" style="margin-bottom:6px;">';
         html += '<button type="button" class="jbtn c-mundial' + (allDone ? ' done' : '') + '" '
-          + 'onclick="tog(\''+jid+'\')">'
+          + 'onclick="_jorToggle(\''+jid+'\')">'
           + '<div class="pdot">' + (allDone ? '✅' : (isCurrent ? '▶' : '○')) + '</div>'
           + '🌍 <b>Mundial</b>&nbsp;&nbsp;Jornada '+(ji+1)+'</button>';
-        html += '<div class="jmatches' + (isCurrent ? ' open' : '') + '" id="'+jid+'">';
+        html += '<div class="jmatches' + (jOpen ? ' open' : '') + '" id="'+jid+'">';
         jor.forEach(function(m, mi){
           var key = gKey + ji + '_' + mi;
           var res = cfg.results[key];
@@ -18324,6 +18359,42 @@ window._showSimProgress = function(opts, onDone){
     return 'linear-gradient(135deg,' + dark + ' 0%,' + hex + ' 50%,' + dark + ' 100%)';
   }
   window._tvCardGradient = _tvCardGradient;
+  /* ── Persistencia de jornadas colapsadas (foto 1+2, 2026-05-24) ──
+     El usuario puede colapsar/expandir cada jornada y la elección
+     sobrevive a re-renders (al simular un partido, navegar y volver,
+     etc.). Sin esto, las jornadas se re-abrían solas porque el render
+     siempre marcaba "current" con la clase `open`. Lista de IDs
+     colapsados en `jor_collapse_v1` (localStorage, sólo strings). */
+  (function(){
+    var KEY = 'jor_collapse_v1';
+    function load(){
+      try { var raw = localStorage.getItem(KEY); var a = raw ? JSON.parse(raw) : []; return Array.isArray(a) ? a : []; }
+      catch(_){ return []; }
+    }
+    function save(arr){ try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch(_){} }
+    window._jorIsCollapsed = function(id){ return load().indexOf(String(id)) !== -1; };
+    window._jorSetCollapsed = function(id, collapsed){
+      id = String(id);
+      var a = load(), i = a.indexOf(id);
+      if (collapsed && i === -1) { a.push(id); save(a); }
+      else if (!collapsed && i !== -1) { a.splice(i, 1); save(a); }
+    };
+    window._jorToggle = function(id){
+      var el = document.getElementById(id);
+      if (!el) return;
+      var nowOpen = el.classList.toggle('open');
+      window._jorSetCollapsed(id, !nowOpen);
+      /* Si el padre es una `.tour-jor` (qualifier de Selecciones,
+         Mundial, etc.), reflejar la apertura en el padre para que el
+         CSS muestre/oculte el body y rote el chevron. */
+      try {
+        var par = el.parentElement;
+        if (par && par.classList && par.classList.contains('tour-jor')){
+          par.classList.toggle('is-open', nowOpen);
+        }
+      } catch(_){}
+    };
+  })();
   function _tvEsc(s){ return String(s == null ? '' : s).replace(/[<>"]/g, function(c){ return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;'; }); }
   /* Una "bandera" de torneo puede ser un emoji O una URL https de
      imagen (petición usuario 2026-05-21). Devuelve el HTML a pintar. */
@@ -18608,22 +18679,42 @@ window._showSimProgress = function(opts, onDone){
         + '<span class="sc-label" style="color:' + txtEl.value + ';">' + _tvEsc(_tvName(id)) + '</span>'
         + '<span class="sc-arr" style="color:' + txtEl.value + ';">▶</span></div>';
     }
-    paint();
-    boxEl.addEventListener('input', paint);
-    txtEl.addEventListener('input', paint);
-    logoEl.addEventListener('input', paint);
-    ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
-    ov.querySelector('#tvc-cancel').addEventListener('click', function(){ ov.remove(); });
-    ov.querySelector('#tvc-save').addEventListener('click', function(){
+    /* Auto-guardado en cada cambio de color/logo (foto 3-5, 2026-05-24).
+       Antes: el color sólo se persistía al pulsar Guardar; en Android
+       el `<input type=color>` es un diálogo a pantalla completa y
+       muchos usuarios pulsaban "Establecer" en el diálogo creyendo
+       que ya estaba guardado, sin llegar a Guardar — la caja se
+       quedaba sin cambiar. Ahora cada `input`/`change` persiste y
+       repinta las cards al instante; Guardar sólo cierra el modal. */
+    function persistAndRender(){
       var c = _tvCfgOf(id);
       c.cardColor = _tvHexClamp(boxEl.value) || c.cardColor || '';
       c.cardText  = _tvHexClamp(txtEl.value) || c.cardText  || '';
       c.flag      = String(logoEl.value || '').trim() || c.flag || '🏆';
       try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = c; } catch(_){}
       try { if (typeof window._tourSave === 'function') window._tourSave(id, c); } catch(_){}
-      ov.remove();
       try { _tvRenderCards(); } catch(_){}
       try { _tvRefreshManage(); } catch(_){}
+    }
+    function onChange(){ paint(); persistAndRender(); }
+    paint();
+    /* `input` cubre desktop (cambia en vivo al arrastrar el cursor);
+       `change` cubre Android, donde el diálogo nativo sólo dispara
+       el evento al pulsar "Establecer". Escuchamos ambos para que
+       cualquier picker — sea cual sea — guarde el color al confirmar. */
+    boxEl.addEventListener('input',  onChange);
+    boxEl.addEventListener('change', onChange);
+    txtEl.addEventListener('input',  onChange);
+    txtEl.addEventListener('change', onChange);
+    logoEl.addEventListener('input', onChange);
+    logoEl.addEventListener('change',onChange);
+    ov.addEventListener('click', function(e){ if (e.target === ov) ov.remove(); });
+    ov.querySelector('#tvc-cancel').addEventListener('click', function(){ ov.remove(); });
+    ov.querySelector('#tvc-save').addEventListener('click', function(){
+      /* Por si llegan aquí sin que haya disparado `change` (picker exótico
+         que sólo dispare `input` y se cierre raro), volvemos a persistir. */
+      persistAndRender();
+      ov.remove();
     });
   }
   window._tvColorEditor = _tvColorEditor;

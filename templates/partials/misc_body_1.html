@@ -17229,7 +17229,10 @@ window._showSimProgress = function(opts, onDone){
       var qual = isAdv || isBestThird;
       var rowBg  = qual ? 'rgba(77,208,225,.10)' : 'transparent';
       var rowBd  = qual ? '#4dd0e1' : 'transparent';
-      var posCol = qual ? '#4dd0e1' : 'rgba(255,255,255,.45)';
+      /* Eliminados: número de posición en blanco brillante (mismo tono
+         que PJ/V/E/P), NO en gris. Solo se distinguen del clasificado
+         por el acento cian en bg + borde (petición usuario 2026-05-24). */
+      var posCol = qual ? '#4dd0e1' : 'rgba(255,255,255,.85)';
       cells += '<tr style="background:'+rowBg+';border-left:3px solid '+rowBd+';border-bottom:1px solid rgba(255,255,255,.05);">'
         + '<td style="padding:8px 6px 8px 7px;"><div style="display:flex;align-items:center;gap:6px;">'
         +   '<span style="font-family:\'Bebas Neue\',sans-serif;color:'+posCol+';width:16px;text-align:center;font-size:15px;">'+pos+'</span>'

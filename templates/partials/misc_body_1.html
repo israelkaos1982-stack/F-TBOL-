@@ -12988,10 +12988,22 @@ window._showSimProgress = function(opts, onDone){
      + ACTA. */
   .tour-tie{
     position:relative;
-    border:1px solid rgba(255,255,255,.18);border-radius:10px;
+    border:1.5px solid rgba(255,255,255,.55);border-radius:10px;
     padding:8px 8px 6px;background:rgba(255,255,255,.022);
+    box-shadow:0 0 6px rgba(255,255,255,.10),inset 0 0 4px rgba(255,255,255,.04);
     display:flex;flex-direction:column;gap:6px;
   }
+  /* VUELTA bloqueada (IDA aún sin jugar): atenuada y sin cursor. */
+  .tour-tie .tour-match.tour-match-locked{
+    opacity:.45;filter:grayscale(.4);cursor:not-allowed;
+    border:1px dashed rgba(255,255,255,.18);background:transparent;
+  }
+  /* Fila GLOBAL: marcador acumulado de la eliminatoria. */
+  .tour-tie .tour-match.tour-match-global{
+    background:rgba(240,192,64,.06);
+    border:1px solid rgba(240,192,64,.35);
+  }
+  .tour-tie .tour-match.tour-match-global .tour-score{color:#ffe489;}
   /* Fecha de la eliminatoria, arriba a la derecha (petición usuario
      2026-05-17). Línea propia alineada a la derecha (sin solapar). */
   .tour-tie-date{
@@ -15255,35 +15267,57 @@ window._showSimProgress = function(opts, onDone){
           tie += _tourTieLegsHtml(cfg, a, b, res);
           tie += _tourActaPanelHtml(id, matchKey, res);
         } else if (hasHuman && _tour2LegRound(cfg, curR)) {
-          /* Eliminatoria a ida y vuelta con humano: 2 partidos con su
-             propia card (petición usuario 2026-05-17). */
+          /* Eliminatoria a ida y vuelta con humano: IDA + VUELTA +
+             GLOBAL siempre visibles en la misma caja (petición usuario
+             2026-05-24). Sin botón SIM IA. La VUELTA se desbloquea al
+             jugar la IDA. */
           var L1 = cfg.results[matchKey + '|L1'];
-          if (!L1) {
-            tie += '<div class="tour-tie-leg-lbl">🟢 IDA · juega en su campo'
-              + (_kd && _kd.ida ? ' · 📅 ' + _kd.ida : '') + '</div>';
-            tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
+          var idaPickable = !L1;
+          var vtaPickable = !!L1;
+          var idaCls = 'tour-match'
+            + (idaPickable ? ' tour-match-pickable tour-match-has-human' : ' tour-match-played');
+          var vtaCls = 'tour-match'
+            + (vtaPickable ? ' tour-match-pickable tour-match-has-human' : ' tour-match-locked');
+          /* IDA */
+          tie += '<div class="tour-tie-leg-lbl">🟢 IDA · juega en su campo'
+            + (_kd && _kd.ida ? ' · 📅 ' + _kd.ida : '') + '</div>';
+          if (L1) {
+            var aWin1 = (L1.a|0) > (L1.b|0), bWin1 = (L1.b|0) > (L1.a|0);
+            var sA1 = '<span class="tour-score'+(aWin1?' tour-score-win':'')+'">'+(L1.a|0)+'</span>';
+            var sB1 = '<span class="tour-score'+(bWin1?' tour-score-win':'')+'">'+(L1.b|0)+'</span>';
+            tie += '<div class="'+idaCls+'">'
               + _bracketTeamHtml(a, id, i)
-              + '<span class="vs">vs</span>'
+              + '<span class="vs tour-score-wrap">'+sA1+' - '+sB1+'</span>'
               + _bracketTeamHtml(b, id, i+1)
               + '</div>';
-            tie += _tourSimAiBtnHtml(id, 'match', matchKey);
           } else {
-            var _e1 = function(s){ return String(s==null?'':s).replace(/[<>]/g,''); };
-            tie += '<div class="tour-tie-legs"><div class="tour-tie-leg">'
-              + '<span class="tl-lbl">IDA</span><span class="tl-row">'
-              + '<span class="tl-tm">'+_e1(a&&a.name)+'</span>'
-              + '<span class="tl-sc">'+(L1.a|0)+' - '+(L1.b|0)+'</span>'
-              + '<span class="tl-tm tl-tm-r">'+_e1(b&&b.name)+'</span></span></div></div>';
-            tie += '<div class="tour-tie-leg-lbl">🔁 VUELTA'
-              + (_kd && _kd.vta ? ' · 📅 ' + _kd.vta : '')
-              + ' · el GLOBAL se decide al terminar</div>';
-            tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
-              + _bracketTeamHtml(b, id, i+1)
-              + '<span class="vs">vs</span>'
+            tie += '<div class="'+idaCls+'"'+dataAttrs+'>'
               + _bracketTeamHtml(a, id, i)
+              + '<span class="vs">vs</span>'
+              + _bracketTeamHtml(b, id, i+1)
               + '</div>';
-            tie += _tourSimAiBtnHtml(id, 'match', matchKey);
           }
+          /* VUELTA (campo invertido) */
+          tie += '<div class="tour-tie-leg-lbl">🔁 VUELTA'
+            + (_kd && _kd.vta ? ' · 📅 ' + _kd.vta : '')
+            + (!L1 ? ' · (se desbloquea tras la IDA)' : '') + '</div>';
+          tie += '<div class="'+vtaCls+'"'+(vtaPickable?dataAttrs:'')+'>'
+            + _bracketTeamHtml(b, id, i+1)
+            + '<span class="vs">vs</span>'
+            + _bracketTeamHtml(a, id, i)
+            + '</div>';
+          /* GLOBAL (placeholder hasta que ambas legs estén jugadas;
+             cuando lo estén, esta rama no se ejecuta — el branch
+             `played` se encarga). */
+          var gA = (L1 ? (L1.a|0) : 0);
+          var gB = (L1 ? (L1.b|0) : 0);
+          var gTxt = L1 ? (gA + ' - ' + gB) : '— - —';
+          tie += '<div class="tour-tie-leg-lbl">🏆 GLOBAL</div>';
+          tie += '<div class="tour-match tour-match-global">'
+            + _bracketTeamHtml(a, id, i)
+            + '<span class="vs tour-score-wrap"><span class="tour-score">'+gTxt+'</span></span>'
+            + _bracketTeamHtml(b, id, i+1)
+            + '</div>';
         } else {
           tie += '<div class="'+rowClass+'"'+dataAttrs+'>'
             + _bracketTeamHtml(a, id, i)

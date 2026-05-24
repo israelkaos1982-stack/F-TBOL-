@@ -11759,12 +11759,28 @@
         _amsDobleTied = (_globalA === _globalB);
       }
       var _scoreTied = (Number(_gm.sc && _gm.sc.a) || 0) === (Number(_gm.sc && _gm.sc.b) || 0);
+      /* Torneo KO single-leg con ET+penaltis (Mundial 2032 fase
+         final: Dieciseisavos..Final). El gm-modal se abrió vía
+         abrirTorneo() que setea _gm._isTour / _tourId / _tourKey.
+         La regla aplica si el matchKey es de KO (`ko_`) y el
+         torneo tiene `formatConfig.koExtraTimePens === true`.
+         2026-05-24. */
+      var _isTourKoETP = false;
+      try {
+        if (_gm._isTour && _gm._tourId && typeof window._tourLoadCachedSync === 'function') {
+          var _tcfgETP = window._tourLoadCachedSync(_gm._tourId);
+          var _tfcETP = (_tcfgETP && _tcfgETP.formatConfig) || {};
+          var _tmkETP = String(_gm._tourKey || '').replace(/\|L[12]$/, '');
+          _isTourKoETP = (_tmkETP.indexOf('ko_') === 0) && (_tfcETP.koExtraTimePens === true);
+        }
+      } catch(_){}
       var _shouldForceET =
            (_isCopaSL && _scoreTied)
         || (_isScSL && _scoreTied)
         || (_isRecopaSL && _scoreTied)
         || (_isAmsElim && _scoreTied)
-        || (_isAmsDobleVuelta && _amsDobleTied);
+        || (_isAmsDobleVuelta && _amsDobleTied)
+        || (_isTourKoETP && _scoreTied);
 
       if (_shouldForceET && !_gm.penDone) {
         if (!_gm.etDone) {
@@ -13359,11 +13375,23 @@
       var globalB = idaB + (Number(_gm.sc.a) || 0);
       _amsDobleTied = (globalA === globalB);
     }
+    /* Torneo KO single-leg con ET+penaltis (Mundial 2032 fase
+       final). Mismo gate que en _gmRefreshFinishLabel. 2026-05-24. */
+    var _isTourKoETP = false;
+    try {
+      if (_gm._isTour && _gm._tourId && typeof window._tourLoadCachedSync === 'function') {
+        var _tcfgETP2 = window._tourLoadCachedSync(_gm._tourId);
+        var _tfcETP2 = (_tcfgETP2 && _tcfgETP2.formatConfig) || {};
+        var _tmkETP2 = String(_gm._tourKey || '').replace(/\|L[12]$/, '');
+        _isTourKoETP = (_tmkETP2.indexOf('ko_') === 0) && (_tfcETP2.koExtraTimePens === true);
+      }
+    } catch(_){}
     var _shouldForceET = (_isCopaSL && _gm.sc.a === _gm.sc.b)
                        || (_isScSL && _gm.sc.a === _gm.sc.b)
                        || (_isRecopaSL && _gm.sc.a === _gm.sc.b)
                        || (_isAmsElim && _gm.sc.a === _gm.sc.b)
-                       || (_isAmsDobleVuelta && _amsDobleTied);
+                       || (_isAmsDobleVuelta && _amsDobleTied)
+                       || (_isTourKoETP && _gm.sc.a === _gm.sc.b);
     if (_shouldForceET && !_gm.penDone) {
       if (!_gm.etDone) {
         var minNow = Math.floor((_gm.timerSec || 0) / 60);

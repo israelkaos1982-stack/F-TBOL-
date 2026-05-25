@@ -26,9 +26,17 @@ orden):
    `BALL_DB` (back-compat de las 14 comps base que históricamente
    se guardaban por la clave `champions`/`uel`/etc. en vez de
    `ucl`/`uel`).
-3. `COMP_BALL[compKey]` — default hardcoded por comp.
-4. Override por clima: nieve → `eFootball MAX VIS 26`.
-5. Fallback `ml-ball-name` del DOM (`ball-wrap-<matchKey>`).
+3. `ball_by_comp_v1[_COMP_GROUP_ALIAS[compKey]]` — alias de GRUPO
+   (2026-05-25): varios compKeys reales comparten una sola fila en
+   Ball Storage. Los torneos de verano (Joan Gamper `jg`, Asian
+   `asia`, Pre-Season Super `pss`, Soccer Champions Tour `sct` y
+   los genéricos `torneo`/`torneos`) caen sobre la extra `verano`;
+   `mundial` cae sobre `mundialito`.
+4. `COMP_BALL[compKey]` — default hardcoded por comp (incluye
+   defaults para `torneo`/`jg`/`asia`/`pss`/`sct`/`mundialito` para
+   evitar que caigan al default genérico `Ligue 1 McDonald's`).
+5. Override por clima: nieve → `eFootball MAX VIS 26`.
+6. Fallback `ml-ball-name` del DOM (`ball-wrap-<matchKey>`).
 
 ### Reglas a respetar
 

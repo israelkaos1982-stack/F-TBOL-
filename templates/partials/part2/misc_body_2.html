@@ -12816,7 +12816,7 @@
   function _gmGetSquad(teamName) {
     var sq = (typeof window.sqFromRegistryFull === 'function' && window.sqFromRegistryFull(teamName)) || [];
     if (!sq.length) sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
-    if (!sq.length) return [['', 'Jugador 1'], ['', 'Jugador 2'], ['', 'Jugador 3']];
+    if (!sq.length && typeof window._fallbackSq11 === 'function') return window._fallbackSq11();
     return sq;
   }
 

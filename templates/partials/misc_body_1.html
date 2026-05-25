@@ -4232,6 +4232,12 @@ window._showSimProgress = function(opts, onDone){
        tocar" del 2026-05-22). */
     var pair = _realPair();
     if (!pair){
+      /* Sin rival = humano eliminado o torneo terminado. Pintamos
+         CONTINUAR ▶ para no dejar al usuario atascado en ese día —
+         mismo patrón que `_cardRest` (precedente: regla CLAUDE.md
+         2026-05-24, eliminado en Mundial → día de descanso). El
+         botón llama `_markDoneAndAdvance` para saltar al siguiente
+         día del calendario. */
       st.innerHTML =
         '<div class="ps-card">'
         + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
@@ -4241,7 +4247,10 @@ window._showSimProgress = function(opts, onDone){
               ? '⚠️ Sin partido del ' + _esc(_psHumanName()) + ' en este día.<br><span style="font-size:11px;opacity:.7;">El cuadro del torneo no programa rival aquí (eliminado o torneo terminado).</span>'
               : '⚠️ Aún no has elegido torneo de verano.<br><span style="font-size:11px;opacity:.7;">Elige uno desde el hub para que se asigne un rival.</span>')
         + '</div>'
+        + '<button type="button" class="ps-btn ghost" id="ps-nopair-btn" style="margin-top:6px;">CONTINUAR ▶</button>'
         + '</div>';
+      var _npb = document.getElementById('ps-nopair-btn');
+      if (_npb) _npb.onclick = function(){ _markDoneAndAdvance(); };
       return;
     }
     var rv = d.rivals[day.date];

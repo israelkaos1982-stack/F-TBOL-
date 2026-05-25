@@ -4252,9 +4252,32 @@ window._showSimProgress = function(opts, onDone){
        "el otro equipo", lo que en vuelta == humano (rompía el placeholder
        y la previa que pintaban "Liverpool vs Liverpool"). */
     var _pairAway = pair.away || pair.rival;
+    /* Sedes (cfg.stadiums, 2026-05-25): si el admin eligió 4 estadios
+       en el editor del torneo, cada partido rota por hash determinista
+       del matchKey. Es la fuente de verdad — gana sobre el pick
+       aleatorio histórico y sobre el rv.stadium persistido (para
+       que cambiar los estadios en el editor se vea EN TODAS las
+       cards del torneo, incluso días ya visitados). */
+    var _tourStad = '';
+    try {
+      var _stCfg = (window._TOUR_CACHE || {})[pair.tourId] || null;
+      if (!_stCfg && typeof window._tourLoadCachedSync === 'function'){
+        _stCfg = window._tourLoadCachedSync(pair.tourId);
+      }
+      if (_stCfg && Array.isArray(_stCfg.stadiums)){
+        var _picks = _stCfg.stadiums.filter(function(s){ return !!s; });
+        if (_picks.length){
+          var _mk = String(pair.matchKey || '');
+          var _h = 5381;
+          for (var _i = 0; _i < _mk.length; _i++) _h = ((_h << 5) + _h + _mk.charCodeAt(_i)) | 0;
+          if (_h < 0) _h = -_h;
+          _tourStad = _picks[_h % _picks.length];
+        }
+      }
+    } catch(_){}
     if (!rv){
       rv = { name: pair.rival, home: pair.home, away: _pairAway,
-             stadium: STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
+             stadium: _tourStad || STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
              difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)] };
       d.rivals[day.date] = rv;
     } else {
@@ -4262,6 +4285,10 @@ window._showSimProgress = function(opts, onDone){
       if (rv.name !== pair.rival) rv.name = pair.rival;
       if (rv.home !== pair.home)  rv.home = pair.home;
       if (rv.away !== _pairAway)  rv.away = _pairAway;
+      /* Override del estadio si el admin configuró las 4 sedes del
+         torneo (cfg.stadiums). Sin esto, días ya creados antes del
+         picker mantendrían el estadio aleatorio guardado en rv. */
+      if (_tourStad && rv.stadium !== _tourStad) rv.stadium = _tourStad;
     }
     _save(d);
     /* En día de partido NO usamos card propia: se abre la PANTALLA DE
@@ -13879,6 +13906,22 @@ window._showSimProgress = function(opts, onDone){
       <!-- subconfig dinámica según el formato -->
     </div>
 
+    <!-- Sedes (4 estadios) — torneos de verano. El admin elige 4
+         estadios del Stadium HUB; cada partido del torneo se juega
+         en uno de los 4 rotando por hash determinista del matchKey.
+         Petición usuario 2026-05-25. Solo visible cuando el board
+         del torneo es 'verano' — _populateForm togglea display. -->
+    <div class="tour-ed-row" id="tour-ed-stadiums-row" style="display:none;">
+      <label>Sedes (4 estadios)</label>
+      <div id="tour-ed-stadiums-box" class="tour-ed-stadiums-box">
+        <div style="font-size:11px;color:#9cc6ff;line-height:1.45;margin-bottom:6px;text-transform:none;letter-spacing:0;">
+          🏟️ <b>Estadios sede</b> · cada partido humano se juega en uno de estos 4 estadios (rotando).
+          Toca un hueco para elegir del Stadium HUB.
+        </div>
+        <div id="tour-ed-stadiums-list"></div>
+      </div>
+    </div>
+
     <!-- Premios -->
     <div class="tour-ed-row" id="tour-ed-prizes-row">
       <label>Premios 🪙 (uno por línea, formato `clave:valor`)</label>
@@ -13936,28 +13979,42 @@ window._showSimProgress = function(opts, onDone){
   #tour-editor-overlay input:focus,#tour-editor-overlay select:focus,#tour-editor-overlay textarea:focus{
     outline:none;border-color:rgba(240,192,64,.55);
   }
-  /* Picker de las 4 sedes del Mundial · 48 selecciones (fase final).
+  /* Picker de las 4 sedes del Mundial · 48 selecciones (fase final)
+     y de los Torneos de Verano (cfg.stadiums por torneo, 2026-05-25).
      Filas tipo "tap-to-pick" que abren el overlay de STADIUM_DB. */
-  #selfin-stadiums-box .selfin-st-row{
+  #selfin-stadiums-box .selfin-st-row,
+  .tour-ed-stadiums-box .selfin-st-row{
     display:flex;align-items:center;gap:10px;padding:8px 10px;margin-top:6px;
     background:rgba(255,255,255,.04);border:1px solid rgba(120,180,255,.25);
     border-radius:7px;cursor:pointer;-webkit-tap-highlight-color:transparent;
     transition:background .14s,border-color .14s;
   }
   #selfin-stadiums-box .selfin-st-row:hover,
-  #selfin-stadiums-box .selfin-st-row:active{
+  #selfin-stadiums-box .selfin-st-row:active,
+  .tour-ed-stadiums-box .selfin-st-row:hover,
+  .tour-ed-stadiums-box .selfin-st-row:active{
     background:rgba(120,180,255,.10);border-color:rgba(120,180,255,.55);
   }
-  #selfin-stadiums-box .selfin-st-num{
+  #selfin-stadiums-box .selfin-st-num,
+  .tour-ed-stadiums-box .selfin-st-num{
     display:inline-flex;align-items:center;justify-content:center;
     width:22px;height:22px;border-radius:50%;font-family:Oswald,sans-serif;
     font-size:11px;background:rgba(120,180,255,.18);color:#9cc6ff;flex:0 0 auto;
   }
-  #selfin-stadiums-box .selfin-st-name{
+  #selfin-stadiums-box .selfin-st-name,
+  .tour-ed-stadiums-box .selfin-st-name{
     flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#eee;
   }
-  #selfin-stadiums-box .selfin-st-act{
+  #selfin-stadiums-box .selfin-st-act,
+  .tour-ed-stadiums-box .selfin-st-act{
     font-size:13px;opacity:.7;flex:0 0 auto;
+  }
+  .tour-ed-stadiums-box{
+    padding:10px 11px;
+    background:rgba(120,180,255,.08);
+    border:1px dashed rgba(120,180,255,.45);
+    border-radius:6px;
+    text-transform:none;letter-spacing:0;
   }
   /* Bloque .minfo dedicado a las sedes (calendar cards cal-mf-*). */
   .jmatches .minfo.selfin-venues{
@@ -15796,7 +15853,134 @@ window._showSimProgress = function(opts, onDone){
     _renderFmtCfg();
     _renderLeagueChecks();
     _updatePoolStat();
+    _renderTourStadiums();
   }
+
+  /* Render del picker de 4 sedes (Torneos de Verano).
+     Visible solo cuando `_tvBoardOf(cfg.id) === 'verano'`. Lee/escribe
+     en `_open.cfg.stadiums` (array de 4 strings). 2026-05-25. */
+  function _renderTourStadiums(){
+    var row = document.getElementById('tour-ed-stadiums-row');
+    if (!row) return;
+    var cfg = (_open && _open.cfg) || null;
+    var board = cfg ? _tvBoardOf(cfg.id) : null;
+    /* Solo torneos de Verano (sct, pss, jg, asia, mundial, tx1..tx8).
+       Selecciones (sel-previa / sel-final) tienen su propio sistema
+       global `sel_fin_stadiums_v1` y NO se mezclan aquí. */
+    if (board !== 'verano') { row.style.display = 'none'; return; }
+    row.style.display = '';
+    var list = document.getElementById('tour-ed-stadiums-list');
+    if (!list) return;
+    var pool = (cfg.stadiums && cfg.stadiums.length) ? cfg.stadiums.slice(0,4) : ['','','',''];
+    while (pool.length < 4) pool.push('');
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    var html = '';
+    for (var i = 0; i < 4; i++){
+      var v = pool[i] || '';
+      var lbl = v ? esc(v) : '<i style="opacity:.5">— sin elegir —</i>';
+      html += '<div class="selfin-st-row" data-idx="'+i+'" onclick="window._tourEdStadiumPickerOpen&&window._tourEdStadiumPickerOpen('+i+')">'+
+        '<span class="selfin-st-num">'+(i+1)+'</span>'+
+        '<span class="selfin-st-name">'+lbl+'</span>'+
+        '<span class="selfin-st-act">🔍</span>'+
+      '</div>';
+    }
+    list.innerHTML = html;
+  }
+
+  /* Picker overlay (lista STADIUM_DB) para asignar un estadio al
+     slot del torneo de verano abierto en el editor. Mismo patrón
+     que `_selFinStadiumPickerOpen` pero las 4 sedes viven en
+     `_open.cfg.stadiums` en vez de la clave global de Selecciones. */
+  window._tourEdStadiumPickerOpen = function(slot){
+    if (!_open || !_open.cfg) return;
+    slot = parseInt(slot, 10) || 0;
+    if (slot < 0 || slot > 3) slot = 0;
+    var db = (window.STADIUM_DB && window.STADIUM_DB.length) ? window.STADIUM_DB.slice() : [];
+    if (!db.length) { alert('STADIUM_DB no está cargado.'); return; }
+    var cfg = _open.cfg;
+    cfg.stadiums = (cfg.stadiums && cfg.stadiums.length) ? cfg.stadiums.slice(0,4) : ['','','',''];
+    while (cfg.stadiums.length < 4) cfg.stadiums.push('');
+    var ov = document.getElementById('tour-ed-stadium-picker-ov');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'tour-ed-stadium-picker-ov';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px;';
+      ov.innerHTML = '<div style="background:#101522;color:#eee;width:100%;max-width:520px;max-height:88vh;border-radius:12px;border:1px solid rgba(120,180,255,.4);display:flex;flex-direction:column;overflow:hidden;">'+
+        '<div style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);">'+
+          '<div style="flex:1;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#9cc6ff;">🏟️ <span id="tour-ed-sp-title">SEDE 1</span></div>'+
+          '<button id="tour-ed-sp-x" style="background:rgba(255,80,80,.18);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:6px;padding:4px 10px;font-size:13px;cursor:pointer;">✕</button>'+
+        '</div>'+
+        '<div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08);">'+
+          '<input id="tour-ed-sp-q" type="text" placeholder="🔍 Buscar estadio o ciudad…" autocomplete="off" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;padding:8px 12px;font-family:Rajdhani,sans-serif;font-size:13px;outline:none;">'+
+        '</div>'+
+        '<div id="tour-ed-sp-list" style="flex:1;overflow:auto;padding:6px 8px;"></div>'+
+        '<div style="padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:8px;">'+
+          '<button id="tour-ed-sp-clear" style="flex:1;background:rgba(255,80,80,.14);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:6px;padding:9px;font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer;">✖ VACIAR HUECO</button>'+
+        '</div>'+
+      '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) ov.style.display = 'none'; });
+    }
+    var titleEl = ov.querySelector('#tour-ed-sp-title');
+    var qEl     = ov.querySelector('#tour-ed-sp-q');
+    var listEl  = ov.querySelector('#tour-ed-sp-list');
+    var xEl     = ov.querySelector('#tour-ed-sp-x');
+    var clrEl   = ov.querySelector('#tour-ed-sp-clear');
+    titleEl.textContent = 'SEDE ' + (slot + 1);
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function render(){
+      var q = (qEl.value || '').toLowerCase().trim();
+      var taken = {};
+      cfg.stadiums.forEach(function(s, i){ if (s && i !== slot) taken[s.toLowerCase()] = 1; });
+      var rows = db.filter(function(s){
+        if (!q) return true;
+        return (s.name||'').toLowerCase().indexOf(q) !== -1 ||
+               (s.city||'').toLowerCase().indexOf(q) !== -1 ||
+               (s.tipo||'').toLowerCase().indexOf(q) !== -1;
+      }).map(function(s){
+        var isT = !!taken[(s.name||'').toLowerCase()];
+        var isCur = (cfg.stadiums[slot] && cfg.stadiums[slot] === s.name);
+        var bg = isCur ? 'rgba(120,180,255,.18)' : (isT ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.05)');
+        var bd = isCur ? '1px solid rgba(120,180,255,.7)' : '1px solid rgba(255,255,255,.08)';
+        var op = isT ? '.45' : '1';
+        var tag = isT ? '<span style="font-size:10px;color:#ffa07a;margin-left:6px;">(ya en otro hueco)</span>' : '';
+        var cur = isCur ? '<span style="font-size:10px;color:#9cc6ff;margin-left:6px;">✓ actual</span>' : '';
+        return '<div class="tour-ed-sp-row" data-name="'+esc(s.name)+'"'+
+          ' style="display:flex;align-items:center;gap:10px;padding:9px 10px;margin:4px 0;background:'+bg+';border:'+bd+';border-radius:7px;cursor:pointer;opacity:'+op+';">'+
+          '<span style="font-size:14px;">🏟️</span>'+
+          '<span style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#eee;">'+esc(s.name)+
+            ' <span style="opacity:.6;font-size:11px;">· '+esc(s.city||'')+'</span>'+tag+cur+
+          '</span>'+
+          '<span style="font-size:10px;color:'+(s.status==='ELITE'?'#ffd700':s.status==='REGIONAL'?'#60aaff':s.status==='NEUTRAL'?'#aa80ff':'#aaa')+';">'+esc(s.status||'')+'</span>'+
+        '</div>';
+      }).join('');
+      listEl.innerHTML = rows || '<div style="padding:14px;text-align:center;opacity:.55;font-size:12px;">Sin resultados.</div>';
+    }
+    qEl.oninput = render;
+    listEl.onclick = function(e){
+      var r = e.target.closest && e.target.closest('.tour-ed-sp-row');
+      if (!r) return;
+      var name = r.getAttribute('data-name');
+      if (!name) return;
+      cfg.stadiums[slot] = name;
+      _open.dirty = true;
+      _tourEdScheduleSave();
+      _renderTourStadiums();
+      ov.style.display = 'none';
+    };
+    clrEl.onclick = function(){
+      cfg.stadiums[slot] = '';
+      _open.dirty = true;
+      _tourEdScheduleSave();
+      _renderTourStadiums();
+      ov.style.display = 'none';
+    };
+    xEl.onclick = function(){ ov.style.display = 'none'; };
+    qEl.value = '';
+    render();
+    ov.style.display = 'flex';
+    setTimeout(function(){ try { qEl.focus(); } catch(_){} }, 80);
+  };
 
   function _readForm(cfg){
     cfg.name       = document.getElementById('tour-ed-name').value.trim() || cfg.name;

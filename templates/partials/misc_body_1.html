@@ -38891,7 +38891,7 @@ Tottenham
      estuviera en el día 1. `ratingTarget` / `moneyTarget` / `pi`
      son config del admin → se conservan. */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos ya resueltos (pretemporada y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Los Puntos de Fisio 💊, los objetivos del club, las plantillas y la configuración de los torneos se conservan.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos ya resueltos (pretemporada, torneos de verano y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Los Puntos de Fisio 💊, los objetivos del club, las plantillas y la configuración de los torneos se conservan.')) return;
     try { if (typeof window._psResetCalendar === 'function') window._psResetCalendar(); } catch(_){}
 
     /* HUD: triple-asalto contra cualquier capa que pueda revivir
@@ -38965,6 +38965,49 @@ Tottenham
       /* Invalidar cache de fechas del Mundial para que el hub recompute
          el "próximo partido" sin el resultado simulado. */
       try { if (typeof window._mundialDateCacheInvalidate === 'function') window._mundialDateCacheInvalidate(); } catch(_){}
+    } catch(_){}
+
+    /* TORNEOS DE VERANO + MUNDIALITO CLUBES: borra resultados y bracket
+       de los slots built-in (sct/pss/jg/asia/mundial) y los 8 tx*.
+       Sin esto, los partidos jugados del Liverpool en, p.ej., el Trofeo
+       Joan Gamper sobrevivían al reset y seguían apareciendo en el
+       dropdown PARTIDOS TEMPORADA (reportado por el usuario 2026-05-25).
+       Conserva teams/format/formatConfig — solo se replican los partidos
+       y el bracket queda listo para una nueva edición. Idempotente. */
+    try {
+      var SUMMER_SLOTS = ['sct','pss','jg','asia','mundial',
+                          'tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
+      SUMMER_SLOTS.forEach(function(sid){
+        try {
+          var lsKey = 'tour_' + sid + '_v1';
+          var raw = localStorage.getItem(lsKey);
+          if (!raw) return;
+          var cfg = JSON.parse(raw);
+          if (!cfg || typeof cfg !== 'object') return;
+          var touched = false;
+          if (cfg.results && Object.keys(cfg.results).length) { cfg.results = {}; touched = true; }
+          if (cfg.currentJornadaByGroup && Object.keys(cfg.currentJornadaByGroup).length) { cfg.currentJornadaByGroup = {}; touched = true; }
+          if (cfg.koCurrentRound) { cfg.koCurrentRound = 0; touched = true; }
+          if (cfg.currentRound)   { cfg.currentRound   = 0; touched = true; }
+          /* Limpia el bracket avanzado (rondas con ganadores propagados).
+             `_paintTourScreen` regenera bracket[0] = teams.slice() al
+             próximo render — el draw inicial no se pierde. */
+          if (cfg.bracket   != null) { cfg.bracket   = null; touched = true; }
+          if (cfg.koBracket != null) { cfg.koBracket = null; touched = true; }
+          if (cfg._prizesPaid)       { cfg._prizesPaid = false; touched = true; }
+          if (!touched) return;
+          cfg.updatedAt = new Date().toISOString();
+          try { localStorage.setItem(lsKey, JSON.stringify(cfg)); } catch(_){}
+          try {
+            if (window._TOUR_CACHE) window._TOUR_CACHE[sid] = cfg;
+          } catch(_){}
+          try {
+            if (typeof window._tourSave === 'function') {
+              Promise.resolve(window._tourSave(sid, cfg)).catch(function(){});
+            }
+          } catch(_){}
+        } catch(_){}
+      });
     } catch(_){}
 
     window._bayernEditValuesClose();

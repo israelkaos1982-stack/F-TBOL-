@@ -16969,6 +16969,72 @@ window._showSimProgress = function(opts, onDone){
     try { window.go(dst); } catch(_){}
   };
 
+  /* Navegación back/forward entre rondas (petición usuario 2026-05-25,
+     "tenemos que tener la opción de en todos los torneos volver a
+     Octavos, Cuartos, Semis y final"). State EFÉMERO (no se persiste
+     en cfg ni en localStorage) — solo vive mientras la pestaña esté
+     abierta. Cuando el usuario entra a la pantalla del torneo, ve la
+     ronda actual; los botones ◀ ▶ navegan entre rondas pasadas y la
+     ronda actual. NUNCA forward por encima de la ronda actual. La
+     vista es read-only — no se permite re-simular ni avanzar desde
+     una ronda pasada. */
+  var _viewRoundKo = {};    /* { [tourId]: roundIdx } — bracket directo */
+  var _viewRoundKoG = {};   /* { [tourId]: koRoundIdx } — fase KO post-grupos */
+  function _tourViewRound(id, isGroupsKo, cur){
+    var bucket = isGroupsKo ? _viewRoundKoG : _viewRoundKo;
+    var v = bucket[id];
+    if (typeof v !== 'number' || isNaN(v)) return cur;
+    if (v < 0) return 0;
+    if (v > cur) return cur;
+    return v;
+  }
+  function _tourSetViewRound(id, isGroupsKo, r){
+    var bucket = isGroupsKo ? _viewRoundKoG : _viewRoundKo;
+    bucket[id] = r;
+  }
+  window._tourGoRound = function(id, isGroupsKo, delta){
+    if (!id || TOUR_IDS.indexOf(id) === -1) return;
+    var cfg = _tourLoadCachedSync(id);
+    if (!cfg) return;
+    var cur = isGroupsKo ? (cfg.koCurrentRound || 0) : (cfg.currentRound || 0);
+    var v = _tourViewRound(id, isGroupsKo, cur);
+    var nv = v + (parseInt(delta,10) || 0);
+    if (nv < 0) nv = 0;
+    if (nv > cur) nv = cur;
+    _tourSetViewRound(id, isGroupsKo, nv);
+    try { if (typeof window._tourRender === 'function') window._tourRender(id); } catch(_){}
+  };
+  /* HTML inline para las flechas de navegación. Se renderiza dentro
+     del título de ronda. `isGroupsKo=true` cuando la ronda navegable
+     es la fase KO post-grupos (jg, asia, mundialito) en vez de un KO
+     directo (sct, pss, tx*). `viewR` = ronda actualmente visualizada,
+     `cur` = ronda actual real del torneo. */
+  function _tourRoundNavHtml(id, isGroupsKo, viewR, cur){
+    var canBack = viewR > 0;
+    var canFwd  = viewR < cur;
+    var commonStyle = 'background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:6px;'
+      + 'color:#fff;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;'
+      + 'padding:3px 9px;cursor:pointer;-webkit-tap-highlight-color:transparent;';
+    var disStyle = 'opacity:.32;cursor:not-allowed;';
+    var bk = '<button type="button" class="tour-round-nav-btn" '
+      + 'data-tour="'+id+'" data-ko="'+(isGroupsKo?'1':'0')+'" data-delta="-1" '
+      + (canBack ? '' : 'disabled aria-disabled="true" ')
+      + 'style="'+commonStyle+(canBack?'':disStyle)+'">◀</button>';
+    var fw = '<button type="button" class="tour-round-nav-btn" '
+      + 'data-tour="'+id+'" data-ko="'+(isGroupsKo?'1':'0')+'" data-delta="1" '
+      + (canFwd ? '' : 'disabled aria-disabled="true" ')
+      + 'style="'+commonStyle+(canFwd?'':disStyle)+'">▶</button>';
+    return '<span style="display:inline-flex;align-items:center;gap:6px;margin-right:8px;">'+bk+'</span>'
+         + '<span style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;">'+fw+'</span>';
+  }
+  /* Pillito indicador de "viendo ronda pasada". */
+  function _tourRoundPastBadge(viewR, cur){
+    if (viewR >= cur) return '';
+    return ' <span style="font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:1px;'
+      + 'color:#9cc6ff;background:rgba(120,180,255,.12);border:1px solid rgba(120,180,255,.4);'
+      + 'border-radius:5px;padding:1px 7px;margin-left:6px;text-transform:uppercase;">PASADA</span>';
+  }
+
   function _paintTourScreen(id, cfg){
     var titleEl = document.getElementById('tour-title-'+id);
     var flagEl  = document.getElementById('tour-flag-'+id);
@@ -17043,13 +17109,21 @@ window._showSimProgress = function(opts, onDone){
       while (cfg.currentRound > 0 && (!cfg.bracket[cfg.currentRound] || !cfg.bracket[cfg.currentRound].length)) {
         cfg.currentRound--;
       }
-      var curR = cfg.currentRound;
+      var curRealR = cfg.currentRound;
+      /* Ronda VISUALIZADA (navegación ◀ ▶, 2026-05-25). Por defecto
+         coincide con la ronda actual; el usuario puede retroceder
+         para revisar rondas pasadas read-only. */
+      var curR = _tourViewRound(id, false, curRealR);
+      var isPastView = (curR < curRealR);
       var curTeams = cfg.bracket[curR] || [];
       var roundLbl = rounds[curR] || ('Ronda de '+curTeams.length);
       var subtitle = (cfg.format === 'ko-2leg') ? 'Ida/Vuelta - Gol visita doble' : 'A un partido';
-      var html = hint + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:2px;font-size:14px;font-weight:700;color:#f0c040;text-shadow:0 0 8px rgba(240,192,64,.45);">'
+      var html = hint + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:2px;font-size:14px;font-weight:700;color:#f0c040;text-shadow:0 0 8px rgba(240,192,64,.45);display:flex;align-items:center;justify-content:center;flex-wrap:wrap;">'
+        + _tourRoundNavHtml(id, false, curR, curRealR)
         + '<span style="text-transform:uppercase;">'+roundLbl+'</span>'
-        + ' <span style="color:rgba(255,255,255,.85);text-shadow:0 0 6px rgba(255,255,255,.3);">- '+subtitle+'</span></p>';
+        + ' <span style="color:rgba(255,255,255,.85);text-shadow:0 0 6px rgba(255,255,255,.3);">- '+subtitle+'</span>'
+        + _tourRoundPastBadge(curR, curRealR)
+        + '</p>';
       html += '<div class="tour-bracket-list">';
       var allPlayed = true;
       var pairCount = 0;
@@ -17159,22 +17233,27 @@ window._showSimProgress = function(opts, onDone){
       html += humanTies + restTies;
       html += '</div>';
       /* Botón "▶ Simular ronda" si quedan partidos por jugar; "Avanzar"
-         si todos los de la ronda están jugados y aún no es final. */
+         si todos los de la ronda están jugados y aún no es final.
+         Cuando el usuario está viendo una ronda PASADA (isPastView),
+         no mostramos SIM ROUND ni AVANZAR — esta vista es read-only.
+         El botón CAMPEÓN sí se mantiene si la final ya está jugada
+         (es informativo). */
       if (curTeams.length > 1) {
-        if (!allPlayed && pairCount > 0) {
+        if (!isPastView && !allPlayed && pairCount > 0) {
           html += '<div style="display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap;">'
             + '<button type="button" class="tour-sim-round-btn" data-tour="'+id+'" '
             + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;box-shadow:0 0 14px rgba(95,224,138,.35);">'
             + '▶ SIMULAR RONDA'
             + '</button></div>';
-        } else if (allPlayed && curR < (rounds.length - 1)) {
+        } else if (!isPastView && allPlayed && curR < (rounds.length - 1)) {
           html += '<div style="display:flex;gap:8px;margin-top:12px;justify-content:center;flex-wrap:wrap;">'
             + '<button type="button" class="tour-advance-btn" data-tour="'+id+'" '
             + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:10px 18px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2.5px;cursor:pointer;box-shadow:0 0 12px rgba(255,198,77,.35);">'
             + '🏆 AVANZAR A ' + (rounds[curR+1] || 'SIGUIENTE RONDA').toUpperCase()
             + '</button></div>';
         } else if (allPlayed && curR >= (rounds.length - 1)) {
-          /* Final jugada — mostrar campeón + payouts. */
+          /* Final jugada — mostrar campeón + payouts (también en
+             vista pasada, es informativo). */
           var lastRes = cfg.results[curR + '_0'];
           if (lastRes && lastRes.played) {
             var champTeam = (lastRes.winner === 'a') ? curTeams[0] : curTeams[1];
@@ -17182,7 +17261,7 @@ window._showSimProgress = function(opts, onDone){
             html += _renderKOPayouts(cfg);
           }
         }
-        if (curR > 0 || allPlayed) {
+        if (!isPastView && (curR > 0 || allPlayed)) {
           html += '<div style="display:flex;gap:8px;margin-top:8px;justify-content:center;flex-wrap:wrap;">'
             + '<button type="button" class="tour-reset-btn" data-tour="'+id+'" '
             + 'style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
@@ -17511,17 +17590,30 @@ window._showSimProgress = function(opts, onDone){
             round0.push(seeded[si], seeded[seeded.length-1-si]);
           }
         }
+        /* Auto re-sortear humanos en la 1ª ronda KO post-grupos
+           (petición usuario 2026-05-25). El cruce "clásico" A1-B2
+           etc. no garantiza separación humana si hay 3+ humanos en
+           grupos distintos → spreadOrder los reparte por cuartos del
+           cuadro KO. */
+        round0 = (typeof _tourRebalanceHumans === 'function') ? _tourRebalanceHumans(round0) : round0;
         return [round0];
       })();
       cfg.koCurrentRound = (typeof cfg.koCurrentRound === 'number') ? cfg.koCurrentRound : 0;
       var koRounds = fc.koRounds || ['Cuartos','Semis','Final'];
-      var curR = cfg.koCurrentRound;
+      var curRealKoR = cfg.koCurrentRound;
+      /* Ronda VISUALIZADA en la fase KO (2026-05-25, navegación ◀ ▶). */
+      var curR = _tourViewRound(tourId, true, curRealKoR);
+      var isPastKoView = (curR < curRealKoR);
       var curT = cfg.koBracket[curR] || [];
       var roundLbl = koRounds[curR] || ('Ronda KO '+(curR+1));
       html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(240,192,64,.25);">';
       var _gkoDate = _tourGkoRoundDate(cfg, curR);
-      html += '<p style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#f0c040;">'
-        + '<span>FASE FINAL · '+roundLbl.toUpperCase()+'</span>'
+      html += '<p style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#f0c040;flex-wrap:wrap;gap:6px;">'
+        + '<span style="display:inline-flex;align-items:center;">'
+        +   _tourRoundNavHtml(tourId, true, curR, curRealKoR)
+        +   '<span>FASE FINAL · '+roundLbl.toUpperCase()+'</span>'
+        +   _tourRoundPastBadge(curR, curRealKoR)
+        + '</span>'
         + (_gkoDate ? '<span style="color:rgba(255,255,255,.6);letter-spacing:.5px;">📅 '+_gkoDate+'</span>' : '')
         + '</p>';
       html += '<div class="tour-bracket-list">';
@@ -17561,13 +17653,13 @@ window._showSimProgress = function(opts, onDone){
       }
       html += '</div>';
       if (curT.length > 1) {
-        if (!koAllPlayed && koPairCount > 0) {
+        if (!isPastKoView && !koAllPlayed && koPairCount > 0) {
           html += '<div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">'
             + '<button type="button" class="tour-sim-ko-btn" data-tour="'+tourId+'" '
             + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:10px;padding:9px 16px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
             + '▶ SIMULAR '+(roundLbl).toUpperCase()
             + '</button></div>';
-        } else if (koAllPlayed && curR < koRounds.length - 1) {
+        } else if (!isPastKoView && koAllPlayed && curR < koRounds.length - 1) {
           html += '<div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">'
             + '<button type="button" class="tour-adv-ko-btn" data-tour="'+tourId+'" '
             + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:10px;padding:9px 16px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
@@ -19816,10 +19908,55 @@ window._showSimProgress = function(opts, onDone){
       winners.push(res.winner === 'a' ? teams[i] : teams[i+1]);
     }
     if (pairs === 0 || played < pairs) return false;  /* aborta */
+    /* Auto re-sortear humanos (petición usuario 2026-05-25): si en
+       la lista de ganadores hay >1 humano vivo, re-spreadar usando
+       bit-reversal igual que el sorteo inicial — así un humano que
+       avanza junto con IAs nunca cruza contra otro humano antes de
+       lo necesario (peor caso CUARTOS). */
+    winners = _tourRebalanceHumans(winners);
     cfg.bracket[curR + 1] = winners;
     cfg.currentRound = curR + 1;
     return true;
   }
+
+  /* Recoloca un array de equipos para separar a los HUMANOS al
+     máximo en el próximo cruce (petición usuario 2026-05-25,
+     "torneos de verano: humanos en semis, peor caso cuartos").
+     - Si hay ≤1 humano: devuelve la lista TAL CUAL (preserva el
+       seeding existente del bracket).
+     - Si hay >1 humano: los redistribuye usando `_spreadOrder` para
+       que se cruzen lo más tarde posible.
+     NO mantiene el seeding bracket clásico (winner of match 1 vs
+     winner of match 2) — el spec lo permite explícitamente. */
+  function _tourRebalanceHumans(winners){
+    if (!Array.isArray(winners) || winners.length < 4) return winners;
+    var humans = [], ais = [];
+    for (var i = 0; i < winners.length; i++){
+      var t = winners[i];
+      if (t && t.isHuman) humans.push(t);
+      else if (t) ais.push(t);
+    }
+    if (humans.length <= 1) return winners;
+    var total = winners.length;
+    var P = Math.floor(total / 2);
+    if (P < 1) return winners;
+    var ord = _spreadOrder(P);
+    var hcount = {};
+    for (var k = 0; k < humans.length; k++){
+      var pidx = ord[k % ord.length];
+      hcount[pidx] = (hcount[pidx] || 0) + 1;
+    }
+    var slots = new Array(total), aiIdx = 0, humIdx = 0;
+    for (var pp = 0; pp < P; pp++){
+      var c = hcount[pp] || 0;
+      slots[pp*2]   = (c >= 1) ? humans[humIdx++] : (ais[aiIdx++] || humans[humIdx++] || winners[pp*2]);
+      slots[pp*2+1] = (c >= 2) ? humans[humIdx++] : (ais[aiIdx++] || humans[humIdx++] || winners[pp*2+1]);
+    }
+    /* Sobras (n impar / nulos) — rellenamos en orden. */
+    for (var s = 0; s < total; s++) if (!slots[s]) slots[s] = ais[aiIdx++] || humans[humIdx++] || winners[s];
+    return slots;
+  }
+  window._tourRebalanceHumans = _tourRebalanceHumans;
 
   function _tourSaveAndRender(id, cfg) {
     /* Persiste + repinta. _tourSave es async pero no esperamos —
@@ -19838,6 +19975,20 @@ window._showSimProgress = function(opts, onDone){
   document.addEventListener('click', function(ev){
     var target = ev.target;
     if (!target || typeof target.closest !== 'function') return;
+
+    /* a.-2) Botón ◀ ▶ navegación entre rondas (read-only). Cambia
+       solo la ronda VISTA en pantalla — no toca cfg.currentRound ni
+       cfg.koCurrentRound. Petición usuario 2026-05-25. */
+    var navBtn = target.closest && target.closest('.tour-round-nav-btn');
+    if (navBtn && !navBtn.disabled) {
+      var navTid = navBtn.getAttribute('data-tour');
+      if (!navTid || TOUR_IDS.indexOf(navTid) === -1) return;
+      var navKo = navBtn.getAttribute('data-ko') === '1';
+      var navDelta = parseInt(navBtn.getAttribute('data-delta'), 10) || 0;
+      window._tourGoRound(navTid, navKo, navDelta);
+      ev.stopPropagation();
+      return;
+    }
 
     /* a.-1) Botón 🤖 SIM IA per-match. Forza la simulación auto de un
        partido con humano sin tener que activar el override admin del
@@ -20259,6 +20410,8 @@ window._showSimProgress = function(opts, onDone){
           winnersSemis.push(r3.winner === 'a' ? curT3[w0]   : curT3[w0+1]);
           losersSemis .push(r3.winner === 'a' ? curT3[w0+1] : curT3[w0]  );
         }
+        /* Final + 3er puesto son rondas de 2 equipos: re-balance no
+           aporta nada (no hay >1 cruce). */
         kcfg2.koBracket[4] = losersSemis;
         kcfg2.koBracket[5] = winnersSemis;
         kcfg2.koCurrentRound = 4;
@@ -20276,6 +20429,9 @@ window._showSimProgress = function(opts, onDone){
           if (!r3b || !r3b.played) continue;
           winners.push(r3b.winner === 'a' ? curT3[w0b] : curT3[w0b+1]);
         }
+        /* Auto re-sortear humanos al avanzar (petición usuario
+           2026-05-25). Mismo helper que `_tourBuildNextRound`. */
+        winners = _tourRebalanceHumans(winners);
         kcfg2.koBracket[curR3 + 1] = winners;
         kcfg2.koCurrentRound = curR3 + 1;
         /* Mundial 48: si estábamos en la vista de la ronda KO recién

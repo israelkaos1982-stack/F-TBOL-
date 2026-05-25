@@ -9140,7 +9140,10 @@
       return;
     }
     /* Cada inyección reduce 1 partido de lesión del jugador. Si llega
-       a 0 queda curado (fuera de LESION_STORE / BAJA_STORE). */
+       a 0 queda curado (fuera de LESION_STORE / BAJA_STORE). Marca al
+       jugador en window._ppJustCured para que la card "LESIONADO" de la
+       previa pase a mostrar "Recuperado" hasta que se cierre la previa. */
+    if (!window._ppJustCured) window._ppJustCured = {};
     picks.forEach(function(pk){
       var l = window.LESION_STORE && window.LESION_STORE[pk.name];
       if (!l) return;
@@ -9148,6 +9151,7 @@
       if (rem <= 0) {
         delete window.LESION_STORE[pk.name];
         if (window.BAJA_STORE && window.BAJA_STORE[pk.name]) delete window.BAJA_STORE[pk.name];
+        window._ppJustCured[pk.name] = true;
       } else {
         l.partidos = rem;
         var b = window.BAJA_STORE && window.BAJA_STORE[pk.name];
@@ -9158,6 +9162,16 @@
     try { if (window._persistInjuries) window._persistInjuries(); } catch(e){}
     try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(e){}
     try { if (typeof window._renderSancionOverlayList === 'function') window._renderSancionOverlayList(); } catch(e){}
+    /* Refresca la card LESIONADO de la previa (PI restantes + estado
+       Recuperado) sin esperar a re-abrirla. */
+    try {
+      if (typeof window._renderPreviaMeta === 'function' && window._ppMatchKey) {
+        window._renderPreviaMeta(window._ppMatchKey, false);
+      }
+    } catch(e){}
+    /* Refresca la plantilla del Liverpool si está visible: los badges
+       💉NP de los curados deben desaparecer. */
+    try { if (typeof window.renderSquadList === 'function') window.renderSquadList(); } catch(e){}
     document.getElementById('ath-med-ov').classList.remove('show');
   };
 

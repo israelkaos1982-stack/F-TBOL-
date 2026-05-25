@@ -6024,6 +6024,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   function _ppClickSfx() { try { var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return; var ctx=window.__ppAudio||(window.__ppAudio=new Ctx()); var o=ctx.createOscillator(); var g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); var t=ctx.currentTime; o.frequency.setValueAtTime(1180,t); g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05); o.start(t); o.stop(t+0.05);} catch(_){} }
 
+  window._renderPreviaMeta = function(matchKey, isHvH){ return _renderPreviaMeta(matchKey, isHvH); };
   function _renderPreviaMeta(matchKey, isHvH) {
     var home, away;
     var wrap = document.getElementById('mlw-' + matchKey);
@@ -6331,10 +6332,35 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         var b=bajas[n]; var pts=(b&&b.liga)?b.liga+' partido(s) restante(s)':'';
         alertsHtml += '<div class="pp-alert-row pp-alert-red">🟥 EXPULSADO: '+n+(pts?' · '+pts:'')+'</div>';
       });
+      /* 2026-05-25 (petición usuario): layout 2 líneas + botón 💊N
+         de inyecciones. Pulsando 💊N (si N>0) se abre el MENÚ DE
+         TRATAMIENTO RÁPIDO (athOpenMedicalMenu). Cuando el jugador
+         queda recién curado en esta misma previa (via _ppJustCured)
+         pasa a "X — Recuperado". */
+      var _piCur = 0;
+      try { if (typeof window.athGetMedicalPI === 'function') _piCur = window.athGetMedicalPI(); } catch(_){}
+      var _piInt = Math.floor(_piCur + 1e-9);
+      var _justCured = window._ppJustCured || {};
       lesionados.forEach(function(n) {
+        if (_justCured[n]) return; /* lo pintamos abajo */
         var l=lesionesStore[n]; var ico=l.grado===3?'🚑':l.grado===2?'💉':'🩹';
-        var b=bajas[n]; var pts=(b&&b.liga)?b.liga+'P baja':'';
-        alertsHtml += '<div class="pp-alert-row pp-alert-inj">'+ico+' LESIONADO: '+n+' — '+(l.descripcion||'')+(pts?' · '+pts:'')+'</div>';
+        var b=bajas[n];
+        var rem = (b && b.liga) ? Number(b.liga) : Number(l.partidos || 0);
+        var btnHtml = '<button type="button" class="pp-inj-pill"'
+          + ' onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()"'
+          + (_piInt > 0
+              ? ' title="' + _piInt + ' inyecciones disponibles. Pulsa para curar."'
+              : ' disabled title="Sin inyecciones disponibles" style="opacity:.4;cursor:not-allowed"')
+          + ' style="margin-left:auto;background:rgba(73,243,223,.14);border:1px solid rgba(73,243,223,.45);color:#9af1e3;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.6px;padding:3px 9px;border-radius:14px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;">💊' + _piInt + '</button>';
+        alertsHtml += '<div class="pp-alert-row pp-alert-inj" style="display:flex;flex-direction:column;align-items:stretch;gap:2px;">'
+          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span>' + ico + '</span><b>' + n + '</b><span style="opacity:.85">· ' + rem + ' Partido' + (rem===1?'':'s') + ' baja</span>' + btnHtml + '</div>'
+          + (l.descripcion ? '<div style="font-size:11px;color:rgba(255,255,255,.62);padding-left:22px;">' + l.descripcion + '</div>' : '')
+          + '</div>';
+      });
+      /* Jugadores recién curados en esta previa (Recuperado transitorio). */
+      Object.keys(_justCured).forEach(function(n){
+        if (!belongs(n)) return;
+        alertsHtml += '<div class="pp-alert-row pp-alert-inj" style="background:rgba(73,243,223,.10);border-color:rgba(73,243,223,.45);"><span>💉</span><b style="margin:0 6px;">' + n + '</b><span style="color:#9af1e3;font-weight:700;">Recuperado</span></div>';
       });
       if (!alertsHtml) alertsHtml = '<div class="pp-alert-row pp-alert-ok">✅ Plantilla al 100% — Sin bajas ni sanciones</div>';
       alerts.innerHTML = alertsHtml;
@@ -6418,9 +6444,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
     _ppMatchKey = matchKey;
     _ppCompKey  = compKey;
+    /* Sync a window para que el menú médico (otra IIFE) pueda
+       re-renderizar la card LESIONADO tras curar a un jugador. */
+    window._ppMatchKey = matchKey;
+    window._ppCompKey  = compKey;
     _ppChecked  = {};
     /* Reset form state for new match */
     if (typeof window._ppResetFormStates === 'function') window._ppResetFormStates();
+    /* "Recuperado" es transitorio: solo se muestra durante la previa en la
+       que el usuario curó al jugador. Al abrir una nueva previa, reset. */
+    window._ppJustCured = {};
     /* Reset del canal Twitch AL ABRIR la previa (antes estaba en
        `_mmInjectEnv`, que corre 60 ms después; si el usuario abría la
        previa del siguiente partido rápido, veía el canal del partido

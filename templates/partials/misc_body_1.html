@@ -34656,6 +34656,18 @@ Tottenham
   #sel-sq-ov .sel-sq-r3 input{flex:1;width:100%;text-align:center;padding:6px 2px;}
   #sel-sq-ov .sel-sq-alias{font-style:italic;color:#ffd58a;}
   #sel-sq-ov .sel-sq-alias::placeholder{color:rgba(255,213,138,.5);font-style:italic;}
+  #sel-sq-ov .sel-sq-r1{display:flex;gap:6px;align-items:stretch;}
+  #sel-sq-ov .sel-sq-r1 .sel-sq-name{flex:1;min-width:0;}
+  #sel-sq-ov .sel-sq-cont{flex:0 0 112px;background:rgba(0,0,0,.55);
+    border:1px solid rgba(255,255,255,.22);color:#dfe6ff;border-radius:8px;
+    padding:6px 4px;font-size:12px;font-family:Rajdhani,sans-serif;
+    appearance:none;-webkit-appearance:none;cursor:pointer;text-align:center;
+    background-image:linear-gradient(45deg,transparent 50%,rgba(255,255,255,.45) 50%),
+                     linear-gradient(135deg,rgba(255,255,255,.45) 50%,transparent 50%);
+    background-position:calc(100% - 11px) 13px,calc(100% - 6px) 13px;
+    background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:18px;}
+  #sel-sq-ov .sel-sq-cont:focus{outline:none;border-color:rgba(154,167,255,.6);}
+  #sel-sq-ov .sel-sq-cont option{background:#101522;color:#fff;}
   #sel-sq-ov .sel-sq-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
     color:#ff9a9a;width:30px;height:30px;border-radius:7px;cursor:pointer;flex-shrink:0;
     font-size:14px;line-height:1;padding:0;}
@@ -34832,6 +34844,23 @@ Tottenham
   };
 
   function _esc(s){ return String(s==null?'':s).replace(/[<>"]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';}); }
+  /* Continentes (2026-05-25): para el juego son 3:
+       europa   = 🇪🇺 Europa
+       pacifico = 🌎 América Norte + Central + Sudamérica + Asia + Oceanía
+       africa   = 🌍 África
+     Persistido por equipo en `t.continent`. El usuario lo elige a mano. */
+  var _SEL_CONTS=[
+    {v:'',         l:'— Continente'},
+    {v:'europa',   l:'🇪🇺 Europa'},
+    {v:'pacifico', l:'🌎 Pacífico'},
+    {v:'africa',   l:'🌍 África'}
+  ];
+  function _contOpts(sel){
+    sel=String(sel==null?'':sel).toLowerCase();
+    return _SEL_CONTS.map(function(c){
+      return '<option value="'+c.v+'"'+(sel===c.v?' selected':'')+'>'+c.l+'</option>';
+    }).join('');
+  }
   function _rowHtml(t){
     t=t||{};
     var img=String(t.img||'').trim();
@@ -34839,7 +34868,10 @@ Tottenham
     return '<div class="sel-sq-row">'
       +'<img src="'+_esc(img)+'" alt="" onerror="this.style.visibility=\'hidden\'">'
       +'<div class="sel-sq-fields">'
+      +'<div class="sel-sq-r1">'
       +'<input class="sel-sq-name" type="text" placeholder="Nombre de la selección" value="'+_esc(t.name||'')+'">'
+      +'<select class="sel-sq-cont" title="Continente — Europa / Pacífico (América + Asia + Oceanía) / África">'+_contOpts(t.continent||'')+'</select>'
+      +'</div>'
       +'<div class="sel-sq-r2">'
       +'<input class="sel-sq-icon" type="text" maxlength="6" placeholder="👤" title="Icono de humano — una selección con icono es HUMANA en los torneos" value="'+_esc(t.icon||'')+'">'
       +'<input class="sel-sq-img" type="text" placeholder="https://… escudo / bandera" value="'+_esc(img)+'">'
@@ -35076,10 +35108,11 @@ Tottenham
       var img=String(((row.querySelector('.sel-sq-img')||{}).value)||'').trim();
       var icon=String(((row.querySelector('.sel-sq-icon')||{}).value)||'').trim();
       var alias=String(((row.querySelector('.sel-sq-alias')||{}).value)||'').trim();
+      var continent=String(((row.querySelector('.sel-sq-cont')||{}).value)||'').trim().toLowerCase();
       function rd(sel,fb){ return _clamp((row.querySelector(sel)||{}).value,fb); }
       var g=rd('.sel-sq-g',75);
       out.push({
-        name:nm, img:img, icon:icon, efootballAlias:alias, power:g,
+        name:nm, img:img, icon:icon, efootballAlias:alias, continent:continent, power:g,
         atk:rd('.sel-sq-a',g), mid:rd('.sel-sq-m',g), def:rd('.sel-sq-d',g),
         players: Array.isArray(row._players) ? row._players : []
       });

@@ -36255,6 +36255,73 @@ Tottenham
     padding:14px;text-align:center;color:rgba(255,255,255,.55);
     font-family:Rajdhani,sans-serif;font-size:11px;
   }
+  /* ── Tabs SELECCIÓN / CLUB (2026-05-25) ──────────────────
+     Sustituyen a las secciones lineales `.munich-fix-section`.
+     Dos botones lado a lado al abrir PARTIDOS TEMPORADA o
+     PARTIDOS PENDIENTES; cada tab muestra Label + Equipo (N) y
+     despliega/colapsa su propia lista de partidos al pulsar. */
+  #s-munich .mf-side-tabs{
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;
+    padding:2px 0 4px;
+  }
+  #s-munich .mf-side-tab{
+    display:flex;flex-direction:column;gap:3px;align-items:flex-start;
+    padding:9px 10px 8px;border-radius:10px;cursor:pointer;
+    background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+    border:1px solid rgba(255,255,255,.16);color:#fff;text-align:left;
+    -webkit-tap-highlight-color:transparent;position:relative;
+    transition:border-color .15s ease, background .2s ease;
+  }
+  #s-munich .mf-side-tab[disabled]{
+    opacity:.40;cursor:default;
+  }
+  #s-munich .mf-side-tab.mft-sel{
+    border-color:rgba(136,170,255,.42);
+    background:linear-gradient(135deg,rgba(136,170,255,.12),rgba(255,255,255,.02));
+  }
+  #s-munich .mf-side-tab.mft-club{
+    border-color:rgba(255,176,96,.42);
+    background:linear-gradient(135deg,rgba(255,176,96,.12),rgba(255,255,255,.02));
+  }
+  #s-munich .mf-side-tab.mft-open.mft-sel{
+    border-color:rgba(136,170,255,.85);
+    background:linear-gradient(135deg,rgba(136,170,255,.22),rgba(255,255,255,.03));
+    box-shadow:0 0 12px rgba(136,170,255,.25);
+  }
+  #s-munich .mf-side-tab.mft-open.mft-club{
+    border-color:rgba(255,176,96,.85);
+    background:linear-gradient(135deg,rgba(255,176,96,.22),rgba(255,255,255,.03));
+    box-shadow:0 0 12px rgba(255,176,96,.25);
+  }
+  #s-munich .mf-side-tab .mft-label{
+    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;
+    text-transform:uppercase;color:rgba(255,255,255,.60);font-weight:700;
+  }
+  #s-munich .mf-side-tab.mft-sel  .mft-label{color:#88aaff;}
+  #s-munich .mf-side-tab.mft-club .mft-label{color:#ffb060;}
+  #s-munich .mf-side-tab .mft-team{
+    font-family:Rajdhani,sans-serif;font-size:15px;color:#fff;
+    line-height:1.1;display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+  }
+  #s-munich .mf-side-tab .mft-team b{font-weight:700;letter-spacing:.4px;}
+  #s-munich .mf-side-tab .mft-count{
+    font-style:normal;color:rgba(255,255,255,.65);font-size:13px;
+    font-family:Oswald,sans-serif;letter-spacing:1px;
+  }
+  #s-munich .mf-side-tab .mft-chev{
+    position:absolute;top:9px;right:10px;font-size:10px;
+    color:rgba(255,255,255,.55);transition:transform .25s ease;
+  }
+  #s-munich .mf-side-tab.mft-open .mft-chev{transform:rotate(180deg);}
+  #s-munich .mf-side-body{
+    display:flex;flex-direction:column;gap:6px;
+    padding:4px 0 2px;animation:mfSideIn .18s ease-out;
+  }
+  #s-munich .mf-side-body[hidden]{display:none;}
+  @keyframes mfSideIn{
+    from{ opacity:0; transform:translateY(-4px); }
+    to  { opacity:1; transform:translateY(0); }
+  }
   /* ── Card de partido jugado (PARTIDOS TEMPORADA) ─────────
      Layout estilo histórico derbys (`s-munich-derby-season`,
      petición usuario 2026-05-24): cabecera con emoji + label
@@ -36921,14 +36988,21 @@ Tottenham
       var pg = (cfg.formatConfig && cfg.formatConfig.perGroup) || 4;
       var teams = cfg.teams || [];
       /* ── Fase de grupos ─────────────────────────────────── */
-      var gFix = cfg.groupFixtures || [];
-      /* `cfg.results` es el store canónico (clave `g<gi>_<jj>_<mi>`
+      /* `cfg.groupFixtures` es un OBJETO `{0:[[..],..], 1:..., 11:...}`
+         keyed por índice numérico de grupo (lo construye
+         `_mundialGroupState` con `cfg.groupFixtures[g] = …`). Iterar
+         con `gFix.length` daba `undefined` → bucle no se ejecutaba →
+         J1/J2/J3 fuera del dropdown. Iteramos por las 12 keys del
+         objeto (Mundial-48: 48 equipos / 4 por grupo).
+         `cfg.results` es el store canónico (clave `g<gi>_<jj>_<mi>`
          que escribe `_tourSaveHumanResult` y el motor IA). El campo
          `cfg.groupResults` nunca se llega a poblar — leerlo ahí dejaba
          los partidos jugados de Francia fuera del dropdown (bug
-         2026-05-25: J1/J2/J3 del Mundial-48 desaparecidos). */
+         2026-05-25). */
+      var gFix = cfg.groupFixtures || {};
+      var nGroups = Math.max(12, Math.ceil((teams.length || 0) / pg));
       var resAll = cfg.results || {};
-      for (var gi = 0; gi < gFix.length; gi++){
+      for (var gi = 0; gi < nGroups; gi++){
         var fixs = gFix[gi]; if (!Array.isArray(fixs)) continue;
         var slice = teams.slice(gi*pg, gi*pg + pg);
         for (var jj = 0; jj < fixs.length; jj++){
@@ -37049,6 +37123,166 @@ Tottenham
     }
   });
 
+  /* Torneos de Verano + Mundialito de Clubes — escaneo de _TOUR_CACHE
+     y slots conocidos (`sct`, `pss`, `jg`, `asia`, `mundial`, `tx1..8`).
+     Cubre los formatos `groups-ko` (Joan Gamper, Asian, Mundialito),
+     `ko-2leg` (Soccer Champions Tour, Premier Summer Series) y `ko`
+     (slots personalizados). Excluye `mundial-48` que ya cubre el
+     colector dedicado de Selecciones. Petición usuario 2026-05-25:
+     "si pulso Liverpool deberían salir los 3 partidos jugados del
+     torneo de verano Joan Gamper". */
+  var _SUMMER_META = {
+    jg:        { id:'jg',         emoji:'🏆', label:'Trofeo Joan Gamper' },
+    sct:       { id:'sct',        emoji:'🇺🇸', label:'Soccer Champions Tour' },
+    pss:       { id:'pss',        emoji:'🇬🇧', label:'Premier Summer Series' },
+    asia:      { id:'asia',       emoji:'🇯🇵', label:'Asian Tournament' },
+    mundial:   { id:'mundialito', emoji:'🌍', label:'Mundialito de Clubes' }
+  };
+  var _SUMMER_SLOTS = ['sct','pss','jg','asia','mundial',
+                       'tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
+  function _summerMeta(tourId, cfg){
+    var m = _SUMMER_META[tourId];
+    if (m) return m;
+    /* Slot personalizado (tx*): usa el nombre que puso el admin en el
+       editor del torneo. Color/etiqueta caen al genérico "torneo". */
+    return { id:'torneo', emoji:(cfg && cfg.flag) || '🏆',
+             label:(cfg && cfg.name) || 'Torneo Verano' };
+  }
+  function _collectSummer(aliases){
+    var out = { pending:[], played:[] };
+    var seenCfg = {};
+    function _pushPlayed(meta, tourId, mk, hN, aN, gh, ga, label, res){
+      out.played.push({ comp:meta.id, emoji:meta.emoji,
+        home:hN, away:aN, gh:(gh|0), ga:(ga|0),
+        label:label, uid:String(tourId)+'-'+mk,
+        events:(res && res.events) || [],
+        mvp:(res && res.mvp) || '', mvpTeam:(res && res.mvpTeam) || '' });
+    }
+    function _pushPending(meta, tourId, mk, hN, aN, label){
+      out.pending.push({ comp:meta.id, emoji:meta.emoji,
+        home:hN, away:aN, label:label });
+    }
+    function _walkCfg(tourId, cfg){
+      if (!cfg || !cfg.format) return;
+      if (cfg.format === 'mundial-48') return;  /* ya cubierto */
+      if (seenCfg[tourId]) return; seenCfg[tourId] = 1;
+      if (!Array.isArray(cfg.teams) || !cfg.teams.length) return;
+      /* Skip rápido: si el club no está en cfg.teams, no hay nada que
+         recolectar para este torneo. */
+      var teamMatch = false;
+      for (var ti = 0; ti < cfg.teams.length; ti++){
+        var tn = cfg.teams[ti] && cfg.teams[ti].name;
+        if (tn && _match(tn, aliases)){ teamMatch = true; break; }
+      }
+      if (!teamMatch) return;
+      var meta = _summerMeta(tourId, cfg);
+      var teams = cfg.teams || [];
+      var resAll = cfg.results || {};
+      var fc = cfg.formatConfig || {};
+      /* ── Fase de grupos (groups-ko) ──────────────────────── */
+      if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss'){
+        var nGroups = fc.groups || 1;
+        var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
+        var gFix = cfg.groupFixtures || {};
+        for (var gi = 0; gi < nGroups; gi++){
+          var fixs = gFix[gi]; if (!Array.isArray(fixs)) continue;
+          var slice = teams.slice(gi*perGroup, gi*perGroup + perGroup);
+          var letter = (nGroups > 1) ? String.fromCharCode(65 + gi) : '';
+          for (var jj = 0; jj < fixs.length; jj++){
+            var ms = fixs[jj]; if (!Array.isArray(ms)) continue;
+            for (var mi = 0; mi < ms.length; mi++){
+              var mm = ms[mi]; if (!mm) continue;
+              var hT = slice[mm.home], aT = slice[mm.away];
+              if (!hT || !aT) continue;
+              var hN = hT.name || '', aN = aT.name || '';
+              if (!hN || hN === 'PENDIENTE' || !aN || aN === 'PENDIENTE') continue;
+              if (!_match(hN, aliases) && !_match(aN, aliases)) continue;
+              var rr = resAll['g' + gi + '_' + jj + '_' + mi] || null;
+              var lblG = (letter ? ('Grupo ' + letter + ' · J') : 'J') + (jj+1);
+              if (rr && (rr.played || rr.done)){
+                _pushPlayed(meta, tourId, 'g'+gi+'_'+jj+'_'+mi,
+                  hN, aN, rr.a, rr.b, lblG, rr);
+              } else {
+                _pushPending(meta, tourId, 'g'+gi+'_'+jj+'_'+mi, hN, aN, lblG);
+              }
+            }
+          }
+        }
+      }
+      /* ── Fase KO ─────────────────────────────────────────── */
+      var koLabels = (fc.koRounds && fc.koRounds.length) ? fc.koRounds
+                    : ((cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss')
+                        ? ['Cuartos','Semis','Final']
+                        : (fc.rounds || []));
+      var bracketAll = (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss')
+                      ? (cfg.koBracket || [])
+                      : (cfg.bracket || []);
+      var twoLeg = (cfg.format === 'ko-2leg');
+      var lastIdx = koLabels.length - 1;
+      var singleLast = !!fc.singleLegLastRound;
+      for (var ri = 0; ri < bracketAll.length; ri++){
+        var br = bracketAll[ri]; if (!Array.isArray(br) || !br.length) continue;
+        var lblK = koLabels[ri] || ('Ronda ' + (ri+1));
+        var nPairs = Math.floor(br.length / 2);
+        var koKeyPrefix = (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss')
+                        ? ('ko_' + ri + '_')
+                        : (ri + '_');
+        var isTwoLegRound = twoLeg && !(ri === lastIdx && singleLast);
+        for (var pi = 0; pi < nPairs; pi++){
+          var hKo = br[pi*2], aKo = br[pi*2+1];
+          if (!hKo || !aKo) continue;
+          var hN2 = hKo.name || '', aN2 = aKo.name || '';
+          if (!hN2 || hN2 === 'PENDIENTE' || !aN2 || aN2 === 'PENDIENTE') continue;
+          if (!_match(hN2, aliases) && !_match(aN2, aliases)) continue;
+          var baseMk = koKeyPrefix + pi;
+          if (isTwoLegRound){
+            /* ida: a vs b — vuelta: b vs a (campo invertido). */
+            var L1 = resAll[baseMk + '|L1'];
+            var L2 = resAll[baseMk + '|L2'];
+            if (L1 && (L1.played || L1.done)){
+              _pushPlayed(meta, tourId, baseMk + '_L1',
+                hN2, aN2, L1.a, L1.b, lblK + ' · Ida', L1);
+            } else {
+              _pushPending(meta, tourId, baseMk + '_L1', hN2, aN2, lblK + ' · Ida');
+            }
+            if (L2 && (L2.played || L2.done)){
+              _pushPlayed(meta, tourId, baseMk + '_L2',
+                aN2, hN2, L2.a, L2.b, lblK + ' · Vuelta', L2);
+            } else {
+              _pushPending(meta, tourId, baseMk + '_L2', aN2, hN2, lblK + ' · Vuelta');
+            }
+          } else {
+            var kr = resAll[baseMk];
+            if (kr && (kr.played || kr.done)){
+              _pushPlayed(meta, tourId, baseMk, hN2, aN2, kr.a, kr.b, lblK, kr);
+            } else {
+              _pushPending(meta, tourId, baseMk, hN2, aN2, lblK);
+            }
+          }
+        }
+      }
+    }
+    try {
+      var cache = window._TOUR_CACHE || {};
+      for (var k in cache){ _walkCfg(k, cache[k]); }
+    } catch(_){}
+    try {
+      if (typeof window._tourLoadCachedSync === 'function'){
+        for (var s = 0; s < _SUMMER_SLOTS.length; s++){
+          try {
+            var sc = window._tourLoadCachedSync(_SUMMER_SLOTS[s]);
+            if (sc) _walkCfg(_SUMMER_SLOTS[s], sc);
+          } catch(_){}
+        }
+      }
+    } catch(_){}
+    return out;
+  }
+  _COMPS.push({
+    id:'verano', label:'Torneos Verano', emoji:'🏆',
+    collect:_collectSummer
+  });
+
   /* Agrega los partidos de Liverpool (club) + Francia (selección) y
      los devuelve en DOS secciones separadas (petición usuario
      2026-05-25): CLUB · Liverpool arriba, SELECCIÓN · Francia debajo.
@@ -37069,7 +37303,7 @@ Tottenham
           groups[c.id].played  = groups[c.id].played.concat(r.played);
         } catch(_){}
       });
-      var order = ['liga','copa','ucl','uel','uecl','sel'];
+      var order = ['liga','copa','ucl','uel','uecl','verano','sel'];
       var out = [];
       order.forEach(function(id){ if (groups[id]) out.push(groups[id]); });
       return out;
@@ -37091,14 +37325,19 @@ Tottenham
     ucl:'Champions League', uel:'Europa League', uecl:'Conference League',
     recopa:'Recopa Europa', usc:'Supercopa Europa', inter:'Intercontinental',
     superliga:'Superliga', amistoso:'Amistoso', torneo:'Torneo Verano',
-    sel:'Selecciones'
+    sel:'Selecciones',
+    jg:'Trofeo Joan Gamper', sct:'Soccer Champions Tour',
+    pss:'Premier Summer Series', asia:'Asian Tournament',
+    mundialito:'Mundialito de Clubes'
   };
   var _MFC_COLOR = {
     liga:'#22c55e', copa:'#e07000', sc:'#f0c040',
     ucl:'#3160ff', uel:'#ff8214', uecl:'#3cc878',
     recopa:'#c01a1a', usc:'#c0c0c0', inter:'#ff9020',
     superliga:'#b040ff', amistoso:'#9fdcff', torneo:'#f0c040',
-    sel:'#0078c8'
+    sel:'#0078c8',
+    jg:'#f0c040', sct:'#3160ff', pss:'#cc2030',
+    asia:'#ff5050', mundialito:'#5fc6c8'
   };
   function _hasLeadingIcon(s){
     if (!s) return false;
@@ -37270,6 +37509,22 @@ Tottenham
     } catch(_){}
   }
 
+  /* Construye el HTML de los partidos de UN lado (Francia o Liverpool)
+     agrupados por competición. Devuelve string vacío si no hay partidos. */
+  function _renderSideBody(sec, mode){
+    var html = '';
+    sec.groups.forEach(function(g){
+      var arr = (mode === 'pend') ? g.pending : g.played;
+      if (!arr || !arr.length) return;
+      html += '<div class="munich-fix-group">'
+            + _esc(g.emoji) + ' ' + _esc(g.label)
+            + ' <span style="opacity:.6">(' + arr.length + ')</span>'
+            + '</div>';
+      arr.forEach(function(m){ html += _renderRow(m, mode === 'temp'); });
+    });
+    return html;
+  }
+
   function _render(mode){
     var listEl = document.getElementById('munich-fix-' + mode + '-list');
     if (!listEl) return;
@@ -37277,7 +37532,7 @@ Tottenham
     var html = '';
     var total = 0;
     /* Cards HvH aplazadas — solo aplican al modo "pend". Las pintamos
-       arriba de las secciones CLUB / SELECCIÓN como sección propia. */
+       arriba de los tabs SELECCIÓN / CLUB como sección propia. */
     var deferred = [];
     if (mode === 'pend'){
       try {
@@ -37293,37 +37548,54 @@ Tottenham
         total += deferred.length;
       }
     }
-    /* Dos secciones top-level: CLUB · Liverpool y SELECCIÓN · Francia.
-       Dentro de cada una, los partidos siguen agrupados por
-       competición (Liga EA, Champions, Selecciones, ...). */
-    var sections = [
-      { id:'club', emoji:gathered.club.emoji, label:gathered.club.label,
-        name:gathered.club.name, groups:gathered.club.groups },
-      { id:'sel',  emoji:gathered.sel.emoji,  label:gathered.sel.label,
-        name:gathered.sel.name,  groups:gathered.sel.groups }
+    /* Dos tabs lado a lado: SELECCIÓN (Francia) | CLUB (Liverpool).
+       Cada uno con su contador y desplegable independiente. Petición
+       usuario 2026-05-25: "Selección - Club / Francia (5) Liverpool (3)
+       si pulso en selección se despliega los partidos…". */
+    var sides = [
+      { id:'sel',  label:'Selección', sec:{ emoji:gathered.sel.emoji,
+          name:gathered.sel.name,  groups:gathered.sel.groups  } },
+      { id:'club', label:'Club',      sec:{ emoji:gathered.club.emoji,
+          name:gathered.club.name, groups:gathered.club.groups } }
     ];
-    sections.forEach(function(sec){
+    var sideHtml = '';
+    var anySide = false;
+    sides.forEach(function(side){
       var secTotal = 0;
-      sec.groups.forEach(function(g){
+      side.sec.groups.forEach(function(g){
         secTotal += ((mode === 'pend') ? g.pending.length : g.played.length);
       });
-      if (!secTotal) return;
-      html += '<div class="munich-fix-section mfs-' + sec.id + '">'
-            + _esc(sec.emoji) + ' ' + _esc(sec.label)
-            + ' · <span class="mfs-name">' + _esc(sec.name) + '</span>'
-            + ' <span style="opacity:.6">(' + secTotal + ')</span>'
-            + '</div>';
-      sec.groups.forEach(function(g){
-        var arr = (mode === 'pend') ? g.pending : g.played;
-        if (!arr || !arr.length) return;
-        html += '<div class="munich-fix-group">'
-              + _esc(g.emoji) + ' ' + _esc(g.label)
-              + ' <span style="opacity:.6">(' + arr.length + ')</span>'
-              + '</div>';
-        arr.forEach(function(m){ html += _renderRow(m, mode === 'temp'); });
-      });
-      total += secTotal;
+      side.total = secTotal;
+      if (secTotal) anySide = true;
     });
+    if (anySide){
+      var tabsHtml = '<div class="mf-side-tabs">';
+      sides.forEach(function(side){
+        var cnt = side.total|0;
+        var disabled = cnt === 0;
+        tabsHtml += '<button type="button" class="mf-side-tab mft-' + side.id + '"'
+                  + ' data-mode="' + mode + '" data-side="' + side.id + '"'
+                  + (disabled ? ' disabled aria-disabled="true"' : '')
+                  + ' aria-expanded="false"'
+                  + ' aria-controls="mf-side-body-' + mode + '-' + side.id + '">'
+                  +   '<span class="mft-label">' + _esc(side.label) + '</span>'
+                  +   '<span class="mft-team">' + _esc(side.sec.emoji) + ' '
+                  +     '<b>' + _esc(side.sec.name) + '</b>'
+                  +     ' <em class="mft-count">(' + cnt + ')</em>'
+                  +   '</span>'
+                  +   '<span class="mft-chev" aria-hidden="true">▼</span>'
+                  + '</button>';
+      });
+      tabsHtml += '</div>';
+      html += tabsHtml;
+      sides.forEach(function(side){
+        if (!side.total) return;
+        html += '<div class="mf-side-body" id="mf-side-body-' + mode + '-' + side.id + '" hidden>'
+              + _renderSideBody(side.sec, mode)
+              + '</div>';
+      });
+      total += sides.reduce(function(s, x){ return s + (x.total|0); }, 0);
+    }
     if (!total){
       listEl.innerHTML = '<div class="munich-fix-empty">'
         + (mode === 'pend'
@@ -37333,6 +37605,23 @@ Tottenham
       return;
     }
     listEl.innerHTML = html;
+    /* Listeners de los 2 tabs (toggle independiente). */
+    var tabs = listEl.querySelectorAll('.mf-side-tab');
+    for (var ti = 0; ti < tabs.length; ti++){
+      (function(tab){
+        tab.onclick = function(ev){
+          if (ev && ev.preventDefault) ev.preventDefault();
+          if (tab.hasAttribute('disabled')) return;
+          var side = tab.getAttribute('data-side');
+          var m = tab.getAttribute('data-mode');
+          var body = document.getElementById('mf-side-body-' + m + '-' + side);
+          if (!body) return;
+          var openNow = body.hasAttribute('hidden');
+          if (openNow){ body.removeAttribute('hidden'); tab.classList.add('mft-open'); tab.setAttribute('aria-expanded','true'); }
+          else        { body.setAttribute('hidden',''); tab.classList.remove('mft-open'); tab.setAttribute('aria-expanded','false'); }
+        };
+      })(tabs[ti]);
+    }
     if (mode === 'pend' && deferred.length){
       var btns = listEl.querySelectorAll('.mu-hvh-play');
       for (var i = 0; i < btns.length; i++){

@@ -3747,6 +3747,11 @@ window._showSimProgress = function(opts, onDone){
      helper. */
   function _psPayAndSimSelMatch(pair){
     if (!pair) return false;
+    /* REGLA (2026-05-25): HvH JAMÁS se simula pagando. La UI de
+       `_cardSelMatch` ya muestra PONER PENDIENTE en lugar de PAGAR
+       cuando ambas selecciones son humanas, pero blindamos el
+       helper por si un caller invoca directamente esta función. */
+    if (pair.home && pair.away && pair.home.isHuman && pair.away.isHuman) return false;
     if (_psGetHubMoney() < PS_PAY_SIM_COST) return false;
     if (typeof window._bayernHudCreditMoney !== 'function') return false;
     if (!_psSimAndSaveTourMatch(pair.tourId, pair.matchKey, pair.home, pair.away)) return false;
@@ -3779,6 +3784,11 @@ window._showSimProgress = function(opts, onDone){
     if (!pair) return false;
     if (!pair.tourId || !pair.matchKey) return false;
     if (!pair.homeObj || !pair.awayObj) return false;
+    /* REGLA (2026-05-25): HvH JAMÁS se simula pagando. Defensa en
+       profundidad — la UI ya esconde el botón en este caso pero
+       cualquier caller que invoque el helper directamente queda
+       bloqueado aquí. */
+    if (pair.homeObj.isHuman && pair.awayObj.isHuman) return false;
     if (_psGetHubMoney() < PS_PAY_SIM_COST_CLUB) return false;
     if (typeof window._bayernHudCreditMoney !== 'function') return false;
     if (!_psSimAndSaveTourMatch(pair.tourId, pair.matchKey, pair.homeObj, pair.awayObj)) return false;
@@ -4315,9 +4325,18 @@ window._showSimProgress = function(opts, onDone){
        (CLAUDE.md ·  2026-05-24 · ya existía en `_cardSelMatch` para
        Selecciones). Solo si el bracket nos dio tourId/matchKey/teams
        (homeObj/awayObj) y el partido aún no está guardado como
-       played en cfg.results. */
+       played en cfg.results.
+       REGLA (2026-05-25, petición usuario): JAMÁS se puede pagar
+       por simular un Humano vs Humano. Si ambos slots son humanos
+       el atajo se elimina por completo — los HvH se juegan SIEMPRE.
+       (Defensa en profundidad: `_realPair` ya devuelve null cuando
+       el rival es humano, pero dejamos el guard explícito por si
+       una refactorización futura cambia esa convención.) */
+    var _isHvHClub = !!(pair && pair.homeObj && pair.awayObj
+                        && pair.homeObj.isHuman && pair.awayObj.isHuman);
     var _payInfoOk = !!(pair && pair.tourId && pair.matchKey
-                        && pair.homeObj && pair.awayObj);
+                        && pair.homeObj && pair.awayObj
+                        && !_isHvHClub);
     var _payRes = null;
     if (_payInfoOk){
       try {

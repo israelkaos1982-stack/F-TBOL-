@@ -3573,6 +3573,11 @@ window._showSimProgress = function(opts, onDone){
      en las cards del #ps-stage. El precio vive en una sola
      constante para que el admin pueda subirlo de un sitio. */
   var PS_PAY_SIM_COST = 50;
+  /* Precio reducido para amistosos / torneos de verano (sct, pss,
+     jg, asia) — petición usuario 2026-05-25. Selecciones (Mundial)
+     y partidos de club del bracket de fase final mantienen los
+     50🪙 globales. */
+  var PS_PAY_SIM_COST_CLUB = 20;
   function _psGetHubMoney(){
     try {
       if (typeof window._bayernHudGet !== 'function') return 0;
@@ -3580,10 +3585,11 @@ window._showSimProgress = function(opts, onDone){
       return (o.money != null) ? (parseFloat(o.money) || 0) : 0;
     } catch(_){ return 0; }
   }
-  function _psPayBtnHtml(disabled){
+  function _psPayBtnHtml(disabled, cost){
+    var c = (cost == null) ? PS_PAY_SIM_COST : cost;
     return '<button type="button" class="ps-btn-pay" id="ps-pay-sim-btn"'
       + (disabled ? ' disabled aria-disabled="true" title="Sin fondos suficientes en la caja"' : '')
-      + '>🤖 PAGAR SIMULACIÓN <span class="pay-coin">' + PS_PAY_SIM_COST + ' 🪙</span></button>';
+      + '>🤖 PAGAR SIMULACIÓN <span class="pay-coin">' + c + ' 🪙</span></button>';
   }
 
   /* ── PONER · PENDIENTE (2026-05-24) ───────────────────────────
@@ -3753,22 +3759,41 @@ window._showSimProgress = function(opts, onDone){
   /* Variante de `_psPayAndSimSelMatch` para los partidos de CLUBES
      del hub (cards de `_cardMatch`: torneos de verano, amistosos
      contra un rival real del bracket). Cobra 50🪙, simula con el
-     motor 4-ejes, persiste en cfg.results[matchKey] del torneo y
-     AVANZA EL DÍA del calendario del hub. A diferencia de la versión
-     de Selecciones, NO mostramos el score + CONTINUAR ▶: las cards
-     de `_cardMatch` no tienen estado played (el flujo normal usa
-     `abrirAmistoso` sin persistencia en cfg.results); pagar es un
-     atajo de "salto a mañana" — el usuario ve el resultado al abrir
-     la pantalla del torneo si quiere. 2026-05-24. */
+     motor 4-ejes y persiste en cfg.results[matchKey] del torneo.
+     NO avanza el día: re-renderiza la card para que muestre el
+     resultado (played:true → score + acta + CONTINUAR ▶), igual
+     que `_psPayAndSimSelMatch` en Selecciones. El usuario pulsa
+     CONTINUAR ▶ para pasar al día siguiente. 2026-05-25 (antes
+     2026-05-24 saltaba directo al día siguiente sin acta ni
+     resultado — reportado por usuario con foto SC Internacional vs
+     Liverpool del Joan Gamper). */
   function _psPayAndSimClubMatch(pair){
     if (!pair) return false;
     if (!pair.tourId || !pair.matchKey) return false;
     if (!pair.homeObj || !pair.awayObj) return false;
-    if (_psGetHubMoney() < PS_PAY_SIM_COST) return false;
+    if (_psGetHubMoney() < PS_PAY_SIM_COST_CLUB) return false;
     if (typeof window._bayernHudCreditMoney !== 'function') return false;
     if (!_psSimAndSaveTourMatch(pair.tourId, pair.matchKey, pair.homeObj, pair.awayObj)) return false;
-    try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
-    _markDoneAndAdvance();
+    try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST_CLUB); } catch(_){}
+    /* Invalida la sig de idempotencia para que `_render` repinte la
+       card con el estado played (idx|type|date no cambia tras pagar
+       pero cfg.results[matchKey] SÍ). Sin esto la card sigue
+       mostrando ABRIR PREVIA + PAGAR SIMULACIÓN. */
+    try {
+      var st = _stage();
+      if (st) st._psSig = null;
+    } catch(_){}
+    /* Marca la previa como "ya abierta" para este idx ANTES de
+       repintar: sin esto, _cardMatch dispararía la auto-apertura
+       de la previa porque previaOpenedIdx !== idx, pero no debe
+       hacerlo si el partido ya está jugado. */
+    try {
+      var _d = _load();
+      _d.previaOpenedIdx = parseInt(_d.dayIdx,10)||0;
+      _save(_d);
+      window.__psPreviaOpenedIdx = _d.previaOpenedIdx;
+    } catch(_){}
+    _render();
     return true;
   }
 
@@ -4249,19 +4274,90 @@ window._showSimProgress = function(opts, onDone){
        played en cfg.results. */
     var _payInfoOk = !!(pair && pair.tourId && pair.matchKey
                         && pair.homeObj && pair.awayObj);
-    var _payAlreadyPlayed = false;
+    var _payRes = null;
     if (_payInfoOk){
       try {
         var _pcfg = (window._TOUR_CACHE || {})[pair.tourId] || null;
         if (!_pcfg && typeof window._tourLoadCachedSync === 'function'){
           _pcfg = window._tourLoadCachedSync(pair.tourId);
         }
-        var _pres = _pcfg && _pcfg.results && _pcfg.results[pair.matchKey];
-        _payAlreadyPlayed = !!(_pres && _pres.played);
+        _payRes = _pcfg && _pcfg.results && _pcfg.results[pair.matchKey] || null;
       } catch(_){}
     }
-    var _payHtml = (_payInfoOk && !_payAlreadyPlayed)
-      ? '<div style="margin-top:6px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST) + '</div>'
+    var _payAlreadyPlayed = !!(_payRes && _payRes.played);
+
+    /* Estado PLAYED tras PAGAR SIMULACIÓN: mostramos score + acta +
+       CONTINUAR ▶ (igual que `_cardSelMatch`). Si no, flujo normal
+       ABRIR PREVIA + PAGAR SIMULACIÓN. 2026-05-25: antes saltaba al
+       día siguiente sin enseñar resultado ni acta — reportado con
+       foto SC Internacional vs Liverpool del Joan Gamper. */
+    if (_payAlreadyPlayed){
+      var _hN = rv.home, _aN = rv.away;
+      var _hS = (pair.homeObj && pair.homeObj.shield) || '';
+      var _aS = (pair.awayObj && pair.awayObj.shield) || '';
+      var _hHi = '', _aHi = '';
+      try {
+        if (pair.homeObj && pair.homeObj.isHuman && typeof window._tourTeamIcon === 'function') {
+          _hHi = window._tourTeamIcon(pair.homeObj) || '';
+        }
+        if (pair.awayObj && pair.awayObj.isHuman && typeof window._tourTeamIcon === 'function') {
+          _aHi = window._tourTeamIcon(pair.awayObj) || '';
+        }
+      } catch(_){}
+      var _aW = _payRes.winner === 'a' || (_payRes.winner == null && _payRes.a > _payRes.b);
+      var _bW = _payRes.winner === 'b' || (_payRes.winner == null && _payRes.b > _payRes.a);
+      var _aClr = _aW ? '#fff' : '#4dd0e1';
+      var _bClr = _bW ? '#fff' : '#4dd0e1';
+      var _centerHtml = '<div class="ps-x" style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;padding:0 4px;">'
+        + '<div style="background:rgba(0,0,0,.45);border:1px solid rgba(77,208,225,.5);border-radius:8px;padding:5px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:2px;color:#4dd0e1;text-shadow:0 0 10px rgba(77,208,225,.45);min-width:78px;text-align:center;line-height:1.05;">'
+        +   '<span style="color:'+_aClr+';">'+_payRes.a+'</span> - <span style="color:'+_bClr+';">'+_payRes.b+'</span>'
+        + '</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:1px 8px;">🏁 FIN</div>'
+        + '</div>';
+      var _actaHtml = '';
+      if (typeof window._eurFaseRenderActaPanel === 'function'){
+        var _actaUid = 'ps-acta-' + String(pair.tourId).replace(/[^A-Za-z0-9_-]/g,'_')
+                    + '-' + String(pair.matchKey).replace(/[^A-Za-z0-9_-]/g,'_');
+        var _actaM = {
+          home: _payRes.home || _hN,
+          away: _payRes.away || _aN,
+          events: (_payRes.events || []),
+          mvp: _payRes.mvp || '',
+          mvpTeam: _payRes.mvpTeam || ''
+        };
+        try { _actaHtml = window._eurFaseRenderActaPanel(_actaM, _actaUid); } catch(_){ _actaHtml = ''; }
+      }
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
+        + '<div class="ps-vs" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0;">'
+        +   '<div class="ps-team">'
+        +     (_hS ? '<img class="ps-shield" src="'+_esc(_hS)+'" onerror="this.style.display=\'none\'" alt="">' : '<div class="ps-shield"></div>')
+        +     '<div class="ps-tn">'+_esc(_hN)+(_hHi?' '+_hHi:'')+'</div>'
+        +   '</div>'
+        +   _centerHtml
+        +   '<div class="ps-team">'
+        +     (_aS ? '<img class="ps-shield" src="'+_esc(_aS)+'" onerror="this.style.display=\'none\'" alt="">' : '<div class="ps-shield"></div>')
+        +     '<div class="ps-tn">'+_esc(_aN)+(_aHi?' '+_aHi:'')+'</div>'
+        +   '</div>'
+        + '</div>'
+        + _actaHtml
+        + '<button type="button" class="ps-btn ghost" id="ps-match-continue" style="margin-top:16px;">CONTINUAR ▶</button>'
+        + '</div>';
+      var _cont = document.getElementById('ps-match-continue');
+      if (_cont) _cont.onclick = function(){ _markDoneAndAdvance(); };
+      /* Marca esta jornada como "previa ya abierta" para que un
+         _render posterior no la dispare al volver. */
+      var idxP = parseInt(d.dayIdx,10)||0;
+      d.previaOpenedIdx = idxP;
+      _save(d);
+      window.__psPreviaOpenedIdx = idxP;
+      return;
+    }
+
+    var _payHtml = _payInfoOk
+      ? '<div style="margin-top:6px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST_CLUB, PS_PAY_SIM_COST_CLUB) + '</div>'
       : '';
     st.innerHTML =
       '<div class="ps-card">'

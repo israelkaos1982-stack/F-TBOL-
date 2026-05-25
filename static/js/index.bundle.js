@@ -5792,7 +5792,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var rem = parseInt(l.partidos || 0, 10) || 0;
       if (rem <= 0) return;
       seen[name] = true;
-      lines.push((l.gradoEmoji || '🩹') + ' ' + name + ' · ' + (l.gradoNombre || 'Lesión') + ' · ' + rem + 'P');
+      /* 2026-05-25: formato corto pedido por usuario — "Nombre · N Partidos baja"
+         (sin gradoNombre redundante; la gravedad ya sale en la card LESIONADO). */
+      lines.push((l.gradoEmoji || '🩹') + ' ' + name + ' · ' + rem + ' Partido' + (rem===1?'':'s') + ' baja');
     });
     /* Sanción / expulsión: BAJA_STORE no guarda equipo → cruzamos con
        SQUAD_REGISTRY del hub para saber si el jugador es de su plantilla. */
@@ -5815,8 +5817,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       if (tipo !== 'sancion' && tipo !== 'expulsion') return;
       if (!hubSquad[name]) return;
       var n = Math.max(parseInt(b.liga || 0, 10) || 0, parseInt(b.copa || 0, 10) || 0, parseInt(b.europa || 0, 10) || 0);
-      lines.push((tipo === 'expulsion' ? '🟥' : '🟨') + ' ' + name + ' · '
-        + (tipo === 'expulsion' ? 'Expulsado' : 'Sancionado') + ' · ' + n + 'P');
+      lines.push((tipo === 'expulsion' ? '🟥' : '🟨') + ' ' + name + ' · ' + n + ' Partido' + (n===1?'':'s') + ' baja');
     });
     return lines;
   }
@@ -6047,7 +6048,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     try {
       var _bjLines = _ppHubBajasLines();
       if (_bjLines.length) {
-        items.push({ id:'bajas', ico:'🏥', lbl:'Bajas — NO alinear', val:_bjLines.join('  ·  ') });
+        /* 2026-05-25: label "NO convocar" + val multilínea (cada baja
+           en su propia fila debajo del título), layout vstack. */
+        items.push({ id:'bajas', ico:'🏥', lbl:'Bajas — NO convocar', val:_bjLines.join('<br>'), vstack:true });
       }
     } catch(_){}
     return items;
@@ -6405,6 +6408,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var checked = _ppChecked[item.id];
       var icoCls = 'pp-ico';
       if (item.id === 'balon' && !checked) icoCls += ' pp-ball-bouncing';
+      /* vstack: el valor va DEBAJO del label (2 l\u00edneas), no a la derecha.
+         Usado para listas largas como "Bajas \u2014 NO convocar". */
+      if (item.vstack) {
+        return '<div class="pp-item pp-item-vstack' + (checked ? ' checked' : '') + '" data-ppid="' + item.id + '" style="flex-wrap:wrap;align-items:flex-start;">'
+          + '<span class="pp-item-lbl" style="flex:1 1 auto;"><span class="' + icoCls + '">' + item.ico + '</span>' + item.lbl + '</span>'
+          + '<span class="pp-check" style="flex-shrink:0;">' + (checked ? '\u2705' : '\u{1F533}') + '</span>'
+          + '<span class="pp-item-val" style="flex:1 1 100%;margin-left:32px;margin-top:4px;text-align:left;font-size:12px;line-height:1.5;">' + item.val + '</span>'
+          + '</div>';
+      }
       return '<div class="pp-item' + (checked ? ' checked' : '') + '" data-ppid="' + item.id + '">'
         + '<span class="pp-item-lbl"><span class="' + icoCls + '">' + item.ico + '</span>' + item.lbl + '</span>'
         + '<span class="pp-item-val">' + item.val + '</span>'

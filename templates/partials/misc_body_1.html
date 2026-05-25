@@ -36909,11 +36909,33 @@ Tottenham
     <button class="btn-next" id="munich-next-day-btn">➡️ SIGUIENTE DÍA</button>
   </div>
 </section>
-<!-- ═══ PARTIDOS PENDIENTES + PARTIDOS TEMPORADA (par horizontal) ═══
-     Dos cajas desplegables lado a lado debajo del "Próximo partido".
-     Liverpool + Francia agrupados. Pendientes = por jugar. Temporada
-     = ya jugados. Plegadas por defecto, abren independientemente. -->
+<!-- ═══ POSPUESTOS + PENDIENTES + JUGADOS (3 cajas apiladas) ═════════
+     Tres desplegables debajo del "Próximo partido". Plegadas por defecto,
+     abren independientemente.
+       · POSPUESTOS — partidos que el usuario ha aplazado manualmente
+         vía 📌 POSPONER. Tabs Club (Liverpool) / Selección (Francia).
+       · PENDIENTES — TODOS los partidos por jugar de Liverpool +
+         Francia en cualquier competición (auto-colectados del calendario
+         y de la caja COMPETICIONES). Vista combinada, sin tabs.
+       · JUGADOS — partidos ya disputados con su acta. Tabs Club /
+         Selección. (Renombrado desde "Partidos Temporada" 2026-05-25.) -->
 <section class="munich-fixtures-pair" id="munich-fixtures-pair">
+  <section class="munich-fix" id="munich-fix-posp" data-mode="posp">
+    <button type="button" class="munich-fix-hdr"
+            onclick="window.muFixToggle&&window.muFixToggle('posp',event)"
+            aria-expanded="false" aria-controls="munich-fix-posp-body">
+      <span class="munich-fix-title">
+        <span class="munich-fix-emoji">📌</span>
+        <span>Partidos Pospuestos</span>
+      </span>
+      <span class="munich-fix-chev" aria-hidden="true">▼</span>
+    </button>
+    <div class="munich-fix-body" id="munich-fix-posp-body">
+      <div class="munich-fix-list" id="munich-fix-posp-list">
+        <div class="munich-fix-empty">Sin partidos pospuestos.</div>
+      </div>
+    </div>
+  </section>
   <section class="munich-fix" id="munich-fix-pend" data-mode="pend">
     <button type="button" class="munich-fix-hdr"
             onclick="window.muFixToggle&&window.muFixToggle('pend',event)"
@@ -36930,18 +36952,18 @@ Tottenham
       </div>
     </div>
   </section>
-  <section class="munich-fix" id="munich-fix-temp" data-mode="temp">
+  <section class="munich-fix" id="munich-fix-jug" data-mode="jug">
     <button type="button" class="munich-fix-hdr"
-            onclick="window.muFixToggle&&window.muFixToggle('temp',event)"
-            aria-expanded="false" aria-controls="munich-fix-temp-body">
+            onclick="window.muFixToggle&&window.muFixToggle('jug',event)"
+            aria-expanded="false" aria-controls="munich-fix-jug-body">
       <span class="munich-fix-title">
-        <span class="munich-fix-emoji">📋</span>
-        <span>Partidos Temporada</span>
+        <span class="munich-fix-emoji">✅</span>
+        <span>Partidos Jugados</span>
       </span>
       <span class="munich-fix-chev" aria-hidden="true">▼</span>
     </button>
-    <div class="munich-fix-body" id="munich-fix-temp-body">
-      <div class="munich-fix-list" id="munich-fix-temp-list">
+    <div class="munich-fix-body" id="munich-fix-jug-body">
+      <div class="munich-fix-list" id="munich-fix-jug-list">
         <div class="munich-fix-empty">Cargando partidos…</div>
       </div>
     </div>
@@ -36949,13 +36971,17 @@ Tottenham
 </section>
 </div>
 <script>
-/* ── Cajas "Partidos Pendientes" + "Partidos Temporada" ──────────────
-   Dos desplegables debajo del "Próximo partido". Listan partidos
-   PENDIENTES (por jugar) y TEMPORADA (ya jugados) de los dos equipos
+/* ── Cajas POSPUESTOS · PENDIENTES · JUGADOS (3 desplegables) ─────
+   Tres desplegables debajo del "Próximo partido" para los 2 equipos
    que dirige Toñín: Liverpool (club) + Francia (selección).
-   La fuente principal de datos es `loadResults()` / `SCHEDULE` de
-   Liga EA + escaneo defensivo de otras competiciones que estén
-   pobladas en localStorage. */
+     · POSPUESTOS — store manual (`pend_hvh_deferred_v1`) alimentado
+       por el botón 📌 POSPONER de las cards de partido. Tabs Club /
+       Selección. Oculto cuando no hay nada pospuesto.
+     · PENDIENTES — auto-colectados de `SCHEDULE` (Liga EA), Copa,
+       UCL/UEL/UECL, Mundial 48 y torneos de verano. Vista combinada
+       sin tabs. Se excluyen los partidos ya en POSPUESTOS.
+     · JUGADOS — partidos ya disputados con sus actas. Tabs Club /
+       Selección. (Renombrado desde "Partidos Temporada" 2026-05-25.) */
 (function(){
   if (window.__MU_FIX_READY) return;
   window.__MU_FIX_READY = true;
@@ -36989,12 +37015,12 @@ Tottenham
     } catch(_){}
     return 'Liverpool';
   }
-  function _aliases(name){
+  /* Alias para SCHEDULE de Liga EA Sports: el calendario interno
+     guarda "Bayern Munich" hardcoded en TEAMS, así que el equipo
+     real del hub (si fue sustituido vía `_ligaEaSubName`) necesita
+     resolverse contra ambos nombres para encontrar sus partidos. */
+  function _aliasesLiga(name){
     var raw = [name];
-    /* El equipo real del hub puede haber sustituido a Bayern por el
-       mecanismo `_ligaEaSubName`. Aliasamos ambos lados para que el
-       cruce con SCHEDULE (que usa el nombre "Bayern Munich" fijo en
-       la liga) localice partidos sin importar la sustitución. */
     raw.push('Bayern Munich','Bayern Múnich','Bayern');
     var out = [], seen = {};
     raw.forEach(function(x){
@@ -37003,6 +37029,22 @@ Tottenham
     });
     return out;
   }
+  /* Alias para TORNEOS (Copa, UCL, UEL, UECL, Mundialito, Verano, …):
+     los `cfg.teams[].name` viven en `_TOUR_CACHE` y reflejan el equipo
+     real del torneo. Si en un torneo viejo todavía aparece "Bayern
+     Munich" como equipo, esos partidos son RESIDUOS de antes de la
+     sustitución y NO deben aparecer en el hub del Liverpool (bug
+     reportado por usuario 2026-05-25: ghost matches "Bayern Munich
+     vs Cultural Leonesa" en PARTIDOS PENDIENTES). Solo se usa el
+     nombre canónico del hub. */
+  function _aliasesTour(name){
+    var n = _norm(name);
+    return n ? [n] : [];
+  }
+  /* Compat — el código legacy llama _aliases(); mantenerlo apuntando
+     a la versión de Liga (la que sí necesita el alias Bayern) para no
+     romper a callers que aún esperen el comportamiento previo. */
+  function _aliases(name){ return _aliasesLiga(name); }
   function _match(n, al){
     var x = _norm(n); if (!x) return false;
     for (var i=0;i<al.length;i++){ if (x === al[i]) return true; }
@@ -37465,14 +37507,23 @@ Tottenham
      competición en el orden canónico (liga > copa > euros > sel). */
   function _gather(){
     var hub = _hubName();
-    var clubAlias = _aliases(hub);
-    var franceAlias = ['francia','france'];
+    /* Liga EA usa el alias con Bayern (SCHEDULE tiene "Bayern Munich"
+       hardcoded). El resto de comps (Copa, eur, torneos, sel) NO
+       aliasea Bayern — los partidos de "Bayern Munich" en cfg.teams
+       son residuos previos a la sustitución y no son del Liverpool. */
+    var clubAliasLiga = _aliasesLiga(hub);
+    var clubAliasTour = _aliasesTour(hub);
+    /* Selección Francia no tiene historial de sustitución, mismo alias
+       en ambos contextos. */
+    var franceAlias   = ['francia','france'];
 
-    function _gatherFor(aliases){
+    function _gatherFor(aliasesLiga, aliasesTour){
       var groups = {};
       _COMPS.forEach(function(c){
         try {
-          var r = c.collect(aliases);
+          var al = (c.id === 'liga') ? aliasesLiga : aliasesTour;
+          if (!al || !al.length) return;
+          var r = c.collect(al);
           if (!groups[c.id]) groups[c.id] = { id:c.id, label:c.label, emoji:c.emoji, pending:[], played:[] };
           groups[c.id].pending = groups[c.id].pending.concat(r.pending);
           groups[c.id].played  = groups[c.id].played.concat(r.played);
@@ -37485,8 +37536,8 @@ Tottenham
     }
 
     return {
-      club: { name: hub,       emoji: '🛡', label: 'CLUB',       groups: _gatherFor(clubAlias) },
-      sel:  { name: 'Francia', emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(franceAlias) }
+      club: { name: hub,       emoji: '🛡', label: 'CLUB',       groups: _gatherFor(clubAliasLiga, clubAliasTour) },
+      sel:  { name: 'Francia', emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(franceAlias, franceAlias) }
     };
   }
 
@@ -37604,10 +37655,15 @@ Tottenham
      Grupo — J3, 🏆 Champions, etc.). 2026-05-24. */
   function _renderDeferredHvHRow(entry){
     if (!entry) return '';
-    var hN = (entry.home && entry.home.name) || '';
-    var aN = (entry.away && entry.away.name) || '';
-    var hS = (entry.home && entry.home.shield) || '';
-    var aS = (entry.away && entry.away.shield) || '';
+    /* entry.home / entry.away pueden ser objeto {name, shield} (camino
+       canónico desde `_psDeferHvHSelMatch`) o string (callers nuevos
+       de Fase 2 que sólo conocen el nombre). Aceptamos ambos. */
+    function _n(v){ return (v && typeof v === 'object') ? (v.name || '') : (v || ''); }
+    function _s(v){ return (v && typeof v === 'object') ? (v.shield || '') : ''; }
+    var hN = _n(entry.home);
+    var aN = _n(entry.away);
+    var hS = _s(entry.home);
+    var aS = _s(entry.away);
     var label = entry.label || 'Partido';
     var emoji = entry.emoji || '🌍';
     var uid = entry.uid || '';
@@ -37685,82 +37741,121 @@ Tottenham
     } catch(_){}
   }
 
-  /* Construye el HTML de los partidos de UN lado (Francia o Liverpool)
-     agrupados por competición. Devuelve string vacío si no hay partidos. */
-  function _renderSideBody(sec, mode){
+  /* Construye el HTML de los partidos jugados de UN lado (Francia o
+     Liverpool) agrupados por competición. Devuelve '' si no hay nada. */
+  function _renderSideBody(sec){
     var html = '';
     sec.groups.forEach(function(g){
-      var arr = (mode === 'pend') ? g.pending : g.played;
+      var arr = g.played;
       if (!arr || !arr.length) return;
       html += '<div class="munich-fix-group">'
             + _esc(g.emoji) + ' ' + _esc(g.label)
             + ' <span style="opacity:.6">(' + arr.length + ')</span>'
             + '</div>';
-      arr.forEach(function(m){ html += _renderRow(m, mode === 'temp'); });
+      arr.forEach(function(m){ html += _renderRow(m, true); });
     });
     return html;
+  }
+
+  /* Firma normalizada para deduplicar contra el store de pospuestos.
+     home + away + label es bastante único (los duplicados naturales —
+     Ida/Vuelta — ya tienen label distinto). */
+  function _matchSig(home, away, label){
+    return _norm(home) + '|' + _norm(away) + '|' + _norm(label || '');
+  }
+  function _pospuestoSigs(){
+    var sigs = {};
+    try {
+      var g = window._pendHvHGet;
+      var arr = (typeof g === 'function') ? (g() || []) : [];
+      arr.forEach(function(e){
+        if (!e) return;
+        var hN = (e.home && e.home.name) || '';
+        var aN = (e.away && e.away.name) || '';
+        sigs[_matchSig(hN, aN, e.label || '')] = 1;
+      });
+    } catch(_){}
+    return sigs;
+  }
+
+  /* Construye el HTML de la lista combinada de PARTIDOS PENDIENTES
+     (Liverpool + Francia juntos, sin tabs). Agrupa por competición y
+     prefija cada grupo con el icono del lado (🛡 Liverpool / 🌍
+     Francia). Excluye los partidos que ya están en POSPUESTOS. */
+  function _renderPendCombined(gathered){
+    var html = '';
+    var total = 0;
+    var pospSigs = _pospuestoSigs();
+    var sides = [
+      { name: gathered.club.name, emoji: '🛡', groups: gathered.club.groups },
+      { name: gathered.sel.name,  emoji: '🌍', groups: gathered.sel.groups  }
+    ];
+    sides.forEach(function(side){
+      side.groups.forEach(function(g){
+        var arr = (g.pending || []).filter(function(m){
+          return !pospSigs[_matchSig(m.home, m.away, m.label)];
+        });
+        if (!arr.length) return;
+        total += arr.length;
+        html += '<div class="munich-fix-group">'
+              + _esc(side.emoji) + ' ' + _esc(side.name) + ' · '
+              + _esc(g.emoji) + ' ' + _esc(g.label)
+              + ' <span style="opacity:.6">(' + arr.length + ')</span>'
+              + '</div>';
+        arr.forEach(function(m){ html += _renderRow(m, false); });
+      });
+    });
+    return { html: html, total: total };
   }
 
   function _render(mode){
     var listEl = document.getElementById('munich-fix-' + mode + '-list');
     if (!listEl) return;
-    var gathered = (mode === 'temp') ? _gather() : null;
     var html = '';
     var total = 0;
-    /* Cards aplazadas — solo aplican al modo "pend". PARTIDOS PENDIENTES
-       contiene SOLO lo que el humano haya pospuesto explícitamente vía
-       el botón 📌 POSPONER (store `pend_hvh_deferred_v1`). Petición
-       usuario 2026-05-25: la caja NO debe colectar partidos
-       automáticamente — eso traía partidos fantasma de Bayern Munich
-       (IA) y matches de eliminatorias que en realidad aún no se podían
-       jugar. */
-    var deferred = [];
-    if (mode === 'pend'){
+
+    /* ── POSPUESTOS: tabs Club/Selección, source = _pendHvHGet ─── */
+    if (mode === 'posp'){
+      var deferred = [];
       try {
-        var getter = window._pendHvHGet;
-        if (typeof getter === 'function') deferred = getter() || [];
+        var g0 = window._pendHvHGet;
+        if (typeof g0 === 'function') deferred = g0() || [];
       } catch(_){}
-      if (deferred.length){
-        html += '<div class="munich-fix-section">'
-              + '📌 POSPUESTOS'
-              + ' <span style="opacity:.6">(' + deferred.length + ')</span>'
-              + '</div>';
-        deferred.forEach(function(e){ html += _renderDeferredHvHRow(e); });
-        total += deferred.length;
+      var hub = _hubName();
+      var clubAl = _aliasesTour(hub);
+      var selAl  = ['francia','france'];
+      function _entrySide(e){
+        if (!e) return null;
+        var hN = (e.home && e.home.name) || '';
+        var aN = (e.away && e.away.name) || '';
+        if (_match(hN, clubAl) || _match(aN, clubAl)) return 'club';
+        if (_match(hN, selAl)  || _match(aN, selAl))  return 'sel';
+        return null;
       }
-    }
-    /* Dos tabs lado a lado: SELECCIÓN (Francia) | CLUB (Liverpool).
-       Solo se muestran en el modo "temp" (Partidos Temporada · jugados).
-       En modo "pend" la caja únicamente lista los aplazados manuales. */
-    if (mode === 'temp' && gathered){
-      var sides = [
-        { id:'sel',  label:'Selección', sec:{ emoji:gathered.sel.emoji,
-            name:gathered.sel.name,  groups:gathered.sel.groups  } },
-        { id:'club', label:'Club',      sec:{ emoji:gathered.club.emoji,
-            name:gathered.club.name, groups:gathered.club.groups } }
-      ];
-      var anySide = false;
-      sides.forEach(function(side){
-        var secTotal = 0;
-        side.sec.groups.forEach(function(g){
-          secTotal += (g.played ? g.played.length : 0);
-        });
-        side.total = secTotal;
-        if (secTotal) anySide = true;
+      var bySide = { club: [], sel: [] };
+      deferred.forEach(function(e){
+        var s = _entrySide(e);
+        if (s) bySide[s].push(e);
       });
-      if (anySide){
+      var posTabs = [
+        { id:'club', label:'Club',      emoji:'🛡', name:hub,       items:bySide.club },
+        { id:'sel',  label:'Selección', emoji:'🌍', name:'Francia', items:bySide.sel  }
+      ];
+      var anyTab = false;
+      posTabs.forEach(function(t){ if (t.items.length) anyTab = true; });
+      if (anyTab){
         var tabsHtml = '<div class="mf-side-tabs">';
-        sides.forEach(function(side){
-          var cnt = side.total|0;
+        posTabs.forEach(function(t){
+          var cnt = t.items.length|0;
           var disabled = cnt === 0;
-          tabsHtml += '<button type="button" class="mf-side-tab mft-' + side.id + '"'
-                    + ' data-mode="' + mode + '" data-side="' + side.id + '"'
+          tabsHtml += '<button type="button" class="mf-side-tab mft-' + t.id + '"'
+                    + ' data-mode="' + mode + '" data-side="' + t.id + '"'
                     + (disabled ? ' disabled aria-disabled="true"' : '')
                     + ' aria-expanded="false"'
-                    + ' aria-controls="mf-side-body-' + mode + '-' + side.id + '">'
-                    +   '<span class="mft-label">' + _esc(side.label) + '</span>'
-                    +   '<span class="mft-team">' + _esc(side.sec.emoji) + ' '
-                    +     '<b>' + _esc(side.sec.name) + '</b>'
+                    + ' aria-controls="mf-side-body-' + mode + '-' + t.id + '">'
+                    +   '<span class="mft-label">' + _esc(t.label) + '</span>'
+                    +   '<span class="mft-team">' + _esc(t.emoji) + ' '
+                    +     '<b>' + _esc(t.name) + '</b>'
                     +     ' <em class="mft-count">(' + cnt + ')</em>'
                     +   '</span>'
                     +   '<span class="mft-chev" aria-hidden="true">▼</span>'
@@ -37768,25 +37863,93 @@ Tottenham
         });
         tabsHtml += '</div>';
         html += tabsHtml;
-        sides.forEach(function(side){
-          if (!side.total) return;
-          html += '<div class="mf-side-body" id="mf-side-body-' + mode + '-' + side.id + '" hidden>'
-                + _renderSideBody(side.sec, mode)
+        posTabs.forEach(function(t){
+          if (!t.items.length) return;
+          var body = '';
+          t.items.forEach(function(e){ body += _renderDeferredHvHRow(e); });
+          html += '<div class="mf-side-body" id="mf-side-body-' + mode + '-' + t.id + '" hidden>'
+                + body
                 + '</div>';
+          total += t.items.length;
         });
-        total += sides.reduce(function(s, x){ return s + (x.total|0); }, 0);
+      }
+      if (!total){
+        listEl.innerHTML = '<div class="munich-fix-empty">'
+          + 'Sin partidos pospuestos. Usa 📌 POSPONER en la card del partido para añadirlo.'
+          + '</div>';
+        return;
       }
     }
-    if (!total){
-      listEl.innerHTML = '<div class="munich-fix-empty">'
-        + (mode === 'pend'
-            ? 'Sin partidos pospuestos. Usa 📌 POSPONER en la card del partido para añadirlo.'
-            : 'Aún no se ha jugado ningún partido esta temporada.')
-        + '</div>';
-      return;
+
+    /* ── PENDIENTES: lista combinada Liverpool + Francia, sin tabs ── */
+    if (mode === 'pend'){
+      var gather1 = _gather();
+      var built = _renderPendCombined(gather1);
+      html += built.html;
+      total += built.total;
+      if (!total){
+        listEl.innerHTML = '<div class="munich-fix-empty">'
+          + 'Sin partidos pendientes para Liverpool ni Francia.'
+          + '</div>';
+        return;
+      }
     }
+
+    /* ── JUGADOS: tabs Club/Selección (era el viejo modo "temp") ── */
+    if (mode === 'jug'){
+      var gather2 = _gather();
+      var sides2 = [
+        { id:'club', label:'Club',      sec:{ emoji:gather2.club.emoji,
+            name:gather2.club.name, groups:gather2.club.groups } },
+        { id:'sel',  label:'Selección', sec:{ emoji:gather2.sel.emoji,
+            name:gather2.sel.name,  groups:gather2.sel.groups  } }
+      ];
+      var anyJ = false;
+      sides2.forEach(function(side){
+        var st = 0;
+        side.sec.groups.forEach(function(g){ st += (g.played ? g.played.length : 0); });
+        side.total = st;
+        if (st) anyJ = true;
+      });
+      if (anyJ){
+        var tabsH = '<div class="mf-side-tabs">';
+        sides2.forEach(function(side){
+          var cnt = side.total|0;
+          var dis = cnt === 0;
+          tabsH += '<button type="button" class="mf-side-tab mft-' + side.id + '"'
+                 + ' data-mode="' + mode + '" data-side="' + side.id + '"'
+                 + (dis ? ' disabled aria-disabled="true"' : '')
+                 + ' aria-expanded="false"'
+                 + ' aria-controls="mf-side-body-' + mode + '-' + side.id + '">'
+                 +   '<span class="mft-label">' + _esc(side.label) + '</span>'
+                 +   '<span class="mft-team">' + _esc(side.sec.emoji) + ' '
+                 +     '<b>' + _esc(side.sec.name) + '</b>'
+                 +     ' <em class="mft-count">(' + cnt + ')</em>'
+                 +   '</span>'
+                 +   '<span class="mft-chev" aria-hidden="true">▼</span>'
+                 + '</button>';
+        });
+        tabsH += '</div>';
+        html += tabsH;
+        sides2.forEach(function(side){
+          if (!side.total) return;
+          html += '<div class="mf-side-body" id="mf-side-body-' + mode + '-' + side.id + '" hidden>'
+                + _renderSideBody(side.sec)
+                + '</div>';
+        });
+        total += sides2.reduce(function(s, x){ return s + (x.total|0); }, 0);
+      }
+      if (!total){
+        listEl.innerHTML = '<div class="munich-fix-empty">'
+          + 'Aún no se ha jugado ningún partido esta temporada.'
+          + '</div>';
+        return;
+      }
+    }
+
     listEl.innerHTML = html;
-    /* Listeners de los 2 tabs (toggle independiente). */
+
+    /* Listeners de los tabs (Club / Selección) — toggle independiente. */
     var tabs = listEl.querySelectorAll('.mf-side-tab');
     for (var ti = 0; ti < tabs.length; ti++){
       (function(tab){
@@ -37803,7 +37966,9 @@ Tottenham
         };
       })(tabs[ti]);
     }
-    if (mode === 'pend' && deferred.length){
+
+    /* Botón ▶ JUGAR + tap-para-despoponer en filas POSPUESTAS. */
+    if (mode === 'posp'){
       var btns = listEl.querySelectorAll('.mu-hvh-play');
       for (var i = 0; i < btns.length; i++){
         (function(btn){
@@ -37815,9 +37980,6 @@ Tottenham
           };
         })(btns[i]);
       }
-      /* Tap en cualquier sitio de la fila (fuera del botón JUGAR) →
-         despospone el partido y lo devuelve a su card original.
-         Petición usuario 2026-05-25. */
       var rows = listEl.querySelectorAll('.mu-hvh-row');
       for (var ri = 0; ri < rows.length; ri++){
         (function(row){
@@ -37836,10 +37998,11 @@ Tottenham
     }
   }
 
-  /* Visibilidad de la caja PARTIDOS PENDIENTES: oculta si no hay
-     partidos pospuestos. PARTIDOS TEMPORADA siempre visible. */
+  /* Visibilidad de la caja PARTIDOS POSPUESTOS: oculta si no hay
+     pospuestos. PARTIDOS PENDIENTES y JUGADOS siempre visibles
+     (auto-colectan datos, no dependen de input del usuario). */
   function _syncPendBoxVisibility(){
-    var box = document.getElementById('munich-fix-pend');
+    var box = document.getElementById('munich-fix-posp');
     if (!box) return;
     var arr = [];
     try {
@@ -37852,6 +38015,10 @@ Tottenham
 
   window.muFixToggle = function(mode, ev){
     if (ev && ev.preventDefault) ev.preventDefault();
+    /* Compat: 'temp' es el nombre legacy de 'jug' (renombrado
+       2026-05-25). Cualquier caller viejo que aún pase 'temp' se
+       redirige a la sección JUGADOS sin romperse. */
+    if (mode === 'temp') mode = 'jug';
     var box = document.getElementById('munich-fix-' + mode);
     if (!box) return;
     var open = box.classList.toggle('open');
@@ -37861,7 +38028,7 @@ Tottenham
   };
   window.muFixRefresh = function(){
     _syncPendBoxVisibility();
-    ['pend','temp'].forEach(function(m){
+    ['posp','pend','jug'].forEach(function(m){
       var box = document.getElementById('munich-fix-' + m);
       if (box && box.classList.contains('open')) _render(m);
     });

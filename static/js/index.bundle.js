@@ -5869,8 +5869,24 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'eur-fin':    "PARADISE Morado",
       'sel':        "NIKE CONTROL CBF",
       'sel-fin':    "NIKE CONTROL CBF",
-      'amistoso':   "eFootballM Origin",
-      'superliga':  "PARADISE Morado"
+      'amistoso':   "eFootball Origin",
+      'superliga':  "PARADISE Morado",
+      /* Torneos de Verano — todas las variantes (Joan Gamper, Asian,
+         Pre-Season Super, Soccer Champions Tour, genéricos…)
+         comparten balón con la fila "verano" de Ball Storage. Sin
+         este default las cards salían con `Ligue 1 McDonald's`
+         porque COMP_BALL['torneo'] no estaba definido (bug
+         FOTO 2026-05-25). */
+      'torneo':     "eFootball Origin",
+      'torneos':    "eFootball Origin",
+      'sct':        "eFootball Origin",
+      'jg':         "eFootball Origin",
+      'pss':        "eFootball Origin",
+      'asia':       "eFootball Origin",
+      'verano':     "eFootball Origin",
+      /* Mundialito de Clubes — compKey real del partido. */
+      'mundialito': "Vantaggio 5000",
+      'mundial':    "Vantaggio 5000"
     };
     /* Override del admin desde "Ball Storage" (s-admin-balls) — el
        admin puede elegir un balón distinto por competición y se
@@ -5894,17 +5910,32 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'superliga':'champions',
       'eur-grupo':'champions','eur-ko':'champions','eur-fin':'champions'
     };
+    /* Alias de GRUPO (2026-05-25): varios compKeys reales del juego
+       comparten la MISMA fila en Ball Storage (los torneos de verano
+       — Joan Gamper, Asian, Pre-Season Super, Soccer Champions Tour
+       y los genéricos `torneo`/`torneos` — viven todos bajo la
+       extra `verano`). Sin este map, las cards salían con el balón
+       por defecto porque `ball_by_comp_v1['torneo']` no existe. */
+    var _COMP_GROUP_ALIAS = {
+      'torneo':'verano', 'torneos':'verano',
+      'sct':'verano', 'jg':'verano', 'pss':'verano', 'asia':'verano',
+      'mundial':'mundialito'
+    };
     try {
       var _ovRaw = localStorage.getItem('ball_by_comp_v1');
       if (_ovRaw) {
         var _ov = JSON.parse(_ovRaw) || {};
-        var _bdbKey = _COMP_TO_BDB[compKey];
-        /* Resolución robusta (2026-05-17): primero la clave RAW del
-           partido (compKey) — así las competiciones extra/custom que
-           añade el admin en Ball Storage (Superliga, torneos nuevos…)
-           se enganchan sin tocar _COMP_TO_BDB. Si no hay, caemos a la
-           clave de BALL_DB (back-compat de las 14 comps base). */
-        var _ovBall = _ov[compKey] || (_bdbKey && _ov[_bdbKey]);
+        var _bdbKey   = _COMP_TO_BDB[compKey];
+        var _groupKey = _COMP_GROUP_ALIAS[compKey];
+        /* Resolución robusta (2026-05-17, ampliada 2026-05-25):
+           1) clave RAW del partido (compKey) — comps base + extras
+              + customs añadidas por el admin.
+           2) alias BALL_DB (back-compat de las 14 comps base).
+           3) alias de GRUPO (torneos de verano → `verano`,
+              variantes mundialito → `mundialito`). */
+        var _ovBall = _ov[compKey]
+                   || (_bdbKey   && _ov[_bdbKey])
+                   || (_groupKey && _ov[_groupKey]);
         if (_ovBall && typeof _ovBall === 'string') {
           /* El admin ha guardado un balón distinto para esta comp →
              gana sobre el default hardcoded. */

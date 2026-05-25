@@ -3645,7 +3645,9 @@ window._showSimProgress = function(opts, onDone){
     return removed;
   }
   window._pendHvHGet = _pendHvHGetRaw;
+  window._pendHvHAdd = _pendHvHAdd;
   window._pendHvHRemove = _pendHvHRemove;
+  window._pendHvHUid = _pendHvHUid;
 
   function _psPendBtnHtml(){
     return '<button type="button" class="ps-btn-pay" id="ps-pend-defer-btn" '
@@ -37623,6 +37625,7 @@ Tottenham
       : '<span style="' + phStyle + '"></span>';
     return ''
       + '<div class="munich-fix-row mu-hvh-row" '
+      +   'data-uid="' + _esc(uid) + '" '
       +   'style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 10px;">'
       +   '<div style="flex:1 1 100%;font-size:11px;letter-spacing:1.5px;'
       +     'text-transform:uppercase;color:rgba(255,255,255,.78);'
@@ -37701,11 +37704,16 @@ Tottenham
   function _render(mode){
     var listEl = document.getElementById('munich-fix-' + mode + '-list');
     if (!listEl) return;
-    var gathered = _gather();
+    var gathered = (mode === 'temp') ? _gather() : null;
     var html = '';
     var total = 0;
-    /* Cards HvH aplazadas — solo aplican al modo "pend". Las pintamos
-       arriba de los tabs SELECCIÓN / CLUB como sección propia. */
+    /* Cards aplazadas — solo aplican al modo "pend". PARTIDOS PENDIENTES
+       contiene SOLO lo que el humano haya pospuesto explícitamente vía
+       el botón 📌 POSPONER (store `pend_hvh_deferred_v1`). Petición
+       usuario 2026-05-25: la caja NO debe colectar partidos
+       automáticamente — eso traía partidos fantasma de Bayern Munich
+       (IA) y matches de eliminatorias que en realidad aún no se podían
+       jugar. */
     var deferred = [];
     if (mode === 'pend'){
       try {
@@ -37714,7 +37722,7 @@ Tottenham
       } catch(_){}
       if (deferred.length){
         html += '<div class="munich-fix-section">'
-              + '📌 APLAZADOS (HvH)'
+              + '📌 POSPUESTOS'
               + ' <span style="opacity:.6">(' + deferred.length + ')</span>'
               + '</div>';
         deferred.forEach(function(e){ html += _renderDeferredHvHRow(e); });
@@ -37722,57 +37730,57 @@ Tottenham
       }
     }
     /* Dos tabs lado a lado: SELECCIÓN (Francia) | CLUB (Liverpool).
-       Cada uno con su contador y desplegable independiente. Petición
-       usuario 2026-05-25: "Selección - Club / Francia (5) Liverpool (3)
-       si pulso en selección se despliega los partidos…". */
-    var sides = [
-      { id:'sel',  label:'Selección', sec:{ emoji:gathered.sel.emoji,
-          name:gathered.sel.name,  groups:gathered.sel.groups  } },
-      { id:'club', label:'Club',      sec:{ emoji:gathered.club.emoji,
-          name:gathered.club.name, groups:gathered.club.groups } }
-    ];
-    var sideHtml = '';
-    var anySide = false;
-    sides.forEach(function(side){
-      var secTotal = 0;
-      side.sec.groups.forEach(function(g){
-        secTotal += ((mode === 'pend') ? g.pending.length : g.played.length);
-      });
-      side.total = secTotal;
-      if (secTotal) anySide = true;
-    });
-    if (anySide){
-      var tabsHtml = '<div class="mf-side-tabs">';
+       Solo se muestran en el modo "temp" (Partidos Temporada · jugados).
+       En modo "pend" la caja únicamente lista los aplazados manuales. */
+    if (mode === 'temp' && gathered){
+      var sides = [
+        { id:'sel',  label:'Selección', sec:{ emoji:gathered.sel.emoji,
+            name:gathered.sel.name,  groups:gathered.sel.groups  } },
+        { id:'club', label:'Club',      sec:{ emoji:gathered.club.emoji,
+            name:gathered.club.name, groups:gathered.club.groups } }
+      ];
+      var anySide = false;
       sides.forEach(function(side){
-        var cnt = side.total|0;
-        var disabled = cnt === 0;
-        tabsHtml += '<button type="button" class="mf-side-tab mft-' + side.id + '"'
-                  + ' data-mode="' + mode + '" data-side="' + side.id + '"'
-                  + (disabled ? ' disabled aria-disabled="true"' : '')
-                  + ' aria-expanded="false"'
-                  + ' aria-controls="mf-side-body-' + mode + '-' + side.id + '">'
-                  +   '<span class="mft-label">' + _esc(side.label) + '</span>'
-                  +   '<span class="mft-team">' + _esc(side.sec.emoji) + ' '
-                  +     '<b>' + _esc(side.sec.name) + '</b>'
-                  +     ' <em class="mft-count">(' + cnt + ')</em>'
-                  +   '</span>'
-                  +   '<span class="mft-chev" aria-hidden="true">▼</span>'
-                  + '</button>';
+        var secTotal = 0;
+        side.sec.groups.forEach(function(g){
+          secTotal += (g.played ? g.played.length : 0);
+        });
+        side.total = secTotal;
+        if (secTotal) anySide = true;
       });
-      tabsHtml += '</div>';
-      html += tabsHtml;
-      sides.forEach(function(side){
-        if (!side.total) return;
-        html += '<div class="mf-side-body" id="mf-side-body-' + mode + '-' + side.id + '" hidden>'
-              + _renderSideBody(side.sec, mode)
-              + '</div>';
-      });
-      total += sides.reduce(function(s, x){ return s + (x.total|0); }, 0);
+      if (anySide){
+        var tabsHtml = '<div class="mf-side-tabs">';
+        sides.forEach(function(side){
+          var cnt = side.total|0;
+          var disabled = cnt === 0;
+          tabsHtml += '<button type="button" class="mf-side-tab mft-' + side.id + '"'
+                    + ' data-mode="' + mode + '" data-side="' + side.id + '"'
+                    + (disabled ? ' disabled aria-disabled="true"' : '')
+                    + ' aria-expanded="false"'
+                    + ' aria-controls="mf-side-body-' + mode + '-' + side.id + '">'
+                    +   '<span class="mft-label">' + _esc(side.label) + '</span>'
+                    +   '<span class="mft-team">' + _esc(side.sec.emoji) + ' '
+                    +     '<b>' + _esc(side.sec.name) + '</b>'
+                    +     ' <em class="mft-count">(' + cnt + ')</em>'
+                    +   '</span>'
+                    +   '<span class="mft-chev" aria-hidden="true">▼</span>'
+                    + '</button>';
+        });
+        tabsHtml += '</div>';
+        html += tabsHtml;
+        sides.forEach(function(side){
+          if (!side.total) return;
+          html += '<div class="mf-side-body" id="mf-side-body-' + mode + '-' + side.id + '" hidden>'
+                + _renderSideBody(side.sec, mode)
+                + '</div>';
+        });
+        total += sides.reduce(function(s, x){ return s + (x.total|0); }, 0);
+      }
     }
     if (!total){
       listEl.innerHTML = '<div class="munich-fix-empty">'
         + (mode === 'pend'
-            ? 'No hay partidos pendientes para Liverpool ni Francia.'
+            ? 'Sin partidos pospuestos. Usa 📌 POSPONER en la card del partido para añadirlo.'
             : 'Aún no se ha jugado ningún partido esta temporada.')
         + '</div>';
       return;
@@ -37801,13 +37809,46 @@ Tottenham
         (function(btn){
           btn.onclick = function(ev){
             if (ev && ev.preventDefault) ev.preventDefault();
+            if (ev && ev.stopPropagation) ev.stopPropagation();
             var uid = btn.getAttribute('data-uid') || '';
             _playDeferredHvH(uid);
           };
         })(btns[i]);
       }
+      /* Tap en cualquier sitio de la fila (fuera del botón JUGAR) →
+         despospone el partido y lo devuelve a su card original.
+         Petición usuario 2026-05-25. */
+      var rows = listEl.querySelectorAll('.mu-hvh-row');
+      for (var ri = 0; ri < rows.length; ri++){
+        (function(row){
+          row.style.cursor = 'pointer';
+          row.title = 'Tap para despoponer';
+          row.onclick = function(ev){
+            var uid = row.getAttribute('data-uid') || '';
+            if (!uid) return;
+            try {
+              if (typeof window._pendHvHRemove === 'function') window._pendHvHRemove(uid);
+            } catch(_){}
+            try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
+          };
+        })(rows[ri]);
+      }
     }
   }
+
+  /* Visibilidad de la caja PARTIDOS PENDIENTES: oculta si no hay
+     partidos pospuestos. PARTIDOS TEMPORADA siempre visible. */
+  function _syncPendBoxVisibility(){
+    var box = document.getElementById('munich-fix-pend');
+    if (!box) return;
+    var arr = [];
+    try {
+      var g = window._pendHvHGet;
+      if (typeof g === 'function') arr = g() || [];
+    } catch(_){}
+    box.style.display = arr.length ? '' : 'none';
+  }
+  window._muFixSyncVisibility = _syncPendBoxVisibility;
 
   window.muFixToggle = function(mode, ev){
     if (ev && ev.preventDefault) ev.preventDefault();
@@ -37819,6 +37860,7 @@ Tottenham
     if (open) _render(mode);
   };
   window.muFixRefresh = function(){
+    _syncPendBoxVisibility();
     ['pend','temp'].forEach(function(m){
       var box = document.getElementById('munich-fix-' + m);
       if (box && box.classList.contains('open')) _render(m);
@@ -37837,10 +37879,14 @@ Tottenham
     };
     window.go._muFixHooked = true;
   }
-  if (document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', _hookGo);
-  } else {
+  function _boot(){
+    try { _syncPendBoxVisibility(); } catch(_){}
     _hookGo();
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', _boot);
+  } else {
+    _boot();
   }
 })();
 </script>

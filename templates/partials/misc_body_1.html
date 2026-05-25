@@ -37579,6 +37579,22 @@ Tottenham
     }
     return { name: raw, ico: ico };
   }
+  /* Display name: sustituye "Bayern Munich" → nombre real del hub
+     (Liverpool) en las filas de Liga EA Sports. El SCHEDULE interno
+     tiene "Bayern Munich" hardcoded; la sustitución es solo visual,
+     el matcher (_aliasesLiga + _match) sigue reconociendo ambos
+     nombres como "nuestro equipo". 2026-05-25.
+     Aplica SOLO a comp === 'liga': en Copa/UCL/UEL/UECL/Mundial/
+     Verano, "Bayern Munich" (si llega aquí) sería un equipo IA
+     legítimo y NO debe renombrarse. */
+  function _displayName(name, comp){
+    if (comp !== 'liga') return name;
+    var n = _norm(name);
+    if (n === 'bayern munich' || n === 'bayern munchen' || n === 'bayern') {
+      return _hubName();
+    }
+    return name;
+  }
   function _outcomeCls(m){
     if (typeof m.gh !== 'number' || typeof m.ga !== 'number') return '';
     var hubName = _hubName();
@@ -37598,8 +37614,8 @@ Tottenham
     var lbl   = _MFC_LABEL[m.comp] || (m.label || '');
     var ico   = m.emoji || '🌍';
     var jorPretty = String(m.label || '').trim();
-    var hT = _teamWithIcon(m.home);
-    var aT = _teamWithIcon(m.away);
+    var hT = _teamWithIcon(_displayName(m.home, m.comp));
+    var aT = _teamWithIcon(_displayName(m.away, m.comp));
     var localHtml = _esc(_short(hT.name))
                   + (hT.ico ? ' <span class="mfc-hi">' + hT.ico + '</span>' : '');
     var visitHtml = (aT.ico ? '<span class="mfc-hi">' + aT.ico + '</span> ' : '')
@@ -37636,14 +37652,17 @@ Tottenham
   }
   function _renderRow(m, played){
     if (played) return _renderPlayedCard(m);
-    /* Pendiente — fila pequeña (sin cambios, formato pre-existente). */
+    /* Pendiente — fila pequeña. Sustituye "Bayern Munich" → hub
+       name solo en filas de Liga (ver _displayName). */
     var sc = '<span class="fr-tag">' + _esc(m.label || '') + '</span>';
+    var hN = _displayName(m.home, m.comp);
+    var aN = _displayName(m.away, m.comp);
     return ''
       + '<div class="munich-fix-row">'
       +   '<span class="fr-comp">' + _esc(m.emoji || '') + '</span>'
-      +   '<span class="fr-teams"><b>' + _esc(_short(m.home)) + '</b>'
+      +   '<span class="fr-teams"><b>' + _esc(_short(hN)) + '</b>'
       +     ' <span style="opacity:.5">vs</span> <b>'
-      +     _esc(_short(m.away)) + '</b></span>'
+      +     _esc(_short(aN)) + '</b></span>'
       +   sc
       + '</div>';
   }
@@ -37660,8 +37679,12 @@ Tottenham
        de Fase 2 que sólo conocen el nombre). Aceptamos ambos. */
     function _n(v){ return (v && typeof v === 'object') ? (v.name || '') : (v || ''); }
     function _s(v){ return (v && typeof v === 'object') ? (v.shield || '') : ''; }
-    var hN = _n(entry.home);
-    var aN = _n(entry.away);
+    /* tourId === 'liga' → entry de Liga EA Sports, aplicamos el rename
+       Bayern Munich → hub name. Para el resto, mantenemos el nombre
+       tal cual (en torneos el equipo es real). */
+    var entryComp = (entry.tourId === 'liga') ? 'liga' : '';
+    var hN = _displayName(_n(entry.home), entryComp);
+    var aN = _displayName(_n(entry.away), entryComp);
     var hS = _s(entry.home);
     var aS = _s(entry.away);
     var label = entry.label || 'Partido';

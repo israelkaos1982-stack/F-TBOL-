@@ -2042,8 +2042,16 @@ window._showSimProgress = function(opts, onDone){
               + mvp + ta + tr
               + '<span class="lext-sq-cell">—</span>';
       }
+      /* Si el jugador está lesionado, el NOMBRE es clicable y abre
+         el MENÚ DE TRATAMIENTO RÁPIDO (foto 4). Petición usuario
+         2026-05-25: opción C (sólo el nombre, no toda la fila). */
+      var _injLes = (window.LESION_STORE || {})[name];
+      var _isInj  = !!(_injLes && Number(_injLes.partidos) > 0);
+      var nameHtml = _isInj
+        ? '<span class="lext-sq-name-link" onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()" style="cursor:pointer;text-decoration:underline dotted rgba(255,120,120,.55);text-underline-offset:3px;" title="Pulsa para abrir el menú de tratamiento">'+name+'</span>'
+        : name;
       return '<div class="lext-sq-row '+cls+'" data-player="'+name.replace(/"/g,'&quot;')+'">'
-           + '<span class="lext-sq-name tier-'+tier+'">'+name+_badges(p)+'</span>'
+           + '<span class="lext-sq-name tier-'+tier+'">'+nameHtml+_badges(p)+'</span>'
            + cells
            + '<span class="lext-sq-actions"></span>'
            + '</div>';
@@ -43638,6 +43646,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       superliga:'la Superliga', recopa:'la Recopa', usc:'la Supercopa de Europa',
       inter:'la Intercontinental', mundial:'el Mundialito de Clubes',
       amistoso:'el amistoso', torneo:'el torneo de pretemporada',
+      /* Variantes con plural y comps de verano (evita gramática rara
+         como "en la torneos" del fallback). 2026-05-25. */
+      torneos:'el torneo de pretemporada', verano:'el torneo de pretemporada',
+      sct:'el Soccer Champions Tour', jg:'el Trofeo Joan Gamper',
+      pss:'la Premier Summer Series', asia:'el Asian Tournament',
+      sel:'la fase de clasificación', 'sel-fin':'el Mundial',
       wprev:'la Previa de Champions'
     };
     return m[c] || (c ? 'la '+c : 'la competición');
@@ -44012,15 +44026,52 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     window.__MU_MSG_HOOKED_STATS = true;
     return true;
   }
+  /* Roster de Liverpool desde SQUAD_REGISTRY — para validar que el
+     jugador del evento es realmente del Liverpool antes de publicar
+     un mensaje a su nombre. Sin esto, eventos con `name`/`player`
+     erróneos (p.ej. un id numérico o un nombre placeholder que se
+     filtra desde otra ruta) llegaban a la bandeja como "A. Tape" o
+     similares (bug 2026-05-25 reportado por usuario). */
+  function _livRosterNames(){
+    var out = {};
+    try {
+      var reg = window.SQUAD_REGISTRY || {};
+      Object.keys(reg).forEach(function(tn){
+        if (!_isLiv(tn)) return;
+        (reg[tn] || []).forEach(function(p){
+          var nm = '';
+          if (Array.isArray(p)) nm = p[1] || '';
+          else if (p && typeof p === 'object') nm = p.nombre || p.name || '';
+          if (nm) out[String(nm).trim()] = true;
+        });
+      });
+    } catch(_){}
+    return out;
+  }
   function _processActa(tA, tB, events, compKey){
     var livIsA = _isLiv(tA), livIsB = _isLiv(tB);
     if (!livIsA && !livIsB) return;
     var livSide = livIsA ? 'a' : 'b';
     var compName = _compLabel(compKey);
     if (!Array.isArray(events)) return;
+    var rosterLiv = _livRosterNames();
+    var rosterHasAny = false;
+    for (var _k in rosterLiv) { if (rosterLiv.hasOwnProperty(_k)) { rosterHasAny = true; break; } }
     events.forEach(function(ev){
       if (!ev || ev.team !== livSide) return;
-      var pl = ev.name || ev.player || 'Un jugador';
+      /* Extracción robusta del nombre del jugador (cubre los 3 shapes:
+         ev.name string, ev.player array [num,name], ev.player string). */
+      var pl = '';
+      if (typeof ev.name === 'string' && ev.name.trim()) pl = ev.name.trim();
+      else if (Array.isArray(ev.player)) pl = String(ev.player[1] || ev.player[0] || '').trim();
+      else if (typeof ev.player === 'string') pl = ev.player.trim();
+      if (!pl || pl === '?') pl = '';
+      /* Validar contra roster del Liverpool. Si tenemos roster pero el
+         nombre no aparece, descartamos el mensaje en vez de publicar uno
+         con el nombre erróneo. Si NO tenemos roster aún cargado, dejamos
+         pasar el mensaje con el nombre tal cual (no romper en arranque). */
+      if (rosterHasAny && pl && !rosterLiv[pl]) return;
+      if (!pl) pl = 'Un jugador del Liverpool';
       if (ev.type === 'lesion'){
         var grade  = ev.lesGrado || 'leve';
         var ng = Array.isArray(ev.lesPartidos) ? ev.lesPartidos[0] : (ev.lesPartidos || 2);

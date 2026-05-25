@@ -10508,6 +10508,51 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       };
       if (COPA_RD[cr]) return COPA_RD[cr];
     }
+    /* Mundial · 48 selecciones (compKey 'torneo' + cfg.format ===
+       'mundial-48'): el matchKey aquí es la prePartidoKey
+       `tour_<tourId>_<tourMatchKey>`, así que leemos `_ppPreviaTeams`
+       (lo fija `_tourOpenHumanMatch`) para obtener la config y deducir
+       la ronda. Sin esto la previa caía a hoy + "torneo" — bug
+       2026-05-25 reportado por usuario con foto Marruecos vs Francia
+       de la GRAN FINAL: la card del hub mostraba "31 May" pero la
+       previa "25 de Mayo". */
+    if (compKey === 'torneo') {
+      try {
+        var _ptCal = window._ppPreviaTeams || {};
+        var _tcfgCal = null;
+        if (_ptCal.tourId && typeof window._tourLoadCachedSync === 'function') {
+          _tcfgCal = window._tourLoadCachedSync(_ptCal.tourId);
+        }
+        if (!_tcfgCal && _ptCal.tourId && window._TOUR_CACHE) {
+          _tcfgCal = window._TOUR_CACHE[_ptCal.tourId];
+        }
+        if (_tcfgCal && _tcfgCal.format === 'mundial-48') {
+          var _tk = String(_ptCal.tourKey || '').replace(/\|L[12]$/, '');
+          var _mGrp = _tk.match(/^g\d+_(\d+)_/);
+          if (_mGrp) {
+            return 'Mundial Grupo — J' + (parseInt(_mGrp[1], 10) + 1);
+          }
+          var _mKo = _tk.match(/^ko_(\d+)_/);
+          if (_mKo) {
+            var _rIdx = parseInt(_mKo[1], 10);
+            var _koR = (_tcfgCal.formatConfig && _tcfgCal.formatConfig.koRounds) || [];
+            var _rName = _koR[_rIdx];
+            /* Etiquetas exactas tal y como aparecen en `.ag-lbl` del
+               calendario (calendario.json → SSR). Si añades un evento
+               nuevo, debe coincidir literalmente con `event.name`. */
+            var MUNDIAL_KO_LABELS = {
+              'Dieciseisavos': 'Mundial - Dieciseisavos',
+              'Octavos':       'Mundial Octavos',
+              'Cuartos':       'Mundial Cuartos',
+              'Semis':         'Mundial Semis',
+              'Tercer Puesto': 'Mundial Tercer Puesto',
+              'Final':         'MUNDIAL GRAN FINAL 🏆'
+            };
+            if (_rName && MUNDIAL_KO_LABELS[_rName]) return MUNDIAL_KO_LABELS[_rName];
+          }
+        }
+      } catch(_){}
+    }
     var MAP = {
       'copa':'Copa del Rey — 1/128','copa-fin':'FINAL COPA DEL REY',
       'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',
@@ -10582,6 +10627,39 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
     window._mmLastWeather = weather;
     var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
+    /* Mundial · 48 selecciones (compKey 'torneo' + cfg.format ===
+       'mundial-48'): reemplazamos el `compLabel` por la etiqueta
+       descriptiva de la ronda, igual que la pantalla BAJAS (overlay
+       de sanciones). Sin esto la previa mostraba "🏆 torneo" en vez
+       de "🏆 Mundial 2032 · GRAN FINAL" (bug 2026-05-25). */
+    if (compKey === 'torneo') {
+      try {
+        var _ptL = window._ppPreviaTeams || {};
+        var _tcfgL = null;
+        if (_ptL.tourId && typeof window._tourLoadCachedSync === 'function') {
+          _tcfgL = window._tourLoadCachedSync(_ptL.tourId);
+        }
+        if (!_tcfgL && _ptL.tourId && window._TOUR_CACHE) {
+          _tcfgL = window._TOUR_CACHE[_ptL.tourId];
+        }
+        if (_tcfgL && _tcfgL.format === 'mundial-48') {
+          var _tkL = String(_ptL.tourKey || '').replace(/\|L[12]$/, '');
+          var _mGL = _tkL.match(/^g\d+_(\d+)_/);
+          var _mKL = _tkL.match(/^ko_(\d+)_/);
+          if (_mGL) {
+            compLabel = 'Mundial 2032 · Grupo J' + (parseInt(_mGL[1], 10) + 1);
+          } else if (_mKL) {
+            var _rIdxL = parseInt(_mKL[1], 10);
+            var _koRL = (_tcfgL.formatConfig && _tcfgL.formatConfig.koRounds) || [];
+            var _rNameL = _koRL[_rIdxL] || '';
+            var _isLastL = _rNameL === 'Final';
+            compLabel = _isLastL
+              ? 'Mundial 2032 · GRAN FINAL 🏆'
+              : ('Mundial 2032 · ' + (_rNameL || 'KO'));
+          }
+        }
+      } catch(_){}
+    }
     /* Añadir jornada/ronda usando el mismo ROUND_MAP que la pantalla
        BAJAS. Ejemplo: "Liga EA Sports · J3" o "Copa del Rey · Octavos".
        Resuelve el blockId por `matchKey` (cal-l3 → "J3", etc.) o por

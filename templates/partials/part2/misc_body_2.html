@@ -31145,6 +31145,38 @@ document.addEventListener('DOMContentLoaded', function() {
 #gm-modal.is-comp-uecl   { --comp-color:#5fe08a; --comp-color-soft:rgba(60,200,110,.22);}
 #gm-modal.is-comp-recopa { --comp-color:#ff8060; --comp-color-soft:rgba(255,100,70,.22);}
 #gm-modal.is-comp-inter  { --comp-color:#f0a040; --comp-color-soft:rgba(240,140,40,.22);}
+/* Mundial / Selecciones / torneo: violeta-morado (mismo lenguaje
+   visual que la caja Estadísticas del Mundial, commit 6f4df03). */
+#gm-modal.is-comp-mundial   { --comp-color:#a875e8; --comp-color-soft:rgba(168,117,232,.22);}
+/* Amistosos / Mundialito Clubes / Previa Champions: azul grisáceo. */
+#gm-modal.is-comp-amistoso  { --comp-color:#7da7c8; --comp-color-soft:rgba(125,167,200,.22);}
+/* Torneos de verano (SCT, PSS, Gamper, Asia): turquesa. */
+#gm-modal.is-comp-verano    { --comp-color:#5fc6c8; --comp-color-soft:rgba(95,198,200,.22);}
+/* Fallback NEUTRO para cualquier comp no reconocida: gris azulado
+   apagado. Evita que comps custom o flujos nuevos hereden el rojo de
+   Liga por defecto (bug 2026-05-24). */
+#gm-modal.is-comp-neutral   { --comp-color:#88a0c0; --comp-color-soft:rgba(136,160,192,.22);}
+
+/* ── CARD BICOLOR · fondo del gm-modal teñido con los colores reales
+   del escudo: mitad izquierda = color local, mitad derecha = color
+   visitante. Petición usuario 2026-05-24 (Francia=azul a la izq, RD
+   Congo a la der). Tinte sutil (~25%) para que el texto siga
+   legible. Las CSS vars --team-a-bg / --team-b-bg las setea
+   _gmPaint con alpha .25. Si el rival no tiene escudo todavía,
+   cae a un azul oscuro neutral. Capas: 1) bicolor translúcido,
+   2) base oscura original. `background-attachment:fixed` ancla las
+   capas al viewport para que el bicolor no se descoloque al hacer
+   scroll del modal. */
+#gm-modal[data-team-colors]{
+  background:
+    linear-gradient(90deg,
+      var(--team-a-bg, rgba(40,60,120,.25)) 0%,
+      var(--team-a-bg, rgba(40,60,120,.25)) 48%,
+      var(--team-b-bg, rgba(60,40,90,.25)) 52%,
+      var(--team-b-bg, rgba(60,40,90,.25)) 100%),
+    linear-gradient(160deg,#0d0820 0%,#071020 100%) !important;
+  background-attachment:fixed, fixed !important;
+}
 
 /* JUGAR · highlight (borde dorado pulsante) sobre #gm-timer cuando
    está en 0' parado. Sin texto "JUGAR" ni flecha 👇 (petición
@@ -31161,7 +31193,9 @@ document.addEventListener('DOMContentLoaded', function() {
 #gm-timer.is-jugar-hint::before,
 #gm-timer.is-jugar-hint::after{ content:none !important; display:none !important; }
 
-/* AÑADIR EVENTO · gradiente bicolor (mitad local / mitad visitante). */
+/* AÑADIR EVENTO · gradiente bicolor (mitad local / mitad visitante).
+   Borde sutil blanco (no rojo del --comp-color). El aro fuerte se
+   reserva para FINALIZAR cuando .is-near-end. */
 #gm-modal[data-team-colors] #gm-add-btn{
   background:linear-gradient(90deg,
     var(--team-a-1, #2a0005) 0%,
@@ -31169,12 +31203,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var(--team-b-1, #6a0010) 52%,
     var(--team-b-2, #2a0005) 100%
   ) !important;
-  border:2px solid var(--comp-color) !important;
+  border:1px solid rgba(255,255,255,.22) !important;
   color:#fff !important;
-  text-shadow:0 1px 4px rgba(0,0,0,.75) !important;
+  text-shadow:0 1px 4px rgba(0,0,0,.85) !important;
   font-weight:900 !important;
   letter-spacing:2px;
-  box-shadow:0 0 14px var(--comp-color-soft), inset 0 1px 0 rgba(255,255,255,.15) !important;
+  box-shadow:0 0 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18) !important;
 }
 
 /* ACTA · look videojuego HUD azul. */
@@ -31819,10 +31853,25 @@ document.addEventListener('DOMContentLoaded', function() {
       if (g._isSc   || g.comp === 'sc'   || g.comp === 'sc-final') return 'super';
       if (g._isRecopa || g.comp === 'recopa') return 'recopa';
       if (g._isSuperliga || g.comp === 'superliga') return ''; /* sin tema */
+      /* Comps reconocidas por g.comp explícito. Mundial (compKey 'torneo'
+         del flujo _tourOpenHumanMatch para Mundial-48), Selecciones fase
+         final, amistosos, verano y mundialito tienen tema propio para
+         que NO caigan al fallback rojo de Liga EA. */
+      if (g.comp === 'ucl') return 'ucl';
+      if (g.comp === 'uel') return 'uel';
+      if (g.comp === 'uecl') return 'uecl';
+      if (g.comp === 'inter') return 'inter';
+      if (g.comp === 'torneo' || g.comp === 'mundial' || g.comp === 'mundial-48') return 'mundial';
+      if (g.comp === 'sel' || g.comp === 'sel-fin' || g.comp === 'selecciones') return 'mundial';
+      if (g.comp === 'amistoso' || g.comp === 'wprev' || g.comp === 'mundialito') return 'amistoso';
+      if (g.comp === 'verano' || g.comp === 'sct' || g.comp === 'jg' || g.comp === 'pss' || g.comp === 'asia') return 'verano';
       if (g.comp === 'liga' || g.comp === 'ea-sports' || g.comp === '' || g.comp == null) return 'liga';
       /* Fallback: leer el badge en la venue bar. */
       var b = document.getElementById('gm-jornada-badge');
       var t = b ? (b.textContent || '').toLowerCase() : '';
+      if (t.indexOf('mundial') !== -1 || t.indexOf('selecciones') !== -1 || t.indexOf('selección') !== -1) return 'mundial';
+      if (t.indexOf('amistoso') !== -1) return 'amistoso';
+      if (t.indexOf('verano') !== -1 || t.indexOf('summer') !== -1 || t.indexOf('gamper') !== -1) return 'verano';
       if (t.indexOf('champions') !== -1 || t.indexOf('ucl') !== -1) return 'ucl';
       if (t.indexOf('europa league') !== -1 || t.indexOf('uel') !== -1) return 'uel';
       if (t.indexOf('conference') !== -1 || t.indexOf('uecl') !== -1) return 'uecl';
@@ -31830,8 +31879,12 @@ document.addEventListener('DOMContentLoaded', function() {
       if (t.indexOf('supercopa') !== -1) return 'super';
       if (t.indexOf('inter') !== -1) return 'inter';
       if (t.indexOf('copa') !== -1) return 'copa';
-      return 'liga';
-    } catch(_){ return 'liga'; }
+      /* Cualquier otra comp desconocida → tema NEUTRO (gris azulado),
+         NUNCA al rojo de Liga (bug 2026-05-24: Mundial-48 con compKey
+         'torneo' caía al tema rojo y todos los bordes del modal salían
+         rojos, foto del usuario). */
+      return 'neutral';
+    } catch(_){ return 'neutral'; }
   }
   function _gmTeamNames(){
     try {
@@ -31868,6 +31921,10 @@ document.addEventListener('DOMContentLoaded', function() {
       modal.style.setProperty('--team-a-2', _hex2rgba(pa, .72));
       modal.style.setProperty('--team-b-1', _hex2rgba(pb, .72));
       modal.style.setProperty('--team-b-2', _hex2rgba(pb, .95));
+      /* Vars dedicadas al tinte del FONDO de la card (alpha bajo para
+         que el texto sea legible, petición usuario 2026-05-24). */
+      modal.style.setProperty('--team-a-bg', _hex2rgba(pa, .25));
+      modal.style.setProperty('--team-b-bg', _hex2rgba(pb, .25));
       modal.setAttribute('data-team-colors', '1');
       var addBtn = document.getElementById('gm-add-btn');
       if (addBtn){
@@ -31877,10 +31934,14 @@ document.addEventListener('DOMContentLoaded', function() {
                  + _hex2rgba(pb, .82) + ' 53%,'
                  + _hex2rgba(pb, .95) + ' 100%)';
         addBtn.style.setProperty('background', grad, 'important');
-        addBtn.style.setProperty('border', '2px solid var(--comp-color, #ff3050)', 'important');
+        /* Borde sutil blanco (no rojo) — el borde con --comp-color
+           creaba el aro rojo que el usuario reportó en Mundial-48
+           (2026-05-24, foto Francia-RD Congo). */
+        addBtn.style.setProperty('border', '1px solid rgba(255,255,255,.22)', 'important');
         addBtn.style.setProperty('color', '#fff', 'important');
         addBtn.style.setProperty('text-shadow', '0 1px 4px rgba(0,0,0,.85)', 'important');
         addBtn.style.setProperty('font-weight', '900', 'important');
+        addBtn.style.setProperty('box-shadow', '0 0 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18)', 'important');
       }
     }
     var ca = _teamColors(t.home);

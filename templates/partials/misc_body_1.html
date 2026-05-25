@@ -41199,11 +41199,37 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        la rama picker ve pickedTours ya poblado y la rama normal pinta
        la card del día desde el primer paint. */
     if (state.pickedTours.length < 1) {
-      var _onlyVis = _psVisibleTourIds();
-      if (_onlyVis.length === 1) {
-        state.pickedTours = [_onlyVis[0]];
-        try { savePickedTours(state.pickedTours); } catch(_){}
-        try { if (typeof window._tourMergeBayern === 'function') window._tourMergeBayern(_onlyVis[0]); } catch(_){}
+      /* GATE de hidratación 2026-05-25 — fix RAÍZ del bug "al reabrir
+         la web el cursor vuelve al 01 May":
+
+         _tourMergeBayern() llama a _save(d) que escribe localStorage
+         Y POSTea al server vía sendBeacon con ts=Date.now(). Si el
+         auto-pick fires ANTES de que hydrateFromServer haya
+         restaurado liverpool_preseason_v1, _load() devuelve el
+         estado por defecto (dayIdx:0, tour:null, rivals:{}, done:{}),
+         _tourMergeBayern pone tour='jg' y persiste TODO eso con
+         ts=ahora. Cuando luego llega el GET del hydrate, el server
+         tiene un valor con ts más viejo (porque nuestro POST aterrizó
+         antes) → la regla "newer-ts-wins" NO restaura → el cursor
+         del usuario (e.g. dayIdx=30 = 31 May) se ha perdido.
+
+         Solución: esperar a que misc_body_2.html setee
+         __compStateSyncHydrated = true tras hydrateFromServer (sea
+         OK o fail). El evento 'comp-state:hydrated' re-dispara
+         updateHud() para que el auto-pick proceda con el cursor real.
+
+         Pre-fix: localStorage purgado + server con dayIdx=30
+         → reload → reset visual a 01 May (REPORTADO 2026-05-25 con
+         fotos: foto 31 May Mundial Gran Final → foto 01 May DESCANSO).
+         Post-fix: el auto-pick espera la hidratación; el cursor
+         real del server sobrevive sin pisarse. */
+      if (window.__compStateSyncHydrated === true) {
+        var _onlyVis = _psVisibleTourIds();
+        if (_onlyVis.length === 1) {
+          state.pickedTours = [_onlyVis[0]];
+          try { savePickedTours(state.pickedTours); } catch(_){}
+          try { if (typeof window._tourMergeBayern === 'function') window._tourMergeBayern(_onlyVis[0]); } catch(_){}
+        }
       }
     }
 
@@ -41458,6 +41484,23 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   } else {
     boot();
   }
+
+  /* Re-dispara updateHud cuando la hidratación del server termina
+     (event 'comp-state:hydrated' disparado por misc_body_2.html).
+     Combinado con el gate de __compStateSyncHydrated en el auto-pick,
+     esto cierra el race "cursor vuelve a 01 May al reabrir la web":
+       1) boot() corre y updateHud() ve el gate cerrado → NO auto-pick.
+       2) hydrateFromServer restaura liverpool_preseason_v1 desde server
+          y llama _psInvalidateCache (cache _MEM limpio → próximo _load
+          devuelve el dayIdx real, e.g. 30).
+       3) misc_body_2.html setea __compStateSyncHydrated = true y
+          dispara este evento.
+       4) updateHud() corre de nuevo, gate abierto → auto-pick procede
+          con el cursor real ya cargado → _save persiste el mismo
+          dayIdx en server (refresh de ts, sin pérdida de progreso). */
+  document.addEventListener('comp-state:hydrated', function(){
+    try { updateHud(); } catch(_){}
+  });
 })();
 </script>
 

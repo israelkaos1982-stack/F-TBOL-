@@ -30315,7 +30315,29 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         }
       })
-      .catch(function(){});
+      .catch(function(){})
+      .then(function(){
+        /* Gate de hidratación 2026-05-25: marcamos que el sync server→
+           local ha terminado (sea por éxito o por catch silencioso).
+           Sin esto, el auto-pick del torneo en updateHud() del hub
+           Liverpool (misc_body_1.html línea ~41201) dispara
+           _tourMergeBayern → _save antes de que llegue la respuesta
+           del GET, escribiendo dayIdx=0 + ts=Date.now() en server
+           vía sendBeacon. La GET subsiguiente compara timestamps,
+           ve que el server (ts=ayer) es más viejo que el local
+           (ts=ahora), NO restaura, y el cursor del usuario queda
+           sepultado a 01 May. Con el flag + el evento, el auto-pick
+           espera y luego corre con el cursor real ya hidratado.
+
+           Fail-open intencional: si el server no responde nunca, el
+           .catch() de arriba se ejecuta y este .then() también, así
+           el flag se setea y el auto-pick procede igual (la única
+           verdad es el local, no se pisa nada en server). */
+        window.__compStateSyncHydrated = true;
+        try {
+          document.dispatchEvent(new CustomEvent('comp-state:hydrated'));
+        } catch(_){}
+      });
   }
 
   /* Snapshot por clave para detectar cambios sin re-leer el server.

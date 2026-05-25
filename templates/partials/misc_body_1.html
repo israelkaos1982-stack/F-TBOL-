@@ -28229,6 +28229,27 @@ Tottenham
           }
         } catch(_){}
       }
+      /* SELECCIONES (2026-05-25): las selecciones sin licencia en
+         eFootball (Trinidad y Tobago, El Salvador, Curazao, …) llevan
+         su alias en `selecciones_squad_v1[].efootballAlias`. Las
+         indexamos aquí para que `getTeamEfootballAlias()` las resuelva
+         igual que cualquier club. */
+      try {
+        var rawSel = localStorage.getItem('selecciones_squad_v1');
+        if(rawSel){
+          var dSel = JSON.parse(rawSel);
+          var selTeams = dSel && Array.isArray(dSel.teams) ? dSel.teams : [];
+          for(var k=0;k<selTeams.length;k++){
+            var st = selTeams[k];
+            if(!st || !st.name) continue;
+            var nmS = _aliasNormName(st.name);
+            if(!nmS) continue;
+            var entryS = map[nmS] || (map[nmS] = {alias:'', stadium:''});
+            var aS = String(st.efootballAlias||'').trim();
+            if(aS) entryS.alias = aS;
+          }
+        }
+      } catch(_){}
     } catch(_){}
     return map;
   }
@@ -34633,6 +34654,8 @@ Tottenham
   #sel-sq-ov .sel-sq-pw{width:58px;flex:0 0 58px;text-align:center;}
   #sel-sq-ov .sel-sq-r3{display:flex;gap:4px;}
   #sel-sq-ov .sel-sq-r3 input{flex:1;width:100%;text-align:center;padding:6px 2px;}
+  #sel-sq-ov .sel-sq-alias{font-style:italic;color:#ffd58a;}
+  #sel-sq-ov .sel-sq-alias::placeholder{color:rgba(255,213,138,.5);font-style:italic;}
   #sel-sq-ov .sel-sq-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
     color:#ff9a9a;width:30px;height:30px;border-radius:7px;cursor:pointer;flex-shrink:0;
     font-size:14px;line-height:1;padding:0;}
@@ -34740,6 +34763,7 @@ Tottenham
   }
   function _save(d){
     try{ localStorage.setItem(KEY, JSON.stringify(d)); }catch(_){}
+    try{ if(typeof window._invalidateAliasCache==='function') window._invalidateAliasCache(); }catch(_){}
     try{
       if(typeof window.fetch==='function')
         window.fetch('/api/kv/'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -34825,6 +34849,9 @@ Tottenham
       +'<input class="sel-sq-a" type="number" min="1" max="100" placeholder="ATQ" title="Ataque" value="'+v(t.atk)+'">'
       +'<input class="sel-sq-m" type="number" min="1" max="100" placeholder="MED" title="Medio" value="'+v(t.mid)+'">'
       +'<input class="sel-sq-d" type="number" min="1" max="100" placeholder="DEF" title="Defensa" value="'+v(t.def)+'">'
+      +'</div>'
+      +'<div class="sel-sq-r2">'
+      +'<input class="sel-sq-alias" type="text" placeholder="Alias eFootball (opcional — selecciones sin licencia)" title="Alias en eFootball — si la selección NO tiene licencia en el juego (p.ej. Trinidad y Tobago, El Salvador, Curazao) escribe el nombre del equipo similar que usas en eFootball. Se mostrará en las cards de partido HvIA / HvH." value="'+_esc(t.efootballAlias||'')+'">'
       +'</div></div>'
       +'<button type="button" class="sel-sq-players-btn" title="Editar jugadores de la selección">👥 <span class="sel-sq-pcount">'+((t.players&&t.players.length)||0)+'</span></button>'
       +'<button type="button" class="sel-sq-del" title="Eliminar">🗑</button>'
@@ -35048,10 +35075,11 @@ Tottenham
       if(!nm) return;
       var img=String(((row.querySelector('.sel-sq-img')||{}).value)||'').trim();
       var icon=String(((row.querySelector('.sel-sq-icon')||{}).value)||'').trim();
+      var alias=String(((row.querySelector('.sel-sq-alias')||{}).value)||'').trim();
       function rd(sel,fb){ return _clamp((row.querySelector(sel)||{}).value,fb); }
       var g=rd('.sel-sq-g',75);
       out.push({
-        name:nm, img:img, icon:icon, power:g,
+        name:nm, img:img, icon:icon, efootballAlias:alias, power:g,
         atk:rd('.sel-sq-a',g), mid:rd('.sel-sq-m',g), def:rd('.sel-sq-d',g),
         players: Array.isArray(row._players) ? row._players : []
       });

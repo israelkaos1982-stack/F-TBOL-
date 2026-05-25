@@ -3726,6 +3726,28 @@ window._showSimProgress = function(opts, onDone){
     return true;
   }
 
+  /* Variante de `_psPayAndSimSelMatch` para los partidos de CLUBES
+     del hub (cards de `_cardMatch`: torneos de verano, amistosos
+     contra un rival real del bracket). Cobra 50🪙, simula con el
+     motor 4-ejes, persiste en cfg.results[matchKey] del torneo y
+     AVANZA EL DÍA del calendario del hub. A diferencia de la versión
+     de Selecciones, NO mostramos el score + CONTINUAR ▶: las cards
+     de `_cardMatch` no tienen estado played (el flujo normal usa
+     `abrirAmistoso` sin persistencia en cfg.results); pagar es un
+     atajo de "salto a mañana" — el usuario ve el resultado al abrir
+     la pantalla del torneo si quiere. 2026-05-24. */
+  function _psPayAndSimClubMatch(pair){
+    if (!pair) return false;
+    if (!pair.tourId || !pair.matchKey) return false;
+    if (!pair.homeObj || !pair.awayObj) return false;
+    if (_psGetHubMoney() < PS_PAY_SIM_COST) return false;
+    if (typeof window._bayernHudCreditMoney !== 'function') return false;
+    if (!_psSimAndSaveTourMatch(pair.tourId, pair.matchKey, pair.homeObj, pair.awayObj)) return false;
+    try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
+    _markDoneAndAdvance();
+    return true;
+  }
+
   /* Card "India vs Francia" en el hub Toñín durante un parón de
      selecciones. Reusa el dispatcher estándar del proyecto:
      `_tourOpenHumanMatch` abre la previa + gm-modal y al confirmarla
@@ -4022,6 +4044,8 @@ window._showSimProgress = function(opts, onDone){
 
         var humanIsHomeL1 = (bi % 2 === 0);
         var humanIsHome   = humanIsHomeL1;
+        var _baseMk = r + '_' + Math.floor(bi/2);
+        var _mkKo = _baseMk;
 
         if (cfg.format === 'ko-2leg'){
           var fc = cfg.formatConfig || {};
@@ -4030,15 +4054,19 @@ window._showSimProgress = function(opts, onDone){
           var singleLast = !!fc.singleLegLastRound;
           var twoLeg = !(isLast && singleLast);
           if (twoLeg){
-            var mk = r + '_' + Math.floor(bi/2);
-            var l1Done = !!(cfg.results && cfg.results[mk + '|L1']);
+            var l1Done = !!(cfg.results && cfg.results[_baseMk + '|L1']);
             if (l1Done) humanIsHome = !humanIsHomeL1;
+            _mkKo = _baseMk + (l1Done ? '|L2' : '|L1');
           }
         }
 
+        var _homeKo = humanIsHome ? humanSlot : oppSlot;
+        var _awayKo = humanIsHome ? oppSlot : humanSlot;
         return humanIsHome
-          ? { home: String(humanName), away: String(oppName),   rival: String(oppName) }
-          : { home: String(oppName),   away: String(humanName), rival: String(oppName) };
+          ? { home: String(humanName), away: String(oppName),   rival: String(oppName),
+              tourId: tid, matchKey: _mkKo, homeObj: _homeKo, awayObj: _awayKo }
+          : { home: String(oppName),   away: String(humanName), rival: String(oppName),
+              tourId: tid, matchKey: _mkKo, homeObj: _homeKo, awayObj: _awayKo };
       }
 
       /* ── Groups + KO (Trofeo Joan Gamper, Asian, Mundialito…) ─
@@ -4068,9 +4096,14 @@ window._showSimProgress = function(opts, onDone){
               if (khName && khName !== 'PENDIENTE'
                   && koName && !_slotIsH(koSlot) && koName !== 'PENDIENTE'){
                 var khIsHome = (kbi % 2 === 0);
+                var _mkGk = 'ko_' + kr + '_' + Math.floor(kbi/2);
+                var _homeGk = khIsHome ? khSlot : koSlot;
+                var _awayGk = khIsHome ? koSlot : khSlot;
                 return khIsHome
-                  ? { home: String(khName), away: String(koName), rival: String(koName) }
-                  : { home: String(koName), away: String(khName), rival: String(koName) };
+                  ? { home: String(khName), away: String(koName), rival: String(koName),
+                      tourId: tid, matchKey: _mkGk, homeObj: _homeGk, awayObj: _awayGk }
+                  : { home: String(koName), away: String(khName), rival: String(koName),
+                      tourId: tid, matchKey: _mkGk, homeObj: _homeGk, awayObj: _awayGk };
               }
             }
           }
@@ -4107,12 +4140,15 @@ window._showSimProgress = function(opts, onDone){
             /* El rival NO puede ser humano (en JG numHumans:1 nunca
                pasa; si en el futuro hay 2 humanos en el mismo grupo,
                este partido lo gestiona HvH y NO entramos por aquí). */
+            var _mkRr = 'g' + gIdx + '_' + cj + '_' + mi;
             if (mm.home === huInSlice){
               if (_slotIsH(aT)) return null;
-              return { home: String(hT.name), away: String(aT.name), rival: String(aT.name) };
+              return { home: String(hT.name), away: String(aT.name), rival: String(aT.name),
+                       tourId: tid, matchKey: _mkRr, homeObj: hT, awayObj: aT };
             } else {
               if (_slotIsH(hT)) return null;
-              return { home: String(hT.name), away: String(aT.name), rival: String(hT.name) };
+              return { home: String(hT.name), away: String(aT.name), rival: String(hT.name),
+                       tourId: tid, matchKey: _mkRr, homeObj: hT, awayObj: aT };
             }
           }
         }
@@ -4182,17 +4218,47 @@ window._showSimProgress = function(opts, onDone){
     /* En día de partido NO usamos card propia: se abre la PANTALLA DE
        PREVIA estándar del proyecto. El #ps-stage solo deja un acceso
        mínimo por si el usuario vuelve de la previa con ◀ Volver. */
+    /* PAGAR SIMULACIÓN 50🪙 — atajo "saltar el día" para clubes
+       (CLAUDE.md ·  2026-05-24 · ya existía en `_cardSelMatch` para
+       Selecciones). Solo si el bracket nos dio tourId/matchKey/teams
+       (homeObj/awayObj) y el partido aún no está guardado como
+       played en cfg.results. */
+    var _payInfoOk = !!(pair && pair.tourId && pair.matchKey
+                        && pair.homeObj && pair.awayObj);
+    var _payAlreadyPlayed = false;
+    if (_payInfoOk){
+      try {
+        var _pcfg = (window._TOUR_CACHE || {})[pair.tourId] || null;
+        if (!_pcfg && typeof window._tourLoadCachedSync === 'function'){
+          _pcfg = window._tourLoadCachedSync(pair.tourId);
+        }
+        var _pres = _pcfg && _pcfg.results && _pcfg.results[pair.matchKey];
+        _payAlreadyPlayed = !!(_pres && _pres.played);
+      } catch(_){}
+    }
+    var _payHtml = (_payInfoOk && !_payAlreadyPlayed)
+      ? '<div style="margin-top:6px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST) + '</div>'
+      : '';
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
       + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>' + _esc(rv.home) + '</b> vs <b>' + _esc(rv.away) + '</b></div>'
-      + '<div style="display:flex;justify-content:center;margin-top:8px;">'
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:8px;">'
       +   '<button type="button" class="ps-btn" id="ps-match-play">📋 ABRIR PREVIA</button>'
+      +   _payHtml
       + '</div>'
       + '</div>';
     var play = document.getElementById('ps-match-play');
     if (play) play.onclick = function(){ _openPreseasonPrevia(day, rv, tourNm); };
+    var _payBtn = document.getElementById('ps-pay-sim-btn');
+    if (_payBtn){
+      _payBtn.onclick = function(){
+        if (_payBtn.disabled) return;
+        _payBtn.disabled = true;
+        if (!_psPayAndSimClubMatch(pair)) _payBtn.disabled = false;
+      };
+    }
     /* AUTO-abrir la previa estándar al llegar al día de partido (una
        sola vez por día — sig-guard de _render evita re-render; el
        idx-guard cubre volver con ◀ Volver sin proceder). El guard

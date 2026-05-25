@@ -5870,8 +5870,24 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'eur-fin':    "PARADISE Morado",
       'sel':        "NIKE CONTROL CBF",
       'sel-fin':    "NIKE CONTROL CBF",
-      'amistoso':   "eFootballM Origin",
-      'superliga':  "PARADISE Morado"
+      'amistoso':   "eFootball Origin",
+      'superliga':  "PARADISE Morado",
+      /* Torneos de Verano — todas las variantes (Joan Gamper, Asian,
+         Pre-Season Super, Soccer Champions Tour, genéricos…)
+         comparten balón con la fila "verano" de Ball Storage. Sin
+         este default las cards salían con `Ligue 1 McDonald's`
+         porque COMP_BALL['torneo'] no estaba definido (bug
+         FOTO 2026-05-25). */
+      'torneo':     "eFootball Origin",
+      'torneos':    "eFootball Origin",
+      'sct':        "eFootball Origin",
+      'jg':         "eFootball Origin",
+      'pss':        "eFootball Origin",
+      'asia':       "eFootball Origin",
+      'verano':     "eFootball Origin",
+      /* Mundialito de Clubes — compKey real del partido. */
+      'mundialito': "Vantaggio 5000",
+      'mundial':    "Vantaggio 5000"
     };
     /* Override del admin desde "Ball Storage" (s-admin-balls) — el
        admin puede elegir un balón distinto por competición y se
@@ -5895,17 +5911,32 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'superliga':'champions',
       'eur-grupo':'champions','eur-ko':'champions','eur-fin':'champions'
     };
+    /* Alias de GRUPO (2026-05-25): varios compKeys reales del juego
+       comparten la MISMA fila en Ball Storage (los torneos de verano
+       — Joan Gamper, Asian, Pre-Season Super, Soccer Champions Tour
+       y los genéricos `torneo`/`torneos` — viven todos bajo la
+       extra `verano`). Sin este map, las cards salían con el balón
+       por defecto porque `ball_by_comp_v1['torneo']` no existe. */
+    var _COMP_GROUP_ALIAS = {
+      'torneo':'verano', 'torneos':'verano',
+      'sct':'verano', 'jg':'verano', 'pss':'verano', 'asia':'verano',
+      'mundial':'mundialito'
+    };
     try {
       var _ovRaw = localStorage.getItem('ball_by_comp_v1');
       if (_ovRaw) {
         var _ov = JSON.parse(_ovRaw) || {};
-        var _bdbKey = _COMP_TO_BDB[compKey];
-        /* Resolución robusta (2026-05-17): primero la clave RAW del
-           partido (compKey) — así las competiciones extra/custom que
-           añade el admin en Ball Storage (Superliga, torneos nuevos…)
-           se enganchan sin tocar _COMP_TO_BDB. Si no hay, caemos a la
-           clave de BALL_DB (back-compat de las 14 comps base). */
-        var _ovBall = _ov[compKey] || (_bdbKey && _ov[_bdbKey]);
+        var _bdbKey   = _COMP_TO_BDB[compKey];
+        var _groupKey = _COMP_GROUP_ALIAS[compKey];
+        /* Resolución robusta (2026-05-17, ampliada 2026-05-25):
+           1) clave RAW del partido (compKey) — comps base + extras
+              + customs añadidas por el admin.
+           2) alias BALL_DB (back-compat de las 14 comps base).
+           3) alias de GRUPO (torneos de verano → `verano`,
+              variantes mundialito → `mundialito`). */
+        var _ovBall = _ov[compKey]
+                   || (_bdbKey   && _ov[_bdbKey])
+                   || (_groupKey && _ov[_groupKey]);
         if (_ovBall && typeof _ovBall === 'string') {
           /* El admin ha guardado un balón distinto para esta comp →
              gana sobre el default hardcoded. */
@@ -10553,6 +10584,51 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       };
       if (COPA_RD[cr]) return COPA_RD[cr];
     }
+    /* Mundial · 48 selecciones (compKey 'torneo' + cfg.format ===
+       'mundial-48'): el matchKey aquí es la prePartidoKey
+       `tour_<tourId>_<tourMatchKey>`, así que leemos `_ppPreviaTeams`
+       (lo fija `_tourOpenHumanMatch`) para obtener la config y deducir
+       la ronda. Sin esto la previa caía a hoy + "torneo" — bug
+       2026-05-25 reportado por usuario con foto Marruecos vs Francia
+       de la GRAN FINAL: la card del hub mostraba "31 May" pero la
+       previa "25 de Mayo". */
+    if (compKey === 'torneo') {
+      try {
+        var _ptCal = window._ppPreviaTeams || {};
+        var _tcfgCal = null;
+        if (_ptCal.tourId && typeof window._tourLoadCachedSync === 'function') {
+          _tcfgCal = window._tourLoadCachedSync(_ptCal.tourId);
+        }
+        if (!_tcfgCal && _ptCal.tourId && window._TOUR_CACHE) {
+          _tcfgCal = window._TOUR_CACHE[_ptCal.tourId];
+        }
+        if (_tcfgCal && _tcfgCal.format === 'mundial-48') {
+          var _tk = String(_ptCal.tourKey || '').replace(/\|L[12]$/, '');
+          var _mGrp = _tk.match(/^g\d+_(\d+)_/);
+          if (_mGrp) {
+            return 'Mundial Grupo — J' + (parseInt(_mGrp[1], 10) + 1);
+          }
+          var _mKo = _tk.match(/^ko_(\d+)_/);
+          if (_mKo) {
+            var _rIdx = parseInt(_mKo[1], 10);
+            var _koR = (_tcfgCal.formatConfig && _tcfgCal.formatConfig.koRounds) || [];
+            var _rName = _koR[_rIdx];
+            /* Etiquetas exactas tal y como aparecen en `.ag-lbl` del
+               calendario (calendario.json → SSR). Si añades un evento
+               nuevo, debe coincidir literalmente con `event.name`. */
+            var MUNDIAL_KO_LABELS = {
+              'Dieciseisavos': 'Mundial - Dieciseisavos',
+              'Octavos':       'Mundial Octavos',
+              'Cuartos':       'Mundial Cuartos',
+              'Semis':         'Mundial Semis',
+              'Tercer Puesto': 'Mundial Tercer Puesto',
+              'Final':         'MUNDIAL GRAN FINAL 🏆'
+            };
+            if (_rName && MUNDIAL_KO_LABELS[_rName]) return MUNDIAL_KO_LABELS[_rName];
+          }
+        }
+      } catch(_){}
+    }
     var MAP = {
       'copa':'Copa del Rey — 1/128','copa-fin':'FINAL COPA DEL REY',
       'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',
@@ -10627,6 +10703,39 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
     window._mmLastWeather = weather;
     var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
+    /* Mundial · 48 selecciones (compKey 'torneo' + cfg.format ===
+       'mundial-48'): reemplazamos el `compLabel` por la etiqueta
+       descriptiva de la ronda, igual que la pantalla BAJAS (overlay
+       de sanciones). Sin esto la previa mostraba "🏆 torneo" en vez
+       de "🏆 Mundial 2032 · GRAN FINAL" (bug 2026-05-25). */
+    if (compKey === 'torneo') {
+      try {
+        var _ptL = window._ppPreviaTeams || {};
+        var _tcfgL = null;
+        if (_ptL.tourId && typeof window._tourLoadCachedSync === 'function') {
+          _tcfgL = window._tourLoadCachedSync(_ptL.tourId);
+        }
+        if (!_tcfgL && _ptL.tourId && window._TOUR_CACHE) {
+          _tcfgL = window._TOUR_CACHE[_ptL.tourId];
+        }
+        if (_tcfgL && _tcfgL.format === 'mundial-48') {
+          var _tkL = String(_ptL.tourKey || '').replace(/\|L[12]$/, '');
+          var _mGL = _tkL.match(/^g\d+_(\d+)_/);
+          var _mKL = _tkL.match(/^ko_(\d+)_/);
+          if (_mGL) {
+            compLabel = 'Mundial 2032 · Grupo J' + (parseInt(_mGL[1], 10) + 1);
+          } else if (_mKL) {
+            var _rIdxL = parseInt(_mKL[1], 10);
+            var _koRL = (_tcfgL.formatConfig && _tcfgL.formatConfig.koRounds) || [];
+            var _rNameL = _koRL[_rIdxL] || '';
+            var _isLastL = _rNameL === 'Final';
+            compLabel = _isLastL
+              ? 'Mundial 2032 · GRAN FINAL 🏆'
+              : ('Mundial 2032 · ' + (_rNameL || 'KO'));
+          }
+        }
+      } catch(_){}
+    }
     /* Añadir jornada/ronda usando el mismo ROUND_MAP que la pantalla
        BAJAS. Ejemplo: "Liga EA Sports · J3" o "Copa del Rey · Octavos".
        Resuelve el blockId por `matchKey` (cal-l3 → "J3", etc.) o por
@@ -10930,6 +11039,31 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
 })();
 
+/* Fallback de 11 jugadores (A-K) con formación 4-3-3 para equipos IA
+   sin plantilla creada en `ligaExt_*` / SQUAD_REGISTRY / selecciones.
+   Lo usa el picker de eventos del gm-modal (_gmGetSquad) y el wizard
+   del penalti (_getSquads) — antes mostraban 3 placeholders o lista
+   vacía respectivamente y no se podía añadir un evento. 2026-05-24. */
+window._fallbackSq11 = function(){
+  return [
+    {h:'🧤 PORTEROS'},
+    ['1','Jugador A','P'],
+    {h:'🛡 DEFENSAS'},
+    ['2','Jugador B','D'],
+    ['3','Jugador C','D'],
+    ['4','Jugador D','D'],
+    ['5','Jugador E','D'],
+    {h:'⚙️ MEDIOS'},
+    ['6','Jugador F','M'],
+    ['7','Jugador G','M'],
+    ['8','Jugador H','M'],
+    {h:'⚡ DELANTEROS'},
+    ['9','Jugador I','F'],
+    ['10','Jugador J','F'],
+    ['11','Jugador K','F']
+  ];
+};
+
 /* ══ PENALTY WIZARD — flujo guiado paso a paso ══════════════════════════ */
 (function(){
   var _wiz={matchId:null,attackTeam:null,defendTeam:null,provocador:null,sancion:null,infractor:null,tirador:null,resultado:null,falladoTipo:null,portero:null,stepHistory:[],minute:0};
@@ -10948,6 +11082,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         if (!sqB.length) sqB = window.SQUAD_REGISTRY[st.away] || [];
       }
     }
+    if (!sqA.length && typeof window._fallbackSq11 === 'function') sqA = window._fallbackSq11();
+    if (!sqB.length && typeof window._fallbackSq11 === 'function') sqB = window._fallbackSq11();
     return { sqA: sqA, sqB: sqB };
   }
 

@@ -70,6 +70,160 @@ barra se rellene. Los lesionados se eligen de la plantilla del
 **Liverpool** (resuelto vía `_bayernSquad()` que ahora hace lookup
 dinámico) y se descartan los que ya tienen baja activa.
 
+## Fecha de la PANTALLA DE PREVIA — fuente única calendario (obligatorio, 2026-05-25)
+
+La fecha que muestra la PANTALLA DE PREVIA junto al icono 🗓️ (línea
+`X de <Mes> | 🏆 <comp>`) NO se inventa ni se setea con `new Date()`.
+**Fuente única**: el calendario global (filas `.ag-r` del DOM,
+generadas por SSR desde `calendario.json`).
+
+### Pipeline
+
+1. `_mmAgDateMap()` lee TODAS las filas `.ag-r` de `#ag-content` y
+   construye `{ <label>: {date, wx} }` indexado por el texto del
+   `.ag-lbl`.
+2. `_mmCalLabel(matchKey, compKey)` resuelve el `<label>` exacto
+   que debe coincidir con la entrada del calendario:
+   - Liga: `Liga — J<N>` (regex `^lj<N>m`).
+   - Copa del Rey: `Copa del Rey — <ronda>` (regex `^copa_<r>_<i>_<l>`).
+   - Mundial · 48 selecciones (compKey `'torneo'` + cfg.format
+     === `'mundial-48'`): lee `_ppPreviaTeams.tourId/tourKey`, carga
+     la cfg vía `_tourLoadCachedSync` / `_TOUR_CACHE` y mapea:
+     - Grupo J<N> → `Mundial Grupo — J<N>` (regex `^g\d+_<jor>_`).
+     - KO (`ko_<rIdx>_<mIdx>`) → ronda según
+       `cfg.formatConfig.koRounds[rIdx]`:
+       - `Dieciseisavos` → `Mundial - Dieciseisavos`
+       - `Octavos`       → `Mundial Octavos`
+       - `Cuartos`       → `Mundial Cuartos`
+       - `Semis`         → `Mundial Semis`
+       - `Tercer Puesto` → `Mundial Tercer Puesto`
+       - `Final`         → `MUNDIAL GRAN FINAL 🏆`
+   - Resto (inter/usc/ucl-fin/uel-fin/...): `MAP[compKey]`.
+3. `_mmInjectEnv` mete `<dayNum> de <Mes>` en `#pp-env` usando el
+   resultado anterior.
+
+### Reglas a respetar
+
+1. **PROHIBIDO hardcodear fechas en la previa** (`"31 de Mayo"`,
+   `"25 de Mayo"`, etc.). Si una comp nueva no resuelve fecha, la
+   solución es añadir su rama a `_mmCalLabel` para que mapee al
+   `.ag-lbl` del calendario, NO escribir la fecha a mano.
+2. **PROHIBIDO sustituir el calendario por `new Date()`** en el
+   pipeline de la previa. El cálculo "hoy" SOLO se usa como
+   fallback degradado cuando no hay match en el calendario.
+3. **Toda comp NUEVA con humanos** que abra la previa
+   (`showPrePartidoOverlay(matchKey, compKey, ...)`) DEBE tener su
+   rama en `_mmCalLabel` para mapear matchKey → `.ag-lbl`.
+4. **Toda nueva ronda de Mundial-48** (p. ej. si se añade una
+   ronda extra) DEBE tener:
+   - Su evento en `calendario.json` con `event.name` exacto.
+   - Su entrada en `MUNDIAL_KO_LABELS` de `_mmCalLabel` mapeando
+     el nombre de la ronda (tal como aparece en
+     `cfg.formatConfig.koRounds`) al `event.name` del calendario.
+5. **El `compLabel`** de la previa (después del icono 🏆) en
+   partidos de Mundial-48 se construye como:
+   - `Mundial 2032 · GRAN FINAL 🏆` para la última ronda.
+   - `Mundial 2032 · <RoundName>` para semis/cuartos/octavos/...
+   - `Mundial 2032 · Grupo J<N>` para fase de grupos.
+   NO mostrar `'torneo'` crudo (bug 2026-05-25).
+
+### Histórico
+
+- 2026-05-25: bug Marruecos vs Francia (GRAN FINAL del Mundial
+  2032). La card del hub mostraba `31 May` (correcto) pero la
+  previa `25 de Mayo` (HOY) porque `_mmCalLabel` no tenía rama
+  para `compKey === 'torneo'`. `_tourOpenHumanMatch` pasa
+  `compKey='torneo'` para TODOS los formatos de torneo (mundial-48,
+  ko, league, groups-ko, swiss...), así que el matchKey
+  `tour_<tourId>_ko_5_0` caía a `MAP[compKey] || null` → null →
+  fallback a `new Date()`. Fix: rama `compKey === 'torneo'` que
+  usa `_ppPreviaTeams.tourId/tourKey` + `cfg.formatConfig.koRounds`
+  para resolver la etiqueta del calendario.
+
+## Tema del gm-modal por competición (obligatorio, 2026-05-24)
+
+El gm-modal (la pantalla del partido HvH/HvIA que ve el usuario) lee
+la comp activa vía `_gmCompFromState()` y le aplica la clase
+`is-comp-<X>`. Esa clase fija las CSS vars `--comp-color` y
+`--comp-color-soft` que pintan TODOS los bordes/glow del modal:
+caja exterior `#gm-inner`, FINALIZAR (`.gm-end-moved`), PRÓRROGA
+(`#gm-btn-et`) y la franja superior de `gm-finalizar-slot`.
+
+### Mapa comp → tema (obligatorio)
+
+| comp en `_gm.comp`                                | clase            | `--comp-color`  | Justificación                                |
+|---------------------------------------------------|------------------|-----------------|-----------------------------------------------|
+| `liga`/`ea-sports`/`''`/`null`                    | `is-comp-liga`   | `#ff5060` rojo  | Liga EA SIEMPRE roja (legacy)                |
+| `copa`/`copa-fin` (o `_isCopa`)                   | `is-comp-copa`   | `#ffb050` ámbar |                                               |
+| `sc`/`sc-final` (o `_isSc`)                       | `is-comp-super`  | `#f0c820` oro   |                                               |
+| `recopa` (o `_isRecopa`)                          | `is-comp-recopa` | `#ff8060`       |                                               |
+| `superliga` (o `_isSuperliga`)                    | (vacío)          | rojo default    | Sin tema explícito (los 6 humanos)            |
+| `ucl`                                             | `is-comp-ucl`    | `#88aaff` azul  |                                               |
+| `uel`                                             | `is-comp-uel`    | `#ffaa55`       |                                               |
+| `uecl`                                            | `is-comp-uecl`   | `#5fe08a`       |                                               |
+| `inter`                                           | `is-comp-inter`  | `#f0a040`       |                                               |
+| `torneo`/`mundial`/`mundial-48`/`sel`/`sel-fin`/`selecciones` | `is-comp-mundial` | `#a875e8` violeta | Mundial-48 (compKey `torneo` vía `_tourOpenHumanMatch`) y Selecciones |
+| `amistoso`/`wprev`/`mundialito`                   | `is-comp-amistoso` | `#7da7c8` azul grisáceo |                                       |
+| `verano`/`sct`/`jg`/`pss`/`asia`                  | `is-comp-verano` | `#5fc6c8` turquesa |                                           |
+| **cualquier otra (fallback)**                     | `is-comp-neutral` | `#88a0c0` gris azulado | **PROHIBIDO** caer al rojo de Liga       |
+
+### Reglas a respetar
+
+1. **Toda comp humana NUEVA** que se añada (custom o de un torneo
+   nuevo) DEBE tener su rama en `_gmCompFromState()` (en
+   `templates/partials/part2/misc_body_2.html`, cerca de la línea del
+   bloque "GM-MODAL · tema + colores de equipo").
+2. **PROHIBIDO** dejar el fallback en `'liga'`. Cualquier comp no
+   reconocida debe caer a `'neutral'` para evitar el bug
+   2026-05-24 (Mundial-48 con todos los bordes rojos — foto Francia vs
+   RD Congo).
+3. **PROHIBIDO hardcodear `border:1px solid red`** o `var(--comp-color)`
+   en elementos nuevos del gm-modal sin antes verificar el tema actual.
+
+## Card bicolor del gm-modal (obligatorio, 2026-05-24)
+
+El fondo del gm-modal lleva un **tinte bicolor** según los colores
+reales del escudo:
+
+- **Mitad izquierda** = color dominante del escudo LOCAL
+  (`--team-a-bg`, alpha 0.25).
+- **Mitad derecha** = color dominante del escudo VISITANTE
+  (`--team-b-bg`, alpha 0.25).
+
+Las vars las setea `_gmPaint(pa, pb)` en
+`templates/partials/part2/misc_body_2.html`. El paint corre 2 veces:
+primero con el "seed" (color de `_teamColors` / `_hashColor` por
+nombre) para que el bicolor NUNCA esté vacío, y luego repinta cuando
+la extracción real del escudo (`_crestPrimary` → `extractColors`)
+resuelve.
+
+Si el escudo del rival no se ha cargado aún o no existe, las CSS
+vars caen a defaults `rgba(40,60,120,.25)` (azul oscuro local) y
+`rgba(60,40,90,.25)` (morado oscuro rival) — petición explícita del
+usuario "si no hay escudo todavía del rival pon el color que más te
+guste".
+
+### Caja "+ AÑADIR EVENTO" bicolor (obligatorio)
+
+La caja AÑADIR EVENTO (`#gm-add-btn`) usa el mismo bicolor pero a
+alpha alto (0.82-0.95) para que sea bien visible. El borde es
+`1px solid rgba(255,255,255,.22)` — **PROHIBIDO** usar
+`var(--comp-color)` en este borde (creaba el aro rojo del bug
+2026-05-24).
+
+### Reglas a respetar
+
+1. **No quitar `background-attachment:fixed`** del bicolor del modal
+   — sin él, el degradado se descoloca al hacer scroll del modal.
+2. **No subir el alpha por encima de 0.30** en `--team-a-bg`/`--team-b-bg`
+   — el texto del modal deja de ser legible.
+3. **No reintroducir `border:2px solid var(--comp-color)`** en el botón
+   AÑADIR EVENTO — eso es lo que causaba el aro rojo cuando el comp
+   caía al fallback liga.
+4. Si añades un elemento nuevo dentro del gm-modal con borde, usa
+   `var(--comp-color, #88a0c0)` con fallback neutro, NUNCA hardcodear
+   rojo.
+
 ## Sanciones y lesiones — SELECCIONES NACIONALES (obligatorio, 2026-05-24)
 
 Sistema PARALELO al de clubes (`calcularSancionesPartido` /
@@ -285,9 +439,17 @@ orden):
    `BALL_DB` (back-compat de las 14 comps base que históricamente
    se guardaban por la clave `champions`/`uel`/etc. en vez de
    `ucl`/`uel`).
-3. `COMP_BALL[compKey]` — default hardcoded por comp.
-4. Override por clima: nieve → `eFootball MAX VIS 26`.
-5. Fallback `ml-ball-name` del DOM (`ball-wrap-<matchKey>`).
+3. `ball_by_comp_v1[_COMP_GROUP_ALIAS[compKey]]` — alias de GRUPO
+   (2026-05-25): varios compKeys reales comparten una sola fila en
+   Ball Storage. Los torneos de verano (Joan Gamper `jg`, Asian
+   `asia`, Pre-Season Super `pss`, Soccer Champions Tour `sct` y
+   los genéricos `torneo`/`torneos`) caen sobre la extra `verano`;
+   `mundial` cae sobre `mundialito`.
+4. `COMP_BALL[compKey]` — default hardcoded por comp (incluye
+   defaults para `torneo`/`jg`/`asia`/`pss`/`sct`/`mundialito` para
+   evitar que caigan al default genérico `Ligue 1 McDonald's`).
+5. Override por clima: nieve → `eFootball MAX VIS 26`.
+6. Fallback `ml-ball-name` del DOM (`ball-wrap-<matchKey>`).
 
 ### Reglas a respetar
 

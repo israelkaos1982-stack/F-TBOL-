@@ -31464,6 +31464,99 @@ document.addEventListener('DOMContentLoaded', function() {
     var rgb = hsl2rgb(hue, sat, lum);
     return '#'+rgb.map(function(v){return ('0'+v.toString(16)).slice(-2);}).join('');
   }
+  /* ── Colores de selecciones nacionales (Mundial-48, amistosos
+     internacionales). El mapa CAMPO_TEAM_COLORS del bundle solo
+     cubre clubes españoles, así que sin esto las selecciones caían
+     al `_hashColor` que producía verdes/morados aleatorios — y la
+     caja AÑADIR EVENTO salía verde con Francia (azul) vs Marruecos
+     (rojo). Fix: tabla LOCAL aquí, NO se altera `getTeamColors`
+     global para no afectar a las visualizaciones del simulador
+     (campo, ratings, etc). Solo el gm-modal y los match-live-wrap
+     leen `_teamColors`. */
+  var _SEL_COLORS = {
+    /* 6 selecciones humanas (canónicas, CLAUDE.md 2026-05-24). */
+    'francia':       '#0a2e6b',  /* azul Francia      */
+    'brasil':        '#fdd835',  /* amarillo Brasil   */
+    'inglaterra':    '#c8102e',  /* rojo Cruz San Jorge */
+    'noruega':       '#c8102e',  /* rojo Noruega      */
+    'argentina':     '#75aadb',  /* celeste Argentina */
+    'españa':        '#c8102e',  /* rojo España       */
+    /* Mundial-48 — resto de selecciones más habituales. */
+    'marruecos':     '#c8102e',  /* rojo Marruecos    */
+    'alemania':      '#1a1a1a',  /* negro Alemania    */
+    'italia':        '#0e4ea8',  /* azzurri           */
+    'portugal':      '#c8102e',  /* rojo Portugal     */
+    'países bajos':  '#ff6900',  /* naranja Holanda   */
+    'holanda':       '#ff6900',
+    'bélgica':       '#c8102e',  /* rojo Bélgica      */
+    'belgica':       '#c8102e',
+    'croacia':       '#c8102e',  /* tartán rojo       */
+    'serbia':        '#c8102e',
+    'suiza':         '#c8102e',
+    'austria':       '#c8102e',
+    'dinamarca':     '#c8102e',
+    'polonia':       '#c8102e',
+    'turquía':       '#c8102e',
+    'turquia':       '#c8102e',
+    'gales':         '#c8102e',
+    'escocia':       '#0e4ea8',
+    'irlanda':       '#169b62',  /* verde Irlanda     */
+    'ucrania':       '#fdd835',  /* amarillo Ucrania  */
+    'suecia':        '#fdd835',  /* amarillo Suecia   */
+    /* América */
+    'estados unidos':'#0e4ea8',
+    'usa':           '#0e4ea8',
+    'méxico':        '#006847',  /* verde México      */
+    'mexico':        '#006847',
+    'canadá':        '#c8102e',
+    'canada':        '#c8102e',
+    'uruguay':       '#75aadb',
+    'colombia':      '#fdd835',
+    'chile':         '#c8102e',
+    'paraguay':      '#c8102e',
+    'perú':          '#c8102e',
+    'peru':          '#c8102e',
+    'ecuador':       '#fdd835',
+    'venezuela':     '#7d1b1f',
+    'costa rica':    '#c8102e',
+    'panamá':        '#c8102e',
+    'panama':        '#c8102e',
+    /* África */
+    'senegal':       '#169b62',
+    'argelia':       '#169b62',
+    'túnez':         '#c8102e',
+    'tunez':         '#c8102e',
+    'egipto':        '#c8102e',
+    'nigeria':       '#169b62',
+    'ghana':         '#fdd835',
+    'camerún':       '#169b62',
+    'camerun':       '#169b62',
+    'costa de marfil':'#ff6900',
+    'sudáfrica':     '#169b62',
+    'sudafrica':     '#169b62',
+    'rd congo':      '#75aadb',  /* azul cielo Congo  */
+    'congo':         '#169b62',
+    'mali':          '#169b62',
+    /* Asia / Oceanía */
+    'japón':         '#0e4ea8',
+    'japon':         '#0e4ea8',
+    'corea del sur': '#c8102e',
+    'corea':         '#c8102e',
+    'arabia saudí':  '#169b62',
+    'arabia saudi':  '#169b62',
+    'irán':          '#169b62',
+    'iran':          '#169b62',
+    'australia':     '#fdd835',
+    'nueva zelanda': '#1a1a1a',
+    'uae':           '#c8102e',  /* Emiratos          */
+    'qatar':         '#7d1b1f',
+    'china':         '#c8102e'
+  };
+  function _selColorFor(name){
+    if (!name) return null;
+    var k = String(name).trim().toLowerCase();
+    return _SEL_COLORS[k] || null;
+  }
   function _teamColors(name){
     if (!name) return null;
     if (_COLOR_CACHE[name]) return _COLOR_CACHE[name];
@@ -31474,13 +31567,21 @@ document.addEventListener('DOMContentLoaded', function() {
         if (c && c.bg){
           var bg = String(c.bg).toLowerCase();
           /* Si el bundle devolvió la paleta-placeholder (`#888`), la
-             ignoramos y caemos al hash determinista. */
+             ignoramos y caemos a selecciones nacionales / hash. */
           if (bg !== '#888' && bg !== '#888888'){
             out = { bg: c.bg, primary: c.bg, border: c.border || c.bg, fg: c.fg || '#fff' };
           }
         }
       }
     } catch(_){}
+    /* Selecciones nacionales: si el bundle no tenía el color, lo
+       buscamos en la tabla _SEL_COLORS antes de caer al hash. */
+    if (!out){
+      var sel = _selColorFor(name);
+      if (sel){
+        out = { bg: sel, primary: sel, border: sel, fg: '#fff' };
+      }
+    }
     if (!out){
       var hex = _hashColor(name);
       out = { bg: hex, primary: hex, border: hex, fg: '#fff' };

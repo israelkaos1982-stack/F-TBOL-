@@ -2996,15 +2996,41 @@ window._showSimProgress = function(opts, onDone){
   /* Plantilla Bayern desde ligaExt (misma fuente que la Caja
      Plantilla). Devuelve [{name,pos,power}]. Prohibido usar listas
      generales / otros equipos. */
+  /* Plantilla del equipo HUMANO del hub (el "slot Bayern Munich" de
+     Liga EA Sports, que el usuario tiene renombrado a Liverpool desde
+     2026-05-23). Usa el nombre lógico de `_psHumanLogicName()` para
+     resolver dinámicamente el slot — NO hardcodear /bayern/i porque el
+     hub puede no llamarse Bayern (bug 2026-05-25 reportado por usuario:
+     `_rollInjuries` tenía pool vacío porque Bayern ya no está en Liga
+     EA Sports → 0 lesiones de entrenamiento NUNCA pasaban). */
   function _bayernSquad(){
     try {
       var raw = localStorage.getItem('ligaExt_liga-ea-sports');
       if (!raw) return [];
       var data = JSON.parse(raw);
       var teams = (data && data.teams) || [];
-      for (var i=0;i<teams.length;i++){
-        var t = teams[i];
-        if (t && t.name && /bayern/i.test(t.name) && Array.isArray(t.players)) return t.players;
+      var hubName = '';
+      try { if (typeof _psHumanLogicName === 'function') hubName = String(_psHumanLogicName() || ''); } catch(_){}
+      var hubL = hubName.toLowerCase().trim();
+      /* 1) Match exacto (insensible a mayúsculas/acentos) por nombre lógico. */
+      if (hubL) {
+        for (var i=0;i<teams.length;i++){
+          var t = teams[i];
+          if (!t || !t.name || !Array.isArray(t.players)) continue;
+          if (String(t.name).toLowerCase().trim() === hubL) return t.players;
+        }
+      }
+      /* 2) Fallback: equipo marcado isHuman (los 5 humanos canónicos de
+         Liga EA Sports — el primero que tenga plantilla). */
+      for (var j=0;j<teams.length;j++){
+        var t2 = teams[j];
+        if (t2 && t2.isHuman && Array.isArray(t2.players) && t2.players.length) return t2.players;
+      }
+      /* 3) Último fallback histórico: el slot Bayern (por si el rename
+         no se aplicó). */
+      for (var k=0;k<teams.length;k++){
+        var t3 = teams[k];
+        if (t3 && t3.name && /bayern/i.test(t3.name) && Array.isArray(t3.players)) return t3.players;
       }
     } catch(_){}
     return [];

@@ -1,5 +1,75 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Hub del usuario: Liverpool (no Bayern) — obligatorio, 2026-05-25
+
+El equipo HUMANO del hub (la pantalla `s-munich`, la card "Próximo
+partido", el calendario, los entrenamientos, el menú médico de
+inyecciones, las pretemporadas) **es el Liverpool 💡**, NO el
+Bayern. Bayern es **IA** y vive en la Liga Alemana
+(`ligaExt_resto-de-ligas-*`).
+
+### ¿De dónde viene el nombre "Bayern" en el código?
+
+El hub se construyó originalmente sobre el slot "Bayern Munich" de
+Liga EA Sports — los identificadores internos (`s-munich`,
+`munich-next-match`, `BAYERN_SHIELD`, `_bayernSquad`, etc.) son
+legacy de esa época. El **2026-05-23 el usuario renombró el slot a
+Liverpool** vía el editor de Liga EA Sports
+(`_ligaEaSubName('Bayern Munich')` devuelve ahora `"Liverpool"`).
+Los identificadores con "munich" / "bayern" en el nombre siguen ahí
+por compatibilidad, pero el contenido es Liverpool.
+
+### Helpers canónicos para el nombre / plantilla / escudo del hub
+
+```
+window._mkHubTeamName               // string canónico del hub humano
+_psHumanName()                       // visual (menu_home_v1.ov o _ligaEaSubName)
+_psHumanLogicName()                  // lógico (siempre _ligaEaSubName del slot Bayern)
+_psHumanShield()                     // URL del escudo
+_athHubTeam()                        // equivalente para el menú médico
+```
+
+### Reglas a respetar
+
+1. **Nunca hardcodear `/bayern/i` o `'Bayern Munich'`** para resolver
+   la plantilla / escudo del usuario. Usa los helpers de arriba.
+   Si una función nueva necesita el equipo del hub, debe leer el
+   nombre lógico (`_psHumanLogicName` o `_mkHubTeamName`) y resolver
+   contra ese.
+2. **`_bayernSquad()` ya está parcheado** para hacer 3 lookups en
+   `ligaExt_liga-ea-sports`: (1) match exacto por nombre lógico,
+   (2) primer team con `isHuman:true`, (3) fallback histórico
+   `/bayern/i`. NO eliminar los fallbacks — cubren saves antiguos.
+3. **El sistema de bajas / inyecciones / "Bajas — NO convocar" /
+   plantilla del HUD / mensajes de la bandeja** se refiere SIEMPRE
+   al equipo del hub (Liverpool actualmente). Los 4 emojis humanos
+   restantes (🐭 Brasil, 🔨 Inglaterra, ✏️ Noruega, 😈 Argentina,
+   🦆 España son SELECCIONES — no aplica) y los OTROS 4 humanos de
+   Liga EA Sports (Real Madrid, Barcelona, Atlético, Arsenal — más
+   el del slot Bayern que es Liverpool) tienen su propio sistema
+   pero NO entran en el hub `s-munich`.
+4. **Si un bug futuro reporta "no hay lesiones de entrenamiento" o
+   "no aparecen jugadores del hub"**, lo primero es comprobar si
+   se está usando `_bayernSquad()` u otra resolución hardcoded a
+   Bayern. El usuario renombró el slot y todas las rutas que
+   resuelvan el hub deben usar los helpers dinámicos.
+
+### Probabilidades del entrenamiento (referencia, 2026-05-25)
+
+`_rollInjuries()` en `misc_body_1.html:3217-3225`:
+
+| Resultado                  | Probabilidad |
+|----------------------------|--------------|
+| 2 jugadores lesionados     | 2 %          |
+| 1 jugador lesionado        | 5 %          |
+| Ninguno (sin bajas)        | 93 %         |
+
+Total: 7 % de los entrenamientos genera al menos una lesión. El
+sorteo es **en el segundo 0** (al pulsar ENTRENAR), antes de que la
+barra se rellene. Los lesionados se eligen de la plantilla del
+**Liverpool** (resuelto vía `_bayernSquad()` que ahora hace lookup
+dinámico) y se descartan los que ya tienen baja activa.
+
 ## Fecha de la PANTALLA DE PREVIA — fuente única calendario (obligatorio, 2026-05-25)
 
 La fecha que muestra la PANTALLA DE PREVIA junto al icono 🗓️ (línea

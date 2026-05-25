@@ -35110,17 +35110,41 @@ Tottenham
   #sel-sq-ov .sel-sq-alias{font-style:italic;color:#ffd58a;}
   #sel-sq-ov .sel-sq-alias::placeholder{color:rgba(255,213,138,.5);font-style:italic;}
   #sel-sq-ov .sel-sq-r1{display:flex;gap:6px;align-items:stretch;}
-  #sel-sq-ov .sel-sq-r1 .sel-sq-name{flex:1;min-width:0;}
-  #sel-sq-ov .sel-sq-cont{flex:0 0 112px;background:rgba(0,0,0,.55);
+  #sel-sq-ov .sel-sq-r1 .sel-sq-name{flex:1;min-width:0;width:100%;}
+  /* Continente: 2026-05-25 — antes era un <select> nativo de 112px que comía
+     el ancho del nombre (el usuario veía "Inc"/"Es"/"Al" en lugar de
+     "Inglaterra"/"España"/"Alemania") y en algunos móviles el desplegable se
+     cerraba al primer toque. Ahora es un botón a ancho completo en su propia
+     fila que abre un picker con ✅ (mismo patrón que el ball-picker). */
+  #sel-sq-ov .sel-sq-cont-btn{width:100%;background:rgba(0,0,0,.55);
     border:1px solid rgba(255,255,255,.22);color:#dfe6ff;border-radius:8px;
-    padding:6px 4px;font-size:12px;font-family:Rajdhani,sans-serif;
-    appearance:none;-webkit-appearance:none;cursor:pointer;text-align:center;
-    background-image:linear-gradient(45deg,transparent 50%,rgba(255,255,255,.45) 50%),
-                     linear-gradient(135deg,rgba(255,255,255,.45) 50%,transparent 50%);
-    background-position:calc(100% - 11px) 13px,calc(100% - 6px) 13px;
-    background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:18px;}
-  #sel-sq-ov .sel-sq-cont:focus{outline:none;border-color:rgba(154,167,255,.6);}
-  #sel-sq-ov .sel-sq-cont option{background:#101522;color:#fff;}
+    padding:7px 10px;font-size:12.5px;font-family:Rajdhani,sans-serif;
+    cursor:pointer;text-align:center;}
+  #sel-sq-ov .sel-sq-cont-btn:focus,#sel-sq-ov .sel-sq-cont-btn:hover{
+    outline:none;border-color:rgba(154,167,255,.6);background:rgba(0,0,0,.7);}
+  /* Overlay del picker de continente. z-index por encima del editor (100040). */
+  #sel-cont-pick{position:fixed;inset:0;z-index:100050;display:none;
+    align-items:center;justify-content:center;padding:18px;background:rgba(0,0,5,.85);}
+  #sel-cont-pick.show{display:flex;}
+  #sel-cont-pick .pick-card{width:min(380px,92vw);
+    background:linear-gradient(170deg,#11151f,#0a0d14);
+    border:1px solid rgba(154,167,255,.45);border-radius:14px;
+    box-shadow:0 22px 60px rgba(0,0,0,.7);overflow:hidden;}
+  #sel-cont-pick .pick-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08);
+    font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#9aa7ff;}
+  #sel-cont-pick .pick-x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
+    color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;}
+  #sel-cont-pick .pick-list{padding:8px 10px 12px;}
+  #sel-cont-pick .pick-row{display:flex;align-items:center;gap:10px;
+    padding:12px 14px;margin:5px 0;background:rgba(255,255,255,.04);
+    border:1px solid rgba(255,255,255,.1);border-radius:9px;
+    font-family:Rajdhani,sans-serif;font-size:14px;color:#dfe6ff;cursor:pointer;}
+  #sel-cont-pick .pick-row:hover{background:rgba(255,255,255,.09);}
+  #sel-cont-pick .pick-row.is-on{border-color:rgba(154,167,255,.6);
+    background:rgba(154,167,255,.14);}
+  #sel-cont-pick .pick-row .pick-lab{flex:1;}
+  #sel-cont-pick .pick-row .pick-check{font-size:16px;min-width:18px;text-align:right;}
   #sel-sq-ov .sel-sq-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
     color:#ff9a9a;width:30px;height:30px;border-radius:7px;cursor:pointer;flex-shrink:0;
     font-size:14px;line-height:1;padding:0;}
@@ -35261,13 +35285,52 @@ Tottenham
     };
     window._selHumanIconPatched=true;
   }
+  /* Canonicaliza nombres y fusiona duplicados de la lista persistida.
+     Si tras `_selCanon` quedan 2+ entradas con el mismo nombre (p.ej.
+     una vieja "Bosnia" y una vieja "Bosnia&Herzegovina" en la misma
+     plantilla), se quedan los datos de la ÚLTIMA que aparezca (gana la
+     más reciente). Los jugadores de las descartadas se pierden — el
+     usuario tendrá que volver a abrir el editor y elegir cuál mantener
+     si quiere mezclarlas a mano. Devuelve la lista limpia y, si hubo
+     cambios, reescribe `selecciones_squad_v1` (y server) para que el
+     dedupe sea persistente. */
+  function _dedupeStored(d){
+    if(!d || !Array.isArray(d.teams)) return d;
+    var changed=false;
+    var seen={}, clean=[];
+    /* Iterar en reverso → la ÚLTIMA aparición de cada nombre canónico
+       gana (los datos más recientes prevalecen). `unshift` mantiene el
+       orden de visualización del usuario. */
+    for(var i=d.teams.length-1;i>=0;i--){
+      var t=d.teams[i];
+      if(!t || !t.name) continue;
+      var orig=t.name;
+      var canon=_selCanon(orig);
+      if(canon!==orig) changed=true;
+      t.name=canon;
+      var key=canon.toLowerCase();
+      if(seen[key]){ changed=true; continue; }
+      seen[key]=1;
+      clean.unshift(t);
+    }
+    if(changed){
+      d.teams=clean;
+      try{ localStorage.setItem(KEY,JSON.stringify(d)); }catch(_){}
+      try{
+        if(typeof window.fetch==='function')
+          window.fetch('/api/kv/'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({value:d})}).catch(function(){});
+      }catch(_){}
+    }
+    return d;
+  }
   /* Registra cada selección en TEAM_RATINGS (escudo + media) y en
      _LIGA_EA_TEAM_STATS (4 ejes; las líneas vacías caen a GLOBAL) para
      que escudos y el motor 4-ejes funcionen como con cualquier club.
      Además publica el mapa `_SEL_HUMAN_ICONS` (nombre→icono) para que
      las selecciones con icono se detecten como humanas. */
   function _hydrate(){
-    var d=_load();
+    var d=_dedupeStored(_load());
     window.TEAM_RATINGS = window.TEAM_RATINGS || {};
     window._LIGA_EA_TEAM_STATS = window._LIGA_EA_TEAM_STATS || {};
     var icons={};
@@ -35308,12 +35371,51 @@ Tottenham
     {v:'pacifico', l:'🌎 Pacífico'},
     {v:'africa',   l:'🌍 África'}
   ];
-  function _contOpts(sel){
-    sel=String(sel==null?'':sel).toLowerCase();
-    return _SEL_CONTS.map(function(c){
-      return '<option value="'+c.v+'"'+(sel===c.v?' selected':'')+'>'+c.l+'</option>';
-    }).join('');
+  function _contLabel(v){
+    v=String(v==null?'':v).toLowerCase();
+    for(var i=0;i<_SEL_CONTS.length;i++) if(_SEL_CONTS[i].v===v) return _SEL_CONTS[i].l;
+    return _SEL_CONTS[0].l;
   }
+  function _contBtnHtml(v){
+    return '<button type="button" class="sel-sq-cont-btn" data-cont="'+_esc(v||'')+'" title="Continente">'
+      +_contLabel(v||'')+'</button>';
+  }
+  /* ── Canonicalización de nombres (2026-05-25, dedup) ──────────────
+     El usuario reportó duplicados como "Rep Checa" vs "República Checa"
+     y "Bosnia" vs "Bosnia&Herzegovina" que entraban como selecciones
+     distintas y acababan en grupos separados del Mundial. La fuente
+     suele ser el pegado masivo o un nombre tecleado a mano con una
+     ortografía diferente.
+     Por petición del usuario el nombre canónico es la FORMA CORTA:
+       - "Rep. Checa" (con el punto)
+       - "Bosnia"
+     Se aplica en `_collect` (al guardar/recoger del DOM) y en
+     `_hydrate` (boot/restore). Después el dedup case-insensitive
+     existente fusiona los duplicados (gana la última entrada). */
+  var _SEL_ALIASES={
+    'rep checa':'Rep. Checa',
+    'rep. checa':'Rep. Checa',
+    'republica checa':'Rep. Checa',
+    'república checa':'Rep. Checa',
+    'czechia':'Rep. Checa',
+    'czech republic':'Rep. Checa',
+    'bosnia':'Bosnia',
+    'bosnia y herzegovina':'Bosnia',
+    'bosnia&herzegovina':'Bosnia',
+    'bosnia & herzegovina':'Bosnia',
+    'bosnia herzegovina':'Bosnia',
+    'bosnia-herzegovina':'Bosnia',
+    'bosnia-erzegovina':'Bosnia',
+    'bosnia-herzegowina':'Bosnia'
+  };
+  function _selCanon(name){
+    if(name==null) return '';
+    var s=String(name).trim();
+    if(!s) return '';
+    var key=s.toLowerCase().replace(/\s+/g,' ');
+    return _SEL_ALIASES[key] || s;
+  }
+  window._selCanonName=_selCanon;
   function _rowHtml(t){
     t=t||{};
     var img=String(t.img||'').trim();
@@ -35321,13 +35423,18 @@ Tottenham
     return '<div class="sel-sq-row">'
       +'<img src="'+_esc(img)+'" alt="" onerror="this.style.visibility=\'hidden\'">'
       +'<div class="sel-sq-fields">'
+      /* Fila 1: SOLO el nombre, a ancho completo. Antes compartía con el
+         select de Continente y se truncaba a "Inc"/"Es"/"Al". El continente
+         pasa a su propia fila con un botón ✅. */
       +'<div class="sel-sq-r1">'
       +'<input class="sel-sq-name" type="text" placeholder="Nombre de la selección" value="'+_esc(t.name||'')+'">'
-      +'<select class="sel-sq-cont" title="Continente — Europa / Pacífico (América + Asia + Oceanía) / África">'+_contOpts(t.continent||'')+'</select>'
       +'</div>'
       +'<div class="sel-sq-r2">'
       +'<input class="sel-sq-icon" type="text" maxlength="6" placeholder="👤" title="Icono de humano — una selección con icono es HUMANA en los torneos" value="'+_esc(t.icon||'')+'">'
       +'<input class="sel-sq-img" type="text" placeholder="https://… escudo / bandera" value="'+_esc(img)+'">'
+      +'</div>'
+      +'<div class="sel-sq-r2">'
+      +_contBtnHtml(t.continent||'')
       +'</div>'
       +'<div class="sel-sq-r3">'
       +'<input class="sel-sq-g" type="number" min="1" max="100" placeholder="GLB" title="Global" value="'+v(t.power)+'">'
@@ -35341,6 +35448,57 @@ Tottenham
       +'<button type="button" class="sel-sq-players-btn" title="Editar jugadores de la selección">👥 <span class="sel-sq-pcount">'+((t.players&&t.players.length)||0)+'</span></button>'
       +'<button type="button" class="sel-sq-del" title="Eliminar">🗑</button>'
       +'</div>';
+  }
+  /* ── Picker de Continente (overlay con ✅, 2026-05-25) ──
+     Reemplaza al <select> nativo. Se construye lazy, una sola vez,
+     y se reutiliza para todas las filas. */
+  var _contPickBtn=null;
+  function _contPickBuild(){
+    var ov=document.createElement('div');
+    ov.id='sel-cont-pick';
+    var rows=_SEL_CONTS.map(function(c){
+      return '<div class="pick-row" data-cont="'+_esc(c.v)+'">'
+        +'<span class="pick-lab">'+c.l+'</span>'
+        +'<span class="pick-check"></span>'
+        +'</div>';
+    }).join('');
+    ov.innerHTML='<div class="pick-card">'
+      +'<div class="pick-hd"><span>🌐 Continente</span>'
+      +'<button type="button" class="pick-x">✕</button></div>'
+      +'<div class="pick-list">'+rows+'</div>'
+      +'</div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('click',function(e){
+      if(e.target===ov){ _contPickClose(); return; }
+      var t=e.target;
+      if(t && t.closest && t.closest('.pick-x')){ _contPickClose(); return; }
+      var r=t && t.closest && t.closest('.pick-row');
+      if(r && _contPickBtn){
+        var val=r.getAttribute('data-cont')||'';
+        _contPickBtn.setAttribute('data-cont',val);
+        _contPickBtn.textContent=_contLabel(val);
+        _contPickClose();
+      }
+    });
+    return ov;
+  }
+  function _contPickOpen(btn){
+    if(!btn) return;
+    _contPickBtn=btn;
+    var ov=document.getElementById('sel-cont-pick') || _contPickBuild();
+    var cur=btn.getAttribute('data-cont')||'';
+    ov.querySelectorAll('.pick-row').forEach(function(r){
+      var on=r.getAttribute('data-cont')===cur;
+      r.classList.toggle('is-on',on);
+      var ck=r.querySelector('.pick-check');
+      if(ck) ck.textContent=on?'✅':'';
+    });
+    ov.classList.add('show');
+  }
+  function _contPickClose(){
+    var ov=document.getElementById('sel-cont-pick');
+    if(ov) ov.classList.remove('show');
+    _contPickBtn=null;
   }
   var _inBulk=false, _bulkBase=null;
   function _renderBody(teams){
@@ -35506,11 +35664,17 @@ Tottenham
     return out;
   }
   /* Funde `add` sobre `base`: si el nombre ya existe actualiza nivel
-     (y escudo si viene), si no lo añade. Case-insensitive. */
+     (y escudo si viene), si no lo añade. Case-insensitive y aplicando
+     `_selCanon` a ambos lados para que «Rep Checa» y «República Checa»
+     se consoliden en «Rep. Checa». */
   function _mergeTeams(base, add){
     var out=(base||[]).slice(), idx={};
-    out.forEach(function(t,i){ idx[String(t.name).toLowerCase()]=i; });
+    out.forEach(function(t,i){
+      t.name=_selCanon(t.name);
+      idx[String(t.name).toLowerCase()]=i;
+    });
     add.forEach(function(t){
+      t.name=_selCanon(t.name);
       var k=t.name.toLowerCase();
       if(idx[k]!=null){
         var o=out[idx[k]];
@@ -35550,18 +35714,22 @@ Tottenham
     var ta=document.getElementById('sel-sq-bulk-ta'); if(ta) ta.focus();
   }
   /* Lee las filas del DOM → array de selecciones (ignora filas sin
-     nombre, dedupea por nombre conservando la última). */
+     nombre, canonicaliza el nombre vía _selCanon — p.ej. "Rep Checa" →
+     "Rep. Checa", "Bosnia&Herzegovina" → "Bosnia" — y dedupea por nombre
+     conservando la última). */
   function _collect(){
     var body=document.getElementById('sel-sq-body');
     var out=[];
     if(!body) return out;
     body.querySelectorAll('.sel-sq-row').forEach(function(row){
-      var nm=String(((row.querySelector('.sel-sq-name')||{}).value)||'').trim();
-      if(!nm) return;
+      var nmRaw=String(((row.querySelector('.sel-sq-name')||{}).value)||'').trim();
+      if(!nmRaw) return;
+      var nm=_selCanon(nmRaw);
       var img=String(((row.querySelector('.sel-sq-img')||{}).value)||'').trim();
       var icon=String(((row.querySelector('.sel-sq-icon')||{}).value)||'').trim();
       var alias=String(((row.querySelector('.sel-sq-alias')||{}).value)||'').trim();
-      var continent=String(((row.querySelector('.sel-sq-cont')||{}).value)||'').trim().toLowerCase();
+      var contBtn=row.querySelector('.sel-sq-cont-btn');
+      var continent=String((contBtn && contBtn.getAttribute('data-cont'))||'').trim().toLowerCase();
       function rd(sel,fb){ return _clamp((row.querySelector(sel)||{}).value,fb); }
       var g=rd('.sel-sq-g',75);
       out.push({
@@ -35842,6 +36010,12 @@ Tottenham
         if(!pb || _inBulk) return;
         var row=pb.closest('.sel-sq-row');
         if(row) _plOpen(row);
+      });
+      /* 🌐 Picker de Continente — abre overlay con ✅. */
+      ov.addEventListener('click',function(e){
+        var cb=e.target&&e.target.closest&&e.target.closest('.sel-sq-cont-btn');
+        if(!cb || _inBulk) return;
+        _contPickOpen(cb);
       });
       /* Vista previa del escudo al teclear la URL. */
       ov.addEventListener('input',function(e){

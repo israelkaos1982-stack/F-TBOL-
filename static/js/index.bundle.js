@@ -5792,7 +5792,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var rem = parseInt(l.partidos || 0, 10) || 0;
       if (rem <= 0) return;
       seen[name] = true;
-      lines.push((l.gradoEmoji || '🩹') + ' ' + name + ' · ' + (l.gradoNombre || 'Lesión') + ' · ' + rem + 'P');
+      /* 2026-05-25: formato corto pedido por usuario — "Nombre · N Partidos baja"
+         (sin gradoNombre redundante; la gravedad ya sale en la card LESIONADO). */
+      lines.push((l.gradoEmoji || '🩹') + ' ' + name + ' · ' + rem + ' Partido' + (rem===1?'':'s') + ' baja');
     });
     /* Sanción / expulsión: BAJA_STORE no guarda equipo → cruzamos con
        SQUAD_REGISTRY del hub para saber si el jugador es de su plantilla. */
@@ -5815,8 +5817,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       if (tipo !== 'sancion' && tipo !== 'expulsion') return;
       if (!hubSquad[name]) return;
       var n = Math.max(parseInt(b.liga || 0, 10) || 0, parseInt(b.copa || 0, 10) || 0, parseInt(b.europa || 0, 10) || 0);
-      lines.push((tipo === 'expulsion' ? '🟥' : '🟨') + ' ' + name + ' · '
-        + (tipo === 'expulsion' ? 'Expulsado' : 'Sancionado') + ' · ' + n + 'P');
+      lines.push((tipo === 'expulsion' ? '🟥' : '🟨') + ' ' + name + ' · ' + n + ' Partido' + (n===1?'':'s') + ' baja');
     });
     return lines;
   }
@@ -5869,8 +5870,24 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'eur-fin':    "PARADISE Morado",
       'sel':        "NIKE CONTROL CBF",
       'sel-fin':    "NIKE CONTROL CBF",
-      'amistoso':   "eFootballM Origin",
-      'superliga':  "PARADISE Morado"
+      'amistoso':   "eFootball Origin",
+      'superliga':  "PARADISE Morado",
+      /* Torneos de Verano — todas las variantes (Joan Gamper, Asian,
+         Pre-Season Super, Soccer Champions Tour, genéricos…)
+         comparten balón con la fila "verano" de Ball Storage. Sin
+         este default las cards salían con `Ligue 1 McDonald's`
+         porque COMP_BALL['torneo'] no estaba definido (bug
+         FOTO 2026-05-25). */
+      'torneo':     "eFootball Origin",
+      'torneos':    "eFootball Origin",
+      'sct':        "eFootball Origin",
+      'jg':         "eFootball Origin",
+      'pss':        "eFootball Origin",
+      'asia':       "eFootball Origin",
+      'verano':     "eFootball Origin",
+      /* Mundialito de Clubes — compKey real del partido. */
+      'mundialito': "Vantaggio 5000",
+      'mundial':    "Vantaggio 5000"
     };
     /* Override del admin desde "Ball Storage" (s-admin-balls) — el
        admin puede elegir un balón distinto por competición y se
@@ -5894,17 +5911,32 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'superliga':'champions',
       'eur-grupo':'champions','eur-ko':'champions','eur-fin':'champions'
     };
+    /* Alias de GRUPO (2026-05-25): varios compKeys reales del juego
+       comparten la MISMA fila en Ball Storage (los torneos de verano
+       — Joan Gamper, Asian, Pre-Season Super, Soccer Champions Tour
+       y los genéricos `torneo`/`torneos` — viven todos bajo la
+       extra `verano`). Sin este map, las cards salían con el balón
+       por defecto porque `ball_by_comp_v1['torneo']` no existe. */
+    var _COMP_GROUP_ALIAS = {
+      'torneo':'verano', 'torneos':'verano',
+      'sct':'verano', 'jg':'verano', 'pss':'verano', 'asia':'verano',
+      'mundial':'mundialito'
+    };
     try {
       var _ovRaw = localStorage.getItem('ball_by_comp_v1');
       if (_ovRaw) {
         var _ov = JSON.parse(_ovRaw) || {};
-        var _bdbKey = _COMP_TO_BDB[compKey];
-        /* Resolución robusta (2026-05-17): primero la clave RAW del
-           partido (compKey) — así las competiciones extra/custom que
-           añade el admin en Ball Storage (Superliga, torneos nuevos…)
-           se enganchan sin tocar _COMP_TO_BDB. Si no hay, caemos a la
-           clave de BALL_DB (back-compat de las 14 comps base). */
-        var _ovBall = _ov[compKey] || (_bdbKey && _ov[_bdbKey]);
+        var _bdbKey   = _COMP_TO_BDB[compKey];
+        var _groupKey = _COMP_GROUP_ALIAS[compKey];
+        /* Resolución robusta (2026-05-17, ampliada 2026-05-25):
+           1) clave RAW del partido (compKey) — comps base + extras
+              + customs añadidas por el admin.
+           2) alias BALL_DB (back-compat de las 14 comps base).
+           3) alias de GRUPO (torneos de verano → `verano`,
+              variantes mundialito → `mundialito`). */
+        var _ovBall = _ov[compKey]
+                   || (_bdbKey   && _ov[_bdbKey])
+                   || (_groupKey && _ov[_groupKey]);
         if (_ovBall && typeof _ovBall === 'string') {
           /* El admin ha guardado un balón distinto para esta comp →
              gana sobre el default hardcoded. */
@@ -6016,7 +6048,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     try {
       var _bjLines = _ppHubBajasLines();
       if (_bjLines.length) {
-        items.push({ id:'bajas', ico:'🏥', lbl:'Bajas — NO alinear', val:_bjLines.join('  ·  ') });
+        /* 2026-05-25: label "NO convocar" + val multilínea (cada baja
+           en su propia fila debajo del título), layout vstack. */
+        items.push({ id:'bajas', ico:'🏥', lbl:'Bajas — NO convocar', val:_bjLines.join('<br>'), vstack:true });
       }
     } catch(_){}
     return items;
@@ -6024,6 +6058,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   function _ppClickSfx() { try { var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return; var ctx=window.__ppAudio||(window.__ppAudio=new Ctx()); var o=ctx.createOscillator(); var g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); var t=ctx.currentTime; o.frequency.setValueAtTime(1180,t); g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05); o.start(t); o.stop(t+0.05);} catch(_){} }
 
+  window._renderPreviaMeta = function(matchKey, isHvH){ return _renderPreviaMeta(matchKey, isHvH); };
   function _renderPreviaMeta(matchKey, isHvH) {
     var home, away;
     var wrap = document.getElementById('mlw-' + matchKey);
@@ -6331,10 +6366,35 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         var b=bajas[n]; var pts=(b&&b.liga)?b.liga+' partido(s) restante(s)':'';
         alertsHtml += '<div class="pp-alert-row pp-alert-red">🟥 EXPULSADO: '+n+(pts?' · '+pts:'')+'</div>';
       });
+      /* 2026-05-25 (petición usuario): layout 2 líneas + botón 💊N
+         de inyecciones. Pulsando 💊N (si N>0) se abre el MENÚ DE
+         TRATAMIENTO RÁPIDO (athOpenMedicalMenu). Cuando el jugador
+         queda recién curado en esta misma previa (via _ppJustCured)
+         pasa a "X — Recuperado". */
+      var _piCur = 0;
+      try { if (typeof window.athGetMedicalPI === 'function') _piCur = window.athGetMedicalPI(); } catch(_){}
+      var _piInt = Math.floor(_piCur + 1e-9);
+      var _justCured = window._ppJustCured || {};
       lesionados.forEach(function(n) {
+        if (_justCured[n]) return; /* lo pintamos abajo */
         var l=lesionesStore[n]; var ico=l.grado===3?'🚑':l.grado===2?'💉':'🩹';
-        var b=bajas[n]; var pts=(b&&b.liga)?b.liga+'P baja':'';
-        alertsHtml += '<div class="pp-alert-row pp-alert-inj">'+ico+' LESIONADO: '+n+' — '+(l.descripcion||'')+(pts?' · '+pts:'')+'</div>';
+        var b=bajas[n];
+        var rem = (b && b.liga) ? Number(b.liga) : Number(l.partidos || 0);
+        var btnHtml = '<button type="button" class="pp-inj-pill"'
+          + ' onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()"'
+          + (_piInt > 0
+              ? ' title="' + _piInt + ' inyecciones disponibles. Pulsa para curar."'
+              : ' disabled title="Sin inyecciones disponibles" style="opacity:.4;cursor:not-allowed"')
+          + ' style="margin-left:auto;background:rgba(73,243,223,.14);border:1px solid rgba(73,243,223,.45);color:#9af1e3;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.6px;padding:3px 9px;border-radius:14px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;">💊' + _piInt + '</button>';
+        alertsHtml += '<div class="pp-alert-row pp-alert-inj" style="display:flex;flex-direction:column;align-items:stretch;gap:2px;">'
+          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span>' + ico + '</span><b>' + n + '</b><span style="opacity:.85">· ' + rem + ' Partido' + (rem===1?'':'s') + ' baja</span>' + btnHtml + '</div>'
+          + (l.descripcion ? '<div style="font-size:11px;color:rgba(255,255,255,.62);padding-left:22px;">' + l.descripcion + '</div>' : '')
+          + '</div>';
+      });
+      /* Jugadores recién curados en esta previa (Recuperado transitorio). */
+      Object.keys(_justCured).forEach(function(n){
+        if (!belongs(n)) return;
+        alertsHtml += '<div class="pp-alert-row pp-alert-inj" style="background:rgba(73,243,223,.10);border-color:rgba(73,243,223,.45);"><span>💉</span><b style="margin:0 6px;">' + n + '</b><span style="color:#9af1e3;font-weight:700;">Recuperado</span></div>';
       });
       if (!alertsHtml) alertsHtml = '<div class="pp-alert-row pp-alert-ok">✅ Plantilla al 100% — Sin bajas ni sanciones</div>';
       alerts.innerHTML = alertsHtml;
@@ -6348,6 +6408,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var checked = _ppChecked[item.id];
       var icoCls = 'pp-ico';
       if (item.id === 'balon' && !checked) icoCls += ' pp-ball-bouncing';
+      /* vstack: el valor va DEBAJO del label (2 l\u00edneas), no a la derecha.
+         Usado para listas largas como "Bajas \u2014 NO convocar". */
+      if (item.vstack) {
+        return '<div class="pp-item pp-item-vstack' + (checked ? ' checked' : '') + '" data-ppid="' + item.id + '" style="flex-wrap:wrap;align-items:flex-start;">'
+          + '<span class="pp-item-lbl" style="flex:1 1 auto;"><span class="' + icoCls + '">' + item.ico + '</span>' + item.lbl + '</span>'
+          + '<span class="pp-check" style="flex-shrink:0;">' + (checked ? '\u2705' : '\u{1F533}') + '</span>'
+          + '<span class="pp-item-val" style="flex:1 1 100%;margin-left:32px;margin-top:4px;text-align:left;font-size:12px;line-height:1.5;">' + item.val + '</span>'
+          + '</div>';
+      }
       return '<div class="pp-item' + (checked ? ' checked' : '') + '" data-ppid="' + item.id + '">'
         + '<span class="pp-item-lbl"><span class="' + icoCls + '">' + item.ico + '</span>' + item.lbl + '</span>'
         + '<span class="pp-item-val">' + item.val + '</span>'
@@ -6418,9 +6487,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
     _ppMatchKey = matchKey;
     _ppCompKey  = compKey;
+    /* Sync a window para que el menú médico (otra IIFE) pueda
+       re-renderizar la card LESIONADO tras curar a un jugador. */
+    window._ppMatchKey = matchKey;
+    window._ppCompKey  = compKey;
     _ppChecked  = {};
     /* Reset form state for new match */
     if (typeof window._ppResetFormStates === 'function') window._ppResetFormStates();
+    /* "Recuperado" es transitorio: solo se muestra durante la previa en la
+       que el usuario curó al jugador. Al abrir una nueva previa, reset. */
+    window._ppJustCured = {};
     /* Reset del canal Twitch AL ABRIR la previa (antes estaba en
        `_mmInjectEnv`, que corre 60 ms después; si el usuario abría la
        previa del siguiente partido rápido, veía el canal del partido
@@ -10508,6 +10584,51 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       };
       if (COPA_RD[cr]) return COPA_RD[cr];
     }
+    /* Mundial · 48 selecciones (compKey 'torneo' + cfg.format ===
+       'mundial-48'): el matchKey aquí es la prePartidoKey
+       `tour_<tourId>_<tourMatchKey>`, así que leemos `_ppPreviaTeams`
+       (lo fija `_tourOpenHumanMatch`) para obtener la config y deducir
+       la ronda. Sin esto la previa caía a hoy + "torneo" — bug
+       2026-05-25 reportado por usuario con foto Marruecos vs Francia
+       de la GRAN FINAL: la card del hub mostraba "31 May" pero la
+       previa "25 de Mayo". */
+    if (compKey === 'torneo') {
+      try {
+        var _ptCal = window._ppPreviaTeams || {};
+        var _tcfgCal = null;
+        if (_ptCal.tourId && typeof window._tourLoadCachedSync === 'function') {
+          _tcfgCal = window._tourLoadCachedSync(_ptCal.tourId);
+        }
+        if (!_tcfgCal && _ptCal.tourId && window._TOUR_CACHE) {
+          _tcfgCal = window._TOUR_CACHE[_ptCal.tourId];
+        }
+        if (_tcfgCal && _tcfgCal.format === 'mundial-48') {
+          var _tk = String(_ptCal.tourKey || '').replace(/\|L[12]$/, '');
+          var _mGrp = _tk.match(/^g\d+_(\d+)_/);
+          if (_mGrp) {
+            return 'Mundial Grupo — J' + (parseInt(_mGrp[1], 10) + 1);
+          }
+          var _mKo = _tk.match(/^ko_(\d+)_/);
+          if (_mKo) {
+            var _rIdx = parseInt(_mKo[1], 10);
+            var _koR = (_tcfgCal.formatConfig && _tcfgCal.formatConfig.koRounds) || [];
+            var _rName = _koR[_rIdx];
+            /* Etiquetas exactas tal y como aparecen en `.ag-lbl` del
+               calendario (calendario.json → SSR). Si añades un evento
+               nuevo, debe coincidir literalmente con `event.name`. */
+            var MUNDIAL_KO_LABELS = {
+              'Dieciseisavos': 'Mundial - Dieciseisavos',
+              'Octavos':       'Mundial Octavos',
+              'Cuartos':       'Mundial Cuartos',
+              'Semis':         'Mundial Semis',
+              'Tercer Puesto': 'Mundial Tercer Puesto',
+              'Final':         'MUNDIAL GRAN FINAL 🏆'
+            };
+            if (_rName && MUNDIAL_KO_LABELS[_rName]) return MUNDIAL_KO_LABELS[_rName];
+          }
+        }
+      } catch(_){}
+    }
     var MAP = {
       'copa':'Copa del Rey — 1/128','copa-fin':'FINAL COPA DEL REY',
       'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',
@@ -10582,6 +10703,39 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
     window._mmLastWeather = weather;
     var compLabel = COMP_LABELS_MM[compKey] || compKey || 'Liga';
+    /* Mundial · 48 selecciones (compKey 'torneo' + cfg.format ===
+       'mundial-48'): reemplazamos el `compLabel` por la etiqueta
+       descriptiva de la ronda, igual que la pantalla BAJAS (overlay
+       de sanciones). Sin esto la previa mostraba "🏆 torneo" en vez
+       de "🏆 Mundial 2032 · GRAN FINAL" (bug 2026-05-25). */
+    if (compKey === 'torneo') {
+      try {
+        var _ptL = window._ppPreviaTeams || {};
+        var _tcfgL = null;
+        if (_ptL.tourId && typeof window._tourLoadCachedSync === 'function') {
+          _tcfgL = window._tourLoadCachedSync(_ptL.tourId);
+        }
+        if (!_tcfgL && _ptL.tourId && window._TOUR_CACHE) {
+          _tcfgL = window._TOUR_CACHE[_ptL.tourId];
+        }
+        if (_tcfgL && _tcfgL.format === 'mundial-48') {
+          var _tkL = String(_ptL.tourKey || '').replace(/\|L[12]$/, '');
+          var _mGL = _tkL.match(/^g\d+_(\d+)_/);
+          var _mKL = _tkL.match(/^ko_(\d+)_/);
+          if (_mGL) {
+            compLabel = 'Mundial 2032 · Grupo J' + (parseInt(_mGL[1], 10) + 1);
+          } else if (_mKL) {
+            var _rIdxL = parseInt(_mKL[1], 10);
+            var _koRL = (_tcfgL.formatConfig && _tcfgL.formatConfig.koRounds) || [];
+            var _rNameL = _koRL[_rIdxL] || '';
+            var _isLastL = _rNameL === 'Final';
+            compLabel = _isLastL
+              ? 'Mundial 2032 · GRAN FINAL 🏆'
+              : ('Mundial 2032 · ' + (_rNameL || 'KO'));
+          }
+        }
+      } catch(_){}
+    }
     /* Añadir jornada/ronda usando el mismo ROUND_MAP que la pantalla
        BAJAS. Ejemplo: "Liga EA Sports · J3" o "Copa del Rey · Octavos".
        Resuelve el blockId por `matchKey` (cal-l3 → "J3", etc.) o por
@@ -10885,6 +11039,31 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
 
 })();
 
+/* Fallback de 11 jugadores (A-K) con formación 4-3-3 para equipos IA
+   sin plantilla creada en `ligaExt_*` / SQUAD_REGISTRY / selecciones.
+   Lo usa el picker de eventos del gm-modal (_gmGetSquad) y el wizard
+   del penalti (_getSquads) — antes mostraban 3 placeholders o lista
+   vacía respectivamente y no se podía añadir un evento. 2026-05-24. */
+window._fallbackSq11 = function(){
+  return [
+    {h:'🧤 PORTEROS'},
+    ['1','Jugador A','P'],
+    {h:'🛡 DEFENSAS'},
+    ['2','Jugador B','D'],
+    ['3','Jugador C','D'],
+    ['4','Jugador D','D'],
+    ['5','Jugador E','D'],
+    {h:'⚙️ MEDIOS'},
+    ['6','Jugador F','M'],
+    ['7','Jugador G','M'],
+    ['8','Jugador H','M'],
+    {h:'⚡ DELANTEROS'},
+    ['9','Jugador I','F'],
+    ['10','Jugador J','F'],
+    ['11','Jugador K','F']
+  ];
+};
+
 /* ══ PENALTY WIZARD — flujo guiado paso a paso ══════════════════════════ */
 (function(){
   var _wiz={matchId:null,attackTeam:null,defendTeam:null,provocador:null,sancion:null,infractor:null,tirador:null,resultado:null,falladoTipo:null,portero:null,stepHistory:[],minute:0};
@@ -10903,6 +11082,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         if (!sqB.length) sqB = window.SQUAD_REGISTRY[st.away] || [];
       }
     }
+    if (!sqA.length && typeof window._fallbackSq11 === 'function') sqA = window._fallbackSq11();
+    if (!sqB.length && typeof window._fallbackSq11 === 'function') sqB = window._fallbackSq11();
     return { sqA: sqA, sqB: sqB };
   }
 
@@ -11188,5 +11369,640 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     setTimeout(_refreshBackBtns, 600);
   }
   setInterval(_refreshBackBtns, 1500);
+})();
+/* ════════════════════════════════════════════════════════════════════════ */
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SANCIONES + LESIONES — SELECCIONES NACIONALES (2026-05-24)
+
+   Sistema PARALELO al de clubes. NO se cruzan: un jugador sancionado en
+   su selección puede jugar con su club, y viceversa. Cada selección tiene
+   su propio contador y su propia cola de sanciones, anidados por torneo
+   (clasificación J1-J10 vs Mundial fase final) para que las amarillas
+   de un torneo no salten al siguiente.
+
+   Selecciones humanas (6): Francia💡, Brasil🐭, Inglaterra🔨, Noruega✏️,
+   Argentina😈, España🦆.
+
+   Reglas (distintas a clubes):
+   1. Lesión "natural" del motor → 1 partido (el siguiente).
+   2. ⬇️ marcado en previa → 2 partidos (este + siguiente).
+   3. Doble amarilla (expulsión) → 1 partido siguiente (NO 2 como clubes).
+   4. Roja directa → 2 partidos siguientes (NO 2-15 como clubes).
+   5. Acumulación de amarillas → cada 2 = 1 partido (ciclo 2, NO 3).
+   6. Sanciones simultáneas → solo se aplica la MAYOR (no se suman).
+   7. Reset entre torneos automático (clasif vs Mundial = stores distintos).
+   8. No hay amistosos de selección — no se contemplan.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function(){
+
+  // ── Lista canónica de selecciones humanas ────────────────────────
+  var SEL_HUMANAS = ['Francia','Brasil','Inglaterra','Noruega','Argentina','España'];
+
+  function _normSel(s){
+    return String(s||'').trim().toLowerCase()
+      .replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i')
+      .replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n');
+  }
+
+  function esSelHumana(name){
+    if (!name) return false;
+    var nn = _normSel(name);
+    if (!nn) return false;
+    for (var i = 0; i < SEL_HUMANAS.length; i++) {
+      if (_normSel(SEL_HUMANAS[i]) === nn) return true;
+    }
+    /* Fallback: cualquier selección marcada como humana en el editor
+       (vía `selecciones_squad_v1.teams[].icon`) cuenta también. */
+    try {
+      var m = window._SEL_HUMAN_ICONS || {};
+      if (m[nn]) return true;
+    } catch(_){}
+    return false;
+  }
+  window._esSelHumana = esSelHumana;
+
+  function canonSelHumana(name){
+    var nn = _normSel(name);
+    for (var i = 0; i < SEL_HUMANAS.length; i++) {
+      if (_normSel(SEL_HUMANAS[i]) === nn) return SEL_HUMANAS[i];
+    }
+    return name;
+  }
+
+  /* compKey de partido de selección. Cubre J1-J10 ('sel'), Mundial fase
+     final ('sel-fin') y partidos del Mundial 2032 lanzados desde el hub
+     ('torneo' + format 'mundial-48'). */
+  function esCompSel(compKey){
+    if (compKey === 'sel' || compKey === 'sel-fin') return true;
+    if (compKey === 'torneo') {
+      try {
+        var pt = window._ppPreviaTeams;
+        var tcfg = (pt && pt.tourId && window._TOUR_CACHE)
+          ? window._TOUR_CACHE[pt.tourId] : null;
+        if (tcfg && tcfg.format === 'mundial-48') return true;
+      } catch(_){}
+    }
+    return false;
+  }
+  window._esCompSel = esCompSel;
+
+  /* Torneo key para anidar stores. Clasificación (J1-J10) y Mundial fase
+     final son torneos distintos → los ciclos de amarillas NO se cruzan. */
+  function torneoKeyFor(compKey){
+    if (compKey === 'sel') return 'sel-clasif';
+    if (compKey === 'sel-fin') return 'sel-mundial';
+    if (compKey === 'torneo' && esCompSel(compKey)) return 'sel-mundial';
+    return null;
+  }
+  window._selTorneoKey = torneoKeyFor;
+
+  // ── Stores paralelos ─────────────────────────────────────────────
+  /* YELLOW_STORE_SEL[torneoKey][selName][playerName] = { count: N }
+     SANCION_STORE_SEL[torneoKey][selName] = [ { name, remaining, reason, tipo } ]
+     LESION_STORE_SEL[selName][playerName] = { remaining, reason, timestamp }
+     Lesiones NO se anidan por torneo (sobreviven entre clasif y Mundial). */
+  window.YELLOW_STORE_SEL  = window.YELLOW_STORE_SEL  || {};
+  window.SANCION_STORE_SEL = window.SANCION_STORE_SEL || {};
+  window.LESION_STORE_SEL  = window.LESION_STORE_SEL  || {};
+  window._FORMA_MATCH_STATES_SEL = window._FORMA_MATCH_STATES_SEL || {};
+
+  // ── Persistencia en localStorage (separada de clubes) ────────────
+  var LS_KEY = 'ftbol_sel_sanciones_v1';
+  var _lastSer = '';
+  function _persist(){
+    try {
+      var payload = JSON.stringify({
+        yellow:  window.YELLOW_STORE_SEL,
+        sancion: window.SANCION_STORE_SEL,
+        lesion:  window.LESION_STORE_SEL
+      });
+      if (payload === _lastSer) return;
+      _lastSer = payload;
+      localStorage.setItem(LS_KEY, payload);
+    } catch(_){}
+  }
+  function _load(){
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw) || {};
+      window.YELLOW_STORE_SEL  = d.yellow  || {};
+      window.SANCION_STORE_SEL = d.sancion || {};
+      window.LESION_STORE_SEL  = d.lesion  || {};
+      _lastSer = raw;
+    } catch(_){}
+  }
+  _load();
+  try {
+    setInterval(_persist, 5000);
+    window.addEventListener('beforeunload', _persist);
+  } catch(_){}
+  window._selPersistSanciones = _persist;
+
+  // ── Helpers de stores ────────────────────────────────────────────
+  function _yelGet(torneoKey, selName, playerName){
+    var bucket = window.YELLOW_STORE_SEL[torneoKey] = window.YELLOW_STORE_SEL[torneoKey] || {};
+    var sel = bucket[selName] = bucket[selName] || {};
+    var ent = sel[playerName] = sel[playerName] || { count: 0 };
+    return ent;
+  }
+  function _sanGetQueue(torneoKey, selName){
+    var bucket = window.SANCION_STORE_SEL[torneoKey] = window.SANCION_STORE_SEL[torneoKey] || {};
+    var q = bucket[selName] = bucket[selName] || [];
+    return q;
+  }
+  function _sanFindFor(torneoKey, selName, playerName){
+    var q = _sanGetQueue(torneoKey, selName);
+    for (var i = 0; i < q.length; i++) {
+      if (q[i].name === playerName) return q[i];
+    }
+    return null;
+  }
+
+  /* Solo se aplica la MAYOR si hay otra pendiente. */
+  function addSancionSel(torneoKey, selName, playerName, reason, partidos, tipo){
+    var n = Math.max(1, parseInt(partidos, 10) || 1);
+    var q = _sanGetQueue(torneoKey, selName);
+    var ex = _sanFindFor(torneoKey, selName, playerName);
+    if (ex) {
+      var prev = parseInt(ex.remaining, 10) || 0;
+      if (n > prev) { ex.remaining = n; ex.reason = reason; ex.tipo = tipo; }
+    } else {
+      q.push({ name: playerName, team: selName, reason: reason, remaining: n, tipo: tipo });
+    }
+    _persist();
+  }
+  window._selAddSancion = addSancionSel;
+
+  /* Descontar 1 partido al jugador en su selección. */
+  function cumplirSancionSel(torneoKey, selName, playerName){
+    var bucket = window.SANCION_STORE_SEL[torneoKey];
+    if (!bucket) return false;
+    var q = bucket[selName];
+    if (!q || !q.length) return false;
+    for (var i = q.length - 1; i >= 0; i--) {
+      if (q[i].name === playerName) {
+        q[i].remaining = (q[i].remaining || 1) - 1;
+        if (q[i].remaining <= 0) q.splice(i, 1);
+        _persist();
+        return true;
+      }
+    }
+    return false;
+  }
+  window._selCumplirSancion = cumplirSancionSel;
+
+  /* Reset al finalizar torneo (manual o tras último partido). */
+  window._selResetTorneo = function(torneoKey){
+    if (!torneoKey) return;
+    if (window.YELLOW_STORE_SEL[torneoKey])  delete window.YELLOW_STORE_SEL[torneoKey];
+    if (window.SANCION_STORE_SEL[torneoKey]) delete window.SANCION_STORE_SEL[torneoKey];
+    _persist();
+  };
+
+  // ── Lesiones de selección ────────────────────────────────────────
+  function addLesionSel(selName, playerName, partidos, reason){
+    var n = Math.max(1, parseInt(partidos, 10) || 1);
+    var bucket = window.LESION_STORE_SEL[selName] = window.LESION_STORE_SEL[selName] || {};
+    var prev = bucket[playerName];
+    if (prev && (parseInt(prev.remaining,10) || 0) >= n) return;
+    bucket[playerName] = { remaining: n, reason: reason || 'Lesión', timestamp: Date.now() };
+    _persist();
+  }
+  window._selAddLesion = addLesionSel;
+
+  function cumplirLesionSel(selName, playerName){
+    var bucket = window.LESION_STORE_SEL[selName];
+    if (!bucket || !bucket[playerName]) return false;
+    bucket[playerName].remaining = (bucket[playerName].remaining || 1) - 1;
+    if (bucket[playerName].remaining <= 0) delete bucket[playerName];
+    _persist();
+    return true;
+  }
+  window._selCumplirLesion = cumplirLesionSel;
+
+  // ── Cálculo de sanciones del partido (selecciones) ───────────────
+  function calcularSelMatch(events, humanTeam, teamName, compKey){
+    var result = [];
+    if (!events || !events.length) return result;
+    var torneoKey = torneoKeyFor(compKey);
+    if (!torneoKey) return result;
+    var selName = canonSelHumana(teamName);
+    var processed = {};
+
+    events.forEach(function(ev){
+      if (ev.team !== humanTeam) return;
+      var key = ev.num + '::' + ev.name;
+
+      if (ev.type === 'amarilla') {
+        var ent = _yelGet(torneoKey, selName, ev.name);
+        ent.count++;
+        if (ent.count >= 2) {
+          ent.count = 0;
+          if (!processed[key]) {
+            processed[key] = true;
+            result.push({
+              name: ev.name, team: selName, tipo: 'acumulacion',
+              reason: '2 🟨 acumuladas (ciclo)', partidos: 1
+            });
+            addSancionSel(torneoKey, selName, ev.name, 'Ciclo amarillas — 1 partido', 1, 'acumulacion');
+          }
+        }
+      } else if (ev.type === 'd-amarilla') {
+        if (!processed[key]) {
+          processed[key] = true;
+          result.push({
+            name: ev.name, team: selName, tipo: 'd-amarilla',
+            reason: 'Doble amarilla — 1 partido', partidos: 1
+          });
+          addSancionSel(torneoKey, selName, ev.name, 'Doble amarilla — 1 partido', 1, 'd-amarilla');
+        }
+      } else if (ev.type === 'roja') {
+        if (!processed[key]) {
+          processed[key] = true;
+          result.push({
+            name: ev.name, team: selName, tipo: 'roja',
+            reason: 'Roja directa — 2 partidos', partidos: 2
+          });
+          addSancionSel(torneoKey, selName, ev.name, 'Roja directa — 2 partidos', 2, 'roja');
+        }
+      }
+    });
+
+    _persist();
+    return result;
+  }
+  window._selCalcularSancionesPartido = calcularSelMatch;
+
+  // ── Hook calcularSancionesPartido: derivar a motor selección ─────
+  var _origCalc = window.calcularSancionesPartido;
+  window.calcularSancionesPartido = function(events, humanTeam, teamName, compKey){
+    if (esCompSel(compKey) && esSelHumana(teamName)) {
+      return calcularSelMatch(events, humanTeam, teamName, compKey);
+    }
+    return _origCalc ? _origCalc(events, humanTeam, teamName, compKey) : [];
+  };
+
+  // ── Pendientes para el overlay PRE-PARTIDO ───────────────────────
+  function pendientesPara(homeTeam, awayTeam, compKey){
+    var out = { sanciones: [], lesiones: [] };
+    if (!esCompSel(compKey)) return out;
+    var torneoKey = torneoKeyFor(compKey);
+    [homeTeam, awayTeam].forEach(function(tm){
+      if (!esSelHumana(tm)) return;
+      var sel = canonSelHumana(tm);
+      var q = torneoKey ? (window.SANCION_STORE_SEL[torneoKey] || {})[sel] : null;
+      if (q && q.length) {
+        q.forEach(function(s){
+          out.sanciones.push({
+            name: s.name, team: sel, reason: s.reason,
+            partidos: s.remaining, tipo: s.tipo
+          });
+        });
+      }
+      var lb = window.LESION_STORE_SEL[sel] || {};
+      Object.keys(lb).forEach(function(pn){
+        var l = lb[pn];
+        if (!l || (parseInt(l.remaining,10) || 0) <= 0) return;
+        out.lesiones.push({
+          name: pn, team: sel, reason: l.reason || 'Lesión',
+          partidos: l.remaining
+        });
+      });
+    });
+    return out;
+  }
+  window._selPendientesPara = pendientesPara;
+
+  // ── Consumo al confirmar overlay PRE-PARTIDO ─────────────────────
+  function consumirParaPartido(homeTeam, awayTeam, compKey){
+    if (!esCompSel(compKey)) return;
+    var torneoKey = torneoKeyFor(compKey);
+    [homeTeam, awayTeam].forEach(function(tm){
+      if (!esSelHumana(tm)) return;
+      var sel = canonSelHumana(tm);
+      if (torneoKey) {
+        var bucket = window.SANCION_STORE_SEL[torneoKey];
+        var q = bucket && bucket[sel];
+        if (q && q.length) {
+          for (var i = q.length - 1; i >= 0; i--) {
+            q[i].remaining = (q[i].remaining || 1) - 1;
+            if (q[i].remaining <= 0) q.splice(i, 1);
+          }
+        }
+      }
+      var lb = window.LESION_STORE_SEL[sel];
+      if (lb) {
+        Object.keys(lb).forEach(function(pn){
+          lb[pn].remaining = (lb[pn].remaining || 1) - 1;
+          if (lb[pn].remaining <= 0) delete lb[pn];
+        });
+      }
+    });
+    _persist();
+  }
+  window._selConsumirParaPartido = consumirParaPartido;
+
+  /* Hook a _sancionConfirm: decrementar también las de selección,
+     idempotente por matchKey (clave 'SEL_<mk>' para no chocar con el
+     flag interno de clubes). */
+  var _origConfirm = window._sancionConfirm;
+  window._sancionConfirm = function(){
+    try {
+      var mk = window._ppMatchKey || null;
+      var comp = window._ppCompKey || null;
+      if (mk && esCompSel(comp)) {
+        window._sancionConsumedFor = window._sancionConsumedFor || {};
+        if (!window._sancionConsumedFor['SEL_' + mk]) {
+          window._sancionConsumedFor['SEL_' + mk] = true;
+          var teams = (typeof window._ppGetCurrentMatchTeams === 'function')
+            ? window._ppGetCurrentMatchTeams() : null;
+          if (teams && teams.home && teams.away) {
+            consumirParaPartido(teams.home, teams.away, comp);
+          }
+        }
+      }
+    } catch(_){}
+    if (_origConfirm) return _origConfirm.apply(this, arguments);
+  };
+
+  // ── Hook _formaToggle: ⬇️ en selección = 2 partidos (no lesión random) ─
+  var _origForma = window._formaToggle;
+  window._formaToggle = function(teamName, playerName){
+    var comp = window._ppCompKey || null;
+    if (esCompSel(comp) && esSelHumana(teamName)) {
+      var sel = canonSelHumana(teamName);
+      var key = sel + '::' + playerName;
+      var existing = window._FORMA_MATCH_STATES_SEL[key];
+      if (existing === '⬇️') {
+        delete window._FORMA_MATCH_STATES_SEL[key];
+        var lb = window.LESION_STORE_SEL[sel];
+        if (lb && lb[playerName]) delete lb[playerName];
+        _persist();
+        if (typeof window._refreshSancionInjList === 'function') window._refreshSancionInjList();
+        return;
+      }
+      window._FORMA_MATCH_STATES_SEL[key] = '⬇️';
+      addLesionSel(sel, playerName, 2, '⬇️ Estado de forma');
+      try {
+        alert('🏥 ⬇️ ESTADO DE FORMA — ' + sel.toUpperCase() + '\n'
+          + playerName + '\n'
+          + 'Se pierde este partido y el siguiente de su selección');
+      } catch(_){}
+      if (typeof window._refreshSancionInjList === 'function') window._refreshSancionInjList();
+      return;
+    }
+    if (_origForma) return _origForma.apply(this, arguments);
+  };
+
+  // ── Render del checklist ⬇️ para selecciones humanas ─────────────
+  function _selRosterFor(selName){
+    var roster = [];
+    try {
+      if (window._selSquadHydrate) window._selSquadHydrate();
+    } catch(_){}
+    try {
+      if (typeof window.sqFromRegistryFull === 'function') {
+        roster = window.sqFromRegistryFull(selName) || [];
+      }
+    } catch(_){}
+    if (!roster.length) {
+      var sq = (window.SQUAD_REGISTRY && window.SQUAD_REGISTRY[selName]) || [];
+      roster = sq.filter(function(p){ return p && !p.h && Array.isArray(p); });
+    }
+    /* Fallback final: leer directamente selecciones_squad_v1. */
+    if (!roster.length) {
+      try {
+        var raw = localStorage.getItem('selecciones_squad_v1');
+        if (raw) {
+          var d = JSON.parse(raw) || {};
+          var teams = d.teams || [];
+          for (var i = 0; i < teams.length; i++) {
+            if (_normSel(teams[i].name) === _normSel(selName)) {
+              var pls = teams[i].players || [];
+              roster = pls.map(function(p, idx){ return [p.num || (idx+1), p.nombre || p.name || '?']; });
+              break;
+            }
+          }
+        }
+      } catch(_){}
+    }
+    return roster.filter(function(p){ return p && Array.isArray(p) && p[1]; });
+  }
+
+  var _origRenderForma = window._renderFormaChecklist;
+  window._renderFormaChecklist = function(){
+    var comp = window._ppCompKey || null;
+    if (!esCompSel(comp)) {
+      return _origRenderForma ? _origRenderForma() : '';
+    }
+    var teams = (typeof window._ppGetCurrentMatchTeams === 'function')
+      ? window._ppGetCurrentMatchTeams() : null;
+    if (!teams) return '';
+    var sels = [];
+    [teams.home, teams.away].forEach(function(tn){
+      if (esSelHumana(tn)) sels.push(canonSelHumana(tn));
+    });
+    if (!sels.length) {
+      return '<div style="margin-top:14px;padding:10px 12px;border:1px solid rgba(255,80,80,.25);border-radius:10px;background:rgba(255,80,80,.04);font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,80,80,.85);text-align:center;letter-spacing:.5px;">🩹 Sin selecciones humanas en este partido</div>';
+    }
+    var html = '<div style="margin-top:16px;padding:12px;border:1px solid rgba(255,80,80,.45);border-radius:10px;background:rgba(255,80,80,.08);">'
+      + '<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;color:#ff5050;margin-bottom:8px;font-weight:700;">🩹 BAJAS POR FORMA — SELECCIÓN</div>'
+      + '<div style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.6);margin-bottom:10px;letter-spacing:.5px;line-height:1.4;">Pulsa ⬇️ para marcar al jugador como baja por estado de forma. Se pierde ESTE partido + el SIGUIENTE de su selección.</div>';
+    sels.forEach(function(sel){
+      var roster = _selRosterFor(sel);
+      if (!roster.length) {
+        html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin:8px 0;padding:8px;background:rgba(255,255,255,.03);border-radius:6px;">⚔️ ' + sel + ' — plantilla no cargada. Recarga la página y vuelve a abrir la previa.</div>';
+        return;
+      }
+      html += '<div style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;color:#fff;margin:10px 0 6px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px;">⚔️ ' + sel + ' <span style="font-size:10px;color:rgba(255,255,255,.45);font-weight:400;margin-left:6px;">' + roster.length + ' jugadores</span></div>';
+      html += '<div style="display:flex;flex-direction:column;gap:4px;">';
+      roster.forEach(function(p){
+        var name = p[1] || '?';
+        var num  = p[0] || '';
+        var key  = sel + '::' + name;
+        var cur  = window._FORMA_MATCH_STATES_SEL[key] || '';
+        var safeSel  = sel.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        var safeName = name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        html += '<label style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:6px;">'
+          + '<span style="font-family:Oswald,sans-serif;font-size:12px;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+          +   (num ? '<span style="color:rgba(255,255,255,.4);margin-right:6px;">' + num + '</span>' : '')
+          +   name
+          + '</span>'
+          + '<span style="display:flex;gap:4px;flex-shrink:0;">'
+          +   '<button type="button" onclick="window._formaToggle(\'' + safeSel + '\',\'' + safeName + '\')" '
+          +     'style="background:' + (cur === '⬇️' ? 'rgba(255,80,80,.35)' : 'rgba(255,255,255,.06)') + ';border:1px solid ' + (cur === '⬇️' ? '#ff5050' : 'rgba(255,255,255,.15)') + ';color:#fff;border-radius:6px;padding:4px 10px;font-size:14px;cursor:pointer;">⬇️</button>'
+          + '</span>'
+          + '</label>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  };
+
+  // ── Hook _refreshSancionInjList: en sel re-renderiza con stores SEL ─
+  /* La función original reconstruye la lista de lesionados desde
+     LESION_STORE (clubes) — en contexto selección eso pisa nuestra
+     lista con "Sin lesionados". Si estamos en partido de selección,
+     re-renderizamos con LESION_STORE_SEL + checklist ⬇️. */
+  var _origRefresh = window._refreshSancionInjList;
+  window._refreshSancionInjList = function(){
+    var comp = window._ppCompKey || null;
+    if (!esCompSel(comp)) {
+      return _origRefresh ? _origRefresh.apply(this, arguments) : null;
+    }
+    var listInj = document.getElementById('sancion-ov-list-inj');
+    if (!listInj) return;
+    var teams = (typeof window._ppGetCurrentMatchTeams === 'function')
+      ? window._ppGetCurrentMatchTeams() : null;
+    var pend = teams ? pendientesPara(teams.home, teams.away, comp) : { sanciones: [], lesiones: [] };
+    function renderCard(s, ico){
+      return '<div class="sancion-card">'
+        + '<div class="sancion-card-icon">' + ico + '</div>'
+        + '<div class="sancion-card-info">'
+        + '<div class="sancion-card-name">' + s.name + '</div>'
+        + '<div class="sancion-card-team">' + s.team + '</div>'
+        + '<div class="sancion-card-reason">' + s.reason + '</div>'
+        + '</div>'
+        + (s.partidos ? '<div class="sancion-card-partidos"><span class="sancion-card-pnum">' + s.partidos + '</span><span class="sancion-card-plbl">PARTIDO' + (s.partidos > 1 ? 'S' : '') + '</span></div>' : '')
+        + '</div>';
+    }
+    var cardsInj = pend.lesiones.length
+      ? pend.lesiones.map(function(l){ return renderCard(l, '🩹'); }).join('')
+      : '<div class="sancion-empty">🚑 Sin lesionados</div>';
+    listInj.innerHTML = cardsInj + (typeof window._renderFormaChecklist === 'function' ? window._renderFormaChecklist() : '');
+    var warnEl = document.getElementById('sancion-ov-warn');
+    if (warnEl) warnEl.style.display = 'block';
+  };
+
+  // ── Hook showSancionOverlay: render con stores de selección ──────
+  /* No delegamos al original cuando es selección: el original hace
+     early-return si SANCION_STORE/LESION_STORE globales están vacíos
+     (siempre para selecciones), saltando el overlay y llamando a
+     onConfirm() antes de que podamos renderizar las listas SEL.
+     Aquí replicamos la estructura: pintar etiqueta de comp, callback,
+     listas + checklist ⬇️, lógica force-share y early-return. */
+  var _origShowOv = window.showSancionOverlay;
+  window.showSancionOverlay = function(compKey, blockId, onConfirm){
+    if (!esCompSel(compKey)) {
+      return _origShowOv ? _origShowOv.apply(this, arguments) : null;
+    }
+
+    var teams = (typeof window._ppGetCurrentMatchTeams === 'function')
+      ? window._ppGetCurrentMatchTeams() : null;
+    var pend = teams ? pendientesPara(teams.home, teams.away, compKey) : { sanciones: [], lesiones: [] };
+    var hayBajas = (pend.sanciones && pend.sanciones.length) || (pend.lesiones && pend.lesiones.length);
+    var forceShow = !!window._ppForceSancionShareMode;
+
+    var listYel = document.getElementById('sancion-ov-list-yel');
+    var listRed = document.getElementById('sancion-ov-list-red');
+    var listInj = document.getElementById('sancion-ov-list-inj');
+    if (!listYel) {
+      if (onConfirm) onConfirm();
+      return;
+    }
+
+    // Etiqueta de competición + jornada
+    var COMP_LBL_SEL = {
+      'sel': 'Selecciones',
+      'sel-fin': 'Selecciones · Mundial',
+      'torneo': 'Mundial 2032'
+    };
+    var compLbl = document.getElementById('sancion-ov-comp-lbl');
+    if (compLbl) {
+      var lbl = COMP_LBL_SEL[compKey] || compKey;
+      var bid = blockId || window._ppBlockId || '';
+      var mJor = /cal-sel(\d+)/.exec(bid || '');
+      if (mJor) lbl = 'Selecciones · J' + mJor[1];
+      else if (bid === 'cal-mf-fin') lbl = 'Mundial · GRAN FINAL';
+      else if (bid && bid.indexOf('cal-mf-') === 0) {
+        var sub = bid.replace('cal-mf-','');
+        lbl = 'Mundial · ' + sub.toUpperCase();
+      }
+      compLbl.textContent = lbl;
+    }
+    window._sancionCallback = onConfirm || null;
+
+    function renderCard(s, ico){
+      return '<div class="sancion-card">'
+        + '<div class="sancion-card-icon">' + ico + '</div>'
+        + '<div class="sancion-card-info">'
+        + '<div class="sancion-card-name">' + s.name + '</div>'
+        + '<div class="sancion-card-team">' + s.team + '</div>'
+        + '<div class="sancion-card-reason">' + s.reason + '</div>'
+        + '</div>'
+        + (s.partidos ? '<div class="sancion-card-partidos"><span class="sancion-card-pnum">' + s.partidos + '</span><span class="sancion-card-plbl">PARTIDO' + (s.partidos > 1 ? 'S' : '') + '</span></div>' : '')
+        + '</div>';
+    }
+    function renderEmpty(txt){ return '<div class="sancion-empty">' + txt + '</div>'; }
+
+    var yel = pend.sanciones.filter(function(s){ return s.tipo === 'acumulacion'; });
+    var red = pend.sanciones.filter(function(s){ return s.tipo === 'roja' || s.tipo === 'd-amarilla'; });
+
+    listYel.innerHTML = yel.length ? yel.map(function(s){ return renderCard(s,'🟨'); }).join('') : renderEmpty('✅ Sin sancionados');
+    listRed.innerHTML = red.length ? red.map(function(s){ return renderCard(s,'🟥'); }).join('') : renderEmpty('✅ Sin expulsados');
+    var cardsInj = pend.lesiones.length ? pend.lesiones.map(function(l){ return renderCard(l, '🩹'); }).join('') : renderEmpty('🚑 Sin lesionados');
+    listInj.innerHTML = cardsInj + (typeof window._renderFormaChecklist === 'function' ? window._renderFormaChecklist() : '');
+
+    if (!hayBajas && !forceShow) {
+      if (onConfirm) onConfirm();
+      return;
+    }
+    var warnEl = document.getElementById('sancion-ov-warn');
+    if (warnEl) warnEl.style.display = hayBajas ? 'block' : 'none';
+
+    // Botón share/entendido (mismo behavior que original)
+    var okBtn = document.getElementById('sancion-ov-ok');
+    if (okBtn) {
+      if (forceShow) {
+        okBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="17" height="17" style="vertical-align:middle;margin-right:8px;"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>Compartir Partido en WhatsApp';
+        okBtn.setAttribute('data-share-mode','1');
+      } else {
+        okBtn.textContent = '✓ ENTENDIDO';
+        okBtn.removeAttribute('data-share-mode');
+      }
+    }
+
+    var ov = document.getElementById('sancion-overlay');
+    if (ov) ov.classList.add('show');
+    window.scrollTo(0, 0);
+  };
+
+  // ── Lesiones del acta: redirigir a LESION_STORE_SEL si es selección ─
+  var _origReg = window._registrarLesionesDesdeEventos;
+  window._registrarLesionesDesdeEventos = function(events, homeName, awayName){
+    if (!Array.isArray(events)) {
+      return _origReg ? _origReg.apply(this, arguments) : null;
+    }
+    var homeIsSel = esSelHumana(homeName);
+    var awayIsSel = esSelHumana(awayName);
+    if (!homeIsSel && !awayIsSel) {
+      return _origReg ? _origReg.apply(this, arguments) : null;
+    }
+    /* Particionamos: eventos de lesión de selección humana → store SEL
+       (1 partido). El resto → motor original. */
+    var rest = [];
+    events.forEach(function(ev){
+      if (!ev || ev.type !== 'lesion') { rest.push(ev); return; }
+      var isHome = ev.team === 'a';
+      var isAway = ev.team === 'b';
+      var tmName = isHome ? homeName : (isAway ? awayName : '');
+      var isSel = (isHome && homeIsSel) || (isAway && awayIsSel);
+      if (!isSel) { rest.push(ev); return; }
+      var playerName = '';
+      if (Array.isArray(ev.player)) playerName = ev.player[1] || ev.player[0] || '';
+      else if (typeof ev.player === 'string') playerName = ev.player;
+      else playerName = ev.name || '';
+      playerName = String(playerName || '').replace(/^\s*\d+\s*[\.\-]?\s*/, '').trim();
+      if (!playerName || playerName === '?') return;
+      var sel = canonSelHumana(tmName);
+      addLesionSel(sel, playerName, 1, 'Lesión en partido');
+    });
+    if (rest.length && _origReg) _origReg(rest, homeName, awayName);
+  };
+
 })();
 /* ════════════════════════════════════════════════════════════════════════ */

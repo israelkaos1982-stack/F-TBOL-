@@ -2725,6 +2725,43 @@ window._showSimProgress = function(opts, onDone){
     background:rgba(255,255,255,.18);color:rgba(255,255,255,.55);
     box-shadow:none;
   }
+  /* ── 📌 POSPONER (top-left de ps-card, 2026-05-26) ──────────────
+     Sustituye al botón PONER · PENDIENTE (HvH) y al botón 📌 de
+     las filas de PENDIENTES. Vive en la esquina superior izquierda
+     del card del próximo partido (ps-card) — petición usuario
+     2026-05-26. Aplica a TODOS los partidos visibles del big card
+     (HvH y HvIA, sel y club). Al pulsar mueve la entrada al store
+     `pend_hvh_deferred_v1` y avanza el cursor al siguiente día. */
+  #ps-stage .ps-card{position:relative;}
+  #ps-stage .ps-defer-top{
+    position:absolute;top:8px;left:8px;z-index:3;
+    display:inline-flex;align-items:center;gap:5px;
+    padding:5px 10px;border-radius:9px;cursor:pointer;
+    background:linear-gradient(135deg,rgba(176,139,255,.30),rgba(124,77,255,.55));
+    border:1px solid rgba(204,170,255,.85);color:#fff;
+    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.6px;
+    font-weight:800;text-transform:uppercase;
+    text-shadow:0 1px 2px rgba(0,0,0,.45);
+    box-shadow:0 0 12px rgba(176,139,255,.55),
+               inset 0 1px 0 rgba(255,255,255,.18);
+    -webkit-tap-highlight-color:transparent;
+    animation:psDeferGlow 1.6s ease-in-out infinite alternate;
+    transition:transform .12s ease;
+  }
+  #ps-stage .ps-defer-top:hover{
+    background:linear-gradient(135deg,rgba(176,139,255,.45),rgba(124,77,255,.70));
+  }
+  #ps-stage .ps-defer-top:active{ transform:scale(.94); }
+  #ps-stage .ps-defer-top:disabled{
+    opacity:.45;cursor:default;animation:none;
+  }
+  #ps-stage .ps-defer-top .pdt-ico{font-size:13px;}
+  @keyframes psDeferGlow{
+    from{ box-shadow:0 0 8px rgba(176,139,255,.40),
+                     inset 0 1px 0 rgba(255,255,255,.18); }
+    to  { box-shadow:0 0 18px rgba(204,170,255,.85),
+                     inset 0 1px 0 rgba(255,255,255,.25); }
+  }
   #ps-stage .ps-bar-wrap{
     height:14px;border-radius:8px;background:rgba(0,0,0,.45);overflow:hidden;
     margin:18px 6px 8px;border:1px solid rgba(255,255,255,.14);
@@ -3801,11 +3838,16 @@ window._showSimProgress = function(opts, onDone){
   window._pendHvHRemove = _pendHvHRemove;
   window._pendHvHUid = _pendHvHUid;
 
-  function _psPendBtnHtml(){
-    return '<button type="button" class="ps-btn-pay" id="ps-pend-defer-btn" '
-      + 'style="background:linear-gradient(135deg,#b08bff,#7c4dff);'
-      + 'box-shadow:0 6px 16px rgba(124,77,255,.40);color:#fff;">'
-      + '📌 PONER · PENDIENTE</button>';
+  /* HTML del botón 📌 Posponer del top-left de ps-card. 2026-05-26.
+     Sustituye al PONER · PENDIENTE (HvH) y al botón 📌 de las filas
+     de PENDIENTES — ahora la única vía para mover un partido a la
+     caja POSPUESTOS es el botón en la esquina del próximo partido. */
+  function _psDeferTopBtnHtml(){
+    return '<button type="button" class="ps-defer-top" id="ps-defer-top-btn"'
+      + ' aria-label="Posponer partido" title="Posponer partido">'
+      + '<span class="pdt-ico">📌</span>'
+      + '<span>Posponer</span>'
+      + '</button>';
   }
   /* Deriva un emoji rápido de la comp en función de la etiqueta del
      día. Se usa para pintar la cabecera del card pequeño en PARTIDOS
@@ -3827,20 +3869,25 @@ window._showSimProgress = function(opts, onDone){
     if (/amistoso|torneo|pretemporada|gamper|asia/.test(s)) return '🌞';
     return '🌍';
   }
-  function _psDeferHvHSelMatch(day, pair){
-    if (!pair || !pair.home || !pair.away) return false;
-    var lbl = (day && day.label) || ('Mundial Grupo — J' + (pair.jor || ''));
-    var uid = _pendHvHUid(pair.tourId, pair.matchKey);
+  /* Mueve el partido actual del big card a POSPUESTOS y avanza el día.
+     Acepta tanto cards de selección (_cardSelMatch: pair.home/away son
+     objetos {name,shield,isHuman}) como cards de club (_cardMatch:
+     pair.homeObj/awayObj + rv.home/rv.away strings). 2026-05-26. */
+  function _psDeferCurrentMatch(opts){
+    if (!opts || !opts.tourId || !opts.matchKey) return false;
+    if (!opts.home || !opts.away) return false;
+    var lbl = opts.label || 'Partido';
+    var uid = _pendHvHUid(opts.tourId, opts.matchKey);
     var entry = {
       uid: uid,
-      tourId: pair.tourId,
-      matchKey: pair.matchKey,
-      home: pair.home,
-      away: pair.away,
-      jor: pair.jor,
-      date: day && day.date,
+      tourId: opts.tourId,
+      matchKey: opts.matchKey,
+      home: opts.home,
+      away: opts.away,
+      jor:  opts.jor || '',
+      date: opts.date || '',
       label: lbl,
-      emoji: _pendHvHEmojiFromLabel(lbl),
+      emoji: opts.emoji || _pendHvHEmojiFromLabel(lbl),
       addedAt: Date.now()
     };
     _pendHvHAdd(entry);
@@ -4089,23 +4136,22 @@ window._showSimProgress = function(opts, onDone){
     var btnHtml = played
       ? '<button type="button" class="ps-btn ghost" id="ps-sel-btn" style="margin-top:16px;">CONTINUAR ▶</button>'
       : '<button type="button" class="ps-btn" id="ps-sel-btn" style="margin-top:16px;">📋 PREVIA · JUGAR ▶</button>';
-    /* Pay-to-sim: solo si el partido está sin jugar. Disabled gris si
-       el presupuesto del hub < 50🪙. 2026-05-24.
-       HvH (ambos humanos): el partido NO se puede pagar para
-       simular — en su lugar el usuario puede aplazarlo con
-       📌 PONER · PENDIENTE, que lo manda al desplegable PARTIDOS
-       PENDIENTES con escudos + botón JUGAR y avanza el día. */
+    /* Pay-to-sim: solo si el partido está sin jugar y NO es HvH.
+       HvH (ambos humanos): el partido NO se puede simular pagando —
+       sólo se puede JUGAR o POSPONER (botón 📌 del top-left).
+       2026-05-26: el HvH ya no muestra "PONER · PENDIENTE" debajo —
+       el 📌 Posponer del top-left lo sustituye. */
     var isHvH = !!(pair && pair.home && pair.away
                    && pair.home.isHuman && pair.away.isHuman);
     var payHtml = '';
-    if (!played){
-      if (isHvH){
-        payHtml = '<div style="margin-top:6px;">' + _psPendBtnHtml() + '</div>';
-      } else {
-        var canPay = _psGetHubMoney() >= PS_PAY_SIM_COST;
-        payHtml = '<div style="margin-top:6px;">' + _psPayBtnHtml(!canPay) + '</div>';
-      }
+    if (!played && !isHvH){
+      var canPay = _psGetHubMoney() >= PS_PAY_SIM_COST;
+      payHtml = '<div style="margin-top:6px;">' + _psPayBtnHtml(!canPay) + '</div>';
     }
+    /* 📌 Posponer (top-left): aparece SIEMPRE que el partido no se
+       haya jugado todavía (HvH y HvIA). Petición usuario 2026-05-26:
+       único punto de entrada al store POSPUESTOS. */
+    var deferHtml = (!played) ? _psDeferTopBtnHtml() : '';
     /* Acta del partido (desplegable) cuando played=true. Reusa el
        renderer canónico de Champions/EL/UECL para que el estilo
        coincida 1:1 con la foto 3 del usuario (📋 ACTA DEL PARTIDO
@@ -4130,6 +4176,7 @@ window._showSimProgress = function(opts, onDone){
     }
     st.innerHTML =
       '<div class="ps-card">'
+      + deferHtml
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">🌍 ' + _esc(day.label || ('Mundial Grupo — J' + pair.jor)) + '</div>'
       + '<div class="ps-vs" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0;">'
@@ -4181,12 +4228,24 @@ window._showSimProgress = function(opts, onDone){
         if (!_psPayAndSimSelMatch(pair)) payBtn.disabled = false;
       };
     }
-    var pendBtn = document.getElementById('ps-pend-defer-btn');
-    if (pendBtn){
-      pendBtn.onclick = function(){
-        if (pendBtn.disabled) return;
-        pendBtn.disabled = true;
-        _psDeferHvHSelMatch(day, pair);
+    var deferBtn = document.getElementById('ps-defer-top-btn');
+    if (deferBtn){
+      deferBtn.onclick = function(){
+        if (deferBtn.disabled) return;
+        deferBtn.disabled = true;
+        var lbl = (day && day.label) || ('Mundial Grupo — J' + (pair.jor || ''));
+        _psDeferCurrentMatch({
+          tourId:   pair.tourId,
+          matchKey: pair.matchKey,
+          home: { name: pair.home && pair.home.name,
+                  shield: pair.home && pair.home.shield },
+          away: { name: pair.away && pair.away.name,
+                  shield: pair.away && pair.away.shield },
+          jor:  pair.jor,
+          date: day && day.date,
+          label: lbl,
+          emoji: '🌍'
+        });
       };
     }
   }
@@ -4662,8 +4721,14 @@ window._showSimProgress = function(opts, onDone){
     var _payHtml = _payInfoOk
       ? '<div style="margin-top:6px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST_CLUB, PS_PAY_SIM_COST_CLUB) + '</div>'
       : '';
+    /* 📌 Posponer (top-left): aparece si el partido pertenece a un
+       torneo (tourId+matchKey conocidos). Sin ellos no podemos
+       reabrirlo desde POSPUESTOS, así que ocultamos el botón. */
+    var _deferHtmlClub = (pair && pair.tourId && pair.matchKey)
+      ? _psDeferTopBtnHtml() : '';
     st.innerHTML =
       '<div class="ps-card">'
+      + _deferHtmlClub
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
       + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>' + _esc(rv.home) + '</b> vs <b>' + _esc(rv.away) + '</b></div>'
@@ -4680,6 +4745,24 @@ window._showSimProgress = function(opts, onDone){
         if (_payBtn.disabled) return;
         _payBtn.disabled = true;
         if (!_psPayAndSimClubMatch(pair)) _payBtn.disabled = false;
+      };
+    }
+    var _deferBtnClub = document.getElementById('ps-defer-top-btn');
+    if (_deferBtnClub){
+      _deferBtnClub.onclick = function(){
+        if (_deferBtnClub.disabled) return;
+        _deferBtnClub.disabled = true;
+        var _hShield = (pair.homeObj && pair.homeObj.shield) || '';
+        var _aShield = (pair.awayObj && pair.awayObj.shield) || '';
+        _psDeferCurrentMatch({
+          tourId:   pair.tourId,
+          matchKey: pair.matchKey,
+          home: { name: rv.home, shield: _hShield },
+          away: { name: rv.away, shield: _aShield },
+          date: day && day.date,
+          label: tourNm + ' · ' + (day.label || ''),
+          emoji: '🌞'
+        });
       };
     }
     /* AUTO-abrir la previa estándar al llegar al día de partido (una
@@ -37989,25 +38072,6 @@ https://api.sofascore.app/api/v1/team/44/image
     padding:2px 6px;border-radius:4px;
     background:rgba(255,255,255,.05);
   }
-  /* Botón 📌 POSPONER por fila de PARTIDOS PENDIENTES (2026-05-26).
-     Solo aparece en filas con tourId+matchKey (Selecciones / Mundial-48
-     y torneos de verano), porque la cola de POSPUESTOS necesita esos
-     campos para reabrir el partido vía `_tourOpenHumanMatch`. */
-  #s-munich .munich-fix-row .fr-defer{
-    flex:0 0 auto;font-size:13px;line-height:1;
-    padding:5px 8px;border-radius:7px;cursor:pointer;
-    border:1px solid rgba(176,139,255,.55);color:#fff;
-    background:linear-gradient(135deg,rgba(176,139,255,.22),rgba(124,77,255,.34));
-    box-shadow:0 2px 6px rgba(124,77,255,.30);
-    -webkit-tap-highlight-color:transparent;
-    transition:background .15s ease, border-color .15s ease, transform .12s ease;
-  }
-  #s-munich .munich-fix-row .fr-defer:hover{
-    background:linear-gradient(135deg,rgba(176,139,255,.32),rgba(124,77,255,.46));
-    border-color:rgba(176,139,255,.85);
-  }
-  #s-munich .munich-fix-row .fr-defer:active{ transform:scale(.94); }
-  #s-munich .munich-fix-row .fr-defer:disabled{ opacity:.4;cursor:default; }
   #s-munich .munich-fix-empty{
     padding:14px;text-align:center;color:rgba(255,255,255,.55);
     font-family:Rajdhani,sans-serif;font-size:11px;
@@ -39264,33 +39328,13 @@ https://api.sofascore.app/api/v1/team/44/image
   function _renderRow(m, played){
     if (played) return _renderPlayedCard(m);
     /* Pendiente — fila pequeña. Sustituye "Bayern Munich" → hub
-       name solo en filas de Liga (ver _displayName). */
+       name solo en filas de Liga (ver _displayName).
+       2026-05-26: el botón 📌 por fila se eliminó. La única vía
+       para mover un partido a POSPUESTOS es el botón 📌 Posponer
+       del top-left del big card "Próximo partido" (ps-card). */
     var sc = '<span class="fr-tag">' + _esc(m.label || '') + '</span>';
     var hN = _displayName(m.home, m.comp);
     var aN = _displayName(m.away, m.comp);
-    /* Botón 📌 POSPONER por fila (2026-05-26). Aparece en TODAS las
-       comps (Liga, Copa, UCL, UEL, UECL, Recopa, USC, Inter, Mundial,
-       Mundialito, torneos de verano y custom). Para entradas con
-       tourId+matchKey (torneo) la cola POSPUESTOS puede reabrir el
-       partido vía `_tourOpenHumanMatch`; para el resto (Liga, Copa,
-       Euros…) el POSPUESTOS funciona como "marca diferida" — la fila
-       desaparece de PENDIENTES y vuelve al hacer tap sobre la card en
-       POSPUESTOS (tap-to-despoponer). */
-    var hNameRaw = (m.home && typeof m.home === 'object') ? (m.home.name || '') : (m.home || '');
-    var aNameRaw = (m.away && typeof m.away === 'object') ? (m.away.name || '') : (m.away || '');
-    var deferBtn = '<button type="button" class="fr-defer"'
-      + ' data-comp="'    + _esc(String(m.comp || ''))    + '"'
-      + ' data-tour="'    + _esc(String(m.tourId || ''))  + '"'
-      + ' data-mk="'      + _esc(String(m.matchKey || ''))+ '"'
-      + ' data-home="'    + _esc(hNameRaw)               + '"'
-      + ' data-away="'    + _esc(aNameRaw)               + '"'
-      + ' data-hshield="' + _esc(m.hShield || '')        + '"'
-      + ' data-ashield="' + _esc(m.aShield || '')        + '"'
-      + ' data-label="'   + _esc(m.label || '')          + '"'
-      + ' data-emoji="'   + _esc(m.emoji || '')          + '"'
-      + ' data-jor="'     + _esc(String(m.jor || ''))    + '"'
-      + ' title="Posponer partido"'
-      + ' aria-label="Posponer partido">📌</button>';
     return ''
       + '<div class="munich-fix-row">'
       +   '<span class="fr-comp">' + _esc(m.emoji || '') + '</span>'
@@ -39298,7 +39342,6 @@ https://api.sofascore.app/api/v1/team/44/image
       +     ' <span style="opacity:.5">vs</span> <b>'
       +     _esc(_short(aN)) + '</b></span>'
       +   sc
-      +   deferBtn
       + '</div>';
   }
 
@@ -39310,8 +39353,8 @@ https://api.sofascore.app/api/v1/team/44/image
   function _renderDeferredHvHRow(entry){
     if (!entry) return '';
     /* entry.home / entry.away pueden ser objeto {name, shield} (camino
-       canónico desde `_psDeferHvHSelMatch`) o string (callers nuevos
-       de Fase 2 que sólo conocen el nombre). Aceptamos ambos. */
+       canónico desde `_psDeferCurrentMatch`) o string (callers viejos
+       que sólo conocen el nombre). Aceptamos ambos. */
     function _n(v){ return (v && typeof v === 'object') ? (v.name || '') : (v || ''); }
     function _s(v){ return (v && typeof v === 'object') ? (v.shield || '') : ''; }
     /* tourId === 'liga' → entry de Liga EA Sports, aplicamos el rename
@@ -39688,62 +39731,10 @@ https://api.sofascore.app/api/v1/team/44/image
       })(tabs[ti]);
     }
 
-    /* Botón 📌 POSPONER por fila de PENDIENTES (2026-05-26). Mueve la
-       entrada al store `pend_hvh_deferred_v1` reusando el mismo helper
-       que el botón 📌 PONER · PENDIENTE de la card del próximo partido,
-       y refresca el hub para que aparezca en POSPUESTOS y desaparezca
-       de PENDIENTES (filtrada por sig en `_renderPendCombined`).
-
-       Entradas SIN tourId+matchKey (Liga, Copa, UCL, UEL, UECL, Recopa,
-       USC, Inter…) se almacenan con uid sintético `<comp>::<lbl>|<h>|<a>`
-       y se muestran en POSPUESTOS como "marca diferida" (sin ▶ JUGAR;
-       tap-en-card para despoponer). El usuario explícitamente pidió
-       que TODAS las comps tengan el botón. */
-    if (mode === 'pend'){
-      var defBtns = listEl.querySelectorAll('.fr-defer');
-      for (var dbi = 0; dbi < defBtns.length; dbi++){
-        (function(btn){
-          btn.onclick = function(ev){
-            if (ev && ev.preventDefault) ev.preventDefault();
-            if (ev && ev.stopPropagation) ev.stopPropagation();
-            if (btn.disabled) return;
-            var uidFn = window._pendHvHUid;
-            var addFn = window._pendHvHAdd;
-            if (typeof uidFn !== 'function' || typeof addFn !== 'function') return;
-            btn.disabled = true;
-            var compK = btn.getAttribute('data-comp')  || '';
-            var tId   = btn.getAttribute('data-tour')  || '';
-            var mK    = btn.getAttribute('data-mk')    || '';
-            var hName = btn.getAttribute('data-home')  || '';
-            var aName = btn.getAttribute('data-away')  || '';
-            var lbl   = btn.getAttribute('data-label') || 'Partido';
-            /* Tour-managed → tourId/matchKey reales. Resto → uid
-               sintético con el compKey como "tourId" y lbl|home|away
-               como "matchKey" (ambos son arbitrarios desde el punto
-               de vista del store; sólo importa que sean estables
-               y únicos por partido). */
-            var uTour = tId || compK || 'manual';
-            var uKey  = mK  || (lbl + '|' + hName + '|' + aName);
-            var entry = {
-              uid: uidFn(uTour, uKey),
-              tourId: tId,
-              compKey: compK,
-              matchKey: mK,
-              home: { name: hName,
-                      shield: btn.getAttribute('data-hshield') || '' },
-              away: { name: aName,
-                      shield: btn.getAttribute('data-ashield') || '' },
-              jor:  btn.getAttribute('data-jor') || '',
-              label: lbl,
-              emoji: btn.getAttribute('data-emoji') || '🌍',
-              addedAt: Date.now()
-            };
-            try { addFn(entry); } catch(_){}
-            try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
-          };
-        })(defBtns[dbi]);
-      }
-    }
+    /* El botón 📌 POSPONER por fila de PENDIENTES se eliminó el
+       2026-05-26. La única vía para mover un partido a POSPUESTOS
+       es el botón 📌 Posponer del top-left del big card "Próximo
+       partido" (ps-card). */
 
     /* Botón ▶ JUGAR + tap-para-despoponer en filas POSPUESTAS. */
     if (mode === 'posp'){

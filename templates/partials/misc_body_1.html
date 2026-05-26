@@ -14794,18 +14794,21 @@ window._showSimProgress = function(opts, onDone){
                                                 koRounds:['Cuartos','Semis','Final'] },
             prizes:{ perWin:15, perDraw:5, perLoss:0,
                      advCuartos:40, advSemis:60, advFinal:80, sub:50, champ:150 }, teams:[] },
-    /* 5️⃣ Mundialito de Clubes (spec usuario 2026-05-17): 8 grupos de
-       4 equipos (roster MANUAL vía editor 🖍 PIN 747, IA + humanos).
+    /* 5️⃣ Mundialito de Clubes (spec usuario 2026-05-17, revisada
+       2026-05-26): 8 grupos de 4 equipos. Editor estándar (admin elige
+       nivel IA mín/máx + sortea grupos automáticamente con el botón
+       ✅ CONFIRMAR Y SORTEAR), igual que cualquier torneo de verano.
        Top 2 de cada grupo → Octavos (8 elim.) → Cuartos → Semis →
        Final, todo a PARTIDO ÚNICO con prórroga + penaltis. La FINAL
-       con humano dura 10 min (resto humano: estándar). */
+       con humano dura 10 min (resto humano: estándar). 4 sedes
+       (cfg.stadiums) elegidas desde el editor (board='verano'). */
     mundial: { name:'Mundialito de Clubes', flag:'🌍', fee:0, dateStart:'1 Jul', dateEnd:'31 Jul',
-            numTeams:32, numHumans:0, aiLevelMin:1, aiLevelMax:100,
+            numTeams:32, numHumans:0, aiLevelMin:75, aiLevelMax:95,
             format:'groups-ko',
             formatConfig:{ groups:8, perGroup:4, advancePerGroup:2,
                            koRounds:['Octavos','Cuartos','Semis','Final'],
                            prizeModel:'flat', koExtraTimePens:true,
-                           manualRoster:true, finalHuman10:true },
+                           finalHuman10:true },
             prizes:{ champ:0, sub:0, sf:0, qf:0 }, teams:[] }
   };
   /* Slots pre-cableados para torneos AÑADIDOS por el admin. Config
@@ -15178,6 +15181,15 @@ window._showSimProgress = function(opts, onDone){
        `ko-2leg` si el flag no está explícito (2026-05-08). */
     if (cfg.format === 'ko-2leg' && cfg.formatConfig && typeof cfg.formatConfig.awayGoalsX2 === 'undefined') {
       cfg.formatConfig.awayGoalsX2 = true;
+    }
+    /* Mundialito de Clubes (2026-05-26): el roster MANUAL se sustituyó
+       por el sorteo automático del editor estándar (nivel IA mín/máx).
+       Saves antiguos con `manualRoster:true` pierden ese flag para
+       que `_tourOpenEditor` abra el editor estándar y el sorteo
+       reparta humanos en grupos distintos. Conserva teams/results/
+       fixtures si el torneo está en curso. */
+    if (cfg.id === 'mundial' && cfg.formatConfig && cfg.formatConfig.manualRoster) {
+      delete cfg.formatConfig.manualRoster;
     }
     /* Re-aplica la spec oficial de sct/jg (petición usuario
        2026-05-17: "directamente créame los torneos en este formato")
@@ -16298,6 +16310,11 @@ window._showSimProgress = function(opts, onDone){
       var _adv = parseInt(_advEl ? _advEl.value : '', 10) || 2;
       if (_adv < 1) _adv = 1;
       if (_adv > _pg) _adv = _pg;   /* no pueden clasificar más de los que hay */
+      /* Preservamos flags que el editor no edita pero el motor sí lee
+         (p.ej. `finalHuman10` del Mundialito de Clubes → la FINAL con
+         humano dura 10 min). Sin esto, re-guardar via «✅ CONFIRMAR Y
+         SORTEAR» machacaría esos flags. */
+      var _prevFc = cfg.formatConfig || {};
       cfg.formatConfig = {
         groups: parseInt(document.getElementById('tour-ed-groups').value, 10) || 2,
         perGroup: _pg,
@@ -16306,6 +16323,9 @@ window._showSimProgress = function(opts, onDone){
         groupDoubleLegs: !!(_gdEl && _gdEl.checked),
         koRounds: rEl ? rEl.value.split(',').map(function(s){return s.trim();}).filter(Boolean) : ['SF','F']
       };
+      if (_prevFc.finalHuman10) cfg.formatConfig.finalHuman10 = true;
+      if (_prevFc.koExtraTimePens) cfg.formatConfig.koExtraTimePens = true;
+      if (_prevFc.prizeModel) cfg.formatConfig.prizeModel = _prevFc.prizeModel;
     } else if (cfg.format === 'league-ko') {
       /* Liga + Playoff = 1 solo "grupo" con todos los equipos +
          eliminatoria final de los N mejores. Se renderiza con el
@@ -17487,9 +17507,15 @@ window._showSimProgress = function(opts, onDone){
          con una pista arriba de cómo colocar los 48 equipos. El menú
          lo construye más abajo `_renderMundial`. */
       if (cfg.format !== 'mundial-48') {
-        infoEl.innerHTML = _mr
-          ? '<div style="padding:22px 16px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">Aún no hay equipos.<br>Pulsa el <b style="color:#4dd0e1;">🖍</b> (arriba dcha · PIN 747) para añadir los 32 equipos (8 grupos × 4).</div>'
-          : '';
+        if (id === 'mundial') {
+          /* Mundialito de Clubes (2026-05-26): editor estándar con
+             nivel IA mín/máx y sorteo automático. */
+          infoEl.innerHTML = '<div style="padding:22px 16px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">Aún no hay equipos.<br>Pulsa el <b style="color:#4dd0e1;">🖍</b> (arriba dcha · PIN 747) → elige nivel IA mín/máx + 4 sedes → <b style="color:#9ee5a9;">✅ CONFIRMAR Y SORTEAR</b>.</div>';
+        } else {
+          infoEl.innerHTML = _mr
+            ? '<div style="padding:22px 16px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;color:rgba(255,255,255,.55);line-height:1.7;">Aún no hay equipos.<br>Pulsa el <b style="color:#4dd0e1;">🖍</b> (arriba dcha · PIN 747) para añadir los 32 equipos (8 grupos × 4).</div>'
+            : '';
+        }
         return;
       }
     }

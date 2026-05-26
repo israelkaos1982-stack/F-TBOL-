@@ -9575,6 +9575,235 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     } catch(_){ return null; }
   }
 
+  /* Migración 2026-05-26: eventos "Jugador A"/"Jugador B" en cfgs de
+     torneos (Mundial-48, Selecciones spv-/sfn-, Verano sct/pss/jg/asia)
+     al arrancar. Cuando una simulación de torneo se ejecutó SIN
+     plantilla de un equipo (squad no sembrado o equipo añadido después),
+     `genMatchEventsEnhanced` cae a [['','Jugador A','F',76]] y los
+     eventos quedan persistidos con `player:'Jugador A'`. Reportado:
+     Irán, India, Polonia en la pantalla "Goleadores" del Mundial 2032.
+
+     Esta migración:
+       (1) Escanea cada `tour_<id>_v1` en localStorage, reescribe
+           `cfg.results[mk].events[].player` (y MVP, y legs[]) con un
+           jugador aleatorio (hash determinista) de la plantilla ACTUAL
+           del equipo, vía sqFromRegistry (que cubre ligaExt_ +
+           selecciones_squad_v1).
+       (2) Reescribe los stores derivados `ef_player_stats_torneos_v1`
+           / `ef_player_stats_mundial_v1` / `ef_player_stats_sel_v1`:
+           reemplaza la clave `<team>::jugador a` por
+           `<team>::<jugadorReal>` fusionando contadores.
+     Idempotente: sin placeholders no toca nada. */
+  function _migrateTourPlaceholderNames(){
+    if (typeof window.sqFromRegistry !== 'function') return;
+
+    function _isPlaceholderName(raw){
+      if (raw == null) return false;
+      var s = String(raw).trim();
+      return /^(?:\d+\.\s*)?Jugador\s+[A-K]$/i.test(s);
+    }
+    function _isPlaceholderNorm(playerNorm){
+      return /^(?:\d+\s+)?jugador\s+[a-k]$/i.test(playerNorm);
+    }
+    function _normPS(s){
+      return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+        .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
+    }
+    /* Hash determinista: el mismo (team + seed) siempre devuelve el
+       mismo índice → migración estable + idempotente. */
+    function _hash(s){
+      var h = 0, str = String(s || '');
+      for (var i = 0; i < str.length; i++) {
+        h = ((h << 5) - h) + str.charCodeAt(i);
+        h |= 0;
+      }
+      return Math.abs(h);
+    }
+
+    /* Cache por equipo: lista de jugadores OUTFIELD (no porteros). */
+    var _sqCache = {};
+    function _getOutfieldSq(team){
+      if (!team) return null;
+      var key = String(team);
+      if (_sqCache[key] !== undefined) return _sqCache[key];
+      var sq = [];
+      try { sq = window.sqFromRegistry(team) || []; } catch(_){ sq = []; }
+      var out = sq.filter(function(p){
+        return Array.isArray(p) && p.length >= 2 && p[1] && p[2] !== 'P';
+      });
+      if (!out.length) {
+        out = sq.filter(function(p){ return Array.isArray(p) && p.length >= 2 && p[1]; });
+      }
+      _sqCache[key] = out.length ? out : null;
+      return _sqCache[key];
+    }
+    function _pick(team, seed){
+      var out = _getOutfieldSq(team);
+      if (!out) return null;
+      var idx = _hash(String(team) + '|' + String(seed)) % out.length;
+      return out[idx];
+    }
+
+    /* ── (1) Migrar eventos en cfgs de torneo ───────────────────── */
+    var tourKeys = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && /^tour_.+_v1$/.test(k)) tourKeys.push(k);
+      }
+    } catch(_){}
+    tourKeys.forEach(function(storeKey){
+      var cfg = null;
+      try {
+        var raw = localStorage.getItem(storeKey);
+        if (!raw) return;
+        cfg = JSON.parse(raw);
+      } catch(_){ return; }
+      if (!cfg || !cfg.results) return;
+      var dirty = false;
+      function _fixEvent(ev, idx, teamA, teamB, prefix){
+        if (!ev) return;
+        var ph = _isPlaceholderName(ev.player) || _isPlaceholderName(ev.name);
+        if (!ph) return;
+        var team = ev.realTeam
+          || (ev.team === 'a' ? teamA : ev.team === 'b' ? teamB : '');
+        if (!team) return;
+        var seed = (prefix||'') + '|' + (ev.type||'') + '|' + (ev.min||idx)
+                 + '|' + (ev.num||'') + '|' + idx;
+        var p = _pick(team, seed);
+        if (!p) return;
+        ev.player = p[1];
+        if (ev.name) ev.name = p[1];
+        if (p[0]) ev.num = String(p[0]);
+        dirty = true;
+      }
+      Object.keys(cfg.results).forEach(function(mk){
+        var res = cfg.results[mk]; if (!res) return;
+        var teamA = res.home || '';
+        var teamB = res.away || '';
+        if (Array.isArray(res.events)) {
+          res.events.forEach(function(ev, idx){
+            _fixEvent(ev, idx, teamA, teamB, mk);
+          });
+        }
+        /* MVP del partido — puede caer al placeholder si el sorteo
+           MVP elige al "Jugador A" sintético. */
+        if (_isPlaceholderName(res.mvp)) {
+          var mvpT = res.mvpTeam || '';
+          if (mvpT) {
+            var pmvp = _pick(mvpT, 'mvp|' + mk);
+            if (pmvp) { res.mvp = pmvp[1]; dirty = true; }
+          }
+        }
+        /* Eliminatorias a IDA+VUELTA: el global agrega `legs[]` con
+           sus propios eventos. */
+        if (Array.isArray(res.legs)) {
+          res.legs.forEach(function(leg, li){
+            if (!leg || !Array.isArray(leg.events)) return;
+            var lA = leg.home || teamA;
+            var lB = leg.away || teamB;
+            leg.events.forEach(function(ev, idx){
+              _fixEvent(ev, idx, lA, lB, mk + '|L' + li);
+            });
+          });
+        }
+      });
+      if (dirty) {
+        try { localStorage.setItem(storeKey, JSON.stringify(cfg)); } catch(_){}
+        try {
+          window._TOUR_CACHE = window._TOUR_CACHE || {};
+          if (cfg.id) window._TOUR_CACHE[cfg.id] = cfg;
+        } catch(_){}
+      }
+    });
+
+    /* ── (2) Migrar stores ef_player_stats_*_v1 derivados ───────── */
+    function _findOriginalTeamName(teamNorm){
+      if (!teamNorm) return null;
+      try {
+        var selRaw = localStorage.getItem('selecciones_squad_v1');
+        if (selRaw) {
+          var sel = JSON.parse(selRaw);
+          var arr = (sel && Array.isArray(sel.teams)) ? sel.teams : [];
+          for (var i = 0; i < arr.length; i++) {
+            var t = arr[i];
+            if (t && t.name && _normPS(t.name) === teamNorm) return t.name;
+          }
+        }
+      } catch(_){}
+      try {
+        for (var li = 0; li < localStorage.length; li++) {
+          var lk = localStorage.key(li);
+          if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+          if (lk.indexOf('_backup') !== -1 || lk.indexOf('_protected') !== -1
+              || lk.indexOf('_snap_') !== -1) continue;
+          var rawL = localStorage.getItem(lk);
+          if (!rawL) continue;
+          var dL; try { dL = JSON.parse(rawL); } catch(_){ continue; }
+          var ts = (dL && Array.isArray(dL.teams)) ? dL.teams : [];
+          for (var ti = 0; ti < ts.length; ti++) {
+            var tt = ts[ti];
+            if (tt && tt.name && _normPS(tt.name) === teamNorm) return tt.name;
+          }
+        }
+      } catch(_){}
+      return null;
+    }
+
+    var STATS_KEYS = [
+      'ef_player_stats_torneos_v1',
+      'ef_player_stats_mundial_v1',
+      'ef_player_stats_sel_v1'
+    ];
+    STATS_KEYS.forEach(function(statsKey){
+      var raw = null;
+      try { raw = localStorage.getItem(statsKey); } catch(_){}
+      if (!raw) return;
+      var store = null;
+      try { store = JSON.parse(raw); } catch(_){}
+      if (!store || typeof store !== 'object') return;
+      var dirty = false;
+      Object.keys(store).forEach(function(k){
+        var sep = k.indexOf('::');
+        if (sep < 0) return;
+        var teamN = k.slice(0, sep);
+        var playerN = k.slice(sep + 2);
+        if (!_isPlaceholderNorm(playerN)) return;
+        var origTeam = _findOriginalTeamName(teamN);
+        if (!origTeam) return;
+        var out = _getOutfieldSq(origTeam);
+        if (!out) return;
+        /* Picker estable: seed = (team + playerN) → mismo "jugador a"
+           siempre va al mismo jugador real dentro del equipo. */
+        var idx = _hash(origTeam + '|' + playerN) % out.length;
+        var p = out[idx];
+        if (!p || !p[1]) return;
+        var newName = p[1];
+        var newPlayerNorm = _normPS(newName);
+        if (!newPlayerNorm) return;
+        var newKey = teamN + '::' + newPlayerNorm;
+        var src = store[k];
+        var dst = store[newKey] || { gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, pj:0, penSaved:0, imbat:0 };
+        dst.gol      = (dst.gol     ||0) + (src.gol     ||0);
+        dst.pen      = (dst.pen     ||0) + (src.pen     ||0);
+        dst.fk       = (dst.fk      ||0) + (src.fk      ||0);
+        dst.mvp      = (dst.mvp     ||0) + (src.mvp     ||0);
+        dst.ta       = (dst.ta      ||0) + (src.ta      ||0);
+        dst.tr       = (dst.tr      ||0) + (src.tr      ||0);
+        dst.imbat    = (dst.imbat   ||0) + (src.imbat   ||0);
+        dst.penSaved = (dst.penSaved||0) + (src.penSaved||0);
+        dst.pj       = Math.max(dst.pj||0, src.pj||0);
+        store[newKey] = dst;
+        delete store[k];
+        dirty = true;
+      });
+      if (dirty) {
+        try { localStorage.setItem(statsKey, JSON.stringify(store)); } catch(_){}
+      }
+    });
+  }
+  try { window._migrateTourPlaceholderNames = _migrateTourPlaceholderNames; } catch(_){}
+
   function hydrateStoreFromSavedResults(){
     var results = parseSavedResults();
     /* Reset PARCIAL del store: borramos solo las entradas de LIGA
@@ -9677,6 +9906,15 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       if(typeof window.buildLigaClas === 'function') window.buildLigaClas();
       if(typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
     }, 100);
+    /* Migración 2026-05-26: placeholders "Jugador A/B" en cfgs de
+       torneos + stores derivados. Delay 600ms para que
+       `selecciones_squad_v1._boot` + `applyEngineOverrides` hayan
+       corrido (ambos en DOMContentLoaded, pero en otros IIFEs sin
+       garantía de orden). Sin esto, sqFromRegistry caería de nuevo
+       a placeholder y la migración no haría nada. */
+    setTimeout(function(){
+      try { _migrateTourPlaceholderNames(); } catch(_){}
+    }, 600);
   });
 })();
 

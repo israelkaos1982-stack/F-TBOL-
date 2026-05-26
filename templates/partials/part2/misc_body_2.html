@@ -27505,39 +27505,13 @@ document.addEventListener('DOMContentLoaded', function() {
       };
     }
 
-    /* Wrap de `ligaExtSimular()` — botón 🎮 Sim de cada liga del
-       "Resto de Ligas" (s-liga-ext). Simula la temporada completa
-       round-robin de los equipos de la liga.
-       2026-05-21: ligaExtSimular ahora es CHUNKED y devuelve Promise
-       con progreso REAL (pct, sub). Antes el wrap usaba _runFakeProgress
-       con fases FALSAS y llamaba al sim como trabajo SÍNCRONO al final
-       → el thread se bloqueaba minutos y la barra se "congelaba". Ahora
-       pasamos `ctx.progress` directo al sim: la barra refleja partidos
-       reales (N/total) y el overlay se cierra EXACTO al terminar. */
-    var origSimLigaExt = window.ligaExtSimular;
-    if(typeof origSimLigaExt === 'function'){
-      window.ligaExtSimular = function(){
-        if(typeof window.ftbolLoaderRun !== 'function'){
-          return origSimLigaExt();
-        }
-        var title = 'LIGA';
-        try {
-          var ck = (typeof window.CURRENT_KEY === 'string') ? window.CURRENT_KEY : '';
-          if(ck) title = ck.replace(/-/g,' ').toUpperCase();
-        } catch(_){}
-        var _runner = (typeof window._ftbolBgRun === 'function')
-          ? window._ftbolBgRun : window.ftbolLoaderRun;
-        return _runner(
-          { title: title, sub:'Preparando…', theme:'resto', minMs:300 },
-          function(ctx){
-            ctx.progress(4, 'Cargando plantillas…');
-            /* origSimLigaExt (chunked) devuelve Promise y reporta
-               progreso real vía el callback. */
-            return Promise.resolve(origSimLigaExt(ctx.progress));
-          }
-        );
-      };
-    }
+    /* 2026-05-26: ELIMINADO el wrap con `ftbolLoaderRun` sobre
+       `ligaExtSimular`. El overlay bloqueante tapaba la UI durante
+       toda la sim y le impedía al usuario navegar a otra liga /
+       pantalla. Ahora la sim corre EN SEGUNDO PLANO con un chip
+       flotante abajo derecha (ver `_bgSimStart` en misc_body_1.html);
+       el usuario puede navegar libremente. `ligaExtSimular` sigue
+       devolviendo Promise por compatibilidad con `pG(function(){...})`. */
 
     /* Wrap de `_wcSimulate()` — botón 🎮 Simular del torneo Wild Card.
        Una sola pulsación juega las 4 semis + 18 RF (ida + vuelta +

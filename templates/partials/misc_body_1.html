@@ -81,6 +81,132 @@ window._showSimProgress = function(opts, onDone){
      instante: la simulación corre directa, sin pantalla. */
   if(typeof onDone === 'function') onDone();
 };
+
+/* ════════════════════════════════════════════════════════════════
+   SIMULACIONES EN SEGUNDO PLANO — chip flotante global.
+   2026-05-26: petición usuario "quiero que las simulaciones se
+   puedan hacer en segundo plano". La sim de una liga (botón 🎮 Sim
+   dentro de s-liga-ext) y la sim global (51 ligas) ya corrían
+   chunkeadas con setTimeout(0), pero un wrap con `ftbolLoaderRun`
+   tapaba la UI con un overlay bloqueante y el usuario no podía
+   navegar mientras simulaba. Este módulo:
+   - Quita el overlay bloqueante (ver _ligaExtSimular wrap fix).
+   - Muestra un CHIP flotante por sim activa (abajo derecha) que
+     persiste al cambiar de pantalla.
+   - Soporta varias sims en paralelo (Portugal + Italia + Francia).
+   - Al terminar, el chip muta a verde + se autodestruye 3-4 s.
+   ════════════════════════════════════════════════════════════════ */
+(function(){
+  if (window._bgSimStart) return; /* idempotente */
+  window._bgSims = window._bgSims || {};
+  window._bgSimsActive = window._bgSimsActive || 0;
+
+  function _ensureContainer(){
+    var c = document.getElementById('bg-sim-chips');
+    if (c) return c;
+    if (!document.body){
+      /* Aún no hay body — diferir. */
+      document.addEventListener('DOMContentLoaded', _ensureContainer, { once: true });
+      return null;
+    }
+    c = document.createElement('div');
+    c.id = 'bg-sim-chips';
+    c.style.cssText = 'position:fixed;right:10px;bottom:10px;display:flex;'
+      + 'flex-direction:column;gap:6px;z-index:2147483640;pointer-events:none;'
+      + 'max-width:calc(100vw - 20px);';
+    document.body.appendChild(c);
+    return c;
+  }
+
+  function _safeId(s){ return String(s||'').replace(/[^a-zA-Z0-9_-]/g,'_'); }
+  function _esc(s){
+    var d = document.createElement('div');
+    d.textContent = String(s == null ? '' : s);
+    return d.innerHTML;
+  }
+
+  function _renderChip(slug){
+    var s = window._bgSims[slug];
+    if (!s) return;
+    var c = _ensureContainer();
+    if (!c) return; /* DOM no listo aún */
+    var id = 'bg-sim-chip-' + _safeId(slug);
+    var el = document.getElementById(id);
+    if (!el){
+      el = document.createElement('div');
+      el.id = id;
+      el.style.cssText = 'background:rgba(8,16,32,.94);border-radius:10px;'
+        + 'padding:8px 12px;font-family:Rajdhani,sans-serif;font-size:12px;'
+        + 'letter-spacing:.4px;box-shadow:0 6px 20px rgba(0,0,0,.55);'
+        + 'min-width:210px;transition:border-color .25s,color .25s;'
+        + 'border:1px solid rgba(125,180,255,.45);';
+      c.appendChild(el);
+    }
+    var pct = (s.total > 0) ? Math.min(100, Math.round(s.done / s.total * 100)) : 0;
+    var icon, txtCol, borderCol, barCol, body;
+    if (s.status === 'running'){
+      icon = '⚽'; txtCol = '#cfe0ff';
+      borderCol = 'rgba(125,180,255,.45)';
+      barCol = 'linear-gradient(90deg,#3a7bd5,#7dd0f0)';
+      body = icon + ' <b>' + _esc(s.name) + '</b> · ' + s.done + '/' + s.total + ' (' + pct + '%)';
+    } else if (s.status === 'done'){
+      icon = '✅'; txtCol = '#7df0a0';
+      borderCol = 'rgba(125,240,160,.55)';
+      barCol = 'linear-gradient(90deg,#3acb70,#7df0a0)';
+      body = icon + ' <b>' + _esc(s.name) + '</b> simulada · ' + s.total + ' partidos';
+    } else {
+      icon = '⚠️'; txtCol = '#ffd0a0';
+      borderCol = 'rgba(255,176,80,.55)';
+      barCol = 'linear-gradient(90deg,#c87a30,#ffb060)';
+      body = icon + ' <b>' + _esc(s.name) + '</b> · ' + s.done + '/' + s.total;
+    }
+    el.style.border = '1px solid ' + borderCol;
+    el.style.color = txtCol;
+    el.innerHTML = body
+      + '<div style="margin-top:6px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;">'
+      + '<div style="height:100%;width:' + pct + '%;background:' + barCol + ';transition:width .18s linear;"></div>'
+      + '</div>';
+  }
+
+  function _removeChip(slug){
+    var el = document.getElementById('bg-sim-chip-' + _safeId(slug));
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  window._bgSimStart = function(slug, name, total){
+    if (!slug) return;
+    window._bgSims[slug] = { name: name || slug, done: 0, total: total || 0, status: 'running' };
+    window._bgSimsActive = (window._bgSimsActive | 0) + 1;
+    /* Mantener el gate de saveData (XHR síncrono off) mientras haya
+       ≥1 sim en curso — sin él, el POST sync de cada partido vuelve
+       a bloquear el hilo. Ver saveData línea ~29319. */
+    window._ligaExtSimInProgress = true;
+    _renderChip(slug);
+  };
+  window._bgSimProgress = function(slug, done, total){
+    var s = window._bgSims[slug]; if (!s) return;
+    s.done = done | 0;
+    if (total != null) s.total = total | 0;
+    _renderChip(slug);
+  };
+  window._bgSimFinish = function(slug, ok, opts){
+    var s = window._bgSims[slug]; if (!s) return;
+    s.status = ok ? 'done' : 'error';
+    if (opts && opts.done != null)  s.done  = opts.done | 0;
+    if (opts && opts.total != null) s.total = opts.total | 0;
+    _renderChip(slug);
+    window._bgSimsActive = Math.max(0, (window._bgSimsActive | 0) - 1);
+    if (!window._bgSimsActive) window._ligaExtSimInProgress = false;
+    setTimeout(function(){
+      _removeChip(slug);
+      delete window._bgSims[slug];
+    }, 3400);
+  };
+  window._bgSimIsActive = function(slug){
+    var s = window._bgSims[slug];
+    return !!(s && s.status === 'running');
+  };
+})();
 </script>
 
 <div class="screen active" id="s-home">
@@ -26129,66 +26255,36 @@ window._showSimProgress = function(opts, onDone){
       alert('Motor de simulación no disponible. Recarga la página.');
       return;
     }
-    /* Recogemos la lista de ligas ANTES de mostrar el overlay para
-       saber el total y poder calcular el % real (1 liga = 1 step).
-       Luego iteramos con setTimeout(0) entre ligas para que la barra
-       de progreso pueda repintarse — antes este loop era 100% síncrono
-       y la pantalla se congelaba durante 30-60s sin feedback. */
     var leagues = [];
     _eachLeagueCard(function(name){ leagues.push(name); });
     var total = leagues.length;
     if(!total){ alert('No hay ligas para simular.'); return; }
     if(!confirm('¿Simular las ' + total + ' ligas? Reseteará los resultados y stats actuales antes de simular.')) return;
 
-    var ok = 0, skip = 0, idx = 0;
-    var skippedSlugs = [];
-    function simNext(progressFn){
-      return new Promise(function(resolve){
-        function step(){
-          if(idx >= total){ resolve(); return; }
-          var name = leagues[idx];
-          var slug = _slugify(name);
-          /* Pre-hidratar desde server si la cache local está vacía o
-             tiene menos de 2 equipos. Sin este paso (2026-05-09), ligas
-             que el usuario completó en otro dispositivo y nunca se han
-             abierto en este se quedaban con teams=[] en local y
-             `ligaExtSimularSlug` las saltaba con "sin equipos
-             suficientes" (caso reportado: 49 ligas simuladas, 2
-             saltadas — italia y escocia — al simular desde un móvil
-             nuevo). `_readLigaData` hace XHR síncrono a /api/liga-ext
-             y persiste el resultado en localStorage antes de simular.
-             Tras la hidratación invalidamos `LIGA_CACHE[slug]` para que
-             `loadData` (editor) re-lea localStorage en vez de devolver
-             un cache vacío anterior. */
-          try { _readLigaData(slug); } catch(_){}
-          try { if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
-          try {
-            if(window.ligaExtSimularSlug(slug, name)){
-              ok++;
-            } else {
-              skip++;
-              skippedSlugs.push({slug: slug, name: name});
-            }
-          } catch(e){
-            skip++;
-            skippedSlugs.push({slug: slug, name: name, error: String(e&&e.message||e)});
-          }
-          idx++;
-          if(typeof progressFn === 'function'){
-            progressFn(Math.round(idx/total*100), 'Simulando ' + name + ' (' + idx + '/' + total + ')');
-          }
-          /* setTimeout(0) cede el hilo para que el overlay repinte
-             antes de la siguiente liga. */
-          setTimeout(step, 0);
-        }
-        step();
-      });
+    /* 2026-05-26: la sim global ahora corre EN SEGUNDO PLANO con un
+       único chip "Sim global · N/51" abajo derecha. El usuario puede
+       navegar libremente mientras se simula. Antes usaba un overlay
+       bloqueante (ftbolLoaderRun) que tapaba la app durante 30-60 s.
+       Las sims por liga se lanzan con suppressChip=true para no
+       inundar la pantalla con 51 chips a la vez — solo el global. */
+    var globalSlug = '__resto_sim_all__';
+    var globalName = 'Sim global · ' + total + ' ligas';
+    if(typeof window._bgSimStart === 'function'){
+      try { window._bgSimStart(globalSlug, globalName, total); } catch(_){}
     }
 
+    /* FLAG BULK 2026-05-12: durante la sim de las 51 ligas,
+       `_readLigaData` NO debe hacer XHR síncrono por liga (51 XHR
+       sync sin timeout contra Railway = el thread bloqueado >1 h).
+       `_applyForcedBlacklist` tampoco debe hacer su persist-mutado
+       por liga — saveData ya persiste al final de cada liga. */
+    window._restoSimBulkInProgress = true;
+
+    var ok = 0, skip = 0, idx = 0;
+    var skippedSlugs = [];
+
     function _onDone(){
-      /* Exponemos las ligas saltadas en window para que el usuario
-         pueda inspeccionarlas desde consola si el conteo no cuadra
-         (ej. "31 simuladas pero 32 incompletas en el WC diag"). */
+      window._restoSimBulkInProgress = false;
       try { window._lastSkippedLeagues = skippedSlugs; } catch(_){}
       try {
         if (skippedSlugs.length) {
@@ -26198,40 +26294,51 @@ window._showSimProgress = function(opts, onDone){
           });
         }
       } catch(_){}
-      var msg = 'Simuladas: ' + ok + ' liga' + (ok===1?'':'s');
-      if (skip) {
-        msg += ' · sin equipos suficientes: ' + skip + '.\n\n';
-        msg += 'Las saltadas (consulta window._lastSkippedLeagues en consola):\n';
-        msg += skippedSlugs.slice(0, 20).map(function(s){ return '  · ' + s.slug; }).join('\n');
-        if (skippedSlugs.length > 20) msg += '\n  · …(' + (skippedSlugs.length-20) + ' más)';
-      } else {
-        msg += '.';
+      if(typeof window._bgSimFinish === 'function'){
+        try { window._bgSimFinish(globalSlug, skip === 0, { done: ok, total: total }); } catch(_){}
       }
-      alert(msg);
     }
 
-    /* FLAG BULK 2026-05-12: durante la sim de las 51 ligas,
-       `_readLigaData` NO debe hacer XHR síncrono por liga (51 XHR
-       sync sin timeout contra Railway = el thread bloqueado >1 h,
-       "0% INICIANDO" eterno). Y `_applyForcedBlacklist` NO debe
-       hacer su persist-mutado por liga (localStorage.setItem +
-       POST redundantes — `saveData` ya persiste al final de cada
-       liga). Se limpia en _onDone (éxito) y en el .catch (error). */
-    window._restoSimBulkInProgress = true;
-    function _clearBulkFlag(){ try { window._restoSimBulkInProgress = false; } catch(_){} }
-    var _onDoneOrig = _onDone;
-    _onDone = function(){ _clearBulkFlag(); try { _onDoneOrig(); } catch(_){} };
-
-    if(typeof window.ftbolLoaderRun === 'function'){
-      window.ftbolLoaderRun(
-        { title:'RESTO DE LIGAS · 51 LIGAS', sub:'Iniciando…', theme:'resto', minMs:300 },
-        function(ctx){ return simNext(ctx.progress); }
-      ).then(_onDone, function(e){ _clearBulkFlag(); try { console.error('[restoSim]', e); } catch(_){} });
-    } else {
-      /* Fallback sin overlay: mantener el comportamiento síncrono
-         clásico (raro pero por seguridad). */
-      simNext(null).then(_onDone, _clearBulkFlag);
+    function step(){
+      if(idx >= total){ _onDone(); return; }
+      var name = leagues[idx];
+      var slug = _slugify(name);
+      /* Pre-hidratar desde server si la cache local está vacía o
+         tiene menos de 2 equipos (ligas completadas en otro
+         dispositivo). */
+      try { _readLigaData(slug); } catch(_){}
+      try { if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+      var p;
+      try {
+        p = window.ligaExtSimularSlug(slug, name, { suppressChip: true });
+      } catch(e){
+        p = Promise.resolve(false);
+        skippedSlugs.push({slug: slug, name: name, error: String(e && e.message || e)});
+      }
+      Promise.resolve(p).then(function(simOk){
+        if(simOk){ ok++; }
+        else if(!skippedSlugs.some(function(s){ return s.slug === slug; })){
+          skip++;
+          skippedSlugs.push({slug: slug, name: name});
+        } else { skip++; }
+        idx++;
+        if(typeof window._bgSimProgress === 'function'){
+          try { window._bgSimProgress(globalSlug, idx, total); } catch(_){}
+        }
+        /* setTimeout(0) cede el hilo entre ligas. */
+        setTimeout(step, 0);
+      }, function(){
+        idx++;
+        skip++;
+        skippedSlugs.push({slug: slug, name: name, error: 'promise rejected'});
+        if(typeof window._bgSimProgress === 'function'){
+          try { window._bgSimProgress(globalSlug, idx, total); } catch(_){}
+        }
+        setTimeout(step, 0);
+      });
     }
+
+    step();
   };
 
   window._restoLigasResAll = function(){
@@ -30398,24 +30505,47 @@ Tottenham
      bloquea. `progressFn(pct, sub)` es opcional (la pasa el wrapper del
      overlay). Devuelve SIEMPRE una Promise para que el loader pueda
      esperar al final exacto de la sim. */
-  function ligaExtSimular(progressFn){
-    if(!CURRENT_KEY) return Promise.resolve();
-    window._ligaExtSimInProgress = true;
+  function ligaExtSimular(progressFn, opts){
+    /* 2026-05-26: refactor para soportar simulación EN SEGUNDO PLANO.
+       - Acepta opts.slug / opts.name (default CURRENT_KEY / CURRENT_NAME)
+         para que la sim siga corriendo sobre la liga correcta aunque
+         el usuario navegue a otra liga / pantalla.
+       - opts.suppressChip = true salta el chip flotante (lo usa
+         `_restoLigasSimAll` que pinta su propio chip "Sim global"). */
+    opts = opts || {};
+    var slug = opts.slug || CURRENT_KEY;
+    var name = opts.name || (slug === CURRENT_KEY ? CURRENT_NAME : null) || slug;
+    var useChip = !opts.suppressChip;
+    if(!slug) return Promise.resolve();
+    /* Si ya hay una sim corriendo para esta misma liga, no relanzar —
+       evita doble-tap en el botón, dobles entradas en el registro y
+       solape entre la sim global (51 ligas) y un click en Sim de la
+       liga que el bulk está procesando justo ahora (data race sobre
+       el mismo slug en localStorage). Usa un set propio para no
+       depender del chip (suppressChip lo evita). */
+    window._ligaExtSimSlugs = window._ligaExtSimSlugs || {};
+    if(window._ligaExtSimSlugs[slug]) return Promise.resolve();
+    window._ligaExtSimSlugs[slug] = true;
     var data;
-    try { data = loadData(CURRENT_KEY); }
-    catch(_){ window._ligaExtSimInProgress = false; return Promise.resolve(); }
+    try { data = loadData(slug); }
+    catch(_){
+      delete window._ligaExtSimSlugs[slug];
+      return Promise.resolve();
+    }
     if(!data || !Array.isArray(data.teams) || data.teams.length < 2){
-      window._ligaExtSimInProgress = false;
+      /* Liberar el slug del set ANTES de cualquier re-intento async,
+         o el retry quedará bloqueado por su propio guard. */
+      delete window._ligaExtSimSlugs[slug];
       window._ligaExtHydrateRetry = window._ligaExtHydrateRetry || {};
-      var _hk = CURRENT_KEY;
+      var _hk = slug;
       if(!window._ligaExtHydrateRetry[_hk] && typeof fetchData === 'function'){
         window._ligaExtHydrateRetry[_hk] = true;
         try {
           fetchData(_hk, function(d2){
             try { delete window._ligaExtHydrateRetry[_hk]; } catch(_){}
             var n = (d2 && Array.isArray(d2.teams)) ? d2.teams.length : 0;
-            if(n >= 2 && CURRENT_KEY === _hk && typeof window.ligaExtSimular === 'function'){
-              try { window.ligaExtSimular(); } catch(_){}
+            if(n >= 2 && typeof window.ligaExtSimular === 'function'){
+              try { window.ligaExtSimular(null, { slug: _hk, name: name, suppressChip: opts.suppressChip }); } catch(_){}
             } else {
               try { alert('Esta liga no tiene equipos suficientes para simular.'); } catch(_){}
             }
@@ -30444,15 +30574,31 @@ Tottenham
     }
     var total = pairs.length;
     var CHUNK = 120;
+    if(useChip && typeof window._bgSimStart === 'function'){
+      try { window._bgSimStart(slug, name, total); } catch(_){}
+    } else {
+      /* suppressChip: aun así contabilizamos para el gate del XHR
+         síncrono de saveData. */
+      window._bgSimsActive = (window._bgSimsActive|0) + 1;
+      window._ligaExtSimInProgress = true;
+    }
     return new Promise(function(resolve){
       var idx = 0;
       function _finishSim(){
-        try { saveData(CURRENT_KEY, data); } catch(_){}
+        try { saveData(slug, data); } catch(_){}
         try { _lecSyncPlayerStatsCache(data); } catch(_){}
-        try { renderTable(); } catch(_){}
-        window._ligaExtSimInProgress = false;
+        /* Solo refrescamos la tabla del DOM si la liga simulada es
+           la que el usuario tiene abierta ahora. Si navegó a otra,
+           respetamos su pantalla. */
+        if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
         if(typeof progressFn === 'function'){ try { progressFn(100, 'Hecho'); } catch(_){} }
-        try { _ligaExtToastSim(CURRENT_NAME || CURRENT_KEY, idx, total); } catch(_){}
+        if(useChip && typeof window._bgSimFinish === 'function'){
+          try { window._bgSimFinish(slug, idx === total, { done: idx, total: total }); } catch(_){}
+        } else {
+          window._bgSimsActive = Math.max(0, (window._bgSimsActive|0) - 1);
+          if(!window._bgSimsActive) window._ligaExtSimInProgress = false;
+        }
+        try { delete window._ligaExtSimSlugs[slug]; } catch(_){}
         resolve();
       }
       /* 2026-05-25: si UNA iteración throwea (applyMatchStats/assignMVP en
@@ -30502,87 +30648,34 @@ Tottenham
             );
           } catch(_){}
         }
+        if(useChip && typeof window._bgSimProgress === 'function'){
+          try { window._bgSimProgress(slug, idx, total); } catch(_){}
+        }
         if(idx < total){ setTimeout(step, 0); return; }
         _finishSim();
       }
       step();
     });
   }
-  /* Toast no-bloqueante con el resultado del sim — el usuario sabe que
-     corrió. Antes la sim era TOTALMENTE silenciosa (el overlay del balón
-     se quitó el 2026-05-21) → si por race condition / error en un
-     equipo el `renderTable` no refrescaba (o el usuario no la veía
-     porque el sticky header tapaba la primera fila) creía que la sim
-     no había hecho nada. */
-  function _ligaExtToastSim(name, done, total){
-    if (!document.body) return;
-    /* Solo si la pantalla `s-liga-ext` está visible — sino estorba en
-       otras pantallas (sim global lo maneja `_restoLigasSimAll`). */
-    var scr = document.getElementById('s-liga-ext');
-    if (!scr || !scr.classList.contains('active')) return;
-    var ok = (done === total && total > 0);
-    var msg = ok
-      ? '✅ ' + (name || 'Liga') + ' simulada ('+total+' partidos)'
-      : '⚠️ ' + (name || 'Liga') + ': '+done+'/'+total+' partidos simulados';
-    var el = document.createElement('div');
-    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);'
-      + 'background:'+(ok?'rgba(8,42,20,.96)':'rgba(60,30,8,.96)')+';'
-      + 'border:1px solid '+(ok?'rgba(125,240,160,.55)':'rgba(255,176,80,.55)')+';'
-      + 'border-radius:10px;padding:11px 18px;color:'+(ok?'#7df0a0':'#ffd0a0')+';'
-      + 'font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;'
-      + 'box-shadow:0 8px 28px rgba(0,0,0,.55);z-index:2147483640;';
-    el.textContent = msg;
-    document.body.appendChild(el);
-    setTimeout(function(){ try { document.body.removeChild(el); } catch(_){} }, 2800);
-  }
   window.ligaExtSimular = ligaExtSimular;
 
   /* Variante slug-aware. La usa el botón global "Sim" del menú
-     "Resto de Ligas" para simular las 51 ligas de golpe sin tener
-     que abrir cada pantalla. Reusa exactamente la misma lógica
-     que ligaExtSimular (resetear stats jugadores, doble round
-     robin con simulateMatch, MVPs, persistir). */
-  window.ligaExtSimularSlug = function(slug, displayName){
-    if(!slug) return false;
+     "Resto de Ligas" para simular las 51 ligas sin tener que abrir
+     cada pantalla.
+     2026-05-26: ahora delega al motor async/chunked `ligaExtSimular`
+     para soportar BACKGROUND (chip flotante por liga si suppressChip
+     es false). Devuelve `Promise<boolean>` (cambio de firma: antes
+     devolvía boolean síncrono). El caller `_restoLigasSimAll` se
+     adaptó al mismo patrón. */
+  window.ligaExtSimularSlug = function(slug, displayName, opts){
+    if(!slug) return Promise.resolve(false);
     var data = loadData(slug);
-    if(!data || !Array.isArray(data.teams) || data.teams.length < 2) return false;
-    data.teams.forEach(function(t){ (t.players||[]).forEach(resetPlayerStats); });
-    data.results = [];
-    var ts = _capRoundRobin(data.teams.slice());
-    /* 2026-05-25: igual que ligaExtSimular, atrapar excepciones por
-       partido para no perder TODO el sim por un único bug puntual.
-       Antes, si un equipo tenía estructura rara y `simulateMatch`
-       lanzaba en la pareja 17/1892, el for entero rompía → saveData
-       NO se ejecutaba → la liga quedaba con `results=[]` persistido y
-       el usuario veía 0 PTS en TODOS los equipos. */
-    for(var i=0;i<ts.length;i++){
-      for(var j=0;j<ts.length;j++){
-        if(i===j) continue;
-        try {
-          var r = simulateMatch(ts[i], ts[j]);
-          data.results.push({
-            h:ts[i].id, a:ts[j].id,
-            gh:r.gh, ga:r.ga,
-            tah:r.tah, taa:r.taa,
-            trh:r.trh, tra:r.tra
-          });
-          var infoI2 = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
-          var infoJ2 = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
-          if(r.gh > r.ga)      assignMVP(ts[i], infoI2, ts[j], infoJ2, false);
-          else if(r.ga > r.gh) assignMVP(ts[j], infoJ2, ts[i], infoI2, false);
-          else                 assignMVP(ts[i], infoI2, ts[j], infoJ2, true);
-        } catch(matchErr){
-          try { console.warn('[ligaExtSimularSlug '+slug+'] partido '+i+'-'+j+' falló:', matchErr); } catch(_){}
-        }
-      }
+    if(!data || !Array.isArray(data.teams) || data.teams.length < 2){
+      return Promise.resolve(false);
     }
-    try { saveData(slug, data); } catch(saveErr){
-      try { console.error('[ligaExtSimularSlug '+slug+'] saveData falló:', saveErr); } catch(_){}
-    }
-    try { _lecSyncPlayerStatsCache(data); } catch(_){}
-    /* Si la liga abierta actualmente coincide con la simulada, refrescar. */
-    if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
-    return true;
+    var simOpts = { slug: slug, name: displayName || slug };
+    if(opts && opts.suppressChip) simOpts.suppressChip = true;
+    return ligaExtSimular(null, simOpts).then(function(){ return true; });
   };
 
   // ── Valoración 0-10 de un jugador ────────────────

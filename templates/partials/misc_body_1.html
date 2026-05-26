@@ -4947,7 +4947,25 @@ window._showSimProgress = function(opts, onDone){
          clave `R_M|L1`. Antes esta función devolvía SIEMPRE al
          humano como local, así que la previa de la vuelta seguía
          poniendo Liverpool en casa cuando le tocaba visitante. */
-      if ((cfg.format === 'ko' || cfg.format === 'ko-2leg') && Array.isArray(cfg.bracket)){
+      if (cfg.format === 'ko' || cfg.format === 'ko-2leg'){
+        /* Defensa 2026-05-26: si cfg.bracket falta (caso edge — el usuario
+           cambió el formato a ko/ko-2leg en el editor pero aún no abrió
+           la pantalla del torneo, que es donde `_paintTourScreen` lo
+           inicializa con `[teams.slice()]`), reconstruimos en memoria
+           desde cfg.teams para que la card del hub encuentre al humano.
+           Sin esto el bug "Sin partido del Liverpool en este día" salta
+           cuando localStorage tiene format='ko-2leg' sin bracket (la
+           inicialización de `_paintTourScreen` es solo in-memory, no
+           persiste a localStorage; al recargar la página el bracket
+           se pierde y el hub no encuentra al humano). */
+        if (!Array.isArray(cfg.bracket) || !cfg.bracket.length){
+          if (Array.isArray(cfg.teams) && cfg.teams.length){
+            cfg.bracket = [cfg.teams.slice()];
+            if (typeof cfg.currentRound !== 'number') cfg.currentRound = 0;
+          } else {
+            return null;
+          }
+        }
         var r = parseInt(cfg.currentRound,10) || 0;
         var round = cfg.bracket[r] || cfg.bracket[0] || [];
         var bi = -1;
@@ -18308,6 +18326,12 @@ window._showSimProgress = function(opts, onDone){
       var rounds = (cfg.formatConfig && cfg.formatConfig.rounds) || [];
       cfg.currentRound = (typeof cfg.currentRound === 'number') ? cfg.currentRound : 0;
       cfg.results = cfg.results || {};
+      /* Persistir la inicialización del bracket (2026-05-26): si
+         cfg.bracket faltaba, la creábamos solo en memoria → al recargar
+         la página el hub no encontraba al humano en `_realPair` y
+         pintaba "Sin partido del Liverpool". Marcamos `_needSaveBracket`
+         para que `_tourSave` se dispare después del paint inicial. */
+      var _needSaveBracket = !cfg.bracket;
       cfg.bracket = cfg.bracket || [teams.slice()];
       /* ── Migración lazy ko-2leg (2026-05-25) ─────────────────────
          Recoge cualquier eliminatoria con |L1 + |L2 sin agregar en
@@ -18499,6 +18523,12 @@ window._showSimProgress = function(opts, onDone){
         }
       }
       infoEl.innerHTML = _statsBoxHtml + html;
+      /* Persistir bracket recién inicializado (2026-05-26): sin esto,
+         recargar la página antes de simular nada deja localStorage sin
+         cfg.bracket y `_realPair` del hub cae al "Sin partido". */
+      if (_needSaveBracket && typeof window._tourSave === 'function'){
+        try { Promise.resolve(window._tourSave(id, cfg)).catch(function(){}); } catch(_){}
+      }
     } else if (cfg.format === 'league') {
       infoEl.innerHTML = _statsBoxHtml + hint + _renderLeague(cfg, id, teams);
     } else if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss') {

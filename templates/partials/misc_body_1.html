@@ -5139,10 +5139,74 @@ window._showSimProgress = function(opts, onDone){
     return p ? p.rival : null;
   }
 
+  /* ── Card para días de PARTIDO que NO son del torneo de verano ──
+     Liga / Copa / Champions / Europa League / Conference / Recopa /
+     Intercontinental / Amistosos del calendario base. El módulo
+     PRETEMPORADA solo gestiona partidos del torneo elegido
+     (`d.tour`) — para los demás días NO debemos prefijar
+     "Trofeo Joan Gamper" al subtítulo ni inventar rival desde el
+     bracket cacheado del torneo de verano (que sigue persistido
+     tras la final pero ya no es relevante). El usuario juega esos
+     partidos desde la pantalla de cada competición. */
+  function _cardNonTour(day){
+    var st = _stage(); if (!st) return;
+    var lbl = day.label || 'Partido';
+    var emoji = (typeof _pendHvHEmojiFromLabel === 'function')
+                ? _pendHvHEmojiFromLabel(lbl) : '⚽';
+    /* Atajo "VER JORNADA N" para Liga EA Sports (única competición
+       con un router directo `openLigaJornada(N)` desde el hub). El
+       resto de comps (Copa/UCL/UEL/...) tienen su propia pantalla
+       y el usuario las abre desde la barra de COMPETICIONES. */
+    var ligaJor = 0;
+    var mL = /Liga\s*[—\-]\s*J(\d+)/i.exec(lbl);
+    if (mL) ligaJor = parseInt(mL[1], 10) || 0;
+    var verBtn = '';
+    if (ligaJor > 0){
+      verBtn = '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>';
+    }
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
+      + '<div class="ps-meta" style="margin:14px 0;color:rgba(255,255,255,.75);font-size:13px;">'
+      +   'La jornada se juega desde la pantalla de la competición.'
+      + '</div>'
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+      +   verBtn
+      +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
+      + '</div>'
+      + '</div>';
+    var bV = document.getElementById('ps-nontour-open');
+    if (bV) bV.onclick = function(){
+      try {
+        if (ligaJor > 0 && typeof window.openLigaJornada === 'function'){
+          window.openLigaJornada(ligaJor);
+        }
+      } catch(_){}
+    };
+    var bC = document.getElementById('ps-nontour-cont');
+    if (bC) bC.onclick = function(){ _markDoneAndAdvance(); };
+  }
+
   function _cardMatch(day){
     var st = _stage(); if (!st) return;
     var d = _load();
     d.rivals = d.rivals || {};
+    /* ── Día NO-torneo (Liga, Copa, Eur, Inter, Recopa, Amist…) ────
+       Bug 2026-05-26: en días posteriores a la pre-temporada (ej.
+       06 Ago = Liga J1), `d.tour` sigue siendo 'jg' (último torneo
+       elegido) y `_realPair()` devolvía el siguiente partido sin
+       jugar del bracket cacheado del Joan Gamper. La card pintaba
+       "TROFEO JOAN GAMPER · LIGA — J1" + "Zhenis Astana vs
+       Liverpool" (rival del bracket de pre-temporada). El módulo
+       PRETEMPORADA solo gestiona días `ag-torneo` (icono 🌞); para
+       el resto delegamos a `_cardNonTour` que pinta una card limpia
+       sin asumir torneo de verano. */
+    var _isTorneoDay = /\bag-torneo\b/.test(day.cls || '');
+    if (!_isTorneoDay){
+      _cardNonTour(day);
+      return;
+    }
     var tourNm = d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido');
     /* Bayern solo tiene partido REAL si el bracket del torneo le da
        rival en la ronda actual. Sin torneo elegido, con torneo
@@ -5409,7 +5473,17 @@ window._showSimProgress = function(opts, onDone){
     if (!day) return '';
     if (day.type === 'train') return '🏃 Entrenamiento · ' + _psShowDate(day.date);
     if (day.type === 'rest')  return (/\bag-sel\b/.test(day.cls)?'🌍 ':'💤 ') + (day.label||'Descanso') + ' · ' + _psShowDate(day.date);
-    return '🌞 ' + (day.label || 'Partido') + ' · ' + _psShowDate(day.date);
+    /* Emoji por competición: días `ag-torneo` (Joan Gamper, Asian,
+       Soccer Champions Tour, Premier Summer Series) llevan 🌞; el
+       resto (Liga/Copa/UCL/...) derivan su emoji de la etiqueta del
+       calendario para no mezclar el icono solar con días de Liga. */
+    var lbl = day.label || 'Partido';
+    var emoji = '🌞';
+    if (!/\bag-torneo\b/.test(day.cls || '')){
+      emoji = (typeof _pendHvHEmojiFromLabel === 'function')
+              ? _pendHvHEmojiFromLabel(lbl) : '⚽';
+    }
+    return emoji + ' ' + lbl + ' · ' + _psShowDate(day.date);
   }
   var _PS_MON = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
   function _psMonth(dateStr){

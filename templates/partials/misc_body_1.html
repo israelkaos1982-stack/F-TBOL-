@@ -40179,6 +40179,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     d.msgs = d.msgs.filter(function(m){ return !m.read; });
     _write(d); _scheduleRefresh();
   }
+  function clearAllMessages(){
+    var d = _read();
+    d.msgs = [];
+    _write(d);
+    try { _refresh(); } catch(_){}
+  }
   function list(side, kind){
     var d = _read();
     return d.msgs
@@ -40251,13 +40257,13 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var n = 0;
       try {
         var dd = _read();
-        n = (dd && dd.msgs) ? dd.msgs.filter(function(m){ return m && m.read; }).length : 0;
+        n = (dd && dd.msgs) ? dd.msgs.length : 0;
       } catch(_){}
       if (!n) return;
       var q = (n === 1)
-        ? '¿Borrar el mensaje leído?'
-        : '¿Borrar los ' + n + ' mensajes leídos?';
-      if (confirm(q)) clearReadAll();
+        ? '¿Borrar el mensaje?'
+        : '¿Borrar los ' + n + ' mensajes?';
+      if (confirm(q)) clearAllMessages();
     };
   }
   function _openPop(){
@@ -40314,18 +40320,20 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     ov.querySelectorAll('.mmo-sub').forEach(function(t){
       t.classList.toggle('on', t.getAttribute('data-kind') === _ui.readTab);
     });
-    /* Botón "🗑 BORRAR TODOS" — sólo visible en sub-pestaña LEÍDOS y
-       si hay al menos un mensaje leído. Texto con contador para que el
-       usuario sepa cuántos se van a borrar antes de confirmar. */
+    /* Botón "🗑 BORRAR TODO" — SIEMPRE visible si hay al menos un
+       mensaje en bandeja (sea nuevo o leído, sea Liverpool o
+       Selección). Petición usuario 2026-05-25: que pueda vaciar la
+       bandeja entera de un solo gesto, no solo los leídos. Texto con
+       contador para que sepa cuántos se borrarán antes del confirm. */
     var clr = document.getElementById('mu-msg-clear');
     if (clr){
-      var readN = 0;
+      var totalN = 0;
       try {
         var allD = _read();
-        readN = (allD && allD.msgs) ? allD.msgs.filter(function(m){ return m && m.read; }).length : 0;
+        totalN = (allD && allD.msgs) ? allD.msgs.length : 0;
       } catch(_){}
-      if (_ui.readTab === 'read' && readN > 0){
-        clr.textContent = '🗑 BORRAR TODOS (' + readN + ')';
+      if (totalN > 0){
+        clr.textContent = '🗑 BORRAR TODO (' + totalN + ')';
         clr.removeAttribute('hidden');
       } else {
         clr.setAttribute('hidden','');
@@ -40640,70 +40648,134 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      — no se inventan rivales aleatorios (petición usuario 2026-05-24
      "los mensajes tienen que tener coherencia y ser la realidad del
      calendario del Liverpool-Francia"). */
+  /* Etiqueta humana de cada ronda KO del Mundial — ronda 0 = Octavos,
+     1 = Cuartos, 2 = Semis, 3 = Final. Si el bracket tiene más
+     rondas (futuros formatos), genérico "Eliminatoria r{N}". */
+  function _koRoundLabel(roundIdx){
+    var L = ['Octavos','Cuartos','Semis','Final'];
+    return L[roundIdx] || ('Eliminatoria r' + (roundIdx + 1));
+  }
+  function _findMundialCfg(){
+    var cache = window._TOUR_CACHE || {};
+    for (var k in cache){
+      var c = cache[k];
+      if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
+        return c;
+      }
+    }
+    if (typeof window._tourLoadCachedSync === 'function'){
+      var SFN = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
+      for (var s = 0; s < SFN.length; s++){
+        try {
+          var sc = window._tourLoadCachedSync(SFN[s]);
+          if (sc && sc.format === 'mundial-48' && Array.isArray(sc.teams) && sc.teams.length){
+            return sc;
+          }
+        } catch(_){}
+      }
+    }
+    return null;
+  }
+  /* Devuelve el "team object" del equipo humano (Francia) del cfg, o
+     null si no se localiza. Mismo doble-pase que `_selPair`: flag
+     `isHuman` explícito primero, después `isHumanInComp(name,
+     'mundial')` como fallback canónico (CLAUDE.md). */
+  function _findHumanTeam(mundialCfg){
+    if (!mundialCfg) return null;
+    var teams = mundialCfg.teams || [];
+    for (var ti = 0; ti < teams.length; ti++){
+      var t = teams[ti];
+      if (t && t.isHuman && t.name && t.name !== 'PENDIENTE') return { team:t, idx:ti };
+    }
+    if (typeof window.isHumanInComp === 'function'){
+      for (var ti2 = 0; ti2 < teams.length; ti2++){
+        var t2 = teams[ti2];
+        if (!t2 || !t2.name || t2.name === 'PENDIENTE') continue;
+        try { if (window.isHumanInComp(t2.name, 'mundial')) return { team:t2, idx:ti2 }; } catch(_){}
+      }
+    }
+    return null;
+  }
+  /* Próximo partido NO jugado de Francia en el Mundial. Cubre la fase
+     de grupos (`groupFixtures` + `groupResults`) Y la fase KO
+     (`koBracket[round]` + `results['ko_'+round+'_'+i/2]`). Si la fase
+     KO está activa pero el partido aún no se ha generado (equipo
+     "PENDIENTE"), devuelve null y el caller debe degradar al texto
+     sin rival. Estructura KO confirmada: round 0 = Octavos, 1 =
+     Cuartos, 2 = Semis, 3 = Final. */
   function _franciaNextMatch(){
     try {
-      var cache = window._TOUR_CACHE || {};
-      var mundialCfg = null;
-      for (var k in cache){
-        var c = cache[k];
-        if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
-          mundialCfg = c; break;
-        }
-      }
-      if (!mundialCfg && typeof window._tourLoadCachedSync === 'function'){
-        var SFN = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
-        for (var s = 0; s < SFN.length; s++){
-          try {
-            var sc = window._tourLoadCachedSync(SFN[s]);
-            if (sc && sc.format === 'mundial-48' && Array.isArray(sc.teams) && sc.teams.length){
-              mundialCfg = sc; break;
-            }
-          } catch(_){}
-        }
-      }
+      var mundialCfg = _findMundialCfg();
       if (!mundialCfg) return null;
+      var hu = _findHumanTeam(mundialCfg);
+      if (!hu) return null;
+      var huIdx = hu.idx;
       var teams = mundialCfg.teams || [];
-      var huIdx = -1;
-      for (var ti = 0; ti < teams.length; ti++){
-        var t = teams[ti];
-        if (t && t.isHuman && t.name && t.name !== 'PENDIENTE'){ huIdx = ti; break; }
-      }
-      if (huIdx < 0 && typeof window.isHumanInComp === 'function'){
-        for (var ti2 = 0; ti2 < teams.length; ti2++){
-          var t2 = teams[ti2];
-          if (!t2 || !t2.name || t2.name === 'PENDIENTE') continue;
-          try {
-            if (window.isHumanInComp(t2.name, 'mundial')){ huIdx = ti2; break; }
-          } catch(_){}
-        }
-      }
-      if (huIdx < 0) return null;
+      var huName = hu.team.name;
+      /* Fase de grupos */
       var pg = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
       var gIdx  = Math.floor(huIdx / pg);
       var gStart = gIdx * pg;
       var slice = teams.slice(gStart, gStart + pg);
       var huInSlice = huIdx - gStart;
       var fixs = (mundialCfg.groupFixtures && mundialCfg.groupFixtures[gIdx]) || null;
-      if (!Array.isArray(fixs)) return null;
       var results = mundialCfg.groupResults && mundialCfg.groupResults[gIdx];
-      for (var j = 0; j < fixs.length; j++){
-        var matchups = fixs[j];
-        if (!Array.isArray(matchups)) continue;
-        for (var mi = 0; mi < matchups.length; mi++){
-          var mm = matchups[mi];
-          if (!mm) continue;
-          if (mm.home !== huInSlice && mm.away !== huInSlice) continue;
-          var r = results && results[j] && results[j][mi];
-          if (r && (r.played || r.done)) continue;
-          var hT = slice[mm.home], aT = slice[mm.away];
-          if (!hT || !aT || !hT.name || hT.name === 'PENDIENTE'
-              || !aT.name || aT.name === 'PENDIENTE') continue;
-          return {
-            jor: j + 1,
-            isHome: (mm.home === huInSlice),
-            rival: (mm.home === huInSlice ? aT.name : hT.name),
-            franceName: (mm.home === huInSlice ? hT.name : aT.name)
-          };
+      if (Array.isArray(fixs)){
+        for (var j = 0; j < fixs.length; j++){
+          var matchups = fixs[j];
+          if (!Array.isArray(matchups)) continue;
+          for (var mi = 0; mi < matchups.length; mi++){
+            var mm = matchups[mi];
+            if (!mm) continue;
+            if (mm.home !== huInSlice && mm.away !== huInSlice) continue;
+            var r = results && results[j] && results[j][mi];
+            if (r && (r.played || r.done)) continue;
+            var hT = slice[mm.home], aT = slice[mm.away];
+            if (!hT || !aT || !hT.name || hT.name === 'PENDIENTE'
+                || !aT.name || aT.name === 'PENDIENTE') continue;
+            return {
+              phase: 'group',
+              phaseLabel: 'J' + (j + 1),
+              jor: j + 1,
+              isHome: (mm.home === huInSlice),
+              rival: (mm.home === huInSlice ? aT.name : hT.name),
+              franceName: (mm.home === huInSlice ? hT.name : aT.name)
+            };
+          }
+        }
+      }
+      /* Fase KO — `koBracket[round]` es un array plano de equipos
+         (pares consecutivos forman cada match), `results['ko_'+R+'_'+i/2]`
+         marca jugados. Si el equipo humano está en la ronda actual y
+         su match NO está jugado, devolvemos el rival. */
+      var koBracket = mundialCfg.koBracket;
+      var resultsObj = mundialCfg.results || {};
+      if (Array.isArray(koBracket)){
+        var curR = (typeof mundialCfg.koCurrentRound === 'number') ? mundialCfg.koCurrentRound : 0;
+        for (var rIdx = curR; rIdx < koBracket.length; rIdx++){
+          var arr = koBracket[rIdx];
+          if (!Array.isArray(arr) || arr.length < 2) continue;
+          for (var i = 0; i + 1 < arr.length; i += 2){
+            var a = arr[i], b = arr[i+1];
+            if (!a || !b) continue;
+            var aN = a.name || (typeof a === 'string' ? a : '');
+            var bN = b.name || (typeof b === 'string' ? b : '');
+            if (!aN || !bN || aN === 'PENDIENTE' || bN === 'PENDIENTE') continue;
+            var matchIdx = i / 2;
+            var kRes = resultsObj['ko_' + rIdx + '_' + matchIdx];
+            if (kRes && kRes.played) continue;
+            var aIsHum = (aN === huName) || (a.isHuman === true);
+            var bIsHum = (bN === huName) || (b.isHuman === true);
+            if (!aIsHum && !bIsHum) continue;
+            return {
+              phase: 'ko',
+              phaseLabel: _koRoundLabel(rIdx),
+              jor: rIdx + 1,
+              isHome: aIsHum,
+              rival: aIsHum ? bN : aN,
+              franceName: aIsHum ? aN : bN
+            };
+          }
         }
       }
     } catch(_){}
@@ -41203,12 +41275,31 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _pushPreviewFromText(t){
     if (!t) return;
     var head = String(t).replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/, '');
-    if (/^(entrenamiento|descanso|pretemporada|libre|selecci|amistoso\s+internac|d[íi]a\s+de\s+selec|d[íi]a\s+libre|elige)/i.test(head))
+    if (/^(entrenamiento|descanso|pretemporada|libre|amistoso\s+internac|d[íi]a\s+de\s+selec|d[íi]a\s+libre|elige)/i.test(head))
       return;
+    /* "Selecci" / "Mundial" en solitario solían filtrarse aquí, pero
+       precisamente esos son los días que queremos cubrir con el rival
+       extraído de `_franciaNextMatch()`. Aceptamos el texto y luego
+       intentamos enriquecer. Si no logramos rival, push genérico. */
     var rivalMatch = t.match(/(?:\bvs\b|\bcontra\b|\@)\s*([^·•\-—\|]+?)(?:\s*[·•\-—\|]|$)/i);
     var rival = rivalMatch ? rivalMatch[1].trim() : '';
     var dateMatch = t.match(/(\d{1,2})\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{3,})/);
     var dateStr = dateMatch ? dateMatch[0] : '';
+    /* Si el texto pinta selección o Mundial pero NO hay rival en el
+       texto, intentamos resolverlo con `_franciaNextMatch()` (cubre
+       fase de grupos y KO: Octavos / Cuartos / Semis / Final). */
+    var isMundial = /mundial|selecci/i.test(t);
+    var franceCtx = null;
+    var sideMsg = 'liv', sender = 'Cuerpo Técnico', icon = '📋';
+    if (isMundial && !rival){
+      try { franceCtx = (typeof _franciaNextMatch === 'function') ? _franciaNextMatch() : null; } catch(_){}
+      if (franceCtx && franceCtx.rival){
+        rival   = franceCtx.rival;
+        sideMsg = 'fra';
+        sender  = 'FFF · Selección Francia';
+        icon    = '🇫🇷';
+      }
+    }
     var sig = 'pre:' + (rival || head.slice(0,30)) + ':' + dateStr;
     if (_getCursor(sig)) return;
     _setCursor(sig, '1');
@@ -41217,18 +41308,28 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (days === 0) when = 'hoy';
     else if (days === 1) when = 'mañana';
     else if (days != null && days >= 2 && days <= 7) when = 'en ' + days + ' días';
-    var venue = /\@\s/.test(t) ? 'fuera de casa' : 'en Anfield';
-    var title = rival
-      ? (when ? 'Próximo partido ' + when + ' — vs ' + rival
-              : 'Próximo partido — vs ' + rival)
-      : 'Próximo partido — ' + t;
-    var body  = rival
-      ? 'Toca preparar el partido contra ' + rival + ' (' + venue
-        + (when ? ', ' + when : '')
-        + '). Revisa lesionados, sancionados y alineación. ¡A por ello!'
-      : 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
-    push({ side:'liv', type:'preview', icon:'📋',
-      sender:'Cuerpo Técnico', title:title, body:body });
+    var venue;
+    if (sideMsg === 'fra' && franceCtx) venue = franceCtx.isHome ? 'en casa' : 'fuera de casa';
+    else                                venue = /\@\s/.test(t) ? 'fuera de casa' : 'en Anfield';
+    var phaseTxt = (franceCtx && franceCtx.phaseLabel) ? franceCtx.phaseLabel : '';
+    var title;
+    if (rival){
+      title = 'Próximo partido' + (when ? ' ' + when : '') + ' — vs ' + rival
+            + (phaseTxt ? ' (' + phaseTxt + ')' : '');
+    } else {
+      title = 'Próximo partido — ' + t;
+    }
+    var body;
+    if (rival){
+      body = 'Toca preparar el partido contra ' + rival
+           + ' (' + venue + (when ? ', ' + when : '') + ')'
+           + (phaseTxt ? ' — ' + phaseTxt : '')
+           + '. Revisa lesionados, sancionados y alineación. ¡A por ello!';
+    } else {
+      body = 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
+    }
+    push({ side: sideMsg, type:'preview', icon: icon,
+      sender: sender, title:title, body:body });
   }
   function _observeNextMatch(){
     if (window.__MU_MSG_OBS_NM) return;

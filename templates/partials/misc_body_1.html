@@ -3550,16 +3550,25 @@ window._showSimProgress = function(opts, onDone){
          de TODOS los grupos jugados (no solo los del humano). */
       if (!cfg.koBracket || !cfg.koBracket.length){
         var allDoneAll = true;
-        var fixs = cfg.groupFixtures || [];
-        for (var gI = 0; gI < fixs.length && allDoneAll; gI++){
-          for (var jI = 0; jI < fixs[gI].length && allDoneAll; jI++){
-            for (var mI = 0; mI < fixs[gI][jI].length && allDoneAll; mI++){
+        var fixs = cfg.groupFixtures || {};
+        /* groupFixtures es OBJETO (`{0:[...], 1:[...]}`) en mundial-48
+           y resto de groups-ko, por lo que `fixs.length` es undefined
+           y un bucle clásico no itera. Resolvemos el nº de grupos del
+           formatConfig (defaults para mundial-48: 12 grupos × 4). */
+        var nGroupsM = fc.groups
+                     || (Array.isArray(fixs) ? fixs.length
+                                             : Object.keys(fixs).length);
+        for (var gI = 0; gI < nGroupsM && allDoneAll; gI++){
+          var _gFxM = fixs[gI] || [];
+          for (var jI = 0; jI < _gFxM.length && allDoneAll; jI++){
+            var _jMsM = _gFxM[jI] || [];
+            for (var mI = 0; mI < _jMsM.length && allDoneAll; mI++){
               var rr = results['g' + gI + '_' + jI + '_' + mI];
               if (!rr || !(rr.played || rr.done)) allDoneAll = false;
             }
           }
         }
-        if (allDoneAll && fixs.length){
+        if (allDoneAll && nGroupsM){
           var slices = [];
           for (var gg = 0; gg < (teams.length / pg); gg++){
             slices.push(teams.slice(gg * pg, gg * pg + pg));
@@ -4281,12 +4290,21 @@ window._showSimProgress = function(opts, onDone){
      league-ko / swiss). matchKey canónico `g<g>_<j>_<m>`. */
   function _psListPendingGroupMatches(cfg, compKey){
     var out = [];
-    var fixs = (cfg && cfg.groupFixtures) || [];
+    var fixs = (cfg && cfg.groupFixtures) || {};
     var teams = (cfg && cfg.teams) || [];
     var fc = (cfg && cfg.formatConfig) || {};
     var pg = fc.perGroup || (fc.groups ? Math.ceil(teams.length / fc.groups) : 4);
     var results = (cfg && cfg.results) || {};
-    for (var gI = 0; gI < fixs.length; gI++){
+    /* `groupFixtures` puede ser OBJETO (groups-ko / league-ko / swiss
+       lo persisten como `{0:[...], 1:[...], ...}`) o ARRAY (mundial-48
+       lo construye con `[]`). Iteramos por número de grupos del
+       formatConfig, NO por `fixs.length` — que es `undefined` para el
+       objeto y haría que el bucle no se ejecute (bug 2026-05-26: el
+       botón 🤖 SIMULAR FASE PREVIA no encontraba partidos pendientes
+       en torneos de verano). */
+    var nG = fc.groups || (Array.isArray(fixs) ? fixs.length
+                                                : Object.keys(fixs).length);
+    for (var gI = 0; gI < nG; gI++){
       var groupTeams = teams.slice(gI * pg, gI * pg + pg);
       var groupFixs = fixs[gI] || [];
       for (var jI = 0; jI < groupFixs.length; jI++){
@@ -4362,7 +4380,17 @@ window._showSimProgress = function(opts, onDone){
     var koRounds = (cfg.formatConfig && cfg.formatConfig.koRounds)
                 || opts.koRoundNames || [];
     if (koRoundIdx === 0) {
-      if (Array.isArray(cfg.groupFixtures) && cfg.groupFixtures.length){
+      /* `groupFixtures` puede ser OBJETO (groups-ko / league-ko / swiss
+         lo persisten como `{0:[...], 1:[...], ...}`) o ARRAY (mundial-48).
+         Comprobamos cualquiera de las dos formas (bug 2026-05-26: la
+         detección de fase previa pendiente fallaba en torneos de verano
+         porque solo aceptaba arrays). */
+      var _gFxAny = cfg.groupFixtures;
+      var _hasGroups = !!_gFxAny && (
+        (Array.isArray(_gFxAny) && _gFxAny.length)
+        || (typeof _gFxAny === 'object' && Object.keys(_gFxAny).length)
+      );
+      if (_hasGroups){
         var pendingGrp = _psListPendingGroupMatches(cfg, compKey);
         if (pendingGrp.length){
           return {
@@ -4411,12 +4439,18 @@ window._showSimProgress = function(opts, onDone){
       var results = cfg.results || {};
       if (pendingInfo.phase === 'groups'){
         /* Verificar que ahora SÍ están todos jugados (otros humanos
-           pueden seguir teniendo partidos sin jugar). */
+           pueden seguir teniendo partidos sin jugar). `groupFixtures`
+           puede ser OBJETO o ARRAY — iteramos por número de grupos
+           del formatConfig para cubrir ambos casos. */
         var allDone = true;
-        var fixs = cfg.groupFixtures || [];
-        for (var gI = 0; gI < fixs.length && allDone; gI++){
-          for (var jI = 0; jI < fixs[gI].length && allDone; jI++){
-            for (var mI = 0; mI < fixs[gI][jI].length && allDone; mI++){
+        var fixs = cfg.groupFixtures || {};
+        var nGroups = fc.groups || (Array.isArray(fixs) ? fixs.length
+                                                        : Object.keys(fixs).length);
+        for (var gI = 0; gI < nGroups && allDone; gI++){
+          var _gFx = fixs[gI] || [];
+          for (var jI = 0; jI < _gFx.length && allDone; jI++){
+            var _jMs = _gFx[jI] || [];
+            for (var mI = 0; mI < _jMs.length && allDone; mI++){
               var rr = results['g'+gI+'_'+jI+'_'+mI];
               if (!rr || !(rr.played || rr.done)) allDone = false;
             }
@@ -5241,6 +5275,37 @@ window._showSimProgress = function(opts, onDone){
           _pcfg = window._tourLoadCachedSync(pair.tourId);
         }
         _payRes = _pcfg && _pcfg.results && _pcfg.results[pair.matchKey] || null;
+        /* Fallback localStorage (2026-05-26): si la cache no tiene el
+           resultado (race con _tourLoad async, server-overwrite con cfg
+           stale, etc.) releemos directamente de localStorage. `_tourSave`
+           escribe localStorage SÍNCRONO antes del fetch al server, así
+           que el último estado jugado SIEMPRE está aquí — incluso si la
+           cache se desincroniza. Bug reportado por usuario 2026-05-26
+           con foto Liverpool vs Zhenis Astana del Joan Gamper: pagar
+           simulación cobraba 20🪙 pero la card seguía igual. */
+        if (!_payRes || !_payRes.played){
+          try {
+            var _rawT = localStorage.getItem('tour_' + pair.tourId + '_v1');
+            if (_rawT){
+              var _pT = JSON.parse(_rawT);
+              var _rT = _pT && _pT.results && _pT.results[pair.matchKey];
+              if (_rT && _rT.played){
+                _payRes = _rT;
+                /* Re-sincroniza la cache con lo que hay en disco para
+                   que renders posteriores no vuelvan a hacer este
+                   parse. La cache pasa a apuntar al cfg parseado. */
+                try {
+                  window._TOUR_CACHE = window._TOUR_CACHE || {};
+                  if (!window._TOUR_CACHE[pair.tourId]
+                      || !window._TOUR_CACHE[pair.tourId].results
+                      || !(window._TOUR_CACHE[pair.tourId].results[pair.matchKey]||{}).played){
+                    window._TOUR_CACHE[pair.tourId] = _pT;
+                  }
+                } catch(_){}
+              }
+            }
+          } catch(_){}
+        }
       } catch(_){}
     }
     var _payAlreadyPlayed = !!(_payRes && _payRes.played);

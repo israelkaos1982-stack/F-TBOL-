@@ -19457,16 +19457,24 @@ window._showSimProgress = function(opts, onDone){
   window._tourOpenHumanMatch = _tourOpenHumanMatch;
 
   /* Mensaje breve cuando un sim-batch saltó N partidos humanos. Se
-     pinta sobre el feedback del torneo. No bloqueante. */
+     pinta sobre el feedback del torneo. No bloqueante.
+     2026-05-26: instancia única (no se apilan), click-to-dismiss, fade-out
+     a los 2.8s, remove garantizado a los ~3.2s — petición usuario:
+     antes podía quedar fijo hasta recargar. */
   function _tourFlashHumanNotice(tourId, n) {
     try {
-      var box = document.getElementById('s-' + tourId);
-      if (!box) return;
+      var prev = document.getElementById('_tour-human-skip-notice');
+      if (prev) { try { prev.remove(); } catch(_){} }
       var f = document.createElement('div');
+      f.id = '_tour-human-skip-notice';
       f.textContent = '🎮 ' + n + ' partido' + (n===1?'':'s') + ' con humano se han SALTADO. Tócalo'+(n===1?'':'s')+' para jugarlo'+(n===1?'':'s')+' a mano.';
-      f.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(240,192,64,.95);color:#1a0e00;padding:10px 16px;border-radius:10px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;font-weight:700;z-index:99999;box-shadow:0 4px 18px rgba(0,0,0,.45);max-width:90vw;text-align:center;';
+      f.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(240,192,64,.95);color:#1a0e00;padding:10px 16px;border-radius:10px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;font-weight:700;z-index:99999;box-shadow:0 4px 18px rgba(0,0,0,.45);max-width:90vw;text-align:center;cursor:pointer;transition:opacity .35s ease;opacity:1;';
+      f.addEventListener('click', function(){ try { f.remove(); } catch(_){} });
       document.body.appendChild(f);
-      setTimeout(function(){ try { f.remove(); } catch(_){} }, 4500);
+      setTimeout(function(){
+        try { f.style.opacity = '0'; } catch(_){}
+        setTimeout(function(){ try { f.remove(); } catch(_){} }, 400);
+      }, 2800);
     } catch(_){}
   }
 

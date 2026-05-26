@@ -3913,6 +3913,10 @@ window._showSimProgress = function(opts, onDone){
       var actaM = {
         home: res.home || hN,
         away: res.away || aN,
+        /* Escudos del bracket → la acta los pinta junto al nombre del
+           equipo en cada evento (2026-05-25). */
+        homeShield: hS,
+        awayShield: aS,
         events: (res.events || []),
         mvp: res.mvp || '',
         mvpTeam: res.mvpTeam || ''
@@ -4410,6 +4414,11 @@ window._showSimProgress = function(opts, onDone){
         var _actaM = {
           home: _payRes.home || _hN,
           away: _payRes.away || _aN,
+          /* Pasamos los escudos del bracket para que la acta los muestre
+             junto al nombre del equipo en cada evento (sin depender del
+             fuzzy match del helper global). 2026-05-25. */
+          homeShield: _hS,
+          awayShield: _aS,
           events: (_payRes.events || []),
           mvp: _payRes.mvp || '',
           mvpTeam: _payRes.mvpTeam || ''
@@ -24416,7 +24425,8 @@ window._showSimProgress = function(opts, onDone){
 .eurfase-acta-min{color:#9fc8ff;font-weight:700;font-size:11.5px;letter-spacing:.5px;}
 .eurfase-acta-ico{text-align:center;font-size:14px;}
 .eurfase-acta-player{color:#fff;line-height:1.2;}
-.eurfase-acta-team{color:rgba(255,255,255,.55);font-size:10.5px;letter-spacing:.3px;}
+.eurfase-acta-team{color:rgba(255,255,255,.55);font-size:10.5px;letter-spacing:.3px;display:inline-flex;align-items:center;gap:4px;}
+.eurfase-acta-team-shield{width:14px;height:14px;object-fit:contain;flex:0 0 14px;filter:drop-shadow(0 0 2px rgba(0,0,0,.5));}
 .eurfase-acta-empty{padding:10px;text-align:center;color:rgba(255,255,255,.45);font-style:italic;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;}
 .eurfase-acta-mvp{padding:8px 10px;margin-top:4px;background:linear-gradient(90deg,rgba(255,213,74,.12),rgba(255,213,74,.04));border-left:2px solid rgba(255,213,74,.55);color:#ffe089;font-family:Rajdhani,sans-serif;font-size:12px;}
 .eurfase-acta-mvp b{color:#ffd54a;}
@@ -25114,21 +25124,52 @@ window._showSimProgress = function(opts, onDone){
     var sorted = events.slice()
       .filter(function(e){ return e && e.type !== 'played' && e.type !== 'sust' && e.type !== 'mvp'; })
       .sort(function(a,b){ return (Number(a.min)||0) - (Number(b.min)||0); });
+    /* Resolver escudos UNA vez por equipo (no por evento) — 2026-05-25:
+       el usuario reportó "faltan iconos en los eventos" sobre la card
+       del Trofeo Joan Gamper. Cada fila solo tenía el icono del evento
+       y el nombre del equipo en texto plano; ahora añadimos el escudo
+       del equipo (📷 pequeño 14×14) al lado del nombre para que sea
+       coherente con el header de la card y con el resto del proyecto. */
+    function _resolveShield(teamName){
+      if (!teamName) return '';
+      if (m && m.homeShield && teamName === m.home) return m.homeShield;
+      if (m && m.awayShield && teamName === m.away) return m.awayShield;
+      try {
+        if (typeof window.getTeamLogoUrl === 'function') {
+          var u = window.getTeamLogoUrl(teamName);
+          if (u) return u;
+        }
+      } catch(_){}
+      try {
+        var g = window._ligaEaShields || {};
+        if (g[teamName]) return g[teamName];
+      } catch(_){}
+      return '';
+    }
+    var _homeShield = _resolveShield(m && m.home);
+    var _awayShield = _resolveShield(m && m.away);
     var rows = '';
     sorted.forEach(function(ev){
       var ico = _EURFASE_EV_ICOS[ev.type] || '•';
       if(ev.dbl) ico = '🟨🟥';
       var pname = String(ev.player || ev.name || '').replace(/^\s*\d+\s*[.\-]?\s*/, '').trim();
       var teamName = ev.team === 'a' ? m.home : (ev.team === 'b' ? m.away : '');
+      var teamShield = ev.team === 'a' ? _homeShield : (ev.team === 'b' ? _awayShield : '');
       var minLabel = ev.min === 121 ? 'PEN' : (ev.min + '\'');
       var extra = '';
       if(ev._varAnulado) extra = ' <span style="font-size:10px;color:#ff5555;font-weight:700;letter-spacing:.4px">⛔ ANULADA POR 📺 VAR</span>';
       else if(ev._varConfirmed) extra = ' <span style="font-size:10px;color:#4fd87a;font-weight:700">✓ Confirmado por 📺 VAR</span>';
+      var teamHtml = '<span class="eurfase-acta-team">'
+        + (teamShield
+            ? '<img class="eurfase-acta-team-shield" src="'+_esc(teamShield)+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'" alt="">'
+            : '')
+        + _esc(teamName)
+        + '</span>';
       rows += '<div class="eurfase-acta-row">'
             + '<span class="eurfase-acta-min">' + _esc(minLabel) + '</span>'
             + '<span class="eurfase-acta-ico">' + ico + '</span>'
             + '<span class="eurfase-acta-player">' + _esc(pname || 'Jugador') + extra + '</span>'
-            + '<span class="eurfase-acta-team">' + _esc(teamName) + '</span>'
+            + teamHtml
             + '</div>';
     });
     if(!rows){
@@ -25136,8 +25177,15 @@ window._showSimProgress = function(opts, onDone){
     }
     var mvpRow = '';
     if(m.mvp){
+      var _mvpShield = _resolveShield(m.mvpTeam);
       mvpRow = '<div class="eurfase-acta-mvp">⭐ MVP: <b>' + _esc(String(m.mvp).replace(/^\s*\d+\s*[.\-]?\s*/, '').trim()) + '</b>'
-             + (m.mvpTeam ? ' <span class="eurfase-acta-team">(' + _esc(m.mvpTeam) + ')</span>' : '')
+             + (m.mvpTeam
+                 ? ' <span class="eurfase-acta-team">('
+                   + (_mvpShield
+                       ? '<img class="eurfase-acta-team-shield" src="'+_esc(_mvpShield)+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'" alt="">'
+                       : '')
+                   + _esc(m.mvpTeam) + ')</span>'
+                 : '')
              + '</div>';
     }
     return '<div class="eurfase-acta-wrap">'

@@ -18672,14 +18672,15 @@ window._showSimProgress = function(opts, onDone){
      llevan zona resaltada en cian. */
   function _mundialClasTableHtml(rows, slice, advancePerGroup, bestThirdNames){
     var cells = '<thead><tr style="background:linear-gradient(90deg,#001f2a,#003a52,#001f2a);border-bottom:1px solid rgba(77,208,225,.40);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:rgba(255,255,255,.7);">'
-      + '<th style="text-align:left;padding:8px 6px 8px 10px;">EQUIPO</th>'
-      + '<th style="padding:8px 4px;">PTS</th>'
-      + '<th style="padding:8px 4px;">PJ</th>'
-      + '<th style="padding:8px 4px;">V</th>'
-      + '<th style="padding:8px 4px;">E</th>'
-      + '<th style="padding:8px 4px;">P</th>'
-      + '<th style="padding:8px 4px;">GF</th>'
-      + '<th style="padding:8px 10px 8px 4px;">GC</th>'
+      + '<th style="text-align:left;padding:8px 2px 8px 6px;">EQUIPO</th>'
+      + '<th style="padding:8px 3px;">PTS</th>'
+      + '<th style="padding:8px 3px;">PJ</th>'
+      + '<th style="padding:8px 3px;">V</th>'
+      + '<th style="padding:8px 3px;">E</th>'
+      + '<th style="padding:8px 3px;">P</th>'
+      + '<th style="padding:8px 3px;">GF</th>'
+      + '<th style="padding:8px 3px;">GC</th>'
+      + '<th style="padding:8px 8px 8px 3px;">DG</th>'
       + '</tr></thead><tbody>';
     rows.forEach(function(r, idx){
       var pos = idx + 1;
@@ -18709,20 +18710,23 @@ window._showSimProgress = function(opts, onDone){
          que PJ/V/E/P), NO en gris. Solo se distinguen del clasificado
          por el acento cian en bg + borde (petición usuario 2026-05-24). */
       var posCol = qual ? '#4dd0e1' : 'rgba(255,255,255,.85)';
+      var _dgVal = (r.dif > 0 ? '+' : '') + r.dif;
+      var _dgCol = r.dif > 0 ? '#80d0ff' : (r.dif < 0 ? '#ff9090' : 'rgba(255,255,255,.85)');
       cells += '<tr style="background:'+rowBg+';border-left:3px solid '+rowBd+';border-bottom:1px solid rgba(255,255,255,.05);">'
-        + '<td style="padding:8px 6px 8px 7px;"><div style="display:flex;align-items:center;gap:6px;">'
-        +   '<span style="font-family:\'Bebas Neue\',sans-serif;color:'+posCol+';width:16px;text-align:center;font-size:15px;">'+pos+'</span>'
+        + '<td style="padding:8px 2px 8px 5px;"><div style="display:flex;align-items:center;gap:4px;">'
+        +   '<span style="font-family:\'Bebas Neue\',sans-serif;color:'+posCol+';width:14px;text-align:center;font-size:15px;">'+pos+'</span>'
         +   shield
-        +   '<span style="font-family:Rajdhani,sans-serif;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;">'+nm+'</span>'
+        +   '<span style="font-family:Rajdhani,sans-serif;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;">'+nm+'</span>'
         +   (humanIc ? '<span style="margin-left:2px;">'+humanIc+'</span>' : '')
         + '</div></td>'
-        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;font-size:17px;color:#f0c040;font-weight:700;">'+r.pts+'</td>'
-        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pj+'</td>'
-        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pg+'</td>'
-        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pe+'</td>'
-        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pp+'</td>'
-        + '<td style="padding:8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:#80d0ff;">'+r.gf+'</td>'
-        + '<td style="padding:8px 10px 8px 4px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:#ff9090;">'+r.gc+'</td>'
+        + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;font-size:17px;color:#f0c040;font-weight:700;">'+r.pts+'</td>'
+        + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pj+'</td>'
+        + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pg+'</td>'
+        + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pe+'</td>'
+        + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:rgba(255,255,255,.85);">'+r.pp+'</td>'
+        + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:#80d0ff;">'+r.gf+'</td>'
+        + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;color:#ff9090;">'+r.gc+'</td>'
+        + '<td style="padding:8px 8px 8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;font-weight:700;color:'+_dgCol+';">'+_dgVal+'</td>'
         + '</tr>';
     });
     cells += '</tbody>';

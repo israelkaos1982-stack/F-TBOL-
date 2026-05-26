@@ -11255,22 +11255,26 @@ window._showSimProgress = function(opts, onDone){
 })();
 </script>
 
-<!-- ═══ RECOPA DE EUROPA · Pantalla principal + 6 rondas ═══
-     Petición usuario 2026-05-06. Competición europea single-leg
-     con 64 equipos. Pool: campeón + (subcampeón opcional) de cada
-     copa nacional de Resto de Ligas + equipos españoles añadidos
-     manualmente vía "EA Sports → Europa" (slug 'recopa').
-     6 rondas K.O., cada partido a partido único con ET+pen si
-     empate al 90'.
+<!-- ═══ RECOPA DE EUROPA · Pantalla principal + 3 rondas ═══
+     Petición usuario 2026-05-06 (formato 64 equipos) y rediseño
+     2026-05-26 (formato 8 equipos en cuartos). Competición europea
+     single-leg con 8 equipos:
+       - Top 6 de Resto del Mundo (auto, vía cfg.zones.recopa).
+       - 2 manuales (campeón + subcampeón Champions del año pasado)
+         vía "EA Sports → Europa" slug 'recopa'.
+     3 rondas K.O. (Cuartos → Semis → Final), partido único con
+     prórroga + penaltis si empate al 90'.
 -->
 <div class="screen" id="s-recopa">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa de Europa</h2></div>
 <div id="recopa-banner" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin:6px 0 10px;padding:0 8px;"></div>
 <div class="jlist">
-<div class="jblock" id="recopa-rd-r64-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r64')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;1/64</span><span class="recopa-rd-cnt" id="recopa-rd-r64-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
-<div class="jblock" id="recopa-rd-r32-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r32')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Dieciseisavos</span><span class="recopa-rd-cnt" id="recopa-rd-r32-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
-<div class="jblock" id="recopa-rd-r16-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r16')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Octavos de Final</span><span class="recopa-rd-cnt" id="recopa-rd-r16-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<!-- Recopa rediseñada 2026-05-26: arranca en CUARTOS con 8 equipos
+     (6 desde Resto del Mundo top + 2 manuales champion/runner-up
+     UCL del año pasado). Las rondas 1/64, 1/32 y Octavos quedan
+     OBSOLETAS — eliminadas del DOM. La key `recopa_state_v1` legacy
+     que tenga `sorteo.r64/r32/r16` con datos se ignora al cargar. -->
 <div class="jblock" id="recopa-rd-r8-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r8')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Cuartos de Final</span><span class="recopa-rd-cnt" id="recopa-rd-r8-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-sf-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Semifinales</span><span class="recopa-rd-cnt" id="recopa-rd-sf-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-fin-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-fin')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;FINAL</span><span class="recopa-rd-cnt" id="recopa-rd-fin-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
@@ -11283,9 +11287,6 @@ window._showSimProgress = function(opts, onDone){
 </div>
 </div>
 </div>
-<div class="screen" id="s-recopa-rd-r64"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · 1/64</h2></div><div id="recopa-rd-r64-body" style="padding:0 4px 20px;"></div></div>
-<div class="screen" id="s-recopa-rd-r32"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Dieciseisavos</h2></div><div id="recopa-rd-r32-body" style="padding:0 4px 20px;"></div></div>
-<div class="screen" id="s-recopa-rd-r16"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Octavos de Final</h2></div><div id="recopa-rd-r16-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-r8"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Cuartos de Final</h2></div><div id="recopa-rd-r8-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-sf"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Semifinales</h2></div><div id="recopa-rd-sf-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-fin"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · FINAL</h2></div><div id="recopa-rd-fin-body" style="padding:0 4px 20px;"></div></div>
@@ -11358,24 +11359,28 @@ window._showSimProgress = function(opts, onDone){
   /* ═══════════════════════════════════════════════════════════════
      RECOPA DE EUROPA · Motor + UI
      ═══════════════════════════════════════════════════════════════
+     Rediseño 2026-05-26: la Recopa arranca DIRECTAMENTE EN CUARTOS
+     con 8 equipos:
+       - Top 6 de Resto del Mundo (auto, leídos de `ligaExt_resto-mundo`).
+       - 2 equipos manuales (campeón + subcampeón Champions del año
+         pasado) añadidos vía "EA Sports → Europa" slug 'recopa'.
+     Las rondas 1/64, 1/32 y Octavos del motor antiguo se eliminaron
+     — el DOM ya no las tiene y el motor no las gestiona.
      Estado en localStorage `recopa_state_v1`:
-       { pool: ['Team1', ...],   // 64 equipos al sortear r64
-         sorteo: { r64:[m,...], r32:[...], r16:[...], r8:[...],
-                   sf:[...], fin:[...] },
+       { pool: ['Team1', ...],         // 8 equipos al sortear r8
+         sorteo: { r8:[m,...], sf:[...], fin:[...] },
          champion: 'Team' | null,
          runnerUp: 'Team' | null }
      Cada match: { home, away, played, gh, ga, etGh, etGa, penWinner }.
      Todas las rondas son a partido único con prórroga + penaltis si
      empate al 90'.
-     Pool: campeón + (subcampeón si data.config.recopaSubcampeon=true)
-     de cada `ligaExt_<slug>.copa`, más equipos manuales de `_meaTeamsFor('recopa')`.
      ═══════════════════════════════════════════════════════════════ */
   var STORE_KEY = 'recopa_state_v1';
-  var PHASES = ['r64','r32','r16','r8','sf','fin'];
-  var PHASE_LABEL = { r64:'1/64', r32:'Dieciseisavos', r16:'Octavos', r8:'Cuartos', sf:'Semifinales', fin:'FINAL' };
-  var PHASE_SIZE  = { r64:32, r32:16, r16:8, r8:4, sf:2, fin:1 }; /* nº de matches */
-  var NEXT_PHASE  = { r64:'r32', r32:'r16', r16:'r8', r8:'sf', sf:'fin', fin:null };
-  var DOM_BODY    = { r64:'recopa-rd-r64-body', r32:'recopa-rd-r32-body', r16:'recopa-rd-r16-body', r8:'recopa-rd-r8-body', sf:'recopa-rd-sf-body', fin:'recopa-rd-fin-body' };
+  var PHASES = ['r8','sf','fin'];
+  var PHASE_LABEL = { r8:'Cuartos', sf:'Semifinales', fin:'FINAL' };
+  var PHASE_SIZE  = { r8:4, sf:2, fin:1 }; /* nº de matches */
+  var NEXT_PHASE  = { r8:'sf', sf:'fin', fin:null };
+  var DOM_BODY    = { r8:'recopa-rd-r8-body', sf:'recopa-rd-sf-body', fin:'recopa-rd-fin-body' };
 
   function _load(){
     try { return JSON.parse(localStorage.getItem(STORE_KEY)||'null'); } catch(_){ return null; }
@@ -11408,14 +11413,16 @@ window._showSimProgress = function(opts, onDone){
     return H.indexOf(name) !== -1;
   }
 
-  /* Construye el pool de 64 equipos a partir de:
-     - Campeón de cada ligaExt_<slug>.copa (1 por liga si existe).
-     - Subcampeón si data.config.recopaSubcampeon === true (0 o 1 más).
-     - Equipos manuales españoles añadidos vía "EA Sports → Europa"
-       slug 'recopa' (window._meaTeamsFor('recopa')).
-     Si hay más de 64, se trunca por ranking aleatorio (shuffle + slice).
-     Si hay menos, se devuelve lo que haya — el sorteo de r64 se hace
-     con los disponibles (las "BYE" no están soportadas por ahora). */
+  /* Construye el pool de 8 equipos (rediseño 2026-05-26):
+     1) Top N de la tabla `ligaExt_resto-mundo` (N = cfg.zones.recopa,
+        default 6). Computados con la misma función `standings` que
+        usa la pantalla de la liga (puntos / diferencia / GF / nombre).
+     2) Equipos manuales añadidos vía "EA Sports → Europa" slug 'recopa'
+        (window._meaTeamsFor('recopa')). El usuario los añade a mano:
+        campeón + subcampeón Champions del año pasado.
+     Si la suma supera 8, se trunca; si es menor, el sorteo se hace
+     con los disponibles. NO usa más campeones de copas (modelo
+     antiguo). */
   function _buildPool(){
     var pool = [];
     var seen = {};
@@ -11427,38 +11434,25 @@ window._showSimProgress = function(opts, onDone){
       seen[nm] = true;
       pool.push(nm);
     }
-    /* 1. Campeones / subcampeones de Resto de Ligas */
+    /* 1. Top N de Resto del Mundo. La función `standings` está en el
+       IIFE de Resto de Ligas (cierre privado), no es global. Como
+       fallback usamos un standings inline equivalente. */
     try {
-      for(var i=0; i<localStorage.length; i++){
-        var k = localStorage.key(i);
-        if(!k || k.indexOf('ligaExt_') !== 0) continue;
-        if(k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1 || k.indexOf('_snap_') !== -1) continue;
-        var raw = localStorage.getItem(k);
-        if(!raw) continue;
-        var parsed; try { parsed = JSON.parse(raw); } catch(_){ continue; }
-        if(!parsed || !parsed.copa) continue;
-        var _champion = parsed.copa.champion;
-        var _runnerUp = parsed.copa.runnerUp;
-        /* Fallback: si la final se jugó pero champion no quedó
-           guardado (legacy data antes de 2026-05-07), tomamos
-           winner/loser de la final misma. */
-        if(!_champion && parsed.copa.final && parsed.copa.final.played && parsed.copa.final.winner){
-          _champion = parsed.copa.final.winner;
-          _runnerUp = (_champion === parsed.copa.final.home) ? parsed.copa.final.away : parsed.copa.final.home;
-        }
-        if(_champion) _push(_champion);
-        /* Subcampeón: default = TRUE (el usuario espera campeón +
-           subcampeón siempre). Solo lo excluimos si el admin
-           explícitamente marcó `recopaSubcampeon === false`. Antes
-           el default era undefined → no se incluía y la pool se
-           quedaba en la mitad. Reportado 2026-05-07. */
-        var _includeRunner = !(parsed.config && parsed.config.recopaSubcampeon === false);
-        if(_includeRunner && _runnerUp){
-          _push(_runnerUp);
+      var raw = localStorage.getItem('ligaExt_resto-mundo');
+      if (raw) {
+        var rmData = JSON.parse(raw);
+        if (rmData && Array.isArray(rmData.teams) && Array.isArray(rmData.results)) {
+          var slots = 6;
+          try {
+            var z = rmData.config && rmData.config.zones;
+            if (z && Number(z.recopa) > 0) slots = Math.min(8, Number(z.recopa));
+          } catch(_){}
+          var rmTop = _rmStandingsTop(rmData, slots);
+          rmTop.forEach(function(nm){ _push(nm); });
         }
       }
     } catch(_){}
-    /* 2. Equipos manuales españoles desde EA Sports → Europa */
+    /* 2. Equipos manuales (campeón + subcampeón Champions año pasado) */
     try {
       if(typeof window._meaTeamsFor === 'function'){
         var manual = window._meaTeamsFor('recopa') || [];
@@ -11467,13 +11461,41 @@ window._showSimProgress = function(opts, onDone){
         });
       }
     } catch(_){}
+    /* Cap a 8 — si por error hay más manuales el sobrante se descarta. */
+    if (pool.length > 8) pool = pool.slice(0, 8);
     return pool;
   }
+  /* Standings inline para Resto del Mundo. Mismo criterio que la
+     función `standings` privada del IIFE de Resto de Ligas. */
+  function _rmStandingsTop(data, n){
+    var byId = {};
+    (data.teams||[]).forEach(function(t){
+      byId[t.id] = { id:t.id, name:t.name, pts:0, dg:0, gf:0 };
+    });
+    (data.results||[]).forEach(function(r){
+      var H = byId[r.h], A = byId[r.a];
+      if(!H || !A) return;
+      H.gf += (r.gh||0); A.gf += (r.ga||0);
+      H.dg += (r.gh||0) - (r.ga||0);
+      A.dg += (r.ga||0) - (r.gh||0);
+      if(r.gh > r.ga)      { H.pts += 3; }
+      else if(r.ga > r.gh) { A.pts += 3; }
+      else                 { H.pts += 1; A.pts += 1; }
+    });
+    var arr = Object.keys(byId).map(function(k){ return byId[k]; });
+    arr.sort(function(a,b){
+      if(b.pts !== a.pts) return b.pts - a.pts;
+      if(b.dg  !== a.dg)  return b.dg  - a.dg;
+      if(b.gf  !== a.gf)  return b.gf  - a.gf;
+      return a.name.localeCompare(b.name, 'es');
+    });
+    return arr.slice(0, Math.max(0, n|0)).map(function(t){ return t.name; });
+  }
 
-  /* Sortea los 64 (o menos) equipos en 32 partidos aleatorios.
-     Si hay menos de 64, se sortean los disponibles. Si hay impar,
-     se descarta el último (random shuffle ya). */
-  function _drawR64(pool){
+  /* Sortea los 8 (o menos) equipos en 4 partidos aleatorios de Cuartos.
+     Si hay menos de 8, se sortean los disponibles. Si hay impar, se
+     descarta el último (random shuffle ya). Rediseño 2026-05-26. */
+  function _drawR8(pool){
     var sh = _shuffle(pool);
     if(sh.length % 2 !== 0) sh.pop();
     var matches = [];
@@ -11529,22 +11551,22 @@ window._showSimProgress = function(opts, onDone){
   /* ── PUBLIC API ───────────────────────────────────────────────── */
   window._recopaSortear = function(){
     var s = _load() || {};
-    var phase = s.sorteo ? _firstPhaseToDraw(s) : 'r64';
-    if(phase === 'r64'){
+    var phase = s.sorteo ? _firstPhaseToDraw(s) : 'r8';
+    if(phase === 'r8'){
       var pool = _buildPool();
       if(pool.length < 2){
-        alert('⚠️ Necesitas al menos 2 equipos para sortear la Recopa.\n\nPool actual: ' + pool.length + '\n\nEl pool se construye con:\n  · Campeones de las copas de Resto de Ligas\n  · Subcampeones (si la copa lo tiene activado en sus Reglas)\n  · Equipos españoles añadidos vía EA Sports → Europa.');
+        alert('⚠️ Necesitas al menos 2 equipos para sortear la Recopa.\n\nPool actual: ' + pool.length + '\n\nEl pool se construye con:\n  · Top 6 de la liga Resto del Mundo (automático).\n  · Campeón + Subcampeón Champions del año pasado (añadidos manualmente vía EA Sports → Europa).');
         return;
       }
-      var conf = pool.length >= 64 ? '64' : (pool.length + ' (faltan ' + (64-pool.length) + ' para llenar el pool)');
-      if(s.sorteo && s.sorteo.r64 && s.sorteo.r64.length){
-        if(!confirm('Ya hay un sorteo de 1/64 hecho. ¿Re-sortear con los ' + conf + ' equipos del pool actual?\n\nSe perderán los resultados ya jugados de esta edición.')) return;
+      var conf = pool.length >= 8 ? '8' : (pool.length + ' (faltan ' + (8-pool.length) + ' para llenar el pool)');
+      if(s.sorteo && s.sorteo.r8 && s.sorteo.r8.length){
+        if(!confirm('Ya hay un sorteo de Cuartos hecho. ¿Re-sortear con los ' + conf + ' equipos del pool actual?\n\nSe perderán los resultados ya jugados de esta edición.')) return;
       }
-      var newSorteo = { r64:_drawR64(pool), r32:[], r16:[], r8:[], sf:[], fin:[] };
-      s = { pool: pool.slice(0, 64), sorteo: newSorteo, champion:null, runnerUp:null };
+      var newSorteo = { r8:_drawR8(pool), sf:[], fin:[] };
+      s = { pool: pool.slice(0, 8), sorteo: newSorteo, champion:null, runnerUp:null };
       _save(s);
       _recopaInit();
-      try { go('s-recopa-rd-r64'); } catch(_){}
+      try { go('s-recopa-rd-r8'); } catch(_){}
       return;
     }
     if(!phase){
@@ -11573,7 +11595,7 @@ window._showSimProgress = function(opts, onDone){
   }
 
   window._recopaReiniciar = function(){
-    if(!confirm('¿Reiniciar Recopa de Europa?\n\nSe pierden el sorteo y todos los resultados de esta edición. El pool se reconstruye al pulsar Sortear 1/64.')) return;
+    if(!confirm('¿Reiniciar Recopa de Europa?\n\nSe pierden el sorteo y todos los resultados de esta edición. El pool se reconstruye al pulsar Sortear Cuartos.')) return;
     try { localStorage.removeItem(STORE_KEY); } catch(_){}
     _recopaInit();
   };
@@ -11652,15 +11674,15 @@ window._showSimProgress = function(opts, onDone){
     if(!host) return;
     var s = _load();
     var html = '';
-    if(!s || !s.sorteo || !s.sorteo.r64 || !s.sorteo.r64.length){
+    if(!s || !s.sorteo || !s.sorteo.r8 || !s.sorteo.r8.length){
       var pool = _buildPool();
-      html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + pool.length + ' equipos)</button>';
+      html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear Cuartos (' + pool.length + ' equipos)</button>';
     } else {
       var phase = _firstPhaseToDraw(s);
       var done = _phaseDone(s, _prevPhase(phase));
       if(s.champion){
         html += '<div class="recopa-banner-info">🏆 Campeón: <b>' + _esc(s.champion) + '</b> · Subcampeón: <b>' + _esc(s.runnerUp||'') + '</b></div>';
-      } else if(phase && phase !== 'r64'){
+      } else if(phase && phase !== 'r8'){
         var prev = _prevPhase(phase);
         if(done){
           html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</button>';
@@ -27345,11 +27367,13 @@ window._showSimProgress = function(opts, onDone){
 <div class="lext-legend" id="lext-legend">
   <div class="lext-leg-item lext-leg-ucl"><span class="lext-leg-dot" style="background:#3160ff;"></span>UCL</div>
   <div class="lext-leg-item lext-leg-uclprev"><span class="lext-leg-dot" style="background:#a050ff;"></span>Previa</div>
-  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#f0c040;"></span>Open</div>
+  <div class="lext-leg-item lext-leg-uclqual"><span class="lext-leg-dot" style="background:#f0c040;"></span>Open</div>
   <div class="lext-leg-item lext-leg-uel"><span class="lext-leg-dot" style="background:#ff8214;"></span>E.League</div>
   <div class="lext-leg-item lext-leg-uecl"><span class="lext-leg-dot" style="background:#3cc878;"></span>Conference</div>
   <div class="lext-leg-item lext-leg-wildcard"><span class="lext-leg-dot" style="background:#ffffff;"></span>WildCard</div>
-  <div class="lext-leg-item"><span class="lext-leg-dot" style="background:#e03c3c;"></span>Descenso</div>
+  <div class="lext-leg-item lext-leg-recopa" style="display:none;"><span class="lext-leg-dot" style="background:#b46438;"></span>Recopa</div>
+  <div class="lext-leg-item lext-leg-mundial" style="display:none;"><span class="lext-leg-dot" style="background:#50a0dc;"></span>Mundialito</div>
+  <div class="lext-leg-item lext-leg-desc"><span class="lext-leg-dot" style="background:#e03c3c;"></span>Descenso</div>
 </div>
 
 <style>
@@ -27370,6 +27394,8 @@ window._showSimProgress = function(opts, onDone){
 .lext-row.z-uel{background:rgba(255,130,20,.13);border-left-color:#ff8214;}
 .lext-row.z-uecl{background:rgba(60,200,120,.12);border-left-color:#3cc878;}
 .lext-row.z-wildcard{background:rgba(255,255,255,.10);border-left-color:#ffffff;}
+.lext-row.z-recopa{background:rgba(180,100,60,.18);border-left-color:#b46438;}
+.lext-row.z-mundial{background:rgba(80,160,220,.13);border-left-color:#50a0dc;}
 .lext-row.z-desc{background:rgba(224,60,60,.13);border-left-color:#e03c3c;}
 .lext-pos{font-family:"Bebas Neue",sans-serif;font-size:15px;color:rgba(255,255,255,.55);text-align:center;}
 .lext-team{display:flex;align-items:center;gap:6px;min-width:0;}
@@ -28107,6 +28133,14 @@ https://api.sofascore.app/api/v1/team/44/image
     <div id="lext-reg-wildcard-row">
       <label class="lext-label" style="color:rgba(255,255,255,.92);">⚪ WildCard Round</label>
       <input class="lext-input" id="lext-reg-wildcard" type="number" min="0" max="20" value="0" style="border-color:rgba(255,255,255,.5);" />
+    </div>
+    <div id="lext-reg-recopa-row" style="display:none;">
+      <label class="lext-label" style="color:#ff9070;">🟤 Equipos pasan a Recopa (a cuartos directo)</label>
+      <input class="lext-input" id="lext-reg-recopa" type="number" min="0" max="20" value="6" />
+    </div>
+    <div id="lext-reg-mundial-row" style="display:none;">
+      <label class="lext-label" style="color:#80d0ff;">🏆 Equipos clasifican a Mundialito Clubes (manual c/4 temporadas)</label>
+      <input class="lext-input" id="lext-reg-mundial" type="number" min="0" max="32" value="16" />
     </div>
     <label class="lext-label">🔴 Descenso (últimas plazas)</label>
     <input class="lext-input" id="lext-reg-desc" type="number" min="0" max="20" value="3" />
@@ -30341,7 +30375,7 @@ https://api.sofascore.app/api/v1/team/44/image
     return arr;
   }
 
-  var DEFAULT_ZONES = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0, desc:3};
+  var DEFAULT_ZONES = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0, recopa:0, mundialClubes:0, desc:3};
 
   function ensureConfig(data){
     if(!data.config) data.config = {};
@@ -30366,6 +30400,15 @@ https://api.sofascore.app/api/v1/team/44/image
     var uel = Math.max(0, zones.uel|0);
     var uecl = Math.max(0, zones.uecl|0);
     var wildcard = Math.max(0, zones.wildcard|0);
+    var recopa = Math.max(0, zones.recopa|0);
+    var mundial = Math.max(0, zones.mundialClubes|0);
+    /* mundialClubes representa los N primeros TOTALES que clasifican al
+       Mundialito (incluye los que también van a Recopa). El cupo
+       visible como franja separada es la diferencia: posiciones que
+       van SOLO a Mundialito y no a Recopa. Si mundial<=recopa no hay
+       franja adicional. Petición usuario 2026-05-26: Resto del Mundo
+       envía 6 a Recopa + 16 al Mundialito (de los cuales 6 coinciden). */
+    var mundialDelta = Math.max(0, mundial - recopa);
     var desc = Math.max(0, zones.desc|0);
     // Zona de descenso (últimas plazas)
     if(desc>0 && pos > total-desc) return 'z-desc';
@@ -30380,6 +30423,8 @@ https://api.sofascore.app/api/v1/team/44/image
     if(pos <= (cursor+=uel)) return 'z-uel';
     if(pos <= (cursor+=uecl)) return 'z-uecl';
     if(pos <= (cursor+=wildcard)) return 'z-wildcard';
+    if(pos <= (cursor+=recopa)) return 'z-recopa';
+    if(pos <= (cursor+=mundialDelta)) return 'z-mundial';
     return '';
   }
 
@@ -30890,10 +30935,15 @@ https://api.sofascore.app/api/v1/team/44/image
     });
     data.results = [];
     var ts = _capRoundRobin(data.teams.slice());
-    /* Lista plana de cruces (i,j) con i≠j — doble round-robin. */
+    /* Lista plana de cruces. Por defecto doble round-robin (i,j) con
+       i≠j. Resto del Mundo es la única liga que se juega a UNA sola
+       vuelta — todos contra todos sin repetir (petición usuario
+       2026-05-26). Para N=43 equipos eso da 42 partidos por equipo. */
     var pairs = [];
+    var _singleRound = (slug === 'resto-mundo');
     for(var pi=0; pi<ts.length; pi++){
-      for(var pj=0; pj<ts.length; pj++){
+      var _jStart = _singleRound ? pi + 1 : 0;
+      for(var pj=_jStart; pj<ts.length; pj++){
         if(pi!==pj) pairs.push([pi,pj]);
       }
     }
@@ -31039,6 +31089,37 @@ https://api.sofascore.app/api/v1/team/44/image
   }
 
   // ── Reglas de la competición ──────────────────────
+  /* Helper: muestra/oculta filas del modal según el slug. Resto del
+     Mundo (petición usuario 2026-05-26): oculta UCL/Previa/Open/
+     E.League/Conference/WildCard/Descenso y muestra Recopa+Mundialito.
+     Resto de ligas: comportamiento opuesto. */
+  function _lextToggleRegRows(slug){
+    var EURO_ROWS = ['lext-reg-ucl-row','lext-reg-uclprev-row','lext-reg-uel-row','lext-reg-uecl-row','lext-reg-wildcard-row'];
+    var RM_ROWS = ['lext-reg-recopa-row','lext-reg-mundial-row'];
+    var isRM = (slug === 'resto-mundo');
+    EURO_ROWS.forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = isRM ? 'none' : '';
+    });
+    /* Open Qualifier y Descenso son labels sueltos sin wrapper. Los
+       envolvemos lógicamente por sus inputs: nodos hermanos del input. */
+    var oqInput = document.getElementById('lext-reg-ucl-qual');
+    if(oqInput){
+      var oqLabel = oqInput.previousElementSibling;
+      oqInput.style.display = isRM ? 'none' : '';
+      if(oqLabel && oqLabel.classList.contains('lext-label')) oqLabel.style.display = isRM ? 'none' : '';
+    }
+    var descInput = document.getElementById('lext-reg-desc');
+    if(descInput){
+      var descLabel = descInput.previousElementSibling;
+      descInput.style.display = isRM ? 'none' : '';
+      if(descLabel && descLabel.classList.contains('lext-label')) descLabel.style.display = isRM ? 'none' : '';
+    }
+    RM_ROWS.forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.style.display = isRM ? '' : 'none';
+    });
+  }
   window.ligaExtReglas = function(){
     if(!CURRENT_KEY) return;
     var data = loadData(CURRENT_KEY);
@@ -31058,6 +31139,19 @@ https://api.sofascore.app/api/v1/team/44/image
        admin lo configura. */
     var wcInp = document.getElementById('lext-reg-wildcard');
     if(wcInp) wcInp.value = Number(z.wildcard||0);
+    /* Resto del Mundo: defaults Recopa=6, Mundialito=16 si no hay
+       guardado previo (petición usuario 2026-05-26). */
+    var rmRecInp = document.getElementById('lext-reg-recopa');
+    var rmMunInp = document.getElementById('lext-reg-mundial');
+    if(rmRecInp){
+      var rv = Number(z.recopa);
+      rmRecInp.value = Number.isFinite(rv) && rv > 0 ? rv : (CURRENT_KEY === 'resto-mundo' ? 6 : 0);
+    }
+    if(rmMunInp){
+      var mv = Number(z.mundialClubes);
+      rmMunInp.value = Number.isFinite(mv) && mv > 0 ? mv : (CURRENT_KEY === 'resto-mundo' ? 16 : 0);
+    }
+    _lextToggleRegRows(CURRENT_KEY);
     lextOpenOv('lext-ov-reglas');
   };
   window.lextSaveReglas = function(){
@@ -31065,13 +31159,15 @@ https://api.sofascore.app/api/v1/team/44/image
     var data = loadData(CURRENT_KEY);
     var cfg = ensureConfig(data);
     cfg.zones = {
-      ucl:      Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
-      uclPrev:  Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
-      uclQual:  Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
-      uel:      Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
-      uecl:     Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
-      wildcard: Math.max(0, parseInt((document.getElementById('lext-reg-wildcard')||{}).value,10)||0),
-      desc:     Math.max(0, parseInt(document.getElementById('lext-reg-desc').value,10)||0)
+      ucl:           Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
+      uclPrev:       Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
+      uclQual:       Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
+      uel:           Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
+      uecl:          Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
+      wildcard:      Math.max(0, parseInt((document.getElementById('lext-reg-wildcard')||{}).value,10)||0),
+      recopa:        Math.max(0, parseInt((document.getElementById('lext-reg-recopa')||{}).value,10)||0),
+      mundialClubes: Math.max(0, parseInt((document.getElementById('lext-reg-mundial')||{}).value,10)||0),
+      desc:          Math.max(0, parseInt(document.getElementById('lext-reg-desc').value,10)||0)
     };
     saveData(CURRENT_KEY, data);
     lextCloseOv('lext-ov-reglas');
@@ -31085,6 +31181,7 @@ https://api.sofascore.app/api/v1/team/44/image
     }
   };
   window.lextResetReglas = function(){
+    var isRM = (CURRENT_KEY === 'resto-mundo');
     document.getElementById('lext-reg-ucl').value = DEFAULT_ZONES.ucl;
     document.getElementById('lext-reg-ucl-prev').value = DEFAULT_ZONES.uclPrev;
     document.getElementById('lext-reg-ucl-qual').value = DEFAULT_ZONES.uclQual;
@@ -31093,6 +31190,10 @@ https://api.sofascore.app/api/v1/team/44/image
     document.getElementById('lext-reg-desc').value = DEFAULT_ZONES.desc;
     var wcInp = document.getElementById('lext-reg-wildcard');
     if(wcInp) wcInp.value = DEFAULT_ZONES.wildcard;
+    var rmRecInp = document.getElementById('lext-reg-recopa');
+    var rmMunInp = document.getElementById('lext-reg-mundial');
+    if(rmRecInp) rmRecInp.value = isRM ? 6 : DEFAULT_ZONES.recopa;
+    if(rmMunInp) rmMunInp.value = isRM ? 16 : DEFAULT_ZONES.mundialClubes;
   };
 
   // ── Wildcard Round (compat: invocador antiguo) ─────
@@ -34633,14 +34734,35 @@ https://api.sofascore.app/api/v1/team/44/image
        Mostramos TODOS los chips (UCL/Previa/UEL/UECL/WildCard) en
        cualquier liga. El usuario configura cupos en cada uno desde
        el modal Reglas, así que la leyenda debe reflejar todas las
-       zonas posibles independientemente del slug. */
+       zonas posibles independientemente del slug.
+       Resto del Mundo (slug 'resto-mundo') es un caso aparte
+       (petición usuario 2026-05-26): no aplica clasificación
+       europea ni descenso — solo Recopa (top 6) + Mundialito (top
+       16). Mostramos sólo esos chips y ocultamos los demás. */
     (function(){
       var legend = document.getElementById('lext-legend');
       if(!legend) return;
-      ['lext-leg-ucl','lext-leg-uclprev','lext-leg-uel','lext-leg-uecl','lext-leg-wildcard'].forEach(function(cls){
-        var el = legend.querySelector('.'+cls);
-        if(el) el.style.display = '';
-      });
+      var EURO_CHIPS = ['lext-leg-ucl','lext-leg-uclprev','lext-leg-uclqual','lext-leg-uel','lext-leg-uecl','lext-leg-wildcard','lext-leg-desc'];
+      var RM_CHIPS = ['lext-leg-recopa','lext-leg-mundial'];
+      if(CURRENT_KEY === 'resto-mundo'){
+        EURO_CHIPS.forEach(function(cls){
+          var el = legend.querySelector('.'+cls);
+          if(el) el.style.display = 'none';
+        });
+        RM_CHIPS.forEach(function(cls){
+          var el = legend.querySelector('.'+cls);
+          if(el) el.style.display = '';
+        });
+      } else {
+        EURO_CHIPS.forEach(function(cls){
+          var el = legend.querySelector('.'+cls);
+          if(el) el.style.display = '';
+        });
+        RM_CHIPS.forEach(function(cls){
+          var el = legend.querySelector('.'+cls);
+          if(el) el.style.display = 'none';
+        });
+      }
     })();
     // Renderiza primero desde cache local (respuesta inmediata)
     var cached = loadData(CURRENT_KEY);
@@ -34742,6 +34864,30 @@ https://api.sofascore.app/api/v1/team/44/image
     {name:'Al Sadd SC',         power:74, atk:74, mid:74, def:74},
     {name:'Al Duhail SC',       power:72, atk:72, mid:72, def:72}
   ];
+  function _upgradeRestoMundoZones(){
+    /* Migración para usuarios con la liga ya sembrada antes de
+       2026-05-26: si recopa/mundialClubes están a 0 o ausentes,
+       los seteamos a 6/16. NO toca otras zones (los teams pueden
+       haber sido editados por el usuario, las zones europeas
+       siguen siendo 0). */
+    var slug = 'resto-mundo';
+    try {
+      var raw = localStorage.getItem('ligaExt_' + slug);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (!d || !d.config) return;
+      if (!d.config.zones) d.config.zones = {};
+      var z = d.config.zones;
+      var changed = false;
+      if (!(Number(z.recopa) > 0)) { z.recopa = 6; changed = true; }
+      if (!(Number(z.mundialClubes) > 0)) { z.mundialClubes = 16; changed = true; }
+      if (changed) {
+        localStorage.setItem('ligaExt_' + slug, JSON.stringify(d));
+        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+      }
+    } catch(_){}
+  }
   function _ensureRestoMundoSeed(){
     var slug = 'resto-mundo';
     var hasTeams = false;
@@ -34752,7 +34898,7 @@ https://api.sofascore.app/api/v1/team/44/image
         if (d && Array.isArray(d.teams) && d.teams.length > 0) hasTeams = true;
       }
     } catch(_){}
-    if (hasTeams) return;
+    if (hasTeams) { _upgradeRestoMundoZones(); return; }
     var teams = RESTO_MUNDO_TEAMS.map(function(spec, idx){
       return {
         id: 'rm-' + (idx + 1),
@@ -34764,14 +34910,16 @@ https://api.sofascore.app/api/v1/team/44/image
         isHuman: false, humanEmoji: ''
       };
     });
-    /* zones a 0 → la clasificación no muestra franjas europeas ni
-       descenso. Coherente con la regla "no va a ninguna competición
-       europea". */
+    /* zones europeas a 0 → la clasificación no muestra franjas
+       europeas (Resto del Mundo no clasifica a UCL/UEL/UECL).
+       Recopa=6 y Mundialito=16 según petición usuario 2026-05-26:
+       los 6 primeros pasan a Recopa (cuartos directos) y los 16
+       primeros clasifican al Mundialito (manual cada 4 temporadas). */
     var data = {
       teams: teams,
       results: [],
       config: {
-        zones: { ucl:0, uclPrev:0, uclQual:0, uel:0, uecl:0, wildcard:0, desc:0 },
+        zones: { ucl:0, uclPrev:0, uclQual:0, uel:0, uecl:0, wildcard:0, recopa:6, mundialClubes:16, desc:0 },
         logo: '', cupName: '', cupLogo: ''
       }
     };

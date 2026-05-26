@@ -38366,31 +38366,29 @@ Tottenham
     var sc = '<span class="fr-tag">' + _esc(m.label || '') + '</span>';
     var hN = _displayName(m.home, m.comp);
     var aN = _displayName(m.away, m.comp);
-    /* Botón 📌 POSPONER (2026-05-26). Solo aparece cuando la fila
-       proviene de un torneo en _TOUR_CACHE (Selecciones Mundial-48,
-       Joan Gamper, Asian, Soccer Champions Tour, Premier Summer
-       Series, Mundialito de Clubes, slots custom tx*). El play
-       desde POSPUESTOS usa `_tourOpenHumanMatch(tourId,matchKey)` y
-       sin esos campos la entrada quedaría muerta — por eso Liga /
-       Copa / Euros no llevan botón. */
-    var canDefer = !!(m.tourId && m.matchKey);
-    var deferBtn = '';
-    if (canDefer){
-      var hNameRaw = (m.home && typeof m.home === 'object') ? (m.home.name || '') : (m.home || '');
-      var aNameRaw = (m.away && typeof m.away === 'object') ? (m.away.name || '') : (m.away || '');
-      deferBtn = '<button type="button" class="fr-defer"'
-        + ' data-tour="'    + _esc(String(m.tourId))   + '"'
-        + ' data-mk="'      + _esc(String(m.matchKey)) + '"'
-        + ' data-home="'    + _esc(hNameRaw)          + '"'
-        + ' data-away="'    + _esc(aNameRaw)          + '"'
-        + ' data-hshield="' + _esc(m.hShield || '')   + '"'
-        + ' data-ashield="' + _esc(m.aShield || '')   + '"'
-        + ' data-label="'   + _esc(m.label || '')     + '"'
-        + ' data-emoji="'   + _esc(m.emoji || '')     + '"'
-        + ' data-jor="'     + _esc(String(m.jor||'')) + '"'
-        + ' title="Posponer partido"'
-        + ' aria-label="Posponer partido">📌</button>';
-    }
+    /* Botón 📌 POSPONER por fila (2026-05-26). Aparece en TODAS las
+       comps (Liga, Copa, UCL, UEL, UECL, Recopa, USC, Inter, Mundial,
+       Mundialito, torneos de verano y custom). Para entradas con
+       tourId+matchKey (torneo) la cola POSPUESTOS puede reabrir el
+       partido vía `_tourOpenHumanMatch`; para el resto (Liga, Copa,
+       Euros…) el POSPUESTOS funciona como "marca diferida" — la fila
+       desaparece de PENDIENTES y vuelve al hacer tap sobre la card en
+       POSPUESTOS (tap-to-despoponer). */
+    var hNameRaw = (m.home && typeof m.home === 'object') ? (m.home.name || '') : (m.home || '');
+    var aNameRaw = (m.away && typeof m.away === 'object') ? (m.away.name || '') : (m.away || '');
+    var deferBtn = '<button type="button" class="fr-defer"'
+      + ' data-comp="'    + _esc(String(m.comp || ''))    + '"'
+      + ' data-tour="'    + _esc(String(m.tourId || ''))  + '"'
+      + ' data-mk="'      + _esc(String(m.matchKey || ''))+ '"'
+      + ' data-home="'    + _esc(hNameRaw)               + '"'
+      + ' data-away="'    + _esc(aNameRaw)               + '"'
+      + ' data-hshield="' + _esc(m.hShield || '')        + '"'
+      + ' data-ashield="' + _esc(m.aShield || '')        + '"'
+      + ' data-label="'   + _esc(m.label || '')          + '"'
+      + ' data-emoji="'   + _esc(m.emoji || '')          + '"'
+      + ' data-jor="'     + _esc(String(m.jor || ''))    + '"'
+      + ' title="Posponer partido"'
+      + ' aria-label="Posponer partido">📌</button>';
     return ''
       + '<div class="munich-fix-row">'
       +   '<span class="fr-comp">' + _esc(m.emoji || '') + '</span>'
@@ -38437,6 +38435,35 @@ Tottenham
       ? '<img src="' + _esc(aS) + '" alt="" style="' + shieldStyle + '" '
         + 'onerror="this.style.display=\'none\'">'
       : '<span style="' + phStyle + '"></span>';
+    /* Acción central (2026-05-26):
+       - Torneo (entry.tourId+matchKey reales): botón ▶ JUGAR que
+         reabre la previa vía `_tourOpenHumanMatch`. Cubre Mundial-48
+         Selecciones, Joan Gamper, Asian Tournament, Soccer Champions
+         Tour, Premier Summer Series, Mundialito de Clubes y slots
+         custom (tx*).
+       - Resto (Liga, Copa, UCL, UEL, UECL, Recopa, USC, Inter…): no
+         hay opener universal por matchKey, así que se muestra una
+         etiqueta 📅 DIFERIDO. El tap-en-card sigue funcionando como
+         "despoponer" y la fila volverá a PENDIENTES. */
+    var isTour = !!(entry.tourId && entry.matchKey);
+    var center;
+    if (isTour){
+      center = '<button type="button" class="mu-hvh-play" '
+        +   'data-uid="' + _esc(uid) + '" '
+        +   'style="flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;'
+        +   'padding:6px 14px;font-family:Oswald,sans-serif;font-size:12px;'
+        +   'letter-spacing:1.5px;font-weight:700;color:#0d0310;'
+        +   'background:linear-gradient(135deg,#ffe489,#f0c040);'
+        +   'box-shadow:0 4px 10px rgba(240,192,64,.35);'
+        +   '-webkit-tap-highlight-color:transparent;">▶ JUGAR</button>';
+    } else {
+      center = '<span class="mu-hvh-diferido" '
+        + 'style="flex:0 0 auto;border:1px solid rgba(176,139,255,.55);'
+        + 'border-radius:8px;padding:6px 12px;font-family:Oswald,sans-serif;'
+        + 'font-size:11px;letter-spacing:1.5px;font-weight:700;color:#d8c5ff;'
+        + 'background:linear-gradient(135deg,rgba(176,139,255,.22),rgba(124,77,255,.30));">'
+        + '📅 DIFERIDO</span>';
+    }
     return ''
       + '<div class="munich-fix-row mu-hvh-row" '
       +   'data-uid="' + _esc(uid) + '" '
@@ -38454,14 +38481,7 @@ Tottenham
       +     '</span>'
       +     hShield
       +   '</div>'
-      +   '<button type="button" class="mu-hvh-play" '
-      +     'data-uid="' + _esc(uid) + '" '
-      +     'style="flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;'
-      +     'padding:6px 14px;font-family:Oswald,sans-serif;font-size:12px;'
-      +     'letter-spacing:1.5px;font-weight:700;color:#0d0310;'
-      +     'background:linear-gradient(135deg,#ffe489,#f0c040);'
-      +     'box-shadow:0 4px 10px rgba(240,192,64,.35);'
-      +     '-webkit-tap-highlight-color:transparent;">▶ JUGAR</button>'
+      +   center
       +   '<div style="flex:1 1 0;min-width:0;display:flex;align-items:center;'
       +     'gap:6px;justify-content:flex-start;">'
       +     aShield
@@ -38633,7 +38653,7 @@ Tottenham
       }
       if (!total){
         listEl.innerHTML = '<div class="munich-fix-empty">'
-          + 'Sin partidos pospuestos. Usa 📌 POSPONER en la card del partido para añadirlo.'
+          + 'Sin partidos pospuestos. Usa 📌 en cualquier fila de PARTIDOS PENDIENTES para diferir un partido.'
           + '</div>';
         return;
       }
@@ -38770,7 +38790,13 @@ Tottenham
        entrada al store `pend_hvh_deferred_v1` reusando el mismo helper
        que el botón 📌 PONER · PENDIENTE de la card del próximo partido,
        y refresca el hub para que aparezca en POSPUESTOS y desaparezca
-       de PENDIENTES (filtrada por sig en `_renderPendCombined`). */
+       de PENDIENTES (filtrada por sig en `_renderPendCombined`).
+
+       Entradas SIN tourId+matchKey (Liga, Copa, UCL, UEL, UECL, Recopa,
+       USC, Inter…) se almacenan con uid sintético `<comp>::<lbl>|<h>|<a>`
+       y se muestran en POSPUESTOS como "marca diferida" (sin ▶ JUGAR;
+       tap-en-card para despoponer). El usuario explícitamente pidió
+       que TODAS las comps tengan el botón. */
     if (mode === 'pend'){
       var defBtns = listEl.querySelectorAll('.fr-defer');
       for (var dbi = 0; dbi < defBtns.length; dbi++){
@@ -38779,21 +38805,31 @@ Tottenham
             if (ev && ev.preventDefault) ev.preventDefault();
             if (ev && ev.stopPropagation) ev.stopPropagation();
             if (btn.disabled) return;
-            var tId = btn.getAttribute('data-tour') || '';
-            var mK  = btn.getAttribute('data-mk')   || '';
-            if (!tId || !mK) return;
             var uidFn = window._pendHvHUid;
             var addFn = window._pendHvHAdd;
             if (typeof uidFn !== 'function' || typeof addFn !== 'function') return;
             btn.disabled = true;
-            var lbl = btn.getAttribute('data-label') || 'Partido';
+            var compK = btn.getAttribute('data-comp')  || '';
+            var tId   = btn.getAttribute('data-tour')  || '';
+            var mK    = btn.getAttribute('data-mk')    || '';
+            var hName = btn.getAttribute('data-home')  || '';
+            var aName = btn.getAttribute('data-away')  || '';
+            var lbl   = btn.getAttribute('data-label') || 'Partido';
+            /* Tour-managed → tourId/matchKey reales. Resto → uid
+               sintético con el compKey como "tourId" y lbl|home|away
+               como "matchKey" (ambos son arbitrarios desde el punto
+               de vista del store; sólo importa que sean estables
+               y únicos por partido). */
+            var uTour = tId || compK || 'manual';
+            var uKey  = mK  || (lbl + '|' + hName + '|' + aName);
             var entry = {
-              uid: uidFn(tId, mK),
+              uid: uidFn(uTour, uKey),
               tourId: tId,
+              compKey: compK,
               matchKey: mK,
-              home: { name: btn.getAttribute('data-home')    || '',
+              home: { name: hName,
                       shield: btn.getAttribute('data-hshield') || '' },
-              away: { name: btn.getAttribute('data-away')    || '',
+              away: { name: aName,
                       shield: btn.getAttribute('data-ashield') || '' },
               jor:  btn.getAttribute('data-jor') || '',
               label: lbl,

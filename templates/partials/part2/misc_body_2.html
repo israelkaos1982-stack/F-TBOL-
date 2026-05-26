@@ -3601,21 +3601,54 @@
 <option value="mvp">⭐ MVP del Partido</option>
 </select>
 <label>EQUIPO</label>
-<select id="_editTeam">
+<select id="_editTeam" onchange="window._onEditTeamChange &amp;&amp; window._onEditTeamChange(this.value)">
 <option value="a">Equipo Local (A)</option>
 <option value="b">Equipo Visitante (B)</option>
 </select>
 <label>JUGADOR DE PLANTILLA</label>
-<select id="_editPlayerSel" onchange="window._onEditPlayerSel(this.value)">
+<!-- Picker button (CLAUDE.md 2026-05-24: prohibido <select> nativo para
+     elegir jugador en móviles — el picker dismiss-on-touch del nativo
+     descartaba la elección y el goleador erróneo se quedaba). -->
+<button id="_editPlPick" type="button" onclick="window._editOpenPlOv()" style="width:100%;background:#0e1118;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:8px 10px;text-align:left;cursor:pointer;">— Toca para elegir jugador —</button>
+<!-- Hidden legacy select kept para back-compat con el workaround
+     2026-05-24 que leía _editPlayerSel.value en _saveEditModal. -->
+<select id="_editPlayerSel" onchange="window._onEditPlayerSel(this.value)" style="display:none">
 <option value="">— seleccionar jugador —</option>
 </select>
 <label>O ESCRIBIR MANUALMENTE (Nº. Nombre)</label>
-<input id="_editManual" placeholder="Ej: 23. F. Mendy" type="text"/>
+<!-- oninput limpia _editPlayerSel para que la edición manual gane sobre
+     una elección anterior del picker (2026-05-24 ver _saveEditModal). -->
+<input id="_editManual" oninput="window._onEditManualInput &amp;&amp; window._onEditManualInput()" placeholder="Ej: 23. F. Mendy" type="text"/>
+<button id="_editAddNewBtn" type="button" onclick="window._editAddNewToggle()" style="width:100%;margin-top:8px;background:rgba(240,192,64,.1);border:1px dashed rgba(240,192,64,.5);border-radius:4px;color:#f0c040;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:1px;padding:7px 10px;cursor:pointer;">➕ AÑADIR JUGADOR NUEVO A LA PLANTILLA</button>
+<div id="_editAddNewForm" style="display:none;margin-top:8px;padding:8px;background:rgba(0,0,0,.3);border:1px solid rgba(240,192,64,.25);border-radius:4px;">
+<div style="display:flex;gap:6px;margin-bottom:6px;">
+<input id="_editNewNum" max="99" min="1" placeholder="Dorsal" style="flex:1;background:#0e1118;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:7px 10px;" type="number"/>
+<input id="_editNewPw" max="99" min="1" placeholder="Valor 1-99" style="flex:1;background:#0e1118;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:7px 10px;" type="number"/>
+</div>
+<input id="_editNewName" placeholder="Nombre completo del jugador" style="width:100%;background:#0e1118;border:1px solid rgba(255,255,255,.15);border-radius:4px;color:#fff;font-family:'Oswald',sans-serif;font-size:13px;padding:7px 10px;margin-bottom:6px;" type="text"/>
+<button id="_editNewSave" type="button" onclick="window._editAddNewConfirm()" style="width:100%;background:linear-gradient(135deg,#1a4a1a,#286028);border:none;border-radius:4px;color:#8aff8a;font-family:'Oswald',sans-serif;font-size:12px;letter-spacing:1.5px;padding:8px 0;cursor:pointer;">✓ GUARDAR EN LA PLANTILLA</button>
+</div>
 <div id="_editModal-btns">
 <button id="_editModal-cancel" onclick="window._closeEditModal()">✕ Cancelar</button>
 <button id="_editModal-save" onclick="window._saveEditModal()">✓ Guardar</button>
 </div>
 </div>
+</div>
+
+<!-- Fullscreen player picker overlay (reemplaza al <select> nativo).
+     Lo abre el botón #_editPlPick y se cierra al elegir un jugador,
+     o con el botón de Cancelar. Reutiliza las clases ml-pl-overlay* que
+     ya están en index.bundle.css. -->
+<div class="ml-pl-overlay" id="_editPlOv">
+<div class="ml-pl-ov-header">
+<button class="ml-pl-ov-back" onclick="window._editClosePlOv()" type="button">&#8592;</button>
+<div>
+<div class="ml-pl-ov-evt">SELECCIONAR JUGADOR</div>
+<div class="ml-pl-ov-team" id="_editPlOv-team">EQUIPO</div>
+</div>
+</div>
+<div class="ml-pl-ov-list" id="_editPlOv-list"></div>
+<button class="ml-pl-ov-close" onclick="window._editClosePlOv()" type="button">✕ Cancelar</button>
 </div>
 
 <script>/* doc */</script>
@@ -3723,6 +3756,11 @@
   function humansInMatch(){
     var t = getMatchTeams();
     if (!t) return [];
+    /* Hidratar selecciones (rellena `_SEL_HUMAN_ICONS` para que
+       `humanIcon('Francia')` devuelva el 💡 y la 3ª pasada de abajo
+       reconozca la selección como humana aunque el usuario no haya
+       entrado al editor de plantillas en esta sesión). */
+    try { if (window._selSquadHydrate) window._selSquadHydrate(); } catch(_){}
     var HUMS = getHumanList();
     var found = [];
     [t.home, t.away].forEach(function(tn){
@@ -3734,6 +3772,17 @@
         var nh = normTeam(HUMS[j]);
         if (nh && nt && (nh.indexOf(nt) !== -1 || nt.indexOf(nh) !== -1)) { found.push(HUMS[j]); return; }
       }
+      /* Fallback humanIcon: cualquier team con icono de humano asignado
+         (selecciones con icono en `selecciones_squad_v1`, o equipos no-EA
+         con `humanEmoji` en el editor de plantilla) cuenta como humano
+         a efectos de añadir lesionados. Cubre el caso "Francia vs UAE":
+         Francia tiene 💡 en su plantilla de selección, debe permitir
+         marcar lesionados aunque no esté en `ligaExt_liga-ea-sports`. */
+      try {
+        if (typeof window.humanIcon === 'function' && window.humanIcon(tn)) {
+          found.push(tn);
+        }
+      } catch(_){}
     });
     return found;
   }
@@ -7611,6 +7660,26 @@
         typeof opts.currentMin === 'number' && opts.currentMin >= 65) {
       tickMs = tickMs + Math.round(500 / 12);
     }
+    /* STOPPAGE SLOWDOWN HvIA (petición usuario 2026-05-24): durante
+       el descuento de la 1ª parte (45+1..45+4) y de la 2ª parte
+       (90+1..90+9), cada game-minute dura 1.5× lo que durara con el
+       ritmo actual. Se aplica multiplicativamente ENCIMA del slowdown
+       del min 65+. Solo HvIA — el usuario quiere darse margen para
+       reaccionar a goles tardíos cuando juega contra la IA. No se
+       aplica a HvH (los humanos juegan al ritmo natural) ni a IAIA
+       (ritmo fijo simulación) ni a prórroga.
+       Detección por timerSec + htDone/etDone:
+         · 1ª stoppage: !htDone && timerSec >= 2700 (45:00)
+         · 2ª stoppage: htDone && !etDone && timerSec >= 5400 (90:00) */
+    if (!override && type === 'HvIA' && !etDone &&
+        typeof opts.timerSec === 'number') {
+      var _ts = opts.timerSec;
+      var _inStop1 = !opts.htDone && _ts >= 2700 && _ts < 5400;
+      var _inStop2 = !!opts.htDone && _ts >= 5400 && _ts < 7200;
+      if (_inStop1 || _inStop2) {
+        tickMs = Math.round(tickMs * 1.5);
+      }
+    }
     return { type: type, rule: r, tickMs: tickMs, realMs: realMs };
   };
 
@@ -8534,6 +8603,31 @@
         _mlStartIntervalGen(mk);
         return;
       }
+      /* STOPPAGE SLOWDOWN HvIA (petición usuario 2026-05-24): re-arm
+         del interval al cruzar 45:00 (entra 45+1..45+4) y 90:00 (entra
+         90+1..90+9) para que `_mlResolveClock` aplique el 1.5×. Solo
+         HvIA (no HvH ni IAIA). Re-anclamos _wallStart / _gameSecAtStart
+         antes del rearm para que el tiempo no salte. El propio resolver
+         vuelve al ritmo normal en la 2ª parte tras el descanso (cuando
+         timerSec=2700 pero htDone=true, no entra en stop1). */
+      if (!st.isIAvsIA && !st.isHvH && !st.etDone) {
+        if (!st.htDone && !st._stop1Applied && st.timerSec >= 2700) {
+          st._stop1Applied = true;
+          st._wallStart = Date.now();
+          st._gameSecAtStart = st.timerSec;
+          clearInterval(st.timerInterval);
+          _mlStartIntervalGen(mk);
+          return;
+        }
+        if (st.htDone && !st._stop2Applied && st.timerSec >= 5400) {
+          st._stop2Applied = true;
+          st._wallStart = Date.now();
+          st._gameSecAtStart = st.timerSec;
+          clearInterval(st.timerInterval);
+          _mlStartIntervalGen(mk);
+          return;
+        }
+      }
       // Fire pending AI events ANTES de comprobar el half-time, así los
       // eventos recién disparados en min 44 ya cuentan para el stoppage
       // de la 1ª parte en esta misma iteración.
@@ -9046,7 +9140,10 @@
       return;
     }
     /* Cada inyección reduce 1 partido de lesión del jugador. Si llega
-       a 0 queda curado (fuera de LESION_STORE / BAJA_STORE). */
+       a 0 queda curado (fuera de LESION_STORE / BAJA_STORE). Marca al
+       jugador en window._ppJustCured para que la card "LESIONADO" de la
+       previa pase a mostrar "Recuperado" hasta que se cierre la previa. */
+    if (!window._ppJustCured) window._ppJustCured = {};
     picks.forEach(function(pk){
       var l = window.LESION_STORE && window.LESION_STORE[pk.name];
       if (!l) return;
@@ -9054,6 +9151,7 @@
       if (rem <= 0) {
         delete window.LESION_STORE[pk.name];
         if (window.BAJA_STORE && window.BAJA_STORE[pk.name]) delete window.BAJA_STORE[pk.name];
+        window._ppJustCured[pk.name] = true;
       } else {
         l.partidos = rem;
         var b = window.BAJA_STORE && window.BAJA_STORE[pk.name];
@@ -9064,6 +9162,16 @@
     try { if (window._persistInjuries) window._persistInjuries(); } catch(e){}
     try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(e){}
     try { if (typeof window._renderSancionOverlayList === 'function') window._renderSancionOverlayList(); } catch(e){}
+    /* Refresca la card LESIONADO de la previa (PI restantes + estado
+       Recuperado) sin esperar a re-abrirla. */
+    try {
+      if (typeof window._renderPreviaMeta === 'function' && window._ppMatchKey) {
+        window._renderPreviaMeta(window._ppMatchKey, false);
+      }
+    } catch(e){}
+    /* Refresca la plantilla del Liverpool si está visible: los badges
+       💉NP de los curados deben desaparecer. */
+    try { if (typeof window.renderSquadList === 'function') window.renderSquadList(); } catch(e){}
     document.getElementById('ath-med-ov').classList.remove('show');
   };
 
@@ -9201,12 +9309,29 @@
        NO el flag global del editor. Si no, un Atlético "humano de
        Liga" pero marcado como IA en el toggle del amistoso entraba
        al overlay de stats y rompía el cierre del partido. */
-    var _humAEnd = st.isFriendly
-      ? !!st.homeIsHuman
-      : (typeof esHumano === 'function' && esHumano(st.home));
-    var _humBEnd = st.isFriendly
-      ? !!st.awayIsHuman
-      : (typeof esHumano === 'function' && esHumano(st.away));
+    /* Bug 2026-05-24: igual que en _mlFinishMatchGen, antes usábamos
+       esHumano() directo que NO detecta selecciones nacionales como
+       humanas → partidos como Francia (humano) vs UAE (IA) en el
+       Mundial saltaban al final sin pedir posesión/tiros/faltas.
+       Helper local que respeta st.homeIsHuman/awayIsHuman si vienen
+       explícitos y cae a isHumanInComp + esHumano. */
+    function _mlTeamIsHumanEnd(side){
+      var explicit = (side === 'a') ? st.homeIsHuman : st.awayIsHuman;
+      if (explicit === true) return true;
+      if (explicit === false) return false;
+      var nm = (side === 'a') ? st.home : st.away;
+      var compK = st.comp || st.compKey || st._comp || 'liga';
+      try {
+        if (typeof window.isHumanInComp === 'function' &&
+            window.isHumanInComp(nm, compK)) return true;
+      } catch(_){}
+      try {
+        if (typeof esHumano === 'function' && esHumano(nm)) return true;
+      } catch(_){}
+      return false;
+    }
+    var _humAEnd = _mlTeamIsHumanEnd('a');
+    var _humBEnd = _mlTeamIsHumanEnd('b');
     if ((_humAEnd || _humBEnd) && !st.matchStats && typeof _mlShowStatsOverlay === 'function') {
       _mlShowStatsOverlay(mk, function(){ window.mlEndMatchGen(mk, winner); });
       return;
@@ -9398,12 +9523,31 @@
        fallback si el flujo entró por otra ruta (p. ej. tanda de penaltis
        directa) y un humano está involucrado. Amistosos: usar el toggle
        per-partido (st.homeIsHuman / st.awayIsHuman). */
-    var _humA = st.isFriendly
-      ? !!st.homeIsHuman
-      : (typeof esHumano === 'function' && esHumano(st.home));
-    var _humB = st.isFriendly
-      ? !!st.awayIsHuman
-      : (typeof esHumano === 'function' && esHumano(st.away));
+    /* Bug 2026-05-24: antes usábamos solo esHumano() para los flujos
+       no-amistosos, que NO reconoce las selecciones nacionales (Francia,
+       Argelia, …) — su humanidad vive en cfg.teams[].isHuman del torneo
+       o en humanIcon. Sin este fallback, partidos como Francia (humano)
+       vs UAE (IA) en el Mundial saltaban directamente al final sin
+       pedir posesión/tiros/faltas. Ahora respetamos st.homeIsHuman /
+       awayIsHuman si están explícitamente seteados (true/false) y
+       caemos a isHumanInComp(name, st.comp) → esHumano() después. */
+    function _mlTeamIsHuman(side){
+      var explicit = (side === 'a') ? st.homeIsHuman : st.awayIsHuman;
+      if (explicit === true) return true;
+      if (explicit === false) return false;
+      var nm = (side === 'a') ? st.home : st.away;
+      var compK = st.comp || st.compKey || st._comp || 'liga';
+      try {
+        if (typeof window.isHumanInComp === 'function' &&
+            window.isHumanInComp(nm, compK)) return true;
+      } catch(_){}
+      try {
+        if (typeof esHumano === 'function' && esHumano(nm)) return true;
+      } catch(_){}
+      return false;
+    }
+    var _humA = _mlTeamIsHuman('a');
+    var _humB = _mlTeamIsHuman('b');
     if ((_humA || _humB) && !st.matchStats) {
       _mlShowStatsOverlay(mk, function(){ _mlShowFinalThenPost(mk); });
     } else {
@@ -10783,14 +10927,122 @@
     ov.classList.add('show');
   }
 
+  /* Cuenta atrás de 20 s antes de arrancar la 2ª parte (petición
+     usuario 2026-05-24). Mismo estilo y mecánica que el overlay de
+     eventos (gol/tarjeta/lesión): círculo SVG, número grande, botón
+     ▶ INICIAR YA y auto-resume al llegar a 0. Reutilizado por
+     `_mlResumeFromDescanso` (calendar cards) y `gmContinueSecondHalf`
+     (gm-modal). El cronómetro permanece congelado (st.inDescanso /
+     _gm.inDescanso siguen true) durante la cuenta atrás — sólo se
+     anclan los timers al disparar `onResume`. */
+  window._showHalftimeCountdown = function(opts){
+    opts = opts || {};
+    var totalSec = 20;
+    var ov = document.getElementById('ml-htcd-ov');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'ml-htcd-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:999999;'
+        + 'background:radial-gradient(circle at center,rgba(20,0,30,.95) 0%,rgba(0,0,0,.97) 75%);'
+        + 'display:none;flex-direction:column;align-items:center;justify-content:center;'
+        + 'padding:24px;font-family:\'Bebas Neue\',Oswald,sans-serif;color:#fff;text-align:center;';
+      ov.innerHTML = ''
+        + '<div id="ml-htcd-lbl" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(28px,7vw,52px);letter-spacing:4px;color:#f0c040;text-shadow:0 0 14px rgba(240,192,64,.85),0 0 28px rgba(240,180,40,.55);margin-bottom:8px;line-height:1.15;">▶ INICIO 2ª PARTE</div>'
+        + '<div id="ml-htcd-score" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(18px,4.6vw,28px);letter-spacing:2px;color:#5eef8b;text-shadow:0 0 12px rgba(94,239,139,.75);margin-bottom:18px;white-space:nowrap;max-width:96vw;overflow:hidden;"></div>'
+        + '<div style="position:relative;width:clamp(140px,40vw,220px);height:clamp(140px,40vw,220px);margin-bottom:14px;">'
+        +   '<svg viewBox="0 0 200 200" style="width:100%;height:100%;transform:rotate(-90deg);">'
+        +     '<circle cx="100" cy="100" r="90" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="12"/>'
+        +     '<circle id="ml-htcd-ring" cx="100" cy="100" r="90" fill="none" stroke="#f0c040" stroke-width="12" stroke-linecap="round" stroke-dasharray="565.5" stroke-dashoffset="0" style="transition:stroke-dashoffset .2s linear,stroke .25s ease;"/>'
+        +   '</svg>'
+        +   '<div id="ml-htcd-num" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:\'Bebas Neue\',sans-serif;font-size:clamp(56px,16vw,96px);color:#fff;letter-spacing:2px;line-height:1;text-shadow:0 0 16px rgba(255,255,255,.55);">20</div>'
+        + '</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:clamp(10px,2.6vw,13px);letter-spacing:3px;color:rgba(255,255,255,.55);margin-bottom:18px;text-transform:uppercase;">Inicia la 2ª parte en eFootball</div>'
+        + '<button type="button" id="ml-htcd-resume" style="font-family:\'Bebas Neue\',sans-serif;font-size:clamp(15px,4vw,20px);letter-spacing:3px;color:#fff;background:linear-gradient(135deg,#0a8a35,#3dcc6e);border:2px solid #5eef8b;border-radius:12px;padding:14px 36px;margin-bottom:10px;cursor:pointer;box-shadow:0 0 18px rgba(94,239,139,.55);">▶ INICIAR YA</button>';
+      document.body.appendChild(ov);
+    }
+    /* Contenido dinámico — marcador con nombres abreviados, igual
+       que el overlay de eventos. */
+    function _abbrevTeam(name){
+      var s = String(name || '').trim();
+      if (s.length <= 11) return s;
+      var parts = s.split(/\s+/);
+      if (parts.length === 1) return s.slice(0, 11) + '.';
+      var first = parts[0];
+      var rest = parts.slice(1).map(function(p){
+        if (!p) return '';
+        if (/^(FC|CF|AC|SC|F\.C\.|C\.F\.|II|B)$/i.test(p)) return p;
+        return p[0].toUpperCase() + '.';
+      }).filter(Boolean).join(' ');
+      var out = first + ' ' + rest;
+      if (out.length > 13) out = (first.length > 9 ? first.slice(0, 9) + '.' : first) + ' ' + rest;
+      return out;
+    }
+    var hShort = _abbrevTeam(opts.home || 'LOCAL');
+    var aShort = _abbrevTeam(opts.away || 'VISITANTE');
+    var scA = (opts.scA != null) ? opts.scA : 0;
+    var scB = (opts.scB != null) ? opts.scB : 0;
+    var $ = function(id){ return document.getElementById(id); };
+    if ($('ml-htcd-score')) $('ml-htcd-score').textContent = hShort + '   ' + scA + ' - ' + scB + '   ' + aShort;
+    if ($('ml-htcd-num'))   $('ml-htcd-num').textContent   = String(totalSec);
+    var ring = $('ml-htcd-ring');
+    var C = 2 * Math.PI * 90;
+    if (ring) { ring.setAttribute('stroke-dasharray', String(C)); ring.setAttribute('stroke-dashoffset', '0'); ring.setAttribute('stroke', '#f0c040'); }
+    ov.style.display = 'flex';
+    /* Limpiar timers previos por si se relanza la cuenta atrás. */
+    if (window._mlHtCdTimer) { try { clearInterval(window._mlHtCdTimer); } catch(_){} window._mlHtCdTimer = null; }
+    if (window._mlHtCdRaf)   { try { cancelAnimationFrame(window._mlHtCdRaf); } catch(_){} window._mlHtCdRaf = null; }
+    var startTs = Date.now();
+    var ended = false;
+    function _finish(){
+      if (ended) return;
+      ended = true;
+      if (window._mlHtCdTimer) { try { clearInterval(window._mlHtCdTimer); } catch(_){} window._mlHtCdTimer = null; }
+      if (window._mlHtCdRaf)   { try { cancelAnimationFrame(window._mlHtCdRaf); } catch(_){} window._mlHtCdRaf = null; }
+      ov.style.display = 'none';
+      if (typeof opts.onResume === 'function') { try { opts.onResume(); } catch(_){} }
+    }
+    var rb = $('ml-htcd-resume');
+    if (rb) rb.onclick = function(){ _finish(); };
+    /* Tick mixto rAF + setInterval(50ms), igual que el overlay de
+       eventos (inmune al timer alignment de Chrome móvil). */
+    function _tick(){
+      if (ended) return;
+      var elapsed = (Date.now() - startTs) / 1000;
+      var remain = Math.max(0, totalSec - elapsed);
+      var dispSec = Math.ceil(remain);
+      var numEl = $('ml-htcd-num');
+      if (numEl && numEl.textContent !== String(dispSec)) numEl.textContent = String(dispSec);
+      var pct = remain / totalSec;
+      if (ring) ring.setAttribute('stroke-dashoffset', String(C * (1 - pct)));
+      if (dispSec <= 5 && ring) ring.setAttribute('stroke', '#ff5050');
+      if (remain <= 0) { _finish(); return; }
+    }
+    function _rafLoop(){
+      if (ended) return;
+      _tick();
+      window._mlHtCdRaf = requestAnimationFrame(_rafLoop);
+    }
+    if (typeof requestAnimationFrame === 'function') window._mlHtCdRaf = requestAnimationFrame(_rafLoop);
+    window._mlHtCdTimer = setInterval(_tick, 50);
+  };
+
   window._mlResumeFromDescanso = function() {
     var ov = document.getElementById('ml-descanso-ov');
     if (!ov) return;
     var mk = ov.getAttribute('data-mk');
     ov.classList.remove('show');
-    if (mk) {
-      var st = _mlSt(mk);
-      if (st && !st.finished) {
+    if (!mk) return;
+    var st = _mlSt(mk);
+    if (!st || st.finished) return;
+    /* Cuenta atrás de 20 s antes de arrancar (petición usuario
+       2026-05-24). Al terminar (o al pulsar ▶ INICIAR YA), se ejecuta
+       el resume real: anclar timer en 45:00 y reanudar interval. */
+    var scA = (st.sc && st.sc.a) || 0;
+    var scB = (st.sc && st.sc.b) || 0;
+    window._showHalftimeCountdown({
+      home: st.home, away: st.away, scA: scA, scB: scB,
+      onResume: function(){
+        if (st.finished) return;
         /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto.
            El descuento de la 1ª parte (que llevó timerSec hasta halfMax)
            ya se mostró durante el cronómetro de descuento "45+N", así
@@ -10802,19 +11054,19 @@
         st._gameSecAtStart = 2700;
         st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk);
         _mlUpdateAplazarBtn(mk);
+        /* Quitar el botón "Compartir descanso" del acta — la 2ª parte
+           ya empezó y ese CTA pertenece al medio tiempo. Si no lo
+           retiramos, sigue visible hasta el final del partido. */
+        try {
+          var acta = document.getElementById('ml-acta-list-' + mk);
+          if (acta) {
+            acta.querySelectorAll('.ml-ht-wa-wrap').forEach(function(n){
+              try { n.parentNode.removeChild(n); } catch(_){}
+            });
+          }
+        } catch(_){}
       }
-      /* Quitar el botón "Compartir descanso" del acta — la 2ª parte
-         ya empezó y ese CTA pertenece al medio tiempo. Si no lo
-         retiramos, sigue visible hasta el final del partido. */
-      try {
-        var acta = document.getElementById('ml-acta-list-' + mk);
-        if (acta) {
-          acta.querySelectorAll('.ml-ht-wa-wrap').forEach(function(n){
-            try { n.parentNode.removeChild(n); } catch(_){}
-          });
-        }
-      } catch(_){}
-    }
+    });
   };
 
   // Compartir marcador en el DESCANSO del modo espectador (gm)
@@ -10946,11 +11198,22 @@
   window.gmContinueSecondHalf = function() {
     var ov = document.getElementById('gm-ht-ov');
     if (ov) ov.style.display = 'none';
-    /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto. */
-    _gm.timerSec = 2700;
-    _gm.inDescanso = false;
-    gmStartTimer();
-    gmUpdateAplazarBtn();
+    /* Cuenta atrás de 20 s antes de arrancar la 2ª parte (petición
+       usuario 2026-05-24). Mismo overlay/estilo que el de eventos.
+       _gm.inDescanso sigue `true` durante la cuenta atrás → el
+       cronómetro permanece congelado hasta el resume real. */
+    var scA = (_gm.sc && _gm.sc.a) || 0;
+    var scB = (_gm.sc && _gm.sc.b) || 0;
+    window._showHalftimeCountdown({
+      home: _gm.home, away: _gm.away, scA: scA, scB: scB,
+      onResume: function(){
+        /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto. */
+        _gm.timerSec = 2700;
+        _gm.inDescanso = false;
+        gmStartTimer();
+        gmUpdateAplazarBtn();
+      }
+    });
   };
 
   function _gmShowFinalOv() {
@@ -11629,12 +11892,28 @@
         _amsDobleTied = (_globalA === _globalB);
       }
       var _scoreTied = (Number(_gm.sc && _gm.sc.a) || 0) === (Number(_gm.sc && _gm.sc.b) || 0);
+      /* Torneo KO single-leg con ET+penaltis (Mundial 2032 fase
+         final: Dieciseisavos..Final). El gm-modal se abrió vía
+         abrirTorneo() que setea _gm._isTour / _tourId / _tourKey.
+         La regla aplica si el matchKey es de KO (`ko_`) y el
+         torneo tiene `formatConfig.koExtraTimePens === true`.
+         2026-05-24. */
+      var _isTourKoETP = false;
+      try {
+        if (_gm._isTour && _gm._tourId && typeof window._tourLoadCachedSync === 'function') {
+          var _tcfgETP = window._tourLoadCachedSync(_gm._tourId);
+          var _tfcETP = (_tcfgETP && _tcfgETP.formatConfig) || {};
+          var _tmkETP = String(_gm._tourKey || '').replace(/\|L[12]$/, '');
+          _isTourKoETP = (_tmkETP.indexOf('ko_') === 0) && (_tfcETP.koExtraTimePens === true);
+        }
+      } catch(_){}
       var _shouldForceET =
            (_isCopaSL && _scoreTied)
         || (_isScSL && _scoreTied)
         || (_isRecopaSL && _scoreTied)
         || (_isAmsElim && _scoreTied)
-        || (_isAmsDobleVuelta && _amsDobleTied);
+        || (_isAmsDobleVuelta && _amsDobleTied)
+        || (_isTourKoETP && _scoreTied);
 
       if (_shouldForceET && !_gm.penDone) {
         if (!_gm.etDone) {
@@ -12039,6 +12318,48 @@
     setInterval(_drive, 50);
   })();
 
+  /* Detección robusta de "hay humano en _gm". `esHumano()` solo
+     conoce los clubes humanos canónicos (Liga EA) + los marcados con
+     humanIcon/humanEmoji en el editor de Resto de Ligas. Las
+     SELECCIONES NACIONALES (Bélgica / Francia / Argelia / …) no
+     tienen humanIcon — su humanidad vive en la cfg del torneo:
+     `cfg.teams[].isHuman` queda a `true` cuando el usuario eligió esa
+     selección como SUYA. Sin este check, `_mlResolveClock` caía a
+     IAIA (≈ 83 ms tick · 1 s real = 1 game-min) en partidos como
+     Bélgica-IA vs Francia-Humana de los torneos sfn* / mundial /
+     selecciones — el cronómetro corría 10× más rápido que el spec
+     HvIA. Bug reportado 2026-05-24. */
+  function _gmHumanInvolved(){
+    if (_gm.isHvH) return true;
+    try {
+      if (_gm._isTour && _gm._tourId && typeof window._tourLoadCachedSync === 'function') {
+        var cfg = window._tourLoadCachedSync(_gm._tourId);
+        if (cfg && Array.isArray(cfg.teams)) {
+          var nh = String(_gm.home || '').trim().toLowerCase();
+          var na = String(_gm.away || '').trim().toLowerCase();
+          for (var i = 0; i < cfg.teams.length; i++) {
+            var t = cfg.teams[i];
+            if (!t || !t.isHuman || !t.name) continue;
+            var n = String(t.name).trim().toLowerCase();
+            if (n === nh || n === na) return true;
+          }
+        }
+      }
+    } catch(_){}
+    try {
+      if (typeof window.isHumanInComp === 'function' && _gm.comp) {
+        if (window.isHumanInComp(_gm.home, _gm.comp)) return true;
+        if (window.isHumanInComp(_gm.away, _gm.comp)) return true;
+      }
+    } catch(_){}
+    try {
+      if (typeof esHumano === 'function') {
+        if (esHumano(_gm.home) || esHumano(_gm.away)) return true;
+      }
+    } catch(_){}
+    return false;
+  }
+
   function gmStartTimer() {
     /* Helper único (CLAUDE.md): honra _ppDurationMin y lee _MATCH_TICKS
        en cada arranque del reloj (no se cachea). Pasamos home/away para
@@ -12048,10 +12369,16 @@
     var tickMs;
     if (typeof window._mlResolveClock === 'function') {
       /* Pasar `currentMin` para que aplique el slowdown +0.5 s/min
-         desde el min 65 (petición usuario 2026-05-08). */
+         desde el min 65 (petición usuario 2026-05-08).
+         `humanInvolved` explícito vía `_gmHumanInvolved()` para que
+         partidos de selecciones (Bélgica-IA vs Francia-Humana) NO
+         caigan al motor IAIA. */
       tickMs = window._mlResolveClock({
         isHvH: !!_gm.isHvH, etDone: !!_gm.etDone,
+        htDone: !!_gm.htDone,
+        timerSec: (_gm.timerSec || 0),
         home: _gm.home, away: _gm.away,
+        humanInvolved: _gmHumanInvolved(),
         currentMin: Math.floor((_gm.timerSec || 0) / 60)
       }).tickMs;
     } else {
@@ -12129,6 +12456,33 @@
         gmStartTimer();
         return;
       }
+      /* STOPPAGE SLOWDOWN HvIA (petición usuario 2026-05-24): re-arm
+         del interval al cruzar 45:00 (entra 45+1..45+4) y 90:00 (entra
+         90+1..90+9) para que `_mlResolveClock` aplique el 1.5×. Solo
+         HvIA — `gmStartTimer` ya descarta el slowdown para HvH/IAIA
+         vía la lógica del propio resolver, pero rearmamos solo si hay
+         humano contra IA. Re-anclamos _wallStart / _secAtStart antes
+         del rearm para que el tiempo no salte. */
+      if (!_gm.isHvH && !_gm.etDone && _gmHumanInvolved()) {
+        if (!_gm.htDone && !_gm._stop1Applied && _gm.timerSec >= 2700) {
+          _gm._stop1Applied = true;
+          _gm._wallStart = Date.now();
+          _gm._secAtStart = _gm.timerSec;
+          clearInterval(_gm.timerInterval);
+          _gm.timerInterval = null;
+          gmStartTimer();
+          return;
+        }
+        if (_gm.htDone && !_gm._stop2Applied && _gm.timerSec >= 5400) {
+          _gm._stop2Applied = true;
+          _gm._wallStart = Date.now();
+          _gm._secAtStart = _gm.timerSec;
+          clearInterval(_gm.timerInterval);
+          _gm.timerInterval = null;
+          gmStartTimer();
+          return;
+        }
+      }
       /* Descuento dinámico en ambas partes (igual que el flujo ml-…).
          Se recalcula cada tick por si un evento recién añadido lo ha
          movido. */
@@ -12139,9 +12493,9 @@
          CONGELA esperando al humano que pulse "🛌 DESCANSO". Sin esto
          el cron seguía corriendo hacia 90+ sin esperar (foto usuario
          2026-05-19). Para IA-vs-IA (caso teórico — gm-modal solo se
-         usa con humano) sí auto-descanso. */
-      var _gmHasHuman = !!_gm.isHvH
-        || (typeof esHumano === 'function' && (esHumano(_gm.home) || esHumano(_gm.away)));
+         usa con humano) sí auto-descanso. Usa el detector que cubre
+         también selecciones nacionales (cfg del torneo). */
+      var _gmHasHuman = _gmHumanInvolved();
       if (!_gm.htDone && _gm.timerSec >= gmHalfMax) {
         if (_gmHasHuman) {
           _gm.timerSec = gmHalfMax;
@@ -12476,7 +12830,7 @@
   function _gmGetSquad(teamName) {
     var sq = (typeof window.sqFromRegistryFull === 'function' && window.sqFromRegistryFull(teamName)) || [];
     if (!sq.length) sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
-    if (!sq.length) return [['', 'Jugador 1'], ['', 'Jugador 2'], ['', 'Jugador 3']];
+    if (!sq.length && typeof window._fallbackSq11 === 'function') return window._fallbackSq11();
     return sq;
   }
 
@@ -12876,15 +13230,25 @@
         selTeam.value = ev.team || 'a';
       }
 
+      /* Configurar el picker overlay (filtrado por equipo del evento).
+         El <select> oculto se sigue rellenando como fallback de
+         back-compat, pero ya no es la fuente de verdad. */
+      var sqA = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.home) || []) : [];
+      var sqB = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.away) || []) : [];
+      window._editPickerCtx = {
+        teamA: { name: _gm.home || 'Local',     sq: sqA },
+        teamB: { name: _gm.away || 'Visitante', sq: sqB },
+        current: ev.team || 'a'
+      };
+      var pkBtn = document.getElementById('_editPlPick');
+      if (pkBtn) pkBtn.textContent = '— Toca para elegir jugador —';
       var selPl = document.getElementById('_editPlayerSel');
       if (selPl) {
-        var sqA = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.home) || []) : [];
-        var sqB = (typeof window.sqFromRegistry === 'function') ? (window.sqFromRegistry(_gm.away) || []) : [];
-        selPl.innerHTML = '<option value="">— seleccionar jugador —</option>'
-          + _gmMkSquadOpts(sqA, _gm.home || 'Local')
-          + _gmMkSquadOpts(sqB, _gm.away || 'Visitante');
-        selPl.value = '';
+        selPl.innerHTML = '<option value="">— seleccionar jugador —</option>';
+        try { selPl.value = ''; } catch(_){}
       }
+      var addForm = document.getElementById('_editAddNewForm');
+      if (addForm) addForm.style.display = 'none';
 
       var playerName = ev.player || ev.name || '';
       var manual = ev.num ? (ev.num + '. ' + playerName) : playerName;
@@ -12945,7 +13309,21 @@
       var newType = document.getElementById('_editType').value;
       var newTeam = document.getElementById('_editTeam').value;
       var newMin  = parseInt(document.getElementById('_editMin').value, 10) || 1;
+      /* Bug 2026-05-24: en algunos navegadores móviles (Samsung Internet)
+         el onchange de #_editPlayerSel no dispara al elegir un jugador
+         del desplegable → _editManual no se actualiza → al guardar se
+         persistía el goleador antiguo (el que el usuario quería cambiar).
+         Fix: si la dropdown tiene un valor seleccionado lo usamos como
+         verdad por encima del campo manual. */
+      var _selPlEl = document.getElementById('_editPlayerSel');
+      var _pickedVal = (_selPlEl && _selPlEl.value) ? String(_selPlEl.value) : '';
       var manualVal = (document.getElementById('_editManual').value || '').trim();
+      if (_pickedVal) {
+        var _pParts = _pickedVal.split('|');
+        var _pNum = _pParts[0] || '';
+        var _pName = _pParts.slice(1).join('|') || '';
+        if (_pName) manualVal = (_pNum ? (_pNum + '. ' + _pName) : _pName);
+      }
       if (!manualVal) { alert('⚠️ Escribe el jugador manualmente o selecciónalo de la plantilla.'); return; }
 
       var newNum = '', newName = '';
@@ -13130,11 +13508,23 @@
       var globalB = idaB + (Number(_gm.sc.a) || 0);
       _amsDobleTied = (globalA === globalB);
     }
+    /* Torneo KO single-leg con ET+penaltis (Mundial 2032 fase
+       final). Mismo gate que en _gmRefreshFinishLabel. 2026-05-24. */
+    var _isTourKoETP = false;
+    try {
+      if (_gm._isTour && _gm._tourId && typeof window._tourLoadCachedSync === 'function') {
+        var _tcfgETP2 = window._tourLoadCachedSync(_gm._tourId);
+        var _tfcETP2 = (_tcfgETP2 && _tcfgETP2.formatConfig) || {};
+        var _tmkETP2 = String(_gm._tourKey || '').replace(/\|L[12]$/, '');
+        _isTourKoETP = (_tmkETP2.indexOf('ko_') === 0) && (_tfcETP2.koExtraTimePens === true);
+      }
+    } catch(_){}
     var _shouldForceET = (_isCopaSL && _gm.sc.a === _gm.sc.b)
                        || (_isScSL && _gm.sc.a === _gm.sc.b)
                        || (_isRecopaSL && _gm.sc.a === _gm.sc.b)
                        || (_isAmsElim && _gm.sc.a === _gm.sc.b)
-                       || (_isAmsDobleVuelta && _amsDobleTied);
+                       || (_isAmsDobleVuelta && _amsDobleTied)
+                       || (_isTourKoETP && _gm.sc.a === _gm.sc.b);
     if (_shouldForceET && !_gm.penDone) {
       if (!_gm.etDone) {
         var minNow = Math.floor((_gm.timerSec || 0) / 60);
@@ -13222,10 +13612,14 @@
        Tras imbatida (si aplica) y antes de elegir MVP, el usuario debe
        rellenar las estadísticas del partido (posesión, remates, etc.).
        Cuando confirma, _mlStatsConfirm guarda en _gm.matchStats y
-       re-llamamos a gmEndMatch para continuar con MVP y final. */
-    var _gmHumA = typeof esHumano === 'function' && esHumano(_gm.home);
-    var _gmHumB = typeof esHumano === 'function' && esHumano(_gm.away);
-    if ((_gmHumA || _gmHumB) && !_gm.matchStats && typeof _mlShowStatsOverlay === 'function') {
+       re-llamamos a gmEndMatch para continuar con MVP y final.
+       Bug 2026-05-24: antes usábamos esHumano() directo, que NO
+       reconoce las selecciones nacionales (Francia, Argelia, …) cuyo
+       humano vive en cfg.teams[].isHuman del torneo. Resultado: en
+       Francia (humano) vs UAE (IA) el match se finalizaba sin pedir
+       posesión/tiros/faltas. Ahora usamos _gmHumanInvolved() (mismo
+       helper que ya usan gmStartTimer y la pausa de descanso). */
+    if (!_gm.matchStats && typeof _mlShowStatsOverlay === 'function' && _gmHumanInvolved()) {
       _mlShowStatsOverlay(_gm, function(){ window.gmEndMatch(); });
       return;
     }
@@ -14370,6 +14764,29 @@
         var stad;
         if (_gm._isSc && _gm._scStadium) {
           stad = _gm._scStadium;
+        } else if (typeof window._selFinStadiumFor === 'function' && (function(){
+          /* Mundial · 48 selecciones: detectamos el torneo por la
+             config cacheada (format === 'mundial-48') — abrirTorneo
+             pasa comp='torneo' genérico, no 'sel-fin'. Petición
+             usuario 2026-05-24. */
+          if (_gm.comp === 'sel-fin') return true;
+          try {
+            if (_gm._isTour && _gm._tourId && typeof window._tourLoadCachedSync === 'function') {
+              var _cfgM = window._tourLoadCachedSync(_gm._tourId);
+              if (_cfgM && _cfgM.format === 'mundial-48') return true;
+            }
+          } catch(_){}
+          return false;
+        })()) {
+          /* 4 sedes neutrales elegidas por el admin
+             (sel_fin_stadiums_v1). Rotación determinista por hash del
+             partido (preferimos _tourKey, que es único por partido del
+             torneo). */
+          var _sfMk = _gm._tourKey || (String(_gm.j||'') + '|' + String(_gm.home||'') + '|' + String(_gm.away||''));
+          stad = window._selFinStadiumFor(_sfMk)
+              || ((typeof window.getTeamStadium === 'function')
+                    ? (window.getTeamStadium(_gm.home) || 'eFootball Stadium')
+                    : 'eFootball Stadium');
         } else {
           stad = (typeof window.getTeamStadium === 'function')
             ? (window.getTeamStadium(_gm.home) || 'eFootball Stadium')
@@ -15705,11 +16122,11 @@
             var newEv = [];
             for (var i = 0; i < et_gh; i++){
               var p = _pickScorer(outA);
-              newEv.push({type:'gol', min:_rndETMin(), num:p[0]||'', player:p[1]||'?', team:'a', _et:true});
+              newEv.push({type:'gol', ico:'⚽', min:_rndETMin(), num:p[0]||'', player:p[1]||'?', team:'a', _et:true});
             }
             for (var j2 = 0; j2 < et_gv; j2++){
               var p2 = _pickScorer(outB);
-              newEv.push({type:'gol', min:_rndETMin(), num:p2[0]||'', player:p2[1]||'?', team:'b', _et:true});
+              newEv.push({type:'gol', ico:'⚽', min:_rndETMin(), num:p2[0]||'', player:p2[1]||'?', team:'b', _et:true});
             }
             /* Insertar al final del array de eventos manteniendo orden
                por minuto. Como evtIdx ya está en evts.length, los
@@ -16170,7 +16587,7 @@
         var pl = _weightedScorerPick(eligibleGol, slot.team === 'a', goalsPerPlayer) || eligibleGol[0];
         if (!pl) return;
         goalsPerPlayer[pl[1]] = (goalsPerPlayer[pl[1]] || 0) + 1;
-        events.push({ type:'gol', min:slot.min, num:pl[0]||'', player:pl[1]||'?', team:slot.team });
+        events.push({ type:'gol', ico:'⚽', min:slot.min, num:pl[0]||'', player:pl[1]||'?', team:slot.team });
       }
     });
 
@@ -16878,6 +17295,15 @@
     }
     return h;
   }
+  /* Exponer _iaEventsHtml a window — fix 2026-05-24: el visor del
+     acta en torneos (_tourActaPanelHtml, Selecciones · spv/sfn,
+     verano · sct/pss/jg/asia, Mundialito, Mundial 48) y el de
+     Superliga (_superActaHtml) consultan window._iaEventsHtml para
+     pintar los eventos minuto-a-minuto. Sin exponer, caían al
+     fallback inline que solo usa `ev.ico` (sin derivar del `type`),
+     así que los eventos 'gol' generados por genMatchEvents (que NO
+     traen `ico`, ver línea ~16173) salían SIN el ⚽ en el acta. */
+  try { window._iaEventsHtml = _iaEventsHtml; } catch(_){}
   function _iaCompletedCard(m, cid, evHtml) {
     var cHomeHuman = esHumano(m.home), cAwayHuman = esHumano(m.away);
     var tcH2 = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};
@@ -18923,7 +19349,8 @@
       if (typeof m === 'number' && m >= 0) return m;
     } catch(_){}
     try {
-      var raw = localStorage.getItem('bayern_preseason_v2')
+      var raw = localStorage.getItem('liverpool_preseason_v1')
+              || localStorage.getItem('bayern_preseason_v2')
               || localStorage.getItem('bayern_preseason_v1');
       if (raw){
         var d = JSON.parse(raw);
@@ -21504,9 +21931,47 @@ window.goLiveMatches = function() {
     }
     return d;
   }
+  /* ── Cash pool por usuario (2026-05-24) ────────────────────────
+     Toñín juega en el Liverpool, así que su CASH de ISRAMAX es la
+     CAJA REAL del Liverpool (`_bayernHudGet().money`) — no una bolsa
+     interna separada. Stakes y devoluciones se aplican directamente
+     al presupuesto del club vía `_bayernHudCreditMoney`. El resto de
+     humanos aún no tiene su caja propia montada; usan la bolsa
+     interna `d.users[userId].cash` con default `ISRAMAX_INITIAL_CASH`. */
+  function _isramaxGetCash(userId){
+    if (userId === 'tonin'){
+      try {
+        var o = (typeof window._bayernHudGet === 'function') ? window._bayernHudGet() : null;
+        if (o && o.money != null) return Number(o.money) || 0;
+      } catch(_){}
+    }
+    var d = _isramaxLoad();
+    var u = d.users && d.users[userId];
+    if (u && typeof u.cash === 'number') return Number(u.cash) || 0;
+    return ISRAMAX_INITIAL_CASH;
+  }
+  /* Suma `delta` a la caja del pool indicado. `pool` puede ser 'hub'
+     (caja real del Liverpool de Toñín) o 'cash' (bolsa interna del
+     usuario). Mutates `d` para el pool 'cash'; el caller persiste. */
+  function _isramaxAdjustPool(d, userId, pool, delta){
+    delta = Number(delta) || 0;
+    if (!delta) return;
+    if (pool === 'hub'){
+      if (typeof window._bayernHudCreditMoney === 'function'){
+        try { window._bayernHudCreditMoney(delta); } catch(_){}
+      }
+      return;
+    }
+    if (!d.users) d.users = {};
+    if (!d.users[userId]) d.users[userId] = { cash: ISRAMAX_INITIAL_CASH, invested: 0, balance: 0 };
+    var next = (Number(d.users[userId].cash)||0) + delta;
+    d.users[userId].cash = Math.max(0, next);
+  }
+  function _isramaxPoolFor(userId){
+    return userId === 'tonin' ? 'hub' : 'cash';
+  }
   function _isramaxStats(userId){
     var d = _isramaxLoad();
-    var u = (d.users && d.users[userId]) || { cash: ISRAMAX_INITIAL_CASH, invested: 0, balance: 0 };
     /* Recalcular invested + balance desde bets activas/resueltas. */
     var invested = 0, won = 0, lost = 0;
     (d.bets || []).forEach(function(b){
@@ -21518,12 +21983,12 @@ window.goLiveMatches = function() {
       } else if (b.status === 'lost'){
         lost += Number(b.stake)||0;
       }
+      /* 'void' no afecta — el stake ya se devolvió al cash. */
     });
-    var balance = won - lost;
     return {
-      cash: Number(u.cash)||0,
+      cash: _isramaxGetCash(userId),
       invested: invested,
-      balance: balance
+      balance: won - lost
     };
   }
 
@@ -21582,8 +22047,11 @@ window.goLiveMatches = function() {
         '#isramax-ov .isr-empty{padding:24px 14px;text-align:center;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;font-style:italic;}' +
         /* Match pick (lista de partidos) */
         '#isramax-ov .isr-pick-comp-hdr{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.55);text-transform:uppercase;padding:14px 4px 6px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:6px;}' +
-        '#isramax-ov .isr-pick-card{display:grid;grid-template-columns:50px 1fr;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;}' +
+        '#isramax-ov .isr-pick-card{display:grid;grid-template-columns:50px 1fr auto;align-items:center;gap:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .15s;}' +
         '#isramax-ov .isr-pick-card:hover{border-color:rgba(96,180,255,.5);background:rgba(96,180,255,.08);}' +
+        '#isramax-ov .isr-pick-edit{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.75);font-size:14px;width:30px;height:30px;border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:all .15s;padding:0;line-height:1;}' +
+        '#isramax-ov .isr-pick-edit:hover{background:rgba(96,180,255,.18);border-color:rgba(96,180,255,.55);color:#fff;}' +
+        '#isramax-ov .isr-pick-edit:active{transform:scale(.92);}' +
         '#isramax-ov .isr-pick-jor{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#9fdcff;text-align:center;}' +
         '#isramax-ov .isr-pick-teams{display:flex;align-items:center;gap:6px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:700;color:#fff;flex-wrap:wrap;}' +
         '#isramax-ov .isr-pick-vs{color:rgba(255,255,255,.40);font-family:Oswald,sans-serif;font-size:11px;}' +
@@ -21616,13 +22084,25 @@ window.goLiveMatches = function() {
         '#isramax-ov .isr-bet-row{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:center;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);}' +
         '#isramax-ov .isr-bet-row.won{border-color:rgba(95,224,138,.50);background:rgba(95,224,138,.08);}' +
         '#isramax-ov .isr-bet-row.lost{border-color:rgba(255,128,128,.40);background:rgba(255,128,128,.06);opacity:.85;}' +
+        '#isramax-ov .isr-bet-row.void{border-color:rgba(180,180,200,.40);background:rgba(180,180,200,.06);opacity:.80;}' +
         '#isramax-ov .isr-bet-meta{font-size:10px;color:rgba(255,255,255,.55);}' +
         '#isramax-ov .isr-bet-stake{font-family:"Bebas Neue",sans-serif;font-size:16px;color:#ffd54a;}' +
         '#isramax-ov .isr-bet-cuota{font-family:Oswald,sans-serif;font-size:10px;color:#9fdcff;letter-spacing:1px;}' +
         '#isramax-ov .isr-bet-actions{display:flex;gap:6px;margin:-2px 0 8px;}' +
         '#isramax-ov .isr-bet-act{flex:1;padding:6px;border-radius:6px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;font-weight:700;cursor:pointer;border:1px solid;background:rgba(255,255,255,.04);-webkit-tap-highlight-color:transparent;}' +
         '#isramax-ov .isr-bet-act.won{color:#5fe08a;border-color:rgba(95,224,138,.45);}' +
-        '#isramax-ov .isr-bet-act.lost{color:#ff8080;border-color:rgba(255,128,128,.40);}';
+        '#isramax-ov .isr-bet-act.lost{color:#ff8080;border-color:rgba(255,128,128,.40);}' +
+        /* Editor de cuotas (PIN 7477) */
+        '#isramax-ov .isr-edit-info{padding:10px 12px;margin:8px 0 14px;background:rgba(127,208,255,.08);border:1px solid rgba(127,208,255,.25);border-radius:8px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.78);line-height:1.4;}' +
+        '#isramax-ov .isr-edit-mk{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:10px;padding:10px 12px;margin-bottom:10px;}' +
+        '#isramax-ov .isr-edit-mk-hdr{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.75);text-transform:uppercase;padding-bottom:6px;border-bottom:1px dashed rgba(255,255,255,.10);margin-bottom:8px;}' +
+        '#isramax-ov .isr-edit-row{display:grid;grid-template-columns:1fr 90px;align-items:center;gap:10px;padding:5px 0;}' +
+        '#isramax-ov .isr-edit-row label{font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}' +
+        '#isramax-ov .isr-edit-row input{background:rgba(0,0,0,.40);border:1px solid rgba(255,255,255,.20);border-radius:6px;padding:6px 8px;color:#fff;font-family:"Bebas Neue",sans-serif;font-size:16px;text-align:center;letter-spacing:1px;}' +
+        '#isramax-ov .isr-edit-row input:focus{outline:none;border-color:#9fdcff;box-shadow:0 0 8px rgba(96,180,255,.30);}' +
+        '#isramax-ov .isr-edit-actions{display:flex;gap:8px;align-items:center;margin-top:10px;}' +
+        '#isramax-ov .isr-edit-actions .isr-btn{flex:0 0 auto;}' +
+        '#isramax-ov .isr-edit-actions .isr-add-bet{flex:1;margin-bottom:0;}';
       document.head.appendChild(css);
     }
     return wrap;
@@ -21724,25 +22204,24 @@ window.goLiveMatches = function() {
     });
     var html = '<div class="isr-pick-comp-hdr">📋 TUS APUESTAS</div>';
     bets.forEach(function(b){
-      var stCls = b.status === 'won' ? 'won' : (b.status === 'lost' ? 'lost' : '');
-      var stIco = b.status === 'won' ? '✅' : (b.status === 'lost' ? '❌' : '⏳');
+      var stCls = b.status === 'won'  ? 'won'
+                : b.status === 'lost' ? 'lost'
+                : b.status === 'void' ? 'void' : '';
+      var stIco = b.status === 'won'  ? '✅'
+                : b.status === 'lost' ? '❌'
+                : b.status === 'void' ? '↩️' : '⏳';
       html += '<div class="isr-bet-row ' + stCls + '">'
             +   '<div>'
             +     '<div>' + _escHtml(b.home) + ' vs ' + _escHtml(b.away) + ' <span class="isr-bet-cuota">@' + (Number(b.cuota)||0).toFixed(2) + '€</span></div>'
-            +     '<div class="isr-bet-meta">' + _escHtml(b.comp || '') + ' · ' + _escHtml(b.label || '') + '</div>'
+            +     '<div class="isr-bet-meta">' + _escHtml(b.comp || '') + ' · ' + _escHtml(b.label || '')
+            +       (b.status === 'void' ? ' · ANULADA (stake devuelto)' : '')
+            +     '</div>'
             +   '</div>'
             +   '<span class="isr-bet-stake">' + (Number(b.stake)||0).toFixed(0) + '€</span>'
             +   '<span style="font-size:18px;">' + stIco + '</span>'
             + '</div>';
-      /* Botones de resolución manual para tus apuestas abiertas (los
-         mercados de córners/tarjetas/etc. no se liquidan solos). */
-      if (b.status === 'open' && _isramaxSession && !_isramaxSession.isGuest
-          && b.userId === _isramaxSession.userId){
-        html += '<div class="isr-bet-actions">'
-              +   '<button class="isr-bet-act won" onclick="window._isramaxMarkBet(\'' + b.id + '\',\'won\')">✅ Gané</button>'
-              +   '<button class="isr-bet-act lost" onclick="window._isramaxMarkBet(\'' + b.id + '\',\'lost\')">❌ Perdí</button>'
-              + '</div>';
-      }
+      /* Sin botones manuales — la realidad del partido decide
+         (petición usuario 2026-05-24). */
     });
     return html;
   }
@@ -21847,9 +22326,12 @@ window.goLiveMatches = function() {
     var all = _isramaxScanDerbys();
     /* Filtros: estado pending o playing (no apostar a finalizados),
        y excluir partidos donde el propio user juegue. */
+    /* Solo partidos PENDING — en cuanto el cronómetro de simulación
+       arranca (estado 'playing') el partido queda bloqueado para
+       apuestas nuevas. Petición usuario 2026-05-24. */
     var pickable = all.filter(function(it){
       if (!it || !it.home || !it.away) return false;
-      if (it.state === 'finished') return false;
+      if (it.state !== 'pending') return false;
       if (it.home === myTeam || it.away === myTeam) return false;
       return true;
     });
@@ -21874,13 +22356,15 @@ window.goLiveMatches = function() {
           var hi2 = (typeof window.humanIcon === 'function' ? (window.humanIcon(it.away)||'').replace(/ /g,'') : '');
           var jLbl = it.j ? 'J' + it.j : '';
           var mk = _isramaxMatchKey(it);
-          html += '<div class="isr-pick-card" onclick="window._isramaxPickMatch&&window._isramaxPickMatch(\'' + _escHtml(mk).replace(/'/g,'&#39;') + '\')">'
+          var mkEsc = _escHtml(mk).replace(/'/g,'&#39;');
+          html += '<div class="isr-pick-card" onclick="window._isramaxPickMatch&&window._isramaxPickMatch(\'' + mkEsc + '\')">'
                 +   '<div class="isr-pick-jor">' + jLbl + '</div>'
                 +   '<div class="isr-pick-teams">'
                 +     '<span>' + _escHtml(it.home) + (hi1 ? ' <span class="isr-pick-hi">' + hi1 + '</span>' : '') + '</span>'
                 +     '<span class="isr-pick-vs">vs</span>'
                 +     '<span>' + (hi2 ? '<span class="isr-pick-hi">' + hi2 + '</span> ' : '') + _escHtml(it.away) + '</span>'
                 +   '</div>'
+                +   '<button class="isr-pick-edit" title="Editar cuotas (PIN)" onclick="event.stopPropagation();window._isramaxEditCuotasAsk&&window._isramaxEditCuotasAsk(\'' + mkEsc + '\')">🖍</button>'
                 + '</div>';
         });
       });
@@ -22113,6 +22597,34 @@ window.goLiveMatches = function() {
       tirospuerta: { maslocal:'1.60', masvisit:'1.95' }
     };
   }
+  /* ── Overrides de cuotas por partido (2026-05-24) ─────────────
+     Si el admin (vía PIN 7477 → icono 🖍) edita las cuotas de un
+     partido concreto, se guardan en `d.cuotasOverride[matchKey]` con
+     la misma estructura que devuelve `_isramaxBuildOdds`. El merge
+     respeta la forma { categoria: { campo: '1.85' } } — cualquier
+     campo no especificado cae al default. */
+  function _isramaxApplyOddsOverride(matchKey, baseOdds){
+    if (!matchKey || !baseOdds) return baseOdds;
+    var d = _isramaxLoad();
+    var ov = d.cuotasOverride && d.cuotasOverride[matchKey];
+    if (!ov) return baseOdds;
+    var out = {};
+    Object.keys(baseOdds).forEach(function(cat){
+      var src = baseOdds[cat];
+      if (!src || typeof src !== 'object'){ out[cat] = src; return; }
+      var dst = {};
+      Object.keys(src).forEach(function(k){ dst[k] = src[k]; });
+      if (ov[cat] && typeof ov[cat] === 'object'){
+        Object.keys(ov[cat]).forEach(function(k){ dst[k] = String(ov[cat][k]); });
+      }
+      out[cat] = dst;
+    });
+    return out;
+  }
+  function _isramaxOddsForMatch(m){
+    var base = _isramaxBuildOdds(m.home, m.away);
+    return _isramaxApplyOddsOverride(_isramaxMatchKey(m), base);
+  }
   var _isramaxCurrentMatch = null;
   window._isramaxPickMatch = function(matchKey){
     var all = _isramaxScanDerbys();
@@ -22130,7 +22642,7 @@ window.goLiveMatches = function() {
     var u = _isramaxFindUser(_isramaxSession.userId);
     var hi1 = (typeof window.humanIcon === 'function' ? (window.humanIcon(m.home)||'').replace(/ /g,'') : '');
     var hi2 = (typeof window.humanIcon === 'function' ? (window.humanIcon(m.away)||'').replace(/ /g,'') : '');
-    var od = _isramaxBuildOdds(m.home, m.away);
+    var od = _isramaxOddsForMatch(m);
     var compName = (m.comp && m.comp.name) || 'Partido';
     var jLbl = m.j ? 'Jornada ' + m.j : '';
     function _btn(market, option, label, odd, color){
@@ -22226,13 +22738,11 @@ window.goLiveMatches = function() {
       +   '<div class="isr-stake-row"><span>Cuota</span><span class="isr-stake-val">' + oddStr + '€</span></div>'
       +   '<div class="isr-stake-row"><span>Cash disponible</span><span class="isr-stake-val">' + stats.cash.toFixed(0) + '€</span></div>'
       +   '<label class="isr-stake-lbl">Importe a apostar (€)</label>'
-      +   '<input id="isramax-stake" class="isr-stake-input" type="number" min="1" max="' + stats.cash.toFixed(0) + '" value="10" inputmode="numeric"/>'
+      +   '<input id="isramax-stake" class="isr-stake-input" type="number" min="10" max="30" step="10" value="10" inputmode="numeric" readonly/>'
       +   '<div class="isr-stake-presets">'
       +     '<button onclick="window._isramaxStakeSet(10)">10€</button>'
-      +     '<button onclick="window._isramaxStakeSet(25)">25€</button>'
-      +     '<button onclick="window._isramaxStakeSet(50)">50€</button>'
-      +     '<button onclick="window._isramaxStakeSet(100)">100€</button>'
-      +     '<button onclick="window._isramaxStakeSet(' + Math.floor(stats.cash) + ')">MAX</button>'
+      +     '<button onclick="window._isramaxStakeSet(20)">20€</button>'
+      +     '<button onclick="window._isramaxStakeSet(30)">30€</button>'
       +   '</div>'
       +   '<div id="isramax-stake-preview" class="isr-stake-preview"></div>'
       +   '<button class="isr-add-bet" onclick="window._isramaxConfirmBet&&window._isramaxConfirmBet()">✅ CONFIRMAR APUESTA</button>'
@@ -22265,24 +22775,26 @@ window.goLiveMatches = function() {
     if (!_isramaxPendingBet || !_isramaxCurrentMatch || !_isramaxSession) return;
     var inp = document.getElementById('isramax-stake');
     var stake = parseFloat(inp ? inp.value : 0) || 0;
-    if (stake < 1){ alert('⚠️ Importe mínimo: 1€'); return; }
+    /* Importes permitidos: 10 / 20 / 30 — petición usuario 2026-05-24. */
+    if (stake !== 10 && stake !== 20 && stake !== 30){
+      alert('⚠️ Importe permitido: 10€, 20€ o 30€.');
+      return;
+    }
+    var userId = _isramaxSession.userId;
     var d = _isramaxLoad();
     if (!d.users) d.users = {};
     if (!d.bets) d.bets = [];
-    var u = d.users[_isramaxSession.userId];
-    if (!u){
-      d.users[_isramaxSession.userId] = { cash: ISRAMAX_INITIAL_CASH, invested:0, balance:0 };
-      u = d.users[_isramaxSession.userId];
-    }
-    if (stake > u.cash){
-      alert('⚠️ No tienes suficiente cash. Tienes ' + u.cash.toFixed(0) + '€.');
+    var cash = _isramaxGetCash(userId);
+    if (stake > cash){
+      alert('⚠️ No tienes suficiente cash. Tienes ' + cash.toFixed(0) + '€.');
       return;
     }
-    u.cash = u.cash - stake;
+    var pool = _isramaxPoolFor(userId);
+    _isramaxAdjustPool(d, userId, pool, -stake);
     var m = _isramaxCurrentMatch;
     d.bets.push({
       id: 'b-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,7),
-      userId: _isramaxSession.userId,
+      userId: userId,
       matchKey: _isramaxMatchKey(m),
       home: m.home, away: m.away,
       comp: (m.comp && m.comp.name) || '',
@@ -22293,6 +22805,7 @@ window.goLiveMatches = function() {
       cuota: _isramaxPendingBet.cuota,
       stake: stake,
       status: 'open',
+      cashPool: pool,
       createdAt: new Date().toISOString()
     });
     _isramaxSave(d);
@@ -22302,32 +22815,246 @@ window.goLiveMatches = function() {
   };
 
   /* ═══════════════════════════════════════════════════════════════
-     LIQUIDACIÓN DE APUESTAS · automatiza el presupuesto del Liverpool
+     EDITOR DE CUOTAS POR PARTIDO · PIN 7477 (admin, 2026-05-24)
      ───────────────────────────────────────────────────────────────
-     Las apuestas se guardan como `open`. Cuando el partido apostado
-     termina (lo detecta `_scanAllDerbies` con state 'finished' + su
-     marcador) se liquidan AUTOMÁTICAMENTE los mercados deducibles del
-     RESULTADO: 1X2, doble oportunidad, total goles y ambos marcan.
-     Los mercados que necesitan datos que el motor no persiste
-     (córners, tarjetas, rojas, tiros, goles 1ª parte) quedan `open` y
-     se resuelven con los botones manuales ✅/❌ del dashboard.
+     Cada partido del match-pick lleva un icono 🖍. Al pulsarlo se
+     pide PIN; con 7477 correcto se abre un formulario con todas las
+     cuotas de TODOS los mercados de ese partido editables. Las
+     ediciones se persisten en `d.cuotasOverride[matchKey]` y
+     sobrescriben las cuotas por defecto del Poisson / matriz H2H.
+     ─────────────────────────────────────────────────────────────── */
+  var ISRAMAX_EDIT_PIN = '7477';
+  var _isramaxEditingMatchKey = null;
 
-     Cuando una apuesta de TOÑÍN (entrenador del Liverpool) resulta
-     GANADA, su ganancia neta (stake × (cuota−1)) se suma al 🪙
-     Presupuesto del hub vía `_bayernHudCreditMoney`. Idempotente:
-     cada apuesta acreditada queda marcada con `hubCredited`. */
-  function _isramaxSettleMarket(b, ga, gv){
-    ga = Number(ga)||0; gv = Number(gv)||0;
-    var tot = ga + gv;
+  function _isramaxFindMatchByKey(matchKey){
+    var all = _isramaxScanDerbys();
+    for (var i=0; i<all.length; i++){
+      if (_isramaxMatchKey(all[i]) === matchKey) return all[i];
+    }
+    return null;
+  }
+
+  window._isramaxEditCuotasAsk = function(matchKey){
+    if (!matchKey) return;
+    _isramaxEditingMatchKey = matchKey;
+    var m = _isramaxFindMatchByKey(matchKey);
+    if (!m){ alert('Partido no encontrado'); return; }
+    var html = ''
+      + '<button class="isr-back" onclick="window._isramaxEditCuotasCancel&&window._isramaxEditCuotasCancel()">◀ Cancelar</button>'
+      + '<h2>🖍 EDITAR CUOTAS</h2>'
+      + '<div class="isr-sub">' + _escHtml(m.home) + ' vs ' + _escHtml(m.away) + '</div>'
+      + '<div class="isr-login-card" style="--isr-c1:#3a3a4a;--isr-c2:#1a1a26;--isr-c3:#7fd0ff;">'
+      +   '<div class="isr-login-icon">🔐</div>'
+      +   '<div class="isr-login-name">PIN ADMIN</div>'
+      +   '<div class="isr-login-team">Acceso al editor de cuotas</div>'
+      +   '<input id="isramax-edit-pin" class="isr-pin-input" type="password" inputmode="numeric" maxlength="4" placeholder="••••"/>'
+      +   '<div id="isramax-edit-pin-err" class="isr-pin-err"></div>'
+      +   '<div class="isr-btn-row">'
+      +     '<button class="isr-btn primary" onclick="window._isramaxEditCuotasVerify&&window._isramaxEditCuotasVerify()">🔓 Entrar</button>'
+      +   '</div>'
+      + '</div>';
+    _isramaxRender(html);
+    setTimeout(function(){
+      var inp = document.getElementById('isramax-edit-pin');
+      if (inp){
+        inp.focus();
+        inp.addEventListener('keydown', function(e){
+          if (e.key === 'Enter') window._isramaxEditCuotasVerify && window._isramaxEditCuotasVerify();
+        });
+      }
+    }, 60);
+  };
+
+  window._isramaxEditCuotasCancel = function(){
+    _isramaxEditingMatchKey = null;
+    _isramaxRenderMatchPick();
+  };
+
+  window._isramaxEditCuotasVerify = function(){
+    var inp = document.getElementById('isramax-edit-pin');
+    var err = document.getElementById('isramax-edit-pin-err');
+    if (!inp) return;
+    var pin = String(inp.value||'').trim();
+    if (pin !== ISRAMAX_EDIT_PIN){
+      if (err) err.textContent = '❌ PIN incorrecto';
+      inp.value = '';
+      inp.focus();
+      return;
+    }
+    _isramaxEditCuotasOpen(_isramaxEditingMatchKey);
+  };
+
+  /* Definición de mercados editables. Cada uno con su categoría
+     ('cat' = clave en el objeto odds) y un array de campos:
+     [optionKey, etiqueta]. Las etiquetas usan placeholders {home}/{away}
+     que se sustituyen por los nombres del partido. */
+  var _ISRAMAX_MK_DEF = [
+    { cat:'onex2',      title:'🏆 1X2 GANADOR',          fields:[['home','{home}'],['draw','Empate'],['away','{away}']] },
+    { cat:'doble',      title:'👥 DOBLE OPORTUNIDAD',    fields:[['homeE','{home} o E'],['awayE','{away} o E'],['homeA','{home} o {away}']] },
+    { cat:'goles1p',    title:'⚽ GOLES 1ª PARTE',       fields:[['masm15','Más 1.5'],['masm25','Más 2.5'],['menos15','Menos 1.5'],['menos25','Menos 2.5']] },
+    { cat:'golespart',  title:'⚽ TOTAL GOLES PARTIDO',  fields:[['mas35','Más 3.5'],['mas45','Más 4.5'],['menos35','Menos 3.5'],['menos45','Menos 4.5']] },
+    { cat:'ambosmarcan',title:'⚽ AMBOS MARCAN',         fields:[['si','Sí'],['no','No']] },
+    { cat:'corners',    title:'⛳ CÓRNERS',              fields:[['mas35','Más 3.5'],['menos45','Menos 4.5'],['maslocal','Más {home}'],['masvisit','Más {away}']] },
+    { cat:'tarjetas',   title:'🟨 TARJETAS AMARILLAS',   fields:[['masLow','Más línea baja'],['menosLow','Menos línea baja'],['masHigh','Más línea alta'],['menosHigh','Menos línea alta']] },
+    { cat:'rojas',      title:'🟥 TARJETAS ROJAS',       fields:[['si','Sí hay roja'],['no','No hay roja']] },
+    { cat:'tirospuerta',title:'👟 TIROS A PUERTA',       fields:[['maslocal','Más {home}'],['masvisit','Más {away}']] }
+  ];
+
+  function _isramaxEditCuotasOpen(matchKey){
+    var m = _isramaxFindMatchByKey(matchKey);
+    if (!m){ _isramaxRenderMatchPick(); return; }
+    var od = _isramaxOddsForMatch(m);
+    var html = ''
+      + '<button class="isr-back" onclick="window._isramaxEditCuotasCancel&&window._isramaxEditCuotasCancel()">◀ Cancelar</button>'
+      + '<h2>🖍 EDITAR CUOTAS</h2>'
+      + '<div class="isr-sub">' + _escHtml(m.home) + ' vs ' + _escHtml(m.away) + '</div>'
+      + '<div class="isr-edit-info">Modifica las cuotas y pulsa <b>GUARDAR</b>. Los valores se aplican solo a este partido.</div>';
+    _ISRAMAX_MK_DEF.forEach(function(def){
+      var src = od[def.cat] || {};
+      html += '<div class="isr-edit-mk"><div class="isr-edit-mk-hdr">' + def.title + '</div>';
+      def.fields.forEach(function(f){
+        var key = f[0];
+        var lbl = String(f[1]).replace('{home}', _escHtml(m.home)).replace('{away}', _escHtml(m.away));
+        var val = src[key] != null ? String(src[key]) : '';
+        html += '<div class="isr-edit-row">'
+              +   '<label>' + lbl + '</label>'
+              +   '<input type="number" step="0.01" min="1" data-cat="' + def.cat + '" data-key="' + key + '" value="' + _escHtml(val) + '"/>'
+              + '</div>';
+      });
+      /* Para tarjetas, exponer también las líneas low/high (no son cuotas
+         pero sí parte del mercado y conviene poder ajustarlas). */
+      if (def.cat === 'tarjetas'){
+        var ll = src.lineLow != null ? String(src.lineLow) : '1.5';
+        var lh = src.lineHigh != null ? String(src.lineHigh) : '2.5';
+        html += '<div class="isr-edit-row">'
+              +   '<label>Línea baja</label>'
+              +   '<input type="number" step="0.5" min="0" data-cat="tarjetas" data-key="lineLow" value="' + _escHtml(ll) + '"/>'
+              + '</div>'
+              + '<div class="isr-edit-row">'
+              +   '<label>Línea alta</label>'
+              +   '<input type="number" step="0.5" min="0" data-cat="tarjetas" data-key="lineHigh" value="' + _escHtml(lh) + '"/>'
+              + '</div>';
+      }
+      html += '</div>';
+    });
+    html += '<div class="isr-edit-actions">'
+         +    '<button class="isr-btn ghost" onclick="window._isramaxEditCuotasReset&&window._isramaxEditCuotasReset()">↺ Restaurar defaults</button>'
+         +    '<button class="isr-add-bet" onclick="window._isramaxEditCuotasSave&&window._isramaxEditCuotasSave()">💾 GUARDAR</button>'
+         + '</div>';
+    _isramaxRender(html);
+  }
+
+  window._isramaxEditCuotasSave = function(){
+    var mk = _isramaxEditingMatchKey;
+    if (!mk) return;
+    var inputs = document.querySelectorAll('#isramax-ov-inner input[data-cat][data-key]');
+    if (!inputs.length) return;
+    var ov = {};
+    inputs.forEach(function(inp){
+      var cat = inp.getAttribute('data-cat');
+      var key = inp.getAttribute('data-key');
+      var raw = String(inp.value||'').replace(',','.').trim();
+      if (!cat || !key || !raw) return;
+      var n = parseFloat(raw);
+      if (!isFinite(n) || n <= 0) return;
+      if (!ov[cat]) ov[cat] = {};
+      /* Línea de tarjetas guardada como '1.5' (no se formatea como cuota). */
+      ov[cat][key] = (key === 'lineLow' || key === 'lineHigh') ? n.toFixed(1) : n.toFixed(2);
+    });
+    var d = _isramaxLoad();
+    if (!d.cuotasOverride) d.cuotasOverride = {};
+    d.cuotasOverride[mk] = ov;
+    _isramaxSave(d);
+    _isramaxEditingMatchKey = null;
+    _isramaxRenderMatchPick();
+  };
+
+  window._isramaxEditCuotasReset = function(){
+    var mk = _isramaxEditingMatchKey;
+    if (!mk) return;
+    if (!confirm('¿Restaurar las cuotas por defecto de este partido?')) return;
+    var d = _isramaxLoad();
+    if (d.cuotasOverride && d.cuotasOverride[mk]){
+      delete d.cuotasOverride[mk];
+      _isramaxSave(d);
+    }
+    _isramaxEditCuotasOpen(mk);
+  };
+
+  /* ═══════════════════════════════════════════════════════════════
+     LIQUIDACIÓN DE APUESTAS · automatizada por la realidad del partido
+     ───────────────────────────────────────────────────────────────
+     Petición usuario 2026-05-24: el HUMANO no marca si una apuesta
+     se ha ganado o perdido — lo decide la REALIDAD del partido
+     (eventos del acta, marcador, matchStats). Cuando el partido
+     finaliza, todas las apuestas abiertas se liquidan automáticamente:
+
+       • 1X2, doble oportunidad, total goles, ambos marcan → del
+         marcador (siempre auto-resolvibles).
+       • Goles 1ª parte, tarjetas, rojas → de `res.events` (Liga EA
+         Sports tiene el acta detallada por minuto).
+       • Córners, tiros a puerta → de `res.matchStats`.
+
+     Si el partido no tiene events/matchStats persistidos (típico de
+     KO de Copa o Champions cuando aún no se ha jugado en vivo) y la
+     apuesta no se puede deducir del marcador, se marca como `void`
+     (anulada) y el stake se DEVUELVE al cash del usuario. Decisión
+     justa cuando el sistema no puede verificar el resultado real.
+
+     Pool de cash: Toñín → caja del Liverpool (`_bayernHudGet().money`)
+     vía `_bayernHudCreditMoney`. Resto de humanos → bolsa interna
+     `d.users[userId].cash`. El pool se persiste por bet en
+     `b.cashPool` ('hub' | 'cash') al crear la apuesta. */
+
+  /* Lookup de datos extendidos del partido (events + matchStats)
+     para apuestas que necesitan más que el marcador. Por ahora solo
+     Liga EA Sports tiene acta accesible vía `loadResults()`. Para
+     otras competiciones se devuelve solo gh/ga. */
+  function _isramaxFetchMatchData(it, b){
+    if (!it) return null;
+    var gh = Number(it.score && it.score.a) || 0;
+    var ga = Number(it.score && it.score.b) || 0;
+    var data = { gh: gh, ga: ga, events: null, matchStats: null, hasDetail: false };
+    try {
+      if (typeof window.loadResults === 'function'){
+        var results = window.loadResults() || {};
+        var rk = (it.j||b.j||0) + '|' + (it.home||b.home) + '|' + (it.away||b.away);
+        var r = results[rk];
+        if (r){
+          if (typeof r.gh === 'number') data.gh = r.gh;
+          if (typeof r.ga === 'number') data.ga = r.ga;
+          if (Array.isArray(r.events)) data.events = r.events;
+          if (r.matchStats) data.matchStats = r.matchStats;
+          if (data.events || data.matchStats) data.hasDetail = true;
+        }
+      }
+    } catch(_){}
+    return data;
+  }
+
+  function _isramaxParseLine(label){
+    /* Extrae el número del label "Más 1.5" / "Menos 2.5" → 1.5 / 2.5 */
+    var m = String(label||'').match(/(\d+(?:[.,]\d+)?)/);
+    return m ? parseFloat(m[1].replace(',','.')) : null;
+  }
+
+  /* Decide outcome: 'won' | 'lost' | 'void' | null (sin datos aún) */
+  function _isramaxSettleMarket(b, md){
+    if (!md) return null;
+    var gh = Number(md.gh)||0;
+    var gv = Number(md.ga)||0;
+    var tot = gh + gv;
+    var ev = md.events;
+    var ms = md.matchStats;
     switch (b.market){
       case '1x2': {
-        var res = ga > gv ? 'home' : (ga < gv ? 'away' : 'draw');
+        var res = gh > gv ? 'home' : (gh < gv ? 'away' : 'draw');
         return b.option === res ? 'won' : 'lost';
       }
       case 'dbl': {
-        var ok = b.option === 'homeE' ? (ga >= gv)
-               : b.option === 'awayE' ? (gv >= ga)
-               : b.option === 'homeA' ? (ga !== gv) : false;
+        var ok = b.option === 'homeE' ? (gh >= gv)
+               : b.option === 'awayE' ? (gv >= gh)
+               : b.option === 'homeA' ? (gh !== gv) : false;
         return ok ? 'won' : 'lost';
       }
       case 'gtp': {
@@ -22336,77 +23063,107 @@ window.goLiveMatches = function() {
         return (over ? (tot > line) : (tot < line)) ? 'won' : 'lost';
       }
       case 'amb': {
-        var btts = (ga > 0 && gv > 0);
+        var btts = (gh > 0 && gv > 0);
         return ((b.option === 'si') === btts) ? 'won' : 'lost';
       }
+      case 'g1p': {
+        if (!Array.isArray(ev)) return 'void';
+        var g1 = 0;
+        ev.forEach(function(e){
+          if (!e || !e.type) return;
+          var mn = Number(e.min)||0;
+          if (mn > 45) return;
+          if (e.type === 'gol' || e.type === 'pen-gol' || e.type === 'falta-gol' || e.type === 'propia') g1++;
+        });
+        var l1 = (String(b.option).indexOf('25') !== -1) ? 2.5 : 1.5;
+        var over1 = String(b.option).indexOf('mas') === 0;
+        return (over1 ? (g1 > l1) : (g1 < l1)) ? 'won' : 'lost';
+      }
+      case 'cor': {
+        if (!ms || !ms.a || !ms.b) return 'void';
+        var ca = Number(ms.a.corners)||0;
+        var cb = Number(ms.b.corners)||0;
+        var totC = ca + cb;
+        if (b.option === 'mas35')    return totC > 3.5 ? 'won' : 'lost';
+        if (b.option === 'menos45')  return totC < 4.5 ? 'won' : 'lost';
+        if (b.option === 'maslocal') return ca > cb ? 'won' : 'lost';
+        if (b.option === 'masvisit') return cb > ca ? 'won' : 'lost';
+        return 'void';
+      }
+      case 'tar': {
+        if (!Array.isArray(ev)) return 'void';
+        var yel = 0;
+        ev.forEach(function(e){
+          if (!e || !e.type) return;
+          if (e.type === 'amarilla' || e.type === 'd-amarilla') yel++;
+        });
+        var ln = _isramaxParseLine(b.label);
+        if (ln == null) return 'void';
+        var overY = String(b.option).indexOf('mas') === 0;
+        return (overY ? (yel > ln) : (yel < ln)) ? 'won' : 'lost';
+      }
+      case 'roj': {
+        if (!Array.isArray(ev)) return 'void';
+        var hasRed = ev.some(function(e){
+          return e && (e.type === 'roja' || e.type === 'd-amarilla');
+        });
+        return ((b.option === 'si') === hasRed) ? 'won' : 'lost';
+      }
+      case 'tir': {
+        if (!ms || !ms.a || !ms.b) return 'void';
+        var sa = Number(ms.a.tiros)||0;
+        var sb = Number(ms.b.tiros)||0;
+        if (b.option === 'maslocal') return sa > sb ? 'won' : 'lost';
+        if (b.option === 'masvisit') return sb > sa ? 'won' : 'lost';
+        return 'void';
+      }
       default:
-        return null;   /* g1p / cor / tar / roj / tir → manual */
+        return 'void';
     }
   }
-  /* Acredita al presupuesto del Liverpool la ganancia neta de las
-     apuestas GANADAS de Toñín aún no acreditadas. Marca el objeto en
-     memoria (`hubCredited`); el caller persiste. Devuelve true si
-     marcó alguna. */
-  function _isramaxCreditHubFromBets(d){
-    var total = 0, marked = false;
-    (d.bets || []).forEach(function(b){
-      if (!b || b.userId !== 'tonin' || b.status !== 'won' || b.hubCredited) return;
-      var profit = (Number(b.stake)||0) * ((Number(b.cuota)||0) - 1);
-      if (profit > 0) total += profit;
-      b.hubCredited = true;
-      marked = true;
-    });
-    if (marked && total > 0 && typeof window._bayernHudCreditMoney === 'function'){
-      try { window._bayernHudCreditMoney(Math.round(total)); } catch(_){}
-    }
-    return marked;
-  }
+
   /* Recorre las apuestas open, liquida las que tengan partido
-     finalizado + mercado deducible del marcador, y acredita al hub.
-     Pull-based, idempotente y barato. Devuelve true si algo cambió. */
+     finalizado y devuelve la ganancia/devolución al pool correcto.
+     Pull-based, idempotente. Devuelve true si algo cambió. */
   function _isramaxSettleOpenBets(){
     var d = _isramaxLoad();
     if (!d || !Array.isArray(d.bets) || !d.bets.length) return false;
     var changed = false;
-    if (d.bets.some(function(b){ return b && b.status === 'open'; })){
-      var byKey = {};
-      try {
-        _isramaxScanDerbys().forEach(function(it){ byKey[_isramaxMatchKey(it)] = it; });
-      } catch(_){}
-      d.bets.forEach(function(b){
-        if (!b || b.status !== 'open') return;
-        var it = byKey[b.matchKey];
-        if (!it || it.state !== 'finished' || !it.score) return;
-        var outcome = _isramaxSettleMarket(b, it.score.a, it.score.b);
-        if (!outcome) return;
-        b.status = outcome;
-        b.settledAt = new Date().toISOString();
-        b.settledScore = String(it.score.a) + '-' + String(it.score.b);
-        b.settledAuto = true;
-        changed = true;
-      });
-    }
-    /* Acreditar al hub las ganadas de Toñín pendientes (recién
-       liquidadas, manuales o de versiones previas). */
-    if (_isramaxCreditHubFromBets(d)) changed = true;
+    var hasOpen = d.bets.some(function(b){ return b && b.status === 'open'; });
+    if (!hasOpen) return false;
+    var byKey = {};
+    try {
+      _isramaxScanDerbys().forEach(function(it){ byKey[_isramaxMatchKey(it)] = it; });
+    } catch(_){}
+    d.bets.forEach(function(b){
+      if (!b || b.status !== 'open') return;
+      var it = byKey[b.matchKey];
+      if (!it || it.state !== 'finished' || !it.score) return;
+      var md = _isramaxFetchMatchData(it, b);
+      var outcome = _isramaxSettleMarket(b, md);
+      if (!outcome) return;
+      b.status = outcome;
+      b.settledAt = new Date().toISOString();
+      b.settledScore = String(md.gh) + '-' + String(md.ga);
+      b.settledAuto = true;
+      /* Pool: si la bet se creó con `cashPool` definido, devolvemos ahí.
+         Bets legacy (sin cashPool) → 'cash' (bolsa interna donde se
+         dedujo el stake en el modelo antiguo). */
+      var pool = b.cashPool || 'cash';
+      if (outcome === 'won'){
+        _isramaxAdjustPool(d, b.userId, pool, (Number(b.stake)||0) * (Number(b.cuota)||0));
+      } else if (outcome === 'void'){
+        _isramaxAdjustPool(d, b.userId, pool, Number(b.stake)||0);
+      }
+      changed = true;
+    });
     if (changed) _isramaxSave(d);
     return changed;
   }
-  /* Resolución MANUAL de una apuesta (botones ✅/❌ del dashboard).
-     Necesaria para mercados no deducibles del marcador. */
-  window._isramaxMarkBet = function(betId, outcome){
-    if (outcome !== 'won' && outcome !== 'lost') return;
-    if (!_isramaxSession || _isramaxSession.isGuest) return;
-    var d = _isramaxLoad();
-    var b = (d.bets||[]).filter(function(x){ return x && x.id === betId; })[0];
-    if (!b || b.status !== 'open' || b.userId !== _isramaxSession.userId) return;
-    b.status = outcome;
-    b.settledAt = new Date().toISOString();
-    b.settledManual = true;
-    _isramaxCreditHubFromBets(d);
-    _isramaxSave(d);
-    _isramaxRenderDashboard();
-  };
+  /* `_isramaxMarkBet` se eliminó del flujo activo (petición usuario
+     2026-05-24: el humano NO marca; la realidad del partido decide).
+     Dejamos un stub no-op por si algún caller legacy lo invoca. */
+  window._isramaxMarkBet = function(){ /* deprecated */ };
   window._isramaxSettleOpenBets = _isramaxSettleOpenBets;
 
   /* Crea el div.screen#s-derbys en body si no existe. */
@@ -24149,6 +24906,7 @@ document.addEventListener('DOMContentLoaded', function() {
     { key:'usc',           cat:'Europea 🇪🇺', comp:'Supercopa de Europa',         id:'eFootball_Contact_26',          luz:'☀️ Sol'   },
     { key:'ucl-previa',    cat:'Europea 🛰',  comp:'Fase Previa Champions',       id:'Derbystar_Globall_25-26',       luz:'🌙 Noche' },
     { key:'selecciones',   cat:'Internac.',   comp:'Fase Final Selecciones',      id:'NIKE_CONTROL_CBF',              luz:'☀️ Sol'   },
+    { key:'sel-clasif',    cat:'Internac.',   comp:'Selecciones · Clasif. (J1-J8)', id:'Orbita_Africa',               luz:'☀️ Sol'   },
     { key:'intercontinental',cat:'Internac. 🟡',comp:'Copa Intercontinental',    id:'Vantaggio_5000',                luz:'☀️ Sol'   },
     { key:'clasif',        cat:'Internac.',   comp:'Clasificatorias / Repesca',   id:'Ligue_2_BKT_Official',          luz:'🌙 Noche' },
     { key:'amistosos',     cat:'Especial 🤝', comp:'Amistosos Pretemporada',      id:'eFootball_Origin',              luz:'🌙 Noche' },
@@ -24277,11 +25035,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* Ball Storage editable (petición usuario 2026-05-05, reescrito
      2026-05-17 para persistencia en servidor + competiciones custom).
-     - Cada competición lleva un <select> con TODOS los balones
-       guardados en el inventario. Cambiar el selector persiste
-       (localStorage + servidor) y los partidos humanos de esa comp
-       pasan a usarlo automáticamente (vía override en bundle
-       COMP_BALL, que ahora lee primero la clave RAW del partido).
+     - Cada competición lleva un botón "▾ ELEGIR" que abre un picker
+       overlay con TODOS los balones guardados en el inventario; el
+       actual se marca con ✅ (antes era un <select> nativo que en
+       algunos móviles no abría / cancelaba la elección al primer
+       toque). Elegir persiste (localStorage + servidor) y los
+       partidos humanos de esa comp pasan a usarlo automáticamente
+       (vía override en bundle COMP_BALL, que lee primero la clave
+       RAW del partido).
      - Botón "+ Añadir balón" añade un balón al inventario.
      - Botón "+ Añadir Competición" añade una comp custom (nombre +
        clave + balón) para torneos nuevos.
@@ -24299,15 +25060,36 @@ document.addEventListener('DOMContentLoaded', function() {
   var _BALL_COMPDB_KEY   = 'ball_comp_db_v1';
 
   /* ── Sync con servidor (GlobalState vía /api/kv) ───────────────── */
+  /* Marca timestamp por clave cuando el usuario escribe localmente;
+     `_ballHydrateAll` la respeta y NO pisa la cache local mientras la
+     ventana de gracia esté activa. Arregla bug 2026-05-24: el hydrate
+     en boot/entrar a la pantalla a veces respondía DESPUÉS del POST
+     del usuario, devolvía valor viejo y sobrescribía el balón / la
+     competición que acababa de añadir. */
+  var _ballLocalWriteAt = {};
+  var _BALL_LOCAL_GRACE_MS = 5 * 60 * 1000; /* 5 min */
+  function _ballMarkLocalWrite(key){ _ballLocalWriteAt[key] = Date.now(); }
+  function _ballRecentLocalWrite(key){
+    var t = _ballLocalWriteAt[key];
+    return !!(t && (Date.now() - t) < _BALL_LOCAL_GRACE_MS);
+  }
+  /* POST con promesa: resuelve a true si el servidor confirmó OK.
+     Lo usan los flujos de añadir/asignar para avisar si la escritura
+     no llegó al servidor (antes era fire-and-forget silencioso). */
   function _ballKvPost(key, value){
-    try {
-      fetch('/api/kv/' + key, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        credentials: 'same-origin',
-        body: JSON.stringify({ value: value })
-      }).catch(function(){});
-    } catch(_){}
+    return new Promise(function(resolve){
+      try {
+        fetch('/api/kv/' + key, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({ value: value })
+        })
+        .then(function(r){ return r.ok ? r.json().catch(function(){ return null; }) : null; })
+        .then(function(j){ resolve(!!(j && j.ok)); })
+        .catch(function(){ resolve(false); });
+      } catch(_){ resolve(false); }
+    });
   }
   /* Hidrata localStorage desde el servidor (fuente de verdad). Se
      llama en el boot (para que el bundle vea datos frescos al
@@ -24321,7 +25103,9 @@ document.addEventListener('DOMContentLoaded', function() {
         fetch('/api/kv/' + key, { credentials:'same-origin', headers:{'Cache-Control':'no-store'} })
           .then(function(r){ return r.ok ? r.json() : null; })
           .then(function(j){
-            if (j && j.ok && j.value != null) {
+            /* Si el usuario ha escrito esta clave hace poco, NO pisar
+               su cache local con la respuesta (que puede ser stale). */
+            if (j && j.ok && j.value != null && !_ballRecentLocalWrite(key)) {
               try { localStorage.setItem(key, JSON.stringify(j.value)); } catch(_){}
             }
             done();
@@ -24330,12 +25114,31 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  /* Balones que SIEMPRE deben estar en el inventario (regla CLAUDE.md
+     "Balón fijo Selecciones por jornada" 2026-05-24). Si el usuario
+     tiene un `ball_inventory_v1` previo sin estos ids, los añadimos
+     de forma silenciosa para que aparezcan en el picker del admin. */
+  var _BALL_INV_REQUIRED = ['Orbita_Africa'];
+  function _ensureRequiredBalls(arr){
+    if (!Array.isArray(arr)) return arr;
+    var changed = false;
+    _BALL_INV_REQUIRED.forEach(function(id){
+      if (arr.indexOf(id) === -1) { arr.push(id); changed = true; }
+    });
+    if (changed) {
+      try { localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr)); } catch(_){}
+      _ballMarkLocalWrite(_BALL_INV_KEY);
+      _ballKvPost(_BALL_INV_KEY, arr);
+    }
+    return arr;
+  }
+
   function _loadBallInventory(){
     try {
       var raw = localStorage.getItem(_BALL_INV_KEY);
       if (raw) {
         var arr = JSON.parse(raw);
-        if (Array.isArray(arr) && arr.length) return arr;
+        if (Array.isArray(arr) && arr.length) return _ensureRequiredBalls(arr);
       }
     } catch(_){}
     /* Semilla: ids únicos de BALL_DB. */
@@ -24362,15 +25165,13 @@ document.addEventListener('DOMContentLoaded', function() {
     /* localStorage = cache; servidor = fuente de verdad. Aunque el
        setItem rebote por quota, el POST al server garantiza que el
        inventario sobreviva (bug histórico "se borraba"). */
-    var localOk = true;
     try {
       localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr));
     } catch(e) {
-      localOk = false;
       try { _ballToast('⚠ Caché llena — guardado en servidor.'); } catch(_){}
     }
-    _ballKvPost(_BALL_INV_KEY, arr || []);
-    return true; /* el server siempre recibe el POST */
+    _ballMarkLocalWrite(_BALL_INV_KEY);
+    return _ballKvPost(_BALL_INV_KEY, arr || []);
   }
   function _loadBallOverride(){
     try { var raw = localStorage.getItem(_BALL_OVERRIDE_KEY); if (raw) return JSON.parse(raw)||{}; } catch(_){}
@@ -24378,8 +25179,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _saveBallOverride(map){
     try { localStorage.setItem(_BALL_OVERRIDE_KEY, JSON.stringify(map||{})); } catch(_){}
-    _ballKvPost(_BALL_OVERRIDE_KEY, map || {});
-    return true;
+    _ballMarkLocalWrite(_BALL_OVERRIDE_KEY);
+    return _ballKvPost(_BALL_OVERRIDE_KEY, map || {});
   }
   /* Competiciones custom añadidas por el admin. Array de
      {key, comp, id, cat, luz, _custom:true}. */
@@ -24389,8 +25190,8 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _saveBallCompDb(arr){
     try { localStorage.setItem(_BALL_COMPDB_KEY, JSON.stringify(arr||[])); } catch(_){}
-    _ballKvPost(_BALL_COMPDB_KEY, arr || []);
-    return true;
+    _ballMarkLocalWrite(_BALL_COMPDB_KEY);
+    return _ballKvPost(_BALL_COMPDB_KEY, arr || []);
   }
 
   /* Competiciones reales que faltaban en la lista base (petición
@@ -24435,11 +25236,77 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch(_){}
   }
 
+  /* Picker overlay con ✅ — reemplaza el <select> nativo (en algunos
+     móviles no abría, cancelaba la selección al primer toque o el
+     onchange no llegaba a disparar). El usuario marca con un toque.
+     Llamadores: `adminBallPickForComp` y el botón "Balón por defecto"
+     del modal "+ Añadir Competición". */
+  function _ballOpenPicker(opts){
+    opts = opts || {};
+    var ovId = '_ball-picker-ov';
+    var prev = document.getElementById(ovId);
+    if (prev) prev.remove();
+    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    var current = opts.current || '';
+    var balls = (opts.balls || []).slice();
+    if (current && balls.indexOf(current) === -1) balls.unshift(current);
+    var rows = balls.map(function(it){
+      var isSel = (it === current);
+      var icon  = isSel
+        ? '<span style="font-size:15px;color:#7df0a0;flex-shrink:0;width:18px;text-align:center;">✅</span>'
+        : '<span style="display:inline-block;width:18px;flex-shrink:0;"></span>';
+      return '<button type="button" data-bid="' + _esc(it) + '" '
+           +   'style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;'
+           +     'background:' + (isSel?'rgba(60,200,120,.10)':'rgba(255,255,255,.03)') + ';'
+           +     'border:1px solid ' + (isSel?'rgba(60,200,120,.45)':'rgba(255,255,255,.08)') + ';'
+           +     'border-radius:8px;padding:10px 11px;color:#e8f0ff;'
+           +     'font-family:\'Courier New\',monospace;font-size:12px;cursor:pointer;">'
+           + icon
+           + '<span style="flex:1;word-break:break-all;">' + _esc(it) + '</span>'
+           + '</button>';
+    }).join('');
+    var ov = document.createElement('div');
+    ov.id = ovId;
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100001;display:flex;align-items:center;justify-content:center;padding:18px;';
+    ov.innerHTML = ''
+      + '<div style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(80,180,255,.45);border-radius:14px;padding:14px;width:100%;max-width:420px;max-height:80vh;display:flex;flex-direction:column;color:#e8f0ff;font-family:Rajdhani,sans-serif;box-shadow:0 0 30px rgba(80,180,255,.20);">'
+      +   '<div style="font-family:Oswald,sans-serif;letter-spacing:2px;font-size:13px;color:#7db8ff;margin-bottom:10px;">' + _esc(opts.title || '⚽ ELEGIR BALÓN') + '</div>'
+      +   '<div id="_ball-picker-list" style="overflow-y:auto;display:flex;flex-direction:column;gap:6px;flex:1;-webkit-overflow-scrolling:touch;">' + rows + '</div>'
+      +   '<button type="button" id="_ball-picker-cancel" style="margin-top:10px;background:rgba(255,255,255,.06);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;cursor:pointer;">CERRAR</button>'
+      + '</div>';
+    document.body.appendChild(ov);
+    function close(){ try { ov.remove(); } catch(_){} }
+    document.getElementById('_ball-picker-list').addEventListener('click', function(e){
+      var btn = e.target.closest ? e.target.closest('button[data-bid]') : null;
+      if (!btn) { var p = e.target; while (p && p !== this) { if (p.getAttribute && p.getAttribute('data-bid') != null) { btn = p; break; } p = p.parentNode; } }
+      if (!btn) return;
+      var id = btn.getAttribute('data-bid');
+      close();
+      if (typeof opts.onPick === 'function') opts.onPick(id);
+    });
+    document.getElementById('_ball-picker-cancel').addEventListener('click', close);
+    ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+  }
+  window._ballOpenPicker = _ballOpenPicker;
+
+  /* Abre el picker para una competición concreta y guarda al elegir. */
+  window.adminBallPickForComp = function(compKey){
+    var inv = _loadBallInventory();
+    var ov  = _loadBallOverride();
+    var found = _effectiveCompList().filter(function(b){ return b.key===compKey; })[0];
+    var current = ov[compKey] || (found && found.id) || (inv[0]||'');
+    _ballOpenPicker({
+      title: '⚽ BALÓN · ' + (found ? found.comp : compKey),
+      current: current,
+      balls: inv,
+      onPick: function(ballId){ window.adminBallSetForComp(compKey, ballId); }
+    });
+  };
+
   window.adminBallSetForComp = function(compKey, ballId){
     var ov = _loadBallOverride();
     if (!ballId) delete ov[compKey];
     else ov[compKey] = ballId;
-    _saveBallOverride(ov);
     /* Feedback visible + re-render: el usuario reportó que "cuesta
        muchísimo conseguir que cambie de balón" porque no había
        ninguna confirmación de que el cambio se aplicó. */
@@ -24448,8 +25315,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var found = _effectiveCompList().filter(function(b){ return b.key===compKey; })[0];
       if (found) lbl = found.comp;
     } catch(_){}
-    _ballToast('✅ Balón guardado: ' + lbl + ' → ' + (ballId || 'por defecto'));
+    _ballToast('💾 Guardando: ' + lbl + '…');
     try { window.adminRenderBalls(); } catch(_){}
+    _saveBallOverride(ov).then(function(serverOk){
+      if (serverOk) _ballToast('✅ Balón guardado: ' + lbl + ' → ' + (ballId || 'por defecto'));
+      else          _ballToast('⚠ Guardado local. El servidor no respondió.');
+    });
   };
 
   /* + Añadir Competición — para torneos/campeonatos nuevos. Guarda
@@ -24461,7 +25332,10 @@ document.addEventListener('DOMContentLoaded', function() {
     var prev = document.getElementById(ovId);
     if (prev) prev.remove();
     var inv = _loadBallInventory();
-    var opts = inv.map(function(it){ return '<option value="'+String(it).replace(/"/g,'&quot;')+'">'+String(it).replace(/</g,'&lt;')+'</option>'; }).join('');
+    /* Selección actual del balón por defecto — se mantiene en closure
+       y se sincroniza con el botón (en lugar de un <select> nativo). */
+    var pickedBall = inv[0] || '';
+    function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
     var ov = document.createElement('div');
     ov.id = ovId;
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:99999;display:flex;align-items:center;justify-content:center;padding:18px;';
@@ -24474,7 +25348,10 @@ document.addEventListener('DOMContentLoaded', function() {
       +   '<input id="bc-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;margin:3px 0 2px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:9px 11px;font-family:\'Courier New\',monospace;font-size:12px;box-sizing:border-box;" placeholder="ej: superliga, verano, mundialito…">'
       +   '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:10px;">Reales: superliga · verano · mundialito · sel · inter · recopa · usc. Mismo nombre que use el torneo internamente.</div>'
       +   '<label style="font-size:11px;color:rgba(255,255,255,.6);">Balón por defecto</label>'
-      +   '<select id="bc-ball" style="width:100%;margin:3px 0 4px;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:8px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:12px;padding:8px 10px;box-sizing:border-box;">'+opts+'</select>'
+      +   '<button type="button" id="bc-ball-btn" style="width:100%;margin:3px 0 4px;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:8px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:12px;padding:9px 11px;box-sizing:border-box;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;">'
+      +     '<span id="bc-ball-label" style="flex:1;word-break:break-all;">'+_esc(pickedBall)+'</span>'
+      +     '<span style="color:rgba(255,255,255,.4);font-size:11px;">▾ ELEGIR</span>'
+      +   '</button>'
       +   '<div id="bc-err" style="font-size:11px;color:#ff8080;margin-top:6px;min-height:14px;"></div>'
       +   '<div style="display:flex;gap:8px;margin-top:8px;">'
       +     '<button type="button" id="bc-ok" style="flex:1;background:linear-gradient(90deg,#1d6fd6,#1558aa);color:#fff;border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:12px;font-weight:700;cursor:pointer;">✅ AÑADIR</button>'
@@ -24483,14 +25360,26 @@ document.addEventListener('DOMContentLoaded', function() {
       + '</div>';
     document.body.appendChild(ov);
     function close(){ try { ov.remove(); } catch(_){} }
+    document.getElementById('bc-ball-btn').addEventListener('click', function(){
+      _ballOpenPicker({
+        title: '⚽ BALÓN POR DEFECTO',
+        current: pickedBall,
+        balls: _loadBallInventory(),
+        onPick: function(id){
+          pickedBall = id || '';
+          var lbl = document.getElementById('bc-ball-label');
+          if (lbl) lbl.textContent = pickedBall;
+        }
+      });
+    });
     function submit(){
       var nameEl = document.getElementById('bc-name');
       var keyEl  = document.getElementById('bc-key');
-      var ballEl = document.getElementById('bc-ball');
+      var okBtn  = document.getElementById('bc-ok');
       var errEl  = document.getElementById('bc-err');
       var name = String((nameEl&&nameEl.value)||'').trim();
       var key  = String((keyEl&&keyEl.value)||'').trim().toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'');
-      var ball = (ballEl&&ballEl.value)||'';
+      var ball = pickedBall || '';
       if (!name) { errEl.textContent = 'Escribe un nombre.'; return; }
       if (!key)  { errEl.textContent = 'Escribe una clave (compKey).'; return; }
       var collide = _effectiveCompList().some(function(b){ return b.key===key && !b._custom; });
@@ -24498,11 +25387,17 @@ document.addEventListener('DOMContentLoaded', function() {
       var db = _loadBallCompDb();
       db = db.filter(function(c){ return c && c.key !== key; });
       db.push({ key:key, comp:name, id:ball, cat:'Custom 🛠', luz:'🌙 Noche', _custom:true });
-      _saveBallCompDb(db);
-      if (ball) { var ovm = _loadBallOverride(); ovm[key] = ball; _saveBallOverride(ovm); }
-      close();
-      _ballToast('✅ Competición añadida: ' + name);
-      try { window.adminRenderBalls(); } catch(_){}
+      if (okBtn){ okBtn.disabled = true; okBtn.textContent = 'GUARDANDO…'; }
+      errEl.textContent = '';
+      var savesP = [ _saveBallCompDb(db) ];
+      if (ball) { var ovm = _loadBallOverride(); ovm[key] = ball; savesP.push(_saveBallOverride(ovm)); }
+      Promise.all(savesP).then(function(results){
+        var allOk = results.every(function(r){ return r === true; });
+        close();
+        _ballToast(allOk ? ('✅ Competición añadida: ' + name)
+                         : ('⚠ Añadida en local — el servidor no respondió.'));
+        try { window.adminRenderBalls(); } catch(_){}
+      });
     }
     document.getElementById('bc-ok').addEventListener('click', submit);
     document.getElementById('bc-cancel').addEventListener('click', close);
@@ -24554,10 +25449,15 @@ document.addEventListener('DOMContentLoaded', function() {
       var inv = _loadBallInventory();
       if (inv.indexOf(name) !== -1) { errEl.textContent = 'Ese balón ya está en el inventario.'; return; }
       inv.push(name);
-      var ok = _saveBallInventory(inv);
-      if (!ok) { return; }  /* alert ya mostrado en _saveBallInventory */
-      close();
-      window.adminRenderBalls();
+      var okBtn = document.getElementById('ball-add-ok');
+      if (okBtn){ okBtn.disabled = true; okBtn.textContent = 'GUARDANDO…'; }
+      errEl.textContent = '';
+      _saveBallInventory(inv).then(function(serverOk){
+        close();
+        _ballToast(serverOk ? ('✅ Balón añadido: ' + name)
+                            : ('⚠ Añadido en local — el servidor no respondió.'));
+        window.adminRenderBalls();
+      });
     }
     document.getElementById('ball-add-ok').addEventListener('click', submit);
     document.getElementById('ball-add-cancel').addEventListener('click', close);
@@ -24611,8 +25511,9 @@ document.addEventListener('DOMContentLoaded', function() {
     html += '<button onclick="window.adminBallAddComp()" style="background:rgba(60,140,255,.18);border:1px solid rgba(80,180,255,.55);color:#7db8ff;border-radius:8px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">＋ AÑADIR COMPETICIÓN</button>';
     html += '</div>';
 
-    /* Lista por competición — cada fila lleva su <select> con todo
-       el inventario disponible. */
+    /* Lista por competición — cada fila lleva un botón que abre el
+       picker con ✅ (antes era un <select> nativo que en algunos
+       móviles no abría / cancelaba la elección al primer toque). */
     html += '<div style="border:1px solid rgba(255,255,255,.08);border-radius:10px;overflow:hidden;">';
     html += comps.map(function (b, i) {
       var isSnow = snowActive && b.key === 'snow';
@@ -24623,21 +25524,16 @@ document.addEventListener('DOMContentLoaded', function() {
          ya en el inventario — se añade como opción para no perderlo).
          Antes caía a b.id si no estaba en inv → parecía "no guardado". */
       var current = ov[b.key] || b.id || (inv[0]||'');
-      var optList = inv.slice();
-      if (current && optList.indexOf(current) === -1) optList.unshift(current);
-      var opts = optList.map(function(it){
-        var sel = (it === current) ? ' selected' : '';
-        return '<option value="' + _esc(it) + '"' + sel + '>' + _esc(it) + '</option>';
-      }).join('');
       var keyJs = String(b.key).replace(/'/g,"\\'");
       return '<div style="display:flex;align-items:center;gap:0;background:' + bg + ';border-bottom:1px solid rgba(255,255,255,.05);">'
         + '<div style="padding:10px 10px 10px 12px;font-size:18px;flex-shrink:0;">' + ballIco + '</div>'
         + '<div style="flex:1;padding:8px 6px;border-left:1px solid rgba(255,255,255,.05);min-width:0;">'
         +   '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:rgba(255,255,255,.65);">' + _esc(b.comp) + (b._custom?' <span style="color:#7db8ff;font-size:9px;">· custom</span>':(b._extra?' <span style="color:#9fd0ff;font-size:9px;">· extra</span>':'')) + '</div>'
-        +   '<select onchange="window.adminBallSetForComp(\'' + keyJs + '\', this.value)" '
-        +          'style="margin-top:3px;width:100%;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:6px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:11px;padding:4px 6px;">'
-        +     opts
-        +   '</select>'
+        +   '<button type="button" onclick="window.adminBallPickForComp(\'' + keyJs + '\')" '
+        +          'style="margin-top:3px;width:100%;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:6px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:11px;padding:6px 8px;cursor:pointer;display:flex;align-items:center;gap:6px;text-align:left;">'
+        +     '<span style="flex:1;word-break:break-all;">' + _esc(current) + '</span>'
+        +     '<span style="color:rgba(255,255,255,.4);font-size:10px;flex-shrink:0;">▾ ELEGIR</span>'
+        +   '</button>'
         + '</div>'
         + '<div style="flex-shrink:0;padding:8px 10px;border-left:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);white-space:nowrap;text-align:right;">'
         +   _esc(b.luz)
@@ -25504,6 +26400,25 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!wrap) return;
     var nmEl = wrap.querySelector('.ml-venue-bar .ml-venue-name');
     if (!nmEl) return;
+    /* Mundial · 48 selecciones: el wrap es de un cal-mf-* (compKey
+       sel-fin) — campo NEUTRAL de las 4 sedes elegidas, gana SIEMPRE
+       sobre el estadio del local. Detección por matchKey del wrap:
+       el wrap id es 'mlw-<matchKey>'. Petición usuario 2026-05-24. */
+    try {
+      if (wrap.id && typeof window._selFinStadiumFor === 'function') {
+        var _wmk = wrap.id.replace(/^mlw-/, '');
+        /* Mapeamos a sel-fin igual que en bundle.js (jid.startsWith
+           'cal-mf-'). El matchKey de cal-mf-* lo emite el motor del
+           torneo; si su contenedor padre es cal-mf-*, también vale. */
+        var _isSelFinWrap = false;
+        var par = wrap.closest && wrap.closest('[id^="cal-mf-"]');
+        if (par) _isSelFinWrap = true;
+        if (_isSelFinWrap) {
+          var _sfStad = window._selFinStadiumFor(_wmk);
+          if (_sfStad) { nmEl.textContent = _sfStad; return; }
+        }
+      }
+    } catch(_){}
     var current = (nmEl.textContent || '').trim().toLowerCase();
     /* Solo reemplazamos el valor por defecto. Si el usuario o otro
        código ya puso un estadio real (no "eFootball"), no tocamos. */
@@ -29286,7 +30201,14 @@ document.addEventListener('DOMContentLoaded', function() {
        caja volvía al "01 May" aunque el usuario hubiese avanzado a
        "02 Jun". Replicado al server con last-write-wins por `ts`
        (sello que añade `_save` del IIFE de pretemporada). */
-    'bayern_preseason_v2',           /* cursor día (dayIdx) + tour elegido + rivales */
+    /* Rebrand 2026-05-24: la clave del cursor pasó a 'liverpool_preseason_v1'.
+       Mantenemos también 'bayern_preseason_v2' durante la transición para
+       que `hydrateFromServer` recupere el progreso de usuarios cuyo
+       server todavía tiene los datos bajo el nombre viejo. El cliente
+       _save escribe solo bajo el nombre nuevo, así que el legacy queda
+       congelado y el nuevo gana por last-write-wins (ts). */
+    'liverpool_preseason_v1',        /* cursor día (dayIdx) + tour elegido + rivales */
+    'bayern_preseason_v2',           /* legacy — solo lectura para migración */
     /* 2026-05-23 (petición usuario "todo igual en cualquier
        móvil/PC"): el estado de TODAS las competiciones restantes
        que aún vivían SOLO en localStorage del dispositivo admin.
@@ -29314,6 +30236,7 @@ document.addEventListener('DOMContentLoaded', function() {
     'superliga_calendar_v1',         /* Superliga calendario 20 jornadas */
     'superliga_results_v1',          /* Superliga resultados de cada jornada */
     'partidos_aplazados',            /* Partidos aplazados (array) */
+    'pend_hvh_deferred_v1',          /* Partidos pospuestos (📌 POSPONER) */
     'wc_champ_v1',                   /* Wild Card · campeón (alias corto) */
     'wc_champion_v1'                 /* Wild Card · campeón */
   ];
@@ -29392,21 +30315,52 @@ document.addEventListener('DOMContentLoaded', function() {
               }
             } catch(_){}
           }
-          /* Si bayern_preseason_v2 (cursor de día de la pretemporada)
+          /* Si liverpool_preseason_v1 (o su legacy bayern_preseason_v2)
              fue restaurado desde server, el IIFE de pretemporada en
              misc_body_1.html tiene su _MEM cacheado con el dayIdx
              stale → la caja del hub mostraría el día viejo. Le
              pedimos que invalide y re-renderice. */
-          if (restored.indexOf('bayern_preseason_v2') !== -1) {
+          if (restored.indexOf('liverpool_preseason_v1') !== -1
+              || restored.indexOf('bayern_preseason_v2') !== -1) {
             try {
               if (typeof window._psInvalidateCache === 'function') {
                 window._psInvalidateCache();
               }
             } catch(_){}
           }
+          /* Si el store de partidos pospuestos viene del server (otro
+             dispositivo añadió/quitó algo), refresca la caja del hub. */
+          if (restored.indexOf('pend_hvh_deferred_v1') !== -1) {
+            try {
+              if (typeof window._muFixSyncVisibility === 'function') window._muFixSyncVisibility();
+              if (typeof window.muFixRefresh === 'function') window.muFixRefresh();
+            } catch(_){}
+          }
         }
       })
-      .catch(function(){});
+      .catch(function(){})
+      .then(function(){
+        /* Gate de hidratación 2026-05-25: marcamos que el sync server→
+           local ha terminado (sea por éxito o por catch silencioso).
+           Sin esto, el auto-pick del torneo en updateHud() del hub
+           Liverpool (misc_body_1.html línea ~41201) dispara
+           _tourMergeBayern → _save antes de que llegue la respuesta
+           del GET, escribiendo dayIdx=0 + ts=Date.now() en server
+           vía sendBeacon. La GET subsiguiente compara timestamps,
+           ve que el server (ts=ayer) es más viejo que el local
+           (ts=ahora), NO restaura, y el cursor del usuario queda
+           sepultado a 01 May. Con el flag + el evento, el auto-pick
+           espera y luego corre con el cursor real ya hidratado.
+
+           Fail-open intencional: si el server no responde nunca, el
+           .catch() de arriba se ejecuta y este .then() también, así
+           el flag se setea y el auto-pick procede igual (la única
+           verdad es el local, no se pisa nada en server). */
+        window.__compStateSyncHydrated = true;
+        try {
+          document.dispatchEvent(new CustomEvent('comp-state:hydrated'));
+        } catch(_){}
+      });
   }
 
   /* Snapshot por clave para detectar cambios sin re-leer el server.
@@ -29747,9 +30701,37 @@ document.addEventListener('DOMContentLoaded', function() {
         if (hasVue) p.anti.push('ida');
       }
     } else if (compClass === 'c-mundial'){
-      /* Mundialito de Clubes — la agenda no lo lista en este JSON,
-         devolverá '' (sin fecha). No es un fallo, es esperado. */
-      p.required = ['mundialito clubes'];
+      /* Mundialito de Clubes — s-mundial-clubes tiene 5 cajas:
+         Fase de Grupos · Octavos · Cuartos · Semis · FINAL. La agenda
+         las lista como "Mundialito Clubes - J1/J2/J3/Octavos/Cuartos/
+         Semis/FINAL". Discriminamos por ronda con bonus tokens; sin
+         estos todos los botones puntuaban igual y se quedaban con la
+         primera fila (J1 = 04 Jul) → todos mostraban "04 JUL".
+         2026-05-24. NB: `required = ['mundialito']` (sin "clubes")
+         para no romper el match con "Mundialito - FINAL" (entrada
+         legacy sin la palabra "Clubes"). Las filas del Mundial de
+         Selecciones empiezan por "Mundial " sin "ito" y quedan
+         filtradas. */
+      p.required = ['mundialito'];
+      if (hasFin && !hasSemis && !hasCuartos && !hasOctavos){
+        p.bonus = ['final'];
+        p.anti  = ['cuartos','semis','octavos','j1','j2','j3'];
+      } else if (hasSemis){
+        p.bonus = ['semis'];
+        p.anti  = ['cuartos','final','octavos','j1','j2','j3'];
+      } else if (hasCuartos){
+        p.bonus = ['cuartos'];
+        p.anti  = ['semis','final','octavos','j1','j2','j3'];
+      } else if (hasOctavos){
+        p.bonus = ['octavos'];
+        p.anti  = ['cuartos','semis','final','j1','j2','j3'];
+      } else if (/\bgrupos?\b/.test(btnN) || /\bfase\b/.test(btnN)){
+        /* Fase de Grupos: J1 como ancla de inicio de fase. El badge
+           muestra "DD Mmm" de la primera jornada; el rango completo
+           (J1-J3) lo ve el usuario al abrir el calendario global. */
+        p.bonus = ['j1'];
+        p.anti  = ['cuartos','semis','final','octavos','j2','j3'];
+      }
     }
     return p;
   }
@@ -30208,6 +31190,38 @@ document.addEventListener('DOMContentLoaded', function() {
 #gm-modal.is-comp-uecl   { --comp-color:#5fe08a; --comp-color-soft:rgba(60,200,110,.22);}
 #gm-modal.is-comp-recopa { --comp-color:#ff8060; --comp-color-soft:rgba(255,100,70,.22);}
 #gm-modal.is-comp-inter  { --comp-color:#f0a040; --comp-color-soft:rgba(240,140,40,.22);}
+/* Mundial / Selecciones / torneo: violeta-morado (mismo lenguaje
+   visual que la caja Estadísticas del Mundial, commit 6f4df03). */
+#gm-modal.is-comp-mundial   { --comp-color:#a875e8; --comp-color-soft:rgba(168,117,232,.22);}
+/* Amistosos / Mundialito Clubes / Previa Champions: azul grisáceo. */
+#gm-modal.is-comp-amistoso  { --comp-color:#7da7c8; --comp-color-soft:rgba(125,167,200,.22);}
+/* Torneos de verano (SCT, PSS, Gamper, Asia): turquesa. */
+#gm-modal.is-comp-verano    { --comp-color:#5fc6c8; --comp-color-soft:rgba(95,198,200,.22);}
+/* Fallback NEUTRO para cualquier comp no reconocida: gris azulado
+   apagado. Evita que comps custom o flujos nuevos hereden el rojo de
+   Liga por defecto (bug 2026-05-24). */
+#gm-modal.is-comp-neutral   { --comp-color:#88a0c0; --comp-color-soft:rgba(136,160,192,.22);}
+
+/* ── CARD BICOLOR · fondo del gm-modal teñido con los colores reales
+   del escudo: mitad izquierda = color local, mitad derecha = color
+   visitante. Petición usuario 2026-05-24 (Francia=azul a la izq, RD
+   Congo a la der). Tinte sutil (~25%) para que el texto siga
+   legible. Las CSS vars --team-a-bg / --team-b-bg las setea
+   _gmPaint con alpha .25. Si el rival no tiene escudo todavía,
+   cae a un azul oscuro neutral. Capas: 1) bicolor translúcido,
+   2) base oscura original. `background-attachment:fixed` ancla las
+   capas al viewport para que el bicolor no se descoloque al hacer
+   scroll del modal. */
+#gm-modal[data-team-colors]{
+  background:
+    linear-gradient(90deg,
+      var(--team-a-bg, rgba(40,60,120,.25)) 0%,
+      var(--team-a-bg, rgba(40,60,120,.25)) 48%,
+      var(--team-b-bg, rgba(60,40,90,.25)) 52%,
+      var(--team-b-bg, rgba(60,40,90,.25)) 100%),
+    linear-gradient(160deg,#0d0820 0%,#071020 100%) !important;
+  background-attachment:fixed, fixed !important;
+}
 
 /* JUGAR · highlight (borde dorado pulsante) sobre #gm-timer cuando
    está en 0' parado. Sin texto "JUGAR" ni flecha 👇 (petición
@@ -30224,7 +31238,9 @@ document.addEventListener('DOMContentLoaded', function() {
 #gm-timer.is-jugar-hint::before,
 #gm-timer.is-jugar-hint::after{ content:none !important; display:none !important; }
 
-/* AÑADIR EVENTO · gradiente bicolor (mitad local / mitad visitante). */
+/* AÑADIR EVENTO · gradiente bicolor (mitad local / mitad visitante).
+   Borde sutil blanco (no rojo del --comp-color). El aro fuerte se
+   reserva para FINALIZAR cuando .is-near-end. */
 #gm-modal[data-team-colors] #gm-add-btn{
   background:linear-gradient(90deg,
     var(--team-a-1, #2a0005) 0%,
@@ -30232,12 +31248,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var(--team-b-1, #6a0010) 52%,
     var(--team-b-2, #2a0005) 100%
   ) !important;
-  border:2px solid var(--comp-color) !important;
+  border:1px solid rgba(255,255,255,.22) !important;
   color:#fff !important;
-  text-shadow:0 1px 4px rgba(0,0,0,.75) !important;
+  text-shadow:0 1px 4px rgba(0,0,0,.85) !important;
   font-weight:900 !important;
   letter-spacing:2px;
-  box-shadow:0 0 14px var(--comp-color-soft), inset 0 1px 0 rgba(255,255,255,.15) !important;
+  box-shadow:0 0 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18) !important;
 }
 
 /* ACTA · look videojuego HUD azul. */
@@ -30471,6 +31487,99 @@ document.addEventListener('DOMContentLoaded', function() {
     var rgb = hsl2rgb(hue, sat, lum);
     return '#'+rgb.map(function(v){return ('0'+v.toString(16)).slice(-2);}).join('');
   }
+  /* ── Colores de selecciones nacionales (Mundial-48, amistosos
+     internacionales). El mapa CAMPO_TEAM_COLORS del bundle solo
+     cubre clubes españoles, así que sin esto las selecciones caían
+     al `_hashColor` que producía verdes/morados aleatorios — y la
+     caja AÑADIR EVENTO salía verde con Francia (azul) vs Marruecos
+     (rojo). Fix: tabla LOCAL aquí, NO se altera `getTeamColors`
+     global para no afectar a las visualizaciones del simulador
+     (campo, ratings, etc). Solo el gm-modal y los match-live-wrap
+     leen `_teamColors`. */
+  var _SEL_COLORS = {
+    /* 6 selecciones humanas (canónicas, CLAUDE.md 2026-05-24). */
+    'francia':       '#0a2e6b',  /* azul Francia      */
+    'brasil':        '#fdd835',  /* amarillo Brasil   */
+    'inglaterra':    '#c8102e',  /* rojo Cruz San Jorge */
+    'noruega':       '#c8102e',  /* rojo Noruega      */
+    'argentina':     '#75aadb',  /* celeste Argentina */
+    'españa':        '#c8102e',  /* rojo España       */
+    /* Mundial-48 — resto de selecciones más habituales. */
+    'marruecos':     '#c8102e',  /* rojo Marruecos    */
+    'alemania':      '#1a1a1a',  /* negro Alemania    */
+    'italia':        '#0e4ea8',  /* azzurri           */
+    'portugal':      '#c8102e',  /* rojo Portugal     */
+    'países bajos':  '#ff6900',  /* naranja Holanda   */
+    'holanda':       '#ff6900',
+    'bélgica':       '#c8102e',  /* rojo Bélgica      */
+    'belgica':       '#c8102e',
+    'croacia':       '#c8102e',  /* tartán rojo       */
+    'serbia':        '#c8102e',
+    'suiza':         '#c8102e',
+    'austria':       '#c8102e',
+    'dinamarca':     '#c8102e',
+    'polonia':       '#c8102e',
+    'turquía':       '#c8102e',
+    'turquia':       '#c8102e',
+    'gales':         '#c8102e',
+    'escocia':       '#0e4ea8',
+    'irlanda':       '#169b62',  /* verde Irlanda     */
+    'ucrania':       '#fdd835',  /* amarillo Ucrania  */
+    'suecia':        '#fdd835',  /* amarillo Suecia   */
+    /* América */
+    'estados unidos':'#0e4ea8',
+    'usa':           '#0e4ea8',
+    'méxico':        '#006847',  /* verde México      */
+    'mexico':        '#006847',
+    'canadá':        '#c8102e',
+    'canada':        '#c8102e',
+    'uruguay':       '#75aadb',
+    'colombia':      '#fdd835',
+    'chile':         '#c8102e',
+    'paraguay':      '#c8102e',
+    'perú':          '#c8102e',
+    'peru':          '#c8102e',
+    'ecuador':       '#fdd835',
+    'venezuela':     '#7d1b1f',
+    'costa rica':    '#c8102e',
+    'panamá':        '#c8102e',
+    'panama':        '#c8102e',
+    /* África */
+    'senegal':       '#169b62',
+    'argelia':       '#169b62',
+    'túnez':         '#c8102e',
+    'tunez':         '#c8102e',
+    'egipto':        '#c8102e',
+    'nigeria':       '#169b62',
+    'ghana':         '#fdd835',
+    'camerún':       '#169b62',
+    'camerun':       '#169b62',
+    'costa de marfil':'#ff6900',
+    'sudáfrica':     '#169b62',
+    'sudafrica':     '#169b62',
+    'rd congo':      '#75aadb',  /* azul cielo Congo  */
+    'congo':         '#169b62',
+    'mali':          '#169b62',
+    /* Asia / Oceanía */
+    'japón':         '#0e4ea8',
+    'japon':         '#0e4ea8',
+    'corea del sur': '#c8102e',
+    'corea':         '#c8102e',
+    'arabia saudí':  '#169b62',
+    'arabia saudi':  '#169b62',
+    'irán':          '#169b62',
+    'iran':          '#169b62',
+    'australia':     '#fdd835',
+    'nueva zelanda': '#1a1a1a',
+    'uae':           '#c8102e',  /* Emiratos          */
+    'qatar':         '#7d1b1f',
+    'china':         '#c8102e'
+  };
+  function _selColorFor(name){
+    if (!name) return null;
+    var k = String(name).trim().toLowerCase();
+    return _SEL_COLORS[k] || null;
+  }
   function _teamColors(name){
     if (!name) return null;
     if (_COLOR_CACHE[name]) return _COLOR_CACHE[name];
@@ -30481,13 +31590,21 @@ document.addEventListener('DOMContentLoaded', function() {
         if (c && c.bg){
           var bg = String(c.bg).toLowerCase();
           /* Si el bundle devolvió la paleta-placeholder (`#888`), la
-             ignoramos y caemos al hash determinista. */
+             ignoramos y caemos a selecciones nacionales / hash. */
           if (bg !== '#888' && bg !== '#888888'){
             out = { bg: c.bg, primary: c.bg, border: c.border || c.bg, fg: c.fg || '#fff' };
           }
         }
       }
     } catch(_){}
+    /* Selecciones nacionales: si el bundle no tenía el color, lo
+       buscamos en la tabla _SEL_COLORS antes de caer al hash. */
+    if (!out){
+      var sel = _selColorFor(name);
+      if (sel){
+        out = { bg: sel, primary: sel, border: sel, fg: '#fff' };
+      }
+    }
     if (!out){
       var hex = _hashColor(name);
       out = { bg: hex, primary: hex, border: hex, fg: '#fff' };
@@ -30512,6 +31629,103 @@ document.addEventListener('DOMContentLoaded', function() {
      canvas 24×24) corre como mucho 1 vez por equipo, sin observers ni
      intervalos nuevos — respeta el precedente del cronómetro. */
   var _CREST_COLOR_CACHE = {};
+  /* ── window.extractColors: lector real de color dominante del escudo ─
+     Carga la imagen en un canvas 24×24 y cuantiza los pixeles por
+     buckets de 4 bits/canal (4096 buckets). Descarta píxeles
+     transparentes, casi-blancos, casi-negros y grises planos. Devuelve
+     un array de hex `[primary, secondary]`. Si la imagen es CORS-tainted
+     o la carga falla, vuelve por `cb([seed])`. Se cachea por URL para
+     no repetir el trabajo en cada paint. NO crea observers ni
+     intervalos — respeta el precedente del cronómetro 2026-05-10. */
+  if (typeof window.extractColors !== 'function'){
+    var _EX_CACHE = {};
+    var _EX_PENDING = {};
+    window.extractColors = function(url, seed, cb){
+      if (!url){ try { cb([seed]); } catch(_){} return; }
+      if (_EX_CACHE[url]){ try { cb(_EX_CACHE[url]); } catch(_){} return; }
+      if (_EX_PENDING[url]){ _EX_PENDING[url].push(cb); return; }
+      _EX_PENDING[url] = [cb];
+      var done = function(cols){
+        _EX_CACHE[url] = cols;
+        var qs = _EX_PENDING[url] || [];
+        _EX_PENDING[url] = null;
+        for (var i = 0; i < qs.length; i++){
+          try { qs[i](cols); } catch(_){}
+        }
+      };
+      var img = new Image();
+      var triedNoCors = false;
+      img.crossOrigin = 'anonymous';
+      img.onload = function(){
+        try {
+          var W = 24, H = 24;
+          var canvas = document.createElement('canvas');
+          canvas.width = W; canvas.height = H;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, W, H);
+          var data;
+          try { data = ctx.getImageData(0, 0, W, H).data; }
+          catch(_e){
+            /* canvas tainted: si aún no hemos probado sin CORS, recarga. */
+            if (!triedNoCors){
+              triedNoCors = true;
+              img.crossOrigin = '';
+              img.src = url + (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
+              return;
+            }
+            done([seed]); return;
+          }
+          var buckets = {};
+          for (var p = 0; p < data.length; p += 4){
+            var a = data[p+3];
+            if (a < 200) continue;
+            var r = data[p], g = data[p+1], b = data[p+2];
+            var mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+            /* descarta casi-blanco, casi-negro y grises (saturación baja). */
+            if (mx > 235 && mn > 215) continue;
+            if (mx < 35) continue;
+            if (mx - mn < 22) continue;
+            var qr = r >> 4, qg = g >> 4, qb = b >> 4;
+            var key = (qr << 8) | (qg << 4) | qb;
+            var slot = buckets[key];
+            if (slot){ slot.n++; slot.r += r; slot.g += g; slot.b += b; }
+            else { buckets[key] = { n:1, r:r, g:g, b:b }; }
+          }
+          var arr = [];
+          for (var k in buckets){ if (buckets.hasOwnProperty(k)){ arr.push(buckets[k]); } }
+          if (!arr.length){ done([seed]); return; }
+          arr.sort(function(x, y){ return y.n - x.n; });
+          var toHex = function(slot){
+            var R = Math.round(slot.r / slot.n);
+            var G = Math.round(slot.g / slot.n);
+            var B = Math.round(slot.b / slot.n);
+            var s = ((1 << 24) | (R << 16) | (G << 8) | B).toString(16).slice(1);
+            return '#' + s;
+          };
+          var primary = toHex(arr[0]);
+          /* secundario: bucket dominante con tono diferente al primario. */
+          var sec = primary;
+          for (var i = 1; i < arr.length; i++){
+            var dr = Math.abs(arr[i].r/arr[i].n - arr[0].r/arr[0].n);
+            var dg = Math.abs(arr[i].g/arr[i].n - arr[0].g/arr[0].n);
+            var db = Math.abs(arr[i].b/arr[i].n - arr[0].b/arr[0].n);
+            if (dr + dg + db > 90){ sec = toHex(arr[i]); break; }
+          }
+          done([primary, sec]);
+        } catch(_){ done([seed]); }
+      };
+      img.onerror = function(){
+        if (!triedNoCors){
+          triedNoCors = true;
+          img.crossOrigin = '';
+          img.src = url;
+          return;
+        }
+        done([seed]);
+      };
+      try { img.src = url; } catch(_){ done([seed]); }
+    };
+  }
   function _resolveShieldUrl(name, hintEl){
     try {
       if (hintEl){
@@ -30551,45 +31765,51 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   function _applyCardTheme(wrap){
-    if (!wrap || wrap._mlThemed) return;
+    if (!wrap) return;
     var mk = wrap.id.replace(/^mlw-/, '');
     var comp = _compFromMk(mk);
-    if (comp){
+    if (comp && !wrap.classList.contains('is-comp-' + comp)){
       wrap.classList.add('is-comp-' + comp);
     }
     /* AÑADIR EVENTO bicolor: izquierda = color del escudo LOCAL,
        derecha = color del escudo VISITANTE. Color real del escudo
        renderizado (no tabla hardcodeada). Pintamos con el seed y
-       repintamos al resolver la extracción del escudo. */
+       repintamos al resolver la extracción del escudo. Firma por
+       comp+home+away para idempotencia (repinta si cambian los
+       equipos, evita bucle infinito del scanner cada 300 ms). */
     var st = (typeof window._calMlSt === 'function') ? window._calMlSt(mk) : null;
-    var home = st && st.home, away = st && st.away;
-    if (home || away){
-      var shields = wrap.querySelectorAll('.ml-shield-wrap');
-      var hintH = shields[0] || null, hintA = shields[1] || null;
-      function _cardPaint(p1, p2, q1, q2){
-        wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .92));
-        wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .70));
-        wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .70));
-        wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .92));
-        wrap.setAttribute('data-team-colors', '1');
-      }
-      var ca = _teamColors(home);
-      var cb = _teamColors(away);
-      _cardPaint((ca && (ca.bg || ca.primary)) || '#3a0008',
-                 (ca && (ca.secondary || ca.bg || ca.primary)) || '#1a0004',
-                 (cb && (cb.bg || cb.primary)) || '#3a0008',
-                 (cb && (cb.secondary || cb.bg || cb.primary)) || '#1a0004');
-      _crestPrimary(home, hintH, function(rh){
-        _crestPrimary(away, hintA, function(rA){
-          var ph = rh ? rh.primary : '#3a0008';
-          var ps = rh ? (rh.secondary || rh.primary) : '#1a0004';
-          var qh = rA ? rA.primary : '#3a0008';
-          var qs = rA ? (rA.secondary || rA.primary) : '#1a0004';
-          _cardPaint(ph, ps, qh, qs);
-        });
-      });
+    var home = (st && st.home) || '';
+    var away = (st && st.away) || '';
+    if (!home && !away) return;
+    var sig = (comp||'') + '|' + home + '|' + away;
+    if (wrap._mlThemeSig === sig) return;
+    wrap._mlThemeSig = sig;
+    var shields = wrap.querySelectorAll('.ml-shield-wrap');
+    var hintH = shields[0] || null, hintA = shields[1] || null;
+    function _cardPaint(p1, p2, q1, q2){
+      wrap.style.setProperty('--team-a-1', _hex2rgba(p1, .92));
+      wrap.style.setProperty('--team-a-2', _hex2rgba(p2, .70));
+      wrap.style.setProperty('--team-b-1', _hex2rgba(q2, .70));
+      wrap.style.setProperty('--team-b-2', _hex2rgba(q1, .92));
+      wrap.setAttribute('data-team-colors', '1');
     }
-    wrap._mlThemed = true;
+    var ca = _teamColors(home);
+    var cb = _teamColors(away);
+    _cardPaint((ca && (ca.bg || ca.primary)) || '#3a0008',
+               (ca && (ca.secondary || ca.bg || ca.primary)) || '#1a0004',
+               (cb && (cb.bg || cb.primary)) || '#3a0008',
+               (cb && (cb.secondary || cb.bg || cb.primary)) || '#1a0004');
+    _crestPrimary(home, hintH, function(rh){
+      if (wrap._mlThemeSig !== sig) return;
+      _crestPrimary(away, hintA, function(rA){
+        if (wrap._mlThemeSig !== sig) return;
+        var ph = rh ? rh.primary : '#3a0008';
+        var ps = rh ? (rh.secondary || rh.primary) : '#1a0004';
+        var qh = rA ? rA.primary : '#3a0008';
+        var qs = rA ? (rA.secondary || rA.primary) : '#1a0004';
+        _cardPaint(ph, ps, qh, qs);
+      });
+    });
   }
 
   /* ── (1) JUGAR · highlight del botón cronómetro cuando está en 0' ──
@@ -30779,10 +31999,25 @@ document.addEventListener('DOMContentLoaded', function() {
       if (g._isSc   || g.comp === 'sc'   || g.comp === 'sc-final') return 'super';
       if (g._isRecopa || g.comp === 'recopa') return 'recopa';
       if (g._isSuperliga || g.comp === 'superliga') return ''; /* sin tema */
+      /* Comps reconocidas por g.comp explícito. Mundial (compKey 'torneo'
+         del flujo _tourOpenHumanMatch para Mundial-48), Selecciones fase
+         final, amistosos, verano y mundialito tienen tema propio para
+         que NO caigan al fallback rojo de Liga EA. */
+      if (g.comp === 'ucl') return 'ucl';
+      if (g.comp === 'uel') return 'uel';
+      if (g.comp === 'uecl') return 'uecl';
+      if (g.comp === 'inter') return 'inter';
+      if (g.comp === 'torneo' || g.comp === 'mundial' || g.comp === 'mundial-48') return 'mundial';
+      if (g.comp === 'sel' || g.comp === 'sel-fin' || g.comp === 'selecciones') return 'mundial';
+      if (g.comp === 'amistoso' || g.comp === 'wprev' || g.comp === 'mundialito') return 'amistoso';
+      if (g.comp === 'verano' || g.comp === 'sct' || g.comp === 'jg' || g.comp === 'pss' || g.comp === 'asia') return 'verano';
       if (g.comp === 'liga' || g.comp === 'ea-sports' || g.comp === '' || g.comp == null) return 'liga';
       /* Fallback: leer el badge en la venue bar. */
       var b = document.getElementById('gm-jornada-badge');
       var t = b ? (b.textContent || '').toLowerCase() : '';
+      if (t.indexOf('mundial') !== -1 || t.indexOf('selecciones') !== -1 || t.indexOf('selección') !== -1) return 'mundial';
+      if (t.indexOf('amistoso') !== -1) return 'amistoso';
+      if (t.indexOf('verano') !== -1 || t.indexOf('summer') !== -1 || t.indexOf('gamper') !== -1) return 'verano';
       if (t.indexOf('champions') !== -1 || t.indexOf('ucl') !== -1) return 'ucl';
       if (t.indexOf('europa league') !== -1 || t.indexOf('uel') !== -1) return 'uel';
       if (t.indexOf('conference') !== -1 || t.indexOf('uecl') !== -1) return 'uecl';
@@ -30790,8 +32025,12 @@ document.addEventListener('DOMContentLoaded', function() {
       if (t.indexOf('supercopa') !== -1) return 'super';
       if (t.indexOf('inter') !== -1) return 'inter';
       if (t.indexOf('copa') !== -1) return 'copa';
-      return 'liga';
-    } catch(_){ return 'liga'; }
+      /* Cualquier otra comp desconocida → tema NEUTRO (gris azulado),
+         NUNCA al rojo de Liga (bug 2026-05-24: Mundial-48 con compKey
+         'torneo' caía al tema rojo y todos los bordes del modal salían
+         rojos, foto del usuario). */
+      return 'neutral';
+    } catch(_){ return 'neutral'; }
   }
   function _gmTeamNames(){
     try {
@@ -30828,6 +32067,10 @@ document.addEventListener('DOMContentLoaded', function() {
       modal.style.setProperty('--team-a-2', _hex2rgba(pa, .72));
       modal.style.setProperty('--team-b-1', _hex2rgba(pb, .72));
       modal.style.setProperty('--team-b-2', _hex2rgba(pb, .95));
+      /* Vars dedicadas al tinte del FONDO de la card (alpha bajo para
+         que el texto sea legible, petición usuario 2026-05-24). */
+      modal.style.setProperty('--team-a-bg', _hex2rgba(pa, .25));
+      modal.style.setProperty('--team-b-bg', _hex2rgba(pb, .25));
       modal.setAttribute('data-team-colors', '1');
       var addBtn = document.getElementById('gm-add-btn');
       if (addBtn){
@@ -30837,10 +32080,14 @@ document.addEventListener('DOMContentLoaded', function() {
                  + _hex2rgba(pb, .82) + ' 53%,'
                  + _hex2rgba(pb, .95) + ' 100%)';
         addBtn.style.setProperty('background', grad, 'important');
-        addBtn.style.setProperty('border', '2px solid var(--comp-color, #ff3050)', 'important');
+        /* Borde sutil blanco (no rojo) — el borde con --comp-color
+           creaba el aro rojo que el usuario reportó en Mundial-48
+           (2026-05-24, foto Francia-RD Congo). */
+        addBtn.style.setProperty('border', '1px solid rgba(255,255,255,.22)', 'important');
         addBtn.style.setProperty('color', '#fff', 'important');
         addBtn.style.setProperty('text-shadow', '0 1px 4px rgba(0,0,0,.85)', 'important');
         addBtn.style.setProperty('font-weight', '900', 'important');
+        addBtn.style.setProperty('box-shadow', '0 0 10px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.18)', 'important');
       }
     }
     var ca = _teamColors(t.home);

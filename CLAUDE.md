@@ -1,5 +1,489 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Hub del usuario: Liverpool (no Bayern) — obligatorio, 2026-05-25
+
+El equipo HUMANO del hub (la pantalla `s-munich`, la card "Próximo
+partido", el calendario, los entrenamientos, el menú médico de
+inyecciones, las pretemporadas) **es el Liverpool 💡**, NO el
+Bayern. Bayern es **IA** y vive en la Liga Alemana
+(`ligaExt_resto-de-ligas-*`).
+
+### ¿De dónde viene el nombre "Bayern" en el código?
+
+El hub se construyó originalmente sobre el slot "Bayern Munich" de
+Liga EA Sports — los identificadores internos (`s-munich`,
+`munich-next-match`, `BAYERN_SHIELD`, `_bayernSquad`, etc.) son
+legacy de esa época. El **2026-05-23 el usuario renombró el slot a
+Liverpool** vía el editor de Liga EA Sports
+(`_ligaEaSubName('Bayern Munich')` devuelve ahora `"Liverpool"`).
+Los identificadores con "munich" / "bayern" en el nombre siguen ahí
+por compatibilidad, pero el contenido es Liverpool.
+
+### Helpers canónicos para el nombre / plantilla / escudo del hub
+
+```
+window._mkHubTeamName               // string canónico del hub humano
+_psHumanName()                       // visual (menu_home_v1.ov o _ligaEaSubName)
+_psHumanLogicName()                  // lógico (siempre _ligaEaSubName del slot Bayern)
+_psHumanShield()                     // URL del escudo
+_athHubTeam()                        // equivalente para el menú médico
+```
+
+### Reglas a respetar
+
+1. **Nunca hardcodear `/bayern/i` o `'Bayern Munich'`** para resolver
+   la plantilla / escudo del usuario. Usa los helpers de arriba.
+   Si una función nueva necesita el equipo del hub, debe leer el
+   nombre lógico (`_psHumanLogicName` o `_mkHubTeamName`) y resolver
+   contra ese.
+2. **`_bayernSquad()` ya está parcheado** para hacer 3 lookups en
+   `ligaExt_liga-ea-sports`: (1) match exacto por nombre lógico,
+   (2) primer team con `isHuman:true`, (3) fallback histórico
+   `/bayern/i`. NO eliminar los fallbacks — cubren saves antiguos.
+3. **El sistema de bajas / inyecciones / "Bajas — NO convocar" /
+   plantilla del HUD / mensajes de la bandeja** se refiere SIEMPRE
+   al equipo del hub (Liverpool actualmente). Los 4 emojis humanos
+   restantes (🐭 Brasil, 🔨 Inglaterra, ✏️ Noruega, 😈 Argentina,
+   🦆 España son SELECCIONES — no aplica) y los OTROS 4 humanos de
+   Liga EA Sports (Real Madrid, Barcelona, Atlético, Arsenal — más
+   el del slot Bayern que es Liverpool) tienen su propio sistema
+   pero NO entran en el hub `s-munich`.
+4. **Si un bug futuro reporta "no hay lesiones de entrenamiento" o
+   "no aparecen jugadores del hub"**, lo primero es comprobar si
+   se está usando `_bayernSquad()` u otra resolución hardcoded a
+   Bayern. El usuario renombró el slot y todas las rutas que
+   resuelvan el hub deben usar los helpers dinámicos.
+
+### Probabilidades del entrenamiento (referencia, 2026-05-25)
+
+`_rollInjuries()` en `misc_body_1.html:3217-3225`:
+
+| Resultado                  | Probabilidad |
+|----------------------------|--------------|
+| 2 jugadores lesionados     | 2 %          |
+| 1 jugador lesionado        | 5 %          |
+| Ninguno (sin bajas)        | 93 %         |
+
+Total: 7 % de los entrenamientos genera al menos una lesión. El
+sorteo es **en el segundo 0** (al pulsar ENTRENAR), antes de que la
+barra se rellene. Los lesionados se eligen de la plantilla del
+**Liverpool** (resuelto vía `_bayernSquad()` que ahora hace lookup
+dinámico) y se descartan los que ya tienen baja activa.
+
+## Fecha de la PANTALLA DE PREVIA — fuente única calendario (obligatorio, 2026-05-25)
+
+La fecha que muestra la PANTALLA DE PREVIA junto al icono 🗓️ (línea
+`X de <Mes> | 🏆 <comp>`) NO se inventa ni se setea con `new Date()`.
+**Fuente única**: el calendario global (filas `.ag-r` del DOM,
+generadas por SSR desde `calendario.json`).
+
+### Pipeline
+
+1. `_mmAgDateMap()` lee TODAS las filas `.ag-r` de `#ag-content` y
+   construye `{ <label>: {date, wx} }` indexado por el texto del
+   `.ag-lbl`.
+2. `_mmCalLabel(matchKey, compKey)` resuelve el `<label>` exacto
+   que debe coincidir con la entrada del calendario:
+   - Liga: `Liga — J<N>` (regex `^lj<N>m`).
+   - Copa del Rey: `Copa del Rey — <ronda>` (regex `^copa_<r>_<i>_<l>`).
+   - Mundial · 48 selecciones (compKey `'torneo'` + cfg.format
+     === `'mundial-48'`): lee `_ppPreviaTeams.tourId/tourKey`, carga
+     la cfg vía `_tourLoadCachedSync` / `_TOUR_CACHE` y mapea:
+     - Grupo J<N> → `Mundial Grupo — J<N>` (regex `^g\d+_<jor>_`).
+     - KO (`ko_<rIdx>_<mIdx>`) → ronda según
+       `cfg.formatConfig.koRounds[rIdx]`:
+       - `Dieciseisavos` → `Mundial - Dieciseisavos`
+       - `Octavos`       → `Mundial Octavos`
+       - `Cuartos`       → `Mundial Cuartos`
+       - `Semis`         → `Mundial Semis`
+       - `Tercer Puesto` → `Mundial Tercer Puesto`
+       - `Final`         → `MUNDIAL GRAN FINAL 🏆`
+   - Resto (inter/usc/ucl-fin/uel-fin/...): `MAP[compKey]`.
+3. `_mmInjectEnv` mete `<dayNum> de <Mes>` en `#pp-env` usando el
+   resultado anterior.
+
+### Reglas a respetar
+
+1. **PROHIBIDO hardcodear fechas en la previa** (`"31 de Mayo"`,
+   `"25 de Mayo"`, etc.). Si una comp nueva no resuelve fecha, la
+   solución es añadir su rama a `_mmCalLabel` para que mapee al
+   `.ag-lbl` del calendario, NO escribir la fecha a mano.
+2. **PROHIBIDO sustituir el calendario por `new Date()`** en el
+   pipeline de la previa. El cálculo "hoy" SOLO se usa como
+   fallback degradado cuando no hay match en el calendario.
+3. **Toda comp NUEVA con humanos** que abra la previa
+   (`showPrePartidoOverlay(matchKey, compKey, ...)`) DEBE tener su
+   rama en `_mmCalLabel` para mapear matchKey → `.ag-lbl`.
+4. **Toda nueva ronda de Mundial-48** (p. ej. si se añade una
+   ronda extra) DEBE tener:
+   - Su evento en `calendario.json` con `event.name` exacto.
+   - Su entrada en `MUNDIAL_KO_LABELS` de `_mmCalLabel` mapeando
+     el nombre de la ronda (tal como aparece en
+     `cfg.formatConfig.koRounds`) al `event.name` del calendario.
+5. **El `compLabel`** de la previa (después del icono 🏆) en
+   partidos de Mundial-48 se construye como:
+   - `Mundial 2032 · GRAN FINAL 🏆` para la última ronda.
+   - `Mundial 2032 · <RoundName>` para semis/cuartos/octavos/...
+   - `Mundial 2032 · Grupo J<N>` para fase de grupos.
+   NO mostrar `'torneo'` crudo (bug 2026-05-25).
+
+### Histórico
+
+- 2026-05-25: bug Marruecos vs Francia (GRAN FINAL del Mundial
+  2032). La card del hub mostraba `31 May` (correcto) pero la
+  previa `25 de Mayo` (HOY) porque `_mmCalLabel` no tenía rama
+  para `compKey === 'torneo'`. `_tourOpenHumanMatch` pasa
+  `compKey='torneo'` para TODOS los formatos de torneo (mundial-48,
+  ko, league, groups-ko, swiss...), así que el matchKey
+  `tour_<tourId>_ko_5_0` caía a `MAP[compKey] || null` → null →
+  fallback a `new Date()`. Fix: rama `compKey === 'torneo'` que
+  usa `_ppPreviaTeams.tourId/tourKey` + `cfg.formatConfig.koRounds`
+  para resolver la etiqueta del calendario.
+
+## Tema del gm-modal por competición (obligatorio, 2026-05-24)
+
+El gm-modal (la pantalla del partido HvH/HvIA que ve el usuario) lee
+la comp activa vía `_gmCompFromState()` y le aplica la clase
+`is-comp-<X>`. Esa clase fija las CSS vars `--comp-color` y
+`--comp-color-soft` que pintan TODOS los bordes/glow del modal:
+caja exterior `#gm-inner`, FINALIZAR (`.gm-end-moved`), PRÓRROGA
+(`#gm-btn-et`) y la franja superior de `gm-finalizar-slot`.
+
+### Mapa comp → tema (obligatorio)
+
+| comp en `_gm.comp`                                | clase            | `--comp-color`  | Justificación                                |
+|---------------------------------------------------|------------------|-----------------|-----------------------------------------------|
+| `liga`/`ea-sports`/`''`/`null`                    | `is-comp-liga`   | `#ff5060` rojo  | Liga EA SIEMPRE roja (legacy)                |
+| `copa`/`copa-fin` (o `_isCopa`)                   | `is-comp-copa`   | `#ffb050` ámbar |                                               |
+| `sc`/`sc-final` (o `_isSc`)                       | `is-comp-super`  | `#f0c820` oro   |                                               |
+| `recopa` (o `_isRecopa`)                          | `is-comp-recopa` | `#ff8060`       |                                               |
+| `superliga` (o `_isSuperliga`)                    | (vacío)          | rojo default    | Sin tema explícito (los 6 humanos)            |
+| `ucl`                                             | `is-comp-ucl`    | `#88aaff` azul  |                                               |
+| `uel`                                             | `is-comp-uel`    | `#ffaa55`       |                                               |
+| `uecl`                                            | `is-comp-uecl`   | `#5fe08a`       |                                               |
+| `inter`                                           | `is-comp-inter`  | `#f0a040`       |                                               |
+| `torneo`/`mundial`/`mundial-48`/`sel`/`sel-fin`/`selecciones` | `is-comp-mundial` | `#a875e8` violeta | Mundial-48 (compKey `torneo` vía `_tourOpenHumanMatch`) y Selecciones |
+| `amistoso`/`wprev`/`mundialito`                   | `is-comp-amistoso` | `#7da7c8` azul grisáceo |                                       |
+| `verano`/`sct`/`jg`/`pss`/`asia`                  | `is-comp-verano` | `#5fc6c8` turquesa |                                           |
+| **cualquier otra (fallback)**                     | `is-comp-neutral` | `#88a0c0` gris azulado | **PROHIBIDO** caer al rojo de Liga       |
+
+### Reglas a respetar
+
+1. **Toda comp humana NUEVA** que se añada (custom o de un torneo
+   nuevo) DEBE tener su rama en `_gmCompFromState()` (en
+   `templates/partials/part2/misc_body_2.html`, cerca de la línea del
+   bloque "GM-MODAL · tema + colores de equipo").
+2. **PROHIBIDO** dejar el fallback en `'liga'`. Cualquier comp no
+   reconocida debe caer a `'neutral'` para evitar el bug
+   2026-05-24 (Mundial-48 con todos los bordes rojos — foto Francia vs
+   RD Congo).
+3. **PROHIBIDO hardcodear `border:1px solid red`** o `var(--comp-color)`
+   en elementos nuevos del gm-modal sin antes verificar el tema actual.
+
+## Card bicolor del gm-modal (obligatorio, 2026-05-24)
+
+El fondo del gm-modal lleva un **tinte bicolor** según los colores
+reales del escudo:
+
+- **Mitad izquierda** = color dominante del escudo LOCAL
+  (`--team-a-bg`, alpha 0.25).
+- **Mitad derecha** = color dominante del escudo VISITANTE
+  (`--team-b-bg`, alpha 0.25).
+
+Las vars las setea `_gmPaint(pa, pb)` en
+`templates/partials/part2/misc_body_2.html`. El paint corre 2 veces:
+primero con el "seed" (color de `_teamColors` / `_hashColor` por
+nombre) para que el bicolor NUNCA esté vacío, y luego repinta cuando
+la extracción real del escudo (`_crestPrimary` → `extractColors`)
+resuelve.
+
+Si el escudo del rival no se ha cargado aún o no existe, las CSS
+vars caen a defaults `rgba(40,60,120,.25)` (azul oscuro local) y
+`rgba(60,40,90,.25)` (morado oscuro rival) — petición explícita del
+usuario "si no hay escudo todavía del rival pon el color que más te
+guste".
+
+### Caja "+ AÑADIR EVENTO" bicolor (obligatorio)
+
+La caja AÑADIR EVENTO (`#gm-add-btn`) usa el mismo bicolor pero a
+alpha alto (0.82-0.95) para que sea bien visible. El borde es
+`1px solid rgba(255,255,255,.22)` — **PROHIBIDO** usar
+`var(--comp-color)` en este borde (creaba el aro rojo del bug
+2026-05-24).
+
+### Reglas a respetar
+
+1. **No quitar `background-attachment:fixed`** del bicolor del modal
+   — sin él, el degradado se descoloca al hacer scroll del modal.
+2. **No subir el alpha por encima de 0.30** en `--team-a-bg`/`--team-b-bg`
+   — el texto del modal deja de ser legible.
+3. **No reintroducir `border:2px solid var(--comp-color)`** en el botón
+   AÑADIR EVENTO — eso es lo que causaba el aro rojo cuando el comp
+   caía al fallback liga.
+4. Si añades un elemento nuevo dentro del gm-modal con borde, usa
+   `var(--comp-color, #88a0c0)` con fallback neutro, NUNCA hardcodear
+   rojo.
+
+## Sanciones y lesiones — SELECCIONES NACIONALES (obligatorio, 2026-05-24)
+
+Sistema PARALELO al de clubes (`calcularSancionesPartido` /
+`YELLOW_STORE` / `SANCION_STORE` / `LESION_STORE`). **NO se cruzan**:
+un jugador sancionado en su selección puede jugar con su club, y
+viceversa. Cada selección tiene su propio contador.
+
+### Selecciones humanas (6, canónicas)
+
+Francia💡, Brasil🐭, Inglaterra🔨, Noruega✏️, Argentina😈, España🦆.
+
+La lista vive en `SEL_HUMANAS` en el bloque IIFE
+`SANCIONES + LESIONES — SELECCIONES NACIONALES` al final de
+`static/js/index.bundle.js`. Helper canónico:
+`window._esSelHumana(name)` (también acepta selecciones marcadas
+como humanas en el editor vía `selecciones_squad_v1.teams[].icon` →
+`_SEL_HUMAN_ICONS`).
+
+### Detección de partido de selección
+
+`window._esCompSel(compKey)` devuelve `true` para:
+- `compKey === 'sel'` (clasificación J1-J10, calendario `cal-sel1..10`).
+- `compKey === 'sel-fin'` (Mundial fase final, `cal-mf-*`).
+- `compKey === 'torneo'` cuando el `_TOUR_CACHE[tourId].format` es
+  `'mundial-48'` (partidos del Mundial 2032 abiertos desde el hub).
+
+### Reglas (distintas a clubes)
+
+| Evento                          | Selecciones humanas         | Clubes (referencia)       |
+|---------------------------------|-----------------------------|---------------------------|
+| Lesión "natural" del motor      | 1 partido (el siguiente)    | 1-7 según grado           |
+| ⬇️ marcado por usuario          | 2 partidos (este + siguiente) | 2-10 según roll Mod/Grave |
+| Doble amarilla (expulsión)      | **1 partido siguiente**     | SIEMPRE 2 partidos        |
+| Roja directa                    | **2 partidos siguientes**   | 2-15 con buckets          |
+| Acumulación de amarillas        | **Cada 2 = 1 partido (ciclo 2)** | Cada 3 = 1 partido    |
+
+Notas:
+- **Sanciones simultáneas → solo se aplica la MAYOR** (no se suman
+  como en clubes). Si llega una sanción menor mientras hay una mayor
+  pendiente, se descarta.
+- **Reset entre torneos automático**: los stores se anidan por
+  `torneoKey` (`'sel-clasif'` para J1-J10, `'sel-mundial'` para la
+  fase final). Las amarillas de la clasificación NO viajan al
+  Mundial y viceversa. Helper manual:
+  `window._selResetTorneo('sel-clasif' | 'sel-mundial')`.
+- **No hay amistosos de selección** — el sistema solo aplica a
+  partidos oficiales. Si en el futuro se añaden amistosos de
+  selección, irán por `compKey='amistoso'` (ya excluido por
+  `EXCLUDED_COMPS` del sistema de clubes), no sumarán nada.
+
+### Stores y persistencia
+
+- `window.YELLOW_STORE_SEL[torneoKey][selName][playerName] = { count }`
+- `window.SANCION_STORE_SEL[torneoKey][selName] = [ { name, remaining, reason, tipo } ]`
+- `window.LESION_STORE_SEL[selName][playerName] = { remaining, reason, timestamp }`
+  (NO se anida por torneo — una lesión "sobrevive" entre clasif y
+  Mundial; se decrementa partido a partido independientemente).
+- `window._FORMA_MATCH_STATES_SEL[selName::playerName] = '⬇️'`
+
+Persistencia en `localStorage` clave `ftbol_sel_sanciones_v1`
+(autosave cada 5 s + beforeunload). Separada del store de clubes
+(`ftbol_lesiones_v1`).
+
+### Helpers públicos
+
+```
+window._esSelHumana(name)
+window._canonSelHumana(name)        // 'francia' → 'Francia'
+window._esCompSel(compKey)
+window._selTorneoKey(compKey)        // 'sel-clasif' | 'sel-mundial' | null
+window._selCalcularSancionesPartido(events, humanTeam, teamName, compKey)
+window._selAddSancion(torneoKey, selName, playerName, reason, partidos, tipo)
+window._selCumplirSancion(torneoKey, selName, playerName)
+window._selAddLesion(selName, playerName, partidos, reason)
+window._selCumplirLesion(selName, playerName)
+window._selResetTorneo(torneoKey)
+window._selPendientesPara(home, away, compKey)    // { sanciones, lesiones }
+window._selConsumirParaPartido(home, away, compKey)
+```
+
+### Hooks instalados sobre el sistema de clubes
+
+El bloque al final de `index.bundle.js` envuelve estas funciones del
+sistema de clubes para enrutar al motor SEL cuando `esCompSel(comp)
+&& esSelHumana(teamName)`:
+
+- `window.calcularSancionesPartido` — delega a
+  `_selCalcularSancionesPartido` en partidos de selección.
+- `window._sancionConfirm` — además de la decrementación de clubes,
+  llama a `_selConsumirParaPartido` (idempotente por
+  `_sancionConsumedFor['SEL_' + mk]`).
+- `window._formaToggle` — ⬇️ en selección registra 2 partidos en
+  `LESION_STORE_SEL` (no en `LESION_STORE` global como hace en
+  clubes), evitando contaminación al club del jugador.
+- `window._renderFormaChecklist` — render propio en partidos de
+  selección con los rosters de las 6 selecciones humanas.
+- `window.showSancionOverlay` — render self-contained desde
+  `SANCION_STORE_SEL` + `LESION_STORE_SEL` (el original hace
+  early-return si los stores globales están vacíos, que SIEMPRE lo
+  están en selección).
+- `window._refreshSancionInjList` — en selección re-renderiza desde
+  `LESION_STORE_SEL` para no pisar la lista con "Sin lesionados" al
+  togglear ⬇️.
+- `window._registrarLesionesDesdeEventos` — particiona los eventos
+  por equipo: lesiones de selección humana → `LESION_STORE_SEL`
+  (1 partido), resto → motor original.
+
+### Reglas a respetar
+
+1. **No mezclar stores de clubes y selecciones.** Las stores SEL son
+   independientes. Cualquier código que añada/lea sanciones de
+   selección debe usar `*_SEL` o los helpers `_sel*`.
+2. **No hardcodear más selecciones en `SEL_HUMANAS`** sin avisar al
+   usuario. Las 6 son canónicas (2026-05-24). Selecciones marcadas
+   como humanas en el editor (`_SEL_HUMAN_ICONS`) se reconocen
+   adicionalmente por el fallback en `esSelHumana`.
+3. **No cambiar los partidos de sanción** (1 d-amarilla, 2 roja,
+   ciclo 2 amarillas, 2 ⬇️, 1 lesión natural) sin acordarlo con el
+   usuario. Son las reglas explícitas pedidas el 2026-05-24.
+4. **No introducir amistosos de selección** sin acordarlo. El
+   usuario explícitamente dijo "no hay amistosos de selecciones, y
+   en el caso de haber no cuentan" — quedan excluidos del cómputo.
+5. **No olvidar el reset por torneo.** La separación por
+   `torneoKey` es lo que hace que un nuevo torneo arranque en cero.
+   Si se añade un nuevo torneo de selecciones (ej. Eurocopa),
+   `_selTorneoKey` debe devolver una key distinta para él.
+
+## Balón fijo Selecciones por jornada (obligatorio, 2026-05-24)
+
+Regla "siempre" pedida por el usuario el 2026-05-24:
+
+- **Selecciones J1 a J8** (`cal-sel1`..`cal-sel8`, fase clasificatoria
+  africana, septiembre–marzo) → **`Orbita Africa`** SIEMPRE.
+- **Selecciones J9 en adelante** (`cal-sel9`, `cal-sel10`, fase de
+  mayo) → **`NIKE CONTROL CBF`** SIEMPRE.
+- **Mundial fase final** (`cal-mf-g1`..`cal-mf-fin`, compKey
+  `sel-fin`) → **`NIKE CONTROL CBF`** (default existente).
+
+Esta regla GANA sobre el override del admin
+(`ball_by_comp_v1['sel']`). Solo el balón de nieve
+(`eFootball MAX VIS 26`) puede sobrescribirla, igual que para el
+resto de comps.
+
+### Resolución
+
+En `_buildItems(matchKey, compKey, …)` de
+`static/js/index.bundle.js`, después de aplicar el override del
+admin sobre `COMP_BALL[compKey]`, se inyecta un bloque que detecta
+`compKey === 'sel'` + jornada (vía `window._ppBlockId` con regex
+`cal-sel(\d+)`, fallback al `matchKey`) y reescribe `balon` a
+`'Orbita Africa'` o `'NIKE CONTROL CBF'` según la jornada.
+
+**Mundial 2032 vía `_tourOpenHumanMatch`** (compKey `'torneo'`): el
+flujo de torneo NO pasa `'sel'`, pasa `'torneo'`. Para que la regla
+también se aplique a partidos de Selecciones lanzados desde la card
+del hub (Francia-UAE en May, etc.), el bloque comprueba además
+`window._TOUR_CACHE[_ppPreviaTeams.tourId].format === 'mundial-48'`
+y, si coincide, fuerza `'NIKE CONTROL CBF'` (Mundial fase final).
+Sin esto, `COMP_BALL['torneo']` no existe y `balon` caía al default
+inicial `"Ligue 1 McDonald's"` (bug reportado por usuario 2026-05-24
+con captura: Francia vs UAE mostraba balón de Liga EA).
+
+En la pantalla `s-calendario.html`, los placeholders `<div class=
+"minfo">⚽️ …</div>` de `cal-sel1`..`cal-sel8` muestran "Orbita
+Africa"; los de `cal-sel9`..`cal-sel10` y `cal-mf-*` mantienen "NIKE
+CONTROL CBF".
+
+### Inventario
+
+El balón `Orbita_Africa` está sembrado en `BALL_DB` (entrada
+`{key:'sel-clasif', comp:'Selecciones · Clasif. (J1-J8)',
+id:'Orbita_Africa'}` en `misc_body_2.html`), así que aparece en
+"INVENTARIO DE BALONES" sin que el admin tenga que añadirlo a mano.
+`NIKE_CONTROL_CBF` ya estaba sembrado por la entrada
+`{key:'selecciones', comp:'Fase Final Selecciones'}`.
+
+### Reglas a respetar
+
+1. **No cambiar el balón hardcoded** sin acuerdo con el usuario:
+   J1-J8 = `Orbita Africa`, J9+ = `NIKE CONTROL CBF`.
+2. **No quitar el bloque jornada-aware** de `_buildItems`. Aunque
+   el admin asigne otro balón vía `s-admin-balls`, esta regla
+   debe ganar (es "siempre" por petición explícita).
+3. **Si se añaden más jornadas de Selecciones** (J11, J12, …), la
+   rama `_selJor >= 9` ya las cubre; no hay que tocar nada.
+4. **No borrar `Orbita_Africa` de `BALL_DB`** — si desaparece de
+   `BALL_DB` y el inventario no se ha sembrado nunca en el navegador
+   del usuario, el picker del admin no lo tendrá disponible.
+
+## Balón asignado por competición (obligatorio, 2026-05-24)
+
+**Cuando el admin asigna un balón a una competición desde "INVENTARIO
+DE BALONES" (pantalla `s-admin-balls`, override
+`ball_by_comp_v1[compKey] = ballId`), ese balón DEBE aparecer en
+TODAS las cards de partidos donde haya un humano implicado en esa
+competición.** Aplica a CUALQUIER tipo de torneo: Liga EA Sports,
+Copa del Rey, Supercopa de España, Champions League, Europa League,
+Conference League, Recopa, Supercopa de Europa, Intercontinental,
+Mundialito de Clubes, Selecciones, Superliga, Torneos de Verano,
+amistosos, y cualquier competición custom que el admin añada vía
+"+ AÑADIR COMPETICIÓN".
+
+### Resolver canónico
+
+El bundle resuelve el balón en `_buildItems(matchKey, compKey, …)`
+de `static/js/index.bundle.js` con esta cadena (NO modificar el
+orden):
+
+1. `ball_by_comp_v1[compKey]` — **clave RAW del partido**. Cubre
+   las 14 comps base + las 3 extras (`superliga`, `verano`,
+   `mundialito`) + cualquier comp custom añadida por el admin.
+2. `ball_by_comp_v1[_COMP_TO_BDB[compKey]]` — fallback al alias de
+   `BALL_DB` (back-compat de las 14 comps base que históricamente
+   se guardaban por la clave `champions`/`uel`/etc. en vez de
+   `ucl`/`uel`).
+3. `ball_by_comp_v1[_COMP_GROUP_ALIAS[compKey]]` — alias de GRUPO
+   (2026-05-25): varios compKeys reales comparten una sola fila en
+   Ball Storage. Los torneos de verano (Joan Gamper `jg`, Asian
+   `asia`, Pre-Season Super `pss`, Soccer Champions Tour `sct` y
+   los genéricos `torneo`/`torneos`) caen sobre la extra `verano`;
+   `mundial` cae sobre `mundialito`.
+4. `COMP_BALL[compKey]` — default hardcoded por comp (incluye
+   defaults para `torneo`/`jg`/`asia`/`pss`/`sct`/`mundialito` para
+   evitar que caigan al default genérico `Ligue 1 McDonald's`).
+5. Override por clima: nieve → `eFootball MAX VIS 26`.
+6. Fallback `ml-ball-name` del DOM (`ball-wrap-<matchKey>`).
+
+### Reglas a respetar
+
+1. **Toda card de partido humano** (HvH, HvIA, IAvH) DEBE construir
+   sus items vía `_buildItems(matchKey, compKey, …)`. No reimplementar
+   la resolución del balón en una nueva ruta.
+2. **Toda nueva competición humana** que se añada al juego DEBE
+   pasar su `compKey` real al builder de la card, para que el
+   override del admin se aplique automáticamente sin tocar
+   `_COMP_TO_BDB`.
+3. **No hardcodear nombres de balón** en builders nuevos. El balón
+   por defecto va en `COMP_BALL`; el override del usuario gana
+   siempre.
+4. **No romper `ball_by_comp_v1`** en wipes ni migraciones. La clave
+   se persiste en localStorage + servidor (`/api/kv/ball_by_comp_v1`,
+   ver sección "Inventario de Balones").
+5. **El admin elige el balón con un picker ✅** (overlay) en
+   `s-admin-balls`. Prohibido reintroducir `<select>` nativo para
+   esta selección (bug 2026-05-24: en algunos móviles el `<select>`
+   cancelaba la elección al primer toque).
+
+### Persistencia del inventario
+
+- Cache local: `localStorage` (3 claves: `ball_inventory_v1`,
+  `ball_by_comp_v1`, `ball_comp_db_v1`).
+- Fuente de verdad: servidor (`/api/kv/<key>` en `app.py`).
+- Las escrituras locales se marcan con `_ballMarkLocalWrite(key)` y
+  durante 5 min `_ballHydrateAll()` NO pisa la cache con la
+  respuesta del servidor (evita race con un GET stale anterior al
+  POST del usuario).
+- Los flujos `adminBallAdd` / `adminBallAddComp` /
+  `adminBallSetForComp` esperan la confirmación del POST y muestran
+  toast distinto si el servidor no respondió.
+
 ## Sanciones por tarjetas (obligatorio, 2026-05-23)
 
 Sistema único cross-competición en `static/js/index.bundle.js`:
@@ -90,6 +574,14 @@ Reglas obligatorias:
    editor — eso lo hace humano en eur/amistoso/torneo SIN romper Liga.
 3. **No hardcodear listas tipo `EUROPEAN_HUMANS = [...]`.** Cualquier
    chequeo de humanidad va por `isHumanInComp`.
+4. **Pantalla obligatoria de estadísticas (posesión/tiros/faltas) tras
+   FINALIZAR**: en gm-modal usar `_gmHumanInvolved()` (que cubre
+   selecciones nacionales vía `cfg.teams[].isHuman`); en ml-card usar
+   el helper local `_mlTeamIsHuman*` que respeta `st.homeIsHuman /
+   awayIsHuman` y cae a `isHumanInComp(name, st.comp)` → `esHumano`.
+   Bug 2026-05-24: `gmEndMatch` y `mlEndMatchGen` usaban `esHumano()`
+   directo → Francia (humano) vs UAE (IA) en el Mundial se finalizaba
+   sin pedir las stats obligatorias.
 
 ## Límites de almacenamiento por carpeta (obligatorio, 2026-05-02)
 
@@ -566,6 +1058,25 @@ Helper: `window._mlCountStoppageHalves(st)` →
   (`!st.etDone && !st.isIAvsIA`).
 - Event-driven (cuenta eventos del acta) para IA vs IA
   (`st.isIAvsIA`) y para prórroga (`st.etDone`).
+
+**HvIA — slowdown ×1.5 durante el descuento** (petición usuario
+2026-05-24). En HvIA / IAvH (un humano contra IA), cada game-minute
+del descuento dura **1.5× lo que duraría con el ritmo actual**:
+
+- 1ª parte (`45+1..45+4`): rearm del interval al cruzar `timerSec
+  >= 2700` con `tickMs *= 1.5`. Solo HvIA, no HvH ni IAIA.
+- 2ª parte (`90+1..90+9`): rearm al cruzar `timerSec >= 5400` con
+  `tickMs *= 1.5`. Se aplica **encima** del slowdown +0.5 s/min del
+  min 65 (multiplicativo).
+
+Flags persistidos en `st` (ml-card) / `_gm` (gm-modal):
+`_stop1Applied`, `_stop2Applied`. Se setean al rearmar para evitar
+re-arms en cada tick. La detección vive en `_mlResolveClock` cuando
+recibe `timerSec`, `htDone`, `etDone`:
+- `inStop1 = !htDone && timerSec >= 2700 && timerSec < 5400`
+- `inStop2 = htDone && timerSec >= 5400 && timerSec < 7200`
+
+HvH y IAIA NO se ralentizan en el descuento — solo HvIA.
 
 **IA vs IA mantiene descuento event-driven** (petición usuario
 2026-05-19): cada gol/tarjeta/lesión/etc. en una parte añade

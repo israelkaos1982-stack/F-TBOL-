@@ -3529,6 +3529,116 @@ window._showSimProgress = function(opts, onDone){
     if (card) card.onclick = adv;
   }
 
+  /* Helper auto-build (2026-05-26): chain-construye los brackets KO
+     de un torneo formato mundial-48 o cualquier otro `koBracket`-based
+     siempre que la fase anterior esté COMPLETA. Sin esto, después de
+     simular grupos / round N, el bracket de round N+1 no se construye
+     hasta que alguien visita la pantalla del torneo. Se llama al
+     entrar a `_selPair` para que la card del hub vea el rival
+     correcto sin navegar. Idempotente: cada vez que se llama,
+     solo construye lo que falta. */
+  function _psAutoChainBuildMundial(cfg, tourId){
+    if (!cfg || cfg.format !== 'mundial-48') return false;
+    if (typeof window._mundialQualifiers !== 'function') return false;
+    var changed = false;
+    try {
+      var fc = cfg.formatConfig || {};
+      var teams = cfg.teams || [];
+      var pg = fc.perGroup || 4;
+      var results = cfg.results || {};
+      /* Paso 1: grupos → koBracket[0]. Requiere TODOS los partidos
+         de TODOS los grupos jugados (no solo los del humano). */
+      if (!cfg.koBracket || !cfg.koBracket.length){
+        var allDoneAll = true;
+        var fixs = cfg.groupFixtures || [];
+        for (var gI = 0; gI < fixs.length && allDoneAll; gI++){
+          for (var jI = 0; jI < fixs[gI].length && allDoneAll; jI++){
+            for (var mI = 0; mI < fixs[gI][jI].length && allDoneAll; mI++){
+              var rr = results['g' + gI + '_' + jI + '_' + mI];
+              if (!rr || !(rr.played || rr.done)) allDoneAll = false;
+            }
+          }
+        }
+        if (allDoneAll && fixs.length){
+          var slices = [];
+          for (var gg = 0; gg < (teams.length / pg); gg++){
+            slices.push(teams.slice(gg * pg, gg * pg + pg));
+          }
+          cfg.koBracket = [ window._mundialQualifiers(cfg, slices) ];
+          cfg.koCurrentRound = 0;
+          changed = true;
+        }
+      }
+      /* Paso 2+: koBracket[N] → koBracket[N+1] mientras estén
+         completos. Replica la lógica de avance del editor mundial. */
+      var kr = (cfg.formatConfig && cfg.formatConfig.koRounds) || [];
+      var has3rd = (kr.length >= 6 && kr[kr.length - 2] === 'Tercer Puesto');
+      if (cfg.koBracket && cfg.koBracket.length){
+        var safety = 0;
+        while (safety++ < 16){
+          var curR = cfg.koCurrentRound || 0;
+          /* Si ya alcanzamos la última ronda, parar. */
+          if (curR >= kr.length - 1) break;
+          var curT = cfg.koBracket[curR] || [];
+          if (!curT.length) break;
+          /* ¿Todos los partidos de esta ronda jugados? */
+          var pairs = 0, played = 0;
+          for (var p = 0; p < curT.length; p += 2){
+            if (!curT[p + 1]) break;
+            pairs++;
+            var rkk = results['ko_' + curR + '_' + (p / 2)];
+            if (rkk && rkk.played) played++;
+          }
+          if (pairs === 0 || played < pairs) break;
+          /* Caso especial Mundial-48 con 3er puesto: tras Semis (curR=3)
+             pueblan kb[4]=losersSemis y kb[5]=winnersSemis a la vez. */
+          if (has3rd && curR === 3){
+            if (!cfg.koBracket[4] || !cfg.koBracket[5]){
+              var winnersSemis = [], losersSemis = [];
+              for (var w0 = 0; w0 < curT.length; w0 += 2){
+                var r3 = results['ko_' + curR + '_' + (w0 / 2)];
+                if (!r3 || !r3.played) continue;
+                winnersSemis.push(r3.winner === 'a' ? curT[w0]     : curT[w0 + 1]);
+                losersSemis .push(r3.winner === 'a' ? curT[w0 + 1] : curT[w0]    );
+              }
+              cfg.koBracket[4] = losersSemis;
+              cfg.koBracket[5] = winnersSemis;
+              cfg.koCurrentRound = 4;
+              changed = true;
+            } else {
+              break;
+            }
+          } else if (has3rd && curR === 4){
+            cfg.koCurrentRound = 5;
+            changed = true;
+          } else {
+            if (cfg.koBracket[curR + 1] && cfg.koBracket[curR + 1].length){
+              cfg.koCurrentRound = curR + 1;
+              changed = true;
+              continue;
+            }
+            var winners = [];
+            for (var wp = 0; wp < curT.length; wp += 2){
+              var rwp = results['ko_' + curR + '_' + (wp / 2)];
+              if (!rwp || !rwp.played) continue;
+              winners.push(rwp.winner === 'a' ? curT[wp] : curT[wp + 1]);
+            }
+            if (typeof window._tourRebalanceHumans === 'function'){
+              try { winners = window._tourRebalanceHumans(winners); } catch(_){}
+            }
+            cfg.koBracket[curR + 1] = winners;
+            cfg.koCurrentRound = curR + 1;
+            changed = true;
+          }
+        }
+      }
+      if (changed){
+        try { if (typeof window._tourSave === 'function') window._tourSave(tourId, cfg); } catch(_){}
+      }
+    } catch(_){}
+    return changed;
+  }
+
   /* Localiza el partido del HUMANO (Francia) en el Mundial 2032 para
      una fila `ag-sel` del calendario:
        - "Mundial Grupo — JN"  → busca en cfg.groupFixtures[gIdx][jor]
@@ -3593,6 +3703,12 @@ window._showSimProgress = function(opts, onDone){
         }
       }
       if (!mundialCfg) return null;
+      /* Auto-construir brackets KO que estén pendientes (grupos
+         terminados → kb[0]; round N completo → kb[N+1]). Idempotente.
+         Sin esto, después de simular grupos vía el botón del hub,
+         koBracket[0] sigue vacío hasta que alguien visita la pantalla
+         del torneo manualmente. 2026-05-26. */
+      try { _psAutoChainBuildMundial(mundialCfg, mundialId); } catch(_){}
       /* Resolver el índice KO según el formato real del torneo:
          antiguo (5 rondas, Final = 4) o nuevo con 3er puesto
          (6 rondas, 3er Puesto = 4, Final = 5). 2026-05-24. */
@@ -3739,6 +3855,29 @@ window._showSimProgress = function(opts, onDone){
             }
           } catch(_){}
         }
+        /* No eliminado, bracket no construido → detección de FASE
+           PREVIA PENDIENTE (2026-05-26). Si encontramos partidos
+           IA-vs-IA pendientes en la fase previa, devolvemos
+           { pending:true, ... } para que `_render` muestre la card
+           de bloqueo en vez de "JUGADORES FUERA · CONTINUAR". */
+        var _krAll = (mundialCfg.formatConfig && mundialCfg.formatConfig.koRounds)
+                  || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
+        var _pendingSel = _psDetectPendingPrevPhase(mundialCfg, {
+          compKey: 'mundial',
+          koRoundIdx: koRoundIdx,
+          bracketProp: 'koBracket',
+          koRoundNames: _krAll,
+          groupsLabel: 'Fase de grupos del Mundial'
+        });
+        if (_pendingSel){
+          return {
+            pending: true,
+            info: _pendingSel,
+            tourId: mundialId,
+            compEmoji: '🌍',
+            compName: 'Mundial · ' + (_krAll[koRoundIdx] || ('Ronda ' + (koRoundIdx + 1)))
+          };
+        }
         return null;
       }
       var huKoIdx = -1;
@@ -3754,7 +3893,29 @@ window._showSimProgress = function(opts, onDone){
       var pairIdx = Math.floor(huKoIdx / 2);
       var hKo = bracket[pairIdx*2], aKo = bracket[pairIdx*2 + 1];
       if (!hKo || !aKo || !hKo.name || !aKo.name) return null;
-      if (hKo.name === 'PENDIENTE' || aKo.name === 'PENDIENTE') return null;
+      if (hKo.name === 'PENDIENTE' || aKo.name === 'PENDIENTE'){
+        /* Bracket construido pero rival aún TBD (resultados de la
+           ronda previa incompletos). Mismo flujo de bloqueo. */
+        var _krAll2 = (mundialCfg.formatConfig && mundialCfg.formatConfig.koRounds)
+                   || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
+        var _pendingSel2 = _psDetectPendingPrevPhase(mundialCfg, {
+          compKey: 'mundial',
+          koRoundIdx: koRoundIdx,
+          bracketProp: 'koBracket',
+          koRoundNames: _krAll2,
+          groupsLabel: 'Fase de grupos del Mundial'
+        });
+        if (_pendingSel2){
+          return {
+            pending: true,
+            info: _pendingSel2,
+            tourId: mundialId,
+            compEmoji: '🌍',
+            compName: 'Mundial · ' + (_krAll2[koRoundIdx] || ('Ronda ' + (koRoundIdx + 1)))
+          };
+        }
+        return null;
+      }
       return {
         tourId: mundialId,
         matchKey: 'ko_' + koRoundIdx + '_' + pairIdx,
@@ -4096,6 +4257,377 @@ window._showSimProgress = function(opts, onDone){
     return true;
   }
 
+  /* ── FASE PREVIA PENDIENTE · CARD DE BLOQUEO (2026-05-26) ──────
+     Cuando un humano abre la card de su próximo partido KO pero el
+     rival aún es TBD porque la FASE PREVIA (grupos / round anterior)
+     no se ha simulado, mostramos una card de bloqueo con 2 botones:
+     📌 POSPONER (top-left, salta el día) y 🤖 SIMULAR FASE PREVIA
+     +10 🪙 (auto-sim de los IA-vs-IA pendientes + recompensa). Los
+     partidos con algún humano implicado NO se auto-simulan — esos
+     los debe jugar / posponer cada humano por su cuenta. La regla
+     aplica a TODAS las eliminatorias (Mundial selecciones, torneos
+     groups-ko, copas, fases finales Champions/EL/UECL, Recopa,
+     Supercopas, Intercontinental, Mundialito, etc.). */
+  var PS_SIM_PREV_REWARD = 10;
+  function _psTeamIsHumanGeneric(t, compKey){
+    if (!t) return false;
+    if (t.isHuman) return true;
+    if (t.name && typeof window.isHumanInComp === 'function'){
+      try { if (window.isHumanInComp(t.name, compKey || 'torneo')) return true; } catch(_){}
+    }
+    return false;
+  }
+  /* Lista pendientes de la FASE DE GRUPOS (mundial-48 / groups-ko /
+     league-ko / swiss). matchKey canónico `g<g>_<j>_<m>`. */
+  function _psListPendingGroupMatches(cfg, compKey){
+    var out = [];
+    var fixs = (cfg && cfg.groupFixtures) || [];
+    var teams = (cfg && cfg.teams) || [];
+    var fc = (cfg && cfg.formatConfig) || {};
+    var pg = fc.perGroup || (fc.groups ? Math.ceil(teams.length / fc.groups) : 4);
+    var results = (cfg && cfg.results) || {};
+    for (var gI = 0; gI < fixs.length; gI++){
+      var groupTeams = teams.slice(gI * pg, gI * pg + pg);
+      var groupFixs = fixs[gI] || [];
+      for (var jI = 0; jI < groupFixs.length; jI++){
+        var matchups = groupFixs[jI] || [];
+        for (var mI = 0; mI < matchups.length; mI++){
+          var mm = matchups[mI];
+          if (!mm) continue;
+          var matchKey = 'g' + gI + '_' + jI + '_' + mI;
+          var res = results[matchKey];
+          if (res && (res.played || res.done)) continue;
+          var h = groupTeams[mm.home];
+          var a = groupTeams[mm.away];
+          if (!h || !a) continue;
+          if (!h.name || h.name === 'PENDIENTE') continue;
+          if (!a.name || a.name === 'PENDIENTE') continue;
+          out.push({
+            matchKey: matchKey, home: h, away: a,
+            hHuman: _psTeamIsHumanGeneric(h, compKey),
+            aHuman: _psTeamIsHumanGeneric(a, compKey)
+          });
+        }
+      }
+    }
+    return out;
+  }
+  /* Lista pendientes de UNA ronda KO. `bracketProp` = 'koBracket'
+     (mundial-48 / groups-ko-ko) o 'bracket' (ko / ko-2leg). Para
+     formato ko-2leg el sim batched es DELICADO (el partido tiene IDA
+     y VUELTA con claves |L1/|L2 y un agregado en baseKey), así que
+     marcamos esos partidos como `is2Leg:true` y `_psAutoSimPendingPhase`
+     los SALTA (los cuenta como pendientes con-humano para que el
+     usuario / admin los juegue manualmente o pague la sim por leg). */
+  function _psListPendingKoMatches(cfg, koRoundIdx, bracketProp, compKey){
+    var out = [];
+    var br = ((cfg && cfg[bracketProp]) || [])[koRoundIdx];
+    if (!Array.isArray(br) || !br.length) return out;
+    var results = (cfg && cfg.results) || {};
+    var is2Leg = (cfg && cfg.format === 'ko-2leg');
+    var fc = (cfg && cfg.formatConfig) || {};
+    var rounds2L = fc.rounds || [];
+    var lastIsSingle = is2Leg && !!fc.singleLegLastRound
+                       && (koRoundIdx === rounds2L.length - 1);
+    var twoLegHere = is2Leg && !lastIsSingle;
+    for (var pi = 0; pi < br.length; pi += 2){
+      var h = br[pi], a = br[pi + 1];
+      if (!h || !a) continue;
+      if (!h.name || h.name === 'PENDIENTE') continue;
+      if (!a.name || a.name === 'PENDIENTE') continue;
+      var baseKey = (bracketProp === 'bracket')
+        ? (koRoundIdx + '_' + Math.floor(pi / 2))
+        : ('ko_' + koRoundIdx + '_' + Math.floor(pi / 2));
+      var aggRes = results[baseKey];
+      if (aggRes && aggRes.played) continue;
+      out.push({
+        matchKey: baseKey, home: h, away: a,
+        hHuman: _psTeamIsHumanGeneric(h, compKey),
+        aHuman: _psTeamIsHumanGeneric(a, compKey),
+        is2Leg: twoLegHere
+      });
+    }
+    return out;
+  }
+  /* Detección genérica de fase previa pendiente. Devuelve
+       { phase:'groups'|'ko', round?, label, matches, bracketProp }
+     o null. Recursa hacia atrás si el bracket de la ronda previa
+     tampoco existe (cadena: round N pendiente → round N-1 pendiente
+     → ... → groups pendiente). */
+  function _psDetectPendingPrevPhase(cfg, opts){
+    if (!cfg || !opts) return null;
+    var compKey = opts.compKey || 'torneo';
+    var koRoundIdx = (typeof opts.koRoundIdx === 'number') ? opts.koRoundIdx : -1;
+    var bracketProp = opts.bracketProp || 'koBracket';
+    var koRounds = (cfg.formatConfig && cfg.formatConfig.koRounds)
+                || opts.koRoundNames || [];
+    if (koRoundIdx === 0) {
+      if (Array.isArray(cfg.groupFixtures) && cfg.groupFixtures.length){
+        var pendingGrp = _psListPendingGroupMatches(cfg, compKey);
+        if (pendingGrp.length){
+          return {
+            phase: 'groups',
+            label: opts.groupsLabel || 'Fase de grupos',
+            bracketProp: bracketProp,
+            matches: pendingGrp
+          };
+        }
+      }
+      return null;
+    }
+    if (koRoundIdx > 0) {
+      var prevR = koRoundIdx - 1;
+      var prevBr = (cfg[bracketProp] || [])[prevR];
+      if (!Array.isArray(prevBr) || !prevBr.length){
+        return _psDetectPendingPrevPhase(cfg, {
+          compKey: compKey, koRoundIdx: prevR, bracketProp: bracketProp,
+          koRoundNames: koRounds, groupsLabel: opts.groupsLabel
+        });
+      }
+      var pendingKo = _psListPendingKoMatches(cfg, prevR, bracketProp, compKey);
+      if (pendingKo.length){
+        var prevName = koRounds[prevR] || ('Ronda ' + (prevR + 1));
+        return {
+          phase: 'ko',
+          round: prevR,
+          bracketProp: bracketProp,
+          label: prevName,
+          matches: pendingKo
+        };
+      }
+    }
+    return null;
+  }
+  /* Tras simular una fase, intenta construir el bracket de la
+     SIGUIENTE fase para que el rival del usuario quede sorteado.
+     Sin esto, después de simular grupos koBracket[0] sigue vacío
+     hasta que alguien visita la pantalla del torneo. */
+  function _psBuildNextBracket(cfg, pendingInfo){
+    if (!cfg || !pendingInfo) return;
+    try {
+      var fc = cfg.formatConfig || {};
+      var teams = cfg.teams || [];
+      var pg = fc.perGroup || (fc.groups ? Math.ceil(teams.length / fc.groups) : 4);
+      var results = cfg.results || {};
+      if (pendingInfo.phase === 'groups'){
+        /* Verificar que ahora SÍ están todos jugados (otros humanos
+           pueden seguir teniendo partidos sin jugar). */
+        var allDone = true;
+        var fixs = cfg.groupFixtures || [];
+        for (var gI = 0; gI < fixs.length && allDone; gI++){
+          for (var jI = 0; jI < fixs[gI].length && allDone; jI++){
+            for (var mI = 0; mI < fixs[gI][jI].length && allDone; mI++){
+              var rr = results['g'+gI+'_'+jI+'_'+mI];
+              if (!rr || !(rr.played || rr.done)) allDone = false;
+            }
+          }
+        }
+        if (!allDone) return;
+        /* Mundial-48 → koBracket[0] vía _mundialQualifiers. */
+        if (cfg.format === 'mundial-48' && (!cfg.koBracket || !cfg.koBracket.length)){
+          if (typeof window._mundialQualifiers !== 'function') return;
+          var slices = [];
+          for (var gg = 0; gg < (teams.length / pg); gg++){
+            slices.push(teams.slice(gg*pg, gg*pg + pg));
+          }
+          cfg.koBracket = [ window._mundialQualifiers(cfg, slices) ];
+          cfg.koCurrentRound = 0;
+        }
+        /* Para groups-ko/league-ko/swiss el cálculo de clasificados
+           depende de advancePerGroup + tieBreak, que viven en la
+           función de render del torneo. Dejamos que la próxima
+           visita a la pantalla del torneo lo construya. */
+      } else if (pendingInfo.phase === 'ko'){
+        var r = pendingInfo.round;
+        var brProp = pendingInfo.bracketProp || 'koBracket';
+        var bracket = cfg[brProp] || [];
+        var curR = bracket[r] || [];
+        if (!curR.length) return;
+        /* Si la siguiente ronda ya está construida, nada que hacer. */
+        if (bracket[r+1] && bracket[r+1].length) return;
+        /* Construir winners — requiere TODOS los partidos jugados. */
+        var winners = [], pairs = 0, played = 0;
+        for (var p = 0; p < curR.length; p += 2){
+          if (!curR[p+1]) break;
+          pairs++;
+          var koKey = (brProp === 'bracket' ? '' : 'ko_') + r + '_' + (p/2);
+          var rk = results[koKey];
+          if (!rk || !rk.played) continue;
+          played++;
+          winners.push(rk.winner === 'a' ? curR[p] : curR[p+1]);
+        }
+        if (pairs === 0 || played < pairs) return;  /* aún no completa */
+        if (typeof window._tourRebalanceHumans === 'function'){
+          try { winners = window._tourRebalanceHumans(winners); } catch(_){}
+        }
+        bracket[r+1] = winners;
+        cfg[brProp] = bracket;
+        if (brProp === 'bracket') cfg.currentRound = r + 1;
+        else                       cfg.koCurrentRound = r + 1;
+      }
+    } catch(_){}
+  }
+  /* Auto-sim de los partidos pendientes (solo IA-vs-IA). Para KO
+     resuelve empates con penaltis vía _tourSimPenalties. Hace UN
+     solo _tourSave al final (batch). Devuelve { simmed, humanRemaining }. */
+  function _psAutoSimPendingPhase(tourId, pendingInfo){
+    var res = { simmed: 0, humanRemaining: 0 };
+    if (!pendingInfo || !Array.isArray(pendingInfo.matches) || !pendingInfo.matches.length) return res;
+    if (typeof window.simulateMatch !== 'function') return res;
+    if (typeof window._tourLoadCachedSync !== 'function') return res;
+    var cfg = window._tourLoadCachedSync(tourId);
+    if (!cfg) return res;
+    cfg.results = cfg.results || {};
+    var matches = pendingInfo.matches;
+    var isKo = pendingInfo.phase === 'ko';
+    for (var i = 0; i < matches.length; i++){
+      var m = matches[i];
+      if (m.hHuman || m.aHuman){ res.humanRemaining++; continue; }
+      /* ko-2leg: el partido tiene IDA + VUELTA con keys |L1/|L2 y un
+         agregado en baseKey. El sim batched no replica esa lógica
+         (necesitaría 2 llamadas + agregación con desempate por gol
+         visitante o penaltis). Lo saltamos y dejamos que el usuario
+         lo pague vía el flujo normal de "PAGAR SIMULACIÓN" leg-by-leg
+         o lo juegue manualmente. */
+      if (m.is2Leg){ res.humanRemaining++; continue; }
+      try {
+        var sim = window.simulateMatch(m.home, m.away);
+        var ga = sim.gh|0, gb = sim.ga|0;
+        var out = { a: ga, b: gb, played: true };
+        if (isKo){
+          if (ga > gb) out.winner = 'a';
+          else if (gb > ga) out.winner = 'b';
+          else {
+            if (typeof window._tourSimPenalties === 'function'){
+              var pens = window._tourSimPenalties(m.home, m.away);
+              out.winner = (pens.a > pens.b) ? 'a' : 'b';
+              out.pens = pens;
+            } else {
+              out.winner = (Math.random() < 0.5) ? 'a' : 'b';
+            }
+          }
+        }
+        try {
+          if (typeof window._tourAttachActa === 'function'){
+            window._tourAttachActa(out, m.home, m.away, ga, gb, tourId, m.matchKey);
+          }
+        } catch(_){}
+        cfg.results[m.matchKey] = out;
+        res.simmed++;
+      } catch(_){}
+    }
+    if (res.simmed > 0){
+      /* Construir el bracket de la siguiente fase para que el rival
+         quede sorteado sin tener que visitar la pantalla del torneo
+         manualmente. Si la fase previa tenía partidos con humanos
+         pendientes y no se completó, _psBuildNextBracket sale sin
+         tocar nada (idempotente). */
+      _psBuildNextBracket(cfg, pendingInfo);
+      try { if (typeof window._tourSave === 'function') window._tourSave(tourId, cfg); } catch(_){}
+      try { if (typeof window._tourRender === 'function') window._tourRender(tourId); } catch(_){}
+    }
+    return res;
+  }
+  /* Toast inline (sin deps). */
+  function _psFlashToast(msg, isOk){
+    try {
+      var t = document.createElement('div');
+      t.textContent = msg;
+      var bg = isOk ? 'rgba(20,80,40,.96)' : 'rgba(80,40,20,.96)';
+      var fg = isOk ? '#caffd0' : '#ffd7b0';
+      var bd = isOk ? 'rgba(120,255,160,.45)' : 'rgba(255,180,90,.45)';
+      t.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
+        + 'background:' + bg + ';color:' + fg + ';font-family:Oswald,sans-serif;font-size:13px;'
+        + 'letter-spacing:1.2px;padding:10px 18px;border-radius:10px;'
+        + 'border:1px solid ' + bd + ';box-shadow:0 6px 24px rgba(0,0,0,.55);z-index:999991;';
+      document.body.appendChild(t);
+      setTimeout(function(){ try { t.parentNode && t.parentNode.removeChild(t); } catch(_){} }, 2800);
+    } catch(_){}
+  }
+  /* Card "BLOQUEADO · Rival pendiente" sustituye a JUGADORES FUERA
+     cuando la fase previa de un KO no se ha simulado. `info` viene
+     de _selPair / _realPair con shape:
+       { pending:true, info:{phase,label,matches,...}, tourId,
+         compEmoji, compName } */
+  function _cardPendingPrevPhase(day, info){
+    var st = _stage(); if (!st) return;
+    var pending = (info && info.info) || null;
+    if (!pending){ _cardRest(day); return; }
+    var compEmoji = (info && info.compEmoji) || '🌍';
+    var compName  = (info && info.compName)  || (day && day.label) || 'Próxima ronda';
+    var prevLabel = pending.label || 'la fase previa';
+    var simmableCount = 0, humanCount = 0;
+    for (var i = 0; i < pending.matches.length; i++){
+      if (pending.matches[i].hHuman || pending.matches[i].aHuman) humanCount++;
+      else simmableCount++;
+    }
+    var rewardBtnHtml = '';
+    if (simmableCount > 0){
+      rewardBtnHtml = '<button type="button" class="ps-btn-pay" id="ps-sim-prev-btn"'
+        + ' style="background:linear-gradient(145deg,#4dd0e1,#00838f);border-color:rgba(120,230,255,.55);">'
+        + '🤖 SIMULAR FASE PREVIA'
+        + '<span class="pay-coin" style="background:rgba(0,0,0,.42);color:#cfffe6;">+' + PS_SIM_PREV_REWARD + ' 🪙</span>'
+        + '</button>';
+    }
+    var humanWaitMsg = '';
+    if (humanCount > 0){
+      humanWaitMsg = '<div style="margin-top:10px;font-size:11px;color:#ffd770;line-height:1.5;letter-spacing:.4px;">'
+        + '⏳ Quedan <b>' + humanCount + '</b> partido' + (humanCount === 1 ? '' : 's')
+        + ' con humanos sin jugar (esos no se auto-simulan).'
+        + '</div>';
+    }
+    var deferHtml = _psDeferTopBtnHtml();
+    st.innerHTML =
+      '<div class="ps-card">'
+      + deferHtml
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + compEmoji + ' ' + _esc(compName) + '</div>'
+      + '<div style="margin:14px 6px 4px;padding:10px 12px;'
+      +   'background:linear-gradient(90deg,rgba(255,140,40,.12),rgba(255,140,40,.30),rgba(255,140,40,.12));'
+      +   'border:1px solid rgba(255,176,80,.65);border-radius:9px;color:#ffd070;'
+      +   'font-family:Oswald,sans-serif;font-size:12px;letter-spacing:.8px;line-height:1.55;text-align:left;">'
+      +   '⚠️ <b>RIVAL PENDIENTE</b><br>'
+      +   '<span style="font-size:11px;color:rgba(255,255,255,.85);font-weight:400;letter-spacing:.4px;">'
+      +     'El admin aún no ha simulado <b>' + _esc(prevLabel) + '</b>. Avísale, '
+      +     'o pulsa el botón para auto-simular los IA vs IA pendientes y desbloquear el sorteo.'
+      +   '</span>'
+      + '</div>'
+      + (rewardBtnHtml
+          ? '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:14px;">' + rewardBtnHtml + '</div>'
+          : '')
+      + humanWaitMsg
+      + '</div>';
+    var deferBtn = document.getElementById('ps-defer-top-btn');
+    if (deferBtn){
+      deferBtn.onclick = function(){
+        if (deferBtn.disabled) return;
+        deferBtn.disabled = true;
+        /* Sin matchKey real (rival TBD) → NO añadimos a PARTIDOS
+           PENDIENTES; simplemente saltamos el día (el usuario debe
+           esperar al admin o auto-simular antes para no perder el
+           partido). */
+        _markDoneAndAdvance();
+      };
+    }
+    var simBtn = document.getElementById('ps-sim-prev-btn');
+    if (simBtn){
+      simBtn.onclick = function(){
+        if (simBtn.disabled) return;
+        simBtn.disabled = true;
+        var r = _psAutoSimPendingPhase(info.tourId, pending);
+        if (r.simmed > 0){
+          try { if (typeof window._bayernHudCreditMoney === 'function') window._bayernHudCreditMoney(PS_SIM_PREV_REWARD); } catch(_){}
+          _psFlashToast('+' + PS_SIM_PREV_REWARD + ' 🪙 · ' + r.simmed + ' partido' + (r.simmed === 1 ? '' : 's') + ' simulado' + (r.simmed === 1 ? '' : 's'), true);
+        } else {
+          _psFlashToast('No hay partidos IA vs IA pendientes que simular', false);
+          simBtn.disabled = false;
+        }
+        try { var s2 = _stage(); if (s2) s2._psSig = null; } catch(_){}
+        _render();
+      };
+    }
+  }
+
   /* Card "India vs Francia" en el hub Toñín durante un parón de
      selecciones. Reusa el dispatcher estándar del proyecto:
      `_tourOpenHumanMatch` abre la previa + gm-modal y al confirmarla
@@ -4381,6 +4913,32 @@ window._showSimProgress = function(opts, onDone){
         return false;
       }
 
+      /* Helper local para construir el shape `{pending:true,...}` que
+         consume `_render` → `_cardPendingPrevPhase`. Reutilizado en
+         las 2 ramas (ko/ko-2leg y groups-ko). 2026-05-26. */
+      function _realPendingShape(_tid, _cfg, _koRoundIdx, _bracketProp){
+        var _krNames = (_cfg.formatConfig && _cfg.formatConfig.koRounds)
+                    || (_cfg.formatConfig && _cfg.formatConfig.rounds)
+                    || [];
+        var _pendInfo = _psDetectPendingPrevPhase(_cfg, {
+          compKey: 'torneo',
+          koRoundIdx: _koRoundIdx,
+          bracketProp: _bracketProp,
+          koRoundNames: _krNames,
+          groupsLabel: 'Fase de grupos'
+        });
+        if (!_pendInfo) return null;
+        var _tourName = TOUR_NAMES[_tid] || (_cfg && _cfg.name) || 'Torneo';
+        var _roundLabel = _krNames[_koRoundIdx] || ('Ronda ' + (_koRoundIdx + 1));
+        return {
+          pending: true,
+          info: _pendInfo,
+          tourId: _tid,
+          compEmoji: '🌞',
+          compName: _tourName + ' · ' + _roundLabel
+        };
+      }
+
       /* ── KO (ida única) y KO-2LEG (ida + vuelta) ─────────────
          La pareja vive en cfg.bracket[currentRound]. Por convenio,
          el primer elemento del par (índice par dentro del round)
@@ -4396,7 +4954,19 @@ window._showSimProgress = function(opts, onDone){
         for (var i=0;i<round.length;i++){
           if (_slotIsH(round[i])){ bi = i; break; }
         }
-        if (bi < 0) return null;
+        if (bi < 0){
+          /* Humano no encontrado en la ronda actual:
+             - r === 0: bracket vacío = admin no lo sorteó (no es
+               "fase previa pendiente"). r === 0 con slots reales sin
+               humano = eliminado por draw. En ambos casos → null.
+             - r > 0: prev round no decidida (round vacío o con slot
+               PENDIENTE en el sitio del humano) → detectamos pending. */
+          if (r > 0){
+            var _p = _realPendingShape(tid, cfg, r, 'bracket');
+            if (_p) return _p;
+          }
+          return null;
+        }
         var humanSlot = round[bi];
         var pj = (bi % 2 === 0) ? bi + 1 : bi - 1;
         var oppSlot = round[pj];
@@ -4404,7 +4974,14 @@ window._showSimProgress = function(opts, onDone){
         var humanName = humanSlot.name;
         var oppName   = oppSlot.name;
         if (!humanName || humanName === 'PENDIENTE') return null;
-        if (!oppName   || _slotIsH(oppSlot) || oppName === 'PENDIENTE') return null;
+        if (!oppName || oppName === 'PENDIENTE'){
+          /* Rival aún TBD: bracket parcialmente construido por
+             resultados incompletos de la ronda previa. */
+          var _p2 = _realPendingShape(tid, cfg, r, 'bracket');
+          if (_p2) return _p2;
+          return null;
+        }
+        if (_slotIsH(oppSlot)) return null;
 
         var humanIsHomeL1 = (bi % 2 === 0);
         var humanIsHome   = humanIsHomeL1;
@@ -4469,7 +5046,19 @@ window._showSimProgress = function(opts, onDone){
                   : { home: String(koName), away: String(khName), rival: String(koName),
                       tourId: tid, matchKey: _mkGk, homeObj: _homeGk, awayObj: _awayGk };
               }
+              /* Humano en el bracket pero rival PENDIENTE → fase
+                 previa pendiente. 2026-05-26. */
+              if (khName && khName !== 'PENDIENTE'
+                  && (!koName || koName === 'PENDIENTE')){
+                var _pGk = _realPendingShape(tid, cfg, kr, 'koBracket');
+                if (_pGk) return _pGk;
+              }
             }
+          } else if (!kround.length && kr > 0){
+            /* Estamos en ronda KO > 0 sin bracket sorteado → fase
+               previa pendiente. 2026-05-26. */
+            var _pGk2 = _realPendingShape(tid, cfg, kr, 'koBracket');
+            if (_pGk2) return _pGk2;
           }
         }
         /* Fase de grupos: localizar al humano en cfg.teams, su grupo
@@ -4546,6 +5135,16 @@ window._showSimProgress = function(opts, onDone){
        Bayern contra un equipo aleatorio (bug "sale partido sin
        tocar" del 2026-05-22). */
     var pair = _realPair();
+    /* Fase previa pendiente (2026-05-26): el bracket de la ronda
+       actual no se ha sorteado / tiene rival TBD porque la fase
+       previa (grupos o ronda KO N-1) no se ha simulado. La card
+       de bloqueo (`_cardPendingPrevPhase`) ofrece POSPONER y un
+       botón 🤖 SIMULAR FASE PREVIA · +10🪙 que auto-sim los
+       IA-vs-IA pendientes y desbloquea el sorteo. */
+    if (pair && pair.pending){
+      _cardPendingPrevPhase(day, pair);
+      return;
+    }
     if (!pair){
       /* Sin rival = humano eliminado o torneo terminado. Pintamos
          CONTINUAR ▶ para no dejar al usuario atascado en ese día —
@@ -4887,6 +5486,7 @@ window._showSimProgress = function(opts, onDone){
         effDay = { date: day.date, label: 'Descanso', type: 'rest', cls: 'ag-r ag-rest' };
         _cardRest(effDay);
       }
+      else if (selPair && selPair.pending) _cardPendingPrevPhase(day, selPair);
       else if (selPair) _cardSelMatch(day, selPair);
       else              _cardRest(day);
     }

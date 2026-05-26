@@ -30331,30 +30331,46 @@ Tottenham
         try { renderTable(); } catch(_){}
         window._ligaExtSimInProgress = false;
         if(typeof progressFn === 'function'){ try { progressFn(100, 'Hecho'); } catch(_){} }
+        try { _ligaExtToastSim(CURRENT_NAME || CURRENT_KEY, idx, total); } catch(_){}
         resolve();
       }
+      /* 2026-05-25: si UNA iteración throwea (applyMatchStats/assignMVP en
+         un objeto raro, persistencia parcial, etc.), el catch antiguo
+         abortaba SILENCIOSAMENTE — `data.results` quedaba con N partidos
+         simulados pero `saveData` / `renderTable` nunca corrían → el
+         usuario veía la tabla con todo a 0 sin saber por qué. Reportado
+         como "crítico, individual y global no funcionan". Ahora aunque
+         falle UN partido salimos por `_finishSim` igualmente para
+         persistir el progreso y dar feedback. */
       function step(){
         var end = Math.min(total, idx + CHUNK);
         try {
           for(; idx<end; idx++){
             var i = pairs[idx][0], j = pairs[idx][1];
-            var r = simulateMatch(ts[i], ts[j]);
-            data.results.push({
-              h:ts[i].id, a:ts[j].id,
-              gh:r.gh, ga:r.ga,
-              tah:r.tah, taa:r.taa,
-              trh:r.trh, tra:r.tra
-            });
-            var infoI = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
-            var infoJ = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
-            if(r.gh > r.ga)      assignMVP(ts[i], infoI, ts[j], infoJ, false);
-            else if(r.ga > r.gh) assignMVP(ts[j], infoJ, ts[i], infoI, false);
-            else                 assignMVP(ts[i], infoI, ts[j], infoJ, true);
+            try {
+              var r = simulateMatch(ts[i], ts[j]);
+              data.results.push({
+                h:ts[i].id, a:ts[j].id,
+                gh:r.gh, ga:r.ga,
+                tah:r.tah, taa:r.taa,
+                trh:r.trh, tra:r.tra
+              });
+              var infoI = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
+              var infoJ = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
+              if(r.gh > r.ga)      assignMVP(ts[i], infoI, ts[j], infoJ, false);
+              else if(r.ga > r.gh) assignMVP(ts[j], infoJ, ts[i], infoI, false);
+              else                 assignMVP(ts[i], infoI, ts[j], infoJ, true);
+            } catch(matchErr){
+              /* Un partido concreto falló — log y seguimos con el siguiente.
+                 No abortamos toda la sim por un bug en un equipo. */
+              try { console.warn('[ligaExtSimular] partido '+i+'-'+j+' falló:', matchErr); } catch(_){}
+            }
           }
         } catch(err){
-          try { console.error('[ligaExtSimular]', err); } catch(_){}
-          window._ligaExtSimInProgress = false;
-          resolve();
+          try { console.error('[ligaExtSimular] chunk falló:', err); } catch(_){}
+          /* Importante: NO abortar sin guardar — finalizar con lo simulado
+             hasta este punto para que el usuario vea ALGÚN resultado. */
+          _finishSim();
           return;
         }
         if(typeof progressFn === 'function' && total > 0){
@@ -30371,6 +30387,33 @@ Tottenham
       step();
     });
   }
+  /* Toast no-bloqueante con el resultado del sim — el usuario sabe que
+     corrió. Antes la sim era TOTALMENTE silenciosa (el overlay del balón
+     se quitó el 2026-05-21) → si por race condition / error en un
+     equipo el `renderTable` no refrescaba (o el usuario no la veía
+     porque el sticky header tapaba la primera fila) creía que la sim
+     no había hecho nada. */
+  function _ligaExtToastSim(name, done, total){
+    if (!document.body) return;
+    /* Solo si la pantalla `s-liga-ext` está visible — sino estorba en
+       otras pantallas (sim global lo maneja `_restoLigasSimAll`). */
+    var scr = document.getElementById('s-liga-ext');
+    if (!scr || !scr.classList.contains('active')) return;
+    var ok = (done === total && total > 0);
+    var msg = ok
+      ? '✅ ' + (name || 'Liga') + ' simulada ('+total+' partidos)'
+      : '⚠️ ' + (name || 'Liga') + ': '+done+'/'+total+' partidos simulados';
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);'
+      + 'background:'+(ok?'rgba(8,42,20,.96)':'rgba(60,30,8,.96)')+';'
+      + 'border:1px solid '+(ok?'rgba(125,240,160,.55)':'rgba(255,176,80,.55)')+';'
+      + 'border-radius:10px;padding:11px 18px;color:'+(ok?'#7df0a0':'#ffd0a0')+';'
+      + 'font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;'
+      + 'box-shadow:0 8px 28px rgba(0,0,0,.55);z-index:2147483640;';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(function(){ try { document.body.removeChild(el); } catch(_){} }, 2800);
+  }
   window.ligaExtSimular = ligaExtSimular;
 
   /* Variante slug-aware. La usa el botón global "Sim" del menú
@@ -30385,24 +30428,36 @@ Tottenham
     data.teams.forEach(function(t){ (t.players||[]).forEach(resetPlayerStats); });
     data.results = [];
     var ts = _capRoundRobin(data.teams.slice());
+    /* 2026-05-25: igual que ligaExtSimular, atrapar excepciones por
+       partido para no perder TODO el sim por un único bug puntual.
+       Antes, si un equipo tenía estructura rara y `simulateMatch`
+       lanzaba en la pareja 17/1892, el for entero rompía → saveData
+       NO se ejecutaba → la liga quedaba con `results=[]` persistido y
+       el usuario veía 0 PTS en TODOS los equipos. */
     for(var i=0;i<ts.length;i++){
       for(var j=0;j<ts.length;j++){
         if(i===j) continue;
-        var r = simulateMatch(ts[i], ts[j]);
-        data.results.push({
-          h:ts[i].id, a:ts[j].id,
-          gh:r.gh, ga:r.ga,
-          tah:r.tah, taa:r.taa,
-          trh:r.trh, tra:r.tra
-        });
-        var infoI2 = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
-        var infoJ2 = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
-        if(r.gh > r.ga)      assignMVP(ts[i], infoI2, ts[j], infoJ2, false);
-        else if(r.ga > r.gh) assignMVP(ts[j], infoJ2, ts[i], infoI2, false);
-        else                 assignMVP(ts[i], infoI2, ts[j], infoJ2, true);
+        try {
+          var r = simulateMatch(ts[i], ts[j]);
+          data.results.push({
+            h:ts[i].id, a:ts[j].id,
+            gh:r.gh, ga:r.ga,
+            tah:r.tah, taa:r.taa,
+            trh:r.trh, tra:r.tra
+          });
+          var infoI2 = applyMatchStats(ts[i], r.gh, r.ga, r.tah, r.trh);
+          var infoJ2 = applyMatchStats(ts[j], r.ga, r.gh, r.taa, r.tra);
+          if(r.gh > r.ga)      assignMVP(ts[i], infoI2, ts[j], infoJ2, false);
+          else if(r.ga > r.gh) assignMVP(ts[j], infoJ2, ts[i], infoI2, false);
+          else                 assignMVP(ts[i], infoI2, ts[j], infoJ2, true);
+        } catch(matchErr){
+          try { console.warn('[ligaExtSimularSlug '+slug+'] partido '+i+'-'+j+' falló:', matchErr); } catch(_){}
+        }
       }
     }
-    saveData(slug, data);
+    try { saveData(slug, data); } catch(saveErr){
+      try { console.error('[ligaExtSimularSlug '+slug+'] saveData falló:', saveErr); } catch(_){}
+    }
     try { _lecSyncPlayerStatsCache(data); } catch(_){}
     /* Si la liga abierta actualmente coincide con la simulada, refrescar. */
     if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
@@ -34167,6 +34222,14 @@ Tottenham
     };
     try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+    /* También poblamos LIGA_CACHE (defensa 2026-05-25): si la cache se
+       hubiera quedado con un objeto vacío por una ruta async (p.ej.
+       fetchData devolviendo {teams:[],results:[]} antes del seed), un
+       openLigaExt posterior leería de cache vacía e ignoraría la seed
+       del localStorage → "Resto Mundo" salía con 0 PTS y la sim no
+       pintaba (porque `data` arrancaba sin teams, el sim devolvía
+       false en la guarda de ≥2 equipos). */
+    try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = data; } catch(_){}
   }
   /* Seed eager (al cargar) para que Sim All y aperturas directas vean
      los 44 equipos sin abrir antes la pantalla. */

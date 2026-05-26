@@ -10870,6 +10870,11 @@ window._showSimProgress = function(opts, onDone){
 #sel-roster-ov .mr-foot{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);}
 #sel-roster-ov .mr-ok{width:100%;padding:13px;border:none;border-radius:9px;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;font-weight:700;cursor:pointer;}
 #sel-roster-ov .mr-ok:disabled{opacity:.5;cursor:not-allowed;}
+#sel-roster-ov .sr-cont-row{padding:8px 12px 4px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.18);}
+#sel-roster-ov .sr-cont-h{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.4px;color:rgba(158,229,255,.7);margin:0 0 6px;text-align:center;}
+#sel-roster-ov .sr-cont-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+#sel-roster-ov .sr-cont-b{padding:9px 6px;background:rgba(77,208,225,.10);border:1px solid rgba(77,208,225,.45);color:#9ee5ff;border-radius:8px;cursor:pointer;font-family:Rajdhani,sans-serif;font-size:12px;font-weight:600;letter-spacing:.3px;}
+#sel-roster-ov .sr-cont-b:active{background:rgba(77,208,225,.28);transform:scale(.97);}
 </style>
 <!-- Pantalla única del Mundialito (motor de torneos): fase de grupos
      + Octavos→Cuartos→Semis→Final progresivos. 🖍 PIN 747 abre el
@@ -16736,6 +16741,14 @@ window._showSimProgress = function(opts, onDone){
         + '<button class="mr-x" type="button" id="sr-x">✕</button></div>'
         + '<div class="mr-sub" id="sr-sub"></div>'
         + '<div class="mr-body" id="sr-body"></div>'
+        + '<div class="sr-cont-row" id="sr-conts">'
+        + '<div class="sr-cont-h">⚡ RELLENAR HUECOS POR CONTINENTE</div>'
+        + '<div class="sr-cont-grid">'
+        + '<button class="sr-cont-b" type="button" data-cont="europa">✅ 🇪🇺 Solo Europa</button>'
+        + '<button class="sr-cont-b" type="button" data-cont="pacifico">✅ 🌎 Solo Pacífico</button>'
+        + '<button class="sr-cont-b" type="button" data-cont="africa">✅ 🌍 Solo África</button>'
+        + '<button class="sr-cont-b" type="button" data-cont="">✅ 🌐 Todas</button>'
+        + '</div></div>'
         + '<div class="mr-search" id="sr-search" style="display:none;">'
         + '<input id="sr-q" type="text" placeholder="Buscar selección…" autocomplete="off">'
         + '<div class="mr-results" id="sr-results"></div></div>'
@@ -16824,6 +16837,51 @@ window._showSimProgress = function(opts, onDone){
         rost[ri] = { name:pick.name, shield:pick.img||'', power:pick.power||75 };
       }
       renderBody();
+    };
+    /* ✅ Rellenar huecos por continente — rápido para Mundial 48 y demás
+       torneos de selecciones. Filtra la plantilla por `t.continent`
+       (europa/pacifico/africa) o acepta cualquiera con contKey=''. */
+    function _fillByContinent(contKey){
+      contKey = String(contKey||'').toLowerCase();
+      var taken = {};
+      rost.forEach(function(v){ if (v && v.name) taken[_norm(v.name)] = 1; });
+      var avail = pool().filter(function(t){
+        if (taken[_norm(t.name)]) return false;
+        if (!contKey) return true;
+        return String(t.continent||'').toLowerCase() === contKey;
+      });
+      var empties = 0;
+      for (var ei = 0; ei < total; ei++) if (!rost[ei]) empties++;
+      if (!empties) { alert('No hay huecos vacíos que rellenar.'); return; }
+      var contLbl = contKey === 'europa'   ? '🇪🇺 Europa'
+                  : contKey === 'pacifico' ? '🌎 Pacífico'
+                  : contKey === 'africa'   ? '🌍 África'
+                  : '🌐 Todas';
+      if (!avail.length) {
+        alert('No hay selecciones de ' + contLbl + ' disponibles en la plantilla.\nAñade selecciones de ese continente en «Plantilla de selecciones» (recuerda marcar su continente con ✅).');
+        return;
+      }
+      if (avail.length < empties) {
+        if (!confirm('Solo hay ' + avail.length + ' selecciones de ' + contLbl + ' para ' + empties + ' huecos.\n¿Rellenar parcialmente (' + avail.length + '/' + empties + ')?')) return;
+      }
+      for (var si = avail.length - 1; si > 0; si--) {
+        var sj = Math.floor(Math.random() * (si + 1));
+        var tmp = avail[si]; avail[si] = avail[sj]; avail[sj] = tmp;
+      }
+      var pi = 0;
+      for (var ri = 0; ri < total; ri++) {
+        if (rost[ri]) continue;
+        if (pi >= avail.length) break;
+        var pick = avail[pi++];
+        rost[ri] = { name:pick.name, shield:pick.img||'', power:pick.power||75 };
+      }
+      renderBody();
+    }
+    var contsRow = ov.querySelector('#sr-conts');
+    if (contsRow) contsRow.onclick = function(e){
+      var b = e.target.closest && e.target.closest('.sr-cont-b');
+      if (!b) return;
+      _fillByContinent(b.getAttribute('data-cont') || '');
     };
     qEl.oninput = doSearch;
     bodyEl.onclick = function(e){

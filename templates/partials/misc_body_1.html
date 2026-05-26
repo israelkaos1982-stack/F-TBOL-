@@ -2731,36 +2731,39 @@ window._showSimProgress = function(opts, onDone){
      del card del próximo partido (ps-card) — petición usuario
      2026-05-26. Aplica a TODOS los partidos visibles del big card
      (HvH y HvIA, sel y club). Al pulsar mueve la entrada al store
-     `pend_hvh_deferred_v1` y avanza el cursor al siguiente día. */
+     `pend_hvh_deferred_v1` y avanza el cursor al siguiente día.
+     2026-05-26 (2ª iter.): tamaño reducido para no tapar la fecha
+     "03 MAY" del centro del card — chip discreto en la esquina,
+     glow suave en lugar de fuerte. */
   #ps-stage .ps-card{position:relative;}
   #ps-stage .ps-defer-top{
-    position:absolute;top:8px;left:8px;z-index:3;
-    display:inline-flex;align-items:center;gap:5px;
-    padding:5px 10px;border-radius:9px;cursor:pointer;
-    background:linear-gradient(135deg,rgba(176,139,255,.30),rgba(124,77,255,.55));
-    border:1px solid rgba(204,170,255,.85);color:#fff;
-    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.6px;
-    font-weight:800;text-transform:uppercase;
-    text-shadow:0 1px 2px rgba(0,0,0,.45);
-    box-shadow:0 0 12px rgba(176,139,255,.55),
-               inset 0 1px 0 rgba(255,255,255,.18);
+    position:absolute;top:6px;left:6px;z-index:3;
+    display:inline-flex;align-items:center;gap:3px;
+    padding:2px 6px;border-radius:6px;cursor:pointer;
+    background:linear-gradient(135deg,rgba(176,139,255,.22),rgba(124,77,255,.42));
+    border:1px solid rgba(204,170,255,.65);color:#fff;
+    font-family:Oswald,sans-serif;font-size:8px;letter-spacing:1.1px;
+    font-weight:700;text-transform:uppercase;
+    text-shadow:0 1px 1px rgba(0,0,0,.35);
+    box-shadow:0 0 6px rgba(176,139,255,.35),
+               inset 0 1px 0 rgba(255,255,255,.14);
     -webkit-tap-highlight-color:transparent;
-    animation:psDeferGlow 1.6s ease-in-out infinite alternate;
+    animation:psDeferGlow 2.2s ease-in-out infinite alternate;
     transition:transform .12s ease;
   }
   #ps-stage .ps-defer-top:hover{
-    background:linear-gradient(135deg,rgba(176,139,255,.45),rgba(124,77,255,.70));
+    background:linear-gradient(135deg,rgba(176,139,255,.38),rgba(124,77,255,.58));
   }
   #ps-stage .ps-defer-top:active{ transform:scale(.94); }
   #ps-stage .ps-defer-top:disabled{
     opacity:.45;cursor:default;animation:none;
   }
-  #ps-stage .ps-defer-top .pdt-ico{font-size:13px;}
+  #ps-stage .ps-defer-top .pdt-ico{font-size:9px;line-height:1;}
   @keyframes psDeferGlow{
-    from{ box-shadow:0 0 8px rgba(176,139,255,.40),
-                     inset 0 1px 0 rgba(255,255,255,.18); }
-    to  { box-shadow:0 0 18px rgba(204,170,255,.85),
-                     inset 0 1px 0 rgba(255,255,255,.25); }
+    from{ box-shadow:0 0 4px rgba(176,139,255,.30),
+                     inset 0 1px 0 rgba(255,255,255,.14); }
+    to  { box-shadow:0 0 10px rgba(204,170,255,.65),
+                     inset 0 1px 0 rgba(255,255,255,.20); }
   }
   #ps-stage .ps-bar-wrap{
     height:14px;border-radius:8px;background:rgba(0,0,0,.45);overflow:hidden;

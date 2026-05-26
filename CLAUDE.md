@@ -1,5 +1,83 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Card "RIVAL PENDIENTE" en eliminatorias (obligatorio, 2026-05-26)
+
+Cuando la card "Próximo partido" del hub Liverpool (`#ps-stage` en
+`s-munich`) llega a una ronda KO de una eliminatoria
+(Mundial selecciones, Mundialito Clubes, fases finales Champions/EL/
+UECL, Recopa, Supercopas, Intercontinental, Copas, torneos de verano
+con KO, etc.) pero el rival aún es TBD porque **la FASE PREVIA no se
+ha simulado** (grupos pendientes o ronda KO N-1 pendiente), la card
+muestra un estado de BLOQUEO en vez del legacy "JUGADORES FUERA ·
+CONTINUAR ▶".
+
+### Estado de bloqueo
+
+- Banner ámbar `⚠️ RIVAL PENDIENTE — El admin aún no ha simulado <fase
+  previa>. Avísale, o pulsa el botón para auto-simular los IA vs IA
+  pendientes y desbloquear el sorteo.`
+- Botón 📌 Posponer (top-left, igual que en cards normales): salta el
+  día (no añade a PARTIDOS PENDIENTES porque no hay matchKey real).
+- Botón principal `🤖 SIMULAR FASE PREVIA · +10 🪙` (turquesa): auto-
+  simula los partidos IA-vs-IA de la fase previa con el motor 4-ejes,
+  construye el bracket de la siguiente fase y RECOMPENSA al usuario
+  con +10 🪙. La recompensa solo se acredita si se simuló ≥1 partido
+  (idempotente — re-pulsar sin progreso no da más oro).
+
+### Detección + sim (`misc_body_1.html`)
+
+Helpers canónicos (IIFE PRETEMPORADA, líneas ~4100-4600):
+
+- `_psDetectPendingPrevPhase(cfg, opts)`: detecta si la fase previa
+  tiene partidos sin jugar. Recursa hacia atrás si la ronda previa
+  tampoco existe (kb[N] empty → kb[N-1] empty → ... → groups empty).
+- `_psListPendingGroupMatches(cfg, compKey)`: iteración round-robin
+  de groupFixtures, devuelve `[{matchKey, home, away, hHuman, aHuman}]`.
+- `_psListPendingKoMatches(cfg, koRoundIdx, bracketProp, compKey)`:
+  iteración de pares del bracket. Marca `is2Leg` cuando el formato es
+  `ko-2leg` para que la auto-sim los SALTE (el sim batched no replica
+  la lógica IDA+VUELTA con desempate por gol visitante / penaltis).
+- `_psAutoSimPendingPhase(tourId, pendingInfo)`: itera matches, sim
+  solo IA-vs-IA (humanos sin tocar — cada humano debe jugar / posponer
+  el suyo), persiste cfg con UN solo `_tourSave` final (batch).
+  Devuelve `{simmed, humanRemaining}`.
+- `_psBuildNextBracket(cfg, pendingInfo)`: tras la sim, construye el
+  bracket de la siguiente fase (grupos → koBracket[0] para
+  mundial-48 vía `_mundialQualifiers`; KO N → KO N+1 con
+  `_tourRebalanceHumans`). Idempotente: salta si la fase aún tiene
+  partidos pendientes.
+- `_psAutoChainBuildMundial(cfg, tourId)`: chain-construye TODOS los
+  brackets KO que se puedan construir (grupos → kb[0] → kb[1] → ...).
+  Se llama al entrar a `_selPair` para sincronizar el estado sin que
+  el usuario tenga que visitar la pantalla del torneo.
+- `_cardPendingPrevPhase(day, info)`: renderiza la card de bloqueo
+  + wire-up de POSPONER y SIMULAR FASE PREVIA.
+
+### Reglas a respetar
+
+1. **Los humanos NUNCA se auto-simulan.** `_psAutoSimPendingPhase`
+   los cuenta como `humanRemaining`. Si el grupo / ronda contiene
+   partidos con otro humano (Brasil, Inglaterra, Noruega, Argentina,
+   España, o cualquier humano de club en otra eliminatoria), el botón
+   sigue activo solo si quedan IA-vs-IA; cuando solo restan humanos,
+   el botón desaparece y la card muestra "⏳ Quedan N partidos con
+   humanos sin jugar."
+2. **+10 🪙 fijos por desbloqueo**, NO por partido. Evita farmeo en
+   torneos con 70+ partidos previos.
+3. **Solo se acredita si `simmed > 0`.** Re-pulsar sin progreso
+   (todos sim'd o humanos pendientes) no da oro, solo toast neutro.
+4. **No reintroducir el legacy CONTINUAR ▶** sobre "JUGADORES FUERA"
+   en cards con rival TBD por fase previa pendiente — eso es el bug
+   2026-05-26 que esta regla arregla (el usuario saltaba el día y
+   nunca recuperaba su KO).
+5. **ko-2leg está fuera de cobertura batch.** Esos torneos (rara vez
+   los hay en el hub Liverpool) mantienen su flujo manual / pay-per-leg.
+6. **Toda eliminatoria NUEVA** que se añada al juego con KO
+   (custom torneo del admin, nueva comp europea, etc.) que vaya por
+   `_realPair` o `_selPair` hereda el flujo automáticamente —
+   bastará con que su cfg tenga `groupFixtures` (si hay grupos) y un
+   `koBracket`/`bracket` con la estructura estándar de pares.
+
 ## Resto del Mundo — 1 vuelta + Recopa + Mundialito (obligatorio, 2026-05-26)
 
 La liga `ligaExt_resto-mundo` (44 equipos top de América + Asia,

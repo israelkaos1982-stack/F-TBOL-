@@ -27641,6 +27641,9 @@ window._showSimProgress = function(opts, onDone){
 .lext-sq-cell.rating.r8{color:#ffb050;background:rgba(255,176,80,.15);}
 .lext-sq-cell.rating.r7{color:#80d0ff;background:rgba(128,208,255,.12);}
 .lext-sq-cell.rating.r6{color:#c0e0a0;}
+.lext-sq-cell.rating.r5{color:rgba(255,255,255,.78);background:rgba(240,192,64,.08);}
+.lext-sq-cell.rating.r4{color:#ffa080;background:rgba(255,120,80,.14);}
+.lext-sq-cell.rating.r3{color:#ff6060;background:rgba(255,60,60,.18);}
 .lext-sq-cell.rating.r0{color:rgba(255,255,255,.22);background:transparent;}
 .lext-sq-mini{background:none;border:none;color:rgba(255,255,255,.35);font-size:12px;cursor:pointer;padding:2px 4px;}
 .lext-sq-mini:hover{color:#ff7070;}
@@ -31206,36 +31209,42 @@ https://api.sofascore.app/api/v1/team/44/image
     return ligaExtSimular(null, simOpts).then(function(){ return true; });
   };
 
-  // ── Valoración 0-10 de un jugador ────────────────
-  // Calibrada con Haaland (33 PJ · 26 gol · 6 pen · 2 falta · 13 MVP) ≈ 9.0
-  // Puntos Haaland: 3.3 + 26 + 6 + 6 + 13 = 54.3
-  // Rating = 5 + (puntos/PJ) * 2.43 → 5 + 1.645*2.43 = 9.0
+  // Valoracion 0-10 de un jugador (recalibrada 2026-05-26).
+  // r = 5.5 + (pts/PJ) * 2.0. Sin bonus universal por jugar.
+  // Negativos: amarilla -0.30, roja -1.50. Porteros restan 0.30 por
+  // cada partido encajando (pj - imbat). Asi el rating puede bajar
+  // de 5.00 con sanciones o malas actuaciones (antes el suelo era ~5.24).
   function computePlayerRating(p){
     ensurePlayerStats(p);
     var pj = Number(p.pj)||0;
     if(pj === 0) return 0;
-    var pts = pj * 0.10;
+    var pts = 0;
+    pts -= (Number(p.ta)||0) * 0.30;
+    pts -= (Number(p.tr)||0) * 1.50;
     if(p.pos === 'POR'){
-      pts += (p.imbat||0) * 2;
-      pts += (p.penSaved||0) * 1;
-      pts += (p.mvp||0) * 3.5;
+      var imbat = Number(p.imbat)||0;
+      var gcProxy = Math.max(0, pj - imbat);
+      pts += imbat * 1.50;
+      pts += (Number(p.penSaved)||0) * 2.00;
+      pts += (Number(p.mvp)||0) * 2.50;
+      pts -= gcProxy * 0.30;
     } else if(p.pos === 'DEF'){
-      pts += (p.gol||0) * 2;
-      pts += (p.pen||0) * 1;
-      pts += (p.fk||0) * 3;
-      pts += (p.mvp||0) * 2;
+      pts += (Number(p.gol)||0) * 1.80;
+      pts += (Number(p.pen)||0) * 0.50;
+      pts += (Number(p.fk)||0) * 2.50;
+      pts += (Number(p.mvp)||0) * 1.80;
     } else if(p.pos === 'MED'){
-      pts += (p.gol||0) * 1.5;
-      pts += (p.pen||0) * 1;
-      pts += (p.fk||0) * 3;
-      pts += (p.mvp||0) * 1.5;
+      pts += (Number(p.gol)||0) * 1.40;
+      pts += (Number(p.pen)||0) * 0.50;
+      pts += (Number(p.fk)||0) * 2.50;
+      pts += (Number(p.mvp)||0) * 1.50;
     } else {
-      pts += (p.gol||0) * 1;
-      pts += (p.pen||0) * 1;
-      pts += (p.fk||0) * 3;
-      pts += (p.mvp||0) * 1;
+      pts += (Number(p.gol)||0) * 1.10;
+      pts += (Number(p.pen)||0) * 0.50;
+      pts += (Number(p.fk)||0) * 2.50;
+      pts += (Number(p.mvp)||0) * 1.20;
     }
-    var r = 5.0 + (pts / pj) * 2.43;
+    var r = 5.5 + (pts / pj) * 2.0;
     if(r < 0) r = 0;
     if(r > 10) r = 10;
     return r;
@@ -33673,7 +33682,9 @@ https://api.sofascore.app/api/v1/team/44/image
     if(r >= 8) return 'r8';
     if(r >= 7) return 'r7';
     if(r >= 6) return 'r6';
-    return '';
+    if(r >= 5) return 'r5';
+    if(r >= 4) return 'r4';
+    return 'r3';
   }
 
   function fmtCell(val, cls){

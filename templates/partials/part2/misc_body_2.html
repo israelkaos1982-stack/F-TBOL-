@@ -10207,9 +10207,48 @@
       lines.push('');
       lines.push('📺 En directo: https://twitch.tv/' + twitch);
     }
+    /* Deep link a ISRAMAX para apostar ANTES de que el humano pulse
+       ▶️ EMPEZAR (petición usuario 2026-05-26). Solo en el share de
+       PREVIA (INICIO): para descanso/final no aplica porque la
+       apuesta ya está cerrada (los mercados se bloquean al pasar a
+       'playing' — ver _isramaxRenderMatchPick filter). */
+    try {
+      if (typeof window.location !== 'undefined' && window.location.host) {
+        var _isrBase = window.location.protocol + '//' + window.location.host + window.location.pathname;
+        lines.push('');
+        lines.push('🎰 Apostar en ISRAMAX: ' + _isrBase + '?open=isramax');
+      }
+    } catch(_){}
     /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
     _waShareToGroup(lines.join('\n'));
   };
+
+  /* Deep link `?open=isramax`: al cargar la app desde un link de
+     WhatsApp del INICIO de un partido, navegamos automáticamente a
+     s-derbys y abrimos el overlay de ISRAMAX. Petición usuario
+     2026-05-26 — flujo "apostar antes del ▶️". El delay (600ms +
+     200ms) deja tiempo a que window.go() y _isramaxOpen() queden
+     definidos (algunos bundles se hidratan tarde). */
+  try {
+    document.addEventListener('DOMContentLoaded', function(){
+      try {
+        var _qm = String(window.location.search || '').match(/[?&]open=([^&]+)/);
+        if (!_qm) return;
+        var _target = decodeURIComponent(_qm[1]);
+        if (_target !== 'isramax') return;
+        setTimeout(function(){
+          try {
+            if (typeof window.go === 'function') window.go('s-derbys');
+            setTimeout(function(){
+              try {
+                if (typeof window._isramaxOpen === 'function') window._isramaxOpen();
+              } catch(_){}
+            }, 200);
+          } catch(_){}
+        }, 600);
+      } catch(_){}
+    });
+  } catch(_){}
 
   // Compartir marcador en el DESCANSO (45 min) de partidos genéricos
   window._mlShareHalfTime = function(mk) {
@@ -10359,6 +10398,44 @@
       else if (c === 'jg') label = 'Japan Game';
       else if (c === 'asia') label = 'Asia Trophy';
       else label = 'Torneo Verano';
+    } else if (c === 'torneo' || c === 'sel-fin') {
+      /* Mundial 2032 — compKey 'torneo' (vía abrirTorneo / _tourOpen-
+         HumanMatch) o 'sel-fin' (card cal-mf-*). Resolvemos la ronda
+         leyendo la cfg cacheada del torneo. Formato preferido por el
+         usuario (2026-05-26): "⚽ Dieciseisavos Mundial 2032" — ronda
+         PRIMERO, sin separador. Lo metemos todo en `label` y dejamos
+         `ronda` vacío para que `_waBuildHeaderLines` no añada " - ".
+         Sin esta rama caía al fallback genérico → "⚽ torneo" crudo. */
+      icon  = '⚽';
+      label = 'Mundial 2032';
+      ronda = '';
+      try {
+        var _ptW   = window._ppPreviaTeams || {};
+        var _gmW   = window.__GM_LIVE || {};
+        var _tidW  = _ptW.tourId  || _gmW._tourId;
+        var _tkeyW = _ptW.tourKey || _gmW._tourKey;
+        var _cfgW = null;
+        if (_tidW && typeof window._tourLoadCachedSync === 'function') {
+          _cfgW = window._tourLoadCachedSync(_tidW);
+        }
+        if (!_cfgW && _tidW && window._TOUR_CACHE) {
+          _cfgW = window._TOUR_CACHE[_tidW];
+        }
+        if (_cfgW && _cfgW.format === 'mundial-48') {
+          var _tkW = String(_tkeyW || '').replace(/\|L[12]$/, '');
+          var _mgW = _tkW.match(/^g\d+_(\d+)_/);
+          var _mkW = _tkW.match(/^ko_(\d+)_/);
+          if (_mgW) {
+            label = 'Grupo J' + (parseInt(_mgW[1], 10) + 1) + ' Mundial 2032';
+          } else if (_mkW) {
+            var _rIdxW  = parseInt(_mkW[1], 10);
+            var _koRW   = (_cfgW.formatConfig && _cfgW.formatConfig.koRounds) || [];
+            var _rNameW = _koRW[_rIdxW] || '';
+            if (_rNameW === 'Final')      label = 'GRAN FINAL Mundial 2032 🏆';
+            else if (_rNameW)             label = _rNameW + ' Mundial 2032';
+          }
+        }
+      } catch(_){}
     } else {
       /* Fallback final: si NADA cuadra, dejamos el comp tal cual con
          el icono ⚽ (caso muy raro — aquí se llega solo con strings
@@ -10519,32 +10596,23 @@
     lines.push(compLine);
     /* Marcador / vs sin línea en blanco intermedia — el usuario quiere
        el bloque compacto. El ACTA del caller va a ir separada con su
-       propio salto. */
-    var sH = _waShortName(opts.home);
-    var sA = _waShortName(opts.away);
+       propio salto.
+       Nombre del equipo: MAYÚSCULAS + nombre completo, en TODOS los
+       partidos (petición usuario 2026-05-26). Strip de emojis 🎲/🖊️ /
+       banderas para que la previa de WhatsApp no parta la línea. */
+    var _waUpper = function(x){
+      var s = String(x || '')
+        .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
+        .replace(/\s+/g,' ').trim();
+      return s.toUpperCase();
+    };
+    var sH = _waUpper(opts.home);
+    var sA = _waUpper(opts.away);
     var hasScore = (opts.scA != null) || (opts.scB != null);
     if (hasScore) {
       lines.push(sH + ' ' + (opts.scA != null ? opts.scA : 0) + '-' + (opts.scB != null ? opts.scB : 0) + ' ' + sA);
     } else {
-      /* INICIO (sin marcador): la previa de WhatsApp es estrecha y
-         "Athletic Club 🎲 vs 🖊️ Atlético Madrid" parte en 2-3 líneas.
-         Petición usuario 2026-05-19: que vaya TODO en una sola línea
-         horizontal → usamos ABREVIATURAS (getTeamAbbr) sobre el nombre
-         limpio (sin emojis 🎲/🖊️ ni selectores de variación). */
-      var _waClean = function(x){
-        return String(x||'')
-          .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
-          .replace(/\s+/g,' ').trim();
-      };
-      var _waAbbr = function(x){
-        var c = _waClean(x);
-        if (typeof window.getTeamAbbr === 'function'){
-          var a = window.getTeamAbbr(c);
-          if (a) return a;
-        }
-        return _waShortName(c) || c;
-      };
-      lines.push(_waAbbr(opts.home) + ' vs ' + _waAbbr(opts.away));
+      lines.push(sH + ' vs ' + sA);
     }
     var evLine = _waEventLine(opts.eventType);
     if (evLine) lines.push(evLine);
@@ -14592,6 +14660,17 @@
     _gm._isTour = saved ? !!saved._isTour : false;
     _gm._tourId = saved ? saved._tourId : null;
     _gm._tourKey = saved ? saved._tourKey : null;
+    /* Consume contexto torneo pre-seteado por abrirTorneo (mismo patrón
+       que _gmPendingCopa unas líneas arriba). Permite que el badge del
+       header y la rama Mundial-48 del estadio funcionen YA en el
+       primer render del modal, sin esperar al post-set en
+       window.__GM_LIVE que llega un tick más tarde. */
+    if (window._gmPendingTour && comp === 'torneo') {
+      _gm._isTour = true;
+      _gm._tourId = window._gmPendingTour.tourId;
+      _gm._tourKey = window._gmPendingTour.tourKey;
+      window._gmPendingTour = null;
+    }
     /* Fase de Liga UCL/UEL/UECL (petición usuario 2026-05-10): mismo
        patrón que Recopa/Sc/Wprev — flags se preservan al backgrounded
        y se restauran al resumir, así gmEndMatch enruta al persister
@@ -14746,7 +14825,39 @@
     var addBtn = document.getElementById('gm-add-btn');
     if (addBtn) { addBtn.disabled = false; addBtn.classList.remove('open'); }
     var jBadge = document.getElementById('gm-jornada-badge');
-    if (jBadge) jBadge.textContent = _gm.isFriendly ? 'Amistoso' : (_gm.comp || ('Liga · Jornada ' + _gm.j));
+    if (jBadge) {
+      var _badgeTxt = _gm.isFriendly ? 'Amistoso' : (_gm.comp || ('Liga · Jornada ' + _gm.j));
+      /* Mundial · 48 selecciones: el compKey crudo es 'torneo'. Resolver
+         la etiqueta descriptiva ("Mundial 2032 · Dieciseisavos", "GRAN
+         FINAL 🏆", "Grupo J3", etc.) consultando la cfg cacheada del
+         torneo — la misma fuente que usa la PREVIA (_mmInjectEnv en
+         index.bundle.js). Sin esto el header mostraba literalmente
+         "torneo" tras confirmar la previa (bug 2026-05-26 reportado
+         por usuario con foto Jordania vs Francia Dieciseisavos). */
+      try {
+        if (_gm._isTour && _gm._tourId
+            && typeof window._tourLoadCachedSync === 'function') {
+          var _cfgB = window._tourLoadCachedSync(_gm._tourId);
+          if (!_cfgB && window._TOUR_CACHE) _cfgB = window._TOUR_CACHE[_gm._tourId];
+          if (_cfgB && _cfgB.format === 'mundial-48') {
+            var _tkB = String(_gm._tourKey || '').replace(/\|L[12]$/, '');
+            var _mgB = _tkB.match(/^g\d+_(\d+)_/);
+            var _mkB = _tkB.match(/^ko_(\d+)_/);
+            if (_mgB) {
+              _badgeTxt = 'Mundial 2032 · Grupo J' + (parseInt(_mgB[1], 10) + 1);
+            } else if (_mkB) {
+              var _rIdxB = parseInt(_mkB[1], 10);
+              var _koRB = (_cfgB.formatConfig && _cfgB.formatConfig.koRounds) || [];
+              var _rNameB = _koRB[_rIdxB] || '';
+              _badgeTxt = (_rNameB === 'Final')
+                ? 'Mundial 2032 · GRAN FINAL 🏆'
+                : ('Mundial 2032 · ' + (_rNameB || 'KO'));
+            }
+          }
+        }
+      } catch(_) {}
+      jBadge.textContent = _badgeTxt;
+    }
     /* Estadio del equipo LOCAL. En la previa ya se muestra el correcto
        (Stadio Orione para Atlético, etc.) pero el gm-modal dejaba el
        literal "eFootball Stadium" hardcoded. Leemos el estadio asignado
@@ -15330,6 +15441,13 @@
      + acreditación de premios. noET=false: empate NO permitido
      (los KO single-leg necesitan ganador → penaltis). 2026-05-09. */
   window.abrirTorneo = function (home, away, isHvH, tourId, matchKey) {
+    /* Pre-set para que gmOpen consuma el contexto del torneo DENTRO
+       del flujo (mismo patrón que _gmPendingCopa). Sin esto el badge
+       del header se renderizaba con _gm._isTour=false → mostraba el
+       compKey crudo "torneo" en vez de "Mundial 2032 · Dieciseisavos",
+       y el bloque de estadio caía a "eFootball Stadium" porque la
+       rama Mundial-48 no se activaba (bug 2026-05-26). */
+    window._gmPendingTour = { tourId: tourId, tourKey: matchKey };
     gmOpen(0, home, away, !!isHvH, 'torneo', false, false);
     try {
       if (window.__GM_LIVE) {

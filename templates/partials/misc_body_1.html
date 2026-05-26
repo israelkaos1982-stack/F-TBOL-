@@ -37087,6 +37087,25 @@ Tottenham
     padding:2px 6px;border-radius:4px;
     background:rgba(255,255,255,.05);
   }
+  /* Botón 📌 POSPONER por fila de PARTIDOS PENDIENTES (2026-05-26).
+     Solo aparece en filas con tourId+matchKey (Selecciones / Mundial-48
+     y torneos de verano), porque la cola de POSPUESTOS necesita esos
+     campos para reabrir el partido vía `_tourOpenHumanMatch`. */
+  #s-munich .munich-fix-row .fr-defer{
+    flex:0 0 auto;font-size:13px;line-height:1;
+    padding:5px 8px;border-radius:7px;cursor:pointer;
+    border:1px solid rgba(176,139,255,.55);color:#fff;
+    background:linear-gradient(135deg,rgba(176,139,255,.22),rgba(124,77,255,.34));
+    box-shadow:0 2px 6px rgba(124,77,255,.30);
+    -webkit-tap-highlight-color:transparent;
+    transition:background .15s ease, border-color .15s ease, transform .12s ease;
+  }
+  #s-munich .munich-fix-row .fr-defer:hover{
+    background:linear-gradient(135deg,rgba(176,139,255,.32),rgba(124,77,255,.46));
+    border-color:rgba(176,139,255,.85);
+  }
+  #s-munich .munich-fix-row .fr-defer:active{ transform:scale(.94); }
+  #s-munich .munich-fix-row .fr-defer:disabled{ opacity:.4;cursor:default; }
   #s-munich .munich-fix-empty{
     padding:14px;text-align:center;color:rgba(255,255,255,.55);
     font-family:Rajdhani,sans-serif;font-size:11px;
@@ -37904,7 +37923,11 @@ Tottenham
                 events:rr.events||[], mvp:rr.mvp||'', mvpTeam:rr.mvpTeam||'' });
             } else {
               out.pending.push({ comp:'sel', emoji:'🌍',
-                home:hN, away:aN, label:'Grupo · J'+(jj+1) });
+                home:hN, away:aN, label:'Grupo · J'+(jj+1),
+                tourId:tourId, matchKey:'g'+gi+'_'+jj+'_'+mi,
+                jor:(jj+1),
+                hShield:(hT && hT.shield) || '',
+                aShield:(aT && aT.shield) || '' });
             }
           }
         }
@@ -37934,7 +37957,10 @@ Tottenham
               events:kr.events||[], mvp:kr.mvp||'', mvpTeam:kr.mvpTeam||'' });
           } else {
             out.pending.push({ comp:'sel', emoji:'🌍',
-              home:hN2, away:aN2, label:lbl });
+              home:hN2, away:aN2, label:lbl,
+              tourId:tourId, matchKey:mk,
+              hShield:(hKo && hKo.shield) || '',
+              aShield:(aKo && aKo.shield) || '' });
           }
         }
       }
@@ -38036,9 +38062,12 @@ Tottenham
         events:(res && res.events) || [],
         mvp:(res && res.mvp) || '', mvpTeam:(res && res.mvpTeam) || '' });
     }
-    function _pushPending(meta, tourId, mk, hN, aN, label){
+    function _pushPending(meta, tourId, mk, hN, aN, label, hT, aT){
       out.pending.push({ comp:meta.id, emoji:meta.emoji,
-        home:hN, away:aN, label:label });
+        home:hN, away:aN, label:label,
+        tourId:tourId, matchKey:mk,
+        hShield:(hT && hT.shield) || '',
+        aShield:(aT && aT.shield) || '' });
     }
     function _walkCfg(tourId, cfg){
       if (!cfg || !cfg.format) return;
@@ -38081,7 +38110,7 @@ Tottenham
                 _pushPlayed(meta, tourId, 'g'+gi+'_'+jj+'_'+mi,
                   hN, aN, rr.a, rr.b, lblG, rr);
               } else {
-                _pushPending(meta, tourId, 'g'+gi+'_'+jj+'_'+mi, hN, aN, lblG);
+                _pushPending(meta, tourId, 'g'+gi+'_'+jj+'_'+mi, hN, aN, lblG, hT, aT);
               }
             }
           }
@@ -38139,13 +38168,13 @@ Tottenham
                 _pushPlayed(meta, tourId, baseMk + '_L1',
                   hN2, aN2, L1.a, L1.b, lblK + ' · Ida', L1);
               } else {
-                _pushPending(meta, tourId, baseMk + '_L1', hN2, aN2, lblK + ' · Ida');
+                _pushPending(meta, tourId, baseMk + '_L1', hN2, aN2, lblK + ' · Ida', hKo, aKo);
               }
               if (L2 && (L2.played || L2.done)){
                 _pushPlayed(meta, tourId, baseMk + '_L2',
                   aN2, hN2, L2.a, L2.b, lblK + ' · Vuelta', L2);
               } else {
-                _pushPending(meta, tourId, baseMk + '_L2', aN2, hN2, lblK + ' · Vuelta');
+                _pushPending(meta, tourId, baseMk + '_L2', aN2, hN2, lblK + ' · Vuelta', aKo, hKo);
               }
             }
           } else {
@@ -38153,7 +38182,7 @@ Tottenham
             if (kr && (kr.played || kr.done)){
               _pushPlayed(meta, tourId, baseMk, hN2, aN2, kr.a, kr.b, lblK, kr);
             } else {
-              _pushPending(meta, tourId, baseMk, hN2, aN2, lblK);
+              _pushPending(meta, tourId, baseMk, hN2, aN2, lblK, hKo, aKo);
             }
           }
         }
@@ -38337,6 +38366,31 @@ Tottenham
     var sc = '<span class="fr-tag">' + _esc(m.label || '') + '</span>';
     var hN = _displayName(m.home, m.comp);
     var aN = _displayName(m.away, m.comp);
+    /* Botón 📌 POSPONER (2026-05-26). Solo aparece cuando la fila
+       proviene de un torneo en _TOUR_CACHE (Selecciones Mundial-48,
+       Joan Gamper, Asian, Soccer Champions Tour, Premier Summer
+       Series, Mundialito de Clubes, slots custom tx*). El play
+       desde POSPUESTOS usa `_tourOpenHumanMatch(tourId,matchKey)` y
+       sin esos campos la entrada quedaría muerta — por eso Liga /
+       Copa / Euros no llevan botón. */
+    var canDefer = !!(m.tourId && m.matchKey);
+    var deferBtn = '';
+    if (canDefer){
+      var hNameRaw = (m.home && typeof m.home === 'object') ? (m.home.name || '') : (m.home || '');
+      var aNameRaw = (m.away && typeof m.away === 'object') ? (m.away.name || '') : (m.away || '');
+      deferBtn = '<button type="button" class="fr-defer"'
+        + ' data-tour="'    + _esc(String(m.tourId))   + '"'
+        + ' data-mk="'      + _esc(String(m.matchKey)) + '"'
+        + ' data-home="'    + _esc(hNameRaw)          + '"'
+        + ' data-away="'    + _esc(aNameRaw)          + '"'
+        + ' data-hshield="' + _esc(m.hShield || '')   + '"'
+        + ' data-ashield="' + _esc(m.aShield || '')   + '"'
+        + ' data-label="'   + _esc(m.label || '')     + '"'
+        + ' data-emoji="'   + _esc(m.emoji || '')     + '"'
+        + ' data-jor="'     + _esc(String(m.jor||'')) + '"'
+        + ' title="Posponer partido"'
+        + ' aria-label="Posponer partido">📌</button>';
+    }
     return ''
       + '<div class="munich-fix-row">'
       +   '<span class="fr-comp">' + _esc(m.emoji || '') + '</span>'
@@ -38344,6 +38398,7 @@ Tottenham
       +     ' <span style="opacity:.5">vs</span> <b>'
       +     _esc(_short(aN)) + '</b></span>'
       +   sc
+      +   deferBtn
       + '</div>';
   }
 
@@ -38709,6 +38764,47 @@ Tottenham
           }
         };
       })(tabs[ti]);
+    }
+
+    /* Botón 📌 POSPONER por fila de PENDIENTES (2026-05-26). Mueve la
+       entrada al store `pend_hvh_deferred_v1` reusando el mismo helper
+       que el botón 📌 PONER · PENDIENTE de la card del próximo partido,
+       y refresca el hub para que aparezca en POSPUESTOS y desaparezca
+       de PENDIENTES (filtrada por sig en `_renderPendCombined`). */
+    if (mode === 'pend'){
+      var defBtns = listEl.querySelectorAll('.fr-defer');
+      for (var dbi = 0; dbi < defBtns.length; dbi++){
+        (function(btn){
+          btn.onclick = function(ev){
+            if (ev && ev.preventDefault) ev.preventDefault();
+            if (ev && ev.stopPropagation) ev.stopPropagation();
+            if (btn.disabled) return;
+            var tId = btn.getAttribute('data-tour') || '';
+            var mK  = btn.getAttribute('data-mk')   || '';
+            if (!tId || !mK) return;
+            var uidFn = window._pendHvHUid;
+            var addFn = window._pendHvHAdd;
+            if (typeof uidFn !== 'function' || typeof addFn !== 'function') return;
+            btn.disabled = true;
+            var lbl = btn.getAttribute('data-label') || 'Partido';
+            var entry = {
+              uid: uidFn(tId, mK),
+              tourId: tId,
+              matchKey: mK,
+              home: { name: btn.getAttribute('data-home')    || '',
+                      shield: btn.getAttribute('data-hshield') || '' },
+              away: { name: btn.getAttribute('data-away')    || '',
+                      shield: btn.getAttribute('data-ashield') || '' },
+              jor:  btn.getAttribute('data-jor') || '',
+              label: lbl,
+              emoji: btn.getAttribute('data-emoji') || '🌍',
+              addedAt: Date.now()
+            };
+            try { addFn(entry); } catch(_){}
+            try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
+          };
+        })(defBtns[dbi]);
+      }
     }
 
     /* Botón ▶ JUGAR + tap-para-despoponer en filas POSPUESTAS. */

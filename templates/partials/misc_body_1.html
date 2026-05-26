@@ -2892,6 +2892,39 @@ window._showSimProgress = function(opts, onDone){
      card del día decía "Sin partido del Bayern" en vez de Liverpool
      vs Cruzeiro. */
   function _psHumanLogicName(){
+    /* 2026-05-26: el usuario reportó que las lesiones del entrenamiento
+       eran de jugadores del Atlético Madrid en vez del Liverpool. Causa:
+       `_ligaEaSubName` no existe en el código, así que esta función
+       siempre devolvía 'Bayern Munich'; luego `_bayernSquad` buscaba ese
+       nombre (no existe), caía al fallback "primer isHuman" y devolvía
+       el primer humano canónico del array (Atlético Madrid). Fix: leer
+       la etiqueta de la caja del menú (menu_home_v1) — misma fuente que
+       `_psHumanName` y `_resolve` del hub — VALIDANDO que el equipo
+       exista en `ligaExt_liga-ea-sports.teams` para que la lógica
+       (registry de jugadores) no se rompa si el label es puramente
+       visual. */
+    try{
+      var raw = localStorage.getItem('menu_home_v1');
+      if (raw){
+        var d = JSON.parse(raw);
+        var ov = d && d.ov && d.ov['go:s-munich'];
+        var lbl = ov && ov.label ? String(ov.label).trim() : '';
+        if (lbl){
+          try{
+            var rl = localStorage.getItem('ligaExt_liga-ea-sports');
+            if (rl){
+              var lex = JSON.parse(rl);
+              var teams = (lex && lex.teams) || [];
+              var lblL = lbl.toLowerCase();
+              for (var i=0;i<teams.length;i++){
+                var t = teams[i];
+                if (t && t.name && String(t.name).toLowerCase().trim() === lblL) return String(t.name);
+              }
+            }
+          }catch(_){}
+        }
+      }
+    }catch(_){}
     try{
       if(window._ligaEaSubName){
         var s = window._ligaEaSubName('Bayern Munich');
@@ -3186,11 +3219,20 @@ window._showSimProgress = function(opts, onDone){
           if (String(t.name).toLowerCase().trim() === hubL) return t.players;
         }
       }
-      /* 2) Fallback: equipo marcado isHuman (los 5 humanos canónicos de
-         Liga EA Sports — el primero que tenga plantilla). */
+      /* 2) Fallback: equipo marcado isHuman EXCLUYENDO los 4 OTROS
+         humanos canónicos (Real Madrid, FC Barcelona, Atlético Madrid,
+         Arsenal). Mismo criterio que `_slot()` del hub (línea 39055)
+         para que el slot dinámico del usuario (5º humano = Liverpool
+         tras el renombre) se identifique inequívocamente. Bug
+         2026-05-26: sin la exclusión, el primer isHuman del array
+         podía ser Atlético Madrid → las lesiones del entrenamiento
+         eran de su plantilla, no de la del Liverpool. */
+      var OTHER = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
       for (var j=0;j<teams.length;j++){
         var t2 = teams[j];
-        if (t2 && t2.isHuman && Array.isArray(t2.players) && t2.players.length) return t2.players;
+        if (!t2 || !t2.isHuman || !Array.isArray(t2.players) || !t2.players.length) continue;
+        if (OTHER[String(t2.name||'').toLowerCase().trim()]) continue;
+        return t2.players;
       }
       /* 3) Último fallback histórico: el slot Bayern (por si el rename
          no se aplicó). */

@@ -16769,10 +16769,83 @@ window._showSimProgress = function(opts, onDone){
      2026-05-17: "arriba a la derecha la fecha de cada eliminatoria").
      Fuente: las filas "Torneo Verano" del calendario Bayern
      (#ag-content). Fallback: desde cfg.dateStart, 1 partido cada 4
-     días. */
+     días.
+
+     2026-05-26: Mundial · 48 selecciones (cfg.format === 'mundial-48')
+     usa SUS PROPIAS filas del calendario (`Mundial Grupo — J<N>`,
+     `Mundial - Dieciseisavos`, `Mundial Octavos`, …, `MUNDIAL GRAN
+     FINAL 🏆`) — NO matchean `/torneo/i`. Antes la cabecera "📅 fecha"
+     de cada ronda KO caía al fallback dateStart (16/20/24/28 Jun) y
+     se desincronizaba de la caja del menú del Mundial (que sí lee
+     las filas Mundial-* correctas). */
   var _TOUR_MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  /* Mundial · 48 selecciones: construye el array de fechas tal y como
+     lo consumen `_tourGroupJorDate` (índices 0..nj-1 = jornadas de
+     grupo J1..J<nj>) y `_tourGkoRoundDate` (índices nj..nj+koRounds-1
+     = rondas KO en el orden de `cfg.formatConfig.koRounds`). Las
+     fechas vienen de las filas Mundial-* del calendario global, las
+     mismas que lee `_mundialRoundDateLookup` para la caja del menú
+     del Mundial — así la cabecera de cada eliminatoria coincide
+     siempre con el menú y con el calendario. */
+  function _tourMundial48MatchDates(cfg){
+    var jors = {}, kos = {};
+    try {
+      var host = document.getElementById('ag-content-bayern');
+      if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
+      if (host) {
+        host.querySelectorAll('.ag-r').forEach(function(r){
+          var lblEl = r.querySelector('.ag-lbl');
+          var dtEl  = r.querySelector('.ag-date');
+          if (!lblEl || !dtEl) return;
+          var lbl = (lblEl.textContent || '').trim().toLowerCase();
+          var dt  = (dtEl.textContent || '').trim();
+          if (!lbl || !dt) return;
+          if (lbl.indexOf('mundial') === -1) return;
+          /* Mundialito Clubes es OTRO torneo (juega en julio) — fuera. */
+          if (lbl.indexOf('mundialito') !== -1) return;
+          var mJ = lbl.match(/grupo[^j]*j\s*(\d+)/);
+          if (mJ) { jors[parseInt(mJ[1], 10)] = dt; return; }
+          if (/\btercer\s*puesto\b|\b3er?\s*puesto\b|\b3\s*\/\s*4\b|\b3\s*y\s*4\b/.test(lbl)) {
+            kos['Tercer Puesto'] = dt;
+          } else if (/\bgran\s+final\b/.test(lbl) || (/\bfinal\b/.test(lbl) && !/de\s+final/.test(lbl))) {
+            kos['Final'] = dt;
+          } else if (/\bsemi(s|finales?|final)\b/.test(lbl)) {
+            kos['Semis'] = dt;
+          } else if (/\bcuartos?\b/.test(lbl)) {
+            kos['Cuartos'] = dt;
+          } else if (/\boctavos?\b/.test(lbl)) {
+            kos['Octavos'] = dt;
+          } else if (/dieciseisav|1\s*\/\s*32|\brepesca\b/.test(lbl)) {
+            kos['Dieciseisavos'] = dt;
+          }
+        });
+      }
+    } catch(_){}
+    var fc = cfg.formatConfig || {};
+    var pg = fc.perGroup || 4;
+    var nj = Math.max(1, pg - 1);
+    var koRounds = fc.koRounds || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
+    var arr = [];
+    for (var ji = 0; ji < nj; ji++) arr.push(jors[ji + 1] || '');
+    for (var ki = 0; ki < koRounds.length; ki++) {
+      var name = koRounds[ki];
+      /* "Tercer Puesto" no tiene fila propia en el calendario actual:
+         se juega en paralelo a la Final → fallback a la fecha de la
+         Final si falta. */
+      var v = kos[name] || (name === 'Tercer Puesto' ? (kos['Final'] || '') : '');
+      arr.push(v);
+    }
+    /* Sin ninguna fila Mundial-* encontrada (DOM aún sin SSR, save sin
+       calendario) → devolver array vacío para que `_tourMatchDates`
+       caiga al fallback dateStart en lugar de devolver huecos. */
+    return arr.some(function(x){ return !!x; }) ? arr : [];
+  }
   function _tourMatchDates(cfg){
     var arr = [];
+    if (cfg && cfg.format === 'mundial-48') {
+      var mundialArr = _tourMundial48MatchDates(cfg);
+      if (mundialArr && mundialArr.length) return mundialArr;
+    }
     try {
       var host = document.getElementById('ag-content-bayern');
       if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');

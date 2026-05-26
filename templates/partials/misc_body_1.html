@@ -3732,32 +3732,109 @@ window._showSimProgress = function(opts, onDone){
     if (!cfg) return false;
     var r = window.simulateMatch(homeObj, awayObj);
     var ga = r.gh|0, gb = r.ga|0;
-    var out = { a: ga, b: gb, played: true };
-    /* KO single-leg (key con 2 segmentos) requiere `winner`; los de
-       grupo (gN_J_M, 3 segmentos) no lo necesitan. Mismo criterio que
-       _tourSaveHumanResult. */
-    var isKO = (matchKey.indexOf('_') === matchKey.lastIndexOf('_'));
-    var isKoG = (matchKey.indexOf('ko_') === 0);
-    if (isKO || isKoG){
-      if (ga > gb) out.winner = 'a';
-      else if (gb > ga) out.winner = 'b';
-      else {
-        if (typeof window._tourSimPenalties === 'function'){
-          var pens = window._tourSimPenalties(homeObj, awayObj);
-          out.winner = (pens.a > pens.b) ? 'a' : 'b';
-          out.pens = pens;
-        } else {
-          out.winner = (Math.random() < 0.5) ? 'a' : 'b';
+    cfg.results = cfg.results || {};
+
+    /* ── ELIMINATORIA A IDA + VUELTA (ko-2leg) ────────────────────
+       Petición usuario 2026-05-25 con fotos del Trofeo Joan Gamper
+       Octavos: pagar la IDA solo simulaba la IDA (correcto), pero el
+       resultado se persistía en `cfg.results[base+'|L1']` y nunca se
+       agregaba en `cfg.results[base]`. La pantalla del torneo lee
+       `cfg.results[base].played` para decidir si avanzar la ronda
+       → `allPlayed=false` → el botón AVANZAR no aparecía y el torneo
+       quedaba bloqueado tras jugar las dos piernas pagando.
+       Espejamos el flujo humano de `_tourSaveHumanResult`:
+         · L1 → guardar como base+'|L1' (estado intermedio).
+         · L2 → agregar con L1: total = L1.a+L2.b vs L1.b+L2.a,
+                desempate por gol de visitante o penaltis simulados,
+                guardar el GLOBAL en cfg.results[base] con played:true,
+                legs:[L1,L2], winner, events fusionados.
+                Borrar el L1 (la versión "leg" ya está embebida en
+                .legs[0] y el bracket lee el base agregado). */
+    var legMatch = String(matchKey).match(/^(.*)\|L([12])$/);
+    if (legMatch) {
+      var _baseKey = legMatch[1], _legN = legMatch[2];
+      var nameA = homeObj.name || String(homeObj || '');
+      var nameB = awayObj.name || String(awayObj || '');
+      var legOut = { a: ga, b: gb, played: true, home: nameA, away: nameB };
+      try {
+        if (typeof window._tourAttachActa === 'function'){
+          window._tourAttachActa(legOut, homeObj, awayObj, ga, gb, tourId, _baseKey + '_L' + _legN);
+        }
+      } catch(_){}
+      if (_legN === '1') {
+        cfg.results[_baseKey + '|L1'] = legOut;
+      } else {
+        /* L2 — agregamos con L1. */
+        var _L1 = cfg.results[_baseKey + '|L1'] || { a:0, b:0, events:[], home:nameB, away:nameA };
+        /* Convención (igual que `_tourSaveHumanResult`):
+             L1.a = teamA goals (teamA local en IDA)
+             L1.b = teamB goals
+             L2.a = teamB goals (teamB local en VUELTA)
+             L2.b = teamA goals
+           Aquí homeObj es teamB (visitante en IDA, local en VUELTA),
+           awayObj es teamA. Por tanto ga = teamB goals (L2.a),
+           gb = teamA goals (L2.b). */
+        var _legs = [ { a:_L1.a|0, b:_L1.b|0 }, { a:ga|0, b:gb|0 } ];
+        var _tA = _legs[0].a + _legs[1].b;  /* teamA total */
+        var _tB = _legs[0].b + _legs[1].a;  /* teamB total */
+        var _win, _pens = null;
+        if (_tA > _tB) _win = 'a';
+        else if (_tB > _tA) _win = 'b';
+        else {
+          var _aAway = _legs[1].b, _bAway = _legs[0].b;
+          if (_aAway > _bAway) _win = 'a';
+          else if (_bAway > _aAway) _win = 'b';
+          else if (typeof window._tourSimPenalties === 'function') {
+            /* awayObj de la VUELTA es teamA (orden a, b). */
+            _pens = window._tourSimPenalties(awayObj, homeObj);
+            _win = (_pens.a > _pens.b) ? 'a' : 'b';
+          } else {
+            _win = (Math.random() < 0.5) ? 'a' : 'b';
+          }
+        }
+        var _evAll = ((_L1.events || []).slice()).concat(legOut.events || []);
+        var _fin = {
+          a: _tA, b: _tB, winner: _win, played: true, legs: _legs,
+          events: _evAll,
+          mvp: legOut.mvp || _L1.mvp || '',
+          mvpTeam: legOut.mvpTeam || _L1.mvpTeam || '',
+          home: _L1.home || nameB,  /* teamA = home de la IDA */
+          away: _L1.away || nameA   /* teamB = away de la IDA */
+        };
+        /* Nota: _L1.home/away se guardó con la perspectiva de la IDA
+           (home = teamA, away = teamB), así que es lo que queremos en
+           el global. En la VUELTA homeObj/awayObj viene invertido, por
+           eso el fallback usa nameB/nameA. */
+        if (_pens) _fin.pens = _pens;
+        cfg.results[_baseKey] = _fin;
+        try { delete cfg.results[_baseKey + '|L1']; } catch(_){}
+      }
+    } else {
+      /* ── Rama original: matchKey simple (no 2-leg) ────────────── */
+      var out = { a: ga, b: gb, played: true };
+      var isKO = (matchKey.indexOf('_') === matchKey.lastIndexOf('_'));
+      var isKoG = (matchKey.indexOf('ko_') === 0);
+      if (isKO || isKoG){
+        if (ga > gb) out.winner = 'a';
+        else if (gb > ga) out.winner = 'b';
+        else {
+          if (typeof window._tourSimPenalties === 'function'){
+            var pens = window._tourSimPenalties(homeObj, awayObj);
+            out.winner = (pens.a > pens.b) ? 'a' : 'b';
+            out.pens = pens;
+          } else {
+            out.winner = (Math.random() < 0.5) ? 'a' : 'b';
+          }
         }
       }
+      try {
+        if (typeof window._tourAttachActa === 'function'){
+          window._tourAttachActa(out, homeObj, awayObj, ga, gb, tourId, matchKey);
+        }
+      } catch(_){}
+      cfg.results[matchKey] = out;
     }
-    try {
-      if (typeof window._tourAttachActa === 'function'){
-        window._tourAttachActa(out, homeObj, awayObj, ga, gb, tourId, matchKey);
-      }
-    } catch(_){}
-    cfg.results = cfg.results || {};
-    cfg.results[matchKey] = out;
+
     /* Persist: `_tourSave` ya hace localStorage.setItem síncrono
        primero + push al servidor async + actualiza _TOUR_CACHE.
        Después repintamos la pantalla del torneo si está abierta. */
@@ -17106,6 +17183,85 @@ window._showSimProgress = function(opts, onDone){
       + 'border-radius:5px;padding:1px 7px;margin-left:6px;text-transform:uppercase;">PASADA</span>';
   }
 
+  /* ko-2leg: fusiona |L1 + |L2 sueltos en el resultado global del
+     base key (clave SIN sufijo). Espejo de la rama L2 de
+     `_psSimAndSaveTourMatch` / `_tourSaveHumanResult`. Se llama
+     desde `_paintTourScreen` para recuperar saves del bug
+     2026-05-25 (Pagar Simulación de la VUELTA dejaba |L1+|L2
+     sin agregar → bracket bloqueado).
+     Idempotente: si no hay parejas |L1+|L2 sueltas no toca nada. */
+  function _ko2legAggregateStaleLegs(cfg){
+    if (!cfg || cfg.format !== 'ko-2leg') return;
+    if (!cfg.results) return;
+    var keys = Object.keys(cfg.results);
+    var bases = {};   /* base → {L1:true|false, L2:true|false} */
+    for (var i = 0; i < keys.length; i++){
+      var m = String(keys[i]).match(/^(.*)\|L([12])$/);
+      if (!m) continue;
+      var bk = m[1];
+      if (!bases[bk]) bases[bk] = { L1:false, L2:false };
+      if (m[2] === '1') bases[bk].L1 = true;
+      else if (m[2] === '2') bases[bk].L2 = true;
+    }
+    var anyChange = false;
+    Object.keys(bases).forEach(function(bk){
+      if (!bases[bk].L1 || !bases[bk].L2) return;        /* nada que fusionar */
+      if (cfg.results[bk] && cfg.results[bk].played) {
+        /* Ya hay aggregate persistido — solo limpiar legs sueltos. */
+        try { delete cfg.results[bk + '|L1']; } catch(_){}
+        try { delete cfg.results[bk + '|L2']; } catch(_){}
+        anyChange = true;
+        return;
+      }
+      var L1 = cfg.results[bk + '|L1'] || {};
+      var L2 = cfg.results[bk + '|L2'] || {};
+      var legs = [
+        { a: (L1.a|0), b: (L1.b|0) },
+        { a: (L2.a|0), b: (L2.b|0) }
+      ];
+      var tA = legs[0].a + legs[1].b;
+      var tB = legs[0].b + legs[1].a;
+      var win, pens = null;
+      if (tA > tB) win = 'a';
+      else if (tB > tA) win = 'b';
+      else {
+        var aAway = legs[1].b, bAway = legs[0].b;
+        if (aAway > bAway) win = 'a';
+        else if (bAway > aAway) win = 'b';
+        else {
+          /* Sin datos para simular penaltis aquí — coin flip
+             determinista por base key. Solo aplica al caso edge de
+             total + goles fuera idénticos en saves stale. */
+          var h = 0; for (var ci = 0; ci < bk.length; ci++) h = ((h<<5)+h+bk.charCodeAt(ci))|0;
+          win = (h & 1) ? 'a' : 'b';
+        }
+      }
+      var evAll = ((L1.events || []).slice()).concat(L2.events || []);
+      cfg.results[bk] = {
+        a: tA, b: tB, winner: win, played: true, legs: legs,
+        events: evAll,
+        mvp: L1.mvp || L2.mvp || '',
+        mvpTeam: L1.mvpTeam || L2.mvpTeam || '',
+        home: L1.home || '',
+        away: L1.away || ''
+      };
+      if (pens) cfg.results[bk].pens = pens;
+      try { delete cfg.results[bk + '|L1']; } catch(_){}
+      try { delete cfg.results[bk + '|L2']; } catch(_){}
+      anyChange = true;
+    });
+    if (anyChange) {
+      try { console.warn('[tour] ko-2leg lazy-aggregated saves stale (bracket recuperado).'); } catch(_){}
+      /* Persistir el cfg recuperado: si no, el siguiente reload vuelve
+         a leer los |L1+|L2 del disco y el bracket sigue bloqueado. */
+      try {
+        if (cfg.id && typeof window._tourSave === 'function') {
+          window._tourSave(cfg.id, cfg);
+        }
+      } catch(_){}
+    }
+  }
+
   function _paintTourScreen(id, cfg){
     var titleEl = document.getElementById('tour-title-'+id);
     var flagEl  = document.getElementById('tour-flag-'+id);
@@ -17160,6 +17316,15 @@ window._showSimProgress = function(opts, onDone){
       cfg.currentRound = (typeof cfg.currentRound === 'number') ? cfg.currentRound : 0;
       cfg.results = cfg.results || {};
       cfg.bracket = cfg.bracket || [teams.slice()];
+      /* ── Migración lazy ko-2leg (2026-05-25) ─────────────────────
+         Recoge cualquier eliminatoria con |L1 + |L2 sin agregar en
+         cfg.results[base] y la consolida en el formato final. Cubre
+         saves del bug donde Pagar Simulación de la VUELTA dejaba el
+         resultado per-leg pero no fusionaba con el GLOBAL → el
+         bracket se quedaba con allPlayed=false y AVANZAR no salía. */
+      if (cfg.format === 'ko-2leg' && typeof _ko2legAggregateStaleLegs === 'function') {
+        try { _ko2legAggregateStaleLegs(cfg); } catch(_){}
+      }
       /* Resincronizar siempre la ronda 0 con cfg.teams. Bug 2026-05-09:
          tras un pick humano, cfg.teams[slot] cambia pero
          cfg.bracket[0][slot] mantenía la referencia vieja
@@ -37739,20 +37904,39 @@ Tottenham
           if (!_match(hN2, aliases) && !_match(aN2, aliases)) continue;
           var baseMk = koKeyPrefix + pi;
           if (isTwoLegRound){
-            /* ida: a vs b — vuelta: b vs a (campo invertido). */
-            var L1 = resAll[baseMk + '|L1'];
-            var L2 = resAll[baseMk + '|L2'];
-            if (L1 && (L1.played || L1.done)){
+            /* ida: a vs b — vuelta: b vs a (campo invertido).
+               Tres estados posibles tras 2026-05-25 (flujo humano-play
+               y pay-sim ahora agregan en `cfg.results[base]` con
+               `legs:[L1,L2]` cuando ambas piernas están jugadas):
+                 · base.played + base.legs[]   → ambas jugadas (lee de legs).
+                 · base+'|L1' suelto           → IDA jugada, VUELTA por jugar.
+                 · base+'|L2' suelto           → caso raro (no se usa hoy).
+                 · ninguno                     → ambas pendientes.
+               Antes solo se miraba |L1/|L2 sueltos, así que un tie
+               agregado aparecía como "PENDIENTE" en las cards. */
+            var BASE = resAll[baseMk];
+            if (BASE && BASE.played && Array.isArray(BASE.legs) && BASE.legs.length >= 2){
+              var _l1 = BASE.legs[0] || {a:0,b:0};
+              var _l2 = BASE.legs[1] || {a:0,b:0};
               _pushPlayed(meta, tourId, baseMk + '_L1',
-                hN2, aN2, L1.a, L1.b, lblK + ' · Ida', L1);
-            } else {
-              _pushPending(meta, tourId, baseMk + '_L1', hN2, aN2, lblK + ' · Ida');
-            }
-            if (L2 && (L2.played || L2.done)){
+                hN2, aN2, _l1.a, _l1.b, lblK + ' · Ida', BASE);
               _pushPlayed(meta, tourId, baseMk + '_L2',
-                aN2, hN2, L2.a, L2.b, lblK + ' · Vuelta', L2);
+                aN2, hN2, _l2.a, _l2.b, lblK + ' · Vuelta', BASE);
             } else {
-              _pushPending(meta, tourId, baseMk + '_L2', aN2, hN2, lblK + ' · Vuelta');
+              var L1 = resAll[baseMk + '|L1'];
+              var L2 = resAll[baseMk + '|L2'];
+              if (L1 && (L1.played || L1.done)){
+                _pushPlayed(meta, tourId, baseMk + '_L1',
+                  hN2, aN2, L1.a, L1.b, lblK + ' · Ida', L1);
+              } else {
+                _pushPending(meta, tourId, baseMk + '_L1', hN2, aN2, lblK + ' · Ida');
+              }
+              if (L2 && (L2.played || L2.done)){
+                _pushPlayed(meta, tourId, baseMk + '_L2',
+                  aN2, hN2, L2.a, L2.b, lblK + ' · Vuelta', L2);
+              } else {
+                _pushPending(meta, tourId, baseMk + '_L2', aN2, hN2, lblK + ' · Vuelta');
+              }
             }
           } else {
             var kr = resAll[baseMk];

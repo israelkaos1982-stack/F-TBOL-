@@ -39409,7 +39409,7 @@ Tottenham
      estuviera en el día 1. `ratingTarget` / `moneyTarget` / `pi`
      son config del admin → se conservan. */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos ya resueltos (pretemporada, torneos de verano y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Los Puntos de Fisio 💊, los objetivos del club, las plantillas y la configuración de los torneos se conservan.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados (pretemporada, torneos de verano y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nLos Puntos de Fisio 💊, los objetivos del club, las plantillas y la configuración de los torneos se conservan.')) return;
     try { if (typeof window._psResetCalendar === 'function') window._psResetCalendar(); } catch(_){}
 
     /* HUD: triple-asalto contra cualquier capa que pueda revivir
@@ -39447,86 +39447,92 @@ Tottenham
       }, t);
     });
 
-    /* MUNDIAL / SELECCIONES: borra resultados ya simulados (cfg.results)
-       de cualquier slot sfn-N o spv-N (Rondas Finales / Previas).
-       Conserva teams/groupFixtures/format/koCurrentRound=0 para que la
-       configuración del torneo no se pierda — solo se replican los
-       partidos. Idempotente. */
+    /* MUNDIAL / SELECCIONES + TORNEOS DE VERANO: borra TODOS los datos
+       de fixtures (results, bracket, koBracket, groupFixtures, fixture,
+       currentRound, koCurrentRound, currentJornadaByGroup, _prizesPaid)
+       de los slots conocidos para que las 3 cajas debajo de la card
+       (POSPUESTOS / PENDIENTES / JUGADOS) queden a CERO partidos tras
+       el reset. Conserva teams/format/formatConfig — la configuración
+       del torneo se mantiene, solo se replican los partidos. Itera
+       localStorage Y `_TOUR_CACHE` (algunos slots solo viven en cache
+       hidratada desde el server). Idempotente. 2026-05-25. */
+    function _resetTourCfg(cfg){
+      if (!cfg || typeof cfg !== 'object') return false;
+      var touched = false;
+      if (cfg.results && Object.keys(cfg.results).length) { cfg.results = {}; touched = true; }
+      if (cfg.currentJornadaByGroup && Object.keys(cfg.currentJornadaByGroup).length) { cfg.currentJornadaByGroup = {}; touched = true; }
+      if (cfg.koCurrentRound) { cfg.koCurrentRound = 0; touched = true; }
+      if (cfg.currentRound)   { cfg.currentRound   = 0; touched = true; }
+      if (cfg.bracket   != null) { cfg.bracket   = null; touched = true; }
+      if (cfg.koBracket != null) { cfg.koBracket = null; touched = true; }
+      if (cfg.groupFixtures && Object.keys(cfg.groupFixtures).length) { cfg.groupFixtures = {}; touched = true; }
+      if (cfg.fixture != null && (!Array.isArray(cfg.fixture) || cfg.fixture.length)) { cfg.fixture = []; touched = true; }
+      if (cfg._prizesPaid) { cfg._prizesPaid = false; touched = true; }
+      return touched;
+    }
+    function _persistTourReset(sid, cfg){
+      cfg.updatedAt = new Date().toISOString();
+      var lsKey = 'tour_' + sid + '_v1';
+      try { localStorage.setItem(lsKey, JSON.stringify(cfg)); } catch(_){}
+      try { if (window._TOUR_CACHE) window._TOUR_CACHE[sid] = cfg; } catch(_){}
+      try {
+        if (typeof window._tourSave === 'function') {
+          Promise.resolve(window._tourSave(sid, cfg)).catch(function(){});
+        }
+      } catch(_){}
+    }
     try {
-      var SEL_SLOTS = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10',
-                       'spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10'];
-      SEL_SLOTS.forEach(function(sid){
+      var ALL_SLOTS = [
+        'sct','pss','jg','asia','mundial',
+        'tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8',
+        'sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10',
+        'spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10'
+      ];
+      /* Pool de slots a tocar: ALL_SLOTS conocidos + cualquier key extra
+         que ya esté en _TOUR_CACHE (cubre slots cargados desde server
+         que aún no han sido persistidos a localStorage). */
+      var poolSet = {};
+      ALL_SLOTS.forEach(function(s){ poolSet[s] = 1; });
+      try {
+        var cache = window._TOUR_CACHE || {};
+        for (var ck in cache) { if (cache[ck]) poolSet[ck] = 1; }
+      } catch(_){}
+      Object.keys(poolSet).forEach(function(sid){
         try {
-          var lsKey = 'tour_' + sid + '_v1';
-          var raw = localStorage.getItem(lsKey);
-          if (!raw) return;
-          var cfg = JSON.parse(raw);
-          if (!cfg || typeof cfg !== 'object') return;
-          var touched = false;
-          if (cfg.results && Object.keys(cfg.results).length) { cfg.results = {}; touched = true; }
-          if (cfg.currentJornadaByGroup && Object.keys(cfg.currentJornadaByGroup).length) { cfg.currentJornadaByGroup = {}; touched = true; }
-          if (cfg.koCurrentRound) { cfg.koCurrentRound = 0; touched = true; }
-          if (!touched) return;
-          cfg.updatedAt = new Date().toISOString();
-          try { localStorage.setItem(lsKey, JSON.stringify(cfg)); } catch(_){}
+          var cfg = null;
           try {
-            if (window._TOUR_CACHE) window._TOUR_CACHE[sid] = cfg;
+            var raw = localStorage.getItem('tour_' + sid + '_v1');
+            if (raw) cfg = JSON.parse(raw);
           } catch(_){}
-          /* Persistir en servidor de forma silenciosa. */
-          try {
-            if (typeof window._tourSave === 'function') {
-              Promise.resolve(window._tourSave(sid, cfg)).catch(function(){});
-            }
-          } catch(_){}
+          if (!cfg) {
+            try { cfg = (window._TOUR_CACHE && window._TOUR_CACHE[sid]) || null; } catch(_){}
+          }
+          if (!cfg) return;
+          if (_resetTourCfg(cfg)) _persistTourReset(sid, cfg);
         } catch(_){}
       });
-      /* Invalidar cache de fechas del Mundial para que el hub recompute
-         el "próximo partido" sin el resultado simulado. */
       try { if (typeof window._mundialDateCacheInvalidate === 'function') window._mundialDateCacheInvalidate(); } catch(_){}
     } catch(_){}
 
-    /* TORNEOS DE VERANO + MUNDIALITO CLUBES: borra resultados y bracket
-       de los slots built-in (sct/pss/jg/asia/mundial) y los 8 tx*.
-       Sin esto, los partidos jugados del Liverpool en, p.ej., el Trofeo
-       Joan Gamper sobrevivían al reset y seguían apareciendo en el
-       dropdown PARTIDOS TEMPORADA (reportado por el usuario 2026-05-25).
-       Conserva teams/format/formatConfig — solo se replican los partidos
-       y el bracket queda listo para una nueva edición. Idempotente. */
+    /* PARTIDOS POSPUESTOS: vacía el store manual + servidor. Sin
+       esto, los partidos pospuestos vía 📌 POSPONER sobrevivían al
+       reset y seguían en la caja de POSPUESTOS. */
     try {
-      var SUMMER_SLOTS = ['sct','pss','jg','asia','mundial',
-                          'tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
-      SUMMER_SLOTS.forEach(function(sid){
-        try {
-          var lsKey = 'tour_' + sid + '_v1';
-          var raw = localStorage.getItem(lsKey);
-          if (!raw) return;
-          var cfg = JSON.parse(raw);
-          if (!cfg || typeof cfg !== 'object') return;
-          var touched = false;
-          if (cfg.results && Object.keys(cfg.results).length) { cfg.results = {}; touched = true; }
-          if (cfg.currentJornadaByGroup && Object.keys(cfg.currentJornadaByGroup).length) { cfg.currentJornadaByGroup = {}; touched = true; }
-          if (cfg.koCurrentRound) { cfg.koCurrentRound = 0; touched = true; }
-          if (cfg.currentRound)   { cfg.currentRound   = 0; touched = true; }
-          /* Limpia el bracket avanzado (rondas con ganadores propagados).
-             `_paintTourScreen` regenera bracket[0] = teams.slice() al
-             próximo render — el draw inicial no se pierde. */
-          if (cfg.bracket   != null) { cfg.bracket   = null; touched = true; }
-          if (cfg.koBracket != null) { cfg.koBracket = null; touched = true; }
-          if (cfg._prizesPaid)       { cfg._prizesPaid = false; touched = true; }
-          if (!touched) return;
-          cfg.updatedAt = new Date().toISOString();
-          try { localStorage.setItem(lsKey, JSON.stringify(cfg)); } catch(_){}
-          try {
-            if (window._TOUR_CACHE) window._TOUR_CACHE[sid] = cfg;
-          } catch(_){}
-          try {
-            if (typeof window._tourSave === 'function') {
-              Promise.resolve(window._tourSave(sid, cfg)).catch(function(){});
-            }
-          } catch(_){}
-        } catch(_){}
-      });
+      localStorage.setItem('pend_hvh_deferred_v1', JSON.stringify([]));
+      try {
+        var _body = JSON.stringify({ competition_state: { 'pend_hvh_deferred_v1': '[]' } });
+        if (typeof navigator !== 'undefined' && navigator.sendBeacon){
+          navigator.sendBeacon('/api/state', new Blob([_body], { type:'application/json' }));
+        } else if (typeof fetch === 'function'){
+          fetch('/api/state', { method:'POST', headers:{'Content-Type':'application/json'},
+            body: _body, keepalive: true }).catch(function(){});
+        }
+      } catch(_){}
     } catch(_){}
+
+    /* Repinta las 3 cajas inmediatamente para que el usuario vea el
+       reset reflejado sin tener que recargar ni volver al hub. */
+    try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
 
     window._bayernEditValuesClose();
   };

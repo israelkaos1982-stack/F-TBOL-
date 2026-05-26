@@ -4068,6 +4068,62 @@ window._showSimProgress = function(opts, onDone){
     _markDoneAndAdvance();
     return true;
   }
+  /* Resuelve el desempate de un KO a partido único empatado al 90'
+     respetando `cfg.formatConfig.koExtraTimePens`:
+       · Con ET+pens (Mundial-48 fase final, Copa, Recopa, etc.):
+         simula prórroga (Poisson λ=0.5 cap 3 cada lado, mismo modelo
+         que _scSyncFallback). Si tras 120' sigue empate → penaltis.
+       · Sin ET+pens: penaltis directos al 90' (comportamiento legacy).
+     Devuelve { hasETP, winner, totalA, totalB, etGh, etGa, pens|null,
+                gh90, ga90 }. Petición usuario 2026-05-26 con foto
+     Francia 1-1 Bosnia (Mundial Cuartos): la card debe mostrar el
+     acta de la prórroga + el resultado de la tanda, no "1-1 FIN"
+     pelado. */
+  function _psPois(L){
+    var e = Math.exp(-L), k = 0, p = 1;
+    do { k++; p *= Math.random(); } while (p > e);
+    return k - 1;
+  }
+  function _psResolveKoTie(cfg, homeObj, awayObj, ga, gb){
+    var hasETP = !!(cfg && cfg.formatConfig && cfg.formatConfig.koExtraTimePens);
+    var etGh = 0, etGa = 0;
+    if (hasETP){
+      etGh = Math.min(3, _psPois(0.5));
+      etGa = Math.min(3, _psPois(0.5));
+    }
+    var totalA = ga + etGh, totalB = gb + etGa;
+    var winner, pens = null;
+    if (totalA > totalB) winner = 'a';
+    else if (totalB > totalA) winner = 'b';
+    else if (typeof window._tourSimPenalties === 'function'){
+      pens = window._tourSimPenalties(homeObj, awayObj);
+      winner = (pens.a > pens.b) ? 'a' : 'b';
+    } else {
+      winner = (Math.random() < 0.5) ? 'a' : 'b';
+    }
+    return { hasETP: hasETP, winner: winner, totalA: totalA, totalB: totalB,
+             etGh: etGh, etGa: etGa, pens: pens, gh90: ga, ga90: gb };
+  }
+  /* Aplica el resultado del desempate al objeto `out` que se persiste
+     en cfg.results[matchKey]. Setea: winner, pens (opcional), gh90/
+     ga90/etGh/etGa (cuando hubo ET) y reescribe a/b al TOTAL post-ET
+     para que las cards y la pantalla del torneo muestren el marcador
+     correcto. Devuelve `etInfo` para pasar a _tourAttachActa o `null`
+     cuando no hubo ET (penaltis directos). */
+  function _psApplyKoTie(out, tb){
+    out.winner = tb.winner;
+    if (tb.pens) out.pens = tb.pens;
+    if (tb.hasETP){
+      out.gh90 = tb.gh90;
+      out.ga90 = tb.ga90;
+      out.etGh = tb.etGh;
+      out.etGa = tb.etGa;
+      out.a = tb.totalA;
+      out.b = tb.totalB;
+      return { gh90: tb.gh90, ga90: tb.ga90, etGh: tb.etGh, etGa: tb.etGa };
+    }
+    return null;
+  }
   /* Auto-simula un partido del torneo con el motor 4-ejes y persiste
      el resultado en cfg.results[matchKey]. Sirve para selecciones
      (India vs Francia) y para el partido del propio Liverpool/Bayern
@@ -4162,22 +4218,18 @@ window._showSimProgress = function(opts, onDone){
       var out = { a: ga, b: gb, played: true };
       var isKO = (matchKey.indexOf('_') === matchKey.lastIndexOf('_'));
       var isKoG = (matchKey.indexOf('ko_') === 0);
+      var _etInfo = null;
       if (isKO || isKoG){
         if (ga > gb) out.winner = 'a';
         else if (gb > ga) out.winner = 'b';
         else {
-          if (typeof window._tourSimPenalties === 'function'){
-            var pens = window._tourSimPenalties(homeObj, awayObj);
-            out.winner = (pens.a > pens.b) ? 'a' : 'b';
-            out.pens = pens;
-          } else {
-            out.winner = (Math.random() < 0.5) ? 'a' : 'b';
-          }
+          var _tb = _psResolveKoTie(cfg, homeObj, awayObj, ga, gb);
+          _etInfo = _psApplyKoTie(out, _tb);
         }
       }
       try {
         if (typeof window._tourAttachActa === 'function'){
-          window._tourAttachActa(out, homeObj, awayObj, ga, gb, tourId, matchKey);
+          window._tourAttachActa(out, homeObj, awayObj, out.a, out.b, tourId, matchKey, _etInfo);
         }
       } catch(_){}
       cfg.results[matchKey] = out;
@@ -4528,22 +4580,18 @@ window._showSimProgress = function(opts, onDone){
         var sim = window.simulateMatch(m.home, m.away);
         var ga = sim.gh|0, gb = sim.ga|0;
         var out = { a: ga, b: gb, played: true };
+        var _etInfo = null;
         if (isKo){
           if (ga > gb) out.winner = 'a';
           else if (gb > ga) out.winner = 'b';
           else {
-            if (typeof window._tourSimPenalties === 'function'){
-              var pens = window._tourSimPenalties(m.home, m.away);
-              out.winner = (pens.a > pens.b) ? 'a' : 'b';
-              out.pens = pens;
-            } else {
-              out.winner = (Math.random() < 0.5) ? 'a' : 'b';
-            }
+            var _tb = _psResolveKoTie(cfg, m.home, m.away, ga, gb);
+            _etInfo = _psApplyKoTie(out, _tb);
           }
         }
         try {
           if (typeof window._tourAttachActa === 'function'){
-            window._tourAttachActa(out, m.home, m.away, ga, gb, tourId, m.matchKey);
+            window._tourAttachActa(out, m.home, m.away, out.a, out.b, tourId, m.matchKey, _etInfo);
           }
         } catch(_){}
         cfg.results[m.matchKey] = out;
@@ -4693,11 +4741,20 @@ window._showSimProgress = function(opts, onDone){
       var bW = res.winner === 'b' || (res.winner == null && res.b > res.a);
       var aClr = aW ? '#fff' : '#4dd0e1';
       var bClr = bW ? '#fff' : '#4dd0e1';
+      /* Badge PEN bajo el 🏁 FIN cuando la eliminatoria se resolvió
+         por penaltis (KO single-leg con `koExtraTimePens:true` que
+         siguió empatado al 120'). Petición usuario 2026-05-26. */
+      var penBadge = '';
+      if (res.pens && res.pens.a != null && res.pens.b != null){
+        var penWin = (res.pens.a|0) > (res.pens.b|0) ? (res.home || hN) : (res.away || aN);
+        penBadge = '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#ffd97a;border:1px solid rgba(240,192,64,.45);background:rgba(240,192,64,.1);border-radius:5px;padding:1px 8px;">🥅 PEN ' + (res.pens.a|0) + '-' + (res.pens.b|0) + ' · ' + _esc(penWin) + '</div>';
+      }
       center = '<div class="ps-x" style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;padding:0 4px;">'
         + '<div style="background:rgba(0,0,0,.45);border:1px solid rgba(77,208,225,.5);border-radius:8px;padding:5px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:2px;color:#4dd0e1;text-shadow:0 0 10px rgba(77,208,225,.45);min-width:78px;text-align:center;line-height:1.05;">'
         +   '<span style="color:'+aClr+';">'+res.a+'</span> - <span style="color:'+bClr+';">'+res.b+'</span>'
         + '</div>'
         + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:1px 8px;">🏁 FIN</div>'
+        + penBadge
         + '</div>';
     } else {
       center = '<div class="ps-x">VS</div>';
@@ -4739,7 +4796,10 @@ window._showSimProgress = function(opts, onDone){
         awayShield: aS,
         events: (res.events || []),
         mvp: res.mvp || '',
-        mvpTeam: res.mvpTeam || ''
+        mvpTeam: res.mvpTeam || '',
+        /* Desglose ET / penaltis al pie del acta (2026-05-26). */
+        etGh: res.etGh, etGa: res.etGa,
+        pens: res.pens
       };
       try { actaHtml = window._eurFaseRenderActaPanel(actaM, actaUid); } catch(_){ actaHtml = ''; }
     }
@@ -5414,11 +5474,18 @@ window._showSimProgress = function(opts, onDone){
       var _bW = _payRes.winner === 'b' || (_payRes.winner == null && _payRes.b > _payRes.a);
       var _aClr = _aW ? '#fff' : '#4dd0e1';
       var _bClr = _bW ? '#fff' : '#4dd0e1';
+      /* Badge PEN cuando hubo tanda (2026-05-26). */
+      var _penBadge = '';
+      if (_payRes.pens && _payRes.pens.a != null && _payRes.pens.b != null){
+        var _penWin = (_payRes.pens.a|0) > (_payRes.pens.b|0) ? (_payRes.home || _hN) : (_payRes.away || _aN);
+        _penBadge = '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#ffd97a;border:1px solid rgba(240,192,64,.45);background:rgba(240,192,64,.1);border-radius:5px;padding:1px 8px;">🥅 PEN ' + (_payRes.pens.a|0) + '-' + (_payRes.pens.b|0) + ' · ' + _esc(_penWin) + '</div>';
+      }
       var _centerHtml = '<div class="ps-x" style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;padding:0 4px;">'
         + '<div style="background:rgba(0,0,0,.45);border:1px solid rgba(77,208,225,.5);border-radius:8px;padding:5px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:2px;color:#4dd0e1;text-shadow:0 0 10px rgba(77,208,225,.45);min-width:78px;text-align:center;line-height:1.05;">'
         +   '<span style="color:'+_aClr+';">'+_payRes.a+'</span> - <span style="color:'+_bClr+';">'+_payRes.b+'</span>'
         + '</div>'
         + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:1px 8px;">🏁 FIN</div>'
+        + _penBadge
         + '</div>';
       var _actaHtml = '';
       if (typeof window._eurFaseRenderActaPanel === 'function'){
@@ -5434,7 +5501,10 @@ window._showSimProgress = function(opts, onDone){
           awayShield: _aS,
           events: (_payRes.events || []),
           mvp: _payRes.mvp || '',
-          mvpTeam: _payRes.mvpTeam || ''
+          mvpTeam: _payRes.mvpTeam || '',
+          /* Desglose ET / penaltis al pie del acta (2026-05-26). */
+          etGh: _payRes.etGh, etGa: _payRes.etGa,
+          pens: _payRes.pens
         };
         try { _actaHtml = window._eurFaseRenderActaPanel(_actaM, _actaUid); } catch(_){ _actaHtml = ''; }
       }
@@ -20998,18 +21068,53 @@ window._showSimProgress = function(opts, onDone){
      `registrarLigaPlayerStats(matchKey, ..., 'torneos')`. NO toca el
      store global ef_player_stats_v1 (los torneos NO cuentan en
      plantilla). Petición usuario 2026-05-09 (FOTO 2 + punto 2). */
-  function _tourAttachActa(out, teamA, teamB, gh, ga, tourId, matchKey) {
+  function _tourAttachActa(out, teamA, teamB, gh, ga, tourId, matchKey, etInfo) {
     if (!out || !teamA || !teamB) return;
     if (typeof window.genMatchEventsEnhanced !== 'function') return;
     var nameA = teamA.name || teamA;
     var nameB = teamB.name || teamB;
     if (!nameA || !nameB) return;
     try {
-      var ev = window.genMatchEventsEnhanced(nameA, nameB, gh|0, ga|0, null);
+      /* etInfo (opcional, 2026-05-26): {gh90, ga90, etGh, etGa}. Cuando
+         el desempate de KO single-leg incluyó prórroga, generamos el
+         acta en 2 pasadas — 90' con los goles de regulación + ET con
+         los goles extras (minutos shifteados al rango 91-120) — para
+         que el desplegable del acta refleje los eventos de la prórroga
+         además del MVP del partido completo. Sin etInfo, comportamiento
+         legacy: 1 pasada con (gh, ga). */
+      var hasET = etInfo && (((etInfo.etGh|0) > 0) || ((etInfo.etGa|0) > 0));
+      var gh90 = hasET ? (etInfo.gh90|0) : (gh|0);
+      var ga90 = hasET ? (etInfo.ga90|0) : (ga|0);
+      var ev = window.genMatchEventsEnhanced(nameA, nameB, gh90, ga90, null);
       if (!ev) return;
-      out.events = (ev.events || []).slice();
-      if (ev.mvp) out.mvp = ev.mvp;
-      if (ev.mvpTeam) out.mvpTeam = ev.mvpTeam;
+      var allEvents = (ev.events || []).slice();
+      var mvp = ev.mvp || '';
+      var mvpTeam = ev.mvpTeam || '';
+      if (hasET){
+        try {
+          var evET = window.genMatchEventsEnhanced(nameA, nameB, etInfo.etGh|0, etInfo.etGa|0, null);
+          if (evET && evET.events){
+            /* Filtrar 'played' (ya emitido en la pasada de 90'),
+               'imbat' (porteros se computan al final del partido
+               completo, no por mitad) y 'mvp'. Shift minutos
+               2..89 → 91..120 proporcionalmente. */
+            var etOnly = evET.events.filter(function(e){
+              return e && e.type !== 'played' && e.type !== 'imbat' && e.type !== 'mvp';
+            });
+            etOnly.forEach(function(e){
+              var orig = Math.max(2, Math.min(89, Number(e.min) || 2));
+              e.min = Math.min(120, Math.max(91, 91 + Math.floor((orig - 2) * 29 / 87)));
+            });
+            allEvents = allEvents.concat(etOnly);
+            /* Si la pasada de 90' fue 0-0 no devolvió MVP → usar el de ET. */
+            if (!mvp && evET.mvp){ mvp = evET.mvp; mvpTeam = evET.mvpTeam || ''; }
+          }
+        } catch(_){}
+      }
+      allEvents.sort(function(a,b){ return (Number(a.min)||0) - (Number(b.min)||0); });
+      out.events = allEvents;
+      if (mvp) out.mvp = mvp;
+      if (mvpTeam) out.mvpTeam = mvpTeam;
       out.home = nameA;
       out.away = nameB;
       /* Acumular stats al store de torneos. Pasamos competition
@@ -25769,6 +25874,10 @@ window._showSimProgress = function(opts, onDone){
 .eurfase-acta-empty{padding:10px;text-align:center;color:rgba(255,255,255,.45);font-style:italic;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;}
 .eurfase-acta-mvp{padding:8px 10px;margin-top:4px;background:linear-gradient(90deg,rgba(255,213,74,.12),rgba(255,213,74,.04));border-left:2px solid rgba(255,213,74,.55);color:#ffe089;font-family:Rajdhani,sans-serif;font-size:12px;}
 .eurfase-acta-mvp b{color:#ffd54a;}
+.eurfase-acta-et{padding:7px 10px;margin-top:6px;background:linear-gradient(90deg,rgba(120,180,255,.14),rgba(120,180,255,.04));border-left:2px solid rgba(120,180,255,.55);color:#bcd6ff;font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.4px;}
+.eurfase-acta-et b{color:#dfeaff;letter-spacing:1.4px;}
+.eurfase-acta-pen{padding:7px 10px;margin-top:4px;background:linear-gradient(90deg,rgba(240,192,64,.14),rgba(240,192,64,.04));border-left:2px solid rgba(240,192,64,.55);color:#ffd97a;font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.4px;}
+.eurfase-acta-pen b{color:#ffe69c;letter-spacing:1.4px;}
 /* Tabla de clasificación Swiss-format (UCL/UEL/UECL fase de liga). */
 .eurfase-clas-empty,.eurfase-clas-info{padding:14px;text-align:center;color:rgba(255,255,255,.55);font-style:italic;font-family:Rajdhani,sans-serif;font-size:12.5px;}
 .eurfase-clas-table{margin:4px 6px 8px;background:linear-gradient(180deg,rgba(20,40,90,.30),rgba(8,15,40,.55));border:1px solid rgba(159,200,255,.20);border-radius:8px;overflow:hidden;}
@@ -26527,6 +26636,27 @@ window._showSimProgress = function(opts, onDone){
                  : '')
              + '</div>';
     }
+    /* Footer rows: prórroga + penaltis (2026-05-26). Cuando el KO
+       single-leg se decidió por ET/penaltis, _psSimAndSaveTourMatch /
+       _psAutoSimPendingPhase persisten etGh/etGa/pens como campos
+       separados; los reflejamos al pie del acta para que el usuario
+       vea el desglose sin tener que confiar solo en el marcador
+       agregado de la cabecera de la card. Mantenemos limpia la
+       convención del proyecto de no inyectar pen-result en
+       `events` (el resto de engines también la filtran). */
+    var etRow = '';
+    if (m.etGh != null && m.etGa != null && ((m.etGh|0) > 0 || (m.etGa|0) > 0)){
+      etRow = '<div class="eurfase-acta-et">🕒 <b>PRÓRROGA</b> · '
+            + _esc(m.home || '') + ' ' + (m.etGh|0) + ' - ' + (m.etGa|0) + ' ' + _esc(m.away || '')
+            + '</div>';
+    }
+    var penRow = '';
+    if (m.pens && m.pens.a != null && m.pens.b != null){
+      var _penWinName = (m.pens.a|0) > (m.pens.b|0) ? (m.home || '') : (m.away || '');
+      penRow = '<div class="eurfase-acta-pen">🥅 <b>PENALTIS</b> · '
+             + (m.pens.a|0) + ' - ' + (m.pens.b|0)
+             + ' · gana <b>' + _esc(_penWinName) + '</b></div>';
+    }
     return '<div class="eurfase-acta-wrap">'
          + '<div class="eurfase-acta-toggle" onclick="window._eurFaseToggleActa(\'' + uid + '\',this)">'
          +   '<span class="eurfase-acta-toggle-ico">▼</span>'
@@ -26534,6 +26664,8 @@ window._showSimProgress = function(opts, onDone){
          + '</div>'
          + '<div id="' + uid + '" class="eurfase-acta-list" style="display:none">'
          +   rows
+         +   etRow
+         +   penRow
          +   mvpRow
          + '</div>'
          + '</div>';
@@ -39707,7 +39839,11 @@ https://api.sofascore.app/api/v1/team/44/image
               home:hN2, away:aN2,
               gh:(kr.a|0), ga:(kr.b|0),
               label:lbl, uid:uidK,
-              events:kr.events||[], mvp:kr.mvp||'', mvpTeam:kr.mvpTeam||'' });
+              events:kr.events||[], mvp:kr.mvp||'', mvpTeam:kr.mvpTeam||'',
+              /* ET / penaltis del KO single-leg (2026-05-26) propagados
+                 al histórico del hub para que la card desplegable muestre
+                 el desglose 🕒 PRÓRROGA / 🥅 PENALTIS al pie del acta. */
+              etGh:kr.etGh, etGa:kr.etGa, pens:kr.pens });
           } else {
             out.pending.push({ comp:'sel', emoji:'🌍',
               home:hN2, away:aN2, label:lbl,
@@ -40090,7 +40226,11 @@ https://api.sofascore.app/api/v1/team/44/image
       try {
         actaHtml = window._eurFaseRenderActaPanel({
           home: m.home, away: m.away,
-          events: m.events, mvp: m.mvp || '', mvpTeam: m.mvpTeam || ''
+          events: m.events, mvp: m.mvp || '', mvpTeam: m.mvpTeam || '',
+          /* Desglose ET / penaltis (2026-05-26): los partidos KO single-leg
+             que se decidieron por ET+pens los persisten cfg.results con
+             estos campos; los reflejamos también en el histórico del hub. */
+          etGh: m.etGh, etGa: m.etGa, pens: m.pens
         }, uid);
       } catch(_){}
     }

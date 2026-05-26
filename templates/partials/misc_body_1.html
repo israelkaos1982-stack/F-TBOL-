@@ -38652,20 +38652,61 @@ Tottenham
 
     listEl.innerHTML = html;
 
-    /* Listeners de los tabs (Club / Selección) — toggle independiente. */
+    /* Listeners de los tabs (Club / Selección) — comportamiento RADIO
+       (2026-05-26). Antes era toggle independiente: al pulsar Francia
+       con Liverpool abierto, el body de Francia se desplegaba DEBAJO
+       del de Liverpool (siguen el orden del DOM: tabs → body-club →
+       body-sel) y desde el viewport del scroller (max-height:360px)
+       el usuario no veía el cambio porque seguía mirando los cards
+       de Liverpool en el top. Ahora pulsar un tab cierra el otro y
+       deja el body recién abierto justo bajo los tabs, con un snap
+       al top del scroller para que la transición sea visible. */
     var tabs = listEl.querySelectorAll('.mf-side-tab');
+    function _snapScrollerToTabs(refTab){
+      try {
+        var scroller = refTab.closest('.munich-fix-body');
+        if (!scroller) return;
+        var tabsBar = refTab.closest('.mf-side-tabs') || refTab;
+        var delta = tabsBar.getBoundingClientRect().top
+                  - scroller.getBoundingClientRect().top;
+        var target = scroller.scrollTop + delta - 4;
+        if (target < 0) target = 0;
+        scroller.scrollTop = target;
+      } catch(_){}
+    }
     for (var ti = 0; ti < tabs.length; ti++){
       (function(tab){
         tab.onclick = function(ev){
           if (ev && ev.preventDefault) ev.preventDefault();
+          if (ev && ev.stopPropagation) ev.stopPropagation();
           if (tab.hasAttribute('disabled')) return;
           var side = tab.getAttribute('data-side');
           var m = tab.getAttribute('data-mode');
           var body = document.getElementById('mf-side-body-' + m + '-' + side);
           if (!body) return;
           var openNow = body.hasAttribute('hidden');
-          if (openNow){ body.removeAttribute('hidden'); tab.classList.add('mft-open'); tab.setAttribute('aria-expanded','true'); }
-          else        { body.setAttribute('hidden',''); tab.classList.remove('mft-open'); tab.setAttribute('aria-expanded','false'); }
+          if (openNow){
+            for (var k = 0; k < tabs.length; k++){
+              var other = tabs[k];
+              if (other === tab) continue;
+              if (other.getAttribute('data-mode') !== m) continue;
+              var oSide = other.getAttribute('data-side');
+              var oBody = document.getElementById('mf-side-body-' + m + '-' + oSide);
+              if (oBody && !oBody.hasAttribute('hidden')){
+                oBody.setAttribute('hidden','');
+              }
+              other.classList.remove('mft-open');
+              other.setAttribute('aria-expanded','false');
+            }
+            body.removeAttribute('hidden');
+            tab.classList.add('mft-open');
+            tab.setAttribute('aria-expanded','true');
+            _snapScrollerToTabs(tab);
+          } else {
+            body.setAttribute('hidden','');
+            tab.classList.remove('mft-open');
+            tab.setAttribute('aria-expanded','false');
+          }
         };
       })(tabs[ti]);
     }

@@ -30236,6 +30236,7 @@ document.addEventListener('DOMContentLoaded', function() {
     'superliga_calendar_v1',         /* Superliga calendario 20 jornadas */
     'superliga_results_v1',          /* Superliga resultados de cada jornada */
     'partidos_aplazados',            /* Partidos aplazados (array) */
+    'pend_hvh_deferred_v1',          /* Partidos pospuestos (📌 POSPONER) */
     'wc_champ_v1',                   /* Wild Card · campeón (alias corto) */
     'wc_champion_v1'                 /* Wild Card · campeón */
   ];
@@ -30325,6 +30326,14 @@ document.addEventListener('DOMContentLoaded', function() {
               if (typeof window._psInvalidateCache === 'function') {
                 window._psInvalidateCache();
               }
+            } catch(_){}
+          }
+          /* Si el store de partidos pospuestos viene del server (otro
+             dispositivo añadió/quitó algo), refresca la caja del hub. */
+          if (restored.indexOf('pend_hvh_deferred_v1') !== -1) {
+            try {
+              if (typeof window._muFixSyncVisibility === 'function') window._muFixSyncVisibility();
+              if (typeof window.muFixRefresh === 'function') window.muFixRefresh();
             } catch(_){}
           }
         }

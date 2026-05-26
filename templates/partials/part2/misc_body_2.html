@@ -5616,6 +5616,36 @@
   var sharedLigaResultsCache = null;
   var sharedLigaScheduleCache = null;
 
+  /* Sorteo lock que SOBREVIVE a `location.replace`. Sin esto, tras
+     pulsar 🎲, el flujo era:
+       1. `sortearCalendarioLiga` setea `window._ligaSorteoLock = Date.now()`
+          y POSTea el calendario nuevo a `/api/state/reset-liga`.
+       2. Al recibir `r.ok`, llama a `_recargar()` → `location.replace`.
+       3. Tras la recarga, este IIFE se reejecuta. `window._ligaSorteoLock`
+          es `undefined` (variable de página perdida en la navegación).
+       4. El hydrate inicial (`hydrateLigaStateFromBackend()` en línea 6288)
+          evalúa `_sorteoFresh = false` y, si el GET a `/api/state` trae
+          el `liga_schedule` viejo (replica lag, GET intermedio cacheado,
+          o cualquier desincronización momentánea), pisa el calendario
+          recién guardado en localStorage con el viejo.
+       5. `refreshLigaViewsAfterSync` repinta TODA la UI con el viejo →
+          al usuario le parece "se actualiza sola la web y vuelve la
+          foto pre-sorteo".
+     Persistimos el timestamp en LS y lo restauramos aquí ANTES de que
+     se defina/llame el hydrate. El guard `_sorteoFresh` del hydrate
+     pasa a estar activo 30 s tras el sorteo, sea con recarga o sin
+     ella. Limpiamos el LS si el lock está stale (>30 s) para no
+     acumular basura. */
+  var LS_SORTEO_LOCK_KEY = 'liga_sorteo_lock_ts_v1';
+  try {
+    var _persistedLockTs = parseInt(localStorage.getItem(LS_SORTEO_LOCK_KEY) || '0', 10);
+    if (_persistedLockTs && (Date.now() - _persistedLockTs) < 30000) {
+      window._ligaSorteoLock = _persistedLockTs;
+    } else if (_persistedLockTs) {
+      localStorage.removeItem(LS_SORTEO_LOCK_KEY);
+    }
+  } catch (_) {}
+
   function isValidLigaSchedule(schedule) {
     if (!Array.isArray(schedule) || schedule.length !== 38) return false;
     /* Equipos válidos de la liga actual. Un schedule guardado que
@@ -6149,8 +6179,14 @@
       return;
     }
 
-    /* Pausar el poll para que no repueble durante el guardado. */
+    /* Pausar el poll para que no repueble durante el guardado.
+       Persistimos el timestamp del lock en localStorage para que
+       sobreviva al `location.replace` y el hydrate post-recarga
+       siga viendo `_sorteoFresh = true` durante 30 s — sin esto,
+       un GET a /api/state que devuelva el calendario stale revertía
+       el sorteo recién hecho ("se actualiza sola la web"). */
     window._ligaSorteoLock = Date.now();
+    try { localStorage.setItem(LS_SORTEO_LOCK_KEY, String(window._ligaSorteoLock)); } catch (_) {}
     try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch (_) {}
 
     /* Borrar resultados / clasificación / stats locales + escribir el

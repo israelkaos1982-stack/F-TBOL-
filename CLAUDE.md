@@ -1,5 +1,106 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Resto del Mundo — 1 vuelta + Recopa + Mundialito (obligatorio, 2026-05-26)
+
+La liga `ligaExt_resto-mundo` (44 equipos top de América + Asia,
+ver "Resto Mundo" seed en `misc_body_1.html`) es **el único caso
+especial** del proyecto en estos 3 ejes:
+
+### 1. Se juega a UNA SOLA VUELTA (no doble round-robin)
+
+`ligaExtSimular` en `misc_body_1.html:~30894` añade un guard
+`_singleRound = (slug === 'resto-mundo')`. El bucle de pares pasa de
+`pj=0` a `pj=pi+1` solo en esta liga: N*(N-1)/2 cruces en vez de
+N*(N-1). Con 43 equipos = 42 partidos por equipo (943 cruces totales).
+
+### 2. Las 2 zonas custom de Reglas: Recopa + Mundialito
+
+El modal "📜 Reglas de la competición" (`#lext-ov-reglas`) muestra,
+SOLO cuando `CURRENT_KEY === 'resto-mundo'`:
+
+- 🟤 **Equipos pasan a Recopa**: default 6. Los 6 primeros de la
+  tabla pasan a CUARTOS DE FINAL directamente (no hay rondas previas).
+- 🏆 **Equipos clasifican a Mundialito Clubes**: default 16. El
+  Mundialito se celebra cada 4 temporadas y el usuario rellena el
+  roster a mano. Esta zona es **informativa + visual** (colorea
+  los puestos 7–16 de la tabla en azul claro `#50a0dc`) pero NO
+  alimenta ningún pool automático.
+
+Las otras 7 zonas (UCL / Previa / Open / E.League / Conference /
+WildCard / Descenso) **se ocultan** en Resto del Mundo (su modal y
+su leyenda), porque la liga está en `EUROPE_BLACKLIST` (no clasifica
+a competiciones europeas estándar).
+
+Coloreo de la tabla (`zoneClass`):
+
+- Posiciones 1–6 → `.lext-row.z-recopa` (banda marrón `#b46438`).
+- Posiciones 7–16 → `.lext-row.z-mundial` (banda azul claro
+  `#50a0dc`). El cómputo es `mundialDelta = max(0, mundialClubes - recopa)`
+  para que `mundialClubes=16` represente los 16 mejores TOTALES, no
+  16 plazas adicionales tras las 6 de Recopa.
+
+Storage: `data.config.zones = {ucl,uclPrev,uclQual,uel,uecl,wildcard,recopa,mundialClubes,desc}`.
+Migración automática: `_upgradeRestoMundoZones()` parchea saves
+antiguos al abrir la liga (settea recopa=6, mundialClubes=16 si
+están a 0/ausentes).
+
+### 3. Motor Recopa de Europa — 8 equipos en Cuartos (rediseño)
+
+Antes (legacy 2026-05-06): 64 equipos, 6 rondas (1/64 → 1/32 →
+Octavos → Cuartos → Semis → Final), pool = campeones + subcampeones
+de copas nacionales de Resto de Ligas + manuales.
+
+Ahora (rediseño 2026-05-26): **8 equipos, 3 rondas** (Cuartos →
+Semis → Final). Pool:
+
+- **6 auto**: top 6 de `ligaExt_resto-mundo` (vía `_rmStandingsTop`,
+  mismo criterio que `standings`: pts → dg → gf → nombre).
+- **2 manuales**: campeón + subcampeón Champions del año pasado,
+  añadidos vía "EA Sports → Europa" slug 'recopa' (`_meaTeamsFor('recopa')`).
+
+Estructura del motor (`misc_body_1.html:11357+`):
+
+```
+PHASES = ['r8','sf','fin']
+PHASE_LABEL = { r8:'Cuartos', sf:'Semifinales', fin:'FINAL' }
+PHASE_SIZE  = { r8:4, sf:2, fin:1 }
+NEXT_PHASE  = { r8:'sf', sf:'fin', fin:null }
+DOM_BODY    = { r8:'recopa-rd-r8-body', sf:'recopa-rd-sf-body', fin:'recopa-rd-fin-body' }
+```
+
+Las pantallas `s-recopa-rd-r64`, `s-recopa-rd-r32`, `s-recopa-rd-r16`
+**fueron eliminadas** del DOM (también sus jblocks). Los saves
+antiguos en `recopa_state_v1` con `sorteo.r64/r32/r16` se ignoran:
+`_firstPhaseToDraw` solo recorre `PHASES`. Si el usuario reanuda un
+save antiguo, debe pulsar "♻️ Reiniciar Recopa" para arrancar el
+nuevo formato.
+
+Calendario (`s-calendario.html`):
+- **22 Dic**: 🟤 Recopa Europa - Cuartos (`cal-rec-q`).
+- **27 May**: 🟤 Recopa Europa - Semis (`cal-rec-s`).
+- **04 Jun**: 🟤 FINAL RECOPA (`cal-rec-fin`).
+
+(Se eliminaron `cal-rec64` y `cal-rec32`; `cal-rec8` se renombró a
+`cal-rec-q` y su texto pasó de "Octavos" a "Cuartos".)
+
+### Reglas a respetar
+
+1. **No reintroducir las rondas 1/64, 1/32 ni Octavos** en el motor
+   de Recopa. El formato es 8 equipos en Cuartos por petición
+   explícita del usuario (2026-05-26).
+2. **No hardcodear `recopa:6` ni `mundialClubes:16`** en builders
+   nuevos. Leer siempre de `data.config.zones`. Default 6/16 lo
+   aplica `_upgradeRestoMundoZones`.
+3. **No usar campeones de copas nacionales** como fuente del pool
+   de Recopa (modelo legacy). Solo top 6 de Resto del Mundo +
+   manuales.
+4. **No quitar `resto-mundo` de `EUROPE_BLACKLIST`**. La liga sigue
+   sin clasificar a UCL/UEL/UECL/Open/WildCard (esas plazas se
+   resuelven SOLO desde las ligas europeas y manual EA Sports).
+5. **Cualquier nueva liga que se juegue a UNA vuelta** debe
+   replicar el guard `_singleRound` en `ligaExtSimular`. La regla
+   por defecto sigue siendo doble round-robin.
+
 ## Hub del usuario: Liverpool (no Bayern) — obligatorio, 2026-05-25
 
 El equipo HUMANO del hub (la pantalla `s-munich`, la card "Próximo

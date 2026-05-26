@@ -27853,6 +27853,140 @@ Tottenham
   </div>
 </div>
 
+<!-- ═══ EDITOR DE EQUIPOS · VISTA CARDS (2026-05-26) ═══════════════
+     Vista compacta estilo "Plantilla de selecciones" para editar los
+     equipos de CUALQUIER liga de Resto de Ligas. Reemplaza al form
+     single-team como entrada por defecto desde `ligaExtEditar()`.
+     Reusa todo el save pipeline existente (saveData del IIFE lext) +
+     las validaciones (blacklist forzada, emoji conflicts,
+     deletedTeamNames). Los datos del equipo NUNCA se borran: solo
+     cambia la UI. Acceso al form clásico vía "📝 Avanzado". -->
+<style>
+#lext-cards-ov{position:fixed;inset:0;z-index:100040;display:none;
+  align-items:center;justify-content:center;padding:18px;background:rgba(0,0,5,.85);}
+#lext-cards-ov.show{display:flex;}
+#lext-cards-ov .lc-card{width:min(560px,96vw);max-height:88vh;display:flex;
+  flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#1a1208,#0a0805);
+  border:1px solid rgba(240,192,64,.45);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
+#lext-cards-ov .lc-hd{display:flex;align-items:center;justify-content:space-between;
+  padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.08);font-family:Oswald,sans-serif;
+  letter-spacing:1.5px;font-size:13.5px;color:#f0c040;}
+#lext-cards-ov .lc-x{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.25);
+  color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;}
+#lext-cards-ov .lc-body{padding:10px 14px;overflow-y:auto;flex:1;}
+#lext-cards-ov .lc-row{display:flex;flex-direction:column;gap:5px;margin-bottom:10px;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:9px 10px;}
+#lext-cards-ov .lc-r1{display:flex;align-items:center;gap:7px;}
+#lext-cards-ov .lc-r1 img{width:34px;height:34px;object-fit:contain;border-radius:5px;
+  flex-shrink:0;background:rgba(255,255,255,.06);}
+#lext-cards-ov .lc-shield-ph{width:34px;height:34px;background:rgba(255,255,255,.04);
+  border:1px dashed rgba(255,255,255,.18);border-radius:5px;flex-shrink:0;}
+#lext-cards-ov .lc-name{flex:1;min-width:0;font-weight:600;}
+#lext-cards-ov .lc-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
+  color:#ff9a9a;width:32px;height:32px;border-radius:7px;cursor:pointer;flex-shrink:0;
+  font-size:14px;line-height:1;padding:0;}
+#lext-cards-ov .lc-r2{display:flex;gap:5px;align-items:center;}
+#lext-cards-ov .lc-shield-url{flex:1;}
+#lext-cards-ov .lc-pl-btn{background:rgba(110,200,255,.16);border:1px solid rgba(110,200,255,.45);
+  color:#bfe4ff;border-radius:7px;padding:7px 9px;font-size:11.5px;font-family:Oswald,sans-serif;
+  letter-spacing:.5px;cursor:pointer;white-space:nowrap;flex-shrink:0;}
+#lext-cards-ov .lc-r3{display:flex;gap:5px;}
+#lext-cards-ov .lc-r3 input{flex:1;width:100%;text-align:center;padding:6px 2px;
+  font-family:"Bebas Neue",sans-serif;font-size:15px;}
+#lext-cards-ov .lc-axis-lbl{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;
+  font-family:Oswald,sans-serif;font-size:8.5px;letter-spacing:1px;
+  color:rgba(255,255,255,.45);text-align:center;}
+#lext-cards-ov .lc-alias{font-style:italic;color:#ffd58a;}
+#lext-cards-ov .lc-alias::placeholder{color:rgba(255,213,138,.5);font-style:italic;}
+#lext-cards-ov input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
+  color:#fff;border-radius:6px;padding:6px 8px;font-size:12.5px;font-family:Rajdhani,sans-serif;
+  box-sizing:border-box;width:100%;}
+#lext-cards-ov input:focus{outline:none;border-color:rgba(240,192,64,.55);}
+#lext-cards-ov .lc-more-btn{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.18);
+  color:rgba(255,255,255,.8);border-radius:6px;padding:5px 9px;font-family:Oswald,sans-serif;
+  letter-spacing:1px;font-size:10.5px;cursor:pointer;align-self:flex-start;margin-top:3px;}
+#lext-cards-ov .lc-more-btn.is-open{background:rgba(240,192,64,.13);border-color:rgba(240,192,64,.45);color:#f0c040;}
+#lext-cards-ov .lc-more{display:none;flex-direction:column;gap:6px;margin-top:5px;
+  padding:7px 8px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.07);border-radius:8px;}
+#lext-cards-ov .lc-row.is-expanded .lc-more{display:flex;}
+#lext-cards-ov .lc-mr-lbl{font-family:Oswald,sans-serif;font-size:9.5px;
+  letter-spacing:1.2px;color:rgba(255,255,255,.5);margin-bottom:-2px;}
+#lext-cards-ov .lc-tipo-row{display:flex;gap:5px;}
+#lext-cards-ov .lc-tipo-btn{flex:1;padding:6px 4px;background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.12);border-radius:6px;color:rgba(255,255,255,.6);
+  cursor:pointer;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;}
+#lext-cards-ov .lc-tipo-btn.is-on{background:rgba(240,192,64,.16);border-color:#f0c040;color:#f0c040;}
+#lext-cards-ov .lc-emoji-grid{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;}
+#lext-cards-ov .lc-emoji{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);
+  border-radius:5px;padding:4px 0;font-size:14px;text-align:center;cursor:pointer;}
+#lext-cards-ov .lc-emoji.is-on{background:rgba(240,192,64,.2);border-color:#f0c040;}
+#lext-cards-ov .lc-foot{padding:10px 14px 14px;border-top:1px solid rgba(255,255,255,.08);
+  display:flex;gap:6px;flex-wrap:wrap;}
+#lext-cards-ov .lc-add,#lext-cards-ov .lc-bulk,#lext-cards-ov .lc-adv{flex:1;
+  min-width:80px;background:rgba(240,192,64,.13);border:1px solid rgba(240,192,64,.4);
+  color:#ffe28a;border-radius:8px;padding:9px;font-family:Oswald,sans-serif;letter-spacing:.5px;
+  font-size:11.5px;cursor:pointer;}
+#lext-cards-ov .lc-save{flex:1.4;min-width:90px;background:linear-gradient(90deg,#1ea14a,#16863c);
+  color:#fff;border:none;border-radius:8px;padding:9px;font-family:Oswald,sans-serif;letter-spacing:1px;
+  font-size:12px;font-weight:700;cursor:pointer;}
+#lext-cards-ov .lc-empty{padding:18px;text-align:center;font-size:12.5px;
+  color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;}
+#lext-cards-ov .lc-bulk-panel{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08);
+  background:rgba(240,192,64,.05);display:none;}
+#lext-cards-ov.is-bulk .lc-bulk-panel{display:block;}
+#lext-cards-ov.is-bulk .lc-body{display:none;}
+#lext-cards-ov.is-bulk .lc-foot{display:none;}
+#lext-cards-ov .lc-bulk-tip{font-family:Rajdhani,sans-serif;font-size:11.5px;
+  color:rgba(255,255,255,.6);line-height:1.5;margin-bottom:6px;}
+#lext-cards-ov .lc-bulk-tip b{color:#ffe28a;}
+#lext-cards-ov #lc-bulk-ta{width:100%;box-sizing:border-box;resize:vertical;
+  background:rgba(0,0,0,.4);border:1px solid rgba(240,192,64,.35);border-radius:8px;
+  color:#fff;font-family:"Courier New",monospace;font-size:12px;padding:8px;line-height:1.5;}
+#lext-cards-ov .lc-bulk-row{display:flex;gap:8px;margin-top:8px;}
+#lext-cards-ov .lc-bulk-cancel{flex:1;background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:8px;padding:9px;
+  font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer;}
+#lext-cards-ov .lc-bulk-ok{flex:1.4;background:linear-gradient(90deg,#1ea14a,#16863c);
+  color:#fff;border:none;border-radius:8px;padding:9px;font-family:Oswald,sans-serif;
+  letter-spacing:1px;font-size:12px;font-weight:700;cursor:pointer;}
+</style>
+
+<div id="lext-cards-ov">
+  <div class="lc-card">
+    <div class="lc-hd">
+      <span id="lext-cards-title">🎴 Editar equipos</span>
+      <button type="button" class="lc-x" onclick="lextCardsClose()">✕</button>
+    </div>
+    <div class="lc-body" id="lext-cards-body"></div>
+    <div class="lc-bulk-panel">
+      <div class="lc-bulk-tip">
+        <b>Dos formatos:</b><br>
+        1) <b>Valores</b> — una línea por equipo: <code>Nombre 88</code> o
+        <code>Nombre 86 87 85 84</code> (Global · ATQ · MED · DEF). Escudo:
+        URL en la línea siguiente o <code>Nombre | 86 | https://…</code>.<br>
+        2) <b>Plantilla con jugadores</b> — cabecera del equipo y jugadores
+        bajo <code>## 🧤 PORTEROS</code> / <code>🛡 DEFENSAS</code> /
+        <code>⚙ CENTROCAMPISTAS</code> / <code>⚽ DELANTEROS</code>.
+        Mismo formato que el editor de Selecciones.
+      </div>
+      <textarea id="lc-bulk-ta" rows="9" placeholder="Manchester City | 88 89 86 87 | https://api.sofascore.app/api/v1/team/17/image
+Liverpool 87
+https://api.sofascore.app/api/v1/team/44/image
+…"></textarea>
+      <div class="lc-bulk-row">
+        <button type="button" class="lc-bulk-cancel" onclick="lextCardsBulkCancel()">✕ Cancelar</button>
+        <button type="button" class="lc-bulk-ok" onclick="lextCardsBulkApply()">✓ Añadir a la lista</button>
+      </div>
+    </div>
+    <div class="lc-foot">
+      <button type="button" class="lc-add" onclick="lextCardsAdd()">＋ Añadir</button>
+      <button type="button" class="lc-bulk" onclick="lextCardsBulkOpen()">📋 Lista</button>
+      <button type="button" class="lc-adv" onclick="lextCardsAdvanced()">📝 Avanzado</button>
+      <button type="button" class="lc-save" onclick="lextCardsSave()">💾 Guardar</button>
+    </div>
+  </div>
+</div>
+
 <div class="lext-ov" id="lext-ov-squad">
   <div class="lext-ov-box" style="max-width:720px;">
     <div class="lext-ov-head">
@@ -31113,7 +31247,22 @@ Tottenham
   };
 
   // ── Editor equipos ────────────────────────────────
+  /* 2026-05-26: la entrada por defecto es la VISTA CARDS estilo
+     "Plantilla de selecciones". El editor clásico (form single-team
+     con bulk-add, mover equipos, restaurar backup, vista previa
+     motor) queda accesible vía botón "📝 Avanzado" dentro de cards,
+     o llamando directamente a `ligaExtEditarLegacy()`. */
   function ligaExtEditar(){
+    if(!CURRENT_KEY) return;
+    if(typeof window.lextCardsOpen === 'function'){
+      window.lextCardsOpen();
+      return;
+    }
+    /* Fallback: si por alguna razón la vista cards no está cargada
+       (módulo no inicializado), abrimos el editor clásico. */
+    ligaExtEditarLegacy();
+  }
+  function ligaExtEditarLegacy(){
     if(!CURRENT_KEY) return;
     EDITING_TEAM_ID = null;
     document.getElementById('lext-ov-teams-title').textContent = '🖍 Editar · '+CURRENT_NAME;
@@ -31123,6 +31272,7 @@ Tottenham
     lextOpenOv('lext-ov-teams');
   }
   window.ligaExtEditar = ligaExtEditar;
+  window.ligaExtEditarLegacy = ligaExtEditarLegacy;
 
   // ── Estado del selector Humano/IA del formulario actual ───
   // Solo aplica cuando CURRENT_KEY === 'liga-ea-sports'.
@@ -35491,6 +35641,518 @@ Tottenham
     if(logo){ logo.src = ''; logo.style.display = 'none'; }
     try { _lecRender(); } catch(_){}
     if(typeof window.go === 'function') window.go('s-lext-copa');
+  };
+
+  /* ═══════════════════════════════════════════════════════════════
+     EDITOR DE EQUIPOS · VISTA CARDS (2026-05-26)
+     Replica del overlay "Plantilla de selecciones" para Resto de Ligas.
+     Lee/escribe con `loadData(CURRENT_KEY)` / `saveData(CURRENT_KEY,…)`
+     del propio IIFE — mismo pipeline que el editor clásico. Preserva
+     todos los campos del equipo no editados por la card (players,
+     country, rules, etc.) gracias al merge sobre el registro previo.
+     ═══════════════════════════════════════════════════════════════ */
+  var _LC_STATE = null;
+  var _LC_EMOJIS = (typeof HUMAN_EMOJI_OPTIONS!=='undefined' && HUMAN_EMOJI_OPTIONS && HUMAN_EMOJI_OPTIONS.length)
+    ? HUMAN_EMOJI_OPTIONS
+    : ['💡','🐭','✏️','🔨','👿','⚽','🎯','🏆','⭐','🦁','🐺','🐉','🦅','🐍','🔥','💎','🐊','🦆'];
+
+  function _lcEsc(s){
+    return String(s==null?'':s).replace(/[<>"]/g,function(c){
+      return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';
+    });
+  }
+  function _lcClamp(n, fb, mn, mx){
+    n = parseInt(n,10);
+    if(isNaN(n)) return fb;
+    mn = (mn==null)?1:mn; mx = (mx==null)?100:mx;
+    return Math.max(mn, Math.min(mx, n));
+  }
+  function _lcShieldHtml(url){
+    if(url){
+      return '<img src="'+_lcEsc(url)+'" referrerpolicy="no-referrer" '
+        +'crossorigin="anonymous" '
+        +'onerror="this.outerHTML=&quot;<div class=\\&quot;lc-shield-ph\\&quot;></div>&quot;"/>';
+    }
+    return '<div class="lc-shield-ph"></div>';
+  }
+  function _lcRenderCard(t, idx){
+    var expanded = t._uiExpand ? ' is-expanded' : '';
+    var moreLbl = t._uiExpand ? '⚙ Cerrar opciones' : '⚙ Más opciones';
+    var iaOn    = t.isHuman ? '' : ' is-on';
+    var humanOn = t.isHuman ? ' is-on' : '';
+    var emoji = t.humanEmoji || '';
+    var emojiHtml = _LC_EMOJIS.map(function(em){
+      var on = (em===emoji) ? ' is-on' : '';
+      return '<button type="button" class="lc-emoji'+on+'" data-em="'+_lcEsc(em)+'">'+em+'</button>';
+    }).join('');
+    var plCount = Array.isArray(t.players) ? t.players.length : 0;
+    var globV = _lcClamp(t.power,75);
+    return '<div class="lc-row'+expanded+'" data-idx="'+idx+'">'
+      +   '<div class="lc-r1">'
+      +     _lcShieldHtml(t.shield)
+      +     '<input class="lc-name" data-f="name" value="'+_lcEsc(t.name||'')+'" placeholder="Nombre del equipo"/>'
+      +     '<button type="button" class="lc-del" title="Borrar equipo">🗑</button>'
+      +   '</div>'
+      +   '<div class="lc-r2">'
+      +     '<input class="lc-shield-url" data-f="shield" value="'+_lcEsc(t.shield||'')+'" placeholder="https://… (URL escudo)"/>'
+      +     '<button type="button" class="lc-pl-btn" title="Editar plantilla">👥 '+plCount+'</button>'
+      +   '</div>'
+      +   '<div class="lc-axis-lbl"><span>GLOBAL</span><span>ATAQUE</span><span>MEDIO</span><span>DEFENSA</span></div>'
+      +   '<div class="lc-r3">'
+      +     '<input data-f="power" type="number" min="1" max="100" value="'+globV+'"/>'
+      +     '<input data-f="atk"   type="number" min="1" max="100" value="'+_lcClamp(t.atk,globV)+'"/>'
+      +     '<input data-f="mid"   type="number" min="1" max="100" value="'+_lcClamp(t.mid,globV)+'"/>'
+      +     '<input data-f="def"   type="number" min="1" max="100" value="'+_lcClamp(t.def,globV)+'"/>'
+      +   '</div>'
+      +   '<input class="lc-alias" data-f="efootballAlias" value="'+_lcEsc(t.efootballAlias||'')+'" placeholder="Alias eFootball (opcional)"/>'
+      +   '<button type="button" class="lc-more-btn'+(t._uiExpand?' is-open':'')+'">'+moreLbl+'</button>'
+      +   '<div class="lc-more">'
+      +     '<div class="lc-mr-lbl">Tipo · ¿quién controla este equipo?</div>'
+      +     '<div class="lc-tipo-row">'
+      +       '<button type="button" class="lc-tipo-btn'+iaOn+'" data-tipo="ia">🤖 IA</button>'
+      +       '<button type="button" class="lc-tipo-btn'+humanOn+'" data-tipo="human">👤 Humano</button>'
+      +     '</div>'
+      +     (t.isHuman ? '<div class="lc-mr-lbl">Emoji humano · aparecerá junto al nombre</div><div class="lc-emoji-grid">'+emojiHtml+'</div>' : '')
+      +     '<div class="lc-mr-lbl">🟨 Agresividad (1-99) · faltas y tarjetas</div>'
+      +     '<input data-f="aggressiveness" type="number" min="1" max="99" value="'+_lcClamp(t.aggressiveness,50,1,99)+'"/>'
+      +     '<div class="lc-mr-lbl">🏟 Estadio local · Stadium Hub</div>'
+      +     '<input data-f="stadium" list="lext-stadium-datalist" value="'+_lcEsc(t.stadium||'')+'" placeholder="— Elegir o escribir estadio —" autocomplete="off"/>'
+      +     '<div class="lc-mr-lbl">🌐 País (opcional)</div>'
+      +     '<input data-f="country" value="'+_lcEsc(t.country||'')+'" placeholder="País"/>'
+      +     '<div class="lc-mr-lbl">💶 Presupuesto del club (€)</div>'
+      +     '<input data-f="budget" type="text" inputmode="numeric" value="'+_lcEsc(t.budget?String(t.budget):'')+'" placeholder="Ej. 1200000000"/>'
+      +   '</div>'
+      + '</div>';
+  }
+  /* Snapshot del estado del slug actual en memoria. Permite editar
+     varias cards y guardar todo en un solo `saveData`. */
+  function _lcReload(){
+    if(!CURRENT_KEY){ _LC_STATE = null; return; }
+    var data = loadData(CURRENT_KEY) || {teams:[]};
+    _LC_STATE = {
+      slug: CURRENT_KEY,
+      teams: (data.teams||[]).map(function(t){
+        return {
+          id: t.id || uid(),
+          name: t.name||'',
+          power: _lcClamp(t.power,75),
+          atk: _lcClamp(t.atk, _lcClamp(t.power,75)),
+          mid: _lcClamp(t.mid, _lcClamp(t.power,75)),
+          def: _lcClamp(t.def, _lcClamp(t.power,75)),
+          aggressiveness: _lcClamp(t.aggressiveness,50,1,99),
+          shield: t.shield||'',
+          efootballAlias: t.efootballAlias||'',
+          budget: Number(t.budget)||0,
+          stadium: t.stadium||'',
+          country: t.country||'',
+          isHuman: !!t.isHuman,
+          humanEmoji: t.humanEmoji||'',
+          players: Array.isArray(t.players) ? t.players : [],
+          _uiExpand: false
+        };
+      })
+    };
+    _lcRender();
+  }
+  function _lcRender(){
+    var body = document.getElementById('lext-cards-body');
+    if(!body) return;
+    if(!_LC_STATE || !_LC_STATE.teams.length){
+      body.innerHTML = '<div class="lc-empty">— Sin equipos en esta liga. Pulsa <b>＋ Añadir</b> o <b>📋 Lista</b> para crear los primeros. —</div>';
+      return;
+    }
+    body.innerHTML = _LC_STATE.teams.map(function(t,i){ return _lcRenderCard(t,i); }).join('');
+    _lcBindCards();
+    try { populateStadiumsDatalist(); } catch(_){}
+  }
+  function _lcBindCards(){
+    var body = document.getElementById('lext-cards-body');
+    if(!body) return;
+    body.querySelectorAll('.lc-row').forEach(function(row){
+      var idx = parseInt(row.getAttribute('data-idx'),10);
+      if(isNaN(idx) || !_LC_STATE || !_LC_STATE.teams[idx]) return;
+      var t = _LC_STATE.teams[idx];
+      /* inputs con data-f */
+      row.querySelectorAll('input[data-f]').forEach(function(inp){
+        inp.addEventListener('input', function(){
+          var f = inp.getAttribute('data-f');
+          if(f==='power' || f==='atk' || f==='mid' || f==='def'){
+            t[f] = _lcClamp(inp.value, t[f], 1, 100);
+          } else if(f==='aggressiveness'){
+            t[f] = _lcClamp(inp.value, t[f], 1, 99);
+          } else if(f==='budget'){
+            var raw = (inp.value||'').replace(/[^\d]/g,'');
+            t[f] = raw ? parseInt(raw,10) : 0;
+          } else {
+            t[f] = (inp.value||'').trim();
+          }
+        });
+        if(inp.getAttribute('data-f')==='shield'){
+          /* repintar el thumb del escudo al hacer blur (no en cada
+             keystroke — evita peticiones de imagen en cada tecla) */
+          inp.addEventListener('change', function(){ _lcRender(); });
+        }
+      });
+      /* papelera */
+      var delBtn = row.querySelector('.lc-del');
+      if(delBtn) delBtn.addEventListener('click', function(){
+        var lbl = t.name ? '«'+t.name+'»' : 'este equipo';
+        if(!confirm('⚠️ ¿Eliminar '+lbl+'?\n\nEl equipo se borrará al pulsar 💾 Guardar. Si cierras sin guardar, no pasa nada.')) return;
+        _LC_STATE.teams.splice(idx,1);
+        _lcRender();
+      });
+      /* plantilla — abre editor legacy lext-ov-squad */
+      var plBtn = row.querySelector('.lc-pl-btn');
+      if(plBtn) plBtn.addEventListener('click', function(){
+        /* Aplastar primero el estado (silent) para que el id del
+           equipo exista en localStorage si es nuevo. */
+        if(!_lcCommit(true)) return;
+        if(typeof window.lextOpenSquad === 'function'){
+          window.lextOpenSquad(t.id, {editable:true});
+          /* Observer que recarga las cards al cerrar el editor de
+             plantilla — así el badge 👥N refleja los cambios. */
+          var ov = document.getElementById('lext-ov-squad');
+          if(ov && !ov._lcWired){
+            ov._lcWired = true;
+            var obs = new MutationObserver(function(){
+              if(!ov.classList.contains('show')){
+                var cardsOv = document.getElementById('lext-cards-ov');
+                if(cardsOv && cardsOv.classList.contains('show')) _lcReload();
+              }
+            });
+            obs.observe(ov, {attributes:true, attributeFilter:['class']});
+          }
+        }
+      });
+      /* ⚙ Más opciones */
+      var moreBtn = row.querySelector('.lc-more-btn');
+      if(moreBtn) moreBtn.addEventListener('click', function(){
+        t._uiExpand = !t._uiExpand;
+        _lcRender();
+      });
+      /* tipo IA/Humano */
+      row.querySelectorAll('.lc-tipo-btn').forEach(function(b){
+        b.addEventListener('click', function(){
+          t.isHuman = (b.getAttribute('data-tipo')==='human');
+          if(t.isHuman && !t.humanEmoji){
+            var used = {};
+            _LC_STATE.teams.forEach(function(x){
+              if(x!==t && x.isHuman && x.humanEmoji) used[x.humanEmoji]=1;
+            });
+            for(var i=0;i<_LC_EMOJIS.length;i++){
+              if(!used[_LC_EMOJIS[i]]){ t.humanEmoji = _LC_EMOJIS[i]; break; }
+            }
+          }
+          _lcRender();
+        });
+      });
+      /* picker de emoji */
+      row.querySelectorAll('.lc-emoji').forEach(function(b){
+        b.addEventListener('click', function(){
+          t.humanEmoji = b.getAttribute('data-em')||'';
+          _lcRender();
+        });
+      });
+    });
+  }
+  /* Aplasta _LC_STATE sobre el documento del slug. Devuelve true si
+     se guardó. `silent=true` evita el feedback visual (lo usa 👥
+     antes de abrir el editor de plantilla). */
+  function _lcCommit(silent){
+    if(!_LC_STATE || !CURRENT_KEY) return false;
+    /* nombre vacío */
+    for(var i=0;i<_LC_STATE.teams.length;i++){
+      if(!_LC_STATE.teams[i].name){
+        alert('⚠️ El equipo #'+(i+1)+' no tiene nombre. Rellénalo antes de guardar.');
+        return false;
+      }
+    }
+    /* tope 20 en Liga EA Sports */
+    if(CURRENT_KEY==='liga-ea-sports' && _LC_STATE.teams.length>20){
+      alert('⚠️ Liga EA Sports tiene un tope de 20 equipos.\nTienes '+_LC_STATE.teams.length+'. Borra alguno antes de guardar.');
+      return false;
+    }
+    /* blacklist forzada por slug */
+    if(typeof window._lextIsForcedBlacklisted==='function'){
+      for(var j=0;j<_LC_STATE.teams.length;j++){
+        var nm = _LC_STATE.teams[j].name;
+        if(window._lextIsForcedBlacklisted(CURRENT_KEY, nm)){
+          alert('🚫 «'+nm+'» está vetado en esta liga.\n\nNo se puede guardar este equipo en '+(CURRENT_KEY||'')+'.');
+          return false;
+        }
+      }
+    }
+    /* conflicto emoji humano duplicado — sólo aviso, no bloquea */
+    var emjUsed = {};
+    for(var k=0;k<_LC_STATE.teams.length;k++){
+      var x = _LC_STATE.teams[k];
+      if(x.isHuman && x.humanEmoji){
+        if(emjUsed[x.humanEmoji]){
+          if(!confirm('⚠️ Dos equipos humanos comparten el emoji '+x.humanEmoji+'.\n\n¿Guardar igualmente?')) return false;
+          break;
+        }
+        emjUsed[x.humanEmoji]=1;
+      }
+    }
+    var data = loadData(CURRENT_KEY) || {teams:[], results:[]};
+    var existingById = {};
+    (data.teams||[]).forEach(function(x){ if(x && x.id) existingById[x.id]=x; });
+    /* deletedTeamNames blacklist (legacy lextDeleteTeam) */
+    var deleted = Array.isArray(data.deletedTeamNames) ? data.deletedTeamNames.slice() : [];
+    var currentIds = {};
+    _LC_STATE.teams.forEach(function(t){ if(t.id) currentIds[t.id]=1; });
+    (data.teams||[]).forEach(function(x){
+      if(x && x.id && !currentIds[x.id] && x.name){
+        var nk = (typeof window._lextNormName==='function')
+          ? window._lextNormName(x.name)
+          : String(x.name).toLowerCase().trim();
+        if(nk && deleted.indexOf(nk)<0) deleted.push(nk);
+      }
+    });
+    /* limpiar de blacklist los equipos "revividos" */
+    _LC_STATE.teams.forEach(function(t){
+      var nk = (typeof window._lextNormName==='function')
+        ? window._lextNormName(t.name)
+        : String(t.name).toLowerCase().trim();
+      if(nk) deleted = deleted.filter(function(n){return n!==nk;});
+    });
+    data.deletedTeamNames = deleted;
+    /* MERGE por equipo: parte del registro previo (preserva campos
+       extra como rules, players, *_protected, etc.) y sobrescribe
+       únicamente los campos que la card edita. Para equipos NUEVOS
+       (sin prev), construye desde cero. */
+    data.teams = _LC_STATE.teams.map(function(t){
+      var prev = existingById[t.id] || {};
+      var merged = {};
+      for(var key in prev){ if(Object.prototype.hasOwnProperty.call(prev,key)) merged[key]=prev[key]; }
+      merged.id = t.id;
+      merged.name = t.name;
+      merged.power = t.power; merged.atk = t.atk;
+      merged.mid = t.mid; merged.def = t.def;
+      merged.aggressiveness = t.aggressiveness;
+      merged.shield = t.shield;
+      merged.efootballAlias = t.efootballAlias;
+      merged.budget = t.budget;
+      merged.stadium = t.stadium;
+      merged.country = t.country;
+      merged.isHuman = !!t.isHuman;
+      merged.humanEmoji = t.isHuman ? (t.humanEmoji||'👤') : '';
+      /* players: si el editor de plantilla legacy los actualizó (prev
+         tiene array no vacío), prevalece prev. Solo usamos t.players
+         si prev no tenía nada (típico al crear via 📋 Lista con
+         bloque de jugadores). */
+      if(!Array.isArray(merged.players) || !merged.players.length){
+        merged.players = Array.isArray(t.players) ? t.players : [];
+      }
+      merged.updatedAt = Date.now();
+      return merged;
+    });
+    /* eliminar results que referencian equipos borrados */
+    data.results = (data.results||[]).filter(function(r){
+      return r && currentIds[r.h] && currentIds[r.a];
+    });
+    saveData(CURRENT_KEY, data);
+    if(!silent){
+      var title = document.getElementById('lext-cards-title');
+      var baseTitle = '🎴 Editar equipos · '+(CURRENT_NAME||CURRENT_KEY);
+      if(title) title.textContent = '💾 Guardando…';
+      (function(slug){
+        var p = (window._ligaExtSavePromise && window._ligaExtSavePromise[slug]) || Promise.resolve(true);
+        Promise.resolve(p).then(function(okSrv){
+          var t2 = document.getElementById('lext-cards-title');
+          if(!t2) return;
+          if(okSrv){
+            t2.textContent = '✅ Guardado y sincronizado';
+            setTimeout(function(){
+              var t3 = document.getElementById('lext-cards-title');
+              if(t3 && t3.textContent.indexOf('✅')===0) t3.textContent = baseTitle;
+            }, 2200);
+          } else {
+            t2.textContent = '⚠ Guardado LOCAL · falta servidor';
+          }
+        });
+      })(CURRENT_KEY);
+      /* mantener sincronizada la lista del editor clásico por si el
+         usuario abre "📝 Avanzado" después de guardar */
+      try { renderTeamsList(); } catch(_){}
+      try { renderTable(); } catch(_){}
+      try { refreshLigaEaCounter(); } catch(_){}
+    }
+    return true;
+  }
+  /* ── Bulk paste parser ─────────────────────────────────────────
+     Acepta dos formatos como el editor de Selecciones:
+       a) "Nombre 88"  o  "Nombre 86 87 85 84"  (G A M D)
+          Opcional: URL del escudo en la línea siguiente, o
+          "Nombre | 88 | https://…" todo en una.
+       b) Bloque "Plantilla con jugadores":
+          Cabecera del equipo (línea con nombre)
+          ## 🧤 PORTEROS / ## 🛡 DEFENSAS / ## ⚙ CENTROCAMPISTAS / ## ⚽ DELANTEROS
+          * Nombre - 88 C⭐ / * Nombre - 75 / ...
+          Se parsea con `parseSquadPaste` del IIFE (mismo helper que
+          el form clásico). */
+  function _lcParseValues(s){
+    s = String(s||'').trim();
+    if(!s || s[0]==='#') return null;
+    var url = '';
+    var parts = s.split('|').map(function(p){return p.trim();});
+    var head = parts[0];
+    if(parts.length>=3 && /^https?:/i.test(parts[parts.length-1])){
+      url = parts[parts.length-1];
+    } else if(parts.length===2 && /^https?:/i.test(parts[1])){
+      url = parts[1];
+    }
+    var numsStr = '';
+    if(parts.length>=2 && !/^https?:/i.test(parts[1])) numsStr = parts[1];
+    var nums = [];
+    if(numsStr) nums = numsStr.match(/\d{1,3}/g) || [];
+    var name = head;
+    if(!nums.length){
+      var m = head.match(/^(.+?)\s+((?:\d{1,3}\s*){1,4})$/);
+      if(m){ name = m[1].trim(); nums = m[2].trim().split(/\s+/); }
+    }
+    if(!name) return null;
+    var g = nums[0] ? parseInt(nums[0],10) : 75;
+    var a = nums[1] ? parseInt(nums[1],10) : g;
+    var md = nums[2] ? parseInt(nums[2],10) : g;
+    var d = nums[3] ? parseInt(nums[3],10) : g;
+    return { name:name, power:g, atk:a, mid:md, def:d, shield:url };
+  }
+  function _lcIsHeader(s){
+    return /^\s*##\s/i.test(s) || /^\s*###\s/i.test(s)
+        || /(PORTEROS|DEFENSAS|CENTROCAMP|DELANTEROS|MEDIOS)/i.test(s);
+  }
+  function _lcIsPlayer(s){
+    return /^\s*\*\s/.test(s) || /^\s*[-•]\s/.test(s);
+  }
+  function _lcBulkParse(text){
+    if(!text) return [];
+    var lines = String(text).split(/\r?\n/);
+    var out = [], i = 0;
+    while(i < lines.length){
+      var ln = lines[i];
+      var t = (ln||'').trim();
+      if(!t || t[0]==='#'){ i++; continue; }
+      /* Bloque "plantilla con jugadores": la línea siguiente es un
+         header `## …` */
+      var nextT = (lines[i+1]||'').trim();
+      if(_lcIsHeader(nextT)){
+        var hdrParse = _lcParseValues(ln) || {name:t, power:75, atk:75, mid:75, def:75, shield:''};
+        var blockLines = [ln];
+        i++;
+        while(i < lines.length){
+          var L = lines[i];
+          var lT = (L||'').trim();
+          if(!lT){ blockLines.push(L); i++; continue; }
+          if(_lcIsHeader(L) || _lcIsPlayer(L)){ blockLines.push(L); i++; continue; }
+          break;
+        }
+        var players = [];
+        try {
+          if(typeof parseSquadPaste === 'function')
+            players = parseSquadPaste(blockLines.join('\n')) || [];
+        } catch(_){}
+        hdrParse.players = players;
+        out.push(hdrParse);
+        continue;
+      }
+      var v = _lcParseValues(ln);
+      if(v){
+        /* línea siguiente puede ser URL del escudo */
+        if(/^https?:\/\//i.test(nextT) && !v.shield){
+          v.shield = nextT;
+          i++;
+        }
+        out.push(v);
+      }
+      i++;
+    }
+    return out;
+  }
+  /* ── API pública ── */
+  window.lextCardsOpen = function(){
+    if(!CURRENT_KEY){ alert('Abre una liga primero.'); return; }
+    var title = document.getElementById('lext-cards-title');
+    if(title) title.textContent = '🎴 Editar equipos · '+(CURRENT_NAME||CURRENT_KEY);
+    _lcReload();
+    var ov = document.getElementById('lext-cards-ov');
+    if(ov){ ov.classList.remove('is-bulk'); ov.classList.add('show'); }
+  };
+  window.lextCardsClose = function(){
+    var ov = document.getElementById('lext-cards-ov');
+    if(ov){ ov.classList.remove('show'); ov.classList.remove('is-bulk'); }
+  };
+  window.lextCardsAdd = function(){
+    if(!_LC_STATE) return;
+    _LC_STATE.teams.push({
+      id: uid(), name:'',
+      power:75, atk:75, mid:75, def:75, aggressiveness:50,
+      shield:'', efootballAlias:'', budget:0,
+      stadium:'', country:'',
+      isHuman:false, humanEmoji:'',
+      players:[], _uiExpand:true
+    });
+    _lcRender();
+    setTimeout(function(){
+      var body = document.getElementById('lext-cards-body');
+      if(body) body.scrollTop = body.scrollHeight;
+    }, 10);
+  };
+  window.lextCardsSave = function(){ _lcCommit(false); };
+  window.lextCardsAdvanced = function(){
+    /* aplastar silent + abrir el editor clásico (form single-team) */
+    if(!_lcCommit(true)) return;
+    window.lextCardsClose();
+    if(typeof ligaExtEditarLegacy === 'function') ligaExtEditarLegacy();
+  };
+  window.lextCardsBulkOpen = function(){
+    var ov = document.getElementById('lext-cards-ov');
+    if(ov) ov.classList.add('is-bulk');
+    var ta = document.getElementById('lc-bulk-ta');
+    if(ta){ ta.value=''; setTimeout(function(){ ta.focus(); },20); }
+  };
+  window.lextCardsBulkCancel = function(){
+    var ov = document.getElementById('lext-cards-ov');
+    if(ov) ov.classList.remove('is-bulk');
+  };
+  window.lextCardsBulkApply = function(){
+    if(!_LC_STATE) return;
+    var ta = document.getElementById('lc-bulk-ta');
+    var txt = ta ? ta.value : '';
+    var parsed = _lcBulkParse(txt);
+    if(!parsed.length){
+      alert('No reconocí ningún equipo en el texto.\n\nFormato:\n  Nombre 88\n  Nombre 86 87 85 84\n  Nombre | 88 | https://…');
+      return;
+    }
+    /* merge: si el nombre (case-insensitive) existe en _LC_STATE,
+       actualiza valores; si no, lo añade como nuevo. */
+    parsed.forEach(function(p){
+      var nk = (p.name||'').toLowerCase();
+      var existing = null;
+      for(var i=0;i<_LC_STATE.teams.length;i++){
+        if((_LC_STATE.teams[i].name||'').toLowerCase()===nk){ existing=_LC_STATE.teams[i]; break; }
+      }
+      if(existing){
+        existing.power = p.power; existing.atk = p.atk;
+        existing.mid = p.mid; existing.def = p.def;
+        if(p.shield) existing.shield = p.shield;
+        if(Array.isArray(p.players) && p.players.length) existing.players = p.players;
+      } else {
+        _LC_STATE.teams.push({
+          id: uid(), name: p.name,
+          power: p.power, atk: p.atk, mid: p.mid, def: p.def,
+          aggressiveness: 50, shield: p.shield||'',
+          efootballAlias: '', budget: 0,
+          stadium: '', country: '',
+          isHuman: false, humanEmoji: '',
+          players: Array.isArray(p.players) ? p.players : [],
+          _uiExpand: false
+        });
+      }
+    });
+    var ov = document.getElementById('lext-cards-ov');
+    if(ov) ov.classList.remove('is-bulk');
+    _lcRender();
   };
 
 })();

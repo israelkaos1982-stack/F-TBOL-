@@ -18339,7 +18339,7 @@ window._showSimProgress = function(opts, onDone){
     return _tourMatchDates(cfg)[jIdx] || '';
   }
   function _tourGkoRoundDate(cfg, kIdx){
-    var pg = (cfg.formatConfig && cfg.formatConfig.perGroup) || 5;
+    var pg = _tourPerGroup(cfg);
     var nj = Math.max(1, pg - 1);
     return _tourMatchDates(cfg)[nj + kIdx] || '';
   }
@@ -21214,6 +21214,25 @@ window._showSimProgress = function(opts, onDone){
        · Penaltis en empates KO single-leg.
        · Goles fuera × 2 en KO ida+vuelta.
        · Liga (round-robin) y Grupos+KO.                              */
+  /* Tamaño REAL del grupo del torneo. Refleja la misma fórmula que
+     `_renderGroupsKO` (línea ~19173): fc.perGroup si existe, si no
+     Math.ceil(teams.length / nGroups). Sin esto el slice `teams.slice
+     (g*pg, (g+1)*pg)` que usan los handlers de SIMULAR JORNADA /
+     SIMULAR GRUPO / sim-AI auto caía al default 5 y devolvía solo
+     los 5 primeros equipos del cfg → matches con índice >= 5 se
+     simulaban contra `undefined` y `_tourFindTeam` retornaba null →
+     simulación silenciosa (botón no hacía nada). Bug 2026-05-27:
+     usuario reportó "no funciona SIMULAR JORNADA en JG" con 1 grupo
+     de 16 equipos (fc.perGroup undefined, así que el handler usaba 5
+     y solo intentaba simular partidos entre los 5 primeros equipos
+     del bracket, no entre los 16 reales). */
+  function _tourPerGroup(cfg){
+    var fc = (cfg && cfg.formatConfig) || {};
+    var teams = (cfg && cfg.teams) || [];
+    var nG = fc.groups || 1;
+    return fc.perGroup || Math.ceil(teams.length / nG) || 5;
+  }
+
   function _tourFindTeam(teamObj){
     /* Devuelve el objeto t completo (con power/atk/mid/def) leyendo
        de ligaExt_* + collectStandings + DEFAULT pools. Si no encuentra,
@@ -21754,7 +21773,7 @@ window._showSimProgress = function(opts, onDone){
         var aiTeams, aiFix;
         if (aiPrefix.indexOf('g') === 0) {
           var aiG = parseInt(aiPrefix.substring(1), 10);
-          var aiPg = (aicfg.formatConfig && aicfg.formatConfig.perGroup) || 5;
+          var aiPg = _tourPerGroup(aicfg);
           aiTeams = (aicfg.teams||[]).slice(aiG*aiPg, (aiG+1)*aiPg);
           aiFix = aicfg.groupFixtures && aicfg.groupFixtures[aiG];
         } else {
@@ -21863,7 +21882,7 @@ window._showSimProgress = function(opts, onDone){
         var teamsForMatch, fixForMatch;
         if (prefix.indexOf('g') === 0) {
           var gIdx = parseInt(prefix.substring(1), 10);
-          var sliceLen = (cfg.formatConfig && cfg.formatConfig.perGroup) || 5;
+          var sliceLen = _tourPerGroup(cfg);
           teamsForMatch = (cfg.teams||[]).slice(gIdx*sliceLen, (gIdx+1)*sliceLen);
           fixForMatch = cfg.groupFixtures && cfg.groupFixtures[gIdx];
         } else {
@@ -21961,7 +21980,7 @@ window._showSimProgress = function(opts, onDone){
       var teamsJ, fixJ;
       if (prefixJ.indexOf('g') === 0) {
         var gIdx2 = parseInt(prefixJ.substring(1), 10);
-        var slLen = (jcfg.formatConfig && jcfg.formatConfig.perGroup) || 5;
+        var slLen = _tourPerGroup(jcfg);
         teamsJ = (jcfg.teams||[]).slice(gIdx2*slLen, (gIdx2+1)*slLen);
         fixJ = jcfg.groupFixtures && jcfg.groupFixtures[gIdx2];
       } else {
@@ -21997,7 +22016,7 @@ window._showSimProgress = function(opts, onDone){
       gcfg.results = gcfg.results || {};
       var gIdx3 = parseInt(simGrpBtn.getAttribute('data-group'), 10);
       if (isNaN(gIdx3)) return;
-      var slLenG = (gcfg.formatConfig && gcfg.formatConfig.perGroup) || 5;
+      var slLenG = _tourPerGroup(gcfg);
       var teamsG = (gcfg.teams||[]).slice(gIdx3*slLenG, (gIdx3+1)*slLenG);
       var fixG = gcfg.groupFixtures && gcfg.groupFixtures[gIdx3];
       if (!fixG) return;

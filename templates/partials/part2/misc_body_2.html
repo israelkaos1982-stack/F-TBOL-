@@ -10474,19 +10474,26 @@
       ronda = opts.j ? ('Jornada ' + opts.j) : '';
     } else if (c === 'sct' || c === 'pss' || c === 'jg' || c === 'asia' || c.indexOf('verano') !== -1 || c.indexOf('summer') !== -1) {
       icon = '🌞';
-      if (c === 'sct') label = 'Super Cup Trophy';
-      else if (c === 'pss') label = 'Preseason Super';
-      else if (c === 'jg') label = 'Japan Game';
-      else if (c === 'asia') label = 'Asia Trophy';
-      else label = 'Torneo Verano';
+      if (c === 'sct') label = 'Soccer Champions Tour';
+      else if (c === 'pss') label = 'Premier Summer Series';
+      else if (c === 'jg') label = 'Trofeo Joan Gamper';
+      else if (c === 'asia') label = 'Asian Tournament';
+      else label = 'Torneo de Verano';
+      ronda = opts.j ? ('Jornada ' + opts.j) : '';
     } else if (c === 'torneo' || c === 'sel-fin') {
-      /* Mundial 2032 — compKey 'torneo' (vía abrirTorneo / _tourOpen-
-         HumanMatch) o 'sel-fin' (card cal-mf-*). Resolvemos la ronda
-         leyendo la cfg cacheada del torneo. Formato preferido por el
-         usuario (2026-05-26): "⚽ Dieciseisavos Mundial 2032" — ronda
-         PRIMERO, sin separador. Lo metemos todo en `label` y dejamos
-         `ronda` vacío para que `_waBuildHeaderLines` no añada " - ".
-         Sin esta rama caía al fallback genérico → "⚽ torneo" crudo. */
+      /* compKey 'torneo' lo pasa `_tourOpenHumanMatch` para TODOS los
+         torneos del motor _tour* (Mundial 2032 selecciones, Mundialito
+         Clubes, Trofeo Joan Gamper, Soccer Champions Tour, Premier
+         Summer Series, Asian Tournament, tx1..tx8, sfn1..10, spv1..10) — el
+         compKey crudo NO basta para distinguirlos. Resolvemos el
+         torneo real vía `_ppPreviaTeams.tourId` (+ tourKey para la
+         jornada/ronda) y mapeamos a su nombre canónico. Sin esta
+         rama, los torneos de verano y Mundialito Clubes caían al
+         label "Mundial 2032" (bug 2026-05-27: foto Liverpool vs
+         Miami BP del Trofeo Joan Gamper J5 saliendo como "Mundial
+         2032"). 'sel-fin' (cal-mf-*) sigue siendo Mundial 2032 sí o sí. */
+      var _SUMMER_TOURS = { sct:'Soccer Champions Tour', pss:'Premier Summer Series',
+                            jg:'Trofeo Joan Gamper', asia:'Asian Tournament' };
       icon  = '⚽';
       label = 'Mundial 2032';
       ronda = '';
@@ -10502,18 +10509,78 @@
         if (!_cfgW && _tidW && window._TOUR_CACHE) {
           _cfgW = window._TOUR_CACHE[_tidW];
         }
+        var _tkW  = String(_tkeyW || '').replace(/\|L[12]$/, '');
+        var _mgW  = _tkW.match(/^g(\d+)_(\d+)_/);
+        var _mkW  = _tkW.match(/^ko_(\d+)_/);
+        var _mljW = _tkW.match(/^(\d+)_(\d+)$/);  /* league format */
         if (_cfgW && _cfgW.format === 'mundial-48') {
-          var _tkW = String(_tkeyW || '').replace(/\|L[12]$/, '');
-          var _mgW = _tkW.match(/^g\d+_(\d+)_/);
-          var _mkW = _tkW.match(/^ko_(\d+)_/);
+          /* Mundial 2032 selecciones — mantiene el formato legacy
+             "Grupo JN Mundial 2032" / "Octavos Mundial 2032" / "GRAN
+             FINAL Mundial 2032 🏆" con la ronda EMBEBIDA en el label
+             (sin separador), petición usuario 2026-05-26. */
           if (_mgW) {
-            label = 'Grupo J' + (parseInt(_mgW[1], 10) + 1) + ' Mundial 2032';
+            label = 'Grupo J' + (parseInt(_mgW[2], 10) + 1) + ' Mundial 2032';
           } else if (_mkW) {
             var _rIdxW  = parseInt(_mkW[1], 10);
             var _koRW   = (_cfgW.formatConfig && _cfgW.formatConfig.koRounds) || [];
             var _rNameW = _koRW[_rIdxW] || '';
             if (_rNameW === 'Final')      label = 'GRAN FINAL Mundial 2032 🏆';
             else if (_rNameW)             label = _rNameW + ' Mundial 2032';
+          }
+        } else if (_tidW === 'mundial') {
+          /* Mundialito de Clubes (tourId='mundial', format='groups-ko').
+             Icono globo, label "Mundialito Clubes" + ronda. */
+          icon  = '🌍';
+          label = 'Mundialito Clubes';
+          if (_mgW) {
+            ronda = 'Jornada ' + (parseInt(_mgW[2], 10) + 1);
+          } else if (_mkW) {
+            var _rIdxM  = parseInt(_mkW[1], 10);
+            var _koRM   = (_cfgW && _cfgW.formatConfig && _cfgW.formatConfig.koRounds) || [];
+            ronda = _koRM[_rIdxM] || ('KO ' + (_rIdxM + 1));
+          }
+        } else if (_tidW && _SUMMER_TOURS[_tidW]) {
+          /* Torneos de verano (jg/sct/pss/asia) — icono sol, label
+             canónico (Trofeo Joan Gamper, Soccer Champions Tour…).
+             Ronda: jornada de grupos / nombre de la ronda KO / "Jornada N"
+             para formatos league. */
+          icon  = '🌞';
+          label = _SUMMER_TOURS[_tidW];
+          if (_mgW) {
+            ronda = 'Jornada ' + (parseInt(_mgW[2], 10) + 1);
+          } else if (_mkW) {
+            var _rIdxS  = parseInt(_mkW[1], 10);
+            var _koRS   = (_cfgW && _cfgW.formatConfig && _cfgW.formatConfig.koRounds) || [];
+            ronda = _koRS[_rIdxS] || ('KO ' + (_rIdxS + 1));
+          } else if (_mljW) {
+            ronda = 'Jornada ' + (parseInt(_mljW[1], 10) + 1);
+          }
+        } else if (_tidW && /^(spv|sfn)\d+$/.test(_tidW)) {
+          /* Slots spv1..10 y sfn1..10 del Mundial 2032 (Previa / Final).
+             Mantienen label "Mundial 2032". */
+          icon  = '⚽';
+          label = 'Mundial 2032';
+          if (_mgW) {
+            label = 'Grupo J' + (parseInt(_mgW[2], 10) + 1) + ' Mundial 2032';
+          } else if (_mkW) {
+            var _rIdxN  = parseInt(_mkW[1], 10);
+            var _koRN   = (_cfgW && _cfgW.formatConfig && _cfgW.formatConfig.koRounds) || [];
+            var _rNameN = _koRN[_rIdxN] || '';
+            if (_rNameN === 'Final')      label = 'GRAN FINAL Mundial 2032 🏆';
+            else if (_rNameN)             label = _rNameN + ' Mundial 2032';
+          }
+        } else if (_cfgW && _cfgW.name) {
+          /* Torneo custom del admin (tx1..tx8): usar cfg.name. */
+          icon  = '🌞';
+          label = _cfgW.name;
+          if (_mgW) {
+            ronda = 'Jornada ' + (parseInt(_mgW[2], 10) + 1);
+          } else if (_mkW) {
+            var _rIdxC  = parseInt(_mkW[1], 10);
+            var _koRC   = (_cfgW.formatConfig && _cfgW.formatConfig.koRounds) || [];
+            ronda = _koRC[_rIdxC] || ('KO ' + (_rIdxC + 1));
+          } else if (_mljW) {
+            ronda = 'Jornada ' + (parseInt(_mljW[1], 10) + 1);
           }
         }
       } catch(_){}
@@ -10572,7 +10639,27 @@
       if (labN === 'liga ea sports') compNeedles.push('ea sports');
       else if (labN === 'liga hypermotion') compNeedles.push('hypermotion');
       else if (labN.indexOf('primera fed') !== -1) compNeedles.push('primera fed');
+      /* Torneos de verano (jg/sct/pss/asia + custom tx*) usan label
+         "Trofeo Joan Gamper"/"Soccer Champions Tour"/etc., pero la fila
+         del calendario es "Torneo Verano - Partido N" (genérica para
+         que diferentes torneos compartan el mismo slot). Añadimos
+         "torneo verano" como needle adicional cuando el label apunta
+         a uno de esos torneos. 2026-05-27 (fix bug share Joan Gamper). */
+      if (labN === 'trofeo joan gamper' || labN === 'soccer champions tour'
+          || labN === 'premier summer series' || labN === 'asian tournament'
+          || labN === 'torneo de verano' || labN.indexOf('torneo de verano') !== -1) {
+        compNeedles.push('torneo verano');
+      }
       var roundNeedle = _norm(meta.round || '');
+      /* Para rondas "Jornada N", el calendario usa "Partido N" (verano)
+         o "JN" (Mundialito Clubes / Mundial 2032). Añadimos los alias
+         como needles secundarios para que el score boost +2 pegue. */
+      var roundAltNeedles = [];
+      var _jMatch = roundNeedle.match(/^jornada\s+(\d+)$/);
+      if (_jMatch) {
+        roundAltNeedles.push('partido ' + _jMatch[1]);   /* "Torneo Verano - Partido 5" */
+        roundAltNeedles.push('j' + _jMatch[1]);          /* "Mundialito Clubes - J3" */
+      }
       var jNeedle = (j != null && j !== '') ? ('j' + String(j).toLowerCase()) : '';
       var bestDate = '';
       var bestScore = -1;
@@ -10591,6 +10678,11 @@
         if (!compHit) continue;
         var score = 1;
         if (roundNeedle && rowLbl.indexOf(roundNeedle) !== -1) score += 2;
+        else {
+          for (var nri = 0; nri < roundAltNeedles.length; nri++) {
+            if (rowLbl.indexOf(roundAltNeedles[nri]) !== -1) { score += 2; break; }
+          }
+        }
         if (jNeedle && rowLbl.indexOf(jNeedle) !== -1) score += 4;
         if (score > bestScore) { bestScore = score; bestDate = rowDate; }
       }

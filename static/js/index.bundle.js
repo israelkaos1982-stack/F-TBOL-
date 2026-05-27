@@ -10940,6 +10940,35 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
             if (_rName && MUNDIAL_KO_LABELS[_rName]) return MUNDIAL_KO_LABELS[_rName];
           }
         }
+        /* Mundialito de Clubes (tourId='mundial', icono 🌐 ag-inter):
+           el calendario usa filas "Mundialito Clubes - J1/J2/J3" (fase
+           de grupos) y "Mundialito Clubes - Octavos/Cuartos/Semis/FINAL"
+           (KO). Por canónico CLAUDE.md el slot built-in 'mundial' es
+           formato 'groups-ko' con perGroup=4 y koRounds=['Octavos',
+           'Cuartos','Semis','Final']. */
+        if (_ptCal.tourId === 'mundial' && _tcfgCal && _tcfgCal.format !== 'mundial-48') {
+          var _fcMC = _tcfgCal.formatConfig || {};
+          var _mkMC = String(_ptCal.tourKey || '').replace(/\|L[12]$/, '');
+          var _mGrMC = _mkMC.match(/^g\d+_(\d+)_/);
+          if (_mGrMC) {
+            return 'Mundialito Clubes - J' + (parseInt(_mGrMC[1], 10) + 1);
+          }
+          var _mKrMC = _mkMC.match(/^ko_(\d+)_/);
+          if (_mKrMC) {
+            var _rIMC = parseInt(_mKrMC[1], 10);
+            var _koRMC = (_fcMC.koRounds || ['Octavos','Cuartos','Semis','Final']);
+            var _rNameMC = _koRMC[_rIMC] || '';
+            var MUNDIALITO_KO_LABELS = {
+              'Dieciseisavos': 'Mundialito Clubes - Dieciseisavos',
+              'Octavos':       'Mundialito Clubes - Octavos',
+              'Cuartos':       'Mundialito Clubes - Cuartos',
+              'Semis':         'Mundialito Clubes - Semis',
+              'Tercer Puesto': 'Mundialito Clubes - Tercer Puesto',
+              'Final':         'Mundialito Clubes - FINAL'
+            };
+            if (MUNDIALITO_KO_LABELS[_rNameMC]) return MUNDIALITO_KO_LABELS[_rNameMC];
+          }
+        }
         /* Torneos de Verano (SCT/PSS/JG/Asia + slots tx1..tx8): el
            calendario usa filas "Torneo Verano - Partido N" (N=1..7)
            con icono 🌞 (clase ag-torneo). Mapeamos el matchKey del
@@ -10947,7 +10976,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
            rama la previa caía a hoy + "torneo" — bug 2026-05-27
            reportado por usuario con foto Joan Gamper J1 mostrando
            "25 de Mayo" en vez de "04 Jun". */
-        if (_tcfgCal && _tcfgCal.format !== 'mundial-48') {
+        if (_ptCal.tourId !== 'mundial' && _tcfgCal && _tcfgCal.format !== 'mundial-48') {
           var _fc = _tcfgCal.formatConfig || {};
           var _mk = String(_ptCal.tourKey || '');
           var _legM = _mk.match(/\|L([12])$/);
@@ -11002,6 +11031,92 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     return { day: parseInt(p[0]) || 0, month: _MONTH_ABBR_ES[p[1]] || 0 };
   }
 
+  /* Fallback robusto 2026-05-27: si el label-based lookup falla para
+     compKey='torneo' (cfg no cargado, perGroup distinto al esperado,
+     calendario con etiquetas legacy/custom, etc.), localizamos la fila
+     del calendario CONTANDO posiciones por icono. El N-ésimo 🌞
+     (ag-torneo) = N-ésimo Torneo de Verano; el N-ésimo 🌐 (ag-inter)
+     = N-ésimo Mundialito de Clubes. Funciona aunque las etiquetas no
+     coincidan letra-a-letra con lo que devuelve `_mmCalLabel`. */
+  function _mmTourFallbackEntry() {
+    try {
+      var _pt = window._ppPreviaTeams || {};
+      if (!_pt.tourId) return null;
+      var _tcfg = null;
+      try {
+        if (typeof window._tourLoadCachedSync === 'function') {
+          _tcfg = window._tourLoadCachedSync(_pt.tourId);
+        }
+        if (!_tcfg && window._TOUR_CACHE) _tcfg = window._TOUR_CACHE[_pt.tourId];
+      } catch(_){}
+      var _mk = String(_pt.tourKey || '').replace(/\|L[12]$/, '');
+      var _pn = 0;
+      var _mGr = _mk.match(/^g\d+_(\d+)_/);
+      if (_mGr) {
+        _pn = parseInt(_mGr[1], 10) + 1;
+      } else {
+        var _mKr = _mk.match(/^ko_(\d+)_/);
+        if (_mKr) {
+          var _rI = parseInt(_mKr[1], 10);
+          var _fc = (_tcfg && _tcfg.formatConfig) || {};
+          if (_tcfg && _tcfg.format === 'groups-ko') {
+            var _pg = _fc.perGroup || 4;
+            _pn = Math.max(1, _pg - 1) + _rI + 1;
+          } else if (_tcfg && _tcfg.format === 'ko') {
+            _pn = _rI + 1;
+          } else {
+            /* Cfg ausente: asumimos groups-ko con 3 jornadas de grupo
+               (perGroup=4) que es el default más común (Mundialito). */
+            _pn = 3 + _rI + 1;
+          }
+        } else {
+          var _mLg = _mk.match(/^(\d+)_/);
+          if (_mLg) _pn = parseInt(_mLg[1], 10) + 1;
+        }
+      }
+      if (_pn <= 0) return null;
+      var iconForTour = (_pt.tourId === 'mundial') ? '🌐' : '🌞';
+      /* Escaneamos primero #ag-content-bayern (modo Bayern/Liverpool)
+         si está visible; si no, el SSR global #ag-content. Si ambos
+         tienen filas, contamos solo en el activo para no duplicar. */
+      var host = document.getElementById('ag-content-bayern');
+      if (!host || !host.querySelector('.ag-r') || host.offsetParent === null) {
+        host = document.getElementById('ag-content');
+      }
+      if (!host) return null;
+      var rows = host.querySelectorAll('.ag-r');
+      var hits = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var icoEl = rows[i].querySelector('.ag-ico');
+        if (!icoEl) continue;
+        var ico = icoEl.textContent.trim();
+        if (ico === iconForTour) {
+          hits++;
+          if (hits === _pn) {
+            var dEl = rows[i].querySelector('.ag-date');
+            var wEl = rows[i].querySelector('.ag-wx');
+            return {
+              date: dEl ? dEl.textContent.trim() : '',
+              wx:   wEl ? wEl.textContent.trim() : ''
+            };
+          }
+        }
+      }
+    } catch(_){}
+    return null;
+  }
+
+  /* Nombre visual del torneo de verano (TOUR_NAMES de misc_body_1.html).
+     No exponemos `TOUR_NAMES` en window, así que duplicamos un mapa local
+     mínimo para el compLabel de la previa. */
+  var _TOUR_NAMES_MM = {
+    sct:   'Soccer Champions Tour',
+    pss:   'Premier Summer Series',
+    jg:    'Trofeo Joan Gamper',
+    asia:  'Asian Tournament',
+    mundial: 'Mundialito de Clubes'
+  };
+
   /* ── Clima del calendario → venue-bar de la card del partido ──────
      _mmInjectEnv resuelve el clima del calendario global (.ag-wx) al
      abrir la previa de CUALQUIER competición. Antes la venue-bar de la
@@ -11036,6 +11151,15 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var dateMap = _mmAgDateMap();
     var label = _mmCalLabel(matchKey || '', compKey || '');
     var calEntry = label ? (dateMap[label] || null) : null;
+    /* Fallback torneo 2026-05-27: cuando el lookup por label falla
+       (cfg no cargado, perGroup distinto al esperado, labels custom
+       del admin…) localizamos la fila del calendario por POSICIÓN
+       contando iconos 🌞 (verano) / 🌐 (Mundialito). Garantía: la
+       previa SIEMPRE mostrará la fecha real del calendario, no la
+       fecha de hoy. */
+    if (!calEntry && compKey === 'torneo') {
+      calEntry = _mmTourFallbackEntry();
+    }
     if (calEntry) {
       var parsed = _mmParseCalDate(calEntry.date);
       month = parsed.month || (new Date().getMonth() + 1);
@@ -11092,6 +11216,25 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
             compLabel = _isLastL
               ? 'Mundial 2032 · GRAN FINAL 🏆'
               : ('Mundial 2032 · ' + (_rNameL || 'KO'));
+          }
+        } else if (_ptL.tourId && _tcfgL) {
+          /* Torneos de verano (jg/sct/pss/asia/tx*) + Mundialito Clubes
+             (mundial): muestra "Trofeo Joan Gamper · Cuartos" en vez del
+             literal "torneo". El nombre lo lee del cfg o del mapa
+             _TOUR_NAMES_MM como fallback. 2026-05-27. */
+          var _tName = (_tcfgL.name) || _TOUR_NAMES_MM[_ptL.tourId] || 'Torneo';
+          var _tkV = String(_ptL.tourKey || '').replace(/\|L[12]$/, '');
+          var _mGV = _tkV.match(/^g\d+_(\d+)_/);
+          var _mKV = _tkV.match(/^ko_(\d+)_/);
+          if (_mGV) {
+            compLabel = _tName + ' · Grupo J' + (parseInt(_mGV[1], 10) + 1);
+          } else if (_mKV) {
+            var _rIdxV = parseInt(_mKV[1], 10);
+            var _koRV = (_tcfgL.formatConfig && _tcfgL.formatConfig.koRounds) || [];
+            var _rNameV = _koRV[_rIdxV] || ('KO ' + (_rIdxV + 1));
+            compLabel = _tName + ' · ' + _rNameV;
+          } else {
+            compLabel = _tName;
           }
         }
       } catch(_){}

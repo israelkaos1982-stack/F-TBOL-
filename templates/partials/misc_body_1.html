@@ -11083,6 +11083,76 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
 
+    /* Source 3: tour_*_v1 cfgs (Torneos de Verano + Mundialito Clubes).
+       LIGA_PLAYER_MATCH_STORE no se persiste a localStorage; tras un
+       page reload solo Source 1 contiene los partidos IA-vs-IA de Liga
+       (vía hydrateStoreFromSavedResults). Los partidos de torneo viven
+       en `cfg.results[mk].events` del propio cfg del torneo, así que
+       los iteramos aquí para que la caja `s-torneos-stats` (y
+       `s-mundial-stats` para el slot 'mundial') sobrevivan a recargas.
+       Bug 2026-05-27 reportado por usuario: jugaba JG y la caja
+       Estadísticas seguía vacía. */
+    try {
+      for (var _ti = 0; _ti < localStorage.length; _ti++) {
+        var _tk = localStorage.key(_ti);
+        if (!_tk || !/^tour_.+_v1$/.test(_tk)) continue;
+        var _tRaw = localStorage.getItem(_tk);
+        if (!_tRaw) continue;
+        var _tCfg = null;
+        try { _tCfg = JSON.parse(_tRaw); } catch(_){ continue; }
+        if (!_tCfg || !_tCfg.results) continue;
+        var _isMundialCfg = (_tCfg.id === 'mundial');
+        var _tBucket = _isMundialCfg ? buckets.mundial : buckets.torneos;
+        var _tPjBucket = _isMundialCfg ? teamPJByComp.mundial : teamPJByComp.torneos;
+        var _tCompKey = _isMundialCfg ? 'mundial' : 'torneos';
+        Object.keys(_tCfg.results).forEach(function(_mk){
+          if (/\|L[12]$/.test(_mk)) return;  /* legs intermedios — agregado vive en baseKey */
+          var _res = _tCfg.results[_mk];
+          if (!_res || !_res.played || !Array.isArray(_res.events)) return;
+          var _tA = _res.home || '';
+          var _tB = _res.away || '';
+          if (!_tA || !_tB) return;
+          var _pjK = _mkPJ(_tA, _tB);
+          var _dK = _tCompKey + '|' + _pjK;
+          if (processedMatches[_dK]) return;
+          processedMatches[_dK] = true;
+          var _nA = _normPS(_tA), _nB = _normPS(_tB);
+          if (_nA) _tPjBucket[_nA] = (_tPjBucket[_nA]||0) + 1;
+          if (_nB) _tPjBucket[_nB] = (_tPjBucket[_nB]||0) + 1;
+          _res.events.forEach(function(ev){
+            if (!ev) return;
+            var team = ev.realTeam
+                    || (ev.team === 'a' ? _tA : ev.team === 'b' ? _tB : '');
+            var player = '';
+            if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+            else if (typeof ev.player === 'string') player = ev.player;
+            else player = ev.name || ev.playerName || '';
+            if (!team || !player) return;
+            var _pEnt = getOrCreateInBucket(_tBucket, team, player);
+            var _ty = ev.type || '';
+            var _ico = String(ev.ico || '').replace(/️/g, '').trim();
+            if (_ty === 'amarilla') _pEnt.ta++;
+            else if (_ty === 'roja' || _ty === 'd-amarilla') _pEnt.tr++;
+            else if (_ty === 'card') {
+              if (_ico === '🟨') _pEnt.ta++;
+              else if (_ico === '🟥') _pEnt.tr++;
+              else if (_ico === '🟨🟥') { _pEnt.ta++; _pEnt.tr++; }
+            }
+            else if (_ty === 'gol') _pEnt.gol++;
+            else if (_ty === 'falta-gol') _pEnt.fk++;
+            else if (_ty === 'pen-gol') _pEnt.pen++;
+            else if (_ty === 'pen-parado') _pEnt.penSaved++;
+            else if (_ty === 'mvp') _pEnt.mvp++;
+            else if (_ty === 'imbat') _pEnt.imbat++;
+          });
+          if (_res.mvp && _res.mvpTeam) {
+            var _hasMvpEvt = _res.events.some(function(e){ return e && e.type === 'mvp'; });
+            if (!_hasMvpEvt) getOrCreateInBucket(_tBucket, _res.mvpTeam, _res.mvp).mvp++;
+          }
+        });
+      }
+    } catch(_){}
+
     /* Para coherencia con el código previo: `stats` y `teamPJ` siguen
        refiriéndose al bucket de Liga EA Sports (que es lo que escribe
        en ef_player_stats_v1, ahora SUMADO con Copa más abajo). */
@@ -15824,9 +15894,12 @@ window._showSimProgress = function(opts, onDone){
   .tour-tie-leg-lbl.tour-tie-leg-lbl-split > span:last-child{
     color:rgba(255,255,255,.75);font-weight:600;letter-spacing:1px;
   }
+  /* Default: partidos IA vs IA → borde BLANCO visible para separarlos
+     entre sí (petición usuario 2026-05-27). Los humanos llevan rosa
+     más abajo. */
   .tour-match{
     display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;
-    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);
+    background:rgba(255,255,255,.04);border:1.5px solid rgba(255,255,255,.55);
     border-radius:8px;padding:6px 8px;
   }
   .tour-match .vs{
@@ -15855,16 +15928,16 @@ window._showSimProgress = function(opts, onDone){
   .tour-match.tour-match-played{background:rgba(255,255,255,.025);}
   .tour-match.tour-match-pickable{cursor:pointer;transition:background .14s;}
   .tour-match.tour-match-pickable:hover{background:rgba(240,192,64,.06);}
-  /* Partido con AL MENOS un humano: borde blanco llamativo + glow.
-     Petición usuario 2026-05-09 (FOTO 2). */
+  /* Partido con AL MENOS un humano: borde ROSA llamativo + glow
+     (petición usuario 2026-05-27, antes blanco). */
   .tour-match.tour-match-has-human{
-    border:1.5px solid #ffffff;
-    box-shadow:0 0 12px rgba(255,255,255,.35), inset 0 0 6px rgba(255,255,255,.10);
-    background:rgba(255,255,255,.04);
+    border:2px solid #ff6b9d;
+    box-shadow:0 0 12px rgba(255,107,157,.45), inset 0 0 6px rgba(255,107,157,.12);
+    background:rgba(255,107,157,.04);
   }
   .tour-match.tour-match-has-human.tour-match-pickable:hover{
-    background:rgba(255,255,255,.08);
-    box-shadow:0 0 18px rgba(255,255,255,.55), inset 0 0 8px rgba(255,255,255,.18);
+    background:rgba(255,107,157,.10);
+    box-shadow:0 0 18px rgba(255,107,157,.65), inset 0 0 8px rgba(255,107,157,.20);
   }
   .tour-bracket-team.is-winner span{color:#5fe08a;font-weight:700;text-shadow:0 0 6px rgba(95,224,138,.4);}
   /* Eliminado en ROJO pero SIN tachar el nombre (petición usuario
@@ -19110,11 +19183,9 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(b, id, i+1)
             + '</div>';
-          /* Botón 🤖 SIM IA: solo aparece si la pareja tiene humano y
-             el partido NO ha sido jugado. */
-          if (hasHuman) {
-            tie += _tourSimAiBtnHtml(id, 'match', matchKey);
-          }
+          /* Botón 🤖 SIM IA retirado para todas las eliminatorias
+             (petición usuario 2026-05-27). El borde rosa del partido
+             humano basta para identificarlo. */
         }
         /* Cada eliminatoria en su propia caja con borde (petición
            usuario 2026-05-17). Las que tienen humano van arriba con
@@ -19337,9 +19408,11 @@ window._showSimProgress = function(opts, onDone){
             + _midHtml
             + _bracketTeamHtml(ta, tourId, m.away)
             + '</div>';
-          if (isCurrent && _tourLeagueMatchHasHuman(teams, m)) {
-            html += _tourSimAiBtnHtml(tourId, 'league', key);
-          }
+          /* Botón 🤖 SIM IA per-match retirado para liga/grupos (petición
+             usuario 2026-05-27): el borde rosa ya identifica a los
+             partidos humanos, así que el botón redundante se quita.
+             El admin que quiera auto-simular puede activar el toggle
+             "Permitir auto-simulación" en el editor del torneo. */
         }
       });
       if (isCurrent && !allPlayedJ) {
@@ -19549,9 +19622,9 @@ window._showSimProgress = function(opts, onDone){
             + '<span class="vs">vs</span>'
             + _bracketTeamHtml(b, tourId, i+1)
             + '</div>';
-          if (_tourPairHasHuman(curT, i)) {
-            html += _tourSimAiBtnHtml(tourId, 'ko', kKey);
-          }
+          /* Botón 🤖 SIM IA retirado en KO (petición usuario 2026-05-27,
+             alineado con liga/grupos). El borde rosa del partido humano
+             ya señala el partido del usuario. */
         }
         koPairCount++;
       }

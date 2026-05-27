@@ -10900,6 +10900,53 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
             if (_rName && MUNDIAL_KO_LABELS[_rName]) return MUNDIAL_KO_LABELS[_rName];
           }
         }
+        /* Torneos de Verano (SCT/PSS/JG/Asia + slots tx1..tx8): el
+           calendario usa filas "Torneo Verano - Partido N" (N=1..7)
+           con icono 🌞 (clase ag-torneo). Mapeamos el matchKey del
+           torneo al partido N usando el formato del cfg. Sin esta
+           rama la previa caía a hoy + "torneo" — bug 2026-05-27
+           reportado por usuario con foto Joan Gamper J1 mostrando
+           "25 de Mayo" en vez de "04 Jun". */
+        if (_tcfgCal && _tcfgCal.format !== 'mundial-48') {
+          var _fc = _tcfgCal.formatConfig || {};
+          var _mk = String(_ptCal.tourKey || '');
+          var _legM = _mk.match(/\|L([12])$/);
+          if (_legM) _mk = _mk.replace(/\|L[12]$/, '');
+          var _pn = 0;
+          var _mGr = _mk.match(/^g\d+_(\d+)_/);
+          if (_mGr) {
+            _pn = parseInt(_mGr[1], 10) + 1;
+          } else {
+            var _mKr = _mk.match(/^ko_(\d+)_/);
+            if (_mKr) {
+              var _rI = parseInt(_mKr[1], 10);
+              if (_tcfgCal.format === 'groups-ko') {
+                var _pg = _fc.perGroup || 4;
+                var _grpJ = Math.max(1, _pg - 1);
+                _pn = _grpJ + _rI + 1;
+              } else if (_tcfgCal.format === 'ko-2leg') {
+                var _rounds = _fc.rounds || [];
+                var _lastIdx = _rounds.length - 1;
+                var _singleLast = !!_fc.singleLegLastRound;
+                var _consumed = 0;
+                for (var _rr = 0; _rr < _rI; _rr++) {
+                  _consumed += (_rr === _lastIdx && _singleLast) ? 1 : 2;
+                }
+                if (!(_rI === _lastIdx && _singleLast)) {
+                  _pn = _consumed + (_legM && _legM[1] === '2' ? 2 : 1);
+                } else {
+                  _pn = _consumed + 1;
+                }
+              } else {
+                _pn = _rI + 1;
+              }
+            } else {
+              var _mLg = _mk.match(/^(\d+)_/);
+              if (_mLg) _pn = parseInt(_mLg[1], 10) + 1;
+            }
+          }
+          if (_pn > 0) return 'Torneo Verano - Partido ' + _pn;
+        }
       } catch(_){}
     }
     var MAP = {

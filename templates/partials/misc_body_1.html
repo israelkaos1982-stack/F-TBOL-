@@ -59,6 +59,24 @@ window.pG = function(fn) {
   </div>
 </div>
 
+<!-- ══ MENÚ DE TRATAMIENTO RÁPIDO (inyecciones de lesionados) — fuera de cualquier
+     .screen para que (1) se pueda abrir desde la plantilla `s-bayern-plantilla`
+     pulsando un nombre lesionado, no solo desde el hub `s-munich`; y (2)
+     position:fixed se ancle al viewport (no a un `.screen` con transform de
+     la animación fadeUp, que lo dejaría centrado muy abajo). Mismo patrón
+     que `#pin-modal` justo arriba. ══ -->
+<div id="ath-med-ov" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="ath-med-box">
+    <h3 class="ath-med-title">💉 MENÚ DE TRATAMIENTO RÁPIDO</h3>
+    <p class="ath-med-help" id="ath-med-ov-help">Sin lesionados disponibles.</p>
+    <div class="ath-med-list" id="ath-med-ov-list"></div>
+    <div class="ath-med-actions">
+      <button class="ath-med-btn danger" onclick="document.getElementById('ath-med-ov').classList.remove('show')">Cancelar</button>
+      <button class="ath-med-btn" onclick="window.athApplyMedicalTreatment && window.athApplyMedicalTreatment()">Confirmar inyección</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══ SIM PROGRESS OVERLAY (Open Qualifier y futuros) ══ -->
 <div id="oq-sim-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999998;align-items:center;justify-content:center;flex-direction:column;">
   <div id="oq-sim-ball" style="font-size:84px;line-height:1;animation:oqBallSpin 1.2s linear infinite;filter:drop-shadow(0 0 16px rgba(253,200,48,.6));">⚽</div>
@@ -39755,17 +39773,7 @@ https://api.sofascore.app/api/v1/team/44/image
   <div class="munich-bar-wrap"><div class="munich-bar" id="ath-bar-pts"></div></div>
   <div class="munich-bar-wrap"><div class="munich-bar" id="ath-bar-money"></div></div>
 </div>
-<div id="ath-med-ov" onclick="if(event.target===this)this.classList.remove('show')">
-  <div class="ath-med-box">
-    <h3 class="ath-med-title">💉 MENÚ DE TRATAMIENTO RÁPIDO</h3>
-    <p class="ath-med-help" id="ath-med-ov-help">Sin lesionados disponibles.</p>
-    <div class="ath-med-list" id="ath-med-ov-list"></div>
-    <div class="ath-med-actions">
-      <button class="ath-med-btn danger" onclick="document.getElementById('ath-med-ov').classList.remove('show')">Cancelar</button>
-      <button class="ath-med-btn" onclick="window.athApplyMedicalTreatment && window.athApplyMedicalTreatment()">Confirmar inyección</button>
-    </div>
-  </div>
-</div>
+<!-- #ath-med-ov se monta fuera de cualquier .screen (ver bloque al inicio del archivo). -->
 <section class="hub-main-grid">
   <button class="hub-card hub-card-trofeos" onclick="go('s-munich-trofeos')">
     <span class="hub-trofeos-emoji">🏆</span>

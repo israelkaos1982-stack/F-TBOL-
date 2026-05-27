@@ -1012,7 +1012,9 @@
 
     function renderRows(rows, startIndex){
       return rows.map(function(item, idx){
-        return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (startIndex + idx) + '</div><div class="liga-stat-player"><div class="liga-stat-name">' + escapeHtml(item.name) + '</div><div class="liga-stat-team">' + escapeHtml(item.team) + '</div></div><div class="liga-stat-value">' + item.value + '</div></div>';
+        var humanCls = (typeof window._humanPlayerClass === 'function')
+          ? window._humanPlayerClass(item.team) : '';
+        return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (startIndex + idx) + '</div><div class="liga-stat-player"><div class="liga-stat-name' + humanCls + '">' + escapeHtml(item.name) + '</div><div class="liga-stat-team">' + escapeHtml(item.team) + '</div></div><div class="liga-stat-value">' + item.value + '</div></div>';
       }).join('');
     }
 

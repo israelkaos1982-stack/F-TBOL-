@@ -3730,250 +3730,258 @@ window._showSimProgress = function(opts, onDone){
         else if (/final/i.test(lbl))                            koLabelKind = 'fin';
         else return null;
       }
+      /* Forzar hidratación de iconos de selecciones humanas ANTES de
+         resolver al humano del Mundial. Sin esto, `humanIcon('Francia')`
+         devuelve '' si la card del hub se renderiza antes del _boot de
+         `selecciones_squad_v1` → `isHumanInComp('Francia','mundial')`
+         falla → huIdx=-1 → JUGADORES FUERA. Idempotente y barato.
+         2026-05-27. */
+      try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+      /* Recopilamos TODAS las cfgs mundial-48 disponibles (cache en
+         memoria + slot builtin `mundial` + 10 slots `sfn*` de Rondas
+         Finales + 10 slots `spv*` de Rondas Previas). Antes solo
+         elegíamos la PRIMERA cfg con `format==='mundial-48'` y al
+         primer humano; si esa cfg estaba stale (sin groupFixtures) o
+         el primer humano no tenía rival para esa jornada, devolvíamos
+         null y el hub mostraba JUGADORES FUERA. 2026-05-27. */
+      var _mCfgs = [];
       var cache = window._TOUR_CACHE || {};
       var keys = Object.keys(cache);
-      var mundialId = null, mundialCfg = null;
       for (var k = 0; k < keys.length; k++){
         var c = cache[keys[k]];
         if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
-          mundialCfg = c; mundialId = keys[k]; break;
+          _mCfgs.push({ id: keys[k], cfg: c });
         }
       }
-      /* Fallback sync por localStorage: el cache en memoria puede estar
-         frío al cargar el hub antes de visitar la pantalla del Mundial.
-         Escaneamos los slots sfn-N (Rondas Finales) para localizarlo. */
-      if (!mundialCfg && typeof window._tourLoadCachedSync === 'function'){
-        var SFN_SLOTS = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
-        for (var s = 0; s < SFN_SLOTS.length; s++){
+      if (typeof window._tourLoadCachedSync === 'function'){
+        var _MUND_SLOTS = ['mundial',
+          'sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10',
+          'spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10'];
+        for (var s = 0; s < _MUND_SLOTS.length; s++){
+          if (cache[_MUND_SLOTS[s]]) continue; /* ya añadido arriba */
           try {
-            var sc = window._tourLoadCachedSync(SFN_SLOTS[s]);
+            var sc = window._tourLoadCachedSync(_MUND_SLOTS[s]);
             if (sc && sc.format === 'mundial-48' && Array.isArray(sc.teams) && sc.teams.length){
-              mundialCfg = sc; mundialId = SFN_SLOTS[s]; break;
+              _mCfgs.push({ id: _MUND_SLOTS[s], cfg: sc });
             }
           } catch(_){}
         }
       }
-      if (!mundialCfg) return null;
-      /* Auto-construir brackets KO que estén pendientes (grupos
-         terminados → kb[0]; round N completo → kb[N+1]). Idempotente.
-         Sin esto, después de simular grupos vía el botón del hub,
-         koBracket[0] sigue vacío hasta que alguien visita la pantalla
-         del torneo manualmente. 2026-05-26. */
-      try { _psAutoChainBuildMundial(mundialCfg, mundialId); } catch(_){}
-      /* Resolver el índice KO según el formato real del torneo:
-         antiguo (5 rondas, Final = 4) o nuevo con 3er puesto
-         (6 rondas, 3er Puesto = 4, Final = 5). 2026-05-24. */
-      if (!isGroup) {
-        var _krSel = (mundialCfg.formatConfig && mundialCfg.formatConfig.koRounds)
+      if (!_mCfgs.length) return null;
+      /* Auto-construir brackets KO pendientes. Solo en cfgs con
+         `groupFixtures` no vacío para evitar disparar la construcción
+         sobre cfgs stale/vacías (donde `allDoneAll` quedaría true por
+         tener 0 partidos y construiríamos un koBracket bogus). Bug
+         2026-05-26 (cfg no vacío). 2026-05-27 (guard groupFixtures). */
+      for (var _ai = 0; _ai < _mCfgs.length; _ai++){
+        var _aiCfg = _mCfgs[_ai].cfg;
+        var _aiGf = _aiCfg && _aiCfg.groupFixtures;
+        var _aiHasFx = _aiGf && (Array.isArray(_aiGf) ? _aiGf.length : Object.keys(_aiGf).length);
+        if (!_aiHasFx) continue;
+        try { _psAutoChainBuildMundial(_aiCfg, _mCfgs[_ai].id); } catch(_){}
+      }
+      /* Helper que resuelve el pair para UN (cfg, humano) concreto.
+         Devuelve un objeto con shape estándar o null. Esto permite
+         iterar TODAS las cfgs mundial-48 disponibles y TODOS los
+         humanos de cada cfg (Francia, Brasil, Inglaterra, Noruega,
+         Argentina, España — las 6 selecciones humanas), priorizando
+         partidos REALES sobre eliminated/pending/null. Sin esto, el
+         hub se quedaba con la primera (cfg, humano) tropezada — si esa
+         tenía rival PENDIENTE o no estaba en el bracket, devolvía null
+         y el resto de humanos quedaba sin chequear. 2026-05-27. */
+      function _resolveForHuman(_cfg, _cfgId, _huIdx){
+        var _teams = _cfg.teams || [];
+        if (isGroup){
+          var pg = (_cfg.formatConfig && _cfg.formatConfig.perGroup) || 4;
+          var gIdx = Math.floor(_huIdx / pg);
+          var gStart = gIdx * pg;
+          var slice = _teams.slice(gStart, gStart + pg);
+          var huInSlice = _huIdx - gStart;
+          var fixs = (_cfg.groupFixtures && _cfg.groupFixtures[gIdx]) || null;
+          if (!Array.isArray(fixs) || !fixs[jor]) return null;
+          var matchups = fixs[jor];
+          for (var mi = 0; mi < matchups.length; mi++){
+            var mm = matchups[mi];
+            if (!mm) continue;
+            if (mm.home === huInSlice || mm.away === huInSlice){
+              var hT = slice[mm.home], aT = slice[mm.away];
+              if (!hT || !aT || !hT.name || !aT.name) return null;
+              if (hT.name === 'PENDIENTE' || aT.name === 'PENDIENTE') return null;
+              return {
+                tourId: _cfgId,
+                matchKey: 'g' + gIdx + '_' + jor + '_' + mi,
+                home: hT,
+                away: aT,
+                rival: (mm.home === huInSlice ? aT.name : hT.name),
+                jor: jor + 1
+              };
+            }
+          }
+          return null;
+        }
+        /* Resolver índice KO específico de ESTA cfg (puede tener
+           formato distinto de la primera). */
+        var _krSel = (_cfg.formatConfig && _cfg.formatConfig.koRounds)
           || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
         var _has3rdSel = (_krSel.length >= 6 && _krSel[_krSel.length - 2] === 'Tercer Puesto');
-        if      (koLabelKind === 'd16') koRoundIdx = 0;
-        else if (koLabelKind === 'oct') koRoundIdx = 1;
-        else if (koLabelKind === 'cua') koRoundIdx = 2;
-        else if (koLabelKind === 'sem') koRoundIdx = 3;
-        else if (koLabelKind === '3p')  koRoundIdx = _has3rdSel ? 4 : -1;
-        else if (koLabelKind === 'fin') koRoundIdx = _krSel.length - 1;
-        if (koRoundIdx < 0) return null;
-      }
-      var teams = mundialCfg.teams || [];
-      var huIdx = -1;
-      /* Pase 1: flag isHuman explícito en cfg.teams (lo pone el editor
-         del Mundial al colocar el equipo). */
-      for (var ti = 0; ti < teams.length; ti++){
-        var t = teams[ti];
-        if (t && t.isHuman && t.name && t.name !== 'PENDIENTE'){ huIdx = ti; break; }
-      }
-      /* Pase 2: fallback canónico — cualquier selección con icono
-         humano asignado en la plantilla cuenta como humana en la comp
-         'mundial' (CLAUDE.md · 2026-05-10 · "Humanidad por
-         competición"). Cubre Mundiales guardados antes de que el
-         editor sellara `isHuman` en cfg.teams. */
-      if (huIdx < 0 && typeof window.isHumanInComp === 'function'){
-        for (var ti2 = 0; ti2 < teams.length; ti2++){
-          var t2 = teams[ti2];
-          if (!t2 || !t2.name || t2.name === 'PENDIENTE') continue;
-          try {
-            if (window.isHumanInComp(t2.name, 'mundial')){ huIdx = ti2; break; }
-          } catch(_){}
-        }
-      }
-      if (huIdx < 0) return null;
-      if (isGroup) {
-        var pg = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
-        var gIdx = Math.floor(huIdx / pg);
-        var gStart = gIdx * pg;
-        var slice = teams.slice(gStart, gStart + pg);
-        var huInSlice = huIdx - gStart;
-        var fixs = (mundialCfg.groupFixtures && mundialCfg.groupFixtures[gIdx]) || null;
-        if (!Array.isArray(fixs) || !fixs[jor]) return null;
-        var matchups = fixs[jor];
-        for (var mi = 0; mi < matchups.length; mi++){
-          var mm = matchups[mi];
-          if (!mm) continue;
-          if (mm.home === huInSlice || mm.away === huInSlice){
-            var hT = slice[mm.home], aT = slice[mm.away];
-            if (!hT || !aT || !hT.name || !aT.name) return null;
-            if (hT.name === 'PENDIENTE' || aT.name === 'PENDIENTE') return null;
+        var _koR = -1;
+        if      (koLabelKind === 'd16') _koR = 0;
+        else if (koLabelKind === 'oct') _koR = 1;
+        else if (koLabelKind === 'cua') _koR = 2;
+        else if (koLabelKind === 'sem') _koR = 3;
+        else if (koLabelKind === '3p')  _koR = _has3rdSel ? 4 : -1;
+        else if (koLabelKind === 'fin') _koR = _krSel.length - 1;
+        if (_koR < 0) return null;
+        var bracketAll = _cfg.koBracket || _cfg.bracket || [];
+        var humanName = (_teams[_huIdx] && _teams[_huIdx].name) || '';
+        if (!humanName) return null;
+        var bracket = bracketAll[_koR];
+        if (!Array.isArray(bracket) || !bracket.length){
+          for (var pr = 0; pr < _koR; pr++){
+            var prevBr = bracketAll[pr];
+            if (!Array.isArray(prevBr) || !prevBr.length) continue;
+            for (var pi = 0; pi < prevBr.length; pi++){
+              var pt = prevBr[pi];
+              if (!pt || pt.name !== humanName) continue;
+              var pPairIdx = Math.floor(pi / 2);
+              var pRes = _cfg.results && _cfg.results['ko_'+pr+'_'+pPairIdx];
+              if (pRes && pRes.played){
+                var winSlot = (pRes.winner === 'a') ? pPairIdx*2 : pPairIdx*2 + 1;
+                if (winSlot !== pi) return { eliminated: true };
+              }
+              break;
+            }
+          }
+          if (_koR === 0 && typeof window._mundialQualifiers === 'function'){
+            try {
+              var pg2 = (_cfg.formatConfig && _cfg.formatConfig.perGroup) || 4;
+              var gIdx2 = Math.floor(_huIdx / pg2);
+              var fixs2 = (_cfg.groupFixtures || [])[gIdx2] || [];
+              var resAll2 = _cfg.results || {};
+              var allDone = fixs2.length > 0;
+              for (var jj = 0; jj < fixs2.length && allDone; jj++){
+                var mu2 = fixs2[jj] || [];
+                for (var mii = 0; mii < mu2.length; mii++){
+                  var rr2 = resAll2['g' + gIdx2 + '_' + jj + '_' + mii];
+                  if (!rr2 || !(rr2.played || rr2.done)){ allDone = false; break; }
+                }
+              }
+              if (allDone){
+                var slices2 = [];
+                for (var gg = 0; gg < (_cfg.teams.length / pg2); gg++){
+                  slices2.push(_cfg.teams.slice(gg*pg2, gg*pg2+pg2));
+                }
+                var quals = window._mundialQualifiers(_cfg, slices2) || [];
+                var inQuals = false;
+                for (var qi = 0; qi < quals.length; qi++){
+                  if (quals[qi] && quals[qi].name === humanName){ inQuals = true; break; }
+                }
+                if (!inQuals) return { eliminated: true };
+              }
+            } catch(_){}
+          }
+          var _pendingSel = _psDetectPendingPrevPhase(_cfg, {
+            compKey: 'mundial',
+            koRoundIdx: _koR,
+            bracketProp: 'koBracket',
+            koRoundNames: _krSel,
+            groupsLabel: 'Fase de grupos del Mundial'
+          });
+          if (_pendingSel){
             return {
-              tourId: mundialId,
-              matchKey: 'g' + gIdx + '_' + jor + '_' + mi,
-              home: hT,
-              away: aT,
-              rival: (mm.home === huInSlice ? aT.name : hT.name),
-              jor: jor + 1
+              pending: true,
+              info: _pendingSel,
+              tourId: _cfgId,
+              compEmoji: '🌍',
+              compName: 'Mundial · ' + (_krSel[_koR] || ('Ronda ' + (_koR + 1)))
             };
           }
+          return null;
         }
-        return null;
+        var huKoIdx = -1;
+        for (var bi = 0; bi < bracket.length; bi++){
+          var bt = bracket[bi];
+          if (bt && bt.name === humanName){ huKoIdx = bi; break; }
+        }
+        if (huKoIdx < 0) return { eliminated: true };
+        var pairIdx = Math.floor(huKoIdx / 2);
+        var hKo = bracket[pairIdx*2], aKo = bracket[pairIdx*2 + 1];
+        if (!hKo || !aKo || !hKo.name || !aKo.name) return null;
+        if (hKo.name === 'PENDIENTE' || aKo.name === 'PENDIENTE'){
+          var _pendingSel2 = _psDetectPendingPrevPhase(_cfg, {
+            compKey: 'mundial',
+            koRoundIdx: _koR,
+            bracketProp: 'koBracket',
+            koRoundNames: _krSel,
+            groupsLabel: 'Fase de grupos del Mundial'
+          });
+          if (_pendingSel2){
+            return {
+              pending: true,
+              info: _pendingSel2,
+              tourId: _cfgId,
+              compEmoji: '🌍',
+              compName: 'Mundial · ' + (_krSel[_koR] || ('Ronda ' + (_koR + 1)))
+            };
+          }
+          return null;
+        }
+        return {
+          tourId: _cfgId,
+          matchKey: 'ko_' + _koR + '_' + pairIdx,
+          home: hKo,
+          away: aKo,
+          rival: (huKoIdx === pairIdx*2 ? aKo.name : hKo.name)
+        };
       }
-      /* KO: cfg.koBracket[koRoundIdx] (formato mundial-48) o
-         cfg.bracket[koRoundIdx] (formatos legacy ko/ko-2leg) es la
-         lista ordenada de equipos que llegan a esa ronda (pos 0 vs 1,
-         2 vs 3, ...). El sorteo lo hace _renderMundial al cerrar la
-         ronda anterior. Si la ronda aún no se ha sorteado, el array
-         no existe o no contiene al humano → null y la card cae a
-         JUGADORES FUERA, que es lo correcto en ese estado.
-         2026-05-24: añadido fallback a `koBracket` — sin esto los
-         días marcados como "Mundial - Dieciseisavos / Octavos /
-         Cuartos / Semis / Final" en el calendario del hub Liverpool
-         caían a JUGADORES FUERA aunque el bracket ya estuviera
-         sorteado, porque mundial-48 NO usa `bracket` sino `koBracket`.
-         2026-05-24 (b): si el bracket está sorteado y el humano NO
-         está en él, devolvemos { eliminated: true } para que el
-         caller renderice día de ENTRENAMIENTO en lugar de JUGADORES
-         FUERA. También detecta eliminación retro-activa cuando el
-         humano perdió en una ronda anterior y la actual aún no se
-         sorteó. Petición usuario: "sincroniza el calendario con sus
-         partidos … si es eliminado de una competición esa card será
-         día de entrenamiento". */
-      var bracketAll = mundialCfg.koBracket || mundialCfg.bracket || [];
-      var humanName = (teams[huIdx] && teams[huIdx].name) || '';
-      if (!humanName) return null;
-      var bracket = bracketAll[koRoundIdx];
-      if (!Array.isArray(bracket) || !bracket.length){
-        /* Ronda actual sin sortear. ¿El humano ya perdió en una
-           ronda anterior? Recorremos los rounds previos buscándole:
-           si lo encontramos jugando y NO ganó esa pareja, está
-           eliminado para siempre. */
-        for (var pr = 0; pr < koRoundIdx; pr++){
-          var prevBr = bracketAll[pr];
-          if (!Array.isArray(prevBr) || !prevBr.length) continue;
-          for (var pi = 0; pi < prevBr.length; pi++){
-            var pt = prevBr[pi];
-            if (!pt || pt.name !== humanName) continue;
-            var pPairIdx = Math.floor(pi / 2);
-            var pRes = mundialCfg.results && mundialCfg.results['ko_'+pr+'_'+pPairIdx];
-            if (pRes && pRes.played){
-              var winSlot = (pRes.winner === 'a') ? pPairIdx*2 : pPairIdx*2 + 1;
-              if (winSlot !== pi) return { eliminated: true };
-            }
-            break;
+      /* Lista de candidatos (cfg, huIdx). Para CADA cfg mundial-48
+         localizada arriba, recolectamos TODOS los humanos (no solo el
+         primero) mediante Pase 1 (isHuman flag) + Pase 2 (humanIcon /
+         isHumanInComp). Esto permite que con 6 selecciones humanas
+         (Francia + Brasil + Inglaterra + Noruega + Argentina + España)
+         encontremos el partido del que SÍ tiene rival ese día, en vez
+         de quedarnos con el primer humano que tropecemos. */
+      var _candidates = [];
+      for (var ci = 0; ci < _mCfgs.length; ci++){
+        var _Cobj = _mCfgs[ci], _C = _Cobj.cfg, _Cid = _Cobj.id;
+        var _T = _C.teams || [];
+        var _seen = {};
+        for (var ti = 0; ti < _T.length; ti++){
+          var t = _T[ti];
+          if (!t || !t.name || t.name === 'PENDIENTE') continue;
+          if (t.isHuman){ if (!_seen[ti]){ _candidates.push({cfg:_C, id:_Cid, huIdx:ti}); _seen[ti]=1; } }
+        }
+        if (typeof window.isHumanInComp === 'function'){
+          for (var ti2 = 0; ti2 < _T.length; ti2++){
+            if (_seen[ti2]) continue;
+            var t2 = _T[ti2];
+            if (!t2 || !t2.name || t2.name === 'PENDIENTE') continue;
+            try {
+              if (window.isHumanInComp(t2.name, 'mundial')){
+                _candidates.push({cfg:_C, id:_Cid, huIdx:ti2});
+                _seen[ti2] = 1;
+              }
+            } catch(_){}
           }
         }
-        /* Caso especial round 0 (Dieciseisavos): la fase de grupos
-           puede estar terminada pero koBracket[0] aún sin construir
-           (el usuario no ha pulsado «ABRIR PLAYOFFS»). Si todos los
-           partidos del grupo del humano están jugados Y el humano
-           NO está entre los clasificados, ya está eliminado. */
-        if (koRoundIdx === 0 && typeof window._mundialQualifiers === 'function'){
-          try {
-            var pg2 = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
-            var gIdx2 = Math.floor(huIdx / pg2);
-            var fixs2 = (mundialCfg.groupFixtures || [])[gIdx2] || [];
-            /* Resultados de grupo: clave canónica `g<g>_<j>_<m>` en
-               cfg.results (cfg.groupResults nunca se llega a poblar).
-               Bug fix 2026-05-25. */
-            var resAll2 = mundialCfg.results || {};
-            var allDone = fixs2.length > 0;
-            for (var jj = 0; jj < fixs2.length && allDone; jj++){
-              var mu2 = fixs2[jj] || [];
-              for (var mii = 0; mii < mu2.length; mii++){
-                var rr2 = resAll2['g' + gIdx2 + '_' + jj + '_' + mii];
-                if (!rr2 || !(rr2.played || rr2.done)){ allDone = false; break; }
-              }
-            }
-            if (allDone){
-              var slices2 = [];
-              for (var gg = 0; gg < (mundialCfg.teams.length / pg2); gg++){
-                slices2.push(mundialCfg.teams.slice(gg*pg2, gg*pg2+pg2));
-              }
-              var quals = window._mundialQualifiers(mundialCfg, slices2) || [];
-              var inQuals = false;
-              for (var qi = 0; qi < quals.length; qi++){
-                if (quals[qi] && quals[qi].name === humanName){ inQuals = true; break; }
-              }
-              if (!inQuals) return { eliminated: true };
-            }
-          } catch(_){}
-        }
-        /* No eliminado, bracket no construido → detección de FASE
-           PREVIA PENDIENTE (2026-05-26). Si encontramos partidos
-           IA-vs-IA pendientes en la fase previa, devolvemos
-           { pending:true, ... } para que `_render` muestre la card
-           de bloqueo en vez de "JUGADORES FUERA · CONTINUAR". */
-        var _krAll = (mundialCfg.formatConfig && mundialCfg.formatConfig.koRounds)
-                  || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
-        var _pendingSel = _psDetectPendingPrevPhase(mundialCfg, {
-          compKey: 'mundial',
-          koRoundIdx: koRoundIdx,
-          bracketProp: 'koBracket',
-          koRoundNames: _krAll,
-          groupsLabel: 'Fase de grupos del Mundial'
-        });
-        if (_pendingSel){
-          return {
-            pending: true,
-            info: _pendingSel,
-            tourId: mundialId,
-            compEmoji: '🌍',
-            compName: 'Mundial · ' + (_krAll[koRoundIdx] || ('Ronda ' + (koRoundIdx + 1)))
-          };
-        }
-        return null;
       }
-      var huKoIdx = -1;
-      for (var bi = 0; bi < bracket.length; bi++){
-        var bt = bracket[bi];
-        if (bt && bt.name === humanName){ huKoIdx = bi; break; }
+      if (!_candidates.length) return null;
+      /* Iterar candidatos. Prioridad: REAL match (return inmediato) >
+         pending > eliminated > null. Conservamos el mejor fallback por
+         si ningún candidato tiene partido real ese día. */
+      var _fallbackPending = null;
+      var _fallbackElim = null;
+      for (var ki = 0; ki < _candidates.length; ki++){
+        var _cand = _candidates[ki];
+        var _res = _resolveForHuman(_cand.cfg, _cand.id, _cand.huIdx);
+        if (!_res) continue;
+        if (_res.pending){ if (!_fallbackPending) _fallbackPending = _res; continue; }
+        if (_res.eliminated){ if (!_fallbackElim) _fallbackElim = _res; continue; }
+        return _res; /* partido real encontrado */
       }
-      /* Bracket sorteado pero el humano NO aparece → eliminado.
-         Para round 0 esto cubre que no clasificara desde la fase de
-         grupos; para rounds > 0 cubre que perdió en la ronda
-         anterior y el bracket nuevo ya se generó sin él. */
-      if (huKoIdx < 0) return { eliminated: true };
-      var pairIdx = Math.floor(huKoIdx / 2);
-      var hKo = bracket[pairIdx*2], aKo = bracket[pairIdx*2 + 1];
-      if (!hKo || !aKo || !hKo.name || !aKo.name) return null;
-      if (hKo.name === 'PENDIENTE' || aKo.name === 'PENDIENTE'){
-        /* Bracket construido pero rival aún TBD (resultados de la
-           ronda previa incompletos). Mismo flujo de bloqueo. */
-        var _krAll2 = (mundialCfg.formatConfig && mundialCfg.formatConfig.koRounds)
-                   || ['Dieciseisavos','Octavos','Cuartos','Semis','Final'];
-        var _pendingSel2 = _psDetectPendingPrevPhase(mundialCfg, {
-          compKey: 'mundial',
-          koRoundIdx: koRoundIdx,
-          bracketProp: 'koBracket',
-          koRoundNames: _krAll2,
-          groupsLabel: 'Fase de grupos del Mundial'
-        });
-        if (_pendingSel2){
-          return {
-            pending: true,
-            info: _pendingSel2,
-            tourId: mundialId,
-            compEmoji: '🌍',
-            compName: 'Mundial · ' + (_krAll2[koRoundIdx] || ('Ronda ' + (koRoundIdx + 1)))
-          };
-        }
-        return null;
-      }
-      return {
-        tourId: mundialId,
-        matchKey: 'ko_' + koRoundIdx + '_' + pairIdx,
-        home: hKo,
-        away: aKo,
-        rival: (huKoIdx === pairIdx*2 ? aKo.name : hKo.name)
-      };
+      if (_fallbackPending) return _fallbackPending;
+      if (_fallbackElim) return _fallbackElim;
+      return null;
     } catch(_){}
     return null;
   }

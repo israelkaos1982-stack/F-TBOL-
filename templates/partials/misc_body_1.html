@@ -11149,6 +11149,16 @@ window._showSimProgress = function(opts, onDone){
           || k.indexOf('|cwc|') !== -1) return 'mundial';
       if (k.indexOf('|sel|') !== -1 || k.indexOf('|sel-fin|') !== -1
           || k.indexOf('cal-sel') !== -1 || k.indexOf('cal-mf-') !== -1) return 'sel';
+      /* 2026-05-27: Mundial 2032 / Selecciones tournaments viven en
+         slots spv1..spv10 (Rondas Previas) y sfn1..sfn10 (Rondas
+         Finales) — sus matchKeys contienen `tour_spv<N>_` o
+         `tour_sfn<N>_`. Son competiciones DE SELECCIONES (Francia,
+         Brasil, Inglaterra…), NO de Torneos de Verano. Sin este
+         check temprano caían al bucket `torneos` por el match
+         `tour_` de abajo y los goleadores nacionales se mezclaban
+         con los jugadores de Joan Gamper / SCT / PSS / Asia en
+         `s-torneos-stats`. */
+      if (k.indexOf('tour_spv') !== -1 || k.indexOf('tour_sfn') !== -1) return 'sel';
       /* Torneos de verano + amistosos → bucket único `torneos`
          (s-torneos-stats). Petición usuario 2026-05-09.
          storeKey real de tour matches = `canonA|canonB|torneos|tour_<id>_<key>`
@@ -11238,7 +11248,16 @@ window._showSimProgress = function(opts, onDone){
       Object.keys(store).forEach(function(matchKey){
         var m = store[matchKey]; if(!m) return;
         var comp = m.competition || _competitionFromMatchKey(matchKey);
-        if (!buckets[comp]) comp = 'liga';
+        /* 2026-05-27: el compKey que pasa `_tourOpenHumanMatch` para
+           Mundial 2032 es `'torneo'` (singular) y para sel-fin es
+           `'sel-fin'`. Ninguno existe directamente en `buckets`
+           (que tiene `torneos` plural y `sel`). Antes caían a 'liga'.
+           Normalizamos vía `_competitionFromMatchKey` (que con el
+           parche `tour_spv*`/`tour_sfn*` clasifica correctamente). */
+        if (!buckets[comp]) {
+          var _fromMk = _competitionFromMatchKey(matchKey);
+          comp = buckets[_fromMk] ? _fromMk : 'liga';
+        }
         var tA = m.teamA||'', tB = m.teamB||'';
         var pjKey = _mkPJ(tA, tB);
         /* dedup PER-competición: el mismo pareja de equipos puede
@@ -11349,9 +11368,35 @@ window._showSimProgress = function(opts, onDone){
         try { _tCfg = JSON.parse(_tRaw); } catch(_){ continue; }
         if (!_tCfg || !_tCfg.results) continue;
         var _isMundialCfg = (_tCfg.id === 'mundial');
-        var _tBucket = _isMundialCfg ? buckets.mundial : buckets.torneos;
-        var _tPjBucket = _isMundialCfg ? teamPJByComp.mundial : teamPJByComp.torneos;
-        var _tCompKey = _isMundialCfg ? 'mundial' : 'torneos';
+        /* 2026-05-27: separar buckets por TIPO de torneo. Los slots
+           spv*/sfn* (Rondas Previas y Finales de Selecciones —
+           Mundial 2032, etc., format `mundial-48`) son competiciones
+           de SELECCIONES NACIONALES, NO de clubes. Sus jugadores
+           (Mbappé/Francia, Borre/Colombia, Williams/Ghana…) deben
+           ir al bucket `sel`, NUNCA al `torneos`. Sin este split,
+           la caja "Torneos de Verano · Estadísticas" mezclaba
+           goleadores de Joan Gamper / SCT / PSS / Asia / Mundialito
+           con goleadores de Selecciones (bug 2026-05-27 reportado
+           con captura: Trofeo Joan Gamper · Estadísticas mostraba
+           Kylian Mbappe / Francia, Rafael Borre / Colombia, etc.). */
+        var _tIdStr = String(_tCfg.id || '');
+        var _isSelCfg = /^(spv|sfn)\d+$/.test(_tIdStr)
+                     || _tCfg.format === 'mundial-48'
+                     || /^tour_(spv|sfn)\d+_v1$/.test(_tk);
+        var _tBucket, _tPjBucket, _tCompKey;
+        if (_isMundialCfg) {
+          _tBucket = buckets.mundial;
+          _tPjBucket = teamPJByComp.mundial;
+          _tCompKey = 'mundial';
+        } else if (_isSelCfg) {
+          _tBucket = buckets.sel;
+          _tPjBucket = teamPJByComp.sel;
+          _tCompKey = 'sel';
+        } else {
+          _tBucket = buckets.torneos;
+          _tPjBucket = teamPJByComp.torneos;
+          _tCompKey = 'torneos';
+        }
         Object.keys(_tCfg.results).forEach(function(_mk){
           if (/\|L[12]$/.test(_mk)) return;  /* legs intermedios — agregado vive en baseKey */
           var _res = _tCfg.results[_mk];

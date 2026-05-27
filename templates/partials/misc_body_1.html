@@ -5035,6 +5035,32 @@ window._showSimProgress = function(opts, onDone){
     try {
       var d = _load();
       var tid = d.tour;
+      /* Día actual del calendario → "Partido N" del torneo. Cada día
+         ag-torneo del calendario individual del Liverpool mapea a UN
+         partido secuencial del torneo (4 jornadas de grupos + 3 KO
+         para JG default; N=1..groupJors → fase de grupos, N>groupJors
+         → ronda KO N-groupJors-1). Sin esto la card del hub usaba
+         `currentJornadaByGroup`/`koCurrentRound` que solo avanzan al
+         pulsar el botón "🏆 J{N+1}" / "🏆 Avanzar KO" en la pantalla
+         del torneo — el usuario juega su partido desde la card del hub
+         y nunca visita la pantalla del torneo, así que esos cursores
+         quedan en 0 y la card seguía mostrando J1 (Tigres) el día 08
+         Jun (J2), 12 Jun (J3), etc. Bug reportado por el usuario con
+         foto Liverpool vs Tigres 1-2 repitiéndose en J3. */
+      var _dayPartidoN = null;
+      try {
+        var _rows = (typeof _calRows === 'function') ? _calRows() : null;
+        if (Array.isArray(_rows)){
+          var _curRow = _rows[parseInt(d.dayIdx, 10) || 0];
+          if (_curRow && /\bag-torneo\b/.test(_curRow.cls || '')){
+            var _mPN = /Partido\s+(\d+)/i.exec(_curRow.label || '');
+            if (_mPN){
+              var _pn = parseInt(_mPN[1], 10);
+              if (_pn > 0) _dayPartidoN = _pn;
+            }
+          }
+        }
+      } catch(_){}
       /* Healing 2026-05-27: si d.tour se perdió (cookie minimal sin
          tour, hidratación del server con dato stale, migración
          cross-device…) pero el usuario ya eligió torneo de verano
@@ -5235,9 +5261,37 @@ window._showSimProgress = function(opts, onDone){
          espejo de la primera (home/away invertidos), así que la
          vuelta cae automáticamente como visitante para el humano. */
       if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss'){
+        /* Número de jornadas de grupos (necesario para decidir si el
+           "Partido N" del calendario cae en grupos o en KO). Leemos de
+           cfg.groupFixtures (cualquier grupo, todos tienen el mismo
+           tamaño tras `_tourBuildRoundRobin` / `_tourDoubleFixture`). */
+        var _grpJors = 0;
+        try {
+          var _anyFix = null;
+          if (cfg.groupFixtures){
+            var _gks = Object.keys(cfg.groupFixtures);
+            for (var _gi = 0; _gi < _gks.length; _gi++){
+              var _ff = cfg.groupFixtures[_gks[_gi]];
+              if (Array.isArray(_ff) && _ff.length){ _anyFix = _ff; break; }
+            }
+          }
+          if (Array.isArray(_anyFix)) _grpJors = _anyFix.length;
+        } catch(_){}
+        /* Día del calendario que cae en KO (Partido N > nº de jornadas
+           de grupos). Si todavía no se ha construido koBracket pero el
+           calendario ya demanda KO, mostramos card RIVAL PENDIENTE
+           (regla CLAUDE.md 2026-05-26). */
+        var _dayInKo = (_dayPartidoN !== null && _grpJors > 0 && _dayPartidoN > _grpJors);
+        var _dayKoIdx = _dayInKo ? (_dayPartidoN - _grpJors - 1) : null;
         /* Fase KO ya iniciada → tratar como KO de partido único. */
         if (Array.isArray(cfg.koBracket) && cfg.koBracket.length){
-          var kr = parseInt(cfg.koCurrentRound,10) || 0;
+          /* Si el calendario demanda una ronda KO concreta, la usamos
+             como override del cursor `koCurrentRound`. Sin esto, la card
+             seguía pintando la ronda KO anterior hasta que el usuario
+             pulsara "🏆 Avanzar KO" en la pantalla del torneo. */
+          var kr = (_dayKoIdx !== null && _dayKoIdx >= 0)
+                    ? Math.min(_dayKoIdx, cfg.koBracket.length - 1)
+                    : (parseInt(cfg.koCurrentRound,10) || 0);
           var kround = cfg.koBracket[kr] || cfg.koBracket[0] || [];
           var kbi = -1;
           for (var ki=0; ki<kround.length; ki++){
@@ -5275,6 +5329,13 @@ window._showSimProgress = function(opts, onDone){
             var _pGk2 = _realPendingShape(tid, cfg, kr, 'koBracket');
             if (_pGk2) return _pGk2;
           }
+        } else if (_dayInKo){
+          /* Calendario demanda KO (Partido N > nº jornadas de grupos)
+             pero koBracket no está construido todavía: la fase previa
+             (los propios grupos) no se ha simulado al completo. Card
+             RIVAL PENDIENTE para que el usuario pueda auto-simular. */
+          var _pKoDay = _realPendingShape(tid, cfg, _dayKoIdx || 0, 'koBracket');
+          if (_pKoDay) return _pKoDay;
         }
         /* Fase de grupos: localizar al humano en cfg.teams, su grupo
            y su partido en la jornada actual del round-robin. */
@@ -5294,7 +5355,20 @@ window._showSimProgress = function(opts, onDone){
         var huInSlice = huIdx - gStart;
         var fixs = (cfg.groupFixtures && cfg.groupFixtures[gIdx]) || null;
         if (!Array.isArray(fixs) || !fixs.length) return null;
-        var cj = (cfg.currentJornadaByGroup && cfg.currentJornadaByGroup[gIdx]) || 0;
+        /* Jornada efectiva = la que demanda el calendario individual
+           (Partido N → jornada N-1) si está disponible. Sin esto la
+           card del hub seguía mostrando la jornada cuyo cursor
+           `currentJornadaByGroup` solo avanza al pulsar el botón
+           "🏆 J{N+1}" en la pantalla del torneo (que el usuario nunca
+           visita: juega el partido desde la card del hub directamente),
+           y la card mostraba J1 (Tigres) los días 08 Jun (J2), 12 Jun
+           (J3), 16 Jun (J4)… 2026-05-27. */
+        var cj;
+        if (_dayPartidoN !== null && (_dayPartidoN - 1) < fixs.length && (_dayPartidoN - 1) >= 0){
+          cj = _dayPartidoN - 1;
+        } else {
+          cj = (cfg.currentJornadaByGroup && cfg.currentJornadaByGroup[gIdx]) || 0;
+        }
         if (cj >= fixs.length) cj = fixs.length - 1;
         var jor = fixs[cj] || [];
         for (var mi=0; mi<jor.length; mi++){

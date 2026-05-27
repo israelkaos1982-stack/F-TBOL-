@@ -3412,6 +3412,13 @@ window._showSimProgress = function(opts, onDone){
       };
       _save(d);
     } catch(_){}
+    /* Refresca en caliente todas las superficies que muestran
+       lesionados: HUD 💊, plantilla del Liverpool (badge 🩹 NP), lista
+       de sanciones/lesiones del overlay, y persiste a localStorage
+       para sobrevivir recargas. Sin esto, el usuario tenía que
+       recargar la web para que apareciera el jugador lesionado en la
+       plantilla (foto 2026-05-27 con A. Robertson). */
+    try { if (typeof window._notifyInjuryAdded === 'function') window._notifyInjuryAdded(); } catch(_){}
     return {
       name: pl.name,
       pos: POS_ES[pl.pos] || pl.pos || '—',

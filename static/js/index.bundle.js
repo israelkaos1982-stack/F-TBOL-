@@ -8239,6 +8239,46 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         europa: partidos
       };
     });
+    /* Refresca al instante todas las superficies que muestran
+       lesionados: HUD 💊, plantilla del Liverpool, overlay de sanciones,
+       y persiste a localStorage. Sin esto, una lesión registrada en
+       gm-modal o ml-card no aparecía en la plantilla del Liverpool
+       hasta recargar la web (foto 2026-05-27 A. Robertson). */
+    try { if (typeof window._notifyInjuryAdded === 'function') window._notifyInjuryAdded(); } catch(_){}
+  };
+
+  /* HELPER CANÓNICO de refresh tras añadir/quitar una lesión
+     (2026-05-27). Centralizamos aquí la cadena de repintados para que
+     cualquier ruta que escriba a `LESION_STORE` (entrenamiento,
+     evento de partido IA-vs-IA, evento del acta humana, scripts de
+     sanciones, …) pueda llamarlo sin duplicar lógica. Es
+     idempotente y silencioso — si una de las superficies no está
+     en pantalla, su refresher hace early-return. */
+  window._notifyInjuryAdded = function _notifyInjuryAdded() {
+    /* (1) Persistencia inmediata a localStorage (sobrevive recarga). */
+    try { if (typeof window._persistInjuries === 'function') window._persistInjuries(); } catch(_){}
+    /* (2) HUD 💊 del Liverpool — el contador `#ath-med-injury` se
+       repinta con el máximo de partidos pendientes. */
+    try { if (typeof window.athRefreshInjuryHud === 'function') window.athRefreshInjuryHud(); } catch(_){}
+    /* (3) Plantilla del editor de Liga EA Sports (overlay lext-ov-squad)
+       si está abierta — añade el badge 🩹 NP al jugador lesionado.
+       Mismo guard que usa `ligaExtReiniciar`: sólo repinta si el
+       overlay está visible. */
+    try {
+      var ovSquad = document.getElementById('lext-ov-squad');
+      if (ovSquad && ovSquad.classList && ovSquad.classList.contains('show')
+          && typeof window.renderSquadList === 'function') {
+        window.renderSquadList();
+      }
+    } catch(_){}
+    /* (4) Overlay "BAJAS PARA EL PARTIDO" / sanciones, si está abierto. */
+    try { if (typeof window._refreshSancionInjList === 'function') window._refreshSancionInjList(); } catch(_){}
+    /* (5) Evento DOM público — terceros (futuros mods, paneles de
+       debug) pueden escuchar `ftbol:injury-added` sin acoplarse a
+       este helper. */
+    try {
+      document.dispatchEvent(new CustomEvent('ftbol:injury-added'));
+    } catch(_){}
   };
 
   console.log('[eFootball] Sistema de Lesiones activado ✓');

@@ -14681,6 +14681,17 @@
         div.setAttribute('data-id', ev.id);
         div.setAttribute('data-team', ev.team || 'a');
         div.setAttribute('data-type', ev.type || '');
+        /* Marcador de restauración: los eventos vienen del snapshot
+           guardado (partido reanudado desde PARTIDOS APLAZADOS), no
+           son eventos nuevos. El MutationObserver de _gmWireActaWatcher
+           los salta para no disparar el overlay fantasma de TARJETA
+           AMARILLA / GOL / etc. al reabrir el partido (bug 2026-05-27
+           reportado con foto "CA River Plate 2-1 Liverpool · Jugador J").
+           SIN ESTE MARCADOR, cada evento del snapshot dispara su propio
+           overlay countdown porque el observer no distingue
+           "evento nuevo añadido por el usuario" de "evento restaurado
+           del histórico". */
+        div.setAttribute('data-restored', '1');
         var _evIdEsc3 = String(ev.id).replace(/'/g,"\\'");
         div.innerHTML = '<span class="ml-evt-min">' + (ev.min || 0) + "'</span>"
                       + '<span class="ml-evt-ico">' + ico + '</span>'
@@ -15084,6 +15095,12 @@
           li.setAttribute('data-id', ev.id);
           li.setAttribute('data-team', ev.team || 'a');
           li.setAttribute('data-type', ev.type || '');
+          /* Marcador de restauración (ver bloque equivalente en
+             gmReanudar). El observer del gm-acta-list salta los nodos
+             con data-restored="1" para no disparar el overlay fantasma
+             al reabrir un partido en background (bug 2026-05-27,
+             foto "CA River Plate 2-1 Liverpool · Jugador J"). */
+          li.setAttribute('data-restored', '1');
           var _evIdEsc2 = String(ev.id).replace(/'/g,"\\'");
           li.innerHTML = '<span class="ml-evt-min">' + (ev.min || 0) + "'</span>"
                         + '<span class="ml-evt-ico">' + ico + '</span>'
@@ -32694,6 +32711,16 @@ document.addEventListener('DOMContentLoaded', function() {
           var n = m.addedNodes[j];
           if (n.nodeType !== 1) continue;
           if (!n.classList || !n.classList.contains('ml-evt-item')) continue;
+          /* Saltar nodos marcados como restauración. Los eventos
+             reinyectados desde un snapshot guardado (gmOpen con
+             saved._gmBg, gmReanudar desde partidos_aplazados) traen
+             `data-restored="1"`. Sin este check, reabrir un partido en
+             background dispara una cascada de overlays fantasma — uno
+             por cada tarjeta/gol del histórico — incluso aunque el
+             partido tuviera placeholders ("Jugador J" del fallbackSq11
+             para equipos sin plantilla, p.ej. CA River Plate). Bug
+             reportado con foto 2026-05-27. */
+          if (n.getAttribute('data-restored') === '1') continue;
           var g = window._gm || {};
           /* Saltar replays del localStorage al ABRIR el modal (kickoff
              aún no se ha pulsado): si el reloj no ha arrancado nunca,

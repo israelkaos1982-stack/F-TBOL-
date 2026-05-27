@@ -5066,6 +5066,7 @@ window._showSimProgress = function(opts, onDone){
          Jun (J2), 12 Jun (J3), etc. Bug reportado por el usuario con
          foto Liverpool vs Tigres 1-2 repitiéndose en J3. */
       var _dayPartidoN = null;
+      var _isMundialitoDay = false;
       try {
         var _rows = (typeof _calRows === 'function') ? _calRows() : null;
         if (Array.isArray(_rows)){
@@ -5077,8 +5078,55 @@ window._showSimProgress = function(opts, onDone){
               if (_pn > 0) _dayPartidoN = _pn;
             }
           }
+          /* Mundialito de Clubes: las filas en `calendario.json` usan
+             icono 🌐 (clase `ag-inter`) con etiquetas «Mundialito Clubes
+             - J1/J2/J3» (fase de grupos) y «Mundialito Clubes - Octavos/
+             Cuartos/Semis/FINAL» (KO). Mapeamos a `_dayPartidoN`
+             usando el formato canónico groups-ko: J1→1, J2→2, J3→3,
+             Octavos→4, Cuartos→5, Semis→6, FINAL→7 (groupJors=3 fijo
+             en 8 grupos × 4 equipos). Petición usuario 2026-05-27.
+             Esto fuerza tid='mundial' SIN persistir en d.tour para
+             que la card del hub pinte el partido del Mundialito sin
+             desplazar el torneo activo del usuario. */
+          if (_curRow && /\bag-inter\b/.test(_curRow.cls || '')){
+            var _lblMC = String(_curRow.label || '');
+            if (/Mundialito\s+Clubes/i.test(_lblMC)){
+              _isMundialitoDay = true;
+              var _mcJor = /-\s*J\s*(\d+)/i.exec(_lblMC);
+              if (_mcJor){
+                _dayPartidoN = parseInt(_mcJor[1], 10);   /* J1→1, J2→2, J3→3 */
+              } else if (/octavos/i.test(_lblMC))   _dayPartidoN = 4;
+              else   if (/cuartos/i.test(_lblMC))   _dayPartidoN = 5;
+              else   if (/semis|semifinal/i.test(_lblMC)) _dayPartidoN = 6;
+              else   if (/final/i.test(_lblMC))     _dayPartidoN = 7;
+            }
+          }
         }
       } catch(_){}
+      /* Si el día actual es del Mundialito, forzamos tid='mundial'
+         localmente (sin tocar d.tour). El builtin 'mundial' es el
+         slot canónico de la Mundialito de Clubes (numTeams:32,
+         format:'groups-ko', 8 grupos × 4, KO Octavos→Final). */
+      if (_isMundialitoDay){
+        var _mundCache = (window._TOUR_CACHE && window._TOUR_CACHE['mundial']) || null;
+        if (!_mundCache && typeof window._tourLoadCachedSync === 'function'){
+          try { _mundCache = window._tourLoadCachedSync('mundial'); } catch(_){}
+        }
+        if (_mundCache && Array.isArray(_mundCache.teams) && _mundCache.teams.length){
+          /* Re-asignar el local `tid` para usar la cfg del Mundialito
+             en el resto de la función. NO persistimos d.tour para no
+             desplazar el torneo activo del usuario (jg/asia/etc.). */
+          tid = 'mundial';
+        } else {
+          /* Mundialito de Clubes aún no lanzado (sin teams en la cfg
+             del slot 'mundial'). Devolvemos null para que la card del
+             hub muestre CONTINUAR ▶ (gestionado por `_cardMatch` →
+             pair=null → card "sin partido"). El usuario tendrá que
+             ir a Resto del Mundo para LANZAR el Mundialito antes de
+             que el día tenga un partido real. 2026-05-27. */
+          return null;
+        }
+      }
       /* Healing 2026-05-27: si d.tour se perdió (cookie minimal sin
          tour, hidratación del server con dato stale, migración
          cross-device…) pero el usuario ya eligió torneo de verano
@@ -5115,8 +5163,12 @@ window._showSimProgress = function(opts, onDone){
       if (!cfg) return null;
       /* Persistimos el healing del tour SOLO si el cfg cargó OK y
          contiene al humano. Sin esto, un cfg parcial podría dejar
-         d.tour apuntando a un torneo sin Liverpool. */
-      if (tid && d.tour !== tid){
+         d.tour apuntando a un torneo sin Liverpool. NUNCA persistimos
+         cuando el día es Mundialito de Clubes (tid forzado localmente):
+         el Mundialito es un torneo "temporal" del calendario y forzar
+         d.tour='mundial' desplazaría el torneo activo del usuario en
+         los días siguientes (jg, asia, etc.). 2026-05-27. */
+      if (tid && d.tour !== tid && !_isMundialitoDay){
         try {
           var _hasHuman = false;
           var _humanKey = null;
@@ -5492,11 +5544,19 @@ window._showSimProgress = function(opts, onDone){
        el resto delegamos a `_cardNonTour` que pinta una card limpia
        sin asumir torneo de verano. */
     var _isTorneoDay = /\bag-torneo\b/.test(day.cls || '');
-    if (!_isTorneoDay){
+    /* Mundialito de Clubes: filas `ag-inter` con label "Mundialito
+       Clubes - …" se tratan como días de torneo (cfg 'mundial',
+       format='groups-ko'). `_realPair` ya hace el override interno de
+       tid='mundial' para esos días. 2026-05-27. */
+    var _isMundialitoCalDay = /\bag-inter\b/.test(day.cls || '')
+                              && /Mundialito\s+Clubes/i.test(day.label || '');
+    if (!_isTorneoDay && !_isMundialitoCalDay){
       _cardNonTour(day);
       return;
     }
-    var tourNm = d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido');
+    var tourNm = _isMundialitoCalDay
+      ? 'Mundialito de Clubes'
+      : (d.tour ? (TOUR_NAMES[d.tour] || 'Torneo de Verano') : (day.label || 'Partido'));
     /* Bayern solo tiene partido REAL si el bracket del torneo le da
        rival en la ronda actual. Sin torneo elegido, con torneo
        terminado, o con Bayern eliminado, _realRival devuelve null.
@@ -12017,42 +12077,46 @@ window._showSimProgress = function(opts, onDone){
      intercontinental, etc. en su día). -->
 <div class="screen" id="s-mundial-clubes">
 <style>
-/* Franja izquierda marrón en cada card de ronda del Mundialito —
-   mismo acento que las cards de Copa del Rey. */
-#s-mundial-clubes .jlist .jbtn.c-mundial{border-left:3px solid #c8732a;}
+/* Franja izquierda amarilla en cada card de ronda del Mundialito
+   (re-tematizado 2026-05-27 a petición del usuario: mismo formato
+   visual que Mundial 2032 selecciones, pero color amarillo
+   `#ffd633`). */
+#s-mundial-clubes .jlist .jbtn.c-mundialito{border-left:3px solid #ffd633;}
 </style>
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Mundialito Clubes</h2></div>
+<div class="sec-hdr"><span class="sec-emoji">🟡</span><h2>Mundialito Clubes</h2></div>
 <div class="jlist">
-  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Fase de Grupos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">8×4</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Octavos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Cuartos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;Semis</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundial" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🌍 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟡 <b>Mundialito</b>&nbsp;&nbsp;Fase de Grupos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">8×4</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟡 <b>Mundialito</b>&nbsp;&nbsp;Octavos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">○</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟡 <b>Mundialito</b>&nbsp;&nbsp;Cuartos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">○</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟡 <b>Mundialito</b>&nbsp;&nbsp;Semis</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">○</span></button></div>
+  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟡 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">○</span></button></div>
   <!-- 📊 Estadísticas -->
-  <div class="submenu-card sc-mundial-stats" style="margin-top:10px;background:linear-gradient(135deg,#001f2a 0%,#003a52 25%,#006080 50%,#00bcd4 70%,#006080 85%,#001f2a 100%) !important;border:1.5px solid #4dd0e1 !important;box-shadow:0 4px 18px rgba(0,188,212,.32),inset 0 1px 0 rgba(255,255,255,.10) !important;" onclick="go('s-mundial-stats')">
+  <div class="submenu-card sc-mundialito-stats" style="margin-top:10px;background:linear-gradient(135deg,#1a1300 0%,#3a2a00 25%,#806008 50%,#ffd633 70%,#806008 85%,#3a2a00 100%) !important;border:1.5px solid #ffe066 !important;box-shadow:0 4px 18px rgba(255,214,51,.32),inset 0 1px 0 rgba(255,255,255,.10) !important;" onclick="go('s-mundial-stats')">
     <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
   </div>
 </div>
 </div>
 <style>
-/* Botones de ronda Mundialito Clubes — gradient cian/turquesa
-   coherente con la caja principal en s-competiciones. */
-.c-mundial{background:linear-gradient(90deg,#001f2a,#003a52,#006080,#00bcd4,#006080,#003a52,#001f2a) !important;border:1.5px solid rgba(77,208,225,.55) !important;}
-/* Caja de Estadísticas del Mundial — gradient violeta/púrpura para
-   diferenciarla de las rondas (petición usuario 2026-05-24). */
-.jbtn.c-mundial.c-mundial-stats{background:linear-gradient(90deg,#1a0033,#2d0b52,#4a1380,#7c3aed,#4a1380,#2d0b52,#1a0033) !important;border:1.5px solid rgba(167,139,250,.6) !important;}
+/* Botones de ronda Mundialito Clubes — gradient amarillo dorado
+   (petición usuario 2026-05-27, mismo formato Mundial 2032 pero en
+   amarillo). El color base es `#ffd633` y el texto en negro/dorado
+   para contraste. */
+.c-mundialito{background:linear-gradient(90deg,#1a1300,#3a2a00,#806008,#ffd633,#806008,#3a2a00,#1a1300) !important;border:1.5px solid rgba(255,224,102,.65) !important;color:#fff !important;}
+/* Caja de Estadísticas del Mundialito — gradient violeta/púrpura
+   para diferenciarla de las rondas (mismo patrón que Mundial 2032). */
+.jbtn.c-mundialito.c-mundialito-stats{background:linear-gradient(90deg,#1a0033,#2d0b52,#4a1380,#7c3aed,#4a1380,#2d0b52,#1a0033) !important;border:1.5px solid rgba(167,139,250,.6) !important;}
 /* Jornada YA JUGADA → botón gris para distinguirlo de la actual y
-   las futuras (petición usuario 2026-05-24, foto 3). El `.done` lo
-   añade `_mundialGroupsHtml` cuando todos los partidos de la
-   jornada están con `played:true`. */
-.jbtn.c-mundial.done{
+   las futuras (mismo patrón que Mundial 2032). */
+.jbtn.c-mundialito.done{
   background:linear-gradient(90deg,#1a1d22,#2a2e36,#3a3e48,#2a2e36,#1a1d22) !important;
   border:1.5px solid rgba(170,180,195,.45) !important;
   filter:grayscale(.5) brightness(.85);
   color:rgba(255,255,255,.55) !important;
 }
-.jbtn.c-mundial.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
+.jbtn.c-mundialito.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
+/* Acento amarillo en el pdot del Mundialito activo. */
+.jbtn.c-mundialito .pdot{border-color:#ffd633;color:#ffe066;}
 /* Editor de roster manual del Mundialito. */
 #mundial-roster-ov{position:fixed;inset:0;z-index:100040;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
 #mundial-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
@@ -12115,38 +12179,41 @@ window._showSimProgress = function(opts, onDone){
      editor de roster manual (8×4). 2026-05-17. -->
 <div class="screen" id="s-mundial">
 <style>
-/* ═══ TEMA "MUNDIAL 2032" · azul cobalto + dorado ════════════════
-   Re-tematiza grupos, jornadas y tarjetas de partido del Mundialito
-   (fase de grupos + playoffs) en azul cobalto con acentos dorados.
-   Las tarjetas pasan a formato grande (escudo arriba, nombre debajo,
-   marcador en caja central + badge FIN/PREVIA). */
+/* ═══ TEMA "MUNDIALITO DE CLUBES" · amarillo dorado ═══════════════
+   Re-tematizado 2026-05-27 a petición del usuario: mismo formato
+   visual que Mundial 2032 selecciones (cards grandes con escudo
+   arriba, nombre debajo, marcador central + badge FIN/PREVIA),
+   pero en paleta AMARILLA `#ffd633` en lugar de azul cobalto.
+   Aplica a fase de grupos + playoffs del Mundialito (tourId='mundial',
+   format='groups-ko'). Mundial 2032 selecciones usa `_renderMundial`
+   y NO se ve afectado por esta CSS. */
 #s-mundial .tour-group-block{
-  background:linear-gradient(160deg,#04132e 0%,#0a2a55 55%,#03102a 100%);
-  border:1.5px solid rgba(56,120,220,.55);
-  box-shadow:0 0 16px rgba(40,90,200,.30),0 4px 16px rgba(0,0,0,.45);
+  background:linear-gradient(160deg,#2a1f00 0%,#5a4408 55%,#1a0f00 100%);
+  border:1.5px solid rgba(255,214,51,.55);
+  box-shadow:0 0 16px rgba(255,180,0,.30),0 4px 16px rgba(0,0,0,.45);
 }
 #s-mundial .tour-group-block.tour-group-human{
-  border:2px solid #f0c040;
-  background:linear-gradient(160deg,#0a1b3e 0%,#13346a 55%,#06122e 100%);
-  box-shadow:0 0 18px rgba(240,192,64,.5),inset 0 0 10px rgba(240,192,64,.10);
+  border:2px solid #ffd633;
+  background:linear-gradient(160deg,#3a2a00 0%,#6a5008 55%,#2a1f00 100%);
+  box-shadow:0 0 18px rgba(255,214,51,.55),inset 0 0 10px rgba(255,214,51,.12);
 }
-#s-mundial .tour-group-block h4{color:#f0c040;text-shadow:0 0 8px rgba(240,192,64,.5);}
-#s-mundial .tour-group-block .tour-st-table{border-bottom-color:rgba(120,170,255,.4);}
-#s-mundial .tour-st-row.is-hum td.nm{color:#ffd24a;}
-#s-mundial .tour-st-row.is-adv td.pos{color:#7fb0ff;}
+#s-mundial .tour-group-block h4{color:#ffd633;text-shadow:0 0 8px rgba(255,214,51,.55);}
+#s-mundial .tour-group-block .tour-st-table{border-bottom-color:rgba(255,214,51,.4);}
+#s-mundial .tour-st-row.is-hum td.nm{color:#fff080;}
+#s-mundial .tour-st-row.is-adv td.pos{color:#ffe066;}
 #s-mundial .tour-jor{
-  background:linear-gradient(180deg,rgba(30,80,180,.10),rgba(2,10,30,.5));
-  border:2px solid rgba(56,120,220,.30);
+  background:linear-gradient(180deg,rgba(255,180,0,.10),rgba(30,20,2,.5));
+  border:2px solid rgba(255,214,51,.30);
 }
 #s-mundial .tour-jor.is-current{
-  border-color:rgba(240,192,64,.7);
-  background:linear-gradient(180deg,rgba(240,192,64,.06),rgba(2,10,30,.5));
+  border-color:rgba(255,214,51,.8);
+  background:linear-gradient(180deg,rgba(255,214,51,.10),rgba(30,20,2,.5));
 }
 #s-mundial .tour-jor.is-past{
-  border-color:rgba(56,120,220,.5);
-  background:linear-gradient(180deg,rgba(40,100,210,.08),rgba(2,10,30,.5));
+  border-color:rgba(255,180,0,.5);
+  background:linear-gradient(180deg,rgba(255,180,0,.08),rgba(30,20,2,.5));
 }
-#s-mundial .tour-jor.is-past .tour-jor-h{color:#7fb0ff;}
+#s-mundial .tour-jor.is-past .tour-jor-h{color:#ffe066;}
 /* Tarjeta Mundial KO — formato FOTO 2 (UCL eliminatoria). Escudo
    arriba · nombre debajo · caja central marcador + badge. Marker
    `.mn-card` añadido per-card desde `_koRowHtml` para no depender
@@ -12295,6 +12362,72 @@ window._showSimProgress = function(opts, onDone){
 .mn-card-frame-human .tour-acta-body{
   border-color:rgba(255,120,180,.25) !important;
 }
+/* ═══ Overrides AMARILLO para Mundialito de Clubes (data-tour="mundial") ═══
+   El motor `_koRowHtml` añade `data-tour="mundial"` a cada `.mn-card`
+   del Mundialito. Usamos ese marker per-card para repintarlas en
+   amarillo (`#ffd633`) sin afectar a las cards del resto de torneos
+   (Mundial 2032 selecciones, Joan Gamper, Asian Tournament, etc. que
+   siguen en azul cobalto + dorado). Petición usuario 2026-05-27.
+   Los wrappers `.mn-card-frame[data-tour]` no existen — el atributo
+   vive en el `.mn-card` interior — así que usamos `:has(.mn-card[data-tour="mundial"])`
+   para teñir el FRAME también. */
+.mn-card[data-tour="mundial"]{
+  background:linear-gradient(165deg,#2d1f00 0%,#5a4408 60%,#1a0f00 100%) !important;
+  border:1.5px solid rgba(255,214,51,.55) !important;
+  box-shadow:0 0 12px rgba(255,180,0,.30),inset 0 0 12px rgba(150,110,0,.18) !important;
+}
+.mn-card[data-tour="mundial"].mn-card-ia{
+  background:linear-gradient(165deg,#2d1f00 0%,#5a4408 60%,#1a0f00 100%) !important;
+  border:1.5px solid rgba(255,214,51,.55) !important;
+  box-shadow:0 0 10px rgba(255,180,0,.28),inset 0 0 12px rgba(150,110,0,.18) !important;
+}
+/* La variante .mn-card-human conserva el rosa/magenta pulsante — es
+   el marker visual de "TU PARTIDO" y debe destacar igual en todos los
+   torneos. NO se sobreescribe en Mundialito. */
+.mn-card[data-tour="mundial"].tour-match-pickable:hover{
+  background:linear-gradient(165deg,#3d2900 0%,#7a5e10 60%,#2a1900 100%) !important;
+}
+.mn-card[data-tour="mundial"] .tour-score-wrap{
+  border-color:rgba(255,214,51,.55) !important;
+}
+.mn-card[data-tour="mundial"] .tour-score{
+  color:#ffe066 !important;
+}
+.mn-card[data-tour="mundial"] .tour-score-win{
+  color:#fff080 !important;text-shadow:0 0 10px rgba(255,214,51,.7);
+}
+.mn-card[data-tour="mundial"] .tour-score-empty{
+  color:rgba(255,224,102,.55) !important;
+}
+.mn-card[data-tour="mundial"] .tour-fin-badge.is-fin{
+  color:#ffe066 !important;border:1px solid rgba(255,214,51,.6) !important;
+  background:rgba(150,110,0,.5) !important;
+}
+.mn-card[data-tour="mundial"] .tour-fin-badge.is-sim{
+  color:#ffe066 !important;border:1px solid rgba(255,214,51,.6) !important;
+  background:rgba(150,110,0,.4) !important;
+}
+.mn-card[data-tour="mundial"] .tour-bracket-team span{
+  color:#fff3d0 !important;
+}
+.mn-card[data-tour="mundial"] .tour-bracket-team.is-winner span{
+  color:#fff080 !important;text-shadow:0 0 6px rgba(255,214,51,.6);
+}
+/* Frame que envuelve card+acta — repintamos cuando contiene una
+   .mn-card del Mundialito. */
+.mn-card-frame:has(.mn-card[data-tour="mundial"]){
+  background:linear-gradient(165deg,#2d1f00 0%,#5a4408 60%,#1a0f00 100%) !important;
+  border:1.5px solid rgba(255,214,51,.55) !important;
+  box-shadow:0 0 12px rgba(255,180,0,.30),inset 0 0 12px rgba(150,110,0,.18) !important;
+}
+.mn-card-frame-human:has(.mn-card[data-tour="mundial"]){
+  /* En human, el rosa gana sobre el amarillo (es lo que marca tu
+     partido). Mantener el degradado magenta del .mn-card-frame-human
+     original — no override aquí. */
+}
+.mn-card-frame:has(.mn-card[data-tour="mundial"]) .tour-acta-body{
+  border-color:rgba(255,214,51,.25) !important;
+}
 /* Separador «🤖 PARTIDOS IA VS IA» entre humano y IA. */
 .mn-ia-sep{
   display:flex !important;align-items:center !important;gap:10px !important;
@@ -12316,6 +12449,19 @@ window._showSimProgress = function(opts, onDone){
   background:rgba(20,60,150,.32) !important;
   border-radius:6px !important;
   box-shadow:0 0 10px rgba(80,140,255,.20);
+}
+/* Variante amarilla del separador para el Mundialito. */
+#s-mundial .mn-ia-sep{
+  color:rgba(255,224,102,.95) !important;
+  text-shadow:0 0 8px rgba(255,180,0,.45);
+}
+#s-mundial .mn-ia-sep-line{
+  background:linear-gradient(90deg, transparent, rgba(255,214,51,.55), transparent) !important;
+}
+#s-mundial .mn-ia-sep-lbl{
+  border:1px solid rgba(255,214,51,.55) !important;
+  background:rgba(150,110,0,.35) !important;
+  box-shadow:0 0 10px rgba(255,180,0,.25);
 }
 </style>
 <button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button>

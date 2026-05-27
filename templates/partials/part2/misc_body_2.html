@@ -19048,6 +19048,83 @@
 })();
 </script>
 
+<script>
+/* ══ EDITOR DEL CALENDARIO · MODO INLINE (2026-05-27) ══════════════
+   Petición usuario: el modal de Editar Evento emergía centrado en el
+   viewport, "en mitad de la pantalla, difícil encontrarlo", y bajo
+   ciertas combinaciones el botón Guardar no respondía visualmente.
+   Ahora `_agOpenForm(anchorEl)` mueve `#ag-form-ov` justo después de
+   la fila editada (o de la sección si es alta), le quita las reglas
+   de overlay fullscreen, lo deja como panel inline y hace
+   `scrollIntoView`. `_agCloseForm()` lo restaura. */
+(function(){
+  if (window.__AG_FORM_INLINE_READY) return;
+  window.__AG_FORM_INLINE_READY = true;
+
+  window._agOpenForm = function(anchorEl){
+    var ov = document.getElementById('ag-form-ov');
+    if (!ov) return;
+    ov.classList.add('ag-form-inline');
+    var s = ov.style;
+    s.position = 'static';
+    s.inset = '';
+    s.top = ''; s.right = ''; s.bottom = ''; s.left = '';
+    s.background = 'transparent';
+    s.zIndex = '';
+    s.padding = '0';
+    s.margin = '6px 8px 14px';
+    s.alignItems = '';
+    s.justifyContent = '';
+    s.display = 'block';
+    if (anchorEl && anchorEl.parentNode){
+      if (anchorEl.nextSibling){
+        anchorEl.parentNode.insertBefore(ov, anchorEl.nextSibling);
+      } else {
+        anchorEl.parentNode.appendChild(ov);
+      }
+      try { anchorEl.classList.add('ag-edit-anchor'); } catch(_){}
+      ov._agAnchor = anchorEl;
+    }
+    setTimeout(function(){
+      try { ov.scrollIntoView({behavior:'smooth', block:'center'}); } catch(_){}
+    }, 60);
+  };
+
+  window._agCloseForm = function(){
+    var ov = document.getElementById('ag-form-ov');
+    if (!ov) return;
+    ov.style.display = 'none';
+    ov.classList.remove('ag-form-inline');
+    if (ov._agAnchor){
+      try { ov._agAnchor.classList.remove('ag-edit-anchor'); } catch(_){}
+      ov._agAnchor = null;
+    }
+    var s = ov.style;
+    s.position = ''; s.background = ''; s.padding = ''; s.margin = '';
+    s.alignItems = ''; s.justifyContent = '';
+    var home = document.getElementById('s-agenda');
+    if (home && ov.parentNode !== home) home.appendChild(ov);
+  };
+})();
+</script>
+
+<style>
+  /* Editor inline (2026-05-27). Cuando #ag-form-ov tiene la clase
+     ag-form-inline, el inner box ya no se centra como overlay; fluye
+     con el contenido y muestra un borde resaltado para distinguirlo
+     de las filas. */
+  #ag-form-ov.ag-form-inline{ display:block; }
+  #ag-form-ov.ag-form-inline > div{
+    width:auto; max-width:560px; margin:0 auto;
+    max-height:none; overflow:visible;
+    box-shadow:0 8px 28px rgba(0,0,0,.55), 0 0 0 1px rgba(240,192,64,.55);
+  }
+  /* Fila ancla resaltada mientras se edita. */
+  .ag-r.ag-edit-anchor, .ag-add-row.ag-edit-anchor{
+    box-shadow: inset 0 0 0 2px rgba(240,192,64,.45);
+  }
+</style>
+
 <style>
   /* Oculta los controles admin por defecto. Se revelan cuando
      <body> tiene clase `adm-on` (la setea `window.pinOk()` al
@@ -19805,7 +19882,9 @@
     _$id('ag-f-icon').value = '⚽';
     _$id('ag-f-name').value = '';
     _$id('ag-f-weather').value = '☀️';
-    _$id('ag-form-ov').style.display = 'flex';
+    var anchor = document.querySelector('#ag-content-bayern .ag-add-row[data-section-id="'+sectionId+'"]');
+    if (typeof window._agOpenForm === 'function') window._agOpenForm(anchor);
+    else _$id('ag-form-ov').style.display = 'flex';
     setTimeout(function(){ _$id('ag-f-date').focus(); }, 50);
   };
   window.bayCalEditEvt = function(eventId){
@@ -19817,7 +19896,9 @@
     _$id('ag-f-icon').value    = ev.icon    || '⚽';
     _$id('ag-f-name').value    = ev.name    || '';
     _$id('ag-f-weather').value = ev.weather || '☀️';
-    _$id('ag-form-ov').style.display = 'flex';
+    var anchor = document.querySelector('#ag-content-bayern .ag-r[data-event-id="'+eventId+'"]');
+    if (typeof window._agOpenForm === 'function') window._agOpenForm(anchor);
+    else _$id('ag-form-ov').style.display = 'flex';
     setTimeout(function(){ _$id('ag-f-date').focus(); }, 50);
   };
   window.bayCalDelEvt = function(eventId){
@@ -20215,19 +20296,27 @@
   }
 
   window.agShowAddForm = function(sectionId){
+    /* Defensiva 2026-05-27: nullear el flag bayern impide que un
+       _bayCalEditing colgado de una sesión previa enrute el guardado
+       al store local en vez de al servidor (causa de "no deja
+       guardar nada" reportado por el usuario). */
+    window._bayCalEditing = null;
     _form = { mode:'add', sectionId:sectionId, eventId:null };
     $('ag-form-title').textContent = '➕ NUEVO EVENTO';
     $('ag-f-date').value = '';
     $('ag-f-icon').value = '⚽';
     $('ag-f-name').value = '';
     $('ag-f-weather').value = '☀️';
-    $('ag-form-ov').style.display = 'flex';
+    var anchor = document.querySelector('#s-agenda .ag-add-row[data-section-id="'+sectionId+'"]');
+    if (typeof window._agOpenForm === 'function') window._agOpenForm(anchor);
+    else $('ag-form-ov').style.display = 'flex';
     setTimeout(function(){ $('ag-f-date').focus(); }, 50);
   };
 
   window.agEditEvt = function(eventId){
     var row = document.querySelector('#s-agenda .ag-r[data-event-id="'+eventId+'"]');
     if (!row) return;
+    window._bayCalEditing = null; /* ver agShowAddForm */
     var date = (row.querySelector('.ag-date')||{}).textContent || '';
     var icon = (row.querySelector('.ag-ico')||{}).textContent  || '';
     var name = (row.querySelector('.ag-lbl')||{}).textContent  || '';
@@ -20238,12 +20327,14 @@
     $('ag-f-icon').value = icon.trim() || '⚽';
     $('ag-f-name').value = name.trim();
     $('ag-f-weather').value = wx.trim() || '☀️';
-    $('ag-form-ov').style.display = 'flex';
+    if (typeof window._agOpenForm === 'function') window._agOpenForm(row);
+    else $('ag-form-ov').style.display = 'flex';
     setTimeout(function(){ $('ag-f-date').focus(); }, 50);
   };
 
   window.agHideForm = function(){
-    $('ag-form-ov').style.display = 'none';
+    if (typeof window._agCloseForm === 'function') window._agCloseForm();
+    else $('ag-form-ov').style.display = 'none';
     _form = { mode:null, sectionId:null, eventId:null };
   };
 
@@ -20455,6 +20546,7 @@
   window.agHideForm = function(){
     window._bayCalEditing = null;
     if (typeof _origHide === 'function') return _origHide();
+    if (typeof window._agCloseForm === 'function') return window._agCloseForm();
     var ov = document.getElementById('ag-form-ov');
     if (ov) ov.style.display = 'none';
   };

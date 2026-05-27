@@ -1,5 +1,78 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Card "Próximo partido" del hub: el CALENDARIO INDIVIDUAL es la única fuente de verdad (obligatorio, 2026-05-27)
+
+**Principio bloqueante**: la card "Próximo partido" del hub Liverpool
+(`#ps-stage` en `s-munich`) SIEMPRE deriva el rival a partir de la fila
+actual del CALENDARIO INDIVIDUAL del Liverpool-Francia
+(`_calRows()[d.dayIdx]`, las filas `.ag-r` del `#ag-content`). El label
+de esa fila (`Partido N`, `Liga — J N`, `Copa — Ronda X`,
+`Mundial Octavos`, `Champions — J3`, etc.) dicta qué partido se debe
+mostrar, sin excepción.
+
+### Por qué esta regla existe
+
+Los cursores manuales (`d.tour`, `cfg.currentJornadaByGroup`,
+`cfg.koCurrentRound`, `currentRound`…) **solo avanzan al pulsar
+botones específicos** en la pantalla de cada torneo (🏆 J{N+1},
+🏆 Avanzar KO, etc.). El usuario juega su partido desde la card del
+hub directamente y NUNCA visita la pantalla del torneo, así que esos
+cursores se quedan congelados en 0 → la card mostraba el mismo J1 los
+días 08 Jun, 12 Jun, 16 Jun… (bug 2026-05-27 con foto Tigres UANL 1-2
+Liverpool repitiéndose).
+
+### Mapeo canónico (en `_realPair`)
+
+1. Leer `d.dayIdx` y `_calRows()[d.dayIdx]`.
+2. Extraer el número de la etiqueta:
+   - Torneos de verano (JG/SCT/PSS/Asia): regex `Partido\s+(\d+)`.
+     `Partido N` mapea a:
+     - **Fase de grupos**: jornada `N-1` (0-indexed) de
+       `cfg.groupFixtures[gIdx]` (override de `currentJornadaByGroup`).
+     - **Fase KO** (si `koBracket` existe): ronda
+       `N - groupJors - 1` de `cfg.koBracket` (override de
+       `koCurrentRound`).
+   - Liga EA Sports: regex `Liga\s*[—\-]\s*J(\d+)` → jornada de liga.
+   - Otras competiciones: añadir su rama al parseo y mapeo cuando se
+     incorporen.
+3. Los cursores manuales (`currentJornadaByGroup`, `koCurrentRound`,
+   `currentRound`) son **advisory** — solo se usan como fallback si
+   el día actual no se puede derivar del calendario.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** usar `cfg.currentJornadaByGroup[gIdx]` /
+   `cfg.koCurrentRound` / `cfg.currentRound` como fuente PRIMARIA
+   en la card del hub. Solo fallback cuando no hay día parseable.
+2. **PROHIBIDO** crear cursores nuevos que requieran pulsar un botón
+   para avanzar y luego usarlos en la card. Si una comp nueva añade
+   esa lógica, se vuelve a hardcodear el bug.
+3. **Toda comp nueva** que entre por `_realPair` / `_selPair` debe
+   tener su rama en el parseo de "Partido N" / "J N" / "Ronda X" del
+   calendario individual, ANTES de leer cualquier cursor del cfg.
+4. **PROHIBIDO** introducir "auto-avance del cursor al jugar el
+   partido" como alternativa a esta regla. Es un parche frágil: si el
+   usuario pospone un día, los cursores y el calendario se vuelven a
+   desincronizar. La regla `calendario = fuente única` es robusta
+   por construcción.
+5. **Fix de saves antiguos**: cuando un cfg legacy tenga cursores
+   apuntando a una jornada distinta a la que demanda el calendario,
+   `_realPair` ignora el cursor y respeta el calendario. La pantalla
+   del torneo seguirá pintando el cursor (UI inconsistente con el
+   hub si el usuario no pulsa "🏆 J{N+1}"), pero la card del hub
+   siempre es correcta. Esto es aceptable — la card es lo crítico,
+   la UI del torneo solo afecta a quien entre a la pantalla.
+
+### Beneficios
+
+- Estado-drift IMPOSIBLE: el calendario es inmutable per-temporada y
+  todas las cards mapean determinísticamente.
+- Funciona en cualquier dispositivo / sesión / hidratación parcial.
+- No requiere que el usuario visite pantallas auxiliares para que la
+  card del hub avance correctamente.
+- Si una temporada futura cambia las fechas del calendario, todas las
+  cards se reajustan automáticamente.
+
 ## Card "RIVAL PENDIENTE" en eliminatorias (obligatorio, 2026-05-26)
 
 Cuando la card "Próximo partido" del hub Liverpool (`#ps-stage` en

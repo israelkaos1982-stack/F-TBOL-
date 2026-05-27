@@ -12607,7 +12607,9 @@ window._showSimProgress = function(opts, onDone){
   border-color:rgba(255,180,0,.5);
   background:linear-gradient(180deg,rgba(255,180,0,.08),rgba(30,20,2,.5));
 }
-#s-mundial .tour-jor.is-past .tour-jor-h{color:#ffe066;}
+/* Header SIEMPRE blanco/negro (regla 2026-05-27): el override
+   amarillo viejo dejaba texto ilegible sobre el bg blanco nuevo. */
+#s-mundial .tour-jor.is-past .tour-jor-h{color:#0a0a0a;}
 /* Tarjeta Mundial KO — formato FOTO 2 (UCL eliminatoria). Escudo
    arriba · nombre debajo · caja central marcador + badge. Marker
    `.mn-card` añadido per-card desde `_koRowHtml` para no depender
@@ -16164,8 +16166,8 @@ window._showSimProgress = function(opts, onDone){
   }
   .tour-tie-human .tour-tie-date{color:#ffe489;}
   .tour-jor-date{
-    font-family:Rajdhani,sans-serif;font-size:9px;letter-spacing:.3px;
-    color:rgba(255,255,255,.5);font-weight:400;white-space:nowrap;
+    font-family:Rajdhani,sans-serif;font-size:11px;letter-spacing:.4px;
+    color:rgba(0,0,0,.75);font-weight:600;white-space:nowrap;
   }
   /* Eliminatoria con humano: borde dorado llamativo + pulso. Va
      arriba del todo (el render la coloca primero). */
@@ -16224,11 +16226,15 @@ window._showSimProgress = function(opts, onDone){
     color:rgba(255,255,255,.45);
   }
   .tour-bracket-team{
-    display:flex;align-items:center;gap:6px;font-size:12px;min-width:0;
+    display:flex;align-items:center;gap:7px;font-size:13px;min-width:0;
+    font-weight:600;color:#fff;
   }
   .tour-bracket-team:last-child{justify-content:flex-end;text-align:right;}
-  .tour-bracket-team img{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
-  .tour-bracket-team span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .tour-bracket-team img{width:20px;height:20px;object-fit:contain;flex-shrink:0;}
+  .tour-bracket-team span{
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    text-shadow:0 1px 2px rgba(0,0,0,.55);
+  }
   .tour-bracket-team.is-pending{color:#f0c040;font-style:italic;}
   .tour-bracket-team.is-pickable{
     cursor:pointer;border-radius:6px;padding:2px 4px;
@@ -16355,57 +16361,76 @@ window._showSimProgress = function(opts, onDone){
   }
   /* Past (jornadas ya jugadas): GRIS — petición usuario 2026-05-24
      ("si la jornada se ha jugado el desplegable pasa a color gris
-     para saber que esa jornada ya se ha jugado"). */
+     para saber que esa jornada ya se ha jugado").
+     2026-05-27: SIN `filter:grayscale` global — desaturaba los nombres
+     de los equipos (winners/losers/ties) y dejaba la card ilegible
+     tras simular. La distinción "ya jugada" se mantiene vía
+     border-color + bg-gradient + pill J1 con borde gris. */
   .tour-jor.is-past{
     border-color:rgba(170,180,195,.55);
     background:linear-gradient(180deg,rgba(170,180,195,.05),rgba(0,0,0,.30));
     box-shadow:0 2px 8px rgba(0,0,0,.30);
-    filter:grayscale(.5) brightness(.88);
   }
-  .tour-jor.is-past .tour-jor-h{color:rgba(255,255,255,.55);}
   /* Current: gold neon — la jornada activa destaca. */
   .tour-jor.is-current{
     border-color:rgba(240,192,64,.75);
     background:linear-gradient(180deg,rgba(240,192,64,.06),rgba(0,0,0,.30));
     box-shadow:0 0 14px rgba(240,192,64,.30),inset 0 0 12px rgba(240,192,64,.05);
   }
-  .tour-jor.is-current .tour-jor-h{color:#f0c040;font-size:12px;letter-spacing:2.5px;text-shadow:0 0 8px rgba(240,192,64,.55);}
   /* Future: borde gris atenuado. */
   .tour-jor.is-future{
-    opacity:.55;
+    opacity:.85;
     border-color:rgba(140,160,200,.20);
   }
-  .tour-jor.is-future .tour-jor-h{color:rgba(180,200,230,.55);}
+  /* Header de la jornada (J1 ✦ 04 Jun): CAJA BLANCA + texto NEGRO
+     en todos los estados (petición usuario 2026-05-27: "las jornadas
+     pon las cajas de color blanco y si hace falta el texto en negro,
+     se ve mal y feo"). La distinción past/current/future se mantiene
+     vía:
+       - past    → border-bottom GRIS  + pill con borde gris
+       - current → border-bottom DORADO + pill con borde dorado + glow
+       - future  → border-bottom translúcido + pill atenuado
+     El cuerpo de la card (.tour-jor-body) sigue siendo oscuro, así
+     el contraste con el header blanco es alto. */
   .tour-jor-h{
     display:flex;justify-content:space-between;align-items:center;gap:8px;
-    font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;
-    color:rgba(255,255,255,.55);font-weight:700;
-    margin:-10px -12px 8px;padding:6px 12px;
-    background:rgba(255,255,255,.04);
-    border-bottom:1px solid rgba(255,255,255,.07);
+    font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;
+    color:#0a0a0a;font-weight:700;
+    margin:-10px -12px 8px;padding:8px 12px;
+    background:#fff;
+    border-bottom:2px solid rgba(0,0,0,.18);
     border-radius:8px 8px 0 0;
+    box-shadow:0 1px 4px rgba(0,0,0,.25);
   }
   .tour-jor.is-past .tour-jor-h{
-    background:rgba(95,224,138,.08);border-bottom-color:rgba(95,224,138,.30);
+    background:#fff;color:#0a0a0a;
+    border-bottom-color:rgba(110,120,140,.55);
   }
   .tour-jor.is-current .tour-jor-h{
-    background:rgba(240,192,64,.10);border-bottom-color:rgba(240,192,64,.40);
+    background:#fff;color:#0a0a0a;
+    border-bottom:2px solid #f0c040;
+    box-shadow:0 1px 6px rgba(240,192,64,.35);
   }
-  /* Chip de la jornada (J1, J2…) — píldora con color de estado. */
+  .tour-jor.is-future .tour-jor-h{
+    background:#fff;color:rgba(0,0,0,.65);
+    border-bottom-color:rgba(0,0,0,.15);
+  }
+  /* Chip de la jornada (J1, J2…) — píldora BLANCA con texto NEGRO
+     y borde codificado por estado. */
   .tour-jor-tag{
-    display:inline-block;padding:2px 10px;border-radius:20px;
-    background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);
-    letter-spacing:1.5px;
+    display:inline-block;padding:3px 12px;border-radius:20px;
+    background:#fff;border:1.5px solid rgba(0,0,0,.35);
+    color:#0a0a0a;letter-spacing:1.5px;font-weight:800;
   }
   .tour-jor.is-past .tour-jor-tag{
-    background:rgba(170,180,195,.18);border-color:rgba(170,180,195,.55);color:rgba(255,255,255,.7);
+    background:#fff;border-color:rgba(110,120,140,.65);color:#0a0a0a;
   }
   .tour-jor.is-current .tour-jor-tag{
-    background:rgba(240,192,64,.20);border-color:rgba(240,192,64,.65);
-    color:#ffe7a6;box-shadow:0 0 8px rgba(240,192,64,.40);
+    background:#fff;border:2px solid #f0c040;color:#0a0a0a;
+    box-shadow:0 0 10px rgba(240,192,64,.55);
   }
   .tour-jor.is-future .tour-jor-tag{
-    background:rgba(140,160,200,.10);border-color:rgba(140,160,200,.28);
+    background:#fff;border-color:rgba(0,0,0,.22);color:rgba(0,0,0,.6);
   }
   /* Icono humano (selección / club) junto al nombre del equipo. */
   .tour-hum-ic{
@@ -16421,11 +16446,11 @@ window._showSimProgress = function(opts, onDone){
      sobreviva a re-renders (al simular / cambiar de pantalla). */
   .tour-jor-h{cursor:pointer;user-select:none;-webkit-user-select:none;}
   .tour-jor-chev{
-    margin-left:auto;font-family:Oswald,sans-serif;font-size:13px;
-    color:rgba(255,255,255,.45);transition:transform .15s ease;
+    margin-left:auto;font-family:Oswald,sans-serif;font-size:14px;
+    color:rgba(0,0,0,.60);transition:transform .15s ease;
     flex-shrink:0;width:14px;text-align:center;
   }
-  .tour-jor.is-open .tour-jor-chev{transform:rotate(180deg);color:rgba(255,255,255,.85);}
+  .tour-jor.is-open .tour-jor-chev{transform:rotate(180deg);color:rgba(0,0,0,.85);}
   .tour-jor-body{display:none;}
   .tour-jor.is-open .tour-jor-body{display:block;}
   /* Cuando la jornada está cerrada, colapsamos el padding inferior y

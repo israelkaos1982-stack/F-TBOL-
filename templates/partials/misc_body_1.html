@@ -4437,6 +4437,13 @@ window._showSimProgress = function(opts, onDone){
     if (t.name && typeof window.isHumanInComp === 'function'){
       try { if (window.isHumanInComp(t.name, compKey || 'torneo')) return true; } catch(_){}
     }
+    /* Pase canónico bloqueante: las 6 selecciones humanas hardcoded
+       SIEMPRE deben detectarse aunque el cfg no tenga isHuman:true ni
+       `selecciones_squad_v1` esté hidratado. Mismo fix que `_selPair` y
+       que el patch SEL_COMPS dentro de isHumanInComp. */
+    if (t.name && typeof window._esSelHumana === 'function'){
+      try { if (window._esSelHumana(t.name)) return true; } catch(_){}
+    }
     return false;
   }
   /* Lista pendientes de la FASE DE GRUPOS (mundial-48 / groups-ko /
@@ -6003,7 +6010,61 @@ window._showSimProgress = function(opts, onDone){
       }
       else if (selPair && selPair.pending) _cardPendingPrevPhase(day, selPair);
       else if (selPair) _cardSelMatch(day, selPair);
-      else              _cardRest(day);
+      else {
+        /* WATCHDOG (2026-05-27): si vamos a renderizar JUGADORES FUERA
+           pero el día es de Mundial Selecciones Y existe un cfg
+           mundial-48 con una selección humana canónica en cfg.teams, es
+           un BUG silencioso de detección de humanos. Log loud a consola
+           con info diagnostic para detectar regresiones futuras al
+           instante (F12 → Console). NO bloquea el render — solo avisa. */
+        try {
+          var _wdLbl = String((day && day.label) || '');
+          if (/\bag-sel\b/.test((day && day.cls) || '') && /mundial/i.test(_wdLbl)){
+            var _wdCfgs = [];
+            try {
+              var _wdCache = window._TOUR_CACHE || {};
+              for (var _wdK in _wdCache){
+                var _wdC = _wdCache[_wdK];
+                if (_wdC && _wdC.format === 'mundial-48' && Array.isArray(_wdC.teams) && _wdC.teams.length){
+                  _wdCfgs.push({ id:_wdK, cfg:_wdC });
+                }
+              }
+              if (typeof window._tourLoadCachedSync === 'function'){
+                var _wdSlots = ['mundial',
+                  'sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10',
+                  'spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10'];
+                for (var _wdS = 0; _wdS < _wdSlots.length; _wdS++){
+                  if (_wdCache[_wdSlots[_wdS]]) continue;
+                  try {
+                    var _wdSc = window._tourLoadCachedSync(_wdSlots[_wdS]);
+                    if (_wdSc && _wdSc.format === 'mundial-48' && Array.isArray(_wdSc.teams) && _wdSc.teams.length){
+                      _wdCfgs.push({ id:_wdSlots[_wdS], cfg:_wdSc });
+                    }
+                  } catch(_){}
+                }
+              }
+            } catch(_){}
+            var _wdFound = null;
+            for (var _wdI = 0; _wdI < _wdCfgs.length && !_wdFound; _wdI++){
+              var _wdTs = _wdCfgs[_wdI].cfg.teams || [];
+              for (var _wdJ = 0; _wdJ < _wdTs.length; _wdJ++){
+                var _wdT = _wdTs[_wdJ];
+                if (!_wdT || !_wdT.name) continue;
+                try {
+                  if (typeof window._esSelHumana === 'function' && window._esSelHumana(_wdT.name)){
+                    _wdFound = { cfgId: _wdCfgs[_wdI].id, humanName: _wdT.name, dayLbl: _wdLbl, dayDate: day.date };
+                    break;
+                  }
+                } catch(_){}
+              }
+            }
+            if (_wdFound){
+              try { console.warn('[F-TBOL] _selPair retornó null pero hay humana canónica en cfg mundial-48 — posible REGRESIÓN del bug 2026-05-27 (card JUGADORES FUERA). Detalles:', _wdFound); } catch(_){}
+            }
+          }
+        } catch(_){}
+        _cardRest(day);
+      }
     }
     else                           _cardMatch(day);
     _syncHubLabels(effDay);
@@ -26619,6 +26680,114 @@ window._showSimProgress = function(opts, onDone){
                     inter:1, 'inter-fin':1, mundial:1, amistoso:1,
                     torneo:1, wprev:1, 'ucl-prev':1, 'ucl-oq':1, 'ucl-wc':1 };
   var DOM_COMPS = { liga:1, copa:1, 'copa-fin':1, sc:1, 'sc-final':1, '':1 };
+  /* Comps donde pueden jugar SELECCIONES (no clubes). En estos comps el
+     check canónico es `_esSelHumana` (lista HARDCODED del bundle:
+     Francia, Brasil, Inglaterra, Noruega, Argentina, España) ANTES que
+     `_hasHumanIcon` — para no depender de la hidratación asincrónica
+     de `selecciones_squad_v1` → `_SEL_HUMAN_ICONS`. Sin esto, el
+     primer render del hub Liverpool / cronómetro / sanciones podía
+     ver a Francia como IA porque `humanIcon('Francia')` devolvía '' →
+     race condition con el fetch del seed (bug 2026-05-27 con foto
+     JUGADORES FUERA en 03 May). 'mundial' y 'torneo' también
+     contemplan selecciones cuando el cfg es format 'mundial-48'. */
+  var SEL_COMPS = { sel:1, 'sel-fin':1, mundial:1, torneo:1,
+                    'mundial-48':1, selecciones:1 };
+
+  /* ══════════════════════════════════════════════════════════════════
+     MISTERS REGISTRY — fuente única canónica de humanos (2026-05-27)
+     ══════════════════════════════════════════════════════════════════
+     Propuesta usuario 2026-05-27 (foto pantalla 👤 EQUIPOS): cada caja
+     del menú EQUIPOS mapea un mister humano a UN club + UNA selección.
+     Esto ES la fuente de verdad para "quién es humano esta temporada".
+
+     6 misters canónicos: cada uno dirige un CLUB y una SELECCIÓN.
+     La pareja (club, selección) es estable; el EMOJI del mister es la
+     identidad inmutable (no cambia aunque el admin renombre el club).
+
+     Esta lista está HARDCODED y es SÍNCRONA. NO depende de:
+       · hidratación de `selecciones_squad_v1` / `_SEL_HUMAN_ICONS`
+       · flag `isHuman` en el cfg del torneo
+       · DOM del menú EQUIPOS estar renderizado
+       · cualquier fetch del servidor
+
+     Es la última línea de defensa contra el bug 2026-05-27
+     (card JUGADORES FUERA en hub Liverpool/Francia 03 May). */
+  var MISTERS_HUMANOS = [
+    { id:'tonin',  emoji:'💡', mister:'Toñín',  club:'Liverpool',      seleccion:'Francia',    screen:'s-munich'   },
+    { id:'alvaro', emoji:'🐭', mister:'Álvaro', club:'Arsenal',        seleccion:'Brasil',     screen:'s-arsenal'  },
+    { id:'acsa',   emoji:'🔨', mister:'Acsa',   club:'Real Madrid',    seleccion:'Inglaterra', screen:'s-madrid'   },
+    { id:'isra',   emoji:'✏️', mister:'Isra',   club:'Atlético Madrid', seleccion:'Noruega',    screen:'s-atletico' },
+    { id:'angel',  emoji:'😈', mister:'Ángel',  club:'FC Barcelona',   seleccion:'Argentina',  screen:'s-barca'    },
+    { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',            seleccion:'España',     screen:'s-psg'      }
+  ];
+  function _mhNorm(s){
+    return String(s||'')
+      .normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[👿]/g,'😈')  /* normaliza variante 👿 ↔ 😈 */
+      .trim().toLowerCase();
+  }
+  function _mhMatchName(name, target){
+    if (!name || !target) return false;
+    var nA = _mhNorm(name), nB = _mhNorm(target);
+    if (nA === nB) return true;
+    /* Variantes cortas: "Bayern" ↔ "Bayern Munich", "Barça" ↔ "FC Barcelona" */
+    if (nA.indexOf(nB) !== -1 || nB.indexOf(nA) !== -1){
+      /* Match si comparten ≥4 chars contiguos del nombre más corto. */
+      if (Math.min(nA.length, nB.length) >= 4) return true;
+    }
+    return false;
+  }
+  window._MISTERS_HUMANOS = MISTERS_HUMANOS;
+  /* ¿Es esta una de las 6 SELECCIONES humanas canónicas? Síncrono,
+     no depende de hidratación. La verdad absoluta del proyecto.
+     Sustituye/refuerza `_esSelHumana` del bundle. */
+  window._isHumanSeleccionCanonica = function(name){
+    if (!name) return false;
+    for (var i = 0; i < MISTERS_HUMANOS.length; i++){
+      if (_mhMatchName(name, MISTERS_HUMANOS[i].seleccion)) return true;
+    }
+    return false;
+  };
+  /* ¿Es este uno de los 6 CLUBES humanos canónicos? Como Liverpool
+     puede venir como "Liverpool", "LFC", "Bayern Munich" (legacy del
+     slot ex-Bayern), permite alias cortos. */
+  window._isHumanClubCanonico = function(name){
+    if (!name) return false;
+    /* Liverpool acepta también el nombre legacy "Bayern Munich" (slot
+       histórico) y la forma corta "Bayern" porque el `_psHumanLogicName`
+       todavía puede devolver el nombre del slot. */
+    var liverpoolAlias = ['Liverpool', 'LFC', 'Bayern Munich', 'Bayern'];
+    for (var la = 0; la < liverpoolAlias.length; la++){
+      if (_mhMatchName(name, liverpoolAlias[la])) return true;
+    }
+    for (var i = 1; i < MISTERS_HUMANOS.length; i++){
+      if (_mhMatchName(name, MISTERS_HUMANOS[i].club)) return true;
+    }
+    return false;
+  };
+  /* Devuelve el mister que dirige a este team (club o selección), o
+     null si no es humano. Util para emparejar Liverpool ↔ Francia
+     ("el mismo Toñín dirige ambos"). */
+  window._mhFindMister = function(name){
+    if (!name) return null;
+    for (var i = 0; i < MISTERS_HUMANOS.length; i++){
+      var m = MISTERS_HUMANOS[i];
+      if (_mhMatchName(name, m.club) || _mhMatchName(name, m.seleccion)) return m;
+    }
+    /* Liverpool alias legacy */
+    if (_mhMatchName(name, 'Bayern Munich') || _mhMatchName(name, 'Bayern') || _mhMatchName(name, 'LFC')){
+      return MISTERS_HUMANOS[0];
+    }
+    return null;
+  };
+  /* ¿La selección X y el club Y los dirige el MISMO mister? Útil para
+     decidir si la card del hub Liverpool debe mostrar el partido de
+     Francia durante un parón. */
+  window._mhSameMister = function(a, b){
+    var mA = window._mhFindMister(a);
+    var mB = window._mhFindMister(b);
+    return !!(mA && mB && mA.id === mB.id);
+  };
   function _hasHumanIcon(name){
     try {
       if(typeof window.humanIcon === 'function'){
@@ -26666,6 +26835,26 @@ window._showSimProgress = function(opts, onDone){
   window.isHumanInComp = function(name, comp){
     if(!name) return false;
     var c = String(comp||'').toLowerCase();
+    /* CAPA 0 (MISTERS_REGISTRY canónico, 2026-05-27): si este nombre es
+       una de las 6 selecciones canónicas Y la comp es de selecciones,
+       SÍEMPRE humana. Si es uno de los 6 clubes canónicos Y la comp es
+       de clubes (liga/copa/sc/eur/superliga), SÍEMPRE humano. Esto NO
+       depende de hidratación, fetch del servidor ni DOM — es la fuente
+       de verdad del proyecto (pantalla 👤 EQUIPOS). */
+    try {
+      if (SEL_COMPS[c] && typeof window._isHumanSeleccionCanonica === 'function'
+          && window._isHumanSeleccionCanonica(name)) return true;
+      if ((EUR_COMPS[c] || DOM_COMPS[c] || c === 'superliga')
+          && typeof window._isHumanClubCanonico === 'function'
+          && window._isHumanClubCanonico(name)) return true;
+    } catch(_){}
+    /* Fallback: consulta `_esSelHumana` (lista hardcoded del bundle,
+       equivalente a CAPA 0 pero por si MISTERS_REGISTRY no cargó). */
+    if(SEL_COMPS[c]){
+      try {
+        if(typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true;
+      } catch(_){}
+    }
     if(c === 'superliga') return _isSuperligaHuman(name);
     if(EUR_COMPS[c])      return _hasHumanIcon(name) || _isLigaHuman(name);
     if(DOM_COMPS[c])      return _isLigaHuman(name);

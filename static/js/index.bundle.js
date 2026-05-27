@@ -11217,22 +11217,32 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
               ? 'Mundial 2032 · GRAN FINAL 🏆'
               : ('Mundial 2032 · ' + (_rNameL || 'KO'));
           }
-        } else if (_ptL.tourId && _tcfgL) {
+        } else if (_ptL.tourId) {
           /* Torneos de verano (jg/sct/pss/asia/tx*) + Mundialito Clubes
              (mundial): muestra "Trofeo Joan Gamper · Cuartos" en vez del
              literal "torneo". El nombre lo lee del cfg o del mapa
-             _TOUR_NAMES_MM como fallback. 2026-05-27. */
-          var _tName = (_tcfgL.name) || _TOUR_NAMES_MM[_ptL.tourId] || 'Torneo';
+             _TOUR_NAMES_MM como fallback. 2026-05-27.
+
+             2026-05-27 (fix bug previa Joan Gamper): antes el branch
+             requería `_tcfgL` no-null para entrar. Si la cfg no estaba
+             cacheada todavía (race con la hidratación), caía al label
+             crudo "🏆 torneo" — foto usuario Liverpool vs Miami BP del
+             Joan Gamper J5. Ahora basta con `_ptL.tourId` y usamos
+             `_TOUR_NAMES_MM` como fallback síncrono. */
+          var _tName = (_tcfgL && _tcfgL.name) || _TOUR_NAMES_MM[_ptL.tourId] || 'Torneo';
           var _tkV = String(_ptL.tourKey || '').replace(/\|L[12]$/, '');
           var _mGV = _tkV.match(/^g\d+_(\d+)_/);
           var _mKV = _tkV.match(/^ko_(\d+)_/);
+          var _mLV = _tkV.match(/^(\d+)_(\d+)$/);  /* league format */
           if (_mGV) {
-            compLabel = _tName + ' · Grupo J' + (parseInt(_mGV[1], 10) + 1);
+            compLabel = _tName + ' · Jornada ' + (parseInt(_mGV[1], 10) + 1);
           } else if (_mKV) {
             var _rIdxV = parseInt(_mKV[1], 10);
-            var _koRV = (_tcfgL.formatConfig && _tcfgL.formatConfig.koRounds) || [];
+            var _koRV = (_tcfgL && _tcfgL.formatConfig && _tcfgL.formatConfig.koRounds) || [];
             var _rNameV = _koRV[_rIdxV] || ('KO ' + (_rIdxV + 1));
             compLabel = _tName + ' · ' + _rNameV;
+          } else if (_mLV) {
+            compLabel = _tName + ' · Jornada ' + (parseInt(_mLV[1], 10) + 1);
           } else {
             compLabel = _tName;
           }

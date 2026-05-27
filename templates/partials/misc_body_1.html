@@ -20679,11 +20679,26 @@ window._showSimProgress = function(opts, onDone){
            pulse se despliega"). El usuario expande con click; el
            estado no se persiste — al re-entrar empieza todo plegado. */
         var jOpen = false;
+        /* Fecha de la jornada de grupo desde el calendario global
+           (filas "Mundial Grupo — J<N>"). `data-jor-pinned="1"` impide
+           que el auto-injector de fechas (misc_body_2.html) sobre-
+           escriba esta fecha con la de Mundialito Clubes (perfil
+           c-mundial → required=['mundialito']). Bug 2026-05-27:
+           todas las jornadas mostraban "04 JUL" (Mundialito J1) en
+           lugar de las fechas de Mundial 2032 (03/07/11 May). */
+        var _jorDtTxt = '';
+        try {
+          var _jorDt = _tourGroupJorDate(cfg, ji);
+          if (_jorDt) _jorDtTxt = '<span class="jor-date is-solo">' + _jorDt + '</span>';
+        } catch(_){}
         html += '<div class="jblock" style="margin-bottom:6px;">';
         html += '<button type="button" class="jbtn c-mundial' + (allDone ? ' done' : '') + '" '
+          + 'data-jor-pinned="1" '
           + 'onclick="_jorToggle(\''+jid+'\')">'
           + '<div class="pdot">' + (allDone ? '✅' : (isCurrent ? '▶' : '○')) + '</div>'
-          + '🌍 <b>Mundial</b>&nbsp;&nbsp;Jornada '+(ji+1)+'</button>';
+          + '🌍 <b>Mundial</b>&nbsp;&nbsp;Jornada '+(ji+1)
+          + _jorDtTxt
+          + '</button>';
         html += '<div class="jmatches' + (jOpen ? ' open' : '') + '" id="'+jid+'">';
         jor.forEach(function(m, mi){
           var key = gKey + ji + '_' + mi;

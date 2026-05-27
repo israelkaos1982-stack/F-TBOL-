@@ -20051,7 +20051,16 @@ window._showSimProgress = function(opts, onDone){
              "Permitir auto-simulación" en el editor del torneo. */
         }
       });
-      if (isCurrent && !allPlayedJ) {
+      /* Botón ▶ SIMULAR JORNADA: aparece en CUALQUIER jornada con
+         partidos pendientes, no solo en la "current" (petición usuario
+         2026-05-27 — captura J5 Joan Gamper). Antes el botón se
+         escondía si el humano tenía un partido pendiente en una
+         jornada anterior (actualCur quedaba atrás → jornadas posteriores
+         se marcaban is-future → sin botón). Ahora el usuario puede
+         simular IA-vs-IA en TODAS las jornadas pendientes sin que su
+         partido humano lo bloquee — el handler ya salta automáticamente
+         los partidos humanos vía `_tourSimLeagueMatch.blockedHuman`. */
+      if (!allPlayedJ) {
         html += '<div style="display:flex;justify-content:center;margin-top:8px;">'
           + '<button type="button" class="tour-sim-jor-btn" data-tour="'+tourId+'" data-key-prefix="'+prefix+'" data-jor="'+j+'" '
           + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;">'

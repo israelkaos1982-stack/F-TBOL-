@@ -1,5 +1,67 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Separación CLUBES vs SELECCIONES en estadísticas (obligatorio, 2026-05-27)
+
+**REGLA BLOQUEANTE ABSOLUTA**: las **estadísticas de jugadores** del
+**MUNDIALITO de CLUBES** (cfg.id `'mundial'`, slot built-in
+`tour_mundial_v1`, format `groups-ko`) y las de los **Torneos de
+Verano** (Trofeo Joan Gamper, Soccer Champions Tour, Premier Summer
+Series, Asian Tournament, `tx1..tx8`) NO pueden contener jugadores
+de SELECCIONES NACIONALES (Mundial 2032 / Rondas Previas /
+amistosos de selección). Y viceversa.
+
+### Por qué esta regla existe (bug 2026-05-27)
+
+Captura usuario: `Torneos de Verano · Trofeo Joan Gamper ·
+Estadísticas · Goleadores` mostraba:
+1. Kylian Mbappe · FRANCIA — 4 goles
+2. Jugador B · AL ITTIHAD CLUB — 3 goles
+3. Rafael Borre · COLOMBIA — 3 goles
+4. Moises Caicedo · ECUADOR — 3 goles
+5. Inaki Williams · GHANA — 3 goles
+6. Jugador B · HAITI — 3 goles
+
+El leak ocurría porque `rebuildPlayerStatsStore` (Source 3, iteración
+de `tour_*_v1`) clasificaba todo cfg con `id !== 'mundial'` al bucket
+`torneos`. Los slots `spv1..spv10` (Rondas Previas) y `sfn1..sfn10`
+(Rondas Finales) de Selecciones caían igual ahí.
+
+### Reglas de clasificación canónica
+
+| Cfg / matchKey                                  | Bucket          | Store                          | Pantalla            |
+|-------------------------------------------------|-----------------|--------------------------------|---------------------|
+| `cfg.id === 'mundial'` (Mundialito Clubes)      | `mundial`       | `ef_player_stats_mundial_v1`   | `s-mundial-stats`   |
+| `cfg.id ∈ {sct,pss,jg,asia,tx1..tx8}`           | `torneos`       | `ef_player_stats_torneos_v1`   | `s-torneos-stats`   |
+| `cfg.id ∈ {spv1..spv10,sfn1..sfn10}` o `format='mundial-48'` | `sel` | `ef_player_stats_sel_v1`       | (per-tour vía `s-tour-stats`) |
+| matchKey con `tour_spv` / `tour_sfn`            | `sel`           | mismo                          | mismo               |
+| matchKey con `cal-sel*` / `cal-mf-*`            | `sel`           | mismo                          | mismo               |
+
+### Reglas a respetar
+
+1. **PROHIBIDO** modificar el split de Source 3 en
+   `rebuildPlayerStatsStore` para que vuelva a clasificar `spv*`/
+   `sfn*` o cfgs `format='mundial-48'` al bucket `torneos`. La regla
+   "Mundialito de Clubes = clubes / Mundial 2032 = selecciones, JAMÁS
+   mezclar" es absoluta.
+2. **PROHIBIDO** quitar el check temprano `tour_spv`/`tour_sfn` →
+   `sel` de `_competitionFromMatchKey`. Sin él, los matches de
+   Mundial 2032 abiertos vía `_tourOpenHumanMatch` (compKey
+   `'torneo'` singular) y sus matchKeys (con `|torneos|`) caían a
+   `torneos` por el match `tour_` o `|torneo|` de abajo.
+3. **PROHIBIDO** dejar `if (!buckets[comp]) comp = 'liga';` sin
+   normalización vía `_competitionFromMatchKey`. Los compKeys
+   `'torneo'` (singular, Mundial 2032) y `'sel-fin'` (cal-mf-*)
+   NO existen como bucket directo (`buckets.torneo` /
+   `buckets['sel-fin']` son `undefined`) → caían a `liga`.
+4. **Toda comp NUEVA** que añada un slot al motor `_tour*` con
+   format de selecciones debe heredar la clasificación a `sel`
+   (idealmente añadiendo su id al regex `^(spv|sfn|XXX)\d+$` y/o
+   añadiendo su `format` a la detección por format).
+5. La regla aplica igual al revés: las pantallas de Selecciones
+   (s-tour-stats por cfg, o `s-sel-stats` si existe) NO deben
+   recibir jugadores de clubes del Mundialito ni de Torneos de
+   Verano. El mapeo es 1-a-1 por id de torneo.
+
 ## MISTERS_REGISTRY — fuente única canónica de humanos (obligatorio, 2026-05-27)
 
 **Propuesta usuario 2026-05-27** (foto pantalla `👤 EQUIPOS` del menú

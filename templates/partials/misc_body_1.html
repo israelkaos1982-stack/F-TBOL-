@@ -9921,6 +9921,35 @@ window._showSimProgress = function(opts, onDone){
         if (preferred) break;
       }
     } catch(_){}
+    /* Fallback a selecciones nacionales (`selecciones_squad_v1`).
+       Sin esto, sqFromRegistry / sqFromRegistryFull caían al placeholder
+       "Jugador A/B" en los actas y stats del Mundial 48 / fase final
+       de selecciones, incluso con la plantilla creada en el editor
+       de selecciones. El wrapper de sqFromRegistry (más abajo en
+       _wrapSqFromRegistry) prefiere el resultado de esta función
+       antes de delegar al original — así garantizamos que las
+       selecciones se resuelvan SIEMPRE aunque applyEngineOverrides
+       no haya seeded SQUAD_REGISTRY para ellas (que no lo hace).
+       2026-05-27. */
+    if (!preferred && !fallback) {
+      try {
+        var _selRaw = localStorage.getItem('selecciones_squad_v1');
+        if (_selRaw) {
+          var _selData = JSON.parse(_selRaw);
+          var _selTeams = (_selData && Array.isArray(_selData.teams)) ? _selData.teams : [];
+          /* Pasada 1: match exacto por nombre normalizado. */
+          for (var si = 0; si < _selTeams.length && !fallback; si++) {
+            var _st = _selTeams[si];
+            if (!_st || !_st.name) continue;
+            if (!Array.isArray(_st.players) || !_st.players.length) continue;
+            var _snm = _lextNormForLookup(_st.name);
+            for (var sti = 0; sti < targets.length; sti++) {
+              if (_snm === targets[sti]) { fallback = _st; break; }
+            }
+          }
+        }
+      } catch(_){}
+    }
     return preferred || fallback;
   }
   function _lextBuildSqFromTeam(t){
@@ -37772,6 +37801,130 @@ https://api.sofascore.app/api/v1/team/44/image
      que escudos y el motor 4-ejes funcionen como con cualquier club.
      Además publica el mapa `_SEL_HUMAN_ICONS` (nombre→icono) para que
      las selecciones con icono se detecten como humanas. */
+  /* Construye un sq corto (formato sqFromRegistry: headers `{h:label}`
+     + entries `[num,name,power]` por posición) a partir de una selección
+     con `players[]`. Mismo formato que produce sqFromRegistry para
+     `ligaExt_*` así que `genMatchEventsEnhanced` / picker del gm-modal
+     / pen wizard lo digieren sin tocar nada. 2026-05-27.
+     Auto-numera dorsales cuando el editor no los asignó (cubre el caso
+     común de plantillas pegadas desde texto sin dorsal). Propaga los
+     6 flags (C/F/P/⭐/⚾/🏀) como propiedades del array — igual que
+     `_importOtherLeaguesIntoEngine`. */
+  function _selBuildSqShort(t){
+    if (!t || !Array.isArray(t.players) || !t.players.length) return null;
+    var POS_MAP = {POR:'P', DEF:'D', MED:'M', DEL:'F'};
+    var POS_HEADER = {P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS'};
+    var POS_ORDER = ['P','D','M','F'];
+    var DEFAULT_NUMS = {
+      P: [1, 13, 25, 12, 31],
+      D: [2, 3, 4, 5, 15, 16, 22, 24, 23, 18, 26],
+      M: [6, 8, 10, 14, 17, 19, 20, 21, 27, 28],
+      F: [7, 9, 11, 29, 30, 32, 33]
+    };
+    var byPos = {P:[], D:[], M:[], F:[]};
+    t.players.forEach(function(p){
+      if (!p || !p.name) return;
+      var simPos = POS_MAP[p.pos] || 'M';
+      byPos[simPos].push(p);
+    });
+    /* Pre-reservar dorsales ya asignados a mano para que la autonumeración
+       no los pise. */
+    var usedNums = {};
+    Object.keys(byPos).forEach(function(ps){
+      byPos[ps].forEach(function(p){
+        var n = Number(p.num);
+        if (n > 0 && !usedNums[n]) usedNums[n] = true;
+      });
+    });
+    function _nextFreeNum(simPos){
+      var pool = DEFAULT_NUMS[simPos] || [];
+      for (var i = 0; i < pool.length; i++) {
+        if (!usedNums[pool[i]]) { usedNums[pool[i]] = true; return pool[i]; }
+      }
+      for (var n = 1; n <= 99; n++) {
+        if (!usedNums[n]) { usedNums[n] = true; return n; }
+      }
+      return 99;
+    }
+    var sq = [];
+    var hasAny = false;
+    POS_ORDER.forEach(function(simPos){
+      var pool = byPos[simPos];
+      if (!pool.length) return;
+      hasAny = true;
+      pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+      sq.push({h: POS_HEADER[simPos]});
+      pool.forEach(function(p){
+        var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+        var num = (Number(p.num) > 0) ? Number(p.num) : _nextFreeNum(simPos);
+        var entry = [String(num), String(p.name || '?'), pw];
+        if (p.elite)      entry.elite      = true;
+        if (p.natGoal)    entry.natGoal    = true;
+        if (p.natGoalPro) entry.natGoalPro = true;
+        if (p.captain)    entry.captain    = true;
+        if (p.freeKick)   entry.freeKick   = true;
+        if (p.penalty)    entry.penalty    = true;
+        sq.push(entry);
+      });
+    });
+    return hasAny ? sq : null;
+  }
+  /* Siembra SQUAD_REGISTRY + sidecar de flags con TODAS las selecciones
+     que tengan plantilla. Sin esto, sqFromRegistry caía al scan tardío
+     de `selecciones_squad_v1` (que existe pero no siempre se ejecuta
+     dependiendo de la ruta — algunos callers usan `sqFromRegistryFull`
+     que sólo consulta SQUAD_REGISTRY tras applyEngineOverrides, y
+     applyEngineOverrides NO seedea selecciones). Resultado del bug:
+     placeholders "Jugador A/B" en actas + stats del Mundial 2032.
+     2026-05-27. */
+  function _seedSelectionsToRegistry(teams){
+    if (!Array.isArray(teams) || !teams.length) return;
+    if (typeof window === 'undefined' || !window.SQUAD_REGISTRY) {
+      window.SQUAD_REGISTRY = window.SQUAD_REGISTRY || {};
+    }
+    teams.forEach(function(t){
+      if (!t || !t.name) return;
+      var sq = _selBuildSqShort(t);
+      if (!sq) return;
+      window.SQUAD_REGISTRY[t.name] = sq;
+      /* Sidecar de flags para que pickSpecialist / scorers respeten
+         C/F/P/⭐/⚾/🏀 en partidos de selección igual que en clubes. */
+      try {
+        var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
+        t.players.forEach(function(p){
+          if (!p || !p.name) return;
+          if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal || p.natGoalPro){
+            fmap[String(t.name) + '::' + String(p.name)] = {
+              captain:    !!p.captain,
+              freeKick:   !!p.freeKick,
+              penalty:    !!p.penalty,
+              elite:      !!p.elite,
+              natGoal:    !!p.natGoal,
+              natGoalPro: !!p.natGoalPro
+            };
+          }
+        });
+      } catch(_){}
+    });
+  }
+  /* Lanza la migración de placeholders "Jugador A/B" en cfgs de torneo
+     + stores de stats UNA vez tras seedear las selecciones (gives them
+     a chance to be resolved). El bundle ya programa la migración al
+     boot (DOMContentLoaded+600ms) pero puede correr ANTES de que las
+     selecciones estén sembradas → no encuentra reemplazo y los
+     placeholders persisten. Re-disparamos aquí ahora que SQUAD_REGISTRY
+     tiene las selecciones. Idempotente. 2026-05-27. */
+  var _selMigrationTimer = null;
+  function _selScheduleMigration(){
+    if (_selMigrationTimer) clearTimeout(_selMigrationTimer);
+    _selMigrationTimer = setTimeout(function(){
+      _selMigrationTimer = null;
+      try {
+        if (typeof window._migrateTourPlaceholderNames === 'function')
+          window._migrateTourPlaceholderNames();
+      } catch(_){}
+    }, 250);
+  }
   function _hydrate(){
     var d=_dedupeStored(_load());
     window.TEAM_RATINGS = window.TEAM_RATINGS || {};
@@ -37791,6 +37944,8 @@ https://api.sofascore.app/api/v1/team/44/image
     });
     window._SEL_HUMAN_ICONS=icons;
     _patchHumanIcon();
+    _seedSelectionsToRegistry(d.teams);
+    _selScheduleMigration();
   }
   window._selSquadLoad=_load;
   window._selSquadHydrate=_hydrate;

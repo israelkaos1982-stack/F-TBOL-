@@ -3390,7 +3390,8 @@ window._showSimProgress = function(opts, onDone){
     var returnDate = (pdRows[returnIdx] && pdRows[returnIdx].date)
       || (pdRows.length ? pdRows[pdRows.length-1].date : '');
     var rec = {
-      equipo:'Bayern Munich', grado:grado, gradoNombre:gradoNombre, gradoEmoji:gradoEmoji,
+      equipo: (function(){ try { return _psHumanLogicName() || 'Bayern Munich'; } catch(_){ return 'Bayern Munich'; } })(),
+      grado:grado, gradoNombre:gradoNombre, gradoEmoji:gradoEmoji,
       descripcion:descripcion, partidos:partidos, returnDate:returnDate, timestamp:Date.now()
     };
     if (!window.LESION_STORE) window.LESION_STORE = {};
@@ -3455,8 +3456,16 @@ window._showSimProgress = function(opts, onDone){
           if (window.BAJA_STORE[nm] && window.BAJA_STORE[nm].tipo === 'lesion') delete window.BAJA_STORE[nm];
           delete inj[nm]; changed = true; return;
         }
+        /* equipo dinámico (hub renombrado a Liverpool en 2026-05-23). Sin
+           esto, sqFromRegistry('Liverpool') no excluía a los lesionados
+           guardados con equipo:'Bayern Munich' y el simulador IA-vs-IA
+           los seleccionaba como goleadores / MVP (bug 2026-05-27: Hugo
+           Ekitiké marcó pagando el partido estando lesionado 3
+           partidos). Como esta función se ejecuta en cada render, las
+           entradas legacy se migran automáticamente al hub actual. */
         window.LESION_STORE[nm] = {
-          equipo:'Bayern Munich', grado:x.grado||1, gradoNombre:x.gradoNombre||'Lesión',
+          equipo: (function(){ try { return _psHumanLogicName() || 'Bayern Munich'; } catch(_){ return 'Bayern Munich'; } })(),
+          grado:x.grado||1, gradoNombre:x.gradoNombre||'Lesión',
           gradoEmoji:x.gradoEmoji||'🩹', descripcion:x.descripcion||'',
           partidos:remaining, returnDate:x.returnDate||'', timestamp:x.ts||Date.now()
         };

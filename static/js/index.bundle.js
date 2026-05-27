@@ -646,13 +646,46 @@ window.sqFromRegistry = function(teamName, opts) {
   try {
     var _lesMap = window.LESION_STORE || {};
     var _teamNorm = String(teamName || '').trim().toLowerCase();
+    /* Alias del hub: si el slot del hub está renombrado (p.ej. usuario
+       cambió "Bayern Munich" → "Liverpool" en 2026-05-23), las entradas
+       legacy de LESION_STORE pueden tener equipo:'Bayern Munich' aunque
+       el jugador ya pertenezca al slot renombrado. Resolvemos el nombre
+       lógico del hub para tratar ambas variantes como equivalentes y
+       que el simulador IA-vs-IA NUNCA elija a un lesionado como
+       goleador / MVP por un equipo desincronizado. Bug 2026-05-27:
+       Hugo Ekitiké marcó pagando la simulación del Joan Gamper estando
+       lesionado 3 partidos. */
+    var _hubAliases = null;
+    function _hubAliasSet() {
+      if (_hubAliases) return _hubAliases;
+      _hubAliases = {};
+      var lg = '';
+      try { lg = typeof window._psHumanLogicName === 'function' ? (window._psHumanLogicName() || '') : ''; } catch(_){ lg = ''; }
+      var lgN = String(lg).trim().toLowerCase();
+      if (lgN) _hubAliases[lgN] = 1;
+      try { if (window._mkHubTeamName) _hubAliases[String(window._mkHubTeamName).trim().toLowerCase()] = 1; } catch(_){}
+      /* Solo añadimos 'bayern munich' como alias legacy si el hub ya
+         fue RENOMBRADO a otro nombre — sin esto un usuario con hub aún
+         en Bayern obtendría falsos positivos al cruzar con otro equipo
+         IA inexistente. La heurística es: el hub lógico no es Bayern. */
+      if (lgN && lgN !== 'bayern munich' && lgN !== 'bayern múnich') {
+        _hubAliases['bayern munich'] = 1;
+        _hubAliases['bayern múnich'] = 1;
+      }
+      return _hubAliases;
+    }
     Object.keys(_lesMap).forEach(function(pn){
       var rec = _lesMap[pn];
       if (!rec || !(Number(rec.partidos) > 0)) return;
       /* Match por nombre de equipo normalizado — cubre "Atlético
          Madrid" / "Atletico Madrid" / "Atl Madrid" consistentemente. */
       var eqNorm = String(rec.equipo || '').trim().toLowerCase();
-      if (eqNorm && eqNorm !== _teamNorm) return;
+      var match = (!eqNorm || eqNorm === _teamNorm);
+      if (!match) {
+        var al = _hubAliasSet();
+        if (al[eqNorm] && al[_teamNorm]) match = true;
+      }
+      if (!match) return;
       if (excluded.indexOf(pn) === -1) excluded.push(pn);
     });
   } catch(_){}

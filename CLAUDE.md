@@ -1,5 +1,115 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Mundialito de Clubes — diseño AMARILLO + flujo Resto del Mundo (obligatorio, 2026-05-27)
+
+El **Mundialito de Clubes** vive en el slot built-in `'mundial'` del
+motor `_tour*` (NO confundir con `mundial-48`, que es Mundial 2032
+de selecciones). Spec canónica (CLAUDE.md regla bloqueante):
+
+- **32 equipos** = 16 europeos (admin elige MANUALMENTE) + 16 de la
+  liga `ligaExt_resto-mundo` (TOP 16 automáticos tras los 42 partidos).
+- **Format**: `'groups-ko'` con `formatConfig.groups=8`, `perGroup=4`,
+  `advancePerGroup=2`, `koRounds=['Octavos','Cuartos','Semis','Final']`.
+- **Top 2 de cada grupo** → Octavos (16 equipos). Octavos → Cuartos →
+  Semis → Final, todo a **PARTIDO ÚNICO con ET + penaltis** (`koExtraTimePens:true`).
+- **NO hay 3er/4º puesto.** Solo 4 rondas KO.
+- **No excluye ligas**: cualquier equipo europeo (cualquier liga) puede
+  ser elegido por el admin como uno de los 16 europeos.
+- **Humanos**: los marca el admin manualmente al lanzar el torneo
+  (igual que Superliga). Cualquier humano puede ser elegido para el
+  Mundialito independientemente de los humanos canónicos de Liga EA.
+- **Frecuencia**: lo lanza el admin desde la pantalla Resto del Mundo
+  (`s-lext` con `slug==='resto-mundo'`) cuando los 42 partidos están
+  completos. El motor NO lo arranca solo cada N temporadas — es
+  bajo demanda.
+
+### Color visual: AMARILLO `#ffd633` (no azul cobalto)
+
+Petición usuario 2026-05-27. El Mundialito tiene **el mismo formato
+visual que el Mundial 2032** (mismas cards `.mn-card`, mismo layout
+de grupos + KO, mismas tablas de clasificación) **pero en amarillo**
+en lugar de azul cobalto + dorado.
+
+Ubicación de los overrides amarillo (`#ffd633`):
+
+1. **`#s-mundial .tour-group-block`** (CSS scopeada): grupos en
+   gradiente amarillo `#2a1f00 → #5a4408 → #1a0f00` con borde
+   `rgba(255,214,51,.55)`.
+2. **`.mn-card[data-tour="mundial"]`** (selector per-card via
+   `data-tour` que `_koRowHtml` añade): cards KO en amarillo, sin
+   afectar a Mundial 2032 (sfn*) ni a otros torneos (jg/asia/sct/pss).
+3. **Hub `s-mundial-clubes`** (5 cajas): clase **`c-mundialito`**
+   (NO `c-mundial`) con gradiente amarillo. La clase `c-mundial`
+   sigue siendo cian/turquesa para Mundial 2032 calendar slots.
+4. **gm-modal**: clase **`is-comp-mundialito`** con
+   `--comp-color:#ffd633`. La detecta `_gmCompFromState` cuando
+   `g._tourId === 'mundial'` (override ANTES de la rama 'torneo'
+   genérica que daría violeta).
+
+### Slots del calendario (calendario.json + s-calendario.html)
+
+Las 7 fechas FIJAS del Mundialito en `calendario.json` (icon `🌐` →
+clase `ag-inter`):
+
+| Fecha     | event.name                      | Slot s-calendario.html |
+|-----------|---------------------------------|------------------------|
+| 04 Jul    | Mundialito Clubes - J1          | `cal-mc-g1`           |
+| 08 Jul    | Mundialito Clubes - J2          | `cal-mc-g2`           |
+| 12 Jul    | Mundialito Clubes - J3          | `cal-mc-g3` (🌧)       |
+| 16 Jul    | Mundialito Clubes - Octavos     | `cal-mc-oct`          |
+| 20 Jul    | Mundialito Clubes - Cuartos     | `cal-mc-cua`          |
+| 24 Jul    | Mundialito Clubes - Semis       | `cal-mc-sf`           |
+| 28 Jul    | Mundialito Clubes - FINAL       | `cal-mc-fin`          |
+
+**Conflicto con Mundial 2032 selecciones**: las fechas 04 Jul, 08 Jul,
+12 Jul, 20 Jul COINCIDEN con `cal-mf-g3`, `cal-mf-g4`, `cal-mf-rep`,
+`cal-mf-fin` (Mundial 2032 grupos J3/J4 + Repesca + FINAL). Asumimos
+que **NUNCA se juegan ambos torneos la misma temporada** (cada uno
+ocupa una temporada distinta del ciclo de 4 años). Si en el futuro
+sí coexisten, habrá que mover las fechas o desolapar.
+
+### Mapeo en `_realPair` (regla bloqueante CLAUDE.md)
+
+`_realPair` detecta los días del Mundialito por la clase `ag-inter`
++ etiqueta `Mundialito Clubes - ...`, fuerza `tid='mundial'`
+LOCALMENTE (sin persistir en `d.tour`) y mapea la etiqueta a
+`_dayPartidoN`:
+
+- `Mundialito Clubes - J1/J2/J3` → `_dayPartidoN = 1/2/3` → cj=0/1/2
+- `Mundialito Clubes - Octavos` → `_dayPartidoN = 4` → _dayInKo, koIdx=0
+- `Mundialito Clubes - Cuartos` → `_dayPartidoN = 5` → koIdx=1
+- `Mundialito Clubes - Semis`   → `_dayPartidoN = 6` → koIdx=2
+- `Mundialito Clubes - FINAL`   → `_dayPartidoN = 7` → koIdx=3
+
+(`grpJors=3` fijo: 4 equipos × round-robin single-leg = 3 jornadas.)
+
+`_cardMatch` también reconoce `_isMundialitoCalDay` (mismo regex) y
+fuerza `tourNm = 'Mundialito de Clubes'` en el título de la card.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** renombrar el tourId built-in `'mundial'` o cambiar
+   su `format` a algo distinto de `'groups-ko'`. El motor entero
+   (CSS, `_realPair`, calendario, hub, gm-modal) depende de esto.
+2. **PROHIBIDO** usar la clase `c-mundial` en cualquier card NUEVA
+   del Mundialito de Clubes — usar `c-mundialito`. `c-mundial` está
+   reservada para Mundial 2032 selecciones (cyan/turquesa).
+3. **PROHIBIDO** modificar `data-tour="mundial"` en `_koRowHtml`. Es
+   el marker que pinta las cards KO en amarillo via
+   `.mn-card[data-tour="mundial"]`.
+4. **PROHIBIDO** persistir `d.tour='mundial'` desde `_realPair` en
+   días Mundialito. El override es LOCAL al call — el flag
+   `_isMundialitoDay` gates el bloque de persistencia.
+5. **PROHIBIDO** caer al placeholder `_cardNonTour` en días
+   Mundialito. `_cardMatch` debe detectar `_isMundialitoCalDay` y
+   rutear al flow de torneo igual que `ag-torneo`.
+6. **Si el admin no ha lanzado el torneo** (cfg `mundial` con teams
+   vacíos), `_realPair` devuelve null para días Mundialito → la card
+   del hub muestra CONTINUAR ▶. NO se inventa partido fantasma.
+7. **Toda comp NUEVA cuyas filas usen `ag-inter`** (icono 🌐) ya
+   queda enrutada a `_realPair` automáticamente — solo necesita su
+   propia rama de parseo de `_dayPartidoN` y override local de `tid`.
+
 ## Card "Próximo partido" del hub: el CALENDARIO INDIVIDUAL es la única fuente de verdad (obligatorio, 2026-05-27)
 
 **Principio bloqueante**: la card "Próximo partido" del hub Liverpool

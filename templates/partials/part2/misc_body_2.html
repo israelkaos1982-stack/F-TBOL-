@@ -31462,8 +31462,12 @@ document.addEventListener('DOMContentLoaded', function() {
 /* Mundial / Selecciones / torneo: violeta-morado (mismo lenguaje
    visual que la caja Estadísticas del Mundial, commit 6f4df03). */
 #gm-modal.is-comp-mundial   { --comp-color:#a875e8; --comp-color-soft:rgba(168,117,232,.22);}
-/* Amistosos / Mundialito Clubes / Previa Champions: azul grisáceo. */
+/* Amistosos / Previa Champions: azul grisáceo. */
 #gm-modal.is-comp-amistoso  { --comp-color:#7da7c8; --comp-color-soft:rgba(125,167,200,.22);}
+/* Mundialito de Clubes: AMARILLO `#ffd633` (petición usuario 2026-05-27
+   — mismo formato visual que Mundial 2032 selecciones pero en amarillo
+   en lugar de violeta). */
+#gm-modal.is-comp-mundialito{ --comp-color:#ffd633; --comp-color-soft:rgba(255,214,51,.22);}
 /* Torneos de verano (SCT, PSS, Gamper, Asia): turquesa. */
 #gm-modal.is-comp-verano    { --comp-color:#5fc6c8; --comp-color-soft:rgba(95,198,200,.22);}
 /* Fallback NEUTRO para cualquier comp no reconocida: gris azulado
@@ -32276,9 +32280,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (g.comp === 'uel') return 'uel';
       if (g.comp === 'uecl') return 'uecl';
       if (g.comp === 'inter') return 'inter';
+      /* Mundialito de Clubes (tourId='mundial', format='groups-ko'):
+         tema AMARILLO `#ffd633`. Petición usuario 2026-05-27. Debe ir
+         ANTES del catch-all 'torneo' para que las cards / bordes del
+         partido NO se pinten de violeta como Mundial 2032 selecciones. */
+      if (g.comp === 'mundialito' || g._tourId === 'mundial') return 'mundialito';
       if (g.comp === 'torneo' || g.comp === 'mundial' || g.comp === 'mundial-48') return 'mundial';
       if (g.comp === 'sel' || g.comp === 'sel-fin' || g.comp === 'selecciones') return 'mundial';
-      if (g.comp === 'amistoso' || g.comp === 'wprev' || g.comp === 'mundialito') return 'amistoso';
+      if (g.comp === 'amistoso' || g.comp === 'wprev') return 'amistoso';
       if (g.comp === 'verano' || g.comp === 'sct' || g.comp === 'jg' || g.comp === 'pss' || g.comp === 'asia') return 'verano';
       if (g.comp === 'liga' || g.comp === 'ea-sports' || g.comp === '' || g.comp == null) return 'liga';
       /* Fallback: leer el badge en la venue bar. */

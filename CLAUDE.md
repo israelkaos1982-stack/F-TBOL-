@@ -148,6 +148,27 @@ Es **SÍNCRONO**, **NO depende de hidratación**, y la lista es
    bug 2026-05-27', diagnosticInfo)`. NO bloquea el render, solo deja
    constancia loud en consola para detectar la próxima regresión al
    instante.
+5. **Botón `🔍 RECUPERAR PARTIDO` en `_cardRest`** (2026-05-27,
+   propuesta usuario): si la card cae a JUGADORES FUERA pero el scan
+   `_scanForCanonicalMundialMatch` detecta que SÍ hay cfg mundial-48
+   con humana canónica, el botón `CONTINUAR ▶` se reemplaza por:
+   - Aviso ámbar `⚠️ Hay partido programado para <Selección> pero la
+     card no lo detectó`.
+   - Botón principal `🔍 RECUPERAR PARTIDO` que dispara la cascada:
+     (1) `_selSquadHydrate()` (re-cargar selecciones_squad_v1),
+     (2) `_invalidateHumanTeamCache()` (limpiar caché),
+     (3) `_tourLoadCachedSync` para TODOS los slots,
+     (4) `_psAutoChainBuildMundial` (construir brackets KO pendientes),
+     (5) scan diagnóstico loggeado en consola,
+     (6) `_psRender()` forzado (limpia sig de idempotencia),
+     (7) si tras 200ms sigue en JUGADORES FUERA, toast/alert con
+         info diagnóstica al usuario.
+   - Botón secundario pequeño `CONTINUAR ▶ (saltar día)` para mantener
+     la opción legacy si el usuario decide ignorar la recuperación.
+
+   Es la última línea de defensa USER-FACING: si todas las capas
+   internas fallan, el usuario tiene un botón visible para forzar la
+   recuperación sin recargar la página.
 
 ### Reglas a respetar (PROHIBICIONES)
 
@@ -170,6 +191,12 @@ Es **SÍNCRONO**, **NO depende de hidratación**, y la lista es
 6. **PROHIBIDO** silenciar / borrar el watchdog en `_psRender`. Es la
    herramienta que descubrirá la próxima regresión sin que el usuario
    tenga que reportar otra captura.
+6b. **PROHIBIDO** quitar el botón `🔍 RECUPERAR PARTIDO` de `_cardRest`
+   o cambiar su keyword sin acuerdo con el usuario. La keyword
+   "RECUPERAR PARTIDO" fue elegida por el usuario para que cuando vea
+   la card JUGADORES FUERA en un día con partido, pulse el botón y la
+   web auto-diagnostique + auto-recupere sin que él tenga que
+   investigar manualmente.
 7. **Toda comp NUEVA** donde puedan aparecer selecciones (Eurocopa,
    Copa América, Confederaciones, amistosos de selección, etc.) debe
    añadirse a `SEL_COMPS` Y, si tiene su propio flujo de detección de
@@ -189,6 +216,8 @@ Es **SÍNCRONO**, **NO depende de hidratación**, y la lista es
 │ ├─ Si TODOS los pases fallan:                                   │
 │ │   └─ Watchdog scan: ¿hay humana canónica en algún cfg?       │
 │ │       → console.warn loud                       ← BLINDAJE 3  │
+│ │   └─ _cardRest detecta SOSPECHA y muestra botón              │
+│ │       🔍 RECUPERAR PARTIDO en vez de CONTINUAR ▶ ← BLINDAJE 4 │
 │ └─ Render: Francia vs Rep. Checa  (NUNCA JUGADORES FUERA)      │
 └─────────────────────────────────────────────────────────────────┘
 ```

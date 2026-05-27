@@ -4987,19 +4987,181 @@ window._showSimProgress = function(opts, onDone){
     }
   }
 
+  /* SCAN agresivo: busca cualquier cfg mundial-48 con una selección
+     humana canónica entre `cfg.teams`. Devuelve { cfgId, humanName,
+     totalCfgs, scannedKeys } o null. Recorre TODO `localStorage` por
+     keys `tour_*_v1` (no solo la lista hardcoded), para no fallar si
+     algún día se añade un slot nuevo (Eurocopa, Copa América…). */
+  function _scanForCanonicalMundialMatch(){
+    var found = null;
+    var scannedKeys = [];
+    var totalCfgs = 0;
+    try {
+      var cache = window._TOUR_CACHE || {};
+      for (var k in cache){
+        var c = cache[k];
+        if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
+          totalCfgs++;
+          scannedKeys.push('cache:' + k);
+          for (var ti = 0; ti < c.teams.length && !found; ti++){
+            var t = c.teams[ti];
+            if (!t || !t.name) continue;
+            try {
+              if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(t.name)){
+                found = { cfgId:k, humanName:t.name, source:'cache' };
+              }
+            } catch(_){}
+          }
+        }
+      }
+    } catch(_){}
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var key = localStorage.key(i);
+        if (!key) continue;
+        if (key.indexOf('tour_') !== 0 || key.indexOf('_v1') === -1) continue;
+        scannedKeys.push('ls:' + key);
+        try {
+          var raw = localStorage.getItem(key);
+          if (!raw) continue;
+          var cfg = JSON.parse(raw);
+          if (!cfg || cfg.format !== 'mundial-48' || !Array.isArray(cfg.teams) || !cfg.teams.length) continue;
+          totalCfgs++;
+          if (found) continue;
+          for (var tj = 0; tj < cfg.teams.length; tj++){
+            var t2 = cfg.teams[tj];
+            if (!t2 || !t2.name) continue;
+            try {
+              if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(t2.name)){
+                found = { cfgId:key.replace(/^tour_/,'').replace(/_v1$/,''), humanName:t2.name, source:'localStorage', key:key };
+                break;
+              }
+            } catch(_){}
+          }
+        } catch(_){}
+      }
+    } catch(_){}
+    return found ? { found:found, totalCfgs:totalCfgs, scannedKeys:scannedKeys } : null;
+  }
+
+  /* RECOVERY agresivo: re-hidrata todo lo que podría estar stale y
+     fuerza un re-render del hub. Si el bug 2026-05-27 vuelve por una
+     vía nueva, este botón es la vía rápida para que el usuario
+     recupere su partido sin tener que recargar la página. */
+  function _recoverSuspiciousRest(day){
+    try {
+      console.log('[F-TBOL] 🔍 RECUPERAR PARTIDO: iniciando diagnóstico...');
+      /* 1. Re-hidratar selecciones humanas (caso: race con
+         selecciones_squad_v1). */
+      try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+      /* 2. Invalidar caché de "is human anywhere" (caso: cache stale). */
+      try { if (typeof window._invalidateHumanTeamCache === 'function') window._invalidateHumanTeamCache(); } catch(_){}
+      /* 3. Re-cargar TODOS los slots de torneo desde localStorage. */
+      try {
+        if (typeof window._tourLoadCachedSync === 'function'){
+          var slots = ['mundial',
+            'sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10',
+            'spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10'];
+          for (var s = 0; s < slots.length; s++){
+            try { window._tourLoadCachedSync(slots[s]); } catch(_){}
+          }
+        }
+      } catch(_){}
+      /* 4. Auto-build de brackets KO pendientes en cfgs mundial-48. */
+      try {
+        if (typeof window._psAutoChainBuildMundial === 'function'){
+          var cache = window._TOUR_CACHE || {};
+          for (var k in cache){
+            var c = cache[k];
+            if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
+              try { window._psAutoChainBuildMundial(c, k); } catch(_){}
+            }
+          }
+        }
+      } catch(_){}
+      /* 5. Scan diagnóstico. */
+      var scan = _scanForCanonicalMundialMatch();
+      console.log('[F-TBOL] 🔍 Diagnóstico:', scan || 'ningún cfg mundial-48 con humana canónica');
+      /* 6. Forzar re-render del hub (limpia sig de idempotencia). */
+      try {
+        var st = _stage();
+        if (st) st._psSig = null;
+      } catch(_){}
+      _render();
+      /* 7. Si tras re-render seguimos en JUGADORES FUERA, mostrar toast
+         con info diagnóstic. */
+      setTimeout(function(){
+        try {
+          var stPost = _stage();
+          var still = stPost && /JUGADORES FUERA|jugadores fuera/i.test(stPost.textContent || '');
+          if (still){
+            var msg;
+            if (scan && scan.found){
+              msg = '⚠️ Encontré la cfg "' + scan.found.cfgId + '" con ' + scan.found.humanName + ' pero _selPair sigue devolviendo null. Posible bug en el bracket / fixtures de esa cfg.';
+            } else {
+              msg = '⚠️ No encontré ningún cfg mundial-48 con una selección humana canónica. Revisa que el Mundial 2032 esté lanzado.';
+            }
+            console.warn('[F-TBOL] 🔍 RECUPERAR PARTIDO falló:', msg, scan);
+            if (typeof window.showToast === 'function') window.showToast(msg);
+            else alert(msg);
+          } else {
+            console.log('[F-TBOL] 🔍 RECUPERAR PARTIDO: éxito, card recuperada.');
+          }
+        } catch(_){}
+      }, 200);
+    } catch(e){
+      try { console.error('[F-TBOL] 🔍 RECUPERAR PARTIDO: excepción', e); } catch(_){}
+    }
+  }
+
   function _cardRest(day){
     var st = _stage(); if (!st) return;
     var isSel = /\bag-sel\b/.test(day.cls);
+    /* SUSPICIOUS DETECTION (2026-05-27): si esto es un día Mundial
+       Selecciones (`ag-sel` + label contiene 'mundial' o 'selecciones')
+       Y existe un cfg mundial-48 con una selección humana canónica en
+       cfg.teams, entonces JUGADORES FUERA es SOSPECHOSO — no debería
+       estar aquí. Reemplazamos el "CONTINUAR ▶" por un "🔍 RECUPERAR
+       PARTIDO" que dispara la cascada de diagnóstico + recovery. */
+    var suspicious = false;
+    var scanResult = null;
+    if (isSel){
+      var lblLow = String(day.label || '').toLowerCase();
+      if (/mundial|seleccion/.test(lblLow)){
+        try { scanResult = _scanForCanonicalMundialMatch(); } catch(_){}
+        if (scanResult && scanResult.found) suspicious = true;
+      }
+    }
+    var btnHtml;
+    if (suspicious){
+      btnHtml = '<div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">'
+        + '<div style="font-size:11px;color:#ffcc66;letter-spacing:1.4px;font-family:Oswald,sans-serif;text-align:center;line-height:1.4;">'
+        +   '⚠️ Hay partido programado para ' + _esc(scanResult.found.humanName) + '<br>pero la card no lo detectó'
+        + '</div>'
+        + '<button type="button" id="ps-recover-btn" style="background:linear-gradient(135deg,#3a5a8a,#5a7ab8);border:1px solid rgba(140,180,240,.7);color:#fff;padding:11px 18px;border-radius:8px;font-family:Oswald,sans-serif;letter-spacing:2.2px;font-size:13px;font-weight:700;text-shadow:0 0 8px rgba(140,180,240,.6);cursor:pointer;">'
+        +   '🔍 RECUPERAR PARTIDO'
+        + '</button>'
+        + '<button type="button" class="ps-btn ghost" id="ps-rest-btn" style="font-size:11px;opacity:.65;">CONTINUAR ▶ (saltar día)</button>'
+        + '</div>';
+    } else {
+      btnHtml = '<button type="button" class="ps-btn ghost" id="ps-rest-btn" style="margin-top:16px;">CONTINUAR ▶</button>';
+    }
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + (isSel ? '🌍 Selecciones · jugadores fuera' : '💤 Día de descanso') + '</div>'
       + '<div style="font-size:54px;line-height:1;margin:10px 0 6px;">' + (isSel?'🌍':'💤') + '</div>'
       + '<div class="ps-meta">' + _esc(day.label || 'Descanso') + '</div>'
-      + '<button type="button" class="ps-btn ghost" id="ps-rest-btn" style="margin-top:16px;">CONTINUAR ▶</button>'
+      + btnHtml
       + '</div>';
     var b = document.getElementById('ps-rest-btn');
     if (b) b.onclick = function(){ _markDoneAndAdvance(); };
+    var rec = document.getElementById('ps-recover-btn');
+    if (rec) rec.onclick = function(){
+      rec.disabled = true;
+      rec.textContent = '🔍 BUSCANDO…';
+      _recoverSuspiciousRest(day);
+    };
   }
 
   /* Abre la PANTALLA DE PREVIA estándar del proyecto (la misma que

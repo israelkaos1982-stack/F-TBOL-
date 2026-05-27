@@ -1,5 +1,79 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## MISTERS_REGISTRY — fuente única canónica de humanos (obligatorio, 2026-05-27)
+
+**Propuesta usuario 2026-05-27** (foto pantalla `👤 EQUIPOS` del menú
+principal): cada caja del menú EQUIPOS mapea un **mister humano** a
+**UN club** + **UNA selección**. Es la fuente de verdad para "quién
+es humano esta temporada".
+
+### Los 6 misters canónicos
+
+| Pantalla (`screen`) | Club | Mister (emoji) | Selección |
+|---------------------|------|----------------|-----------|
+| `s-munich`   | Liverpool        | Toñín 💡  | Francia    |
+| `s-arsenal`  | Arsenal          | Álvaro 🐭 | Brasil     |
+| `s-madrid`   | Real Madrid      | Acsa 🔨   | Inglaterra |
+| `s-atletico` | Atlético Madrid  | Isra ✏️   | Noruega    |
+| `s-barca`    | FC Barcelona     | Ángel 😈  | Argentina  |
+| `s-psg`      | PSG              | Izan 🦆   | España     |
+
+Cada mister dirige **AMBOS** equipos: pulsando su caja del menú se
+abre la pantalla con calendario + competiciones del club + la selección.
+
+### Registry canónico
+
+`window._MISTERS_HUMANOS` (definido en `misc_body_1.html`, IIFE
+HUMANIDAD POR COMPETICIÓN, JUSTO antes de `SEL_COMPS`):
+
+```js
+var MISTERS_HUMANOS = [
+  { id:'tonin',  emoji:'💡', mister:'Toñín',  club:'Liverpool',        seleccion:'Francia',    screen:'s-munich'   },
+  { id:'alvaro', emoji:'🐭', mister:'Álvaro', club:'Arsenal',          seleccion:'Brasil',     screen:'s-arsenal'  },
+  { id:'acsa',   emoji:'🔨', mister:'Acsa',   club:'Real Madrid',      seleccion:'Inglaterra', screen:'s-madrid'   },
+  { id:'isra',   emoji:'✏️', mister:'Isra',   club:'Atlético Madrid',  seleccion:'Noruega',    screen:'s-atletico' },
+  { id:'angel',  emoji:'😈', mister:'Ángel',  club:'FC Barcelona',     seleccion:'Argentina',  screen:'s-barca'    },
+  { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',              seleccion:'España',     screen:'s-psg'      }
+];
+```
+
+Es **HARDCODED**, **SÍNCRONO**, y NO depende de NADA externo:
+- ❌ NO depende de hidratación de `selecciones_squad_v1`
+- ❌ NO depende de flag `isHuman` en cfgs del torneo
+- ❌ NO depende del DOM del menú EQUIPOS estar renderizado
+- ❌ NO depende de fetch del servidor
+
+### Helpers públicos (todos sync, todos infallible)
+
+- `window._isHumanSeleccionCanonica(name)` → bool. ¿Es Francia/Brasil/…?
+- `window._isHumanClubCanonico(name)` → bool. ¿Es Liverpool/Arsenal/…?
+  Acepta alias legacy ("Bayern Munich" / "Bayern" / "LFC" → Liverpool).
+- `window._mhFindMister(name)` → mister object o null. Útil para saber
+  qué mister dirige al equipo.
+- `window._mhSameMister(a, b)` → bool. ¿`a` y `b` los dirige el mismo
+  mister? Ej: `_mhSameMister('Liverpool','Francia')` → true (Toñín).
+
+### `isHumanInComp` consulta el registry primero
+
+`isHumanInComp(name, comp)` ahora tiene una CAPA 0 antes que TODAS las
+demás:
+
+```js
+window.isHumanInComp = function(name, comp){
+  // CAPA 0 — MISTERS_REGISTRY (sync, hardcoded, infallible):
+  if (SEL_COMPS[c] && _isHumanSeleccionCanonica(name)) return true;
+  if ((EUR_COMPS[c] || DOM_COMPS[c] || c === 'superliga')
+      && _isHumanClubCanonico(name)) return true;
+  // CAPA 1+ — fallbacks asincrónicos (_esSelHumana, _hasHumanIcon, etc.)
+  ...
+};
+```
+
+Como TODOS los flujos del juego pasan por `isHumanInComp` (gracias a
+las defensas previas), la CAPA 0 garantiza que el bug 2026-05-27
+JAMÁS pueda reproducirse, incluso aunque el resto de capas estén
+rotas.
+
 ## Detección de SELECCIONES humanas — fuente única `_esSelHumana` (obligatorio, 2026-05-27)
 
 **REGLA BLOQUEANTE ABSOLUTA**: las **6 selecciones humanas canónicas**
@@ -118,6 +192,79 @@ Es **SÍNCRONO**, **NO depende de hidratación**, y la lista es
 │ └─ Render: Francia vs Rep. Checa  (NUNCA JUGADORES FUERA)      │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+## Jornada / ronda CUMPLIDA → cabecera GRIS (obligatorio, 2026-05-27)
+
+Cuando una jornada de grupo o una ronda KO tiene **TODOS** sus
+partidos jugados (con resultado `played === true`), el botón de
+cabecera de esa jornada/ronda (`.jbtn` en `.jblock`) debe salir en
+**color gris** para distinguirla de las que aún están pendientes.
+
+Aplica a **todas** las competiciones que rinden con el patrón
+`.jblock + .jbtn.c-<comp>`:
+
+| comp class       | done style                  | dónde lo añade el JS                                                   |
+|------------------|------------------------------|------------------------------------------------------------------------|
+| `c-mundialito`   | gris (regla CSS bloqueante)  | _tour engine (Mundialito Clubes)                                       |
+| `c-mundial`      | gris (regla CSS bloqueante)  | `_mundialGroupsHtml` (jornadas de grupo) + `row()` de `_mundialKoHtml` (rondas KO) en `misc_body_1.html` |
+| `c-superliga`    | oro/trofeo (excepción)       | `s-superliga-clas.html` + `part2/misc_body_2.html` — color de campeón, NO se gris-ifica |
+
+Las reglas CSS gris viven juntas en
+`templates/partials/misc_body_1.html` (~líneas 12190-12215), bloque
+"Jornada YA JUGADA → botón gris". La gradiente gris es:
+```
+linear-gradient(90deg,#1a1d22,#2a2e36,#3a3e48,#2a2e36,#1a1d22)
+```
+con borde `rgba(170,180,195,.45)`, `filter:grayscale(.5) brightness(.85)`
+y `color:rgba(255,255,255,.55)`.
+
+### Cómo detectar "todos los partidos jugados"
+
+El JS construye el botón con la clase `done` cuando todos los partidos
+de esa jornada / ronda están con resultado. Ejemplos canónicos:
+
+```js
+// _mundialGroupsHtml: jornada de grupo
+var allDone = true;
+jor.forEach(function(_, mi){
+  var r = (cfg.results[gKey+ji+'_'+mi]||{});
+  if (!r.played) allDone = false;
+});
+html += '<button class="jbtn c-mundial' + (allDone ? ' done' : '') + '" ...>';
+```
+
+### Reglas a respetar
+
+1. **Toda nueva competición** que use el patrón `.jblock + .jbtn.c-<comp>`
+   en una pantalla de torneo (`s-<comp>-clas`, `s-<comp>-stats`,
+   pantalla del hub `_tour*`, etc.) DEBE:
+   - Añadir la clase `done` al `.jbtn` cuando todos los partidos de la
+     jornada/ronda estén jugados.
+   - Tener su regla `.jbtn.c-<comp>.done` en el bloque CSS gris (o
+     reutilizar las existentes si comparte gradient base).
+2. **PROHIBIDO** dejar una jornada cumplida con la cabecera del color
+   activo de la comp (rojo Liga, rosa Mundial-48, etc.). Eso confunde
+   al usuario sobre qué jornadas siguen pendientes.
+3. **PROHIBIDO** eliminar la regla `.jbtn.c-mundial.done` /
+   `.jbtn.c-mundialito.done` sin reemplazo equivalente. El base color
+   de `c-mundial` (`#5a0030 → #c8205a` en `static/css/index.bundle.css`)
+   usa `!important`, así que la regla `.jbtn.c-mundial.done` también
+   debe llevar `!important` para ganarle (especificidad 0,3,0 vs 0,1,0).
+4. **Excepción documentada — Superliga**: el "done" de Superliga
+   (`#s-superliga-clas .jbtn.c-superliga.done` en
+   `part2/misc_body_2.html:873`) usa gradient **oro/trofeo** en lugar
+   de gris. Es intencional (decisión de diseño previa, color trofeo
+   `#F1C40F`). NO modificar sin acuerdo con el usuario.
+
+### Histórico
+
+- 2026-05-27: usuario reporta foto del Mundial 2032 (Grupo A:
+  Filipinas/Senegal/Kuwait/Jordania) con J1 y J2 cumplidas saliendo
+  en color rosa/magenta pese a tener todos los partidos con FIN. El
+  JS ya añadía la clase `done` (líneas 20392 y 20643 de
+  `misc_body_1.html`) pero faltaba la regla CSS
+  `.jbtn.c-mundial.done`. Añadida al bloque junto a
+  `.jbtn.c-mundialito.done` (líneas 12200-12215).
 
 ## Mundialito de Clubes — diseño AMARILLO + flujo Resto del Mundo (obligatorio, 2026-05-27)
 

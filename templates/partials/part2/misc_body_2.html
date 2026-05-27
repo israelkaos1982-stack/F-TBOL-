@@ -8985,7 +8985,38 @@
   };
 
   var ATH_MED_KEY = 'athMedicalPI';
+  /* FUENTE ÚNICA de PI (2026-05-27): el saldo de PI vive en el HUD del
+     Liverpool (`_bayernHudGet().pi` → `state.pi` → `#ath-med-val`). Ese
+     es el mismo número que pinta el 💊 del HUD superior. Antes el
+     menú médico leía un localStorage independiente (`athMedicalPI`)
+     que se desincronizaba del HUD: foto 2026-05-27 con A. Robertson
+     mostraba HUD = 💊 8 PI pero MENÚ DE TRATAMIENTO = «0 PI
+     disponibles». Ahora ambos leen del mismo sitio.
+
+     Cae en cascada: cache en memoria → state legacy IIFE → DOM →
+     localStorage legacy. Cualquiera de las 4 sirve si las otras
+     fallan (boot, recarga, navegador con cuota purgada…). */
   function athGetMedicalPI() {
+    try {
+      if (window._BAYERN_HUD_CACHE && window._BAYERN_HUD_CACHE.pi != null) {
+        var vC = parseFloat(window._BAYERN_HUD_CACHE.pi);
+        if (isFinite(vC)) return Math.max(0, vC);
+      }
+    } catch(e){}
+    try {
+      if (window._bayernLegacyState && window._bayernLegacyState.pi != null) {
+        var vL = parseFloat(window._bayernLegacyState.pi);
+        if (isFinite(vL)) return Math.max(0, vL);
+      }
+    } catch(e){}
+    try {
+      var el = document.getElementById('ath-med-val');
+      if (el) {
+        var txt = String(el.textContent || '').replace(/\s*PI\s*$/i, '').trim();
+        var vD = parseFloat(txt);
+        if (isFinite(vD)) return Math.max(0, vD);
+      }
+    } catch(e){}
     try {
       var n = parseFloat(localStorage.getItem(ATH_MED_KEY) || '0');
       return Math.max(0, isFinite(n) ? n : 0);
@@ -8997,9 +9028,21 @@
        decimales para no arrastrar ruido de coma flotante. */
     n = Math.round(n * 100) / 100;
     window.__ATH_MED_PI = n;
+    /* Persistimos en el HUD (5 capas + servidor). `_bayernHudMerge`
+       llama a `save()` + `apply()` → repintará `#ath-med-val` y
+       sincronizará `_bayernLegacyState.pi` para que el próximo
+       `updateHud()` no pinte el default 8. */
+    try {
+      if (typeof window._bayernHudMerge === 'function') {
+        window._bayernHudMerge({ pi: n });
+      }
+      if (window._bayernLegacyState) {
+        window._bayernLegacyState.pi = Math.floor(n + 1e-9);
+      }
+    } catch(e){}
+    /* Copia legacy de localStorage por compatibilidad — si el HUD
+       API aún no se ha cargado en boot, el read cae aquí. */
     try { localStorage.setItem(ATH_MED_KEY, String(n)); } catch(e){}
-    /* El icono 💊 del HUD muestra los partidos de lesión pendientes,
-       no los PI. El saldo de PI se ve dentro del menú de tratamiento. */
   }
   function _athFmtPI(n) {
     n = Math.round((parseFloat(n) || 0) * 10) / 10;

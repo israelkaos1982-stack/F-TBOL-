@@ -3991,6 +3991,30 @@ window._showSimProgress = function(opts, onDone){
             } catch(_){}
           }
         }
+        /* Pase 3 (fallback canónico): `_esSelHumana` consulta la lista
+           HARDCODED `SEL_HUMANAS` del bundle (Francia, Brasil, Inglaterra,
+           Noruega, Argentina, España). NO depende de hidratación de
+           `selecciones_squad_v1` ni de que el admin haya marcado
+           `isHuman:true` en el cfg del Mundial. Sin esto, si el usuario
+           crea el Mundial 2032 SIN marcar Francia como humana en el
+           editor Y `_SEL_HUMAN_ICONS` aún no se ha hidratado (race con
+           el fetch de selecciones_squad_v1 al primer render), Pase 1+2
+           fallan → _candidates vacío → card del hub muestra JUGADORES
+           FUERA en lugar del partido real de Francia. Bug reportado
+           2026-05-27 con foto Liverpool/Francia · 03 May. */
+        if (typeof window._esSelHumana === 'function'){
+          for (var ti3 = 0; ti3 < _T.length; ti3++){
+            if (_seen[ti3]) continue;
+            var t3 = _T[ti3];
+            if (!t3 || !t3.name || t3.name === 'PENDIENTE') continue;
+            try {
+              if (window._esSelHumana(t3.name)){
+                _candidates.push({cfg:_C, id:_Cid, huIdx:ti3});
+                _seen[ti3] = 1;
+              }
+            } catch(_){}
+          }
+        }
       }
       if (!_candidates.length) return null;
       /* Iterar candidatos. Prioridad: REAL match (return inmediato) >
@@ -48389,6 +48413,17 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var t2 = teams[ti2];
         if (!t2 || !t2.name || t2.name === 'PENDIENTE') continue;
         try { if (window.isHumanInComp(t2.name, 'mundial')) return { team:t2, idx:ti2 }; } catch(_){}
+      }
+    }
+    /* Pase 3 (fallback canónico, 2026-05-27): `_esSelHumana` lista
+       hardcoded SEL_HUMANAS del bundle — no depende de hidratación de
+       selecciones_squad_v1 ni de `isHuman:true` en el cfg. Mismo fix
+       que `_selPair`. */
+    if (typeof window._esSelHumana === 'function'){
+      for (var ti3 = 0; ti3 < teams.length; ti3++){
+        var t3 = teams[ti3];
+        if (!t3 || !t3.name || t3.name === 'PENDIENTE') continue;
+        try { if (window._esSelHumana(t3.name)) return { team:t3, idx:ti3 }; } catch(_){}
       }
     }
     return null;

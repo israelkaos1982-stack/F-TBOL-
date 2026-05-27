@@ -1,5 +1,124 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Detección de SELECCIONES humanas — fuente única `_esSelHumana` (obligatorio, 2026-05-27)
+
+**REGLA BLOQUEANTE ABSOLUTA**: las **6 selecciones humanas canónicas**
+(Francia 💡, Brasil 🐭, Inglaterra 🔨, Noruega ✏️, Argentina 😈,
+España 🦆) DEBEN ser detectadas como humanas en TODOS los flujos del
+proyecto que toquen partidos de selección, **independientemente de
+cualquier estado asincrónico** (hidratación de `selecciones_squad_v1`,
+flag `isHuman` en el cfg del torneo, fetch del servidor, etc.).
+
+### Por qué esta regla existe (bug 2026-05-27)
+
+El usuario reportó con captura "Liverpool/Francia · 03 May" que la
+card "Próximo partido" del hub mostraba `🌍 SELECCIONES · JUGADORES
+FUERA · CONTINUAR ▶` en lugar del partido real `Francia vs Rep.
+Checa` (Mundial Grupo — J1). La causa raíz:
+
+1. `_selPair` resolvía al humano con 2 pases: (1) `t.isHuman` flag, y
+   (2) `isHumanInComp(name, 'mundial')`.
+2. `isHumanInComp('Francia', 'mundial')` cae a `_hasHumanIcon` →
+   `humanIcon('Francia')` → depende de `_SEL_HUMAN_ICONS` hidratado
+   desde `selecciones_squad_v1`.
+3. Si el admin no marcó Francia `isHuman:true` en el cfg del Mundial
+   **Y** la hidratación async aún no había corrido al primer render,
+   ambos pases fallaban → `_candidates` vacío → `_selPair` retornaba
+   null → card del hub mostraba JUGADORES FUERA.
+4. **Mismo bug afectaba a 6 sitios más en paralelo**: `_gmHumanInvolved`
+   (cronómetro caía a IAIA 90s en vez de HvH 16.5min / HvIA 9.75min),
+   `_mlTeamIsHumanEnd` (no se mostraba stats overlay obligatorio),
+   `_mlTeamIsHuman` (sanciones mal aplicadas), `_mlPlayerValuationAjax`
+   (auto-pick saltaba al jugador del rival), `athRivalIsHuman` (PI
+   médicos incorrectos), `_psTeamIsHumanGeneric` (auto-sim fase previa).
+
+### Fuente única canónica
+
+`window._esSelHumana(name)` (definido en `static/js/index.bundle.js`
+en el bloque IIFE SANCIONES + LESIONES — SELECCIONES NACIONALES):
+
+```js
+var SEL_HUMANAS = ['Francia','Brasil','Inglaterra','Noruega','Argentina','España'];
+function esSelHumana(name){
+  // Normaliza (sin tildes, lowercase) y compara contra SEL_HUMANAS.
+  // Fallback: `_SEL_HUMAN_ICONS` si el usuario añadió otras humanas
+  // vía editor (selecciones_squad_v1.teams[].icon).
+}
+window._esSelHumana = esSelHumana;
+```
+
+Es **SÍNCRONO**, **NO depende de hidratación**, y la lista es
+**HARDCODED** en el bundle.
+
+### Defensas en capas (todas obligatorias)
+
+1. **`isHumanInComp` parchado** (`misc_body_1.html`, IIFE HUMANIDAD POR
+   COMPETICIÓN): para los comps de selección (`SEL_COMPS = {sel,
+   sel-fin, mundial, torneo, mundial-48, selecciones}`), `isHumanInComp`
+   consulta `_esSelHumana` ANTES que `_hasHumanIcon`. Así CUALQUIER
+   código que use `isHumanInComp(name, 'mundial')` queda inmunizado de
+   una vez sin tocar el call site.
+2. **Pase 3 explícito en `_selPair` y `_findHumanTeam`**: belt-and-
+   suspenders. Si el código itera cfg.teams en busca de humanos, tras
+   los pases `isHuman` + `isHumanInComp`, hace un Pase 3 con
+   `_esSelHumana`. Garantiza detección incluso si alguien rompe
+   `isHumanInComp` en el futuro.
+3. **`_psTeamIsHumanGeneric` con Pase 3**: el helper que clasifica
+   teams como humanos en `_psListPendingGroupMatches` /
+   `_psListPendingKoMatches` también añade fallback `_esSelHumana`.
+4. **Watchdog en `_psRender`**: cuando la card cae a JUGADORES FUERA
+   en un día Mundial Selecciones (`ag-sel` + label contiene 'mundial')
+   PERO existe un cfg mundial-48 con una selección humana canónica en
+   `cfg.teams`, se hace `console.warn('[F-TBOL] _selPair retornó null
+   pero hay humana canónica en cfg mundial-48 — posible REGRESIÓN del
+   bug 2026-05-27', diagnosticInfo)`. NO bloquea el render, solo deja
+   constancia loud en consola para detectar la próxima regresión al
+   instante.
+
+### Reglas a respetar (PROHIBICIONES)
+
+1. **PROHIBIDO** crear código nuevo que detecte humanos de selección
+   usando SOLO `t.isHuman` (flag del cfg). Siempre añadir fallback
+   `_esSelHumana(t.name)`.
+2. **PROHIBIDO** usar SOLO `isHumanInComp` sin entender que para SEL_COMPS
+   YA incluye `_esSelHumana`. Para comps que NO están en SEL_COMPS pero
+   donde pueden aparecer selecciones (eventos custom), añadir el fallback
+   explícito en el call site.
+3. **PROHIBIDO** quitar la lista hardcoded `SEL_HUMANAS` o eliminar
+   `_esSelHumana` del bundle. Es la última línea de defensa.
+4. **PROHIBIDO** añadir selecciones nuevas a `SEL_HUMANAS` sin avisar
+   al usuario explícitamente. Las 6 son canónicas (2026-05-24). Si
+   el admin marca otras como humanas vía editor, se reconocen vía
+   `_SEL_HUMAN_ICONS` automáticamente.
+5. **PROHIBIDO** quitar SEL_COMPS de `isHumanInComp` o reordenar el
+   chequeo para que `_hasHumanIcon` se ejecute ANTES de `_esSelHumana`
+   — eso reintroduce el race con la hidratación.
+6. **PROHIBIDO** silenciar / borrar el watchdog en `_psRender`. Es la
+   herramienta que descubrirá la próxima regresión sin que el usuario
+   tenga que reportar otra captura.
+7. **Toda comp NUEVA** donde puedan aparecer selecciones (Eurocopa,
+   Copa América, Confederaciones, amistosos de selección, etc.) debe
+   añadirse a `SEL_COMPS` Y, si tiene su propio flujo de detección de
+   humanos, también heredar el Pase 3 `_esSelHumana`.
+
+### Resumen visual
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Hub Liverpool/Francia → card "Próximo partido" 03 May          │
+│ ├─ day.cls = 'ag-sel'  +  label = 'Mundial Grupo — J1'         │
+│ ├─ _selPair(day)                                                │
+│ │   ├─ Pase 1: t.isHuman                          ← admin manual│
+│ │   ├─ Pase 2: isHumanInComp(name,'mundial')      ← SEL_COMPS  │
+│ │   │            → _esSelHumana   ← BLINDAJE 1   │              │
+│ │   └─ Pase 3: _esSelHumana(t.name) directo       ← BLINDAJE 2  │
+│ ├─ Si TODOS los pases fallan:                                   │
+│ │   └─ Watchdog scan: ¿hay humana canónica en algún cfg?       │
+│ │       → console.warn loud                       ← BLINDAJE 3  │
+│ └─ Render: Francia vs Rep. Checa  (NUNCA JUGADORES FUERA)      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
 ## Mundialito de Clubes — diseño AMARILLO + flujo Resto del Mundo (obligatorio, 2026-05-27)
 
 El **Mundialito de Clubes** vive en el slot built-in `'mundial'` del

@@ -30797,6 +30797,7 @@ document.addEventListener('DOMContentLoaded', function() {
 .jbtn.c-usc     .jor-date{color:#e8e8e8;border-color:rgba(232,232,232,.55);}
 .jbtn.c-inter   .jor-date{color:#f0c040;border-color:rgba(240,192,64,.6);}
 .jbtn.c-mundial .jor-date{color:#5fe0d0;border-color:rgba(95,224,208,.6);}
+.jbtn.c-mundialito .jor-date{color:#ffd633;border-color:rgba(255,214,51,.7);}
 </style>
 <script>
 (function(){
@@ -30808,7 +30809,7 @@ document.addEventListener('DOMContentLoaded', function() {
        · c-other (Amistosos / Torneos de verano, excluidos)
        · c-road  (Selecciones — ya tienen fecha inline en s-calendario) */
   var COMP_CLASSES = ['c-liga','c-copa','c-super','c-ucl','c-uel','c-uecl',
-                      'c-recopa','c-usc','c-inter','c-mundial'];
+                      'c-recopa','c-usc','c-inter','c-mundial','c-mundialito'];
 
   /* Reglas de acortado del label, aplicadas siempre. */
   var TRUNC_RULES = [
@@ -30969,18 +30970,15 @@ document.addEventListener('DOMContentLoaded', function() {
         if (hasIda) p.anti.push('vuelta');
         if (hasVue) p.anti.push('ida');
       }
-    } else if (compClass === 'c-mundial'){
-      /* Mundialito de Clubes — s-mundial-clubes tiene 5 cajas:
-         Fase de Grupos · Octavos · Cuartos · Semis · FINAL. La agenda
-         las lista como "Mundialito Clubes - J1/J2/J3/Octavos/Cuartos/
-         Semis/FINAL". Discriminamos por ronda con bonus tokens; sin
-         estos todos los botones puntuaban igual y se quedaban con la
-         primera fila (J1 = 04 Jul) → todos mostraban "04 JUL".
-         2026-05-24. NB: `required = ['mundialito']` (sin "clubes")
-         para no romper el match con "Mundialito - FINAL" (entrada
-         legacy sin la palabra "Clubes"). Las filas del Mundial de
-         Selecciones empiezan por "Mundial " sin "ito" y quedan
-         filtradas. */
+    } else if (compClass === 'c-mundialito'){
+      /* Mundialito de CLUBES — hub `s-mundial-clubes` (5 cajas) +
+         filas calendario `cal-mc-*`. La agenda las lista como
+         "Mundialito Clubes - J1/J2/J3/Octavos/Cuartos/Semis/FINAL"
+         (Jul). Discriminamos por ronda con bonus tokens; sin estos
+         todos los botones puntuaban igual y se quedaban con la
+         primera fila (J1 = 04 Jul). 2026-05-24. NB: `required =
+         ['mundialito']` (sin "clubes") para no romper el match con
+         "Mundialito - FINAL" (entrada legacy sin "Clubes"). */
       p.required = ['mundialito'];
       if (hasFin && !hasSemis && !hasCuartos && !hasOctavos){
         p.bonus = ['final'];
@@ -31000,6 +30998,51 @@ document.addEventListener('DOMContentLoaded', function() {
            (J1-J3) lo ve el usuario al abrir el calendario global. */
         p.bonus = ['j1'];
         p.anti  = ['cuartos','semis','final','octavos','j2','j3'];
+      }
+    } else if (compClass === 'c-mundial'){
+      /* Mundial 2032 · 48 SELECCIONES (NO confundir con Mundialito
+         de Clubes, que es `c-mundialito` arriba). Pantalla
+         `_mundialGroupsHtml` + `_mundialKoHtml` + `_mundialMenuHtml`.
+         Filas calendario: "Mundial Grupo — J1/J2/J3" (May), "Mundial
+         - Dieciseisavos", "Mundial Octavos/Cuartos/Semis", "Tercer
+         Puesto", "MUNDIAL GRAN FINAL". 2026-05-27.
+         Required: 'mundial'. Anti: 'mundialito' para NO matchear
+         filas del Mundialito Clubes (cuyo label también empieza por
+         "Mundial..."). Discriminamos por ronda con bonus específicos
+         para que cada botón coja su fecha real, no la primera fila
+         que cumpla required. */
+      p.required = ['mundial'];
+      p.anti = ['mundialito'];
+      if (hasFin && !hasSemis && !hasCuartos && !hasOctavos
+          && !/\btercer\b/.test(btnN)){
+        p.bonus.push('final', 'gran');
+        p.anti.push('cuartos','semis','octavos','tercer','j1','j2','j3','dieciseisavos');
+      } else if (/\btercer\b/.test(btnN)){
+        p.bonus.push('tercer');
+        p.anti.push('cuartos','semis','octavos','final','j1','j2','j3','dieciseisavos');
+      } else if (hasSemis){
+        p.bonus.push('semis');
+        p.anti.push('cuartos','final','octavos','tercer','j1','j2','j3','dieciseisavos');
+      } else if (hasCuartos){
+        p.bonus.push('cuartos');
+        p.anti.push('semis','final','octavos','tercer','j1','j2','j3','dieciseisavos');
+      } else if (hasOctavos){
+        p.bonus.push('octavos');
+        p.anti.push('cuartos','semis','final','tercer','j1','j2','j3','dieciseisavos');
+      } else if (/\bdieciseisavos\b|1\s*\/\s*32|\brepesca\b/.test(btnN)){
+        p.bonus.push('dieciseisavos','repesca','1/32');
+        p.anti.push('cuartos','semis','final','octavos','tercer','j1','j2','j3');
+      } else if (jNum){
+        /* Jornada N de grupo: bonus j<N> + 'grupo'. Anti los otros
+           j<X> para que cada jornada apunte a su fila propia. */
+        p.bonus.push('j' + jNum, 'grupo');
+        var _jOther = ['1','2','3','4','5','6'].filter(function(x){ return x !== jNum; });
+        for (var _ji = 0; _ji < _jOther.length; _ji++) p.anti.push('j' + _jOther[_ji]);
+        p.anti.push('cuartos','semis','final','octavos','tercer','dieciseisavos','repesca');
+      } else if (/\bgrupos?\b/.test(btnN) || /\bfase\b/.test(btnN)){
+        /* Caja "Fase de Grupos" del menú (sin J<N>): ancla a J1. */
+        p.bonus.push('j1','grupo');
+        p.anti.push('cuartos','semis','final','octavos','tercer','j2','j3','dieciseisavos','repesca');
       }
     }
     return p;
@@ -31060,7 +31103,7 @@ document.addEventListener('DOMContentLoaded', function() {
     's-supercopa':          'c-super',
     's-usc':                'c-usc',
     's-intercontinental':   'c-inter',
-    's-mundial-clubes':     'c-mundial'
+    's-mundial-clubes':     'c-mundialito'
   };
 
   function _processBtn(btn){

@@ -5033,13 +5033,66 @@ window._showSimProgress = function(opts, onDone){
      re-resolverlo, así no hay desincronización posible. */
   function _realPair(){
     try {
-      var tid = _load().tour;
+      var d = _load();
+      var tid = d.tour;
+      /* Healing 2026-05-27: si d.tour se perdió (cookie minimal sin
+         tour, hidratación del server con dato stale, migración
+         cross-device…) pero el usuario ya eligió torneo de verano
+         (state.pickedTours en TOURS_STORAGE_KEY) o solo hay un torneo
+         visible (Joan Gamper hoy), reutilizamos esa fuente para no
+         pintar "no has elegido torneo" cuando la card del calendario
+         pide partido (ag-torneo). Persistimos el healing en d.tour
+         para que las próximas llamadas no tengan que repetir el
+         fallback (y el cookie/server lo recoja). Bug reportado por
+         usuario con foto Liverpool 08 Jun "Torneo Verano - Partido 2"
+         mostrando "Aún no has elegido torneo" mientras la pantalla del
+         Joan Gamper ya tenía a Liverpool jugando J2 vs Al Ittihad. */
+      if (!tid){
+        try {
+          var _picked = JSON.parse(localStorage.getItem('munich_summer_tours_v1') || '[]');
+          if (Array.isArray(_picked) && _picked.length){
+            tid = _picked[0];
+          }
+        } catch(_){}
+      }
+      if (!tid){
+        try {
+          var _vis = (typeof _psVisibleTourIds === 'function') ? _psVisibleTourIds() : null;
+          if (Array.isArray(_vis) && _vis.length === 1){
+            tid = _vis[0];
+          }
+        } catch(_){}
+      }
       if (!tid) return null;
       var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tid]) || null;
       if (!cfg && typeof window._tourLoadCachedSync === 'function'){
         try { cfg = window._tourLoadCachedSync(tid); } catch(_){}
       }
       if (!cfg) return null;
+      /* Persistimos el healing del tour SOLO si el cfg cargó OK y
+         contiene al humano. Sin esto, un cfg parcial podría dejar
+         d.tour apuntando a un torneo sin Liverpool. */
+      if (tid && d.tour !== tid){
+        try {
+          var _hasHuman = false;
+          var _humanKey = null;
+          try { _humanKey = _psNameKey(_psHumanLogicName()); } catch(_){}
+          if (Array.isArray(cfg.teams)){
+            for (var _ti = 0; _ti < cfg.teams.length; _ti++){
+              var _tt = cfg.teams[_ti];
+              if (!_tt) continue;
+              if (_tt.isHuman){ _hasHuman = true; break; }
+              if (_tt.name && _humanKey && _psNameKey(_tt.name) === _humanKey){
+                _hasHuman = true; break;
+              }
+            }
+          }
+          if (_hasHuman){
+            d.tour = tid;
+            _save(d);
+          }
+        } catch(_){}
+      }
       /* Fuente de verdad del slot humano: la bandera .isHuman que el
          módulo de torneos pone al asignar el slot PENDIENTE dorado
          (la misma flag que renderiza 👤 en la UI). Fallback por

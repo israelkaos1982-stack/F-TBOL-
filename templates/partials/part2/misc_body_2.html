@@ -2324,16 +2324,18 @@
     } else {
       var top = rows.slice(0, 6), rest = rows.slice(6);
       html += top.map(function(r, i){
+        var humanCls = (typeof window._humanPlayerClass === 'function') ? window._humanPlayerClass(r.team) : '';
         return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (i+1) + '</div>'
-          + '<div class="liga-stat-player"><div class="liga-stat-name">' + _esc(r.name) + '</div>'
+          + '<div class="liga-stat-player"><div class="liga-stat-name' + humanCls + '">' + _esc(r.name) + '</div>'
           + '<div class="liga-stat-team">' + _esc(r.team) + '</div></div>'
           + '<div class="liga-stat-value">' + r.value + '</div></div>';
       }).join('');
       if(rest.length){
         html += '<details class="liga-stat-more"><summary>Ver todos (' + rows.length + ')</summary><div class="liga-stat-more-list">'
           + rest.map(function(r, i){
+              var humanCls = (typeof window._humanPlayerClass === 'function') ? window._humanPlayerClass(r.team) : '';
               return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (i+7) + '</div>'
-                + '<div class="liga-stat-player"><div class="liga-stat-name">' + _esc(r.name) + '</div>'
+                + '<div class="liga-stat-player"><div class="liga-stat-name' + humanCls + '">' + _esc(r.name) + '</div>'
                 + '<div class="liga-stat-team">' + _esc(r.team) + '</div></div>'
                 + '<div class="liga-stat-value">' + r.value + '</div></div>';
             }).join('')
@@ -5162,7 +5164,7 @@
   function renderStats(rootId, players, emptyText){
     var root=document.getElementById(rootId); if(!root) return;
     players = Array.isArray(players) ? players : [];
-    function rows(items,start){return items.map(function(item,idx){return '<div class="liga-stat-row"><div class="liga-stat-rank">'+(start+idx)+'</div><div class="liga-stat-player"><div class="liga-stat-name">'+esc(item.name)+'</div><div class="liga-stat-team">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
+    function rows(items,start){return items.map(function(item,idx){var humanCls=(typeof window._humanPlayerClass==='function')?window._humanPlayerClass(item.team):'';return '<div class="liga-stat-row"><div class="liga-stat-rank">'+(start+idx)+'</div><div class="liga-stat-player"><div class="liga-stat-name'+humanCls+'">'+esc(item.name)+'</div><div class="liga-stat-team">'+esc(item.team)+'</div></div><div class="liga-stat-value">'+item.value+'</div></div>'}).join('')}
     var html='';
     STATS_CATS.forEach(function(cat){var all=topPlayersBy(players,cat.key); var top=all.slice(0,6), rest=all.slice(6); html+='<div class="liga-stat-card" data-cat="'+cat.key+'"><div class="liga-stat-head"><div class="liga-stat-ico">'+cat.icon+'</div><div class="liga-stat-title">'+cat.title+'</div></div><div class="liga-stat-body">'; if(!all.length){html+='<div class="liga-stat-empty">'+emptyText+'</div>';} else {html+=rows(top,1); if(rest.length){html+='<details class="liga-stat-more"><summary>Ver todos ('+all.length+')</summary><div class="liga-stat-more-list">'+rows(rest,7)+'</div></details>';}} html+='</div></div>';});
     root.innerHTML=html;

@@ -10440,6 +10440,101 @@ window._showSimProgress = function(opts, onDone){
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;')
       .replace(/'/g,'&#39;');
   }
+  /* ── Highlight de jugadores de equipo HUMANO en stats (2026-05-27) ──
+     Para que el usuario encuentre rápido a sus jugadores en CUALQUIER
+     pantalla de estadísticas (Liga EA, Copa, UCL/UEL/UECL, Recopa,
+     USC, Inter, Mundial, Mundialito, Torneos, Superliga, Hypermotion,
+     Primera Federación, Resto de Ligas), todo jugador cuyo equipo o
+     selección sea HUMANO se pinta en color amarillo.
+
+     `_isHumanTeamAnywhere(t)` combina:
+       · esHumano (5 humanos canónicos de Liga EA Sports)
+       · _esSelHumana (6 selecciones humanas: Francia, Brasil,
+         Inglaterra, Noruega, Argentina, España)
+       · humanIcon (humanos secundarios con emoji en el editor —
+         PSG, Man United, City, Dortmund, Leipzig, etc.)
+     `_humanPlayerClass(t)` devuelve `' is-human-player'` (con espacio
+     inicial, listo para concatenar al `class="liga-stat-name"`) si el
+     team es humano en cualquier comp, vacío si no. */
+  if (typeof window._isHumanTeamAnywhere !== 'function') {
+    /* Cache simple — invalidamos al cambiar tab/visibilidad porque
+       los humanos no cambian dentro de una sesión salvo edición. */
+    var _ihtCache = Object.create(null);
+    function _ihtNorm(s){
+      return String(s||'')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+        .toLowerCase().trim();
+    }
+    function _ihtFallbackLigaEa(nrm){
+      try {
+        var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (!raw) return false;
+        var d = JSON.parse(raw);
+        if (!d || !Array.isArray(d.teams)) return false;
+        for (var i = 0; i < d.teams.length; i++) {
+          var t = d.teams[i];
+          if (!t || !t.name || !t.isHuman) continue;
+          if (_ihtNorm(t.name) === nrm) return true;
+        }
+      } catch(_){}
+      return false;
+    }
+    function _ihtFallbackHumanIcon(nrm, origName){
+      /* Pase normalizado por todos los `ligaExt_*` por si humanIcon
+         no resolvió por diferencia de tildes/espacios. */
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var key = localStorage.key(i);
+          if (!key || key.indexOf('ligaExt_') !== 0) continue;
+          if (key.indexOf('_protected') !== -1) continue;
+          if (key.indexOf('_snap_') !== -1) continue;
+          if (key.indexOf('_backup') !== -1) continue;
+          var raw = localStorage.getItem(key);
+          if (!raw) continue;
+          var d; try { d = JSON.parse(raw); } catch(_){ continue; }
+          if (!d || !Array.isArray(d.teams)) continue;
+          for (var j = 0; j < d.teams.length; j++) {
+            var t = d.teams[j];
+            if (!t || !t.name) continue;
+            if (_ihtNorm(t.name) !== nrm) continue;
+            if (t.isHuman) return true;
+            if (t.humanEmoji && String(t.humanEmoji).trim()) return true;
+          }
+        }
+      } catch(_){}
+      return false;
+    }
+    window._isHumanTeamAnywhere = function(name){
+      var s = String(name || '').trim();
+      if (!s) return false;
+      if (s in _ihtCache) return _ihtCache[s];
+      var hit = false;
+      try { if (!hit && typeof window.esHumano === 'function' && window.esHumano(s)) hit = true; } catch(_){}
+      try { if (!hit && typeof window._esSelHumana === 'function' && window._esSelHumana(s)) hit = true; } catch(_){}
+      try {
+        if (!hit && typeof window.humanIcon === 'function') {
+          var ic = window.humanIcon(s);
+          if (ic && String(ic).trim()) hit = true;
+        }
+      } catch(_){}
+      if (!hit) {
+        var nrm = _ihtNorm(s);
+        if (nrm && (_ihtFallbackLigaEa(nrm) || _ihtFallbackHumanIcon(nrm, s))) hit = true;
+      }
+      _ihtCache[s] = hit;
+      return hit;
+    };
+    /* Invalidar cache cuando el usuario edite plantillas humanas. */
+    window._invalidateHumanTeamCache = function(){
+      _ihtCache = Object.create(null);
+    };
+  }
+  if (typeof window._humanPlayerClass !== 'function') {
+    window._humanPlayerClass = function(teamName){
+      try { return window._isHumanTeamAnywhere(teamName) ? ' is-human-player' : ''; }
+      catch(_){ return ''; }
+    };
+  }
   /* Renderiza el dashboard de estadísticas (8 categorías) a partir de
      un objeto `stats` (`teamNorm::playerNorm` → counters) y devuelve
      el HTML. Lo usan `_lextBuildCompStatsDashboard` (lee de
@@ -10493,10 +10588,12 @@ window._showSimProgress = function(opts, onDone){
     }
     function _renderRows(rows, startIndex){
       return rows.map(function(item, idx){
+        var humanCls = (typeof window._humanPlayerClass === 'function')
+          ? window._humanPlayerClass(item.team) : '';
         return '<div class="liga-stat-row">'
              +   '<div class="liga-stat-rank">' + (startIndex + idx) + '</div>'
              +   '<div class="liga-stat-player">'
-             +     '<div class="liga-stat-name">' + _escHtmlPS(item.name) + '</div>'
+             +     '<div class="liga-stat-name' + humanCls + '">' + _escHtmlPS(item.name) + '</div>'
              +     '<div class="liga-stat-team">' + _escHtmlPS(item.team) + '</div>'
              +   '</div>'
              +   '<div class="liga-stat-value">' + item.value + '</div>'
@@ -27486,6 +27583,13 @@ window._showSimProgress = function(opts, onDone){
 .restoligas-stats-info{min-width:0;line-height:1.2;}
 .restoligas-stats-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .restoligas-stats-team{font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+/* Highlight amarillo de jugadores de equipo HUMANO (2026-05-27). Aplica
+   a TODA pantalla de estadísticas — Liga EA, Copa, UCL/UEL/UECL, Recopa,
+   USC, Inter, Mundial, Mundialito, Torneos, Superliga, Hypermotion,
+   Primera Federación, Resto de Ligas. El usuario lo pidió para
+   encontrar rápidamente a sus jugadores en los rankings. */
+.liga-stat-name.is-human-player,
+.restoligas-stats-name.is-human-player{color:#fbbf24!important;text-shadow:0 0 8px rgba(251,191,36,.45);}
 .restoligas-stats-val{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#7df0a0;letter-spacing:1px;font-weight:700;text-align:right;}
 .restoligas-stats-toggle{display:block;width:calc(100% - 16px);margin:6px 8px 8px;padding:8px;border:1px dashed rgba(94,182,228,.45);border-radius:8px;background:rgba(94,182,228,.06);color:#9fdcff;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .14s,border-color .14s;}
 .restoligas-stats-toggle:hover{background:rgba(94,182,228,.14);border-color:rgba(94,182,228,.65);}
@@ -27971,11 +28075,13 @@ window._showSimProgress = function(opts, onDone){
         + '</div>';
     }
     function _row(p, i){
+      var humanCls = (typeof window._humanPlayerClass === 'function')
+        ? window._humanPlayerClass(p.team) : '';
       return '<div class="restoligas-stats-row">'
         + '<div class="restoligas-stats-pos">' + (i+1) + '</div>'
         + '<div class="restoligas-stats-flag">' + (p.flag || '🌍') + '</div>'
         + '<div class="restoligas-stats-info">'
-        +   '<div class="restoligas-stats-name">' + (p.name||'?') + '</div>'
+        +   '<div class="restoligas-stats-name' + humanCls + '">' + (p.name||'?') + '</div>'
         +   '<div class="restoligas-stats-team">' + (p.team||'?') + '</div>'
         + '</div>'
         + '<div class="restoligas-stats-val">' + (p[valLabel.field]||0) + '</div>'

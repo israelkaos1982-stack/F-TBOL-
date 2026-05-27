@@ -5128,6 +5128,100 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     });
   };
 
+  /* ── Helpers de POSICIÓN (P/D/M/F) para agrupar lesionados/forma
+     en BAJAS PARA EL PARTIDO (Foto 3 + Foto 5 2026-05-27).
+     `_injPosOf(name, team?)` busca al jugador en SQUAD_REGISTRY y
+     en TODAS las claves `ligaExt_*` del localStorage, devuelve el
+     código P/D/M/F (Portero / Defensa / Medio / Delantero) o 'M'
+     por defecto si no se encuentra. */
+  window._injPosLabels = { P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS' };
+  window._injPosShort  = { P:'POR', D:'DEF', M:'MED', F:'DEL' };
+  window._injPosOrder  = ['P','D','M','F'];
+  window._injPosOf = function(playerName, teamHint){
+    if (!playerName) return 'M';
+    var tNorm = teamHint ? String(teamHint).trim().toLowerCase() : '';
+    /* (1) SQUAD_REGISTRY del equipo conocido o de cualquiera. */
+    try {
+      if (window.SQUAD_REGISTRY) {
+        var sr = window.SQUAD_REGISTRY;
+        var keys = teamHint
+          ? Object.keys(sr).filter(function(k){
+              return String(k).trim().toLowerCase() === tNorm;
+            })
+          : Object.keys(sr);
+        if (!keys.length) keys = Object.keys(sr);
+        for (var i = 0; i < keys.length; i++){
+          var arr = sr[keys[i]] || [];
+          for (var j = 0; j < arr.length; j++){
+            var p = arr[j];
+            if (Array.isArray(p) && p[1] === playerName && p[2]) {
+              var c = String(p[2]).toUpperCase().charAt(0);
+              if (c==='P'||c==='D'||c==='M'||c==='F') return c;
+            }
+          }
+        }
+      }
+    } catch(_){}
+    /* (2) sqFromRegistryFull si tenemos team. */
+    if (teamHint && typeof window.sqFromRegistryFull === 'function') {
+      try {
+        var full = window.sqFromRegistryFull(teamHint) || [];
+        for (var k = 0; k < full.length; k++){
+          var fp = full[k];
+          if (Array.isArray(fp) && fp[1] === playerName && fp[2]) {
+            var cc = String(fp[2]).toUpperCase().charAt(0);
+            if (cc==='P'||cc==='D'||cc==='M'||cc==='F') return cc;
+          }
+        }
+      } catch(_){}
+    }
+    /* (3) Escaneo de TODAS las ligaExt_* en localStorage. */
+    try {
+      for (var li = 0; li < localStorage.length; li++){
+        var lk = localStorage.key(li);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_backup') !== -1) continue;
+        var raw = localStorage.getItem(lk);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        for (var ti = 0; ti < teams.length; ti++){
+          var tm = teams[ti];
+          if (!tm) continue;
+          if (tNorm && String(tm.name||'').trim().toLowerCase() !== tNorm) continue;
+          var pls = Array.isArray(tm.players) ? tm.players : [];
+          for (var pi = 0; pi < pls.length; pi++){
+            var pl = pls[pi];
+            if (pl && pl.name === playerName && pl.pos) {
+              var ccc = String(pl.pos).toUpperCase().charAt(0);
+              if (ccc==='P'||ccc==='D'||ccc==='M'||ccc==='F') return ccc;
+            }
+          }
+        }
+      }
+    } catch(_){}
+    return 'M';
+  };
+  /* Agrupa una lista de objetos `{name, team?}` por posición y
+     devuelve los grupos en orden POR→DEF→MED→DEL, vacíos eliminados. */
+  window._injGroupByPos = function(items, getName, getTeam){
+    var buckets = { P:[], D:[], M:[], F:[] };
+    (items || []).forEach(function(it){
+      var nm = getName ? getName(it) : (it && it.name);
+      var tm = getTeam ? getTeam(it) : (it && (it.team || it.equipo));
+      var c = window._injPosOf(nm, tm) || 'M';
+      if (!buckets[c]) buckets[c] = [];
+      buckets[c].push(it);
+    });
+    var out = [];
+    window._injPosOrder.forEach(function(code){
+      if (buckets[code] && buckets[code].length) {
+        out.push({ code: code, label: window._injPosLabels[code], items: buckets[code] });
+      }
+    });
+    return out;
+  };
+
   // ══ OVERLAY PRE-PARTIDO ══════════════════════════════════════
   window.showSancionOverlay = function(compKey, blockId, onConfirm) {
     var cfg = COMP_CONFIG[compKey] || { label: compKey, esFinal: false };
@@ -5271,27 +5365,72 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return _belongsToHumanOfMatch(l.equipo);
     }) : [];
 
-    listYel.innerHTML = san.length ? san.map(function(s){ return renderCard(s,'🟨'); }).join('') : renderEmpty('✅ Sin sancionados');
-    listRed.innerHTML = exp.length ? exp.map(function(s){ return renderCard(s,'🟥'); }).join('') : renderEmpty('✅ Sin expulsados');
+    /* Foto 4 (2026-05-27): si SANCIONADOS / EXPULSADOS están vacíos,
+       OCULTAMOS toda la sección (no se muestra "Sin sancionados"
+       — el usuario no quiere ruido en pantalla). LESIONADOS sigue
+       mostrándose siempre. */
+    var secYel = listYel && listYel.parentNode;
+    var secRed = listRed && listRed.parentNode;
+    if (san.length) {
+      listYel.innerHTML = san.map(function(s){ return renderCard(s,'🟨'); }).join('');
+      if (secYel) secYel.style.display = '';
+    } else if (secYel) {
+      secYel.style.display = 'none';
+    }
+    if (exp.length) {
+      listRed.innerHTML = exp.map(function(s){ return renderCard(s,'🟥'); }).join('');
+      if (secRed) secRed.style.display = '';
+    } else if (secRed) {
+      secRed.style.display = 'none';
+    }
 
     if (injList.length) {
-      listInj.innerHTML = injList.map(function(nombre) {
-        var l = window.LESION_STORE[nombre];
-        var p = window.BAJA_STORE && window.BAJA_STORE[nombre] ? window.BAJA_STORE[nombre] : {};
-        var colorGrado = l.grado === 3 ? '#ff4444' : l.grado === 2 ? '#ff8c00' : '#ffd700';
-        var partsTxt = '';
-        if (p.liga > 0)   partsTxt += '<span style="margin-right:8px">🇪🇸 ' + p.liga + 'P</span>';
-        if (p.copa > 0)   partsTxt += '<span style="margin-right:8px">🏆 ' + p.copa + 'P</span>';
-        if (p.europa > 0) partsTxt += '<span>🌍 ' + p.europa + 'P</span>';
-        return '<div class="sancion-card">'
-          + '<div class="sancion-card-icon">🩹</div>'
-          + '<div class="sancion-card-info">'
-          + '<div class="sancion-card-name">' + nombre + '</div>'
-          + '<div class="sancion-card-team">' + l.equipo + '</div>'
-          + '<div class="sancion-card-reason" style="color:' + colorGrado + '">' + l.gradoEmoji + ' ' + l.gradoNombre + ' — ' + l.descripcion + '</div>'
-          + (partsTxt ? '<div style="font-family:Oswald,sans-serif;font-size:11px;color:#f0c040;margin-top:3px;">' + partsTxt + '</div>' : '')
-          + '</div>'
-          + '</div>';
+      /* Foto 3 (2026-05-27): cards agrupadas por posición
+         (POR/DEF/MED/DEL), icono real por grado (🩹/💉/🚑),
+         label de posición en lugar del legacy "🇪🇸 1P 🏆 1P 🌍 1P"
+         y botón 💊 PI debajo del recuadro "N PARTIDOS" para gastar
+         inyecciones (athOpenMedicalMenu). */
+      var _piAvail = 0;
+      try { if (typeof window.athGetMedicalPI === 'function') _piAvail = Math.floor((window.athGetMedicalPI()||0) + 1e-9); } catch(_){}
+      var injObjs = injList.map(function(nombre){
+        return { name: nombre, equipo: (window.LESION_STORE[nombre] && window.LESION_STORE[nombre].equipo) || '' };
+      });
+      var grouped = window._injGroupByPos(injObjs,
+        function(it){ return it.name; },
+        function(it){ return it.equipo; }
+      );
+      listInj.innerHTML = grouped.map(function(grp){
+        var hdr = '<div class="sancion-pos-hdr">' + grp.label + '</div>';
+        var cards = grp.items.map(function(it){
+          var nombre = it.name;
+          var l = window.LESION_STORE[nombre];
+          var colorGrado = l.grado === 3 ? '#ff4444' : l.grado === 2 ? '#ff8c00' : '#ffd700';
+          var ico = l.gradoEmoji || (l.grado===3?'🚑':l.grado===2?'💉':'🩹');
+          var rem = parseInt(l.partidos || 0, 10) || 0;
+          var posShort = window._injPosShort[grp.code] || '';
+          var pillDisabled = _piAvail <= 0;
+          var pill = '<button type="button" class="sancion-card-pi"'
+            + (pillDisabled
+                ? ' disabled title="Sin PI disponibles"'
+                : ' title="Gastar 💊 PI para recuperar al jugador"'
+              )
+            + ' onclick="event.stopPropagation();if(window.athOpenMedicalMenu)window.athOpenMedicalMenu();"'
+            + '>💊 ' + _piAvail + '</button>';
+          return '<div class="sancion-card">'
+            + '<div class="sancion-card-icon">' + ico + '</div>'
+            + '<div class="sancion-card-info">'
+            + '<div class="sancion-card-name">' + nombre + '</div>'
+            + '<div class="sancion-card-team">' + (l.equipo || '') + '</div>'
+            + '<div class="sancion-card-reason" style="color:' + colorGrado + '">' + ico + ' ' + l.gradoNombre + ' — ' + l.descripcion + '</div>'
+            + (posShort ? '<div class="sancion-card-pos">' + posShort + '</div>' : '')
+            + '</div>'
+            + '<div class="sancion-card-partidos-wrap">'
+            +   '<div class="sancion-card-partidos"><span class="sancion-card-pnum" style="color:' + colorGrado + '">' + rem + '</span><span class="sancion-card-plbl">PARTIDO' + (rem===1?'':'S') + '</span></div>'
+            +   pill
+            + '</div>'
+            + '</div>';
+        }).join('');
+        return hdr + cards;
       }).join('');
     } else {
       listInj.innerHTML = renderEmpty('🚑 Sin lesionados');
@@ -6074,20 +6213,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     var items = [
       { id:'balon',   ico:'⚽️', lbl:'Balón',         val:balon }
     ];
-    /* ── Card de BAJAS (obligatoria) ──────────────────────────────
-       Si el equipo del hub juega este partido y tiene jugadores con
-       baja (lesión / sanción / expulsión), añadimos una card que el
-       humano DEBE marcar ✅ para poder avanzar a "COMENZAR PARTIDO".
-       Así confirma qué jugadores no pueden jugar — si alinea a uno en
-       un evento del acta, el partido se pierde 5-0. */
-    try {
-      var _bjLines = _ppHubBajasLines();
-      if (_bjLines.length) {
-        /* 2026-05-25: label "NO convocar" + val multilínea (cada baja
-           en su propia fila debajo del título), layout vstack. */
-        items.push({ id:'bajas', ico:'🏥', lbl:'Bajas — NO convocar', val:_bjLines.join('<br>'), vstack:true });
-      }
-    } catch(_){}
+    /* La card "🏥 Bajas — NO convocar" SE HA RETIRADO de la PREVIA
+       (petición usuario 2026-05-27, Foto 2). En esta pantalla el
+       usuario aún está configurando estadio/clima/balón/duración —
+       las bajas viven exclusivamente en la pantalla BAJAS PARA EL
+       PARTIDO (siguiente paso) donde sí se elige alineación. */
     return items;
   }
 
@@ -6401,37 +6531,13 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         var b=bajas[n]; var pts=(b&&b.liga)?b.liga+' partido(s) restante(s)':'';
         alertsHtml += '<div class="pp-alert-row pp-alert-red">🟥 EXPULSADO: '+n+(pts?' · '+pts:'')+'</div>';
       });
-      /* 2026-05-25 (petición usuario): layout 2 líneas + botón 💊N
-         de inyecciones. Pulsando 💊N (si N>0) se abre el MENÚ DE
-         TRATAMIENTO RÁPIDO (athOpenMedicalMenu). Cuando el jugador
-         queda recién curado en esta misma previa (via _ppJustCured)
-         pasa a "X — Recuperado". */
-      var _piCur = 0;
-      try { if (typeof window.athGetMedicalPI === 'function') _piCur = window.athGetMedicalPI(); } catch(_){}
-      var _piInt = Math.floor(_piCur + 1e-9);
-      var _justCured = window._ppJustCured || {};
-      lesionados.forEach(function(n) {
-        if (_justCured[n]) return; /* lo pintamos abajo */
-        var l=lesionesStore[n]; var ico=l.grado===3?'🚑':l.grado===2?'💉':'🩹';
-        var b=bajas[n];
-        var rem = (b && b.liga) ? Number(b.liga) : Number(l.partidos || 0);
-        var btnHtml = '<button type="button" class="pp-inj-pill"'
-          + ' onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()"'
-          + (_piInt > 0
-              ? ' title="' + _piInt + ' inyecciones disponibles. Pulsa para curar."'
-              : ' disabled title="Sin inyecciones disponibles" style="opacity:.4;cursor:not-allowed"')
-          + ' style="margin-left:auto;background:rgba(73,243,223,.14);border:1px solid rgba(73,243,223,.45);color:#9af1e3;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.6px;padding:3px 9px;border-radius:14px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;">💊' + _piInt + '</button>';
-        alertsHtml += '<div class="pp-alert-row pp-alert-inj" style="display:flex;flex-direction:column;align-items:stretch;gap:2px;">'
-          + '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span>' + ico + '</span><b>' + n + '</b><span style="opacity:.85">· ' + rem + ' Partido' + (rem===1?'':'s') + ' baja</span>' + btnHtml + '</div>'
-          + (l.descripcion ? '<div style="font-size:11px;color:rgba(255,255,255,.62);padding-left:22px;">' + l.descripcion + '</div>' : '')
-          + '</div>';
-      });
-      /* Jugadores recién curados en esta previa (Recuperado transitorio). */
-      Object.keys(_justCured).forEach(function(n){
-        if (!belongs(n)) return;
-        alertsHtml += '<div class="pp-alert-row pp-alert-inj" style="background:rgba(73,243,223,.10);border-color:rgba(73,243,223,.45);"><span>💉</span><b style="margin:0 6px;">' + n + '</b><span style="color:#9af1e3;font-weight:700;">Recuperado</span></div>';
-      });
-      if (!alertsHtml) alertsHtml = '<div class="pp-alert-row pp-alert-ok">✅ Plantilla al 100% — Sin bajas ni sanciones</div>';
+      /* La lista detallada de LESIONADOS se ha retirado de la PREVIA
+         (petición usuario 2026-05-27, Foto 2). Los lesionados se ven
+         exclusivamente en la pantalla BAJAS PARA EL PARTIDO con el
+         botón 💊 integrado por jugador, no aquí. Se conservan las
+         alertas de SANCIONADO/EXPULSADO porque son menos frecuentes y
+         útiles como aviso inmediato. */
+      if (!alertsHtml) alertsHtml = '<div class="pp-alert-row pp-alert-ok">✅ Plantilla al 100% — Sin sancionados ni expulsados</div>';
       alerts.innerHTML = alertsHtml;
     }
   }
@@ -8013,24 +8119,50 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       listInj.innerHTML = '<div class="sancion-empty">🚑 Sin lesionados</div>';
       return;
     }
-    listInj.innerHTML = lesiones.map(function(nombre) {
-      var l = window.LESION_STORE[nombre];
-      var colorGrado = l.grado === 3 ? '#ff4444' : l.grado === 2 ? '#ff8c00' : '#ffd700';
-      var p = window.BAJA_STORE[nombre] || {};
-      var partsTxt = '';
-      if (p.liga > 0) partsTxt += '<span style="margin-right:8px">🇪🇸 ' + p.liga + 'P</span>';
-      if (p.copa > 0) partsTxt += '<span style="margin-right:8px">🏆 ' + p.copa + 'P</span>';
-      if (p.europa > 0) partsTxt += '<span>🌍 ' + p.europa + 'P</span>';
-      return '<div class="sancion-card">'
-        + '<div class="sancion-card-icon">🩹</div>'
-        + '<div class="sancion-card-info">'
-        + '<div class="sancion-card-name">' + nombre + '</div>'
-        + '<div class="sancion-card-team">' + l.equipo + '</div>'
-        + '<div class="sancion-card-reason" style="color:' + colorGrado + '">' + l.gradoEmoji + ' ' + l.gradoNombre + ' — ' + l.descripcion + '</div>'
-        + (partsTxt ? '<div style="font-family:Oswald,sans-serif;font-size:11px;color:#f0c040;margin-top:3px;letter-spacing:1px;">' + partsTxt + '</div>' : '')
-        + '</div>'
-        + '<div class="sancion-card-partidos"><span class="sancion-card-pnum" style="color:' + colorGrado + '">' + (p.liga || 0) + '</span><span class="sancion-card-plbl">PARTIDOS</span></div>'
-        + '</div>';
+    /* Foto 3 (2026-05-27): mismo layout que showSancionOverlay —
+       agrupado por posición, icono real por grado, label POR/DEF/MED/DEL
+       y botón 💊 PI por jugador. */
+    var _piAvail = 0;
+    try { if (typeof window.athGetMedicalPI === 'function') _piAvail = Math.floor((window.athGetMedicalPI()||0) + 1e-9); } catch(_){}
+    var injObjs = lesiones.map(function(nombre){
+      return { name: nombre, equipo: (window.LESION_STORE[nombre] && window.LESION_STORE[nombre].equipo) || '' };
+    });
+    var grouped = window._injGroupByPos(injObjs,
+      function(it){ return it.name; },
+      function(it){ return it.equipo; }
+    );
+    listInj.innerHTML = grouped.map(function(grp){
+      var hdr = '<div class="sancion-pos-hdr">' + grp.label + '</div>';
+      var cards = grp.items.map(function(it){
+        var nombre = it.name;
+        var l = window.LESION_STORE[nombre];
+        var colorGrado = l.grado === 3 ? '#ff4444' : l.grado === 2 ? '#ff8c00' : '#ffd700';
+        var ico = l.gradoEmoji || (l.grado===3?'🚑':l.grado===2?'💉':'🩹');
+        var rem = parseInt(l.partidos || 0, 10) || 0;
+        var posShort = window._injPosShort[grp.code] || '';
+        var pillDisabled = _piAvail <= 0;
+        var pill = '<button type="button" class="sancion-card-pi"'
+          + (pillDisabled
+              ? ' disabled title="Sin PI disponibles"'
+              : ' title="Gastar 💊 PI para recuperar al jugador"'
+            )
+          + ' onclick="event.stopPropagation();if(window.athOpenMedicalMenu)window.athOpenMedicalMenu();"'
+          + '>💊 ' + _piAvail + '</button>';
+        return '<div class="sancion-card">'
+          + '<div class="sancion-card-icon">' + ico + '</div>'
+          + '<div class="sancion-card-info">'
+          + '<div class="sancion-card-name">' + nombre + '</div>'
+          + '<div class="sancion-card-team">' + (l.equipo || '') + '</div>'
+          + '<div class="sancion-card-reason" style="color:' + colorGrado + '">' + ico + ' ' + l.gradoNombre + ' — ' + l.descripcion + '</div>'
+          + (posShort ? '<div class="sancion-card-pos">' + posShort + '</div>' : '')
+          + '</div>'
+          + '<div class="sancion-card-partidos-wrap">'
+          +   '<div class="sancion-card-partidos"><span class="sancion-card-pnum" style="color:' + colorGrado + '">' + rem + '</span><span class="sancion-card-plbl">PARTIDO' + (rem===1?'':'S') + '</span></div>'
+          +   pill
+          + '</div>'
+          + '</div>';
+      }).join('');
+      return hdr + cards;
     }).join('');
     var warnEl = document.getElementById('sancion-ov-warn');
     if (warnEl) warnEl.style.display = 'block';
@@ -12455,8 +12587,22 @@ window._fallbackSq11 = function(){
     var yel = pend.sanciones.filter(function(s){ return s.tipo === 'acumulacion'; });
     var red = pend.sanciones.filter(function(s){ return s.tipo === 'roja' || s.tipo === 'd-amarilla'; });
 
-    listYel.innerHTML = yel.length ? yel.map(function(s){ return renderCard(s,'🟨'); }).join('') : renderEmpty('✅ Sin sancionados');
-    listRed.innerHTML = red.length ? red.map(function(s){ return renderCard(s,'🟥'); }).join('') : renderEmpty('✅ Sin expulsados');
+    /* Foto 4 (2026-05-27): si SANCIONADOS / EXPULSADOS están vacíos,
+       ocultamos toda la sección. LESIONADOS siempre visible. */
+    var secYel = listYel && listYel.parentNode;
+    var secRed = listRed && listRed.parentNode;
+    if (yel.length) {
+      listYel.innerHTML = yel.map(function(s){ return renderCard(s,'🟨'); }).join('');
+      if (secYel) secYel.style.display = '';
+    } else if (secYel) {
+      secYel.style.display = 'none';
+    }
+    if (red.length) {
+      listRed.innerHTML = red.map(function(s){ return renderCard(s,'🟥'); }).join('');
+      if (secRed) secRed.style.display = '';
+    } else if (secRed) {
+      secRed.style.display = 'none';
+    }
     var cardsInj = pend.lesiones.length ? pend.lesiones.map(function(l){ return renderCard(l, '🩹'); }).join('') : renderEmpty('🚑 Sin lesionados');
     listInj.innerHTML = cardsInj + (typeof window._renderFormaChecklist === 'function' ? window._renderFormaChecklist() : '');
 

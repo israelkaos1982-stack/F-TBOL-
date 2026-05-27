@@ -3916,25 +3916,41 @@
         return;
       }
       html += '<div class="sancion-forma-team-hdr">⚔️ ' + team + ' <span class="sancion-forma-team-cnt">' + roster.length + '</span></div>';
-      html += '<div class="sancion-forma-grid">';
+      /* Foto 5 (2026-05-27): roster agrupado por posición — cabecera
+         de grupo (Porteros / Defensas / Medios / Delanteros) seguida
+         de los chips ⬇️ de ese grupo. */
+      var POS_LBL = { P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS' };
+      var POS_ORDER = ['P','D','M','F'];
+      var buckets = { P:[], D:[], M:[], F:[] };
       roster.forEach(function(p){
-        var name = p[1] || '?';
-        var num  = p[0] || '';
-        var cur  = states[name] || '';
-        /* Si ya hay una lesión registrada de otro origen (no de este toggle),
-           deshabilitamos el botón para no pisar la lesión existente. */
-        var isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && cur !== '⬇️');
-        var stateCls = (cur === '⬇️' ? ' is-injured' : '') + (isLes ? ' is-disabled' : '');
-        var dis = isLes ? 'disabled' : '';
-        var esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/\'/g,"\\'"); };
-        html += '<button type="button" class="sancion-forma-chip' + stateCls + '" ' + dis
-          +     ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\')">'
-          +   (num ? '<span class="sancion-forma-chip-num">' + num + '</span>' : '')
-          +   '<span class="sancion-forma-chip-name">' + name + '</span>'
-          +   '<span class="sancion-forma-chip-ico">⬇️</span>'
-          + '</button>';
+        var code = (p && p[2]) ? String(p[2]).toUpperCase().charAt(0) : 'M';
+        if (!buckets[code]) buckets[code] = [];
+        buckets[code].push(p);
       });
-      html += '</div>';
+      POS_ORDER.forEach(function(code){
+        var bucket = buckets[code];
+        if (!bucket || !bucket.length) return;
+        html += '<div class="sancion-forma-pos-hdr">' + POS_LBL[code] + '</div>';
+        html += '<div class="sancion-forma-grid">';
+        bucket.forEach(function(p){
+          var name = p[1] || '?';
+          var num  = p[0] || '';
+          var cur  = states[name] || '';
+          /* Si ya hay una lesión registrada de otro origen (no de este toggle),
+             deshabilitamos el botón para no pisar la lesión existente. */
+          var isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && cur !== '⬇️');
+          var stateCls = (cur === '⬇️' ? ' is-injured' : '') + (isLes ? ' is-disabled' : '');
+          var dis = isLes ? 'disabled' : '';
+          var esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/\'/g,"\\'"); };
+          html += '<button type="button" class="sancion-forma-chip' + stateCls + '" ' + dis
+            +     ' onclick="window._formaToggleInline(\'' + esc(team) + '\',\'' + esc(name) + '\')">'
+            +   (num ? '<span class="sancion-forma-chip-num">' + num + '</span>' : '')
+            +   '<span class="sancion-forma-chip-name">' + name + '</span>'
+            +   '<span class="sancion-forma-chip-ico">⬇️</span>'
+            + '</button>';
+        });
+        html += '</div>';
+      });
     });
     host.innerHTML = html;
   }
@@ -4064,6 +4080,16 @@
   font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);
   padding:6px 10px;background:rgba(255,255,255,.03);border-radius:6px;
   margin:6px 8px;
+}
+/* Foto 5 (2026-05-27): cabecera por posición dentro del roster
+   de AÑADIR LESIONADOS · EQUIPO HUMANO. */
+.sancion-forma-pos-hdr{
+  font-family:'Oswald',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:2px;color:rgba(125,220,255,.92);
+  margin:10px 0 4px;padding:3px 8px 3px 10px;
+  background:linear-gradient(90deg,rgba(80,200,255,.15),rgba(80,200,255,.02));
+  border-left:3px solid rgba(80,200,255,.55);
+  border-radius:3px;text-transform:uppercase;
 }
 .sancion-forma-empty{
   font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,80,80,.75);

@@ -12196,6 +12196,22 @@ window._showSimProgress = function(opts, onDone){
 .jbtn.c-mundialito.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
 /* Acento oro trofeo en el pdot del Mundialito activo. */
 .jbtn.c-mundialito .pdot{border-color:#ffd700;color:#fff080;}
+/* Mundial 2032 selecciones (c-mundial, base pink/magenta en
+   index.bundle.css): la jornada/ronda YA JUGADA pasa a gris para
+   que el usuario distinga de un vistazo qué jornadas siguen
+   pendientes. Petición usuario 2026-05-27 (captura J1+J2 de Grupo A
+   con Filipinas/Senegal/Kuwait/Jordania saliendo en rosa pese a
+   estar todas con FIN). El JS ya añade la clase `done` cuando
+   allDone===true en `_mundialGroupsHtml` y en el helper `row()` de
+   `_mundialKoHtml`; solo faltaba la regla CSS. */
+.jbtn.c-mundial.done{
+  background:linear-gradient(90deg,#1a1d22,#2a2e36,#3a3e48,#2a2e36,#1a1d22) !important;
+  border:1.5px solid rgba(170,180,195,.45) !important;
+  filter:grayscale(.5) brightness(.85);
+  color:rgba(255,255,255,.55) !important;
+}
+.jbtn.c-mundial.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
+.jbtn.c-mundial.done .jor-date{color:rgba(255,255,255,.55) !important;border-color:rgba(170,180,195,.45) !important;}
 /* Editor de roster manual del Mundialito. */
 #mundial-roster-ov{position:fixed;inset:0;z-index:100040;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
 #mundial-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}

@@ -40593,6 +40593,11 @@ https://api.sofascore.app/api/v1/team/44/image
     --mc-glow:rgba(255,80,100,.22);
     filter:grayscale(.25) opacity(.88);
   }
+  #s-munich .munich-comp-chip.done{
+    --mc-color:rgba(241,196,15,.92);
+    --mc-glow:rgba(241,196,15,.32);
+    filter:opacity(.95);
+  }
   #s-munich .munich-comp-chip .munich-comp-ico{
     font-size:22px;line-height:1;height:28px;display:flex;align-items:center;justify-content:center;
   }
@@ -40619,6 +40624,9 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   #s-munich .munich-comps-legend .munich-leg-dot.out{
     background:#ff5064;box-shadow:0 0 6px rgba(255,80,100,.5);
+  }
+  #s-munich .munich-comps-legend .munich-leg-dot.done{
+    background:#F1C40F;box-shadow:0 0 6px rgba(241,196,15,.6);
   }
   #s-munich .munich-comps-empty{
     padding:14px;text-align:center;color:rgba(255,255,255,.55);
@@ -41106,7 +41114,7 @@ https://api.sofascore.app/api/v1/team/44/image
     </div>
     <div class="munich-comps-legend">
       <span><i class="munich-leg-dot in"></i>En juego</span>
-      <span><i class="munich-leg-dot out"></i>Eliminado</span>
+      <span><i class="munich-leg-dot done"></i>Finalizada</span>
     </div>
   </div>
 </section>
@@ -42572,8 +42580,11 @@ https://api.sofascore.app/api/v1/team/44/image
          en el state de Champions/Recopa/SC Europa/Mundialito/etc.,
          se muestra el chip aunque el calendario no lo marque. Esto
          garantiza las 8 comps oficiales sin depender del calendario.
-     Estado de cada chip: 'En juego' por defecto, 'Eliminado' sólo
-     cuando hay un campeón decidido en su state y NO es el hub. */
+     Estado de cada chip: 'En juego' por defecto, 'Finalizada' cuando
+     la competición tiene un campeón decidido (sea el hub o no — la
+     comp ha acabado). Petición usuario 2026-05-28: "cuando se finaliza
+     una de las competiciones en lugar de poner en juego, pondría
+     finalizada". */
   var _CAL_COMPS_KEY = 'bayern_calendar_comps_v1';
   var _CAL_COMP_DEFAULTS = {
     liga:true, copa:true, 'sup-esp':true, champ:true,
@@ -42600,7 +42611,7 @@ https://api.sofascore.app/api/v1/team/44/image
     return sel;
   }
   function _statusFromChamp(champ, aliases){
-    return (champ && !_matches(champ, aliases)) ? 'out' : 'in';
+    return champ ? 'done' : 'in';
   }
   function _statusEur(comp, aliases){
     var KO = { ucl:'ucl_ko_state_v1', uel:'uel_ko_state_v1', uecl:'uecl_ko_state_v1' };
@@ -42712,7 +42723,7 @@ https://api.sofascore.app/api/v1/team/44/image
       if (typeof def.statusFn === 'function'){
         try {
           var r = def.statusFn(aliases);
-          if (r === 'out') status = 'out';
+          if (r === 'done' || r === 'out') status = 'done';
         } catch(_){}
       }
       out.push({ status:status, label:def.label, emoji:def.emoji, screen:def.screen });
@@ -42792,7 +42803,9 @@ https://api.sofascore.app/api/v1/team/44/image
     var html = items.map(function(it){
       var screen = it.screen ? _esc(it.screen).replace(/'/g,'') : '';
       var clk = screen ? ' onclick="try{window._munichChipNav(\'' + screen + '\')}catch(_){}"' : '';
-      var stTxt = (it.status === 'out') ? 'Eliminado' : 'En juego';
+      var stTxt = (it.status === 'done') ? 'Finalizada'
+                : (it.status === 'out')  ? 'Eliminado'
+                :                          'En juego';
       return ''
         + '<div class="munich-comp-chip ' + it.status + '"' + clk + ' role="button" tabindex="0">'
         +   '<div class="munich-comp-ico">' + _esc(it.emoji) + '</div>'

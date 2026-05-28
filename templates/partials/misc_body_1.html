@@ -5619,12 +5619,26 @@ window._showSimProgress = function(opts, onDone){
           }
           if (Array.isArray(_anyFix)) _grpJors = _anyFix.length;
         } catch(_){}
+        /* Sin fase final: si el torneo se configuró con 0 equipos a
+           fase final (suizo / liga+playoff sin eliminatoria, petición
+           usuario 2026-05-28), NINGÚN día se trata como KO — solo hay
+           liguilla. Evita mostrar "RIVAL PENDIENTE" para una fase que
+           no existe. */
+        var _advFinal = (cfg.formatConfig && typeof cfg.formatConfig.advancePerGroup === 'number')
+                         ? cfg.formatConfig.advancePerGroup : 2;
         /* Día del calendario que cae en KO (Partido N > nº de jornadas
            de grupos). Si todavía no se ha construido koBracket pero el
            calendario ya demanda KO, mostramos card RIVAL PENDIENTE
            (regla CLAUDE.md 2026-05-26). */
-        var _dayInKo = (_dayPartidoN !== null && _grpJors > 0 && _dayPartidoN > _grpJors);
+        var _dayInKo = (_advFinal > 0 && _dayPartidoN !== null && _grpJors > 0 && _dayPartidoN > _grpJors);
         var _dayKoIdx = _dayInKo ? (_dayPartidoN - _grpJors - 1) : null;
+        /* Sin fase final + el calendario pide un partido más allá de la
+           última jornada de liguilla → el torneo ya terminó para el
+           humano. Devolvemos null (la card mostrará "torneo terminado ·
+           CONTINUAR ▶") en vez de repetir la última jornada. */
+        if (_advFinal === 0 && _dayPartidoN !== null && _grpJors > 0 && _dayPartidoN > _grpJors){
+          return null;
+        }
         /* Fase KO ya iniciada → tratar como KO de partido único. */
         if (Array.isArray(cfg.koBracket) && cfg.koBracket.length){
           /* Si el calendario demanda una ronda KO concreta, la usamos
@@ -17880,12 +17894,14 @@ window._showSimProgress = function(opts, onDone){
       box.innerHTML =
         '<div class="tour-ed-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
         '<div><label>Jornadas (partidos/equipo)</label><input id="tour-ed-swissrounds" type="number" min="1" max="20" value="'+(fc.swissRounds||6)+'"></div>' +
-        '<div><label>Equipos a fase final</label><input id="tour-ed-advance" type="number" min="2" max="32" value="'+(fc.advancePerGroup||8)+'"></div>' +
+        '<div><label>Equipos a fase final</label><input id="tour-ed-advance" type="number" min="0" max="32" value="'+((typeof fc.advancePerGroup==='number')?fc.advancePerGroup:8)+'"></div>' +
         '<div><label>Desempate</label>'+_tbSelectHtml(fc.tieBreak)+'</div>' +
         '</div>' +
         '<div style="margin-top:6px;font-size:11px;color:rgba(255,255,255,.5);text-transform:none;letter-spacing:0;line-height:1.4;">' +
           'Una sola tabla, sin grupos: cada equipo juega ese nº de partidos contra rivales <b>distintos</b>. ' +
-          'Al terminar, los <b>N mejores</b> de la clasificación pasan a la eliminatoria final.' +
+          'Al terminar, los <b>N mejores</b> de la clasificación pasan a la eliminatoria final. ' +
+          'Pon <b>0</b> equipos a fase final si solo quieres jugar la liguilla (sin eliminatoria): ' +
+          'campeón = 1º de la clasificación.' +
         '</div>' +
         '<label style="margin-top:8px;">Eliminatoria final (rondas)</label>' +
         '<input id="tour-ed-rounds" type="text" value="'+(fc.koRounds||['SF','F']).join(',')+'" placeholder="QF,SF,F">';
@@ -18287,10 +18303,16 @@ window._showSimProgress = function(opts, onDone){
          N mejores. También usa el motor de grupos-ko (groups:1). */
       var rElSw = document.getElementById('tour-ed-rounds');
       var _swR  = parseInt((document.getElementById('tour-ed-swissrounds')||{}).value, 10) || 6;
-      var _advSw = parseInt((document.getElementById('tour-ed-advance')||{}).value, 10) || 8;
+      /* "Equipos a fase final" = 0 → SIN eliminatoria (solo liguilla).
+         Petición usuario 2026-05-28: en el suizo (Joan Gamper, etc.)
+         poner 0 deja únicamente las N jornadas de grupo, campeón = 1º.
+         Por eso NO se usa `|| 8` (machacaría el 0) y NO se sube a 2. */
+      var _advRaw = parseInt((document.getElementById('tour-ed-advance')||{}).value, 10);
+      var _advSw = isNaN(_advRaw) ? 8 : _advRaw;
       var _tbSw  = document.getElementById('tour-ed-tiebreak');
       if (_swR < 1) _swR = 1;
-      if (_advSw < 2) _advSw = 2;
+      if (_advSw < 0) _advSw = 0;
+      else if (_advSw === 1) _advSw = 2; /* 1 no forma cuadro KO → mínimo 2 */
       cfg.formatConfig = {
         groups: 1,
         swissRounds: _swR,
@@ -19319,7 +19341,11 @@ window._showSimProgress = function(opts, onDone){
     } else if (cfg.format === 'league-ko') {
       fmtTxt += ': liguilla'+(fc.groupDoubleLegs?' (doble vuelta)':'')+' + playoff de '+(fc.advancePerGroup||'?')+' → '+(fc.koRounds||[]).join(' → ');
     } else if (cfg.format === 'swiss') {
-      fmtTxt += ': '+(fc.swissRounds||'?')+' jornadas · '+(fc.advancePerGroup||'?')+' a la fase final → '+(fc.koRounds||[]).join(' → ');
+      if (fc.advancePerGroup === 0) {
+        fmtTxt += ': '+(fc.swissRounds||'?')+' jornadas · SIN fase final (campeón = 1º de la liguilla)';
+      } else {
+        fmtTxt += ': '+(fc.swissRounds||'?')+' jornadas · '+((typeof fc.advancePerGroup==='number')?fc.advancePerGroup:'?')+' a la fase final → '+(fc.koRounds||[]).join(' → ');
+      }
     } else if (cfg.format === 'mundial-48') {
       fmtTxt += ': 12 grupos de 4 · 1º+2º+8 mejores 3os → '+(fc.koRounds||[]).join(' → ');
     }
@@ -20446,7 +20472,9 @@ window._showSimProgress = function(opts, onDone){
     var fc = cfg.formatConfig || {};
     var nGroups = fc.groups || 1;
     var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
-    var advancePerGroup = fc.advancePerGroup || 2;
+    /* advancePerGroup === 0 → SIN fase final (solo liguilla / grupos).
+       No usar `|| 2` porque machacaría el 0 legítimo del suizo. */
+    var advancePerGroup = (typeof fc.advancePerGroup === 'number') ? fc.advancePerGroup : 2;
     cfg.results = cfg.results || {};
     /* Construir fixtures por grupo si no existen. */
     cfg.groupFixtures = cfg.groupFixtures || {};
@@ -20498,8 +20526,22 @@ window._showSimProgress = function(opts, onDone){
       html += _fixtureCardsHtml(slice, fix, cfg.results, gKey, tourId, curJg, {shortLabel:true});
       html += '</div>';
     }
+    /* Sin fase final (advancePerGroup === 0): el torneo es solo la
+       liguilla. Campeón = 1º de la clasificación. No se construye
+       koBracket ni se pinta sección FASE FINAL. Petición usuario
+       2026-05-28 (suizo Joan Gamper con 0 equipos a fase final). */
+    if (allGroupsDone && advancePerGroup === 0) {
+      if (nGroups === 1 && slices[0] && slices[0].length) {
+        var _liguillaRows = _tourComputeStandings(slices[0], cfg.groupFixtures[0], cfg.results, 'g0_', fc.tieBreak);
+        if (_liguillaRows[0] && slices[0][_liguillaRows[0].idx]) {
+          html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(240,192,64,.25);">';
+          html += _championBoxHtml(slices[0][_liguillaRows[0].idx]);
+          html += '</div>';
+        }
+      }
+    }
     /* Si todos los grupos terminaron, generar / renderizar fase KO. */
-    if (allGroupsDone) {
+    if (allGroupsDone && advancePerGroup > 0) {
       cfg.koBracket = cfg.koBracket || (function(){
         /* Mundialito de Clubes (tourId='mundial'): bracket custom que
            garantiza 1º vs 2º + mismo grupo NUNCA hasta la Final +

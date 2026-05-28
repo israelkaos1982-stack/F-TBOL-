@@ -12810,6 +12810,19 @@ window._showSimProgress = function(opts, onDone){
 .mn-card[data-tour="mundial"] .tour-bracket-team.is-winner span{
   color:#fff080 !important;text-shadow:0 0 6px rgba(255,214,51,.6);
 }
+/* Selección HUMANA canónica (Francia 💡, Brasil 🐭, …) en las cards
+   del bracket Mundial 2032: nombre AMARILLO + glow para localizarla
+   al instante (petición usuario 2026-05-28). Gana a las reglas
+   mn-card / mn-card-human / is-winner por especificidad + !important.
+   Los clubes humanos del Mundialito NO llevan .is-human-sel, así que
+   su bracket sigue intacto. */
+.mn-card .tour-bracket-team.is-human-sel span,
+.mn-card-human .tour-bracket-team.is-human-sel span,
+.mn-card[data-tour] .tour-bracket-team.is-human-sel span{
+  color:#ffd633 !important;
+  text-shadow:0 0 9px rgba(255,214,51,.6) !important;
+  font-weight:700 !important;
+}
 /* Frame que envuelve card+acta — repintamos cuando contiene una
    .mn-card del Mundialito. */
 .mn-card-frame:has(.mn-card[data-tour="mundial"]){
@@ -16299,6 +16312,13 @@ window._showSimProgress = function(opts, onDone){
   /* Eliminado en ROJO pero SIN tachar el nombre (petición usuario
      2026-05-17). */
   .tour-bracket-team.is-loser span{color:#ff6b7d;}
+  /* Selección humana canónica fuera de las cards mn-card (fixtures de
+     grupo / otros formatos): nombre AMARILLO (petición usuario
+     2026-05-28). El is-winner/is-loser de la misma especificidad gana
+     en su contexto; aquí solo aplica cuando no es ganador/perdedor. */
+  .tour-bracket-team.is-human-sel span{
+    color:#ffd633;text-shadow:0 0 8px rgba(255,214,51,.5);font-weight:700;
+  }
   .tour-score{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:rgba(255,255,255,.75);}
   .tour-score-win{color:#5fe08a;text-shadow:0 0 8px rgba(95,224,138,.5);}
   .tour-score-wrap{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px 8px;}
@@ -19255,6 +19275,12 @@ window._showSimProgress = function(opts, onDone){
     }
     if (isWinner) classes.push('is-winner');
     if (isLoser)  classes.push('is-loser');
+    /* Selección humana canónica (Francia 💡, …): clase is-human-sel
+       → nombre en AMARILLO para encontrarla rápido en el bracket del
+       Mundial 2032 (petición usuario 2026-05-28). Los clubes humanos
+       del Mundialito NO matchean `_esSelHumana`, así que su bracket
+       sigue intacto. */
+    if (_tourIsHumanSel(t)) classes.push('is-human-sel');
     var data = (t.isHuman && t.name === 'PENDIENTE') ? ' data-tour="'+tourId+'" data-slot="'+slotIdx+'"' : '';
     var _ic = _tourTeamIcon(t);
     var icHtml = _ic ? '<span class="tour-hum-ic">'+_ic+'</span>' : '';
@@ -20084,6 +20110,19 @@ window._showSimProgress = function(opts, onDone){
         — cubre torneos antiguos guardados sin el campo `icon`.
      3) Fallback genérico 👤 para humanos sin icono (clubes humanos).
      PENDIENTE (placeholder sin equipo) nunca lleva icono. */
+  /* ¿Es una SELECCIÓN humana canónica? (Francia 💡, Brasil 🐭,
+     Inglaterra 🔨, Noruega ✏️, Argentina 😈, España 🦆). Fuente única
+     `_esSelHumana` (lista hardcoded en el bundle) — NO depende del flag
+     `isHuman` del cfg ni de la hidratación de selecciones_squad_v1.
+     Petición usuario 2026-05-28: Francia (humano) DEBE salir siempre
+     con su icono + en amarillo en la clasificación y eliminatorias del
+     Mundial 2032 para encontrarla rápido. */
+  function _tourIsHumanSel(t){
+    try {
+      return !!(t && t.name && typeof window._esSelHumana === 'function'
+                && window._esSelHumana(t.name));
+    } catch(_){ return false; }
+  }
   function _tourTeamIcon(t){
     if (!t || !t.name || t.name === 'PENDIENTE') return '';
     if (t.icon) return t.icon;
@@ -20091,8 +20130,24 @@ window._showSimProgress = function(opts, onDone){
       var ic = window._selSquadIcon && window._selSquadIcon(t.name);
       if (ic) return ic;
     } catch(_){}
+    /* Selección humana canónica: el emoji de su mister (💡/🐭/🔨/✏️/😈/🦆)
+       es la fuente de verdad, INDEPENDIENTE de hidratación o del flag
+       isHuman. Así Francia muestra 💡 aunque el admin no la marcara y
+       el squad aún no se haya hidratado. */
+    try {
+      if (_tourIsHumanSel(t) && typeof window._mhFindMister === 'function'){
+        var m = window._mhFindMister(t.name);
+        if (m && m.emoji) return m.emoji;
+      }
+    } catch(_){}
     return t.isHuman ? '👤' : '';
   }
+  /* Exponer en window: varios call sites (cards del hub, brackets de
+     otros IIFEs) llaman `window._tourTeamIcon` / `window._tourIsHumanSel`.
+     Sin esto el icono 💡 de las selecciones humanas no se pintaba en la
+     clasificación del Mundial 2032 (bug 2026-05-28). */
+  try { window._tourTeamIcon = _tourTeamIcon; } catch(_){}
+  try { window._tourIsHumanSel = _tourIsHumanSel; } catch(_){}
 
   function _stTeamCellHtml(row) {
     var ic = _tourTeamIcon(row);
@@ -20959,12 +21014,18 @@ window._showSimProgress = function(opts, onDone){
       var shield = t && t.shield
         ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'" style="width:22px;height:22px;object-fit:contain;flex-shrink:0;">'
         : '';
+      /* Selección humana canónica (Francia 💡, …): icono SIEMPRE
+         presente + nombre en AMARILLO para encontrarla rápido
+         (petición usuario 2026-05-28). No se gatea por t.isHuman: usa
+         _tourIsHumanSel (_esSelHumana, sin depender de hidratación). */
+      var isHumanSel = _tourIsHumanSel(t);
       var humanIc = '';
       try {
-        if (t && t.isHuman && typeof window._tourTeamIcon === 'function') {
-          humanIc = window._tourTeamIcon(t);
+        if (t && (t.isHuman || isHumanSel)) {
+          humanIc = _tourTeamIcon(t);
         }
       } catch(_){}
+      var nameCol = isHumanSel ? '#ffd633' : '#fff';
       var isAdv = (pos <= advancePerGroup);
       /* En el Mundial, el 3º clasifica si está entre las 8 mejores
          terceras globales — `bestThirdNames` lleva ese set. Mismo
@@ -20986,7 +21047,7 @@ window._showSimProgress = function(opts, onDone){
         + '<td style="padding:8px 2px 8px 5px;"><div style="display:flex;align-items:center;gap:4px;">'
         +   '<span style="font-family:\'Bebas Neue\',sans-serif;color:'+posCol+';width:14px;text-align:center;font-size:15px;">'+pos+'</span>'
         +   shield
-        +   '<span style="font-family:Rajdhani,sans-serif;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;">'+nm+'</span>'
+        +   '<span style="font-family:Rajdhani,sans-serif;font-weight:700;color:'+nameCol+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;'+(isHumanSel?'text-shadow:0 0 8px rgba(255,214,51,.5);':'')+'">'+nm+'</span>'
         +   (humanIc ? '<span style="margin-left:2px;">'+humanIc+'</span>' : '')
         + '</div></td>'
         + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;font-size:17px;color:#f0c040;font-weight:700;">'+r.pts+'</td>'
@@ -21020,15 +21081,19 @@ window._showSimProgress = function(opts, onDone){
       var sh = t && t.shield
         ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'" style="width:38px;height:38px;object-fit:contain;">'
         : '<div style="width:38px;height:38px;"></div>';
+      /* Selección humana canónica → icono SIEMPRE + nombre AMARILLO
+         (petición usuario 2026-05-28). */
+      var isHumanSel = _tourIsHumanSel(t);
       var humanIc = '';
       try {
-        if (t && t.isHuman && typeof window._tourTeamIcon === 'function') {
-          humanIc = window._tourTeamIcon(t);
+        if (t && (t.isHuman || isHumanSel)) {
+          humanIc = _tourTeamIcon(t);
         }
       } catch(_){}
+      var nameCol = isHumanSel ? '#ffd633' : '#fff';
       return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center;">'
         + sh
-        + '<span style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block;">'+nm
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:'+nameCol+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block;'+(isHumanSel?'text-shadow:0 0 8px rgba(255,214,51,.5);':'')+'">'+nm
         +   (humanIc ? ' '+humanIc : '')
         + '</span></div>';
     }
@@ -21075,7 +21140,7 @@ window._showSimProgress = function(opts, onDone){
       var rows = _tourComputeStandings(slice, fix, cfg.results, gKey);
       var prog = _tourFixtureProgress(fix, cfg.results, gKey);
       var letter = String.fromCharCode(65+g);
-      var hasH = slice.some(function(t){ return t && t.isHuman; });
+      var hasH = slice.some(function(t){ return t && (t.isHuman || _tourIsHumanSel(t)); });
       var curJg = cfg.currentJornadaByGroup[g] || 0;
       /* Card del grupo: cabecera cian + clasificación + jornadas.
          Borde BLANCO por defecto y ROSA llamativo si el grupo tiene

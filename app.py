@@ -2537,6 +2537,7 @@ def _lx_merge_teams(old_data, new_data):
 
     merged = {}      # key -> team dict
     order = []        # keys en orden (entrantes primero, luego solo-viejos)
+    meta = {}         # key -> is_incoming de la versión ganadora
 
     def _consider(team, is_incoming):
         key = _lx_team_key(team)
@@ -2546,6 +2547,7 @@ def _lx_merge_teams(old_data, new_data):
             key = "anon:%d" % len(order)
         if key not in merged:
             merged[key] = team
+            meta[key] = is_incoming
             order.append(key)
             return
         cur = merged[key]
@@ -2554,12 +2556,15 @@ def _lx_merge_teams(old_data, new_data):
         if cu is not None and nu is not None:
             if nu >= cu:
                 merged[key] = team
+                meta[key] = is_incoming
         elif nu is not None and cu is None:
             merged[key] = team
+            meta[key] = is_incoming
         elif nu is None and cu is None:
             # Ninguno sellado: gana el entrante (comportamiento previo).
             if is_incoming:
                 merged[key] = team
+                meta[key] = is_incoming
         # (cu set, nu None) → conservamos el almacenado/sellado.
 
     # Primero los viejos (base), luego los entrantes (pueden ganar).
@@ -2598,12 +2603,54 @@ def _lx_merge_teams(old_data, new_data):
                 if n and n not in incoming_names:
                     del_set.add(n)
 
+    # Colapso final POR NOMBRE NORMALIZADO (fix duplicados/triplicados
+    # 2026-05-28). La fusión de arriba indexa por `id`, pero el editor
+    # crea un `id` NUEVO cada vez que se re-pega la lista de equipos
+    # (lextBulkAddTeams → uid()). Resultado: el viejo "Beerschot"(id:A)
+    # y el re-pegado "Beerschot"(id:X) eran claves distintas y AMBOS
+    # sobrevivían; con la regla "add trumps delete" el borrado por
+    # nombre no los podaba → la liga se duplicaba/triplicaba en cada
+    # ciclo borrar+repegar (foto usuario: Beerschot VA ×3, Charleroi
+    # ×3, etc.). Aquí dos equipos que comparten nombre normalizado son
+    # el MISMO equipo: nos quedamos con la versión más reciente por
+    # `updatedAt` (empate → gana la entrante, p.ej. la lista recién
+    # pegada con valoraciones nuevas).
     out_teams = []
+    out_incoming = []
+    by_name = {}     # nombre normalizado -> índice en out_teams
     for key in order:
         t = merged[key]
-        if _lx_norm_name(t.get("name")) in del_set:
+        nm = _lx_norm_name(t.get("name"))
+        if nm in del_set:
             continue
-        out_teams.append(t)
+        inc = bool(meta.get(key))
+        if not nm:
+            out_teams.append(t)
+            out_incoming.append(inc)
+            continue
+        if nm not in by_name:
+            by_name[nm] = len(out_teams)
+            out_teams.append(t)
+            out_incoming.append(inc)
+            continue
+        # Colisión de nombre: mismo equipo con id distinto. Elegimos
+        # ganador igual que en la fusión por id (updatedAt; empate sin
+        # sellar → la entrante).
+        idx = by_name[nm]
+        cur = out_teams[idx]
+        cu = _lx_updated_at(cur)
+        tu = _lx_updated_at(t)
+        if tu is not None and cu is not None:
+            take = tu >= cu
+        elif tu is not None and cu is None:
+            take = True
+        elif tu is None and cu is None:
+            take = inc and not out_incoming[idx]
+        else:  # tu None, cu set → conservamos el sellado existente
+            take = False
+        if take:
+            out_teams[idx] = t
+            out_incoming[idx] = inc
 
     result = dict(new_data)
     result["teams"] = out_teams

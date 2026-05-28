@@ -3802,6 +3802,33 @@ window._showSimProgress = function(opts, onDone){
         }
       }
       if (!_mCfgs.length) return null;
+      /* Asegurar `cfg.groupFixtures` ANTES de resolver. Los fixtures de
+         grupo del Mundial 2032 solo se construían (lazy) en el render
+         de la pantalla del torneo (`_mundialGroupState`). Si la card
+         del hub se pinta antes de que el usuario abra esa pantalla — o
+         si el cfg persistido en localStorage no incluye los fixtures —
+         `_resolveForHuman` veía `cfg.groupFixtures[gIdx]` undefined y
+         devolvía null → la card mostraba «JUGADORES FUERA» aunque
+         Francia es humana y tiene partido programado (bug 2026-05-28,
+         foto Liverpool/Francia · 03 May · Mundial Grupo J1). Usamos el
+         MISMO builder canónico (`_mundialGroupState`) que la pantalla
+         del torneo, así que los matchKeys `g<g>_<jor>_<mi>` coinciden
+         exactamente. Persistimos con `_tourSave` solo si construimos
+         algo nuevo, para que el resto de flujos (stats, KO) y futuras
+         sesiones lo encuentren ya hecho. */
+      if (typeof window._mundialGroupState === 'function'){
+        for (var _gfi = 0; _gfi < _mCfgs.length; _gfi++){
+          try {
+            var _gfCfg = _mCfgs[_gfi].cfg;
+            var _hadFx = !!(_gfCfg.groupFixtures && Object.keys(_gfCfg.groupFixtures).length);
+            window._mundialGroupState(_gfCfg, _gfCfg.teams || []);
+            var _nowFx = !!(_gfCfg.groupFixtures && Object.keys(_gfCfg.groupFixtures).length);
+            if (!_hadFx && _nowFx && typeof window._tourSave === 'function'){
+              try { window._tourSave(_mCfgs[_gfi].id, _gfCfg); } catch(_){}
+            }
+          } catch(_){}
+        }
+      }
       /* Auto-construir brackets KO pendientes. Solo en cfgs con
          `groupFixtures` no vacío para evitar disparar la construcción
          sobre cfgs stale/vacías (donde `allDoneAll` quedaría true por
@@ -5074,15 +5101,29 @@ window._showSimProgress = function(opts, onDone){
           }
         }
       } catch(_){}
-      /* 4. Auto-build de brackets KO pendientes en cfgs mundial-48. */
+      /* 4. Construir `groupFixtures` (si faltan) + brackets KO
+         pendientes en cfgs mundial-48. Construir los fixtures de grupo
+         es lo que de verdad desbloquea la card cuando el usuario aún no
+         ha abierto la pantalla del Mundial: sin ellos `_selPair` no
+         encuentra el partido de Francia. Persistimos lo que cambie.
+         Bug 2026-05-28. */
       try {
-        if (typeof window._psAutoChainBuildMundial === 'function'){
-          var cache = window._TOUR_CACHE || {};
-          for (var k in cache){
-            var c = cache[k];
-            if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
-              try { window._psAutoChainBuildMundial(c, k); } catch(_){}
-            }
+        var cache = window._TOUR_CACHE || {};
+        for (var k in cache){
+          var c = cache[k];
+          if (!c || c.format !== 'mundial-48' || !Array.isArray(c.teams) || !c.teams.length) continue;
+          if (typeof window._mundialGroupState === 'function'){
+            try {
+              var _hadFx = !!(c.groupFixtures && Object.keys(c.groupFixtures).length);
+              window._mundialGroupState(c, c.teams || []);
+              var _nowFx = !!(c.groupFixtures && Object.keys(c.groupFixtures).length);
+              if (!_hadFx && _nowFx && typeof window._tourSave === 'function'){
+                try { window._tourSave(k, c); } catch(_){}
+              }
+            } catch(_){}
+          }
+          if (typeof window._psAutoChainBuildMundial === 'function'){
+            try { window._psAutoChainBuildMundial(c, k); } catch(_){}
           }
         }
       } catch(_){}
@@ -20728,6 +20769,17 @@ window._showSimProgress = function(opts, onDone){
      sorteado, y muestra «JUGADORES FUERA» en lugar de un día de
      ENTRENAMIENTO. */
   try { window._mundialQualifiers = _mundialQualifiers; } catch(_){}
+  /* Expuesto a window para que `_selPair` (caja Liverpool/Francia) y
+     el RECUPERAR PARTIDO puedan CONSTRUIR los `cfg.groupFixtures` del
+     Mundial 2032 sin que el usuario tenga que abrir la pantalla del
+     torneo. Sin esto, los fixtures de grupo solo se construían en el
+     render del torneo; si la card del hub se pinta antes (o el cfg
+     persistido no los trae), `_resolveForHuman` no encontraba el
+     partido de Francia y la card caía a JUGADORES FUERA aunque
+     Francia SÍ es humana. Bug 2026-05-28. Es el MISMO builder que usa
+     `_mundialGroupsHtml`, así que los matchKeys `g<g>_<jor>_<mi>` y la
+     numeración de jornadas coinciden 1-a-1 con la pantalla del torneo. */
+  try { window._mundialGroupState = _mundialGroupState; } catch(_){}
   /* Set de nombres de las 8 mejores terceras (mismo comparador que
      `_mundialQualifiers` para mantener coherencia visual con el cuadro
      real de Dieciseisavos). Usado por el render de las tablas de grupo

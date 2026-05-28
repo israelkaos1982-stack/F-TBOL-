@@ -1,5 +1,69 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Caja "Torneos de Verano · Estadísticas" — render no bloqueante + equipos vigentes (obligatorio, 2026-05-28)
+
+**Bug (foto usuario 2026-05-28)**: con el Trofeo Joan Gamper a 46/48
+partidos jugados, la pantalla `s-torneos-stats` ("Torneos de Verano ·
+Estadísticas") se quedaba **congelada en el placeholder
+"Calculando estadísticas…"** y nunca renderizaba.
+
+### Causa raíz
+
+El loop de `STATS_SCREENS` (IIFE en `misc_body_1.html` ~13180)
+ejecutaba `syncLigaEaPlayerStats()` (= `rebuildPlayerStatsStore`,
+**O(matches × events × competitions)**) de forma **SÍNCRONA ANTES**
+de pintar el dashboard. Con muchos partidos el hilo se bloqueaba y
+nunca se llegaba a `_lextBuildCompStatsDashboard`, así que la caja
+seguía mostrando el HTML inicial "Calculando estadísticas…".
+
+### Refuerzo (2026-05-28) — render-first + sync diferido
+
+`_renderOne(cfg)` ahora:
+1. **PINTA YA** desde el cache (`_paint(cfg)`, síncrono y rápido) ⇒ la
+   caja JAMÁS se queda en "Calculando…".
+2. **DIFIERE** el `syncLigaEaPlayerStats()` pesado a `setTimeout(0)` y
+   **re-pinta** con datos frescos al terminar.
+
+`_lextBuildCompStatsDashboard` envuelve `_lextStatsDashHtml` en
+try/catch: si tira, pinta el estado vacío en vez de dejar el
+placeholder. **PROHIBIDO** volver a ejecutar el sync pesado de forma
+síncrona antes del primer paint de una pantalla de estadísticas.
+
+### Equipos vigentes — la caja muestra SOLO los del torneo actual
+
+Petición usuario: "las estadísticas de ese torneo solo con los
+equipos que juegan ese torneo en ese momento". El store
+`ef_player_stats_torneos_v1` ACUMULA jugadores de TODAS las ediciones
+de torneos de verano jugadas alguna vez. La caja `s-torneos-stats`
+ahora filtra (entrada `filterTeams:true` en `STATS_SCREENS`) a SOLO
+los equipos presentes en los cfgs `tour_<id>_v1` de board `verano`
+**vigentes** vía `window._torneosVeranoTeamSet()`:
+- Escanea ids `{sct,pss,jg,asia,tx1..tx8}` (regex
+  `/^tour_(sct|pss|jg|asia|tx\d+)_v1$/`) de `_TOUR_CACHE` + localStorage.
+- EXCLUYE `mundial` (Mundialito Clubes → `s-mundial-stats`) y los
+  slots de Selecciones `spv*`/`sfn*` (bucket `sel`).
+- Si el set sale vacío (ningún cfg cargado todavía) NO filtra
+  (preferimos mostrar algo a una caja en blanco).
+
+`_lextBuildCompStatsDashboard(rootId, statsKey, teamFilterSet?)` acepta
+un 3er arg opcional con el set de equipos; `_filterStatsByTeamSet`
+hace el filtrado (match exacto + inclusión laxa de grafías). El
+filtro refuerza además la regla CLUBES≠SELECCIONES (las selecciones
+nunca están en `cfg.teams` de un torneo de verano).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** revertir el render-first / sync diferido en
+   `STATS_SCREENS._renderOne`. Es lo que evita el cuelgue.
+2. **PROHIBIDO** quitar el try/catch de `_lextBuildCompStatsDashboard`
+   que garantiza que el placeholder siempre se reemplaza.
+3. **Toda nueva edición de torneo de verano** (nuevo slot, nuevo id)
+   debe quedar capturada por `_torneosVeranoTeamSet` (añadir su id al
+   regex / lista) para que sus equipos aparezcan en la caja.
+4. El 3er arg de `_lextBuildCompStatsDashboard` es **opcional**: las
+   demás pantallas (Recopa, USC, Inter, Mundial, SC, UCL, Superliga)
+   lo llaman con 2 args y NO filtran. No cambiar esa firma.
+
 ## Separación CLUBES vs SELECCIONES en estadísticas (obligatorio, 2026-05-27)
 
 **REGLA BLOQUEANTE ABSOLUTA**: las **estadísticas de jugadores** del

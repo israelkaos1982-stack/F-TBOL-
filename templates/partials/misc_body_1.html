@@ -11131,14 +11131,99 @@ window._showSimProgress = function(opts, onDone){
   }
   window._lextStatsDashHtml = _lextStatsDashHtml;
 
-  window._lextBuildCompStatsDashboard = function(rootId, statsKey){
+  /* ── Filtro de equipos VIGENTES para s-torneos-stats (2026-05-28) ──
+     La caja "Torneos de Verano · Estadísticas" lee el store agregado
+     `ef_player_stats_torneos_v1`, que ACUMULA jugadores de TODOS los
+     torneos de verano jugados alguna vez (incluidas ediciones pasadas
+     con equipos distintos). Petición usuario 2026-05-28: la caja debe
+     mostrar SOLO los equipos que juegan los torneos de verano EN ESE
+     MOMENTO. Construimos el set de equipos a partir de los cfgs
+     `tour_<id>_v1` de board 'verano' (sct/pss/jg/asia + tx1..tx8),
+     EXCLUYENDO mundial (Mundialito Clubes, su propia caja
+     `s-mundial-stats`) y los slots de Selecciones (spv*/sfn*, bucket
+     `sel`). Refuerza la regla bloqueante CLUBES≠SELECCIONES. */
+  var _TORNEOS_VERANO_ID_RE = /^tour_(sct|pss|jg|asia|tx\d+)_v1$/;
+  window._torneosVeranoTeamSet = function(){
+    var set = Object.create(null);
+    var nm = (typeof window._normPS === 'function') ? window._normPS : _normPS;
+    function _addCfg(cfg){
+      if (!cfg || !Array.isArray(cfg.teams)) return;
+      cfg.teams.forEach(function(t){
+        var n = t && (t.name || (typeof t === 'string' ? t : ''));
+        if (!n) return;
+        var k = nm(n);
+        if (k) set[k] = true;
+      });
+    }
+    /* 1) cfgs en memoria (los más frescos: reflejan el sorteo actual). */
+    try {
+      var cache = window._TOUR_CACHE || {};
+      ['sct','pss','jg','asia','tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8']
+        .forEach(function(id){ if (cache[id]) _addCfg(cache[id]); });
+    } catch(_){}
+    /* 2) cfgs persistidos en localStorage (sobreviven a recargas). */
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || !_TORNEOS_VERANO_ID_RE.test(k)) continue;
+        var raw = localStorage.getItem(k);
+        if (!raw) continue;
+        var cfg = null;
+        try { cfg = JSON.parse(raw); } catch(_){ continue; }
+        _addCfg(cfg);
+      }
+    } catch(_){}
+    return set;
+  };
+  /* Filtra un objeto stats (`teamNorm::playerNorm` → counters) a SOLO
+     las entradas cuyo equipo está en `teamSet`. Si el set está vacío
+     (ningún torneo de verano cargado todavía) NO filtra — preferimos
+     mostrar lo que haya antes que una caja en blanco. */
+  function _filterStatsByTeamSet(stats, teamSet){
+    if (!stats || !teamSet) return stats || {};
+    var teamKeys = Object.keys(teamSet);
+    if (!teamKeys.length) return stats;
+    var out = {};
+    Object.keys(stats).forEach(function(k){
+      var sep = k.indexOf('::');
+      if (sep < 0) return;
+      var tn = k.slice(0, sep);
+      if (teamSet[tn]) { out[k] = stats[k]; return; }
+      /* match laxo por inclusión: las grafías del store y del cfg
+         pueden diferir ("Liverpool" vs "Liverpool FC"). */
+      for (var i = 0; i < teamKeys.length; i++) {
+        var t2 = teamKeys[i];
+        if (tn === t2 || (tn && tn.indexOf(t2) !== -1) || (t2 && t2.indexOf(tn) !== -1)) {
+          out[k] = stats[k];
+          return;
+        }
+      }
+    });
+    return out;
+  }
+  window._filterStatsByTeamSet = _filterStatsByTeamSet;
+
+  /* `teamFilterSet` (opcional, 3er arg 2026-05-28): si viene, filtra
+     el store a esos equipos antes de renderizar (lo usa s-torneos-stats).
+     Wrap defensivo: si `_lextStatsDashHtml` tira, pintamos igualmente
+     el estado vacío en lugar de dejar la caja congelada en
+     "Calculando estadísticas..." (bug 2026-05-28). */
+  window._lextBuildCompStatsDashboard = function(rootId, statsKey, teamFilterSet){
     var root = document.getElementById(rootId);
     if (!root) return;
     var raw = null;
     try { raw = localStorage.getItem(statsKey); } catch(_){}
     var stats = {};
     if (raw) { try { stats = JSON.parse(raw) || {}; } catch(_){ stats = {}; } }
-    root.innerHTML = _lextStatsDashHtml(stats);
+    if (teamFilterSet && typeof teamFilterSet === 'object') {
+      try { stats = _filterStatsByTeamSet(stats, teamFilterSet); } catch(_){}
+    }
+    try {
+      root.innerHTML = _lextStatsDashHtml(stats);
+    } catch(err){
+      try { if (typeof console !== 'undefined') console.error('[compStats] render error:', err); } catch(_){}
+      root.innerHTML = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
+    }
   };
 
   function _normPS(s){
@@ -13102,15 +13187,40 @@ window._showSimProgress = function(opts, onDone){
     { screenId:'s-usc-stats',     rootId:'usc-stats-dashboard',     storeKey:'ef_player_stats_usc_v1' },
     { screenId:'s-inter-stats',   rootId:'inter-stats-dashboard',   storeKey:'ef_player_stats_inter_v1' },
     { screenId:'s-mundial-stats', rootId:'mundial-stats-dashboard', storeKey:'ef_player_stats_mundial_v1' },
-    { screenId:'s-torneos-stats', rootId:'torneos-stats-dashboard', storeKey:'ef_player_stats_torneos_v1' },
+    /* `filterTeams` (2026-05-28): la caja de Torneos de Verano filtra
+       el store a SOLO los equipos que juegan los torneos de verano en
+       ese momento (vía `_torneosVeranoTeamSet`). */
+    { screenId:'s-torneos-stats', rootId:'torneos-stats-dashboard', storeKey:'ef_player_stats_torneos_v1', filterTeams:true },
     { screenId:'s-sc-stats',      rootId:'sc-stats-dashboard',      storeKey:'ef_player_stats_sc_v1' }
   ];
-  function _renderOne(cfg){
-    if (typeof window.syncLigaEaPlayerStats === 'function') {
-      try { window.syncLigaEaPlayerStats(); } catch(_){}
+  /* Pinta el dashboard desde el cache (rápido, sync). Opcionalmente
+     filtra a los equipos vigentes (s-torneos-stats). */
+  function _paint(cfg){
+    if (typeof window._lextBuildCompStatsDashboard !== 'function') return;
+    var filterSet = null;
+    if (cfg.filterTeams && typeof window._torneosVeranoTeamSet === 'function') {
+      try { filterSet = window._torneosVeranoTeamSet(); } catch(_){}
     }
-    if (typeof window._lextBuildCompStatsDashboard === 'function') {
-      window._lextBuildCompStatsDashboard(cfg.rootId, cfg.storeKey);
+    try { window._lextBuildCompStatsDashboard(cfg.rootId, cfg.storeKey, filterSet); } catch(_){}
+  }
+  /* REFUERZO 2026-05-28 (bug "caja Estadísticas congelada en
+     'Calculando estadísticas…' con muchos partidos jugados"):
+     `rebuildPlayerStatsStore` (vía syncLigaEaPlayerStats) es
+     O(matches × events × competitions) y, al ejecutarse SÍNCRONA antes
+     del render, bloqueaba el hilo cuando había muchos partidos (foto
+     usuario: Trofeo Joan Gamper 46/48). Como nunca llegaba a
+     `_lextBuildCompStatsDashboard`, la caja se quedaba en el
+     placeholder inicial.
+     Fix: (1) PINTAMOS YA desde el cache (nunca bloquea ⇒ la caja jamás
+     se queda en "Calculando…"), y (2) DIFERIMOS el sync pesado a un
+     setTimeout(0); al terminar, re-pintamos con los datos frescos. */
+  function _renderOne(cfg){
+    _paint(cfg);
+    if (typeof window.syncLigaEaPlayerStats === 'function') {
+      setTimeout(function(){
+        try { window.syncLigaEaPlayerStats(); } catch(_){}
+        try { _paint(cfg); } catch(_){}
+      }, 0);
     }
   }
   STATS_SCREENS.forEach(function(cfg){

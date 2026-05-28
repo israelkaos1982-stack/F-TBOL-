@@ -202,14 +202,37 @@ Es **SÍNCRONO**, **NO depende de hidratación**, y la lista es
 3. **`_psTeamIsHumanGeneric` con Pase 3**: el helper que clasifica
    teams como humanos en `_psListPendingGroupMatches` /
    `_psListPendingKoMatches` también añade fallback `_esSelHumana`.
-4. **Watchdog en `_psRender`**: cuando la card cae a JUGADORES FUERA
-   en un día Mundial Selecciones (`ag-sel` + label contiene 'mundial')
-   PERO existe un cfg mundial-48 con una selección humana canónica en
-   `cfg.teams`, se hace `console.warn('[F-TBOL] _selPair retornó null
-   pero hay humana canónica en cfg mundial-48 — posible REGRESIÓN del
-   bug 2026-05-27', diagnosticInfo)`. NO bloquea el render, solo deja
-   constancia loud en consola para detectar la próxima regresión al
-   instante.
+4. **Watchdog + AUTO-HEAL en `_psRender`** (2026-05-27 → upgrade
+   2026-05-28): cuando la card cae a JUGADORES FUERA en un día Mundial
+   Selecciones (`ag-sel` + label contiene 'mundial') PERO existe un
+   cfg mundial-48 con una selección humana canónica en `cfg.teams`,
+   ADEMÁS del `console.warn` diagnóstico, el watchdog **reconstruye
+   automáticamente** todo el estado del Mundial vía
+   `_psEnsureMundialStateRebuilt()` y **reintenta `_selPair` SOLO**,
+   sin que el usuario tenga que pulsar 🔍 RECUPERAR PARTIDO. Esto hace
+   que esta CLASE de fallo (card JUGADORES FUERA falsa con humana
+   canónica) se arregle **para siempre de forma automática**, sin
+   tocar código. Guard anti-bucle: `st._psAutoHealSig === sig` →
+   auto-heal corre como mucho UNA vez por día. Si tras reconstruir
+   `_selPair` sigue null, cae a `_cardRest` (con el botón manual de
+   respaldo). **PROHIBIDO** degradar el watchdog a solo-warn otra vez:
+   el auto-heal es lo que evita que el usuario tenga que reportar
+   capturas y pagar código por cada regresión.
+   - `_psEnsureMundialStateRebuilt()` (núcleo común, idempotente y
+     barato): (1) `_selSquadHydrate`, (2) `_invalidateHumanTeamCache`,
+     (3) `_tourLoadCachedSync` de todos los slots Mundial, (4)
+     construye `cfg.groupFixtures` (vía `window._mundialGroupState`,
+     el MISMO builder de la pantalla del torneo) + chain de brackets
+     KO (`_psAutoChainBuildMundial`) en cada cfg mundial-48, y
+     persiste lo que cambie. Lo usan el AUTO-HEAL del watchdog Y el
+     botón manual `_recoverSuspiciousRest`.
+   - **Root cause 2026-05-28**: `cfg.groupFixtures` solo se construía
+     (lazy) al renderizar la pantalla del torneo (`_mundialGroupState`).
+     La card del hub (`_selPair → _resolveForHuman`) los necesita para
+     localizar el partido del humano; sin ellos devolvía null →
+     JUGADORES FUERA. Fix: `_selPair` ahora los construye+persiste
+     ANTES de resolver (mismo builder canónico), y el auto-heal los
+     reconstruye si por cualquier vía futura faltaran.
 5. **Botón `🔍 RECUPERAR PARTIDO` en `_cardRest`** (2026-05-27,
    propuesta usuario): si la card cae a JUGADORES FUERA pero el scan
    `_scanForCanonicalMundialMatch` detecta que SÍ hay cfg mundial-48

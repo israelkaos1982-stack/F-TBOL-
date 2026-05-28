@@ -20110,35 +20110,38 @@ window._showSimProgress = function(opts, onDone){
         — cubre torneos antiguos guardados sin el campo `icon`.
      3) Fallback genérico 👤 para humanos sin icono (clubes humanos).
      PENDIENTE (placeholder sin equipo) nunca lleva icono. */
-  /* ¿Es una SELECCIÓN humana canónica? (Francia 💡, Brasil 🐭,
-     Inglaterra 🔨, Noruega ✏️, Argentina 😈, España 🦆). Fuente única
-     `_esSelHumana` (lista hardcoded en el bundle) — NO depende del flag
-     `isHuman` del cfg ni de la hidratación de selecciones_squad_v1.
-     Petición usuario 2026-05-28: Francia (humano) DEBE salir siempre
-     con su icono + en amarillo en la clasificación y eliminatorias del
-     Mundial 2032 para encontrarla rápido. */
+  /* ¿Es una SELECCIÓN humana de las CAJAS DEL MENÚ PRINCIPAL?
+     Fuente de verdad = MISTERS_REGISTRY (`_isHumanSeleccionCanonica`):
+     matchea SOLO las 6 selecciones de las cajas — Francia 💡, Brasil 🐭,
+     Inglaterra 🔨, Noruega ✏️, Argentina 😈, España 🦆. NO usamos
+     `_esSelHumana` aquí porque ese además acepta selecciones marcadas a
+     mano en el editor (`_SEL_HUMAN_ICONS`); el usuario quiere
+     ESTRICTAMENTE las del menú principal (2026-05-28).
+     Petición usuario 2026-05-28: Francia (humano del menú) DEBE salir
+     siempre con su icono 💡 + en amarillo en la clasificación y
+     eliminatorias del Mundial 2032 para encontrarla rápido. */
   function _tourIsHumanSel(t){
     try {
-      return !!(t && t.name && typeof window._esSelHumana === 'function'
-                && window._esSelHumana(t.name));
+      return !!(t && t.name && typeof window._isHumanSeleccionCanonica === 'function'
+                && window._isHumanSeleccionCanonica(t.name));
     } catch(_){ return false; }
   }
   function _tourTeamIcon(t){
     if (!t || !t.name || t.name === 'PENDIENTE') return '';
+    /* Selección humana de una caja del menú → SIEMPRE el emoji de su
+       mister (Francia 💡, …) desde el MISTERS_REGISTRY. Es la identidad
+       inmutable de la caja del menú, así que gana a t.icon / squad
+       hidratado / flag isHuman. */
+    try {
+      if (_tourIsHumanSel(t) && typeof window._mhFindMister === 'function'){
+        var mh = window._mhFindMister(t.name);
+        if (mh && mh.emoji) return mh.emoji;
+      }
+    } catch(_){}
     if (t.icon) return t.icon;
     try {
       var ic = window._selSquadIcon && window._selSquadIcon(t.name);
       if (ic) return ic;
-    } catch(_){}
-    /* Selección humana canónica: el emoji de su mister (💡/🐭/🔨/✏️/😈/🦆)
-       es la fuente de verdad, INDEPENDIENTE de hidratación o del flag
-       isHuman. Así Francia muestra 💡 aunque el admin no la marcara y
-       el squad aún no se haya hidratado. */
-    try {
-      if (_tourIsHumanSel(t) && typeof window._mhFindMister === 'function'){
-        var m = window._mhFindMister(t.name);
-        if (m && m.emoji) return m.emoji;
-      }
     } catch(_){}
     return t.isHuman ? '👤' : '';
   }
@@ -21014,10 +21017,11 @@ window._showSimProgress = function(opts, onDone){
       var shield = t && t.shield
         ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'" style="width:22px;height:22px;object-fit:contain;flex-shrink:0;">'
         : '';
-      /* Selección humana canónica (Francia 💡, …): icono SIEMPRE
-         presente + nombre en AMARILLO para encontrarla rápido
+      /* Selección humana de una caja del menú (Francia 💡, …): icono
+         SIEMPRE presente + nombre en AMARILLO para encontrarla rápido
          (petición usuario 2026-05-28). No se gatea por t.isHuman: usa
-         _tourIsHumanSel (_esSelHumana, sin depender de hidratación). */
+         _tourIsHumanSel (MISTERS_REGISTRY del menú, sin depender de
+         hidratación). */
       var isHumanSel = _tourIsHumanSel(t);
       var humanIc = '';
       try {

@@ -13079,11 +13079,249 @@
     document.getElementById('gm-team-pick').style.display = 'none';
     var pp = document.getElementById('gm-player-pick');
     if (pp) pp.style.display = 'none';
+    /* Cerrar también los overlays de "Añadir Jugador" (team picker
+       + form). Sin esto, al pulsar ✕ Cancelar dentro del flujo de
+       alta de jugador, los overlays quedaban abiertos sobre el
+       partido. */
+    var apTp = document.getElementById('gm-add-player-team-pick');
+    if (apTp) apTp.style.display = 'none';
+    var apFm = document.getElementById('gm-add-player-form');
+    if (apFm) apFm.style.display = 'none';
     document.getElementById('gm-add-btn').classList.remove('open');
     _gm.pendingEvt = null;
     _gm.pendingTeam = null;
     if (_gm.timerWasRunning && !_gm.finished && !_gm.inDescanso && _gm.kickoffDone) { gmStartTimer(); }
     _gm.timerWasRunning = false;
+  };
+
+  /* ── ALTA DE JUGADOR (👤 Añadir Jugador) — petición usuario 2026-05-27
+     ──────────────────────────────────────────────────────────────────
+     Flujo:
+       1. AÑADIR EVENTO panel → botón "👤 AÑADIR JUGADOR".
+       2. Team picker (escudo + nombre local / visitante).
+       3. Form (dorsal / nombre / posición / nivel).
+       4. Persistencia: el jugador se añade al `players[]` del equipo
+          en su `ligaExt_<slug>` (o `selecciones_squad_v1` si es una
+          selección nacional). PERMANENTE — solo se borra editando la
+          plantilla del equipo manualmente.
+     Activo SIEMPRE — gm-modal es por definición HvH/HvIA (nunca IAvIA,
+     ver comment en mlMilestoneCheck call line 13345). */
+  var _gmAddPlayerTeamSide = null;  /* 'a' | 'b' tras elegir equipo */
+  var _gmAddPlayerPos = null;        /* 'POR' | 'DEF' | 'MED' | 'DEL' */
+
+  /* Resuelve el escudo de un equipo replicando la cascada de _gmLogo
+     (alt-img → getTeamLogoUrl → scan ligaExt_*.shield → getLogoEquipo).
+     No comparte el helper porque _gmLogo es local a gmOpen y no
+     accesible desde aquí. */
+  function _gmAddPlayerResolveShield(name) {
+    if (!name) return '';
+    try {
+      var byAlt = document.querySelector('.ml-team-svg[alt="' + name.replace(/"/g,'&quot;') + '"]');
+      if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
+    } catch(_){}
+    var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
+    if (tlu) return tlu;
+    try {
+      var nm = String(name||'').trim().toLowerCase();
+      for (var li = 0; li < localStorage.length; li++) {
+        var lk = localStorage.key(li);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_backup') !== -1 || lk.indexOf('_snap_') !== -1 || lk.indexOf('_protected') !== -1) continue;
+        var raw = localStorage.getItem(lk);
+        if (!raw) continue;
+        var parsed; try { parsed = JSON.parse(raw); } catch(_) { continue; }
+        var teams = (parsed && Array.isArray(parsed.teams)) ? parsed.teams : [];
+        for (var ti = 0; ti < teams.length; ti++) {
+          var t = teams[ti];
+          if (!t || !t.name || !t.shield) continue;
+          if (String(t.name).trim().toLowerCase() === nm) return String(t.shield);
+        }
+      }
+    } catch(_){}
+    return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+  }
+
+  /* Localiza el equipo en cualquier ligaExt_* o en selecciones_squad_v1
+     y añade el jugador a su `players[]`. Devuelve
+       { ok:true, key:'ligaExt_xxx', teamName:'<nombre canónico>' }
+       { ok:false, reason:'duplicate'|'team-not-found'|'storage'|'invalid' }
+     Tras éxito invalida SQUAD_REGISTRY[teamName] para que el siguiente
+     `sqFromRegistry` / `sqFromRegistryFull` releea desde disco e
+     incluya al nuevo jugador en el picker. */
+  window._gmFindAndPersistPlayer = function(teamName, player) {
+    if (!teamName || !player || !player.name) return { ok:false, reason:'invalid' };
+    function _norm(s) { return String(s||'').trim().toLowerCase(); }
+    function _normA(s) {
+      var x = String(s||'').trim().toLowerCase();
+      try { x = x.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch(_){}
+      x = x.replace(/\b(fc|f\.c\.|cf|c\.f\.|ac|a\.c\.|sc|s\.c\.|club|the)\b/gi, '');
+      x = x.replace(/[^a-z0-9]+/gi, ' ').replace(/\s+/g, ' ').trim();
+      return x;
+    }
+    var aliases = window.TEAM_ALIASES || {};
+    var target = _norm(teamName);
+    var resolved = _norm(aliases[target] || teamName);
+    var targetA = _normA(teamName);
+    var resolvedA = _normA(aliases[target] || teamName);
+
+    var playerEntry = {
+      name: String(player.name).trim(),
+      num: String(player.num != null ? player.num : '').trim(),
+      pos: String(player.pos || 'MED'),
+      power: Math.max(1, Math.min(99, Number(player.power) || 70))
+    };
+
+    /* 1ª pasada: ligaExt_*. */
+    try {
+      for (var li = 0; li < localStorage.length; li++) {
+        var lk = localStorage.key(li);
+        if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
+        if (lk.indexOf('_backup') !== -1 || lk.indexOf('_snap_') !== -1 || lk.indexOf('_protected') !== -1) continue;
+        var raw = localStorage.getItem(lk);
+        if (!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_) { continue; }
+        if (!data || !Array.isArray(data.teams)) continue;
+
+        for (var ti = 0; ti < data.teams.length; ti++) {
+          var t = data.teams[ti];
+          if (!t || !t.name) continue;
+          var tn = _norm(t.name);
+          var tnA = _normA(t.name);
+          var hit = (tn === target) || (tn === resolved) || (tnA === targetA) || (tnA === resolvedA);
+          if (!hit) continue;
+          if (!Array.isArray(t.players)) t.players = [];
+          var dup = t.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
+          if (dup) return { ok:false, reason:'duplicate', key:lk, teamName:t.name };
+          t.players.push(playerEntry);
+          try { localStorage.setItem(lk, JSON.stringify(data)); }
+          catch(e) { return { ok:false, reason:'storage', key:lk }; }
+          /* Invalidar cache para que el próximo picker refleje el alta. */
+          try {
+            if (window.SQUAD_REGISTRY) {
+              delete window.SQUAD_REGISTRY[teamName];
+              delete window.SQUAD_REGISTRY[t.name];
+              if (aliases[target]) delete window.SQUAD_REGISTRY[aliases[target]];
+            }
+          } catch(_){}
+          /* Promover al motor si applyEngineOverrides está cargado. */
+          try { if (typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides(); } catch(_){}
+          return { ok:true, key:lk, teamName:t.name };
+        }
+      }
+    } catch(_){}
+
+    /* 2ª pasada: selecciones_squad_v1 (selecciones nacionales). */
+    try {
+      var srRaw = localStorage.getItem('selecciones_squad_v1');
+      if (srRaw) {
+        var sr = JSON.parse(srRaw);
+        var sTeams = (sr && Array.isArray(sr.teams)) ? sr.teams : [];
+        for (var si = 0; si < sTeams.length; si++) {
+          var st = sTeams[si];
+          if (!st || !st.name) continue;
+          var stn = _norm(st.name);
+          var stnA = _normA(st.name);
+          var sHit = (stn === target) || (stn === resolved) || (stnA === targetA) || (stnA === resolvedA);
+          if (!sHit) continue;
+          if (!Array.isArray(st.players)) st.players = [];
+          var sdup = st.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
+          if (sdup) return { ok:false, reason:'duplicate', key:'selecciones_squad_v1', teamName:st.name };
+          st.players.push(playerEntry);
+          try { localStorage.setItem('selecciones_squad_v1', JSON.stringify(sr)); }
+          catch(e) { return { ok:false, reason:'storage', key:'selecciones_squad_v1' }; }
+          try { if (window.SQUAD_REGISTRY) { delete window.SQUAD_REGISTRY[teamName]; delete window.SQUAD_REGISTRY[st.name]; } } catch(_){}
+          return { ok:true, key:'selecciones_squad_v1', teamName:st.name };
+        }
+      }
+    } catch(_){}
+
+    return { ok:false, reason:'team-not-found' };
+  };
+
+  window.gmShowAddPlayer = function() {
+    if (_gm.finished) return;
+    document.getElementById('gm-event-panel').style.display = 'none';
+    document.getElementById('gm-team-pick').style.display = 'none';
+    var pp = document.getElementById('gm-player-pick'); if (pp) pp.style.display = 'none';
+    document.getElementById('gm-add-player-form').style.display = 'none';
+    /* Cargar escudos + nombres en el picker. */
+    var hN = _gm.home || 'LOCAL';
+    var aN = _gm.away || 'VISITANTE';
+    var hL = _gmAddPlayerResolveShield(hN);
+    var aL = _gmAddPlayerResolveShield(aN);
+    var sa = document.getElementById('gm-add-player-shield-a');
+    var sb = document.getElementById('gm-add-player-shield-b');
+    var na = document.getElementById('gm-add-player-team-name-a');
+    var nb = document.getElementById('gm-add-player-team-name-b');
+    if (sa) { if (hL) sa.src = hL; else sa.removeAttribute('src'); }
+    if (sb) { if (aL) sb.src = aL; else sb.removeAttribute('src'); }
+    if (na) na.textContent = hN;
+    if (nb) nb.textContent = aN;
+    document.getElementById('gm-add-player-team-pick').style.display = 'flex';
+  };
+
+  window.gmAddPlayerPickTeam = function(side) {
+    _gmAddPlayerTeamSide = side;
+    var name = side === 'a' ? (_gm.home || 'LOCAL') : (_gm.away || 'VISITANTE');
+    document.getElementById('gm-add-player-team-pick').style.display = 'none';
+    document.getElementById('gm-add-player-form').style.display = 'flex';
+    var teamLbl = document.getElementById('gm-add-player-form-team');
+    if (teamLbl) teamLbl.textContent = name;
+    /* Reset form. */
+    var $ = function(id) { return document.getElementById(id); };
+    if ($('gm-add-player-num')) $('gm-add-player-num').value = '';
+    if ($('gm-add-player-name')) $('gm-add-player-name').value = '';
+    if ($('gm-add-player-pow')) $('gm-add-player-pow').value = '70';
+    _gmAddPlayerPos = null;
+    document.querySelectorAll('.gm-add-player-pos-btn').forEach(function(b){ b.classList.remove('active'); });
+  };
+
+  window.gmAddPlayerPickPos = function(pos) {
+    _gmAddPlayerPos = pos;
+    document.querySelectorAll('.gm-add-player-pos-btn').forEach(function(b){
+      if (b.getAttribute('data-pos') === pos) b.classList.add('active');
+      else b.classList.remove('active');
+    });
+  };
+
+  window.gmAddPlayerCommit = function() {
+    var $ = function(id) { return document.getElementById(id); };
+    var numRaw = String(($('gm-add-player-num') || {}).value || '').trim();
+    var name = String(($('gm-add-player-name') || {}).value || '').trim();
+    var pow = Number(($('gm-add-player-pow') || {}).value || 70);
+    var pos = _gmAddPlayerPos;
+    if (!name)        { alert('⚠️ Falta el NOMBRE del jugador.'); return; }
+    if (!pos)         { alert('⚠️ Selecciona la POSICIÓN (POR / DEF / MED / DEL).'); return; }
+    var dorsal = parseInt(numRaw, 10);
+    if (!numRaw || isNaN(dorsal) || dorsal < 1 || dorsal > 99) { alert('⚠️ DORSAL debe ser un número entre 1 y 99.'); return; }
+    if (isNaN(pow) || pow < 1 || pow > 99) { alert('⚠️ NIVEL debe ser un número entre 1 y 99.'); return; }
+    var teamName = _gmAddPlayerTeamSide === 'a' ? (_gm.home || '') : (_gm.away || '');
+    if (!teamName) { alert('⚠️ Equipo no identificado — vuelve a abrir el picker.'); return; }
+
+    var res = window._gmFindAndPersistPlayer(teamName, {
+      name: name, num: String(dorsal), pos: pos, power: pow
+    });
+    if (res && res.ok) {
+      /* Cerrar form + picker y volver al panel de eventos. El usuario
+         puede ahora pulsar el evento (Gol, Tarjeta...) y al llegar al
+         player picker verá al jugador nuevo (cache invalidado por
+         _gmFindAndPersistPlayer). */
+      document.getElementById('gm-add-player-form').style.display = 'none';
+      document.getElementById('gm-add-player-team-pick').style.display = 'none';
+      document.getElementById('gm-event-panel').style.display = 'flex';
+      var msg = '✅ ' + name + ' añadido a ' + (res.teamName || teamName);
+      if (typeof _mlShowEventFlash === 'function') {
+        try { _mlShowEventFlash(msg, 'goal'); } catch(_){ alert(msg); }
+      } else {
+        alert(msg);
+      }
+      return;
+    }
+    var reason = (res && res.reason) || '';
+    if (reason === 'duplicate')        alert('⚠️ Ya existe un jugador "' + name + '" en ' + (res.teamName || teamName) + '. Elige otro nombre o edita la plantilla.');
+    else if (reason === 'team-not-found') alert('❌ No se encontró "' + teamName + '" en almacenamiento — no puedo guardar el jugador. Edita la plantilla del equipo desde el menú.');
+    else if (reason === 'storage')     alert('❌ No se pudo guardar (almacenamiento lleno o error). Reintenta.');
+    else                                alert('❌ No se pudo añadir el jugador (' + (reason || 'error desconocido') + ').');
   };
 
   /* ── Penalty wizard launcher para el gm-modal ─────────────────────
@@ -18041,6 +18279,74 @@
 #gm-wa-btn{width:100%;border:none;border-radius:8px;padding:11px 10px;margin-bottom:8px;font-family:'Oswald',sans-serif;font-size:14px;font-weight:700;letter-spacing:1.6px;color:#001c09;background:linear-gradient(90deg,#19ff7f,#4dff96,#1aff82);box-shadow:0 0 16px rgba(45,255,130,.75),0 0 36px rgba(45,255,130,.35);cursor:pointer;animation:gmWaGlow 1.35s ease-in-out infinite;}
 @keyframes gmWaGlow{0%,100%{filter:brightness(1);}50%{filter:brightness(1.18);}}
 #gm-post-close{width:100%;border-radius:8px;border:1px solid rgba(255,255,255,.16);padding:8px;background:rgba(255,255,255,.06);color:#bbb;font-family:'Oswald',sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;}
+
+/* ── Añadir Jugador (team picker + form) ─────────────────── */
+#gm-add-player-team-pick, #gm-add-player-form {
+  display: none; position: fixed; inset: 0; z-index: 10005;
+  background: rgba(0,0,8,.97); flex-direction: column; align-items: center;
+  justify-content: flex-start; overflow-y: auto; padding: 36px 16px 30px;
+}
+.gm-add-player-sub {
+  font-family: "Oswald", sans-serif; font-size: 11px; letter-spacing: 4px;
+  color: rgba(255,255,255,.35); text-align: center; margin-bottom: 6px; text-transform: uppercase;
+}
+.gm-add-player-title {
+  font-family: "Bebas Neue", sans-serif; font-size: 32px; letter-spacing: 3px;
+  color: #88c8ff; text-align: center; margin-bottom: 28px;
+  text-shadow: 0 0 18px rgba(120,180,255,.45);
+}
+.gm-add-player-team-row { display: flex; gap: 14px; width: 100%; max-width: 440px; }
+.gm-add-player-team-btn {
+  flex: 1; padding: 16px 8px; border-radius: 14px; border: 2px solid rgba(120,180,255,.32);
+  background: rgba(40,80,160,.10); color: #fff; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  -webkit-tap-highlight-color: transparent; min-height: 170px; justify-content: center;
+  transition: background .15s, transform .12s;
+}
+.gm-add-player-team-btn:active { background: rgba(120,180,255,.22); transform: scale(.96); }
+.gm-add-player-shield { width: 84px; height: 84px; object-fit: contain; display: block; }
+.gm-add-player-shield:not([src]), .gm-add-player-shield[src=""] { display: none; }
+.gm-add-player-team-name {
+  font-family: "Oswald", sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 1px;
+  color: #fff; text-transform: uppercase; line-height: 1.2; text-align: center;
+}
+.gm-add-player-field {
+  width: 100%; max-width: 420px; margin-bottom: 18px;
+}
+.gm-add-player-field label {
+  display: block; font-family: "Oswald", sans-serif; font-size: 10px;
+  letter-spacing: 3px; color: rgba(255,255,255,.55); margin-bottom: 8px; text-transform: uppercase; font-weight: 600;
+}
+.gm-add-player-field input[type="text"], .gm-add-player-field input[type="number"] {
+  width: 100%; padding: 12px 14px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06);
+  color: #fff; font-family: "Oswald", sans-serif; font-size: 16px;
+  -webkit-appearance: none; appearance: none; box-sizing: border-box;
+}
+.gm-add-player-field input:focus {
+  outline: none; border-color: rgba(120,180,255,.55); background: rgba(40,80,160,.14);
+}
+.gm-add-player-pos-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.gm-add-player-pos-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 4px; border-radius: 10px; cursor: pointer;
+  border: 1px solid rgba(255,255,255,.15); background: rgba(255,255,255,.05);
+  color: #fff; -webkit-tap-highlight-color: transparent;
+}
+.gm-add-player-pos-btn.active {
+  border-color: rgba(120,180,255,.7); background: rgba(40,80,160,.28);
+  box-shadow: 0 0 12px rgba(120,180,255,.32);
+}
+.gm-add-player-pos-ico { font-size: 22px; line-height: 1; }
+.gm-add-player-pos-lbl { font-family: "Oswald", sans-serif; font-size: 10px; letter-spacing: 1.5px; font-weight: 700; }
+#gm-add-player-save {
+  width: 100%; max-width: 420px; padding: 14px; border-radius: 10px;
+  border: 1px solid rgba(94,239,139,.5); background: linear-gradient(135deg, rgba(10,138,53,.45), rgba(61,204,110,.35));
+  color: #5eef8b; font-family: "Oswald", sans-serif; font-size: 14px; font-weight: 700;
+  letter-spacing: 2px; cursor: pointer; box-shadow: 0 0 14px rgba(94,239,139,.32);
+  margin-top: 8px;
+}
+#gm-add-player-save:active { transform: scale(.97); }
 </style>
 
 <div id="gm-modal" style="display:none;">
@@ -18146,8 +18452,18 @@
           <span class="gm-card-ico">🧤</span><span class="gm-card-lbl">P. Imbatida</span>
         </div>
       </div>
+      <!-- 👤 Añadir Jugador: alta de jugador NUEVO durante el partido
+           (HvH / HvIA, petición usuario 2026-05-27). Abre picker de
+           equipo (local/visitante con escudo) → form (dorsal/nombre/
+           posición/nivel) → persiste el jugador en `ligaExt_*` o
+           `selecciones_squad_v1` para SIEMPRE. -->
+      <button id="gm-add-player-launch" onclick="window.gmShowAddPlayer()"
+        style="margin-top:22px;font-family:'Oswald',sans-serif;font-size:13px;font-weight:700;letter-spacing:2px;color:#88c8ff;background:rgba(40,80,160,.18);border:1px solid rgba(120,180,255,.45);border-radius:8px;padding:13px 34px;cursor:pointer;display:flex;align-items:center;gap:10px;box-shadow:0 0 12px rgba(120,180,255,.18);">
+        <span style="font-size:18px;line-height:1;">👤</span>
+        AÑADIR JUGADOR
+      </button>
       <button onclick="window.gmHideEvents()"
-        style="margin-top:20px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.25);background:none;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:10px 28px;cursor:pointer;">
+        style="margin-top:14px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.25);background:none;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:10px 28px;cursor:pointer;">
         ✕ Cancelar
       </button>
     </div>
@@ -18172,6 +18488,68 @@
       <div id="gm-player-list"></div>
       <button onclick="window.gmHideEvents()"
         style="margin-top:20px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.25);background:none;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:10px 28px;cursor:pointer;flex-shrink:0;">
+        ✕ Cancelar
+      </button>
+    </div>
+
+    <!-- Añadir Jugador · team picker (full-screen overlay) -->
+    <div id="gm-add-player-team-pick">
+      <div class="gm-add-player-sub">SELECCIONA EQUIPO</div>
+      <div class="gm-add-player-title">AÑADIR JUGADOR</div>
+      <div class="gm-add-player-team-row">
+        <button class="gm-add-player-team-btn" id="gm-add-player-team-a" onclick="window.gmAddPlayerPickTeam('a')">
+          <img class="gm-add-player-shield" id="gm-add-player-shield-a" alt="">
+          <span class="gm-add-player-team-name" id="gm-add-player-team-name-a">LOCAL</span>
+        </button>
+        <button class="gm-add-player-team-btn" id="gm-add-player-team-b" onclick="window.gmAddPlayerPickTeam('b')">
+          <img class="gm-add-player-shield" id="gm-add-player-shield-b" alt="">
+          <span class="gm-add-player-team-name" id="gm-add-player-team-name-b">VISITANTE</span>
+        </button>
+      </div>
+      <button onclick="window.gmHideEvents()"
+        style="margin-top:32px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.25);background:none;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:10px 28px;cursor:pointer;">
+        ✕ Cancelar
+      </button>
+    </div>
+
+    <!-- Añadir Jugador · form (full-screen overlay) -->
+    <div id="gm-add-player-form">
+      <div class="gm-add-player-sub">AÑADIR JUGADOR A</div>
+      <div class="gm-add-player-title" id="gm-add-player-form-team">EQUIPO</div>
+      <div class="gm-add-player-field">
+        <label for="gm-add-player-num">DORSAL</label>
+        <input type="number" id="gm-add-player-num" min="1" max="99" placeholder="1-99" inputmode="numeric" pattern="[0-9]*">
+      </div>
+      <div class="gm-add-player-field">
+        <label for="gm-add-player-name">NOMBRE</label>
+        <input type="text" id="gm-add-player-name" maxlength="40" placeholder="Nombre del jugador" autocomplete="off" autocapitalize="words">
+      </div>
+      <div class="gm-add-player-field">
+        <label>POSICIÓN</label>
+        <div class="gm-add-player-pos-row">
+          <button type="button" class="gm-add-player-pos-btn" data-pos="POR" onclick="window.gmAddPlayerPickPos('POR')">
+            <span class="gm-add-player-pos-ico">🧤</span><span class="gm-add-player-pos-lbl">POR</span>
+          </button>
+          <button type="button" class="gm-add-player-pos-btn" data-pos="DEF" onclick="window.gmAddPlayerPickPos('DEF')">
+            <span class="gm-add-player-pos-ico">🛡</span><span class="gm-add-player-pos-lbl">DEF</span>
+          </button>
+          <button type="button" class="gm-add-player-pos-btn" data-pos="MED" onclick="window.gmAddPlayerPickPos('MED')">
+            <span class="gm-add-player-pos-ico">⚙️</span><span class="gm-add-player-pos-lbl">MED</span>
+          </button>
+          <button type="button" class="gm-add-player-pos-btn" data-pos="DEL" onclick="window.gmAddPlayerPickPos('DEL')">
+            <span class="gm-add-player-pos-ico">⚡</span><span class="gm-add-player-pos-lbl">DEL</span>
+          </button>
+        </div>
+      </div>
+      <div class="gm-add-player-field">
+        <label for="gm-add-player-pow">NIVEL <span style="font-weight:400;letter-spacing:1px;color:rgba(255,255,255,.35);">(1-99)</span></label>
+        <input type="number" id="gm-add-player-pow" min="1" max="99" value="70" inputmode="numeric" pattern="[0-9]*">
+      </div>
+      <button type="button" id="gm-add-player-save" onclick="window.gmAddPlayerCommit()">
+        💾 GUARDAR JUGADOR
+      </button>
+      <button type="button" onclick="window.gmHideEvents()"
+        style="margin-top:14px;font-family:'Oswald',sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.25);background:none;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:10px 28px;cursor:pointer;">
         ✕ Cancelar
       </button>
     </div>

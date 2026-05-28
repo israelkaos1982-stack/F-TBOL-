@@ -19790,6 +19790,22 @@ window._showSimProgress = function(opts, onDone){
         }
       }
     });
+    /* REFUERZO 2026-05-28: `LIGA_PLAYER_MATCH_STORE` es SOLO memoria y
+       se vacía al recargar la página → la caja `s-tour-stats` salía
+       vacía tras un reload aunque el torneo estuviera jugado. Si el
+       store en memoria no aportó nada, agregamos desde `cfg.results`
+       (persistido en `tour_<id>_v1`, sobrevive a recargas) usando los
+       `home`/`away` que guarda `_tourAttachActa`. */
+    if (!Object.keys(stats).length) {
+      try {
+        var _cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tourId])
+          || (typeof _tourLoadCachedSync === 'function' ? _tourLoadCachedSync(tourId) : null);
+        if (_cfg) {
+          var _fromCfg = _tourStatsFromCfgResults(_cfg);
+          if (_fromCfg && Object.keys(_fromCfg).length) stats = _fromCfg;
+        }
+      } catch(_){}
+    }
     return stats;
   }
 
@@ -21719,16 +21735,114 @@ window._showSimProgress = function(opts, onDone){
     });
     return stats;
   }
-  /* Caja «Estadísticas» del Mundial — dashboard de 8 categorías
-     calculado en vivo desde los eventos de todas las fases. */
+  /* ── Agregador GENÉRICO de stats desde cfg.results (2026-05-28) ──
+     A diferencia de `_mundialAggregateStats` (que necesita el índice
+     de fixtures de grupos para mapear el lado a/b → nombre real), este
+     usa los `home`/`away` que `_tourAttachActa` y `_tourSaveHumanResult`
+     YA persisten en cada result. Funciona para CUALQUIER formato de
+     torneo (mundial-48, groups-ko, ko, league) y sobrevive a recargas
+     (cfg.results se persiste en `tour_<id>_v1`). Es el fallback robusto
+     cuando la agregación por fixtures sale vacía. */
+  function _tourStatsFromCfgResults(cfg){
+    var stats = {};
+    var norm = (typeof window._normPS === 'function')
+      ? window._normPS : function(s){ return String(s||'').toLowerCase().trim(); };
+    function rec(teamName, playerName){
+      var tk = norm(teamName), pk = norm(playerName);
+      if (!tk || !pk) return null;
+      var key = tk + '::' + pk;
+      if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+      return stats[key];
+    }
+    var results = (cfg && cfg.results) || {};
+    Object.keys(results).forEach(function(key){
+      if (/\|L[12]$/.test(key)) return;   /* legs intermedios → agregado en baseKey */
+      var res = results[key];
+      if (!res || !res.played || !Array.isArray(res.events)) return;
+      var nameA = res.home, nameB = res.away;
+      res.events.forEach(function(ev){
+        if (!ev) return;
+        var team = ev.realTeam || (ev.team === 'a' ? nameA : ev.team === 'b' ? nameB : '');
+        var player = '';
+        if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+        else if (typeof ev.player === 'string') player = ev.player;
+        else player = ev.name || ev.playerName || '';
+        if (!team || !player) return;
+        var p = rec(team, player);
+        if (!p) return;
+        var type = ev.type || '';
+        var ico = String(ev.ico || '').replace(/️/g,'').trim();
+        if (type === 'amarilla') p.ta++;
+        else if (type === 'roja' || type === 'd-amarilla') p.tr++;
+        else if (type === 'card') {
+          if (ico === '🟨') p.ta++;
+          else if (ico === '🟥') p.tr++;
+          else if (ico === '🟨🟥') { p.ta++; p.tr++; }
+        }
+        else if (type === 'gol') p.gol++;
+        else if (type === 'falta-gol') p.fk++;
+        else if (type === 'pen-gol') p.pen++;
+        else if (type === 'pen-parado') p.penSaved++;
+        else if (type === 'mvp') p.mvp++;
+        else if (type === 'imbat') p.imbat++;
+      });
+      if (res.mvp && res.mvpTeam) {
+        var hasMvp = res.events.some(function(e){ return e && e.type === 'mvp'; });
+        if (!hasMvp) { var rm = rec(res.mvpTeam, res.mvp); if (rm) rm.mvp++; }
+      }
+    });
+    return stats;
+  }
+  /* Lee un store persistido (`ef_player_stats_*_v1`) y lo filtra a los
+     equipos del torneo (último recurso si cfg.results no tiene events,
+     p.ej. partidos simulados con una versión antigua del motor). */
+  function _statsFromStoreFilteredToTeams(storeKey, teams){
+    var raw = null; try { raw = localStorage.getItem(storeKey); } catch(_){ return {}; }
+    if (!raw) return {};
+    var all = {}; try { all = JSON.parse(raw) || {}; } catch(_){ return {}; }
+    var nm = (typeof window._normPS === 'function')
+      ? window._normPS : function(s){ return String(s||'').toLowerCase().trim(); };
+    var set = Object.create(null);
+    (teams || []).forEach(function(t){
+      var n = t && (t.name || (typeof t === 'string' ? t : ''));
+      if (n) { var k = nm(n); if (k) set[k] = true; }
+    });
+    if (!Object.keys(set).length) return all;
+    return (typeof window._filterStatsByTeamSet === 'function')
+      ? window._filterStatsByTeamSet(all, set) : all;
+  }
+  /* Caja «Estadísticas» del Mundial — dashboard de 8 categorías.
+     REFUERZO 2026-05-28 (foto usuario "Mundial 2032 terminado · sin
+     estadísticas → Estadísticas no disponibles."):
+       1. try/catch en TODA la agregación y el render.
+       2. Cadena de fallbacks: agregación por fixtures →
+          `_tourStatsFromCfgResults` (usa home/away persistidos) →
+          store persistido filtrado a los equipos del torneo.
+       3. Mensaje vacío correcto ("Sin datos todavía"), no
+          "Estadísticas no disponibles" (que era el branch de
+          `_lextStatsDashHtml` ausente). */
   function _mundialStatsHtml(cfg, tourId, teams){
     var html = _mundialBackBtn(tourId)
       + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;'
       + 'font-size:11px;color:#4dd0e1;">📊 ESTADÍSTICAS · TODAS LAS FASES</p>';
-    var stats = _mundialAggregateStats(cfg, teams);
-    var inner = (typeof window._lextStatsDashHtml === 'function')
-      ? window._lextStatsDashHtml(stats)
-      : '<div class="liga-stat-empty">Estadísticas no disponibles.</div>';
+    var stats = {};
+    try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
+    if (!stats || !Object.keys(stats).length) {
+      try { var g = _tourStatsFromCfgResults(cfg); if (g && Object.keys(g).length) stats = g; } catch(_){}
+    }
+    if (!stats || !Object.keys(stats).length) {
+      try {
+        var sk = (cfg && cfg.id === 'mundial') ? 'ef_player_stats_mundial_v1' : 'ef_player_stats_sel_v1';
+        var fb = _statsFromStoreFilteredToTeams(sk, teams);
+        if (fb && Object.keys(fb).length) stats = fb;
+      } catch(_){}
+    }
+    var EMPTY = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
+    var inner;
+    try {
+      inner = (typeof window._lextStatsDashHtml === 'function')
+        ? window._lextStatsDashHtml(stats) : EMPTY;
+    } catch(_){ inner = EMPTY; }
     html += '<div class="liga-stats-wrap">' + inner + '</div>';
     return html;
   }

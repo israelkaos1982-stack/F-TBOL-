@@ -64,6 +64,76 @@ nunca están en `cfg.teams` de un torneo de verano).
    demás pantallas (Recopa, USC, Inter, Mundial, SC, UCL, Superliga)
    lo llaman con 2 args y NO filtran. No cambiar esa firma.
 
+## Mundial 2032 + cajas de stats que computan EN VIVO desde cfg.results (obligatorio, 2026-05-28)
+
+**Bug (foto usuario 2026-05-28)**: el Mundial 2032 (Selecciones,
+format `mundial-48`) TERMINADO (Egipto campeón, grupos 72/72, todas
+las rondas KO jugadas) mostraba la caja `📊 ESTADÍSTICAS · TODAS LAS
+FASES` con **"Estadísticas no disponibles."** — el mismo síntoma
+(caja de stats vacía) que la de Torneos de Verano.
+
+### Inventario de cajas de stats (auditoría 2026-05-28)
+
+Dos familias según su fuente de datos:
+
+| Familia | Cajas | Fuente | Render |
+|---------|-------|--------|--------|
+| **Cache** (`ef_player_stats_*_v1`) | Liga, Superliga, Copa, UCL/UEL/UECL, Recopa, USC, Inter, Mundialito Clubes, Torneos, SC | store en localStorage (lo rellena `rebuildPlayerStatsStore`) | `_lextBuildCompStatsDashboard` |
+| **En vivo** (`cfg.results[].events`) | Mundial 2032 (`_mundialStatsHtml`), s-tour-stats per-torneo (`_tourCollectStatsForTour`), Segunda (`buildLigaStatsDashboard`) | eventos del propio cfg del torneo | agregador propio + `_lextStatsDashHtml` |
+
+### Causas raíz de las cajas "en vivo" vacías
+
+1. **`_mundialStatsHtml`**: usaba `_mundialAggregateStats`, que mapea
+   el lado a/b del evento → nombre real vía `cfg.groupFixtures`. Si los
+   fixtures no estaban construidos (se construyen lazy al render del
+   torneo) Y el result no tenía `home`/`away`, hacía
+   `if (!nameA || !nameB) return;` y **saltaba el partido entero** sin
+   mirar `ev.realTeam`. Además, si `_lextStatsDashHtml` no estaba
+   disponible mostraba el literal "Estadísticas no disponibles." en vez
+   del mensaje vacío estándar, y NO tenía try/catch.
+2. **`_tourCollectStatsForTour`** (caja `s-tour-stats`): leía SOLO
+   `LIGA_PLAYER_MATCH_STORE` (memoria, NO se persiste) → **vacía tras
+   recargar** la página aunque el torneo estuviera jugado.
+
+### Refuerzo (2026-05-28)
+
+Helpers nuevos (en el IIFE del motor `_tour*` de `misc_body_1.html`):
+- **`_tourStatsFromCfgResults(cfg)`**: agregador GENÉRICO que usa los
+  `home`/`away` que `_tourAttachActa`/`_tourSaveHumanResult` YA
+  persisten en cada `cfg.results[mk]`, con fallback a `ev.realTeam`.
+  Funciona para CUALQUIER formato y **sobrevive a recargas**. NO tiene
+  el early-return que saltaba partidos.
+- **`_statsFromStoreFilteredToTeams(storeKey, teams)`**: último recurso
+  que lee el store persistido (`ef_player_stats_sel_v1` para mundial-48,
+  `ef_player_stats_mundial_v1` para Mundialito) filtrado a los equipos
+  del torneo.
+
+`_mundialStatsHtml` ahora encadena fallbacks con try/catch:
+`_mundialAggregateStats` → `_tourStatsFromCfgResults` →
+`_statsFromStoreFilteredToTeams`, y si todo falla muestra el mensaje
+vacío estándar ("Sin datos todavía"), nunca "no disponibles".
+
+`_tourCollectStatsForTour` cae a `_tourStatsFromCfgResults(cfg)` cuando
+el store en memoria está vacío (tras recarga).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una caja de stats "en vivo" dependa de un único
+   camino de agregación sin fallback. Toda caja que compute desde
+   `cfg.results` debe encadenar `_tourStatsFromCfgResults` como red de
+   seguridad (usa home/away + realTeam, sin early-return).
+2. **PROHIBIDO** que `_tourCollectStatsForTour` u otra caja lea SOLO
+   `LIGA_PLAYER_MATCH_STORE` (memoria volátil). Siempre con fallback a
+   `cfg.results` persistido.
+3. **PROHIBIDO** el literal "Estadísticas no disponibles." como
+   estado vacío. Usar el mensaje estándar "Sin datos todavía — juega o
+   simula partidos para ver estadísticas." y SIEMPRE envolver el render
+   en try/catch para no dejar el placeholder colgado.
+4. **Todo sim IA-vs-IA de torneo** debe adjuntar `events` +
+   `home`/`away` al `cfg.results[mk]` vía `_tourAttachActa` (o
+   `_tourSaveHumanResult` para humanos). Sin events no hay goleadores
+   que mostrar — es la fuente única de las cajas "en vivo".
+
 ## Separación CLUBES vs SELECCIONES en estadísticas (obligatorio, 2026-05-27)
 
 **REGLA BLOQUEANTE ABSOLUTA**: las **estadísticas de jugadores** del

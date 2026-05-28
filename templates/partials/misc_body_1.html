@@ -46242,8 +46242,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var resetBtn = getEl('munich-tour-reset');
     if (!pk) return;
     /* Solo 1 torneo presente (Joan Gamper) → se autoselecciona sin
-       mostrar el selector (petición usuario "sin elegir"). */
-    if (state.pickedTours.length < 1) {
+       mostrar el selector (petición usuario "sin elegir").
+
+       GATE de hidratación 2026-05-28 — fix RAÍZ del bug "al reabrir
+       la web me encuentro el día 01 May" (reportado con foto 29 Jul
+       Descanso → 01 May Descanso). El gate análogo en updateHud()
+       (~línea 46599) ya bloqueaba el auto-pick pre-hidratación, pero
+       cuando ese gate cerraba, el flujo CAÍA aquí (renderTourPicker
+       se llama desde updateHud cuando state.pickedTours sigue vacío)
+       y este auto-pick disparaba _tourMergeBayern → _save(dayIdx=0)
+       ANTES de que hydrateFromServer restaurase el cursor real,
+       pisando el server con ts=now. Resultado idéntico al bug
+       2026-05-25 ya documentado.
+
+       Fix: replicar el gate aquí. Si hidratación no terminó, NO
+       auto-pickeamos. El evento 'comp-state:hydrated' re-dispara
+       updateHud(), que con el gate ya abierto auto-pickea por la
+       rama 46599 y nunca llegamos a este renderTourPicker. */
+    if (state.pickedTours.length < 1
+        && window.__compStateSyncHydrated === true) {
       var _only = _psVisibleTourIds();
       if (_only.length === 1) {
         state.pickedTours = [_only[0]];

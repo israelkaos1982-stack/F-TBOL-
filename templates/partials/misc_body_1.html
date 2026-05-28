@@ -35567,6 +35567,19 @@ https://api.sofascore.app/api/v1/team/44/image
     if(typeof window.syncLigaEaPlayerStats === 'function'){
       try { window.syncLigaEaPlayerStats(); } catch(_){}
     }
+    /* Refresco del caché de stats per-jugador desde `team.players[].gol/...`
+       de la liga actual (Resto de Ligas / Resto del Mundo). Sin este sync
+       el header de líderes («Máximo goleador / MVP / Mejor puntuación»)
+       leía un caché stale y mostraba «sin registros» aunque las stats
+       autoritativas estuvieran en los objetos. Idempotente: para
+       liga-ea-sports / hypermotion / etc. `data.results` está vacío y la
+       función hace early-return. 2026-05-28. */
+    try {
+      if (typeof _lecSyncPlayerStatsCache === 'function' && CURRENT_KEY) {
+        var _syncData = loadData(CURRENT_KEY);
+        if (_syncData) _lecSyncPlayerStatsCache(_syncData);
+      }
+    } catch(_){}
     var id, t;
     if (idOrTeam && typeof idOrTeam === 'object') {
       /* Objeto team pasado directamente (típico: click en la fila de
@@ -36107,6 +36120,19 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     } catch(_){}
     var data = loadData(CURRENT_KEY);
+    /* Refrescar `ef_player_stats_v1` desde `team.players[].gol/pen/...`
+       de la liga actual ANTES de hidratar (2026-05-28). Es la fuente
+       autoritativa que `applyMatchStats` actualiza durante sim de liga
+       (`ligaExtSimular`) y de copa (`_lecSimMatch` → `_lecRunAllAuto`)
+       en TODAS las ligas externas, incluida Resto del Mundo. Sin este
+       sync, si el caché perdió sincronía (rebuild parcial, wipe del LS,
+       race con otro flow), la hidratación devolvía 0 y la fila del
+       jugador se pintaba a cero, sobrescribiendo además `p.gol` en
+       memoria (corrupción permanente al siguiente saveData). Pasa
+       `pj = ligaPj + cupPj` para que la pantalla sume liga+copa. */
+    try {
+      if (typeof _lecSyncPlayerStatsCache === 'function') _lecSyncPlayerStatsCache(data);
+    } catch(_){}
     /* Fallback por nombre del título del overlay por si CURRENT_SQUAD_TEAM
        quedó desincronizado (ver helper _lextFindTeamRow). Sin este
        fallback la lista se pintaba "Sin jugadores" aunque los datos
@@ -36203,15 +36229,25 @@ https://api.sofascore.app/api/v1/team/44/image
       var clean = (typeof window._lextHydratePlayerStats === 'function')
         ? window._lextHydratePlayerStats(t, p, _real)
         : {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};
-      p.pj       = clean.pj;
-      p.gol      = clean.gol;
-      p.pen      = clean.pen;
-      p.fk       = clean.fk;
-      p.mvp      = clean.mvp;
-      p.ta       = clean.ta;
-      p.tr       = clean.tr;
-      p.imbat    = clean.imbat;
-      p.penSaved = clean.penSaved;
+      /* 2026-05-28: solo sobrescribir el objeto del jugador cuando la
+         hidratación devuelve stats REALES (clean.pj > 0). Si clean.pj
+         es 0 (caché vacío para la liga / fallback fallido / team aún
+         sin simular), respetamos lo que ya tiene `p.*` — son los
+         valores autoritativos escritos por `applyMatchStats` durante
+         sim. Sin este guard, una hidratación fallida pintaba todo a 0
+         y, al siguiente saveData (toggle flag, edit), las stats se
+         perdían para siempre en localStorage. */
+      if (clean.pj > 0) {
+        p.pj       = clean.pj;
+        p.gol      = clean.gol;
+        p.pen      = clean.pen;
+        p.fk       = clean.fk;
+        p.mvp      = clean.mvp;
+        p.ta       = clean.ta;
+        p.tr       = clean.tr;
+        p.imbat    = clean.imbat;
+        p.penSaved = clean.penSaved;
+      }
       (byPos[p.pos]||byPos.MED).push(p);
     });
 

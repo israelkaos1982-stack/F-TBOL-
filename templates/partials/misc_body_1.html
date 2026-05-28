@@ -34995,8 +34995,20 @@ https://api.sofascore.app/api/v1/team/44/image
       var t = (data.teams||[]).filter(function(x){return x.id===id;})[0];
       var teamLabel = t && t.name ? '«'+t.name+'»' : 'este equipo';
       if(!confirm('⚠️ ¿Eliminar '+teamLabel+' definitivamente?\n\nSe borrará también de la clasificación y de los resultados guardados. Esta acción no se puede deshacer.')) return;
-      data.teams = data.teams.filter(function(x){return x.id!==id;});
-      data.results = (data.results||[]).filter(function(r){return r.h!==id && r.a!==id;});
+      /* Borrado POR NOMBRE, no solo por id (fix duplicados 2026-05-28).
+         Si la liga tiene el equipo duplicado/triplicado (cada copia con
+         un id distinto creado al re-pegar la lista), filtrar solo por
+         `id` dejaba las otras copias vivas y la fila "no se borraba".
+         Eliminamos TODAS las copias que comparten el nombre normalizado
+         de un solo clic; sus ids caen también de results. */
+      var _delNk = (t && t.name) ? _lextNormName(t.name) : null;
+      var _delIds = {};
+      data.teams.forEach(function(x){
+        if(!x) return;
+        if(x.id===id || (_delNk && _lextNormName(x.name)===_delNk)) _delIds[x.id]=true;
+      });
+      data.teams = data.teams.filter(function(x){return x && !_delIds[x.id];});
+      data.results = (data.results||[]).filter(function(r){return !_delIds[r.h] && !_delIds[r.a];});
       /* ═══════════════════════════════════════════════════════════
          Blacklist persistente de equipos borrados por NOMBRE. Impide
          que cualquier camino (fetchData del servidor con estado
@@ -35079,7 +35091,14 @@ https://api.sofascore.app/api/v1/team/44/image
         id: uid(), name: name,
         power: 75, atk: 75, mid: 75, def: 75, aggressiveness: 50,
         stadium: '', shield: '', budget: 0, players: [],
-        isHuman: false, humanEmoji: ''
+        isHuman: false, humanEmoji: '',
+        /* Sello por equipo (2026-05-28): la fusión del servidor colapsa
+           equipos con el MISMO nombre quedándose con el de mayor
+           updatedAt. Sin este sello, una lista re-pegada (con
+           valoraciones nuevas) perdía contra la copia vieja del
+           servidor. Con el sello, la lista recién pegada gana y la
+           vieja se descarta → sin duplicados. */
+        updatedAt: Date.now()
       };
       data.teams.push(newTeam);
       /* Si el nombre estaba en la blacklist (borrado previamente) el

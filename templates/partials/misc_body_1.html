@@ -12520,7 +12520,8 @@ window._showSimProgress = function(opts, onDone){
 #mundial-roster-ov .mr-body{padding:6px 12px 10px;overflow-y:auto;}
 #mundial-roster-ov .mr-grp{margin:8px 0;border:1px solid rgba(77,208,225,.30);border-radius:10px;padding:6px 8px;}
 #mundial-roster-ov .mr-grp-h{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#4dd0e1;margin:2px 0 5px;}
-#mundial-roster-ov .mr-row{display:flex;align-items:center;gap:6px;padding:4px 2px;border-bottom:1px solid rgba(255,255,255,.05);}
+#mundial-roster-ov .mr-row{display:flex;align-items:center;gap:6px;padding:4px 2px;border-bottom:1px solid rgba(255,255,255,.05);border-radius:6px;}
+#mundial-roster-ov .mr-row.is-active{background:rgba(255,215,0,.14);outline:1px solid rgba(255,215,0,.55);}
 #mundial-roster-ov .mr-slot{flex:0 0 16px;font-family:'Bebas Neue',sans-serif;color:rgba(255,255,255,.4);font-size:13px;}
 #mundial-roster-ov .mr-name{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 #mundial-roster-ov .mr-b{flex:0 0 auto;width:30px;height:28px;border-radius:6px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;font-size:14px;padding:0;}
@@ -18397,7 +18398,7 @@ window._showSimProgress = function(opts, onDone){
           + '<div class="mr-hd"><span>🏆 Mundialito · Roster</span>'
           + '<button class="mr-x" onclick="document.getElementById(\'mundial-roster-ov\').style.display=\'none\'">✕</button></div>'
           + '<div class="mr-sub">16 europeos (manual) + 16 Resto del Mundo (top 16 auto) + 4 sedes. '
-            + '8 grupos × 4 = 2 EUR + 2 RM por grupo. Humanos: pulsa 👤 en cualquier slot.</div>'
+            + '8 grupos × 4 = 2 EUR + 2 RM por grupo. Toca la fila o el 🤖 para elegir equipo · 👤 para humano.</div>'
           + '<div class="mr-body" id="mr-body"></div>'
           + '<div class="mr-search" id="mr-search" style="display:none;">'
           + '<input id="mr-q" type="text" placeholder="Buscar equipo…" autocomplete="off">'
@@ -18431,7 +18432,12 @@ window._showSimProgress = function(opts, onDone){
       var zone = (idx < eurCount) ? 'eur' : 'rm';
       var lbl = v ? (v.human ? '👤 Humano' : esc(v.name)) : '<i style="opacity:.45">— vacío —</i>';
       var num = (zone === 'eur') ? (idx + 1) : (idx - eurCount + 1);
-      return '<div class="mr-row"><span class="mr-slot">'+num+'</span>'
+      /* 2026-05-28: la fila entera es clickable para abrir el picker
+         (data-row-pick=idx). Más fácil en móvil que apuntar al 🤖 de
+         30×28 px. El botón 🤖 sigue funcionando por compatibilidad. */
+      var isAct = (activeSlot === idx) ? ' is-active' : '';
+      return '<div class="mr-row'+isAct+'" data-row-pick="'+idx+'" data-zone="'+zone+'" style="cursor:pointer;">'
+        + '<span class="mr-slot">'+num+'</span>'
         + '<span class="mr-name">'+lbl+'</span>'
         + '<button class="mr-b" data-idx="'+idx+'" data-act="hum" title="Humano">👤</button>'
         + '<button class="mr-b" data-idx="'+idx+'" data-act="ia" data-zone="'+zone+'" title="Elegir equipo">🤖</button>'
@@ -18577,9 +18583,76 @@ window._showSimProgress = function(opts, onDone){
       renderBody();
     }
 
+    /* Abre el picker para un slot — usado por el botón 🤖 y por click
+       en la fila entera (data-row-pick). NO limpia `rost[idx]` para
+       no perder el contenido si el usuario cancela el picker; solo
+       marca el slot como activo (highlight amarillo en renderBody)
+       para que sepa dónde irá el equipo. 2026-05-28. */
+    function openPickerForSlot(idx, zone){
+      if (isNaN(idx) || idx < 0 || idx >= total) return;
+      activeSlot = idx;
+      activeZone = zone || (idx < eurCount ? 'eur' : 'rm');
+      searchEl.style.display='block'; qEl.value=''; resEl.innerHTML='';
+      renderBody();   /* refresca highlight is-active */
+      try{qEl.focus();}catch(_){}
+    }
+    /* Asigna un equipo IA al activeSlot. Si activeSlot=-1 (porque algo
+       lo reseteó o el usuario tocó el resultado sin pulsar 🤖 antes),
+       busca el primer slot vacío de la zona correspondiente. 2026-05-28. */
+    function assignTeamToActive(name, shield, power){
+      if (!name) return false;
+      /* Determinar zona del equipo a añadir (EUR vs RM) por sus ligas */
+      var teamZone = activeZone;
+      if (!teamZone){
+        try {
+          var all = _allTeams();
+          for (var ai = 0; ai < all.length; ai++){
+            if (all[ai].name === name){
+              var lgs = (all[ai]._leagues && all[ai]._leagues.length) ? all[ai]._leagues : [all[ai]._league||''];
+              teamZone = (lgs.indexOf('resto-mundo') !== -1) ? 'rm' : 'eur';
+              break;
+            }
+          }
+        } catch(_){}
+        if (!teamZone) teamZone = 'eur';
+      }
+      var target = activeSlot;
+      if (target < 0){
+        /* Fallback: primer slot vacío en la zona del equipo */
+        var lo = (teamZone === 'rm') ? eurCount : 0;
+        var hi = (teamZone === 'rm') ? total : eurCount;
+        for (var k = lo; k < hi; k++){
+          if (!rost[k]){ target = k; break; }
+        }
+      }
+      if (target < 0) return false;
+      rost[target] = {
+        name: name,
+        shield: shield || '',
+        power: parseInt(power,10) || 70,
+        zone: teamZone
+      };
+      searchEl.style.display = 'none';
+      activeSlot = -1; activeZone = '';
+      renderBody();
+      return true;
+    }
+
     if (!ov._mrWired) {
       ov._mrWired = true;
       qEl.addEventListener('input', doSearch);
+      /* Handler directo en el contenedor de resultados — bypass del
+         bubble-handler de `ov` por si algo intercepta. 2026-05-28. */
+      resEl.addEventListener('click', function(e){
+        var rr = e.target.closest && e.target.closest('.mr-res');
+        if (!rr) return;
+        e.stopPropagation();   /* no que el ov-handler vuelva a procesarlo */
+        assignTeamToActive(
+          rr.getAttribute('data-name'),
+          rr.getAttribute('data-sh'),
+          rr.getAttribute('data-pw')
+        );
+      });
       ov.addEventListener('click', function(e){
         /* Slot row buttons (humano / IA / clear). */
         var b = e.target.closest && e.target.closest('.mr-b');
@@ -18618,31 +18691,44 @@ window._showSimProgress = function(opts, onDone){
           var idx = parseInt(b.getAttribute('data-idx'),10), act = b.getAttribute('data-act');
           if (isNaN(idx)) return;
           var zone = b.getAttribute('data-zone') || (idx < eurCount ? 'eur' : 'rm');
-          if (act === 'hum') { rost[idx] = { human:true, zone:zone }; renderBody(); }
-          else if (act === 'clr') { rost[idx] = null; renderBody(); }
+          if (act === 'hum') {
+            rost[idx] = { human:true, zone:zone };
+            /* Si este slot era el activo del picker, cancela el picker */
+            if (activeSlot === idx){ activeSlot=-1; activeZone=''; searchEl.style.display='none'; }
+            renderBody();
+          }
+          else if (act === 'clr') {
+            rost[idx] = null;
+            if (activeSlot === idx){ activeSlot=-1; activeZone=''; searchEl.style.display='none'; }
+            renderBody();
+          }
           else if (act === 'ia') {
-            activeSlot = idx; activeZone = zone;
-            searchEl.style.display='block'; qEl.value=''; resEl.innerHTML='';
-            try{qEl.focus();}catch(_){}
+            openPickerForSlot(idx, zone);
           }
           return;
+        }
+        /* Click en la FILA entera (no en un botón) → abre picker para
+           ese slot (UX móvil, 2026-05-28). */
+        var rowPick = e.target.closest && e.target.closest('[data-row-pick]');
+        if (rowPick && !e.target.closest('.mr-b')) {
+          var ridx = parseInt(rowPick.getAttribute('data-row-pick'),10);
+          var rzone = rowPick.getAttribute('data-zone') || (ridx < eurCount ? 'eur' : 'rm');
+          if (!isNaN(ridx)) { openPickerForSlot(ridx, rzone); return; }
         }
         /* AUTO-FILL RM (Mundialito). */
         if (e.target && e.target.id === 'mr-autofill-rm'){
           autoFillRm();
           return;
         }
-        /* Click en un resultado de búsqueda → asigna al slot activo. */
+        /* Click en un resultado de búsqueda — RUTA DE RESPALDO si por
+           algún motivo el handler directo de resEl no disparó. */
         var r = e.target.closest && e.target.closest('.mr-res');
-        if (r && activeSlot >= 0) {
-          var zoneR = activeZone || (activeSlot < eurCount ? 'eur' : 'rm');
-          rost[activeSlot] = {
-            name:r.getAttribute('data-name'),
-            shield:r.getAttribute('data-sh'),
-            power:parseInt(r.getAttribute('data-pw'),10)||70,
-            zone:zoneR
-          };
-          searchEl.style.display = 'none'; activeSlot = -1; activeZone = ''; renderBody();
+        if (r) {
+          assignTeamToActive(
+            r.getAttribute('data-name'),
+            r.getAttribute('data-sh'),
+            r.getAttribute('data-pw')
+          );
           return;
         }
         /* CONFIRMAR ROSTER. */

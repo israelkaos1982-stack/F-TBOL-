@@ -16263,6 +16263,38 @@ window._showSimProgress = function(opts, onDone){
     background:rgba(255,107,157,.10);
     box-shadow:0 0 18px rgba(255,107,157,.65), inset 0 0 8px rgba(255,107,157,.20);
   }
+  /* Caja contenedora del partido + su ACTA (petición usuario 2026-05-28,
+     foto 3): cada match en su propia "card" con borde BLANCO separador
+     que agrupa la fila del partido y el botón/cuerpo de 📋 ACTA en un
+     mismo recuadro; ROSA si involucra a un humano. También añade
+     `margin-bottom` para separar visualmente los partidos de la
+     jornada entre sí (foto 2). */
+  .tour-match-box{
+    margin:0 0 10px;
+    padding:6px 6px 4px;
+    background:rgba(255,255,255,.04);
+    border:1.5px solid rgba(255,255,255,.55);
+    border-radius:10px;
+  }
+  .tour-match-box:last-child{margin-bottom:0;}
+  .tour-match-box.tour-match-box-has-human{
+    border:2px solid #ff6b9d;
+    box-shadow:0 0 12px rgba(255,107,157,.45), inset 0 0 6px rgba(255,107,157,.12);
+    background:rgba(255,107,157,.04);
+  }
+  /* La fila del partido dentro de la caja pierde su propio borde/bg
+     (los provee la caja exterior) — válido tanto para IA como humano. */
+  .tour-match-box > .tour-match,
+  .tour-match-box > .tour-match.tour-match-has-human{
+    border:1px solid transparent;
+    background:transparent;
+    box-shadow:none;
+  }
+  .tour-match-box > .tour-match.tour-match-pickable:hover,
+  .tour-match-box > .tour-match.tour-match-has-human.tour-match-pickable:hover{
+    background:rgba(255,255,255,.05);
+    box-shadow:none;
+  }
   .tour-bracket-team.is-winner span{color:#5fe08a;font-weight:700;text-shadow:0 0 6px rgba(95,224,138,.4);}
   /* Eliminado en ROJO pero SIN tachar el nombre (petición usuario
      2026-05-17). */
@@ -16300,15 +16332,18 @@ window._showSimProgress = function(opts, onDone){
     border-radius:14px;
     box-shadow:0 0 14px rgba(255,255,255,.18),0 4px 16px rgba(0,0,0,.4);
   }
-  /* Grupo con equipo(s) humano(s): borde ROSA llamativo + pulso
+  /* Grupo con equipo(s) humano(s): borde ROSA llamativo
      (petición usuario 2026-05-24: "en el grupo de selecciones … en
      el grupo que esté un equipo humano este borde será rosa
-     llamativo para encontrarlo rápido"). */
+     llamativo para encontrarlo rápido").
+     2026-05-28: pulso/parpadeo retirado a petición del usuario
+     ("el brillo intermitente de la clasificación quítalo, es molesto").
+     El borde rosa + glow estático sigue identificando al humano sin
+     marear la vista. */
   .tour-group-block.tour-group-human{
     --grp-color:#ec4899;--grp-rgb:236,72,153;
     border:2.5px solid #ff3d99;
     box-shadow:0 0 20px rgba(255,61,153,.70),inset 0 0 10px rgba(255,61,153,.18);
-    animation:tourTiePulse 1.5s ease-in-out infinite;
   }
   /* Cabecera del grupo: banner a sangre con el color del grupo +
      barra de acento blanca a la izquierda. */
@@ -20157,11 +20192,18 @@ window._showSimProgress = function(opts, onDone){
         if (!played) allPlayedJ = false;
         var th = teams[m.home] || {name:'?'};
         var ta = teams[m.away] || {name:'?'};
+        var hasHuman = _tourLeagueMatchHasHuman(teams, m);
         var rowCls = 'tour-match';
         if (played) rowCls += ' tour-match-played';
         else rowCls += ' tour-match-pickable';  /* TODO unplayed → pickable, sin importar si la jornada es current/future. El usuario debe poder clickar SIEMPRE el partido humano para abrir la previa, aunque su jornada haya quedado "atrás". */
-        if (_tourLeagueMatchHasHuman(teams, m)) rowCls += ' tour-match-has-human';
+        if (hasHuman) rowCls += ' tour-match-has-human';
         var dataAttrs = ' data-tour="'+tourId+'" data-league-key="'+key+'"';
+        /* Petición usuario 2026-05-28 (foto 3): cada partido + su ACTA
+           viven en una `.tour-match-box` (borde blanco; rosa si humano).
+           Da espacio entre partidos (foto 2) y agrupa acta+fila en un
+           recuadro visual único. */
+        var boxCls = 'tour-match-box' + (hasHuman ? ' tour-match-box-has-human' : '');
+        html += '<div class="'+boxCls+'">';
         if (played) {
           var aWin = res.a > res.b, bWin = res.b > res.a;
           var sH = '<span class="tour-score'+(aWin?' tour-score-win':'')+'">'+res.a+'</span>';
@@ -20188,6 +20230,7 @@ window._showSimProgress = function(opts, onDone){
              El admin que quiera auto-simular puede activar el toggle
              "Permitir auto-simulación" en el editor del torneo. */
         }
+        html += '</div>'; /* cierra .tour-match-box */
       });
       /* Botón ▶ SIMULAR JORNADA: aparece en CUALQUIER jornada con
          partidos pendientes, no solo en la "current" (petición usuario

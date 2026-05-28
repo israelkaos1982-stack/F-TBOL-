@@ -49449,7 +49449,96 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       }
       _setCursor('lesion:cur', cur.join('|'));
     } catch(_){}
+    _showRecoveryModalIfPending();
   }
+
+  /* ── HOOK 17b: modal de ALTA MÉDICA — pantalla emergente
+     (petición usuario 2026-05-27, Foto 1).
+     Cuando el usuario abre el hub Liverpool y hay 1+ mensajes de
+     tipo `recovery` sin leer, emerge un overlay obligatorio con la
+     lista. Cerrar con ✅ marca los mensajes como leídos.
+     Idempotente por sesión: una vez mostrado / cerrado en este
+     boot, no se vuelve a emerger hasta que llegue una nueva alta. */
+  var _recoveryShownIds = {};
+  function _pendingRecoveryMsgs(){
+    var d = _read();
+    return d.msgs.filter(function(m){
+      return m && !m.read
+        && m.type === 'recovery'
+        && (!m.side || m.side === 'liv')
+        && !_recoveryShownIds[m.id];
+    });
+  }
+  function _showRecoveryModalIfPending(){
+    /* Solo emerger si el usuario está en s-munich (hub humano).
+       En otras pantallas, los mensajes esperan a que vuelva. */
+    var scr = document.getElementById('s-munich');
+    if (!scr || !scr.classList.contains('active')) return;
+    var pending = _pendingRecoveryMsgs();
+    if (!pending.length) return;
+    /* No re-pintar si ya está abierto. */
+    if (document.getElementById('mu-recov-ov')) return;
+    pending.forEach(function(m){ _recoveryShownIds[m.id] = true; });
+
+    var ov = document.createElement('div');
+    ov.id = 'mu-recov-ov';
+    ov.setAttribute('role','dialog');
+    ov.setAttribute('aria-label','Alta médica');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:1000099;'
+      + 'background:rgba(0,0,0,.86);display:flex;align-items:center;'
+      + 'justify-content:center;padding:18px;'
+      + 'animation:muRecovFade .18s ease-out;';
+    var rows = pending.map(function(m){
+      var safeTitle = _esc(m.title || '');
+      var safeBody  = _esc(m.body  || '');
+      return '<div class="mu-recov-row">'
+        +   '<div class="mu-recov-row-ico">🩹</div>'
+        +   '<div class="mu-recov-row-info">'
+        +     '<div class="mu-recov-row-title">' + safeTitle + '</div>'
+        +     '<div class="mu-recov-row-body">'  + safeBody  + '</div>'
+        +   '</div>'
+        + '</div>';
+    }).join('');
+    var plural = pending.length > 1;
+    ov.innerHTML = ''
+      + '<style>@keyframes muRecovFade{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}'
+      + '#mu-recov-ov .mu-recov-card{background:linear-gradient(160deg,#0a1a14,#0e2a1c 50%,#0a1a14);'
+      + ' border:2px solid #4dd86a;border-radius:14px;padding:22px 20px 16px;max-width:420px;width:100%;'
+      + ' box-shadow:0 0 50px rgba(80,220,130,.35),0 10px 30px rgba(0,0,0,.7);text-align:center;}'
+      + '#mu-recov-ov .mu-recov-title{font-family:"Bebas Neue",sans-serif;font-size:24px;letter-spacing:3px;'
+      + ' color:#bdf5c8;margin-bottom:4px;text-shadow:0 0 12px rgba(80,220,130,.55);}'
+      + '#mu-recov-ov .mu-recov-sub{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;'
+      + ' color:rgba(189,245,200,.7);margin-bottom:14px;}'
+      + '#mu-recov-ov .mu-recov-list{max-height:54vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:14px;text-align:left;}'
+      + '#mu-recov-ov .mu-recov-row{display:flex;gap:10px;background:rgba(80,220,130,.08);'
+      + ' border:1px solid rgba(80,220,130,.32);border-radius:9px;padding:10px 12px;align-items:flex-start;}'
+      + '#mu-recov-ov .mu-recov-row-ico{font-size:24px;flex-shrink:0;}'
+      + '#mu-recov-ov .mu-recov-row-info{flex:1;min-width:0;}'
+      + '#mu-recov-ov .mu-recov-row-title{font-family:Oswald,sans-serif;font-weight:700;font-size:13px;'
+      + ' color:#bdf5c8;letter-spacing:.5px;margin-bottom:3px;}'
+      + '#mu-recov-ov .mu-recov-row-body{font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.4;'
+      + ' color:rgba(255,255,255,.78);}'
+      + '#mu-recov-ov .mu-recov-ok{background:linear-gradient(135deg,#1a3a18,#2b6228 50%,#1a3a18);'
+      + ' border:1px solid #4dd86a;color:#bdf5c8;font-family:"Bebas Neue",sans-serif;font-size:18px;'
+      + ' letter-spacing:3px;padding:12px 26px;border-radius:8px;cursor:pointer;width:100%;'
+      + ' box-shadow:0 0 16px rgba(80,220,130,.3);-webkit-tap-highlight-color:transparent;}'
+      + '#mu-recov-ov .mu-recov-ok:active{filter:brightness(1.25);}</style>'
+      + '<div class="mu-recov-card">'
+      +   '<div class="mu-recov-title">🩹 ALTA MÉDICA</div>'
+      +   '<div class="mu-recov-sub">' + (plural ? pending.length + ' JUGADORES RECUPERADOS' : '1 JUGADOR RECUPERADO') + '</div>'
+      +   '<div class="mu-recov-list">' + rows + '</div>'
+      +   '<button type="button" class="mu-recov-ok" id="mu-recov-ok">✅ ENTENDIDO</button>'
+      + '</div>';
+    document.body.appendChild(ov);
+    document.getElementById('mu-recov-ok').onclick = function(){
+      /* Marcar todos los mostrados como leídos y cerrar. */
+      pending.forEach(function(m){ try { markRead(m.id); } catch(_){} });
+      try { ov.remove(); } catch(_){}
+    };
+  }
+  /* Exponemos para que otras rutas (p. ej. tras una recuperación
+     manual desde la pantalla médica) puedan re-disparar el chequeo. */
+  window._muShowRecoveryModalIfPending = _showRecoveryModalIfPending;
 
   /* ── HOOK 13: previa del próximo partido ──────────────
      Observa #munich-next-match. Cuando el texto cambia y describe

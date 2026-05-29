@@ -21844,10 +21844,28 @@ window._showSimProgress = function(opts, onDone){
     var idx = {};
     try {
       var tt = teams || cfg.teams || [];
+      var _bfc = cfg.formatConfig || {};
+      var _bpg = _bfc.perGroup || 4;
       var gf = cfg.groupFixtures || {};
+      /* `groupFixtures` se construye lazy al renderizar la pantalla de
+         GRUPOS. Si el usuario entra directo a ESTADÍSTICAS (o tras recargar
+         la página) aún no existe, y sin él no se puede resolver el
+         home/away de cada partido de grupo → la caja salía VACÍA. Lo
+         reconstruimos aquí con el MISMO builder canónico (_tourBuildRoundRobin)
+         y lo persistimos para los próximos renders. */
+      if (!Object.keys(gf).length && tt.length) {
+        var _bng = _bfc.groups || Math.ceil(tt.length / _bpg);
+        gf = {};
+        for (var _bg = 0; _bg < _bng; _bg++) {
+          var _bsl = tt.slice(_bg*_bpg, _bg*_bpg+_bpg);
+          if (_bsl.length < 2) break;
+          gf[_bg] = _tourBuildRoundRobin(_bsl.map(function(_,i){return i;}));
+        }
+        cfg.groupFixtures = gf;
+      }
       Object.keys(gf).forEach(function(gk){
         var g = parseInt(gk, 10); if (isNaN(g)) return;
-        var slice = tt.slice(g*4, g*4+4);
+        var slice = tt.slice(g*_bpg, g*_bpg+_bpg);
         var fix = gf[gk] || [];
         for (var j = 0; j < fix.length; j++) {
           for (var mi = 0; mi < fix[j].length; mi++) {
@@ -21906,10 +21924,23 @@ window._showSimProgress = function(opts, onDone){
       + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;'
       + 'font-size:11px;color:#4dd0e1;">📊 ESTADÍSTICAS · TODAS LAS FASES</p>';
     var stats = {};
+    /* Hidratar plantillas de selecciones para que los goleadores tengan
+       nombre real (no «Jugador»). Idempotente y barato. */
+    try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
     try { _tourBackfillActasFromResults(cfg, teams); } catch(_){}
     try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
     if (!stats || !Object.keys(stats).length) {
       try { var g = _tourStatsFromCfgResults(cfg); if (g && Object.keys(g).length) stats = g; } catch(_){}
+    }
+    /* Si sigue vacío, FORZAR la regeneración del acta (regenera incluso las
+       que tuvieran events placeholder/incompletos) y reintentar la
+       agregación en vivo antes de caer a los stores persistidos. */
+    if (!stats || !Object.keys(stats).length) {
+      try { _tourBackfillActasFromResults(cfg, teams, true); } catch(_){}
+      try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
+      if (!stats || !Object.keys(stats).length) {
+        try { var g2 = _tourStatsFromCfgResults(cfg); if (g2 && Object.keys(g2).length) stats = g2; } catch(_){}
+      }
     }
     if (!stats || !Object.keys(stats).length) {
       try {

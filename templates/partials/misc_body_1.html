@@ -39221,7 +39221,7 @@ https://api.sofascore.app/api/v1/team/44/image
         if(inp.getAttribute('data-f')==='shield'){
           /* repintar el thumb del escudo al hacer blur (no en cada
              keystroke — evita peticiones de imagen en cada tecla) */
-          inp.addEventListener('change', function(){ _lcRender(); });
+          inp.addEventListener('change', function(){ _lcSyncFromDOM(); _lcRender(); });
         }
       });
       /* papelera */
@@ -39229,6 +39229,8 @@ https://api.sofascore.app/api/v1/team/44/image
       if(delBtn) delBtn.addEventListener('click', function(){
         var lbl = t.name ? '«'+t.name+'»' : 'este equipo';
         if(!confirm('⚠️ ¿Eliminar '+lbl+'?\n\nEl equipo se borrará al pulsar 💾 Guardar. Si cierras sin guardar, no pasa nada.')) return;
+        /* Capturar lo tecleado en las OTRAS cards antes de re-pintar. */
+        _lcSyncFromDOM();
         _LC_STATE.teams.splice(idx,1);
         _lcRender();
       });
@@ -39258,12 +39260,14 @@ https://api.sofascore.app/api/v1/team/44/image
       /* ⚙ Más opciones */
       var moreBtn = row.querySelector('.lc-more-btn');
       if(moreBtn) moreBtn.addEventListener('click', function(){
+        _lcSyncFromDOM();
         t._uiExpand = !t._uiExpand;
         _lcRender();
       });
       /* tipo IA/Humano */
       row.querySelectorAll('.lc-tipo-btn').forEach(function(b){
         b.addEventListener('click', function(){
+          _lcSyncFromDOM();
           t.isHuman = (b.getAttribute('data-tipo')==='human');
           if(t.isHuman && !t.humanEmoji){
             var used = {};
@@ -39280,9 +39284,44 @@ https://api.sofascore.app/api/v1/team/44/image
       /* picker de emoji */
       row.querySelectorAll('.lc-emoji').forEach(function(b){
         b.addEventListener('click', function(){
+          _lcSyncFromDOM();
           t.humanEmoji = b.getAttribute('data-em')||'';
           _lcRender();
         });
+      });
+    });
+  }
+  /* Lee los valores ACTUALES de los inputs del DOM y los aplasta sobre
+     _LC_STATE ANTES de guardar. Imprescindible porque la captura por
+     evento `input` (_lcBindCards) NO es fiable en teclados móviles con
+     escritura por gestos / autocompletado / corrector: el valor queda
+     pintado en el <input> pero el evento `input` no se dispara, así que
+     `t.name` (y el resto de campos) se quedaban sin actualizar y el
+     equipo recién añadido se guardaba VACÍO (bloqueado por el chequeo
+     de nombre vacío) o sin los datos tecleados — "lo añado, lo guardo y
+     no se queda guardado" (foto usuario 2026-05-29, móvil). Leer del DOM
+     al guardar garantiza que SIEMPRE persiste lo que el usuario ve en
+     pantalla, dispare o no el navegador el evento `input`. */
+  function _lcSyncFromDOM(){
+    if(!_LC_STATE) return;
+    var body = document.getElementById('lext-cards-body');
+    if(!body) return;
+    body.querySelectorAll('.lc-row').forEach(function(row){
+      var idx = parseInt(row.getAttribute('data-idx'),10);
+      if(isNaN(idx) || !_LC_STATE.teams[idx]) return;
+      var t = _LC_STATE.teams[idx];
+      row.querySelectorAll('input[data-f]').forEach(function(inp){
+        var f = inp.getAttribute('data-f');
+        if(f==='power' || f==='atk' || f==='mid' || f==='def'){
+          t[f] = _lcClamp(inp.value, t[f], 1, 100);
+        } else if(f==='aggressiveness'){
+          t[f] = _lcClamp(inp.value, t[f], 1, 99);
+        } else if(f==='budget'){
+          var raw = (inp.value||'').replace(/[^\d]/g,'');
+          t[f] = raw ? parseInt(raw,10) : 0;
+        } else {
+          t[f] = (inp.value||'').trim();
+        }
       });
     });
   }
@@ -39291,6 +39330,9 @@ https://api.sofascore.app/api/v1/team/44/image
      antes de abrir el editor de plantilla). */
   function _lcCommit(silent){
     if(!_LC_STATE || !CURRENT_KEY) return false;
+    /* Capturar lo tecleado AHORA mismo desde el DOM (los listeners
+       `input` pueden no haberse disparado en móvil). */
+    _lcSyncFromDOM();
     /* nombre vacío */
     for(var i=0;i<_LC_STATE.teams.length;i++){
       if(!_LC_STATE.teams[i].name){
@@ -39515,6 +39557,10 @@ https://api.sofascore.app/api/v1/team/44/image
   };
   window.lextCardsAdd = function(){
     if(!_LC_STATE) return;
+    /* Capturar lo tecleado en las cards existentes ANTES de re-pintar
+       (si no, el re-render desde _LC_STATE borraría un nombre que el
+       móvil no propagó vía evento `input`). */
+    _lcSyncFromDOM();
     _LC_STATE.teams.push({
       id: uid(), name:'',
       power:75, atk:75, mid:75, def:75, aggressiveness:50,
@@ -39548,6 +39594,8 @@ https://api.sofascore.app/api/v1/team/44/image
   };
   window.lextCardsBulkApply = function(){
     if(!_LC_STATE) return;
+    /* Preservar lo tecleado en las cards antes de fusionar la lista. */
+    _lcSyncFromDOM();
     var ta = document.getElementById('lc-bulk-ta');
     var txt = ta ? ta.value : '';
     var parsed = _lcBulkParse(txt);

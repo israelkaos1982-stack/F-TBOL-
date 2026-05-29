@@ -21707,10 +21707,10 @@ window._showSimProgress = function(opts, onDone){
       var nameA = info.a || res.home;
       var nameB = info.b || res.away;
       if (!nameA || !nameB) return;
-      (res.events || []).forEach(function(ev){
+      (res.events || res.acta || []).forEach(function(ev){
         if (!ev) return;
         if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta para nadie */
-        var team = ev.team === 'a' ? nameA : ev.team === 'b' ? nameB : (ev.realTeam || '');
+        var team = ev.realTeam || ((ev.team === 'a' || ev.side === 'a' || ev.team === 'home') ? nameA : (ev.team === 'b' || ev.side === 'b' || ev.team === 'away') ? nameB : (ev.team === nameA ? nameA : ev.team === nameB ? nameB : ''));
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
         else if (typeof ev.player === 'string') player = ev.player;
@@ -21763,12 +21763,13 @@ window._showSimProgress = function(opts, onDone){
     Object.keys(results).forEach(function(key){
       if (/\|L[12]$/.test(key)) return;   /* legs intermedios → agregado en baseKey */
       var res = results[key];
-      if (!res || !res.played || !Array.isArray(res.events)) return;
+      var _evs = res && (res.events || res.acta);
+      if (!res || !res.played || !Array.isArray(_evs)) return;
       var nameA = res.home, nameB = res.away;
-      res.events.forEach(function(ev){
+      _evs.forEach(function(ev){
         if (!ev) return;
         if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta para nadie */
-        var team = ev.realTeam || (ev.team === 'a' ? nameA : ev.team === 'b' ? nameB : '');
+        var team = ev.realTeam || ((ev.team === 'a' || ev.side === 'a' || ev.team === 'home') ? nameA : (ev.team === 'b' || ev.side === 'b' || ev.team === 'away') ? nameB : (ev.team === nameA ? nameA : ev.team === nameB ? nameB : ''));
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
         else if (typeof ev.player === 'string') player = ev.player;
@@ -21793,7 +21794,7 @@ window._showSimProgress = function(opts, onDone){
         else if (type === 'imbat') p.imbat++;
       });
       if (res.mvp && res.mvpTeam) {
-        var hasMvp = res.events.some(function(e){ return e && e.type === 'mvp'; });
+        var hasMvp = _evs.some(function(e){ return e && e.type === 'mvp'; });
         if (!hasMvp) { var rm = rec(res.mvpTeam, res.mvp); if (rm) rm.mvp++; }
       }
     });
@@ -21827,11 +21828,70 @@ window._showSimProgress = function(opts, onDone){
        3. Mensaje vacío correcto ("Sin datos todavía"), no
           "Estadísticas no disponibles" (que era el branch de
           `_lextStatsDashHtml` ausente). */
+  /* Backfill de actas (events) para partidos YA jugados que solo
+     guardaron el marcador (sims de grupos/KO previos al fix 2026-05-29).
+     Regenera los events con genMatchEventsEnhanced usando el home/away +
+     marcador persistidos y normaliza realTeam igual que _tourAttachActa.
+     Persiste una sola vez. Hace que la caja de estadisticas se rellene
+     sin tener que resetear el torneo. Generico: lo usan Mundial 2032 y
+     cualquier otra caja "en vivo". */
+  function _tourBackfillActasFromResults(cfg, teams){
+    if (!cfg || !cfg.results) return false;
+    if (typeof window.genMatchEventsEnhanced !== 'function') return false;
+    /* Mapa key->{a,b} con nombres reales desde los fixtures de grupo y el
+       bracket KO (igual que _mundialAggregateStats). Permite reconstruir el
+       acta de resultados antiguos que guardaron solo el marcador, sin home/away. */
+    var idx = {};
+    try {
+      var tt = teams || cfg.teams || [];
+      var gf = cfg.groupFixtures || {};
+      Object.keys(gf).forEach(function(gk){
+        var g = parseInt(gk, 10); if (isNaN(g)) return;
+        var slice = tt.slice(g*4, g*4+4);
+        var fix = gf[gk] || [];
+        for (var j = 0; j < fix.length; j++) {
+          for (var mi = 0; mi < fix[j].length; mi++) {
+            var pr = fix[j][mi]; var th = slice[pr.home], ta = slice[pr.away];
+            idx['g'+g+'_'+j+'_'+mi] = { a: th && th.name, b: ta && ta.name };
+          }
+        }
+      });
+      var kb = cfg.koBracket || [];
+      for (var r2 = 0; r2 < kb.length; r2++) {
+        var rt = kb[r2] || [];
+        for (var ii = 0; ii < rt.length; ii += 2) {
+          if (!rt[ii+1]) break;
+          idx['ko_'+r2+'_'+(ii/2)] = { a: rt[ii] && rt[ii].name, b: rt[ii+1] && rt[ii+1].name };
+        }
+      }
+    } catch(_){}
+    var changed = false;
+    Object.keys(cfg.results).forEach(function(mk){
+      var r = cfg.results[mk]; if (!r || !r.played) return;
+      if (/\|L[12]$/.test(mk)) return;
+      var evs = r.events || r.acta; if (evs && evs.length) return;
+      var info = idx[mk] || {};
+      var home = r.home || info.a, away = r.away || info.b;
+      if (!home || !away) return;
+      var gh = (typeof r.gh === 'number') ? r.gh : ((typeof r.a === 'number') ? r.a : null);
+      var ga = (typeof r.ga === 'number') ? r.ga : ((typeof r.b === 'number') ? r.b : null);
+      if (gh == null || ga == null) return;
+      var gen = window.genMatchEventsEnhanced(home, away, gh|0, ga|0, null);
+      var ev = (gen && gen.events) ? gen.events : (Array.isArray(gen) ? gen : []);
+      ev.forEach(function(e){ if (e && !e.realTeam) e.realTeam = ((e.side==='a'||e.team==='home'||e.team===home) ? home : away); });
+      if (!r.home) r.home = home;
+      if (!r.away) r.away = away;
+      r.events = ev; r.acta = ev; changed = true;
+    });
+    if (changed) { try { if (typeof window._tourSave === 'function') window._tourSave(cfg.id, cfg); } catch(_){} }
+    return changed;
+  }
   function _mundialStatsHtml(cfg, tourId, teams){
     var html = _mundialBackBtn(tourId)
       + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;'
       + 'font-size:11px;color:#4dd0e1;">📊 ESTADÍSTICAS · TODAS LAS FASES</p>';
     var stats = {};
+    try { _tourBackfillActasFromResults(cfg, teams); } catch(_){}
     try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
     if (!stats || !Object.keys(stats).length) {
       try { var g = _tourStatsFromCfgResults(cfg); if (g && Object.keys(g).length) stats = g; } catch(_){}

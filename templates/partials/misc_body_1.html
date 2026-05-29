@@ -21703,9 +21703,9 @@ window._showSimProgress = function(opts, onDone){
       var nameA = info.a || res.home;
       var nameB = info.b || res.away;
       if (!nameA || !nameB) return;
-      (res.events || []).forEach(function(ev){
+      (res.events || res.acta || []).forEach(function(ev){
         if (!ev) return;
-        var team = ev.team === 'a' ? nameA : ev.team === 'b' ? nameB : (ev.realTeam || '');
+        var team = ev.realTeam || ((ev.team === 'a' || ev.side === 'a' || ev.team === 'home') ? nameA : (ev.team === 'b' || ev.side === 'b' || ev.team === 'away') ? nameB : (ev.team === nameA ? nameA : ev.team === nameB ? nameB : ''));
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
         else if (typeof ev.player === 'string') player = ev.player;
@@ -21758,11 +21758,12 @@ window._showSimProgress = function(opts, onDone){
     Object.keys(results).forEach(function(key){
       if (/\|L[12]$/.test(key)) return;   /* legs intermedios → agregado en baseKey */
       var res = results[key];
-      if (!res || !res.played || !Array.isArray(res.events)) return;
+      var _evs = res && (res.events || res.acta);
+      if (!res || !res.played || !Array.isArray(_evs)) return;
       var nameA = res.home, nameB = res.away;
-      res.events.forEach(function(ev){
+      _evs.forEach(function(ev){
         if (!ev) return;
-        var team = ev.realTeam || (ev.team === 'a' ? nameA : ev.team === 'b' ? nameB : '');
+        var team = ev.realTeam || ((ev.team === 'a' || ev.side === 'a' || ev.team === 'home') ? nameA : (ev.team === 'b' || ev.side === 'b' || ev.team === 'away') ? nameB : (ev.team === nameA ? nameA : ev.team === nameB ? nameB : ''));
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
         else if (typeof ev.player === 'string') player = ev.player;
@@ -21787,7 +21788,7 @@ window._showSimProgress = function(opts, onDone){
         else if (type === 'imbat') p.imbat++;
       });
       if (res.mvp && res.mvpTeam) {
-        var hasMvp = res.events.some(function(e){ return e && e.type === 'mvp'; });
+        var hasMvp = _evs.some(function(e){ return e && e.type === 'mvp'; });
         if (!hasMvp) { var rm = rec(res.mvpTeam, res.mvp); if (rm) rm.mvp++; }
       }
     });

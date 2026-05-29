@@ -16304,18 +16304,44 @@
            donde el árbitro suele revisar imagen).
        Además, el VEREDICTO (50/50 confirma/anula) se decide AHORA en
        generación para que funcione igual en tick vivo y en batch
-       (simularJornadaIA): set ev._varConfirmed o ev._varAnulado. */
+       (simularJornadaIA): set ev._varConfirmed o ev._varAnulado.
+
+       CLAVE (bug Dembélé 2026-05-29): el marcador lo fija el motor
+       (simScore) y `genMatchEvents` ya emitió EXACTAMENTE goalsA+goalsB
+       goles que SÍ cuentan. Un gol anulado por VAR NO debe RESTAR de ese
+       marcador — si anulásemos un gol real, el acta mostraría menos
+       goles válidos que el resultado (3 válidos con marcador 4, foto
+       usuario). Y como en KO el ganador se decide desde simScore ANTES
+       de generar el acta, restar un gol aquí dejaría brackets corruptos
+       (un 1-0 anulado → 0-0 con winner ya fijado). Por eso una ANULACIÓN
+       de gol NO toca el gol real: emite un gol EXTRA "fantasma" (mismo
+       equipo, minuto anterior) marcado `_varAnulado`, que TODAS las
+       rutas ya excluyen del marcador y de las stats. Resultado:
+       marcador = simScore SIEMPRE, y el acta enseña el "gol anulado por
+       VAR" como lo que es — un gol que NO subió al marcador. Las
+       confirmaciones y el VAR sobre tarjetas/penaltis siguen siendo
+       cosméticos (sin impacto en el marcador). */
+    var _varGhostGoals = [];
     evts.forEach(function(ev) {
+      var isGoal = ['gol','pen-gol','falta-gol','propia'].indexOf(ev.type) !== -1;
       var vp = 0;
-      if (['gol','pen-gol','falta-gol','propia'].indexOf(ev.type) !== -1) vp = 1/15;
+      if (isGoal) vp = 1/15;
       else if (['pen-prov','pen-parado','pen-fallo'].indexOf(ev.type) !== -1) vp = 1/3;
       else if (ev.type === 'roja' || ev.type === 'd-amarilla' || ev.dbl) vp = 1/3;
-      if (vp > 0 && Math.random() < vp) {
+      if (vp <= 0 || Math.random() >= vp) return;
+      var annul = Math.random() < 0.5;
+      if (isGoal && annul) {
+        /* Gol anulado = gol EXTRA fantasma; el gol real intacto (cuenta). */
+        var _gm = Math.max(2, Math.min(90, (Number(ev.min)||45) - 1 - Math.floor(Math.random()*3)));
+        _varGhostGoals.push({ type:ev.type, ico:ev.ico, team:ev.team,
+          num:ev.num, player:ev.player, min:_gm, var:true, _varAnulado:true });
+      } else {
         ev.var = true;
-        if (Math.random() < 0.5) ev._varConfirmed = true;
-        else                     ev._varAnulado = true;
+        if (annul) ev._varAnulado = true;   /* tarjeta/penalti anulado — sin impacto en marcador */
+        else       ev._varConfirmed = true;
       }
     });
+    _varGhostGoals.forEach(function(g){ evts.push(g); });
     /* ── PORTERÍA IMBATIDA ───────────────────────────────────────────
        En IA vs IA `genMatchEventsEnhanced` no emitía el evento 'imbat'
        cuando un equipo cerraba el partido con 0 goles recibidos, así

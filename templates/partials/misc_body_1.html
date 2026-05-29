@@ -11471,6 +11471,7 @@ window._showSimProgress = function(opts, onDone){
           if (nB0) pjBucket[nB0] = (pjBucket[nB0]||0) + 1;
         }
         (m.evts||[]).forEach(function(ev){
+          if(!ev || ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
           var team = ev.realTeam || '';
           if(!team){ team = ev.team==='a'?tA:ev.team==='b'?tB:''; }
           var player = '';
@@ -11521,6 +11522,7 @@ window._showSimProgress = function(opts, onDone){
           if(processedMatches[dedupKey2]) return;
           processedMatches[dedupKey2] = true;
           (r.events||[]).forEach(function(ev){
+            if(!ev || ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
             var team = ev.team==='a'?tA:ev.team==='b'?tB:'';
             var player = typeof ev.player==='string'?ev.player:(Array.isArray(ev.player)?ev.player[1]:'');
             if(!player) return;
@@ -11607,6 +11609,7 @@ window._showSimProgress = function(opts, onDone){
           if (_nB) _tPjBucket[_nB] = (_tPjBucket[_nB]||0) + 1;
           _res.events.forEach(function(ev){
             if (!ev) return;
+            if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
             var team = ev.realTeam
                     || (ev.team === 'a' ? _tA : ev.team === 'b' ? _tB : '');
             var player = '';
@@ -19758,6 +19761,7 @@ window._showSimProgress = function(opts, onDone){
       var tA = m.teamA || '', tB = m.teamB || '';
       (m.evts || []).forEach(function(ev){
         if (!ev) return;
+        if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
         var team = ev.realTeam || (ev.team === 'a' ? tA : ev.team === 'b' ? tB : '');
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
@@ -21705,6 +21709,7 @@ window._showSimProgress = function(opts, onDone){
       if (!nameA || !nameB) return;
       (res.events || res.acta || []).forEach(function(ev){
         if (!ev) return;
+        if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta para nadie */
         var team = ev.realTeam || ((ev.team === 'a' || ev.side === 'a' || ev.team === 'home') ? nameA : (ev.team === 'b' || ev.side === 'b' || ev.team === 'away') ? nameB : (ev.team === nameA ? nameA : ev.team === nameB ? nameB : ''));
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
@@ -21763,6 +21768,7 @@ window._showSimProgress = function(opts, onDone){
       var nameA = res.home, nameB = res.away;
       _evs.forEach(function(ev){
         if (!ev) return;
+        if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta para nadie */
         var team = ev.realTeam || ((ev.team === 'a' || ev.side === 'a' || ev.team === 'home') ? nameA : (ev.team === 'b' || ev.side === 'b' || ev.team === 'away') ? nameB : (ev.team === nameA ? nameA : ev.team === nameB ? nameB : ''));
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';

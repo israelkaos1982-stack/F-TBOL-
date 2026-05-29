@@ -21835,7 +21835,7 @@ window._showSimProgress = function(opts, onDone){
      Persiste una sola vez. Hace que la caja de estadisticas se rellene
      sin tener que resetear el torneo. Generico: lo usan Mundial 2032 y
      cualquier otra caja "en vivo". */
-  function _tourBackfillActasFromResults(cfg, teams){
+  function _tourBackfillActasFromResults(cfg, teams, force){
     if (!cfg || !cfg.results) return false;
     if (typeof window.genMatchEventsEnhanced !== 'function') return false;
     /* Mapa key->{a,b} con nombres reales desde los fixtures de grupo y el
@@ -21869,7 +21869,22 @@ window._showSimProgress = function(opts, onDone){
     Object.keys(cfg.results).forEach(function(mk){
       var r = cfg.results[mk]; if (!r || !r.played) return;
       if (/\|L[12]$/.test(mk)) return;
-      var evs = r.events || r.acta; if (evs && evs.length) return;
+      var evs = r.events || r.acta;
+      /* `force` (botón 🔄 Recalcular) regenera el acta SOLO si la
+         existente es placeholder ("Jugador A/B", sin nombre real) —
+         útil si el acta vieja se guardó antes de hidratar las
+         plantillas de selecciones. Si ya hay goleadores con nombre
+         real, NO la tocamos (preserva los scorers originales). */
+      if (evs && evs.length) {
+        if (!force) return;
+        var _hasReal = evs.some(function(e){
+          if (!e) return false;
+          var pn = Array.isArray(e.player) ? (e.player[1]||e.player[0]) : (e.player || e.name || e.playerName || '');
+          pn = String(pn||'').trim();
+          return pn && !/^jugador\s*[ab]?$/i.test(pn) && pn !== '?';
+        });
+        if (_hasReal) return;   /* ya tiene nombres reales → respetar */
+      }
       var info = idx[mk] || {};
       var home = r.home || info.a, away = r.away || info.b;
       if (!home || !away) return;
@@ -21918,6 +21933,14 @@ window._showSimProgress = function(opts, onDone){
       inner = (typeof window._lextStatsDashHtml === 'function')
         ? window._lextStatsDashHtml(stats) : EMPTY;
     } catch(_){ inner = EMPTY; }
+    /* Botón 🔄 Recalcular: fuerza la regeneración del acta (events) de
+       TODOS los partidos jugados y re-pinta. Red de seguridad visible
+       para el usuario cuando, por timing/hidratación, el backfill
+       automático no rellenó la caja al primer render. */
+    html += '<div style="display:flex;justify-content:center;margin:4px 0 10px;">'
+      + '<button type="button" class="mundial-recalc-btn" data-tour="'+tourId+'" '
+      + 'style="background:linear-gradient(145deg,#1f6f8b,#0d3a4a);border:1px solid rgba(77,208,225,.6);color:#cdeef5;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
+      + '🔄 Recalcular estadísticas</button></div>';
     html += '<div class="liga-stats-wrap">' + inner + '</div>';
     return html;
   }
@@ -23849,6 +23872,36 @@ window._showSimProgress = function(opts, onDone){
     }
 
     /* d) Botón ↺ Reset (bracket / liga / grupos+ko). */
+    /* Botón 🔄 Recalcular estadísticas (caja de stats del Mundial 2032).
+       Fuerza la regeneración del acta (events) de los partidos jugados
+       cuyo acta sea placeholder o falte, hidratando antes las
+       plantillas de selecciones, y re-pinta el torneo. No borra
+       resultados — solo reconstruye los goleadores/tarjetas/MVP. */
+    var recalcBtn = target.closest('.mundial-recalc-btn');
+    if (recalcBtn) {
+      var tidR = recalcBtn.getAttribute('data-tour');
+      if (!tidR || TOUR_IDS.indexOf(tidR) === -1) return;
+      ev.stopPropagation();
+      try {
+        var prevTxt = recalcBtn.textContent;
+        recalcBtn.textContent = '⏳ Recalculando…';
+        recalcBtn.disabled = true;
+      } catch(_){}
+      try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+      try {
+        var cfgR = _tourLoadCachedSync(tidR);
+        if (cfgR) {
+          var teamsR = (cfgR.teams || []);
+          var ch = _tourBackfillActasFromResults(cfgR, teamsR, true);
+          if (ch && typeof window._tourSave === 'function') {
+            try { window._tourSave(tidR, cfgR); } catch(_){}
+          }
+        }
+      } catch(_){}
+      try { if (typeof window._tourRender === 'function') window._tourRender(tidR); } catch(_){}
+      return;
+    }
+
     var resetBtn = target.closest('.tour-reset-btn');
     if (resetBtn) {
       var tid4 = resetBtn.getAttribute('data-tour');

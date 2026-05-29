@@ -33304,7 +33304,42 @@ https://api.sofascore.app/api/v1/team/44/image
         var _slugPending = false;
         try { _slugPending = _ligaExtPendingSet().indexOf(k) !== -1; } catch(_){}
         var localDirty = !!LIGA_LOCAL_DIRTY_AT[k] || _slugPending;
-        if (teamsWipe || playersWipe || perTeamWipe || localDirty) {
+        /* ─── SYNC MULTI-DISPOSITIVO (2026-05-29) ─────────────────────
+           Bug usuario: "mi amigo edita los equipos de Resto de Ligas
+           (Portugal) desde su móvil, pero desde mi móvil/PC no sale
+           actualizado". El anti-wipe de abajo conserva la copia LOCAL
+           cuando es "más rica" que la del servidor (más equipos/jugadores),
+           descartando la edición que OTRO dispositivo subió al servidor.
+           Para distinguir una edición remota legítima de un wipe real
+           comparamos el `updatedAt` más reciente de los equipos
+           (lextSaveTeam sella cada equipo al guardar): si el servidor trae
+           un equipo editado MÁS TARDE que cualquiera del local, es una
+           edición de otro dispositivo y debe GANAR. Guards: servidor no
+           vacío y que NO encoja a menos de la mitad de los equipos locales
+           (un reset de Railway daría 0 → cae al anti-wipe), y NUNCA pisar
+           cambios locales sin guardar (`localDirty`). El merge por equipo
+           del servidor (_lx_merge_teams, app.py) garantiza que adoptar el
+           server no pierde una edición local previa: el server es la
+           fusión last-edit-wins de ambos. */
+        var _lextMaxTeamTs = function(_d){
+          var _m = 0;
+          try {
+            var _ts = (_d && _d.teams) || [];
+            for (var _i = 0; _i < _ts.length; _i++){
+              var _v = (_ts[_i] && _ts[_i].updatedAt) ? +_ts[_i].updatedAt : 0;
+              if (_v > _m) _m = _v;
+            }
+          } catch(_){}
+          return _m;
+        };
+        var _adoptRemoteEdit = !localDirty &&
+          (_lextMaxTeamTs(data) > _lextMaxTeamTs(localCache)) &&
+          ((data.teams ? data.teams.length : 0) > 0) &&
+          ((data.teams ? data.teams.length : 0) >= Math.ceil(localTeams.length / 2));
+        if (_adoptRemoteEdit) {
+          try{ console.warn('[ligaExt] '+k+': edición remota más reciente — adoptando copia del servidor (otro dispositivo).'); }catch(_){}
+        }
+        if (!_adoptRemoteEdit && (teamsWipe || playersWipe || perTeamWipe || localDirty)) {
           try{ console.warn('[ligaExt] anti-wipe activado ('+k+'): local='+localTeams.length+'T/'+localPlayerCount+'J vs server='+(data.teams||[]).length+'T/'+serverPlayerCount+'J'+(perTeamWipe?' (per-team)':'')+(localDirty?' (dirty)':'')+'. Conservando local y re-subiendo.'); }catch(_){}
           // Conservamos la versión local en memoria y disco.
           LIGA_CACHE[k] = localCache;

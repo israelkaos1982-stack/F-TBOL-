@@ -21821,11 +21821,37 @@ window._showSimProgress = function(opts, onDone){
        3. Mensaje vacío correcto ("Sin datos todavía"), no
           "Estadísticas no disponibles" (que era el branch de
           `_lextStatsDashHtml` ausente). */
+  /* Backfill de actas (events) para partidos YA jugados que solo
+     guardaron el marcador (sims de grupos/KO previos al fix 2026-05-29).
+     Regenera los events con genMatchEventsEnhanced usando el home/away +
+     marcador persistidos y normaliza realTeam igual que _tourAttachActa.
+     Persiste una sola vez. Hace que la caja de estadisticas se rellene
+     sin tener que resetear el torneo. Generico: lo usan Mundial 2032 y
+     cualquier otra caja "en vivo". */
+  function _tourBackfillActasFromResults(cfg){
+    if (!cfg || !cfg.results) return false;
+    if (typeof window.genMatchEventsEnhanced !== 'function') return false;
+    var changed = false;
+    Object.keys(cfg.results).forEach(function(mk){
+      var r = cfg.results[mk]; if (!r || !r.played) return;
+      var evs = r.events || r.acta; if (evs && evs.length) return;
+      var home = r.home, away = r.away; if (!home || !away) return;
+      var gh = (typeof r.gh === 'number') ? r.gh : ((typeof r.a === 'number') ? r.a : null);
+      var ga = (typeof r.ga === 'number') ? r.ga : ((typeof r.b === 'number') ? r.b : null);
+      if (gh == null || ga == null) return;
+      var ev = window.genMatchEventsEnhanced(home, away, gh|0, ga|0, null) || [];
+      ev.forEach(function(e){ if (e && !e.realTeam) e.realTeam = ((e.side==='a'||e.team==='home'||e.team===home) ? home : away); });
+      r.events = ev; r.acta = ev; changed = true;
+    });
+    if (changed) { try { if (typeof window._tourSave === 'function') window._tourSave(cfg.id, cfg); } catch(_){} }
+    return changed;
+  }
   function _mundialStatsHtml(cfg, tourId, teams){
     var html = _mundialBackBtn(tourId)
       + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;'
       + 'font-size:11px;color:#4dd0e1;">📊 ESTADÍSTICAS · TODAS LAS FASES</p>';
     var stats = {};
+    try { _tourBackfillActasFromResults(cfg); } catch(_){}
     try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
     if (!stats || !Object.keys(stats).length) {
       try { var g = _tourStatsFromCfgResults(cfg); if (g && Object.keys(g).length) stats = g; } catch(_){}

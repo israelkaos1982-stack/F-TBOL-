@@ -21898,9 +21898,18 @@ window._showSimProgress = function(opts, onDone){
     }
     if (!stats || !Object.keys(stats).length) {
       try {
-        var sk = (cfg && cfg.id === 'mundial') ? 'ef_player_stats_mundial_v1' : 'ef_player_stats_sel_v1';
-        var fb = _statsFromStoreFilteredToTeams(sk, teams);
-        if (fb && Object.keys(fb).length) stats = fb;
+        /* Cadena de stores persistidos. OJO: `_tourAttachActa` registra
+           los partidos del Mundial 2032 (y de cualquier torneo del motor
+           _tour*) con competition='torneos' → store `ef_player_stats_torneos_v1`.
+           Probamos ese PRIMERO, luego los buckets canónicos sel/mundial.
+           Filtramos siempre a los equipos del torneo para no mezclar. */
+        var _sks = ['ef_player_stats_torneos_v1',
+                    (cfg && cfg.id === 'mundial') ? 'ef_player_stats_mundial_v1' : 'ef_player_stats_sel_v1',
+                    'ef_player_stats_sel_v1', 'ef_player_stats_mundial_v1'];
+        for (var _ki = 0; _ki < _sks.length; _ki++) {
+          var fb = _statsFromStoreFilteredToTeams(_sks[_ki], teams);
+          if (fb && Object.keys(fb).length) { stats = fb; break; }
+        }
       } catch(_){}
     }
     var EMPTY = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';

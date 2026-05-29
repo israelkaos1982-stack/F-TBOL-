@@ -16203,6 +16203,24 @@
       return rndSq(sq);
     }
 
+    /* ── Goles especiales = RE-ETIQUETADO de un gol normal, NUNCA un gol
+       EXTRA ──────────────────────────────────────────────────────────
+       El marcador (simScore.gh/ga) lo fija el motor de simulación y
+       `genMatchEvents` ya emitió EXACTAMENTE goalsA+goalsB eventos de
+       tipo 'gol'. Penalti / gol de falta / autogol NO deben AÑADIR un
+       gol nuevo: si lo hicieran, el acta marcaría 1 gol más que el
+       resultado real (bug Olise 2026-05-29: "gol de falta de Olise"
+       con Francia 0-1 en el Mundial). Además varias rutas derivan el
+       marcador contando estos eventos (tick IA-vs-IA, _mlFirePendingEvents
+       HvIA), así que un gol extra descuadraría TODOS esos caminos.
+       Por eso cada tipo CONVIERTE un gol normal existente del equipo
+       correspondiente. `_takeGoal(side)` devuelve un evento 'gol' de ese
+       lado (o null si no hay ninguno que convertir). */
+    function _takeGoal(side){
+      var gs = evts.filter(function(e){ return e && e.type === 'gol' && e.team === side; });
+      return gs.length ? gs[Math.floor(Math.random()*gs.length)] : null;
+    }
+
     /* ── PENALTI (8% por partido) ── */
     if (Math.random() < 0.08) {
       var penTeam   = Math.random() < 0.5 ? 'a' : 'b';    // equipo que RECIBE y tira
@@ -16218,11 +16236,17 @@
       evts.push({ type:'pen-prov', ico:'🤦🥅', min:penMin, num:foulDef[0]||'', player:foulDef[1]||'?', team:foulTeam });
       var penRoll = Math.random();
       var penKickMin = Math.min(penMin + 1 + Math.floor(Math.random()*2), 90);
-      if (penRoll < 0.70) {
-        // Gol de penalti
-        evts.push({ type:'pen-gol', ico:'⚽🥅', min:penKickMin, num:penKicker[0]||'', player:penKicker[1]||'?', team:penTeam });
+      // Solo puede ser GOL de penalti si penTeam tiene un gol normal que
+      // convertir; si no, el penalti se resuelve como parado/fallado para
+      // NO descuadrar el marcador.
+      var penGoal = (penRoll < 0.70) ? _takeGoal(penTeam) : null;
+      if (penGoal) {
+        // Gol de penalti: re-etiqueta el gol normal existente.
+        penGoal.type = 'pen-gol'; penGoal.ico = '⚽🥅'; penGoal.min = penKickMin;
+        if (penKicker) { penGoal.num = penKicker[0]||penGoal.num||''; penGoal.player = penKicker[1]||penGoal.player||'?'; }
       } else if (penRoll < 0.90) {
-        // Parado por el portero
+        // Parado por el portero (incluye el caso "iba a ser gol pero no
+        // había gol que convertir" → el penalti se falla, sin tocar marcador).
         evts.push({ type:'pen-parado', ico:'🖐🥅', min:penKickMin, num:penGk[0]||'', player:penGk[1]||'?', team:foulTeam });
       } else {
         // Fallado
@@ -16233,15 +16257,26 @@
     /* ── GOL DE FALTA (8% por partido) ── */
     if (Math.random() < 0.08) {
       var fkTeam = Math.random() < 0.5 ? 'a' : 'b';
-      var fkP    = pickSpecialist(fkTeam === 'a' ? outA : outB, 'freeKick', fkTeam === 'a' ? teamA : teamB);
-      evts.push({ type:'falta-gol', ico:'⚽🎯', min:rndMin(), num:fkP[0]||'', player:fkP[1]||'?', team:fkTeam });
+      var fkGoal = _takeGoal(fkTeam);   // re-etiqueta un gol normal; si no hay, no ocurre
+      if (fkGoal) {
+        var fkP = pickSpecialist(fkTeam === 'a' ? outA : outB, 'freeKick', fkTeam === 'a' ? teamA : teamB);
+        fkGoal.type = 'falta-gol'; fkGoal.ico = '⚽🎯';
+        if (fkP) { fkGoal.num = fkP[0]||fkGoal.num||''; fkGoal.player = fkP[1]||fkGoal.player||'?'; }
+      }
     }
 
     /* ── AUTOGOL (5% por partido) ── */
     if (Math.random() < 0.05) {
-      var ogTeam = Math.random() < 0.5 ? 'a' : 'b';
-      var ogP    = rndSq(ogTeam === 'a' ? outA : outB);
-      evts.push({ type:'propia', ico:'⚽🚫', min:rndMin(), num:ogP[0]||'', player:ogP[1]||'?', team:ogTeam });
+      var ogTeam = Math.random() < 0.5 ? 'a' : 'b';     // mete en su propia puerta
+      var benef  = ogTeam === 'a' ? 'b' : 'a';          // equipo BENEFICIADO (suma el gol)
+      var ogGoal = _takeGoal(benef);   // el gol del beneficiado pasa a ser en propia puerta
+      if (ogGoal) {
+        var ogP = rndSq(ogTeam === 'a' ? outA : outB);
+        // El contador de marcador invierte el lado para 'propia', así que
+        // dejamos team=ogTeam y el gol sigue contando para `benef`.
+        ogGoal.type = 'propia'; ogGoal.ico = '⚽🚫'; ogGoal.team = ogTeam;
+        ogGoal.num = ogP[0]||''; ogGoal.player = ogP[1]||'?';
+      }
     }
 
     /* ── ROJAS / DOBLE AMARILLA adicionales ── */

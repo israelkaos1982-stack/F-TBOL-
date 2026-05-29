@@ -2041,7 +2041,11 @@ var STAT_CLASS_MAP = {
        sin elegir, o el flujo de Copa terminó por una rama distinta).
        Sin esto, el partido 0-2 ganado al rival deja a Neuer con 0
        imbat aunque haya jugado la final. */
-    var _evtsList = evts || [];
+    /* Excluimos los goles ANULADOS por VAR (_varAnulado): no cuentan ni
+       para el marcador ni para el goleador en plantilla/dashboard. El
+       acta sigue mostrándolos como "ANULADA POR VAR" desde cfg.results,
+       pero NUNCA entran al store de stats. */
+    var _evtsList = (evts || []).filter(function(e){ return e && !e._varAnulado; });
     var _golA = 0, _golB = 0;
     var _hasImbA = false, _hasImbB = false;
     _evtsList.forEach(function(ev){

@@ -11471,6 +11471,7 @@ window._showSimProgress = function(opts, onDone){
           if (nB0) pjBucket[nB0] = (pjBucket[nB0]||0) + 1;
         }
         (m.evts||[]).forEach(function(ev){
+          if(!ev || ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
           var team = ev.realTeam || '';
           if(!team){ team = ev.team==='a'?tA:ev.team==='b'?tB:''; }
           var player = '';
@@ -11521,6 +11522,7 @@ window._showSimProgress = function(opts, onDone){
           if(processedMatches[dedupKey2]) return;
           processedMatches[dedupKey2] = true;
           (r.events||[]).forEach(function(ev){
+            if(!ev || ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
             var team = ev.team==='a'?tA:ev.team==='b'?tB:'';
             var player = typeof ev.player==='string'?ev.player:(Array.isArray(ev.player)?ev.player[1]:'');
             if(!player) return;
@@ -11607,6 +11609,7 @@ window._showSimProgress = function(opts, onDone){
           if (_nB) _tPjBucket[_nB] = (_tPjBucket[_nB]||0) + 1;
           _res.events.forEach(function(ev){
             if (!ev) return;
+            if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
             var team = ev.realTeam
                     || (ev.team === 'a' ? _tA : ev.team === 'b' ? _tB : '');
             var player = '';
@@ -19758,6 +19761,7 @@ window._showSimProgress = function(opts, onDone){
       var tA = m.teamA || '', tB = m.teamB || '';
       (m.evts || []).forEach(function(ev){
         if (!ev) return;
+        if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
         var team = ev.realTeam || (ev.team === 'a' ? tA : ev.team === 'b' ? tB : '');
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
@@ -21705,6 +21709,7 @@ window._showSimProgress = function(opts, onDone){
       if (!nameA || !nameB) return;
       (res.events || res.acta || []).forEach(function(ev){
         if (!ev) return;
+        if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta para nadie */
         var team = (ev.team === 'a' || ev.side === 'a' || ev.team === 'home') ? nameA : (ev.team === 'b' || ev.side === 'b' || ev.team === 'away') ? nameB : (ev.realTeam || (ev.team === nameA ? nameA : ev.team === nameB ? nameB : ''));
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
@@ -21763,6 +21768,7 @@ window._showSimProgress = function(opts, onDone){
       var nameA = res.home, nameB = res.away;
       _evs.forEach(function(ev){
         if (!ev) return;
+        if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta para nadie */
         var team = (ev.team === 'a' || ev.side === 'a' || ev.team === 'home') ? nameA : (ev.team === 'b' || ev.side === 'b' || ev.team === 'away') ? nameB : (ev.realTeam || (ev.team === nameA ? nameA : ev.team === nameB ? nameB : ''));
         var player = '';
         if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
@@ -33298,7 +33304,42 @@ https://api.sofascore.app/api/v1/team/44/image
         var _slugPending = false;
         try { _slugPending = _ligaExtPendingSet().indexOf(k) !== -1; } catch(_){}
         var localDirty = !!LIGA_LOCAL_DIRTY_AT[k] || _slugPending;
-        if (teamsWipe || playersWipe || perTeamWipe || localDirty) {
+        /* ─── SYNC MULTI-DISPOSITIVO (2026-05-29) ─────────────────────
+           Bug usuario: "mi amigo edita los equipos de Resto de Ligas
+           (Portugal) desde su móvil, pero desde mi móvil/PC no sale
+           actualizado". El anti-wipe de abajo conserva la copia LOCAL
+           cuando es "más rica" que la del servidor (más equipos/jugadores),
+           descartando la edición que OTRO dispositivo subió al servidor.
+           Para distinguir una edición remota legítima de un wipe real
+           comparamos el `updatedAt` más reciente de los equipos
+           (lextSaveTeam sella cada equipo al guardar): si el servidor trae
+           un equipo editado MÁS TARDE que cualquiera del local, es una
+           edición de otro dispositivo y debe GANAR. Guards: servidor no
+           vacío y que NO encoja a menos de la mitad de los equipos locales
+           (un reset de Railway daría 0 → cae al anti-wipe), y NUNCA pisar
+           cambios locales sin guardar (`localDirty`). El merge por equipo
+           del servidor (_lx_merge_teams, app.py) garantiza que adoptar el
+           server no pierde una edición local previa: el server es la
+           fusión last-edit-wins de ambos. */
+        var _lextMaxTeamTs = function(_d){
+          var _m = 0;
+          try {
+            var _ts = (_d && _d.teams) || [];
+            for (var _i = 0; _i < _ts.length; _i++){
+              var _v = (_ts[_i] && _ts[_i].updatedAt) ? +_ts[_i].updatedAt : 0;
+              if (_v > _m) _m = _v;
+            }
+          } catch(_){}
+          return _m;
+        };
+        var _adoptRemoteEdit = !localDirty &&
+          (_lextMaxTeamTs(data) > _lextMaxTeamTs(localCache)) &&
+          ((data.teams ? data.teams.length : 0) > 0) &&
+          ((data.teams ? data.teams.length : 0) >= Math.ceil(localTeams.length / 2));
+        if (_adoptRemoteEdit) {
+          try{ console.warn('[ligaExt] '+k+': edición remota más reciente — adoptando copia del servidor (otro dispositivo).'); }catch(_){}
+        }
+        if (!_adoptRemoteEdit && (teamsWipe || playersWipe || perTeamWipe || localDirty)) {
           try{ console.warn('[ligaExt] anti-wipe activado ('+k+'): local='+localTeams.length+'T/'+localPlayerCount+'J vs server='+(data.teams||[]).length+'T/'+serverPlayerCount+'J'+(perTeamWipe?' (per-team)':'')+(localDirty?' (dirty)':'')+'. Conservando local y re-subiendo.'); }catch(_){}
           // Conservamos la versión local en memoria y disco.
           LIGA_CACHE[k] = localCache;
@@ -39180,7 +39221,7 @@ https://api.sofascore.app/api/v1/team/44/image
         if(inp.getAttribute('data-f')==='shield'){
           /* repintar el thumb del escudo al hacer blur (no en cada
              keystroke — evita peticiones de imagen en cada tecla) */
-          inp.addEventListener('change', function(){ _lcRender(); });
+          inp.addEventListener('change', function(){ _lcSyncFromDOM(); _lcRender(); });
         }
       });
       /* papelera */
@@ -39188,6 +39229,8 @@ https://api.sofascore.app/api/v1/team/44/image
       if(delBtn) delBtn.addEventListener('click', function(){
         var lbl = t.name ? '«'+t.name+'»' : 'este equipo';
         if(!confirm('⚠️ ¿Eliminar '+lbl+'?\n\nEl equipo se borrará al pulsar 💾 Guardar. Si cierras sin guardar, no pasa nada.')) return;
+        /* Capturar lo tecleado en las OTRAS cards antes de re-pintar. */
+        _lcSyncFromDOM();
         _LC_STATE.teams.splice(idx,1);
         _lcRender();
       });
@@ -39217,12 +39260,14 @@ https://api.sofascore.app/api/v1/team/44/image
       /* ⚙ Más opciones */
       var moreBtn = row.querySelector('.lc-more-btn');
       if(moreBtn) moreBtn.addEventListener('click', function(){
+        _lcSyncFromDOM();
         t._uiExpand = !t._uiExpand;
         _lcRender();
       });
       /* tipo IA/Humano */
       row.querySelectorAll('.lc-tipo-btn').forEach(function(b){
         b.addEventListener('click', function(){
+          _lcSyncFromDOM();
           t.isHuman = (b.getAttribute('data-tipo')==='human');
           if(t.isHuman && !t.humanEmoji){
             var used = {};
@@ -39239,9 +39284,44 @@ https://api.sofascore.app/api/v1/team/44/image
       /* picker de emoji */
       row.querySelectorAll('.lc-emoji').forEach(function(b){
         b.addEventListener('click', function(){
+          _lcSyncFromDOM();
           t.humanEmoji = b.getAttribute('data-em')||'';
           _lcRender();
         });
+      });
+    });
+  }
+  /* Lee los valores ACTUALES de los inputs del DOM y los aplasta sobre
+     _LC_STATE ANTES de guardar. Imprescindible porque la captura por
+     evento `input` (_lcBindCards) NO es fiable en teclados móviles con
+     escritura por gestos / autocompletado / corrector: el valor queda
+     pintado en el <input> pero el evento `input` no se dispara, así que
+     `t.name` (y el resto de campos) se quedaban sin actualizar y el
+     equipo recién añadido se guardaba VACÍO (bloqueado por el chequeo
+     de nombre vacío) o sin los datos tecleados — "lo añado, lo guardo y
+     no se queda guardado" (foto usuario 2026-05-29, móvil). Leer del DOM
+     al guardar garantiza que SIEMPRE persiste lo que el usuario ve en
+     pantalla, dispare o no el navegador el evento `input`. */
+  function _lcSyncFromDOM(){
+    if(!_LC_STATE) return;
+    var body = document.getElementById('lext-cards-body');
+    if(!body) return;
+    body.querySelectorAll('.lc-row').forEach(function(row){
+      var idx = parseInt(row.getAttribute('data-idx'),10);
+      if(isNaN(idx) || !_LC_STATE.teams[idx]) return;
+      var t = _LC_STATE.teams[idx];
+      row.querySelectorAll('input[data-f]').forEach(function(inp){
+        var f = inp.getAttribute('data-f');
+        if(f==='power' || f==='atk' || f==='mid' || f==='def'){
+          t[f] = _lcClamp(inp.value, t[f], 1, 100);
+        } else if(f==='aggressiveness'){
+          t[f] = _lcClamp(inp.value, t[f], 1, 99);
+        } else if(f==='budget'){
+          var raw = (inp.value||'').replace(/[^\d]/g,'');
+          t[f] = raw ? parseInt(raw,10) : 0;
+        } else {
+          t[f] = (inp.value||'').trim();
+        }
       });
     });
   }
@@ -39250,6 +39330,9 @@ https://api.sofascore.app/api/v1/team/44/image
      antes de abrir el editor de plantilla). */
   function _lcCommit(silent){
     if(!_LC_STATE || !CURRENT_KEY) return false;
+    /* Capturar lo tecleado AHORA mismo desde el DOM (los listeners
+       `input` pueden no haberse disparado en móvil). */
+    _lcSyncFromDOM();
     /* nombre vacío */
     for(var i=0;i<_LC_STATE.teams.length;i++){
       if(!_LC_STATE.teams[i].name){
@@ -39474,6 +39557,10 @@ https://api.sofascore.app/api/v1/team/44/image
   };
   window.lextCardsAdd = function(){
     if(!_LC_STATE) return;
+    /* Capturar lo tecleado en las cards existentes ANTES de re-pintar
+       (si no, el re-render desde _LC_STATE borraría un nombre que el
+       móvil no propagó vía evento `input`). */
+    _lcSyncFromDOM();
     _LC_STATE.teams.push({
       id: uid(), name:'',
       power:75, atk:75, mid:75, def:75, aggressiveness:50,
@@ -39507,6 +39594,8 @@ https://api.sofascore.app/api/v1/team/44/image
   };
   window.lextCardsBulkApply = function(){
     if(!_LC_STATE) return;
+    /* Preservar lo tecleado en las cards antes de fusionar la lista. */
+    _lcSyncFromDOM();
     var ta = document.getElementById('lc-bulk-ta');
     var txt = ta ? ta.value : '';
     var parsed = _lcBulkParse(txt);

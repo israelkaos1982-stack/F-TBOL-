@@ -1938,30 +1938,41 @@ def _purge_pre_june(data):
     return data
 
 
-# PRE-VERANO en MAYO (01–31). Mundial de Selecciones: 8 partidos
-# (J1/J2/J3/Dieciseisavos/Octavos/Cuartos/Semis/Final) + 23 descansos.
-# Petición usuario 2026-05-20. 2026-05-24: renombrado "Repesca J3"
-# → "Dieciseisavos" (la ronda es Dieciseisavos = 1/32 = 32 selecciones
-# según _mundialFormatConfig en misc_body_1.html).
-_PREVERANO_MAY_MATCHES = [
-    (3,  "Mundial Grupo — J1",          "☀️"),
-    (7,  "Mundial Grupo — J2",          "🌧"),
-    (11, "Mundial Grupo — J3",          "☀️"),
-    (15, "Mundial Dieciseisavos",       "☀️"),
-    (19, "Mundial Octavos",             "☀️"),
-    (23, "Mundial Cuartos",             "☀️"),
-    (27, "Mundial Semis",               "☀️"),
-    (31, "MUNDIAL GRAN FINAL 🏆",        "☀️"),
-]
+# PRE-VERANO en MAYO (01–31). Mundial de Selecciones: 9 partidos
+# (J1/J2/J3/Dieciseisavos/Octavos/Cuartos/Semis/Tercer Puesto/Final) +
+# 23 descansos. Petición usuario 2026-05-20. 2026-05-24: renombrado
+# "Repesca J3" → "Dieciseisavos" (la ronda es Dieciseisavos = 1/32 =
+# 32 selecciones según _mundialFormatConfig en misc_body_1.html).
+# 2026-05-29: el 31 May se disputan DOS partidos el mismo día — el
+# "Mundial Tercer Puesto" (3º/4º puesto) Y la "MUNDIAL GRAN FINAL".
+# Por eso el mapa es day → LISTA de partidos (en orden de render): el
+# Tercer Puesto va PRIMERO para que la card del hub de la selección
+# humana (Francia, perdedora de semis) resuelva su partido del 3er
+# puesto antes que la Final (en la que no juega). Los nombres deben
+# coincidir EXACTAMENTE con MUNDIAL_KO_LABELS de misc_body_1.html para
+# que la fecha de la PANTALLA DE PREVIA salga del calendario (31 May)
+# y no del fallback new Date().
+_PREVERANO_MAY_MATCHES = {
+    3:  [("Mundial Grupo — J1",      "☀️")],
+    7:  [("Mundial Grupo — J2",      "🌧")],
+    11: [("Mundial Grupo — J3",      "☀️")],
+    15: [("Mundial - Dieciseisavos", "☀️")],
+    19: [("Mundial Octavos",         "☀️")],
+    23: [("Mundial Cuartos",         "☀️")],
+    27: [("Mundial Semis",           "☀️")],
+    31: [("Mundial Tercer Puesto",   "☀️"),
+         ("MUNDIAL GRAN FINAL 🏆",    "☀️")],
+}
 def _build_preverano_may_events():
-    matches = {d: (n, w) for d, n, w in _PREVERANO_MAY_MATCHES}
     out = []
     for day in range(1, 32):
         date = "%02d May" % day
-        if day in matches:
-            n, w = matches[day]
-            out.append({"id": "pvm-%02d" % day, "date": date,
-                        "icon": "🌍", "name": n, "weather": w})
+        ms = _PREVERANO_MAY_MATCHES.get(day)
+        if ms:
+            for i, (n, w) in enumerate(ms):
+                eid = "pvm-%02d" % day if i == 0 else "pvm-%02d-%d" % (day, i)
+                out.append({"id": eid, "date": date,
+                            "icon": "🌍", "name": n, "weather": w})
         else:
             out.append({"id": "pvm-%02d" % day, "date": date,
                         "icon": "💤", "name": "Descanso", "weather": "☀️"})

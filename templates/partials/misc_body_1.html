@@ -29528,7 +29528,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef3340,#fff,#00a3e0);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇺</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Luxembgo</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003da5,#ffd100,#cc0001);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇩</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Moldavia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce2028,#f7e117,#ce2028);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Maced.</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#fff,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇧</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Irlanda</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#fff,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇬</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Irlanda</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf0921,#fff,#cf0921);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Malta</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c40308,#d4af37,#c40308);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Montenegro</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
@@ -38315,6 +38315,123 @@ https://api.sofascore.app/api/v1/team/44/image
         try { _ensureRestoMundoSeed(); } catch(_){}
       }
       return _origOpen.apply(this, arguments);
+    };
+  })();
+
+  /* ═══════════════════════════════════════════════════════════════
+     N. Irlanda + Montenegro — pre-seed 20 equipos reales (2026-05-30)
+     Mismo patrón que "Resto Mundo": si la liga aún no tiene equipos,
+     la sembramos con 20 clubes reales para que la TABLA y la COPA de
+     20 (4 grupos × 5 → cuartos → semis → final, igual que el resto)
+     funcionen out-of-the-box. Las REGLAS (zonas Europa) y los valores
+     de cada equipo siguen siendo 100% editables desde la pantalla de
+     la liga (botones 🖍 Edit y 📜 Reglas). Petición usuario: "quiero
+     lo mismo que estas y el resto".
+     ═══════════════════════════════════════════════════════════════ */
+  var _EXTRA_LEAGUE_SEEDS = {
+    'n-irlanda': {
+      /* NIFL — Premiership + Championship (poderes ~57-70). */
+      teams: [
+        {name:'Linfield FC',         power:70, atk:70, mid:70, def:70},
+        {name:'Larne FC',            power:70, atk:70, mid:70, def:70},
+        {name:'Glentoran FC',        power:68, atk:68, mid:68, def:68},
+        {name:'Cliftonville FC',     power:67, atk:67, mid:67, def:67},
+        {name:'Crusaders FC',        power:67, atk:67, mid:67, def:67},
+        {name:'Coleraine FC',        power:66, atk:66, mid:66, def:66},
+        {name:'Glenavon FC',         power:65, atk:65, mid:65, def:65},
+        {name:'Ballymena United',    power:64, atk:64, mid:64, def:64},
+        {name:'Carrick Rangers',     power:63, atk:63, mid:63, def:63},
+        {name:'Dungannon Swifts',    power:63, atk:63, mid:63, def:63},
+        {name:'Loughgall FC',        power:62, atk:62, mid:62, def:62},
+        {name:'Portadown FC',        power:62, atk:62, mid:62, def:62},
+        {name:'Newry City AFC',      power:61, atk:61, mid:61, def:61},
+        {name:'Bangor FC',           power:60, atk:60, mid:60, def:60},
+        {name:'Annagh United',       power:60, atk:60, mid:60, def:60},
+        {name:'Ballyclare Comrades', power:59, atk:59, mid:59, def:59},
+        {name:'H&W Welders',         power:59, atk:59, mid:59, def:59},
+        {name:'Dergview FC',         power:58, atk:58, mid:58, def:58},
+        {name:'Institute FC',        power:58, atk:58, mid:58, def:58},
+        {name:'Ards FC',             power:57, atk:57, mid:57, def:57}
+      ]
+    },
+    'montenegro': {
+      /* Prva CFL + Druga (poderes ~57-70). */
+      teams: [
+        {name:'FK Budućnost Podgorica', power:70, atk:70, mid:70, def:70},
+        {name:'FK Sutjeska Nikšić',     power:69, atk:69, mid:69, def:69},
+        {name:'FK Dečić',               power:67, atk:67, mid:67, def:67},
+        {name:'OFK Petrovac',           power:66, atk:66, mid:66, def:66},
+        {name:'FK Mornar',              power:66, atk:66, mid:66, def:66},
+        {name:'FK Rudar Pljevlja',      power:65, atk:65, mid:65, def:65},
+        {name:'FK Arsenal Tivat',       power:64, atk:64, mid:64, def:64},
+        {name:'OFK Titograd',           power:64, atk:64, mid:64, def:64},
+        {name:'FK Jezero',              power:63, atk:63, mid:63, def:63},
+        {name:'FK Bokelj',              power:62, atk:62, mid:62, def:62},
+        {name:'FK Zeta',                power:62, atk:62, mid:62, def:62},
+        {name:'FK Iskra',               power:61, atk:61, mid:61, def:61},
+        {name:'FK Mladost DG',          power:61, atk:61, mid:61, def:61},
+        {name:'FK Otrant Ulcinj',       power:60, atk:60, mid:60, def:60},
+        {name:'FK Lovćen',              power:60, atk:60, mid:60, def:60},
+        {name:'FK Berane',              power:59, atk:59, mid:59, def:59},
+        {name:'FK Kom',                 power:59, atk:59, mid:59, def:59},
+        {name:'FK Grbalj',              power:58, atk:58, mid:58, def:58},
+        {name:'FK Internacional Podgorica', power:58, atk:58, mid:58, def:58},
+        {name:'FK Cetinje',             power:57, atk:57, mid:57, def:57}
+      ]
+    }
+  };
+  function _ensureExtraLeagueSeed(slug){
+    var spec = _EXTRA_LEAGUE_SEEDS[slug];
+    if (!spec) return;
+    var hasTeams = false;
+    try {
+      var raw = localStorage.getItem('ligaExt_' + slug);
+      if (raw) {
+        var d = JSON.parse(raw);
+        if (d && Array.isArray(d.teams) && d.teams.length > 0) hasTeams = true;
+      }
+    } catch(_){}
+    if (hasTeams) return;
+    var teams = spec.teams.map(function(s, idx){
+      return {
+        id: slug + '-' + (idx + 1),
+        name: s.name,
+        power: s.power, atk: s.atk, mid: s.mid, def: s.def,
+        aggressiveness: 50,
+        shield: '', stadium: '', efootballAlias: '', budget: 0,
+        players: [],
+        isHuman: false, humanEmoji: ''
+      };
+    });
+    /* Zonas Europa de liga menor (mismas que el resto de las pequeñas
+       de WILDCARD_LIGA_SLUGS) — totalmente editables vía 📜 Reglas. */
+    var data = {
+      teams: teams,
+      results: [],
+      config: {
+        zones: { ucl:0, uclPrev:1, uclQual:1, uel:0, uecl:0, wildcard:1, desc:2 },
+        logo: '', cupName: '', cupLogo: ''
+      }
+    };
+    try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+    try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = data; } catch(_){}
+  }
+  /* Seed eager (al cargar) para que Sim All y aperturas directas vean
+     los 20 equipos sin abrir antes la pantalla. */
+  try {
+    Object.keys(_EXTRA_LEAGUE_SEEDS).forEach(function(s){ _ensureExtraLeagueSeed(s); });
+  } catch(_){}
+  /* Defensa adicional: re-sembrar al abrir si el storage quedó vacío. */
+  (function(){
+    var _origOpenX = window.openLigaExt;
+    if (typeof _origOpenX !== 'function') return;
+    window.openLigaExt = function(name, emoji){
+      try {
+        var slg = (typeof slugify === 'function') ? slugify(name || '') : '';
+        if (_EXTRA_LEAGUE_SEEDS[slg]) _ensureExtraLeagueSeed(slg);
+      } catch(_){}
+      return _origOpenX.apply(this, arguments);
     };
   })();
 

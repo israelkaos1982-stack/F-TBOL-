@@ -37,6 +37,32 @@ tablas.
 - Clasifica **solo el 1º** (`QUALIFY_TOP=1`) → **28** →
   `oq_to_previa_v1` (lo lee `computeUclPrevTeams`, count-agnóstico).
 
+### Previa de Champions (motor en `part2/misc_body_2.html`, IIFE `WPREV_*`)
+
+- **62 equipos** = **34 directos** 🟣 (zonas `uclPrev`) + **28** del
+  Open Qualifier (vía `oq_to_previa_v1`). `computeUclPrevTeams` los
+  une (dedupe). `POOL_TARGET=62`.
+- **16 grupos** (`N_GROUPS=16` → 14 de 4 + 2 de 3, snake por poder +
+  anti-mismo-país `_distributeGroups`). Liguilla a DOBLE ida y vuelta
+  (`_simulateGroup`), IA-vs-IA. La UI muestra **SOLO tablas**.
+- **CORTE GLOBAL** (`_globalRanking`): se ordena por **posición en su
+  grupo → PTS → DG → GF → nombre** y se reparte:
+  - **Top 12 → Champions** (`wprev_to_fase_grupos_v1`)
+  - **13-34 → Europa** (22) (`wprev_to_europa_v1`)
+  - **35-62 → Conference** (28) (`wprev_r1_to_conference_v1`)
+  - Los 62 clasifican (12+22+28 = 62, ninguno eliminado). Los huecos
+    TBD/placeholder NO se propagan a las fases finales.
+- Botones: **🎲 Draw** sortea los 16 grupos, **🎮 Sim** juega las
+  liguillas + aplica el corte, **♻️ Reset** limpia (`_resetEuropePoolFeeders('previa')`).
+- **Sustituye** al formato R1 eliminatorias + Ronda Final + EXENTOS
+  (ver sección "EXENTOS Previa Champions" más abajo, ya OBSOLETA).
+- Las fases finales (UCL/UEL/UECL) consumen las 3 claves y rellenan a
+  40 (`computeUcl/Uel/UeclClassified` + pad). Reparto emergente:
+  28 directos + 12 Previa (UCL), 18 + 22 (UEL), 12 + 28 (UECL).
+- Sin partidos humanos individuales: `_wprevPlayHumanMatch` /
+  `_wprevSaveHumanResult` quedan como **no-ops** (compat con las
+  llamadas `st.isWprev` del gm-modal/ml-card, que ya nunca se activan).
+
 ### Encaje global (objetivo del usuario)
 
 `⚪️ WC 72→24 · 🟡 OQ 88+24=112→28 · 🟣 Previa 34+28=62 (12/22/28) ·
@@ -44,15 +70,23 @@ tablas.
 
 ### Reglas a respetar
 
-1. **PROHIBIDO** volver al bracket de Wild Card (4 semis + 18 RF) ni
-   al OQ de 7×14 (top-5/35). Son fases de grupos con SOLO tablas.
+1. **PROHIBIDO** volver al bracket de Wild Card (4 semis + 18 RF), al
+   OQ de 7×14 (top-5/35), ni a la Previa de R1 eliminatorias + Ronda
+   Final + EXENTOS. Los tres son fases de grupos con SOLO tablas.
 2. **PROHIBIDO** renderizar las jornadas/partidos individuales en
-   `s-wild-card` ni en `s-open-qualifier-clas`. Solo tablas de
-   clasificación (petición explícita "sin que vengan las jornadas").
+   `s-wild-card`, `s-open-qualifier-clas` ni `s-ucl-previa-clas`. Solo
+   tablas de clasificación (petición explícita "sin que vengan las
+   jornadas").
 3. Los thresholds "done" de `s-champions` (`_wcDone` ≥20, `_oqDone`
-   ≥24) son tolerantes a algún TBD; no subirlos a 24/28 exactos.
-4. Toda nueva edición debe mantener el cuadre 72→24→112→28; si cambia
-   un número, actualizar AMBOS motores + la leyenda visible del OQ.
+   ≥24, `_wprevDone` = `phase==='done'`) son tolerantes a algún TBD;
+   no subirlos a exactos.
+4. Toda nueva edición debe mantener el cuadre
+   72→24→112→28→62→(12/22/28); si cambia un número, actualizar el
+   motor afectado + la leyenda visible.
+5. **PROHIBIDO** que la Previa reparta menos de los 62 (todos
+   clasifican). El corte es 12/22/28 sobre el ranking global, no por
+   posición de grupo (un 1º de grupo puede caer a Europa si su
+   ranking global es bajo).
 
 ## Caja "Torneos de Verano · Estadísticas" — render no bloqueante + equipos vigentes (obligatorio, 2026-05-28)
 
@@ -1783,7 +1817,13 @@ de Previa Champions con TBD-50..63 (reportado por el usuario con
 fotos). El check `pj === 0` es exactamente la condición del bug
 original sin destruir contribuciones legítimas.
 
-## EXENTOS Previa Champions (obligatorio, 2026-05-02)
+## EXENTOS Previa Champions (OBSOLETO desde 2026-05-30)
+
+> ⚠️ **OBSOLETO**: la Previa pasó a **fase de grupos pura + corte
+> global** (ver sección "Wild Card + Open Qualifier — FASE DE GRUPOS"
+> arriba). Ya **no hay** Ronda 1 eliminatorias, ni Ronda Final, ni
+> EXENTOS, ni `splitByesAndR1`. Esta sección se conserva solo como
+> histórico. **PROHIBIDO** reintroducir los EXENTOS / `splitByesAndR1`.
 
 Los 3 EXENTOS — los equipos que pasan directos a la Ronda Final de la
 Previa de Champions sin jugar la Ronda 1 de eliminatorias — siguen una

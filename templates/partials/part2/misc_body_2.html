@@ -28518,10 +28518,10 @@ document.addEventListener('DOMContentLoaded', function() {
        devolviendo Promise por compatibilidad con `pG(function(){...})`. */
 
     /* Wrap de `_wcSimulate()` — botón 🎮 Simular del torneo Wild Card.
-       Una sola pulsación juega las 4 semis + 18 RF (ida + vuelta +
-       prórroga + penaltis si hace falta). El overlay del balón usa
-       phases distintas según la fase actual: si ya hay sorteo, no
-       muestra el paso de "sortear". */
+       Una sola pulsación juega las liguillas de los 24 grupos (12
+       partidos cada uno). El overlay del balón usa phases distintas
+       según la fase actual: si ya hay sorteo, no muestra el paso de
+       "sortear". */
     var origWcSim = window._wcSimulate;
     if(typeof origWcSim === 'function'){
       window._wcSimulate = function(){
@@ -28537,21 +28537,21 @@ document.addEventListener('DOMContentLoaded', function() {
         var phases;
         if(hasDraw){
           phases = [
-            { pct:30, sub:'Jugando 4 semifinales…',           ms:180 },
-            { pct:60, sub:'Resolviendo ganadores SF…',        ms:140 },
-            { pct:88, sub:'Jugando 18 eliminatorias Ronda Final…', ms:240 }
+            { pct:35, sub:'Jugando las 24 liguillas…',         ms:200 },
+            { pct:75, sub:'Calculando clasificaciones…',       ms:160 },
+            { pct:92, sub:'Clasificando al 1º de cada grupo…',  ms:200 }
           ];
         } else {
           phases = [
             { pct:18, sub:'Cargando equipos…',                ms:130 },
-            { pct:38, sub:'Sorteando semis y Ronda Final…',   ms:160 },
-            { pct:62, sub:'Jugando 4 semifinales…',           ms:180 },
-            { pct:90, sub:'Jugando 18 eliminatorias Ronda Final…', ms:240 }
+            { pct:42, sub:'Sorteando 24 grupos de 3…',        ms:160 },
+            { pct:74, sub:'Jugando las liguillas…',           ms:200 },
+            { pct:92, sub:'Clasificando al 1º de cada grupo…', ms:220 }
           ];
         }
         try {
           return _runFakeProgress(
-            { title: 'WILD CARD · SEMIFINAL + RONDA FINAL', sub:'Preparando…', theme:'wildcard', minMs:1300, phases: phases },
+            { title: 'WILD CARD · FASE DE GRUPOS', sub:'Preparando…', theme:'wildcard', minMs:1300, phases: phases },
             function(){ if(typeof origWcSim === 'function') origWcSim(); }
           );
         } catch(e){
@@ -28575,9 +28575,9 @@ document.addEventListener('DOMContentLoaded', function() {
         return _runFakeProgress(
           { title: 'WILD CARD · SORTEO', sub:'Preparando…', theme:'wildcard', minMs:900,
             phases:[
-              { pct:30, sub:'Eligiendo 8 equipos para semis…', ms:120 },
-              { pct:60, sub:'Aplicando restricciones de país…',ms:140 },
-              { pct:90, sub:'Cuadrando bracket de Ronda Final…',ms:160 }
+              { pct:30, sub:'Repartiendo 72 equipos…',          ms:120 },
+              { pct:60, sub:'Aplicando restricciones de país…', ms:140 },
+              { pct:90, sub:'Formando 24 grupos de 3…',         ms:160 }
             ]
           },
           function(){ if(typeof origWcDraw === 'function') origWcDraw(); }
@@ -28613,31 +28613,41 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- ══════════════════════════════════════════════════
-     UCL · WILD CARD — Semifinal + Ronda Final (2026-04-30 v2)
-     · Pool: 40 equipos (zona `wildcard` de cada `ligaExt_*`).
-     · FASE SEMIFINAL: 8 equipos elegidos al azar juegan 4
-       eliminatorias ida + vuelta. Los 32 restantes son BYES y pasan
-       directos a la Ronda Final. 4 ganadores de SEMI avanzan; los
-       4 perdedores quedan ELIMINADOS de cualquier competición.
-     · RONDA FINAL: 32 byes + 4 ganadores SEMI = 36 equipos en 18
-       eliminatorias ida + vuelta + global + prórroga + penaltis.
-       18 ganadores → Open Qualifier de ESTA temporada
-       (`wc_to_open_qualifier_v1`). 18 perdedores ELIMINADOS.
+     UCL · WILD CARD — Fase de grupos (2026-05-30 v3)
+     · Pool: 72 equipos (plazas ⚪️ por liga, puesto 12+, 1-2 cada
+       una; zona `wildcard` de cada `ligaExt_*`).
+     · FASE DE GRUPOS: 24 grupos de 3 equipos. Liguilla a DOBLE ida y
+       vuelta (cada par juega 4 veces) → 8 partidos por equipo, 12 por
+       grupo. Solo el 1º de cada grupo clasifica → 24 ganadores.
+     · SALIDA: los 24 ganadores → Open Qualifier de ESTA temporada
+       (`wc_to_open_qualifier_v1`). El 2º y 3º de cada grupo quedan
+       ELIMINADOS de cualquier competición.
+     · UI: SOLO tablas de clasificación (sin desplegar las jornadas),
+       por petición del usuario.
      · Botones:
        - 🎮 Sim: contextual. Sin estado → init+draw+sim. drawn → sim.
-       - 🎲 Draw: solo sortea (PIN admin 747). Pre-pinta el bracket
-         con placeholders "Ganador SF N" donde toque, sin scores.
+       - 🎲 Draw: solo sortea los 24 grupos (PIN admin 747), sin jugar.
        - ♻️ Res: limpia el estado.
      ══════════════════════════════════════════════════ -->
 <script>
 (function(){
   var WC_KEY         = 'wc_state_v1';
   var WC_CHAMP_KEY   = 'wc_champion_v1';            /* legacy — limpiado al reset */
-  var WC_TO_OQ_KEY   = 'wc_to_open_qualifier_v1';   /* 18 ganadores RF → OQ */
-  var POOL_TARGET    = 40;
-  var SEMI_TIES      = 4;                            /* 8 equipos juegan SEMI */
-  var BYES_COUNT     = 32;                           /* 40 − 8 = 32 byes a RF */
-  var RF_TIES        = 18;                           /* (32 + 4) / 2 = 18 ties */
+  var WC_TO_OQ_KEY   = 'wc_to_open_qualifier_v1';   /* 24 ganadores de grupo → OQ */
+  /* FORMATO 2026-05-30 — Wild Card = fase de grupos (sustituye al
+     bracket de semis + ronda final):
+       · 72 equipos (plazas ⚪️ por liga, puesto 12+, 1-2 cada una).
+       · 24 grupos de 3 equipos.
+       · Liguilla a DOBLE ida y vuelta (WC_ROUND_TRIPS=2): cada par
+         juega 4 veces → 8 partidos por equipo, 12 partidos por grupo.
+       · Solo el 1º de cada grupo clasifica → 24 → Open Qualifier de
+         ESTA temporada.
+     La UI muestra SOLO las tablas de clasificación (sin desplegar las
+     jornadas), por petición del usuario. */
+  var POOL_TARGET    = 72;                           /* 24 grupos × 3 */
+  var WC_N_GROUPS    = 24;
+  var WC_PER_GROUP   = 3;
+  var WC_ROUND_TRIPS = 2;                            /* "2 idas y vueltas" */
 
   function loadState(){ try { return JSON.parse(localStorage.getItem(WC_KEY)||'null'); } catch(_){ return null; } }
   function saveState(s){
@@ -28753,68 +28763,67 @@ document.addEventListener('DOMContentLoaded', function() {
     return arr;
   }
 
-  /* Devuelve {semiTeams, byes} a partir del pool: 8 equipos al azar
-     juegan SEMI; los 32 restantes son byes (RF directo). El usuario
-     pidió explícitamente "de manera aleatoria" para esta primera
-     ronda. */
-  function pickSemiAndByes(pool){
-    var shuffled = pool.slice();
-    for(var i=shuffled.length-1; i>0; i--){
-      var j = Math.floor(Math.random() * (i+1));
-      var tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
-    }
-    return {
-      semiTeams: shuffled.slice(0, 8),
-      byes:      shuffled.slice(8, POOL_TARGET)
-    };
-  }
-
-  /* Helper compartido — true si dos equipos comparten `league` real
-     (los placeholders __placeholder_ y __sf_winner_ no cuentan). */
-  function _sameCountry(p){
-    var lh = p.teamH && p.teamH.league;
-    var la = p.teamA && p.teamA.league;
-    if(!lh || !la) return false;
-    if(/^__placeholder_|^__sf_winner_/.test(lh)) return false;
+  /* true si dos equipos comparten `league` real (los placeholders
+     __placeholder_ / __sf_winner_ no cuentan como país). */
+  function _wcSameLeague(a, b){
+    var la = a && a.league, lb = b && b.league;
+    if(!la || !lb) return false;
     if(/^__placeholder_|^__sf_winner_/.test(la)) return false;
-    return lh === la;
+    if(/^__placeholder_|^__sf_winner_/.test(lb)) return false;
+    return la === lb;
   }
 
-  /* Pareo aleatorio con 4 pasadas greedy de same-country avoidance.
-     Genérica: la usan tanto pairSemiTies (4 ties) como pairRfTies
-     (18 ties). Asume `teams` length par. Devuelve array de
-     {idx, teamH, teamA}. */
-  function _pairRandom(teams){
-    var shuf = teams.slice();
-    for(var i=shuf.length-1; i>0; i--){
-      var j = Math.floor(Math.random()*(i+1));
-      var tmp = shuf[i]; shuf[i] = shuf[j]; shuf[j] = tmp;
-    }
-    var pairs = [];
-    for(var k=0; k<shuf.length; k+=2){
-      pairs.push({ idx: k/2, teamH: shuf[k], teamA: shuf[k+1] });
+  /* Reparte el pool (72) en 24 grupos de 3 con anti-mismo-país.
+     Snake-draft por poder (el pool ya viene ordenado desc por
+     _normalizePool) para equilibrar la fuerza de los grupos, seguido
+     de pases greedy de intercambio que deshacen los grupos con dos
+     equipos del mismo país siempre que el swap no empeore el reparto
+     global. */
+  function _distributeWcGroups(pool){
+    var groups = [];
+    for(var g=0; g<WC_N_GROUPS; g++) groups.push([]);
+    pool.forEach(function(t, i){
+      var row = Math.floor(i / WC_N_GROUPS);
+      var col = i % WC_N_GROUPS;
+      var gi = (row % 2 === 0) ? col : (WC_N_GROUPS - 1 - col);
+      groups[gi].push(t);
+    });
+    function dupMax(grp){
+      var c = {}, m = 0;
+      for(var i=0;i<grp.length;i++){
+        var t = grp[i], k = (t && t.league) || '';
+        if(!k || /^__placeholder_|^__sf_winner_/.test(k)) continue;
+        c[k] = (c[k]||0)+1; if(c[k]>m) m=c[k];
+      }
+      return m;
     }
     for(var pass=0; pass<4; pass++){
       var changed = false;
-      for(var ii=0; ii<pairs.length; ii++){
-        if(!_sameCountry(pairs[ii])) continue;
-        for(var jj=0; jj<pairs.length; jj++){
-          if(jj===ii) continue;
-          var newI = { teamH: pairs[ii].teamH, teamA: pairs[jj].teamA };
-          var newJ = { teamH: pairs[jj].teamH, teamA: pairs[ii].teamA };
-          if(!_sameCountry(newI) && !_sameCountry(newJ)){
-            var t2 = pairs[ii].teamA; pairs[ii].teamA = pairs[jj].teamA; pairs[jj].teamA = t2;
-            changed = true; break;
+      for(var gg=0; gg<WC_N_GROUPS; gg++){
+        if(dupMax(groups[gg]) < 2) continue;
+        var done = false;
+        for(var si=0; si<groups[gg].length && !done; si++){
+          var clashes = false;
+          for(var sk=0; sk<groups[gg].length; sk++){
+            if(sk!==si && _wcSameLeague(groups[gg][si], groups[gg][sk])){ clashes = true; break; }
+          }
+          if(!clashes) continue;
+          for(var dg=0; dg<WC_N_GROUPS && !done; dg++){
+            if(dg===gg) continue;
+            for(var di=0; di<groups[dg].length && !done; di++){
+              var before = dupMax(groups[gg]) + dupMax(groups[dg]);
+              var tmp = groups[gg][si]; groups[gg][si] = groups[dg][di]; groups[dg][di] = tmp;
+              var after = dupMax(groups[gg]) + dupMax(groups[dg]);
+              if(after < before){ changed = true; done = true; }
+              else { var t2 = groups[gg][si]; groups[gg][si] = groups[dg][di]; groups[dg][di] = t2; }
+            }
           }
         }
       }
       if(!changed) break;
     }
-    return pairs;
+    return groups;
   }
-
-  function pairSemiTies(semiTeams){ return _pairRandom(semiTeams); }
-  function pairRfTies(rfTeams){     return _pairRandom(rfTeams); }
 
   /* Wrap del simulador IA-vs-IA. Reusa _simIAvsIAWithContext si está
      disponible (mismo motor que LaLiga), caemos a _fallbackIAvsIAScore
@@ -28853,91 +28862,68 @@ document.addEventListener('DOMContentLoaded', function() {
     return { gh: Math.min(5, poiss(0.8 + (ph-pa)/40 + 0.3)), ga: Math.min(5, poiss(0.8 - (ph-pa)/40 + 0.1)) };
   }
 
-  /* Resuelve UNA eliminatoria completa: ida + vuelta + (prórroga +
-     penaltis si hace falta). Storage en el objeto tie:
-       teamH / teamA            → strings con los nombres
-       idaGh / idaGa            → goles de la ida (teamH local)
-       vueltaGh / vueltaGa      → goles de la vuelta (teamA local)
-       etGh / etGa              → goles añadidos en prórroga
-                                  (etGh = goles del local de la
-                                  vuelta = teamA, etGa = goles del
-                                  visitante = teamH)
-       penGh / penGa            → tanda de penaltis
-                                  (penGh = penaltis convertidos
-                                  por teamA, penGa por teamH —
-                                  alineado con el contexto vuelta)
-       aggH / aggA              → agregado FINAL incluyendo prórroga
-       etDecided                → true si hubo prórroga
-       penDecided               → true si hubo penaltis
-       winner                   → nombre del equipo clasificado
-     OJO: la convención "gh/ga" en cada pierna es siempre relativa
-     al LOCAL de esa pierna. La ida la juega teamH como local; la
-     vuelta y la prórroga las juega teamA como local. */
-  function playKoTie(tie){
-    var nameH = tie.teamH && tie.teamH.name ? tie.teamH.name : tie.teamH;
-    var nameA = tie.teamA && tie.teamA.name ? tie.teamA.name : tie.teamA;
-    /* IDA — teamH local */
-    var ida = simMatch(nameH, nameA);
-    tie.idaGh = ida.gh; tie.idaGa = ida.ga;
-    /* VUELTA — teamA local */
-    var vu  = simMatch(nameA, nameH);
-    tie.vueltaGh = vu.gh; tie.vueltaGa = vu.ga;
-    tie.played = true;
-    /* Agregado tras 90+90 minutos */
-    var aggH = ida.gh + vu.ga;       /* goles totales de teamH */
-    var aggA = ida.ga + vu.gh;       /* goles totales de teamA */
-    if(aggH > aggA){ tie.aggH=aggH; tie.aggA=aggA; tie.winner=nameH; return; }
-    if(aggA > aggH){ tie.aggH=aggH; tie.aggA=aggA; tie.winner=nameA; return; }
-    /* Empate al global → PRÓRROGA dentro del partido de vuelta.
-       Modelamos 30 minutos como ⅓ de un partido entero: simulamos
-       y dividimos los goles por 2 (floor). teamA sigue siendo local. */
-    var et = simMatch(nameA, nameH);
-    var etGh = Math.min(2, Math.floor((et.gh||0)/2));   /* goles teamA en prórroga */
-    var etGa = Math.min(2, Math.floor((et.ga||0)/2));   /* goles teamH en prórroga */
-    tie.etGh = etGh; tie.etGa = etGa;
-    tie.etDecided = true;
-    aggH += etGa;
-    aggA += etGh;
-    tie.aggH = aggH; tie.aggA = aggA;
-    if(aggH > aggA){ tie.winner = nameH; return; }
-    if(aggA > aggH){ tie.winner = nameA; return; }
-    /* Empate tras prórroga → PENALTIS. Probabilidad H ligeramente
-       sesgada por diferencia de poder, capada a ±10%. Marcador del
-       ganador 4-5, perdedor 0..win-1. */
-    var pH = _powerOf(nameH), pA = _powerOf(nameA);
-    var probH = 0.5 + Math.max(-0.10, Math.min(0.10, (pH - pA) / 200));
-    var penWinH = Math.random() < probH;
-    var winScore  = 4 + Math.floor(Math.random()*2);   /* 4 ó 5 */
-    var loseScore = Math.floor(Math.random() * winScore);
-    if(loseScore >= winScore) loseScore = winScore - 1;
-    if(loseScore < 0) loseScore = 0;
-    /* penGh = goles de penalti del local de la vuelta (teamA),
-       penGa = goles de penalti del visitante (teamH). */
-    if(penWinH){
-      tie.penGh = loseScore; tie.penGa = winScore;   /* teamH gana */
-      tie.winner = nameH;
-    } else {
-      tie.penGh = winScore;  tie.penGa = loseScore;  /* teamA gana */
-      tie.winner = nameA;
+  /* Simula la liguilla de UN grupo: doble round-robin repetido
+     WC_ROUND_TRIPS veces. Para 3 equipos, cada "trip" genera los 6
+     enfrentamientos ordenados (i,j) i≠j (ida + vuelta), y con
+     WC_ROUND_TRIPS=2 cada par juega 4 veces → 8 partidos por equipo,
+     12 por grupo. Devuelve array de {hi, ai, gh, ga}. */
+  function _simulateWcGroup(grp){
+    var matches = [];
+    for(var trip=0; trip<WC_ROUND_TRIPS; trip++){
+      for(var i=0; i<grp.length; i++){
+        for(var j=0; j<grp.length; j++){
+          if(i === j) continue;
+          var nameH = (grp[i] && grp[i].name) || '';
+          var nameA = (grp[j] && grp[j].name) || '';
+          var r = simMatch(nameH, nameA);
+          matches.push({ hi:i, ai:j, gh:r.gh, ga:r.ga });
+        }
+      }
     }
-    tie.penDecided = true;
+    return matches;
   }
 
-  /* Persiste los 18 ganadores DE LA RONDA FINAL en
-     `wc_to_open_qualifier_v1`. Los 4 perdedores SEMI no entran aquí —
-     quedan eliminados de cualquier competición.
-     `computeOpenQualifierTeams` (misc_body_1.html) lee este flag y
-     mete los 18 ganadores en el pool del OQ de la misma temporada. */
+  /* Clasificación de un grupo a partir de sus matches. Orden:
+     PTS → DG → GF → nombre. */
+  function _wcStandings(grp, matches){
+    var arr = grp.map(function(t, i){
+      return { idx:i, name:(t&&t.name)||'', logo:(t&&t.logo)||'', league:(t&&t.league)||'',
+               pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0 };
+    });
+    (matches||[]).forEach(function(m){
+      var H = arr[m.hi], A = arr[m.ai];
+      if(!H || !A) return;
+      H.pj++; A.pj++;
+      H.gf += m.gh; H.gc += m.ga; A.gf += m.ga; A.gc += m.gh;
+      if(m.gh > m.ga){ H.v++; A.p++; H.pts += 3; }
+      else if(m.gh < m.ga){ A.v++; H.p++; A.pts += 3; }
+      else { H.e++; A.e++; H.pts++; A.pts++; }
+    });
+    arr.forEach(function(s){ s.dg = s.gf - s.gc; });
+    arr.sort(function(a, b){
+      return (b.pts-a.pts) || (b.dg-a.dg) || (b.gf-a.gf)
+        || String(a.name).localeCompare(String(b.name), 'es');
+    });
+    return arr;
+  }
+
+  /* Persiste los 24 ganadores (1º de cada grupo) en
+     `wc_to_open_qualifier_v1`. El 2º y 3º de cada grupo quedan
+     eliminados. `computeOpenQualifierTeams` (misc_body_1.html) lee
+     este flag y mete los 24 ganadores en el pool del OQ de la misma
+     temporada. Los huecos (TBD/placeholder que terminen 1º de un
+     grupo incompleto) NO se propagan. */
   function _persistWinners(state){
     var winners = [];
-    (state.rfTies||[]).forEach(function(t){
-      if(!t || !t.winner) return;
-      var src = (t.winner === (t.teamH && t.teamH.name)) ? t.teamH : t.teamA;
+    (state.standings||[]).forEach(function(st){
+      var top = st && st[0];
+      if(!top || !top.name) return;
+      if(/^TBD|^__placeholder_/.test(top.name)) return;
       winners.push({
-        name: t.winner,
-        logo: (src && src.logo) || _logoOf(t.winner) || '',
+        name: top.name,
+        logo: top.logo || _logoOf(top.name) || '',
         league: 'wild-card',
-        sourceLeague: (src && src.league) || ''
+        sourceLeague: top.league || ''
       });
     });
     state.winners = winners;
@@ -28951,58 +28937,25 @@ document.addEventListener('DOMContentLoaded', function() {
     try { localStorage.removeItem(WC_CHAMP_KEY); } catch(_){}
   }
 
-  /* Sustituye en las RF ties los placeholders "Ganador SF N" por el
-     equipo real ganador de la SEMI correspondiente. Llamada después
-     de jugar las semis y antes de jugar las RF ties. */
-  function _resolveSemiWinnersInRf(state){
-    (state.rfTies||[]).forEach(function(rfTie){
-      ['teamH','teamA'].forEach(function(side){
-        var t = rfTie[side];
-        if(t && t.isSemiWinner){
-          var semi = state.semis[t.semiIdx];
-          if(semi && semi.winner){
-            /* semi.winner es el NAME del ganador. Buscamos su objeto. */
-            var realTeam = (semi.winner === semi.teamH.name) ? semi.teamH : semi.teamA;
-            rfTie[side] = realTeam;
-          }
-        }
-      });
-    });
-  }
-
-  /* Una sola pulsación de Sim juega TODA la fase: 4 semis + 18 RF.
-     Pasos:
-       1. Juega las 4 semis (si no están ya jugadas).
-       2. Resuelve los placeholders "Ganador SF N" en las RF ties.
-       3. Juega las 18 RF ties.
-       4. Persiste los 18 ganadores RF y limpia caché del OQ.
-     El flag legacy `wc_champion_v1` ya no se escribe.
-
-     Cada tie se juega dentro de un try/catch para que si UN partido
-     falla (p.ej. equipo con datos corruptos) el resto del torneo
-     siga adelante. Guardamos estado incrementalmente tras semis y
-     RF — así un fallo a media RF no pierde los ganadores ya
-     decididos. */
+  /* Una sola pulsación de Sim juega TODAS las liguillas de los 24
+     grupos (12 partidos cada uno) y calcula sus clasificaciones. Solo
+     el 1º de cada grupo pasa al Open Qualifier. Cada grupo se simula
+     dentro de un try/catch para que un fallo aislado no rompa el
+     resto del torneo. */
   function simulateAll(state){
-    if(!state) return;
-    if(Array.isArray(state.semis)){
-      state.semis.forEach(function(t){
-        if(t.played) return;
-        try { playKoTie(t); }
-        catch(e){ try{console.error('[wc-sim semi]', t && t.idx, e);}catch(_){} }
-      });
-      saveState(state); /* persistimos semis antes de tocar RF */
-    }
-    _resolveSemiWinnersInRf(state);
-    if(Array.isArray(state.rfTies)){
-      state.rfTies.forEach(function(t){
-        if(t.played) return;
-        try { playKoTie(t); }
-        catch(e){ try{console.error('[wc-sim rf]', t && t.idx, e);}catch(_){} }
-      });
-    }
+    if(!state || !Array.isArray(state.groups)) return;
+    state.matchesByGroup = state.groups.map(function(grp){
+      try { return _simulateWcGroup(grp); }
+      catch(e){ try{console.error('[wc-sim grupo]', e);}catch(_){} return []; }
+    });
+    state.standings = state.groups.map(function(grp, gi){
+      try { return _wcStandings(grp, state.matchesByGroup[gi]||[]); }
+      catch(e){ try{console.error('[wc-standings]', gi, e);}catch(_){} return []; }
+    });
     state.phase = 'done';
     _persistWinners(state);
+    /* El OQ y la Previa se reconstruyen desde estos ganadores —
+       limpiamos su caché para que vuelvan a sortearse. */
     try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
     try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
     try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
@@ -29034,57 +28987,20 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   };
 
-  function _newTie(idx, teamH, teamA){
-    return {
-      idx: idx,
-      teamH: teamH, teamA: teamA,
-      played: false,
-      idaGh: null, idaGa: null,
-      vueltaGh: null, vueltaGa: null,
-      etGh: null, etGa: null, etDecided: false,
-      penGh: null, penGa: null, penDecided: false,
-      aggH: null, aggA: null,
-      winner: null
-    };
-  }
-
-  /* Inicializa el estado SORTEANDO las eliminatorias (sin simular).
-     Pasos:
-       1. Pool de 40 equipos (rellenado con placeholders si hace falta).
-       2. 8 random a SEMI · 32 byes a RF directo.
-       3. 4 ties SEMI con same-country avoidance.
-       4. RF se pre-pinta con 32 byes + 4 placeholders "Ganador SF N"
-          → 18 ties RF random con same-country avoidance. Cuando se
-          simule, _resolveSemiWinnersInRf reemplaza los placeholders
-          por los ganadores reales conservando la posición original
-          en el bracket. */
+  /* Inicializa el estado SORTEANDO los 24 grupos (sin simular):
+       1. Pool de 72 equipos (rellenado con placeholders si hace falta).
+       2. Reparto en 24 grupos de 3 (snake por poder + anti-mismo-país).
+     Las liguillas se juegan al pulsar 🎮 Simular (simulateAll). */
   function initState(){
     var raw = buildPool();
     if(raw.length === 0) return null;
     var pool = _normalizePool(raw);
-    var split = pickSemiAndByes(pool);
-    var semiPairs = pairSemiTies(split.semiTeams);
-    var semis = semiPairs.map(function(p){ return _newTie(p.idx, p.teamH, p.teamA); });
-    /* Placeholders para los 4 ganadores SEMI (se sustituyen al sim). */
-    var sfPlaceholders = [];
-    for(var k=0; k<SEMI_TIES; k++){
-      sfPlaceholders.push({
-        name: 'Ganador SF'+(k+1),
-        league: '__sf_winner_'+k,
-        logo: '',
-        power: 60,
-        isSemiWinner: true,
-        semiIdx: k
-      });
-    }
-    var rfPool = split.byes.concat(sfPlaceholders);   /* 32 + 4 = 36 */
-    var rfPairs = pairRfTies(rfPool);                  /* 18 ties random */
-    var rfTies = rfPairs.map(function(p){ return _newTie(p.idx, p.teamH, p.teamA); });
+    var groups = _distributeWcGroups(pool);
     return {
       pool: pool,
-      semis: semis,
-      byes: split.byes,
-      rfTies: rfTies,
+      groups: groups,
+      matchesByGroup: [],
+      standings: [],
       winners: [],
       phase: 'drawn',
       ts: Date.now()
@@ -29101,86 +29017,54 @@ document.addEventListener('DOMContentLoaded', function() {
   function _teamName(t){ return (t && t.name) ? t.name : (typeof t === 'string' ? t : ''); }
   function _teamLogo(t){ return (t && t.logo) ? t.logo : _logoOf(_teamName(t)); }
 
-  /* Render de UNA eliminatoria. Ida + Vuelta + (Prórroga + Penaltis si
-     aplica) + Global + indicador del clasificado. Acepta un `prefix`
-     opcional para distinguir SEMI vs RF en el header (#1, #2…). */
-  function renderTie(tie, prefix){
-    var played = !!tie.played;
-    var nameH = _teamName(tie.teamH), nameA = _teamName(tie.teamA);
-    var aggH = (tie.aggH != null) ? tie.aggH : ((tie.idaGh||0) + (tie.vueltaGa||0));
-    var aggA = (tie.aggA != null) ? tie.aggA : ((tie.idaGa||0) + (tie.vueltaGh||0));
-    var winnerH = played && tie.winner === nameH;
-    var winnerA = played && tie.winner === nameA;
-    var label = (prefix||'ELIMINATORIA') + ' #' + ((tie.idx||0)+1);
+  /* Etiqueta de grupo: A..X para los 24 grupos. */
+  function _wcGroupLabel(gi){ return String.fromCharCode(65 + (gi % 26)); }
 
-    var html = '<div class="wc-tie '+(played?'played':'')+'">';
-    html += '<div class="wc-tie-label" style="margin-bottom:6px;">'
-      +    label
-      +    '</div>';
-
-    /* IDA — teamH local */
-    html += '<div class="wc-tie-label" style="font-size:9px;color:rgba(255,255,255,.45);margin-top:2px;">IDA</div>'
-      + '<div class="wc-tie-leg">'
-      +   '<span class="wc-tie-h">'+_badge(nameH, _teamLogo(tie.teamH))+_esc(nameH)+'</span>'
-      +   '<span class="wc-tie-sc">'+(played?(tie.idaGh+'-'+tie.idaGa):'vs')+'</span>'
-      +   '<span class="wc-tie-a">'+_esc(nameA)+_badge(nameA, _teamLogo(tie.teamA))+'</span>'
+  /* Render de la TABLA de clasificación de UN grupo (sin jornadas).
+     1º = clasifica (fila blanca `qual`); 2º/3º = eliminados (`elim`).
+     Columnas: # · Equipo · PTS · PJ · V · E · P · GF · GC · DG. */
+  function _wcGroupTable(gi, grp, standings){
+    var html = '<div class="wc-group">'
+      + '<div class="wc-group-h">GRUPO ' + _wcGroupLabel(gi)
+      +   '<span class="wc-group-count">' + grp.length + ' / ' + WC_PER_GROUP + '</span>'
+      + '</div>'
+      + '<div class="wc-table-scroll">'
+      + '<div class="wc-row hdr">'
+      +   '<span class="wc-pos">#</span><span class="wc-name">Equipo</span>'
+      +   '<span class="wc-cell">PTS</span><span class="wc-cell">PJ</span><span class="wc-cell">V</span>'
+      +   '<span class="wc-cell">E</span><span class="wc-cell">P</span><span class="wc-cell">GF</span>'
+      +   '<span class="wc-cell">GC</span><span class="wc-cell">DG</span>'
       + '</div>';
-
-    if(played){
-      /* VUELTA — teamA local. Si hubo prórroga, sumamos los goles de
-         prórroga al marcador mostrado de la vuelta para que el usuario
-         vea exactamente "lo que pasó en ese partido", y añadimos un
-         pie con el desglose. */
-      var vGh = tie.vueltaGh + (tie.etDecided ? (tie.etGh||0) : 0);
-      var vGa = tie.vueltaGa + (tie.etDecided ? (tie.etGa||0) : 0);
-      html += '<div class="wc-tie-label" style="font-size:9px;color:rgba(255,255,255,.45);margin-top:8px;">VUELTA'
-        +    (tie.etDecided ? ' (con prórroga)' : '')
-        +    '</div>'
-        + '<div class="wc-tie-leg" style="margin-top:2px;">'
-        +   '<span class="wc-tie-h">'+_badge(nameA, _teamLogo(tie.teamA))+_esc(nameA)+'</span>'
-        +   '<span class="wc-tie-sc">'+vGh+'-'+vGa+'</span>'
-        +   '<span class="wc-tie-a">'+_esc(nameH)+_badge(nameH, _teamLogo(tie.teamH))+'</span>'
+    for(var i=0; i<WC_PER_GROUP; i++){
+      var t = standings[i];
+      var cls = (i === 0) ? 'qual' : 'elim';
+      var dgv = t ? t.dg : 0;
+      var nameHtml;
+      if(t && t.name && !/^TBD|^__placeholder_/.test(t.name)){
+        nameHtml = _badge(t.name, t.logo) + _esc(t.name);
+      } else {
+        nameHtml = '<span style="color:rgba(255,255,255,.35);">Por definir</span>';
+      }
+      var dgClass = 'wc-cell dg' + (dgv > 0 ? ' pos' : (dgv < 0 ? ' neg' : ''));
+      html += '<div class="wc-row ' + cls + '">'
+        + '<span class="wc-pos">' + (i+1) + '</span>'
+        + '<span class="wc-name">' + nameHtml + '</span>'
+        + '<span class="wc-cell pts">' + (t?t.pts:0) + '</span>'
+        + '<span class="wc-cell">' + (t?t.pj:0) + '</span>'
+        + '<span class="wc-cell">' + (t?t.v:0) + '</span>'
+        + '<span class="wc-cell">' + (t?t.e:0) + '</span>'
+        + '<span class="wc-cell">' + (t?t.p:0) + '</span>'
+        + '<span class="wc-cell">' + (t?t.gf:0) + '</span>'
+        + '<span class="wc-cell">' + (t?t.gc:0) + '</span>'
+        + '<span class="' + dgClass + '">' + (t?((dgv>0?'+':'')+dgv):0) + '</span>'
         + '</div>';
-      if(tie.etDecided){
-        html += '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.45);text-align:center;margin-top:3px;">'
-          +    '90\': '+tie.vueltaGh+'-'+tie.vueltaGa+' · prórroga: '+(tie.etGh||0)+'-'+(tie.etGa||0)
-          +    '</div>';
-      }
-      /* GLOBAL — agregado FINAL incluyendo prórroga */
-      html += '<div class="wc-tie-agg">'
-        +   '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">'+_esc(nameH)+'</span>'
-        +   '<span class="agg-sc">'+aggH+' - '+aggA+'</span>'
-        +   '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+_esc(nameA)+'</span>'
-        + '</div>'
-        + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.4);text-align:center;margin-top:2px;">GLOBAL</div>';
-      /* PENALTIS si aplica */
-      if(tie.penDecided){
-        var penH = (tie.winner === nameH) ? Math.max(tie.penGa||0, tie.penGh||0) : Math.min(tie.penGa||0, tie.penGh||0);
-        var penA = (tie.winner === nameA) ? Math.max(tie.penGa||0, tie.penGh||0) : Math.min(tie.penGa||0, tie.penGh||0);
-        html += '<div class="wc-tie-agg" style="margin-top:6px;border-top-style:solid;">'
-          +    '<span style="text-align:right;color:rgba(255,255,255,.7);">PENALTIS</span>'
-          +    '<span class="agg-sc">'+penH+' - '+penA+'</span>'
-          +    '<span style="color:rgba(255,255,255,.7);"></span>'
-          +    '</div>';
-      }
-      /* CLASIFICADO */
-      var winLogo = winnerH ? _teamLogo(tie.teamH) : _teamLogo(tie.teamA);
-      var sub = tie.penDecided ? ' (en penaltis)' : (tie.etDecided ? ' (en prórroga)' : '');
-      html += '<div style="margin-top:8px;padding:6px 10px;background:rgba(255,255,255,.08);border:1px solid #ffffff;border-radius:6px;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#fff;">'
-        +    '✅ CLASIFICA: '+_badge(tie.winner, winLogo)+'<b>'+_esc(tie.winner)+'</b>'+sub
-        +    '</div>';
-    } else {
-      /* Sin jugar todavía: solo mostramos el cruce. */
-      html += '<div style="margin-top:6px;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.4);text-align:center;">vuelta · global · prórroga · penaltis (si hace falta)</div>';
     }
-    html += '</div>';
+    html += '</div></div>';
     return html;
   }
 
-  /* Tarjeta-resumen con los 18 ganadores que pasan al Open Qualifier.
-     Reemplaza al antiguo `renderChampion` (1 campeón único). El mensaje
-     hereda el espíritu del fix 2b97e6d: avisa de que el OQ se reinició
-     para que los ganadores entren en sus 6 grupos al re-simularlo. */
+  /* Tarjeta-resumen con los 24 ganadores (1º de grupo) que pasan al
+     Open Qualifier. */
   function renderWinners(s){
     if(!s.winners || !s.winners.length) return '';
     var rows = '';
@@ -29193,7 +29077,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return '<div class="wc-champion" style="padding:18px 14px;">'
       +    '<div class="wc-champion-lbl">⭐ '+s.winners.length+' GANADORES → OPEN QUALIFIER ⭐</div>'
       +    '<div style="margin-top:10px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.1);border-radius:8px;text-align:left;">'+rows+'</div>'
-      +    '<div class="wc-champion-note" style="margin-top:8px;">Clasifican directos al <b>Open Qualifier</b> de <b>ESTA</b> temporada. Los 18 eliminados quedan fuera de cualquier competición.<br><span style="opacity:.6;font-size:11px;">El Open Qualifier se reinició — vuelve a simularlo para que entren en sus 6 grupos.</span></div>'
+      +    '<div class="wc-champion-note" style="margin-top:8px;">El <b>1º de cada grupo</b> clasifica directo al <b>Open Qualifier</b> de <b>ESTA</b> temporada. El 2º y el 3º quedan fuera de cualquier competición.<br><span style="opacity:.6;font-size:11px;">El Open Qualifier se reinició — vuelve a simularlo para que entren en sus 28 grupos.</span></div>'
       +  '</div>';
   }
 
@@ -29220,7 +29104,7 @@ document.addEventListener('DOMContentLoaded', function() {
             : '⚠️ Pool vacío: <b>0 / '+POOL_TARGET+'</b>');
       var actionLine = poolReady
         ? '<div style="margin-top:14px;padding:10px 12px;background:rgba(255,215,0,.10);border:1px solid rgba(255,215,0,.45);border-radius:8px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:13px;color:#ffe680;">'
-          + '👉 Pulsa <b style="color:#fff;">🎮 Simular</b> arriba para sortear las eliminatorias y jugar las 4 semis + 18 ties de la Ronda Final de una sola vez.'
+          + '👉 Pulsa <b style="color:#fff;">🎲 Draw</b> para sortear los 24 grupos de 3 y luego <b style="color:#fff;">🎮 Simular</b> para jugar las liguillas (12 partidos por grupo) de una sola vez. Clasifica el 1º de cada grupo.'
           + '</div>'
         : '<div style="margin-top:14px;font-size:12px;color:rgba(255,255,255,.5);">Necesitas al menos 1 equipo para arrancar — entra a "Resto de Ligas" y configura/sim alguna.</div>';
       host.innerHTML = '<div class="wc-empty">'
@@ -29236,34 +29120,25 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
 
-    function _secHead(title){
-      return '<div class="wc-sec-head"><div class="wc-sec-title">'+title+'</div></div>';
-    }
-
     var html = '';
     /* Banner de fase para el usuario */
     var phaseBanner = (s.phase === 'drawn')
-      ? '⏳ SORTEO LISTO · pulsa 🎮 Simular para jugar las eliminatorias'
-      : '✓ TORNEO COMPLETO · 18 ganadores → Open Qualifier';
+      ? '⏳ SORTEO LISTO · 24 grupos de 3 · pulsa 🎮 Simular para jugar las liguillas'
+      : '✓ TORNEO COMPLETO · 24 ganadores (1º de grupo) → Open Qualifier';
     html += '<div style="margin:0 4px 6px;padding:8px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#ffffff;text-align:center;">'
       +    phaseBanner
       +    '</div>';
 
-    /* === SEMIFINAL === */
-    var semiTitle = (s.phase === 'done')
-      ? 'SEMIFINAL · 4 ELIMINATORIAS · RESUELTAS'
-      : 'SEMIFINAL · 4 ELIMINATORIAS · PENDIENTES';
-    html += '<div class="wc-sec">' + _secHead(semiTitle);
-    (s.semis || []).forEach(function(t){ html += renderTie(t, 'SEMI'); });
-    html += '</div>';
-
-    /* === RONDA FINAL === */
-    var rfTitle = (s.phase === 'done')
-      ? 'RONDA FINAL · 18 ELIMINATORIAS · RESUELTAS'
-      : 'RONDA FINAL · 18 ELIMINATORIAS · PENDIENTES';
-    html += '<div class="wc-sec">' + _secHead(rfTitle);
-    (s.rfTies || []).forEach(function(t){ html += renderTie(t, 'RF'); });
-    html += '</div>';
+    /* === 24 GRUPOS · solo tablas de clasificación (sin jornadas) === */
+    (s.groups || []).forEach(function(grp, gi){
+      var st = (s.standings && s.standings[gi] && s.standings[gi].length)
+        ? s.standings[gi]
+        : grp.map(function(t, i){
+            return { idx:i, name:(t&&t.name)||'', logo:(t&&t.logo)||'', league:(t&&t.league)||'',
+                     pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0 };
+          });
+      html += _wcGroupTable(gi, grp, st);
+    });
 
     if(s.phase === 'done'){
       html += renderWinners(s);
@@ -29295,7 +29170,7 @@ document.addEventListener('DOMContentLoaded', function() {
           alert('⚠️ No se pudo inicializar el sorteo. Revisa la consola (F12).');
           return;
         }
-        try { console.log('[wc-sim] initState OK · semis='+(s.semis||[]).length+' · rfTies='+(s.rfTies||[]).length); } catch(_){}
+        try { console.log('[wc-sim] initState OK · grupos='+(s.groups||[]).length); } catch(_){}
         if(!saveState(s)) return; /* abortamos — el alert dentro de saveState ya avisó */
       }
       if(s.phase === 'done'){ render(); return; }
@@ -29340,7 +29215,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   window._wcReset = function(){
     function _doReset(){
-      if(!confirm('¿Reiniciar el torneo Wild Card?\n\nSe perderán todos los partidos jugados.\n\nTambién se reiniciarán el Open Qualifier y la Previa de Champions: sus pools se construyen desde los ganadores del Wild Card (18 al OQ → 35 a Previa), así que sin WC los datos viejos no encajarían.\n\nLos huecos en la clasificación de Champions (11), Europa League (22) y Conference League (30) volverán a "Por definir".')) return;
+      if(!confirm('¿Reiniciar el torneo Wild Card?\n\nSe perderán todas las liguillas jugadas.\n\nTambién se reiniciarán el Open Qualifier y la Previa de Champions: sus pools se construyen desde los ganadores del Wild Card (24 al OQ → 28 a Previa), así que sin WC los datos viejos no encajarían.\n\nLos huecos en la clasificación de Champions, Europa League y Conference League volverán a "Por definir".')) return;
       clearState();
       /* Cascada centralizada (helper en misc_body_1.html). Limpia
          también OQ + Previa Champions, invalida la snapshot

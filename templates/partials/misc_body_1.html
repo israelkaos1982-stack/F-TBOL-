@@ -9871,15 +9871,16 @@ window._showSimProgress = function(opts, onDone){
        - El auto-recovery en DOM ready que rellena ligas vacías.
      Si añades una nueva card al menú, añade su slug aquí. */
   var KNOWN_COUNTRY_SLUGS = [
-    'inglaterra','alemania','italia','francia','p-bajos','portugal',
-    'belgica','turquia','dinamarca','rep-checa','suiza','escocia',
-    'austria','noruega','grecia','israel','ucrania','polonia',
-    'serbia','croacia','rusia','rumania','suecia','chipre',
-    'irlanda','kazajst','andorra','albania','bosnia','azerbayan',
-    'san-marino','gibraltar','bulgaria','hungria','gales','estonia',
-    'finlandia','letonia','lituania','islandia','armenia','bielorrsa',
-    'eslovaquia','eslovenia','is-feroe','georgia','luxembgo','moldavia',
-    'n-maced','n-irlanda','malta','montenegro','kosovo','resto-mundo'
+    'inglaterra','italia','alemania','francia','portugal','p-bajos',
+    'belgica','turquia','rep-checa','grecia','polonia','dinamarca',
+    'noruega','chipre','suiza','austria','escocia','suecia',
+    'croacia','israel','hungria','ucrania','serbia','rumania',
+    'eslovenia','azerbayan','rusia','eslovaquia','bulgaria','irlanda',
+    'islandia','armenia','moldavia','finlandia','kosovo','kazajst',
+    'bosnia','letonia','is-feroe','malta','liechtenstein','estonia',
+    'albania','n-maced','lituania','n-irlanda','gibraltar','andorra',
+    'bielorrsa','luxembgo','montenegro','georgia','gales','san-marino',
+    'resto-mundo'
   ];
 
   window.lextDeepRecoverAll = function(opts){
@@ -17422,7 +17423,9 @@ window._showSimProgress = function(opts, onDone){
         if (!data || !Array.isArray(data.teams)) continue;
         var withTeams = data.teams.filter(function(t){ return t && t.name; }).length;
         if (withTeams === 0) continue;
-        leagues[slug] = { slug: slug, label: data.name || _humanizeSlug(slug), count: withTeams };
+        var _cfgNm = (data.config && typeof data.config.name === 'string') ? data.config.name.trim() : '';
+        var _defNm = (window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[slug]) || '';
+        leagues[slug] = { slug: slug, label: (data.name && String(data.name).trim()) || _cfgNm || _defNm || _humanizeSlug(slug), count: withTeams };
       }
     } catch(_){}
     /* 2) Las 3 Ligas de España SIEMPRE deben poder excluirse aunque
@@ -29480,58 +29483,59 @@ window._showSimProgress = function(opts, onDone){
 
 <div class="menu-grid">
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#7a0010,#cf142b,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇧</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Inglaterra</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#111,#dd0000,#ffcc00);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Alemania</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006630,#fff,#ce2b37);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Italia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#111,#dd0000,#ffcc00);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Alemania</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002395,#fff,#ed2939);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇫🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Francia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ae1c28,#fff,#21468b);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇳🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">P. Bajos</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006600,#fff,#c60c30);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇵🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Portugal</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ae1c28,#fff,#21468b);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇳🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">P. Bajos</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a0a0a,#ef3340,#f5d220);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bélgica</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#8a0a22,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇹🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Turquía</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c60c30,#8a0a22,#c60c30);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Dinamarca</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0d57a8,#d7141a,#0d57a8);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Rep. Checa</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c01020,#8a0010,#c01020);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇭</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Suiza</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003399,#0044aa,#003399);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🏴󠁧󠁢󠁳󠁣󠁴󠁿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Escocia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ee1c25,#fff,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Austria</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#002868,#ef2b2d);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇳🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Noruega</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0d5eaf,#fff,#0d5eaf);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Grecia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003ea5,#fff,#003ea5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Israel</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#005bbb,#ffd500,#005bbb);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇺🇦</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Ucrania</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#dc143c,#fff,#dc143c);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇵🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Polonia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#0032a0,#c6aa76);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇸</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Serbia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#fff,#171796);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇭🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Croacia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#0038a8,#ef2b2d);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇺</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Rusia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002b7f,#fcd116,#ce1126);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Rumanía</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006aa7,#fecc02,#006aa7);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Suecia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c60c30,#8a0a22,#c60c30);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Dinamarca</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#002868,#ef2b2d);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇳🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Noruega</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c87020,#fff,#c87020);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇾</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Chipre</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#169b62,#fff,#ff883e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Irlanda</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#00afca,#ffd700,#00afca);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇰🇿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kazajst.</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0032a0,#fedf00,#c7232a);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇩</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Andorra</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#e41e20,#3a0000,#e41e20);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Albania</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002395,#fedf00,#002395);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇦</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bosnia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0092bc,#ed2939,#00b140);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Azerbayán</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#5eb6e4,#fff,#5eb6e4);border-color:rgba(94,182,228,.5);"><span class="mc-emoji">🇸🇲</span><span class="mc-label" style="color:#003d80;text-shadow:0 0 3px rgba(255,255,255,.8);">San Marino</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce1126,#fff,#ce1126);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Gibraltar</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#00966e,#d62612);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇬</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bulgaria</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c01020,#8a0010,#c01020);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇭</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Suiza</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ee1c25,#fff,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Austria</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003399,#0044aa,#003399);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🏴󠁧󠁢󠁳󠁣󠁴󠁿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Escocia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006aa7,#fecc02,#006aa7);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Suecia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#fff,#171796);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇭🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Croacia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003ea5,#fff,#003ea5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Israel</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce2939,#fff,#477050);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇭🇺</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Hungría</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#fff,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🏴󠁧󠁢󠁷󠁬󠁳󠁿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Gales</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0072ce,#1a1a1a,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇪🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Estonia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#003580,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇫🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Finlandia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#9e3039,#fff,#9e3039);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇻</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Letonia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fdba12,#006a44,#c22229);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Lituania</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#005bbb,#ffd500,#005bbb);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇺🇦</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Ucrania</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#0032a0,#c6aa76);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇸</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Serbia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002b7f,#fcd116,#ce1126);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Rumanía</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003da5,#fff,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eslovenia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0092bc,#ed2939,#00b140);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Azerbayán</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#0038a8,#ef2b2d);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇺</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Rusia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#0b4ea2,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eslovaquia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#00966e,#d62612);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇬</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bulgaria</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#169b62,#fff,#ff883e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Irlanda</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003897,#fff,#dc143c);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇸</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Islandia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#d90012,#0033a0,#f2a800);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇲</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Armenia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf101a,#007040,#cf101a);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇾</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bielorrsa</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#0b4ea2,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eslovaquia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003da5,#fff,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eslovenia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002070,#003897,#ef2b2d,#003897,#002070);border-color:rgba(0,56,151,.5);"><span class="mc-emoji">🇫🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 3px rgba(0,0,0,.9);">Is. Feroe</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#dc143c,#fff,#dc143c);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Georgia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef3340,#fff,#00a3e0);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇺</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Luxembgo</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003da5,#ffd100,#cc0001);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇩</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Moldavia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce2028,#f7e117,#ce2028);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Maced.</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#fff,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇬</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Irlanda</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf0921,#fff,#cf0921);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Malta</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c40308,#d4af37,#c40308);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Montenegro</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#003580,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇫🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Finlandia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#00afca,#ffd700,#00afca);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇰🇿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kazajst.</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002395,#fedf00,#002395);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇦</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bosnia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#9e3039,#fff,#9e3039);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇻</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Letonia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002070,#003897,#ef2b2d,#003897,#002070);border-color:rgba(0,56,151,.5);"><span class="mc-emoji">🇫🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 3px rgba(0,0,0,.9);">Is. Feroe</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf0921,#fff,#cf0921);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Malta</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002b7f,#cf9f00,#ce1126);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Liechtenstein</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0072ce,#1a1a1a,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇪🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Estonia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#e41e20,#3a0000,#e41e20);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Albania</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce2028,#f7e117,#ce2028);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Maced.</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fdba12,#006a44,#c22229);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Lituania</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#fff,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇬</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Irlanda</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce1126,#fff,#ce1126);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Gibraltar</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0032a0,#fedf00,#c7232a);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇩</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Andorra</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf101a,#007040,#cf101a);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇾</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bielorrsa</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef3340,#fff,#00a3e0);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇺</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Luxembgo</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c40308,#d4af37,#c40308);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Montenegro</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#dc143c,#fff,#dc143c);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Georgia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#fff,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🏴󠁧󠁢󠁷󠁬󠁳󠁿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Gales</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#5eb6e4,#fff,#5eb6e4);border-color:rgba(94,182,228,.5);"><span class="mc-emoji">🇸🇲</span><span class="mc-label" style="color:#003d80;text-shadow:0 0 3px rgba(255,255,255,.8);">San Marino</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
 </div>
 <!-- Botón "Enviar a Europa" (PIN admin 747). Va al FINAL de la lista
@@ -30057,7 +30061,9 @@ window._showSimProgress = function(opts, onDone){
         var data;
         try { data = JSON.parse(raw); } catch(_){ continue; }
         if (!data || !Array.isArray(data.teams)) continue;
-        var label = (data.name && String(data.name).trim()) || _humanizeAuditSlug(slug);
+        var _auCfgNm = (data.config && typeof data.config.name === 'string') ? data.config.name.trim() : '';
+        var _auDefNm = (window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[slug]) || '';
+        var label = (data.name && String(data.name).trim()) || _auCfgNm || _auDefNm || _humanizeAuditSlug(slug);
         data.teams.forEach(function(t){
           if (!t || !t.name) return;
           var clean = String(t.name).trim();
@@ -30518,6 +30524,7 @@ window._showSimProgress = function(opts, onDone){
     <span class="lext-logo-ph">📷</span>
   </div>
   <h2 id="liga-ext-title">Liga</h2>
+  <button onclick="window.lextEditLeagueName&&window.lextEditLeagueName()" title="Editar nombre de la liga (admin)" style="background:none;border:none;color:#f0c040;font-size:16px;cursor:pointer;padding:4px 6px;margin-left:2px;flex:0 0 auto;">🖍</button>
 </div>
 
 <div class="btn-action-bar" style="margin:0 14px 10px;flex-direction:column;gap:6px;">
@@ -31365,6 +31372,22 @@ https://api.sofascore.app/api/v1/team/44/image
     <div class="lext-btn-row">
       <button class="lext-btn green" onclick="lextSaveLeagueLogo()">💾 Guardar logo</button>
       <button class="lext-btn danger" onclick="lextClearLeagueLogo()">🗑 Quitar</button>
+    </div>
+  </div>
+</div>
+
+<div class="lext-ov" id="lext-ov-league-name">
+  <div class="lext-ov-box">
+    <div class="lext-ov-head">
+      <div class="lext-ov-title">✏️ Nombre de la liga</div>
+      <button class="lext-ov-close" onclick="lextCloseOv('lext-ov-league-name')">✕</button>
+    </div>
+    <div class="lext-sub" style="margin-bottom:10px;">Nombre oficial de la competición (p.ej. Premier League, Serie A). Aparece en la cabecera de la liga. Las cajas del menú siguen mostrando el país.</div>
+    <label class="lext-label">Nombre de la liga</label>
+    <input class="lext-input" id="lext-league-name-input" placeholder="Ej. Premier League" />
+    <div class="lext-btn-row">
+      <button class="lext-btn green" onclick="lextSaveLeagueName()">💾 Guardar nombre</button>
+      <button class="lext-btn danger" onclick="lextResetLeagueName()">↩ Por defecto</button>
     </div>
   </div>
 </div>
@@ -33592,6 +33615,7 @@ https://api.sofascore.app/api/v1/team/44/image
       });
     }
     if(typeof data.config.logo !== 'string') data.config.logo = '';
+    if(typeof data.config.name !== 'string') data.config.name = '';
     if(typeof data.config.cupName !== 'string') data.config.cupName = '';
     if(typeof data.config.cupLogo !== 'string') data.config.cupLogo = '';
     return data.config;
@@ -34535,6 +34559,44 @@ https://api.sofascore.app/api/v1/team/44/image
     var lbl = document.getElementById('lext-copa-btn-label');
     if(lbl) lbl.textContent = cfg.cupName || 'Copa';
     lextCloseOv('lext-ov-copa');
+  };
+
+  // ── Nombre de la liga ─────────────────────────────
+  window.lextEditLeagueName = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    var inp = document.getElementById('lext-league-name-input');
+    /* Precarga el nombre real (custom del admin, o el default del slug)
+       para que el editor muestre "el nombre correspondiente". */
+    if(inp) inp.value = lextLeagueDisplayName(CURRENT_KEY, cfg);
+    lextOpenOv('lext-ov-league-name');
+  };
+  window.lextSaveLeagueName = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    cfg.name = ((document.getElementById('lext-league-name-input')||{}).value||'').trim();
+    /* Espejo en data.name para que las pantallas de Estadísticas /
+       Auditar (que leen data.name) muestren el mismo nombre. */
+    data.name = cfg.name;
+    saveData(CURRENT_KEY, data);
+    var ttl = document.getElementById('liga-ext-title');
+    if(ttl) ttl.textContent = lextLeagueDisplayName(CURRENT_KEY, cfg);
+    lextCloseOv('lext-ov-league-name');
+  };
+  window.lextResetLeagueName = function(){
+    if(!CURRENT_KEY) return;
+    var data = loadData(CURRENT_KEY);
+    var cfg = ensureConfig(data);
+    cfg.name = '';
+    data.name = '';
+    saveData(CURRENT_KEY, data);
+    var ttl = document.getElementById('liga-ext-title');
+    if(ttl) ttl.textContent = lextLeagueDisplayName(CURRENT_KEY, cfg);
+    var inp = document.getElementById('lext-league-name-input');
+    if(inp) inp.value = lextLeagueDisplayName(CURRENT_KEY, cfg);
+    lextCloseOv('lext-ov-league-name');
   };
 
   // ── Logo de la liga ───────────────────────────────
@@ -37534,6 +37596,8 @@ https://api.sofascore.app/api/v1/team/44/image
   function applyLeagueHeaderFromData(data){
     var cfg = ensureConfig(data);
     applyLeagueLogoToHeader(cfg.logo || '');
+    var ttl = document.getElementById('liga-ext-title');
+    if(ttl) ttl.textContent = lextLeagueDisplayName(CURRENT_KEY, cfg);
     var lbl = document.getElementById('lext-copa-btn-label');
     if(lbl) lbl.textContent = cfg.cupName || 'Copa';
   }
@@ -38067,7 +38131,7 @@ https://api.sofascore.app/api/v1/team/44/image
     'estonia':1, 'finlandia':1, 'letonia':1, 'lituania':1,
     'islandia':1, 'armenia':1, 'bielorrsa':1, 'is-feroe':1,
     'georgia':1, 'luxembgo':1, 'moldavia':1, 'n-maced':1,
-    'n-irlanda':1, 'montenegro':1,
+    'n-irlanda':1, 'montenegro':1, 'liechtenstein':1,
     'malta':1, 'kosovo':1,
     /* 21 medias añadidas */
     'rep-checa':1, 'austria':1, 'noruega':1, 'grecia':1,
@@ -38078,6 +38142,80 @@ https://api.sofascore.app/api/v1/team/44/image
     'eslovenia':1
   };
   window.WILDCARD_LIGA_SLUGS = WILDCARD_LIGA_SLUGS;
+
+  /* Nombre real de cada competición por slug. Lo muestra la cabecera
+     de la pantalla de la liga (#liga-ext-title) y precarga el editor
+     "Nombre de la liga" (🖍 junto al título). Las menu-cards de
+     s-ligas siguen mostrando el PAÍS (Inglaterra, Italia…) porque su
+     texto es la fuente del slug vía slugify(); el nombre real va aquí,
+     editable y persistido en data.config.name. Petición usuario
+     2026-05-30. */
+  var LEAGUE_DEFAULT_NAMES = {
+    'inglaterra':'Premier League',
+    'italia':'Serie A',
+    'alemania':'Bundesliga',
+    'francia':'Ligue 1',
+    'portugal':'Liga Portugal Betclic',
+    'p-bajos':'Eredivisie',
+    'belgica':'Pro League',
+    'turquia':'Süper Lig',
+    'rep-checa':'Czech First League',
+    'grecia':'Super League',
+    'polonia':'Ekstraklasa',
+    'dinamarca':'Superliga',
+    'noruega':'Eliteserien',
+    'chipre':'Cyprus League',
+    'suiza':'Super League',
+    'austria':'Bundesliga',
+    'escocia':'Premiership',
+    'suecia':'Allsvenskan',
+    'croacia':'HNL',
+    'israel':'Israeli Premier League',
+    'hungria':'Fizz Liga',
+    'ucrania':'Premier League',
+    'serbia':'Superliga',
+    'rumania':'SuperLiga',
+    'eslovenia':'PrvaLiga',
+    'azerbayan':'Premier League',
+    'rusia':'Premier League',
+    'eslovaquia':'Niké Liga',
+    'bulgaria':'Parva Liga',
+    'irlanda':'Premier Division',
+    'islandia':'Besta deild karla',
+    'armenia':'Premier League',
+    'moldavia':'Super Liga',
+    'finlandia':'Veikkausliiga',
+    'kosovo':'Superliga',
+    'kazajst':'Premier League',
+    'bosnia':'WWIN Liga BiH',
+    'letonia':'Virsliga',
+    'is-feroe':'Premier League',
+    'malta':'Malta Premier',
+    'liechtenstein':'FL1 Aktiv - Cup',
+    'estonia':'Premium Liiga',
+    'albania':'Abissnet Superiore',
+    'n-maced':'1. MFL',
+    'lituania':'TOPLYGA',
+    'n-irlanda':'NIFL Premiership',
+    'gibraltar':'Gibraltar Football League',
+    'andorra':'Primera Divisió',
+    'bielorrsa':'Vysshaya Liga',
+    'luxembgo':'Division Nationale',
+    'montenegro':'First League',
+    'georgia':'Erovnuli Liga',
+    'gales':'Cymru Premier',
+    'san-marino':'Campionato Sammarinese'
+  };
+  window.LEAGUE_DEFAULT_NAMES = LEAGUE_DEFAULT_NAMES;
+  /* Nombre a mostrar en la cabecera: custom del admin (cfg.name) →
+     nombre real por defecto del slug → texto del país de la card. */
+  function lextLeagueDisplayName(key, cfg){
+    var custom = cfg && typeof cfg.name === 'string' ? cfg.name.trim() : '';
+    if(custom) return custom;
+    if(key && LEAGUE_DEFAULT_NAMES[key]) return LEAGUE_DEFAULT_NAMES[key];
+    return CURRENT_NAME || 'Liga';
+  }
+  window.lextLeagueDisplayName = lextLeagueDisplayName;
 
   window.openLigaExt = function(name, emoji){
     CURRENT_NAME = name || 'Liga';

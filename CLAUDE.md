@@ -1,5 +1,59 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Wild Card + Open Qualifier — FASE DE GRUPOS (obligatorio, 2026-05-30)
+
+Petición usuario 2026-05-30: la **Wild Card** (`s-wild-card`,
+"UCL · Wild Card") y el **Open Qualifier** (`s-open-qualifier-clas`)
+dejan de ser eliminatorias y pasan a **fase de grupos**. La pantalla
+muestra **SOLO las tablas de clasificación** (sin desplegar las
+jornadas): al pulsar Simular se juega todo IA-vs-IA y se rellenan las
+tablas.
+
+### Wild Card (motor en `part2/misc_body_2.html`, IIFE `WC_*`)
+
+- **72 equipos** (plazas ⚪️ por liga, puesto 12+, 1-2 cada una; zona
+  `wildcard` de cada `ligaExt_*` vía `computeWildCardClassified` →
+  `_computeQualifiedFromLeagues('wildcard')`, que ya emite `slots`
+  equipos por liga). `POOL_TARGET=72`; se rellena con TBD si falta.
+- **24 grupos de 3** (`WC_N_GROUPS=24`, `WC_PER_GROUP=3`). Reparto
+  snake por poder + anti-mismo-país (`_distributeWcGroups`).
+- Liguilla a **DOBLE ida y vuelta** (`WC_ROUND_TRIPS=2`): cada par
+  juega 4 veces → **8 partidos por equipo, 12 por grupo**
+  (`_simulateWcGroup`).
+- Clasifica **solo el 1º de cada grupo** → **24 ganadores** →
+  `wc_to_open_qualifier_v1` (`_persistWinners`, filtra TBD). El 2º y
+  3º quedan eliminados.
+- Botones: **🎲 Draw** sortea los 24 grupos (sin jugar), **🎮 Simular**
+  juega las liguillas y rellena tablas, **♻️ Reset** limpia.
+
+### Open Qualifier (motor en `misc_body_1.html`, IIFE `STORE_KEY='oq_simulation_v1'`)
+
+- **112 equipos** = **88 directos** 🟡 (zonas `uclQual`) + **24** de la
+  Wild Card. `computeOpenQualifierTeams` capa a 112, reserva
+  `wcWinners.length`, `maxLeagues = 112 - reserved`.
+- **28 grupos de 4** (`N_GROUPS=28`, `TEAMS_PER_GROUP=4`,
+  `GROUP_LABELS` = A..Z, AA, AB). Round-robin ida+vuelta
+  (`_simulateGroup`): **6 partidos por equipo, 12 por grupo**.
+- Clasifica **solo el 1º** (`QUALIFY_TOP=1`) → **28** →
+  `oq_to_previa_v1` (lo lee `computeUclPrevTeams`, count-agnóstico).
+
+### Encaje global (objetivo del usuario)
+
+`⚪️ WC 72→24 · 🟡 OQ 88+24=112→28 · 🟣 Previa 34+28=62 (12/22/28) ·
+🔵 UCL 28+12=40 · 🟠 UEL 18+22=40 · 🟢 UECL 12+28=40`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver al bracket de Wild Card (4 semis + 18 RF) ni
+   al OQ de 7×14 (top-5/35). Son fases de grupos con SOLO tablas.
+2. **PROHIBIDO** renderizar las jornadas/partidos individuales en
+   `s-wild-card` ni en `s-open-qualifier-clas`. Solo tablas de
+   clasificación (petición explícita "sin que vengan las jornadas").
+3. Los thresholds "done" de `s-champions` (`_wcDone` ≥20, `_oqDone`
+   ≥24) son tolerantes a algún TBD; no subirlos a 24/28 exactos.
+4. Toda nueva edición debe mantener el cuadre 72→24→112→28; si cambia
+   un número, actualizar AMBOS motores + la leyenda visible del OQ.
+
 ## Caja "Torneos de Verano · Estadísticas" — render no bloqueante + equipos vigentes (obligatorio, 2026-05-28)
 
 **Bug (foto usuario 2026-05-28)**: con el Trofeo Joan Gamper a 46/48

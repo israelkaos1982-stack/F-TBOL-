@@ -88,6 +88,31 @@ tablas.
    posición de grupo (un 1º de grupo puede caer a Europa si su
    ranking global es bajo).
 
+### Tabla de coeficientes — plazas por defecto por liga (2026-05-30)
+
+`window.LEAGUE_DEFAULT_ZONES` (en `misc_body_1.html`, justo tras
+`DEFAULT_ZONES`) fija las plazas por defecto de cada liga según el
+cuadro del usuario (🔵ucl 🟣uclPrev 🟠uel 🟢uecl 🟡uclQual ⚪️wildcard).
+`window._zonesDefaultFor(slug)` = genérico `DEFAULT_ZONES` + override
+de la liga.
+
+- Lo consume `ensureConfig(data, slug)` (modal Reglas read + reset) y
+  el seed `_seedLeagueDefaultZonesV1` (precarga las ligas ya sembradas
+  que sigan en el genérico 1/1/1/1/1, sin pisar ediciones del admin).
+- **España = `liga-ea-sports`** está en la tabla (🔵4 🟣1 🟠2 🟢1) pero
+  sus plazas europeas entran por la pantalla manual "EA Sports → Europa"
+  (está en `EUROPE_BLACKLIST` para el cómputo automático).
+- Totales (incluida España): 🔵28 🟣34 🟠18 🟢12 🟡88 ⚪️71. Todo cuadra
+  exacto salvo ⚪️ WC = 71 (1 hueco TBD en un grupo, sin efecto aguas
+  abajo: WC saca 24, OQ 88+24=112, Previa 34+28=62).
+- `_fixupLeagueZonesV2` (flag `ftbol_league_zones_fix_v2`) re-aplica el
+  cuadro CORREGIDO (Albania→🟣, Feroe/Malta→🟡3, Montenegro/Georgia→⚪️2,
+  Bélgica/Turquía/Chequia/Grecia→🟣1) a navegadores que ya corrieron el
+  seed v1 con los valores viejos — SOLO si la liga sigue en el valor
+  viejo o genérico (nunca pisa edición manual). Idempotente.
+- **PROHIBIDO** hardcodear plazas en builders nuevos: leer siempre de
+  `data.config.zones` con fallback `window._zonesDefaultFor(slug)`.
+
 ## Caja "Torneos de Verano · Estadísticas" — render no bloqueante + equipos vigentes (obligatorio, 2026-05-28)
 
 **Bug (foto usuario 2026-05-28)**: con el Trofeo Joan Gamper a 46/48

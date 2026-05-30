@@ -25519,14 +25519,14 @@ window._showSimProgress = function(opts, onDone){
     var frozen = _europeFrozenFor('ucl');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('ucl');
-    /* Los 11 ganadores de los 11 grupos de la Ronda Final de la Previa
-       de Champions entran AUTOMÁTICAMENTE como plazas extra a la Fase
-       de Grupos en la MISMA temporada (petición usuario 2026-05-05).
-       Total objetivo del pool UCL: 29 directos por liga + 11 de Previa
-       = 40 equipos. Los 11 los persiste el módulo de la Previa en
-       `wprev_to_fase_grupos_v1` cuando todas las jornadas terminan.
-       Dedupe por nombre — si un equipo ya está clasificado directo
-       por su liga, no se duplica. */
+    /* Los 12 mejores del corte global de la Previa de Champions
+       (fase de grupos pura, formato 16 grupos desde 2026-05-30) entran
+       AUTOMÁTICAMENTE como plazas extra a la Fase de Grupos en la MISMA
+       temporada. Total objetivo del pool UCL: 28 directos por liga +
+       12 de Previa = 40 equipos. Los 12 los persiste el módulo de la
+       Previa en `wprev_to_fase_grupos_v1` al simular. Dedupe por
+       nombre — si un equipo ya está clasificado directo por su liga,
+       no se duplica. */
     try {
       var raw = localStorage.getItem('wprev_to_fase_grupos_v1');
       if(raw){
@@ -25988,8 +25988,8 @@ window._showSimProgress = function(opts, onDone){
           style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 16px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎮 Sim
   </button>
-  <!-- 🎲 Draw — re-sortea los 11 grupos de Ronda Final (PIN admin 747).
-       Solo activo cuando ya hay 30 ganadores R1 (phase ∈ rf-drawn|done). -->
+  <!-- 🎲 Draw — sortea los 16 grupos de la Previa (PIN admin 747),
+       sin jugar. 🎮 Sim juega las liguillas y aplica el corte global. -->
   <button id="wprev-btn-draw" onclick="window._wprevDraw&&window._wprevDraw()"
           style="background:linear-gradient(135deg,#3a2a00,#7a5a00);border:1px solid #ffd700;border-radius:8px;padding:9px 16px;color:#ffe480;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎲 Draw
@@ -26039,6 +26039,8 @@ window._showSimProgress = function(opts, onDone){
 #s-ucl-previa-clas .wprev-row.hdr{background:linear-gradient(90deg,#2a0a4a,#1a0535,#2a0a4a);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:#e0bfff;font-weight:700;text-transform:uppercase;border-bottom:1px solid rgba(168,85,247,.4);}
 #s-ucl-previa-clas .wprev-row.qual-best{background:rgba(168,85,247,.10);border-left:3px solid #a855f7;}
 #s-ucl-previa-clas .wprev-row.qual-death{background:rgba(243,115,53,.10);border-left:3px solid #F37335;}
+/* Conference (corte global 35-62) — verde. */
+#s-ucl-previa-clas .wprev-row.qual-conf{background:rgba(95,224,138,.08);border-left:3px solid #5fe08a;}
 #s-ucl-previa-clas .wprev-row.elim{background:rgba(255,80,80,.04);border-left:3px solid rgba(255,255,255,.05);}
 #s-ucl-previa-clas .wprev-pos{color:#fff;text-align:center;font-family:Bebas Neue,sans-serif;font-size:14px;}
 #s-ucl-previa-clas .wprev-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;color:#fff;}

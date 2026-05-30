@@ -29439,468 +29439,131 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 
 <!-- ══════════════════════════════════════════════════
-     UCL · PREVIA DE CHAMPIONS — Estructura oficial (2026-04-30)
-     · 63 equipos = 28 directos + 35 del Open Qualifier
-     · Ronda 1 (eliminatorias):
-         - 3 EXENTOS → Ronda Final (regla 2026-05-02):
-            · 1 fijo: 5º de Liga EA Sports (entrada manual EA→Europa).
-            · 2 al azar: entre los 2º de Bélgica, Turquía, Suiza,
-              Dinamarca y Escocia. El sorteo se renueva con cada Draw.
-         - 60 equipos juegan 30 cruces ida + vuelta:
-            · CABEZAS de serie (top 30 power) vs NO CABEZAS (bottom 30)
-            · Restricción: no enfrentar dos equipos del mismo país
-            · IDA en estadio del NO CABEZA, VUELTA en el CABEZA
-            · Empate global → gol de visitante / prórroga / penaltis
-         - 30 GANADORES → Ronda Final
-         - 30 PERDEDORES → Conference League (mismo año)
-     · Ronda Final (33 equipos = 30 R1 + 3 exentos):
-         - 11 grupos × 3 equipos (A-K)
-         - 3 BOMBOS por power (1-11, 12-22, 23-33), un equipo de cada
-         - Same-country avoidance dentro de cada grupo
-         - Liguilla IDA + VUELTA (4 partidos por equipo, 6 por grupo)
-         - 1º grupo → Champions League · 2º+3º → Europa League
+     UCL · PREVIA DE CHAMPIONS — Fase de grupos pura (2026-05-30)
+     · 62 equipos = 34 directos (zona uclPrev) + 28 del Open Qualifier.
+     · 16 grupos (14 de 4 + 2 de 3), liguilla a doble ida y vuelta,
+       IA-vs-IA. La UI muestra SOLO las tablas (sin jornadas).
+     · CORTE GLOBAL por (posición en su grupo → PTS → DG → GF):
+         - Top 12 → Champions · 13-34 → Europa (22) · 35-62 → Conference (28)
+       Los 62 clasifican (12+22+28 = 62, ninguno eliminado).
      · Persistencia (todo en la misma temporada):
-         - `wprev_to_fase_grupos_v1`     → 11 a Champions (1º × 11)
-         - `wprev_to_europa_v1`          → 22 a Europa    (2º + 3º)
-         - `wprev_r1_to_conference_v1`   → 30 a Conference (R1 losers)
+         - `wprev_to_fase_grupos_v1`     → 12 a Champions
+         - `wprev_to_europa_v1`          → 22 a Europa
+         - `wprev_r1_to_conference_v1`   → 28 a Conference
+     · Sustituye al formato R1 eliminatorias + Ronda Final + EXENTOS.
      ══════════════════════════════════════════════════ -->
 <script>
 (function(){
+  /* ════════════════════════════════════════════════════════════
+     UCL · PREVIA DE CHAMPIONS — Fase de grupos pura (2026-05-30 v3)
+     · Pool: 62 equipos = 34 directos (zona `uclPrev` de las ligas)
+       + 28 del Open Qualifier (vía `oq_to_previa_v1`).
+     · 16 grupos (14 de 4 + 2 de 3, snake por poder + anti-mismo-país),
+       liguilla a DOBLE ida y vuelta. Cada grupo se simula IA-vs-IA y
+       la UI muestra SOLO las tablas de clasificación (sin jornadas).
+     · CORTE GLOBAL: se ordena el ranking global por
+       (posición en su grupo → PTS → DG → GF → nombre) y se reparte:
+         - Top 12  → Champions   (`wprev_to_fase_grupos_v1`)
+         - 13-34   → Europa (22)  (`wprev_to_europa_v1`)
+         - 35-62   → Conference(28)(`wprev_r1_to_conference_v1`)
+       Los 62 clasifican (ninguno eliminado). 12+22+28 = 62.
+     · Sustituye al formato anterior (Ronda 1 eliminatorias + Ronda
+       Final + EXENTOS). Las claves de salida se conservan para que
+       las fases finales (UCL/UEL/UECL) las consuman sin cambios.
+     ════════════════════════════════════════════════════════════ */
   var WPREV_KEY      = 'wprev_state_v1';
-  var WPREV_FG_KEY   = 'wprev_to_fase_grupos_v1';   /* 11 → Champions */
-  var WPREV_EUR_KEY  = 'wprev_to_europa_v1';        /* 22 → Europa    */
-  var WPREV_CONF_KEY = 'wprev_r1_to_conference_v1'; /* 30 → Conference */
-  var POOL_TARGET    = 63;
-  var BYES_COUNT     = 3;
-  var R1_TIES        = 30;                          /* (63 − 3) / 2 */
-  var N_GROUPS       = 11;
-  var TEAMS_PER_GROUP= 3;
-  var GROUP_LABELS   = ['A','B','C','D','E','F','G','H','I','J','K'];
+  var WPREV_FG_KEY   = 'wprev_to_fase_grupos_v1';   /* 12 → Champions  */
+  var WPREV_EUR_KEY  = 'wprev_to_europa_v1';        /* 22 → Europa     */
+  var WPREV_CONF_KEY = 'wprev_r1_to_conference_v1'; /* 28 → Conference */
+  var POOL_TARGET    = 62;
+  var N_GROUPS       = 16;                           /* 14×4 + 2×3 = 62 */
+  var CUT_UCL = 12, CUT_UEL = 22, CUT_UECL = 28;    /* suman 62        */
 
-  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function _logoOf(name){
-    if(typeof window.getTeamLogoUrl === 'function'){ try { return window.getTeamLogoUrl(name)||''; } catch(_){} }
+    if(typeof window.getTeamLogoUrl === 'function'){ try { return window.getTeamLogoUrl(name) || ''; } catch(_){} }
     return (window.TEAM_LOGOS && window.TEAM_LOGOS[name]) || '';
   }
   function _powerOf(name){
-    var r = window.TEAM_RATINGS || {};
-    var e = r[name];
-    if(!e) return 70;
+    var r = window.TEAM_RATINGS || {}, e = r[name];
+    if(!e) return 65;
     if(typeof e === 'number') return e;
     if(typeof e === 'object' && typeof e.media === 'number') return e.media;
-    return 70;
+    return 65;
   }
-  function loadState(){
-    var s;
-    try { s = JSON.parse(localStorage.getItem(WPREV_KEY)||'null'); } catch(_){ return null; }
-    if(!s) return null;
-    /* Auto-migración 2026-05-02: si los byes vienen del flujo viejo
-       (regla "top 3 power") y aún no se ha simulado nada (phase
-       'paired'), recalculamos los byes con la regla nueva (5º España
-       fijo + 2 al azar de Bel/Tur/Sui/Den/Sco). Solo aplicamos esto
-       cuando es 100% seguro — phase='paired' significa que las
-       cruces se sortearon pero no hay IDA jugada todavía, así que
-       reordenar byes+heads+nonHeads no destruye datos del usuario.
-       Para fases posteriores (ida-played, rf-drawn, done) el admin
-       tendrá que hacer Reset si quiere aplicar la regla nueva. */
-    if(s.byesRule !== 'spain5+2random_v1' && s.phase === 'paired'
-        && Array.isArray(s.pool) && s.pool.length){
-      try {
-        var newSplit = splitByesAndR1(s.pool);
-        var newPairs = pairR1Ties(newSplit.heads, newSplit.nonHeads);
-        s.byes = newSplit.byes;
-        s.ties = newPairs.map(function(p){
-          return {
-            idx: p.idx,
-            teamH: p.teamH, teamA: p.teamA,
-            idaPlayed: false, played: false, winner: null,
-            idaGh:null, idaGa:null,
-            vueltaGh:null, vueltaGa:null,
-            etGh:null, etGa:null, etDecided:false,
-            penGh:null, penGa:null, penDecided:false,
-            awayDecided: false,
-            aggH:null, aggA:null
-          };
-        });
-        s.byesRule = 'spain5+2random_v1';
-        s.ts = Date.now();
-        try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); } catch(_){}
-      } catch(_){}
-    }
-    return s;
+  var GROUP_LABELS = (function(){
+    var a = [];
+    for(var i=0; i<N_GROUPS; i++){ a.push(i<26 ? String.fromCharCode(65+i) : 'A'+String.fromCharCode(65+(i-26))); }
+    return a;
+  })();
+
+  function loadState(){ try { return JSON.parse(localStorage.getItem(WPREV_KEY)||'null'); } catch(_){ return null; } }
+  function _freeSpace(){
+    var del = [];
+    try { for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); if(k&&(k.indexOf('_backup')!==-1||k.indexOf('_snap_')!==-1||k.indexOf('_snapshot')!==-1||k.indexOf('_protected')!==-1)) del.push(k); } } catch(_){}
+    del.forEach(function(k){ try{ localStorage.removeItem(k); }catch(_){} });
+    return del.length;
   }
   function saveState(s){
-    /* Marcamos los nuevos saves como conformes a la regla de byes
-       2026-05-02 para que la auto-migración solo se dispare en
-       estados antiguos. */
-    if(s && !s.byesRule) s.byesRule = 'spain5+2random_v1';
-    try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); } catch(_){}
+    try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); return true; }
+    catch(e){
+      var isQuota = /Quota|QUOTA_EXCEEDED|22|1014/i.test(String((e&&(e.name||e.code))||'')) || /quota/i.test(String(e&&e.message));
+      if(isQuota){ var f=_freeSpace(); try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); return true; } catch(e2){ alert('⚠️ Sin espacio en localStorage para guardar la Previa.\n\nLiberé '+f+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas.'); return false; } }
+      alert('⚠️ Error guardando la Previa: '+(e&&e.message?e.message:e)); return false;
+    }
   }
-  function clearState(){
-    try {
-      localStorage.removeItem(WPREV_KEY);
-      localStorage.removeItem(WPREV_FG_KEY);
-      localStorage.removeItem(WPREV_EUR_KEY);
-      localStorage.removeItem(WPREV_CONF_KEY);
-    } catch(_){}
-  }
+  function clearState(){ try { localStorage.removeItem(WPREV_KEY); } catch(_){} }
 
-  /* Lee del computador global el pool de Previa Champions (28 directos
-     desde zonas `uclPrev` + 35 desde `oq_to_previa_v1`). Si hay más de
-     63 recortamos por power; si hay menos completamos con placeholders
-     para que el bracket no se rompa. Cada equipo conserva su `league`
-     (slug del país de origen) para los filtros de mismo país. */
+  /* Pool: 34 directos (zona uclPrev) + 28 del OQ (oq_to_previa_v1). */
   function buildPool(){
     var raw = [];
     if(typeof window.computeUclPrevTeams === 'function'){
       try {
         (window.computeUclPrevTeams()||[]).forEach(function(t){
           if(!t || !t.name) return;
-          raw.push({
-            name: t.name,
-            logo: t.logo || _logoOf(t.name),
-            league: t.league || '',
-            power: _powerOf(t.name)
-          });
+          raw.push({ name:t.name, logo:t.logo||_logoOf(t.name), league:t.league||'', power:_powerOf(t.name) });
         });
       } catch(_){}
     }
     return raw;
   }
-
   function _normalizePool(raw){
     var arr = raw.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); });
     if(arr.length > POOL_TARGET) arr = arr.slice(0, POOL_TARGET);
-    while(arr.length < POOL_TARGET){
-      var i = arr.length;
-      arr.push({
-        name: 'TBD '+(i+1),
-        logo: '',
-        league: '__placeholder_'+i,
-        power: 50
-      });
-    }
+    while(arr.length < POOL_TARGET){ var i=arr.length; arr.push({ name:'TBD '+(i+1), logo:'', league:'__placeholder_'+i, power:50 }); }
     return arr;
   }
 
-  /* Selección de los 3 EXENTOS (regla del usuario, 2026-05-02):
-       - 1 fijo: el 5º de Liga EA Sports. Como Liga EA está blacklisted
-         del cómputo automático, ese equipo entra al pool vía la
-         pantalla manual "EA Sports → Europa" → su `league` en el pool
-         es 'ea-sports-manual'. Si admin añadió varios manuales para
-         uclPrev, escogemos el de mayor power.
-       - 2 aleatorios: 2 al azar de los 2º de {Bélgica, Turquía, Suiza,
-         Dinamarca, Escocia}. En el pool tienen `league` igual al slug
-         del país. Cada Draw produce un sorteo distinto (la persistencia
-         vive en wprev_state_v1, así que el sorteo SOLO cambia cuando
-         se vuelve a hacer Draw).
-       - Si por algún motivo faltan candidatos (admin no añadió el
-         español, alguna de las 5 ligas no está simulada), rellenamos
-         con los siguientes equipos por power para no dejar plazas
-         vacías.
-
-     El resto del pool (los 60 que no son byes) se divide en CABEZAS
-     (los 30 mejores por power) y NO CABEZAS (los 30 peores). */
-  function splitByesAndR1(pool){
-    var BYE_SPAIN_LEAGUE = 'ea-sports-manual';
-    var BYE_RANDOM_LEAGUES = ['belgica','turquia','suiza','dinamarca','escocia'];
-    var taken = {};
-    var byes = [];
-
-    /* 1. Bye fijo: el 5º de Liga EA Sports (manual). Si hay varios
-       en uclPrev, prevalece el de mayor power. */
-    var spainBest = -1;
-    for(var i = 0; i < pool.length; i++){
-      if(pool[i] && pool[i].league === BYE_SPAIN_LEAGUE){
-        if(spainBest === -1 || (Number(pool[i].power)||0) > (Number(pool[spainBest].power)||0)){
-          spainBest = i;
-        }
-      }
-    }
-    if(spainBest !== -1){
-      byes.push(pool[spainBest]);
-      taken[spainBest] = true;
-    }
-
-    /* 2. 2 aleatorios entre {Bélgica, Turquía, Suiza, Dinamarca, Escocia}.
-       Fisher-Yates sobre los índices candidatos. */
-    var foreign = [];
-    for(var fi = 0; fi < pool.length; fi++){
-      if(taken[fi]) continue;
-      if(BYE_RANDOM_LEAGUES.indexOf(pool[fi] && pool[fi].league) !== -1){
-        foreign.push(fi);
-      }
-    }
-    for(var sf = foreign.length - 1; sf > 0; sf--){
-      var sj = Math.floor(Math.random() * (sf + 1));
-      var tmpIdx = foreign[sf]; foreign[sf] = foreign[sj]; foreign[sj] = tmpIdx;
-    }
-    while(byes.length < BYES_COUNT && foreign.length){
-      var idx = foreign.shift();
-      byes.push(pool[idx]);
-      taken[idx] = true;
-    }
-
-    /* 3. Fallback: rellenar por power si faltan byes. El pool ya viene
-       ordenado por power desc desde _normalizePool. */
-    for(var fb = 0; fb < pool.length && byes.length < BYES_COUNT; fb++){
-      if(taken[fb]) continue;
-      byes.push(pool[fb]);
-      taken[fb] = true;
-    }
-
-    /* 4. Resto = pool sin byes, manteniendo el orden por power. Los 30
-       primeros son CABEZAS, los 30 siguientes son NO CABEZAS. */
-    var rest = [];
-    for(var ri = 0; ri < pool.length; ri++){
-      if(!taken[ri]) rest.push(pool[ri]);
-    }
-    var heads    = rest.slice(0, R1_TIES);
-    var nonHeads = rest.slice(R1_TIES, 2 * R1_TIES);
-    return { byes: byes, heads: heads, nonHeads: nonHeads };
+  function _sameLeague(a,b){
+    var la=a&&a.league, lb=b&&b.league;
+    if(!la||!lb) return false;
+    if(/^__placeholder_/.test(la) || /^__placeholder_/.test(lb)) return false;
+    return la===lb;
   }
-
-  /* Construye 30 cruces 1 cabeza vs 1 no-cabeza, intentando no
-     enfrentar dos equipos del mismo país. Estrategia:
-       1. Pareo inicial por orden: head[i] vs nonHead[i].
-       2. Pasadas greedy (hasta 4): para cada pareja en conflicto,
-          intercambia el no-cabeza con otra pareja si eso resuelve el
-          conflicto sin crear uno nuevo.
-       3. Si no hay swap válido, se acepta la pareja como está
-          (best-effort — el pool puede tener tantos del mismo país
-          que haya conflictos inevitables). */
-  function pairR1Ties(heads, nonHeads){
-    var pairs = [];
-    for(var i=0;i<heads.length;i++){
-      pairs.push({
-        idx: i,
-        teamH: heads[i],     /* CABEZA — local en la VUELTA */
-        teamA: nonHeads[i]   /* NO CABEZA — local en la IDA */
-      });
-    }
-    function sameCountry(p){
-      var lh = p.teamH && p.teamH.league;
-      var la = p.teamA && p.teamA.league;
-      if(!lh || !la) return false;
-      if(/^__placeholder_/.test(lh) || /^__placeholder_/.test(la)) return false;
-      return lh === la;
-    }
+  /* Reparte 62 en 16 grupos (snake por poder) con anti-mismo-país. */
+  function _distributeGroups(pool){
+    var groups=[]; for(var g=0; g<N_GROUPS; g++) groups.push([]);
+    pool.forEach(function(t,i){ var row=Math.floor(i/N_GROUPS), col=i%N_GROUPS, gi=(row%2===0)?col:(N_GROUPS-1-col); groups[gi].push(t); });
+    function dupMax(grp){ var c={},m=0; for(var i=0;i<grp.length;i++){ var k=(grp[i]&&grp[i].league)||''; if(!k||/^__placeholder_/.test(k)) continue; c[k]=(c[k]||0)+1; if(c[k]>m) m=c[k]; } return m; }
     for(var pass=0; pass<4; pass++){
-      var changed = false;
-      for(var i=0;i<pairs.length;i++){
-        if(!sameCountry(pairs[i])) continue;
-        for(var j=0;j<pairs.length;j++){
-          if(j===i) continue;
-          var newI = { teamH: pairs[i].teamH, teamA: pairs[j].teamA };
-          var newJ = { teamH: pairs[j].teamH, teamA: pairs[i].teamA };
-          if(!sameCountry(newI) && !sameCountry(newJ)){
-            var t = pairs[i].teamA; pairs[i].teamA = pairs[j].teamA; pairs[j].teamA = t;
-            changed = true;
-            break;
+      var changed=false;
+      for(var gg=0; gg<N_GROUPS; gg++){
+        if(dupMax(groups[gg])<2) continue;
+        var done=false;
+        for(var si=0; si<groups[gg].length && !done; si++){
+          var clash=false;
+          for(var sk=0; sk<groups[gg].length; sk++){ if(sk!==si && _sameLeague(groups[gg][si],groups[gg][sk])){ clash=true; break; } }
+          if(!clash) continue;
+          for(var dg=0; dg<N_GROUPS && !done; dg++){
+            if(dg===gg) continue;
+            for(var di=0; di<groups[dg].length && !done; di++){
+              var before=dupMax(groups[gg])+dupMax(groups[dg]);
+              var tmp=groups[gg][si]; groups[gg][si]=groups[dg][di]; groups[dg][di]=tmp;
+              var after=dupMax(groups[gg])+dupMax(groups[dg]);
+              if(after<before){ changed=true; done=true; }
+              else { var t2=groups[gg][si]; groups[gg][si]=groups[dg][di]; groups[dg][di]=t2; }
+            }
           }
-        }
-      }
-      if(!changed) break;
-    }
-    return pairs;
-  }
-
-  function genJornadas(){
-    /* 3 equipos, ida + vuelta = 6 partidos en 6 jornadas:
-       J1: 0v1   J2: 1v2   J3: 2v0
-       J4: 1v0   J5: 2v1   J6: 0v2 */
-    return [
-      {hi:0, ai:1}, {hi:1, ai:2}, {hi:2, ai:0},
-      {hi:1, ai:0}, {hi:2, ai:1}, {hi:0, ai:2}
-    ];
-  }
-
-  function simMatch(home, away){
-    if(typeof window._simIAvsIAWithContext === 'function'){
-      try { return window._simIAvsIAWithContext(home, away, 0); } catch(_){}
-    }
-    if(typeof window._fallbackIAvsIAScore === 'function'){
-      try { return window._fallbackIAvsIAScore(home, away); } catch(_){}
-    }
-    function poiss(l){var L=Math.exp(-l),k=0,p=1;do{k++;p*=Math.random();}while(p>L);return k-1;}
-    var ph=_powerOf(home), pa=_powerOf(away);
-    return { gh:Math.min(5, poiss(0.9 + (ph-pa)/40)), ga:Math.min(5, poiss(0.8 - (ph-pa)/40)) };
-  }
-
-  function emptyTable(group){
-    return group.map(function(t){
-      return { name:t.name, logo:t.logo||'', power:t.power||70,
-               pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 };
-    });
-  }
-  function applyToTable(table, hIdx, aIdx, gh, ga){
-    var H = table[hIdx], A = table[aIdx];
-    H.pj++; A.pj++; H.gf+=gh; H.gc+=ga; A.gf+=ga; A.gc+=gh;
-    if(gh>ga){H.v++; A.p++; H.pts+=3;}
-    else if(ga>gh){A.v++; H.p++; A.pts+=3;}
-    else {H.e++; A.e++; H.pts++; A.pts++;}
-    H.dg = H.gf - H.gc; A.dg = A.gf - A.gc;
-  }
-  function sortTable(t){
-    return t.slice().map(function(r,i){ r._i=i; return r; }).sort(function(a,b){
-      if(b.pts!==a.pts) return b.pts-a.pts;
-      if(b.dg !==a.dg ) return b.dg-a.dg;
-      if(b.gf !==a.gf ) return b.gf-a.gf;
-      return a.name.localeCompare(b.name,'es');
-    });
-  }
-
-  /* Resuelve UNA eliminatoria de Ronda 1 EN DOS FASES (separadas para
-     que el usuario pueda darle a "Simular IDA" y "Simular VUELTA"
-     por separado).
-       teamH (CABEZA)    — local en la VUELTA
-       teamA (NO CABEZA) — local en la IDA
-     Storage en el objeto tie:
-       idaGh / idaGa            — goles ida (NO-cabeza local)
-                                  idaGh = teamA, idaGa = teamH
-       idaPlayed                — true tras playR1TieIda
-       vueltaGh / vueltaGa      — goles vuelta (CABEZA local)
-                                  vueltaGh = teamH, vueltaGa = teamA
-       aggH / aggA              — goles totales del CABEZA / NO-CABEZA
-       awayDecided              — true si decidió por gol de visitante
-       etDecided                — true si hubo prórroga
-       penDecided               — true si hubo penaltis
-       penGh / penGa            — penaltis convertidos por H / A
-       played                   — true tras playR1TieVuelta (winner final)
-       winner                   — referencia al teamH o teamA ganador
-     Empate en agg → primero gol de visitante, luego prórroga, luego
-     penaltis. */
-  function playR1TieIda(tie){
-    if(tie.idaPlayed) return;
-    var nameH = tie.teamH.name, nameA = tie.teamA.name;
-    var ida = simMatch(nameA, nameH);   /* teamA local */
-    tie.idaGh = ida.gh;                 /* goles teamA (NO-cabeza local) */
-    tie.idaGa = ida.ga;                 /* goles teamH (CABEZA visitante) */
-    tie.idaPlayed = true;
-  }
-
-  function playR1TieVuelta(tie){
-    if(tie.played) return;
-    if(!tie.idaPlayed) playR1TieIda(tie);
-    var nameH = tie.teamH.name, nameA = tie.teamA.name;
-    /* VUELTA — teamH local */
-    var vu = simMatch(nameH, nameA);
-    tie.vueltaGh = vu.gh;
-    tie.vueltaGa = vu.ga;
-    /* Agregado tras 90+90 */
-    var aggH = tie.idaGa + tie.vueltaGh;   /* CABEZA: ida (visitante) + vuelta (local) */
-    var aggA = tie.idaGh + tie.vueltaGa;   /* NO-CABEZA: ida (local) + vuelta (visitante) */
-    tie.aggH = aggH; tie.aggA = aggA;
-    if(aggH > aggA){ tie.winner = tie.teamH; tie.played = true; return; }
-    if(aggA > aggH){ tie.winner = tie.teamA; tie.played = true; return; }
-    /* Empate global → REGLA DEL GOL DE VISITANTE.
-         awayH = goles del CABEZA fuera (en ida) = idaGa
-         awayA = goles del NO-CABEZA fuera (en vuelta) = vueltaGa */
-    var awayH = tie.idaGa, awayA = tie.vueltaGa;
-    if(awayH > awayA){ tie.awayDecided = true; tie.winner = tie.teamH; tie.played = true; return; }
-    if(awayA > awayH){ tie.awayDecided = true; tie.winner = tie.teamA; tie.played = true; return; }
-    /* Sigue empate → PRÓRROGA en la vuelta (campo del CABEZA). */
-    var et = simMatch(nameH, nameA);
-    var etGh = Math.min(2, Math.floor((et.gh||0)/2));
-    var etGa = Math.min(2, Math.floor((et.ga||0)/2));
-    tie.etGh = etGh; tie.etGa = etGa;
-    tie.etDecided = true;
-    aggH += etGh; aggA += etGa;
-    tie.aggH = aggH; tie.aggA = aggA;
-    if(aggH > aggA){ tie.winner = tie.teamH; tie.played = true; return; }
-    if(aggA > aggH){ tie.winner = tie.teamA; tie.played = true; return; }
-    /* PENALTIS — sesgo ±10 % por diferencia de power. */
-    var pH = _powerOf(nameH), pA = _powerOf(nameA);
-    var probH = 0.5 + Math.max(-0.10, Math.min(0.10, (pH - pA) / 200));
-    var winH = Math.random() < probH;
-    var winScore  = 4 + Math.floor(Math.random()*2);
-    var loseScore = Math.floor(Math.random() * winScore);
-    if(loseScore >= winScore) loseScore = winScore - 1;
-    if(loseScore < 0) loseScore = 0;
-    if(winH){ tie.penGh = winScore; tie.penGa = loseScore; tie.winner = tie.teamH; }
-    else    { tie.penGh = loseScore; tie.penGa = winScore; tie.winner = tie.teamA; }
-    tie.penDecided = true;
-    tie.played = true;
-  }
-
-  /* Reparte 33 equipos (30 ganadores R1 + 3 byes) en 11 grupos de 3.
-     Sembrado: ordena por power desc, divide en 3 BOMBOS de 11 y
-     reparte 1 de cada bombo a cada grupo. Después aplica un post-pass
-     de same-country avoidance: si un grupo tiene 2+ del mismo `league`,
-     intenta intercambiar UNO con otro grupo donde no se cree conflicto.
-     Si el conflicto es del mismo bombo, intercambia un equipo de ESE
-     bombo (preserva la estructura de bombos). */
-  function seedRoundFinal(qualified){
-    var sorted = qualified.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); });
-    var bombo1 = sorted.slice(0, N_GROUPS);
-    var bombo2 = sorted.slice(N_GROUPS, 2*N_GROUPS);
-    var bombo3 = sorted.slice(2*N_GROUPS, 3*N_GROUPS);
-    /* Shuffle dentro de cada bombo para que el pareo a grupos sea
-       aleatorio en cada draw (sin esto el sortear era determinista
-       y re-Draw producía siempre los mismos grupos). La estructura
-       de bombos se conserva — solo cambia QUÉ equipo del bombo cae
-       en QUÉ grupo. */
-    function _shuf(a){
-      for(var i=a.length-1; i>0; i--){
-        var j = Math.floor(Math.random()*(i+1));
-        var t = a[i]; a[i] = a[j]; a[j] = t;
-      }
-      return a;
-    }
-    _shuf(bombo1); _shuf(bombo2); _shuf(bombo3);
-    var groups = [];
-    for(var g=0; g<N_GROUPS; g++){
-      groups.push([ bombo1[g], bombo2[g], bombo3[g] ]);
-    }
-    function dupCountry(grp){
-      var c = {};
-      for(var i=0;i<grp.length;i++){
-        var l = grp[i] && grp[i].league;
-        if(!l || /^__placeholder_/.test(l)) continue;
-        c[l] = (c[l]||0) + 1;
-      }
-      for(var k in c){ if(c[k] >= 2) return k; }
-      return null;
-    }
-    function maxDup(grp){
-      var c = {}, m = 0;
-      grp.forEach(function(t){
-        if(!t || !t.league || /^__placeholder_/.test(t.league)) return;
-        c[t.league] = (c[t.league]||0) + 1;
-        if(c[t.league] > m) m = c[t.league];
-      });
-      return m;
-    }
-    /* Greedy: para cada conflicto, intercambia con otro grupo en el
-       MISMO slot de bombo (mantiene estructura) si baja la suma de
-       máximos. */
-    for(var pass=0; pass<4; pass++){
-      var changed = false;
-      for(var g=0; g<N_GROUPS; g++){
-        var dup = dupCountry(groups[g]);
-        if(!dup) continue;
-        /* localiza el slot de bombo donde está la duplicación */
-        var slotToSwap = -1;
-        for(var s=0; s<groups[g].length; s++){
-          if(groups[g][s].league === dup){ slotToSwap = s; break; }
-        }
-        if(slotToSwap < 0) continue;
-        for(var dg=0; dg<N_GROUPS && !changed; dg++){
-          if(dg === g) continue;
-          var srcT = groups[g][slotToSwap], dstT = groups[dg][slotToSwap];
-          if(!srcT || !dstT) continue;
-          var origSum = maxDup(groups[g]) + maxDup(groups[dg]);
-          /* prueba el swap */
-          groups[g][slotToSwap] = dstT;
-          groups[dg][slotToSwap] = srcT;
-          var newSum = maxDup(groups[g]) + maxDup(groups[dg]);
-          if(newSum < origSum){
-            changed = true;
-            break;
-          }
-          /* revierte si no mejora */
-          groups[g][slotToSwap] = srcT;
-          groups[dg][slotToSwap] = dstT;
         }
       }
       if(!changed) break;
@@ -29908,971 +29571,187 @@ document.addEventListener('DOMContentLoaded', function() {
     return groups;
   }
 
+  function _poisson(l){ l=Math.max(0.1,Math.min(5,Number(l)||1)); var L=Math.exp(-l),k=0,p=1; do{k++;p*=Math.random();}while(p>L&&k<25); return k-1; }
+  function _simMatch(home,away){
+    if(typeof window._simIAvsIAWithContext==='function'){ try { var r=window._simIAvsIAWithContext(home,away,0); if(r&&isFinite(+r.gh)&&isFinite(+r.ga)) return {gh:Math.max(0,Math.min(7,Math.round(+r.gh))),ga:Math.max(0,Math.min(7,Math.round(+r.ga)))}; } catch(_){} }
+    if(typeof window._fallbackIAvsIAScore==='function'){ try { var r2=window._fallbackIAvsIAScore(home,away); if(r2&&isFinite(+r2.gh)&&isFinite(+r2.ga)) return {gh:Math.max(0,Math.min(7,Math.round(+r2.gh))),ga:Math.max(0,Math.min(7,Math.round(+r2.ga)))}; } catch(_){} }
+    var ph=_powerOf(home), pa=_powerOf(away);
+    return { gh:Math.min(6,_poisson(1.25+(ph-pa)/45)), ga:Math.min(6,_poisson(0.95+(pa-ph)/45)) };
+  }
+  /* Doble round-robin: cada par juega 2 veces (ida + vuelta). */
+  function _simulateGroup(grp){
+    var matches=[];
+    for(var i=0;i<grp.length;i++){ for(var j=0;j<grp.length;j++){ if(i===j) continue; var r=_simMatch((grp[i]&&grp[i].name)||'',(grp[j]&&grp[j].name)||''); matches.push({hi:i,ai:j,gh:r.gh,ga:r.ga}); } }
+    return matches;
+  }
+  function _standingsFor(grp,matches){
+    var arr=grp.map(function(t,i){ return {idx:i,name:(t&&t.name)||'',logo:(t&&t.logo)||'',league:(t&&t.league)||'',pts:0,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0}; });
+    (matches||[]).forEach(function(m){ var H=arr[m.hi],A=arr[m.ai]; if(!H||!A) return; H.pj++;A.pj++; H.gf+=m.gh;H.gc+=m.ga;A.gf+=m.ga;A.gc+=m.gh; if(m.gh>m.ga){H.v++;A.p++;H.pts+=3;} else if(m.gh<m.ga){A.v++;H.p++;A.pts+=3;} else {H.e++;A.e++;H.pts++;A.pts++;} });
+    arr.forEach(function(s){ s.dg=s.gf-s.gc; });
+    arr.sort(function(a,b){ return (b.pts-a.pts)||(b.dg-a.dg)||(b.gf-a.gf)||String(a.name).localeCompare(String(b.name),'es'); });
+    return arr;
+  }
+
+  /* Ranking GLOBAL: por posición en su grupo (0-indexed) → PTS → DG →
+     GF → nombre. La posición de grupo va primero para que el corte sea
+     justo entre grupos de tamaño desigual (3 ó 4). */
+  function _globalRanking(state){
+    var all=[];
+    (state.sortedTables||[]).forEach(function(st){ (st||[]).forEach(function(row,pos){ all.push({ name:row.name, logo:row.logo, league:row.league, pos:pos, pts:row.pts, dg:row.dg, gf:row.gf }); }); });
+    all.sort(function(a,b){ return (a.pos-b.pos)||(b.pts-a.pts)||(b.dg-a.dg)||(b.gf-a.gf)||String(a.name).localeCompare(String(b.name),'es'); });
+    return all;
+  }
+  function _destMap(state){
+    var rank=_globalRanking(state), map={};
+    rank.forEach(function(r,i){ map[r.name]= (i<CUT_UCL)?'ucl':((i<CUT_UCL+CUT_UEL)?'uel':'uecl'); });
+    return map;
+  }
+  /* Persiste el reparto 12/22/28 a las 3 claves de salida. Los huecos
+     TBD/placeholder NO se propagan a las fases finales. */
+  function _persistDistribution(state){
+    var rank=_globalRanking(state);
+    function pack(r){ return { name:r.name, logo:r.logo||_logoOf(r.name)||'', league:r.league||'' }; }
+    var ucl=[], uel=[], uecl=[];
+    rank.forEach(function(r,i){
+      if(/^TBD|^__placeholder_/.test(r.name)) return;
+      if(i<CUT_UCL) ucl.push(pack(r));
+      else if(i<CUT_UCL+CUT_UEL) uel.push(pack(r));
+      else uecl.push(pack(r));
+    });
+    try { localStorage.setItem(WPREV_FG_KEY,  JSON.stringify({teams:ucl,  ts:Date.now()})); } catch(_){}
+    try { localStorage.setItem(WPREV_EUR_KEY, JSON.stringify({teams:uel,  ts:Date.now()})); } catch(_){}
+    try { localStorage.setItem(WPREV_CONF_KEY,JSON.stringify({teams:uecl, ts:Date.now()})); } catch(_){}
+  }
+
   function initState(){
-    var raw = buildPool();
-    if(raw.length === 0) return null;
-    var pool = _normalizePool(raw);
-    var split = splitByesAndR1(pool);
-    var r1Pairs = pairR1Ties(split.heads, split.nonHeads);
-    var ties = r1Pairs.map(function(p){
-      return {
-        idx: p.idx,
-        teamH: p.teamH, teamA: p.teamA,
-        idaPlayed: false,
-        played: false, winner: null,
-        idaGh:null, idaGa:null,
-        vueltaGh:null, vueltaGa:null,
-        etGh:null, etGa:null, etDecided:false,
-        penGh:null, penGa:null, penDecided:false,
-        awayDecided: false,
-        aggH:null, aggA:null
-      };
-    });
-    return {
-      pool: pool,
-      byes: split.byes,
-      ties: ties,                /* 30 cruces R1 ya formados, sin partidos */
-      r1Losers: [],
-      groups: [],                /* se llena tras R1 vuelta */
-      tables: [],
-      sortedTables: [],
-      jornadasByGroup: [],
-      /* Fases:
-           'paired'      → solo cruces formados, ningún partido jugado
-           'ida-played'  → idas jugadas, vueltas pendientes
-           'done'        → vueltas + Ronda Final completas (winners persistidos)
-         Esto separa los 3 botones del usuario:
-           1. "Sortear cruces"  → crea state, phase='paired'
-           2. "Simular IDA"     → simulateIda(s),    phase='ida-played'
-           3. "Simular VUELTA"  → simulateVuelta(s), phase='done'
-                                  (también ejecuta Ronda Final + persiste) */
-      phase: 'paired',
-      ts: Date.now()
-    };
+    var raw=buildPool(); if(!raw.length) return null;
+    var pool=_normalizePool(raw);
+    var groups=_distributeGroups(pool);
+    return { pool:pool, groups:groups, matchesByGroup:[], sortedTables:[], phase:'drawn', ts:Date.now() };
   }
-
-  /* Persiste los 30 perdedores de Ronda 1 a `wprev_r1_to_conference_v1`
-     INMEDIATAMENTE tras la VUELTA — el usuario quiere que al terminar
-     ida+vuelta los 30 perdedores ya estén en Conference, sin tener
-     que esperar a simular los grupos RF.
-     2026-05-09: añadimos `league` (slug del país de origen) para que
-     la fase de liga UECL pueda aplicar la regla "no mismo país". Sin
-     este campo, los 30 perdedores compartían `league='previa-champions'`
-     en `computeUeclClassified` y el sorteo no podía cuadrar. */
-  function _persistR1Losers(state){
-    var confArr = (state.r1Losers||[]).map(function(t){
-      return { name:t.name, logo:t.logo||'', league:t.league||'', source:'previa-r1-loser' };
-    });
-    try {
-      localStorage.setItem(WPREV_CONF_KEY, JSON.stringify({teams:confArr, ts:Date.now()}));
-    } catch(_){}
-  }
-
-  /* Persiste Champions (1º × 11) y Europa (2º+3º × 11) tras la
-     liguilla. Los perdedores R1 ya se han persistido antes. */
-  function _persistChampionsAndEuropa(state){
-    var champArr = [];
-    var euroArr = [];
-    state.sortedTables.forEach(function(st, gi){
-      st.forEach(function(row, pos){
-        var t = state.groups[gi][row._i];
-        if(!t || !t.name) return;
-        /* 2026-05-09: persistimos `league` (slug del país) para que la
-           fase de liga UCL/UEL pueda aplicar la regla "no mismo país".
-           Sin este campo todos compartían `league='previa-champions'`
-           y la fase UEL (22 teams) era infeasible. */
-        var entry = { name:t.name, logo:t.logo||'', league:t.league||'', source:'previa-rf-g'+(gi+1)+'-pos'+(pos+1) };
-        if(pos === 0)            champArr.push(entry);
-        else if(pos === 1 || pos === 2) euroArr.push(entry);
-      });
-    });
-    try {
-      localStorage.setItem(WPREV_FG_KEY,  JSON.stringify({teams:champArr, ts:Date.now()}));
-      localStorage.setItem(WPREV_EUR_KEY, JSON.stringify({teams:euroArr,  ts:Date.now()}));
-    } catch(_){}
-  }
-
-  /* PASO 2 — Simular las 30 IDAS (30 partidos en estadios de los
-     no-cabezas). NO determina ganadores aún; eso pasa tras la vuelta. */
-  function simulateIda(state){
-    state.ties.forEach(function(tie){ playR1TieIda(tie); });
-    state.phase = 'ida-played';
-    state.ts = Date.now();
-  }
-
-  /* PASO 3 — Simular las 30 VUELTAS + tiebreakers (gol visitante /
-     prórroga / penaltis). Determina ganadores y perdedores. Tras
-     esta fase los 30 PERDEDORES están YA en Conference (mismo año).
-     A continuación SORTEA los 11 grupos de Ronda Final con los 30
-     ganadores + 3 byes — pero NO simula la liguilla.
-     Phase resultante: 'rf-drawn'. */
-  function simulateVuelta(state){
-    state.r1Losers = [];
-    state.ties.forEach(function(tie){
-      playR1TieVuelta(tie);
-      var loserTeam = (tie.winner === tie.teamH) ? tie.teamA : tie.teamH;
-      if(loserTeam) state.r1Losers.push(loserTeam);
-    });
-    _persistR1Losers(state);    /* 30 perdedores → Conference, ya */
-    drawRfGroups(state);        /* sortea los 11 grupos, sin simular */
-    state.phase = 'rf-drawn';
-    state.ts = Date.now();
-  }
-
-  /* Sortea (o re-sortea) los 11 grupos de Ronda Final desde los 30
-     ganadores R1 + 3 byes (33 equipos). NO juega ningún partido —
-     deja las tables / sortedTables a 0 stats. Llamado tanto desde
-     simulateVuelta (auto, primera vez) como desde el botón 🎲 Draw
-     (manual, re-sortear con PIN admin). */
-  function drawRfGroups(state){
-    var qualified = (state.byes||[]).slice();
-    (state.ties||[]).forEach(function(tie){
-      if(tie.winner) qualified.push(tie.winner);
-    });
-    state.groups = seedRoundFinal(qualified);
-    state.tables = state.groups.map(emptyTable);
-    state.jornadasByGroup = state.groups.map(function(){
-      return genJornadas().map(function(m){
-        return { hi:m.hi, ai:m.ai, gh:null, ga:null, played:false };
-      });
-    });
-    state.sortedTables = state.tables.map(function(t){ return t.map(function(r,i){
-      return Object.assign({}, r, {_i:i});
-    }); });
-  }
-
-  /* PASO 4 — Simular la liguilla de los 11 grupos (ya sorteados).
-     Tras esta fase se persisten Champions (1º) y Europa (2º+3º).
-     Phase resultante: 'done'. */
-  /* PASO 4 — Simular liguilla por JORNADAS individuales (J1..J6).
-     Antes simulábamos las 6 jornadas de los 11 grupos en una sola
-     pulsación → el usuario perdía la posibilidad de jugar a mano
-     sus equipos humanos (Atlético Madrid, etc.). Ahora cada
-     pulsación juega SOLO una jornada (1 partido por grupo), salta
-     los partidos humanos (los marca `humanPending:true` para que el
-     flujo humano los recoja desde la lista de partidos jugables) y
-     marca `phase='done'` solo cuando las 6 jornadas están completas
-     en TODOS los grupos. */
-  function _isHumanTeam(name){
-    if(!name) return false;
-    /* Fuente principal: window.esHumano (definido por el módulo de Liga
-       y por el bloque _mmHUMANOS de index.bundle.js). El IIFE de la
-       Previa de Champions no comparte scope con la lista HUMANOS, así
-       que confiarse a `typeof HUMANOS` aquí daba siempre false → los
-       partidos del Atlético Madrid (u otro humano) se auto-simulaban
-       incluso cuando deberían pasar por la PREVIA manual. */
-    try {
-      if(typeof window.esHumano === 'function'){
-        return !!window.esHumano(name);
-      }
-    } catch(_){}
-    try {
-      var list = (typeof HUMANOS !== 'undefined') ? HUMANOS : (window.HUMANOS || []);
-      for(var i=0; i<list.length; i++){
-        if(list[i] === name) return true;
-      }
-    } catch(_){}
-    return false;
-  }
-  function simulateRfJornada(state, jIdx){
-    /* jIdx: 0..5 → J1..J6 dentro del array `jornadasByGroup[gi]`. */
-    if(jIdx < 0 || jIdx > 5) return { simmed:0, humanPending:0 };
-    var simmed = 0, humanPending = 0;
-    state.groups.forEach(function(grp, gi){
-      var sched = state.jornadasByGroup[gi];
-      var m = sched[jIdx];
-      if(!m || m.played) return;
-      var homeName = grp[m.hi] && grp[m.hi].name || '';
-      var awayName = grp[m.ai] && grp[m.ai].name || '';
-      if(_isHumanTeam(homeName) || _isHumanTeam(awayName)){
-        m.humanPending = true;
-        humanPending++;
-        return; /* el usuario debe jugarlo a mano (gm-modal/PREVIA) */
-      }
-      var sc = simMatch(homeName, awayName);
-      m.gh = sc.gh; m.ga = sc.ga; m.played = true;
-      m.humanPending = false;
-      applyToTable(state.tables[gi], m.hi, m.ai, sc.gh, sc.ga);
-      simmed++;
-    });
-    state.sortedTables = state.tables.map(sortTable);
-    state.ts = Date.now();
-    return { simmed: simmed, humanPending: humanPending };
-  }
-  /* Comprueba si TODAS las jornadas y partidos están completados —
-     si sí, marca phase='done' y persiste flags Champions/Europa. */
-  function _maybeFinalizeWprev(state){
-    var allDone = (state.jornadasByGroup||[]).every(function(sched){
-      return (sched||[]).every(function(m){ return m && m.played; });
-    });
-    if(!allDone) return false;
-    _persistChampionsAndEuropa(state);
+  function simulateAll(state){
+    if(!state || !Array.isArray(state.groups)) return;
+    state.matchesByGroup = state.groups.map(function(grp){ try { return _simulateGroup(grp); } catch(e){ try{console.error('[wprev-sim grupo]',e);}catch(_){} return []; } });
+    state.sortedTables = state.groups.map(function(grp,gi){ try { return _standingsFor(grp, state.matchesByGroup[gi]||[]); } catch(e){ return []; } });
     state.phase = 'done';
-    state.ts = Date.now();
-    /* Avisa al hub de Champions para que la caja "Previa Champions"
-       pase al estado COMPLETADA (gris) sin necesidad de navegar
-       fuera y volver. _refreshChampionsDoneFlags es un helper
-       expuesto por el IIFE de s-champions. */
-    try {
-      if(typeof window._refreshChampionsDoneFlags === 'function'){
-        window._refreshChampionsDoneFlags();
-      }
-    } catch(_){}
-    /* Re-render del pool UCL fase de grupos: el localStorage de
-       wprev_to_fase_grupos_v1 acaba de actualizarse con los 11
-       ganadores, así que la pantalla de clasificación UCL ahora
-       suma 29 directos + 11 = 40 equipos. Si el usuario está
-       mirando esa pantalla, lo refrescamos sin esperar a su
-       siguiente navegación. */
-    try {
-      if(typeof window.buildUclGruposClas === 'function'){
-        window.buildUclGruposClas();
-      }
-    } catch(_){}
-    return true;
-  }
-  /* Devuelve el índice (0..5) de la PRÓXIMA jornada con partidos
-     pendientes (incluyendo humanPending). Devuelve 6 si todas
-     están jugadas. */
-  function _wprevNextPendingJornada(state){
-    if(!state || !Array.isArray(state.jornadasByGroup)) return 0;
-    for(var j=0; j<6; j++){
-      var anyPending = false;
-      for(var gi=0; gi<state.jornadasByGroup.length; gi++){
-        var m = state.jornadasByGroup[gi][j];
-        if(m && !m.played){ anyPending = true; break; }
-      }
-      if(anyPending) return j;
-    }
-    return 6;
-  }
-  /* Devuelve el índice (0..5) de la próxima jornada cuyos partidos
-     IA estén sin simular. Útil para el botón Sim — si la jornada
-     actual ya tiene todos los IA simmed pero los humanos pending,
-     dejamos al usuario AVANZAR (sin completar humanos) sólo si las
-     IA siguientes están sin tocar. */
-  function _wprevNextSimableJornada(state){
-    if(!state || !Array.isArray(state.jornadasByGroup)) return 0;
-    for(var j=0; j<6; j++){
-      var anyIaPending = false;
-      for(var gi=0; gi<state.jornadasByGroup.length; gi++){
-        var m = state.jornadasByGroup[gi][j];
-        if(!m || m.played) continue;
-        var grp = state.groups[gi];
-        var hN = grp[m.hi] && grp[m.hi].name || '';
-        var aN = grp[m.ai] && grp[m.ai].name || '';
-        if(_isHumanTeam(hN) || _isHumanTeam(aN)) continue;
-        anyIaPending = true; break;
-      }
-      if(anyIaPending) return j;
-    }
-    return 6;
-  }
-  /* Wrapper compat: ahora simula UNA jornada (la próxima sin sim de
-     IA). Si recibe un jornadaIdx explícito, sim sólo esa. */
-  function simulateRfGroups(state, jornadaIdx){
-    if(typeof jornadaIdx !== 'number'){
-      jornadaIdx = _wprevNextSimableJornada(state);
-    }
-    if(jornadaIdx >= 6){
-      _maybeFinalizeWprev(state);
-      return { simmed:0, humanPending:0, jornada: 6 };
-    }
-    var r = simulateRfJornada(state, jornadaIdx);
-    _maybeFinalizeWprev(state);
-    r.jornada = jornadaIdx;
-    return r;
+    _persistDistribution(state);
   }
 
-  function _badge(name, logo){
-    var l = logo || _logoOf(name) || '';
-    if(l) return '<img src="'+_esc(l)+'" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display=\'none\'">';
-    return '';
+  /* ════ RENDER (solo tablas) ════ */
+  function _badge(name,logo){ var l=logo||_logoOf(name)||''; return l ? '<img src="'+_esc(l)+'" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display=\'none\'">' : ''; }
+  function _groupTable(gi,grp,sorted,destMap){
+    var src = (sorted&&sorted.length) ? sorted : grp.map(function(t,i){ return {idx:i,name:(t&&t.name)||'',logo:(t&&t.logo)||'',pts:0,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0}; });
+    var rows='<div class="wprev-row hdr"><span class="wprev-pos">#</span><span class="wprev-name">Equipo</span><span class="wprev-cell">PTS</span><span class="wprev-cell">PJ</span><span class="wprev-cell">V</span><span class="wprev-cell">E</span><span class="wprev-cell">P</span><span class="wprev-cell">GF</span><span class="wprev-cell">GC</span><span class="wprev-cell">DG</span></div>';
+    for(var i=0;i<src.length;i++){
+      var r=src[i], dest=destMap?destMap[r.name]:null;
+      var cls = dest==='ucl'?'qual-best':(dest==='uel'?'qual-death':(dest==='uecl'?'qual-conf':''));
+      var nm = (r.name && !/^TBD|^__placeholder_/.test(r.name)) ? (_badge(r.name,r.logo)+_esc(r.name)) : '<span style="color:rgba(255,255,255,.35);">Por definir</span>';
+      var dgClass='wprev-cell dg'+(r.dg>0?' pos':(r.dg<0?' neg':''));
+      rows += '<div class="wprev-row '+cls+'"><span class="wprev-pos">'+(i+1)+'</span><span class="wprev-name">'+nm+'</span>'
+        +'<span class="wprev-cell pts">'+(r.pts||0)+'</span><span class="wprev-cell">'+(r.pj||0)+'</span><span class="wprev-cell">'+(r.v||0)+'</span>'
+        +'<span class="wprev-cell">'+(r.e||0)+'</span><span class="wprev-cell">'+(r.p||0)+'</span><span class="wprev-cell">'+(r.gf||0)+'</span>'
+        +'<span class="wprev-cell">'+(r.gc||0)+'</span><span class="'+dgClass+'">'+((r.dg>0?'+':'')+(r.dg||0))+'</span></div>';
+    }
+    return '<div class="wprev-group"><div class="wprev-group-h">GRUPO '+GROUP_LABELS[gi]+'<span class="wprev-group-count">'+grp.length+'</span></div><div class="wprev-table-scroll"><div class="wprev-table">'+rows+'</div></div></div>';
   }
-
-  function renderGroupTable(gi, sortedTable, group){
-    /* Detección del equipo humano en el grupo (petición usuario
-       2026-05-02: el grupo del humano debe tener un color distinto
-       para encontrarlo más rápido). _isHumanTeam ya consulta
-       window.esHumano y la lista HUMANOS legacy. Si cualquier equipo
-       del grupo es humano, marcamos el wrapper con
-       `wprev-group-human` y la fila de ese equipo con
-       `wprev-row-human` para destacar al admin entre 11 grupos. */
-    var humanIdx = -1;
-    var humanInGroup = false;
-    sortedTable.forEach(function(r, i){
-      if(_isHumanTeam(r.name)){ humanInGroup = true; humanIdx = i; }
-    });
-    var rows = '<div class="wprev-row hdr">'
-      + '<span>#</span><span>Equipo</span>'
-      + '<span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span>'
-      + '<span>GF</span><span>GC</span><span>D+-</span>'
-      + '</div>';
-    sortedTable.forEach(function(r, i){
-      var pos = i+1;
-      /* Zonas: 1º → Champions (qual-best, púrpura) · 2º-3º → Europa
-         (qual-death, naranja apagado). No hay eliminados — todos los
-         33 de Ronda Final clasifican a alguna competición. */
-      var cls = (i === 0) ? 'qual-best' : 'qual-death';
-      if(_isHumanTeam(r.name)) cls += ' wprev-row-human';
-      var dgCls = r.dg>0 ? 'pos' : (r.dg<0?'neg':'');
-      var dgTxt = (r.dg>0?'+':'') + r.dg;
-      rows += '<div class="wprev-row '+cls+'">'
-        + '<span class="wprev-pos">'+pos+'</span>'
-        + '<span class="wprev-name">'+_badge(r.name, r.logo)+_esc(r.name)+'</span>'
-        + '<span class="wprev-cell pts">'+r.pts+'</span>'
-        + '<span class="wprev-cell">'+r.pj+'</span>'
-        + '<span class="wprev-cell">'+r.v+'</span>'
-        + '<span class="wprev-cell">'+r.e+'</span>'
-        + '<span class="wprev-cell">'+r.p+'</span>'
-        + '<span class="wprev-cell">'+r.gf+'</span>'
-        + '<span class="wprev-cell">'+r.gc+'</span>'
-        + '<span class="wprev-cell dg '+dgCls+'">'+dgTxt+'</span>'
-        + '</div>';
-    });
-    var groupCls = 'wprev-group' + (humanInGroup ? ' wprev-group-human' : '');
-    var headerLabel = humanInGroup ? '👤 ' : '';
-    return '<div class="'+groupCls+'">'
-      + '<div class="wprev-group-h">'+headerLabel+'GRUPO '+GROUP_LABELS[gi]
-      +   '<span class="wprev-group-count">'+sortedTable.length+' / '+TEAMS_PER_GROUP+'</span></div>'
-      + '<div class="wprev-table-scroll"><div class="wprev-table">'+rows+'</div></div>'
-      + _renderJornadas(gi, group)
-      + '</div>';
+  function _renderDiag(){
+    var body=document.getElementById('wprev-diag-body'); if(!body) return;
+    var raw=buildPool();
+    body.innerHTML='<div style="padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);line-height:1.7;">'
+      +'Pool: <b>'+raw.length+' / '+POOL_TARGET+'</b> · 34 directos (zona uclPrev) + 28 del Open Qualifier.<br>'
+      +'Formato: 16 grupos (liguilla a doble vuelta, IA-vs-IA) · corte global <b>12 / 22 / 28</b> → Champions / Europa / Conference.'
+      +'</div>';
   }
-
-  function _renderJornadas(gi, group){
-    var s = loadState();
-    if(!s || !s.jornadasByGroup || !s.jornadasByGroup[gi]) return '';
-    var sched = s.jornadasByGroup[gi];
-    var html = '<div class="wprev-jorns">';
-    for(var j=0; j<sched.length; j++){
-      var m = sched[j];
-      var hName = group[m.hi] && group[m.hi].name || '?';
-      var aName = group[m.ai] && group[m.ai].name || '?';
-      /* Logo real de cada equipo desde el state wprev. Sin esto los
-         escudos de equipos foráneos (Bistrica, BVSC Zuglo, etc.) no
-         aparecían — _badge cae a _logoOf que solo conoce ligas
-         españolas, así que devolvía '' aunque el equipo tuviera su
-         escudo guardado en Resto de Ligas. */
-      var hLogo = (group[m.hi] && group[m.hi].logo) || '';
-      var aLogo = (group[m.ai] && group[m.ai].logo) || '';
-      var jId = 'wprev-j-'+gi+'-'+j;
-      var played = m.played;
-      var humanInvolved = _isHumanTeam(hName) || _isHumanTeam(aName);
-      var humanPending = !played && humanInvolved;
-      var scTxt = played ? (m.gh + ' - ' + m.ga) : 'vs';
-      var rowId = 'wprev-row-'+gi+'-'+j;
-      var hostId = 'cal-ucl-wprev-'+gi+'-'+j;
-      /* Para partidos humanos pendientes mostramos un botón "📋 PREVIA" en
-         la columna del marcador. El click delega en _wprevPlayHumanMatch
-         que inyecta el match-card completo (mismo motor que Liga/amistosos)
-         dentro del host `cal-ucl-wprev-...` para que mlPreviaClick
-         reconozca la competición como UCL. */
-      var scCell;
-      if(humanPending){
-        scCell = '<button class="wprev-previa-btn" '
-          +    'onclick="window._wprevPlayHumanMatch('+gi+','+j+')" '
-          +    'style="background:linear-gradient(135deg,rgba(91,28,142,.55),rgba(168,85,247,.65));border:1px solid rgba(168,85,247,.8);border-radius:6px;color:#fff;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 8px;cursor:pointer;white-space:nowrap;">'
-          +    '📋 PREVIA</button>';
-      } else {
-        scCell = scTxt;
-      }
-      var progressTxt = played ? '1/1' : (humanPending ? '👤 0/1' : '0/1');
-      /* Botón apagado cuando la jornada ya está jugada — petición
-         usuario 2026-05-02: cada caja desplegable de jornada se
-         apaga al haberse jugado para visualizar de un vistazo qué
-         queda pendiente. */
-      var jbtnCls = 'wprev-jbtn' + (played ? ' is-done' : '');
-      html += '<button class="'+jbtnCls+'" onclick="(function(){var e=document.getElementById(\''+jId+'\');if(e)e.style.display=e.style.display===\'none\'?\'block\':\'none\';})()">'
-        +   '<span class="pdot">▶</span><b>Jornada '+(j+1)+'</b>'
-        +   '<span class="progress">'+progressTxt+'</span>'
-        + '</button>'
-        + '<div class="wprev-jmatches" id="'+jId+'" style="display:none;">'
-        +   '<div class="wprev-mrow" id="'+rowId+'">'
-        +     '<span class="h" title="'+_esc(hName)+'">'+_badge(hName, hLogo)+'<span class="nm">'+_esc(hName)+'</span></span>'
-        +     '<span class="sc"'+(humanPending?' style="background:transparent;border:none;padding:0;"':'')+'>'+scCell+'</span>'
-        +     '<span class="a" title="'+_esc(aName)+'"><span class="nm">'+_esc(aName)+'</span>'+_badge(aName, aLogo)+'</span>'
-        +   '</div>'
-        +   (humanPending ? '<div class="jmatches" id="'+hostId+'" style="display:none;background:transparent;padding:0;margin-top:6px;"></div>' : '')
-        + '</div>';
-    }
-    html += '</div>';
-    return html;
-  }
-
-  function _renderR1Tie(tie){
-    var idaPlayed = !!tie.idaPlayed;
-    var played = !!tie.played;
-    var nameH = tie.teamH.name, nameA = tie.teamA.name;
-    /* Layout: IDA (NO-cabeza local) → VUELTA (CABEZA local) → GLOBAL.
-       teamH = CABEZA, teamA = NO CABEZA. Estados:
-         idaPlayed && !played → solo se muestra IDA con score y un
-                                aviso "VUELTA pendiente"
-         played               → todo el bloque
-         ninguno              → solo "vs" (cruce sin partidos). */
-    var winnerH = played && tie.winner === tie.teamH;
-    var winnerA = played && tie.winner === tie.teamA;
-    var idaScore = idaPlayed ? (tie.idaGh+'-'+tie.idaGa) : 'vs';
-    var html = '<div class="wprev-dr-tie">'
-      + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-bottom:3px;">'
-      +   'IDA · estadio del NO-cabeza'
-      + '</div>'
-      + '<div class="wprev-dr-leg">'
-      +   '<span class="h">'+_badge(nameA, tie.teamA.logo)+_esc(nameA)+'</span>'
-      +   '<span class="sc">'+idaScore+'</span>'
-      +   '<span class="a">'+_esc(nameH)+_badge(nameH, tie.teamH.logo)+'</span>'
-      + '</div>';
-    if(idaPlayed && !played){
-      /* IDA jugada, VUELTA pendiente — mostramos un aviso. */
-      html += '<div style="margin-top:8px;text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);">'
-        +    'VUELTA pendiente · pulsa Simular VUELTA'
-        +    '</div>';
-    }
-    if(played){
-      var vGh = tie.vueltaGh + (tie.etDecided ? (tie.etGh||0) : 0);
-      var vGa = tie.vueltaGa + (tie.etDecided ? (tie.etGa||0) : 0);
-      html += '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);text-align:center;margin-top:6px;margin-bottom:3px;">'
-        +    'VUELTA · estadio del cabeza'+(tie.etDecided?' (con prórroga)':'')
-        +    '</div>'
-        + '<div class="wprev-dr-leg">'
-        +   '<span class="h">'+_badge(nameH, tie.teamH.logo)+_esc(nameH)+'</span>'
-        +   '<span class="sc">'+vGh+'-'+vGa+'</span>'
-        +   '<span class="a">'+_esc(nameA)+_badge(nameA, tie.teamA.logo)+'</span>'
-        + '</div>';
-      if(tie.etDecided){
-        html += '<div style="font-family:Oswald,sans-serif;font-size:9px;color:rgba(255,255,255,.45);text-align:center;margin-top:2px;">'
-          +    '90\': '+tie.vueltaGh+'-'+tie.vueltaGa+' · prórroga: '+(tie.etGh||0)+'-'+(tie.etGa||0)
-          +    '</div>';
-      }
-      html += '<div class="wprev-dr-agg">'
-        +   '<span class="'+(winnerH?'winner-mark':'loser-mark')+'" style="text-align:right;">'+_esc(nameH)+'</span>'
-        +   '<span class="sc">'+tie.aggH+'-'+tie.aggA+'</span>'
-        +   '<span class="'+(winnerA?'winner-mark':'loser-mark')+'">'+_esc(nameA)+'</span>'
-        + '</div>'
-        + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.4);text-align:center;margin-top:2px;">GLOBAL</div>';
-      if(tie.penDecided){
-        var penH = tie.penGh, penA = tie.penGa;
-        html += '<div class="wprev-dr-agg" style="margin-top:6px;">'
-          +    '<span style="text-align:right;color:rgba(255,255,255,.7);">PENALTIS</span>'
-          +    '<span class="sc">'+penH+'-'+penA+'</span>'
-          +    '<span></span>'
-          +    '</div>';
-      }
-      var subTxt = tie.penDecided ? ' (en penaltis)'
-                : (tie.etDecided ? ' (en prórroga)'
-                : (tie.awayDecided ? ' (gol de visitante)' : ''));
-      html += '<div style="margin-top:8px;text-align:center;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#a855f7;font-weight:700;">'
-        +    '✓ '+_esc(tie.winner.name)+' → RONDA FINAL'+subTxt
-        +    '</div>';
-    }
-    html += '</div>';
-    return html;
-  }
-
-  function renderRound1(s){
-    var host = document.getElementById('wprev-deathround-container');
-    if(!host) return;
-    if(!s || !s.ties || !s.ties.length){
-      host.innerHTML = '';
-      return;
-    }
-    var byesHtml = '';
-    if(s.byes && s.byes.length){
-      byesHtml = '<div style="padding:8px 14px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.7);">'
-        + '⭐ EXENTOS (5º España + 2 al azar de Bel/Tur/Sui/Den/Sco) → directos a Ronda Final:'
-        + '</div>'
-        + '<div style="display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 8px;">';
-      s.byes.forEach(function(t){
-        byesHtml += '<span style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);border-radius:4px;padding:4px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;">'
-          +    _badge(t.name, t.logo)+_esc(t.name)
-          +    '</span>';
-      });
-      byesHtml += '</div>';
-    }
-    var phaseLabel = '';
-    if(s.phase === 'paired')           phaseLabel = '⏳ CRUCES SORTEADOS · PENDIENTE SIMULAR IDA';
-    else if(s.phase === 'ida-played')  phaseLabel = '⏳ IDAS JUGADAS · PENDIENTE SIMULAR VUELTA';
-    else if(s.phase === 'rf-drawn')    phaseLabel = '✓ RONDA 1 COMPLETA · 30 PERDEDORES YA EN CONFERENCE';
-    else if(s.phase === 'done')        phaseLabel = '✓ RONDA 1 COMPLETA · TORNEO TERMINADO';
-    var collapsed = false;
-    try { collapsed = localStorage.getItem('wprev_r1_collapsed') === '1'; } catch(_){}
-    /* Apagar la caja desplegable cuando Ronda 1 ya cumplió su función
-       (phase 'rf-drawn' = 30 ganadores ya van a Ronda Final, 30
-       perdedores ya están en Conference; phase 'done' = torneo
-       completo). Petición usuario 2026-05-02. */
-    var r1Done = (s.phase === 'rf-drawn' || s.phase === 'done');
-    var rootCls = 'wprev-dr' + (collapsed?' collapsed':'') + (r1Done?' is-done':'');
-    var html = '<div class="'+rootCls+'" id="wprev-dr-root">'
-      + '<div class="wprev-dr-hdr" id="wprev-dr-toggle">'
-      +   '<span>⚔️ RONDA 1 · 30 ELIMINATORIAS + 3 EXENTOS</span>'
-      +   '<span class="wprev-dr-chev">▼</span>'
-      + '</div>'
-      + '<div class="wprev-dr-body">'
-      + (phaseLabel ? '<div style="text-align:center;padding:6px 14px 0;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:#a855f7;font-weight:700;">'+phaseLabel+'</div>' : '')
-      + byesHtml;
-    s.ties.forEach(function(t){ html += _renderR1Tie(t); });
-    html += '</div></div>';
-    host.innerHTML = html;
-    var tgl = document.getElementById('wprev-dr-toggle');
-    var root = document.getElementById('wprev-dr-root');
-    if(tgl && root){
-      tgl.addEventListener('click', function(){
-        var isCol = root.classList.toggle('collapsed');
-        try { localStorage.setItem('wprev_r1_collapsed', isCol ? '1' : '0'); } catch(_){}
-      });
-    }
-  }
-
-  /* Refresca el label y disabled del botón Sim según la fase actual.
-     Llamado al inicio de buildUclPrevClas, así el botón queda
-     sincronizado con el state después de cada acción. */
-  function _refreshSimBtn(){
-    var btn = document.getElementById('wprev-btn-sim');
-    if(btn){
-      btn.textContent = window._wprevNextLabel();
-      var disabled = !!window._wprevSimDisabled();
-      btn.disabled = disabled;
-      btn.style.opacity = disabled ? '0.45' : '1';
-      btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
-    }
-    var btnDraw = document.getElementById('wprev-btn-draw');
-    if(btnDraw){
-      var dDisabled = !!(typeof window._wprevDrawDisabled === 'function' && window._wprevDrawDisabled());
-      btnDraw.disabled = dDisabled;
-      btnDraw.style.opacity = dDisabled ? '0.45' : '1';
-      btnDraw.style.cursor = dDisabled ? 'not-allowed' : 'pointer';
-    }
-  }
-
-  /* ── Panel de diagnóstico del pool (admin) ─────────────────────
-     Petición usuario 2026-05-02: ver de un vistazo qué fuentes
-     contribuyen al pool de Previa Champions y por qué algunas ligas
-     no aportan equipos. Lee window._lastQualDiag (que rellena
-     `_computeQualifiedFromLeagues` en su última invocación) y se
-     refresca al re-renderizar la pantalla. */
-  function _wprevRenderDiag(){
-    var body = document.getElementById('wprev-diag-body');
-    if(!body) return;
-    /* Forzamos un cómputo fresco para que _lastQualDiag refleje la
-       situación actual (no la del último render que pudo haber sido
-       hace minutos). */
-    var prevTeams = [];
-    try {
-      if(typeof window.computeUclPrevTeams === 'function'){
-        prevTeams = window.computeUclPrevTeams() || [];
-      }
-    } catch(_){}
-    var diag = (window._lastQualDiag || []).slice();
-    /* Conteos por fuente */
-    var manualCount = 0, oqCount = 0, leagueCount = 0;
-    prevTeams.forEach(function(t){
-      var lg = t && t.league;
-      if(lg === 'ea-sports-manual') manualCount++;
-      else if(lg === 'open-qualifier') oqCount++;
-      else leagueCount++;
-    });
-    /* OQ count adicional desde la fuente directa por si computeUclPrevTeams
-       todavía no se haya hidratado tras un Sim. */
-    try {
-      if(oqCount === 0){
-        var raw = localStorage.getItem('oq_to_previa_v1');
-        if(raw){
-          var d = JSON.parse(raw);
-          if(d && Array.isArray(d.teams)) oqCount = d.teams.length;
-        }
-      }
-    } catch(_){}
-    var total = manualCount + oqCount + leagueCount;
-    var faltan = Math.max(0, 63 - total);
-    var summaryClass = faltan === 0 ? 'ok' : (faltan <= 5 ? 'warn' : 'err');
-    var summary = '<div class="wprev-diag-summary">'
-      + '<b>Pool actual:</b> <span class="'+summaryClass+'">'+total+' / 63</span>'
-      + (faltan > 0 ? ' · faltan <b class="err">'+faltan+'</b> plazas (TBD)' : ' <span class="ok">✓ pool completo</span>')
-      + '<br>'
-      + '🎮 Manual EA Sports → Europa: <b>'+manualCount+'</b>'
-      + ' · 🟡 Open Qualifier: <b>'+oqCount+'</b> / 35 esperados'
-      + ' · 🌍 Resto de Ligas: <b>'+leagueCount+'</b>'
-      + '</div>';
-    /* Tabla detallada per-liga */
-    var rows = '<div class="wprev-diag-row h">'
-      + '<span>Liga</span><span>Estado</span><span>Detalle</span>'
-      + '</div>';
-    /* Orden: ok → sin-plazas → blacklist → duplicada → otros. Dentro
-       de cada grupo, alfabético. */
-    var ORDER = { ok:0, 'sin-plazas':1, blacklist:2, duplicada:3 };
-    diag.sort(function(a,b){
-      var ka = ORDER[a.status] != null ? ORDER[a.status] : 4;
-      var kb = ORDER[b.status] != null ? ORDER[b.status] : 4;
-      if(ka !== kb) return ka - kb;
-      return String(a.slug||'').localeCompare(String(b.slug||''),'es');
-    });
-    function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    diag.forEach(function(d){
-      var statusClass = (d.status === 'ok') ? 'ok'
-                      : (d.status === 'blacklist') ? 'bl'
-                      : 'skip';
-      var statusLabel = ({
-        ok:'OK', 'sin-plazas':'sin cupo', blacklist:'manual', duplicada:'dup',
-        'no-lista':'incomp.', skip:'skip', error:'err'
-      })[d.status] || d.status || '?';
-      rows += '<div class="wprev-diag-row">'
-        + '<span class="slug">'+_esc(d.slug||'')+'</span>'
-        + '<span class="badge '+statusClass+'">'+_esc(statusLabel)+'</span>'
-        + '<span class="note" title="'+_esc(d.note||'')+'">'+_esc(d.note||'')+'</span>'
-        + '</div>';
-    });
-    if(!diag.length){
-      rows += '<div class="wprev-diag-row"><span class="note" style="grid-column:1/-1;text-align:center;">Sin datos de diag — ejecuta Sim para que se computen las clasificaciones.</span></div>';
-    }
-    body.innerHTML = summary + rows;
-  }
-
   function buildUclPrevClas(){
-    var host = document.getElementById('wprev-groups-container');
-    if(!host) return;
-    _refreshSimBtn();
-    var s = loadState();
+    var host=document.getElementById('wprev-groups-container'); if(!host) return;
+    _refreshButtons();
+    var dr=document.getElementById('wprev-deathround-container'); if(dr) dr.innerHTML='';
+    var s=loadState();
     if(!s){
-      var raw = buildPool();
-      host.innerHTML = '<div class="wprev-empty">'
-        + '<div style="font-size:32px;margin-bottom:10px;">🇪🇺</div>'
-        + 'Sin equipos clasificados todavía.<br><br>'
-        + 'Configura el cupo <b>🇪🇺 Previa de Champions</b> en cada liga y simula primero el <b>Open Qualifier</b>. '
-        + 'Equipos detectados ahora mismo: <b>'+raw.length+'/'+POOL_TARGET+'</b> (objetivo: 28 directos + 35 OQ).<br><br>'
-        + 'Pulsa <b>🎮 Sim</b> para iniciar el torneo (rellenamos hasta '+POOL_TARGET+' con placeholders si faltan).'
-        + '</div>';
-      var dr = document.getElementById('wprev-deathround-container');
-      if(dr) dr.innerHTML = '';
+      var raw=buildPool();
+      host.innerHTML='<div style="padding:24px 12px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.7;">'
+        +'<div style="font-size:32px;margin-bottom:8px;">🇪🇺</div>'
+        +'<div style="font-family:Oswald,sans-serif;letter-spacing:1.5px;color:rgba(255,255,255,.85);">PREVIA SIN SORTEAR</div>'
+        +'<div style="margin-top:6px;">Equipos detectados: <b>'+raw.length+' / '+POOL_TARGET+'</b> (34 directos + 28 del Open Qualifier).</div>'
+        +'<div style="margin-top:12px;padding:10px 12px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.4);border-radius:8px;color:#e0bfff;">👉 Pulsa <b>🎲 Draw</b> para sortear los 16 grupos y <b>🎮 Sim</b> para jugar las liguillas. Clasifican los 62: <b>top 12 → Champions</b>, <b>13-34 → Europa</b>, <b>35-62 → Conference</b>.</div>'
+        +'</div>';
+      _renderDiag();
       return;
     }
-    /* Render: bloque de Ronda 1 (3 exentos + 30 ties) arriba, luego
-       los 11 grupos de Ronda Final con su liguilla. La R1 se pinta en
-       el container `wprev-deathround-container` (renombramiento
-       implícito — el id se conserva para minimizar cambios al HTML). */
-    var rfHtml = '';
-    var rfReady = (s.phase === 'rf-drawn' || s.phase === 'done') && s.groups && s.groups.length;
-    if(rfReady){
-      var rfSubtitle = (s.phase === 'done')
-        ? '1º → Champions League · 2º y 3º → Europa League'
-        : '⏳ GRUPOS SORTEADOS · sin partidos jugados todavía · pulsa 🎮 Sim para jugar la liguilla';
-      rfHtml += '<div style="padding:10px 14px;margin:14px 4px 0;background:linear-gradient(90deg,#5b1c8e,#a855f7,#7e22ce);border-radius:8px;font-family:Bebas Neue,Oswald,sans-serif;font-size:18px;letter-spacing:2px;color:#fff;text-align:center;font-weight:900;">'
-        +    '🏆 RONDA FINAL · 11 GRUPOS × 3 EQUIPOS'
-        +    '</div>'
-        +    '<div style="padding:6px 14px;font-family:Oswald,sans-serif;font-size:11px;color:rgba(255,255,255,.6);text-align:center;">'
-        +    rfSubtitle
-        +    '</div>';
-      for(var g=0; g<N_GROUPS; g++){
-        rfHtml += renderGroupTable(g, s.sortedTables[g]||[], s.groups[g]||[]);
-      }
-    } else {
-      rfHtml = '<div class="wprev-empty" style="padding:14px;">'
-        +     'La Ronda Final se construye tras la Ronda 1. Pulsa <b>🎮 Sim</b>.'
-        +     '</div>';
+    var destMap = (s.phase==='done') ? _destMap(s) : null;
+    var html='';
+    var banner = (s.phase==='drawn')
+      ? '⏳ SORTEO LISTO · 16 grupos · pulsa 🎮 Sim para jugar las liguillas'
+      : '✓ COMPLETO · 12 → Champions · 22 → Europa · 28 → Conference';
+    html += '<div style="margin:0 4px 8px;padding:8px 14px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.35);border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#e0bfff;text-align:center;">'+banner+'</div>';
+    if(s.phase==='done'){
+      html += '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:0 4px 8px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;">'
+        +'<span style="color:#a855f7;">■ Champions (1-12)</span><span style="color:#F37335;">■ Europa (13-34)</span><span style="color:#5fe08a;">■ Conference (35-62)</span></div>';
     }
-    host.innerHTML = rfHtml;
-    renderRound1(s);
-    /* Panel de diagnóstico del pool — siempre visible (colapsado por
-       defecto). Lo refrescamos en cada render para que refleje la
-       última snapshot tras Sim/Reset. */
-    try { _wprevRenderDiag(); } catch(_){}
+    (s.groups||[]).forEach(function(grp,gi){ html += _groupTable(gi, grp, (s.sortedTables&&s.sortedTables[gi])||null, destMap); });
+    host.innerHTML=html;
+    _renderDiag();
   }
+
+  function _nextLabel(){ var s=loadState(); if(!s) return '🎮 Sim'; if(s.phase==='drawn') return '🎮 Simular grupos'; return '🔁 Re-simular'; }
+  function _refreshButtons(){
+    var btn=document.getElementById('wprev-btn-sim'); if(btn) btn.textContent=_nextLabel();
+    var draw=document.getElementById('wprev-btn-draw'); if(draw) draw.disabled=false;
+  }
+
   window.buildUclPrevClas = buildUclPrevClas;
-  /* Wire para el botón colapsable del diag y persistencia del estado
-     entre cargas (mismo patrón que Ronda 1). */
+  window.simulateUclPrev = function(){
+    try {
+      var s=loadState();
+      if(!s){ var pool=buildPool(); if(!pool.length){ alert('⚠️ Sin equipos en el pool de la Previa. Simula el Open Qualifier y/o configura zonas uclPrev en las ligas.'); return; } s=initState(); if(!s){ alert('⚠️ No se pudo inicializar la Previa.'); return; } if(!saveState(s)) return; }
+      simulateAll(s);
+      if(!saveState(s)) return;
+      buildUclPrevClas();
+    } catch(e){ try{console.error('[simulateUclPrev]',e);}catch(_){} alert('⚠️ Error simulando la Previa: '+(e&&e.message?e.message:e)); }
+  };
+  window._wprevDraw = function(){
+    function _do(){
+      var pool=buildPool();
+      if(!pool.length){ alert('⚠️ Sin equipos en el pool de la Previa.'); return; }
+      var prev=loadState();
+      if(prev && !confirm('Hay un sorteo previo'+(prev.phase==='done'?' Y simulado':'')+'. ¿Sobreescribirlo con uno nuevo?')) return;
+      var s=initState(); if(!s){ alert('⚠️ initState() falló.'); return; }
+      if(!saveState(s)) return;
+      buildUclPrevClas();
+    }
+    if(typeof window.pG==='function') window.pG(_do); else _do();
+  };
+  window._wprevNextLabel    = _nextLabel;
+  window._wprevSimDisabled  = function(){ var s=loadState(); return !!(s && s.phase==='done'); };
+  window._wprevDrawDisabled = function(){ return false; };
+  window.resetUclPrev = function(){
+    function _do(){
+      if(!confirm('¿Reiniciar la Previa de Champions?\n\nSe perderán las liguillas jugadas y se limpiarán las plazas que alimentan Champions (12), Europa (22) y Conference (28). Esos huecos volverán a "Por definir".')) return;
+      clearState();
+      try { localStorage.removeItem(WPREV_FG_KEY); localStorage.removeItem(WPREV_EUR_KEY); localStorage.removeItem(WPREV_CONF_KEY); } catch(_){}
+      if(typeof window._resetEuropePoolFeeders==='function'){ window._resetEuropePoolFeeders('previa'); }
+      buildUclPrevClas();
+    }
+    if(typeof window.pG==='function') window.pG(_do); else _do();
+  };
+  /* Compat: la Previa ya no tiene partidos humanos individuales (fase
+     de grupos IA-vs-IA, solo tablas). Mantenemos estos exports como
+     no-ops para no romper llamadas externas legacy (gm-modal / ml-card
+     guardan por `st.isWprev`, que ya nunca se activa). */
+  window._wprevForceSimHumanos = function(){ try { window.simulateUclPrev && window.simulateUclPrev(); } catch(_){} };
+  window._wprevPlayHumanMatch  = function(){};
+  window._wprevSaveHumanResult = function(){};
+
+  document.addEventListener('DOMContentLoaded', buildUclPrevClas);
+  /* Wire del botón colapsable del panel diagnóstico. */
   document.addEventListener('DOMContentLoaded', function(){
     setTimeout(function(){
-      var tgl = document.getElementById('wprev-diag-toggle');
-      var root = document.getElementById('wprev-diag-root');
-      if(!tgl || !root || tgl.__wired) return;
-      tgl.__wired = true;
-      try {
-        if(localStorage.getItem('wprev_diag_collapsed') === '0'){
-          root.classList.remove('collapsed');
-        }
-      } catch(_){}
-      tgl.addEventListener('click', function(){
-        var isCol = root.classList.toggle('collapsed');
-        try { localStorage.setItem('wprev_diag_collapsed', isCol ? '1' : '0'); } catch(_){}
-      });
+      var tgl=document.getElementById('wprev-diag-toggle'), root=document.getElementById('wprev-diag-root');
+      if(!tgl||!root||tgl.__wired) return;
+      tgl.__wired=true;
+      try { if(localStorage.getItem('wprev_diag_collapsed')==='0') root.classList.remove('collapsed'); } catch(_){}
+      tgl.addEventListener('click', function(){ var isCol=root.classList.toggle('collapsed'); try{ localStorage.setItem('wprev_diag_collapsed', isCol?'1':'0'); }catch(_){} });
     }, 300);
-  });
-
-  /* Botón contextual: cada pulsación avanza UNA fase.
-       - sin estado          → sortear cruces (init), phase='paired'
-       - phase='paired'      → simular IDA,           phase='ida-played'
-       - phase='ida-played'  → simular VUELTA + 30 perdedores a
-                                Conference + DRAW de los 11 grupos
-                                (sin simular liguilla),
-                                phase='rf-drawn'
-       - phase='rf-drawn'    → simular liguilla 11×3 → 11 a Champions
-                                + 22 a Europa, phase='done'
-       - phase='done'        → no-op (botón deshabilitado). */
-  window.simulateUclPrev = function(){
-    var raw = buildPool();
-    var s = loadState();
-    if(!s){
-      if(!raw.length){
-        alert('No hay equipos clasificados aún. Configura cupos 🇪🇺 Previa Champions en las ligas y simula primero el Open Qualifier.');
-        return;
-      }
-      s = initState();
-      if(!s) return;
-      saveState(s);
-      buildUclPrevClas();
-      return;
-    }
-    if(s.phase === 'paired'){
-      simulateIda(s);
-      saveState(s);
-      buildUclPrevClas();
-      return;
-    }
-    if(s.phase === 'ida-played'){
-      simulateVuelta(s);   /* incluye persistir Conference + drawRfGroups */
-      saveState(s);
-      buildUclPrevClas();
-      return;
-    }
-    if(s.phase === 'rf-drawn'){
-      var r = simulateRfGroups(s);
-      saveState(s);
-      buildUclPrevClas();
-      /* Diagnóstico al usuario tras cada Simular JN. */
-      if(r.simmed === 0 && r.humanPending === 0 && r.jornada >= 6){
-        if(s.phase === 'done'){
-          alert('✓ Ronda Final completa.');
-        }
-      } else {
-        var msg = 'Jornada J'+(r.jornada+1)+' procesada · '
-                + r.simmed+' partidos IA simulados';
-        if(r.humanPending > 0){
-          msg += ' · '+r.humanPending+' partido(s) humano(s) pendiente(s)';
-          msg += '\n\nLos partidos del Atlético Madrid (u otros equipos humanos) '
-              +  'NO se han simulado automáticamente. Júgalos a mano con la PREVIA '
-              +  'desde la lista de partidos jugables, o usa "Forzar sim humanos" '
-              +  'al final si quieres autosimularlos.';
-        }
-        try { console.log('[wprev-sim]', r); } catch(_){}
-        if(r.humanPending > 0) alert(msg);
-      }
-      return;
-    }
-    /* phase === 'done' → solo refrescar render. */
-    buildUclPrevClas();
-  };
-
-  /* Forzar sim de los partidos humanos pendientes — para que el
-     usuario pueda finalizar la Ronda Final sin pasar por la PREVIA
-     manual. Usa el mismo `simMatch` (que internamente llama a
-     `_simIAvsIAWithContext` cuando existe → respeta lineup humano
-     según CLAUDE.md). PIN admin no exigido — es una decisión del
-     dueño de la partida. */
-  window._wprevForceSimHumanos = function(){
-    var s = loadState();
-    if(!s || s.phase !== 'rf-drawn') return;
-    var pending = [];
-    (s.jornadasByGroup||[]).forEach(function(sched, gi){
-      sched.forEach(function(m, j){
-        if(!m || m.played) return;
-        var grp = s.groups[gi];
-        var hN = grp[m.hi] && grp[m.hi].name || '';
-        var aN = grp[m.ai] && grp[m.ai].name || '';
-        if(_isHumanTeam(hN) || _isHumanTeam(aN)){
-          pending.push({gi:gi, j:j, hN:hN, aN:aN, m:m});
-        }
-      });
-    });
-    if(!pending.length){
-      alert('No hay partidos humanos pendientes.');
-      return;
-    }
-    if(!confirm('Vas a auto-simular '+pending.length+' partido(s) humano(s) (Atlético Madrid u otros). '
-              + '¿Continuar? Esto los marca como jugados con el motor IA-vs-IA.')) return;
-    pending.forEach(function(p){
-      var sc = simMatch(p.hN, p.aN);
-      p.m.gh = sc.gh; p.m.ga = sc.ga; p.m.played = true; p.m.humanPending = false;
-      applyToTable(s.tables[p.gi], p.m.hi, p.m.ai, sc.gh, sc.ga);
-    });
-    s.sortedTables = s.tables.map(sortTable);
-    _maybeFinalizeWprev(s);
-    saveState(s);
-    buildUclPrevClas();
-  };
-
-  /* 🎲 Draw — re-sortea los 11 grupos de Ronda Final. PIN admin 747
-     vía window.pG. Solo activo cuando phase ∈ {'rf-drawn', 'done'}.
-     Si está 'done', avisa que se perderán los partidos jugados de
-     la liguilla. */
-  window._wprevDraw = function(){
-    function _doDraw(){
-      var s = loadState();
-      if(!s){
-        alert('Aún no hay torneo iniciado. Pulsa 🎮 Sim primero para sortear y simular la Ronda 1.');
-        return;
-      }
-      if(s.phase === 'paired' || s.phase === 'ida-played'){
-        alert('Simula primero las idas y las vueltas de Ronda 1 (botón 🎮 Sim).');
-        return;
-      }
-      if(s.phase === 'done' && !confirm('Hay un torneo simulado. ¿Sobreescribir el sorteo de los 11 grupos? Perderás los partidos jugados de la liguilla.')) return;
-      drawRfGroups(s);
-      s.phase = 'rf-drawn';
-      /* Si estaba 'done', también limpiamos los flags de Champions/Europa
-         persistidos previamente porque ya no son válidos hasta re-simular. */
-      try {
-        localStorage.removeItem(WPREV_FG_KEY);
-        localStorage.removeItem(WPREV_EUR_KEY);
-      } catch(_){}
-      saveState(s);
-      buildUclPrevClas();
-    }
-    if(typeof window.pG === 'function') window.pG(_doDraw);
-    else _doDraw();
-  };
-
-  window._wprevNextLabel = function(){
-    var s = loadState();
-    if(!s)                          return '🎮 Sortear cruces';
-    if(s.phase === 'paired')        return '🎮 Simular IDA';
-    if(s.phase === 'ida-played')    return '🎮 Simular VUELTA';
-    if(s.phase === 'rf-drawn'){
-      /* Etiqueta dinámica: indica la próxima jornada IA pendiente,
-         de J1 a J6. Si todas las IA están simuladas pero quedan
-         humanos pending, decimos "Esperando humanos" para que el
-         usuario sepa que tiene que jugar sus partidos antes. */
-      var nextSim = _wprevNextSimableJornada(s);
-      if(nextSim >= 6){
-        var anyHumanPending = (s.jornadasByGroup||[]).some(function(sched){
-          return (sched||[]).some(function(m){ return m && !m.played; });
-        });
-        if(anyHumanPending) return '⏳ Esperando partidos humanos';
-        return '✓ Ronda Final completa';
-      }
-      return '🎮 Simular J' + (nextSim+1) + ' Ronda Final';
-    }
-    return '✓ Completado';
-  };
-  window._wprevSimDisabled = function(){
-    var s = loadState();
-    if(!s) return false;
-    if(s.phase === 'done') return true;
-    /* Si la próxima jornada IA ya está jugada y solo quedan humanos
-       pendientes, deshabilitamos el botón — el usuario tiene que
-       jugar sus partidos primero. */
-    if(s.phase === 'rf-drawn' && _wprevNextSimableJornada(s) >= 6){
-      var anyHumanPending = (s.jornadasByGroup||[]).some(function(sched){
-        return (sched||[]).some(function(m){ return m && !m.played; });
-      });
-      if(anyHumanPending) return true;
-    }
-    return false;
-  };
-  window._wprevDrawDisabled = function(){
-    var s = loadState();
-    /* Draw solo tiene sentido cuando ya hay 30 ganadores de R1. */
-    return !s || s.phase === 'paired' || s.phase === 'ida-played';
-  };
-  window.resetUclPrev = function(){
-    if(!confirm('¿Reiniciar la Previa de Champions?\n\nSe perderán todos los partidos jugados.\n\nLos huecos en la clasificación de Champions (11), Europa League (22) y Conference League (30) volverán a "Por definir".')) return;
-    clearState();
-    /* clearState ya limpió las 4 wprev_* keys. El helper invalida
-       la snapshot europe_committed_v1 y re-renderiza UCL/UEL/UECL
-       grupos para que los huecos vuelvan a "Por definir". */
-    if (typeof window._resetEuropePoolFeeders === 'function') {
-      window._resetEuropePoolFeeders('previa');
-    }
-    buildUclPrevClas();
-  };
-
-  /* Lanza el flujo PREVIA → COMPARTIR → gm-modal para un partido
-     humano pendiente (HvH/HvIA) de la Ronda Final. Mismo flujo que
-     las jornadas 2-38 de Liga: prepartido-overlay (configuración,
-     canal Twitch, bajas, COMPARTIR PARTIDO EN WHATSAPP) y, tras
-     compartir, gm-modal full-screen. compKey='ucl' aplica todos los
-     códigos de equipo humano (capitán ×1.05, goleador nato ×1.8,
-     goleador estrella ×3.0, P, F, ⭐, formación, alineación ideal,
-     MVP, estadísticas, sanciones — los flags definidos en
-     CLAUDE.md). El resultado se persiste en wprev_state_v1 desde
-     gmEndMatch (rama `_isWprev` que llama a _wprevSaveHumanResult).
-     Antes inyectábamos un .match-live-wrap inline + mlPreviaClick,
-     pero al cerrar el overlay el usuario quedaba con el timer parado
-     y la pantalla scrolleada al inicio de la Previa de Champions
-     (foto 1→2 vs expectativa foto 3 = gm-modal, reportado
-     2026-05-02). */
-  window._wprevPlayHumanMatch = function(gi, j){
-    var s = loadState();
-    if(!s || !s.jornadasByGroup || !s.jornadasByGroup[gi]) return;
-    var m = s.jornadasByGroup[gi][j];
-    if(!m || m.played) return;
-    var grp = s.groups && s.groups[gi];
-    if(!grp) return;
-    var home = grp[m.hi] && grp[m.hi].name;
-    var away = grp[m.ai] && grp[m.ai].name;
-    if(!home || !away) return;
-    var homeIsHuman = _isHumanTeam(home);
-    var awayIsHuman = _isHumanTeam(away);
-    var isHvH = homeIsHuman && awayIsHuman;
-    var mk = 'wprev-G'+gi+'-J'+j;
-    var duracion = (typeof window._mlRealDurationLabel === 'function')
-      ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
-      : (isHvH ? '16.5 min' : '13.5 min');
-    /* _ppPreviaTeams alimenta _ppShareWA (mensaje de WhatsApp con la
-       jornada). Sumamos +1 a `j` porque el state es 0-indexed y el
-       usuario ve "Jornada 1..6". */
-    window._ppPreviaTeams = { home: home, away: away, j: (j+1) };
-    window._ppCustomCallback = function(){
-      window._ppPreviaTeams = null;
-      if(typeof window.abrirPreviaChampionsMatch === 'function'){
-        window.abrirPreviaChampionsMatch(home, away, isHvH, gi, j);
-      }
-    };
-    if(typeof window.showPrePartidoOverlay === 'function'){
-      window.showPrePartidoOverlay(mk, 'ucl', 'No', duracion, isHvH);
-    }
-  };
-
-  /* Persiste el resultado de un partido humano de la Ronda Final tras
-     finalizar (rama _isWprev de gmEndMatch). Aplica la fila a la tabla
-     del grupo, reordena standings y deja phase='done' si era el último
-     pendiente. */
-  window._wprevSaveHumanResult = function(gi, j, gh, ga){
-    var s = loadState();
-    if(!s || !s.jornadasByGroup || !s.jornadasByGroup[gi]) return;
-    var m = s.jornadasByGroup[gi][j];
-    if(!m || m.played) return;
-    m.gh = gh; m.ga = ga; m.played = true; m.humanPending = false;
-    if(s.tables && s.tables[gi]){
-      applyToTable(s.tables[gi], m.hi, m.ai, gh, ga);
-    }
-    if(s.tables) s.sortedTables = s.tables.map(sortTable);
-    s.ts = Date.now();
-    _maybeFinalizeWprev(s);
-    saveState(s);
-    /* Re-render diferido: el usuario está en gm-modal viendo el flujo
-       de fin de partido (FIN → MVP → stats → WhatsApp). El re-render
-       de buildUclPrevClas (11 grupos × 3 equipos + Ronda 1 = pesado)
-       NO afecta a lo que ve y bloquearía la transición al overlay
-       siguiente. Lo difiero para que ocurra cuando el usuario ya esté
-       viendo la siguiente pantalla — la próxima vez que vuelva a
-       Previa Champions, los datos ya están aplicados. */
-    if(typeof buildUclPrevClas === 'function'){
-      setTimeout(function(){ try { buildUclPrevClas(); } catch(_){} }, 0);
-    }
-  };
-
-  /* Re-render al entrar a la pantalla. */
-  var _origGoUp = window.go;
-  if(typeof _origGoUp === 'function'){
-    window.go = function(id){
-      var r = _origGoUp.apply(this, arguments);
-      if(id === 's-ucl-previa-clas'){
-        try { setTimeout(buildUclPrevClas, 30); } catch(_){}
-      }
-      return r;
-    };
-  }
-  document.addEventListener('DOMContentLoaded', function(){
-    setTimeout(buildUclPrevClas, 250);
   });
 })();
 
@@ -30894,34 +29773,20 @@ document.addEventListener('DOMContentLoaded', function() {
       })();
       var title, phases, minMs = 1100;
       if(!s){
-        title = 'PREVIA · SORTEO DE CRUCES';
+        title = 'PREVIA · SORTEO DE GRUPOS';
         phases = [
-          { pct:30, sub:'Cargando plantillas…',           ms:120 },
-          { pct:60, sub:'Sembrando cabezas y no-cabezas…',ms:160 },
+          { pct:30, sub:'Cargando plantillas…',            ms:120 },
+          { pct:60, sub:'Repartiendo 62 en 16 grupos…',    ms:160 },
           { pct:90, sub:'Aplicando restricciones de país…',ms:140 }
         ];
-      } else if(s.phase === 'paired'){
-        title = 'PREVIA · RONDA 1 · IDAS';
+      } else if(s.phase === 'drawn'){
+        title = 'PREVIA · LIGUILLA DE GRUPOS';
         phases = [
-          { pct:34, sub:'Cargando estadios de los no-cabezas…', ms:140 },
-          { pct:74, sub:'Simulando 30 idas…',                  ms:240 }
+          { pct:30, sub:'Cargando 16 grupos…',                  ms:140 },
+          { pct:70, sub:'Simulando las liguillas IA-vs-IA…',    ms:240 },
+          { pct:90, sub:'Calculando corte global 12/22/28…',    ms:160 }
         ];
-        minMs = 1300;
-      } else if(s.phase === 'ida-played'){
-        title = 'PREVIA · RONDA 1 · VUELTAS + SORTEO RF';
-        phases = [
-          { pct:30, sub:'Simulando 30 vueltas + tiebreakers…', ms:240 },
-          { pct:60, sub:'Enviando 30 perdedores a Conference…',ms:140 },
-          { pct:90, sub:'Sorteando 11 grupos de Ronda Final…', ms:170 }
-        ];
-        minMs = 1500;
-      } else if(s.phase === 'rf-drawn'){
-        title = 'PREVIA · LIGUILLA RONDA FINAL';
-        phases = [
-          { pct:30, sub:'Cargando 11 grupos…',                 ms:140 },
-          { pct:90, sub:'Simulando 6 jornadas por grupo…',     ms:230 }
-        ];
-        minMs = 1300;
+        minMs = 1400;
       } else {
         title = 'PREVIA DE CHAMPIONS';
         phases = [{ pct:90, sub:'Refrescando…', ms:80 }];
@@ -30959,13 +29824,13 @@ document.addEventListener('DOMContentLoaded', function() {
     if(typeof origWprevDraw === 'function' && typeof window.ftbolLoaderRun === 'function'){
       window._wprevDraw = function(){
         return window.ftbolLoaderRun(
-          { title:'PREVIA · SORTEO RONDA FINAL', sub:'Preparando…', theme:'ucl', minMs:900 },
+          { title:'PREVIA · SORTEO DE GRUPOS', sub:'Preparando…', theme:'ucl', minMs:900 },
           function(ctx){
             return new Promise(function(resolve){
               var phases = [
-                { pct:30, sub:'Ordenando 33 equipos por power…', ms:120 },
-                { pct:60, sub:'Repartiendo 3 bombos a 11 grupos…',ms:160 },
-                { pct:88, sub:'Aplicando restricciones de país…',ms:140 }
+                { pct:30, sub:'Ordenando 62 equipos por power…',   ms:120 },
+                { pct:60, sub:'Repartiendo en 16 grupos (snake)…', ms:160 },
+                { pct:88, sub:'Aplicando restricciones de país…',  ms:140 }
               ];
               var k = 0;
               function step(){

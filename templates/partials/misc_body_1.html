@@ -33605,12 +33605,70 @@ https://api.sofascore.app/api/v1/team/44/image
 
   var DEFAULT_ZONES = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0, intercontinental:0, mundialClubes:0, desc:3};
 
-  function ensureConfig(data){
+  /* ── Reparto europeo POR DEFECTO por liga (petición usuario 2026-05-30) ──
+     Cada liga del "Resto de Ligas" arranca con el cupo europeo que le
+     corresponde según el bracket del usuario, en vez del genérico
+     1/1/1/1/1. Solo se precargan los campos europeos
+     (🔵ucl 🟣uclPrev 🟠uel 🟢uecl 🟡uclQual ⚪wildcard); `desc` y los
+     campos de Resto del Mundo (intercontinental/mundialClubes) caen al
+     DEFAULT_ZONES. TODO sigue siendo EDITABLE desde 📜 Reglas — esto solo
+     ahorra teclear ~54 ligas a mano.
+       Sumas de control del bracket: 🔵28 · 🟠18 · 🟢12 · ⚪72. */
+  var LEAGUE_DEFAULT_ZONES = (function(){
+    var Z = {};
+    function set(slugs, z){ slugs.forEach(function(s){ Z[s] = z; }); }
+    // 🔵4 🟣1 🟠2 🟢1 — España (Liga EA Sports; manual/blacklist europeo)
+    Z['liga-ea-sports'] = {ucl:4, uclPrev:1, uclQual:0, uel:2, uecl:1, wildcard:0};
+    // 🔵4 🟠2 🟢2 — Inglaterra
+    Z['inglaterra']     = {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:2, wildcard:0};
+    // 🔵4 🟠2 🟢1 — Italia / Alemania / Francia
+    set(['italia','alemania','francia'],      {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0});
+    // 🔵2 🟠2 🟢1 — Portugal / Países Bajos
+    set(['portugal','p-bajos'],               {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0});
+    // 🔵1 🟠1 🟢1 — Bélgica / Turquía / Chequia / Grecia
+    set(['belgica','turquia','rep-checa','grecia'], {ucl:1, uclPrev:0, uclQual:0, uel:1, uecl:1, wildcard:0});
+    // 🟣1 🟡2 ⚪2 — bloque medio
+    set(['polonia','dinamarca','noruega','chipre','suiza','austria','escocia',
+         'suecia','croacia','israel','hungria','ucrania','serbia','rumania',
+         'eslovenia','azerbayan','rusia','eslovaquia'],
+        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2});
+    // 🟣1 🟡2 ⚪1 — bloque medio-bajo
+    set(['bulgaria','irlanda','islandia','armenia','moldavia','finlandia',
+         'kosovo','kazajst','bosnia','letonia','is-feroe','malta','estonia','albania'],
+        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1});
+    // 🟡2 ⚪2 — bloque menor (sin Previa directa)
+    set(['n-maced','lituania','n-irlanda','gibraltar','andorra','bielorrsa',
+         'luxembgo','montenegro','georgia','gales','san-marino'],
+        {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2});
+    return Z;
+  })();
+  window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
+
+  /* Default de zonas para un slug: genérico + override europeo por liga. */
+  function _zonesDefaultFor(slug){
+    var base = Object.assign({}, DEFAULT_ZONES);
+    if(slug && LEAGUE_DEFAULT_ZONES[slug]) Object.assign(base, LEAGUE_DEFAULT_ZONES[slug]);
+    return base;
+  }
+  window._zonesDefaultFor = _zonesDefaultFor;
+
+  /* ¿Las zonas europeas siguen en el placeholder genérico 1/1/1/1/1
+     (wildcard 0)? Si es así, la liga nunca se configuró y podemos
+     precargar el reparto por liga sin pisar nada del admin. */
+  function _zonesIsGeneric(z){
+    if(!z) return true;
+    return Number(z.ucl)===1 && Number(z.uclPrev)===1 && Number(z.uclQual)===1 &&
+           Number(z.uel)===1 && Number(z.uecl)===1 && Number(z.wildcard||0)===0;
+  }
+  window._zonesIsGeneric = _zonesIsGeneric;
+
+  function ensureConfig(data, slug){
+    var DEF = _zonesDefaultFor(slug);
     if(!data.config) data.config = {};
-    if(!data.config.zones) data.config.zones = Object.assign({}, DEFAULT_ZONES);
+    if(!data.config.zones) data.config.zones = Object.assign({}, DEF);
     else {
       Object.keys(DEFAULT_ZONES).forEach(function(k){
-        if(typeof data.config.zones[k] !== 'number') data.config.zones[k] = DEFAULT_ZONES[k];
+        if(typeof data.config.zones[k] !== 'number') data.config.zones[k] = DEF[k];
       });
     }
     if(typeof data.config.logo !== 'string') data.config.logo = '';
@@ -34443,8 +34501,12 @@ https://api.sofascore.app/api/v1/team/44/image
   window.ligaExtReglas = function(){
     if(!CURRENT_KEY) return;
     var data = loadData(CURRENT_KEY);
-    var cfg = ensureConfig(data);
+    var cfg = ensureConfig(data, CURRENT_KEY);
     var z = cfg.zones;
+    /* Liga nunca configurada (sigue en el genérico 1/1/1/1/1): precargamos
+       el reparto europeo POR DEFECTO de esta liga para ahorrar tiempo.
+       Sigue siendo editable; solo persiste si el usuario pulsa Guardar. */
+    if(_zonesIsGeneric(z)) z = _zonesDefaultFor(CURRENT_KEY);
     document.getElementById('lext-reg-ucl').value = z.ucl;
     document.getElementById('lext-reg-ucl-prev').value = z.uclPrev;
     document.getElementById('lext-reg-ucl-qual').value = z.uclQual;
@@ -34479,7 +34541,7 @@ https://api.sofascore.app/api/v1/team/44/image
   window.lextSaveReglas = function(){
     if(!CURRENT_KEY) return;
     var data = loadData(CURRENT_KEY);
-    var cfg = ensureConfig(data);
+    var cfg = ensureConfig(data, CURRENT_KEY);
     cfg.zones = {
       ucl:              Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
       uclPrev:          Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
@@ -34504,14 +34566,17 @@ https://api.sofascore.app/api/v1/team/44/image
   };
   window.lextResetReglas = function(){
     var isRM = (CURRENT_KEY === 'resto-mundo');
-    document.getElementById('lext-reg-ucl').value = DEFAULT_ZONES.ucl;
-    document.getElementById('lext-reg-ucl-prev').value = DEFAULT_ZONES.uclPrev;
-    document.getElementById('lext-reg-ucl-qual').value = DEFAULT_ZONES.uclQual;
-    document.getElementById('lext-reg-uel').value = DEFAULT_ZONES.uel;
-    document.getElementById('lext-reg-uecl').value = DEFAULT_ZONES.uecl;
-    document.getElementById('lext-reg-desc').value = DEFAULT_ZONES.desc;
+    /* "Restablecer" = volver al reparto POR DEFECTO de ESTA liga
+       (genérico + override europeo por liga), no al 1/1/1/1/1 plano. */
+    var DEF = _zonesDefaultFor(CURRENT_KEY);
+    document.getElementById('lext-reg-ucl').value = DEF.ucl;
+    document.getElementById('lext-reg-ucl-prev').value = DEF.uclPrev;
+    document.getElementById('lext-reg-ucl-qual').value = DEF.uclQual;
+    document.getElementById('lext-reg-uel').value = DEF.uel;
+    document.getElementById('lext-reg-uecl').value = DEF.uecl;
+    document.getElementById('lext-reg-desc').value = DEF.desc;
     var wcInp = document.getElementById('lext-reg-wildcard');
-    if(wcInp) wcInp.value = DEFAULT_ZONES.wildcard;
+    if(wcInp) wcInp.value = DEF.wildcard;
     var rmIntInp = document.getElementById('lext-reg-inter');
     var rmMunInp = document.getElementById('lext-reg-mundial');
     if(rmIntInp) rmIntInp.value = isRM ? 6 : (DEFAULT_ZONES.intercontinental||0);
@@ -38390,6 +38455,38 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     } catch(_){}
   }
+  /* ── Migración: reparto europeo por defecto por liga (2026-05-30) ──
+     Aplica UNA sola vez `LEAGUE_DEFAULT_ZONES` a las ligas ya sembradas
+     que aún están en el default genérico (1/1/1/1/1, wildcard 0) o sin
+     zones. NUNCA pisa una liga que el admin ya personalizó (sus euro-
+     zonas difieren del genérico). Guard por flag en localStorage para
+     que corra solo la primera vez. Las ligas todavía no sembradas las
+     cubre `ensureConfig(data, slug)` / `ligaExtReglas` al abrirlas. */
+  function _seedLeagueDefaultZonesV1(){
+    var FLAG = 'ftbol_league_zones_seeded_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      Object.keys(LEAGUE_DEFAULT_ZONES).forEach(function(slug){
+        try {
+          var key = 'ligaExt_' + slug;
+          var raw = localStorage.getItem(key);
+          if(!raw) return;                 // no sembrada → la cubre el modal/ensureConfig
+          var d = JSON.parse(raw);
+          if(!d) return;
+          if(!d.config) d.config = {};
+          var z = d.config.zones;
+          if(z && !_zonesIsGeneric(z)) return;   // personalizada → respetar
+          /* def manda en los campos europeos; desc + intercontinental +
+             mundialClubes conservan lo previo (o caen al DEFAULT_ZONES). */
+          d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), LEAGUE_DEFAULT_ZONES[slug]);
+          localStorage.setItem(key, JSON.stringify(d));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        } catch(_){}
+      });
+      localStorage.setItem(FLAG, '1');
+    } catch(_){}
+  }
   function _ensureRestoMundoSeed(){
     var slug = 'resto-mundo';
     var hasTeams = false;
@@ -38440,6 +38537,9 @@ https://api.sofascore.app/api/v1/team/44/image
   /* Seed eager (al cargar) para que Sim All y aperturas directas vean
      los 44 equipos sin abrir antes la pantalla. */
   try { _ensureRestoMundoSeed(); } catch(_){}
+  /* Precarga del reparto europeo por liga (LEAGUE_DEFAULT_ZONES);
+     corre una sola vez vía flag en localStorage. */
+  try { _seedLeagueDefaultZonesV1(); } catch(_){}
   /* Defensa adicional: si en algún momento el storage queda vacío
      (reset / sync server que devuelve {teams:[]}), re-sembramos al
      abrir la pantalla. */

@@ -33619,7 +33619,8 @@ https://api.sofascore.app/api/v1/team/44/image
      campos de Resto del Mundo (intercontinental/mundialClubes) caen al
      DEFAULT_ZONES. TODO sigue siendo EDITABLE desde 📜 Reglas — esto solo
      ahorra teclear ~54 ligas a mano.
-       Sumas de control del bracket: 🔵28 · 🟠18 · 🟢12 · ⚪72. */
+       Sumas de control (con España manual 4/1/2/1):
+       🔵28 · 🟣34 · 🟠18 · 🟢12 · 🟡88 · ⚪71. */
   var LEAGUE_DEFAULT_ZONES = (function(){
     var Z = {};
     function set(slugs, z){ slugs.forEach(function(s){ Z[s] = z; }); }
@@ -33631,21 +33632,25 @@ https://api.sofascore.app/api/v1/team/44/image
     set(['italia','alemania','francia'],      {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0});
     // 🔵2 🟠2 🟢1 — Portugal / Países Bajos
     set(['portugal','p-bajos'],               {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0});
-    // 🔵1 🟠1 🟢1 — Bélgica / Turquía / Chequia / Grecia
-    set(['belgica','turquia','rep-checa','grecia'], {ucl:1, uclPrev:0, uclQual:0, uel:1, uecl:1, wildcard:0});
-    // 🟣1 🟡2 ⚪2 — bloque medio
+    // 🔵1 🟣1 🟠1 🟢1 — Bélgica / Turquía / Chequia / Grecia
+    set(['belgica','turquia','rep-checa','grecia'], {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0});
+    // 🟣1 🟡2 ⚪2 — bloque medio (18 ligas)
     set(['polonia','dinamarca','noruega','chipre','suiza','austria','escocia',
          'suecia','croacia','israel','hungria','ucrania','serbia','rumania',
          'eslovenia','azerbayan','rusia','eslovaquia'],
         {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2});
-    // 🟣1 🟡2 ⚪1 — bloque medio-bajo
+    // 🟣1 🟡2 ⚪1 — bloque medio-bajo (11 ligas, incluye Albania)
     set(['bulgaria','irlanda','islandia','armenia','moldavia','finlandia',
-         'kosovo','kazajst','bosnia','letonia','is-feroe','malta','estonia','albania'],
+         'kosovo','kazajst','bosnia','letonia','albania'],
         {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1});
-    // 🟡2 ⚪2 — bloque menor (sin Previa directa)
-    set(['n-maced','lituania','n-irlanda','gibraltar','andorra','bielorrsa',
-         'luxembgo','montenegro','georgia','gales','san-marino'],
+    // 🟡3 ⚪1 — Islas Feroe / Malta
+    set(['is-feroe','malta'], {ucl:0, uclPrev:0, uclQual:3, uel:0, uecl:0, wildcard:1});
+    // 🟡2 ⚪2 — bloque menor (10 ligas, incluye Montenegro / Georgia)
+    set(['estonia','n-maced','lituania','n-irlanda','gibraltar','andorra',
+         'bielorrsa','luxembgo','montenegro','georgia'],
         {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2});
+    // 🟡2 ⚪1 — Gales / San Marino
+    set(['gales','san-marino'], {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:1});
     return Z;
   })();
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
@@ -38493,6 +38498,61 @@ https://api.sofascore.app/api/v1/team/44/image
       localStorage.setItem(FLAG, '1');
     } catch(_){}
   }
+  /* Fixup v2 (2026-05-30): el primer cuadro de `LEAGUE_DEFAULT_ZONES`
+     dejaba 🟣Previa=33 y 🟡OQ=86 (1-2 cortos), y a Bélgica/Turquía/
+     Chequia/Grecia sin su 🟣1. El cuadro corregido cuadra Previa=34,
+     OQ=88. Para navegadores que YA corrieron el seed v1 con los valores
+     viejos, re-aplicamos el valor NUEVO de la tabla a las ligas
+     afectadas SOLO si sus euro-zonas siguen EXACTAMENTE en el valor
+     viejo (= lo puso el seed, no el usuario a mano) o en el genérico.
+     Idempotente vía flag propio. */
+  function _fixupLeagueZonesV2(){
+    var FLAG = 'ftbol_league_zones_fix_v2';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    /* slug → valor VIEJO que tenía el seed v1 (solo euro-zonas). */
+    var OLD = {
+      'belgica':    {ucl:1, uclPrev:0, uclQual:0, uel:1, uecl:1, wildcard:0},
+      'turquia':    {ucl:1, uclPrev:0, uclQual:0, uel:1, uecl:1, wildcard:0},
+      'rep-checa':  {ucl:1, uclPrev:0, uclQual:0, uel:1, uecl:1, wildcard:0},
+      'grecia':     {ucl:1, uclPrev:0, uclQual:0, uel:1, uecl:1, wildcard:0},
+      'albania':    {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1},
+      'is-feroe':   {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1},
+      'malta':      {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1},
+      'montenegro': {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2},
+      'georgia':    {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2}
+    };
+    function eqEuro(z, r){
+      if(!z) return false;
+      return Number(z.ucl||0)===r.ucl && Number(z.uclPrev||0)===r.uclPrev
+          && Number(z.uclQual||0)===r.uclQual && Number(z.uel||0)===r.uel
+          && Number(z.uecl||0)===r.uecl && Number(z.wildcard||0)===r.wildcard;
+    }
+    var GEN = {ucl:1,uclPrev:1,uclQual:1,uel:1,uecl:1,wildcard:0};
+    try {
+      Object.keys(OLD).forEach(function(slug){
+        try {
+          var key = 'ligaExt_' + slug;
+          var raw = localStorage.getItem(key);
+          if(!raw) return;                 // no sembrada → la cubre ensureConfig
+          var d = JSON.parse(raw);
+          if(!d) return;
+          if(!d.config) d.config = {};
+          var z = d.config.zones;
+          var nw = LEAGUE_DEFAULT_ZONES[slug];
+          if(!nw) return;
+          /* Solo re-aplica si está en el valor VIEJO o en el genérico —
+             en ambos casos no es edición manual del admin. */
+          if(!(eqEuro(z, OLD[slug]) || eqEuro(z, GEN) || !z)) return;
+          d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), nw);
+          localStorage.setItem(key, JSON.stringify(d));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        } catch(_){}
+      });
+      localStorage.setItem(FLAG, '1');
+    } catch(_){}
+  }
+  window._fixupLeagueZonesV2 = _fixupLeagueZonesV2;
   function _ensureRestoMundoSeed(){
     var slug = 'resto-mundo';
     var hasTeams = false;
@@ -38546,6 +38606,7 @@ https://api.sofascore.app/api/v1/team/44/image
   /* Precarga del reparto europeo por liga (LEAGUE_DEFAULT_ZONES);
      corre una sola vez vía flag en localStorage. */
   try { _seedLeagueDefaultZonesV1(); } catch(_){}
+  try { _fixupLeagueZonesV2(); } catch(_){}
   /* Defensa adicional: si en algún momento el storage queda vacío
      (reset / sync server que devuelve {teams:[]}), re-sembramos al
      abrir la pantalla. */

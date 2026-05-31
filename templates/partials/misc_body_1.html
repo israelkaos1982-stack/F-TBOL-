@@ -38831,13 +38831,19 @@ https://api.sofascore.app/api/v1/team/44/image
         isHuman: false, humanEmoji: ''
       };
     });
-    /* Zonas Europa de liga menor (mismas que el resto de las pequeñas
-       de WILDCARD_LIGA_SLUGS) — totalmente editables vía 📜 Reglas. */
+    /* Zonas Europa POR DEFECTO de ESTA liga (LEAGUE_DEFAULT_ZONES vía
+       `_zonesDefaultFor`). PROHIBIDO hardcodear: N. Irlanda y Montenegro
+       son 🟡OQ2 ⚪WildCard2 (bloque menor 🟡2 ⚪2), NO el genérico de liga
+       menor 🟣1/🟡1/⚪1 que descuadraba el bracket (Previa +, OQ/WC −) y
+       confundía al usuario ("no se guardan las reglas"). Sigue 100%
+       editable vía 📜 Reglas. */
     var data = {
       teams: teams,
       results: [],
       config: {
-        zones: { ucl:0, uclPrev:1, uclQual:1, uel:0, uecl:0, wildcard:1, desc:2 },
+        zones: (typeof _zonesDefaultFor === 'function')
+                 ? _zonesDefaultFor(slug)
+                 : { ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2, desc:3 },
         logo: '', cupName: '', cupLogo: ''
       }
     };
@@ -38850,6 +38856,52 @@ https://api.sofascore.app/api/v1/team/44/image
   try {
     Object.keys(_EXTRA_LEAGUE_SEEDS).forEach(function(s){ _ensureExtraLeagueSeed(s); });
   } catch(_){}
+  /* Fixup (2026-05-31): las primeras versiones del pre-seed de N. Irlanda
+     y Montenegro escribían las zonas de "liga menor genérica"
+     ({uclPrev:1, uclQual:1, wildcard:1, desc:2}) en lugar del reparto real
+     de estas dos ligas (🟡OQ2 ⚪WildCard2, ver LEAGUE_DEFAULT_ZONES). Eso
+     descuadraba el bracket (Previa de más, OQ/WC de menos) y hacía que el
+     usuario viera reglas "que no se podían cambiar / no se guardaban"
+     (los defaults del modal no coincidían con los de 'Restaurar por
+     defecto', que sí leen `_zonesDefaultFor`). Re-aplica el reparto
+     CORRECTO SOLO a las ligas que sigan EXACTAMENTE en el valor
+     mal-sembrado o en el genérico — NUNCA pisa una edición manual del
+     admin. Idempotente vía flag propio. */
+  function _fixupExtraLeagueZonesV1(){
+    var FLAG = 'ftbol_extra_league_zones_fix_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    /* Valor euro mal-sembrado por las versiones viejas del seed. */
+    var BAD = { ucl:0, uclPrev:1, uclQual:1, uel:0, uecl:0, wildcard:1 };
+    function eqEuro(z, r){
+      if(!z) return false;
+      return Number(z.ucl||0)===r.ucl && Number(z.uclPrev||0)===r.uclPrev
+          && Number(z.uclQual||0)===r.uclQual && Number(z.uel||0)===r.uel
+          && Number(z.uecl||0)===r.uecl && Number(z.wildcard||0)===r.wildcard;
+    }
+    try {
+      Object.keys(_EXTRA_LEAGUE_SEEDS).forEach(function(slug){
+        try {
+          var key = 'ligaExt_' + slug;
+          var raw = localStorage.getItem(key);
+          if(!raw) return;                 // no sembrada → la cubre el seed corregido
+          var d = JSON.parse(raw);
+          if(!d) return;
+          if(!d.config) d.config = {};
+          var z = d.config.zones;
+          /* Solo re-aplica si está mal-sembrada o genérica (no es edición
+             manual del admin). */
+          if(!(eqEuro(z, BAD) || _zonesIsGeneric(z) || !z)) return;
+          d.config.zones = _zonesDefaultFor(slug);
+          localStorage.setItem(key, JSON.stringify(d));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        } catch(_){}
+      });
+      localStorage.setItem(FLAG, '1');
+    } catch(_){}
+  }
+  window._fixupExtraLeagueZonesV1 = _fixupExtraLeagueZonesV1;
+  try { _fixupExtraLeagueZonesV1(); } catch(_){}
   /* Defensa adicional: re-sembrar al abrir si el storage quedó vacío. */
   (function(){
     var _origOpenX = window.openLigaExt;

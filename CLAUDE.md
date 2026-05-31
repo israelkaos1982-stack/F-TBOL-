@@ -1773,6 +1773,60 @@ de capitán `×1.05` sobre el valor del equipo donde aplique.
   un `×1.05` adicional.
 - Bonus invisible: no se muestra como estadística, pero sí se aplica.
 
+## Puntuación del MVP — realista élite (obligatorio, 2026-05-31)
+
+**Bug (foto usuario 2026-05-31)**: el ranking de MVP de la Liga salía
+LLENO de porteros (Robert Sánchez, Donnarumma, Henderson, Lammens,
+Pope, Sommer… los 6 primeros porteros). Un portero NO puede ser MVP
+el ~40% de los partidos — no es real.
+
+### Causa raíz
+
+El MVP de la simulación IA-vs-IA por lotes (`simularJornadaIA` →
+`_simIAvsIAWithContext` → `genMatchEventsEnhanced` → `genMatchEvents`)
+se elegía con un sorteo ponderado donde el **portero con portería a
+cero pesaba +4.0** mientras cada jugador de campo sólo +0.5 y un gol
++3.0. Como las porterías a cero son MUY comunes en sims de pocos goles
+(y un 0-0 da +4.0 a LOS DOS porteros), los metas ganaban ~40-44%.
+
+### Modelo nuevo (en `genMatchEvents`, `part2/misc_body_2.html`)
+
+Sorteo ponderado por jugador:
+
+- **Base por posición** (todo jugador de campo entra): Delantero (F)
+  **1.6** · Medio (M) **1.0** · Defensa (D) **0.55** · posición
+  desconocida 0.8.
+- **Gol marcado**: **+3.0** cada uno (doblete/hat-trick casi siempre
+  se lleva el MVP).
+- **Gol decisivo** (el `(golesPerdedor+1)`-ésimo gol del ganador, el
+  que pone por delante para no devolver la ventaja): **+1.5** a su
+  autor.
+- **Portero con portería a cero**: **+2.0** (antes 4.0). **Sin**
+  portería a cero el portero NO entra al sorteo.
+- **Sesgo al equipo ganador**: base de campo **×1.15** al ganador,
+  **×0.85** al perdedor (empate → ×1.0). El MotM casi nunca sale del
+  equipo goleado.
+
+Distribución resultante (Monte-Carlo 300 k partidos, marcador
+Poisson λ≈1.35): **F 61% · M 21% · D 7% · Portero 7%** global, con
+picos legítimos por marcador (0-0 ≈ 17% portero, partidos decididos
+≈ 0%).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** devolver el peso del portero con portería a cero a
+   4.0 (ni nada que lo haga dominar el sorteo). El tope realista es
+   ~+2.0 frente a un gol +3.0 y bases de campo por posición.
+2. **PROHIBIDO** dar a un portero que ENCAJA peso de MVP. Sólo entra
+   al sorteo con portería a cero (+ futuros bonus tipo penalti parado
+   si se añaden).
+3. El motor de partido EN VIVO (`index.bundle.js`, ticker IA-vs-IA) y
+   el de Copa (`copa-engine.js`) ya son realistas (el portero sólo
+   puntúa por `pen-parado`, sin bonus de portería a cero) — **no**
+   reintroducir un bonus de clean-sheet ahí.
+4. Toda comp/motor NUEVO que elija MVP debe mantener esta jerarquía:
+   atacantes que marcan ≫ mediocampistas ≫ defensas > porteros.
+
 ## Propagación de flags al motor
 
 Los flags viven en el editor de plantilla y se guardan en

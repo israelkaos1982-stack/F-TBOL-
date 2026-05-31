@@ -2014,6 +2014,10 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){}
       return null;
     }
+    /* Expuesto en window para que el actualizador del hub
+       (munich-plantilla-count) pueda leer la plantilla REAL del equipo
+       de Toñín desde otro IIFE. */
+    try { window._findBayernRow = _findBayernRow; } catch(_){}
 
     function _statCell(cls, val){
       var n = Number(val) || 0;
@@ -48254,6 +48258,26 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        lo poblan los partidos al ocurrir una lesi\u00f3n (gen\u00e9rico, no
        distingue equipo) \u2014 filtramos por nombre del jugador con la
        plantilla del Bayern (v\u00eda CURRENT_SQUAD_TEAM/sqFromRegistry). */
+    /* PLANTILLA · número REAL de jugadores del equipo del hub
+       (Liverpool). Se lee de la plantilla real vía _findBayernRow()
+       (el slot de Toñín 💡, renombrado a Liverpool). Si por cualquier
+       motivo no se puede resolver un número válido, se BORRA el número
+       y queda solo el título "PLANTILLA" — petición explícita del
+       usuario 2026-05-31: "si vas a fallar quita el número y deja solo
+       el título plantilla". Nunca mostrar un valor hardcodeado/stale. */
+    var plantillaCountEl = getEl('munich-plantilla-count');
+    if (plantillaCountEl) {
+      var realCount = null;
+      try {
+        var hubRow = (typeof window._findBayernRow === 'function') ? window._findBayernRow() : null;
+        if (hubRow && Array.isArray(hubRow.players)) {
+          var n = 0;
+          hubRow.players.forEach(function(p){ if (p && p.name) n++; });
+          if (n > 0) realCount = n;
+        }
+      } catch(_){}
+      plantillaCountEl.textContent = (realCount != null) ? String(realCount) : '';
+    }
     var injuryBadgeEl = getEl('munich-plantilla-injury');
     if (injuryBadgeEl) {
       var hasInjury = false;

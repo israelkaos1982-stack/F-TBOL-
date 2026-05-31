@@ -5264,7 +5264,15 @@ window._showSimProgress = function(opts, onDone){
       : '8 min';
     window._ppPreviaTeams = {
       home: home, away: away, j: 0, comp: comp,
-      stadium: rv.stadium || '', tourName: tourNm || ''
+      stadium: rv.stadium || '', tourName: tourNm || '',
+      /* Contexto del torneo (2026-05-31): `_mmCalLabel` / `_mmInjectEnv`
+         (bundle) lo leen para mapear el partido a la fila del calendario
+         individual y mostrar la fecha REAL (no hoy) + el compLabel del
+         torneo ("Mundialito de Clubes · Jornada 2", "Trofeo Joan Gamper ·
+         Jornada 5", etc.). El matchKey del torneo (g<grp>_<jor>_<m> /
+         ko_<r>_<m>) va en `tourKey`. */
+      tourId: (rv && rv.tourId) || null,
+      tourKey: (rv && rv.tourKey) || null
     };
     var advanced = false;
     window._ppCustomCallback = function(){
@@ -5918,13 +5926,29 @@ window._showSimProgress = function(opts, onDone){
     if (!rv){
       rv = { name: pair.rival, home: pair.home, away: _pairAway,
              stadium: _tourStad || STADIUMS[Math.floor(Math.random()*STADIUMS.length)],
-             difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)] };
+             difficulty: DIFFS[Math.floor(Math.random()*DIFFS.length)],
+             /* tourId/tourKey del bracket (2026-05-31): los necesita la
+                PANTALLA DE PREVIA (`_mmCalLabel`) para resolver la fila
+                del calendario (p.ej. "Mundialito Clubes - J2" → 08 Jul) y
+                el compLabel ("Mundialito de Clubes · Jornada 2"). Sin
+                ellos `_ppPreviaTeams` quedaba sin contexto del torneo y la
+                previa caía a la fecha de hoy + "🏆 torneo" crudo (bug
+                Liverpool vs Atalanta Mundialito J2 mostrando "31 de Mayo"
+                con la card del hub en "08 Jul"). */
+             tourId: pair.tourId || null,
+             tourKey: pair.matchKey || null };
       d.rivals[day.date] = rv;
     } else {
       /* Resync con el bracket por si cambió en el editor (admin). */
       if (rv.name !== pair.rival) rv.name = pair.rival;
       if (rv.home !== pair.home)  rv.home = pair.home;
       if (rv.away !== _pairAway)  rv.away = _pairAway;
+      /* tourId/tourKey deterministas del día (derivados del calendario
+         vía `_realPair`): re-sincronizamos siempre para que saves
+         antiguos de `d.rivals` (creados antes de 2026-05-31, sin estos
+         campos) también resuelvan la fecha de la previa. */
+      if (rv.tourId  !== (pair.tourId  || null)) rv.tourId  = pair.tourId  || null;
+      if (rv.tourKey !== (pair.matchKey || null)) rv.tourKey = pair.matchKey || null;
       /* Override del estadio si el admin configuró las 4 sedes del
          torneo (cfg.stadiums). Sin esto, días ya creados antes del
          picker mantendrían el estadio aleatorio guardado en rv. */

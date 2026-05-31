@@ -10947,9 +10947,12 @@ window._showSimProgress = function(opts, onDone){
     { key:'cs',          title:'Portería imbatida',   icon:'🧤' },
     { key:'yel',         title:'Tarjetas amarillas',  icon:'🟨' },
     { key:'red',         title:'Tarjetas rojas',      icon:'🟥' },
-    { key:'pen-gol',     title:'Goles de penalti',    icon:'🥅' },
-    { key:'pen-parado',  title:'Penaltis parados',    icon:'🖐' },
-    { key:'falta-gol',   title:'Goles de falta',      icon:'🎯' },
+    { key:'pen-prov',    title:'Penaltis provocados', icon:'🤦‍♂️🥅' },
+    { key:'pen-gol',     title:'Goles de penalti',    icon:'⚽🥅' },
+    { key:'pen-fallado', title:'Penaltis fallados',   icon:'❌️🥅' },
+    { key:'pen-parado',  title:'Penaltis parados',    icon:'🖐🥅' },
+    { key:'falta-gol',   title:'Goles de falta',      icon:'⚽🎯' },
+    { key:'propia',      title:'Autogoles',           icon:'⚽🚫' },
     { key:'mvp',         title:'MVP',                 icon:'⭐️' }
   ];
   function _escHtmlPS(s){
@@ -11087,9 +11090,12 @@ window._showSimProgress = function(opts, onDone){
           'cs':          Number(s.imbat||0),
           'yel':         Number(s.ta||0),
           'red':         Number(s.tr||0),
+          'pen-prov':    Number(s.penProv||0),
           'pen-gol':     Number(s.pen||0),
+          'pen-fallado': Number(s.penFall||0),
           'pen-parado':  Number(s.penSaved||0),
           'falta-gol':   Number(s.fk||0),
+          'propia':      Number(s.propia||0),
           'mvp':         Number(s.mvp||0)
         }
       };
@@ -11299,7 +11305,7 @@ window._showSimProgress = function(opts, onDone){
 
     function getOrCreateInBucket(bucket, teamName, playerName){
       var key = _normPS(teamName) + '::' + _normPS(playerName);
-      if(!bucket[key]) bucket[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+      if(!bucket[key]) bucket[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
       return bucket[key];
     }
     function _competitionFromMatchKey(mk){
@@ -11494,6 +11500,9 @@ window._showSimProgress = function(opts, onDone){
           else if(type==='gol') p.gol++;
           else if(type==='falta-gol') p.fk++;
           else if(type==='pen-gol') p.pen++;
+          else if(type==='pen-prov') p.penProv++;
+          else if(type==='pen-fallo'||type==='pen-fallado') p.penFall++;
+          else if(type==='propia') p.propia++;
           else if(type==='pen-parado') p.penSaved++;
           else if(type==='mvp') p.mvp++;
           else if(type==='imbat') p.imbat++;
@@ -11631,6 +11640,9 @@ window._showSimProgress = function(opts, onDone){
             else if (_ty === 'gol') _pEnt.gol++;
             else if (_ty === 'falta-gol') _pEnt.fk++;
             else if (_ty === 'pen-gol') _pEnt.pen++;
+            else if (_ty === 'pen-prov') _pEnt.penProv++;
+            else if (_ty === 'pen-fallo' || _ty === 'pen-fallado') _pEnt.penFall++;
+            else if (_ty === 'propia') _pEnt.propia++;
             else if (_ty === 'pen-parado') _pEnt.penSaved++;
             else if (_ty === 'mvp') _pEnt.mvp++;
             else if (_ty === 'imbat') _pEnt.imbat++;
@@ -11697,7 +11709,7 @@ window._showSimProgress = function(opts, onDone){
       }
       if(!gk) return;
       var key = teamNorm + '::' + _normPS(gk.name);
-      if(!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+      if(!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
     });
 
     // Assign PJ: use authoritative counter from ef_liga38_v4
@@ -11735,7 +11747,7 @@ window._showSimProgress = function(opts, onDone){
     function _mergeBucketInto(target, source){
       Object.keys(source).forEach(function(k){
         var src = source[k]; if (!src) return;
-        var dst = target[k] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+        var dst = target[k] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
         dst.gol      = (dst.gol     ||0) + (src.gol     ||0);
         dst.pen      = (dst.pen     ||0) + (src.pen     ||0);
         dst.fk       = (dst.fk      ||0) + (src.fk      ||0);
@@ -11744,6 +11756,9 @@ window._showSimProgress = function(opts, onDone){
         dst.tr       = (dst.tr      ||0) + (src.tr      ||0);
         dst.imbat    = (dst.imbat   ||0) + (src.imbat   ||0);
         dst.penSaved = (dst.penSaved||0) + (src.penSaved||0);
+        dst.penProv  = (dst.penProv ||0) + (src.penProv ||0);
+        dst.penFall  = (dst.penFall ||0) + (src.penFall ||0);
+        dst.propia   = (dst.propia  ||0) + (src.propia  ||0);
         /* PJ NO se suma jugador a jugador (ya viene del equipo). */
         target[k] = dst;
       });
@@ -11790,7 +11805,7 @@ window._showSimProgress = function(opts, onDone){
         var src = buckets[id] || {};
         Object.keys(src).forEach(function(k){
           var s = src[k] || {};
-          var d = merged[k] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+          var d = merged[k] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
           d.gol      = (d.gol     ||0) + (s.gol     ||0);
           d.pen      = (d.pen     ||0) + (s.pen     ||0);
           d.fk       = (d.fk      ||0) + (s.fk      ||0);
@@ -11799,6 +11814,9 @@ window._showSimProgress = function(opts, onDone){
           d.tr       = (d.tr      ||0) + (s.tr      ||0);
           d.imbat    = (d.imbat   ||0) + (s.imbat   ||0);
           d.penSaved = (d.penSaved||0) + (s.penSaved||0);
+          d.penProv  = (d.penProv ||0) + (s.penProv ||0);
+          d.penFall  = (d.penFall ||0) + (s.penFall ||0);
+          d.propia   = (d.propia  ||0) + (s.propia  ||0);
           merged[k] = d;
         });
         var pj = teamPJByComp[id] || {};
@@ -21851,7 +21869,7 @@ window._showSimProgress = function(opts, onDone){
       : function(s){ return String(s||'').toLowerCase().trim(); };
     function rec(teamName, playerName){
       var key = norm(teamName) + '::' + norm(playerName);
-      if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+      if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
       return stats[key];
     }
     /* Índice clave-de-partido → { a, b } nombres reales. */
@@ -21908,6 +21926,9 @@ window._showSimProgress = function(opts, onDone){
         else if (type === 'gol') p.gol++;
         else if (type === 'falta-gol') p.fk++;
         else if (type === 'pen-gol') p.pen++;
+        else if (type === 'pen-prov') p.penProv++;
+        else if (type === 'pen-fallo' || type === 'pen-fallado') p.penFall++;
+        else if (type === 'propia') p.propia++;
         else if (type === 'pen-parado') p.penSaved++;
         else if (type === 'mvp') p.mvp++;
         else if (type === 'imbat') p.imbat++;
@@ -21935,7 +21956,7 @@ window._showSimProgress = function(opts, onDone){
       var tk = norm(teamName), pk = norm(playerName);
       if (!tk || !pk) return null;
       var key = tk + '::' + pk;
-      if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0};
+      if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
       return stats[key];
     }
     var results = (cfg && cfg.results) || {};
@@ -21968,6 +21989,9 @@ window._showSimProgress = function(opts, onDone){
         else if (type === 'gol') p.gol++;
         else if (type === 'falta-gol') p.fk++;
         else if (type === 'pen-gol') p.pen++;
+        else if (type === 'pen-prov') p.penProv++;
+        else if (type === 'pen-fallo' || type === 'pen-fallado') p.penFall++;
+        else if (type === 'propia') p.propia++;
         else if (type === 'pen-parado') p.penSaved++;
         else if (type === 'mvp') p.mvp++;
         else if (type === 'imbat') p.imbat++;

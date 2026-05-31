@@ -13135,14 +13135,6 @@ window._showSimProgress = function(opts, onDone){
 #s-mundial-stats .liga-stat-rank{color:rgba(140,220,235,.85)!important;text-shadow:0 0 12px rgba(0,188,212,.55)!important;}
 #s-mundial-stats .liga-stat-value{color:#fff8b0!important;text-shadow:0 0 18px rgba(255,240,140,.6)!important;}
 
-/* TORNEOS DE VERANO stats — dorado/amarillo. */
-#s-torneos-stats .liga-stat-card{border-color:rgba(240,192,64,.45)!important;background:linear-gradient(145deg,#1a1300 0%,#2c2000 45%,#0d0a00 100%)!important;}
-#s-torneos-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(240,192,64,.7),rgba(255,240,180,1),rgba(240,192,64,.7),transparent)!important;}
-#s-torneos-stats .liga-stat-card::after{border-color:rgba(255,220,120,.45)!important;}
-#s-torneos-stats .liga-stat-head{background:linear-gradient(90deg,rgba(120,80,0,.55),rgba(220,160,20,.20),rgba(80,50,0,.12))!important;border-bottom:1px solid rgba(240,192,64,.40)!important;}
-#s-torneos-stats .liga-stat-title{color:#ffd870!important;text-shadow:0 0 18px rgba(240,192,64,.65)!important;}
-#s-torneos-stats .liga-stat-rank{color:rgba(255,220,120,.85)!important;text-shadow:0 0 12px rgba(240,192,64,.55)!important;}
-#s-torneos-stats .liga-stat-value{color:#ffe890!important;text-shadow:0 0 18px rgba(255,232,144,.6)!important;}
 </style>
 
 <!-- Pantalla Recopa Europa stats -->
@@ -13171,13 +13163,6 @@ window._showSimProgress = function(opts, onDone){
 <button class="back-btn" onclick="go('s-mundial-clubes')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Mundialito Clubes · Estadísticas</h2></div>
 <div class="liga-stats-wrap" id="mundial-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
-</div>
-
-<!-- Pantalla Torneos de Verano stats -->
-<div class="screen" id="s-torneos-stats">
-<button class="back-btn" onclick="go('s-torneos-verano')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Torneos de Verano · Estadísticas</h2></div>
-<div class="liga-stats-wrap" id="torneos-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
 </div>
 
 <!-- Pantalla Supercopa de España stats — paleta amarillo-dorado +
@@ -13225,10 +13210,6 @@ window._showSimProgress = function(opts, onDone){
     { screenId:'s-usc-stats',     rootId:'usc-stats-dashboard',     storeKey:'ef_player_stats_usc_v1' },
     { screenId:'s-inter-stats',   rootId:'inter-stats-dashboard',   storeKey:'ef_player_stats_inter_v1' },
     { screenId:'s-mundial-stats', rootId:'mundial-stats-dashboard', storeKey:'ef_player_stats_mundial_v1' },
-    /* `filterTeams` (2026-05-28): la caja de Torneos de Verano filtra
-       el store a SOLO los equipos que juegan los torneos de verano en
-       ese momento (vía `_torneosVeranoTeamSet`). */
-    { screenId:'s-torneos-stats', rootId:'torneos-stats-dashboard', storeKey:'ef_player_stats_torneos_v1', filterTeams:true },
     { screenId:'s-sc-stats',      rootId:'sc-stats-dashboard',      storeKey:'ef_player_stats_sc_v1' }
   ];
   /* Pinta el dashboard desde el cache (rápido, sync). Opcionalmente
@@ -15570,16 +15551,6 @@ window._showSimProgress = function(opts, onDone){
   <!-- Cards generadas dinámicamente desde el registro de torneos
        (built-in + slots añadidos). Ver _tvRenderCards(). -->
   <div id="tv-tour-cards"></div>
-  <!-- Caja "📊 Estadísticas" Torneos de Verano: paleta verdosa-azulada
-       (teal) para diferenciarla del dorado del Joan Gamper de arriba
-       (petición usuario 2026-05-19, foto 1). Lee de
-       `ef_player_stats_torneos_v1`. -->
-  <div class="submenu-card sc-torneos-stats"
-       style="margin-top:6px;background:linear-gradient(135deg,#00221d 0%,#005c4e 25%,#008a76 50%,#2dd4bf 70%,#008a76 85%,#00221d 100%) !important;border:1.5px solid #2dd4bf !important;box-shadow:0 4px 18px rgba(45,212,191,.32),inset 0 1px 0 rgba(255,255,255,.12) !important;"
-       onclick="go('s-torneos-stats')">
-    <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span>
-    <span class="sc-arr">▶</span>
-  </div>
 </div>
 <style>
   /* Botón ℹ️ inline en las cajas del listado de Torneos de Verano.
@@ -22097,62 +22068,6 @@ window._showSimProgress = function(opts, onDone){
     if (changed) { try { if (typeof window._tourSave === 'function') window._tourSave(cfg.id, cfg); } catch(_){} }
     return changed;
   }
-  function _mundialStatsHtml(cfg, tourId, teams){
-    var html = _mundialBackBtn(tourId)
-      + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;'
-      + 'font-size:11px;color:#4dd0e1;">📊 ESTADÍSTICAS · TODAS LAS FASES</p>';
-    var stats = {};
-    /* Hidratar plantillas de selecciones para que los goleadores tengan
-       nombre real (no «Jugador»). Idempotente y barato. */
-    try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
-    try { _tourBackfillActasFromResults(cfg, teams); } catch(_){}
-    try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
-    if (!stats || !Object.keys(stats).length) {
-      try { var g = _tourStatsFromCfgResults(cfg); if (g && Object.keys(g).length) stats = g; } catch(_){}
-    }
-    /* Si sigue vacío, FORZAR la regeneración del acta (regenera incluso las
-       que tuvieran events placeholder/incompletos) y reintentar la
-       agregación en vivo antes de caer a los stores persistidos. */
-    if (!stats || !Object.keys(stats).length) {
-      try { _tourBackfillActasFromResults(cfg, teams, true); } catch(_){}
-      try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
-      if (!stats || !Object.keys(stats).length) {
-        try { var g2 = _tourStatsFromCfgResults(cfg); if (g2 && Object.keys(g2).length) stats = g2; } catch(_){}
-      }
-    }
-    if (!stats || !Object.keys(stats).length) {
-      try {
-        /* Cadena de stores persistidos. OJO: `_tourAttachActa` registra
-           los partidos del Mundial 2032 (y de cualquier torneo del motor
-           _tour*) con competition='torneos' → store `ef_player_stats_torneos_v1`.
-           Probamos ese PRIMERO, luego los buckets canónicos sel/mundial.
-           Filtramos siempre a los equipos del torneo para no mezclar. */
-        var _sks = ['ef_player_stats_torneos_v1',
-                    (cfg && cfg.id === 'mundial') ? 'ef_player_stats_mundial_v1' : 'ef_player_stats_sel_v1',
-                    'ef_player_stats_sel_v1', 'ef_player_stats_mundial_v1'];
-        for (var _ki = 0; _ki < _sks.length; _ki++) {
-          var fb = _statsFromStoreFilteredToTeams(_sks[_ki], teams);
-          if (fb && Object.keys(fb).length) { stats = fb; break; }
-        }
-      } catch(_){}
-    }
-    var EMPTY = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
-    var inner;
-    try {
-      inner = (typeof window._lextStatsDashHtml === 'function')
-        ? window._lextStatsDashHtml(stats) : EMPTY;
-    } catch(_){ inner = EMPTY; }
-    /* Botón 🔄 Recalcular: fuerza la regeneración del acta (events) de
-       TODOS los partidos jugados y re-pinta. Red de seguridad visible
-       para el usuario cuando, por timing/hidratación, el backfill
-       automático no rellenó la caja al primer render. */
-    html += '<div style="display:flex;justify-content:center;margin:4px 0 10px;">'
-      + '<button type="button" class="mundial-recalc-btn" data-tour="'+tourId+'" '
-      + 'style="background:linear-gradient(145deg,#1f6f8b,#0d3a4a);border:1px solid rgba(77,208,225,.6);color:#cdeef5;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
-      + '🔄 Recalcular estadísticas</button></div>';
-    html += '<div class="liga-stats-wrap">' + inner + '</div>';
-    return html;
-  }
   function _renderMundial(cfg, tourId, teams){
     /* Un torneo mundial-48 guardado sin formatConfig (o con uno
        incompleto) dejaría las cajas KO sin sus etiquetas de ronda.
@@ -22170,7 +22085,6 @@ window._showSimProgress = function(opts, onDone){
     var view = _mundialView[tourId] || 'menu';
     var gs = _mundialGroupState(cfg, teams);
     if (view === 'groups') return _mundialGroupsHtml(cfg, tourId, gs);
-    if (view === 'stats')  return _mundialStatsHtml(cfg, tourId, teams);
     if (view.indexOf('ko') === 0) {
       var r = parseInt(view.slice(2), 10);
       return _mundialKoHtml(cfg, tourId, gs, isNaN(r) ? cfg.koCurrentRound : r);
@@ -24081,36 +23995,6 @@ window._showSimProgress = function(opts, onDone){
     }
 
     /* d) Botón ↺ Reset (bracket / liga / grupos+ko). */
-    /* Botón 🔄 Recalcular estadísticas (caja de stats del Mundial 2032).
-       Fuerza la regeneración del acta (events) de los partidos jugados
-       cuyo acta sea placeholder o falte, hidratando antes las
-       plantillas de selecciones, y re-pinta el torneo. No borra
-       resultados — solo reconstruye los goleadores/tarjetas/MVP. */
-    var recalcBtn = target.closest('.mundial-recalc-btn');
-    if (recalcBtn) {
-      var tidR = recalcBtn.getAttribute('data-tour');
-      if (!tidR || TOUR_IDS.indexOf(tidR) === -1) return;
-      ev.stopPropagation();
-      try {
-        var prevTxt = recalcBtn.textContent;
-        recalcBtn.textContent = '⏳ Recalculando…';
-        recalcBtn.disabled = true;
-      } catch(_){}
-      try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
-      try {
-        var cfgR = _tourLoadCachedSync(tidR);
-        if (cfgR) {
-          var teamsR = (cfgR.teams || []);
-          var ch = _tourBackfillActasFromResults(cfgR, teamsR, true);
-          if (ch && typeof window._tourSave === 'function') {
-            try { window._tourSave(tidR, cfgR); } catch(_){}
-          }
-        }
-      } catch(_){}
-      try { if (typeof window._tourRender === 'function') window._tourRender(tidR); } catch(_){}
-      return;
-    }
-
     var resetBtn = target.closest('.tour-reset-btn');
     if (resetBtn) {
       var tid4 = resetBtn.getAttribute('data-tour');

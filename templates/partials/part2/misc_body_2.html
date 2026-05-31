@@ -9029,12 +9029,24 @@
      localStorage legacy. Cualquiera de las 4 sirve si las otras
      fallan (boot, recarga, navegador con cuota purgada…). */
   function athGetMedicalPI() {
-    try {
-      if (window._BAYERN_HUD_CACHE && window._BAYERN_HUD_CACHE.pi != null) {
-        var vC = parseFloat(window._BAYERN_HUD_CACHE.pi);
-        if (isFinite(vC)) return Math.max(0, vC);
-      }
-    } catch(e){}
+    /* ORDEN DE LECTURA (2026-05-31): state legacy / DOM ANTES que el
+       cache en memoria. El número que el usuario VE y en el que confía
+       es el 💊 del HUD superior (#ath-med-val), pintado por updateHud()
+       desde `window._bayernLegacyState.pi`. El cache
+       (_BAYERN_HUD_CACHE.pi) puede quedar OBSOLETO por DEBAJO del HUD:
+       el flujo legacy de avance de día (`SIGUIENTE DÍA`, +1 PI/día) y
+       `maybeIncident` mutan `state.pi` + repintan el HUD PERO no tocan
+       el cache. Si leíamos el cache primero (versión vieja) devolvíamos
+       un saldo viejo (p. ej. 0) mientras el HUD mostraba 8 → el botón
+       💊 de la card "BAJAS PARA EL PARTIDO" salía DESHABILITADO pese a
+       tener PI y no dejaba recuperar al lesionado. Bug foto usuario
+       2026-05-31 (A. Mac Allister, 1 partido, HUD 💊 8, botón 💊 0).
+
+       `apply()` del IIFE de override YA sincroniza `state.pi` desde el
+       cache/servidor (misc_body_1.html ~línea 44576) cuando llega un
+       override con `pi != null`, así que `state.pi` siempre es ≥ tan
+       fresco como el cache. Por eso el state legacy es la fuente
+       primaria. Cascada: state legacy → DOM → cache → localStorage. */
     try {
       if (window._bayernLegacyState && window._bayernLegacyState.pi != null) {
         var vL = parseFloat(window._bayernLegacyState.pi);
@@ -9047,6 +9059,12 @@
         var txt = String(el.textContent || '').replace(/\s*PI\s*$/i, '').trim();
         var vD = parseFloat(txt);
         if (isFinite(vD)) return Math.max(0, vD);
+      }
+    } catch(e){}
+    try {
+      if (window._BAYERN_HUD_CACHE && window._BAYERN_HUD_CACHE.pi != null) {
+        var vC = parseFloat(window._BAYERN_HUD_CACHE.pi);
+        if (isFinite(vC)) return Math.max(0, vC);
       }
     } catch(e){}
     try {

@@ -12802,6 +12802,26 @@ window._showSimProgress = function(opts, onDone){
 /* Header SIEMPRE blanco/negro (regla 2026-05-27): el override
    amarillo viejo dejaba texto ilegible sobre el bg blanco nuevo. */
 #s-mundial .tour-jor.is-past .tour-jor-h{color:#0a0a0a;}
+/* Botón de cabecera de jornada del Mundialito DENTRO de la pantalla
+   de grupos (#s-mundial): VERDE ESMERALDA para casar con las cards
+   verdes (petición usuario 2026-05-31). Las 5 cajas del HUB
+   (s-mundial-clubes) usan la misma clase pero conservan su trofeo
+   dorado porque NO están dentro de #s-mundial. El .done gris se
+   re-declara con la especificidad del id para que la jornada cumplida
+   siga saliendo gris (CLAUDE.md). */
+#s-mundial .jbtn.c-mundialito{
+  background:linear-gradient(90deg,#04241a,#06513a,#0a8f63,#06513a,#04241a) !important;
+  border:1px solid rgba(52,224,161,.55) !important;
+  color:#9bffd9 !important;
+}
+#s-mundial .jbtn.c-mundialito .pdot{border-color:#34e0a1;color:#9bffd9;}
+#s-mundial .jbtn.c-mundialito.done{
+  background:linear-gradient(90deg,#1a1d22,#2a2e36,#3a3e48,#2a2e36,#1a1d22) !important;
+  border:1.5px solid rgba(170,180,195,.45) !important;
+  filter:grayscale(.5) brightness(.85);
+  color:rgba(255,255,255,.55) !important;
+}
+#s-mundial .jbtn.c-mundialito.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
 /* Tarjeta Mundial KO — formato FOTO 2 (UCL eliminatoria). Escudo
    arriba · nombre debajo · caja central marcador + badge. Marker
    `.mn-card` añadido per-card desde `_koRowHtml` para no depender
@@ -12960,46 +12980,46 @@ window._showSimProgress = function(opts, onDone){
    vive en el `.mn-card` interior — así que usamos `:has(.mn-card[data-tour="mundial"])`
    para teñir el FRAME también. */
 .mn-card[data-tour="mundial"]{
-  background:linear-gradient(165deg,#2d1f00 0%,#5a4408 60%,#1a0f00 100%) !important;
-  border:1.5px solid rgba(255,214,51,.55) !important;
-  box-shadow:0 0 12px rgba(255,180,0,.30),inset 0 0 12px rgba(150,110,0,.18) !important;
+  background:linear-gradient(165deg,#04241a 0%,#06513a 60%,#03140d 100%) !important;
+  border:1.5px solid rgba(52,224,161,.55) !important;
+  box-shadow:0 0 12px rgba(52,224,161,.30),inset 0 0 12px rgba(10,110,70,.20) !important;
 }
 .mn-card[data-tour="mundial"].mn-card-ia{
-  background:linear-gradient(165deg,#2d1f00 0%,#5a4408 60%,#1a0f00 100%) !important;
-  border:1.5px solid rgba(255,214,51,.55) !important;
-  box-shadow:0 0 10px rgba(255,180,0,.28),inset 0 0 12px rgba(150,110,0,.18) !important;
+  background:linear-gradient(165deg,#04241a 0%,#06513a 60%,#03140d 100%) !important;
+  border:1.5px solid rgba(52,224,161,.55) !important;
+  box-shadow:0 0 10px rgba(52,224,161,.28),inset 0 0 12px rgba(10,110,70,.20) !important;
 }
 /* La variante .mn-card-human conserva el rosa/magenta pulsante — es
    el marker visual de "TU PARTIDO" y debe destacar igual en todos los
    torneos. NO se sobreescribe en Mundialito. */
 .mn-card[data-tour="mundial"].tour-match-pickable:hover{
-  background:linear-gradient(165deg,#3d2900 0%,#7a5e10 60%,#2a1900 100%) !important;
+  background:linear-gradient(165deg,#063a28 0%,#0a7a55 60%,#04241a 100%) !important;
 }
 .mn-card[data-tour="mundial"] .tour-score-wrap{
-  border-color:rgba(255,214,51,.55) !important;
+  border-color:rgba(52,224,161,.55) !important;
 }
 .mn-card[data-tour="mundial"] .tour-score{
-  color:#ffe066 !important;
+  color:#5fffc8 !important;
 }
 .mn-card[data-tour="mundial"] .tour-score-win{
-  color:#fff080 !important;text-shadow:0 0 10px rgba(255,214,51,.7);
+  color:#aaffe0 !important;text-shadow:0 0 10px rgba(52,224,161,.7);
 }
 .mn-card[data-tour="mundial"] .tour-score-empty{
-  color:rgba(255,224,102,.55) !important;
+  color:rgba(95,255,200,.45) !important;
 }
 .mn-card[data-tour="mundial"] .tour-fin-badge.is-fin{
-  color:#ffe066 !important;border:1px solid rgba(255,214,51,.6) !important;
-  background:rgba(150,110,0,.5) !important;
+  color:#5fffc8 !important;border:1px solid rgba(52,224,161,.6) !important;
+  background:rgba(10,110,70,.5) !important;
 }
 .mn-card[data-tour="mundial"] .tour-fin-badge.is-sim{
-  color:#ffe066 !important;border:1px solid rgba(255,214,51,.6) !important;
-  background:rgba(150,110,0,.4) !important;
+  color:#5fffc8 !important;border:1px solid rgba(52,224,161,.6) !important;
+  background:rgba(10,110,70,.4) !important;
 }
 .mn-card[data-tour="mundial"] .tour-bracket-team span{
-  color:#fff3d0 !important;
+  color:#d8fff0 !important;
 }
 .mn-card[data-tour="mundial"] .tour-bracket-team.is-winner span{
-  color:#fff080 !important;text-shadow:0 0 6px rgba(255,214,51,.6);
+  color:#aaffe0 !important;text-shadow:0 0 6px rgba(52,224,161,.6);
 }
 /* Selección HUMANA canónica (Francia 💡, Brasil 🐭, …) en las cards
    del bracket Mundial 2032: nombre AMARILLO + glow para localizarla
@@ -18651,7 +18671,12 @@ window._showSimProgress = function(opts, onDone){
     for (var i = 0; i < total; i++) {
       if (src && src[i]) {
         if (src[i].isHuman || src[i].name === 'PENDIENTE') {
-          rost[i] = { human:true, zone:src[i]._zone || (i<eurCount?'eur':'rm') };
+          /* Humano: conservamos el equipo elegido en el lanzamiento
+             (name/shield/power) para no perderlo al reabrir el editor.
+             Solo 'PENDIENTE' = humano sin equipo todavía. */
+          var _hn = (src[i].name && src[i].name !== 'PENDIENTE') ? src[i].name : '';
+          rost[i] = { human:true, name:_hn, shield:src[i].shield||'', power:src[i].power||0,
+                      zone:src[i]._zone || (i<eurCount?'eur':'rm') };
         } else {
           rost[i] = { name:src[i].name, shield:src[i].shield||'', power:src[i].power||70,
                       zone:src[i]._zone || (i<eurCount?'eur':'rm') };
@@ -18660,7 +18685,7 @@ window._showSimProgress = function(opts, onDone){
         rost[i] = null;
       }
     }
-    var activeSlot = -1, activeZone = '';
+    var activeSlot = -1, activeZone = '', activeHuman = false;
     function esc(s){ return String(s==null?'':s).replace(/[<>"]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';}); }
     /* Construimos el overlay limpiamente cada vez en Mundialito para
        evitar arrastrar HTML de aperturas anteriores con layout viejo
@@ -18679,7 +18704,8 @@ window._showSimProgress = function(opts, onDone){
           + '<div class="mr-hd"><span>🏆 Mundialito · Roster</span>'
           + '<button class="mr-x" onclick="document.getElementById(\'mundial-roster-ov\').style.display=\'none\'">✕</button></div>'
           + '<div class="mr-sub">16 europeos (manual) + 16 Resto del Mundo (top 16 auto) + 4 sedes. '
-            + '8 grupos × 4 = 2 EUR + 2 RM por grupo. Toca la fila o el 🤖 para elegir equipo · 👤 para humano.</div>'
+            + '8 grupos × 4 = 2 EUR + 2 RM por grupo. Toca la fila o el 🤖 para elegir equipo IA · '
+            + '👤 para elegir TU equipo humano (eliges el equipo aquí mismo).</div>'
           + '<div class="mr-body" id="mr-body"></div>'
           + '<div class="mr-search" id="mr-search" style="display:none;">'
           + '<input id="mr-q" type="text" placeholder="Buscar equipo…" autocomplete="off">'
@@ -18711,7 +18737,11 @@ window._showSimProgress = function(opts, onDone){
     function renderSlotMundialito(idx){
       var v = rost[idx];
       var zone = (idx < eurCount) ? 'eur' : 'rm';
-      var lbl = v ? (v.human ? '👤 Humano' : esc(v.name)) : '<i style="opacity:.45">— vacío —</i>';
+      var lbl = v
+        ? (v.human
+            ? ('👤 ' + (v.name ? esc(v.name) : '<i style="opacity:.55">elige tu equipo…</i>'))
+            : esc(v.name))
+        : '<i style="opacity:.45">— vacío —</i>';
       var num = (zone === 'eur') ? (idx + 1) : (idx - eurCount + 1);
       /* 2026-05-28: la fila entera es clickable para abrir el picker
          (data-row-pick=idx). Más fácil en móvil que apuntar al 🤖 de
@@ -18869,10 +18899,11 @@ window._showSimProgress = function(opts, onDone){
        no perder el contenido si el usuario cancela el picker; solo
        marca el slot como activo (highlight amarillo en renderBody)
        para que sepa dónde irá el equipo. 2026-05-28. */
-    function openPickerForSlot(idx, zone){
+    function openPickerForSlot(idx, zone, asHuman){
       if (isNaN(idx) || idx < 0 || idx >= total) return;
       activeSlot = idx;
       activeZone = zone || (idx < eurCount ? 'eur' : 'rm');
+      activeHuman = !!asHuman;
       searchEl.style.display='block'; qEl.value=''; resEl.innerHTML='';
       renderBody();   /* refresca highlight is-active */
       try{qEl.focus();}catch(_){}
@@ -18913,8 +18944,12 @@ window._showSimProgress = function(opts, onDone){
         power: parseInt(power,10) || 70,
         zone: teamZone
       };
+      /* Si el slot se eligió como HUMANO (botón 👤), el equipo elegido
+         queda marcado humano — su zona queda fijada aquí mismo, así NO
+         se rompe el 2 EUR + 2 RM por grupo (petición usuario 2026-05-31). */
+      if (activeHuman) rost[target].human = true;
       searchEl.style.display = 'none';
-      activeSlot = -1; activeZone = '';
+      activeSlot = -1; activeZone = ''; activeHuman = false;
       renderBody();
       return true;
     }
@@ -18973,18 +19008,19 @@ window._showSimProgress = function(opts, onDone){
           if (isNaN(idx)) return;
           var zone = b.getAttribute('data-zone') || (idx < eurCount ? 'eur' : 'rm');
           if (act === 'hum') {
-            rost[idx] = { human:true, zone:zone };
-            /* Si este slot era el activo del picker, cancela el picker */
-            if (activeSlot === idx){ activeSlot=-1; activeZone=''; searchEl.style.display='none'; }
-            renderBody();
+            /* 👤 abre el picker en MODO HUMANO: el admin elige TU equipo
+               aquí mismo (filtrado por zona EUR/RM), y queda marcado
+               humano al asignarlo. Así no hay slot PENDIENTE dentro de
+               los grupos que pudiera romper el 2 EUR + 2 RM. */
+            openPickerForSlot(idx, zone, true);
           }
           else if (act === 'clr') {
             rost[idx] = null;
-            if (activeSlot === idx){ activeSlot=-1; activeZone=''; searchEl.style.display='none'; }
+            if (activeSlot === idx){ activeSlot=-1; activeZone=''; activeHuman=false; searchEl.style.display='none'; }
             renderBody();
           }
           else if (act === 'ia') {
-            openPickerForSlot(idx, zone);
+            openPickerForSlot(idx, zone, false);
           }
           return;
         }
@@ -19016,11 +19052,21 @@ window._showSimProgress = function(opts, onDone){
         if (e.target && e.target.id === 'mr-ok') {
           var filled = rost.filter(Boolean).length;
           if (filled !== total) { alert('Faltan equipos: '+filled+'/'+total); return; }
+          /* En Mundialito el equipo humano se elige AQUÍ (no dentro de
+             los grupos). Si algún slot humano no tiene equipo, avisamos:
+             evita el slot PENDIENTE que rompía el 2 EUR + 2 RM. */
+          if (isMundialitoSplit){
+            var _humanSinEq = rost.some(function(v){ return v && v.human && !v.name; });
+            if (_humanSinEq){
+              alert('Tu equipo humano 👤 no tiene equipo elegido.\nToca el slot 👤 y elige tu equipo antes de confirmar.');
+              return;
+            }
+          }
           var teamsRaw = [];
           for (var i2 = 0; i2 < total; i2++) {
             var vv = rost[i2];
             var zoneT = vv.zone || (i2 < eurCount ? 'eur' : 'rm');
-            if (vv.human) teamsRaw.push({ name:'PENDIENTE', isHuman:true, shield:'', power:0, _zone:zoneT });
+            if (vv.human) teamsRaw.push({ name: vv.name || 'PENDIENTE', isHuman:true, shield:vv.shield||'', power:vv.power||70, _zone:zoneT });
             else teamsRaw.push({ name:vv.name, isHuman:false, shield:vv.shield||'', power:vv.power||70, _zone:zoneT });
           }
           /* SORTEO Mundialito: 2 EUR + 2 RM por grupo (petición usuario
@@ -20601,8 +20647,101 @@ window._showSimProgress = function(opts, onDone){
     return html;
   }
 
+  /* Tema VERDE ESMERALDA del Mundialito de Clubes — mismo layout
+     "videojuego" que el Mundial 2032 (cards con escudo grande arriba,
+     nombre debajo, marcador central) pero en verde en vez de cyan
+     (petición usuario 2026-05-31: el amarillo era feo). */
+  var _MCL_EMERALD = { acc:'#34e0a1', accRGB:'52,224,161',
+                       hdrGrad:'#04241a,#06513a,#0a8f63,#06513a,#04241a',
+                       humanCol:'#7fffd4' };
+
+  /* Card de UN grupo del Mundialito (estilo Mundial 2032 · verde):
+     cabecera con gradiente esmeralda + tabla de clasificación
+     (_mundialClasTableHtml) + jornadas desplegables con
+     _mundialMatchCardHtml (escudo grande + nombre debajo + marcador).
+     Reusa los mismos botones data-* que el motor _tour* (SIM jornada,
+     pasar a J), así que los handlers globales siguen funcionando. */
+  function _mclGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup){
+    var TH = _MCL_EMERALD;
+    var letter = String.fromCharCode(65+g);
+    var hasH = slice.some(function(t){ return t && (t.isHuman || _tourIsHumanSel(t)); });
+    /* Jornada actual = la PRIMERA con partidos pendientes (robusto sin
+       cursores; mismo criterio que _fixtureCardsHtml). */
+    var curJg = 0;
+    for (var _ji = 0; _ji < fix.length; _ji++){
+      var _pend = false;
+      (fix[_ji]||[]).forEach(function(_, mi){
+        if (!((cfg.results[gKey+_ji+'_'+mi]||{}).played)) _pend = true;
+      });
+      if (_pend){ curJg = _ji; break; }
+      if (_ji === fix.length - 1) curJg = _ji;
+    }
+    var _grpBorder = hasH
+      ? 'border:2.5px solid #ff3d99;box-shadow:0 0 20px rgba(255,61,153,.70),inset 0 0 10px rgba(255,61,153,.18);'
+      : 'border:2px solid rgba('+TH.accRGB+',.55);box-shadow:0 0 12px rgba('+TH.accRGB+',.20),0 4px 14px rgba(0,0,0,.4);';
+    var html = '<div style="margin:12px 0;background:linear-gradient(180deg,#04150f 0%,#06241a 100%);border-radius:12px;overflow:hidden;' + _grpBorder + '">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;'
+      + 'background:linear-gradient(90deg,'+TH.hdrGrad+');'
+      + 'border-bottom:1px solid rgba('+TH.accRGB+',.45);font-family:Oswald,sans-serif;letter-spacing:2px;'
+      + 'font-size:13px;color:'+TH.acc+';">'
+      +   '<span>GRUPO '+letter+'</span>'
+      +   '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.6);letter-spacing:.5px;">'+prog.done+' / '+prog.tot+'</span>'
+      + '</div>';
+    html += _mundialClasTableHtml(rows, slice, advancePerGroup, null, TH);
+    html += '<div style="padding:10px 12px 12px;">';
+    var _grpPend = (prog.tot - prog.done) > 0;
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;padding:0 2px;">'
+      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba('+TH.accRGB+',.85);">JORNADAS · GRUPO '+letter+'</div>'
+      + (_grpPend
+          ? '<button type="button" class="tour-sim-grp-btn" data-tour="'+tourId+'" data-group="'+g+'" '
+            + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:6px;padding:4px 10px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">▶ SIM</button>'
+          : '')
+      + '</div>';
+    fix.forEach(function(jor, ji){
+      var allDone = true;
+      jor.forEach(function(_, mi){
+        if (!((cfg.results[gKey+ji+'_'+mi]||{}).played)) allDone = false;
+      });
+      var isCurrent = (ji === curJg);
+      var jid = 'mcl-j-' + tourId + '-' + g + '-' + ji;
+      var _jorDtTxt = '';
+      try {
+        var _jorDt = _tourGroupJorDate(cfg, ji);
+        if (_jorDt) _jorDtTxt = '<span class="jor-date is-solo">' + _jorDt + '</span>';
+      } catch(_){}
+      html += '<div class="jblock" style="margin-bottom:6px;">';
+      html += '<button type="button" class="jbtn c-mundialito' + (allDone ? ' done' : '') + '" '
+        + 'data-jor-pinned="1" '
+        + 'onclick="_jorToggle(\''+jid+'\')">'
+        + '<div class="pdot">' + (allDone ? '✅' : (isCurrent ? '▶' : '○')) + '</div>'
+        + '🏆 <b>Mundialito</b>&nbsp;&nbsp;Jornada '+(ji+1)
+        + _jorDtTxt
+        + '</button>';
+      html += '<div class="jmatches" id="'+jid+'">';
+      jor.forEach(function(m, mi){
+        var key = gKey + ji + '_' + mi;
+        html += _mundialMatchCardHtml(tourId, key, slice[m.home], slice[m.away], cfg.results[key], TH);
+      });
+      if (isCurrent && !allDone) {
+        html += '<div style="display:flex;justify-content:center;padding:10px;">'
+          + '<button type="button" class="tour-sim-jor-btn" data-tour="'+tourId+'" data-key-prefix="'+gKey+'" data-jor="'+ji+'" '
+          + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:8px;padding:8px 16px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
+          + '▶ SIMULAR JORNADA</button></div>';
+      } else if (isCurrent && allDone && ji < fix.length - 1) {
+        html += '<div style="display:flex;justify-content:center;padding:10px;">'
+          + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" data-group="'+g+'" '
+          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
+          + '🏆 Pasar a J'+(ji+2)+'</button></div>';
+      }
+      html += '</div></div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
   function _renderGroupsKO(cfg, tourId, teams) {
     var fc = cfg.formatConfig || {};
+    var _isMcl = (tourId === 'mundial');
     var nGroups = fc.groups || 1;
     var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
     /* advancePerGroup === 0 → SIN fase final (solo liguilla / grupos).
@@ -20636,6 +20775,14 @@ window._showSimProgress = function(opts, onDone){
       if (!prog.allDone) allGroupsDone = false;
       var letter = String.fromCharCode(65+g);
       var _grpHasHuman = slice.some(function(t){ return t && t.isHuman; });
+      /* Mundialito de Clubes (tourId='mundial'): card estilo Mundial
+         2032 en VERDE ESMERALDA (petición usuario 2026-05-31). El resto
+         de torneos groups-ko (Joan Gamper, Asian…) siguen con el layout
+         genérico .tour-group-block. */
+      if (_isMcl) {
+        html += _mclGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup);
+        continue;
+      }
       /* Con 1 solo grupo (liga+playoff / suizo) la tabla no es un
          "grupo": se titula CLASIFICACIÓN. */
       var _grpTitle = (nGroups === 1) ? 'CLASIFICACIÓN' : ('GRUPO ' + letter);
@@ -20760,7 +20907,12 @@ window._showSimProgress = function(opts, onDone){
         var kPlayed = !!(kRes && kRes.played);
         if (!kPlayed) koAllPlayed = false;
         var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
-        if (_tourPairHasHuman(curT, i)) kRowCls += ' tour-match-has-human';
+        var _koPairHuman = _tourPairHasHuman(curT, i);
+        if (_koPairHuman) kRowCls += ' tour-match-has-human';
+        /* Mundialito: card estilo Mundial 2032 (escudo grande arriba) en
+           verde esmeralda — el marker mn-card activa el CSS
+           .mn-card[data-tour="mundial"]. 2026-05-31. */
+        if (_isMcl) kRowCls += ' mn-card' + (_koPairHuman ? ' mn-card-human' : ' mn-card-ia');
         var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
         if (kPlayed) {
           var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
@@ -21272,8 +21424,13 @@ window._showSimProgress = function(opts, onDone){
      posición, escudo, nombre + icono humano, PTS destacado y
      PJ/V/E/P/GF/GC. Los clasificados directos (top advancePerGroup)
      llevan zona resaltada en cian. */
-  function _mundialClasTableHtml(rows, slice, advancePerGroup, bestThirdNames){
-    var cells = '<thead><tr style="background:linear-gradient(90deg,#001f2a,#003a52,#001f2a);border-bottom:1px solid rgba(77,208,225,.40);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:rgba(255,255,255,.7);">'
+  function _mundialClasTableHtml(rows, slice, advancePerGroup, bestThirdNames, theme){
+    /* theme (opcional): permite re-tematizar la tabla sin tocar Mundial
+       2032 (cyan por defecto). El Mundialito de Clubes la llama en
+       VERDE ESMERALDA. */
+    theme = theme || { acc:'#4dd0e1', accRGB:'77,208,225', hdrGrad:'#001f2a,#003a52,#001f2a' };
+    var _acc = theme.acc, _accRGB = theme.accRGB;
+    var cells = '<thead><tr style="background:linear-gradient(90deg,'+theme.hdrGrad+');border-bottom:1px solid rgba('+_accRGB+',.40);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:rgba(255,255,255,.7);">'
       + '<th style="text-align:left;padding:8px 2px 8px 6px;">EQUIPO</th>'
       + '<th style="padding:8px 3px;">PTS</th>'
       + '<th style="padding:8px 3px;">PJ</th>'
@@ -21313,12 +21470,12 @@ window._showSimProgress = function(opts, onDone){
         && t && t.name
         && bestThirdNames[t.name] === true;
       var qual = isAdv || isBestThird;
-      var rowBg  = qual ? 'rgba(77,208,225,.10)' : 'transparent';
-      var rowBd  = qual ? '#4dd0e1' : 'transparent';
+      var rowBg  = qual ? 'rgba('+_accRGB+',.10)' : 'transparent';
+      var rowBd  = qual ? _acc : 'transparent';
       /* Eliminados: número de posición en blanco brillante (mismo tono
          que PJ/V/E/P), NO en gris. Solo se distinguen del clasificado
-         por el acento cian en bg + borde (petición usuario 2026-05-24). */
-      var posCol = qual ? '#4dd0e1' : 'rgba(255,255,255,.85)';
+         por el acento de la comp en bg + borde (petición usuario 2026-05-24). */
+      var posCol = qual ? _acc : 'rgba(255,255,255,.85)';
       var _dgVal = (r.dif > 0 ? '+' : '') + r.dif;
       var _dgCol = r.dif > 0 ? '#80d0ff' : (r.dif < 0 ? '#ff9090' : 'rgba(255,255,255,.85)');
       cells += '<tr style="background:'+rowBg+';border-left:3px solid '+rowBd+';border-bottom:1px solid rgba(255,255,255,.05);">'
@@ -21349,7 +21506,11 @@ window._showSimProgress = function(opts, onDone){
      nombre debajo a cada lado, cuadradito central con marcador o
      "PREVIA". Mantiene `tour-match` + `data-match-key` para que el
      handler de click siga abriendo gm-modal / acta. */
-  function _mundialMatchCardHtml(tourId, matchKey, th, ta, res){
+  function _mundialMatchCardHtml(tourId, matchKey, th, ta, res, theme){
+    /* theme (opcional): cyan por defecto (Mundial 2032). El Mundialito
+       de Clubes la llama en VERDE ESMERALDA. */
+    theme = theme || { acc:'#4dd0e1', accRGB:'77,208,225' };
+    var _acc = theme.acc, _accRGB = theme.accRGB, _humanCol = theme.humanCol || '';
     var played = !!(res && res.played);
     var hasHuman = (th && th.isHuman) || (ta && ta.isHuman);
     var rowCls = 'tour-match' + (played ? ' tour-match-played' : ' tour-match-pickable');
@@ -21368,10 +21529,12 @@ window._showSimProgress = function(opts, onDone){
           humanIc = _tourTeamIcon(t);
         }
       } catch(_){}
-      var nameCol = isHumanSel ? '#ffd633' : '#fff';
+      var nameCol = isHumanSel ? '#ffd633' : ((t && t.isHuman && _humanCol) ? _humanCol : '#fff');
+      var _nmGlow = isHumanSel ? 'text-shadow:0 0 8px rgba(255,214,51,.5);'
+                  : ((t && t.isHuman && _humanCol) ? 'text-shadow:0 0 8px rgba('+_accRGB+',.5);' : '');
       return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;text-align:center;">'
         + sh
-        + '<span style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:'+nameCol+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block;'+(isHumanSel?'text-shadow:0 0 8px rgba(255,214,51,.5);':'')+'">'+nm
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:700;color:'+nameCol+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:block;'+_nmGlow+'">'+nm
         +   (humanIc ? ' '+humanIc : '')
         + '</span></div>';
     }
@@ -21379,7 +21542,7 @@ window._showSimProgress = function(opts, onDone){
     if (played) {
       var aW = res.winner === 'a', bW = res.winner === 'b';
       center = '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 6px;">'
-        + '<div style="background:rgba(0,0,0,.45);border:1px solid rgba(77,208,225,.5);border-radius:6px;padding:4px 10px;font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:2px;color:#4dd0e1;text-shadow:0 0 10px rgba(77,208,225,.55);min-width:60px;text-align:center;"><span'+(aW?' style="color:#fff;"':'')+'>'+res.a+'</span> - <span'+(bW?' style="color:#fff;"':'')+'>'+res.b+'</span></div>'
+        + '<div style="background:rgba(0,0,0,.45);border:1px solid rgba('+_accRGB+',.5);border-radius:6px;padding:4px 10px;font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:2px;color:'+_acc+';text-shadow:0 0 10px rgba('+_accRGB+',.55);min-width:60px;text-align:center;"><span'+(aW?' style="color:#fff;"':'')+'>'+res.a+'</span> - <span'+(bW?' style="color:#fff;"':'')+'>'+res.b+'</span></div>'
         + '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);">🏁 FIN</div>'
         + '</div>';
     } else {
@@ -21391,7 +21554,7 @@ window._showSimProgress = function(opts, onDone){
       var _badgeLbl = hasHuman ? '📋 PREVIA' : '▶ SIMULAR';
       center = '<div style="flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0 6px;">'
         + '<div style="background:transparent;border:1px solid rgba(255,255,255,.20);border-radius:6px;padding:4px 10px;font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:2px;color:rgba(255,255,255,.35);min-width:60px;text-align:center;">—</div>'
-        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#4dd0e1;border:1px solid rgba(77,208,225,.55);border-radius:5px;padding:2px 8px;">'+_badgeLbl+'</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:'+_acc+';border:1px solid rgba('+_accRGB+',.55);border-radius:5px;padding:2px 8px;">'+_badgeLbl+'</div>'
         + '</div>';
     }
     /* `data-league-key` (no -match-key): el handler global dispatcha

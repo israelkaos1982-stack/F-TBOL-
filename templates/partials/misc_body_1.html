@@ -17212,6 +17212,12 @@ window._showSimProgress = function(opts, onDone){
       if (!cfg || cfg.format !== 'groups-ko') return cfg;
       var fc = cfg.formatConfig || {};
       if (fc.manualRoster) return cfg;
+      /* Mundialito de Clubes (eurRmSplit): roster manual con reparto
+         2 EUR + 2 RM por grupo + humano elegido en el lanzamiento.
+         JAMÁS re-barajar — destruiría groupFixtures (SIM no funciona)
+         y el balance de zonas. Guard extra por si un save antiguo
+         perdió el flag manualRoster (2026-05-31). */
+      if (cfg.id === 'mundial' || fc.eurRmSplit) return cfg;
       var teams = cfg.teams || [];
       if (!teams.length) return cfg;
       /* No tocar un torneo en curso (algún partido jugado / KO). */
@@ -17275,8 +17281,15 @@ window._showSimProgress = function(opts, onDone){
        Saves antiguos con `manualRoster:true` pierden ese flag para
        que `_tourOpenEditor` abra el editor estándar y el sorteo
        reparta humanos en grupos distintos. Conserva teams/results/
-       fixtures si el torneo está en curso. */
-    if (cfg.id === 'mundial' && cfg.formatConfig && cfg.formatConfig.manualRoster) {
+       fixtures si el torneo está en curso.
+       EXCEPCIÓN (2026-05-31): el Mundialito con `eurRmSplit` SÍ usa
+       roster manual (16 EUR + 16 RM, 2+2 por grupo, humano elegido en
+       el lanzamiento). NO le quitamos `manualRoster` — si lo hiciéramos,
+       `_respreadGroupsKoHumans` re-barajaría los equipos y BORRARÍA
+       `groupFixtures`, dejando la pantalla sin fixtures (la SIM no hace
+       nada) y rompiendo el reparto 2 EUR + 2 RM. */
+    if (cfg.id === 'mundial' && cfg.formatConfig && cfg.formatConfig.manualRoster
+        && !cfg.formatConfig.eurRmSplit) {
       delete cfg.formatConfig.manualRoster;
     }
     /* Re-aplica la spec oficial de sct/jg (petición usuario

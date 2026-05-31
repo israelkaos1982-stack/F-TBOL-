@@ -34451,7 +34451,29 @@ https://api.sofascore.app/api/v1/team/44/image
                                    intentar finalizar a la vez */
         doneFlag = true;
         _disarmWatchdog();
+        /* PERSISTENCIA FUERTE DE LA CLASIFICACIÓN (2026-05-31, petición
+           usuario: "cuando se simule una liga, por mucho que borres
+           datos de navegación, que esa clasificación se guarde; solo se
+           reinicia al pulsar RESET").
+           `saveData` SALTA su POST SÍNCRONO al servidor mientras el gate
+           `_ligaExtSimInProgress` esté activo (anti-freeze de la sim).
+           En una sim de UNA liga ese gate sigue activo aquí, así que la
+           clasificación quedaba solo en el POST async best-effort — que
+           un "borrar datos de navegación" puede cancelar antes de
+           confirmar → al recargar, loadData hidrataba del server la
+           plantilla SIN resultados y la tabla volvía a 0.
+           Solución: para una liga individual des-gateamos el POST
+           síncrono SOLO si NO estamos en la sim masiva de 51 ligas
+           (`_restoSimBulkInProgress`, que SÍ debe seguir async para no
+           congelar el hilo con 51 XHR bloqueantes). Reusa toda la
+           lógica robusta de saveData (3 reintentos + protected forzado).
+           Restauramos el gate justo después. */
+        var _gatePrev = window._ligaExtSimInProgress;
+        if (!window._restoSimBulkInProgress) {
+          try { window._ligaExtSimInProgress = false; } catch(_){}
+        }
         try { saveData(slug, data); } catch(_){}
+        try { window._ligaExtSimInProgress = _gatePrev; } catch(_){}
         try { _lecSyncPlayerStatsCache(data); } catch(_){}
         /* Solo refrescamos la tabla del DOM si la liga simulada es
            la que el usuario tiene abierta ahora. Si navegó a otra,

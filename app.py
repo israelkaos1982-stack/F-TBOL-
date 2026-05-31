@@ -1830,6 +1830,17 @@ def _ensure_june_pretemp(data):
         return data
     if any(isinstance(s, dict) and s.get("id") == "verano-jun" for s in secs):
         return data
+    # Idempotente vs CONTENIDO: si alguna sección ya trae eventos de
+    # Junio (p.ej. el 'verano-p1' del calendario.json, que ahora incluye
+    # la pretemporada de Junio + los Torneos de Verano), NO insertamos un
+    # segundo bloque de Junio — eso causaba el "Junio repetido 2 veces".
+    for s in secs:
+        if not isinstance(s, dict):
+            continue
+        for ev in (s.get("events") or []):
+            p = _parse_event_date((ev or {}).get("date"))
+            if p is not None and p[0] == 5:  # Junio (0-indexed)
+                return data
     secs.insert(0, _build_june_pretemp_section())
     return data
 
@@ -1882,6 +1893,17 @@ def _ensure_mundialito(data):
                 ev for ev in s["events"]
                 if not (isinstance(ev, dict) and str(ev.get("id", "")).startswith("mun-"))
             ]
+    # 1b. Idempotente vs CONTENIDO: si el calendario.json ya trae los
+    #     eventos canónicos 'Mundialito Clubes - JX' (icon 🌐), NO
+    #     inyectamos los 'mun-*' ('Mundialito- JX') — eso duplicaba el
+    #     Mundialito en el mismo día (foto usuario 2026-05-31).
+    has_canon_mundialito = any(
+        isinstance(ev, dict) and "Mundialito Clubes" in str(ev.get("name", ""))
+        for s in secs if isinstance(s, dict)
+        for ev in (s.get("events") or [])
+    )
+    if has_canon_mundialito:
+        return data
     # 2. Sección destino: la que tenga eventos de Julio (mes 6); si
     #    no, la primera con eventos; si no, la primera.
     target = None
@@ -2100,6 +2122,57 @@ def _ensure_fase_final_may(data):
     return data
 
 
+def _dedupe_calendario(data):
+    """Elimina duplicados que los inyectores antiguos pudieran haber
+    persistido en BD antes de hacerlos idempotentes:
+
+    1. Mundialito: si existen los canónicos 'Mundialito Clubes - JX'
+       (del calendario.json), purga los server-managed 'mun-*'
+       ('Mundialito- JX').
+    2. Junio: elimina el bloque inyectado 'verano-jun' cuando OTRA
+       sección (p.ej. 'verano-p1' del calendario.json) ya cubre Junio.
+
+    Corre SIEMPRE (no gated por `_normalized_v`) para sanear cargas
+    ya contaminadas sin requerir reset manual. Idempotente."""
+    if not isinstance(data, dict):
+        return data
+    secs = data.get("sections")
+    if not isinstance(secs, list):
+        return data
+
+    # 1. Mundialito duplicado: prioriza los 'Mundialito Clubes' y purga 'mun-*'.
+    has_canon_mundialito = any(
+        isinstance(ev, dict) and "Mundialito Clubes" in str(ev.get("name", ""))
+        for s in secs if isinstance(s, dict)
+        for ev in (s.get("events") or [])
+    )
+    if has_canon_mundialito:
+        for s in secs:
+            if isinstance(s, dict) and isinstance(s.get("events"), list):
+                s["events"] = [
+                    ev for ev in s["events"]
+                    if not (isinstance(ev, dict)
+                            and str(ev.get("id", "")).startswith("mun-"))
+                ]
+
+    # 2. Junio duplicado: si una sección que NO es 'verano-jun' ya trae
+    #    Junio, la 'verano-jun' inyectada es redundante → la eliminamos.
+    other_has_june = any(
+        isinstance(s, dict) and s.get("id") != "verano-jun"
+        and any(
+            (_parse_event_date((ev or {}).get("date")) or (None,))[0] == 5
+            for ev in (s.get("events") or [])
+        )
+        for s in secs
+    )
+    if other_has_june:
+        data["sections"] = [
+            s for s in secs
+            if not (isinstance(s, dict) and s.get("id") == "verano-jun")
+        ]
+    return data
+
+
 def _calendario_normalize(data):
     """Asegura el esqueleto mínimo y los defaults de un dict de calendario.
 
@@ -2122,6 +2195,10 @@ def _calendario_normalize(data):
         _ensure_preverano_may(data)
         _ensure_mundialito(data)
         data["_normalized_v"] = cur_ver
+    # Saneado SIEMPRE: aunque ya estuviera normalizado, limpia los
+    # duplicados de Junio / Mundialito que inyectores antiguos pudieran
+    # haber dejado persistidos en BD.
+    _dedupe_calendario(data)
     return data
 
 
@@ -2176,8 +2253,15 @@ def load_calendario():
                     pass
                 return seed
             _secs0 = data.get("sections") or []
+            # ¿Hay ya contenido de Junio? (cualquier sección con un
+            # evento de Junio, no solo el bloque inyectado 'verano-jun').
+            # Si NO lo hay, hay que persistir tras inyectarlo.
             had_june = any(
-                isinstance(s, dict) and s.get("id") == "verano-jun"
+                isinstance(s, dict)
+                and any(
+                    (_parse_event_date((ev or {}).get("date")) or (None,))[0] == 5
+                    for ev in (s.get("events") or [])
+                )
                 for s in _secs0
             )
             _mun_before = _mun_sig(data)

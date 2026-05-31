@@ -6100,30 +6100,48 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'sct':'verano', 'jg':'verano', 'pss':'verano', 'asia':'verano',
       'mundial':'mundialito'
     };
+    /* compKey EFECTIVO para el balón (2026-05-31): la PANTALLA DE PREVIA
+       abre el Mundialito de Clubes y los Torneos de Verano con el mismo
+       compKey genérico 'torneo' (`_openPreseasonPrevia`). El alias de
+       grupo manda 'torneo' → 'verano', así que el Mundialito heredaba
+       el balón de los Torneos de Verano (eFootball Origin) en vez del
+       suyo propio (Ball Store "Mundialito de Clubes · extra" →
+       PUMA Orbita MFL1 / default Vantaggio 5000). Distinguimos por
+       `_ppPreviaTeams.tourId`: el slot built-in 'mundial' (groups-ko)
+       es el Mundialito de Clubes; los `mundial-48` (Mundial 2032 de
+       selecciones) ya los captura el bloque _isSelCtx de más abajo.
+       Bug FOTO 2026-05-31 (Liverpool vs Atalanta · Mundialito J2). */
+    var _ballComp = compKey;
+    if (compKey === 'torneo' || compKey === 'torneos') {
+      try {
+        var _ppBT = window._ppPreviaTeams;
+        if (_ppBT && _ppBT.tourId === 'mundial') _ballComp = 'mundial';
+      } catch(_){}
+    }
     try {
       var _ovRaw = localStorage.getItem('ball_by_comp_v1');
       if (_ovRaw) {
         var _ov = JSON.parse(_ovRaw) || {};
-        var _bdbKey   = _COMP_TO_BDB[compKey];
-        var _groupKey = _COMP_GROUP_ALIAS[compKey];
+        var _bdbKey   = _COMP_TO_BDB[_ballComp];
+        var _groupKey = _COMP_GROUP_ALIAS[_ballComp];
         /* Resolución robusta (2026-05-17, ampliada 2026-05-25):
-           1) clave RAW del partido (compKey) — comps base + extras
+           1) clave RAW del partido (_ballComp) — comps base + extras
               + customs añadidas por el admin.
            2) alias BALL_DB (back-compat de las 14 comps base).
            3) alias de GRUPO (torneos de verano → `verano`,
               variantes mundialito → `mundialito`). */
-        var _ovBall = _ov[compKey]
+        var _ovBall = _ov[_ballComp]
                    || (_bdbKey   && _ov[_bdbKey])
                    || (_groupKey && _ov[_groupKey]);
         if (_ovBall && typeof _ovBall === 'string') {
           /* El admin ha guardado un balón distinto para esta comp →
              gana sobre el default hardcoded. */
-          COMP_BALL[compKey] = _ovBall.replace(/_/g, ' ');
+          COMP_BALL[_ballComp] = _ovBall.replace(/_/g, ' ');
         }
       }
     } catch(_){}
-    if (COMP_BALL[compKey]) {
-      balon = COMP_BALL[compKey];
+    if (COMP_BALL[_ballComp]) {
+      balon = COMP_BALL[_ballComp];
     }
     /* Selecciones por jornada (regla obligatoria CLAUDE.md 2026-05-24):
        J1-J8 = "Orbita Africa" (fase clasificatoria).

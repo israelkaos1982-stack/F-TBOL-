@@ -22857,6 +22857,16 @@ window.goLiveMatches = function() {
   ];
   var ISRAMAX_INITIAL_CASH = 1300;
   var _isramaxSession = null; /* {userId, isGuest} en memoria */
+  /* Modo PERSONAL (2026-05-31): cuando ISRAMAX se abre desde la caja
+     del hub de un humano concreto (p.ej. Liverpool → Toñín), se pasa
+     su userId aquí. En ese modo la pantalla de usuarios muestra SOLO
+     esa tarjeta y la navegación "Volver" del dashboard cierra el
+     overlay (vuelve al hub) en vez de listar los 5 usuarios. */
+  var _isramaxRestrict = null;
+  /* Estado abierto/cerrado de los 4 desplegables del dashboard
+     (Pendientes / Ganadas / Perdidas / Anuladas). Pendientes abierto
+     por defecto. Se conserva entre re-renders. */
+  var _isramaxBoxOpen = { open:true, won:false, lost:false, 'void':false };
 
   /* ── Equipo ACTUAL del humano (2026-05-19) ───────────────────────
      ISRAMAX_USERS trae un `team` HARDCODEADO. Cuando un humano cambia
@@ -23112,7 +23122,44 @@ window.goLiveMatches = function() {
         '#isramax-ov .isr-edit-row input:focus{outline:none;border-color:#9fdcff;box-shadow:0 0 8px rgba(96,180,255,.30);}' +
         '#isramax-ov .isr-edit-actions{display:flex;gap:8px;align-items:center;margin-top:10px;}' +
         '#isramax-ov .isr-edit-actions .isr-btn{flex:0 0 auto;}' +
-        '#isramax-ov .isr-edit-actions .isr-add-bet{flex:1;margin-bottom:0;}';
+        '#isramax-ov .isr-edit-actions .isr-add-bet{flex:1;margin-bottom:0;}' +
+        /* Desplegables del dashboard (Pendientes/Ganadas/Perdidas/Anuladas) */
+        '#isramax-ov .isr-acc{margin-bottom:8px;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,.12);}' +
+        '#isramax-ov .isr-acc-hdr{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;background:rgba(255,255,255,.05);border:none;cursor:pointer;-webkit-tap-highlight-color:transparent;font-family:Oswald,sans-serif;text-align:left;}' +
+        '#isramax-ov .isr-acc-hdr:hover{background:rgba(255,255,255,.09);}' +
+        '#isramax-ov .isr-acc-ico{font-size:18px;line-height:1;}' +
+        '#isramax-ov .isr-acc-title{flex:1;font-size:13px;letter-spacing:1.5px;color:#fff;text-transform:uppercase;font-weight:700;}' +
+        '#isramax-ov .isr-acc-cnt{min-width:24px;text-align:center;font-family:"Bebas Neue",sans-serif;font-size:16px;letter-spacing:1px;color:#fff;background:rgba(0,0,0,.30);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:1px 8px;}' +
+        '#isramax-ov .isr-acc-car{font-size:14px;color:rgba(255,255,255,.7);width:14px;text-align:center;}' +
+        '#isramax-ov .isr-acc-body{padding:10px 12px;background:rgba(0,0,0,.22);}' +
+        '#isramax-ov .isr-acc-pend .isr-acc-hdr{border-left:3px solid #ffd54a;}' +
+        '#isramax-ov .isr-acc-won  .isr-acc-hdr{border-left:3px solid #5fe08a;}' +
+        '#isramax-ov .isr-acc-lost .isr-acc-hdr{border-left:3px solid #ff8080;}' +
+        '#isramax-ov .isr-acc-void .isr-acc-hdr{border-left:3px solid #b4b4c8;}' +
+        '#isramax-ov .isr-acc-empty{padding:12px 4px;text-align:center;color:rgba(255,255,255,.40);font-family:Rajdhani,sans-serif;font-size:12px;font-style:italic;}' +
+        /* Ticket completo (Pendientes) — cada apuesta separada por borde */
+        '#isramax-ov .isr-ticket{border:1px solid rgba(255,213,74,.40);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:rgba(255,213,74,.05);}' +
+        '#isramax-ov .isr-ticket:last-child{margin-bottom:0;}' +
+        '#isramax-ov .isr-ticket-match{font-family:Rajdhani,sans-serif;font-size:15px;font-weight:700;color:#fff;text-align:center;padding-bottom:8px;margin-bottom:8px;border-bottom:1px dashed rgba(255,255,255,.18);}' +
+        '#isramax-ov .isr-ticket-vs{color:rgba(255,255,255,.45);font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;}' +
+        '#isramax-ov .isr-ticket-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:3px 0;font-family:Rajdhani,sans-serif;font-size:13px;}' +
+        '#isramax-ov .isr-ticket-k{color:rgba(255,255,255,.55);font-size:11px;letter-spacing:.5px;text-transform:uppercase;}' +
+        '#isramax-ov .isr-ticket-v{color:#fff;font-weight:600;text-align:right;}' +
+        '#isramax-ov .isr-ticket-v.money{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#ffd54a;}' +
+        '#isramax-ov .isr-ticket-v.win{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#5fe08a;}' +
+        '#isramax-ov .isr-ticket-cuota{color:#9fdcff;font-family:Oswald,sans-serif;font-size:11px;}' +
+        /* Tickets reducidos (Ganadas/Perdidas/Anuladas) */
+        '#isramax-ov .isr-ticket-mini{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 10px;margin-bottom:6px;}' +
+        '#isramax-ov .isr-ticket-mini:last-child{margin-bottom:0;}' +
+        '#isramax-ov .isr-ticket-mini-won{border-color:rgba(95,224,138,.45);background:rgba(95,224,138,.07);}' +
+        '#isramax-ov .isr-ticket-mini-lost{border-color:rgba(255,128,128,.40);background:rgba(255,128,128,.06);}' +
+        '#isramax-ov .isr-ticket-mini-void{border-color:rgba(180,180,200,.40);background:rgba(180,180,200,.06);}' +
+        '#isramax-ov .isr-mini-match{font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;}' +
+        '#isramax-ov .isr-mini-sub{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.55);}' +
+        '#isramax-ov .isr-mini-r{font-family:"Bebas Neue",sans-serif;font-size:18px;letter-spacing:1px;white-space:nowrap;}' +
+        '#isramax-ov .isr-ticket-mini-won .isr-mini-r{color:#5fe08a;}' +
+        '#isramax-ov .isr-ticket-mini-lost .isr-mini-r{color:#ff8080;}' +
+        '#isramax-ov .isr-ticket-mini-void .isr-mini-r{color:#c8c8d8;}';
       document.head.appendChild(css);
     }
     return wrap;
@@ -23122,6 +23169,7 @@ window.goLiveMatches = function() {
     var ov = document.getElementById('isramax-ov');
     if (ov) ov.style.display = 'none';
     _isramaxSession = null;
+    _isramaxRestrict = null;
   }
 
   function _isramaxRender(html){
@@ -23131,14 +23179,20 @@ window.goLiveMatches = function() {
     ov.style.display = 'block';
   }
 
-  /* Pantalla 1: lista de usuarios. */
+  /* Pantalla 1: lista de usuarios. En modo PERSONAL (_isramaxRestrict)
+     solo se muestra la tarjeta del humano de esa caja del hub. */
   function _isramaxRenderUsers(){
+    var list = ISRAMAX_USERS;
+    if (_isramaxRestrict){
+      var only = _isramaxFindUser(_isramaxRestrict);
+      if (only) list = [only];
+    }
     var html = ''
       + '<button class="isr-back" onclick="window._isramaxClose&&window._isramaxClose()">✕ Cerrar</button>'
       + '<h2>🎰 ISRAMAX</h2>'
       + '<div class="isr-sub">Apuestas sobre nuestros partidos Humano vs Humano</div>'
       + '<div class="isr-users">';
-    ISRAMAX_USERS.forEach(function(u){
+    list.forEach(function(u){
       var c1 = _isramaxLighten(u.color, 0.30);
       var c2 = u.dark;
       var c3 = u.color;
@@ -23198,42 +23252,109 @@ window.goLiveMatches = function() {
     }, 60);
   }
 
-  /* Renderiza listado de apuestas del usuario actual (open + history)
-     dentro del dashboard. Las open primero, las resueltas (won/lost)
-     después con borde verde/rojo. */
-  function _isramaxRenderBetsList(userId){
+  /* ── 4 desplegables del dashboard (2026-05-31) ────────────────────
+     Las apuestas del usuario se reparten en 4 cajas horizontales
+     plegables: ⏳ Pendientes · ✅ Ganadas · ❌ Perdidas · ↩️ Anuladas.
+     Pendientes muestra el TICKET completo (partido, tipo de apuesta,
+     dinero apostado, posibles ganancias, competición/jornada y fecha
+     de la apuesta). Ganadas / Perdidas / Anuladas muestran tickets
+     reducidos. El estado abierto/cerrado se guarda en _isramaxBoxOpen
+     y se conserva entre re-renders. */
+  function _isramaxFmtDate(iso){
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      var mm = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      return d.getDate() + ' ' + mm[d.getMonth()] + ' ' + d.getFullYear();
+    } catch(_){ return ''; }
+  }
+  function _isramaxBetMatchRef(b){
+    var ref = _escHtml(b.comp || 'Partido');
+    if (b.j) ref += ' · Jornada ' + b.j;
+    return ref;
+  }
+  window._isramaxToggleBox = function(key){
+    _isramaxBoxOpen[key] = !_isramaxBoxOpen[key];
+    var body = document.getElementById('isr-acc-body-' + key);
+    var car  = document.getElementById('isr-acc-car-' + key);
+    if (body) body.style.display = _isramaxBoxOpen[key] ? 'block' : 'none';
+    if (car)  car.textContent = _isramaxBoxOpen[key] ? '▾' : '▸';
+  };
+  function _isramaxRenderBetsBoxes(userId){
     var d = _isramaxLoad();
     var bets = (d.bets||[]).filter(function(b){ return b && b.userId === userId; });
-    if (!bets.length) return '<div class="isr-empty">📋 Sin apuestas todavía. Pulsa <b>➕ AÑADIR APUESTA</b> para empezar.</div>';
-    /* Ordenar: open primero (más recientes arriba), luego history. */
-    bets.sort(function(a,b){
-      var so = function(x){ return x.status === 'open' ? 0 : 1; };
-      var d1 = so(a) - so(b);
-      if (d1 !== 0) return d1;
-      return (b.createdAt || '').localeCompare(a.createdAt || '');
-    });
-    var html = '<div class="isr-pick-comp-hdr">📋 TUS APUESTAS</div>';
+    var groups = { open:[], won:[], lost:[], 'void':[] };
     bets.forEach(function(b){
-      var stCls = b.status === 'won'  ? 'won'
-                : b.status === 'lost' ? 'lost'
-                : b.status === 'void' ? 'void' : '';
-      var stIco = b.status === 'won'  ? '✅'
-                : b.status === 'lost' ? '❌'
-                : b.status === 'void' ? '↩️' : '⏳';
-      html += '<div class="isr-bet-row ' + stCls + '">'
-            +   '<div>'
-            +     '<div>' + _escHtml(b.home) + ' vs ' + _escHtml(b.away) + ' <span class="isr-bet-cuota">@' + (Number(b.cuota)||0).toFixed(2) + '€</span></div>'
-            +     '<div class="isr-bet-meta">' + _escHtml(b.comp || '') + ' · ' + _escHtml(b.label || '')
-            +       (b.status === 'void' ? ' · ANULADA (stake devuelto)' : '')
-            +     '</div>'
-            +   '</div>'
-            +   '<span class="isr-bet-stake">' + (Number(b.stake)||0).toFixed(0) + '€</span>'
-            +   '<span style="font-size:18px;">' + stIco + '</span>'
-            + '</div>';
-      /* Sin botones manuales — la realidad del partido decide
-         (petición usuario 2026-05-24). */
+      var s = (b.status === 'won' || b.status === 'lost' || b.status === 'void') ? b.status : 'open';
+      groups[s].push(b);
+    });
+    Object.keys(groups).forEach(function(k){
+      groups[k].sort(function(a,b){ return (b.createdAt||'').localeCompare(a.createdAt||''); });
+    });
+    var defs = [
+      { key:'open',   ico:'⏳', title:'Apuestas pendientes', cls:'pend' },
+      { key:'won',    ico:'✅', title:'Apuestas ganadas',    cls:'won'  },
+      { key:'lost',   ico:'❌', title:'Apuestas perdidas',   cls:'lost' },
+      { key:'void',   ico:'↩️', title:'Apuestas anuladas',   cls:'void' }
+    ];
+    var html = '';
+    defs.forEach(function(def){
+      var arr = groups[def.key];
+      var openNow = !!_isramaxBoxOpen[def.key];
+      html += '<div class="isr-acc isr-acc-' + def.cls + '">'
+           +    '<button class="isr-acc-hdr" onclick="window._isramaxToggleBox&&window._isramaxToggleBox(\'' + def.key + '\')">'
+           +      '<span class="isr-acc-ico">' + def.ico + '</span>'
+           +      '<span class="isr-acc-title">' + def.title + '</span>'
+           +      '<span class="isr-acc-cnt">' + arr.length + '</span>'
+           +      '<span class="isr-acc-car" id="isr-acc-car-' + def.key + '">' + (openNow ? '▾' : '▸') + '</span>'
+           +    '</button>'
+           +    '<div class="isr-acc-body" id="isr-acc-body-' + def.key + '" style="display:' + (openNow ? 'block' : 'none') + ';">';
+      if (!arr.length){
+        html += '<div class="isr-acc-empty">Sin apuestas en esta categoría.</div>';
+      } else if (def.key === 'open'){
+        arr.forEach(function(b){
+          var stake = Number(b.stake)||0;
+          var cuota = Number(b.cuota)||0;
+          var ret   = stake * cuota;
+          var fd    = _isramaxFmtDate(b.createdAt);
+          html += '<div class="isr-ticket">'
+               +    '<div class="isr-ticket-match">' + _escHtml(b.home) + ' <span class="isr-ticket-vs">vs</span> ' + _escHtml(b.away) + '</div>'
+               +    '<div class="isr-ticket-line"><span class="isr-ticket-k">Tipo de apuesta</span><span class="isr-ticket-v">' + _escHtml(b.label||'') + ' <span class="isr-ticket-cuota">@' + cuota.toFixed(2) + '€</span></span></div>'
+               +    '<div class="isr-ticket-line"><span class="isr-ticket-k">Dinero apostado</span><span class="isr-ticket-v money">' + stake.toFixed(0) + '€</span></div>'
+               +    '<div class="isr-ticket-line"><span class="isr-ticket-k">Posibles ganancias</span><span class="isr-ticket-v win">' + ret.toFixed(2) + '€</span></div>'
+               +    '<div class="isr-ticket-line"><span class="isr-ticket-k">Partido</span><span class="isr-ticket-v">' + _isramaxBetMatchRef(b) + '</span></div>'
+               +    (fd ? '<div class="isr-ticket-line"><span class="isr-ticket-k">Fecha de la apuesta</span><span class="isr-ticket-v">' + fd + '</span></div>' : '')
+               + '</div>';
+        });
+      } else {
+        arr.forEach(function(b){
+          var stake = Number(b.stake)||0;
+          var cuota = Number(b.cuota)||0;
+          var ret   = stake * cuota;
+          var resTxt = def.key === 'won'  ? '+' + (ret - stake).toFixed(0) + '€'
+                     : def.key === 'lost' ? '−' + stake.toFixed(0) + '€'
+                     : stake.toFixed(0) + '€ ↩';
+          html += '<div class="isr-ticket-mini isr-ticket-mini-' + def.cls + '">'
+               +    '<div class="isr-mini-l">'
+               +      '<div class="isr-mini-match">' + _escHtml(b.home) + ' vs ' + _escHtml(b.away) + '</div>'
+               +      '<div class="isr-mini-sub">' + _escHtml(b.label||'') + ' · ' + stake.toFixed(0) + '€ @' + cuota.toFixed(2) + '</div>'
+               +    '</div>'
+               +    '<div class="isr-mini-r">' + resTxt + '</div>'
+               + '</div>';
+        });
+      }
+      html += '</div></div>';
     });
     return html;
+  }
+  /* ¿El usuario ya tiene una apuesta (no anulada) en este partido?
+     Regla 2026-05-31: SOLO 1 apuesta por partido, sin combinadas. Las
+     anuladas (void, stake devuelto) sí permiten volver a apostar. */
+  function _isramaxUserHasBet(userId, matchKey){
+    var d = _isramaxLoad();
+    return (d.bets||[]).some(function(b){
+      return b && b.userId === userId && b.matchKey === matchKey && b.status !== 'void';
+    });
   }
 
   /* Pantalla 3: dashboard del usuario logueado (admin o invitado). */
@@ -23249,8 +23370,13 @@ window.goLiveMatches = function() {
     var c1 = _isramaxLighten(u.color, 0.18);
     var c2 = u.dark;
     var c3 = u.color;
+    /* En modo PERSONAL (caja del hub) no hay "cambiar usuario": el
+       botón Volver cierra el overlay y regresa al hub del humano. */
+    var backBtn = _isramaxRestrict
+      ? '<button class="isr-back" onclick="window._isramaxClose&&window._isramaxClose()">◀ Volver</button>'
+      : '<button class="isr-back" onclick="window._isramaxBackToUsers&&window._isramaxBackToUsers()">◀ Cambiar usuario</button>';
     var html = ''
-      + '<button class="isr-back" onclick="window._isramaxBackToUsers&&window._isramaxBackToUsers()">◀ Cambiar usuario</button>'
+      + backBtn
       + '<div class="isr-login-card" style="--isr-c1:'+c1+';--isr-c2:'+c2+';--isr-c3:'+c3+';padding:18px 14px;">'
       +   '<div style="display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:14px;">'
       +     '<span style="font-size:34px;">' + u.icon + '</span>'
@@ -23269,13 +23395,19 @@ window.goLiveMatches = function() {
           ? '<div class="isr-empty">👁 Modo invitado — solo lectura. Entra con PIN para añadir apuestas.</div>'
           : '<button class="isr-add-bet" onclick="window._isramaxAddBet&&window._isramaxAddBet()">➕ AÑADIR APUESTA</button>'
         )
-      +   _isramaxRenderBetsList(u.id)
+      +   _isramaxRenderBetsBoxes(u.id)
       + '</div>';
     _isramaxRender(html);
   }
 
   /* ── API pública ──────────────────────────────────────────── */
-  window._isramaxOpen = function(){ try { _isramaxSettleOpenBets(); } catch(_){} _isramaxRenderUsers(); };
+  window._isramaxOpen = function(restrictUserId){
+    /* Modo PERSONAL: si llega un userId válido (caja del hub de un
+       humano, p.ej. Liverpool → 'tonin'), solo se muestra su tarjeta. */
+    _isramaxRestrict = (restrictUserId && _isramaxFindUser(restrictUserId)) ? restrictUserId : null;
+    try { _isramaxSettleOpenBets(); } catch(_){}
+    _isramaxRenderUsers();
+  };
   window._isramaxClose = _isramaxClose;
   window._isramaxBackToUsers = function(){ _isramaxSession = null; _isramaxRenderUsers(); };
   window._isramaxLogin = function(userId){ _isramaxRenderLogin(userId); };
@@ -23343,6 +23475,9 @@ window.goLiveMatches = function() {
       if (!it || !it.home || !it.away) return false;
       if (it.state !== 'pending') return false;
       if (it.home === myTeam || it.away === myTeam) return false;
+      /* 1 apuesta por partido (2026-05-31): si el user ya apostó este
+         partido (y no fue anulada), no vuelve a aparecer en la lista. */
+      if (_isramaxUserHasBet(u.id, _isramaxMatchKey(it))) return false;
       return true;
     });
     var html = ''
@@ -23794,6 +23929,12 @@ window.goLiveMatches = function() {
     var d = _isramaxLoad();
     if (!d.users) d.users = {};
     if (!d.bets) d.bets = [];
+    /* 1 apuesta por partido — sin combinadas (2026-05-31). */
+    if (_isramaxUserHasBet(userId, _isramaxMatchKey(_isramaxCurrentMatch))){
+      alert('⚠️ Ya tienes una apuesta en este partido. Solo se permite 1 apuesta por partido (no se pueden combinar).');
+      _isramaxRenderDashboard();
+      return;
+    }
     var cash = _isramaxGetCash(userId);
     if (stake > cash){
       alert('⚠️ No tienes suficiente cash. Tienes ' + cash.toFixed(0) + '€.');

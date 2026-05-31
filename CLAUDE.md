@@ -110,6 +110,17 @@ de la liga.
   Bélgica/Turquía/Chequia/Grecia→🟣1) a navegadores que ya corrieron el
   seed v1 con los valores viejos — SOLO si la liga sigue en el valor
   viejo o genérico (nunca pisa edición manual). Idempotente.
+- **N. Irlanda + Montenegro — pre-seed de 20 equipos** (`_EXTRA_LEAGUE_SEEDS`,
+  `_ensureExtraLeagueSeed`): sus zonas iniciales se leen de
+  `_zonesDefaultFor(slug)` (= 🟡OQ2 ⚪️WC2). **PROHIBIDO** volver a
+  hardcodear el genérico de liga menor (🟣1/🟡1/⚪️1, `desc:2`) en ese
+  seed — descuadraba el bracket (Previa de más, OQ/WC de menos) y hacía
+  que el usuario viera reglas "que no se guardaban" (los defaults del
+  modal no coincidían con 'Restaurar por defecto'). Bug 2026-05-31, foto
+  usuario. `_fixupExtraLeagueZonesV1` (flag
+  `ftbol_extra_league_zones_fix_v1`) corrige navegadores ya sembrados con
+  el valor malo — SOLO si la liga sigue en el valor mal-sembrado o
+  genérico (nunca pisa edición manual). Idempotente.
 - **PROHIBIDO** hardcodear plazas en builders nuevos: leer siempre de
   `data.config.zones` con fallback `window._zonesDefaultFor(slug)`.
 

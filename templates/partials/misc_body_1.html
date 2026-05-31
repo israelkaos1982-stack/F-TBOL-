@@ -16630,8 +16630,8 @@ window._showSimProgress = function(opts, onDone){
      tras simular. La distinción "ya jugada" se mantiene vía
      border-color + bg-gradient + pill J1 con borde gris. */
   .tour-jor.is-past{
-    border-color:rgba(170,180,195,.55);
-    background:linear-gradient(180deg,rgba(170,180,195,.05),rgba(0,0,0,.30));
+    border-color:rgba(150,158,170,.60);
+    background:linear-gradient(180deg,rgba(150,158,170,.07),rgba(0,0,0,.34));
     box-shadow:0 2px 8px rgba(0,0,0,.30);
   }
   /* Current: gold neon — la jornada activa destaca. */
@@ -16640,21 +16640,26 @@ window._showSimProgress = function(opts, onDone){
     background:linear-gradient(180deg,rgba(240,192,64,.06),rgba(0,0,0,.30));
     box-shadow:0 0 14px rgba(240,192,64,.30),inset 0 0 12px rgba(240,192,64,.05);
   }
-  /* Future: borde gris atenuado. */
+  /* Future: jornada PENDIENTE — caja blanca normal (NO gris). El gris se
+     reserva EXCLUSIVAMENTE para las jornadas ya CUMPLIDAS (is-past), por
+     petición usuario 2026-05-31: "siempre que se completen todos los
+     partidos de esa jornada o eliminatoria emergerá de color gris". Las
+     jornadas que aún quedan por jugar NO deben verse grises/apagadas. */
   .tour-jor.is-future{
-    opacity:.85;
-    border-color:rgba(140,160,200,.20);
+    opacity:1;
+    border-color:rgba(255,255,255,.12);
   }
-  /* Header de la jornada (J1 ✦ 04 Jun): CAJA BLANCA + texto NEGRO
-     en todos los estados (petición usuario 2026-05-27: "las jornadas
-     pon las cajas de color blanco y si hace falta el texto en negro,
-     se ve mal y feo"). La distinción past/current/future se mantiene
-     vía:
-       - past    → border-bottom GRIS  + pill con borde gris
-       - current → border-bottom DORADO + pill con borde dorado + glow
-       - future  → border-bottom translúcido + pill atenuado
-     El cuerpo de la card (.tour-jor-body) sigue siendo oscuro, así
-     el contraste con el header blanco es alto. */
+  /* Header de la jornada (J1 ✦ 04 Jun). Caja BLANCA para las jornadas
+     PENDIENTES (current + future) — petición usuario 2026-05-27: "las
+     jornadas pon las cajas de color blanco... se ve mal y feo". La
+     jornada YA CUMPLIDA (is-past) sí pasa a GRIS apagado — petición
+     usuario 2026-05-31: "siempre que se completen todos los partidos de
+     esa jornada o eliminatoria emergerá de color gris". Distinción:
+       - past    → header + pill GRISES (apagado)
+       - current → header BLANCO + border-bottom/pill DORADO + glow
+       - future  → header BLANCO normal (pendiente, NUNCA gris)
+     El cuerpo de la card (.tour-jor-body) sigue oscuro y SIN grayscale
+     para no desaturar los nombres de los equipos al desplegar. */
   .tour-jor-h{
     display:flex;justify-content:space-between;align-items:center;gap:8px;
     font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;
@@ -16665,18 +16670,23 @@ window._showSimProgress = function(opts, onDone){
     border-radius:8px 8px 0 0;
     box-shadow:0 1px 4px rgba(0,0,0,.25);
   }
+  /* Past (jornada CUMPLIDA) → header GRIS apagado (no blanco) para que se
+     distinga de un vistazo de las pendientes. Texto gris oscuro legible. */
   .tour-jor.is-past .tour-jor-h{
-    background:#fff;color:#0a0a0a;
+    background:linear-gradient(180deg,#c8ccd3,#aab0bb);color:rgba(0,0,0,.55);
     border-bottom-color:rgba(110,120,140,.55);
+    box-shadow:none;
   }
   .tour-jor.is-current .tour-jor-h{
     background:#fff;color:#0a0a0a;
     border-bottom:2px solid #f0c040;
     box-shadow:0 1px 6px rgba(240,192,64,.35);
   }
+  /* Future (pendiente) → header BLANCO normal, como una jornada activa
+     sin jugar (NUNCA gris). */
   .tour-jor.is-future .tour-jor-h{
-    background:#fff;color:rgba(0,0,0,.65);
-    border-bottom-color:rgba(0,0,0,.15);
+    background:#fff;color:#0a0a0a;
+    border-bottom-color:rgba(0,0,0,.18);
   }
   /* Chip de la jornada (J1, J2…) — píldora BLANCA con texto NEGRO
      y borde codificado por estado. */
@@ -16686,15 +16696,19 @@ window._showSimProgress = function(opts, onDone){
     color:#0a0a0a;letter-spacing:1.5px;font-weight:800;
   }
   .tour-jor.is-past .tour-jor-tag{
-    background:#fff;border-color:rgba(110,120,140,.65);color:#0a0a0a;
+    background:#d6d9df;border-color:rgba(110,120,140,.7);color:rgba(0,0,0,.55);
   }
   .tour-jor.is-current .tour-jor-tag{
     background:#fff;border:2px solid #f0c040;color:#0a0a0a;
     box-shadow:0 0 10px rgba(240,192,64,.55);
   }
   .tour-jor.is-future .tour-jor-tag{
-    background:#fff;border-color:rgba(0,0,0,.22);color:rgba(0,0,0,.6);
+    background:#fff;border-color:rgba(0,0,0,.35);color:#0a0a0a;
   }
+  /* La fecha 📅 y el chevron ▾ del header gris (jornada cumplida) también
+     en gris oscuro para mantener el conjunto apagado. */
+  .tour-jor.is-past .tour-jor-date{color:rgba(0,0,0,.5);}
+  .tour-jor.is-past .tour-jor-chev{color:rgba(0,0,0,.45);}
   /* Icono humano (selección / club) junto al nombre del equipo. */
   .tour-hum-ic{
     display:inline-flex;align-items:center;justify-content:center;

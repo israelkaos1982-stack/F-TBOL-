@@ -12802,6 +12802,26 @@ window._showSimProgress = function(opts, onDone){
 /* Header SIEMPRE blanco/negro (regla 2026-05-27): el override
    amarillo viejo dejaba texto ilegible sobre el bg blanco nuevo. */
 #s-mundial .tour-jor.is-past .tour-jor-h{color:#0a0a0a;}
+/* Botón de cabecera de jornada del Mundialito DENTRO de la pantalla
+   de grupos (#s-mundial): VERDE ESMERALDA para casar con las cards
+   verdes (petición usuario 2026-05-31). Las 5 cajas del HUB
+   (s-mundial-clubes) usan la misma clase pero conservan su trofeo
+   dorado porque NO están dentro de #s-mundial. El .done gris se
+   re-declara con la especificidad del id para que la jornada cumplida
+   siga saliendo gris (CLAUDE.md). */
+#s-mundial .jbtn.c-mundialito{
+  background:linear-gradient(90deg,#04241a,#06513a,#0a8f63,#06513a,#04241a) !important;
+  border:1px solid rgba(52,224,161,.55) !important;
+  color:#9bffd9 !important;
+}
+#s-mundial .jbtn.c-mundialito .pdot{border-color:#34e0a1;color:#9bffd9;}
+#s-mundial .jbtn.c-mundialito.done{
+  background:linear-gradient(90deg,#1a1d22,#2a2e36,#3a3e48,#2a2e36,#1a1d22) !important;
+  border:1.5px solid rgba(170,180,195,.45) !important;
+  filter:grayscale(.5) brightness(.85);
+  color:rgba(255,255,255,.55) !important;
+}
+#s-mundial .jbtn.c-mundialito.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
 /* Tarjeta Mundial KO — formato FOTO 2 (UCL eliminatoria). Escudo
    arriba · nombre debajo · caja central marcador + badge. Marker
    `.mn-card` añadido per-card desde `_koRowHtml` para no depender

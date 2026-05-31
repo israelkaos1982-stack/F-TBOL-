@@ -34080,13 +34080,19 @@ https://api.sofascore.app/api/v1/team/44/image
          · +3 por gol marcado (cumulativo)
          · +5 extra si marcó 2 goles (brace)
          · +6 extra adicional si marcó 3+ (hat-trick total: 3·3+5+6=20)
-         · +5 si el portero mantuvo portería imbatida
-         · +4 si el portero paró un penalti
+         · +2 si el portero mantuvo portería imbatida
+         · +3 si el portero paró un penalti
          · -2 por amarilla recibida
          · -5 por roja recibida
      - El jugador con mayor score se lleva el MVP. En empate, el
        de mayor poder. Si nadie tiene score > 0 (típico en 0-0),
-       fallback al weightedPick clásico. */
+       fallback al weightedPick clásico.
+     - 2026-05-31: portería imbatida bajó de +5 a +2 y penalti parado
+       de +4 a +3. Los porteros se llevaban DEMASIADOS MVP porque una
+       imbatida (+5) superaba a un goleador (+3) en CUALQUIER 1-0/2-0/
+       3-0. Ahora un gol siempre gana a una imbatida; el portero solo
+       es MVP si para un penalti (y mantiene la portería a cero) o en
+       empates sin goles. */
   function _pickMVPByMerit(team, info){
     if(!team || !team.players || !team.players.length) return null;
     if(!info) {
@@ -34110,8 +34116,8 @@ https://api.sofascore.app/api/v1/team/44/image
     });
     // Portero
     if(info.gk){
-      if(info.cleanSheet) _add(info.gk, 5);
-      if(info.penSaved)   _add(info.gk, 4);
+      if(info.cleanSheet) _add(info.gk, 2);
+      if(info.penSaved)   _add(info.gk, 3);
     }
     // Penalizaciones
     info.yellows.forEach(function(p){ _add(p, -2); });

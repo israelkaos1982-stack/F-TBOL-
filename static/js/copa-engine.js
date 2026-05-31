@@ -3066,12 +3066,46 @@
      la sesión admin ya está unlocked, pG ejecuta la callback al
      instante. Fallback al confirm directo si pG no estuviera
      disponible por timing raro al boot. */
+  /* 2026-05-31: al REINICIAR la Copa hay que purgar las stats de Copa
+     que se acumulan EN MEMORIA en LIGA_PLAYER_MATCH_STORE, además de
+     borrar copa_state en el servidor.
+
+     Bug reportado por el usuario: simular Liga + Copa y, al reiniciar
+     la Copa y re-simularla varias veces, los jugadores acumulaban PJ
+     imposibles (City con 61 partidos jugados). Causa: cada partido de
+     Copa se indexa en el store con una storeKey que contiene '|copa|'
+     (ver registrarLigaPlayerStats con compKey='copa'), y la storeKey
+     incluye un sig único por partido (ronda+idx+marcador). Al reiniciar
+     + re-sortear, los cruces cambian → nuevos sigs → las entradas
+     VIEJAS nunca se sobrescriben y `rebuildPlayerStatsStore` las vuelve
+     a contar todas → PJ/goles/MVP se acumulan partido a partido.
+
+     El borrado de copa_state en el servidor NO toca el store en memoria
+     ni los caches persistidos (ef_player_stats_copa_v1 / el merge
+     Liga+Copa de ef_player_stats_v1), así que hay que limpiarlo aquí. */
+  function _copaPurgePlayerStats(){
+    try {
+      var store = window.LIGA_PLAYER_MATCH_STORE;
+      if (store && typeof store === 'object') {
+        Object.keys(store).forEach(function (k) {
+          if (String(k).indexOf('|copa|') !== -1) delete store[k];
+        });
+      }
+    } catch(_){}
+    /* Olvidar los sigs ya aplicados para que un futuro copaRender pueda
+       re-aplicar limpiamente los resultados de la NUEVA Copa. */
+    _appliedMeta = {};
+    /* Reconstruir los caches persistidos (ef_player_stats_copa_v1 y el
+       merge Liga+Copa de ef_player_stats_v1) ya SIN la Copa vieja. */
+    try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
+  }
+
   window.copaReiniciar = function () {
     function _doReset(){
       if (!confirm('¿Reiniciar Copa del Rey? Se perderán todos los resultados y bajas de Copa seguirán en ficha hasta agotarse.')) return;
       fetch('/api/copa/reiniciar', { method: 'POST' })
         .then(function (r) { return r.json(); })
-        .then(function (d) { if (d.ok) copaRender({}); });
+        .then(function (d) { if (d.ok) { _copaPurgePlayerStats(); copaRender({}); } });
     }
     if (typeof window.pG === 'function') {
       window.pG(_doReset);

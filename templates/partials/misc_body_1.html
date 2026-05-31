@@ -17091,7 +17091,11 @@ window._showSimProgress = function(opts, onDone){
     if (!ov) {
       ov = document.createElement('div');
       ov.id = 'selfin-stadium-picker-ov';
-      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px;';
+      /* z-index 1000050: por ENCIMA de #tour-editor-overlay (999990),
+         desde donde se abre este picker (formato mundial-48). Con 99999
+         el overlay se abría DETRÁS del editor y parecía que "no hacía
+         nada" al pulsar 🔍 (mismo bug que el picker del Mundialito). */
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000050;display:flex;align-items:center;justify-content:center;padding:14px;';
       ov.innerHTML = '<div id="selfin-sp-card" style="background:#101522;color:#eee;width:100%;max-width:520px;max-height:88vh;border-radius:12px;border:1px solid rgba(120,180,255,.4);display:flex;flex-direction:column;overflow:hidden;">'+
         '<div style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);">'+
           '<div style="flex:1;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#9cc6ff;">🏟️ <span id="selfin-sp-title">SEDE 1</span></div>'+
@@ -17163,6 +17167,9 @@ window._showSimProgress = function(opts, onDone){
     xEl.onclick = function(){ ov.style.display = 'none'; };
     qEl.value = '';
     render();
+    /* Reasegura el z-index por si el overlay se cacheó con el valor
+       viejo (99999) en una sesión anterior. */
+    ov.style.zIndex = '1000050';
     ov.style.display = 'flex';
     setTimeout(function(){ try { qEl.focus(); } catch(_){} }, 80);
   };
@@ -18324,7 +18331,12 @@ window._showSimProgress = function(opts, onDone){
     if (!ov) {
       ov = document.createElement('div');
       ov.id = 'tour-ed-stadium-picker-ov';
-      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:99999;display:flex;align-items:center;justify-content:center;padding:14px;';
+      /* z-index 1000050: por ENCIMA de #mundial-roster-ov (100040) y de
+         #tour-editor-overlay (999990), las 2 pantallas desde las que se
+         abre este picker. Con 99999 el overlay se abría DETRÁS del
+         roster del Mundialito (fondo opaco) y parecía que "no hacía
+         nada" al pulsar 🔍 (bug 2026-05-31). */
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000050;display:flex;align-items:center;justify-content:center;padding:14px;';
       ov.innerHTML = '<div style="background:#101522;color:#eee;width:100%;max-width:520px;max-height:88vh;border-radius:12px;border:1px solid rgba(120,180,255,.4);display:flex;flex-direction:column;overflow:hidden;">'+
         '<div style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);">'+
           '<div style="flex:1;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#9cc6ff;">🏟️ <span id="tour-ed-sp-title">SEDE 1</span></div>'+
@@ -18398,6 +18410,10 @@ window._showSimProgress = function(opts, onDone){
     xEl.onclick = function(){ ov.style.display = 'none'; };
     qEl.value = '';
     render();
+    /* Reasegura el z-index por si el overlay se cacheó con el valor
+       viejo (99999) en una sesión anterior — debe quedar SIEMPRE por
+       encima del roster del Mundialito (100040) y del editor (999990). */
+    ov.style.zIndex = '1000050';
     ov.style.display = 'flex';
     setTimeout(function(){ try { qEl.focus(); } catch(_){} }, 80);
   };

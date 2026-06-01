@@ -11089,10 +11089,10 @@ window._showSimProgress = function(opts, onDone){
      el HTML. Lo usan `_lextBuildCompStatsDashboard` (lee de
      localStorage) y la caja «Estadísticas» del Mundial (calcula el
      objeto en vivo desde los resultados del torneo). */
-  function _lextStatsDashHtml(stats){
+  function _lextStatsDashHtml(stats, alwaysGrid){
     stats = stats || {};
     var keys = Object.keys(stats);
-    if (!keys.length) {
+    if (!keys.length && !alwaysGrid) {
       return '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
     }
     /* Convertir el cache (`teamNorm::playerNorm` → counters) a la
@@ -22151,6 +22151,90 @@ window._showSimProgress = function(opts, onDone){
     if (changed) { try { if (typeof window._tourSave === 'function') window._tourSave(cfg.id, cfg); } catch(_){} }
     return changed;
   }
+  /* Escaneo ROBUSTO de stats del Mundial 2032 (2026-06-01). Resuelve el
+     nombre real de cada equipo desde TODAS las fuentes disponibles
+     (res.home/away, índice de grupos por teams.slice, índice de KO por
+     koBracket, y ev.realTeam) y agrega los eventos del acta. No tiene el
+     early-return `if (!nameA||!nameB) return` que dejaba la caja vacía
+     cuando un partido viejo no guardó home/away y groupFixtures no estaba
+     reconstruido. */
+  function _mundialStatsRobustScan(cfg, teams){
+    var stats = {};
+    var norm = (typeof window._normPS === 'function')
+      ? window._normPS : function(s){ return String(s||'').toLowerCase().trim(); };
+    function rec(teamName, playerName){
+      var tk = norm(teamName), pk = norm(playerName);
+      if (!tk || !pk) return null;
+      var key = tk + '::' + pk;
+      if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+      return stats[key];
+    }
+    var tt = teams || cfg.teams || [];
+    var bpg = (cfg.formatConfig && cfg.formatConfig.perGroup) || 4;
+    /* Índice key→{a,b} desde grupos (por teams.slice, sin depender de
+       que groupFixtures esté construido) y desde el bracket KO. */
+    var idx = {};
+    try {
+      var gf = cfg.groupFixtures || {};
+      Object.keys(gf).forEach(function(gk){
+        var g = parseInt(gk, 10); if (isNaN(g)) return;
+        var slice = tt.slice(g*bpg, g*bpg+bpg);
+        var fix = gf[gk] || [];
+        for (var j = 0; j < fix.length; j++) for (var mi = 0; mi < fix[j].length; mi++) {
+          var pr = fix[j][mi]; if (!pr) continue;
+          idx['g'+g+'_'+j+'_'+mi] = { a: (slice[pr.home]||{}).name, b: (slice[pr.away]||{}).name };
+        }
+      });
+      var kb = cfg.koBracket || [];
+      for (var r = 0; r < kb.length; r++) { var rt = kb[r]||[]; for (var i = 0; i+1 < rt.length; i += 2) {
+        idx['ko_'+r+'_'+(i/2)] = { a:(rt[i]||{}).name, b:(rt[i+1]||{}).name };
+      } }
+    } catch(_){}
+    var results = cfg.results || {};
+    Object.keys(results).forEach(function(key){
+      if (/\|L[12]$/.test(key)) return;
+      var res = results[key]; if (!res || !res.played) return;
+      var evs = res.events || res.acta; if (!Array.isArray(evs) || !evs.length) return;
+      var info = idx[key] || {};
+      var nameA = res.home || info.a;
+      var nameB = res.away || info.b;
+      evs.forEach(function(ev){
+        if (!ev || ev._varAnulado) return;
+        var side = ev.team || ev.side;
+        var team = (side === 'a' || side === 'home') ? nameA
+                 : (side === 'b' || side === 'away') ? nameB
+                 : ((side && side !== 'a' && side !== 'b') ? side : '');
+        /* Si el mapeo a/b no resolvió nombre (sin home/away ni índice),
+           caer a realTeam. Cubre actas viejas de KO sin bracket cargado. */
+        if (!team) team = ev.realTeam || '';
+        var player = '';
+        if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+        else if (typeof ev.player === 'string') player = ev.player;
+        else player = ev.name || ev.playerName || '';
+        if (!team || !player) return;
+        var p = rec(team, player); if (!p) return;
+        var type = ev.type || '';
+        var ico = String(ev.ico || '').replace(/️/g,'').trim();
+        if (type === 'amarilla') p.ta++;
+        else if (type === 'roja' || type === 'd-amarilla') p.tr++;
+        else if (type === 'card') { if (ico === '🟨') p.ta++; else if (ico === '🟥') p.tr++; else if (ico === '🟨🟥') { p.ta++; p.tr++; } }
+        else if (type === 'gol') p.gol++;
+        else if (type === 'falta-gol') p.fk++;
+        else if (type === 'pen-gol') p.pen++;
+        else if (type === 'pen-prov') p.penProv++;
+        else if (type === 'pen-fallo' || type === 'pen-fallado') p.penFall++;
+        else if (type === 'propia') p.propia++;
+        else if (type === 'pen-parado') p.penSaved++;
+        else if (type === 'mvp') p.mvp++;
+        else if (type === 'imbat') p.imbat++;
+      });
+      if (res.mvp && res.mvpTeam) {
+        var hasMvp = evs.some(function(e){ return e && e.type === 'mvp'; });
+        if (!hasMvp) { var rm = rec(res.mvpTeam, res.mvp); if (rm) rm.mvp++; }
+      }
+    });
+    return stats;
+  }
   function _mundialStatsHtml(cfg, tourId, teams){
     var html = _mundialBackBtn(tourId)
       + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;'
@@ -22190,12 +22274,21 @@ window._showSimProgress = function(opts, onDone){
         }
       } catch(_){}
     }
-    var EMPTY = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
+    /* ÚLTIMO RECURSO ROBUSTO (2026-06-01): escaneo directo de
+       cfg.results que NO depende de groupFixtures NI de home/away — usa
+       team a/b + side + realTeam y resuelve el nombre real contra el
+       índice de grupos/KO si hace falta. Los partidos del Mundial 2032
+       (fotos usuario) tienen el acta completa en cfg.results[].events
+       pero a veces sin home/away (sims viejas) y sin groupFixtures
+       reconstruido → todos los agregadores previos salían vacíos. */
+    if (!stats || !Object.keys(stats).length) {
+      try { var rs = _mundialStatsRobustScan(cfg, teams); if (rs && Object.keys(rs).length) stats = rs; } catch(_){}
+    }
     var inner;
     try {
       inner = (typeof window._lextStatsDashHtml === 'function')
-        ? window._lextStatsDashHtml(stats) : EMPTY;
-    } catch(_){ inner = EMPTY; }
+        ? window._lextStatsDashHtml(stats, true) : '';
+    } catch(_){ inner = ''; }
     /* Botón 🔄 Recalcular: fuerza la regeneración del acta (events) de
        TODOS los partidos jugados y re-pinta. Red de seguridad visible
        para el usuario cuando, por timing/hidratación, el backfill

@@ -11084,6 +11084,32 @@ window._showSimProgress = function(opts, onDone){
       catch(_){ return ''; }
     };
   }
+  /* Icono humano de un equipo para las cajas de estadísticas (2026-06-01,
+     petición usuario: "siempre que haya un equipo humano el texto en
+     amarillo y el icono"). Prioridad:
+       1) MISTERS_REGISTRY (_mhFindMister) → emoji del mister (💡🐭🔨✏️😈🦆)
+          para las 6 selecciones + 6 clubes canónicos.
+       2) humanIcon(name) → humanos secundarios con emoji en el editor.
+     Devuelve '' (sin icono) si el equipo no es humano. */
+  if (typeof window._statHumanIcon !== 'function') {
+    window._statHumanIcon = function(teamName){
+      var n = String(teamName || '').trim();
+      if (!n) return '';
+      try {
+        if (typeof window._mhFindMister === 'function') {
+          var mh = window._mhFindMister(n);
+          if (mh && mh.emoji) return mh.emoji;
+        }
+      } catch(_){}
+      try {
+        if (typeof window.humanIcon === 'function') {
+          var ic = window.humanIcon(n);
+          if (ic && String(ic).trim()) return String(ic).trim();
+        }
+      } catch(_){}
+      return '';
+    };
+  }
   /* Renderiza el dashboard de estadísticas (8 categorías) a partir de
      un objeto `stats` (`teamNorm::playerNorm` → counters) y devuelve
      el HTML. Lo usan `_lextBuildCompStatsDashboard` (lee de
@@ -11142,10 +11168,13 @@ window._showSimProgress = function(opts, onDone){
       return rows.map(function(item, idx){
         var humanCls = (typeof window._humanPlayerClass === 'function')
           ? window._humanPlayerClass(item.team) : '';
+        var hIco = (typeof window._statHumanIcon === 'function')
+          ? window._statHumanIcon(item.team) : '';
+        var icoHtml = hIco ? '<span class="stat-human-ico">' + hIco + '</span>' : '';
         return '<div class="liga-stat-row">'
              +   '<div class="liga-stat-rank">' + (startIndex + idx) + '</div>'
              +   '<div class="liga-stat-player">'
-             +     '<div class="liga-stat-name' + humanCls + '">' + _escHtmlPS(item.name) + '</div>'
+             +     '<div class="liga-stat-name' + humanCls + '">' + _escHtmlPS(item.name) + icoHtml + '</div>'
              +     '<div class="liga-stat-team">' + _escHtmlPS(item.team) + '</div>'
              +   '</div>'
              +   '<div class="liga-stat-value">' + item.value + '</div>'
@@ -22353,9 +22382,11 @@ window._showSimProgress = function(opts, onDone){
     function rows(list, start){
       return list.map(function(it, i){
         var hc = (typeof window._humanPlayerClass === 'function') ? window._humanPlayerClass(it.team) : '';
+        var hIco = (typeof window._statHumanIcon === 'function') ? window._statHumanIcon(it.team) : '';
+        var icoHtml = hIco ? '<span class="stat-human-ico">' + hIco + '</span>' : '';
         return '<div class="liga-stat-row">'
           + '<div class="liga-stat-rank">' + (start+i) + '</div>'
-          + '<div class="liga-stat-player"><div class="liga-stat-name'+hc+'">' + esc(it.name) + '</div>'
+          + '<div class="liga-stat-player"><div class="liga-stat-name'+hc+'">' + esc(it.name) + icoHtml + '</div>'
           + '<div class="liga-stat-team">' + esc(it.team) + '</div></div>'
           + '<div class="liga-stat-value">' + it.value + '</div></div>';
       }).join('');

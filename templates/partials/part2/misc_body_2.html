@@ -27337,6 +27337,16 @@ document.addEventListener('DOMContentLoaded', function() {
         timerBtn0.disabled = false;
         timerBtn0.style.display = '';
         timerBtn0.textContent = '▶ SIMULAR';
+        /* Belt-and-suspenders: además del onclick inline del HTML,
+           enlazamos un handler directo (referencia viva a
+           mlTimerClickGen capturando mk) para que ▶ SIMULAR arranque
+           la simulación IA-vs-IA aunque el atributo onclick inline se
+           pierda o no resuelva en algún navegador. */
+        (function(matchKey){
+          timerBtn0.onclick = function(){
+            if (typeof window.mlTimerClickGen === 'function') window.mlTimerClickGen(matchKey);
+          };
+        })(mk);
       }
       var addBtn0 = document.getElementById('ml-add-btn-' + mk);
       if (addBtn0) { addBtn0.style.visibility = 'hidden'; addBtn0.disabled = true; }
@@ -31879,8 +31889,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!mk) return;
     var wrap = document.getElementById('mlw-' + mk);
     if (!wrap) return;
-    /* Solo HvH/HvIA. */
-    var isHumanMatch = wrap.classList.contains('hvh') || wrap.classList.contains('hvia');
+    /* Solo HvH/HvIA. Los amistosos IA-vs-IA comparten layout y llevan la
+       clase `hvia`, pero NO son partidos con humano: el overlay
+       "REGISTRA EL EVENTO EN eFootball" (cuenta atrás que PAUSA el
+       cronómetro) jamás debe dispararse en una simulación IA-vs-IA —
+       hacía que el amistoso IA-vs-IA se congelara en el primer gol/
+       tarjeta (bug 2026-05-31). */
+    var _stWatch = (typeof window._calMlSt === 'function') ? window._calMlSt(mk) : null;
+    var isHumanMatch = (wrap.classList.contains('hvh') || wrap.classList.contains('hvia'))
+                       && !(_stWatch && _stWatch.isIAvsIA);
     if (!isHumanMatch) return;
     new MutationObserver(function(muts){
       for (var i = 0; i < muts.length; i++){
@@ -31893,6 +31910,9 @@ document.addEventListener('DOMContentLoaded', function() {
              de carga de localStorage). */
           var st = window._calMlSt && window._calMlSt(mk);
           if (!st || !st.timerRunning) continue;
+          /* IA-vs-IA nunca muestra el overlay de cuenta atrás (no hay
+             humano que registre el evento en eFootball). */
+          if (st.isIAvsIA) continue;
           var type = n.getAttribute('data-type') || '';
           if (!EVT_CD_SEC[type]) continue;
           /* Defer un tick para que el código que añadió el evento

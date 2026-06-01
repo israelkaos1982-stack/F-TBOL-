@@ -8509,8 +8509,161 @@
     }
   };
 
+  /* ════════════════════════════════════════════════════════════════
+     MOTOR DE SIMULACIÓN PROPIO DE AMISTOSOS (autocontenido, 2026-05-31)
+     ════════════════════════════════════════════════════════════════
+     Los amistosos (st.isFriendly) viven en `#ams-match-container` y su
+     estado `_mlStates[mk]` lo gestiona/rehidrata el sync del servidor
+     (`_liveStore`) — a diferencia del gm-modal (`__GM_LIVE`), que NO se
+     rehidrata. Eso hacía que el cronómetro de los amistosos se quedara
+     CONGELADO en 0' en la web desplegada (el sync paraba/reseteaba el
+     setInterval del cron compartido entre ticks), mientras que Liga y el
+     resto seguían bien. Petición usuario 2026-05-31: "solo toca la
+     simulación de amistosos".
+
+     Este motor es DEDICADO y robusto por construcción:
+       · Movido por requestAnimationFrame (garantizado en primer plano,
+         inmune al throttling de setInterval) + un setInterval de
+         respaldo (por si rAF no está). El rAF se RE-PROGRAMA solo: nada
+         externo (sync, scanners) puede pararlo.
+       · El minuto se DERIVA del reloj real (Date.now) desde un ancla
+         `_amsWall` que NO se serializa al servidor → ningún reset
+         externo de `timerSec` lo afecta (cada frame recalcula el minuto
+         correcto). No puede clavarse en 0'.
+       · Solo re-renderiza/ dispara eventos cuando CAMBIA el minuto
+         (guardia `_amsLastMin`), así no satura el hilo ni el observer.
+     Reglas CLAUDE.md respetadas: IAIA = 1 game-min por segundo real
+     (90 s); HvIA = ritmo de `_mlResolveClock`; descanso del amistoso al
+     45' (auto, reutiliza `_mlEnterDescansoCore`); finalización IAIA
+     automática y HvIA manual (botón FINALIZAR). */
+  function _amsDriveStart(mk) {
+    var st = _mlSt(mk);
+    if (!st) return;
+    /* Limpiar cualquier driver/intervalo previo de este partido. */
+    if (st._amsRaf != null) { try { cancelAnimationFrame(st._amsRaf); } catch(_){} st._amsRaf = null; }
+    if (st._amsTimer) { try { clearInterval(st._amsTimer); } catch(_){} st._amsTimer = null; }
+    if (st._iaiaInterval) { try { clearInterval(st._iaiaInterval); } catch(_){} st._iaiaInterval = null; }
+    if (st.timerInterval) { try { clearInterval(st.timerInterval); } catch(_){} st.timerInterval = null; }
+    /* Pre-generar eventos IA (ambos lados IA, o el lado IA en HvIA). */
+    try { _mlPreGenAIEvents(mk); }
+    catch(_ePg){ st.pendingAIEvents = st.pendingAIEvents || []; st.aiEventsGenerated = true; }
+    st.stoppageSec = 0;
+    /* Ritmo: ms reales por game-minute. */
+    var perMin;
+    if (st.isIAvsIA) {
+      perMin = 1000; /* IAIA: 1 segundo real = 1 game-min (CLAUDE.md). */
+    } else {
+      var tickMs = 542;
+      try {
+        var rc = (typeof _mlResolveClock === 'function')
+          ? _mlResolveClock({ isHvH: !!st.isHvH, etDone: !!st.etDone, home: st.home,
+                              away: st.away, humanInvolved: true,
+                              timerSec: st.timerSec, htDone: st.htDone })
+          : null;
+        if (rc && isFinite(rc.tickMs) && rc.tickMs > 0) tickMs = rc.tickMs;
+      } catch(_){}
+      perMin = tickMs * (60 / _ML_TICK_SEC); /* tickMs es por _ML_TICK_SEC game-seg. */
+    }
+    if (!isFinite(perMin) || perMin <= 0) perMin = st.isIAvsIA ? 1000 : 6500;
+    st._amsPerMin = perMin;
+    /* Ancla wall-clock a partir del minuto actual (continúa tras pausa/
+       descanso). NO se serializa → inmune a resets del sync. */
+    st._amsWall = Date.now() - Math.max(0, (st.timerSec || 0)) / 60 * perMin;
+    st._amsLastMin = -1;
+    _mlRenderTimerGen(mk);
+
+    function _amsTick() {
+      st._amsRaf = null;
+      try {
+        if (!st.timerRunning || st.finished || st.inDescanso) {
+          if (st._amsTimer) { clearInterval(st._amsTimer); st._amsTimer = null; }
+          return;
+        }
+        var curMin = Math.floor((Date.now() - st._amsWall) / st._amsPerMin);
+        if (curMin < 0) curMin = 0;
+        /* Solo trabajamos cuando cambia el minuto (no en cada frame). */
+        if (curMin === st._amsLastMin) {
+          st._amsRaf = (typeof requestAnimationFrame === 'function')
+            ? requestAnimationFrame(_amsTick) : null;
+          return;
+        }
+        var stops = (typeof _mlCountStoppageHalves === 'function')
+          ? _mlCountStoppageHalves(st) : { first: 0, second: 0 };
+        var halfMaxMin = 45 + (stops.first || 0);
+        var fullMaxMin = 90 + (stops.second || 0);
+
+        /* ── 1ª parte de un amistoso HvH/HvIA: descanso AUTOMÁTICO al
+              llegar a 45'+descuento (regla amistosos). ─────────────── */
+        if (!st.isIAvsIA && !st.htDone && curMin >= halfMaxMin) {
+          st._amsLastMin = halfMaxMin;
+          st.timerSec = halfMaxMin * 60;
+          _mlFirePendingEvents(mk, halfMaxMin);
+          if (st._amsTimer) { clearInterval(st._amsTimer); st._amsTimer = null; }
+          if (typeof _mlEnterDescansoCore === 'function') {
+            try { _mlEnterDescansoCore(mk, st); }
+            catch(_){ st.inDescanso = true; st.htDone = true; st.timerRunning = false; _mlRenderTimerGen(mk); }
+          } else {
+            st.inDescanso = true; st.htDone = true; st.timerRunning = false; _mlRenderTimerGen(mk);
+          }
+          return; /* se reanuda vía _mlResumeFromDescanso → _amsDriveStart */
+        }
+
+        /* IAIA: marcador de descanso (sin pausa) al cruzar el 45. */
+        if (st.isIAvsIA && curMin >= 45 && !st.htDone) {
+          st.htDone = true;
+          var listIA = document.getElementById('ml-acta-list-' + mk);
+          if (listIA) {
+            var d = document.createElement('div');
+            d.className = 'ml-ht'; d.textContent = '— DESCANSO (45 min) —';
+            listIA.appendChild(d);
+          }
+        }
+
+        if (curMin > fullMaxMin) curMin = fullMaxMin;
+        st._amsLastMin = curMin;
+        st.timerSec = curMin * 60;
+        _mlFirePendingEvents(mk, curMin);
+        _mlRenderTimerGen(mk);
+
+        if (curMin >= fullMaxMin) {
+          if (st.isIAvsIA) {
+            st.timerRunning = false;
+            if (st._amsTimer) { clearInterval(st._amsTimer); st._amsTimer = null; }
+            if (typeof window.mlEndMatchGen === 'function') {
+              try { window.mlEndMatchGen(mk); } catch(_){}
+            }
+            return;
+          }
+          /* HvIA: congelar en 90'+descuento; el humano pulsa FINALIZAR. */
+          st.timerSec = fullMaxMin * 60;
+        }
+      } catch(_eAms) {
+        try { console.error('[ams tick]', mk, _eAms); } catch(__){}
+      }
+      if (st.timerRunning && !st.finished && !st.inDescanso) {
+        st._amsRaf = (typeof requestAnimationFrame === 'function')
+          ? requestAnimationFrame(_amsTick) : null;
+      }
+    }
+
+    /* Doble motor: rAF (preciso, primer plano) + setInterval de respaldo.
+       Ambos derivan del mismo reloj, así que son idempotentes. */
+    st._amsRaf = (typeof requestAnimationFrame === 'function')
+      ? requestAnimationFrame(_amsTick) : null;
+    st._amsTimer = setInterval(_amsTick, 250);
+    /* Exponemos el respaldo como timerInterval para que el "pause" de
+       mlTimerClickGen (clearInterval) también lo detenga; el rAF se
+       autodetiene al ver timerRunning=false. */
+    st.timerInterval = st._amsTimer;
+  }
+
   function _mlStartIntervalGen(mk) {
     var st = _mlSt(mk);
+
+    /* Amistosos → motor dedicado (rAF + reloj real). Cubre el arranque
+       inicial, la reanudación tras descanso (_mlResumeFromDescanso) y
+       cualquier re-arme: todos pasan por aquí. */
+    if (st.isFriendly) { _amsDriveStart(mk); return; }
 
     /* ════ IA vs IA: simulador dedicado garantizado (2026-05-09) ════
        Petición usuario: TODA simulación IA-vs-IA debe avanzar el
@@ -8534,35 +8687,15 @@
         st.aiEventsGenerated = true;
       }
       st.stoppageSec = 0;
-      /* ── CRON IA-vs-IA DERIVADO DEL RELOJ REAL (auto-corrector) ──────
-         Regla CLAUDE.md: IAIA = 1 game-min por segundo real (90 s total).
-         ANTES el minuto se incrementaba con un contador (curMin++ por
-         tick). Si un tick se retrasaba, se perdía, o un proceso externo
-         (sync del servidor, re-render, throttling del móvil) reescribía
-         st.timerSec entre ticks, el contador no progresaba y el cron se
-         quedaba CONGELADO en 0' (bug recurrente del usuario, 2026-05-31).
-         AHORA el minuto se DERIVA de Date.now(): cada tick recalcula el
-         minuto correcto desde el instante de arranque, así el cron NO
-         puede clavarse en 0' mientras dispare aunque sea de vez en cuando
-         — y se auto-corrige tras cualquier reset externo de timerSec.
-         Anclamos _iaiaWall a partir del timerSec actual para que un
-         partido reanudado continúe desde su minuto. */
-      st._iaiaWall = Date.now() - Math.max(0, (st.timerSec || 0)) / 60 * 1000;
       _mlRenderTimerGen(mk);
       st._iaiaInterval = setInterval(function(){
         try {
-          /* Minuto = segundos reales transcurridos (1 game-min/seg). */
-          var curMin = Math.floor((Date.now() - st._iaiaWall) / 1000);
-          if (curMin < 0) curMin = 0;
-          var stops = (typeof _mlCountStoppageHalves === 'function')
-            ? _mlCountStoppageHalves(st)
-            : { first: 0, second: 0 };
-          var endMin = 90 + (stops.second || 0);
-          if (curMin > endMin) curMin = endMin;
+          /* min++ en cada tick. Garantiza recorrido 1, 2, 3, … 90. */
+          var curMin = Math.floor(st.timerSec / 60) + 1;
           st.timerSec = curMin * 60;
 
-          /* HT marker al cruzar el 45 (solo una vez; >= por si saltamos). */
-          if (curMin >= 45 && !st.htDone) {
+          /* HT marker al cruzar el 45 (solo una vez). */
+          if (curMin === 45 && !st.htDone) {
             st.htDone = true;
             var listIA = document.getElementById('ml-acta-list-' + mk);
             if (listIA) {
@@ -8573,7 +8706,7 @@
             }
           }
 
-          /* Disparar eventos pendientes hasta este minuto. */
+          /* Disparar eventos pendientes para este minuto. */
           if (typeof _mlFirePendingEvents === 'function') {
             _mlFirePendingEvents(mk, curMin);
           }
@@ -8582,6 +8715,10 @@
           _mlRenderTimerGen(mk);
 
           /* End match al llegar a 90 (+ descuento dinámico si lo hay). */
+          var stops = (typeof _mlCountStoppageHalves === 'function')
+            ? _mlCountStoppageHalves(st)
+            : { first: 0, second: 0 };
+          var endMin = 90 + (stops.second || 0);
           if (curMin >= endMin) {
             clearInterval(st._iaiaInterval);
             st._iaiaInterval = null;
@@ -8595,7 +8732,7 @@
           try { console.error('[iaia tick]', mk, _eTickIa); } catch(__){}
           /* Tick sigue vivo aunque uno falle. */
         }
-      }, 250);
+      }, 1000);
       st.timerInterval = st._iaiaInterval;
       return;
     }
@@ -27775,16 +27912,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) {
           scheduleRun(); break;
         }
-        /* OJO: NO reaccionamos a cambios de clase de `.ml-timer`. El
-           cronómetro reescribe su className en CADA tick (varias veces
-           por segundo), y eso disparaba runAll en bucle (render→observer
-           →runAll→…), competiendo con el setInterval del cron y
-           contribuyendo a que se "clavara" (anti-patrón documentado en
-           CLAUDE.md "Cronómetro · BASE INMUTABLE"). El re-patch de
-           estadio/clima solo necesita detectar cards NUEVAS (childList,
-           arriba) o cambios en el propio `.match-live-wrap`. */
         if (m.type === 'attributes' && m.target && m.target.classList &&
-            m.target.classList.contains('match-live-wrap')) {
+            (m.target.classList.contains('ml-timer') || m.target.classList.contains('match-live-wrap'))) {
           scheduleRun(); break;
         }
       }

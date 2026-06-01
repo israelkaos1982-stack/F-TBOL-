@@ -16314,6 +16314,22 @@ window._showSimProgress = function(opts, onDone){
       </div>
     </div>
 
+    <!-- Balones (2 balones) — torneos de Selecciones (Rondas Previas /
+         Finales) y de Verano. El admin elige 2 balones del Inventario;
+         cada partido del torneo usa uno de los 2 rotando por hash
+         determinista del matchKey. Petición usuario 2026-06-01.
+         _renderTourBalls togglea display según el board del torneo. -->
+    <div class="tour-ed-row" id="tour-ed-balls-row" style="display:none;">
+      <label>Balones (2)</label>
+      <div id="tour-ed-balls-box" class="tour-ed-stadiums-box">
+        <div style="font-size:11px;color:#9cc6ff;line-height:1.45;margin-bottom:6px;text-transform:none;letter-spacing:0;">
+          ⚽️ <b>Balones del torneo</b> · cada partido usa uno de estos 2 balones (rotando).
+          Toca un hueco para elegir del Inventario de Balones.
+        </div>
+        <div id="tour-ed-balls-list"></div>
+      </div>
+    </div>
+
     <!-- Premios -->
     <div class="tour-ed-row" id="tour-ed-prizes-row">
       <label>Premios 🪙 (uno por línea, formato `clave:valor`)</label>
@@ -18186,7 +18202,6 @@ window._showSimProgress = function(opts, onDone){
          (caja sfn*). Solo grupos + clasificados; NO genera KO en
          este mismo torneo. Los clasificados se envían manualmente
          al torneo destino con un botón. Petición usuario 2026-05-24. */
-      var _targets = _qualifierTargetOptionsHtml(fc.targetTour, _open && _open.id);
       box.innerHTML =
         '<div class="tour-ed-row-2" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">' +
         '<div><label>Nº grupos</label><input id="tour-ed-groups" type="number" min="1" max="16" value="'+(fc.groups||4)+'"></div>' +
@@ -18197,9 +18212,9 @@ window._showSimProgress = function(opts, onDone){
         '<div><label>Doble vuelta</label><label style="display:flex;align-items:center;gap:6px;font-size:12px;text-transform:none;letter-spacing:0;padding-top:8px;"><input id="tour-ed-grpdouble" type="checkbox" style="width:auto;" '+(fc.groupDoubleLegs?'checked':'')+'> cada rival 2 veces</label></div>' +
         '</div>' +
         '<label style="margin-top:10px;">📤 Ramificación · Ronda Final destino</label>' +
-        '<select id="tour-ed-target" style="width:100%;box-sizing:border-box;padding:7px;border-radius:6px;background:#1a1f29;color:#eee;border:1px solid rgba(255,102,196,.45);font-family:inherit;font-size:13px;">' +
-          _targets +
-        '</select>' +
+        '<button type="button" id="tour-ed-target-btn" data-target="'+_tvEsc(fc.targetTour||'')+'" onclick="window._tourEdTargetPickerOpen&&window._tourEdTargetPickerOpen()" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:6px;background:#1a1f29;color:#eee;border:1px solid rgba(255,102,196,.45);font-family:inherit;font-size:13px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:8px;">' +
+          '<span class="tour-ed-target-lbl" style="flex:1;">'+_tvEsc(_qualifierTargetLabel(fc.targetTour||''))+'</span><span style="opacity:.7;">▼</span>' +
+        '</button>' +
         '<div style="margin-top:8px;padding:8px 10px;background:rgba(255,66,179,.10);border:1px dashed rgba(255,66,179,.45);border-radius:6px;font-size:11px;color:#ffaadf;line-height:1.45;text-transform:none;letter-spacing:0;">'+
           '<b>Cómo funciona</b>: este torneo es solo una <b>fase de grupos</b> — no genera cuadro KO propio. '+
           'Al terminar los grupos, los <b>N primeros</b> + los <b>X mejores '+(((fc.advancePerGroup||2)+1))+'ºs</b> '+
@@ -18254,6 +18269,87 @@ window._showSimProgress = function(opts, onDone){
     });
     return opts;
   }
+
+  /* Nombre visible de un slot sfn* para el botón de Ramificación. */
+  function _qualifierTargetLabel(cur){
+    if (!cur) return '— seleccionar Ronda Final —';
+    var c = (window._TOUR_CACHE && window._TOUR_CACHE[cur]) || null;
+    if (!c) { try { c = _tourLoadCachedSync(cur); } catch(_){} }
+    if (!c) c = DEFAULTS[cur] || {};
+    return c.name || cur;
+  }
+
+  /* Picker overlay para «Ramificación · Ronda Final destino».
+     Reemplaza al <select> nativo (que en algunos móviles Samsung NO
+     aplicaba la opción elegida — bug usuario 2026-06-01, foto "Road
+     Copa América"). Guarda el id elegido en el `data-target` del botón
+     y en `_open.cfg.formatConfig.targetTour`; `_readForm` lo lee de ahí.
+     Mismo patrón que los pickers de sedes / balones. */
+  window._tourEdTargetPickerOpen = function(){
+    if (!_open || !_open.cfg) return;
+    var selfId = _open.id;
+    var btn = document.getElementById('tour-ed-target-btn');
+    var cur = (btn && btn.getAttribute('data-target')) ||
+              (_open.cfg.formatConfig && _open.cfg.formatConfig.targetTour) || '';
+    function _name(id){
+      var c = (window._TOUR_CACHE && window._TOUR_CACHE[id]) || null;
+      if (!c) { try { c = _tourLoadCachedSync(id); } catch(_){} }
+      if (!c) c = DEFAULTS[id] || {};
+      return c.name || id;
+    }
+    var ov = document.getElementById('tour-ed-target-picker-ov');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'tour-ed-target-picker-ov';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000050;display:flex;align-items:center;justify-content:center;padding:14px;';
+      ov.innerHTML = '<div style="background:#101522;color:#eee;width:100%;max-width:520px;max-height:88vh;border-radius:12px;border:1px solid rgba(255,102,196,.45);display:flex;flex-direction:column;overflow:hidden;">'+
+        '<div style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);">'+
+          '<div style="flex:1;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#ffaadf;">📤 RONDA FINAL DESTINO</div>'+
+          '<button id="tour-ed-tp-x" style="background:rgba(255,80,80,.18);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:6px;padding:4px 10px;font-size:13px;cursor:pointer;">✕</button>'+
+        '</div>'+
+        '<div id="tour-ed-tp-list" style="flex:1;overflow:auto;padding:6px 8px;"></div>'+
+      '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) ov.style.display = 'none'; });
+    }
+    var listEl = ov.querySelector('#tour-ed-tp-list');
+    var xEl    = ov.querySelector('#tour-ed-tp-x');
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function rowHtml(val, label){
+      var isCur = (cur === val);
+      var bg = isCur ? 'rgba(255,102,196,.18)' : 'rgba(255,255,255,.05)';
+      var bd = isCur ? '1px solid rgba(255,102,196,.7)' : '1px solid rgba(255,255,255,.08)';
+      return '<div class="tour-ed-tp-row" data-val="'+esc(val)+'"'+
+        ' style="display:flex;align-items:center;gap:10px;padding:11px 12px;margin:4px 0;background:'+bg+';border:'+bd+';border-radius:7px;cursor:pointer;">'+
+        '<span style="flex:1;font-family:Rajdhani,sans-serif;font-size:14px;color:#eee;">'+esc(label)+'</span>'+
+        (isCur ? '<span style="font-size:12px;color:#ffaadf;">✓</span>' : '')+
+      '</div>';
+    }
+    var html = rowHtml('', '— seleccionar Ronda Final —');
+    TOUR_SLOTS_SELF.forEach(function(id){
+      if (id === selfId) return;
+      html += rowHtml(id, _name(id));
+    });
+    listEl.innerHTML = html;
+    listEl.onclick = function(e){
+      var r = e.target.closest && e.target.closest('.tour-ed-tp-row');
+      if (!r) return;
+      var val = r.getAttribute('data-val') || '';
+      if (btn){
+        btn.setAttribute('data-target', val);
+        var lblSpan = btn.querySelector('.tour-ed-target-lbl');
+        if (lblSpan) lblSpan.textContent = _qualifierTargetLabel(val);
+      }
+      _open.cfg.formatConfig = _open.cfg.formatConfig || {};
+      _open.cfg.formatConfig.targetTour = val;
+      _open.dirty = true;
+      _tourEdScheduleSave();
+      ov.style.display = 'none';
+    };
+    xEl.onclick = function(){ ov.style.display = 'none'; };
+    ov.style.zIndex = '1000050';
+    ov.style.display = 'flex';
+  };
 
   /* CASILLAS de "Formato" (sustituyen al <select> nativo, que no
      respondía de forma fiable en móvil — bug usuario 2026-05-17 y
@@ -18319,6 +18415,11 @@ window._showSimProgress = function(opts, onDone){
     _open.dirty = true;
     _tourEdFmtPaint(fmt);
     _renderFmtCfg();
+    /* Refrescar visibilidad de las filas de sedes/balones por torneo:
+       la de sedes se OCULTA en mundial-48 (que tiene su propio picker
+       en la subconfig) y se MUESTRA en el resto. */
+    _renderTourStadiums();
+    _renderTourBalls();
     /* Persistir el cambio de formato (un click en <div> no dispara
        `input`/`change`, así que el auto-guardado del editor-box no se
        enteraría). */
@@ -18374,20 +18475,27 @@ window._showSimProgress = function(opts, onDone){
     _renderLeagueChecks();
     _updatePoolStat();
     _renderTourStadiums();
+    _renderTourBalls();
   }
 
-  /* Render del picker de 4 sedes (Torneos de Verano).
-     Visible solo cuando `_tvBoardOf(cfg.id) === 'verano'`. Lee/escribe
-     en `_open.cfg.stadiums` (array de 4 strings). 2026-05-25. */
+  /* Render del picker de 4 sedes. Visible en Torneos de Verano Y en
+     torneos de Selecciones (Rondas Previas / Finales) — petición
+     usuario 2026-06-01: las selecciones también eligen sus 4 estadios
+     por torneo. Lee/escribe en `_open.cfg.stadiums` (array de 4
+     strings). 2026-05-25 (verano) · 2026-06-01 (selecciones). */
   function _renderTourStadiums(){
     var row = document.getElementById('tour-ed-stadiums-row');
     if (!row) return;
     var cfg = (_open && _open.cfg) || null;
-    var board = cfg ? _tvBoardOf(cfg.id) : null;
-    /* Solo torneos de Verano (sct, pss, jg, asia, mundial, tx1..tx8).
-       Selecciones (sel-previa / sel-final) tienen su propio sistema
-       global `sel_fin_stadiums_v1` y NO se mezclan aquí. */
-    if (board !== 'verano') { row.style.display = 'none'; return; }
+    if (!cfg) { row.style.display = 'none'; return; }
+    /* mundial-48 ya tiene su propio picker de 4 sedes dentro de la
+       subconfig del formato (global `sel_fin_stadiums_v1`); no lo
+       duplicamos aquí. */
+    if (cfg.format === 'mundial-48') { row.style.display = 'none'; return; }
+    /* Verano + Selecciones (sel-previa / sel-final). Son los únicos
+       boards del editor de torneos; mostramos la fila en todos. Las
+       4 sedes por torneo (cfg.stadiums) ganan sobre el sistema global
+       `sel_fin_stadiums_v1` en las cards (ver _tourStadiumForPrevia). */
     row.style.display = '';
     var list = document.getElementById('tour-ed-stadiums-list');
     if (!list) return;
@@ -18406,6 +18514,143 @@ window._showSimProgress = function(opts, onDone){
     }
     list.innerHTML = html;
   }
+
+  /* ── Balones del torneo (cfg.balls, 2 balones, 2026-06-01) ──
+     Render del picker de 2 balones. Visible en los mismos boards que
+     las sedes (Verano + Selecciones). Lee/escribe `_open.cfg.balls`
+     (array de 2 strings con el nombre del balón, espacios no `_`). */
+  function _renderTourBalls(){
+    var row = document.getElementById('tour-ed-balls-row');
+    if (!row) return;
+    var cfg = (_open && _open.cfg) || null;
+    if (!cfg) { row.style.display = 'none'; return; }
+    row.style.display = '';
+    var list = document.getElementById('tour-ed-balls-list');
+    if (!list) return;
+    var pool = (cfg.balls && cfg.balls.length) ? cfg.balls.slice(0,2) : ['',''];
+    while (pool.length < 2) pool.push('');
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    var html = '';
+    for (var i = 0; i < 2; i++){
+      var v = pool[i] || '';
+      var lbl = v ? esc(v) : '<i style="opacity:.5">— sin elegir —</i>';
+      html += '<div class="selfin-st-row" data-idx="'+i+'" onclick="window._tourEdBallPickerOpen&&window._tourEdBallPickerOpen('+i+')">'+
+        '<span class="selfin-st-num">'+(i+1)+'</span>'+
+        '<span class="selfin-st-name">'+lbl+'</span>'+
+        '<span class="selfin-st-act">🔍</span>'+
+      '</div>';
+    }
+    list.innerHTML = html;
+  }
+
+  /* Lista de balones disponibles (inventario del admin + BALL_DB).
+     Devuelve nombres ya limpios (con espacios, sin `_`). */
+  function _tourEdBallList(){
+    var seen = {}, out = [];
+    function add(id){
+      var nm = String(id==null?'':id).replace(/_/g,' ').trim();
+      if (!nm) return;
+      var k = nm.toLowerCase();
+      if (seen[k]) return;
+      seen[k] = 1; out.push(nm);
+    }
+    try {
+      var raw = localStorage.getItem('ball_inventory_v1');
+      if (raw){ var arr = JSON.parse(raw); if (Array.isArray(arr)) arr.forEach(add); }
+    } catch(_){}
+    (window.BALL_DB || []).forEach(function(b){ if (b && b.id) add(b.id); });
+    out.sort(function(a,b){ return a.localeCompare(b); });
+    return out;
+  }
+
+  /* Picker overlay (inventario de balones) para asignar un balón al
+     slot del torneo abierto. Mismo patrón visual que el picker de
+     sedes; los 2 balones viven en `_open.cfg.balls`. */
+  window._tourEdBallPickerOpen = function(slot){
+    if (!_open || !_open.cfg) return;
+    slot = parseInt(slot, 10) || 0;
+    if (slot < 0 || slot > 1) slot = 0;
+    var balls = _tourEdBallList();
+    if (!balls.length) { alert('No hay balones en el inventario.'); return; }
+    var cfg = _open.cfg;
+    cfg.balls = (cfg.balls && cfg.balls.length) ? cfg.balls.slice(0,2) : ['',''];
+    while (cfg.balls.length < 2) cfg.balls.push('');
+    var ov = document.getElementById('tour-ed-ball-picker-ov');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'tour-ed-ball-picker-ov';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:1000050;display:flex;align-items:center;justify-content:center;padding:14px;';
+      ov.innerHTML = '<div style="background:#101522;color:#eee;width:100%;max-width:520px;max-height:88vh;border-radius:12px;border:1px solid rgba(120,180,255,.4);display:flex;flex-direction:column;overflow:hidden;">'+
+        '<div style="display:flex;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1);">'+
+          '<div style="flex:1;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:14px;color:#9cc6ff;">⚽️ <span id="tour-ed-bp-title">BALÓN 1</span></div>'+
+          '<button id="tour-ed-bp-x" style="background:rgba(255,80,80,.18);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:6px;padding:4px 10px;font-size:13px;cursor:pointer;">✕</button>'+
+        '</div>'+
+        '<div style="padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.08);">'+
+          '<input id="tour-ed-bp-q" type="text" placeholder="🔍 Buscar balón…" autocomplete="off" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;padding:8px 12px;font-family:Rajdhani,sans-serif;font-size:13px;outline:none;">'+
+        '</div>'+
+        '<div id="tour-ed-bp-list" style="flex:1;overflow:auto;padding:6px 8px;"></div>'+
+        '<div style="padding:10px 12px;border-top:1px solid rgba(255,255,255,.08);display:flex;gap:8px;">'+
+          '<button id="tour-ed-bp-clear" style="flex:1;background:rgba(255,80,80,.14);color:#ffb0b0;border:1px solid rgba(255,80,80,.35);border-radius:6px;padding:9px;font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;cursor:pointer;">✖ VACIAR HUECO</button>'+
+        '</div>'+
+      '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if (e.target === ov) ov.style.display = 'none'; });
+    }
+    var titleEl = ov.querySelector('#tour-ed-bp-title');
+    var qEl     = ov.querySelector('#tour-ed-bp-q');
+    var listEl  = ov.querySelector('#tour-ed-bp-list');
+    var xEl     = ov.querySelector('#tour-ed-bp-x');
+    var clrEl   = ov.querySelector('#tour-ed-bp-clear');
+    titleEl.textContent = 'BALÓN ' + (slot + 1);
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function render(){
+      var q = (qEl.value || '').toLowerCase().trim();
+      var taken = {};
+      cfg.balls.forEach(function(s, i){ if (s && i !== slot) taken[s.toLowerCase()] = 1; });
+      var rows = balls.filter(function(nm){
+        return !q || nm.toLowerCase().indexOf(q) !== -1;
+      }).map(function(nm){
+        var isT  = !!taken[nm.toLowerCase()];
+        var isCur= (cfg.balls[slot] && cfg.balls[slot].toLowerCase() === nm.toLowerCase());
+        var bg = isCur ? 'rgba(120,180,255,.18)' : (isT ? 'rgba(255,255,255,.03)' : 'rgba(255,255,255,.05)');
+        var bd = isCur ? '1px solid rgba(120,180,255,.7)' : '1px solid rgba(255,255,255,.08)';
+        var op = isT ? '.45' : '1';
+        var tag = isT ? '<span style="font-size:10px;color:#ffa07a;margin-left:6px;">(ya en el otro hueco)</span>' : '';
+        var cur = isCur ? '<span style="font-size:10px;color:#9cc6ff;margin-left:6px;">✓ actual</span>' : '';
+        return '<div class="tour-ed-bp-row" data-name="'+esc(nm)+'"'+
+          ' style="display:flex;align-items:center;gap:10px;padding:9px 10px;margin:4px 0;background:'+bg+';border:'+bd+';border-radius:7px;cursor:pointer;opacity:'+op+';">'+
+          '<span style="font-size:14px;">⚽️</span>'+
+          '<span style="flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#eee;">'+esc(nm)+tag+cur+'</span>'+
+        '</div>';
+      }).join('');
+      listEl.innerHTML = rows || '<div style="padding:14px;text-align:center;opacity:.55;font-size:12px;">Sin resultados.</div>';
+    }
+    qEl.oninput = render;
+    listEl.onclick = function(e){
+      var r = e.target.closest && e.target.closest('.tour-ed-bp-row');
+      if (!r) return;
+      var name = r.getAttribute('data-name');
+      if (!name) return;
+      cfg.balls[slot] = name;
+      _open.dirty = true;
+      _tourEdScheduleSave();
+      _renderTourBalls();
+      ov.style.display = 'none';
+    };
+    clrEl.onclick = function(){
+      cfg.balls[slot] = '';
+      _open.dirty = true;
+      _tourEdScheduleSave();
+      _renderTourBalls();
+      ov.style.display = 'none';
+    };
+    xEl.onclick = function(){ ov.style.display = 'none'; };
+    qEl.value = '';
+    render();
+    ov.style.zIndex = '1000050';
+    ov.style.display = 'flex';
+    setTimeout(function(){ try { qEl.focus(); } catch(_){} }, 80);
+  };
 
   /* Picker overlay (lista STADIUM_DB) para asignar un estadio al
      slot del torneo de verano abierto en el editor. Mismo patrón
@@ -18615,7 +18860,14 @@ window._showSimProgress = function(opts, onDone){
       var _gpQ  = parseInt((document.getElementById('tour-ed-groups')||{}).value, 10) || 4;
       var _tbQ  = document.getElementById('tour-ed-tiebreak');
       var _gdQ  = document.getElementById('tour-ed-grpdouble');
-      var _tgQ  = document.getElementById('tour-ed-target');
+      /* Ronda Final destino: leemos del BOTÓN custom (data-target), que
+         sustituyó al <select> nativo (no aplicaba en móvil Samsung —
+         bug 2026-06-01). Fallback al select legacy y a la cfg previa. */
+      var _tgBtn = document.getElementById('tour-ed-target-btn');
+      var _tgQ   = document.getElementById('tour-ed-target');
+      var _tgVal = (_tgBtn && _tgBtn.getAttribute('data-target')) ||
+                   (_tgQ && _tgQ.value) ||
+                   (cfg.formatConfig && cfg.formatConfig.targetTour) || '';
       if (_advQ < 1) _advQ = 1;
       if (_advQ > _pgQ) _advQ = _pgQ;
       if (_xQ < 0) _xQ = 0;
@@ -18624,7 +18876,7 @@ window._showSimProgress = function(opts, onDone){
         perGroup: _pgQ,
         advancePerGroup: _advQ,
         extraQualifiers: _xQ,
-        targetTour: (_tgQ && _tgQ.value) || '',
+        targetTour: _tgVal,
         tieBreak: (_tbQ && _tbQ.value) || 'dif',
         groupDoubleLegs: !!(_gdQ && _gdQ.checked)
       };

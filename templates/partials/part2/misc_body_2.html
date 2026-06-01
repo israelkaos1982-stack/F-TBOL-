@@ -3874,6 +3874,46 @@
     return {grado:grado, gradoNombre:gn, gradoEmoji:ge, descripcion:d, partidos:partidos};
   }
   window._formaToggleInline = function(team, name){
+    /* ── SELECCIONES: muy pocos partidos. Un ⬇️ NO asigna una lesión
+       random de 2-11 partidos (eso es para CLUBES, que tienen muchos
+       partidos y torneos). En selección es BAJA POR FORMA: el jugador
+       solo se pierde ESTE partido + el SIGUIENTE (2 partidos), en el
+       store SEL (LESION_STORE_SEL), no en el de clubes.
+       Bug foto usuario 2026-06-01: Dembélé caía 5 partidos con Francia. */
+    var _isSel = false;
+    try { _isSel = (typeof window._esSelHumana === 'function') && window._esSelHumana(team); } catch(_){}
+    if (_isSel) {
+      var canon = (typeof window._canonSelHumana === 'function') ? window._canonSelHumana(team) : team;
+      window._FORMA_MATCH_STATES_SEL = window._FORMA_MATCH_STATES_SEL || {};
+      window.LESION_STORE_SEL        = window.LESION_STORE_SEL        || {};
+      var skey = canon + '::' + name;
+      if (window._FORMA_MATCH_STATES_SEL[skey] === '⬇️') {
+        /* deseleccionar: quitar la baja por forma SEL */
+        delete window._FORMA_MATCH_STATES_SEL[skey];
+        var lb = window.LESION_STORE_SEL[canon];
+        if (lb && lb[name]) delete lb[name];
+        renderForma();
+        if (typeof window._refreshSancionInjList === 'function') {
+          try { window._refreshSancionInjList(); } catch(_){}
+        }
+        return;
+      }
+      window._FORMA_MATCH_STATES_SEL[skey] = '⬇️';
+      try {
+        if (typeof window._selAddLesion === 'function') {
+          window._selAddLesion(canon, name, 2, '⬇️ Estado de forma');
+        }
+      } catch(_){}
+      alert('🏥 ⬇️ ESTADO DE FORMA — ' + String(canon).toUpperCase() + '\n' +
+            name + ' (' + canon + ')\n' +
+            'Se pierde este partido y el siguiente de su selección');
+      renderForma();
+      if (typeof window._refreshSancionInjList === 'function') {
+        try { window._refreshSancionInjList(); } catch(_){}
+      }
+      return;
+    }
+    /* ── CLUBES: lesión random MODERADA/GRAVE (hay muchos partidos) ── */
     window.BAJA_STORE         = window.BAJA_STORE         || {};
     window._FORMA_MATCH_STATES= window._FORMA_MATCH_STATES|| {};
     var existing = window._FORMA_MATCH_STATES[name];
@@ -3916,6 +3956,11 @@
         return;
       }
       html += '<div class="sancion-forma-team-hdr">⚔️ ' + team + ' <span class="sancion-forma-team-cnt">' + roster.length + '</span></div>';
+      /* SELECCIONES: el estado ⬇️ vive en _FORMA_MATCH_STATES_SEL
+         (baja por forma, 2 partidos), no en _FORMA_MATCH_STATES (clubes). */
+      var _isSelTeam = false;
+      try { _isSelTeam = (typeof window._esSelHumana === 'function') && window._esSelHumana(team); } catch(_){}
+      var _selCanon = (_isSelTeam && typeof window._canonSelHumana === 'function') ? window._canonSelHumana(team) : team;
       /* Foto 5 (2026-05-27): roster agrupado por posición — cabecera
          de grupo (Porteros / Defensas / Medios / Delanteros) seguida
          de los chips ⬇️ de ese grupo. */
@@ -3935,10 +3980,18 @@
         bucket.forEach(function(p){
           var name = p[1] || '?';
           var num  = p[0] || '';
-          var cur  = states[name] || '';
-          /* Si ya hay una lesión registrada de otro origen (no de este toggle),
-             deshabilitamos el botón para no pisar la lesión existente. */
-          var isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && cur !== '⬇️');
+          var cur, isLes;
+          if (_isSelTeam) {
+            var _sk = _selCanon + '::' + name;
+            cur = (window._FORMA_MATCH_STATES_SEL && window._FORMA_MATCH_STATES_SEL[_sk]) || '';
+            var _lb = window.LESION_STORE_SEL && window.LESION_STORE_SEL[_selCanon];
+            isLes = !!(_lb && _lb[name] && cur !== '⬇️');
+          } else {
+            cur  = states[name] || '';
+            /* Si ya hay una lesión registrada de otro origen (no de este toggle),
+               deshabilitamos el botón para no pisar la lesión existente. */
+            isLes = !!(window.BAJA_STORE && window.BAJA_STORE[name] && window.BAJA_STORE[name].tipo === 'lesion' && cur !== '⬇️');
+          }
           var stateCls = (cur === '⬇️' ? ' is-injured' : '') + (isLes ? ' is-disabled' : '');
           var dis = isLes ? 'disabled' : '';
           var esc = function(s){ return String(s).replace(/\\/g,'\\\\').replace(/\'/g,"\\'"); };

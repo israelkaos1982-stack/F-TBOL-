@@ -24940,6 +24940,26 @@ window.goLiveMatches = function() {
     /* Si el usuario lo mandó a la papelera, NUNCA rehidratar — el
      veto local supera cualquier snapshot vivo del servidor. */
     if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(mk)) return;
+    /* ── NO PISAR UN PARTIDO EN CURSO LOCAL ──────────────────────────
+       Si este dispositivo está jugando/simulando el partido AHORA MISMO
+       (cronómetro corriendo) y su minuto va por delante (o igual) del
+       snapshot entrante, ESTE dispositivo es la autoridad de su propio
+       reloj. Rehidratarlo llamaría a `_mlRestoreState`, que reescribe
+       `timerSec` al valor viejo del servidor (el tick del cron NO
+       persiste cada segundo, solo el kickoff a 0) y fuerza
+       `timerRunning=false` → el cronómetro de los amistosos IA-vs-IA
+       (y de cualquier partido en vivo) se quedaba CONGELADO en 0' tras
+       el primer poll de sincronización (cada 5 s). Bug 2026-05-31,
+       solo reproducible con servidor (Railway), no en local.
+       El propio `pollOnce` hace flush() después, así que el avance
+       local sí se sube al servidor en cada ciclo. */
+    try {
+      var _localSt = (typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
+      if (_localSt && _localSt.timerRunning && !_localSt.finished
+          && (_localSt.timerSec || 0) >= (saved.timerSec || 0)) {
+        return;
+      }
+    } catch (_eGuard) {}
     /* 1) Asegurar que existe la tarjeta en el DOM */
     var wrap = document.getElementById('mlw-' + mk);
     var isAms = mk.indexOf('ams-') === 0;
@@ -27520,6 +27540,35 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     _updatePlayBtn();
     _amsRenderHistory();
+    /* ── PRECARGA DE TODAS LAS LIGAS para el buscador ────────────────
+       El buscador (`_getTeamList`) lee SOLO las ligas que están en
+       localStorage (`ligaExt_*`). Esas ligas se bajan del servidor de
+       forma perezosa al abrir cada liga, así que en un dispositivo
+       donde el usuario no las ha abierto, la lupa NO encontraba la
+       mayoría de equipos (EA Sports, Hypermotion, Primera Federación,
+       las 51 del Resto + Resto del Mundo). Lanzamos el MISMO prefetch
+       async que usa el editor de torneos: baja a localStorage TODAS las
+       ligas que falten (concurrencia 5, idempotente, persiste para
+       siempre). A medida que llegan, re-pintamos la búsqueda activa con
+       debounce para que los equipos vayan apareciendo. Bug usuario
+       2026-05-31 ("no salen todos los equipos"). */
+    try {
+      if (typeof window._tourPrefetchAllLeagues === 'function') {
+        var _amsPfDeb = 0;
+        window._tourPrefetchAllLeagues(function(){
+          if (_amsPfDeb) return;
+          _amsPfDeb = setTimeout(function(){
+            _amsPfDeb = 0;
+            ['a','b'].forEach(function(side){
+              var inp = document.getElementById('ams-search-' + side);
+              if (inp && inp.value && inp.value.trim()) {
+                try { _renderResults(side, inp.value); } catch(_){}
+              }
+            });
+          }, 350);
+        });
+      }
+    } catch(_){}
   };
 
   /* ── Bind search inputs ── */

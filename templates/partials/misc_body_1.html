@@ -46579,15 +46579,15 @@ https://api.sofascore.app/api/v1/team/44/image
       { t:'No perder ningún partido europeo en casa' }
     ]},
     { id:'superliga', icon:'⚡', title:'SUPERLIGA · TOÑÍN VS EL MUNDO', color:'#b060f0', items:[
-      { t:'Ganar {N} de 20 partidos vs humanos', c:6, track:true },
-      { t:'{N} partidos imbatido contra rival real', c:4, track:true },
-      { t:'Marcar {N} o más ⚽ en 1 duelo humano', c:4, track:true },
-      { t:'No ser el equipo más goleado del grupo' },
-      { t:'No perder por más de {N} goles contra un rival', c:3 },
-      { t:'Conseguir {N} puntos de 60 posibles', c:20, track:true },
-      { t:'Quedar por delante de RIVAL', rival:true },
+      { t:'Ganar {N} de 20 partidos vs humanos', c:6, track:true, auto:'sl-wins' },
+      { t:'{N} partidos imbatido contra rival real', c:4, track:true, auto:'sl-unbeaten' },
+      { t:'Marcar {N} o más ⚽ en 1 duelo humano', c:4, track:true, auto:'sl-max-goals' },
+      { t:'No ser el equipo más goleado del grupo', auto:'sl-not-most-conceded' },
+      { t:'No perder por más de {N} goles contra un rival', c:3, auto:'sl-no-loss-by' },
+      { t:'Conseguir {N} puntos de 60 posibles', c:20, track:true, auto:'sl-pts' },
+      { t:'Quedar por delante de RIVAL', rival:true, auto:'sl-ahead-rival' },
       { t:'1 jugador en el Top {N} goleadores', c:3 },
-      { t:'Equipo entre los {N} máximos goleadores', c:3 },
+      { t:'Equipo entre los {N} máximos goleadores', c:3, auto:'sl-top-scorer' },
       { t:'1 jugador marca {N} Hattrick', c:1, track:true },
       { t:'1 jugador marca 2 o más goles en {N} partidos', c:4, track:true },
       { t:'1 jugador entre los {N} máximos MVP', c:3 },
@@ -46595,7 +46595,7 @@ https://api.sofascore.app/api/v1/team/44/image
       { t:'Portero {N} veces imbatido', c:3, track:true },
       { t:'Equipo con {N}% o más de posesión', c:50, u:'%', track:true },
       { t:'Equipo entre los {N} que más tiran a puerta', c:3 },
-      { t:'Equipo con menos tarjetas' },
+      { t:'Equipo con menos tarjetas', auto:'sl-least-cards' },
       { t:'Equipo entre los {N} con más córners', c:3 }
     ]},
     { id:'global', icon:'🏅', title:'GLOBALES DEL CLUB · HITOS DE ÉLITE', color:'#ff4444', items:[
@@ -47075,6 +47075,52 @@ https://api.sofascore.app/api/v1/team/44/image
   function _norm(s){ return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
   function _trailing(form, pred){ var n = 0; if (!form || !form.length) return 0; for (var i = form.length - 1; i >= 0; i--){ if (pred(form[i])) n++; else break; } return n; }
 
+  /* Contexto de la SUPERLIGA del hub, calculado desde el almacenamiento
+     ya persistido (calendario + resultados + eventos). Devuelve null si
+     no hay datos o el equipo del hub no está en la Superliga. */
+  function _superligaCtx(tnorm){
+    var cal, results;
+    try { cal = JSON.parse(localStorage.getItem('superliga_calendar_v1') || 'null'); } catch(_){}
+    try { results = JSON.parse(localStorage.getItem('superliga_results_v1') || 'null'); } catch(_){}
+    if (!cal || !Array.isArray(cal.teams) || !Array.isArray(cal.schedule) || !results) return null;
+    var T = {};
+    cal.teams.forEach(function(n){ T[n] = { name:n, pts:0, pj:0, v:0, gf:0, gc:0, dg:0, form:[], cards:0 }; });
+    var hubMatches = [];
+    cal.schedule.forEach(function(round, idx){
+      var j = idx + 1;
+      round.forEach(function(m){
+        var res = results[j + '|' + m[0] + '|' + m[1]];
+        if (!res) return;
+        var H = T[m[0]], A = T[m[1]]; if (!H || !A) return;
+        var gh = parseInt(res.gh, 10) || 0, ga = parseInt(res.ga, 10) || 0;
+        H.pj++; A.pj++; H.gf += gh; H.gc += ga; A.gf += ga; A.gc += gh;
+        if (gh > ga){ H.v++; H.pts += 3; H.form.push('W'); A.form.push('L'); }
+        else if (gh < ga){ A.v++; A.pts += 3; H.form.push('L'); A.form.push('W'); }
+        else { H.pts++; A.pts++; H.form.push('D'); A.form.push('D'); }
+        (res.events || []).forEach(function(e){
+          if (e && e.type && /amarilla|roja|tarjeta|card/i.test(e.type)){
+            if (e.team === 'a') H.cards++; else if (e.team === 'b') A.cards++;
+          }
+        });
+        if (_norm(m[0]) === tnorm) hubMatches.push({ gf:gh, ga:ga });
+        else if (_norm(m[1]) === tnorm) hubMatches.push({ gf:ga, ga:gh });
+      });
+    });
+    var arr = Object.keys(T).map(function(n){ return T[n]; });
+    arr.forEach(function(t){ t.dg = t.gf - t.gc; });
+    arr.sort(function(a,b){ if (b.pts!==a.pts) return b.pts-a.pts; if (b.dg!==a.dg) return b.dg-a.dg; if (b.gf!==a.gf) return b.gf-a.gf; return a.name.localeCompare(b.name,'es'); });
+    var row = null, pos = null;
+    arr.forEach(function(t,i){ if (_norm(t.name) === tnorm){ row = t; pos = i + 1; } });
+    if (!row) return null;
+    var byGf = arr.slice().sort(function(a,b){ return b.gf - a.gf; });
+    var scorerRank = null; byGf.forEach(function(t,i){ if (t === row) scorerRank = i + 1; });
+    var maxGc = Math.max.apply(null, arr.map(function(t){ return t.gc; }));
+    var others = arr.filter(function(t){ return t !== row; }).map(function(t){ return t.cards; });
+    var minCardsOthers = others.length ? Math.min.apply(null, others) : Infinity;
+    return { arr:arr, row:row, pos:pos, scorerRank:scorerRank, maxGc:maxGc,
+             hubCards:row.cards, minCardsOthers:minCardsOthers, hubMatches:hubMatches };
+  }
+
   window._munichAutoEval = function(){
     if (window.__munichObjEditing) return;   /* no tocar mientras se editan cantidades */
     var host = document.getElementById('ath-obj-club');
@@ -47082,34 +47128,63 @@ https://api.sofascore.app/api/v1/team/44/image
     var autoInputs = host.querySelectorAll('input[data-auto]');
     if (!autoInputs.length) return;
     var tnorm = _norm(_hubTeamName());
+
+    /* ── Contexto LIGA EA (puede ser null si aún no hay datos) ── */
     var standings = [];
     try { standings = window.collectStandings ? (window.collectStandings() || []) : []; } catch(_){}
-    var row = null, pos = null;
-    standings.forEach(function(r, i){ if (_norm(r.name) === tnorm){ row = r; pos = i + 1; } });
-    if (!row) return;   /* datos no listos → no tocar nada */
-    var results = [];
-    try { results = window.LIGA_J1_RESULTS || []; } catch(_){}
-    var unbeaten  = _trailing(row.form, function(x){ return x === 'V' || x === 'E'; });
-    var winStreak = _trailing(row.form, function(x){ return x === 'V'; });
-    var homeWins  = 0;
-    results.forEach(function(r){
-      if (_norm(r.home) === tnorm && (parseInt(r.gh, 10) || 0) > (parseInt(r['ga_'], 10) || 0)) homeWins++;
-    });
-    var gf = parseInt(row.gf, 10) || 0;
-    var dg = parseInt(row.dg, 10) || 0;
-    function evalMetric(metric, N){
-      if (metric === 'liga-pos')         return { ok: pos != null && pos <= N };
-      if (metric === 'liga-wins-casa')   return { ok: homeWins >= N,  val: homeWins };
-      if (metric === 'liga-wins-streak') return { ok: winStreak >= N, val: winStreak };
-      if (metric === 'liga-unbeaten')    return { ok: unbeaten >= N,  val: unbeaten };
-      if (metric === 'liga-gf')          return { ok: gf >= N,        val: gf };
-      if (metric === 'liga-dg')          return { ok: dg >= N,        val: dg, dg: true };
+    var lRow = null, lPos = null;
+    standings.forEach(function(r, i){ if (_norm(r.name) === tnorm){ lRow = r; lPos = i + 1; } });
+    var lUnbeaten = lRow ? _trailing(lRow.form, function(x){ return x==='V'||x==='E'; }) : 0;
+    var lWinStreak = lRow ? _trailing(lRow.form, function(x){ return x==='V'; }) : 0;
+    var lHomeWins = 0;
+    if (lRow){
+      var lResults = [];
+      try { lResults = window.LIGA_J1_RESULTS || []; } catch(_){}
+      lResults.forEach(function(r){ if (_norm(r.home) === tnorm && (parseInt(r.gh,10)||0) > (parseInt(r['ga_'],10)||0)) lHomeWins++; });
+    }
+    var lGf = lRow ? (parseInt(lRow.gf,10)||0) : 0;
+    var lDg = lRow ? (parseInt(lRow.dg,10)||0) : 0;
+
+    /* ── Contexto SUPERLIGA (lazy; null si no hay datos) ── */
+    var sl; /* undefined = aún no calculado; null = sin datos */
+    function SL(){ if (sl === undefined) sl = _superligaCtx(tnorm); return sl; }
+
+    function evalLiga(metric, N){
+      if (!lRow) return null;
+      if (metric === 'liga-pos')         return { ok: lPos != null && lPos <= N };
+      if (metric === 'liga-wins-casa')   return { ok: lHomeWins >= N,  val: lHomeWins };
+      if (metric === 'liga-wins-streak') return { ok: lWinStreak >= N, val: lWinStreak };
+      if (metric === 'liga-unbeaten')    return { ok: lUnbeaten >= N,  val: lUnbeaten };
+      if (metric === 'liga-gf')          return { ok: lGf >= N,        val: lGf };
+      if (metric === 'liga-dg')          return { ok: lDg >= N,        val: lDg, dg:true };
       return null;
     }
+    function evalSL(metric, N){
+      var c = SL();
+      if (!c) return null;
+      if (metric === 'sl-pts')      return { ok: c.row.pts >= N, val: c.row.pts };
+      if (metric === 'sl-wins')     return { ok: c.row.v   >= N, val: c.row.v };
+      if (metric === 'sl-unbeaten'){ var st = _trailing(c.row.form, function(x){ return x==='W'||x==='D'; }); return { ok: st >= N, val: st }; }
+      if (metric === 'sl-max-goals'){ var mx = 0; c.hubMatches.forEach(function(g){ if (g.gf > mx) mx = g.gf; }); return { ok: mx >= N, val: mx }; }
+      if (metric === 'sl-not-most-conceded') return { ok: c.hubMatches.length > 0 && c.row.gc < c.maxGc };
+      if (metric === 'sl-top-scorer')        return { ok: c.scorerRank != null && c.scorerRank <= N };
+      if (metric === 'sl-least-cards')       return { ok: c.hubMatches.length > 0 && c.hubCards <= c.minCardsOthers };
+      if (metric === 'sl-no-loss-by'){ var bad = c.hubMatches.some(function(g){ return (g.ga - g.gf) > N; }); return { ok: c.hubMatches.length > 0 && !bad }; }
+      if (metric === 'sl-ahead-rival'){
+        var rivalN = ''; try { rivalN = _norm(localStorage.getItem('munich-obj-rival') || ''); } catch(_){}
+        if (!rivalN) return null;
+        var rPos = null; c.arr.forEach(function(t,i){ if (_norm(t.name) === rivalN) rPos = i + 1; });
+        if (rPos == null) return null;   /* rival no está en la Superliga → no marcar */
+        return { ok: c.pos < rPos };
+      }
+      return null;
+    }
+
     autoInputs.forEach(function(cb){
+      var metric = cb.getAttribute('data-auto') || '';
       var N = parseInt(cb.getAttribute('data-target'), 10); if (isNaN(N)) N = 0;
-      var res = evalMetric(cb.getAttribute('data-auto'), N);
-      if (!res) return;
+      var res = metric.indexOf('sl-') === 0 ? evalSL(metric, N) : evalLiga(metric, N);
+      if (!res) return;   /* datos no listos para esta métrica → no tocar este objetivo */
       var lbl = cb.closest('.obj-item');
       if (res.val != null && lbl){
         var ctr = lbl.querySelector('.obj-counter');

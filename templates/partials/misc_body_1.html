@@ -19439,7 +19439,8 @@ window._showSimProgress = function(opts, onDone){
         + '<div class="sr-cont-h">⚡ RELLENAR HUECOS POR CONTINENTE</div>'
         + '<div class="sr-cont-grid">'
         + '<button class="sr-cont-b" type="button" data-cont="europa">✅ 🇪🇺 Solo Europa</button>'
-        + '<button class="sr-cont-b" type="button" data-cont="pacifico">✅ 🌎 Solo Pacífico</button>'
+        + '<button class="sr-cont-b" type="button" data-cont="america">✅ 🌎 Solo América</button>'
+        + '<button class="sr-cont-b" type="button" data-cont="asia">✅ 🌏 Solo Asia</button>'
         + '<button class="sr-cont-b" type="button" data-cont="africa">✅ 🌍 Solo África</button>'
         + '<button class="sr-cont-b" type="button" data-cont="">✅ 🌐 Todas</button>'
         + '</div></div>'
@@ -19534,7 +19535,7 @@ window._showSimProgress = function(opts, onDone){
     };
     /* ✅ Rellenar huecos por continente — rápido para Mundial 48 y demás
        torneos de selecciones. Filtra la plantilla por `t.continent`
-       (europa/pacifico/africa) o acepta cualquiera con contKey=''. */
+       (europa/america/asia/africa) o acepta cualquiera con contKey=''. */
     function _fillByContinent(contKey){
       contKey = String(contKey||'').toLowerCase();
       var taken = {};
@@ -19547,9 +19548,10 @@ window._showSimProgress = function(opts, onDone){
       var empties = 0;
       for (var ei = 0; ei < total; ei++) if (!rost[ei]) empties++;
       if (!empties) { alert('No hay huecos vacíos que rellenar.'); return; }
-      var contLbl = contKey === 'europa'   ? '🇪🇺 Europa'
-                  : contKey === 'pacifico' ? '🌎 Pacífico'
-                  : contKey === 'africa'   ? '🌍 África'
+      var contLbl = contKey === 'europa'  ? '🇪🇺 Europa'
+                  : contKey === 'america' ? '🌎 América'
+                  : contKey === 'asia'    ? '🌏 Asia'
+                  : contKey === 'africa'  ? '🌍 África'
                   : '🌐 Todas';
       if (!avail.length) {
         alert('No hay selecciones de ' + contLbl + ' disponibles en la plantilla.\nAñade selecciones de ese continente en «Plantilla de selecciones» (recuerda marcar su continente con ✅).');
@@ -40985,6 +40987,13 @@ https://api.sofascore.app/api/v1/team/44/image
     font-size:12px;font-weight:700;cursor:pointer;}
   #sel-sq-ov .sel-sq-empty{padding:18px;text-align:center;font-size:12.5px;
     color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;}
+  /* Cabecera de bloque por continente (selecciones agrupadas, 2026-06-01) */
+  #sel-sq-ov .sel-sq-conthd{position:sticky;top:0;z-index:3;margin:4px 0 8px;
+    padding:7px 10px;border-radius:8px;font-family:Oswald,sans-serif;
+    letter-spacing:1.2px;font-size:12px;font-weight:700;text-transform:uppercase;
+    color:#cdd4ff;background:linear-gradient(90deg,rgba(80,120,220,.22),rgba(40,60,120,.12));
+    border:1px solid rgba(120,150,230,.35);}
+  #sel-sq-ov .sel-sq-conthd:first-child{margin-top:0;}
   #sel-sq-ov .sel-sq-bulk-tip{font-size:11.5px;color:rgba(255,255,255,.6);
     font-family:Rajdhani,sans-serif;line-height:1.5;margin-bottom:8px;}
   #sel-sq-ov .sel-sq-bulk-tip b{color:#cdd4ff;}
@@ -41313,21 +41322,54 @@ https://api.sofascore.app/api/v1/team/44/image
   };
 
   function _esc(s){ return String(s==null?'':s).replace(/[<>"]/g,function(c){return c==='<'?'&lt;':c==='>'?'&gt;':'&quot;';}); }
-  /* Continentes (2026-05-25): para el juego son 3:
+  /* Continentes (2026-06-01): para el juego son 4:
        europa   = 🇪🇺 Europa
-       pacifico = 🌎 América Norte + Central + Sudamérica + Asia + Oceanía
+       america  = 🌎 América (Norte + Central + Sudamérica)
+       asia     = 🌏 Asia (+ Oceanía)
        africa   = 🌍 África
-     Persistido por equipo en `t.continent`. El usuario lo elige a mano. */
+     Persistido por equipo en `t.continent`. El usuario lo elige a mano.
+     Histórico: hasta 2026-05-31 existía un único `pacifico` que unía
+     América + Asia + Oceanía. Se mantiene su etiqueta en `_SEL_CONT_LEGACY`
+     para no romper selecciones guardadas con ese valor (ya no aparece en
+     el picker; el usuario las reasigna a 🌎 América o 🌏 Asia a mano). */
   var _SEL_CONTS=[
     {v:'',         l:'— Continente'},
     {v:'europa',   l:'🇪🇺 Europa'},
-    {v:'pacifico', l:'🌎 Pacífico'},
+    {v:'america',  l:'🌎 América'},
+    {v:'asia',     l:'🌏 Asia'},
     {v:'africa',   l:'🌍 África'}
   ];
+  var _SEL_CONT_LEGACY={ 'pacifico':'🌎 Pacífico' };
   function _contLabel(v){
     v=String(v==null?'':v).toLowerCase();
     for(var i=0;i<_SEL_CONTS.length;i++) if(_SEL_CONTS[i].v===v) return _SEL_CONTS[i].l;
+    if(_SEL_CONT_LEGACY[v]) return _SEL_CONT_LEGACY[v];
     return _SEL_CONTS[0].l;
+  }
+  /* Orden de agrupación de las cards del editor (los sin continente y
+     los legacy `pacifico` van al final). */
+  function _contOrderIndex(v){
+    v=String(v==null?'':v).toLowerCase();
+    var order=['europa','america','asia','africa'];
+    var i=order.indexOf(v);
+    if(i>=0) return i;
+    if(v==='pacifico') return order.length;      /* legacy, justo después */
+    return order.length+1;                        /* sin continente, al final */
+  }
+  /* Devuelve una copia de `list` ordenada por continente (estable dentro
+     de cada continente) para mostrar las selecciones agrupadas. */
+  function _groupByContinent(list){
+    return (list||[]).map(function(t,i){ return {t:t,i:i}; })
+      .sort(function(a,b){
+        var d=_contOrderIndex(a.t&&a.t.continent)-_contOrderIndex(b.t&&b.t.continent);
+        return d!==0 ? d : (a.i-b.i);
+      })
+      .map(function(x){ return x.t; });
+  }
+  function _contHeaderLabel(v){
+    v=String(v==null?'':v).toLowerCase();
+    if(!v) return '🌐 Sin continente';
+    return _contLabel(v);
   }
   function _contBtnHtml(v){
     return '<button type="button" class="sel-sq-cont-btn" data-cont="'+_esc(v||'')+'" title="Continente">'
@@ -41458,10 +41500,24 @@ https://api.sofascore.app/api/v1/team/44/image
     var body=document.getElementById('sel-sq-body');
     if(!body) return;
     _inBulk=false;
-    var list = teams || _load().teams;
-    body.innerHTML = list.length
-      ? list.map(_rowHtml).join('')
-      : '<div class="sel-sq-empty">Sin selecciones todavía. Pulsa «➕ Añadir» o «📋 Lista».</div>';
+    /* Las selecciones se muestran AGRUPADAS por continente (2026-06-01),
+       con una cabecera por bloque. `_collect` lee del DOM en orden, así
+       que al guardar se persiste ya agrupado. */
+    var list = _groupByContinent(teams || _load().teams);
+    if(!list.length){
+      body.innerHTML='<div class="sel-sq-empty">Sin selecciones todavía. Pulsa «➕ Añadir» o «📋 Lista».</div>';
+      return;
+    }
+    var html='', lastCont=null;
+    list.forEach(function(t){
+      var c=String((t&&t.continent)||'').toLowerCase();
+      if(c!==lastCont){
+        html+='<div class="sel-sq-conthd">'+_contHeaderLabel(c)+'</div>';
+        lastCont=c;
+      }
+      html+=_rowHtml(t);
+    });
+    body.innerHTML=html;
     /* La plantilla de jugadores no tiene representación en inputs del
        DOM: se guarda en el propio elemento de la fila (`_players`) y
        `_collect` la lee de ahí. */

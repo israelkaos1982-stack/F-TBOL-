@@ -17649,6 +17649,11 @@ window._showSimProgress = function(opts, onDone){
         .catch(function(){});
     } catch(_){}
   }
+  /* Exponer el prefetch para que OTRAS pantallas (p.ej. el buscador de
+     amistosos en part2/misc_body_2.html) puedan precargar TODAS las
+     ligas a localStorage y mostrar todos los equipos. Idempotente:
+     `_isCached` salta las ya bajadas. */
+  try { window._tourPrefetchAllLeagues = _tourPrefetchAllLeagues; } catch(_){}
   function _allTeamsUncached(){
     var out = [], seen = {};
     /* Trackeamos TODAS las ligas en las que aparece cada equipo

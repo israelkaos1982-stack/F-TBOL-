@@ -22240,6 +22240,89 @@ window._showSimProgress = function(opts, onDone){
     });
     return stats;
   }
+  /* Renderer AUTOCONTENIDO del grid de 11 cajas para el Mundial 2032.
+     Recibe el objeto `stats` (clave `teamNorm::playerNorm` → counters
+     {gol,pen,fk,ta,tr,imbat,penSaved,mvp,penProv,penFall,propia}) y
+     devuelve el HTML de las 11 categorías (igual que España). NO depende
+     de window._lextStatsDashHtml ni de nada externo — el diag demostró
+     que ese helper devolvía '' en esta pantalla. */
+  function _mundialRenderStatsGrid(stats){
+    stats = stats || {};
+    var keys = Object.keys(stats);
+    var CATS = [
+      { key:'goles-total', title:'Goleadores',          icon:'⚽️' },
+      { key:'cs',          title:'Portería imbatida',   icon:'🧤' },
+      { key:'yel',         title:'Tarjetas amarillas',  icon:'🟨' },
+      { key:'red',         title:'Tarjetas rojas',      icon:'🟥' },
+      { key:'pen-prov',    title:'Penaltis provocados', icon:'🤦‍♂️🥅' },
+      { key:'pen-gol',     title:'Goles de penalti',    icon:'⚽🥅' },
+      { key:'pen-fallado', title:'Penaltis fallados',   icon:'❌️🥅' },
+      { key:'pen-parado',  title:'Penaltis parados',    icon:'🖐🥅' },
+      { key:'falta-gol',   title:'Goles de falta',      icon:'⚽🎯' },
+      { key:'propia',      title:'Autogoles',           icon:'⚽🚫' },
+      { key:'mvp',         title:'MVP',                 icon:'⭐️' }
+    ];
+    function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+    function tc(s){ return String(s||'').split(/\s+/).map(function(w){ return w ? w.charAt(0).toUpperCase()+w.slice(1) : ''; }).join(' ').trim(); }
+    var players = keys.map(function(k){
+      var sep = k.indexOf('::'); if (sep < 0) return null;
+      var s = stats[k] || {};
+      var golTotal = Number(s.gol||0) + Number(s.pen||0) + Number(s.fk||0);
+      return {
+        team: tc(k.slice(0, sep)),
+        name: tc(k.slice(sep + 2)),
+        v: {
+          'goles-total': golTotal,
+          'cs':          Number(s.imbat||0),
+          'yel':         Number(s.ta||0),
+          'red':         Number(s.tr||0),
+          'pen-prov':    Number(s.penProv||0),
+          'pen-gol':     Number(s.pen||0),
+          'pen-fallado': Number(s.penFall||0),
+          'pen-parado':  Number(s.penSaved||0),
+          'falta-gol':   Number(s.fk||0),
+          'propia':      Number(s.propia||0),
+          'mvp':         Number(s.mvp||0)
+        }
+      };
+    }).filter(Boolean);
+    function topBy(field){
+      return players.map(function(p){ return { name:p.name, team:p.team, value:Number(p.v[field]||0) }; })
+        .filter(function(x){ return x.value > 0; })
+        .sort(function(a,b){
+          if (b.value !== a.value) return b.value - a.value;
+          if (a.team !== b.team) return a.team.localeCompare(b.team,'es');
+          return a.name.localeCompare(b.name,'es');
+        });
+    }
+    function rows(list, start){
+      return list.map(function(it, i){
+        var hc = (typeof window._humanPlayerClass === 'function') ? window._humanPlayerClass(it.team) : '';
+        return '<div class="liga-stat-row">'
+          + '<div class="liga-stat-rank">' + (start+i) + '</div>'
+          + '<div class="liga-stat-player"><div class="liga-stat-name'+hc+'">' + esc(it.name) + '</div>'
+          + '<div class="liga-stat-team">' + esc(it.team) + '</div></div>'
+          + '<div class="liga-stat-value">' + it.value + '</div></div>';
+      }).join('');
+    }
+    var html = '';
+    CATS.forEach(function(cat){
+      var all = topBy(cat.key);
+      var top = all.slice(0,6), rest = all.slice(6);
+      html += '<div class="liga-stat-card"><div class="liga-stat-head">'
+        + '<div class="liga-stat-ico">' + cat.icon + '</div>'
+        + '<div class="liga-stat-title">' + cat.title + '</div></div>'
+        + '<div class="liga-stat-body">';
+      if (!all.length) html += '<div class="liga-stat-empty">Sin datos todavía</div>';
+      else {
+        html += rows(top, 1);
+        if (rest.length) html += '<details class="liga-stat-more"><summary>Ver todos (' + all.length + ')</summary>'
+          + '<div class="liga-stat-more-list">' + rows(rest, 7) + '</div></details>';
+      }
+      html += '</div></div>';
+    });
+    return html;
+  }
   function _mundialStatsHtml(cfg, tourId, teams){
     var html = _mundialBackBtn(tourId)
       + '<p style="margin:0 0 10px;font-family:Oswald,sans-serif;letter-spacing:1.5px;'
@@ -22297,40 +22380,21 @@ window._showSimProgress = function(opts, onDone){
     if (!stats || !Object.keys(stats).length) {
       try { var rs = _mundialStatsRobustScan(cfg, teams); if (rs && Object.keys(rs).length) stats = rs; } catch(_){}
     }
-    /* DIAGNÓSTICO VISIBLE (2026-06-01): cuando la caja sale vacía pese a
-       haber partidos jugados, mostramos contadores reales del cfg para
-       saber DÓNDE se rompe la cadena (sin tener que pedir más capturas).
-       results jugados · con events · claves de stats agregadas. */
-    var _diag = '';
-    try {
-      var _res = (cfg && cfg.results) || {};
-      var _rk = Object.keys(_res);
-      var _played = 0, _withEv = 0, _evTotal = 0;
-      _rk.forEach(function(k){
-        var r = _res[k]; if (!r || !r.played) return; _played++;
-        var ev = r.events || r.acta;
-        if (Array.isArray(ev) && ev.length) { _withEv++; _evTotal += ev.length; }
-      });
-      _diag = '<div style="margin:0 0 8px;padding:6px 10px;border:1px dashed rgba(77,208,225,.35);'
-        + 'border-radius:6px;font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(140,220,235,.65);'
-        + 'letter-spacing:.5px;">🔍 diag · teams:' + ((teams&&teams.length)||0)
-        + ' · results:' + _rk.length + ' · jugados:' + _played
-        + ' · con acta:' + _withEv + ' · eventos:' + _evTotal
-        + ' · stats:' + Object.keys(stats||{}).length
-        + ' · gf:' + Object.keys((cfg&&cfg.groupFixtures)||{}).length + '</div>';
-    } catch(_){}
     var inner;
-    try {
-      inner = (typeof window._lextStatsDashHtml === 'function')
-        ? window._lextStatsDashHtml(stats, true) : '';
-    } catch(_e){ inner = '<div class="liga-stat-empty">render error: '+(_e&&_e.message||_e)+'</div>'; }
-    /* Añadir al diag el tamaño del HTML renderizado + nº de cards, para
-       distinguir "no hay datos" de "datos pero CSS los oculta". */
-    try {
-      var _nCards = (inner.match(/liga-stat-card/g)||[]).length;
-      _diag = _diag.replace('</div>', ' · innerLen:'+inner.length+' · cards:'+_nCards+'</div>');
-    } catch(_){}
-    html += _diag;
+    /* RENDERER AUTOCONTENIDO (2026-06-01): copia de la lógica de España
+       (buildLigaStatsDashboard / _lextStatsDashHtml) pero SIN depender de
+       window._lextStatsDashHtml — el diag reveló stats:712 pero
+       innerLen:0, es decir window._lextStatsDashHtml devolvía '' en esta
+       pantalla (no exportado/roto en este contexto). Pintamos el grid de
+       11 cajas aquí mismo, infalible. */
+    try { inner = _mundialRenderStatsGrid(stats); } catch(_e){ inner = ''; }
+    /* Fallback al renderer compartido SOLO si el propio salió vacío. */
+    if (!inner) {
+      try {
+        inner = (typeof window._lextStatsDashHtml === 'function')
+          ? window._lextStatsDashHtml(stats, true) : '';
+      } catch(_e2){ inner = ''; }
+    }
     /* Botón 🔄 Recalcular: fuerza la regeneración del acta (events) de
        TODOS los partidos jugados y re-pinta. Red de seguridad visible
        para el usuario cuando, por timing/hidratación, el backfill

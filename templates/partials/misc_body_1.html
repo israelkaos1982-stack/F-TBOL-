@@ -42663,7 +42663,7 @@ https://api.sofascore.app/api/v1/team/44/image
   <button class="hub-card hub-card-objetivos" onclick="go('s-munich-objetivos')">
     <span class="hub-objetivos-emoji">🎯</span>
     <span class="hub-objetivos-title">OBJETIVOS DEL CLUB</span>
-    <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 33</span></div>
+    <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 68</span></div>
   </button>
   <button class="hub-card hub-card-plantilla" onclick="go('s-bayern-plantilla');if(window.renderBayernPlantillaScreen){[0,120,400,900].forEach(function(t){setTimeout(window.renderBayernPlantillaScreen,t);});}">
     <span class="hub-plantilla-emoji">👕</span>
@@ -46535,14 +46535,14 @@ https://api.sofascore.app/api/v1/team/44/image
      reset lo dispara "Reiniciar Temporada al 1 de Mayo". */
   var SECTIONS = [
     { id:'liga', icon:'🇪🇸', title:'LIGA EA SPORTS', color:'#ff8c42', items:[
-      { icon:'🛡️', t:'Finalizar entre los 6 primeros' },
-      { icon:'🏠', t:'Ganar 10 partidos en casa', c:10 },
-      { icon:'🔥', t:'Ganar 4 partidos seguidos en Liga', c:4 },
+      { icon:'🛡️', t:'Finalizar entre los 6 primeros', auto:'liga-pos-6' },
+      { icon:'🏠', t:'Ganar 10 partidos en casa', c:10, auto:'liga-wins-casa-10' },
+      { icon:'🔥', t:'Ganar 4 partidos seguidos en Liga', c:4, auto:'liga-wins-4' },
       { icon:'🎯', t:'1 jugador entre los 6 máximos goleadores Liga' },
       { icon:'🏆', t:'1 jugador entre los 10 máximos MVP Liga' },
-      { icon:'🧤', t:'Lograr 7 partidos imbatido', c:7 },
-      { icon:'⚽', t:'Marcar 70 goles en la liga', c:70 },
-      { icon:'📈', t:'Diferencia de goles positiva (+15 o más)', c:15, dg:true },
+      { icon:'🧤', t:'Lograr 7 partidos imbatido', c:7, auto:'liga-imbatido-7' },
+      { icon:'⚽', t:'Marcar 70 goles en la liga', c:70, auto:'liga-gf-70' },
+      { icon:'📈', t:'Diferencia de goles positiva (+15 o más)', c:15, dg:true, auto:'liga-dg-15' },
       { icon:'🎮', t:'43% o más de posesión media', c:43, u:'%' },
       { icon:'⭐', t:'Rating del 55% o más', c:55, u:'%' },
       { icon:'🎩', t:'Lograr 2 Hattricks', c:2 },
@@ -46654,13 +46654,16 @@ https://api.sofascore.app/api/v1/team/44/image
     var inner;
     if (item.rival) {
       var parts = esc(item.t).split('RIVAL');
-      inner = esc(item.icon) + ' ' + parts[0]
+      inner = parts[0]
         + '<span class="oc-rival" id="oc-superliga-rival" onclick="athObjSetRival(event)">[definir rival]</span>'
         + (parts[1] || '');
     } else {
-      inner = esc(item.icon + ' ' + item.t);
+      inner = esc(item.t);
     }
-    return '<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ' + inner + counter + '</label>';
+    var autoAttr = item.auto ? (' data-auto="' + item.auto + '"') : '';
+    var autoCls  = item.auto ? ' is-auto' : '';
+    var autoTag  = item.auto ? '<span class="oc-auto" title="Se marca automáticamente">🤖</span>' : '';
+    return '<label class="obj-item' + autoCls + '"><input onchange="athObjCount()" type="checkbox"' + autoAttr + '/> <span class="obj-txt">' + autoTag + inner + '</span>' + counter + '</label>';
   }
 
   function renderSection(sec, teamName) {
@@ -46704,8 +46707,24 @@ https://api.sofascore.app/api/v1/team/44/image
 .oc-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:4px;width:20px;height:20px;font-size:13px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
 .oc-btn:active{background:rgba(255,255,255,.28);}
 /* Rival editable del duelo de Superliga (clic → prompt). */
-.oc-rival{display:inline-block;color:#f0c040;font-weight:700;border-bottom:1px dashed rgba(240,192,64,.6);cursor:pointer;padding:0 2px;}
+.oc-rival{color:#f0c040;font-weight:700;border-bottom:1px dashed rgba(240,192,64,.6);cursor:pointer;padding:0 2px;}
 .oc-rival:active{opacity:.7;}
+/* ── Objetivos compactos: SIN iconos, texto en una sola línea ──
+   (petición usuario 2026-06-01: "quita los iconos, que entre en
+   horizontal cada texto"). Fuente más pequeña + steppers/contadores
+   reducidos + texto nowrap que ocupa el ancho restante. */
+#s-munich-objetivos .obj-item{gap:6px;padding:6px 2px;font-size:11.5px;line-height:1.25;align-items:center;}
+#s-munich-objetivos .obj-item input[type=checkbox]{width:15px;height:15px;}
+/* Texto en el ancho restante; parte de línea sólo si no cabe (sin
+   ocultar nunca contenido — la mayoría entra en horizontal). */
+#s-munich-objetivos .obj-txt{flex:1;min-width:0;}
+#s-munich-objetivos .obj-counter{margin-left:6px;font-size:12px;padding:1px 5px;}
+#s-munich-objetivos .obj-counter-max{font-size:10px;}
+#s-munich-objetivos .oc-btns{gap:2px;margin-left:5px;}
+#s-munich-objetivos .oc-btn{width:18px;height:18px;font-size:12px;}
+/* Marca de objetivo automático (se marca solo desde los datos). */
+#s-munich-objetivos .oc-auto{font-size:9px;margin-right:3px;opacity:.7;vertical-align:middle;}
+#s-munich-objetivos .obj-item.is-auto{border-left:2px solid rgba(95,200,200,.5);padding-left:4px;}
 .mvp-log-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;background:rgba(240,192,64,.07);border:1px solid rgba(240,192,64,.12);}
 .mvp-log-rank{font-family:'Bebas Neue',sans-serif;font-size:15px;color:#f0c040;min-width:18px;}
 .mvp-log-name{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;font-weight:600;}
@@ -46944,11 +46963,89 @@ https://api.sofascore.app/api/v1/team/44/image
       if (orig) orig.apply(this, arguments);
       saveObjState();
       try { liverpoolObjEarnings(); } catch(_){}
+      /* Sincroniza el badge de la caja del HUB (s-munich) con el
+         contador de la pantalla de objetivos. */
+      try {
+        var src = document.getElementById('ath-obj-count');
+        var dst = document.getElementById('munich-obj-count');
+        if (src && dst) dst.textContent = src.textContent;
+      } catch(_){}
       if (typeof window._bayernHudReapply === 'function') {
         try { window._bayernHudReapply(); } catch(_){}
       }
     };
   }
+
+  /* ── AUTO-EVALUACIÓN de objetivos (subset fiable de Liga) ─────────
+     Marca solos los objetivos con `data-auto` calculables 100% desde
+     los datos persistidos de Liga EA (clasificación + resultados):
+       liga-pos-6      → posición ≤ 6 (vas en zona / has terminado top6)
+       liga-wins-casa-10 → victorias en casa en Liga ≥ 10
+       liga-wins-4     → racha actual de victorias seguidas ≥ 4
+       liga-imbatido-7 → racha actual sin perder ≥ 7
+       liga-gf-70      → goles a favor en Liga ≥ 70
+       liga-dg-15      → diferencia de goles ≥ +15
+     Resuelve el equipo del hub dinámicamente. Si la clasificación
+     aún no incluye al equipo (datos no cargados) NO toca nada — así
+     nunca desmarca por un estado transitorio. El resto de objetivos
+     (jugadores, rankings, posesión, copa/europa/superliga/selección)
+     siguen siendo manuales. Lo dispara `autoEvalAllTeams` del bundle
+     (tras cada Sim de Liga y al cargar) + al abrir la pantalla. */
+  function _hubTeamName(){
+    try { if (typeof window._psHumanLogicName === 'function'){ var n = window._psHumanLogicName(); if (n) return String(n); } } catch(_){}
+    try { if (window._mkHubTeamName) return String(window._mkHubTeamName); } catch(_){}
+    try { if (typeof window._ligaEaSubName === 'function'){ var s = window._ligaEaSubName('Bayern Munich'); if (s) return String(s); } } catch(_){}
+    return 'Liverpool';
+  }
+  function _norm(s){ return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+  function _trailing(form, pred){ var n = 0; if (!form || !form.length) return 0; for (var i = form.length - 1; i >= 0; i--){ if (pred(form[i])) n++; else break; } return n; }
+
+  window._munichAutoEval = function(){
+    var host = document.getElementById('ath-obj-club');
+    if (!host) return;
+    var autoInputs = host.querySelectorAll('input[data-auto]');
+    if (!autoInputs.length) return;
+    var tnorm = _norm(_hubTeamName());
+    var standings = [];
+    try { standings = window.collectStandings ? (window.collectStandings() || []) : []; } catch(_){}
+    var row = null, pos = null;
+    standings.forEach(function(r, i){ if (_norm(r.name) === tnorm){ row = r; pos = i + 1; } });
+    if (!row) return;   /* datos no listos → no tocar nada */
+    var results = [];
+    try { results = window.LIGA_J1_RESULTS || []; } catch(_){}
+    var unbeaten  = _trailing(row.form, function(x){ return x === 'V' || x === 'E'; });
+    var winStreak = _trailing(row.form, function(x){ return x === 'V'; });
+    var homeWins  = 0;
+    results.forEach(function(r){
+      if (_norm(r.home) === tnorm && (parseInt(r.gh, 10) || 0) > (parseInt(r['ga_'], 10) || 0)) homeWins++;
+    });
+    var gf = parseInt(row.gf, 10) || 0;
+    var dg = parseInt(row.dg, 10) || 0;
+    function evalKey(key){
+      if (key === 'liga-pos-6')        return { ok: pos != null && pos <= 6 };
+      if (key === 'liga-wins-casa-10') return { ok: homeWins >= 10, val: homeWins };
+      if (key === 'liga-wins-4')       return { ok: winStreak >= 4, val: winStreak };
+      if (key === 'liga-imbatido-7')   return { ok: unbeaten >= 7, val: unbeaten };
+      if (key === 'liga-gf-70')        return { ok: gf >= 70, val: gf };
+      if (key === 'liga-dg-15')        return { ok: dg >= 15, val: dg, dg: true };
+      return null;
+    }
+    autoInputs.forEach(function(cb){
+      var res = evalKey(cb.getAttribute('data-auto'));
+      if (!res) return;
+      var lbl = cb.closest('.obj-item');
+      if (res.val != null && lbl){
+        var ctr = lbl.querySelector('.obj-counter');
+        if (ctr && ctr.childNodes[0]){
+          ctr.childNodes[0].textContent = res.dg ? (res.val >= 0 ? '+' + res.val : String(res.val)) : String(res.val);
+        }
+      }
+      cb.checked = !!res.ok;
+      if (lbl) lbl.classList.toggle('done', !!res.ok);
+    });
+    /* Recalcula recompensas + badges + persiste (versión parcheada). */
+    try { if (typeof window.athObjCount === 'function') window.athObjCount(); } catch(_){}
+  };
 
   /* ── Reset de objetivos al Reiniciar Temporada (1 de Mayo) ────────
      Desmarca TODOS los ✅, resetea los contadores a su valor inicial
@@ -46975,14 +47072,32 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   };
 
+  /* Re-evalúa los objetivos automáticos al abrir la pantalla de
+     objetivos (además del hook tras Sim de Liga del bundle). */
+  function hookGoAutoEval(){
+    if (window.__munichObjGoHooked || typeof window.go !== 'function') return;
+    window.__munichObjGoHooked = true;
+    var origGo = window.go;
+    window.go = function(id){
+      var r = origGo.apply(this, arguments);
+      if (id === 's-munich-objetivos'){
+        setTimeout(function(){ try { if (typeof window._munichAutoEval === 'function') window._munichAutoEval(); } catch(_){} }, 40);
+      }
+      return r;
+    };
+  }
+
   /* ── Init on DOMContentLoaded ── */
   document.addEventListener('DOMContentLoaded', function(){
     loadObjState();
     updateMVPCounter();
     patchAthObjCount();
     hookMVPTracking();
+    hookGoAutoEval();
     /* Run initial count to sync the hub badge */
     if (typeof window.athObjCount === 'function') window.athObjCount();
+    /* Primera auto-evaluación (si la Liga ya tiene datos). */
+    setTimeout(function(){ try { if (typeof window._munichAutoEval === 'function') window._munichAutoEval(); } catch(_){} }, 300);
   });
 })();
 </script>

@@ -9437,9 +9437,13 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     if (typeof countFn === 'function') countFn();
   }
 
-  // Auto-eval all 5 human teams
+  // Auto-eval all human teams.
   window.autoEvalAllTeams = function() {
-    autoEvalObjetivos('Athletic Club', 'ath-obj-club', function(){ if(typeof athObjCount==='function') athObjCount(); });
+    // Hub Liverpool-Francia: eval propio (definido en misc_body_1.html),
+    // resuelve el equipo del hub dinámicamente y sólo toca los objetivos
+    // con data-auto fiables. Sustituye al legacy 'Athletic Club' (equipo
+    // equivocado para el hub renombrado a Liverpool).
+    try { if (typeof window._munichAutoEval === 'function') window._munichAutoEval(); } catch(_){}
     autoEvalObjetivos('Real Betis', 'bet-obj', window.betObjCount);
     autoEvalObjetivos('Real Sociedad', 'soc-obj', window.socObjCount);
     autoEvalObjetivos('Real Madrid', 'mad-obj', window.madObjCount);

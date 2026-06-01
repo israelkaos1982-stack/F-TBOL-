@@ -7378,7 +7378,12 @@ window._refreshSancionInjList = function() {
         + '</div></div>';
     }).join('');
   }
-  listInj.innerHTML = cardsHtml + (typeof window._renderFormaChecklist === 'function' ? window._renderFormaChecklist() : '');
+  /* LESIONADOS muestra SOLO los jugadores ya lesionados. El checklist
+     ⬇️ "AÑADIR LESIONADOS" vive en su propia sección dedicada
+     (#sancion-ov-list-forma → renderForma() agrupado por posición),
+     así que NO inyectamos aquí _renderFormaChecklist() — eso duplicaba
+     la card (bug foto usuario 2026-06-01). */
+  listInj.innerHTML = cardsHtml;
   var warnEl = document.getElementById('sancion-ov-warn');
   if (warnEl) warnEl.style.display = 'block';
 };
@@ -12544,7 +12549,11 @@ window._fallbackSq11 = function(){
     var cardsInj = pend.lesiones.length
       ? pend.lesiones.map(function(l){ return renderCard(l, '🩹'); }).join('')
       : '<div class="sancion-empty">🚑 Sin lesionados</div>';
-    listInj.innerHTML = cardsInj + (typeof window._renderFormaChecklist === 'function' ? window._renderFormaChecklist() : '');
+    /* Solo lesionados aquí. El checklist ⬇️ vive en la sección
+       dedicada #sancion-ov-list-forma (renderForma, foto 2). No
+       inyectamos _renderFormaChecklist() para no duplicar la card
+       (bug foto usuario 2026-06-01). */
+    listInj.innerHTML = cardsInj;
     var warnEl = document.getElementById('sancion-ov-warn');
     if (warnEl) warnEl.style.display = 'block';
   };
@@ -12630,7 +12639,11 @@ window._fallbackSq11 = function(){
       secRed.style.display = 'none';
     }
     var cardsInj = pend.lesiones.length ? pend.lesiones.map(function(l){ return renderCard(l, '🩹'); }).join('') : renderEmpty('🚑 Sin lesionados');
-    listInj.innerHTML = cardsInj + (typeof window._renderFormaChecklist === 'function' ? window._renderFormaChecklist() : '');
+    /* Solo lesionados. El checklist ⬇️ "AÑADIR LESIONADOS" es la
+       sección dedicada #sancion-ov-list-forma (renderForma, foto 2);
+       NO inyectamos _renderFormaChecklist() aquí — duplicaba la card
+       (bug foto usuario 2026-06-01). */
+    listInj.innerHTML = cardsInj;
 
     if (!hayBajas && !forceShow) {
       if (onConfirm) onConfirm();

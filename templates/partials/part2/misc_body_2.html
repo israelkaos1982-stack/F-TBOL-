@@ -24940,6 +24940,26 @@ window.goLiveMatches = function() {
     /* Si el usuario lo mandó a la papelera, NUNCA rehidratar — el
      veto local supera cualquier snapshot vivo del servidor. */
     if (typeof window._mlIsTrashed === 'function' && window._mlIsTrashed(mk)) return;
+    /* ── NO PISAR UN PARTIDO EN CURSO LOCAL ──────────────────────────
+       Si este dispositivo está jugando/simulando el partido AHORA MISMO
+       (cronómetro corriendo) y su minuto va por delante (o igual) del
+       snapshot entrante, ESTE dispositivo es la autoridad de su propio
+       reloj. Rehidratarlo llamaría a `_mlRestoreState`, que reescribe
+       `timerSec` al valor viejo del servidor (el tick del cron NO
+       persiste cada segundo, solo el kickoff a 0) y fuerza
+       `timerRunning=false` → el cronómetro de los amistosos IA-vs-IA
+       (y de cualquier partido en vivo) se quedaba CONGELADO en 0' tras
+       el primer poll de sincronización (cada 5 s). Bug 2026-05-31,
+       solo reproducible con servidor (Railway), no en local.
+       El propio `pollOnce` hace flush() después, así que el avance
+       local sí se sube al servidor en cada ciclo. */
+    try {
+      var _localSt = (typeof window._mlGetState === 'function') ? window._mlGetState(mk) : null;
+      if (_localSt && _localSt.timerRunning && !_localSt.finished
+          && (_localSt.timerSec || 0) >= (saved.timerSec || 0)) {
+        return;
+      }
+    } catch (_eGuard) {}
     /* 1) Asegurar que existe la tarjeta en el DOM */
     var wrap = document.getElementById('mlw-' + mk);
     var isAms = mk.indexOf('ams-') === 0;

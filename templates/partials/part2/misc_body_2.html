@@ -8534,15 +8534,35 @@
         st.aiEventsGenerated = true;
       }
       st.stoppageSec = 0;
+      /* ── CRON IA-vs-IA DERIVADO DEL RELOJ REAL (auto-corrector) ──────
+         Regla CLAUDE.md: IAIA = 1 game-min por segundo real (90 s total).
+         ANTES el minuto se incrementaba con un contador (curMin++ por
+         tick). Si un tick se retrasaba, se perdía, o un proceso externo
+         (sync del servidor, re-render, throttling del móvil) reescribía
+         st.timerSec entre ticks, el contador no progresaba y el cron se
+         quedaba CONGELADO en 0' (bug recurrente del usuario, 2026-05-31).
+         AHORA el minuto se DERIVA de Date.now(): cada tick recalcula el
+         minuto correcto desde el instante de arranque, así el cron NO
+         puede clavarse en 0' mientras dispare aunque sea de vez en cuando
+         — y se auto-corrige tras cualquier reset externo de timerSec.
+         Anclamos _iaiaWall a partir del timerSec actual para que un
+         partido reanudado continúe desde su minuto. */
+      st._iaiaWall = Date.now() - Math.max(0, (st.timerSec || 0)) / 60 * 1000;
       _mlRenderTimerGen(mk);
       st._iaiaInterval = setInterval(function(){
         try {
-          /* min++ en cada tick. Garantiza recorrido 1, 2, 3, … 90. */
-          var curMin = Math.floor(st.timerSec / 60) + 1;
+          /* Minuto = segundos reales transcurridos (1 game-min/seg). */
+          var curMin = Math.floor((Date.now() - st._iaiaWall) / 1000);
+          if (curMin < 0) curMin = 0;
+          var stops = (typeof _mlCountStoppageHalves === 'function')
+            ? _mlCountStoppageHalves(st)
+            : { first: 0, second: 0 };
+          var endMin = 90 + (stops.second || 0);
+          if (curMin > endMin) curMin = endMin;
           st.timerSec = curMin * 60;
 
-          /* HT marker al cruzar el 45 (solo una vez). */
-          if (curMin === 45 && !st.htDone) {
+          /* HT marker al cruzar el 45 (solo una vez; >= por si saltamos). */
+          if (curMin >= 45 && !st.htDone) {
             st.htDone = true;
             var listIA = document.getElementById('ml-acta-list-' + mk);
             if (listIA) {
@@ -8553,7 +8573,7 @@
             }
           }
 
-          /* Disparar eventos pendientes para este minuto. */
+          /* Disparar eventos pendientes hasta este minuto. */
           if (typeof _mlFirePendingEvents === 'function') {
             _mlFirePendingEvents(mk, curMin);
           }
@@ -8562,10 +8582,6 @@
           _mlRenderTimerGen(mk);
 
           /* End match al llegar a 90 (+ descuento dinámico si lo hay). */
-          var stops = (typeof _mlCountStoppageHalves === 'function')
-            ? _mlCountStoppageHalves(st)
-            : { first: 0, second: 0 };
-          var endMin = 90 + (stops.second || 0);
           if (curMin >= endMin) {
             clearInterval(st._iaiaInterval);
             st._iaiaInterval = null;
@@ -8579,7 +8595,7 @@
           try { console.error('[iaia tick]', mk, _eTickIa); } catch(__){}
           /* Tick sigue vivo aunque uno falle. */
         }
-      }, 1000);
+      }, 250);
       st.timerInterval = st._iaiaInterval;
       return;
     }
@@ -27759,8 +27775,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) {
           scheduleRun(); break;
         }
+        /* OJO: NO reaccionamos a cambios de clase de `.ml-timer`. El
+           cronómetro reescribe su className en CADA tick (varias veces
+           por segundo), y eso disparaba runAll en bucle (render→observer
+           →runAll→…), competiendo con el setInterval del cron y
+           contribuyendo a que se "clavara" (anti-patrón documentado en
+           CLAUDE.md "Cronómetro · BASE INMUTABLE"). El re-patch de
+           estadio/clima solo necesita detectar cards NUEVAS (childList,
+           arriba) o cambios en el propio `.match-live-wrap`. */
         if (m.type === 'attributes' && m.target && m.target.classList &&
-            (m.target.classList.contains('ml-timer') || m.target.classList.contains('match-live-wrap'))) {
+            m.target.classList.contains('match-live-wrap')) {
           scheduleRun(); break;
         }
       }

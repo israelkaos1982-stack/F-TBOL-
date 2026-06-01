@@ -13210,6 +13210,58 @@ window._showSimProgress = function(opts, onDone){
 <div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Mundialito Clubes · Estadísticas</h2></div>
 <div class="liga-stats-wrap" id="mundial-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
 </div>
+<script>
+/* Mundialito de Clubes · Estadísticas — render EN VIVO desde el cfg del
+   torneo (slot built-in 'mundial', tour_mundial_v1), igual que el
+   Mundial 2032. El camino antiguo (STATS_SCREENS → _lextBuildCompStatsDashboard
+   leyendo ef_player_stats_mundial_v1) se quedaba colgado en "Calculando
+   estadísticas…" (foto usuario 2026-06-01). Reusamos los agregadores
+   robustos y el renderer autocontenido del Mundial 2032
+   (window._mundialStatsRobustScan + window._mundialRenderStatsGrid),
+   que computan desde cfg.results[].events y NUNCA dependen del store
+   ni de window._lextStatsDashHtml. */
+(function(){
+  function _renderMundialitoStats(){
+    var root = document.getElementById('mundial-stats-dashboard');
+    if (!root) return;
+    var cfg = null;
+    try {
+      cfg = (window._TOUR_CACHE && window._TOUR_CACHE.mundial) || null;
+      if (!cfg && typeof window._tourLoadCachedSync === 'function') cfg = window._tourLoadCachedSync('mundial');
+    } catch(_){}
+    if (!cfg) { root.innerHTML = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>'; return; }
+    var teams = (cfg.teams || []);
+    var stats = {};
+    try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+    /* Backfill de actas (regenera events de partidos que solo guardaron
+       marcador) — idempotente, igual que el Mundial 2032. */
+    try { if (typeof window._tourBackfillActasFromResults === 'function') window._tourBackfillActasFromResults(cfg, teams); } catch(_){}
+    try { if (typeof window._mundialStatsRobustScan === 'function') { var s = window._mundialStatsRobustScan(cfg, teams); if (s && Object.keys(s).length) stats = s; } } catch(_){}
+    if (!Object.keys(stats).length) {
+      try { if (typeof window._tourStatsFromCfgResults === 'function') { var g = window._tourStatsFromCfgResults(cfg); if (g && Object.keys(g).length) stats = g; } } catch(_){}
+    }
+    var inner = '';
+    try { if (typeof window._mundialRenderStatsGrid === 'function') inner = window._mundialRenderStatsGrid(stats); } catch(_){}
+    if (!inner && typeof window._lextStatsDashHtml === 'function') {
+      try { inner = window._lextStatsDashHtml(stats, true); } catch(_){}
+    }
+    root.innerHTML = inner || '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
+  }
+  window._renderMundialitoStats = _renderMundialitoStats;
+  var _og = window.go;
+  if (typeof _og === 'function' && !_og._mclStatsPatched) {
+    window.go = function(id){
+      var r = _og.apply(this, arguments);
+      if (id === 's-mundial-stats') {
+        setTimeout(_renderMundialitoStats, 0);
+        setTimeout(_renderMundialitoStats, 200);
+      }
+      return r;
+    };
+    window.go._mclStatsPatched = true;
+  }
+})();
+</script>
 
 <!-- Pantalla Supercopa de España stats — paleta amarillo-dorado +
      rojo magenta (logo de la competición: trofeo dorado sobre
@@ -13255,7 +13307,10 @@ window._showSimProgress = function(opts, onDone){
     { screenId:'s-recopa-stats',  rootId:'recopa-stats-dashboard',  storeKey:'ef_player_stats_recopa_v1' },
     { screenId:'s-usc-stats',     rootId:'usc-stats-dashboard',     storeKey:'ef_player_stats_usc_v1' },
     { screenId:'s-inter-stats',   rootId:'inter-stats-dashboard',   storeKey:'ef_player_stats_inter_v1' },
-    { screenId:'s-mundial-stats', rootId:'mundial-stats-dashboard', storeKey:'ef_player_stats_mundial_v1' },
+    /* s-mundial-stats (Mundialito de Clubes) se renderiza EN VIVO desde
+       cfg.results vía window._renderMundialitoStats (script propio junto
+       a la pantalla). NO usar el path de cache aquí — se colgaba en
+       "Calculando estadísticas…". 2026-06-01. */
     { screenId:'s-sc-stats',      rootId:'sc-stats-dashboard',      storeKey:'ef_player_stats_sc_v1' }
   ];
   /* Pinta el dashboard desde el cache (rápido, sync). Opcionalmente
@@ -23507,6 +23562,13 @@ window._showSimProgress = function(opts, onDone){
      sin duplicar la lógica de genMatchEventsEnhanced + el registro
      a 'torneos'. 2026-05-24. */
   try { window._tourAttachActa = _tourAttachActa; } catch(_){}
+  /* Exponer agregadores + renderer de stats a window para que la
+     pantalla `s-mundial-stats` (Mundialito de Clubes) los reuse en
+     vivo, igual que la caja del Mundial 2032. 2026-06-01. */
+  try { window._mundialStatsRobustScan = _mundialStatsRobustScan; } catch(_){}
+  try { window._mundialRenderStatsGrid = _mundialRenderStatsGrid; } catch(_){}
+  try { window._tourStatsFromCfgResults = _tourStatsFromCfgResults; } catch(_){}
+  try { window._tourBackfillActasFromResults = _tourBackfillActasFromResults; } catch(_){}
 
   function _tourSimPenalties(teamA, teamB) {
     function _pProb(atk, defOpp) {

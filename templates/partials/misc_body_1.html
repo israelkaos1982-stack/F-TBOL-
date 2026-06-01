@@ -45170,8 +45170,11 @@ https://api.sofascore.app/api/v1/team/44/image
      estuviera en el día 1. `ratingTarget` / `moneyTarget` / `pi`
      son config del admin → se conservan. */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados (pretemporada, torneos de verano y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nLos Puntos de Fisio 💊, los objetivos del club, las plantillas y la configuración de los torneos se conservan.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados (pretemporada, torneos de verano y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nLos Objetivos del Club se DESMARCAN (✅ a cero) y sus ganancias 💼/🪙 vuelven a 0.\n\nLos Puntos de Fisio 💊, las plantillas y la configuración de los torneos se conservan.')) return;
     try { if (typeof window._psResetCalendar === 'function') window._psResetCalendar(); } catch(_){}
+    /* Objetivos del Club → desmarcar ✅ + contadores a 0 (las
+       ganancias 💼/🪙 las pone a 0 el bloque HUD de abajo). */
+    try { if (typeof window._munichObjReset === 'function') window._munichObjReset(); } catch(_){}
 
     /* HUD: triple-asalto contra cualquier capa que pueda revivir
        el 0.66/350. (a) merge del override → sync localStorage +
@@ -46483,7 +46486,7 @@ https://api.sofascore.app/api/v1/team/44/image
 <div style="padding:4px 14px 40px;">
 <div style="padding:8px 4px 14px;display:flex;align-items:center;justify-content:space-between;">
 <span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.5);">PROTOCOLO · MÁXIMA PRESIÓN · TOÑÍN</span>
-<span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:#f0c040;" id="ath-obj-count">0 / 33</span>
+<span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:#f0c040;" id="ath-obj-count">0 / 68</span>
 </div>
 <div class="ent-body ath-body-obj open" id="ath-obj-club">
   <!-- Secciones rellenadas dinámicamente por el IIFE de objetivos al final del screen. -->
@@ -46550,75 +46553,145 @@ https://api.sofascore.app/api/v1/team/44/image
   window.teamFactor     = teamFactor;
   window.TEAM_SKILL     = TEAM_SKILL;
 
-  /* Las secciones replican las 5 pestañas originales. Cada item tiene
-     icon/title/text/type. El `{X}` del `text` se reemplaza por el
-     target escalado; si falta (binarios) queda fijo. `cid` es el id
-     del contador que el autoEvalObjetivos del bundle rellenará con
-     el progreso real cuando se active el tracking. */
+  /* ═══════════════════════════════════════════════════════════════
+     SPEC DE 68 OBJETIVOS (boceto del usuario 2026-06-01).
+     ─────────────────────────────────────────────────────────────
+     Cada item: { icon, t (texto literal), c? (target numérico del
+     contador 0/N), u? ('%' si el contador es porcentaje), dg? (true
+     si es diferencia de goles, +0/+N), rival? (true para el duelo de
+     Superliga con nombre de rival editable) }.
+     Marcado MANUAL (checkbox) + contadores editables (➕/➖). La
+     recompensa (💼 0,275 cap 10 · 🪙 25 sin cap) se calcula sola a
+     partir de los checkbox marcados (ver liverpoolObjEarnings). El
+     reset lo dispara "Reiniciar Temporada al 1 de Mayo". */
   var SECTIONS = [
     { id:'liga', icon:'🇪🇸', title:'LIGA EA SPORTS', color:'#ff8c42', items:[
-      { icon:'🛡️', title:'Élite',        text:'Finalizar entre los {X} primeros',               type:'rank', base:6,  min:1, max:12 },
-      { icon:'🧤', title:'Muro',         text:'Lograr {X} partidos imbatido',                   type:'acc',  base:5,  min:1, max:10, cid:'oc-imbatido-liga' },
-      { icon:'🎯', title:'Referente',    text:'1 jugador entre los {X} máx. goleadores',        type:'rank', base:10, min:3, max:20 },
-      { icon:'⭐', title:'Rating',       text:'Mantener {X}% o más de valoración global',       type:'acc',  base:48, min:20, max:80, cid:'oc-rating-liga', unit:'%' },
-      { icon:'⚔️', title:'Duelo Directo', text:'Terminar por delante del VILLARREAL CF',         type:'bin' }
+      { icon:'🛡️', t:'Finalizar entre los 6 primeros' },
+      { icon:'🏠', t:'Ganar 10 partidos en casa', c:10 },
+      { icon:'🔥', t:'Ganar 4 partidos seguidos en Liga', c:4 },
+      { icon:'🎯', t:'1 jugador entre los 6 máximos goleadores Liga' },
+      { icon:'🏆', t:'1 jugador entre los 10 máximos MVP Liga' },
+      { icon:'🧤', t:'Lograr 7 partidos imbatido', c:7 },
+      { icon:'⚽', t:'Marcar 70 goles en la liga', c:70 },
+      { icon:'📈', t:'Diferencia de goles positiva (+15 o más)', c:15, dg:true },
+      { icon:'🎮', t:'43% o más de posesión media', c:43, u:'%' },
+      { icon:'⭐', t:'Rating del 55% o más', c:55, u:'%' },
+      { icon:'🎩', t:'Lograr 2 Hattricks', c:2 },
+      { icon:'📊', t:'1 jugador marca en 3 partidos seguidos', c:3 },
+      { icon:'💥', t:'1 jugador marca 2 o más goles en 5 ocasiones', c:5 }
     ]},
     { id:'copa', icon:'🏆', title:'COPA DEL REY', color:'#f0c040', items:[
-      { icon:'🥉', title:'Exigencia',  text:'Alcanzar los Cuartos de Final',                    type:'bin' },
-      { icon:'🥈', title:'Gran Final', text:'Clasificar y jugar la Final de Copa',              type:'bin' },
-      { icon:'🔥', title:'Eficacia',   text:'Marcar {X} o más ⚽ en 1 eliminatoria',            type:'acc', base:5, min:2, max:10, cid:'oc-goles-copa' }
+      { icon:'🥉', t:'Alcanzar Cuartos de Final' },
+      { icon:'🔥', t:'Marcar 4 o más goles en 1 eliminatoria', c:4 },
+      { icon:'💪', t:'Ganar un partido por 3 o más goles de diferencia' },
+      { icon:'🤝', t:'Ganar 1 eliminatoria a doble partido' },
+      { icon:'🧤', t:'1 partido de copa sin encajar gol', c:1 },
+      { icon:'🎯', t:'1 jugador marca en 2 rondas distintas', c:2 },
+      { icon:'⚽', t:'1 jugador marca 2 o más goles en 2 partidos distintos', c:2 }
     ]},
-    { id:'uecl', icon:'🌍', title:'EUROPA · ORGULLO DE ANFIELD', color:'#00c875', items:[
-      { icon:'📊', title:'Fase de Grupos', text:'Clasificar en el Top {X}',                    type:'rank', base:8, min:3, max:16, cid:'oc-pos-uecl' },
-      { icon:'🛡️', title:'Fase KO',        text:'Alcanzar los Cuartos de Final',                type:'bin' },
-      { icon:'🏆', title:'Gloria',         text:'Llegar a la Gran Final Europea',               type:'bin' },
-      { icon:'⚽', title:'Vendaval',       text:'Marcar {X} o más ⚽ en 1 partido europeo',     type:'acc', base:3, min:2, max:6, cid:'oc-goles-uecl' }
+    { id:'europa', icon:'🌍', title:'EUROPA · CHAMPIONS / EUROPA / CONFERENCE', color:'#00c875', items:[
+      { icon:'📊', t:'Clasificar entre los 8 primeros de grupo' },
+      { icon:'🛡️', t:'Llegar a Cuartos de Final' },
+      { icon:'🎩', t:'1 jugador marca Hattrick' },
+      { icon:'⚽', t:'1 jugador bigoleador en 2 partidos Europa', c:2 },
+      { icon:'📈', t:'1 jugador marca en 3 partidos de Europa', c:3 },
+      { icon:'🥇', t:'1 jugador entre los 10 máximos goleadores europeos' },
+      { icon:'🏆', t:'1 jugador entre los 10 máximos MVP europeos' },
+      { icon:'💥', t:'Marcar 3 o más ⚽ en 2 partidos europeos', c:2 },
+      { icon:'🧤', t:'2 partidos europeos imbatido', c:2 },
+      { icon:'🏟️', t:'No perder ningún partido europeo en casa' }
     ]},
-    { id:'derbys', icon:'⚡', title:'DERBYS · TOÑÍN VS EL MUNDO', color:'#b060f0', items:[
-      { icon:'⚔️', title:'Dominio',     text:'Ganar {X} de 12 partidos vs humanos',             type:'acc', base:3, min:1, max:8, cid:'oc-ganar-derby' },
-      { icon:'🧤', title:'Resistencia', text:'{X} partido imbatido contra rival real',          type:'acc', base:1, min:1, max:4, cid:'oc-imbatido-derby' },
-      { icon:'🥊', title:'El Zarpazo',  text:'Marcar {X} o más ⚽ en 1 duelo humano',           type:'acc', base:3, min:2, max:6, cid:'oc-goles-derby' },
-      { icon:'📈', title:'Pundonor',    text:'No ser el equipo más goleado del grupo',          type:'bin' },
-      { icon:'🛡️', title:'Estadística', text:'No perder por más de 3 goles contra el líder',    type:'bin' }
+    { id:'superliga', icon:'⚡', title:'SUPERLIGA · TOÑÍN VS EL MUNDO', color:'#b060f0', items:[
+      { icon:'⚔️', t:'Ganar 6 de 20 partidos vs humanos', c:6 },
+      { icon:'🧤', t:'4 partidos imbatido contra rival real', c:4 },
+      { icon:'🥊', t:'Marcar 4 o más ⚽ en 1 duelo humano', c:4 },
+      { icon:'📈', t:'No ser el equipo más goleado del grupo' },
+      { icon:'🛡️', t:'No perder por más de 3 goles contra un rival' },
+      { icon:'🎯', t:'Conseguir 20 puntos de 60 posibles', c:20 },
+      { icon:'🏅', t:'Quedar por delante de RIVAL', rival:true },
+      { icon:'⚽', t:'1 jugador en el Top 3 goleadores' },
+      { icon:'🔥', t:'Equipo entre los 3 máximos goleadores' },
+      { icon:'🎩', t:'1 jugador marca 1 Hattrick', c:1 },
+      { icon:'💥', t:'1 jugador marca 2 o más goles en 4 partidos', c:4 },
+      { icon:'🏆', t:'1 jugador entre los 3 máximos MVP' },
+      { icon:'⭐', t:'Equipo entre los 3 máximos MVP' },
+      { icon:'🧤', t:'Portero 3 veces imbatido', c:3 },
+      { icon:'🎮', t:'Equipo con 50% o más de posesión', c:50, u:'%' },
+      { icon:'🎯', t:'Equipo entre los 3 que más tiran a puerta' },
+      { icon:'🟨', t:'Equipo con menos tarjetas' },
+      { icon:'🚩', t:'Equipo entre los 3 con más córners' }
     ]},
-    { id:'global', icon:'🟢', title:'GLOBALES DEL CLUB · HITOS DE ÉLITE', color:'#ff4444', items:[
-      { icon:'🏆', title:'Título',       text:'Ganar 1 Título oficial (Liga, Copa o Europa)',   type:'bin' },
-      { icon:'🏠', title:'Fortín',       text:'Ganar {X} partidos en casa',                     type:'acc', base:12, min:4, max:22, cid:'oc-casa' },
-      { icon:'🎯', title:'Especialista', text:'Marcar 1 gol de Penalti o Falta',                type:'bin' },
-      { icon:'⚽', title:'Racha Letal',  text:'Marcar {X}⚽ en 2 partidos',                      type:'acc', base:5, min:2, max:10, cid:'oc-5goles2' },
-      { icon:'🔥', title:'Goleada',      text:'Marcar {X}⚽ en 1 solo partido',                  type:'acc', base:6, min:3, max:10, cid:'oc-6goles1' },
-      { icon:'🎩', title:'Tripletes',    text:'Lograr {X} Hattricks',                           type:'acc', base:2, min:1, max:5, cid:'oc-hattrick-gl' },
-      { icon:'📊', title:'Diferencia',   text:'Diferencia de Goles +{X}',                       type:'acc', base:20, min:5, max:40, cid:'oc-dif-goles' },
-      { icon:'✨', title:'Balón de Oro', text:'1 jugador entre los {X} nominados',              type:'rank', base:20, min:5, max:30 },
-      { icon:'👟', title:'Bota de Oro',  text:'1 jugador entre los {X} máx. goleadores europeos', type:'rank', base:20, min:5, max:30 },
-      { icon:'🏆', title:'MVP',          text:'1 jugador con {X}+ premios MVP en la temporada', type:'acc', base:10, min:3, max:20, cid:'oc-mvp-temp' },
-      { icon:'👕', title:'Gestión',      text:'Mantener a los 26 jugadores con moral Alta o superior', type:'bin' }
+    { id:'global', icon:'🏅', title:'GLOBALES DEL CLUB · HITOS DE ÉLITE', color:'#ff4444', items:[
+      { icon:'🏆', t:'Ganar 1 título oficial con el equipo' },
+      { icon:'🥇', t:'Ganar 1 título individual con un jugador' },
+      { icon:'⚽', t:'Equipo entre los 30 máximos goleadores' },
+      { icon:'🏆', t:'Equipo entre los 30 máximos MVP' },
+      { icon:'💥', t:'Marcar más de 100 goles', c:100 },
+      { icon:'✨', t:'Balón de Oro: 1 jugador nominado entre los 30 mejores' },
+      { icon:'👟', t:'Bota de Oro: 1 jugador nominado entre los 30 mejores' },
+      { icon:'🎯', t:'Marcar 2 goles de Penalti o Falta', c:2 },
+      { icon:'🧱', t:'Parar 2 penaltis', c:2 },
+      { icon:'🏠', t:'Ganar 16 partidos en casa', c:16 },
+      { icon:'🔥', t:'Marcar 5 goles en 3 partidos', c:3 },
+      { icon:'💣', t:'Marcar 6 goles en 1 partido', c:6 },
+      { icon:'🎩', t:'Lograr 3 Hattricks', c:3 },
+      { icon:'📈', t:'Ganar 5 partidos seguidos', c:5 }
     ]},
-    { id:'sel', icon:'🇫🇷', title:'SELECCIÓN · DOMINIO ABSOLUTO', color:'#4090f0', items:[
-      { icon:'🌍', title:'Mundial',     text:'Clasificar a Francia directamente para el Mundial 2026', type:'bin' },
-      { icon:'⭐', title:'La Tercera',  text:'Ganar la Copa del Mundo',                         type:'bin' },
-      { icon:'🎩', title:'Estrella',    text:'Marcar {X} Hattrick internacional',               type:'acc', base:1, min:1, max:3, cid:'oc-hattrick-sel' },
-      { icon:'📊', title:'Ranking',     text:'Estar en el Top {X} goleadores del Mundial',      type:'rank', base:10, min:3, max:20, cid:'oc-top10-sel' },
-      { icon:'🥇', title:'MVP Mundial', text:'Tener al MVP del torneo en tu plantilla',         type:'bin' }
+    { id:'sel', icon:'🇫🇷', title:'SELECCIONES · DOMINIO NACIONAL', color:'#4090f0', items:[
+      { icon:'🌍', t:'Clasificar a Francia para la Copa Pacífico (8 partidos)' },
+      { icon:'⚽', t:'Marcar 5 goles en un partido', c:5 },
+      { icon:'🎩', t:'Marcar 1 Hattrick internacional', c:1 },
+      { icon:'📊', t:'1 jugador entre el Top 10 del torneo', c:10 },
+      { icon:'🧤', t:'2 partidos internacionales sin encajar', c:2 },
+      { icon:'📈', t:'Equipo marca en 3 partidos consecutivos', c:3 }
     ]}
   ];
+  /* Asigna un id de contador estable a cada item con contador. El
+     orden de iteración (sección→item) coincide con el orden DOM, que
+     es como saveObjState indexa los checkbox. */
+  (function(){
+    var gid = 0;
+    SECTIONS.forEach(function(sec){
+      sec.items.forEach(function(it){
+        if (it.c != null || it.u) it.cid = 'oc-mu-' + (gid);
+        gid++;
+      });
+    });
+  })();
   window.OBJECTIVES_SPEC = SECTIONS;
 
   function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-  function renderItemLabel(item, teamName) {
-    var target = scaleObjective(item, teamName);
-    var text = item.icon + ' ' + item.title + ' · ' + item.text;
-    if (target != null) text = text.replace('{X}', String(target));
+  function renderItemLabel(item) {
     var counter = '';
     if (item.cid) {
-      var isPct = item.unit === '%';
-      var start = isPct ? '0%' : '0';
-      var maxTxt = (target != null ? target : item.base) + (isPct ? '%' : '');
-      counter = ' <span class="obj-counter" id="' + item.cid + '">' + start
+      var isPct = item.u === '%';
+      var startTxt = isPct ? '0%' : (item.dg ? '+0' : '0');
+      var maxTxt   = (item.dg ? '+' + item.c : item.c) + (isPct ? '%' : '');
+      counter = ' <span class="obj-counter" id="' + item.cid + '">' + startTxt
               + '<span class="obj-counter-max">/' + maxTxt + '</span></span>';
+      /* Steppers ➖/➕ — event.stopPropagation()+preventDefault() para
+         que pulsar el botón dentro del <label> NO togglee el checkbox. */
+      var mn = item.dg ? -20 : 0;
+      var call = isPct
+        ? "athObjStepPct('" + item.cid + "',D,0," + item.c + "," + item.c + ")"
+        : "athObjStep('" + item.cid + "',D,"  + mn + "," + item.c + "," + (item.dg ? 'true' : 'false') + ")";
+      var guard = "event.preventDefault();event.stopPropagation();";
+      counter += ' <span class="oc-btns">'
+        + '<button type="button" class="oc-btn" onclick="' + guard + call.replace('D','-1') + '">−</button>'
+        + '<button type="button" class="oc-btn" onclick="' + guard + call.replace('D','1')  + '">+</button>'
+        + '</span>';
     }
-    return '<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ' + esc(text) + counter + '</label>';
+    var inner;
+    if (item.rival) {
+      var parts = esc(item.t).split('RIVAL');
+      inner = esc(item.icon) + ' ' + parts[0]
+        + '<span class="oc-rival" id="oc-superliga-rival" onclick="athObjSetRival(event)">[definir rival]</span>'
+        + (parts[1] || '');
+    } else {
+      inner = esc(item.icon + ' ' + item.t);
+    }
+    return '<label class="obj-item"><input onchange="athObjCount()" type="checkbox"/> ' + inner + counter + '</label>';
   }
 
   function renderSection(sec, teamName) {
@@ -46658,9 +46731,12 @@ https://api.sofascore.app/api/v1/team/44/image
 </script>
 
 <style>
-.oc-btns{display:inline-flex;gap:2px;margin-left:4px;flex-shrink:0;}
+.oc-btns{display:inline-flex;gap:2px;margin-left:4px;flex-shrink:0;vertical-align:middle;}
 .oc-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:4px;width:20px;height:20px;font-size:13px;line-height:1;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
 .oc-btn:active{background:rgba(255,255,255,.28);}
+/* Rival editable del duelo de Superliga (clic → prompt). */
+.oc-rival{display:inline-block;color:#f0c040;font-weight:700;border-bottom:1px dashed rgba(240,192,64,.6);cursor:pointer;padding:0 2px;}
+.oc-rival:active{opacity:.7;}
 .mvp-log-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;background:rgba(240,192,64,.07);border:1px solid rgba(240,192,64,.12);}
 .mvp-log-rank{font-family:'Bebas Neue',sans-serif;font-size:15px;color:#f0c040;min-width:18px;}
 .mvp-log-name{flex:1;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;font-weight:600;}
@@ -46670,14 +46746,33 @@ https://api.sofascore.app/api/v1/team/44/image
 
 <script>
 (function(){
-  var LS_OBJ = 'munich-obj-state-v3';
+  /* v4: el set de objetivos cambió a 68 (boceto usuario 2026-06-01),
+     así que el índice de checkbox y los ids de contador difieren del
+     v3 — clave nueva para arrancar limpio. */
+  var LS_OBJ = 'munich-obj-state-v4';
   var LS_MVP = 'munich-mvp-tracker-v2';
+  var LS_RIVAL = 'munich-obj-rival';
   var TEAM_NAME = 'Bayern Munich';
 
-  /* ── Counter IDs that store plain integers ── */
-  var INT_COUNTERS = ['oc-imbatido-liga','oc-goles-copa','oc-goles-uecl',
-    'oc-ganar-derby','oc-imbatido-derby','oc-goles-derby',
-    'oc-casa','oc-5goles2','oc-6goles1','oc-hattrick-gl','oc-hattrick-sel'];
+  /* ── Rival editable del duelo de Superliga ── */
+  window.athObjSetRival = function(ev){
+    if (ev){ try { ev.preventDefault(); ev.stopPropagation(); } catch(_){} }
+    var cur = '';
+    try { cur = localStorage.getItem(LS_RIVAL) || ''; } catch(_){}
+    var v = prompt('Nombre de la selección / equipo rival de la Superliga:', cur);
+    if (v == null) return;
+    v = v.trim();
+    try { localStorage.setItem(LS_RIVAL, v); } catch(_){}
+    var el = document.getElementById('oc-superliga-rival');
+    if (el) el.textContent = v ? v : '[definir rival]';
+  };
+  function loadRival(){
+    var el = document.getElementById('oc-superliga-rival');
+    if (!el) return;
+    var v = '';
+    try { v = localStorage.getItem(LS_RIVAL) || ''; } catch(_){}
+    el.textContent = v ? v : '[definir rival]';
+  }
 
   /* ── Stepper for plain integer counters ── */
   window.athObjStep = function(id, delta, min, max, isGoalDiff){
@@ -46774,7 +46869,9 @@ https://api.sofascore.app/api/v1/team/44/image
     };
   }
 
-  /* ── Persist checkbox state + counters to localStorage ── */
+  /* ── Persist checkbox state + counters to localStorage ──
+     Genérico: itera TODOS los `.obj-counter[id]` del contenedor, así
+     cubre los 68 objetivos sin lista hardcoded de ids. */
   function saveObjState(){
     try {
       var data = { checks: {}, counters: {} };
@@ -46782,11 +46879,8 @@ https://api.sofascore.app/api/v1/team/44/image
         var cb = lbl.querySelector('input[type=checkbox]');
         if (cb) data.checks[i] = cb.checked;
       });
-      /* save counter text nodes */
-      var counterIds = INT_COUNTERS.concat(['oc-dif-goles','oc-rating-liga','oc-mvp-temp','oc-pos-uecl','oc-top10-sel']);
-      counterIds.forEach(function(id){
-        var el = document.getElementById(id);
-        if (el && el.childNodes[0]) data.counters[id] = el.childNodes[0].textContent.trim();
+      document.querySelectorAll('#ath-obj-club .obj-counter[id]').forEach(function(el){
+        if (el.childNodes[0]) data.counters[el.id] = el.childNodes[0].textContent.trim();
       });
       localStorage.setItem(LS_OBJ, JSON.stringify(data));
     } catch(e){}
@@ -46794,6 +46888,7 @@ https://api.sofascore.app/api/v1/team/44/image
 
   function loadObjState(){
     try {
+      loadRival();
       var raw = localStorage.getItem(LS_OBJ);
       if (!raw) return;
       var data = JSON.parse(raw);
@@ -46825,12 +46920,19 @@ https://api.sofascore.app/api/v1/team/44/image
      veces el span quedaba con el valor automático. Llamando a
      `_bayernHudReapply()` (apply de los overrides) directamente
      después de athObjCount aseguramos que el override siempre gana. */
-  /* ── Ganancias por objetivos del club ────────────────────────────
-     Cada objetivo del club cumplido suma 50🪙 al presupuesto y 0,33💼
-     a la valoración del hub. Idempotente: memoiza la aportación de
-     objetivos en `objMoney`/`objRating` del override del HUD, así que
-     al recalcular sólo aplica el DELTA — cubre marcar Y desmarcar, y
-     sobrevive a recargas sin doble-contar. */
+  /* ── Ganancias por objetivos del club (spec usuario 2026-06-01) ───
+     Cada objetivo del club cumplido ✅ suma:
+       · 🪙 Presupuesto : +25 (millones) por objetivo, SIN tope (el
+         contador sigue sumando aunque supere el presupuesto objetivo).
+       · 💼 Valoración  : +0,275 por objetivo, con TOPE en 10 (una vez
+         alcanzado 10 se queda en 10 aunque se marquen más objetivos).
+     Idempotente: memoiza la aportación de objetivos en
+     `objMoney`/`objRating` del override del HUD, así que al recalcular
+     sólo aplica el DELTA — cubre marcar Y desmarcar, y sobrevive a
+     recargas sin doble-contar. */
+  var OBJ_MONEY_PER = 25;     /* 🪙 por objetivo, sin cap */
+  var OBJ_RATING_PER = 0.275; /* 💼 por objetivo */
+  var OBJ_RATING_CAP = 10;    /* tope de la aportación 💼 */
   function liverpoolObjEarnings(){
     if (typeof window._bayernHudGet !== 'function'
         || typeof window._bayernHudMerge !== 'function') return;
@@ -46841,20 +46943,30 @@ https://api.sofascore.app/api/v1/team/44/image
       var cb = lbl.querySelector('input[type=checkbox]');
       if (cb && cb.checked) done++;
     });
-    var MONEY_PER_OBJ = 50, RATING_PER_OBJ = 0.33;
     var o = window._bayernHudGet() || {};
     var prevObjMoney  = parseFloat(o.objMoney)  || 0;
     var prevObjRating = parseFloat(o.objRating) || 0;
-    var newObjMoney  = done * MONEY_PER_OBJ;
-    var newObjRating = Math.round(done * RATING_PER_OBJ * 100) / 100;
+    var newObjMoney  = done * OBJ_MONEY_PER;
+    var newObjRating = Math.min(OBJ_RATING_CAP, Math.round(done * OBJ_RATING_PER * 1000) / 1000);
     if (newObjMoney === prevObjMoney && newObjRating === prevObjRating) return;
     var money  = ((o.money  != null) ? (parseFloat(o.money)  || 0) : 0) + (newObjMoney  - prevObjMoney);
     var rating = ((o.rating != null) ? (parseFloat(o.rating) || 0) : 0) + (newObjRating - prevObjRating);
     if (money  < 0) money  = 0;
     if (rating < 0) rating = 0;
-    rating = Math.round(rating * 100) / 100;
+    rating = Math.round(rating * 1000) / 1000;
     window._bayernHudMerge({ money: money, rating: rating,
                              objMoney: newObjMoney, objRating: newObjRating });
+    /* Barras de progreso del HUD coherentes con los nuevos valores
+       (athObjCount las pinta con su escala vieja; aquí las corregimos
+       contra los targets visibles 💼 /9.10 y 🪙 /1300€). */
+    try {
+      var barP = document.getElementById('ath-bar-pts');
+      var barM = document.getElementById('ath-bar-money');
+      var tgtR = parseFloat((o.ratingTarget != null) ? o.ratingTarget : 9.10) || 9.10;
+      var tgtM = parseFloat((o.moneyTarget  != null) ? o.moneyTarget  : 1300) || 1300;
+      if (barP) barP.style.width = Math.min(100, (rating / tgtR) * 100) + '%';
+      if (barM) barM.style.width = Math.min(100, (money  / tgtM) * 100) + '%';
+    } catch(_){}
   }
 
   function patchAthObjCount(){
@@ -46868,6 +46980,31 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     };
   }
+
+  /* ── Reset de objetivos al Reiniciar Temporada (1 de Mayo) ────────
+     Desmarca TODOS los ✅, resetea los contadores a su valor inicial
+     (0 / 0% / +0), borra el estado persistido y recalcula (💼 y 🪙 de
+     objetivos vuelven a 0 vía liverpoolObjEarnings con done=0). Lo
+     llama `_bayernEditValuesResetCal`. El nombre del rival de la
+     Superliga se conserva (es configuración, no progreso). */
+  window._munichObjReset = function(){
+    try {
+      document.querySelectorAll('#ath-obj-club .obj-item').forEach(function(lbl){
+        var cb = lbl.querySelector('input[type=checkbox]');
+        if (cb) cb.checked = false;
+        lbl.classList.remove('done');
+      });
+      document.querySelectorAll('#ath-obj-club .obj-counter[id]').forEach(function(el){
+        if (!el.childNodes[0]) return;
+        var txt = el.childNodes[0].textContent.trim();
+        if (/%/.test(txt)) el.childNodes[0].textContent = '0%';
+        else if (/^\+/.test(txt)) el.childNodes[0].textContent = '+0';
+        else el.childNodes[0].textContent = '0';
+      });
+      try { localStorage.removeItem(LS_OBJ); } catch(_){}
+      if (typeof window.athObjCount === 'function') window.athObjCount();
+    } catch(_){}
+  };
 
   /* ── Init on DOMContentLoaded ── */
   document.addEventListener('DOMContentLoaded', function(){

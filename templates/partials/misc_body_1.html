@@ -25987,13 +25987,20 @@ window._showSimProgress = function(opts, onDone){
     return out;
   }
   function computeUclPrevTeams(){
+    /* Base = 34 directos (zona uclPrev). Si los pools europeos están
+       CONGELADOS (`europe_committed_v1`) usamos esa snapshot como base,
+       PERO seguimos mergeando el Open Qualifier (la snapshot solo
+       congela las plazas de liga; el feeder del OQ es dinámico y
+       distinto). Antes había un `return frozen.slice()` que cortaba
+       aquí → la Previa se quedaba en 34/62 tras congelar Europa porque
+       NUNCA llegaba a añadir los 28 del OQ (foto usuario 2026-06-01). */
     var frozen = _europeFrozenFor('uclPrev');
-    if(frozen) return frozen.slice();
-    var arr = _computeQualifiedFromLeagues('uclPrev');
+    var arr = frozen ? frozen.slice() : _computeQualifiedFromLeagues('uclPrev');
     /* El 1º de cada grupo del Open Qualifier (28 grupos × 1 = 28
        plazas, formato 28×4 desde 2026-05-30) se añade a la Previa
-       de Champions ese mismo año. Los persiste `simulateOpenQualifier`
-       en `oq_to_previa_v1`. Dedupe por nombre. */
+       de Champions ese mismo año, AL MOMENTO. Los persiste
+       `simulateOpenQualifier` en `oq_to_previa_v1` con su país real.
+       Dedupe por nombre. */
     try {
       var raw = localStorage.getItem('oq_to_previa_v1');
       if(raw){
@@ -26003,11 +26010,22 @@ window._showSimProgress = function(opts, onDone){
         arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
         teams.forEach(function(t){
           if(!t || !t.name || seen[t.name]) return;
+          /* Salta huecos TBD/placeholder (saves antiguos que los
+             persistían). Solo equipos reales entran a la Previa. */
+          if(/^TBD/i.test(t.name) || /^__placeholder_/.test(t.league||'')) return;
           seen[t.name] = true;
-          arr.push({name:t.name, logo:t.logo||'', league:'open-qualifier'});
+          /* Conservamos el `league` real persistido (slug-país). Solo
+             caemos a 'open-qualifier' si el dato es legacy (sin league);
+             `_eurFixupLeagues` de abajo intentará recuperar el país. */
+          arr.push({name:t.name, logo:t.logo||'', league:(t.league||'open-qualifier')});
         });
       }
     } catch(_){}
+    /* Recupera el slug-país real de los equipos del OQ (o de cualquier
+       directo legacy sin league) para que el sorteo de la Previa
+       (`_distributeGroups`, anti-mismo-país) no trate a todos los del
+       OQ como un mismo país. */
+    _eurFixupLeagues(arr);
     return _prependManualEa(arr, 'uclPrev');
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
@@ -27035,7 +27053,19 @@ window._showSimProgress = function(opts, onDone){
           for(var idx=0; idx<QUALIFY_TOP; idx++){
             if(!st[idx]) continue;
             var t = sim.groups[g][st[idx].idx];
-            if(t && t.name) previaArr.push({name:t.name, logo:t.logo||'', source:'oq-top1'});
+            if(!t || !t.name) continue;
+            /* No propagamos huecos: si el ganador del grupo es un
+               placeholder (`TBD-OQ-N`, league `__placeholder_*`) porque
+               el pool real no llegaba a 112, NO entra a la Previa. Esto
+               hace que la Previa reciba exactamente los ganadores REALES
+               (p.ej. 24) en lugar de 28 con huecos TBD. */
+            if(/^TBD/i.test(t.name) || /^__placeholder_/.test(t.league||'')) continue;
+            /* Persistimos el `league` REAL del equipo (slug-país que el
+               OQ ya conoce, vía `computeOpenQualifierTeams`) para que el
+               sorteo de la Previa pueda evitar repetir país en un mismo
+               grupo. Antes se perdía y todos caían a 'open-qualifier' →
+               el anti-mismo-país los trataba como un único país. */
+            previaArr.push({name:t.name, logo:t.logo||'', league:t.league||'', source:'oq-top1'});
           }
         }
       }

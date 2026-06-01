@@ -22323,7 +22323,13 @@ window._showSimProgress = function(opts, onDone){
     try {
       inner = (typeof window._lextStatsDashHtml === 'function')
         ? window._lextStatsDashHtml(stats, true) : '';
-    } catch(_){ inner = ''; }
+    } catch(_e){ inner = '<div class="liga-stat-empty">render error: '+(_e&&_e.message||_e)+'</div>'; }
+    /* Añadir al diag el tamaño del HTML renderizado + nº de cards, para
+       distinguir "no hay datos" de "datos pero CSS los oculta". */
+    try {
+      var _nCards = (inner.match(/liga-stat-card/g)||[]).length;
+      _diag = _diag.replace('</div>', ' · innerLen:'+inner.length+' · cards:'+_nCards+'</div>');
+    } catch(_){}
     html += _diag;
     /* Botón 🔄 Recalcular: fuerza la regeneración del acta (events) de
        TODOS los partidos jugados y re-pinta. Red de seguridad visible

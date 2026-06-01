@@ -22248,8 +22248,16 @@ window._showSimProgress = function(opts, onDone){
     /* Hidratar plantillas de selecciones para que los goleadores tengan
        nombre real (no «Jugador»). Idempotente y barato. */
     try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
-    try { _tourBackfillActasFromResults(cfg, teams); } catch(_){}
-    try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
+    /* PRIMERO el escaneo robusto (2026-06-01): lee cfg.results[].events
+       directamente con resolución de equipo desde TODAS las fuentes. Es
+       el camino que NO depende de groupFixtures ni de un home/away
+       perfecto, así que es el más fiable para los partidos ya jugados
+       que se ven en el acta. Si encuentra datos, no hace falta el resto. */
+    try { var _rs0 = _mundialStatsRobustScan(cfg, teams); if (_rs0 && Object.keys(_rs0).length) stats = _rs0; } catch(_){}
+    if (!stats || !Object.keys(stats).length) {
+      try { _tourBackfillActasFromResults(cfg, teams); } catch(_){}
+      try { stats = _mundialAggregateStats(cfg, teams) || {}; } catch(_){ stats = {}; }
+    }
     if (!stats || !Object.keys(stats).length) {
       try { var g = _tourStatsFromCfgResults(cfg); if (g && Object.keys(g).length) stats = g; } catch(_){}
     }
@@ -22289,11 +22297,34 @@ window._showSimProgress = function(opts, onDone){
     if (!stats || !Object.keys(stats).length) {
       try { var rs = _mundialStatsRobustScan(cfg, teams); if (rs && Object.keys(rs).length) stats = rs; } catch(_){}
     }
+    /* DIAGNÓSTICO VISIBLE (2026-06-01): cuando la caja sale vacía pese a
+       haber partidos jugados, mostramos contadores reales del cfg para
+       saber DÓNDE se rompe la cadena (sin tener que pedir más capturas).
+       results jugados · con events · claves de stats agregadas. */
+    var _diag = '';
+    try {
+      var _res = (cfg && cfg.results) || {};
+      var _rk = Object.keys(_res);
+      var _played = 0, _withEv = 0, _evTotal = 0;
+      _rk.forEach(function(k){
+        var r = _res[k]; if (!r || !r.played) return; _played++;
+        var ev = r.events || r.acta;
+        if (Array.isArray(ev) && ev.length) { _withEv++; _evTotal += ev.length; }
+      });
+      _diag = '<div style="margin:0 0 8px;padding:6px 10px;border:1px dashed rgba(77,208,225,.35);'
+        + 'border-radius:6px;font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(140,220,235,.65);'
+        + 'letter-spacing:.5px;">🔍 diag · teams:' + ((teams&&teams.length)||0)
+        + ' · results:' + _rk.length + ' · jugados:' + _played
+        + ' · con acta:' + _withEv + ' · eventos:' + _evTotal
+        + ' · stats:' + Object.keys(stats||{}).length
+        + ' · gf:' + Object.keys((cfg&&cfg.groupFixtures)||{}).length + '</div>';
+    } catch(_){}
     var inner;
     try {
       inner = (typeof window._lextStatsDashHtml === 'function')
         ? window._lextStatsDashHtml(stats, true) : '';
     } catch(_){ inner = ''; }
+    html += _diag;
     /* Botón 🔄 Recalcular: fuerza la regeneración del acta (events) de
        TODOS los partidos jugados y re-pinta. Red de seguridad visible
        para el usuario cuando, por timing/hidratación, el backfill

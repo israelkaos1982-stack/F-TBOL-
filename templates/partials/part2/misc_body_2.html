@@ -27540,6 +27540,35 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     _updatePlayBtn();
     _amsRenderHistory();
+    /* ── PRECARGA DE TODAS LAS LIGAS para el buscador ────────────────
+       El buscador (`_getTeamList`) lee SOLO las ligas que están en
+       localStorage (`ligaExt_*`). Esas ligas se bajan del servidor de
+       forma perezosa al abrir cada liga, así que en un dispositivo
+       donde el usuario no las ha abierto, la lupa NO encontraba la
+       mayoría de equipos (EA Sports, Hypermotion, Primera Federación,
+       las 51 del Resto + Resto del Mundo). Lanzamos el MISMO prefetch
+       async que usa el editor de torneos: baja a localStorage TODAS las
+       ligas que falten (concurrencia 5, idempotente, persiste para
+       siempre). A medida que llegan, re-pintamos la búsqueda activa con
+       debounce para que los equipos vayan apareciendo. Bug usuario
+       2026-05-31 ("no salen todos los equipos"). */
+    try {
+      if (typeof window._tourPrefetchAllLeagues === 'function') {
+        var _amsPfDeb = 0;
+        window._tourPrefetchAllLeagues(function(){
+          if (_amsPfDeb) return;
+          _amsPfDeb = setTimeout(function(){
+            _amsPfDeb = 0;
+            ['a','b'].forEach(function(side){
+              var inp = document.getElementById('ams-search-' + side);
+              if (inp && inp.value && inp.value.trim()) {
+                try { _renderResults(side, inp.value); } catch(_){}
+              }
+            });
+          }, 350);
+        });
+      }
+    } catch(_){}
   };
 
   /* ── Bind search inputs ── */

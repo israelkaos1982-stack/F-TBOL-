@@ -46119,18 +46119,65 @@ https://api.sofascore.app/api/v1/team/44/image
     var m = s.match(/[A-Za-zÀ-ɏͰ-῿Ⰰ-퟿].*$/);
     return m ? m[0].trim() : s.trim();
   }
+  /* Normaliza un nombre de equipo para comparar con TOLERANCIA: quita
+     emojis/banderas/símbolos en CUALQUIER posición (incluido el sufijo
+     "🇪🇸" que `_stripLeadingIcon` dejaba), quita acentos y colapsa
+     espacios. "💡 Atlético Madrid 🇪🇸" → "atletico madrid". */
+  if (!window._mDerbyNorm){
+    window._mDerbyNorm = function(s){
+      if (s == null) return '';
+      var str = String(s);
+      try { str = str.normalize('NFD').replace(/[̀-ͯ]/g,''); } catch(_){}
+      return str.replace(/[^0-9A-Za-z\s]/g,' ').toLowerCase().replace(/\s+/g,' ').trim();
+    };
+  }
+  /* ¿`a` y `b` son el MISMO equipo aunque se tecleen distinto? Cubre
+     iconos/banderas embebidos, acentos y ABREVIATURAS por prefijo de
+     token: "Atl Madrid" == "Atlético Madrid", "Barcelona" == "FC
+     Barcelona". Petición usuario 2026-06-01: un derby con el nombre
+     abreviado en la temporada y completo en el partido (o viceversa)
+     debe contar en PJ/G/E/P. */
+  if (!window._mDerbyTeamMatch){
+    window._mDerbyTeamMatch = function(a, b){
+      var na = window._mDerbyNorm(a), nb = window._mDerbyNorm(b);
+      if (!na || !nb) return false;
+      if (na === nb) return true;
+      if (na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0) return true;
+      var ta = na.split(' '), tb = nb.split(' ');
+      var sh = ta.length <= tb.length ? ta : tb;
+      var lo = ta.length <= tb.length ? tb : ta;
+      if (!sh.length) return false;
+      return sh.every(function(tok){
+        return lo.some(function(L){
+          if (tok === L) return true;
+          if (tok.length >= 3 && L.indexOf(tok) === 0) return true;
+          if (L.length   >= 3 && tok.indexOf(L) === 0) return true;
+          return false;
+        });
+      });
+    };
+  }
   function _outcomeFor(match, teamName){
     if (!teamName || !match) return null;
     var t = _stripLeadingIcon(String(teamName)).toLowerCase();
     var local = _stripLeadingIcon(String(match.local || '')).toLowerCase();
     var visit = _stripLeadingIcon(String(match.visitante || '')).toLowerCase();
     var gl = Number(match.gl || 0), gv = Number(match.gv || 0);
-    if (local === t){
+    var isLocal = (local === t) || window._mDerbyTeamMatch(match.local, teamName);
+    var isVisit = (visit === t) || window._mDerbyTeamMatch(match.visitante, teamName);
+    /* Si ambos lados matchean de forma laxa (raro) desempata por
+       igualdad exacta; si ninguno es exacto, prioriza el local. */
+    if (isLocal && isVisit){
+      if (local === t && visit !== t) isVisit = false;
+      else if (visit === t && local !== t) isLocal = false;
+      else isVisit = false;
+    }
+    if (isLocal){
       if (gl > gv) return 'g';
       if (gl < gv) return 'p';
       return 'e';
     }
-    if (visit === t){
+    if (isVisit){
       if (gv > gl) return 'g';
       if (gv < gl) return 'p';
       return 'e';
@@ -47169,12 +47216,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var local = _stripLeadingIcon(String(match.local||'')).toLowerCase();
     var visit = _stripLeadingIcon(String(match.visitante||'')).toLowerCase();
     var gl = Number(match.gl||0), gv = Number(match.gv||0);
-    if (local === t){
+    /* Matching tolerante (acentos, banderas, abreviaturas) — mismo
+       helper que el HUB. Fallback a igualdad exacta si no existe. */
+    var _fz = window._mDerbyTeamMatch || function(){ return false; };
+    var isLocal = (local === t) || _fz(match.local, teamName);
+    var isVisit = (visit === t) || _fz(match.visitante, teamName);
+    if (isLocal && isVisit){
+      if (local === t && visit !== t) isVisit = false;
+      else if (visit === t && local !== t) isLocal = false;
+      else isVisit = false;
+    }
+    if (isLocal){
       if (gl > gv) return 'g';
       if (gl < gv) return 'p';
       return 'e';
     }
-    if (visit === t){
+    if (isVisit){
       if (gv > gl) return 'g';
       if (gv < gl) return 'p';
       return 'e';

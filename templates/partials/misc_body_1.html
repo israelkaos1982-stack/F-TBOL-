@@ -25579,6 +25579,14 @@ window._showSimProgress = function(opts, onDone){
      la zona pedida, caemos al cómputo dinámico — preserva la UX para
      usuarios que no usan el botón. */
   function _europeFrozenFor(zone){
+    /* Bypass deliberado: cuando el admin pulsa "Enviar realidad…" para
+       REFRESCAR la snapshot, queremos recalcular EN VIVO desde las ligas
+       (ignorando la snapshot vieja). Sin esto, los compute*Classified()
+       devolvían la snapshot congelada anterior y re-commitearla con los
+       MISMOS valores viejos — el botón "pulsa otra vez para refrescar"
+       no refrescaba nada (bug 2026-06-01: el cuadre quedaba clavado en
+       Previa 35 / OQ 84 aunque las ligas ya estuvieran corregidas). */
+    if(window._europeIgnoreFrozen) return null;
     try {
       var raw = localStorage.getItem('europe_committed_v1');
       if(!raw) return null;
@@ -29953,16 +29961,27 @@ window._showSimProgress = function(opts, onDone){
       catch(_){ return []; }
     }
     /* Mapamos cada función. Cada una devuelve array de
-       {name, logo, league}. Lo guardamos tal cual. */
-    var blob = {
-      ucl:      _safeCompute(window.computeUclClassified),
-      uclPrev:  _safeCompute(window.computeUclPrevTeams),
-      uel:      _safeCompute(window.computeUelClassified),
-      uecl:     _safeCompute(window.computeUeclClassified),
-      uclQual:  _safeCompute(window.computeOpenQualifierTeams),
-      wildcard: _safeCompute(window.computeWildCardClassified),
-      ts:       Date.now()
-    };
+       {name, logo, league}. Lo guardamos tal cual.
+       IMPORTANTE: forzamos cálculo EN VIVO (`_europeIgnoreFrozen`) para
+       que el re-commit recalcule desde las ligas y NO devuelva la
+       snapshot congelada anterior — así "pulsa otra vez para refrescar"
+       SÍ refresca cuando el admin reconfigura/re-simula las ligas. */
+    var _prevIgnore = window._europeIgnoreFrozen;
+    window._europeIgnoreFrozen = true;
+    var blob;
+    try {
+      blob = {
+        ucl:      _safeCompute(window.computeUclClassified),
+        uclPrev:  _safeCompute(window.computeUclPrevTeams),
+        uel:      _safeCompute(window.computeUelClassified),
+        uecl:     _safeCompute(window.computeUeclClassified),
+        uclQual:  _safeCompute(window.computeOpenQualifierTeams),
+        wildcard: _safeCompute(window.computeWildCardClassified),
+        ts:       Date.now()
+      };
+    } finally {
+      window._europeIgnoreFrozen = _prevIgnore;
+    }
     var totalUcl  = blob.ucl.length;
     var totalPrev = blob.uclPrev.length;
     var totalUel  = blob.uel.length;

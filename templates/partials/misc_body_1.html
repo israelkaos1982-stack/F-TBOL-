@@ -13451,11 +13451,17 @@ window._showSimProgress = function(opts, onDone){
 <div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa de Europa</h2></div>
 <div id="recopa-banner" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin:6px 0 10px;padding:0 8px;"></div>
 <div class="jlist">
-<!-- Recopa rediseñada 2026-05-26: arranca en CUARTOS con 8 equipos
-     (6 desde Resto del Mundo top + 2 manuales champion/runner-up
-     UCL del año pasado). Las rondas 1/64, 1/32 y Octavos quedan
-     OBSOLETAS — eliminadas del DOM. La key `recopa_state_v1` legacy
-     que tenga `sorteo.r64/r32/r16` con datos se ignora al cargar. -->
+<!-- Recopa rediseñada 2026-06-02: bracket COMPLETO de 64 equipos a
+     partido único (prórroga + penaltis). 6 rondas, mismas fechas que
+     el calendario (calendario.json): 1/64 → 1/32 → Octavos → Cuartos
+     → Semis → FINAL. El pool son los CAMPEONES (+ subcampeones si la
+     copa lo tiene activado) de las copas nacionales europeas
+     (`ligaExt_*.copa`) + los manuales de "EA Sports → Europa" slug
+     recopa, hasta 64. Se rellena con BYE si faltan (el equipo con BYE
+     pasa directo). -->
+<div class="jblock" id="recopa-rd-r64-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r64')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;1/64</span><span class="recopa-rd-cnt" id="recopa-rd-r64-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<div class="jblock" id="recopa-rd-r32-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r32')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;1/32</span><span class="recopa-rd-cnt" id="recopa-rd-r32-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
+<div class="jblock" id="recopa-rd-r16-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r16')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Octavos</span><span class="recopa-rd-cnt" id="recopa-rd-r16-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-r8-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r8')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Cuartos de Final</span><span class="recopa-rd-cnt" id="recopa-rd-r8-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-sf-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-sf')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;Semifinales</span><span class="recopa-rd-cnt" id="recopa-rd-sf-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-fin-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-fin')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🟤 <b>Recopa</b>&nbsp;&nbsp;FINAL</span><span class="recopa-rd-cnt" id="recopa-rd-fin-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
@@ -13468,6 +13474,9 @@ window._showSimProgress = function(opts, onDone){
 </div>
 </div>
 </div>
+<div class="screen" id="s-recopa-rd-r64"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · 1/64</h2></div><div id="recopa-rd-r64-body" style="padding:0 4px 20px;"></div></div>
+<div class="screen" id="s-recopa-rd-r32"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · 1/32</h2></div><div id="recopa-rd-r32-body" style="padding:0 4px 20px;"></div></div>
+<div class="screen" id="s-recopa-rd-r16"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Octavos</h2></div><div id="recopa-rd-r16-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-r8"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Cuartos de Final</h2></div><div id="recopa-rd-r8-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-sf"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Semifinales</h2></div><div id="recopa-rd-sf-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-fin"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · FINAL</h2></div><div id="recopa-rd-fin-body" style="padding:0 4px 20px;"></div></div>
@@ -13557,14 +13566,24 @@ window._showSimProgress = function(opts, onDone){
      empate al 90'.
      ═══════════════════════════════════════════════════════════════ */
   var STORE_KEY = 'recopa_state_v1';
-  var PHASES = ['r8','sf','fin'];
-  var PHASE_LABEL = { r8:'Cuartos', sf:'Semifinales', fin:'FINAL' };
-  var PHASE_SIZE  = { r8:4, sf:2, fin:1 }; /* nº de matches */
-  var NEXT_PHASE  = { r8:'sf', sf:'fin', fin:null };
-  var DOM_BODY    = { r8:'recopa-rd-r8-body', sf:'recopa-rd-sf-body', fin:'recopa-rd-fin-body' };
+  var BYE = '__BYE__';
+  var POOL_TARGET = 64;
+  var PHASES = ['r64','r32','r16','r8','sf','fin'];
+  var PHASE_LABEL = { r64:'1/64', r32:'1/32', r16:'Octavos', r8:'Cuartos', sf:'Semifinales', fin:'FINAL' };
+  var PHASE_SIZE  = { r64:32, r32:16, r16:8, r8:4, sf:2, fin:1 }; /* nº de matches */
+  var NEXT_PHASE  = { r64:'r32', r32:'r16', r16:'r8', r8:'sf', sf:'fin', fin:null };
+  var DOM_BODY    = { r64:'recopa-rd-r64-body', r32:'recopa-rd-r32-body', r16:'recopa-rd-r16-body', r8:'recopa-rd-r8-body', sf:'recopa-rd-sf-body', fin:'recopa-rd-fin-body' };
 
   function _load(){
-    try { return JSON.parse(localStorage.getItem(STORE_KEY)||'null'); } catch(_){ return null; }
+    var s;
+    try { s = JSON.parse(localStorage.getItem(STORE_KEY)||'null'); } catch(_){ return null; }
+    /* Migración: estados legacy de 3 fases (bracket de 8: r8/sf/fin sin
+       r64) se descartan para no mostrar datos viejos en las cajas
+       nuevas. El usuario re-sortea el bracket de 64 desde 1/64. */
+    if(s && s.sorteo && !s.sorteo.r64 && (s.sorteo.r8 || s.sorteo.sf || s.sorteo.fin)){
+      return null;
+    }
+    return s;
   }
   function _save(s){
     try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){}
@@ -13594,73 +13613,156 @@ window._showSimProgress = function(opts, onDone){
     return H.indexOf(name) !== -1;
   }
 
-  /* Construye el pool de Recopa (rediseño 2026-05-27):
-     Resto del Mundo YA NO alimenta Recopa — sus 6 primeros van a Copa
-     Intercontinental, no aquí. El pool de Recopa queda limitado a los
-     equipos manuales añadidos vía "EA Sports → Europa" slug 'recopa'
-     (window._meaTeamsFor('recopa')). El usuario los añade a mano:
-     campeón + subcampeón Champions del año pasado.
-     NOTA: con solo 2 equipos manuales no se puede sortear un bracket
-     de 8. El motor de Recopa queda pendiente de un rediseño separado
-     (pool de 64 equipos exclusivamente europeos según indicó el
-     usuario). Hasta entonces, las pantallas s-recopa-rd-* permanecen
-     pero no se podrán arrancar sin pool completo. */
+  /* Construye el pool de Recopa (rediseño 2026-06-02):
+     Modelo histórico Recopa / Cup Winners' Cup. El pool son los
+     CAMPEONES de las copas nacionales europeas (`ligaExt_<slug>.copa`,
+     motor _lecCopa) + los SUBCAMPEONES de las copas que tengan el
+     toggle `recopaSubcampeon` activado (default ON) + los equipos
+     manuales de "EA Sports → Europa" slug 'recopa' (donde entran el
+     campeón/subcampeón de la Copa del Rey española, ya que Liga EA
+     está en EUROPE_BLACKLIST). Tope POOL_TARGET (64). El bracket de
+     64 se rellena con BYE si faltan equipos (el equipo emparejado con
+     BYE pasa directo). Exclusivamente europeo: se saltan las ligas no
+     UEFA (resto-mundo) y las internas españolas (EA/Hyp/1ªRFEF), igual
+     que `_computeQualifiedFromLeagues`. */
   function _buildPool(){
     var pool = [];
     var seen = {};
     function _push(name){
       var nm = String(name||'').trim();
       if(!nm) return;
+      if(nm === BYE) return;
       if(/^@[a-z0-9]+#\d+$/i.test(nm)) return; /* TBD pendiente */
-      if(seen[nm]) return;
-      seen[nm] = true;
+      var key = nm.toLowerCase();
+      if(seen[key]) return;
+      seen[key] = true;
       pool.push(nm);
     }
-    /* Equipos manuales (campeón + subcampeón Champions año pasado) */
+    /* (1) Manuales primero — tienen prioridad (el usuario los puso a
+       mano: campeón/subcampeón de la Copa del Rey, etc.). */
     try {
       if(typeof window._meaTeamsFor === 'function'){
         var manual = window._meaTeamsFor('recopa') || [];
-        manual.forEach(function(t){
-          if(t && t.name) _push(t.name);
+        manual.forEach(function(t){ if(t && t.name) _push(t.name); });
+      }
+    } catch(_){}
+    /* (2) Campeones (y subcampeones si procede) de las copas europeas.
+       Recorremos todas las claves `ligaExt_<slug>` reales (igual que
+       _computeQualifiedFromLeagues: sin _backup/_snap/_protected/_vN).
+       Primero TODOS los campeones, luego TODOS los subcampeones, para
+       que al capar a 64 los campeones siempre entren antes. */
+    var EUROPE_BLACKLIST = { 'liga-hypermotion':1, 'liga-primera-federacion':1, 'liga-ea-sports':1, 'resto-mundo':1 };
+    var champs = [], runners = [];
+    try {
+      if(typeof localStorage !== 'undefined'){
+        var keys = [];
+        for(var i=0;i<localStorage.length;i++){
+          var k = localStorage.key(i);
+          if(!k || k.indexOf('ligaExt_')!==0) continue;
+          if(k.indexOf('_backup')>=0 || k.indexOf('_snap_')>=0 || k.indexOf('_snapshot')>=0 || k.indexOf('_protected')>=0) continue;
+          if(/_v\d+$/.test(k)) continue;
+          keys.push(k);
+        }
+        keys.sort();
+        keys.forEach(function(key){
+          var slug = key.substring('ligaExt_'.length);
+          if(EUROPE_BLACKLIST[slug]) return;
+          var data;
+          try { data = JSON.parse(localStorage.getItem(key)||'null'); } catch(_){ return; }
+          var cp = data && data.copa;
+          if(!cp) return;
+          if(cp.champion) champs.push(cp.champion);
+          /* Subcampeón: default incluido salvo que el admin lo desactive. */
+          var subOn = !(data.config && data.config.recopaSubcampeon === false);
+          if(subOn && cp.runnerUp) runners.push(cp.runnerUp);
         });
       }
     } catch(_){}
-    /* Cap a 8 — si por error hay más manuales el sobrante se descarta. */
-    if (pool.length > 8) pool = pool.slice(0, 8);
+    champs.forEach(_push);
+    runners.forEach(_push);
+    /* Cap a POOL_TARGET (64). */
+    if (pool.length > POOL_TARGET) pool = pool.slice(0, POOL_TARGET);
     return pool;
   }
 
-  /* Sortea los 8 (o menos) equipos en 4 partidos aleatorios de Cuartos.
-     Si hay menos de 8, se sortean los disponibles. Si hay impar, se
-     descarta el último (random shuffle ya). Rediseño 2026-05-26. */
-  function _drawR8(pool){
-    var sh = _shuffle(pool);
-    if(sh.length % 2 !== 0) sh.pop();
-    var matches = [];
-    for(var i=0; i<sh.length; i+=2){
-      matches.push({home: sh[i], away: sh[i+1], played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null});
-    }
-    return matches;
+  function _mkMatch(home, away){
+    return { home: home, away: away, played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null };
   }
-  /* Sortea la siguiente ronda con los ganadores de la previa. */
+  /* Marca un match con BYE como ya jugado (walkover): el equipo real
+     pasa directo. Si ambos lados son BYE el slot propaga BYE. */
+  function _resolveBye(m){
+    var hBye = (m.home === BYE), aBye = (m.away === BYE);
+    if(!hBye && !aBye) return m;
+    m.played = true; m.gh = 0; m.ga = 0; m.etGh = 0; m.etGa = 0; m.penWinner = null;
+    m.bye = true;
+    return m;
+  }
+  /* Sortea la PRIMERA ronda (1/64) en 32 partidos. Si el pool < 64 se
+     rellena con BYE de forma que cada BYE empareje con un equipo real
+     (walkover) y nunca BYE-vs-BYE mientras queden reales. Rediseño
+     2026-06-02. */
+  function _drawFirstRound(pool){
+    var sh = _shuffle(pool);
+    var nMatches = PHASE_SIZE.r64;          /* 32 */
+    var capacity = nMatches * 2;            /* 64 */
+    if(sh.length > capacity) sh = sh.slice(0, capacity);
+    var byes = capacity - sh.length;        /* huecos a rellenar */
+    var matches = [];
+    /* (a) `byes` equipos reales reciben un BYE (pasan directo). */
+    var byeTeams = sh.slice(0, Math.min(byes, sh.length));
+    var rest = sh.slice(byeTeams.length);
+    byeTeams.forEach(function(t){ matches.push(_resolveBye(_mkMatch(t, BYE))); });
+    /* (b) el resto se empareja real-vs-real. */
+    for(var i=0; i+1<rest.length; i+=2){
+      matches.push(_mkMatch(rest[i], rest[i+1]));
+    }
+    /* (c) sobrante impar → BYE. */
+    if(rest.length % 2 === 1){
+      matches.push(_resolveBye(_mkMatch(rest[rest.length-1], BYE)));
+    }
+    /* (d) relleno final BYE-vs-BYE hasta 32 (solo si pool muy pequeño). */
+    while(matches.length < nMatches){
+      matches.push(_resolveBye(_mkMatch(BYE, BYE)));
+    }
+    return _shuffle(matches);
+  }
+  /* Sortea la siguiente ronda con los ganadores de la previa. Los BYE
+     que hayan propagado (bracket no lleno) se vuelven a emparejar de
+     forma que un equipo real con BYE pase directo. */
   function _drawNext(prevMatches){
     var winners = [];
     prevMatches.forEach(function(m){
       if(m && m.played){
         var w = _winnerOf(m);
-        if(w) winners.push(w);
+        winners.push(w || BYE);   /* slot vacío → BYE para mantener el tamaño */
       }
     });
     var sh = _shuffle(winners);
-    if(sh.length % 2 !== 0) sh.pop();
+    /* Separar reales y BYEs para que ningún real quede fuera por un
+       emparejamiento BYE-vs-real mal colocado. */
+    var reals = sh.filter(function(x){ return x && x !== BYE; });
+    var nByes = sh.length - reals.length;
+    if(sh.length % 2 === 1){ reals = reals.slice(); if(reals.length) reals.pop(); }
     var matches = [];
-    for(var i=0; i<sh.length; i+=2){
-      matches.push({home: sh[i], away: sh[i+1], played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null});
+    var ri = 0;
+    /* Cada BYE empareja con un real (walkover). */
+    var byeUse = Math.min(nByes, reals.length);
+    for(var b=0; b<byeUse; b++){
+      matches.push(_resolveBye(_mkMatch(reals[ri++], BYE)));
+    }
+    /* El resto real-vs-real. */
+    for(; ri+1<reals.length; ri+=2){
+      matches.push(_mkMatch(reals[ri], reals[ri+1]));
     }
     return matches;
   }
   function _winnerOf(m){
     if(!m || !m.played) return null;
+    /* Walkover por BYE: el equipo real pasa directo. */
+    var hBye = (m.home === BYE), aBye = (m.away === BYE);
+    if(hBye && aBye) return null;
+    if(aBye) return m.home;
+    if(hBye) return m.away;
     var totA = (m.gh||0) + (m.etGh||0);
     var totB = (m.ga||0) + (m.etGa||0);
     if(m.penWinner === 'a') return m.home;
@@ -13689,22 +13791,22 @@ window._showSimProgress = function(opts, onDone){
   /* ── PUBLIC API ───────────────────────────────────────────────── */
   window._recopaSortear = function(){
     var s = _load() || {};
-    var phase = s.sorteo ? _firstPhaseToDraw(s) : 'r8';
-    if(phase === 'r8'){
+    var phase = s.sorteo ? _firstPhaseToDraw(s) : 'r64';
+    if(phase === 'r64'){
       var pool = _buildPool();
       if(pool.length < 2){
-        alert('⚠️ Necesitas al menos 2 equipos para sortear la Recopa.\n\nPool actual: ' + pool.length + '\n\nEl pool se construye con:\n  · Top 6 de la liga Resto del Mundo (automático).\n  · Campeón + Subcampeón Champions del año pasado (añadidos manualmente vía EA Sports → Europa).');
+        alert('⚠️ Necesitas al menos 2 equipos para sortear la Recopa.\n\nPool actual: ' + pool.length + '\n\nEl pool se construye con:\n  · Campeón de cada copa nacional europea (automático tras simular su copa).\n  · Subcampeón de cada copa (si está activado en sus Reglas).\n  · Equipos manuales añadidos vía "EA Sports → Europa" (slug Recopa) — p.ej. campeón/subcampeón de la Copa del Rey.');
         return;
       }
-      var conf = pool.length >= 8 ? '8' : (pool.length + ' (faltan ' + (8-pool.length) + ' para llenar el pool)');
-      if(s.sorteo && s.sorteo.r8 && s.sorteo.r8.length){
-        if(!confirm('Ya hay un sorteo de Cuartos hecho. ¿Re-sortear con los ' + conf + ' equipos del pool actual?\n\nSe perderán los resultados ya jugados de esta edición.')) return;
+      var conf = pool.length >= POOL_TARGET ? String(POOL_TARGET) : (pool.length + ' (se rellena con BYE hasta ' + POOL_TARGET + ')');
+      if(s.sorteo && s.sorteo.r64 && s.sorteo.r64.length){
+        if(!confirm('Ya hay un sorteo de 1/64 hecho. ¿Re-sortear con los ' + conf + ' equipos del pool actual?\n\nSe perderán los resultados ya jugados de esta edición.')) return;
       }
-      var newSorteo = { r8:_drawR8(pool), sf:[], fin:[] };
-      s = { pool: pool.slice(0, 8), sorteo: newSorteo, champion:null, runnerUp:null };
+      var newSorteo = { r64:_drawFirstRound(pool), r32:[], r16:[], r8:[], sf:[], fin:[] };
+      s = { pool: pool.slice(0, POOL_TARGET), sorteo: newSorteo, champion:null, runnerUp:null };
       _save(s);
       _recopaInit();
-      try { go('s-recopa-rd-r8'); } catch(_){}
+      try { go('s-recopa-rd-r64'); } catch(_){}
       return;
     }
     if(!phase){
@@ -13733,7 +13835,7 @@ window._showSimProgress = function(opts, onDone){
   }
 
   window._recopaReiniciar = function(){
-    if(!confirm('¿Reiniciar Recopa de Europa?\n\nSe pierden el sorteo y todos los resultados de esta edición. El pool se reconstruye al pulsar Sortear Cuartos.')) return;
+    if(!confirm('¿Reiniciar Recopa de Europa?\n\nSe pierden el sorteo y todos los resultados de esta edición. El pool se reconstruye al pulsar Sortear 1/64.')) return;
     try { localStorage.removeItem(STORE_KEY); } catch(_){}
     _recopaInit();
   };
@@ -13812,15 +13914,15 @@ window._showSimProgress = function(opts, onDone){
     if(!host) return;
     var s = _load();
     var html = '';
-    if(!s || !s.sorteo || !s.sorteo.r8 || !s.sorteo.r8.length){
+    if(!s || !s.sorteo || !s.sorteo.r64 || !s.sorteo.r64.length){
       var pool = _buildPool();
-      html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear Cuartos (' + pool.length + ' equipos)</button>';
+      html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + pool.length + ' equipos)</button>';
     } else {
       var phase = _firstPhaseToDraw(s);
       var done = _phaseDone(s, _prevPhase(phase));
       if(s.champion){
         html += '<div class="recopa-banner-info">🏆 Campeón: <b>' + _esc(s.champion) + '</b> · Subcampeón: <b>' + _esc(s.runnerUp||'') + '</b></div>';
-      } else if(phase && phase !== 'r8'){
+      } else if(phase && phase !== 'r64'){
         var prev = _prevPhase(phase);
         if(done){
           html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</button>';
@@ -13892,6 +13994,21 @@ window._showSimProgress = function(opts, onDone){
   }
   function _renderMatchCard(m, phase, idx){
     var played = !!m.played;
+    /* Walkover por BYE: el equipo real pasa directo (sin partido). */
+    if(m.home === BYE || m.away === BYE){
+      var real = (m.home === BYE) ? m.away : m.home;
+      if(real === BYE){
+        return '<div class="recopa-card" style="opacity:.45;"><div class="recopa-card-row" style="justify-content:center;"><div class="recopa-card-name" style="color:rgba(255,255,255,.4);">Plaza libre (BYE)</div></div></div>';
+      }
+      var lR = _logo(real);
+      var hiR = (typeof window.humanIcon === 'function') ? (window.humanIcon(real)||'') : '';
+      return '<div class="recopa-card played" style="border-color:rgba(95,224,138,.35);">'
+           + '<div class="recopa-card-row">'
+           + '<div class="recopa-card-side">' + (lR ? '<img src="' + _esc(lR) + '"/>' : '<span style="font-size:36px;">🛡</span>') + '<div class="recopa-card-name win">' + hiR + _esc(real) + '</div></div>'
+           + '<div class="recopa-card-mid"><div class="recopa-card-pen" style="color:#5fe08a;">PASA DIRECTO</div></div>'
+           + '<div class="recopa-card-side"><span style="font-size:30px;opacity:.4;">—</span><div class="recopa-card-name" style="color:rgba(255,255,255,.35);">BYE</div></div>'
+           + '</div></div>';
+    }
     var totA = (m.gh||0) + (m.etGh||0);
     var totB = (m.ga||0) + (m.etGa||0);
     var winner = _winnerOf(m);

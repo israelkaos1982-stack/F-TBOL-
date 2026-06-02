@@ -163,6 +163,12 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 .ml-venue-sep{color:rgba(255,255,255,.2);font-size:10px;flex-shrink:0;}
 .ml-venue-weather{font-family:"Oswald",sans-serif;font-size:10px;font-weight:600;letter-spacing:1px;color:#f0c040;white-space:nowrap;flex-shrink:0;}
 .ml-sun{display:inline-block;animation:sunPulse 2s ease-in-out infinite;}@keyframes sunPulse{0%,100%{transform:scale(1) rotate(0deg);filter:brightness(1);}50%{transform:scale(1.22) rotate(18deg);filter:brightness(1.35);}}
+/* Lluvia/nieve en la barra de la card → destaca (color frío + pulso) para
+   recordar cambiar el clima en el juego. Petición usuario 2026-06-02. */
+.ml-venue-weather.is-wx-special{color:#bfe3ff!important;text-shadow:0 0 7px rgba(90,170,255,.95);animation:mlWxAlert 1.1s ease-in-out infinite;}
+@keyframes mlWxAlert{0%,100%{opacity:.82;}50%{opacity:1;}}
+.ml-wx-ico.ml-wx-rain,.ml-wx-ico.ml-wx-snow{display:inline-block;animation:mlWxIco 1.1s ease-in-out infinite;}
+@keyframes mlWxIco{0%,100%{transform:translateY(0) scale(1);}50%{transform:translateY(-1.5px) scale(1.2);}}
 .match-live-wrap.hvh .ml-venue-bar{background:rgba(90,0,140,.35);border-bottom-color:rgba(180,60,255,.2);}
 .match-live-wrap.hvia .ml-venue-bar{background:rgba(0,80,0,.3);border-bottom-color:rgba(60,200,60,.15);}
 .ml-team-svg{width:32px;height:38px;flex-shrink:0;position:relative;z-index:2;}
@@ -2029,6 +2035,37 @@ i.ico{font-style:normal;}.ath-t-ico,.betis-t-ico,.soc-t-ico,.mad-t-ico,.bar-t-ic
 }
 .pp-env-line span { font-size: 15px; }
 .pp-env-line b { font-weight: 600; }
+
+/* Clima ESPECIAL (lluvia/nieve) en la PREVIA — destaca mucho para
+   recordar cambiarlo en el juego (eFootball). Petición usuario
+   2026-06-02 ("apenas se fijan"). El soleado no usa estas clases. */
+.pp-env-line.is-wx-special { flex-wrap: wrap; }
+.pp-wx-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 12px; border-radius: 999px;
+  font-family: Oswald, sans-serif; line-height: 1;
+  animation: ppWxPulse 1.15s ease-in-out infinite;
+}
+.pp-wx-badge .pp-wx-ico  { font-size: 19px; animation: ppWxIco 1.15s ease-in-out infinite; }
+.pp-wx-badge .pp-wx-name { font-size: 14px; font-weight: 800; letter-spacing: 1.2px; }
+.pp-wx-rain {
+  background: linear-gradient(90deg,#0a3a6b,#2278cc,#0a3a6b);
+  color: #e6f3ff; border: 1px solid rgba(130,195,255,.9);
+  box-shadow: 0 0 11px rgba(70,150,255,.7), inset 0 0 8px rgba(130,195,255,.4);
+}
+.pp-wx-snow {
+  background: linear-gradient(90deg,#2a536e,#9fd8f2,#2a536e);
+  color: #06222f; border: 1px solid rgba(225,247,255,.95);
+  box-shadow: 0 0 13px rgba(195,238,255,.85), inset 0 0 8px rgba(255,255,255,.5);
+}
+.pp-wx-remind {
+  font-family: Oswald, sans-serif; font-size: 11px; font-weight: 700;
+  letter-spacing: .5px; color: #ffdf6b; margin-left: 8px;
+  animation: ppWxBlink 1s steps(1) infinite;
+}
+@keyframes ppWxPulse { 0%,100%{ transform: scale(1); } 50%{ transform: scale(1.06); } }
+@keyframes ppWxIco   { 0%,100%{ transform: translateY(0) rotate(-7deg); } 50%{ transform: translateY(-1px) rotate(7deg); } }
+@keyframes ppWxBlink { 0%,49%{ opacity: 1; } 50%,100%{ opacity: .28; } }
 
 /* Flash overlay — Gol / Expulsión */
 #mm-event-flash {

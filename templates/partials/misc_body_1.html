@@ -20632,26 +20632,16 @@ window._showSimProgress = function(opts, onDone){
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
     if (flagEl  && cfg.flag) flagEl.innerHTML    = _tourFlagHtml(cfg.flag, 'sec-flag-img');
     if (!infoEl) return;
-    /* Botón "📊 Estadísticas" en torneos de Selecciones (spv, sfn) y en
-       los Torneos de Verano (Joan Gamper, Asian, …, tx). NO para
-       `mundial-48` (ya incluye Estadísticas en su menú de 7 cajas) ni
-       para el Mundialito de Clubes (id 'mundial', pantalla propia
-       s-mundial-stats). Abre la pantalla dedicada `s-tour-stats` (paleta
-       VERDE-TEAL esmeralda) que computa las stats EN VIVO desde
-       cfg.results del propio torneo → se actualizan partido a partido
-       (petición usuario 2026-06-02: "cajas estadísticas para los torneos
-       de verano, en color verdoso, que vayan actualizándose"). */
+    /* Botón "📊 Estadísticas" sólo en torneos de Selecciones (spv, sfn)
+       — NO para `mundial-48` (ya incluye Estadísticas en su menú de 7
+       cajas). Los Torneos de Verano tienen su caja de Estadísticas en la
+       LISTA (s-torneos-verano), DEBAJO de cada card — no dentro de la
+       pantalla del torneo (petición usuario 2026-06-02). La pinta
+       `_tvRenderCards`. */
     var _statsBoard = (typeof _tvBoardOf === 'function') ? _tvBoardOf(id) : null;
-    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final'
-                         || _statsBoard === 'verano')
-                        && (cfg.format !== 'mundial-48') && (id !== 'mundial');
+    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final')
+                        && (cfg.format !== 'mundial-48');
     var _statsBoxHtml = _statsAllowed ? _tourStatsBtnHtml(id) : '';
-    /* En los Torneos de Verano la caja de Estadísticas va DEBAJO de la
-       clasificación (petición usuario 2026-06-02). En Selecciones sigue
-       arriba como hasta ahora. */
-    var _statsAtBottom = (_statsBoard === 'verano');
-    var _statsTop = _statsAtBottom ? '' : _statsBoxHtml;
-    var _statsBot = _statsAtBottom ? _statsBoxHtml : '';
     var teams = cfg.teams || [];
     if (!teams.length) {
       var _mr = cfg.formatConfig && cfg.formatConfig.manualRoster;
@@ -20889,7 +20879,7 @@ window._showSimProgress = function(opts, onDone){
             + '</button></div>';
         }
       }
-      infoEl.innerHTML = _statsTop + html + _statsBot;
+      infoEl.innerHTML = _statsBoxHtml + html;
       /* Persistir bracket recién inicializado (2026-05-26): sin esto,
          recargar la página antes de simular nada deja localStorage sin
          cfg.bracket y `_realPair` del hub cae al "Sin partido". */
@@ -20897,13 +20887,13 @@ window._showSimProgress = function(opts, onDone){
         try { Promise.resolve(window._tourSave(id, cfg)).catch(function(){}); } catch(_){}
       }
     } else if (cfg.format === 'league') {
-      infoEl.innerHTML = _statsTop + hint + _renderLeague(cfg, id, teams) + _statsBot;
+      infoEl.innerHTML = _statsBoxHtml + hint + _renderLeague(cfg, id, teams);
     } else if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss') {
       /* Liga+Playoff y Suizo reutilizan el motor de grupos-ko con
          1 solo grupo (config normalizada en _readForm). */
-      infoEl.innerHTML = _statsTop + hint + _renderGroupsKO(cfg, id, teams) + _statsBot;
+      infoEl.innerHTML = _statsBoxHtml + hint + _renderGroupsKO(cfg, id, teams);
     } else if (cfg.format === 'qualifier-route') {
-      infoEl.innerHTML = _statsTop + hint + _renderQualifierRoute(cfg, id, teams) + _statsBot;
+      infoEl.innerHTML = _statsBoxHtml + hint + _renderQualifierRoute(cfg, id, teams);
     } else if (cfg.format === 'mundial-48') {
       /* El menú de 7 cajas (Final · Semis · Cuartos · Octavos ·
          Dieciseisavos · Fase de Grupos · Estadísticas) debe pintarse
@@ -20912,7 +20902,7 @@ window._showSimProgress = function(opts, onDone){
       var _mBody = '';
       try { _mBody = _renderMundial(cfg, id, teams) || ''; }
       catch(_eM){ _mBody = ''; }
-      infoEl.innerHTML = _statsTop + hint + _mBody + _statsBot;
+      infoEl.innerHTML = _statsBoxHtml + hint + _mBody;
     } else {
       infoEl.innerHTML = '';
     }
@@ -25523,6 +25513,20 @@ window._showSimProgress = function(opts, onDone){
         + '<button type="button" class="sc-info-btn" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
         + '<span class="sc-arr">▶</span>'
         + '</div>';
+      /* Caja "📊 Estadísticas" DEBAJO de la card de cada Torneo de Verano
+         (petición usuario 2026-06-02). Verde-teal, abre la pantalla
+         s-tour-stats que computa las stats EN VIVO desde cfg.results del
+         propio torneo. El Mundialito de Clubes (id 'mundial') tiene su
+         pantalla propia (s-mundial-stats), así que se excluye. */
+      if (bd === 'verano' && id !== 'mundial') {
+        slot.html += '<div class="tv-stats-row" style="margin:-1px 0 9px;">'
+          + '<button type="button" class="tour-stats-jbtn is-verano" '
+          + 'onclick="window._tourStatsOpen&&window._tourStatsOpen(\'' + id + '\')">'
+          + '<span class="tsb-emoji">📊</span>'
+          + '<span class="tsb-label">Estadísticas</span>'
+          + '<span class="tsb-arr">▶</span>'
+          + '</button></div>';
+      }
     });
     Object.keys(boards).forEach(function(bd){
       var box = document.getElementById(boards[bd].box);

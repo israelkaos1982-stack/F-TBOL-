@@ -20003,8 +20003,25 @@ window._showSimProgress = function(opts, onDone){
         var _cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tourId])
           || (typeof _tourLoadCachedSync === 'function' ? _tourLoadCachedSync(tourId) : null);
         if (_cfg) {
-          var _fromCfg = _tourStatsFromCfgResults(_cfg);
-          if (_fromCfg && Object.keys(_fromCfg).length) stats = _fromCfg;
+          var _teamsC = _cfg.teams || [];
+          /* Backfill de actas (regenera events de partidos que solo
+             guardaron el marcador) antes de agregar. Idempotente. */
+          try { if (typeof _tourBackfillActasFromResults === 'function') _tourBackfillActasFromResults(_cfg, _teamsC); } catch(_){}
+          /* 1) Escaneo ROBUSTO (resuelve nombre de equipo desde el índice
+             de grupos/KO + home/away + realTeam — cubre qualifier-route /
+             Road Copa donde los results de grupo no siempre guardan
+             home/away). 2026-06-01. */
+          try {
+            if (typeof _mundialStatsRobustScan === 'function') {
+              var _rs = _mundialStatsRobustScan(_cfg, _teamsC);
+              if (_rs && Object.keys(_rs).length) stats = _rs;
+            }
+          } catch(_){}
+          /* 2) Fallback genérico por home/away persistidos. */
+          if (!Object.keys(stats).length) {
+            var _fromCfg = _tourStatsFromCfgResults(_cfg);
+            if (_fromCfg && Object.keys(_fromCfg).length) stats = _fromCfg;
+          }
         }
       } catch(_){}
     }

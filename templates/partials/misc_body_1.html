@@ -12790,6 +12790,18 @@ window._showSimProgress = function(opts, onDone){
 }
 .jbtn.c-road.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
 .jbtn.c-road.done .jor-date{color:rgba(255,255,255,.55) !important;border-color:rgba(170,180,195,.45) !important;}
+/* Torneos de Verano (c-summer, base turquesa en index.bundle.css): las
+   cards de grupo estilo Mundial (_veranoGroupCardHtml) usan c-summer en
+   los botones de jornada → jornada YA JUGADA pasa a GRIS, igual que el
+   resto de comps. (2026-06-02). */
+.jbtn.c-summer.done{
+  background:linear-gradient(90deg,#1a1d22,#2a2e36,#3a3e48,#2a2e36,#1a1d22) !important;
+  border:1.5px solid rgba(170,180,195,.45) !important;
+  filter:grayscale(.5) brightness(.85);
+  color:rgba(255,255,255,.55) !important;
+}
+.jbtn.c-summer.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
+.jbtn.c-summer.done .jor-date{color:rgba(255,255,255,.55) !important;border-color:rgba(170,180,195,.45) !important;}
 /* Editor de roster manual del Mundialito. */
 #mundial-roster-ov{position:fixed;inset:0;z-index:100040;display:none;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,6,.88);}
 #mundial-roster-ov .mr-card{width:min(460px,95vw);max-height:88vh;display:flex;flex-direction:column;overflow:hidden;background:linear-gradient(170deg,#06141c,#0a1d28);border:1px solid rgba(77,208,225,.5);border-radius:14px;box-shadow:0 22px 60px rgba(0,0,0,.7);}
@@ -21215,22 +21227,23 @@ window._showSimProgress = function(opts, onDone){
     return true;
   }
 
-  /* Card de UN grupo de un torneo de Selecciones (estilo Mundial 2032 ·
-     rosa): cabecera con gradiente magenta + tabla de clasificación
-     (_mundialClasTableHtml) + jornadas desplegables con
-     _mundialMatchCardHtml (escudo grande + nombre debajo + marcador).
-     Reusa los mismos botones data-* y match-keys que el motor _tour*
-     (SIM jornada, pasar a J, click partido), así que los handlers
-     globales siguen funcionando exactamente igual que con el render
-     genérico (_standingsTableHtml + _fixtureCardsHtml). */
-  function _selGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup){
-    var TH = _SEL_PINK;
+  /* Card de UN grupo estilo Mundial 2032 (layout "videojuego": escudo
+     grande arriba + nombre debajo + marcador central) PARAMETRIZADO por
+     tema `TH`. Lo usan los torneos de Selecciones (rosa, _selGroupCardHtml)
+     y los Torneos de Verano (turquesa, _veranoGroupCardHtml). Reusa los
+     mismos botones data-* y match-keys que el motor _tour* (SIM jornada,
+     pasar a J, click partido), así que los handlers globales funcionan
+     igual que con el render genérico. TH: { acc, accRGB, hdrGrad, humanCol,
+     bg1, bg2, humanBorder, humanGlow, humanGlowIn, jbtnClass, jLbl, flag,
+     jidPrefix, grpLabel? }. */
+  function _bigGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, TH){
     var letter = String.fromCharCode(65+g);
     var hasH = slice.some(function(t){ return t && (t.isHuman || _tourIsHumanSel(t)); });
-    /* Etiqueta corta de la jornada según el board: Previa / Final. */
-    var _board = (typeof _tvBoardOf === 'function') ? _tvBoardOf(tourId) : '';
-    var _jLbl = (_board === 'sel-final') ? 'Final' : 'Previa';
-    var _flag = (cfg && cfg.flag && cfg.flag.indexOf('http') !== 0) ? cfg.flag : '🌍';
+    var jLbl = TH.jLbl || 'Jornada';
+    var flag = TH.flag || '🏆';
+    var jbtnClass = TH.jbtnClass || 'c-road';
+    var jidPrefix = TH.jidPrefix || 'big-j-';
+    var grpLbl = TH.grpLabel || ('GRUPO ' + letter);
     /* Jornada actual = la PRIMERA con partidos pendientes. */
     var curJg = 0;
     for (var _ji = 0; _ji < fix.length; _ji++){
@@ -21242,21 +21255,21 @@ window._showSimProgress = function(opts, onDone){
       if (_ji === fix.length - 1) curJg = _ji;
     }
     var _grpBorder = hasH
-      ? 'border:2.5px solid #ff3d99;box-shadow:0 0 20px rgba(255,61,153,.70),inset 0 0 10px rgba(255,61,153,.18);'
+      ? 'border:2.5px solid '+TH.humanBorder+';box-shadow:0 0 20px '+TH.humanGlow+',inset 0 0 10px '+TH.humanGlowIn+';'
       : 'border:2px solid rgba('+TH.accRGB+',.55);box-shadow:0 0 12px rgba('+TH.accRGB+',.20),0 4px 14px rgba(0,0,0,.4);';
-    var html = '<div style="margin:12px 0;background:linear-gradient(180deg,#16040e 0%,#240a16 100%);border-radius:12px;overflow:hidden;' + _grpBorder + '">';
+    var html = '<div style="margin:12px 0;background:linear-gradient(180deg,'+TH.bg1+' 0%,'+TH.bg2+' 100%);border-radius:12px;overflow:hidden;' + _grpBorder + '">';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;'
       + 'background:linear-gradient(90deg,'+TH.hdrGrad+');'
       + 'border-bottom:1px solid rgba('+TH.accRGB+',.45);font-family:Oswald,sans-serif;letter-spacing:2px;'
       + 'font-size:13px;color:'+TH.acc+';">'
-      +   '<span>GRUPO '+letter+'</span>'
+      +   '<span>'+grpLbl+'</span>'
       +   '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.6);letter-spacing:.5px;">'+prog.done+' / '+prog.tot+'</span>'
       + '</div>';
     html += _mundialClasTableHtml(rows, slice, advancePerGroup, null, TH);
     html += '<div style="padding:10px 12px 12px;">';
     var _grpPend = (prog.tot - prog.done) > 0;
     html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;padding:0 2px;">'
-      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba('+TH.accRGB+',.85);">JORNADAS · GRUPO '+letter+'</div>'
+      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba('+TH.accRGB+',.85);">JORNADAS · '+grpLbl+'</div>'
       + (_grpPend
           ? '<button type="button" class="tour-sim-grp-btn" data-tour="'+tourId+'" data-group="'+g+'" '
             + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:6px;padding:4px 10px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">▶ SIM</button>'
@@ -21268,18 +21281,18 @@ window._showSimProgress = function(opts, onDone){
         if (!((cfg.results[gKey+ji+'_'+mi]||{}).played)) allDone = false;
       });
       var isCurrent = (ji === curJg);
-      var jid = 'sel-j-' + tourId + '-' + g + '-' + ji;
+      var jid = jidPrefix + tourId + '-' + g + '-' + ji;
       var _jorDtTxt = '';
       try {
         var _jorDt = _tourGroupJorDate(cfg, ji);
         if (_jorDt) _jorDtTxt = '<span class="jor-date is-solo">' + _jorDt + '</span>';
       } catch(_){}
       html += '<div class="jblock" style="margin-bottom:6px;">';
-      html += '<button type="button" class="jbtn c-road' + (allDone ? ' done' : '') + '" '
+      html += '<button type="button" class="jbtn '+jbtnClass+(allDone ? ' done' : '')+'" '
         + 'data-jor-pinned="1" '
         + 'onclick="_jorToggle(\''+jid+'\')">'
         + '<div class="pdot">' + (allDone ? '✅' : (isCurrent ? '▶' : '○')) + '</div>'
-        + _flag + ' <b>'+_jLbl+'</b>&nbsp;&nbsp;Jornada '+(ji+1)
+        + flag + ' <b>'+jLbl+'</b>&nbsp;&nbsp;Jornada '+(ji+1)
         + _jorDtTxt
         + '</button>';
       html += '<div class="jmatches" id="'+jid+'">';
@@ -21303,6 +21316,40 @@ window._showSimProgress = function(opts, onDone){
     html += '</div></div>';
     return html;
   }
+
+  /* Card de grupo de un torneo de Selecciones (Rondas Previas/Finales) →
+     tema ROSA. Etiqueta de jornada según board (Previa / Final). */
+  function _selGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup){
+    var _board = (typeof _tvBoardOf === 'function') ? _tvBoardOf(tourId) : '';
+    var _jLbl = (_board === 'sel-final') ? 'Final' : 'Previa';
+    var _flag = (cfg && cfg.flag && cfg.flag.indexOf('http') !== 0) ? cfg.flag : '🌍';
+    var TH = { acc:_SEL_PINK.acc, accRGB:_SEL_PINK.accRGB, hdrGrad:_SEL_PINK.hdrGrad, humanCol:_SEL_PINK.humanCol,
+               bg1:'#16040e', bg2:'#240a16',
+               humanBorder:'#ff3d99', humanGlow:'rgba(255,61,153,.70)', humanGlowIn:'rgba(255,61,153,.18)',
+               jbtnClass:'c-road', jLbl:_jLbl, flag:_flag, jidPrefix:'sel-j-' };
+    return _bigGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, TH);
+  }
+
+  /* Tema TURQUESA de los Torneos de Verano (Trofeo Joan Gamper, Asian
+     Tournament, y cualquier slot nuevo) — mismo layout "videojuego"
+     grande que el Mundial 2032 / Selecciones pero en turquesa
+     (#5fc6c8, color de comp 'verano'). Petición usuario 2026-06-02:
+     "los torneos de verano (Joan Gamper y todos los que se añadan)
+     también diseño grande". */
+  var _SUM_TURQ = { acc:'#5fc6c8', accRGB:'95,198,200',
+                    hdrGrad:'#04201f,#08403e,#0c6360,#08403e,#04201f',
+                    humanCol:'#ffd633' };
+  function _veranoGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, nGroups){
+    var nm   = (cfg && cfg.name) ? cfg.name : 'Torneo';
+    var flag = (cfg && cfg.flag && cfg.flag.indexOf('http') !== 0) ? cfg.flag : '🏆';
+    var grpLbl = (nGroups === 1) ? 'CLASIFICACIÓN' : ('GRUPO ' + String.fromCharCode(65+g));
+    var TH = { acc:_SUM_TURQ.acc, accRGB:_SUM_TURQ.accRGB, hdrGrad:_SUM_TURQ.hdrGrad, humanCol:_SUM_TURQ.humanCol,
+               bg1:'#021413', bg2:'#04201f',
+               humanBorder:'#3fe0d8', humanGlow:'rgba(63,224,216,.65)', humanGlowIn:'rgba(63,224,216,.18)',
+               jbtnClass:'c-summer', jLbl:nm, flag:flag, jidPrefix:'sum-j-', grpLabel:grpLbl };
+    return _bigGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, TH);
+  }
+
 
   function _renderGroupsKO(cfg, tourId, teams) {
     var fc = cfg.formatConfig || {};
@@ -21363,28 +21410,12 @@ window._showSimProgress = function(opts, onDone){
         html += _selGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup);
         continue;
       }
-      /* Con 1 solo grupo (liga+playoff / suizo) la tabla no es un
-         "grupo": se titula CLASIFICACIÓN. */
-      var _grpTitle = (nGroups === 1) ? 'CLASIFICACIÓN' : ('GRUPO ' + letter);
-      html += '<div class="tour-group-block tour-grp-'+letter+(_grpHasHuman?' tour-group-human':'')+'"><h4>'+_grpTitle+' · '+prog.done+'/'+prog.tot+'</h4>';
-      html += _standingsTableHtml(rows, advancePerGroup);
-      var curJg = cfg.currentJornadaByGroup[g];
-      var jProg = (function(){
-        var done=0, tot=0;
-        (fix[curJg]||[]).forEach(function(_, mi){
-          tot++; if ((cfg.results[gKey+curJg+'_'+mi]||{}).played) done++;
-        });
-        return { done:done, tot:tot, allDone: done===tot && tot>0 };
-      })();
-      if (jProg.allDone && curJg < fix.length - 1) {
-        html += '<div style="display:flex;justify-content:center;margin:6px 0 4px;">'
-          + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" data-group="'+g+'" '
-          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:7px;padding:5px 11px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
-          + '🏆 J'+(curJg+2)
-          + '</button></div>';
-      }
-      html += _fixtureCardsHtml(slice, fix, cfg.results, gKey, tourId, curJg, {shortLabel:true});
-      html += '</div>';
+      /* Torneos de Verano (Trofeo Joan Gamper, Asian Tournament, y
+         cualquier slot nuevo): mismo diseño "videojuego" grande que el
+         Mundial 2032 / Selecciones pero en TURQUESA. Petición usuario
+         2026-06-02. Con 1 solo grupo (liga/suizo) la card se titula
+         CLASIFICACIÓN (lo gestiona _veranoGroupCardHtml vía nGroups). */
+      html += _veranoGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, nGroups);
     }
     /* Sin fase final (advancePerGroup === 0): el torneo es solo la
        liguilla. Campeón = 1º de la clasificación. No se construye
@@ -22030,7 +22061,11 @@ window._showSimProgress = function(opts, onDone){
           humanIc = _tourTeamIcon(t);
         }
       } catch(_){}
-      var nameCol = isHumanSel ? '#ffd633' : '#fff';
+      /* Resalta en AMARILLO tanto selecciones humanas (isHumanSel) como
+         clubes humanos (t.isHuman, p.ej. el humano de un Torneo de
+         Verano). 2026-06-02. */
+      var isHumanRow = !!(t && (t.isHuman || isHumanSel));
+      var nameCol = isHumanRow ? '#ffd633' : '#fff';
       var isAdv = (pos <= advancePerGroup);
       /* En el Mundial, el 3º clasifica si está entre las 8 mejores
          terceras globales — `bestThirdNames` lleva ese set. Mismo
@@ -22052,7 +22087,7 @@ window._showSimProgress = function(opts, onDone){
         + '<td style="padding:8px 2px 8px 5px;"><div style="display:flex;align-items:center;gap:4px;">'
         +   '<span style="font-family:\'Bebas Neue\',sans-serif;color:'+posCol+';width:14px;text-align:center;font-size:15px;">'+pos+'</span>'
         +   shield
-        +   '<span style="font-family:Rajdhani,sans-serif;font-weight:700;color:'+nameCol+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;'+(isHumanSel?'text-shadow:0 0 8px rgba(255,214,51,.5);':'')+'">'+nm+'</span>'
+        +   '<span style="font-family:Rajdhani,sans-serif;font-weight:700;color:'+nameCol+';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;'+(isHumanRow?'text-shadow:0 0 8px rgba(255,214,51,.5);':'')+'">'+nm+'</span>'
         +   (humanIc ? '<span style="margin-left:2px;">'+humanIc+'</span>' : '')
         + '</div></td>'
         + '<td style="padding:8px 3px;text-align:center;font-family:\'Bebas Neue\',sans-serif;font-size:17px;color:#f0c040;font-weight:700;">'+r.pts+'</td>'

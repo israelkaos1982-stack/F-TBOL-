@@ -8265,8 +8265,16 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var partidos = sortearPartidos(tipo);
       // Registrar siempre (actualiza estado del equipo IA también)
       registrarLesion(lesionado[1], teamName, partidos, tipo);
-      // Solo mostrar overlay para equipos humanos
-      if (_EQUIPOS_HUMANOS.indexOf(teamName) !== -1) {
+      // Solo mostrar overlay para equipos humanos. Lista live de Liga EA
+      // (isHuman) + registro canónico alias-safe (_isHumanClubCanonico) →
+      // cubre CUALQUIER caja de humano, presente o futura (Arsenal/Brasil,
+      // Atlético/Noruega, etc.), sin depender de la lista cacheada al load.
+      var _esHumanoClub = (_EQUIPOS_HUMANOS.indexOf(teamName) !== -1);
+      try {
+        if (!_esHumanoClub && typeof window._isHumanClubCanonico === 'function'
+            && window._isHumanClubCanonico(teamName)) _esHumanoClub = true;
+      } catch(_){}
+      if (_esHumanoClub) {
         window.LESIONES_PARTIDO_ACTUAL.push({
           jugador: [lesionado[0], lesionado[1]],
           teamName: teamName,

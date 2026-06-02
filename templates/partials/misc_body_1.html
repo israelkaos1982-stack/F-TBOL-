@@ -51719,6 +51719,37 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (c === 'amistoso') return 'el amistoso';
     return 'la selección';
   }
+  /* Nota de scouting del rival para la previa: su posición y forma
+     reciente en la clasificación, si está disponible (Liga EA). Para
+     rivales de los que no tenemos datos (p.ej. selecciones del Mundial)
+     devuelve '' y la previa simplemente no la incluye. Robusto: nunca
+     lanza, nunca inventa. */
+  function _rivalScoutNote(rival){
+    if (!rival) return '';
+    try {
+      if (typeof window.collectStandings !== 'function') return '';
+      var arr = window.collectStandings('liga') || [];
+      var rl = String(rival).toLowerCase().trim();
+      for (var i = 0; i < arr.length; i++){
+        var r = arr[i];
+        if (!r || !r.name) continue;
+        if (String(r.name).toLowerCase().trim() !== rl) continue;
+        var pj = r.pj || 0;
+        if (pj < 1) return '';
+        var note = 'El rival llega ' + (i + 1) + 'º en LaLiga con ' + (r.pts || 0) + ' pts';
+        /* "Últimos resultados": forma reciente si el row la trae
+           (cadena tipo "WWDLW" o array). */
+        var form = r.form || r.racha || r.last5 || null;
+        if (typeof form === 'string' && form){
+          var f = form.replace(/[^WDLVEP]/gi, '').slice(-5).toUpperCase()
+                       .replace(/V/g, 'W').replace(/E/g, 'D').replace(/P/g, 'L');
+          if (f) note += '. Últimos partidos: ' + f.split('').join(' ');
+        }
+        return note + '.';
+      }
+    } catch(_){}
+    return '';
+  }
 
   /* ── Estado UI ──────────────────────────────────────────── */
   var _ui = { sideTab:'liv', readTab:'new' };
@@ -53113,6 +53144,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var body;
     if (rival){
       body = _pick(_previewPhrases(rival, venue, when, phaseTxt));
+      var scout = _rivalScoutNote(rival);
+      if (scout) body += ' 🔎 ' + scout;
     } else {
       body = 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
     }
@@ -53323,6 +53356,87 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           }
         });
       }
+
+      /* ── Goleadores de la SELECCIÓN: doblete/hat-trick + racha ──
+         (el Liverpool ya lo cubre _checkHatTrick / _checkScoreStreak
+         vía _processActa). Una sola pasada por partido. */
+      if (side === 'fra' && !_getCursor('fragoals:' + mk)){
+        _setCursor('fragoals:' + mk, '1');
+        var fLetter = humanIsHome ? 'a' : 'b';
+        var fgoals = {};
+        events.forEach(function(ev){
+          if (!ev || ev.team !== fLetter) return;
+          if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
+            var nm = _evPlayerName(ev);
+            if (nm) fgoals[nm] = (fgoals[nm] || 0) + 1;
+          }
+        });
+        Object.keys(fgoals).forEach(function(pl){
+          var gN = fgoals[pl];
+          if (gN >= 2){
+            var lbl = (gN === 2) ? 'Doblete' : (gN === 3) ? 'Hat-trick' : (gN === 4) ? '¡Cuádruple!' : '¡Manita!';
+            var icg = (gN === 2) ? '⚽⚽' : (gN === 3) ? '🎩' : '👑';
+            push({ side:'fra', type:'hat-trick', icon:icg,
+              sender:"L'Équipe · Goleadores",
+              title: lbl + ' de ' + pl,
+              body : pl + ' firma ' + gN + ' goles con Francia en un solo partido. ¡Está imparable! ' + (gN >= 3 ? '🎉' : '🔥') });
+          }
+          /* Racha multi-partido viendo puerta. */
+          var ks = 'strkfra:' + pl;
+          var sn = (_getCursor(ks) || 0) + 1;
+          _setCursor(ks, sn);
+          if (sn === 3 || sn === 5 || sn === 7 || sn === 10){
+            push({ side:'fra', type:'streak', icon:'🔥',
+              sender:"L'Équipe · Goleadores",
+              title: pl + ' marca en ' + sn + ' partidos seguidos',
+              body : pl + ' encadena ' + sn + ' partidos consecutivos viendo puerta con Les Bleus. ¡En racha! ⚡' });
+          }
+        });
+      }
+
+      /* ── Amarillas de la SELECCIÓN: aviso "a una de la sanción" y
+         sanción cumplida (ciclo de 2 en selección). Best-effort: lee
+         YELLOW_STORE_SEL un tick más tarde (las sanciones se procesan
+         async). Si la estructura no existe, no hace nada. */
+      if (side === 'fra'){
+        setTimeout(function(){ _checkFraYellowBrink(humanTeam); }, 140);
+      }
+    } catch(_){}
+  }
+  function _checkFraYellowBrink(selName){
+    try {
+      var store = window.YELLOW_STORE_SEL || {};
+      Object.keys(store).forEach(function(tk){
+        var bySel = store[tk] || {};
+        var players = bySel[selName] || bySel['Francia'] || null;
+        if (!players){
+          Object.keys(bySel).forEach(function(sn){
+            if (String(sn).toLowerCase().indexOf('franc') >= 0) players = bySel[sn];
+          });
+        }
+        if (!players) return;
+        Object.keys(players).forEach(function(pn){
+          var rec = players[pn] || {};
+          var cnt = rec.count || rec.amarillas || 0;
+          if (!cnt) return;
+          var name = rec.name || rec.jugador || pn;
+          var curK = 'yelfra:' + tk + ':' + pn;
+          var seen = _getCursor(curK) || 0;
+          if (cnt <= seen) return;
+          _setCursor(curK, cnt);
+          if (cnt % 2 === 1){
+            push({ side:'fra', type:'card-warn', icon:'🟨',
+              sender:'Comité de Competición',
+              title:'Aviso amarillas: ' + name,
+              body: name + ' suma una amarilla con Francia. Otra más y se perderá el próximo partido por acumulación.' });
+          } else {
+            push({ side:'fra', type:'card-susp', icon:'⛔',
+              sender:'Comité de Competición',
+              title:'Sanción amarillas: ' + name,
+              body: name + ' cumple ciclo de amarillas con Francia: se pierde el próximo partido por acumulación.' });
+          }
+        });
+      });
     } catch(_){}
   }
   window._broadcastHumanMatchResult = _broadcastHumanMatchResult;
@@ -53341,11 +53455,36 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      Si tiene el cursor legacy `seeded='1'` dentro de
      `mu_messages_v1.cursors`, también lo respetamos. */
   var _SEED_FLAG = 'mu_seeded_v1';
+  /* El flag de "ya sembrado" se guarda en DOS sitios:
+       1. La clave aparte `mu_seeded_v1` (rápida).
+       2. Un cursor `seeded` DENTRO de `mu_messages_v1`.
+     Motivo (bug bucle 2026-06-02): si el `setItem` de la clave aparte
+     falla (cuota llena, modo privado, etc.) el flag se perdía y los 3
+     mensajes de bienvenida se RESEMBRABAN en cada carga de la web. El
+     cursor viaja con los mensajes (un único setItem) y `clearAllMessages`
+     lo conserva, así que es mucho más resistente. Basta con que CUALQUIERA
+     de los dos esté puesto para no volver a sembrar. */
   function _seedFlagOn(){
-    try { return localStorage.getItem(_SEED_FLAG) === '1'; } catch(_){ return false; }
+    try { if (localStorage.getItem(_SEED_FLAG) === '1') return true; } catch(_){}
+    try { if (_getCursor('seeded') === '1') return true; } catch(_){}
+    return false;
   }
   function _markSeeded(){
     try { localStorage.setItem(_SEED_FLAG, '1'); } catch(_){}
+    try { _setCursor('seeded', '1'); } catch(_){}
+  }
+  /* ¿El sistema de mensajes ya ha procesado eventos del juego alguna vez?
+     Si hay cursores de actividad (resultados, previas, avisos de Francia,
+     tarjetas, rachas, clasificación…) el usuario NO es un jugador nuevo:
+     aunque haya pulsado "BORRAR TODO" no debemos re-sembrar las
+     bienvenidas. Los cursores sobreviven a `clearAllMessages`. */
+  function _hasActivityCursors(){
+    try {
+      var c = _read().cursors || {};
+      return Object.keys(c).some(function(k){
+        return /^(res:|acta:|pre:|fra:|yel:|strk|strkfra|cs:|liga:|bet:|obj)/.test(k);
+      });
+    } catch(_){ return false; }
   }
   function _migrateSeedFlag(){
     if (_seedFlagOn()) return;
@@ -53353,11 +53492,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var d = _read();
       var hadWelcome = (d && d.msgs || []).some(function(m){ return m && m.type === 'welcome'; });
       var hadCursor  = _getCursor('seeded') === '1';
-      if (hadWelcome || hadCursor) _markSeeded();
+      if (hadWelcome || hadCursor || _hasActivityCursors()) _markSeeded();
     } catch(_){}
   }
   function _seed(){
     if (_seedFlagOn()) return;
+    /* Si el usuario ya ha jugado (hay cursores de actividad) no sembramos
+       aunque la bandeja esté vacía — evita el bucle de bienvenidas. */
+    if (_hasActivityCursors()){ _markSeeded(); return; }
     /* Doble check: si por la razón que sea la bandeja ya tiene CUALQUIER
        mensaje en ella, no sembramos (el flag debería cubrirlo, este es
        el cinturón). El usuario ya tiene contexto — no le metemos

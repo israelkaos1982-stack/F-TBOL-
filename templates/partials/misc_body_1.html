@@ -41668,14 +41668,24 @@ https://api.sofascore.app/api/v1/team/44/image
     if(!d || !Array.isArray(d.teams)) d={v:1,teams:[]};
     return d;
   }
+  /* POST al servidor con reintentos (la red móvil falla a menudo y un
+     POST perdido dejaba el server con datos viejos → al recargar, el GET
+     del boot pisaba la plantilla local recién editada y "se borraba" lo
+     añadido). Reintenta hasta 3 veces con backoff. 2026-06-02. */
+  function _post(d, tries){
+    tries = tries||0;
+    if(typeof window.fetch!=='function') return;
+    try{
+      window.fetch('/api/kv/'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({value:d})})
+        .then(function(r){ if(!(r&&r.ok) && tries<3) setTimeout(function(){ _post(d,tries+1); }, 1500*(tries+1)); })
+        .catch(function(){ if(tries<3) setTimeout(function(){ _post(d,tries+1); }, 1500*(tries+1)); });
+    }catch(_){ if(tries<3) setTimeout(function(){ _post(d,tries+1); }, 1500*(tries+1)); }
+  }
   function _save(d){
     try{ localStorage.setItem(KEY, JSON.stringify(d)); }catch(_){}
     try{ if(typeof window._invalidateAliasCache==='function') window._invalidateAliasCache(); }catch(_){}
-    try{
-      if(typeof window.fetch==='function')
-        window.fetch('/api/kv/'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({value:d})}).catch(function(){});
-    }catch(_){}
+    _post(d, 0);
   }
   /* Normaliza un número al rango 1-100; si no es válido cae a `fb`. */
   function _clamp(n,fb){
@@ -41726,6 +41736,11 @@ https://api.sofascore.app/api/v1/team/44/image
       var canon=_selCanon(orig);
       if(canon!==orig) changed=true;
       t.name=canon;
+      /* Migración de continentes obsoletos (2026-06-02): el `pacifico`
+         legacy ya no existe → se deja sin continente para que el usuario
+         lo reasigne a 🌎 América o 🌏 Asia. */
+      var nc=_normCont(t.continent);
+      if(nc!==String(t.continent==null?'':t.continent).trim().toLowerCase()){ t.continent=nc; changed=true; }
       var key=canon.toLowerCase();
       if(seen[key]){ changed=true; continue; }
       seen[key]=1;
@@ -41741,6 +41756,38 @@ https://api.sofascore.app/api/v1/team/44/image
       }catch(_){}
     }
     return d;
+  }
+  /* ── Fusión LOCAL ∪ SERVIDOR (anti "se borran", 2026-06-02) ──────
+     Antes el boot pisaba ciegamente la plantilla local con la del
+     servidor. Si dos personas (mi amigo y yo) editan, o si un POST se
+     perdió, el GET stale BORRABA selecciones/medias/jugadores recién
+     añadidos. Ahora el boot FUSIONA: unión por nombre canónico, sin
+     perder nunca lo local. En conflicto (mismo nombre en ambos lados)
+     gana el `updatedAt` más reciente; a igualdad, el que tenga más
+     jugadores / más datos. NUNCA elimina una selección local. */
+  function _teamRichness(t){
+    if(!t) return 0;
+    var pl=(Array.isArray(t.players)?t.players.length:0);
+    var info=0;
+    if(t.img) info++; if(t.icon) info++; if(t.efootballAlias) info++; if(t.continent) info++;
+    return pl*10+info;
+  }
+  function _mergeTeamsForSync(localTeams, remoteTeams){
+    var order=[], map={};
+    function add(t){
+      if(!t || !t.name) return;
+      var canon=_selCanon(t.name); t.name=canon;
+      t.continent=_normCont(t.continent);
+      var k=canon.toLowerCase();
+      if(!(k in map)){ map[k]=t; order.push(k); return; }
+      var prev=map[k];
+      var tu=Number(t.updatedAt)||0, pu=Number(prev.updatedAt)||0;
+      if(tu>pu) map[k]=t;
+      else if(tu===pu && _teamRichness(t)>_teamRichness(prev)) map[k]=t;
+    }
+    (localTeams||[]).forEach(add);   /* local primero → conserva su orden */
+    (remoteTeams||[]).forEach(add);  /* selecciones solo-servidor al final */
+    return order.map(function(k){ return map[k]; });
   }
   /* Registra cada selección en TEAM_RATINGS (escudo + media) y en
      _LIGA_EA_TEAM_STATS (4 ejes; las líneas vacías caen a GLOBAL) para
@@ -41911,9 +41958,10 @@ https://api.sofascore.app/api/v1/team/44/image
        africa   = 🌍 África
      Persistido por equipo en `t.continent`. El usuario lo elige a mano.
      Histórico: hasta 2026-05-31 existía un único `pacifico` que unía
-     América + Asia + Oceanía. Se mantiene su etiqueta en `_SEL_CONT_LEGACY`
-     para no romper selecciones guardadas con ese valor (ya no aparece en
-     el picker; el usuario las reasigna a 🌎 América o 🌏 Asia a mano). */
+     América + Asia + Oceanía. ELIMINADO (2026-06-02, petición usuario):
+     `_normCont` lo migra a "sin continente" en carga/guardado y ya no se
+     muestra "Pacífico" en ningún sitio; el usuario reasigna esas
+     selecciones a 🌎 América o 🌏 Asia a mano. */
   var _SEL_CONTS=[
     {v:'',         l:'— Continente'},
     {v:'europa',   l:'🇪🇺 Europa'},
@@ -41921,22 +41969,26 @@ https://api.sofascore.app/api/v1/team/44/image
     {v:'asia',     l:'🌏 Asia'},
     {v:'africa',   l:'🌍 África'}
   ];
-  var _SEL_CONT_LEGACY={ 'pacifico':'🌎 Pacífico' };
+  /* Normaliza el valor de continente. El `pacifico` obsoleto cae a ''
+     (sin continente) para que NUNCA vuelva a aparecer "Pacífico". */
+  function _normCont(v){
+    v=String(v==null?'':v).trim().toLowerCase();
+    if(v==='pacifico') return '';
+    return v;
+  }
   function _contLabel(v){
-    v=String(v==null?'':v).toLowerCase();
+    v=_normCont(v);
     for(var i=0;i<_SEL_CONTS.length;i++) if(_SEL_CONTS[i].v===v) return _SEL_CONTS[i].l;
-    if(_SEL_CONT_LEGACY[v]) return _SEL_CONT_LEGACY[v];
     return _SEL_CONTS[0].l;
   }
-  /* Orden de agrupación de las cards del editor (los sin continente y
-     los legacy `pacifico` van al final). */
+  /* Orden de agrupación de las cards del editor (los sin continente van
+     al final). */
   function _contOrderIndex(v){
-    v=String(v==null?'':v).toLowerCase();
+    v=_normCont(v);
     var order=['europa','america','asia','africa'];
     var i=order.indexOf(v);
     if(i>=0) return i;
-    if(v==='pacifico') return order.length;      /* legacy, justo después */
-    return order.length+1;                        /* sin continente, al final */
+    return order.length;                          /* sin continente, al final */
   }
   /* Devuelve una copia de `list` ordenada por continente (estable dentro
      de cada continente) para mostrar las selecciones agrupadas. */
@@ -42320,13 +42372,16 @@ https://api.sofascore.app/api/v1/team/44/image
       var icon=String(((row.querySelector('.sel-sq-icon')||{}).value)||'').trim();
       var alias=String(((row.querySelector('.sel-sq-alias')||{}).value)||'').trim();
       var contBtn=row.querySelector('.sel-sq-cont-btn');
-      var continent=String((contBtn && contBtn.getAttribute('data-cont'))||'').trim().toLowerCase();
+      var continent=_normCont((contBtn && contBtn.getAttribute('data-cont'))||'');
       function rd(sel,fb){ return _clamp((row.querySelector(sel)||{}).value,fb); }
       var g=rd('.sel-sq-g',75);
       out.push({
         name:nm, img:img, icon:icon, efootballAlias:alias, continent:continent, power:g,
         atk:rd('.sel-sq-a',g), mid:rd('.sel-sq-m',g), def:rd('.sel-sq-d',g),
-        players: Array.isArray(row._players) ? row._players : []
+        players: Array.isArray(row._players) ? row._players : [],
+        /* Marca de edición para resolver conflictos en la fusión
+           local∪servidor sin perder datos (2026-06-02). */
+        updatedAt: Date.now()
       });
     });
     var seen={},dedup=[];
@@ -42623,14 +42678,28 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   window._selSquadOpenEditor=_open;
 
-  /* Hidratación inicial: local + servidor (best-effort, cross-device). */
+  /* Hidratación inicial: local + servidor (best-effort, cross-device).
+     FUSIONA en vez de pisar (2026-06-02): la plantilla local NUNCA se
+     pierde aunque el servidor venga con menos selecciones (POST perdido,
+     edición del amigo en otro dispositivo, GET stale anterior al POST…).
+     Si la fusión añade algo que el servidor no tenía, se re-sube para
+     que el servidor quede completo y el otro dispositivo lo reciba. */
   function _boot(){
     _hydrate();
     try{
       if(typeof window.fetch==='function'){
         window.fetch('/api/kv/'+KEY).then(function(r){return (r&&r.ok)?r.json():null;}).then(function(j){
           if(!j||!j.value||!Array.isArray(j.value.teams)) return;
-          try{ localStorage.setItem(KEY,JSON.stringify(j.value)); }catch(_){}
+          var localTeams=(_load().teams)||[];
+          var serverTeams=j.value.teams||[];
+          var merged={v:1, teams:_mergeTeamsForSync(localTeams, serverTeams)};
+          try{ localStorage.setItem(KEY,JSON.stringify(merged)); }catch(_){}
+          /* Si la fusión difiere del servidor (este dispositivo tenía
+             selecciones que faltaban allí), súbela. Es una unión: nunca
+             borra del servidor, solo añade lo que falta. */
+          try{
+            if(JSON.stringify(merged.teams)!==JSON.stringify(serverTeams)) _post(merged,0);
+          }catch(_){}
           _hydrate();
           if(document.getElementById('sel-sq-body')) _renderBody();
         }).catch(function(){});

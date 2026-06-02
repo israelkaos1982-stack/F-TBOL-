@@ -1,5 +1,63 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Plantilla de selecciones — sync que NO pierde datos + sin «Pacífico» (obligatorio, 2026-06-02)
+
+**Bug (foto usuario 2026-06-02)**: en «🌐 Plantilla de selecciones»
+(editor en `misc_body_1.html`, IIFE `KEY='selecciones_squad_v1'`) las
+selecciones, medias y jugadores que añadían el usuario **o su amigo
+desde otro dispositivo** se BORRABAN al recargar. Además el picker de
+continente seguía mostrando «🌎 Pacífico», un continente ya eliminado.
+
+### Causa raíz (datos que «se borran»)
+
+1. `_boot()` hacía un GET al servidor y **PISABA ciegamente**
+   `localStorage` con `j.value` (`localStorage.setItem(KEY, …)`). Si el
+   servidor venía con MENOS selecciones (POST anterior perdido en red
+   móvil, GET stale anterior al POST, o edición concurrente del amigo),
+   la plantilla local recién editada se perdía.
+2. `_save()` era fire-and-forget sin reintentos: un POST perdido dejaba
+   el servidor con datos viejos para siempre.
+
+### Fix — FUSIÓN local∪servidor (nunca borra) + POST con reintentos
+
+- **`_mergeTeamsForSync(localTeams, remoteTeams)`**: unión por nombre
+  canónico (`_selCanon`). En conflicto (mismo nombre en ambos lados)
+  gana `updatedAt` más reciente; a igualdad, el más «rico»
+  (`_teamRichness`: nº de jugadores + datos). **NUNCA elimina una
+  selección local.** Conserva el orden local y añade al final las
+  selecciones que solo estaban en el servidor.
+- **`_collect()`** sella `updatedAt: Date.now()` en cada selección al
+  guardar → los conflictos se resuelven por recencia (la última
+  edición gana, propagación correcta entre dispositivos).
+- **`_boot()`** FUSIONA en vez de pisar; si la fusión añade algo que el
+  servidor no tenía, re-sube (unión, nunca borra del servidor) para que
+  el otro dispositivo lo reciba. Converge (no hace loop).
+- **`_post(d, tries)`** reintenta el POST hasta 3× con backoff.
+- **`_save` = push autoritativo** (respeta borrados en el mismo
+  dispositivo). **`_boot` = pull aditivo** (nunca pierde lo local).
+
+### Continentes — «Pacífico» ELIMINADO
+
+Los 4 continentes del juego son `europa` 🇪🇺 · `america` 🌎 · `asia` 🌏
+· `africa` 🌍 (`_SEL_CONTS`). El antiguo `pacifico` (unía América +
+Asia + Oceanía) está **eliminado**: `_normCont(v)` lo migra a `''` (sin
+continente) en carga (`_dedupeStored`/`_hydrate`), guardado
+(`_collect`) y fusión. El usuario reasigna esas selecciones a 🌎 América
+o 🌏 Asia a mano. Se borró `_SEL_CONT_LEGACY` y la rama `pacifico` de
+`_contOrderIndex`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a pisar `localStorage` con el GET del servidor
+   en `_boot` sin fusionar. La hidratación de selecciones SIEMPRE es
+   unión que conserva lo local (es lo que evita el «se borran»).
+2. **PROHIBIDO** reintroducir `pacifico` (ni en `_SEL_CONTS`, ni en
+   labels, ni en el picker). `_normCont` debe seguir mapeándolo a `''`.
+3. **PROHIBIDO** dejar `_save` sin reintentos de POST (la red móvil
+   pierde requests y eso reintroduce el bug).
+4. Toda selección recolectada debe llevar `updatedAt` para que la
+   fusión resuelva conflictos por recencia.
+
 ## Wild Card + Open Qualifier — FASE DE GRUPOS (obligatorio, 2026-05-30)
 
 Petición usuario 2026-05-30: la **Wild Card** (`s-wild-card`,

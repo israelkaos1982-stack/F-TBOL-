@@ -12790,6 +12790,17 @@ window._showSimProgress = function(opts, onDone){
 }
 .jbtn.c-road.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
 .jbtn.c-road.done .jor-date{color:rgba(255,255,255,.55) !important;border-color:rgba(170,180,195,.45) !important;}
+/* Rondas PREVIAS "Road" (c-roadq, base azul clarito en index.bundle.css):
+   jornada YA JUGADA → gris. Distinta del rosa de las Rondas Finales
+   (c-road). (2026-06-02). */
+.jbtn.c-roadq.done{
+  background:linear-gradient(90deg,#1a1d22,#2a2e36,#3a3e48,#2a2e36,#1a1d22) !important;
+  border:1.5px solid rgba(170,180,195,.45) !important;
+  filter:grayscale(.5) brightness(.85);
+  color:rgba(255,255,255,.55) !important;
+}
+.jbtn.c-roadq.done .pdot{border-color:rgba(170,180,195,.5);color:rgba(255,255,255,.7);}
+.jbtn.c-roadq.done .jor-date{color:rgba(255,255,255,.55) !important;border-color:rgba(170,180,195,.45) !important;}
 /* Torneos de Verano (c-summer, base turquesa en index.bundle.css): las
    cards de grupo estilo Mundial (_veranoGroupCardHtml) usan c-summer en
    los botones de jornada → jornada YA JUGADA pasa a GRIS, igual que el
@@ -21176,6 +21187,13 @@ window._showSimProgress = function(opts, onDone){
   var _SEL_PINK = { acc:'#ff5db1', accRGB:'255,93,177',
                     hdrGrad:'#2a081a,#5a1038,#9a1850,#5a1038,#2a081a',
                     humanCol:'#ffd633' };
+  /* Tema AZUL CLARITO de las RONDAS PREVIAS "Road" (qualifier-route +
+     groups-ko en slots spv*). Petición usuario 2026-06-02: el color de la
+     Road NO puede ser el mismo que el de las Rondas Finales (rosa) — usar
+     un azul clarito (el turquesa ya lo usan los Torneos de Verano). */
+  var _SEL_BLUE = { acc:'#5db8ff', accRGB:'93,184,255',
+                    hdrGrad:'#04101f,#0a2a4a,#1456a0,#0a2a4a,#04101f',
+                    humanCol:'#ffd633' };
 
   /* ── Descanso del HUMANO al final (torneos de Selecciones, 2026-06-02) ──
      Petición usuario: en las fases previas/finales el equipo humano debe
@@ -21317,16 +21335,24 @@ window._showSimProgress = function(opts, onDone){
     return html;
   }
 
-  /* Card de grupo de un torneo de Selecciones (Rondas Previas/Finales) →
-     tema ROSA. Etiqueta de jornada según board (Previa / Final). */
+  /* Card de grupo de un torneo de Selecciones → Rondas FINALES en ROSA,
+     Rondas PREVIAS ("Road") en AZUL CLARITO (deben distinguirse, petición
+     usuario 2026-06-02). Etiqueta de jornada según board (Previa / Final). */
   function _selGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup){
     var _board = (typeof _tvBoardOf === 'function') ? _tvBoardOf(tourId) : '';
-    var _jLbl = (_board === 'sel-final') ? 'Final' : 'Previa';
+    var _isFinal = (_board === 'sel-final');
+    var _jLbl = _isFinal ? 'Final' : 'Previa';
     var _flag = (cfg && cfg.flag && cfg.flag.indexOf('http') !== 0) ? cfg.flag : '🌍';
-    var TH = { acc:_SEL_PINK.acc, accRGB:_SEL_PINK.accRGB, hdrGrad:_SEL_PINK.hdrGrad, humanCol:_SEL_PINK.humanCol,
-               bg1:'#16040e', bg2:'#240a16',
-               humanBorder:'#ff3d99', humanGlow:'rgba(255,61,153,.70)', humanGlowIn:'rgba(255,61,153,.18)',
-               jbtnClass:'c-road', jLbl:_jLbl, flag:_flag, jidPrefix:'sel-j-' };
+    var _C = _isFinal ? _SEL_PINK : _SEL_BLUE;
+    var TH = _isFinal
+      ? { acc:_C.acc, accRGB:_C.accRGB, hdrGrad:_C.hdrGrad, humanCol:_C.humanCol,
+          bg1:'#16040e', bg2:'#240a16',
+          humanBorder:'#ff3d99', humanGlow:'rgba(255,61,153,.70)', humanGlowIn:'rgba(255,61,153,.18)',
+          jbtnClass:'c-road', jLbl:_jLbl, flag:_flag, jidPrefix:'sel-j-' }
+      : { acc:_C.acc, accRGB:_C.accRGB, hdrGrad:_C.hdrGrad, humanCol:_C.humanCol,
+          bg1:'#040c16', bg2:'#0a1626',
+          humanBorder:'#3da0ff', humanGlow:'rgba(61,160,255,.65)', humanGlowIn:'rgba(61,160,255,.18)',
+          jbtnClass:'c-roadq', jLbl:_jLbl, flag:_flag, jidPrefix:'selp-j-' };
     return _bigGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, TH);
   }
 

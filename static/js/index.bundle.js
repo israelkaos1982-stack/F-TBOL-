@@ -11361,9 +11361,16 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var emoji = parts[0] || '☀️';
     var name  = parts.slice(1).join(' ') || 'Soleado';
     /* La animación sunPulse (rotación) solo pega con el sol; lluvia y
-       nieve usan un icono estático (clase ml-wx-ico sin animación). */
-    var cls = (emoji.indexOf('☀') !== -1) ? 'ml-sun' : 'ml-wx-ico';
+       nieve usan un icono propio que PULSA + colorea la barra para que
+       destaque (hay que cambiar el clima en el juego — petición usuario
+       2026-06-02). El sol queda discreto (estado por defecto). */
+    var isRain = emoji.indexOf('🌧') !== -1;
+    var isSnow = emoji.indexOf('❄') !== -1;
+    var cls = (emoji.indexOf('☀') !== -1)
+      ? 'ml-sun'
+      : ('ml-wx-ico' + (isRain ? ' ml-wx-rain' : isSnow ? ' ml-wx-snow' : ''));
     var html = '<span class="' + cls + '">' + emoji + '</span> ' + name;
+    el.classList.toggle('is-wx-special', isRain || isSnow);
     if (el.innerHTML !== html) el.innerHTML = html;
   };
 
@@ -11557,15 +11564,38 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       if (s) stadiumName = s;
     }
 
+    /* Clima ESPECIAL (lluvia/nieve) → badge llamativo + recordatorio para
+       que el usuario NO se olvide de cambiarlo en el juego (eFootball).
+       Petición usuario 2026-06-02: "cuando hay lluvia o nieve que llame
+       más la atención, hay que cambiarlo en el juego y apenas se fijan".
+       El soleado se mantiene discreto (es el estado por defecto). */
+    var _wxRain = weather.indexOf('🌧') !== -1;
+    var _wxSnow = weather.indexOf('❄') !== -1;
+    var _wxSpecial = _wxRain || _wxSnow;
+    var _wxParts = String(weather).trim().split(' ');
+    var _wxEmoji = _wxParts[0] || '';
+    var _wxName  = _wxParts.slice(1).join(' ') || weather;
+    var weatherHtml;
+    if (_wxSpecial) {
+      weatherHtml =
+          '<span class="pp-wx-badge ' + (_wxRain ? 'pp-wx-rain' : 'pp-wx-snow') + '">'
+        +   '<span class="pp-wx-ico">' + _wxEmoji + '</span>'
+        +   '<b class="pp-wx-name">' + _wxName.toUpperCase() + '</b>'
+        + '</span>'
+        + '<span class="pp-wx-remind">⚠️ CÁMBIALO EN EL JUEGO</span>';
+    } else {
+      weatherHtml = '<b>' + weather + '</b>';
+    }
+
     /* Layout en 3 líneas independientes para que estación+clima NUNCA se
        pierdan por overflow ni por wrap. Antes iban en la misma línea que
        el estadio con margin-left y ocasionalmente no aparecían. */
     envEl.innerHTML =
         '<div class="pp-env-line"><span>🏟️</span><b>' + stadiumName + '</b></div>'
-      + '<div class="pp-env-line" id="pp-env-meteo">'
+      + '<div class="pp-env-line' + (_wxSpecial ? ' is-wx-special' : '') + '" id="pp-env-meteo">'
       +   '<span>' + sEmoji + '</span><b>' + sName + '</b>'
       +   '<span style="margin:0 6px;opacity:.4">·</span>'
-      +   '<b>' + weather + '</b>'
+      +   weatherHtml
       + '</div>'
       + '<div class="pp-env-line"><span>🗓️</span><b>' + dayNum + ' de ' + MONTHS_ES[month - 1] + '</b>'
       +   '<span style="margin:0 6px;opacity:.4">|</span><span>🏆</span><b>' + compLabel + '</b></div>';

@@ -6193,6 +6193,28 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         if (!COMP_BALL[compKey]) balon = 'NIKE CONTROL CBF';
       }
     }
+    /* Balones POR TORNEO (cfg.balls, 2026-06-01): si el admin eligió 2
+       balones en el editor del torneo (torneos de Selecciones — Rondas
+       Previas / Finales — o de Verano), cada partido usa uno de los 2
+       rotando por hash determinista del matchKey. Gana sobre el default
+       de la competición y sobre la regla de Selecciones por jornada.
+       Solo la nieve (más abajo) puede sobrescribirlo. */
+    try {
+      var _tbCfg = null, _tbPT = window._ppPreviaTeams;
+      if (_tbPT && _tbPT.tourId && typeof window._tourLoadCachedSync === 'function') {
+        _tbCfg = (window._TOUR_CACHE || {})[_tbPT.tourId] || window._tourLoadCachedSync(_tbPT.tourId);
+      }
+      if (_tbCfg && Array.isArray(_tbCfg.balls)) {
+        var _tbPicks = _tbCfg.balls.filter(function(b){ return !!b; });
+        if (_tbPicks.length) {
+          var _tbKey = String((_tbPT && _tbPT.tourKey) || matchKey || '');
+          var _tbH = 5381, _tbi;
+          for (_tbi = 0; _tbi < _tbKey.length; _tbi++) _tbH = ((_tbH << 5) + _tbH + _tbKey.charCodeAt(_tbi)) | 0;
+          if (_tbH < 0) _tbH = -_tbH;
+          balon = String(_tbPicks[_tbH % _tbPicks.length]).replace(/_/g, ' ');
+        }
+      }
+    } catch(_){}
     /* Liga/partido en nieve → balón amarillo especial "eFootball MAX VIS 26".
        Antes solo se comprobaba `tiempo` (parte 0 del texto del venue-bar),
        pero la UI guarda "Invierno · ❄ Nieve" donde "Invierno" es el
@@ -6288,8 +6310,31 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       } catch(_){}
       return false;
     }
+    /* Sedes POR TORNEO (cfg.stadiums, 2026-06-01): si el torneo de la
+       previa actual tiene 4 estadios elegidos en el editor, rotan por
+       hash del matchKey. Aplica a torneos de Selecciones (Rondas
+       Previas / Finales) y de Verano, y GANA sobre el sistema global
+       sel_fin_stadiums_v1. */
+    function _tourStadiumForPrevia(){
+      try {
+        var pt = window._ppPreviaTeams;
+        if (!pt || !pt.tourId || typeof window._tourLoadCachedSync !== 'function') return '';
+        var cfgP = (window._TOUR_CACHE || {})[pt.tourId] || window._tourLoadCachedSync(pt.tourId);
+        if (!cfgP || !Array.isArray(cfgP.stadiums)) return '';
+        var picks = cfgP.stadiums.filter(function(s){ return !!s; });
+        if (!picks.length) return '';
+        var key = String(pt.tourKey || _ppMatchKey || (pt.home||'')+'|'+(pt.away||''));
+        var h = 5381, i;
+        for (i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) | 0;
+        if (h < 0) h = -h;
+        return picks[h % picks.length];
+      } catch(_){ return ''; }
+    }
+    var _ppTourStad = _tourStadiumForPrevia();
     if ((_ppCompKey === 'sc' || _ppCompKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
       _ppStadium = window._ppPreviaTeams.stadium;
+    } else if (_ppTourStad) {
+      _ppStadium = _ppTourStad;
     } else if (typeof window._selFinStadiumFor === 'function' && _isSelFinPreviaCtx()) {
       var _sfHashKey = (window._ppPreviaTeams && window._ppPreviaTeams.tourKey)
                        || _ppMatchKey

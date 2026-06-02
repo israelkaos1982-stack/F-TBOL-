@@ -2747,6 +2747,45 @@ def _lx_merge_teams(old_data, new_data):
             out_teams[idx] = t
             out_incoming[idx] = inc
 
+    # BACKFILL DE ESCUDOS POR NOMBRE (2026-06-02) ─────────────────────
+    # Bug usuario: "mi amigo puso todos los escudos de la Liga Grecia
+    # desde su PC pero no sale ninguno". La fusión por equipo elige al
+    # ganador por `updatedAt`; si el ganador de un equipo NO trae escudo
+    # (p.ej. la copia de otro dispositivo con plantilla más reciente pero
+    # sin el escudo que el amigo acababa de pegar), el escudo se perdía
+    # aunque existiera en la otra versión del MISMO equipo. El escudo es
+    # un dato de IDENTIDAD: una vez puesto en CUALQUIER dispositivo no
+    # debe desaparecer nunca. Aquí, tras elegir ganadores, rellenamos el
+    # `shield` de los equipos que se quedaron sin él tomándolo de la
+    # versión más reciente (de old o new) que SÍ tenía escudo. Nunca
+    # PISA un escudo ya presente en el ganador (su edición manda).
+    def _lx_shield_of(t):
+        if not isinstance(t, dict):
+            return ""
+        s = t.get("shield")
+        return s.strip() if isinstance(s, str) and s.strip() else ""
+
+    shield_by_name = {}   # nombre normalizado -> (ts, shield)
+    for t in (old_teams + new_teams):
+        if not isinstance(t, dict):
+            continue
+        nm = _lx_norm_name(t.get("name"))
+        sh = _lx_shield_of(t)
+        if not nm or not sh:
+            continue
+        ts = _lx_updated_at(t) or 0
+        cur = shield_by_name.get(nm)
+        if cur is None or ts >= cur[0]:
+            shield_by_name[nm] = (ts, sh)
+    if shield_by_name:
+        for t in out_teams:
+            if not isinstance(t, dict) or _lx_shield_of(t):
+                continue
+            nm = _lx_norm_name(t.get("name"))
+            best = shield_by_name.get(nm) if nm else None
+            if best:
+                t["shield"] = best[1]
+
     result = dict(new_data)
     result["teams"] = out_teams
     if del_set:

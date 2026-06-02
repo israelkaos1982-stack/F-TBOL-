@@ -21165,6 +21165,56 @@ window._showSimProgress = function(opts, onDone){
                     hdrGrad:'#2a081a,#5a1038,#9a1850,#5a1038,#2a081a',
                     humanCol:'#ffd633' };
 
+  /* ── Descanso del HUMANO al final (torneos de Selecciones, 2026-06-02) ──
+     Petición usuario: en las fases previas/finales el equipo humano debe
+     jugar OBLIGATORIAMENTE las jornadas más tempranas (las que tienen
+     fecha en su calendario) y DESCANSAR las últimas. En un grupo de 5 a
+     doble vuelta (10 jornadas) el humano juega 8 y descansa 2 → esas 2
+     se colocan al FINAL (J9-J10).
+
+     Reordena `cfg.groupFixtures[g]` moviendo las jornadas SIN partido del
+     humano al final (orden estable: las jugadas mantienen su orden, los
+     byes van detrás). Remapea `cfg.results` por la permutación para NO
+     perder partidos ya jugados (IA). Idempotente: si los byes del humano
+     ya están al final, no hace nada. Devuelve true si reordenó.
+     Solo se llama para torneos de selecciones (1 humano por grupo el
+     caso normal; si hay varios humanos, prioriza el primero). */
+  function _selArrangeHumanByesLast(cfg, g, slice){
+    if (!cfg || !cfg.groupFixtures) return false;
+    var fix = cfg.groupFixtures[g];
+    if (!fix || !fix.length) return false;
+    var hIdx = -1;
+    for (var i = 0; i < slice.length; i++){
+      if (slice[i] && (slice[i].isHuman || _tourIsHumanSel(slice[i]))) { hIdx = i; break; }
+    }
+    if (hIdx < 0) return false;
+    var playIdx = [], byeIdx = [];
+    fix.forEach(function(jor, ji){
+      var inIt = (jor || []).some(function(m){ return m && (m.home === hIdx || m.away === hIdx); });
+      (inIt ? playIdx : byeIdx).push(ji);
+    });
+    if (!byeIdx.length) return false;                 /* equipos pares: sin bye */
+    var order = playIdx.concat(byeIdx);               /* nuevo orden de índices VIEJOS */
+    var same = order.every(function(v, i){ return v === i; });
+    if (same) return false;                            /* ya están al final */
+    var gKey = 'g' + g + '_';
+    var newFix = order.map(function(oji){ return fix[oji]; });
+    var res = cfg.results || (cfg.results = {});
+    var moved = {};
+    order.forEach(function(oji, nji){
+      (fix[oji] || []).forEach(function(_, mi){
+        var ok = gKey + oji + '_' + mi;
+        if (res[ok] != null) moved[gKey + nji + '_' + mi] = res[ok];
+      });
+    });
+    Object.keys(res).forEach(function(k){ if (k.indexOf(gKey) === 0) delete res[k]; });
+    Object.keys(moved).forEach(function(k){ res[k] = moved[k]; });
+    cfg.groupFixtures[g] = newFix;
+    cfg.currentJornadaByGroup = cfg.currentJornadaByGroup || {};
+    cfg.currentJornadaByGroup[g] = 0;
+    return true;
+  }
+
   /* Card de UN grupo de un torneo de Selecciones (estilo Mundial 2032 ·
      rosa): cabecera con gradiente magenta + tabla de clasificación
      (_mundialClasTableHtml) + jornadas desplegables con
@@ -21285,6 +21335,13 @@ window._showSimProgress = function(opts, onDone){
       }
       if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
       var fix = cfg.groupFixtures[g];
+      /* Selecciones (sel-previa/sel-final): el humano descansa SIEMPRE las
+         últimas jornadas (byes al final). Verano/Mundialito NO se tocan. */
+      if ((typeof _tvBoardOf === 'function') && _tvBoardOf(tourId) !== 'verano'
+          && _selArrangeHumanByesLast(cfg, g, slice)) {
+        fix = cfg.groupFixtures[g];
+        try { window._tourSave(tourId, cfg); } catch(_){}
+      }
       var rows = _tourComputeStandings(slice, fix, cfg.results, gKey, fc.tieBreak);
       var prog = _tourFixtureProgress(fix, cfg.results, gKey);
       if (!prog.allDone) allGroupsDone = false;
@@ -21514,6 +21571,7 @@ window._showSimProgress = function(opts, onDone){
     var html = '';
     var allGroupsDone = true;
     var slices = [];
+    var _selByesFixed = false;
     /* ── Render de cada grupo (mismo motor que groups-ko) ── */
     for (var g = 0; g < nGroups; g++) {
       var slice = teams.slice(g*perGroup, (g+1)*perGroup);
@@ -21527,6 +21585,9 @@ window._showSimProgress = function(opts, onDone){
       }
       if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
       var fix = cfg.groupFixtures[g];
+      /* El humano descansa SIEMPRE las últimas jornadas (sus byes al
+         final). Reordena + remapea resultados si hace falta. */
+      if (_selArrangeHumanByesLast(cfg, g, slice)) { fix = cfg.groupFixtures[g]; _selByesFixed = true; }
       var rows = _tourComputeStandings(slice, fix, cfg.results, gKey, fc.tieBreak);
       var prog = _tourFixtureProgress(fix, cfg.results, gKey);
       if (!prog.allDone) allGroupsDone = false;
@@ -21535,6 +21596,9 @@ window._showSimProgress = function(opts, onDone){
          nombre debajo + tabla PTS-PJ-V-E-P-GF-GC-DG. 2026-06-02. */
       html += _selGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup);
     }
+    /* Persistir la reordenación de byes del humano (una sola vez; el
+       helper es idempotente, así que no re-guarda en renders siguientes). */
+    if (_selByesFixed) { try { window._tourSave(tourId, cfg); } catch(_){} }
     /* ── Sección RAMIFICACIÓN ── */
     var targetId = fc.targetTour || '';
     var targetCfg = null;

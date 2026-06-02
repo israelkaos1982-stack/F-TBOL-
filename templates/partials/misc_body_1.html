@@ -51573,7 +51573,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       sct:'el Soccer Champions Tour', jg:'el Trofeo Joan Gamper',
       pss:'la Premier Summer Series', asia:'el Asian Tournament',
       sel:'la fase de clasificación', 'sel-fin':'el Mundial',
-      wprev:'la Previa de Champions'
+      wprev:'la Previa de Champions',
+      /* Alias devueltos por _gmCompFromState (gm-modal). 2026-06-02. */
+      super:'la Supercopa de España', mundialito:'el Mundialito de Clubes',
+      neutral:'la competición'
     };
     return m[c] || (c ? 'la '+c : 'la competición');
   }
@@ -51581,6 +51584,84 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var m = { r1:'1ª Ronda', r2:'2ª Ronda', r16:'Dieciseisavos',
       oct:'Octavos', cua:'Cuartos', sf:'Semifinales', fin:'la Final' };
     return m[r] || r;
+  }
+
+  /* ── Frases dinámicas (variedad "como la vida real", 2026-06-02) ──
+     El usuario reportó que la bandeja siempre mostraba los mismos
+     textos. Estas plantillas se eligen al azar para que cada partido
+     genere un mensaje distinto: positivo al ganar, negativo al perder
+     y neutro al empatar. `team` = nombre del equipo del usuario,
+     `g`/`r` = goles propios/rival, `where` = "en casa"/"a domicilio". */
+  function _pick(arr){ return arr[(Math.random()*arr.length)|0]; }
+  function _winPhrases(team, riv, g, r, where){
+    return [
+      '¡Victoria! '+team+' se impone '+g+'-'+r+' a '+riv+'. El vestuario lo celebra. 🎉',
+      '¡A por todas! Triunfo por '+g+'-'+r+' frente a '+riv+' '+where+'. Gran partido. 💪',
+      'Tres puntos en el bolsillo: '+g+'-'+r+' ante '+riv+'. La afición se va feliz. 🔥',
+      '¡Qué alegría! Ganamos '+g+'-'+r+' a '+riv+'. Seguimos sumando, mister. 🏆',
+      'Sólido '+g+'-'+r+' contra '+riv+'. El equipo responde cuando hace falta. 👏',
+      '¡Triunfazo! '+g+'-'+r+' ante '+riv+'. Así da gusto. 😄'
+    ];
+  }
+  function _lossPhrases(team, riv, g, r, where){
+    return [
+      'Derrota '+g+'-'+r+' frente a '+riv+'. Duele, pero hay que levantarse ya. 😞',
+      'Mal día: caemos '+g+'-'+r+' ante '+riv+' '+where+'. A corregir errores. 😔',
+      'No pudo ser. Perdemos '+g+'-'+r+' contra '+riv+'. A apretar los dientes. 💔',
+      'Tropiezo '+g+'-'+r+' frente a '+riv+'. El equipo debe reaccionar ya. ⚠️',
+      'Pinchazo doloroso: '+g+'-'+r+' ante '+riv+'. La próxima será nuestra. 🙏',
+      'Jarro de agua fría: '+g+'-'+r+' contra '+riv+'. Cabeza alta y a seguir. 😣'
+    ];
+  }
+  function _drawPhrases(team, riv, g, r, where){
+    return [
+      'Empate '+g+'-'+r+' con '+riv+'. Sabe a poco, faltó pegada. 🤝',
+      'Reparto de puntos: '+g+'-'+r+' ante '+riv+'. Hay que mejorar arriba. 😐',
+      'Igualada '+g+'-'+r+' frente a '+riv+'. Un punto que puede valer. ⚖️',
+      'Tablas '+g+'-'+r+' contra '+riv+'. Ni para unos ni para otros. 🤝'
+    ];
+  }
+  function _previewPhrases(riv, where, when, comp){
+    var c = comp ? ' — '+comp : '';
+    return [
+      'Toca preparar el partido contra '+riv+' ('+where+(when?', '+when:'')+')'+c+'. Revisa lesionados, sancionados y alineación. ¡A por ello! 💪',
+      'Se acerca el duelo ante '+riv+' ('+where+(when?', '+when:'')+')'+c+'. Mira las bajas y prepara el once. 📋',
+      'Próximo reto: '+riv+' ('+where+(when?', '+when:'')+')'+c+'. Comprueba sancionados y lesionados antes de elegir la alineación. ⚽',
+      'A concentrarse: jugamos contra '+riv+' ('+where+(when?', '+when:'')+')'+c+'. Revisa la convocatoria con cuidado. 🎯'
+    ];
+  }
+  /* Nombre legible del grado de lesión (acepta número 1/2/3 o texto). */
+  function _gradeLabel(g){
+    if (g === 1 || g === '1') return 'leve';
+    if (g === 2 || g === '2') return 'moderada';
+    if (g === 3 || g === '3') return 'grave';
+    var s = String(g || '').toLowerCase();
+    if (s) return s;
+    return 'leve';
+  }
+  /* Extracción robusta del nombre del jugador desde un evento del acta
+     (cubre ev.name string, ev.player [num,name] y ev.player string). */
+  function _evPlayerName(ev){
+    if (!ev) return '';
+    if (typeof ev.name === 'string' && ev.name.trim()) return ev.name.trim();
+    if (Array.isArray(ev.player)) return String(ev.player[1] || ev.player[0] || '').trim();
+    if (typeof ev.player === 'string') return ev.player.trim();
+    return '';
+  }
+  /* ¿Es el equipo la selección del usuario (Francia)? El hub de
+     selecciones del usuario es Francia; las otras 5 selecciones
+     humanas pertenecen a otros misters y NO van a esta bandeja. */
+  function _isFra(name){
+    if (!name) return false;
+    var n = String(name).toLowerCase().trim();
+    return n === 'francia' || n === 'france' || n.indexOf('francia') >= 0;
+  }
+  function _fraCompLabel(c){
+    c = String(c || '');
+    if (/mundial|sel-fin/.test(c)) return 'el Mundial';
+    if (c === 'sel') return 'la fase de clasificación';
+    if (c === 'amistoso') return 'el amistoso';
+    return 'la selección';
   }
 
   /* ── Estado UI ──────────────────────────────────────────── */
@@ -51913,18 +51994,19 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             var riv = livHome ? tB : tA;
             var diff = lg - rg;
             var ic, title, body;
+            var whereW = livHome ? 'en Anfield' : 'a domicilio';
             if (diff > 0){
               ic = '🏆';
               title = 'Victoria '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = '¡Tres puntos para el Liverpool! '+(livHome?'En Anfield':'Como visitante')+' por '+lg+'-'+rg+'.';
+              body  = _pick(_winPhrases('el Liverpool', riv, lg, rg, whereW));
             } else if (diff < 0){
               ic = '❌';
               title = 'Derrota '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = 'Cae el Liverpool '+(livHome?'en Anfield':'como visitante')+' por '+lg+'-'+rg+'. Toca levantarse.';
+              body  = _pick(_lossPhrases('el Liverpool', riv, lg, rg, whereW));
             } else {
               ic = '🤝';
               title = 'Empate '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = 'Reparto de puntos '+(livHome?'en Anfield':'fuera de casa')+': '+lg+'-'+rg+'.';
+              body  = _pick(_drawPhrases('el Liverpool', riv, lg, rg, whereW));
             }
             var mvp = livHome ? mvp_a : mvp_b;
             if (mvp) body += ' ⭐ MVP: '+mvp+'.';
@@ -52974,10 +53056,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     var body;
     if (rival){
-      body = 'Toca preparar el partido contra ' + rival
-           + ' (' + venue + (when ? ', ' + when : '') + ')'
-           + (phaseTxt ? ' — ' + phaseTxt : '')
-           + '. Revisa lesionados, sancionados y alineación. ¡A por ello!';
+      body = _pick(_previewPhrases(rival, venue, when, phaseTxt));
     } else {
       body = 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
     }
@@ -53045,6 +53124,152 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     push({ side:'liv', type:'res-streak', icon:ic,
       sender:'LaLiga · Tendencias', title:title, body:body });
   }
+
+  /* ── HOOK 15: resultado UNIVERSAL (cualquier competición) ──────
+     2026-06-02 — petición usuario: "cuando se pierda un partido un
+     mensaje negativo, cuando se gane uno positivo, e indicar lesiones
+     y amonestaciones de jugadores que se pierden partidos. Algo más
+     como la vida real."
+
+     `registrarResultadoLiga` solo se llama en Liga, así que hasta
+     ahora SOLO la Liga generaba mensaje de victoria/derrota/empate.
+     El usuario juega sobre todo el Mundial (Francia) y los torneos,
+     donde no salía ningún mensaje de resultado → la bandeja solo
+     mostraba previas repetidas.
+
+     Esta función la invoca `gmEndMatch` (gm-modal) al finalizar
+     CUALQUIER partido humano (Copa, Champions, Europa, Conference,
+     Recopa, Supercopa, Mundialito, Mundial selecciones, torneos de
+     verano, amistosos, Superliga…). Publica:
+       · Un mensaje de resultado VARIADO (positivo/negativo/neutro).
+       · Para la selección del usuario (Francia): lesiones + rojas +
+         dobles amarillas (los del Liverpool ya los publica
+         `_processActa` vía `registrarLigaPlayerStats`).
+
+     Dedup:
+       · Resultado: cursor `res:<mk>` (mismo esquema que el hook de
+         Liga; se SALTA `liga` para liv para no duplicar con el hook 1).
+       · Acta (lesión/roja): cursor `acta:<mk>:<idx>:<tipo>`.
+
+     NO toca el Liverpool en `liga` (lo cubre el hook 1). NO publica
+     para equipos que no sean del usuario (Liverpool o Francia). */
+  function _broadcastHumanMatchResult(info){
+    try {
+      if (!info) return;
+      var home = info.home || '', away = info.away || '';
+      if (!home || !away) return;
+      var comp = info.comp || 'liga';
+      var ga = +info.scoreA || 0, gb = +info.scoreB || 0;
+      if (info.etScores){ ga += (+info.etScores.a || 0); gb += (+info.etScores.b || 0); }
+      var events = Array.isArray(info.events) ? info.events : [];
+
+      /* Lado de la bandeja + qué equipo es el del usuario. */
+      var side = null, humanIsHome = false;
+      if (_isLiv(home) || _isLiv(away)){ side = 'liv'; humanIsHome = _isLiv(home); }
+      else if (_isFra(home) || _isFra(away)){ side = 'fra'; humanIsHome = _isFra(home); }
+      else return;  /* no es un equipo del usuario → silencio */
+
+      var humanTeam = humanIsHome ? home : away;
+      var rival     = humanIsHome ? away : home;
+      var hg = humanIsHome ? ga : gb;   /* goles del usuario */
+      var rg = humanIsHome ? gb : ga;   /* goles del rival   */
+
+      /* V/E/D — con desempate por penaltis en eliminatorias. El
+         `penWinner` puede venir como 'a'/'b' o como nombre de equipo. */
+      var diff = hg - rg, penUser = null;
+      var pen = info.penWinner;
+      if (diff === 0 && pen){
+        var penSideHome = (pen === 'a' || pen === home);
+        var penSideAway = (pen === 'b' || pen === away);
+        if (penSideHome || penSideAway){
+          penUser = (penSideHome === humanIsHome);
+          diff = penUser ? 1 : -1;
+        }
+      }
+
+      var mk = info.mk || (comp + ':' + home + '-' + away + ':' + ga + '-' + gb);
+      var compName = (side === 'fra') ? _fraCompLabel(comp) : _compLabel(comp);
+      var sender   = (side === 'fra') ? 'FFF · Selección Francia' : 'Liverpool FC';
+
+      /* ── Mensaje de resultado (salta liga-liv: ya lo hace el hook 1) ── */
+      if (!(side === 'liv' && comp === 'liga')){
+        var sigR = 'res:' + mk;
+        if (!_getCursor(sigR)){
+          _setCursor(sigR, _now());
+          var whereW = humanIsHome ? (side === 'liv' ? 'en Anfield' : 'en casa') : 'a domicilio';
+          var teamW  = (side === 'fra') ? 'Francia' : 'el Liverpool';
+          var ic, title, body;
+          if (diff > 0){
+            ic = '🏆';
+            title = 'Victoria ' + hg + '-' + rg + (humanIsHome ? ' vs ' : ' @ ') + rival;
+            body  = _pick(_winPhrases(teamW, rival, hg, rg, whereW));
+          } else if (diff < 0){
+            ic = '😞';
+            title = 'Derrota ' + hg + '-' + rg + (humanIsHome ? ' vs ' : ' @ ') + rival;
+            body  = _pick(_lossPhrases(teamW, rival, hg, rg, whereW));
+          } else {
+            ic = '🤝';
+            title = 'Empate ' + hg + '-' + rg + (humanIsHome ? ' vs ' : ' @ ') + rival;
+            body  = _pick(_drawPhrases(teamW, rival, hg, rg, whereW));
+          }
+          if (penUser != null){
+            title += ' (pen.)';
+            body += penUser ? ' Y nos llevamos la tanda de penaltis. 🎯'
+                            : ' Caímos en la tanda de penaltis. 😣';
+          }
+          body += ' En ' + compName + '.';
+          /* MVP del lado del usuario, si lo hay en el acta. */
+          var letter = humanIsHome ? 'a' : 'b';
+          var mvpEv = null;
+          for (var mi = 0; mi < events.length; mi++){
+            var e = events[mi];
+            if (e && e.type === 'mvp' && (e.team === letter || e.team === '' || e.team == null)){ mvpEv = e; break; }
+          }
+          var mvpNm = mvpEv ? _evPlayerName(mvpEv) : '';
+          if (mvpNm) body += ' ⭐ MVP: ' + mvpNm + '.';
+          push({ side: side, type:'result', icon: ic, sender: sender, title: title, body: body });
+        }
+      }
+
+      /* ── Lesiones / sanciones de la SELECCIÓN (Francia) ──
+         El Liverpool ya las publica `_processActa`. Aquí cubrimos el
+         hueco de la selección, que nunca pasaba por ningún hook. */
+      if (side === 'fra'){
+        var hLetter = humanIsHome ? 'a' : 'b';
+        events.forEach(function(ev, idx){
+          if (!ev || ev.team !== hLetter) return;
+          var ty = ev.type;
+          if (ty !== 'lesion' && ty !== 'roja' && ty !== 'd-amarilla') return;
+          var sig = 'acta:' + mk + ':' + idx + ':' + ty;
+          if (_getCursor(sig)) return;
+          var pl = _evPlayerName(ev) || 'Un jugador';
+          if (ty === 'lesion'){
+            var grade = _gradeLabel(ev.lesGrado);
+            var n = Array.isArray(ev.lesPartidos) ? ev.lesPartidos[0] : (ev.lesPartidos || 1);
+            _setCursor(sig, '1');
+            push({ side:'fra', type:'injury', icon:'🏥',
+              sender:'Servicios Médicos · Francia',
+              title:'Lesión ' + grade + ': ' + pl,
+              body: pl + ' cae lesionado (' + grade + ') y se perderá aprox. ' + n +
+                    ' partido' + (n === 1 ? '' : 's') + ' con la selección.' });
+          } else if (ty === 'roja'){
+            _setCursor(sig, '1');
+            push({ side:'fra', type:'red', icon:'🟥',
+              sender:'Comité de Competición',
+              title:'Expulsión: ' + pl,
+              body: pl + ' ve la roja directa y se perderá los próximos 2 partidos de la selección.' });
+          } else { /* d-amarilla */
+            _setCursor(sig, '1');
+            push({ side:'fra', type:'red', icon:'🟨🟥',
+              sender:'Comité de Competición',
+              title:'Doble amarilla: ' + pl,
+              body: pl + ' es expulsado por doble amarilla y se perderá el próximo partido de la selección.' });
+          }
+        });
+      }
+    } catch(_){}
+  }
+  window._broadcastHumanMatchResult = _broadcastHumanMatchResult;
 
   /* ── Semilla inicial ────────────────────────────────────
      Los 3 mensajes de bienvenida (Bienvenido a Anfield, Plantilla,

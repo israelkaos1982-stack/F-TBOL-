@@ -2266,7 +2266,10 @@ var STAT_CLASS_MAP = {
       return rows.map(function(item, idx){
         var humanCls = (typeof window._humanPlayerClass === 'function')
           ? window._humanPlayerClass(item.team) : '';
-        return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (startIndex + idx) + '</div><div class="liga-stat-player"><div class="liga-stat-name' + humanCls + '">' + escapeHtml(item.name) + '</div><div class="liga-stat-team">' + escapeHtml(item.team) + '</div></div><div class="liga-stat-value">' + item.value + '</div></div>';
+        var hIco = (typeof window._statHumanIcon === 'function')
+          ? window._statHumanIcon(item.team) : '';
+        var icoHtml = hIco ? '<span class="stat-human-ico">' + hIco + '</span>' : '';
+        return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (startIndex + idx) + '</div><div class="liga-stat-player"><div class="liga-stat-name' + humanCls + '">' + escapeHtml(item.name) + '</div><div class="liga-stat-team' + (humanCls ? ' is-human-team' : '') + '">' + escapeHtml(item.team) + icoHtml + '</div></div><div class="liga-stat-value">' + item.value + '</div></div>';
       }).join('');
     }
 

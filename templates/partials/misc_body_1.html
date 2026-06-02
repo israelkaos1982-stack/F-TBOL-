@@ -11058,6 +11058,24 @@ window._showSimProgress = function(opts, onDone){
       if (!s) return false;
       if (s in _ihtCache) return _ihtCache[s];
       var hit = false;
+      /* CAPA 0 — MISTERS_REGISTRY (hardcoded, síncrono, infalible): es la
+         fuente canónica de los 6 clubes + 6 selecciones humanas y NO depende
+         de hidratación (`_esSelHumana`/`humanIcon` pueden no estar listos /
+         cachear un falso negativo). Esto garantiza el nombre AMARILLO en las
+         cajas de estadísticas para Francia/Brasil/… aunque el resto falle. */
+      var registryReady = false;
+      try {
+        if (typeof window._isHumanSeleccionCanonica === 'function') {
+          registryReady = true;
+          if (window._isHumanSeleccionCanonica(s)) hit = true;
+        }
+      } catch(_){}
+      try {
+        if (!hit && typeof window._isHumanClubCanonico === 'function') {
+          registryReady = true;
+          if (window._isHumanClubCanonico(s)) hit = true;
+        }
+      } catch(_){}
       try { if (!hit && typeof window.esHumano === 'function' && window.esHumano(s)) hit = true; } catch(_){}
       try { if (!hit && typeof window._esSelHumana === 'function' && window._esSelHumana(s)) hit = true; } catch(_){}
       try {
@@ -11070,7 +11088,9 @@ window._showSimProgress = function(opts, onDone){
         var nrm = _ihtNorm(s);
         if (nrm && (_ihtFallbackLigaEa(nrm) || _ihtFallbackHumanIcon(nrm, s))) hit = true;
       }
-      _ihtCache[s] = hit;
+      /* No cachear un falso negativo si el registry canónico aún no estaba
+         disponible (evita envenenar el cache en un render muy temprano). */
+      if (hit || registryReady) _ihtCache[s] = hit;
       return hit;
     };
     /* Invalidar cache cuando el usuario edite plantillas humanas. */
@@ -11086,7 +11106,9 @@ window._showSimProgress = function(opts, onDone){
   }
   /* Icono humano de un equipo para las cajas de estadísticas (2026-06-01,
      petición usuario: "siempre que haya un equipo humano el texto en
-     amarillo y el icono"). Prioridad:
+     amarillo y el icono"; refinado 2026-06-02: el icono va en la LÍNEA DEL
+     EQUIPO de cada fila — p.ej. «FRANCIA 💡» — junto al equipo también en
+     amarillo, además del nombre del jugador en amarillo). Prioridad:
        1) MISTERS_REGISTRY (_mhFindMister) → emoji del mister (💡🐭🔨✏️😈🦆)
           para las 6 selecciones + 6 clubes canónicos.
        2) humanIcon(name) → humanos secundarios con emoji en el editor.
@@ -11174,8 +11196,8 @@ window._showSimProgress = function(opts, onDone){
         return '<div class="liga-stat-row">'
              +   '<div class="liga-stat-rank">' + (startIndex + idx) + '</div>'
              +   '<div class="liga-stat-player">'
-             +     '<div class="liga-stat-name' + humanCls + '">' + _escHtmlPS(item.name) + icoHtml + '</div>'
-             +     '<div class="liga-stat-team">' + _escHtmlPS(item.team) + '</div>'
+             +     '<div class="liga-stat-name' + humanCls + '">' + _escHtmlPS(item.name) + '</div>'
+             +     '<div class="liga-stat-team' + (humanCls ? ' is-human-team' : '') + '">' + _escHtmlPS(item.team) + icoHtml + '</div>'
              +   '</div>'
              +   '<div class="liga-stat-value">' + item.value + '</div>'
              + '</div>';
@@ -23067,8 +23089,8 @@ window._showSimProgress = function(opts, onDone){
         var icoHtml = hIco ? '<span class="stat-human-ico">' + hIco + '</span>' : '';
         return '<div class="liga-stat-row">'
           + '<div class="liga-stat-rank">' + (start+i) + '</div>'
-          + '<div class="liga-stat-player"><div class="liga-stat-name'+hc+'">' + esc(it.name) + icoHtml + '</div>'
-          + '<div class="liga-stat-team">' + esc(it.team) + '</div></div>'
+          + '<div class="liga-stat-player"><div class="liga-stat-name'+hc+'">' + esc(it.name) + '</div>'
+          + '<div class="liga-stat-team' + (hc ? ' is-human-team' : '') + '">' + esc(it.team) + icoHtml + '</div></div>'
           + '<div class="liga-stat-value">' + it.value + '</div></div>';
       }).join('');
     }
@@ -30710,6 +30732,13 @@ window._showSimProgress = function(opts, onDone){
    encontrar rápidamente a sus jugadores en los rankings. */
 .liga-stat-name.is-human-player,
 .restoligas-stats-name.is-human-player{color:#fbbf24!important;text-shadow:0 0 8px rgba(251,191,36,.45);}
+/* Equipo humano (p.ej. «FRANCIA 💡») en amarillo + icono del mister en la
+   línea del equipo de la fila de estadísticas (2026-06-02, petición usuario:
+   "o pones el nombre del jugador humano en amarillo o pon Francia💡"). */
+.liga-stat-team.is-human-team,
+.restoligas-stats-team.is-human-team{color:#fbbf24;font-weight:700;text-shadow:0 0 7px rgba(251,191,36,.4);}
+.liga-stat-name .stat-human-ico,.liga-stat-team .stat-human-ico,
+.restoligas-stats-team .stat-human-ico{margin-left:5px;font-size:13px;}
 .restoligas-stats-val{font-family:'Bebas Neue',sans-serif;font-size:18px;color:#7df0a0;letter-spacing:1px;font-weight:700;text-align:right;}
 .restoligas-stats-toggle{display:block;width:calc(100% - 16px);margin:6px 8px 8px;padding:8px;border:1px dashed rgba(94,182,228,.45);border-radius:8px;background:rgba(94,182,228,.06);color:#9fdcff;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .14s,border-color .14s;}
 .restoligas-stats-toggle:hover{background:rgba(94,182,228,.14);border-color:rgba(94,182,228,.65);}
@@ -31210,12 +31239,15 @@ window._showSimProgress = function(opts, onDone){
     function _row(p, i){
       var humanCls = (typeof window._humanPlayerClass === 'function')
         ? window._humanPlayerClass(p.team) : '';
+      var hIco = (typeof window._statHumanIcon === 'function')
+        ? window._statHumanIcon(p.team) : '';
+      var icoHtml = hIco ? '<span class="stat-human-ico">' + hIco + '</span>' : '';
       return '<div class="restoligas-stats-row">'
         + '<div class="restoligas-stats-pos">' + (i+1) + '</div>'
         + '<div class="restoligas-stats-flag">' + (p.flag || '🌍') + '</div>'
         + '<div class="restoligas-stats-info">'
         +   '<div class="restoligas-stats-name' + humanCls + '">' + (p.name||'?') + '</div>'
-        +   '<div class="restoligas-stats-team">' + (p.team||'?') + '</div>'
+        +   '<div class="restoligas-stats-team' + (humanCls ? ' is-human-team' : '') + '">' + (p.team||'?') + icoHtml + '</div>'
         + '</div>'
         + '<div class="restoligas-stats-val">' + (p[valLabel.field]||0) + '</div>'
         + '</div>';

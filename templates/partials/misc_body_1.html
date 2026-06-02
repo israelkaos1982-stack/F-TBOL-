@@ -51697,6 +51697,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
   /* ── Estado UI ──────────────────────────────────────────── */
   var _ui = { sideTab:'liv', readTab:'new' };
+  /* Compositor manual: se desbloquea con PIN 7477 (se recuerda durante
+     la sesión para no re-pedirlo en cada apertura del compositor). */
+  var _penUnlocked = false;
 
   /* ── API pública ────────────────────────────────────────── */
   function push(opts){
@@ -51850,12 +51853,31 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     +   '<div class="mmo-hdr">'
     +     '<span class="mmo-title">✉️ MENSAJES <span class="mmo-title-sub">LIVERPOOL</span>'
     +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-all" hidden></i></span>'
+    +     '<button type="button" class="mmo-pen" id="mu-msg-pen" aria-label="Escribir mensaje" title="Escribir mensaje (PIN)"'
+    +       ' style="background:none;border:none;color:#fff;opacity:.5;font-size:13px;line-height:1;cursor:pointer;padding:2px 5px;margin-right:2px;">🖍</button>'
     +     '<button type="button" class="mmo-x" aria-label="Cerrar">✕</button>'
     +   '</div>'
     +   '<div class="mmo-subtabs">'
     +     '<button type="button" class="mmo-sub" data-kind="new">📩 NUEVOS</button>'
     +     '<button type="button" class="mmo-sub" data-kind="read">📭 LEÍDOS</button>'
     +     '<button type="button" class="mmo-actions" id="mu-msg-clear" hidden>🗑 LIMPIAR LEÍDOS</button>'
+    +   '</div>'
+    +   '<div class="mmo-compose" id="mu-msg-compose" hidden'
+    +     ' style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);display:flex;flex-direction:column;gap:7px;">'
+    +     '<div style="display:flex;gap:7px;align-items:center;">'
+    +       '<select id="mu-cmp-side" style="flex:1;min-width:0;padding:6px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
+    +         '<option value="liv">🔴 Liverpool</option>'
+    +         '<option value="fra">🇫🇷 Selección Francia</option>'
+    +       '</select>'
+    +       '<input id="mu-cmp-icon" maxlength="3" placeholder="🖍" value="🖍" style="width:52px;text-align:center;padding:6px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:15px;">'
+    +     '</div>'
+    +     '<input id="mu-cmp-sender" placeholder="Remitente (ej. Dirección)" value="Dirección" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
+    +     '<input id="mu-cmp-title" placeholder="Título del mensaje" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
+    +     '<textarea id="mu-cmp-body" placeholder="Texto del mensaje…" rows="3" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;resize:vertical;"></textarea>'
+    +     '<div style="display:flex;gap:8px;justify-content:flex-end;">'
+    +       '<button type="button" id="mu-cmp-cancel" style="padding:6px 12px;border-radius:7px;background:#3a2030;color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px;cursor:pointer;">Cancelar</button>'
+    +       '<button type="button" id="mu-cmp-send" style="padding:6px 14px;border-radius:7px;background:#1f7a3a;color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px;font-weight:bold;cursor:pointer;">📨 Enviar</button>'
+    +     '</div>'
     +   '</div>'
     +   '<div class="mmo-body" id="mu-msg-body"></div>'
     + '</div>';
@@ -51880,6 +51902,43 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         : '¿Borrar los ' + n + ' mensajes?';
       if (confirm(q)) clearAllMessages();
     };
+    /* 🖍 Compositor manual — protegido por PIN 7477. */
+    var penBtn = document.getElementById('mu-msg-pen');
+    var compEl = document.getElementById('mu-msg-compose');
+    if (penBtn && compEl){
+      penBtn.onclick = function(ev){
+        ev.stopPropagation();
+        if (!_penUnlocked){
+          var pin = prompt('Introduce el PIN para escribir mensajes:');
+          if (pin == null) return;
+          if (String(pin).trim() !== '7477'){ alert('PIN incorrecto.'); return; }
+          _penUnlocked = true;
+        }
+        compEl.hidden = !compEl.hidden;
+        if (!compEl.hidden){
+          var ti = document.getElementById('mu-cmp-title');
+          if (ti) ti.focus();
+        }
+      };
+      var sendBtn = document.getElementById('mu-cmp-send');
+      var cancelBtn = document.getElementById('mu-cmp-cancel');
+      if (cancelBtn) cancelBtn.onclick = function(){ compEl.hidden = true; };
+      if (sendBtn) sendBtn.onclick = function(){
+        var side   = (document.getElementById('mu-cmp-side')   || {}).value || 'liv';
+        var sender = ((document.getElementById('mu-cmp-sender')|| {}).value || '').trim() || 'Dirección';
+        var title  = ((document.getElementById('mu-cmp-title') || {}).value || '').trim();
+        var bodyT  = ((document.getElementById('mu-cmp-body')  || {}).value || '').trim();
+        var icon   = ((document.getElementById('mu-cmp-icon')  || {}).value || '').trim() || '🖍';
+        if (!title){ alert('Escribe al menos un título.'); return; }
+        push({ side: side, type:'manual', icon: icon, sender: sender, title: title, body: bodyT });
+        var tEl = document.getElementById('mu-cmp-title'); if (tEl) tEl.value = '';
+        var bEl = document.getElementById('mu-cmp-body');  if (bEl) bEl.value = '';
+        compEl.hidden = true;
+        _ui.readTab = 'new';
+        if (side) _ui.sideTab = side;
+        try { _refresh(); } catch(_){}
+      };
+    }
   }
   function _openPop(){
     _ensureUI();

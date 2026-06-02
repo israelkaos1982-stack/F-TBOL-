@@ -12159,7 +12159,8 @@ window._fallbackSq11 = function(){
    1. Lesión "natural" del motor → 1 partido (el siguiente).
    2. ⬇️ marcado en previa → 2 partidos (este + siguiente).
    3. Doble amarilla (expulsión) → 1 partido siguiente (NO 2 como clubes).
-   4. Roja directa → 2 partidos siguientes (NO 2-15 como clubes).
+   4. Roja directa → 1 partido siguiente (igual que doble amarilla;
+      petición usuario 2026-06-02). NO 2-15 como clubes.
    5. Acumulación de amarillas → cada 2 = 1 partido (ciclo 2, NO 3).
    6. Sanciones simultáneas → solo se aplica la MAYOR (no se suman).
    7. Reset entre torneos automático (clasif vs Mundial = stores distintos).
@@ -12394,9 +12395,9 @@ window._fallbackSq11 = function(){
           processed[key] = true;
           result.push({
             name: ev.name, team: selName, tipo: 'roja',
-            reason: 'Roja directa — 2 partidos', partidos: 2
+            reason: 'Roja directa — 1 partido', partidos: 1
           });
-          addSancionSel(torneoKey, selName, ev.name, 'Roja directa — 2 partidos', 2, 'roja');
+          addSancionSel(torneoKey, selName, ev.name, 'Roja directa — 1 partido', 1, 'roja');
         }
       }
     });

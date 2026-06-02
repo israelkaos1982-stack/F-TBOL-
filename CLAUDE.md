@@ -1411,7 +1411,7 @@ como humanas en el editor vía `selecciones_squad_v1.teams[].icon` →
 | Lesión "natural" del motor      | 1 partido (el siguiente)    | 1-7 según grado           |
 | ⬇️ marcado por usuario          | 2 partidos (este + siguiente) | 2-10 según roll Mod/Grave |
 | Doble amarilla (expulsión)      | **1 partido siguiente**     | SIEMPRE 2 partidos        |
-| Roja directa                    | **2 partidos siguientes**   | 2-15 con buckets          |
+| Roja directa                    | **1 partido siguiente** (2026-06-02) | 2-15 con buckets |
 | Acumulación de amarillas        | **Cada 2 = 1 partido (ciclo 2)** | Cada 3 = 1 partido    |
 
 Notas:
@@ -1494,9 +1494,11 @@ sistema de clubes para enrutar al motor SEL cuando `esCompSel(comp)
    usuario. Las 6 son canónicas (2026-05-24). Selecciones marcadas
    como humanas en el editor (`_SEL_HUMAN_ICONS`) se reconocen
    adicionalmente por el fallback en `esSelHumana`.
-3. **No cambiar los partidos de sanción** (1 d-amarilla, 2 roja,
-   ciclo 2 amarillas, 2 ⬇️, 1 lesión natural) sin acordarlo con el
-   usuario. Son las reglas explícitas pedidas el 2026-05-24.
+3. **No cambiar los partidos de sanción** (1 d-amarilla, 1 roja
+   directa, ciclo 2 amarillas, 2 ⬇️, 1 lesión natural) sin acordarlo
+   con el usuario. Reglas pedidas el 2026-05-24; roja directa pasó de
+   2 → 1 partido el 2026-06-02 (petición usuario: roja directa y roja
+   por doble amarilla se pierden SOLO el siguiente partido).
 4. **No introducir amistosos de selección** sin acordarlo. El
    usuario explícitamente dijo "no hay amistosos de selecciones, y
    en el caso de haber no cuentan" — quedan excluidos del cómputo.

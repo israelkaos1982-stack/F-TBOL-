@@ -1,5 +1,63 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Escudos de Resto de Ligas — backfill por nombre, NUNCA se pierden entre dispositivos (obligatorio, 2026-06-02)
+
+**Bug (foto usuario 2026-06-02)**: el amigo puso TODOS los escudos de
+la Liga Grecia (`ligaExt_grecia`, «Super League») desde su PC, pero en
+el móvil del usuario **no salía ninguno** (círculos grises en la tabla
+de clasificación `renderTable` / `s-liga-ext`).
+
+### Causa raíz
+
+El escudo de cada equipo vive en `team.shield` (URL o dataURI). La
+sincronización multi-dispositivo de `ligaExt_<slug>` resuelve conflictos
+a nivel de DOCUMENTO o de EQUIPO-completo, no de campo:
+
+1. **Cliente (`fetchData`, `misc_body_1.html`)**: el anti-wipe es
+   **todo-o-nada**. Si la copia LOCAL del usuario tiene rosters más
+   ricos (más jugadores) que la del amigo, el anti-wipe **conserva la
+   copia local entera e IGNORA la del servidor** — incluidos los
+   escudos que el amigo acababa de subir.
+2. **Servidor (`_lx_merge_teams`, `app.py`)**: la fusión por equipo
+   elige al ganador por `updatedAt`. Si el ganador de un equipo no
+   trae escudo (copia de otro dispositivo con plantilla más reciente
+   pero sin el escudo), el escudo se perdía aunque existiera en la otra
+   versión del MISMO equipo.
+
+### Fix — el escudo es IDENTIDAD: backfill por nombre normalizado
+
+El `shield` es un dato de identidad: una vez puesto en CUALQUIER
+dispositivo, **no debe desaparecer nunca** y debe propagarse a todos,
+independientemente de qué lado «gane» el roster.
+
+- **Cliente**: helper `_lextBackfillShields(target, source)` (justo
+  antes de `fetchData`). Rellena el `shield` de cada equipo de `target`
+  que NO lo tenga, tomándolo del equipo del MISMO nombre normalizado
+  (`_lextNormName`) en `source`. **NUNCA pisa** un escudo ya presente.
+  Se llama en las **3 rutas** de adopción de `fetchData`: (a) adopción
+  temprana «servidor tiene ≥ local+6 equipos», (b) rama anti-wipe
+  (conserva local → backfill desde servidor + re-push), (c) rama de
+  aceptar servidor (backfill desde local).
+- **Servidor**: tras elegir ganadores en `_lx_merge_teams`, se rellena
+  el `shield` de los `out_teams` que se quedaron sin él tomándolo de la
+  versión (old o new) más reciente que SÍ tenía escudo. Defensa en
+  profundidad: si un dispositivo re-sube una copia sin escudos, el
+  servidor los reconstruye.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el anti-wipe de rosters (teams/players/perTeam)
+   descarte escudos del servidor. El backfill debe correr SIEMPRE que
+   se conserve la copia local.
+2. **PROHIBIDO** que `_lextBackfillShields` PISE un escudo ya presente
+   en el target (la edición del propio dispositivo manda; solo se
+   rellenan los vacíos).
+3. El backfill es por **nombre normalizado** (`_lextNormName` en
+   cliente, `_lx_norm_name` en servidor), no por id (los ids se
+   regeneran al re-pegar listas).
+4. Toda nueva ruta de sync de `ligaExt_*` que adopte una de las dos
+   copias debe pasar por el backfill de escudos antes de cachear/render.
+
 ## Plantilla de selecciones — sync que NO pierde datos + sin «Pacífico» (obligatorio, 2026-06-02)
 
 **Bug (foto usuario 2026-06-02)**: en «🌐 Plantilla de selecciones»

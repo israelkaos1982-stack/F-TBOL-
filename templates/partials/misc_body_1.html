@@ -20646,6 +20646,12 @@ window._showSimProgress = function(opts, onDone){
                          || _statsBoard === 'verano')
                         && (cfg.format !== 'mundial-48') && (id !== 'mundial');
     var _statsBoxHtml = _statsAllowed ? _tourStatsBtnHtml(id) : '';
+    /* En los Torneos de Verano la caja de Estadísticas va DEBAJO de la
+       clasificación (petición usuario 2026-06-02). En Selecciones sigue
+       arriba como hasta ahora. */
+    var _statsAtBottom = (_statsBoard === 'verano');
+    var _statsTop = _statsAtBottom ? '' : _statsBoxHtml;
+    var _statsBot = _statsAtBottom ? _statsBoxHtml : '';
     var teams = cfg.teams || [];
     if (!teams.length) {
       var _mr = cfg.formatConfig && cfg.formatConfig.manualRoster;
@@ -20883,7 +20889,7 @@ window._showSimProgress = function(opts, onDone){
             + '</button></div>';
         }
       }
-      infoEl.innerHTML = _statsBoxHtml + html;
+      infoEl.innerHTML = _statsTop + html + _statsBot;
       /* Persistir bracket recién inicializado (2026-05-26): sin esto,
          recargar la página antes de simular nada deja localStorage sin
          cfg.bracket y `_realPair` del hub cae al "Sin partido". */
@@ -20891,13 +20897,13 @@ window._showSimProgress = function(opts, onDone){
         try { Promise.resolve(window._tourSave(id, cfg)).catch(function(){}); } catch(_){}
       }
     } else if (cfg.format === 'league') {
-      infoEl.innerHTML = _statsBoxHtml + hint + _renderLeague(cfg, id, teams);
+      infoEl.innerHTML = _statsTop + hint + _renderLeague(cfg, id, teams) + _statsBot;
     } else if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss') {
       /* Liga+Playoff y Suizo reutilizan el motor de grupos-ko con
          1 solo grupo (config normalizada en _readForm). */
-      infoEl.innerHTML = _statsBoxHtml + hint + _renderGroupsKO(cfg, id, teams);
+      infoEl.innerHTML = _statsTop + hint + _renderGroupsKO(cfg, id, teams) + _statsBot;
     } else if (cfg.format === 'qualifier-route') {
-      infoEl.innerHTML = _statsBoxHtml + hint + _renderQualifierRoute(cfg, id, teams);
+      infoEl.innerHTML = _statsTop + hint + _renderQualifierRoute(cfg, id, teams) + _statsBot;
     } else if (cfg.format === 'mundial-48') {
       /* El menú de 7 cajas (Final · Semis · Cuartos · Octavos ·
          Dieciseisavos · Fase de Grupos · Estadísticas) debe pintarse
@@ -20906,7 +20912,7 @@ window._showSimProgress = function(opts, onDone){
       var _mBody = '';
       try { _mBody = _renderMundial(cfg, id, teams) || ''; }
       catch(_eM){ _mBody = ''; }
-      infoEl.innerHTML = _statsBoxHtml + hint + _mBody;
+      infoEl.innerHTML = _statsTop + hint + _mBody + _statsBot;
     } else {
       infoEl.innerHTML = '';
     }

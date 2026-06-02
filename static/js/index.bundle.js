@@ -11226,6 +11226,22 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         }
       } catch(_){}
     }
+    /* Recopa de Europa: matchKey `recopa_<phase>_<idx>`. Mapeamos cada
+       ronda del bracket de 64 a la fila EXACTA del calendario
+       (calendario.json → SSR). Sin esto la previa de un partido de
+       Recopa caía a HOY + "recopa" sin fecha real. 2026-06-02. */
+    var rm = String(matchKey || '').match(/^recopa_([a-z0-9]+)_\d+$/i);
+    if (rm) {
+      var RECOPA_RD = {
+        r64: 'Recopa Europa — 1/64',
+        r32: 'Recopa Europa — 1/32',
+        r16: 'Recopa Europa — Octavos',
+        r8:  'Recopa Europa — Cuartos',
+        sf:  'Recopa Europa — Semis',
+        fin: 'FINAL RECOPA'
+      };
+      if (RECOPA_RD[rm[1].toLowerCase()]) return RECOPA_RD[rm[1].toLowerCase()];
+    }
     var MAP = {
       'copa':'Copa del Rey — 1/128','copa-fin':'FINAL COPA DEL REY',
       'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',

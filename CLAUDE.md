@@ -1079,17 +1079,58 @@ corona al campeón.". El resto de copas nacionales (FA Cup, Coppa,
 etc.) mantienen el bloque clásico con Campeón=1 fijo y Subcampeón
 toggle 0/1 hacia Recopa.
 
-### 4. Motor Recopa de Europa — pendiente de rediseño
+### 4. Motor Recopa de Europa — bracket de 64 (2026-06-02)
 
-El `_buildPool` de Recopa (`misc_body_1.html:~12665`) **YA NO**
-lee `ligaExt_resto-mundo`. Su pool queda restringido a los manuales
-de "EA Sports → Europa" slug 'recopa' (`_meaTeamsFor('recopa')`).
-Con solo 2 manuales el bracket de 8 no es sorteable — Recopa
-queda pendiente de un rediseño separado (el usuario indicó "se
-alimenta de 64 equipos exclusivamente europeos"). Hasta entonces,
-las pantallas `s-recopa-rd-*` y los eventos del calendario
-(`cal-rec-q`, `cal-rec-s`, `cal-rec-fin`) permanecen pero no se
-podrán arrancar sin pool completo.
+Rediseño implementado (petición usuario, fotos 2026-06-02). La Recopa
+es un **bracket de 64 equipos a partido único** (prórroga + penaltis
+si empate al 90'), con **6 rondas** que cuadran con las fechas fijas
+del calendario (`calendario.json`):
+
+```
+1/64 → 1/32 → Octavos → Cuartos → Semifinales → FINAL
+(32m)   (16m)   (8m)      (4m)      (2m)          (1m)
+```
+
+Motor en `misc_body_1.html` (IIFE `STORE_KEY='recopa_state_v1'`):
+`PHASES = ['r64','r32','r16','r8','sf','fin']`. La pantalla
+`s-recopa` muestra las **6 cajas** (`recopa-rd-<phase>-blk`) + sus 6
+sub-pantallas `s-recopa-rd-<phase>`.
+
+**Pool — modelo histórico Cup Winners' Cup** (`_buildPool`): los
+**campeones** de las copas nacionales europeas
+(`ligaExt_<slug>.copa.champion`, motor `_lecCopa`) + los
+**subcampeones** de las copas con `data.config.recopaSubcampeon !==
+false` (toggle, default ON) + los **manuales** de "EA Sports →
+Europa" slug 'recopa' (`_meaTeamsFor('recopa')`, donde entran
+campeón/subcampeón de la Copa del Rey española porque Liga EA está
+en `EUROPE_BLACKLIST`). Prioridad al capar a 64: manuales → campeones
+→ subcampeones. Se saltan las ligas NO europeas (mismo
+`EUROPE_BLACKLIST` que `_computeQualifiedFromLeagues`:
+`resto-mundo`, `liga-ea-sports`, `liga-hypermotion`,
+`liga-primera-federacion`).
+
+**Relleno con BYE**: si el pool < 64, el sorteo de 1/64
+(`_drawFirstRound`) rellena con `BYE='__BYE__'` de forma que cada BYE
+empareje con un equipo real (walkover → el real pasa directo,
+`_resolveBye` marca el match `played` con `bye:true`). Nunca
+BYE-vs-BYE mientras queden reales. De 1/32 en adelante los ganadores
+ya son potencia de 2 limpia. `_winnerOf` resuelve el walkover (lado
+BYE pierde).
+
+### Reglas a respetar (Recopa)
+
+- **PROHIBIDO** volver al bracket de 8 (Cuartos→Semis→Final) ni al
+  pool de "solo 2 manuales". Son 6 rondas / 64 equipos.
+- **PROHIBIDO** alimentar Recopa desde `ligaExt_resto-mundo` (sigue
+  en `EUROPE_BLACKLIST`). El pool es copas europeas + manuales.
+- **PROHIBIDO** hardcodear plazas: el subcampeón entra según el
+  toggle `recopaSubcampeon` de cada copa.
+- Todas las rondas son **partido único con ET + penaltis** (`_gm._isRecopa`
+  / `comp==='recopa'` → `_isRecopaSL` en gm-modal). NO meter ida/vuelta.
+- El previa-date sale del calendario vía `_mmCalLabel` (rama
+  `recopa_<phase>_<idx>` → `Recopa Europa — 1/64 … FINAL RECOPA`).
+  Toda ronda nueva debe tener su fila en `calendario.json` y su
+  entrada en ese mapa.
 
 ### Reglas a respetar
 

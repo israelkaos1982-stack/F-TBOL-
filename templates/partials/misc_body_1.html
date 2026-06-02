@@ -20124,11 +20124,52 @@ window._showSimProgress = function(opts, onDone){
        caiga al fallback dateStart en lugar de devolver huecos. */
     return arr.some(function(x){ return !!x; }) ? arr : [];
   }
+  /* Fechas de las jornadas de un torneo Road / Ronda Previa de
+     Selecciones (qualifier-route + groups-ko en slots spv*). Se leen del
+     CALENDARIO por etiqueta "Selecciones — JN" (icono 🌍 / clase ag-sel,
+     que el lector genérico excluye). El usuario asigna ahí las ventanas
+     internacionales (foto 2026-06-02: J1=21 Ago, J2=24 Ago, J3=01 Oct,
+     J4=04 Oct, J5=05 Nov, J6=08 Nov, J7=18 Feb, J8=21 Feb). Devuelve un
+     array indexado por jornada (J1→idx0). Las jornadas SIN fila en el
+     calendario quedan '' (el humano DESCANSA esas — sus byes van al final
+     vía _selArrangeHumanByesLast). Mismo patrón que _tourMundial48MatchDates. */
+  function _tourSelPreviaMatchDates(){
+    var jors = {};
+    try {
+      var host = document.getElementById('ag-content-bayern');
+      if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
+      if (host) {
+        host.querySelectorAll('.ag-r').forEach(function(r){
+          var lbl = ((r.querySelector('.ag-lbl') || {}).textContent || '').trim().toLowerCase();
+          var dt  = ((r.querySelector('.ag-date') || {}).textContent || '').trim();
+          if (!lbl || !dt) return;
+          if (lbl.indexOf('selecciones') === -1) return;   /* "Selecciones — JN" */
+          if (lbl.indexOf('mundial') !== -1) return;        /* fase final aparte */
+          var m = lbl.match(/j\s*(\d+)/);
+          if (m) jors[parseInt(m[1], 10)] = dt;
+        });
+      }
+    } catch(_){}
+    var maxJ = 0;
+    Object.keys(jors).forEach(function(k){ var n = parseInt(k, 10); if (n > maxJ) maxJ = n; });
+    if (!maxJ) return [];
+    var arr = [];
+    for (var i = 1; i <= maxJ; i++) arr.push(jors[i] || '');
+    return arr;
+  }
   function _tourMatchDates(cfg){
     var arr = [];
     if (cfg && cfg.format === 'mundial-48') {
       var mundialArr = _tourMundial48MatchDates(cfg);
       if (mundialArr && mundialArr.length) return mundialArr;
+    }
+    /* Torneos Road / Rondas Previas de Selecciones: las fechas viven en
+       las filas "Selecciones — JN" del calendario (ag-sel, que el scan
+       genérico de abajo excluye). 2026-06-02. */
+    if (cfg && (cfg.format === 'qualifier-route'
+        || (cfg.id && typeof _tvBoardOf === 'function' && _tvBoardOf(cfg.id) === 'sel-previa'))) {
+      var selArr = _tourSelPreviaMatchDates();
+      if (selArr && selArr.length) return selArr;
     }
     try {
       var host = document.getElementById('ag-content-bayern');

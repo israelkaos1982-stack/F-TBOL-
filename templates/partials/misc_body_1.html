@@ -51783,9 +51783,6 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
   /* ── Estado UI ──────────────────────────────────────────── */
   var _ui = { sideTab:'liv', readTab:'new' };
-  /* Compositor manual: se desbloquea con PIN 7477 (se recuerda durante
-     la sesión para no re-pedirlo en cada apertura del compositor). */
-  var _penUnlocked = false;
 
   /* ── API pública ────────────────────────────────────────── */
   function push(opts){
@@ -51939,8 +51936,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     +   '<div class="mmo-hdr">'
     +     '<span class="mmo-title">✉️ MENSAJES <span class="mmo-title-sub">LIVERPOOL</span>'
     +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-all" hidden></i></span>'
-    +     '<button type="button" class="mmo-pen" id="mu-msg-pen" aria-label="Escribir mensaje" title="Escribir mensaje (PIN)"'
-    +       ' style="background:none;border:none;color:#fff;opacity:.5;font-size:13px;line-height:1;cursor:pointer;padding:2px 5px;margin-right:2px;">🖍</button>'
+    +     '<button type="button" class="mmo-pen" id="mu-msg-pen" aria-label=" " title=""'
+    +       ' style="background:none;border:none;color:#fff;opacity:.18;font-size:12px;line-height:1;cursor:pointer;padding:2px 5px;margin-right:2px;">🖍</button>'
     +     '<button type="button" class="mmo-x" aria-label="Cerrar">✕</button>'
     +   '</div>'
     +   '<div class="mmo-subtabs">'
@@ -51994,17 +51991,17 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (penBtn && compEl){
       penBtn.onclick = function(ev){
         ev.stopPropagation();
-        if (!_penUnlocked){
-          var pin = prompt('Introduce el PIN para escribir mensajes:');
-          if (pin == null) return;
-          if (String(pin).trim() !== '7477'){ alert('PIN incorrecto.'); return; }
-          _penUnlocked = true;
-        }
-        compEl.hidden = !compEl.hidden;
-        if (!compEl.hidden){
-          var ti = document.getElementById('mu-cmp-title');
-          if (ti) ti.focus();
-        }
+        /* Si ya está abierto, un toque lo oculta (sin pedir PIN). */
+        if (!compEl.hidden){ compEl.hidden = true; return; }
+        /* Prompt NEUTRO + fallo SILENCIOSO: un humano que toque por
+           curiosidad solo ve "PIN" y, si falla o cancela, no ocurre
+           NADA — no se entera de que existe el compositor del admin. */
+        var pin = prompt('PIN');
+        if (pin == null) return;                       /* cancelado: silencio */
+        if (String(pin).trim() !== '7477') return;     /* incorrecto: silencio */
+        compEl.hidden = false;
+        var ti = document.getElementById('mu-cmp-title');
+        if (ti) ti.focus();
       };
       var sendBtn = document.getElementById('mu-cmp-send');
       var cancelBtn = document.getElementById('mu-cmp-cancel');
@@ -52026,14 +52023,20 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       };
     }
   }
+  function _hideCompose(){
+    var c = document.getElementById('mu-msg-compose');
+    if (c) c.hidden = true;
+  }
   function _openPop(){
     _ensureUI();
     var ov = document.getElementById('mu-msg-ov');
     if (!ov) return;
+    _hideCompose();   /* el compositor SIEMPRE arranca oculto al abrir */
     ov.removeAttribute('hidden');
     _refresh();
   }
   function _closePop(){
+    _hideCompose();   /* y queda oculto al cerrar (nadie lo ve al reabrir) */
     var ov = document.getElementById('mu-msg-ov');
     if (ov) ov.setAttribute('hidden','');
   }

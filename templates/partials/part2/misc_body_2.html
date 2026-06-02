@@ -14565,6 +14565,29 @@
        hub. En ml-cards lo hace _mlFinishMatchGen; aquí cubrimos el
        gm-modal (Copa, Recopa, Supercopa, amistosos, torneos…). */
     try { athApplyMedicalFromActa(_gm); } catch(_){}
+    /* Bandeja de mensajes — resultado (victoria/derrota/empate) +
+       lesiones/sanciones de la selección, para CUALQUIER competición
+       (no solo Liga). Hasta ahora solo la Liga generaba mensaje de
+       resultado; el usuario juega sobre todo el Mundial/torneos y no
+       veía ninguno. 2026-06-02. */
+    try {
+      if (typeof window._broadcastHumanMatchResult === 'function' && _gmHumanInvolved()){
+        var _bmk = 'gm:' + (_gm.comp || '') + ':' + (_gm._tourId || '') + ':' +
+                   (_gm._tourKey || '') + ':' +
+                   (_gm._copaRonda || _gm._scKey || _gm._recopaPhase || '') + ':' +
+                   (_gm.j != null ? _gm.j : '') + ':' + _gm.home + '-' + _gm.away;
+        window._broadcastHumanMatchResult({
+          mk: _bmk,
+          comp: (typeof _gmCompFromState === 'function') ? _gmCompFromState() : (_gm.comp || 'liga'),
+          home: _gm.home, away: _gm.away,
+          scoreA: (_gm.sc && _gm.sc.a) || 0, scoreB: (_gm.sc && _gm.sc.b) || 0,
+          penWinner: _gm.penWinner || null,
+          etScores: _gm.etScores || null,
+          events: _gm.events || [],
+          isHvH: _gm.isHvH
+        });
+      }
+    } catch(_){}
     /* Arrancar el grace period de propagación: el snapshot seguirá
        incluyendo este partido con finished=true durante
        FINISHED_PROPAGATE_MS para que los otros dispositivos lo vean

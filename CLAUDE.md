@@ -1709,6 +1709,59 @@ amarillas, NO generan sanción y NO consumen sanción. CompKeys:
 - No reintroducir sorteos `0.5 ? 1 : 2` o rangos 2-8 — están
   obsoletos desde 2026-05-23.
 
+## Toda caja de humano nueva HEREDA los códigos de sanción/lesión (obligatorio, 2026-06-02)
+
+Petición usuario 2026-06-02: cuando se cree una **caja de humano**
+nueva (un club marcado como humano: Arsenal🇧🇷=Brasil, Atlético🇳🇴=
+Noruega, etc., los 6 del `MISTERS_REGISTRY`), **TODOS los códigos de
+sanción y lesión deben aplicarse también a esa plantilla**, igual que
+al Liverpool, y de forma **acumulativa cross-competición** para ese club.
+
+### El motor ya es genérico por equipo — NO hardcodear al Liverpool
+
+- `calcularSancionesPartido(events, humanTeam, teamName, comp)` y
+  `procesarSancionesPostPartido` trabajan con el **nombre de equipo que
+  reciben**. Los contadores son **por jugador::equipo**
+  (`YELLOW_STORE.__global`, `SANCION_STORE.__global`) → cada club acumula
+  independientemente. Aplica a CUALQUIER club reconocido como humano.
+- **Detección de club humano**: usar SIEMPRE `window._isHumanClubCanonico(name)`
+  (alias-safe, registro `MISTERS_HUMANOS`) y/o el `isHuman` LIVE de
+  `ligaExt_liga-ea-sports`. **PROHIBIDO** gatear con listas exactas
+  cacheadas al load (rompen con grafías/alias y con cajas nuevas). El
+  overlay de lesión de `_generarLesionHumano` ya combina ambos
+  (`_EQUIPOS_HUMANOS` live ∪ `_isHumanClubCanonico`).
+
+### El hub pivota sobre UN resolver de "club activo"
+
+Todo el hub (`s-munich`) resuelve su club vía **una sola fuente**:
+`window._mkHubTeamName` / `_psHumanLogicName()` (lógico) y
+`_psHumanName()` / `_psHumanShield()` (visual). Helpers ya dinámicos
+que NO están atados al Liverpool: `_bayernSquad()` (lee
+`_psHumanLogicName()`), `_athHubTeam()` (lee `_mkHubTeamName`),
+`_athInjuredForHub()`, el overlay BAJAS (`_ppGetCurrentMatchTeams` lee
+el DOM del partido). Para dar a una caja nueva su **hub completo
+propio** (calendario, card "Próximo partido", overlay BAJAS,
+entrenamiento, menú médico), se alimenta ese resolver con el club de la
+caja — NO se duplica lógica ni se hardcodea el nombre.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** hardcodear `/bayern/i`, `'Liverpool'`, `'Bayern
+   Munich'` (ni ningún club concreto) en código nuevo de sanción /
+   lesión / hub. Resolver SIEMPRE vía `_psHumanLogicName()` /
+   `_mkHubTeamName` (club del hub) o el `teamName` del partido.
+2. **PROHIBIDO** gatear "¿es humano?" con una lista exacta cacheada.
+   Usar `_isHumanClubCanonico` (alias-safe) ∪ `isHuman` live.
+3. **Cada club acumula lo suyo**: las stores son por `jugador::equipo`,
+   nunca globales-de-un-solo-club. No mezclar contadores entre cajas.
+4. Las **selecciones** de cada caja (Francia/Brasil/Inglaterra/Noruega/
+   Argentina/España) siguen su propio motor `_sel*` (cuenta única `'sel'`
+   por selección, ver sección de Selecciones). Club y selección de un
+   mismo mister NO comparten contador (sistemas paralelos).
+5. Al construir el **hub propio** de una caja nueva, reutilizar los
+   helpers existentes parametrizados por el resolver de club activo; no
+   clonar `s-munich` con nombres hardcodeados.
+
 ## Humanidad por competición (obligatorio, 2026-05-10)
 
 **Un equipo puede ser HUMANO en una competición y IA en otra.** No

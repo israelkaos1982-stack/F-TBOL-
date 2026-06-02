@@ -16279,6 +16279,19 @@ window._showSimProgress = function(opts, onDone){
   .tour-stats-jbtn .tsb-arr{
     font-size:14px;color:#e6d4ff !important;text-shadow:0 0 10px rgba(180,120,255,.9);
   }
+  /* Variante VERDE-TEAL esmeralda para los Torneos de Verano (Joan
+     Gamper, Asian, …) — mismo tono que la pantalla s-tour-stats que
+     abre (petición usuario 2026-06-02: "cajas estadísticas … en color
+     verdoso"). El morado se reserva para Selecciones.               */
+  .tour-stats-jbtn.is-verano{
+    background:linear-gradient(135deg,#00221d 0%,#005c4e 24%,#0a9f86 50%,#2dd4bf 72%,#0a9f86 85%,#00221d 100%) !important;
+    border:1.5px solid #3fe0c8 !important;
+    box-shadow:0 4px 18px rgba(45,212,191,.42),inset 0 1px 0 rgba(255,255,255,.16) !important;
+  }
+  .tour-stats-jbtn.is-verano:hover{box-shadow:0 6px 24px rgba(45,212,191,.65),inset 0 1px 0 rgba(255,255,255,.22) !important;}
+  .tour-stats-jbtn.is-verano .tsb-emoji{filter:drop-shadow(0 0 6px rgba(150,240,210,.8));}
+  .tour-stats-jbtn.is-verano .tsb-label{text-shadow:0 0 14px rgba(150,240,210,.6),0 1px 2px rgba(0,0,0,.7);}
+  .tour-stats-jbtn.is-verano .tsb-arr{color:#d6fff5 !important;text-shadow:0 0 10px rgba(45,212,191,.9);}
   /* Caja "📤 RAMIFICACIÓN" del formato qualifier-route. Marco morado/
      magenta (tema Selecciones · destino) con sub-secciones por
      posición (1ºs, 2ºs, … extras). Botón "Enviar clasificados" usa
@@ -20505,8 +20518,10 @@ window._showSimProgress = function(opts, onDone){
      Petición usuario 2026-05-24: "no es desplegable, es una caja que
      al pulsar se abre parecido a la foto 2".                       */
   function _tourStatsBtnHtml(tourId){
+    var _verano = false;
+    try { _verano = (typeof _tvBoardOf === 'function') && _tvBoardOf(tourId) === 'verano'; } catch(_){}
     return '<div style="padding:0 12px;margin:8px 0 10px;">'
-         +   '<button type="button" class="tour-stats-jbtn" '
+         +   '<button type="button" class="tour-stats-jbtn'+(_verano?' is-verano':'')+'" '
          +     'onclick="window._tourStatsOpen&amp;&amp;window._tourStatsOpen(\''+tourId+'\')">'
          +     '<span class="tsb-emoji">📊</span>'
          +     '<span class="tsb-label">Estadísticas</span>'
@@ -20756,14 +20771,19 @@ window._showSimProgress = function(opts, onDone){
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
     if (flagEl  && cfg.flag) flagEl.innerHTML    = _tourFlagHtml(cfg.flag, 'sec-flag-img');
     if (!infoEl) return;
-    /* Botón "📊 Estadísticas" sólo en torneos de Selecciones (spv* /
-       sfn*) — y NO para `mundial-48`, que ya incluye la entrada de
-       Estadísticas en su propio menú de 7 cajas. Verano + Mundialito
-       tienen sus propias pantallas dedicadas (s-torneos-stats,
-       s-mundial-stats), no añadir botón ahí.                       */
+    /* Botón "📊 Estadísticas" en torneos de Selecciones (spv*/sfn*) y en
+       los Torneos de Verano (Joan Gamper, Asian, …, tx*). NO para
+       `mundial-48` (ya incluye Estadísticas en su menú de 7 cajas) ni
+       para el Mundialito de Clubes (id 'mundial', pantalla propia
+       s-mundial-stats). Abre la pantalla dedicada `s-tour-stats` (paleta
+       VERDE-TEAL esmeralda) que computa las stats EN VIVO desde
+       cfg.results del propio torneo → se actualizan partido a partido
+       (petición usuario 2026-06-02: "cajas estadísticas para los torneos
+       de verano, en color verdoso, que vayan actualizándose"). */
     var _statsBoard = (typeof _tvBoardOf === 'function') ? _tvBoardOf(id) : null;
-    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final')
-                        && (cfg.format !== 'mundial-48');
+    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final'
+                         || _statsBoard === 'verano')
+                        && (cfg.format !== 'mundial-48') && (id !== 'mundial');
     var _statsBoxHtml = _statsAllowed ? _tourStatsBtnHtml(id) : '';
     var teams = cfg.teams || [];
     if (!teams.length) {

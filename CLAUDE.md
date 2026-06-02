@@ -1418,11 +1418,18 @@ Notas:
 - **Sanciones simultáneas → solo se aplica la MAYOR** (no se suman
   como en clubes). Si llega una sanción menor mientras hay una mayor
   pendiente, se descarta.
-- **Reset entre torneos automático**: los stores se anidan por
-  `torneoKey` (`'sel-clasif'` para J1-J10, `'sel-mundial'` para la
-  fase final). Las amarillas de la clasificación NO viajan al
-  Mundial y viceversa. Helper manual:
-  `window._selResetTorneo('sel-clasif' | 'sel-mundial')`.
+- **SIN reset entre torneos — cuenta ÚNICA y continua (2026-06-02)**:
+  todos los stores usan la key única `'sel'`. Amarillas sueltas, ciclos
+  de 2, expulsiones (roja/doble amarilla) y lesiones **NUNCA** se
+  resetean entre torneos: viajan al siguiente partido que juegue la
+  selección, sea clasificación o Mundial. Ejemplo canónico: Francia
+  eliminada en cuartos del Mundial 2032 con un expulsado / 2 amarillas
+  acumuladas → la sanción se cumple en **Selecciones J1** (21 sep) de la
+  siguiente clasificación (misma selección, mismos jugadores).
+  `torneoKeyFor(compKey)` devuelve `'sel'` para `sel`/`sel-fin`/`torneo`
+  (mundial-48). Migración `_migrateLegacyTorneoKeys` fusiona los buckets
+  legacy `sel-clasif`+`sel-mundial` en `'sel'` (idempotente). Helper
+  manual de borrado total: `window._selResetTorneo('sel')`.
 - **No hay amistosos de selección** — el sistema solo aplica a
   partidos oficiales. Si en el futuro se añaden amistosos de
   selección, irán por `compKey='amistoso'` (ya excluido por
@@ -1430,8 +1437,9 @@ Notas:
 
 ### Stores y persistencia
 
-- `window.YELLOW_STORE_SEL[torneoKey][selName][playerName] = { count }`
-- `window.SANCION_STORE_SEL[torneoKey][selName] = [ { name, remaining, reason, tipo } ]`
+- `window.YELLOW_STORE_SEL['sel'][selName][playerName] = { count }`
+- `window.SANCION_STORE_SEL['sel'][selName] = [ { name, remaining, reason, tipo } ]`
+  (key única `'sel'` desde 2026-06-02 — clasif + Mundial comparten bucket)
 - `window.LESION_STORE_SEL[selName][playerName] = { remaining, reason, timestamp }`
   (NO se anida por torneo — una lesión "sobrevive" entre clasif y
   Mundial; se decrementa partido a partido independientemente).
@@ -1447,7 +1455,7 @@ Persistencia en `localStorage` clave `ftbol_sel_sanciones_v1`
 window._esSelHumana(name)
 window._canonSelHumana(name)        // 'francia' → 'Francia'
 window._esCompSel(compKey)
-window._selTorneoKey(compKey)        // 'sel-clasif' | 'sel-mundial' | null
+window._selTorneoKey(compKey)        // 'sel' (única) | null
 window._selCalcularSancionesPartido(events, humanTeam, teamName, compKey)
 window._selAddSancion(torneoKey, selName, playerName, reason, partidos, tipo)
 window._selCumplirSancion(torneoKey, selName, playerName)
@@ -1502,10 +1510,13 @@ sistema de clubes para enrutar al motor SEL cuando `esCompSel(comp)
 4. **No introducir amistosos de selección** sin acordarlo. El
    usuario explícitamente dijo "no hay amistosos de selecciones, y
    en el caso de haber no cuentan" — quedan excluidos del cómputo.
-5. **No olvidar el reset por torneo.** La separación por
-   `torneoKey` es lo que hace que un nuevo torneo arranque en cero.
-   Si se añade un nuevo torneo de selecciones (ej. Eurocopa),
-   `_selTorneoKey` debe devolver una key distinta para él.
+5. **PROHIBIDO reintroducir el reset/separación por torneo** (los
+   antiguos `'sel-clasif'` / `'sel-mundial'`). La cuenta es ÚNICA y
+   continua (`'sel'`): las sanciones/lesiones de una selección DEBEN
+   viajar al siguiente partido que juegue, sea del torneo que sea
+   (petición usuario 2026-06-02, "todo es acumulable siempre que juegue
+   la selección"). Si se añade un torneo nuevo de selecciones (ej.
+   Eurocopa), `_selTorneoKey` debe seguir devolviendo `'sel'` para él.
 
 ## Balón fijo Selecciones por jornada (obligatorio, 2026-05-24)
 

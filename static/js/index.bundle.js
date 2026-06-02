@@ -12148,9 +12148,10 @@ window._fallbackSq11 = function(){
 
    Sistema PARALELO al de clubes. NO se cruzan: un jugador sancionado en
    su selección puede jugar con su club, y viceversa. Cada selección tiene
-   su propio contador y su propia cola de sanciones, anidados por torneo
-   (clasificación J1-J10 vs Mundial fase final) para que las amarillas
-   de un torneo no salten al siguiente.
+   UNA cuenta ÚNICA y CONTINUA (contador de amarillas + cola de sanciones +
+   lesiones) que NUNCA se resetea entre torneos: las sanciones viajan de la
+   clasificación al Mundial y del Mundial a la siguiente clasificación
+   (misma selección, mismos jugadores). Petición usuario 2026-06-02.
 
    Selecciones humanas (6): Francia💡, Brasil🐭, Inglaterra🔨, Noruega✏️,
    Argentina😈, España🦆.
@@ -12163,7 +12164,8 @@ window._fallbackSq11 = function(){
       petición usuario 2026-06-02). NO 2-15 como clubes.
    5. Acumulación de amarillas → cada 2 = 1 partido (ciclo 2, NO 3).
    6. Sanciones simultáneas → solo se aplica la MAYOR (no se suman).
-   7. Reset entre torneos automático (clasif vs Mundial = stores distintos).
+   7. SIN reset entre torneos: cuenta continua mientras juegue la selección
+      (2026-06-02; antes clasif vs Mundial eran stores distintos).
    8. No hay amistosos de selección — no se contemplan.
    ═══════════════════════════════════════════════════════════════════════ */
 (function(){
@@ -12219,21 +12221,25 @@ window._fallbackSq11 = function(){
   }
   window._esCompSel = esCompSel;
 
-  /* Torneo key para anidar stores. Clasificación (J1-J10) y Mundial fase
-     final son torneos distintos → los ciclos de amarillas NO se cruzan. */
+  /* Torneo key para anidar stores. 2026-06-02: cuenta ÚNICA y continua por
+     selección — clasificación (J1-J10) y Mundial fase final comparten el
+     MISMO bucket ('sel') para que las sanciones/ciclos/lesiones viajen al
+     siguiente partido que juegue la selección, sea del torneo que sea
+     (Francia eliminada en cuartos del Mundial cumple en Selecciones J1). */
+  var SEL_KEY = 'sel';
   function torneoKeyFor(compKey){
-    if (compKey === 'sel') return 'sel-clasif';
-    if (compKey === 'sel-fin') return 'sel-mundial';
-    if (compKey === 'torneo' && esCompSel(compKey)) return 'sel-mundial';
+    if (compKey === 'sel' || compKey === 'sel-fin') return SEL_KEY;
+    if (compKey === 'torneo' && esCompSel(compKey)) return SEL_KEY;
     return null;
   }
   window._selTorneoKey = torneoKeyFor;
 
   // ── Stores paralelos ─────────────────────────────────────────────
-  /* YELLOW_STORE_SEL[torneoKey][selName][playerName] = { count: N }
-     SANCION_STORE_SEL[torneoKey][selName] = [ { name, remaining, reason, tipo } ]
+  /* YELLOW_STORE_SEL['sel'][selName][playerName] = { count: N }
+     SANCION_STORE_SEL['sel'][selName] = [ { name, remaining, reason, tipo } ]
      LESION_STORE_SEL[selName][playerName] = { remaining, reason, timestamp }
-     Lesiones NO se anidan por torneo (sobreviven entre clasif y Mundial). */
+     2026-06-02: cuenta ÚNICA — todo vive bajo la key 'sel' (clasif + Mundial
+     comparten bucket). Lesiones nunca se anidaron por torneo. */
   window.YELLOW_STORE_SEL  = window.YELLOW_STORE_SEL  || {};
   window.SANCION_STORE_SEL = window.SANCION_STORE_SEL || {};
   window.LESION_STORE_SEL  = window.LESION_STORE_SEL  || {};
@@ -12265,7 +12271,69 @@ window._fallbackSq11 = function(){
       _lastSer = raw;
     } catch(_){}
   }
+
+  /* ── Migración 2026-06-02: fusionar los buckets legacy por torneo
+     ('sel-clasif' + 'sel-mundial') en la cuenta ÚNICA 'sel'. Sin esto,
+     las sanciones del Mundial ya guardadas se quedarían huérfanas y no
+     aparecerían cuando la selección juega la siguiente clasificación.
+     Idempotente: tras correr borra las keys legacy (no vuelve a fusionar). */
+  function _migrateLegacyTorneoKeys(){
+    var legacy = ['sel-clasif', 'sel-mundial'];
+    var ys = window.YELLOW_STORE_SEL  = window.YELLOW_STORE_SEL  || {};
+    var ss = window.SANCION_STORE_SEL = window.SANCION_STORE_SEL || {};
+    var hasLegacy = legacy.some(function(k){ return ys[k] || ss[k]; });
+    if (!hasLegacy) return;
+    var dstY = ys[SEL_KEY] = ys[SEL_KEY] || {};
+    var dstS = ss[SEL_KEY] = ss[SEL_KEY] || {};
+    function _mergeSancion(selName, s){
+      var dq = dstS[selName] = dstS[selName] || [];
+      var ex = null;
+      for (var i = 0; i < dq.length; i++) { if (dq[i].name === s.name) { ex = dq[i]; break; } }
+      var rem = parseInt(s.remaining, 10) || 1;
+      if (ex) { if (rem > (parseInt(ex.remaining,10) || 0)) { ex.remaining = rem; ex.reason = s.reason; ex.tipo = s.tipo; } }
+      else { dq.push({ name:s.name, team:s.team||selName, reason:s.reason, remaining:rem, tipo:s.tipo }); }
+    }
+    legacy.forEach(function(lk){
+      var srcY = ys[lk];
+      if (srcY) {
+        Object.keys(srcY).forEach(function(selName){
+          var players = srcY[selName] || {};
+          var dSel = dstY[selName] = dstY[selName] || {};
+          Object.keys(players).forEach(function(pn){
+            var c = (players[pn] && parseInt(players[pn].count,10)) || 0;
+            var cur = dSel[pn] = dSel[pn] || { count: 0 };
+            cur.count += c;
+          });
+        });
+        delete ys[lk];
+      }
+      var srcS = ss[lk];
+      if (srcS) {
+        Object.keys(srcS).forEach(function(selName){
+          (srcS[selName] || []).forEach(function(s){ _mergeSancion(selName, s); });
+        });
+        delete ss[lk];
+      }
+    });
+    /* Normalizar: si un jugador acumuló ≥2 amarillas al fusionar (1+1),
+       eso es un ciclo cumplido → suspensión de 1 partido, count = resto. */
+    Object.keys(dstY).forEach(function(selName){
+      var players = dstY[selName];
+      Object.keys(players).forEach(function(pn){
+        var c = parseInt(players[pn].count,10) || 0;
+        while (c >= 2) {
+          c -= 2;
+          _mergeSancion(selName, { name:pn, team:selName, remaining:1,
+            reason:'Ciclo amarillas — 1 partido', tipo:'acumulacion' });
+        }
+        players[pn].count = c;
+      });
+    });
+    _persist();
+  }
+
   _load();
+  _migrateLegacyTorneoKeys();
   try {
     setInterval(_persist, 5000);
     window.addEventListener('beforeunload', _persist);

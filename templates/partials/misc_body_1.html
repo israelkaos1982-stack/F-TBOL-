@@ -43660,7 +43660,14 @@ https://api.sofascore.app/api/v1/team/44/image
   #s-munich .munich-comp-chip .munich-comp-ico{
     font-size:22px;line-height:1;height:28px;display:flex;align-items:center;justify-content:center;
   }
-  #s-munich .munich-comp-chip .munich-comp-ico img{width:24px;height:24px;object-fit:contain;}
+  /* Logos oficiales sobre teja blanca redondeada: garantiza contraste
+     de escudos oscuros (Copa azul marino, cup negro de Supercopa…) sobre
+     el chip casi negro. Solo afecta a <img> (logos), no a los emoji. */
+  #s-munich .munich-comp-chip .munich-comp-ico img{
+    width:26px;height:26px;object-fit:contain;
+    background:#fff;border-radius:6px;padding:2px;box-sizing:border-box;
+    box-shadow:0 0 0 1px rgba(255,255,255,.18);
+  }
   #s-munich .munich-comp-chip .munich-comp-lbl{
     font-family:Rajdhani,sans-serif;font-size:10px;font-weight:700;
     color:#fff;text-align:center;line-height:1.12;letter-spacing:.3px;
@@ -45934,7 +45941,7 @@ https://api.sofascore.app/api/v1/team/44/image
           if (r === 'done' || r === 'out') status = 'done';
         } catch(_){}
       }
-      out.push({ status:status, label:def.label, emoji:def.emoji, screen:def.screen });
+      out.push({ id:def.id, status:status, label:def.label, emoji:def.emoji, screen:def.screen });
     });
     /* Superliga vive fuera del modal del calendario — la añadimos
        sólo si el equipo está inscrito en `superliga_teams_v1`. */
@@ -45944,6 +45951,7 @@ https://api.sofascore.app/api/v1/team/44/image
         var slSt = _loadJSON('superliga_state_v1');
         var slCh = slSt && (slSt.champion || slSt.campeon);
         out.push({
+          id:'superliga',
           status: _statusFromChamp(slCh, aliases),
           label:'Superliga', emoji:'🌟', screen:'s-superliga-clas'
         });
@@ -45999,6 +46007,33 @@ https://api.sofascore.app/api/v1/team/44/image
     }, true);
   })();
 
+  /* ── Logos oficiales de cada competición (PNG en static/img/comp/).
+     Si hay logo para el chip se pinta como <img>; si la imagen falla al
+     cargar (onerror) se cae automáticamente al emoji. El admin puede
+     sobrescribir cualquiera subiendo su icono desde la pantalla
+     COMPETICIONES (`comp_icons_v1`, sincronizado entre dispositivos),
+     que tiene prioridad sobre el PNG por defecto.
+     Las entradas de `_CHIP_LOGO_FILES` se van añadiendo conforme se
+     suben los PNG al repo — un chip sin entrada (y sin override) sigue
+     mostrando su emoji, sin lanzar peticiones 404. */
+  var _CHIP_LOGO_BASE = '/static/img/comp/';
+  var _CHIP_LOGO_FILES = {
+    /* id → fichero. Un chip sin entrada (y sin override) muestra su emoji. */
+    liga:'liga-ea.png',
+    copa:'copa-rey.png',
+    'sup-esp':'supercopa-esp.png'
+  };
+  function _chipLogoSrc(id, label){
+    /* 1) override del admin por label (comp_icons_v1, dataURI o URL). */
+    try {
+      var icons = JSON.parse(localStorage.getItem('comp_icons_v1') || '{}');
+      if (icons && label && icons[label]) return icons[label];
+    } catch(_){}
+    /* 2) PNG oficial por defecto del repo. */
+    var f = id && _CHIP_LOGO_FILES[id];
+    return f ? (_CHIP_LOGO_BASE + f) : '';
+  }
+
   function _render(){
     var row = document.getElementById('munich-comps-row');
     if (!row) return;
@@ -46014,9 +46049,15 @@ https://api.sofascore.app/api/v1/team/44/image
       var stTxt = (it.status === 'done') ? 'Finalizada'
                 : (it.status === 'out')  ? 'Eliminado'
                 :                          'En juego';
+      var logo = _chipLogoSrc(it.id, it.label);
+      var ico = logo
+        ? '<img src="' + _esc(logo) + '" alt="" '
+          + 'onerror="this.style.display=\'none\';var s=this.nextSibling;if(s)s.style.display=\'\';">'
+          + '<span style="display:none;">' + _esc(it.emoji) + '</span>'
+        : _esc(it.emoji);
       return ''
         + '<div class="munich-comp-chip ' + it.status + '"' + clk + ' role="button" tabindex="0">'
-        +   '<div class="munich-comp-ico">' + _esc(it.emoji) + '</div>'
+        +   '<div class="munich-comp-ico">' + ico + '</div>'
         +   '<div class="munich-comp-lbl">' + _esc(it.label) + '</div>'
         +   '<div class="munich-comp-status">' + stTxt + '</div>'
         + '</div>';

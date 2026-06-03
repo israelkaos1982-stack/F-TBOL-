@@ -1,5 +1,65 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Sedes por torneo en la PREVIA + self-heal anti-pantalla-negra (obligatorio, 2026-06-03)
+
+**Bug 1 (foto usuario «Road Copa Asia/América»)**: un torneo de
+Selecciones (Rondas Previas) tenía **4 sedes elegidas** en el editor
+(`cfg.stadiums` = Estadio Banorte, El Volcán, Olímpico Universitario,
+MorumbIS) pero la **PANTALLA DE PREVIA** mostraba «🏟️ eFootball
+Stadium» — un estadio que NO estaba entre los 4.
+
+### Causa raíz (sedes)
+
+`_renderPreviaMeta` (en `static/js/index.bundle.js`) SÍ resolvía la
+sede del torneo por hash del matchKey (rotación entre `cfg.stadiums`),
+pero **`_mmInjectEnv`** —que **repinta `#pp-env` 60 ms después** con el
+clima/fecha del calendario— **REconstruía el estadio sin la rama de
+`cfg.stadiums`**: caía a `getTeamStadium(local)` y, como las
+selecciones no tienen estadio, a `'eFootball Stadium'`. Así pisaba la
+sede correcta que `_renderPreviaMeta` ya había puesto.
+
+### Fix (sedes)
+
+- Helper ÚNICO `window._previaTourStadium(fallbackKey)`: rota por hash
+  del `tourKey`/matchKey entre `cfg.stadiums` no vacíos del torneo de
+  la previa actual (`_ppPreviaTeams.tourId`). Lo usan **AMBOS**
+  `_renderPreviaMeta` y `_mmInjectEnv`, con la **MISMA prioridad**:
+  `sc/sc-final` → **sedes del torneo** → `sel_fin_stadiums_v1` →
+  `getTeamStadium(local)` → `eFootball Stadium`.
+- **PROHIBIDO** que `_mmInjectEnv` (o cualquier repintado del env)
+  resuelva el estadio sin pasar por `_previaTourStadium` primero. Las
+  sedes de `cfg.stadiums` GANAN sobre `sel_fin_stadiums_v1` y sobre el
+  estadio del local (regla 2026-06-01).
+
+**Bug 2 (foto usuario, pantalla negra)**: al pulsar **cualquier
+caja/card** de un torneo de Selecciones la pantalla destino aparecía en
+**NEGRO** y había que pulsar «atrás» en el móvil para verla.
+
+### Causa raíz (pantalla negra)
+
+Un overlay modal fullscreen (PREVIA `#prepartido-overlay`, BAJAS
+`#sancion-overlay`, alias `#_copaAliasOv`) quedaba con `.show` de un
+flujo anterior; su fondo casi-opaco (`rgba(0,0,6,.97)`) tapaba la nueva
+pantalla. El `_blackScreenSafetyNet` documentado SÓLO limpia en
+page-load / `pageshow` — nunca en navegación SPA. Por eso «atrás» (que
+re-renderiza / re-dispara el cleanup) era el único modo de recuperarla.
+
+### Fix (pantalla negra)
+
+`renderScreen` (router en `index.bundle.js`) hace **self-heal en CADA
+navegación SPA real** (cambio de pantalla, no refresco in-place ni
+`window._iaRefreshInPlace`): cierra los overlays modales huérfanos
+(`prepartido-overlay`, `sancion-overlay`, `_copaAliasOv`) y garantiza
+que SIEMPRE haya una `.screen.active`.
+
+- **PROHIBIDO** cerrar en este self-heal los splash/intro
+  (`ucl-intro`, `comp-flash`, celebración, `sc-champion-ov`) ni el
+  `gm-modal` de un partido vivo: el primero lo muestra el propio `go()`
+  con su temporizador; el segundo es un partido en curso. El cierre se
+  limita a overlays modales que sólo se abren vía `showPrePartidoOverlay`
+  / `showSancionOverlay` (nunca vía `go()`), así que cerrarlos al
+  navegar a OTRA pantalla siempre es correcto.
+
 ## Registro de torneos (Rondas Previas/Finales) — FUSIÓN, NUNCA se pierden entre dispositivos (obligatorio, 2026-06-03)
 
 **Bug (foto usuario 2026-06-03)**: en la pantalla `🌐 Selecciones`

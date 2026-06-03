@@ -1935,6 +1935,30 @@ verano. También fuera: Previa Champions / Open Qualifier / Wild Card
    recalibración de la fórmula del editor se propaga sola a la
    plantilla del hub. No duplicar la fórmula.
 
+### Toggle escudo CLUB ↔ SELECCIÓN (2026-06-03)
+
+La cabecera de `#s-bayern-plantilla` muestra **dos escudos** arriba a
+la derecha (`#bplant-crest-toggle`): el del **club** del hub (Liverpool)
+y el de su **selección** (Francia). Pulsando cada escudo emerge la
+plantilla de ese equipo en el MISMO layout `lext-sq-*`.
+
+- El mapa club→selección sale de `window._mhFindMister(_hubTeamName())`
+  (`.seleccion`), así que **generaliza a cualquier caja de humano**
+  (Arsenal→Brasil, Atlético→Noruega, …). Fallback `'Francia'`.
+- Estado en `window._bplantView` (`'club'` | `'sel'`), toggle vía
+  `window._bplantSetView(v)`. Default `'club'`.
+- La **vista selección** (`_renderSelView`) reutiliza `_section`/`_rowFor`
+  con un **ctx** `{statsFor, notaFor}` que lee `ef_player_stats_sel_v1`
+  (filtrado a la selección). La nota de selección es la del único comp
+  `'sel'` (no se promedia entre varias). El layout (GOLES único + NOTA)
+  es idéntico al del club por el grid scopeado a `#s-bayern-plantilla`.
+- Escudo del club: `_findBayernRow().shield/img` → `getTeamLogoUrl`.
+  Escudo de la selección: `t.img` del store `selecciones_squad_v1`
+  (`_selSquadLoad`) → `getTeamLogoUrl` → bandera emoji (`_SEL_FLAGS`).
+- **PROHIBIDO** duplicar el layout de fila: la vista selección usa el
+  MISMO `_rowFor`/`_section` parametrizados por `ctx`. Toda columna
+  nueva se añade una sola vez.
+
 ## Toda caja de humano nueva HEREDA los códigos de sanción/lesión (obligatorio, 2026-06-02)
 
 Petición usuario 2026-06-02: cuando se cree una **caja de humano**

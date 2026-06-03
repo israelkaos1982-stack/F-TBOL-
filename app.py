@@ -3611,7 +3611,7 @@ def estadisticas():
     def top(counter):
         return sorted(counter.items(), key=lambda x: x[1], reverse=True)
 
-    return render_template(
+    resp = make_response(render_template(
         "estadisticas.html",
         goles=top(goles_counter),
         amarillas=top(amarillas_counter),
@@ -3620,7 +3620,11 @@ def estadisticas():
         penaltis_fallados=top(penaltis_fallados_counter),
         faltas_gol=top(faltas_gol_counter),
         autogoles=top(autogoles_counter),
-    )
+    ))
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/reiniciar")

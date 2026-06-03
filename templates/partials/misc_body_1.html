@@ -22170,7 +22170,17 @@ window._showSimProgress = function(opts, onDone){
       if (!slice.length) break;
       slices.push(slice);
       var gKey = 'g'+g+'_';
-      if (!cfg.groupFixtures[g]) {
+      /* Reconstruir el fixture si falta O si quedó OBSOLETO al
+         reconfigurar el torneo (de N a M equipos, o cambio de
+         swissRounds/doble vuelta) y no hay partidos jugados que perder.
+         Sin esto el render reutilizaba el round-robin viejo → "3
+         jornadas, solo 4 equipos" (bug Joan Gamper suizo 2026-06-03). */
+      var _rebuildFix = !cfg.groupFixtures[g];
+      if (!_rebuildFix && _tourFixtureStale(cfg.groupFixtures[g], slice, fc)
+          && !_tourGroupHasPlayed(cfg, gKey)) {
+        _rebuildFix = true;
+      }
+      if (_rebuildFix) {
         var _gFix = _tourBuildRoundRobin(slice.map(function(_,i){return i;}));
         /* Doble vuelta (grupos-ko / liga+playoff): cada rival 2 veces. */
         if (fc.groupDoubleLegs) _gFix = _tourDoubleFixture(_gFix);
@@ -22178,6 +22188,7 @@ window._showSimProgress = function(opts, onDone){
            juega N rivales distintos, sin repetir. */
         if (fc.swissRounds && fc.swissRounds < _gFix.length) _gFix = _gFix.slice(0, fc.swissRounds);
         cfg.groupFixtures[g] = _gFix;
+        try { window._tourSave(tourId, cfg); } catch(_){}
       }
       if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
       var fix = cfg.groupFixtures[g];
@@ -25122,6 +25133,58 @@ window._showSimProgress = function(opts, onDone){
     return fixture.concat(second);
   }
 
+  /* ¿El fixture cacheado de un grupo/liga sigue cuadrando con la config
+     ACTUAL (nº de equipos del slice + swissRounds + doble vuelta)?
+     Devuelve true si está OBSOLETO. Caso canónico: el torneo se
+     reconfiguró de N a M equipos (o cambió `swissRounds`) pero
+     `groupFixtures[g]` quedó con el round-robin viejo → en la pantalla
+     salían menos jornadas de las pedidas y solo jugaban los primeros
+     equipos (bug Joan Gamper suizo 2026-06-03, foto usuario: tabla con
+     16 equipos pero 3 jornadas y solo 4 equipos en los partidos).
+     El round-robin de los torneos de verano es determinista (sin
+     reordenado de byes), así que basta comparar longitud + cobertura. */
+  function _tourFixtureStale(fix, slice, fc){
+    try {
+      if (!Array.isArray(fix) || !fix.length) return true;
+      var n = slice.length;
+      if (n < 2) return false;
+      fc = fc || {};
+      /* Jornadas esperadas del round-robin (circle method): N par → N-1,
+         N impar → N (bye). Doble vuelta dobla; suizo recorta a swissRounds. */
+      var rrRounds = (n % 2 === 0) ? (n - 1) : n;
+      var expLen = fc.groupDoubleLegs ? rrRounds * 2 : rrRounds;
+      if (fc.swissRounds && fc.swissRounds < expLen) expLen = fc.swissRounds;
+      if (fix.length !== expLen) return true;
+      /* Cobertura: todo índice 0..n-1 debe aparecer y ninguno fuera de rango. */
+      var seen = {};
+      for (var j = 0; j < fix.length; j++){
+        var jor = fix[j] || [];
+        for (var k = 0; k < jor.length; k++){
+          var h = jor[k].home, a = jor[k].away;
+          if (h >= n || a >= n || h < 0 || a < 0) return true;
+          seen[h] = 1; seen[a] = 1;
+        }
+      }
+      for (var i = 0; i < n; i++){ if (!seen[i]) return true; }
+      return false;
+    } catch(_){ return true; }
+  }
+
+  /* ¿Hay algún resultado YA JUGADO en este grupo/liga? Gatea la
+     reconstrucción de un fixture obsoleto: si no hay nada jugado,
+     reconstruir es seguro (no se pierde progreso). */
+  function _tourGroupHasPlayed(cfg, gKey){
+    try {
+      var res = cfg && cfg.results;
+      if (!res) return false;
+      var keys = Object.keys(res);
+      for (var i = 0; i < keys.length; i++){
+        if (keys[i].indexOf(gKey) === 0 && res[keys[i]] && res[keys[i]].played) return true;
+      }
+      return false;
+    } catch(_){ return false; }
+  }
+
   /* Asegura `cfg.groupFixtures` (todos los grupos) si faltan, con el
      MISMO builder canónico (`_tourBuildRoundRobin`) y la misma config
      (groupDoubleLegs / swissRounds) que el render de la pantalla del
@@ -25156,7 +25219,15 @@ window._showSimProgress = function(opts, onDone){
       for (var g = 0; g < nGroups; g++) {
         var slice = teams.slice(g*perGroup, (g+1)*perGroup);
         if (slice.length < 2) break;
-        if (!cfg.groupFixtures[g]) {
+        var _gKey = 'g'+g+'_';
+        /* Igual que el render: reconstruir si falta o quedó obsoleto
+           (reconfig de equipos / swissRounds) sin partidos jugados. */
+        var _need = !cfg.groupFixtures[g];
+        if (!_need && _tourFixtureStale(cfg.groupFixtures[g], slice, fc)
+            && !_tourGroupHasPlayed(cfg, _gKey)) {
+          _need = true;
+        }
+        if (_need) {
           var _gFix = _tourBuildRoundRobin(slice.map(function(_, i){ return i; }));
           if (fc.groupDoubleLegs) _gFix = _tourDoubleFixture(_gFix);
           if (fc.swissRounds && fc.swissRounds < _gFix.length) _gFix = _gFix.slice(0, fc.swissRounds);

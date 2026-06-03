@@ -2024,7 +2024,7 @@ window._showSimProgress = function(opts, onDone){
 
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button></div>
+  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button><div id="bplant-crest-toggle" style="margin-left:auto;display:flex;gap:8px;align-items:center;"></div></div>
   <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
        del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
        fuente de datos (`ligaExt_liga-ea-sports`). Los iconos por sección
@@ -2362,18 +2362,21 @@ window._showSimProgress = function(opts, onDone){
       return 'r3';
     }
 
-    function _rowFor(p, isGK){
+    function _rowFor(p, isGK, ctx){
+      ctx = ctx || null;
+      var _statsProv = (ctx && ctx.statsFor) || _statsFor;
+      var _notaProv  = (ctx && ctx.notaFor)  || _notaFor;
       var name = String(p.name||'?');
       var pw = Number(p.power)||0;
       var tier = _powerTier(pw);
-      var s = _statsFor(name);
+      var s = _statsProv(name);
       var pwCell = '<span class="lext-sq-cell pw tier-'+tier+'" title="Poder '+pw+'/99">'+pw+'</span>';
       var pj = _statCell('', s.pj);
       var mvp = _statCell('mvp', s.mvp);
       var ta = _statCell('ta', s.ta);
       var tr = _statCell('tr', s.tr);
       /* NOTA MEDIA por competición (0-10). */
-      var nota = _notaFor(name, p.pos);
+      var nota = _notaProv(name, p.pos);
       var notaCell = '<span class="lext-sq-cell rating '+_notaTone(nota)+'" title="Nota media entre competiciones oficiales (Liga, Copa, Supercopa España, Champions/Europa, Recopa, Supercopa Europa, Intercontinental, Mundialito)">'
         + (nota > 0 ? nota.toFixed(2) : '—') + '</span>';
       var cells, cls;
@@ -2409,7 +2412,7 @@ window._showSimProgress = function(opts, onDone){
            + '</div>';
     }
 
-    function _section(label, list, isGK){
+    function _section(label, list, isGK, ctx){
       if (!list.length) return '';
       var hdrCells, cls;
       if (isGK){
@@ -2436,7 +2439,7 @@ window._showSimProgress = function(opts, onDone){
       }
       var hdr = '<div class="lext-sq-hdr '+cls+'"><span>'+label+'</span>'+hdrCells+'</div>';
       list.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
-      return '<div class="lext-sq-sec">'+hdr+list.map(function(p){return _rowFor(p, isGK);}).join('')+'</div>';
+      return '<div class="lext-sq-sec">'+hdr+list.map(function(p){return _rowFor(p, isGK, ctx);}).join('')+'</div>';
     }
 
     function _renderEmpty(host){
@@ -2460,6 +2463,133 @@ window._showSimProgress = function(opts, onDone){
        sin "— Sin jugadores —" ni mensaje de error. Ahora capturamos
        y pintamos un placeholder con el mensaje del error para poder
        diagnosticar en lugar de adivinar. */
+    /* ════════════════════════════════════════════════════════════════
+       TOGGLE CLUB ↔ SELECCIÓN (escudos arriba a la derecha) — 2026-06-03
+       ════════════════════════════════════════════════════════════════
+       La caja Liverpool-Francia muestra DOS escudos: el del club del hub
+       (Liverpool) y el de su selección (Francia, vía MISTERS_REGISTRY).
+       Pulsando cada escudo emerge la plantilla de ese equipo en el MISMO
+       layout (`lext-sq-*`). Generaliza a cualquier caja de humano (el
+       mapa club→selección sale de `_mhFindMister`). */
+    function _hubSelName(){
+      try {
+        var m = window._mhFindMister && window._mhFindMister(_hubTeamName());
+        if (m && m.seleccion) return String(m.seleccion);
+      } catch(_){}
+      return 'Francia';
+    }
+    function _hubClubCrest(){
+      try { var t = _findBayernRow(); if (t && (t.shield || t.img)) return String(t.shield || t.img); } catch(_){}
+      try { if (window.getTeamLogoUrl){ var u = window.getTeamLogoUrl(_hubTeamName()); if (u) return u; } } catch(_){}
+      return '';
+    }
+    function _selTeamObj(selName){
+      try {
+        var store = window._selSquadLoad ? window._selSquadLoad() : null;
+        var teams = (store && store.teams) || [];
+        var nn = _normForStats(selName), i, t;
+        for (i=0;i<teams.length;i++){ t=teams[i]; if (t && t.name && _normForStats(t.name) === nn) return t; }
+        for (i=0;i<teams.length;i++){ t=teams[i]; if (t && t.name && _normForStats(t.name).indexOf(nn) !== -1) return t; }
+      } catch(_){}
+      return null;
+    }
+    function _selCrestUrl(selName){
+      try { var t = _selTeamObj(selName); if (t && t.img) return String(t.img); } catch(_){}
+      try { if (window.getTeamLogoUrl){ var u = window.getTeamLogoUrl(selName); if (u) return u; } } catch(_){}
+      return '';
+    }
+    var _SEL_FLAGS = { francia:'🇫🇷', brasil:'🇧🇷', inglaterra:'🏴', noruega:'🇳🇴', argentina:'🇦🇷', espana:'🇪🇸' };
+    function _selCrestEmoji(selName){
+      var nn = _normForStats(selName);
+      if (_SEL_FLAGS[nn]) return _SEL_FLAGS[nn];
+      try { var t = _selTeamObj(selName); if (t && t.icon && !/^[💡🐭🔨✏️😈🦆]$/.test(t.icon)) return t.icon; } catch(_){}
+      return '🏳️';
+    }
+    function _crestBtn(url, emoji, label, active, onclick){
+      var img = url
+        ? '<img src="'+String(url).replace(/"/g,'&quot;')+'" alt="" style="width:30px;height:30px;object-fit:contain;border-radius:50%;background:rgba(255,255,255,.06);" onerror="this.style.display=\'none\';var e=this.parentNode.querySelector(\'.bpl-cr-emoji\');if(e)e.style.display=\'\';">'
+        : '';
+      var emo = '<span class="bpl-cr-emoji" style="font-size:21px;line-height:1;'+(url?'display:none;':'')+'">'+(emoji||'🛡')+'</span>';
+      return '<button type="button" title="Ver plantilla · '+String(label).replace(/"/g,'&quot;')+'" onclick="'+onclick+'" '
+        + 'style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;cursor:pointer;padding:2px;'
+        + 'border:2px solid '+(active?'#f0c040':'rgba(255,255,255,.18)')+';'
+        + 'background:'+(active?'rgba(240,192,64,.18)':'rgba(255,255,255,.04)')+';'
+        + 'opacity:'+(active?'1':'.55')+';transition:all .15s;">'+img+emo+'</button>';
+    }
+    function _bplantRenderCrestToggle(){
+      var box = document.getElementById('bplant-crest-toggle');
+      if (!box) return;
+      var view = (window._bplantView === 'sel') ? 'sel' : 'club';
+      var clubName = _hubTeamName(), selName = _hubSelName();
+      box.innerHTML =
+          _crestBtn(_hubClubCrest(), '👕', clubName, view === 'club', "window._bplantSetView('club')")
+        + _crestBtn(_selCrestUrl(selName), _selCrestEmoji(selName), selName, view === 'sel', "window._bplantSetView('sel')");
+    }
+    window._bplantSetView = function(v){
+      window._bplantView = (v === 'sel') ? 'sel' : 'club';
+      try { window.renderBayernPlantillaScreen(); } catch(_){}
+    };
+    /* Stats de la selección (mismo layout, fuente `ef_player_stats_sel_v1`).
+       La nota es la del único comp de selección (no se promedia entre
+       varias). */
+    function _buildSelStatsMap(selName){
+      var map = {};
+      try {
+        var raw = localStorage.getItem('ef_player_stats_sel_v1');
+        if (!raw) return map;
+        var data = JSON.parse(raw);
+        if (!data || typeof data !== 'object') return map;
+        var teamNorm = _normForStats(selName);
+        Object.keys(data).forEach(function(k){
+          var sep = k.indexOf('::'); if (sep < 0) return;
+          var t = k.slice(0, sep); if (!t || !_teamKeyMatches(t, teamNorm)) return;
+          var pName = k.slice(sep + 2); if (!pName) return;
+          var ps = data[k]; if (!ps) return;
+          var b = map[pName] = map[pName] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+          _STATS_FIELDS.forEach(function(f){ b[f] += Number(ps[f]||0); });
+        });
+      } catch(_){}
+      return map;
+    }
+    function _selCtxFor(selName){
+      var map = _buildSelStatsMap(selName);
+      var base = {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+      function look(name){
+        var pNorm = _normForStats(name);
+        if (map[pNorm]) return map[pNorm];
+        if (!pNorm) return base;
+        var keys = Object.keys(map);
+        for (var i=0;i<keys.length;i++){ var kk=keys[i]; if(!kk) continue; if (kk===pNorm || kk.indexOf(pNorm)!==-1 || pNorm.indexOf(kk)!==-1) return map[kk]; }
+        return base;
+      }
+      return {
+        statsFor: look,
+        notaFor: function(name, pos){
+          var s = look(name);
+          if ((Number(s.pj)||0) <= 0 || typeof window.computePlayerRating !== 'function') return 0;
+          try { return Number(window.computePlayerRating({pos:pos,pj:s.pj,gol:s.gol,pen:s.pen,fk:s.fk,mvp:s.mvp,ta:s.ta,tr:s.tr,imbat:s.imbat,penSaved:s.penSaved}))||0; } catch(_){ return 0; }
+        }
+      };
+    }
+    function _renderSelView(host, selName){
+      var t = _selTeamObj(selName);
+      if (!t || !Array.isArray(t.players) || !t.players.length){
+        host.innerHTML = '<div style="padding:28px 14px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;line-height:1.6;">'
+          + '— Sin jugadores en «' + String(selName).replace(/[<>&]/g,'') + '» —<br>'
+          + '<span style="font-size:11px;color:rgba(255,255,255,.45);">Crea su plantilla en <b>🌐 Plantilla de selecciones</b>.</span></div>';
+        return;
+      }
+      var ctx = _selCtxFor(selName);
+      var by = {POR:[], DEF:[], MED:[], DEL:[]};
+      t.players.forEach(function(p){ if (!p || !p.name) return; (by[p.pos] || by.MED).push(p); });
+      var html = ''
+        + _section('🧤 PORTEROS',     by.POR, true,  ctx)
+        + _section('🛡 DEFENSAS',     by.DEF, false, ctx)
+        + _section('⚙ CENTROCAMPISTAS', by.MED, false, ctx)
+        + _section('⚽ DELANTEROS',    by.DEL, false, ctx);
+      host.innerHTML = html || '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.55);">— Sin jugadores —</div>';
+    }
+
     window.renderBayernPlantillaScreen = function(){
       var host = document.getElementById('bayern-plantilla-host');
       if (!host) return;
@@ -2471,6 +2601,12 @@ window._showSimProgress = function(opts, onDone){
           } catch(_){}
           _LAST_SYNC_TS = now;
           try { window._invalidateBayernStatsCache && window._invalidateBayernStatsCache(); } catch(_){}
+        }
+        /* Escudos club/selección arriba a la derecha + vista activa. */
+        try { _bplantRenderCrestToggle(); } catch(_){}
+        if (window._bplantView === 'sel'){
+          _renderSelView(host, _hubSelName());
+          return;
         }
         var t = _findBayernRow();
         if (!t || !Array.isArray(t.players) || !t.players.length){

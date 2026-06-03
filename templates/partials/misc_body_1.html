@@ -16279,19 +16279,6 @@ window._showSimProgress = function(opts, onDone){
   .tour-stats-jbtn .tsb-arr{
     font-size:14px;color:#e6d4ff !important;text-shadow:0 0 10px rgba(180,120,255,.9);
   }
-  /* Variante VERDE-TEAL esmeralda para los Torneos de Verano (Joan
-     Gamper, Asian, …) — mismo tono que la pantalla s-tour-stats que
-     abre (petición usuario 2026-06-02: "cajas estadísticas … en color
-     verdoso"). El morado se reserva para Selecciones.               */
-  .tour-stats-jbtn.is-verano{
-    background:linear-gradient(135deg,#00221d 0%,#005c4e 24%,#0a9f86 50%,#2dd4bf 72%,#0a9f86 85%,#00221d 100%) !important;
-    border:1.5px solid #3fe0c8 !important;
-    box-shadow:0 4px 18px rgba(45,212,191,.42),inset 0 1px 0 rgba(255,255,255,.16) !important;
-  }
-  .tour-stats-jbtn.is-verano:hover{box-shadow:0 6px 24px rgba(45,212,191,.65),inset 0 1px 0 rgba(255,255,255,.22) !important;}
-  .tour-stats-jbtn.is-verano .tsb-emoji{filter:drop-shadow(0 0 6px rgba(150,240,210,.8));}
-  .tour-stats-jbtn.is-verano .tsb-label{text-shadow:0 0 14px rgba(150,240,210,.6),0 1px 2px rgba(0,0,0,.7);}
-  .tour-stats-jbtn.is-verano .tsb-arr{color:#d6fff5 !important;text-shadow:0 0 10px rgba(45,212,191,.9);}
   /* Caja "📤 RAMIFICACIÓN" del formato qualifier-route. Marco morado/
      magenta (tema Selecciones · destino) con sub-secciones por
      posición (1ºs, 2ºs, … extras). Botón "Enviar clasificados" usa
@@ -20518,10 +20505,8 @@ window._showSimProgress = function(opts, onDone){
      Petición usuario 2026-05-24: "no es desplegable, es una caja que
      al pulsar se abre parecido a la foto 2".                       */
   function _tourStatsBtnHtml(tourId){
-    var _verano = false;
-    try { _verano = (typeof _tvBoardOf === 'function') && _tvBoardOf(tourId) === 'verano'; } catch(_){}
     return '<div style="padding:0 12px;margin:8px 0 10px;">'
-         +   '<button type="button" class="tour-stats-jbtn'+(_verano?' is-verano':'')+'" '
+         +   '<button type="button" class="tour-stats-jbtn" '
          +     'onclick="window._tourStatsOpen&amp;&amp;window._tourStatsOpen(\''+tourId+'\')">'
          +     '<span class="tsb-emoji">📊</span>'
          +     '<span class="tsb-label">Estadísticas</span>'
@@ -25653,18 +25638,19 @@ window._showSimProgress = function(opts, onDone){
         + '<span class="sc-arr">▶</span>'
         + '</div>';
       /* Caja "📊 Estadísticas" DEBAJO de la card de cada Torneo de Verano
-         (petición usuario 2026-06-02). Verde-teal, abre la pantalla
-         s-tour-stats que computa las stats EN VIVO desde cfg.results del
-         propio torneo. El Mundialito de Clubes (id 'mundial') tiene su
-         pantalla propia (s-mundial-stats), así que se excluye. */
+         (petición usuario 2026-06-02). MISMO tamaño/estilo que la card del
+         torneo (.submenu-card, full-width) — como las cajas ESTADÍSTICAS
+         del Mundialito / Recopa — pero en gradiente VERDE-TEAL. Abre
+         s-tour-stats con las stats EN VIVO del propio torneo. El Mundialito
+         de Clubes (id 'mundial') tiene su pantalla propia, se excluye. */
       if (bd === 'verano' && id !== 'mundial') {
-        slot.html += '<div class="tv-stats-row" style="margin:-1px 0 9px;">'
-          + '<button type="button" class="tour-stats-jbtn is-verano" '
+        slot.html += '<div class="submenu-card sc-' + id + '-stats" '
+          + 'style="margin-top:2px;background:linear-gradient(135deg,#00221d 0%,#003a32 16%,#006e5c 36%,#0aa386 52%,#2dd4bf 60%,#0aa386 70%,#006e5c 84%,#00221d 100%) !important;border:1.5px solid #2dd4bf !important;box-shadow:0 4px 18px rgba(45,212,191,.38),inset 0 1px 0 rgba(255,255,255,.16) !important;" '
           + 'onclick="window._tourStatsOpen&&window._tourStatsOpen(\'' + id + '\')">'
-          + '<span class="tsb-emoji">📊</span>'
-          + '<span class="tsb-label">Estadísticas</span>'
-          + '<span class="tsb-arr">▶</span>'
-          + '</button></div>';
+          + '<span class="sc-emoji">📊</span>'
+          + '<span class="sc-label" style="flex:1;">Estadísticas</span>'
+          + '<span class="sc-arr" style="margin-left:auto;">▶</span>'
+          + '</div>';
       }
     });
     Object.keys(boards).forEach(function(bd){

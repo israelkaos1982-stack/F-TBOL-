@@ -13446,6 +13446,40 @@ window._showSimProgress = function(opts, onDone){
     };
     window.go._mclStatsPatched = true;
   }
+  /* TRIGGER ROBUSTO (2026-06-03) — el parche de `window.go` de arriba
+     NO basta: `index.bundle.js` declara `function go(id)` (hoisted) y
+     RE-ENVUELVE `window.go` varias veces DESPUÉS de que este partial se
+     evalúe, así que el wrap `_mclStatsPatched` se pierde y la pantalla
+     nunca renderizaba — se quedaba congelada en "Calculando
+     estadísticas…" pese a tener la fase de grupos simulada (foto usuario
+     2026-06-03). Mismo patrón documentado en `_watchScreens` y en
+     `STATS_SCREENS`: un MutationObserver sobre la clase `.active` de la
+     pantalla dispara el render SIN depender de `window.go`. Sobrevive a
+     cualquier redefinición del router y a la restauración de pestaña al
+     recargar. */
+  function _watchMundialitoStats(){
+    var el = document.getElementById('s-mundial-stats');
+    if (!el) return;
+    var wasActive = el.classList.contains('active');
+    if (wasActive) { try { _renderMundialitoStats(); } catch(_){} }
+    if (typeof MutationObserver !== 'function') return;
+    try {
+      var mo = new MutationObserver(function(){
+        var nowActive = el.classList.contains('active');
+        if (nowActive && !wasActive) {
+          setTimeout(_renderMundialitoStats, 0);
+          setTimeout(_renderMundialitoStats, 200);
+        }
+        wasActive = nowActive;
+      });
+      mo.observe(el, { attributes:true, attributeFilter:['class'] });
+    } catch(_){}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _watchMundialitoStats);
+  } else {
+    _watchMundialitoStats();
+  }
 })();
 </script>
 

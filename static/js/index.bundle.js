@@ -6272,6 +6272,31 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
 
   function _ppClickSfx() { try { var Ctx=window.AudioContext||window.webkitAudioContext; if(!Ctx) return; var ctx=window.__ppAudio||(window.__ppAudio=new Ctx()); var o=ctx.createOscillator(); var g=ctx.createGain(); o.connect(g); g.connect(ctx.destination); var t=ctx.currentTime; o.frequency.setValueAtTime(1180,t); g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.05); o.start(t); o.stop(t+0.05);} catch(_){} }
 
+  /* Sedes POR TORNEO (cfg.stadiums) — fuente ÚNICA compartida por la
+     previa (`_renderPreviaMeta`) y por `_mmInjectEnv` (que repinta
+     #pp-env 60 ms después). Si el torneo de la previa actual tiene
+     estadios elegidos en el editor, rotan por hash del matchKey.
+     Aplica a torneos de Selecciones (Rondas Previas / Finales) y de
+     Verano, y GANA sobre el sistema global sel_fin_stadiums_v1.
+     Antes esta lógica vivía SOLO dentro de `_renderPreviaMeta`, así
+     que `_mmInjectEnv` la pisaba con getTeamStadium(local) →
+     "eFootball Stadium" en partidos de selección (bug 2026-06-03). */
+  window._previaTourStadium = function(fallbackKey){
+    try {
+      var pt = window._ppPreviaTeams;
+      if (!pt || !pt.tourId || typeof window._tourLoadCachedSync !== 'function') return '';
+      var cfgP = (window._TOUR_CACHE || {})[pt.tourId] || window._tourLoadCachedSync(pt.tourId);
+      if (!cfgP || !Array.isArray(cfgP.stadiums)) return '';
+      var picks = cfgP.stadiums.filter(function(s){ return !!s; });
+      if (!picks.length) return '';
+      var key = String(pt.tourKey || fallbackKey || (pt.home||'')+'|'+(pt.away||''));
+      var h = 5381, i;
+      for (i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) | 0;
+      if (h < 0) h = -h;
+      return picks[h % picks.length];
+    } catch(_){ return ''; }
+  };
+
   window._renderPreviaMeta = function(matchKey, isHvH){ return _renderPreviaMeta(matchKey, isHvH); };
   function _renderPreviaMeta(matchKey, isHvH) {
     var home, away;
@@ -6320,22 +6345,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
        hash del matchKey. Aplica a torneos de Selecciones (Rondas
        Previas / Finales) y de Verano, y GANA sobre el sistema global
        sel_fin_stadiums_v1. */
-    function _tourStadiumForPrevia(){
-      try {
-        var pt = window._ppPreviaTeams;
-        if (!pt || !pt.tourId || typeof window._tourLoadCachedSync !== 'function') return '';
-        var cfgP = (window._TOUR_CACHE || {})[pt.tourId] || window._tourLoadCachedSync(pt.tourId);
-        if (!cfgP || !Array.isArray(cfgP.stadiums)) return '';
-        var picks = cfgP.stadiums.filter(function(s){ return !!s; });
-        if (!picks.length) return '';
-        var key = String(pt.tourKey || _ppMatchKey || (pt.home||'')+'|'+(pt.away||''));
-        var h = 5381, i;
-        for (i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) | 0;
-        if (h < 0) h = -h;
-        return picks[h % picks.length];
-      } catch(_){ return ''; }
-    }
-    var _ppTourStad = _tourStadiumForPrevia();
+    var _ppTourStad = window._previaTourStadium(_ppMatchKey);
     if ((_ppCompKey === 'sc' || _ppCompKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
       _ppStadium = window._ppPreviaTeams.stadium;
     } else if (_ppTourStad) {
@@ -10381,8 +10391,45 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   function renderScreen(screenId, opts){
     opts = opts || {};
     rebuildRoutes();
+    /* Pantalla activa ANTES de navegar — para detectar cambio real de
+       pantalla (vs refresco in-place del mismo screen, p.ej. los
+       re-render de las simulaciones IA). */
+    var _prevActiveEl = document.querySelector('.screen.active');
+    var _prevActiveId = _prevActiveEl ? _prevActiveEl.id : null;
     routerState.activeScreenId = screenId;
     originalGo(screenId);
+    /* ── SELF-HEAL ANTI-PANTALLA-NEGRA (2026-06-03) ──────────────────
+       Síntoma (foto usuario): al pulsar una caja/card de un torneo de
+       Selecciones la pantalla destino aparecía en NEGRO y había que
+       pulsar «atrás» en el móvil para verla. Causa: un overlay modal
+       fullscreen (PREVIA `#prepartido-overlay`, BAJAS `#sancion-overlay`,
+       alias eFootball `#_copaAliasOv`) quedaba con `.show` de un flujo
+       anterior y su fondo casi-opaco (rgba(0,0,6,.97)) tapaba la nueva
+       pantalla. El safety-net documentado sólo limpiaba en page-load /
+       pageshow (de ahí que «atrás» lo arreglara). Aquí lo limpiamos en
+       CADA navegación SPA real para que jamás quede una pantalla negra.
+
+       SÓLO al cambiar de pantalla de verdad (no en refresco in-place) y
+       NO tocamos los splash/intro (ucl-intro, comp-flash, celebración),
+       que los muestra el propio `go()` con su temporizador, ni el
+       gm-modal de un partido en vivo. */
+    try {
+      var _realNav = (_prevActiveId !== screenId) && !window._iaRefreshInPlace;
+      if (_realNav) {
+        ['prepartido-overlay','sancion-overlay','_copaAliasOv'].forEach(function(oid){
+          var ov = document.getElementById(oid);
+          if (!ov) return;
+          if (ov.classList) ov.classList.remove('show');
+          if (ov.style && ov.style.display && ov.style.display !== 'none') ov.style.display = 'none';
+        });
+      }
+      /* Garantizar SIEMPRE una pantalla activa (si por cualquier ruta
+         `originalGo` no la dejó activa → no más fondo negro vacío). */
+      if (!document.querySelector('.screen.active')) {
+        var _t = document.getElementById(screenId) || document.getElementById('s-home');
+        if (_t) _t.classList.add('active');
+      }
+    } catch(_){}
     if(opts.updateHistory !== false){
       syncHistory(screenId, !!opts.replaceHistory);
     }
@@ -11545,8 +11592,17 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
        Sin esta rama _mmInjectEnv pisaba 60 ms después con
        getTeamStadium(local) → mostraba Camp Nou / Signal Iduna en
        vez de Maracanã (reportado por usuario 2026-05-05). */
+    /* Sedes POR TORNEO (cfg.stadiums): GANA sobre sel_fin_stadiums_v1 y
+       sobre getTeamStadium(local). MISMA prioridad que `_renderPreviaMeta`
+       — sin esta rama `_mmInjectEnv` pisaba 60 ms después con
+       "eFootball Stadium" en torneos de Selecciones / Verano con sedes
+       elegidas (bug 2026-06-03, foto usuario Road Copa Asia). */
+    var _mmTourStad = (typeof window._previaTourStadium === 'function')
+      ? window._previaTourStadium(matchKey) : '';
     if ((compKey === 'sc' || compKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
       stadiumName = window._ppPreviaTeams.stadium;
+    } else if (_mmTourStad) {
+      stadiumName = _mmTourStad;
     } else if (typeof window._selFinStadiumFor === 'function' && (function(){
       /* Mundial · 48 selecciones: 2 caminos — cal-mf-* (compKey
          'sel-fin') o partido de torneo cuyo cfg.format === 'mundial-48'.

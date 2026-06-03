@@ -25765,6 +25765,12 @@ window._showSimProgress = function(opts, onDone){
       var bd = _tvBoardOf(id);
       var slot = boards[bd];
       if (!slot) return;
+      /* El Mundialito de Clubes (id 'mundial') NO se muestra en
+         "Torneos de Verano": vive en la pantalla Competiciones
+         (card → s-mundial-clubes). Petición usuario 2026-06-03.
+         Sigue siendo built-in del registro/motor, solo se oculta
+         su card del board verano. */
+      if (bd === 'verano' && id === 'mundial') return;
       var _cc = _tvCfgOf(id);
       var _ccBox = _tvHexClamp(_cc && _cc.cardColor);
       var col = _ccBox

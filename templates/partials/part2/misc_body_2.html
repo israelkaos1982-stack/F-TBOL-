@@ -29135,10 +29135,27 @@ document.addEventListener('DOMContentLoaded', function() {
           try { console.warn('[wc-saveState] retry OK tras liberar', freed, 'keys'); } catch(_){}
           return true;
         } catch(e2){
-          try { console.error('[wc-saveState] retry falló', e2); } catch(_){}
-          alert('⚠️ Sin espacio en localStorage para guardar el sorteo Wild Card.\n\n'
-              + 'Liberé '+freed+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas o usa Reset en otras competiciones.');
-          return false;
+          /* Último recurso: guardar SOLO lo que render() necesita
+             (groups + standings + winners + phase + ts), soltando el
+             `pool` y `matchesByGroup` (peso muerto que no se renderiza).
+             Así el estado "done" cabe aunque la cuota esté al límite y la
+             pantalla se actualiza igual en vez de quedarse en "SORTEO
+             LISTO" con las tablas a 0. */
+          try {
+            var slim = {
+              pool: [], groups: s.groups, matchesByGroup: [],
+              standings: s.standings, winners: s.winners,
+              phase: s.phase, ts: s.ts
+            };
+            localStorage.setItem(WC_KEY, JSON.stringify(slim));
+            try { console.warn('[wc-saveState] guardado SLIM tras cuota (liberadas', freed, 'keys)'); } catch(_){}
+            return true;
+          } catch(e3){
+            try { console.error('[wc-saveState] retry+slim falló', e2, e3); } catch(_){}
+            alert('⚠️ Sin espacio en localStorage para guardar el sorteo Wild Card.\n\n'
+                + 'Liberé '+freed+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas o usa Reset en otras competiciones.');
+            return false;
+          }
         }
       }
       alert('⚠️ Error guardando el estado Wild Card: '+(e && e.message ? e.message : e));
@@ -29406,15 +29423,35 @@ document.addEventListener('DOMContentLoaded', function() {
      resto del torneo. */
   function simulateAll(state){
     if(!state || !Array.isArray(state.groups)) return;
-    state.matchesByGroup = state.groups.map(function(grp){
+    /* Las jornadas (matchesByGroup) son PESADAS (24 grupos × 12 = 288
+       objetos) y SOLO se usan aquí para construir las tablas: ni
+       render() ni _persistWinners leen `matchesByGroup`, solo
+       `standings`. Las calculamos en una variable LOCAL y NO las
+       persistimos → el estado "done" apenas crece respecto al "drawn",
+       y saveState no revienta la cuota de localStorage.
+       Bug que arregla (foto usuario 2026-06-03 "la simulación automática
+       de la wild card no funciona"): la sim corría OK en memoria pero el
+       setItem del estado "done" (mucho mayor por las 288 jornadas)
+       fallaba SILENCIOSAMENTE por cuota → saveState devolvía false →
+       _wcSimulate retornaba antes de render() → la pantalla seguía en
+       "SORTEO LISTO" con todas las tablas a 0. */
+    var matchesByGroup = state.groups.map(function(grp){
       try { return _simulateWcGroup(grp); }
       catch(e){ try{console.error('[wc-sim grupo]', e);}catch(_){} return []; }
     });
     state.standings = state.groups.map(function(grp, gi){
-      try { return _wcStandings(grp, state.matchesByGroup[gi]||[]); }
+      try { return _wcStandings(grp, matchesByGroup[gi]||[]); }
       catch(e){ try{console.error('[wc-standings]', gi, e);}catch(_){} return []; }
     });
+    state.matchesByGroup = [];   /* peso muerto: no se persiste */
     state.phase = 'done';
+    /* Sello de recencia FRESCO: sin esto el estado simulado conservaba el
+       `ts` del sorteo, así que la hidratación multi-dispositivo
+       (SYNC_KEYS → wc_state_v1, desempate por ts en hydrateFromServer) lo
+       trataba como "no más nuevo" que la copia drawn del servidor y podía
+       NO propagarlo / revertirlo a drawn. Con ts fresco el "done" SIEMPRE
+       gana el last-write-wins. */
+    state.ts = Date.now();
     _persistWinners(state);
     /* El OQ y la Previa se reconstruyen desde estos ganadores —
        limpiamos su caché para que vuelvan a sortearse. */
@@ -29440,8 +29477,8 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if(s.phase === 'done'){ render(); return s; }
       simulateAll(s);
-      if(!saveState(s)) return;
-      render();
+      saveState(s);
+      render(s);
       return s;
     } catch(e){
       try{console.error('[_wcDoSim]', e);}catch(_){}
@@ -29550,10 +29587,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if(btnDraw) btnDraw.disabled = false;   /* Draw siempre disponible (re-sortea) */
   }
 
-  function render(){
+  function render(stateOverride){
     var host = document.getElementById('wc-body');
     if(!host) return;
-    var s = loadState();
+    /* `stateOverride` permite pintar desde el estado EN MEMORIA (justo
+       tras simular) sin depender de que saveState haya persistido —
+       así las tablas se rellenan SIEMPRE al pulsar 🎮 Simular, aunque la
+       cuota de localStorage impida guardar. Sin arg → lee de disco
+       (uso normal: navegación, hidratación desde server). */
+    var s = stateOverride || loadState();
     _refreshSimBtn(s);
     if(!s){
       var pool = buildPool();
@@ -29638,8 +29680,15 @@ document.addEventListener('DOMContentLoaded', function() {
       if(s.phase === 'done'){ render(); return; }
       simulateAll(s);
       try { console.log('[wc-sim] simulateAll OK · phase='+s.phase); } catch(_){}
-      if(!saveState(s)) return;
-      render();
+      /* Pintamos SIEMPRE desde el estado en memoria (no dependemos de que
+         saveState haya persistido): así las tablas se rellenan al instante
+         aunque la cuota de localStorage falle. saveState corre igualmente
+         para propagar al server / sobrevivir al reload. */
+      var saved = saveState(s);
+      render(s);
+      if(!saved){
+        try { console.warn('[wc-sim] render desde memoria (saveState falló)'); } catch(_){}
+      }
       /* Verificación post-sim: si algo dejó el estado en 'drawn', avisa
          al usuario. Antes el usuario veía "PENDIENTES" sin ninguna
          pista de qué pasó. */

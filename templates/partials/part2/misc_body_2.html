@@ -11518,6 +11518,7 @@
     /* Limpiar timers previos por si se relanza la cuenta atrás. */
     if (window._mlHtCdTimer) { try { clearInterval(window._mlHtCdTimer); } catch(_){} window._mlHtCdTimer = null; }
     if (window._mlHtCdRaf)   { try { cancelAnimationFrame(window._mlHtCdRaf); } catch(_){} window._mlHtCdRaf = null; }
+    if (window._mlHtCdBackup){ try { clearTimeout(window._mlHtCdBackup); } catch(_){} window._mlHtCdBackup = null; }
     var startTs = Date.now();
     var ended = false;
     function _finish(){
@@ -11525,8 +11526,18 @@
       ended = true;
       if (window._mlHtCdTimer) { try { clearInterval(window._mlHtCdTimer); } catch(_){} window._mlHtCdTimer = null; }
       if (window._mlHtCdRaf)   { try { cancelAnimationFrame(window._mlHtCdRaf); } catch(_){} window._mlHtCdRaf = null; }
+      if (window._mlHtCdBackup){ try { clearTimeout(window._mlHtCdBackup); } catch(_){} window._mlHtCdBackup = null; }
       ov.style.display = 'none';
-      if (typeof opts.onResume === 'function') { try { opts.onResume(); } catch(_){} }
+      /* BUG 2026-06-03 (foto usuario Francia-Vietnam · Road Copa Asia):
+         si `onResume` lanzaba, el catch lo TRAGABA en silencio y la 2ª
+         parte se quedaba sin arrancar (cron congelado en el descanso).
+         Ahora lo logueamos para no enmascarar futuras regresiones; el
+         watchdog del caller (gmContinueSecondHalf / _mlResumeFromDescanso)
+         garantiza el arranque igualmente. */
+      if (typeof opts.onResume === 'function') {
+        try { opts.onResume(); }
+        catch(e){ try { console.error('[_showHalftimeCountdown] onResume falló', e); } catch(_){} }
+      }
     }
     var rb = $('ml-htcd-resume');
     if (rb) rb.onclick = function(){ _finish(); };
@@ -11551,6 +11562,13 @@
     }
     if (typeof requestAnimationFrame === 'function') window._mlHtCdRaf = requestAnimationFrame(_rafLoop);
     window._mlHtCdTimer = setInterval(_tick, 50);
+    /* BACKUP independiente (bug 2026-06-03): si rAF y el setInterval(50ms)
+       se quedan congelados (hilo bloqueado, pestaña que vuelve de la app
+       de WhatsApp throttleada, etc.) la cuenta atrás no llegaría nunca a 0
+       y `onResume` no se dispararía → la 2ª parte se quedaba sin arrancar.
+       Este setTimeout garantiza que `_finish` (y por tanto el resume) se
+       ejecute pase lo que pase. `_finish` es idempotente. */
+    try { window._mlHtCdBackup = setTimeout(_finish, totalSec * 1000 + 1200); } catch(_){}
   };
 
   window._mlResumeFromDescanso = function() {
@@ -11563,37 +11581,53 @@
     if (!st || st.finished) return;
     /* Cuenta atrás de 20 s antes de arrancar (petición usuario
        2026-05-24). Al terminar (o al pulsar ▶ INICIAR YA), se ejecuta
-       el resume real: anclar timer en 45:00 y reanudar interval. */
+       el resume real: anclar timer en 45:00 y reanudar interval.
+       Resume IDEMPOTENTE + WATCHDOG (mismo blindaje que gm-modal,
+       bug 2026-06-03): garantiza que la 2ª parte arranque aunque la
+       cuenta atrás falle o `_mlStartIntervalGen` lance. */
     var scA = (st.sc && st.sc.a) || 0;
     var scB = (st.sc && st.sc.b) || 0;
-    window._showHalftimeCountdown({
-      home: st.home, away: st.away, scA: scA, scB: scB,
-      onResume: function(){
-        if (st.finished) return;
-        /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto.
-           El descuento de la 1ª parte (que llevó timerSec hasta halfMax)
-           ya se mostró durante el cronómetro de descuento "45+N", así
-           que aquí lo descartamos y volvemos al minuto 45 limpio.
-           Re-ancla _wallStart/_gameSecAtStart o el primer tick volvería
-           a calcular el timerSec desde el anclaje original. */
-        st.timerSec = 2700;
-        st._wallStart = Date.now();
-        st._gameSecAtStart = 2700;
-        st.inDescanso = false; st.timerRunning = true; _mlStartIntervalGen(mk);
-        _mlUpdateAplazarBtn(mk);
-        /* Quitar el botón "Compartir descanso" del acta — la 2ª parte
-           ya empezó y ese CTA pertenece al medio tiempo. Si no lo
-           retiramos, sigue visible hasta el final del partido. */
-        try {
-          var acta = document.getElementById('ml-acta-list-' + mk);
-          if (acta) {
-            acta.querySelectorAll('.ml-ht-wa-wrap').forEach(function(n){
-              try { n.parentNode.removeChild(n); } catch(_){}
-            });
-          }
-        } catch(_){}
-      }
-    });
+    var _resumed = false;
+    function _doResume(){
+      if (_resumed || st.finished) return;   /* idempotente */
+      _resumed = true;
+      /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto.
+         El descuento de la 1ª parte (que llevó timerSec hasta halfMax)
+         ya se mostró durante el cronómetro de descuento "45+N", así
+         que aquí lo descartamos y volvemos al minuto 45 limpio.
+         Re-ancla _wallStart/_gameSecAtStart o el primer tick volvería
+         a calcular el timerSec desde el anclaje original. */
+      st.timerSec = 2700;
+      st._wallStart = Date.now();
+      st._gameSecAtStart = 2700;
+      st.inDescanso = false; st.timerRunning = true;
+      try { _mlStartIntervalGen(mk); }
+      catch(e){ try { console.error('[_mlResumeFromDescanso] _mlStartIntervalGen falló', e); } catch(_){} }
+      try { _mlUpdateAplazarBtn(mk); } catch(_){}
+      /* Quitar el botón "Compartir descanso" del acta — la 2ª parte
+         ya empezó y ese CTA pertenece al medio tiempo. Si no lo
+         retiramos, sigue visible hasta el final del partido. */
+      try {
+        var acta = document.getElementById('ml-acta-list-' + mk);
+        if (acta) {
+          acta.querySelectorAll('.ml-ht-wa-wrap').forEach(function(n){
+            try { n.parentNode.removeChild(n); } catch(_){}
+          });
+        }
+      } catch(_){}
+    }
+    var _shown = false;
+    if (typeof window._showHalftimeCountdown === 'function') {
+      try {
+        window._showHalftimeCountdown({
+          home: st.home, away: st.away, scA: scA, scB: scB,
+          onResume: _doResume
+        });
+        _shown = true;
+      } catch(_){}
+    }
+    if (!_shown) { _doResume(); return; }
+    try { setTimeout(_doResume, 21000); } catch(_){}
   };
 
   // Compartir marcador en el DESCANSO del modo espectador (gm)
@@ -11728,19 +11762,58 @@
     /* Cuenta atrás de 20 s antes de arrancar la 2ª parte (petición
        usuario 2026-05-24). Mismo overlay/estilo que el de eventos.
        _gm.inDescanso sigue `true` durante la cuenta atrás → el
-       cronómetro permanece congelado hasta el resume real. */
+       cronómetro permanece congelado hasta el resume real.
+
+       BUG 2026-06-03 (foto usuario, Francia-Vietnam · Road Copa Asia):
+       al pulsar "▶ INICIAR SEGUNDA PARTE" el cronómetro se quedaba
+       atascado en el descanso y la 2ª parte NO arrancaba. El resume
+       vivía SOLO dentro del `onResume` de la cuenta atrás; ese callback
+       se invoca con try/catch que TRAGA la excepción y depende de que el
+       tick rAF/setInterval llegue a 0 — si el hilo se bloquea, la pestaña
+       vuelve de WhatsApp throttleada, o `gmStartTimer` lanza, la 2ª parte
+       jamás empezaba. Fix: resume IDEMPOTENTE + WATCHDOG que garantiza el
+       arranque aunque la cuenta atrás falle, con arranque manual de
+       respaldo del cron si `gmStartTimer` lanza. */
     var scA = (_gm.sc && _gm.sc.a) || 0;
     var scB = (_gm.sc && _gm.sc.b) || 0;
-    window._showHalftimeCountdown({
-      home: _gm.home, away: _gm.away, scA: scA, scB: scB,
-      onResume: function(){
-        /* Petición usuario: la 2ª parte arranca SIEMPRE en 45:00 exacto. */
-        _gm.timerSec = 2700;
-        _gm.inDescanso = false;
-        gmStartTimer();
-        gmUpdateAplazarBtn();
+    var _resumed = false;
+    function _doResume(){
+      if (_resumed || _gm.finished) return;   /* idempotente */
+      _resumed = true;
+      _gm.timerSec = 2700;                     /* la 2ª parte SIEMPRE en 45:00 */
+      _gm.inDescanso = false;
+      try { gmStartTimer(); }
+      catch(e){
+        try { console.error('[gmContinueSecondHalf] gmStartTimer falló', e); } catch(_){}
+        /* Respaldo: arrancar el cron a mano para que el cron driver lo
+           avance igualmente — NUNCA dejar la 2ª parte sin empezar. */
+        _gm.timerRunning = true;
+        _gm._wallStart = Date.now();
+        _gm._secAtStart = 2700;
+        if (!isFinite(_gm._gameSecPerMs) || _gm._gameSecPerMs <= 0) {
+          _gm._gameSecPerMs = 5 / (_gm.isHvH ? 556 : 542);
+        }
       }
-    });
+      try { gmUpdateAplazarBtn(); } catch(_){}
+      try { if (typeof gmRenderTimer === 'function') gmRenderTimer(); } catch(_){}
+    }
+    var _shown = false;
+    if (typeof window._showHalftimeCountdown === 'function') {
+      try {
+        window._showHalftimeCountdown({
+          home: _gm.home, away: _gm.away, scA: scA, scB: scB,
+          onResume: _doResume
+        });
+        _shown = true;
+      } catch(_){}
+    }
+    if (!_shown) { _doResume(); return; }
+    /* WATCHDOG (red de seguridad): si la cuenta atrás de 20 s no dispara
+       `onResume` (excepción tragada, timers throttleados, doble pulsación
+       que pisa el setInterval global de la cuenta atrás…), reanudamos a
+       mano a los 21 s. Idempotente: si la cuenta atrás ya reanudó es
+       un no-op. */
+    try { setTimeout(_doResume, 21000); } catch(_){}
   };
 
   function _gmShowFinalOv() {

@@ -32443,6 +32443,56 @@ window._showSimProgress = function(opts, onDone){
         + '   🟠 Europa: ' + mUel + '/2   🟢 Conference: ' + mUecl + '/1\n'
         + '   (esas plazas las eliges a mano; si faltan, añádelas ahí.)';
     }
+    /* ── Diagnóstico de las plazas que faltan (2026-06-03) ────────────
+       Tras forzar las zonas canónicas (paso a) la ÚNICA razón por la
+       que una zona queda por debajo del objetivo es que alguna liga
+       NO tiene plantilla (≥2 equipos) en este dispositivo NI en el
+       servidor — por eso no emite ningún equipo al pool. Listamos esas
+       ligas por nombre para que el admin sepa EXACTAMENTE cuáles
+       rellenar (abrir la card y pegar sus equipos). Sin esto, el botón
+       solo decía "－12" sin pista de la causa → "sigo con problemas". */
+    var anyShort = (tUcl<28)||(tPrev<34)||(tOq<88)||(tWc<71)||(tUel<18)||(tUecl<12);
+    var emptyNote = '';
+    if(anyShort){
+      var _PRETTY = {
+        'n-maced':'Macedonia del N.', 'bielorrsa':'Bielorrusia',
+        'luxembgo':'Luxemburgo', 'is-feroe':'Islas Feroe',
+        'kazajst':'Kazajistán', 'azerbayan':'Azerbaiyán',
+        'p-bajos':'Países Bajos', 'rep-checa':'Rep. Checa',
+        'n-irlanda':'Irlanda del N.', 'san-marino':'San Marino'
+      };
+      function _pretty(s){
+        return _PRETTY[s] || s.replace(/-/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+      }
+      var emptyLigas = [];
+      try {
+        Object.keys(window.LEAGUE_DEFAULT_ZONES || {}).forEach(function(slug){
+          if(slug === 'liga-ea-sports') return; // manual, no cuenta aquí
+          var z = window.LEAGUE_DEFAULT_ZONES[slug] || {};
+          /* Solo nos importan las ligas que DEBERÍAN aportar a alguna
+             euro-zona (las que tienen alguna plaza europea > 0). */
+          var aporta = (Number(z.ucl||0)+Number(z.uclPrev||0)+Number(z.uclQual||0)
+                       +Number(z.uel||0)+Number(z.uecl||0)+Number(z.wildcard||0)) > 0;
+          if(!aporta) return;
+          var n = 0;
+          try {
+            var raw = localStorage.getItem('ligaExt_' + slug);
+            if(raw){ var d = JSON.parse(raw); n = (d && Array.isArray(d.teams)) ? d.teams.length : 0; }
+          } catch(_){}
+          if(n < 2) emptyLigas.push(_pretty(slug) + (n? (' ('+n+')') : ''));
+        });
+      } catch(_){}
+      if(emptyLigas.length){
+        emptyNote = '\n\n⚠️ Faltan plazas porque estas ' + emptyLigas.length
+          + ' liga(s) NO tienen plantilla (≥2 equipos) ni en este móvil ni\n'
+          + 'en el servidor. Ábrelas en «Resto de Ligas» y pega sus equipos\n'
+          + '(o hazlo en el PC y vuelve a pulsar este botón):\n\n   '
+          + emptyLigas.join(' · ');
+      } else {
+        emptyNote = '\n\nℹ️ Todas las ligas tienen plantilla pero el conteo no\n'
+          + 'llega al objetivo. Revisa las plazas en 📜 Reglas de cada liga.';
+      }
+    }
     alert('♻️ Reparto europeo re-cuadrado.\n\n'
         + (recovered ? ('🌐 Ligas recuperadas del servidor: ' + recovered + '\n') : '')
         + 'Ligas corregidas: ' + fixed + (missing? '  ·  sin sembrar: '+missing : '') + '\n'
@@ -32453,7 +32503,7 @@ window._showSimProgress = function(opts, onDone){
         + '🎟️ Wild Card: ' + tWc + '  ' + _markWc(tWc) + '\n'
         + '🟠 Europa League: ' + tUel + '  ' + _mark(tUel,18) + '\n'
         + '🟢 Conference League: ' + tUecl + '  ' + _mark(tUecl,12)
-        + manualNote);
+        + manualNote + emptyNote);
   };
 
   /* ── Estadísticas agregadas ──────────────────────────────────── */

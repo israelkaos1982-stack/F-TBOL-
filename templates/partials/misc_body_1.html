@@ -161,22 +161,31 @@ window._showSimProgress = function(opts, onDone){
       c.appendChild(el);
     }
     var pct = (s.total > 0) ? Math.min(100, Math.round(s.done / s.total * 100)) : 0;
+    /* `unit`/`verb`/`pctOnly` permiten reutilizar el chip para SORTEOS
+       (no solo simulaciones de liga). Defaults = comportamiento legacy
+       de Resto de Ligas ("simulada · N partidos"). */
+    var unit = s.unit || 'partidos';
+    var verb = s.verb || 'simulada';
+    var pctOnly = !!s.pctOnly;
     var icon, txtCol, borderCol, barCol, body;
     if (s.status === 'running'){
       icon = '⚽'; txtCol = '#cfe0ff';
       borderCol = 'rgba(125,180,255,.45)';
       barCol = 'linear-gradient(90deg,#3a7bd5,#7dd0f0)';
-      body = icon + ' <b>' + _esc(s.name) + '</b> · ' + s.done + '/' + s.total + ' (' + pct + '%)';
+      body = icon + ' <b>' + _esc(s.name) + '</b> · '
+        + (pctOnly ? (pct + '%') : (s.done + '/' + s.total + ' (' + pct + '%)'));
     } else if (s.status === 'done'){
       icon = '✅'; txtCol = '#7df0a0';
       borderCol = 'rgba(125,240,160,.55)';
       barCol = 'linear-gradient(90deg,#3acb70,#7df0a0)';
-      body = icon + ' <b>' + _esc(s.name) + '</b> simulada · ' + s.total + ' partidos';
+      body = icon + ' <b>' + _esc(s.name) + '</b> ' + verb
+        + (pctOnly ? '' : (' · ' + s.total + ' ' + unit));
     } else {
       icon = '⚠️'; txtCol = '#ffd0a0';
       borderCol = 'rgba(255,176,80,.55)';
       barCol = 'linear-gradient(90deg,#c87a30,#ffb060)';
-      body = icon + ' <b>' + _esc(s.name) + '</b> · ' + s.done + '/' + s.total;
+      body = icon + ' <b>' + _esc(s.name) + '</b> · '
+        + (pctOnly ? (pct + '%') : (s.done + '/' + s.total));
     }
     el.style.border = '1px solid ' + borderCol;
     el.style.color = txtCol;
@@ -191,9 +200,16 @@ window._showSimProgress = function(opts, onDone){
     if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
-  window._bgSimStart = function(slug, name, total){
+  window._bgSimStart = function(slug, name, total, opts){
     if (!slug) return;
-    window._bgSims[slug] = { name: name || slug, done: 0, total: total || 0, status: 'running' };
+    opts = opts || {};
+    window._bgSims[slug] = {
+      name: name || slug, done: 0, total: total || 0, status: 'running',
+      /* Personalización opcional (sorteos vs simulaciones). */
+      unit: opts.unit || 'partidos',
+      verb: opts.verb || 'simulada',
+      pctOnly: !!opts.pctOnly
+    };
     window._bgSimsActive = (window._bgSimsActive | 0) + 1;
     /* Mantener el gate de saveData (XHR síncrono off) mientras haya
        ≥1 sim en curso — sin él, el POST sync de cada partido vuelve
@@ -223,6 +239,56 @@ window._showSimProgress = function(opts, onDone){
   window._bgSimIsActive = function(slug){
     var s = window._bgSims[slug];
     return !!(s && s.status === 'running');
+  };
+
+  /* Helper para SORTEOS / operaciones de duración desconocida (fetch al
+     backend, distribución instantánea de grupos): muestra un chip
+     "solo %" que sube 0→90% mientras corre `work` y salta a 100% al
+     terminar. `work` puede ser síncrono o devolver una Promise.
+     Devuelve la Promise del trabajo. Petición usuario 2026-06-03:
+     "igual que sale en segundo plano el % de simulación … ponerlo
+     igual en el sorteo de copa del rey, y sorteo de wild card / OQ". */
+  window._bgSimFakeRun = function(slug, name, opts, work){
+    opts = opts || {};
+    if (window._bgSimIsActive && window._bgSimIsActive(slug)){
+      /* Ya hay uno en curso para este slug — ejecuta sin duplicar chip. */
+      try { return Promise.resolve(typeof work === 'function' ? work() : null); }
+      catch(e){ return Promise.reject(e); }
+    }
+    var TICKS = 90;
+    window._bgSimStart(slug, name, TICKS, {
+      pctOnly: true,
+      verb: opts.verb || 'listo',
+      unit: opts.unit || ''
+    });
+    var done = 0, finished = false, ending = false;
+    var startedAt = Date.now();
+    var iv = setInterval(function(){
+      if (finished) return;
+      /* Avance asintótico: rápido al principio, frenando cerca del 90%. */
+      done += Math.max(1, Math.round((TICKS - done) * 0.18));
+      if (done > TICKS - 3) done = TICKS - 3;
+      window._bgSimProgress(slug, done, TICKS);
+    }, opts.tickMs || 90);
+    function _end(ok){
+      if (ending) return;
+      ending = true;
+      /* `minMs` mantiene el chip visible aunque el trabajo sea
+         instantáneo (sorteos síncronos) — sin esto el chip parpadea. */
+      var wait = Math.max(0, (opts.minMs || 0) - (Date.now() - startedAt));
+      setTimeout(function(){
+        finished = true;
+        clearInterval(iv);
+        window._bgSimFinish(slug, ok !== false, { done: TICKS, total: TICKS });
+      }, wait);
+    }
+    var r;
+    try { r = (typeof work === 'function') ? work() : null; }
+    catch(e){ _end(false); return Promise.reject(e); }
+    return Promise.resolve(r).then(
+      function(v){ _end(true); return v; },
+      function(e){ _end(false); throw e; }
+    );
   };
 })();
 </script>
@@ -28153,17 +28219,16 @@ window._showSimProgress = function(opts, onDone){
         alert('Primero termina alguna liga con plazas en la zona "Open Qualifier".');
         return;
       }
-      if(typeof window._showSimProgress !== 'function'){
-        _doSimulate(classified);
+      /* Evitar doble lanzamiento mientras un sim previo aún corre. */
+      if(window._bgSimIsActive && window._bgSimIsActive('open-qualifier')){
+        try { console.log('[oq-sim] ya en curso — ignorado'); } catch(_){}
         return;
       }
-      window._showSimProgress({ms:3000, label:'SIMULANDO OPEN QUALIFIER'}, function(){
-        try { _doSimulate(classified); }
-        catch(e){
-          try { console.error('[oq-sim] _doSimulate (con overlay)', e); } catch(_){}
-          alert('⚠️ Error simulando Open Qualifier: '+(e && e.message ? e.message : e));
-        }
-      });
+      /* Sorteo + simulación EN SEGUNDO PLANO (chip flotante con %).
+         El sorteo (_distributeSnake) es instantáneo; el peso está en los
+         28×12 = 336 partidos, que se simulan grupo a grupo cediendo el
+         hilo entre cada uno para que el % avance y la UI no se congele. */
+      _doSimulateChunked(classified);
     } catch(e){
       try { console.error('[simulateOpenQualifier]', e); } catch(_){}
       alert('⚠️ Error en simulateOpenQualifier: '+(e && e.message ? e.message : e)+'\n\nF12 → Consola para detalles.');
@@ -28207,6 +28272,24 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
   }
 
+  /* Persiste + re-pinta tras la simulación. Compartido por la ruta
+     síncrona (_doSimulate) y la chunked (_doSimulateChunked). Devuelve
+     true si guardó OK. */
+  function _finishOqSim(groups, matchesByGroup){
+    var sim = {groups:groups, matchesByGroup:matchesByGroup, playoff:null, ts:Date.now()};
+    var saved = _saveSim(sim);
+    if(!saved){
+      /* `_saveSim` ya alertó al usuario con el motivo. Salimos para
+         no re-pintar con datos que no se persistieron — antes
+         buildOpenQualifierClas leía null y dejaba grupos en 0. */
+      return false;
+    }
+    _persistPreviaFlag(sim);
+    try { console.log('[oq-sim] guardado OK · pintando clas'); } catch(_){}
+    buildOpenQualifierClas();
+    return true;
+  }
+
   function _doSimulate(classified){
     /* Cap+pad a `N_GROUPS × TEAMS_PER_GROUP` (112). Misma helper que
        usa el render "fresco" — así sim y fresco siempre cuadran a
@@ -28216,19 +28299,39 @@ window._showSimProgress = function(opts, onDone){
     var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
     try { console.log('[oq-sim] _doSimulate · groups='+groups.length+' · matches/g='+(matchesByGroup[0]||[]).length); } catch(_){}
     /* Sin playoff — formato 28×4 solo promueve el 1º de cada grupo y
-       elimina al resto. Mantenemos el campo `playoff:null` en el sim
-       por compatibilidad con cualquier lectura antigua. */
-    var sim = {groups:groups, matchesByGroup:matchesByGroup, playoff:null, ts:Date.now()};
-    var saved = _saveSim(sim);
-    if(!saved){
-      /* `_saveSim` ya alertó al usuario con el motivo. Salimos para
-         no re-pintar con datos que no se persistieron — antes
-         buildOpenQualifierClas leía null y dejaba grupos en 0. */
-      return;
+       elimina al resto. */
+    _finishOqSim(groups, matchesByGroup);
+  }
+
+  /* Versión EN SEGUNDO PLANO: sortea (instantáneo), luego simula grupo
+     a grupo cediendo el hilo entre cada uno y reportando el % al chip
+     flotante global (_bgSim*). Si el chip no existe, cae al sync. */
+  function _doSimulateChunked(classified){
+    if(typeof window._bgSimStart !== 'function'){ _doSimulate(classified); return; }
+    classified = _padToFull(classified);
+    var groups = _distributeSnake(classified, N_GROUPS);
+    var total = 0;
+    groups.forEach(function(g){ var n=(g||[]).length; total += n*(n-1); });
+    try { window._bgSimStart('open-qualifier', 'Open Qualifier', total, { verb:'simulado' }); } catch(_){}
+    var matchesByGroup = new Array(groups.length);
+    var gi = 0, doneMatches = 0;
+    function step(){
+      var endG = Math.min(groups.length, gi + 1); /* 1 grupo por tick */
+      for(; gi<endG; gi++){
+        var ms;
+        try { ms = _simulateGroup(groups[gi]); }
+        catch(e){ try{console.error('[oq-sim grupo]', gi, e);}catch(_){} ms = []; }
+        matchesByGroup[gi] = ms;
+        doneMatches += ms.length;
+      }
+      try { window._bgSimProgress('open-qualifier', doneMatches, total); } catch(_){}
+      if(gi < groups.length){ setTimeout(step, 0); return; }
+      var ok = false;
+      try { ok = _finishOqSim(groups, matchesByGroup); }
+      catch(e){ try { console.error('[oq-sim] finish', e); } catch(_){} }
+      try { window._bgSimFinish('open-qualifier', ok, { done:total, total:total }); } catch(_){}
     }
-    _persistPreviaFlag(sim);
-    try { console.log('[oq-sim] guardado OK · pintando clas'); } catch(_){}
-    buildOpenQualifierClas();
+    setTimeout(step, 0);
   }
   function resetOpenQualifier(){
     try { localStorage.removeItem(STORE_KEY); } catch(_){}

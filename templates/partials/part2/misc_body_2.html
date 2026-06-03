@@ -29422,6 +29422,55 @@ document.addEventListener('DOMContentLoaded', function() {
     try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
     try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
   }
+
+  /* Versión EN SEGUNDO PLANO de simulateAll: simula las 24 liguillas
+     grupo a grupo cediendo el hilo entre cada uno y reportando el % al
+     chip flotante global (_bgSim*, misc_body_1.html). Así el usuario
+     puede navegar mientras se simulan los 24×12 = 288 partidos sin que
+     la UI se congele. Si el chip no existe (carga parcial), cae al
+     simulateAll síncrono legacy. Petición usuario 2026-06-03. */
+  function simulateAllChunked(state, onDone){
+    if(!state || !Array.isArray(state.groups)){ if(onDone) onDone(false); return; }
+    if(typeof window._bgSimStart !== 'function'){
+      simulateAll(state); if(onDone) onDone(true); return;
+    }
+    var groups = state.groups;
+    var total = 0;
+    groups.forEach(function(g){ var n=(g||[]).length; total += WC_ROUND_TRIPS * n*(n-1); });
+    try { window._bgSimStart('wild-card', 'Wild Card', total, { verb:'simulado' }); } catch(_){}
+    state.matchesByGroup = new Array(groups.length);
+    var gi = 0, doneMatches = 0;
+    function finish(ok){
+      try {
+        state.standings = groups.map(function(grp, g){
+          try { return _wcStandings(grp, state.matchesByGroup[g]||[]); }
+          catch(e){ try{console.error('[wc-standings]', g, e);}catch(_){} return []; }
+        });
+        state.phase = 'done';
+        _persistWinners(state);
+        try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
+        try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+        try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
+      } catch(e){ try{console.error('[wc-sim finish]', e);}catch(_){} ok = false; }
+      try { window._bgSimFinish('wild-card', ok!==false, {done:total, total:total}); } catch(_){}
+      if(onDone) onDone(ok!==false);
+    }
+    function step(){
+      var endG = Math.min(groups.length, gi + 1); /* 1 grupo por tick */
+      for(; gi<endG; gi++){
+        var ms;
+        try { ms = _simulateWcGroup(groups[gi]); }
+        catch(e){ try{console.error('[wc-sim grupo]', gi, e);}catch(_){} ms = []; }
+        state.matchesByGroup[gi] = ms;
+        doneMatches += ms.length;
+      }
+      try { window._bgSimProgress('wild-card', doneMatches, total); } catch(_){}
+      if(gi < groups.length){ setTimeout(step, 0); return; }
+      finish(true);
+    }
+    setTimeout(step, 0);
+  }
+  window._wcSimulateAllChunked = simulateAllChunked;
   /* Expuestas para depurar desde consola.
        · `_wcSimulateAll(state)` corre la sim sobre un estado dado.
        · `_wcDoSim()` corre el flujo completo SIN pasar por el loader
@@ -29636,16 +29685,27 @@ document.addEventListener('DOMContentLoaded', function() {
         if(!saveState(s)) return; /* abortamos — el alert dentro de saveState ya avisó */
       }
       if(s.phase === 'done'){ render(); return; }
-      simulateAll(s);
-      try { console.log('[wc-sim] simulateAll OK · phase='+s.phase); } catch(_){}
-      if(!saveState(s)) return;
-      render();
-      /* Verificación post-sim: si algo dejó el estado en 'drawn', avisa
-         al usuario. Antes el usuario veía "PENDIENTES" sin ninguna
-         pista de qué pasó. */
-      if(s.phase !== 'done'){
-        alert('⚠️ La simulación terminó pero el estado no quedó como "done". Mira la consola para detalles.');
+      /* Evitar doble lanzamiento mientras un sim previo aún corre. */
+      if(window._bgSimIsActive && window._bgSimIsActive('wild-card')){
+        try { console.log('[wc-sim] ya en curso — ignorado'); } catch(_){}
+        return;
       }
+      /* Simulación EN SEGUNDO PLANO (chip flotante con %). Persistencia
+         y render al terminar. */
+      simulateAllChunked(s, function(ok){
+        try {
+          try { console.log('[wc-sim] simulateAllChunked OK · phase='+s.phase); } catch(_){}
+          if(!saveState(s)) return;
+          render();
+          /* Verificación post-sim: si algo dejó el estado en 'drawn',
+             avisa al usuario. */
+          if(s.phase !== 'done'){
+            alert('⚠️ La simulación terminó pero el estado no quedó como "done". Mira la consola para detalles.');
+          }
+        } catch(e2){
+          try { console.error('[_wcSimulate done]', e2); } catch(_){}
+        }
+      });
     } catch(e){
       try { console.error('[_wcSimulate]', e); } catch(_){}
       alert('⚠️ Error al simular Wild Card: '+(e && e.message ? e.message : e)+'\n\nRevisa la consola (F12) para más detalles.');
@@ -29666,10 +29726,20 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       var prev = loadState();
       if(prev && !confirm('Hay un sorteo previo'+(prev.phase==='done'?' Y simulado':'')+'. ¿Sobreescribirlo con uno nuevo?')) return;
-      var s = initState();
-      if(!s){ alert('⚠️ initState() falló. F12 → Consola.'); return; }
-      if(!saveState(s)) return;
-      render();
+      /* Sorteo EN SEGUNDO PLANO (chip flotante con %). La distribución
+         es instantánea, así que minMs mantiene el chip visible ~0.9s. */
+      var _drawWork = function(){
+        var s = initState();
+        if(!s){ alert('⚠️ initState() falló. F12 → Consola.'); throw new Error('initState'); }
+        if(!saveState(s)) throw new Error('saveState');
+        render();
+      };
+      if(typeof window._bgSimFakeRun === 'function'){
+        window._bgSimFakeRun('wild-card-draw', 'Wild Card · Sorteo',
+          { verb:'sorteado', minMs:900 }, _drawWork)['catch'](function(){});
+      } else {
+        try { _drawWork(); } catch(_){}
+      }
     }
     if(typeof window.pG === 'function') window.pG(_doDraw);
     else _doDraw();

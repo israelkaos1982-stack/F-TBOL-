@@ -2891,52 +2891,20 @@
           alert('❌ No se pudo sortear ' + (ROUND_LABEL[ronda] || ronda) + ':\n' + ((err && err.message) || err));
         });
       }
-      /* Overlay del balón con tema Copa del Rey (naranja-marrón). El
-         usuario reportó (2026-05-10) que el sorteo tardaba "más de 3
-         minutos" — bottleneck era esperar a que las 3 fases de la
-         animación terminen ANTES de lanzar el fetch al backend. Ahora
-         lanzamos el fetch EN PARALELO con la animación: las fases
-         decoran el wait mientras el backend procesa. Si el fetch
-         termina antes que la animación, completamos al instante. */
-      if (typeof window.ftbolLoaderRun === 'function') {
-        var lbl = ROUND_LABEL[ronda] || ronda;
-        window.ftbolLoaderRun(
-          {
-            title: 'COPA DEL REY · SORTEO ' + String(lbl).toUpperCase(),
-            sub: 'Preparando bombos…', theme: 'copa', minMs: 300,
-            phases: [
-              { pct: 30, sub: 'Sembrando equipos por nivel…',         ms: 40 },
-              { pct: 60, sub: 'Aplicando restricciones humano vs IA…', ms: 40 },
-              { pct: 88, sub: 'Cuadrando cruces…',                    ms: 40 }
-            ]
-          },
-          function(ctx){
-            return new Promise(function(resolve){
-              /* Lanzar el fetch DESDE EL INICIO (paralelo con phases). */
-              var fetchPromise = _doFetch();
-              var i = 0;
-              var phases = [
-                { pct: 30 }, { pct: 60 }, { pct: 88 }
-              ];
-              function next(){
-                if (i >= phases.length){
-                  ctx.progress(95, 'Lanzando sorteo…');
-                  fetchPromise.then(function(){
-                    ctx.progress(100, 'Hecho');
-                    resolve();
-                  }).catch(function(){
-                    ctx.progress(100, 'Error');
-                    resolve();
-                  });
-                  return;
-                }
-                ctx.progress(phases[i++].pct);
-                setTimeout(next, 30);  /* era 80 ms */
-              }
-              next();
-            });
-          }
-        );
+      /* Sorteo EN SEGUNDO PLANO (petición usuario 2026-06-03): en vez del
+         overlay bloqueante del balón (`ftbolLoaderRun`), mostramos un chip
+         flotante con % abajo a la derecha — igual que la sim del resto de
+         ligas. El usuario puede seguir navegando mientras el backend
+         procesa el emparejamiento. El chip sube 0→90% durante el fetch y
+         salta a 100% al resolver. _doFetch ya alerta en caso de error. */
+      var lbl = ROUND_LABEL[ronda] || ronda;
+      if (typeof window._bgSimFakeRun === 'function') {
+        window._bgSimFakeRun(
+          'copa-sorteo',
+          'Copa del Rey · ' + lbl,
+          { verb: 'sorteado', minMs: 600 },
+          _doFetch
+        )['catch'](function(){});
       } else {
         _doFetch();
       }

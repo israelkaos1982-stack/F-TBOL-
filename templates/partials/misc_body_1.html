@@ -10667,6 +10667,57 @@ window._showSimProgress = function(opts, onDone){
         }
       } catch(_){}
     }
+    /* Fallback FINAL: plantillas creadas DENTRO de un torneo
+       (`tour_<id>_v1.teams[].players` y su espejo `_TOUR_CACHE`).
+       Algunos torneos (Selecciones spv-/sfn-, Verano sct/pss/jg/asia,
+       o cualquier slot custom) guardan su roster en el propio cfg del
+       torneo, NO en `ligaExt_*` ni en `selecciones_squad_v1`. Sin este
+       escaneo `sqFromRegistry('Inter')` (etc.) caía a «Jugador A/B» en
+       el acta y stats de ese torneo y en cualquier otra competición que
+       use ese equipo. Petición usuario 2026-06-03: «los equipos que
+       tienen las plantillas creadas se usan en TODAS las competiciones».
+       Va el ÚLTIMO para que ligaExt y selecciones (fuentes canónicas)
+       sigan ganando; solo se usa cuando el equipo no aparece con roster
+       en ninguna de ellas. El formato de `players[]` es idéntico
+       ({name,num,pos:POR/DEF/MED/DEL,power,flags}), así que
+       `_lextBuildSq*FromTeam` lo digieren igual. */
+    if (!preferred && !fallback) {
+      try {
+        var _scanTourTeams = function(teamsArr){
+          if (!Array.isArray(teamsArr)) return null;
+          for (var _tti = 0; _tti < teamsArr.length; _tti++) {
+            var _tt = teamsArr[_tti];
+            if (!_tt || !_tt.name) continue;
+            if (!Array.isArray(_tt.players) || !_tt.players.length) continue;
+            var _tnm = _lextNormForLookup(_tt.name);
+            for (var _tk = 0; _tk < targets.length; _tk++) {
+              if (_tnm === targets[_tk]) return _tt;
+            }
+          }
+          return null;
+        };
+        /* 1) `_TOUR_CACHE` en memoria (fresco, sin parsear localStorage). */
+        var _tc = window._TOUR_CACHE || {};
+        for (var _ck in _tc) {
+          if (!Object.prototype.hasOwnProperty.call(_tc, _ck)) continue;
+          var _ccfg = _tc[_ck];
+          var _hit = _scanTourTeams(_ccfg && _ccfg.teams);
+          if (_hit) { fallback = _hit; break; }
+        }
+        /* 2) localStorage `tour_<id>_v1` (sobrevive a recargas aunque la
+           cache en memoria aún no esté poblada). */
+        if (!fallback) {
+          for (var _li = 0; _li < localStorage.length && !fallback; _li++) {
+            var _lk = localStorage.key(_li);
+            if (!_lk || !/^tour_.+_v1$/.test(_lk)) continue;
+            var _lraw = localStorage.getItem(_lk); if (!_lraw) continue;
+            var _ldata; try { _ldata = JSON.parse(_lraw); } catch(_e){ continue; }
+            var _hit2 = _scanTourTeams(_ldata && _ldata.teams);
+            if (_hit2) fallback = _hit2;
+          }
+        }
+      } catch(_){}
+    }
     return preferred || fallback;
   }
   function _lextBuildSqFromTeam(t){
@@ -23222,25 +23273,38 @@ window._showSimProgress = function(opts, onDone){
         }
       }
     } catch(_){}
+    /* Placeholder = «Jugador A..K» / «Portero A..K» (con o sin nº de
+       dorsal delante), o el «?» sintético. Cubre porteros y de campo. */
+    function _bfIsRealName(e){
+      if (!e) return false;
+      var pn = Array.isArray(e.player) ? (e.player[1]||e.player[0]) : (e.player || e.name || e.playerName || '');
+      pn = String(pn||'').trim();
+      if (!pn || pn === '?') return false;
+      return !/^(?:\d+\.?\s*)?(?:jugador|portero)\s*[a-k]?$/i.test(pn);
+    }
+    function _bfActaHasReal(arr){
+      return Array.isArray(arr) && arr.some(_bfIsRealName);
+    }
     var changed = false;
     Object.keys(cfg.results).forEach(function(mk){
       var r = cfg.results[mk]; if (!r || !r.played) return;
       if (/\|L[12]$/.test(mk)) return;
       var evs = r.events || r.acta;
-      /* `force` (botón 🔄 Recalcular) regenera el acta SOLO si la
-         existente es placeholder ("Jugador A/B", sin nombre real) —
-         útil si el acta vieja se guardó antes de hidratar las
-         plantillas de selecciones. Si ya hay goleadores con nombre
-         real, NO la tocamos (preserva los scorers originales). */
+      /* Regeneramos el acta SOLO si la existente es placeholder
+         ("Jugador A/B" / "Portero A/B", sin nombre real) — útil si el
+         acta vieja se guardó antes de que la plantilla del equipo
+         estuviera disponible (simulada antes de crear el roster en el
+         editor de Liga/Selecciones/Torneo). Si ya hay goleadores con
+         nombre real, NO la tocamos (preserva los scorers originales).
+         El modo AUTO (no `force`, llamado en cada `_tourRender`) además
+         SOLO pisa el placeholder si la regeneración produce nombres
+         REALES (la plantilla ya resuelve) — así no churnea ni cambia un
+         placeholder por otro en cada render. El modo `force` (botón 🔄
+         Recalcular) regenera siempre. */
+      var _wasPlaceholder = false;
       if (evs && evs.length) {
-        if (!force) return;
-        var _hasReal = evs.some(function(e){
-          if (!e) return false;
-          var pn = Array.isArray(e.player) ? (e.player[1]||e.player[0]) : (e.player || e.name || e.playerName || '');
-          pn = String(pn||'').trim();
-          return pn && !/^jugador\s*[ab]?$/i.test(pn) && pn !== '?';
-        });
-        if (_hasReal) return;   /* ya tiene nombres reales → respetar */
+        if (_bfActaHasReal(evs)) return;   /* ya tiene nombres reales → respetar */
+        _wasPlaceholder = true;            /* acta solo-placeholder → intentar sanar */
       }
       var info = idx[mk] || {};
       var home = r.home || info.a, away = r.away || info.b;
@@ -23250,10 +23314,16 @@ window._showSimProgress = function(opts, onDone){
       if (gh == null || ga == null) return;
       var gen = window.genMatchEventsEnhanced(home, away, gh|0, ga|0, null);
       var ev = (gen && gen.events) ? gen.events : (Array.isArray(gen) ? gen : []);
+      /* AUTO-HEAL: si veníamos de un placeholder y NO es force, exigimos
+         que la plantilla ya resuelva (acta nueva con nombres reales)
+         antes de pisar; si no, dejamos el placeholder intacto. */
+      if (_wasPlaceholder && !force && !_bfActaHasReal(ev)) return;
       ev.forEach(function(e){ if (e && !e.realTeam) e.realTeam = ((e.team==='a'||e.side==='a'||e.team==='home'||e.team===home) ? home : (e.team==='b'||e.side==='b'||e.team==='away'||e.team===away) ? away : home); });
       if (!r.home) r.home = home;
       if (!r.away) r.away = away;
       r.events = ev; r.acta = ev; changed = true;
+      /* MVP también puede haber quedado en placeholder ("⭐ Jugador B"). */
+      if (gen && gen.mvp) { r.mvp = gen.mvp; r.mvpTeam = gen.mvpTeam || r.mvpTeam || ''; }
     });
     if (changed) { try { if (typeof window._tourSave === 'function') window._tourSave(cfg.id, cfg); } catch(_){} }
     return changed;
@@ -24301,6 +24371,19 @@ window._showSimProgress = function(opts, onDone){
     var cached = _tourLoadCachedSync(id) || _cloneDefault(id);
     window._TOUR_CACHE = window._TOUR_CACHE || {};
     window._TOUR_CACHE[id] = cached;
+    /* AUTO-HEAL de actas con placeholders ("Jugador A/B" / "Portero
+       A/B"): si un partido se simuló ANTES de que la plantilla del
+       equipo estuviera disponible (roster creado después en el editor
+       de Liga/Selecciones/Torneo), su acta quedó con nombres genéricos.
+       Ahora que `sqFromRegistry` resuelve la plantilla (incl. rosters
+       creados dentro de torneos), regeneramos esas actas con los
+       nombres reales y persistimos — sin tocar las que ya tienen
+       goleadores reales. Petición usuario 2026-06-03. */
+    try {
+      if (typeof window._tourBackfillActasFromResults === 'function') {
+        window._tourBackfillActasFromResults(cached, (cached && cached.teams) || null);
+      }
+    } catch(_){}
     /* Pintado instantáneo. */
     try { _paintTourScreen(id, cached); } catch(_){}
     /* Refresco en bg: si el server devuelve algo más nuevo,

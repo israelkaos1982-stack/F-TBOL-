@@ -30180,10 +30180,20 @@ document.addEventListener('DOMContentLoaded', function() {
     var s=loadState();
     if(!s){
       var raw=buildPool();
+      /* Aviso de carga: si el pool aún no llegó a 62 Y el sync del
+         servidor todavía no terminó de hidratar, los feeders (los 28 del
+         Open Qualifier) pueden estar en camino. Mostramos un aviso para
+         que el usuario espere unos segundos en vez de sortear un cuadro
+         incompleto (el re-render automático subirá el contador solo). */
+      var _hydrated = (window.__compStateSyncHydrated === true);
+      var _loadingHint = (raw.length < POOL_TARGET && !_hydrated)
+        ? '<div style="margin-top:10px;padding:8px 12px;background:rgba(255,200,60,.10);border:1px solid rgba(255,200,60,.45);border-radius:8px;color:#ffe08a;">⏳ Cargando equipos del Open Qualifier y las ligas… espera unos segundos (el contador subirá solo, sin recargar).</div>'
+        : '';
       host.innerHTML='<div style="padding:24px 12px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.7;">'
         +'<div style="font-size:32px;margin-bottom:8px;">🇪🇺</div>'
         +'<div style="font-family:Oswald,sans-serif;letter-spacing:1.5px;color:rgba(255,255,255,.85);">PREVIA SIN SORTEAR</div>'
         +'<div style="margin-top:6px;">Equipos detectados: <b>'+raw.length+' / '+POOL_TARGET+'</b> (34 directos + 28 del Open Qualifier).</div>'
+        +_loadingHint
         +'<div style="margin-top:12px;padding:10px 12px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.4);border-radius:8px;color:#e0bfff;">👉 Pulsa <b>🎲 Draw</b> para sortear los 16 grupos y <b>🎮 Sim</b> para jugar las liguillas. Clasifican los 62: <b>top 12 → Champions</b>, <b>13-34 → Europa</b>, <b>35-62 → Conference</b>.</div>'
         +'</div>';
       _renderDiag();
@@ -30376,6 +30386,96 @@ document.addEventListener('DOMContentLoaded', function() {
     _wireOnce();
     if(window._uclPrevSimWired || ++_tries >= 8) clearInterval(_intv);
   }, 400);
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════
+     FASES PREVIAS DE EUROPA — re-render fiable de Wild Card /
+     Open Qualifier / Previa de Champions (2026-06-03)
+
+     Bug (foto usuario 2026-06-03): el botón 🎲 Draw de la Previa
+     "no funcionaba" y había que recargar muchas veces para que el
+     Draw / Sim de Wild Card, Open Qualifier y Previa funcionaran.
+
+     Causa raíz: el POOL de cada fase se alimenta de datos que llegan
+     de forma ASÍNCRONA:
+       · `oq_to_previa_v1`, `wc_to_open_qualifier_v1` → vía el sync del
+         servidor (GET /api/state, ver bloque siguiente).
+       · zonas `uclPrev`/`uclQual`/`wildcard` de los `ligaExt_*` → vía
+         fetchData (GET /api/kv por liga).
+     La Previa SOLO renderiza en DOMContentLoaded (cuando los feeders
+     aún están vacíos → "34/62 · PREVIA SIN SORTEAR") y NO se
+     re-renderiza al NAVEGAR a la pantalla — a diferencia de Wild Card,
+     que ya parchea go(). Así el usuario veía la pantalla congelada con
+     el pool incompleto y, al sortear, obtenía un cuadro lleno de "Por
+     definir" (o aparentemente nada) hasta recargar y forzar un render
+     fresco con los datos ya hidratados.
+
+     Fix: re-render de las 3 pantallas (a) al NAVEGAR a ellas (parche de
+     go() encadenado, con reintentos diferidos para capturar los datos
+     que llegan tarde mientras la pantalla sigue abierta) y (b) al
+     completar la hidratación del servidor (`comp-state:hydrated`).
+     Todas las funciones build*/render solo LEEN el estado y repintan su
+     contenedor (idempotente, NUNCA tocan el sorteo guardado), así que
+     re-renderizar de más es inocuo.
+     ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var SCREENS = {
+    's-wild-card':           function(){ if(typeof window._wcRender === 'function') window._wcRender(); },
+    's-open-qualifier-clas': function(){ if(typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); },
+    's-ucl-previa-clas':     function(){ if(typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); }
+  };
+  function _render(id){ try { var fn = SCREENS[id]; if(fn) fn(); } catch(_){} }
+  function _renderAll(){ for(var id in SCREENS){ if(SCREENS.hasOwnProperty(id)) _render(id); } }
+
+  var _cur = null;
+  /* Reintentos diferidos: las zonas de los `ligaExt_*` y los feeders del
+     servidor pueden llegar cientos de ms (o varios s en móvil lento)
+     después de abrir la pantalla. Re-pintamos varias veces MIENTRAS siga
+     siendo la pantalla activa para que el pool detectado suba a su total
+     sin que el usuario tenga que recargar. */
+  var _NAV_RETRY_MS  = [0, 400, 1200, 3000, 6000];
+  var _BOOT_RETRY_MS = [300, 1500, 4000];
+  function _renderWithRetries(id){
+    _NAV_RETRY_MS.forEach(function(ms){
+      setTimeout(function(){ if(_cur === id) _render(id); }, ms);
+    });
+  }
+
+  /* Parche encadenado de go() — respeta los parches previos (Wild Card
+     ya parchea go()); el nuestro queda como el más externo y delega en
+     el anterior antes de re-pintar. */
+  function _patchGo(){
+    if(window._eurPrevGoPatched) return true;
+    if(typeof window.go !== 'function') return false;
+    var orig = window.go;
+    window.go = function(id){
+      var r = orig.apply(this, arguments);
+      _cur = id;
+      if(SCREENS.hasOwnProperty(id)) _renderWithRetries(id);
+      return r;
+    };
+    window._eurPrevGoPatched = true;
+    return true;
+  }
+  if(!_patchGo()){
+    var _gt = 0, _gi = setInterval(function(){ if(_patchGo() || ++_gt >= 20) clearInterval(_gi); }, 100);
+  }
+
+  /* Re-render cuando el sync del servidor termina de hidratar los
+     feeders (oq_to_previa_v1, wc_to_open_qualifier_v1, etc.). El propio
+     hydrateFromServer ya llama a las build* pero SOLO si restauró alguna
+     clave; este listener cubre el caso de que los datos relevantes
+     llegaran por otra vía (fetchData de ligas) sin restaurar SYNC_KEYS. */
+  document.addEventListener('comp-state:hydrated', function(){ _renderAll(); });
+
+  /* Red de seguridad en el arranque: re-pinta las 3 por si la pantalla
+     inicial es una de ellas (deep-link) o los datos llegan poco después
+     del primer render de cada IIFE. */
+  function _boot(){ _BOOT_RETRY_MS.forEach(function(ms){ setTimeout(_renderAll, ms); }); }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _boot);
+  else _boot();
 })();
 </script>
 

@@ -25643,14 +25643,48 @@ window._showSimProgress = function(opts, onDone){
     return _tvEsc(flag);
   }
   window._tourFlagHtml = _tourFlagHtml;
+  /* ¿El slot tiene DATOS REALES guardados? (el admin lo creó/editó).
+     Un slot intacto NO tiene clave en localStorage (se resuelve con
+     _cloneDefault al vuelo). Si la clave existe Y trae equipos,
+     resultados, o nombre/bandera/color personalizado, es un torneo
+     real del usuario que NUNCA debe desaparecer por un sync stale. */
+  function _tvSlotHasContent(id){
+    if (TOUR_IDS.indexOf(id) === -1) return false;
+    var raw = null;
+    try { raw = localStorage.getItem(_key(id)); } catch(_){ return false; }
+    if (!raw) return false;
+    var c = null;
+    try { c = JSON.parse(raw); } catch(_){ return false; }
+    if (!c || typeof c !== 'object') return false;
+    if (Array.isArray(c.teams) && c.teams.length) return true;
+    if (c.results && typeof c.results === 'object' && Object.keys(c.results).length) return true;
+    var def = DEFAULTS[id] || {};
+    if (c.name && def.name && c.name !== def.name) return true;
+    if (c.flag && def.flag && c.flag !== def.flag) return true;
+    if (c.cardColor || c.cardText) return true;
+    return false;
+  }
   function _tvRegLoad(){
     var reg = null;
     try { var raw = localStorage.getItem(_TV_REG_KEY); if (raw) reg = JSON.parse(raw); } catch(_){}
     if (!reg || !Array.isArray(reg.visible)) reg = { v:1, visible: TOUR_BUILTINS.slice() };
+    if (!Array.isArray(reg.hidden)) reg.hidden = [];
+    var hiddenSet = {}; reg.hidden.forEach(function(id){ hiddenSet[id] = 1; });
     var seen = {}, vis = [];
     reg.visible.forEach(function(id){
       if (TOUR_IDS.indexOf(id) === -1 || seen[id]) return;
       seen[id] = 1; vis.push(id);
+    });
+    /* RECUPERACIÓN anti-wipe (2026-06-03): cualquier slot con DATOS
+       REALES en localStorage que NO esté visible y NO haya sido
+       ocultado EXPLÍCITAMENTE por el admin (tombstone `hidden`) se
+       restaura. Devuelve las cajas de Rondas Previas/Finales ("Road
+       Copa Asia", "Mundial 2032", …) cuando un GET stale del server
+       pisó el registro y las "perdió". El tombstone `hidden` evita
+       resucitar lo que el admin borró a propósito. */
+    TOUR_SLOTS.forEach(function(id){
+      if (seen[id] || hiddenSet[id]) return;
+      if (_tvSlotHasContent(id)) { seen[id] = 1; vis.push(id); }
     });
     reg.visible = vis.length ? vis : TOUR_BUILTINS.slice();
     return reg;
@@ -25843,9 +25877,15 @@ window._showSimProgress = function(opts, onDone){
         } else if (act === 'del'){
           if (!confirm('¿Eliminar este torneo de la lista? Se conservan sus datos por si lo restauras.')) return;
           reg.visible = reg.visible.filter(function(x){ return x !== id; });
+          /* Tombstone: marca el ocultado EXPLÍCITO para que la
+             recuperación anti-wipe NO lo resucite (sí distingue
+             "borrado a propósito" de "perdido por sync stale"). */
+          reg.hidden = (reg.hidden || []).filter(function(x){ return x !== id; });
+          reg.hidden.push(id);
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
         } else if (act === 'restore'){
           if (TOUR_IDS.indexOf(id) !== -1 && reg.visible.indexOf(id) === -1) reg.visible.push(id);
+          reg.hidden = (reg.hidden || []).filter(function(x){ return x !== id; });
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
         } else if (act === 'new'){
           var free = _tvSlotsOf(_tvMgBoard).filter(function(s){ return reg.visible.indexOf(s) === -1; });
@@ -25862,6 +25902,7 @@ window._showSimProgress = function(opts, onDone){
           try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[slot] = cfg; } catch(_){}
           try { if (typeof window._tourSave === 'function') window._tourSave(slot, cfg); } catch(_){}
           if (reg.visible.indexOf(slot) === -1) reg.visible.push(slot);
+          reg.hidden = (reg.hidden || []).filter(function(x){ return x !== slot; });
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
           setTimeout(function(){
             _tvCloseManage();
@@ -26033,10 +26074,49 @@ window._showSimProgress = function(opts, onDone){
     paint();
   }
   window._tvColorEditor = _tvColorEditor;
+  /* FUSIÓN (unión) del registro local con el del servidor. NUNCA
+     elimina un torneo VISIBLE en local (mismo principio anti-wipe que
+     selecciones_squad_v1 / ligaExt_*: la hidratación cross-device es
+     SIEMPRE aditiva, jamás pisa-y-borra). Conserva el orden local y
+     añade al final los slots que solo estaban en el servidor.
+     Devuelve { merged, addedFromLocal } donde addedFromLocal indica
+     que la unión tiene MÁS que el server (hay que re-subir para que
+     el otro dispositivo reciba los slots locales). */
+  function _tvRegMerge(localReg, remoteVisible, remoteHidden){
+    var lvis = (localReg && Array.isArray(localReg.visible)) ? localReg.visible : [];
+    var rvis = Array.isArray(remoteVisible) ? remoteVisible : [];
+    var seen = {}, merged = [];
+    function add(id){
+      if (TOUR_IDS.indexOf(id) === -1 || seen[id]) return;
+      seen[id] = 1; merged.push(id);
+    }
+    lvis.forEach(add);                 // primero TODO lo local (nunca se pierde)
+    var addedFromLocal = false;
+    rvis.forEach(function(id){
+      if (TOUR_IDS.indexOf(id) === -1) return;
+      if (!seen[id]) add(id);          // el server aporta slots que local no tenía
+    });
+    /* Tombstones de "ocultar" (unión local∪server). Lo VISIBLE gana
+       sobre lo oculto: un slot que algún dispositivo muestra no se
+       tombstonea (la edición que MUESTRA es aditiva, prevalece). */
+    var hid = {};
+    function addHid(id){ if (TOUR_IDS.indexOf(id) !== -1) hid[id] = 1; }
+    ((localReg && localReg.hidden) || []).forEach(addHid);
+    (Array.isArray(remoteHidden) ? remoteHidden : []).forEach(addHid);
+    merged.forEach(function(id){ delete hid[id]; });
+    var hidden = Object.keys(hid);
+    /* ¿La unión añade algo que el server NO tenía? (slots solo locales) */
+    var rset = {}; rvis.forEach(function(id){ rset[id] = 1; });
+    merged.forEach(function(id){ if (!rset[id]) addedFromLocal = true; });
+    if (!merged.length) merged = TOUR_BUILTINS.slice();
+    return { merged: { v:1, visible: merged, hidden: hidden }, addedFromLocal: addedFromLocal };
+  }
   /* Hidrata el registro desde el server (best-effort, async). Hace
      el registro cross-device y resistente a borrados de localStorage
-     ("guárdalo para siempre"). Solo pisa el local si el server trae
-     una lista válida. */
+     ("guárdalo para siempre"). FUSIONA local∪server — PROHIBIDO pisar
+     ciegamente la lista local con el GET (eso borraba las cajas de
+     Rondas Previas/Finales — "Road Copa Asia", "Mundial 2032", etc.—
+     cuando el server traía una copia stale/más corta, bug 2026-06-03). */
   function _tvHydrateReg(){
     try {
       if (typeof window.fetch !== 'function') return;
@@ -26044,7 +26124,13 @@ window._showSimProgress = function(opts, onDone){
         return (r && r.ok) ? r.json() : null;
       }).then(function(j){
         if (!j || !j.value || !Array.isArray(j.value.visible)) return;
-        try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(j.value)); } catch(_){}
+        var localReg = _tvRegLoad();
+        var res = _tvRegMerge(localReg, j.value.visible, j.value.hidden);
+        try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(res.merged)); } catch(_){}
+        /* Si la unión tiene slots que el server no traía, re-subir
+           (aditivo, nunca borra del server) para propagarlos al otro
+           dispositivo. Converge: el otro lado fusiona y deja de diferir. */
+        if (res.addedFromLocal) { try { _tvRegSave(res.merged); } catch(_){} }
         _tvRenderCards();
         if (document.getElementById('tv-mg-body')) _tvRefreshManage();
       }).catch(function(){});

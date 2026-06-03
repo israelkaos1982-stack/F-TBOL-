@@ -1,5 +1,69 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Registro de torneos (Rondas Previas/Finales) — FUSIÓN, NUNCA se pierden entre dispositivos (obligatorio, 2026-06-03)
+
+**Bug (foto usuario 2026-06-03)**: en la pantalla `🌐 Selecciones`
+(`s-selecciones`) habían desaparecido las cajas que el usuario tenía
+en **🛉 RONDAS PREVIAS** y **🏆 RONDAS FINALES** (entre ellas «Road
+Copa Asia» y «Mundial 2032») **más las cajas ocultas** — la pantalla
+mostraba «Sin rondas previas/finales. Pulsa 🖍 para crear una.».
+
+### Causa raíz
+
+Qué cajas se ven lo dicta `tour_registry_v1.visible` (lista de slots
+`spv1..spv10` = Rondas Previas, `sfn1..sfn10` = Rondas Finales,
+`tx1..tx8` = Torneos de Verano custom). El **nombre** custom de cada
+caja («Road Copa Asia»…) vive en su cfg `tour_<id>_v1`, NO en el
+registro.
+
+`_tvHydrateReg` (en `misc_body_1.html`) hacía un GET a
+`/api/kv/tour_registry_v1` y **PISABA ciegamente** `localStorage` con
+`j.value` (`localStorage.setItem(_TV_REG_KEY, JSON.stringify(j.value))`).
+Si el server traía una copia **stale/más corta** (otro dispositivo, o
+un GET previo al POST que añadió las cajas), el registro local se
+quedaba con solo los built-in → las Rondas Previas/Finales
+desaparecían. Mismo patrón anti-wipe que ya documentado para
+`selecciones_squad_v1` y los escudos de `ligaExt_*`.
+
+### Fix — FUSIÓN (unión) local∪server + recuperación + defensa server
+
+- **Cliente** (`misc_body_1.html`, IIFE del registro de torneos):
+  - `_tvRegMerge(localReg, remoteVisible, remoteHidden)`: unión por id.
+    Conserva TODO lo local (orden local) y añade al final lo que solo
+    estaba en el server. **NUNCA elimina** un slot visible local. Si la
+    unión tiene más que el server, `_tvHydrateReg` **re-sube** (aditivo).
+  - `_tvHydrateReg` FUSIONA en vez de pisar. **PROHIBIDO** volver al
+    `setItem(j.value)` ciego.
+  - **Recuperación anti-wipe** en `_tvRegLoad`: `_tvSlotHasContent(id)`
+    detecta slots con DATOS REALES en `localStorage` (equipos,
+    resultados, o nombre/bandera/color custom). Cualquier slot con
+    contenido que NO esté visible y NO esté en el tombstone `hidden` se
+    **restaura** automáticamente. Devuelve las cajas perdidas aunque el
+    registro ya se hubiera pisado.
+  - **Tombstone `hidden`**: «Eliminar» (act `del`) ahora marca el id en
+    `reg.hidden` para distinguir «borrado a propósito» de «perdido por
+    sync». La recuperación NO resucita lo tombstoneado; `restore`/`new`
+    lo quitan de `hidden`.
+- **Servidor** (`app.py`, `api_kv_set`): `_tour_registry_merge` une el
+  `visible` entrante con el guardado para `tour_registry_v1` — la lista
+  **jamás encoge** en el server (defensa en profundidad, igual que
+  `_lx_merge_teams` para escudos). `hidden` se une pero lo visible gana.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_tvHydrateReg` (o cualquier ruta nueva) pise
+   `tour_registry_v1` local con el GET sin fusionar. La hidratación es
+   SIEMPRE unión aditiva.
+2. **PROHIBIDO** que el server reduzca el `visible` de
+   `tour_registry_v1` en un POST. Siempre `_tour_registry_merge`.
+3. La recuperación por contenido (`_tvSlotHasContent`) es la red que
+   devuelve cajas ya perdidas — no quitarla. El tombstone `hidden` es
+   lo único que frena la resucitación (borrado explícito del admin).
+4. El nombre custom de cada caja vive en `tour_<id>_v1` (cfg), el
+   registro solo lista ids — toda ruta que añada/quite cajas debe tocar
+   AMBOS de forma coherente (cfg vía `_tourSave`, registro vía
+   `_tvRegSave`).
+
 ## Escudos de Resto de Ligas — backfill por nombre, NUNCA se pierden entre dispositivos (obligatorio, 2026-06-02)
 
 **Bug (foto usuario 2026-06-02)**: el amigo puso TODOS los escudos de

@@ -12882,17 +12882,121 @@ window._showSimProgress = function(opts, onDone){
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico comp-logo" src="/static/img/comp/mundialito.png" alt="Mundialito Clubes"/><h2>Mundialito Clubes</h2></div>
 <div class="jlist">
-  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Fase de Grupos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">8×4</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Octavos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">○</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Cuartos</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">○</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Semis</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">○</span></button></div>
-  <div class="jblock"><button class="jbtn c-mundialito" onclick="go('s-mundial')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">○</span></button></div>
+  <!-- Cajas por FASE (petición usuario 2026-06-03): cada caja abre SOLO su
+       fase. La fase COMPLETADA pasa a gris (.done); el indicador muestra
+       ✅ jugada · ▶ en juego · 🔒 bloqueada. Lo actualiza `_mclHubRefresh`. -->
+  <div class="jblock"><button id="mcl-box-groups" class="jbtn c-mundialito" data-mcl-view="groups" onclick="window._mclHubGo&&window._mclHubGo('groups')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Fase de Grupos</span><span id="mcl-ind-groups" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">8×4</span></button></div>
+  <div class="jblock"><button id="mcl-box-ko0" class="jbtn c-mundialito" data-mcl-view="ko0" onclick="window._mclHubGo&&window._mclHubGo('ko0')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Octavos</span><span id="mcl-ind-ko0" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">🔒</span></button></div>
+  <div class="jblock"><button id="mcl-box-ko1" class="jbtn c-mundialito" data-mcl-view="ko1" onclick="window._mclHubGo&&window._mclHubGo('ko1')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Cuartos</span><span id="mcl-ind-ko1" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">🔒</span></button></div>
+  <div class="jblock"><button id="mcl-box-ko2" class="jbtn c-mundialito" data-mcl-view="ko2" onclick="window._mclHubGo&&window._mclHubGo('ko2')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Semis</span><span id="mcl-ind-ko2" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">🔒</span></button></div>
+  <div class="jblock"><button id="mcl-box-ko3" class="jbtn c-mundialito" data-mcl-view="ko3" onclick="window._mclHubGo&&window._mclHubGo('ko3')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span id="mcl-ind-ko3" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">🔒</span></button></div>
   <!-- 📊 Estadísticas -->
   <div class="submenu-card sc-mundialito-stats" style="margin-top:10px;background:linear-gradient(135deg,#2a1a00 0%,#4a3308 12%,#806008 28%,#c8a028 45%,#ffd700 55%,#fff080 60%,#ffd700 65%,#c8a028 75%,#806008 88%,#2a1a00 100%) !important;border:1.5px solid #ffd700 !important;box-shadow:0 4px 22px rgba(255,215,0,.45),inset 0 1px 0 rgba(255,255,255,.18) !important;" onclick="go('s-mundial-stats')">
     <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
   </div>
 </div>
 </div>
+<script>
+/* Mundialito de Clubes · HUB por FASE (petición usuario 2026-06-03).
+   Cada caja del hub (Fase de Grupos · Octavos · Cuartos · Semis · FINAL)
+   abre SOLO su fase en la pantalla del torneo (`s-mundial`) fijando
+   `_mundialView['mundial']` ANTES de navegar. La fase COMPLETADA se pinta
+   en gris (.done) y muestra ✅; la fase en juego ▶; la bloqueada 🔒. El
+   estado se recalcula desde el cfg del torneo cada vez que se entra al hub
+   (observer sobre la clase `.active`) — robusto frente a re-wraps de
+   `window.go` por el bundle, igual que la caja de Estadísticas. */
+(function(){
+  function _loadCfg(){
+    try {
+      if (window._TOUR_CACHE && window._TOUR_CACHE.mundial) return window._TOUR_CACHE.mundial;
+      if (typeof window._tourLoadCachedSync === 'function') return window._tourLoadCachedSync('mundial');
+    } catch(_){}
+    return null;
+  }
+  function _groupsDone(cfg){
+    if (!cfg) return false;
+    var res = cfg.results || {};
+    var fc = cfg.formatConfig || {};
+    var nG = fc.groups || 8, pg = fc.perGroup || 4;
+    var gf = cfg.groupFixtures || {};
+    if (Object.keys(gf).length){
+      for (var g=0; g<nG; g++){
+        var fix = gf[g]; if (!fix) return false;
+        for (var j=0;j<fix.length;j++) for (var m=0;m<fix[j].length;m++){
+          if (!((res['g'+g+'_'+j+'_'+m]||{}).played)) return false;
+        }
+      }
+      /* Exigir que de verdad haya algo jugado (cfg recién sorteado tiene
+         fixtures pero 0 resultados → NO está "completada"). */
+      return Object.keys(res).some(function(k){ return /^g\d+_/.test(k) && res[k] && res[k].played; });
+    }
+    /* Sin fixtures construidos: inferir round-robin de pg equipos. */
+    var jors = Math.max(1, pg-1), perJor = Math.floor(pg/2), any=false;
+    for (var g2=0; g2<nG; g2++) for (var j2=0;j2<jors;j2++) for (var m2=0;m2<perJor;m2++){
+      var r2 = res['g'+g2+'_'+j2+'_'+m2];
+      if (!(r2 && r2.played)) return false;
+      any = true;
+    }
+    return any;
+  }
+  function _roundDone(cfg, r){
+    var res = cfg.results||{}, kb = cfg.koBracket||[], b = kb[r];
+    if (!b || b.length < 2) return false;
+    for (var i=0;i+1<b.length;i+=2){ if (!((res['ko_'+r+'_'+(i/2)]||{}).played)) return false; }
+    return true;
+  }
+  function _roundState(cfg, r, groupsDone){
+    var done = _roundDone(cfg, r);
+    var prevDone = (r===0) ? groupsDone : _roundDone(cfg, r-1);
+    var built = !!((cfg.koBracket||[])[r] && cfg.koBracket[r].length);
+    var active = !done && (built || prevDone);
+    return { done:done, active:active, locked:(!done && !active) };
+  }
+  function _applyBox(view, done, ind){
+    var btn = document.getElementById('mcl-box-'+view);
+    var sp  = document.getElementById('mcl-ind-'+view);
+    if (btn){ if (done) btn.classList.add('done'); else btn.classList.remove('done'); }
+    if (sp){
+      sp.textContent = ind;
+      sp.style.color = done ? 'rgba(255,255,255,.6)' : 'rgba(0,0,0,.55)';
+    }
+  }
+  function _refresh(){
+    var cfg = _loadCfg();
+    var gDone = cfg ? _groupsDone(cfg) : false;
+    _applyBox('groups', gDone, gDone ? '✅' : '8×4');
+    for (var r=0;r<4;r++){
+      var st = cfg ? _roundState(cfg, r, gDone) : { done:false, active:false, locked:true };
+      _applyBox('ko'+r, st.done, st.done ? '✅' : (st.active ? '▶' : '🔒'));
+    }
+  }
+  window._mclHubRefresh = _refresh;
+  window._mclHubGo = function(view){
+    try { if (typeof window._mclSetView === 'function') window._mclSetView(view); } catch(_){}
+    try { window.go('s-mundial'); } catch(_){}
+    /* Garantizar que la pantalla pinte la fase elegida tras activarse
+       (el observer de `_watchScreens` también la dispara, esto es red). */
+    try { setTimeout(function(){ try { window._tourRender && window._tourRender('mundial'); } catch(_){} }, 0); } catch(_){}
+  };
+  function _watch(){
+    var el = document.getElementById('s-mundial-clubes');
+    if (!el) return;
+    var was = el.classList.contains('active');
+    if (was) { try { _refresh(); } catch(_){} }
+    if (typeof MutationObserver !== 'function') return;
+    try {
+      var mo = new MutationObserver(function(){
+        var now = el.classList.contains('active');
+        if (now && !was) { setTimeout(_refresh, 0); setTimeout(_refresh, 250); }
+        was = now;
+      });
+      mo.observe(el, { attributes:true, attributeFilter:['class'] });
+    } catch(_){}
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _watch);
+  else _watch();
+})();
+</script>
 <style>
 /* Botones de ronda Mundialito Clubes — gradient TROFEO DORADO
    METÁLICO (petición usuario 2026-05-27, foto trofeo CC: oro brillante
@@ -13438,14 +13542,43 @@ window._showSimProgress = function(opts, onDone){
    que computan desde cfg.results[].events y NUNCA dependen del store
    ni de window._lextStatsDashHtml. */
 (function(){
+  /* Carga el cfg del Mundialito eligiendo la copia MÁS RICA en eventos:
+     `_TOUR_CACHE.mundial` puede haber sido pisado por un refresco de
+     servidor SIN actas (o quedar sin events si el save local rebotó por
+     cuota), mientras localStorage conserva los `cfg.results[].events`
+     reales (o viceversa). Contamos los partidos jugados CON events en
+     cada copia y nos quedamos con la que más tenga. Así las estadísticas
+     nunca salen vacías por culpa de una copia pobre. */
+  function _mclLoadRichestCfg(){
+    var a = null, b = null;
+    try { a = (window._TOUR_CACHE && window._TOUR_CACHE.mundial) || null; } catch(_){}
+    try {
+      var raw = localStorage.getItem('tour_mundial_v1');
+      if (raw) b = JSON.parse(raw);
+    } catch(_){}
+    if (!a && typeof window._tourLoadCachedSync === 'function') {
+      try { a = window._tourLoadCachedSync('mundial'); } catch(_){}
+    }
+    function _evCount(cfg){
+      if (!cfg || !cfg.results) return 0;
+      var n = 0, res = cfg.results;
+      Object.keys(res).forEach(function(k){
+        var r = res[k];
+        if (r && r.played && Array.isArray(r.events) && r.events.length) n++;
+      });
+      return n;
+    }
+    var ca = _evCount(a), cb = _evCount(b);
+    var best = (cb > ca) ? b : (a || b);
+    /* Mantener la cache sincronizada con la copia ganadora para que el
+       resto de la app (y el próximo render) la reutilice. */
+    if (best) { try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE.mundial = best; } catch(_){} }
+    return best;
+  }
   function _renderMundialitoStats(){
     var root = document.getElementById('mundial-stats-dashboard');
     if (!root) return;
-    var cfg = null;
-    try {
-      cfg = (window._TOUR_CACHE && window._TOUR_CACHE.mundial) || null;
-      if (!cfg && typeof window._tourLoadCachedSync === 'function') cfg = window._tourLoadCachedSync('mundial');
-    } catch(_){}
+    var cfg = _mclLoadRichestCfg();
     if (!cfg) { root.innerHTML = '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>'; return; }
     var teams = (cfg.teams || []);
     var stats = {};
@@ -13457,12 +13590,48 @@ window._showSimProgress = function(opts, onDone){
     if (!Object.keys(stats).length) {
       try { if (typeof window._tourStatsFromCfgResults === 'function') { var g = window._tourStatsFromCfgResults(cfg); if (g && Object.keys(g).length) stats = g; } } catch(_){}
     }
+    /* Si SIGUE vacío, FORZAR la regeneración del acta (events) de TODOS los
+       partidos jugados y reintentar — cubre cfgs cuyas actas se guardaron
+       como placeholder o se perdieron en una recarga. */
+    if (!Object.keys(stats).length) {
+      try { if (typeof window._tourBackfillActasFromResults === 'function') window._tourBackfillActasFromResults(cfg, teams, true); } catch(_){}
+      try { if (typeof window._mundialStatsRobustScan === 'function') { var s2 = window._mundialStatsRobustScan(cfg, teams); if (s2 && Object.keys(s2).length) stats = s2; } } catch(_){}
+    }
+    /* Último recurso: stores PERSISTIDOS de jugadores. `_tourAttachActa`
+       registra los partidos del Mundialito con competition='torneos'
+       (store `ef_player_stats_torneos_v1`), así que ese sobrevive aunque
+       el cfg pierda los events. Filtrado SIEMPRE a los equipos del torneo
+       para no mezclar con otros clubes. */
+    if (!Object.keys(stats).length && typeof window._statsFromStoreFilteredToTeams === 'function') {
+      var _sks = ['ef_player_stats_torneos_v1', 'ef_player_stats_mundial_v1'];
+      for (var _ki=0; _ki<_sks.length; _ki++){
+        try { var fb = window._statsFromStoreFilteredToTeams(_sks[_ki], teams); if (fb && Object.keys(fb).length) { stats = fb; break; } } catch(_){}
+      }
+    }
     var inner = '';
     try { if (typeof window._mundialRenderStatsGrid === 'function') inner = window._mundialRenderStatsGrid(stats); } catch(_){}
     if (!inner && typeof window._lextStatsDashHtml === 'function') {
       try { inner = window._lextStatsDashHtml(stats, true); } catch(_){}
     }
-    root.innerHTML = inner || '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
+    /* Botón 🔄 Recalcular: red de seguridad visible (regenera actas + re-
+       pinta) por si el primer render llegó antes de la hidratación. */
+    var recalc = '<div style="display:flex;justify-content:center;margin:2px 0 10px;">'
+      + '<button type="button" id="mcl-stats-recalc" '
+      + 'style="background:linear-gradient(145deg,#1f6f8b,#0d3a4a);border:1px solid rgba(77,208,225,.6);color:#cdeef5;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">'
+      + '🔄 Recalcular estadísticas</button></div>';
+    root.innerHTML = recalc + (inner || '<div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div>');
+    var rb = document.getElementById('mcl-stats-recalc');
+    if (rb) rb.addEventListener('click', function(){
+      try { rb.textContent = '⏳ Recalculando…'; rb.disabled = true; } catch(_){}
+      try {
+        var c2 = _mclLoadRichestCfg();
+        if (c2 && typeof window._tourBackfillActasFromResults === 'function'){
+          var ch = window._tourBackfillActasFromResults(c2, c2.teams||[], true);
+          if (ch && typeof window._tourSave === 'function') { try { window._tourSave('mundial', c2); } catch(_){} }
+        }
+      } catch(_){}
+      setTimeout(_renderMundialitoStats, 60);
+    });
   }
   window._renderMundialitoStats = _renderMundialitoStats;
   var _og = window.go;
@@ -21900,6 +22069,21 @@ window._showSimProgress = function(opts, onDone){
   function _renderGroupsKO(cfg, tourId, teams) {
     var fc = cfg.formatConfig || {};
     var _isMcl = (tourId === 'mundial');
+    /* Mundialito de Clubes — VISTAS POR FASE (petición usuario 2026-06-03):
+       cada caja del hub abre SOLO su fase, no todo a la vez.
+         'groups' → tablas de clasificación (sin la fase final debajo)
+         'ko0'    → Octavos · 'ko1' → Cuartos · 'ko2' → Semis · 'ko3' → Final
+       La fase completada se muestra en gris en el hub; la siguiente se abre
+       desde su propia caja. La navegación ◀▶ interna de la fase final se
+       desactiva (cada ronda tiene su caja). */
+    var _mclView = _isMcl ? (_mundialView[tourId] || 'groups') : null;
+    var _mclKoIdx = -1;
+    if (_isMcl && _mclView && _mclView.indexOf('ko') === 0) {
+      var _mvk = parseInt(_mclView.slice(2), 10);
+      if (!isNaN(_mvk)) _mclKoIdx = _mvk;
+    }
+    var _mclKoMode = (_mclKoIdx >= 0);
+    var _mclShowGroups = !_isMcl || _mclView === 'groups';
     var nGroups = fc.groups || 1;
     var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
     /* advancePerGroup === 0 → SIN fase final (solo liguilla / grupos).
@@ -21945,7 +22129,7 @@ window._showSimProgress = function(opts, onDone){
          de torneos groups-ko (Joan Gamper, Asian…) siguen con el layout
          genérico .tour-group-block. */
       if (_isMcl) {
-        html += _mclGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup);
+        if (_mclShowGroups) html += _mclGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup);
         continue;
       }
       /* Torneos de Selecciones (Rondas Finales sfn* en formato groups-ko):
@@ -21977,8 +22161,22 @@ window._showSimProgress = function(opts, onDone){
         }
       }
     }
-    /* Si todos los grupos terminaron, generar / renderizar fase KO. */
-    if (allGroupsDone && advancePerGroup > 0) {
+    /* Mundialito · VISTA DE GRUPOS: NO se pinta la fase final aquí (cada
+       ronda tiene su propia caja en el hub). Si la fase de grupos terminó,
+       una pista invita a abrir Octavos. */
+    if (_isMcl && _mclShowGroups) {
+      if (allGroupsDone && advancePerGroup > 0) {
+        html += '<div style="margin-top:14px;padding:13px 12px;text-align:center;border-top:1px solid rgba(52,224,161,.28);font-family:Oswald,sans-serif;letter-spacing:1px;font-size:11px;color:#7fffd4;line-height:1.7;">'
+          + '✅ Fase de grupos completada.<br>'
+          + '<span style="color:rgba(255,255,255,.6);font-size:10.5px;">Pulsa <b>◀ Volver</b> y abre la caja <b style="color:#f0c040;">🏆 Octavos</b> para seguir.</span>'
+          + '</div>';
+      }
+    } else if (_isMcl && _mclKoMode && (!allGroupsDone || advancePerGroup <= 0)) {
+      /* Caja de fase final abierta pero la fase de grupos aún no acabó. */
+      html += '<div style="margin-top:6px;padding:18px 14px;text-align:center;border:1px solid rgba(240,192,64,.35);border-radius:12px;background:rgba(40,30,0,.25);font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;color:#f0c040;line-height:1.7;">'
+        + '⚠️ Completa la <b>Fase de Grupos</b><br>antes de abrir esta ronda.</div>';
+    } else if (allGroupsDone && advancePerGroup > 0) {
+      /* Si todos los grupos terminaron, generar / renderizar fase KO. */
       cfg.koBracket = cfg.koBracket || (function(){
         /* Mundialito de Clubes (tourId='mundial'): bracket custom que
            garantiza 1º vs 2º + mismo grupo NUNCA hasta la Final +
@@ -22039,18 +22237,29 @@ window._showSimProgress = function(opts, onDone){
       cfg.koCurrentRound = (typeof cfg.koCurrentRound === 'number') ? cfg.koCurrentRound : 0;
       var koRounds = fc.koRounds || ['Cuartos','Semis','Final'];
       var curRealKoR = cfg.koCurrentRound;
-      /* Ronda VISUALIZADA en la fase KO (2026-05-25, navegación ◀ ▶). */
-      var curR = _tourViewRound(tourId, true, curRealKoR);
-      var isPastKoView = (curR < curRealKoR);
+      /* Ronda VISUALIZADA en la fase KO. Mundialito: la dicta la CAJA
+         abierta (_mclKoIdx); resto de torneos: navegación ◀▶ (2026-05-25). */
+      var curR = _mclKoMode ? _mclKoIdx : _tourViewRound(tourId, true, curRealKoR);
+      /* Mundialito: una ronda es "pasada" si el torneo ya avanzó más allá
+         de ella (koCurrentRound) → se ven los resultados pero NO los botones
+         SIMULAR/AVANZAR (evita re-avanzar una ronda ya cerrada). */
+      var isPastKoView = _mclKoMode ? (_mclKoIdx < curRealKoR) : (curR < curRealKoR);
       var curT = cfg.koBracket[curR] || [];
       var roundLbl = koRounds[curR] || ('Ronda KO '+(curR+1));
+      /* Mundialito: ronda futura aún no construida (la anterior no se ha
+         cerrado con AVANZAR) → aviso en vez de un cuadro vacío. */
+      if (_mclKoMode && !curT.length) {
+        html += '<div style="margin-top:6px;padding:18px 14px;text-align:center;border:1px solid rgba(240,192,64,.35);border-radius:12px;background:rgba(40,30,0,.25);font-family:Oswald,sans-serif;letter-spacing:1px;font-size:12px;color:#f0c040;line-height:1.7;">'
+          + '⚠️ Termina <b>'+(koRounds[curR-1]||'la ronda anterior')+'</b><br>y pulsa <b>AVANZAR</b> para abrir esta ronda.</div>';
+        return html;
+      }
       html += '<div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(240,192,64,.25);">';
       var _gkoDate = _tourGkoRoundDate(cfg, curR);
       html += '<p style="margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:#f0c040;flex-wrap:wrap;gap:6px;">'
         + '<span style="display:inline-flex;align-items:center;">'
-        +   _tourRoundNavHtml(tourId, true, curR, curRealKoR)
+        +   (_mclKoMode ? '' : _tourRoundNavHtml(tourId, true, curR, curRealKoR))
         +   '<span>FASE FINAL · '+roundLbl.toUpperCase()+'</span>'
-        +   _tourRoundPastBadge(curR, curRealKoR)
+        +   (_mclKoMode ? '' : _tourRoundPastBadge(curR, curRealKoR))
         + '</span>'
         + (_gkoDate ? '<span style="color:rgba(255,255,255,.6);letter-spacing:.5px;">📅 '+_gkoDate+'</span>' : '')
         + '</p>';
@@ -22288,6 +22497,12 @@ window._showSimProgress = function(opts, onDone){
      clasificación de 32 = 1º+2º de los 12 grupos + 8 mejores terceros
      y el dashboard de estadísticas agregadas de todas las fases. */
   var _mundialView = {};
+  /* Setter LIGERO de la vista por fase (sin re-render). Lo usa el hub
+     del Mundialito de Clubes (`_mclHubGo`) para fijar la fase ANTES de
+     navegar a `s-mundial`; el render lo dispara `_watchScreens` al activarse
+     la pantalla. Mantiene `_mundialView` como única fuente de la vista. */
+  window._mclSetView = function(view){ _mundialView['mundial'] = view; };
+  window._mclGetView = function(){ return _mundialView['mundial'] || 'groups'; };
   window._mundialGo = function(id, view){
     _mundialView[id] = view;
     try { window._tourRender(id); } catch(_){}
@@ -24618,6 +24833,7 @@ window._showSimProgress = function(opts, onDone){
   try { window._mundialRenderStatsGrid = _mundialRenderStatsGrid; } catch(_){}
   try { window._tourStatsFromCfgResults = _tourStatsFromCfgResults; } catch(_){}
   try { window._tourBackfillActasFromResults = _tourBackfillActasFromResults; } catch(_){}
+  try { window._statsFromStoreFilteredToTeams = _statsFromStoreFilteredToTeams; } catch(_){}
 
   function _tourSimPenalties(teamA, teamB) {
     function _pProb(atk, defOpp) {
@@ -25480,9 +25696,11 @@ window._showSimProgress = function(opts, onDone){
         winners = _tourRebalanceHumans(winners);
         kcfg2.koBracket[curR3 + 1] = winners;
         kcfg2.koCurrentRound = curR3 + 1;
-        /* Mundial 48: si estábamos en la vista de la ronda KO recién
-           cerrada, saltar a la nueva ronda para no quedar en la pasada. */
-        if (kcfg2.format === 'mundial-48' && _mundialView[ktid2] === 'ko'+curR3) {
+        /* Mundial 48 / Mundialito de Clubes: si estábamos en la vista de la
+           ronda KO recién cerrada, saltar a la nueva ronda (su caja) para
+           no quedar en la pasada. */
+        if ((kcfg2.format === 'mundial-48' || ktid2 === 'mundial')
+            && _mundialView[ktid2] === 'ko'+curR3) {
           _mundialView[ktid2] = 'ko'+(curR3 + 1);
         }
       }

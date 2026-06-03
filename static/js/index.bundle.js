@@ -11243,7 +11243,17 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
            torneo al partido N usando el formato del cfg. Sin esta
            rama la previa caía a hoy + "torneo" — bug 2026-05-27
            reportado por usuario con foto Joan Gamper J1 mostrando
-           "25 de Mayo" en vez de "04 Jun". */
+           "25 de Mayo" en vez de "04 Jun".
+
+           Torneos de Selecciones "Road" / Rondas Previas (slots spv*,
+           format 'qualifier-route' o 'groups-ko'): NO usan las filas
+           "Torneo Verano - Partido N" sino las filas "Selecciones — JN"
+           del calendario (icono 🌍 / ag-sel), las MISMAS que lee la
+           pantalla del torneo vía `_tourSelPreviaMatchDates`. El índice
+           plano (_pn, 1-based) coincide letra-a-letra con esa pantalla.
+           Sin esto la previa de "Road Copa Asia" caía a hoy + "torneo"
+           → fecha inventada "4 de Junio" en vez de "21 Ago" (bug
+           2026-06-03 reportado por usuario con foto Francia vs Vietnam). */
         if (_ptCal.tourId !== 'mundial' && _tcfgCal && _tcfgCal.format !== 'mundial-48') {
           var _fc = _tcfgCal.formatConfig || {};
           var _mk = String(_ptCal.tourKey || '');
@@ -11282,7 +11292,13 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
               if (_mLg) _pn = parseInt(_mLg[1], 10) + 1;
             }
           }
-          if (_pn > 0) return 'Torneo Verano - Partido ' + _pn;
+          if (_pn > 0) {
+            var _selRoad = (_tcfgCal.format === 'qualifier-route')
+                        || /^spv\d+$/.test(String(_ptCal.tourId || ''));
+            return _selRoad
+              ? ('Selecciones — J' + _pn)
+              : ('Torneo Verano - Partido ' + _pn);
+          }
         }
       } catch(_){}
     }
@@ -11359,7 +11375,14 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         }
       }
       if (_pn <= 0) return null;
-      var iconForTour = (_pt.tourId === 'mundial') ? '🌐' : '🌞';
+      /* Selecciones "Road" / Rondas Previas (spv* o qualifier-route): el
+         N-ésimo evento es la fila "Selecciones — JN" (icono 🌍 / ag-sel),
+         no un Torneo de Verano (🌞). Filtramos por label "selecciones"
+         (excluyendo la fase final "mundial") igual que
+         `_tourSelPreviaMatchDates`. Verano = 🌞, Mundialito = 🌐. */
+      var _selRoad = (_tcfg && _tcfg.format === 'qualifier-route')
+                  || /^spv\d+$/.test(String(_pt.tourId || ''));
+      var iconForTour = _selRoad ? '🌍' : ((_pt.tourId === 'mundial') ? '🌐' : '🌞');
       /* Escaneamos primero #ag-content-bayern (modo Bayern/Liverpool)
          si está visible; si no, el SSR global #ag-content. Si ambos
          tienen filas, contamos solo en el activo para no duplicar. */
@@ -11374,16 +11397,21 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         var icoEl = rows[i].querySelector('.ag-ico');
         if (!icoEl) continue;
         var ico = icoEl.textContent.trim();
-        if (ico === iconForTour) {
-          hits++;
-          if (hits === _pn) {
-            var dEl = rows[i].querySelector('.ag-date');
-            var wEl = rows[i].querySelector('.ag-wx');
-            return {
-              date: dEl ? dEl.textContent.trim() : '',
-              wx:   wEl ? wEl.textContent.trim() : ''
-            };
-          }
+        if (ico !== iconForTour) continue;
+        /* Para la Road, solo cuentan las filas "Selecciones — JN" (no las
+           filas 🌍 de la fase final del Mundial de selecciones). */
+        if (_selRoad) {
+          var _lbl = ((rows[i].querySelector('.ag-lbl') || {}).textContent || '').toLowerCase();
+          if (_lbl.indexOf('selecciones') === -1 || _lbl.indexOf('mundial') !== -1) continue;
+        }
+        hits++;
+        if (hits === _pn) {
+          var dEl = rows[i].querySelector('.ag-date');
+          var wEl = rows[i].querySelector('.ag-wx');
+          return {
+            date: dEl ? dEl.textContent.trim() : '',
+            wx:   wEl ? wEl.textContent.trim() : ''
+          };
         }
       }
     } catch(_){}

@@ -9912,7 +9912,14 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       return /^(?:\d+\s+)?jugador\s+[a-k]$/i.test(playerNorm);
     }
     function _normPS(s){
-      return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      /* Debe coincidir con el `_normPS` canónico de misc_body_1.html:
+         transliterar letras no-NFD (ø, æ, œ, ß, ł, đ, ð, þ) a ASCII
+         para no partir nombres como «Sørloth» (bug 2026-06-03). */
+      return String(s||'')
+        .replace(/[øØ]/g,'o').replace(/[æÆ]/g,'ae').replace(/[œŒ]/g,'oe')
+        .replace(/ß/g,'ss').replace(/[łŁ]/g,'l').replace(/[đðĐÐ]/g,'d')
+        .replace(/[þÞ]/g,'th')
+        .normalize('NFD').replace(/[̀-ͯ]/g,'')
         .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
     }
     /* Hash determinista: el mismo (team + seed) siempre devuelve el

@@ -11844,7 +11844,19 @@ window._showSimProgress = function(opts, onDone){
   };
 
   function _normPS(s){
-    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    /* Transliterar letras latinas que NO se descomponen en NFD (\u00f8, \u00e6,
+       \u0153, \u00df, \u0142, \u0111, \u00f0, \u00fe\u2026) a su equivalente ASCII ANTES de quitar lo no
+       alfanum\u00e9rico. Sin esto, `\u00f8` cae en `[^A-Za-z0-9 ]` y se sustituye
+       por un ESPACIO, partiendo el nombre: \u00abA. S\u00f8rloth\u00bb \u2192 \u00aba s rloth\u00bb
+       \u2192 (title-case) \u00abA S Rloth\u00bb en las estad\u00edsticas (bug 2026-06-03,
+       foto usuario). Con la transliteraci\u00f3n \u00abA. S\u00f8rloth\u00bb \u2192 \u00aba sorloth\u00bb
+       \u2192 \u00abA Sorloth\u00bb, coherente con c\u00f3mo ya se muestran Griezmann,
+       Julian Alvarez, etc. (todos pierden tildes/puntos en esta vista). */
+    return String(s||'')
+      .replace(/[\u00f8\u00d8]/g,'o').replace(/[\u00e6\u00c6]/g,'ae').replace(/[\u0153\u0152]/g,'oe')
+      .replace(/\u00df/g,'ss').replace(/[\u0142\u0141]/g,'l').replace(/[\u0111\u00f0\u0110\u00d0]/g,'d')
+      .replace(/[\u00fe\u00de]/g,'th')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
       .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
   }
   /* Exponer en window para que el IIFE del editor (bloque 5701-
@@ -34384,7 +34396,15 @@ https://api.sofascore.app/api/v1/team/44/image
      por el try/catch de lextOpenSquad \u2014 ahora visible gracias al
      commit anterior). */
   function _normPS(s){
-    return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    /* Misma transliteraci\u00f3n de letras no-NFD que la copia del otro
+       bloque (ver bug 2026-06-03 \u00abA. S\u00f8rloth\u00bb \u2192 \u00abA S Rloth\u00bb). Ambas
+       copias DEBEN coincidir: son la fuente de las claves del store de
+       estad\u00edsticas y deben normalizar igual. */
+    return String(s||'')
+      .replace(/[\u00f8\u00d8]/g,'o').replace(/[\u00e6\u00c6]/g,'ae').replace(/[\u0153\u0152]/g,'oe')
+      .replace(/\u00df/g,'ss').replace(/[\u0142\u0141]/g,'l').replace(/[\u0111\u00f0\u0110\u00d0]/g,'d')
+      .replace(/[\u00fe\u00de]/g,'th')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
       .replace(/[^A-Za-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
   }
   /* Bridge global desde este bloque: si el IIFE del otro

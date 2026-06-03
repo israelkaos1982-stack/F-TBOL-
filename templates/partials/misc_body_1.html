@@ -21054,6 +21054,24 @@ window._showSimProgress = function(opts, onDone){
       flag: cfg.flag || '🌐',
       from: _fromId
     };
+    /* Fijar el destino del botón ◀ Volver. El router global (index.bundle.js)
+       intercepta TODO click en `.back-btn` en fase de captura, ignora el
+       onclick inline y navega a `routerState.backTarget[screenId]`, que
+       `detectBackTarget` calcula leyendo `go('...')` del onclick. Como el
+       botón llamaba a `_tourStatsBack()` (sin `go(...)`), el router caía a
+       `s-home` (menú principal). Reescribimos el onclick a `go('<origen>')`
+       para que el router vuelva a la pantalla del torneo (grupos/clasif.)
+       y NO al menú. Bug foto usuario 2026-06-03. */
+    try {
+      var _backCands = [_fromId, (tourId ? ('s-' + tourId) : ''), 's-selecciones'];
+      var _backDst = '';
+      for (var _bi = 0; _bi < _backCands.length; _bi++) {
+        if (_backCands[_bi] && document.getElementById(_backCands[_bi])) { _backDst = _backCands[_bi]; break; }
+      }
+      if (!_backDst) _backDst = 's-selecciones';
+      var _backBtn = document.getElementById('s-tour-stats-back');
+      if (_backBtn) _backBtn.setAttribute('onclick', "go('" + _backDst + "')");
+    } catch(_){}
     var titleEl = document.getElementById('s-tour-stats-title');
     var emojiEl = document.getElementById('s-tour-stats-emoji');
     var dashEl  = document.getElementById('tour-stats-dashboard');

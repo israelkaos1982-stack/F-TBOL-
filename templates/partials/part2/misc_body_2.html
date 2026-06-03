@@ -2241,16 +2241,20 @@
       html += '<div class="liga-stat-empty">Sin datos todavía</div>';
     } else {
       var top = rows.slice(0, 6), rest = rows.slice(6);
+      /* `r.name` aquí es un EQUIPO (card de stats por equipo: posesión,
+         tiros, faltas…). Si es club/selección humano, su nombre va en
+         amarillo igual que en las cajas de jugadores (2026-06-03). */
+      var _hc = function(nm){ return (typeof window._humanPlayerClass === 'function') ? window._humanPlayerClass(nm) : ''; };
       html += top.map(function(r, i){
         return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (i+1) + '</div>'
-          + '<div class="liga-stat-player"><div class="liga-stat-name">' + _esc(r.name) + '</div></div>'
+          + '<div class="liga-stat-player"><div class="liga-stat-name' + _hc(r.name) + '">' + _esc(r.name) + '</div></div>'
           + '<div class="liga-stat-value">' + r.value + sfx + '</div></div>';
       }).join('');
       if(rest.length){
         html += '<details class="liga-stat-more"><summary>Ver todos (' + rows.length + ')</summary><div class="liga-stat-more-list">'
           + rest.map(function(r, i){
               return '<div class="liga-stat-row"><div class="liga-stat-rank">' + (i+7) + '</div>'
-                + '<div class="liga-stat-player"><div class="liga-stat-name">' + _esc(r.name) + '</div></div>'
+                + '<div class="liga-stat-player"><div class="liga-stat-name' + _hc(r.name) + '">' + _esc(r.name) + '</div></div>'
                 + '<div class="liga-stat-value">' + r.value + sfx + '</div></div>';
             }).join('')
           + '</div></details>';

@@ -29111,18 +29111,47 @@ document.addEventListener('DOMContentLoaded', function() {
   var WC_PER_GROUP   = 3;
   var WC_ROUND_TRIPS = 2;                            /* "2 idas y vueltas" */
 
+  /* Espejo EN MEMORIA del estado más reciente. Lo usa render() como
+     fuente de verdad por encima de loadState() cuando es MÁS RECIENTE
+     (mayor ts). Arregla el bug "no se simula" (foto usuario 2026-06-03):
+     el re-render automático de s-wild-card (parche de go() con reintentos
+     a 0/400/1200/3000/6000 ms, bloque "FASES PREVIAS DE EUROPA") llamaba
+     a _wcRender()→render()→loadState(); si saveState había fallado por
+     CUOTA (localStorage lleno de ligaExt_*), el disco seguía en 'drawn' y
+     ese reintento BORRABA las tablas que la sim acababa de pintar desde
+     memoria. Con el espejo, render() conserva el estado simulado aunque
+     el disco no lo tenga. */
+  var _memState = null;
+  function _wcTs(s){ return (s && typeof s.ts === 'number') ? s.ts : 0; }
+  /* Devuelve el estado MÁS RECIENTE por ts (empate → `a`, el espejo). */
+  function _freshestState(a, b){
+    if(!a) return b || null;
+    if(!b) return a;
+    return (_wcTs(b) > _wcTs(a)) ? b : a;
+  }
+
   function loadState(){ try { return JSON.parse(localStorage.getItem(WC_KEY)||'null'); } catch(_){ return null; } }
   function saveState(s){
-    /* Antes era `try { setItem } catch(_){}` puro — si la cuota
-       de localStorage estaba al límite (50+ ligaExt_* con
-       resultados pueden acercarse a los 5-10MB del navegador),
-       saveState fallaba SILENCIOSAMENTE. La sim corría OK en
-       memoria pero render() leía null y volvía al empty-state.
-       Ahora detectamos QuotaExceededError, intentamos liberar
-       espacio borrando snapshots / backups, reintentamos, y si
-       sigue fallando avisamos al usuario. */
+    /* SIEMPRE actualizamos el espejo en memoria PRIMERO — render() ya
+       puede pintar el estado simulado aunque el setItem falle por cuota.
+       Esto desacopla "lo que se ve" de "lo que cabe en disco". */
+    _memState = _freshestState(_memState, s);
+    /* Persistimos SOLO lo que render() necesita: groups + standings +
+       winners + phase + ts. `pool` (lista plana, redundante con groups) y
+       `matchesByGroup` (24×12 = 288 jornadas) NO se renderizan nunca, así
+       que se quedan FUERA del disco para que el setItem sea lo más pequeño
+       posible y no reviente la cuota (50+ ligaExt_* con resultados pueden
+       acercarse a los 5-10 MB del navegador). El bug "la sim corre pero
+       render lee disco viejo" se cubre además con el espejo _memState. */
+    var slim = {
+      groups:    s.groups    || [],
+      standings: s.standings || [],
+      winners:   s.winners   || [],
+      phase:     s.phase,
+      ts:        s.ts
+    };
     try {
-      localStorage.setItem(WC_KEY, JSON.stringify(s));
+      localStorage.setItem(WC_KEY, JSON.stringify(slim));
       return true;
     } catch(e){
       var name = (e && (e.name || e.code)) || '';
@@ -29131,34 +29160,19 @@ document.addEventListener('DOMContentLoaded', function() {
       if(isQuota){
         var freed = _wcFreeStorageSpace();
         try {
-          localStorage.setItem(WC_KEY, JSON.stringify(s));
+          localStorage.setItem(WC_KEY, JSON.stringify(slim));
           try { console.warn('[wc-saveState] retry OK tras liberar', freed, 'keys'); } catch(_){}
           return true;
         } catch(e2){
-          /* Último recurso: guardar SOLO lo que render() necesita
-             (groups + standings + winners + phase + ts), soltando el
-             `pool` y `matchesByGroup` (peso muerto que no se renderiza).
-             Así el estado "done" cabe aunque la cuota esté al límite y la
-             pantalla se actualiza igual en vez de quedarse en "SORTEO
-             LISTO" con las tablas a 0. */
-          try {
-            var slim = {
-              pool: [], groups: s.groups, matchesByGroup: [],
-              standings: s.standings, winners: s.winners,
-              phase: s.phase, ts: s.ts
-            };
-            localStorage.setItem(WC_KEY, JSON.stringify(slim));
-            try { console.warn('[wc-saveState] guardado SLIM tras cuota (liberadas', freed, 'keys)'); } catch(_){}
-            return true;
-          } catch(e3){
-            try { console.error('[wc-saveState] retry+slim falló', e2, e3); } catch(_){}
-            alert('⚠️ Sin espacio en localStorage para guardar el sorteo Wild Card.\n\n'
-                + 'Liberé '+freed+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas o usa Reset en otras competiciones.');
-            return false;
-          }
+          /* No cabe ni la versión mínima. NO bloqueamos al usuario: el
+             espejo _memState ya tiene el estado simulado y render() lo
+             pinta igual; solo no sobrevivirá a un reload hasta que se
+             libere espacio. Avisamos en consola, sin alert intrusivo. */
+          try { console.warn('[wc-saveState] sin espacio ni para slim — se usa espejo en memoria (liberadas', freed, 'keys)', e2); } catch(_){}
+          return false;
         }
       }
-      alert('⚠️ Error guardando el estado Wild Card: '+(e && e.message ? e.message : e));
+      try { console.error('[wc-saveState] error no-cuota', e); } catch(_){}
       return false;
     }
   }
@@ -29183,6 +29197,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return toDelete.length;
   }
   function clearState(){
+    _memState = null;   /* sin esto, render() resucitaría el estado simulado tras un Reset */
     try {
       localStorage.removeItem(WC_KEY);
       localStorage.removeItem(WC_CHAMP_KEY);
@@ -29649,12 +29664,16 @@ document.addEventListener('DOMContentLoaded', function() {
   function render(stateOverride){
     var host = document.getElementById('wc-body');
     if(!host) return;
-    /* `stateOverride` permite pintar desde el estado EN MEMORIA (justo
-       tras simular) sin depender de que saveState haya persistido —
-       así las tablas se rellenan SIEMPRE al pulsar 🎮 Simular, aunque la
-       cuota de localStorage impida guardar. Sin arg → lee de disco
-       (uso normal: navegación, hidratación desde server). */
-    var s = stateOverride || loadState();
+    /* Fuente de verdad = el MÁS RECIENTE (mayor ts) entre el espejo en
+       memoria y el disco. `stateOverride` (llamada directa tras simular)
+       gana siempre. Así un re-render automático sin argumento (parche de
+       go() / hidratación) NUNCA pisa el estado simulado con una copia de
+       disco más vieja (bug "no se simula" cuando saveState falla por
+       cuota). Si el disco trae algo MÁS nuevo (otro dispositivo vía
+       sync), ese gana y refresca el espejo. */
+    var disk = loadState();
+    var s = stateOverride || _freshestState(_memState, disk);
+    if(s) _memState = _freshestState(_memState, s);
     _refreshSimBtn(s);
     if(!s){
       var pool = buildPool();
@@ -29719,8 +29738,10 @@ document.addEventListener('DOMContentLoaded', function() {
   window._wcSimulate = function(){
     try { console.log('[wc-sim] _wcSimulate INICIO'); } catch(_){}
     try {
-      var s = loadState();
-      try { console.log('[wc-sim] loadState →', s ? ('phase='+s.phase) : 'null'); } catch(_){}
+      /* Estado más reciente memoria∪disco: si un sim previo quedó solo en
+         memoria (saveState falló por cuota), no re-simulamos por error. */
+      var s = _freshestState(_memState, loadState());
+      try { console.log('[wc-sim] estado →', s ? ('phase='+s.phase) : 'null'); } catch(_){}
       if(!s){
         var pool = buildPool();
         try { console.log('[wc-sim] buildPool →', pool.length, 'equipos'); } catch(_){}
@@ -29734,7 +29755,11 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
         }
         try { console.log('[wc-sim] initState OK · grupos='+(s.groups||[]).length); } catch(_){}
-        if(!saveState(s)) return; /* abortamos — el alert dentro de saveState ya avisó */
+        /* Best-effort: aunque el disco esté lleno, saveState deja el
+           sorteo en el espejo _memState, así que seguimos a simular igual
+           (no abortamos como antes — eso dejaba "no se simula" si la cuota
+           estaba al límite). */
+        saveState(s);
       }
       if(s.phase === 'done'){ render(); return; }
       /* Evitar doble lanzamiento mientras un sim previo aún corre. */

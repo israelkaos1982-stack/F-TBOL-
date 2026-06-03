@@ -45884,7 +45884,7 @@ https://api.sofascore.app/api/v1/team/44/image
           if (r === 'done' || r === 'out') status = 'done';
         } catch(_){}
       }
-      out.push({ status:status, label:def.label, emoji:def.emoji, screen:def.screen });
+      out.push({ id:def.id, status:status, label:def.label, emoji:def.emoji, screen:def.screen });
     });
     /* Superliga vive fuera del modal del calendario — la añadimos
        sólo si el equipo está inscrito en `superliga_teams_v1`. */
@@ -45894,6 +45894,7 @@ https://api.sofascore.app/api/v1/team/44/image
         var slSt = _loadJSON('superliga_state_v1');
         var slCh = slSt && (slSt.champion || slSt.campeon);
         out.push({
+          id:'superliga',
           status: _statusFromChamp(slCh, aliases),
           label:'Superliga', emoji:'🌟', screen:'s-superliga-clas'
         });
@@ -45949,6 +45950,30 @@ https://api.sofascore.app/api/v1/team/44/image
     }, true);
   })();
 
+  /* ── Logos oficiales de cada competición (PNG en static/img/comp/).
+     Si hay logo para el chip se pinta como <img>; si la imagen falla al
+     cargar (onerror) se cae automáticamente al emoji. El admin puede
+     sobrescribir cualquiera subiendo su icono desde la pantalla
+     COMPETICIONES (`comp_icons_v1`, sincronizado entre dispositivos),
+     que tiene prioridad sobre el PNG por defecto.
+     Las entradas de `_CHIP_LOGO_FILES` se van añadiendo conforme se
+     suben los PNG al repo — un chip sin entrada (y sin override) sigue
+     mostrando su emoji, sin lanzar peticiones 404. */
+  var _CHIP_LOGO_BASE = '/static/img/comp/';
+  var _CHIP_LOGO_FILES = {
+    /* id → fichero. Ej: mundial:'mundialito.png'. Vacío hasta subir PNGs. */
+  };
+  function _chipLogoSrc(id, label){
+    /* 1) override del admin por label (comp_icons_v1, dataURI o URL). */
+    try {
+      var icons = JSON.parse(localStorage.getItem('comp_icons_v1') || '{}');
+      if (icons && label && icons[label]) return icons[label];
+    } catch(_){}
+    /* 2) PNG oficial por defecto del repo. */
+    var f = id && _CHIP_LOGO_FILES[id];
+    return f ? (_CHIP_LOGO_BASE + f) : '';
+  }
+
   function _render(){
     var row = document.getElementById('munich-comps-row');
     if (!row) return;
@@ -45964,9 +45989,15 @@ https://api.sofascore.app/api/v1/team/44/image
       var stTxt = (it.status === 'done') ? 'Finalizada'
                 : (it.status === 'out')  ? 'Eliminado'
                 :                          'En juego';
+      var logo = _chipLogoSrc(it.id, it.label);
+      var ico = logo
+        ? '<img src="' + _esc(logo) + '" alt="" '
+          + 'onerror="this.style.display=\'none\';var s=this.nextSibling;if(s)s.style.display=\'\';">'
+          + '<span style="display:none;">' + _esc(it.emoji) + '</span>'
+        : _esc(it.emoji);
       return ''
         + '<div class="munich-comp-chip ' + it.status + '"' + clk + ' role="button" tabindex="0">'
-        +   '<div class="munich-comp-ico">' + _esc(it.emoji) + '</div>'
+        +   '<div class="munich-comp-ico">' + ico + '</div>'
         +   '<div class="munich-comp-lbl">' + _esc(it.label) + '</div>'
         +   '<div class="munich-comp-status">' + stTxt + '</div>'
         + '</div>';

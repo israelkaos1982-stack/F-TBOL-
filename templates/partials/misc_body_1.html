@@ -22109,7 +22109,12 @@ window._showSimProgress = function(opts, onDone){
           jbtnClass:'c-road', jLbl:_jLbl, flag:_flag, jidPrefix:'sel-j-' }
       : { acc:_C.acc, accRGB:_C.accRGB, hdrGrad:_C.hdrGrad, humanCol:_C.humanCol,
           bg1:'#040c16', bg2:'#0a1626',
-          humanBorder:'#3da0ff', humanGlow:'rgba(61,160,255,.65)', humanGlowIn:'rgba(61,160,255,.18)',
+          /* Grupo con humano → borde ROSA llamativo, NO azul (el tema de
+             la Road es azul, así que un borde azul no destacaría del
+             resto de grupos). Regla 2026-05-24: el grupo del humano
+             siempre rosa para encontrarlo rápido (foto usuario
+             2026-06-03 "Road Copa Asia": Francia💡 no se distinguía). */
+          humanBorder:'#ff3d99', humanGlow:'rgba(255,61,153,.70)', humanGlowIn:'rgba(255,61,153,.18)',
           jbtnClass:'c-roadq', jLbl:_jLbl, flag:_flag, jidPrefix:'selp-j-' };
     return _bigGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, TH, slotBase);
   }

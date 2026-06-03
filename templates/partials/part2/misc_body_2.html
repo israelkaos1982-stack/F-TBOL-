@@ -29797,30 +29797,33 @@ document.addEventListener('DOMContentLoaded', function() {
         try { console.log('[wc-sim] ya en curso — ignorado'); } catch(_){}
         return;
       }
-      /* Simulación EN SEGUNDO PLANO (chip flotante con %). Persistencia
-         y render al terminar. */
-      simulateAllChunked(s, function(ok){
+      /* Simulación SÍNCRONA en UN solo pase + feedback garantizado
+         (2026-06-03). Antes corría por `simulateAllChunked`: los 24 grupos
+         en una cadena de `setTimeout(step,28)`. En el MÓVIL, al atenuarse
+         o apagarse la pantalla el navegador PAUSA los timers de fondo y la
+         cadena se quedaba CONGELADA a mitad (foto usuario: «60/288 · 21%»
+         sin avanzar en 35 min). Los 288 partidos son aritmética ligera
+         (<1 s de CPU), así que los jugamos de golpe en UN bloque síncrono:
+         imposible que se quede a medias por throttling de timers. Cedemos
+         un tick para pintar el aviso "Simulando…" antes de bloquear. */
+      _wcToast('⏳ Simulando Wild Card · 24 grupos (288 partidos)…', true);
+      setTimeout(function(){
         try {
-          try { console.log('[wc-sim] simulateAllChunked OK · phase='+s.phase); } catch(_){}
-          /* Pintamos SIEMPRE desde el estado EN MEMORIA (no dependemos de
-             que saveState haya persistido): así las tablas se rellenan al
-             instante aunque la cuota de localStorage falle. saveState
-             corre igualmente para propagar al server / sobrevivir al
-             reload. */
+          simulateAll(s);            /* 288 partidos en un único pase */
           var saved = saveState(s);
           render(s);
-          if(!saved){
-            try { console.warn('[wc-sim] render desde memoria (saveState falló)'); } catch(_){}
-          }
-          /* Verificación post-sim: si algo dejó el estado en 'drawn',
-             avisa al usuario. */
-          if(s.phase !== 'done'){
-            alert('⚠️ La simulación terminó pero el estado no quedó como "done". Mira la consola para detalles.');
+          if(s.phase === 'done'){
+            var nw = (s.winners || []).length;
+            _wcToast('✅ Wild Card simulada · ' + nw + ' ganadores → Open Qualifier.'
+              + (saved ? '' : ' (almacenamiento lleno: se mantiene en memoria)'), true);
+          } else {
+            _wcToast('⚠️ Terminó pero el estado no quedó "done". F12 → Consola.', false);
           }
         } catch(e2){
-          try { console.error('[_wcSimulate done]', e2); } catch(_){}
+          try { console.error('[_wcSimulate sync]', e2); } catch(_){}
+          _wcToast('❌ Error al simular: ' + (e2 && e2.message || e2), false);
         }
-      });
+      }, 30);
     } catch(e){
       try { console.error('[_wcSimulate]', e); } catch(_){}
       alert('⚠️ Error al simular Wild Card: '+(e && e.message ? e.message : e)+'\n\nRevisa la consola (F12) para más detalles.');

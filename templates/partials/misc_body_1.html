@@ -46265,11 +46265,48 @@ https://api.sofascore.app/api/v1/team/44/image
   function _chipTourHasTeams(cfg){
     return !!(cfg && Array.isArray(cfg.teams) && cfg.teams.length >= 2);
   }
+  /* ¿Están jugados TODOS los partidos de un fixture (array de jornadas,
+     cada jornada array de partidos)? Mismo esquema de claves que
+     `_tourFixtureProgress`: `<prefix><jornada>_<idx>`. Devuelve false
+     si el fixture está vacío (un torneo sin partidos no está "acabado"). */
+  function _chipFixtureAllDone(fixture, res, prefix){
+    if (!fixture || typeof fixture.forEach !== 'function') return false;
+    var done = 0, tot = 0;
+    fixture.forEach(function(jor, j){
+      if (!jor || typeof jor.forEach !== 'function') return;
+      jor.forEach(function(m, mi){
+        tot++;
+        var r = res[(prefix || '') + j + '_' + mi];
+        if (r && r.played) done++;
+      });
+    });
+    return tot > 0 && done === tot;
+  }
+  /* ¿Están jugados TODOS los partidos de TODOS los grupos/liguilla?
+     (groups-ko / league-ko / swiss SIN fase final → campeón = 1º de la
+     tabla). `groupFixtures` puede ser objeto `{0:[...],1:[...]}` o array;
+     el prefijo de cada grupo es `g<key>_`. */
+  function _chipAllGroupsDone(cfg){
+    var fx = cfg.groupFixtures;
+    if (!fx) return false;
+    var res = cfg.results || {};
+    var keys = Object.keys(fx);
+    if (!keys.length) return false;
+    var sawAny = false;
+    for (var i = 0; i < keys.length; i++){
+      var g = keys[i], arr = fx[g];
+      if (!arr || !arr.length) continue;
+      sawAny = true;
+      if (!_chipFixtureAllDone(arr, res, 'g' + g + '_')) return false;
+    }
+    return sawAny;
+  }
   function _chipTourCfgDone(cfg){
     if (!cfg || typeof cfg !== 'object') return false;
     var res = cfg.results || {};
     function _played(k){ var r = res[k]; return !!(r && r.played); }
     var fmt = cfg.format;
+    var fc = cfg.formatConfig || {};
     /* KO directo (ko, ko-2leg): la final es el último par de cfg.bracket. */
     if (fmt === 'ko' || fmt === 'ko-2leg'){
       var br = cfg.bracket || [];
@@ -46278,14 +46315,26 @@ https://api.sofascore.app/api/v1/team/44/image
       if (!br[lr] || br[lr].length < 2) return false;   /* final aún no formada */
       return _played(lr + '_0');
     }
-    /* groups-ko / mundial-48 / league-ko / swiss: la final es la última
-       ronda de cfg.koBracket → result key `ko_<lastR>_0`. */
+    /* Liga pura (round-robin, sin fase final): campeón = 1º de la tabla
+       → finalizado cuando TODOS los partidos del fixture están jugados.
+       Sin esto, un Torneo de Verano «Liga» terminado se quedaba SIEMPRE
+       en «En juego» (bug foto usuario 2026-06-03). */
+    if (fmt === 'league'){
+      return _chipFixtureAllDone(cfg.fixture, res, '');
+    }
+    /* groups-ko / mundial-48 / league-ko / swiss. */
     if (fmt === 'groups-ko' || fmt === 'mundial-48'
         || fmt === 'league-ko' || fmt === 'swiss'){
+      var kr = fc.koRounds || [];
+      /* SIN fase final (suizo/liguilla con `advancePerGroup === 0` o
+         `koRounds` vacío, p.ej. Joan Gamper suizo con 0 a la fase final):
+         campeón = 1º de la liguilla → finalizado cuando TODOS los
+         partidos de grupos están jugados. */
+      if (!kr.length || fc.advancePerGroup === 0){
+        return _chipAllGroupsDone(cfg);
+      }
       var kb = cfg.koBracket || [];
-      var kr = (cfg.formatConfig && cfg.formatConfig.koRounds) || [];
-      var lr2 = (kr.length ? kr.length : kb.length) - 1;
-      if (lr2 < 0) return false;
+      var lr2 = kr.length - 1;
       if (!kb[lr2] || kb[lr2].length < 2) return false; /* final aún no sorteada */
       return _played('ko_' + lr2 + '_0');
     }

@@ -12344,6 +12344,18 @@ window._showSimProgress = function(opts, onDone){
 
 </div>
 <div class="screen" id="s-liga-resultados">
+<style>
+  /* Título en UNA sola línea horizontal: forzamos nowrap y reducimos
+     el tamaño con clamp si no cabe. Ocultamos la línea decorativa
+     ::after para dejar todo el ancho al título. */
+  #s-liga-resultados .sec-hdr{flex-wrap:nowrap;gap:8px;}
+  #s-liga-resultados .sec-hdr h2{
+    font-size:clamp(13px,4.6vw,18px);
+    letter-spacing:1px;
+    white-space:nowrap;
+  }
+  #s-liga-resultados .sec-hdr::after{display:none;}
+</style>
 <button class="back-btn" onclick="go('s-liga')">◀ Volver</button>
 <div class="sec-hdr"><img alt="Liga EA Sports" class="sec-ico" src="/static/img/logos/spain_la-liga.football-logos.cc.svg"/><h2>Liga EA Sports · Resultados</h2></div>
 <div id="ia-res-section" style="margin-top:8px;padding:0 4px 20px;">

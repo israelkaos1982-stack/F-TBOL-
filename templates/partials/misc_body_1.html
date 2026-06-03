@@ -50199,15 +50199,20 @@ https://api.sofascore.app/api/v1/team/44/image
   /* ── AUTO-EVALUACIÓN de objetivos (subset fiable de Liga) ─────────
      Marca solos los objetivos con `data-auto` calculables 100% desde
      los datos persistidos de Liga EA (clasificación + resultados):
-       liga-pos-6      → posición ≤ 6 (vas en zona / has terminado top6)
-       liga-wins-casa-10 → victorias en casa en Liga ≥ 10
-       liga-wins-4     → racha actual de victorias seguidas ≥ 4
-       liga-imbatido-7 → racha actual sin perder ≥ 7
-       liga-gf-70      → goles a favor en Liga ≥ 70
-       liga-dg-15      → diferencia de goles ≥ +15
-     Resuelve el equipo del hub dinámicamente. Si la clasificación
-     aún no incluye al equipo (datos no cargados) NO toca nada — así
-     nunca desmarca por un estado transitorio. El resto de objetivos
+       liga-pos-6      → FINAL: terminar ≤ 6 (solo al acabar la liga)
+       liga-wins-casa-10 → acumulativo: victorias en casa ≥ 10
+       liga-wins-4     → acumulativo (engancha): racha de victorias ≥ 4
+       liga-imbatido-7 → acumulativo (engancha): racha sin perder ≥ 7
+       liga-gf-70      → acumulativo: goles a favor ≥ 70
+       liga-dg-15      → FINAL: dif. de goles ≥ +15 al cerrar la liga
+     SENTIDO COMÚN: los objetivos de CLASIFICACIÓN FINAL (posición,
+     dif. de goles final, máximo goleador del grupo, menos tarjetas,
+     quedar por delante del rival…) solo se conceden cuando la
+     competición ha terminado (Liga = 38 jornadas; Superliga = 20
+     partidos). Los ACUMULATIVOS/hito se enganchan al alcanzarse y no
+     se desmarcan. Resuelve el equipo del hub dinámicamente. Si la
+     clasificación aún no incluye al equipo (datos no cargados) NO toca
+     nada — así nunca desmarca por un estado transitorio. El resto de objetivos
      (jugadores, rankings, posesión, copa/europa/superliga/selección)
      siguen siendo manuales. Lo dispara `autoEvalAllTeams` del bundle
      (tras cada Sim de Liga y al cargar) + al abrir la pantalla. */
@@ -50289,40 +50294,60 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     var lGf = lRow ? (parseInt(lRow.gf,10)||0) : 0;
     var lDg = lRow ? (parseInt(lRow.dg,10)||0) : 0;
+    /* La Liga EA son 38 jornadas (ver collectStandings). Los objetivos
+       de CLASIFICACIÓN FINAL (terminar entre los N, dif. de goles final)
+       solo tienen sentido cuando la temporada ha terminado. */
+    var ligaComplete = !!(lRow && (parseInt(lRow.pj,10)||0) >= 38);
 
     /* ── Contexto SUPERLIGA (lazy; null si no hay datos) ── */
     var sl; /* undefined = aún no calculado; null = sin datos */
     function SL(){ if (sl === undefined) sl = _superligaCtx(tnorm); return sl; }
 
+    /* Métricas de CLASIFICACIÓN FINAL (solo se confirman al terminar la
+       competición). El resto son ACUMULATIVAS / de hito (se enganchan al
+       alcanzarse y no se desmarcan). */
+    var LIGA_FINAL = { 'liga-pos':1, 'liga-dg':1 };
+    var SL_FINAL   = { 'sl-not-most-conceded':1, 'sl-top-scorer':1, 'sl-least-cards':1, 'sl-no-loss-by':1, 'sl-ahead-rival':1 };
+
     function evalLiga(metric, N){
       if (!lRow) return null;
-      if (metric === 'liga-pos')         return { ok: lPos != null && lPos <= N };
-      if (metric === 'liga-wins-casa')   return { ok: lHomeWins >= N,  val: lHomeWins };
-      if (metric === 'liga-wins-streak') return { ok: lWinStreak >= N, val: lWinStreak };
-      if (metric === 'liga-unbeaten')    return { ok: lUnbeaten >= N,  val: lUnbeaten };
-      if (metric === 'liga-gf')          return { ok: lGf >= N,        val: lGf };
-      if (metric === 'liga-dg')          return { ok: lDg >= N,        val: lDg, dg:true };
-      return null;
+      var r = null;
+      if (metric === 'liga-pos')         r = { ok: lPos != null && lPos <= N };
+      else if (metric === 'liga-wins-casa')   r = { ok: lHomeWins >= N,  val: lHomeWins };
+      else if (metric === 'liga-wins-streak') r = { ok: lWinStreak >= N, val: lWinStreak };
+      else if (metric === 'liga-unbeaten')    r = { ok: lUnbeaten >= N,  val: lUnbeaten };
+      else if (metric === 'liga-gf')          r = { ok: lGf >= N,        val: lGf };
+      else if (metric === 'liga-dg')          r = { ok: lDg >= N,        val: lDg, dg:true };
+      else return null;
+      r.kind = LIGA_FINAL[metric] ? 'final' : 'cumulative';
+      r.complete = ligaComplete;
+      return r;
     }
     function evalSL(metric, N){
       var c = SL();
       if (!c) return null;
-      if (metric === 'sl-pts')      return { ok: c.row.pts >= N, val: c.row.pts };
-      if (metric === 'sl-wins')     return { ok: c.row.v   >= N, val: c.row.v };
-      if (metric === 'sl-unbeaten'){ var st = _trailing(c.row.form, function(x){ return x==='W'||x==='D'; }); return { ok: st >= N, val: st }; }
-      if (metric === 'sl-max-goals'){ var mx = 0; c.hubMatches.forEach(function(g){ if (g.gf > mx) mx = g.gf; }); return { ok: mx >= N, val: mx }; }
-      if (metric === 'sl-not-most-conceded') return { ok: c.hubMatches.length > 0 && c.row.gc < c.maxGc };
-      if (metric === 'sl-top-scorer')        return { ok: c.scorerRank != null && c.scorerRank <= N };
-      if (metric === 'sl-least-cards')       return { ok: c.hubMatches.length > 0 && c.hubCards <= c.minCardsOthers };
-      if (metric === 'sl-no-loss-by'){ var bad = c.hubMatches.some(function(g){ return (g.ga - g.gf) > N; }); return { ok: c.hubMatches.length > 0 && !bad }; }
-      if (metric === 'sl-ahead-rival'){
+      /* Superliga = 20 partidos del hub (enunciado "de 20 partidos"). */
+      var slComplete = c.hubMatches.length >= 20;
+      var r = null;
+      if (metric === 'sl-pts')      r = { ok: c.row.pts >= N, val: c.row.pts };
+      else if (metric === 'sl-wins')     r = { ok: c.row.v   >= N, val: c.row.v };
+      else if (metric === 'sl-unbeaten'){ var st = _trailing(c.row.form, function(x){ return x==='W'||x==='D'; }); r = { ok: st >= N, val: st }; }
+      else if (metric === 'sl-max-goals'){ var mx = 0; c.hubMatches.forEach(function(g){ if (g.gf > mx) mx = g.gf; }); r = { ok: mx >= N, val: mx }; }
+      else if (metric === 'sl-not-most-conceded') r = { ok: c.hubMatches.length > 0 && c.row.gc < c.maxGc };
+      else if (metric === 'sl-top-scorer')        r = { ok: c.scorerRank != null && c.scorerRank <= N };
+      else if (metric === 'sl-least-cards')       r = { ok: c.hubMatches.length > 0 && c.hubCards <= c.minCardsOthers };
+      else if (metric === 'sl-no-loss-by'){ var bad = c.hubMatches.some(function(g){ return (g.ga - g.gf) > N; }); r = { ok: c.hubMatches.length > 0 && !bad }; }
+      else if (metric === 'sl-ahead-rival'){
         var rivalN = ''; try { rivalN = _norm(localStorage.getItem('munich-obj-rival') || ''); } catch(_){}
         if (!rivalN) return null;
         var rPos = null; c.arr.forEach(function(t,i){ if (_norm(t.name) === rivalN) rPos = i + 1; });
         if (rPos == null) return null;   /* rival no está en la Superliga → no marcar */
-        return { ok: c.pos < rPos };
+        r = { ok: c.pos < rPos };
       }
-      return null;
+      else return null;
+      r.kind = SL_FINAL[metric] ? 'final' : 'cumulative';
+      r.complete = slComplete;
+      return r;
     }
 
     autoInputs.forEach(function(cb){
@@ -50331,14 +50356,26 @@ https://api.sofascore.app/api/v1/team/44/image
       var res = metric.indexOf('sl-') === 0 ? evalSL(metric, N) : evalLiga(metric, N);
       if (!res) return;   /* datos no listos para esta métrica → no tocar este objetivo */
       var lbl = cb.closest('.obj-item');
+      /* El contador SIEMPRE refleja el progreso en vivo (aunque el ✅ aún
+         no se conceda). */
       if (res.val != null && lbl){
         var ctr = lbl.querySelector('.obj-counter');
         if (ctr && ctr.childNodes[0]){
           ctr.childNodes[0].textContent = res.dg ? (res.val >= 0 ? '+' + res.val : String(res.val)) : String(res.val);
         }
       }
-      cb.checked = !!res.ok;
-      if (lbl) lbl.classList.toggle('done', !!res.ok);
+      if (res.kind === 'final'){
+        /* Clasificación final: SOLO se concede cuando la competición ha
+           terminado. A mitad de temporada se mantiene SIN marcar aunque
+           ahora mismo se cumpla (la posición/orden todavía puede cambiar). */
+        cb.checked = res.complete ? !!res.ok : false;
+      } else {
+        /* Acumulativo / hito: se ENGANCHA al alcanzarse y no se desmarca
+           (lograr "4 victorias seguidas" sigue contando aunque luego
+           pierdas; "70 goles" no se pierde). */
+        if (res.ok) cb.checked = true;
+      }
+      if (lbl) lbl.classList.toggle('done', cb.checked);
     });
     /* Recalcula recompensas + badges + persiste (versión parcheada). */
     try { if (typeof window.athObjCount === 'function') window.athObjCount(); } catch(_){}

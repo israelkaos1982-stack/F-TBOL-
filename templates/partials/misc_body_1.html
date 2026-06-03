@@ -16436,39 +16436,27 @@ window._showSimProgress = function(opts, onDone){
      dedicada `s-tour-stats` con el dashboard completo (mismo look
      que la Caja España / s-liga-stats). Petición usuario 2026-05-24:
      "no es desplegable, es una caja que al pulsar se abre".         */
+  /* Mismo formato PLANO que la barra del Mundial 2032 (.jbtn.c-mundial,
+     foto 2 del usuario) pero en VERDE: barra horizontal con gradiente
+     90deg (oscuro → verde vivo → oscuro), texto Oswald y flecha a la
+     derecha. Sin brillos/sombras pesadas — look limpio idéntico a foto 2. */
   .tour-stats-jbtn{
-    width:100%;display:flex;align-items:center;gap:13px;
-    background:linear-gradient(135deg,#031c08 0%,#0a4a18 18%,#15832c 42%,#27c84a 56%,#15832c 72%,#0a4a18 88%,#031c08 100%) !important;
-    border:1.5px solid #3ee06a !important;
-    box-shadow:0 5px 22px rgba(39,200,74,.42),inset 0 1px 0 rgba(255,255,255,.22),inset 0 -2px 9px rgba(0,0,0,.30) !important;
-    border-radius:13px;
-    padding:14px 18px;cursor:pointer;
-    font-family:Rajdhani,sans-serif;color:#fff;
-    position:relative;overflow:hidden;
-    transition:transform .08s ease, box-shadow .15s ease, filter .15s ease;
+    display:flex;align-items:center;gap:10px;width:100%;
+    padding:12px 14px;border:none;border-radius:5px;cursor:pointer;
+    font-family:'Oswald',sans-serif;font-size:13px;font-weight:600;
+    letter-spacing:1.5px;text-align:left;color:rgba(255,255,255,.92);
+    background:linear-gradient(90deg,#053a16,#0c7a30,#1ec64e,#0c7a30,#053a16) !important;
+    box-shadow:0 3px 14px rgba(30,198,78,.30),inset 0 1px 0 rgba(255,255,255,.14) !important;
+    transition:filter .16s;
   }
-  /* Brillo diagonal estático que da el acabado "videojuego" horizontal. */
-  .tour-stats-jbtn::before{
-    content:'';position:absolute;top:0;left:-28%;width:34%;height:100%;
-    background:linear-gradient(100deg,transparent,rgba(255,255,255,.26),transparent);
-    transform:skewX(-18deg);pointer-events:none;
-  }
-  .tour-stats-jbtn:hover{box-shadow:0 7px 28px rgba(39,200,74,.7),inset 0 1px 0 rgba(255,255,255,.3) !important;filter:brightness(1.06);}
-  .tour-stats-jbtn:active{transform:translateY(1px);}
-  .tour-stats-jbtn .tsb-emoji{
-    flex:0 0 auto;width:36px;height:36px;line-height:1;font-size:20px;
-    display:flex;align-items:center;justify-content:center;border-radius:10px;
-    background:rgba(0,0,0,.30);
-    box-shadow:inset 0 0 0 1px rgba(62,224,106,.55),0 0 11px rgba(62,224,106,.40);
-    filter:drop-shadow(0 0 6px rgba(170,245,150,.7));
-  }
-  .tour-stats-jbtn .tsb-label{
-    flex:1;text-align:left;font-family:Oswald,sans-serif;font-weight:700;
-    font-size:15px;letter-spacing:3px;text-transform:uppercase;
-    color:#ecffe9 !important;text-shadow:0 0 14px rgba(62,224,106,.7),0 1px 2px rgba(0,0,0,.7);
+  .tour-stats-jbtn:hover{filter:brightness(1.12);}
+  .tour-stats-jbtn:active{filter:brightness(.94);}
+  .tour-stats-jbtn b{
+    font-weight:700;letter-spacing:2px;text-transform:uppercase;
+    color:#ecffe9 !important;text-shadow:0 0 9px rgba(120,255,150,.5),0 1px 2px rgba(0,0,0,.55);
   }
   .tour-stats-jbtn .tsb-arr{
-    flex:0 0 auto;font-size:15px;color:#d6ffd5 !important;text-shadow:0 0 10px rgba(62,224,106,.95);
+    margin-left:auto;font-size:13px;color:rgba(255,255,255,.9);
   }
   /* Caja "📤 RAMIFICACIÓN" del formato qualifier-route. Marco morado/
      magenta (tema Selecciones · destino) con sub-secciones por
@@ -20783,11 +20771,13 @@ window._showSimProgress = function(opts, onDone){
      Petición usuario 2026-05-24: "no es desplegable, es una caja que
      al pulsar se abre parecido a la foto 2".                       */
   function _tourStatsBtnHtml(tourId){
-    return '<div style="padding:0 12px;margin:8px 0 10px;">'
+    /* Barra horizontal PLANA estilo Mundial 2032 (.jbtn.c-mundial) pero en
+       VERDE — petición usuario 2026-06-03 (foto: "hazla verde, similar a la
+       caja Estadísticas de la foto 2"). Emoji + label en negrita + flecha. */
+    return '<div style="padding:0 18px;margin:8px 0 10px;">'
          +   '<button type="button" class="tour-stats-jbtn" '
          +     'onclick="window._tourStatsOpen&amp;&amp;window._tourStatsOpen(\''+tourId+'\',\'s-'+tourId+'\')">'
-         +     '<span class="tsb-emoji">📊</span>'
-         +     '<span class="tsb-label">Estadísticas</span>'
+         +     '📊 <b>Estadísticas</b>'
          +     '<span class="tsb-arr">▶</span>'
          +   '</button>'
          + '</div>';

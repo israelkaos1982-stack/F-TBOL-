@@ -30875,6 +30875,21 @@ window._showSimProgress = function(opts, onDone){
     <span>Enviar realidad de cada equipo a su Europa (admin)</span>
   </button>
 </div>
+<!-- Botón "♻️ Re-cuadrar Europa" (PIN admin 747). Restaura el reparto
+     europeo CANÓNICO (LEAGUE_DEFAULT_ZONES) en TODAS las ligas, limpia
+     los feeders obsoletos del cascade (WC→OQ→Previa) + la snapshot
+     congelada, y re-congela el cuadre limpio (28/34/88/72/18/12).
+     Para cuando los números se descuadran (foto usuario 2026-06-03:
+     27/35/92/73/17/11). Petición usuario: lo pulsa cuando vea el
+     desajuste y vuelve a cuadrar de un toque. -->
+<div class="restoligas-actions" style="margin-top:10px;">
+  <button class="restoligas-btn restoligas-btn-commit"
+          onclick="window.pG(function(){window._restoLigasRecuadrarEurope&&window._restoLigasRecuadrarEurope();})"
+          style="flex:1 1 auto;background:linear-gradient(90deg,#1a2e1a,#1e4a2e,#2e7a4e,#1e4a2e,#1a2e1a);">
+    <span class="restoligas-ico">♻️</span>
+    <span>Re-cuadrar reparto europeo (canónico) (admin)</span>
+  </button>
+</div>
 </div>
 
 <script>
@@ -31172,6 +31187,160 @@ window._showSimProgress = function(opts, onDone){
         + '🟠 Europa League: ' + totalUel + ' equipos\n'
         + '🟢 Conference League: ' + totalUecl + ' equipos\n\n'
         + 'A partir de ahora estas pantallas usarán esta snapshot. Si vuelves a simular las ligas, pulsa este botón otra vez para refrescar.');
+  };
+
+  /* ── Re-cuadrar reparto europeo (canónico) ───────────────────────
+     Petición usuario 2026-06-03 (foto "27/35/92/73/17/11"): los pools
+     europeos se descuadran respecto a la tabla de coeficientes
+     canónica (28/34/88/72/18/12) por DOS motivos de DATOS de
+     dispositivo, independientes del código (la tabla
+     LEAGUE_DEFAULT_ZONES YA es correcta):
+
+       1. Plazas por liga DRIFTED: alguna `ligaExt_<slug>.config.zones`
+          quedó en un valor viejo/intermedio que los seeds one-shot
+          (`_seedLeagueDefaultZonesV1`/`_fixupLeagueZonesV2`) ya no
+          tocan (corren una vez por flag, y solo si la liga está
+          EXACTAMENTE en el valor viejo conocido). → +/− plazas.
+       2. FEEDERS obsoletos del cascade WC→OQ→Previa
+          (`oq_to_previa_v1`, `wc_to_open_qualifier_v1`, `wprev_to_*`,
+          `oq_to_conference_v1`, `wc_champion_v1`) de una corrida
+          anterior: se MEZCLAN en el recálculo en vivo de
+          `computeUclPrevTeams`/`computeOpenQualifierTeams`/... e
+          inflan Previa (+1), OQ (+4), WC (+1).
+
+     Este botón es la solución self-service que pidió el usuario: con
+     un toque (a) FUERZA el reparto canónico `LEAGUE_DEFAULT_ZONES`
+     en TODAS las ligas (el usuario confirmó 2026-06-03 que NUNCA edita
+     las plazas a mano, así que es seguro pisar; preservamos
+     desc/intercontinental/mundialClubes), (b) BORRA los feeders
+     obsoletos + la snapshot congelada, y (c) re-congela el cuadre
+     LIMPIO. Idempotente: re-pulsarlo siempre deja el mismo cuadre. */
+  var _EURO_FEEDER_KEYS = [
+    'wprev_to_fase_grupos_v1',   // → +12 UCL
+    'wprev_to_europa_v1',        // → +22 UEL
+    'wprev_r1_to_conference_v1', // → +28 UECL
+    'oq_to_previa_v1',           // → +28 Previa
+    'oq_to_conference_v1',       // legacy feeder
+    'wc_to_open_qualifier_v1',   // → +24 OQ
+    'wc_champion_v1'             // legacy campeón único WC
+  ];
+  function _clearKvKey(k){
+    try { localStorage.removeItem(k); } catch(_){}
+    try {
+      fetch('/api/kv/'+k, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: null})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  window._restoLigasRecuadrarEurope = function(){
+    if(typeof window.LEAGUE_DEFAULT_ZONES !== 'object'
+       || typeof window._zonesDefaultFor !== 'function'){
+      alert('Motor de reparto no disponible. Recarga la página.');
+      return;
+    }
+    if(!confirm('♻️ Re-cuadrar reparto europeo (canónico)\n\n'
+      +'Restaura las plazas europeas de CADA liga a la tabla de\n'
+      +'coeficientes oficial (28/34/88/72/18/12) y limpia los datos\n'
+      +'obsoletos de Wild Card / Open Qualifier / Previa que descuadran\n'
+      +'el conteo.\n\n'
+      +'⚠️ Sobrescribe cualquier plaza europea que hubieras editado a\n'
+      +'mano en el modal 📜 Reglas de las ligas (NO toca el descenso ni\n'
+      +'las plazas de Intercontinental/Mundialito).\n\n'
+      +'¿Continuar?')) return;
+
+    /* (a) Forzar reparto canónico en TODAS las ligas de la tabla. */
+    var fixed = 0, missing = 0;
+    Object.keys(window.LEAGUE_DEFAULT_ZONES).forEach(function(slug){
+      try {
+        if(slug === 'liga-ea-sports') return; // blacklist europeo: va por manual EA→Europa
+        var key = 'ligaExt_' + slug;
+        var raw = localStorage.getItem(key);
+        if(!raw){ missing++; return; } // no sembrada → la cubre ensureConfig al abrirla
+        var d = JSON.parse(raw);
+        if(!d) { missing++; return; }
+        if(!d.config) d.config = {};
+        var prev = d.config.zones || {};
+        /* `_zonesDefaultFor` ya trae el genérico (desc/intercontinental/
+           mundialClubes) + el override europeo canónico de la liga. */
+        var canon = window._zonesDefaultFor(slug) || {};
+        /* Canónico en las 6 euro-zonas; conserva desc + intercontinental
+           + mundialClubes que el usuario sí gestiona por liga. */
+        d.config.zones = Object.assign({}, canon, {
+          desc:             (prev.desc != null ? prev.desc : canon.desc),
+          intercontinental: (prev.intercontinental != null ? prev.intercontinental : (canon.intercontinental||0)),
+          mundialClubes:    (prev.mundialClubes != null ? prev.mundialClubes : (canon.mundialClubes||0))
+        });
+        localStorage.setItem(key, JSON.stringify(d));
+        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        fixed++;
+      } catch(_){}
+    });
+
+    /* (b) Borrar feeders obsoletos del cascade + snapshot congelada. */
+    _EURO_FEEDER_KEYS.forEach(_clearKvKey);
+    _clearKvKey(EUROPE_COMMIT_KEY);
+    try { window._eurInvalidateLeagueCache && window._eurInvalidateLeagueCache(); } catch(_){}
+
+    /* (c) Recalcular EN VIVO (sin feeders, sin snapshot) y re-congelar. */
+    function _safeCompute(fn){
+      try { return (typeof fn === 'function') ? (fn() || []) : []; }
+      catch(_){ return []; }
+    }
+    var _prevIgnore = window._europeIgnoreFrozen;
+    window._europeIgnoreFrozen = true;
+    var blob;
+    try {
+      blob = {
+        ucl:      _safeCompute(window.computeUclClassified),
+        uclPrev:  _safeCompute(window.computeUclPrevTeams),
+        uel:      _safeCompute(window.computeUelClassified),
+        uecl:     _safeCompute(window.computeUeclClassified),
+        uclQual:  _safeCompute(window.computeOpenQualifierTeams),
+        wildcard: _safeCompute(window.computeWildCardClassified),
+        ts:       Date.now()
+      };
+    } finally {
+      window._europeIgnoreFrozen = _prevIgnore;
+    }
+    try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
+    _saveEuropeCommitServer(blob);
+
+    /* Conteo de plazas manuales España (EA→Europa) para que el admin
+       vea de un vistazo si el déficit -1 en 🔵/🟠/🟢 viene de ahí (esas
+       plazas las elige a mano el admin, este botón NO las inventa). */
+    function _meaCount(s){
+      try { return ((window._meaTeamsFor && window._meaTeamsFor(s)) || []).length; }
+      catch(_){ return 0; }
+    }
+    var tUcl=blob.ucl.length, tPrev=blob.uclPrev.length, tUel=blob.uel.length,
+        tUecl=blob.uecl.length, tOq=blob.uclQual.length, tWc=blob.wildcard.length;
+    function _mark(n, target){ return (n===target) ? '✅' : ((n>target?'＋':'－')+Math.abs(n-target)); }
+    /* WC tolerante: el pool crudo canónico es 71 ó 72 (1 hueco TBD que
+       el módulo de Wild Card rellena aguas abajo). Ambos son ✅. */
+    function _markWc(n){ return (n===72||n===71) ? '✅' : ((n>72?'＋'+(n-72):'－'+(72-n))); }
+    var manualNote = '';
+    var mUcl=_meaCount('ucl'), mPrev=_meaCount('uclPrev'), mUel=_meaCount('uel'), mUecl=_meaCount('uecl');
+    /* España objetivo: 🔵4 🟣1 🟠2 🟢1 vía EA Sports → Europa. */
+    if(mUcl<4 || mUel<2 || mUecl<1 || mPrev<1){
+      manualNote = '\n\n⚠️ Revisa "🎮 EA Sports → Europa" (España):\n'
+        + '   🔵 Champions: ' + mUcl + '/4   🟣 Previa: ' + mPrev + '/1\n'
+        + '   🟠 Europa: ' + mUel + '/2   🟢 Conference: ' + mUecl + '/1\n'
+        + '   (esas plazas las eliges a mano; si faltan, añádelas ahí.)';
+    }
+    alert('♻️ Reparto europeo re-cuadrado.\n\n'
+        + 'Ligas corregidas: ' + fixed + (missing? '  ·  sin sembrar: '+missing : '') + '\n'
+        + 'Feeders WC/OQ/Previa limpiados + snapshot recongelada.\n\n'
+        + '🔵 Champions League: ' + tUcl + '  ' + _mark(tUcl,28) + '\n'
+        + '🇪🇺 Previa de Champions: ' + tPrev + '  ' + _mark(tPrev,34) + '\n'
+        + '🟡 Open Qualifier: ' + tOq + '  ' + _mark(tOq,88) + '\n'
+        + '🎟️ Wild Card: ' + tWc + '  ' + _markWc(tWc) + '\n'
+        + '🟠 Europa League: ' + tUel + '  ' + _mark(tUel,18) + '\n'
+        + '🟢 Conference League: ' + tUecl + '  ' + _mark(tUecl,12)
+        + manualNote);
   };
 
   /* ── Estadísticas agregadas ──────────────────────────────────── */

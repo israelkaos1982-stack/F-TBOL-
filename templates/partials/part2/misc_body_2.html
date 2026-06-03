@@ -29754,10 +29754,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if(s.phase === 'done'){
       html += renderWinners(s);
+      /* Botón ABAJO DEL TODO — lanza los 24 ganadores de la Wild Card
+         directamente a la pantalla del Open Qualifier (foto 2). Re-persiste
+         los ganadores en `wc_to_open_qualifier_v1` por si acaso y navega. */
+      html += '<div style="padding:14px 8px 22px;text-align:center;">'
+        +     '<button onclick="window._wcLaunchToOpenQualifier&&window._wcLaunchToOpenQualifier()" '
+        +       'style="width:calc(100% - 8px);padding:16px 14px;border:2px solid #FDC830;border-radius:10px;'
+        +       'background:linear-gradient(90deg,#FDC830,#F37335);color:#000;'
+        +       'font-family:Oswald,sans-serif;font-size:14px;font-weight:900;letter-spacing:1.5px;cursor:pointer;'
+        +       'box-shadow:0 4px 14px rgba(243,115,53,.35);">'
+        +       '🟡 LANZAR CLASIFICADOS AL OPEN QUALIFIER ▶'
+        +     '</button>'
+        +   '</div>';
     }
     host.innerHTML = html;
   }
   window._wcRender = render;
+
+  /* Lanza los ganadores de la Wild Card al Open Qualifier (foto 2):
+     re-persiste el estado actual en `wc_to_open_qualifier_v1` (lo lee
+     computeOpenQualifierTeams), reconstruye la clasificación del OQ y
+     navega a su pantalla. */
+  window._wcLaunchToOpenQualifier = function(){
+    try {
+      var s = _freshestState(_memState, loadState());
+      if(!s || s.phase !== 'done'){
+        alert('La Wild Card todavía no está terminada. Pulsa 🎮 Simular primero.');
+        return;
+      }
+      _persistWinners(s);
+    } catch(_){}
+    try { if(typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
+    try { if(typeof window.go === 'function') window.go('s-open-qualifier-clas'); } catch(_){}
+  };
 
   /* 🎮 Sim — contextual:
        - sin estado     → init + sortea + juega TODO (semis + RF) en uno.

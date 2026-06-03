@@ -43939,21 +43939,48 @@ https://api.sofascore.app/api/v1/team/44/image
   var BAYERN_SVG='/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg';
   function _teams(){ try{ var r=localStorage.getItem('ligaExt_liga-ea-sports'); if(r){ var d=JSON.parse(r); if(d&&d.teams) return d.teams; } }catch(_){ } return []; }
   function _boxOv(){ try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r); if(d&&d.ov) return d.ov['go:s-munich']||null; } }catch(_){ } return null; }
+  /* Club CANÓNICO del hub de Toñín (s-munich) según MISTERS_REGISTRY
+     (CLAUDE.md, 2026-05-27): hardcoded, sync, infalible. Es 'Liverpool'.
+     Lo usamos para que el hub NUNCA muestre el nombre legacy "Bayern
+     Munich": el slot interno sigue llamándose así en saves antiguos
+     (el rename `_ligaEaSubName` NUNCA llegó a existir — ver línea 2919),
+     pero lo que se MUESTRA debe ser siempre el club canónico. */
+  function _canonHubName(){
+    try{
+      var M=window._MISTERS_HUMANOS;
+      if(M&&M.length){ for(var i=0;i<M.length;i++){ if(M[i]&&M[i].screen==='s-munich'&&M[i].club) return String(M[i].club); } }
+    }catch(_){ }
+    return 'Liverpool';
+  }
+  function _isBayernLegacy(n){
+    /* SOLO el slot humano legacy (inglés). NUNCA los IA reales
+       "Bayern München"/"Bayern Leverkusen" del Mundialito/Bundesliga. */
+    var k=String(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+    return k==='bayern munich' || k==='fc bayern munich';
+  }
   function _slot(){
-    var teams=_teams(), want='Bayern Munich', i, t;
-    try{ if(typeof window._ligaEaSubName==='function'){ var s=window._ligaEaSubName('Bayern Munich'); if(s) want=String(s); } }catch(_){ }
-    var wl=want.toLowerCase();
-    for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.name.toLowerCase()===wl) return t; }
+    var teams=_teams(), i, t;
+    /* Orden de preferencia para localizar el slot humano del hub:
+       1) la etiqueta de la caja del menú (rename visual del usuario),
+       2) el club canónico (Liverpool),
+       3) el nombre legacy "Bayern Munich" (saves antiguos sin renombrar). */
+    var wants=[], ov=_boxOv();
+    if(ov&&ov.label) wants.push(String(ov.label).toLowerCase());
+    wants.push(_canonHubName().toLowerCase());
+    wants.push('bayern munich');
+    for(var w=0;w<wants.length;w++){
+      for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.name.toLowerCase()===wants[w]) return t; }
+    }
     for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&/bayern/i.test(t.name)) return t; }
-    var o={'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+    var o={'real madrid':1,'real madrid cf':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
     for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.isHuman&&!o[t.name.toLowerCase()]) return t; }
     return null;
   }
   function _resolve(){
     /* LA CAJA DEL MENÚ MANDA: si el admin puso un equipo en la caja
        (menu_home_v1 → go:s-munich), el interior ES ese equipo. Solo
-       si no hay caja editada caemos al reemplazo real de Liga EA y,
-       por último, a Bayern. */
+       si no hay caja editada caemos al slot de Liga EA y, por último,
+       al club canónico (Liverpool) — NUNCA al literal "Bayern Munich". */
     var ov=_boxOv();
     var name='', esc='', stad='', cols=null;
     if(ov){
@@ -43962,10 +43989,19 @@ https://api.sofascore.app/api/v1/team/44/image
       if(ov.stadium) stad=String(ov.stadium);
       if(ov.colors && ov.colors.length) cols=ov.colors;
     }
+    var canon=_canonHubName();
     if(!name){
       var t=_slot();
-      name=(t&&t.name)||'Bayern Munich';
+      name=(t&&t.name)||canon;
       if(!esc) esc=(t&&(t.escudo||t.shield))||'';
+    }
+    /* El slot legacy se llama "Bayern Munich" pero el hub de Toñín es
+       canónicamente Liverpool. Nunca mostrar "Bayern Munich": usar el
+       club canónico y descartar el escudo legacy del Bayern para que
+       getTeamLogoUrl resuelva el del club canónico (LFC). */
+    if(_isBayernLegacy(name)){
+      name=canon;
+      if(esc===BAYERN_SVG || /germany_bayern/i.test(String(esc))) esc='';
     }
     if(!esc){ try{ if(window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(name)||''; } }catch(_){ } }
     if(!esc) esc=BAYERN_SVG;
@@ -43984,9 +44020,16 @@ https://api.sofascore.app/api/v1/team/44/image
     if(!b&&!n) return;
     var host=document.getElementById('s-munich')||document.body;
     var r=_resolve(), sig=r.name+'|'+r.esc+'|'+r.stad+'|'+(r.cols?r.cols.join(','):'');
-    /* Nombre del equipo del hub → lo consume el icono 💊 del HUD para
-       saber de qué equipo contar los partidos de lesión pendientes. */
-    window._mkHubTeamName=r.name;
+    /* Nombre del equipo del hub → lo consume el icono 💊 del HUD y la
+       card de bajas de la previa para saber de qué equipo contar las
+       lesiones/sanciones pendientes. DEBE ser el nombre LÓGICO del slot
+       (`_psHumanLogicName`, el mismo que graba `_injureOne` y que usan
+       los brackets/calendario), NO el nombre VISUAL del header: si el
+       slot legacy se llama "Bayern Munich" y la caja muestra "Liverpool",
+       las lesiones se guardan como "Bayern Munich" y el match por nombre
+       visual fallaba. El display del header sí usa el canónico (r.name). */
+    try{ window._mkHubTeamName = (typeof window._psHumanLogicName==='function' && window._psHumanLogicName()) || r.name; }
+    catch(_){ window._mkHubTeamName=r.name; }
     try{ if(window.athRefreshInjuryHud) window.athRefreshInjuryHud(); }catch(_){}
     if(host.__mkHubSig===sig) return; host.__mkHubSig=sig;
     if(n) n.textContent=r.name;
@@ -44012,15 +44055,35 @@ https://api.sofascore.app/api/v1/team/44/image
     }
   }
   function run(){ setTimeout(_sync,0); setTimeout(_sync,80); setTimeout(_sync,240); }
-  function _wrapGo(){
-    if(window.__mkHubGoWrapped || typeof window.go!=='function') return;
-    window.__mkHubGoWrapped=true;
-    var g=window.go;
-    window.go=function(id){ var x=g.apply(this,arguments); if(id==='s-munich'||id==='s-bayern-plantilla') run(); return x; };
+  /* ROBUSTEZ DE NAVEGACIÓN (fix bug 2026-06-03, foto usuario: la caja
+     del menú decía LIVERPOOL pero el hub se abría como "Bayern Munich").
+     NO podemos envolver `window.go` aquí: el bundle (index.bundle.js,
+     que carga DESPUÉS de este partial) RE-ENVUELVE `window.go` varias
+     veces y borra cualquier wrapper nuestro — exactamente lo mismo que
+     ya documenta el observer de la Caja Plantilla (líneas ~2298-2306).
+     Resultado del bug: `_sync` sólo corría al cargar la página (antes de
+     que la caja del menú aplicara su override `menu_home_v1` → 'Liverpool')
+     y NUNCA al abrir la pantalla, así que el header se quedaba con el
+     SSR "Bayern Munich". Solución robusta: MutationObserver sobre la
+     clase `.active` de #s-munich → re-sincroniza cada vez que se abre. */
+  function _wireObserver(){
+    if(window.__mkHubObsReady) return;
+    var screen=document.getElementById('s-munich');
+    if(!screen) return;
+    window.__mkHubObsReady=true;
+    if(screen.classList.contains('active')) run();
+    try{
+      var obs=new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          if(muts[i].attributeName==='class' && screen.classList.contains('active')){ run(); return; }
+        }
+      });
+      obs.observe(screen, { attributes:true, attributeFilter:['class'] });
+    }catch(_){ }
   }
   if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded', function(){ run(); _wrapGo(); });
-  } else { run(); _wrapGo(); }
+    document.addEventListener('DOMContentLoaded', function(){ run(); _wireObserver(); });
+  } else { run(); _wireObserver(); }
 })();
 </script>
 <div class="munich-arena-wrap">

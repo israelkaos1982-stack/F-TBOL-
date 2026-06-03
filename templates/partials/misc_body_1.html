@@ -32300,18 +32300,21 @@ window._showSimProgress = function(opts, onDone){
   }
   /* Hidrata del SERVIDOR las ligas que en ESTE dispositivo aún no
      tienen plantilla local (≥2 equipos). Causa raíz del "da error todo
-     el rato" (foto 2026-06-03, dialog 4/1/6/6/2/1): el reparto europeo
-     se calcula EXCLUSIVAMENTE con las `ligaExt_<slug>` presentes en
-     localStorage. En un móvil que nunca abrió las ~50 ligas (los
-     rosters los pegó el amigo en el PC y viven en el servidor) el
-     cómputo automático salía casi a 0 → solo contribuía la España
-     manual (🔵4 🟣1 🟠2 🟢1) + 1-2 ligas sueltas, descuadrando todo.
+     el rato": el reparto europeo se calcula EXCLUSIVAMENTE con las
+     `ligaExt_<slug>` presentes en localStorage, y esas SOLO se cargan
+     al ABRIR cada pantalla de liga. En un móvil recién abierto (sesión
+     nueva) localStorage tiene ~2 ligas → el cómputo salía casi a 0
+     (foto 2026-06-03: «sin sembrar: 51», dialog 4/1/4/4/2/1) aunque las
+     53 ligas con sus equipos SÍ existen en el servidor.
 
-     SEGURO: solo trae las que FALTAN (sin plantilla local). Las ligas
-     que ya tienen equipos en este dispositivo NO se re-piden, así no
-     se arriesga a pisar resultados simulados locales aún no subidos
-     (el anti-wipe de `fetchData` solo cubre teams/players, no results).
-     Tope de 15 s para no colgar el botón si el servidor no responde. */
+     IMPORTANTE: `fetchData` vive en otro IIFE y NO está en este scope
+     (typeof fetchData === 'undefined'), por eso el intento anterior con
+     `fetchData` era un no-op silencioso. Aquí pegamos al endpoint
+     `/api/liga-ext/<slug>` DIRECTAMENTE y escribimos `ligaExt_<slug>`
+     en localStorage (que es justo de donde lee `_computeQualifiedFromLeagues`).
+
+     SEGURO: solo trae las que FALTAN (sin plantilla local ≥2 equipos).
+     Nunca pisa una copia local más rica (guard `keep`). Tope de 25 s. */
   function _eurHydrateMissingLeagues(done){
     var slugs;
     try { slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {}); }
@@ -32325,19 +32328,38 @@ window._showSimProgress = function(opts, onDone){
         return !(d && Array.isArray(d.teams) && d.teams.length >= 2);
       } catch(_){ return true; }
     });
-    if(!toFetch.length || typeof fetchData !== 'function'){ done(0, toFetch.length); return; }
+    if(!toFetch.length){ done(0, 0); return; }
     var pending = toFetch.length, recovered = 0, finished = false;
     function finish(){ if(finished) return; finished = true; done(recovered, toFetch.length); }
-    var timer = setTimeout(finish, 15000);
+    var timer = setTimeout(finish, 25000);
+    function step(){ if(--pending <= 0){ try{ clearTimeout(timer); }catch(_){} finish(); } }
     toFetch.forEach(function(slug){
-      try {
-        fetchData(slug, function(data){
-          if(data && Array.isArray(data.teams) && data.teams.length >= 2) recovered++;
-          if(--pending <= 0){ try{ clearTimeout(timer); }catch(_){} finish(); }
-        });
-      } catch(_){
-        if(--pending <= 0){ try{ clearTimeout(timer); }catch(_){} finish(); }
-      }
+      var key = 'ligaExt_' + slug;
+      fetch('/api/liga-ext/' + encodeURIComponent(slug), { credentials:'same-origin' })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          try {
+            var data = j && j.data;
+            if(data && Array.isArray(data.teams) && data.teams.length >= 2){
+              /* No pisar si por carrera ya hay copia local igual o más
+                 rica (otro flujo la cargó mientras tanto). */
+              var keep = false;
+              try {
+                var lr = localStorage.getItem(key);
+                if(lr){ var ld = JSON.parse(lr);
+                  if(ld && Array.isArray(ld.teams) && ld.teams.length >= data.teams.length) keep = true; }
+              } catch(_){}
+              if(!keep){
+                data.results = data.results || [];
+                localStorage.setItem(key, JSON.stringify(data));
+                try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+              }
+              recovered++;
+            }
+          } catch(_){}
+        })
+        .catch(function(){})
+        .then(step);
     });
   }
   window._restoLigasRecuadrarEurope = function(){

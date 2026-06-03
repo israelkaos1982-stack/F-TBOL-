@@ -6005,6 +6005,37 @@ window._showSimProgress = function(opts, onDone){
     return p ? p.rival : null;
   }
 
+  /* Localiza el partido del equipo del hub (Liverpool / slot humano del
+     hub) en una jornada de Liga EA Sports leyendo el calendario global
+     `window.LIGA_SCHEDULE` (la MISMA fuente que la pantalla de jornada).
+     Devuelve {home, away} respetando la orientación local/visitante del
+     calendario, o null si no se puede resolver. Lo usa `_cardNonTour`
+     para abrir DIRECTAMENTE la previa del partido del Liverpool desde la
+     card del hub — igual que las Selecciones (Francia) abren su partido
+     del Mundial sin pasar por la lista de la jornada (petición usuario
+     2026-06-03). */
+  function _resolveHubLigaMatch(ligaJor){
+    if (!(ligaJor > 0)) return null;
+    try {
+      var hub = (typeof _psHumanLogicName === 'function')
+        ? String(_psHumanLogicName() || '') : '';
+      if (!hub) return null;
+      var hubK = _psNameKey(hub);
+      var sched = window.LIGA_SCHEDULE;
+      var row = (Array.isArray(sched) && Array.isArray(sched[ligaJor - 1]))
+        ? sched[ligaJor - 1] : null;
+      if (!row) return null;
+      for (var i = 0; i < row.length; i++){
+        var m = row[i];
+        if (!m) continue;
+        if (_psNameKey(m[0]) === hubK || _psNameKey(m[1]) === hubK){
+          return { home: String(m[0]), away: String(m[1]) };
+        }
+      }
+    } catch(_){}
+    return null;
+  }
+
   /* ── Card para días de PARTIDO que NO son del torneo de verano ──
      Liga / Copa / Champions / Europa League / Conference / Recopa /
      Intercontinental / Amistosos del calendario base. El módulo
@@ -6019,29 +6050,48 @@ window._showSimProgress = function(opts, onDone){
     var lbl = day.label || 'Partido';
     var emoji = (typeof _pendHvHEmojiFromLabel === 'function')
                 ? _pendHvHEmojiFromLabel(lbl) : '⚽';
-    /* Atajo "VER JORNADA N" para Liga EA Sports (única competición
-       con un router directo `openLigaJornada(N)` desde el hub). El
-       resto de comps (Copa/UCL/UEL/...) tienen su propia pantalla
-       y el usuario las abre desde la barra de COMPETICIONES. */
+    /* Liga EA Sports: parseamos la jornada del label para (a) abrir la
+       previa del partido del Liverpool directamente y (b) como respaldo,
+       el atajo "VER JORNADA N" hacia la lista de la jornada. El resto de
+       comps (Copa/UCL/UEL/...) tienen su propia pantalla y el usuario
+       las abre desde la barra de COMPETICIONES. */
     var ligaJor = 0;
     var mL = /Liga\s*[—\-]\s*J(\d+)/i.exec(lbl);
     if (mL) ligaJor = parseInt(mL[1], 10) || 0;
-    var verBtn = '';
-    if (ligaJor > 0){
-      verBtn = '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>';
+    /* Partido del Liverpool en esta jornada → abrimos SU previa
+       directamente desde la card del hub (igual que Francia abre su
+       partido del Mundial). Si no se puede resolver, caemos al atajo
+       "VER JORNADA N" (lista de la jornada) como respaldo. */
+    var ligaMatch = _resolveHubLigaMatch(ligaJor);
+    var openBtn = '';
+    if (ligaMatch){
+      openBtn = '<button type="button" class="ps-btn" id="ps-nontour-previa">📋 ABRIR PREVIA</button>';
+    } else if (ligaJor > 0){
+      openBtn = '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>';
     }
+    var metaHtml = ligaMatch
+      ? '📋 Pantalla de previa<br><b>' + _esc(ligaMatch.home) + '</b> vs <b>' + _esc(ligaMatch.away) + '</b>'
+      : 'La jornada se juega desde la pantalla de la competición.';
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
-      + '<div class="ps-meta" style="margin:14px 0;color:rgba(255,255,255,.75);font-size:13px;">'
-      +   'La jornada se juega desde la pantalla de la competición.'
+      + '<div class="ps-meta" style="margin:14px 0;color:rgba(255,255,255,.85);font-size:13px;">'
+      +   metaHtml
       + '</div>'
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
-      +   verBtn
+      +   openBtn
       +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
       + '</div>'
       + '</div>';
+    var bP = document.getElementById('ps-nontour-previa');
+    if (bP) bP.onclick = function(){
+      try {
+        if (ligaMatch && typeof window._openMatchWithPrevia === 'function'){
+          window._openMatchWithPrevia(ligaJor, ligaMatch.home, ligaMatch.away);
+        }
+      } catch(_){}
+    };
     var bV = document.getElementById('ps-nontour-open');
     if (bV) bV.onclick = function(){
       try {

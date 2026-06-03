@@ -45690,6 +45690,75 @@ https://api.sofascore.app/api/v1/team/44/image
     var ko = _loadJSON(KO[comp]);
     return _statusFromChamp(ko && (ko.champion || ko.campeon), aliases);
   }
+  /* ── Estado de los torneos del motor `_tour*` (Mundialito de Clubes,
+     Torneos de Verano, Selecciones / Mundial 2032). Estos cfgs NO
+     guardan un campo `.champion`: el campeón se DERIVA de la final
+     jugada. Un torneo está «finalizado» cuando su ÚLTIMO partido (la
+     final) tiene `played === true`. Sin esto, los chips MUNDIALITO /
+     SELECCIONES / TORNEO VERANO se quedaban SIEMPRE en «En juego»
+     aunque el torneo estuviera terminado (bug foto usuario 2026-06-03). */
+  function _chipLoadTourCfg(id){
+    var cfg = null;
+    try { cfg = (window._TOUR_CACHE || {})[id] || null; } catch(_){}
+    if (!cfg && typeof window._tourLoadCachedSync === 'function'){
+      try { cfg = window._tourLoadCachedSync(id); } catch(_){}
+    }
+    if (!cfg){
+      try {
+        var raw = localStorage.getItem('tour_' + id + '_v1');
+        if (raw) cfg = JSON.parse(raw);
+      } catch(_){}
+    }
+    return cfg;
+  }
+  function _chipTourHasTeams(cfg){
+    return !!(cfg && Array.isArray(cfg.teams) && cfg.teams.length >= 2);
+  }
+  function _chipTourCfgDone(cfg){
+    if (!cfg || typeof cfg !== 'object') return false;
+    var res = cfg.results || {};
+    function _played(k){ var r = res[k]; return !!(r && r.played); }
+    var fmt = cfg.format;
+    /* KO directo (ko, ko-2leg): la final es el último par de cfg.bracket. */
+    if (fmt === 'ko' || fmt === 'ko-2leg'){
+      var br = cfg.bracket || [];
+      if (!br.length) return false;
+      var lr = br.length - 1;
+      if (!br[lr] || br[lr].length < 2) return false;   /* final aún no formada */
+      return _played(lr + '_0');
+    }
+    /* groups-ko / mundial-48 / league-ko / swiss: la final es la última
+       ronda de cfg.koBracket → result key `ko_<lastR>_0`. */
+    if (fmt === 'groups-ko' || fmt === 'mundial-48'
+        || fmt === 'league-ko' || fmt === 'swiss'){
+      var kb = cfg.koBracket || [];
+      var kr = (cfg.formatConfig && cfg.formatConfig.koRounds) || [];
+      var lr2 = (kr.length ? kr.length : kb.length) - 1;
+      if (lr2 < 0) return false;
+      if (!kb[lr2] || kb[lr2].length < 2) return false; /* final aún no sorteada */
+      return _played('ko_' + lr2 + '_0');
+    }
+    return false;
+  }
+  /* Escanea varios slots de torneo y devuelve 'done' SÓLO si al menos
+     uno está lanzado (con equipos) y TODOS los lanzados están
+     finalizados; 'in' mientras quede alguno sin terminar; null si
+     ninguno está lanzado (el chip cae a la detección por defecto). */
+  function _chipScanTours(ids){
+    var anyLaunched = false, allDone = true;
+    for (var i = 0; i < ids.length; i++){
+      var cfg = _chipLoadTourCfg(ids[i]);
+      if (!_chipTourHasTeams(cfg)) continue;
+      anyLaunched = true;
+      if (!_chipTourCfgDone(cfg)) allDone = false;
+    }
+    if (!anyLaunched) return null;
+    return allDone ? 'done' : 'in';
+  }
+  var _VERANO_TOUR_IDS = ['sct','pss','jg','asia',
+    'tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
+  var _SEL_TOUR_IDS = ['spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10',
+    'sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
   /* Detección heurística: el equipo está en una competición si su
      nombre (cualquier alias normalizado) aparece dentro del JSON raw
      de los stores asociados. Más barato que parsear estructuras y
@@ -45771,11 +45840,28 @@ https://api.sofascore.app/api/v1/team/44/image
       }},
     { id:'mundial', label:'Mundialito',      emoji:'🌍', screen:'s-mundial-clubes',
       statusFn:function(a){
+        /* Mundialito de Clubes = slot built-in 'mundial' con format
+           'groups-ko' (NO mundial-48, que sería Mundial 2032 selecciones). */
+        var cfg = _chipLoadTourCfg('mundial');
+        if (cfg && cfg.format !== 'mundial-48' && _chipTourHasTeams(cfg)){
+          return _chipTourCfgDone(cfg) ? 'done' : 'in';
+        }
         var s = _loadJSON('mundial_state_v1') || _loadJSON('mundialito_state_v1');
         return _statusFromChamp(s && s.champion, a);
       }},
-    { id:'sel',     label:'Selecciones',     emoji:'🌐', screen:'s-selecciones' },
-    { id:'torneo',  label:'Torneo Verano',   emoji:'🌞', screen:'s-torneos-verano' },
+    { id:'sel',     label:'Selecciones',     emoji:'🌐', screen:'s-selecciones',
+      statusFn:function(a){
+        /* Selecciones = slots spv / sfn + el Mundial 2032 (slot
+           'mundial' con format mundial-48). */
+        var ids = _SEL_TOUR_IDS.slice();
+        var mc = _chipLoadTourCfg('mundial');
+        if (mc && mc.format === 'mundial-48') ids.push('mundial');
+        return _chipScanTours(ids) || 'in';
+      }},
+    { id:'torneo',  label:'Torneo Verano',   emoji:'🌞', screen:'s-torneos-verano',
+      statusFn:function(a){
+        return _chipScanTours(_VERANO_TOUR_IDS) || 'in';
+      }},
     { id:'amist',   label:'Amistosos',       emoji:'🤝', screen:'s-amistosos' }
   ];
 

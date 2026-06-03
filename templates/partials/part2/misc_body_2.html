@@ -7082,6 +7082,23 @@
 
   /* ── ABRIR JORNADA EN PANTALLA DEDICADA ───────────── */
   window.openLigaJornada = function (j) {
+    /* ── UNIFICACIÓN DE INTERFAZ (2026-06-03) ──────────────────────
+       Históricamente esta función pintaba `s-liga-jornada` con filas
+       planas `.mrow` + botón PREVIA violeta — una interfaz que NO
+       coincide con el resto del juego (foto usuario: la card del hub
+       "VER JORNADA N" abría una pantalla que "no existe en la web").
+       Por petición del usuario, TODA apertura de una jornada de Liga
+       EA Sports (desde el hub, desde el calendario de Liga o desde
+       Resultados) usa AHORA la MISMA interfaz: las cards
+       `.match-live-wrap` con escudos, marcador, 📋 PREVIA (humanos) /
+       ▶ SIMULAR (IA) que renderiza `openIAJornada` en la pantalla
+       `s-liga-ia-jornada` (la de Resultados · fotos 4 y 5). Delegamos
+       aquí para unificar todos los puntos de entrada en una sola
+       interfaz. La pantalla legacy `s-liga-jornada` queda sólo como
+       fallback defensivo si `openIAJornada` no estuviera disponible. */
+    if (typeof window.openIAJornada === 'function') {
+      return window.openIAJornada(j);
+    }
     var titleEl = document.getElementById('liga-jornada-title');
     var bodyEl  = document.getElementById('liga-jornada-body');
     if (!titleEl || !bodyEl) return;

@@ -17618,6 +17618,22 @@ window._showSimProgress = function(opts, onDone){
         && !cfg.formatConfig.eurRmSplit) {
       delete cfg.formatConfig.manualRoster;
     }
+    /* Mundialito de Clubes (2026-06-03): los equipos de Resto del Mundo
+       que se rellenaron con el ALIAS eFootball corto ("Avellaneda R",
+       "Rosario AA") como `name` se re-mapean a su nombre REAL vía
+       `_rmRealName`. Idempotente: un nombre ya real (o con licencia /
+       selección) se queda igual. Arregla el cfg en memoria → la tabla
+       de grupos, el bracket KO y la card del hub muestran el nombre
+       real. NO toca otros campos (shield/power/isHuman/zone). */
+    if (cfg.id === 'mundial' && Array.isArray(cfg.teams)
+        && typeof window._rmRealName === 'function') {
+      cfg.teams.forEach(function(t){
+        if (t && t.name) {
+          var rn = window._rmRealName(t.name);
+          if (rn && rn !== t.name) t.name = rn;
+        }
+      });
+    }
     /* Re-aplica la spec oficial de sct/jg (petición usuario
        2026-05-17: "directamente créame los torneos en este formato")
        SIN destruir un torneo ya sorteado. Si hay bracket / fixture /
@@ -18041,7 +18057,13 @@ window._showSimProgress = function(opts, onDone){
      desde el picker. Petición usuario 2026-05-09 (FOTO 4 sobre
      Atlético Madrid; Bayern Munich ya tenía caja propia). Mantengo
      varias variantes de nombre para cubrir capitalizaciones / acentos. */
-  var HUMAN_ONLY_TEAMS = ['bayern','bayern munich','bayern muenchen','bayern munchen','fc bayern','fc bayern munchen','atletico madrid','atletico de madrid','atletico'];
+  /* SOLO el slot legacy EXACTO "Bayern Munich" (inglés = Liverpool) +
+     Atlético. PROHIBIDO incluir las grafías alemanas "bayern munchen" /
+     "bayern muenchen" / "fc bayern": son el IA real "Bayern München" (y
+     "Bayern Leverkusen") del Mundialito → se reservaban como humanos por
+     error. "bayern munich" (inglés) ≠ "bayern munchen" (alemán). Bug
+     2026-06-03. */
+  var HUMAN_ONLY_TEAMS = ['bayern munich','atletico madrid','atletico de madrid','atletico'];
   function _isHumanOnlyTeam(name){
     if (!name) return false;
     var n = String(name).normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
@@ -22296,6 +22318,9 @@ window._showSimProgress = function(opts, onDone){
       var pos = idx + 1;
       var t = slice[r.idx];
       var nm = (t && t.name) || '?';
+      /* Defensa Mundialito (2026-06-03): si un equipo de Resto del Mundo
+         quedó con el alias eFootball corto como nombre, mostrar el real. */
+      try { if (typeof window._rmRealName === 'function') nm = window._rmRealName(nm); } catch(_){}
       var shield = t && t.shield
         ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'" style="width:22px;height:22px;object-fit:contain;flex-shrink:0;">'
         : '';
@@ -29039,12 +29064,17 @@ window._showSimProgress = function(opts, onDone){
      slot ex-Bayern), permite alias cortos. */
   window._isHumanClubCanonico = function(name){
     if (!name) return false;
-    /* Liverpool acepta también el nombre legacy "Bayern Munich" (slot
-       histórico) y la forma corta "Bayern" porque el `_psHumanLogicName`
-       todavía puede devolver el nombre del slot. */
-    var liverpoolAlias = ['Liverpool', 'LFC', 'Bayern Munich', 'Bayern'];
+    /* Liverpool acepta el nombre real + el legacy EXACTO "Bayern Munich"
+       (el slot de Liga EA todavía se llama así en la LÓGICA del motor;
+       el display es "Liverpool"). El alias se compara EXACTO (`_mhNorm`),
+       NO con `_mhMatchName` laxo: la antigua forma corta "Bayern" hacía
+       que "Bayern München" y "Bayern Leverkusen" (IA reales del
+       Mundialito) se interpretaran como el humano Liverpool. Como
+       "bayern munich" (inglés, slot) ≠ "bayern munchen" (alemán, IA),
+       el match exacto distingue perfectamente. Bug 2026-06-03. */
+    var liverpoolAlias = ['Liverpool', 'LFC', 'Bayern Munich'];
     for (var la = 0; la < liverpoolAlias.length; la++){
-      if (_mhMatchName(name, liverpoolAlias[la])) return true;
+      if (_mhNorm(name) === _mhNorm(liverpoolAlias[la])) return true;
     }
     for (var i = 1; i < MISTERS_HUMANOS.length; i++){
       if (_mhMatchName(name, MISTERS_HUMANOS[i].club)) return true;
@@ -29060,8 +29090,10 @@ window._showSimProgress = function(opts, onDone){
       var m = MISTERS_HUMANOS[i];
       if (_mhMatchName(name, m.club) || _mhMatchName(name, m.seleccion)) return m;
     }
-    /* Liverpool alias legacy */
-    if (_mhMatchName(name, 'Bayern Munich') || _mhMatchName(name, 'Bayern') || _mhMatchName(name, 'LFC')){
+    /* Liverpool alias legacy — EXACTO (ver _isHumanClubCanonico): la
+       forma corta "Bayern" atrapaba a los IA reales Bayern München /
+       Leverkusen. Bug 2026-06-03. */
+    if (_mhNorm(name) === _mhNorm('Bayern Munich') || _mhNorm(name) === _mhNorm('LFC')){
       return MISTERS_HUMANOS[0];
     }
     return null;
@@ -39829,6 +39861,35 @@ https://api.sofascore.app/api/v1/team/44/image
     {name:'Al Sadd SC',         power:74, atk:74, mid:74, def:74},
     {name:'Al Duhail SC',       power:72, atk:72, mid:72, def:72}
   ];
+  /* ── Resolución FICT → NOMBRE REAL (2026-06-03) ─────────────────────
+     Petición usuario: en el Mundialito de Clubes algunos equipos
+     sudamericanos salían con el ALIAS eFootball corto como nombre
+     principal ("Avellaneda R", "Rosario AA") en vez de su nombre REAL
+     ("Independiente de Avellaneda", "Rosario Central"). Causa: el cfg
+     del Mundialito (`tour_mundial_v1`) se rellenó con esos `fict` ANTES
+     de que `_fixupRestoMundoAliasesV2` migrara la liga a nombres reales,
+     y ese fixup solo toca `ligaExt_resto-mundo`, no el cfg del torneo.
+     `_rmRealName(name)` mapea cualquier `fict` (o nombre ya real, con
+     grafía canónica) → nombre REAL usando RESTO_MUNDO_TEAMS como fuente
+     única. Devuelve el nombre original si no lo reconoce (equipos con
+     licencia, selecciones, etc. — no se tocan). */
+  window._rmRealName = (function(){
+    function _rmn(s){
+      return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+    }
+    var byFict = {}, byReal = {};
+    RESTO_MUNDO_TEAMS.forEach(function(spec){
+      if (spec && spec.name) byReal[_rmn(spec.name)] = spec.name;
+      if (spec && spec.fict) byFict[_rmn(spec.fict)] = spec.name;
+    });
+    return function(name){
+      if (!name) return name;
+      var n = _rmn(name);
+      if (byReal[n]) return byReal[n];   /* ya es real → grafía canónica */
+      if (byFict[n]) return byFict[n];   /* fict eFootball → nombre real */
+      return name;                        /* desconocido → sin cambios */
+    };
+  })();
   function _upgradeRestoMundoZones(){
     /* Migración para usuarios con la liga ya sembrada:
          - Pre 2026-05-26: zones sin recopa/mundialClubes → set 6/16.

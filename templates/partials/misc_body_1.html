@@ -22175,29 +22175,19 @@ window._showSimProgress = function(opts, onDone){
     var rows = _tourComputeStandings(teams, cfg.fixture, cfg.results, '');
     var prog = _tourFixtureProgress(cfg.fixture, cfg.results, '');
     var html = '';
-    html += '<p style="margin:0 0 6px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">CLASIFICACIÓN · '+prog.done+' / '+prog.tot+' partidos</p>';
-    html += _standingsTableHtml(rows);
-    html += '<p style="margin:14px 0 4px;font-family:Oswald,sans-serif;letter-spacing:1.5px;font-size:11px;color:rgba(255,255,255,.55);">CALENDARIO</p>';
-    /* Avanzar jornada current si la actual ya está completa pero
-       quedan jornadas. */
-    var curJ = cfg.currentJornada;
-    if (curJ < cfg.fixture.length) {
-      var jProg = (function(){
-        var done=0, tot=0;
-        (cfg.fixture[curJ]||[]).forEach(function(_, mi){
-          tot++; if ((cfg.results[curJ+'_'+mi]||{}).played) done++;
-        });
-        return { done:done, tot:tot, allDone: done===tot && tot>0 };
-      })();
-      if (jProg.allDone && curJ < cfg.fixture.length - 1) {
-        html += '<div style="display:flex;justify-content:center;margin-bottom:8px;">'
-          + '<button type="button" class="tour-adv-jor-btn" data-tour="'+tourId+'" '
-          + 'style="background:linear-gradient(145deg,#f8c44e,#b88915);border:1px solid rgba(240,192,64,.65);color:#1a0e00;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:2px;cursor:pointer;">'
-          + '🏆 AVANZAR A JORNADA '+(curJ+2)
-          + '</button></div>';
-      }
+    /* Interfaz estilizada "videojuego" (la MISMA que la fase de grupos),
+       coloreada por el board del torneo = el color de su caja:
+         Rondas Finales → ROSA · Rondas Previas → AZUL · Verano → TURQUESA.
+       El formato LIGA se pinta como UN solo grupo titulado CLASIFICACIÓN
+       (clave de partido sin prefijo de grupo: cfg.fixture). Petición
+       usuario 2026-06-03: todo torneo nuevo (previa / final / amistoso)
+       usa esta interfaz; solo cambia el color (= el de su caja). */
+    var _board = (typeof _tvBoardOf === 'function') ? _tvBoardOf(tourId) : '';
+    if (_board === 'verano') {
+      html += _veranoGroupCardHtml(cfg, tourId, 0, teams, cfg.fixture, rows, prog, '', 0, 1, 0, true);
+    } else {
+      html += _selGroupCardHtml(cfg, tourId, 0, teams, cfg.fixture, rows, prog, '', 0, 0, true);
     }
-    html += _fixtureCardsHtml(teams, cfg.fixture, cfg.results, '', tourId, curJ, {});
     if (prog.allDone) {
       html += _renderLeagueChampionAndPayouts(cfg, rows);
     }
@@ -22397,7 +22387,11 @@ window._showSimProgress = function(opts, onDone){
     var flag = TH.flag || '🏆';
     var jbtnClass = TH.jbtnClass || 'c-road';
     var jidPrefix = TH.jidPrefix || 'big-j-';
-    var grpLbl = TH.grpLabel || ('GRUPO ' + letter);
+    /* leagueMode: el torneo es una LIGA (formato 'league', 1 sola tabla).
+       Se pinta como UN grupo titulado CLASIFICACIÓN y los botones SIM /
+       AVANZAR usan claves de liga (prefijo '' / sin data-group). */
+    var _leagueMode = !!TH.leagueMode;
+    var grpLbl = TH.grpLabel || (_leagueMode ? 'CLASIFICACIÓN' : ('GRUPO ' + letter));
     /* Jornada actual = la PRIMERA con partidos pendientes. */
     var curJg = 0;
     for (var _ji = 0; _ji < fix.length; _ji++){
@@ -22425,7 +22419,7 @@ window._showSimProgress = function(opts, onDone){
     html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 8px;padding:0 2px;">'
       + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba('+TH.accRGB+',.85);">JORNADAS · '+grpLbl+'</div>'
       + (_grpPend
-          ? '<button type="button" class="tour-sim-grp-btn" data-tour="'+tourId+'" data-group="'+g+'" '
+          ? '<button type="button" class="tour-sim-grp-btn" data-tour="'+tourId+'" '+(_leagueMode ? 'data-league="1" ' : 'data-group="'+g+'" ')
             + 'style="background:linear-gradient(145deg,#5fe08a,#2a8c4a);border:1px solid rgba(95,224,138,.6);color:#0a1408;border-radius:6px;padding:4px 10px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">▶ SIM</button>'
           : '')
       + '</div>';
@@ -22474,7 +22468,7 @@ window._showSimProgress = function(opts, onDone){
   /* Card de grupo de un torneo de Selecciones → Rondas FINALES en ROSA,
      Rondas PREVIAS ("Road") en AZUL CLARITO (deben distinguirse, petición
      usuario 2026-06-02). Etiqueta de jornada según board (Previa / Final). */
-  function _selGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, slotBase){
+  function _selGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, slotBase, leagueMode){
     var _board = (typeof _tvBoardOf === 'function') ? _tvBoardOf(tourId) : '';
     var _isFinal = (_board === 'sel-final');
     var _jLbl = _isFinal ? 'Final' : 'Previa';
@@ -22494,6 +22488,9 @@ window._showSimProgress = function(opts, onDone){
              2026-06-03 "Road Copa Asia": Francia💡 no se distinguía). */
           humanBorder:'#ff3d99', humanGlow:'rgba(255,61,153,.70)', humanGlowIn:'rgba(255,61,153,.18)',
           jbtnClass:'c-roadq', jLbl:_jLbl, flag:_flag, jidPrefix:'selp-j-' };
+    /* Formato LIGA (1 tabla, sin grupos): título CLASIFICACIÓN + botones
+       SIM/AVANZAR de liga (petición usuario 2026-06-03). */
+    if (leagueMode){ TH.leagueMode = true; TH.grpLabel = 'CLASIFICACIÓN'; }
     return _bigGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, TH, slotBase);
   }
 
@@ -22506,7 +22503,7 @@ window._showSimProgress = function(opts, onDone){
   var _SUM_TURQ = { acc:'#5fc6c8', accRGB:'95,198,200',
                     hdrGrad:'#04201f,#08403e,#0c6360,#08403e,#04201f',
                     humanCol:'#ffd633' };
-  function _veranoGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, nGroups, slotBase){
+  function _veranoGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, nGroups, slotBase, leagueMode){
     var nm   = (cfg && cfg.name) ? cfg.name : 'Torneo';
     var flag = (cfg && cfg.flag && cfg.flag.indexOf('http') !== 0) ? cfg.flag : '🏆';
     var grpLbl = (nGroups === 1) ? 'CLASIFICACIÓN' : ('GRUPO ' + String.fromCharCode(65+g));
@@ -22514,6 +22511,9 @@ window._showSimProgress = function(opts, onDone){
                bg1:'#021413', bg2:'#04201f',
                humanBorder:'#3fe0d8', humanGlow:'rgba(63,224,216,.65)', humanGlowIn:'rgba(63,224,216,.18)',
                jbtnClass:'c-summer', jLbl:nm, flag:flag, jidPrefix:'sum-j-', grpLabel:grpLbl, jShort:true };
+    /* Formato LIGA (1 tabla): botones SIM/AVANZAR de liga (claves sin
+       prefijo de grupo). El título ya es CLASIFICACIÓN vía nGroups=1. */
+    if (leagueMode) TH.leagueMode = true;
     return _bigGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup, TH, slotBase);
   }
 
@@ -26091,13 +26091,23 @@ window._showSimProgress = function(opts, onDone){
       var gcfg = _tourLoadCachedSync(gtid);
       if (!gcfg) return;
       gcfg.results = gcfg.results || {};
-      var gIdx3 = parseInt(simGrpBtn.getAttribute('data-group'), 10);
-      if (isNaN(gIdx3)) return;
-      var slLenG = _tourPerGroup(gcfg);
-      var teamsG = (gcfg.teams||[]).slice(gIdx3*slLenG, (gIdx3+1)*slLenG);
-      var fixG = gcfg.groupFixtures && gcfg.groupFixtures[gIdx3];
+      /* leagueMode (formato 'league' pintado como 1 grupo): el botón ▶ SIM
+         lleva data-league="1" en vez de data-group → simula TODAS las
+         jornadas de cfg.fixture (prefijo vacío). */
+      var teamsG, fixG, prefixG;
+      if (simGrpBtn.getAttribute('data-league')) {
+        teamsG = gcfg.teams || [];
+        fixG = gcfg.fixture;
+        prefixG = '';
+      } else {
+        var gIdx3 = parseInt(simGrpBtn.getAttribute('data-group'), 10);
+        if (isNaN(gIdx3)) return;
+        var slLenG = _tourPerGroup(gcfg);
+        teamsG = (gcfg.teams||[]).slice(gIdx3*slLenG, (gIdx3+1)*slLenG);
+        fixG = gcfg.groupFixtures && gcfg.groupFixtures[gIdx3];
+        prefixG = 'g'+gIdx3+'_';
+      }
       if (!fixG) return;
-      var prefixG = 'g'+gIdx3+'_';
       var skippedG = 0;
       fixG.forEach(function(jor, ji){
         jor.forEach(function(m, mi){

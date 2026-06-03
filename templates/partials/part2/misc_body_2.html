@@ -29797,30 +29797,33 @@ document.addEventListener('DOMContentLoaded', function() {
         try { console.log('[wc-sim] ya en curso — ignorado'); } catch(_){}
         return;
       }
-      /* Simulación EN SEGUNDO PLANO (chip flotante con %). Persistencia
-         y render al terminar. */
-      simulateAllChunked(s, function(ok){
+      /* Simulación SÍNCRONA en UN solo pase + feedback garantizado
+         (2026-06-03). Antes corría por `simulateAllChunked`: los 24 grupos
+         en una cadena de `setTimeout(step,28)`. En el MÓVIL, al atenuarse
+         o apagarse la pantalla el navegador PAUSA los timers de fondo y la
+         cadena se quedaba CONGELADA a mitad (foto usuario: «60/288 · 21%»
+         sin avanzar en 35 min). Los 288 partidos son aritmética ligera
+         (<1 s de CPU), así que los jugamos de golpe en UN bloque síncrono:
+         imposible que se quede a medias por throttling de timers. Cedemos
+         un tick para pintar el aviso "Simulando…" antes de bloquear. */
+      _wcToast('⏳ Simulando Wild Card · 24 grupos (288 partidos)…', true);
+      setTimeout(function(){
         try {
-          try { console.log('[wc-sim] simulateAllChunked OK · phase='+s.phase); } catch(_){}
-          /* Pintamos SIEMPRE desde el estado EN MEMORIA (no dependemos de
-             que saveState haya persistido): así las tablas se rellenan al
-             instante aunque la cuota de localStorage falle. saveState
-             corre igualmente para propagar al server / sobrevivir al
-             reload. */
+          simulateAll(s);            /* 288 partidos en un único pase */
           var saved = saveState(s);
           render(s);
-          if(!saved){
-            try { console.warn('[wc-sim] render desde memoria (saveState falló)'); } catch(_){}
-          }
-          /* Verificación post-sim: si algo dejó el estado en 'drawn',
-             avisa al usuario. */
-          if(s.phase !== 'done'){
-            alert('⚠️ La simulación terminó pero el estado no quedó como "done". Mira la consola para detalles.');
+          if(s.phase === 'done'){
+            var nw = (s.winners || []).length;
+            _wcToast('✅ Wild Card simulada · ' + nw + ' ganadores → Open Qualifier.'
+              + (saved ? '' : ' (almacenamiento lleno: se mantiene en memoria)'), true);
+          } else {
+            _wcToast('⚠️ Terminó pero el estado no quedó "done". F12 → Consola.', false);
           }
         } catch(e2){
-          try { console.error('[_wcSimulate done]', e2); } catch(_){}
+          try { console.error('[_wcSimulate sync]', e2); } catch(_){}
+          _wcToast('❌ Error al simular: ' + (e2 && e2.message || e2), false);
         }
-      });
+      }, 30);
     } catch(e){
       try { console.error('[_wcSimulate]', e); } catch(_){}
       alert('⚠️ Error al simular Wild Card: '+(e && e.message ? e.message : e)+'\n\nRevisa la consola (F12) para más detalles.');
@@ -29831,30 +29834,59 @@ document.addEventListener('DOMContentLoaded', function() {
      Si ya hay un estado previo (drawn o done), confirma para
      sobreescribirlo, así el usuario no pierde un torneo simulado por
      error. */
+  /* Toast de feedback auto-contenido (el `_toast` global vive en otro
+     IIFE y no es accesible aquí). Verde = OK · rojo = error. */
+  function _wcToast(msg, ok){
+    try {
+      var t = document.createElement('div');
+      t.textContent = msg;
+      t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);'
+        + 'max-width:90vw;z-index:1000000;padding:12px 18px;border-radius:10px;'
+        + 'font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;letter-spacing:.4px;'
+        + 'color:#fff;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.55);'
+        + 'background:' + (ok===false ? 'linear-gradient(135deg,#7a1020,#c0392b)' : 'linear-gradient(135deg,#0d5a2a,#19a34a)') + ';'
+        + 'border:1px solid rgba(255,255,255,.25);opacity:0;transition:opacity .2s;';
+      document.body.appendChild(t);
+      requestAnimationFrame(function(){ t.style.opacity = '1'; });
+      setTimeout(function(){ t.style.opacity = '0'; setTimeout(function(){ try{ t.remove(); }catch(_){} }, 250); }, 3400);
+    } catch(_){ try{ if(ok===false) alert(msg); }catch(__){} }
+  }
   window._wcDraw = function(){
     function _doDraw(){
-      try { console.log('[wc-draw] _doDraw INICIO'); } catch(_){}
       var pool = buildPool();
       if(!pool.length){
-        alert('⚠️ No hay equipos clasificados. Configura cupos ⚪ WildCard en las ligas menores y simúlalas primero.');
+        alert('⚠️ No hay equipos en el pool de la Wild Card.\n\nPulsa «♻️ Re-cuadrar reparto europeo (canónico)» en Resto de Ligas para cargar las ligas del servidor y rellenar el pool, y vuelve a intentarlo.');
         return;
       }
       var prev = loadState();
-      if(prev && !confirm('Hay un sorteo previo'+(prev.phase==='done'?' Y simulado':'')+'. ¿Sobreescribirlo con uno nuevo?')) return;
-      /* Sorteo EN SEGUNDO PLANO (chip flotante con %). La distribución
-         es instantánea, así que minMs mantiene el chip visible ~0.9s. */
-      var _drawWork = function(){
-        var s = initState();
-        if(!s){ alert('⚠️ initState() falló. F12 → Consola.'); throw new Error('initState'); }
-        if(!saveState(s)) throw new Error('saveState');
-        render();
-      };
-      if(typeof window._bgSimFakeRun === 'function'){
-        window._bgSimFakeRun('wild-card-draw', 'Wild Card · Sorteo',
-          { verb:'sorteado', minMs:900 }, _drawWork)['catch'](function(){});
-      } else {
-        try { _drawWork(); } catch(_){}
+      if(prev && !confirm('Hay un sorteo previo'+(prev.phase==='done'?' Y simulado':'')+'.\n\n¿Sobreescribirlo con uno nuevo?')) return;
+      /* SÍNCRONO + feedback garantizado (2026-06-03). Antes el sorteo
+         corría dentro de `_bgSimFakeRun(...).catch(()=>{})`, y `_drawWork`
+         hacía `if(!saveState(s)) throw` → si localStorage estaba lleno
+         (móvil con 53 ligas hidratadas) saveState devolvía false, lanzaba,
+         y el .catch se lo TRAGABA en silencio: render() nunca corría y el
+         usuario veía "le doy a Draw y no pasa nada". Ahora: nunca lanzamos
+         por saveState (el espejo _memState ya tiene el sorteo), render con
+         el estado explícito, y SIEMPRE avisamos por toast (verde/rojo). */
+      var s;
+      try {
+        s = initState();
+      } catch(e){
+        try { console.error('[wc-draw] initState', e); } catch(_){}
+        _wcToast('❌ Error al sortear: ' + (e && e.message || e), false);
+        return;
       }
+      if(!s){
+        _wcToast('⚠️ El sorteo no pudo arrancar (pool vacío).', false);
+        return;
+      }
+      var saved = false;
+      try { saved = saveState(s); } catch(e){ try { console.error('[wc-draw] saveState', e); } catch(_){} }
+      try { render(s); } catch(e){ try { console.error('[wc-draw] render', e); } catch(_){} }
+      var ng = (s.groups || []).length;
+      _wcToast('✅ Sorteo completo · ' + ng + ' grupos de 3 formados.'
+        + (saved ? '' : ' (almacenamiento lleno: se mantiene en memoria)')
+        + '  Pulsa 🎮 Simular.', true);
     }
     if(typeof window.pG === 'function') window.pG(_doDraw);
     else _doDraw();

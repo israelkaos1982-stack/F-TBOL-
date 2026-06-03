@@ -29135,10 +29135,27 @@ document.addEventListener('DOMContentLoaded', function() {
           try { console.warn('[wc-saveState] retry OK tras liberar', freed, 'keys'); } catch(_){}
           return true;
         } catch(e2){
-          try { console.error('[wc-saveState] retry falló', e2); } catch(_){}
-          alert('⚠️ Sin espacio en localStorage para guardar el sorteo Wild Card.\n\n'
-              + 'Liberé '+freed+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas o usa Reset en otras competiciones.');
-          return false;
+          /* Último recurso: guardar SOLO lo que render() necesita
+             (groups + standings + winners + phase + ts), soltando el
+             `pool` y `matchesByGroup` (peso muerto que no se renderiza).
+             Así el estado "done" cabe aunque la cuota esté al límite y la
+             pantalla se actualiza igual en vez de quedarse en "SORTEO
+             LISTO" con las tablas a 0. */
+          try {
+            var slim = {
+              pool: [], groups: s.groups, matchesByGroup: [],
+              standings: s.standings, winners: s.winners,
+              phase: s.phase, ts: s.ts
+            };
+            localStorage.setItem(WC_KEY, JSON.stringify(slim));
+            try { console.warn('[wc-saveState] guardado SLIM tras cuota (liberadas', freed, 'keys)'); } catch(_){}
+            return true;
+          } catch(e3){
+            try { console.error('[wc-saveState] retry+slim falló', e2, e3); } catch(_){}
+            alert('⚠️ Sin espacio en localStorage para guardar el sorteo Wild Card.\n\n'
+                + 'Liberé '+freed+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas o usa Reset en otras competiciones.');
+            return false;
+          }
         }
       }
       alert('⚠️ Error guardando el estado Wild Card: '+(e && e.message ? e.message : e));
@@ -29406,15 +29423,35 @@ document.addEventListener('DOMContentLoaded', function() {
      resto del torneo. */
   function simulateAll(state){
     if(!state || !Array.isArray(state.groups)) return;
-    state.matchesByGroup = state.groups.map(function(grp){
+    /* Las jornadas (matchesByGroup) son PESADAS (24 grupos × 12 = 288
+       objetos) y SOLO se usan aquí para construir las tablas: ni
+       render() ni _persistWinners leen `matchesByGroup`, solo
+       `standings`. Las calculamos en una variable LOCAL y NO las
+       persistimos → el estado "done" apenas crece respecto al "drawn",
+       y saveState no revienta la cuota de localStorage.
+       Bug que arregla (foto usuario 2026-06-03 "la simulación automática
+       de la wild card no funciona"): la sim corría OK en memoria pero el
+       setItem del estado "done" (mucho mayor por las 288 jornadas)
+       fallaba SILENCIOSAMENTE por cuota → saveState devolvía false →
+       _wcSimulate retornaba antes de render() → la pantalla seguía en
+       "SORTEO LISTO" con todas las tablas a 0. */
+    var matchesByGroup = state.groups.map(function(grp){
       try { return _simulateWcGroup(grp); }
       catch(e){ try{console.error('[wc-sim grupo]', e);}catch(_){} return []; }
     });
     state.standings = state.groups.map(function(grp, gi){
-      try { return _wcStandings(grp, state.matchesByGroup[gi]||[]); }
+      try { return _wcStandings(grp, matchesByGroup[gi]||[]); }
       catch(e){ try{console.error('[wc-standings]', gi, e);}catch(_){} return []; }
     });
+    state.matchesByGroup = [];   /* peso muerto: no se persiste */
     state.phase = 'done';
+    /* Sello de recencia FRESCO: sin esto el estado simulado conservaba el
+       `ts` del sorteo, así que la hidratación multi-dispositivo
+       (SYNC_KEYS → wc_state_v1, desempate por ts en hydrateFromServer) lo
+       trataba como "no más nuevo" que la copia drawn del servidor y podía
+       NO propagarlo / revertirlo a drawn. Con ts fresco el "done" SIEMPRE
+       gana el last-write-wins. */
+    state.ts = Date.now();
     _persistWinners(state);
     /* El OQ y la Previa se reconstruyen desde estos ganadores —
        limpiamos su caché para que vuelvan a sortearse. */
@@ -29489,8 +29526,8 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if(s.phase === 'done'){ render(); return s; }
       simulateAll(s);
-      if(!saveState(s)) return;
-      render();
+      saveState(s);
+      render(s);
       return s;
     } catch(e){
       try{console.error('[_wcDoSim]', e);}catch(_){}
@@ -29599,10 +29636,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if(btnDraw) btnDraw.disabled = false;   /* Draw siempre disponible (re-sortea) */
   }
 
-  function render(){
+  function render(stateOverride){
     var host = document.getElementById('wc-body');
     if(!host) return;
-    var s = loadState();
+    /* `stateOverride` permite pintar desde el estado EN MEMORIA (justo
+       tras simular) sin depender de que saveState haya persistido —
+       así las tablas se rellenan SIEMPRE al pulsar 🎮 Simular, aunque la
+       cuota de localStorage impida guardar. Sin arg → lee de disco
+       (uso normal: navegación, hidratación desde server). */
+    var s = stateOverride || loadState();
     _refreshSimBtn(s);
     if(!s){
       var pool = buildPool();
@@ -29695,8 +29737,16 @@ document.addEventListener('DOMContentLoaded', function() {
       simulateAllChunked(s, function(ok){
         try {
           try { console.log('[wc-sim] simulateAllChunked OK · phase='+s.phase); } catch(_){}
-          if(!saveState(s)) return;
-          render();
+          /* Pintamos SIEMPRE desde el estado EN MEMORIA (no dependemos de
+             que saveState haya persistido): así las tablas se rellenan al
+             instante aunque la cuota de localStorage falle. saveState
+             corre igualmente para propagar al server / sobrevivir al
+             reload. */
+          var saved = saveState(s);
+          render(s);
+          if(!saved){
+            try { console.warn('[wc-sim] render desde memoria (saveState falló)'); } catch(_){}
+          }
           /* Verificación post-sim: si algo dejó el estado en 'drawn',
              avisa al usuario. */
           if(s.phase !== 'done'){
@@ -30201,10 +30251,20 @@ document.addEventListener('DOMContentLoaded', function() {
     var s=loadState();
     if(!s){
       var raw=buildPool();
+      /* Aviso de carga: si el pool aún no llegó a 62 Y el sync del
+         servidor todavía no terminó de hidratar, los feeders (los 28 del
+         Open Qualifier) pueden estar en camino. Mostramos un aviso para
+         que el usuario espere unos segundos en vez de sortear un cuadro
+         incompleto (el re-render automático subirá el contador solo). */
+      var _hydrated = (window.__compStateSyncHydrated === true);
+      var _loadingHint = (raw.length < POOL_TARGET && !_hydrated)
+        ? '<div style="margin-top:10px;padding:8px 12px;background:rgba(255,200,60,.10);border:1px solid rgba(255,200,60,.45);border-radius:8px;color:#ffe08a;">⏳ Cargando equipos del Open Qualifier y las ligas… espera unos segundos (el contador subirá solo, sin recargar).</div>'
+        : '';
       host.innerHTML='<div style="padding:24px 12px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.7;">'
         +'<div style="font-size:32px;margin-bottom:8px;">🇪🇺</div>'
         +'<div style="font-family:Oswald,sans-serif;letter-spacing:1.5px;color:rgba(255,255,255,.85);">PREVIA SIN SORTEAR</div>'
         +'<div style="margin-top:6px;">Equipos detectados: <b>'+raw.length+' / '+POOL_TARGET+'</b> (34 directos + 28 del Open Qualifier).</div>'
+        +_loadingHint
         +'<div style="margin-top:12px;padding:10px 12px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.4);border-radius:8px;color:#e0bfff;">👉 Pulsa <b>🎲 Draw</b> para sortear los 16 grupos y <b>🎮 Sim</b> para jugar las liguillas. Clasifican los 62: <b>top 12 → Champions</b>, <b>13-34 → Europa</b>, <b>35-62 → Conference</b>.</div>'
         +'</div>';
       _renderDiag();
@@ -30397,6 +30457,96 @@ document.addEventListener('DOMContentLoaded', function() {
     _wireOnce();
     if(window._uclPrevSimWired || ++_tries >= 8) clearInterval(_intv);
   }, 400);
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════
+     FASES PREVIAS DE EUROPA — re-render fiable de Wild Card /
+     Open Qualifier / Previa de Champions (2026-06-03)
+
+     Bug (foto usuario 2026-06-03): el botón 🎲 Draw de la Previa
+     "no funcionaba" y había que recargar muchas veces para que el
+     Draw / Sim de Wild Card, Open Qualifier y Previa funcionaran.
+
+     Causa raíz: el POOL de cada fase se alimenta de datos que llegan
+     de forma ASÍNCRONA:
+       · `oq_to_previa_v1`, `wc_to_open_qualifier_v1` → vía el sync del
+         servidor (GET /api/state, ver bloque siguiente).
+       · zonas `uclPrev`/`uclQual`/`wildcard` de los `ligaExt_*` → vía
+         fetchData (GET /api/kv por liga).
+     La Previa SOLO renderiza en DOMContentLoaded (cuando los feeders
+     aún están vacíos → "34/62 · PREVIA SIN SORTEAR") y NO se
+     re-renderiza al NAVEGAR a la pantalla — a diferencia de Wild Card,
+     que ya parchea go(). Así el usuario veía la pantalla congelada con
+     el pool incompleto y, al sortear, obtenía un cuadro lleno de "Por
+     definir" (o aparentemente nada) hasta recargar y forzar un render
+     fresco con los datos ya hidratados.
+
+     Fix: re-render de las 3 pantallas (a) al NAVEGAR a ellas (parche de
+     go() encadenado, con reintentos diferidos para capturar los datos
+     que llegan tarde mientras la pantalla sigue abierta) y (b) al
+     completar la hidratación del servidor (`comp-state:hydrated`).
+     Todas las funciones build*/render solo LEEN el estado y repintan su
+     contenedor (idempotente, NUNCA tocan el sorteo guardado), así que
+     re-renderizar de más es inocuo.
+     ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  var SCREENS = {
+    's-wild-card':           function(){ if(typeof window._wcRender === 'function') window._wcRender(); },
+    's-open-qualifier-clas': function(){ if(typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); },
+    's-ucl-previa-clas':     function(){ if(typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); }
+  };
+  function _render(id){ try { var fn = SCREENS[id]; if(fn) fn(); } catch(_){} }
+  function _renderAll(){ for(var id in SCREENS){ if(SCREENS.hasOwnProperty(id)) _render(id); } }
+
+  var _cur = null;
+  /* Reintentos diferidos: las zonas de los `ligaExt_*` y los feeders del
+     servidor pueden llegar cientos de ms (o varios s en móvil lento)
+     después de abrir la pantalla. Re-pintamos varias veces MIENTRAS siga
+     siendo la pantalla activa para que el pool detectado suba a su total
+     sin que el usuario tenga que recargar. */
+  var _NAV_RETRY_MS  = [0, 400, 1200, 3000, 6000];
+  var _BOOT_RETRY_MS = [300, 1500, 4000];
+  function _renderWithRetries(id){
+    _NAV_RETRY_MS.forEach(function(ms){
+      setTimeout(function(){ if(_cur === id) _render(id); }, ms);
+    });
+  }
+
+  /* Parche encadenado de go() — respeta los parches previos (Wild Card
+     ya parchea go()); el nuestro queda como el más externo y delega en
+     el anterior antes de re-pintar. */
+  function _patchGo(){
+    if(window._eurPrevGoPatched) return true;
+    if(typeof window.go !== 'function') return false;
+    var orig = window.go;
+    window.go = function(id){
+      var r = orig.apply(this, arguments);
+      _cur = id;
+      if(SCREENS.hasOwnProperty(id)) _renderWithRetries(id);
+      return r;
+    };
+    window._eurPrevGoPatched = true;
+    return true;
+  }
+  if(!_patchGo()){
+    var _gt = 0, _gi = setInterval(function(){ if(_patchGo() || ++_gt >= 20) clearInterval(_gi); }, 100);
+  }
+
+  /* Re-render cuando el sync del servidor termina de hidratar los
+     feeders (oq_to_previa_v1, wc_to_open_qualifier_v1, etc.). El propio
+     hydrateFromServer ya llama a las build* pero SOLO si restauró alguna
+     clave; este listener cubre el caso de que los datos relevantes
+     llegaran por otra vía (fetchData de ligas) sin restaurar SYNC_KEYS. */
+  document.addEventListener('comp-state:hydrated', function(){ _renderAll(); });
+
+  /* Red de seguridad en el arranque: re-pinta las 3 por si la pantalla
+     inicial es una de ellas (deep-link) o los datos llegan poco después
+     del primer render de cada IIFE. */
+  function _boot(){ _BOOT_RETRY_MS.forEach(function(ms){ setTimeout(_renderAll, ms); }); }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _boot);
+  else _boot();
 })();
 </script>
 

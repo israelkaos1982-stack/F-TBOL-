@@ -13478,6 +13478,20 @@ window._showSimProgress = function(opts, onDone){
 <button class="back-btn" id="s-tour-stats-back" onclick="window._tourStatsBack&&window._tourStatsBack()">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji" id="s-tour-stats-emoji">📊</span><h2 id="s-tour-stats-title">Estadísticas</h2></div>
 <div class="liga-stats-wrap" id="tour-stats-dashboard"><div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div></div>
+<style>
+  /* Título de la pantalla de estadísticas de torneo en UNA sola línea
+     horizontal (petición usuario 2026-06-03, foto: "Trofeo Joan Gamper ·
+     Estadísticas" salía partido en 2 líneas). Reducimos el cuerpo + el
+     letter-spacing, forzamos nowrap y ocultamos la línea decorativa
+     ::after para dejar todo el ancho al título. */
+  #s-tour-stats .sec-hdr{flex-wrap:nowrap;gap:8px;}
+  #s-tour-stats .sec-hdr h2{
+    font-size:clamp(13px,4.6vw,18px);
+    letter-spacing:1.5px;
+    white-space:nowrap;
+  }
+  #s-tour-stats .sec-hdr::after{display:none;}
+</style>
 </div>
 
 <script>
@@ -20755,7 +20769,15 @@ window._showSimProgress = function(opts, onDone){
     var titleEl = document.getElementById('s-tour-stats-title');
     var emojiEl = document.getElementById('s-tour-stats-emoji');
     var dashEl  = document.getElementById('tour-stats-dashboard');
-    if (titleEl) titleEl.textContent = (cfg.name || tourId) + ' · Estadísticas';
+    /* Título en UNA línea: quitamos el prefijo "Trofeo " (p.ej. "Trofeo
+       Joan Gamper" → "Joan Gamper") para que "<Nombre> · Estadísticas"
+       quepa horizontal sin partir en 2 líneas. Petición usuario
+       2026-06-03 ("reducelo a Joan Gamper · Estadísticas, en la misma
+       línea horizontal"). El CSS de #s-tour-stats fuerza nowrap. */
+    if (titleEl) {
+      var _statsNm = String(cfg.name || tourId).replace(/^\s*Trofeo\s+/i, '');
+      titleEl.textContent = _statsNm + ' · Estadísticas';
+    }
     if (emojiEl) {
       try { emojiEl.innerHTML = _tourFlagHtml(cfg.flag || '📊', 'sec-flag-img'); }
       catch(_){ emojiEl.textContent = '📊'; }

@@ -3206,6 +3206,42 @@ def _kv_is_allowed(key):
     return bool(_KV_ALLOWED_REGEX.match(key))
 
 
+def _tour_registry_merge(old_json, new_value):
+    """Une (unión) el registro de torneos visibles entrante con el ya
+    guardado. La lista `visible` jamás encoge: conserva el orden del
+    valor entrante y añade al final los slots que solo tenía la copia
+    vieja del server. `hidden` (ocultados a propósito) se une, pero
+    nunca tombstonea un slot que quede visible. Anti-wipe cross-device.
+    """
+    try:
+        old_value = json.loads(old_json)
+    except Exception:
+        old_value = None
+    if not isinstance(new_value, dict) or not isinstance(new_value.get("visible"), list):
+        # El entrante no es un registro válido → no fusionamos, que el
+        # validador / last-write de arriba decida.
+        return new_value
+    old_vis = old_value.get("visible") if isinstance(old_value, dict) else None
+    if not isinstance(old_vis, list):
+        return new_value
+    seen, merged = set(), []
+    for _id in list(new_value["visible"]) + list(old_vis):
+        if isinstance(_id, str) and _id not in seen:
+            seen.add(_id)
+            merged.append(_id)
+    hid = set()
+    for src in (new_value.get("hidden"), (old_value.get("hidden") if isinstance(old_value, dict) else None)):
+        if isinstance(src, list):
+            for _id in src:
+                if isinstance(_id, str):
+                    hid.add(_id)
+    hid -= seen  # lo visible gana sobre lo oculto
+    out = dict(new_value)
+    out["visible"] = merged
+    out["hidden"] = sorted(hid)
+    return out
+
+
 @app.route("/api/kv/<key>", methods=["GET"])
 def api_kv_get(key):
     if not _kv_is_allowed(key):
@@ -3241,6 +3277,21 @@ def api_kv_set(key):
         return jsonify({"ok": False, "error": "payload supera 2 MB"}), 413
     now = utc_now_iso()
     row = GlobalState.query.filter_by(clave=key).first()
+    # Defensa en profundidad para el registro de torneos visibles
+    # (tour_registry_v1): la lista `visible` NUNCA debe encoger en el
+    # server. Un dispositivo que suba una copia stale/corta (otro móvil,
+    # POST perdido tras un GET viejo) borraba las cajas de Rondas
+    # Previas/Finales ("Road Copa Asia", "Mundial 2032"…) del resto de
+    # dispositivos. Aquí FUSIONAMOS (unión) el `visible` entrante con el
+    # ya guardado — mismo principio anti-wipe que `_lx_merge_teams` para
+    # los escudos. `hidden` (ocultados explícitos) sí respeta lo
+    # entrante, pero nunca tombstonea algo que quede visible.
+    if key == "tour_registry_v1" and row and row.valor_json:
+        try:
+            value = _tour_registry_merge(row.valor_json, value)
+            payload = json.dumps(value, ensure_ascii=False)
+        except Exception:
+            pass
     if row:
         row.valor_json = payload
         row.updated_at = now

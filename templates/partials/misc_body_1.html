@@ -53962,43 +53962,34 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (hadWelcome || hadCursor || _hasActivityCursors()) _markSeeded();
     } catch(_){}
   }
+  /* 2026-06-03 — Los 3 mensajes de bienvenida (Anfield / Plantilla /
+     Doble compromiso) se ELIMINAN por completo. El usuario los veía
+     reaparecer en CADA carga porque el flag `mu_seeded_v1` y los cursores
+     no persistían (la cuota de localStorage del juego está llena → los
+     writes fallan en silencio). Como NO se puede confiar en ningún flag
+     para suprimirlos, la única solución robusta es NO crearlos nunca y,
+     además, purgar los que ya estén en la bandeja. */
   function _seed(){
-    if (_seedFlagOn()) return;
-    /* Si el usuario ya ha jugado (hay cursores de actividad) no sembramos
-       aunque la bandeja esté vacía — evita el bucle de bienvenidas. */
-    if (_hasActivityCursors()){ _markSeeded(); return; }
-    /* Doble check: si por la razón que sea la bandeja ya tiene CUALQUIER
-       mensaje en ella, no sembramos (el flag debería cubrirlo, este es
-       el cinturón). El usuario ya tiene contexto — no le metemos
-       3 mensajes nuevos por encima. */
-    var d = _read();
-    if (d && d.msgs && d.msgs.length){ _markSeeded(); return; }
-    _markSeeded();
-    push({ id:'seed-liv-anfield', side:'liv', type:'welcome', icon:'✉️',
-      sender:'Liverpool FC',
-      title:'Bienvenido a Anfield, mister',
-      body:'Aquí recibirás todas las novedades del club: resultados de los partidos, sorteos de copa, lesiones, tarjetas y sanciones, hat-tricks, rachas, apuestas, objetivos y mucho más.' });
-    push({ id:'seed-liv-plantilla', side:'liv', type:'welcome', icon:'📋',
-      sender:'Secretaría Técnica',
-      title:'Plantilla a tu disposición',
-      body:'31 jugadores fichados y listos. Revisa la lista en el menú PLANTILLA.' });
-    /* Body del seed de Francia construido sobre la próxima jornada real
-       del Mundial si el config está cargado, o un texto genérico si aún
-       no — evita "Mundial 2032" estático cuando Francia podría estar
-       jugando otra cosa más adelante. */
-    var fraBody = 'No olvides que también diriges a Les Bleus. Aquí verás las jornadas de Francia, las convocatorias y los resultados de la selección.';
+    _markSeeded();   /* deja sellado el flag por si acaso; NO siembra nada */
+  }
+  /* Borra de la bandeja CUALQUIER mensaje de bienvenida (los 3 clásicos
+     por id o por type:'welcome'). Idempotente y barato: se llama en cada
+     boot, así que aunque se hayan re-creado en una sesión vieja, al
+     siguiente arranque desaparecen para siempre. */
+  function _purgeWelcomes(){
     try {
-      var nxt = (typeof _franciaNextMatch === 'function') ? _franciaNextMatch() : null;
-      if (nxt && nxt.rival){
-        fraBody = 'No olvides que también diriges a Les Bleus. El próximo partido del Mundial es '
-          + (nxt.franceName || 'Francia') + ' vs ' + nxt.rival
-          + ' (J' + nxt.jor + '). Aquí verás todas las jornadas y convocatorias.';
-      }
+      var d = _read();
+      if (!d || !d.msgs || !d.msgs.length) return;
+      var before = d.msgs.length;
+      d.msgs = d.msgs.filter(function(m){
+        if (!m) return false;
+        if (m.type === 'welcome') return false;
+        if (m.id === 'seed-liv-anfield' || m.id === 'seed-liv-plantilla'
+            || m.id === 'seed-fra-bleus') return false;
+        return true;
+      });
+      if (d.msgs.length !== before) _write(d);
     } catch(_){}
-    push({ id:'seed-fra-bleus', side:'fra', type:'welcome', icon:'🇫🇷',
-      sender:'FFF · Selección Francia',
-      title:'Doble compromiso, mister',
-      body: fraBody });
   }
 
   /* ── Limpieza one-shot: avisos "Próximo partido — Descanso/
@@ -54078,25 +54069,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       }
       _write(d);
     }
-    /* Si borramos el seed Francia legacy, re-inyectamos el seed nuevo
-       inmediatamente para que el usuario no se quede sin el welcome de
-       la selección — sin esto el `_seed()` siguiente lo saltaría por
-       tener la bandeja no vacía (Anfield + Plantilla). */
-    if (hadLegacySeed){
-      var fraBody = 'No olvides que también diriges a Les Bleus. Aquí verás las jornadas de Francia, las convocatorias y los resultados de la selección.';
-      try {
-        var nxt = (typeof _franciaNextMatch === 'function') ? _franciaNextMatch() : null;
-        if (nxt && nxt.rival){
-          fraBody = 'No olvides que también diriges a Les Bleus. El próximo partido del Mundial es '
-            + (nxt.franceName || 'Francia') + ' vs ' + nxt.rival
-            + ' (J' + nxt.jor + '). Aquí verás todas las jornadas y convocatorias.';
-        }
-      } catch(_){}
-      push({ id:'seed-fra-bleus', side:'fra', type:'welcome', icon:'🇫🇷',
-        sender:'FFF · Selección Francia',
-        title:'Doble compromiso, mister',
-        body: fraBody });
-    }
+    /* (2026-06-03) Ya NO re-inyectamos el welcome de Francia: las
+       bienvenidas están eliminadas por completo. */
     _setCursor('purged:fra_legacy', '1');
   }
 
@@ -54114,8 +54088,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
   function _bootStage2(){
     _migrateSeedFlag();   /* sella flag mu_seeded_v1 si ya hay welcomes en bandeja */
-    _purgeStaleFrancia(); /* borra seed legacy + callups con "amistoso" antes del seed nuevo */
-    _seed();              /* no-op si el flag ya está */
+    _purgeStaleFrancia(); /* borra seed legacy + callups con "amistoso" */
+    _seed();              /* no-op: las bienvenidas están eliminadas */
+    _purgeWelcomes();     /* borra CUALQUIER bienvenida que siga en la bandeja */
     _purgeStaleRest();
     _refresh();
     /* Engancha hooks tan pronto como las funciones existan. */

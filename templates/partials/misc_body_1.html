@@ -25697,26 +25697,53 @@ window._showSimProgress = function(opts, onDone){
     if (c.cardColor || c.cardText) return true;
     return false;
   }
+  function _tvNow(){ try { return Date.now(); } catch(_){ return 0; } }
+  /* Conjunto EFECTIVO de slots ocultos del registro, resuelto por
+     RECENCIA (timestamps) con fallback al array legacy `hidden`.
+     Cada acción de ocultar sella `hiddenAt[id]`, cada acción de
+     mostrar/crear/restaurar sella `shownAt[id]`. La más reciente gana:
+     así "ocultar" PERSISTE frente a una copia stale que aún tenga el
+     slot en `visible`, y "mostrar" en otro dispositivo (más reciente)
+     gana frente a un tombstone viejo. Sin timestamps cae al array. */
+  function _tvEffHidden(reg){
+    var out = {};
+    ((reg && reg.hidden) || []).forEach(function(id){ if (TOUR_IDS.indexOf(id) !== -1) out[id] = 1; });
+    var hAt = (reg && reg.hiddenAt && typeof reg.hiddenAt === 'object') ? reg.hiddenAt : {};
+    var sAt = (reg && reg.shownAt  && typeof reg.shownAt  === 'object') ? reg.shownAt  : {};
+    var ids = {};
+    Object.keys(hAt).forEach(function(id){ ids[id] = 1; });
+    Object.keys(sAt).forEach(function(id){ ids[id] = 1; });
+    Object.keys(ids).forEach(function(id){
+      if (TOUR_IDS.indexOf(id) === -1) return;
+      var h = +hAt[id] || 0, s = +sAt[id] || 0;
+      if (h > s) out[id] = 1;
+      else if (s > 0 && s >= h) delete out[id];
+    });
+    return out;
+  }
   function _tvRegLoad(){
     var reg = null;
     try { var raw = localStorage.getItem(_TV_REG_KEY); if (raw) reg = JSON.parse(raw); } catch(_){}
     if (!reg || !Array.isArray(reg.visible)) reg = { v:1, visible: TOUR_BUILTINS.slice() };
     if (!Array.isArray(reg.hidden)) reg.hidden = [];
-    var hiddenSet = {}; reg.hidden.forEach(function(id){ hiddenSet[id] = 1; });
+    if (!reg.hiddenAt || typeof reg.hiddenAt !== 'object') reg.hiddenAt = {};
+    if (!reg.shownAt  || typeof reg.shownAt  !== 'object') reg.shownAt  = {};
+    var effHidden = _tvEffHidden(reg);
     var seen = {}, vis = [];
     reg.visible.forEach(function(id){
-      if (TOUR_IDS.indexOf(id) === -1 || seen[id]) return;
+      if (TOUR_IDS.indexOf(id) === -1 || seen[id] || effHidden[id]) return;
       seen[id] = 1; vis.push(id);
     });
     /* RECUPERACIÓN anti-wipe (2026-06-03): cualquier slot con DATOS
        REALES en localStorage que NO esté visible y NO haya sido
-       ocultado EXPLÍCITAMENTE por el admin (tombstone `hidden`) se
-       restaura. Devuelve las cajas de Rondas Previas/Finales ("Road
-       Copa Asia", "Mundial 2032", …) cuando un GET stale del server
-       pisó el registro y las "perdió". El tombstone `hidden` evita
-       resucitar lo que el admin borró a propósito. */
+       ocultado EXPLÍCITAMENTE por el admin (tombstone `hidden` /
+       recencia) se restaura. Devuelve las cajas de Rondas Previas/
+       Finales ("Road Copa Asia", "Mundial 2032", …) cuando un GET
+       stale del server pisó el registro y las "perdió". El tombstone
+       (resuelto por recencia en `effHidden`) evita resucitar lo que el
+       admin ocultó a propósito. */
     TOUR_SLOTS.forEach(function(id){
-      if (seen[id] || hiddenSet[id]) return;
+      if (seen[id] || effHidden[id]) return;
       if (_tvSlotHasContent(id)) { seen[id] = 1; vis.push(id); }
     });
     reg.visible = vis.length ? vis : TOUR_BUILTINS.slice();
@@ -25910,15 +25937,20 @@ window._showSimProgress = function(opts, onDone){
         } else if (act === 'del'){
           if (!confirm('¿Eliminar este torneo de la lista? Se conservan sus datos por si lo restauras.')) return;
           reg.visible = reg.visible.filter(function(x){ return x !== id; });
-          /* Tombstone: marca el ocultado EXPLÍCITO para que la
-             recuperación anti-wipe NO lo resucite (sí distingue
-             "borrado a propósito" de "perdido por sync stale"). */
+          /* Tombstone con SELLO DE RECENCIA: marca el ocultado
+             EXPLÍCITO para que la recuperación anti-wipe NO lo
+             resucite y para que GANE frente a una copia stale que aún
+             tenga el slot en `visible` (cliente o server). `hiddenAt`
+             > `shownAt` ⇒ oculto persistente hasta que el admin lo
+             muestre de nuevo (que sellará un `shownAt` más reciente). */
           reg.hidden = (reg.hidden || []).filter(function(x){ return x !== id; });
           reg.hidden.push(id);
+          reg.hiddenAt = reg.hiddenAt || {}; reg.hiddenAt[id] = _tvNow();
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
         } else if (act === 'restore'){
           if (TOUR_IDS.indexOf(id) !== -1 && reg.visible.indexOf(id) === -1) reg.visible.push(id);
           reg.hidden = (reg.hidden || []).filter(function(x){ return x !== id; });
+          reg.shownAt = reg.shownAt || {}; reg.shownAt[id] = _tvNow();
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
         } else if (act === 'new'){
           var free = _tvSlotsOf(_tvMgBoard).filter(function(s){ return reg.visible.indexOf(s) === -1; });
@@ -25936,6 +25968,7 @@ window._showSimProgress = function(opts, onDone){
           try { if (typeof window._tourSave === 'function') window._tourSave(slot, cfg); } catch(_){}
           if (reg.visible.indexOf(slot) === -1) reg.visible.push(slot);
           reg.hidden = (reg.hidden || []).filter(function(x){ return x !== slot; });
+          reg.shownAt = reg.shownAt || {}; reg.shownAt[slot] = _tvNow();
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
           setTimeout(function(){
             _tvCloseManage();
@@ -26115,34 +26148,63 @@ window._showSimProgress = function(opts, onDone){
      Devuelve { merged, addedFromLocal } donde addedFromLocal indica
      que la unión tiene MÁS que el server (hay que re-subir para que
      el otro dispositivo reciba los slots locales). */
-  function _tvRegMerge(localReg, remoteVisible, remoteHidden){
-    var lvis = (localReg && Array.isArray(localReg.visible)) ? localReg.visible : [];
+  /* Fusión local∪server del registro RESUELTA POR RECENCIA. El estado
+     visible/oculto de cada slot lo decide la ÚLTIMA acción real del
+     admin (sello `hiddenAt`/`shownAt`), NO un "visible gana siempre".
+     Así:
+       · Anti-wipe: un slot nunca visto-como-oculto en ningún sitio
+         (solo presente en `visible`) se conserva (shownAt baseline 1,
+         sin hiddenAt ⇒ visible). NUNCA se pierde por un GET stale.
+       · Ocultar PERSISTE: un slot con `hiddenAt` reciente gana frente
+         a una copia stale que lo siga teniendo en `visible` (baseline
+         shownAt 1 « hiddenAt now). Bug 2026-06-03: las cajas ocultas
+         de Torneos de Verano / Selecciones volvían a salir al recargar.
+       · Mostrar de nuevo gana si es MÁS reciente que el ocultado
+         (cross-device correcto). */
+  function _tvRegMerge(localReg, remoteVisible, remoteHidden, remoteHiddenAt, remoteShownAt){
+    localReg = localReg || {};
+    var lvis = Array.isArray(localReg.visible) ? localReg.visible : [];
     var rvis = Array.isArray(remoteVisible) ? remoteVisible : [];
-    var seen = {}, merged = [];
-    function add(id){
-      if (TOUR_IDS.indexOf(id) === -1 || seen[id]) return;
-      seen[id] = 1; merged.push(id);
+    var lhid = Array.isArray(localReg.hidden) ? localReg.hidden : [];
+    var rhid = Array.isArray(remoteHidden) ? remoteHidden : [];
+    var hiddenAt = {}, shownAt = {};
+    function mergeTs(dst, m){
+      if (!m || typeof m !== 'object') return;
+      Object.keys(m).forEach(function(id){
+        if (TOUR_IDS.indexOf(id) === -1) return;
+        var v = +m[id] || 0; if (v > (dst[id] || 0)) dst[id] = v;
+      });
     }
-    lvis.forEach(add);                 // primero TODO lo local (nunca se pierde)
-    var addedFromLocal = false;
-    rvis.forEach(function(id){
-      if (TOUR_IDS.indexOf(id) === -1) return;
-      if (!seen[id]) add(id);          // el server aporta slots que local no tenía
+    mergeTs(hiddenAt, localReg.hiddenAt); mergeTs(hiddenAt, remoteHiddenAt);
+    mergeTs(shownAt,  localReg.shownAt);  mergeTs(shownAt,  remoteShownAt);
+    /* Baselines de presencia (datos legacy sin timestamps): un slot en
+       `visible` sin sello ⇒ shownAt=1; en `hidden` sin sello ⇒
+       hiddenAt=1. Los timestamps reales (ms) ganan a estos baselines. */
+    lvis.concat(rvis).forEach(function(id){ if (TOUR_IDS.indexOf(id) !== -1 && !shownAt[id])  shownAt[id]  = 1; });
+    lhid.concat(rhid).forEach(function(id){ if (TOUR_IDS.indexOf(id) !== -1 && !hiddenAt[id]) hiddenAt[id] = 1; });
+    /* Orden: primero el visible LOCAL (conserva orden del dispositivo),
+       luego el visible remoto, luego cualquier id solo conocido por sus
+       timestamps. */
+    var order = [], inOrder = {};
+    function ord(id){ if (TOUR_IDS.indexOf(id) !== -1 && !inOrder[id]) { inOrder[id] = 1; order.push(id); } }
+    lvis.forEach(ord); rvis.forEach(ord);
+    Object.keys(shownAt).forEach(ord); Object.keys(hiddenAt).forEach(ord);
+    var merged = [], hidden = [];
+    order.forEach(function(id){
+      var h = hiddenAt[id] || 0, s = shownAt[id] || 0;
+      if (h > s) hidden.push(id); else merged.push(id);
     });
-    /* Tombstones de "ocultar" (unión local∪server). Lo VISIBLE gana
-       sobre lo oculto: un slot que algún dispositivo muestra no se
-       tombstonea (la edición que MUESTRA es aditiva, prevalece). */
-    var hid = {};
-    function addHid(id){ if (TOUR_IDS.indexOf(id) !== -1) hid[id] = 1; }
-    ((localReg && localReg.hidden) || []).forEach(addHid);
-    (Array.isArray(remoteHidden) ? remoteHidden : []).forEach(addHid);
-    merged.forEach(function(id){ delete hid[id]; });
-    var hidden = Object.keys(hid);
-    /* ¿La unión añade algo que el server NO tenía? (slots solo locales) */
+    /* ¿La unión difiere de lo que el server tenía? (slots o tombstones
+       que solo tiene este dispositivo) ⇒ re-subir para propagar. Con
+       timestamps converge: una vez ambos lados igualan el máximo sello,
+       deja de diferir. */
+    var addedFromLocal = false;
     var rset = {}; rvis.forEach(function(id){ rset[id] = 1; });
+    var rhidSet = {}; rhid.forEach(function(id){ rhidSet[id] = 1; });
     merged.forEach(function(id){ if (!rset[id]) addedFromLocal = true; });
+    hidden.forEach(function(id){ if (!rhidSet[id]) addedFromLocal = true; });
     if (!merged.length) merged = TOUR_BUILTINS.slice();
-    return { merged: { v:1, visible: merged, hidden: hidden }, addedFromLocal: addedFromLocal };
+    return { merged: { v:1, visible: merged, hidden: hidden, hiddenAt: hiddenAt, shownAt: shownAt }, addedFromLocal: addedFromLocal };
   }
   /* Hidrata el registro desde el server (best-effort, async). Hace
      el registro cross-device y resistente a borrados de localStorage
@@ -26158,7 +26220,7 @@ window._showSimProgress = function(opts, onDone){
       }).then(function(j){
         if (!j || !j.value || !Array.isArray(j.value.visible)) return;
         var localReg = _tvRegLoad();
-        var res = _tvRegMerge(localReg, j.value.visible, j.value.hidden);
+        var res = _tvRegMerge(localReg, j.value.visible, j.value.hidden, j.value.hiddenAt, j.value.shownAt);
         try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(res.merged)); } catch(_){}
         /* Si la unión tiene slots que el server no traía, re-subir
            (aditivo, nunca borra del server) para propagarlos al otro

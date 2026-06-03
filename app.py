@@ -3207,11 +3207,24 @@ def _kv_is_allowed(key):
 
 
 def _tour_registry_merge(old_json, new_value):
-    """Une (unión) el registro de torneos visibles entrante con el ya
-    guardado. La lista `visible` jamás encoge: conserva el orden del
-    valor entrante y añade al final los slots que solo tenía la copia
-    vieja del server. `hidden` (ocultados a propósito) se une, pero
-    nunca tombstonea un slot que quede visible. Anti-wipe cross-device.
+    """Fusión local∪server del registro de torneos RESUELTA POR RECENCIA.
+
+    El estado visible/oculto de cada slot lo decide la ÚLTIMA acción
+    real del admin (sello `hiddenAt`/`shownAt`), NO un "visible gana
+    siempre". Esto reconcilia dos requisitos opuestos:
+
+    · ANTI-WIPE: un slot nunca visto-como-oculto en ningún sitio (solo
+      presente en `visible`) se conserva — la lista visible no encoge
+      por un POST stale/corto (otro móvil, POST perdido tras un GET
+      viejo). Las cajas de Rondas Previas/Finales ("Road Copa Asia",
+      "Mundial 2032"…) NUNCA desaparecen por sync.
+    · OCULTAR PERSISTE: un slot con `hiddenAt` reciente GANA frente a
+      una copia stale que lo siga teniendo en `visible` (baseline
+      shownAt=1 « hiddenAt now). Antes el server lo re-añadía a
+      `visible` desde `old_vis` y borraba el tombstone, así que las
+      cajas ocultas volvían a salir al recargar (bug 2026-06-03).
+    · MOSTRAR de nuevo gana si es más reciente que el ocultado
+      (cross-device correcto).
     """
     try:
         old_value = json.loads(old_json)
@@ -3221,24 +3234,63 @@ def _tour_registry_merge(old_json, new_value):
         # El entrante no es un registro válido → no fusionamos, que el
         # validador / last-write de arriba decida.
         return new_value
-    old_vis = old_value.get("visible") if isinstance(old_value, dict) else None
+    if not isinstance(old_value, dict):
+        old_value = {}
+    old_vis = old_value.get("visible")
     if not isinstance(old_vis, list):
-        return new_value
-    seen, merged = set(), []
-    for _id in list(new_value["visible"]) + list(old_vis):
+        old_vis = []
+
+    def _str_list(v):
+        return [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
+
+    n_vis = _str_list(new_value.get("visible"))
+    o_vis = _str_list(old_vis)
+    n_hid = _str_list(new_value.get("hidden"))
+    o_hid = _str_list(old_value.get("hidden"))
+
+    hidden_at, shown_at = {}, {}
+
+    def _merge_ts(dst, m):
+        if not isinstance(m, dict):
+            return
+        for _id, v in m.items():
+            if not isinstance(_id, str):
+                continue
+            try:
+                v = float(v)
+            except (TypeError, ValueError):
+                continue
+            if v > dst.get(_id, 0):
+                dst[_id] = v
+
+    _merge_ts(hidden_at, new_value.get("hiddenAt"))
+    _merge_ts(hidden_at, old_value.get("hiddenAt"))
+    _merge_ts(shown_at, new_value.get("shownAt"))
+    _merge_ts(shown_at, old_value.get("shownAt"))
+    # Baselines de presencia (datos legacy sin timestamps).
+    for _id in n_vis + o_vis:
+        shown_at.setdefault(_id, 1)
+    for _id in n_hid + o_hid:
+        hidden_at.setdefault(_id, 1)
+
+    order, seen = [], set()
+    for _id in n_vis + o_vis + list(shown_at.keys()) + list(hidden_at.keys()):
         if isinstance(_id, str) and _id not in seen:
             seen.add(_id)
-            merged.append(_id)
-    hid = set()
-    for src in (new_value.get("hidden"), (old_value.get("hidden") if isinstance(old_value, dict) else None)):
-        if isinstance(src, list):
-            for _id in src:
-                if isinstance(_id, str):
-                    hid.add(_id)
-    hid -= seen  # lo visible gana sobre lo oculto
+            order.append(_id)
+
+    visible, hidden = [], []
+    for _id in order:
+        if hidden_at.get(_id, 0) > shown_at.get(_id, 0):
+            hidden.append(_id)
+        else:
+            visible.append(_id)
+
     out = dict(new_value)
-    out["visible"] = merged
-    out["hidden"] = sorted(hid)
+    out["visible"] = visible
+    out["hidden"] = hidden
+    out["hiddenAt"] = {k: int(v) for k, v in hidden_at.items()}
+    out["shownAt"] = {k: int(v) for k, v in shown_at.items()}
     return out
 
 
@@ -3278,14 +3330,14 @@ def api_kv_set(key):
     now = utc_now_iso()
     row = GlobalState.query.filter_by(clave=key).first()
     # Defensa en profundidad para el registro de torneos visibles
-    # (tour_registry_v1): la lista `visible` NUNCA debe encoger en el
-    # server. Un dispositivo que suba una copia stale/corta (otro móvil,
-    # POST perdido tras un GET viejo) borraba las cajas de Rondas
-    # Previas/Finales ("Road Copa Asia", "Mundial 2032"…) del resto de
-    # dispositivos. Aquí FUSIONAMOS (unión) el `visible` entrante con el
-    # ya guardado — mismo principio anti-wipe que `_lx_merge_teams` para
-    # los escudos. `hidden` (ocultados explícitos) sí respeta lo
-    # entrante, pero nunca tombstonea algo que quede visible.
+    # (tour_registry_v1): FUSIÓN POR RECENCIA. La lista `visible` no
+    # encoge por una copia stale/corta (otro móvil, POST perdido tras un
+    # GET viejo) — anti-wipe de las cajas de Rondas Previas/Finales
+    # ("Road Copa Asia", "Mundial 2032"…). PERO un ocultado EXPLÍCITO
+    # del admin (sello `hiddenAt` reciente) SÍ retira el slot de
+    # `visible`: si no, las cajas ocultas volvían a salir al recargar
+    # (bug 2026-06-03). Lo decide la última acción real (hiddenAt vs
+    # shownAt), no un "visible gana siempre".
     if key == "tour_registry_v1" and row and row.valor_json:
         try:
             value = _tour_registry_merge(row.valor_json, value)

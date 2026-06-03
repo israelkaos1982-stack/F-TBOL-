@@ -25,41 +25,74 @@ quedaba con solo los built-in → las Rondas Previas/Finales
 desaparecían. Mismo patrón anti-wipe que ya documentado para
 `selecciones_squad_v1` y los escudos de `ligaExt_*`.
 
-### Fix — FUSIÓN (unión) local∪server + recuperación + defensa server
+### Segundo bug (2026-06-03, foto usuario): lo OCULTO volvía a salir
+
+Al **ocultar** (act `del`) una caja de Torneos de Verano o de
+Selecciones, al recargar la web **volvía a aparecer**. Causa: el
+anti-wipe anterior hacía que `visible` **jamás encogiera** ni en el
+cliente (`_tvRegMerge` añadía el slot remoto aunque estuviera oculto
+en local) ni en el server (`_tour_registry_merge` re-añadía el id desde
+`old_vis` y, con `hid -= seen`, borraba el tombstone). El «visible gana
+siempre» era **incompatible** con poder ocultar: cualquier copia stale
+que tuviera la caja en `visible` la resucitaba. El tombstone `hidden`
+sin sello no podía ganar a un `visible` stale.
+
+### Fix — FUSIÓN POR RECENCIA (tombstones con timestamp)
+
+El estado visible/oculto de cada slot lo decide la **ÚLTIMA acción
+real** del admin, no un «visible gana siempre». Dos sellos por slot:
+`hiddenAt[id]` (ocultar) y `shownAt[id]` (mostrar/crear/restaurar). El
+mayor gana: `hiddenAt > shownAt` ⇒ oculto; si no ⇒ visible.
 
 - **Cliente** (`misc_body_1.html`, IIFE del registro de torneos):
-  - `_tvRegMerge(localReg, remoteVisible, remoteHidden)`: unión por id.
-    Conserva TODO lo local (orden local) y añade al final lo que solo
-    estaba en el server. **NUNCA elimina** un slot visible local. Si la
-    unión tiene más que el server, `_tvHydrateReg` **re-sube** (aditivo).
-  - `_tvHydrateReg` FUSIONA en vez de pisar. **PROHIBIDO** volver al
-    `setItem(j.value)` ciego.
+  - `_tvRegMerge(localReg, remoteVisible, remoteHidden, remoteHiddenAt,
+    remoteShownAt)`: fusiona los mapas de timestamps (máx por id),
+    aplica **baselines de presencia** (`visible` legacy sin sello ⇒
+    `shownAt=1`; `hidden` legacy ⇒ `hiddenAt=1`; los ms reales ganan a
+    estos `1`) y decide visible/oculto por recencia. Conserva el orden
+    local. Si difiere del server, `_tvHydrateReg` **re-sube** (converge).
+  - `_tvHydrateReg` FUSIONA (con timestamps) en vez de pisar.
+    **PROHIBIDO** volver al `setItem(j.value)` ciego.
+  - `_tvEffHidden(reg)`: conjunto EFECTIVO de ocultos resuelto por
+    recencia (con fallback al array `hidden` para datos sin sello). Lo
+    usa `_tvRegLoad` para filtrar `visible` y para gatear la
+    recuperación.
   - **Recuperación anti-wipe** en `_tvRegLoad`: `_tvSlotHasContent(id)`
     detecta slots con DATOS REALES en `localStorage` (equipos,
     resultados, o nombre/bandera/color custom). Cualquier slot con
-    contenido que NO esté visible y NO esté en el tombstone `hidden` se
-    **restaura** automáticamente. Devuelve las cajas perdidas aunque el
-    registro ya se hubiera pisado.
-  - **Tombstone `hidden`**: «Eliminar» (act `del`) ahora marca el id en
-    `reg.hidden` para distinguir «borrado a propósito» de «perdido por
-    sync». La recuperación NO resucita lo tombstoneado; `restore`/`new`
-    lo quitan de `hidden`.
-- **Servidor** (`app.py`, `api_kv_set`): `_tour_registry_merge` une el
-  `visible` entrante con el guardado para `tour_registry_v1` — la lista
-  **jamás encoge** en el server (defensa en profundidad, igual que
-  `_lx_merge_teams` para escudos). `hidden` se une pero lo visible gana.
+    contenido que NO esté visible y NO esté en `_tvEffHidden` se
+    **restaura**. Devuelve las cajas perdidas aunque el registro se
+    hubiera pisado, **sin** resucitar lo ocultado a propósito.
+  - **Acciones**: `del` sella `hiddenAt[id]=Date.now()` (+ array
+    `hidden`); `restore`/`new` sellan `shownAt[id]=Date.now()` (y
+    quitan de `hidden`).
+- **Servidor** (`app.py`, `api_kv_set` → `_tour_registry_merge`): misma
+  lógica de recencia. `visible` **no encoge por una copia stale**
+  (anti-wipe: slot sin `hiddenAt` en ningún sitio se conserva) PERO un
+  `hiddenAt` reciente **SÍ** retira el slot de `visible` (ocultar
+  persiste). Persiste `hiddenAt`/`shownAt` para que el cómputo sea
+  cross-device y converja.
 
 ### Reglas a respetar
 
 1. **PROHIBIDO** que `_tvHydrateReg` (o cualquier ruta nueva) pise
    `tour_registry_v1` local con el GET sin fusionar. La hidratación es
-   SIEMPRE unión aditiva.
-2. **PROHIBIDO** que el server reduzca el `visible` de
-   `tour_registry_v1` en un POST. Siempre `_tour_registry_merge`.
-3. La recuperación por contenido (`_tvSlotHasContent`) es la red que
-   devuelve cajas ya perdidas — no quitarla. El tombstone `hidden` es
-   lo único que frena la resucitación (borrado explícito del admin).
-4. El nombre custom de cada caja vive en `tour_<id>_v1` (cfg), el
+   SIEMPRE fusión por recencia (timestamps).
+2. **PROHIBIDO** volver al «visible gana siempre» / «`visible` jamás
+   encoge» en cliente o server. Eso reintroduce el bug de las cajas
+   ocultas que vuelven a salir. El estado lo decide la recencia
+   (`hiddenAt` vs `shownAt`). El anti-wipe se preserva con el **baseline
+   de presencia** (un slot solo-`visible`, sin `hiddenAt`, nunca se
+   pierde) + la recuperación por contenido.
+3. **PROHIBIDO** que `del`/`restore`/`new` dejen de sellar
+   `hiddenAt`/`shownAt`. Sin sello, un POST stale puede ganar y
+   reaparece (o desaparece) la caja. El array `hidden` se mantiene solo
+   por compatibilidad/legacy.
+4. La recuperación por contenido (`_tvSlotHasContent`) es la red que
+   devuelve cajas ya perdidas — no quitarla. Está gateada por
+   `_tvEffHidden` (recencia), que es lo único que frena la
+   resucitación de lo ocultado explícitamente.
+5. El nombre custom de cada caja vive en `tour_<id>_v1` (cfg), el
    registro solo lista ids — toda ruta que añada/quite cajas debe tocar
    AMBOS de forma coherente (cfg vía `_tourSave`, registro vía
    `_tvRegSave`).

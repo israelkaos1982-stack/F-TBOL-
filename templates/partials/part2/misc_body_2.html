@@ -5643,7 +5643,12 @@
      forma corta o con variaciones (Champions, Superliga, sin acentos…).
      Mapea cada variante normalizada a la clave canónica de HUMAN_ICONS. */
   var HUMAN_ALIAS = {
-    'bayern':'Bayern Munich','fc bayern':'Bayern Munich','fc bayern munich':'Bayern Munich','bayern munchen':'Bayern Munich',
+    /* Liverpool = slot legacy "Bayern Munich" (inglés). SOLO ese alias
+       EXACTO mapea al humano. PROHIBIDO mapear "bayern munchen" / "fc
+       bayern" / "bayern" sueltos: atrapaban a los IA reales "Bayern
+       München" y "Bayern Leverkusen" del Mundialito (les ponía el
+       emoji 💡 → se interpretaban como humanos). Bug 2026-06-03. */
+    'bayern munich':'Bayern Munich','liverpool':'Bayern Munich','liverpool fc':'Bayern Munich','lfc':'Bayern Munich',
     'arsenal fc':'Arsenal',
     'atletico':'Atlético Madrid','atletico madrid':'Atlético Madrid','atletico de madrid':'Atlético Madrid','atl madrid':'Atlético Madrid','club atletico de madrid':'Atlético Madrid','atletico madrid cf':'Atlético Madrid',
     'real madrid cf':'Real Madrid',

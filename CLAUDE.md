@@ -1,5 +1,51 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Interfaz ÚNICA estilizada para TODO torneo · color = el de su caja (obligatorio, 2026-06-03)
+
+**Petición usuario 2026-06-03 (fotos «Road Copa África» vs «Road Copa
+Asia»)**: al crear un torneo nuevo (Fase Previa, Fase Final o Torneo
+amistoso/Verano) la interfaz debe ser SIEMPRE la misma «videojuego»
+(cabecera con gradiente + tabla estilizada `_mundialClasTableHtml` +
+jornadas desplegables con escudos grandes `_mundialMatchCardHtml`), como
+la foto 2. **Lo único que cambia es el color = el de la caja del torneo**:
+Rondas Previas → AZUL (`_SEL_BLUE`, `c-roadq`), Rondas Finales → ROSA
+(`_SEL_PINK`, `c-road`), Verano → TURQUESA (`_SUM_TURQ`, `c-summer`).
+
+### Causa raíz
+
+El formato `'league'` (1 sola tabla, sin grupos) caía a `_renderLeague`,
+que pintaba la versión PLANA (`_standingsTableHtml` + `_fixtureCardsHtml`
+con cajas blancas `.tour-jor`) — foto 1. Los demás formatos
+(`groups-ko`/`league-ko`/`swiss` vía `_renderGroupsKO`, y
+`qualifier-route` vía `_renderQualifierRoute`) ya usaban la card grande.
+
+### Fix (todo en `templates/partials/misc_body_1.html`)
+
+- `_bigGroupCardHtml` acepta `TH.leagueMode`: el torneo se pinta como UN
+  grupo titulado **CLASIFICACIÓN** y los botones SIM/AVANZAR usan claves
+  de liga (botón ▶ SIM con `data-league="1"` en vez de `data-group`;
+  prefijo de match-key vacío).
+- `_selGroupCardHtml(...,leagueMode)` y `_veranoGroupCardHtml(...,leagueMode)`
+  propagan `TH.leagueMode`.
+- `_renderLeague` ya NO pinta plano: dispatcha por `_tvBoardOf(tourId)`
+  (`verano` → `_veranoGroupCardHtml`, resto → `_selGroupCardHtml`) con
+  `g=0, gKey='', fix=cfg.fixture, advancePerGroup=0, leagueMode=true`.
+- Handler `tour-sim-grp-btn` (router de clicks): si trae `data-league`
+  simula TODAS las jornadas de `cfg.fixture` (prefijo vacío) en vez de
+  `groupFixtures[g]`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_renderLeague` vuelva a pintar la versión plana
+   (`_standingsTableHtml` + `_fixtureCardsHtml`). Toda liga usa la card
+   grande coloreada por board.
+2. **PROHIBIDO** hardcodear el color de la card: sale del board
+   (`_tvBoardOf`) = el de la caja. Toda comp/board nuevo debe tener su
+   tema en el dispatch de `_renderLeague` igual que en `_renderGroupsKO`.
+3. El click de partido (`data-league-key`) y el ▶ SIMULAR JORNADA
+   (`tour-sim-jor-btn`, `data-key-prefix=''`) YA soportan claves de liga
+   sin prefijo de grupo — no romper ese parseo.
+
 ## Sedes por torneo en la PREVIA + self-heal anti-pantalla-negra (obligatorio, 2026-06-03)
 
 **Bug 1 (foto usuario «Road Copa Asia/América»)**: un torneo de

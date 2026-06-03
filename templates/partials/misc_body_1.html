@@ -52641,6 +52641,19 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     });
   }
   function _userTeamAlias(){
+    /* Nombre LÓGICO del club del hub humano. SIEMPRE dinámico — el slot
+       histórico "Bayern Munich" fue renombrado por el usuario (a Liverpool
+       actualmente). Resolver vía los helpers canónicos, NUNCA hardcodear el
+       club (regla CLAUDE.md "Hub del usuario: Liverpool, no Bayern"). */
+    try {
+      if (window._mkHubTeamName) return String(window._mkHubTeamName);
+    } catch(_){}
+    try {
+      if (typeof window._psHumanLogicName === 'function'){
+        var h = window._psHumanLogicName();
+        if (h) return String(h);
+      }
+    } catch(_){}
     try {
       if (typeof window._ligaEaSubName === 'function'){
         var s = window._ligaEaSubName('Bayern Munich');
@@ -52652,10 +52665,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _isLiv(name){
     if (!name) return false;
     var n = String(name).toLowerCase();
-    if (n.indexOf('bayern') >= 0) return true;
-    if (n.indexOf('liverpool') >= 0) return true;
+    /* PROHIBIDO reconocer 'bayern' aquí: el Bayern es ahora un equipo IA de
+       la liga alemana, NO el equipo del hub. Reconocer 'bayern' metía sus
+       noticias (p.ej. "Harry Kane anota en 3 partidos seguidos") en la
+       bandeja del Liverpool. El club del hub se resuelve dinámicamente. */
     var alias = _userTeamAlias().toLowerCase();
-    return !!alias && n.indexOf(alias) >= 0;
+    if (alias && n.indexOf(alias) >= 0) return true;
+    /* Fallback solo si el alias no resolvió: el hub actual es el Liverpool. */
+    if (!alias && n.indexOf('liverpool') >= 0) return true;
+    return false;
   }
   function _compLabel(c){
     var m = {

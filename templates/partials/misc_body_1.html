@@ -20773,12 +20773,25 @@ window._showSimProgress = function(opts, onDone){
   function _tourStatsBtnHtml(tourId){
     /* Barra horizontal PLANA estilo Mundial 2032 (.jbtn.c-mundial) pero en
        VERDE — petición usuario 2026-06-03 (foto: "hazla verde, similar a la
-       caja Estadísticas de la foto 2"). Emoji + label en negrita + flecha. */
+       caja Estadísticas de la foto 2"). Emoji + label en negrita + flecha.
+       Estilos INLINE (además de la clase .tour-stats-jbtn) para que el
+       verde NO dependa de que el bloque <style> cargue/se cachee: el
+       navegado del usuario mostraba el botón en BLANCO (estilo por defecto)
+       cuando el CSS llegaba stale. Inline gana siempre. */
+    var _bg = 'background:linear-gradient(90deg,#053a16,#0c7a30,#1ec64e,#0c7a30,#053a16);';
+    var _btnSt = 'display:flex;align-items:center;gap:10px;width:100%;'
+               + 'padding:12px 14px;border:none;border-radius:6px;cursor:pointer;'
+               + "font-family:'Oswald',sans-serif;font-size:13px;font-weight:600;"
+               + 'letter-spacing:1.5px;text-align:left;color:#fff;'
+               + _bg
+               + 'box-shadow:0 3px 14px rgba(30,198,78,.30),inset 0 1px 0 rgba(255,255,255,.16);';
+    var _bSt = 'font-weight:700;letter-spacing:2px;text-transform:uppercase;'
+             + 'color:#ecffe9;text-shadow:0 0 9px rgba(120,255,150,.5),0 1px 2px rgba(0,0,0,.55);';
     return '<div style="padding:0 18px;margin:8px 0 10px;">'
-         +   '<button type="button" class="tour-stats-jbtn" '
+         +   '<button type="button" class="tour-stats-jbtn" style="'+_btnSt+'" '
          +     'onclick="window._tourStatsOpen&amp;&amp;window._tourStatsOpen(\''+tourId+'\',\'s-'+tourId+'\')">'
-         +     '📊 <b>Estadísticas</b>'
-         +     '<span class="tsb-arr">▶</span>'
+         +     '📊 <b style="'+_bSt+'">Estadísticas</b>'
+         +     '<span class="tsb-arr" style="margin-left:auto;font-size:13px;color:rgba(255,255,255,.9);">▶</span>'
          +   '</button>'
          + '</div>';
   }

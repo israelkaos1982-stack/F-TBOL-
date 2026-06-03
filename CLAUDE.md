@@ -1866,6 +1866,75 @@ amarillas, NO generan sanción y NO consumen sanción. CompKeys:
 - No reintroducir sorteos `0.5 ? 1 : 2` o rangos 2-8 — están
   obsoletos desde 2026-05-23.
 
+## Plantilla del hub (Liverpool-Francia) — stats SUMADAS + nota media por competición (obligatorio, 2026-06-03)
+
+Petición usuario 2026-06-03 (foto caja Liverpool-Francia → 👕
+PLANTILLA): las estadísticas de cada jugador de la plantilla del hub
+deben ir **SINCRONIZADAS y SUMADAS** de TODAS las competiciones
+OFICIALES del club, jugador a jugador, estadística a estadística. Lo
+mismo para un jugador NUEVO que se añada a la plantilla (automático,
+por nombre).
+
+### Competiciones que cuentan (oficiales del club)
+
+Liga EA Sports · Copa del Rey · Supercopa de España · Champions /
+Europa / Conference (la que juegue) · Recopa de Europa · Supercopa de
+Europa · Intercontinental · Mundialito de Clubes.
+
+**EXCLUIDAS SIEMPRE** (van a parte): Superliga, amistosos, torneos de
+verano. También fuera: Previa Champions / Open Qualifier / Wild Card
+(no son "competición real").
+
+### Implementación (todo en `templates/partials/misc_body_1.html`)
+
+- **Render**: `renderBayernPlantillaScreen` → `_section` → `_rowFor` en
+  el IIFE de `#s-bayern-plantilla` (host `bayern-plantilla-host`).
+- **SUMA agregada** (`_buildStatsCache` → `_statsFor`): suma
+  `_STATS_FIELDS` sobre `_STATS_STORES` = `[ef_player_stats_v1`
+  (Liga+Copa+SC), `ucl_main, uel, uecl, recopa, usc, inter, mundial]`.
+  Sin solape ⇒ sin doble conteo. La columna **GOLES** es un **total
+  único** = `gol + pen + fk` sumado de todas las comps (no 3 columnas).
+- **NOTA MEDIA (0.00-10.00)**: media de la nota del jugador por
+  competición. `_notaFor(name, pos)` calcula la nota de cada comp con
+  `window.computePlayerRating` (MISMA fórmula por posición del editor,
+  expuesta en window) sobre el desglose por comp (`_NOTA_CACHE`, lleno
+  por `_buildStatsCache` desde `_NOTA_STORES`), y **promedia solo las
+  comps con `pj>0`**. Ejemplo:
+  `(8.30+8.10+7.77+7.86+6.92+7.00)/6 = 7.64`.
+- **Liga, Copa y Supercopa España van SEPARADAS** en la media. Como
+  `ef_player_stats_v1` las funde, `rebuildPlayerStatsStore` persiste una
+  copia **Liga SOLA** en `ef_player_stats_liga_only_v1` (snapshot
+  profundo TOMADO ANTES de `_mergeBucketInto(stats, buckets.copa/sc)`).
+  `_NOTA_STORES` la usa en vez de v1.
+- **Nombre del club dinámico**: la agregación indexa por el nombre REAL
+  del hub (`_hubTeamName()` → `_findBayernRow().name` → Liverpool), NO
+  por `'Bayern Munich'` hardcodeado. Sin esto la agregación devuelve
+  ceros tras renombrar el slot (bug raíz 2026-06-03).
+- **CSS**: layout propio scopeado a `#s-bayern-plantilla` (9 col campo /
+  10 portero) con columna GOLES única + columna NOTA (📈). NO toca el
+  editor admin de Resto de Ligas (`renderSquadList`, mismas clases
+  `lext-sq-*` pero otro scope).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a hardcodear `'Bayern Munich'` en
+   `_buildStatsCache`/`_hubTeamName`. Resolver SIEMPRE el club del hub
+   dinámicamente (`_findBayernRow` / `_psHumanLogicName`).
+2. **PROHIBIDO** meter Superliga, amistosos o torneos de verano en
+   `_STATS_STORES` / `_NOTA_STORES`. Van a parte por decisión del
+   usuario.
+3. **PROHIBIDO** que la nota media se calcule sobre los totales sumados
+   (sería otra cifra). Es la MEDIA de las notas por competición
+   (`computePlayerRating` por comp, promedio de las que tienen `pj>0`).
+4. **PROHIBIDO** romper el snapshot Liga-sola: `_persistBucket` de
+   `ef_player_stats_liga_only_v1` debe seguir TOMÁNDOSE ANTES de fundir
+   Copa+SC en `buckets.liga`.
+5. Un jugador NUEVO de la plantilla hereda todo automáticamente (lookup
+   por nombre normalizado + fuzzy). No hay listas por jugador.
+6. La nota usa `computePlayerRating` (expuesta en `window`); cualquier
+   recalibración de la fórmula del editor se propaga sola a la
+   plantilla del hub. No duplicar la fórmula.
+
 ## Toda caja de humano nueva HEREDA los códigos de sanción/lesión (obligatorio, 2026-06-02)
 
 Petición usuario 2026-06-02: cuando se cree una **caja de humano**

@@ -2187,9 +2187,44 @@ window._showSimProgress = function(opts, onDone){
       'ef_player_stats_mundial_v1'    /* Mundial Clubes / Mundialito */
     ];
     var _STATS_FIELDS = ['pj','gol','pen','fk','mvp','ta','tr','imbat','penSaved'];
+    /* Stores POR COMPETICIÓN (separadas) para la NOTA MEDIA: la nota de
+       cada jugador se calcula por competición con `computePlayerRating`
+       y luego se promedia entre las competiciones donde jugó (pj>0).
+       Liga, Copa y Supercopa España van SEPARADAS (no la suma
+       `ef_player_stats_v1`). EXCLUIDAS: Superliga, amistosos, torneos de
+       verano (van a parte, petición usuario 2026-06-03). */
+    var _NOTA_STORES = [
+      'ef_player_stats_liga_only_v1', /* Liga EA Sports (sola) */
+      'ef_player_stats_copa_v1',      /* Copa del Rey */
+      'ef_player_stats_sc_v1',        /* Supercopa de España */
+      'ef_player_stats_ucl_main_v1',  /* Champions (Grupos + Playoffs) */
+      'ef_player_stats_uel_v1',       /* Europa League */
+      'ef_player_stats_uecl_v1',      /* Conference League */
+      'ef_player_stats_recopa_v1',    /* Recopa de Europa */
+      'ef_player_stats_usc_v1',       /* Supercopa de Europa */
+      'ef_player_stats_inter_v1',     /* Intercontinental */
+      'ef_player_stats_mundial_v1'    /* Mundialito de Clubes */
+    ];
     var _STATS_CACHE = null;
+    var _NOTA_CACHE = null;
     var _STATS_CACHE_TS = 0;
     var _STATS_CACHE_MS = 1500;
+    /* Nombre REAL del club del hub (Liverpool actualmente). El store de
+       stats indexa por el nombre del equipo de los eventos ("liverpool"),
+       NO por "Bayern Munich" (legacy). Resolver el nombre dinámico evita
+       que la agregación devuelva ceros tras renombrar el slot. */
+    function _hubTeamName(){
+      try {
+        var t = (typeof _findBayernRow === 'function') ? _findBayernRow() : null;
+        if (t && t.name) return String(t.name);
+      } catch(_){}
+      try { if (typeof window._psHumanLogicName === 'function'){ var n = window._psHumanLogicName(); if (n) return String(n); } } catch(_){}
+      try { if (window._mkHubTeamName) return String(window._mkHubTeamName); } catch(_){}
+      return 'Bayern Munich';
+    }
+    function _teamKeyMatches(t, teamNorm){
+      return (t === teamNorm) || (t.indexOf(teamNorm) !== -1) || (teamNorm.indexOf(t) !== -1);
+    }
     function _normForStats(s){
       try {
         return String(s||'').toLowerCase()
@@ -2201,13 +2236,16 @@ window._showSimProgress = function(opts, onDone){
     }
     window._invalidateBayernStatsCache = function(){
       _STATS_CACHE = null;
+      _NOTA_CACHE = null;
       _STATS_CACHE_TS = 0;
     };
     function _buildStatsCache(){
       var now = Date.now();
       if (_STATS_CACHE && (now - _STATS_CACHE_TS) < _STATS_CACHE_MS) return _STATS_CACHE;
-      var cache = {};
-      var teamNorm = _normForStats('Bayern Munich');
+      var cache = {};   /* pName -> SUMA de todas las comps oficiales */
+      var nota  = {};   /* pName -> { compStoreKey -> {stats de esa comp} } */
+      var teamNorm = _normForStats(_hubTeamName());
+      /* ── SUMA agregada (goles, tarjetas, MVP, …) ── */
       _STATS_STORES.forEach(function(lsKey){
         var raw;
         try { raw = localStorage.getItem(lsKey); } catch(_){ raw = null; }
@@ -2219,11 +2257,7 @@ window._showSimProgress = function(opts, onDone){
           var sep = k.indexOf('::');
           if (sep < 0) return;
           var t = k.slice(0, sep);
-          if (!t) return;
-          /* Match equipo: igual normalizado o contains en cualquier
-             dirección (cubre alias "Bayern" / "FC Bayern" / etc.). */
-          var teamMatch = (t === teamNorm) || (t.indexOf(teamNorm) !== -1) || (teamNorm.indexOf(t) !== -1);
-          if (!teamMatch) return;
+          if (!t || !_teamKeyMatches(t, teamNorm)) return;
           var pName = k.slice(sep + 2);
           if (!pName) return;
           var ps = data[k];
@@ -2232,7 +2266,32 @@ window._showSimProgress = function(opts, onDone){
           _STATS_FIELDS.forEach(function(f){ bucket[f] += Number(ps[f]||0); });
         });
       });
+      /* ── Desglose POR COMPETICIÓN para la nota media ── */
+      _NOTA_STORES.forEach(function(lsKey){
+        var raw;
+        try { raw = localStorage.getItem(lsKey); } catch(_){ raw = null; }
+        if (!raw) return;
+        var data;
+        try { data = JSON.parse(raw); } catch(_){ return; }
+        if (!data || typeof data !== 'object') return;
+        Object.keys(data).forEach(function(k){
+          var sep = k.indexOf('::');
+          if (sep < 0) return;
+          var t = k.slice(0, sep);
+          if (!t || !_teamKeyMatches(t, teamNorm)) return;
+          var pName = k.slice(sep + 2);
+          if (!pName) return;
+          var ps = data[k];
+          if (!ps) return;
+          var byComp = nota[pName] = nota[pName] || {};
+          /* Acumular por si una comp llega en varias keys (alias de
+             equipo distintos del mismo jugador). */
+          var d = byComp[lsKey] = byComp[lsKey] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+          _STATS_FIELDS.forEach(function(f){ d[f] += Number(ps[f]||0); });
+        });
+      });
       _STATS_CACHE = cache;
+      _NOTA_CACHE = nota;
       _STATS_CACHE_TS = now;
       return cache;
     }
@@ -2256,6 +2315,52 @@ window._showSimProgress = function(opts, onDone){
       }
       return base;
     }
+    /* NOTA MEDIA (0.00-10.00): media de la nota del jugador en cada
+       competición oficial donde haya jugado (pj>0). Usa el MISMO motor
+       `computePlayerRating` del editor (misma fórmula por posición). Si
+       no jugó ninguna oficial → 0 (la celda muestra "—"). Ejemplo:
+       (8.30+8.10+7.77+7.86+6.92+7.00)/6 = 7.64. */
+    function _notaCompMap(playerName){
+      _buildStatsCache();
+      var byComp = _NOTA_CACHE || {};
+      var pNorm = _normForStats(playerName);
+      if (byComp[pNorm]) return byComp[pNorm];
+      if (!pNorm) return null;
+      var keys = Object.keys(byComp);
+      for (var i = 0; i < keys.length; i++){
+        var k = keys[i];
+        if (!k) continue;
+        if (k === pNorm || k.indexOf(pNorm) !== -1 || pNorm.indexOf(k) !== -1) return byComp[k];
+      }
+      return null;
+    }
+    function _notaFor(playerName, pos){
+      var map = _notaCompMap(playerName);
+      if (!map) return 0;
+      if (typeof window.computePlayerRating !== 'function') return 0;
+      var sum = 0, n = 0;
+      Object.keys(map).forEach(function(storeKey){
+        var s = map[storeKey];
+        if (!s || (Number(s.pj)||0) <= 0) return;
+        var pseudo = {
+          pos: pos,
+          pj: Number(s.pj)||0, gol: Number(s.gol)||0, pen: Number(s.pen)||0,
+          fk: Number(s.fk)||0, mvp: Number(s.mvp)||0, ta: Number(s.ta)||0,
+          tr: Number(s.tr)||0, imbat: Number(s.imbat)||0, penSaved: Number(s.penSaved)||0
+        };
+        var r;
+        try { r = Number(window.computePlayerRating(pseudo)) || 0; } catch(_){ r = 0; }
+        if (r > 0){ sum += r; n++; }
+      });
+      return n ? (sum / n) : 0;
+    }
+    function _notaTone(r){
+      try { if (typeof window.ratingClass === 'function') return window.ratingClass(r); } catch(_){}
+      if (r <= 0) return 'r0';
+      if (r >= 9) return 'r9'; if (r >= 8) return 'r8'; if (r >= 7) return 'r7';
+      if (r >= 6) return 'r6'; if (r >= 5) return 'r5'; if (r >= 4) return 'r4';
+      return 'r3';
+    }
 
     function _rowFor(p, isGK){
       var name = String(p.name||'?');
@@ -2267,6 +2372,10 @@ window._showSimProgress = function(opts, onDone){
       var mvp = _statCell('mvp', s.mvp);
       var ta = _statCell('ta', s.ta);
       var tr = _statCell('tr', s.tr);
+      /* NOTA MEDIA por competición (0-10). */
+      var nota = _notaFor(name, p.pos);
+      var notaCell = '<span class="lext-sq-cell rating '+_notaTone(nota)+'" title="Nota media entre competiciones oficiales (Liga, Copa, Supercopa España, Champions/Europa, Recopa, Supercopa Europa, Intercontinental, Mundialito)">'
+        + (nota > 0 ? nota.toFixed(2) : '—') + '</span>';
       var cells, cls;
       if (isGK){
         cls = 'gk';
@@ -2274,15 +2383,16 @@ window._showSimProgress = function(opts, onDone){
               + _statCell('imbat', s.imbat)
               + _statCell('psave', s.penSaved)
               + mvp + ta + tr
-              + '<span class="lext-sq-cell">—</span>';
+              + notaCell;
       } else {
         cls = 'ot';
+        /* GOLES = total único (jugada + penaltis + faltas) sumado de
+           todas las competiciones oficiales (petición usuario 2026-06-03). */
+        var golesTot = (Number(s.gol)||0) + (Number(s.pen)||0) + (Number(s.fk)||0);
         cells = pwCell + pj
-              + _statCell('gol', s.gol)
-              + _statCell('pen', s.pen)
-              + _statCell('fk',  s.fk)
+              + _statCell('gol', golesTot)
               + mvp + ta + tr
-              + '<span class="lext-sq-cell">—</span>';
+              + notaCell;
       }
       /* Si el jugador está lesionado, el NOMBRE es clicable y abre
          el MENÚ DE TRATAMIENTO RÁPIDO (foto 4). Petición usuario
@@ -2311,18 +2421,17 @@ window._showSimProgress = function(opts, onDone){
                  + '<span title="MVP">⭐</span>'
                  + '<span title="Tar. amarillas">🟨</span>'
                  + '<span title="Tar. rojas">🟥</span>'
-                 + '<span></span>'
+                 + '<span title="Nota media">📈</span>'
                  + '<span></span>';
       } else {
         cls = 'ot';
         hdrCells = '<span title="Poder">🛡</span>'
                  + '<span title="Partidos">👤</span>'
-                 + '<span title="Goles">⚽</span>'
-                 + '<span title="Pen marcados">🥅</span>'
-                 + '<span title="Goles de falta">🎯</span>'
+                 + '<span title="Goles (total: jugada + penalti + falta)">⚽</span>'
                  + '<span title="MVP">⭐</span>'
                  + '<span title="Tar. amarillas">🟨</span>'
                  + '<span title="Tar. rojas">🟥</span>'
+                 + '<span title="Nota media">📈</span>'
                  + '<span></span>';
       }
       var hdr = '<div class="lext-sq-hdr '+cls+'"><span>'+label+'</span>'+hdrCells+'</div>';
@@ -6722,6 +6831,13 @@ window._showSimProgress = function(opts, onDone){
   #s-bayern-plantilla .lext-sq-wrap{padding:0 4px;}
   #s-bayern-plantilla .lext-sq-sec{margin-bottom:14px;}
   #s-bayern-plantilla .lext-sq-hdr span:first-child{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2.5px;color:#f0c040;font-weight:700;}
+  /* Hub Liverpool-Francia: GOLES en una sola columna (total) + columna
+     NOTA media (📈). Layout propio (9 col jugador de campo / 10 portero)
+     que NO toca el editor admin de Resto de Ligas (mismas clases, otro
+     scope). 2026-06-03. */
+  #s-bayern-plantilla .lext-sq-hdr.ot,#s-bayern-plantilla .lext-sq-row.ot{grid-template-columns:minmax(108px,1.3fr) 30px 30px 38px 30px 30px 30px 48px 20px;min-width:0;}
+  #s-bayern-plantilla .lext-sq-hdr.gk,#s-bayern-plantilla .lext-sq-row.gk{grid-template-columns:minmax(108px,1.3fr) 30px 30px 30px 30px 30px 30px 30px 48px 20px;min-width:0;}
+  #s-bayern-plantilla .lext-sq-cell.rating{font-family:Oswald,sans-serif;font-weight:700;font-size:11px;}
 </style>
 
 <script>
@@ -12011,6 +12127,21 @@ window._showSimProgress = function(opts, onDone){
         target[k] = dst;
       });
     }
+    /* Snapshot Liga-SOLA antes de fundir Copa + Supercopa España.
+       La caja Liverpool-Francia promedia la NOTA de Liga, Copa y
+       Supercopa España como competiciones SEPARADAS, pero
+       `ef_player_stats_v1` ya las funde (referencia a buckets.liga).
+       Guardamos aquí una copia profunda de Liga sola + sus PJ. */
+    var _ligaOnlySnap = {}, _ligaOnlyPJ = {};
+    try {
+      Object.keys(stats).forEach(function(k){
+        try { _ligaOnlySnap[k] = JSON.parse(JSON.stringify(stats[k])); }
+        catch(_){ _ligaOnlySnap[k] = stats[k]; }
+      });
+      Object.keys(teamPJByComp.liga || {}).forEach(function(tn){
+        _ligaOnlyPJ[tn] = teamPJByComp.liga[tn];
+      });
+    } catch(_){}
     _mergeBucketInto(stats, buckets.copa);
     _mergeBucketInto(stats, buckets.sc);
     /* PJ del equipo en EA Sports = Liga + Copa + Supercopa España. */
@@ -12098,6 +12229,9 @@ window._showSimProgress = function(opts, onDone){
        (`ef_player_stats_v1`) sigue mergeando Liga+Copa+SupEsp para
        el total agregado, pero esta clave permite ver SOLO Copa. */
     _persistBucket(buckets.copa,      teamPJByComp.copa,      'ef_player_stats_copa_v1');
+    /* Liga SOLA (sin Copa ni Supercopa España) → la usa la plantilla
+       del hub Liverpool-Francia para la nota media por competición. */
+    _persistBucket(_ligaOnlySnap,     _ligaOnlyPJ,            'ef_player_stats_liga_only_v1');
 
     // Save to SEPARATE storage (Liga + Copa unidas → ef_player_stats_v1)
     try { localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}
@@ -36983,6 +37117,10 @@ https://api.sofascore.app/api/v1/team/44/image
     if(r > 10) r = 10;
     return r;
   }
+  /* Exponer el motor de nota por jugador (0-10) para que la plantilla
+     del hub (Liverpool-Francia) calcule la nota media por competición
+     con la MISMA fórmula que el editor de Resto de Ligas. */
+  try { window.computePlayerRating = computePlayerRating; } catch(_){}
 
   // ── Reglas de la competición ──────────────────────
   /* Helper: muestra/oculta filas del modal según el slug. Resto del
@@ -39499,6 +39637,7 @@ https://api.sofascore.app/api/v1/team/44/image
     if(r >= 4) return 'r4';
     return 'r3';
   }
+  try { window.ratingClass = ratingClass; } catch(_){}
 
   function fmtCell(val, cls){
     var n = Number(val)||0;

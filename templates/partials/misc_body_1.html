@@ -13476,7 +13476,7 @@ window._showSimProgress = function(opts, onDone){
      que la Caja España (s-liga-stats). Petición usuario 2026-05-24. -->
 <div class="screen" id="s-tour-stats">
 <button class="back-btn" id="s-tour-stats-back" onclick="window._tourStatsBack&&window._tourStatsBack()">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji" id="s-tour-stats-emoji">📊</span><h2 id="s-tour-stats-title">Estadísticas</h2></div>
+<div class="sec-hdr"><span class="sec-emoji" id="s-tour-stats-emoji">📊</span><h2 id="s-tour-stats-title" style="font-size:14px;letter-spacing:1.2px;white-space:nowrap;">Estadísticas</h2></div>
 <div class="liga-stats-wrap" id="tour-stats-dashboard"><div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div></div>
 </div>
 
@@ -20755,7 +20755,15 @@ window._showSimProgress = function(opts, onDone){
     var titleEl = document.getElementById('s-tour-stats-title');
     var emojiEl = document.getElementById('s-tour-stats-emoji');
     var dashEl  = document.getElementById('tour-stats-dashboard');
-    if (titleEl) titleEl.textContent = (cfg.name || tourId) + ' · Estadísticas';
+    if (titleEl) {
+      /* Título COMPACTO en UNA sola línea horizontal (petición usuario
+         2026-06-03): quitamos el prefijo "Trofeo " y usamos " - " como
+         separador → "Trofeo Joan Gamper" ⇒ "Joan Gamper - Estadísticas".
+         El font-size/letter-spacing reducido + white-space:nowrap del h2
+         (ver markup de s-tour-stats) garantizan que no salte a 2 líneas. */
+      var _statTitle = String(cfg.name || tourId || '').replace(/^Trofeo\s+/i, '').trim();
+      titleEl.textContent = _statTitle + ' - Estadísticas';
+    }
     if (emojiEl) {
       try { emojiEl.innerHTML = _tourFlagHtml(cfg.flag || '📊', 'sec-flag-img'); }
       catch(_){ emojiEl.textContent = '📊'; }

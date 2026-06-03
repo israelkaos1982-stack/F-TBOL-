@@ -1341,6 +1341,8 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Bayern Munich':      '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
     'Bayern de Múnich':   '/static/img/escudos-1/germany_bayern-munchen.football-logos.cc.svg',
     'Arsenal':            '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
+    'Liverpool':          '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+    'Liverpool FC':       '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
     'Deportivo Alavés': '/static/img/escudos-1/spain_deportivo-alaves.svg',
     'Sporting de Portugal':'/static/img/escudos-1/portugal_sporting-cp.football-logos.cc.svg',
     'PSG':                'https://cdn.resfu.com/img_data/equipos/1924.png?size=120x&lossy=1',

@@ -29483,7 +29483,15 @@ document.addEventListener('DOMContentLoaded', function() {
           try { return _wcStandings(grp, state.matchesByGroup[g]||[]); }
           catch(e){ try{console.error('[wc-standings]', g, e);}catch(_){} return []; }
         });
+        /* Soltar las jornadas (peso muerto: solo servían para construir las
+           tablas; render() lee `standings`). Sin esto el estado "done"
+           carga las 288 jornadas y el setItem revienta la cuota de
+           localStorage → saveState falla y las tablas quedan a 0. */
+        state.matchesByGroup = [];
         state.phase = 'done';
+        /* Sello de recencia FRESCO → el "done" gana el last-write-wins del
+           sync multi-dispositivo (SYNC_KEYS → wc_state_v1). */
+        state.ts = Date.now();
         _persistWinners(state);
         try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
         try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}

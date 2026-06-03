@@ -2024,7 +2024,7 @@ window._showSimProgress = function(opts, onDone){
 
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button><div id="bplant-crest-toggle" style="margin-left:auto;display:flex;gap:8px;align-items:center;"></div></div>
+  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button><div id="bplant-crest-toggle"></div></div>
   <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
        del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
        fuente de datos (`ligaExt_liga-ea-sports`). Los iconos por sección
@@ -2507,14 +2507,11 @@ window._showSimProgress = function(opts, onDone){
     }
     function _crestBtn(url, emoji, label, active, onclick){
       var img = url
-        ? '<img src="'+String(url).replace(/"/g,'&quot;')+'" alt="" style="width:30px;height:30px;object-fit:contain;border-radius:50%;background:rgba(255,255,255,.06);" onerror="this.style.display=\'none\';var e=this.parentNode.querySelector(\'.bpl-cr-emoji\');if(e)e.style.display=\'\';">'
+        ? '<img src="'+String(url).replace(/"/g,'&quot;')+'" alt="" onerror="this.style.display=\'none\';var e=this.parentNode.querySelector(\'.bpl-cr-emoji\');if(e)e.style.display=\'\';">'
         : '';
-      var emo = '<span class="bpl-cr-emoji" style="font-size:21px;line-height:1;'+(url?'display:none;':'')+'">'+(emoji||'🛡')+'</span>';
-      return '<button type="button" title="Ver plantilla · '+String(label).replace(/"/g,'&quot;')+'" onclick="'+onclick+'" '
-        + 'style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;cursor:pointer;padding:2px;'
-        + 'border:2px solid '+(active?'#f0c040':'rgba(255,255,255,.18)')+';'
-        + 'background:'+(active?'rgba(240,192,64,.18)':'rgba(255,255,255,.04)')+';'
-        + 'opacity:'+(active?'1':'.55')+';transition:all .15s;">'+img+emo+'</button>';
+      var emo = '<span class="bpl-cr-emoji"'+(url?' style="display:none;"':'')+'>'+(emoji||'🛡')+'</span>';
+      return '<button type="button" class="bpl-crest-btn'+(active?' is-active':'')+'" '
+        + 'title="Ver plantilla · '+String(label).replace(/"/g,'&quot;')+'" onclick="'+onclick+'">'+img+emo+'</button>';
     }
     function _bplantRenderCrestToggle(){
       var box = document.getElementById('bplant-crest-toggle');
@@ -7012,6 +7009,17 @@ window._showSimProgress = function(opts, onDone){
   #s-bayern-plantilla .lext-sq-hdr.ot,#s-bayern-plantilla .lext-sq-row.ot{grid-template-columns:minmax(108px,1.3fr) 30px 30px 38px 30px 30px 30px 48px 20px;min-width:0;}
   #s-bayern-plantilla .lext-sq-hdr.gk,#s-bayern-plantilla .lext-sq-row.gk{grid-template-columns:minmax(108px,1.3fr) 30px 30px 30px 30px 30px 30px 30px 48px 20px;min-width:0;}
   #s-bayern-plantilla .lext-sq-cell.rating{font-family:Oswald,sans-serif;font-weight:700;font-size:11px;}
+  /* Escudos club/selección: pegados al borde derecho (ocultamos la línea
+     decorativa ::after que ocupaba ese hueco) + más grandes y llamativos.
+     2026-06-03. */
+  #s-bayern-plantilla .sec-hdr::after{display:none;}
+  #bplant-crest-toggle{margin-left:auto;margin-right:2px;display:flex;gap:13px;align-items:center;}
+  #bplant-crest-toggle .bpl-crest-btn{display:flex;align-items:center;justify-content:center;width:50px;height:50px;border-radius:50%;cursor:pointer;padding:3px;background:radial-gradient(circle at 50% 32%,rgba(255,255,255,.12),rgba(255,255,255,.02));border:2px solid rgba(255,255,255,.28);opacity:.6;transition:transform .15s,box-shadow .2s,opacity .15s,border-color .15s;-webkit-tap-highlight-color:transparent;}
+  #bplant-crest-toggle .bpl-crest-btn:active{transform:scale(.93);}
+  #bplant-crest-toggle .bpl-crest-btn.is-active{opacity:1;border-color:#ffd24a;border-width:2.5px;background:radial-gradient(circle at 50% 32%,rgba(255,210,74,.34),rgba(255,210,74,.05));transform:scale(1.1);animation:bplCrestPulse 1.8s ease-in-out infinite;}
+  #bplant-crest-toggle .bpl-crest-btn img{width:40px;height:40px;object-fit:contain;border-radius:50%;background:rgba(255,255,255,.06);filter:drop-shadow(0 1px 3px rgba(0,0,0,.55));}
+  #bplant-crest-toggle .bpl-crest-btn .bpl-cr-emoji{font-size:28px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.55));}
+  @keyframes bplCrestPulse{0%,100%{box-shadow:0 0 12px rgba(255,210,74,.6),inset 0 0 0 1px rgba(255,255,255,.18);}50%{box-shadow:0 0 22px rgba(255,210,74,.98),0 0 7px rgba(255,210,74,.75),inset 0 0 0 1px rgba(255,255,255,.3);}}
 </style>
 
 <script>

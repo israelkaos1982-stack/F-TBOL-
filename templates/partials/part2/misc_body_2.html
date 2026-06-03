@@ -29527,10 +29527,19 @@ document.addEventListener('DOMContentLoaded', function() {
         doneMatches += ms.length;
       }
       try { window._bgSimProgress('wild-card', doneMatches, total); } catch(_){}
-      if(gi < groups.length){ setTimeout(step, 0); return; }
+      /* RITMO VISIBLE 0→100 (2026-06-03, petición usuario "que salga la
+         carga de 0 a 100 como la de Italia"): la sim de los 24 grupos es
+         casi instantánea (288 partidos en memoria), así que con
+         setTimeout(step,0) el chip flotante saltaba de 0% a 100% sin que
+         se viera la barra animarse. Cedemos ~28 ms entre grupos para que
+         el navegador repinte el chip y el % suba progresivamente igual
+         que en la simulación de una liga (foto "Italia · 120/380"). */
+      if(gi < groups.length){ setTimeout(step, 28); return; }
       finish(true);
     }
-    setTimeout(step, 0);
+    /* Primer tick con pequeño retardo para que el frame 0% se pinte antes
+       de empezar a sumar partidos. */
+    setTimeout(step, 30);
   }
   window._wcSimulateAllChunked = simulateAllChunked;
   /* Expuestas para depurar desde consola.

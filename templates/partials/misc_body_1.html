@@ -49561,8 +49561,8 @@ https://api.sofascore.app/api/v1/team/44/image
 </div>
 <div style="padding:0 4px 10px;">
 <button type="button" id="ath-obj-edit-btn" onclick="window.athObjToggleEdit&&window.athObjToggleEdit()"
-  style="background:rgba(95,200,200,.16);border:1px solid rgba(95,200,200,.5);color:#bfeff0;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;-webkit-tap-highlight-color:transparent;">✏️ Editar cantidades</button>
-<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);margin-left:8px;">Cambia la cantidad de cada objetivo (goles, posición, victorias…). El texto y la automatización se ajustan solos.</span>
+  style="background:rgba(95,200,200,.16);border:1px solid rgba(95,200,200,.5);color:#bfeff0;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;-webkit-tap-highlight-color:transparent;">✏️ Editar objetivos</button>
+<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);margin-left:8px;">Edita el <b>texto</b> y la <b>cantidad</b> de cada objetivo. Usa <code>{N}</code> en el texto donde quieras que salga la cantidad (goles, posición, victorias…). La automatización se ajusta sola.</span>
 </div>
 <div class="ent-body ath-body-obj open" id="ath-obj-club">
   <!-- Secciones rellenadas dinámicamente por el IIFE de objetivos al final del screen. -->
@@ -49743,7 +49743,11 @@ https://api.sofascore.app/api/v1/team/44/image
   function saveOverrides(){ try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){} }
   loadOverrides();
   function effTarget(it){ var o = OVR[it.oid]; return (o && o.c != null && !isNaN(o.c)) ? Number(o.c) : it.c; }
-  function effLabel(it){ return String(it.t).replace(/\{N\}/g, String(effTarget(it))); }
+  /* Plantilla de texto EFECTIVA: el override `t` (editado por el usuario)
+     gana sobre el texto por defecto. Conserva el token {N} para que la
+     cantidad editable se siga sustituyendo. */
+  function effTemplate(it){ var o = OVR[it.oid]; return (o && typeof o.t === 'string' && o.t.length) ? o.t : it.t; }
+  function effLabel(it){ return String(effTemplate(it)).replace(/\{N\}/g, String(effTarget(it))); }
   window._munichEffTarget = function(oid){ var it = BY_OID[oid]; return it ? effTarget(it) : null; };
 
   function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -49784,8 +49788,14 @@ https://api.sofascore.app/api/v1/team/44/image
     return '<label class="obj-item' + autoCls + '"><input onchange="athObjCount()" type="checkbox"' + autoAttr + '/> <span class="obj-txt">' + autoTag + inner + '</span>' + counter + '</label>';
   }
 
-  /* Fila de EDICIÓN de cantidad (modo ✏️). Sólo número (la cantidad);
-     el texto se regenera solo desde {N}. Binarios sin cantidad → "—". */
+  /* Fila de EDICIÓN (modo ✏️). Ahora editable EN DOS partes:
+       · TEXTO del objetivo (input de texto, con el token {N} para la
+         cantidad — si se borra {N} el número deja de mostrarse inline,
+         pero el contador sigue saliendo aparte).
+       · CANTIDAD (input numérico) cuando el objetivo tiene número.
+     El texto editado se persiste en el override `t`; la cantidad en `c`.
+     La automatización NO depende del texto (usa data-auto/data-target),
+     así que renombrar un objetivo nunca la rompe. */
   function renderEditRow(item) {
     var tgt = effTarget(item);
     var hasNum = item.c != null;
@@ -49797,7 +49807,9 @@ https://api.sofascore.app/api/v1/team/44/image
     } else {
       ctrl = '<span class="obj-edit-na">sin cantidad</span>';
     }
-    return '<div class="obj-edit-row"><span class="obj-edit-txt">' + esc(effLabel(item)) + '</span>' + ctrl + '</div>';
+    var txtInput = '<input class="obj-edit-txt-input" type="text" data-oid="' + item.oid
+      + '" value="' + esc(effTemplate(item)) + '" placeholder="Texto del objetivo (usa {N} para la cantidad)"/>';
+    return '<div class="obj-edit-row">' + txtInput + ctrl + '</div>';
   }
 
   function renderSection(sec, edit) {
@@ -49831,8 +49843,8 @@ https://api.sofascore.app/api/v1/team/44/image
       window.__munichObjEditing = true;
       renderAll('ath-obj-club', 'Liverpool', true);
     } else {
-      /* Guardar: lee los number inputs, persiste sólo lo que difiera
-         del valor por defecto. */
+      /* Guardar: lee los inputs de TEXTO y de CANTIDAD, persiste sólo lo
+         que difiera del valor por defecto. */
       var host = document.getElementById('ath-obj-club');
       if (host) {
         host.querySelectorAll('.obj-edit-num').forEach(function(inp){
@@ -49844,6 +49856,15 @@ https://api.sofascore.app/api/v1/team/44/image
           if (v === it.c) { if (OVR[oid]) { delete OVR[oid].c; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
           else { OVR[oid] = OVR[oid] || {}; OVR[oid].c = v; }
         });
+        host.querySelectorAll('.obj-edit-txt-input').forEach(function(inp){
+          var oid = inp.getAttribute('data-oid');
+          var it  = BY_OID[oid];
+          if (!it) return;
+          var v = (inp.value || '').trim();
+          /* Vacío o igual al texto por defecto → no se guarda override. */
+          if (!v || v === String(it.t)) { if (OVR[oid]) { delete OVR[oid].t; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
+          else { OVR[oid] = OVR[oid] || {}; OVR[oid].t = v; }
+        });
         saveOverrides();
       }
       window.__munichObjEditing = false;
@@ -49852,7 +49873,7 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     /* Actualiza el rótulo del botón. */
     var btn = document.getElementById('ath-obj-edit-btn');
-    if (btn) btn.textContent = window.__munichObjEditing ? '💾 Guardar cantidades' : '✏️ Editar cantidades';
+    if (btn) btn.textContent = window.__munichObjEditing ? '💾 Guardar objetivos' : '✏️ Editar objetivos';
   };
 
   function boot() {
@@ -49896,6 +49917,8 @@ https://api.sofascore.app/api/v1/team/44/image
 #s-munich-objetivos #ath-obj-club.obj-editing{outline:1px dashed rgba(95,200,200,.4);border-radius:8px;padding:4px;}
 #s-munich-objetivos .obj-edit-row{display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:11.5px;color:rgba(255,255,255,.85);border-bottom:1px solid rgba(255,255,255,.05);}
 #s-munich-objetivos .obj-edit-txt{flex:1;min-width:0;}
+#s-munich-objetivos .obj-edit-txt-input{flex:1;min-width:0;background:rgba(0,0,0,.35);border:1px solid rgba(95,200,200,.4);color:#eafdfd;border-radius:6px;padding:5px 7px;font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.2;}
+#s-munich-objetivos .obj-edit-txt-input:focus{outline:none;border-color:rgba(95,200,200,.85);background:rgba(0,0,0,.5);}
 #s-munich-objetivos .obj-edit-num{width:62px;flex-shrink:0;background:rgba(0,0,0,.35);border:1px solid rgba(95,200,200,.55);color:#bfeff0;border-radius:6px;padding:4px 6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;}
 #s-munich-objetivos .obj-edit-na{flex-shrink:0;font-size:9px;color:rgba(255,255,255,.3);font-style:italic;}
 .mvp-log-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:6px;background:rgba(240,192,64,.07);border:1px solid rgba(240,192,64,.12);}

@@ -18118,6 +18118,47 @@ window._showSimProgress = function(opts, onDone){
     return _isHumanOnlyTeam(name);
   }
 
+  /* CLUBES ≠ SELECCIONES (regla CLAUDE.md "Separación CLUBES vs
+     SELECCIONES", bug 2026-06-03 / foto usuario): los torneos de
+     CLUBES (board 'verano' — Trofeo Joan Gamper, Soccer Champions
+     Tour, Premier Summer Series, Asian Tournament, tx*, y el
+     Mundialito de Clubes) JAMÁS deben incluir SELECCIONES NACIONALES
+     en su pool (ni en el sorteo automático de IA, ni en el contador,
+     ni en el picker manual).
+
+     Causa raíz: `_selSquadHydrate` siembra TODAS las selecciones de
+     `selecciones_squad_v1` en `window.SQUAD_REGISTRY`, y `_allTeams`
+     las recoge con power 0 → 70 (default de `_push`), justo dentro
+     del rango IA típico de los torneos de verano (p.ej. 70-88 en Joan
+     Gamper) → Kazajistán, Brunéi… salían sorteadas como si fueran
+     clubes. Filtramos por NOMBRE normalizado contra la plantilla de
+     selecciones (`selecciones_squad_v1`, fuente autoritativa del
+     listado de selecciones nacionales). */
+  function _selTeamKey(name){
+    return String(name||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^a-z0-9]+/gi,'').toLowerCase();
+  }
+  function _seleccionNameSet(){
+    var set = {};
+    var arr = [];
+    /* `_selSquadLoad` lee `selecciones_squad_v1` de localStorage (sin
+       depender de la hidratación): es la lista canónica de selecciones
+       nacionales. No forzamos `_selSquadHydrate` aquí (es caro y
+       reseedea SQUAD_REGISTRY); el listado de nombres basta. */
+    try { arr = (window._selSquadLoad && window._selSquadLoad().teams) || []; } catch(_){}
+    for (var i = 0; i < arr.length; i++){
+      var t = arr[i];
+      if (t && t.name){ var k = _selTeamKey(t.name); if (k) set[k] = 1; }
+    }
+    return set;
+  }
+  function _isSeleccionTeam(name, set){
+    if (!name) return false;
+    set = set || _seleccionNameSet();
+    var k = _selTeamKey(name);
+    return !!(k && set[k]);
+  }
+
   /* Petición usuario 2026-05-16: al excluir una Liga, la regla tiene
      que "surtir efecto" también sobre el bracket YA armado — si no,
      equipos de esa Liga elegidos/sorteados antes seguían jugando la
@@ -18250,9 +18291,11 @@ window._showSimProgress = function(opts, onDone){
     var aimin = cfg.aiLevelMin || 1;
     var aimax = cfg.aiLevelMax || 100;
     var excluded = cfg.excludedLeagues || [];
+    var _selSet = _seleccionNameSet();
     var pool = _allTeams().filter(function(t){
       if (_teamInExcludedLeagues(t, excluded)) return false;
       if (_isHumanTeamForTour(t.name)) return false;   /* humano nunca como IA */
+      if (_isSeleccionTeam(t.name, _selSet)) return false;  /* CLUBES ≠ SELECCIONES */
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, (cfg.numTeams || 0) - (cfg.numHumans || 0));
@@ -18288,8 +18331,10 @@ window._showSimProgress = function(opts, onDone){
     var numT  = parseInt(document.getElementById('tour-ed-num').value, 10) || 0;
     var numH  = parseInt(document.getElementById('tour-ed-hum').value, 10) || 0;
     var excluded = (_open && _open.cfg && _open.cfg.excludedLeagues) || [];
+    var _selSet = _seleccionNameSet();
     var pool = _allTeams().filter(function(t){
       if (_teamInExcludedLeagues(t, excluded)) return false;
+      if (_isSeleccionTeam(t.name, _selSet)) return false;  /* CLUBES ≠ SELECCIONES */
       return t.power >= aimin && t.power <= aimax;
     });
     var needed = Math.max(0, numT - numH);
@@ -19459,10 +19504,15 @@ window._showSimProgress = function(opts, onDone){
       var q = _norm(qEl.value || '');
       if (q.length < 2) { resEl.innerHTML = '<div class="mr-hint">Escribe ≥2 letras…</div>'; return; }
       var all = []; try { all = _allTeams(); } catch(_){}
+      /* CLUBES ≠ SELECCIONES: el Mundialito de Clubes (board 'verano')
+         NUNCA debe ofrecer selecciones nacionales en su roster editor
+         (leak vía SQUAD_REGISTRY → `_allTeams`). Bug 2026-06-03. */
+      var selSet = _seleccionNameSet();
       var seenNm = {}, m = [];
       for (var x = 0; x < all.length && m.length < 40; x++) {
         var t = all[x];
         if (seenNm[t.name]) continue;
+        if (_isSeleccionTeam(t.name, selSet)) continue;
         if (_norm(t.name).indexOf(q) === -1) continue;
         /* Filtro EUR vs RM en Mundialito: las ligas de cada equipo
            vienen en `_leagues` desde `_allTeams`. EUR = cualquier
@@ -25488,8 +25538,15 @@ window._showSimProgress = function(opts, onDone){
     } else {
       _pkSrc = _allTeams();
     }
+    /* CLUBES ≠ SELECCIONES: en torneos de CLUBES (board 'verano') el
+       picker manual tampoco ofrece selecciones nacionales (bug
+       2026-06-03). Las selecciones leak'eaban vía SQUAD_REGISTRY →
+       `_allTeams`. Los torneos de Selecciones (sel-previa/sel-final)
+       ya usan `_selSquadLoad` directamente más arriba. */
+    var _pkSelSet = (_pkBoard === 'verano') ? _seleccionNameSet() : null;
     var matches = _pkSrc.filter(function(t){
       if (_pkBoard === 'verano' && _teamInExcludedLeagues(t, excluded)) return false;
+      if (_pkSelSet && _isSeleccionTeam(t.name, _pkSelSet)) return false;
       /* Petición usuario 2026-05-09: el HUMANO puede elegir CUALQUIER
          equipo del pool, sin importar el rango de nivel IA. El rango
          solo aplica al sorteo automático de IAs. */

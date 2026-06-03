@@ -2529,26 +2529,64 @@ window._showSimProgress = function(opts, onDone){
       window._bplantView = (v === 'sel') ? 'sel' : 'club';
       try { window.renderBayernPlantillaScreen(); } catch(_){}
     };
-    /* Stats de la selección (mismo layout, fuente `ef_player_stats_sel_v1`).
-       La nota es la del único comp de selección (no se promedia entre
-       varias). */
+    /* Stats de la selección — AUTO-DETECTA las competiciones ACTIVAS
+       (petición usuario 2026-06-03: "cada año juega 2 competiciones
+       distintas", p.ej. Mundial 2032 + Road Copa Asia). Agrega los stats
+       de la selección SUMANDO todas las cajas de selección VISIBLES
+       (Rondas Previas `spv*` + Rondas Finales `sfn*` del registro) donde
+       la selección juega y tiene partidos disputados. NO usa el store
+       unificado `ef_player_stats_sel_v1` (acumula todas las temporadas);
+       lee `cfg.results` de cada torneo activo vía
+       `_tourStatsFromCfgResults`. Goles = TOTAL único; nota = una sola
+       global sobre el agregado (no media por competición). */
+    function _selActiveTourIds(){
+      var ids = [];
+      try {
+        var raw = localStorage.getItem('tour_registry_v1');
+        if (raw){
+          var reg = JSON.parse(raw);
+          var vis = (reg && reg.visible) || [];
+          vis.forEach(function(id){ if (/^(spv|sfn)\d+$/.test(id)) ids.push(id); });
+        }
+      } catch(_){}
+      if (!ids.length){ for (var i=1;i<=10;i++){ ids.push('spv'+i); ids.push('sfn'+i); } }
+      return ids;
+    }
     function _buildSelStatsMap(selName){
       var map = {};
-      try {
-        var raw = localStorage.getItem('ef_player_stats_sel_v1');
-        if (!raw) return map;
-        var data = JSON.parse(raw);
-        if (!data || typeof data !== 'object') return map;
-        var teamNorm = _normForStats(selName);
-        Object.keys(data).forEach(function(k){
-          var sep = k.indexOf('::'); if (sep < 0) return;
-          var t = k.slice(0, sep); if (!t || !_teamKeyMatches(t, teamNorm)) return;
-          var pName = k.slice(sep + 2); if (!pName) return;
-          var ps = data[k]; if (!ps) return;
-          var b = map[pName] = map[pName] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
-          _STATS_FIELDS.forEach(function(f){ b[f] += Number(ps[f]||0); });
+      var selNorm = _normForStats(selName);
+      if (typeof window._tourLoadCachedSync !== 'function' || typeof window._tourStatsFromCfgResults !== 'function') return map;
+      _selActiveTourIds().forEach(function(id){
+        var cfg = null;
+        try { cfg = window._tourLoadCachedSync(id); } catch(_){}
+        if (!cfg || !Array.isArray(cfg.teams) || !cfg.results) return;
+        /* ¿juega esta selección en el torneo? */
+        var plays = cfg.teams.some(function(t){ return t && t.name && _teamKeyMatches(_normForStats(t.name), selNorm); });
+        if (!plays) return;
+        /* partidos DISPUTADOS de la selección en este torneo (= PJ team-level) */
+        var selMatches = 0;
+        Object.keys(cfg.results).forEach(function(mk){
+          if (/\|L[12]$/.test(mk)) return;
+          var r = cfg.results[mk];
+          if (!r || !r.played) return;
+          var h = _normForStats(r.home||''), a = _normForStats(r.away||'');
+          if (_teamKeyMatches(h, selNorm) || _teamKeyMatches(a, selNorm)) selMatches++;
         });
-      } catch(_){}
+        if (selMatches === 0) return; /* torneo sin partidos de la selección → no cuenta */
+        var tstats = {};
+        try { tstats = window._tourStatsFromCfgResults(cfg) || {}; } catch(_){ tstats = {}; }
+        Object.keys(tstats).forEach(function(k){
+          var sep = k.indexOf('::'); if (sep < 0) return;
+          var tk = k.slice(0, sep); if (!_teamKeyMatches(tk, selNorm)) return;
+          var pNorm = k.slice(sep + 2); if (!pNorm) return;
+          var src = tstats[k]; if (!src) return;
+          var b = map[pNorm] = map[pNorm] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+          b.gol += Number(src.gol||0); b.pen += Number(src.pen||0); b.fk += Number(src.fk||0);
+          b.mvp += Number(src.mvp||0); b.ta += Number(src.ta||0); b.tr += Number(src.tr||0);
+          b.imbat += Number(src.imbat||0); b.penSaved += Number(src.penSaved||0);
+          b.pj += selMatches; /* PJ team-level del torneo (mismo criterio que el club) */
+        });
+      });
       return map;
     }
     function _selCtxFor(selName){

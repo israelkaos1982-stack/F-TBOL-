@@ -20815,14 +20815,14 @@ window._showSimProgress = function(opts, onDone){
     var titleEl = document.getElementById('s-tour-stats-title');
     var emojiEl = document.getElementById('s-tour-stats-emoji');
     var dashEl  = document.getElementById('tour-stats-dashboard');
-    /* Título en UNA línea: quitamos el prefijo "Trofeo " (p.ej. "Trofeo
-       Joan Gamper" → "Joan Gamper") para que "<Nombre> · Estadísticas"
-       quepa horizontal sin partir en 2 líneas. Petición usuario
-       2026-06-03 ("reducelo a Joan Gamper · Estadísticas, en la misma
-       línea horizontal"). El CSS de #s-tour-stats fuerza nowrap. */
     if (titleEl) {
-      var _statsNm = String(cfg.name || tourId).replace(/^\s*Trofeo\s+/i, '');
-      titleEl.textContent = _statsNm + ' · Estadísticas';
+      /* Título COMPACTO en UNA sola línea horizontal (petición usuario
+         2026-06-03): quitamos el prefijo "Trofeo " y usamos " - " como
+         separador → "Trofeo Joan Gamper" ⇒ "Joan Gamper - Estadísticas".
+         El font-size/letter-spacing reducido + white-space:nowrap del h2
+         (ver markup de s-tour-stats) garantizan que no salte a 2 líneas. */
+      var _statTitle = String(cfg.name || tourId || '').replace(/^\s*Trofeo\s+/i, '').trim();
+      titleEl.textContent = _statTitle + ' - Estadísticas';
     }
     if (emojiEl) {
       try { emojiEl.innerHTML = _tourFlagHtml(cfg.flag || '📊', 'sec-flag-img'); }

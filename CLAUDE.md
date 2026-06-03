@@ -1948,10 +1948,30 @@ plantilla de ese equipo en el MISMO layout `lext-sq-*`.
 - Estado en `window._bplantView` (`'club'` | `'sel'`), toggle vía
   `window._bplantSetView(v)`. Default `'club'`.
 - La **vista selección** (`_renderSelView`) reutiliza `_section`/`_rowFor`
-  con un **ctx** `{statsFor, notaFor}` que lee `ef_player_stats_sel_v1`
-  (filtrado a la selección). La nota de selección es la del único comp
-  `'sel'` (no se promedia entre varias). El layout (GOLES único + NOTA)
+  con un **ctx** `{statsFor, notaFor}`. El layout (GOLES único + NOTA)
   es idéntico al del club por el grid scopeado a `#s-bayern-plantilla`.
+- **Fuente de stats de selección — AUTO-DETECTA las competiciones
+  ACTIVAS** (petición usuario 2026-06-03: "cada año juega 2
+  competiciones distintas", p.ej. Mundial 2032 + Road Copa Asia; el año
+  siguiente Fase Final Copa Asia + Road Copa América; etc.).
+  `_buildSelStatsMap(selName)` **NO** usa el store unificado
+  `ef_player_stats_sel_v1` (acumula TODAS las temporadas). En su lugar:
+  - `_selActiveTourIds()` enumera las cajas de selección **VISIBLES**
+    (`tour_registry_v1.visible` ∩ `/^(spv|sfn)\d+$/`; fallback: todos los
+    slots `spv1..spv10`+`sfn1..sfn10`).
+  - Para cada torneo donde la selección juega Y tiene partidos
+    disputados, agrega los stats por jugador vía
+    `window._tourStatsFromCfgResults(cfg)` (lee `cfg.results[].events`)
+    y suma `pj += partidos de la selección en ese torneo` (PJ
+    team-level, mismo criterio que el club; `_tourStatsFromCfgResults`
+    NO cuenta pj por sí solo).
+  - **GOLES = total único** (gol+pen+fk sumado). **NOTA = una sola
+    global** (`computePlayerRating` sobre el agregado, NO media por
+    competición — decisión usuario).
+- **PROHIBIDO** volver a leer `ef_player_stats_sel_v1` para la plantilla
+  del hub (mezcla temporadas pasadas). La fuente son los torneos de
+  selección ACTIVOS. El store unificado sigue siendo para
+  sanciones/lesiones (cuenta continua), no para esta caja.
 - Escudo del club: `_findBayernRow().shield/img` → `getTeamLogoUrl`.
   Escudo de la selección: `t.img` del store `selecciones_squad_v1`
   (`_selSquadLoad`) → `getTeamLogoUrl` → bandera emoji (`_SEL_FLAGS`).

@@ -51946,7 +51946,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     +     '<button type="button" class="mmo-actions" id="mu-msg-clear" hidden>🗑 LIMPIAR LEÍDOS</button>'
     +   '</div>'
     +   '<div class="mmo-compose" id="mu-msg-compose" hidden'
-    +     ' style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);display:flex;flex-direction:column;gap:7px;">'
+    +     ' style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);display:none;flex-direction:column;gap:7px;">'
     +     '<div style="display:flex;gap:7px;align-items:center;">'
     +       '<select id="mu-cmp-side" style="flex:1;min-width:0;padding:6px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
     +         '<option value="liv">🔴 Liverpool</option>'
@@ -51992,20 +51992,20 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       penBtn.onclick = function(ev){
         ev.stopPropagation();
         /* Si ya está abierto, un toque lo oculta (sin pedir PIN). */
-        if (!compEl.hidden){ compEl.hidden = true; return; }
+        if (_composeVisible()){ _hideCompose(); return; }
         /* Prompt NEUTRO + fallo SILENCIOSO: un humano que toque por
            curiosidad solo ve "PIN" y, si falla o cancela, no ocurre
            NADA — no se entera de que existe el compositor del admin. */
         var pin = prompt('PIN');
         if (pin == null) return;                       /* cancelado: silencio */
         if (String(pin).trim() !== '7477') return;     /* incorrecto: silencio */
-        compEl.hidden = false;
+        _showCompose(true);
         var ti = document.getElementById('mu-cmp-title');
         if (ti) ti.focus();
       };
       var sendBtn = document.getElementById('mu-cmp-send');
       var cancelBtn = document.getElementById('mu-cmp-cancel');
-      if (cancelBtn) cancelBtn.onclick = function(){ compEl.hidden = true; };
+      if (cancelBtn) cancelBtn.onclick = function(){ _hideCompose(); };
       if (sendBtn) sendBtn.onclick = function(){
         var side   = (document.getElementById('mu-cmp-side')   || {}).value || 'liv';
         var sender = ((document.getElementById('mu-cmp-sender')|| {}).value || '').trim() || 'Dirección';
@@ -52016,17 +52016,27 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         push({ side: side, type:'manual', icon: icon, sender: sender, title: title, body: bodyT });
         var tEl = document.getElementById('mu-cmp-title'); if (tEl) tEl.value = '';
         var bEl = document.getElementById('mu-cmp-body');  if (bEl) bEl.value = '';
-        compEl.hidden = true;
+        _hideCompose();
         _ui.readTab = 'new';
         if (side) _ui.sideTab = side;
         try { _refresh(); } catch(_){}
       };
     }
   }
-  function _hideCompose(){
+  function _composeVisible(){
     var c = document.getElementById('mu-msg-compose');
-    if (c) c.hidden = true;
+    return !!(c && c.style.display !== 'none');
   }
+  function _showCompose(v){
+    var c = document.getElementById('mu-msg-compose');
+    if (!c) return;
+    /* OJO: el div lleva style="display:flex/none" en línea, que GANA al
+       atributo `hidden`. Por eso hay que tocar style.display, no solo
+       `hidden` (bug 2026-06-02: el formulario se veía siempre). */
+    c.style.display = v ? 'flex' : 'none';
+    c.hidden = !v;
+  }
+  function _hideCompose(){ _showCompose(false); }
   function _openPop(){
     _ensureUI();
     var ov = document.getElementById('mu-msg-ov');

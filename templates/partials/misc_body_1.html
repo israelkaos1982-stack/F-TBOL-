@@ -16292,25 +16292,38 @@ window._showSimProgress = function(opts, onDone){
      que la Caja España / s-liga-stats). Petición usuario 2026-05-24:
      "no es desplegable, es una caja que al pulsar se abre".         */
   .tour-stats-jbtn{
-    width:100%;display:flex;align-items:center;gap:10px;
-    background:linear-gradient(135deg,#1a0033 0%,#3a0a6a 22%,#6a18c0 50%,#9040ff 72%,#6a18c0 85%,#1a0033 100%) !important;
-    border:1.5px solid #b070ff !important;
-    box-shadow:0 4px 18px rgba(144,64,255,.45),inset 0 1px 0 rgba(255,255,255,.16) !important;
-    border-radius:10px;
-    padding:13px 16px;cursor:pointer;
+    width:100%;display:flex;align-items:center;gap:13px;
+    background:linear-gradient(135deg,#00241f 0%,#004b40 18%,#0a8a72 42%,#16c79a 56%,#0a8a72 72%,#004b40 88%,#00241f 100%) !important;
+    border:1.5px solid #2dd4bf !important;
+    box-shadow:0 5px 22px rgba(22,199,154,.42),inset 0 1px 0 rgba(255,255,255,.22),inset 0 -2px 9px rgba(0,0,0,.30) !important;
+    border-radius:13px;
+    padding:14px 18px;cursor:pointer;
     font-family:Rajdhani,sans-serif;color:#fff;
-    transition:transform .08s ease, box-shadow .15s ease;
+    position:relative;overflow:hidden;
+    transition:transform .08s ease, box-shadow .15s ease, filter .15s ease;
   }
-  .tour-stats-jbtn:hover{box-shadow:0 6px 24px rgba(144,64,255,.7),inset 0 1px 0 rgba(255,255,255,.22) !important;}
+  /* Brillo diagonal estático que da el acabado "videojuego" horizontal. */
+  .tour-stats-jbtn::before{
+    content:'';position:absolute;top:0;left:-28%;width:34%;height:100%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.26),transparent);
+    transform:skewX(-18deg);pointer-events:none;
+  }
+  .tour-stats-jbtn:hover{box-shadow:0 7px 28px rgba(22,199,154,.7),inset 0 1px 0 rgba(255,255,255,.3) !important;filter:brightness(1.06);}
   .tour-stats-jbtn:active{transform:translateY(1px);}
-  .tour-stats-jbtn .tsb-emoji{font-size:20px;line-height:1;filter:drop-shadow(0 0 6px rgba(200,160,255,.7));}
+  .tour-stats-jbtn .tsb-emoji{
+    flex:0 0 auto;width:36px;height:36px;line-height:1;font-size:20px;
+    display:flex;align-items:center;justify-content:center;border-radius:10px;
+    background:rgba(0,0,0,.30);
+    box-shadow:inset 0 0 0 1px rgba(45,212,191,.55),0 0 11px rgba(45,212,191,.40);
+    filter:drop-shadow(0 0 6px rgba(150,240,210,.7));
+  }
   .tour-stats-jbtn .tsb-label{
     flex:1;text-align:left;font-family:Oswald,sans-serif;font-weight:700;
-    font-size:14px;letter-spacing:2px;text-transform:uppercase;
-    color:#ffffff !important;text-shadow:0 0 14px rgba(200,160,255,.6),0 1px 2px rgba(0,0,0,.7);
+    font-size:15px;letter-spacing:3px;text-transform:uppercase;
+    color:#eafff9 !important;text-shadow:0 0 14px rgba(45,212,191,.7),0 1px 2px rgba(0,0,0,.7);
   }
   .tour-stats-jbtn .tsb-arr{
-    font-size:14px;color:#e6d4ff !important;text-shadow:0 0 10px rgba(180,120,255,.9);
+    flex:0 0 auto;font-size:15px;color:#d6fff5 !important;text-shadow:0 0 10px rgba(45,212,191,.95);
   }
   /* Caja "📤 RAMIFICACIÓN" del formato qualifier-route. Marco morado/
      magenta (tema Selecciones · destino) con sub-secciones por
@@ -20459,97 +20472,112 @@ window._showSimProgress = function(opts, onDone){
      al servidor antes de pintar nada. Ahora pintamos con la cache
      local INSTANTÁNEAMENTE y refrescamos en bg si el server tiene
      una versión más nueva. */
-  /* Recolecta los eventos del store global filtrando por torneo
-     concreto (matchKey contiene `|torneos|tour_<tourId>_`, que es lo
-     que escribe `registrarLigaPlayerStats` con compKey='torneos').
-     Devuelve un objeto {teamNorm::playerNorm → counters} que el
-     renderer `_lextStatsDashHtml` consume tal cual. */
+  /* Agregador de estadísticas de un torneo del motor `_tour*` (Selecciones
+     spv*/sfn*, qualifier-route "Road", verano, etc.). REESCRITO 2026-06-03
+     para replicar la MISMA cadena infalible que la caja del Mundial 2032
+     (`_mundialStatsHtml`) — el usuario reportó la caja "Road Copa Asia"
+     vacía pese a tener partidos simulados. La clave es: (a) hidratar las
+     plantillas de selecciones para que los goleadores tengan nombre real,
+     (b) FORZAR la regeneración del acta cuando los events están vacíos o
+     son placeholder, y (c) encadenar TODOS los agregadores (robusto →
+     cfg.results → memoria → stores persistidos) sin depender de un solo
+     camino. */
   function _tourCollectStatsForTour(tourId){
+    var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tourId]) || null;
+    if (!cfg) { try { cfg = (typeof _tourLoadCachedSync === 'function') ? _tourLoadCachedSync(tourId) : null; } catch(_){} }
+    cfg = cfg || {};
+    var teams = cfg.teams || [];
     var stats = {};
-    var _nm = (typeof window._normPS === 'function')
-      ? window._normPS
-      : function(s){ return String(s||'').trim().toLowerCase(); };
-    function _ensure(team, player){
-      var tk = _nm(team), pk = _nm(player);
-      if (!tk || !pk) return null;
-      var key = tk + '::' + pk;
-      if (!stats[key]) stats[key] = { gol:0, fk:0, pen:0, penSaved:0, ta:0, tr:0, mvp:0, imbat:0 };
-      return stats[key];
+    function _has(){ return stats && Object.keys(stats).length > 0; }
+    /* Hidratar plantillas de selecciones (idempotente y barato) → nombres
+       reales en vez de «Jugador A/B». Mismo paso que el Mundial 2032. */
+    try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+
+    /* 1) Escaneo ROBUSTO de cfg.results[].events (persistido, sobrevive a
+       recargas; resuelve el equipo desde home/away + índice grupos/KO +
+       realTeam). Es el camino más fiable para los partidos ya jugados. */
+    try { if (typeof _mundialStatsRobustScan === 'function') { var _rs0 = _mundialStatsRobustScan(cfg, teams); if (_rs0 && Object.keys(_rs0).length) stats = _rs0; } } catch(_){}
+
+    /* 2) Backfill de actas (regenera events de partidos que solo guardaron
+       el marcador) + re-escaneo robusto. */
+    if (!_has()) {
+      try { if (typeof _tourBackfillActasFromResults === 'function') _tourBackfillActasFromResults(cfg, teams); } catch(_){}
+      try { if (typeof _mundialStatsRobustScan === 'function') { var _rs1 = _mundialStatsRobustScan(cfg, teams); if (_rs1 && Object.keys(_rs1).length) stats = _rs1; } } catch(_){}
     }
-    var store = window.LIGA_PLAYER_MATCH_STORE || {};
-    var marker = '|torneos|tour_' + tourId + '_';
-    Object.keys(store).forEach(function(mk){
-      if (mk.indexOf(marker) === -1) return;
-      var m = store[mk] || {};
-      var tA = m.teamA || '', tB = m.teamB || '';
-      (m.evts || []).forEach(function(ev){
-        if (!ev) return;
-        if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
-        var team = ev.realTeam || (ev.team === 'a' ? tA : ev.team === 'b' ? tB : '');
-        var player = '';
-        if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
-        else if (typeof ev.player === 'string') player = ev.player;
-        else player = ev.name || ev.playerName || '';
-        if (!team || !player) return;
-        var rec = _ensure(team, player);
-        if (!rec) return;
-        var t = ev.type || '';
-        var ico = String(ev.ico || '').replace(/️/g, '').trim();
-        if (t === 'amarilla') rec.ta++;
-        else if (t === 'roja' || t === 'd-amarilla') rec.tr++;
-        else if (t === 'card') {
-          if (ico === '🟨') rec.ta++;
-          else if (ico === '🟥') rec.tr++;
-          else if (ico === '🟨🟥') { rec.ta++; rec.tr++; }
-        }
-        else if (t === 'gol') rec.gol++;
-        else if (t === 'falta-gol') rec.fk++;
-        else if (t === 'pen-gol') rec.pen++;
-        else if (t === 'pen-parado') rec.penSaved++;
-        else if (t === 'mvp') rec.mvp++;
-        else if (t === 'imbat') rec.imbat++;
-      });
-      if (m.mvpName && m.mvpTeam) {
-        var hasEvt = (m.evts || []).some(function(e){ return e && e.type === 'mvp'; });
-        if (!hasEvt) {
-          var r = _ensure(m.mvpTeam, m.mvpName);
-          if (r) r.mvp++;
-        }
+
+    /* 3) Fallback genérico por home/away persistidos. */
+    if (!_has()) {
+      try { var _fc = _tourStatsFromCfgResults(cfg); if (_fc && Object.keys(_fc).length) stats = _fc; } catch(_){}
+    }
+
+    /* 4) Store en memoria (live, misma sesión — `_tourAttachActa` lo
+       rellena al simular IA-vs-IA). */
+    if (!_has()) {
+      var _nm = (typeof window._normPS === 'function')
+        ? window._normPS
+        : function(s){ return String(s||'').trim().toLowerCase(); };
+      var _mem = {};
+      function _ensure(team, player){
+        var tk = _nm(team), pk = _nm(player);
+        if (!tk || !pk) return null;
+        var key = tk + '::' + pk;
+        if (!_mem[key]) _mem[key] = { gol:0, fk:0, pen:0, penSaved:0, ta:0, tr:0, mvp:0, imbat:0 };
+        return _mem[key];
       }
-    });
-    /* REFUERZO 2026-05-28: `LIGA_PLAYER_MATCH_STORE` es SOLO memoria y
-       se vacía al recargar la página → la caja `s-tour-stats` salía
-       vacía tras un reload aunque el torneo estuviera jugado. Si el
-       store en memoria no aportó nada, agregamos desde `cfg.results`
-       (persistido en `tour_<id>_v1`, sobrevive a recargas) usando los
-       `home`/`away` que guarda `_tourAttachActa`. */
-    if (!Object.keys(stats).length) {
+      var store = window.LIGA_PLAYER_MATCH_STORE || {};
+      var marker = '|torneos|tour_' + tourId + '_';
+      Object.keys(store).forEach(function(mk){
+        if (mk.indexOf(marker) === -1) return;
+        var m = store[mk] || {};
+        var tA = m.teamA || '', tB = m.teamB || '';
+        (m.evts || []).forEach(function(ev){
+          if (!ev || ev._varAnulado) return;
+          var team = ev.realTeam || (ev.team === 'a' ? tA : ev.team === 'b' ? tB : '');
+          var player = Array.isArray(ev.player) ? (ev.player[1] || ev.player[0] || '')
+            : (typeof ev.player === 'string' ? ev.player : (ev.name || ev.playerName || ''));
+          if (!team || !player) return;
+          var rec = _ensure(team, player); if (!rec) return;
+          var t = ev.type || '';
+          var ico = String(ev.ico || '').replace(/️/g, '').trim();
+          if (t === 'amarilla') rec.ta++;
+          else if (t === 'roja' || t === 'd-amarilla') rec.tr++;
+          else if (t === 'card') { if (ico === '🟨') rec.ta++; else if (ico === '🟥') rec.tr++; else if (ico === '🟨🟥') { rec.ta++; rec.tr++; } }
+          else if (t === 'gol') rec.gol++;
+          else if (t === 'falta-gol') rec.fk++;
+          else if (t === 'pen-gol') rec.pen++;
+          else if (t === 'pen-parado') rec.penSaved++;
+          else if (t === 'mvp') rec.mvp++;
+          else if (t === 'imbat') rec.imbat++;
+        });
+        if (m.mvpName && m.mvpTeam) {
+          var hasEvt = (m.evts || []).some(function(e){ return e && e.type === 'mvp'; });
+          if (!hasEvt) { var r = _ensure(m.mvpTeam, m.mvpName); if (r) r.mvp++; }
+        }
+      });
+      if (Object.keys(_mem).length) stats = _mem;
+    }
+
+    /* 5) FORZAR la regeneración del acta (incluso events placeholder, p.ej.
+       partidos simulados antes de hidratar la plantilla) y reintentar la
+       agregación en vivo antes de caer a los stores persistidos. */
+    if (!_has()) {
+      try { if (typeof _tourBackfillActasFromResults === 'function') _tourBackfillActasFromResults(cfg, teams, true); } catch(_){}
+      try { if (typeof _mundialStatsRobustScan === 'function') { var _rs2 = _mundialStatsRobustScan(cfg, teams); if (_rs2 && Object.keys(_rs2).length) stats = _rs2; } } catch(_){}
+      if (!_has()) { try { var _fc2 = _tourStatsFromCfgResults(cfg); if (_fc2 && Object.keys(_fc2).length) stats = _fc2; } catch(_){} }
+    }
+
+    /* 6) Último recurso: stores persistidos filtrados a los equipos del
+       torneo (`_tourAttachActa` registra con competition='torneos'). */
+    if (!_has()) {
       try {
-        var _cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tourId])
-          || (typeof _tourLoadCachedSync === 'function' ? _tourLoadCachedSync(tourId) : null);
-        if (_cfg) {
-          var _teamsC = _cfg.teams || [];
-          /* Backfill de actas (regenera events de partidos que solo
-             guardaron el marcador) antes de agregar. Idempotente. */
-          try { if (typeof _tourBackfillActasFromResults === 'function') _tourBackfillActasFromResults(_cfg, _teamsC); } catch(_){}
-          /* 1) Escaneo ROBUSTO (resuelve nombre de equipo desde el índice
-             de grupos/KO + home/away + realTeam — cubre qualifier-route /
-             Road Copa donde los results de grupo no siempre guardan
-             home/away). 2026-06-01. */
-          try {
-            if (typeof _mundialStatsRobustScan === 'function') {
-              var _rs = _mundialStatsRobustScan(_cfg, _teamsC);
-              if (_rs && Object.keys(_rs).length) stats = _rs;
-            }
-          } catch(_){}
-          /* 2) Fallback genérico por home/away persistidos. */
-          if (!Object.keys(stats).length) {
-            var _fromCfg = _tourStatsFromCfgResults(_cfg);
-            if (_fromCfg && Object.keys(_fromCfg).length) stats = _fromCfg;
-          }
+        var _sks = ['ef_player_stats_torneos_v1', 'ef_player_stats_sel_v1', 'ef_player_stats_mundial_v1'];
+        for (var _ki = 0; _ki < _sks.length; _ki++) {
+          var fb = _statsFromStoreFilteredToTeams(_sks[_ki], teams);
+          if (fb && Object.keys(fb).length) { stats = fb; break; }
         }
       } catch(_){}
     }
+
     return stats;
   }
 
@@ -20562,7 +20590,7 @@ window._showSimProgress = function(opts, onDone){
   function _tourStatsBtnHtml(tourId){
     return '<div style="padding:0 12px;margin:8px 0 10px;">'
          +   '<button type="button" class="tour-stats-jbtn" '
-         +     'onclick="window._tourStatsOpen&amp;&amp;window._tourStatsOpen(\''+tourId+'\')">'
+         +     'onclick="window._tourStatsOpen&amp;&amp;window._tourStatsOpen(\''+tourId+'\',\'s-'+tourId+'\')">'
          +     '<span class="tsb-emoji">📊</span>'
          +     '<span class="tsb-label">Estadísticas</span>'
          +     '<span class="tsb-arr">▶</span>'
@@ -20580,20 +20608,28 @@ window._showSimProgress = function(opts, onDone){
      única línea vacía y el usuario no veía la estructura de stats
      (petición 2026-05-24: "que salgan las estadísticas de los eventos
      goleadores mvp etc"). */
-  window._tourStatsOpen = function(tourId){
+  window._tourStatsOpen = function(tourId, fromId){
     var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tourId]) || null;
     if (!cfg) { try { cfg = _tourLoadCachedSync(tourId); } catch(_){} }
     if (!cfg) cfg = {};
-    /* Guardar la pantalla activa ANTES de navegar a s-tour-stats para
-       que `_tourStatsBack` vuelva exactamente ahí (los grupos del
-       torneo) y no al hub de Selecciones. Petición usuario 2026-05-24:
-       "al volver te manda al menú principal, te debería mandar a los
-       grupos, pantalla anterior". */
-    var _fromId = '';
-    try {
-      var _act = document.querySelector('.screen.active');
-      if (_act && _act.id && _act.id !== 's-tour-stats') _fromId = _act.id;
-    } catch(_){}
+    /* Guardar la pantalla DESDE LA QUE se abre s-tour-stats para que
+       `_tourStatsBack` vuelva EXACTAMENTE ahí (los grupos del torneo) y NO
+       al menú principal. Petición usuario 2026-05-24 / 2026-06-03 ("al
+       volver te saca al menú principal, te debería llevar a la pantalla
+       anterior"). El caller pasa el id explícito (`s-<tourId>` desde la
+       pantalla del torneo, `s-torneos-verano` desde la lista) — más fiable
+       que leer `.screen.active`, que con varias `.active` colgadas
+       devolvía la PRIMERA del DOM (el menú principal). Fallback: detectar
+       la pantalla activa que NO sea s-tour-stats. */
+    var _fromId = fromId || '';
+    if (!_fromId) {
+      try {
+        var _acts = document.querySelectorAll('.screen.active');
+        for (var _ai = 0; _ai < _acts.length; _ai++) {
+          if (_acts[_ai].id && _acts[_ai].id !== 's-tour-stats') { _fromId = _acts[_ai].id; break; }
+        }
+      } catch(_){}
+    }
     window._tourStatsActive = {
       tourId: tourId,
       name: cfg.name || tourId,
@@ -20611,8 +20647,14 @@ window._showSimProgress = function(opts, onDone){
     if (dashEl) {
       var stats = _tourCollectStatsForTour(tourId);
       var _hasData = stats && Object.keys(stats).length > 0;
-      if (_hasData && typeof window._lextStatsDashHtml === 'function') {
-        dashEl.innerHTML = window._lextStatsDashHtml(stats);
+      if (_hasData) {
+        /* Renderer AUTOCONTENIDO primero (mismo que el Mundial 2032) — el
+           diag demostró que `_lextStatsDashHtml` podía devolver '' en esta
+           pantalla. Fallback al compartido sólo si el propio salió vacío. */
+        var inner = '';
+        try { if (typeof _mundialRenderStatsGrid === 'function') inner = _mundialRenderStatsGrid(stats); } catch(_){}
+        if (!inner) { try { if (typeof window._lextStatsDashHtml === 'function') inner = window._lextStatsDashHtml(stats, true); } catch(_){} }
+        dashEl.innerHTML = inner || _tourStatsEmptyCardsHtml();
       } else {
         dashEl.innerHTML = _tourStatsEmptyCardsHtml();
       }
@@ -20653,9 +20695,17 @@ window._showSimProgress = function(opts, onDone){
      `from` no está disponible, cae a la pantalla del torneo
      (`s-<tourId>`) o, en último recurso, al hub de Selecciones. */
   window._tourStatsBack = function(){
-    var a = window._tourStatsActive;
-    var dst = (a && a.from)
-              || ((a && a.tourId) ? ('s-' + a.tourId) : 's-selecciones');
+    var a = window._tourStatsActive || {};
+    /* Candidatos en orden de preferencia; nos quedamos con el PRIMERO que
+       exista realmente como pantalla, para no caer a un id roto (que
+       dejaría la web sin ninguna `.screen.active` → aspecto de "menú
+       principal"). */
+    var cands = [a.from, (a.tourId ? ('s-' + a.tourId) : ''), 's-selecciones'];
+    var dst = '';
+    for (var i = 0; i < cands.length; i++) {
+      if (cands[i] && document.getElementById(cands[i])) { dst = cands[i]; break; }
+    }
+    if (!dst) dst = 's-selecciones';
     try { window.go(dst); } catch(_){}
   };
 
@@ -25704,7 +25754,7 @@ window._showSimProgress = function(opts, onDone){
       if (bd === 'verano' && id !== 'mundial') {
         slot.html += '<div class="submenu-card sc-' + id + '-stats" '
           + 'style="margin-top:2px;background:linear-gradient(135deg,#00221d 0%,#003a32 16%,#006e5c 36%,#0aa386 52%,#2dd4bf 60%,#0aa386 70%,#006e5c 84%,#00221d 100%) !important;border:1.5px solid #2dd4bf !important;box-shadow:0 4px 18px rgba(45,212,191,.38),inset 0 1px 0 rgba(255,255,255,.16) !important;" '
-          + 'onclick="window._tourStatsOpen&&window._tourStatsOpen(\'' + id + '\')">'
+          + 'onclick="window._tourStatsOpen&&window._tourStatsOpen(\'' + id + '\',\'s-torneos-verano\')">'
           + '<span class="sc-emoji">📊</span>'
           + '<span class="sc-label" style="flex:1;">Estadísticas</span>'
           + '<span class="sc-arr" style="margin-left:auto;">▶</span>'
@@ -30908,6 +30958,21 @@ window._showSimProgress = function(opts, onDone){
     <span>Enviar realidad de cada equipo a su Europa (admin)</span>
   </button>
 </div>
+<!-- Botón "♻️ Re-cuadrar Europa" (PIN admin 747). Restaura el reparto
+     europeo CANÓNICO (LEAGUE_DEFAULT_ZONES) en TODAS las ligas, limpia
+     los feeders obsoletos del cascade (WC→OQ→Previa) + la snapshot
+     congelada, y re-congela el cuadre limpio (28/34/88/72/18/12).
+     Para cuando los números se descuadran (foto usuario 2026-06-03:
+     27/35/92/73/17/11). Petición usuario: lo pulsa cuando vea el
+     desajuste y vuelve a cuadrar de un toque. -->
+<div class="restoligas-actions" style="margin-top:10px;">
+  <button class="restoligas-btn restoligas-btn-commit"
+          onclick="window.pG(function(){window._restoLigasRecuadrarEurope&&window._restoLigasRecuadrarEurope();})"
+          style="flex:1 1 auto;background:linear-gradient(90deg,#1a2e1a,#1e4a2e,#2e7a4e,#1e4a2e,#1a2e1a);">
+    <span class="restoligas-ico">♻️</span>
+    <span>Re-cuadrar reparto europeo (canónico) (admin)</span>
+  </button>
+</div>
 </div>
 
 <script>
@@ -31205,6 +31270,160 @@ window._showSimProgress = function(opts, onDone){
         + '🟠 Europa League: ' + totalUel + ' equipos\n'
         + '🟢 Conference League: ' + totalUecl + ' equipos\n\n'
         + 'A partir de ahora estas pantallas usarán esta snapshot. Si vuelves a simular las ligas, pulsa este botón otra vez para refrescar.');
+  };
+
+  /* ── Re-cuadrar reparto europeo (canónico) ───────────────────────
+     Petición usuario 2026-06-03 (foto "27/35/92/73/17/11"): los pools
+     europeos se descuadran respecto a la tabla de coeficientes
+     canónica (28/34/88/72/18/12) por DOS motivos de DATOS de
+     dispositivo, independientes del código (la tabla
+     LEAGUE_DEFAULT_ZONES YA es correcta):
+
+       1. Plazas por liga DRIFTED: alguna `ligaExt_<slug>.config.zones`
+          quedó en un valor viejo/intermedio que los seeds one-shot
+          (`_seedLeagueDefaultZonesV1`/`_fixupLeagueZonesV2`) ya no
+          tocan (corren una vez por flag, y solo si la liga está
+          EXACTAMENTE en el valor viejo conocido). → +/− plazas.
+       2. FEEDERS obsoletos del cascade WC→OQ→Previa
+          (`oq_to_previa_v1`, `wc_to_open_qualifier_v1`, `wprev_to_*`,
+          `oq_to_conference_v1`, `wc_champion_v1`) de una corrida
+          anterior: se MEZCLAN en el recálculo en vivo de
+          `computeUclPrevTeams`/`computeOpenQualifierTeams`/... e
+          inflan Previa (+1), OQ (+4), WC (+1).
+
+     Este botón es la solución self-service que pidió el usuario: con
+     un toque (a) FUERZA el reparto canónico `LEAGUE_DEFAULT_ZONES`
+     en TODAS las ligas (el usuario confirmó 2026-06-03 que NUNCA edita
+     las plazas a mano, así que es seguro pisar; preservamos
+     desc/intercontinental/mundialClubes), (b) BORRA los feeders
+     obsoletos + la snapshot congelada, y (c) re-congela el cuadre
+     LIMPIO. Idempotente: re-pulsarlo siempre deja el mismo cuadre. */
+  var _EURO_FEEDER_KEYS = [
+    'wprev_to_fase_grupos_v1',   // → +12 UCL
+    'wprev_to_europa_v1',        // → +22 UEL
+    'wprev_r1_to_conference_v1', // → +28 UECL
+    'oq_to_previa_v1',           // → +28 Previa
+    'oq_to_conference_v1',       // legacy feeder
+    'wc_to_open_qualifier_v1',   // → +24 OQ
+    'wc_champion_v1'             // legacy campeón único WC
+  ];
+  function _clearKvKey(k){
+    try { localStorage.removeItem(k); } catch(_){}
+    try {
+      fetch('/api/kv/'+k, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        credentials:'same-origin',
+        body: JSON.stringify({value: null})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  window._restoLigasRecuadrarEurope = function(){
+    if(typeof window.LEAGUE_DEFAULT_ZONES !== 'object'
+       || typeof window._zonesDefaultFor !== 'function'){
+      alert('Motor de reparto no disponible. Recarga la página.');
+      return;
+    }
+    if(!confirm('♻️ Re-cuadrar reparto europeo (canónico)\n\n'
+      +'Restaura las plazas europeas de CADA liga a la tabla de\n'
+      +'coeficientes oficial (28/34/88/72/18/12) y limpia los datos\n'
+      +'obsoletos de Wild Card / Open Qualifier / Previa que descuadran\n'
+      +'el conteo.\n\n'
+      +'⚠️ Sobrescribe cualquier plaza europea que hubieras editado a\n'
+      +'mano en el modal 📜 Reglas de las ligas (NO toca el descenso ni\n'
+      +'las plazas de Intercontinental/Mundialito).\n\n'
+      +'¿Continuar?')) return;
+
+    /* (a) Forzar reparto canónico en TODAS las ligas de la tabla. */
+    var fixed = 0, missing = 0;
+    Object.keys(window.LEAGUE_DEFAULT_ZONES).forEach(function(slug){
+      try {
+        if(slug === 'liga-ea-sports') return; // blacklist europeo: va por manual EA→Europa
+        var key = 'ligaExt_' + slug;
+        var raw = localStorage.getItem(key);
+        if(!raw){ missing++; return; } // no sembrada → la cubre ensureConfig al abrirla
+        var d = JSON.parse(raw);
+        if(!d) { missing++; return; }
+        if(!d.config) d.config = {};
+        var prev = d.config.zones || {};
+        /* `_zonesDefaultFor` ya trae el genérico (desc/intercontinental/
+           mundialClubes) + el override europeo canónico de la liga. */
+        var canon = window._zonesDefaultFor(slug) || {};
+        /* Canónico en las 6 euro-zonas; conserva desc + intercontinental
+           + mundialClubes que el usuario sí gestiona por liga. */
+        d.config.zones = Object.assign({}, canon, {
+          desc:             (prev.desc != null ? prev.desc : canon.desc),
+          intercontinental: (prev.intercontinental != null ? prev.intercontinental : (canon.intercontinental||0)),
+          mundialClubes:    (prev.mundialClubes != null ? prev.mundialClubes : (canon.mundialClubes||0))
+        });
+        localStorage.setItem(key, JSON.stringify(d));
+        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        fixed++;
+      } catch(_){}
+    });
+
+    /* (b) Borrar feeders obsoletos del cascade + snapshot congelada. */
+    _EURO_FEEDER_KEYS.forEach(_clearKvKey);
+    _clearKvKey(EUROPE_COMMIT_KEY);
+    try { window._eurInvalidateLeagueCache && window._eurInvalidateLeagueCache(); } catch(_){}
+
+    /* (c) Recalcular EN VIVO (sin feeders, sin snapshot) y re-congelar. */
+    function _safeCompute(fn){
+      try { return (typeof fn === 'function') ? (fn() || []) : []; }
+      catch(_){ return []; }
+    }
+    var _prevIgnore = window._europeIgnoreFrozen;
+    window._europeIgnoreFrozen = true;
+    var blob;
+    try {
+      blob = {
+        ucl:      _safeCompute(window.computeUclClassified),
+        uclPrev:  _safeCompute(window.computeUclPrevTeams),
+        uel:      _safeCompute(window.computeUelClassified),
+        uecl:     _safeCompute(window.computeUeclClassified),
+        uclQual:  _safeCompute(window.computeOpenQualifierTeams),
+        wildcard: _safeCompute(window.computeWildCardClassified),
+        ts:       Date.now()
+      };
+    } finally {
+      window._europeIgnoreFrozen = _prevIgnore;
+    }
+    try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
+    _saveEuropeCommitServer(blob);
+
+    /* Conteo de plazas manuales España (EA→Europa) para que el admin
+       vea de un vistazo si el déficit -1 en 🔵/🟠/🟢 viene de ahí (esas
+       plazas las elige a mano el admin, este botón NO las inventa). */
+    function _meaCount(s){
+      try { return ((window._meaTeamsFor && window._meaTeamsFor(s)) || []).length; }
+      catch(_){ return 0; }
+    }
+    var tUcl=blob.ucl.length, tPrev=blob.uclPrev.length, tUel=blob.uel.length,
+        tUecl=blob.uecl.length, tOq=blob.uclQual.length, tWc=blob.wildcard.length;
+    function _mark(n, target){ return (n===target) ? '✅' : ((n>target?'＋':'－')+Math.abs(n-target)); }
+    /* WC tolerante: el pool crudo canónico es 71 ó 72 (1 hueco TBD que
+       el módulo de Wild Card rellena aguas abajo). Ambos son ✅. */
+    function _markWc(n){ return (n===72||n===71) ? '✅' : ((n>72?'＋'+(n-72):'－'+(72-n))); }
+    var manualNote = '';
+    var mUcl=_meaCount('ucl'), mPrev=_meaCount('uclPrev'), mUel=_meaCount('uel'), mUecl=_meaCount('uecl');
+    /* España objetivo: 🔵4 🟣1 🟠2 🟢1 vía EA Sports → Europa. */
+    if(mUcl<4 || mUel<2 || mUecl<1 || mPrev<1){
+      manualNote = '\n\n⚠️ Revisa "🎮 EA Sports → Europa" (España):\n'
+        + '   🔵 Champions: ' + mUcl + '/4   🟣 Previa: ' + mPrev + '/1\n'
+        + '   🟠 Europa: ' + mUel + '/2   🟢 Conference: ' + mUecl + '/1\n'
+        + '   (esas plazas las eliges a mano; si faltan, añádelas ahí.)';
+    }
+    alert('♻️ Reparto europeo re-cuadrado.\n\n'
+        + 'Ligas corregidas: ' + fixed + (missing? '  ·  sin sembrar: '+missing : '') + '\n'
+        + 'Feeders WC/OQ/Previa limpiados + snapshot recongelada.\n\n'
+        + '🔵 Champions League: ' + tUcl + '  ' + _mark(tUcl,28) + '\n'
+        + '🇪🇺 Previa de Champions: ' + tPrev + '  ' + _mark(tPrev,34) + '\n'
+        + '🟡 Open Qualifier: ' + tOq + '  ' + _mark(tOq,88) + '\n'
+        + '🎟️ Wild Card: ' + tWc + '  ' + _markWc(tWc) + '\n'
+        + '🟠 Europa League: ' + tUel + '  ' + _mark(tUel,18) + '\n'
+        + '🟢 Conference League: ' + tUecl + '  ' + _mark(tUecl,12)
+        + manualNote);
   };
 
   /* ── Estadísticas agregadas ──────────────────────────────────── */
@@ -43474,7 +43693,14 @@ https://api.sofascore.app/api/v1/team/44/image
   #s-munich .munich-comp-chip .munich-comp-ico{
     font-size:22px;line-height:1;height:28px;display:flex;align-items:center;justify-content:center;
   }
-  #s-munich .munich-comp-chip .munich-comp-ico img{width:24px;height:24px;object-fit:contain;}
+  /* Logos oficiales sobre teja blanca redondeada: garantiza contraste
+     de escudos oscuros (Copa azul marino, cup negro de Supercopa…) sobre
+     el chip casi negro. Solo afecta a <img> (logos), no a los emoji. */
+  #s-munich .munich-comp-chip .munich-comp-ico img{
+    width:26px;height:26px;object-fit:contain;
+    background:#fff;border-radius:6px;padding:2px;box-sizing:border-box;
+    box-shadow:0 0 0 1px rgba(255,255,255,.18);
+  }
   #s-munich .munich-comp-chip .munich-comp-lbl{
     font-family:Rajdhani,sans-serif;font-size:10px;font-weight:700;
     color:#fff;text-align:center;line-height:1.12;letter-spacing:.3px;
@@ -43805,21 +44031,48 @@ https://api.sofascore.app/api/v1/team/44/image
   var BAYERN_SVG='/static/img/escudos-1/england_liverpool.football-logos.cc.svg';
   function _teams(){ try{ var r=localStorage.getItem('ligaExt_liga-ea-sports'); if(r){ var d=JSON.parse(r); if(d&&d.teams) return d.teams; } }catch(_){ } return []; }
   function _boxOv(){ try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r); if(d&&d.ov) return d.ov['go:s-munich']||null; } }catch(_){ } return null; }
+  /* Club CANÓNICO del hub de Toñín (s-munich) según MISTERS_REGISTRY
+     (CLAUDE.md, 2026-05-27): hardcoded, sync, infalible. Es 'Liverpool'.
+     Lo usamos para que el hub NUNCA muestre el nombre legacy "Bayern
+     Munich": el slot interno sigue llamándose así en saves antiguos
+     (el rename `_ligaEaSubName` NUNCA llegó a existir — ver línea 2919),
+     pero lo que se MUESTRA debe ser siempre el club canónico. */
+  function _canonHubName(){
+    try{
+      var M=window._MISTERS_HUMANOS;
+      if(M&&M.length){ for(var i=0;i<M.length;i++){ if(M[i]&&M[i].screen==='s-munich'&&M[i].club) return String(M[i].club); } }
+    }catch(_){ }
+    return 'Liverpool';
+  }
+  function _isBayernLegacy(n){
+    /* SOLO el slot humano legacy (inglés). NUNCA los IA reales
+       "Bayern München"/"Bayern Leverkusen" del Mundialito/Bundesliga. */
+    var k=String(n||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ').trim().toLowerCase();
+    return k==='bayern munich' || k==='fc bayern munich';
+  }
   function _slot(){
-    var teams=_teams(), want='Bayern Munich', i, t;
-    try{ if(typeof window._ligaEaSubName==='function'){ var s=window._ligaEaSubName('Bayern Munich'); if(s) want=String(s); } }catch(_){ }
-    var wl=want.toLowerCase();
-    for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.name.toLowerCase()===wl) return t; }
+    var teams=_teams(), i, t;
+    /* Orden de preferencia para localizar el slot humano del hub:
+       1) la etiqueta de la caja del menú (rename visual del usuario),
+       2) el club canónico (Liverpool),
+       3) el nombre legacy "Bayern Munich" (saves antiguos sin renombrar). */
+    var wants=[], ov=_boxOv();
+    if(ov&&ov.label) wants.push(String(ov.label).toLowerCase());
+    wants.push(_canonHubName().toLowerCase());
+    wants.push('bayern munich');
+    for(var w=0;w<wants.length;w++){
+      for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.name.toLowerCase()===wants[w]) return t; }
+    }
     for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&/bayern/i.test(t.name)) return t; }
-    var o={'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+    var o={'real madrid':1,'real madrid cf':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
     for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.isHuman&&!o[t.name.toLowerCase()]) return t; }
     return null;
   }
   function _resolve(){
     /* LA CAJA DEL MENÚ MANDA: si el admin puso un equipo en la caja
        (menu_home_v1 → go:s-munich), el interior ES ese equipo. Solo
-       si no hay caja editada caemos al reemplazo real de Liga EA y,
-       por último, a Bayern. */
+       si no hay caja editada caemos al slot de Liga EA y, por último,
+       al club canónico (Liverpool) — NUNCA al literal "Bayern Munich". */
     var ov=_boxOv();
     var name='', esc='', stad='', cols=null;
     if(ov){
@@ -43828,10 +44081,19 @@ https://api.sofascore.app/api/v1/team/44/image
       if(ov.stadium) stad=String(ov.stadium);
       if(ov.colors && ov.colors.length) cols=ov.colors;
     }
+    var canon=_canonHubName();
     if(!name){
       var t=_slot();
-      name=(t&&t.name)||'Liverpool';
+      name=(t&&t.name)||canon;
       if(!esc) esc=(t&&(t.escudo||t.shield))||'';
+    }
+    /* El slot legacy se llama "Bayern Munich" pero el hub de Toñín es
+       canónicamente Liverpool. Nunca mostrar "Bayern Munich": usar el
+       club canónico y descartar el escudo legacy del Bayern para que
+       getTeamLogoUrl resuelva el del club canónico (LFC). */
+    if(_isBayernLegacy(name)){
+      name=canon;
+      if(esc===BAYERN_SVG || /germany_bayern/i.test(String(esc))) esc='';
     }
     if(!esc){ try{ if(window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(name)||''; } }catch(_){ } }
     if(!esc) esc=BAYERN_SVG;
@@ -43850,9 +44112,16 @@ https://api.sofascore.app/api/v1/team/44/image
     if(!b&&!n) return;
     var host=document.getElementById('s-munich')||document.body;
     var r=_resolve(), sig=r.name+'|'+r.esc+'|'+r.stad+'|'+(r.cols?r.cols.join(','):'');
-    /* Nombre del equipo del hub → lo consume el icono 💊 del HUD para
-       saber de qué equipo contar los partidos de lesión pendientes. */
-    window._mkHubTeamName=r.name;
+    /* Nombre del equipo del hub → lo consume el icono 💊 del HUD y la
+       card de bajas de la previa para saber de qué equipo contar las
+       lesiones/sanciones pendientes. DEBE ser el nombre LÓGICO del slot
+       (`_psHumanLogicName`, el mismo que graba `_injureOne` y que usan
+       los brackets/calendario), NO el nombre VISUAL del header: si el
+       slot legacy se llama "Bayern Munich" y la caja muestra "Liverpool",
+       las lesiones se guardan como "Bayern Munich" y el match por nombre
+       visual fallaba. El display del header sí usa el canónico (r.name). */
+    try{ window._mkHubTeamName = (typeof window._psHumanLogicName==='function' && window._psHumanLogicName()) || r.name; }
+    catch(_){ window._mkHubTeamName=r.name; }
     try{ if(window.athRefreshInjuryHud) window.athRefreshInjuryHud(); }catch(_){}
     if(host.__mkHubSig===sig) return; host.__mkHubSig=sig;
     if(n) n.textContent=r.name;
@@ -43878,15 +44147,35 @@ https://api.sofascore.app/api/v1/team/44/image
     }
   }
   function run(){ setTimeout(_sync,0); setTimeout(_sync,80); setTimeout(_sync,240); }
-  function _wrapGo(){
-    if(window.__mkHubGoWrapped || typeof window.go!=='function') return;
-    window.__mkHubGoWrapped=true;
-    var g=window.go;
-    window.go=function(id){ var x=g.apply(this,arguments); if(id==='s-munich'||id==='s-bayern-plantilla') run(); return x; };
+  /* ROBUSTEZ DE NAVEGACIÓN (fix bug 2026-06-03, foto usuario: la caja
+     del menú decía LIVERPOOL pero el hub se abría como "Bayern Munich").
+     NO podemos envolver `window.go` aquí: el bundle (index.bundle.js,
+     que carga DESPUÉS de este partial) RE-ENVUELVE `window.go` varias
+     veces y borra cualquier wrapper nuestro — exactamente lo mismo que
+     ya documenta el observer de la Caja Plantilla (líneas ~2298-2306).
+     Resultado del bug: `_sync` sólo corría al cargar la página (antes de
+     que la caja del menú aplicara su override `menu_home_v1` → 'Liverpool')
+     y NUNCA al abrir la pantalla, así que el header se quedaba con el
+     SSR "Bayern Munich". Solución robusta: MutationObserver sobre la
+     clase `.active` de #s-munich → re-sincroniza cada vez que se abre. */
+  function _wireObserver(){
+    if(window.__mkHubObsReady) return;
+    var screen=document.getElementById('s-munich');
+    if(!screen) return;
+    window.__mkHubObsReady=true;
+    if(screen.classList.contains('active')) run();
+    try{
+      var obs=new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          if(muts[i].attributeName==='class' && screen.classList.contains('active')){ run(); return; }
+        }
+      });
+      obs.observe(screen, { attributes:true, attributeFilter:['class'] });
+    }catch(_){ }
   }
   if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded', function(){ run(); _wrapGo(); });
-  } else { run(); _wrapGo(); }
+    document.addEventListener('DOMContentLoaded', function(){ run(); _wireObserver(); });
+  } else { run(); _wireObserver(); }
 })();
 </script>
 <div class="munich-arena-wrap">
@@ -45493,6 +45782,75 @@ https://api.sofascore.app/api/v1/team/44/image
     var ko = _loadJSON(KO[comp]);
     return _statusFromChamp(ko && (ko.champion || ko.campeon), aliases);
   }
+  /* ── Estado de los torneos del motor `_tour*` (Mundialito de Clubes,
+     Torneos de Verano, Selecciones / Mundial 2032). Estos cfgs NO
+     guardan un campo `.champion`: el campeón se DERIVA de la final
+     jugada. Un torneo está «finalizado» cuando su ÚLTIMO partido (la
+     final) tiene `played === true`. Sin esto, los chips MUNDIALITO /
+     SELECCIONES / TORNEO VERANO se quedaban SIEMPRE en «En juego»
+     aunque el torneo estuviera terminado (bug foto usuario 2026-06-03). */
+  function _chipLoadTourCfg(id){
+    var cfg = null;
+    try { cfg = (window._TOUR_CACHE || {})[id] || null; } catch(_){}
+    if (!cfg && typeof window._tourLoadCachedSync === 'function'){
+      try { cfg = window._tourLoadCachedSync(id); } catch(_){}
+    }
+    if (!cfg){
+      try {
+        var raw = localStorage.getItem('tour_' + id + '_v1');
+        if (raw) cfg = JSON.parse(raw);
+      } catch(_){}
+    }
+    return cfg;
+  }
+  function _chipTourHasTeams(cfg){
+    return !!(cfg && Array.isArray(cfg.teams) && cfg.teams.length >= 2);
+  }
+  function _chipTourCfgDone(cfg){
+    if (!cfg || typeof cfg !== 'object') return false;
+    var res = cfg.results || {};
+    function _played(k){ var r = res[k]; return !!(r && r.played); }
+    var fmt = cfg.format;
+    /* KO directo (ko, ko-2leg): la final es el último par de cfg.bracket. */
+    if (fmt === 'ko' || fmt === 'ko-2leg'){
+      var br = cfg.bracket || [];
+      if (!br.length) return false;
+      var lr = br.length - 1;
+      if (!br[lr] || br[lr].length < 2) return false;   /* final aún no formada */
+      return _played(lr + '_0');
+    }
+    /* groups-ko / mundial-48 / league-ko / swiss: la final es la última
+       ronda de cfg.koBracket → result key `ko_<lastR>_0`. */
+    if (fmt === 'groups-ko' || fmt === 'mundial-48'
+        || fmt === 'league-ko' || fmt === 'swiss'){
+      var kb = cfg.koBracket || [];
+      var kr = (cfg.formatConfig && cfg.formatConfig.koRounds) || [];
+      var lr2 = (kr.length ? kr.length : kb.length) - 1;
+      if (lr2 < 0) return false;
+      if (!kb[lr2] || kb[lr2].length < 2) return false; /* final aún no sorteada */
+      return _played('ko_' + lr2 + '_0');
+    }
+    return false;
+  }
+  /* Escanea varios slots de torneo y devuelve 'done' SÓLO si al menos
+     uno está lanzado (con equipos) y TODOS los lanzados están
+     finalizados; 'in' mientras quede alguno sin terminar; null si
+     ninguno está lanzado (el chip cae a la detección por defecto). */
+  function _chipScanTours(ids){
+    var anyLaunched = false, allDone = true;
+    for (var i = 0; i < ids.length; i++){
+      var cfg = _chipLoadTourCfg(ids[i]);
+      if (!_chipTourHasTeams(cfg)) continue;
+      anyLaunched = true;
+      if (!_chipTourCfgDone(cfg)) allDone = false;
+    }
+    if (!anyLaunched) return null;
+    return allDone ? 'done' : 'in';
+  }
+  var _VERANO_TOUR_IDS = ['sct','pss','jg','asia',
+    'tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'];
+  var _SEL_TOUR_IDS = ['spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10',
+    'sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
   /* Detección heurística: el equipo está en una competición si su
      nombre (cualquier alias normalizado) aparece dentro del JSON raw
      de los stores asociados. Más barato que parsear estructuras y
@@ -45574,11 +45932,28 @@ https://api.sofascore.app/api/v1/team/44/image
       }},
     { id:'mundial', label:'Mundialito',      emoji:'🌍', screen:'s-mundial-clubes',
       statusFn:function(a){
+        /* Mundialito de Clubes = slot built-in 'mundial' con format
+           'groups-ko' (NO mundial-48, que sería Mundial 2032 selecciones). */
+        var cfg = _chipLoadTourCfg('mundial');
+        if (cfg && cfg.format !== 'mundial-48' && _chipTourHasTeams(cfg)){
+          return _chipTourCfgDone(cfg) ? 'done' : 'in';
+        }
         var s = _loadJSON('mundial_state_v1') || _loadJSON('mundialito_state_v1');
         return _statusFromChamp(s && s.champion, a);
       }},
-    { id:'sel',     label:'Selecciones',     emoji:'🌐', screen:'s-selecciones' },
-    { id:'torneo',  label:'Torneo Verano',   emoji:'🌞', screen:'s-torneos-verano' },
+    { id:'sel',     label:'Selecciones',     emoji:'🌐', screen:'s-selecciones',
+      statusFn:function(a){
+        /* Selecciones = slots spv / sfn + el Mundial 2032 (slot
+           'mundial' con format mundial-48). */
+        var ids = _SEL_TOUR_IDS.slice();
+        var mc = _chipLoadTourCfg('mundial');
+        if (mc && mc.format === 'mundial-48') ids.push('mundial');
+        return _chipScanTours(ids) || 'in';
+      }},
+    { id:'torneo',  label:'Torneo Verano',   emoji:'🌞', screen:'s-torneos-verano',
+      statusFn:function(a){
+        return _chipScanTours(_VERANO_TOUR_IDS) || 'in';
+      }},
     { id:'amist',   label:'Amistosos',       emoji:'🤝', screen:'s-amistosos' }
   ];
 
@@ -45601,7 +45976,7 @@ https://api.sofascore.app/api/v1/team/44/image
           if (r === 'done' || r === 'out') status = 'done';
         } catch(_){}
       }
-      out.push({ status:status, label:def.label, emoji:def.emoji, screen:def.screen });
+      out.push({ id:def.id, status:status, label:def.label, emoji:def.emoji, screen:def.screen });
     });
     /* Superliga vive fuera del modal del calendario — la añadimos
        sólo si el equipo está inscrito en `superliga_teams_v1`. */
@@ -45611,6 +45986,7 @@ https://api.sofascore.app/api/v1/team/44/image
         var slSt = _loadJSON('superliga_state_v1');
         var slCh = slSt && (slSt.champion || slSt.campeon);
         out.push({
+          id:'superliga',
           status: _statusFromChamp(slCh, aliases),
           label:'Superliga', emoji:'🌟', screen:'s-superliga-clas'
         });
@@ -45666,6 +46042,33 @@ https://api.sofascore.app/api/v1/team/44/image
     }, true);
   })();
 
+  /* ── Logos oficiales de cada competición (PNG en static/img/comp/).
+     Si hay logo para el chip se pinta como <img>; si la imagen falla al
+     cargar (onerror) se cae automáticamente al emoji. El admin puede
+     sobrescribir cualquiera subiendo su icono desde la pantalla
+     COMPETICIONES (`comp_icons_v1`, sincronizado entre dispositivos),
+     que tiene prioridad sobre el PNG por defecto.
+     Las entradas de `_CHIP_LOGO_FILES` se van añadiendo conforme se
+     suben los PNG al repo — un chip sin entrada (y sin override) sigue
+     mostrando su emoji, sin lanzar peticiones 404. */
+  var _CHIP_LOGO_BASE = '/static/img/comp/';
+  var _CHIP_LOGO_FILES = {
+    /* id → fichero. Un chip sin entrada (y sin override) muestra su emoji. */
+    liga:'liga-ea.png',
+    copa:'copa-rey.png',
+    'sup-esp':'supercopa-esp.png'
+  };
+  function _chipLogoSrc(id, label){
+    /* 1) override del admin por label (comp_icons_v1, dataURI o URL). */
+    try {
+      var icons = JSON.parse(localStorage.getItem('comp_icons_v1') || '{}');
+      if (icons && label && icons[label]) return icons[label];
+    } catch(_){}
+    /* 2) PNG oficial por defecto del repo. */
+    var f = id && _CHIP_LOGO_FILES[id];
+    return f ? (_CHIP_LOGO_BASE + f) : '';
+  }
+
   function _render(){
     var row = document.getElementById('munich-comps-row');
     if (!row) return;
@@ -45681,9 +46084,15 @@ https://api.sofascore.app/api/v1/team/44/image
       var stTxt = (it.status === 'done') ? 'Finalizada'
                 : (it.status === 'out')  ? 'Eliminado'
                 :                          'En juego';
+      var logo = _chipLogoSrc(it.id, it.label);
+      var ico = logo
+        ? '<img src="' + _esc(logo) + '" alt="" '
+          + 'onerror="this.style.display=\'none\';var s=this.nextSibling;if(s)s.style.display=\'\';">'
+          + '<span style="display:none;">' + _esc(it.emoji) + '</span>'
+        : _esc(it.emoji);
       return ''
         + '<div class="munich-comp-chip ' + it.status + '"' + clk + ' role="button" tabindex="0">'
-        +   '<div class="munich-comp-ico">' + _esc(it.emoji) + '</div>'
+        +   '<div class="munich-comp-ico">' + ico + '</div>'
         +   '<div class="munich-comp-lbl">' + _esc(it.label) + '</div>'
         +   '<div class="munich-comp-status">' + stTxt + '</div>'
         + '</div>';
@@ -53679,43 +54088,34 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (hadWelcome || hadCursor || _hasActivityCursors()) _markSeeded();
     } catch(_){}
   }
+  /* 2026-06-03 — Los 3 mensajes de bienvenida (Anfield / Plantilla /
+     Doble compromiso) se ELIMINAN por completo. El usuario los veía
+     reaparecer en CADA carga porque el flag `mu_seeded_v1` y los cursores
+     no persistían (la cuota de localStorage del juego está llena → los
+     writes fallan en silencio). Como NO se puede confiar en ningún flag
+     para suprimirlos, la única solución robusta es NO crearlos nunca y,
+     además, purgar los que ya estén en la bandeja. */
   function _seed(){
-    if (_seedFlagOn()) return;
-    /* Si el usuario ya ha jugado (hay cursores de actividad) no sembramos
-       aunque la bandeja esté vacía — evita el bucle de bienvenidas. */
-    if (_hasActivityCursors()){ _markSeeded(); return; }
-    /* Doble check: si por la razón que sea la bandeja ya tiene CUALQUIER
-       mensaje en ella, no sembramos (el flag debería cubrirlo, este es
-       el cinturón). El usuario ya tiene contexto — no le metemos
-       3 mensajes nuevos por encima. */
-    var d = _read();
-    if (d && d.msgs && d.msgs.length){ _markSeeded(); return; }
-    _markSeeded();
-    push({ id:'seed-liv-anfield', side:'liv', type:'welcome', icon:'✉️',
-      sender:'Liverpool FC',
-      title:'Bienvenido a Anfield, mister',
-      body:'Aquí recibirás todas las novedades del club: resultados de los partidos, sorteos de copa, lesiones, tarjetas y sanciones, hat-tricks, rachas, apuestas, objetivos y mucho más.' });
-    push({ id:'seed-liv-plantilla', side:'liv', type:'welcome', icon:'📋',
-      sender:'Secretaría Técnica',
-      title:'Plantilla a tu disposición',
-      body:'31 jugadores fichados y listos. Revisa la lista en el menú PLANTILLA.' });
-    /* Body del seed de Francia construido sobre la próxima jornada real
-       del Mundial si el config está cargado, o un texto genérico si aún
-       no — evita "Mundial 2032" estático cuando Francia podría estar
-       jugando otra cosa más adelante. */
-    var fraBody = 'No olvides que también diriges a Les Bleus. Aquí verás las jornadas de Francia, las convocatorias y los resultados de la selección.';
+    _markSeeded();   /* deja sellado el flag por si acaso; NO siembra nada */
+  }
+  /* Borra de la bandeja CUALQUIER mensaje de bienvenida (los 3 clásicos
+     por id o por type:'welcome'). Idempotente y barato: se llama en cada
+     boot, así que aunque se hayan re-creado en una sesión vieja, al
+     siguiente arranque desaparecen para siempre. */
+  function _purgeWelcomes(){
     try {
-      var nxt = (typeof _franciaNextMatch === 'function') ? _franciaNextMatch() : null;
-      if (nxt && nxt.rival){
-        fraBody = 'No olvides que también diriges a Les Bleus. El próximo partido del Mundial es '
-          + (nxt.franceName || 'Francia') + ' vs ' + nxt.rival
-          + ' (J' + nxt.jor + '). Aquí verás todas las jornadas y convocatorias.';
-      }
+      var d = _read();
+      if (!d || !d.msgs || !d.msgs.length) return;
+      var before = d.msgs.length;
+      d.msgs = d.msgs.filter(function(m){
+        if (!m) return false;
+        if (m.type === 'welcome') return false;
+        if (m.id === 'seed-liv-anfield' || m.id === 'seed-liv-plantilla'
+            || m.id === 'seed-fra-bleus') return false;
+        return true;
+      });
+      if (d.msgs.length !== before) _write(d);
     } catch(_){}
-    push({ id:'seed-fra-bleus', side:'fra', type:'welcome', icon:'🇫🇷',
-      sender:'FFF · Selección Francia',
-      title:'Doble compromiso, mister',
-      body: fraBody });
   }
 
   /* ── Limpieza one-shot: avisos "Próximo partido — Descanso/
@@ -53795,25 +54195,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       }
       _write(d);
     }
-    /* Si borramos el seed Francia legacy, re-inyectamos el seed nuevo
-       inmediatamente para que el usuario no se quede sin el welcome de
-       la selección — sin esto el `_seed()` siguiente lo saltaría por
-       tener la bandeja no vacía (Anfield + Plantilla). */
-    if (hadLegacySeed){
-      var fraBody = 'No olvides que también diriges a Les Bleus. Aquí verás las jornadas de Francia, las convocatorias y los resultados de la selección.';
-      try {
-        var nxt = (typeof _franciaNextMatch === 'function') ? _franciaNextMatch() : null;
-        if (nxt && nxt.rival){
-          fraBody = 'No olvides que también diriges a Les Bleus. El próximo partido del Mundial es '
-            + (nxt.franceName || 'Francia') + ' vs ' + nxt.rival
-            + ' (J' + nxt.jor + '). Aquí verás todas las jornadas y convocatorias.';
-        }
-      } catch(_){}
-      push({ id:'seed-fra-bleus', side:'fra', type:'welcome', icon:'🇫🇷',
-        sender:'FFF · Selección Francia',
-        title:'Doble compromiso, mister',
-        body: fraBody });
-    }
+    /* (2026-06-03) Ya NO re-inyectamos el welcome de Francia: las
+       bienvenidas están eliminadas por completo. */
     _setCursor('purged:fra_legacy', '1');
   }
 
@@ -53831,8 +54214,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
   function _bootStage2(){
     _migrateSeedFlag();   /* sella flag mu_seeded_v1 si ya hay welcomes en bandeja */
-    _purgeStaleFrancia(); /* borra seed legacy + callups con "amistoso" antes del seed nuevo */
-    _seed();              /* no-op si el flag ya está */
+    _purgeStaleFrancia(); /* borra seed legacy + callups con "amistoso" */
+    _seed();              /* no-op: las bienvenidas están eliminadas */
+    _purgeWelcomes();     /* borra CUALQUIER bienvenida que siga en la bandeja */
     _purgeStaleRest();
     _refresh();
     /* Engancha hooks tan pronto como las funciones existan. */

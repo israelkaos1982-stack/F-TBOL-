@@ -5714,6 +5714,25 @@ window._showSimProgress = function(opts, onDone){
          espejo de la primera (home/away invertidos), así que la
          vuelta cae automáticamente como visitante para el humano. */
       if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss'){
+        /* Asegurar `cfg.groupFixtures` ANTES de resolver (mismo patrón
+           anti-bug que `_selPair` para Mundial-48). Los fixtures de
+           grupo se construyen LAZY en el render de la pantalla del
+           torneo (`_tourRender`) y NO se persisten, así que tras
+           recargar la página la card del hub los veía `undefined` →
+           `fixs` null → return null → "Sin partido del Liverpool en
+           este día" pese a tener partido en su grupo (bug Mundialito
+           de Clubes 2026-06-03, foto usuario: Liverpool en Grupo H con
+           J1 vs Al Ahli Saudi FC). El builder es determinista
+           (`_tourBuildRoundRobin`), así que los matchKeys coinciden con
+           los de la pantalla. Persistimos solo si construimos algo. */
+        try {
+          if (typeof window._tourEnsureGroupFixtures === 'function'){
+            var _builtGf = window._tourEnsureGroupFixtures(cfg);
+            if (_builtGf && typeof window._tourSave === 'function'){
+              try { window._tourSave(tid, cfg); } catch(_){}
+            }
+          }
+        } catch(_){}
         /* Número de jornadas de grupos (necesario para decidir si el
            "Partido N" del calendario cae en grupos o en KO). Leemos de
            cfg.groupFixtures (cualquier grupo, todos tienen el mismo
@@ -24782,6 +24801,53 @@ window._showSimProgress = function(opts, onDone){
     });
     return fixture.concat(second);
   }
+
+  /* Asegura `cfg.groupFixtures` (todos los grupos) si faltan, con el
+     MISMO builder canónico (`_tourBuildRoundRobin`) y la misma config
+     (groupDoubleLegs / swissRounds) que el render de la pantalla del
+     torneo (`_tourRender`, ~línea 21888). Los fixtures se construían
+     LAZY solo al pintar la pantalla del torneo y NO se persistían, así
+     que tras recargar la card del hub (`_realPair`) los veía
+     `undefined` → devolvía null → "Sin partido del Liverpool en este
+     día" pese a que el humano SÍ tenía partido en su grupo (bug
+     Mundialito de Clubes 2026-06-03, foto usuario: Liverpool en Grupo
+     H con J1 vs Al Ahli Saudi FC, pero la card decía que el cuadro no
+     programa rival). Mismo patrón anti-bug que `_selPair` para
+     Mundial-48 (que usa `_mundialGroupState`).
+     Devuelve true si construyó algún grupo nuevo (para que el caller
+     decida persistir con `_tourSave`).
+     NOTA: NO aplica `_selArrangeHumanByesLast` — ese rearm solo corre
+     para boards de Selecciones (sel-previa/sel-final), que se resuelven
+     por `_selPair`. Los torneos que llegan aquí (verano + Mundialito,
+     board 'verano') NO se reordenan en el render, así que el
+     round-robin plano coincide EXACTAMENTE con los matchKeys
+     `g<g>_<jor>_<mi>` de la pantalla. */
+  function _tourEnsureGroupFixtures(cfg) {
+    try {
+      if (!cfg) return false;
+      if (cfg.format !== 'groups-ko' && cfg.format !== 'league-ko' && cfg.format !== 'swiss') return false;
+      var teams = Array.isArray(cfg.teams) ? cfg.teams : [];
+      if (!teams.length) return false;
+      var fc = cfg.formatConfig || {};
+      var nGroups = fc.groups || 1;
+      var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
+      cfg.groupFixtures = cfg.groupFixtures || {};
+      var built = false;
+      for (var g = 0; g < nGroups; g++) {
+        var slice = teams.slice(g*perGroup, (g+1)*perGroup);
+        if (slice.length < 2) break;
+        if (!cfg.groupFixtures[g]) {
+          var _gFix = _tourBuildRoundRobin(slice.map(function(_, i){ return i; }));
+          if (fc.groupDoubleLegs) _gFix = _tourDoubleFixture(_gFix);
+          if (fc.swissRounds && fc.swissRounds < _gFix.length) _gFix = _gFix.slice(0, fc.swissRounds);
+          cfg.groupFixtures[g] = _gFix;
+          built = true;
+        }
+      }
+      return built;
+    } catch(_){ return false; }
+  }
+  try { window._tourEnsureGroupFixtures = _tourEnsureGroupFixtures; } catch(_){}
 
   /* ─── Standings de un grupo o liga ────────────────────────
      `teams` = array de teamObjs (con .name).

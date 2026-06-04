@@ -4455,6 +4455,41 @@ window._showSimProgress = function(opts, onDone){
         }
       }
       if (!_candidates.length) return null;
+      /* Filtrar a la SELECCIÓN DEL HUB (REGLA 2026-06-04, hermana del
+         fix de `_realPair`/`_slotIsH`): con las 6 selecciones humanas en
+         el mismo Mundial, `_candidates` trae a TODAS y el bucle de abajo
+         devuelve la PRIMERA con partido real ese día → la card de
+         Liverpool/Francia podía pintar el partido de Brasil/España. Cada
+         caja de humano solo debe mostrar SU propia selección: la que
+         dirige el mismo mister que su club (registro MISTERS_HUMANOS,
+         vía `_mhFindMister(_psHumanLogicName()).seleccion`). Si el hub no
+         es canónico o su selección no está en ningún Mundial activo, se
+         mantiene la lista completa (no peor que antes). */
+      try {
+        var _hubClub = (typeof _psHumanLogicName === 'function')
+          ? String(_psHumanLogicName() || '') : '';
+        var _hubMister = (_hubClub && typeof window._mhFindMister === 'function')
+          ? window._mhFindMister(_hubClub) : null;
+        if (_hubMister && _hubMister.seleccion){
+          var _selKey = _psNameKey(_hubMister.seleccion);
+          /* Restricción ESTRICTA: la caja solo muestra SU selección. Si
+             tras filtrar no queda candidato (la selección del hub no
+             está en ningún Mundial activo / fue eliminada), `_candidates`
+             queda vacío → la card cae a "sin partido"/JUGADORES FUERA en
+             vez de mostrar la selección de OTRO mister (que es justo el
+             bug que esta regla corrige). El watchdog/recuperación de
+             `_psRender` sigue cubriendo el caso de Francia presente. */
+          _candidates = _candidates.filter(function(c){
+            try {
+              var _cn = (c.cfg.teams && c.cfg.teams[c.huIdx] && c.cfg.teams[c.huIdx].name) || '';
+              if (_psNameKey(_cn) === _selKey) return true;
+              if (typeof window._canonSelHumana === 'function'
+                  && _psNameKey(window._canonSelHumana(_cn)) === _selKey) return true;
+              return false;
+            } catch(_){ return false; }
+          });
+        }
+      } catch(_){}
       /* Iterar candidatos. Prioridad: REAL match (return inmediato) >
          pending > eliminated > null. Conservamos el mejor fallback por
          si ningún candidato tiene partido real ese día. */
@@ -5434,6 +5469,30 @@ window._showSimProgress = function(opts, onDone){
     var found = null;
     var scannedKeys = [];
     var totalCfgs = 0;
+    /* El watchdog solo debe dispararse por la selección DEL HUB (misma
+       caja/mister). Sin esto, en un Mundial con varias selecciones
+       humanas (Francia + Brasil + …) la card de Liverpool/Francia
+       mostraría RECUPERAR PARTIDO en días en que juega OTRA selección
+       (no la suya). 2026-06-04 (hermano del fix `_selPair`/`_realPair`). */
+    var _hubSelKey = '';
+    try {
+      var _hc = (typeof _psHumanLogicName === 'function') ? String(_psHumanLogicName()||'') : '';
+      var _hm = (_hc && typeof window._mhFindMister === 'function') ? window._mhFindMister(_hc) : null;
+      if (_hm && _hm.seleccion) _hubSelKey = _psNameKey(_hm.seleccion);
+    } catch(_){}
+    function _isHubSel(name){
+      try {
+        if (_hubSelKey){
+          if (_psNameKey(name) === _hubSelKey) return true;
+          if (typeof window._canonSelHumana === 'function'
+              && _psNameKey(window._canonSelHumana(name)) === _hubSelKey) return true;
+          return false;
+        }
+        /* Hub no resoluble → legacy: cualquier humana canónica. */
+        return (typeof window._isHumanSeleccionCanonica === 'function')
+          && window._isHumanSeleccionCanonica(name);
+      } catch(_){ return false; }
+    }
     try {
       var cache = window._TOUR_CACHE || {};
       for (var k in cache){
@@ -5445,7 +5504,7 @@ window._showSimProgress = function(opts, onDone){
             var t = c.teams[ti];
             if (!t || !t.name) continue;
             try {
-              if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(t.name)){
+              if (_isHubSel(t.name)){
                 found = { cfgId:k, humanName:t.name, source:'cache' };
               }
             } catch(_){}
@@ -5470,7 +5529,7 @@ window._showSimProgress = function(opts, onDone){
             var t2 = cfg.teams[tj];
             if (!t2 || !t2.name) continue;
             try {
-              if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(t2.name)){
+              if (_isHubSel(t2.name)){
                 found = { cfgId:key.replace(/^tour_/,'').replace(/_v1$/,''), humanName:t2.name, source:'localStorage', key:key };
                 break;
               }
@@ -5855,16 +5914,14 @@ window._showSimProgress = function(opts, onDone){
       if (tid && d.tour !== tid && !_isMundialitoDay){
         try {
           var _hasHuman = false;
-          var _humanKey = null;
-          try { _humanKey = _psNameKey(_psHumanLogicName()); } catch(_){}
+          /* Solo persistimos d.tour si el CLUB DEL HUB está en el torneo
+             (vía `_slotIsH`, hub-específico). Con varias cajas humanas,
+             `_tt.isHuman` plano marcaba cualquier humano (Real Madrid…)
+             y podía fijar d.tour a un torneo donde el hub ni juega.
+             2026-06-04. */
           if (Array.isArray(cfg.teams)){
             for (var _ti = 0; _ti < cfg.teams.length; _ti++){
-              var _tt = cfg.teams[_ti];
-              if (!_tt) continue;
-              if (_tt.isHuman){ _hasHuman = true; break; }
-              if (_tt.name && _humanKey && _psNameKey(_tt.name) === _humanKey){
-                _hasHuman = true; break;
-              }
+              if (_slotIsH(cfg.teams[_ti])){ _hasHuman = true; break; }
             }
           }
           if (_hasHuman){
@@ -5873,20 +5930,44 @@ window._showSimProgress = function(opts, onDone){
           }
         } catch(_){}
       }
-      /* Fuente de verdad del slot humano: la bandera .isHuman que el
-         módulo de torneos pone al asignar el slot PENDIENTE dorado
-         (la misma flag que renderiza 👤 en la UI). Fallback por
-         nombre para data legacy sin .isHuman. */
+      /* ¿Este slot es el del HUMANO DE ESTA CAJA (el del hub)?
+         REGLA 2026-06-04 (foto usuario: Liverpool/Francia mostraba
+         "RB Leipzig vs Real Madrid" en el Joan Gamper): cada caja de
+         humano debe mostrar SOLO los partidos de SU club. Con varias
+         cajas humanas (Liverpool, Real Madrid, Arsenal, …) el torneo
+         marca a TODAS con `isHuman:true`, así que `if (t.isHuman)
+         return true` cogía a la PRIMERA que tropezaba (Real Madrid) en
+         vez del club del hub. El discriminador correcto es el NOMBRE
+         del club del hub (`_psHumanLogicName`) + el MISTER (registro
+         MISTERS_HUMANOS): el slot es del hub solo si lo dirige el mismo
+         mister que al club del hub. `t.isHuman` por sí solo YA NO basta. */
       function _slotIsH(t){
         if (!t) return false;
-        if (t.isHuman) return true;
         var nm = t.name;
         if (!nm || nm === 'PENDIENTE') return false;
         var k = _psNameKey(nm);
-        if (k === _psNameKey(_psHumanLogicName())) return true;
+        var hubName = _psHumanLogicName();
+        /* Match directo por nombre del club del hub (+ aliases legacy
+           del slot renombrado Bayern → Liverpool). */
+        if (k === _psNameKey(hubName))             return true;
         if (k === _psNameKey('Bayern Munich'))     return true;
         if (k === _psNameKey('Bayern Múnich'))     return true;
         if (k === _psNameKey('Bayern'))            return true;
+        /* `isHuman` solo cuenta si lo dirige el MISMO mister que el
+           club del hub (excluye Real Madrid/Arsenal/… que también son
+           humanos en el mismo torneo). Si el hub no es un humano
+           canónico del registro, caemos al comportamiento legacy
+           (isHuman) para no romper setups no canónicos. */
+        if (t.isHuman){
+          try {
+            var _hubMister = (typeof window._mhFindMister === 'function')
+              ? window._mhFindMister(hubName) : null;
+            if (!_hubMister) return true; /* hub no canónico → legacy */
+            if (typeof window._mhSameMister === 'function'
+                && window._mhSameMister(hubName, nm)) return true;
+            return false; /* isHuman pero de OTRO mister → no es del hub */
+          } catch(_){ return true; }
+        }
         return false;
       }
 

@@ -80,6 +80,35 @@ m = tour_cfg_merge(json.dumps(old), new)
 check("torneo: entrante stale con otro sorteo NO machaca al servidor",
       [t["name"] for t in m["teams"]] == ["Brasil", "Japon"])
 
+# RESET deliberado: el usuario reinicia (results={} + resetAt) → el
+# reinicio GANA al anti-wipe (bug "Road Copa América/Asia" 2026-06-04).
+old = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 0},
+            "g0_0_1": {"played": True, "a": 2, "b": 2}},
+           "2026-06-03T10:00:00.000Z")
+new = _cfg({}, "2026-06-04T10:00:00.000Z")
+new["resetAt"] = 1759000000000
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: RESET deliberado borra los resultados viejos (no resucitan)",
+      m["results"] == {} and m.get("resetAt") == 1759000000000)
+
+# Tras el reset, un partido NUEVO se conserva; los viejos (copia stale sin
+# resetAt) NO resucitan.
+old = _cfg({"g0_0_0": {"played": True, "a": 9, "b": 9}}, "2026-06-04T09:00:00.000Z")
+new = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 0}}, "2026-06-04T11:00:00.000Z")
+new["resetAt"] = 1759000000000
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: post-reset gana la copia con resetAt (partido nuevo)",
+      m["results"]["g0_0_0"]["a"] == 1 and m.get("resetAt") == 1759000000000)
+
+# Copia STALE (con resetAt viejo) tras un reset más reciente del servidor:
+# sus partidos no vuelven.
+old = _cfg({}, "2026-06-04T11:00:00.000Z")
+old["resetAt"] = 1759000000000  # servidor ya reiniciado
+new = _cfg({"g0_0_0": {"played": True, "a": 5, "b": 5}}, "2026-06-04T08:00:00.000Z")  # stale sin reset
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: copia stale NO resucita partidos tras un reset del servidor",
+      m["results"] == {})
+
 # Sin copia previa en servidor → devuelve el entrante tal cual.
 m = tour_cfg_merge(None, _cfg({"k": {"played": True}}))
 check("torneo: sin old devuelve el entrante", "k" in m["results"])

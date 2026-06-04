@@ -59,6 +59,33 @@ window.pG = function(fn) {
   </div>
 </div>
 
+<!-- ══ PIN DIGITAL para ACCEDER al editor de OBJETIVOS DEL CLUB (PIN 7477) —
+     fuera de cualquier .screen para que position:fixed se ancle al viewport
+     (mismo patrón que #pin-modal). ══ -->
+<div id="mobj-pin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999999;align-items:center;justify-content:center;">
+  <div style="background:linear-gradient(160deg,#0d1117 0%,#161b22 100%);border:1px solid rgba(95,200,200,.25);border-radius:16px;padding:28px 24px 20px;width:280px;max-width:90vw;text-align:center;box-shadow:0 0 40px rgba(0,0,0,.8);">
+    <div style="font-family:Oswald,sans-serif;font-size:15px;letter-spacing:3px;color:rgba(191,239,240,.8);margin-bottom:6px;">🔐 EDITAR OBJETIVOS</div>
+    <div style="font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.4);margin-bottom:16px;">Introduce el PIN para acceder</div>
+    <div id="mobj-pin-display" style="font-family:'Courier New',monospace;font-size:28px;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:10px 16px;margin-bottom:16px;min-height:52px;line-height:1.2;letter-spacing:12px;">····</div>
+    <div id="mobj-pin-err" style="display:none;color:#ff5555;font-size:11px;margin-bottom:10px;font-family:Rajdhani,sans-serif;letter-spacing:1px;">PIN INCORRECTO</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('1')">1</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('2')">2</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('3')">3</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('4')">4</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('5')">5</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('6')">6</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('7')">7</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('8')">8</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('9')">9</button>
+      <button class="pin-key pin-key-del" onclick="window._mobjPinDel&&window._mobjPinDel()">⌫</button>
+      <button class="pin-key" onclick="window._mobjPinKey&&window._mobjPinKey('0')">0</button>
+      <button class="pin-key pin-key-ok" onclick="window._mobjPinOk&&window._mobjPinOk()">✓</button>
+    </div>
+    <button onclick="window._mobjPinClose&&window._mobjPinClose()" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;font-family:Rajdhani,sans-serif;letter-spacing:1.5px;cursor:pointer;padding:4px 8px;">CANCELAR</button>
+  </div>
+</div>
+
 <!-- ══ MENÚ DE TRATAMIENTO RÁPIDO (inyecciones de lesionados) — fuera de cualquier
      .screen para que (1) se pueda abrir desde la plantilla `s-bayern-plantilla`
      pulsando un nombre lesionado, no solo desde el hub `s-munich`; y (2)
@@ -50132,10 +50159,58 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   window.renderObjectivesFor = function(cid, team){ return renderAll(cid, team, false); };
 
+  /* ── PIN DIGITAL (7477) para acceder al editor ──
+     El acceso al modo edición está protegido por un PIN digital.
+     Una vez desbloqueado, permanece abierto durante la sesión
+     (`window.__munichObjPinOk`). El PIN solo se pide al ENTRAR a
+     edición, nunca al guardar. */
+  var MOBJ_PIN = '7477';
+  var _mobjBuf = '';
+  function _mobjRender(){
+    var d = document.getElementById('mobj-pin-display');
+    if (d) d.textContent = _mobjBuf.length ? new Array(_mobjBuf.length + 1).join('●') + new Array(Math.max(0, 4 - _mobjBuf.length) + 1).join('·') : '····';
+  }
+  window._mobjPinKey = function(k){
+    if (_mobjBuf.length >= 4) return;
+    _mobjBuf += k;
+    var er = document.getElementById('mobj-pin-err'); if (er) er.style.display = 'none';
+    _mobjRender();
+    if (_mobjBuf.length === 4) window._mobjPinOk();
+  };
+  window._mobjPinDel = function(){
+    _mobjBuf = _mobjBuf.slice(0, -1);
+    _mobjRender();
+  };
+  window._mobjPinClose = function(){
+    _mobjBuf = '';
+    _mobjRender();
+    var m = document.getElementById('mobj-pin-modal'); if (m) m.style.display = 'none';
+    var er = document.getElementById('mobj-pin-err'); if (er) er.style.display = 'none';
+  };
+  window._mobjPinOk = function(){
+    if (_mobjBuf === MOBJ_PIN){
+      window.__munichObjPinOk = true;
+      window._mobjPinClose();
+      window.athObjToggleEdit();           /* re-entra: ahora ya desbloqueado */
+    } else {
+      _mobjBuf = '';
+      _mobjRender();
+      var er = document.getElementById('mobj-pin-err'); if (er) er.style.display = 'block';
+    }
+  };
+
   /* ── Toggle del modo edición de cantidades ── */
   window.athObjToggleEdit = function(){
     var editing = !window.__munichObjEditing;
     if (editing) {
+      /* Gate: acceder al editor requiere el PIN digital 7477. */
+      if (!window.__munichObjPinOk){
+        _mobjBuf = '';
+        _mobjRender();
+        var em = document.getElementById('mobj-pin-modal'); if (em) em.style.display = 'flex';
+        var ee = document.getElementById('mobj-pin-err'); if (ee) ee.style.display = 'none';
+        return;                             /* no entra hasta validar PIN */
+      }
       window.__munichObjEditing = true;
       renderAll('ath-obj-club', 'Liverpool', true);
     } else {

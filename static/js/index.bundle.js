@@ -11545,6 +11545,18 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       };
       if (RECOPA_RD[rm[1].toLowerCase()]) return RECOPA_RD[rm[1].toLowerCase()];
     }
+    /* Copa Intercontinental: matchKey `inter_<phase>_<idx>` (q/s/f).
+       Mapeamos cada ronda a la fila EXACTA del calendario para que la
+       previa muestre la fecha real (02/05/08 Dic). 2026-06-04. */
+    var im = String(matchKey || '').match(/^inter_([a-z]+)_\d+$/i);
+    if (im) {
+      var INTER_RD = {
+        q: 'Intercontinental — Cuartos',
+        s: 'Intercontinental — Semis',
+        f: 'Intercontinental — FINAL 🏆'
+      };
+      if (INTER_RD[im[1].toLowerCase()]) return INTER_RD[im[1].toLowerCase()];
+    }
     var MAP = {
       'copa':'Copa del Rey — 1/128','copa-fin':'FINAL COPA DEL REY',
       'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',

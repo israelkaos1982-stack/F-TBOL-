@@ -38233,24 +38233,24 @@ https://api.sofascore.app/api/v1/team/44/image
     // los 30 jugadores por defecto. Sin plantilla, applyMatchStats hace
     // early-return y la caja del club queda «Sin jugadores»/a 0 aunque el
     // equipo juegue sus 38 partidos (2026-06-04).
-    var _changedRoster = false;
-    /* Durante la sim MASIVA de las 51 ligas (`_restoSimBulkInProgress`)
-       NO sembramos plantillas: hacerlo en ~1000 equipos a la vez podría
-       reventar la cuota de localStorage. El sembrado va en la sim
-       INDIVIDUAL de cada liga (flujo normal) y al abrir la caja del club,
-       ambos acotados. */
+    // IMPORTANTE: NO guardamos aquí en medio de la sim. El sembrado solo
+    // muta `data.teams[].players` en memoria; el `saveData` final de
+    // `_finishSim` ya persiste rosters + resultados juntos. Un saveData
+    // intermedio (con la gate de sim aún sin activar) disparaba un POST
+    // síncrono al servidor con `data.results` en su estado PRE-sim (vacío
+    // tras un reset), y ese estado vacío competía con el fetchData de la
+    // navegación → la clasificación salía toda a CERO (bug 2026-06-04).
     var _bulkSim = !!window._restoSimBulkInProgress;
     data.teams.forEach(function(t){
       if (!_bulkSim && t && (!t.players || !t.players.length)) {
         try {
           var _hy = _lextHydrateFromSquadRegistry(t.name);
-          if (_hy && _hy.length) { t.players = _hy; _changedRoster = true; }
+          if (_hy && _hy.length) { t.players = _hy; }
         } catch(_){}
-        try { if (_lextEnsureDefaultRoster(t)) _changedRoster = true; } catch(_){}
+        try { _lextEnsureDefaultRoster(t); } catch(_){}
       }
       (t.players||[]).forEach(resetPlayerStats);
     });
-    if (_changedRoster) { try { saveData(slug, data); } catch(_){} }
     data.results = [];
     var ts = _capRoundRobin(data.teams.slice());
     /* Lista plana de cruces. Por defecto doble round-robin (i,j) con

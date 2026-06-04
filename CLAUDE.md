@@ -1,5 +1,51 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## «Reiniciar Temporada» NUNCA borra Derbys / Trofeos / Plantillas (obligatorio, 2026-06-04)
+
+**Regla usuario 2026-06-04 (3 fotos)**: el botón **«Reiniciar
+Temporada»** (`window._bayernEditValuesResetCal` en `misc_body_1.html`,
+modal admin PIN 747) **JAMÁS** debe reiniciar/borrar:
+
+1. **Histórico de Derbys** — `bayern_derbys_seasons_v1` +
+   `bayern_derbys_matches_v1` (pantalla `s-bayern-derbys`).
+2. **Vitrina de Trofeos** — `bayern_trofeos_v1` (pantalla
+   `s-bayern-trofeos`). Es un registro PERSISTENTE aditivo gestionado
+   por el admin, **NO** se recalcula desde `cfg.results`.
+3. **Plantillas del CLUB y la SELECCIÓN** — el club vive dentro de
+   `ligaExt_liga-ea-sports.teams[].players` (roster + medias + flags);
+   la selección en `selecciones_squad_v1`. **Solo** cambian si el admin
+   las edita a mano.
+
+### Qué SÍ limpia el reset (correcto, no tocar su scope)
+
+Cursor del día (`liverpool_preseason_v1`), objetivos del club, HUD
+(💼/🪙 a 0), **resultados** de los slots de torneo (`tour_*_v1`:
+`results`/`bracket`/`koBracket`/`groupFixtures`/`fixture`/cursores/
+`_prizesPaid` — **conservando `teams`/`format`/`formatConfig`**) y
+`pend_hvh_deferred_v1`. NO toca `ligaExt_*` ni las 4 claves protegidas.
+
+### Blindaje implementado
+
+`_bayernEditValuesResetCal` hace **snapshot ANTES** del reset de
+`_PRESERVE_KEYS = ['bayern_derbys_seasons_v1','bayern_derbys_matches_v1',
+'bayern_trofeos_v1','selecciones_squad_v1']` y los **restaura AL FINAL**
+(solo si cambiaron). Defensa en profundidad: aunque un cambio futuro
+añada por error un borrado, estas claves se devuelven a su valor previo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** añadir al reset cualquier `removeItem`/vaciado de las 4
+   claves protegidas o de `ligaExt_liga-ea-sports` (donde vive la
+   plantilla del club). Si hay que limpiar algo nuevo de temporada, va
+   en su propia clave `tour_*`/cursor, nunca en estas.
+2. **PROHIBIDO** quitar el snapshot+restore de `_PRESERVE_KEYS`. Toda
+   clave nueva que represente histórico/palmarés/plantilla del usuario
+   debe AÑADIRSE a `_PRESERVE_KEYS`, no quedar expuesta al reset.
+3. La plantilla del CLUB NO se mete en `_PRESERVE_KEYS` (congelaría la
+   clasificación de Liga); se protege porque el reset no toca
+   `ligaExt_*`. Si algún día el reset SÍ debe limpiar resultados de Liga,
+   hacerlo preservando `teams[].players` (roster) explícitamente.
+
 ## La card del hub muestra SOLO el club + selección de SU caja (obligatorio, 2026-06-04)
 
 **Bug (foto usuario 2026-06-04, caja «Liverpool/Francia»)**: la card

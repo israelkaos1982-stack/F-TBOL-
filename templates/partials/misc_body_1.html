@@ -48611,6 +48611,24 @@ https://api.sofascore.app/api/v1/team/44/image
      son config del admin → se conservan. */
   window._bayernEditValuesResetCal = function(){
     if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados (pretemporada, torneos de verano y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nLos Objetivos del Club se DESMARCAN (✅ a cero) y sus ganancias 💼/🪙 vuelven a 0.\n\nLos Puntos de Fisio 💊, las plantillas y la configuración de los torneos se conservan.')) return;
+    /* GARANTÍA (regla usuario 2026-06-04): «Reiniciar Temporada» JAMÁS
+       debe borrar el HISTÓRICO DE DERBYS, la VITRINA DE TROFEOS ni las
+       PLANTILLAS (club + selección). Son datos persistentes que el admin
+       gestiona a mano y sobreviven a TODAS las temporadas (solo cambian
+       si el admin los edita). Aunque el reset actual NO toca estas
+       claves, snapshotamos su valor ANTES de limpiar y lo restauramos AL
+       FINAL: así ni este flujo ni un cambio futuro pueden vaciarlas por
+       accidente.
+       NOTA: la plantilla del CLUB vive DENTRO de ligaExt_liga-ea-sports
+       (que el reset tampoco toca); NO la metemos en el snapshot para no
+       congelar de paso la clasificación/resultados de la Liga EA. La
+       plantilla de la SELECCIÓN sí es una clave propia
+       (selecciones_squad_v1) y se protege aquí. */
+    var _PRESERVE_KEYS = ['bayern_derbys_seasons_v1','bayern_derbys_matches_v1','bayern_trofeos_v1','selecciones_squad_v1'];
+    var _preserveSnap = {};
+    _PRESERVE_KEYS.forEach(function(k){
+      try { var v = localStorage.getItem(k); if (v != null) _preserveSnap[k] = v; } catch(_){}
+    });
     try { if (typeof window._psResetCalendar === 'function') window._psResetCalendar(); } catch(_){}
     /* Objetivos del Club → desmarcar ✅ + contadores a 0 (las
        ganancias 💼/🪙 las pone a 0 el bloque HUD de abajo). */
@@ -48732,6 +48750,22 @@ https://api.sofascore.app/api/v1/team/44/image
             body: _body, keepalive: true }).catch(function(){});
         }
       } catch(_){}
+    } catch(_){}
+
+    /* RESTAURACIÓN defensiva de las claves protegidas (ver snapshot
+       arriba): si alguna se vació/borró/cambió durante el reset (no
+       debería, pero defensa en profundidad), la devolvemos a su valor
+       previo. Solo escribe si cambió → no toca el server si no hace
+       falta. Histórico Derbys, Vitrina Trofeos y Plantilla Selección
+       quedan SIEMPRE intactos tras Reiniciar Temporada. */
+    try {
+      Object.keys(_preserveSnap).forEach(function(k){
+        var cur = null;
+        try { cur = localStorage.getItem(k); } catch(_){}
+        if (cur !== _preserveSnap[k]){
+          try { localStorage.setItem(k, _preserveSnap[k]); } catch(_){}
+        }
+      });
     } catch(_){}
 
     /* Repinta las 3 cajas inmediatamente para que el usuario vea el

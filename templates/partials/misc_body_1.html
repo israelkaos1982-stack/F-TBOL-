@@ -2479,6 +2479,13 @@ window._showSimProgress = function(opts, onDone){
       return 'Francia';
     }
     function _hubClubCrest(){
+      /* Fuente única canónica del escudo del hub (= el mismo que pinta la
+         card del hub vía ps-shield). _psHumanShield() resuelve override del
+         menú → reemplazo Liga EA → fallback Liverpool, así que NUNCA usa el
+         escudo STALE del Bayern guardado en la fila del slot renombrado
+         (bug 2026-06-04: la caja Liverpool-Francia mostraba el escudo del
+         Bayern porque _findBayernRow().shield seguía apuntando al Bayern). */
+      try { if (typeof window._psHumanShield === 'function'){ var s = window._psHumanShield(); if (s) return s; } } catch(_){}
       try { var t = _findBayernRow(); if (t && (t.shield || t.img)) return String(t.shield || t.img); } catch(_){}
       try { if (window.getTeamLogoUrl){ var u = window.getTeamLogoUrl(_hubTeamName()); if (u) return u; } } catch(_){}
       return '';

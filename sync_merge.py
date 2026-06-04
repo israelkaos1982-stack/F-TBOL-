@@ -139,15 +139,30 @@ def tour_cfg_merge(old_json, new_value):
     if new_sig != old_sig:
         return new_value if _iso(new_value.get("updatedAt")) >= _iso(old.get("updatedAt")) else old
 
-    # Mismo sorteo → UNIÓN de resultados (nadie pierde su partido).
+    # Reinicio deliberado (tombstone con sello ms). El usuario que pulsa
+    # "RESET" del torneo sella `resetAt = Date.now()` y sube results={}.
+    # El reinicio DEBE ganar al anti-wipe: si no, la unión devolvía los
+    # resultados viejos y el torneo "no se reiniciaba" (bug 2026-06-04,
+    # "Road Copa América/Asia"). Regla: solo cuentan los resultados de la
+    # copia que conoce el reset MÁS reciente; una copia stale (resetAt
+    # menor) trae partidos previos al reset → se descartan.
+    new_reset = _num(new_value.get("resetAt"))
+    old_reset = _num(old.get("resetAt"))
+    eff_reset = max(new_reset, old_reset)
+
+    # Mismo sorteo → UNIÓN de resultados (nadie pierde su partido), salvo
+    # los de una copia anterior a un reset más reciente.
     old_res = old.get("results") if isinstance(old.get("results"), dict) else {}
     new_res = new_value.get("results") if isinstance(new_value.get("results"), dict) else {}
-    merged = dict(old_res)
-    for mk, r in new_res.items():
-        if mk in merged:
-            merged[mk] = _pick_result(merged[mk], r)
-        else:
-            merged[mk] = r
+    merged = {}
+    if old_reset >= eff_reset:
+        merged.update(old_res)
+    if new_reset >= eff_reset:
+        for mk, r in new_res.items():
+            if mk in merged:
+                merged[mk] = _pick_result(merged[mk], r)
+            else:
+                merged[mk] = r
 
     # Base = el documento más reciente (para cursores/flags/colores), pero
     # con los resultados UNIDOS y el updatedAt máximo.
@@ -156,6 +171,10 @@ def tour_cfg_merge(old_json, new_value):
     out = dict(base)
     out["results"] = merged
     out["updatedAt"] = new_up if new_up >= old_up else old_up
+    # Persistimos el sello de reset máximo para que el reinicio converja
+    # cross-device (cualquier copia stale futura lo respeta y no resucita).
+    if eff_reset > 0:
+        out["resetAt"] = int(eff_reset)
     return out
 
 

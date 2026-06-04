@@ -26464,6 +26464,13 @@ window._showSimProgress = function(opts, onDone){
       var cfg4 = _tourLoadCachedSync(tid4);
       if (!cfg4) return;
       cfg4.results = {};
+      /* Sello de reinicio deliberado (tombstone ms). El servidor
+         (`tour_cfg_merge`) hace UNIÓN de resultados por matchKey para no
+         perder partidos entre dispositivos; sin este sello la unión
+         devolvía los resultados viejos y el torneo "no se reiniciaba"
+         (bug 2026-06-04, "Road Copa América/Asia"). Con `resetAt` el
+         reinicio GANA al anti-wipe y converge cross-device. */
+      cfg4.resetAt = Date.now();
       if (cfg4.format === 'ko' || cfg4.format === 'ko-2leg') {
         cfg4.bracket = [(cfg4.teams||[]).slice()];
         cfg4.currentRound = 0;

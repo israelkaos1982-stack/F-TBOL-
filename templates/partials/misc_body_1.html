@@ -56569,6 +56569,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var goalsP = {};
     events.forEach(function(ev){
       if (!ev || ev.team !== livSide) return;
+      if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
       if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
         var nm = ev.name || ev.player;
         if (nm) goalsP[nm] = (goalsP[nm] || 0) + 1;
@@ -56593,6 +56594,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var scored = {};
     events.forEach(function(ev){
       if (!ev || ev.team !== livSide) return;
+      if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
       if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
         var nm = ev.name || ev.player;
         if (nm) scored[nm] = true;
@@ -57326,6 +57328,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var fgoals = {};
         events.forEach(function(ev){
           if (!ev || ev.team !== fLetter) return;
+          if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
           if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
             var nm = _evPlayerName(ev);
             if (nm) fgoals[nm] = (fgoals[nm] || 0) + 1;

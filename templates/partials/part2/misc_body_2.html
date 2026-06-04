@@ -17996,6 +17996,69 @@
     }
   };
 
+  /* ── PAGAR SIMULACIÓN del partido del HUB en una jornada de Liga ──
+     (2026-06-04). Simula UN partido concreto (el del Liverpool / slot
+     humano del hub) en una jornada de Liga EA Sports con el MISMO
+     motor 4-ejes (`_simIAvsIAWithContext`) y la MISMA persistencia que
+     el batch IA-vs-IA (`simularJornadaIA`): resultado + eventos en el
+     store de Liga (`loadResults`/`saveResults`, key `rKey`),
+     `registrarLigaPlayerStats`, lesiones, decremento de bajas y
+     reconstrucción de clasificación. Se diferencia de
+     `simularJornadaIA` SOLO en que NO salta el partido del humano —
+     justo el que el usuario decide simular pagando. Lo invoca la caja
+     «🤖 PAGAR SIMULACIÓN · 50🪙» de la card del hub (`_cardNonTour` en
+     misc_body_1.html) en los días de Liga, donde el atajo de pago no
+     existía (solo CONTINUAR, que saltaba el día sin jugar). Devuelve
+     el resultado guardado `{gh,ga,events,mvp,mvpTeam}` o null. */
+  window._simHubLigaMatch = function (j, home, away) {
+    try {
+      if (!(j > 0) || !home || !away) return null;
+      var results = loadResults();
+      var key = rKey(j, home, away);
+      if (results[key]) return results[key]; /* ya jugado/simulado */
+      var simScore = (typeof _simIAvsIAWithContext === 'function')
+        ? _simIAvsIAWithContext(home, away, j)
+        : _fallbackIAvsIAScore(home, away);
+      var evtData = genMatchEventsEnhanced(home, away, simScore.gh, simScore.ga, simScore);
+      /* Recalcular marcador real desde los eventos (igual que el batch
+         IA: pen/falta/propia + exclusión de goles anulados por VAR). */
+      var actualGh = 0, actualGa = 0;
+      evtData.events.forEach(function (ev) {
+        if (ev._varAnulado) return;
+        if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
+          if (ev.team === 'a') actualGh++; else actualGa++;
+        } else if (ev.type === 'propia') {
+          if (ev.team === 'a') actualGa++; else actualGh++;
+        }
+      });
+      results[key] = { gh: actualGh, ga: actualGa, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+      saveResults(results);
+      if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
+        window.registrarLigaPlayerStats(key, home, away, evtData.events, evtData.mvp, evtData.mvpTeam);
+      }
+      try {
+        if (typeof window._registrarLesionesDesdeEventos === 'function') {
+          window._registrarLesionesDesdeEventos(evtData.events, home, away);
+        }
+      } catch(_){}
+      try {
+        if (window.LESION_STORE_UTILS && typeof window.LESION_STORE_UTILS.decrementarPorPartido === 'function') {
+          window.LESION_STORE_UTILS.decrementarPorPartido(home, 'liga');
+          window.LESION_STORE_UTILS.decrementarPorPartido(away, 'liga');
+        }
+      } catch(_){}
+      actualizarDom('l-j' + j, home, away, actualGh, actualGa);
+      actualizarDom('cl-j' + j, home, away, actualGh, actualGa);
+      try { if (typeof populateCalendar === 'function') populateCalendar(); } catch(_){}
+      try { if (typeof refreshMainCalendarCards === 'function') refreshMainCalendarCards(); } catch(_){}
+      if (typeof window.buildLigaClas      === 'function') window.buildLigaClas();
+      if (typeof window.buildIAresults     === 'function') window.buildIAresults();
+      if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+      try { if (typeof _updateLigaJornadaStatus === 'function') _updateLigaJornadaStatus(); } catch(_){}
+      return results[key];
+    } catch(_) { return null; }
+  };
+
   /* botón "Simular TODAS las jornadas IA" (sync — kept for legacy
      callers; el async wrapper de bgRun lo prefiere). */
   window.simularTodasJornadasIA = function () {

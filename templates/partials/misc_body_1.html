@@ -14121,7 +14121,7 @@ window._showSimProgress = function(opts, onDone){
   <div class="jblock"><button id="mcl-box-ko2" class="jbtn c-mundialito" data-mcl-view="ko2" onclick="window._mclHubGo&&window._mclHubGo('ko2')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Semis</span><span id="mcl-ind-ko2" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">🔒</span></button></div>
   <div class="jblock"><button id="mcl-box-ko3" class="jbtn c-mundialito" data-mcl-view="ko3" onclick="window._mclHubGo&&window._mclHubGo('ko3')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span id="mcl-ind-ko3" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">🔒</span></button></div>
   <!-- 📊 Estadísticas -->
-  <div class="submenu-card sc-mundialito-stats" style="margin-top:10px;background:linear-gradient(135deg,#2a1a00 0%,#4a3308 12%,#806008 28%,#c8a028 45%,#ffd700 55%,#fff080 60%,#ffd700 65%,#c8a028 75%,#806008 88%,#2a1a00 100%) !important;border:1.5px solid #ffd700 !important;box-shadow:0 4px 22px rgba(255,215,0,.45),inset 0 1px 0 rgba(255,255,255,.18) !important;" onclick="go('s-mundial-stats')">
+  <div class="submenu-card sc-mundialito-stats" style="margin-top:10px;background:linear-gradient(135deg,#2a1a00 0%,#4a3308 12%,#806008 28%,#c8a028 45%,#ffd700 55%,#fff080 60%,#ffd700 65%,#c8a028 75%,#806008 88%,#2a1a00 100%) !important;border:1.5px solid #ffd700 !important;box-shadow:0 4px 22px rgba(255,215,0,.45),inset 0 1px 0 rgba(255,255,255,.18) !important;" onclick="go('s-mundial-stats'); if(window._mclSchedule)window._mclSchedule(); else if(window._renderMundialitoStats){setTimeout(window._renderMundialitoStats,0);setTimeout(window._renderMundialitoStats,260);}">
     <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
   </div>
 </div>
@@ -14864,51 +14864,90 @@ window._showSimProgress = function(opts, onDone){
     });
   }
   window._renderMundialitoStats = _renderMundialitoStats;
+  /* Programa el render (2 pasadas: inmediata + a 260ms tras hidratación).
+     Debounced: las tres rutas de disparo (onclick de la card, wrap de
+     `window.go` y MutationObserver) pueden coincidir → coalescen en UNA
+     sola pasada por ventana en vez de re-renderizar 6 veces. */
+  var _mclT0 = null, _mclT1 = null;
+  function _mclSchedule(){
+    if (_mclT0) clearTimeout(_mclT0);
+    if (_mclT1) clearTimeout(_mclT1);
+    _mclT0 = setTimeout(function(){ _mclT0 = null; try { _renderMundialitoStats(); } catch(_){} }, 0);
+    _mclT1 = setTimeout(function(){ _mclT1 = null; try { _renderMundialitoStats(); } catch(_){} }, 260);
+  }
+  window._mclSchedule = _mclSchedule;
   var _og = window.go;
   if (typeof _og === 'function' && !_og._mclStatsPatched) {
     window.go = function(id){
       var r = _og.apply(this, arguments);
-      if (id === 's-mundial-stats') {
-        setTimeout(_renderMundialitoStats, 0);
-        setTimeout(_renderMundialitoStats, 200);
-      }
+      if (id === 's-mundial-stats') _mclSchedule();
       return r;
     };
     window.go._mclStatsPatched = true;
   }
-  /* TRIGGER ROBUSTO (2026-06-03) — el parche de `window.go` de arriba
-     NO basta: `index.bundle.js` declara `function go(id)` (hoisted) y
-     RE-ENVUELVE `window.go` varias veces DESPUÉS de que este partial se
-     evalúe, así que el wrap `_mclStatsPatched` se pierde y la pantalla
-     nunca renderizaba — se quedaba congelada en "Calculando
-     estadísticas…" pese a tener la fase de grupos simulada (foto usuario
-     2026-06-03). Mismo patrón documentado en `_watchScreens` y en
-     `STATS_SCREENS`: un MutationObserver sobre la clase `.active` de la
-     pantalla dispara el render SIN depender de `window.go`. Sobrevive a
-     cualquier redefinición del router y a la restauración de pestaña al
-     recargar. */
+  /* TRIGGER ROBUSTO (2026-06-04) — DOS mecanismos independientes, porque
+     ni el parche de `window.go` de arriba ni el MutationObserver diferido
+     a DOMContentLoaded bastaban: el usuario seguía viendo la pantalla
+     congelada en "Calculando estadísticas…" pese a tener el partido de la
+     IA jugado con goles (foto 2026-06-04, Bayer Leverkusen 2-3 Belgrano).
+
+     Causa: (a) este partial se evalúa ANTES que `index.bundle.js` (que
+     re-define `window.go` en su módulo), así que el wrap de arriba corre
+     con `window.go` aún `undefined` → no se instala; (b) el observer se
+     montaba SOLO en DOMContentLoaded.
+
+     Fix robusto:
+       1. Observer SÍNCRONO (el `<div id="s-mundial-stats">` ya existe —
+          está justo encima de este script), EXACTAMENTE como el patrón
+          probado de `STATS_SCREENS` (que sí funciona). Sin depender de
+          DOMContentLoaded.
+       2. Re-wrap de `window.go` en DOMContentLoaded, que corre DESPUÉS de
+          que el bundle bloqueante haya ejecutado y fijado su `window.go`
+          final (`navigateWithRetry`). Como el bundle ya no re-envuelve
+          tras el module-eval, este wrap sobrevive y captura TODA
+          navegación a `s-mundial-stats` (incluida la card del hub
+          `onclick="go('s-mundial-stats')"`). Es el camino que NO depende
+          del observer. */
+  var _mclWatchSetup = false;
   function _watchMundialitoStats(){
+    if (_mclWatchSetup) return;
     var el = document.getElementById('s-mundial-stats');
     if (!el) return;
+    _mclWatchSetup = true;
     var wasActive = el.classList.contains('active');
     if (wasActive) { try { _renderMundialitoStats(); } catch(_){} }
     if (typeof MutationObserver !== 'function') return;
     try {
       var mo = new MutationObserver(function(){
         var nowActive = el.classList.contains('active');
-        if (nowActive && !wasActive) {
-          setTimeout(_renderMundialitoStats, 0);
-          setTimeout(_renderMundialitoStats, 200);
-        }
+        if (nowActive && !wasActive) _mclSchedule();
         wasActive = nowActive;
       });
       mo.observe(el, { attributes:true, attributeFilter:['class'] });
     } catch(_){}
   }
+  function _installGoWrap(){
+    try {
+      var g2 = window.go;
+      if (typeof g2 === 'function' && !g2._mclStatsGoWrap) {
+        window.go = function(id){
+          var r = g2.apply(this, arguments);
+          if (id === 's-mundial-stats') _mclSchedule();
+          return r;
+        };
+        window.go._mclStatsGoWrap = true;
+      }
+    } catch(_){}
+  }
+  /* 1) Observer síncrono YA (el elemento existe en este punto del parse). */
+  try { _watchMundialitoStats(); } catch(_){}
+  /* 2) En DOMContentLoaded (post-bundle): re-asegurar el observer y, sobre
+        todo, envolver el `window.go` definitivo del router. */
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _watchMundialitoStats);
+    document.addEventListener('DOMContentLoaded', function(){ _watchMundialitoStats(); _installGoWrap(); });
   } else {
     _watchMundialitoStats();
+    _installGoWrap();
   }
 })();
 </script>

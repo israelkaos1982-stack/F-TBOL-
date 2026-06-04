@@ -19436,6 +19436,50 @@ window._showSimProgress = function(opts, onDone){
     return null;
   };
 
+  /* ── Sync INCREMENTAL de estadísticas tras CADA partido de torneo ──
+     Petición usuario 2026-06-04 (Mundialito de Clubes · fase de grupos):
+     "partido que se juega con eventos → esos eventos se suben AL MOMENTO
+     a las cajas de estadísticas", NO al terminar toda la fase de grupos.
+
+     Antes, los stores PERSISTIDOS por competición (`ef_player_stats_mundial_v1`,
+     `ef_player_stats_torneos_v1`, `ef_player_stats_sel_v1`) sólo se
+     reconstruían (`rebuildPlayerStatsStore` vía `syncLigaEaPlayerStats`)
+     al ABRIR una pantalla de stats o el modal Plantilla. Así, la caja del
+     hub (plantilla SUMADA) y los dashboards basados en cache quedaban
+     "atrasados" hasta que el usuario navegaba a una pantalla de stats —
+     dando la sensación de que las estadísticas "no se subían" hasta el
+     final del grupo.
+
+     `_tourSave` es el ÚNICO chokepoint de TODOS los guardados de torneo
+     (Mundialito, Torneos de Verano, Selecciones — vía `_tourSaveAndRender`,
+     `_tourSaveHumanResult` y el auto-sim del hub), así que disparamos aquí
+     el sync incremental.
+
+     DEBOUNCED + DIFERIDO (regla 2026-05-28 "render no bloqueante"):
+     `rebuildPlayerStatsStore` es O(matches×events×comps); una ráfaga de
+     guardados (sim de una jornada/grupo entero) coalesce en UNA sola
+     pasada, SIEMPRE en `setTimeout` (nunca síncrono antes del paint).
+     Idempotente y sin recursión: `syncLigaEaPlayerStats` no llama a
+     `_tourSave`. */
+  var _tourStatsSyncT = null;
+  function _tourScheduleStatsSync(){
+    if (_tourStatsSyncT) { clearTimeout(_tourStatsSyncT); }
+    _tourStatsSyncT = setTimeout(function(){
+      _tourStatsSyncT = null;
+      try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
+      /* Si una caja EN VIVO está abierta, re-pintarla para que el goleador
+         recién marcado aparezca sin tener que salir y volver a entrar. */
+      try {
+        var act = document.querySelector('.screen.active');
+        var aid = act && act.id;
+        if (aid === 's-mundial-stats' && typeof window._renderMundialitoStats === 'function') {
+          window._renderMundialitoStats();
+        }
+      } catch(_){}
+    }, 500);
+  }
+  window._tourScheduleStatsSync = _tourScheduleStatsSync;
+
   window._tourSave = async function(id, cfg){
     if (TOUR_IDS.indexOf(id) === -1) return false;
     cfg = cfg || {};
@@ -19447,6 +19491,10 @@ window._showSimProgress = function(opts, onDone){
     /* Refresca cache sincrónico para `_tourMuInfoData` / `muTourInfo`. */
     window._TOUR_CACHE = window._TOUR_CACHE || {};
     window._TOUR_CACHE[id] = cfg;
+    /* Estadísticas EN EL MOMENTO: agenda el sync incremental (debounced,
+       diferido) para que cada partido jugado suba sus eventos a las cajas
+       sin esperar a que termine la fase. */
+    try { _tourScheduleStatsSync(); } catch(_){}
     /* Sync al servidor con HARD TIMEOUT de 8 s. Sin esto, en redes
        lentas el `await fetch(...)` se quedaba colgado para siempre y
        el editor mostraba "Sorteando y guardando…" sin avanzar (caso

@@ -50554,14 +50554,10 @@ https://api.sofascore.app/api/v1/team/44/image
 <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🎯</span><h2>Objetivos del Club</h2></div>
 <div style="padding:4px 14px 40px;">
-<div style="padding:8px 4px 14px;display:flex;align-items:center;justify-content:space-between;">
-<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:rgba(255,255,255,.5);">PROTOCOLO · MÁXIMA PRESIÓN · TOÑÍN</span>
-<span style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:#f0c040;" id="ath-obj-count">0 / 68</span>
-</div>
-<div style="padding:0 4px 10px;">
+<div style="padding:8px 4px 12px;display:flex;align-items:center;justify-content:space-between;">
+<span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#f0c040;" id="ath-obj-count">0 / 68</span>
 <button type="button" id="ath-obj-edit-btn" onclick="window.athObjToggleEdit&&window.athObjToggleEdit()"
-  style="background:rgba(95,200,200,.16);border:1px solid rgba(95,200,200,.5);color:#bfeff0;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;-webkit-tap-highlight-color:transparent;">✏️ Editar objetivos</button>
-<span style="font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.4);margin-left:8px;">Edita el <b>texto</b> y la <b>cantidad</b> de cada objetivo. Usa <code>{N}</code> en el texto donde quieras que salga la cantidad (goles, posición, victorias…). La automatización se ajusta sola.</span>
+  style="background:rgba(95,200,200,.16);border:1px solid rgba(95,200,200,.5);color:#bfeff0;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;-webkit-tap-highlight-color:transparent;">🖍 Editar</button>
 </div>
 <div class="ent-body ath-body-obj open" id="ath-obj-club">
   <!-- Secciones rellenadas dinámicamente por el IIFE de objetivos al final del screen. -->
@@ -50793,10 +50789,21 @@ https://api.sofascore.app/api/v1/team/44/image
 
   function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
+  /* Marcador "(Si/No)" en el texto del objetivo (con/sin tilde, may/min,
+     espacios opcionales): "(Si/No)", "(SÍ / NO)", "(si/no)"…
+     Un objetivo Si/No se aprueba MANUALMENTE con el check (✅ = SÍ logrado,
+     ☐ = NO logrado): NO muestra contador ni steppers ➖/➕ y NO se
+     auto-evalúa (el usuario decide). El token {N} sigue saliendo en el
+     texto como cifra de referencia (p.ej. "entre los {6} primeros"). */
+  function isSiNo(label){ return /\(\s*s[ií]\s*\/\s*no\s*\)/i.test(String(label == null ? '' : label)); }
+  window._munichObjIsSiNo = isSiNo;
+
   function renderItemLabel(item) {
+    var label = effLabel(item);
+    var sino  = isSiNo(label);
     var tgt = effTarget(item);
     var counter = '';
-    if (item.track && tgt != null) {
+    if (item.track && tgt != null && !sino) {
       var isPct = item.u === '%';
       var startTxt = isPct ? '0%' : (item.dg ? '+0' : '0');
       var maxTxt   = (item.dg ? '+' + tgt : tgt) + (isPct ? '%' : '');
@@ -50816,17 +50823,20 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     var inner;
     if (item.rival) {
-      var parts = effLabel(item).split('RIVAL');
+      var parts = label.split('RIVAL');
       inner = esc(parts[0])
         + '<span class="oc-rival" id="oc-superliga-rival" onclick="athObjSetRival(event)">[definir rival]</span>'
         + esc(parts[1] || '');
     } else {
-      inner = esc(effLabel(item));
+      inner = esc(label);
     }
-    var autoAttr = item.auto ? (' data-auto="' + item.auto + '" data-target="' + tgt + '"') : '';
-    var autoCls  = item.auto ? ' is-auto' : '';
-    var autoTag  = item.auto ? '<span class="oc-auto" title="Se marca automáticamente">🤖</span>' : '';
-    return '<label class="obj-item' + autoCls + '"><input onchange="athObjCount()" type="checkbox"' + autoAttr + '/> <span class="obj-txt">' + autoTag + inner + '</span>' + counter + '</label>';
+    /* Si/No → objetivo MANUAL: no se emite data-auto (no se auto-marca). */
+    var useAuto  = item.auto && !sino;
+    var autoAttr = useAuto ? (' data-auto="' + item.auto + '" data-target="' + tgt + '"') : '';
+    var autoCls  = useAuto ? ' is-auto' : '';
+    var autoTag  = useAuto ? '<span class="oc-auto" title="Se marca automáticamente">🤖</span>' : '';
+    var sinoCls  = sino ? ' is-sino' : '';
+    return '<label class="obj-item' + autoCls + sinoCls + '"><input onchange="athObjCount()" type="checkbox"' + autoAttr + '/> <span class="obj-txt">' + autoTag + inner + '</span>' + counter + '</label>';
   }
 
   /* Fila de EDICIÓN (modo ✏️). Ahora editable EN DOS partes:
@@ -50962,7 +50972,7 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     /* Actualiza el rótulo del botón. */
     var btn = document.getElementById('ath-obj-edit-btn');
-    if (btn) btn.textContent = window.__munichObjEditing ? '💾 Guardar objetivos' : '✏️ Editar objetivos';
+    if (btn) btn.textContent = window.__munichObjEditing ? '💾 Guardar' : '🖍 Editar';
   };
 
   function boot() {
@@ -51010,6 +51020,9 @@ https://api.sofascore.app/api/v1/team/44/image
 /* Marca de objetivo automático (se marca solo desde los datos). */
 #s-munich-objetivos .oc-auto{font-size:9px;margin-right:3px;opacity:.7;vertical-align:middle;}
 #s-munich-objetivos .obj-item.is-auto{border-left:2px solid rgba(95,200,200,.5);padding-left:4px;}
+/* Objetivo Si/No → aprobación manual (sin contador). Marca lateral ámbar
+   para distinguirlo del automático (turquesa). */
+#s-munich-objetivos .obj-item.is-sino{border-left:2px solid rgba(240,192,64,.55);padding-left:4px;}
 /* Modo edición de cantidades: filas con input numérico. */
 #s-munich-objetivos #ath-obj-edit-btn:active{filter:brightness(1.2);}
 #s-munich-objetivos #ath-obj-club.obj-editing{outline:1px dashed rgba(95,200,200,.4);border-radius:8px;padding:4px;}

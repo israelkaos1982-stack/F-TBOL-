@@ -35384,6 +35384,19 @@ https://api.sofascore.app/api/v1/team/44/image
     13:'POR',14:'DEF',15:'DEF',16:'DEF',17:'DEF',18:'MED',19:'MED',20:'MED',21:'MED',22:'DEL',23:'DEL',24:'DEL',
     25:'POR',26:'DEF',27:'DEF',28:'MED',29:'MED',30:'DEL'
   };
+  /* Perfil de flags por defecto (lo típico de una plantilla, como
+     describió el usuario: 1 🏀 muy top, 1-2 ⚾, 2 ⭐, 1 C, 1 F, 1 P).
+     Sirve para que la SIM genérica produzca un goleador claro (el 🏀
+     se lleva ~48% de los goles del equipo) en vez de repartir parejo —
+     así al pegar la plantilla real el goleador real (⚾/🏀) hereda un
+     registro realista. Por índice de «Jugador N»: */
+  var _LEXT_DEF_FLAGS = {
+    10: { natGoalPro:true, elite:true, penalty:true },  /* DEL principal */
+    11: { natGoal:true,    elite:true },                /* DEL */
+    22: { natGoal:true },                               /* DEL 2º bloque */
+    6:  { captain:true },                               /* MED capitán */
+    7:  { freeKick:true }                               /* MED faltas */
+  };
   function _lextBuildDefaultRoster(team){
     var ls = null;
     try { if (typeof computeLineStats === 'function') ls = computeLineStats(team); } catch(_){}
@@ -35397,15 +35410,19 @@ https://api.sofascore.app/api/v1/team/44/image
     for (var i = 1; i <= 30; i++) {
       var pos = _LEXT_DEF_POS_BY_IDX[i] || 'MED';
       /* Variación determinista -2/0/+2 dentro de cada línea (sin random
-         para que reseed/refresh dé siempre lo mismo). */
+         para que reseed/refresh dé siempre lo mismo). Los jugadores con
+         flag de goleador (🏀/⚾) reciben +3 para que destaquen. */
       var off = ((i % 3) - 1) * 2;
+      var fl = _LEXT_DEF_FLAGS[i] || {};
+      if (fl.natGoalPro) off += 5; else if (fl.natGoal) off += 3;
       out.push({
         id: 'pd'+i+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
         name: 'Jugador ' + i,
         num: i,
         pos: pos,
         power: clamp(baseFor[pos] + off),
-        captain:false, freeKick:false, penalty:false, elite:false, natGoal:false, natGoalPro:false,
+        captain:!!fl.captain, freeKick:!!fl.freeKick, penalty:!!fl.penalty,
+        elite:!!fl.elite, natGoal:!!fl.natGoal, natGoalPro:!!fl.natGoalPro,
         pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
       });
     }
@@ -35424,6 +35441,101 @@ https://api.sofascore.app/api/v1/team/44/image
     window._lextBuildDefaultRoster = _lextBuildDefaultRoster;
     window._lextEnsureDefaultRoster = _lextEnsureDefaultRoster;
   } catch(_){}
+
+  /* ── Herencia de estadísticas al pegar la plantilla REAL ────────────
+     Petición usuario 2026-06-04: cuando el club juega con la plantilla
+     genérica («Jugador 1..30») la simulación acumula goles/MVP/tarjetas
+     en esos slots (p.ej. «Jugador 24» delantero con 22⚽ 11⭐ 4🟨 1🟥).
+     Al pegar la plantilla REAL, cada jugador real debe HEREDAR esas
+     estadísticas según su PERFIL, para que el goleador real (delantero
+     con valoración alta + ⚾/🏀) se quede con el registro del goleador
+     genérico — pero ya con su nombre real.
+
+     Mapeo (dos pasadas):
+       1. Por NOMBRE exacto (re-pegar / corregir nombres no pierde stats).
+       2. Por POSICIÓN + RANGO: dentro de cada línea, ordenamos los slots
+          ANTIGUOS por rendimiento (goles+pen+falta+MVP…) y los NUEVOS por
+          su PESO de goleador (mismo `_w` que el motor: 🏀×3 · ⚾×1.8 ·
+          P+0.4 · F+0.3 · power), y los emparejamos en orden. Así el
+          delantero real designado como goleador hereda el mayor registro.
+     Solo transfiere si los slots antiguos tienen stats; si no, no toca. */
+  function _lextStatLineOf(p){
+    return {
+      pj:Number(p.pj)||0, gol:Number(p.gol)||0, pen:Number(p.pen)||0, fk:Number(p.fk)||0,
+      mvp:Number(p.mvp)||0, ta:Number(p.ta)||0, tr:Number(p.tr)||0,
+      imbat:Number(p.imbat)||0, penSaved:Number(p.penSaved)||0
+    };
+  }
+  function _lextApplyStatLine(p, s){
+    p.pj=s.pj; p.gol=s.gol; p.pen=s.pen; p.fk=s.fk; p.mvp=s.mvp;
+    p.ta=s.ta; p.tr=s.tr; p.imbat=s.imbat; p.penSaved=s.penSaved;
+  }
+  function _lextPerfScore(p){   /* rendimiento ANTIGUO (jugadores de campo) */
+    return (Number(p.gol)||0)*3 + (Number(p.pen)||0) + (Number(p.fk)||0)
+         + (Number(p.mvp)||0)*1.5 + (Number(p.imbat)||0)*0.5 + (Number(p.penSaved)||0)*0.5;
+  }
+  function _lextScorerWeight(p){ /* perfil goleador NUEVO (= _w del motor) */
+    var w = Math.max(1, Number(p.power)||1);
+    if (p.natGoalPro)   w *= 3.0;
+    else if (p.natGoal) w *= 1.8;
+    if (p.penalty)  w += 0.40;
+    if (p.freeKick) w += 0.30;
+    return w;
+  }
+  function _lextRosterHasStats(players){
+    return Array.isArray(players) && players.some(function(p){
+      return p && ((Number(p.gol)||0)>0 || (Number(p.pj)||0)>0 ||
+                   (Number(p.mvp)||0)>0 || (Number(p.ta)||0)>0 || (Number(p.tr)||0)>0);
+    });
+  }
+  function _lextCarryStatsToNewRoster(oldPlayers, newPlayers){
+    if (!Array.isArray(oldPlayers) || !oldPlayers.length) return newPlayers;
+    if (!Array.isArray(newPlayers) || !newPlayers.length) return newPlayers;
+    if (!_lextRosterHasStats(oldPlayers)) return newPlayers;
+    var _np = (typeof _normPS === 'function') ? _normPS
+            : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
+            : function(s){ return String(s||'').toLowerCase(); };
+    oldPlayers.forEach(function(p){ if(p) p._carryUsed = false; });
+    newPlayers.forEach(function(p){ if(p) p._carryGot = false; });
+    /* Pasada 1 — por nombre exacto. */
+    var oldByName = {};
+    oldPlayers.forEach(function(p){ if(p && p.name) oldByName[_np(p.name)] = p; });
+    newPlayers.forEach(function(np){
+      if (!np || !np.name) return;
+      var op = oldByName[_np(np.name)];
+      if (op && !op._carryUsed) {
+        _lextApplyStatLine(np, _lextStatLineOf(op));
+        op._carryUsed = true; np._carryGot = true;
+      }
+    });
+    /* Pasada 2 — por posición + rango. */
+    ['POR','DEF','MED','DEL'].forEach(function(pos){
+      var oldP = oldPlayers.filter(function(p){ return p && p.pos===pos && !p._carryUsed; });
+      var newP = newPlayers.filter(function(p){ return p && p.pos===pos && !p._carryGot; });
+      if (!oldP.length || !newP.length) return;
+      if (pos === 'POR') {
+        oldP.sort(function(a,b){ return ((Number(b.pj)||0)+(Number(b.imbat)||0)+(Number(b.mvp)||0))
+                                      - ((Number(a.pj)||0)+(Number(a.imbat)||0)+(Number(a.mvp)||0)); });
+        newP.sort(function(a,b){ return (Number(b.power)||0)-(Number(a.power)||0); });
+      } else {
+        oldP.sort(function(a,b){ return _lextPerfScore(b)-_lextPerfScore(a); });
+        newP.sort(function(a,b){
+          var w = _lextScorerWeight(b)-_lextScorerWeight(a);
+          if (w) return w;
+          return (Number(b.power)||0)-(Number(a.power)||0);
+        });
+      }
+      var n = Math.min(oldP.length, newP.length);
+      for (var k=0; k<n; k++) {
+        _lextApplyStatLine(newP[k], _lextStatLineOf(oldP[k]));
+        oldP[k]._carryUsed = true; newP[k]._carryGot = true;
+      }
+    });
+    oldPlayers.forEach(function(p){ if(p) delete p._carryUsed; });
+    newPlayers.forEach(function(p){ if(p) delete p._carryGot; });
+    return newPlayers;
+  }
+  try { window._lextCarryStatsToNewRoster = _lextCarryStatsToNewRoster; } catch(_){}
 
 
   // ── Persistencia en servidor (sincroniza entre dispositivos) ──
@@ -41336,8 +41448,39 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     } catch(_){}
     if(t.players.length){
-      var replace = confirm('Este equipo ya tiene '+t.players.length+' jugadores.\n\nOK = REEMPLAZAR toda la plantilla por los '+parsed.length+' pegados\nCancelar = AÑADIR los '+parsed.length+' a los existentes');
-      if(replace) t.players = parsed;
+      var _oldRoster = t.players.slice();
+      var _oldHadStats = _lextRosterHasStats(_oldRoster);
+      var _replaceMsg = 'Este equipo ya tiene '+t.players.length+' jugadores.\n\n'
+        + 'OK = REEMPLAZAR toda la plantilla por los '+parsed.length+' pegados'
+        + (_oldHadStats ? '\n   (los jugadores reales HEREDAN las estadísticas por posición + perfil:\n    el goleador real ⚾/🏀 se queda con los goles del slot que más marcó)' : '')
+        + '\nCancelar = AÑADIR los '+parsed.length+' a los existentes';
+      var replace = confirm(_replaceMsg);
+      if(replace){
+        /* Herencia de stats: el goleador real (⚾/🏀 + valoración alta)
+           se queda con el registro del slot genérico que más marcó, etc.
+           (petición usuario 2026-06-04). */
+        try { parsed = _lextCarryStatsToNewRoster(_oldRoster, parsed); } catch(_){}
+        t.players = parsed;
+        /* Purga las claves stale del cache (team::«Jugador N») que ya no
+           están en la plantilla, para que NO salgan como fantasmas en el
+           dashboard de Estadísticas. El cache se repuebla con los nombres
+           reales en el siguiente _lecSyncPlayerStatsCache (renderSquadList). */
+        if(_oldHadStats){
+          try {
+            var _np2 = (typeof _normPS === 'function') ? _normPS
+                     : (typeof window._normPS === 'function') ? window._normPS
+                     : function(s){ return String(s||'').toLowerCase(); };
+            var _psRaw = localStorage.getItem('ef_player_stats_v1');
+            if(_psRaw){
+              var _ps = JSON.parse(_psRaw) || {};
+              var _pref = _np2(t.name) + '::';
+              var _chg = false;
+              Object.keys(_ps).forEach(function(kk){ if(kk.indexOf(_pref)===0){ delete _ps[kk]; _chg=true; } });
+              if(_chg) localStorage.setItem('ef_player_stats_v1', JSON.stringify(_ps));
+            }
+          } catch(_){}
+        }
+      }
       else t.players = _dedupeSquadPlayers(t.players.concat(parsed));
     } else {
       t.players = parsed;

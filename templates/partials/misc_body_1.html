@@ -3660,6 +3660,26 @@ window._showSimProgress = function(opts, onDone){
     try { if (typeof window._psRender === 'function') window._psRender(); } catch(_){}
     try { if (typeof window._bayernCalMarkToday === 'function') window._bayernCalMarkToday(); } catch(_){}
   };
+  /* MULTI-PESTAÑA / RESET CROSS-TAB (2026-06-04): si OTRA pestaña del
+     mismo navegador cambia el cursor en localStorage (típicamente el
+     usuario pulsa «Reiniciar Temporada» en la pestaña A mientras la B
+     sigue abierta en el hub), esta pestaña conserva su `_MEM` cacheado
+     con el dayIdx VIEJO. Sin enterarse del cambio, su próximo
+     updateHud / _tourMergeBayern / _render llama a `_save(_MEM viejo)`
+     con ts FRESCO y RESUCITA la temporada anterior en el servidor,
+     pisando el reset (bug foto usuario 2026-06-04: reset→01 May,
+     recargo→12 Jul, con 2 pestañas abiertas). El evento `storage` SOLO
+     llega a las OTRAS pestañas (nunca a la que escribió), así que
+     invalidar aquí es seguro y barato: re-leemos el cursor del disco
+     (ya reseteado) y re-renderizamos. También sincroniza el avance de
+     día normal entre pestañas. */
+  try {
+    window.addEventListener('storage', function(ev){
+      if (!ev || (ev.key !== KEY && ev.key !== KEY_LEGACY)) return;
+      try { _MEM = null; } catch(_){}
+      try { if (typeof window._psInvalidateCache === 'function') window._psInvalidateCache(); } catch(_){}
+    });
+  } catch(_){}
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   /* Antes (hist. 2026-04): relabel SOLO VISUAL de la pretemporada a un
      mes antes (Jul→Jun…) porque el calendario almacenado arrancaba en

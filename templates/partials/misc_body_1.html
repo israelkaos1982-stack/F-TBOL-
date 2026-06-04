@@ -49497,10 +49497,21 @@ https://api.sofascore.app/api/v1/team/44/image
       if (cfg.groupFixtures && Object.keys(cfg.groupFixtures).length) { cfg.groupFixtures = {}; touched = true; }
       if (cfg.fixture != null && (!Array.isArray(cfg.fixture) || cfg.fixture.length)) { cfg.fixture = []; touched = true; }
       if (cfg._prizesPaid) { cfg._prizesPaid = false; touched = true; }
+      /* Sello de reinicio deliberado (tombstone ms). SIN esto, el servidor
+         (`tour_cfg_merge`) hacía UNIÓN de resultados por matchKey y la copia
+         "ya cumplida" del torneo (p.ej. Mundial 2032 con 72/72 grupos)
+         RESUCITABA al recargar / borrar datos de navegación — el reinicio
+         "no se guardaba" (bug usuario 2026-06-04). Con `resetAt` el wipe de
+         «Reiniciar Temporada» GANA al anti-wipe y converge cross-device,
+         igual que el botón ↺ Reset del torneo. */
+      if (touched) cfg.resetAt = Date.now();
       return touched;
     }
     function _persistTourReset(sid, cfg){
       cfg.updatedAt = new Date().toISOString();
+      /* Garantía defensiva: si por cualquier vía llegamos aquí sin sello,
+         lo ponemos ahora (el reinicio SIEMPRE debe tombstone-ar). */
+      if (!cfg.resetAt) cfg.resetAt = Date.now();
       var lsKey = 'tour_' + sid + '_v1';
       try { localStorage.setItem(lsKey, JSON.stringify(cfg)); } catch(_){}
       try { if (window._TOUR_CACHE) window._TOUR_CACHE[sid] = cfg; } catch(_){}

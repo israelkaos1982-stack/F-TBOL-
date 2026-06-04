@@ -10570,7 +10570,8 @@
       }
     }
     var twitch = window._ppSelectedTwitch;
-    if (twitch) {
+    twitch = (twitch == null) ? '' : String(twitch).trim();
+    if (twitch && twitch !== '__skip__') {
       lines.push('');
       lines.push('📺 En directo: https://twitch.tv/' + twitch);
     }
@@ -11171,7 +11172,8 @@
        del sufijo "— Visto en el Twitch de <streamer>". */
     try {
       var _twitch = window._ppSelectedTwitch;
-      if (_twitch && String(text).indexOf('Twitch de ' + _twitch) === -1) {
+      _twitch = (_twitch == null) ? '' : String(_twitch).trim();
+      if (_twitch && _twitch !== '__skip__' && String(text).indexOf('Twitch de ' + _twitch) === -1) {
         text = text + '\n\n📺 Visto en el Twitch de ' + _twitch;
       }
     } catch(_){}

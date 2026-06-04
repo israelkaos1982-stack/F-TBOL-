@@ -11848,7 +11848,8 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   /* ── 9. WHATSAPP CON CANAL TWITCH ────────────────────────────────── */
   function _mmTwitchSuffix() {
     var t = window._ppSelectedTwitch;
-    return t ? ' — Visto en el Twitch de ' + t : '';
+    t = (t == null) ? '' : String(t).trim();
+    return (t && t !== '__skip__') ? ' — Visto en el Twitch de ' + t : '';
   }
 
   // Override gmShareWhatsApp

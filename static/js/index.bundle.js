@@ -6394,7 +6394,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
        Previas / Finales) y de Verano, y GANA sobre el sistema global
        sel_fin_stadiums_v1. */
     var _ppTourStad = window._previaTourStadium(_ppMatchKey);
-    if ((_ppCompKey === 'sc' || _ppCompKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
+    if ((_ppCompKey === 'sc' || _ppCompKey === 'sc-final' || _ppCompKey === 'usc' || _ppCompKey === 'usc-fin') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
       _ppStadium = window._ppPreviaTeams.stadium;
     } else if (_ppTourStad) {
       _ppStadium = _ppTourStad;
@@ -11854,7 +11854,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
        elegidas (bug 2026-06-03, foto usuario Road Copa Asia). */
     var _mmTourStad = (typeof window._previaTourStadium === 'function')
       ? window._previaTourStadium(matchKey) : '';
-    if ((compKey === 'sc' || compKey === 'sc-final') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
+    if ((compKey === 'sc' || compKey === 'sc-final' || compKey === 'usc' || compKey === 'usc-fin') && window._ppPreviaTeams && window._ppPreviaTeams.stadium) {
       stadiumName = window._ppPreviaTeams.stadium;
     } else if (_mmTourStad) {
       stadiumName = _mmTourStad;

@@ -8408,21 +8408,120 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(_){}
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     SYNC GENÉRICO localStorage ⇄ servidor para BLOBS de baja/sanción
+     (2026-06-04). Las lesiones/sanciones (club Y selección) vivían SOLO
+     en localStorage → al BORRAR datos de navegación / cambiar de móvil
+     se perdía TODO lo editado a mano (foto usuario: Kounde·Francia
+     lesionado 1 partido manualmente → al limpiar el navegador
+     desaparecía). Patrón: localStorage = caché rápida · servidor
+     (GlobalState, /api/kv) = fuente de verdad.
+
+     - hydrate(): al arrancar, si el local está VACÍO o el server es más
+       reciente (`updatedAt`), ADOPTA el server. Si el local es
+       autoritativo (no vacío y >= server), lo RE-SUBE. La recencia por
+       `updatedAt` es clave: un consumo legítimo (sanción decrementada,
+       lesión cumplida) NO se resucita porque el blob recién guardado
+       tiene un `updatedAt` mayor que el del server.
+     - touch(): tras cada cambio real, agenda un POST debounced + 3
+       reintentos (la red móvil pierde requests). NO sube nada antes de
+       hidratar (anti-wipe: un autosave temprano no debe pisar el server
+       con un local todavía vacío recién limpiado).
+
+     La clave debe estar en `_KV_ALLOWED_EXACT` (app.py) con su merge por
+     recencia (defensa en profundidad anti-wipe stale cross-device). */
+  window._kvBlobSync = window._kvBlobSync || function(key){
+    var st = { hydrated:false, timer:null, snapshot:null, adopt:null, empty:null, updatedAt:0 };
+    function _blob(){
+      var d = st.snapshot ? (st.snapshot() || {}) : {};
+      var o = {}; for (var k in d) o[k] = d[k];
+      o.updatedAt = st.updatedAt || Date.now();
+      return o;
+    }
+    function _push(tries){
+      tries = tries || 0;
+      try {
+        fetch('/api/kv/' + key, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          credentials:'same-origin', body: JSON.stringify({ value: _blob() })
+        }).then(function(r){ return r && r.ok ? r.json() : null; })
+          .then(function(j){ if (!(j && j.ok) && tries < 3) setTimeout(function(){ _push(tries+1); }, 1000*(tries+1)); })
+          .catch(function(){ if (tries < 3) setTimeout(function(){ _push(tries+1); }, 1000*(tries+1)); });
+      } catch(_){}
+    }
+    return {
+      config: function(snapshot, adopt, empty){ st.snapshot = snapshot; st.adopt = adopt; st.empty = empty; return this; },
+      /* Sembrar el `updatedAt` cargado de localStorage ANTES de hydrate
+         (sin agendar push): así la recencia local vs server es correcta
+         tras un reload normal. No pisa un `touch` ya ocurrido (mutación
+         temprana con ts mayor). */
+      seed: function(ts){ ts = Number(ts) || 0; if (ts > st.updatedAt) st.updatedAt = ts; return this; },
+      /* Lo invoca el _persist del store tras CADA cambio real. */
+      touch: function(updatedAt){
+        st.updatedAt = updatedAt || Date.now();
+        if (!st.hydrated) return;        // anti-wipe: no subir antes de hidratar
+        if (st.timer) return;
+        st.timer = setTimeout(function(){ st.timer = null; _push(0); }, 1200);
+      },
+      pushNow: function(){ _push(0); },
+      isHydrated: function(){ return st.hydrated; },
+      hydrate: function(onAdopt){
+        try {
+          fetch('/api/kv/' + key, { credentials:'same-origin', headers:{'Cache-Control':'no-store'} })
+            .then(function(r){ return r && r.ok ? r.json() : null; })
+            .then(function(j){
+              var sv = j && j.ok ? j.value : null;
+              /* Recalcular el estado local AHORA (puede haber mutado
+                 mientras volaba el GET): una edición hecha entre el GET y
+                 su respuesta NO se debe pisar con el server viejo. */
+              var localData  = st.snapshot ? (st.snapshot() || {}) : {};
+              var localEmpty = st.empty ? st.empty(localData) : false;
+              var localTs    = st.updatedAt || 0;
+              if (sv && typeof sv === 'object' && !(st.empty && st.empty(sv))) {
+                var svTs = Number(sv.updatedAt) || 0;
+                if (localEmpty || svTs > localTs) {
+                  if (st.adopt) st.adopt(sv);
+                  st.updatedAt = svTs || Date.now();
+                  st.hydrated = true;
+                  if (typeof onAdopt === 'function') { try { onAdopt(); } catch(_){} }
+                  return;
+                }
+              }
+              st.hydrated = true;
+              if (!localEmpty) { if (!st.updatedAt) st.updatedAt = localTs || Date.now(); _push(0); }
+            }).catch(function(){ st.hydrated = true; });
+        } catch(_){ st.hydrated = true; }
+      }
+    };
+  };
+
   /* ── Persistencia de lesiones en localStorage (2026-05-22) ─────────
      BAJA_STORE / LESION_STORE viven en memoria; sin esto una lesión se
      pierde al recargar. Serializamos en `ftbol_lesiones_v1` — payload
-     diminuto (<1 KB), muy por debajo del cap de 2 MB por carpeta. */
+     diminuto (<1 KB), muy por debajo del cap de 2 MB por carpeta.
+     2026-06-04: + sync a servidor (sobrevive a borrado de navegación /
+     cambio de móvil) vía `_kvBlobSync`. */
   var _LESION_LS_KEY = 'ftbol_lesiones_v1';
   var _lesionLastSer = '';
+  var _lesionUpdatedAt = 0;
+  var _lesionSync = window._kvBlobSync(_LESION_LS_KEY);
+  function _lesionDataObj(){
+    return { baja: window.BAJA_STORE || {}, lesion: window.LESION_STORE || {} };
+  }
+  function _lesionIsEmpty(d){
+    if (!d) return true;
+    var b = d.baja || {}, l = d.lesion || {};
+    return !(Object.keys(b).length || Object.keys(l).length);
+  }
   function _persistInjuries() {
     try {
-      var payload = JSON.stringify({
-        baja:   window.BAJA_STORE   || {},
-        lesion: window.LESION_STORE || {}
-      });
+      var data = _lesionDataObj();
+      var payload = JSON.stringify(data);
       if (payload === _lesionLastSer) return;
       _lesionLastSer = payload;
-      localStorage.setItem(_LESION_LS_KEY, payload);
+      _lesionUpdatedAt = Date.now();
+      localStorage.setItem(_LESION_LS_KEY, JSON.stringify({ baja:data.baja, lesion:data.lesion, updatedAt:_lesionUpdatedAt }));
+      _lesionSync.touch(_lesionUpdatedAt);
     } catch (_) {}
   }
   function _loadInjuries() {
@@ -8435,14 +8534,30 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       window.LESION_STORE = window.LESION_STORE || {};
       if (d.baja)   Object.keys(d.baja).forEach(function(k){   if (!window.BAJA_STORE[k])   window.BAJA_STORE[k]   = d.baja[k]; });
       if (d.lesion) Object.keys(d.lesion).forEach(function(k){ if (!window.LESION_STORE[k]) window.LESION_STORE[k] = d.lesion[k]; });
-      _lesionLastSer = raw;
+      _lesionUpdatedAt = Number(d.updatedAt) || 0;
+      _lesionLastSer = JSON.stringify(_lesionDataObj());
     } catch (_) {}
   }
   window._persistInjuries = _persistInjuries;
   _loadInjuries();
+  _lesionSync.config(_lesionDataObj, function(sv){
+    /* Adoptar la copia del server (más reciente o local vacío). */
+    window.BAJA_STORE   = (sv && sv.baja)   || {};
+    window.LESION_STORE = (sv && sv.lesion) || {};
+    _lesionUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
+    _lesionLastSer = JSON.stringify(_lesionDataObj());
+    try { localStorage.setItem(_LESION_LS_KEY, JSON.stringify({ baja:window.BAJA_STORE, lesion:window.LESION_STORE, updatedAt:_lesionUpdatedAt })); } catch(_){}
+  }, _lesionIsEmpty);
+  _lesionSync.seed(_lesionUpdatedAt);
   try {
     setInterval(_persistInjuries, 5000);
     window.addEventListener('beforeunload', _persistInjuries);
+  } catch (_) {}
+  try {
+    _lesionSync.hydrate(function(){
+      try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(_){}
+      try { if (window.renderBayernPlantillaScreen) window.renderBayernPlantillaScreen(); } catch(_){}
+    });
   } catch (_) {}
 
   /* ── Persistencia de SANCIONES de club en localStorage (2026-06-04) ──
@@ -8454,12 +8569,19 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
      (cumplirSancion lo decrementa y el autosave refleja el cambio). */
   var _SANC_LS_KEY = 'ftbol_sanciones_v1';
   var _sancLastSer = '';
+  var _sancUpdatedAt = 0;
+  var _sancSync = window._kvBlobSync(_SANC_LS_KEY);
+  function _sancDataObj(){ return { g: (window.SANCION_STORE && window.SANCION_STORE.__global) || [] }; }
+  function _sancIsEmpty(d){ return !(d && Array.isArray(d.g) && d.g.length); }
   function _persistSancionesClub() {
     try {
-      var payload = JSON.stringify({ g: (window.SANCION_STORE && window.SANCION_STORE.__global) || [] });
+      var data = _sancDataObj();
+      var payload = JSON.stringify(data);
       if (payload === _sancLastSer) return;
       _sancLastSer = payload;
-      localStorage.setItem(_SANC_LS_KEY, payload);
+      _sancUpdatedAt = Date.now();
+      localStorage.setItem(_SANC_LS_KEY, JSON.stringify({ g:data.g, updatedAt:_sancUpdatedAt }));
+      _sancSync.touch(_sancUpdatedAt);
     } catch (_) {}
   }
   function _loadSancionesClub() {
@@ -8471,14 +8593,28 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       window.SANCION_STORE = window.SANCION_STORE || {};
       var cur = window.SANCION_STORE.__global = window.SANCION_STORE.__global || [];
       if (!cur.length) { for (var i = 0; i < d.g.length; i++) cur.push(d.g[i]); }
-      _sancLastSer = raw;
+      _sancUpdatedAt = Number(d.updatedAt) || 0;
+      _sancLastSer = JSON.stringify(_sancDataObj());
     } catch (_) {}
   }
   window._persistSancionesClub = _persistSancionesClub;
   _loadSancionesClub();
+  _sancSync.config(_sancDataObj, function(sv){
+    window.SANCION_STORE = window.SANCION_STORE || {};
+    window.SANCION_STORE.__global = (sv && Array.isArray(sv.g)) ? sv.g.slice() : [];
+    _sancUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
+    _sancLastSer = JSON.stringify(_sancDataObj());
+    try { localStorage.setItem(_SANC_LS_KEY, JSON.stringify({ g:window.SANCION_STORE.__global, updatedAt:_sancUpdatedAt })); } catch(_){}
+  }, _sancIsEmpty);
+  _sancSync.seed(_sancUpdatedAt);
   try {
     setInterval(_persistSancionesClub, 5000);
     window.addEventListener('beforeunload', _persistSancionesClub);
+  } catch (_) {}
+  try {
+    _sancSync.hydrate(function(){
+      try { if (window.renderBayernPlantillaScreen) window.renderBayernPlantillaScreen(); } catch(_){}
+    });
   } catch (_) {}
 
   window.LESION_STORE_UTILS = {
@@ -12432,19 +12568,38 @@ window._fallbackSq11 = function(){
   window.LESION_STORE_SEL  = window.LESION_STORE_SEL  || {};
   window._FORMA_MATCH_STATES_SEL = window._FORMA_MATCH_STATES_SEL || {};
 
-  // ── Persistencia en localStorage (separada de clubes) ────────────
+  // ── Persistencia en localStorage + SERVIDOR (separada de clubes) ──
+  /* 2026-06-04: + sync a servidor vía `_kvBlobSync`. Antes vivía SOLO en
+     localStorage → al borrar datos de navegación se perdía TODO lo
+     editado a mano (foto usuario: Kounde·Francia lesionado 1 partido
+     desaparecía). Ahora el server (GlobalState /api/kv) es la fuente de
+     verdad y la lesión/sanción manual sobrevive a un wipe del navegador
+     y al cambio de móvil. */
   var LS_KEY = 'ftbol_sel_sanciones_v1';
   var _lastSer = '';
+  var _selUpdatedAt = 0;
+  var _selSync = (typeof window._kvBlobSync === 'function') ? window._kvBlobSync(LS_KEY) : null;
+  function _selDataObj(){
+    return {
+      yellow:  window.YELLOW_STORE_SEL  || {},
+      sancion: window.SANCION_STORE_SEL || {},
+      lesion:  window.LESION_STORE_SEL  || {}
+    };
+  }
+  function _selIsEmpty(d){
+    if (!d) return true;
+    function any(o){ if (!o) return false; for (var k in o){ var v = o[k]; if (v && (Array.isArray(v) ? v.length : Object.keys(v).length)) return true; } return false; }
+    return !(any(d.yellow) || any(d.sancion) || any(d.lesion));
+  }
   function _persist(){
     try {
-      var payload = JSON.stringify({
-        yellow:  window.YELLOW_STORE_SEL,
-        sancion: window.SANCION_STORE_SEL,
-        lesion:  window.LESION_STORE_SEL
-      });
+      var data = _selDataObj();
+      var payload = JSON.stringify(data);
       if (payload === _lastSer) return;
       _lastSer = payload;
-      localStorage.setItem(LS_KEY, payload);
+      _selUpdatedAt = Date.now();
+      localStorage.setItem(LS_KEY, JSON.stringify({ yellow:data.yellow, sancion:data.sancion, lesion:data.lesion, updatedAt:_selUpdatedAt }));
+      if (_selSync) _selSync.touch(_selUpdatedAt);
     } catch(_){}
   }
   function _load(){
@@ -12455,7 +12610,8 @@ window._fallbackSq11 = function(){
       window.YELLOW_STORE_SEL  = d.yellow  || {};
       window.SANCION_STORE_SEL = d.sancion || {};
       window.LESION_STORE_SEL  = d.lesion  || {};
-      _lastSer = raw;
+      _selUpdatedAt = Number(d.updatedAt) || 0;
+      _lastSer = JSON.stringify(_selDataObj());
     } catch(_){}
   }
 
@@ -12521,11 +12677,35 @@ window._fallbackSq11 = function(){
 
   _load();
   _migrateLegacyTorneoKeys();
+  if (_selSync) {
+    _selSync.config(_selDataObj, function(sv){
+      /* Adoptar la copia del server (más reciente o local vacío). */
+      window.YELLOW_STORE_SEL  = (sv && sv.yellow)  || {};
+      window.SANCION_STORE_SEL = (sv && sv.sancion) || {};
+      window.LESION_STORE_SEL  = (sv && sv.lesion)  || {};
+      _selUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
+      _lastSer = JSON.stringify(_selDataObj());
+      try { localStorage.setItem(LS_KEY, JSON.stringify({ yellow:window.YELLOW_STORE_SEL, sancion:window.SANCION_STORE_SEL, lesion:window.LESION_STORE_SEL, updatedAt:_selUpdatedAt })); } catch(_){}
+      try { _migrateLegacyTorneoKeys(); } catch(_){}
+    }, _selIsEmpty);
+    _selSync.seed(_selUpdatedAt);
+  }
   try {
     setInterval(_persist, 5000);
     window.addEventListener('beforeunload', _persist);
   } catch(_){}
   window._selPersistSanciones = _persist;
+  /* Hidratar desde el server: si el local está vacío (borrado de
+     navegación) o el server es más reciente, recupera lo guardado. Tras
+     adoptar, refresca las pantallas que muestran lesiones/sanciones de
+     selección (plantilla del hub, lista de bajas, HUD). */
+  try {
+    if (_selSync) _selSync.hydrate(function(){
+      try { if (window.renderBayernPlantillaScreen) window.renderBayernPlantillaScreen(); } catch(_){}
+      try { if (window._refreshSancionInjList) window._refreshSancionInjList(); } catch(_){}
+      try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(_){}
+    });
+  } catch(_){}
 
   // ── Helpers de stores ────────────────────────────────────────────
   function _yelGet(torneoKey, selName, playerName){

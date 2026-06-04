@@ -2214,15 +2214,9 @@ window._showSimProgress = function(opts, onDone){
       if (p.elite)      b += '<span class="lext-badge star"  title="Estrella del equipo">⭐</span>';
       if (p.natGoal)    b += '<span class="lext-badge scorer" title="Goleador nato (~30% goles)">⚾</span>';
       if (p.natGoalPro) b += '<span class="lext-badge scorer" title="Goleador estrella (~45% goles)">🏀</span>';
-      try {
-        var _les = (window.LESION_STORE || {})[p && p.name];
-        if (_les && Number(_les.partidos) > 0) {
-          var _ico = _les.gradoEmoji || '🩹';
-          var _n   = Math.max(0, parseInt(_les.partidos) || 0);
-          var _ttl = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _n + ' partido(s) restante(s)';
-          b += '<span class="lext-badge injury" title="' + _ttl.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _ico + ' ' + _n + 'P</span>';
-        }
-      } catch(_){}
+      /* El badge de baja (lesión/sanción) lo añade `_bedBajaBadge` en la
+         fila — cubre club Y selección de forma uniforme (antes este
+         bloque solo leía LESION_STORE de club). */
       return b;
     }
 
@@ -2531,6 +2525,72 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){}
       return null;
     }
+    /* Detalle de la baja activa (estado + nº de partidos + motivo) para
+       mostrarlo al pulsar el nombre (foto usuario 2026-06-04: al tocar
+       Kounde el humano debe VER que tiene 1 partido de lesión y el tipo).
+       null = sin baja. Prioridad: sanción > lesión. */
+    function _bedBajaDetail(name){
+      var nn = _normForStats(name);
+      try {
+        if (window._bplantView === 'sel'){
+          var sel = _hubSelName();
+          var q = (((window.SANCION_STORE_SEL || {})['sel']) || {})[sel] || [];
+          for (var i = 0; i < q.length; i++){
+            var s = q[i]; var rem = Number(s && s.remaining) || 0;
+            if (rem > 0 && _teamKeyMatches(_normForStats(s.name || ''), nn))
+              return { state: (s.tipo === 'amarilla' ? 'yellow' : 'red'), n: rem, reason: s.reason || '' };
+          }
+          var lb = ((window.LESION_STORE_SEL || {})[sel]) || {};
+          for (var lk in lb){
+            var l = lb[lk]; var lrem = Number(l && l.remaining) || 0;
+            if (lrem > 0 && _teamKeyMatches(_normForStats(lk), nn))
+              return { state: 'purple', n: lrem, reason: (l && l.reason) || 'Lesión' };
+          }
+          return null;
+        }
+        var hub = _normForStats(_hubTeamName());
+        var g = (window.SANCION_STORE && window.SANCION_STORE.__global) || [];
+        for (var j = 0; j < g.length; j++){
+          var cs = g[j]; var crem = Number(cs && cs.remaining) || 0;
+          if (!cs || crem <= 0) continue;
+          if (!_teamKeyMatches(_normForStats(cs.team || ''), hub)) continue;
+          if (!_teamKeyMatches(_normForStats(cs.name || ''), nn)) continue;
+          return { state: (cs.tipo === 'roja' || cs.tipo === 'd-amarilla') ? 'red' : 'yellow', n: crem, reason: cs.reason || '' };
+        }
+        var LS = window.LESION_STORE || {};
+        for (var nk in LS){
+          var cl = LS[nk]; var clrem = Number(cl && cl.partidos) || 0;
+          if (!cl || clrem <= 0) continue;
+          if (!_teamKeyMatches(_normForStats(nk), nn)) continue;
+          if (!_teamKeyMatches(_normForStats(cl.equipo || ''), hub)) continue;
+          var rsn = cl.descripcion || cl.gradoNombre || 'Lesión';
+          return { state: 'purple', n: clrem, reason: rsn };
+        }
+      } catch(_){}
+      return null;
+    }
+
+    /* Badge visible de la baja en la fila (club Y selección), para que el
+       humano VEA de un vistazo que el jugador está de baja, su tipo y los
+       partidos restantes — sin tener que entrar a editar (foto usuario
+       2026-06-04: Kounde·Francia debía mostrar "🩹 1P"). Lee de los
+       stores REALES vía `_bedBajaDetail` (cubre la vista selección, que
+       `_badges` —solo club— no contemplaba). */
+    function _bedBajaBadge(name){
+      try {
+        var d = _bedBajaDetail(name);
+        if (!d) return '';
+        var n = Math.max(0, parseInt(d.n,10) || 0);
+        if (!n) return '';
+        var ico = d.state==='red' ? '🟥' : d.state==='yellow' ? '🟨' : '🩹';
+        var col = d.state==='red' ? ['rgba(255,60,60,.2)','rgba(255,80,80,.45)','#ff8a8a']
+                : d.state==='yellow' ? ['rgba(240,200,60,.18)','rgba(240,200,60,.45)','#ffe169']
+                : ['rgba(190,110,255,.2)','rgba(190,110,255,.45)','#d6a6ff'];
+        var ttl = (d.reason ? String(d.reason) + ' · ' : '') + n + ' partido(s) de baja';
+        return '<span class="lext-badge injury" title="' + ttl.replace(/"/g,'&quot;') + '" style="background:'+col[0]+';border:1px solid '+col[1]+';color:'+col[2]+';">' + ico + ' ' + n + 'P</span>';
+      } catch(_){ return ''; }
+    }
+
     /* Celda de stat: input editable en modo edición, span estático fuera.
        `dispVal` = automático + delta (lo que se ve). `autoVal` = solo el
        automático, va en data-auto para que al re-editar el delta se
@@ -2600,7 +2660,7 @@ window._showSimProgress = function(opts, onDone){
       var bj = _bedBajaState(name);
       var bjCls = bj ? (' bed-'+bj) : '';
       return '<div class="lext-sq-row '+cls+bjCls+'" data-player="'+name.replace(/"/g,'&quot;')+'">'
-           + '<span class="lext-sq-name tier-'+tier+'">'+nameHtml+_badges(p)+'</span>'
+           + '<span class="lext-sq-name tier-'+tier+'">'+nameHtml+_badges(p)+_bedBajaBadge(name)+'</span>'
            + cells
            + '<span class="lext-sq-actions"></span>'
            + '</div>';
@@ -2830,13 +2890,23 @@ window._showSimProgress = function(opts, onDone){
       if (!name) return;
       _bedTarget = name; _bedType = null;
       var nm = document.getElementById('bed-baja-name'); if (nm) nm.textContent = name;
-      var st = _bedBajaState(name);
+      var det = _bedBajaDetail(name);
+      var st = det ? det.state : _bedBajaState(name);
       var cur = document.getElementById('bed-baja-cur');
-      if (cur) cur.textContent = st
-        ? ('Baja actual: ' + (st==='red'?'🟥 Expulsado':st==='yellow'?'🟨🟨🟨 Acumulación':'🩹 Lesionado') + ' — pulsa QUITAR BAJA para anularla')
-        : '';
+      if (cur){
+        if (det){
+          var lbl = (det.state==='red' ? '🟥 Expulsado' : det.state==='yellow' ? '🟨🟨🟨 Acumulación' : '🩹 Lesionado');
+          var np  = Math.max(0, parseInt(det.n,10) || 0);
+          var pl  = np === 1 ? 'partido' : 'partidos';
+          cur.innerHTML = 'Baja actual: <b>' + lbl + '</b> · ' + np + ' ' + pl
+            + (det.reason ? ' — ' + String(det.reason).replace(/</g,'&lt;') : '')
+            + '<br><span style="color:rgba(255,255,255,.4);">Pulsa QUITAR BAJA para anularla</span>';
+        } else {
+          cur.textContent = '';
+        }
+      }
       var clr = document.getElementById('bed-baja-clear'); if (clr) clr.style.display = st ? '' : 'none';
-      var ni = document.getElementById('bed-baja-n'); if (ni) ni.value = '1';
+      var ni = document.getElementById('bed-baja-n'); if (ni) ni.value = det ? String(Math.max(1, parseInt(det.n,10)||1)) : '1';
       var btns = document.querySelectorAll('#bed-baja-ov .bed-type-btn');
       for (var i=0;i<btns.length;i++) btns[i].classList.remove('is-sel');
       var ov = document.getElementById('bed-baja-ov'); if (ov) ov.style.display = 'flex';

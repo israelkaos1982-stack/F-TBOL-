@@ -1,5 +1,91 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Lesiones / sanciones (club + selección) se SINCRONIZAN al servidor — sobreviven al borrado de datos del navegador (obligatorio, 2026-06-04)
+
+**Bug (fotos usuario 2026-06-04, «Kounde·Francia»)**: el usuario añade
+a mano (editor azul 🖍 de la plantilla del hub, vista SELECCIÓN, PIN
+7477) a **Jules Koundé (Francia) lesionado 1 partido**. El mensaje de
+lesión aparece en la bandeja y la fila se marca. Pero al **borrar los
+datos de navegación** TODO lo editado a mano de Kounde desaparece.
+
+### Causa raíz
+
+Los stores de baja/sanción vivían **SOLO en localStorage**, sin sync al
+servidor:
+
+- `ftbol_sel_sanciones_v1` — selecciones (`YELLOW_STORE_SEL` +
+  `SANCION_STORE_SEL` + `LESION_STORE_SEL`).
+- `ftbol_lesiones_v1` — club (`BAJA_STORE` + `LESION_STORE`).
+- `ftbol_sanciones_v1` — club (`SANCION_STORE.__global`).
+
+Al limpiar el navegador se vaciaba localStorage y, **sin copia en el
+server**, no había de dónde recuperar. Mismo síntoma «se borra al
+limpiar / cambiar de móvil» que ya resuelto para `selecciones_squad_v1`,
+`menu_home_v1`, `munich-obj-overrides-v1`, etc.
+
+### Fix — `_kvBlobSync` (localStorage = caché · server = fuente de verdad)
+
+Helper genérico `window._kvBlobSync(key)` en `static/js/index.bundle.js`
+(definido junto al store de lesiones de club). Cada uno de los 3 stores
+lo usa con su `snapshot`/`adopt`/`isEmpty`:
+
+- **`touch(updatedAt)`**: tras cada cambio real (lo llama el `_persist`
+  del store), agenda un **POST debounced + 3 reintentos**. NO sube nada
+  antes de hidratar (anti-wipe: un autosave temprano no debe pisar el
+  server con un local recién vaciado).
+- **`hydrate()`**: al arrancar, GET del server. Si el **local está
+  vacío** (borrado de navegación) **o el server es más reciente**
+  (`updatedAt`), **ADOPTA** el server y re-renderiza (plantilla del hub,
+  lista de bajas, HUD). Si el **local es autoritativo** (no vacío y
+  `updatedAt` >= server), lo **re-sube**. Recalcula el estado local
+  DENTRO del `.then` (una edición hecha mientras volaba el GET no se
+  pisa con el server viejo).
+- **`seed(ts)`**: siembra el `updatedAt` cargado de localStorage ANTES
+  de `hydrate` para que la comparación de recencia tras un reload normal
+  sea correcta.
+
+Cada blob persiste un `updatedAt` (ms). **Servidor** (`app.py`,
+`api_kv_set`): las 3 claves están en `_KV_ALLOWED_EXACT` y en
+`_KV_RECENCY_BLOB_KEYS` → **merge por RECENCIA**: el blob con
+`updatedAt` mayor **gana ENTERO**. Un POST stale (otro móvil, request
+perdido) nunca pisa una copia más nueva, y un **consumo legítimo**
+(sanción decrementada, lesión cumplida) NO se resucita porque el blob
+que lo decrementó tiene `updatedAt` mayor.
+
+### El humano VE la baja al pulsar el jugador (vista selección incluida)
+
+Segundo punto de la foto 2: al pulsar Kounde el humano debe ver **en
+pantalla** que tiene 1 partido de lesión + el tipo. En `misc_body_1.html`
+(IIFE de `#s-bayern-plantilla`):
+
+- `_bedBajaDetail(name)` → `{state, n, reason}` leído de los stores
+  REALES (cubre club **Y** selección; antes `_badges` solo leía
+  `LESION_STORE` de club).
+- `_bedBajaBadge(name)` pinta el badge `🩹/🟥/🟨 NP` en la fila (club +
+  selección, uniforme). Se quitó el badge de lesión club-only de
+  `_badges` para no duplicar.
+- El panel `_bedOpenBaja` muestra «Baja actual: <tipo> · N partido(s) —
+  <motivo>» y pre-rellena el contador con los partidos restantes.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un store de baja/sanción (club o selección) viva
+   SOLO en localStorage. Todo store nuevo de este tipo debe usar
+   `_kvBlobSync` + estar en `_KV_ALLOWED_EXACT`/`_KV_RECENCY_BLOB_KEYS`.
+2. **PROHIBIDO** sustituir el merge por recencia del server por una
+   unión por-entrada: las sanciones/lesiones se CONSUMEN (se borran al
+   cumplirse), y una unión las resucitaría. El blob `updatedAt` mayor
+   gana entero.
+3. **PROHIBIDO** subir al server antes de hidratar (`touch` lo gatea con
+   `st.hydrated`). Sin ese gate, un autosave temprano tras un wipe
+   pisaría el server con el local vacío.
+4. **PROHIBIDO** que la baja deje de VERSE en la plantilla del hub. El
+   badge sale de `_bedBajaDetail`/`_bedBajaBadge` (club + selección), no
+   de `_badges` (que solo conoce el club).
+5. Toda caja de humano nueva hereda esto automáticamente (los stores son
+   genéricos por equipo/selección; el badge y la sync no hardcodean
+   Liverpool/Francia).
+
 ## «Reiniciar Temporada» NUNCA borra Derbys / Trofeos / Plantillas (obligatorio, 2026-06-04)
 
 **Regla usuario 2026-06-04 (3 fotos)**: el botón **«Reiniciar
@@ -1754,8 +1840,11 @@ Notas:
 - `window._FORMA_MATCH_STATES_SEL[selName::playerName] = '⬇️'`
 
 Persistencia en `localStorage` clave `ftbol_sel_sanciones_v1`
-(autosave cada 5 s + beforeunload). Separada del store de clubes
-(`ftbol_lesiones_v1`).
+(autosave cada 5 s + beforeunload) **+ sync al servidor** vía
+`_kvBlobSync` (sobrevive al borrado de datos de navegación / cambio de
+móvil — ver sección "Lesiones / sanciones … se SINCRONIZAN al servidor",
+2026-06-04). Separada del store de clubes (`ftbol_lesiones_v1`, también
+sincronizado).
 
 ### Helpers públicos
 

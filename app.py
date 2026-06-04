@@ -3192,6 +3192,25 @@ _KV_ALLOWED_EXACT = {
     # reiniciar la web no se guarda lo editado"). Patrón "_save = push
     # autoritativo · _boot = pull aditivo" como selecciones_squad_v1.
     "munich-obj-overrides-v1",
+    # Lesiones / sanciones del CLUB del hub y de las SELECCIONES. Vivían
+    # SOLO en localStorage → al borrar datos de navegación / cambiar de
+    # móvil se perdía TODO lo editado a mano (foto usuario 2026-06-04:
+    # Kounde·Francia lesionado 1 partido manualmente → desaparecía al
+    # limpiar el navegador). localStorage es solo caché; el server es la
+    # fuente de verdad. Merge por RECENCIA (updatedAt): un consumo
+    # legítimo (sanción decrementada) no se resucita y un POST stale no
+    # pisa una copia más nueva. Mismo patrón "_save = push autoritativo ·
+    # _boot = pull aditivo" que selecciones_squad_v1.
+    "ftbol_sel_sanciones_v1",   # selecciones (amarillas + sanciones + lesiones)
+    "ftbol_lesiones_v1",        # club: BAJA_STORE + LESION_STORE
+    "ftbol_sanciones_v1",       # club: SANCION_STORE.__global
+}
+# Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
+# del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
+# así un POST stale (otro móvil, request perdido) nunca pisa lo más
+# nuevo y un consumo (decremento) tampoco se revierte.
+_KV_RECENCY_BLOB_KEYS = {
+    "ftbol_sel_sanciones_v1", "ftbol_lesiones_v1", "ftbol_sanciones_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
@@ -3377,6 +3396,19 @@ def api_kv_set(key):
             cand = json.dumps(merged, ensure_ascii=False)
             if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
                 value, payload = merged, cand
+        except Exception:
+            pass
+    # Blobs de baja/sanción (club + selecciones): merge por RECENCIA. El
+    # blob con `updatedAt` mayor gana ENTERO. Anti-wipe: un POST stale no
+    # pisa una copia más nueva; respeta consumos (no resucita sanciones
+    # decrementadas porque el blob que las decrementó es más reciente).
+    elif key in _KV_RECENCY_BLOB_KEYS and row and row.valor_json:
+        try:
+            old = json.loads(row.valor_json)
+            old_ts = float((old or {}).get("updatedAt") or 0)
+            new_ts = float((value or {}).get("updatedAt") or 0)
+            if old_ts > new_ts:
+                value, payload = old, row.valor_json
         except Exception:
             pass
     if row:

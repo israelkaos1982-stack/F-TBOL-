@@ -1502,6 +1502,33 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     var ratings = window.TEAM_RATINGS || {};
     var meta = ratings[canonical] || ratings[clean];
     if (meta && typeof meta === 'object' && meta.shield) return meta.shield;
+    // ── Fallback: equipos que SOLO viven en un cfg de torneo
+    // (tour_<id>_v1.teams[].shield) — Torneos de Verano, Mundialito,
+    // Mundial 2032, Selecciones. La card del torneo pinta t.shield
+    // directo, pero la PREVIA (_pickLogo) y el gm-modal (_gmLogo)
+    // resuelven por NOMBRE vía este helper. Sin esta rama, un escudo
+    // que el admin puso SOLO dentro del torneo (p.ej. Sporting Braga en
+    // el Trofeo Joan Gamper) salía con el escudo genérico en la previa y
+    // en la pantalla del partido, pese a verse bien en la lista de
+    // jornadas. Escaneamos el cache EN MEMORIA (_TOUR_CACHE), barato.
+    try {
+      var _tc = window._TOUR_CACHE;
+      if (_tc) {
+        for (var _tk in _tc) {
+          if (!Object.prototype.hasOwnProperty.call(_tc, _tk)) continue;
+          var _tcfg = _tc[_tk];
+          var _tteams = (_tcfg && Array.isArray(_tcfg.teams)) ? _tcfg.teams : [];
+          for (var _ti = 0; _ti < _tteams.length; _ti++) {
+            var _tt = _tteams[_ti];
+            if (!_tt || !_tt.shield || !_tt.name) continue;
+            if (_tt.name === clean || _tt.name === canonical
+                || normalizeTeamKey(_tt.name) === normalizedClean) {
+              return String(_tt.shield);
+            }
+          }
+        }
+      }
+    } catch(_){}
     return '';
   };
 

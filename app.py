@@ -3185,6 +3185,13 @@ _KV_ALLOWED_EXACT = {
     # hash). Sync server para que las sedes elegidas en PC aparezcan
     # en el móvil (2026-05-24).
     "sel_fin_stadiums_v1",
+    # Editor de Objetivos del Club (cantidades + textos custom de las
+    # ~68 misiones). localStorage es solo cache; el server es la fuente
+    # de verdad para que lo editado sobreviva a un reinicio de la web /
+    # cambio de móvil / evicción de caché (foto usuario 2026-06-04: "al
+    # reiniciar la web no se guarda lo editado"). Patrón "_save = push
+    # autoritativo · _boot = pull aditivo" como selecciones_squad_v1.
+    "munich-obj-overrides-v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

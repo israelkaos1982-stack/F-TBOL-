@@ -11,6 +11,7 @@ from functools import wraps
 
 from jugadores_data import jugadores_por_equipo
 from logica_liga import calcular_tabla, obtener_resultados_ia
+from sync_merge import tour_cfg_merge, sel_squad_merge
 
 app = Flask(__name__)
 
@@ -3342,6 +3343,33 @@ def api_kv_set(key):
         try:
             value = _tour_registry_merge(row.valor_json, value)
             payload = json.dumps(value, ensure_ascii=False)
+        except Exception:
+            pass
+    # FUSIÓN multi-dispositivo de las cfg de torneo (tour_<id>_v1, p.ej.
+    # tour_asia_v1 = "Road Copa Asia"): se UNEN los resultados por matchKey
+    # para que un partido jugado en CUALQUIER móvil sobreviva, en vez de que
+    # el último POST borre los de los demás (bug 2026-06-03, 6 móviles + PC).
+    elif (key.startswith("tour_") and key.endswith("_v1")
+          and key != "tour_registry_v1" and row and row.valor_json):
+        try:
+            merged = tour_cfg_merge(row.valor_json, value)
+            cand = json.dumps(merged, ensure_ascii=False)
+            # La unión nunca debería pasar de 2 MB (resultados acotados por
+            # el tamaño del torneo), pero si lo hiciera, conservamos el
+            # entrante sin fusionar para no rebotar el guardado.
+            if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
+                value, payload = merged, cand
+        except Exception:
+            pass
+    # FUSIÓN de la plantilla de selecciones (selecciones_squad_v1): unión por
+    # nombre canónico, NUNCA borra una selección (espejo de la fusión que ya
+    # hace el cliente, ahora también en el servidor).
+    elif key == "selecciones_squad_v1" and row and row.valor_json:
+        try:
+            merged = sel_squad_merge(row.valor_json, value)
+            cand = json.dumps(merged, ensure_ascii=False)
+            if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
+                value, payload = merged, cand
         except Exception:
             pass
     if row:

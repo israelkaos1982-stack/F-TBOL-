@@ -25028,6 +25028,50 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
   };
 
+  /* AUTO-SYNC al volver a la app (petición usuario 2026-06-03: "todo
+     mucho más fácil y automatizado" · 6 móviles + PC). Cuando el
+     usuario vuelve el foco a la pestaña/app, re-hidratamos la pantalla
+     de torneo que esté ABIERTA desde el servidor (que ahora FUSIONA, así
+     que ve la unión de lo jugado en todos los dispositivos) + el registro
+     de cajas. Es EVENT-DRIVEN (no un bucle de polling) y está GUARDADO
+     contra partidos en vivo, así que NUNCA compite con el cronómetro
+     (regla BASE INMUTABLE). _tourRender ya re-pide al server y repinta. */
+  window._tourRefreshActive = function(){
+    try {
+      /* No tocar nada si hay un partido en curso (gm-modal vivo). */
+      if (window._gm && window._gm.kickoffDone && !window._gm.finished) return;
+      var gmEl = document.getElementById('gm-modal');
+      if (gmEl) {
+        var disp = (gmEl.style && gmEl.style.display) || '';
+        if (disp === 'flex' || disp === 'block') return;
+      }
+      for (var i = 0; i < TOUR_IDS.length; i++){
+        var tid = TOUR_IDS[i];
+        var anchor = document.getElementById('tour-info-' + tid)
+                  || document.getElementById('tour-title-' + tid);
+        if (!anchor || !anchor.closest) continue;
+        var scr = anchor.closest('.screen');
+        if (scr && scr.classList.contains('active')) {
+          try { window._tourRender(tid); } catch(_){}
+        }
+      }
+    } catch(_){}
+  };
+  (function _wireTourAutoSync(){
+    if (window._tourAutoSyncWired) return;
+    window._tourAutoSyncWired = true;
+    ['focus','pageshow','visibilitychange'].forEach(function(evt){
+      window.addEventListener(evt, function(){
+        if (document.visibilityState && document.visibilityState !== 'visible') return;
+        clearTimeout(window._tourAutoSyncT);
+        window._tourAutoSyncT = setTimeout(function(){
+          try { if (typeof window._tvHydrateReg === 'function') window._tvHydrateReg(); } catch(_){}
+          try { window._tourRefreshActive(); } catch(_){}
+        }, 350);
+      });
+    });
+  })();
+
   /* ── Wire-up del overlay (1 sola vez por carga de página) */
   function _wire(){
     /* Inputs que afectan al pool stat: nº equipos, humanos, nivel
@@ -27280,6 +27324,9 @@ window._showSimProgress = function(opts, onDone){
       }).catch(function(){});
     } catch(_){}
   }
+  /* Exponer para el auto-sync al volver el foco a la app (lo llama
+     _wireTourAutoSync en el IIFE del motor de torneos). */
+  try { window._tvHydrateReg = _tvHydrateReg; } catch(_){}
   function _tvWatch(){
     _tvRenderCards();
     _tvHydrateReg();

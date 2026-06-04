@@ -9393,9 +9393,26 @@
     } catch(e){}
     return '';
   }
+  /* Selección que dirige el MISMO mister que el club del hub (Toñín:
+     Liverpool → Francia). El menú médico 💊 también cura las lesiones
+     de ESA selección (las lesiones de selección viven en
+     LESION_STORE_SEL, no en LESION_STORE). Generaliza a cualquier caja
+     de humano vía el registro MISTERS_HUMANOS. */
+  function _athHubSeleccion() {
+    try {
+      if (typeof window._mhFindMister === 'function') {
+        var m = window._mhFindMister(_athHubTeam());
+        if (m && m.seleccion) return String(m.seleccion);
+      }
+    } catch(e){}
+    return '';
+  }
   /* Lesionados del equipo del hub. Fuente de verdad: LESION_STORE
      (.partidos es la cuenta única global que decrementa 1 por cada
-     partido jugado en cualquier competición). */
+     partido jugado en cualquier competición) PARA EL CLUB, y
+     LESION_STORE_SEL[selección] para la selección del mismo mister
+     (.remaining). Los de selección llevan `_selName` para que la
+     curación decremente el store correcto. */
   function _athInjuredForHub() {
     var team = _athHubTeam().trim().toLowerCase();
     var store = window.LESION_STORE || {};
@@ -9412,10 +9429,25 @@
         descripcion: l.descripcion
       });
     });
+    /* Lesiones de la selección del mister del hub (Koundé · Francia). */
+    var selName = _athHubSeleccion();
+    var selStore = (window.LESION_STORE_SEL && selName) ? window.LESION_STORE_SEL[selName] : null;
+    if (selStore) {
+      Object.keys(selStore).forEach(function(pname){
+        var l = selStore[pname];
+        if (!l) return;
+        var rem = parseInt(l.remaining || 0, 10) || 0;
+        if (rem <= 0) return;
+        out.push({
+          name: pname, remain: rem,
+          descripcion: l.reason, _selName: selName
+        });
+      });
+    }
     return out;
   }
   function athGetInjuredList() {
-    return _athInjuredForHub().map(function(p){ return { name:p.name, remain:p.remain }; });
+    return _athInjuredForHub().map(function(p){ return { name:p.name, remain:p.remain, sel:p._selName||'' }; });
   }
   /* Refresca el número del icono 💊: partidos de lesión pendientes del
      equipo del hub (el máximo restante → decrementa 1 por partido). */
@@ -9456,12 +9488,14 @@
     var maxPI = Math.floor(athGetMedicalPI() + 1e-9);
     list.innerHTML = injured.map(function(p){
       var nm = p.name.replace(/"/g,'&quot;');
+      var sel = (p.sel || '').replace(/"/g,'&quot;');
+      var selTag = sel ? ' · <span style="color:#7da7c8;">🌍 ' + sel + '</span>' : '';
       return '<div class="ath-med-row">'
-        + '<span><b>🩹 ' + p.name + '</b><br><small>Lesión restante: ' + p.remain + ' partido(s)</small></span>'
+        + '<span><b>🩹 ' + p.name + '</b>' + selTag + '<br><small>Lesión restante: ' + p.remain + ' partido(s)</small></span>'
         + '<span class="ath-med-stepper">'
         +   '<button type="button" class="ath-med-step" data-d="-1">−</button>'
         +   '<input type="text" inputmode="numeric" readonly class="ath-med-alloc" value="0" '
-        +     'data-player="' + nm + '" data-max="' + p.remain + '"/>'
+        +     'data-player="' + nm + '" data-sel="' + sel + '" data-max="' + p.remain + '"/>'
         +   '<button type="button" class="ath-med-step" data-d="1">+</button>'
         + '</span>'
         + '</div>';
@@ -9497,7 +9531,7 @@
       var n = parseInt(inp.value,10) || 0;
       var max = parseInt(inp.getAttribute('data-max'),10) || 0;
       if (n < 0) n = 0; if (n > max) n = max;
-      if (n > 0) picks.push({ name: inp.getAttribute('data-player'), n: n });
+      if (n > 0) picks.push({ name: inp.getAttribute('data-player'), n: n, sel: inp.getAttribute('data-sel') || '' });
       total += n;
     });
     if (total <= 0) { document.getElementById('ath-med-ov').classList.remove('show'); return; }
@@ -9512,6 +9546,25 @@
        previa pase a mostrar "Recuperado" hasta que se cierre la previa. */
     if (!window._ppJustCured) window._ppJustCured = {};
     picks.forEach(function(pk){
+      /* Lesión de selección (Koundé · Francia): decrementa
+         LESION_STORE_SEL vía el helper canónico (persiste + sync). */
+      if (pk.sel) {
+        var sb = window.LESION_STORE_SEL && window.LESION_STORE_SEL[pk.sel];
+        if (!sb || !sb[pk.name]) return;
+        for (var i = 0; i < pk.n; i++) {
+          if (typeof window._selCumplirLesion === 'function') {
+            window._selCumplirLesion(pk.sel, pk.name);
+          } else {
+            sb[pk.name].remaining = (parseInt(sb[pk.name].remaining, 10) || 1) - 1;
+            if (sb[pk.name].remaining <= 0) { delete sb[pk.name]; break; }
+          }
+          if (!sb[pk.name]) break;
+        }
+        if (!sb[pk.name] || (parseInt((sb[pk.name]||{}).remaining, 10) || 0) <= 0) {
+          window._ppJustCured[pk.name] = true;
+        }
+        return;
+      }
       var l = window.LESION_STORE && window.LESION_STORE[pk.name];
       if (!l) return;
       var rem = (parseInt(l.partidos || 0, 10) || 0) - pk.n;
@@ -9539,6 +9592,9 @@
     /* Refresca la plantilla del Liverpool si está visible: los badges
        💉NP de los curados deben desaparecer. */
     try { if (typeof window.renderSquadList === 'function') window.renderSquadList(); } catch(e){}
+    /* Refresca la plantilla del hub (club + selección) — el badge
+       🩹 NP de Koundé (selección) debe desaparecer al curarlo. */
+    try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(e){}
     document.getElementById('ath-med-ov').classList.remove('show');
   };
 

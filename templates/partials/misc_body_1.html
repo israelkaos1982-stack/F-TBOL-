@@ -13012,12 +13012,52 @@ window._showSimProgress = function(opts, onDone){
           _tPjBucket = teamPJByComp.torneos;
           _tCompKey = 'torneos';
         }
+        /* Índice matchKey→{a,b} con nombres reales desde groupFixtures
+           + koBracket (EXACTAMENTE como `_mundialStatsRobustScan` y
+           `_tourBackfillActasFromResults`). Recupera el nombre del
+           equipo cuando un result NO guardó `home`/`away` — caso típico
+           de los partidos de GRUPO del Mundialito de Clubes, cuyo
+           nombre se resuelve por el índice de fixtures. Sin esto, el
+           loop bail-eaba en `if (!_tA||!_tB) return` y la plantilla del
+           hub NUNCA recibía los goles del Mundialito aunque la pantalla
+           de Estadísticas (que SÍ usa el índice) los mostrara. Bug
+           2026-06-04, foto usuario: M Salah 3 goles en el Mundialito de
+           Clubes pero 0 en la plantilla del Liverpool. */
+        var _tTeams = _tCfg.teams || [];
+        var _tPg = (_tCfg.formatConfig && _tCfg.formatConfig.perGroup) || 4;
+        /* groupFixtures se construye lazy al renderizar el torneo; si
+           falta (entrada directa a la plantilla / tras recarga) lo
+           reconstruye el builder canónico para que el índice esté
+           completo. Solo para el Mundialito (cfg.id==='mundial'), que es
+           el caso reportado; no toca otros formatos. */
+        if (_isMundialCfg && (!_tCfg.groupFixtures || !Object.keys(_tCfg.groupFixtures).length)
+            && _tTeams.length && typeof window._mundialGroupState === 'function') {
+          try { window._mundialGroupState(_tCfg, _tTeams); } catch(_){}
+        }
+        var _tIdx = {};
+        try {
+          var _gf = _tCfg.groupFixtures || {};
+          Object.keys(_gf).forEach(function(_gk){
+            var _g = parseInt(_gk, 10); if (isNaN(_g)) return;
+            var _sl = _tTeams.slice(_g*_tPg, _g*_tPg+_tPg);
+            var _fx = _gf[_gk] || [];
+            for (var _j = 0; _j < _fx.length; _j++) for (var _mi = 0; _mi < _fx[_j].length; _mi++) {
+              var _pr = _fx[_j][_mi]; if (!_pr) continue;
+              _tIdx['g'+_g+'_'+_j+'_'+_mi] = { a:(_sl[_pr.home]||{}).name, b:(_sl[_pr.away]||{}).name };
+            }
+          });
+          var _kb = _tCfg.koBracket || [];
+          for (var _r = 0; _r < _kb.length; _r++) { var _rt = _kb[_r]||[]; for (var _i = 0; _i+1 < _rt.length; _i += 2) {
+            _tIdx['ko_'+_r+'_'+(_i/2)] = { a:(_rt[_i]||{}).name, b:(_rt[_i+1]||{}).name };
+          } }
+        } catch(_){}
         Object.keys(_tCfg.results).forEach(function(_mk){
           if (/\|L[12]$/.test(_mk)) return;  /* legs intermedios — agregado vive en baseKey */
           var _res = _tCfg.results[_mk];
           if (!_res || !_res.played || !Array.isArray(_res.events)) return;
-          var _tA = _res.home || '';
-          var _tB = _res.away || '';
+          var _info = _tIdx[_mk] || {};
+          var _tA = _res.home || _info.a || '';
+          var _tB = _res.away || _info.b || '';
           if (!_tA || !_tB) return;
           var _pjK = _mkPJ(_tA, _tB);
           var _dK = _tCompKey + '|' + _pjK;
@@ -13029,8 +13069,10 @@ window._showSimProgress = function(opts, onDone){
           _res.events.forEach(function(ev){
             if (!ev) return;
             if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
+            var _side = ev.team || ev.side;
             var team = ev.realTeam
-                    || (ev.team === 'a' ? _tA : ev.team === 'b' ? _tB : '');
+                    || ((_side === 'a' || _side === 'home') ? _tA
+                      : (_side === 'b' || _side === 'away') ? _tB : '');
             var player = '';
             if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
             else if (typeof ev.player === 'string') player = ev.player;

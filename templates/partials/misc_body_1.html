@@ -3070,12 +3070,27 @@ window._showSimProgress = function(opts, onDone){
     function _selActiveTourIds(){
       var ids = [];
       try {
-        var raw = localStorage.getItem('tour_registry_v1');
-        if (raw){
-          var reg = JSON.parse(raw);
-          var vis = (reg && reg.visible) || [];
-          vis.forEach(function(id){ if (/^(spv|sfn)\d+$/.test(id)) ids.push(id); });
+        /* Fuente canónica de "torneos visibles": `window._tourVisibleIds()`
+           (= `_tvRegLoad().visible`), la MISMA que usa la pantalla 🌐
+           Selecciones y cada caja de Estadísticas por torneo. Resuelve la
+           lista por RECENCIA de tombstones + RECUPERACIÓN por contenido,
+           así que devuelve un slot cuyo cfg tiene datos reales aunque haya
+           caído del `visible` por un GET stale del servidor (anti-wipe).
+           Leer el raw `tour_registry_v1.visible` directamente (lo que se
+           hacía antes) se SALTABA esa recuperación: si una de las dos cajas
+           de la selección (p.ej. Ronda Previa 1) no estaba en el `visible`
+           crudo, la plantilla del hub dejaba de sumar SUS estadísticas y
+           solo mostraba las del otro torneo (bug 2026-06-04: Francia jugó
+           Mundial 2032 + Ronda Previa 1 y la plantilla solo contaba uno). */
+        var vis = null;
+        if (typeof window._tourVisibleIds === 'function') {
+          try { vis = window._tourVisibleIds(); } catch(_){ vis = null; }
         }
+        if (!vis) {
+          var raw = localStorage.getItem('tour_registry_v1');
+          if (raw){ var reg = JSON.parse(raw); vis = (reg && reg.visible) || []; }
+        }
+        (vis || []).forEach(function(id){ if (/^(spv|sfn)\d+$/.test(id)) ids.push(id); });
       } catch(_){}
       if (!ids.length){ for (var i=1;i<=10;i++){ ids.push('spv'+i); ids.push('sfn'+i); } }
       return ids;

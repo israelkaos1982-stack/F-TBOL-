@@ -6896,8 +6896,23 @@ window._showSimProgress = function(opts, onDone){
     if (!rows.length){
       st.innerHTML = '<div class="ps-card"><div class="ps-sub">Cargando calendario…</div></div>';
       st._psSig = null;
+      /* AUTO-RECUPERACIÓN (2026-06-04): el calendario aún no está en el
+         DOM (part2 carga después / rebuild del calendario Bayern en
+         curso). Reintentamos solos hasta que `_calRows()` devuelva
+         filas para que la card NUNCA se quede atascada en «Cargando…»
+         sin botón CONTINUAR (bug foto 2 usuario: «no se puede avanzar»).
+         Guard `_retryT` para no acumular timers. */
+      try {
+        if (!_render._retryT){
+          _render._retryT = setTimeout(function(){
+            _render._retryT = null;
+            try { _render(); } catch(_){}
+          }, 300);
+        }
+      } catch(_){}
       return;
     }
+    try { if (_render._retryT){ clearTimeout(_render._retryT); _render._retryT = null; } } catch(_){}
     var d = _load();
     var idx = _clampDayIdx(rows, d.dayIdx);
     if (idx !== d.dayIdx){ d.dayIdx = idx; _save(d); }
@@ -7012,6 +7027,20 @@ window._showSimProgress = function(opts, onDone){
     }
     else                           _cardMatch(day);
     _syncHubLabels(effDay);
+    /* SAFETY NET (2026-06-04): garantizamos que SIEMPRE quede una card
+       con botón en #ps-stage. Si por cualquier motivo ninguna rama
+       pintó nada (helper que falló en silencio, estado de torneo
+       inconsistente tras Reiniciar Temporada, etc.), el usuario se
+       quedaba con el #ps-stage vacío y SIN forma de avanzar (bug foto 2
+       usuario «no se puede avanzar»). Todas las `_card*` escriben
+       innerHTML de forma SÍNCRONA, así que aquí ya deberían haber
+       pintado; si no, forzamos la card de descanso del día (lleva
+       CONTINUAR ▶). */
+    try {
+      if (st && !st.querySelector('.ps-card')){
+        _cardRest(day);
+      }
+    } catch(_){}
   }
 
   /* El render lo dispara updateHud() del hub (rama "torneo elegido")
@@ -7071,13 +7100,16 @@ window._showSimProgress = function(opts, onDone){
     /* Re-render DIFERIDO (2026-06-04): si el calendario aún no está
        hidratado en el DOM en el instante exacto del reset (part2 carga
        después / navegación SPA), `_calRows()` devuelve [] y la card
-       central se queda en «Cargando…»/«Día a Día» y la caja CALENDARIO
-       cae al fallback. Invalidamos `_ROWS_CACHE` y re-renderizamos en
-       cuanto el DOM tenga filas para que SIEMPRE pinte el 01 May
-       (Descanso) — inicio de temporada. */
+       central se queda en «Cargando…». Re-renderizamos unas cuantas
+       veces hasta que el DOM tenga filas para que SIEMPRE pinte el
+       01 May (Descanso) — inicio de temporada.
+       OJO: NO tocar `_ROWS_CACHE` aquí. `_calRows()` solo cachea
+       resultados NO vacíos, así que si la caché ya tiene filas buenas
+       de antes, vaciarla durante una ventana en la que el DOM devuelve
+       [] (rebuild del calendario Bayern, navegación) dejaría la card
+       atascada sin poder avanzar (bug 2026-06-04, foto 2 usuario). */
     [60, 250, 700, 1500].forEach(function(_t){
       setTimeout(function(){
-        try { _ROWS_CACHE = null; } catch(_){}
         try { _render(); } catch(_){}
         try {
           var _cf = document.getElementById('munich-cal-fecha');

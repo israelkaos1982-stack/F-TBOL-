@@ -8445,6 +8445,42 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     window.addEventListener('beforeunload', _persistInjuries);
   } catch (_) {}
 
+  /* ── Persistencia de SANCIONES de club en localStorage (2026-06-04) ──
+     SANCION_STORE.__global vivía SOLO en memoria → una sanción/expulsión
+     (real o añadida a mano desde el editor azul de la plantilla) se perdía
+     al recargar. Igual patrón que las lesiones: serializamos el bucket
+     __global y lo restauramos al arrancar (solo si está vacío, para no
+     pisar lo que ya haya en memoria). Se CONSUME solo igual que siempre
+     (cumplirSancion lo decrementa y el autosave refleja el cambio). */
+  var _SANC_LS_KEY = 'ftbol_sanciones_v1';
+  var _sancLastSer = '';
+  function _persistSancionesClub() {
+    try {
+      var payload = JSON.stringify({ g: (window.SANCION_STORE && window.SANCION_STORE.__global) || [] });
+      if (payload === _sancLastSer) return;
+      _sancLastSer = payload;
+      localStorage.setItem(_SANC_LS_KEY, payload);
+    } catch (_) {}
+  }
+  function _loadSancionesClub() {
+    try {
+      var raw = localStorage.getItem(_SANC_LS_KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (!d || !Array.isArray(d.g)) return;
+      window.SANCION_STORE = window.SANCION_STORE || {};
+      var cur = window.SANCION_STORE.__global = window.SANCION_STORE.__global || [];
+      if (!cur.length) { for (var i = 0; i < d.g.length; i++) cur.push(d.g[i]); }
+      _sancLastSer = raw;
+    } catch (_) {}
+  }
+  window._persistSancionesClub = _persistSancionesClub;
+  _loadSancionesClub();
+  try {
+    setInterval(_persistSancionesClub, 5000);
+    window.addEventListener('beforeunload', _persistSancionesClub);
+  } catch (_) {}
+
   window.LESION_STORE_UTILS = {
     registrar: registrarLesion,
     sortearGrado: sortearGrado,

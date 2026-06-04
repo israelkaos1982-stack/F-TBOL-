@@ -31557,8 +31557,9 @@ window._showSimProgress = function(opts, onDone){
 .eurfase-acta-row:last-child{border-bottom:none;}
 .eurfase-acta-min{color:#9fc8ff;font-weight:700;font-size:11.5px;letter-spacing:.5px;}
 .eurfase-acta-ico{text-align:center;font-size:14px;}
-.eurfase-acta-player{color:#fff;line-height:1.2;}
-.eurfase-acta-team{color:rgba(255,255,255,.55);font-size:10.5px;letter-spacing:.3px;display:inline-flex;align-items:center;gap:4px;}
+.eurfase-acta-player{color:#fff;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.eurfase-acta-team{color:rgba(255,255,255,.55);font-size:10.5px;letter-spacing:.3px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex:0 0 auto;}
+.eurfase-acta-team-abbr{font-weight:700;letter-spacing:.6px;}
 .eurfase-acta-team-shield{width:14px;height:14px;object-fit:contain;flex:0 0 14px;filter:drop-shadow(0 0 2px rgba(0,0,0,.5));}
 .eurfase-acta-empty{padding:10px;text-align:center;color:rgba(255,255,255,.45);font-style:italic;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;}
 .eurfase-acta-mvp{padding:8px 10px;margin-top:4px;background:linear-gradient(90deg,rgba(255,213,74,.12),rgba(255,213,74,.04));border-left:2px solid rgba(255,213,74,.55);color:#ffe089;font-family:Rajdhani,sans-serif;font-size:12px;}
@@ -32254,6 +32255,30 @@ window._showSimProgress = function(opts, onDone){
     'falta-gol':'⚽🎯','propia':'⚽🚫','roja':'🟥','amarilla':'🟨',
     'd-amarilla':'🟨🟥','sust':'🔄','imbat':'🧤','lesion':'🩹','mvp':'⭐'
   };
+  /* Abreviatura del nombre de equipo/selección para que cada fila del
+     acta entre en HORIZONTAL en una sola línea (petición usuario
+     2026-06-04, fotos «Liverpool/Francia»): escudo + acrónimo de 3
+     letras (Liverpool→LIV, Francia→FRA, Dinamarca→DIN). Quita tildes y
+     tokens de ruido (FC, CF, de…). Para nombres de 1 palabra = 3
+     primeras letras; multi-palabra = iniciales (rellenadas a 3). */
+  function _eurFaseTeamAbbr(name){
+    var s = String(name||'').normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]','g'),'').trim();
+    if(!s) return '';
+    var raw = s.split(/\s+/);
+    var words = raw.filter(function(w){
+      return !/^(fc|cf|cd|ud|sd|ac|as|sc|rc|afc|cfc|club|de|del|la|el|los|las|the|1899)$/i.test(w);
+    });
+    if(!words.length) words = raw;
+    var abbr;
+    if(words.length === 1){
+      abbr = words[0].slice(0,3);
+    } else {
+      abbr = words.map(function(w){ return w.charAt(0); }).join('');
+      if(abbr.length < 3) abbr = words.join('').slice(0,3);
+      else abbr = abbr.slice(0,3);
+    }
+    return abbr.toUpperCase();
+  }
   function _eurFaseRenderActaPanel(m, uid){
     var events = (m && m.events) || [];
     /* Filtrar eventos relevantes para el acta (sin "played" interno
@@ -32296,11 +32321,11 @@ window._showSimProgress = function(opts, onDone){
       var extra = '';
       if(ev._varAnulado) extra = ' <span style="font-size:10px;color:#ff5555;font-weight:700;letter-spacing:.4px">⛔ ANULADA POR 📺 VAR</span>';
       else if(ev._varConfirmed) extra = ' <span style="font-size:10px;color:#4fd87a;font-weight:700">✓ Confirmado por 📺 VAR</span>';
-      var teamHtml = '<span class="eurfase-acta-team">'
+      var teamHtml = '<span class="eurfase-acta-team" title="'+_esc(teamName)+'">'
         + (teamShield
             ? '<img class="eurfase-acta-team-shield" src="'+_esc(teamShield)+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'" alt="">'
             : '')
-        + _esc(teamName)
+        + '<span class="eurfase-acta-team-abbr">'+_esc(_eurFaseTeamAbbr(teamName))+'</span>'
         + '</span>';
       rows += '<div class="eurfase-acta-row">'
             + '<span class="eurfase-acta-min">' + _esc(minLabel) + '</span>'
@@ -46970,9 +46995,13 @@ https://api.sofascore.app/api/v1/team/44/image
     letter-spacing:.5px;text-align:right;
   }
   #s-munich .munich-fix-card .eurfase-acta-ico{font-size:13px;text-align:center;}
-  #s-munich .munich-fix-card .eurfase-acta-player{font-weight:600;}
+  #s-munich .munich-fix-card .eurfase-acta-player{
+    font-weight:600;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;min-width:0;
+  }
   #s-munich .munich-fix-card .eurfase-acta-team{
     font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.4px;
+    white-space:nowrap;flex:0 0 auto;
   }
   #s-munich .munich-fix-card .eurfase-acta-empty{
     padding:10px;text-align:center;color:rgba(255,255,255,.45);

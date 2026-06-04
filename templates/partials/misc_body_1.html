@@ -35362,6 +35362,69 @@ https://api.sofascore.app/api/v1/team/44/image
     return out;
   }
 
+  /* ── Plantilla por defecto (30 jugadores genéricos) ─────────────────
+     Petición usuario 2026-06-04: los clubes de las ligas externas que
+     todavía no tienen plantilla metida deben arrancar con 30 jugadores
+     genéricos («Jugador 1»..«Jugador 30») repartidos por posición, para
+     que la caja del club NO salga «Sin jugadores» y, sobre todo, para que
+     la simulación distribuya goles/tarjetas/MVP entre jugadores reales
+     (sin esto applyMatchStats hace early-return y la plantilla queda a 0
+     aunque el equipo juegue sus 38 partidos). El usuario los renombra a
+     mano después; los stats (liga + copa) se acumulan por nombre.
+
+     Reparto fijo (bloques de 12, cada bloque arranca con portero — así
+     los porteros son «Jugador 1 / 13 / 25», como pidió el usuario):
+       POR(3): 1,13,25 · DEF(10): 2-5,14-17,26,27 ·
+       MED(10): 6-9,18-21,28,29 · DEL(7): 10-12,22-24,30
+     El poder de cada jugador sale de los 4 ejes del equipo (computeLineStats)
+     con una pequeña variación determinista, para que NO altere la fuerza
+     del club (el motor sigue usando los valores manuales del equipo). */
+  var _LEXT_DEF_POS_BY_IDX = {
+    1:'POR',2:'DEF',3:'DEF',4:'DEF',5:'DEF',6:'MED',7:'MED',8:'MED',9:'MED',10:'DEL',11:'DEL',12:'DEL',
+    13:'POR',14:'DEF',15:'DEF',16:'DEF',17:'DEF',18:'MED',19:'MED',20:'MED',21:'MED',22:'DEL',23:'DEL',24:'DEL',
+    25:'POR',26:'DEF',27:'DEF',28:'MED',29:'MED',30:'DEL'
+  };
+  function _lextBuildDefaultRoster(team){
+    var ls = null;
+    try { if (typeof computeLineStats === 'function') ls = computeLineStats(team); } catch(_){}
+    var glob = (ls && Number(ls.glob)) || Number(team && team.power) || 70;
+    var atk  = (ls && Number(ls.atk))  || glob;
+    var mid  = (ls && Number(ls.mid))  || glob;
+    var def  = (ls && Number(ls.def))  || glob;
+    var baseFor = { POR:def, DEF:def, MED:mid, DEL:atk };
+    var clamp = function(n){ return Math.max(40, Math.min(99, Math.round(n))); };
+    var out = [];
+    for (var i = 1; i <= 30; i++) {
+      var pos = _LEXT_DEF_POS_BY_IDX[i] || 'MED';
+      /* Variación determinista -2/0/+2 dentro de cada línea (sin random
+         para que reseed/refresh dé siempre lo mismo). */
+      var off = ((i % 3) - 1) * 2;
+      out.push({
+        id: 'pd'+i+'_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+        name: 'Jugador ' + i,
+        num: i,
+        pos: pos,
+        power: clamp(baseFor[pos] + off),
+        captain:false, freeKick:false, penalty:false, elite:false, natGoal:false, natGoalPro:false,
+        pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
+      });
+    }
+    return out;
+  }
+  /* Rellena la plantilla con los 30 por defecto SOLO si está vacía.
+     Idempotente: si ya hay jugadores no toca nada. Devuelve true si
+     sembró (para que el caller persista). */
+  function _lextEnsureDefaultRoster(team){
+    if (!team) return false;
+    if (Array.isArray(team.players) && team.players.length) return false;
+    team.players = _lextBuildDefaultRoster(team);
+    return true;
+  }
+  try {
+    window._lextBuildDefaultRoster = _lextBuildDefaultRoster;
+    window._lextEnsureDefaultRoster = _lextEnsureDefaultRoster;
+  } catch(_){}
+
 
   // ── Persistencia en servidor (sincroniza entre dispositivos) ──
   // Cache local por liga + write-back optimista al servidor. Si el
@@ -37968,10 +38031,30 @@ https://api.sofascore.app/api/v1/team/44/image
       }
       return Promise.resolve();
     }
-    // Resetear stats de jugadores
+    // Resetear stats de jugadores. Antes, garantizamos que cada equipo
+    // tiene plantilla: primero intentamos hidratarla del SQUAD_REGISTRY
+    // (plantillas reales de las ligas mayores) y, si tampoco hay, sembramos
+    // los 30 jugadores por defecto. Sin plantilla, applyMatchStats hace
+    // early-return y la caja del club queda «Sin jugadores»/a 0 aunque el
+    // equipo juegue sus 38 partidos (2026-06-04).
+    var _changedRoster = false;
+    /* Durante la sim MASIVA de las 51 ligas (`_restoSimBulkInProgress`)
+       NO sembramos plantillas: hacerlo en ~1000 equipos a la vez podría
+       reventar la cuota de localStorage. El sembrado va en la sim
+       INDIVIDUAL de cada liga (flujo normal) y al abrir la caja del club,
+       ambos acotados. */
+    var _bulkSim = !!window._restoSimBulkInProgress;
     data.teams.forEach(function(t){
+      if (!_bulkSim && t && (!t.players || !t.players.length)) {
+        try {
+          var _hy = _lextHydrateFromSquadRegistry(t.name);
+          if (_hy && _hy.length) { t.players = _hy; _changedRoster = true; }
+        } catch(_){}
+        try { if (_lextEnsureDefaultRoster(t)) _changedRoster = true; } catch(_){}
+      }
       (t.players||[]).forEach(resetPlayerStats);
     });
+    if (_changedRoster) { try { saveData(slug, data); } catch(_){} }
     data.results = [];
     var ts = _capRoundRobin(data.teams.slice());
     /* Lista plana de cruces. Por defecto doble round-robin (i,j) con
@@ -40461,6 +40544,55 @@ https://api.sofascore.app/api/v1/team/44/image
        · 🟨 Top amarillas (max p.ta)
        · 🟥 Top rojas (max p.tr)
      Cuando hay empates listamos los nombres separados por «y». */
+  /* Agrega los partidos de COPA (motor _lecCopa) de UN equipo: PJ / V /
+     E / P / GF / GC, contando cada partido (o cada leg de una
+     eliminatoria a doble partido) por su resultado al 90'. Se usa SOLO
+     dentro de la plantilla del club, para sumar la copa a los stats de
+     liga (la clasificación de liga NO suma copa). 2026-06-04.
+     Estructura del cfg copa (ver _lecBuildGroups / _lecSim2Leg /
+     _lecSim1Leg): groups[].matches[] = {home,away,gh,ga,played};
+     cuartos/semis 2-leg = {tieHome,tieAway,ida:{gh,ga},vta:{gh,ga},played}
+     (ida: local=tieAway; vta: local=tieHome); semis 1-leg / final =
+     {home,away,gh,ga,played}. */
+  function _lextCupAggForTeam(data, teamName){
+    var agg = {pj:0, v:0, e:0, p:0, gf:0, gc:0};
+    if (!data || !data.copa || !teamName) return agg;
+    var cp = data.copa;
+    function tally(gf, ga){
+      gf = Number(gf)||0; ga = Number(ga)||0;
+      agg.pj++; agg.gf += gf; agg.gc += ga;
+      if (gf > ga) agg.v++; else if (gf < ga) agg.p++; else agg.e++;
+    }
+    if (Array.isArray(cp.groups)) {
+      cp.groups.forEach(function(g){
+        (g && Array.isArray(g.matches) ? g.matches : []).forEach(function(m){
+          if (!m || !m.played) return;
+          if (m.home === teamName) tally(m.gh, m.ga);
+          else if (m.away === teamName) tally(m.ga, m.gh);
+        });
+      });
+    }
+    function koTally(node){
+      if (!node || !node.played) return;
+      if (node.ida && node.vta) {
+        var ida = node.ida || {}, vta = node.vta || {};
+        if (teamName === node.tieHome) {          /* visitante en ida, local en vta */
+          tally(ida.ga, ida.gh); tally(vta.gh, vta.ga);
+        } else if (teamName === node.tieAway) {   /* local en ida, visitante en vta */
+          tally(ida.gh, ida.ga); tally(vta.ga, vta.gh);
+        }
+      } else if (node.home && node.away) {         /* partido único */
+        if (node.home === teamName) tally(node.gh, node.ga);
+        else if (node.away === teamName) tally(node.ga, node.gh);
+      }
+    }
+    if (Array.isArray(cp.cuartos)) cp.cuartos.forEach(koTally);
+    if (Array.isArray(cp.semis))   cp.semis.forEach(koTally);
+    if (cp.final) koTally(cp.final);
+    return agg;
+  }
+  try { window._lextCupAggForTeam = _lextCupAggForTeam; } catch(_){}
+
   function _lextRenderSquadStatsHeader(team) {
     var box = document.getElementById('lext-squad-stats-header');
     if (!box || !team) return;
@@ -40481,6 +40613,28 @@ https://api.sofascore.app/api/v1/team/44/image
       if (r.name && _normName(r.name) === targetName) return true;
       return false;
     }
+
+    /* 1·PRIORIDAD — clasificación de ESTA liga externa (2026-06-04).
+       `standings(loadData(CURRENT_KEY))` es EXACTAMENTE la misma fuente
+       que pinta la tabla de la clasificación (renderTable), así que la
+       caja del club SIEMPRE coincide con la fila que el usuario acaba de
+       pulsar. Va PRIMERO, antes que `collectStandings()` (Liga EA Sports)
+       y antes que el DOM, porque esas dos podían colar una fila ajena/
+       stale (bug Olympiacos: la clasificación mostraba 38 PJ pero la caja
+       6, al resolver el row por collectStandings/DOM en vez de por la liga
+       propia). Solo cae a los fallbacks de abajo si esta liga no tiene
+       resultados (p.ej. Liga EA Sports, cuyos resultados viven en
+       ef_liga38_v4 y los resuelve collectStandings). */
+    try {
+      var _dataPri = (typeof loadData === 'function') ? loadData(CURRENT_KEY) : null;
+      if (_dataPri && Array.isArray(_dataPri.results) && _dataPri.results.length
+          && typeof standings === 'function') {
+        var _arrPri = standings(_dataPri) || [];
+        for (var _pq = 0; _pq < _arrPri.length && !row; _pq++) {
+          if (_matchRow(_arrPri[_pq])) row = _arrPri[_pq];
+        }
+      }
+    } catch(_){}
 
     /* 1a. collectStandings — motor principal de Liga EA Sports
        (también reutilizado por Hypermotion / Primera Federación
@@ -40602,6 +40756,25 @@ https://api.sofascore.app/api/v1/team/44/image
     }
 
     if (!row) row = {pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
+    /* Clonamos la fila de liga ANTES de sumar la copa: `row` puede ser un
+       objeto compartido del array de standings, y mutarlo corromper­ía la
+       clasificación (que debe quedarse SOLO con liga). */
+    row = {
+      pj: Number(row.pj)||0, v: Number(row.v)||0, e: Number(row.e)||0, p: Number(row.p)||0,
+      gf: Number(row.gf)||0, gc: Number(row.gc)||0,
+      dg: (typeof row.dg === 'number') ? row.dg : ((Number(row.gf)||0)-(Number(row.gc)||0))
+    };
+    /* SUMA de la COPA — solo dentro de la plantilla del club, nunca en la
+       clasificación de liga (petición usuario 2026-06-04). */
+    try {
+      var _cupData = (typeof loadData === 'function') ? loadData(CURRENT_KEY) : null;
+      var _cupAgg = _lextCupAggForTeam(_cupData, team.name);
+      if (_cupAgg && _cupAgg.pj > 0) {
+        row.pj += _cupAgg.pj; row.v += _cupAgg.v; row.e += _cupAgg.e; row.p += _cupAgg.p;
+        row.gf += _cupAgg.gf; row.gc += _cupAgg.gc;
+        row.dg = row.gf - row.gc;
+      }
+    } catch(_){}
     var pct = row.pj > 0 ? Math.round((row.v / row.pj) * 100) : 0;
 
     /* ── 2. Líderes del equipo (sobre t.players) ──
@@ -40838,6 +41011,13 @@ https://api.sofascore.app/api/v1/team/44/image
           try { saveData(CURRENT_KEY, data); } catch(_){}
         }
       } catch(_){}
+      /* Si el registro no aportó plantilla (típico en ligas externas
+         como Grecia), sembramos los 30 por defecto para que la caja no
+         salga «Sin jugadores». Sus stats se rellenan al simular liga/copa
+         (la sim también siembra antes de jugar). 2026-06-04. */
+      if (t && (!t.players || !t.players.length)) {
+        try { if (_lextEnsureDefaultRoster(t)) saveData(CURRENT_KEY, data); } catch(_){}
+      }
     }
     /* ── GUARD DURABLE anti-rebrote (2026-05-17) ──────────────────
        El usuario edita la plantilla, la guarda limpia, pero al
@@ -42955,6 +43135,13 @@ https://api.sofascore.app/api/v1/team/44/image
        liga ya estaba marcado y nuestros players nuevos podrían
        quedarse sin inicializar. Hacemos un ensure global aquí. */
     (data.teams||[]).forEach(function(t){
+      if (t && (!t.players || !t.players.length)) {
+        try {
+          var _hyC = _lextHydrateFromSquadRegistry(t.name);
+          if (_hyC && _hyC.length) t.players = _hyC;
+        } catch(_){}
+        try { _lextEnsureDefaultRoster(t); } catch(_){}
+      }
       (t && t.players ? t.players : []).forEach(ensurePlayerStats);
     });
     /* Invalidar el roster cache para que applyMatchStats relea

@@ -49817,7 +49817,49 @@ https://api.sofascore.app/api/v1/team/44/image
   var OVR_KEY = 'munich-obj-overrides-v1';
   var OVR = {};
   function loadOverrides(){ try { OVR = JSON.parse(localStorage.getItem(OVR_KEY) || '{}') || {}; } catch(_){ OVR = {}; } }
-  function saveOverrides(){ try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){} }
+  /* Persistencia del editor de Objetivos del Club (cantidades + textos
+     custom). Antes vivía SOLO en localStorage: al recargar la web en
+     otro dispositivo, o si el navegador móvil evictaba la caché, lo
+     editado "no se guardaba" (foto usuario 2026-06-04). Ahora se
+     sincroniza con el servidor (/api/kv/munich-obj-overrides-v1) con el
+     patrón canónico "_save = push autoritativo · _boot = pull aditivo":
+       · saveOverrides → localStorage + POST del OVR COMPLETO (los
+         reverts a default del propio dispositivo SÍ propagan al server).
+       · _hydrateOverridesFromServer → fusión ADITIVA: los overrides
+         LOCALES GANAN; sólo se añaden los oids que el server tenga y el
+         local no. Nunca pisa una edición local. Si la fusión añade algo,
+         re-sube para converger. */
+  function _saveOverridesServer(){
+    try {
+      window.fetch('/api/kv/' + OVR_KEY, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({value: OVR || {}})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  function saveOverrides(){ try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){} _saveOverridesServer(); }
+  function _hydrateOverridesFromServer(cb){
+    try {
+      window.fetch('/api/kv/' + OVR_KEY, {credentials:'same-origin', headers:{'Cache-Control':'no-store'}})
+        .then(function(r){ return (r && r.ok) ? r.json() : null; })
+        .then(function(j){
+          var remote = (j && j.ok && j.value && typeof j.value === 'object') ? j.value : null;
+          if (!remote){ if (typeof cb === 'function') cb(false); return; }
+          var added = false;
+          for (var oid in remote){
+            if (!remote.hasOwnProperty(oid)) continue;
+            if (OVR[oid] == null && remote[oid] != null){ OVR[oid] = remote[oid]; added = true; }
+          }
+          if (added){
+            try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){}
+            _saveOverridesServer();
+          }
+          if (typeof cb === 'function') cb(added);
+        }).catch(function(){ if (typeof cb === 'function') cb(false); });
+    } catch(_){ if (typeof cb === 'function') cb(false); }
+  }
   loadOverrides();
   function effTarget(it){ var o = OVR[it.oid]; return (o && o.c != null && !isNaN(o.c)) ? Number(o.c) : it.c; }
   /* Plantilla de texto EFECTIVA: el override `t` (editado por el usuario)
@@ -49957,6 +49999,15 @@ https://api.sofascore.app/api/v1/team/44/image
     var ok = renderAll('ath-obj-club', 'Liverpool', false);
     if (!ok) { setTimeout(boot, 120); return; }
     if (typeof athObjCount === 'function') athObjCount();
+    /* Pull aditivo del server: si trae overrides que este dispositivo no
+       tiene, re-render para reflejarlos — sin pisar lo editado aquí ni
+       interrumpir una edición en curso. */
+    _hydrateOverridesFromServer(function(changed){
+      if (!changed || window.__munichObjEditing) return;
+      renderAll('ath-obj-club', 'Liverpool', false);
+      if (typeof athObjCount === 'function') athObjCount();
+      try { if (typeof window._munichObjAfterRender === 'function') window._munichObjAfterRender(); } catch(_){}
+    });
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

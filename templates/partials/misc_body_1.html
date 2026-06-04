@@ -2648,14 +2648,27 @@ window._showSimProgress = function(opts, onDone){
       if (_bedEdit){
         /* En modo edición el nombre abre el PANEL DE BAJA MANUAL. */
         nameHtml = '<span class="lext-sq-name-link bed-name" onclick="event.stopPropagation();window._bedOpenBaja&&window._bedOpenBaja(this)" title="Marcar baja manual (expulsión / acumulación / lesión)">'+name+'</span>';
+      } else if (window._bplantView === 'sel'){
+        /* Selección, fuera de edición: si tiene baja (nombre en morado /
+           rojo / amarillo), al pulsar el nombre se muestra la lesión y el
+           tiempo de baja (petición usuario 2026-06-04). */
+        var _detSel = _bedBajaDetail(name);
+        nameHtml = _detSel
+          ? '<span class="lext-sq-name-link" onclick="event.stopPropagation();window._bedShowBajaInfo&&window._bedShowBajaInfo(this)" style="cursor:pointer;text-decoration:underline dotted rgba(214,166,255,.6);text-underline-offset:3px;" title="Pulsa para ver la baja">'+name+'</span>'
+          : name;
       } else {
-        /* Fuera de edición: si está lesionado, el nombre abre el menú de
-           tratamiento (foto 4, petición usuario 2026-05-25). */
+        /* Club, fuera de edición: si está lesionado, el nombre abre el menú
+           de tratamiento (foto 4, petición usuario 2026-05-25). Si tiene
+           sanción (sin lesión), muestra la baja al pulsar. */
         var _injLes = (window.LESION_STORE || {})[name];
         var _isInj  = !!(_injLes && Number(_injLes.partidos) > 0);
-        nameHtml = _isInj
-          ? '<span class="lext-sq-name-link" onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()" style="cursor:pointer;text-decoration:underline dotted rgba(255,120,120,.55);text-underline-offset:3px;" title="Pulsa para abrir el menú de tratamiento">'+name+'</span>'
-          : name;
+        if (_isInj){
+          nameHtml = '<span class="lext-sq-name-link" onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()" style="cursor:pointer;text-decoration:underline dotted rgba(255,120,120,.55);text-underline-offset:3px;" title="Pulsa para abrir el menú de tratamiento">'+name+'</span>';
+        } else if (_bedBajaDetail(name)){
+          nameHtml = '<span class="lext-sq-name-link" onclick="event.stopPropagation();window._bedShowBajaInfo&&window._bedShowBajaInfo(this)" style="cursor:pointer;text-decoration:underline dotted rgba(255,210,120,.6);text-underline-offset:3px;" title="Pulsa para ver la baja">'+name+'</span>';
+        } else {
+          nameHtml = name;
+        }
       }
       var bj = _bedBajaState(name);
       var bjCls = bj ? (' bed-'+bj) : '';
@@ -2884,6 +2897,30 @@ window._showSimProgress = function(opts, onDone){
     var _bedTarget = null;   /* nombre del jugador en edición */
     var _bedType = null;     /* 'red' | 'yellow' | 'purple' */
     function _bedTeamLabel(){ return (window._bplantView === 'sel') ? _hubSelName() : _hubTeamName(); }
+    /* Mostrar (fuera de edición) la baja de un jugador al pulsar su nombre:
+       tipo + partidos restantes + motivo (petición usuario 2026-06-04:
+       "al pinchar el nombre en morado de Kounde tiene que salir la lesión
+       que tiene y el tiempo de baja"). Lee el detalle de los stores REALES
+       vía `_bedBajaDetail` (cubre club Y selección). */
+    window._bedShowBajaInfo = function(el){
+      var row = el && el.closest ? el.closest('.lext-sq-row') : null;
+      var name = row && row.getAttribute('data-player');
+      if (!name) return;
+      var d = _bedBajaDetail(name);
+      if (!d){ try { alert(name + '\nSin baja activa.'); } catch(_){} return; }
+      var tipo = (d.state === 'red')   ? '🟥 Expulsado'
+               : (d.state === 'yellow')? '🟨 Sanción por acumulación de tarjetas'
+               :                         '🩹 Lesionado';
+      var n  = Math.max(0, parseInt(d.n, 10) || 0);
+      var pl = (n === 1) ? 'partido' : 'partidos';
+      var team = _bedTeamLabel();
+      try {
+        alert('🏥 ' + name + '  ·  ' + team + '\n\n'
+          + tipo + '\n'
+          + 'Tiempo de baja: ' + n + ' ' + pl + '\n'
+          + (d.reason ? ('Motivo: ' + d.reason) : ''));
+      } catch(_){}
+    };
     window._bedOpenBaja = function(el){
       var row = el && el.closest ? el.closest('.lext-sq-row') : null;
       var name = row && row.getAttribute('data-player');
@@ -3114,7 +3151,7 @@ window._showSimProgress = function(opts, onDone){
       var html = ''
         + _section('🧤 PORTEROS',     by.POR, true,  ctx)
         + _section('🛡 DEFENSAS',     by.DEF, false, ctx)
-        + _section('⚙ CENTROCAMPISTAS', by.MED, false, ctx)
+        + _section('⚙ MEDIOS',         by.MED, false, ctx)
         + _section('⚽ DELANTEROS',    by.DEL, false, ctx);
       host.innerHTML = html || '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.55);">— Sin jugadores —</div>';
     }
@@ -3150,7 +3187,7 @@ window._showSimProgress = function(opts, onDone){
         var html = ''
           + _section('🧤 PORTEROS',     by.POR, true)
           + _section('🛡 DEFENSAS',     by.DEF, false)
-          + _section('⚙ CENTROCAMPISTAS', by.MED, false)
+          + _section('⚙ MEDIOS',         by.MED, false)
           + _section('⚽ DELANTEROS',    by.DEL, false);
         host.innerHTML = html || '';
         if (!html) _renderEmpty(host);

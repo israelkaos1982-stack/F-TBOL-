@@ -6920,6 +6920,46 @@ window._showSimProgress = function(opts, onDone){
        partido del Mundial). Si no se puede resolver, caemos al atajo
        "VER JORNADA N" (lista de la jornada) como respaldo. */
     var ligaMatch = _resolveHubLigaMatch(ligaJor);
+    /* ¿El partido del hub en esta jornada de Liga ya está jugado o
+       simulado? Leemos del MISMO store de resultados de Liga
+       (`window.loadResults`, key `j|home|away`) que usa la pantalla de
+       jornada y `_simHubLigaMatch`. Si está jugado, la card muestra el
+       marcador + VER JORNADA + CONTINUAR (no se puede re-simular). */
+    var _ligaPlayed = null;
+    if (ligaMatch && ligaJor > 0){
+      try {
+        if (typeof window.loadResults === 'function'){
+          var _allLR = window.loadResults() || {};
+          _ligaPlayed = _allLR[ligaJor + '|' + ligaMatch.home + '|' + ligaMatch.away] || null;
+        }
+      } catch(_){}
+    }
+    if (_ligaPlayed){
+      var _gh = (_ligaPlayed.gh != null) ? _ligaPlayed.gh : '-';
+      var _ga = (_ligaPlayed.ga != null) ? _ligaPlayed.ga : '-';
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
+        + '<div class="ps-meta" style="margin:14px 0;">'
+        +   '<div style="font-size:12px;color:rgba(255,255,255,.6);letter-spacing:1px;margin-bottom:6px;">✅ PARTIDO JUGADO</div>'
+        +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:19px;letter-spacing:1px;line-height:1.3;">'
+        +     '<b>' + _esc(ligaMatch.home) + '</b> <span style="color:#ffd54a;">' + _gh + ' – ' + _ga + '</span> <b>' + _esc(ligaMatch.away) + '</b>'
+        +   '</div>'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+        +   '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>'
+        +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
+        + '</div>'
+        + '</div>';
+      var bV0 = document.getElementById('ps-nontour-open');
+      if (bV0) bV0.onclick = function(){
+        try { if (ligaJor > 0 && typeof window.openLigaJornada === 'function') window.openLigaJornada(ligaJor); } catch(_){}
+      };
+      var bC0 = document.getElementById('ps-nontour-cont');
+      if (bC0) bC0.onclick = function(){ _markDoneAndAdvance(); };
+      return;
+    }
     var openBtn = '';
     if (ligaMatch){
       openBtn = '<button type="button" class="ps-btn" id="ps-nontour-previa">📋 ABRIR PREVIA</button>';
@@ -6929,6 +6969,21 @@ window._showSimProgress = function(opts, onDone){
     var metaHtml = ligaMatch
       ? '📋 Pantalla de previa<br><b>' + _esc(ligaMatch.home) + '</b> vs <b>' + _esc(ligaMatch.away) + '</b>'
       : 'La jornada se juega desde la pantalla de la competición.';
+    /* Caja «🤖 PAGAR SIMULACIÓN · 50🪙» para los días de Liga
+       (2026-06-04, petición usuario): cobra del presupuesto del hub y
+       auto-simula SOLO el partido del Liverpool en esta jornada con el
+       motor 4-ejes (`window._simHubLigaMatch`), igual que el atajo que
+       ya existía en las cards de torneo. Convive con CONTINUAR ▶ (que
+       sigue saltando el día sin jugar ni pagar). REGLA (2026-05-25): un
+       HvH JAMÁS se simula pagando — si el rival del Liverpool también
+       fuese humano, la caja no aparece. */
+    var _ligaHvH = false;
+    if (ligaMatch){
+      try { _ligaHvH = (typeof window.esHumano === 'function') && window.esHumano(ligaMatch.home) && window.esHumano(ligaMatch.away); } catch(_){}
+    }
+    var _payHtmlLiga = (ligaMatch && !_ligaHvH)
+      ? '<div style="margin-top:2px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST, PS_PAY_SIM_COST) + '</div>'
+      : '';
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
@@ -6938,6 +6993,7 @@ window._showSimProgress = function(opts, onDone){
       + '</div>'
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
       +   openBtn
+      +   _payHtmlLiga
       +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
       + '</div>'
       + '</div>';
@@ -6959,6 +7015,37 @@ window._showSimProgress = function(opts, onDone){
     };
     var bC = document.getElementById('ps-nontour-cont');
     if (bC) bC.onclick = function(){ _markDoneAndAdvance(); };
+    var _payBtnL = document.getElementById('ps-pay-sim-btn');
+    if (_payBtnL){
+      _payBtnL.onclick = function(){
+        if (_payBtnL.disabled) return;
+        _payBtnL.disabled = true;
+        if (!_psPayAndSimHubLigaMatch(ligaJor, ligaMatch)) _payBtnL.disabled = false;
+      };
+    }
+  }
+
+  /* Cobra 50🪙 del presupuesto del hub y auto-simula el partido del
+     Liverpool en una jornada de Liga vía `window._simHubLigaMatch`. NO
+     avanza el día: invalida la firma de idempotencia y re-renderiza
+     para que `_cardNonTour` detecte el partido ya jugado y muestre el
+     marcador + CONTINUAR ▶. Devuelve false (sin cobrar) si no hay
+     fondos, falta algún helper o el partido es HvH. 2026-06-04. */
+  function _psPayAndSimHubLigaMatch(j, ligaMatch){
+    if (!(j > 0) || !ligaMatch || !ligaMatch.home || !ligaMatch.away) return false;
+    try {
+      if (typeof window.esHumano === 'function'
+          && window.esHumano(ligaMatch.home) && window.esHumano(ligaMatch.away)) return false;
+    } catch(_){}
+    if (_psGetHubMoney() < PS_PAY_SIM_COST) return false;
+    if (typeof window._bayernHudCreditMoney !== 'function') return false;
+    if (typeof window._simHubLigaMatch !== 'function') return false;
+    var res = window._simHubLigaMatch(j, ligaMatch.home, ligaMatch.away);
+    if (!res) return false;
+    try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
+    try { var st = _stage(); if (st) st._psSig = null; } catch(_){}
+    _render();
+    return true;
   }
 
   function _cardMatch(day){

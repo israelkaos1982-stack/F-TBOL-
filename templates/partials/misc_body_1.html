@@ -3301,7 +3301,12 @@ window._showSimProgress = function(opts, onDone){
         var u=window.getTeamLogoUrl(String(s)); if(u && !_isStaleBayernShield(u)) return u; } } }catch(_){}
     return HUB_FALLBACK_SHIELD;
   }
-  /* Nombre LÓGICO del equipo humano del hub (slot Bayern Munich). Lo
+  /* Exponer en window: el toggle de escudos de la plantilla del hub
+     (_hubClubCrest, otro IIFE) usa window._psHumanShield como fuente
+     única del escudo del hub. Sin esta exposición caía al escudo STALE
+     del Bayern del slot renombrado (bug 2026-06-04). */
+  try { window._psHumanShield = _psHumanShield; } catch(_){}
+  try { window._psHumanName = _psHumanName; } catch(_){}
      usan _realRival (matching del bracket del torneo) y
      _openPreseasonPrevia (home de la previa + lookup de plantilla en
      showPrePartidoOverlay / abrirAmistoso). Priorizamos el reemplazo

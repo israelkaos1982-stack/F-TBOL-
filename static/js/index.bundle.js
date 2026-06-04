@@ -5533,9 +5533,30 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
     } catch(_){}
     document.getElementById('sancion-overlay').classList.remove('show');
+    /* Snapshot de los equipos de la previa ANTES de ejecutar el callback.
+       El callback (_sancionCallback → _afterShare → _ppCustomCallback)
+       puede poner `window._ppPreviaTeams = null` (p.ej. el callback de
+       `_openMatchWithPrevia` de Liga). Si el share corre DESPUÉS con
+       `_ppPreviaTeams` nulo, `_ppShareWA` cae a `_mlSt(_ppMatchKey)` y
+       `_ppMatchKey` para Liga es `lj{j}m0` = el PRIMER partido de la
+       jornada (NO el de la caja del hub) → compartía el partido
+       equivocado. Bug 2026-06-04 (fotos usuario, varias cajas de humano):
+       la caja Liverpool abría la previa de "Celta de Vigo vs Liverpool"
+       (correcto) pero el mensaje 🟢 INICIO de WhatsApp salía
+       "Arsenal vs Athletic Club" (= primer partido de la J3). */
+    var _previaSnap = window._ppPreviaTeams;
     if (window._sancionCallback) { var _cb = window._sancionCallback; window._sancionCallback = null; try { _cb(); } catch(_){} }
     if (shouldShare) {
+      var _restoredPrevia = false;
+      if (!window._ppPreviaTeams && _previaSnap && _previaSnap.home && _previaSnap.away) {
+        window._ppPreviaTeams = _previaSnap;
+        _restoredPrevia = true;
+      }
       try { if (typeof window._ppShareWA === 'function') window._ppShareWA(); } catch(_){}
+      /* Re-nulificar para respetar la intención del callback (que ya
+         avanzó el estado del partido). El próximo open de previa lo
+         vuelve a setear. */
+      if (_restoredPrevia) window._ppPreviaTeams = null;
     }
   };
 

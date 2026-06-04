@@ -13187,6 +13187,65 @@ window._showSimProgress = function(opts, onDone){
         _ligaOnlyPJ[tn] = teamPJByComp.liga[tn];
       });
     } catch(_){}
+
+    /* Source 4: inter_state_v1 (Copa Intercontinental). Igual que Recopa,
+       sus partidos IA-vs-IA NO se persisten en LIGA_PLAYER_MATCH_STORE
+       (volátil), así que tras un reload la caja Estadísticas quedaría
+       vacía (y un rebuild la sobreescribiría con un bucket vacío). El
+       estado del bracket SÍ persiste con match.events/home/away, así que
+       lo iteramos aquí → bucket 'inter'. Misma filosofía que Source 3
+       (cfg.results de torneos). 2026-06-04. */
+    try {
+      var _icSt = null;
+      try { _icSt = JSON.parse(localStorage.getItem('inter_state_v1')||'null'); } catch(_){}
+      if (_icSt && _icSt.sorteo) {
+        ['q','s','f'].forEach(function(_ph){
+          var _ms = _icSt.sorteo[_ph] || [];
+          _ms.forEach(function(_m){
+            if (!_m || !_m.played || !Array.isArray(_m.events)) return;
+            var _tA = _m.home || '', _tB = _m.away || '';
+            if (!_tA || !_tB) return;
+            var _pjK = _mkPJ(_tA, _tB);
+            var _dK = 'inter|' + _pjK;
+            if (processedMatches[_dK]) return;
+            processedMatches[_dK] = true;
+            var _nA = _normPS(_tA), _nB = _normPS(_tB);
+            if (_nA) teamPJByComp.inter[_nA] = (teamPJByComp.inter[_nA]||0) + 1;
+            if (_nB) teamPJByComp.inter[_nB] = (teamPJByComp.inter[_nB]||0) + 1;
+            _m.events.forEach(function(ev){
+              if (!ev || ev._varAnulado) return;
+              var team = ev.realTeam || (ev.team === 'a' ? _tA : ev.team === 'b' ? _tB : '');
+              var player = '';
+              if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+              else if (typeof ev.player === 'string') player = ev.player;
+              else player = ev.name || ev.playerName || '';
+              if (!player) return;
+              var p = getOrCreateInBucket(buckets.inter, team, player);
+              var type = ev.type || '';
+              var ico = String(ev.ico||'').replace(/️/g,'').trim();
+              if (type==='amarilla') p.ta++;
+              else if (type==='roja'||type==='d-amarilla') p.tr++;
+              else if (type==='card'){ if(ico==='🟨')p.ta++; else if(ico==='🟥')p.tr++; else if(ico==='🟨🟥'){p.ta++;p.tr++;} }
+              else if (type==='gol') p.gol++;
+              else if (type==='falta-gol') p.fk++;
+              else if (type==='pen-gol') p.pen++;
+              else if (type==='pen-prov') p.penProv++;
+              else if (type==='pen-fallo'||type==='pen-fallado') p.penFall++;
+              else if (type==='propia') p.propia++;
+              else if (type==='pen-parado') p.penSaved++;
+              else if (type==='mvp') p.mvp++;
+              else if (type==='imbat') p.imbat++;
+              if (type==='sust' && ev.playerOut) getOrCreateInBucket(buckets.inter, team, ev.playerOut);
+            });
+            if (_m.mvp && _m.mvpTeam) {
+              var _hasMvp = _m.events.some(function(e){ return e.type==='mvp'; });
+              if (!_hasMvp) getOrCreateInBucket(buckets.inter, _m.mvpTeam, _m.mvp).mvp++;
+            }
+          });
+        });
+      }
+    } catch(_){}
+
     _mergeBucketInto(stats, buckets.copa);
     _mergeBucketInto(stats, buckets.sc);
     /* PJ del equipo en EA Sports = Liga + Copa + Supercopa España. */
@@ -32875,23 +32934,15 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-intercontinental">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🌐</span><h2>Intercontinental</h2></div>
+<!-- Banner dinámico: 🎯 Sortear / estado del pool / ♻️ Reiniciar (motor inter_state_v1). -->
+<div id="inter-banner"></div>
 <div class="jlist">
 <div class="jblock"><button class="jbtn c-inter" onclick="tog('inter-q')"><div class="pdot">▶</div>🌐 <b>Inter</b>  Cuartos</button>
-<div class="jmatches" id="inter-q">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-inter" onclick="tog('inter-s')"><div class="pdot">▶</div>🌐 <b>Inter</b>  Semifinales</button>
-<div class="jmatches" id="inter-s">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
+<div class="jmatches" id="inter-q"></div></div>
+<div class="jblock"><button class="jbtn c-inter" onclick="tog('inter-s')"><div class="pdot">▶</div>🌐 <b>Inter</b>  Semis</button>
+<div class="jmatches" id="inter-s"></div></div>
 <div class="jblock"><button class="jbtn c-inter" onclick="tog('inter-f')"><div class="pdot">▶</div>🌐 <b>Inter</b>  Final</button>
-<div class="jmatches" id="inter-f">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
+<div class="jmatches" id="inter-f"></div></div>
 <!-- Caja "📊 Estadísticas" Intercontinental (2026-05-08, sustituye al
      placeholder "Cuadro de Eliminatorias — próximamente"). Paleta wine
      oscuro + dorado-naranja igual que la temática (#ff9020 borde). Lee
@@ -32901,6 +32952,333 @@ window._showSimProgress = function(opts, onDone){
 </div>
 </div>
 </div>
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   Copa Intercontinental · bracket de 8 (Cuartos → Semis → Final), a
+   partido ÚNICO con prórroga + penaltis si empate al 90'. Tema
+   naranja/wine de la caja Inter (#ff9020). Cards con escudos +
+   simulación IA-vs-IA (estilo Recopa, coloreado Inter).
+   Motor: window._interRender (store localStorage `inter_state_v1`).
+   Pool = 2 manuales (campeón+subcampeón Champions, vía «EA Sports →
+   Europa → 🌐 Intercontinental») + 6 primeros de la Liga Resto del
+   Mundo (entran solos cuando ESTÉ TODA simulada). 2026-06-04.
+   ══════════════════════════════════════════════════════════════════ */
+#s-intercontinental #inter-banner{padding:6px 12px 2px;display:flex;flex-direction:column;gap:8px;}
+#s-intercontinental .inter-btn-sortear{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid rgba(255,144,32,.7);background:linear-gradient(135deg,rgba(255,144,32,.20),rgba(110,40,0,.35));color:#ffd0a0;box-shadow:0 0 14px rgba(255,144,32,.25);}
+#s-intercontinental .inter-btn-sortear:active{filter:brightness(1.15);}
+#s-intercontinental .inter-btn-reset{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid rgba(255,80,80,.55);background:linear-gradient(135deg,rgba(255,80,80,.12),rgba(80,20,20,.25));color:#ffb0b0;}
+#s-intercontinental .inter-banner-info{font-family:Rajdhani,sans-serif;font-size:12.5px;line-height:1.55;color:rgba(255,210,170,.92);background:rgba(255,144,32,.07);border:1px solid rgba(255,144,32,.30);border-radius:9px;padding:9px 11px;}
+#s-intercontinental .inter-banner-info b{color:#ffd700;}
+#s-intercontinental .inter-empty{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,210,170,.6);text-align:center;padding:14px 10px;font-style:italic;}
+#s-intercontinental .inter-card{margin:8px 8px;background:linear-gradient(135deg,#1a0a02,#3a1808 50%,#1a0a02);border:1px solid rgba(255,144,32,.5);border-radius:12px;overflow:hidden;padding:10px 6px;}
+#s-intercontinental .inter-card.played{border-color:rgba(255,180,80,.5);}
+#s-intercontinental .inter-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+#s-intercontinental .inter-card-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
+#s-intercontinental .inter-card-side img{width:48px;height:48px;object-fit:contain;}
+#s-intercontinental .inter-card-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.4px;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:700;}
+#s-intercontinental .inter-card-name.win{color:#ffd54a;text-shadow:0 0 12px rgba(255,200,80,.7);}
+#s-intercontinental .inter-card-name.lose{color:#ff8a8a;text-decoration:line-through;text-decoration-color:rgba(255,138,138,.5);opacity:.72;}
+#s-intercontinental .inter-card-mid{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:80px;flex-shrink:0;}
+#s-intercontinental .inter-card-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;letter-spacing:2px;background:rgba(0,0,0,.4);border-radius:8px;padding:3px 12px;border:1px solid rgba(255,144,32,.25);}
+#s-intercontinental .inter-card-score.played{color:#ffd54a;}
+#s-intercontinental .inter-card-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:#ffd080;background:rgba(255,160,40,.15);border:1px solid rgba(255,160,40,.4);border-radius:4px;padding:1px 5px;}
+#s-intercontinental .inter-card-act{padding:5px 12px;border-radius:7px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.1px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;}
+#s-intercontinental .inter-card-act.simular{background:rgba(255,144,32,.16);color:#ffb060;border-color:rgba(255,144,32,.6);}
+#s-intercontinental .inter-card-act.previa{background:rgba(120,180,255,.14);color:#9fc4ff;border-color:rgba(120,180,255,.55);}
+#s-intercontinental .inter-simall-wrap{display:flex;justify-content:center;padding:8px 8px 2px;}
+#s-intercontinental .inter-btn-simall{padding:8px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:rgba(255,160,40,.15);color:#ffa050;border:1.5px solid rgba(255,160,40,.55);}
+#s-intercontinental .inter-champ-row{display:flex;align-items:center;gap:14px;margin:10px 8px;padding:12px;border-radius:12px;background:linear-gradient(135deg,rgba(255,144,32,.18),rgba(110,40,0,.30));border:1.5px solid rgba(255,200,80,.6);box-shadow:0 0 22px rgba(255,144,32,.25);}
+#s-intercontinental .inter-champ-row img{width:64px;height:64px;object-fit:contain;}
+#s-intercontinental .inter-champ-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#ffd54a;font-weight:700;}
+#s-intercontinental .inter-champ-name{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:1.5px;color:#fff;text-shadow:0 0 14px rgba(255,200,80,.6);}
+</style>
+<script>
+/* ── Motor Copa Intercontinental (inter_state_v1) ─────────────────────
+   8 equipos · Cuartos→Semis→Final · partido único ET+pens.
+   state = { sorteo:{ q:[m×4], s:[m×2], f:[m×1] }, champion, runnerUp }
+   match = { home, away, played, gh, ga, etGh, etGa, penWinner, events,
+             mvp, mvpTeam }
+   - IA-vs-IA: ▶ Simular → iaSimLive('inter_<phase>_<idx>', ...) →
+     window._interPersistAfterIa (single-leg ET+pen vía _isInterSim del
+     bundle de iaSimLive). Stats → ef_player_stats_inter_v1.
+   - HvIA/HvH: 📋 Previa → showPrePartidoOverlay(...,'inter',...) →
+     abrirInter → gm-modal comp='inter' → _interSaveHumanResult.
+   ─────────────────────────────────────────────────────────────────── */
+(function(){
+  var STORE_KEY = 'inter_state_v1';
+  var PHASES = ['q','s','f'];
+  var PHASE_LABEL = { q:'Cuartos', s:'Semifinales', f:'Final' };
+
+  function _load(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)||'null'); } catch(_){ return null; } }
+  function _save(s){ try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){} }
+  function _shuffle(a){ a=a.slice(); for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+  function _esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function _q(s){ return String(s||'').replace(/'/g,"\\'"); }
+  function _logo(name){ if(typeof window.getTeamLogoUrl==='function'){ try { return window.getTeamLogoUrl(name)||''; } catch(_){} } return ''; }
+  function _humIco(name){ if(typeof window.humanIcon==='function'){ try { return window.humanIcon(name)||''; } catch(_){} } return ''; }
+  function _isHuman(name){
+    try { if(typeof window.isHumanInComp==='function') return !!window.isHumanInComp(name,'inter'); } catch(_){}
+    try { if(typeof window.esHumano==='function') return !!window.esHumano(name); } catch(_){}
+    return false;
+  }
+
+  /* Tabla de la Liga Resto del Mundo + chequeo de "todos los partidos
+     jugados". Resto del Mundo se juega a UNA vuelta (CLAUDE.md), así que
+     "completa" = cada equipo ha disputado sus N-1 partidos. */
+  function _restoStandings(){
+    var data;
+    try { var raw=localStorage.getItem('ligaExt_resto-mundo'); data=raw?JSON.parse(raw):null; } catch(_){ return null; }
+    if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)) return null;
+    var map={};
+    data.teams.forEach(function(t){ if(t && t.id!=null) map[t.id]={ name:t.name||'', pj:0, gf:0, gc:0, pts:0 }; });
+    data.results.forEach(function(r){
+      var H=map[r.h], A=map[r.a]; if(!H||!A) return;
+      H.pj++; A.pj++; H.gf+=(r.gh||0); H.gc+=(r.ga||0); A.gf+=(r.ga||0); A.gc+=(r.gh||0);
+      if(r.gh>r.ga){ H.pts+=3; } else if(r.gh<r.ga){ A.pts+=3; } else { H.pts++; A.pts++; }
+    });
+    var N=data.teams.length;
+    var arr=Object.keys(map).map(function(k){ var m=map[k]; m.dg=m.gf-m.gc; return m; });
+    arr.sort(function(a,b){ if(b.pts!==a.pts) return b.pts-a.pts; if(b.dg!==a.dg) return b.dg-a.dg; if(b.gf!==a.gf) return b.gf-a.gf; return String(a.name).localeCompare(String(b.name),'es'); });
+    var complete = N>=8 && arr.length>=6 && arr.every(function(t){ return t.pj>=(N-1); });
+    return { ranking:arr, complete:complete, N:N };
+  }
+
+  /* Construye el pool de 8: 2 manuales (Champions) + 6 primeros de Resto
+     del Mundo (solo si la liga está TODA simulada). */
+  function _buildPool(){
+    var manual=[];
+    try {
+      if(typeof window._meaTeamsFor==='function'){
+        (window._meaTeamsFor('intercontinental')||[]).forEach(function(t){ if(t && t.name) manual.push(t.name); });
+      }
+    } catch(_){}
+    var rs=_restoStandings();
+    var restoComplete=!!(rs && rs.complete);
+    var restoTop6=(rs && restoComplete) ? rs.ranking.slice(0,6).map(function(t){ return t.name; }) : [];
+    var seen={}, pool=[];
+    function push(n){ n=String(n||'').trim(); if(!n) return; var k=n.toLowerCase(); if(seen[k]) return; seen[k]=true; pool.push(n); }
+    manual.slice(0,2).forEach(push);
+    restoTop6.forEach(push);
+    return { pool:pool.slice(0,8), manualCount:manual.length, restoComplete:restoComplete, ready:(manual.length>=2 && restoComplete && pool.length>=8) };
+  }
+
+  function _mkMatch(h,a){ return { home:h, away:a, played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null }; }
+  function _drawQuarters(pool){ var sh=_shuffle(pool).slice(0,8); var m=[]; for(var i=0;i<8;i+=2) m.push(_mkMatch(sh[i],sh[i+1])); return m; }
+  function _winnerOf(m){
+    if(!m || !m.played) return null;
+    var totA=(m.gh||0)+(m.etGh||0), totB=(m.ga||0)+(m.etGa||0);
+    if(m.penWinner==='a') return m.home;
+    if(m.penWinner==='b') return m.away;
+    if(totA>totB) return m.home;
+    if(totB>totA) return m.away;
+    return null;
+  }
+  function _drawNext(prev){ var w=[]; prev.forEach(function(m){ var x=_winnerOf(m); if(x) w.push(x); }); w=_shuffle(w); var m=[]; for(var i=0;i+1<w.length;i+=2) m.push(_mkMatch(w[i],w[i+1])); return m; }
+  function _phaseDone(s,phase){ var ms=(s.sorteo&&s.sorteo[phase])||[]; if(!ms.length) return false; for(var i=0;i<ms.length;i++) if(!ms[i].played) return false; return true; }
+  function _prevPhase(p){ var i=PHASES.indexOf(p); return i>0?PHASES[i-1]:null; }
+  function _firstPhaseToDraw(s){ for(var i=0;i<PHASES.length;i++){ var p=PHASES[i]; var ms=s.sorteo&&s.sorteo[p]; if(!ms||!ms.length) return p; } return null; }
+
+  /* ── PUBLIC API ──────────────────────────────────────────────────── */
+  window._interSortear = function(){
+    var s=_load()||{};
+    if(!s.sorteo || !s.sorteo.q || !s.sorteo.q.length){
+      var info=_buildPool();
+      if(!info.ready){
+        alert('⚠️ La Copa Intercontinental necesita EXACTAMENTE 8 equipos:\n\n· 2 de Europa (campeón + subcampeón de Champions) añadidos a mano en «EA Sports → Europa → 🌐 Intercontinental» — ahora '+info.manualCount+'/2.\n· Los 6 primeros de la Liga Resto del Mundo, que entran solos cuando ESTÉ TODA simulada — ahora '+(info.restoComplete?'lista ✅':'incompleta ⏳')+'.');
+        return;
+      }
+      s={ sorteo:{ q:_drawQuarters(info.pool), s:[], f:[] }, champion:null, runnerUp:null };
+      _save(s); _interRender();
+      return;
+    }
+    var phase=_firstPhaseToDraw(s);
+    if(!phase){ alert('La Copa Intercontinental ya tiene campeón. Pulsa ♻️ Reiniciar para rehacerla.'); return; }
+    var prev=_prevPhase(phase);
+    if(!prev || !_phaseDone(s,prev)){ alert('⚠️ Termina todos los partidos de '+(PHASE_LABEL[prev]||prev)+' antes de sortear '+(PHASE_LABEL[phase]||phase)+'.'); return; }
+    s.sorteo[phase]=_drawNext(s.sorteo[prev]);
+    _save(s); _interRender();
+  };
+
+  window._interReiniciar = function(){
+    if(!confirm('¿Reiniciar la Copa Intercontinental?\n\nSe pierden el sorteo y todos los resultados. El pool se reconstruye al pulsar 🎯 Sortear.')) return;
+    try { localStorage.removeItem(STORE_KEY); } catch(_){}
+    _interRender();
+  };
+
+  /* Persist hook IA-vs-IA: lo llama iaSimLive con prefijo inter_<phase>_<idx>. */
+  window._interPersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam, copaET){
+    var m=/^inter_([a-z]+)_(\d+)$/.exec(String(mk||'')); if(!m) return;
+    var phase=m[1], idx=parseInt(m[2],10)|0;
+    var s=_load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match=s.sorteo[phase][idx]; if(!match) return;
+    var et=copaET||{};
+    var totA=Number(scA)||0, totB=Number(scB)||0;
+    var etA=Number(et.et_gl)||0, etB=Number(et.et_gv)||0;
+    var penWinName=et.pen_winner||null;
+    match.gh=Math.max(0, totA-etA);
+    match.ga=Math.max(0, totB-etB);
+    match.etGh=etA; match.etGa=etB;
+    match.penWinner=penWinName ? (penWinName===home ? 'a' : (penWinName===away ? 'b' : null)) : null;
+    match.played=true;
+    match.events=(events||[]).filter(function(e){ return e && e.type!=='pen-result'; });
+    match.mvp=mvp||''; match.mvpTeam=mvpTeam||'';
+    if(phase==='f'){ var champ=_winnerOf(match); if(champ){ s.champion=champ; s.runnerUp=(champ===match.home)?match.away:match.home; } }
+    _save(s);
+    /* Stats de jugadores → ef_player_stats_inter_v1 (LIGA_PLAYER_MATCH_STORE
+       con competition='inter'). Sin esto la caja Estadísticas quedaría
+       vacía (la mayoría de partidos son IA-vs-IA). */
+    try { if(typeof window.registrarLigaPlayerStats==='function'){ window.registrarLigaPlayerStats(mk, home, away, match.events, mvp||'', mvpTeam||'', 'inter'); } } catch(_){}
+    setTimeout(function(){
+      if(phase==='f' && s.champion && typeof window._lecShowChampion==='function'){ try { window._lecShowChampion(s.champion); } catch(_){} }
+      _interRender();
+    }, 600);
+  };
+
+  /* Persist hook humano: lo llama gmEndMatch cuando _gm.comp==='inter'. */
+  window._interSaveHumanResult = function(phase, idx, gh, ga, etGh, etGa, penWinner, events, mvp, mvpTeam, home, away){
+    var s=_load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match=s.sorteo[phase][idx]; if(!match) return;
+    match.gh=Number(gh)||0; match.ga=Number(ga)||0;
+    match.etGh=Number(etGh)||0; match.etGa=Number(etGa)||0;
+    match.penWinner=penWinner||null; match.played=true;
+    match.events=(events||[]).filter(function(e){ return e && e.type!=='pen-result'; });
+    match.mvp=mvp||''; match.mvpTeam=mvpTeam||'';
+    if(phase==='f'){ var champ=_winnerOf(match); if(champ){ s.champion=champ; s.runnerUp=(champ===match.home)?match.away:match.home; } }
+    _save(s);
+    setTimeout(function(){
+      if(phase==='f' && s.champion && typeof window._lecShowChampion==='function'){ try { window._lecShowChampion(s.champion); } catch(_){} }
+      _interRender();
+    }, 500);
+  };
+
+  window._interSimAllIA = function(phase){
+    var s=_load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var ms=s.sorteo[phase]; var i=0;
+    function next(){
+      while(i<ms.length){
+        var m=ms[i];
+        if(m && !m.played && !_isHuman(m.home) && !_isHuman(m.away)){
+          var btn=document.getElementById('ia-sim-btn-inter_'+phase+'_'+i);
+          if(btn && !btn.disabled){ try { btn.click(); } catch(_){} i++; setTimeout(next,200); return; }
+        }
+        i++;
+      }
+    }
+    next();
+  };
+
+  window._interAbrirPrevia = function(phase, idx){
+    var s=_load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match=s.sorteo[phase][idx]; if(!match) return;
+    var local=match.home, visit=match.away;
+    var isHvH=_isHuman(local) && _isHuman(visit);
+    var matchKey='inter_'+phase+'_'+idx;
+    var dur=(typeof window._mlRealDurationLabel==='function')
+      ? window._mlRealDurationLabel({ isHvH:isHvH, humanInvolved:!isHvH })
+      : (isHvH ? '16.5 min' : '9.75 min');
+    window._ppPreviaTeams={ home:local, away:visit, j:0, comp:'inter', interPhase:phase, interIdx:idx };
+    window._ppCustomCallback=function(){ window._ppPreviaTeams=null; if(typeof window.abrirInter==='function'){ try { window.abrirInter(phase, idx, local, visit); } catch(_){} } };
+    if(typeof window.showPrePartidoOverlay==='function'){ window.showPrePartidoOverlay(matchKey, 'inter', 'Sí', dur, isHvH); }
+  };
+
+  /* ── RENDER ──────────────────────────────────────────────────────── */
+  function _renderBanner(){
+    var host=document.getElementById('inter-banner'); if(!host) return;
+    var s=_load(); var html='';
+    if(!s || !s.sorteo || !s.sorteo.q || !s.sorteo.q.length){
+      var info=_buildPool();
+      if(info.ready){
+        html+='<button class="inter-btn-sortear" onclick="window._interSortear&&window._interSortear()">🎯 Sortear Cuartos · 8 equipos</button>';
+      } else {
+        var parts=[];
+        if(info.manualCount<2) parts.push('Añade el <b>campeón y subcampeón de Champions</b> en «EA Sports → Europa → 🌐 Intercontinental» ('+info.manualCount+'/2).');
+        if(!info.restoComplete) parts.push('Simula <b>TODA</b> la Liga Resto del Mundo — sus 6 primeros entran automáticamente.');
+        html+='<div class="inter-banner-info">🌐 Faltan equipos para los 8:<br>· '+parts.join('<br>· ')+'</div>';
+      }
+    } else {
+      if(s.champion){
+        html+='<div class="inter-banner-info">🏆 Campeón: <b>'+_esc(s.champion)+'</b> · Subcampeón: <b>'+_esc(s.runnerUp||'')+'</b></div>';
+      } else {
+        var phase=_firstPhaseToDraw(s);
+        if(phase && phase!=='q'){
+          var prev=_prevPhase(phase);
+          if(_phaseDone(s,prev)) html+='<button class="inter-btn-sortear" onclick="window._interSortear&&window._interSortear()">🎯 Sortear '+(PHASE_LABEL[phase])+'</button>';
+          else html+='<div class="inter-banner-info">⏳ Termina los partidos de <b>'+(PHASE_LABEL[prev])+'</b> para sortear la siguiente ronda.</div>';
+        }
+      }
+      html+='<button class="inter-btn-reset" onclick="window._interReiniciar&&window._interReiniciar()">♻️ Reiniciar Intercontinental</button>';
+    }
+    host.innerHTML=html;
+  }
+
+  function _renderRound(phase){
+    var host=document.getElementById('inter-'+phase); if(!host) return;
+    var s=_load()||{}; var ms=(s.sorteo&&s.sorteo[phase])||[];
+    if(!ms.length){
+      host.innerHTML='<div class="inter-empty">'+(phase==='q'?'Aún no se ha sorteado. Pulsa 🎯 Sortear Cuartos arriba.':'Se sortea al terminar la ronda anterior.')+'</div>';
+      return;
+    }
+    var html='';
+    var pendingIA=false; ms.forEach(function(m){ if(m && !m.played && !_isHuman(m.home) && !_isHuman(m.away)) pendingIA=true; });
+    if(pendingIA){ html+='<div class="inter-simall-wrap"><button class="inter-btn-simall" onclick="window._interSimAllIA&&window._interSimAllIA(\''+phase+'\')">⚡ Simular IA · '+(PHASE_LABEL[phase])+'</button></div>'; }
+    if(phase==='f' && s.champion){
+      var l=_logo(s.champion);
+      html+='<div class="inter-champ-row">'+(l?'<img src="'+_esc(l)+'"/>':'<span style="font-size:48px;">🏆</span>')+'<div><div class="inter-champ-lbl">CAMPEÓN INTERCONTINENTAL</div><div class="inter-champ-name">'+_esc(s.champion)+'</div></div></div>';
+    }
+    ms.forEach(function(m,i){ html+=_renderMatchCard(m,phase,i); });
+    host.innerHTML=html;
+  }
+
+  function _renderMatchCard(m, phase, idx){
+    var played=!!m.played;
+    var totA=(m.gh||0)+(m.etGh||0), totB=(m.ga||0)+(m.etGa||0);
+    var winner=_winnerOf(m), loser=winner?(winner===m.home?m.away:m.home):null;
+    var humA=_isHuman(m.home), humB=_isHuman(m.away);
+    var bothIA=!humA && !humB;
+    var mk='inter_'+phase+'_'+idx;
+    function side(name, isWin, isLose){
+      var l=_logo(name); var cls=isWin?'win':(isLose?'lose':''); var hi=_humIco(name);
+      return '<div class="inter-card-side">'+(l?'<img src="'+_esc(l)+'"/>':'<span style="font-size:36px;">🛡</span>')+'<div class="inter-card-name '+cls+'">'+hi+_esc(name)+'</div></div>';
+    }
+    var center;
+    if(played){
+      var penTxt=m.penWinner?'<div class="inter-card-pen">PEN '+_esc(m.penWinner==='a'?m.home:m.away)+'</div>':'';
+      center='<div class="inter-card-mid"><div class="inter-card-score played">'+totA+'–'+totB+'</div>'+penTxt+'</div>';
+    } else if(bothIA){
+      center='<div class="inter-card-mid">'
+        +'<div class="ml-score" id="ia-sim-score-'+mk+'"><div id="ia-sc-'+mk+'-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div><span style="margin:0 4px;color:rgba(255,255,255,.5);">–</span><div id="ia-sc-'+mk+'-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div></div>'
+        +'<button class="inter-card-act simular" id="ia-sim-btn-'+mk+'" onclick="window.iaSimLive(\''+mk+'\',\''+_q(m.home)+'\',\''+_q(m.away)+'\',0)">▶ Simular</button>'
+        +'</div>';
+    } else {
+      center='<div class="inter-card-mid"><div class="inter-card-score">– –</div><button class="inter-card-act previa" onclick="window._interAbrirPrevia&&window._interAbrirPrevia(\''+phase+'\','+idx+')">📋 Previa</button></div>';
+    }
+    var actaId='ia-acta-'+mk;
+    return '<div class="inter-card '+(played?'played':'')+'"><div class="inter-card-row">'+side(m.home, winner===m.home, loser===m.home)+center+side(m.away, winner===m.away, loser===m.away)+'</div>'
+      +(bothIA && !played ? '<div id="'+actaId+'" style="display:none;border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;font-family:Rajdhani,sans-serif;font-size:12px;max-height:240px;overflow-y:auto;"></div>' : '')
+      +'</div>';
+  }
+
+  function _interRender(){
+    _renderBanner();
+    PHASES.forEach(function(p){ if(document.getElementById('inter-'+p)) _renderRound(p); });
+  }
+  window._interRender=_interRender;
+
+  /* Hook al go() para re-renderizar al entrar en la pantalla. OJO:
+     index.bundle.js (donde vive window.go) se carga DESPUÉS de este
+     partial, así que en parse-time `go` aún no existe. Instalamos el
+     patch en DOMContentLoaded (el bundle ya ejecutó) y, por si acaso,
+     intentamos también de inmediato (inocuo si go no existe todavía). */
+  function _installGoHook(){
+    var orig=window.go;
+    if(typeof orig!=='function' || orig._interPatched) return;
+    window.go=function(id){ var ret=orig.apply(this, arguments); try { if(id==='s-intercontinental') _interRender(); } catch(_){} return ret; };
+    window.go._interPatched=true;
+  }
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ _interRender(); _installGoHook(); }, 90); });
+  _installGoHook();
+})();
+</script>
 <div class="screen" id="s-ligas">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Resto de Ligas</h2></div>

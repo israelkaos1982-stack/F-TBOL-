@@ -7068,6 +7068,24 @@ window._showSimProgress = function(opts, onDone){
         detail:{ dayIdx:0, date:(rows[0]||{}).date }
       }));
     } catch(_){}
+    /* Re-render DIFERIDO (2026-06-04): si el calendario aún no está
+       hidratado en el DOM en el instante exacto del reset (part2 carga
+       después / navegación SPA), `_calRows()` devuelve [] y la card
+       central se queda en «Cargando…»/«Día a Día» y la caja CALENDARIO
+       cae al fallback. Invalidamos `_ROWS_CACHE` y re-renderizamos en
+       cuanto el DOM tenga filas para que SIEMPRE pinte el 01 May
+       (Descanso) — inicio de temporada. */
+    [60, 250, 700, 1500].forEach(function(_t){
+      setTimeout(function(){
+        try { _ROWS_CACHE = null; } catch(_){}
+        try { _render(); } catch(_){}
+        try {
+          var _cf = document.getElementById('munich-cal-fecha');
+          var _cd = _currentDay();
+          if (_cf && _cd && _cd.date) _cf.textContent = _psShowDate(_cd.date);
+        } catch(_){}
+      }, _t);
+    });
   };
   /* Purga BRUTA pre-Mayo en el DOM del calendario (cliente). Si el
      servidor todavía sirve filas pre-mayo (BD vieja sin migrar,
@@ -52409,7 +52427,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     if (matchEl) {
       var _psLbl = (typeof window._psCurrentLabel === 'function') ? window._psCurrentLabel() : '';
-      matchEl.textContent = _psLbl || '🌞 Pretemporada · Día a Día';
+      /* Fallback alineado con la caja CALENDARIO (ver abajo): si el
+         cursor del día aún no se puede resolver (calendario sin hidratar,
+         p.ej. justo tras Reiniciar Temporada) NO mostramos el genérico
+         «Día a Día» — la temporada SIEMPRE arranca el 1 de Mayo, que es
+         un día de Descanso. Bug 2026-06-04 (foto usuario). */
+      matchEl.textContent = _psLbl || '💤 Descanso · 01 May';
     }
 
     /* Hidratación → si el día actual es Descanso, auto-scroll a la
@@ -52462,12 +52485,19 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (psDate && _mo(psDate) >= 4){
         calFechaEl.textContent = psDate;
       } else {
-        var curEvt = state.events && state.events[state.eventIdx];
-        var fb = (curEvt && curEvt.date)
-          ? (window._psShowDate ? window._psShowDate(curEvt.date) : curEvt.date)
-          : '01 May';
-        /* Cinturón anti-pre-mayo: si el fallback es pre-Mayo, forzamos 01 May. */
-        calFechaEl.textContent = (_mo(fb) >= 0 && _mo(fb) < 4) ? '01 May' : fb;
+        /* `_psCurrentDate()` no resolvió un día válido (el calendario
+           todavía no está hidratado en el DOM, p.ej. justo tras
+           Reiniciar Temporada). PROHIBIDO caer a `state.events` aquí:
+           esa lista la construye `parseAgenda`, cuyo `AG_TYPE_MAP` NO
+           incluye `ag-rest` / `ag-train`, así que OMITE los días de
+           Descanso/Entrenamiento → su primer elemento es "03 May"
+           (🌍 Mundial Grupo — J1), NUNCA el "01 May" (💤 Descanso) que
+           es el verdadero inicio de temporada. La temporada SIEMPRE
+           arranca el 1 de Mayo, así que ese es el default correcto.
+           Bug 2026-06-04 (foto usuario, caja Liverpool/Francia): al
+           reiniciar la temporada la caja CALENDARIO saltaba a «03 MAY»
+           en vez de «01 MAY». */
+        calFechaEl.textContent = '01 May';
       }
     }
     /* Mueve el marcador rosa/morado del calendario a la fila del

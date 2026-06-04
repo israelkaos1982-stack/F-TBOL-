@@ -12695,7 +12695,7 @@
          shape que `gmEndMatch` (línea ~10300). */
       var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
                     && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
-      var _isScSL = !!_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final';
+      var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
       var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
       var _isAmsElim = !!_gm.isFriendly && _gm.matchType === 'elim';
       var _isAmsDobleVuelta = !!_gm.isFriendly && _gm.matchType === 'doble' && _gm.dobleLeg === 'vuelta';
@@ -14539,7 +14539,7 @@
     var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
                   && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
     /* Supercopa de España (sc): single-leg con ET+pen igual que Copa. */
-    var _isScSL = !!_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final';
+    var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
     /* Recopa de Europa: TODAS las rondas son single-leg con ET+pen.
        Si empate al 90', prórroga; al 120' penaltis. 2026-05-06. */
     var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
@@ -15062,6 +15062,40 @@
           window.registrarLigaPlayerStats(_scMk, _gm.home, _gm.away, _scStatsEv, _scMvpName, _scMvpTeam, 'sc');
         }
       } catch(_e){}
+    } else if (_gm._isUsc || _gm.comp === 'usc' || _gm.comp === 'usc-fin') {
+      /* Supercopa de Europa: persistimos en usc_state_v1 vía
+         _uscSaveHumanResult (definido en el motor de s-usc). Mismo
+         patrón single-leg ET+pen que la Supercopa de España. */
+      try {
+        var _uscEt = _gm.etScores || {};
+        var _uscPenWin = _gm.penWinner || null;
+        if (!_uscPenWin) {
+          var _uscPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+          if (_uscPenEv) _uscPenWin = _uscPenEv.team === 'a' ? 'a' : 'b';
+        } else if (_uscPenWin === _gm.home) _uscPenWin = 'a';
+        else if (_uscPenWin === _gm.away) _uscPenWin = 'b';
+        if (typeof window._uscSaveHumanResult === 'function') {
+          window._uscSaveHumanResult(
+            _gm._uscKey || 'sf', _gm._uscIdx || 0,
+            _gm.sc.a, _gm.sc.b,
+            _uscEt.a || 0, _uscEt.b || 0,
+            _uscPenWin,
+            _gm.events || []
+          );
+        }
+        /* Stats → ef_player_stats_usc_v1 (vía LIGA_PLAYER_MATCH_STORE
+           con compKey 'usc'). */
+        if (typeof window.registrarLigaPlayerStats === 'function') {
+          var _uscMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+          var _uscMvpName = _uscMvpEv ? (_uscMvpEv.player || _uscMvpEv.name || '') : '';
+          var _uscMvpTeam = _uscMvpEv ? (_uscMvpEv.team === 'a' ? _gm.home : (_uscMvpEv.team === 'b' ? _gm.away : '')) : '';
+          var _uscStatsEv = (_gm.events || []).filter(function(e){
+            return e && e.type !== 'pen-result' && !e._varAnulado;
+          });
+          var _uscMk = 'usc_' + (_gm._uscKey || 'sf') + '_' + (_gm._uscIdx || 0);
+          window.registrarLigaPlayerStats(_uscMk, _gm.home, _gm.away, _uscStatsEv, _uscMvpName, _uscMvpTeam, 'usc');
+        }
+      } catch(_e){}
     } else if (!_gm.isFriendly) {
       guardarResultado(_gm.j, _gm.home, _gm.away, _gm.sc.a, _gm.sc.b);
       /* Persistir eventos en el mismo registro para que el acta sea
@@ -15132,6 +15166,7 @@
         var _adComp = 'liga';
         if      (_gm._isCopa     || _gm.comp === 'copa' || _gm.comp === 'copa-fin') _adComp = 'copa';
         else if (_gm._isSc       || _gm.comp === 'sc'   || _gm.comp === 'sc-final') _adComp = 'sc';
+        else if (_gm._isUsc      || _gm.comp === 'usc'  || _gm.comp === 'usc-fin')  _adComp = 'usc';
         else if (_gm._isRecopa   || _gm.comp === 'recopa')                          _adComp = 'recopa';
         else if (_gm._isWprev)                                                       _adComp = 'ucl';
         else if (_gm._isEurFase)                                                     _adComp = (_gm._eurFaseComp || 'ucl');
@@ -15569,6 +15604,10 @@
       _scKey: _gm._scKey,
       _scIdx: _gm._scIdx,
       _scStadium: _gm._scStadium,
+      _isUsc: !!_gm._isUsc,
+      _uscKey: _gm._uscKey,
+      _uscIdx: _gm._uscIdx,
+      _uscStadium: _gm._uscStadium,
       _isRecopa: !!_gm._isRecopa,
       _recopaPhase: _gm._recopaPhase,
       _recopaIdx: _gm._recopaIdx,
@@ -15728,6 +15767,10 @@
     _gm._scKey = saved ? saved._scKey : null;
     _gm._scIdx = saved ? saved._scIdx : null;
     _gm._scStadium = saved ? saved._scStadium : null;
+    _gm._isUsc = saved ? !!saved._isUsc : false;
+    _gm._uscKey = saved ? saved._uscKey : null;
+    _gm._uscIdx = saved ? saved._uscIdx : null;
+    _gm._uscStadium = saved ? saved._uscStadium : null;
     _gm._isRecopa = saved ? !!saved._isRecopa : false;
     _gm._recopaPhase = saved ? saved._recopaPhase : null;
     _gm._recopaIdx = saved ? saved._recopaIdx : null;
@@ -15893,7 +15936,7 @@
          fuerza prórroga + penaltis automáticamente cuando hay empate
          al pulsar FINALIZAR (rama _isScSL en gmEndMatch). Petición
          usuario 2026-05-05: interface limpia como Copa HvIA. */
-      var _isScSL = !!_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final';
+      var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
       /* Fase de Liga UCL/UEL/UECL (Swiss-format): empate al 90' es
          resultado válido — NO hay prórroga ni penaltis en la fase de
          liga (regla UEFA). Igual que la Liga doméstica. */
@@ -16511,6 +16554,25 @@
         window.__GM_LIVE._scIdx = idx || 0;
         window.__GM_LIVE._scStadium = stadium || '';
         window.__GM_LIVE.comp = 'sc';
+      }
+    } catch(_){}
+  };
+
+  /* Supercopa de Europa (UEFA Super Cup): abre el gm-modal con comp
+     'usc' (semis) / 'usc-fin' (final), single-leg con prórroga +
+     penaltis. Marca _gm con _isUsc + _uscKey + _uscIdx para que
+     gmEndMatch persista en usc_state_v1 vía _uscSaveHumanResult.
+     2026-06-04. */
+  window.abrirUsc = function (home, away, isHvH, key, idx, stadium) {
+    var comp = (key === 'fin') ? 'usc-fin' : 'usc';
+    gmOpen(0, home, away, !!isHvH, comp, false, false);
+    try {
+      if (window.__GM_LIVE) {
+        window.__GM_LIVE._isUsc = true;
+        window.__GM_LIVE._uscKey = key || 'sf';
+        window.__GM_LIVE._uscIdx = idx || 0;
+        window.__GM_LIVE._uscStadium = stadium || '';
+        window.__GM_LIVE.comp = comp;
       }
     } catch(_){}
   };
@@ -17155,11 +17217,16 @@
        equipo del sorteo, prórroga + penaltis si empate al 90'.
        Persist vía window._recopaPersistAfterIa. 2026-05-06. */
     var _isRecopaSim = typeof mk === 'string' && mk.indexOf('recopa_') === 0;
+    /* Supercopa de Europa (usc_<sf|fin>_<idx>): single-leg con ET+pen,
+       igual que SC. OJO: el prefijo es `usc_`, NO matchea `sc_` (el
+       indexOf de _isScSim es 1, no 0), por eso se detecta aparte.
+       2026-06-04. */
+    var _isUscSim = typeof mk === 'string' && mk.indexOf('usc_') === 0;
     /* Copa Intercontinental (inter_<phase>_<idx>): bracket de 8 a partido
        único con ET+pen, mismo régimen single-leg que Recopa. Persist vía
        window._interPersistAfterIa. 2026-06-04. */
     var _isInterSim = typeof mk === 'string' && mk.indexOf('inter_') === 0;
-    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isLecSim || _isRecopaSim || _isInterSim;
+    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isUscSim || _isLecSim || _isRecopaSim || _isInterSim;
     var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
     /* COPA SINGLE-LEG con empate previsto al 90': el partido va a
@@ -17545,6 +17612,9 @@
            sc_state_v1 vía window._scPersistAfterIa (definido en
            el IIFE de s-supercopa). 2026-05-05. */
         var __isScSimPersist = typeof mk === 'string' && mk.indexOf('sc_') === 0;
+        /* Supercopa de Europa: mk con prefijo usc_ → persistir en
+           usc_state_v1 vía window._uscPersistAfterIa. 2026-06-04. */
+        var __isUscSimPersist = typeof mk === 'string' && mk.indexOf('usc_') === 0;
         /* Liga Ext Copa: mk con prefijo lec_ → persistir en
            ligaExt_<slug>.copa vía window._lecPersistAfterIa
            (definido en el IIFE de s-lext-copa). 2026-05-06. */
@@ -17567,6 +17637,10 @@
           try {
             window._scPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
           } catch(_e) { try { console.error('[scSimLive persist]', _e); } catch(__){} }
+        } else if (__isUscSimPersist && typeof window._uscPersistAfterIa === 'function') {
+          try {
+            window._uscPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
+          } catch(_e) { try { console.error('[uscSimLive persist]', _e); } catch(__){} }
         } else if (__isLecSimPersist && typeof window._lecPersistAfterIa === 'function') {
           try {
             window._lecPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
@@ -17611,9 +17685,10 @@
           if (!window._iaRunningCount) {
             if (__isCopaSim) {
               if (typeof window.copaInit === 'function') window.copaInit();
-            } else if (__isScSimPersist || __isLecSimPersist || __isRecopaSimPersist || __isInterSimPersist || __isEurFaseSimPersist) {
-              /* SC, Lec, Recopa, Inter y EurFase ya re-renderizan dentro
-                 de su propio persistAfterIa. No tocamos la tabla de Liga. */
+            } else if (__isScSimPersist || __isUscSimPersist || __isLecSimPersist || __isRecopaSimPersist || __isInterSimPersist || __isEurFaseSimPersist) {
+              /* SC, USC, Lec, Recopa, Inter y EurFase ya re-renderizan
+                 dentro de su propio persistAfterIa. No tocamos la tabla
+                 de Liga. */
             } else {
               if (typeof window.buildIAresults === 'function') window.buildIAresults();
               if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
@@ -32941,6 +33016,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var g = window._gm || {};
       if (g._isCopa || g.comp === 'copa' || g.comp === 'copa-fin') return 'copa';
       if (g._isSc   || g.comp === 'sc'   || g.comp === 'sc-final') return 'super';
+      if (g._isUsc  || g.comp === 'usc'  || g.comp === 'usc-fin') return 'usc';
       if (g._isRecopa || g.comp === 'recopa') return 'recopa';
       if (g._isSuperliga || g.comp === 'superliga') return ''; /* sin tema */
       /* Comps reconocidas por g.comp explícito. Mundial (compKey 'torneo'

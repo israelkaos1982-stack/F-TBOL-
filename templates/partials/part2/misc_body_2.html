@@ -20373,20 +20373,20 @@
      window._bayernCalMarkToday a las filas firstMay..idx-1. El fondo
      gris GANA sobre el color de competición (ag-liga/ag-sel/…) con
      !important; iconos y texto quedan atenuados en escala de grises. */
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done{
+  body.bayern-cal-on #s-agenda .ag-r.ag-done{
     background:linear-gradient(90deg,rgba(26,29,34,.94),
                rgba(42,46,54,.55) 60%,rgba(26,29,34,.94)) !important;
     background-image:none !important;
     opacity:.82;
   }
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-date,
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-lbl{
+  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-date,
+  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-lbl{
     color:rgba(190,196,206,.52) !important;
     text-shadow:none !important;
     font-weight:500;
   }
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-ico,
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-wx{
+  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-ico,
+  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-wx{
     filter:grayscale(1) brightness(.85);opacity:.5;
   }
 
@@ -20914,27 +20914,50 @@
       r.classList.remove('ag-done');
     });
     if (!document.body.classList.contains('bayern-cal-on')) return;
+    /* Marcamos el host VISIBLE: normalmente el render Bayern
+       (#ag-content-bayern), pero si por una carrera de timing aún no
+       está construido y se está mostrando el SSR (#ag-content),
+       marcamos ese para que el borde NUNCA falte. */
     var host = document.getElementById('ag-content-bayern');
+    if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
     if (!host) return;
     var rows = host.querySelectorAll('.ag-r');
     if (!rows.length) return;
     /* La temporada arranca el 1 de MAYO (sección PRE-VERANO con el
-       Mundial de Selecciones, añadida 2026-05-20). Saltamos cualquier
-       fila pre-mayo del DOM para que el índice del cursor de
-       pretemporada (que ya está recortado a Mayo+) coincida con la
-       fila que pintamos. Antes el ancla era Junio (`>= 5`); ahora
-       Mayo (`>= 4`) para que el borde rosa arranque en 01 May. */
+       Mundial de Selecciones, añadida 2026-05-20). `firstMay` = primera
+       fila de Mayo en adelante: nada anterior se tiñe de gris. */
     var _SP = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
     function _mon(d){ var p=String(d||'').trim().split(/\s+/); if(p.length<2) return -1;
       var m=_SP[(p[1]||'').toLowerCase().replace(/\./g,'').slice(0,3)]; return (m==null)?-1:m; }
+    function _normDate(s){ return String(s||'').trim().replace(/\s+/g,' ').toLowerCase(); }
     var firstMay = 0;
     for (var i = 0; i < rows.length; i++){
       var de = rows[i].querySelector('.ag-date');
       if (de && _mon(de.textContent) >= 4){ firstMay = i; break; }
     }
-    var idx = _currentDayIdx() + firstMay;
-    if (idx > rows.length - 1) idx = rows.length - 1;
-    if (idx < firstMay) idx = firstMay;
+    /* RESOLUCIÓN DEL DÍA ACTUAL — por FECHA, no por aritmética de
+       índice. La fuente única es la MISMA que muestra la caja
+       CALENDARIO del hub (`window._psCurrentDate()` → p.ej. "26 Jul").
+       Buscamos la fila cuya `.ag-date` coincide con esa fecha: así el
+       borde rosa cae EXACTAMENTE en el día que el hub considera "hoy",
+       sin posibilidad de desincronización con el cursor. Si no se puede
+       resolver la fecha (calendario sin hidratar), caemos al método
+       legacy por índice (`_currentDayIdx() + firstMay`). */
+    var idx = -1;
+    var curDate = '';
+    try { if (typeof window._psCurrentDate === 'function') curDate = window._psCurrentDate(); } catch(_){}
+    if (curDate){
+      var want = _normDate(curDate);
+      for (var k = firstMay; k < rows.length; k++){
+        var dk = rows[k].querySelector('.ag-date');
+        if (dk && _normDate(dk.textContent) === want){ idx = k; break; }
+      }
+    }
+    if (idx < 0){
+      idx = _currentDayIdx() + firstMay;
+      if (idx > rows.length - 1) idx = rows.length - 1;
+      if (idx < firstMay) idx = firstMay;
+    }
     /* Fechas YA CUMPLIDAS → gris. Toda fila ANTERIOR al día en curso
        (desde el arranque de temporada en Mayo) se tiñe de gris como
        "completada". Petición usuario 2026-06-04: al pasar del 01 May

@@ -20237,6 +20237,29 @@
     #s-agenda .ag-r.ag-today-marker{animation:none;}
   }
 
+  /* ── FECHA CUMPLIDA (día ya pasado) ────────────────────────────
+     Toda fila anterior al día en curso se pinta de GRIS apagado para
+     marcarla como "completada". La clase .ag-done la añade
+     window._bayernCalMarkToday a las filas firstMay..idx-1. El fondo
+     gris GANA sobre el color de competición (ag-liga/ag-sel/…) con
+     !important; iconos y texto quedan atenuados en escala de grises. */
+  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done{
+    background:linear-gradient(90deg,rgba(26,29,34,.94),
+               rgba(42,46,54,.55) 60%,rgba(26,29,34,.94)) !important;
+    background-image:none !important;
+    opacity:.82;
+  }
+  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-date,
+  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-lbl{
+    color:rgba(190,196,206,.52) !important;
+    text-shadow:none !important;
+    font-weight:500;
+  }
+  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-ico,
+  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-wx{
+    filter:grayscale(1) brightness(.85);opacity:.5;
+  }
+
   /* Modal selector */
   #bayern-cal-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:99998;align-items:center;justify-content:center;padding:18px;}
   #bayern-cal-ov.show{display:flex;}
@@ -20750,11 +20773,15 @@
   window._bayernCalMarkToday = function(){
     var screen = document.getElementById('s-agenda');
     if (!screen) return;
-    /* El marcador es exclusivo del calendario del Bayern (la "caja
+    /* El marcador de HOY (borde rosa) y el de fechas CUMPLIDAS
+       (fondo gris) son exclusivos del calendario del Bayern (la "caja
        Bayern"). En el AGENDA global del resto de usuarios no se
-       pinta — solo limpiamos cualquier resto. */
+       pintan — solo limpiamos cualquier resto. */
     screen.querySelectorAll('.ag-r.ag-today-marker').forEach(function(r){
       r.classList.remove('ag-today-marker');
+    });
+    screen.querySelectorAll('.ag-r.ag-done').forEach(function(r){
+      r.classList.remove('ag-done');
     });
     if (!document.body.classList.contains('bayern-cal-on')) return;
     var host = document.getElementById('ag-content-bayern');
@@ -20778,6 +20805,13 @@
     var idx = _currentDayIdx() + firstMay;
     if (idx > rows.length - 1) idx = rows.length - 1;
     if (idx < firstMay) idx = firstMay;
+    /* Fechas YA CUMPLIDAS → gris. Toda fila ANTERIOR al día en curso
+       (desde el arranque de temporada en Mayo) se tiñe de gris como
+       "completada". Petición usuario 2026-06-04: al pasar del 01 May
+       al 02 May, el 01 May queda gris al instante. */
+    for (var j = firstMay; j < idx; j++){
+      if (rows[j]) rows[j].classList.add('ag-done');
+    }
     var target = rows[idx];
     if (!target) return;
     target.classList.add('ag-today-marker');

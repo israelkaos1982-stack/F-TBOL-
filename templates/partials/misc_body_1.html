@@ -3070,12 +3070,27 @@ window._showSimProgress = function(opts, onDone){
     function _selActiveTourIds(){
       var ids = [];
       try {
-        var raw = localStorage.getItem('tour_registry_v1');
-        if (raw){
-          var reg = JSON.parse(raw);
-          var vis = (reg && reg.visible) || [];
-          vis.forEach(function(id){ if (/^(spv|sfn)\d+$/.test(id)) ids.push(id); });
+        /* Fuente canónica de "torneos visibles": `window._tourVisibleIds()`
+           (= `_tvRegLoad().visible`), la MISMA que usa la pantalla 🌐
+           Selecciones y cada caja de Estadísticas por torneo. Resuelve la
+           lista por RECENCIA de tombstones + RECUPERACIÓN por contenido,
+           así que devuelve un slot cuyo cfg tiene datos reales aunque haya
+           caído del `visible` por un GET stale del servidor (anti-wipe).
+           Leer el raw `tour_registry_v1.visible` directamente (lo que se
+           hacía antes) se SALTABA esa recuperación: si una de las dos cajas
+           de la selección (p.ej. Ronda Previa 1) no estaba en el `visible`
+           crudo, la plantilla del hub dejaba de sumar SUS estadísticas y
+           solo mostraba las del otro torneo (bug 2026-06-04: Francia jugó
+           Mundial 2032 + Ronda Previa 1 y la plantilla solo contaba uno). */
+        var vis = null;
+        if (typeof window._tourVisibleIds === 'function') {
+          try { vis = window._tourVisibleIds(); } catch(_){ vis = null; }
         }
+        if (!vis) {
+          var raw = localStorage.getItem('tour_registry_v1');
+          if (raw){ var reg = JSON.parse(raw); vis = (reg && reg.visible) || []; }
+        }
+        (vis || []).forEach(function(id){ if (/^(spv|sfn)\d+$/.test(id)) ids.push(id); });
       } catch(_){}
       if (!ids.length){ for (var i=1;i<=10;i++){ ids.push('spv'+i); ids.push('sfn'+i); } }
       return ids;
@@ -6920,6 +6935,46 @@ window._showSimProgress = function(opts, onDone){
        partido del Mundial). Si no se puede resolver, caemos al atajo
        "VER JORNADA N" (lista de la jornada) como respaldo. */
     var ligaMatch = _resolveHubLigaMatch(ligaJor);
+    /* ¿El partido del hub en esta jornada de Liga ya está jugado o
+       simulado? Leemos del MISMO store de resultados de Liga
+       (`window.loadResults`, key `j|home|away`) que usa la pantalla de
+       jornada y `_simHubLigaMatch`. Si está jugado, la card muestra el
+       marcador + VER JORNADA + CONTINUAR (no se puede re-simular). */
+    var _ligaPlayed = null;
+    if (ligaMatch && ligaJor > 0){
+      try {
+        if (typeof window.loadResults === 'function'){
+          var _allLR = window.loadResults() || {};
+          _ligaPlayed = _allLR[ligaJor + '|' + ligaMatch.home + '|' + ligaMatch.away] || null;
+        }
+      } catch(_){}
+    }
+    if (_ligaPlayed){
+      var _gh = (_ligaPlayed.gh != null) ? _ligaPlayed.gh : '-';
+      var _ga = (_ligaPlayed.ga != null) ? _ligaPlayed.ga : '-';
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
+        + '<div class="ps-meta" style="margin:14px 0;">'
+        +   '<div style="font-size:12px;color:rgba(255,255,255,.6);letter-spacing:1px;margin-bottom:6px;">✅ PARTIDO JUGADO</div>'
+        +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:19px;letter-spacing:1px;line-height:1.3;">'
+        +     '<b>' + _esc(ligaMatch.home) + '</b> <span style="color:#ffd54a;">' + _gh + ' – ' + _ga + '</span> <b>' + _esc(ligaMatch.away) + '</b>'
+        +   '</div>'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+        +   '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>'
+        +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
+        + '</div>'
+        + '</div>';
+      var bV0 = document.getElementById('ps-nontour-open');
+      if (bV0) bV0.onclick = function(){
+        try { if (ligaJor > 0 && typeof window.openLigaJornada === 'function') window.openLigaJornada(ligaJor); } catch(_){}
+      };
+      var bC0 = document.getElementById('ps-nontour-cont');
+      if (bC0) bC0.onclick = function(){ _markDoneAndAdvance(); };
+      return;
+    }
     var openBtn = '';
     if (ligaMatch){
       openBtn = '<button type="button" class="ps-btn" id="ps-nontour-previa">📋 ABRIR PREVIA</button>';
@@ -6929,6 +6984,21 @@ window._showSimProgress = function(opts, onDone){
     var metaHtml = ligaMatch
       ? '📋 Pantalla de previa<br><b>' + _esc(ligaMatch.home) + '</b> vs <b>' + _esc(ligaMatch.away) + '</b>'
       : 'La jornada se juega desde la pantalla de la competición.';
+    /* Caja «🤖 PAGAR SIMULACIÓN · 50🪙» para los días de Liga
+       (2026-06-04, petición usuario): cobra del presupuesto del hub y
+       auto-simula SOLO el partido del Liverpool en esta jornada con el
+       motor 4-ejes (`window._simHubLigaMatch`), igual que el atajo que
+       ya existía en las cards de torneo. Convive con CONTINUAR ▶ (que
+       sigue saltando el día sin jugar ni pagar). REGLA (2026-05-25): un
+       HvH JAMÁS se simula pagando — si el rival del Liverpool también
+       fuese humano, la caja no aparece. */
+    var _ligaHvH = false;
+    if (ligaMatch){
+      try { _ligaHvH = (typeof window.esHumano === 'function') && window.esHumano(ligaMatch.home) && window.esHumano(ligaMatch.away); } catch(_){}
+    }
+    var _payHtmlLiga = (ligaMatch && !_ligaHvH)
+      ? '<div style="margin-top:2px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST, PS_PAY_SIM_COST) + '</div>'
+      : '';
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
@@ -6938,6 +7008,7 @@ window._showSimProgress = function(opts, onDone){
       + '</div>'
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
       +   openBtn
+      +   _payHtmlLiga
       +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
       + '</div>'
       + '</div>';
@@ -6959,6 +7030,37 @@ window._showSimProgress = function(opts, onDone){
     };
     var bC = document.getElementById('ps-nontour-cont');
     if (bC) bC.onclick = function(){ _markDoneAndAdvance(); };
+    var _payBtnL = document.getElementById('ps-pay-sim-btn');
+    if (_payBtnL){
+      _payBtnL.onclick = function(){
+        if (_payBtnL.disabled) return;
+        _payBtnL.disabled = true;
+        if (!_psPayAndSimHubLigaMatch(ligaJor, ligaMatch)) _payBtnL.disabled = false;
+      };
+    }
+  }
+
+  /* Cobra 50🪙 del presupuesto del hub y auto-simula el partido del
+     Liverpool en una jornada de Liga vía `window._simHubLigaMatch`. NO
+     avanza el día: invalida la firma de idempotencia y re-renderiza
+     para que `_cardNonTour` detecte el partido ya jugado y muestre el
+     marcador + CONTINUAR ▶. Devuelve false (sin cobrar) si no hay
+     fondos, falta algún helper o el partido es HvH. 2026-06-04. */
+  function _psPayAndSimHubLigaMatch(j, ligaMatch){
+    if (!(j > 0) || !ligaMatch || !ligaMatch.home || !ligaMatch.away) return false;
+    try {
+      if (typeof window.esHumano === 'function'
+          && window.esHumano(ligaMatch.home) && window.esHumano(ligaMatch.away)) return false;
+    } catch(_){}
+    if (_psGetHubMoney() < PS_PAY_SIM_COST) return false;
+    if (typeof window._bayernHudCreditMoney !== 'function') return false;
+    if (typeof window._simHubLigaMatch !== 'function') return false;
+    var res = window._simHubLigaMatch(j, ligaMatch.home, ligaMatch.away);
+    if (!res) return false;
+    try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
+    try { var st = _stage(); if (st) st._psSig = null; } catch(_){}
+    _render();
+    return true;
   }
 
   function _cardMatch(day){
@@ -13012,12 +13114,52 @@ window._showSimProgress = function(opts, onDone){
           _tPjBucket = teamPJByComp.torneos;
           _tCompKey = 'torneos';
         }
+        /* Índice matchKey→{a,b} con nombres reales desde groupFixtures
+           + koBracket (EXACTAMENTE como `_mundialStatsRobustScan` y
+           `_tourBackfillActasFromResults`). Recupera el nombre del
+           equipo cuando un result NO guardó `home`/`away` — caso típico
+           de los partidos de GRUPO del Mundialito de Clubes, cuyo
+           nombre se resuelve por el índice de fixtures. Sin esto, el
+           loop bail-eaba en `if (!_tA||!_tB) return` y la plantilla del
+           hub NUNCA recibía los goles del Mundialito aunque la pantalla
+           de Estadísticas (que SÍ usa el índice) los mostrara. Bug
+           2026-06-04, foto usuario: M Salah 3 goles en el Mundialito de
+           Clubes pero 0 en la plantilla del Liverpool. */
+        var _tTeams = _tCfg.teams || [];
+        var _tPg = (_tCfg.formatConfig && _tCfg.formatConfig.perGroup) || 4;
+        /* groupFixtures se construye lazy al renderizar el torneo; si
+           falta (entrada directa a la plantilla / tras recarga) lo
+           reconstruye el builder canónico para que el índice esté
+           completo. Solo para el Mundialito (cfg.id==='mundial'), que es
+           el caso reportado; no toca otros formatos. */
+        if (_isMundialCfg && (!_tCfg.groupFixtures || !Object.keys(_tCfg.groupFixtures).length)
+            && _tTeams.length && typeof window._mundialGroupState === 'function') {
+          try { window._mundialGroupState(_tCfg, _tTeams); } catch(_){}
+        }
+        var _tIdx = {};
+        try {
+          var _gf = _tCfg.groupFixtures || {};
+          Object.keys(_gf).forEach(function(_gk){
+            var _g = parseInt(_gk, 10); if (isNaN(_g)) return;
+            var _sl = _tTeams.slice(_g*_tPg, _g*_tPg+_tPg);
+            var _fx = _gf[_gk] || [];
+            for (var _j = 0; _j < _fx.length; _j++) for (var _mi = 0; _mi < _fx[_j].length; _mi++) {
+              var _pr = _fx[_j][_mi]; if (!_pr) continue;
+              _tIdx['g'+_g+'_'+_j+'_'+_mi] = { a:(_sl[_pr.home]||{}).name, b:(_sl[_pr.away]||{}).name };
+            }
+          });
+          var _kb = _tCfg.koBracket || [];
+          for (var _r = 0; _r < _kb.length; _r++) { var _rt = _kb[_r]||[]; for (var _i = 0; _i+1 < _rt.length; _i += 2) {
+            _tIdx['ko_'+_r+'_'+(_i/2)] = { a:(_rt[_i]||{}).name, b:(_rt[_i+1]||{}).name };
+          } }
+        } catch(_){}
         Object.keys(_tCfg.results).forEach(function(_mk){
           if (/\|L[12]$/.test(_mk)) return;  /* legs intermedios — agregado vive en baseKey */
           var _res = _tCfg.results[_mk];
           if (!_res || !_res.played || !Array.isArray(_res.events)) return;
-          var _tA = _res.home || '';
-          var _tB = _res.away || '';
+          var _info = _tIdx[_mk] || {};
+          var _tA = _res.home || _info.a || '';
+          var _tB = _res.away || _info.b || '';
           if (!_tA || !_tB) return;
           var _pjK = _mkPJ(_tA, _tB);
           var _dK = _tCompKey + '|' + _pjK;
@@ -13029,8 +13171,10 @@ window._showSimProgress = function(opts, onDone){
           _res.events.forEach(function(ev){
             if (!ev) return;
             if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
+            var _side = ev.team || ev.side;
             var team = ev.realTeam
-                    || (ev.team === 'a' ? _tA : ev.team === 'b' ? _tB : '');
+                    || ((_side === 'a' || _side === 'home') ? _tA
+                      : (_side === 'b' || _side === 'away') ? _tB : '');
             var player = '';
             if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
             else if (typeof ev.player === 'string') player = ev.player;
@@ -13187,6 +13331,65 @@ window._showSimProgress = function(opts, onDone){
         _ligaOnlyPJ[tn] = teamPJByComp.liga[tn];
       });
     } catch(_){}
+
+    /* Source 4: inter_state_v1 (Copa Intercontinental). Igual que Recopa,
+       sus partidos IA-vs-IA NO se persisten en LIGA_PLAYER_MATCH_STORE
+       (volátil), así que tras un reload la caja Estadísticas quedaría
+       vacía (y un rebuild la sobreescribiría con un bucket vacío). El
+       estado del bracket SÍ persiste con match.events/home/away, así que
+       lo iteramos aquí → bucket 'inter'. Misma filosofía que Source 3
+       (cfg.results de torneos). 2026-06-04. */
+    try {
+      var _icSt = null;
+      try { _icSt = JSON.parse(localStorage.getItem('inter_state_v1')||'null'); } catch(_){}
+      if (_icSt && _icSt.sorteo) {
+        ['q','s','f'].forEach(function(_ph){
+          var _ms = _icSt.sorteo[_ph] || [];
+          _ms.forEach(function(_m){
+            if (!_m || !_m.played || !Array.isArray(_m.events)) return;
+            var _tA = _m.home || '', _tB = _m.away || '';
+            if (!_tA || !_tB) return;
+            var _pjK = _mkPJ(_tA, _tB);
+            var _dK = 'inter|' + _pjK;
+            if (processedMatches[_dK]) return;
+            processedMatches[_dK] = true;
+            var _nA = _normPS(_tA), _nB = _normPS(_tB);
+            if (_nA) teamPJByComp.inter[_nA] = (teamPJByComp.inter[_nA]||0) + 1;
+            if (_nB) teamPJByComp.inter[_nB] = (teamPJByComp.inter[_nB]||0) + 1;
+            _m.events.forEach(function(ev){
+              if (!ev || ev._varAnulado) return;
+              var team = ev.realTeam || (ev.team === 'a' ? _tA : ev.team === 'b' ? _tB : '');
+              var player = '';
+              if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+              else if (typeof ev.player === 'string') player = ev.player;
+              else player = ev.name || ev.playerName || '';
+              if (!player) return;
+              var p = getOrCreateInBucket(buckets.inter, team, player);
+              var type = ev.type || '';
+              var ico = String(ev.ico||'').replace(/️/g,'').trim();
+              if (type==='amarilla') p.ta++;
+              else if (type==='roja'||type==='d-amarilla') p.tr++;
+              else if (type==='card'){ if(ico==='🟨')p.ta++; else if(ico==='🟥')p.tr++; else if(ico==='🟨🟥'){p.ta++;p.tr++;} }
+              else if (type==='gol') p.gol++;
+              else if (type==='falta-gol') p.fk++;
+              else if (type==='pen-gol') p.pen++;
+              else if (type==='pen-prov') p.penProv++;
+              else if (type==='pen-fallo'||type==='pen-fallado') p.penFall++;
+              else if (type==='propia') p.propia++;
+              else if (type==='pen-parado') p.penSaved++;
+              else if (type==='mvp') p.mvp++;
+              else if (type==='imbat') p.imbat++;
+              if (type==='sust' && ev.playerOut) getOrCreateInBucket(buckets.inter, team, ev.playerOut);
+            });
+            if (_m.mvp && _m.mvpTeam) {
+              var _hasMvp = _m.events.some(function(e){ return e.type==='mvp'; });
+              if (!_hasMvp) getOrCreateInBucket(buckets.inter, _m.mvpTeam, _m.mvp).mvp++;
+            }
+          });
+        });
+      }
+    } catch(_){}
+
     _mergeBucketInto(stats, buckets.copa);
     _mergeBucketInto(stats, buckets.sc);
     /* PJ del equipo en EA Sports = Liga + Copa + Supercopa España. */
@@ -14121,7 +14324,7 @@ window._showSimProgress = function(opts, onDone){
   <div class="jblock"><button id="mcl-box-ko2" class="jbtn c-mundialito" data-mcl-view="ko2" onclick="window._mclHubGo&&window._mclHubGo('ko2')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;Semis</span><span id="mcl-ind-ko2" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">🔒</span></button></div>
   <div class="jblock"><button id="mcl-box-ko3" class="jbtn c-mundialito" data-mcl-view="ko3" onclick="window._mclHubGo&&window._mclHubGo('ko3')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;">🏆 <b>Mundialito</b>&nbsp;&nbsp;FINAL</span><span id="mcl-ind-ko3" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(0,0,0,.55);">🔒</span></button></div>
   <!-- 📊 Estadísticas -->
-  <div class="submenu-card sc-mundialito-stats" style="margin-top:10px;background:linear-gradient(135deg,#2a1a00 0%,#4a3308 12%,#806008 28%,#c8a028 45%,#ffd700 55%,#fff080 60%,#ffd700 65%,#c8a028 75%,#806008 88%,#2a1a00 100%) !important;border:1.5px solid #ffd700 !important;box-shadow:0 4px 22px rgba(255,215,0,.45),inset 0 1px 0 rgba(255,255,255,.18) !important;" onclick="go('s-mundial-stats')">
+  <div class="submenu-card sc-mundialito-stats" style="margin-top:10px;background:linear-gradient(135deg,#2a1a00 0%,#4a3308 12%,#806008 28%,#c8a028 45%,#ffd700 55%,#fff080 60%,#ffd700 65%,#c8a028 75%,#806008 88%,#2a1a00 100%) !important;border:1.5px solid #ffd700 !important;box-shadow:0 4px 22px rgba(255,215,0,.45),inset 0 1px 0 rgba(255,255,255,.18) !important;" onclick="go('s-mundial-stats'); if(window._mclSchedule)window._mclSchedule(); else if(window._renderMundialitoStats){setTimeout(window._renderMundialitoStats,0);setTimeout(window._renderMundialitoStats,260);}">
     <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
   </div>
 </div>
@@ -14864,51 +15067,90 @@ window._showSimProgress = function(opts, onDone){
     });
   }
   window._renderMundialitoStats = _renderMundialitoStats;
+  /* Programa el render (2 pasadas: inmediata + a 260ms tras hidratación).
+     Debounced: las tres rutas de disparo (onclick de la card, wrap de
+     `window.go` y MutationObserver) pueden coincidir → coalescen en UNA
+     sola pasada por ventana en vez de re-renderizar 6 veces. */
+  var _mclT0 = null, _mclT1 = null;
+  function _mclSchedule(){
+    if (_mclT0) clearTimeout(_mclT0);
+    if (_mclT1) clearTimeout(_mclT1);
+    _mclT0 = setTimeout(function(){ _mclT0 = null; try { _renderMundialitoStats(); } catch(_){} }, 0);
+    _mclT1 = setTimeout(function(){ _mclT1 = null; try { _renderMundialitoStats(); } catch(_){} }, 260);
+  }
+  window._mclSchedule = _mclSchedule;
   var _og = window.go;
   if (typeof _og === 'function' && !_og._mclStatsPatched) {
     window.go = function(id){
       var r = _og.apply(this, arguments);
-      if (id === 's-mundial-stats') {
-        setTimeout(_renderMundialitoStats, 0);
-        setTimeout(_renderMundialitoStats, 200);
-      }
+      if (id === 's-mundial-stats') _mclSchedule();
       return r;
     };
     window.go._mclStatsPatched = true;
   }
-  /* TRIGGER ROBUSTO (2026-06-03) — el parche de `window.go` de arriba
-     NO basta: `index.bundle.js` declara `function go(id)` (hoisted) y
-     RE-ENVUELVE `window.go` varias veces DESPUÉS de que este partial se
-     evalúe, así que el wrap `_mclStatsPatched` se pierde y la pantalla
-     nunca renderizaba — se quedaba congelada en "Calculando
-     estadísticas…" pese a tener la fase de grupos simulada (foto usuario
-     2026-06-03). Mismo patrón documentado en `_watchScreens` y en
-     `STATS_SCREENS`: un MutationObserver sobre la clase `.active` de la
-     pantalla dispara el render SIN depender de `window.go`. Sobrevive a
-     cualquier redefinición del router y a la restauración de pestaña al
-     recargar. */
+  /* TRIGGER ROBUSTO (2026-06-04) — DOS mecanismos independientes, porque
+     ni el parche de `window.go` de arriba ni el MutationObserver diferido
+     a DOMContentLoaded bastaban: el usuario seguía viendo la pantalla
+     congelada en "Calculando estadísticas…" pese a tener el partido de la
+     IA jugado con goles (foto 2026-06-04, Bayer Leverkusen 2-3 Belgrano).
+
+     Causa: (a) este partial se evalúa ANTES que `index.bundle.js` (que
+     re-define `window.go` en su módulo), así que el wrap de arriba corre
+     con `window.go` aún `undefined` → no se instala; (b) el observer se
+     montaba SOLO en DOMContentLoaded.
+
+     Fix robusto:
+       1. Observer SÍNCRONO (el `<div id="s-mundial-stats">` ya existe —
+          está justo encima de este script), EXACTAMENTE como el patrón
+          probado de `STATS_SCREENS` (que sí funciona). Sin depender de
+          DOMContentLoaded.
+       2. Re-wrap de `window.go` en DOMContentLoaded, que corre DESPUÉS de
+          que el bundle bloqueante haya ejecutado y fijado su `window.go`
+          final (`navigateWithRetry`). Como el bundle ya no re-envuelve
+          tras el module-eval, este wrap sobrevive y captura TODA
+          navegación a `s-mundial-stats` (incluida la card del hub
+          `onclick="go('s-mundial-stats')"`). Es el camino que NO depende
+          del observer. */
+  var _mclWatchSetup = false;
   function _watchMundialitoStats(){
+    if (_mclWatchSetup) return;
     var el = document.getElementById('s-mundial-stats');
     if (!el) return;
+    _mclWatchSetup = true;
     var wasActive = el.classList.contains('active');
     if (wasActive) { try { _renderMundialitoStats(); } catch(_){} }
     if (typeof MutationObserver !== 'function') return;
     try {
       var mo = new MutationObserver(function(){
         var nowActive = el.classList.contains('active');
-        if (nowActive && !wasActive) {
-          setTimeout(_renderMundialitoStats, 0);
-          setTimeout(_renderMundialitoStats, 200);
-        }
+        if (nowActive && !wasActive) _mclSchedule();
         wasActive = nowActive;
       });
       mo.observe(el, { attributes:true, attributeFilter:['class'] });
     } catch(_){}
   }
+  function _installGoWrap(){
+    try {
+      var g2 = window.go;
+      if (typeof g2 === 'function' && !g2._mclStatsGoWrap) {
+        window.go = function(id){
+          var r = g2.apply(this, arguments);
+          if (id === 's-mundial-stats') _mclSchedule();
+          return r;
+        };
+        window.go._mclStatsGoWrap = true;
+      }
+    } catch(_){}
+  }
+  /* 1) Observer síncrono YA (el elemento existe en este punto del parse). */
+  try { _watchMundialitoStats(); } catch(_){}
+  /* 2) En DOMContentLoaded (post-bundle): re-asegurar el observer y, sobre
+        todo, envolver el `window.go` definitivo del router. */
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _watchMundialitoStats);
+    document.addEventListener('DOMContentLoaded', function(){ _watchMundialitoStats(); _installGoWrap(); });
   } else {
     _watchMundialitoStats();
+    _installGoWrap();
   }
 })();
 </script>
@@ -19824,6 +20066,50 @@ window._showSimProgress = function(opts, onDone){
     return null;
   };
 
+  /* ── Sync INCREMENTAL de estadísticas tras CADA partido de torneo ──
+     Petición usuario 2026-06-04 (Mundialito de Clubes · fase de grupos):
+     "partido que se juega con eventos → esos eventos se suben AL MOMENTO
+     a las cajas de estadísticas", NO al terminar toda la fase de grupos.
+
+     Antes, los stores PERSISTIDOS por competición (`ef_player_stats_mundial_v1`,
+     `ef_player_stats_torneos_v1`, `ef_player_stats_sel_v1`) sólo se
+     reconstruían (`rebuildPlayerStatsStore` vía `syncLigaEaPlayerStats`)
+     al ABRIR una pantalla de stats o el modal Plantilla. Así, la caja del
+     hub (plantilla SUMADA) y los dashboards basados en cache quedaban
+     "atrasados" hasta que el usuario navegaba a una pantalla de stats —
+     dando la sensación de que las estadísticas "no se subían" hasta el
+     final del grupo.
+
+     `_tourSave` es el ÚNICO chokepoint de TODOS los guardados de torneo
+     (Mundialito, Torneos de Verano, Selecciones — vía `_tourSaveAndRender`,
+     `_tourSaveHumanResult` y el auto-sim del hub), así que disparamos aquí
+     el sync incremental.
+
+     DEBOUNCED + DIFERIDO (regla 2026-05-28 "render no bloqueante"):
+     `rebuildPlayerStatsStore` es O(matches×events×comps); una ráfaga de
+     guardados (sim de una jornada/grupo entero) coalesce en UNA sola
+     pasada, SIEMPRE en `setTimeout` (nunca síncrono antes del paint).
+     Idempotente y sin recursión: `syncLigaEaPlayerStats` no llama a
+     `_tourSave`. */
+  var _tourStatsSyncT = null;
+  function _tourScheduleStatsSync(){
+    if (_tourStatsSyncT) { clearTimeout(_tourStatsSyncT); }
+    _tourStatsSyncT = setTimeout(function(){
+      _tourStatsSyncT = null;
+      try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
+      /* Si una caja EN VIVO está abierta, re-pintarla para que el goleador
+         recién marcado aparezca sin tener que salir y volver a entrar. */
+      try {
+        var act = document.querySelector('.screen.active');
+        var aid = act && act.id;
+        if (aid === 's-mundial-stats' && typeof window._renderMundialitoStats === 'function') {
+          window._renderMundialitoStats();
+        }
+      } catch(_){}
+    }, 500);
+  }
+  window._tourScheduleStatsSync = _tourScheduleStatsSync;
+
   window._tourSave = async function(id, cfg){
     if (TOUR_IDS.indexOf(id) === -1) return false;
     cfg = cfg || {};
@@ -19835,6 +20121,10 @@ window._showSimProgress = function(opts, onDone){
     /* Refresca cache sincrónico para `_tourMuInfoData` / `muTourInfo`. */
     window._TOUR_CACHE = window._TOUR_CACHE || {};
     window._TOUR_CACHE[id] = cfg;
+    /* Estadísticas EN EL MOMENTO: agenda el sync incremental (debounced,
+       diferido) para que cada partido jugado suba sus eventos a las cajas
+       sin esperar a que termine la fase. */
+    try { _tourScheduleStatsSync(); } catch(_){}
     /* Sync al servidor con HARD TIMEOUT de 8 s. Sin esto, en redes
        lentas el `await fetch(...)` se quedaba colgado para siempre y
        el editor mostraba "Sorteando y guardando…" sin avanzar (caso
@@ -31987,8 +32277,9 @@ window._showSimProgress = function(opts, onDone){
 .eurfase-acta-row:last-child{border-bottom:none;}
 .eurfase-acta-min{color:#9fc8ff;font-weight:700;font-size:11.5px;letter-spacing:.5px;}
 .eurfase-acta-ico{text-align:center;font-size:14px;}
-.eurfase-acta-player{color:#fff;line-height:1.2;}
-.eurfase-acta-team{color:rgba(255,255,255,.55);font-size:10.5px;letter-spacing:.3px;display:inline-flex;align-items:center;gap:4px;}
+.eurfase-acta-player{color:#fff;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
+.eurfase-acta-team{color:rgba(255,255,255,.55);font-size:10.5px;letter-spacing:.3px;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;flex:0 0 auto;}
+.eurfase-acta-team-abbr{font-weight:700;letter-spacing:.6px;}
 .eurfase-acta-team-shield{width:14px;height:14px;object-fit:contain;flex:0 0 14px;filter:drop-shadow(0 0 2px rgba(0,0,0,.5));}
 .eurfase-acta-empty{padding:10px;text-align:center;color:rgba(255,255,255,.45);font-style:italic;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;}
 .eurfase-acta-mvp{padding:8px 10px;margin-top:4px;background:linear-gradient(90deg,rgba(255,213,74,.12),rgba(255,213,74,.04));border-left:2px solid rgba(255,213,74,.55);color:#ffe089;font-family:Rajdhani,sans-serif;font-size:12px;}
@@ -32684,6 +32975,30 @@ window._showSimProgress = function(opts, onDone){
     'falta-gol':'⚽🎯','propia':'⚽🚫','roja':'🟥','amarilla':'🟨',
     'd-amarilla':'🟨🟥','sust':'🔄','imbat':'🧤','lesion':'🩹','mvp':'⭐'
   };
+  /* Abreviatura del nombre de equipo/selección para que cada fila del
+     acta entre en HORIZONTAL en una sola línea (petición usuario
+     2026-06-04, fotos «Liverpool/Francia»): escudo + acrónimo de 3
+     letras (Liverpool→LIV, Francia→FRA, Dinamarca→DIN). Quita tildes y
+     tokens de ruido (FC, CF, de…). Para nombres de 1 palabra = 3
+     primeras letras; multi-palabra = iniciales (rellenadas a 3). */
+  function _eurFaseTeamAbbr(name){
+    var s = String(name||'').normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]','g'),'').trim();
+    if(!s) return '';
+    var raw = s.split(/\s+/);
+    var words = raw.filter(function(w){
+      return !/^(fc|cf|cd|ud|sd|ac|as|sc|rc|afc|cfc|club|de|del|la|el|los|las|the|1899)$/i.test(w);
+    });
+    if(!words.length) words = raw;
+    var abbr;
+    if(words.length === 1){
+      abbr = words[0].slice(0,3);
+    } else {
+      abbr = words.map(function(w){ return w.charAt(0); }).join('');
+      if(abbr.length < 3) abbr = words.join('').slice(0,3);
+      else abbr = abbr.slice(0,3);
+    }
+    return abbr.toUpperCase();
+  }
   function _eurFaseRenderActaPanel(m, uid){
     var events = (m && m.events) || [];
     /* Filtrar eventos relevantes para el acta (sin "played" interno
@@ -32726,11 +33041,11 @@ window._showSimProgress = function(opts, onDone){
       var extra = '';
       if(ev._varAnulado) extra = ' <span style="font-size:10px;color:#ff5555;font-weight:700;letter-spacing:.4px">⛔ ANULADA POR 📺 VAR</span>';
       else if(ev._varConfirmed) extra = ' <span style="font-size:10px;color:#4fd87a;font-weight:700">✓ Confirmado por 📺 VAR</span>';
-      var teamHtml = '<span class="eurfase-acta-team">'
+      var teamHtml = '<span class="eurfase-acta-team" title="'+_esc(teamName)+'">'
         + (teamShield
             ? '<img class="eurfase-acta-team-shield" src="'+_esc(teamShield)+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'" alt="">'
             : '')
-        + _esc(teamName)
+        + '<span class="eurfase-acta-team-abbr">'+_esc(_eurFaseTeamAbbr(teamName))+'</span>'
         + '</span>';
       rows += '<div class="eurfase-acta-row">'
             + '<span class="eurfase-acta-min">' + _esc(minLabel) + '</span>'
@@ -33403,23 +33718,15 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-intercontinental">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🌐</span><h2>Intercontinental</h2></div>
+<!-- Banner dinámico: 🎯 Sortear / estado del pool / ♻️ Reiniciar (motor inter_state_v1). -->
+<div id="inter-banner"></div>
 <div class="jlist">
 <div class="jblock"><button class="jbtn c-inter" onclick="tog('inter-q')"><div class="pdot">▶</div>🌐 <b>Inter</b>  Cuartos</button>
-<div class="jmatches" id="inter-q">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-inter" onclick="tog('inter-s')"><div class="pdot">▶</div>🌐 <b>Inter</b>  Semifinales</button>
-<div class="jmatches" id="inter-s">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
+<div class="jmatches" id="inter-q"></div></div>
+<div class="jblock"><button class="jbtn c-inter" onclick="tog('inter-s')"><div class="pdot">▶</div>🌐 <b>Inter</b>  Semis</button>
+<div class="jmatches" id="inter-s"></div></div>
 <div class="jblock"><button class="jbtn c-inter" onclick="tog('inter-f')"><div class="pdot">▶</div>🌐 <b>Inter</b>  Final</button>
-<div class="jmatches" id="inter-f">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
+<div class="jmatches" id="inter-f"></div></div>
 <!-- Caja "📊 Estadísticas" Intercontinental (2026-05-08, sustituye al
      placeholder "Cuadro de Eliminatorias — próximamente"). Paleta wine
      oscuro + dorado-naranja igual que la temática (#ff9020 borde). Lee
@@ -33429,6 +33736,333 @@ window._showSimProgress = function(opts, onDone){
 </div>
 </div>
 </div>
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   Copa Intercontinental · bracket de 8 (Cuartos → Semis → Final), a
+   partido ÚNICO con prórroga + penaltis si empate al 90'. Tema
+   naranja/wine de la caja Inter (#ff9020). Cards con escudos +
+   simulación IA-vs-IA (estilo Recopa, coloreado Inter).
+   Motor: window._interRender (store localStorage `inter_state_v1`).
+   Pool = 2 manuales (campeón+subcampeón Champions, vía «EA Sports →
+   Europa → 🌐 Intercontinental») + 6 primeros de la Liga Resto del
+   Mundo (entran solos cuando ESTÉ TODA simulada). 2026-06-04.
+   ══════════════════════════════════════════════════════════════════ */
+#s-intercontinental #inter-banner{padding:6px 12px 2px;display:flex;flex-direction:column;gap:8px;}
+#s-intercontinental .inter-btn-sortear{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px;border-radius:10px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid rgba(255,144,32,.7);background:linear-gradient(135deg,rgba(255,144,32,.20),rgba(110,40,0,.35));color:#ffd0a0;box-shadow:0 0 14px rgba(255,144,32,.25);}
+#s-intercontinental .inter-btn-sortear:active{filter:brightness(1.15);}
+#s-intercontinental .inter-btn-reset{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid rgba(255,80,80,.55);background:linear-gradient(135deg,rgba(255,80,80,.12),rgba(80,20,20,.25));color:#ffb0b0;}
+#s-intercontinental .inter-banner-info{font-family:Rajdhani,sans-serif;font-size:12.5px;line-height:1.55;color:rgba(255,210,170,.92);background:rgba(255,144,32,.07);border:1px solid rgba(255,144,32,.30);border-radius:9px;padding:9px 11px;}
+#s-intercontinental .inter-banner-info b{color:#ffd700;}
+#s-intercontinental .inter-empty{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,210,170,.6);text-align:center;padding:14px 10px;font-style:italic;}
+#s-intercontinental .inter-card{margin:8px 8px;background:linear-gradient(135deg,#1a0a02,#3a1808 50%,#1a0a02);border:1px solid rgba(255,144,32,.5);border-radius:12px;overflow:hidden;padding:10px 6px;}
+#s-intercontinental .inter-card.played{border-color:rgba(255,180,80,.5);}
+#s-intercontinental .inter-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+#s-intercontinental .inter-card-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
+#s-intercontinental .inter-card-side img{width:48px;height:48px;object-fit:contain;}
+#s-intercontinental .inter-card-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.4px;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:700;}
+#s-intercontinental .inter-card-name.win{color:#ffd54a;text-shadow:0 0 12px rgba(255,200,80,.7);}
+#s-intercontinental .inter-card-name.lose{color:#ff8a8a;text-decoration:line-through;text-decoration-color:rgba(255,138,138,.5);opacity:.72;}
+#s-intercontinental .inter-card-mid{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:80px;flex-shrink:0;}
+#s-intercontinental .inter-card-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;letter-spacing:2px;background:rgba(0,0,0,.4);border-radius:8px;padding:3px 12px;border:1px solid rgba(255,144,32,.25);}
+#s-intercontinental .inter-card-score.played{color:#ffd54a;}
+#s-intercontinental .inter-card-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:#ffd080;background:rgba(255,160,40,.15);border:1px solid rgba(255,160,40,.4);border-radius:4px;padding:1px 5px;}
+#s-intercontinental .inter-card-act{padding:5px 12px;border-radius:7px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.1px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;}
+#s-intercontinental .inter-card-act.simular{background:rgba(255,144,32,.16);color:#ffb060;border-color:rgba(255,144,32,.6);}
+#s-intercontinental .inter-card-act.previa{background:rgba(120,180,255,.14);color:#9fc4ff;border-color:rgba(120,180,255,.55);}
+#s-intercontinental .inter-simall-wrap{display:flex;justify-content:center;padding:8px 8px 2px;}
+#s-intercontinental .inter-btn-simall{padding:8px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:rgba(255,160,40,.15);color:#ffa050;border:1.5px solid rgba(255,160,40,.55);}
+#s-intercontinental .inter-champ-row{display:flex;align-items:center;gap:14px;margin:10px 8px;padding:12px;border-radius:12px;background:linear-gradient(135deg,rgba(255,144,32,.18),rgba(110,40,0,.30));border:1.5px solid rgba(255,200,80,.6);box-shadow:0 0 22px rgba(255,144,32,.25);}
+#s-intercontinental .inter-champ-row img{width:64px;height:64px;object-fit:contain;}
+#s-intercontinental .inter-champ-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:#ffd54a;font-weight:700;}
+#s-intercontinental .inter-champ-name{font-family:'Bebas Neue',sans-serif;font-size:24px;letter-spacing:1.5px;color:#fff;text-shadow:0 0 14px rgba(255,200,80,.6);}
+</style>
+<script>
+/* ── Motor Copa Intercontinental (inter_state_v1) ─────────────────────
+   8 equipos · Cuartos→Semis→Final · partido único ET+pens.
+   state = { sorteo:{ q:[m×4], s:[m×2], f:[m×1] }, champion, runnerUp }
+   match = { home, away, played, gh, ga, etGh, etGa, penWinner, events,
+             mvp, mvpTeam }
+   - IA-vs-IA: ▶ Simular → iaSimLive('inter_<phase>_<idx>', ...) →
+     window._interPersistAfterIa (single-leg ET+pen vía _isInterSim del
+     bundle de iaSimLive). Stats → ef_player_stats_inter_v1.
+   - HvIA/HvH: 📋 Previa → showPrePartidoOverlay(...,'inter',...) →
+     abrirInter → gm-modal comp='inter' → _interSaveHumanResult.
+   ─────────────────────────────────────────────────────────────────── */
+(function(){
+  var STORE_KEY = 'inter_state_v1';
+  var PHASES = ['q','s','f'];
+  var PHASE_LABEL = { q:'Cuartos', s:'Semifinales', f:'Final' };
+
+  function _load(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)||'null'); } catch(_){ return null; } }
+  function _save(s){ try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){} }
+  function _shuffle(a){ a=a.slice(); for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
+  function _esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function _q(s){ return String(s||'').replace(/'/g,"\\'"); }
+  function _logo(name){ if(typeof window.getTeamLogoUrl==='function'){ try { return window.getTeamLogoUrl(name)||''; } catch(_){} } return ''; }
+  function _humIco(name){ if(typeof window.humanIcon==='function'){ try { return window.humanIcon(name)||''; } catch(_){} } return ''; }
+  function _isHuman(name){
+    try { if(typeof window.isHumanInComp==='function') return !!window.isHumanInComp(name,'inter'); } catch(_){}
+    try { if(typeof window.esHumano==='function') return !!window.esHumano(name); } catch(_){}
+    return false;
+  }
+
+  /* Tabla de la Liga Resto del Mundo + chequeo de "todos los partidos
+     jugados". Resto del Mundo se juega a UNA vuelta (CLAUDE.md), así que
+     "completa" = cada equipo ha disputado sus N-1 partidos. */
+  function _restoStandings(){
+    var data;
+    try { var raw=localStorage.getItem('ligaExt_resto-mundo'); data=raw?JSON.parse(raw):null; } catch(_){ return null; }
+    if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)) return null;
+    var map={};
+    data.teams.forEach(function(t){ if(t && t.id!=null) map[t.id]={ name:t.name||'', pj:0, gf:0, gc:0, pts:0 }; });
+    data.results.forEach(function(r){
+      var H=map[r.h], A=map[r.a]; if(!H||!A) return;
+      H.pj++; A.pj++; H.gf+=(r.gh||0); H.gc+=(r.ga||0); A.gf+=(r.ga||0); A.gc+=(r.gh||0);
+      if(r.gh>r.ga){ H.pts+=3; } else if(r.gh<r.ga){ A.pts+=3; } else { H.pts++; A.pts++; }
+    });
+    var N=data.teams.length;
+    var arr=Object.keys(map).map(function(k){ var m=map[k]; m.dg=m.gf-m.gc; return m; });
+    arr.sort(function(a,b){ if(b.pts!==a.pts) return b.pts-a.pts; if(b.dg!==a.dg) return b.dg-a.dg; if(b.gf!==a.gf) return b.gf-a.gf; return String(a.name).localeCompare(String(b.name),'es'); });
+    var complete = N>=8 && arr.length>=6 && arr.every(function(t){ return t.pj>=(N-1); });
+    return { ranking:arr, complete:complete, N:N };
+  }
+
+  /* Construye el pool de 8: 2 manuales (Champions) + 6 primeros de Resto
+     del Mundo (solo si la liga está TODA simulada). */
+  function _buildPool(){
+    var manual=[];
+    try {
+      if(typeof window._meaTeamsFor==='function'){
+        (window._meaTeamsFor('intercontinental')||[]).forEach(function(t){ if(t && t.name) manual.push(t.name); });
+      }
+    } catch(_){}
+    var rs=_restoStandings();
+    var restoComplete=!!(rs && rs.complete);
+    var restoTop6=(rs && restoComplete) ? rs.ranking.slice(0,6).map(function(t){ return t.name; }) : [];
+    var seen={}, pool=[];
+    function push(n){ n=String(n||'').trim(); if(!n) return; var k=n.toLowerCase(); if(seen[k]) return; seen[k]=true; pool.push(n); }
+    manual.slice(0,2).forEach(push);
+    restoTop6.forEach(push);
+    return { pool:pool.slice(0,8), manualCount:manual.length, restoComplete:restoComplete, ready:(manual.length>=2 && restoComplete && pool.length>=8) };
+  }
+
+  function _mkMatch(h,a){ return { home:h, away:a, played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null }; }
+  function _drawQuarters(pool){ var sh=_shuffle(pool).slice(0,8); var m=[]; for(var i=0;i<8;i+=2) m.push(_mkMatch(sh[i],sh[i+1])); return m; }
+  function _winnerOf(m){
+    if(!m || !m.played) return null;
+    var totA=(m.gh||0)+(m.etGh||0), totB=(m.ga||0)+(m.etGa||0);
+    if(m.penWinner==='a') return m.home;
+    if(m.penWinner==='b') return m.away;
+    if(totA>totB) return m.home;
+    if(totB>totA) return m.away;
+    return null;
+  }
+  function _drawNext(prev){ var w=[]; prev.forEach(function(m){ var x=_winnerOf(m); if(x) w.push(x); }); w=_shuffle(w); var m=[]; for(var i=0;i+1<w.length;i+=2) m.push(_mkMatch(w[i],w[i+1])); return m; }
+  function _phaseDone(s,phase){ var ms=(s.sorteo&&s.sorteo[phase])||[]; if(!ms.length) return false; for(var i=0;i<ms.length;i++) if(!ms[i].played) return false; return true; }
+  function _prevPhase(p){ var i=PHASES.indexOf(p); return i>0?PHASES[i-1]:null; }
+  function _firstPhaseToDraw(s){ for(var i=0;i<PHASES.length;i++){ var p=PHASES[i]; var ms=s.sorteo&&s.sorteo[p]; if(!ms||!ms.length) return p; } return null; }
+
+  /* ── PUBLIC API ──────────────────────────────────────────────────── */
+  window._interSortear = function(){
+    var s=_load()||{};
+    if(!s.sorteo || !s.sorteo.q || !s.sorteo.q.length){
+      var info=_buildPool();
+      if(!info.ready){
+        alert('⚠️ La Copa Intercontinental necesita EXACTAMENTE 8 equipos:\n\n· 2 de Europa (campeón + subcampeón de Champions) añadidos a mano en «EA Sports → Europa → 🌐 Intercontinental» — ahora '+info.manualCount+'/2.\n· Los 6 primeros de la Liga Resto del Mundo, que entran solos cuando ESTÉ TODA simulada — ahora '+(info.restoComplete?'lista ✅':'incompleta ⏳')+'.');
+        return;
+      }
+      s={ sorteo:{ q:_drawQuarters(info.pool), s:[], f:[] }, champion:null, runnerUp:null };
+      _save(s); _interRender();
+      return;
+    }
+    var phase=_firstPhaseToDraw(s);
+    if(!phase){ alert('La Copa Intercontinental ya tiene campeón. Pulsa ♻️ Reiniciar para rehacerla.'); return; }
+    var prev=_prevPhase(phase);
+    if(!prev || !_phaseDone(s,prev)){ alert('⚠️ Termina todos los partidos de '+(PHASE_LABEL[prev]||prev)+' antes de sortear '+(PHASE_LABEL[phase]||phase)+'.'); return; }
+    s.sorteo[phase]=_drawNext(s.sorteo[prev]);
+    _save(s); _interRender();
+  };
+
+  window._interReiniciar = function(){
+    if(!confirm('¿Reiniciar la Copa Intercontinental?\n\nSe pierden el sorteo y todos los resultados. El pool se reconstruye al pulsar 🎯 Sortear.')) return;
+    try { localStorage.removeItem(STORE_KEY); } catch(_){}
+    _interRender();
+  };
+
+  /* Persist hook IA-vs-IA: lo llama iaSimLive con prefijo inter_<phase>_<idx>. */
+  window._interPersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam, copaET){
+    var m=/^inter_([a-z]+)_(\d+)$/.exec(String(mk||'')); if(!m) return;
+    var phase=m[1], idx=parseInt(m[2],10)|0;
+    var s=_load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match=s.sorteo[phase][idx]; if(!match) return;
+    var et=copaET||{};
+    var totA=Number(scA)||0, totB=Number(scB)||0;
+    var etA=Number(et.et_gl)||0, etB=Number(et.et_gv)||0;
+    var penWinName=et.pen_winner||null;
+    match.gh=Math.max(0, totA-etA);
+    match.ga=Math.max(0, totB-etB);
+    match.etGh=etA; match.etGa=etB;
+    match.penWinner=penWinName ? (penWinName===home ? 'a' : (penWinName===away ? 'b' : null)) : null;
+    match.played=true;
+    match.events=(events||[]).filter(function(e){ return e && e.type!=='pen-result'; });
+    match.mvp=mvp||''; match.mvpTeam=mvpTeam||'';
+    if(phase==='f'){ var champ=_winnerOf(match); if(champ){ s.champion=champ; s.runnerUp=(champ===match.home)?match.away:match.home; } }
+    _save(s);
+    /* Stats de jugadores → ef_player_stats_inter_v1 (LIGA_PLAYER_MATCH_STORE
+       con competition='inter'). Sin esto la caja Estadísticas quedaría
+       vacía (la mayoría de partidos son IA-vs-IA). */
+    try { if(typeof window.registrarLigaPlayerStats==='function'){ window.registrarLigaPlayerStats(mk, home, away, match.events, mvp||'', mvpTeam||'', 'inter'); } } catch(_){}
+    setTimeout(function(){
+      if(phase==='f' && s.champion && typeof window._lecShowChampion==='function'){ try { window._lecShowChampion(s.champion); } catch(_){} }
+      _interRender();
+    }, 600);
+  };
+
+  /* Persist hook humano: lo llama gmEndMatch cuando _gm.comp==='inter'. */
+  window._interSaveHumanResult = function(phase, idx, gh, ga, etGh, etGa, penWinner, events, mvp, mvpTeam, home, away){
+    var s=_load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match=s.sorteo[phase][idx]; if(!match) return;
+    match.gh=Number(gh)||0; match.ga=Number(ga)||0;
+    match.etGh=Number(etGh)||0; match.etGa=Number(etGa)||0;
+    match.penWinner=penWinner||null; match.played=true;
+    match.events=(events||[]).filter(function(e){ return e && e.type!=='pen-result'; });
+    match.mvp=mvp||''; match.mvpTeam=mvpTeam||'';
+    if(phase==='f'){ var champ=_winnerOf(match); if(champ){ s.champion=champ; s.runnerUp=(champ===match.home)?match.away:match.home; } }
+    _save(s);
+    setTimeout(function(){
+      if(phase==='f' && s.champion && typeof window._lecShowChampion==='function'){ try { window._lecShowChampion(s.champion); } catch(_){} }
+      _interRender();
+    }, 500);
+  };
+
+  window._interSimAllIA = function(phase){
+    var s=_load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var ms=s.sorteo[phase]; var i=0;
+    function next(){
+      while(i<ms.length){
+        var m=ms[i];
+        if(m && !m.played && !_isHuman(m.home) && !_isHuman(m.away)){
+          var btn=document.getElementById('ia-sim-btn-inter_'+phase+'_'+i);
+          if(btn && !btn.disabled){ try { btn.click(); } catch(_){} i++; setTimeout(next,200); return; }
+        }
+        i++;
+      }
+    }
+    next();
+  };
+
+  window._interAbrirPrevia = function(phase, idx){
+    var s=_load(); if(!s || !s.sorteo || !s.sorteo[phase]) return;
+    var match=s.sorteo[phase][idx]; if(!match) return;
+    var local=match.home, visit=match.away;
+    var isHvH=_isHuman(local) && _isHuman(visit);
+    var matchKey='inter_'+phase+'_'+idx;
+    var dur=(typeof window._mlRealDurationLabel==='function')
+      ? window._mlRealDurationLabel({ isHvH:isHvH, humanInvolved:!isHvH })
+      : (isHvH ? '16.5 min' : '9.75 min');
+    window._ppPreviaTeams={ home:local, away:visit, j:0, comp:'inter', interPhase:phase, interIdx:idx };
+    window._ppCustomCallback=function(){ window._ppPreviaTeams=null; if(typeof window.abrirInter==='function'){ try { window.abrirInter(phase, idx, local, visit); } catch(_){} } };
+    if(typeof window.showPrePartidoOverlay==='function'){ window.showPrePartidoOverlay(matchKey, 'inter', 'Sí', dur, isHvH); }
+  };
+
+  /* ── RENDER ──────────────────────────────────────────────────────── */
+  function _renderBanner(){
+    var host=document.getElementById('inter-banner'); if(!host) return;
+    var s=_load(); var html='';
+    if(!s || !s.sorteo || !s.sorteo.q || !s.sorteo.q.length){
+      var info=_buildPool();
+      if(info.ready){
+        html+='<button class="inter-btn-sortear" onclick="window._interSortear&&window._interSortear()">🎯 Sortear Cuartos · 8 equipos</button>';
+      } else {
+        var parts=[];
+        if(info.manualCount<2) parts.push('Añade el <b>campeón y subcampeón de Champions</b> en «EA Sports → Europa → 🌐 Intercontinental» ('+info.manualCount+'/2).');
+        if(!info.restoComplete) parts.push('Simula <b>TODA</b> la Liga Resto del Mundo — sus 6 primeros entran automáticamente.');
+        html+='<div class="inter-banner-info">🌐 Faltan equipos para los 8:<br>· '+parts.join('<br>· ')+'</div>';
+      }
+    } else {
+      if(s.champion){
+        html+='<div class="inter-banner-info">🏆 Campeón: <b>'+_esc(s.champion)+'</b> · Subcampeón: <b>'+_esc(s.runnerUp||'')+'</b></div>';
+      } else {
+        var phase=_firstPhaseToDraw(s);
+        if(phase && phase!=='q'){
+          var prev=_prevPhase(phase);
+          if(_phaseDone(s,prev)) html+='<button class="inter-btn-sortear" onclick="window._interSortear&&window._interSortear()">🎯 Sortear '+(PHASE_LABEL[phase])+'</button>';
+          else html+='<div class="inter-banner-info">⏳ Termina los partidos de <b>'+(PHASE_LABEL[prev])+'</b> para sortear la siguiente ronda.</div>';
+        }
+      }
+      html+='<button class="inter-btn-reset" onclick="window._interReiniciar&&window._interReiniciar()">♻️ Reiniciar Intercontinental</button>';
+    }
+    host.innerHTML=html;
+  }
+
+  function _renderRound(phase){
+    var host=document.getElementById('inter-'+phase); if(!host) return;
+    var s=_load()||{}; var ms=(s.sorteo&&s.sorteo[phase])||[];
+    if(!ms.length){
+      host.innerHTML='<div class="inter-empty">'+(phase==='q'?'Aún no se ha sorteado. Pulsa 🎯 Sortear Cuartos arriba.':'Se sortea al terminar la ronda anterior.')+'</div>';
+      return;
+    }
+    var html='';
+    var pendingIA=false; ms.forEach(function(m){ if(m && !m.played && !_isHuman(m.home) && !_isHuman(m.away)) pendingIA=true; });
+    if(pendingIA){ html+='<div class="inter-simall-wrap"><button class="inter-btn-simall" onclick="window._interSimAllIA&&window._interSimAllIA(\''+phase+'\')">⚡ Simular IA · '+(PHASE_LABEL[phase])+'</button></div>'; }
+    if(phase==='f' && s.champion){
+      var l=_logo(s.champion);
+      html+='<div class="inter-champ-row">'+(l?'<img src="'+_esc(l)+'"/>':'<span style="font-size:48px;">🏆</span>')+'<div><div class="inter-champ-lbl">CAMPEÓN INTERCONTINENTAL</div><div class="inter-champ-name">'+_esc(s.champion)+'</div></div></div>';
+    }
+    ms.forEach(function(m,i){ html+=_renderMatchCard(m,phase,i); });
+    host.innerHTML=html;
+  }
+
+  function _renderMatchCard(m, phase, idx){
+    var played=!!m.played;
+    var totA=(m.gh||0)+(m.etGh||0), totB=(m.ga||0)+(m.etGa||0);
+    var winner=_winnerOf(m), loser=winner?(winner===m.home?m.away:m.home):null;
+    var humA=_isHuman(m.home), humB=_isHuman(m.away);
+    var bothIA=!humA && !humB;
+    var mk='inter_'+phase+'_'+idx;
+    function side(name, isWin, isLose){
+      var l=_logo(name); var cls=isWin?'win':(isLose?'lose':''); var hi=_humIco(name);
+      return '<div class="inter-card-side">'+(l?'<img src="'+_esc(l)+'"/>':'<span style="font-size:36px;">🛡</span>')+'<div class="inter-card-name '+cls+'">'+hi+_esc(name)+'</div></div>';
+    }
+    var center;
+    if(played){
+      var penTxt=m.penWinner?'<div class="inter-card-pen">PEN '+_esc(m.penWinner==='a'?m.home:m.away)+'</div>':'';
+      center='<div class="inter-card-mid"><div class="inter-card-score played">'+totA+'–'+totB+'</div>'+penTxt+'</div>';
+    } else if(bothIA){
+      center='<div class="inter-card-mid">'
+        +'<div class="ml-score" id="ia-sim-score-'+mk+'"><div id="ia-sc-'+mk+'-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div><span style="margin:0 4px;color:rgba(255,255,255,.5);">–</span><div id="ia-sc-'+mk+'-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div></div>'
+        +'<button class="inter-card-act simular" id="ia-sim-btn-'+mk+'" onclick="window.iaSimLive(\''+mk+'\',\''+_q(m.home)+'\',\''+_q(m.away)+'\',0)">▶ Simular</button>'
+        +'</div>';
+    } else {
+      center='<div class="inter-card-mid"><div class="inter-card-score">– –</div><button class="inter-card-act previa" onclick="window._interAbrirPrevia&&window._interAbrirPrevia(\''+phase+'\','+idx+')">📋 Previa</button></div>';
+    }
+    var actaId='ia-acta-'+mk;
+    return '<div class="inter-card '+(played?'played':'')+'"><div class="inter-card-row">'+side(m.home, winner===m.home, loser===m.home)+center+side(m.away, winner===m.away, loser===m.away)+'</div>'
+      +(bothIA && !played ? '<div id="'+actaId+'" style="display:none;border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;font-family:Rajdhani,sans-serif;font-size:12px;max-height:240px;overflow-y:auto;"></div>' : '')
+      +'</div>';
+  }
+
+  function _interRender(){
+    _renderBanner();
+    PHASES.forEach(function(p){ if(document.getElementById('inter-'+p)) _renderRound(p); });
+  }
+  window._interRender=_interRender;
+
+  /* Hook al go() para re-renderizar al entrar en la pantalla. OJO:
+     index.bundle.js (donde vive window.go) se carga DESPUÉS de este
+     partial, así que en parse-time `go` aún no existe. Instalamos el
+     patch en DOMContentLoaded (el bundle ya ejecutó) y, por si acaso,
+     intentamos también de inmediato (inocuo si go no existe todavía). */
+  function _installGoHook(){
+    var orig=window.go;
+    if(typeof orig!=='function' || orig._interPatched) return;
+    window.go=function(id){ var ret=orig.apply(this, arguments); try { if(id==='s-intercontinental') _interRender(); } catch(_){} return ret; };
+    window.go._interPatched=true;
+  }
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ _interRender(); _installGoHook(); }, 90); });
+  _installGoHook();
+})();
+</script>
 <div class="screen" id="s-ligas">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🌍</span><h2>Resto de Ligas</h2></div>
@@ -47081,9 +47715,13 @@ https://api.sofascore.app/api/v1/team/44/image
     letter-spacing:.5px;text-align:right;
   }
   #s-munich .munich-fix-card .eurfase-acta-ico{font-size:13px;text-align:center;}
-  #s-munich .munich-fix-card .eurfase-acta-player{font-weight:600;}
+  #s-munich .munich-fix-card .eurfase-acta-player{
+    font-weight:600;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;min-width:0;
+  }
   #s-munich .munich-fix-card .eurfase-acta-team{
     font-size:10px;color:rgba(255,255,255,.55);letter-spacing:.4px;
+    white-space:nowrap;flex:0 0 auto;
   }
   #s-munich .munich-fix-card .eurfase-acta-empty{
     padding:10px;text-align:center;color:rgba(255,255,255,.45);
@@ -56680,6 +57318,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var goalsP = {};
     events.forEach(function(ev){
       if (!ev || ev.team !== livSide) return;
+      if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
       if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
         var nm = ev.name || ev.player;
         if (nm) goalsP[nm] = (goalsP[nm] || 0) + 1;
@@ -56704,6 +57343,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var scored = {};
     events.forEach(function(ev){
       if (!ev || ev.team !== livSide) return;
+      if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
       if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
         var nm = ev.name || ev.player;
         if (nm) scored[nm] = true;
@@ -57437,6 +58077,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var fgoals = {};
         events.forEach(function(ev){
           if (!ev || ev.team !== fLetter) return;
+          if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
           if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
             var nm = _evPlayerName(ev);
             if (nm) fgoals[nm] = (fgoals[nm] || 0) + 1;

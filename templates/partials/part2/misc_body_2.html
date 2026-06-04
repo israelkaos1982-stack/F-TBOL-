@@ -9393,9 +9393,26 @@
     } catch(e){}
     return '';
   }
+  /* Selección que dirige el MISMO mister que el club del hub (Toñín:
+     Liverpool → Francia). El menú médico 💊 también cura las lesiones
+     de ESA selección (las lesiones de selección viven en
+     LESION_STORE_SEL, no en LESION_STORE). Generaliza a cualquier caja
+     de humano vía el registro MISTERS_HUMANOS. */
+  function _athHubSeleccion() {
+    try {
+      if (typeof window._mhFindMister === 'function') {
+        var m = window._mhFindMister(_athHubTeam());
+        if (m && m.seleccion) return String(m.seleccion);
+      }
+    } catch(e){}
+    return '';
+  }
   /* Lesionados del equipo del hub. Fuente de verdad: LESION_STORE
      (.partidos es la cuenta única global que decrementa 1 por cada
-     partido jugado en cualquier competición). */
+     partido jugado en cualquier competición) PARA EL CLUB, y
+     LESION_STORE_SEL[selección] para la selección del mismo mister
+     (.remaining). Los de selección llevan `_selName` para que la
+     curación decremente el store correcto. */
   function _athInjuredForHub() {
     var team = _athHubTeam().trim().toLowerCase();
     var store = window.LESION_STORE || {};
@@ -9412,10 +9429,25 @@
         descripcion: l.descripcion
       });
     });
+    /* Lesiones de la selección del mister del hub (Koundé · Francia). */
+    var selName = _athHubSeleccion();
+    var selStore = (window.LESION_STORE_SEL && selName) ? window.LESION_STORE_SEL[selName] : null;
+    if (selStore) {
+      Object.keys(selStore).forEach(function(pname){
+        var l = selStore[pname];
+        if (!l) return;
+        var rem = parseInt(l.remaining || 0, 10) || 0;
+        if (rem <= 0) return;
+        out.push({
+          name: pname, remain: rem,
+          descripcion: l.reason, _selName: selName
+        });
+      });
+    }
     return out;
   }
   function athGetInjuredList() {
-    return _athInjuredForHub().map(function(p){ return { name:p.name, remain:p.remain }; });
+    return _athInjuredForHub().map(function(p){ return { name:p.name, remain:p.remain, sel:p._selName||'' }; });
   }
   /* Refresca el número del icono 💊: partidos de lesión pendientes del
      equipo del hub (el máximo restante → decrementa 1 por partido). */
@@ -9456,12 +9488,14 @@
     var maxPI = Math.floor(athGetMedicalPI() + 1e-9);
     list.innerHTML = injured.map(function(p){
       var nm = p.name.replace(/"/g,'&quot;');
+      var sel = (p.sel || '').replace(/"/g,'&quot;');
+      var selTag = sel ? ' · <span style="color:#7da7c8;">🌍 ' + sel + '</span>' : '';
       return '<div class="ath-med-row">'
-        + '<span><b>🩹 ' + p.name + '</b><br><small>Lesión restante: ' + p.remain + ' partido(s)</small></span>'
+        + '<span><b>🩹 ' + p.name + '</b>' + selTag + '<br><small>Lesión restante: ' + p.remain + ' partido(s)</small></span>'
         + '<span class="ath-med-stepper">'
         +   '<button type="button" class="ath-med-step" data-d="-1">−</button>'
         +   '<input type="text" inputmode="numeric" readonly class="ath-med-alloc" value="0" '
-        +     'data-player="' + nm + '" data-max="' + p.remain + '"/>'
+        +     'data-player="' + nm + '" data-sel="' + sel + '" data-max="' + p.remain + '"/>'
         +   '<button type="button" class="ath-med-step" data-d="1">+</button>'
         + '</span>'
         + '</div>';
@@ -9497,7 +9531,7 @@
       var n = parseInt(inp.value,10) || 0;
       var max = parseInt(inp.getAttribute('data-max'),10) || 0;
       if (n < 0) n = 0; if (n > max) n = max;
-      if (n > 0) picks.push({ name: inp.getAttribute('data-player'), n: n });
+      if (n > 0) picks.push({ name: inp.getAttribute('data-player'), n: n, sel: inp.getAttribute('data-sel') || '' });
       total += n;
     });
     if (total <= 0) { document.getElementById('ath-med-ov').classList.remove('show'); return; }
@@ -9512,6 +9546,25 @@
        previa pase a mostrar "Recuperado" hasta que se cierre la previa. */
     if (!window._ppJustCured) window._ppJustCured = {};
     picks.forEach(function(pk){
+      /* Lesión de selección (Koundé · Francia): decrementa
+         LESION_STORE_SEL vía el helper canónico (persiste + sync). */
+      if (pk.sel) {
+        var sb = window.LESION_STORE_SEL && window.LESION_STORE_SEL[pk.sel];
+        if (!sb || !sb[pk.name]) return;
+        for (var i = 0; i < pk.n; i++) {
+          if (typeof window._selCumplirLesion === 'function') {
+            window._selCumplirLesion(pk.sel, pk.name);
+          } else {
+            sb[pk.name].remaining = (parseInt(sb[pk.name].remaining, 10) || 1) - 1;
+            if (sb[pk.name].remaining <= 0) { delete sb[pk.name]; break; }
+          }
+          if (!sb[pk.name]) break;
+        }
+        if (!sb[pk.name] || (parseInt((sb[pk.name]||{}).remaining, 10) || 0) <= 0) {
+          window._ppJustCured[pk.name] = true;
+        }
+        return;
+      }
       var l = window.LESION_STORE && window.LESION_STORE[pk.name];
       if (!l) return;
       var rem = (parseInt(l.partidos || 0, 10) || 0) - pk.n;
@@ -9539,6 +9592,9 @@
     /* Refresca la plantilla del Liverpool si está visible: los badges
        💉NP de los curados deben desaparecer. */
     try { if (typeof window.renderSquadList === 'function') window.renderSquadList(); } catch(e){}
+    /* Refresca la plantilla del hub (club + selección) — el badge
+       🩹 NP de Koundé (selección) debe desaparecer al curarlo. */
+    try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(e){}
     document.getElementById('ath-med-ov').classList.remove('show');
   };
 
@@ -12640,7 +12696,7 @@
       var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
                     && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
       var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
-      var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa';
+      var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
       var _isAmsElim = !!_gm.isFriendly && _gm.matchType === 'elim';
       var _isAmsDobleVuelta = !!_gm.isFriendly && _gm.matchType === 'doble' && _gm.dobleLeg === 'vuelta';
       var _amsDobleTied = false;
@@ -14486,7 +14542,7 @@
     var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
     /* Recopa de Europa: TODAS las rondas son single-leg con ET+pen.
        Si empate al 90', prórroga; al 120' penaltis. 2026-05-06. */
-    var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa';
+    var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
     /* Amistoso ELIMINATORIA: misma regla que Copa single-leg — empate
        al 90' fuerza prórroga, empate al 120' fuerza penaltis (petición
        usuario 2026-05-05). */
@@ -14933,6 +14989,41 @@
           });
           var _rcMk = 'recopa_' + (_gm._recopaPhase || 'r64') + '_' + (_gm._recopaIdx || 0);
           window.registrarLigaPlayerStats(_rcMk, _gm.home, _gm.away, _rcStatsEv, _rcMvpName, _rcMvpTeam, 'recopa');
+        }
+      } catch(_e){}
+    } else if (_gm._isInter || _gm.comp === 'inter') {
+      /* Copa Intercontinental HvIA / HvH: persistimos en inter_state_v1
+         vía _interSaveHumanResult (IIFE de s-intercontinental). Single-leg
+         con ET+pen — mismo régimen que Recopa. Stats van a la plantilla
+         vía registrarLigaPlayerStats con compKey 'inter'. */
+      try {
+        var _icEt = _gm.etScores || {};
+        var _icPenWin = _gm.penWinner || null;
+        if (!_icPenWin) {
+          var _icPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+          if (_icPenEv) _icPenWin = _icPenEv.team === 'a' ? 'a' : 'b';
+        } else if (_icPenWin === _gm.home) _icPenWin = 'a';
+        else if (_icPenWin === _gm.away) _icPenWin = 'b';
+        var _icMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+        var _icMvpName = _icMvpEv ? (_icMvpEv.player || _icMvpEv.name || '') : '';
+        var _icMvpTeam = _icMvpEv ? (_icMvpEv.team === 'a' ? _gm.home : (_icMvpEv.team === 'b' ? _gm.away : '')) : '';
+        if (typeof window._interSaveHumanResult === 'function') {
+          window._interSaveHumanResult(
+            _gm._interPhase, _gm._interIdx,
+            _gm.sc.a, _gm.sc.b,
+            _icEt.a || 0, _icEt.b || 0,
+            _icPenWin,
+            _gm.events || [],
+            _icMvpName, _icMvpTeam,
+            _gm.home, _gm.away
+          );
+        }
+        if (typeof window.registrarLigaPlayerStats === 'function') {
+          var _icStatsEv = (_gm.events || []).filter(function(e){
+            return e && e.type !== 'pen-result' && !e._varAnulado;
+          });
+          var _icMk = 'inter_' + (_gm._interPhase || 'q') + '_' + (_gm._interIdx || 0);
+          window.registrarLigaPlayerStats(_icMk, _gm.home, _gm.away, _icStatsEv, _icMvpName, _icMvpTeam, 'inter');
         }
       } catch(_e){}
     } else if (_gm._isSc || _gm.comp === 'sc' || _gm.comp === 'sc-final') {
@@ -15520,6 +15611,9 @@
       _isRecopa: !!_gm._isRecopa,
       _recopaPhase: _gm._recopaPhase,
       _recopaIdx: _gm._recopaIdx,
+      _isInter: !!_gm._isInter,
+      _interPhase: _gm._interPhase,
+      _interIdx: _gm._interIdx,
       _isTour: !!_gm._isTour,
       _tourId: _gm._tourId,
       _tourKey: _gm._tourKey,
@@ -15680,6 +15774,9 @@
     _gm._isRecopa = saved ? !!saved._isRecopa : false;
     _gm._recopaPhase = saved ? saved._recopaPhase : null;
     _gm._recopaIdx = saved ? saved._recopaIdx : null;
+    _gm._isInter = saved ? !!saved._isInter : false;
+    _gm._interPhase = saved ? saved._interPhase : null;
+    _gm._interIdx = saved ? saved._interIdx : null;
     _gm._isTour = saved ? !!saved._isTour : false;
     _gm._tourId = saved ? saved._tourId : null;
     _gm._tourKey = saved ? saved._tourKey : null;
@@ -15834,7 +15931,7 @@
          engine de Copa al confirmar la vuelta. */
       var _isCopa = !!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin';
       var _isCopaSingleLeg = _isCopa && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
-      var _isRecopaCfg = !!_gm._isRecopa || _gm.comp === 'recopa';
+      var _isRecopaCfg = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
       /* Supercopa España: el botón PRÓRROGA NO se muestra. El sistema
          fuerza prórroga + penaltis automáticamente cuando hay empate
          al pulsar FINALIZAR (rama _isScSL en gmEndMatch). Petición
@@ -16403,6 +16500,28 @@
         window.__GM_LIVE._recopaPhase = phase;
         window.__GM_LIVE._recopaIdx = idx;
         window.__GM_LIVE.comp = 'recopa';
+      }
+    } catch(_){}
+  };
+
+  /* Copa Intercontinental HvIA / HvH: abre gm-modal con comp='inter' y
+     los flags _isInter/_interPhase/_interIdx para que gmEndMatch persista
+     vía _interSaveHumanResult en inter_state_v1. Single-leg con ET+pen
+     automático si empate al 90' (mismo régimen que Recopa). 2026-06-04.
+     Humanidad por-competición: en 'inter' es humano cualquier equipo con
+     icono humano (isHumanInComp), no solo los 5 canónicos de Liga. */
+  window.abrirInter = function (phase, idx, home, away) {
+    var _ih = (typeof window.isHumanInComp === 'function')
+      ? function(n){ return !!window.isHumanInComp(n, 'inter'); }
+      : function(n){ return !!esHumano(n); };
+    var isHvH = _ih(home) && _ih(away);
+    gmOpen(0, home, away, isHvH, 'inter', false, false);
+    try {
+      if (window.__GM_LIVE) {
+        window.__GM_LIVE._isInter = true;
+        window.__GM_LIVE._interPhase = phase;
+        window.__GM_LIVE._interIdx = idx;
+        window.__GM_LIVE.comp = 'inter';
       }
     } catch(_){}
   };
@@ -17103,7 +17222,11 @@
        indexOf de _isScSim es 1, no 0), por eso se detecta aparte.
        2026-06-04. */
     var _isUscSim = typeof mk === 'string' && mk.indexOf('usc_') === 0;
-    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isUscSim || _isLecSim || _isRecopaSim;
+    /* Copa Intercontinental (inter_<phase>_<idx>): bracket de 8 a partido
+       único con ET+pen, mismo régimen single-leg que Recopa. Persist vía
+       window._interPersistAfterIa. 2026-06-04. */
+    var _isInterSim = typeof mk === 'string' && mk.indexOf('inter_') === 0;
+    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isUscSim || _isLecSim || _isRecopaSim || _isInterSim;
     var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
     /* COPA SINGLE-LEG con empate previsto al 90': el partido va a
@@ -17499,6 +17622,9 @@
         /* Recopa de Europa: mk con prefijo recopa_ → persistir en
            recopa_state_v1 vía window._recopaPersistAfterIa. 2026-05-06. */
         var __isRecopaSimPersist = typeof mk === 'string' && mk.indexOf('recopa_') === 0;
+        /* Copa Intercontinental: mk con prefijo inter_ → persistir en
+           inter_state_v1 vía window._interPersistAfterIa. 2026-06-04. */
+        var __isInterSimPersist = typeof mk === 'string' && mk.indexOf('inter_') === 0;
         /* Fase de Liga UCL/UEL/UECL (Swiss-format): mk con prefijo
            eurfase_ → persistir en {comp}_phase_v1 vía
            window._eurFasePersistAfterIa. 2026-05-10. */
@@ -17523,6 +17649,10 @@
           try {
             window._recopaPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
           } catch(_e) { try { console.error('[recopaSimLive persist]', _e); } catch(__){} }
+        } else if (__isInterSimPersist && typeof window._interPersistAfterIa === 'function') {
+          try {
+            window._interPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
+          } catch(_e) { try { console.error('[interSimLive persist]', _e); } catch(__){} }
         } else if (__isEurFaseSimPersist && typeof window._eurFasePersistAfterIa === 'function') {
           try {
             window._eurFasePersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam);
@@ -17555,9 +17685,10 @@
           if (!window._iaRunningCount) {
             if (__isCopaSim) {
               if (typeof window.copaInit === 'function') window.copaInit();
-            } else if (__isScSimPersist || __isUscSimPersist || __isLecSimPersist || __isRecopaSimPersist || __isEurFaseSimPersist) {
-              /* SC, Lec, Recopa y EurFase ya re-renderizan dentro de su
-                 propio persistAfterIa. No tocamos la tabla de Liga. */
+            } else if (__isScSimPersist || __isUscSimPersist || __isLecSimPersist || __isRecopaSimPersist || __isInterSimPersist || __isEurFaseSimPersist) {
+              /* SC, USC, Lec, Recopa, Inter y EurFase ya re-renderizan
+                 dentro de su propio persistAfterIa. No tocamos la tabla
+                 de Liga. */
             } else {
               if (typeof window.buildIAresults === 'function') window.buildIAresults();
               if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
@@ -17994,6 +18125,69 @@
       if (typeof window.buildIAresults === 'function') window.buildIAresults();
       if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
     }
+  };
+
+  /* ── PAGAR SIMULACIÓN del partido del HUB en una jornada de Liga ──
+     (2026-06-04). Simula UN partido concreto (el del Liverpool / slot
+     humano del hub) en una jornada de Liga EA Sports con el MISMO
+     motor 4-ejes (`_simIAvsIAWithContext`) y la MISMA persistencia que
+     el batch IA-vs-IA (`simularJornadaIA`): resultado + eventos en el
+     store de Liga (`loadResults`/`saveResults`, key `rKey`),
+     `registrarLigaPlayerStats`, lesiones, decremento de bajas y
+     reconstrucción de clasificación. Se diferencia de
+     `simularJornadaIA` SOLO en que NO salta el partido del humano —
+     justo el que el usuario decide simular pagando. Lo invoca la caja
+     «🤖 PAGAR SIMULACIÓN · 50🪙» de la card del hub (`_cardNonTour` en
+     misc_body_1.html) en los días de Liga, donde el atajo de pago no
+     existía (solo CONTINUAR, que saltaba el día sin jugar). Devuelve
+     el resultado guardado `{gh,ga,events,mvp,mvpTeam}` o null. */
+  window._simHubLigaMatch = function (j, home, away) {
+    try {
+      if (!(j > 0) || !home || !away) return null;
+      var results = loadResults();
+      var key = rKey(j, home, away);
+      if (results[key]) return results[key]; /* ya jugado/simulado */
+      var simScore = (typeof _simIAvsIAWithContext === 'function')
+        ? _simIAvsIAWithContext(home, away, j)
+        : _fallbackIAvsIAScore(home, away);
+      var evtData = genMatchEventsEnhanced(home, away, simScore.gh, simScore.ga, simScore);
+      /* Recalcular marcador real desde los eventos (igual que el batch
+         IA: pen/falta/propia + exclusión de goles anulados por VAR). */
+      var actualGh = 0, actualGa = 0;
+      evtData.events.forEach(function (ev) {
+        if (ev._varAnulado) return;
+        if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol') {
+          if (ev.team === 'a') actualGh++; else actualGa++;
+        } else if (ev.type === 'propia') {
+          if (ev.team === 'a') actualGa++; else actualGh++;
+        }
+      });
+      results[key] = { gh: actualGh, ga: actualGa, events: evtData.events, mvp: evtData.mvp, mvpTeam: evtData.mvpTeam };
+      saveResults(results);
+      if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
+        window.registrarLigaPlayerStats(key, home, away, evtData.events, evtData.mvp, evtData.mvpTeam);
+      }
+      try {
+        if (typeof window._registrarLesionesDesdeEventos === 'function') {
+          window._registrarLesionesDesdeEventos(evtData.events, home, away);
+        }
+      } catch(_){}
+      try {
+        if (window.LESION_STORE_UTILS && typeof window.LESION_STORE_UTILS.decrementarPorPartido === 'function') {
+          window.LESION_STORE_UTILS.decrementarPorPartido(home, 'liga');
+          window.LESION_STORE_UTILS.decrementarPorPartido(away, 'liga');
+        }
+      } catch(_){}
+      actualizarDom('l-j' + j, home, away, actualGh, actualGa);
+      actualizarDom('cl-j' + j, home, away, actualGh, actualGa);
+      try { if (typeof populateCalendar === 'function') populateCalendar(); } catch(_){}
+      try { if (typeof refreshMainCalendarCards === 'function') refreshMainCalendarCards(); } catch(_){}
+      if (typeof window.buildLigaClas      === 'function') window.buildLigaClas();
+      if (typeof window.buildIAresults     === 'function') window.buildIAresults();
+      if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed();
+      try { if (typeof _updateLigaJornadaStatus === 'function') _updateLigaJornadaStatus(); } catch(_){}
+      return results[key];
+    } catch(_) { return null; }
   };
 
   /* botón "Simular TODAS las jornadas IA" (sync — kept for legacy
@@ -20317,20 +20511,20 @@
      window._bayernCalMarkToday a las filas firstMay..idx-1. El fondo
      gris GANA sobre el color de competición (ag-liga/ag-sel/…) con
      !important; iconos y texto quedan atenuados en escala de grises. */
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done{
+  body.bayern-cal-on #s-agenda .ag-r.ag-done{
     background:linear-gradient(90deg,rgba(26,29,34,.94),
                rgba(42,46,54,.55) 60%,rgba(26,29,34,.94)) !important;
     background-image:none !important;
     opacity:.82;
   }
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-date,
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-lbl{
+  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-date,
+  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-lbl{
     color:rgba(190,196,206,.52) !important;
     text-shadow:none !important;
     font-weight:500;
   }
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-ico,
-  body.bayern-cal-on #s-agenda #ag-content-bayern .ag-r.ag-done .ag-wx{
+  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-ico,
+  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-wx{
     filter:grayscale(1) brightness(.85);opacity:.5;
   }
 
@@ -20858,27 +21052,50 @@
       r.classList.remove('ag-done');
     });
     if (!document.body.classList.contains('bayern-cal-on')) return;
+    /* Marcamos el host VISIBLE: normalmente el render Bayern
+       (#ag-content-bayern), pero si por una carrera de timing aún no
+       está construido y se está mostrando el SSR (#ag-content),
+       marcamos ese para que el borde NUNCA falte. */
     var host = document.getElementById('ag-content-bayern');
+    if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
     if (!host) return;
     var rows = host.querySelectorAll('.ag-r');
     if (!rows.length) return;
     /* La temporada arranca el 1 de MAYO (sección PRE-VERANO con el
-       Mundial de Selecciones, añadida 2026-05-20). Saltamos cualquier
-       fila pre-mayo del DOM para que el índice del cursor de
-       pretemporada (que ya está recortado a Mayo+) coincida con la
-       fila que pintamos. Antes el ancla era Junio (`>= 5`); ahora
-       Mayo (`>= 4`) para que el borde rosa arranque en 01 May. */
+       Mundial de Selecciones, añadida 2026-05-20). `firstMay` = primera
+       fila de Mayo en adelante: nada anterior se tiñe de gris. */
     var _SP = {ene:0,feb:1,mar:2,abr:3,may:4,jun:5,jul:6,ago:7,sep:8,oct:9,nov:10,dic:11};
     function _mon(d){ var p=String(d||'').trim().split(/\s+/); if(p.length<2) return -1;
       var m=_SP[(p[1]||'').toLowerCase().replace(/\./g,'').slice(0,3)]; return (m==null)?-1:m; }
+    function _normDate(s){ return String(s||'').trim().replace(/\s+/g,' ').toLowerCase(); }
     var firstMay = 0;
     for (var i = 0; i < rows.length; i++){
       var de = rows[i].querySelector('.ag-date');
       if (de && _mon(de.textContent) >= 4){ firstMay = i; break; }
     }
-    var idx = _currentDayIdx() + firstMay;
-    if (idx > rows.length - 1) idx = rows.length - 1;
-    if (idx < firstMay) idx = firstMay;
+    /* RESOLUCIÓN DEL DÍA ACTUAL — por FECHA, no por aritmética de
+       índice. La fuente única es la MISMA que muestra la caja
+       CALENDARIO del hub (`window._psCurrentDate()` → p.ej. "26 Jul").
+       Buscamos la fila cuya `.ag-date` coincide con esa fecha: así el
+       borde rosa cae EXACTAMENTE en el día que el hub considera "hoy",
+       sin posibilidad de desincronización con el cursor. Si no se puede
+       resolver la fecha (calendario sin hidratar), caemos al método
+       legacy por índice (`_currentDayIdx() + firstMay`). */
+    var idx = -1;
+    var curDate = '';
+    try { if (typeof window._psCurrentDate === 'function') curDate = window._psCurrentDate(); } catch(_){}
+    if (curDate){
+      var want = _normDate(curDate);
+      for (var k = firstMay; k < rows.length; k++){
+        var dk = rows[k].querySelector('.ag-date');
+        if (dk && _normDate(dk.textContent) === want){ idx = k; break; }
+      }
+    }
+    if (idx < 0){
+      idx = _currentDayIdx() + firstMay;
+      if (idx > rows.length - 1) idx = rows.length - 1;
+      if (idx < firstMay) idx = firstMay;
+    }
     /* Fechas YA CUMPLIDAS → gris. Toda fila ANTERIOR al día en curso
        (desde el arranque de temporada en Mayo) se tiñe de gris como
        "completada". Petición usuario 2026-06-04: al pasar del 01 May

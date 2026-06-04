@@ -2050,6 +2050,23 @@ plantilla de ese equipo en el MISMO layout `lext-sq-*`.
 - El mapa club→selección sale de `window._mhFindMister(_hubTeamName())`
   (`.seleccion`), así que **generaliza a cualquier caja de humano**
   (Arsenal→Brasil, Atlético→Noruega, …). Fallback `'Francia'`.
+- **Escudo del club = mapa CANÓNICO autoritativo** (`_CANON_CLUB_CREST`
+  en `misc_body_1.html`; gemelo `_PS_CANON_CREST` para la card del hub
+  en `_psHumanShield`). Bug 2026-06-04 (foto usuario, "por error
+  continuado seguía saliendo el Bayern"): el filtro por URL
+  `_isStaleBayernShield` SOLO detecta el escudo stale del Bayern cuando
+  es una RUTA con `bayern-munchen`; **no** puede detectar un data-URI
+  del Bayern guardado en `shield`/`img`/override del menú. Fix:
+  `_hubClubCrest()` y `_psHumanShield()` resuelven el escudo del hub
+  desde `_CANON_CLUB_CREST[_normForStats(nombre)]` **ANTES** de mirar
+  ningún `shield`/`img`/override. Mapea los 6 clubes humanos a su
+  archivo bundleado (`/static/img/escudos-1/*`); incluye alias legacy
+  `bayern munich`/`bayern`/`lfc`→Liverpool y `paris saint-germain`/
+  `paris`→PSG. **PROHIBIDO** volver a confiar primero en
+  `shield`/`img`/`getTeamLogoUrl` para el escudo de la plantilla de una
+  caja de humano canónica: el mapa canónico gana siempre (es lo único
+  inmune a data-URIs stale). Una caja de humano nueva hereda esto
+  añadiendo su club al mapa.
 - Estado en `window._bplantView` (`'club'` | `'sel'`), toggle vía
   `window._bplantSetView(v)`. Default `'club'`.
 - La **vista selección** (`_renderSelView`) reutiliza `_section`/`_rowFor`

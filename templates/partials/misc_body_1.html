@@ -2478,13 +2478,42 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){}
       return 'Francia';
     }
+    /* Mapa CANÓNICO club humano → archivo de escudo bundleado. Es la
+       fuente AUTORITATIVA del escudo de la plantilla del hub: gana sobre
+       cualquier `shield`/`img`/override stale guardado en localStorage
+       (incluido un data-URI del Bayern, que el filtro por URL
+       `_isStaleBayernShield` NO puede detectar — bug 2026-06-04, "por
+       error continuado seguía saliendo el Bayern"). Generaliza a las 6
+       cajas de humano del MISTERS_REGISTRY (regla "toda caja de humano
+       nueva hereda"); el slot legacy 'Bayern Munich' del hub = Liverpool. */
+    var _CANON_CLUB_CREST = {
+      'liverpool':           '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+      'bayern munich':       '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+      'bayern':              '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+      'lfc':                 '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+      'arsenal':             '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
+      'real madrid':         '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+      'atletico madrid':     '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+      'fc barcelona':        '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+      'barcelona':           '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+      'psg':                 '/static/img/escudos-1/france_paris-saint-germain.svg',
+      'paris saint germain': '/static/img/escudos-1/france_paris-saint-germain.svg',
+      'paris saint-germain': '/static/img/escudos-1/france_paris-saint-germain.svg'
+    };
+    function _canonClubCrest(name){
+      try { var c = _CANON_CLUB_CREST[_normForStats(name)]; return c || ''; } catch(_){ return ''; }
+    }
     function _hubClubCrest(){
-      /* Fuente única canónica del escudo del hub (= el mismo que pinta la
-         card del hub vía ps-shield). _psHumanShield() resuelve override del
-         menú → reemplazo Liga EA → fallback Liverpool, así que NUNCA usa el
-         escudo STALE del Bayern guardado en la fila del slot renombrado
-         (bug 2026-06-04: la caja Liverpool-Francia mostraba el escudo del
-         Bayern porque _findBayernRow().shield seguía apuntando al Bayern). */
+      /* 1) MAPA CANÓNICO (autoritativo): si el club del hub es uno de los
+            humanos canónicos, su escudo es el archivo bundleado — NUNCA un
+            escudo STALE del Bayern (ni URL ni data-URI). Esto mata de raíz
+            el bug 2026-06-04 (la caja Liverpool-Francia seguía mostrando el
+            Bayern por más que el filtro por URL no lo capturara). */
+      var canon = _canonClubCrest(_hubTeamName());
+      if (canon) return canon;
+      /* 2) Fuente única del hub (override del menú → reemplazo Liga EA →
+            fallback). _psHumanShield ya descarta el escudo stale del Bayern
+            por URL para clubes no mapeados arriba. */
       try { if (typeof window._psHumanShield === 'function'){ var s = window._psHumanShield(); if (s) return s; } } catch(_){}
       try { var t = _findBayernRow(); if (t && (t.shield || t.img)) return String(t.shield || t.img); } catch(_){}
       try { if (window.getTeamLogoUrl){ var u = window.getTeamLogoUrl(_hubTeamName()); if (u) return u; } } catch(_){}
@@ -3293,7 +3322,41 @@ window._showSimProgress = function(opts, onDone){
       return !/bayern/i.test(_psHumanName()||'');
     }catch(_){ return false; }
   }
+  /* Mapa CANÓNICO club humano → escudo bundleado (misma tabla que usa la
+     plantilla, _CANON_CLUB_CREST). Gana sobre cualquier override/lookup
+     stale (incluido un data-URI del Bayern que `_isStaleBayernShield` no
+     puede detectar por URL). Generaliza a las 6 cajas de humano. */
+  var _PS_CANON_CREST = {
+    'liverpool':'/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+    'bayern munich':'/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+    'bayern':'/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+    'lfc':'/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+    'arsenal':'/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
+    'real madrid':'/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+    'atletico madrid':'/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'atlético madrid':'/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+    'fc barcelona':'/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'barcelona':'/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+    'psg':'/static/img/escudos-1/france_paris-saint-germain.svg',
+    'paris saint-germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
+    'paris saint germain':'/static/img/escudos-1/france_paris-saint-germain.svg'
+  };
+  function _psCanonNorm(s){
+    try{ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); }catch(_){ return String(s||'').toLowerCase().trim(); }
+  }
+  function _psCanonCrest(){
+    /* Probamos nombre visual y nombre lógico del hub: ambos deben mapear
+       al mismo club humano canónico. El alias 'bayern munich'→Liverpool
+       cubre el slot legacy renombrado. */
+    var c='';
+    try{ c=_PS_CANON_CREST[_psCanonNorm(_psHumanName())]; if(c) return c; }catch(_){}
+    try{ if(typeof _psHumanLogicName==='function'){ c=_PS_CANON_CREST[_psCanonNorm(_psHumanLogicName())]; if(c) return c; } }catch(_){}
+    return '';
+  }
   function _psHumanShield(){
+    /* Si el hub es un club humano canónico, su escudo es el archivo
+       bundleado — autoritativo sobre cualquier dato stale (bug 2026-06-04). */
+    var canon=_psCanonCrest(); if(canon) return canon;
     try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r);
       var ov=d&&d.ov&&d.ov['go:s-munich']; if(ov&&ov.escudo && !_isStaleBayernShield(ov.escudo)) return String(ov.escudo); } }catch(_){}
     try{ if(window._ligaEaSubName){ var s=window._ligaEaSubName('Bayern Munich');

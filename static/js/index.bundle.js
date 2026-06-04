@@ -11863,9 +11863,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var msg = '¡Mira el resultado de mi partido: '
       + (_gm.home || '') + ' ' + (_gm.sc ? _gm.sc.a : 0) + ' - ' + (_gm.sc ? _gm.sc.b : 0) + ' ' + (_gm.away || '') + '!'
       + mvpLabel + suffix;
-    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
+    /* Compartir SIEMPRE Y DIRECTAMENTE al grupo del juego, sin
+       excepción (regla usuario 2026-05-09 · 2026-06-04). */
     if (typeof window._waShareToGroup === 'function') window._waShareToGroup(msg);
-    else { try { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); } catch(e) {} }
+    else { try { window.open(window._WA_GROUP_URL || 'https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX', '_blank'); } catch(e) {} }
   };
 
   // [Twitch suffix interceptor — DEPRECATED 2026-05-09]

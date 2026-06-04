@@ -11086,31 +11086,39 @@
   } catch(_){}
 
   /* ════════════════════════════════════════════════════════════════
-     ENVÍO ÚNICO AL GRUPO DE WHATSAPP (2026-05-09)
+     ENVÍO ÚNICO Y DIRECTO AL GRUPO DE WHATSAPP (2026-05-09 ·
+     reforzado 2026-06-04)
      ════════════════════════════════════════════════════════════════
-     Petición usuario: TODOS los share (inicio · descanso · final ·
-     prórroga · penaltis) van al MISMO grupo de WhatsApp:
+     Petición usuario 2026-06-04: TODOS los share de partidos con
+     humano implicado (HvH · IAvH · HvIA · inicio · descanso · final ·
+     prórroga · penaltis) van SIEMPRE Y DIRECTAMENTE — SIN EXCEPCIÓN —
+     al MISMO grupo de WhatsApp:
        https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX
-     Como WhatsApp no acepta `?text=` con un enlace de grupo (solo
-     `wa.me/<phone>?text=`), copiamos el texto al portapapeles y
-     abrimos el grupo en pestaña nueva. El usuario pega (Ctrl+V) y
-     envía. Mismo flujo que ya usaba `_gmShareFinal`, ahora reusable
-     para cualquier momento del partido. */
+
+     WhatsApp no permite pre-redactar texto sobre un enlace de GRUPO
+     (chat.whatsapp.com/<token>); el `?text=` solo funciona con
+     `wa.me/<phone>`. Por eso copiamos el texto al portapapeles y
+     abrimos el grupo: el usuario pega (Ctrl+V / mantener pulsado →
+     Pegar) y envía DE VERDAD.
+
+     PROHIBIDO (regla usuario 2026-06-04) volver a usar
+     `navigator.share` (selector del sistema) o `wa.me/?text=`
+     (selector de chat de WhatsApp): ninguno garantiza ESTE grupo,
+     así que el "sin excepción" se rompía. El share va al grupo fijo
+     y a ningún otro destino. */
   var _WA_GROUP_URL = 'https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX';
   function _waShareToGroup(text) {
     /* 0. Si hay un Twitch seleccionado para la previa, auto-append
-       del sufijo "— Visto en el Twitch de <streamer>" — antes lo
-       interceptaba un wrap de window.open en el bundle, pero ahora
-       la URL ya no es wa.me/?text= sino chat.whatsapp.com/<token>
-       (el texto va por clipboard). */
+       del sufijo "— Visto en el Twitch de <streamer>". */
     try {
       var _twitch = window._ppSelectedTwitch;
       if (_twitch && String(text).indexOf('Twitch de ' + _twitch) === -1) {
         text = text + '\n\n📺 Visto en el Twitch de ' + _twitch;
       }
     } catch(_){}
-    /* 1. Copiar al portapapeles (backup — si el share nativo se
-       cancela, el usuario puede pegar en el grupo manualmente). */
+    /* 1. Copiar al portapapeles para que el usuario lo pegue en el
+       grupo (es la VÍA por la que el mensaje llega al grupo, ya que
+       el enlace de grupo no admite texto pre-redactado). */
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).catch(function(){});
@@ -11125,31 +11133,11 @@
         document.body.removeChild(_ta);
       }
     } catch(_){}
-    /* 2. SHARE NATIVO (Web Share API) — REPARA "no se comparte nada"
-       (reportado 2026-05-18). Antes solo se abría el link de
-       INVITACIÓN del grupo (chat.whatsapp.com/<token>), que NO
-       redacta ningún mensaje → el usuario veía que no se compartía
-       nada. navigator.share abre el selector del sistema con el
-       texto ya escrito; el usuario elige WhatsApp (o el grupo) y se
-       envía DE VERDAD. Fallbacks robustos en cascada:
-         a) navigator.share({text})  — móvil (caso normal).
-         b) wa.me/?text=<txt>        — WhatsApp con el texto puesto.
-         c) grupo fijo               — última red (texto en portapapeles). */
-    try {
-      if (navigator.share) {
-        navigator.share({ text: text }).catch(function(err){
-          /* AbortError = el usuario cerró el selector a propósito →
-             NO hacemos fallback (no es un fallo). Cualquier otro
-             error sí cae a wa.me. */
-          if (err && err.name === 'AbortError') return;
-          try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); } catch(_){}
-        });
-        return;
-      }
-    } catch(_){}
-    /* 3. Sin Web Share API (desktop): WhatsApp con el texto ya puesto. */
-    try { window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank'); return; } catch(_){}
-    /* 4. Última red: abrir el grupo fijo (texto ya en portapapeles). */
+    /* 2. SIN EXCEPCIÓN: abrir SIEMPRE el grupo fijo en pestaña/intent
+       NUEVO (`_blank`) → la web sigue VIVA en segundo plano para que
+       el usuario pueda volver a ella sin errores (los safety-nets
+       `_blackScreenSafetyNet` reactivan la pantalla al volver). NO
+       navegamos la pestaña actual (evita perder el estado del juego). */
     try { window.open(_WA_GROUP_URL, '_blank'); } catch(_){}
   }
   try {
@@ -15370,9 +15358,10 @@
   window.gmShareWhatsApp = function(){
     var msg = '¡Mira el resultado de mi partido: '
       + _gm.home + ' ' + _gm.sc.a + ' - ' + _gm.sc.b + ' ' + _gm.away + '!';
-    /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
+    /* Compartir SIEMPRE Y DIRECTAMENTE al grupo del juego, sin
+       excepción (regla usuario 2026-05-09 · 2026-06-04). */
     if (typeof _waShareToGroup === 'function') _waShareToGroup(msg);
-    else { try { window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank'); } catch(e) {} }
+    else { try { window.open(window._WA_GROUP_URL || 'https://chat.whatsapp.com/FcpiaB7ML245OwR0n9mmAX', '_blank'); } catch(e) {} }
   };
 
   /* ── BACKGROUND MATCH STORE (multi-live gm-modal) ────────────────

@@ -10578,9 +10578,25 @@
        ▶️ EMPEZAR (petición usuario 2026-05-26). Solo en el share de
        PREVIA (INICIO): para descanso/final no aplica porque la
        apuesta ya está cerrada (los mercados se bloquean al pasar a
-       'playing' — ver _isramaxRenderMatchPick filter). */
+       'playing' — ver _isramaxRenderMatchPick filter).
+       SOLO Humano vs Humano (petición usuario 2026-06-04): en HvIA no
+       hay apuesta posible (los humanos implicados no pueden apostar
+       para evitar fraude), así que NO se añade el deep link. */
+    var _bothHuman = false;
     try {
-      if (typeof window.location !== 'undefined' && window.location.host) {
+      var _hH = false, _aH = false;
+      if (typeof window.isHumanInComp === 'function') {
+        _hH = !!window.isHumanInComp(home, _ppCompKey);
+        _aH = !!window.isHumanInComp(away, _ppCompKey);
+      }
+      if (!_hH && typeof window._esSelHumana === 'function') _hH = !!window._esSelHumana(home);
+      if (!_aH && typeof window._esSelHumana === 'function') _aH = !!window._esSelHumana(away);
+      if (!_hH && typeof window.esHumano === 'function') _hH = !!window.esHumano(home);
+      if (!_aH && typeof window.esHumano === 'function') _aH = !!window.esHumano(away);
+      _bothHuman = _hH && _aH;
+    } catch(_){}
+    try {
+      if (_bothHuman && typeof window.location !== 'undefined' && window.location.host) {
         var _isrBase = window.location.protocol + '//' + window.location.host + window.location.pathname;
         lines.push('');
         lines.push('🎰 Apostar en ISRAMAX: ' + _isrBase + '?open=isramax');
@@ -11150,25 +11166,6 @@
     } catch(_){}
     return ok;
   }
-  /* Aviso flotante: el texto NO se pre-redacta en un enlace de grupo,
-     así que el usuario DEBE pegar. Se lo recordamos de forma visible
-     (y persiste lo justo para que lo vea al abrir / al volver). */
-  function _waPasteHint() {
-    try {
-      var old = document.getElementById('wa-paste-hint');
-      if (old && old.parentNode) old.parentNode.removeChild(old);
-      var el = document.createElement('div');
-      el.id = 'wa-paste-hint';
-      el.style.cssText = 'position:fixed;left:50%;top:18px;transform:translateX(-50%);'
-        + 'z-index:100000;max-width:90vw;padding:12px 16px;border-radius:12px;'
-        + 'background:linear-gradient(135deg,#128c7e,#075e54);color:#fff;'
-        + 'font-family:Rajdhani,sans-serif;font-weight:700;font-size:14px;'
-        + 'text-align:center;line-height:1.35;box-shadow:0 6px 24px rgba(0,0,0,.45);';
-      el.textContent = '📋 Resultado copiado. En el grupo: mantén pulsado el cuadro de texto → Pegar → Enviar.';
-      document.body.appendChild(el);
-      setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 7000);
-    } catch(_){}
-  }
   function _waShareToGroup(text) {
     /* 0. Si hay un Twitch seleccionado para la previa, auto-append
        del sufijo "— Visto en el Twitch de <streamer>". */
@@ -11182,9 +11179,7 @@
        mensaje llega al grupo, ya que el enlace de grupo no admite
        texto pre-redactado. */
     _waCopyToClipboard(text);
-    /* 2. Recordatorio visible de PEGAR (el grupo no pre-redacta). */
-    _waPasteHint();
-    /* 3. SIN EXCEPCIÓN: abrir SIEMPRE el grupo fijo en pestaña/intent
+    /* 2. SIN EXCEPCIÓN: abrir SIEMPRE el grupo fijo en pestaña/intent
        NUEVO (`_blank`) → la web sigue VIVA en segundo plano para que
        el usuario pueda volver a ella sin errores (los safety-nets
        `_blackScreenSafetyNet` reactivan la pantalla al volver). NO

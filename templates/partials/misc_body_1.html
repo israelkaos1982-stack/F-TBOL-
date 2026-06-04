@@ -104,6 +104,57 @@ window.pG = function(fn) {
   </div>
 </div>
 
+<!-- ══ PIN DIGITAL 7477 — editor MANUAL de stats + bajas de la plantilla del hub
+     (lápiz AZUL en #s-bayern-plantilla). Numpad propio, fuera de cualquier
+     .screen para anclar position:fixed al viewport. ══ -->
+<div id="bed-pin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:999999;align-items:center;justify-content:center;">
+  <div style="background:linear-gradient(160deg,#06121f 0%,#0b1c30 100%);border:1px solid rgba(61,165,255,.35);border-radius:16px;padding:28px 24px 20px;width:280px;max-width:90vw;text-align:center;box-shadow:0 0 40px rgba(0,0,0,.8);">
+    <div style="font-family:Oswald,sans-serif;font-size:15px;letter-spacing:3px;color:rgba(184,222,255,.9);margin-bottom:6px;">🖍 EDITAR STATS Y BAJAS</div>
+    <div style="font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.4);margin-bottom:16px;">Introduce el PIN digital para acceder</div>
+    <div id="bed-pin-display" style="font-family:'Courier New',monospace;font-size:28px;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:10px 16px;margin-bottom:16px;min-height:52px;line-height:1.2;letter-spacing:12px;">····</div>
+    <div id="bed-pin-err" style="display:none;color:#ff5555;font-size:11px;margin-bottom:10px;font-family:Rajdhani,sans-serif;letter-spacing:1px;">PIN INCORRECTO</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;">
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('1')">1</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('2')">2</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('3')">3</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('4')">4</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('5')">5</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('6')">6</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('7')">7</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('8')">8</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('9')">9</button>
+      <button class="pin-key pin-key-del" onclick="window._bedPinDel&&window._bedPinDel()">⌫</button>
+      <button class="pin-key" onclick="window._bedPinKey&&window._bedPinKey('0')">0</button>
+      <button class="pin-key pin-key-ok" onclick="window._bedPinOk&&window._bedPinOk()">✓</button>
+    </div>
+    <button onclick="window._bedPinClose&&window._bedPinClose()" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:12px;font-family:Rajdhani,sans-serif;letter-spacing:1.5px;cursor:pointer;padding:4px 8px;">CANCELAR</button>
+  </div>
+</div>
+
+<!-- ══ PANEL DE BAJA MANUAL — al pulsar un jugador en modo edición (lápiz azul).
+     Marca expulsado 🟥 / acumulación 🟨🟨🟨 / lesión 🩹 con nº de partidos. ══ -->
+<div id="bed-baja-ov" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:999999;align-items:center;justify-content:center;" onclick="if(event.target===this)window._bedBajaClose&&window._bedBajaClose()">
+  <div style="position:relative;background:linear-gradient(165deg,#0b0f17 0%,#141a26 100%);border:1px solid rgba(120,150,200,.35);border-radius:16px;padding:22px 20px 18px;width:320px;max-width:92vw;box-shadow:0 18px 48px rgba(0,0,0,.75);font-family:Oswald,sans-serif;">
+    <div style="font-family:'Bebas Neue','Oswald',sans-serif;font-size:13px;letter-spacing:2px;color:rgba(255,255,255,.55);text-align:center;">REGISTRAR BAJA MANUAL</div>
+    <div id="bed-baja-name" style="font-family:'Bebas Neue','Oswald',sans-serif;font-size:21px;letter-spacing:1px;color:#fff;text-align:center;margin:2px 0 4px;"></div>
+    <div id="bed-baja-cur" style="font-family:Rajdhani,sans-serif;font-size:11px;letter-spacing:.5px;color:rgba(255,210,120,.9);text-align:center;min-height:14px;margin-bottom:12px;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button type="button" class="bed-type-btn" data-type="red"    onclick="window._bedPickType&&window._bedPickType('red')"    style="border:1px solid rgba(255,70,70,.5);background:rgba(255,40,40,.10);color:#ff7a7a;border-radius:10px;padding:11px 12px;font-size:13px;letter-spacing:1px;cursor:pointer;text-align:left;">🟥 EXPULSADO</button>
+      <button type="button" class="bed-type-btn" data-type="yellow" onclick="window._bedPickType&&window._bedPickType('yellow')" style="border:1px solid rgba(240,200,60,.5);background:rgba(240,200,60,.10);color:#ffe169;border-radius:10px;padding:11px 12px;font-size:13px;letter-spacing:1px;cursor:pointer;text-align:left;">🟨🟨🟨 ACUMULACIÓN DE TARJETAS</button>
+      <button type="button" class="bed-type-btn" data-type="purple" onclick="window._bedPickType&&window._bedPickType('purple')" style="border:1px solid rgba(190,110,255,.5);background:rgba(190,110,255,.10);color:#d6a6ff;border-radius:10px;padding:11px 12px;font-size:13px;letter-spacing:1px;cursor:pointer;text-align:left;">🩹💉🚑 LESIONADO</button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin:16px 0 6px;">
+      <span style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:1px;color:rgba(255,255,255,.6);">PARTIDOS DE BAJA</span>
+      <button type="button" onclick="window._bedNudgeN&&window._bedNudgeN(-1)" style="width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font-size:18px;cursor:pointer;">−</button>
+      <input id="bed-baja-n" type="number" inputmode="numeric" min="1" max="50" value="1" style="width:54px;text-align:center;font-family:Oswald,sans-serif;font-size:18px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);border-radius:8px;color:#fff;padding:5px 0;">
+      <button type="button" onclick="window._bedNudgeN&&window._bedNudgeN(1)" style="width:30px;height:30px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:#fff;font-size:18px;cursor:pointer;">+</button>
+    </div>
+    <button type="button" id="bed-baja-confirm" onclick="window._bedBajaConfirm&&window._bedBajaConfirm()" style="width:100%;margin-top:10px;border:none;border-radius:10px;padding:12px;font-family:Oswald,sans-serif;font-size:14px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:linear-gradient(135deg,#1e6dc1,#143f6d);color:#fff;box-shadow:0 4px 14px rgba(30,109,193,.4);">CONFIRMAR BAJA</button>
+    <button type="button" id="bed-baja-clear" onclick="window._bedBajaClear&&window._bedBajaClear()" style="width:100%;margin-top:8px;border:1px solid rgba(255,120,120,.4);border-radius:10px;padding:9px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;background:rgba(255,60,60,.08);color:#ff9a9a;">QUITAR BAJA</button>
+    <button type="button" onclick="window._bedBajaClose&&window._bedBajaClose()" style="width:100%;margin-top:8px;background:none;border:none;color:rgba(255,255,255,.4);font-size:11px;font-family:Rajdhani,sans-serif;letter-spacing:1.5px;cursor:pointer;padding:4px;">CANCELAR</button>
+  </div>
+</div>
+
 <!-- ══ SIM PROGRESS OVERLAY (Open Qualifier y futuros) ══ -->
 <div id="oq-sim-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999998;align-items:center;justify-content:center;flex-direction:column;">
   <div id="oq-sim-ball" style="font-size:84px;line-height:1;animation:oqBallSpin 1.2s linear infinite;filter:drop-shadow(0 0 16px rgba(253,200,48,.6));">⚽</div>
@@ -2051,7 +2102,7 @@ window._showSimProgress = function(opts, onDone){
 
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button><div id="bplant-crest-toggle"></div></div>
+  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button><button type="button" id="bplant-baja-pencil" class="munich-edit-pencil bed-pencil" onclick="window._bedToggleGated&amp;&amp;window._bedToggleGated()" title="Editar stats y bajas manualmente (PIN 7477)" aria-label="Editar stats y bajas">🖍</button><div id="bplant-crest-toggle"></div></div>
   <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
        del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
        fuente de datos (`ligaExt_liga-ea-sports`). Los iconos por sección
@@ -2064,6 +2115,7 @@ window._showSimProgress = function(opts, onDone){
        así que quedan excluidos automáticamente. -->
   <div class="ent-section" style="border:1px solid rgba(238,28,37,.3);background:rgba(8,4,12,.4);">
     <div class="ent-body open" id="bayern-plantilla" style="padding:8px 8px 12px;">
+      <div id="bed-edit-banner">🖍 <b>MODO EDICIÓN MANUAL</b> · toca un número para corregir su estadística (queda fijada) · toca el <b>nombre</b> de un jugador para marcar 🟥 expulsado / 🟨🟨🟨 acumulación / 🩹 lesión.</div>
       <div id="bayern-plantilla-host" class="lext-sq-wrap" style="margin:0;"></div>
     </div>
   </div>
@@ -2389,6 +2441,109 @@ window._showSimProgress = function(opts, onDone){
       return 'r3';
     }
 
+    /* ════════════════════════════════════════════════════════════════
+       EDITOR MANUAL (lápiz AZUL · PIN 7477) — stats FIJADAS + bajas
+       (expulsión / acumulación / lesión) manuales. 2026-06-04.
+       · Stats: override BLOQUEADO en `bplant_stat_overrides_v1` — la cifra
+         escrita REEMPLAZA a la calculada y NO se recalcula sola con
+         futuros partidos (petición usuario: "fijar override bloqueado").
+       · Bajas: escriben en los stores REALES (club: SANCION_STORE /
+         LESION_STORE ; selección: _selAddSancion / _selAddLesion) con el
+         nº de partidos elegido → aparecen en BAJAS PARA EL PARTIDO del
+         próximo partido del humano y SE CONSUMEN solas al jugarlo.
+       · Generaliza a cualquier caja de humano (club + selección del
+         registro de misters); NO hardcodea Liverpool/Francia. La vista
+         activa (`window._bplantView`) decide club vs selección.
+       ════════════════════════════════════════════════════════════════ */
+    var _bedEdit = false;
+    var _BED_OV_KEY = 'bplant_stat_overrides_v1';
+    function _bedScopeKey(){
+      return (window._bplantView === 'sel')
+        ? 'sel:' + _normForStats(_hubSelName())
+        : 'club:' + _normForStats(_hubTeamName());
+    }
+    function _bedOvAll(){ try { return JSON.parse(localStorage.getItem(_BED_OV_KEY) || '{}') || {}; } catch(_){ return {}; } }
+    function _bedOvSaveAll(o){ try { localStorage.setItem(_BED_OV_KEY, JSON.stringify(o)); } catch(_){} }
+    function _bedOvGet(name){
+      var o = _bedOvAll(); var sc = o[_bedScopeKey()];
+      return (sc && sc[_normForStats(name)]) || null;
+    }
+    function _bedSetField(name, field, val){
+      if (!field) return;
+      var o = _bedOvAll(); var sk = _bedScopeKey();
+      var sc = o[sk] = o[sk] || {}; var nn = _normForStats(name);
+      var e = sc[nn] = sc[nn] || {};
+      var t = String(val == null ? '' : val).trim();
+      if (t === '') { delete e[field]; }
+      else { var num = Number(t); e[field] = isNaN(num) ? 0 : num; }
+      if (!Object.keys(e).length) delete sc[nn];
+      if (!Object.keys(sc).length) delete o[sk];
+      _bedOvSaveAll(o);
+    }
+    /* Override de stats BLOQUEADO: clona la base y pisa los campos
+       editados. La columna GOLES es total único → se guarda en `gol`
+       (con pen/fk a 0 para no doblar). NUNCA muta el cache. */
+    function _bedApplyStatOverride(name, base){
+      var ov = _bedOvGet(name);
+      if (!ov) return base;
+      var out = {}; for (var k in base) out[k] = base[k];
+      ['pj','mvp','ta','tr','imbat','penSaved'].forEach(function(f){ if (ov[f] != null) out[f] = Number(ov[f]) || 0; });
+      if (ov.gol != null) { out.gol = Number(ov.gol) || 0; out.pen = 0; out.fk = 0; }
+      return out;
+    }
+    function _bedNotaOverride(name){
+      var ov = _bedOvGet(name);
+      return (ov && ov.nota != null) ? (Number(ov.nota) || 0) : null;
+    }
+    /* Estado de baja (rojo expulsión / amarillo acumulación / morado
+       lesión) leído de los stores REALES del club o la selección según
+       la vista activa. null = sin baja. Prioridad: sanción > lesión. */
+    function _bedBajaState(name){
+      var nn = _normForStats(name);
+      try {
+        if (window._bplantView === 'sel'){
+          var sel = _hubSelName();
+          var q = (((window.SANCION_STORE_SEL || {})['sel']) || {})[sel] || [];
+          for (var i = 0; i < q.length; i++){
+            if ((Number(q[i].remaining) || 0) > 0 && _teamKeyMatches(_normForStats(q[i].name || ''), nn))
+              return (q[i].tipo === 'amarilla') ? 'yellow' : 'red';
+          }
+          var lb = ((window.LESION_STORE_SEL || {})[sel]) || {};
+          for (var lk in lb){ if (lb[lk] && (Number(lb[lk].remaining) || 0) > 0 && _teamKeyMatches(_normForStats(lk), nn)) return 'purple'; }
+          return null;
+        }
+        var hub = _normForStats(_hubTeamName());
+        var g = (window.SANCION_STORE && window.SANCION_STORE.__global) || [];
+        for (var j = 0; j < g.length; j++){
+          var s = g[j]; if (!s || (Number(s.remaining) || 0) <= 0) continue;
+          if (!_teamKeyMatches(_normForStats(s.team || ''), hub)) continue;
+          if (!_teamKeyMatches(_normForStats(s.name || ''), nn)) continue;
+          return (s.tipo === 'roja' || s.tipo === 'd-amarilla') ? 'red' : 'yellow';
+        }
+        var LS = window.LESION_STORE || {};
+        for (var nk in LS){
+          var l = LS[nk]; if (!l || (Number(l.partidos) || 0) <= 0) continue;
+          if (!_teamKeyMatches(_normForStats(nk), nn)) continue;
+          if (!_teamKeyMatches(_normForStats(l.equipo || ''), hub)) continue;
+          return 'purple';
+        }
+      } catch(_){}
+      return null;
+    }
+    /* Celda de stat: input editable en modo edición, span estático fuera. */
+    function _bedCell(cls, field, val, isNota){
+      if (_bedEdit){
+        var step = isNota ? ' step="0.01"' : ' step="1"';
+        var v = isNota ? (Number(val) > 0 ? (Number(val)).toFixed(2) : '') : (Number(val) || 0);
+        return '<input class="lext-sq-cell bed-in ' + cls + '" type="number" inputmode="' + (isNota ? 'decimal' : 'numeric') + '"' + step
+             + ' data-field="' + field + '" value="' + v + '" onclick="event.stopPropagation()" onchange="window._bedStatInput&&window._bedStatInput(this)">';
+      }
+      if (isNota){
+        return '<span class="lext-sq-cell rating ' + _notaTone(Number(val)) + '" title="Nota media entre competiciones oficiales">' + (Number(val) > 0 ? (Number(val)).toFixed(2) : '—') + '</span>';
+      }
+      return _statCell(cls, val);
+    }
+
     function _rowFor(p, isGK, ctx){
       ctx = ctx || null;
       var _statsProv = (ctx && ctx.statsFor) || _statsFor;
@@ -2396,43 +2551,51 @@ window._showSimProgress = function(opts, onDone){
       var name = String(p.name||'?');
       var pw = Number(p.power)||0;
       var tier = _powerTier(pw);
-      var s = _statsProv(name);
+      var s = _bedApplyStatOverride(name, _statsProv(name));
       var pwCell = '<span class="lext-sq-cell pw tier-'+tier+'" title="Poder '+pw+'/99">'+pw+'</span>';
-      var pj = _statCell('', s.pj);
-      var mvp = _statCell('mvp', s.mvp);
-      var ta = _statCell('ta', s.ta);
-      var tr = _statCell('tr', s.tr);
-      /* NOTA MEDIA por competición (0-10). */
-      var nota = _notaProv(name, p.pos);
-      var notaCell = '<span class="lext-sq-cell rating '+_notaTone(nota)+'" title="Nota media entre competiciones oficiales (Liga, Copa, Supercopa España, Champions/Europa, Recopa, Supercopa Europa, Intercontinental, Mundialito)">'
-        + (nota > 0 ? nota.toFixed(2) : '—') + '</span>';
+      /* NOTA MEDIA por competición (0-10) — respeta el override manual. */
+      var _notaOv = _bedNotaOverride(name);
+      var nota = (_notaOv != null) ? _notaOv : _notaProv(name, p.pos);
+      var notaCell = _bedCell('rating', 'nota', nota, true);
       var cells, cls;
       if (isGK){
         cls = 'gk';
-        cells = pwCell + pj
-              + _statCell('imbat', s.imbat)
-              + _statCell('psave', s.penSaved)
-              + mvp + ta + tr
+        cells = pwCell
+              + _bedCell('', 'pj', s.pj, false)
+              + _bedCell('imbat', 'imbat', s.imbat, false)
+              + _bedCell('psave', 'penSaved', s.penSaved, false)
+              + _bedCell('mvp', 'mvp', s.mvp, false)
+              + _bedCell('ta', 'ta', s.ta, false)
+              + _bedCell('tr', 'tr', s.tr, false)
               + notaCell;
       } else {
         cls = 'ot';
-        /* GOLES = total único (jugada + penaltis + faltas) sumado de
-           todas las competiciones oficiales (petición usuario 2026-06-03). */
+        /* GOLES = total único (jugada + penaltis + faltas). */
         var golesTot = (Number(s.gol)||0) + (Number(s.pen)||0) + (Number(s.fk)||0);
-        cells = pwCell + pj
-              + _statCell('gol', golesTot)
-              + mvp + ta + tr
+        cells = pwCell
+              + _bedCell('', 'pj', s.pj, false)
+              + _bedCell('gol', 'gol', golesTot, false)
+              + _bedCell('mvp', 'mvp', s.mvp, false)
+              + _bedCell('ta', 'ta', s.ta, false)
+              + _bedCell('tr', 'tr', s.tr, false)
               + notaCell;
       }
-      /* Si el jugador está lesionado, el NOMBRE es clicable y abre
-         el MENÚ DE TRATAMIENTO RÁPIDO (foto 4). Petición usuario
-         2026-05-25: opción C (sólo el nombre, no toda la fila). */
-      var _injLes = (window.LESION_STORE || {})[name];
-      var _isInj  = !!(_injLes && Number(_injLes.partidos) > 0);
-      var nameHtml = _isInj
-        ? '<span class="lext-sq-name-link" onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()" style="cursor:pointer;text-decoration:underline dotted rgba(255,120,120,.55);text-underline-offset:3px;" title="Pulsa para abrir el menú de tratamiento">'+name+'</span>'
-        : name;
-      return '<div class="lext-sq-row '+cls+'" data-player="'+name.replace(/"/g,'&quot;')+'">'
+      var nameHtml;
+      if (_bedEdit){
+        /* En modo edición el nombre abre el PANEL DE BAJA MANUAL. */
+        nameHtml = '<span class="lext-sq-name-link bed-name" onclick="event.stopPropagation();window._bedOpenBaja&&window._bedOpenBaja(this)" title="Marcar baja manual (expulsión / acumulación / lesión)">'+name+'</span>';
+      } else {
+        /* Fuera de edición: si está lesionado, el nombre abre el menú de
+           tratamiento (foto 4, petición usuario 2026-05-25). */
+        var _injLes = (window.LESION_STORE || {})[name];
+        var _isInj  = !!(_injLes && Number(_injLes.partidos) > 0);
+        nameHtml = _isInj
+          ? '<span class="lext-sq-name-link" onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()" style="cursor:pointer;text-decoration:underline dotted rgba(255,120,120,.55);text-underline-offset:3px;" title="Pulsa para abrir el menú de tratamiento">'+name+'</span>'
+          : name;
+      }
+      var bj = _bedBajaState(name);
+      var bjCls = bj ? (' bed-'+bj) : '';
+      return '<div class="lext-sq-row '+cls+bjCls+'" data-player="'+name.replace(/"/g,'&quot;')+'">'
            + '<span class="lext-sq-name tier-'+tier+'">'+nameHtml+_badges(p)+'</span>'
            + cells
            + '<span class="lext-sq-actions"></span>'
@@ -2589,6 +2752,190 @@ window._showSimProgress = function(opts, onDone){
       window._bplantView = (v === 'sel') ? 'sel' : 'club';
       try { window.renderBayernPlantillaScreen(); } catch(_){}
     };
+
+    /* ════════════════════════════════════════════════════════════════
+       LÁPIZ AZUL · PIN 7477 + modo edición + panel de baja manual.
+       ════════════════════════════════════════════════════════════════ */
+    var _bedPinBuf = '';
+    function _bedPinRender(){
+      var d = document.getElementById('bed-pin-display');
+      if (d) d.textContent = _bedPinBuf.length ? (new Array(_bedPinBuf.length+1).join('●') + new Array(Math.max(0,4-_bedPinBuf.length)+1).join('·')) : '····';
+    }
+    window._bedPinKey = function(k){
+      if (_bedPinBuf.length >= 4) return;
+      _bedPinBuf += k;
+      var er = document.getElementById('bed-pin-err'); if (er) er.style.display = 'none';
+      _bedPinRender();
+      if (_bedPinBuf.length === 4) window._bedPinOk();
+    };
+    window._bedPinDel = function(){ _bedPinBuf = _bedPinBuf.slice(0,-1); _bedPinRender(); };
+    window._bedPinClose = function(){
+      _bedPinBuf = ''; _bedPinRender();
+      var m = document.getElementById('bed-pin-modal'); if (m) m.style.display = 'none';
+      var er = document.getElementById('bed-pin-err'); if (er) er.style.display = 'none';
+    };
+    window._bedPinOk = function(){
+      if (_bedPinBuf === '7477'){
+        window.__bedPinOk = true;
+        window._bedPinClose();
+        _bedSetEdit(true);
+      } else {
+        _bedPinBuf = ''; _bedPinRender();
+        var er = document.getElementById('bed-pin-err'); if (er) er.style.display = 'block';
+      }
+    };
+    window._bedToggleGated = function(){
+      if (window.__bedPinOk){ _bedSetEdit(!_bedEdit); return; }
+      _bedPinBuf = ''; _bedPinRender();
+      var m = document.getElementById('bed-pin-modal'); if (m) m.style.display = 'flex';
+      var er = document.getElementById('bed-pin-err'); if (er) er.style.display = 'none';
+    };
+    function _bedSetEdit(on){
+      _bedEdit = !!on;
+      var scr = document.getElementById('s-bayern-plantilla');
+      if (scr) scr.classList.toggle('bed-editing', _bedEdit);
+      var btn = document.getElementById('bplant-baja-pencil');
+      if (btn){ btn.classList.toggle('is-on', _bedEdit); btn.textContent = _bedEdit ? '✓' : '🖍'; }
+      try { window.renderBayernPlantillaScreen(); } catch(_){}
+    }
+    window._bedStatInput = function(inp){
+      if (!inp) return;
+      var row = inp.closest ? inp.closest('.lext-sq-row') : null;
+      var name = row && row.getAttribute('data-player');
+      if (!name) return;
+      _bedSetField(name, inp.getAttribute('data-field'), inp.value);
+    };
+
+    /* ── Panel de baja manual ── */
+    var _bedTarget = null;   /* nombre del jugador en edición */
+    var _bedType = null;     /* 'red' | 'yellow' | 'purple' */
+    function _bedTeamLabel(){ return (window._bplantView === 'sel') ? _hubSelName() : _hubTeamName(); }
+    window._bedOpenBaja = function(el){
+      var row = el && el.closest ? el.closest('.lext-sq-row') : null;
+      var name = row && row.getAttribute('data-player');
+      if (!name) return;
+      _bedTarget = name; _bedType = null;
+      var nm = document.getElementById('bed-baja-name'); if (nm) nm.textContent = name;
+      var st = _bedBajaState(name);
+      var cur = document.getElementById('bed-baja-cur');
+      if (cur) cur.textContent = st
+        ? ('Baja actual: ' + (st==='red'?'🟥 Expulsado':st==='yellow'?'🟨🟨🟨 Acumulación':'🩹 Lesionado') + ' — pulsa QUITAR BAJA para anularla')
+        : '';
+      var clr = document.getElementById('bed-baja-clear'); if (clr) clr.style.display = st ? '' : 'none';
+      var ni = document.getElementById('bed-baja-n'); if (ni) ni.value = '1';
+      var btns = document.querySelectorAll('#bed-baja-ov .bed-type-btn');
+      for (var i=0;i<btns.length;i++) btns[i].classList.remove('is-sel');
+      var ov = document.getElementById('bed-baja-ov'); if (ov) ov.style.display = 'flex';
+    };
+    window._bedBajaClose = function(){ var ov = document.getElementById('bed-baja-ov'); if (ov) ov.style.display = 'none'; _bedTarget = null; _bedType = null; };
+    window._bedPickType = function(t){
+      _bedType = t;
+      var btns = document.querySelectorAll('#bed-baja-ov .bed-type-btn');
+      for (var i=0;i<btns.length;i++) btns[i].classList.toggle('is-sel', btns[i].getAttribute('data-type') === t);
+    };
+    window._bedNudgeN = function(d){
+      var ni = document.getElementById('bed-baja-n'); if (!ni) return;
+      ni.value = Math.max(1, Math.min(50, (parseInt(ni.value,10)||1) + d));
+    };
+    window._bedBajaConfirm = function(){
+      if (!_bedTarget) return;
+      if (!_bedType){ try { alert('Elige primero: 🟥 expulsado, 🟨🟨🟨 acumulación o 🩹 lesión.'); } catch(_){} return; }
+      var ni = document.getElementById('bed-baja-n');
+      var n = Math.max(1, Math.min(50, (ni ? parseInt(ni.value,10) : 1) || 1));
+      var name = _bedTarget, isSel = (window._bplantView === 'sel');
+      try {
+        if (isSel){
+          var sel = _hubSelName();
+          if (_bedType === 'purple'){ if (window._selAddLesion) window._selAddLesion(sel, name, n, 'Lesión (añadida manualmente)'); }
+          else {
+            var tipoS = (_bedType === 'red') ? 'roja' : 'amarilla';
+            var reasonS = (_bedType === 'red') ? 'Expulsión (añadida manualmente)' : 'Acumulación de amarillas (manual)';
+            if (window._selAddSancion) window._selAddSancion('sel', sel, name, reasonS, n, tipoS);
+          }
+        } else {
+          if (_bedType === 'purple') _bedAddClubLesion(name, n);
+          else if (_bedType === 'red') _bedAddClubSancion(name, 'roja', 'Expulsión (añadida manualmente)', n);
+          else _bedAddClubSancion(name, 'amarilla', 'Acumulación de amarillas (manual)', n);
+        }
+      } catch(_){}
+      _bedPushMsg(name, _bedType, n);
+      window._bedBajaClose();
+      try { window.renderBayernPlantillaScreen(); } catch(_){}
+    };
+    window._bedBajaClear = function(){
+      if (!_bedTarget) return;
+      var name = _bedTarget;
+      try { if (window._bplantView === 'sel') _bedClearSel(name); else _bedClearClub(name); } catch(_){}
+      window._bedBajaClose();
+      try { window.renderBayernPlantillaScreen(); } catch(_){}
+    };
+
+    /* Escrituras en los stores REALES (club). */
+    function _bedAddClubSancion(name, tipo, reason, n){
+      window.SANCION_STORE = window.SANCION_STORE || {};
+      var q = window.SANCION_STORE.__global = window.SANCION_STORE.__global || [];
+      var team = _hubTeamName(), nn = _normForStats(name), tn = _normForStats(team);
+      for (var i = q.length - 1; i >= 0; i--){
+        if (_teamKeyMatches(_normForStats(q[i].name||''), nn) && _teamKeyMatches(_normForStats(q[i].team||''), tn)) q.splice(i,1);
+      }
+      q.push({ name:name, team:team, reason:reason, remaining:Math.max(1,n), srcComp:'manual', tipo:tipo, manual:true });
+      try { if (window._persistSancionesClub) window._persistSancionesClub(); } catch(_){}
+    }
+    function _bedAddClubLesion(name, n){
+      window.LESION_STORE = window.LESION_STORE || {};
+      window.BAJA_STORE = window.BAJA_STORE || {};
+      window.LESION_STORE[name] = { equipo:_hubTeamName(), grado:2, gradoNombre:'Lesión', gradoEmoji:'🩹', descripcion:'Lesión (añadida manualmente)', partidos:Math.max(1,n), timestamp:Date.now(), manual:true };
+      window.BAJA_STORE[name] = { tipo:'lesion', liga:n, copa:n, europa:n };
+      try { if (window._persistInjuries) window._persistInjuries(); } catch(_){}
+    }
+    function _bedClearClub(name){
+      var nn = _normForStats(name), tn = _normForStats(_hubTeamName());
+      try {
+        var q = (window.SANCION_STORE && window.SANCION_STORE.__global) || [];
+        for (var i = q.length - 1; i >= 0; i--){
+          if (_teamKeyMatches(_normForStats(q[i].name||''), nn) && _teamKeyMatches(_normForStats(q[i].team||''), tn)) q.splice(i,1);
+        }
+        if (window._persistSancionesClub) window._persistSancionesClub();
+      } catch(_){}
+      try {
+        var LS = window.LESION_STORE || {};
+        Object.keys(LS).forEach(function(k){
+          if (_teamKeyMatches(_normForStats(k), nn) && _teamKeyMatches(_normForStats((LS[k]||{}).equipo||''), tn)){
+            delete LS[k];
+            if (window.BAJA_STORE) delete window.BAJA_STORE[k];
+          }
+        });
+        if (window._persistInjuries) window._persistInjuries();
+      } catch(_){}
+    }
+    function _bedClearSel(name){
+      var sel = _hubSelName(), nn = _normForStats(name);
+      try {
+        var q = (((window.SANCION_STORE_SEL || {})['sel']) || {})[sel];
+        if (q && q.length){ for (var i = q.length - 1; i >= 0; i--){ if (_teamKeyMatches(_normForStats(q[i].name||''), nn)) q.splice(i,1); } }
+      } catch(_){}
+      try {
+        var lb = (window.LESION_STORE_SEL || {})[sel];
+        if (lb){ Object.keys(lb).forEach(function(k){ if (_teamKeyMatches(_normForStats(k), nn)) delete lb[k]; }); }
+      } catch(_){}
+      try { if (window._selPersistSanciones) window._selPersistSanciones(); } catch(_){}
+    }
+
+    /* Mensaje a la bandeja del hub (foto 2). */
+    function _bedPushMsg(name, kind, n){
+      try {
+        if (!(window._muMsg && window._muMsg.push)) return;
+        var isSel = (window._bplantView === 'sel');
+        var side = isSel ? 'fra' : 'liv';
+        var team = _bedTeamLabel();
+        var pl = n + ' partido' + (n === 1 ? '' : 's');
+        var icon, title, body;
+        if (kind === 'red'){ icon = '🟥'; title = 'Expulsión — ' + name; body = name + ' (' + team + ') ha sido EXPULSADO y se perderá ' + pl + '.'; }
+        else if (kind === 'yellow'){ icon = '🟨'; title = 'Sanción por acumulación — ' + name; body = name + ' (' + team + ') llega a la acumulación de amarillas y se perderá ' + pl + '.'; }
+        else { icon = '🩹'; title = 'Lesión — ' + name; body = name + ' (' + team + ') ha caído lesionado y estará de baja ' + pl + '.'; }
+        window._muMsg.push({ side:side, type:'sancion', icon:icon, sender:(isSel ? ('Servicios médicos · ' + team) : team), title:title, body:body });
+      } catch(_){}
+    }
     /* Stats de la selección — AUTO-DETECTA las competiciones ACTIVAS
        (petición usuario 2026-06-03: "cada año juega 2 competiciones
        distintas", p.ej. Mundial 2032 + Road Copa Asia). Agrega los stats
@@ -7384,6 +7731,25 @@ window._showSimProgress = function(opts, onDone){
   #bplant-crest-toggle .bpl-crest-btn img{width:40px;height:40px;object-fit:contain;border-radius:50%;background:rgba(255,255,255,.06);filter:drop-shadow(0 1px 3px rgba(0,0,0,.55));}
   #bplant-crest-toggle .bpl-crest-btn .bpl-cr-emoji{font-size:28px;line-height:1;filter:drop-shadow(0 1px 3px rgba(0,0,0,.55));}
   @keyframes bplCrestPulse{0%,100%{box-shadow:0 0 12px rgba(255,210,74,.6),inset 0 0 0 1px rgba(255,255,255,.18);}50%{box-shadow:0 0 22px rgba(255,210,74,.98),0 0 7px rgba(255,210,74,.75),inset 0 0 0 1px rgba(255,255,255,.3);}}
+  /* ── Lápiz AZUL: editor manual de stats + bajas (PIN 7477) ── */
+  .munich-edit-pencil.bed-pencil{background:rgba(30,109,193,.20);border-color:rgba(120,180,255,.55);color:#bfe0ff;}
+  .munich-edit-pencil.bed-pencil:hover{background:rgba(30,109,193,.34);}
+  .munich-edit-pencil.bed-pencil.is-on{background:linear-gradient(135deg,#1e6dc1,#0a2c4d);border-color:#7fc0ff;color:#fff;box-shadow:0 0 9px rgba(61,165,255,.7);}
+  /* ── Filas coloreadas por baja manual (rojo expulsión / amarillo
+       acumulación / morado lesión). Petición usuario 2026-06-04. ── */
+  #s-bayern-plantilla .lext-sq-row.bed-red{background:linear-gradient(90deg,rgba(255,40,40,.20),rgba(255,40,40,.03));box-shadow:inset 3px 0 0 #ff3b3b;}
+  #s-bayern-plantilla .lext-sq-row.bed-red .lext-sq-name{color:#ff6b6b !important;text-shadow:0 0 8px rgba(255,50,50,.65);}
+  #s-bayern-plantilla .lext-sq-row.bed-yellow{background:linear-gradient(90deg,rgba(240,200,40,.20),rgba(240,200,40,.03));box-shadow:inset 3px 0 0 #ffd633;}
+  #s-bayern-plantilla .lext-sq-row.bed-yellow .lext-sq-name{color:#ffe169 !important;text-shadow:0 0 8px rgba(240,200,40,.6);}
+  #s-bayern-plantilla .lext-sq-row.bed-purple{background:linear-gradient(90deg,rgba(185,100,255,.22),rgba(185,100,255,.03));box-shadow:inset 3px 0 0 #c266ff;}
+  #s-bayern-plantilla .lext-sq-row.bed-purple .lext-sq-name{color:#d6a6ff !important;text-shadow:0 0 8px rgba(190,110,255,.65);}
+  /* ── Modo edición: inputs de stats + nombre pulsable ── */
+  #s-bayern-plantilla.bed-editing .lext-sq-name{cursor:pointer;text-decoration:underline dotted rgba(120,180,255,.7);text-underline-offset:3px;}
+  #s-bayern-plantilla .lext-sq-cell.bed-in{width:100%;min-width:0;box-sizing:border-box;text-align:center;font-family:Oswald,sans-serif;font-size:11px;background:rgba(30,109,193,.14);border:1px solid rgba(120,180,255,.4);border-radius:5px;color:#fff;padding:2px 0;-moz-appearance:textfield;}
+  #s-bayern-plantilla .lext-sq-cell.bed-in::-webkit-outer-spin-button,#s-bayern-plantilla .lext-sq-cell.bed-in::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+  #bed-edit-banner{display:none;margin:0 6px 8px;padding:7px 10px;border-radius:8px;background:linear-gradient(135deg,rgba(30,109,193,.22),rgba(20,63,109,.12));border:1px solid rgba(120,180,255,.4);color:#cfe6ff;font-family:Rajdhani,sans-serif;font-size:11px;letter-spacing:.6px;line-height:1.4;}
+  #s-bayern-plantilla.bed-editing #bed-edit-banner{display:block;}
+  .bed-type-btn.is-sel{outline:2px solid currentColor;outline-offset:-1px;filter:brightness(1.25);}
 </style>
 
 <script>

@@ -3397,6 +3397,7 @@ window._showSimProgress = function(opts, onDone){
      del Bayern del slot renombrado (bug 2026-06-04). */
   try { window._psHumanShield = _psHumanShield; } catch(_){}
   try { window._psHumanName = _psHumanName; } catch(_){}
+  /* Nombre LÓGICO del equipo humano del hub (slot Bayern Munich). Lo
      usan _realRival (matching del bracket del torneo) y
      _openPreseasonPrevia (home de la previa + lookup de plantilla en
      showPrePartidoOverlay / abrirAmistoso). Priorizamos el reemplazo
@@ -6881,8 +6882,44 @@ window._showSimProgress = function(opts, onDone){
     if (cfEl && day.date) cfEl.textContent = _psShowDate(day.date);
   }
 
+  /* Fallback INFALIBLE: pinta SIEMPRE una card de Descanso con botón
+     CONTINUAR ▶ en #ps-stage, recalculando el día actual desde el
+     calendario (con default 01 May si aún no hay filas). Lo usa el
+     `finally` de _render para que el stage NUNCA quede vacío (bug foto
+     usuario 2026-06-04: #ps-stage visible pero sin card → no se puede
+     avanzar). */
+  function _forceRestFallback(st){
+    if (!st){ st = _stage(); if (!st) return; }
+    var day = null;
+    try {
+      var rows = _calRows();
+      if (rows && rows.length){
+        var d = _load();
+        var idx = _clampDayIdx(rows, d.dayIdx);
+        day = rows[idx];
+      }
+    } catch(_){}
+    if (!day) day = { date:'01 May', label:'Descanso', type:'rest', cls:'ag-r ag-rest' };
+    try { _cardRest(day); } catch(_){
+      /* Último recurso: HTML mínimo pero con botón funcional. */
+      try {
+        var _dd = _psShowDate(day.date || '01 May');
+        st.innerHTML = '<div class="ps-card">'
+          + '<div class="ps-date">' + _esc(String(_dd).toUpperCase()) + '</div>'
+          + '<div class="ps-sub">💤 Día de descanso</div>'
+          + '<div style="font-size:54px;line-height:1;margin:10px 0 6px;">💤</div>'
+          + '<div class="ps-meta">Descanso</div>'
+          + '<button type="button" class="ps-btn ghost" id="ps-rest-btn" style="margin-top:16px;">CONTINUAR ▶</button>'
+          + '</div>';
+        var _b = document.getElementById('ps-rest-btn');
+        if (_b) _b.onclick = function(){ try { _markDoneAndAdvance(); } catch(_){} };
+      } catch(_){}
+    }
+  }
+
   function _render(){
     var st = _stage(); if (!st) return;
+    try {
     /* Reaplica lesiones de pretemporada a los stores globales en
        CADA render (idempotente) — sobreviven recargas y las ven el
        menú médico y la plantilla. */
@@ -7027,20 +7064,30 @@ window._showSimProgress = function(opts, onDone){
     }
     else                           _cardMatch(day);
     _syncHubLabels(effDay);
-    /* SAFETY NET (2026-06-04): garantizamos que SIEMPRE quede una card
-       con botón en #ps-stage. Si por cualquier motivo ninguna rama
-       pintó nada (helper que falló en silencio, estado de torneo
-       inconsistente tras Reiniciar Temporada, etc.), el usuario se
-       quedaba con el #ps-stage vacío y SIN forma de avanzar (bug foto 2
-       usuario «no se puede avanzar»). Todas las `_card*` escriben
-       innerHTML de forma SÍNCRONA, así que aquí ya deberían haber
-       pintado; si no, forzamos la card de descanso del día (lleva
-       CONTINUAR ▶). */
-    try {
-      if (st && !st.querySelector('.ps-card')){
-        _cardRest(day);
-      }
-    } catch(_){}
+    } catch(__renderErr){
+      /* PROHIBIDO tragarse en silencio una excepción de render dejando
+         #ps-stage vacío. La causa raíz del bug foto usuario 2026-06-04
+         (card del 01 May VACÍA, sin botón, «no se puede avanzar») era
+         justamente esto: updateHud llama a window._psRender() dentro de
+         un try/catch que descartaba el error, y la red de seguridad
+         estaba al FINAL de _render → si _render lanzaba a media función
+         (helper roto, estado inconsistente tras Reiniciar Temporada),
+         nunca se alcanzaba y el stage quedaba en blanco. */
+      try { console.error('[F-TBOL] _render() excepción — se forzará card de Descanso:', __renderErr); } catch(_){}
+    } finally {
+      /* GARANTÍA ABSOLUTA: si #ps-stage está VISIBLE y NO tiene ninguna
+         .ps-card (excepción arriba, helper que falló al pintar, rebuild
+         del calendario que vació el nodo, return temprano sobre un nodo
+         que alguien limpió…), forzamos la card de Descanso del día con
+         su botón CONTINUAR ▶. Así el usuario SIEMPRE puede avanzar.
+         El `finally` se ejecuta también en los `return` internos, por lo
+         que cubre TODOS los caminos de salida de _render. */
+      try {
+        if (st && st.style.display !== 'none' && !st.querySelector('.ps-card')){
+          _forceRestFallback(st);
+        }
+      } catch(_){}
+    }
   }
 
   /* El render lo dispara updateHud() del hub (rama "torneo elegido")
@@ -12004,7 +12051,7 @@ window._showSimProgress = function(opts, onDone){
      MOMENTO. Construimos el set de equipos a partir de los cfgs
      `tour_<id>_v1` de board 'verano' (sct/pss/jg/asia + tx1..tx8),
      EXCLUYENDO mundial (Mundialito Clubes, su propia caja
-     `s-mundial-stats`) y los slots de Selecciones (spv*/sfn*, bucket
+     `s-mundial-stats`) y los slots de Selecciones (spv, sfn — bucket
      `sel`). Refuerza la regla bloqueante CLUBES≠SELECCIONES. */
   var _TORNEOS_VERANO_ID_RE = /^tour_(sct|pss|jg|asia|tx\d+)_v1$/;
   window._torneosVeranoTeamSet = function(){
@@ -12430,7 +12477,7 @@ window._showSimProgress = function(opts, onDone){
         if (!_tCfg || !_tCfg.results) continue;
         var _isMundialCfg = (_tCfg.id === 'mundial');
         /* 2026-05-27: separar buckets por TIPO de torneo. Los slots
-           spv*/sfn* (Rondas Previas y Finales de Selecciones —
+           spv, sfn (Rondas Previas y Finales de Selecciones —
            Mundial 2032, etc., format `mundial-48`) son competiciones
            de SELECCIONES NACIONALES, NO de clubes. Sus jugadores
            (Mbappé/Francia, Borre/Colombia, Williams/Ghana…) deben
@@ -14379,7 +14426,7 @@ window._showSimProgress = function(opts, onDone){
 </div>
 
 <!-- Pantalla genérica de Estadísticas para torneos de Selecciones
-     (spv*/sfn*). Una sola pantalla compartida; la activa el botón
+     (spv, sfn). Una sola pantalla compartida; la activa el botón
      "📊 ESTADÍSTICAS" inyectado por _paintTourScreen y la rellena al
      vuelo `window._tourStatsOpen(tourId)` desde el contenido de
      LIGA_PLAYER_MATCH_STORE filtrado por torneo. Mismo look-and-feel
@@ -17275,7 +17322,7 @@ window._showSimProgress = function(opts, onDone){
     margin-left:auto;letter-spacing:.5px;
   }
   /* Botón "📊 Estadísticas" inyectado por `_paintTourScreen` en
-     los torneos de Selecciones (spv*/sfn*) excepto formato
+     los torneos de Selecciones (spv, sfn) excepto formato
      `mundial-48` (ese formato ya incluye la entrada de Estadísticas
      en su propio menú de 7 cajas). Al pulsar abre la pantalla
      dedicada `s-tour-stats` con el dashboard completo (mismo look

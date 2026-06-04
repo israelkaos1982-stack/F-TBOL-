@@ -1,5 +1,64 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La card del hub muestra SOLO el club + selección de SU caja (obligatorio, 2026-06-04)
+
+**Bug (foto usuario 2026-06-04, caja «Liverpool/Francia»)**: la card
+«Próximo partido» del hub (`#ps-stage` en `s-munich`) mostraba en el
+Trofeo Joan Gamper **`RB LEIPZIG vs REAL MADRID`** — el partido de OTRA
+caja humana (Real Madrid = Acsa), no el del Liverpool.
+
+### Causa raíz
+
+Con **varias cajas de humano** (Liverpool, Real Madrid, Arsenal… los 6
+del `MISTERS_REGISTRY`), un torneo marca a TODAS con `isHuman:true`. Dos
+resolutores de la card del hub identificaban al humano con un check
+PLANO de `isHuman` y cogían **al primero que tropezaban**, no al de la
+caja:
+
+1. **Club** — `_slotIsH(t)` en `_realPair` (`misc_body_1.html`):
+   `if (t.isHuman) return true` matcheaba a Real Madrid antes que a
+   Liverpool.
+2. **Selección** — `_selPair` recolectaba a las 6 selecciones humanas
+   como candidatas y devolvía la PRIMERA con partido real ese día →
+   podía mostrar el partido de Brasil/España en la caja de Francia.
+
+### Fix — filtrar por el MISTER de la caja (registro `MISTERS_HUMANOS`)
+
+Cada caja = un mister (Toñín = Liverpool **+** Francia). La fuente para
+saber «de quién es este slot» es el registro, NO el flag `isHuman`:
+
+- **`_slotIsH(t)`**: el slot es del hub solo si su nombre = club del hub
+  (`_psHumanLogicName()`, + aliases legacy Bayern→Liverpool) **o** lo
+  dirige el MISMO mister (`window._mhSameMister(hubName, t.name)`).
+  `t.isHuman` por sí solo YA NO basta: si es de OTRO mister → `false`.
+  Fallback legacy (acepta `isHuman`) solo si el hub no es un humano
+  canónico (`_mhFindMister(hubName)` null).
+- **`_selPair`**: tras construir `_candidates`, **filtro ESTRICTO** a la
+  selección del mismo mister que el club del hub
+  (`_mhFindMister(_psHumanLogicName()).seleccion`). Si la selección del
+  hub no está en ningún Mundial activo, `_candidates` queda vacío → card
+  «sin partido»/JUGADORES FUERA (NUNCA la selección de otra caja).
+- **`_scanForCanonicalMundialMatch`** (watchdog de `_psRender`): solo se
+  dispara por la selección DEL HUB (mismo mister), no por cualquier
+  humana canónica — si no, mostraría «RECUPERAR PARTIDO» en días que
+  juega otra caja.
+- **Healing de `d.tour`** en `_realPair`: usa `_slotIsH` (hub-específico)
+  para no fijar `d.tour` a un torneo donde el hub ni juega.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** identificar al humano de la card del hub con un check
+   plano `t.isHuman` / «el primer humano que aparece». Cada caja resuelve
+   SU club (`_psHumanLogicName`) y SU selección (mister del registro).
+   El discriminador es el MISTER (`_mhSameMister`/`_mhFindMister`), no
+   `isHuman`.
+2. **PROHIBIDO** que la caja de un mister muestre el partido de otra
+   caja (otro club u otra selección). El filtro de `_selPair` es
+   estricto; `_slotIsH` excluye a los humanos de otros misters.
+3. **Toda caja de humano nueva** hereda esto automáticamente vía el
+   registro `MISTERS_HUMANOS` (club↔selección por mister). No hardcodear
+   nombres concretos en estos resolutores.
+
 ## Interfaz ÚNICA estilizada para TODO torneo · color = el de su caja (obligatorio, 2026-06-03)
 
 **Petición usuario 2026-06-03 (fotos «Road Copa África» vs «Road Copa

@@ -3279,12 +3279,26 @@ window._showSimProgress = function(opts, onDone){
       if(s && String(s).toLowerCase()!=='bayern munich') return String(s); } }catch(_){}
     return 'Liverpool';
   }
+  /* El slot del hub se renombró de "Bayern Munich" a Liverpool, pero su
+     campo `shield` (y `_ligaEaShields[<nombre>]`) puede seguir apuntando
+     STALE al escudo del Bayern. Si el hub YA NO es el Bayern, ese escudo
+     es incorrecto: lo descartamos para caer al fallback Liverpool. Solo
+     se rechaza cuando el nombre del hub no es Bayern (si el usuario tiene
+     de verdad al Bayern como hub, su escudo SÍ es válido). Bug 2026-06-04:
+     la caja Liverpool-Francia seguía mostrando el escudo del Bayern. */
+  function _isStaleBayernShield(url){
+    try{
+      if(!url) return false;
+      if(String(url).indexOf('bayern-munchen') === -1 && String(url) !== BAYERN_SHIELD) return false;
+      return !/bayern/i.test(_psHumanName()||'');
+    }catch(_){ return false; }
+  }
   function _psHumanShield(){
     try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r);
-      var ov=d&&d.ov&&d.ov['go:s-munich']; if(ov&&ov.escudo) return String(ov.escudo); } }catch(_){}
+      var ov=d&&d.ov&&d.ov['go:s-munich']; if(ov&&ov.escudo && !_isStaleBayernShield(ov.escudo)) return String(ov.escudo); } }catch(_){}
     try{ if(window._ligaEaSubName){ var s=window._ligaEaSubName('Bayern Munich');
       if(s && String(s).toLowerCase()!=='bayern munich' && window.getTeamLogoUrl){
-        var u=window.getTeamLogoUrl(String(s)); if(u) return u; } } }catch(_){}
+        var u=window.getTeamLogoUrl(String(s)); if(u && !_isStaleBayernShield(u)) return u; } } }catch(_){}
     return HUB_FALLBACK_SHIELD;
   }
   /* Nombre LÓGICO del equipo humano del hub (slot Bayern Munich). Lo

@@ -50562,16 +50562,6 @@ https://api.sofascore.app/api/v1/team/44/image
 <div class="ent-body ath-body-obj open" id="ath-obj-club">
   <!-- Secciones rellenadas dinámicamente por el IIFE de objetivos al final del screen. -->
 </div><!-- end #ath-obj-club -->
-
-<!-- MVP TRACKER PANEL -->
-<div style="margin-top:10px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,.3);">
-<button class="obj-sub-hdr" onclick="subTog('mvp-tracker-body')" style="color:#f0c040;width:100%;padding:11px 14px 9px;">⭐ <span>REGISTRO MVP POR JUGADOR</span> <span class="obj-sub-arr" id="mvp-tracker-body-arr">▼</span></button>
-<div class="obj-sub-body" id="mvp-tracker-body" style="padding:0 14px 12px;">
-<p style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);margin:0 0 8px;letter-spacing:.5px;">Auto-actualizado al cerrar cada partido. El jugador con más MVPs activa el objetivo 🏆 MVP.</p>
-<div id="mvp-tracker-log" style="display:flex;flex-direction:column;gap:4px;min-height:28px;"></div>
-<button onclick="athMvpReset()" style="margin-top:10px;background:rgba(197,15,31,.35);border:1px solid rgba(197,15,31,.5);color:#fff;border-radius:6px;padding:5px 12px;font-family:Rajdhani,sans-serif;font-size:12px;cursor:pointer;letter-spacing:.5px;">🗑 Reiniciar tracker MVP</button>
-</div>
-</div>
 </div>
 </div>
 
@@ -50643,25 +50633,25 @@ https://api.sofascore.app/api/v1/team/44/image
       { t:'Finalizar entre los {N} primeros (Si/No)', c:6, auto:'liga-pos' },
       { t:'Ganar {N} partidos en casa', c:10, track:true, auto:'liga-wins-casa' },
       { t:'Ganar {N} partidos seguidos en Liga', c:4, track:true, auto:'liga-wins-streak' },
-      { t:'1 jugador entre los {N} máximos goleadores Liga (Si/No)', c:10 },
-      { t:'1 jugador entre los {N} máximos MVP Liga (Si/No)', c:15 },
-      { t:'Lograr {N} partidos imbatido', c:7, track:true, auto:'liga-unbeaten' },
+      { t:'1 jugador entre los {N} máx goleadores (Si/No)', c:10 },
+      { t:'1 jugador entre los {N} máxi MVP Liga (Si/No)', c:15 },
+      { t:'Lograr {N} partidos imbatido Liga', c:7, track:true, auto:'liga-unbeaten' },
       { t:'Marcar {N} goles en la liga', c:68, track:true, auto:'liga-gf' },
-      { t:'Diferencia de goles positiva (+{N} o más) (Si/No)', c:15, dg:true, track:true, auto:'liga-dg' },
+      { t:'Diferencia goles positiva (+{N} o +) (Si/No)', c:15, dg:true, track:true, auto:'liga-dg' },
       { t:'Quedar delante del Arsenal en Liga (Si/No)' },
-      { t:'Rating del {N}% o más', c:55, u:'%', track:true },
-      { t:'Lograr {N} Hattricks', c:2, track:true },
+      { t:'Rating del {N}% o + de victorias Liga', c:53, u:'%', track:true },
+      { t:'Lograr {N} Hattricks en Liga', c:2, track:true },
       { t:'1 jugador marca en {N} partidos seguidos', c:3, track:true },
-      { t:'1 jugador marca 2 o más goles en {N} ocasiones', c:5, track:true }
+      { t:'1 jugador marca 2 o más goles {N} veces', c:5, track:true }
     ]},
     { id:'copa', icon:'🏆', title:'COPA DEL REY', color:'#f0c040', items:[
       { t:'Alcanzar Cuartos de Final (Si/No)' },
       { t:'Marcar {N} o más goles en 1 eliminatoria', c:4, track:true },
-      { t:'Ganar un partido por {N} o más goles de diferencia', c:3 },
+      { t:'Ganar 1 partido por {N} o + goles diferencia', c:3 },
       { t:'Ganar 1 eliminatoria a doble partido (Si/No)' },
       { t:'{N} partido de copa sin encajar gol', c:1, track:true },
       { t:'1 jugador marca en {N} rondas distintas', c:2, track:true },
-      { t:'1 jugador marca 2 o más goles en {N} partidos distintos', c:2, track:true }
+      { t:'1 jugador marca 2 o + goles en {N} partidos', c:2, track:true }
     ]},
     { id:'europa', icon:'🇪🇺', title:'EUROPA · CHAMPIONS / EUROPA / CONFERENCE', color:'#00c875',
       comps:[
@@ -50671,58 +50661,58 @@ https://api.sofascore.app/api/v1/team/44/image
       ], items:[
       { t:'Clasificar entre los {N} primeros de grupo (Si/No)', c:14 },
       { t:'Llegar a Cuartos de Final UCL (Si/No)' },
-      { t:'1 jugador marca Hattrick en UCL' },
+      { t:'1 jugador marca Hattrick en UCL (Contador 0/1)' },
       { t:'1 jugador bigoleador en {N} partidos UCL', c:2, track:true },
       { t:'1 jugador marca en {N} partidos en UCL', c:3, track:true },
-      { t:'1 jugador entre los {N} máximos goleadores europeos (Si/No)', c:15 },
-      { t:'1 jugador entre los {N} máximos MVP europeos (Si/No)', c:20 },
+      { t:'1 jugador entre los {N} máximos goleadores (Si/No)', c:15 },
+      { t:'1 jugador entre los {N} máxi MVP (Si/No)', c:20 },
       { t:'Marcar 3 o más ⚽ en {N} partidos UCL', c:2, track:true },
       { t:'{N} partidos imbatido en Champions', c:2, track:true },
       { t:'No perder ningún partido europeo en casa (Si/No)' }
     ]},
     { id:'superliga', icon:'⚡', title:'SUPERLIGA · TOÑÍN VS EL MUNDO', color:'#b060f0', items:[
-      { t:'Ganar {N} de 20 partidos vs humanos', c:6, track:true, auto:'sl-wins' },
-      { t:'{N} partidos imbatido contra rival real', c:4, track:true, auto:'sl-unbeaten' },
-      { t:'Marcar {N} o más ⚽ en 1 duelo humano', c:4, track:true, auto:'sl-max-goals' },
-      { t:'No ser el equipo más goleado del grupo', auto:'sl-not-most-conceded' },
-      { t:'No perder por más de {N} goles contra un rival', c:3, auto:'sl-no-loss-by' },
-      { t:'Conseguir {N} puntos de 60 posibles', c:20, track:true, auto:'sl-pts' },
-      { t:'Quedar por delante de RIVAL', rival:true, auto:'sl-ahead-rival' },
-      { t:'1 jugador en el Top {N} goleadores', c:3 },
-      { t:'Equipo entre los {N} máximos goleadores', c:3, auto:'sl-top-scorer' },
+      { t:'Ganar {N} de 20 derbys', c:5, track:true, auto:'sl-wins' },
+      { t:'{N} partidos imbatido contra rival real', c:3, track:true, auto:'sl-unbeaten' },
+      { t:'Marcar {N} o + goles en 1 derby', c:4, track:true, auto:'sl-max-goals' },
+      { t:'No ser el equipo más goleado del grupo (Si/No)', auto:'sl-not-most-conceded' },
+      { t:'No perder por + de {N} goles contra rival (Si/No)', c:3, auto:'sl-no-loss-by' },
+      { t:'Conseguir {N} puntos de 60 posibles', c:18, track:true, auto:'sl-pts' },
+      { t:'Quedar por delante de RIVAL (Si/No)', rival:true, auto:'sl-ahead-rival' },
+      { t:'1 jugador en el Top {N} goleadores (Si/No)', c:5 },
+      { t:'Equipo entre los {N} máximos goleadores (Si/No)', c:4, auto:'sl-top-scorer' },
       { t:'1 jugador marca {N} Hattrick', c:1, track:true },
-      { t:'1 jugador marca 2 o más goles en {N} partidos', c:4, track:true },
-      { t:'1 jugador entre los {N} máximos MVP', c:3 },
-      { t:'Equipo entre los {N} máximos MVP', c:3 },
+      { t:'1 jugador marca 2 o + goles en {N} partidos', c:4, track:true },
+      { t:'1 jugador entre los {N} máximos MVP (Si/No)', c:5 },
+      { t:'Equipo entre los {N} máximos MVP (Si/No)', c:4 },
       { t:'Portero {N} veces imbatido', c:3, track:true },
-      { t:'Equipo con {N}% o más de posesión', c:50, u:'%', track:true },
-      { t:'Equipo entre los {N} que más tiran a puerta', c:3 },
-      { t:'Equipo con menos tarjetas', auto:'sl-least-cards' },
-      { t:'Equipo entre los {N} con más córners', c:3 }
+      { t:'Equipo con {N}% o más de posesión', c:46, u:'%', track:true },
+      { t:'Equipo entre los {N} que más tiran a puerta (Si/No)', c:4 },
+      { t:'Equipo con menos tarjetas (Si/No)', auto:'sl-least-cards' },
+      { t:'Equipo entre los {N} con más córners (Si/No)', c:4 }
     ]},
     { id:'global', icon:'🏅', title:'GLOBALES DEL CLUB · HITOS DE ÉLITE', color:'#ff4444', items:[
       { t:'Ganar {N} título oficial con el equipo', c:1, track:true },
       { t:'Ganar {N} título individual con un jugador', c:1, track:true },
-      { t:'Equipo entre los {N} máximos goleadores', c:30 },
-      { t:'Equipo entre los {N} máximos MVP', c:30 },
+      { t:'Equipo entre los {N} máximos goleadores (Si/No)', c:40 },
+      { t:'Equipo entre los {N} máximos MVP (Si/No)', c:50 },
       { t:'Marcar más de {N} goles', c:100, track:true },
-      { t:'Balón de Oro: 1 jugador nominado entre los {N} mejores', c:30 },
-      { t:'Bota de Oro: 1 jugador nominado entre los {N} mejores', c:30 },
+      { t:'Balón de Oro: 1 jugador nominado (Si/No)' },
+      { t:'Bota de Oro: 1 jugador nominado (Si/No)' },
       { t:'Marcar {N} goles de Penalti o Falta', c:2, track:true },
       { t:'Parar {N} penaltis', c:2, track:true },
       { t:'Ganar {N} partidos en casa', c:16, track:true },
       { t:'Marcar 5 goles en {N} partidos', c:3, track:true },
-      { t:'Marcar {N} goles en 1 partido', c:6, track:true },
+      { t:'Marcar goles en {N} partido', c:1, track:true },
       { t:'Lograr {N} Hattricks', c:3, track:true },
       { t:'Ganar {N} partidos seguidos', c:5, track:true }
     ]},
     { id:'sel', icon:'🇫🇷', title:'SELECCIONES · DOMINIO NACIONAL', color:'#4090f0', items:[
-      { t:'Clasificar a Francia para la Copa Pacífico ({N} partidos)', c:8 },
+      { t:'Clasificar a Francia para la Copa Asia (Si/No)' },
       { t:'Marcar {N} goles en un partido', c:5, track:true },
       { t:'Marcar {N} Hattrick internacional', c:1, track:true },
-      { t:'1 jugador entre el Top {N} del torneo', c:10 },
+      { t:'1 jugador entre el Top {N} del torneo (Si/No)', c:10 },
       { t:'{N} partidos internacionales sin encajar', c:2, track:true },
-      { t:'Equipo marca en {N} partidos consecutivos', c:3, track:true }
+      { t:'Equipo marca en {N} partidos consecutivos', c:4, track:true }
     ]}
   ];
   /* ids estables (oid) + cid del contador + índice global de checkbox. */

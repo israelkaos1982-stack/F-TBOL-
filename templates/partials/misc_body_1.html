@@ -2115,7 +2115,7 @@ window._showSimProgress = function(opts, onDone){
        así que quedan excluidos automáticamente. -->
   <div class="ent-section" style="border:1px solid rgba(238,28,37,.3);background:rgba(8,4,12,.4);">
     <div class="ent-body open" id="bayern-plantilla" style="padding:8px 8px 12px;">
-      <div id="bed-edit-banner">🖍 <b>MODO EDICIÓN MANUAL</b> · toca un número para corregir su estadística (queda fijada) · toca el <b>nombre</b> de un jugador para marcar 🟥 expulsado / 🟨🟨🟨 acumulación / 🩹 lesión.</div>
+      <div id="bed-edit-banner">🖍 <b>MODO EDICIÓN MANUAL</b> · toca un número para corregir su estadística (el cálculo automático sigue sumando encima) · toca el <b>nombre</b> de un jugador para marcar 🟥 expulsado / 🟨🟨🟨 acumulación / 🩹 lesión.</div>
       <div id="bayern-plantilla-host" class="lext-sq-wrap" style="margin:0;"></div>
     </div>
   </div>
@@ -2442,11 +2442,16 @@ window._showSimProgress = function(opts, onDone){
     }
 
     /* ════════════════════════════════════════════════════════════════
-       EDITOR MANUAL (lápiz AZUL · PIN 7477) — stats FIJADAS + bajas
-       (expulsión / acumulación / lesión) manuales. 2026-06-04.
-       · Stats: override BLOQUEADO en `bplant_stat_overrides_v1` — la cifra
-         escrita REEMPLAZA a la calculada y NO se recalcula sola con
-         futuros partidos (petición usuario: "fijar override bloqueado").
+       EDITOR MANUAL (lápiz AZUL · PIN 7477) — AJUSTE manual de stats +
+       bajas (expulsión / acumulación / lesión) manuales. 2026-06-04.
+       · Stats: el cálculo automático SIGUE sumando de todas las comps
+         oficiales. El ajuste manual se guarda como un DELTA (no un valor
+         bloqueado) en `bplant_stat_adjust_v1`: cuando escribes una cifra,
+         se guarda `delta = cifra − automático_actual`, y lo que se MUESTRA
+         es `automático + delta`. Así, si luego se juegan más partidos, el
+         automático sigue incrementando ENCIMA de tu corrección (petición
+         usuario 2026-06-04: "que se sigan sumando automáticamente pero si
+         edito algo manualmente que siga también el automático").
        · Bajas: escriben en los stores REALES (club: SANCION_STORE /
          LESION_STORE ; selección: _selAddSancion / _selAddLesion) con el
          nº de partidos elegido → aparecen en BAJAS PARA EL PARTIDO del
@@ -2456,44 +2461,40 @@ window._showSimProgress = function(opts, onDone){
          activa (`window._bplantView`) decide club vs selección.
        ════════════════════════════════════════════════════════════════ */
     var _bedEdit = false;
-    var _BED_OV_KEY = 'bplant_stat_overrides_v1';
+    var _BED_OV_KEY = 'bplant_stat_adjust_v1';
     function _bedScopeKey(){
       return (window._bplantView === 'sel')
         ? 'sel:' + _normForStats(_hubSelName())
         : 'club:' + _normForStats(_hubTeamName());
     }
-    function _bedOvAll(){ try { return JSON.parse(localStorage.getItem(_BED_OV_KEY) || '{}') || {}; } catch(_){ return {}; } }
-    function _bedOvSaveAll(o){ try { localStorage.setItem(_BED_OV_KEY, JSON.stringify(o)); } catch(_){} }
-    function _bedOvGet(name){
+    var _bedOvCache = null;   /* este editor es el único escritor de la clave */
+    function _bedOvAll(){ if (_bedOvCache) return _bedOvCache; try { _bedOvCache = JSON.parse(localStorage.getItem(_BED_OV_KEY) || '{}') || {}; } catch(_){ _bedOvCache = {}; } return _bedOvCache; }
+    function _bedOvSaveAll(o){ _bedOvCache = o; try { localStorage.setItem(_BED_OV_KEY, JSON.stringify(o)); } catch(_){} }
+    /* Mapa de deltas { field -> ajuste } del jugador en la vista actual. */
+    function _bedDelta(name){
       var o = _bedOvAll(); var sc = o[_bedScopeKey()];
       return (sc && sc[_normForStats(name)]) || null;
     }
-    function _bedSetField(name, field, val){
+    /* Guarda el DELTA de un campo (cifra escrita − automático). Pasar
+       delta null/'' borra el ajuste (vuelve al 100% automático). Un delta
+       que redondea a 0 también se borra (sin ruido en el store). */
+    function _bedSetDelta(name, field, delta){
       if (!field) return;
       var o = _bedOvAll(); var sk = _bedScopeKey();
       var sc = o[sk] = o[sk] || {}; var nn = _normForStats(name);
       var e = sc[nn] = sc[nn] || {};
-      var t = String(val == null ? '' : val).trim();
-      if (t === '') { delete e[field]; }
-      else { var num = Number(t); e[field] = isNaN(num) ? 0 : num; }
+      var eps = (field === 'nota') ? 0.005 : 0.5;
+      if (delta == null || delta === '' || isNaN(Number(delta)) || Math.abs(Number(delta)) < eps) { delete e[field]; }
+      else { e[field] = Number(delta); }
       if (!Object.keys(e).length) delete sc[nn];
       if (!Object.keys(sc).length) delete o[sk];
       _bedOvSaveAll(o);
     }
-    /* Override de stats BLOQUEADO: clona la base y pisa los campos
-       editados. La columna GOLES es total único → se guarda en `gol`
-       (con pen/fk a 0 para no doblar). NUNCA muta el cache. */
-    function _bedApplyStatOverride(name, base){
-      var ov = _bedOvGet(name);
-      if (!ov) return base;
-      var out = {}; for (var k in base) out[k] = base[k];
-      ['pj','mvp','ta','tr','imbat','penSaved'].forEach(function(f){ if (ov[f] != null) out[f] = Number(ov[f]) || 0; });
-      if (ov.gol != null) { out.gol = Number(ov.gol) || 0; out.pen = 0; out.fk = 0; }
-      return out;
-    }
-    function _bedNotaOverride(name){
-      var ov = _bedOvGet(name);
-      return (ov && ov.nota != null) ? (Number(ov.nota) || 0) : null;
+    /* Valor MOSTRADO = automático + delta (el automático nunca se pierde). */
+    function _bedAdj(name, field, autoVal){
+      var d = _bedDelta(name);
+      var base = Number(autoVal) || 0;
+      return base + ((d && d[field] != null) ? Number(d[field]) : 0);
     }
     /* Estado de baja (rojo expulsión / amarillo acumulación / morado
        lesión) leído de los stores REALES del club o la selección según
@@ -2530,18 +2531,21 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){}
       return null;
     }
-    /* Celda de stat: input editable en modo edición, span estático fuera. */
-    function _bedCell(cls, field, val, isNota){
+    /* Celda de stat: input editable en modo edición, span estático fuera.
+       `dispVal` = automático + delta (lo que se ve). `autoVal` = solo el
+       automático, va en data-auto para que al re-editar el delta se
+       recalcule contra el automático ACTUAL (no contra el mostrado). */
+    function _bedCell(cls, field, dispVal, isNota, autoVal){
       if (_bedEdit){
         var step = isNota ? ' step="0.01"' : ' step="1"';
-        var v = isNota ? (Number(val) > 0 ? (Number(val)).toFixed(2) : '') : (Number(val) || 0);
+        var v = isNota ? (Number(dispVal) > 0 ? (Number(dispVal)).toFixed(2) : '') : (Number(dispVal) || 0);
         return '<input class="lext-sq-cell bed-in ' + cls + '" type="number" inputmode="' + (isNota ? 'decimal' : 'numeric') + '"' + step
-             + ' data-field="' + field + '" value="' + v + '" onclick="event.stopPropagation()" onchange="window._bedStatInput&&window._bedStatInput(this)">';
+             + ' data-field="' + field + '" data-auto="' + (Number(autoVal) || 0) + '" value="' + v + '" onclick="event.stopPropagation()" onchange="window._bedStatInput&&window._bedStatInput(this)">';
       }
       if (isNota){
-        return '<span class="lext-sq-cell rating ' + _notaTone(Number(val)) + '" title="Nota media entre competiciones oficiales">' + (Number(val) > 0 ? (Number(val)).toFixed(2) : '—') + '</span>';
+        return '<span class="lext-sq-cell rating ' + _notaTone(Number(dispVal)) + '" title="Nota media entre competiciones oficiales (+ ajuste manual si lo hay)">' + (Number(dispVal) > 0 ? (Number(dispVal)).toFixed(2) : '—') + '</span>';
       }
-      return _statCell(cls, val);
+      return _statCell(cls, dispVal);
     }
 
     function _rowFor(p, isGK, ctx){
@@ -2551,33 +2555,33 @@ window._showSimProgress = function(opts, onDone){
       var name = String(p.name||'?');
       var pw = Number(p.power)||0;
       var tier = _powerTier(pw);
-      var s = _bedApplyStatOverride(name, _statsProv(name));
+      var s = _statsProv(name);   /* automático puro (cache, NO mutar) */
       var pwCell = '<span class="lext-sq-cell pw tier-'+tier+'" title="Poder '+pw+'/99">'+pw+'</span>';
-      /* NOTA MEDIA por competición (0-10) — respeta el override manual. */
-      var _notaOv = _bedNotaOverride(name);
-      var nota = (_notaOv != null) ? _notaOv : _notaProv(name, p.pos);
-      var notaCell = _bedCell('rating', 'nota', nota, true);
+      /* NOTA MEDIA por competición (0-10) + ajuste manual (delta). */
+      var autoNota = _notaProv(name, p.pos);
+      var nota = Math.max(0, Math.min(10, _bedAdj(name, 'nota', autoNota)));
+      var notaCell = _bedCell('rating', 'nota', nota, true, autoNota);
       var cells, cls;
       if (isGK){
         cls = 'gk';
         cells = pwCell
-              + _bedCell('', 'pj', s.pj, false)
-              + _bedCell('imbat', 'imbat', s.imbat, false)
-              + _bedCell('psave', 'penSaved', s.penSaved, false)
-              + _bedCell('mvp', 'mvp', s.mvp, false)
-              + _bedCell('ta', 'ta', s.ta, false)
-              + _bedCell('tr', 'tr', s.tr, false)
+              + _bedCell('', 'pj', _bedAdj(name,'pj',s.pj), false, s.pj)
+              + _bedCell('imbat', 'imbat', _bedAdj(name,'imbat',s.imbat), false, s.imbat)
+              + _bedCell('psave', 'penSaved', _bedAdj(name,'penSaved',s.penSaved), false, s.penSaved)
+              + _bedCell('mvp', 'mvp', _bedAdj(name,'mvp',s.mvp), false, s.mvp)
+              + _bedCell('ta', 'ta', _bedAdj(name,'ta',s.ta), false, s.ta)
+              + _bedCell('tr', 'tr', _bedAdj(name,'tr',s.tr), false, s.tr)
               + notaCell;
       } else {
         cls = 'ot';
-        /* GOLES = total único (jugada + penaltis + faltas). */
+        /* GOLES = total único (jugada + penaltis + faltas) + ajuste. */
         var golesTot = (Number(s.gol)||0) + (Number(s.pen)||0) + (Number(s.fk)||0);
         cells = pwCell
-              + _bedCell('', 'pj', s.pj, false)
-              + _bedCell('gol', 'gol', golesTot, false)
-              + _bedCell('mvp', 'mvp', s.mvp, false)
-              + _bedCell('ta', 'ta', s.ta, false)
-              + _bedCell('tr', 'tr', s.tr, false)
+              + _bedCell('', 'pj', _bedAdj(name,'pj',s.pj), false, s.pj)
+              + _bedCell('gol', 'gol', _bedAdj(name,'gol',golesTot), false, golesTot)
+              + _bedCell('mvp', 'mvp', _bedAdj(name,'mvp',s.mvp), false, s.mvp)
+              + _bedCell('ta', 'ta', _bedAdj(name,'ta',s.ta), false, s.ta)
+              + _bedCell('tr', 'tr', _bedAdj(name,'tr',s.tr), false, s.tr)
               + notaCell;
       }
       var nameHtml;
@@ -2803,7 +2807,17 @@ window._showSimProgress = function(opts, onDone){
       var row = inp.closest ? inp.closest('.lext-sq-row') : null;
       var name = row && row.getAttribute('data-player');
       if (!name) return;
-      _bedSetField(name, inp.getAttribute('data-field'), inp.value);
+      var field = inp.getAttribute('data-field');
+      var raw = String(inp.value == null ? '' : inp.value).trim();
+      if (raw === ''){ _bedSetDelta(name, field, null); }   /* vacío → 100% automático */
+      else {
+        var auto = Number(inp.getAttribute('data-auto')) || 0;
+        _bedSetDelta(name, field, Number(raw) - auto);       /* delta = escrito − automático */
+      }
+      /* Re-render para que data-auto se re-ancle y el valor mostrado
+         (automático + delta) quede consistente. El onchange ya disparó
+         en blur, así que no se interrumpe la escritura. */
+      try { window.renderBayernPlantillaScreen(); } catch(_){}
     };
 
     /* ── Panel de baja manual ── */

@@ -2256,8 +2256,14 @@ window._showSimProgress = function(opts, onDone){
       'ef_player_stats_uecl_v1',
       'ef_player_stats_recopa_v1',
       'ef_player_stats_usc_v1',       /* Supercopa de Europa */
-      'ef_player_stats_inter_v1',     /* Intercontinental */
-      'ef_player_stats_mundial_v1'    /* Mundial Clubes / Mundialito */
+      'ef_player_stats_inter_v1'      /* Intercontinental */
+      /* Mundialito de Clubes: NO se lee del store persistido
+         (ef_player_stats_mundial_v1, que depende de que el rebuild Source 3
+         haya corrido). Se computa EN VIVO desde el cfg del torneo (misma
+         fuente que la caja Estadísticas del Mundialito, que SÍ funciona) en
+         `_mundialLiveStatsForHub` y se mergea más abajo. Así las stats del
+         Mundialito del hub aparecen SIEMPRE en la plantilla. Petición
+         usuario reiterada 2026-06-05. */
     ];
     var _STATS_FIELDS = ['pj','gol','pen','fk','mvp','ta','tr','imbat','penSaved'];
     /* Stores POR COMPETICIÓN (separadas) para la NOTA MEDIA: la nota de
@@ -2275,8 +2281,8 @@ window._showSimProgress = function(opts, onDone){
       'ef_player_stats_uecl_v1',      /* Conference League */
       'ef_player_stats_recopa_v1',    /* Recopa de Europa */
       'ef_player_stats_usc_v1',       /* Supercopa de Europa */
-      'ef_player_stats_inter_v1',     /* Intercontinental */
-      'ef_player_stats_mundial_v1'    /* Mundialito de Clubes */
+      'ef_player_stats_inter_v1'      /* Intercontinental */
+      /* Mundialito: nota computada EN VIVO (ver _mundialLiveStatsForHub). */
     ];
     var _STATS_CACHE = null;
     var _NOTA_CACHE = null;
@@ -2382,10 +2388,83 @@ window._showSimProgress = function(opts, onDone){
           _STATS_FIELDS.forEach(function(f){ d[f] += Number(ps[f]||0); });
         });
       });
+      /* ── Mundialito de Clubes EN VIVO (competición OFICIAL del club) ──
+         Se agrega aquí, desde el cfg del torneo, con el MISMO escáner que
+         usa la caja «Mundialito · Estadísticas» (que SÍ muestra los goles).
+         Independiente de rebuildPlayerStatsStore: aunque el store
+         persistido no se haya reconstruido, los goles/tarjetas/MVP del
+         Mundialito del hub aparecen en la plantilla. */
+      try {
+        var _ml = _mundialLiveStatsForHub(teamNorm);
+        if (_ml && _ml.stats) {
+          Object.keys(_ml.stats).forEach(function(k){
+            var sep = k.indexOf('::'); if (sep < 0) return;
+            var t = k.slice(0, sep);
+            if (!t || !_teamKeyMatches(t, teamNorm)) return;   /* solo el hub */
+            var pName = k.slice(sep + 2); if (!pName) return;
+            var ps = _ml.stats[k]; if (!ps) return;
+            /* SUMA agregada. */
+            var bucket = cache[pName] = cache[pName] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+            _STATS_FIELDS.forEach(function(f){ if (f === 'pj') return; bucket[f] += Number(ps[f]||0); });
+            bucket.pj += _ml.pj || 0;
+            /* Desglose para la NOTA MEDIA (comp «Mundialito»). */
+            var byComp = nota[pName] = nota[pName] || {};
+            var d = byComp['__mundial_live'] = byComp['__mundial_live'] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+            _STATS_FIELDS.forEach(function(f){ if (f === 'pj') return; d[f] += Number(ps[f]||0); });
+            d.pj += _ml.pj || 0;
+          });
+        }
+      } catch(_){}
       _STATS_CACHE = cache;
       _NOTA_CACHE = nota;
       _STATS_CACHE_TS = now;
       return cache;
+    }
+    /* Stats del Mundialito de Clubes del equipo del hub, EN VIVO desde el
+       cfg `tour_mundial_v1` (cache de memoria si existe). Devuelve
+       `{ stats, pj }` donde `stats` es `teamNorm::playerNorm → counters`
+       (vía el escáner robusto compartido) y `pj` = nº de partidos jugados
+       por el hub en el torneo. null si no hay datos. */
+    function _mundialLiveStatsForHub(teamNorm){
+      try {
+        if (typeof window._mundialStatsRobustScan !== 'function') return null;
+        var cfgM = (window._TOUR_CACHE && window._TOUR_CACHE['mundial']) || null;
+        if (!cfgM) { try { cfgM = JSON.parse(localStorage.getItem('tour_mundial_v1') || 'null'); } catch(_){ cfgM = null; } }
+        if (!cfgM || !cfgM.results) return null;
+        var teams = cfgM.teams || [];
+        var all = window._mundialStatsRobustScan(cfgM, teams);
+        if (!all || !Object.keys(all).length) return null;
+        /* PJ del hub: nº de partidos jugados donde participa (resuelto por
+           home/away + índice de fixtures, igual que el escáner). */
+        var bpg = (cfgM.formatConfig && cfgM.formatConfig.perGroup) || 4;
+        var idxA = {};
+        try {
+          var gf = cfgM.groupFixtures || {};
+          Object.keys(gf).forEach(function(gk){
+            var g = parseInt(gk, 10); if (isNaN(g)) return;
+            var slice = teams.slice(g*bpg, g*bpg+bpg);
+            var fix = gf[gk] || [];
+            for (var j = 0; j < fix.length; j++) for (var mi = 0; mi < fix[j].length; mi++) {
+              var pr = fix[j][mi]; if (!pr) continue;
+              idxA['g'+g+'_'+j+'_'+mi] = { a:(slice[pr.home]||{}).name, b:(slice[pr.away]||{}).name };
+            }
+          });
+          var kb = cfgM.koBracket || [];
+          for (var r = 0; r < kb.length; r++) { var rt = kb[r]||[]; for (var i = 0; i+1 < rt.length; i += 2) {
+            idxA['ko_'+r+'_'+(i/2)] = { a:(rt[i]||{}).name, b:(rt[i+1]||{}).name };
+          } }
+        } catch(_){}
+        var pj = 0;
+        Object.keys(cfgM.results).forEach(function(mk){
+          if (/\|L[12]$/.test(mk)) return;
+          var r = cfgM.results[mk]; if (!r || !r.played) return;
+          var info = idxA[mk] || {};
+          var hN = _normForStats(r.home || info.a || '');
+          var aN = _normForStats(r.away || info.b || '');
+          if ((hN && _teamKeyMatches(hN, teamNorm)) || (aN && _teamKeyMatches(aN, teamNorm))) pj++;
+        });
+        return { stats: all, pj: pj };
+      } catch(_){ return null; }
     }
     function _statsFor(playerName){
       var base = {pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0};

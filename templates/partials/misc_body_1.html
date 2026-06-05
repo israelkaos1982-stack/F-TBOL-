@@ -6941,6 +6941,21 @@ window._showSimProgress = function(opts, onDone){
           var _pKoDay = _realPendingShape(tid, cfg, _dayKoIdx || 0, 'koBracket');
           if (_pKoDay) return _pKoDay;
         }
+        /* ── DÍA KO + humano fuera del cuadro = ELIMINADO → DESCANSO ──
+           El calendario demanda una ronda eliminatoria (`_dayInKo`) pero
+           no hemos resuelto ningún partido KO arriba: el humano NO está
+           en la ronda demandada (kbi<0) NI hay fase previa pendiente
+           que sortear. Eso significa que el humano fue ELIMINADO en
+           grupos (o en una ronda KO anterior). PROHIBIDO caer a la
+           resolución de fase de grupos de abajo: con el cursor
+           `currentJornadaByGroup` congelado en 0 (el usuario juega desde
+           la card del hub y nunca pulsa "🏆 J{N+1}"), devolvía el
+           resultado VIEJO de la J1 de grupos en BUCLE en TODOS los días
+           KO (Octavos/Cuartos/Semis/FINAL). Bug Mundialito 2026-06-05,
+           foto usuario: «Liverpool 0-3 Al Hilal · Cuartos» (= su J1 de
+           grupos) repetido en cada ronda KO pese a estar eliminado. Con
+           `null`, `_cardMatch` pinta la card de descanso/CONTINUAR ▶. */
+        if (_dayInKo) return null;
         /* Fase de grupos: localizar al humano en cfg.teams, su grupo
            y su partido en la jornada actual del round-robin. */
         var teams = Array.isArray(cfg.teams) ? cfg.teams : [];

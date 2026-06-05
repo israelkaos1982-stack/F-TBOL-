@@ -10532,23 +10532,63 @@
     } else if (jornada) {
       compLabel += ' · Jornada ' + jornada;
     }
-    /* Determinar equipo humano */
-    var humanTeam = null;
-    try {
-      if (typeof window.esHumano === 'function') {
-        if (window.esHumano(home)) humanTeam = home;
-        else if (window.esHumano(away)) humanTeam = away;
+    /* Determinar equipo(s) humano(s). En HvH (p.ej. Francia vs Noruega,
+       dos SELECCIONES humanas de misters distintos) AMBOS lados son
+       humanos → hay que recoger las bajas de los dos. La detección cubre
+       clubes (esHumano), SELECCIONES humanas (_esSelHumana, SÍNCRONO e
+       infalible) y comps europeas/torneo (isHumanInComp). Usar SOLO
+       esHumano fallaba con selecciones por el race de hidratación. */
+    var _waIsHuman = function(n){
+      if (!n) return false;
+      try { if (typeof window.esHumano === 'function' && window.esHumano(n)) return true; } catch(_){}
+      try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(n)) return true; } catch(_){}
+      try { if (typeof window.isHumanInComp === 'function' && window.isHumanInComp(n, window._ppCompKey || 'liga')) return true; } catch(_){}
+      return false;
+    };
+    var humanTeams = [];
+    if (_waIsHuman(home)) humanTeams.push(home);
+    if (_waIsHuman(away) && away !== home) humanTeams.push(away);
+
+    /* Bajas (sanciones · expulsiones · lesiones — INCLUIDO el ⬇️ estado
+       de forma marcado por el usuario) de UN equipo humano. [] = al 100%.
+       Cubre el store de CLUB (BAJA_STORE + LESION_STORE, global por
+       jugador) Y el de SELECCIÓN (SANCION_STORE_SEL + LESION_STORE_SEL,
+       por selección). El ⬇️ entra en LESION_STORE (club) o en
+       LESION_STORE_SEL (selección) — petición usuario 2026-06-05: el
+       lesionado ⬇️ DEBE salir en el texto compartido por WhatsApp.
+       Formato por baja:
+         💉/🩹/🚑 Lesionado: Nombre · • +N partidos · • Descripción */
+    var _waBajasForTeam = function(teamName){
+      var out = [];
+      if (!teamName) return out;
+      /* ── SELECCIÓN humana ───────────────────────────────────── */
+      var isSel = false;
+      try { isSel = (typeof window._esSelHumana === 'function') && window._esSelHumana(teamName); } catch(_){}
+      if (isSel) {
+        var sel = teamName;
+        try { if (typeof window._canonSelHumana === 'function') sel = window._canonSelHumana(teamName) || teamName; } catch(_){}
+        var sanRoot = (window.SANCION_STORE_SEL && window.SANCION_STORE_SEL['sel']) || {};
+        (sanRoot[sel] || []).forEach(function(s){
+          if (!s || !((parseInt(s.remaining, 10) || 0) > 0)) return;
+          var tipo = String(s.tipo || '').toLowerCase();
+          if (tipo === 'roja' || tipo === 'expulsion' || tipo === 'doble-amarilla') out.push('🟥 Expulsado: ' + s.name);
+          else out.push('🟨 Sancionado: ' + s.name);
+          out.push('• +' + s.remaining + ' partido(s)' + (s.reason ? ' — ' + s.reason : ''));
+        });
+        var lbSel = (window.LESION_STORE_SEL && window.LESION_STORE_SEL[sel]) || {};
+        Object.keys(lbSel).forEach(function(pl){
+          var l = lbSel[pl] || {};
+          if (!((parseInt(l.remaining, 10) || 0) > 0)) return;
+          out.push('🩹 Lesionado: ' + pl);
+          out.push('• +' + l.remaining + ' partido(s) lesionado');
+          if (l.reason) out.push('• ' + l.reason);
+        });
+        return out;
       }
-    } catch(_) {}
-    /* Recoger bajas del equipo humano */
-    var bajaLines = [];
-    if (humanTeam) {
+      /* ── CLUB humano ────────────────────────────────────────── */
       var normFn = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
-      var nH = normFn(humanTeam);
+      var nH = normFn(teamName);
       var belongs = function(name) {
-        if (typeof window._ppPlayerBelongsToMatch === 'function') {
-          /* fallback heurístico: usar SQUAD_REGISTRY */
-        }
         var squads = window.SQUAD_REGISTRY || {};
         for (var team in squads) {
           if (normFn(team) !== nH) continue;
@@ -10563,40 +10603,37 @@
       };
       var bajas = window.BAJA_STORE || {};
       var lesiones = window.LESION_STORE || {};
-      /* Formato por baja (pedido por el usuario):
-           💉 Lesionado: Nombre
-           • +N partidos lesionado
-           • Descripción */
       Object.keys(bajas).forEach(function(n) {
         if (!belongs(n)) return;
         var b = bajas[n];
         var t = b && (b.tipo || b);
         if (t === 'sancion') {
-          bajaLines.push('🟨 Sancionado: ' + n);
+          out.push('🟨 Sancionado: ' + n);
           var pS = [];
           if (b.liga > 0)   pS.push(b.liga + ' Liga');
           if (b.copa > 0)   pS.push(b.copa + ' Copa');
           if (b.europa > 0) pS.push(b.europa + ' Europa');
-          if (pS.length)    bajaLines.push('• +' + pS.join(' / '));
+          if (pS.length)    out.push('• +' + pS.join(' / '));
         }
         else if (t === 'expulsion' || t === 'roja') {
-          bajaLines.push('🟥 Expulsado: ' + n);
+          out.push('🟥 Expulsado: ' + n);
           var pE = [];
           if (b.liga > 0)   pE.push(b.liga + ' Liga');
           if (b.copa > 0)   pE.push(b.copa + ' Copa');
           if (b.europa > 0) pE.push(b.europa + ' Europa');
-          if (pE.length)    bajaLines.push('• +' + pE.join(' / '));
+          if (pE.length)    out.push('• +' + pE.join(' / '));
         }
       });
       Object.keys(lesiones).forEach(function(n) {
         if (!belongs(n)) return;
         var l = lesiones[n];
         var ico = l.grado === 3 ? '🚑' : (l.grado === 2 ? '💉' : '🩹');
-        bajaLines.push(ico + ' Lesionado: ' + n);
-        if (l.partidos) bajaLines.push('• +' + l.partidos + ' partidos lesionado');
-        if (l.descripcion) bajaLines.push('• ' + l.descripcion);
+        out.push(ico + ' Lesionado: ' + n);
+        if (l.partidos) out.push('• +' + l.partidos + ' partidos lesionado');
+        if (l.descripcion) out.push('• ' + l.descripcion);
       });
-    }
+      return out;
+    };
     var lines = [];
     /* Cabecera nueva (2026-05-09): 📅 fecha + icono comp + label + ronda
        + "home vs away" + 🟢 INICIO. Reusa _waBuildHeaderLines para
@@ -10609,22 +10646,29 @@
       scA: null, scB: null, /* sin marcador → se renderiza "vs" */
       eventType: 'kickoff'
     }).forEach(function(l){ lines.push(l); });
-    if (humanTeam) {
-      /* Abreviatura limpia (sin emojis 🎲/🖊️) para que la línea NO
-         parta en la preview de WhatsApp (petición usuario 2026-05-19:
-         cada cosa en una sola línea horizontal). */
-      var _htClean = String(humanTeam)
+    /* Abreviatura limpia (sin emojis 🎲/🖊️ ni banderas) para que la
+       línea NO parta en la preview de WhatsApp (petición usuario
+       2026-05-19: cada cosa en una sola línea horizontal). */
+    var _waAbbr = function(t){
+      var _clean = String(t || '')
         .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
         .replace(/\s+/g,' ').trim();
-      var _htAbbr = (typeof window.getTeamAbbr === 'function' && window.getTeamAbbr(_htClean)) || _htClean;
+      return (typeof window.getTeamAbbr === 'function' && window.getTeamAbbr(_clean)) || _clean;
+    };
+    /* Bloque de bajas por CADA equipo humano (en HvH selección, los dos).
+       Si está al 100% se muestra "✅ ABBR — Plantilla al 100%"; si tiene
+       sancionados/expulsados/lesionados (incluido ⬇️) se listan. */
+    humanTeams.forEach(function(ht){
+      var _abbr = _waAbbr(ht);
+      var _hb = _waBajasForTeam(ht);
       lines.push('');
-      if (bajaLines.length) {
-        lines.push('🚑 Bajas de ' + _htAbbr + ':');
-        lines = lines.concat(bajaLines);
+      if (_hb.length) {
+        lines.push('🚑 Bajas de ' + _abbr + ':');
+        _hb.forEach(function(l){ lines.push(l); });
       } else {
-        lines.push('✅ ' + _htAbbr + ' — Plantilla al 100%');
+        lines.push('✅ ' + _abbr + ' — Plantilla al 100%');
       }
-    }
+    });
     var twitch = window._ppSelectedTwitch;
     twitch = (twitch == null) ? '' : String(twitch).trim();
     if (twitch && twitch !== '__skip__') {
@@ -11114,8 +11158,12 @@
        "[home] vs [away]" (caso INICIO de partido, no hay score aún). */
     var meta = _waCompMeta(opts);
     var lines = [];
-    var date = _waCalDate(meta, opts.j);
-    if (date) lines.push('📅 ' + date);
+    /* 📅 FECHA ELIMINADA del texto compartido por WhatsApp (petición
+       usuario 2026-06-05): la fecha del calendario casi nunca coincide
+       con el día real de juego y solo creaba confusión en los humanos.
+       Se omite por completo — `_waCalDate` se conserva por si algún
+       otro consumidor la necesita, pero la cabecera del share ya NO la
+       incluye. PROHIBIDO volver a añadir la línea 📅 al share. */
     /* Liga / superliga / champions / uel / uecl / mundial / verano →
        "Icono Label Jornada N" sin separador.
        Copa / supercopa / recopa / intercontinental → "Icono Label - Ronda"

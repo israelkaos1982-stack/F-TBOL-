@@ -3311,12 +3311,19 @@ window._showSimProgress = function(opts, onDone){
       if (!host) return;
       try {
         var now = Date.now();
+        /* RENDER-FIRST + sync DIFERIDO (regla 2026-05-28, ahora también
+           aquí): el rebuild de stores (syncLigaEaPlayerStats) es O(todas
+           las comps) y bloqueaba el hilo ~10 s al abrir la plantilla
+           (bug 2026-06-05). Pintamos YA desde el cache actual y, si toca
+           refrescar, lanzamos el rebuild en setTimeout(0) y re-pintamos al
+           terminar — la caja aparece al instante y se actualiza sola. */
         if ((now - _LAST_SYNC_TS) > 2000){
-          try {
-            if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats();
-          } catch(_){}
-          _LAST_SYNC_TS = now;
-          try { window._invalidateBayernStatsCache && window._invalidateBayernStatsCache(); } catch(_){}
+          _LAST_SYNC_TS = now;   /* marca ANTES para que el re-pintado no reentre */
+          setTimeout(function(){
+            try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
+            try { window._invalidateBayernStatsCache && window._invalidateBayernStatsCache(); } catch(_){}
+            try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){}
+          }, 0);
         }
         /* Escudos club/selección arriba a la derecha + vista activa. */
         try { _bplantRenderCrestToggle(); } catch(_){}
@@ -13458,7 +13465,8 @@ window._showSimProgress = function(opts, onDone){
             var _side = ev.team || ev.side;
             var team = ev.realTeam
                     || ((_side === 'a' || _side === 'home') ? _tA
-                      : (_side === 'b' || _side === 'away') ? _tB : '');
+                      : (_side === 'b' || _side === 'away') ? _tB
+                      : ((_side && _side !== 'a' && _side !== 'b') ? _side : ''));
             var player = '';
             if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
             else if (typeof ev.player === 'string') player = ev.player;
@@ -20392,16 +20400,31 @@ window._showSimProgress = function(opts, onDone){
     if (_tourStatsSyncT) { clearTimeout(_tourStatsSyncT); }
     _tourStatsSyncT = setTimeout(function(){
       _tourStatsSyncT = null;
-      try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
-      /* Si una caja EN VIVO está abierta, re-pintarla para que el goleador
-         recién marcado aparezca sin tener que salir y volver a entrar. */
-      try {
-        var act = document.querySelector('.screen.active');
-        var aid = act && act.id;
-        if (aid === 's-mundial-stats' && typeof window._renderMundialitoStats === 'function') {
-          window._renderMundialitoStats();
+      var aid = '';
+      try { var act = document.querySelector('.screen.active'); aid = (act && act.id) || ''; } catch(_){}
+      /* La caja EN VIVO del Mundialito lee `cfg.results` directo (barato):
+         se re-pinta para que el goleador recién marcado aparezca sin salir
+         y volver. */
+      if (aid === 's-mundial-stats' && typeof window._renderMundialitoStats === 'function') {
+        try { window._renderMundialitoStats(); } catch(_){}
+        return;
+      }
+      /* El rebuild COMPLETO de los stores persistidos (ef_player_stats_*_v1)
+         es O(todas las competiciones × partidos × eventos) — caro. NO se
+         corre tras CADA partido: bloqueaba el hilo 10-15 s al navegar por el
+         Mundialito (pulsar una caja, abrir Estadísticas) — bug 2026-06-05.
+         Esos stores se reconstruyen al ABRIR la plantilla del hub o una caja
+         de stats basada en cache (ambas llaman a syncLigaEaPlayerStats con
+         su propio guard de recencia). Aquí SOLO lo lanzamos si una de esas
+         pantallas está abierta AHORA MISMO (caso raro durante el juego), para
+         que se refresque en vivo sin penalizar la navegación normal. */
+      if (typeof window.syncLigaEaPlayerStats === 'function'
+          && (aid === 's-bayern-plantilla' || /-stats$/.test(aid))) {
+        try { window.syncLigaEaPlayerStats(); } catch(_){}
+        if (aid === 's-bayern-plantilla' && typeof window.renderBayernPlantillaScreen === 'function') {
+          try { window.renderBayernPlantillaScreen(); } catch(_){}
         }
-      } catch(_){}
+      }
     }, 500);
   }
   window._tourScheduleStatsSync = _tourScheduleStatsSync;

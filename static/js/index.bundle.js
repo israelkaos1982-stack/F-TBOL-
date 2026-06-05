@@ -8368,11 +8368,45 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     var store = window.LESION_STORE || {};
     var target = String(teamName || '').trim().toLowerCase();
     if (!target) return;
+    /* ¿El nombre con el que llega ESTE partido y el `equipo` guardado en la
+       baja son el MISMO club humano? El slot del hub se renombró (Bayern→
+       Liverpool) y la lógica del motor a veces sigue usando el nombre
+       legacy: una baja guardada como "Liverpool" no casaba en estricto con
+       un partido que llega como "Bayern Munich" (o al revés), así que la
+       lesión NUNCA se restaba al pasar los partidos (bug 2026-06-05,
+       Harvey Davies / Kaide Gordon). Resolvemos por MISTER del registro
+       canónico (alias-safe) y lo GATEAMOS a clubes humanos para no cruzar
+       club↔selección del mismo mister. Generaliza a las 6 cajas humanas. */
+    function _sameHumanClub(a, b){
+      try {
+        if (typeof window._isHumanClubCanonico !== 'function') return false;
+        if (!window._isHumanClubCanonico(a) || !window._isHumanClubCanonico(b)) return false;
+        return !!(window._mhSameMister && window._mhSameMister(a, b));
+      } catch(_){ return false; }
+    }
+    /* Club del hub actual — para resolver bajas con `equipo` vacío, que el
+       resto de la UI (`_hubTeamMatches`) asume del hub. Esas SOLO las resta
+       el partido del propio hub, nunca un partido de otra caja / IA. */
+    var hubName = '';
+    try {
+      hubName = (window._psHumanLogicName && window._psHumanLogicName())
+             || (window._mkHubTeamName ? String(window._mkHubTeamName) : '') || '';
+    } catch(_){}
     Object.keys(store).forEach(function(name){
       var rec = store[name];
       if (!rec) return;
-      var eq = String(rec.equipo || '').trim().toLowerCase();
-      if (eq !== target) return;
+      var rawEq = String(rec.equipo || '').trim();
+      var eq = rawEq.toLowerCase();
+      var match = (eq === target);
+      if (!match && rawEq) {
+        /* Mismo club humano con grafía/alias distinta (Bayern↔Liverpool). */
+        match = _sameHumanClub(teamName, rec.equipo);
+      }
+      if (!match && !rawEq) {
+        /* Baja sin equipo → la UI la asume del hub; la resta solo el hub. */
+        match = !!(hubName && _sameHumanClub(teamName, hubName));
+      }
+      if (!match) return;
       var n = Number(rec.partidos) || 0;
       if (n <= 0) { return; }
       if (rec._skipFirstDecrement) {

@@ -1,5 +1,53 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
+
+**Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:
+dos lesionados del hub (Liverpool) salían en el 💉 MENÚ DE TRATAMIENTO
+RÁPIDO con un nº FIJO de partidos restantes (4 y 6) que **nunca bajaba**
+por más partidos que jugara el usuario. «Pasan los partidos y no se van
+restando automáticamente.»
+
+### Causa raíz
+
+`decrementarPorPartido(teamName, compKey)` (`static/js/index.bundle.js`,
+`LESION_STORE_UTILS`) — el único punto que resta 1 partido a las
+lesiones de club cuando el equipo juega (lo llaman gm-modal `gmEndMatch`,
+ml-card `_mlFinishMatchGen`, `simularJornadaIA`, copa-engine) — comparaba
+el equipo de la baja con el del partido en **ESTRICTO**
+(`if (eq !== target) return;`). El slot del hub se renombró
+**Bayern→Liverpool** y los distintos resolutores del nombre del hub
+NO coinciden entre sí (`_mkHubTeamName` / `_psHumanLogicName()` pueden
+dar el lógico `"Bayern Munich"`, `_findBayernRow().name` da el display
+`"Liverpool"`, y el partido puede llegar con cualquiera de los dos).
+Así, una baja guardada como `"Liverpool"` no casaba con un partido que
+llegaba como `"Bayern Munich"` (o al revés) y **jamás se decrementaba**.
+La capa de DISPLAY ya era tolerante (`_hubTeamMatches`, bug 2026-06-05,
+mismo Harvey Davies); la de DECREMENTO no.
+
+### Fix
+
+`decrementarPorPartido` resuelve la equivalencia por **MISTER del
+registro canónico** (`window._mhSameMister`, alias-safe Bayern↔Liverpool),
+**gateado a CLUBES humanos** (`window._isHumanClubCanonico` en AMBOS
+lados) para no cruzar club↔selección del mismo mister. Una baja con
+`equipo` vacío (que la UI asume del hub) la resta SOLO el partido del
+propio hub (`_psHumanLogicName()`/`_mkHubTeamName`), nunca un partido de
+otra caja humana ni de un IA. El match exacto previo se conserva.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver al match ESTRICTO `eq !== target` en
+   `decrementarPorPartido`. El equipo del partido y el `equipo` de la
+   baja deben compararse con la MISMA tolerancia que el display
+   (alias por mister + `equipo` vacío = hub).
+2. **PROHIBIDO** ensanchar el match con substring crudo o `_mhSameMister`
+   SIN el gate `_isHumanClubCanonico` en ambos lados: cruzaría las bajas
+   de club con las de la selección del mismo mister (Liverpool↔Francia)
+   o entre cajas con grafías parecidas.
+3. Generaliza a las 6 cajas humanas (cada una resuelve su propio mister);
+   no hardcodear Liverpool/Bayern en el decremento.
+
 ## Lesiones / sanciones (club + selección) se SINCRONIZAN al servidor — sobreviven al borrado de datos del navegador (obligatorio, 2026-06-04)
 
 **Bug (fotos usuario 2026-06-04, «Kounde·Francia»)**: el usuario añade

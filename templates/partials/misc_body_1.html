@@ -6908,6 +6908,63 @@ window._showSimProgress = function(opts, onDone){
     return null;
   }
 
+  /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
+     Petición usuario (foto 2): TODAS las cards del hub (Liga, Copa,
+     competiciones europeas, torneos de verano, Mundialito y Selección)
+     comparten el MISMO diseño «escudos grandes + VS», ya sea Liverpool
+     o Francia. Estos 3 helpers producen los bloques visuales que antes
+     solo tenía `_cardSelMatch` para que el resto de renderers
+     (`_cardNonTour` de Liga, rama de torneo de `_cardMatch`) los usen
+     1:1. */
+  /* Bloque «escudo grande + nombre» de un equipo. Resuelve el escudo
+     por nombre con `getTeamLogoUrl` si no viene explícito en `o.shield`
+     (cubre Liga/Copa/Europa, donde solo tenemos el nombre). `o.icon` =
+     emoji humano opcional (mister 💡/🐭/… o selección). */
+  function _psVsTeamHtml(o){
+    var s = o && o.shield;
+    if (!s && o && o.name && typeof window.getTeamLogoUrl === 'function'){
+      try { s = window.getTeamLogoUrl(o.name) || ''; } catch(_){ s = ''; }
+    }
+    var ic = (o && o.icon) ? (' ' + o.icon) : '';
+    return '<div class="ps-team">'
+      + (s ? '<img class="ps-shield" src="'+_esc(s)+'" onerror="this.style.display=\'none\'" alt="">' : '<div class="ps-shield"></div>')
+      + '<div class="ps-tn">'+_esc((o&&o.name)||'')+ic+'</div>'
+      + '</div>';
+  }
+  /* Bloque VS completo: equipo · centro (VS o marcador) · equipo. */
+  function _psVsBlockHtml(home, away, centerHtml){
+    return '<div class="ps-vs" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0;">'
+      + _psVsTeamHtml(home)
+      + (centerHtml || '<div class="ps-x">VS</div>')
+      + _psVsTeamHtml(away)
+      + '</div>';
+  }
+  /* Centro con MARCADOR (mismo estilo cian + 🏁 FIN que `_cardSelMatch`)
+     para el estado jugado. */
+  function _psScoreCenterHtml(a, b){
+    a = a|0; b = b|0;
+    var aClr = (a > b) ? '#fff' : '#4dd0e1';
+    var bClr = (b > a) ? '#fff' : '#4dd0e1';
+    return '<div class="ps-x" style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;padding:0 4px;">'
+      + '<div style="background:rgba(0,0,0,.45);border:1px solid rgba(77,208,225,.5);border-radius:8px;padding:5px 14px;font-family:\'Bebas Neue\',sans-serif;font-size:26px;letter-spacing:2px;color:#4dd0e1;text-shadow:0 0 10px rgba(77,208,225,.45);min-width:78px;text-align:center;line-height:1.05;">'
+      +   '<span style="color:'+aClr+';">'+a+'</span> - <span style="color:'+bClr+';">'+b+'</span>'
+      + '</div>'
+      + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.18);border-radius:5px;padding:1px 8px;">🏁 FIN</div>'
+      + '</div>';
+  }
+  /* Emoji humano (mister) de un club/selección del registro canónico,
+     para pintarlo junto al nombre en la card (Liverpool 💡, Francia 💡,
+     Arsenal 🐭, …). Vacío para equipos IA. */
+  function _psClubIcon(name){
+    try {
+      if (name && typeof window._mhFindMister === 'function'){
+        var m = window._mhFindMister(name);
+        if (m && m.emoji) return m.emoji;
+      }
+    } catch(_){}
+    return '';
+  }
+
   /* ── Card para días de PARTIDO que NO son del torneo de verano ──
      Liga / Copa / Champions / Europa League / Conference / Recopa /
      Intercontinental / Amistosos del calendario base. El módulo
@@ -6950,18 +7007,16 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){}
     }
     if (_ligaPlayed){
-      var _gh = (_ligaPlayed.gh != null) ? _ligaPlayed.gh : '-';
-      var _ga = (_ligaPlayed.ga != null) ? _ligaPlayed.ga : '-';
+      var _gh = _ligaPlayed.gh|0;
+      var _ga = _ligaPlayed.ga|0;
       st.innerHTML =
         '<div class="ps-card">'
         + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
         + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
-        + '<div class="ps-meta" style="margin:14px 0;">'
-        +   '<div style="font-size:12px;color:rgba(255,255,255,.6);letter-spacing:1px;margin-bottom:6px;">✅ PARTIDO JUGADO</div>'
-        +   '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:19px;letter-spacing:1px;line-height:1.3;">'
-        +     '<b>' + _esc(ligaMatch.home) + '</b> <span style="color:#ffd54a;">' + _gh + ' – ' + _ga + '</span> <b>' + _esc(ligaMatch.away) + '</b>'
-        +   '</div>'
-        + '</div>'
+        + _psVsBlockHtml(
+            { name: ligaMatch.home, icon: _psClubIcon(ligaMatch.home) },
+            { name: ligaMatch.away, icon: _psClubIcon(ligaMatch.away) },
+            _psScoreCenterHtml(_gh, _ga))
         + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
         +   '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>'
         +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
@@ -6975,15 +7030,6 @@ window._showSimProgress = function(opts, onDone){
       if (bC0) bC0.onclick = function(){ _markDoneAndAdvance(); };
       return;
     }
-    var openBtn = '';
-    if (ligaMatch){
-      openBtn = '<button type="button" class="ps-btn" id="ps-nontour-previa">📋 ABRIR PREVIA</button>';
-    } else if (ligaJor > 0){
-      openBtn = '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>';
-    }
-    var metaHtml = ligaMatch
-      ? '📋 Pantalla de previa<br><b>' + _esc(ligaMatch.home) + '</b> vs <b>' + _esc(ligaMatch.away) + '</b>'
-      : 'La jornada se juega desde la pantalla de la competición.';
     /* Caja «🤖 PAGAR SIMULACIÓN · 50🪙» para los días de Liga
        (2026-06-04, petición usuario): cobra del presupuesto del hub y
        auto-simula SOLO el partido del Liverpool en esta jornada con el
@@ -6999,19 +7045,42 @@ window._showSimProgress = function(opts, onDone){
     var _payHtmlLiga = (ligaMatch && !_ligaHvH)
       ? '<div style="margin-top:2px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST, PS_PAY_SIM_COST) + '</div>'
       : '';
-    st.innerHTML =
-      '<div class="ps-card">'
-      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
-      + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
-      + '<div class="ps-meta" style="margin:14px 0;color:rgba(255,255,255,.85);font-size:13px;">'
-      +   metaHtml
-      + '</div>'
-      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
-      +   openBtn
-      +   _payHtmlLiga
-      +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
-      + '</div>'
-      + '</div>';
+    if (ligaMatch){
+      /* Día de Liga con partido del hub resuelto → DISEÑO ÚNICO de la
+         card (escudos grandes + VS), idéntico a la de Selección. */
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
+        + _psVsBlockHtml(
+            { name: ligaMatch.home, icon: _psClubIcon(ligaMatch.home) },
+            { name: ligaMatch.away, icon: _psClubIcon(ligaMatch.away) },
+            '<div class="ps-x">VS</div>')
+        + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+        +   '<button type="button" class="ps-btn" id="ps-nontour-previa">📋 PREVIA · JUGAR ▶</button>'
+        +   _payHtmlLiga
+        +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
+        + '</div>'
+        + '</div>';
+    } else {
+      /* Día de otra competición (Copa/Champions/Europa/…) sin fixture
+         resoluble en el hub: se juega desde su propia pantalla. */
+      var openBtn = (ligaJor > 0)
+        ? '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>'
+        : '';
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
+        + '<div class="ps-meta" style="margin:14px 0;color:rgba(255,255,255,.85);font-size:13px;">'
+        +   'La jornada se juega desde la pantalla de la competición.'
+        + '</div>'
+        + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+        +   openBtn
+        +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
+        + '</div>'
+        + '</div>';
+    }
     var bP = document.getElementById('ps-nontour-previa');
     if (bP) bP.onclick = function(){
       try {
@@ -7350,14 +7419,27 @@ window._showSimProgress = function(opts, onDone){
        reabrirlo desde POSPUESTOS, así que ocultamos el botón. */
     var _deferHtmlClub = (pair && pair.tourId && pair.matchKey)
       ? _psDeferTopBtnHtml() : '';
+    /* Escudos + emoji humano del bracket para el DISEÑO ÚNICO (escudos
+       grandes + VS), idéntico a la card de Selección. Fallback de
+       escudo por nombre dentro de `_psVsBlockHtml` (getTeamLogoUrl). */
+    var _uHS = (pair.homeObj && pair.homeObj.shield) || '';
+    var _uAS = (pair.awayObj && pair.awayObj.shield) || '';
+    var _uHHi = '', _uAHi = '';
+    try {
+      if (pair.homeObj && pair.homeObj.isHuman && typeof window._tourTeamIcon === 'function') _uHHi = window._tourTeamIcon(pair.homeObj) || '';
+      if (pair.awayObj && pair.awayObj.isHuman && typeof window._tourTeamIcon === 'function') _uAHi = window._tourTeamIcon(pair.awayObj) || '';
+    } catch(_){}
     st.innerHTML =
       '<div class="ps-card">'
       + _deferHtmlClub
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + _esc(tourNm) + ' · ' + _esc(day.label) + '</div>'
-      + '<div class="ps-meta" style="margin:16px 0;">📋 Pantalla de previa<br><b>' + _esc(rv.home) + '</b> vs <b>' + _esc(rv.away) + '</b></div>'
+      + _psVsBlockHtml(
+          { name: rv.home, shield: _uHS, icon: _uHHi },
+          { name: rv.away, shield: _uAS, icon: _uAHi },
+          '<div class="ps-x">VS</div>')
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:8px;">'
-      +   '<button type="button" class="ps-btn" id="ps-match-play">📋 ABRIR PREVIA</button>'
+      +   '<button type="button" class="ps-btn" id="ps-match-play">📋 PREVIA · JUGAR ▶</button>'
       +   _payHtml
       + '</div>'
       + '</div>';

@@ -15742,8 +15742,21 @@ window._showSimProgress = function(opts, onDone){
     }
     /* Rondas posteriores: sortear con ganadores de la previa. */
     var prev = PHASES[PHASES.indexOf(phase)-1];
-    if(!prev || !s.sorteo[prev] || !_phaseDone(s, prev)){
-      alert('⚠️ Tienes que terminar todos los partidos de la ronda anterior antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
+    /* Si la ronda previa NI SIQUIERA está sorteada, el problema real no es
+       "termina la ronda anterior" sino que la Recopa está vacía / aún no se
+       ha sorteado el 1/64. Mensaje claro en vez del confuso del 1/32. */
+    if(!prev || !s.sorteo[prev] || !s.sorteo[prev].length){
+      var pool = _buildPool();
+      if(pool.length < 2){
+        alert('⚠️ La Recopa aún no tiene equipos (pool actual: ' + pool.length + ').\n\nSe llena con:\n  · Campeón de cada copa nacional europea (automático al simular su copa).\n  · Subcampeón de cada copa (si está activado en sus Reglas).\n  · Equipos manuales en "EA Sports → Europa" (Recopa).\n\nAlimenta el pool y después pulsa 🎯 Sortear 1/64.');
+      } else {
+        alert('⚠️ Aún no has sorteado el 1/64.\n\nPulsa 🎯 Sortear 1/64 (hay ' + pool.length + ' equipos en el pool) antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
+      }
+      return;
+    }
+    /* La ronda previa está sorteada pero faltan partidos por jugar. */
+    if(!_phaseDone(s, prev)){
+      alert('⚠️ Tienes que terminar todos los partidos de ' + (PHASE_LABEL[prev]||prev) + ' antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
       return;
     }
     s.sorteo[phase] = _drawNext(s.sorteo[prev]);

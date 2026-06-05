@@ -2889,22 +2889,35 @@ window._showSimProgress = function(opts, onDone){
       try { window.renderBayernPlantillaScreen(); } catch(_){}
     };
 
-    /* Sube los 2 lápices (🖍 rojo + 🖍 azul) a la fila de navegación,
-       pegados a la derecha del botón 🏠 (la home-icon-btn que index.html
-       inyecta junto al ◀ Volver). Petición usuario 2026-06-05. Idempotente:
-       si ya están en la nav-row no hace nada. */
+    /* Coloca los 2 lápices (🖍 rojo + 🖍 azul, muy pequeños) pegados a la
+       derecha del botón 🏠. Petición usuario 2026-06-05. Van en un contenedor
+       ABSOLUTO dentro del screen (NO dentro de la nav-row sticky) → así se
+       quedan arriba al inicio pero hacen scroll con la página (no se bloquean
+       arriba como ◀ Volver / 🏠). Idempotente: reubica + reposiciona. */
     function _bplantRelocatePencils(){
       var scr = document.getElementById('s-bayern-plantilla');
       if (!scr) return;
       var navRow = scr.querySelector('.nav-row');
-      if (!navRow) return; /* la inyecta el DOMContentLoaded de index.html */
+      var home = navRow && navRow.querySelector('.home-icon-btn');
       var red  = document.getElementById('bplant-edit-pencil');
       var blue = document.getElementById('bplant-baja-pencil');
       if (!red || !blue) return;
-      if (red.parentNode === navRow && blue.parentNode === navRow) return; /* ya reubicados */
-      navRow.appendChild(red);
-      navRow.appendChild(blue);
-      navRow.classList.add('bplant-nav');
+      var box = document.getElementById('bplant-pencils');
+      if (!box){
+        box = document.createElement('div');
+        box.id = 'bplant-pencils';
+        scr.appendChild(box);
+      }
+      if (red.parentNode !== box){ box.appendChild(red); }
+      if (blue.parentNode !== box){ box.appendChild(blue); }
+      /* Posición = justo a la derecha del 🏠, a la misma altura, en
+         coordenadas de layout (no afectadas por el scroll de la nav sticky). */
+      if (home && navRow){
+        var x = 0, y = 0, el = home;
+        while (el && el !== scr){ x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; }
+        box.style.left = (x + home.offsetWidth + 8) + 'px';
+        box.style.top  = (y + Math.max(0, (home.offsetHeight - 17) / 2)) + 'px';
+      }
     }
 
     /* ════════════════════════════════════════════════════════════════
@@ -8126,10 +8139,11 @@ window._showSimProgress = function(opts, onDone){
      sólo ocupa la izquierda, así que el lado derecho queda libre para los
      escudos). 2026-06-05. */
   #s-bayern-plantilla .sec-hdr{padding-top:0;margin-top:0;min-height:0;}
-  #bplant-crest-toggle{margin-left:auto;margin-right:2px;margin-top:-58px;display:flex;gap:13px;align-items:center;position:relative;z-index:160;}
-  /* Lápices 🖍 reubicados a la derecha del 🏠 dentro de la nav-row
-     (que es width:fit-content → los envuelve pegados al home). */
-  #s-bayern-plantilla .nav-row.bplant-nav .munich-edit-pencil{width:30px;height:30px;font-size:16px;border-radius:6px;margin-left:0;}
+  #bplant-crest-toggle{margin-left:auto;margin-right:2px;margin-top:-42px;display:flex;gap:13px;align-items:center;position:relative;z-index:160;}
+  /* Lápices 🖍 muy pequeños, a la derecha del 🏠. Contenedor ABSOLUTO
+     dentro del screen (no sticky) → hacen scroll con la página. */
+  #bplant-pencils{position:absolute;display:flex;gap:5px;align-items:center;z-index:140;}
+  #bplant-pencils .munich-edit-pencil{width:17px;height:17px;font-size:9px;border-radius:4px;margin-left:0;padding:0;}
   #bplant-crest-toggle .bpl-crest-btn{display:flex;align-items:center;justify-content:center;width:50px;height:50px;border-radius:50%;cursor:pointer;padding:3px;background:radial-gradient(circle at 50% 32%,rgba(255,255,255,.12),rgba(255,255,255,.02));border:2px solid rgba(255,255,255,.28);opacity:.6;transition:transform .15s,box-shadow .2s,opacity .15s,border-color .15s;-webkit-tap-highlight-color:transparent;}
   #bplant-crest-toggle .bpl-crest-btn:active{transform:scale(.93);}
   #bplant-crest-toggle .bpl-crest-btn.is-active{opacity:1;border-color:#ffd24a;border-width:2.5px;background:radial-gradient(circle at 50% 32%,rgba(255,210,74,.34),rgba(255,210,74,.05));transform:scale(1.1);animation:bplCrestPulse 1.8s ease-in-out infinite;}

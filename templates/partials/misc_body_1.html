@@ -2307,6 +2307,25 @@ window._showSimProgress = function(opts, onDone){
         return String(s||'').toLowerCase().trim();
       }
     }
+    /* ¿El `equipo` guardado en una baja de club corresponde al equipo del
+       hub? Alias-aware (el slot pudo renombrarse Bayern→Liverpool, así que
+       una entrada legacy puede traer equipo:'Bayern Munich') y tolerante a
+       entradas SIN equipo (la fila renderizada ES del hub, así que un
+       nombre suelto cuenta como del hub — mismo criterio que `_isInj` en
+       `_rowFor`, que NO mira equipo). Bug 2026-06-05: Harvey Davies salía
+       como lesionado (nombre clicable) pero la fila NO se coloreaba morado
+       porque su `equipo` no casaba con "Liverpool". */
+    function _hubTeamMatches(eq){
+      var e = _normForStats(eq || '');
+      if (!e) return true;                 /* sin equipo → asumimos hub */
+      var aliases = [];
+      try { aliases.push(_normForStats(_hubTeamName())); } catch(_){}
+      try { if (window._psHumanLogicName) aliases.push(_normForStats(window._psHumanLogicName()||'')); } catch(_){}
+      try { if (window._mkHubTeamName) aliases.push(_normForStats(String(window._mkHubTeamName))); } catch(_){}
+      aliases.push(_normForStats('Bayern Munich'));   /* alias legacy del slot renombrado */
+      for (var i=0;i<aliases.length;i++){ if (aliases[i] && _teamKeyMatches(e, aliases[i])) return true; }
+      return false;
+    }
     window._invalidateBayernStatsCache = function(){
       _STATS_CACHE = null;
       _NOTA_CACHE = null;
@@ -2575,10 +2594,16 @@ window._showSimProgress = function(opts, onDone){
           return (s.tipo === 'roja' || s.tipo === 'd-amarilla') ? 'red' : 'yellow';
         }
         var LS = window.LESION_STORE || {};
+        /* (a) match exacto por clave — igual que `_isInj` en `_rowFor`,
+           que trata cualquier LESION_STORE[name]>0 como del hub. */
+        var direct = LS[name];
+        if (direct && (Number(direct.partidos) || 0) > 0) return 'purple';
+        /* (b) fuzzy por nombre + equipo alias-aware (tolera equipo vacío
+           o legacy 'Bayern Munich'). */
         for (var nk in LS){
           var l = LS[nk]; if (!l || (Number(l.partidos) || 0) <= 0) continue;
           if (!_teamKeyMatches(_normForStats(nk), nn)) continue;
-          if (!_teamKeyMatches(_normForStats(l.equipo || ''), hub)) continue;
+          if (!_hubTeamMatches(l.equipo)) continue;
           return 'purple';
         }
       } catch(_){}
@@ -2617,11 +2642,16 @@ window._showSimProgress = function(opts, onDone){
           return { state: (cs.tipo === 'roja' || cs.tipo === 'd-amarilla') ? 'red' : 'yellow', n: crem, reason: cs.reason || '' };
         }
         var LS = window.LESION_STORE || {};
+        /* (a) match exacto por clave — igual que `_isInj` en `_rowFor`. */
+        var direct = LS[name]; var drem = Number(direct && direct.partidos) || 0;
+        if (direct && drem > 0)
+          return { state: 'purple', n: drem, reason: direct.descripcion || direct.gradoNombre || 'Lesión' };
+        /* (b) fuzzy por nombre + equipo alias-aware. */
         for (var nk in LS){
           var cl = LS[nk]; var clrem = Number(cl && cl.partidos) || 0;
           if (!cl || clrem <= 0) continue;
           if (!_teamKeyMatches(_normForStats(nk), nn)) continue;
-          if (!_teamKeyMatches(_normForStats(cl.equipo || ''), hub)) continue;
+          if (!_hubTeamMatches(cl.equipo)) continue;
           var rsn = cl.descripcion || cl.gradoNombre || 'Lesión';
           return { state: 'purple', n: clrem, reason: rsn };
         }
@@ -2722,7 +2752,9 @@ window._showSimProgress = function(opts, onDone){
         var _injLes = (window.LESION_STORE || {})[name];
         var _isInj  = !!(_injLes && Number(_injLes.partidos) > 0);
         if (_isInj){
-          nameHtml = '<span class="lext-sq-name-link" onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()" style="cursor:pointer;text-decoration:underline dotted rgba(255,120,120,.55);text-underline-offset:3px;" title="Pulsa para abrir el menú de tratamiento">'+name+'</span>';
+          /* Lesión = morado (coordinación de colores con la fila bed-purple
+             + el badge 🩹). El nombre abre el menú de tratamiento. */
+          nameHtml = '<span class="lext-sq-name-link" onclick="event.stopPropagation();window.athOpenMedicalMenu&&window.athOpenMedicalMenu()" style="cursor:pointer;text-decoration:underline dotted rgba(214,166,255,.6);text-underline-offset:3px;" title="Pulsa para abrir el menú de tratamiento">'+name+'</span>';
         } else if (_bedBajaDetail(name)){
           nameHtml = '<span class="lext-sq-name-link" onclick="event.stopPropagation();window._bedShowBajaInfo&&window._bedShowBajaInfo(this)" style="cursor:pointer;text-decoration:underline dotted rgba(255,210,120,.6);text-underline-offset:3px;" title="Pulsa para ver la baja">'+name+'</span>';
         } else {

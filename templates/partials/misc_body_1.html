@@ -56400,6 +56400,28 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   #mu-msg-ov .mmo-msg-body{ font-size:11.5px; line-height:1.35;
     color:rgba(255,255,255,.78); margin-top:3px;
     font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  /* Foto adjunta a un mensaje (compositor admin). Miniatura clicable
+     que abre el visor a pantalla completa. */
+  #mu-msg-ov .mmo-msg-photo-wrap{ margin-top:7px; }
+  #mu-msg-ov .mmo-msg-photo{ display:block; max-width:100%; max-height:210px;
+    border-radius:8px; border:1px solid rgba(255,255,255,.16);
+    object-fit:contain; cursor:zoom-in; background:rgba(0,0,0,.3); }
+  /* Compositor admin: botón 📷 + miniatura de previsualización. */
+  #mu-msg-ov #mu-cmp-photo-btn{ padding:6px 12px; border-radius:7px;
+    background:#1f3a5a; color:#fff; border:1px solid rgba(255,255,255,.2);
+    font-size:13px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  #mu-msg-ov #mu-cmp-photo-btn:active{ transform:scale(.96); }
+  #mu-msg-ov #mu-cmp-photo-prev{ max-height:46px; max-width:90px;
+    border-radius:6px; border:1px solid rgba(255,255,255,.2); object-fit:cover; }
+  #mu-msg-ov #mu-cmp-photo-clear{ padding:5px 9px; border-radius:7px;
+    background:#3a2030; color:#ffb3b3; border:1px solid rgba(220,90,90,.45);
+    font-size:13px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+  /* Visor a pantalla completa de la foto. */
+  .mu-lightbox{ position:fixed; inset:0; z-index:1000120;
+    background:rgba(0,0,0,.93); display:flex; align-items:center;
+    justify-content:center; cursor:zoom-out; padding:14px; }
+  .mu-lightbox img{ max-width:96vw; max-height:96vh; border-radius:8px;
+    box-shadow:0 10px 40px rgba(0,0,0,.7); }
   #mu-msg-ov .mmo-msg-acts{ flex:0 0 auto; display:flex; flex-direction:column;
     gap:4px; align-items:flex-end; }
   #mu-msg-ov .mmo-btn{ background:rgba(255,255,255,.06);
@@ -56465,6 +56487,84 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
   var KEY  = 'mu_messages_v1';
   var CAP  = 500;     /* mensajes máx. por lado (FIFO) */
+
+  /* ── Sync localStorage ⇄ servidor (2026-06-05) ───────────────────
+     La bandeja vivía SOLO en localStorage → se perdía al borrar datos
+     de navegación / cambiar de móvil (incluidos los mensajes que el
+     admin compone a mano con FOTO adjunta). localStorage = caché ·
+     servidor = fuente de verdad. Merge por RECENCIA: el blob con
+     `updatedAt` mayor gana entero (mismo patrón que bajas/sanciones,
+     ver `_kvBlobSync` en index.bundle.js). */
+  var _muUpdatedAt = 0;
+  var _muSync = null, _muSyncReady = false;
+  function _muSetupSync(){
+    if (_muSyncReady) return;
+    if (typeof window._kvBlobSync !== 'function'){
+      /* index.bundle.js aún no ha definido el helper — reintenta. */
+      if ((_muSetupSync._t = (_muSetupSync._t || 0) + 1) <= 40)
+        setTimeout(_muSetupSync, 250);
+      return;
+    }
+    _muSyncReady = true;
+    _muSync = window._kvBlobSync(KEY);
+    _muSync.config(
+      function(){ var d = _read(); return { msgs:d.msgs, cursors:d.cursors }; },
+      function(sv){
+        try {
+          var msgs    = Array.isArray(sv && sv.msgs) ? sv.msgs : [];
+          var cursors = (sv && sv.cursors) || {};
+          _muUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
+          localStorage.setItem(KEY, JSON.stringify({ msgs:msgs, cursors:cursors, updatedAt:_muUpdatedAt }));
+        } catch(_){}
+        try { _refresh(); } catch(_){}
+      },
+      function(d){ return !(d && Array.isArray(d.msgs) && d.msgs.length); }
+    );
+    _muSync.seed(_muUpdatedAt);
+    try { _muSync.hydrate(function(){ try { _refresh(); } catch(_){} }); } catch(_){}
+  }
+
+  /* Valida que una cadena sea un data-URI de imagen seguro (lo usamos
+     para renderizar sin escapar — base64 no contiene comillas, así que
+     no puede romper el atributo src ni inyectar HTML). */
+  function _isImgData(s){
+    return typeof s === 'string'
+      && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/.test(s)
+      && s.length < 2200000;   /* tope defensivo ~2.2 MB de data-URI */
+  }
+  /* Reescala una imagen elegida por el admin a JPEG pequeño (máx. 980 px,
+     calidad 0.68) para que quepa cómodamente en localStorage y bajo el
+     cap de 2 MB por clave del servidor. cb(dataURI|null). */
+  function _muDownscale(file, cb){
+    try {
+      var fr = new FileReader();
+      fr.onload = function(){
+        var img = new Image();
+        img.onload = function(){
+          try {
+            var MAX = 980;
+            var w = img.naturalWidth || img.width;
+            var h = img.naturalHeight || img.height;
+            if (!w || !h){ cb(null); return; }
+            var scale = Math.min(1, MAX / Math.max(w, h));
+            var cw = Math.max(1, Math.round(w * scale));
+            var ch = Math.max(1, Math.round(h * scale));
+            var cv = document.createElement('canvas');
+            cv.width = cw; cv.height = ch;
+            var ctx = cv.getContext('2d');
+            ctx.drawImage(img, 0, 0, cw, ch);
+            var out = null;
+            try { out = cv.toDataURL('image/jpeg', 0.68); } catch(_){ out = null; }
+            cb(out && _isImgData(out) ? out : null);
+          } catch(_){ cb(null); }
+        };
+        img.onerror = function(){ cb(null); };
+        img.src = fr.result;
+      };
+      fr.onerror = function(){ cb(null); };
+      fr.readAsDataURL(file);
+    } catch(_){ cb(null); }
+  }
   /* El equipo del usuario es canónicamente "Bayern Munich" en todo el
      motor (LIGA_SCHEDULE, LIGA_PLAYER_MATCH_STORE, registrar*, etc).
      El editor de plantillas permite renombrarlo (en este save: Liverpool)
@@ -56477,6 +56577,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var r = localStorage.getItem(KEY);
       if (!r) return { msgs:[], cursors:{} };
       var d = JSON.parse(r);
+      if (d && d.updatedAt){
+        var ts = Number(d.updatedAt) || 0;
+        if (ts > _muUpdatedAt) _muUpdatedAt = ts;
+      }
       return (d && typeof d === 'object' && Array.isArray(d.msgs))
         ? { msgs:d.msgs, cursors:d.cursors || {} }
         : { msgs:[], cursors:{} };
@@ -56493,7 +56597,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           });
         }
       });
-      localStorage.setItem(KEY, JSON.stringify(d));
+      _muUpdatedAt = Date.now();
+      localStorage.setItem(KEY, JSON.stringify({ msgs:d.msgs, cursors:d.cursors || {}, updatedAt:_muUpdatedAt }));
+      /* Sube al servidor (debounced + reintentos). No hace nada hasta
+         que el sync ha hidratado (anti-wipe). */
+      if (_muSync){ try { _muSync.touch(_muUpdatedAt); } catch(_){} }
     } catch(_){}
   }
   function _uuid(){ return 'm_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36); }
@@ -56683,6 +56791,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
   /* ── Estado UI ──────────────────────────────────────────── */
   var _ui = { sideTab:'liv', readTab:'new' };
+  var _cmpImg = '';   /* foto adjunta pendiente en el compositor admin */
 
   /* ── API pública ────────────────────────────────────────── */
   function push(opts){
@@ -56699,6 +56808,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       ts:     opts.ts || _now(),
       read:   false
     };
+    /* Foto adjunta opcional (solo el compositor admin la setea). Se
+       guarda como data-URI JPEG reescalado; se valida para no inyectar
+       nada raro venido del servidor/otra sesión. */
+    if (_isImgData(opts.img)) msg.img = opts.img;
     if (d.msgs.some(function(m){ return m.id === msg.id; })) return null;
     d.msgs.push(msg);
     _write(d);
@@ -56857,6 +56970,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     +     '<input id="mu-cmp-sender" placeholder="Remitente (ej. Dirección)" value="Dirección" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
     +     '<input id="mu-cmp-title" placeholder="Título del mensaje" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
     +     '<textarea id="mu-cmp-body" placeholder="Texto del mensaje…" rows="3" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;resize:vertical;"></textarea>'
+    +     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
+    +       '<button type="button" id="mu-cmp-photo-btn">📷 Adjuntar foto</button>'
+    +       '<input type="file" id="mu-cmp-photo" accept="image/*" style="display:none;">'
+    +       '<img id="mu-cmp-photo-prev" alt="" style="display:none;">'
+    +       '<button type="button" id="mu-cmp-photo-clear" style="display:none;">✕ Quitar</button>'
+    +     '</div>'
     +     '<div style="display:flex;gap:8px;justify-content:flex-end;">'
     +       '<button type="button" id="mu-cmp-cancel" style="padding:6px 12px;border-radius:7px;background:#3a2030;color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px;cursor:pointer;">Cancelar</button>'
     +       '<button type="button" id="mu-cmp-send" style="padding:6px 14px;border-radius:7px;background:#1f7a3a;color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px;font-weight:bold;cursor:pointer;">📨 Enviar</button>'
@@ -56903,6 +57022,27 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var ti = document.getElementById('mu-cmp-title');
         if (ti) ti.focus();
       };
+      /* 📷 Adjuntar foto: file picker → reescalado → previsualización. */
+      var photoBtn  = document.getElementById('mu-cmp-photo-btn');
+      var photoInp  = document.getElementById('mu-cmp-photo');
+      var photoPrev = document.getElementById('mu-cmp-photo-prev');
+      var photoClr  = document.getElementById('mu-cmp-photo-clear');
+      if (photoBtn && photoInp){
+        photoBtn.onclick = function(){ photoInp.click(); };
+        photoInp.onchange = function(){
+          var f = photoInp.files && photoInp.files[0];
+          if (!f) return;
+          photoBtn.textContent = '⏳ Procesando…';
+          _muDownscale(f, function(data){
+            photoBtn.textContent = '📷 Adjuntar foto';
+            if (!data){ alert('No se pudo procesar la imagen.'); return; }
+            _cmpImg = data;
+            if (photoPrev){ photoPrev.src = data; photoPrev.style.display = 'inline-block'; }
+            if (photoClr) photoClr.style.display = 'inline-block';
+          });
+        };
+        if (photoClr) photoClr.onclick = function(){ _muClearComposePhoto(); };
+      }
       var sendBtn = document.getElementById('mu-cmp-send');
       var cancelBtn = document.getElementById('mu-cmp-cancel');
       if (cancelBtn) cancelBtn.onclick = function(){ _hideCompose(); };
@@ -56912,16 +57052,41 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var title  = ((document.getElementById('mu-cmp-title') || {}).value || '').trim();
         var bodyT  = ((document.getElementById('mu-cmp-body')  || {}).value || '').trim();
         var icon   = ((document.getElementById('mu-cmp-icon')  || {}).value || '').trim() || '🖍';
-        if (!title){ alert('Escribe al menos un título.'); return; }
-        push({ side: side, type:'manual', icon: icon, sender: sender, title: title, body: bodyT });
+        /* Permite enviar SOLO foto (sin título) — usa un título por
+           defecto para que `push` no descarte el mensaje. */
+        if (!title && !_isImgData(_cmpImg)){ alert('Escribe un título o adjunta una foto.'); return; }
+        push({ side: side, type:'manual', icon: icon, sender: sender,
+               title: title || '📷 Foto', body: bodyT,
+               img: _isImgData(_cmpImg) ? _cmpImg : '' });
         var tEl = document.getElementById('mu-cmp-title'); if (tEl) tEl.value = '';
         var bEl = document.getElementById('mu-cmp-body');  if (bEl) bEl.value = '';
+        _muClearComposePhoto();
         _hideCompose();
         _ui.readTab = 'new';
         if (side) _ui.sideTab = side;
         try { _refresh(); } catch(_){}
       };
     }
+  }
+  function _muClearComposePhoto(){
+    _cmpImg = '';
+    var inp  = document.getElementById('mu-cmp-photo');
+    var prev = document.getElementById('mu-cmp-photo-prev');
+    var clr  = document.getElementById('mu-cmp-photo-clear');
+    if (inp)  inp.value = '';
+    if (prev){ prev.removeAttribute('src'); prev.style.display = 'none'; }
+    if (clr)  clr.style.display = 'none';
+  }
+  /* Visor a pantalla completa de una foto de la bandeja. */
+  function _muLightbox(src){
+    if (!_isImgData(src)) return;
+    var ov = document.createElement('div');
+    ov.className = 'mu-lightbox';
+    var im = document.createElement('img');
+    im.src = src;
+    ov.appendChild(im);
+    ov.onclick = function(){ try { ov.parentNode && ov.parentNode.removeChild(ov); } catch(_){} };
+    document.body.appendChild(ov);
   }
   function _composeVisible(){
     var c = document.getElementById('mu-msg-compose');
@@ -56936,7 +57101,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     c.style.display = v ? 'flex' : 'none';
     c.hidden = !v;
   }
-  function _hideCompose(){ _showCompose(false); }
+  function _hideCompose(){ _showCompose(false); try { _muClearComposePhoto(); } catch(_){} }
   function _openPop(){
     _ensureUI();
     var ov = document.getElementById('mu-msg-ov');
@@ -57039,6 +57204,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         +   '</div>'
         +   '<div class="mmo-msg-title">'+_esc(m.title)+'</div>'
         +   (m.body ? '<div class="mmo-msg-body">'+_esc(m.body)+'</div>' : '')
+        +   (_isImgData(m.img) ? '<div class="mmo-msg-photo-wrap"><img class="mmo-msg-photo" src="'+m.img+'" alt="foto" loading="lazy"></div>' : '')
         + '</div>'
         + '<div class="mmo-msg-acts">'
         +   '<button type="button" class="mmo-btn del" data-act="del" title="Borrar">🗑</button>'
@@ -57058,6 +57224,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         try { row.parentNode && row.parentNode.removeChild(row); } catch(_){}
         try { del(id); } catch(_){}
       };
+      var ph = row.querySelector('.mmo-msg-photo');
+      if (ph) ph.onclick = function(ev){ ev.stopPropagation(); _muLightbox(ph.getAttribute('src')); };
       row.onclick = function(){
         if (!row.classList.contains('is-unread')) return;
         _markReadAnimated(row, id);
@@ -58625,6 +58793,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     _bootStage2();
   }
   function _bootStage2(){
+    _muSetupSync();       /* localStorage ⇄ servidor (mensajes + fotos sobreviven a wipe/cambio de móvil) */
     _migrateSeedFlag();   /* sella flag mu_seeded_v1 si ya hay welcomes en bandeja */
     _purgeStaleFrancia(); /* borra seed legacy + callups con "amistoso" */
     _seed();              /* no-op: las bienvenidas están eliminadas */

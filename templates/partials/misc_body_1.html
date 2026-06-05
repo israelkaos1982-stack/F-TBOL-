@@ -20434,6 +20434,7 @@ window._showSimProgress = function(opts, onDone){
          pantallas está abierta AHORA MISMO (caso raro durante el juego), para
          que se refresque en vivo sin penalizar la navegación normal. */
       if (typeof window.syncLigaEaPlayerStats === 'function'
+          && aid !== 's-tour-stats'   /* lee cfg.results en vivo, no el store */
           && (aid === 's-bayern-plantilla' || /-stats$/.test(aid))) {
         try { window.syncLigaEaPlayerStats(); } catch(_){}
         if (aid === 's-bayern-plantilla' && typeof window.renderBayernPlantillaScreen === 'function') {
@@ -23438,22 +23439,34 @@ window._showSimProgress = function(opts, onDone){
       try { emojiEl.innerHTML = _tourFlagHtml(cfg.flag || '📊', 'sec-flag-img'); }
       catch(_){ emojiEl.textContent = '📊'; }
     }
-    if (dashEl) {
-      var stats = _tourCollectStatsForTour(tourId);
-      var _hasData = stats && Object.keys(stats).length > 0;
-      if (_hasData) {
-        /* Renderer AUTOCONTENIDO primero (mismo que el Mundial 2032) — el
-           diag demostró que `_lextStatsDashHtml` podía devolver '' en esta
-           pantalla. Fallback al compartido sólo si el propio salió vacío. */
-        var inner = '';
-        try { if (typeof _mundialRenderStatsGrid === 'function') inner = _mundialRenderStatsGrid(stats); } catch(_){}
-        if (!inner) { try { if (typeof window._lextStatsDashHtml === 'function') inner = window._lextStatsDashHtml(stats, true); } catch(_){} }
-        dashEl.innerHTML = inner || _tourStatsEmptyCardsHtml();
-      } else {
-        dashEl.innerHTML = _tourStatsEmptyCardsHtml();
-      }
-    }
+    /* RENDER-FIRST + cómputo DIFERIDO (regla render no bloqueante
+       2026-05-28): `_tourCollectStatsForTour` puede ser costoso (escaneo
+       de cfg.results + backfill de actas) y, ejecutado SÍNCRONO antes de
+       navegar, congelaba la web al pulsar la caja «Estadísticas» de los
+       Torneos de Verano (bug 2026-06-05). Pintamos las cajas vacías YA,
+       navegamos al instante y rellenamos los datos en el siguiente tick. */
+    if (dashEl) dashEl.innerHTML = _tourStatsEmptyCardsHtml();
     try { window.go('s-tour-stats'); } catch(_){}
+    (function(_tid){
+      setTimeout(function(){
+        var dEl = document.getElementById('tour-stats-dashboard');
+        if (!dEl) return;
+        /* Si el usuario ya navegó a OTRA caja de stats, no pisar. */
+        if (!window._tourStatsActive || window._tourStatsActive.tourId !== _tid) return;
+        var stats = null;
+        try { stats = _tourCollectStatsForTour(_tid); } catch(_){}
+        var _hasData = stats && Object.keys(stats).length > 0;
+        var inner = '';
+        if (_hasData) {
+          /* Renderer AUTOCONTENIDO primero (mismo que el Mundial 2032) — el
+             diag demostró que `_lextStatsDashHtml` podía devolver '' en esta
+             pantalla. Fallback al compartido sólo si el propio salió vacío. */
+          try { if (typeof _mundialRenderStatsGrid === 'function') inner = _mundialRenderStatsGrid(stats); } catch(_){}
+          if (!inner) { try { if (typeof window._lextStatsDashHtml === 'function') inner = window._lextStatsDashHtml(stats, true); } catch(_){} }
+        }
+        dEl.innerHTML = inner || _tourStatsEmptyCardsHtml();
+      }, 0);
+    })(tourId);
   };
 
   /* HTML de las 8 cajas vacías (mismas categorías que `_lextStatsDashHtml`)

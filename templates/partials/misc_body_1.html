@@ -50368,6 +50368,10 @@ https://api.sofascore.app/api/v1/team/44/image
         .catch(function(){ return false; });
     } catch(_){ return Promise.resolve(false); }
   }
+  function _tsOf(o){
+    try { return (o && o.updatedAt != null) ? (Number(o.updatedAt) || 0) : 0; }
+    catch(_){ return 0; }
+  }
   function _serverPull(cb){
     try {
       fetch('/api/state', { method:'GET' })
@@ -50375,14 +50379,33 @@ https://api.sofascore.app/api/v1/team/44/image
         .then(function(d){
           if (!d || !d.state) return;
           var srv = d.state.bayern_hud_overrides_v1;
-          if (srv && typeof srv === 'object' && Object.keys(srv).length) {
-            window._BAYERN_HUD_CACHE = srv;
-            try { localStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
-            try { sessionStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
-            _cookieWrite(srv);
-            _idbWrite(srv);
-            if (typeof cb === 'function') cb(srv);
+          if (!(srv && typeof srv === 'object' && Object.keys(srv).length)) return;
+          /* Adopción por RECENCIA (no ciega). Leemos el blob local
+             (cache → localStorage) y comparamos `updatedAt`:
+               · local vacío  → adopta el server (recupera tras wipe).
+               · server >= local → adopta el server (otro dispositivo
+                 hizo un cambio más nuevo).
+               · local > server → NO adopta; RE-SUBE el local para que
+                 el server (y el otro móvil) converjan a la copia nueva.
+             Esto es lo que evita la divergencia 🪙💊: el dispositivo
+             que ganó dinero más recientemente manda, y el otro adopta
+             en su próximo pull en vez de pisar con un total viejo. */
+          var loc = window._BAYERN_HUD_CACHE;
+          if (!loc || typeof loc !== 'object') {
+            try { var r = localStorage.getItem(KEY); if (r) loc = JSON.parse(r); } catch(_){}
           }
+          var localEmpty = !loc || typeof loc !== 'object' || !Object.keys(loc).length;
+          if (!localEmpty && _tsOf(loc) > _tsOf(srv)) {
+            /* Local más nuevo → re-subir para converger, sin adoptar. */
+            try { _serverPush(loc); } catch(_){}
+            return;
+          }
+          window._BAYERN_HUD_CACHE = srv;
+          try { localStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+          try { sessionStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+          _cookieWrite(srv);
+          _idbWrite(srv);
+          if (typeof cb === 'function') cb(srv);
         }).catch(function(){});
     } catch(_){}
   }
@@ -50443,6 +50466,12 @@ https://api.sofascore.app/api/v1/team/44/image
      retornar. */
   function save(o){
     var data = o || {};
+    /* Sello de recencia: cada guardado real estampa `updatedAt` (ms)
+       para que el server (y el _serverPull de otros dispositivos)
+       resuelvan los conflictos por RECENCIA — el blob más nuevo gana
+       ENTERO. Sin esto, 🪙💊 (running totals locales) divergían entre
+       PC y móvil porque /api/state hacía last-write-wins sin árbitro. */
+    data.updatedAt = Date.now();
     /* Capa 1: in-memory. */
     window._BAYERN_HUD_CACHE = data;
     /* Capa 2: localStorage. */
@@ -50827,8 +50856,12 @@ https://api.sofascore.app/api/v1/team/44/image
       document.cookie = COOKIE_KEY + '=; max-age=0; path=/; SameSite=Lax';
     } catch(_){}
     _idbWrite({});  /* sobreescribe IDB con vacío */
-    /* Server: POST objeto vacío para limpiar la fila remota. */
-    try { _serverPush({}); } catch(_){}
+    /* Server: POST "vacío" pero SELLADO con `updatedAt` para que el
+       reset gane por recencia (un {} sin sello, ts=0, perdería contra
+       el valor previo del server y el reset no se propagaría a los
+       demás dispositivos). El blob solo lleva `updatedAt` ⇒ sin
+       overrides ⇒ el HUD recalcula desde defaults en todos lados. */
+    try { _serverPush({ updatedAt: Date.now() }); } catch(_){}
     /* Restaurar targets a default desde DEF — los valores actuales
        se recalcularán en la siguiente llamada a athObjCount. */
     applying = true;
@@ -51245,25 +51278,20 @@ https://api.sofascore.app/api/v1/team/44/image
   setTimeout(function(){ try { _hookLegacyHud(); } catch(_){} }, 1500);
   setTimeout(function(){ try { _hookLegacyHud(); } catch(_){} }, 3000);
 
-  /* ── REINTENTOS DE SERVER PULL (refuerzo 2026-05-10) ──────────
+  /* ── REINTENTOS DE SERVER PULL (refuerzo 2026-05-10 · recencia
+        2026-06-05) ───────────────────────────────────────────────
      Railway puede tardar 1-3s en cold start (primera petición tras
-     periodo idle). Si el primer _serverPull en boot() falla por
-     timeout/network, reintentamos a +2s y +5s. Si la cache local
-     ya tiene datos, los retries son no-ops baratos (server-pull
-     skipea el overwrite si el JSON local coincide). */
+     periodo idle). Reintentamos a +2s y +5s. Ahora `_serverPull`
+     resuelve por RECENCIA (adopta el server solo si es más nuevo; si
+     el local es más nuevo, RE-SUBE en vez de pisar), así que estos
+     retries son SEGUROS aunque la cache local ya tenga datos: sirven
+     para que la divergencia 🪙💊 entre PC y móvil CONVERJA poco
+     después de cargar, sin que el usuario tenga que hacer nada. */
   setTimeout(function(){
-    try {
-      if (!window._BAYERN_HUD_CACHE || !Object.keys(window._BAYERN_HUD_CACHE).length){
-        _serverPull(function(){ try { apply(); } catch(_){} });
-      }
-    } catch(_){}
+    try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
   }, 2000);
   setTimeout(function(){
-    try {
-      if (!window._BAYERN_HUD_CACHE || !Object.keys(window._BAYERN_HUD_CACHE).length){
-        _serverPull(function(){ try { apply(); } catch(_){} });
-      }
-    } catch(_){}
+    try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
   }, 5000);
 
   /* Polling más agresivo (200ms) — barato y cubre micro-races. */

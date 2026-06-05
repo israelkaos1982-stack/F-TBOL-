@@ -334,6 +334,95 @@ def _recency_winner(old_blob, new_blob):
         return new_blob
     return new_blob if _blob_updated_at(new_blob) >= _blob_updated_at(old_blob) else old_blob
 
+
+# Claves de `competition_state` que son el CURSOR DEL DÍA del hub
+# (liverpool_preseason_v1 + su legacy bayern_preseason_v2). Su `dayIdx`
+# es MONOTÓNICO: solo avanza al siguiente día o se REINICIA a 0 vía el
+# botón «Reiniciar Temporada» (que marca el blob con `resetAt`). NUNCA
+# debe saltar a un día anterior > 0.
+#
+# Bug (foto usuario 2026-06-05): el usuario estaba en agosto y al volver
+# a la web el cursor mostraba el 16 de junio. Causa: una pestaña de
+# fondo congelada (tenía 2 abiertas) re-guardaba un cursor viejo con
+# `ts` FRESCO y lo empujaba al server; el merge ciego de
+# `competition_state` (campo a campo en `merge_dict`) lo aceptaba
+# entero, pisando el avance real. Al purgarse luego el localStorage
+# del móvil, la hidratación traía el cursor stale del server.
+#
+# Fix: merge dedicado por RECENCIA MONOTÓNICA — gana el `dayIdx` MAYOR;
+# un reinicio explícito (marca `resetAt`/`_reset`) gana por `ts`; un
+# downgrade a un día anterior > 0 SIN marca de reinicio se RECHAZA.
+_STATE_CURSOR_KEYS = {"liverpool_preseason_v1", "bayern_preseason_v2"}
+
+
+def _parse_json_blob(s):
+    """Parsea un JSON STRING a dict, o None si no es un dict válido."""
+    if not isinstance(s, str) or not s:
+        return None
+    try:
+        o = json.loads(s)
+        return o if isinstance(o, dict) else None
+    except Exception:
+        return None
+
+
+def _safe_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        try:
+            return int(float(v))
+        except (TypeError, ValueError):
+            return 0
+
+
+def _cursor_ts(blob):
+    """ms (float) del campo `ts` del cursor, 0 si ausente."""
+    if not isinstance(blob, dict):
+        return 0.0
+    try:
+        return float(blob.get("ts") or blob.get("updatedAt") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _cursor_is_reset(blob):
+    """¿El blob porta una marca de reinicio de temporada explícita?"""
+    return bool(isinstance(blob, dict) and (blob.get("resetAt") or blob.get("_reset")))
+
+
+def _cursor_winner(old_str, new_str):
+    """Devuelve el JSON STRING ganador del cursor del día del hub.
+
+    Regla monotónica anti-stale:
+      * POST entrante ilegible → conservar lo que hubiera.
+      * No había copia válida → aceptar el entrante.
+      * Reinicio explícito (resetAt/_reset) → gana por recencia (ts).
+      * `dayIdx` MAYOR → gana (avance de día normal).
+      * Empate de `dayIdx` → gana el `ts` mayor (rivales/done del mismo
+        día actualizados).
+      * `dayIdx` MENOR sin marca de reinicio → DOWNGRADE STALE → se
+        RECHAZA (conserva la copia del server). Esto cubre tanto el
+        downgrade agosto→16 jun como un dispositivo recién abierto que
+        empuja el estado por defecto (dayIdx 0 sin reset)."""
+    new_blob = _parse_json_blob(new_str)
+    if new_blob is None:
+        return old_str
+    old_blob = _parse_json_blob(old_str)
+    if old_blob is None:
+        return new_str
+    old_idx = _safe_int(old_blob.get("dayIdx"))
+    new_idx = _safe_int(new_blob.get("dayIdx"))
+    old_ts = _cursor_ts(old_blob)
+    new_ts = _cursor_ts(new_blob)
+    if _cursor_is_reset(new_blob):
+        return new_str if new_ts >= old_ts else old_str
+    if new_idx > old_idx:
+        return new_str
+    if new_idx == old_idx:
+        return new_str if new_ts >= old_ts else old_str
+    return old_str
+
 def get_or_create_global_state():
     row = GlobalState.query.filter_by(clave=GLOBAL_STATE_KEY).first()
     if not row:
@@ -406,6 +495,22 @@ def save_global_state(new_state, replace=False):
         for rk in _STATE_RECENCY_BLOB_KEYS:
             if rk in incoming:
                 merged[rk] = _recency_winner(base.get(rk), incoming.get(rk))
+        # Cursor del día del hub (liverpool_preseason_v1 + legacy):
+        # merge MONOTÓNICO. `merge_dict` ya copió el string entrante en
+        # merged['competition_state'][k] (overwrite ciego); lo CORREGIMOS
+        # aquí para que un POST stale jamás devuelva el cursor a un día
+        # anterior (bug agosto→16 jun, foto usuario 2026-06-05).
+        inc_comp = incoming.get("competition_state")
+        if isinstance(inc_comp, dict):
+            merged_comp = merged.get("competition_state")
+            base_comp = base.get("competition_state")
+            if isinstance(merged_comp, dict):
+                if not isinstance(base_comp, dict):
+                    base_comp = {}
+                for ck in _STATE_CURSOR_KEYS:
+                    if ck in inc_comp:
+                        merged_comp[ck] = _cursor_winner(
+                            base_comp.get(ck), inc_comp.get(ck))
     row.valor_json = json.dumps(merged, ensure_ascii=False)
     row.updated_at = utc_now_iso()
     db.session.commit()

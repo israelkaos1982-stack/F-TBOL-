@@ -26347,6 +26347,110 @@ window.goLiveMatches = function() {
   window._cleanupBlackScreen = _cleanupOverlays;
 })();
 
+/* ══ REPAINT GUARD — fuerza el repintado del navegador ════════════════
+   Bug usuario 2026-06-05 (2 fotos):
+     · Foto 1: "en cualquier pantalla la parte de abajo NO se ve, te
+       corta 1/4 de la visual" → el tramo inferior de una pantalla larga
+       sale en NEGRO (región sin pintar por el compositor de Chromium/
+       Android, no es que falte contenido).
+     · Foto 2: "el 90% de las veces que sales un momento de la web, al
+       volver la pantalla está en NEGRO; sólo se arregla pulsando la
+       flecha de volver del dispositivo".
+
+   Causa común: Chromium en Android NO re-rasteriza ciertas capas tras
+   un cambio de visibilidad / layout / scroll, dejando huecos negros.
+   Pulsar «atrás» lo arregla porque fuerza un re-layout completo. El
+   `_blackScreenSafetyNet` de arriba sólo limpia overlays HUÉRFANOS —
+   NUNCA fuerza un repintado, por eso el negro persistía aunque no
+   hubiera overlay residual.
+
+   FIX: forzar un repintado real cuando se den los disparadores del bug
+   (volver a ser visible, recuperar foco, navegar de pantalla, rotar,
+   redimensionar, fin de scroll). El método es un toggle síncrono de
+   `display` sobre la `.screen.active` (re-layout + re-raster de TODO
+   el contenido visible). Es UN one-shot — no instala observers ni
+   intervals, así que NO afecta al cronómetro (regla CLAUDE.md sobre el
+   thread JS). No toca los overlays fixed (gm-modal/previa) porque NO
+   son descendientes de `.screen` → no hay glitch de position:fixed. */
+(function _repaintGuard(){
+  var _pending = false;
+
+  function _nudge(){
+    _pending = false;
+    try {
+      var sc = document.querySelector('.screen.active');
+      if (sc) {
+        /* display none→'' fuerza reflow + repaint del subárbol visible.
+           Re-dispara la animación fadeUp (.2s) — inofensivo y además
+           confirma visualmente que se ha repintado. */
+        var d = sc.style.display;
+        sc.style.display = 'none';
+        /* lectura forzada del layout (reflow) entre los dos sets */
+        void sc.offsetHeight;
+        sc.style.display = d || '';
+        void sc.offsetHeight;
+      } else {
+        /* Sin pantalla activa: nudge suave sobre el body (opacity NO
+           crea containing-block para position:fixed → sin glitch). */
+        var b = document.body, o = b.style.opacity;
+        b.style.opacity = '0.999';
+        void b.offsetHeight;
+        b.style.opacity = o || '';
+      }
+    } catch(_){}
+  }
+
+  /* Coalesce: como mucho un repaint por frame. */
+  function _requestNudge(){
+    if (_pending) return;
+    _pending = true;
+    try { requestAnimationFrame(_nudge); } catch(_){ setTimeout(_nudge, 16); }
+  }
+
+  /* Repaint al VOLVER a ser visible / recuperar foco / resume.
+     Se ejecuta DESPUÉS del cleanup del safety-net (que usa setTimeout
+     0 y 250) para repintar ya con los overlays huérfanos cerrados. */
+  function _onResume(){
+    try { if (document.visibilityState && document.visibilityState !== 'visible') return; } catch(_){}
+    setTimeout(_requestNudge, 60);
+    setTimeout(_requestNudge, 320);  /* 2º pase tras el cleanup de 250ms */
+  }
+  try {
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState === 'visible') _onResume();
+    }, false);
+    window.addEventListener('focus', _onResume, false);
+    window.addEventListener('pageshow', function(){ setTimeout(_requestNudge, 60); }, false);
+    document.addEventListener('resume', _onResume, false);
+  } catch(_){}
+
+  /* Repaint al rotar / redimensionar (la barra de direcciones móvil
+     mostrándose/ocultándose cambia la altura visible → huecos negros). */
+  try {
+    window.addEventListener('orientationchange', function(){ setTimeout(_requestNudge, 120); }, false);
+    var _rzT = null;
+    window.addEventListener('resize', function(){
+      if (_rzT) clearTimeout(_rzT);
+      _rzT = setTimeout(_requestNudge, 180);
+    }, false);
+  } catch(_){}
+
+  /* Repaint al TERMINAR de hacer scroll (cubre el negro del tramo
+     inferior de pantallas largas — foto 1). Debounced para no repintar
+     en cada tick de scroll (evita jank). */
+  try {
+    var _scT = null;
+    window.addEventListener('scroll', function(){
+      if (_scT) clearTimeout(_scT);
+      _scT = setTimeout(_requestNudge, 160);
+    }, { passive: true });
+  } catch(_){}
+
+  /* Exponer para que renderScreen (router SPA) y cualquier flujo pueda
+     forzar el repaint tras pintar una pantalla nueva. */
+  window._nudgeRepaint = _requestNudge;
+})();
+
 /* ══ TIMER EDIT — long-press o right-click sobre el cronómetro ══════
    Abre un prompt para ajustar el minuto del partido cuando el tiempo
    del juego real se desfasa del cronómetro en pantalla (ej. "el

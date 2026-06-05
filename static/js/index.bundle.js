@@ -8617,6 +8617,22 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     });
   } catch (_) {}
 
+  /* FLUSH INMEDIATO al servidor de las bajas/sanciones de CLUB tras una
+     edición MANUAL (editor azul de la plantilla: añadir / QUITAR baja).
+     `touch()` agenda el POST con 1200 ms de debounce; si el usuario
+     QUITA una baja y acto seguido borra los datos del navegador / cierra
+     la pestaña, ese POST diferido nunca llega al servidor → al volver, la
+     hidratación re-adopta la copia vieja y la baja "vuelve a salir" (bug
+     2026-06-05, foto usuario: Hugo Ekitiké amarilla / Koundé lesión que
+     re-mergeaban tras borrar datos). Un borrado manual es una acción
+     deliberada y poco frecuente: se sube YA, sin esperar al debounce. */
+  window._bajaFlushClubNow = function(){
+    try { _persistInjuries(); } catch(_){}
+    try { _persistSancionesClub(); } catch(_){}
+    try { if (_lesionSync && _lesionSync.pushNow) _lesionSync.pushNow(); } catch(_){}
+    try { if (_sancSync && _sancSync.pushNow) _sancSync.pushNow(); } catch(_){}
+  };
+
   window.LESION_STORE_UTILS = {
     registrar: registrarLesion,
     sortearGrado: sortearGrado,
@@ -12707,6 +12723,16 @@ window._fallbackSq11 = function(){
     window.addEventListener('beforeunload', _persist);
   } catch(_){}
   window._selPersistSanciones = _persist;
+  /* FLUSH INMEDIATO al servidor de las bajas/sanciones de SELECCIÓN tras
+     una edición MANUAL (QUITAR lesión/sanción de Koundé·Francia, etc.).
+     Igual que el club: el `touch()` agenda con 1200 ms de debounce y, si
+     el usuario quita la baja y borra los datos del navegador en seguida,
+     el POST diferido se pierde y al volver la lesión "vuelve a salir".
+     Un borrado manual se sube YA. */
+  window._bajaFlushSelNow = function(){
+    try { _persist(); } catch(_){}
+    try { if (_selSync && _selSync.pushNow) _selSync.pushNow(); } catch(_){}
+  };
   /* Hidratar desde el server: si el local está vacío (borrado de
      navegación) o el server es más reciente, recupera lo guardado. Tras
      adoptar, refresca las pantallas que muestran lesiones/sanciones de

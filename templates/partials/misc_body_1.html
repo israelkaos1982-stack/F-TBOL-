@@ -20310,6 +20310,25 @@ window._showSimProgress = function(opts, onDone){
     cfg = cfg || {};
     cfg.id = id;
     cfg.updatedAt = new Date().toISOString();
+    /* CONSERVAR el sello de reinicio (`resetAt`) que ya conozca este
+       dispositivo. El servidor (`tour_cfg_merge`) descarta los resultados
+       de copias ANTERIORES a un reset; si un guardado de partida perdiera
+       el `resetAt` que el dispositivo ya tenía en localStorage, ese POST
+       podría quedar "por detrás" del reinicio. Tomamos el sello MÁXIMO
+       entre el de la cfg entrante y el persistido, para que toda partida
+       jugada tras un reinicio viaje SIEMPRE con el sello correcto y sus
+       resultados nunca se pierdan (bug 2026-06-05, "clasificación a cero").
+       NUNCA lo bajamos: un sello mayor en la cfg entrante (un reset recién
+       pulsado) gana. */
+    try {
+      var _prevRaw = localStorage.getItem(_key(id));
+      if (_prevRaw) {
+        var _prev = JSON.parse(_prevRaw);
+        var _prevReset = (_prev && +_prev.resetAt) || 0;
+        var _curReset  = (+cfg.resetAt) || 0;
+        if (_prevReset > _curReset) cfg.resetAt = _prevReset;
+      }
+    } catch(_){}
     /* Persistencia LOCAL (sync, siempre primero). Esto garantiza que
        el sorteo no se pierde aunque la red falle o el server tarde. */
     try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}

@@ -29,6 +29,7 @@ Reglas (espejo de la fusión que ya hace el cliente):
 
 import json
 import unicodedata
+from datetime import datetime
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -59,6 +60,20 @@ def _iso(v):
     """updatedAt de torneo: cadena ISO. Comparación lexicográfica válida
     para ISO-8601 con 'Z'. Ausente → '' (lo más antiguo)."""
     return v if isinstance(v, str) else ""
+
+
+def _iso_ms(v):
+    """ISO-8601 (`updatedAt`) → epoch en milisegundos (float), comparable con
+    `resetAt` (que el cliente sella con `Date.now()`). Ausente/inválido → 0."""
+    if not isinstance(v, str) or not v:
+        return 0.0
+    s = v.strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(s).timestamp() * 1000.0
+    except Exception:
+        return 0.0
 
 
 def _num(v):
@@ -143,21 +158,48 @@ def tour_cfg_merge(old_json, new_value):
     # "RESET" del torneo sella `resetAt = Date.now()` y sube results={}.
     # El reinicio DEBE ganar al anti-wipe: si no, la unión devolvía los
     # resultados viejos y el torneo "no se reiniciaba" (bug 2026-06-04,
-    # "Road Copa América/Asia"). Regla: solo cuentan los resultados de la
-    # copia que conoce el reset MÁS reciente; una copia stale (resetAt
-    # menor) trae partidos previos al reset → se descartan.
+    # "Road Copa América/Asia").
     new_reset = _num(new_value.get("resetAt"))
     old_reset = _num(old.get("resetAt"))
     eff_reset = max(new_reset, old_reset)
 
-    # Mismo sorteo → UNIÓN de resultados (nadie pierde su partido), salvo
-    # los de una copia anterior a un reset más reciente.
     old_res = old.get("results") if isinstance(old.get("results"), dict) else {}
     new_res = new_value.get("results") if isinstance(new_value.get("results"), dict) else {}
-    merged = {}
-    if old_reset >= eff_reset:
-        merged.update(old_res)
+
+    # Momento del reinicio MÁS reciente = `updatedAt` (ms) de la copia que
+    # porta el sello `resetAt` máximo (el reset se sella a la vez que el
+    # updatedAt, así que ambos marcan "el instante del reinicio").
+    new_upd_ms = _iso_ms(new_value.get("updatedAt"))
+    old_upd_ms = _iso_ms(old.get("updatedAt"))
+    reset_copy_ms = 0.0
     if new_reset >= eff_reset:
+        reset_copy_ms = max(reset_copy_ms, new_upd_ms)
+    if old_reset >= eff_reset:
+        reset_copy_ms = max(reset_copy_ms, old_upd_ms)
+
+    # Una copia aporta sus resultados si:
+    #   (a) porta el sello `resetAt` más reciente (o no hubo reset:
+    #       eff_reset=0 ⇒ ambas copias lo "portan" ⇒ unión pura), O
+    #   (b) NO porta el sello, pero fue modificada DESPUÉS del reinicio
+    #       (su `updatedAt` es posterior al de la copia que reinició) ⇒ son
+    #       partidos jugados TRAS el reset y NO se pueden perder.
+    # Una copia stale ANTERIOR/IGUAL al reinicio sin sello → pre-reset → se
+    # descarta (no resucita). Esto arregla la pérdida de la clasificación
+    # (bug 2026-06-05, "Ronda Previa 1 a cero"): el guardado normal de
+    # partidas NO porta `resetAt`, así que con la regla anterior ("solo si
+    # porta el sello") los partidos jugados tras un reset previo se
+    # descartaban SIEMPRE en el servidor → la clasificación volvía a 0.
+    def _included(side_reset, side_upd_ms):
+        if side_reset >= eff_reset:
+            return True
+        return side_upd_ms > reset_copy_ms
+
+    # Mismo sorteo → UNIÓN de resultados (nadie pierde su partido), salvo
+    # los de una copia anterior a un reset más reciente.
+    merged = {}
+    if _included(old_reset, old_upd_ms):
+        merged.update(old_res)
+    if _included(new_reset, new_upd_ms):
         for mk, r in new_res.items():
             if mk in merged:
                 merged[mk] = _pick_result(merged[mk], r)

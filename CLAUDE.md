@@ -86,6 +86,55 @@ pantalla** que tiene 1 partido de lesión + el tipo. En `misc_body_1.html`
    genéricos por equipo/selección; el badge y la sync no hardcodean
    Liverpool/Francia).
 
+## El `resetAt` de torneo NO debe descartar partidos jugados DESPUÉS del reinicio (obligatorio, 2026-06-05)
+
+**Bug (fotos usuario 2026-06-05, «Ronda Previa 1»)**: el usuario tenía
+la clasificación de la Ronda Previa 1 (slot `spv1`) con 6/10 jornadas
+jugadas (Noruega 6, Vietnam 6, Francia 3…). Al volver a entrar estaba
+**TODO a cero (0/10)**. La clasificación se borró sola.
+
+### Causa raíz
+
+El servidor fusiona cada `tour_<id>_v1` con `tour_cfg_merge`
+(`sync_merge.py`). El sello `resetAt` (que «Reiniciar Temporada» / el
+botón ↺ Reset siembran) hacía que **solo se conservaran los resultados
+de la copia que PORTASE ese mismo `resetAt`** (`side_reset >=
+eff_reset`). Pero el guardado normal de partidas (`_tourSave` →
+`_tourSaveHumanResult` / sim IA) **NO porta `resetAt`**. Así, si en el
+pasado hubo CUALQUIER reinicio (sello en el servidor), TODOS los
+partidos jugados después se **descartaban silenciosamente** en la
+fusión del servidor → al rehidratar desde el servidor (otro móvil /
+datos borrados / otra sesión) la clasificación volvía a 0.
+
+### Fix — una copia aporta resultados si porta el sello O es POSTERIOR al reset
+
+`tour_cfg_merge` ahora incluye los resultados de una copia cuando:
+- **(a)** porta el `resetAt` máximo (`side_reset >= eff_reset`; si no
+  hubo reset, `eff_reset=0` ⇒ ambas lo «portan» ⇒ unión pura), **o**
+- **(b)** NO porta el sello pero su `updatedAt` (convertido a ms,
+  `_iso_ms`) es **posterior** al `updatedAt` de la copia que reinició
+  (`reset_copy_ms`) ⇒ son partidos jugados TRAS el reset y NO se pueden
+  perder.
+
+Una copia stale **anterior/igual** al reinicio sin sello sigue sin
+resucitar (sigue cubierto por los tests). Defensa en el cliente:
+`_tourSave` **conserva el `resetAt` máximo** entre la cfg entrante y el
+persistido en localStorage (nunca lo baja), para que toda partida
+jugada tras un reinicio viaje con el sello correcto.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a la regla «solo cuentan los resultados de la
+   copia que porta el sello `resetAt`». El guardado de partidas no
+   porta el sello → eso descarta partidos legítimos post-reset. La
+   condición es «porta el sello **O** `updatedAt` posterior al reset».
+2. **PROHIBIDO** que `_tourSave` baje/pierda el `resetAt` ya conocido
+   por el dispositivo. Toma el MÁXIMO (un reset recién pulsado, con
+   sello mayor en la cfg entrante, sí gana).
+3. Mantener los tests de `tests/test_sync_merge.py` (incluido el caso
+   «partidos jugados TRAS un reset previo NO se pierden» y «copia stale
+   anterior al reset sigue sin resucitar»).
+
 ## «Reiniciar Temporada» NUNCA borra Derbys / Trofeos / Plantillas (obligatorio, 2026-06-04)
 
 **Regla usuario 2026-06-04 (3 fotos)**: el botón **«Reiniciar

@@ -109,6 +109,29 @@ m = tour_cfg_merge(json.dumps(old), new)
 check("torneo: copia stale NO resucita partidos tras un reset del servidor",
       m["results"] == {})
 
+# Bug 2026-06-05 ("Ronda Previa 1 a cero"): el servidor ya tiene un reset
+# (resetAt) de una temporada anterior, pero los partidos jugados DESPUÉS del
+# reset se guardan SIN portar el sello (el `_tourSave` normal no lo añade).
+# Antes se descartaban SIEMPRE → la clasificación volvía a 0. Ahora se
+# conservan porque su `updatedAt` es posterior al del reinicio.
+old = _cfg({}, "2026-06-01T10:00:00.000Z")     # servidor: reiniciado el 01-jun
+old["resetAt"] = 1748772000000                  # ms ≈ 2025-06-01 (anterior al juego)
+new = _cfg({"g0_0_0": {"played": True, "a": 2, "b": 1},
+            "g0_0_1": {"played": True, "a": 3, "b": 0}},
+           "2026-06-04T23:00:00.000Z")          # jugado DESPUÉS, sin resetAt
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: partidos jugados TRAS un reset previo (sin sello) NO se pierden",
+      "g0_0_0" in m["results"] and "g0_0_1" in m["results"])
+
+# Pero una copia stale ANTERIOR al reset (updatedAt previo) sigue sin
+# resucitar aunque el servidor tenga el reset.
+old = _cfg({}, "2026-06-04T11:00:00.000Z")      # servidor reiniciado a las 11:00
+old["resetAt"] = 1759000000000
+new = _cfg({"g0_0_0": {"played": True, "a": 5, "b": 5}}, "2026-06-04T08:00:00.000Z")  # ANTERIOR
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: copia stale anterior al reset sigue sin resucitar",
+      m["results"] == {})
+
 # Sin copia previa en servidor → devuelve el entrante tal cual.
 m = tour_cfg_merge(None, _cfg({"k": {"played": True}}))
 check("torneo: sin old devuelve el entrante", "k" in m["results"])

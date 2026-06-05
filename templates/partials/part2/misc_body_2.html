@@ -26378,16 +26378,36 @@ window.goLiveMatches = function() {
   function _nudge(){
     _pending = false;
     try {
+      /* Guardamos el scroll SIEMPRE: cualquier re-raster que toque la
+         pantalla no debe mover la vista (bug 2026-06-05). */
+      var sx = window.pageXOffset || document.documentElement.scrollLeft || 0;
+      var sy = window.pageYOffset || document.documentElement.scrollTop  || 0;
       var sc = document.querySelector('.screen.active');
       if (sc) {
-        /* display none→'' fuerza reflow + repaint del subárbol visible.
-           Re-dispara la animación fadeUp (.2s) — inofensivo y además
-           confirma visualmente que se ha repintado. */
-        var d = sc.style.display;
-        sc.style.display = 'none';
-        /* lectura forzada del layout (reflow) entre los dos sets */
+        /* Forzar re-raster del subárbol visible SIN colapsar el layout
+           ni replayar la animación de entrada.
+
+           PROHIBIDO usar el toggle `display:none → ''` (versión previa):
+           (1) colapsa el layout → el navegador clampa scrollY a 0 →
+               "se vuelve a la parte de arriba"; y
+           (2) `.screen.active` lleva `animation:fadeUp .2s` → al volver
+               de display:none la animación se REPLAYA → "parpadea".
+           Como esto se dispara en el evento `scroll`, ocurría en TODAS
+           las pantallas al bajar.
+
+           En su lugar promovemos la capa a GPU (`translateZ(0)`) + un
+           micro-opacity y la reflowamos: fuerza al compositor de
+           Chromium/Android a re-rasterizar las tiles (que es el origen
+           del negro) SIN tocar el flujo del documento (scroll intacto)
+           y SIN re-disparar `fadeUp` (no hay transición display). Se
+           restaura síncronamente en el mismo frame → sin glitch de
+           position:fixed (gm-modal/previa NO son hijos de `.screen`). */
+        var pt = sc.style.transform, po = sc.style.opacity;
+        sc.style.transform = 'translateZ(0)';
+        sc.style.opacity = '0.999';
         void sc.offsetHeight;
-        sc.style.display = d || '';
+        sc.style.transform = pt || '';
+        sc.style.opacity = po || '';
         void sc.offsetHeight;
       } else {
         /* Sin pantalla activa: nudge suave sobre el body (opacity NO
@@ -26396,6 +26416,11 @@ window.goLiveMatches = function() {
         b.style.opacity = '0.999';
         void b.offsetHeight;
         b.style.opacity = o || '';
+      }
+      /* Defensa en profundidad: si algún flujo movió el scroll durante
+         el re-raster, lo devolvemos a donde estaba. */
+      if ((window.pageYOffset || 0) !== sy || (window.pageXOffset || 0) !== sx) {
+        try { window.scrollTo(sx, sy); } catch(_){}
       }
     } catch(_){}
   }

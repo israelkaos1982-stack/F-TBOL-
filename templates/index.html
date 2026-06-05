@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>eFootball ✓</title>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;600;700&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/index.bundle.css') }}?v=5.5">
@@ -55,6 +55,25 @@
       display:none!important;
       visibility:hidden!important;
       opacity:0!important;
+    }
+    /* ── ALTURA DE VIEWPORT MÓVIL + SAFE-AREA (2026-06-05) ──────────
+       Bug usuario (foto 1): "la parte de abajo de la pantalla no se ve,
+       te corta 1/4 de la visual en cualquier pantalla".
+
+       En móviles `100vh` mide el viewport GRANDE (incluye la zona que
+       tapan la barra de direcciones / la barra de gestos del sistema),
+       así que el último tramo del contenido quedaba debajo de la UI del
+       navegador o sin pintar (negro). `100dvh` (dynamic viewport
+       height) mide SOLO lo realmente visible, y la safe-area añade
+       margen extra para la barra inferior del sistema. */
+    @supports (height: 100dvh) {
+      html, body { min-height: 100dvh; }
+      .screen { min-height: 100dvh; }
+    }
+    body {
+      /* +safe-area para que el último contenido no quede bajo la barra
+         inferior del sistema/navegador. */
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)) !important;
     }
   </style>
   <script>

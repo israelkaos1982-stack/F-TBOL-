@@ -10656,6 +10656,14 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         var _t = document.getElementById(screenId) || document.getElementById('s-home');
         if (_t) _t.classList.add('active');
       }
+      /* REPAINT GUARD (2026-06-05): tras navegar a otra pantalla, forzar
+         un repintado para que Chromium/Android pinte TODO el contenido
+         (incl. el tramo inferior de pantallas largas, que a veces queda
+         en negro sin pintar — foto 1 usuario). One-shot, no afecta al
+         cronómetro. */
+      if (_realNav && typeof window._nudgeRepaint === 'function') {
+        window._nudgeRepaint();
+      }
     } catch(_){}
     if(opts.updateHistory !== false){
       syncHistory(screenId, !!opts.replaceHistory);

@@ -2631,6 +2631,19 @@ window._showSimProgress = function(opts, onDone){
          salir" la cifra vieja (bug 2026-06-05). */
       try { if (_bedOvSync){ _bedOvSync.touch(_bedOvUpdatedAt); if (_bedOvSync.pushNow) _bedOvSync.pushNow(); } } catch(_){}
     }
+    /* Borra TODOS los ajustes manuales de stats (cliente + servidor).
+       Invalida la cache en memoria (`_bedOvCache`) — un removeItem suelto
+       desde otro scope NO bastaría porque `_bedOvAll` la cachea y
+       `_bedOvWriteLocal` la re-escribiría. Lo usa «Reiniciar Temporada»
+       (todo a 0). Sube un blob vacío con updatedAt nuevo → el server lo
+       adopta por recencia. */
+    window._bplantClearStatAdjust = function(){
+      _bedOvCache = {};
+      _bedOvUpdatedAt = Date.now();
+      try { _bedOvWriteLocal(); } catch(_){}
+      try { if (_bedOvSync){ _bedOvSync.touch(_bedOvUpdatedAt); if (_bedOvSync.pushNow) _bedOvSync.pushNow(); } } catch(_){}
+      try { window._invalidateBayernStatsCache && window._invalidateBayernStatsCache(); } catch(_){}
+    };
     function _bedOvIsEmpty(d){
       if (!d) return true;
       for (var k in d){ if (k === 'updatedAt') continue; var sc = d[k]; if (sc && Object.keys(sc).length) return false; }
@@ -51161,7 +51174,7 @@ https://api.sofascore.app/api/v1/team/44/image
      estuviera en el día 1. `ratingTarget` / `moneyTarget` / `pi`
      son config del admin → se conservan. */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados (pretemporada, torneos de verano y Mundial de Selecciones) y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nLos Objetivos del Club se DESMARCAN (✅ a cero) y sus ganancias 💼/🪙 vuelven a 0.\n\nLos Puntos de Fisio 💊, las plantillas y la configuración de los torneos se conservan.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nSe ponen a 0 TODAS las estadísticas de jugador y la clasificación de Liga, Copa, Supercopas, Champions/Europa/Conference, Recopa, Intercontinental, Mundialito de Clubes, Superliga, torneos de verano y Selecciones.\n\nLos Objetivos del Club se DESMARCAN (✅ a cero) y sus ganancias 💼/🪙 vuelven a 0.\n\nSE CONSERVAN: las plantillas (club y selección), los escudos, el histórico de Derbys, la Vitrina de Trofeos, los Puntos de Fisio 💊 y la configuración de los torneos.')) return;
     /* GARANTÍA (regla usuario 2026-06-04): «Reiniciar Temporada» JAMÁS
        debe borrar el HISTÓRICO DE DERBYS, la VITRINA DE TROFEOS ni las
        PLANTILLAS (club + selección). Son datos persistentes que el admin
@@ -51296,6 +51309,94 @@ https://api.sofascore.app/api/v1/team/44/image
         } catch(_){}
       });
       try { if (typeof window._mundialDateCacheInvalidate === 'function') window._mundialDateCacheInvalidate(); } catch(_){}
+    } catch(_){}
+
+    /* ════════════════════════════════════════════════════════════════
+       RESET TOTAL de ESTADÍSTICAS + RESULTADOS (petición usuario
+       2026-06-05, opción «Borrar TODO a 0»): «Reiniciar Temporada» pone
+       a 0 las stats de jugador de TODAS las competiciones oficiales del
+       club (Liga, Copa, Supercopas, Champions/EL/ECL, Recopa,
+       Intercontinental, Mundialito de Clubes, Superliga) y la
+       clasificación de Liga EA. Antes solo reiniciaba pretemporada +
+       torneos de verano + Mundial de Selecciones + cursor, así que un MVP
+       de Liga (p.ej. Salah) sobrevivía y la plantilla nunca quedaba a 0.
+       CONSERVA: rosters/escudos/medias (ligaExt_*.teams[].players),
+       Derbys, Trofeos y Plantillas (snapshot _PRESERVE_KEYS arriba) y la
+       configuración de torneos. Solo borra DATOS DERIVADOS (stores de
+       stats + fuentes de resultados), nunca plantillas ni config. */
+    try {
+      /* 1) Stores de stats de jugador (los lee la plantilla del hub Y
+            todas las pantallas de Estadísticas). Borrarlos ANTES de
+            cualquier rebuild evita que la lógica de "preservar entradas
+            sin PJ" resucite los fósiles (un MVP sin partido que lo
+            respalde). */
+      ['ef_player_stats_v1','ef_player_stats_liga_only_v1','ef_player_stats_copa_v1',
+       'ef_player_stats_sc_v1','ef_player_stats_ucl_main_v1','ef_player_stats_ucl_v1',
+       'ef_player_stats_ucl_prev_v1','ef_player_stats_ucl_oq_v1','ef_player_stats_ucl_wc_v1',
+       'ef_player_stats_uel_v1','ef_player_stats_uecl_v1','ef_player_stats_recopa_v1',
+       'ef_player_stats_usc_v1','ef_player_stats_inter_v1','ef_player_stats_mundial_v1',
+       'ef_player_stats_sel_v1','ef_player_stats_torneos_v1','ef_player_stats_superliga_v1',
+       'ef_player_stats_segunda_v1'
+      ].forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      /* 2) Fuentes de RESULTADOS de Liga EA (la tabla de Liga se calcula
+            de aquí; sin borrarlas, el rebuild las resucita). */
+      try { localStorage.removeItem('ef_liga38_v4'); } catch(_){}
+      try { localStorage.removeItem('ef_liga38_schedule_v2'); } catch(_){}
+      try {
+        if (window.LIGA_PLAYER_MATCH_STORE && typeof window.LIGA_PLAYER_MATCH_STORE === 'object') {
+          Object.keys(window.LIGA_PLAYER_MATCH_STORE).forEach(function(mk){ try { delete window.LIGA_PLAYER_MATCH_STORE[mk]; } catch(_){} });
+        }
+      } catch(_){}
+      /* 3) Estado de las competiciones de club (brackets/fases/feeders).
+            No contienen rosters (referencian equipos por nombre), así que
+            es seguro vaciarlos para que esas competiciones arranquen
+            limpias la nueva temporada. */
+      ['copa_state_v1','copa_data_v1','sc_state_v1','usc_state_v1',
+       'recopa_state_v1','inter_state_v1',
+       'ucl_ko_state_v1','uel_ko_state_v1','uecl_ko_state_v1','uel_phase_v1','uecl_phase_v1',
+       'wprev_state_v1','oq_simulation_v1',
+       'wc_to_open_qualifier_v1','oq_to_previa_v1',
+       'wprev_to_fase_grupos_v1','wprev_to_europa_v1','wprev_r1_to_conference_v1',
+       'superliga_results_v1','superliga_state_v1'
+      ].forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      /* 4) AJUSTES MANUALES de stats de la plantilla del hub
+            (bplant_stat_adjust_v1, lápiz azul PIN 7477). Son DELTAS sobre
+            el valor automático; en una temporada nueva (auto=0) un delta
+            +1 segu­iría mostrando "1" (p.ej. el MVP de Salah). "Todo a 0"
+            incluye estos ajustes → se vacían en cliente Y servidor (es un
+            blob _kvBlobSync con merge por recencia: subimos un blob vacío
+            con updatedAt nuevo para que el server adopte el vacío). */
+      try { if (typeof window._bplantClearStatAdjust === 'function') window._bplantClearStatAdjust(); else localStorage.removeItem('bplant_stat_adjust_v1'); } catch(_){}
+      /* 5) RESET de Liga EA en el SERVIDOR. Los resultados de Liga
+            (ef_liga38_v4 / liga_results) están sincronizados: borrarlos
+            solo en local NO basta — el siguiente tick del poll los
+            repobla. /api/state/reset-liga deja liga_results={} server-side
+            (replace) y propaga a todos los dispositivos. Pausamos el poll
+            durante el reset y reintentamos. */
+      try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(35000); } catch(_){}
+      (function _resetLigaServer(tries){
+        tries = tries || 0;
+        fetch('/api/state/reset-liga', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({}), keepalive: true
+        }).then(function(r){ return r.json(); }).then(function(j){
+          /* Guardar el calendario nuevo que devuelve el server (misma clave
+             que usa el botón "Res" de Liga) para que cliente y server vean
+             el mismo cuadro. */
+          try {
+            var srvSched = j && (j.liga_schedule || (j.state && j.state.liga_schedule));
+            if (srvSched && srvSched.length) localStorage.setItem('ef_liga38_schedule_v2', JSON.stringify(srvSched));
+          } catch(_){}
+          try { if (typeof window.buildLigaClas === 'function') window.buildLigaClas(); } catch(_){}
+        }).catch(function(){
+          if (tries < 3) setTimeout(function(){ _resetLigaServer(tries+1); }, Math.pow(2, tries+1) * 1000);
+        });
+      })(0);
+      /* 6) Reconstruir los stores de stats (ahora vacíos) y refrescar la
+            plantilla del hub para que se vea 0 al instante. */
+      try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
+      try { if (typeof window._invalidateBayernStatsCache === 'function') window._invalidateBayernStatsCache(); } catch(_){}
+      try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(_){}
     } catch(_){}
 
     /* PARTIDOS POSPUESTOS: vacía el store manual + servidor. Sin

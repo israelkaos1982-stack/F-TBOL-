@@ -32570,18 +32570,15 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   PREVIA · highlight del cuadro de estadio + clima
+   PREVIA · highlight de acciones pendientes
    ───────────────────────────────────────────────────────────────
-   Foto 1/2 del usuario: en partidos donde el rival NO necesita
-   alias (porque es equipo real de eFootball), la primera acción
-   visible debe ser elegir / confirmar el estadio + clima. El
-   `#pp-env` recibe la clase `.is-pp-env-hint` cuando se abre la
-   previa, con borde amarillo pulsante (igual estilo que el
-   resalte de AÑADIR LESIONADOS).
+   El resalte amarillo del cuadro de estadio/clima (`#pp-env`) se
+   ELIMINÓ (petición usuario 2026-06-05): resultaba intrusivo en
+   todos los partidos de Liga EA. El highlight sigue disponible para
+   los items de la lista (balón, prórroga, penaltis, alias).
    ═══════════════════════════════════════════════════════════════ */
-/* Highlight amarillo aplicable a cualquier elemento de la previa
-   en la secuencia (estadio, prórroga, penaltis, balón, alias). */
-#pp-env.is-pp-env-hint,
+/* Highlight amarillo aplicable a los items de la previa
+   en la secuencia (prórroga, penaltis, balón, alias). */
 .pp-item.is-pp-env-hint,
 .pp-alias-hint.is-pp-env-hint,
 .pp-vs .is-pp-env-hint{
@@ -33613,9 +33610,11 @@ document.addEventListener('DOMContentLoaded', function() {
        atributo data-pp-alias-needed. */
     var aliasEl = document.querySelector('.pp-alias-need, [data-pp-alias-needed="1"]');
     if (aliasEl) seq.push({ el: aliasEl, ms: 5000 });
-    /* (2) Estadio (siempre). */
-    var env = document.getElementById('pp-env');
-    if (env) seq.push({ el: env, ms: 3000 });
+    /* (2) Estadio — el resalte amarillo del `#pp-env` se ELIMINÓ
+       (petición usuario 2026-06-05, foto Deportivo Alavés vs FC
+       Barcelona en Liga EA): el borde amarillo pulsante sobre la caja
+       del estadio/clima resultaba intrusivo en TODOS los partidos. El
+       estadio se sigue eligiendo pero sin el resalte. */
     /* (3) Prórroga y Penaltis si son items en pp-list (eliminatoria
        a partido único). */
     var pro = document.querySelector('#pp-list .pp-item[data-ppid="prorroga"]');

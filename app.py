@@ -302,6 +302,38 @@ def merge_dict(base, incoming):
             result[k] = v
     return result
 
+
+# Claves de `/api/state` cuyo blob es un running total / consumible
+# (HUD: 🪙 presupuesto · 💊 puntos de fisio · 💼 valoración). Para ellas
+# NO vale el field-merge recursivo de `merge_dict`: dos dispositivos
+# llevan totales DISTINTOS calculados localmente, así que un merge campo
+# a campo mezclaría cifras de generaciones distintas y el resultado nunca
+# converge (bug 🪙💊 fuera de sync entre PC y móvil). Igual que las
+# claves de `_KV_RECENCY_BLOB_KEYS`: el blob con `updatedAt` mayor gana
+# ENTERO. Un POST stale (otro dispositivo, request perdido) jamás pisa
+# una copia más nueva.
+_STATE_RECENCY_BLOB_KEYS = {"bayern_hud_overrides_v1"}
+
+
+def _blob_updated_at(blob):
+    """ms (float) del campo `updatedAt` de un blob, 0 si ausente."""
+    if not isinstance(blob, dict):
+        return 0.0
+    try:
+        return float(blob.get("updatedAt") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _recency_winner(old_blob, new_blob):
+    """Devuelve el blob con `updatedAt` mayor, ENTERO (sin field-merge).
+    En empate gana `new_blob` (el POST entrante = el escritor)."""
+    if not isinstance(new_blob, dict):
+        return old_blob
+    if not isinstance(old_blob, dict):
+        return new_blob
+    return new_blob if _blob_updated_at(new_blob) >= _blob_updated_at(old_blob) else old_blob
+
 def get_or_create_global_state():
     row = GlobalState.query.filter_by(clave=GLOBAL_STATE_KEY).first()
     if not row:
@@ -366,6 +398,14 @@ def save_global_state(new_state, replace=False):
         # del row.
         base = merge_dict(DEFAULT_GLOBAL_STATE, existing)
         merged = merge_dict(base, incoming)
+        # Recency-merge de los blobs running-total / consumible (HUD
+        # 🪙💊💼): el de `updatedAt` mayor gana ENTERO. `merge_dict`
+        # ya los fundió campo a campo arriba; lo CORREGIMOS aquí cuando
+        # el POST entrante porta la clave, para que un POST stale no
+        # pueda pisar (ni mezclar con) una copia más nueva del server.
+        for rk in _STATE_RECENCY_BLOB_KEYS:
+            if rk in incoming:
+                merged[rk] = _recency_winner(base.get(rk), incoming.get(rk))
     row.valor_json = json.dumps(merged, ensure_ascii=False)
     row.updated_at = utc_now_iso()
     db.session.commit()

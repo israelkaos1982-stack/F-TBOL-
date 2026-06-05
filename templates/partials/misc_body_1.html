@@ -2428,12 +2428,54 @@ window._showSimProgress = function(opts, onDone){
     function _mundialLiveStatsForHub(teamNorm){
       try {
         if (typeof window._mundialStatsRobustScan !== 'function') return null;
-        var cfgM = (window._TOUR_CACHE && window._TOUR_CACHE['mundial']) || null;
-        if (!cfgM) { try { cfgM = JSON.parse(localStorage.getItem('tour_mundial_v1') || 'null'); } catch(_){ cfgM = null; } }
+        /* Elegir la copia MÁS RICA (más partidos con events) entre la cache
+           de memoria y el localStorage — IDÉNTICO a `_mclLoadRichestCfg` de
+           la caja en vivo. La cache de memoria puede ser PARCIAL (cargada
+           para la card del hub sin todos los resultados), así que tomar
+           `_TOUR_CACHE['mundial']` a ciegas perdía los goles. Bug 2026-06-05:
+           la plantilla seguía a 0 aunque la caja Estadísticas (que usa el
+           richest-cfg) sí los mostraba. */
+        function _evCount(c){
+          if (!c || !c.results) return 0;
+          var n = 0;
+          Object.keys(c.results).forEach(function(k){
+            var r = c.results[k];
+            if (r && r.played && Array.isArray(r.events) && r.events.length) n++;
+          });
+          return n;
+        }
+        var a = null, b = null;
+        try { a = (window._TOUR_CACHE && window._TOUR_CACHE['mundial']) || null; } catch(_){}
+        try { b = JSON.parse(localStorage.getItem('tour_mundial_v1') || 'null'); } catch(_){ b = null; }
+        if (!a && typeof window._tourLoadCachedSync === 'function') { try { a = window._tourLoadCachedSync('mundial'); } catch(_){} }
+        var ca = _evCount(a), cb = _evCount(b);
+        var cfgM = (cb > ca) ? b : (a || b);
         if (!cfgM || !cfgM.results) return null;
         var teams = cfgM.teams || [];
+        /* El escáner resuelve el equipo del hub por home/away (presentes en
+           sus partidos humanos), así que NO necesitamos backfill aquí — lo
+           evitamos para no disparar guardados/cascadas de torneo. */
         var all = window._mundialStatsRobustScan(cfgM, teams);
-        if (!all || !Object.keys(all).length) return null;
+        if (!all || !Object.keys(all).length) {
+          /* Fallback LIMPIO: el store dedicado del Mundialito (rebuild
+             Source 3). Es SOLO del Mundialito (no mezcla torneos de verano),
+             así que es seguro filtrarlo al hub. NO usamos
+             ef_player_stats_torneos_v1 (mezclaría Joan Gamper, excluido). */
+          all = {};
+          try {
+            var rawM = localStorage.getItem('ef_player_stats_mundial_v1');
+            if (rawM) {
+              var dataM = JSON.parse(rawM) || {};
+              Object.keys(dataM).forEach(function(k){
+                var sp = k.indexOf('::'); if (sp < 0) return;
+                var tt2 = k.slice(0, sp);
+                if (!tt2 || !_teamKeyMatches(tt2, teamNorm)) return;
+                all[k] = dataM[k];
+              });
+            }
+          } catch(_){}
+          if (!Object.keys(all).length) return null;
+        }
         /* PJ del hub: nº de partidos jugados donde participa (resuelto por
            home/away + índice de fixtures, igual que el escáner). */
         var bpg = (cfgM.formatConfig && cfgM.formatConfig.perGroup) || 4;

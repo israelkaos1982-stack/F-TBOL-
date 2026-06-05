@@ -4339,6 +4339,44 @@ window._showSimProgress = function(opts, onDone){
   }
   function _save(d){
     _MEM = d || _MEM || { tour:null, dayIdx:0, rivals:{}, done:{} };
+    /* ── GUARD MONOTÓNICO DEL CURSOR (2026-06-05) ──────────────────
+       El cursor del día NUNCA puede retroceder a un día anterior > 0
+       fuera del reinicio de temporada (que va por `_psResetCalendar`,
+       el cual escribe disco DIRECTAMENTE sin pasar por aquí). Una
+       pestaña de fondo CONGELADA (el usuario tenía 2 abiertas) conserva
+       un `_MEM` con el `dayIdx` VIEJO; al reanudarse, su
+       updateHud/_render/creación de rivales llama a `_save` y, con `ts`
+       FRESCO, RESUCITARÍA ese día viejo en disco y lo empujaría al
+       server vía sendBeacon, devolviendo al usuario semanas atrás (bug
+       foto usuario: estaba en agosto, volvió y le ponía el 16 de junio).
+       Releemos el disco: si va por DELANTE de nuestro `_MEM`, nuestro
+       estado en memoria está stale → adoptamos el de disco ENTERO y
+       ABORTAMOS el downgrade. El avance normal (dayIdx+1 > disco) y las
+       escrituras del mismo día (dayIdx ==) pasan sin problema. */
+    try {
+      var _diskRaw = localStorage.getItem(KEY);
+      if (_diskRaw){
+        var _disk = JSON.parse(_diskRaw);
+        if (_disk && typeof _disk === 'object'){
+          var _diskIdx = parseInt(_disk.dayIdx, 10) || 0;
+          var _memIdx  = parseInt(_MEM.dayIdx, 10) || 0;
+          if (_diskIdx > _memIdx){
+            _MEM = _disk;
+            try { window.__psDayIdx = _MEM.dayIdx; } catch(_){}
+            try {
+              var _mpo = parseInt(_MEM.previaOpenedIdx, 10);
+              window.__psPreviaOpenedIdx = isNaN(_mpo) ? -1 : _mpo;
+            } catch(_){}
+            return;
+          }
+        }
+      }
+    } catch(_){}
+    /* El cursor normal NO porta marca de reinicio: solo el POST de
+       `_psResetCalendar` la lleva. Si quedó pegada en `_MEM` tras un
+       reset (el siguiente avance parte de ese blob), la quitamos para
+       que el server NO trate este guardado como un reinicio. */
+    try { delete _MEM.resetAt; delete _MEM._reset; } catch(_){}
     /* Sello de tiempo: lo lee `_ts` del sync (misc_body_2.html) para
        desempatar conflictos local↔server (last-write-wins). Sin esto
        el server siempre pierde contra un local stale (ts=0). */
@@ -4412,6 +4450,32 @@ window._showSimProgress = function(opts, onDone){
       try { _MEM = null; } catch(_){}
       try { if (typeof window._psInvalidateCache === 'function') window._psInvalidateCache(); } catch(_){}
     });
+  } catch(_){}
+  /* REANUDAR PESTAÑA DE FONDO (2026-06-05): los móviles CONGELAN las
+     pestañas en segundo plano — no procesan timers ni, de forma
+     fiable, los eventos `storage`. Una pestaña que estuvo congelada en
+     un día viejo conserva su `_MEM` stale; si actúa sobre él (un
+     `_save`) RESUCITA ese día. Al volver a primer plano: (1) re-leemos
+     el disco (otra pestaña del mismo navegador pudo avanzar) y (2)
+     re-hidratamos del servidor (otro dispositivo / disco purgado) para
+     adoptar SIEMPRE el cursor más reciente ANTES de cualquier guardado.
+     El guard monotónico de `_save` y el merge del server son la red de
+     seguridad; esto cierra la ventana en origen. */
+  try {
+    var _psResumeLast = 0;
+    var _psOnResume = function(){
+      if (document.visibilityState && document.visibilityState !== 'visible') return;
+      /* Debounce: visibilitychange + focus + pageshow pueden dispararse
+         juntos al reanudar; con 1 GET basta. */
+      var _n = Date.now();
+      if (_n - _psResumeLast < 1000) return;
+      _psResumeLast = _n;
+      try { _MEM = null; _load(); } catch(_){}
+      try { if (typeof window._compStateSyncHydrate === 'function') window._compStateSyncHydrate(); } catch(_){}
+    };
+    document.addEventListener('visibilitychange', _psOnResume);
+    window.addEventListener('pageshow', _psOnResume);
+    window.addEventListener('focus', _psOnResume);
   } catch(_){}
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   /* Antes (hist. 2026-04): relabel SOLO VISUAL de la pretemporada a un
@@ -8035,7 +8099,13 @@ window._showSimProgress = function(opts, onDone){
      para que la temporada arranque limpia: sin partidos ya resueltos,
      sin previas marcadas como ya abiertas. */
   window._psResetCalendar = function(){
-    var d = { tour: null, dayIdx: 0, rivals: {}, done: {}, previaOpenedIdx: -1, ts: Date.now() };
+    /* `resetAt` marca este blob como un REINICIO EXPLÍCITO de temporada:
+       es la ÚNICA forma de que un `dayIdx` 0 (o cualquier bajada) gane
+       en el merge monotónico del server (`_cursor_winner`). Un guardado
+       normal NUNCA porta esta marca (`_save` la elimina), así que un
+       POST stale no puede hacerse pasar por reinicio. 2026-06-05. */
+    var _now = Date.now();
+    var d = { tour: null, dayIdx: 0, rivals: {}, done: {}, previaOpenedIdx: -1, ts: _now, resetAt: _now };
     _MEM = d;
     var _resetJson = JSON.stringify(d);
     try { localStorage.setItem(KEY, _resetJson); } catch(_){}

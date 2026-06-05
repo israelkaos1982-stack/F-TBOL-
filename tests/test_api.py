@@ -243,6 +243,76 @@ class TestApiState:
 
 
 # ---------------------------------------------------------------------------
+# Cursor del día del hub (liverpool_preseason_v1) — merge MONOTÓNICO
+# Bug 2026-06-05: el usuario estaba en agosto y al volver le ponía 16 jun.
+# ---------------------------------------------------------------------------
+
+class TestHubCursorMonotonic:
+
+    KEY = "liverpool_preseason_v1"
+
+    def _post_cursor(self, client, blob):
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"competition_state": {self.KEY: json.dumps(blob)}}}),
+            content_type="application/json",
+        )
+
+    def _get_cursor(self, client):
+        rv = client.get("/api/state")
+        raw = _json(rv)["state"]["competition_state"].get(self.KEY)
+        return json.loads(raw) if raw else None
+
+    def test_advance_is_accepted(self, client):
+        self._post_cursor(client, {"dayIdx": 40, "ts": 1000})
+        self._post_cursor(client, {"dayIdx": 41, "ts": 1001})
+        assert self._get_cursor(client)["dayIdx"] == 41
+
+    def test_stale_downgrade_is_rejected(self, client):
+        # Usuario en agosto (dayIdx alto). Una pestaña congelada empuja
+        # un cursor viejo (16 jun ~ dayIdx 46) con ts MÁS NUEVO.
+        self._post_cursor(client, {"dayIdx": 90, "ts": 5000})
+        self._post_cursor(client, {"dayIdx": 46, "ts": 9999})  # stale, ts fresco
+        assert self._get_cursor(client)["dayIdx"] == 90
+
+    def test_default_zero_does_not_wipe_progress(self, client):
+        # Un dispositivo recién abierto empuja el estado por defecto
+        # (dayIdx 0, SIN marca de reinicio) → no debe borrar el avance.
+        self._post_cursor(client, {"dayIdx": 70, "ts": 5000})
+        self._post_cursor(client, {"dayIdx": 0, "ts": 9999})
+        assert self._get_cursor(client)["dayIdx"] == 70
+
+    def test_explicit_reset_wins(self, client):
+        # «Reiniciar Temporada» porta resetAt → gana por recencia.
+        self._post_cursor(client, {"dayIdx": 70, "ts": 5000})
+        self._post_cursor(client, {"dayIdx": 0, "ts": 9999, "resetAt": 9999})
+        assert self._get_cursor(client)["dayIdx"] == 0
+
+    def test_stale_reset_does_not_undo_progress(self, client):
+        # Un reinicio VIEJO (ts menor) no debe deshacer un avance posterior.
+        self._post_cursor(client, {"dayIdx": 80, "ts": 9000})
+        self._post_cursor(client, {"dayIdx": 0, "ts": 100, "resetAt": 100})
+        assert self._get_cursor(client)["dayIdx"] == 80
+
+    def test_same_day_update_uses_recency(self, client):
+        # Mismo día, se actualizan rivales/done → gana el ts mayor.
+        self._post_cursor(client, {"dayIdx": 50, "ts": 1000, "done": {}})
+        self._post_cursor(client, {"dayIdx": 50, "ts": 2000, "done": {"x": 1}})
+        assert self._get_cursor(client)["done"] == {"x": 1}
+
+    def test_other_competition_state_keys_unaffected(self, client):
+        # El merge monotónico SOLO aplica al cursor; otras claves de
+        # competition_state siguen con overwrite normal.
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"competition_state": {"sc_state_v1": "{\"a\":1}"}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        assert _json(rv)["state"]["competition_state"]["sc_state_v1"] == "{\"a\":1}"
+
+
+# ---------------------------------------------------------------------------
 # /reiniciar
 # ---------------------------------------------------------------------------
 

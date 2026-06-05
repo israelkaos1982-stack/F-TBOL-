@@ -10245,6 +10245,26 @@
       stats[s][k] = n;
     });
     st.matchStats = stats;
+    /* Registrar 🚪 tiros / ⚠️ faltas / ⛳️ córners en el acumulador de la
+       plantilla del hub (going-forward). Este confirm lo comparten la
+       ml-card y el gm-modal (`_mlStatsStateRef` puede ser `_gm`), así que
+       captura TODOS los partidos humanos en un solo punto. La función del
+       hub filtra a comps oficiales y al equipo del hub. 2026-06-05. */
+    try {
+      if (typeof window._bplantRecordMatchStats === 'function'){
+        var _btComp = st.comp || st.compKey || st._comp || 'liga';
+        var _btTid  = st._tourId || st.tourId ||
+                      (window._ppPreviaTeams && window._ppPreviaTeams.tourId) || '';
+        var _btFmt = '';
+        try { if (_btTid && window._TOUR_CACHE && window._TOUR_CACHE[_btTid]) _btFmt = window._TOUR_CACHE[_btTid].format; } catch(e){}
+        if (!_btFmt && _btTid && typeof window._tourLoadCachedSync === 'function'){
+          try { var _btc = window._tourLoadCachedSync(_btTid); if (_btc) _btFmt = _btc.format; } catch(e){}
+        }
+        var _btId = (_btTid || _btComp) + '|' + (st.home||'') + '|' + (st.away||'') + '|' + (st.j != null ? st.j : '');
+        window._bplantRecordMatchStats(_btId, { comp:_btComp, tourId:_btTid, format:_btFmt },
+                                       st.home, st.away, stats.a, stats.b);
+      }
+    } catch(e){}
     var ov = document.getElementById('ml-stats-ov');
     if (ov) ov.classList.remove('show');
     var cb = _mlStatsCallback; _mlStatsCallback = null; _mlStatsMk = null; _mlStatsStateRef = null;
@@ -10382,6 +10402,24 @@
         a: Object.assign({}, _mlStatsBuffer.a),
         b: Object.assign({}, _mlStatsBuffer.b)
       };
+      /* Acumulador de la plantilla del hub (going-forward). Este overlay
+         (postStats) trae tiros + córners (sin faltas); se registra solo
+         si el overlay primario (matchStats) no corrió. 2026-06-05. */
+      try {
+        if (typeof window._bplantRecordMatchStats === 'function'){
+          var _btComp = st.comp || st.compKey || st._comp || 'liga';
+          var _btTid  = st._tourId || st.tourId ||
+                        (window._ppPreviaTeams && window._ppPreviaTeams.tourId) || '';
+          var _btFmt = '';
+          try { if (_btTid && window._TOUR_CACHE && window._TOUR_CACHE[_btTid]) _btFmt = window._TOUR_CACHE[_btTid].format; } catch(e){}
+          if (!_btFmt && _btTid && typeof window._tourLoadCachedSync === 'function'){
+            try { var _btc = window._tourLoadCachedSync(_btTid); if (_btc) _btFmt = _btc.format; } catch(e){}
+          }
+          var _btId = (_btTid || _btComp) + '|' + (st.home||'') + '|' + (st.away||'') + '|' + (st.j != null ? st.j : '');
+          window._bplantRecordMatchStats(_btId, { comp:_btComp, tourId:_btTid, format:_btFmt },
+                                         st.home, st.away, st.postStats.a, st.postStats.b);
+        }
+      } catch(e){}
     }
     var ov = document.getElementById('ml-stats-entry-ov');
     if (ov) ov.classList.remove('show');

@@ -2116,7 +2116,12 @@ window._showSimProgress = function(opts, onDone){
   <div class="ent-section" style="border:1px solid rgba(238,28,37,.3);background:rgba(8,4,12,.4);">
     <div class="ent-body open" id="bayern-plantilla" style="padding:8px 8px 12px;">
       <div id="bed-edit-banner">🖍 <b>MODO EDICIÓN MANUAL</b> · toca un número para corregir su estadística (el cálculo automático sigue sumando encima) · toca el <b>nombre</b> de un jugador para marcar 🟥 expulsado / 🟨🟨🟨 acumulación / 🩹 lesión.</div>
-      <div id="bayern-plantilla-host" class="lext-sq-wrap" style="margin:0;"></div>
+      <!-- Banda de TOTALES del equipo (suma de TODAS las competiciones
+           oficiales del club / la selección, según el toggle de escudo).
+           La rellena `renderBayernPlantillaScreen` / `_renderSelView` vía
+           `_bplantRenderTotals(...)`. 2026-06-05. -->
+      <div id="bplant-totals-banner" aria-label="Totales del equipo"></div>
+      <div id="bayern-plantilla-host" class="lext-sq-wrap" style="margin:6px 0 0;"></div>
     </div>
   </div>
   <script>
@@ -3425,7 +3430,247 @@ window._showSimProgress = function(opts, onDone){
         + _section('⚙ MEDIOS',         by.MED, false, ctx)
         + _section('⚽ DELANTEROS',    by.DEL, false, ctx);
       host.innerHTML = html || '<div style="padding:24px;text-align:center;color:rgba(255,255,255,.55);">— Sin jugadores —</div>';
+      try { window._bplantRenderTotals && window._bplantRenderTotals('sel'); } catch(_){}
     }
+
+    /* ════════════════════════════════════════════════════════════════
+       BANDA DE TOTALES DEL EQUIPO (2026-06-05) — suma de TODAS las
+       competiciones oficiales (club o selección, según el toggle de
+       escudo): J G E P G+ G- DG · 🟨 🟥 ⭐️ · % · 🚪 ⚠️ ⛳️.
+         · J/G/E/P/G+/G-/DG → del colector del hub `window._muGatherPlayed`
+           (mismas fuentes que la caja PARTIDOS JUGADOS; resuelve fixtures
+           de Mundial-48 / Mundialito / todas las europeas).
+         · 🟨/🟥/⭐️ → suma de los jugadores (mismas fuentes oficiales que
+           las filas de la plantilla → consistente con lo que se ve).
+         · 🚪/⚠️/⛳️ → NO se persisten en ninguna comp oficial (solo
+           Superliga, excluida); los acumulamos going-forward por partido
+           en `bplant_match_stats_v1` (sync server). Hasta que el usuario
+           juegue partidos con stats, salen "–".
+       Excluidos SIEMPRE (decisión usuario): Superliga, amistosos y
+       torneos de verano. ──────────────────────────────────────────── */
+    function _btClubAliases(){
+      var out = [], seen = {};
+      function add(n){ n = _normForStats(n||''); if (n && !seen[n]){ seen[n]=1; out.push(n); } }
+      try { add(_hubTeamName()); } catch(_){}
+      try { if (window._psHumanLogicName) add(window._psHumanLogicName()||''); } catch(_){}
+      try { if (window._mkHubTeamName) add(String(window._mkHubTeamName)); } catch(_){}
+      add('Bayern Munich');   /* alias legacy del slot renombrado */
+      return out;
+    }
+    function _btSelAliases(selName){
+      var out = [], seen = {};
+      function add(n){ n = _normForStats(n||''); if (n && !seen[n]){ seen[n]=1; out.push(n); } }
+      add(selName); add('France');
+      return out;
+    }
+    function _btHit(name, aliases){
+      var n = _normForStats(name||''); if (!n) return false;
+      for (var i=0;i<aliases.length;i++){ if (aliases[i] && _teamKeyMatches(n, aliases[i])) return true; }
+      return false;
+    }
+    var _BT_OFFICIAL_CLUB = { liga:1, copa:1, sc:1, ucl:1, uel:1, uecl:1, recopa:1, usc:1, inter:1, mundialito:1 };
+    var _btGatherCache = null, _btGatherTs = 0;
+    function _btGather(){
+      var now = Date.now();
+      if (_btGatherCache && (now - _btGatherTs) < 1200) return _btGatherCache;
+      try { _btGatherCache = (window._muGatherPlayed && window._muGatherPlayed()) || null; } catch(_){ _btGatherCache = null; }
+      _btGatherTs = now;
+      return _btGatherCache;
+    }
+    function _btTeamRecord(view, aliases){
+      var rec = { pj:0, g:0, e:0, p:0, gf:0, ga:0 };
+      var gathered = _btGather();
+      if (!gathered) return rec;
+      var side = (view === 'sel') ? gathered.sel : gathered.club;
+      if (!side || !Array.isArray(side.groups)) return rec;
+      side.groups.forEach(function(g){
+        var comp = g && g.id;
+        if (view !== 'sel' && !_BT_OFFICIAL_CLUB[comp]) return;   /* club: solo oficiales */
+        (g.played || []).forEach(function(m){
+          if (!m || typeof m.gh !== 'number' || typeof m.ga !== 'number') return;
+          var isH = _btHit(m.home, aliases), isA = _btHit(m.away, aliases);
+          if (!isH && !isA) return;
+          var gf = isH ? m.gh : m.ga, ga = isH ? m.ga : m.gh;
+          rec.pj++; rec.gf += gf; rec.ga += ga;
+          if (gf > ga) rec.g++; else if (gf < ga) rec.p++; else rec.e++;
+        });
+      });
+      return rec;
+    }
+    function _btCardsTotals(view, selName){
+      var t = { ta:0, tr:0, mvp:0 };
+      try {
+        if (view === 'sel'){
+          var map = _buildSelStatsMap(selName) || {};
+          Object.keys(map).forEach(function(k){ var s=map[k]||{}; t.ta+=Number(s.ta)||0; t.tr+=Number(s.tr)||0; t.mvp+=Number(s.mvp)||0; });
+        } else {
+          _buildStatsCache();
+          var cache = _STATS_CACHE || {};
+          Object.keys(cache).forEach(function(k){ var s=cache[k]||{}; t.ta+=Number(s.ta)||0; t.tr+=Number(s.tr)||0; t.mvp+=Number(s.mvp)||0; });
+        }
+      } catch(_){}
+      return t;
+    }
+
+    /* ── Acumulador de 🚪 tiros / ⚠️ faltas / ⛳️ córners por partido ──
+       (going-forward, sync server). Idempotente por `ident`. */
+    var _BT_MS_KEY = 'bplant_match_stats_v1';
+    window._BPLANT_MS = window._BPLANT_MS || { entries:{}, updatedAt:0 };
+    var _btMsSync = null;
+    function _btMsLoad(){
+      try {
+        var raw = localStorage.getItem(_BT_MS_KEY);
+        if (!raw) return;
+        var d = JSON.parse(raw); if (!d) return;
+        window._BPLANT_MS = { entries:(d.entries||{}), updatedAt:Number(d.updatedAt)||0 };
+      } catch(_){}
+    }
+    function _btMsPersist(){
+      try {
+        window._BPLANT_MS.updatedAt = Date.now();
+        localStorage.setItem(_BT_MS_KEY, JSON.stringify(window._BPLANT_MS));
+        if (_btMsSync) _btMsSync.touch(window._BPLANT_MS.updatedAt);
+      } catch(_){}
+    }
+    function _btMsIsEmpty(d){ return !(d && d.entries && Object.keys(d.entries).length); }
+    _btMsLoad();
+    /* Este partial se evalúa ANTES que index.bundle.js (donde vive
+       `_kvBlobSync`), igual que `_bedOvInitSync` — diferimos el alta de
+       sync hasta que esté disponible para que el acumulador SÍ suba al
+       servidor (regla: ningún store de datos del usuario vive solo en
+       localStorage). */
+    function _btMsInitSync(tries){
+      tries = tries || 0;
+      if (_btMsSync) return;
+      if (typeof window._kvBlobSync !== 'function'){
+        if (tries < 60) setTimeout(function(){ _btMsInitSync(tries+1); }, 150);
+        return;
+      }
+      try {
+        _btMsSync = window._kvBlobSync(_BT_MS_KEY);
+        _btMsSync.config(function(){ return window._BPLANT_MS; }, function(sv){
+          window._BPLANT_MS = { entries:(sv&&sv.entries)||{}, updatedAt:Number(sv&&sv.updatedAt)||Date.now() };
+          try { localStorage.setItem(_BT_MS_KEY, JSON.stringify(window._BPLANT_MS)); } catch(_){}
+          try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){}
+        }, _btMsIsEmpty);
+        _btMsSync.seed(window._BPLANT_MS.updatedAt);
+        _btMsSync.hydrate(function(){ try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){} });
+      } catch(_){}
+    }
+    _btMsInitSync();
+    /* comp del partido → { bucket oficial, scope:'club'|'sel' } o null
+       (verano / amistoso / superliga = NO oficial). `info` = {comp,tourId,format}. */
+    function _btBucketFor(info){
+      var c   = String((info && info.comp)   || '').toLowerCase();
+      var tid = String((info && info.tourId) || '').toLowerCase();
+      var fmt = String((info && info.format) || '').toLowerCase();
+      if (c === 'liga' || c === 'ea-sports' || c === '') return { bucket:'liga', scope:'club' };
+      if (c === 'copa' || c === 'copa-fin')  return { bucket:'copa',   scope:'club' };
+      if (c === 'sc'   || c === 'sc-final')  return { bucket:'sc',     scope:'club' };
+      if (c === 'ucl')    return { bucket:'ucl',    scope:'club' };
+      if (c === 'uel')    return { bucket:'uel',    scope:'club' };
+      if (c === 'uecl')   return { bucket:'uecl',   scope:'club' };
+      if (c === 'recopa') return { bucket:'recopa', scope:'club' };
+      if (c === 'usc')    return { bucket:'usc',    scope:'club' };
+      if (c === 'inter')  return { bucket:'inter',  scope:'club' };
+      if (c === 'sel' || c === 'sel-fin' || c === 'selecciones' || fmt === 'mundial-48')
+        return { bucket:'sel', scope:'sel' };
+      if (c === 'torneo' || c === 'mundial'){
+        if (tid === 'mundial') return { bucket:'mundialito', scope:'club' };  /* Mundialito de Clubes */
+        if (fmt === 'mundial-48') return { bucket:'sel', scope:'sel' };       /* Mundial 2032 selecciones */
+        return null;   /* torneos de verano (jg/sct/pss/asia/tx*) → no oficiales */
+      }
+      return null;     /* superliga, amistoso, verano… */
+    }
+    /* Lo invoca `_mlStatsConfirm` (ml-card + gm-modal comparten ese confirm)
+       al cerrar el overlay de stats post-partido. */
+    window._bplantRecordMatchStats = function(ident, info, home, away, sa, sb){
+      try {
+        var bk = _btBucketFor(info);
+        if (!bk) return;   /* comp no oficial → no se registra */
+        /* Solo partidos del HUB (su club o su selección) — el store no
+           acumula partidos de otros humanos / otras cajas. */
+        var _hubAl = (bk.scope === 'sel') ? _btSelAliases(_hubSelName()) : _btClubAliases();
+        if (!_btHit(home, _hubAl) && !_btHit(away, _hubAl)) return;
+        function _clean(s){ s = s || {}; return {
+          tiros:   Math.max(0, Number(s.tiros)   || 0),
+          faltas:  Math.max(0, Number(s.faltas)  || 0),
+          corners: Math.max(0, Number(s.corners) || 0)
+        }; }
+        var a = _clean(sa), b = _clean(sb);
+        if (!(a.tiros||a.faltas||a.corners||b.tiros||b.faltas||b.corners)) return;
+        var id = String(ident || (bk.bucket + '|' + home + '|' + away));
+        window._BPLANT_MS.entries[id] = {
+          bucket:bk.bucket, scope:bk.scope,
+          home:String(home||''), away:String(away||''),
+          a:a, b:b, ts:Date.now()
+        };
+        _btMsPersist();
+        try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){}
+      } catch(_){}
+    };
+    function _btShotsTotals(view, aliases){
+      var t = { tiros:0, faltas:0, corners:0, has:false };
+      var ent = (window._BPLANT_MS && window._BPLANT_MS.entries) || {};
+      Object.keys(ent).forEach(function(id){
+        var m = ent[id]; if (!m) return;
+        if (view === 'sel'){ if (m.scope !== 'sel') return; }
+        else { if (m.scope !== 'club' || !_BT_OFFICIAL_CLUB[m.bucket]) return; }
+        var isH = _btHit(m.home, aliases), isA = _btHit(m.away, aliases);
+        var side = isH ? m.a : (isA ? m.b : null);
+        if (!side) return;
+        t.tiros += Number(side.tiros)||0; t.faltas += Number(side.faltas)||0; t.corners += Number(side.corners)||0;
+        t.has = true;
+      });
+      return t;
+    }
+    function _btCell(k, v, cls, sep){
+      return '<div class="bpl-tot-cell'+(sep?' sep':'')+'">'
+        + '<span class="bpl-tot-k">'+k+'</span>'
+        + '<span class="bpl-tot-v'+(cls?(' '+cls):'')+'">'+v+'</span></div>';
+    }
+    window._bplantRenderTotals = function(view){
+      var box = document.getElementById('bplant-totals-banner');
+      if (!box) return;
+      view = (view === 'sel') ? 'sel' : 'club';
+      var selName = '', aliases;
+      if (view === 'sel'){ selName = _hubSelName(); aliases = _btSelAliases(selName); }
+      else { aliases = _btClubAliases(); }
+      var rec   = _btTeamRecord(view, aliases);
+      var cards = _btCardsTotals(view, selName);
+      var shots = _btShotsTotals(view, aliases);
+      box.className = 'has-data' + (view === 'sel' ? ' is-sel' : '');
+      var titleTxt = (view === 'sel')
+        ? ('🌍 TOTAL ' + String(selName || 'SELECCIÓN').toUpperCase() + ' · TODAS LAS COMPETICIONES')
+        : '🛡 TOTAL CLUB · TODAS LAS COMPETICIONES OFICIALES';
+      if (!rec.pj){
+        box.innerHTML = '<div class="bpl-tot-wrap"><div class="bpl-tot-title">'+titleTxt+'</div>'
+          + '<div class="bpl-tot-empty">— Sin partidos jugados todavía —</div></div>';
+        return;
+      }
+      var dg = rec.gf - rec.ga;
+      var dgTxt = (dg > 0 ? '+' : '') + dg;
+      var pct = rec.pj ? Math.round((rec.g / rec.pj) * 100) : 0;
+      var sh = shots.has;
+      var strip = ''
+        + _btCell('J',  rec.pj)
+        + _btCell('G',  rec.g, 'g')
+        + _btCell('E',  rec.e, 'e')
+        + _btCell('P',  rec.p, 'p')
+        + _btCell('G+', rec.gf, 'gf', true)
+        + _btCell('G-', rec.ga, 'ga')
+        + _btCell('DG', dgTxt, (dg>0?'g':dg<0?'p':''))
+        + _btCell('🟨', cards.ta, '', true)
+        + _btCell('🟥', cards.tr)
+        + _btCell('⭐️', cards.mvp)
+        + _btCell('%',  pct + '%', (pct>=50?'g':''), true)
+        + _btCell('🚪', sh ? shots.tiros   : '–', sh?'':'muted', true)
+        + _btCell('⚠️', sh ? shots.faltas  : '–', sh?'':'muted')
+        + _btCell('⛳️', sh ? shots.corners : '–', sh?'':'muted');
+      box.innerHTML = '<div class="bpl-tot-wrap">'
+        + '<div class="bpl-tot-title">'+titleTxt+'</div>'
+        + '<div class="bpl-tot-strip">'+strip+'</div></div>';
+    };
 
     window.renderBayernPlantillaScreen = function(){
       var host = document.getElementById('bayern-plantilla-host');
@@ -3454,6 +3699,8 @@ window._showSimProgress = function(opts, onDone){
           _renderSelView(host, _hubSelName());
           return;
         }
+        /* Banda de TOTALES del club (suma de todas las comps oficiales). */
+        try { window._bplantRenderTotals && window._bplantRenderTotals('club'); } catch(_){}
         var t = _findBayernRow();
         if (!t || !Array.isArray(t.players) || !t.players.length){
           _renderEmpty(host);
@@ -8399,6 +8646,50 @@ window._showSimProgress = function(opts, onDone){
   #s-bayern-plantilla .lext-sq-hdr.ot,#s-bayern-plantilla .lext-sq-row.ot{grid-template-columns:minmax(108px,1.3fr) 30px 30px 38px 30px 30px 30px 48px 20px;min-width:0;}
   #s-bayern-plantilla .lext-sq-hdr.gk,#s-bayern-plantilla .lext-sq-row.gk{grid-template-columns:minmax(108px,1.3fr) 30px 30px 30px 30px 30px 30px 30px 48px 20px;min-width:0;}
   #s-bayern-plantilla .lext-sq-cell.rating{font-family:Oswald,sans-serif;font-weight:700;font-size:11px;}
+  /* ── BANDA DE TOTALES DEL EQUIPO (suma de todas las comps oficiales) ──
+       Petición usuario 2026-06-05: una línea, bien ordenada y estructurada,
+       con J G E P G+ G- DG 🟨 🟥 ⭐️ % 🚪 ⚠️ ⛳️. El recuadro de jugadores
+       baja un poco para dejarle sitio (margin-top en el host). Es una tira
+       horizontal con scroll si no cabe; cada stat = cabecera (símbolo) +
+       valor debajo. 2026-06-05. */
+  #bplant-totals-banner{display:none;margin:2px 4px 6px;}
+  #bplant-totals-banner.has-data{display:block;}
+  #bplant-totals-banner .bpl-tot-wrap{
+    background:linear-gradient(135deg,rgba(238,28,37,.16),rgba(8,4,12,.4));
+    border:1px solid rgba(238,28,37,.42);border-radius:11px;
+    padding:7px 8px;box-shadow:inset 0 0 22px rgba(238,28,37,.10);}
+  #bplant-totals-banner.is-sel .bpl-tot-wrap{
+    background:linear-gradient(135deg,rgba(70,120,255,.16),rgba(8,4,14,.42));
+    border-color:rgba(110,150,255,.45);box-shadow:inset 0 0 22px rgba(90,130,255,.10);}
+  #bplant-totals-banner .bpl-tot-title{
+    font-family:Oswald,sans-serif;font-size:9.5px;letter-spacing:1.8px;
+    color:#ffb9bd;text-transform:uppercase;margin:0 0 5px 2px;opacity:.92;}
+  #bplant-totals-banner.is-sel .bpl-tot-title{color:#bcd0ff;}
+  #bplant-totals-banner .bpl-tot-strip{
+    display:flex;gap:0;overflow-x:auto;overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:2px;}
+  #bplant-totals-banner .bpl-tot-strip::-webkit-scrollbar{height:4px;}
+  #bplant-totals-banner .bpl-tot-strip::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:3px;}
+  #bplant-totals-banner .bpl-tot-cell{
+    flex:0 0 auto;min-width:30px;display:flex;flex-direction:column;align-items:center;
+    gap:2px;padding:1px 5px;border-right:1px solid rgba(255,255,255,.07);}
+  #bplant-totals-banner .bpl-tot-cell:last-child{border-right:none;}
+  #bplant-totals-banner .bpl-tot-cell.sep{border-right:1px solid rgba(255,255,255,.22);}
+  #bplant-totals-banner .bpl-tot-k{
+    font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.3px;
+    color:rgba(255,255,255,.62);line-height:1;white-space:nowrap;}
+  #bplant-totals-banner .bpl-tot-v{
+    font-family:'Bebas Neue',Oswald,sans-serif;font-size:15px;line-height:1;
+    color:#fff;font-weight:700;white-space:nowrap;}
+  #bplant-totals-banner .bpl-tot-v.g{color:#7ee08a;}
+  #bplant-totals-banner .bpl-tot-v.e{color:#ffd24a;}
+  #bplant-totals-banner .bpl-tot-v.p{color:#ff7b7b;}
+  #bplant-totals-banner .bpl-tot-v.gf{color:#7ee08a;}
+  #bplant-totals-banner .bpl-tot-v.ga{color:#ff9b9b;}
+  #bplant-totals-banner .bpl-tot-v.muted{color:rgba(255,255,255,.5);}
+  #bplant-totals-banner .bpl-tot-empty{
+    font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);
+    padding:4px 2px;letter-spacing:.4px;}
   /* Escudos club/selección: pegados al borde derecho (ocultamos la línea
      decorativa ::after que ocupaba ese hueco) + más grandes y llamativos.
      2026-06-03. */
@@ -49295,6 +49586,98 @@ https://api.sofascore.app/api/v1/team/44/image
     collect:_collectSummer
   });
 
+  /* ── Competiciones que faltaban por normalizar (2026-06-05) ──────────
+     `_MFC_LABEL`/`_MFC_COLOR` ya tenían entradas para recopa / usc /
+     inter / sc (Supercopa de España) y para la FASE DE LIGA de las
+     europeas, pero no había colector que las leyera, así que ni la caja
+     PARTIDOS JUGADOS ni la banda de TOTALES de la plantilla las contaban.
+     Las añadimos aquí leyendo su store dedicado. Mismo formato de salida
+     `{home,away,gh,ga,events,mvp,mvpTeam,...}` que el resto de colectores.
+     Los KO (recopa/inter/sc/usc) se deciden a partido único con ET+pens:
+     el marcador final = gh+etGh / ga+etGa (los penaltis NO suman goles,
+     son desempate → en el registro cuentan como EMPATE en el césped). */
+  var _PHASE_LABELS = { r64:'1/64', r32:'1/32', r16:'Octavos', r8:'Cuartos',
+                        sf:'Semis', fin:'FINAL', q:'Cuartos', s:'Semis', f:'FINAL' };
+  function _koPushMatch(out, m, comp, emoji, label, uid, aliases){
+    if (!m) return;
+    var h = m.home || m.l, a = m.away || m.v;
+    if (!h || !a) return;
+    if (h === '__BYE__' || a === '__BYE__') return;
+    if (!_match(h, aliases) && !_match(a, aliases)) return;
+    if (m.played){
+      var gh = (Number(m.gh)||0) + (Number(m.etGh)||0);
+      var ga = (Number(m.ga)||0) + (Number(m.etGa)||0);
+      out.played.push({ comp:comp, emoji:emoji, home:h, away:a, gh:gh, ga:ga,
+        label:label, uid:uid, events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+        etGh:m.etGh, etGa:m.etGa, pens:(m.penWinner ? { winner:m.penWinner } : m.pens) });
+    } else {
+      out.pending.push({ comp:comp, emoji:emoji, home:h, away:a, label:label });
+    }
+  }
+  /* Bracket por fases (recopa: sorteo.r64..fin · inter: sorteo.q/s/f). */
+  function _collectBracketState(lsKey, comp, emoji, phases, aliases){
+    var out = { pending:[], played:[] };
+    var st = null; try { st = JSON.parse(localStorage.getItem(lsKey)||'null'); } catch(_){}
+    if (!st) return out;
+    var sorteo = st.sorteo || st.bracket || {};
+    phases.forEach(function(ph){
+      var arr = sorteo[ph]; if (!Array.isArray(arr)) return;
+      arr.forEach(function(m, idx){
+        _koPushMatch(out, m, comp, emoji, _PHASE_LABELS[ph] || ph, comp+'-'+ph+'-'+idx, aliases);
+      });
+    });
+    return out;
+  }
+  /* Semifinales + Final (Supercopa de España `sc_state_v1` · Supercopa de
+     Europa `usc_state_v1`): { semis:[m,m], final:m }. */
+  function _collectSemisFinal(lsKey, comp, emoji, aliases){
+    var out = { pending:[], played:[] };
+    var st = null; try { st = JSON.parse(localStorage.getItem(lsKey)||'null'); } catch(_){}
+    if (!st) return out;
+    (Array.isArray(st.semis) ? st.semis : []).forEach(function(m, idx){
+      _koPushMatch(out, m, comp, emoji, 'Semis', comp+'-sf-'+idx, aliases);
+    });
+    if (st.final) _koPushMatch(out, st.final, comp, emoji, 'FINAL', comp+'-fin', aliases);
+    return out;
+  }
+  /* Fase de liga europea (swiss): `ucl_phase_v1` / `uel_phase_v1` /
+     `uecl_phase_v1` → { pairs:[{home,away,jornada,gh,ga,played}] }. Sin
+     ET (90' siempre). Se emite con el MISMO `comp` que el KO para que en
+     la caja se agrupen bajo "Champions/Europa/Conference League". */
+  function _collectEurPhase(lsKey, comp, emoji, aliases){
+    var out = { pending:[], played:[] };
+    var st = null; try { st = JSON.parse(localStorage.getItem(lsKey)||'null'); } catch(_){}
+    if (!st || !Array.isArray(st.pairs)) return out;
+    st.pairs.forEach(function(p, idx){
+      if (!p) return;
+      var h = p.home, a = p.away;
+      if (!h || !a) return;
+      if (!_match(h, aliases) && !_match(a, aliases)) return;
+      var lbl = 'Liga · J' + (p.jornada || (idx+1));
+      if (p.played && typeof p.gh === 'number' && typeof p.ga === 'number'){
+        out.played.push({ comp:comp, emoji:emoji, home:h, away:a, gh:p.gh, ga:p.ga,
+          label:lbl, uid:comp+'-ph-'+idx, events:p.events||[], mvp:p.mvp||'', mvpTeam:p.mvpTeam||'' });
+      } else {
+        out.pending.push({ comp:comp, emoji:emoji, home:h, away:a, label:lbl });
+      }
+    });
+    return out;
+  }
+  _COMPS.push({ id:'sc',     label:'Supercopa España',  emoji:'🏆',
+    collect:function(al){ return _collectSemisFinal('sc_state_v1','sc','🏆',al); } });
+  _COMPS.push({ id:'usc',    label:'Supercopa Europa',  emoji:'🏆',
+    collect:function(al){ return _collectSemisFinal('usc_state_v1','usc','🏆',al); } });
+  _COMPS.push({ id:'recopa', label:'Recopa Europa',     emoji:'🏆',
+    collect:function(al){ return _collectBracketState('recopa_state_v1','recopa','🏆',['r64','r32','r16','r8','sf','fin'],al); } });
+  _COMPS.push({ id:'inter',  label:'Intercontinental',  emoji:'🌐',
+    collect:function(al){ return _collectBracketState('inter_state_v1','inter','🌐',['q','s','f'],al); } });
+  _COMPS.push({ id:'uclph',  label:'Champions (fase)',  emoji:'🏆',
+    collect:function(al){ return _collectEurPhase('ucl_phase_v1','ucl','🏆',al); } });
+  _COMPS.push({ id:'uelph',  label:'Europa (fase)',     emoji:'🟠',
+    collect:function(al){ return _collectEurPhase('uel_phase_v1','uel','🟠',al); } });
+  _COMPS.push({ id:'ueclph', label:'Conference (fase)', emoji:'🟢',
+    collect:function(al){ return _collectEurPhase('uecl_phase_v1','uecl','🟢',al); } });
+
   /* Agrega los partidos de Liverpool (club) + Francia (selección) y
      los devuelve en DOS secciones separadas (petición usuario
      2026-05-25): CLUB · Liverpool arriba, SELECCIÓN · Francia debajo.
@@ -49365,6 +49748,12 @@ https://api.sofascore.app/api/v1/team/44/image
       sel:  { name: 'Francia', emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(franceAlias, franceAlias) }
     };
   }
+  /* Expuesto para la BANDA DE TOTALES de la plantilla del hub
+     (`_bplantRenderTotals` en el IIFE de #s-bayern-plantilla): suma
+     J/G/E/P/G+/G- de TODOS los partidos jugados, competición a
+     competición, reutilizando este colector (que ya resuelve los
+     fixtures de Mundial-48 / Mundialito y todas las europeas). */
+  try { window._muGatherPlayed = function(){ try { return _gather(); } catch(_){ return null; } }; } catch(_){}
 
   /* Mapas de etiqueta / color por comp — clonan los del histórico
      derbys (`s-munich-derby-season`) para que la card del dropdown

@@ -7155,10 +7155,34 @@ window._showSimProgress = function(opts, onDone){
             { name: ligaMatch.away, icon: _psClubIcon(ligaMatch.away) },
             _psScoreCenterHtml(_gh, _ga))
         + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
-        +   '<button type="button" class="ps-btn" id="ps-nontour-open">📋 VER JORNADA ' + ligaJor + '</button>'
+        +   '<button type="button" class="ps-btn" id="ps-nontour-acta">📋 ACTA DEL PARTIDO</button>'
+        +   '<button type="button" class="ps-btn" id="ps-nontour-open">📅 VER JORNADA ' + ligaJor + '</button>'
         +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
         + '</div>'
         + '</div>';
+      /* 📋 ACTA DEL PARTIDO: abre el acta (goles/tarjetas/MVP) de ESTE
+         partido directamente desde la card del hub, sin tener que entrar
+         a "VER JORNADA" y desplegar el toggle del acta. El acta del
+         partido del hub (HvIA/HvH o pagar-simulación) se persiste en el
+         MISMO store de Liga (`loadResults`, key `j|home|away`) con sus
+         `events`, así que `showMatchActaModal` lo resuelve con los mismos
+         nombres con que `_ligaPlayed` lo encontró. Si por cualquier
+         motivo el resultado no trae `events`, caemos a abrir la jornada
+         (donde el acta se ve como toggle) para no dejar al usuario sin
+         feedback (bug 2026-06-05 «no sale el acta del partido»). */
+      var bA0 = document.getElementById('ps-nontour-acta');
+      if (bA0) bA0.onclick = function(){
+        try {
+          var _res = (_ligaPlayed && _ligaPlayed.events && _ligaPlayed.events.length) ? _ligaPlayed : null;
+          if (_res && typeof window.showMatchActaModal === 'function'){
+            window.showMatchActaModal(ligaJor, ligaMatch.home, ligaMatch.away);
+            return;
+          }
+          if (ligaJor > 0 && typeof window.openLigaJornada === 'function'){
+            window.openLigaJornada(ligaJor);
+          }
+        } catch(_){}
+      };
       var bV0 = document.getElementById('ps-nontour-open');
       if (bV0) bV0.onclick = function(){
         try { if (ligaJor > 0 && typeof window.openLigaJornada === 'function') window.openLigaJornada(ligaJor); } catch(_){}

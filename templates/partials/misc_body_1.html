@@ -2102,7 +2102,7 @@ window._showSimProgress = function(opts, onDone){
 
 <div class="screen" id="s-bayern-plantilla">
   <button class="back-btn" onclick="go('s-munich')">◀ Volver</button>
-  <div class="sec-hdr" style="gap:6px;align-items:center;"><span class="sec-emoji">👕</span><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button><button type="button" id="bplant-baja-pencil" class="munich-edit-pencil bed-pencil" onclick="window._bedToggleGated&amp;&amp;window._bedToggleGated()" title="Editar stats y bajas manualmente (PIN 7477)" aria-label="Editar stats y bajas">🖍</button><div id="bplant-crest-toggle"></div></div>
+  <div class="sec-hdr" style="gap:6px;align-items:center;"><button type="button" id="bplant-edit-pencil" class="munich-edit-pencil" onclick="window._bplantPickOpenGated&amp;&amp;window._bplantPickOpenGated()" title="Cambiar plantilla del hub (admin PIN 747)" aria-label="Cambiar plantilla del hub">🖍</button><button type="button" id="bplant-baja-pencil" class="munich-edit-pencil bed-pencil" onclick="window._bedToggleGated&amp;&amp;window._bedToggleGated()" title="Editar stats y bajas manualmente (PIN 7477)" aria-label="Editar stats y bajas">🖍</button><div id="bplant-crest-toggle"></div></div>
   <!-- La caja del Bayern reusa EXACTAMENTE el mismo layout del modal
        del editor EA Sports (lext-sq-*) y se pinta a partir de la misma
        fuente de datos (`ligaExt_liga-ea-sports`). Los iconos por sección
@@ -2830,6 +2830,24 @@ window._showSimProgress = function(opts, onDone){
       try { window.renderBayernPlantillaScreen(); } catch(_){}
     };
 
+    /* Sube los 2 lápices (🖍 rojo + 🖍 azul) a la fila de navegación,
+       pegados a la derecha del botón 🏠 (la home-icon-btn que index.html
+       inyecta junto al ◀ Volver). Petición usuario 2026-06-05. Idempotente:
+       si ya están en la nav-row no hace nada. */
+    function _bplantRelocatePencils(){
+      var scr = document.getElementById('s-bayern-plantilla');
+      if (!scr) return;
+      var navRow = scr.querySelector('.nav-row');
+      if (!navRow) return; /* la inyecta el DOMContentLoaded de index.html */
+      var red  = document.getElementById('bplant-edit-pencil');
+      var blue = document.getElementById('bplant-baja-pencil');
+      if (!red || !blue) return;
+      if (red.parentNode === navRow && blue.parentNode === navRow) return; /* ya reubicados */
+      navRow.appendChild(red);
+      navRow.appendChild(blue);
+      navRow.classList.add('bplant-nav');
+    }
+
     /* ════════════════════════════════════════════════════════════════
        LÁPIZ AZUL · PIN 7477 + modo edición + panel de baja manual.
        ════════════════════════════════════════════════════════════════ */
@@ -3185,6 +3203,8 @@ window._showSimProgress = function(opts, onDone){
         }
         /* Escudos club/selección arriba a la derecha + vista activa. */
         try { _bplantRenderCrestToggle(); } catch(_){}
+        /* Lápices 🖍 → pegados a la derecha del 🏠 en la nav-row. */
+        try { _bplantRelocatePencils(); } catch(_){}
         if (window._bplantView === 'sel'){
           _renderSelView(host, _hubSelName());
           return;
@@ -8029,7 +8049,15 @@ window._showSimProgress = function(opts, onDone){
      decorativa ::after que ocupaba ese hueco) + más grandes y llamativos.
      2026-06-03. */
   #s-bayern-plantilla .sec-hdr::after{display:none;}
-  #bplant-crest-toggle{margin-left:auto;margin-right:2px;display:flex;gap:13px;align-items:center;}
+  /* Sec-hdr sin padding superior: los escudos suben lo máximo posible,
+     hasta solaparse con la fila de navegación (que es width:fit-content y
+     sólo ocupa la izquierda, así que el lado derecho queda libre para los
+     escudos). 2026-06-05. */
+  #s-bayern-plantilla .sec-hdr{padding-top:0;margin-top:0;min-height:0;}
+  #bplant-crest-toggle{margin-left:auto;margin-right:2px;margin-top:-58px;display:flex;gap:13px;align-items:center;position:relative;z-index:160;}
+  /* Lápices 🖍 reubicados a la derecha del 🏠 dentro de la nav-row
+     (que es width:fit-content → los envuelve pegados al home). */
+  #s-bayern-plantilla .nav-row.bplant-nav .munich-edit-pencil{width:30px;height:30px;font-size:16px;border-radius:6px;margin-left:0;}
   #bplant-crest-toggle .bpl-crest-btn{display:flex;align-items:center;justify-content:center;width:50px;height:50px;border-radius:50%;cursor:pointer;padding:3px;background:radial-gradient(circle at 50% 32%,rgba(255,255,255,.12),rgba(255,255,255,.02));border:2px solid rgba(255,255,255,.28);opacity:.6;transition:transform .15s,box-shadow .2s,opacity .15s,border-color .15s;-webkit-tap-highlight-color:transparent;}
   #bplant-crest-toggle .bpl-crest-btn:active{transform:scale(.93);}
   #bplant-crest-toggle .bpl-crest-btn.is-active{opacity:1;border-color:#ffd24a;border-width:2.5px;background:radial-gradient(circle at 50% 32%,rgba(255,210,74,.34),rgba(255,210,74,.05));transform:scale(1.1);animation:bplCrestPulse 1.8s ease-in-out infinite;}

@@ -33935,6 +33935,13 @@ window._showSimProgress = function(opts, onDone){
 #s-intercontinental .inter-btn-reset{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:8px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid rgba(255,80,80,.55);background:linear-gradient(135deg,rgba(255,80,80,.12),rgba(80,20,20,.25));color:#ffb0b0;}
 #s-intercontinental .inter-banner-info{font-family:Rajdhani,sans-serif;font-size:12.5px;line-height:1.55;color:rgba(255,210,170,.92);background:rgba(255,144,32,.07);border:1px solid rgba(255,144,32,.30);border-radius:9px;padding:9px 11px;}
 #s-intercontinental .inter-banner-info b{color:#ffd700;}
+/* Desplegable «Faltan equipos…»: cabecera plegada por defecto. */
+#s-intercontinental .inter-banner-det{border:1px solid rgba(255,144,32,.30);border-radius:9px;background:rgba(255,144,32,.06);overflow:hidden;}
+#s-intercontinental .inter-banner-det>summary{cursor:pointer;list-style:none;padding:9px 11px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:.6px;font-weight:700;color:#ffd0a0;display:flex;align-items:center;gap:6px;-webkit-tap-highlight-color:transparent;}
+#s-intercontinental .inter-banner-det>summary::-webkit-details-marker{display:none;}
+#s-intercontinental .inter-banner-det>summary::after{content:'▾';margin-left:auto;transition:transform .18s;opacity:.8;}
+#s-intercontinental .inter-banner-det[open]>summary::after{transform:rotate(180deg);}
+#s-intercontinental .inter-banner-det .inter-banner-info{border:none;border-top:1px solid rgba(255,144,32,.20);border-radius:0;background:transparent;}
 #s-intercontinental .inter-empty{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,210,170,.6);text-align:center;padding:14px 10px;font-style:italic;}
 #s-intercontinental .inter-card{margin:8px 8px;background:linear-gradient(135deg,#1a0a02,#3a1808 50%,#1a0a02);border:1px solid rgba(255,144,32,.5);border-radius:12px;overflow:hidden;padding:10px 6px;}
 #s-intercontinental .inter-card.played{border-color:rgba(255,180,80,.5);}
@@ -34159,7 +34166,12 @@ window._showSimProgress = function(opts, onDone){
         var parts=[];
         if(info.manualCount<2) parts.push('Añade el <b>campeón y subcampeón de Champions</b> en «EA Sports → Europa → 🌐 Intercontinental» ('+info.manualCount+'/2).');
         if(!info.restoComplete) parts.push('Simula <b>TODA</b> la Liga Resto del Mundo — sus 6 primeros entran automáticamente.');
-        html+='<div class="inter-banner-info">🌐 Faltan equipos para los 8:<br>· '+parts.join('<br>· ')+'</div>';
+        /* Texto plegado en un desplegable (petición usuario): por defecto
+           solo se ve la cabecera «Faltan equipos…»; al pulsar se expanden
+           los pasos pendientes. */
+        var _have=Math.min(info.manualCount,2)+(info.restoComplete?6:0);
+        html+='<details class="inter-banner-det"><summary>🌐 Faltan equipos para los 8 ('+_have+'/8)</summary>'
+            +'<div class="inter-banner-info" style="margin-top:6px;">· '+parts.join('<br>· ')+'</div></details>';
       }
     } else {
       if(s.champion){

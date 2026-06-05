@@ -32570,23 +32570,21 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   PREVIA · highlight de acciones pendientes
+   PREVIA · resalte amarillo ELIMINADO (petición usuario 2026-06-05)
    ───────────────────────────────────────────────────────────────
-   El resalte amarillo del cuadro de estadio/clima (`#pp-env`) se
-   ELIMINÓ (petición usuario 2026-06-05): resultaba intrusivo en
-   todos los partidos de Liga EA. El highlight sigue disponible para
-   los items de la lista (balón, prórroga, penaltis, alias).
+   El borde/glow amarillo pulsante (`is-pp-env-hint`) que recorría
+   estadio → balón → prórroga → penaltis → alias resultaba intrusivo
+   en TODOS los partidos de Liga EA (fotos usuario). La secuencia ya
+   no aplica la clase (`_ppBuildSequence` devuelve []), y esta regla
+   se neutraliza para que NINGÚN elemento de la previa muestre el
+   brillo amarillo aunque la clase llegue por cualquier vía/caché.
    ═══════════════════════════════════════════════════════════════ */
-/* Highlight amarillo aplicable a los items de la previa
-   en la secuencia (prórroga, penaltis, balón, alias). */
 .pp-item.is-pp-env-hint,
 .pp-alias-hint.is-pp-env-hint,
 .pp-vs .is-pp-env-hint{
-  border:2px solid #f0c820 !important;
-  box-shadow:0 0 24px rgba(240,200,32,.6), inset 0 0 14px rgba(240,200,32,.08) !important;
-  animation:ppEnvHintPulse 1.6s ease-in-out infinite;
-  position:relative;
-  border-radius:10px;
+  border:inherit !important;
+  box-shadow:none !important;
+  animation:none !important;
 }
 /* (tooltip "ELIGE ESTADIO Y CLIMA" eliminado — petición usuario
    2026-05-10: el resalte visual es suficiente, el texto sobre el
@@ -33601,30 +33599,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   function _ppBuildSequence(){
-    /* Detectar tipo de match para construir la secuencia de targets. */
-    var seq = [];
-    /* (1) Alias picker — visible solo cuando un IA-team de Resto de
-       Ligas necesita alias. Detectamos el badge "EQUIPO eFootball"
-       o un botón con clase pp-alias-hint, etc. Por ahora buscamos
-       cualquier elemento con clase `pp-alias-need` o un botón con
-       atributo data-pp-alias-needed. */
-    var aliasEl = document.querySelector('.pp-alias-need, [data-pp-alias-needed="1"]');
-    if (aliasEl) seq.push({ el: aliasEl, ms: 5000 });
-    /* (2) Estadio — el resalte amarillo del `#pp-env` se ELIMINÓ
-       (petición usuario 2026-06-05, foto Deportivo Alavés vs FC
-       Barcelona en Liga EA): el borde amarillo pulsante sobre la caja
-       del estadio/clima resultaba intrusivo en TODOS los partidos. El
-       estadio se sigue eligiendo pero sin el resalte. */
-    /* (3) Prórroga y Penaltis si son items en pp-list (eliminatoria
-       a partido único). */
-    var pro = document.querySelector('#pp-list .pp-item[data-ppid="prorroga"]');
-    if (pro) seq.push({ el: pro, ms: 3000 });
-    var pen = document.querySelector('#pp-list .pp-item[data-ppid="penaltis"]');
-    if (pen) seq.push({ el: pen, ms: 3000 });
-    /* (4) Balón (último — la confirmación llega cuando se marca). */
-    var balon = document.querySelector('#pp-list .pp-item[data-ppid="balon"]');
-    if (balon) seq.push({ el: balon, ms: 8000 }); /* el último permanece hasta que se marque */
-    return seq;
+    /* RESALTE AMARILLO DE LA PREVIA ELIMINADO POR COMPLETO
+       (petición usuario 2026-06-05, fotos Liga EA — Deportivo Alavés
+       vs FC Barcelona y Sevilla vs Atlético): el borde/glow amarillo
+       pulsante (`is-pp-env-hint`) que recorría estadio → balón →
+       prórroga → penaltis → alias resultaba intrusivo en TODOS los
+       partidos. Devolvemos secuencia vacía → ningún elemento de la
+       previa recibe el resalte. Las acciones (elegir estadio, balón,
+       etc.) siguen funcionando igual, solo sin el brillo amarillo.
+       Para reactivarlo en el futuro, restaurar los pushes a `seq`. */
+    return [];
   }
   function _ppApplyStep(i){
     _ppClearAllHint();

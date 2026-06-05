@@ -3204,6 +3204,13 @@ _KV_ALLOWED_EXACT = {
     "ftbol_sel_sanciones_v1",   # selecciones (amarillas + sanciones + lesiones)
     "ftbol_lesiones_v1",        # club: BAJA_STORE + LESION_STORE
     "ftbol_sanciones_v1",       # club: SANCION_STORE.__global
+    # Ajustes MANUALES de estadísticas de la plantilla del hub (editor azul
+    # 🖍): deltas por jugador y campo (club + selección). Vivían SOLO en
+    # localStorage → al borrar datos de navegación se perdía la corrección
+    # (foto usuario 2026-06-05: amarilla editada a mano que "volvía a salir"
+    # al recargar). localStorage es solo caché; el server es la fuente de
+    # verdad. Merge por RECENCIA, igual que las bajas/sanciones.
+    "bplant_stat_adjust_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -3211,6 +3218,7 @@ _KV_ALLOWED_EXACT = {
 # nuevo y un consumo (decremento) tampoco se revierte.
 _KV_RECENCY_BLOB_KEYS = {
     "ftbol_sel_sanciones_v1", "ftbol_lesiones_v1", "ftbol_sanciones_v1",
+    "bplant_stat_adjust_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

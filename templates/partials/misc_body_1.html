@@ -2461,9 +2461,68 @@ window._showSimProgress = function(opts, onDone){
         ? 'sel:' + _normForStats(_hubSelName())
         : 'club:' + _normForStats(_hubTeamName());
     }
-    var _bedOvCache = null;   /* este editor es el único escritor de la clave */
-    function _bedOvAll(){ if (_bedOvCache) return _bedOvCache; try { _bedOvCache = JSON.parse(localStorage.getItem(_BED_OV_KEY) || '{}') || {}; } catch(_){ _bedOvCache = {}; } return _bedOvCache; }
-    function _bedOvSaveAll(o){ _bedOvCache = o; try { localStorage.setItem(_BED_OV_KEY, JSON.stringify(o)); } catch(_){} }
+    var _bedOvCache = null;   /* único escritor LOCAL de la clave; el server puede adoptar vía sync */
+    var _bedOvUpdatedAt = 0;
+    var _bedOvSync = null;
+    function _bedOvAll(){
+      if (_bedOvCache) return _bedOvCache;
+      try {
+        var raw = JSON.parse(localStorage.getItem(_BED_OV_KEY) || '{}') || {};
+        if (raw && raw.updatedAt != null){ _bedOvUpdatedAt = Number(raw.updatedAt) || 0; delete raw.updatedAt; }
+        _bedOvCache = raw;
+      } catch(_){ _bedOvCache = {}; }
+      return _bedOvCache;
+    }
+    function _bedOvWriteLocal(){
+      try {
+        var o = _bedOvAll(), blob = {};
+        for (var k in o) blob[k] = o[k];
+        blob.updatedAt = _bedOvUpdatedAt || 0;
+        localStorage.setItem(_BED_OV_KEY, JSON.stringify(blob));
+      } catch(_){}
+    }
+    function _bedOvSaveAll(o){
+      _bedOvCache = o;
+      _bedOvUpdatedAt = Date.now();
+      _bedOvWriteLocal();
+      /* Sube YA al servidor la corrección manual (sin esperar al debounce
+         de 1200 ms): si el usuario edita y borra los datos del navegador en
+         seguida, la corrección ya está en el server → al volver no "vuelve a
+         salir" la cifra vieja (bug 2026-06-05). */
+      try { if (_bedOvSync){ _bedOvSync.touch(_bedOvUpdatedAt); if (_bedOvSync.pushNow) _bedOvSync.pushNow(); } } catch(_){}
+    }
+    function _bedOvIsEmpty(d){
+      if (!d) return true;
+      for (var k in d){ if (k === 'updatedAt') continue; var sc = d[k]; if (sc && Object.keys(sc).length) return false; }
+      return true;
+    }
+    /* Sync al servidor (mismo `_kvBlobSync` + merge por RECENCIA que las
+       bajas/sanciones). Este partial se evalúa ANTES que index.bundle.js
+       (donde vive `_kvBlobSync`), así que diferimos el alta hasta que esté
+       disponible. Recencia: la última edición (mayor updatedAt) gana; un
+       borrado de navegación (local vacío) adopta el server. */
+    function _bedOvInitSync(tries){
+      tries = tries || 0;
+      if (_bedOvSync) return;
+      if (typeof window._kvBlobSync !== 'function'){
+        if (tries < 60) setTimeout(function(){ _bedOvInitSync(tries+1); }, 150);
+        return;
+      }
+      try {
+        _bedOvSync = window._kvBlobSync(_BED_OV_KEY);
+        _bedOvAll();   /* carga _bedOvUpdatedAt desde localStorage */
+        _bedOvSync.config(function(){ return _bedOvAll(); }, function(sv){
+          var o = {}; if (sv){ for (var k in sv){ if (k === 'updatedAt') continue; o[k] = sv[k]; } }
+          _bedOvCache = o;
+          _bedOvUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
+          _bedOvWriteLocal();
+          try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){}
+        }, _bedOvIsEmpty);
+        _bedOvSync.seed(_bedOvUpdatedAt);
+        _bedOvSync.hydrate(function(){ try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){} });
+      } catch(_){}
+    }
+    try { _bedOvInitSync(0); } catch(_){}
     /* Mapa de deltas { field -> ajuste } del jugador en la vista actual. */
     function _bedDelta(name){
       var o = _bedOvAll(); var sc = o[_bedScopeKey()];
@@ -2967,6 +3026,17 @@ window._showSimProgress = function(opts, onDone){
       var ov = document.getElementById('bed-baja-ov'); if (ov) ov.style.display = 'flex';
     };
     window._bedBajaClose = function(){ var ov = document.getElementById('bed-baja-ov'); if (ov) ov.style.display = 'none'; _bedTarget = null; _bedType = null; };
+    /* Sube YA al servidor la baja/sanción editada a mano (sin esperar al
+       debounce de 1200 ms del autosave). Un borrado manual debe persistir
+       en el server antes de que el usuario borre los datos del navegador,
+       o al volver la hidratación re-adopta la copia vieja y la baja vuelve
+       a salir (bug 2026-06-05). */
+    function _bedFlushSync(){
+      try {
+        if (window._bplantView === 'sel'){ if (window._bajaFlushSelNow) window._bajaFlushSelNow(); }
+        else { if (window._bajaFlushClubNow) window._bajaFlushClubNow(); }
+      } catch(_){}
+    }
     window._bedPickType = function(t){
       _bedType = t;
       var btns = document.querySelectorAll('#bed-baja-ov .bed-type-btn');
@@ -2998,6 +3068,7 @@ window._showSimProgress = function(opts, onDone){
         }
       } catch(_){}
       _bedPushMsg(name, _bedType, n);
+      _bedFlushSync();
       window._bedBajaClose();
       try { window.renderBayernPlantillaScreen(); } catch(_){}
     };
@@ -3005,6 +3076,7 @@ window._showSimProgress = function(opts, onDone){
       if (!_bedTarget) return;
       var name = _bedTarget;
       try { if (window._bplantView === 'sel') _bedClearSel(name); else _bedClearClub(name); } catch(_){}
+      _bedFlushSync();
       window._bedBajaClose();
       try { window.renderBayernPlantillaScreen(); } catch(_){}
     };

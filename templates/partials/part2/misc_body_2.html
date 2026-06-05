@@ -20436,20 +20436,20 @@
      window._bayernCalMarkToday a las filas firstMay..idx-1. El fondo
      gris GANA sobre el color de competición (ag-liga/ag-sel/…) con
      !important; iconos y texto quedan atenuados en escala de grises. */
-  body.bayern-cal-on #s-agenda .ag-r.ag-done{
+  #s-agenda .ag-r.ag-done{
     background:linear-gradient(90deg,rgba(26,29,34,.94),
                rgba(42,46,54,.55) 60%,rgba(26,29,34,.94)) !important;
     background-image:none !important;
     opacity:.82;
   }
-  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-date,
-  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-lbl{
+  #s-agenda .ag-r.ag-done .ag-date,
+  #s-agenda .ag-r.ag-done .ag-lbl{
     color:rgba(190,196,206,.52) !important;
     text-shadow:none !important;
     font-weight:500;
   }
-  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-ico,
-  body.bayern-cal-on #s-agenda .ag-r.ag-done .ag-wx{
+  #s-agenda .ag-r.ag-done .ag-ico,
+  #s-agenda .ag-r.ag-done .ag-wx{
     filter:grayscale(1) brightness(.85);opacity:.5;
   }
 
@@ -20967,8 +20967,8 @@
     var screen = document.getElementById('s-agenda');
     if (!screen) return;
     /* El marcador de HOY (borde rosa) y el de fechas CUMPLIDAS
-       (fondo gris) son exclusivos del calendario del Bayern (la "caja
-       Bayern"). En el AGENDA global del resto de usuarios no se
+       (fondo gris) son exclusivos del calendario del Liverpool (la
+       "caja Bayern"). En el AGENDA global del resto de usuarios no se
        pintan — solo limpiamos cualquier resto. */
     screen.querySelectorAll('.ag-r.ag-today-marker').forEach(function(r){
       r.classList.remove('ag-today-marker');
@@ -20976,13 +20976,22 @@
     screen.querySelectorAll('.ag-r.ag-done').forEach(function(r){
       r.classList.remove('ag-done');
     });
-    if (!document.body.classList.contains('bayern-cal-on')) return;
-    /* Marcamos el host VISIBLE: normalmente el render Bayern
-       (#ag-content-bayern), pero si por una carrera de timing aún no
-       está construido y se está mostrando el SSR (#ag-content),
-       marcamos ese para que el borde NUNCA falte. */
-    var host = document.getElementById('ag-content-bayern');
-    if (!host || !host.querySelector('.ag-r')) host = document.getElementById('ag-content');
+    /* Contexto del calendario del Liverpool: aceptamos CUALQUIERA de
+       las dos señales (la clase del body o el flag de contexto) por si
+       una se desincroniza con la otra en una carrera de timing. Sin
+       contexto Liverpool no marcamos nada. */
+    var inCtx = document.body.classList.contains('bayern-cal-on')
+             || window._bayernCalContext === true;
+    if (!inCtx) return;
+    /* Host VISIBLE: el que el usuario realmente está viendo. En modo
+       Bayern es #ag-content-bayern; si por timing se ve el SSR, ese.
+       `offsetParent === null` ⇒ el nodo está oculto (display:none). */
+    var bay = document.getElementById('ag-content-bayern');
+    var ssr = document.getElementById('ag-content');
+    function _vis(el){ return !!(el && el.querySelector('.ag-r') && el.offsetParent !== null); }
+    var host = _vis(bay) ? bay
+             : (_vis(ssr) ? ssr
+             : ((bay && bay.querySelector('.ag-r')) ? bay : ssr));
     if (!host) return;
     var rows = host.querySelectorAll('.ag-r');
     if (!rows.length) return;
@@ -21000,12 +21009,10 @@
     }
     /* RESOLUCIÓN DEL DÍA ACTUAL — por FECHA, no por aritmética de
        índice. La fuente única es la MISMA que muestra la caja
-       CALENDARIO del hub (`window._psCurrentDate()` → p.ej. "26 Jul").
+       CALENDARIO del hub (`window._psCurrentDate()` → p.ej. "03 May").
        Buscamos la fila cuya `.ag-date` coincide con esa fecha: así el
-       borde rosa cae EXACTAMENTE en el día que el hub considera "hoy",
-       sin posibilidad de desincronización con el cursor. Si no se puede
-       resolver la fecha (calendario sin hidratar), caemos al método
-       legacy por índice (`_currentDayIdx() + firstMay`). */
+       borde rosa cae EXACTAMENTE en el día que el hub considera "hoy".
+       Si no se resuelve la fecha, caemos al índice del cursor. */
     var idx = -1;
     var curDate = '';
     try { if (typeof window._psCurrentDate === 'function') curDate = window._psCurrentDate(); } catch(_){}
@@ -21037,6 +21044,25 @@
       catch(_){ try { target.scrollIntoView(); } catch(__){} }
     }
   };
+
+  /* ENFORCER INDEPENDIENTE del marcador. El cableado por observer /
+     _startMarkTimer puede no dispararse en algún flujo (carreras del
+     SPA, re-render por sims de fondo, etc.). Este intervalo de nivel
+     superior re-aplica el marcador SIEMPRE que la pantalla del
+     calendario esté activa, sin depender de ese cableado. Es barato
+     e idempotente (la propia función limpia y re-pone una clase). */
+  try {
+    setInterval(function(){
+      var sc = document.getElementById('s-agenda');
+      /* Pantalla VISIBLE (no dependemos solo de la clase .active por si
+         el SPA la muestra de otro modo). */
+      if (!sc || sc.offsetParent === null) return;
+      if (!document.body.classList.contains('bayern-cal-on')
+          && window._bayernCalContext !== true) return;
+      try { window._bayernCalMarkToday(); } catch(_){}
+    }, 600);
+  } catch(_){}
+
 
   function _patchCounters(){
     var host = document.getElementById('ag-content-bayern');

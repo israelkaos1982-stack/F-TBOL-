@@ -3364,6 +3364,14 @@ _KV_ALLOWED_EXACT = {
     # verdad. Merge por RECENCIA (updatedAt): el blob más nuevo gana
     # entero, igual que las bajas/sanciones (2026-06-05).
     "mu_messages_v1",
+    # Acumulador de 🚪 tiros / ⚠️ faltas / ⛳️ córners por partido del hub
+    # (Liverpool + selección), para la BANDA DE TOTALES de la plantilla.
+    # Estos 3 datos NO se persisten en ninguna competición oficial (solo
+    # Superliga, que va excluida), así que se acumulan aquí going-forward.
+    # localStorage es solo caché; el server es la fuente de verdad para que
+    # sobrevivan al borrado de navegación / cambio de móvil. Merge por
+    # RECENCIA (updatedAt), igual que las bajas/sanciones (2026-06-05).
+    "bplant_match_stats_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -3371,7 +3379,7 @@ _KV_ALLOWED_EXACT = {
 # nuevo y un consumo (decremento) tampoco se revierte.
 _KV_RECENCY_BLOB_KEYS = {
     "ftbol_sel_sanciones_v1", "ftbol_lesiones_v1", "ftbol_sanciones_v1",
-    "bplant_stat_adjust_v1", "mu_messages_v1",
+    "bplant_stat_adjust_v1", "mu_messages_v1", "bplant_match_stats_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

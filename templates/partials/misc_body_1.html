@@ -49014,21 +49014,51 @@ https://api.sofascore.app/api/v1/team/44/image
        en ambos contextos. */
     var franceAlias   = ['francia','france'];
 
+    /* Agrupamos por la competición REAL de cada partido (`m.comp`), NO
+       por la entrada de `_COMPS` que lo recolectó. El colector `verano`
+       (`_collectSummer`) cubre VARIAS comps a la vez: Trofeo Joan Gamper
+       (`jg`), Soccer Champions Tour (`sct`), Premier Summer Series
+       (`pss`), Asian Tournament (`asia`), slots custom (`torneo`) Y el
+       Mundialito de Clubes (`mundialito`). Agrupar por `c.id` ('verano')
+       metía TODOS bajo la etiqueta "Torneos Verano" — por eso un partido
+       del Mundialito de Clubes salía rotulado como "TORNEOS VERANO" (bug
+       2026-06-05, foto usuario: Liverpool vs Al Hilal SFC · Grupo A). El
+       label de cada grupo sale de `_MFC_LABEL[comp]` (nombre real de la
+       competición) y el icono del propio partido. */
     function _gatherFor(aliasesLiga, aliasesTour){
       var groups = {};
+      function _ensureGroup(comp, emoji){
+        if (!groups[comp]){
+          groups[comp] = {
+            id: comp,
+            label: _MFC_LABEL[comp] || comp,
+            emoji: emoji || '🏆',
+            pending: [], played: []
+          };
+        }
+        return groups[comp];
+      }
       _COMPS.forEach(function(c){
         try {
           var al = (c.id === 'liga') ? aliasesLiga : aliasesTour;
           if (!al || !al.length) return;
           var r = c.collect(al);
-          if (!groups[c.id]) groups[c.id] = { id:c.id, label:c.label, emoji:c.emoji, pending:[], played:[] };
-          groups[c.id].pending = groups[c.id].pending.concat(r.pending);
-          groups[c.id].played  = groups[c.id].played.concat(r.played);
+          (r.pending || []).forEach(function(m){
+            _ensureGroup(m.comp || c.id, m.emoji || c.emoji).pending.push(m);
+          });
+          (r.played || []).forEach(function(m){
+            _ensureGroup(m.comp || c.id, m.emoji || c.emoji).played.push(m);
+          });
         } catch(_){}
       });
-      var order = ['liga','copa','ucl','uel','uecl','verano','sel'];
-      var out = [];
-      order.forEach(function(id){ if (groups[id]) out.push(groups[id]); });
+      /* Orden canónico de comps; las que el colector emita y no estén
+         listadas se añaden al final (defensivo ante comps futuras). */
+      var order = ['liga','copa','sc','ucl','uel','uecl','recopa','usc',
+                   'inter','superliga','jg','sct','pss','asia','torneo',
+                   'mundialito','amistoso','sel'];
+      var out = [], seen = {};
+      order.forEach(function(id){ if (groups[id]){ out.push(groups[id]); seen[id] = 1; } });
+      Object.keys(groups).forEach(function(id){ if (!seen[id]) out.push(groups[id]); });
       return out;
     }
 

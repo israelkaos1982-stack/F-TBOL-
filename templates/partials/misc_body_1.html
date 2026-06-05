@@ -17085,7 +17085,6 @@ window._showSimProgress = function(opts, onDone){
     el.innerHTML = ''
       + '<div style="display:flex;justify-content:flex-end;gap:8px;">'
       +   '<button class="usc-banner-btn usc-reset" onclick="window._uscResetGate&&window._uscResetGate()" style="width:auto;padding:6px 14px;">♻️ Res</button>'
-      +   '<button class="usc-banner-btn usc-stats" onclick="go(\'s-usc-stats\')" style="width:auto;padding:6px 14px;">📊 Stats</button>'
       + '</div>';
   }
 
@@ -33879,19 +33878,13 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-usc">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">⭐</span><h2>UEFA Supercup</h2></div>
+<!-- Banner dinamico — sin state: "CONFIGURAR SUPERCOPA"; con state: "Res".
+     Lo rellena window._uscRender (motor de la Supercopa de Europa). -->
+<div id="usc-banner" style="padding:8px 14px 4px;"></div>
+<!-- Cards (Semis + Final) generadas por window._uscRender(): 4 equipos
+     manuales, semis + final a partido unico con prorroga + penaltis. -->
+<div id="usc-content" style="padding:0 4px 8px;"></div>
 <div class="jlist">
-<div class="jblock"><button class="jbtn c-usc" onclick="tog('usc-s')"><div class="pdot">▶</div>⭐ <b>Supercup</b>  Semis</button>
-<div class="jmatches" id="usc-s">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<div class="jblock"><button class="jbtn c-usc" onclick="tog('usc-f')"><div class="pdot">▶</div>⭐ <b>Supercup</b>  Final</button>
-<div class="jmatches" id="usc-f">
-<div class="mrow"><div class="mn">Por definir</div><div class="ms p">vs</div><div class="mn r">Por definir</div></div>
-</div></div>
-<!-- Caja "📊 Estadísticas" Supercopa de Europa (2026-05-08): paleta
-     gris/plata/dorado igual que la temática (la caja en s-competiciones
-     es gris-negro con dorado). Lee de `ef_player_stats_usc_v1`. -->
 <div class="submenu-card sc-usc-stats" style="margin-top:10px;background:linear-gradient(135deg,#0a0a0a 0%,#262626 25%,#5a5a5a 55%,#c0c0c0 70%,#5a5a5a 85%,#0a0a0a 100%) !important;border:1.5px solid #c0c0c0 !important;box-shadow:0 4px 18px rgba(192,192,192,.28),inset 0 1px 0 rgba(255,255,255,.18) !important;" onclick="go('s-usc-stats')">
 <span class="sc-emoji">📊</span><span class="sc-label">Estadísticas</span><span class="sc-arr">▶</span>
 </div>

@@ -13336,6 +13336,28 @@ window._showSimProgress = function(opts, onDone){
         var _tCfg = null;
         try { _tCfg = JSON.parse(_tRaw); } catch(_){ continue; }
         if (!_tCfg || !_tCfg.results) continue;
+        /* La copia EN MEMORIA (_TOUR_CACHE) es la más rica: el render del
+           torneo construye `teams`/`groupFixtures`/`koBracket` y NO siempre
+           se re-persisten al localStorage. La caja Estadísticas EN VIVO
+           (`_mundialStatsRobustScan`) lee de _TOUR_CACHE y por eso SÍ
+           resuelve los nombres; este rebuild leía SOLO el localStorage y
+           podía quedarse sin teams/fixtures → no resolvía el equipo del
+           partido y bail-eaba (bug 2026-06-05: 3 partidos del Mundialito
+           del Liverpool sin subir NINGÚN gol a la plantilla, aunque la caja
+           Estadísticas del Mundialito sí los mostraba). Backfill desde la
+           caché de memoria cuando el localStorage venga incompleto. */
+        try {
+          var _tIdMem = _tk.replace(/^tour_/, '').replace(/_v1$/, '');
+          var _memCfg = (window._TOUR_CACHE && window._TOUR_CACHE[_tIdMem]) || null;
+          if (_memCfg) {
+            if ((!_tCfg.teams || !_tCfg.teams.length) && _memCfg.teams && _memCfg.teams.length)
+              _tCfg.teams = _memCfg.teams;
+            if ((!_tCfg.groupFixtures || !Object.keys(_tCfg.groupFixtures||{}).length) && _memCfg.groupFixtures)
+              _tCfg.groupFixtures = _memCfg.groupFixtures;
+            if ((!_tCfg.koBracket || !_tCfg.koBracket.length) && _memCfg.koBracket && _memCfg.koBracket.length)
+              _tCfg.koBracket = _memCfg.koBracket;
+          }
+        } catch(_){}
         var _isMundialCfg = (_tCfg.id === 'mundial');
         /* 2026-05-27: separar buckets por TIPO de torneo. Los slots
            spv, sfn (Rondas Previas y Finales de Selecciones —
@@ -13412,14 +13434,24 @@ window._showSimProgress = function(opts, onDone){
           var _info = _tIdx[_mk] || {};
           var _tA = _res.home || _info.a || '';
           var _tB = _res.away || _info.b || '';
-          if (!_tA || !_tB) return;
-          var _pjK = _mkPJ(_tA, _tB);
-          var _dK = _tCompKey + '|' + _pjK;
+          /* NO bail-ear si no se resuelve el par de equipos: los eventos
+             traen `realTeam` (la caja Estadísticas EN VIVO los muestra así)
+             y deben subir igual a la plantilla. El guard `if(!_tA||!_tB)
+             return` previo descartaba el partido ENTERO y los goles nunca
+             llegaban al store (bug 2026-06-05, Mundialito del Liverpool).
+             Dedup: por par de equipos cuando se resuelven (mantiene la
+             de-duplicación contra Source 1 para torneos de verano);
+             por identidad única tour+matchKey cuando NO se resuelven. */
+          var _haveTeams = !!(_tA && _tB);
+          var _dK = _haveTeams ? (_tCompKey + '|' + _mkPJ(_tA, _tB))
+                               : (_tCompKey + '|' + _tk + '|' + _mk);
           if (processedMatches[_dK]) return;
           processedMatches[_dK] = true;
-          var _nA = _normPS(_tA), _nB = _normPS(_tB);
-          if (_nA) _tPjBucket[_nA] = (_tPjBucket[_nA]||0) + 1;
-          if (_nB) _tPjBucket[_nB] = (_tPjBucket[_nB]||0) + 1;
+          if (_haveTeams) {
+            var _nA = _normPS(_tA), _nB = _normPS(_tB);
+            if (_nA) _tPjBucket[_nA] = (_tPjBucket[_nA]||0) + 1;
+            if (_nB) _tPjBucket[_nB] = (_tPjBucket[_nB]||0) + 1;
+          }
           _res.events.forEach(function(ev){
             if (!ev) return;
             if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */

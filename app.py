@@ -3251,6 +3251,14 @@ _KV_ALLOWED_EXACT = {
     # al recargar). localStorage es solo caché; el server es la fuente de
     # verdad. Merge por RECENCIA, igual que las bajas/sanciones.
     "bplant_stat_adjust_v1",
+    # Bandeja de MENSAJES del hub (Liverpool + Selección Francia). Vivía
+    # SOLO en localStorage → al borrar datos de navegación / cambiar de
+    # móvil se perdía todo, incluidos los mensajes que el admin compone a
+    # mano (🖍 + PIN), que pueden llevar una FOTO adjunta (data-URI JPEG
+    # reescalado). localStorage es solo caché; el server es la fuente de
+    # verdad. Merge por RECENCIA (updatedAt): el blob más nuevo gana
+    # entero, igual que las bajas/sanciones (2026-06-05).
+    "mu_messages_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -3258,7 +3266,7 @@ _KV_ALLOWED_EXACT = {
 # nuevo y un consumo (decremento) tampoco se revierte.
 _KV_RECENCY_BLOB_KEYS = {
     "ftbol_sel_sanciones_v1", "ftbol_lesiones_v1", "ftbol_sanciones_v1",
-    "bplant_stat_adjust_v1",
+    "bplant_stat_adjust_v1", "mu_messages_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

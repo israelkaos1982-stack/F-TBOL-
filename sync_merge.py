@@ -263,6 +263,93 @@ def tour_cfg_merge(old_json, new_value):
 
 
 # ──────────────────────────────────────────────────────────────────
+# Copa del Rey (copa_state) — unión de resultados que NUNCA pierde el acta
+# ──────────────────────────────────────────────────────────────────
+def _copa_played(r):
+    """¿Cruce de Copa jugado? Acepta el flag `jugado` y el marcador gl/gv."""
+    if not isinstance(r, dict):
+        return False
+    if r.get("jugado") or r.get("winner"):
+        return True
+    for k in ("gl", "gv", "et_gl", "et_gv"):
+        if isinstance(r.get(k), (int, float)):
+            return True
+    return False
+
+
+def _copa_score(r):
+    """Marcador de un cruce (gl, gv, et_gl, et_gv) para comparar identidad."""
+    if not isinstance(r, dict):
+        return None
+    return (r.get("gl"), r.get("gv"), r.get("et_gl"), r.get("et_gv"))
+
+
+def _copa_pick_result(ex, inc):
+    """Reconciliación de UN cruce `resultados[rondaKey][idx]` de Copa.
+    Jugado gana a no-jugado; entre dos jugados con el MISMO marcador la
+    copia con acta (`events`) gana aunque sea la "vieja"; en cualquier otro
+    caso gana el entrante (last-write del cliente que acaba de recalcular).
+    Espejo de `_pick_result` de torneos: el objetivo es que un guardado
+    solo-marcador de otro móvil NUNCA borre los goleadores/tarjetas/MVP."""
+    if not isinstance(inc, dict):
+        return ex
+    if not isinstance(ex, dict):
+        return inc
+    ex_p, inc_p = _copa_played(ex), _copa_played(inc)
+    if inc_p and not ex_p:
+        return inc
+    if ex_p and not inc_p:
+        return ex
+    ex_a, inc_a = _acta_len(ex), _acta_len(inc)
+    if (ex_a > 0) != (inc_a > 0) and _copa_score(ex) == _copa_score(inc):
+        return ex if ex_a > inc_a else inc
+    return inc
+
+
+def copa_state_merge(old_json, new_value):
+    """Fusiona el `copa_state` entrante con el guardado SIN perder el acta de
+    ningún cruce ya jugado. Estructura: `resultados[<rondaKey>]` = lista
+    indexada por idx de cruces `{gl,gv,events,injuries,summary,winner,...}`.
+
+    - `resultados`: UNIÓN por rondaKey + idx; cada cruce se reconcilia con
+      `_copa_pick_result` (jugado gana a no-jugado; a igualdad de marcador,
+      la copia con acta gana). Así un POST stale/solo-marcador de otro móvil
+      no borra los eventos → la pantalla de Estadísticas de la Copa no se
+      vacía (misma clase de bug que «Road Copa Asia», 2026-06-06).
+    - Resto de campos (sorteo/clasificados/fase/campeón…): del entrante (es
+      el que acaba de recalcular los TBD). Nunca produce algo peor que el
+      last-write actual."""
+    new_value = _loads(new_value)
+    if not isinstance(new_value, dict):
+        return new_value
+    old = _loads(old_json)
+    if not isinstance(old, dict):
+        return new_value
+    old_res = old.get("resultados") if isinstance(old.get("resultados"), dict) else {}
+    new_res = new_value.get("resultados") if isinstance(new_value.get("resultados"), dict) else {}
+    merged = {}
+    for rk in set(old_res.keys()) | set(new_res.keys()):
+        o_list = old_res.get(rk) if isinstance(old_res.get(rk), list) else []
+        n_list = new_res.get(rk) if isinstance(new_res.get(rk), list) else []
+        n = max(len(o_list), len(n_list))
+        out_list = []
+        for i in range(n):
+            o = o_list[i] if i < len(o_list) else None
+            inc = n_list[i] if i < len(n_list) else None
+            if o is None:
+                out_list.append(inc)
+            elif inc is None:
+                out_list.append(o)
+            else:
+                out_list.append(_copa_pick_result(o, inc))
+        out_list.extend(n_list[n:])
+        merged[rk] = out_list
+    out = dict(new_value)
+    out["resultados"] = merged
+    return out
+
+
+# ──────────────────────────────────────────────────────────────────
 # Plantilla de selecciones (selecciones_squad_v1)
 # ──────────────────────────────────────────────────────────────────
 def _team_richness(t):

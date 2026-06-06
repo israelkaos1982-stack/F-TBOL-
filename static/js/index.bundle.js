@@ -6329,19 +6329,32 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
      Antes esta lógica vivía SOLO dentro de `_renderPreviaMeta`, así
      que `_mmInjectEnv` la pisaba con getTeamStadium(local) →
      "eFootball Stadium" en partidos de selección (bug 2026-06-03). */
-  window._previaTourStadium = function(fallbackKey){
+  /* Resuelve la sede de un torneo concreto (cfg.stadiums) por hash del
+     hashKey. AUTÓNOMO: no depende de _ppPreviaTeams, así que lo puede
+     usar tanto la previa como el gm-modal (que solo conoce _gm._tourId /
+     _gm._tourKey). Si el torneo no tiene estadios elegidos en el editor
+     devuelve '' para que el caller caiga a su siguiente fuente. */
+  window._tourStadiumFor = function(tourId, hashKey){
     try {
-      var pt = window._ppPreviaTeams;
-      if (!pt || !pt.tourId || typeof window._tourLoadCachedSync !== 'function') return '';
-      var cfgP = (window._TOUR_CACHE || {})[pt.tourId] || window._tourLoadCachedSync(pt.tourId);
+      if (!tourId || typeof window._tourLoadCachedSync !== 'function') return '';
+      var cfgP = (window._TOUR_CACHE || {})[tourId] || window._tourLoadCachedSync(tourId);
       if (!cfgP || !Array.isArray(cfgP.stadiums)) return '';
       var picks = cfgP.stadiums.filter(function(s){ return !!s; });
       if (!picks.length) return '';
-      var key = String(pt.tourKey || fallbackKey || (pt.home||'')+'|'+(pt.away||''));
+      var key = String(hashKey || '');
       var h = 5381, i;
       for (i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) | 0;
       if (h < 0) h = -h;
       return picks[h % picks.length];
+    } catch(_){ return ''; }
+  };
+
+  window._previaTourStadium = function(fallbackKey){
+    try {
+      var pt = window._ppPreviaTeams;
+      if (!pt || !pt.tourId) return '';
+      var key = pt.tourKey || fallbackKey || (pt.home||'')+'|'+(pt.away||'');
+      return window._tourStadiumFor(pt.tourId, key);
     } catch(_){ return ''; }
   };
 

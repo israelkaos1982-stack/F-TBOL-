@@ -53,6 +53,41 @@ new = _cfg({"k": {"played": True, "a": 2, "b": 0, "ua": 200}}, "2026-06-03T12:00
 m = tour_cfg_merge(json.dumps(old), new)
 check("torneo: entre 2 jugados gana el ua mayor", m["results"]["k"]["a"] == 2)
 
+# ── ANTI-PÉRDIDA DE ACTA (bug «Road Copa Asia» 2026-06-06) ──
+# Mismo marcador, una copia con acta y otra solo-marcador: gana la del acta
+# AUNQUE su `ua` sea menor (un guardado solo-marcador de otro móvil NO debe
+# borrar los eventos ya generados → estadísticas del torneo no se vacían).
+old = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2,
+                       "events": [{"type": "gol", "player": "Mbappe", "team": "a"}],
+                       "home": "Espana", "away": "Libano", "ua": 100}})
+new = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2, "ua": 500}},
+           "2026-06-06T10:00:00.000Z")
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: copia con acta gana a solo-marcador con MISMO resultado (acta no se pierde)",
+      len(m["results"]["g0_0_0"].get("events", [])) == 1
+      and m["results"]["g0_0_0"].get("home") == "Espana")
+
+# Y al revés (el acta llega como ENTRANTE y el servidor tenía solo-marcador).
+old = _cfg({"g0_0_0": {"played": True, "a": 3, "b": 0, "ua": 400}})
+new = _cfg({"g0_0_0": {"played": True, "a": 3, "b": 0,
+                       "events": [{"type": "gol", "player": "Vinicius", "team": "a"}],
+                       "ua": 100}},
+           "2026-06-06T10:00:00.000Z")
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: acta entrante gana a solo-marcador del servidor (mismo resultado)",
+      len(m["results"]["g0_0_0"].get("events", [])) == 1)
+
+# Marcador DISTINTO: una corrección legítima del resultado decide por `ua`
+# (NO se conserva el acta viejo de un marcador que ya no aplica).
+old = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 1,
+                       "events": [{"type": "gol", "player": "X", "team": "a"}],
+                       "ua": 100}})
+new = _cfg({"g0_0_0": {"played": True, "a": 3, "b": 0, "ua": 900}},
+           "2026-06-06T11:00:00.000Z")
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: marcador distinto sigue decidiendo por ua (corrección no se revierte)",
+      m["results"]["g0_0_0"]["a"] == 3 and m["results"]["g0_0_0"]["b"] == 0)
+
 # Un POST stale (más viejo) NO borra el resultado que ya estaba.
 old = _cfg({"a1": {"played": True, "a": 1, "b": 0}}, "2026-06-03T13:00:00.000Z")
 new = _cfg({}, "2026-06-03T12:00:00.000Z")  # entrante viejo y vacío

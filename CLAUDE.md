@@ -1,5 +1,66 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El ACTA de un partido de torneo NUNCA se pierde en la fusión cross-device (obligatorio, 2026-06-06)
+
+**Bug (fotos usuario 2026-06-06, «Road Copa Asia»)**: un torneo de
+Selecciones (Rondas Previas, slot `spv*`, formato `qualifier-route`)
+tenía partidos JUGADOS y con 📋 ACTA visible (España 1-2 Líbano,
+Birmania 1-0 Vietnam, España 4-2 Hong Kong…), pero la pantalla
+**«Road Copa Asia - Estadísticas»** (`s-tour-stats`) salía «Sin datos
+todavía» en TODAS las categorías (Goleadores, Portería imbatida,
+Tarjetas).
+
+### Causa raíz
+
+La card del torneo y la caja de Estadísticas leen el MISMO cfg
+(`_TOUR_CACHE[tourId]` / `_tourLoadCachedSync`). El botón 📋 ACTA solo
+se pinta si `res.events` es un array no vacío (`_tourActaPanelHtml`),
+así que ver ACTA demuestra que los eventos SÍ estaban en `cfg.results`.
+La caja de stats salía vacía porque, entre ver la card y abrir las
+stats, el `_tourLoad` ASÍNCRONO traía del servidor una copia del cfg
+con los partidos SOLO-MARCADOR (sin `events`) y machacaba la cache:
+
+- **Servidor** (`sync_merge.py`, `_pick_result`): al reconciliar un
+  mismo `matchKey` presente en dos dispositivos, decidía SOLO por
+  `played` + `ua` (sello ms por partido). Como los resultados de torneo
+  **no estampan `ua`**, ganaba el último que escribió — y si esa copia
+  era solo-marcador (un móvil que guardó el partido ANTES de cargar el
+  motor de actas `genMatchEventsEnhanced`, o re-guardó solo el marcador),
+  **descartaba los `events` ya generados en otro móvil**. El partido
+  sobrevivía (marcador → clasificación OK) pero el acta/goleadores/MVP
+  desaparecían → caja de stats vacía.
+
+### Fix — el acta es dato que NO se pierde (espejo de la regla de escudos)
+
+- **Servidor** (`_pick_result`): si dos copias jugadas tienen el MISMO
+  marcador pero una trae acta (`events`/`acta`) y la otra es
+  solo-marcador, **gana SIEMPRE la que tiene acta**, aunque su `ua` sea
+  menor. Un marcador DISTINTO sigue decidiendo por `ua` (una corrección
+  legítima del resultado no se revierte). Tests en
+  `tests/test_sync_merge.py`.
+- **Cliente** (`_tourLoad` → `_tourBackfillActaFromLocal`): al adoptar
+  el cfg del servidor, rellena el acta de cada partido que el server
+  trajo solo-marcador desde la copia LOCAL que sí la tiene, SIEMPRE que
+  el marcador coincida. Nunca pisa un acta que el server ya traiga ni
+  toca partidos con marcador distinto. Defensa en profundidad: la caja
+  de stats no se vacía al sincronizar aunque el server tarde en
+  converger.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_pick_result` vuelva a decidir SOLO por
+   `played`+`ua` ignorando el acta: a igualdad de marcador, la copia con
+   `events` gana. Eso evita que un guardado solo-marcador borre los
+   goleadores.
+2. **PROHIBIDO** que `_tourLoad` adopte el cfg del servidor sin pasar
+   por `_tourBackfillActaFromLocal` (rellena el acta perdida desde el
+   local con el mismo marcador).
+3. Todo result de torneo debe llevar `events`+`home`+`away` (lo estampan
+   `_tourAttachActa` para IA y `_tourSaveHumanResult` para humanos). La
+   caja `s-tour-stats` los agrega vía `_tourCollectStatsForTour`
+   (`_mundialStatsRobustScan` → `_tourStatsFromCfgResults`), que ya tiene
+   backfill por si faltaran — pero la fuente NO debe perderlos en el sync.
+
 ## El HUD del hub (🪙💊💼) se SINCRONIZA por `/api/kv` (recencia), NUNCA por `/api/state` (obligatorio, 2026-06-06)
 
 **Bug (fotos usuario 2026-06-06, «Liverpool-Francia»)**: el usuario

@@ -29,6 +29,29 @@ ya presente.
 | Resto de Ligas / Hypermotion / 1ªRFEF / Superliga / Resto del Mundo | stats per-jugador en `team.players[]` (NO en `results[].events`; `ligaExtSimular` solo guarda `{h,a,gh,ga,tah,...}`) | `_lx_merge_teams` fusiona por equipo por `updatedAt` (las stats viajan en el equipo, no en el acta) |
 | Europeas KO (UCL/UEL/UECL fase final, Recopa, USC, Inter) | bracket en `recopa_state_v1`/`inter_state_v1`/etc. + `cfg.results` en vivo | `rebuildPlayerStatsStore` las reconstruye EN VIVO desde su estado; sin fusión KV propia (estado local) |
 
+### Las estadísticas SOBREVIVEN al borrado de datos / cambio de móvil
+
+No basta con que el acta no se pierda en la fusión: tras un borrado de
+datos de navegación (o en un móvil nuevo) el cliente debe poder
+RECONSTRUIR las estadísticas desde el servidor. Para cada fuente:
+
+- **Torneos** (`tour_*_v1`): la cfg (con `results[].events`) está en KV
+  y se rehidrata en `_tourLoad`; `rebuildPlayerStatsStore` Source 3 +
+  `_tourCollectStatsForTour` leen `cfg.results` en vivo.
+- **Liga EA Sports**: `liga_results` (con events) viaja en `/api/state`;
+  el poll global (`hydrateLigaStateFromBackend`) lo escribe en
+  `ef_liga38_v4` y Source 2 reconstruye.
+- **Copa del Rey**: `copa_state` (con `resultados[].events`) viaja en
+  `/api/state`; el poll global Y la pantalla de la Copa lo espejan a
+  `localStorage['copa_state_v1']`, y **`rebuildPlayerStatsStore` Source 5**
+  lo itera → bucket `copa` (dedup `copa|`+`_mkPJ` compartido con Source 1).
+- **Intercontinental**: `inter_state_v1` (Source 4), ya durable.
+
+**PROHIBIDO** que una caja de stats dependa SOLO de `LIGA_PLAYER_MATCH_STORE`
+(memoria volátil): toda comp cuyos events no viajen ya en `tour_*_v1`/
+`ef_liga38_v4` necesita su propia Source durable en `rebuildPlayerStatsStore`
+leyendo el estado persistido (como Source 4 inter / Source 5 copa).
+
 ### Reglas a respetar
 
 1. **PROHIBIDO** que CUALQUIER fusión de resultados (servidor o cliente,
@@ -36,11 +59,16 @@ ya presente.
    A igualdad de marcador, la copia con `events` gana SIEMPRE.
 2. **Toda competición/fuente NUEVA** que guarde `events` de partido debe
    heredar este principio en su punto de fusión (añadir el guard como en
-   `_pick_result`/`copa_state_merge`/`_preserve_results_acta`).
+   `_pick_result`/`copa_state_merge`/`_preserve_results_acta`) Y, si sus
+   events no viven ya en una fuente durable que el rebuild lea, añadir su
+   Source en `rebuildPlayerStatsStore`.
 3. Tests obligatorios en `tests/test_sync_merge.py` (torneos + Copa) y la
    verificación del helper de Liga. No bajarlos.
 4. El guard es ADITIVO: nunca borra ni cambia un acta ya presente, solo
    restaura la que el merge habría perdido con el mismo marcador.
+5. **PROHIBIDO** quitar el mirror `copa_state_v1` (poll global + pantalla
+   Copa) o la Source 5: sin ellos la caja Estadísticas de la Copa se
+   vacía tras un borrado de datos / cambio de móvil.
 
 ## El ACTA de un partido de torneo NUNCA se pierde en la fusión cross-device (obligatorio, 2026-06-06)
 

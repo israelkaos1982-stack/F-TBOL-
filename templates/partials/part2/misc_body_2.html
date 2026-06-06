@@ -5835,6 +5835,18 @@
           try { localStorage.setItem(LS_KEY, JSON.stringify(sharedLigaResultsCache)); } catch (e) {}
         }
 
+        /* Copa del Rey: mirror del estado (con los `events` de cada cruce)
+           a localStorage para que `rebuildPlayerStatsStore` (Source 5)
+           pueda reconstruir las estadísticas de la Copa tras un borrado de
+           datos de navegación / cambio de móvil SIN tener que abrir la
+           pantalla de la Copa. El acta viaja en
+           `copa_state.resultados[].events` (protegida en el server por
+           `copa_state_merge`). Mismo patrón durable que `inter_state_v1`.
+           2026-06-06. */
+        if (state.copa_state && typeof state.copa_state === 'object') {
+          try { localStorage.setItem('copa_state_v1', JSON.stringify(state.copa_state)); } catch (e) {}
+        }
+
         /* No re-imponer el calendario del backend justo después de un
            sorteo manual: durante 30 s tras pulsar 🎲, el cliente manda.
            Sin esto, un poll que llegase con el calendario viejo (antes

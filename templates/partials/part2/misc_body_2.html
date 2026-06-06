@@ -16101,8 +16101,22 @@
            local — esto es campo neutral. _gm._scStadium se rellena
            desde abrirSc() vía window._gm._scStadium. */
         var stad;
+        /* Sedes POR TORNEO (cfg.stadiums): si el torneo del partido tiene
+           estadios elegidos en el editor, rotan por hash del partido
+           (preferimos _tourKey, único por partido). La previa ya lo hace
+           vía _previaTourStadium; el gm-modal debe usar la MISMA fuente o
+           muestra "eFootball Stadium" mientras la previa mostraba la sede
+           correcta (bug 2026-06-06, foto España vs Birmania · Road Copa
+           Asia: previa "Estadio Banorte" / gm-modal "eFootball Stadium").
+           Las sedes del torneo GANAN sobre sel_fin_stadiums_v1 (igual que
+           en _renderPreviaMeta). */
+        var _gmTourStad = (typeof window._tourStadiumFor === 'function' && _gm._isTour && _gm._tourId)
+          ? window._tourStadiumFor(_gm._tourId, _gm._tourKey || (String(_gm.j||'') + '|' + String(_gm.home||'') + '|' + String(_gm.away||'')))
+          : '';
         if (_gm._isSc && _gm._scStadium) {
           stad = _gm._scStadium;
+        } else if (_gmTourStad) {
+          stad = _gmTourStad;
         } else if (typeof window._selFinStadiumFor === 'function' && (function(){
           /* Mundial · 48 selecciones: detectamos el torneo por la
              config cacheada (format === 'mundial-48') — abrirTorneo

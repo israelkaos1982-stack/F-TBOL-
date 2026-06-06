@@ -427,6 +427,39 @@ sede correcta que `_renderPreviaMeta` ya había puesto.
   sedes de `cfg.stadiums` GANAN sobre `sel_fin_stadiums_v1` y sobre el
   estadio del local (regla 2026-06-01).
 
+### Fix (sedes) — el gm-modal usa la MISMA fuente (obligatorio, 2026-06-06)
+
+**Bug (foto usuario 2026-06-06, «España vs Birmania · Road Copa
+Asia»)**: la PREVIA mostraba la sede correcta del torneo (🏟️ Estadio
+Banorte) pero al abrir el partido el **gm-modal** (la pantalla de la
+simulación) mostraba `🏟️ eFootball Stadium` en la cabecera.
+
+**Causa raíz**: el bloque de estadio del gm-modal
+(`gmOpen`, `#gm-venue-stadium`, en `part2/misc_body_2.html`) tenía
+ramas para Supercopa España (`_scStadium`) y Mundial-48
+(`_selFinStadiumFor`), pero **NINGUNA rama para `cfg.stadiums`** del
+torneo. Para un torneo de Selecciones (Rondas Previas/Finales) o de
+Verano caía al `else` → `getTeamStadium(_gm.home)` → como las
+selecciones no tienen estadio → `eFootball Stadium`.
+
+**Fix**: `_previaTourStadium` se refactoriza para delegar en un helper
+AUTÓNOMO `window._tourStadiumFor(tourId, hashKey)` (no depende de
+`_ppPreviaTeams`). El gm-modal llama
+`_tourStadiumFor(_gm._tourId, _gm._tourKey)` con la **MISMA prioridad**
+que la previa: `_scStadium` → **sedes del torneo (cfg.stadiums)** →
+`_selFinStadiumFor` → `getTeamStadium(local)` → `eFootball Stadium`.
+Como `_gm._tourKey === _ppPreviaTeams.tourKey === matchKey`, el hash
+coincide y la previa y el gm-modal muestran la **MISMA** sede.
+
+- **PROHIBIDO** que el bloque de estadio del gm-modal (o cualquier
+  pantalla de partido nueva) resuelva la sede sin consultar
+  `_tourStadiumFor(_gm._tourId, _gm._tourKey)` ANTES de
+  `_selFinStadiumFor`/`getTeamStadium`. Las sedes de `cfg.stadiums`
+  GANAN (igual que en `_renderPreviaMeta`).
+- **PROHIBIDO** desincronizar el hashKey: el gm-modal debe hashear con
+  `_gm._tourKey` (= el `matchKey` que pasa `_tourOpenHumanMatch`), el
+  mismo que usa la previa, o mostrarían sedes distintas del mismo torneo.
+
 **Bug 2 (foto usuario, pantalla negra)**: al pulsar **cualquier
 caja/card** de un torneo de Selecciones la pantalla destino aparecía en
 **NEGRO** y había que pulsar «atrás» en el móvil para verla.

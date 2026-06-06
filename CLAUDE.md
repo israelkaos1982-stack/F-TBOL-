@@ -1,5 +1,47 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El ACTA de un partido NUNCA se pierde en la fusión cross-device — TODA competición (obligatorio, 2026-06-06)
+
+**Regla general (petición usuario 2026-06-06, «que no vuelva a pasar con
+las estadísticas de NINGÚN torneo, Copa, Liga, competición»)**: en un
+juego con 6 móviles + PC tocando los mismos datos, una copia
+**solo-marcador** (un dispositivo que guardó el partido ANTES de cargar
+el motor de actas `genMatchEventsEnhanced`, o re-guardó solo el resultado)
+NUNCA debe machacar los `events`/goleadores/MVP que otro dispositivo ya
+generó para el MISMO partido. Es la causa raíz de «el partido se jugó
+(marcador OK) pero las Estadísticas salen vacías».
+
+### Principio único (espejo en TODAS las fusiones de resultados)
+
+A igualdad de MARCADOR, entre dos copias de un mismo partido la que trae
+el acta (`events`/`acta`/`scorers`) GANA, aunque su sello (`ua`/updatedAt)
+sea menor. Un marcador DISTINTO sí decide por recencia (una corrección
+legítima del resultado no se revierte). Es ADITIVO: nunca borra un acta
+ya presente.
+
+### Dónde está implementado (cada fuente de eventos del juego)
+
+| Competición(es) | Fuente de eventos | Fusión protegida |
+|---|---|---|
+| Torneos: Selecciones (`spv*`/`sfn*`), Mundial 2032 (`mundial-48`), Mundialito (`tour_mundial_v1`), Verano (`jg/asia/sct/pss/tx*`) | `tour_<id>_v1.cfg.results[mk].events` | **Servidor** `sync_merge.py::_pick_result` (a igualdad de marcador gana el acta) + **cliente** `_tourLoad`→`_tourBackfillActaFromLocal` |
+| Copa del Rey | `copa_state.resultados[ronda][idx].events` | **Servidor** `sync_merge.py::copa_state_merge` (unión por ronda+idx, `_copa_pick_result`) en `/api/copa/state_set` |
+| Liga EA Sports | `liga_results[<j\|home\|away>].events` (= `ef_liga38_v4`) | **Servidor** `app.py::_preserve_results_acta` tras el `merge_dict` de `/api/state` (restaura el acta que un `events:[]` entrante vaciaría) |
+| Resto de Ligas / Hypermotion / 1ªRFEF / Superliga / Resto del Mundo | stats per-jugador en `team.players[]` (NO en `results[].events`; `ligaExtSimular` solo guarda `{h,a,gh,ga,tah,...}`) | `_lx_merge_teams` fusiona por equipo por `updatedAt` (las stats viajan en el equipo, no en el acta) |
+| Europeas KO (UCL/UEL/UECL fase final, Recopa, USC, Inter) | bracket en `recopa_state_v1`/`inter_state_v1`/etc. + `cfg.results` en vivo | `rebuildPlayerStatsStore` las reconstruye EN VIVO desde su estado; sin fusión KV propia (estado local) |
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que CUALQUIER fusión de resultados (servidor o cliente,
+   actual o futura) decida solo por recencia/last-write ignorando el acta.
+   A igualdad de marcador, la copia con `events` gana SIEMPRE.
+2. **Toda competición/fuente NUEVA** que guarde `events` de partido debe
+   heredar este principio en su punto de fusión (añadir el guard como en
+   `_pick_result`/`copa_state_merge`/`_preserve_results_acta`).
+3. Tests obligatorios en `tests/test_sync_merge.py` (torneos + Copa) y la
+   verificación del helper de Liga. No bajarlos.
+4. El guard es ADITIVO: nunca borra ni cambia un acta ya presente, solo
+   restaura la que el merge habría perdido con el mismo marcador.
+
 ## El ACTA de un partido de torneo NUNCA se pierde en la fusión cross-device (obligatorio, 2026-06-06)
 
 **Bug (fotos usuario 2026-06-06, «Road Copa Asia»)**: un torneo de

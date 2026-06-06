@@ -303,6 +303,56 @@ def merge_dict(base, incoming):
     return result
 
 
+# ── Anti-pérdida de acta en resultados de Liga (2026-06-06) ──────────
+# `liga_results` (Liga EA Sports) es un dict matchKey→{gh,ga,events,mvp,…}.
+# `merge_dict` ya hace UNIÓN a nivel de matchKey (un partido jugado en un
+# móvil sobrevive aunque otro no lo tenga), pero a nivel de CAMPO un
+# `events:[]` entrante (copia solo-marcador de otro dispositivo) vaciaría
+# los goleadores/MVP que la copia base SÍ tenía para el MISMO partido →
+# la pantalla de Estadísticas de Liga se quedaría sin datos. Misma clase
+# de bug que «Road Copa Asia» (torneos) y Copa. Restauramos el acta desde
+# base cuando el merge la perdió y el marcador coincide. Solo AÑADE de
+# vuelta, NUNCA borra.
+_ACTA_FIELDS = ("events", "scorers", "acta", "mvp", "mvpTeam")
+
+
+def _acta_present(r):
+    if not isinstance(r, dict):
+        return False
+    for k in ("events", "scorers", "acta"):
+        v = r.get(k)
+        if isinstance(v, list) and v:
+            return True
+    return False
+
+
+def _same_match_score(a, b):
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return False
+    return (a.get("gh"), a.get("ga"), a.get("et_gl"), a.get("et_gv")) == \
+           (b.get("gh"), b.get("ga"), b.get("et_gl"), b.get("et_gv"))
+
+
+def _preserve_results_acta(base_res, merged_res):
+    """Restaura en `merged_res` el acta (events/scorers/mvp) que `base_res`
+    tenía para un matchKey y que el merge field-a-field perdió (p.ej. un
+    `events:[]` entrante), SIEMPRE que el marcador coincida. Aditivo: nunca
+    borra ni cambia un acta ya presente en el merge."""
+    if not isinstance(base_res, dict) or not isinstance(merged_res, dict):
+        return
+    for mk, b in base_res.items():
+        if not _acta_present(b):
+            continue
+        m = merged_res.get(mk)
+        if not isinstance(m, dict) or _acta_present(m):
+            continue
+        if not _same_match_score(b, m):
+            continue
+        for f in _ACTA_FIELDS:
+            if f in b and not m.get(f):
+                m[f] = b[f]
+
+
 # Claves de `/api/state` cuyo blob es un running total / consumible
 # (HUD: 🪙 presupuesto · 💊 puntos de fisio · 💼 valoración). Para ellas
 # NO vale el field-merge recursivo de `merge_dict`: dos dispositivos
@@ -511,6 +561,16 @@ def save_global_state(new_state, replace=False):
                     if ck in inc_comp:
                         merged_comp[ck] = _cursor_winner(
                             base_comp.get(ck), inc_comp.get(ck))
+        # Anti-pérdida de acta de Liga EA: si el POST entrante trae
+        # liga_results, restaurar el acta (events/MVP) de los partidos cuyo
+        # marcador coincide pero el merge dejó sin eventos (copia
+        # solo-marcador de otro móvil). Nunca borra.
+        if "liga_results" in incoming:
+            try:
+                _preserve_results_acta(base.get("liga_results"),
+                                       merged.get("liga_results"))
+            except Exception:
+                pass
     row.valor_json = json.dumps(merged, ensure_ascii=False)
     row.updated_at = utc_now_iso()
     db.session.commit()
@@ -1266,6 +1326,17 @@ def copa_state_set():
     if not isinstance(new_state, dict):
         return jsonify({"ok": False, "error": "payload.copa requerido"}), 400
     data = load_global_state()
+    # Fusión anti-pérdida de acta (2026-06-06): un POST de otro móvil con
+    # una copia stale / solo-marcador NO debe borrar los eventos de cruces
+    # ya jugados (goleadores/tarjetas/MVP de la Copa). Unimos `resultados`
+    # por ronda+idx conservando el acta; el resto (sorteo/clasificados/
+    # fase/campeón) viene del entrante (es el que recalcula los TBD).
+    try:
+        merged = copa_state_merge(data.get("copa_state"), new_state)
+        if isinstance(merged, dict):
+            new_state = merged
+    except Exception:
+        pass
     data["copa_state"] = new_state
     save_global_state(data)
     return jsonify({"ok": True, "copa": new_state})

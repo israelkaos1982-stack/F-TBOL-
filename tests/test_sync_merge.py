@@ -9,7 +9,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from sync_merge import tour_cfg_merge, sel_squad_merge  # noqa: E402
+from sync_merge import tour_cfg_merge, sel_squad_merge, copa_state_merge  # noqa: E402
 
 _fails = []
 
@@ -215,6 +215,52 @@ check("selecciones: España/Espana no duplica", len(m["teams"]) == 1)
 # Entrante sin teams válido → pasa de largo.
 check("selecciones: entrante inválido pasa de largo",
       sel_squad_merge(json.dumps(old), {"teams": "x"}) == {"teams": "x"})
+
+
+# ──────────────────────────────────────────────────────────────────
+# COPA DEL REY — el acta de un cruce NUNCA se pierde (mismo bug que torneos)
+# ──────────────────────────────────────────────────────────────────
+def _copa(resultados):
+    return {"sorteo": {}, "resultados": resultados, "clasificados": {}}
+
+
+# Device A guardó el cruce CON acta; Device B (state_set) lo trae solo-marcador
+# (mismo resultado) → el acta de A se conserva.
+old = _copa({"oct": [{"jugado": True, "gl": 2, "gv": 1,
+                      "events": [{"type": "gol", "player": "Griezmann"}], "mvp": "Griezmann"}]})
+new = _copa({"oct": [{"jugado": True, "gl": 2, "gv": 1}]})
+m = copa_state_merge(json.dumps(old), new)
+check("copa: cruce con acta gana a solo-marcador (mismo resultado)",
+      len(m["resultados"]["oct"][0].get("events", [])) == 1
+      and m["resultados"]["oct"][0].get("mvp") == "Griezmann")
+
+# Unión por ronda+idx: un cruce jugado en otra ronda NO se pierde aunque el
+# entrante no lo traiga.
+old = _copa({"r16": [{"jugado": True, "gl": 1, "gv": 0,
+                      "events": [{"type": "gol", "player": "X"}]}]})
+new = _copa({"oct": [{"jugado": True, "gl": 3, "gv": 2,
+                      "events": [{"type": "gol", "player": "Y"}]}]})
+m = copa_state_merge(json.dumps(old), new)
+check("copa: une rondas (r16 de A + oct de B, ninguno se pierde)",
+      "r16" in m["resultados"] and "oct" in m["resultados"]
+      and len(m["resultados"]["r16"][0]["events"]) == 1)
+
+# Jugado gana a no-jugado para el mismo idx (un None entrante no borra).
+old = _copa({"fin": [{"jugado": True, "gl": 2, "gv": 0,
+                      "events": [{"type": "gol", "player": "Z"}], "winner": "Atletico"}]})
+new = _copa({"fin": [None]})
+m = copa_state_merge(json.dumps(old), new)
+check("copa: cruce jugado no lo borra un None entrante",
+      m["resultados"]["fin"][0].get("jugado") is True
+      and len(m["resultados"]["fin"][0]["events"]) == 1)
+
+# Marcador DISTINTO: corrección legítima → gana el entrante (last-write).
+old = _copa({"sf": [{"jugado": True, "gl": 1, "gv": 1,
+                     "events": [{"type": "gol", "player": "viejo"}]}]})
+new = _copa({"sf": [{"jugado": True, "gl": 3, "gv": 0}]})
+m = copa_state_merge(json.dumps(old), new)
+check("copa: marcador distinto no resucita el acta vieja",
+      m["resultados"]["sf"][0]["gl"] == 3 and m["resultados"]["sf"][0]["gv"] == 0)
 
 
 print()

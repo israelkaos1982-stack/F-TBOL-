@@ -17613,6 +17613,29 @@ window._showSimProgress = function(opts, onDone){
 #usc-setup-ov .usc-setup-btns button{flex:1;padding:12px;border-radius:8px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;}
 #usc-setup-ov .usc-setup-ok{background:rgba(60,200,120,.18);color:#7df0a0;border-color:rgba(60,200,120,.55);}
 #usc-setup-ov .usc-setup-cancel{background:rgba(255,255,255,.06);color:rgba(255,255,255,.6);border-color:rgba(255,255,255,.2);}
+/* Botón-buscador de equipo (sustituye al <select> nativo) */
+#usc-setup-ov .usc-team-pick{width:100%;display:flex;align-items:center;gap:8px;padding:10px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);border-radius:8px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;cursor:pointer;text-align:left;}
+#usc-setup-ov .usc-team-pick:hover{border-color:rgba(200,200,200,.55);}
+#usc-setup-ov .usc-team-pick img{width:24px;height:24px;object-fit:contain;border-radius:50%;}
+#usc-setup-ov .usc-team-pick .usc-pick-lbl{flex:1;}
+#usc-setup-ov .usc-team-pick.empty .usc-pick-lbl{color:rgba(255,255,255,.5);}
+#usc-setup-ov .usc-team-pick .usc-pick-lupa{font-size:15px;opacity:.7;}
+/* Overlay de búsqueda de equipo */
+#usc-team-search-ov{display:none;position:fixed;inset:0;z-index:99990;background:rgba(0,0,8,.96);overflow-y:auto;padding:20px 14px;}
+#usc-team-search-ov.show{display:block;}
+#usc-team-search-ov .usc-ts-card{max-width:440px;margin:0 auto;background:linear-gradient(180deg,#1a1a1f,#0a0a0c);border:1px solid rgba(200,200,200,.55);border-radius:14px;padding:16px 14px;box-shadow:0 0 30px rgba(200,200,200,.25);}
+#usc-team-search-ov .usc-ts-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+#usc-team-search-ov .usc-ts-title{font-family:Oswald,sans-serif;letter-spacing:2px;font-size:13px;color:#eaeaea;}
+#usc-team-search-ov .usc-ts-close{background:none;border:none;color:rgba(255,255,255,.55);font-size:24px;cursor:pointer;line-height:1;padding:0 4px;}
+#usc-team-search-ov .usc-ts-input{width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;padding:10px 14px;font-family:Rajdhani,sans-serif;font-size:14px;outline:none;}
+#usc-team-search-ov .usc-ts-results{margin-top:10px;max-height:60vh;overflow-y:auto;border:1px solid rgba(255,255,255,.10);border-radius:8px;background:rgba(0,0,0,.30);}
+#usc-team-search-ov .usc-ts-row{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.05);font-size:13px;color:#e8f0ff;}
+#usc-team-search-ov .usc-ts-row:hover{background:rgba(200,200,200,.10);}
+#usc-team-search-ov .usc-ts-row img{width:26px;height:26px;object-fit:contain;border-radius:50%;}
+#usc-team-search-ov .usc-ts-row .usc-ts-shield{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:14px;color:#aaa;}
+#usc-team-search-ov .usc-ts-row.used{opacity:.4;pointer-events:none;}
+#usc-team-search-ov .usc-ts-row .usc-ts-tag{margin-left:auto;font-size:9px;letter-spacing:1px;color:rgba(255,255,255,.45);}
+#usc-team-search-ov .usc-ts-empty{padding:16px;text-align:center;color:rgba(255,255,255,.45);font-size:12px;}
 </style>
 <!-- Setup overlay para configurar las semis (4 equipos + estadio neutral) -->
 <div id="usc-setup-ov">
@@ -17620,19 +17643,30 @@ window._showSimProgress = function(opts, onDone){
     <h3>⭐ Configurar Supercopa de Europa</h3>
     <div class="usc-setup-sub">Elige los 4 equipos de las Semifinales y el estadio neutral. Bracket: SF1 = T1 vs T2 · SF2 = T3 vs T4 · Final = ganadores. Partido único con prórroga + penaltis.</div>
     <label>EQUIPO 1 (SF1 LOCAL)</label>
-    <select id="usc-pick-1"></select>
+    <button type="button" class="usc-team-pick empty" id="usc-pick-1" onclick="window._uscOpenTeamSearch&&window._uscOpenTeamSearch(1)"><span class="usc-pick-lbl">— elegir —</span><span class="usc-pick-lupa">🔍</span></button>
     <label>EQUIPO 2 (SF1 VISITANTE)</label>
-    <select id="usc-pick-2"></select>
+    <button type="button" class="usc-team-pick empty" id="usc-pick-2" onclick="window._uscOpenTeamSearch&&window._uscOpenTeamSearch(2)"><span class="usc-pick-lbl">— elegir —</span><span class="usc-pick-lupa">🔍</span></button>
     <label>EQUIPO 3 (SF2 LOCAL)</label>
-    <select id="usc-pick-3"></select>
+    <button type="button" class="usc-team-pick empty" id="usc-pick-3" onclick="window._uscOpenTeamSearch&&window._uscOpenTeamSearch(3)"><span class="usc-pick-lbl">— elegir —</span><span class="usc-pick-lupa">🔍</span></button>
     <label>EQUIPO 4 (SF2 VISITANTE)</label>
-    <select id="usc-pick-4"></select>
+    <button type="button" class="usc-team-pick empty" id="usc-pick-4" onclick="window._uscOpenTeamSearch&&window._uscOpenTeamSearch(4)"><span class="usc-pick-lbl">— elegir —</span><span class="usc-pick-lupa">🔍</span></button>
     <label>ESTADIO NEUTRAL</label>
     <select id="usc-pick-stadium"></select>
     <div class="usc-setup-btns">
       <button class="usc-setup-cancel" onclick="window._uscCancelSetup&&window._uscCancelSetup()">CANCELAR</button>
       <button class="usc-setup-ok" onclick="window._uscConfirmSetup&&window._uscConfirmSetup()">✅ CONFIRMAR</button>
     </div>
+  </div>
+</div>
+<!-- Overlay buscador de equipo (lupa) para el setup de la Supercopa de Europa -->
+<div id="usc-team-search-ov">
+  <div class="usc-ts-card">
+    <div class="usc-ts-head">
+      <div class="usc-ts-title" id="usc-ts-title">🔍 BUSCAR EQUIPO</div>
+      <button class="usc-ts-close" onclick="window._uscCloseTeamSearch&&window._uscCloseTeamSearch()">×</button>
+    </div>
+    <input id="usc-ts-input" class="usc-ts-input" type="text" placeholder="Escribe el nombre del equipo…" autocomplete="off" oninput="window._uscRenderTeamSearch&&window._uscRenderTeamSearch()">
+    <div id="usc-ts-results" class="usc-ts-results"></div>
   </div>
 </div>
 <script>
@@ -17732,16 +17766,88 @@ window._showSimProgress = function(opts, onDone){
   };
 
   /* ── SETUP OVERLAY ── */
+  /* Estado de los 4 equipos elegidos (slot 1..4 → nombre). El buscador
+     con lupa los rellena; antes eran <select> nativos (incómodos). */
+  var _uscPicks = { 1:'', 2:'', 3:'', 4:'' };
+  var _uscSearchSlot = 0;
+  var _uscLastList = [];
+
+  function _uscSetPickLabel(slot){
+    var btn = document.getElementById('usc-pick-' + slot);
+    if(!btn) return;
+    var name = _uscPicks[slot] || '';
+    var lbl = btn.querySelector('.usc-pick-lbl');
+    if(name){
+      btn.classList.remove('empty');
+      var l = _logoFor(name);
+      var img = l ? '<img src="' + _esc(l) + '" alt="">' : '';
+      btn.innerHTML = img + '<span class="usc-pick-lbl">' + _esc(name) + '</span><span class="usc-pick-lupa">🔍</span>';
+    } else {
+      btn.classList.add('empty');
+      btn.innerHTML = '<span class="usc-pick-lbl">— elegir —</span><span class="usc-pick-lupa">🔍</span>';
+    }
+  }
+
+  window._uscOpenTeamSearch = function(slot){
+    _uscSearchSlot = slot;
+    var t = document.getElementById('usc-ts-title');
+    if(t) t.textContent = '🔍 EQUIPO ' + slot;
+    var inp = document.getElementById('usc-ts-input');
+    if(inp) inp.value = '';
+    window._uscRenderTeamSearch();
+    var ov = document.getElementById('usc-team-search-ov');
+    if(ov) ov.classList.add('show');
+    if(inp) setTimeout(function(){ try { inp.focus(); } catch(_){} }, 60);
+  };
+  window._uscCloseTeamSearch = function(){
+    var ov = document.getElementById('usc-team-search-ov');
+    if(ov) ov.classList.remove('show');
+    _uscSearchSlot = 0;
+  };
+  window._uscRenderTeamSearch = function(){
+    var box = document.getElementById('usc-ts-results');
+    if(!box) return;
+    var inp = document.getElementById('usc-ts-input');
+    var q = _normPS(inp ? inp.value : '').trim();
+    var teams = _availableTeams();
+    /* equipos ya elegidos en OTROS slots → marcados como usados */
+    var usedNames = {};
+    [1,2,3,4].forEach(function(s){ if(s !== _uscSearchSlot && _uscPicks[s]) usedNames[_uscPicks[s]] = true; });
+    var list = teams.filter(function(t){
+      if(!q) return true;
+      return _normPS(t.name).indexOf(q) !== -1 || _normPS(t.label).indexOf(q) !== -1;
+    });
+    if(!list.length){
+      _uscLastList = [];
+      box.innerHTML = '<div class="usc-ts-empty">Sin equipos que coincidan con «' + _esc(inp ? inp.value : '') + '».</div>';
+      return;
+    }
+    _uscLastList = list.slice(0, 200);
+    box.innerHTML = _uscLastList.map(function(t, idx){
+      var used = !!usedNames[t.name];
+      var l = _logoFor(t.name);
+      var shield = l ? '<img src="' + _esc(l) + '" alt="">' : '<div class="usc-ts-shield">🛡</div>';
+      var tag = used ? '<span class="usc-ts-tag">YA ELEGIDO</span>' : (_isHuman(t.name) ? '<span class="usc-ts-tag">' + _esc(_humanIco(t.name) || '👤') + '</span>' : '');
+      return '<div class="usc-ts-row' + (used ? ' used' : '') + '" onclick="window._uscPickTeam(' + idx + ')">' + shield + '<span>' + _esc(t.label) + '</span>' + tag + '</div>';
+    }).join('');
+  };
+  window._uscPickTeam = function(idx){
+    var t = _uscLastList[idx];
+    if(t && _uscSearchSlot >= 1 && _uscSearchSlot <= 4){
+      _uscPicks[_uscSearchSlot] = t.name;
+      _uscSetPickLabel(_uscSearchSlot);
+    }
+    window._uscCloseTeamSearch();
+  };
+
   window._uscOpenSetup = function(){
     var teams = _availableTeams();
     if(teams.length < 4){
       alert('Hace falta tener al menos 4 equipos europeos guardados en alguna liga (Resto de Ligas). Usa el editor antes de configurar la Supercopa de Europa.');
       return;
     }
-    var optsTeams = '<option value="">— elegir —</option>' + teams.map(function(t){
-      return '<option value="' + _esc(t.name) + '">' + _esc(t.label) + '</option>';
-    }).join('');
-    [1,2,3,4].forEach(function(i){ var sel = document.getElementById('usc-pick-' + i); if(sel) sel.innerHTML = optsTeams; });
+    _uscPicks = { 1:'', 2:'', 3:'', 4:'' };
+    [1,2,3,4].forEach(function(i){ _uscSetPickLabel(i); });
     var stSel = document.getElementById('usc-pick-stadium');
     if(stSel){
       var pool = _uscStadiumPool();
@@ -17753,12 +17859,14 @@ window._showSimProgress = function(opts, onDone){
     var ov = document.getElementById('usc-setup-ov');
     if(ov) ov.classList.add('show');
   };
-  window._uscCancelSetup = function(){ var ov = document.getElementById('usc-setup-ov'); if(ov) ov.classList.remove('show'); };
+  window._uscCancelSetup = function(){
+    var ov = document.getElementById('usc-setup-ov'); if(ov) ov.classList.remove('show');
+    window._uscCloseTeamSearch();
+  };
   window._uscConfirmSetup = function(){
     var picks = [];
     for(var i=1;i<=4;i++){
-      var sel = document.getElementById('usc-pick-' + i);
-      var v = sel ? sel.value : '';
+      var v = _uscPicks[i] || '';
       if(!v){ alert('Falta elegir el equipo ' + i + '.'); return; }
       if(picks.indexOf(v) !== -1){ alert('Equipo repetido: ' + v + '. Elige 4 distintos.'); return; }
       picks.push(v);

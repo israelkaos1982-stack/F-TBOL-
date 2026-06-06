@@ -3372,6 +3372,15 @@ _KV_ALLOWED_EXACT = {
     # sobrevivan al borrado de navegación / cambio de móvil. Merge por
     # RECENCIA (updatedAt), igual que las bajas/sanciones (2026-06-05).
     "bplant_match_stats_v1",
+    # CASH (Panel Admin · 🪙): tabla EDITABLE de premios por objetivo/posición
+    # de cada competición (cash_rewards_v1) + LEDGER idempotente de pagos ya
+    # acreditados a las cajas humanas (cash_ledger_v1). localStorage es solo
+    # caché; el server es la fuente de verdad para que la tabla editada y los
+    # premios ya pagados sobrevivan al borrado de navegación / cambio de móvil
+    # (2026-06-06). cash_rewards_v1 → merge por RECENCIA (la última edición
+    # gana). cash_ledger_v1 → merge por UNIÓN (nunca se pierde un pago ya
+    # hecho, o se re-pagaría al re-escanear en otro dispositivo).
+    "cash_rewards_v1", "cash_ledger_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -3380,6 +3389,8 @@ _KV_ALLOWED_EXACT = {
 _KV_RECENCY_BLOB_KEYS = {
     "ftbol_sel_sanciones_v1", "ftbol_lesiones_v1", "ftbol_sanciones_v1",
     "bplant_stat_adjust_v1", "mu_messages_v1", "bplant_match_stats_v1",
+    # Tabla EDITABLE de premios CASH: la última edición del admin gana entera.
+    "cash_rewards_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
@@ -3578,6 +3589,27 @@ def api_kv_set(key):
             new_ts = float((value or {}).get("updatedAt") or 0)
             if old_ts > new_ts:
                 value, payload = old, row.valor_json
+        except Exception:
+            pass
+    # LEDGER de pagos CASH (cash_ledger_v1): merge por UNIÓN del mapa `paid`.
+    # Cada entrada es un pago YA acreditado a una caja humana, idempotente por
+    # clave de instancia (`<comp>|<sig>`). Si dos dispositivos acreditan
+    # competiciones distintas, un POST stale NO debe borrar las entradas del
+    # otro (se re-pagaría al re-escanear). Unión: se conservan TODAS las claves
+    # de ambos lados (la entrante gana en caso de colisión).
+    elif key == "cash_ledger_v1" and row and row.valor_json:
+        try:
+            old = json.loads(row.valor_json) or {}
+            new = value or {}
+            old_paid = (old.get("paid") or {}) if isinstance(old, dict) else {}
+            new_paid = (new.get("paid") or {}) if isinstance(new, dict) else {}
+            merged_paid = dict(old_paid)
+            merged_paid.update(new_paid)
+            merged = dict(new) if isinstance(new, dict) else {}
+            merged["paid"] = merged_paid
+            cand = json.dumps(merged, ensure_ascii=False)
+            if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
+                value, payload = merged, cand
         except Exception:
             pass
     if row:

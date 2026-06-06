@@ -9520,13 +9520,13 @@ window._showSimProgress = function(opts, onDone){
     </div>
     <div class="admin-module-card" style="border-color:rgba(60,180,240,.4);" onclick="window.lextExportBackup&&window.lextExportBackup()">
       <span class="admin-mod-icon">💾</span>
-      <div class="admin-mod-label" style="color:#60b4f0;">Descargar Backup</div>
-      <div class="admin-mod-desc">Exporta un .json con todas las plantillas y reglas</div>
+      <div class="admin-mod-label" style="color:#60b4f0;">Descargar Backup TOTAL</div>
+      <div class="admin-mod-desc">Exporta un .json con TODO tu progreso (hub, calendario, torneos, plantillas, trofeos…)</div>
     </div>
     <div class="admin-module-card" style="border-color:rgba(60,200,120,.4);" onclick="document.getElementById('lext-import-file').click()">
       <span class="admin-mod-icon">📂</span>
-      <div class="admin-mod-label" style="color:#3cc878;">Importar Backup</div>
-      <div class="admin-mod-desc">Carga un .json previamente descargado</div>
+      <div class="admin-mod-label" style="color:#3cc878;">Importar Backup TOTAL</div>
+      <div class="admin-mod-desc">Carga un .json y lo restaura TODO (local + servidor, gana sobre Railway)</div>
     </div>
     <input type="file" id="lext-import-file" accept="application/json,.json" style="display:none" onchange="window.lextImportBackup&&window.lextImportBackup(this.files[0])"/>
   </div>
@@ -11879,6 +11879,11 @@ window._showSimProgress = function(opts, onDone){
         '\n\n¿Continuar?'
       )) return;
       var restoredKeys = 0, restoredLigas = 0, restoredTeams = 0, restoredPlayers = 0;
+      /* Promesas de re-subida al servidor: las ESPERAMOS antes de recargar
+         para que las peticiones no se corten a mitad (el reload cancela los
+         fetch en vuelo). Antes el reload a 400 ms podía abortar las subidas
+         y la importación "no llegaba" al servidor. */
+      var serverPushes = [];
       /* 1. Restaurar TODO storage si v2. */
       if (isV2 && payload.storage) {
         Object.keys(payload.storage).forEach(function(k){
@@ -11900,11 +11905,11 @@ window._showSimProgress = function(opts, onDone){
                   /* Re-subir al server (idempotente). */
                   var slugK = k.replace(/^ligaExt_/,'');
                   try {
-                    fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
+                    serverPushes.push(fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
                       method:'POST',
                       headers:{'Content-Type':'application/json'},
                       body: payload.storage[k] /* ya es JSON string */
-                    }).catch(function(){});
+                    }).catch(function(){}));
                   } catch(_){}
                 }
               } catch(_){}
@@ -11925,11 +11930,11 @@ window._showSimProgress = function(opts, onDone){
             if (lk.indexOf('_snap_') === -1 && lk.indexOf('_backup') === -1 && lk.indexOf('_protected') === -1) {
               var slugK = lk.replace(/^ligaExt_/,'');
               try {
-                fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
+                serverPushes.push(fetch('/api/liga-ext/'+encodeURIComponent(slugK), {
                   method:'POST',
                   headers:{'Content-Type':'application/json'},
                   body: JSON.stringify({data: d})
-                }).catch(function(){});
+                }).catch(function(){}));
               } catch(_){}
             }
           } catch(_){}
@@ -11953,17 +11958,93 @@ window._showSimProgress = function(opts, onDone){
           window._LIGA_EA_PLAYER_FLAGS = payload.flags;
         }
       } catch(_){}
+      /* 4. RE-SUBIR AL SERVIDOR todas las claves SINCRONIZADAS para que la
+            copia importada GANE sobre lo que haya en Railway — NO solo las
+            ligas. Sin esto, al recargar el merge por recencia del servidor
+            podía PISAR la importación si el server tenía datos más nuevos
+            (aunque fueran justo los corruptos que queremos sustituir).
+            Rutas (espejo del allowlist del servidor en app.py):
+              · claves KV → /api/kv/<key> {value}. Para los blobs de
+                RECENCIA estampamos updatedAt=ahora para que ganen ENTERO.
+              · cursor del día / competition_state → /api/state.
+            (Las ligaExt_* ya se re-subieron en el paso 1.) */
+      var nPushed = 0;
+      if (isV2 && payload.storage) {
+        var _KV_EXACT = {
+          'comp_icons_v1':1,'comp_cards_v1':1,'europe_committed_v1':1,'bayern_trofeos_v1':1,
+          'ucl_phase_v1':1,'uel_phase_v1':1,'uecl_phase_v1':1,'tour_registry_v1':1,
+          'ball_inventory_v1':1,'ball_by_comp_v1':1,'ball_comp_db_v1':1,'menu_home_v1':1,
+          'selecciones_squad_v1':1,'sel_fin_stadiums_v1':1,'munich-obj-overrides-v1':1,
+          'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
+          'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
+          'cash_rewards_v1':1,'cash_ledger_v1':1,'bayern_hud_overrides_v1':1
+        };
+        var _KV_REGEX = /^(manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)|tour_(sct|pss|jg|asia|mundial|tx[1-8]|spv(10|[1-9])|sfn(10|[1-9])))_v1$/;
+        var _KV_RECENCY = {
+          'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
+          'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
+          'cash_rewards_v1':1,'bayern_hud_overrides_v1':1
+        };
+        /* competition_state: el cursor del día + pospuestos. El valor que
+           viaja en competition_state es un JSON-STRING opaco (igual que lo
+           guarda el cliente), así que mandamos el raw tal cual. */
+        var _STATE_KEYS = { 'liverpool_preseason_v1':1, 'bayern_preseason_v2':1, 'pend_hvh_deferred_v1':1 };
+        var _now = Date.now();
+        Object.keys(payload.storage).forEach(function(k){
+          var raw = payload.storage[k];
+          if (typeof raw !== 'string') return;
+          try {
+            if (_STATE_KEYS[k]) {
+              var _cs = {}; _cs[k] = raw;
+              serverPushes.push(fetch('/api/state', {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ competition_state: _cs })
+              }).catch(function(){}));
+              nPushed++;
+            } else if (_KV_EXACT[k] || _KV_REGEX.test(k)) {
+              var val; try { val = JSON.parse(raw); } catch(_){ return; }
+              /* Blob de recencia → estampa updatedAt=ahora para ganar entero
+                 frente a lo que tenga el servidor (incluido el estado roto). */
+              if (_KV_RECENCY[k] && val && typeof val === 'object' && !Array.isArray(val)) {
+                val.updatedAt = _now;
+                /* Reflejar el sello en localStorage para que el pull de
+                   arranque (que adopta por recencia) converja al mismo blob. */
+                try { localStorage.setItem(k, JSON.stringify(val)); } catch(_){}
+              }
+              serverPushes.push(fetch('/api/kv/'+encodeURIComponent(k), {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ value: val })
+              }).catch(function(){}));
+              nPushed++;
+            }
+          } catch(_){}
+        });
+      }
       try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(); } catch(_){}
       alert(
         '✅ Backup importado\n\n' +
         '• Claves restauradas: ' + restoredKeys + '\n' +
+        '• Re-subidas al servidor: ' + nPushed + ' (+ ligas)\n' +
         '• Ligas: ' + restoredLigas + '\n' +
         '• Equipos: ' + restoredTeams + '\n' +
         '• Jugadores: ' + restoredPlayers + '\n' +
         (nWin ? '• Estado en memoria: ' + nWin + ' bloques\n' : '') +
-        '\nRecargando…'
+        '\nGuardando en el servidor y recargando…'
       );
-      setTimeout(function(){ location.reload(); }, 400);
+      /* Esperamos a que TODAS las subidas terminen (o un máximo de 8 s)
+         ANTES de recargar, para que ninguna se corte a mitad. */
+      (function(){
+        var done = false;
+        function _reloadOnce(){ if (done) return; done = true; try { location.reload(); } catch(_){} }
+        try {
+          if (serverPushes.length && Promise && typeof Promise.allSettled === 'function') {
+            Promise.allSettled(serverPushes).then(_reloadOnce);
+            setTimeout(_reloadOnce, 8000);   /* red de seguridad anti-cuelgue */
+          } else {
+            setTimeout(_reloadOnce, 1200);
+          }
+        } catch(_){ setTimeout(_reloadOnce, 1200); }
+      })();
     };
     reader.onerror = function(){ alert('⚠️ Error al leer el archivo.'); };
     reader.readAsText(file);

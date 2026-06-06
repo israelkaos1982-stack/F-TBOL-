@@ -2067,6 +2067,91 @@ alpha alto (0.82-0.95) para que sea bien visible. El borde es
    `var(--comp-color, #88a0c0)` con fallback neutro, NUNCA hardcodear
    rojo.
 
+## Sanción de SELECCIÓN por tarjetas se RECONCILIA desde el acta — nunca se pierde (obligatorio, 2026-06-06)
+
+**Bug (fotos usuario 2026-06-06, «Rabiot·Francia 2🟨»)**: Adrien Rabiot
+(Francia) tenía **2 amarillas** en la columna 🟨 de la plantilla (vista
+selección), el código obliga a perderse el próximo partido por
+acumulación (ciclo de 2), pero: (1) NO salía marcado en
+amarillo/rojo en la plantilla, (2) NO había mensaje en la bandeja, y
+(3) NO aparecía en la card «BAJAS PARA EL PARTIDO» (AMONESTADOS /
+EXPULSADOS / LESIONADOS).
+
+### Causa raíz
+
+El motor de sanciones de selección (`calcularSelMatch` /
+`window.calcularSancionesPartido` / `_selCalcularSancionesPartido`)
+**NUNCA se invocaba** en ningún fin-de-partido (`gmEndMatch`,
+`_mlFinishMatchGen`, auto-sim de torneo). Es decir,
+`YELLOW_STORE_SEL` / `SANCION_STORE_SEL` jamás se alimentaban → cero
+suspensiones registradas (ni acumulación, ni roja, ni doble amarilla).
+El "2" de la plantilla viene de OTRA fuente (las stats `ta`/`tr` que
+agrega `_tourStatsFromCfgResults` desde `cfg.results[].events`), así
+que el síntoma era "veo 2 amarillas pero el juego no sabe que está
+sancionado".
+
+### Fix — derivar la suspensión del ACTA (cfg.results), retroactivo
+
+`window._selReconcileSuspensions(selName)` (IIFE de selecciones en
+`static/js/index.bundle.js`) deriva las suspensiones de las TARJETAS
+acumuladas en `cfg.results` (la MISMA fuente que pinta la columna 🟨),
+de forma RETROACTIVA y self-healing cross-device. Por jugador:
+
+- `count`     = total de 🟨 (monótono = stat `ta`). Lo lee
+  `_checkFraYellowBrink` para el aviso/suspensión de la bandeja.
+- `issued`    = nº de ciclos de 2 🟨 ya convertidos en suspensión.
+- `issuedRed` = nº de 🟥/dobles-amarillas (stat `tr`) ya convertidas.
+
+`owedAcc = floor(ta/2)`; si `owedAcc > issued` emite la diferencia y
+sube `issued`. Igual para rojas con `tr`. **Idempotente**: el consumo
+(`_selConsumirParaPartido` al jugar) decrementa la cola pero NUNCA toca
+`issued`/`issuedRed` → una suspensión cumplida no se resucita aunque
+`ta` siga a 2 para siempre. Primera reconciliación: si ya hay una
+suspensión pendiente del mismo tipo (migración legacy u otro
+dispositivo), `issued` se siembra a `owed` para no duplicar.
+
+Stats por jugador vía `window._selCardStatsFor(selName)` (en
+`misc_body_1.html`, junto a `_selCtxFor`) → reusa el MISMO matching
+difuso que la plantilla (`_selCtxFor().statsFor`).
+
+### Dónde se dispara la reconciliación
+
+- **Plantilla** (`_renderSelView`): reconcilia ANTES de pintar →
+  badge 🟨/🟥 (`_bedBajaBadge`) + fila coloreada (`_bedBajaState`) +
+  detalle al pulsar (`_bedBajaDetail`). También llama
+  `window._checkFraYellowBrink` (expuesto) para el mensaje retroactivo.
+- **Overlay BAJAS** (`pendientesPara`, home+away): reconcilia antes de
+  leer la cola → AMONESTADOS (`tipo:'acumulacion'`) / EXPULSADOS
+  (`tipo:'roja'/'d-amarilla'`).
+- **Fin de partido** (`_broadcastHumanMatchResult`, lado `fra`):
+  reconcilia + `_checkFraYellowBrink` (mensaje en bandeja).
+
+### Bug colateral arreglado: color del badge/fila
+
+`_bedBajaState`/`_bedBajaDetail` (vista selección) decidían
+amarillo/rojo con `tipo === 'amarilla'`, pero la acumulación usa
+`tipo: 'acumulacion'` → salía ROJO. Corregido a la misma lógica que el
+club: `roja`/`d-amarilla` → rojo, el resto → amarillo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** depender de que `calcularSelMatch` se llame en el
+   fin-de-partido para registrar sanciones de selección. La fuente de
+   verdad es `cfg.results` (acta) vía `_selReconcileSuspensions`. Toda
+   pantalla que muestre la suspensión (plantilla, overlay, mensaje)
+   debe reconciliar antes de leer.
+2. **PROHIBIDO** resetear `count` a 0 al cumplir el ciclo en la
+   reconciliación: `count` es monótono (= `ta`) porque
+   `_checkFraYellowBrink` espera un total creciente. La no-duplicación
+   la garantizan `issued`/`issuedRed`, NO el reset del contador.
+3. **PROHIBIDO** que el consumo de la sanción toque `issued`/`issuedRed`
+   (resucitaría la suspensión, que `ta` mantiene a 2 para siempre).
+4. **PROHIBIDO** volver a usar `tipo === 'amarilla'` para colorear el
+   badge/fila de selección: la acumulación es `tipo:'acumulacion'`.
+5. Una caja de humano nueva hereda el badge/overlay (genéricos por
+   selección); el mensaje de bandeja sigue siendo lado `fra` (hub
+   Liverpool/Francia) — `_checkFraYellowBrink` se autogatea con `_isFra`.
+
 ## Sanciones y lesiones — SELECCIONES NACIONALES (obligatorio, 2026-05-24)
 
 Sistema PARALELO al de clubes (`calcularSancionesPartido` /

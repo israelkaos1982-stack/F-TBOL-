@@ -12935,6 +12935,94 @@ window._fallbackSq11 = function(){
   }
   window._selCalcularSancionesPartido = calcularSelMatch;
 
+  /* ── Reconciliación de SANCIONES por TARJETAS desde el acta real ──
+     El recuento de amarillas/rojas de una selección NO se alimentaba en
+     NINGÚN punto del juego (`calcularSelMatch` nunca se invoca en ningún
+     fin-de-partido), así que el ciclo de 2 amarillas → 1 partido jamás
+     registraba la suspensión: un jugador con 2 🟨 (foto usuario
+     2026-06-06, Rabiot·Francia) NO salía marcado en la plantilla, no
+     había aviso en la bandeja y no aparecía en BAJAS PARA EL PARTIDO
+     (AMONESTADOS). Lo derivamos directamente de las TARJETAS acumuladas
+     en `cfg.results` (la MISMA fuente que pinta el "2" de la columna 🟨
+     de la plantilla), de forma RETROACTIVA y self-healing cross-device.
+
+       count     = total de 🟨 vistas (monótono = stat `ta`). Lo lee
+                   `_checkFraYellowBrink` para el aviso/suspensión.
+       issued    = nº de ciclos de 2 🟨 ya convertidos en suspensión.
+       issuedRed = nº de 🟥 / dobles-amarillas ya convertidas.
+
+     Idempotente: solo emite suspensiones NUEVAS (owed > issued). El
+     consumo (al jugar el partido, `_selConsumirParaPartido`) decrementa
+     la cola pero NO toca los contadores issued → una suspensión cumplida
+     NUNCA se resucita aunque el `ta` siga a 2 para siempre. */
+  function _addSelSuspDiff(selName, playerName, diff, tipo, reason){
+    if (diff <= 0) return;
+    var q = _sanGetQueue(SEL_KEY, selName);
+    var ex = null;
+    for (var i = 0; i < q.length; i++){
+      if (q[i].name === playerName && q[i].tipo === tipo){ ex = q[i]; break; }
+    }
+    if (ex){ ex.remaining = (parseInt(ex.remaining,10)||0) + diff; ex.reason = reason; }
+    else { q.push({ name: playerName, team: selName, reason: reason, remaining: diff, tipo: tipo }); }
+  }
+  /* ¿hay ya una suspensión pendiente del jugador del tipo dado?
+     (yellow = 'acumulacion'; red = 'roja'/'d-amarilla'). */
+  function _hasPendingSelTipo(selName, playerName, kind){
+    var bucket = window.SANCION_STORE_SEL[SEL_KEY];
+    var q = bucket && bucket[selName];
+    if (!q || !q.length) return false;
+    for (var i = 0; i < q.length; i++){
+      if (q[i].name !== playerName || (parseInt(q[i].remaining,10)||0) <= 0) continue;
+      var t = q[i].tipo;
+      if (kind === 'red'){ if (t === 'roja' || t === 'd-amarilla') return true; }
+      else { if (t === 'acumulacion') return true; }
+    }
+    return false;
+  }
+  function reconcileSelSuspensions(selName){
+    try {
+      if (!esSelHumana(selName)) return;
+      var lookup = (typeof window._selCardStatsFor === 'function') ? window._selCardStatsFor(selName) : null;
+      if (!lookup) return;
+      var sel = canonSelHumana(selName);
+      var roster = _selRosterFor(sel);
+      if (!roster || !roster.length) return;
+      var changed = false;
+      roster.forEach(function(p){
+        var name = p && p[1]; if (!name) return;
+        var c = lookup(name) || {};
+        var ta = Math.max(0, parseInt(c.ta, 10) || 0);
+        var tr = Math.max(0, parseInt(c.tr, 10) || 0);
+        if (!ta && !tr) return;
+        var ent = _yelGet(SEL_KEY, sel, name);
+        /* contador monótono = total de amarillas (NO se resetea: lo lee
+           _checkFraYellowBrink, que espera un total creciente). */
+        if ((parseInt(ent.count, 10) || 0) !== ta){ ent.count = ta; changed = true; }
+        /* Acumulación: cada 2 🟨 = 1 partido. */
+        var owedAcc = Math.floor(ta / 2);
+        /* Primera reconciliación: si ya hay una suspensión por
+           acumulación pendiente (p.ej. de la migración legacy o de un
+           dispositivo que ya la emitió), considérala ya emitida para no
+           duplicar. */
+        if (ent.issued === undefined){ ent.issued = _hasPendingSelTipo(sel, name, 'yellow') ? owedAcc : 0; changed = true; }
+        var issAcc = parseInt(ent.issued, 10) || 0;
+        if (owedAcc > issAcc){
+          _addSelSuspDiff(sel, name, owedAcc - issAcc, 'acumulacion', '2 🟨 acumuladas (ciclo)');
+          ent.issued = owedAcc; changed = true;
+        }
+        /* Rojas / dobles amarillas: cada una = 1 partido. */
+        if (ent.issuedRed === undefined){ ent.issuedRed = _hasPendingSelTipo(sel, name, 'red') ? tr : 0; changed = true; }
+        var issRed = parseInt(ent.issuedRed, 10) || 0;
+        if (tr > issRed){
+          _addSelSuspDiff(sel, name, tr - issRed, 'roja', 'Expulsión — 1 partido');
+          ent.issuedRed = tr; changed = true;
+        }
+      });
+      if (changed) _persist();
+    } catch(_){}
+  }
+  window._selReconcileSuspensions = reconcileSelSuspensions;
+
   // ── Hook calcularSancionesPartido: derivar a motor selección ─────
   var _origCalc = window.calcularSancionesPartido;
   window.calcularSancionesPartido = function(events, humanTeam, teamName, compKey){
@@ -12951,6 +13039,10 @@ window._fallbackSq11 = function(){
     var torneoKey = torneoKeyFor(compKey);
     [homeTeam, awayTeam].forEach(function(tm){
       if (!esSelHumana(tm)) return;
+      /* Reconciliar tarjetas → suspensión ANTES de leer la cola, para
+         que AMONESTADOS/EXPULSADOS muestren el ciclo de 2 🟨 aunque
+         nunca se haya llamado al motor durante el partido. */
+      try { reconcileSelSuspensions(tm); } catch(_){}
       var sel = canonSelHumana(tm);
       var q = torneoKey ? (window.SANCION_STORE_SEL[torneoKey] || {})[sel] : null;
       if (q && q.length) {

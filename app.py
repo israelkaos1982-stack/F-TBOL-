@@ -3381,6 +3381,19 @@ _KV_ALLOWED_EXACT = {
     # gana). cash_ledger_v1 → merge por UNIÓN (nunca se pierde un pago ya
     # hecho, o se re-pagaría al re-escanear en otro dispositivo).
     "cash_rewards_v1", "cash_ledger_v1",
+    # HUD del hub (🪙 presupuesto · 💊 puntos de fisio · 💼 valoración +
+    # objetivos). ANTES vivía en el blob TOP-LEVEL de /api/state, compartido
+    # por decenas de writers concurrentes (poll de Liga/comp-state + el
+    # `reset-liga` con replace=True full-state): un read-modify-write ajeno o
+    # el replace del reset DESCARTABA el 🪙/💊/💼 recién guardado y, como el
+    # HUD se sube UNA sola vez, ese clobber era PERMANENTE → tras borrar datos
+    # de navegación la rehidratación no encontraba nada y el HUD volvía a los
+    # defaults (foto usuario 2026-06-06: "pongo los valores, borro datos y al
+    # volver no se han cambiado"; la fecha SÍ sobrevivía porque su cursor tiene
+    # merge dedicado + re-push frecuente). Ahora vive en su PROPIA fila KV —
+    # sin contención con otros writers — con merge por RECENCIA (updatedAt): un
+    # POST stale (otro móvil, request perdido) nunca pisa una copia más nueva.
+    "bayern_hud_overrides_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -3391,6 +3404,10 @@ _KV_RECENCY_BLOB_KEYS = {
     "bplant_stat_adjust_v1", "mu_messages_v1", "bplant_match_stats_v1",
     # Tabla EDITABLE de premios CASH: la última edición del admin gana entera.
     "cash_rewards_v1",
+    # HUD del hub (🪙💊💼 + objetivos): running total / consumible. El blob
+    # con `updatedAt` mayor gana ENTERO — un consumo legítimo (PI gastado,
+    # presupuesto sumado) no se revierte y un POST stale no pisa lo más nuevo.
+    "bayern_hud_overrides_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

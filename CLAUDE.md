@@ -1,5 +1,67 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El HUD del hub (🪙💊💼) se SINCRONIZA por `/api/kv` (recencia), NUNCA por `/api/state` (obligatorio, 2026-06-06)
+
+**Bug (fotos usuario 2026-06-06, «Liverpool-Francia»)**: el usuario
+reinicia la temporada, abre el editor 🖍 EDITAR HUD y pone 🪙 2500 ·
+💊 4 · valoración objetivo 8.80. **Borra los datos de navegación** y al
+volver la FECHA (01 May) está bien pero los **valores del HUD vuelven a
+los defaults** (🪙 0 · 💊 8 · /9.10). «Los valores no se han cambiado.»
+
+### Causa raíz
+
+`bayern_hud_overrides_v1` (🪙 presupuesto · 💊 puntos de fisio · 💼
+valoración + objetivos) era el ÚNICO blob de running-total que aún vivía
+en el blob **TOP-LEVEL de `/api/state`**, compartido por DECENAS de
+writers concurrentes:
+
+- El poll de Liga / `competition_state` POSTea `/api/state` cada pocos
+  segundos (read-modify-write del estado completo).
+- `/api/state/reset-liga` («Reiniciar Temporada») hace
+  `save_global_state(data, replace=True)` con el estado ENTERO cargado
+  — y la rama `replace=True` **NO aplica la corrección por recencia**
+  (esa solo está en la rama `replace=False`).
+
+Cualquier write ajeno que leyera la fila ANTES del save del HUD y la
+escribiera DESPUÉS **descartaba** el 🪙/💊/💼 recién guardado. Y como el
+HUD se sube **UNA sola vez** (no se re-pushea solo), ese clobber era
+**PERMANENTE**: tras borrar datos de navegación, la rehidratación
+(`_serverPull`) no encontraba nada en el server y el HUD caía a los
+defaults hardcoded. La **FECHA** (`liverpool_preseason_v1`) SÍ sobrevive
+porque su cursor tiene merge MONOTÓNICO dedicado **+ re-push frecuente**
+(self-healing); el HUD no tenía ninguna de las dos cosas.
+
+### Fix — mover el HUD a su PROPIA fila KV con merge por recencia
+
+`bayern_hud_overrides_v1` pasa al patrón canónico de todos los demás
+blobs «sobrevive al wipe» (bajas/sanciones, mensajes, CASH…):
+
+- **Servidor** (`app.py`): la clave está en `_KV_ALLOWED_EXACT` **y** en
+  `_KV_RECENCY_BLOB_KEYS`. `/api/kv/<key>` guarda **una fila por clave**
+  → CERO contención con otros writers; `reset-liga` (que reescribe la
+  fila principal) ni la toca. Merge por RECENCIA: el blob con `updatedAt`
+  mayor gana ENTERO (un consumo legítimo de PI / suma de presupuesto no
+  se revierte; un POST stale no pisa lo más nuevo).
+- **Cliente** (`misc_body_1.html`, IIFE del HUD admin): `_serverPush`
+  POSTea `/api/kv/bayern_hud_overrides_v1` con `{value:o}`; `_serverPull`
+  hace GET del KV y adopta por recencia (`_adoptFromServer`). Si el KV
+  está vacío, **fallback de migración** `_legacyStatePull` lee el blob
+  legacy de `/api/state` UNA vez, lo adopta y lo re-sube al KV.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** devolver `bayern_hud_overrides_v1` (ni ningún
+   running-total / consumible del HUD) al blob top-level de `/api/state`.
+   Vive en su fila `/api/kv` con merge por recencia.
+2. **PROHIBIDO** quitar `bayern_hud_overrides_v1` de `_KV_ALLOWED_EXACT`
+   o de `_KV_RECENCY_BLOB_KEYS`, o cambiar `_serverPush`/`_serverPull`
+   para que vuelvan a `/api/state`. Reintroduce el clobber.
+3. Todo store nuevo de running-total / consumible del hub hereda este
+   patrón: fila KV propia + recencia, NUNCA el blob compartido de
+   `/api/state` (que sufre read-modify-write races + `replace=True`).
+4. `save()` SIEMPRE estampa `updatedAt` (ms) en el blob antes de subir —
+   sin él la recencia del server no puede arbitrar.
+
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:

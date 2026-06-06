@@ -51748,24 +51748,34 @@ https://api.sofascore.app/api/v1/team/44/image
     }).catch(function(){ return false; });
   }
 
-  /* Server endpoints: usamos /api/state (mismo patrón que
-     bayern_derbys_seasons_v1) para persistir el override en el
-     backend. SAVE: keepalive + sendBeacon de respaldo (sobrevive
-     cierre de tab, no se cancela en una recarga rápida). */
+  /* Server endpoint: KV DEDICADO (/api/kv/bayern_hud_overrides_v1) con
+     UNA fila propia por clave y merge por RECENCIA en el servidor
+     (`_KV_RECENCY_BLOB_KEYS`). ANTES esto vivía en el blob TOP-LEVEL de
+     /api/state, compartido por decenas de writers concurrentes (poll de
+     Liga/comp-state + `reset-liga` con replace=True full-state): un
+     read-modify-write ajeno o el replace del reset DESCARTABA el 🪙/💊/💼
+     recién guardado y, como el HUD se sube UNA sola vez, ese clobber era
+     PERMANENTE → tras borrar datos de navegación la rehidratación no
+     encontraba nada y el HUD volvía a los defaults (foto usuario
+     2026-06-06; la FECHA sí sobrevivía porque su cursor tiene merge
+     dedicado + re-push frecuente). El KV por-clave elimina la contención:
+     ningún otro writer toca esta fila. SAVE: keepalive + sendBeacon de
+     respaldo (sobrevive cierre de tab, no se cancela en una recarga rápida). */
+  var KV_URL = '/api/kv/bayern_hud_overrides_v1';
   function _serverPush(o){
-    var body = JSON.stringify({ bayern_hud_overrides_v1: o || {} });
+    var body = JSON.stringify({ value: o || {} });
     /* sendBeacon: garantiza entrega incluso si la página se está
        descargando. No espera respuesta — perfecto para esto. */
     try {
       if (navigator.sendBeacon) {
         var blob = new Blob([body], {type:'application/json'});
-        navigator.sendBeacon('/api/state', blob);
+        navigator.sendBeacon(KV_URL, blob);
       }
     } catch(_){}
     /* fetch keepalive: además del sendBeacon, hacemos fetch para
        tener Promise y poder esperarlo si el caller quiere. */
     try {
-      return fetch('/api/state', {
+      return fetch(KV_URL, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: body,
@@ -51778,41 +51788,62 @@ https://api.sofascore.app/api/v1/team/44/image
     try { return (o && o.updatedAt != null) ? (Number(o.updatedAt) || 0) : 0; }
     catch(_){ return 0; }
   }
-  function _serverPull(cb){
+  /* Adopción por RECENCIA (no ciega) de un blob del server. Leemos el
+     blob local (cache → localStorage) y comparamos `updatedAt`:
+       · local vacío  → adopta el server (recupera tras wipe).
+       · server >= local → adopta el server (otro dispositivo hizo un
+         cambio más nuevo).
+       · local > server → NO adopta; RE-SUBE el local para que el server
+         (y el otro móvil) converjan a la copia nueva.
+     Esto es lo que evita la divergencia 🪙💊: el dispositivo que ganó
+     dinero más recientemente manda, y el otro adopta en su próximo pull
+     en vez de pisar con un total viejo. */
+  function _adoptFromServer(srv, cb){
+    if (!(srv && typeof srv === 'object' && Object.keys(srv).length)) return;
+    var loc = window._BAYERN_HUD_CACHE;
+    if (!loc || typeof loc !== 'object') {
+      try { var r = localStorage.getItem(KEY); if (r) loc = JSON.parse(r); } catch(_){}
+    }
+    var localEmpty = !loc || typeof loc !== 'object' || !Object.keys(loc).length;
+    if (!localEmpty && _tsOf(loc) > _tsOf(srv)) {
+      /* Local más nuevo → re-subir para converger, sin adoptar. */
+      try { _serverPush(loc); } catch(_){}
+      return;
+    }
+    window._BAYERN_HUD_CACHE = srv;
+    try { localStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+    try { sessionStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+    _cookieWrite(srv);
+    _idbWrite(srv);
+    if (typeof cb === 'function') cb(srv);
+  }
+  /* FALLBACK de migración: lee el blob LEGACY del top-level /api/state
+     (donde el HUD vivía antes de mudarse al KV). Solo se usa cuando el KV
+     está vacío; si encuentra una copia buena la adopta por recencia Y la
+     re-sube al KV para converger. Así un dispositivo que aún no había
+     migrado no pierde su HUD. */
+  function _legacyStatePull(cb){
     try {
       fetch('/api/state', { method:'GET' })
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(d){
-          if (!d || !d.state) return;
-          var srv = d.state.bayern_hud_overrides_v1;
-          if (!(srv && typeof srv === 'object' && Object.keys(srv).length)) return;
-          /* Adopción por RECENCIA (no ciega). Leemos el blob local
-             (cache → localStorage) y comparamos `updatedAt`:
-               · local vacío  → adopta el server (recupera tras wipe).
-               · server >= local → adopta el server (otro dispositivo
-                 hizo un cambio más nuevo).
-               · local > server → NO adopta; RE-SUBE el local para que
-                 el server (y el otro móvil) converjan a la copia nueva.
-             Esto es lo que evita la divergencia 🪙💊: el dispositivo
-             que ganó dinero más recientemente manda, y el otro adopta
-             en su próximo pull en vez de pisar con un total viejo. */
-          var loc = window._BAYERN_HUD_CACHE;
-          if (!loc || typeof loc !== 'object') {
-            try { var r = localStorage.getItem(KEY); if (r) loc = JSON.parse(r); } catch(_){}
+          var srv = d && d.state && d.state.bayern_hud_overrides_v1;
+          if (srv && typeof srv === 'object' && Object.keys(srv).length) {
+            _adoptFromServer(srv, cb);
+            try { _serverPush(srv); } catch(_){}   /* migra al KV */
           }
-          var localEmpty = !loc || typeof loc !== 'object' || !Object.keys(loc).length;
-          if (!localEmpty && _tsOf(loc) > _tsOf(srv)) {
-            /* Local más nuevo → re-subir para converger, sin adoptar. */
-            try { _serverPush(loc); } catch(_){}
-            return;
-          }
-          window._BAYERN_HUD_CACHE = srv;
-          try { localStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
-          try { sessionStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
-          _cookieWrite(srv);
-          _idbWrite(srv);
-          if (typeof cb === 'function') cb(srv);
         }).catch(function(){});
+    } catch(_){}
+  }
+  function _serverPull(cb){
+    try {
+      fetch(KV_URL, { method:'GET', headers:{'Cache-Control':'no-store'} })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          var srv = (j && j.ok && j.value && typeof j.value === 'object') ? j.value : null;
+          if (srv && Object.keys(srv).length) { _adoptFromServer(srv, cb); }
+          else { _legacyStatePull(cb); }   /* KV vacío → migración one-time */
+        }).catch(function(){ try { _legacyStatePull(cb); } catch(_){} });
     } catch(_){}
   }
   function load(){

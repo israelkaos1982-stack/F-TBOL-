@@ -21399,6 +21399,45 @@ window._showSimProgress = function(opts, onDone){
      siempre fallaban y caían al return null (dead code). 2026-05-24. */
   try { window._tourLoadCachedSync = _tourLoadCachedSync; } catch(_){}
 
+  /* Rellena en `srv` (cfg que llega del servidor) el ACTA de cada partido
+     que el servidor trajo SOLO con marcador pero que la copia LOCAL `loc`
+     sí tiene con eventos, SIEMPRE que el marcador coincida (= mismo
+     resultado, el server solo perdió el acta en la fusión). NUNCA pisa un
+     acta que el server ya traiga, ni toca partidos con marcador distinto
+     (una corrección legítima del resultado manda). Espejo cliente de la
+     regla anti-pérdida de acta de `_pick_result` (sync_merge.py). */
+  function _tourBackfillActaFromLocal(srv, loc){
+    if (!srv || !loc) return;
+    var sr = srv.results, lr = loc.results;
+    if (!sr || !lr || typeof sr !== 'object' || typeof lr !== 'object') return;
+    function _actaLen(r){
+      if (!r) return 0;
+      if (Array.isArray(r.events)) return r.events.length;
+      if (Array.isArray(r.acta)) return r.acta.length;
+      return 0;
+    }
+    function _score(r){
+      if (!r) return null;
+      if (typeof r.a === 'number' && typeof r.b === 'number') return r.a + '-' + r.b;
+      if (typeof r.gh === 'number' && typeof r.ga === 'number') return r.gh + '-' + r.ga;
+      return null;
+    }
+    Object.keys(sr).forEach(function(mk){
+      var s = sr[mk], l = lr[mk];
+      if (!s || !l) return;
+      if (_actaLen(s) > 0) return;          /* server ya trae acta → respetar */
+      if (_actaLen(l) === 0) return;        /* local tampoco tiene → nada que rellenar */
+      var ssc = _score(s);
+      if (!ssc || ssc !== _score(l)) return; /* marcador distinto → ua/server manda */
+      if (Array.isArray(l.events) && l.events.length) s.events = l.events.slice();
+      if (Array.isArray(l.acta)   && l.acta.length)   s.acta   = l.acta.slice();
+      if (!s.home && l.home)       s.home = l.home;
+      if (!s.away && l.away)       s.away = l.away;
+      if (!s.mvp && l.mvp)         s.mvp = l.mvp;
+      if (!s.mvpTeam && l.mvpTeam) s.mvpTeam = l.mvpTeam;
+    });
+  }
+
   /* ── Persistencia ──────────────────────────────────────── */
   window._tourLoad = async function(id){
     if (TOUR_IDS.indexOf(id) === -1) return null;
@@ -21425,6 +21464,16 @@ window._showSimProgress = function(opts, onDone){
           if (srvUpd && localUpd && srvUpd <= localUpd) {
             return localCfg || cfg;
           }
+          /* ANTI-PÉRDIDA DE ACTA (2026-06-06): aunque el server sea más
+             reciente, NUNCA descartar los eventos que la copia LOCAL ya
+             tenía para un partido con el MISMO marcador. Un merge del server
+             (o un guardado solo-marcador de otro móvil que llegó antes de
+             cargar el motor de actas) podía traer el partido sin `events`
+             → la card seguía mostrando el resultado pero la caja de
+             Estadísticas del torneo salía «Sin datos todavía» (bug «Road
+             Copa Asia», fotos usuario). Rellenamos el acta desde el local
+             para que las stats no se vacíen al sincronizar. */
+          try { _tourBackfillActaFromLocal(cfg, localCfg); } catch(_){}
           try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
           try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
           return cfg;

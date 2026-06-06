@@ -113,10 +113,46 @@ def _result_is_played(r):
     return False
 
 
+def _acta_len(r):
+    """Nº de eventos del acta de un resultado (events/acta). 0 si no hay."""
+    if not isinstance(r, dict):
+        return 0
+    for k in ("events", "acta"):
+        v = r.get(k)
+        if isinstance(v, list):
+            return len(v)
+    return 0
+
+
+def _score_pair(r):
+    """Marcador (local, visitante) de un resultado, o None si no es numérico.
+    Tolera las dos convenciones del cliente (a/b y gh/ga)."""
+    if not isinstance(r, dict):
+        return None
+    a, b = r.get("a"), r.get("b")
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return (a, b)
+    gh, ga = r.get("gh"), r.get("ga")
+    if isinstance(gh, (int, float)) and isinstance(ga, (int, float)):
+        return (gh, ga)
+    return None
+
+
 def _pick_result(ex, inc):
     """Elige el resultado ganador para un mismo matchKey presente en ambos
     lados. Jugado gana a no-jugado; entre dos jugados gana el `ua` mayor
-    y, a falta de sello, el entrante (last-write a nivel de partido)."""
+    y, a falta de sello, el entrante (last-write a nivel de partido).
+
+    EXCEPCIÓN ANTI-PÉRDIDA DE ACTA (2026-06-06): si ambos tienen el MISMO
+    marcador pero una copia trae el acta (`events`/`acta`) y la otra es
+    solo-marcador, gana SIEMPRE la que tiene acta — aunque su `ua` sea menor.
+    Sin esto, un dispositivo que guardó el partido antes de cargar el motor
+    de actas (o que re-guardó solo el marcador) MACHACABA los eventos ya
+    generados en otro móvil: el partido sobrevivía (marcador → clasificación
+    OK) pero los goleadores/tarjetas/MVP desaparecían y la caja de
+    Estadísticas del torneo salía «Sin datos todavía» (bug «Road Copa Asia»,
+    fotos usuario 2026-06-06). Un marcador DISTINTO sí decide por `ua` (una
+    corrección legítima del resultado no se revierte)."""
     if not isinstance(inc, dict):
         return ex
     if not isinstance(ex, dict):
@@ -126,6 +162,12 @@ def _pick_result(ex, inc):
         return inc
     if ex_p and not inc_p:
         return ex
+    # Mismo marcador + solo una copia trae acta → conservar el acta.
+    ex_a, inc_a = _acta_len(ex), _acta_len(inc)
+    if (ex_a > 0) != (inc_a > 0):
+        s_ex, s_inc = _score_pair(ex), _score_pair(inc)
+        if s_ex is not None and s_ex == s_inc:
+            return ex if ex_a > inc_a else inc
     ua_ex, ua_inc = _num(ex.get("ua")), _num(inc.get("ua"))
     if ua_inc >= ua_ex:
         return inc

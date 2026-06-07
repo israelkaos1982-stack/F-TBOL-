@@ -14724,6 +14724,64 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
 
+    /* Source 5: copa_state (Copa del Rey). Los partidos de Copa (IA y
+       humanos) NO se persisten en LIGA_PLAYER_MATCH_STORE (volátil) — su
+       acta vive en copa_state.resultados[ronda][idx].events (servidor +
+       mirror localStorage `copa_state_v1`, escrito por el poll global y
+       por la pantalla de la Copa). Tras un borrado de datos de navegación
+       / cambio de móvil la caja Estadísticas de la Copa quedaba vacía
+       aunque los goleadores estuvieran en el servidor. Lo iteramos aquí →
+       bucket 'copa'. Misma filosofía que Source 4 (inter_state_v1) y
+       Source 3 (cfg.results de torneos). Dedup compartido con Source 1
+       (mismo `copa|`+_mkPJ) para no doblar conteo en vivo. 2026-06-06. */
+    try {
+      var _cpSt = null;
+      try { _cpSt = JSON.parse(localStorage.getItem('copa_state_v1')||'null'); } catch(_){}
+      var _cpRes = _cpSt && _cpSt.resultados;
+      if (_cpRes && typeof _cpRes === 'object') {
+        Object.keys(_cpRes).forEach(function(_rk){
+          var _list = _cpRes[_rk];
+          if (!Array.isArray(_list)) return;
+          _list.forEach(function(_m){
+            if (!_m || !_m.jugado || !Array.isArray(_m.events) || !_m.events.length) return;
+            var _tA = _m.team_a || '', _tB = _m.team_b || '';
+            if (!_tA || !_tB) return;
+            var _dK = 'copa|' + _mkPJ(_tA, _tB);
+            if (processedMatches[_dK]) return;
+            processedMatches[_dK] = true;
+            var _nA = _normPS(_tA), _nB = _normPS(_tB);
+            if (_nA) teamPJByComp.copa[_nA] = (teamPJByComp.copa[_nA]||0) + 1;
+            if (_nB) teamPJByComp.copa[_nB] = (teamPJByComp.copa[_nB]||0) + 1;
+            _m.events.forEach(function(ev){
+              if (!ev || ev._varAnulado) return;
+              var team = ev.realTeam || (ev.team === 'a' ? _tA : ev.team === 'b' ? _tB : '');
+              var player = '';
+              if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+              else if (typeof ev.player === 'string') player = ev.player;
+              else player = ev.name || ev.playerName || '';
+              if (!player) return;
+              var p = getOrCreateInBucket(buckets.copa, team, player);
+              var type = ev.type || '';
+              var ico = String(ev.ico||'').replace(/️/g,'').trim();
+              if (type==='amarilla') p.ta++;
+              else if (type==='roja'||type==='d-amarilla') p.tr++;
+              else if (type==='card'){ if(ico==='🟨')p.ta++; else if(ico==='🟥')p.tr++; else if(ico==='🟨🟥'){p.ta++;p.tr++;} }
+              else if (type==='gol') p.gol++;
+              else if (type==='falta-gol') p.fk++;
+              else if (type==='pen-gol') p.pen++;
+              else if (type==='pen-prov') p.penProv++;
+              else if (type==='pen-fallo'||type==='pen-fallado') p.penFall++;
+              else if (type==='propia') p.propia++;
+              else if (type==='pen-parado') p.penSaved++;
+              else if (type==='mvp') p.mvp++;
+              else if (type==='imbat') p.imbat++;
+              if (type==='sust' && ev.playerOut) getOrCreateInBucket(buckets.copa, team, ev.playerOut);
+            });
+          });
+        });
+      }
+    } catch(_){}
+
     _mergeBucketInto(stats, buckets.copa);
     _mergeBucketInto(stats, buckets.sc);
     /* PJ del equipo en EA Sports = Liga + Copa + Supercopa España. */

@@ -52034,17 +52034,32 @@ https://api.sofascore.app/api/v1/team/44/image
         navigator.sendBeacon(KV_URL, blob);
       }
     } catch(_){}
-    /* fetch keepalive: además del sendBeacon, hacemos fetch para
-       tener Promise y poder esperarlo si el caller quiere. */
-    try {
-      return fetch(KV_URL, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: body,
-        keepalive: true
-      }).then(function(r){ return r && r.ok; })
-        .catch(function(){ return false; });
-    } catch(_){ return Promise.resolve(false); }
+    /* fetch con REINTENTOS (backoff 1s/2s/4s). Bug raíz 2026-06-07: el
+       push se hacía UNA sola vez; si ese POST fallaba (móvil/5G/Railway
+       frío) el valor quedaba SOLO en local y, al borrar datos de
+       navegación, MORÍA porque nunca llegó al servidor. Es justo lo que
+       el usuario veía: "lo pongo, se ve, borro datos y vuelve a 0". Los
+       demás stores (`_kvBlobSync`) ya reintentan; el HUD no lo hacía. */
+    function _attempt(n){
+      try {
+        return fetch(KV_URL, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body: body,
+          keepalive: true
+        }).then(function(r){
+          if (r && r.ok) return true;
+          throw new Error('http ' + (r && r.status));
+        }).catch(function(){
+          if (n >= 3) return false;
+          return new Promise(function(res){
+            setTimeout(function(){ res(_attempt(n + 1)); }, Math.pow(2, n) * 1000);
+          });
+        });
+      } catch(_){ return Promise.resolve(false); }
+    }
+    return _attempt(0);
   }
   function _tsOf(o){
     try { return (o && o.updatedAt != null) ? (Number(o.updatedAt) || 0) : 0; }
@@ -52115,7 +52130,23 @@ https://api.sofascore.app/api/v1/team/44/image
           var j = res.j;
           var srv = (j && j.ok && j.value && typeof j.value === 'object') ? j.value : null;
           if (srv && Object.keys(srv).length) { _adoptFromServer(srv, cb); }
-          else { _legacyStatePull(cb); }   /* KV vacío → migración one-time */
+          else if (res.ok) {
+            /* Server ALCANZABLE pero el KV está VACÍO. Antes de caer a la
+               migración legacy, AUTO-SANAMOS: si el local tiene datos del
+               admin (un save anterior cuyo POST no llegó al server), los
+               RE-SUBIMOS con reintentos para que no se pierdan en el
+               próximo wipe. Solo si NO hay local probamos /api/state. */
+            var loc = window._BAYERN_HUD_CACHE;
+            if (!loc || typeof loc !== 'object') {
+              try { var r0 = localStorage.getItem(KEY); if (r0) loc = JSON.parse(r0); } catch(_){}
+            }
+            if (loc && typeof loc === 'object' && Object.keys(loc).length) {
+              try { _serverPush(loc, true); } catch(_){}
+            } else {
+              _legacyStatePull(cb);   /* KV vacío + sin local → migración one-time */
+            }
+          }
+          else { _legacyStatePull(cb); }   /* server con error → intenta /api/state */
         }).catch(function(){ try { _legacyStatePull(cb); } catch(_){} });
     } catch(_){}
   }

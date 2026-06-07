@@ -2718,7 +2718,7 @@ window._showSimProgress = function(opts, onDone){
           var q = (((window.SANCION_STORE_SEL || {})['sel']) || {})[sel] || [];
           for (var i = 0; i < q.length; i++){
             if ((Number(q[i].remaining) || 0) > 0 && _teamKeyMatches(_normForStats(q[i].name || ''), nn))
-              return (q[i].tipo === 'amarilla') ? 'yellow' : 'red';
+              return (q[i].tipo === 'roja' || q[i].tipo === 'd-amarilla') ? 'red' : 'yellow';
           }
           var lb = ((window.LESION_STORE_SEL || {})[sel]) || {};
           for (var lk in lb){ if (lb[lk] && (Number(lb[lk].remaining) || 0) > 0 && _teamKeyMatches(_normForStats(lk), nn)) return 'purple'; }
@@ -2761,7 +2761,7 @@ window._showSimProgress = function(opts, onDone){
           for (var i = 0; i < q.length; i++){
             var s = q[i]; var rem = Number(s && s.remaining) || 0;
             if (rem > 0 && _teamKeyMatches(_normForStats(s.name || ''), nn))
-              return { state: (s.tipo === 'amarilla' ? 'yellow' : 'red'), n: rem, reason: s.reason || '' };
+              return { state: (s.tipo === 'roja' || s.tipo === 'd-amarilla' ? 'red' : 'yellow'), n: rem, reason: s.reason || '' };
           }
           var lb = ((window.LESION_STORE_SEL || {})[sel]) || {};
           for (var lk in lb){
@@ -3426,7 +3426,27 @@ window._showSimProgress = function(opts, onDone){
         }
       };
     }
+    /* Tarjetas (🟨 ta / 🟥 tr) acumuladas por jugador de una selección,
+       derivadas de cfg.results (la MISMA fuente que pinta las columnas de
+       la plantilla). Lo consume el motor de sanciones de selección
+       (index.bundle.js → `_selReconcileSuspensions`) para registrar el
+       ciclo de 2 amarillas → 1 partido de forma RETROACTIVA y
+       self-healing. Devuelve una función `lookup(playerName) → {ta,tr}`
+       con el mismo matching difuso que la plantilla. */
+    window._selCardStatsFor = function(selName){
+      var ctx = _selCtxFor(selName);
+      return function(name){
+        var s = (ctx && ctx.statsFor) ? (ctx.statsFor(name) || {}) : {};
+        return { ta: Number(s.ta) || 0, tr: Number(s.tr) || 0 };
+      };
+    };
     function _renderSelView(host, selName){
+      /* Reconciliar sanciones por tarjetas ANTES de pintar: registra el
+         ciclo de 2 amarillas → 1 partido (y rojas) desde el acta real, para
+         que el jugador salga marcado en amarillo/rojo en la plantilla
+         (badge + fila) y se dispare el aviso en la bandeja. */
+      try { if (window._selReconcileSuspensions) window._selReconcileSuspensions(selName); } catch(_){}
+      try { if (window._checkFraYellowBrink) window._checkFraYellowBrink(selName); } catch(_){}
       var t = _selTeamObj(selName);
       if (!t || !Array.isArray(t.players) || !t.players.length){
         host.innerHTML = '<div style="padding:28px 14px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;line-height:1.6;">'
@@ -60253,12 +60273,21 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
          YELLOW_STORE_SEL un tick más tarde (las sanciones se procesan
          async). Si la estructura no existe, no hace nada. */
       if (side === 'fra'){
+        /* Reconciliar el ciclo de amarillas/rojas de la selección desde el
+           acta (registra la suspensión en SANCION_STORE_SEL + sincroniza
+           el contador monótono que lee _checkFraYellowBrink). */
+        try { if (window._selReconcileSuspensions) window._selReconcileSuspensions(humanTeam); } catch(_){}
         setTimeout(function(){ _checkFraYellowBrink(humanTeam); }, 140);
       }
     } catch(_){}
   }
   function _checkFraYellowBrink(selName){
     try {
+      /* La bandeja solo tiene lado 'fra' para selección (hub
+         Liverpool/Francia). Si lo llaman con OTRA selección (la plantilla
+         del hub es genérica por caja), no inventamos un mensaje "con
+         Francia" para Brasil/Argentina/… */
+      if (selName && typeof _isFra === 'function' && !_isFra(selName)) return;
       var store = window.YELLOW_STORE_SEL || {};
       Object.keys(store).forEach(function(tk){
         var bySel = store[tk] || {};
@@ -60294,6 +60323,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     } catch(_){}
   }
   window._broadcastHumanMatchResult = _broadcastHumanMatchResult;
+  /* Expuesto para que la plantilla del hub (vista selección) pueda
+     disparar el aviso/suspensión de amarillas tras reconciliar, sin
+     esperar al fin del próximo partido (mensaje retroactivo). */
+  window._checkFraYellowBrink = _checkFraYellowBrink;
 
   /* ── Semilla inicial ────────────────────────────────────
      Los 3 mensajes de bienvenida (Bienvenido a Anfield, Plantilla,

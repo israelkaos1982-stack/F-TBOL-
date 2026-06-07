@@ -2099,32 +2099,44 @@ de forma RETROACTIVA y self-healing cross-device. Por jugador:
 
 - `count`     = total de 🟨 (monótono = stat `ta`). Lo lee
   `_checkFraYellowBrink` para el aviso/suspensión de la bandeja.
-- `issued`    = nº de ciclos de 2 🟨 ya convertidos en suspensión.
-- `issuedRed` = nº de 🟥/dobles-amarillas (stat `tr`) ya convertidas.
+- `servedAcc` = nº de suspensiones por acumulación YA CUMPLIDAS.
+- `servedRed` = nº de suspensiones por 🟥/doble-amarilla YA CUMPLIDAS.
 
-`owedAcc = floor(ta/2)`; si `owedAcc > issued` emite la diferencia y
-sube `issued`. Igual para rojas con `tr`. **Idempotente**: el consumo
-(`_selConsumirParaPartido` al jugar) decrementa la cola pero NUNCA toca
-`issued`/`issuedRed` → una suspensión cumplida no se resucita aunque
-`ta` siga a 2 para siempre. Primera reconciliación: si ya hay una
-suspensión pendiente del mismo tipo (migración legacy u otro
-dispositivo), `issued` se siembra a `owed` para no duplicar.
+`pendingAcc = max(0, floor(ta/2) − servedAcc)`; `pendingRed = max(0,
+tr − servedRed)`. **AUTO-LIMPIANTE** (refuerzo 2026-06-07, foto usuario
+«Doué con 1 🟨 salía suspendido»): en CADA pasada la cola se AJUSTA a
+ese `pending` — añade/actualiza si falta y **RETIRA** la entrada
+gestionada si ya no procede (stats bajaron por un reset/re-sim o se
+cumplió). `served*` SOLO sube al consumir (`_selConsumirParaPartido`,
+que distingue las entradas gestionadas vía `_isSelReconEntry`), así una
+suspensión cumplida no se resucita y una que dejó de proceder
+desaparece sola. Migración del primer deploy: en la 1ª pasada
+`served* = max(0, issued_legacy − pendiente_en_cola)` para no
+re-suspender lo ya cumplido ni perder lo aún vigente.
+
+Las entradas gestionadas llevan `srcCardRecon:true` (las legacy del
+primer deploy se reconocen por `reason`). Las MANUALES del editor
+(`'…(manual)'`) NO se tocan (las quita el usuario con QUITAR BAJA).
 
 Stats por jugador vía `window._selCardStatsFor(selName)` (en
-`misc_body_1.html`, junto a `_selCtxFor`) → reusa el MISMO matching
-difuso que la plantilla (`_selCtxFor().statsFor`).
+`misc_body_1.html`, junto a `_selCtxFor`): devuelve la LISTA
+`[{name,ta,tr}]` construida con el MISMO roster (`_selTeamObj`) y el
+MISMO matching (`_selCtxFor().statsFor`) que las filas de la plantilla
+→ reconciliación y display NUNCA discrepan (un jugador con 1 🟨 en la
+tabla tendrá `ta=1` en la reconciliación, jamás 2).
 
 ### Dónde se dispara la reconciliación
 
 - **Plantilla** (`_renderSelView`): reconcilia ANTES de pintar →
   badge 🟨/🟥 (`_bedBajaBadge`) + fila coloreada (`_bedBajaState`) +
-  detalle al pulsar (`_bedBajaDetail`). También llama
-  `window._checkFraYellowBrink` (expuesto) para el mensaje retroactivo.
+  detalle al pulsar (`_bedBajaDetail`). NO dispara el mensaje aquí (era
+  una ráfaga retroactiva de avisos al abrir la plantilla — 2026-06-07).
 - **Overlay BAJAS** (`pendientesPara`, home+away): reconcilia antes de
   leer la cola → AMONESTADOS (`tipo:'acumulacion'`) / EXPULSADOS
   (`tipo:'roja'/'d-amarilla'`).
 - **Fin de partido** (`_broadcastHumanMatchResult`, lado `fra`):
-  reconcilia + `_checkFraYellowBrink` (mensaje en bandeja).
+  reconcilia + `_checkFraYellowBrink` (mensaje en bandeja, contextual al
+  partido recién jugado).
 
 ### Bug colateral arreglado: color del badge/fila
 
@@ -2140,17 +2152,33 @@ club: `roja`/`d-amarilla` → rojo, el resto → amarillo.
    verdad es `cfg.results` (acta) vía `_selReconcileSuspensions`. Toda
    pantalla que muestre la suspensión (plantilla, overlay, mensaje)
    debe reconciliar antes de leer.
-2. **PROHIBIDO** resetear `count` a 0 al cumplir el ciclo en la
-   reconciliación: `count` es monótono (= `ta`) porque
-   `_checkFraYellowBrink` espera un total creciente. La no-duplicación
-   la garantizan `issued`/`issuedRed`, NO el reset del contador.
-3. **PROHIBIDO** que el consumo de la sanción toque `issued`/`issuedRed`
-   (resucitaría la suspensión, que `ta` mantiene a 2 para siempre).
-4. **PROHIBIDO** volver a usar `tipo === 'amarilla'` para colorear el
-   badge/fila de selección: la acumulación es `tipo:'acumulacion'`.
-5. Una caja de humano nueva hereda el badge/overlay (genéricos por
-   selección); el mensaje de bandeja sigue siendo lado `fra` (hub
-   Liverpool/Francia) — `_checkFraYellowBrink` se autogatea con `_isFra`.
+2. **PROHIBIDO** que la reconciliación sea SOLO ADITIVA (bug 2026-06-07:
+   una suspensión `issued` que nunca se retiraba quedaba STALE cuando
+   las stats bajaban por un reset/re-sim → un jugador con 1 🟨 salía
+   suspendido). Debe ser AUTO-LIMPIANTE: `pending = max(0, owed −
+   served)` recalculado en cada pasada, AÑADE/ACTUALIZA y **RETIRA** la
+   entrada gestionada (`_syncSelManagedSusp`).
+3. **PROHIBIDO** que `_selReconcileSuspensions` y la plantilla usen
+   fuentes de stats DISTINTAS. Ambas leen `window._selCardStatsFor`
+   (mismo roster `_selTeamObj` + mismo `_selCtxFor`) → no pueden
+   discrepar (no más "la tabla dice 1 🟨 pero lo suspende por 2").
+4. **PROHIBIDO** resetear `count` a 0 al cumplir el ciclo: `count` es
+   monótono (= `ta`) porque `_checkFraYellowBrink` espera un total
+   creciente. La no-duplicación la garantiza `served*` (solo sube al
+   consumir), NO el reset del contador.
+5. **PROHIBIDO** que la reconciliación toque las bajas MANUALES del
+   editor (`reason` `'…(manual)'`, sin `srcCardRecon`): solo gestiona
+   las suyas (`_isSelReconEntry`). El consumo distingue ambas para
+   contar `served*` solo en las gestionadas.
+6. **PROHIBIDO** volver a usar `tipo === 'amarilla'` para colorear el
+   badge/fila de selección: la acumulación es `tipo:'acumulacion'` (el
+   editor manual también la guarda así, para que salga en AMONESTADOS).
+7. **PROHIBIDO** disparar `_checkFraYellowBrink` en el render de la
+   plantilla (suelta una ráfaga retroactiva de avisos al abrirla). El
+   mensaje va al FIN del partido. Una caja de humano nueva hereda el
+   badge/overlay (genéricos por selección); el mensaje sigue siendo lado
+   `fra` (hub Liverpool/Francia) — `_checkFraYellowBrink` se autogatea
+   con `_isFra`.
 
 ## Sanciones y lesiones — SELECCIONES NACIONALES (obligatorio, 2026-05-24)
 

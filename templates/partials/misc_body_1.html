@@ -51877,6 +51877,54 @@ https://api.sofascore.app/api/v1/team/44/image
   var applying = false;
   var observers = [];
 
+  /* ── GATE DE HIDRATACIÓN (obligatorio, regla _kvBlobSync 2026-06-04) ──
+     NINGUNA escritura AUTOMÁTICA al servidor puede salir antes de que el
+     primer `_serverPull` haya reconciliado con el servidor. Sin este gate,
+     tras borrar datos de navegación (o en otro móvil) un writer de
+     running-total (premio de torneo `_bayernHudCreditMoney`, objetivos
+     `liverpoolObjEarnings`, coste de sim…) leía un base VACÍO/stale
+     (money≈0) y hacía `save()` SELLADO con `updatedAt` FRESCO ⇒ ganaba la
+     recencia del server y, en el siguiente pull, el local "más nuevo" se
+     re-subía ⇒ clobber PERMANENTE de los valores que el admin puso → el
+     HUD volvía a los defaults (queja usuario 2026-06-07, "los iconos que
+     les da la gana").
+
+     · Los writers automáticos se DIFIEREN hasta hidratar:
+       `_bayernHudCreditMoney` acumula su delta en `_pendingMoneyDelta`;
+       `liverpoolObjEarnings` se rearma vía `_bayernHudOnHydrate`.
+     · La acción EXPLÍCITA del admin (✅ Guardar, ♻ Restablecer,
+       📅 Reiniciar Temporada) pasa `force:true` y SIEMPRE escribe — es
+       su intención directa y debe ganar.
+     · `_hudHydrated` se marca SOLO al recibir una RESPUESTA HTTP del KV
+       (no en fallo de red): si el server está caído los créditos quedan
+       en cola (seguro) hasta un pull con éxito, en vez de clobberear. */
+  var _hudHydrated = false;
+  var _pendingMoneyDelta = 0;
+  var _hydrateCbs = [];
+  window._BAYERN_HUD_HYDRATED = false;
+  function _markHydrated(){
+    if (_hudHydrated) return;
+    _hudHydrated = true;
+    try { window._BAYERN_HUD_HYDRATED = true; } catch(_){}
+    /* Flush del crédito acumulado durante el gate, ya sobre el base
+       correcto (server adoptado). */
+    if (_pendingMoneyDelta){
+      var d = _pendingMoneyDelta; _pendingMoneyDelta = 0;
+      try { _creditMoneyNow(d); } catch(_){}
+    }
+    /* Rearma a los suscriptores (objetivos del club, etc.). */
+    var cbs = _hydrateCbs.slice(); _hydrateCbs.length = 0;
+    cbs.forEach(function(fn){ try { fn(); } catch(_){} });
+  }
+  /* Pub-sub: ejecuta `fn` cuando el HUD esté hidratado (o YA, si lo
+     está). Lo usan los recalculadores de running-total para no correr
+     sobre un base sin reconciliar. */
+  window._bayernHudOnHydrate = function(fn){
+    if (typeof fn !== 'function') return;
+    if (_hudHydrated){ try { fn(); } catch(_){} return; }
+    _hydrateCbs.push(fn);
+  };
+
   /* ── CAPA 1: in-memory cache ───────────────────────── */
   if (!window._BAYERN_HUD_CACHE) window._BAYERN_HUD_CACHE = null;
 
@@ -51970,7 +52018,13 @@ https://api.sofascore.app/api/v1/team/44/image
      ningún otro writer toca esta fila. SAVE: keepalive + sendBeacon de
      respaldo (sobrevive cierre de tab, no se cancela en una recarga rápida). */
   var KV_URL = '/api/kv/bayern_hud_overrides_v1';
-  function _serverPush(o){
+  function _serverPush(o, force){
+    /* GATE: una escritura automática NO sale al server antes de hidratar
+       (evita clobber con un base vacío/stale sellado con ts fresco). La
+       acción explícita del admin (force) siempre se envía. */
+    if (!force && !_hudHydrated){
+      return Promise.resolve(false);
+    }
     var body = JSON.stringify({ value: o || {} });
     /* sendBeacon: garantiza entrega incluso si la página se está
        descargando. No espera respuesta — perfecto para esto. */
@@ -52046,8 +52100,19 @@ https://api.sofascore.app/api/v1/team/44/image
   function _serverPull(cb){
     try {
       fetch(KV_URL, { method:'GET', headers:{'Cache-Control':'no-store'} })
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(j){
+        .then(function(r){
+          var ok = !!(r && r.ok);
+          return (ok ? r.json() : Promise.resolve(null)).then(function(j){
+            return { ok: ok, j: j };
+          });
+        })
+        .then(function(res){
+          /* Marcamos hidratado SOLO si hubo respuesta HTTP válida: a
+             partir de aquí los writers automáticos ya pueden salir al
+             server sin clobber (el base local está reconciliado). Un
+             500/no-ok NO hidrata (el server no nos dio su verdad). */
+          if (res.ok) _markHydrated();
+          var j = res.j;
           var srv = (j && j.ok && j.value && typeof j.value === 'object') ? j.value : null;
           if (srv && Object.keys(srv).length) { _adoptFromServer(srv, cb); }
           else { _legacyStatePull(cb); }   /* KV vacío → migración one-time */
@@ -52109,7 +52174,7 @@ https://api.sofascore.app/api/v1/team/44/image
   /* save() retorna una Promise que resuelve cuando el server
      confirma. Las capas locales se escriben SÍNCRONAMENTE antes de
      retornar. */
-  function save(o){
+  function save(o, force){
     var data = o || {};
     /* Sello de recencia: cada guardado real estampa `updatedAt` (ms)
        para que el server (y el _serverPull de otros dispositivos)
@@ -52133,8 +52198,10 @@ https://api.sofascore.app/api/v1/team/44/image
     _cookieWrite(data);
     /* Capa 5: IndexedDB. fire-and-forget pero más durable que ls. */
     _idbWrite(data);
-    /* Capa 6: server (Promise). */
-    var serverP = _serverPush(data) || Promise.resolve(false);
+    /* Capa 6: server (Promise). `force` viene de una acción explícita
+       del admin (✅ Guardar / ♻ / 📅) que SIEMPRE debe persistir, aunque
+       aún no hayamos hidratado. */
+    var serverP = _serverPush(data, force) || Promise.resolve(false);
     /* Si localStorage falló, avisamos pero NO bloqueamos — las otras
        capas (cookie + IDB + server) son suficientes para recuperar. */
     if (!lsOk) {
@@ -52443,7 +52510,11 @@ https://api.sofascore.app/api/v1/team/44/image
        que resuelve cuando el server confirma o falla. */
     var serverPromise;
     try {
-      serverPromise = save(o);
+      /* force:true — el admin pulsó ✅ Guardar: su intención es
+         autoritativa y debe persistir aunque el pull aún no haya
+         hidratado (y deja el HUD hidratado para los writers automáticos). */
+      try { _markHydrated(); } catch(_){}
+      serverPromise = save(o, true);
     } catch(e) {
       _bayernHudToast('✖ Error guardando: ' + (e && e.message || ''), 'err');
       return;
@@ -52506,7 +52577,8 @@ https://api.sofascore.app/api/v1/team/44/image
        el valor previo del server y el reset no se propagaría a los
        demás dispositivos). El blob solo lleva `updatedAt` ⇒ sin
        overrides ⇒ el HUD recalcula desde defaults en todos lados. */
-    try { _serverPush({ updatedAt: Date.now() }); } catch(_){}
+    try { _markHydrated(); } catch(_){}
+    try { _serverPush({ updatedAt: Date.now() }, true); } catch(_){}
     /* Restaurar targets a default desde DEF — los valores actuales
        se recalcularán en la siguiente llamada a athObjCount. */
     applying = true;
@@ -52563,7 +52635,10 @@ https://api.sofascore.app/api/v1/team/44/image
        _render encadenado por _psResetCalendar. */
     try {
       if (typeof window._bayernHudMerge === 'function') {
-        window._bayernHudMerge({ rating: 0, money: 0, objRating: 0, objMoney: 0 });
+        /* force:true — «Reiniciar Temporada» es acción explícita del
+           admin: el 0/0 debe persistir y propagarse a todos los móviles
+           por recencia, no quedar gateado. */
+        window._bayernHudMerge({ rating: 0, money: 0, objRating: 0, objMoney: 0 }, true);
       }
     } catch(_){}
     try {
@@ -52872,17 +52947,24 @@ https://api.sofascore.app/api/v1/team/44/image
     var o = load();
     return (o && typeof o === 'object') ? o : {};
   };
-  window._bayernHudMerge = function(patch){
+  window._bayernHudMerge = function(patch, force){
     if (!patch || typeof patch !== 'object') return;
+    /* Merge AUTOMÁTICO (sin force) antes de hidratar → DIFERIR: correr
+       sobre un base sin reconciliar y sellarlo con ts fresco pisaría el
+       server. Lo reintentamos (recomputado) cuando hidratemos. */
+    if (!force && !_hudHydrated){
+      window._bayernHudOnHydrate(function(){ window._bayernHudMerge(patch, false); });
+      return;
+    }
     var o = load() || {}, merged = {}, k;
     for (k in o) if (Object.prototype.hasOwnProperty.call(o, k)) merged[k] = o[k];
     for (k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) merged[k] = patch[k];
-    save(merged);
+    save(merged, force);
     try { apply(); } catch(_){}
   };
-  /* Suma `delta` € al presupuesto (running total). La idempotencia la
-     gestiona el llamador (torneo / apuesta), no esta función. */
-  window._bayernHudCreditMoney = function(delta){
+  /* Aplica AHORA el delta al presupuesto (running total) — solo se llama
+     cuando ya estamos hidratados (directo o flush de la cola). */
+  function _creditMoneyNow(delta){
     delta = Number(delta) || 0;
     if (!delta) return;
     var o = load() || {};
@@ -52890,6 +52972,18 @@ https://api.sofascore.app/api/v1/team/44/image
     var next = cur + delta;
     if (next < 0) next = 0;
     window._bayernHudMerge({ money: next });
+  }
+  /* Suma `delta` € al presupuesto (running total). La idempotencia la
+     gestiona el llamador (torneo / apuesta), no esta función. ANTES de
+     hidratar el delta se ACUMULA en `_pendingMoneyDelta` y se aplica de
+     golpe en `_markHydrated` sobre el base ya reconciliado — así un
+     premio/coste que caiga en la ventana de arranque ni se pierde ni
+     clobberea los valores del admin. */
+  window._bayernHudCreditMoney = function(delta){
+    delta = Number(delta) || 0;
+    if (!delta) return;
+    if (!_hudHydrated){ _pendingMoneyDelta += delta; return; }
+    _creditMoneyNow(delta);
   };
 
   /* ── REFUERZO 2026-05-09 ──────────────────────────────────────
@@ -53046,9 +53140,18 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }, 200);
 
-  /* Eventos del navegador que pueden disparar reapply útil. */
+  /* Eventos del navegador que pueden disparar reapply útil. Además
+     re-pulleamos: (a) si aún NO hemos hidratado (un cold-start que
+     falló las 3 ventanas de boot recupera aquí — sin esto los créditos
+     quedarían en cola para siempre y el HUD en defaults); (b) para
+     CONVERGER al volver tras estar fuera (la queja "3 días sin entrar":
+     el server trae los valores reales y se adoptan por recencia). */
   ['focus','pageshow','visibilitychange'].forEach(function(evt){
-    window.addEventListener(evt, function(){ setTimeout(apply, 50); });
+    window.addEventListener(evt, function(){
+      try { if (document.visibilityState === 'hidden') return; } catch(_){}
+      setTimeout(apply, 50);
+      try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
+    });
   });
 
   if (document.readyState === 'loading'){
@@ -54731,6 +54834,16 @@ https://api.sofascore.app/api/v1/team/44/image
   function liverpoolObjEarnings(){
     if (typeof window._bayernHudGet !== 'function'
         || typeof window._bayernHudMerge !== 'function') return;
+    /* GATE de hidratación: recalcular las ganancias de objetivos sobre un
+       base HUD sin reconciliar (tras borrar datos / otro móvil) y sellarlo
+       con ts fresco pisaría los valores que el admin puso. Esperamos a que
+       el HUD haya hidratado y nos rearmamos una vez. */
+    if (window._BAYERN_HUD_HYDRATED === false){
+      if (typeof window._bayernHudOnHydrate === 'function'){
+        window._bayernHudOnHydrate(function(){ try { liverpoolObjEarnings(); } catch(_){} });
+      }
+      return;
+    }
     var items = document.querySelectorAll('#ath-obj-club .obj-item');
     if (!items.length) return;   /* objetivos no renderizados todavía */
     var done = 0;

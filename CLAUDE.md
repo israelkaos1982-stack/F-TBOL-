@@ -193,6 +193,52 @@ blobs «sobrevive al wipe» (bajas/sanciones, mensajes, CASH…):
 4. `save()` SIEMPRE estampa `updatedAt` (ms) en el blob antes de subir —
    sin él la recencia del server no puede arbitrar.
 
+### GATE de hidratación — el HUD no se sube antes de reconciliar (obligatorio, 2026-06-07)
+
+**Bug (queja usuario 2026-06-07, «los iconos 💼🪙💊 que les da la
+gana»)**: el admin editaba el HUD pero, tras borrar datos de navegación
+o estar 3 días fuera, los valores volvían a los defaults. La recencia +
+fila KV propia NO bastaban: faltaba el GATE de hidratación que ya es
+obligatorio para todo store `_kvBlobSync` (bajas/sanciones, 2026-06-04).
+
+**Causa raíz**: tras un wipe / en otro móvil, `_BAYERN_HUD_CACHE` está
+vacío. Un writer AUTOMÁTICO de running-total —`_bayernHudCreditMoney`
+(premio de torneo / coste de sim), `liverpoolObjEarnings` (objetivos)—
+corría ANTES de que `_serverPull` reconciliara, leía un base vacío/stale
+(money≈0) y hacía `save()` SELLADO con `updatedAt` FRESCO ⇒ ganaba la
+recencia del server y, en el siguiente pull, el local "más nuevo" se
+re-subía ⇒ **clobber PERMANENTE** de lo que el admin puso → defaults.
+
+**Fix** (`misc_body_1.html`, IIFE del HUD admin):
+- `_hudHydrated` (+ espejo `window._BAYERN_HUD_HYDRATED`) se marca SOLO
+  al recibir una RESPUESTA HTTP del KV en `_serverPull` (no en fallo de
+  red: si el server está caído, los créditos quedan EN COLA, nunca
+  clobberean).
+- `_serverPush(o, force)`: una escritura AUTOMÁTICA (`!force`) NO sale al
+  server antes de hidratar.
+- Writers automáticos DIFERIDOS: `_bayernHudCreditMoney` acumula su delta
+  en `_pendingMoneyDelta` y se aplica de golpe en `_markHydrated` sobre
+  el base ya reconciliado (ni se pierde ni clobberea); `_bayernHudMerge`
+  automático y `liverpoolObjEarnings` se rearman vía
+  `window._bayernHudOnHydrate`.
+- La acción EXPLÍCITA del admin (✅ Guardar / ♻ Restablecer /
+  📅 Reiniciar Temporada) pasa `force:true` + `_markHydrated()`: SIEMPRE
+  persiste (su intención es autoritativa) y gana por recencia.
+- `focus`/`pageshow`/`visibilitychange` re-pullean: recuperan un
+  cold-start que falló las 3 ventanas de boot y CONVERGEN al volver tras
+  estar fuera (la queja «3 días sin entrar»).
+
+**Reglas a respetar**:
+5. **PROHIBIDO** que un writer AUTOMÁTICO de running-total del HUD
+   (`_bayernHudCreditMoney`, `_bayernHudMerge` sin `force`,
+   `liverpoolObjEarnings`, o cualquiera nuevo) escriba al server antes de
+   `_hudHydrated`. Debe diferirse (cola de delta / `_bayernHudOnHydrate`).
+6. **PROHIBIDO** marcar `_hudHydrated` en un fallo de red (sólo con
+   respuesta HTTP del KV). Marcarlo a ciegas reintroduce el clobber con
+   base vacío cuando el server tarda en responder.
+7. Toda acción EXPLÍCITA del admin que escriba el HUD pasa `force:true`
+   (bypassa el gate). Todo writer automático nuevo hereda el gate.
+
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:

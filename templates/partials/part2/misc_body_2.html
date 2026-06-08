@@ -8493,13 +8493,17 @@
       humanA = typeof esHumano === 'function' && esHumano(st.home);
       humanB = typeof esHumano === 'function' && esHumano(st.away);
     }
-    /* Amistosos: el sistema de simulación es idéntico al de Liga
-       (petición usuario). Si los dos son IA → generador dedicado con
-       expulsiones; si hay un humano → cae al pre-gen del lado IA
-       (más abajo); si los dos son humanos → return temprano por
-       st.isHvH al inicio de la función. */
-    /* IA vs IA: usar generador dedicado con expulsiones */
+    /* IA vs IA: usar generador dedicado con expulsiones (sin humano,
+       todo automático — único caso de auto-acta). */
     if (!humanA && !humanB) { _mlPreGenIAvsIAEvents(mk); return; }
+    /* AMISTOSOS con HUMANO (HvIA) → NADA automático (petición usuario
+       2026-06-08): cuando hay un equipo humano en un amistoso, TODOS
+       los eventos (incluidos los goles del rival IA) los añade el
+       usuario a mano desde la card, con sus botones 🖍 editar / ✕
+       borrar. NO pre-generamos goles del lado IA: así no aparece
+       ningún gol "puesto solo" que el usuario no pueda editar ni
+       eliminar. (HvH ya retorna arriba por st.isHvH.) */
+    if (st.isFriendly) { st.pendingAIEvents = []; st.aiEventsGenerated = true; return; }
     st.aiEventsGenerated = true;
     var aiTeam = humanA ? 'b' : 'a';
     var aiTeamName = humanA ? st.away : st.home;

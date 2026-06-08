@@ -52651,7 +52651,7 @@ https://api.sofascore.app/api/v1/team/44/image
      estuviera en el día 1. `ratingTarget` / `moneyTarget` / `pi`
      son config del admin → se conservan. */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nSe ponen a 0 TODAS las estadísticas de jugador y la clasificación de Liga, Copa, Supercopas, Champions/Europa/Conference, Recopa, Intercontinental, Mundialito de Clubes, Superliga, torneos de verano y Selecciones.\n\nLos Objetivos del Club se DESMARCAN (✅ a cero) y sus ganancias 💼/🪙 vuelven a 0.\n\nSE CONSERVAN: las plantillas (club y selección), los escudos, el histórico de Derbys, la Vitrina de Trofeos, los Puntos de Fisio 💊 y la configuración de los torneos.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nSe ponen a 0 TODAS las estadísticas de jugador y la clasificación de Liga, Copa, Supercopas, Champions/Europa/Conference, Recopa, Intercontinental, Mundialito de Clubes, Superliga, torneos de verano y Selecciones.\n\nNo quedan lesionados, expulsados ni amonestados (club y selección).\n\nLos Objetivos del Club se DESMARCAN (✅ a cero) y sus ganancias 💼/🪙 vuelven a 0.\n\nSE CONSERVAN: las plantillas (club y selección), los escudos, el histórico de Derbys, la Vitrina de Trofeos, los Puntos de Fisio 💊 y la configuración de los torneos.')) return;
     /* GARANTÍA (regla usuario 2026-06-04): «Reiniciar Temporada» JAMÁS
        debe borrar el HISTÓRICO DE DERBYS, la VITRINA DE TROFEOS ni las
        PLANTILLAS (club + selección). Son datos persistentes que el admin
@@ -52876,6 +52876,41 @@ https://api.sofascore.app/api/v1/team/44/image
             plantilla del hub para que se vea 0 al instante. */
       try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
       try { if (typeof window._invalidateBayernStatsCache === 'function') window._invalidateBayernStatsCache(); } catch(_){}
+      try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(_){}
+    } catch(_){}
+
+    /* ════════════════════════════════════════════════════════════════
+       BAJAS / SANCIONES / LESIONES a CERO (club + selección) — petición
+       usuario 2026-06-07: «cuando se reinicia una temporada no hay ni
+       lesionados ni expulsados ni amonestados». Limpia los stores en
+       memoria, localStorage Y SERVIDOR. Cada store es un blob _kvBlobSync
+       con merge por recencia: tras vaciarlo, el _persist sella un
+       updatedAt nuevo y el flush sube el blob VACÍO → el server adopta el
+       vacío en todos los dispositivos (sin esto la hidratación
+       resucitaba las bajas al recargar / cambiar de móvil). Las stats
+       que las pintan (cfg.results de torneo, tabla de Liga) ya se
+       vaciaron arriba, así que la reconciliación de selección tampoco
+       las regenera. */
+    try {
+      /* CLUB: lesiones (BAJA_STORE + LESION_STORE), sanciones
+         (SANCION_STORE.__global) y el contador de amarillas acumuladas
+         (YELLOW_STORE.__global). */
+      window.BAJA_STORE = {};
+      window.LESION_STORE = {};
+      try { if (window.SANCION_STORE) window.SANCION_STORE.__global = []; } catch(_){}
+      try { if (window.YELLOW_STORE)  window.YELLOW_STORE.__global  = {}; } catch(_){}
+      try { if (window._FORMA_MATCH_STATES) window._FORMA_MATCH_STATES = {}; } catch(_){}
+      try { if (typeof window._persistInjuries === 'function') window._persistInjuries(); } catch(_){}
+      try { if (typeof window._persistSancionesClub === 'function') window._persistSancionesClub(); } catch(_){}
+      try { if (typeof window._bajaFlushClubNow === 'function') window._bajaFlushClubNow(); } catch(_){}
+      /* SELECCIÓN: amarillas/served, sanciones, lesiones y estados ⬇️. */
+      window.YELLOW_STORE_SEL = {};
+      window.SANCION_STORE_SEL = {};
+      window.LESION_STORE_SEL = {};
+      window._FORMA_MATCH_STATES_SEL = {};
+      try { if (typeof window._selPersistSanciones === 'function') window._selPersistSanciones(); } catch(_){}
+      try { if (typeof window._bajaFlushSelNow === 'function') window._bajaFlushSelNow(); } catch(_){}
+      try { if (typeof window.athRefreshInjuryHud === 'function') window.athRefreshInjuryHud(); } catch(_){}
       try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(_){}
     } catch(_){}
 

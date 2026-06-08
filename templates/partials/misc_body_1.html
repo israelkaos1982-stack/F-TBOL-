@@ -53152,6 +53152,37 @@ https://api.sofascore.app/api/v1/team/44/image
     try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
   }, 5000);
 
+  /* ── RE-PUSH FRECUENTE (self-healing, 2026-06-07) ─────────────────
+     POR QUÉ: la BD del server es SQLite EFÍMERO en Railway salvo que
+     haya Postgres (`DATABASE_URL`) — se BORRA en cada deploy/restart del
+     contenedor. La FECHA (`liverpool_preseason_v1`) SOBREVIVE a eso
+     porque los dispositivos activos la RE-EMPUJAN constantemente: tras
+     un reset de la DB el siguiente push la restaura, y un móvil que borró
+     datos la recupera del server. El HUD se subía UNA sola vez ⇒ tras un
+     reset (o un POST perdido) desaparecía del server para siempre y el
+     móvil que borraba datos caía a defaults (queja usuario 2026-06-07,
+     "al reiniciar datos del móvil se reinician los valores").
+
+     FIX: cada dispositivo con valores HUD los RE-SUBE cada 25s (y al
+     volver el foco). Re-empuja el blob TAL CUAL, SIN re-sellar
+     `updatedAt`, así que NO gana recencia artificialmente — solo
+     MANTIENE el server poblado. Con 6 móviles + PC, basta con que UNO
+     esté activo para que el server siempre tenga el valor y cualquier
+     móvil que borre datos lo recupere. `_serverPush` ya reintenta. */
+  function _serverRepush(){
+    if (!_hudHydrated) return;
+    var o = window._BAYERN_HUD_CACHE;
+    if (!o || typeof o !== 'object') {
+      try { var r = localStorage.getItem(KEY); if (r) o = JSON.parse(r); } catch(_){}
+    }
+    if (!o || typeof o !== 'object') return;
+    var hasData = ['rating','ratingTarget','money','moneyTarget','pi']
+      .some(function(k){ return o[k] != null; });
+    if (!hasData) return;
+    try { _serverPush(o, false); } catch(_){}
+  }
+  setInterval(function(){ try { _serverRepush(); } catch(_){} }, 25000);
+
   /* Polling más agresivo (200ms) — barato y cubre micro-races. */
   setInterval(function(){
     try {
@@ -53182,6 +53213,9 @@ https://api.sofascore.app/api/v1/team/44/image
       try { if (document.visibilityState === 'hidden') return; } catch(_){}
       setTimeout(apply, 50);
       try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
+      /* Re-empuja al volver: si el server se reseteó (DB efímera) o un
+         push se perdió mientras estábamos fuera, lo restauramos. */
+      try { setTimeout(_serverRepush, 1200); } catch(_){}
     });
   });
 

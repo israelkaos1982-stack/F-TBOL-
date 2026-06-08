@@ -20785,6 +20785,16 @@ window._showSimProgress = function(opts, onDone){
   .tour-score{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px;color:rgba(255,255,255,.75);}
   .tour-score-win{color:#5fe08a;text-shadow:0 0 8px rgba(95,224,138,.5);}
   .tour-score-wrap{display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:2px 8px;}
+  /* Badge central por partido (📋 PREVIA · 🤖 SIMULAR · 🏁 FIN) para las
+     cards KO de groups-ko que NO son `.mn-card` (Rondas Finales de
+     Selecciones, Torneos de Verano). El Mundialito usa `.mn-card` y sus
+     reglas más específicas ganan. 2026-06-08. */
+  .tour-score-line{display:inline-flex;align-items:center;gap:6px;}
+  .tour-score-empty{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:3px;color:rgba(255,255,255,.4);}
+  .tour-fin-badge{display:inline-flex;align-items:center;gap:5px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1.4px;border-radius:6px;padding:3px 9px;}
+  .tour-fin-badge.is-fin{color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.04);}
+  .tour-fin-badge.is-previa{color:#ffd9ec;border:1.5px solid #ff3d8a;background:rgba(255,61,138,.18);text-shadow:0 0 8px rgba(255,61,138,.6);}
+  .tour-fin-badge.is-sim{color:#bcd6ff;border:1px solid rgba(120,170,255,.5);background:rgba(20,60,150,.3);}
   .tour-team-chip.is-pickable{cursor:pointer;}
   .tour-team-chip.is-pickable:hover{background:rgba(240,192,64,.15);}
   .tour-team-chip.is-pickable.is-pending{
@@ -26110,19 +26120,27 @@ window._showSimProgress = function(opts, onDone){
           var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
           html += '<div class="'+kRowCls+'"'+kAttrs+'>'
             + _bracketTeamHtml(a, tourId, i, aW, bW)
-            + '<span class="vs tour-score-wrap">'+sA+' - '+sB+pensTxt+'</span>'
+            + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
             + _bracketTeamHtml(b, tourId, i+1, bW, aW)
             + '</div>';
           html += _tourActaPanelHtml(tourId, kKey, kRes);
         } else {
+          /* Badge central por partido (igual que Mundial 2032 / _koRowHtml):
+             humano → 📋 PREVIA (abre la pantalla de previa); IA vs IA →
+             🤖 SIMULAR (un toque sobre la card auto-simula). 2026-06-08:
+             el KO de groups-ko (Mundialito de Clubes, Rondas Finales de
+             Selecciones, Verano) mostraba solo "vs", sin esta etiqueta —
+             el usuario no veía SIMULAR/PREVIA en los Octavos del Mundialito.
+             La card ya era `.tour-match-pickable` (el handler de `data-ko-key`
+             abre la previa al humano o auto-simula la IA); solo faltaba el
+             badge visual. */
+          var _koBadgeCls = _koPairHuman ? 'is-previa' : 'is-sim';
+          var _koBadgeTxt = _koPairHuman ? '📋 PREVIA' : '🤖 SIMULAR';
           html += '<div class="'+kRowCls+'"'+kAttrs+'>'
             + _bracketTeamHtml(a, tourId, i)
-            + '<span class="vs">vs</span>'
+            + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge '+_koBadgeCls+'">'+_koBadgeTxt+'</span></span>'
             + _bracketTeamHtml(b, tourId, i+1)
             + '</div>';
-          /* Botón 🤖 SIM IA retirado en KO (petición usuario 2026-05-27,
-             alineado con liga/grupos). El borde rosa del partido humano
-             ya señala el partido del usuario. */
         }
         koPairCount++;
       }

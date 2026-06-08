@@ -316,6 +316,28 @@ que conserva los demás campos. Si el API del HUD no existe, NO persiste.
     el resto de campos. El gate de hidratación lo previene; no añadir
     writers de campo suelto fuera de ese gate.
 
+### Defensa a prueba de balas en el SERVER — field-merge del HUD (obligatorio, 2026-06-08)
+
+**Por qué**: con 6 móviles + PC, no se puede confiar en que TODOS tengan
+desplegado el último cliente. Un móvil con código viejo puede mandar un
+POST PARCIAL (`{pi:8}`) que borraba money/rating/objetivos del server
+(captura usuario: el server tenía SOLO `{"pi":8}`). La defensa definitiva
+va en el SERVER, donde un solo punto protege a todos los clientes.
+
+**Fix** (`app.py`, `api_kv_set`, SOLO la clave `bayern_hud_overrides_v1`):
+los writes NO-authoritative hacen **FIELD-MERGE que PRESERVA campos**: los
+que el POST no trae se rellenan desde lo almacenado, así que un write de
+un solo campo NUNCA vacía el resto. Recencia en los campos compartidos
+(`new_ts >= old_ts` ⇒ el entrante actualiza sus campos; más viejo ⇒ se
+conserva el almacenado entero). La acción AUTORITATIVA del admin sigue
+siendo REEMPLAZO total (puede limpiar campos: ♻ Restablecer).
+
+**Regla a respetar**:
+12. **PROHIBIDO** que el HUD no-authoritative haga REEMPLAZO total en el
+    server (volvería a permitir que un `{pi:8}` parcial borre el resto).
+    Field-merge SIEMPRE para no-authoritative; replace SOLO para
+    authoritative (intención explícita del admin de limpiar).
+
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:

@@ -5339,6 +5339,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return false;
     }
     var _allowedTeams = null;  /* null = sin filtro */
+    var _hubOnly = false;
     if (_matchTeams) {
       _allowedTeams = [];
       if (_matchTeams.home && _looseIsHuman(_matchTeams.home)) _allowedTeams.push(_matchTeams.home);
@@ -5350,8 +5351,43 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         if (_matchTeams.home) _allowedTeams.push(_matchTeams.home);
         if (_matchTeams.away) _allowedTeams.push(_matchTeams.away);
       }
+    } else {
+      /* Sin contexto de partido (BAJAS abierto desde un menú / HUD, no
+         desde la previa de un partido): el usuario SOLO gestiona su
+         propia caja, así que filtramos al CLUB del hub. Antes (sin
+         filtro) se mostraban TODAS las lesiones/sanciones del juego —
+         incluidas las de equipos IA generadas en sims IA-vs-IA (p.ej.
+         Open Qualifier: Utrecht, Club Brugge, İstanbul Başakşehir…),
+         que `registrarLesion` guarda «siempre» para mantener el estado
+         de plantilla de la IA. El usuario reportó (2026-06-08) que con
+         su hub Liverpool-Francia solo debería ver al Liverpool. */
+      _hubOnly = true;
+    }
+    /* Club del hub (alias-safe; generaliza a las 6 cajas de humano). */
+    function _hubClubName(){
+      try {
+        if (window._mkHubTeamName) return String(window._mkHubTeamName);
+        if (typeof window._psHumanLogicName === 'function') return String(window._psHumanLogicName() || '');
+      } catch(_){}
+      return '';
+    }
+    function _belongsToHub(teamName){
+      var hub = _hubClubName();
+      if (!hub || !teamName) return false;
+      if (_normTm(teamName) === _normTm(hub)) return true;
+      /* Alias del slot del hub (Bayern↔Liverpool) y cualquier otra caja
+         humana: mismo MISTER + ambos clubes canónicos. Gateado a club
+         (no cruza con la selección del mismo mister). */
+      try {
+        if (typeof window._isHumanClubCanonico === 'function'
+            && typeof window._mhSameMister === 'function'
+            && window._isHumanClubCanonico(teamName)
+            && window._mhSameMister(hub, teamName)) return true;
+      } catch(_){}
+      return false;
     }
     function _belongsToHumanOfMatch(teamName){
+      if (_hubOnly) return _belongsToHub(teamName);  /* sin partido → solo el club del hub */
       if (!_allowedTeams) return true;        /* sin match context → no filtramos */
       if (!_allowedTeams.length) return false;/* match conocido pero vacío → no mostrar */
       var tn = _normTm(teamName);

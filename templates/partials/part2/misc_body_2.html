@@ -9681,7 +9681,20 @@
   };
 
   setTimeout(function(){
-    athSetMedicalPI(athGetMedicalPI());
+    /* GATE DE HIDRATACIÓN (bug raíz 2026-06-07): NO persistir el PI antes
+       de que el HUD haya reconciliado con el servidor. Si corremos a los
+       30 ms, `athGetMedicalPI()` devuelve el DEFAULT 8 (state legacy / DOM
+       SSR) y `athSetMedicalPI(8)` hace `_bayernHudMerge({pi:8})` sobre una
+       base VACÍA → escribe `{pi:8}` en el server y BORRA money/rating/
+       objetivos del admin (foto usuario: el server tenía solo `{"pi":8}`).
+       Esperamos a `_bayernHudOnHydrate`: entonces `athGetMedicalPI()`
+       devuelve el PI REAL ya adoptado del server y el re-guardado es un
+       no-op inofensivo que conserva los demás campos. Si el API del HUD
+       no existe, NO persistimos (el HUD se pinta solo en su propio boot). */
+    var _seedPI = function(){ try { athSetMedicalPI(athGetMedicalPI()); } catch(_){} };
+    if (typeof window._bayernHudOnHydrate === 'function') {
+      window._bayernHudOnHydrate(_seedPI);
+    }
     if (window.athRefreshInjuryHud) window.athRefreshInjuryHud();
     var medBtn = document.getElementById('ath-med-icon');
     if (medBtn) medBtn.addEventListener('click', function(ev){ ev.stopPropagation(); window.athOpenMedicalMenu(); });

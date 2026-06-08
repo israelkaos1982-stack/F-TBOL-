@@ -2800,6 +2800,45 @@ verano. También fuera: Previa Champions / Open Qualifier / Wild Card
    recalibración de la fórmula del editor se propaga sola a la
    plantilla del hub. No duplicar la fórmula.
 
+### El filtro de equipo de la plantilla es ALIAS-tolerante Bayern↔Liverpool (obligatorio, 2026-06-08)
+
+**Bug (fotos usuario 2026-06-08, Mundialito de Clubes)**: el Liverpool
+jugó 3 partidos oficiales del Mundialito de Clubes (con goles, tarjetas,
+MVP, portería imbatida visibles en la caja «Mundialito · Estadísticas»),
+pero en `s-bayern-plantilla` (caja Liverpool-Francia → 👕 PLANTILLA)
+NINGÚN jugador tenía una sola estadística — TODO a 0.
+
+**Causa raíz**: la caja Estadísticas del Mundialito (`_mundialRenderStatsGrid`)
+NO filtra por equipo, así que muestra los goles del Liverpool tal cual los
+trae el escáner (`_mundialStatsRobustScan` → claves `liverpool::jugador`).
+La plantilla SÍ filtra al equipo del hub, y lo hacía con un match ESTRICTO
+de UN solo nombre: `_teamKeyMatches(t, _normForStats(_hubTeamName()))`. El
+slot del hub resuelve su nombre LÓGICO a «Bayern Munich» (legacy, el dato
+del slot de Liga EA NO se renombró físicamente — solo el display vía
+`menu_home_v1`), mientras los partidos del Mundialito guardan el equipo
+como «Liverpool» → `_teamKeyMatches('liverpool','bayern munich')` = false
+→ se descartaban TODAS las stats del hub → plantilla a 0.
+
+**Fix** (`misc_body_1.html`, IIFE de `#s-bayern-plantilla`): helper
+`_hubTeamKeyMatch(t)` que, además del match alias previo (`_hubTeamMatches`),
+ensancha a un CLUB HUMANO CANÓNICO dirigido por el MISMO mister que el hub
+(`_isHumanClubCanonico(t) && _mhSameMister(_hubTeamName(), t)`). Cubre
+Bayern↔Liverpool en AMBOS sentidos (dato «Bayern» / eventos «Liverpool» o
+al revés) y cualquier otra caja humana. Se aplica al merge del Mundialito
+EN VIVO **y** a los loops de SUMA (`_STATS_STORES`) y NOTA (`_NOTA_STORES`),
+para que el mismo desajuste de nombre no vacíe tampoco Liga/Copa/UCL/etc.
+cuando el hub empiece a jugarlas.
+
+Reglas:
+7. **PROHIBIDO** filtrar las stats de la plantilla del hub por UN solo
+   nombre estricto (`_teamKeyMatches(t, teamNorm)`). Usar `_hubTeamKeyMatch`
+   (alias + mismo mister gateado por `_isHumanClubCanonico`), que tolera el
+   desajuste Bayern↔Liverpool venga del lado que venga.
+8. **PROHIBIDO** ensanchar ese match SIN el gate `_isHumanClubCanonico` +
+   `_mhSameMister`: sin él se colarían IA del torneo (Bayern Leverkusen,
+   Al Hilal, Club Brugge…) o el club de OTRO mister. El gate restringe el
+   ensanche al club humano del propio hub.
+
 ### Toggle escudo CLUB ↔ SELECCIÓN (2026-06-03)
 
 La cabecera de `#s-bayern-plantilla` muestra **dos escudos** arriba a

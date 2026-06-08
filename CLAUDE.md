@@ -281,6 +281,41 @@ POST devolvió 200), pero al **borrar datos de navegación** el HUD
    problema mientras haya un dispositivo activo con el valor correcto.
    Verificable en `/api/debug` (`"postgresql"` = ✅ · `"sqlite"` = ⚠️).
 
+### CAUSA RAÍZ REAL — el seed de PI del arranque borraba el HUD (obligatorio, 2026-06-08)
+
+**Bug (captura `/api/kv/bayern_hud_overrides_v1` del usuario)**: con la
+BD ya PERSISTENTE (Postgres, confirmado en `/api/debug`), el server tenía
+guardado **SOLO** `{"pi":8,"updatedAt":...}` — sin `money`/`rating`/
+`ratingTarget`/`moneyTarget`. Un escritor borraba TODO el HUD dejando
+solo el PI por defecto.
+
+**Causa raíz**: en `part2/misc_body_2.html` había, a +30 ms del arranque,
+`setTimeout(function(){ athSetMedicalPI(athGetMedicalPI()); ... }, 30)`.
+A los 30 ms el HUD AÚN NO ha hidratado del server, así que
+`athGetMedicalPI()` devuelve el **default 8** (state legacy / DOM SSR) y
+`athSetMedicalPI(8)` hace `_bayernHudMerge({pi:8})` sobre una base
+VACÍA ⇒ `{pi:8}` se guarda en el server y BORRA money/rating/objetivos.
+Y se repetía en CADA arranque (cada móvil), así que el `pi` volvía a 8
+y el resto desaparecía. Era el clobber que ninguna capa anterior
+(recencia, authoritative, re-push) podía evitar porque el propio seed
+corría antes de hidratar.
+
+**Fix**: el seed de PI del arranque se DIFIERE con
+`window._bayernHudOnHydrate(...)`. Tras hidratar, `athGetMedicalPI()`
+devuelve el PI REAL ya adoptado del server y el re-guardado es un no-op
+que conserva los demás campos. Si el API del HUD no existe, NO persiste.
+
+**Reglas a respetar**:
+10. **PROHIBIDO** que NINGÚN seed/refresh del arranque
+    (`athSetMedicalPI(athGetMedicalPI())` u otro) persista el HUD
+    (`_bayernHudMerge`/`save`/`athSetMedicalPI`) antes de hidratar. Todo
+    seed de arranque que escriba el HUD debe ir dentro de
+    `window._bayernHudOnHydrate(...)`.
+11. **PROHIBIDO** que un writer de un SOLO campo del HUD (p.ej. `{pi}`)
+    corra sobre un `load()` vacío: el merge resultante (`{pi:8}`) borra
+    el resto de campos. El gate de hidratación lo previene; no añadir
+    writers de campo suelto fuera de ese gate.
+
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:

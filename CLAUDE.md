@@ -338,6 +338,34 @@ siendo REEMPLAZO total (puede limpiar campos: ♻ Restablecer).
     Field-merge SIEMPRE para no-authoritative; replace SOLO para
     authoritative (intención explícita del admin de limpiar).
 
+### El 💊 PI volvía a 8 — rechazo de POST parcial + boot sin seed (obligatorio, 2026-06-08)
+
+**Bug (2 fotos usuario 2026-06-08)**: tras el field-merge, money/rating ya
+SOBREVIVÍAN al borrado de datos, PERO el **💊 PI volvía SIEMPRE a 8**. El
+field-merge preserva los campos que el POST NO trae, pero el seed de
+arranque SÍ trae `pi` (=8 por defecto), así que ese campo se aplicaba.
+
+**Causa**: (1) el seed de arranque `athSetMedicalPI(athGetMedicalPI())`
+seguía mandando `pi=8` (en un móvil sin actualizar, o leído antes de
+hidratar); (2) el server aplicaba ese `pi` aunque el POST fuera parcial.
+
+**Fix**:
+- **Cliente** (`part2/misc_body_2.html`): se ELIMINA por completo el seed
+  de PI del arranque (no aporta nada — `apply()` ya pinta el PI desde la
+  hidratación). El boot solo refresca la lista de lesionados y cablea el
+  botón del menú médico; NO toca el PI ni persiste el HUD.
+- **Server** (`app.py`, `api_kv_set`, `bayern_hud_overrides_v1`): un POST
+  no-authoritative que NO trae NINGÚN campo ANCLA
+  (`money`/`rating`/`ratingTarget`/`moneyTarget`) pero el almacenado SÍ
+  los tiene, se RECHAZA ENTERO (no toca ni `pi`). Un blob legítimo
+  siempre trae campos ancla (los writers reales mergean sobre el cache
+  completo ya hidratado), así que solo el seed parcial cae aquí.
+
+**Regla a respetar**:
+13. **PROHIBIDO** reintroducir un seed/persistencia de PI en el arranque
+    (`athSetMedicalPI` en boot) o quitar el rechazo de POST parcial sin
+    campos ancla: cualquiera de los dos hace que el 💊 vuelva a 8.
+
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:

@@ -3700,17 +3700,29 @@ def api_kv_set(key):
             value["updatedAt"] = max(new_ts, old_ts + 1.0, srv_now)
             payload = json.dumps(value, ensure_ascii=False)
         elif key == "bayern_hud_overrides_v1" and isinstance(old, dict) and isinstance(value, dict):
-            # HUD no-authoritative: FIELD-MERGE que PRESERVA campos (defensa
-            # a prueba de balas, 2026-06-08). Un POST PARCIAL —p.ej. el seed
-            # de arranque `{pi:8}` de un móvil con código viejo, o un writer
-            # que corrió antes de hidratar— NUNCA debe borrar
-            # money/rating/ratingTarget/moneyTarget. Captura del usuario: el
-            # server tenía SOLO `{"pi":8}`. Con field-merge, los campos que
-            # el POST no trae se rellenan desde lo almacenado, así que un
-            # write de un solo campo jamás vacía el resto. Recencia en los
-            # campos compartidos; el blob entrante más viejo conserva el
-            # almacenado entero (ya completo y más nuevo).
-            if new_ts >= old_ts:
+            # HUD no-authoritative: defensa a prueba de balas (2026-06-08).
+            #
+            # (A) RECHAZO de POST PARCIAL sin campos ANCLA. El seed de
+            #     arranque de un móvil con código viejo manda
+            #     `{pi:8, updatedAt}` (el PI por defecto leído antes de
+            #     hidratar) SIN money/rating/targets. Un blob legítimo
+            #     SIEMPRE trae los campos ancla (los writers reales hacen
+            #     merge sobre el cache COMPLETO ya hidratado). Por eso, si el
+            #     almacenado tiene campos ancla y el entrante NO trae
+            #     NINGUNO, el entrante NO es de fiar para NINGÚN campo (ni
+            #     `pi`): se conserva lo almacenado ENTERO. Esto evita que el
+            #     💊 vuelva a 8 (foto usuario 2026-06-08) aunque un móvil sin
+            #     actualizar siga mandando el seed viejo.
+            # (B) FIELD-MERGE que PRESERVA campos: los que el POST no trae se
+            #     rellenan desde lo almacenado, así un write de un solo campo
+            #     jamás vacía el resto. Recencia en los compartidos.
+            _ANCHOR = ("money", "rating", "ratingTarget", "moneyTarget")
+            inc_has_anchor = any(k in value for k in _ANCHOR)
+            old_has_anchor = any(k in old for k in _ANCHOR)
+            if old_has_anchor and not inc_has_anchor:
+                # POST parcial (seed `{pi:8}`): conserva lo almacenado entero.
+                value, payload = old, row.valor_json
+            elif new_ts >= old_ts:
                 merged = dict(old)
                 merged.update(value)
                 value, payload = merged, json.dumps(merged, ensure_ascii=False)

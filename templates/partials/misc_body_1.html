@@ -2337,6 +2337,31 @@ window._showSimProgress = function(opts, onDone){
       for (var i=0;i<aliases.length;i++){ if (aliases[i] && _teamKeyMatches(e, aliases[i])) return true; }
       return false;
     }
+    /* ¿La clave de equipo `t` (ya normalizada, de un store/escáner de
+       stats) es el club del hub? Más TOLERANTE que `_hubTeamMatches`:
+       cubre el caso Bayern↔Liverpool aunque NINGÚN resolutor del nombre
+       del hub coincida con el nombre que traen los EVENTOS del torneo.
+       Causa raíz 2026-06-08 (foto usuario, Mundialito): el slot del hub
+       resuelve su nombre LÓGICO a «Bayern Munich» (legacy, dato sin
+       renombrar) mientras los partidos del Mundialito guardan el equipo
+       como «Liverpool» → `_hubTeamMatches('liverpool')` daba false y la
+       plantilla salía a 0 aunque la caja Estadísticas (sin filtro) sí
+       mostraba los goles. Gate de seguridad: solo se ensancha el match
+       a un CLUB HUMANO CANÓNICO dirigido por el MISMO mister que el hub
+       (`_isHumanClubCanonico` + `_mhSameMister`), así NUNCA se cuela un
+       IA del torneo (Bayern Leverkusen, Al Hilal, Club Brugge…) ni el
+       club de OTRO mister. */
+    function _hubTeamKeyMatch(t){
+      if (!t) return false;
+      if (_hubTeamMatches(t)) return true;
+      try {
+        if (typeof window._isHumanClubCanonico === 'function'
+            && typeof window._mhSameMister === 'function'
+            && window._isHumanClubCanonico(t)
+            && window._mhSameMister(_hubTeamName(), t)) return true;
+      } catch(_){}
+      return false;
+    }
     window._invalidateBayernStatsCache = function(){
       _STATS_CACHE = null;
       _NOTA_CACHE = null;
@@ -2360,7 +2385,7 @@ window._showSimProgress = function(opts, onDone){
           var sep = k.indexOf('::');
           if (sep < 0) return;
           var t = k.slice(0, sep);
-          if (!t || !_teamKeyMatches(t, teamNorm)) return;
+          if (!t || !_hubTeamKeyMatch(t)) return;   /* alias Bayern↔Liverpool */
           var pName = k.slice(sep + 2);
           if (!pName) return;
           var ps = data[k];
@@ -2381,7 +2406,7 @@ window._showSimProgress = function(opts, onDone){
           var sep = k.indexOf('::');
           if (sep < 0) return;
           var t = k.slice(0, sep);
-          if (!t || !_teamKeyMatches(t, teamNorm)) return;
+          if (!t || !_hubTeamKeyMatch(t)) return;   /* alias Bayern↔Liverpool */
           var pName = k.slice(sep + 2);
           if (!pName) return;
           var ps = data[k];
@@ -2405,7 +2430,7 @@ window._showSimProgress = function(opts, onDone){
           Object.keys(_ml.stats).forEach(function(k){
             var sep = k.indexOf('::'); if (sep < 0) return;
             var t = k.slice(0, sep);
-            if (!t || !_teamKeyMatches(t, teamNorm)) return;   /* solo el hub */
+            if (!t || !_hubTeamKeyMatch(t)) return;   /* solo el hub (alias Bayern↔Liverpool) */
             var pName = k.slice(sep + 2); if (!pName) return;
             var ps = _ml.stats[k]; if (!ps) return;
             /* SUMA agregada. */
@@ -2474,7 +2499,7 @@ window._showSimProgress = function(opts, onDone){
               Object.keys(dataM).forEach(function(k){
                 var sp = k.indexOf('::'); if (sp < 0) return;
                 var tt2 = k.slice(0, sp);
-                if (!tt2 || !_teamKeyMatches(tt2, teamNorm)) return;
+                if (!tt2 || !_hubTeamKeyMatch(tt2)) return;
                 all[k] = dataM[k];
               });
             }
@@ -2508,7 +2533,7 @@ window._showSimProgress = function(opts, onDone){
           var info = idxA[mk] || {};
           var hN = _normForStats(r.home || info.a || '');
           var aN = _normForStats(r.away || info.b || '');
-          if ((hN && _teamKeyMatches(hN, teamNorm)) || (aN && _teamKeyMatches(aN, teamNorm))) pj++;
+          if ((hN && _hubTeamKeyMatch(hN)) || (aN && _hubTeamKeyMatch(aN))) pj++;
         });
         return { stats: all, pj: pj };
       } catch(_){ return null; }

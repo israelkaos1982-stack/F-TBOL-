@@ -16278,6 +16278,27 @@ window._showSimProgress = function(opts, onDone){
 .mn-card[data-tour="mundial"] .tour-bracket-team.is-winner span{
   color:#aaffe0 !important;text-shadow:0 0 6px rgba(52,224,161,.6);
 }
+/* TU PARTIDO en el Mundialito (`.mn-card-human`) — el verde de
+   `.mn-card[data-tour="mundial"]` (0,2,0) machacaba el rosa de
+   `.mn-card-human` (0,1,0), así que la card del humano (Liverpool) salía
+   VERDE con el nombre blanco (foto usuario 2026-06-08). Re-asertamos el
+   rosa/magenta con mayor especificidad para que el partido del humano
+   destaque en ROSA como en el Mundial 2032 (foto 3). */
+.mn-card.mn-card-human[data-tour="mundial"]{
+  background:linear-gradient(165deg,#1a0820 0%,#2a0a3e 55%,#1a0420 100%) !important;
+  border:2px solid #ff3d8a !important;
+  box-shadow:0 0 22px rgba(255,61,138,.55),0 0 48px rgba(255,61,138,.22),inset 0 0 12px rgba(255,80,150,.14) !important;
+}
+.mn-card.mn-card-human[data-tour="mundial"].tour-match-pickable:hover{
+  background:linear-gradient(165deg,#240a2e 0%,#3a0e52 55%,#1f0628 100%) !important;
+}
+.mn-card.mn-card-human[data-tour="mundial"] .tour-score-wrap{
+  border-color:rgba(255,120,180,.55) !important;
+  background:rgba(20,4,16,.78) !important;
+}
+.mn-card-human[data-tour="mundial"] .tour-bracket-team span{
+  color:#ffd9ec !important;text-shadow:0 0 8px rgba(255,90,170,.45) !important;
+}
 /* Selección HUMANA canónica (Francia 💡, Brasil 🐭, …) en las cards
    del bracket Mundial 2032: nombre AMARILLO + glow para localizarla
    al instante (petición usuario 2026-05-28). Gana a las reglas
@@ -16291,20 +16312,20 @@ window._showSimProgress = function(opts, onDone){
   text-shadow:0 0 9px rgba(255,214,51,.6) !important;
   font-weight:700 !important;
 }
-/* Frame que envuelve card+acta — repintamos cuando contiene una
-   .mn-card del Mundialito. */
-.mn-card-frame:has(.mn-card[data-tour="mundial"]){
-  background:linear-gradient(165deg,#2d1f00 0%,#5a4408 60%,#1a0f00 100%) !important;
-  border:1.5px solid rgba(255,214,51,.55) !important;
-  box-shadow:0 0 12px rgba(255,180,0,.30),inset 0 0 12px rgba(150,110,0,.18) !important;
+/* Frame que envuelve card+acta — repintamos en VERDE ESMERALDA cuando
+   es del Mundialito (para casar con `.mn-card[data-tour="mundial"]`, que
+   es verde). SOLO los frames IA (`mn-card-frame-ia`): el frame del
+   partido HUMANO conserva el degradado rosa/magenta (es lo que marca tu
+   partido). El `_tourKoRowHtml` estampa `data-tour` también en el frame,
+   así que el selector directo `[data-tour="mundial"]` funciona aunque el
+   navegador no soporte `:has()`. 2026-06-08. */
+.mn-card-frame-ia[data-tour="mundial"]{
+  background:linear-gradient(165deg,#04241a 0%,#06513a 60%,#03140d 100%) !important;
+  border:1.5px solid rgba(52,224,161,.55) !important;
+  box-shadow:0 0 12px rgba(52,224,161,.30),inset 0 0 12px rgba(10,110,70,.20) !important;
 }
-.mn-card-frame-human:has(.mn-card[data-tour="mundial"]){
-  /* En human, el rosa gana sobre el amarillo (es lo que marca tu
-     partido). Mantener el degradado magenta del .mn-card-frame-human
-     original — no override aquí. */
-}
-.mn-card-frame:has(.mn-card[data-tour="mundial"]) .tour-acta-body{
-  border-color:rgba(255,214,51,.25) !important;
+.mn-card-frame-ia[data-tour="mundial"] .tour-acta-body{
+  border-color:rgba(52,224,161,.25) !important;
 }
 /* Separador «🤖 PARTIDOS IA VS IA» entre humano y IA. */
 .mn-ia-sep{
@@ -25888,6 +25909,78 @@ window._showSimProgress = function(opts, onDone){
   }
 
 
+  /* ── Card de un cruce KO estilo FOTO 2/3 (Mundial 2032) ──────────
+     Escudo grande arriba · nombre debajo · caja central con marcador
+     + badge (🏁 FIN / 📋 PREVIA / 🤖 SIMULAR), y el ACTA DENTRO del
+     mismo frame de la card (no flotando entre cards). El partido con
+     humano usa `mn-card-human` (borde rosa + nombre rosa). El marker
+     `data-tour` permite teñir por torneo (Mundialito → verde).
+     Extraído de `_mundialKoHtml._koRowHtml` (2026-06-08) para que el
+     KO de groups-ko (Mundialito de Clubes) use EXACTAMENTE el mismo
+     formato que el Mundial 2032. */
+  function _tourKoRowHtml(tourId, a, b, kKey, kRes, kPlayed, hasHuman, slotI){
+    var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
+    kRowCls += ' mn-card';
+    if (hasHuman) kRowCls += ' tour-match-has-human mn-card-human';
+    else kRowCls += ' tour-match-ia mn-card-ia';
+    var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
+    if (kPlayed) {
+      var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
+      var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
+      var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
+      var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
+      var actaHtml = _tourActaPanelHtml(tourId, kKey, kRes);
+      var frameCls = 'mn-card-frame' + (hasHuman ? ' mn-card-frame-human' : ' mn-card-frame-ia');
+      if (actaHtml) frameCls += ' mn-card-frame-has-acta';
+      return '<div class="'+frameCls+'" data-tour="'+tourId+'">'
+        + '<div class="'+kRowCls+' mn-card-in-frame"'+kAttrs+'>'
+        + _bracketTeamHtml(a, tourId, slotI, aW, bW)
+        + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
+        + _bracketTeamHtml(b, tourId, slotI+1, bW, aW)
+        + '</div>'
+        + actaHtml
+        + '</div>';
+    }
+    var badgeCls = hasHuman ? 'is-previa' : 'is-sim';
+    var badgeTxt = hasHuman ? '📋 PREVIA' : '🤖 SIMULAR';
+    return '<div class="'+kRowCls+'"'+kAttrs+'>'
+      + _bracketTeamHtml(a, tourId, slotI)
+      + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge '+badgeCls+'">'+badgeTxt+'</span></span>'
+      + _bracketTeamHtml(b, tourId, slotI+1)
+      + '</div>';
+  }
+  /* Lista de cruces KO con humanos arriba (rosa) + separador
+     «🤖 PARTIDOS IA VS IA» + IA debajo. Compartida por Mundial 2032 y
+     el KO de groups-ko (Mundialito). Devuelve { html, allPlayed,
+     pairs, hasHuman, hasIa }. */
+  function _tourKoBracketListHtml(cfg, tourId, curT, curR){
+    var humanRows = '', iaRows = '';
+    var allPlayed = true, pairs = 0, hasHuman = false, hasIa = false;
+    for (var i = 0; i < curT.length; i += 2) {
+      var a = curT[i], b = curT[i+1];
+      if (!b) break;
+      var kKey = 'ko_'+curR+'_'+(i/2);
+      var kRes = cfg.results[kKey];
+      var kPlayed = !!(kRes && kRes.played);
+      if (!kPlayed) allPlayed = false;
+      var pairHuman = _tourPairHasHuman(curT, i);
+      var rowHtml = _tourKoRowHtml(tourId, a, b, kKey, kRes, kPlayed, pairHuman, i);
+      if (pairHuman){ humanRows += rowHtml; hasHuman = true; }
+      else          { iaRows    += rowHtml; hasIa    = true; }
+      pairs++;
+    }
+    var out = '<div class="tour-bracket-list">' + humanRows;
+    if (hasHuman && hasIa) {
+      out += '<div class="mn-ia-sep">'
+        +    '<span class="mn-ia-sep-line"></span>'
+        +    '<span class="mn-ia-sep-lbl">🤖 PARTIDOS IA VS IA</span>'
+        +    '<span class="mn-ia-sep-line"></span>'
+        + '</div>';
+    }
+    out += iaRows + '</div>';
+    return { html: out, allPlayed: allPlayed, pairs: pairs, hasHuman: hasHuman, hasIa: hasIa };
+  }
+
   function _renderGroupsKO(cfg, tourId, teams) {
     var fc = cfg.formatConfig || {};
     var _isMcl = (tourId === 'mundial');
@@ -26096,55 +26189,58 @@ window._showSimProgress = function(opts, onDone){
         + '</span>'
         + (_gkoDate ? '<span style="color:rgba(255,255,255,.6);letter-spacing:.5px;">📅 '+_gkoDate+'</span>' : '')
         + '</p>';
-      html += '<div class="tour-bracket-list">';
       var koAllPlayed = true, koPairCount = 0;
-      for (var i = 0; i < curT.length; i += 2) {
-        var a = curT[i], b = curT[i+1];
-        if (!b) break;
-        var kKey = 'ko_'+curR+'_'+(i/2);
-        var kRes = cfg.results[kKey];
-        var kPlayed = !!(kRes && kRes.played);
-        if (!kPlayed) koAllPlayed = false;
-        var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
-        var _koPairHuman = _tourPairHasHuman(curT, i);
-        if (_koPairHuman) kRowCls += ' tour-match-has-human';
-        /* Mundialito: card estilo Mundial 2032 (escudo grande arriba) en
-           verde esmeralda — el marker mn-card activa el CSS
-           .mn-card[data-tour="mundial"]. 2026-05-31. */
-        if (_isMcl) kRowCls += ' mn-card' + (_koPairHuman ? ' mn-card-human' : ' mn-card-ia');
-        var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
-        if (kPlayed) {
-          var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
-          var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
-          var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
-          var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
-          html += '<div class="'+kRowCls+'"'+kAttrs+'>'
-            + _bracketTeamHtml(a, tourId, i, aW, bW)
-            + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
-            + _bracketTeamHtml(b, tourId, i+1, bW, aW)
-            + '</div>';
-          html += _tourActaPanelHtml(tourId, kKey, kRes);
-        } else {
-          /* Badge central por partido (igual que Mundial 2032 / _koRowHtml):
-             humano → 📋 PREVIA (abre la pantalla de previa); IA vs IA →
-             🤖 SIMULAR (un toque sobre la card auto-simula). 2026-06-08:
-             el KO de groups-ko (Mundialito de Clubes, Rondas Finales de
-             Selecciones, Verano) mostraba solo "vs", sin esta etiqueta —
-             el usuario no veía SIMULAR/PREVIA en los Octavos del Mundialito.
-             La card ya era `.tour-match-pickable` (el handler de `data-ko-key`
-             abre la previa al humano o auto-simula la IA); solo faltaba el
-             badge visual. */
-          var _koBadgeCls = _koPairHuman ? 'is-previa' : 'is-sim';
-          var _koBadgeTxt = _koPairHuman ? '📋 PREVIA' : '🤖 SIMULAR';
-          html += '<div class="'+kRowCls+'"'+kAttrs+'>'
-            + _bracketTeamHtml(a, tourId, i)
-            + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge '+_koBadgeCls+'">'+_koBadgeTxt+'</span></span>'
-            + _bracketTeamHtml(b, tourId, i+1)
-            + '</div>';
+      if (_isMcl) {
+        /* Mundialito de Clubes: MISMO formato que el Mundial 2032
+           (foto 3) — partidos con humano ARRIBA con frame ROSA + nombre
+           rosa, separador «🤖 PARTIDOS IA VS IA», IA debajo, marcador con
+           badge 🏁 FIN y el ACTA DENTRO de cada card (no flotando entre
+           cards). Reutiliza el MISMO renderer que el Mundial 2032
+           (`_tourKoBracketListHtml`/`_tourKoRowHtml`); el `data-tour="mundial"`
+           tiñe las cards IA de verde. Petición usuario 2026-06-08. */
+        var _mclKo = _tourKoBracketListHtml(cfg, tourId, curT, curR);
+        koAllPlayed = _mclKo.allPlayed; koPairCount = _mclKo.pairs;
+        html += _mclKo.html;
+      } else {
+        /* Resto de groups-ko (Rondas Finales de Selecciones, Verano):
+           layout en fila (no mn-card) con badge 📋 PREVIA / 🤖 SIMULAR /
+           🏁 FIN, para respetar el tema de su caja (rosa / turquesa). */
+        html += '<div class="tour-bracket-list">';
+        for (var i = 0; i < curT.length; i += 2) {
+          var a = curT[i], b = curT[i+1];
+          if (!b) break;
+          var kKey = 'ko_'+curR+'_'+(i/2);
+          var kRes = cfg.results[kKey];
+          var kPlayed = !!(kRes && kRes.played);
+          if (!kPlayed) koAllPlayed = false;
+          var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
+          var _koPairHuman = _tourPairHasHuman(curT, i);
+          if (_koPairHuman) kRowCls += ' tour-match-has-human';
+          var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
+          if (kPlayed) {
+            var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
+            var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
+            var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
+            var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
+            html += '<div class="'+kRowCls+'"'+kAttrs+'>'
+              + _bracketTeamHtml(a, tourId, i, aW, bW)
+              + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
+              + _bracketTeamHtml(b, tourId, i+1, bW, aW)
+              + '</div>';
+            html += _tourActaPanelHtml(tourId, kKey, kRes);
+          } else {
+            var _koBadgeCls = _koPairHuman ? 'is-previa' : 'is-sim';
+            var _koBadgeTxt = _koPairHuman ? '📋 PREVIA' : '🤖 SIMULAR';
+            html += '<div class="'+kRowCls+'"'+kAttrs+'>'
+              + _bracketTeamHtml(a, tourId, i)
+              + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge '+_koBadgeCls+'">'+_koBadgeTxt+'</span></span>'
+              + _bracketTeamHtml(b, tourId, i+1)
+              + '</div>';
+          }
+          koPairCount++;
         }
-        koPairCount++;
+        html += '</div>';
       }
-      html += '</div>';
       if (curT.length > 1) {
         if (!isPastKoView && !koAllPlayed && koPairCount > 0) {
           html += '<div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">'
@@ -26948,84 +27044,12 @@ window._showSimProgress = function(opts, onDone){
       + '<span>PLAYOFFS · '+roundLbl.toUpperCase()+' · '+curT.length+' selecciones</span>'
       + (dt ? '<span style="color:rgba(255,255,255,.6);letter-spacing:.5px;">📅 '+dt+'</span>' : '')
       + '</p>';
-    /* Layout estilo FOTO 2 (UCL fase eliminatoria): primero los
-       cruces con humano (borde rosa + glow), separador
-       «PARTIDOS IA VS IA», y debajo los cruces IA-vs-IA cada uno con
-       su propio botón 🤖 SIMULAR. 2026-05-24 (Mundial 2032). */
-    function _koRowHtml(a, b, kKey, kRes, kPlayed, hasHuman, slotI){
-      var kRowCls = kPlayed ? 'tour-match tour-match-played' : 'tour-match tour-match-pickable';
-      /* Marker `mn-card` (Mundial card): permite que el CSS pinte
-         estas tarjetas como foto 2 sin depender de #s-mundial como
-         ancestro (algunas builds de la HTML reinyectan el bracket
-         fuera del wrapper de pantalla). 2026-05-24. */
-      kRowCls += ' mn-card';
-      if (hasHuman) kRowCls += ' tour-match-has-human mn-card-human';
-      else kRowCls += ' tour-match-ia mn-card-ia';
-      var kAttrs = ' data-tour="'+tourId+'" data-ko-key="'+kKey+'"';
-      if (kPlayed) {
-        var aW = kRes.winner === 'a', bW = kRes.winner === 'b';
-        var sA = '<span class="tour-score'+(aW?' tour-score-win':'')+'">'+kRes.a+'</span>';
-        var sB = '<span class="tour-score'+(bW?' tour-score-win':'')+'">'+kRes.b+'</span>';
-        var pensTxt = kRes.pens ? ' <span style="font-size:10px;color:#f0c040;letter-spacing:1px;">('+kRes.pens.a+'-'+kRes.pens.b+' pen.)</span>' : '';
-        var actaHtml = _tourActaPanelHtml(tourId, kKey, kRes);
-        /* Wrap card + acta en un único frame para que el acta
-           (toggle 📋 ACTA + body de eventos) quede VISUALMENTE
-           dentro de la card de su partido y no flote entre dos
-           cards. Petición usuario 2026-05-24. */
-        var frameCls = 'mn-card-frame' + (hasHuman ? ' mn-card-frame-human' : ' mn-card-frame-ia');
-        if (actaHtml) frameCls += ' mn-card-frame-has-acta';
-        return '<div class="'+frameCls+'">'
-          + '<div class="'+kRowCls+' mn-card-in-frame"'+kAttrs+'>'
-          + _bracketTeamHtml(a, tourId, slotI, aW, bW)
-          + '<span class="vs tour-score-wrap"><span class="tour-score-line">'+sA+' - '+sB+pensTxt+'</span><span class="tour-fin-badge is-fin">🏁 FIN</span></span>'
-          + _bracketTeamHtml(b, tourId, slotI+1, bW, aW)
-          + '</div>'
-          + actaHtml
-          + '</div>';
-      }
-      var badgeCls = hasHuman ? 'is-previa' : 'is-sim';
-      var badgeTxt = hasHuman ? '📋 PREVIA' : '🤖 SIMULAR';
-      /* Sin botón extra debajo de la card: la propia card es
-         `.tour-match-pickable` (humano → abre PREVIA / gm-modal;
-         IA-vs-IA → auto-sim con un toque sobre el badge `🤖 SIMULAR`).
-         Mantenemos solo el botón verde global "▶ SIMULAR <RONDA>" al
-         pie del bracket (petición usuario 2026-05-24: ahorrar
-         espacio entre partidos; cada caja IA vs IA se simula desde
-         dentro y la del humano no necesita atajo SIM IA). */
-      var row = '<div class="'+kRowCls+'"'+kAttrs+'>'
-        + _bracketTeamHtml(a, tourId, slotI)
-        + '<span class="vs tour-score-wrap"><span class="tour-score-line tour-score-empty">– – –</span><span class="tour-fin-badge '+badgeCls+'">'+badgeTxt+'</span></span>'
-        + _bracketTeamHtml(b, tourId, slotI+1)
-        + '</div>';
-      return row;
-    }
-    var humanRows = '', iaRows = '';
-    var koAllPlayed = true, koPairs = 0;
-    var hasAnyHuman = false, hasAnyIa = false;
-    for (var i = 0; i < curT.length; i += 2) {
-      var a = curT[i], b = curT[i+1];
-      if (!b) break;
-      var kKey = 'ko_'+curR+'_'+(i/2);
-      var kRes = cfg.results[kKey];
-      var kPlayed = !!(kRes && kRes.played);
-      if (!kPlayed) koAllPlayed = false;
-      var pairHuman = _tourPairHasHuman(curT, i);
-      var rowHtml = _koRowHtml(a, b, kKey, kRes, kPlayed, pairHuman, i);
-      if (pairHuman){ humanRows += rowHtml; hasAnyHuman = true; }
-      else          { iaRows    += rowHtml; hasAnyIa    = true; }
-      koPairs++;
-    }
-    html += '<div class="tour-bracket-list">';
-    html += humanRows;
-    if (hasAnyHuman && hasAnyIa) {
-      html += '<div class="mn-ia-sep">'
-        +     '<span class="mn-ia-sep-line"></span>'
-        +     '<span class="mn-ia-sep-lbl">🤖 PARTIDOS IA VS IA</span>'
-        +     '<span class="mn-ia-sep-line"></span>'
-        + '</div>';
-    }
-    html += iaRows;
-    html += '</div>';
+    /* Layout estilo FOTO 2/3 (humanos arriba en rosa, separador
+       «PARTIDOS IA VS IA», IA debajo). Compartido con el KO del
+       Mundialito vía `_tourKoBracketListHtml`/`_tourKoRowHtml`. */
+    var _koList = _tourKoBracketListHtml(cfg, tourId, curT, curR);
+    var koAllPlayed = _koList.allPlayed, koPairs = _koList.pairs;
+    html += _koList.html;
     if (curT.length > 1 && isCurrent) {
       if (!koAllPlayed && koPairs > 0) {
         html += '<div style="display:flex;justify-content:center;margin-top:10px;">'

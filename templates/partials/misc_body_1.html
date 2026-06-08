@@ -3241,7 +3241,11 @@ window._showSimProgress = function(opts, onDone){
           var sel = _hubSelName();
           if (_bedType === 'purple'){ if (window._selAddLesion) window._selAddLesion(sel, name, n, 'Lesión (añadida manualmente)'); }
           else {
-            var tipoS = (_bedType === 'red') ? 'roja' : 'amarilla';
+            /* tipo 'acumulacion' (no 'amarilla') para que la baja MANUAL
+               por acumulación aparezca también en AMONESTADOS del overlay
+               BAJAS (el filtro es tipo==='acumulacion'); el motor de
+               reconciliación NO la toca (la detecta por reason/srcCardRecon). */
+            var tipoS = (_bedType === 'red') ? 'roja' : 'acumulacion';
             var reasonS = (_bedType === 'red') ? 'Expulsión (añadida manualmente)' : 'Acumulación de amarillas (manual)';
             if (window._selAddSancion) window._selAddSancion('sel', sel, name, reasonS, n, tipoS);
           }
@@ -3431,22 +3435,35 @@ window._showSimProgress = function(opts, onDone){
        la plantilla). Lo consume el motor de sanciones de selección
        (index.bundle.js → `_selReconcileSuspensions`) para registrar el
        ciclo de 2 amarillas → 1 partido de forma RETROACTIVA y
-       self-healing. Devuelve una función `lookup(playerName) → {ta,tr}`
-       con el mismo matching difuso que la plantilla. */
+       self-healing. Devuelve una LISTA `[{name, ta, tr}]` construida con
+       el MISMO roster (`_selTeamObj`) y el MISMO matching (`_selCtxFor`)
+       que las filas de la plantilla → reconciliación y display NUNCA
+       pueden discrepar (un jugador con 1 🟨 en la tabla tendrá ta=1 en la
+       reconciliación, jamás 2). */
     window._selCardStatsFor = function(selName){
-      var ctx = _selCtxFor(selName);
-      return function(name){
-        var s = (ctx && ctx.statsFor) ? (ctx.statsFor(name) || {}) : {};
-        return { ta: Number(s.ta) || 0, tr: Number(s.tr) || 0 };
-      };
+      var out = [];
+      try {
+        var t = _selTeamObj(selName);
+        var ctx = _selCtxFor(selName);
+        if (t && Array.isArray(t.players) && ctx && ctx.statsFor){
+          t.players.forEach(function(p){
+            if (!p || !p.name) return;
+            var s = ctx.statsFor(p.name) || {};
+            out.push({ name: p.name, ta: Number(s.ta) || 0, tr: Number(s.tr) || 0 });
+          });
+        }
+      } catch(_){}
+      return out;
     };
     function _renderSelView(host, selName){
       /* Reconciliar sanciones por tarjetas ANTES de pintar: registra el
-         ciclo de 2 amarillas → 1 partido (y rojas) desde el acta real, para
+         ciclo de 2 amarillas → 1 partido (y rojas) desde el acta real, y
+         RETIRA las que ya no procedan (stats reseteadas / cumplidas), para
          que el jugador salga marcado en amarillo/rojo en la plantilla
-         (badge + fila) y se dispare el aviso en la bandeja. */
+         (badge + fila) solo cuando corresponda. El aviso/mensaje en la
+         bandeja se dispara al FIN del partido (no aquí, para no soltar una
+         ráfaga retroactiva al abrir la plantilla). */
       try { if (window._selReconcileSuspensions) window._selReconcileSuspensions(selName); } catch(_){}
-      try { if (window._checkFraYellowBrink) window._checkFraYellowBrink(selName); } catch(_){}
       var t = _selTeamObj(selName);
       if (!t || !Array.isArray(t.players) || !t.players.length){
         host.innerHTML = '<div style="padding:28px 14px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;line-height:1.6;">'

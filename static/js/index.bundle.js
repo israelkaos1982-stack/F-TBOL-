@@ -12939,84 +12939,105 @@ window._fallbackSq11 = function(){
      El recuento de amarillas/rojas de una selección NO se alimentaba en
      NINGÚN punto del juego (`calcularSelMatch` nunca se invoca en ningún
      fin-de-partido), así que el ciclo de 2 amarillas → 1 partido jamás
-     registraba la suspensión: un jugador con 2 🟨 (foto usuario
-     2026-06-06, Rabiot·Francia) NO salía marcado en la plantilla, no
-     había aviso en la bandeja y no aparecía en BAJAS PARA EL PARTIDO
-     (AMONESTADOS). Lo derivamos directamente de las TARJETAS acumuladas
-     en `cfg.results` (la MISMA fuente que pinta el "2" de la columna 🟨
-     de la plantilla), de forma RETROACTIVA y self-healing cross-device.
+     registraba la suspensión. Lo derivamos directamente de las TARJETAS
+     acumuladas en `cfg.results` (la MISMA fuente que pinta la columna 🟨
+     de la plantilla — `window._selCardStatsFor` devuelve el MISMO roster
+     y stats que las filas, así reconciliación y display NUNCA discrepan),
+     de forma RETROACTIVA, self-healing y cross-device.
 
-       count     = total de 🟨 vistas (monótono = stat `ta`). Lo lee
-                   `_checkFraYellowBrink` para el aviso/suspensión.
-       issued    = nº de ciclos de 2 🟨 ya convertidos en suspensión.
-       issuedRed = nº de 🟥 / dobles-amarillas ya convertidas.
+     Modelo (autoritativo y AUTO-LIMPIANTE — bug 2026-06-07, "Doué con 1 🟨
+     salía suspendido por una suspensión STALE que ya no procedía tras
+     resetear/re-simular"):
 
-     Idempotente: solo emite suspensiones NUEVAS (owed > issued). El
-     consumo (al jugar el partido, `_selConsumirParaPartido`) decrementa
-     la cola pero NO toca los contadores issued → una suspensión cumplida
-     NUNCA se resucita aunque el `ta` siga a 2 para siempre. */
-  function _addSelSuspDiff(selName, playerName, diff, tipo, reason){
-    if (diff <= 0) return;
-    var q = _sanGetQueue(SEL_KEY, selName);
-    var ex = null;
-    for (var i = 0; i < q.length; i++){
-      if (q[i].name === playerName && q[i].tipo === tipo){ ex = q[i]; break; }
-    }
-    if (ex){ ex.remaining = (parseInt(ex.remaining,10)||0) + diff; ex.reason = reason; }
-    else { q.push({ name: playerName, team: selName, reason: reason, remaining: diff, tipo: tipo }); }
+       count     = total de 🟨 vistas (monótono = stat `ta`; lo lee
+                   `_checkFraYellowBrink` para el aviso/suspensión).
+       servedAcc = nº de suspensiones por acumulación YA CUMPLIDAS.
+       servedRed = nº de suspensiones por 🟥/doble-amarilla YA CUMPLIDAS.
+
+     pendingAcc = max(0, floor(ta/2) − servedAcc); pendingRed = max(0,
+     tr − servedRed). En CADA pasada la cola se ajusta a ese pending:
+     se AÑADE/ACTUALIZA si falta, y se RETIRA si ya no procede (stats
+     bajaron por un reset o se cumplió). `served*` SOLO sube al consumir
+     (`_selConsumirParaPartido`) → una suspensión cumplida no se resucita,
+     y una que dejó de proceder (ta bajó) desaparece sola. */
+
+  /* ¿es una entrada de cola gestionada por la reconciliación de tarjetas?
+     (las manuales del editor usan otra `reason` y NO se tocan). Incluye
+     las legacy del primer deploy (sin `srcCardRecon`) para poder
+     limpiarlas/migrarlas. */
+  function _isSelReconEntry(s){
+    return !!(s && (s.srcCardRecon === true
+      || s.reason === '2 🟨 acumuladas (ciclo)'
+      || s.reason === 'Expulsión — 1 partido'));
   }
-  /* ¿hay ya una suspensión pendiente del jugador del tipo dado?
-     (yellow = 'acumulacion'; red = 'roja'/'d-amarilla'). */
-  function _hasPendingSelTipo(selName, playerName, kind){
-    var bucket = window.SANCION_STORE_SEL[SEL_KEY];
-    var q = bucket && bucket[selName];
-    if (!q || !q.length) return false;
+  /* Ajusta la cola al `pending` calculado para (jugador, tipo): añade,
+     actualiza o RETIRA la entrada gestionada. Devuelve true si cambió.
+     El match de nombre es NORMALIZADO (`_normSel`) para reconocer también
+     las entradas legacy del primer deploy, que pudieron crearse con otra
+     grafía/fuente de roster (`_selRosterFor` vs `_selTeamObj`). */
+  function _syncSelManagedSusp(q, selName, name, tipo, pending, reason){
+    var nn = _normSel(name), idx = -1;
     for (var i = 0; i < q.length; i++){
-      if (q[i].name !== playerName || (parseInt(q[i].remaining,10)||0) <= 0) continue;
-      var t = q[i].tipo;
-      if (kind === 'red'){ if (t === 'roja' || t === 'd-amarilla') return true; }
-      else { if (t === 'acumulacion') return true; }
+      if (_isSelReconEntry(q[i]) && _normSel(q[i].name) === nn && q[i].tipo === tipo){ idx = i; break; }
     }
+    if (pending > 0){
+      if (idx >= 0){
+        var e = q[idx], ch = false;
+        if ((parseInt(e.remaining,10)||0) !== pending){ e.remaining = pending; ch = true; }
+        if (e.reason !== reason){ e.reason = reason; ch = true; }
+        if (e.name !== name){ e.name = name; ch = true; }   /* canonizar a la grafía del display */
+        if (e.srcCardRecon !== true){ e.srcCardRecon = true; ch = true; }
+        return ch;
+      }
+      q.push({ name: name, team: selName, reason: reason, remaining: pending, tipo: tipo, srcCardRecon: true });
+      return true;
+    }
+    if (idx >= 0){ q.splice(idx, 1); return true; }
     return false;
+  }
+  /* Suma de `remaining` de las entradas gestionadas de un tipo/jugador. */
+  function _selManagedPending(q, name, tipos){
+    var nn = _normSel(name), sum = 0;
+    for (var i = 0; i < q.length; i++){
+      var s = q[i];
+      if (_isSelReconEntry(s) && _normSel(s.name) === nn && tipos.indexOf(s.tipo) >= 0)
+        sum += Math.max(0, parseInt(s.remaining,10) || 0);
+    }
+    return sum;
   }
   function reconcileSelSuspensions(selName){
     try {
       if (!esSelHumana(selName)) return;
-      var lookup = (typeof window._selCardStatsFor === 'function') ? window._selCardStatsFor(selName) : null;
-      if (!lookup) return;
+      var list = (typeof window._selCardStatsFor === 'function') ? window._selCardStatsFor(selName) : null;
+      if (!Array.isArray(list) || !list.length) return;
       var sel = canonSelHumana(selName);
-      var roster = _selRosterFor(sel);
-      if (!roster || !roster.length) return;
+      var q = _sanGetQueue(SEL_KEY, sel);
       var changed = false;
-      roster.forEach(function(p){
-        var name = p && p[1]; if (!name) return;
-        var c = lookup(name) || {};
-        var ta = Math.max(0, parseInt(c.ta, 10) || 0);
-        var tr = Math.max(0, parseInt(c.tr, 10) || 0);
-        if (!ta && !tr) return;
+      list.forEach(function(it){
+        var name = it && it.name; if (!name) return;
+        var ta = Math.max(0, parseInt(it.ta, 10) || 0);
+        var tr = Math.max(0, parseInt(it.tr, 10) || 0);
         var ent = _yelGet(SEL_KEY, sel, name);
-        /* contador monótono = total de amarillas (NO se resetea: lo lee
-           _checkFraYellowBrink, que espera un total creciente). */
+        /* contador monótono = total de amarillas (lo lee _checkFraYellowBrink). */
         if ((parseInt(ent.count, 10) || 0) !== ta){ ent.count = ta; changed = true; }
-        /* Acumulación: cada 2 🟨 = 1 partido. */
         var owedAcc = Math.floor(ta / 2);
-        /* Primera reconciliación: si ya hay una suspensión por
-           acumulación pendiente (p.ej. de la migración legacy o de un
-           dispositivo que ya la emitió), considérala ya emitida para no
-           duplicar. */
-        if (ent.issued === undefined){ ent.issued = _hasPendingSelTipo(sel, name, 'yellow') ? owedAcc : 0; changed = true; }
-        var issAcc = parseInt(ent.issued, 10) || 0;
-        if (owedAcc > issAcc){
-          _addSelSuspDiff(sel, name, owedAcc - issAcc, 'acumulacion', '2 🟨 acumuladas (ciclo)');
-          ent.issued = owedAcc; changed = true;
+        /* Migración del primer deploy: deriva served* del legacy `issued`
+           (= emitidas) menos lo que aún quede pendiente en la cola, para
+           no re-suspender lo ya cumplido ni perder lo aún vigente. */
+        if (ent.servedAcc === undefined){
+          var pendAcc0 = _selManagedPending(q, name, ['acumulacion']);
+          ent.servedAcc = Math.max(0, (parseInt(ent.issued, 10) || 0) - pendAcc0);
+          changed = true;
         }
-        /* Rojas / dobles amarillas: cada una = 1 partido. */
-        if (ent.issuedRed === undefined){ ent.issuedRed = _hasPendingSelTipo(sel, name, 'red') ? tr : 0; changed = true; }
-        var issRed = parseInt(ent.issuedRed, 10) || 0;
-        if (tr > issRed){
-          _addSelSuspDiff(sel, name, tr - issRed, 'roja', 'Expulsión — 1 partido');
-          ent.issuedRed = tr; changed = true;
+        if (ent.servedRed === undefined){
+          var pendRed0 = _selManagedPending(q, name, ['roja','d-amarilla']);
+          ent.servedRed = Math.max(0, (parseInt(ent.issuedRed, 10) || 0) - pendRed0);
+          changed = true;
         }
+        var pendingAcc = Math.max(0, owedAcc - (parseInt(ent.servedAcc,10) || 0));
+        var pendingRed = Math.max(0, tr - (parseInt(ent.servedRed,10) || 0));
+        if (_syncSelManagedSusp(q, sel, name, 'acumulacion', pendingAcc, '2 🟨 acumuladas (ciclo)')) changed = true;
+        if (_syncSelManagedSusp(q, sel, name, 'roja', pendingRed, 'Expulsión — 1 partido')) changed = true;
       });
       if (changed) _persist();
     } catch(_){}
@@ -13079,8 +13100,18 @@ window._fallbackSq11 = function(){
         var q = bucket && bucket[sel];
         if (q && q.length) {
           for (var i = q.length - 1; i >= 0; i--) {
-            q[i].remaining = (q[i].remaining || 1) - 1;
-            if (q[i].remaining <= 0) q.splice(i, 1);
+            var s = q[i];
+            /* Las suspensiones gestionadas por la reconciliación de
+               tarjetas llevan cuenta de CUMPLIDAS (served*) para que
+               `_selReconcileSuspensions` no las vuelva a emitir (pending =
+               owed − served). Las manuales se decrementan sin más. */
+            if (_isSelReconEntry(s)) {
+              var ent = _yelGet(SEL_KEY, sel, s.name);
+              if (s.tipo === 'roja' || s.tipo === 'd-amarilla') ent.servedRed = (parseInt(ent.servedRed,10)||0) + 1;
+              else ent.servedAcc = (parseInt(ent.servedAcc,10)||0) + 1;
+            }
+            s.remaining = (parseInt(s.remaining,10) || 1) - 1;
+            if (s.remaining <= 0) q.splice(i, 1);
           }
         }
       }

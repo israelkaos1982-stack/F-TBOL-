@@ -15863,10 +15863,21 @@ window._showSimProgress = function(opts, onDone){
   window._mclHubRefresh = _refresh;
   window._mclHubGo = function(view){
     try { if (typeof window._mclSetView === 'function') window._mclSetView(view); } catch(_){}
+    var _before = 0;
+    try { _before = (window._tourLastRenderAt && window._tourLastRenderAt.mundial) || 0; } catch(_){}
     try { window.go('s-mundial'); } catch(_){}
-    /* Garantizar que la pantalla pinte la fase elegida tras activarse
-       (el observer de `_watchScreens` también la dispara, esto es red). */
-    try { setTimeout(function(){ try { window._tourRender && window._tourRender('mundial'); } catch(_){} }, 0); } catch(_){}
+    /* RED de seguridad: el observer de `_watchScreens` ya pinta la fase
+       elegida al activarse `s-mundial`. Solo re-renderizamos si NO lo hizo
+       (p.ej. `window.go` re-envuelto). Evita el doble render en cada
+       apertura de caja (perf 2026-06-08). */
+    try {
+      setTimeout(function(){
+        try {
+          var _after = (window._tourLastRenderAt && window._tourLastRenderAt.mundial) || 0;
+          if (_after <= _before && window._tourRender) window._tourRender('mundial');
+        } catch(_){}
+      }, 0);
+    } catch(_){}
   };
   function _watch(){
     var el = document.getElementById('s-mundial-clubes');
@@ -27615,19 +27626,20 @@ window._showSimProgress = function(opts, onDone){
      reusa `window._iaEventsHtml` para pintar los eventos minuto-a-
      minuto. El botón 📋 se pinta inline para no estorbar la card.
      2026-05-09 (FOTO 2 acta auto-sim). */
-  function _tourActaPanelHtml(tourId, matchKey, res) {
+  /* Cuerpo del acta (lista de eventos minuto a minuto). Extraído de
+     `_tourActaPanelHtml` para poder CONSTRUIRLO DE FORMA DIFERIDA al
+     primer clic en 📋 ACTA. Una fase de grupos completa del Mundialito
+     tiene ~48 partidos jugados; construir las 48 actas (cada una via
+     `_iaEventsHtml`) en CADA render hacía que abrir las cajas fuera
+     lento (perf 2026-06-08). Los `events` siguen viviendo en
+     `cfg.results[].events` — esto solo difiere el RENDER, no los datos. */
+  function _tourActaBodyHtml(res) {
     if (!res || !res.events || !res.events.length) return '';
-    var actaId = 'tour-acta-' + tourId + '-' + matchKey.replace(/[^A-Za-z0-9_-]/g,'_');
-    var btnId  = actaId + '-btn';
     /* Filtramos los markers internos del motor que NO deben aparecer
        en la UI del acta:
          - 'played' (1 entrada por jugador titular/suplente, marker
            para acumular PJ en stats — no es un evento real).
-         - 'mvp' / 'sust' (se muestran fuera del acta).
-       Sin este filtro, si por race condition `window._iaEventsHtml`
-       no está disponible al render, el fallback inline mostraba TODA
-       la plantilla como eventos `?' #N,Jugador,POS · Equipo` (caso
-       reportado por el usuario 2026-05-09). */
+         - 'mvp' / 'sust' (se muestran fuera del acta). */
     var SKIP_TYPES = { played:1, mvp:1, sust:1 };
     var renderable = (res.events || []).filter(function(e){
       return e && e.type && !SKIP_TYPES[e.type];
@@ -27637,7 +27649,6 @@ window._showSimProgress = function(opts, onDone){
     var m = { home: res.home || '', away: res.away || '',
               gh: res.a, ga: res.b, events: renderable,
               mvp: res.mvp || '', mvpTeam: res.mvpTeam || '' };
-    var inner = '';
     function _evPlayerName(e){
       if (!e) return '?';
       var p = e.player || e.name;
@@ -27646,23 +27657,39 @@ window._showSimProgress = function(opts, onDone){
     }
     try {
       if (typeof window._iaEventsHtml === 'function') {
-        inner = window._iaEventsHtml(m);
-      } else {
-        inner = renderable.map(function(e){
-          var min = (e.min != null && e.min !== '') ? e.min : '?';
-          return '<div style="padding:4px 10px;font-size:12px;color:#fff;">'
-            + min + "' " + (e.ico || '') + ' '
-            + _evPlayerName(e) + ' · ' + (e.team === 'a' ? (m.home || 'A') : (m.away || 'B'))
-            + '</div>';
-        }).join('');
+        return window._iaEventsHtml(m);
       }
-    } catch(_) { inner = ''; }
+      /* Fallback inline si `_iaEventsHtml` no está disponible al render. */
+      return renderable.map(function(e){
+        var min = (e.min != null && e.min !== '') ? e.min : '?';
+        return '<div style="padding:4px 10px;font-size:12px;color:#fff;">'
+          + min + "' " + (e.ico || '') + ' '
+          + _evPlayerName(e) + ' · ' + (e.team === 'a' ? (m.home || 'A') : (m.away || 'B'))
+          + '</div>';
+      }).join('');
+    } catch(_) { return ''; }
+  }
+  window._tourActaBodyHtml = _tourActaBodyHtml;
+
+  function _tourActaPanelHtml(tourId, matchKey, res) {
+    if (!res || !res.events || !res.events.length) return '';
+    /* El botón 📋 ACTA solo se pinta si HAY eventos reales (filtro barato,
+       sin construir HTML). Ver el botón demuestra que los eventos están en
+       el cfg (CLAUDE.md). El CUERPO se construye al primer clic. */
+    var SKIP_TYPES = { played:1, mvp:1, sust:1 };
+    var renderable = (res.events || []).filter(function(e){
+      return e && e.type && !SKIP_TYPES[e.type];
+    });
+    if (!renderable.length) return '';
+    var actaId = 'tour-acta-' + tourId + '-' + matchKey.replace(/[^A-Za-z0-9_-]/g,'_');
+    var btnId  = actaId + '-btn';
     var html = '<div style="display:flex;justify-content:center;margin-top:-2px;margin-bottom:6px;">'
       + '<button type="button" id="'+btnId+'" class="tour-acta-toggle" data-target="'+actaId+'" '
+      + 'data-tour="'+tourId+'" data-acta-key="'+matchKey+'" '
       + 'style="background:rgba(95,224,138,.10);border:1px solid rgba(95,224,138,.40);color:#9ee5a9;border-radius:6px;padding:3px 10px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
       + '📋 ACTA</button></div>'
-      + '<div id="'+actaId+'" class="tour-acta-body" style="display:none;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin:0 4px 6px;overflow:hidden;">'
-      + inner + '</div>';
+      + '<div id="'+actaId+'" class="tour-acta-body" data-acta-lazy="1" style="display:none;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin:0 4px 6px;overflow:hidden;">'
+      + '</div>';
     return html;
   }
 
@@ -28403,6 +28430,10 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     /* Pintado instantáneo. */
     try { _paintTourScreen(id, cached); } catch(_){}
+    /* Sello de "este id se acaba de pintar" — lo usa `_mclHubGo` para no
+       re-renderizar la pantalla del Mundialito una 2ª vez (el observer de
+       `_watchScreens` ya la pinta al activarse). Perf 2026-06-08. */
+    try { window._tourLastRenderAt = window._tourLastRenderAt || {}; window._tourLastRenderAt[id] = Date.now(); } catch(_){}
     /* Refresco en bg: si el server devuelve algo más nuevo,
        repintamos sin bloquear la UI. */
     try {
@@ -29333,6 +29364,19 @@ window._showSimProgress = function(opts, onDone){
       var aTarget = actaBtn.getAttribute('data-target');
       var aBox = aTarget && document.getElementById(aTarget);
       if (aBox) {
+        /* Construcción DIFERIDA del cuerpo del acta (perf Mundialito
+           2026-06-08): solo la 1ª vez que se abre. Los eventos viven en
+           cfg.results[matchKey].events; aquí solo se pinta su HTML. */
+        if (aBox.getAttribute('data-acta-lazy')) {
+          aBox.removeAttribute('data-acta-lazy');
+          try {
+            var _atid = actaBtn.getAttribute('data-tour');
+            var _akey = actaBtn.getAttribute('data-acta-key');
+            var _acfg = (_atid && typeof _tourLoadCachedSync === 'function') ? _tourLoadCachedSync(_atid) : null;
+            var _ares = _acfg && _acfg.results && _acfg.results[_akey];
+            aBox.innerHTML = (typeof _tourActaBodyHtml === 'function' && _ares) ? (_tourActaBodyHtml(_ares) || '') : '';
+          } catch(_){ }
+        }
         var visible = aBox.style.display !== 'none';
         aBox.style.display = visible ? 'none' : 'block';
         actaBtn.textContent = visible ? '📋 ACTA' : '📋 OCULTAR';

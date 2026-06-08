@@ -9383,6 +9383,28 @@
     if (rivalIsHuman) return fouls*0.1 + yellow*1.5 + red*4;
     return fouls*0.5 + yellow*6 + red*12;
   }
+  /* PI ganados por el RENDIMIENTO del equipo humano del hub en las
+     estadísticas del partido (petición usuario 2026-06-08). Aplica
+     IGUAL en Humano vs IA y en Humano vs Humano — solo cuenta a favor
+     del hub, comparando sus stats con las del rival:
+       · Posesión > 50%: +0,1 PI por cada punto porcentual por encima
+         de 50 (51% → +0,1 · 52% → +0,2 · 53% → +0,3 …).
+       · Tiros a puerta: +0,1 PI por cada tiro de MÁS que el rival
+         (ej. 8 vs 4 → +0,4 PI). 0 si no supera al rival.
+       · Córners: +0,3 PI (fijo) si el hub tiene MÁS córners que el
+         rival. 0 si empata o tiene menos.
+     `hub`/`rival` son los objetos `st.matchStats[side]` (posesion,
+     tiros, corners…). */
+  function athComputeStatsPI(hub, rival) {
+    hub = hub || {}; rival = rival || {};
+    var pi = 0;
+    var pos = Number(hub.posesion) || 0;
+    if (pos > 50) pi += (pos - 50) * 0.1;
+    var tiroDiff = (Number(hub.tiros) || 0) - (Number(rival.tiros) || 0);
+    if (tiroDiff > 0) pi += tiroDiff * 0.1;
+    if ((Number(hub.corners) || 0) > (Number(rival.corners) || 0)) pi += 0.3;
+    return pi;
+  }
   /* Otorga PI al equipo del hub (Liverpool) por las tarjetas y faltas
      que le hizo el rival en este partido. Tarjetas: del acta. Faltas:
      del campo `faltas` de matchStats (lo teclea el humano en la
@@ -9406,6 +9428,11 @@
     var fouls = 0;
     try { if (st.matchStats && st.matchStats[rivalSide]) fouls = Number(st.matchStats[rivalSide].faltas) || 0; } catch(e){}
     var pi = athComputePI(yellow, red, fouls, rivalIsHuman);
+    /* PI por rendimiento del hub en las stats (posesión / tiros a
+       puerta / córners) — suma en HvIA y HvH por igual. */
+    try {
+      if (st.matchStats) pi += athComputeStatsPI(st.matchStats[hubSide], st.matchStats[rivalSide]);
+    } catch(e){}
     if (pi > 0) {
       athAddMedicalPI(pi);
       try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(e){}
@@ -9496,8 +9523,8 @@
     var cur = athGetMedicalPI();
     var allocs = Array.prototype.slice.call(document.querySelectorAll('#ath-med-ov .ath-med-alloc'));
     var used = allocs.reduce(function(a,inp){ return a + (parseInt(inp.value,10)||0); }, 0);
-    help.innerHTML = '💉 <b>' + _athFmtPI(cur) + ' PI</b> disponibles · usando <b>' + used + '</b>'
-      + ' &nbsp;|&nbsp; 1 PI = 1 partido de lesión.';
+    help.innerHTML = '💉<b>' + _athFmtPI(cur) + ' PI</b> disponibles/Usando <b>' + used + '</b>'
+      + ' / 1PI= 1 partido lesión';
   }
   window.athOpenMedicalMenu = function() {
     var ov = document.getElementById('ath-med-ov');
@@ -10024,13 +10051,15 @@
      (mitad del rango, el más probable). Usamos un <select> en vez de
      <input type=number> para que el móvil abra una ruleta vertical
      nativa, mucho más rápido que teclear. */
+  /* Estas 4 stats manuales TODAS otorgan Puntos de Inyección (PI) al
+     equipo del hub vía athApplyMedicalFromActa (athComputePI para las
+     faltas del rival + athComputeStatsPI para posesión/tiros/córners
+     del hub). Posesión >50% → +0,1 PI/punto · tiros a puerta → +0,1
+     PI por tiro de más que el rival · córners → +0,3 PI si el hub
+     tiene más · faltas del rival → 0,5/0,1 (IA/humano) por falta. */
   var _STAT_DEFS_MANUAL = [
     { key: 'posesion', ico: '➗', lbl: 'POSESIÓN (%)',     min: 30, max: 70, def: 50, pairSum: 100 },
     { key: 'tiros',    ico: '🚪', lbl: 'TIROS A PUERTA',   min: 0,  max: 20, def: 7  },
-    /* FALTAS COMETIDAS por cada equipo, justo debajo de Tiros a
-       puerta. El humano las teclea; las faltas que comete el RIVAL
-       otorgan Puntos de Inyección (PI) al equipo del hub vía
-       athApplyMedicalFromActa. */
     { key: 'faltas',   ico: '⚠️', lbl: 'FALTAS COMETIDAS',  min: 0,  max: 40, def: 8  },
     { key: 'corners',  ico: '⛳', lbl: 'CÓRNERS',           min: 0,  max: 10, def: 3  }
     /* REMATES y PARADAS eliminados a petición del usuario — ya no se

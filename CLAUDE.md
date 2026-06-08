@@ -369,8 +369,24 @@ modal admin PIN 747) **JAMÁS** debe reiniciar/borrar:
 Cursor del día (`liverpool_preseason_v1`), objetivos del club, HUD
 (💼/🪙 a 0), **resultados** de los slots de torneo (`tour_*_v1`:
 `results`/`bracket`/`koBracket`/`groupFixtures`/`fixture`/cursores/
-`_prizesPaid` — **conservando `teams`/`format`/`formatConfig`**) y
-`pend_hvh_deferred_v1`. NO toca `ligaExt_*` ni las 4 claves protegidas.
+`_prizesPaid` — **conservando `teams`/`format`/`formatConfig`**),
+`pend_hvh_deferred_v1` y **TODAS las bajas/sanciones/lesiones (club +
+selección)** (petición usuario 2026-06-07: «cuando se reinicia una
+temporada no hay ni lesionados ni expulsados ni amonestados»). NO toca
+`ligaExt_*` ni las 4 claves protegidas.
+
+**Bajas a CERO**: `ftbol_lesiones_v1` (`BAJA_STORE`+`LESION_STORE`),
+`ftbol_sanciones_v1` (`SANCION_STORE.__global`), el contador club
+`YELLOW_STORE.__global`, y `ftbol_sel_sanciones_v1`
+(`YELLOW_STORE_SEL`+`SANCION_STORE_SEL`+`LESION_STORE_SEL`+
+`_FORMA_MATCH_STATES_SEL`). Se vacían en memoria, localStorage Y
+servidor: cada uno es un blob `_kvBlobSync` con merge por recencia, así
+que tras vaciarlo el `_persist` sella `updatedAt` nuevo y el flush
+(`_bajaFlushClubNow`/`_bajaFlushSelNow` → `pushNow`) sube el blob VACÍO
+→ el server lo adopta en todos los dispositivos (sin esto la
+hidratación resucitaba las bajas al recargar / cambiar de móvil). Como
+`cfg.results` también se vacía, `_selReconcileSuspensions` tampoco las
+regenera.
 
 ### Blindaje implementado
 

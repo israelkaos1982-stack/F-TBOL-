@@ -9961,6 +9961,44 @@ window._showSimProgress = function(opts, onDone){
       var ok=true, total=0; (res.payouts||[]).forEach(function(p){ if(p.coins>0){ if(_credit(p.name,p.coins))total+=p.coins; else ok=false; } });
       if(!ok)return; /* crédito no disponible → reintenta en el próximo scan, sin marcar pagado */
       ledger.paid[k]=total; changed=true; }
+    /* Torneo de Verano LIGA / LIGUILLA (1 tabla, sin fase final): PAGA a
+       cada humano su premio en cuanto ÉL termine TODOS sus partidos, según
+       la clasificación ACTUAL — SIN esperar a que OTRA caja humana (otro
+       mister, p.ej. Real Madrid con 0 partidos) juegue (no la bloquea).
+       Petición usuario 2026-06-08. Idempotente POR humano: la clave del
+       ledger se ancla al RECORD PROPIO del jugador (pj-pts-gf-gc), que NO
+       cambia si otra caja juega después → una posición provisional NUNCA se
+       re-paga aunque luego varíe. Un reset (resetAt nuevo / record distinto)
+       sí vuelve a pagar al re-terminar. */
+    function runVeranoLeague(id, c, vals){
+      if(!c || !Array.isArray(c.teams) || c.teams.length<2) return;
+      var fc=c.formatConfig||{}, fixture, prefix;
+      if(c.format==='league'){ fixture=c.fixture; prefix=''; }
+      else { var gf=c.groupFixtures||{}; fixture=gf[0]||gf['0']; prefix='g0_'; }
+      if(!fixture || typeof fixture.forEach!=='function') return;
+      var results=c.results||{};
+      var humanIdx=[]; c.teams.forEach(function(t,i){ if(t&&t.name&&_humClub(t.name)) humanIdx.push(i); });
+      if(!humanIdx.length) return;
+      var sched={}, plyd={};
+      fixture.forEach(function(jor,j){ if(!jor||typeof jor.forEach!=='function')return; jor.forEach(function(m,mi){
+        if(!m)return; sched[m.home]=(sched[m.home]||0)+1; sched[m.away]=(sched[m.away]||0)+1;
+        var r=results[(prefix||'')+j+'_'+mi]; if(r&&r.played){ plyd[m.home]=(plyd[m.home]||0)+1; plyd[m.away]=(plyd[m.away]||0)+1; }
+      });});
+      var rows=_standings(c.teams, fixture, results, prefix); if(!rows||!rows.length) return;
+      var posKeys=['p1','p2','p3','p4','p5','p6'];
+      humanIdx.forEach(function(hi){
+        if((sched[hi]||0)===0 || (plyd[hi]||0)<(sched[hi]||0)) return;   /* este humano aún no terminó SUS partidos */
+        var name=c.teams[hi].name, pos=-1, hr=null;
+        for(var ri=0;ri<rows.length;ri++){ if(rows[ri].idx===hi){ pos=ri; hr=rows[ri]; break; } }
+        if(pos<0||!hr) return;
+        var tier=posKeys[pos]; if(!tier) return;        /* fuera del top 6 → sin premio */
+        var coins=num(vals[tier]); if(coins<=0) return;
+        var lock=_norm(name)+':'+hr.pj+'-'+hr.pts+'-'+hr.gf+'-'+hr.gc+'|'+(c.resetAt||0);
+        var k='verano:'+id+'|H|'+lock;
+        if(ledger.paid[k]!=null) return;
+        if(_credit(name,coins)){ ledger.paid[k]=coins; changed=true; }
+      });
+    }
     run('recopa', _detBracket('recopa_state_v1', ['r64','r32','r16','r8','sf','fin'], {r64:'r64',r32:'r32',r16:'oct',r8:'qf',sf:'sf'}, V.recopa||{}, _humClub));
     run('inter',  _detBracket('inter_state_v1', ['q','s','f'], {q:'qf',s:'sf'}, V.inter||{}, _humClub));
     run('usc', _detSemisFinal('usc_state_v1', V.usc||{}, _humClub));
@@ -9970,7 +10008,18 @@ window._showSimProgress = function(opts, onDone){
     run('uecl', _detEuro('uecl_ko_state_v1','uecl_phase_v1', V.uecl||{}, _humClub));
     run('liga', _detLiga(V.liga||{}, _humClub));
     run('superliga', _detSuperliga(V.superliga||{}, _humClub));
-    ['sct','pss','jg','asia','tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'].forEach(function(id){ var c=_loadTour(id); if(c) run('verano:'+id, _detVerano(c, V.verano||{}, _humClub)); });
+    ['sct','pss','jg','asia','tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'].forEach(function(id){
+      var c=_loadTour(id); if(!c)return;
+      var fc=c.formatConfig||{};
+      /* Liga pura O liguilla de 1 grupo sin fase final (1 sola tabla):
+         pago provisional POR humano (no bloquea otra caja). El resto
+         (groups-ko con KO real) sigue el detector estándar. */
+      var pureLeague = (c.format==='league')
+        || ((c.format==='groups-ko'||c.format==='swiss'||c.format==='league-ko')
+            && fc.advancePerGroup===0 && (fc.groups||1)<=1);
+      if(pureLeague) runVeranoLeague(id, c, V.verano||{});
+      else run('verano:'+id, _detVerano(c, V.verano||{}, _humClub));
+    });
     run('mundialito:mundial', _detMundialito(_loadTour('mundial'), V.mundialito||{}, _humClub));
     var i; for(i=1;i<=10;i++){ var cf=_loadTour('sfn'+i); if(cf) run('selfin:sfn'+i, _detSelFin(cf, V['sel-fin']||{}, _humSel)); }
     for(i=1;i<=10;i++){ var cp=_loadTour('spv'+i); if(cp) run('selprev:spv'+i, _detSelPrev(cp, V['sel-prev']||{}, _humSel)); }
@@ -26703,7 +26752,7 @@ window._showSimProgress = function(opts, onDone){
     function side(t, isRight){
       var nm = (t && t.name) || '?';
       var sh = t && t.shield
-        ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'" style="width:38px;height:38px;object-fit:contain;">'
+        ? '<img src="'+t.shield+'" loading="lazy" decoding="async" onerror="this.style.display=\'none\'" style="width:38px;height:38px;object-fit:contain;">'
         : '<div style="width:38px;height:38px;"></div>';
       /* Selección humana canónica → icono SIEMPRE + nombre AMARILLO
          (petición usuario 2026-05-28). */
@@ -51510,6 +51559,29 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     return sawAny;
   }
+  /* ¿La liga/liguilla está «finalizada» PARA EL HUB? El chip de
+     COMPETICIONES pasa a «Finalizada» en cuanto el equipo del HUB (el club
+     humano de esta caja) ha jugado TODOS sus partidos, aunque OTRA caja
+     humana (otro mister, p.ej. Real Madrid con 0 partidos) aún no haya
+     jugado — esa otra caja NO debe bloquear el chip (petición usuario
+     2026-06-08). Si el hub no participa en este torneo (p.ej. una liguilla
+     de Selecciones donde el hub es una selección, no el club), cae al
+     criterio GLOBAL (todos los partidos jugados) → sin regresión. */
+  function _chipLeagueHubDone(cfg, fixture, prefix){
+    var res = cfg.results || {};
+    if (!fixture || typeof fixture.forEach !== 'function') return false;
+    var hub = '';
+    try { if (typeof window._tourHubTeamName === 'function') hub = window._tourHubTeamName(); } catch(_){}
+    function _n(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
+    var hubN = _n(hub), hubIdx = -1;
+    (cfg.teams || []).forEach(function(t,i){ if (t && _n(t.name) === hubN) hubIdx = i; });
+    if (hubIdx < 0) return _chipFixtureAllDone(fixture, res, prefix);
+    var sched = 0, plyd = 0;
+    fixture.forEach(function(jor,j){ if(!jor||typeof jor.forEach!=='function')return; jor.forEach(function(m,mi){
+      if(!m)return; if(m.home===hubIdx||m.away===hubIdx){ sched++; var r=res[(prefix||'')+j+'_'+mi]; if(r&&r.played)plyd++; }
+    });});
+    return sched > 0 && plyd === sched;
+  }
   function _chipTourCfgDone(cfg){
     if (!cfg || typeof cfg !== 'object') return false;
     var res = cfg.results || {};
@@ -51529,7 +51601,7 @@ https://api.sofascore.app/api/v1/team/44/image
        Sin esto, un Torneo de Verano «Liga» terminado se quedaba SIEMPRE
        en «En juego» (bug foto usuario 2026-06-03). */
     if (fmt === 'league'){
-      return _chipFixtureAllDone(cfg.fixture, res, '');
+      return _chipLeagueHubDone(cfg, cfg.fixture, '');
     }
     /* groups-ko / mundial-48 / league-ko / swiss. */
     if (fmt === 'groups-ko' || fmt === 'mundial-48'
@@ -51540,6 +51612,13 @@ https://api.sofascore.app/api/v1/team/44/image
          campeón = 1º de la liguilla → finalizado cuando TODOS los
          partidos de grupos están jugados. */
       if (!kr.length || fc.advancePerGroup === 0){
+        /* Liguilla de 1 grupo (verano «1 tabla»): basta con que el HUB
+           termine SUS partidos (no lo bloquea otra caja humana). Multi-grupo
+           → criterio global. */
+        if ((fc.groups || 1) <= 1){
+          var _gf = cfg.groupFixtures || {};
+          return _chipLeagueHubDone(cfg, _gf[0] || _gf['0'], 'g0_');
+        }
         return _chipAllGroupsDone(cfg);
       }
       var kb = cfg.koBracket || [];

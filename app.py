@@ -2,6 +2,7 @@ from flask import Flask, render_template, redirect, url_for, request, jsonify, a
 from flask_sqlalchemy import SQLAlchemy
 import random
 import os
+import time
 import json
 import re
 import unicodedata
@@ -3616,6 +3617,11 @@ def api_kv_set(key):
     if "value" not in body:
         return jsonify({"ok": False, "error": "falta `value`"}), 400
     value = body.get("value")
+    # Flag de escritura AUTORITATIVA (acción explícita del admin): para los
+    # blobs de recencia hace que el valor gane SIEMPRE con sello del reloj
+    # del servidor (defeat clock-skew de otros dispositivos). Ver el merge
+    # de `_KV_RECENCY_BLOB_KEYS` abajo.
+    authoritative = bool(body.get("authoritative"))
     try:
         payload = json.dumps(value, ensure_ascii=False)
     except (TypeError, ValueError):
@@ -3666,19 +3672,35 @@ def api_kv_set(key):
                 value, payload = merged, cand
         except Exception:
             pass
-    # Blobs de baja/sanción (club + selecciones): merge por RECENCIA. El
-    # blob con `updatedAt` mayor gana ENTERO. Anti-wipe: un POST stale no
+    # Blobs de baja/sanción (club + selecciones) + HUD: merge por RECENCIA.
+    # El blob con `updatedAt` mayor gana ENTERO. Anti-wipe: un POST stale no
     # pisa una copia más nueva; respeta consumos (no resucita sanciones
     # decrementadas porque el blob que las decrementó es más reciente).
-    elif key in _KV_RECENCY_BLOB_KEYS and row and row.valor_json:
+    #
+    # MODO AUTHORITATIVE (admin pulsó ✅ Guardar / ♻ / 📅 en el HUD): el
+    # valor GANA SIEMPRE y el SERVIDOR SELLA `updatedAt` con SU PROPIO reloj
+    # por encima de lo almacenado (`max(server_now, stored+1, client)`). Sin
+    # esto, en un parque de 6 móviles + PC un dispositivo con el RELOJ
+    # ADELANTADO dejaba en el server un valor viejo con un `updatedAt`
+    # FUTURO; el guardado legítimo del admin (reloj correcto, ts menor) era
+    # RECHAZADO por recencia aunque el POST devolvía 200 ("✓ HUD guardado"
+    # mentía) y, al borrar datos, el GET devolvía ese valor viejo
+    # ("vuelven a datos antiguos", foto usuario 2026-06-07). Sellar con el
+    # reloj del server (única fuente monotónica) hace que la acción
+    # explícita del admin domine y converja en todos los dispositivos.
+    elif key in _KV_RECENCY_BLOB_KEYS:
         try:
-            old = json.loads(row.valor_json)
-            old_ts = float((old or {}).get("updatedAt") or 0)
-            new_ts = float((value or {}).get("updatedAt") or 0)
-            if old_ts > new_ts:
-                value, payload = old, row.valor_json
+            old = json.loads(row.valor_json) if (row and row.valor_json) else None
         except Exception:
-            pass
+            old = None
+        old_ts = float((old or {}).get("updatedAt") or 0) if isinstance(old, dict) else 0.0
+        new_ts = float((value or {}).get("updatedAt") or 0) if isinstance(value, dict) else 0.0
+        if authoritative and isinstance(value, dict):
+            srv_now = time.time() * 1000.0
+            value["updatedAt"] = max(new_ts, old_ts + 1.0, srv_now)
+            payload = json.dumps(value, ensure_ascii=False)
+        elif row and row.valor_json and old_ts > new_ts:
+            value, payload = old, row.valor_json
     # LEDGER de pagos CASH (cash_ledger_v1): merge por UNIÓN del mapa `paid`.
     # Cada entrada es un pago YA acreditado a una caja humana, idempotente por
     # clave de instancia (`<comp>|<sig>`). Si dos dispositivos acreditan

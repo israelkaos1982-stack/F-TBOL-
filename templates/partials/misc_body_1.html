@@ -52018,14 +52018,17 @@ https://api.sofascore.app/api/v1/team/44/image
      ningún otro writer toca esta fila. SAVE: keepalive + sendBeacon de
      respaldo (sobrevive cierre de tab, no se cancela en una recarga rápida). */
   var KV_URL = '/api/kv/bayern_hud_overrides_v1';
-  function _serverPush(o, force){
+  function _serverPush(o, force, authoritative){
     /* GATE: una escritura automática NO sale al server antes de hidratar
        (evita clobber con un base vacío/stale sellado con ts fresco). La
-       acción explícita del admin (force) siempre se envía. */
+       acción explícita del admin (force) siempre se envía.
+       `authoritative`: acción explícita del admin (✅/♻/📅) → el SERVER la
+       sella con su reloj y GANA siempre (defeat clock-skew de otros
+       móviles que dejaban un valor viejo con ts futuro). */
     if (!force && !_hudHydrated){
       return Promise.resolve(false);
     }
-    var body = JSON.stringify({ value: o || {} });
+    var body = JSON.stringify({ value: o || {}, authoritative: !!authoritative });
     /* sendBeacon: garantiza entrega incluso si la página se está
        descargando. No espera respuesta — perfecto para esto. */
     try {
@@ -52205,7 +52208,7 @@ https://api.sofascore.app/api/v1/team/44/image
   /* save() retorna una Promise que resuelve cuando el server
      confirma. Las capas locales se escriben SÍNCRONAMENTE antes de
      retornar. */
-  function save(o, force){
+  function save(o, force, authoritative){
     var data = o || {};
     /* Sello de recencia: cada guardado real estampa `updatedAt` (ms)
        para que el server (y el _serverPull de otros dispositivos)
@@ -52231,8 +52234,9 @@ https://api.sofascore.app/api/v1/team/44/image
     _idbWrite(data);
     /* Capa 6: server (Promise). `force` viene de una acción explícita
        del admin (✅ Guardar / ♻ / 📅) que SIEMPRE debe persistir, aunque
-       aún no hayamos hidratado. */
-    var serverP = _serverPush(data, force) || Promise.resolve(false);
+       aún no hayamos hidratado. `authoritative` la sella el server como
+       ganadora (defeat clock-skew). */
+    var serverP = _serverPush(data, force, authoritative) || Promise.resolve(false);
     /* Si localStorage falló, avisamos pero NO bloqueamos — las otras
        capas (cookie + IDB + server) son suficientes para recuperar. */
     if (!lsOk) {
@@ -52545,7 +52549,7 @@ https://api.sofascore.app/api/v1/team/44/image
          autoritativa y debe persistir aunque el pull aún no haya
          hidratado (y deja el HUD hidratado para los writers automáticos). */
       try { _markHydrated(); } catch(_){}
-      serverPromise = save(o, true);
+      serverPromise = save(o, true, true);   /* authoritative: gana en el server */
     } catch(e) {
       _bayernHudToast('✖ Error guardando: ' + (e && e.message || ''), 'err');
       return;
@@ -52609,7 +52613,7 @@ https://api.sofascore.app/api/v1/team/44/image
        demás dispositivos). El blob solo lleva `updatedAt` ⇒ sin
        overrides ⇒ el HUD recalcula desde defaults en todos lados. */
     try { _markHydrated(); } catch(_){}
-    try { _serverPush({ updatedAt: Date.now() }, true); } catch(_){}
+    try { _serverPush({ updatedAt: Date.now() }, true, true); } catch(_){}
     /* Restaurar targets a default desde DEF — los valores actuales
        se recalcularán en la siguiente llamada a athObjCount. */
     applying = true;
@@ -52666,10 +52670,11 @@ https://api.sofascore.app/api/v1/team/44/image
        _render encadenado por _psResetCalendar. */
     try {
       if (typeof window._bayernHudMerge === 'function') {
-        /* force:true — «Reiniciar Temporada» es acción explícita del
-           admin: el 0/0 debe persistir y propagarse a todos los móviles
-           por recencia, no quedar gateado. */
-        window._bayernHudMerge({ rating: 0, money: 0, objRating: 0, objMoney: 0 }, true);
+        /* force + authoritative — «Reiniciar Temporada» es acción
+           explícita del admin: el 0/0 debe GANAR en el server (sello del
+           reloj del server) y propagarse a todos los móviles, no quedar
+           gateado ni ser rechazado por un ts futuro de otro dispositivo. */
+        window._bayernHudMerge({ rating: 0, money: 0, objRating: 0, objMoney: 0 }, true, true);
       }
     } catch(_){}
     try {
@@ -52978,19 +52983,19 @@ https://api.sofascore.app/api/v1/team/44/image
     var o = load();
     return (o && typeof o === 'object') ? o : {};
   };
-  window._bayernHudMerge = function(patch, force){
+  window._bayernHudMerge = function(patch, force, authoritative){
     if (!patch || typeof patch !== 'object') return;
     /* Merge AUTOMÁTICO (sin force) antes de hidratar → DIFERIR: correr
        sobre un base sin reconciliar y sellarlo con ts fresco pisaría el
        server. Lo reintentamos (recomputado) cuando hidratemos. */
     if (!force && !_hudHydrated){
-      window._bayernHudOnHydrate(function(){ window._bayernHudMerge(patch, false); });
+      window._bayernHudOnHydrate(function(){ window._bayernHudMerge(patch, false, authoritative); });
       return;
     }
     var o = load() || {}, merged = {}, k;
     for (k in o) if (Object.prototype.hasOwnProperty.call(o, k)) merged[k] = o[k];
     for (k in patch) if (Object.prototype.hasOwnProperty.call(patch, k)) merged[k] = patch[k];
-    save(merged, force);
+    save(merged, force, authoritative);
     try { apply(); } catch(_){}
   };
   /* Aplica AHORA el delta al presupuesto (running total) — solo se llama

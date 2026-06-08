@@ -239,6 +239,48 @@ re-subía ⇒ **clobber PERMANENTE** de lo que el admin puso → defaults.
 7. Toda acción EXPLÍCITA del admin que escriba el HUD pasa `force:true`
    (bypassa el gate). Todo writer automático nuevo hereda el gate.
 
+### Escritura AUTORITATIVA + re-push self-heal + BD persistente (obligatorio, 2026-06-07)
+
+**Bug (2 fotos usuario 2026-06-07)**: admin pone día 11 de mayo
+💼/8.80 · 🪙 2350 · 💊 3, sale el toast verde **«✓ HUD guardado»** (el
+POST devolvió 200), pero al **borrar datos de navegación** el HUD
+**«vuelve a datos antiguos»** (la FECHA 11 May sí persiste).
+
+**Dos causas combinadas**:
+1. **Recencia rechazaba el guardado del admin por clock-skew**. En un
+   parque de 6 móviles + PC, un dispositivo con el **reloj adelantado**
+   dejaba en el server un valor viejo con `updatedAt` FUTURO. El guardado
+   del admin (reloj correcto, ts menor) era **RECHAZADO** por el merge de
+   recencia — aunque el POST devolvía 200 (el toast verde MENTÍA) — y al
+   borrar datos el GET devolvía ese valor viejo.
+2. **El server pierde el blob (SQLite EFÍMERO)** y otros dispositivos
+   re-empujan valores VIEJOS, así que el móvil que borró datos recupera
+   uno de ésos.
+
+**Fix**:
+- **Escritura AUTORITATIVA** (`misc_body_1.html` + `app.py`): la acción
+  explícita del admin (✅/♻/📅) manda `authoritative:true` en el POST.
+  El **servidor** (`api_kv_set`, blobs de `_KV_RECENCY_BLOB_KEYS`) la
+  guarda GANANDO siempre y **sella `updatedAt` con SU PROPIO reloj** por
+  encima de lo almacenado (`max(server_now, stored+1, client)`). Una
+  sola fuente monotónica ⇒ el reloj adelantado de otro móvil ya no puede
+  revivir un valor viejo. Los writers normales (re-push / running-total)
+  siguen por recencia pura.
+- **Re-push frecuente self-heal** (`_serverRepush`, cada 25s + al volver
+  el foco): cada dispositivo con valores re-sube el blob TAL CUAL (sin
+  re-sellar `updatedAt`), manteniendo el server poblado tras un reset de
+  la BD efímera — igual que la FECHA.
+
+**Regla a respetar**:
+8. **PROHIBIDO** quitar el flag `authoritative` de la acción del admin ni
+   el sello con reloj del SERVER en `api_kv_set` para los blobs de
+   recencia: sin él, el reloj adelantado de otro dispositivo vuelve a
+   rechazar/revertir el guardado del admin.
+9. La BD del server DEBE ser persistente (Postgres vía `DATABASE_URL`, o
+   volumen montado). Con SQLite efímero el re-push solo enmascara el
+   problema mientras haya un dispositivo activo con el valor correcto.
+   Verificable en `/api/debug` (`"postgresql"` = ✅ · `"sqlite"` = ⚠️).
+
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:

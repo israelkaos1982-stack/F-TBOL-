@@ -16615,21 +16615,16 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-tour-stats">
 <button class="back-btn" id="s-tour-stats-back" onclick="window._tourStatsBack&&window._tourStatsBack()">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji" id="s-tour-stats-emoji">📊</span><h2 id="s-tour-stats-title">Estadísticas</h2></div>
-<!-- ▶️ ACTUALIZAR ESTADÍSTICAS (admin · PIN 747) — petición usuario
-     2026-06-08 (foto Trofeo Joan Gamper: "no se actualizan las
-     estadísticas de los jugadores"). Fuerza el pipeline completo de
-     reconstrucción (hidratar plantillas → backfill de actas →
-     rebuildPlayerStatsStore → recolectar del cfg) y re-pinta la caja.
-     Estilos INLINE (verde, como el botón "Estadísticas") para no
-     depender de que el <style> cargue. -->
-<div style="padding:0 18px;margin:4px 0 10px;">
-  <button type="button" id="s-tour-stats-refresh"
-    onclick="window._tourStatsForceRefresh&amp;&amp;window._tourStatsForceRefresh()"
-    style="display:flex;align-items:center;gap:10px;width:100%;padding:11px 14px;border:none;border-radius:6px;cursor:pointer;font-family:'Oswald',sans-serif;font-size:13px;font-weight:600;letter-spacing:1.5px;text-align:left;color:#fff;background:linear-gradient(90deg,#053a16,#0c7a30,#1ec64e,#0c7a30,#053a16);box-shadow:0 3px 14px rgba(30,198,78,.30),inset 0 1px 0 rgba(255,255,255,.16);">
-    ▶️ <b style="font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ecffe9;text-shadow:0 0 9px rgba(120,255,150,.5),0 1px 2px rgba(0,0,0,.55);">Actualizar estadísticas</b>
-    <span style="margin-left:auto;font-size:10px;font-weight:700;letter-spacing:1px;color:rgba(255,255,255,.75);">🔒 PIN 747</span>
-  </button>
-</div>
+<!-- ▶️ ACTUALIZAR ESTADÍSTICAS (icono solo, arriba a la derecha) —
+     petición usuario 2026-06-08 (foto Trofeo Joan Gamper: "no se
+     actualizan las estadísticas de los jugadores · solo quiero arriba a
+     la derecha el icono ▶️ y que funcione"). Al pulsarlo pide PIN 747 y
+     fuerza el pipeline completo (hidratar plantillas → backfill de
+     actas → rebuildPlayerStatsStore → recolectar del cfg) y re-pinta la
+     caja. Posición absoluta top-right (la `.screen` es position:relative). -->
+<button type="button" id="s-tour-stats-refresh" title="Actualizar estadísticas"
+  onclick="window._tourStatsForceRefresh&amp;&amp;window._tourStatsForceRefresh()"
+  style="position:absolute;top:14px;right:16px;z-index:5;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid rgba(120,255,150,.45);border-radius:50%;cursor:pointer;font-size:18px;line-height:1;color:#fff;background:radial-gradient(circle at 35% 30%,#1ec64e,#0c7a30 70%,#053a16);box-shadow:0 3px 14px rgba(30,198,78,.40),inset 0 1px 0 rgba(255,255,255,.20);">▶️</button>
 <div class="liga-stats-wrap" id="tour-stats-dashboard"><div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div></div>
 <style>
   /* Título de la pantalla de estadísticas de torneo en UNA sola línea

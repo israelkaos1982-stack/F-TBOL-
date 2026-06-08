@@ -3699,6 +3699,23 @@ def api_kv_set(key):
             srv_now = time.time() * 1000.0
             value["updatedAt"] = max(new_ts, old_ts + 1.0, srv_now)
             payload = json.dumps(value, ensure_ascii=False)
+        elif key == "bayern_hud_overrides_v1" and isinstance(old, dict) and isinstance(value, dict):
+            # HUD no-authoritative: FIELD-MERGE que PRESERVA campos (defensa
+            # a prueba de balas, 2026-06-08). Un POST PARCIAL —p.ej. el seed
+            # de arranque `{pi:8}` de un móvil con código viejo, o un writer
+            # que corrió antes de hidratar— NUNCA debe borrar
+            # money/rating/ratingTarget/moneyTarget. Captura del usuario: el
+            # server tenía SOLO `{"pi":8}`. Con field-merge, los campos que
+            # el POST no trae se rellenan desde lo almacenado, así que un
+            # write de un solo campo jamás vacía el resto. Recencia en los
+            # campos compartidos; el blob entrante más viejo conserva el
+            # almacenado entero (ya completo y más nuevo).
+            if new_ts >= old_ts:
+                merged = dict(old)
+                merged.update(value)
+                value, payload = merged, json.dumps(merged, ensure_ascii=False)
+            else:
+                value, payload = old, row.valor_json
         elif row and row.valor_json and old_ts > new_ts:
             value, payload = old, row.valor_json
     # LEDGER de pagos CASH (cash_ledger_v1): merge por UNIÓN del mapa `paid`.

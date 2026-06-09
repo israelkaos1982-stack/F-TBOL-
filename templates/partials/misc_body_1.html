@@ -7918,6 +7918,45 @@ window._showSimProgress = function(opts, onDone){
     }
     return null;
   }
+  /* CHAMPIONS / EUROPA · ELIMINATORIAS (playoffs). Días "Europa —
+     Repesca/Octavos/Cuartos/Semis Ida/Vuelta" y "FINALES EUROPA".
+     Localiza el partido del hub en {comp}_ko_state_v1 y lo abre con el
+     MISMO flujo que la pantalla de playoffs (_eurKoOpenMatch). 2026-06-09. */
+  function _eurKoHubResolve(lbl){
+    var s = String(lbl || '');
+    var round = null, leg = null;
+    if(/finales?\s+europa|final\s+europa/i.test(s)){ round='fin'; leg='f'; }
+    else if(!/europa/i.test(s)) return null;
+    else if(/repesca/i.test(s)){ round='rep'; leg=/vuelta/i.test(s)?'v':'i'; }
+    else if(/octavos/i.test(s)){ round='oct'; leg=/vuelta/i.test(s)?'v':'i'; }
+    else if(/cuartos/i.test(s)){ round='qf'; leg=/vuelta/i.test(s)?'v':'i'; }
+    else if(/semis|semifinal/i.test(s)){ round='sf'; leg=/vuelta/i.test(s)?'v':'i'; }
+    else return null;
+    var comps = ['ucl','uel','uecl'];
+    for(var ci=0; ci<comps.length; ci++){
+      var comp = comps[ci], st = null;
+      try { st = JSON.parse(localStorage.getItem(comp + '_ko_state_v1') || 'null'); } catch(_){}
+      if(!st || !st.rounds) continue;
+      var arr = (round === 'fin') ? st.rounds.fin : st.rounds[round];
+      if(!Array.isArray(arr)) continue;
+      for(var i=0; i<arr.length; i++){
+        var tie = arr[i]; if(!tie) continue;
+        var m = (round === 'fin') ? tie.m : (leg === 'v' ? tie.vta : tie.ida);
+        if(!m || !m.home || !m.away) continue;
+        if(!_psHubClubMatches(m.home) && !_psHubClubMatches(m.away)) continue;
+        var EMOJI = comp === 'ucl' ? '🔵' : (comp === 'uel' ? '🟠' : '🟢');
+        return {
+          home:String(m.home), away:String(m.away),
+          rival:String(_psHubClubMatches(m.home) ? m.away : m.home),
+          played:!!m.played, gh:(m.gh|0), ga:(m.ga|0),
+          events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+          uid:'ps-eurko-'+comp+'-'+round+'-'+i+'-'+leg, emoji:EMOJI,
+          open:(function(_c,_r,_i,_l){ return function(){ try { if(typeof window._eurKoOpenMatch === 'function') window._eurKoOpenMatch(_c,_r,_i,_l); } catch(_){} }; })(comp, round, i, leg)
+        };
+      }
+    }
+    return null;
+  }
 
   /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
      Petición usuario (foto 2): TODAS las cards del hub (Liga, Copa,
@@ -8011,6 +8050,8 @@ window._showSimProgress = function(opts, onDone){
       if (_uscc && _cardCupCard(day, '🇪🇺', lbl, _uscc)) return;
       /* CHAMPIONS / EUROPA fase de grupos ("Europa — Grupo JN"). La KO
          europea aún no es jugable → esos días caen al flujo genérico. */
+      var _eko = _eurKoHubResolve(lbl);
+      if (_eko && _cardCupCard(day, _eko.emoji, lbl, _eko)) return;
       var _eur = _eurHubResolve(lbl);
       if (_eur && _cardCupCard(day, _eur.emoji, lbl, _eur)) return;
     } catch(_){}

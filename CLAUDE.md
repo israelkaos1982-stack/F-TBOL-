@@ -1322,6 +1322,47 @@ diferido llegaba a completar — y fallaba repetidamente (2026-06-01,
    síncrono ANTES del esqueleto: bloquea el hilo al abrir la caja. Va
    diferido a `setTimeout`, igual que `_tourStatsOpen` / `STATS_SCREENS`.
 
+### TODA caja de stats tiene DOBLE DISPARO: observer + go-wrap (obligatorio, 2026-06-09)
+
+**Petición usuario 2026-06-09**: «cada caja de estadísticas emergen con
+los eventos de esa competición con doble disparo (observer + go-wrap /
+render directo)». El síntoma "caja colgada en el placeholder"
+(Mundialito) se debía a un ÚNICO disparo (MutationObserver) que, si no
+saltaba, dejaba el placeholder para siempre. Las cajas que NUNCA
+fallaron (Liga, Superliga) tienen DOS disparos independientes.
+
+Inventario de disparos por caja (TODAS con doble disparo · auditado):
+
+| Caja(s) | Render | Disparos |
+|---|---|---|
+| Liga EA (Liga+Copa+SC España) `s-liga-stats` | `buildLigaStatsDashboard` | go-wrap (3 pasadas) + DOMContentLoaded |
+| Superliga `s-superliga-stats` | `build` | observer + go-wrap + DOMContentLoaded |
+| Recopa · USC · Inter · Supercopa España (`STATS_SCREENS`) | `_lextBuildCompStatsDashboard` | observer + `_installStatsGoWrap` (go-wrap) + DOMContentLoaded |
+| Champions · Europa · Conference | `_renderUcl/Uel/UeclStats` | observer + go-wrap (`_eurStatsWrap`) + DOMContentLoaded |
+| Mundialito Clubes `s-mundial-stats` | `_renderMundialitoStats` | render-first + `_mclSchedule` síncrono + go-wrap + observer |
+| Mundial 2032 (`mundial-48`) | `_mundialStatsHtml` | inline síncrono vía `_mundialGo`→`_tourRender` (render directo) |
+| Selecciones ROAD / Rondas Finales (spv/sfn) + Torneos de Verano | `_tourCollectStatsForTour` | botón 📊 → `_tourStatsOpen` (render-first, render directo) |
+| Segunda · 1ª RFEF | `renderStats` | render directo on-load + on-sim |
+
+**Reglas a respetar**:
+7. **PROHIBIDO** que una caja de stats dependa de UN SOLO disparo
+   (solo observer, o solo go-wrap, o solo onclick). SIEMPRE observer de
+   `.active` **+** wrap de `window.go` (o, si es inline, render directo
+   vía `_tourRender`/`_tourStatsOpen`). El bundle re-define `window.go`
+   tras evaluar el partial, así que el go-wrap se instala TAMBIÉN en
+   `DOMContentLoaded` (no solo a parse-time).
+8. Todo wrap de `window.go` lleva su FLAG propio (`_statsScreensWrap`,
+   `_eurStatsWrap`, `_mclStatsGoWrap`…) para no re-envolverse y para
+   COEXISTIR encadenando el `go` anterior. NUNCA pisar un wrap existente.
+9. El render que dispara el wrap debe SIEMPRE asignar `innerHTML`
+   (`_lextBuildCompStatsDashboard` lo hace con try/catch → estado vacío),
+   nunca `return` antes de pintar dejando el placeholder.
+10. **Toda comp NUEVA de SELECCIONES cuyo nombre empiece por «Road»**
+    (Rondas Previas, board `sel-previa`) — y toda Ronda Final (board
+    `sel-final`, salvo `mundial-48` que ya lo trae en su menú) — hereda
+    AUTOMÁTICAMENTE el botón verde 📊 ESTADÍSTICAS vía `_tourStatsBtnHtml`
+    en `_paintTourScreen`. No hardcodear por nombre; sale del board.
+
 ## Separación CLUBES vs SELECCIONES en estadísticas (obligatorio, 2026-05-27)
 
 **REGLA BLOQUEANTE ABSOLUTA**: las **estadísticas de jugadores** del

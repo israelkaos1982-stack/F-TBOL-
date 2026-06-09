@@ -16698,24 +16698,14 @@ window._showSimProgress = function(opts, onDone){
 })();
 </script>
 
-<!-- Pantalla Supercopa de España stats — paleta amarillo-dorado +
-     rojo magenta (logo de la competición: trofeo dorado sobre
-     demonio rojo). Lee de `ef_player_stats_sc_v1` (cache aislado
-     populado por rebuildPlayerStatsStore). -->
-<style>
-#s-sc-stats .liga-stat-card{border-color:rgba(240,192,64,.45)!important;background:linear-gradient(145deg,#1a1100 0%,#2c1f00 45%,#0d0700 100%)!important;}
-#s-sc-stats .liga-stat-card::before{background:linear-gradient(90deg,transparent,rgba(240,192,64,.7),rgba(255,80,140,1),rgba(240,192,64,.7),transparent)!important;}
-#s-sc-stats .liga-stat-card::after{border-color:rgba(255,220,120,.45)!important;}
-#s-sc-stats .liga-stat-head{background:linear-gradient(90deg,rgba(110,80,0,.55),rgba(220,40,80,.18),rgba(80,40,0,.12))!important;border-bottom:1px solid rgba(240,192,64,.40)!important;}
-#s-sc-stats .liga-stat-title{color:#ffd870!important;text-shadow:0 0 18px rgba(240,192,64,.65),0 0 6px rgba(255,80,140,.3)!important;}
-#s-sc-stats .liga-stat-rank{color:rgba(255,220,120,.85)!important;text-shadow:0 0 12px rgba(240,192,64,.55)!important;}
-#s-sc-stats .liga-stat-value{color:#ff5090!important;text-shadow:0 0 18px rgba(220,40,80,.7)!important;}
-</style>
-<div class="screen" id="s-sc-stats">
-<button class="back-btn" onclick="go('s-supercopa')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Supercopa España · Estadísticas</h2></div>
-<div class="liga-stats-wrap" id="sc-stats-dashboard"><div class="liga-stat-empty">Calculando estadísticas...</div></div>
-</div>
+<!-- Pantalla `s-sc-stats` (Supercopa de España · Estadísticas) ELIMINADA
+     (2026-06-09, petición usuario): las 3 competiciones nacionales (Liga EA
+     Sports + Copa del Rey + Supercopa de España) SUMAN en la MISMA caja de
+     estadísticas (`s-liga-stats`, store `ef_player_stats_v1` = liga+copa+sc),
+     y los jugadores de las plantillas de la Liga EA Sports también las suman.
+     La caja propia de Supercopa era redundante → retirada (botón "📊 Stats"
+     del banner + esta pantalla + su entrada en STATS_SCREENS). El bucket `sc`
+     se sigue agregando en rebuildPlayerStatsStore para s-liga-stats. -->
 
 <!-- Pantalla genérica de Estadísticas para torneos de Selecciones
      (spv, sfn). Una sola pantalla compartida; la activa el botón
@@ -16765,12 +16755,13 @@ window._showSimProgress = function(opts, onDone){
   var STATS_SCREENS = [
     { screenId:'s-recopa-stats',  rootId:'recopa-stats-dashboard',  storeKey:'ef_player_stats_recopa_v1' },
     { screenId:'s-usc-stats',     rootId:'usc-stats-dashboard',     storeKey:'ef_player_stats_usc_v1', teamSetFn:'_uscTeamSet' },
-    { screenId:'s-inter-stats',   rootId:'inter-stats-dashboard',   storeKey:'ef_player_stats_inter_v1' },
+    { screenId:'s-inter-stats',   rootId:'inter-stats-dashboard',   storeKey:'ef_player_stats_inter_v1' }
     /* s-mundial-stats (Mundialito de Clubes) se renderiza EN VIVO desde
        cfg.results vía window._renderMundialitoStats (script propio junto
        a la pantalla). NO usar el path de cache aquí — se colgaba en
-       "Calculando estadísticas…". 2026-06-01. */
-    { screenId:'s-sc-stats',      rootId:'sc-stats-dashboard',      storeKey:'ef_player_stats_sc_v1' }
+       "Calculando estadísticas…". 2026-06-01.
+       s-sc-stats (Supercopa de España) ELIMINADA 2026-06-09: sus stats
+       suman en s-liga-stats (liga+copa+sc), caja propia redundante. */
   ];
   /* Pinta el dashboard desde el cache (rápido, sync). Opcionalmente
      filtra a los equipos vigentes (s-torneos-stats). */
@@ -16806,6 +16797,32 @@ window._showSimProgress = function(opts, onDone){
       }, 0);
     }
   }
+  /* TRIGGER ROBUSTO (2026-06-09) — además del MutationObserver, envolvemos
+     `window.go` para disparar el render al navegar a CUALQUIERA de estas
+     pantallas (Recopa · USC · Inter · Supercopa España), igual que ya hacen
+     s-liga-stats / s-superliga-stats / s-mundial-stats. El observer por sí
+     solo fue el punto único de fallo que dejó al Mundialito colgado en
+     "Calculando estadísticas…"; el go-wrap lo elimina. Se instala YA (si
+     `go` existe) y en DOMContentLoaded (tras el bundle fijar su `window.go`
+     definitivo, que se evalúa DESPUÉS de este partial). Flag propio para no
+     re-envolver ni chocar con los otros wraps (cada uno encadena el anterior). */
+  var _statsByScreen = {};
+  STATS_SCREENS.forEach(function(c){ _statsByScreen[c.screenId] = c; });
+  function _installStatsGoWrap(){
+    try {
+      var g = window.go;
+      if (typeof g === 'function' && !g._statsScreensWrap) {
+        window.go = function(id){
+          var r = g.apply(this, arguments);
+          var c = _statsByScreen[id];
+          if (c) { try { _renderOne(c); } catch(_){} }
+          return r;
+        };
+        window.go._statsScreensWrap = true;
+      }
+    } catch(_){}
+  }
+  _installStatsGoWrap();
   STATS_SCREENS.forEach(function(cfg){
     try {
       var el = document.getElementById(cfg.screenId);
@@ -16826,6 +16843,7 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
   });
   document.addEventListener('DOMContentLoaded', function(){
+    _installStatsGoWrap();
     STATS_SCREENS.forEach(_renderOne);
   });
 })();
@@ -17752,13 +17770,12 @@ window._showSimProgress = function(opts, onDone){
        compacto "♻️ Res" arriba a la derecha. Sin estadio + balón
        (esa info ya sale en el header de cada card y en la previa)
        ni texto extra. La acción RESET sigue exigiendo PIN admin.
-       2026-05-08: añadida caja "📊 Stats" a la derecha de Res que
-       navega a `s-sc-stats` (dashboard de la Supercopa de España
-       con las MISMAS categorías que Liga EA Sports stats). */
+       2026-06-09: caja "📊 Stats" RETIRADA (petición usuario) — las stats
+       de la Supercopa de España suman en la caja única de España
+       (`s-liga-stats` = Liga + Copa + Supercopa). Solo queda "♻️ Res". */
     el.innerHTML = ''
       + '<div style="display:flex;justify-content:flex-end;gap:8px;">'
       +   '<button class="sc-banner-btn sc-reset" onclick="window._scResetGate&&window._scResetGate()" style="width:auto;padding:6px 14px;">♻️ Res</button>'
-      +   '<button class="sc-banner-btn sc-stats" onclick="go(\'s-sc-stats\')" style="width:auto;padding:6px 14px;">📊 Stats</button>'
       + '</div>';
   }
 
@@ -30562,9 +30579,16 @@ window._showSimProgress = function(opts, onDone){
     var reg = _tvRegLoad();
     var visSet = {}; reg.visible.forEach(function(id){ visSet[id]=1; });
     var slots = _tvSlotsOf(board);
-    /* Los built-in (sct/pss/jg/asia/mundial) solo existen en verano. */
-    var builtins = (board === 'verano') ? TOUR_BUILTINS : [];
-    var active = reg.visible.filter(function(id){ return _tvBoardOf(id) === board; });
+    /* Los built-in (sct/pss/jg/asia/mundial) solo existen en verano. PERO el
+       Mundialito de Clubes (built-in 'mundial') NO se gestiona desde "Torneos
+       de Verano": vive en la pantalla Competiciones (card → s-mundial-clubes).
+       Se EXCLUYE del manager —tanto de "Torneos activos" como de "Restaurar
+       built-in"— para que no aparezca su caja fantasma aquí (petición usuario
+       2026-06-09: "en torneos de verano sale una caja oculta de mundialito").
+       Ya estaba oculto de las cards (`_tvRenderCards`, 2026-06-03); ahora
+       también del editor. */
+    var builtins = (board === 'verano') ? TOUR_BUILTINS.filter(function(id){ return id !== 'mundial'; }) : [];
+    var active = reg.visible.filter(function(id){ return _tvBoardOf(id) === board && id !== 'mundial'; });
     var h = '<div class="tv-mg-sec">Torneos activos</div>';
     if (!active.length) h += '<div class="tv-mg-empty">Ninguno.</div>';
     active.forEach(function(id){

@@ -36012,6 +36012,389 @@ window._showSimProgress = function(opts, onDone){
   window._eurFaseSave   = saveState;
   window._eurFaseDraw   = drawPairs;
   window._eurFaseAssign = assignJornadas;
+
+  /* ════════════════════════════════════════════════════════════════
+     PLAYOFFS / ELIMINATORIAS · UCL · UEL · UECL (2026-06-09)
+     Petición usuario: copiar la interfaz de la Copa del Rey. Tras los
+     8 partidos de la fase de liga (Swiss), los 8 primeros pasan directos
+     a Octavos (juegan la VUELTA como local); del 9 al 24 disputan la
+     REPESCA (1/32). Emparejamientos fijos (por puesto):
+       24v9→ganador vs 8 · 17v16→vs1 · 21v11→vs5 · 20v13→vs4
+       19v14→vs3 · 22v12→vs6 · 23v10→vs7 · 18v15→vs2
+     Rondas Repesca→Octavos→Cuartos→Semis a IDA/VUELTA con GOLES FUERA
+     DOBLES; si el global sigue empatado → TERCER PARTIDO (desempate, y
+     si éste acaba empatado → prórroga+penaltis). La FINAL es a partido
+     único con prórroga+penaltis. Estado en `{comp}_ko_state_v1`. ════ */
+  var _KO_KEY = { ucl:'ucl_ko_state_v1', uel:'uel_ko_state_v1', uecl:'uecl_ko_state_v1' };
+  var _KO_TAG = { ucl:'UCL', uel:'Europa', uecl:'UECL' };
+  var _KO_DOT = { ucl:'🔵', uel:'🟠', uecl:'🟢' };
+  /* Paleta por comp para las cards (azul UCL · naranja UEL · verde UECL). */
+  var _KO_COL = {
+    ucl:  { main:'#3b6cff', soft:'rgba(59,108,255,.30)', bg:'linear-gradient(120deg,rgba(40,80,220,.28),rgba(10,25,80,.45))', bd:'rgba(99,140,255,.45)' },
+    uel:  { main:'#ff8c1a', soft:'rgba(255,140,26,.30)', bg:'linear-gradient(120deg,rgba(200,110,10,.26),rgba(70,35,0,.45))',  bd:'rgba(255,160,60,.50)' },
+    uecl: { main:'#39d353', soft:'rgba(57,211,83,.30)',  bg:'linear-gradient(120deg,rgba(30,150,55,.26),rgba(5,45,15,.45))',   bd:'rgba(90,220,120,.45)' }
+  };
+  /* DOM de cada caja por ronda+pierna. */
+  var _KO_DOM = {
+    ucl:  { rep_i:'ucl-rep-i',  rep_v:'ucl-rep-v',  oct_i:'ucl-oct-i',  oct_v:'ucl-oct-v',  qf_i:'ucl-qf-i',  qf_v:'ucl-qf-v',  sf_i:'ucl-sf-i',  sf_v:'ucl-sf-v',  fin:'ucl-fin'  },
+    uel:  { rep_i:'uel-rep-i',  rep_v:'uel-rep-v',  oct_i:'uel-oct-i',  oct_v:'uel-oct-v',  qf_i:'uel-qf-i',  qf_v:'uel-qf-v',  sf_i:'uel-sf-i',  sf_v:'uel-sf-v',  fin:'uel-fin'  },
+    uecl: { rep_i:'uecl-rep-i', rep_v:'uecl-rep-v', oct_i:'uecl-oct-i', oct_v:'uecl-oct-v', qf_i:'uecl-qf-i', qf_v:'uecl-qf-v', sf_i:'uecl-sf-i', sf_v:'uecl-sf-v', fin:'uecl-fin' }
+  };
+  /* Repesca por PUESTO (1-indexed): [mejor, peor, rivalTop8EnOctavos].
+     El mejor sembrado juega la VUELTA como local (ida visitante). */
+  var _KO_REP_SEEDS = [
+    [9,24,8],[16,17,1],[11,21,5],[13,20,4],[14,19,3],[12,22,6],[10,23,7],[15,18,2]
+  ];
+  var _KO_ROUND_LBL = { rep:'Repesca 1/32', oct:'Octavos', qf:'Cuartos', sf:'Semis', fin:'FINAL' };
+
+  function _koLoad(comp){ try { return JSON.parse(localStorage.getItem(_KO_KEY[comp]) || 'null'); } catch(_){ return null; } }
+  function _koSave(comp, st){
+    try { localStorage.setItem(_KO_KEY[comp], JSON.stringify(st)); } catch(_){}
+    try {
+      fetch('/api/kv/' + _KO_KEY[comp], { method:'POST', headers:{'Content-Type':'application/json'},
+        credentials:'same-origin', body: JSON.stringify({ value: st || {} }) }).catch(function(){});
+    } catch(_){}
+  }
+  function _koLeg(home, away){ return { home:home, away:away, gh:null, ga:null, played:false, events:[], mvp:'', mvpTeam:'' }; }
+  function _koGroupComplete(comp){
+    var state = loadState(comp);
+    if(!state || !Array.isArray(state.pairs) || !state.pairs.length) return false;
+    if((state.teams||[]).length < 24) return false;
+    return state.pairs.every(function(p){ return p && p.played; });
+  }
+  /* Construye el cuadro completo (esqueleto) cuando la fase de liga
+     está terminada. Idempotente: si ya existe `built`, no rehace. */
+  function _koBuild(comp){
+    var ex = _koLoad(comp);
+    if(ex && ex.built) return ex;
+    if(!_koGroupComplete(comp)) return null;
+    var rank = _eurFaseComputeStandings(comp);
+    if(rank.length < 24) return null;
+    var seed = {}; for(var i=0;i<24;i++) seed[i+1] = rank[i].name;
+    var seedOf = {}; for(var s=1;s<=24;s++) seedOf[seed[s]] = s;
+    var st = { built:true, comp:comp, seeds:[], seedOf:seedOf,
+               rounds:{ rep:[], oct:[], qf:[], sf:[], fin:[] }, champion:null, runnerUp:null };
+    for(var s2=1;s2<=24;s2++) st.seeds.push(seed[s2]);
+    /* Repesca: el mejor (a) hace la VUELTA en casa; el peor (b) la IDA. */
+    _KO_REP_SEEDS.forEach(function(p){
+      var better = seed[p[0]], worse = seed[p[1]];
+      st.rounds.rep.push({
+        a:better, b:worse, aSeed:p[0], bSeed:p[1], octTop:p[2],
+        ida:_koLeg(worse, better), vta:_koLeg(better, worse), des:null, winner:null
+      });
+    });
+    /* Octavos: el cabeza de serie top (octTop) espera al ganador de su
+       repesca. El top siembra como local de VUELTA. b = TBD. */
+    _KO_REP_SEEDS.forEach(function(p, ri){
+      st.rounds.oct.push({ a:seed[p[2]], b:null, aSeed:p[2], bSeed:null,
+        repFrom:ri, ida:null, vta:null, des:null, winner:null });
+    });
+    /* Cuartos / Semis / Final: esqueleto vacío (se llenan al avanzar). */
+    for(var q=0;q<4;q++) st.rounds.qf.push({ a:null, b:null, aSeed:null, bSeed:null, ida:null, vta:null, des:null, winner:null });
+    for(var sm=0;sm<2;sm++) st.rounds.sf.push({ a:null, b:null, aSeed:null, bSeed:null, ida:null, vta:null, des:null, winner:null });
+    st.rounds.fin.push({ a:null, b:null, aSeed:null, bSeed:null, m:null, winner:null });
+    _koSave(comp, st);
+    return st;
+  }
+  /* Resuelve una eliminatoria a doble partido. Devuelve:
+       {winner, loser, aggA, aggB, awayA, awayB, decided:bool, needDes:bool} */
+  function _koTwoLegResult(tie){
+    var ida = tie.ida, vta = tie.vta;
+    if(!ida || !vta || !ida.played || !vta.played) return { decided:false };
+    /* ida: home=b, away=a · vta: home=a, away=b. */
+    var aAgg = (vta.gh|0) + (ida.ga|0);     /* a: local en vuelta + visitante en ida */
+    var bAgg = (ida.gh|0) + (vta.ga|0);     /* b: local en ida + visitante en vuelta */
+    var aAway = (ida.ga|0);                 /* goles de a fuera (en la ida) */
+    var bAway = (vta.ga|0);                 /* goles de b fuera (en la vuelta) */
+    if(aAgg !== bAgg) return { decided:true, winner: aAgg>bAgg?tie.a:tie.b, loser: aAgg>bAgg?tie.b:tie.a, aAgg:aAgg, bAgg:bAgg, aAway:aAway, bAway:bAway };
+    if(aAway !== bAway) return { decided:true, winner: aAway>bAway?tie.a:tie.b, loser: aAway>bAway?tie.b:tie.a, aAgg:aAgg, bAgg:bAgg, aAway:aAway, bAway:bAway };
+    /* Global Y goles fuera empatados → TERCER PARTIDO (desempate). */
+    if(tie.des && tie.des.played){
+      var dh = (tie.des.gh|0) + (tie.des.etGh|0), da = (tie.des.ga|0) + (tie.des.etGa|0);   /* des: home=a, away=b (incluye prórroga) */
+      var w;
+      if(dh > da) w = tie.a; else if(da > dh) w = tie.b;
+      else { /* desempate empatado → penaltis */ w = (tie.des.penWinner === 'b') ? tie.b : (tie.des.penWinner === 'a' ? tie.a : null); }
+      if(w) return { decided:true, winner:w, loser: w===tie.a?tie.b:tie.a, aAgg:aAgg, bAgg:bAgg, aAway:aAway, bAway:bAway, viaDes:true };
+    }
+    return { decided:false, needDes:true, aAgg:aAgg, bAgg:bAgg, aAway:aAway, bAway:bAway };
+  }
+  function _koPenWinner(a, b){
+    /* Penaltis IA: ponderado por poder del equipo (fallback aleatorio). */
+    var pa = 50, pb = 50;
+    try { if(typeof window._teamOffense === 'function'){ pa = (window._teamOffense(a)||50); pb = (window._teamOffense(b)||50); } } catch(_){}
+    return (Math.random() * (pa + pb) < pa) ? a : b;
+  }
+  /* Avanza el cuadro: rellena `b` de Octavos con ganadores de Repesca,
+     crea ida/vta cuando ambos equipos se conocen, y compone QF/SF/FIN.
+     Idempotente. */
+  function _koAdvance(comp, st){
+    if(!st || !st.rounds) return;
+    function ensureLegs(tie, betterFirst){
+      /* betterFirst: a = mejor sembrado (local de vuelta). */
+      if(tie.a && tie.b && !tie.ida){ tie.ida = _koLeg(tie.b, tie.a); tie.vta = _koLeg(tie.a, tie.b); }
+    }
+    function resolveRound(roundKey, nextKey, pairMap){
+      var R = st.rounds[roundKey];
+      R.forEach(function(tie, idx){
+        if(tie.winner) return;
+        if(tie.a && tie.b){
+          ensureLegs(tie);
+          var r = _koTwoLegResult(tie);
+          if(r.needDes && !tie.des){ tie.des = { home:tie.a, away:tie.b, gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[], mvp:'', mvpTeam:'' }; }
+          if(r.decided){ tie.winner = r.winner; tie.loser = r.loser; }
+        }
+      });
+    }
+    /* Repesca → Octavos.b */
+    resolveRound('rep');
+    st.rounds.rep.forEach(function(tie, ri){
+      if(tie.winner){
+        var oct = st.rounds.oct[ri];
+        if(oct && !oct.b){ oct.b = tie.winner; oct.bSeed = st.seedOf[tie.winner] || 99; }
+      }
+    });
+    /* Octavos (resuelve). El emparejamiento de Octavos respeta el orden
+       de _KO_REP_SEEDS (idx ri); QF empareja oct adyacentes. */
+    resolveRound('oct');
+    /* Octavos → Cuartos (oct[0]&oct[1]→qf0, etc.). El mejor sembrado de
+       los dos ganadores hace la vuelta en casa. */
+    function feed(srcKey, dstKey){
+      var S = st.rounds[srcKey], D = st.rounds[dstKey];
+      for(var d=0; d<D.length; d++){
+        var t1 = S[d*2], t2 = S[d*2+1];
+        var dst = D[d];
+        if(dst.a && dst.b) continue;
+        if(t1 && t1.winner && t2 && t2.winner){
+          var s1 = st.seedOf[t1.winner] || 99, s2 = st.seedOf[t2.winner] || 99;
+          var better = (s1 <= s2) ? t1.winner : t2.winner;
+          var worse  = (s1 <= s2) ? t2.winner : t1.winner;
+          dst.a = better; dst.b = worse; dst.aSeed = Math.min(s1,s2); dst.bSeed = Math.max(s1,s2);
+        }
+      }
+    }
+    feed('oct','qf'); resolveRound('qf');
+    feed('qf','sf');  resolveRound('sf');
+    /* Semis → Final (partido único). */
+    var fin = st.rounds.fin[0];
+    if(fin && !fin.a && st.rounds.sf[0].winner && st.rounds.sf[1].winner){
+      var w0 = st.rounds.sf[0].winner, w1 = st.rounds.sf[1].winner;
+      var f0 = st.seedOf[w0] || 99, f1 = st.seedOf[w1] || 99;
+      fin.a = (f0 <= f1) ? w0 : w1; fin.b = (f0 <= f1) ? w1 : w0;
+      fin.m = { home:fin.a, away:fin.b, gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[], mvp:'', mvpTeam:'' };
+    }
+    if(fin && fin.m && fin.m.played && !fin.winner){
+      var fh = (fin.m.gh|0) + (fin.m.etGh|0), fa = (fin.m.ga|0) + (fin.m.etGa|0);
+      if(fh > fa) fin.winner = fin.a;
+      else if(fa > fh) fin.winner = fin.b;
+      else fin.winner = (fin.m.penWinner === 'b') ? fin.b : (fin.m.penWinner === 'a' ? fin.a : null);
+      if(fin.winner){ st.champion = fin.winner; st.runnerUp = (fin.winner === fin.a) ? fin.b : fin.a; }
+    }
+  }
+  window._eurKoBuild = _koBuild;
+  window._eurKoAdvance = function(comp){ var st=_koLoad(comp); if(st){ _koAdvance(comp,st); _koSave(comp,st); } return st; };
+
+  /* ── Persistencia de resultados (humano + IA) ──────────────────── */
+  window._eurKoSaveHumanResult = function(comp, roundKey, idx, leg, gh, ga, etGh, etGa, penWinner, events, mvp, mvpTeam, home, away){
+    var st = _koLoad(comp); if(!st || !st.rounds) return;
+    var tie = (roundKey === 'fin') ? st.rounds.fin[0] : (st.rounds[roundKey] || [])[idx];
+    if(!tie) return;
+    var m = leg==='i'?tie.ida : leg==='v'?tie.vta : leg==='d'?tie.des : tie.m;
+    if(!m) return;
+    m.gh = gh|0; m.ga = ga|0; m.played = true;
+    m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    m.mvp = mvp||''; m.mvpTeam = mvpTeam||'';
+    if(leg==='d' || leg==='f'){ m.etGh = etGh|0; m.etGa = etGa|0; m.penWinner = penWinner || null; }
+    _koAdvance(comp, st); _koSave(comp, st);
+    setTimeout(function(){ try { _koRenderAll(comp); } catch(_){} }, 150);
+  };
+  window._eurKoPersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam){
+    var mm = /^eurko_([a-z]+)_([a-z]+)_(\d+)_([ivdf])$/.exec(String(mk||''));
+    if(!mm) return;
+    var comp = mm[1], roundKey = mm[2], idx = parseInt(mm[3],10), leg = mm[4];
+    var st = _koLoad(comp); if(!st || !st.rounds) return;
+    var tie = (roundKey === 'fin') ? st.rounds.fin[0] : (st.rounds[roundKey] || [])[idx];
+    if(!tie) return;
+    var m = leg==='i'?tie.ida : leg==='v'?tie.vta : leg==='d'?tie.des : tie.m;
+    if(!m) return;
+    m.gh = scA|0; m.ga = scB|0; m.played = true;
+    m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    m.mvp = mvp||''; m.mvpTeam = mvpTeam||'';
+    if(leg==='d' || leg==='f'){
+      /* IA: desempate/final a partido único → si empata, penaltis. */
+      m.etGh = 0; m.etGa = 0;
+      if((m.gh|0) === (m.ga|0)){ var w = _koPenWinner(m.home, m.away); m.penWinner = (w === m.home) ? 'a' : 'b'; }
+      else m.penWinner = null;
+    }
+    _koAdvance(comp, st); _koSave(comp, st);
+    setTimeout(function(){ try { _koRenderAll(comp); } catch(_){} }, 120);
+  };
+
+  /* ── Apertura de partido (humano → previa / IA → iaSimLive) ────── */
+  window._eurKoOpenMatch = function(comp, roundKey, idx, leg){
+    var st = _koLoad(comp); if(!st || !st.rounds) return;
+    var tie = (roundKey === 'fin') ? st.rounds.fin[0] : (st.rounds[roundKey] || [])[idx];
+    if(!tie) return;
+    var m = leg==='i'?tie.ida : leg==='v'?tie.vta : leg==='d'?tie.des : tie.m;
+    if(!m || m.played) return;
+    var hH = _isHumanTeam(m.home), aH = _isHumanTeam(m.away);
+    if(hH || aH){ _eurKoAbrirPrevia(comp, roundKey, idx, leg, m.home, m.away); }
+    else {
+      var mk = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
+      if(typeof window.iaSimLive === 'function') window.iaSimLive(mk, m.home, m.away, 0);
+    }
+  };
+  function _eurKoAbrirPrevia(comp, roundKey, idx, leg, home, away){
+    var isHvH = _isHumanTeam(home) && _isHumanTeam(away);
+    var isSL = (roundKey === 'fin' || leg === 'd');
+    var mk = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
+    var dur = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH:isHvH, humanInvolved:!isHvH })
+      : (isHvH ? '15 min 45 s' : '9 min 45 s');
+    window._ppPreviaTeams = { home:home, away:away, j:0, comp:comp,
+      eurKoComp:comp, eurKoRound:roundKey, eurKoIdx:idx, eurKoLeg:leg };
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      try { ['prepartido-overlay','sancion-overlay','_copaAliasOv'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); }); } catch(_){}
+      try { window.abrirEurKo(comp, roundKey, idx, leg, home, away); } catch(_){}
+    };
+    if(typeof window.showPrePartidoOverlay === 'function'){
+      window.showPrePartidoOverlay(mk, comp, isSL ? 'Sí' : 'No', dur, isHvH);
+    }
+  }
+  window.abrirEurKo = function(comp, roundKey, idx, leg, home, away){
+    var isHvH = _isHumanTeam(home) && _isHumanTeam(away);
+    if(typeof window.gmOpen !== 'function') return;
+    try { window.gmOpen(0, home, away, isHvH, comp, false, false); } catch(e){ return; }
+    try {
+      if(window.__GM_LIVE){
+        var G = window.__GM_LIVE;
+        G._isEurKo = true; G._eurKoComp = comp; G._eurKoRound = roundKey;
+        G._eurKoIdx = idx; G._eurKoLeg = leg; G.comp = comp;
+      }
+    } catch(_){}
+    try {
+      var gm = document.getElementById('gm-modal'); if(gm) gm.style.display = '';
+      ['prepartido-overlay','sancion-overlay','_copaAliasOv','ml-evt-cd-overlay','gm-evt-countdown-ov'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(el){ el.classList.remove('show'); if(el.style && el.style.display && el.style.display !== 'none' && id !== 'gm-modal') el.style.display='none'; }
+      });
+      window.scrollTo(0,0);
+    } catch(_){}
+  };
+
+  /* ── Render (estilo Copa del Rey, coloreado por comp) ───────────── */
+  function _koTeamHtml(name){
+    var logo = _resolveLogoFor(name, '');
+    var sh = logo ? '<img src="'+_esc(logo)+'" style="width:34px;height:34px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '<span style="font-size:26px;color:rgba(200,210,230,.55);">🛡</span>';
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;">'
+      + sh + '<span style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:600;color:#fff;text-align:center;line-height:1.1;">' + _humanIcoFor(name) + _esc(name) + '</span></div>';
+  }
+  function _koMatchCard(comp, m, roundKey, idx, leg){
+    var col = _KO_COL[comp];
+    var hH = _isHumanTeam(m.home), aH = _isHumanTeam(m.away), anyH = hH || aH;
+    var mk = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
+    var legLbl = leg==='i'?'IDA':leg==='v'?'VUELTA':leg==='d'?'DESEMPATE':'FINAL';
+    var center;
+    if(m.played){
+      var pen = ((leg==='d'||leg==='f') && m.penWinner)
+        ? '<div style="font-size:9px;color:'+col.main+';font-family:Oswald,sans-serif;letter-spacing:1px;margin-top:2px;">PEN '+_esc(String(m.penWinner==='a'?m.home:m.away).split(' ')[0])+'</div>' : '';
+      center = '<div style="text-align:center;flex:0 0 auto;padding:0 6px;">'
+        + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#fff;letter-spacing:1px;">'+(m.gh|0)+' – '+(m.ga|0)+'</div>'
+        + pen + '<div style="font-size:8px;color:rgba(255,255,255,.5);letter-spacing:1px;">🏁 '+legLbl+'</div></div>';
+    } else if(anyH){
+      center = '<div style="text-align:center;flex:0 0 auto;padding:0 6px;">'
+        + '<div style="color:rgba(255,255,255,.5);font-size:18px;">– – –</div>'
+        + '<button onclick="window._eurKoOpenMatch(\''+comp+'\',\''+roundKey+'\','+idx+',\''+leg+'\')" style="margin-top:4px;background:'+col.main+';color:#fff;border:none;border-radius:6px;padding:5px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">📋 PREVIA</button></div>';
+    } else {
+      center = '<div style="text-align:center;flex:0 0 auto;padding:0 6px;">'
+        + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:18px;color:rgba(255,255,255,.7);"><span id="ia-sc-'+mk+'-a">–</span> – <span id="ia-sc-'+mk+'-b">–</span></div>'
+        + '<button id="ia-sim-btn-'+mk+'" onclick="window._eurKoOpenMatch(\''+comp+'\',\''+roundKey+'\','+idx+',\''+leg+'\')" style="margin-top:4px;background:transparent;color:'+col.main+';border:1px solid '+col.bd+';border-radius:6px;padding:5px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">▶ SIMULAR</button></div>';
+    }
+    var actaSlot = (!anyH && !m.played) ? '<div id="ia-acta-'+mk+'" style="display:none;"></div>' : '';
+    return '<div style="background:'+col.bg+';border:1px solid '+col.bd+';border-radius:10px;padding:10px 8px;margin:6px 0;display:flex;align-items:center;gap:8px;">'
+      + _koTeamHtml(m.home) + center + _koTeamHtml(m.away) + '</div>' + actaSlot;
+  }
+  function _koTBDrow(){ return '<div style="text-align:center;padding:8px;color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;font-size:12px;font-style:italic;">Por definir</div>'; }
+  function _koPendRow(comp, a, b, txt){
+    var col = _KO_COL[comp];
+    return '<div style="background:'+col.bg+';border:1px solid '+col.bd+';border-radius:10px;padding:10px 8px;margin:6px 0;display:flex;align-items:center;gap:8px;opacity:.55;">'
+      + _koTeamHtml(a) + '<div style="flex:0 0 auto;font-size:9px;color:rgba(255,255,255,.6);text-align:center;padding:0 6px;">'+txt+'</div>' + _koTeamHtml(b) + '</div>';
+  }
+  function _koAggHtml(comp, r){
+    var col = _KO_COL[comp];
+    if(r.needDes){
+      return '<div style="text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:'+col.main+';margin:0 0 8px;">Global '+r.aAgg+'–'+r.bAgg+' · empate → 🔁 TERCER PARTIDO</div>';
+    }
+    if(r.decided){
+      return '<div style="text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:rgba(255,255,255,.7);margin:0 0 8px;">Global '+r.aAgg+'–'+r.bAgg+' · ✅ clasifica <b style="color:'+col.main+';">'+_esc(r.winner)+'</b></div>';
+    }
+    return '';
+  }
+  function _fillBox(comp, domId, ties, roundKey, leg){
+    var box = document.getElementById(domId); if(!box) return;
+    var html = '';
+    ties.forEach(function(tie, idx){
+      if(!tie.a || !tie.b || !tie.ida){ html += _koTBDrow(); return; }
+      if(leg === 'i'){ html += _koMatchCard(comp, tie.ida, roundKey, idx, 'i'); return; }
+      /* vuelta */
+      if(!tie.ida.played){ html += _koPendRow(comp, tie.a, tie.b, '⏳ Tras la IDA'); return; }
+      html += _koMatchCard(comp, tie.vta, roundKey, idx, 'v');
+      if(tie.vta.played){
+        var r = _koTwoLegResult(tie);
+        html += _koAggHtml(comp, r);
+        if(r.needDes && tie.des){ html += _koMatchCard(comp, tie.des, roundKey, idx, 'd'); }
+      }
+    });
+    box.innerHTML = html || _koTBDrow();
+  }
+  function _fillFinBox(comp, domId, fin){
+    var box = document.getElementById(domId); if(!box) return;
+    if(!fin || !fin.a || !fin.b || !fin.m){ box.innerHTML = _koTBDrow(); return; }
+    var html = _koMatchCard(comp, fin.m, 'fin', 0, 'f');
+    if(fin.winner){
+      var col = _KO_COL[comp];
+      html += '<div style="text-align:center;font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:1px;color:'+col.main+';margin-top:6px;">🏆 CAMPEÓN: '+_esc(fin.winner)+'</div>';
+    }
+    box.innerHTML = html;
+  }
+  function _koRenderAll(comp){
+    var st = _koLoad(comp);
+    if(!st || !st.built){ if(_koGroupComplete(comp)) st = _koBuild(comp); }
+    if(!st || !st.built) return;
+    _koAdvance(comp, st); _koSave(comp, st);
+    var dom = _KO_DOM[comp]; if(!dom) return;
+    _fillBox(comp, dom.rep_i, st.rounds.rep, 'rep', 'i');
+    _fillBox(comp, dom.rep_v, st.rounds.rep, 'rep', 'v');
+    _fillBox(comp, dom.oct_i, st.rounds.oct, 'oct', 'i');
+    _fillBox(comp, dom.oct_v, st.rounds.oct, 'oct', 'v');
+    _fillBox(comp, dom.qf_i,  st.rounds.qf,  'qf',  'i');
+    _fillBox(comp, dom.qf_v,  st.rounds.qf,  'qf',  'v');
+    _fillBox(comp, dom.sf_i,  st.rounds.sf,  'sf',  'i');
+    _fillBox(comp, dom.sf_v,  st.rounds.sf,  'sf',  'v');
+    _fillFinBox(comp, dom.fin, st.rounds.fin[0]);
+    /* Ocultar la caja "Cuadro de Eliminatorias — próximamente". */
+    try {
+      var scr = document.getElementById('s-'+comp+'-playoffs');
+      if(scr){ scr.querySelectorAll('.jblock').forEach(function(b){ if(/próximamente/i.test(b.textContent||'')) b.style.display='none'; }); }
+    } catch(_){}
+  }
+  window._eurKoRender = _koRenderAll;
+  /* Render perezoso al entrar en cada pantalla de playoffs. */
+  (function(){
+    var pg = window.go;
+    if(typeof pg !== 'function' || pg._eurKoPatched) return;
+    window.go = function(id){
+      var ret = pg.apply(this, arguments);
+      try {
+        var s = String(id||'');
+        if(s === 's-ucl-playoffs')       setTimeout(function(){ _koRenderAll('ucl'); }, 60);
+        else if(s === 's-uel-playoffs')  setTimeout(function(){ _koRenderAll('uel'); }, 60);
+        else if(s === 's-uecl-playoffs') setTimeout(function(){ _koRenderAll('uecl'); }, 60);
+      } catch(_){}
+      return ret;
+    };
+    window.go._eurKoPatched = true;
+  })();
 })();
 </script>
 </div>

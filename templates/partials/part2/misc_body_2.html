@@ -12850,6 +12850,9 @@
                     && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
       var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
       var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
+      /* Eliminatorias europeas: SOLO desempate ('d') y FINAL ('f') son a
+         partido único con prórroga+penaltis; ida/vuelta no. 2026-06-09. */
+      var _isEurKoSL = !!_gm._isEurKo && (_gm._eurKoRound === 'fin' || _gm._eurKoLeg === 'd');
       var _isAmsElim = !!_gm.isFriendly && _gm.matchType === 'elim';
       var _isAmsDobleVuelta = !!_gm.isFriendly && _gm.matchType === 'doble' && _gm.dobleLeg === 'vuelta';
       var _amsDobleTied = false;
@@ -12882,6 +12885,7 @@
         || (_isRecopaSL && _scoreTied)
         || (_isAmsElim && _scoreTied)
         || (_isAmsDobleVuelta && _amsDobleTied)
+        || (_isEurKoSL && _scoreTied)
         || (_isTourKoETP && _scoreTied);
 
       if (_shouldForceET && !_gm.penDone) {
@@ -14696,6 +14700,9 @@
     /* Recopa de Europa: TODAS las rondas son single-leg con ET+pen.
        Si empate al 90', prórroga; al 120' penaltis. 2026-05-06. */
     var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
+    /* Eliminatorias europeas: desempate + FINAL a partido único con
+       ET+pen (ida/vuelta no). 2026-06-09. */
+    var _isEurKoSL = !!_gm._isEurKo && (_gm._eurKoRound === 'fin' || _gm._eurKoLeg === 'd');
     /* Amistoso ELIMINATORIA: misma regla que Copa single-leg — empate
        al 90' fuerza prórroga, empate al 120' fuerza penaltis (petición
        usuario 2026-05-05). */
@@ -14731,6 +14738,7 @@
                        || (_isRecopaSL && _gm.sc.a === _gm.sc.b)
                        || (_isAmsElim && _gm.sc.a === _gm.sc.b)
                        || (_isAmsDobleVuelta && _amsDobleTied)
+                       || (_isEurKoSL && _gm.sc.a === _gm.sc.b)
                        || (_isTourKoETP && _gm.sc.a === _gm.sc.b);
     if (_shouldForceET && !_gm.penDone) {
       if (!_gm.etDone) {
@@ -15031,6 +15039,40 @@
       try {
         if (typeof window._wprevSaveHumanResult === 'function') {
           window._wprevSaveHumanResult(_gm._wprevGi, _gm._wprevJ, _gm.sc.a, _gm.sc.b);
+        }
+      } catch(_e){}
+    } else if (_gm._isEurKo) {
+      /* UCL / UEL / UECL · ELIMINATORIAS (playoffs) — 2026-06-09.
+         ida/vuelta = 90' sin prórroga (el global decide); desempate
+         ('d') y FINAL ('f') = prórroga+penaltis. Persiste en
+         {comp}_ko_state_v1 vía _eurKoSaveHumanResult (IIFE misc_body_1). */
+      try {
+        var _ekLeg = _gm._eurKoLeg;
+        var _ekSL = (_gm._eurKoRound === 'fin' || _ekLeg === 'd');
+        var _ekEt = _gm.etScores || {};
+        var _ekPen = _gm.penWinner || null;
+        if (_ekSL) {
+          if (!_ekPen) {
+            var _ekPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
+            if (_ekPenEv) _ekPen = _ekPenEv.team === 'a' ? 'a' : 'b';
+          } else if (_ekPen === _gm.home) _ekPen = 'a';
+          else if (_ekPen === _gm.away) _ekPen = 'b';
+        } else { _ekPen = null; }
+        var _ekMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+        var _ekMvpName = _ekMvpEv ? (_ekMvpEv.player || _ekMvpEv.name || '') : '';
+        var _ekMvpTeam = _ekMvpEv ? (_ekMvpEv.team === 'a' ? _gm.home : (_ekMvpEv.team === 'b' ? _gm.away : '')) : '';
+        if (typeof window._eurKoSaveHumanResult === 'function') {
+          window._eurKoSaveHumanResult(
+            _gm._eurKoComp, _gm._eurKoRound, _gm._eurKoIdx, _ekLeg,
+            _gm.sc.a, _gm.sc.b,
+            _ekSL ? (_ekEt.a || 0) : 0, _ekSL ? (_ekEt.b || 0) : 0, _ekPen,
+            _gm.events || [], _ekMvpName, _ekMvpTeam, _gm.home, _gm.away
+          );
+        }
+        if (typeof window.registrarLigaPlayerStats === 'function') {
+          var _ekStatsEv = (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result' && !e._varAnulado; });
+          var _ekMk = 'eurko_' + (_gm._eurKoComp||'ucl') + '_' + (_gm._eurKoRound||'rep') + '_' + (_gm._eurKoIdx||0) + '_' + (_ekLeg||'i');
+          window.registrarLigaPlayerStats(_ekMk, _gm.home, _gm.away, _ekStatsEv, _ekMvpName, _ekMvpTeam, _gm._eurKoComp||'ucl');
         }
       } catch(_e){}
     } else if (_gm._isEurFase) {
@@ -15773,7 +15815,12 @@
       _isEurFase: !!_gm._isEurFase,
       _eurFaseComp: _gm._eurFaseComp,
       _eurFaseJor: _gm._eurFaseJor,
-      _eurFaseIdx: _gm._eurFaseIdx
+      _eurFaseIdx: _gm._eurFaseIdx,
+      _isEurKo: !!_gm._isEurKo,
+      _eurKoComp: _gm._eurKoComp,
+      _eurKoRound: _gm._eurKoRound,
+      _eurKoIdx: _gm._eurKoIdx,
+      _eurKoLeg: _gm._eurKoLeg
     };
   }
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
@@ -15952,6 +15999,11 @@
     _gm._eurFaseComp = saved ? saved._eurFaseComp : null;
     _gm._eurFaseJor = saved ? saved._eurFaseJor : null;
     _gm._eurFaseIdx = saved ? saved._eurFaseIdx : null;
+    _gm._isEurKo = saved ? !!saved._isEurKo : false;
+    _gm._eurKoComp = saved ? saved._eurKoComp : null;
+    _gm._eurKoRound = saved ? saved._eurKoRound : null;
+    _gm._eurKoIdx = saved ? saved._eurKoIdx : null;
+    _gm._eurKoLeg = saved ? saved._eurKoLeg : null;
     /* Registro global para el hub PARTIDOS LIVE: expone el estado del
        partido abierto en gm-modal para que buildLiveScreen pueda
        mostrarlo como tarjeta live aunque el usuario navegue a otra
@@ -16094,7 +16146,11 @@
          resultado válido — NO hay prórroga ni penaltis en la fase de
          liga (regla UEFA). Igual que la Liga doméstica. */
       var _isEurFaseCfg = !!_gm._isEurFase;
-      var _showET = ((_gm.isHvH && !_gm.noET && !_isLiga && !_isScSL && !_isRecopaCfg && !_isEurFaseCfg) || _isCopaSingleLeg);
+      /* Eliminatorias europeas: ET solo en desempate ('d') y FINAL ('f');
+         ida/vuelta = 90' sin prórroga. 2026-06-09. */
+      var _isEurKoSL = !!_gm._isEurKo && (_gm._eurKoRound === 'fin' || _gm._eurKoLeg === 'd');
+      var _isEurKoTwoLeg = !!_gm._isEurKo && !_isEurKoSL;
+      var _showET = ((_gm.isHvH && !_gm.noET && !_isLiga && !_isScSL && !_isRecopaCfg && !_isEurFaseCfg && !_isEurKoTwoLeg) || _isCopaSingleLeg || _isEurKoSL);
       etBtn.style.display = _showET ? '' : 'none';
       etBtn.disabled = !!_gm.etDone;
       etBtn.style.opacity = _gm.etDone ? '0.35' : '1';
@@ -17796,7 +17852,23 @@
            eurfase_ → persistir en {comp}_phase_v1 vía
            window._eurFasePersistAfterIa. 2026-05-10. */
         var __isEurFaseSimPersist = typeof mk === 'string' && mk.indexOf('eurfase_') === 0;
-        if (__isCopaSim && typeof window._copaSimLivePersist === 'function') {
+        /* Eliminatorias UCL/UEL/UECL: mk con prefijo eurko_ → persistir
+           en {comp}_ko_state_v1 vía window._eurKoPersistAfterIa. El
+           propio persistor resuelve los empates de FINAL/desempate por
+           penaltis (no usa la prórroga IA). 2026-06-09. */
+        var __isEurKoSimPersist = typeof mk === 'string' && mk.indexOf('eurko_') === 0;
+        if (__isEurKoSimPersist && typeof window._eurKoPersistAfterIa === 'function') {
+          try {
+            window._eurKoPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam);
+          } catch(_e) { try { console.error('[eurKoSimLive persist]', _e); } catch(__){} }
+          try {
+            if (typeof window.registrarLigaPlayerStats === 'function' && evtData.events && evtData.events.length) {
+              var _ekComp = (mk.split('_')[1]) || 'ucl';
+              var _ekStatsEvIA = evtData.events.filter(function(e){ return e && !e._varAnulado; });
+              window.registrarLigaPlayerStats(mk, home, away, _ekStatsEvIA, evtData.mvp, evtData.mvpTeam, _ekComp);
+            }
+          } catch(_){}
+        } else if (__isCopaSim && typeof window._copaSimLivePersist === 'function') {
           try {
             window._copaSimLivePersist(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam);
           } catch(_e) { try { console.error('[copaSimLive persist]', _e); } catch(__){} }
@@ -17852,8 +17924,8 @@
           if (!window._iaRunningCount) {
             if (__isCopaSim) {
               if (typeof window.copaInit === 'function') window.copaInit();
-            } else if (__isScSimPersist || __isUscSimPersist || __isLecSimPersist || __isRecopaSimPersist || __isInterSimPersist || __isEurFaseSimPersist) {
-              /* SC, USC, Lec, Recopa, Inter y EurFase ya re-renderizan
+            } else if (__isScSimPersist || __isUscSimPersist || __isLecSimPersist || __isRecopaSimPersist || __isInterSimPersist || __isEurFaseSimPersist || __isEurKoSimPersist) {
+              /* SC, USC, Lec, Recopa, Inter, EurFase y EurKo ya re-renderizan
                  dentro de su propio persistAfterIa. No tocamos la tabla
                  de Liga. */
             } else {

@@ -7933,29 +7933,92 @@ window._showSimProgress = function(opts, onDone){
     else if(/semis|semifinal/i.test(s)){ round='sf'; leg=/vuelta/i.test(s)?'v':'i'; }
     else return null;
     var comps = ['ucl','uel','uecl'];
+    function _isPend(n){ return !n || n === 'PENDIENTE' || n === '__BYE__' || /^@/.test(String(n)); }
     for(var ci=0; ci<comps.length; ci++){
       var comp = comps[ci], st = null;
       try { st = JSON.parse(localStorage.getItem(comp + '_ko_state_v1') || 'null'); } catch(_){}
       if(!st || !st.rounds) continue;
+      var EMOJI = comp === 'ucl' ? '🔵' : (comp === 'uel' ? '🟠' : '🟢');
       var arr = (round === 'fin') ? st.rounds.fin : st.rounds[round];
       if(!Array.isArray(arr)) continue;
       for(var i=0; i<arr.length; i++){
         var tie = arr[i]; if(!tie) continue;
+        var hubInTie = _psHubClubMatches(tie.a) || _psHubClubMatches(tie.b);
         var m = (round === 'fin') ? tie.m : (leg === 'v' ? tie.vta : tie.ida);
-        if(!m || !m.home || !m.away) continue;
-        if(!_psHubClubMatches(m.home) && !_psHubClubMatches(m.away)) continue;
-        var EMOJI = comp === 'ucl' ? '🔵' : (comp === 'uel' ? '🟠' : '🟢');
-        return {
-          home:String(m.home), away:String(m.away),
-          rival:String(_psHubClubMatches(m.home) ? m.away : m.home),
-          played:!!m.played, gh:(m.gh|0), ga:(m.ga|0),
-          events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
-          uid:'ps-eurko-'+comp+'-'+round+'-'+i+'-'+leg, emoji:EMOJI,
-          open:(function(_c,_r,_i,_l){ return function(){ try { if(typeof window._eurKoOpenMatch === 'function') window._eurKoOpenMatch(_c,_r,_i,_l); } catch(_){} }; })(comp, round, i, leg)
-        };
+        /* Caso JUGABLE: el leg existe con ambos equipos definidos. */
+        if(m && m.home && m.away && !_isPend(m.home) && !_isPend(m.away)
+           && (_psHubClubMatches(m.home) || _psHubClubMatches(m.away))){
+          return {
+            home:String(m.home), away:String(m.away),
+            rival:String(_psHubClubMatches(m.home) ? m.away : m.home),
+            played:!!m.played, gh:(m.gh|0), ga:(m.ga|0),
+            events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+            uid:'ps-eurko-'+comp+'-'+round+'-'+i+'-'+leg, emoji:EMOJI,
+            comp:comp, koRound:round, koIdx:i, koLeg:leg,
+            open:(function(_c,_r,_i,_l){ return function(){ try { if(typeof window._eurKoOpenMatch === 'function') window._eurKoOpenMatch(_c,_r,_i,_l); } catch(_){} }; })(comp, round, i, leg)
+          };
+        }
+        /* Caso RIVAL PENDIENTE: el hub está en la eliminatoria pero su
+           rival aún no se conoce (la eliminatoria previa no se ha jugado).
+           El humano puede auto-simular los IA-vs-IA previos o posponer. */
+        if(hubInTie){
+          var nPendIA = 0;
+          try { nPendIA = (typeof window._eurKoCountPendingIA === 'function') ? window._eurKoCountPendingIA(comp) : 0; } catch(_){}
+          return {
+            pending:true, comp:comp, koRound:round, koIdx:i, koLeg:leg, emoji:EMOJI,
+            pendingIA: nPendIA > 0,
+            hubName: _psHubClubMatches(tie.a) ? String(tie.a) : String(tie.b)
+          };
+        }
       }
     }
     return null;
+  }
+  /* Card "RIVAL PENDIENTE" de un playoff europeo: el humano está en la
+     eliminatoria pero su rival aún no se conoce. Ofrece 🤖 Simular
+     eliminatorias previas (IA-vs-IA) y 📌 POSPONER (→ PARTIDOS
+     PENDIENTES). 2026-06-09. */
+  function _cardEurKoPending(day, eko){
+    var st = _stage(); if (!st) return;
+    var lbl = day.label || 'Eliminatoria';
+    var mkUid = 'eurko_' + eko.comp + '_' + eko.koRound + '_' + eko.koIdx + '_' + eko.koLeg;
+    var simBtn = eko.pendingIA
+      ? '<button type="button" class="ps-btn" id="ps-eurko-sim">🤖 Simular eliminatorias previas</button>'
+      : '';
+    var msg = eko.pendingIA
+      ? '⚠️ RIVAL PENDIENTE<br><span style="font-size:11px;opacity:.75;">La eliminatoria previa (IA) aún no se ha jugado. Simúlala para conocer a tu rival, o pospón este partido.</span>'
+      : '⏳ ESPERANDO RIVAL<br><span style="font-size:11px;opacity:.75;">Tu rival saldrá de una eliminatoria que debe jugar otro equipo humano. Puedes posponer este partido.</span>';
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + eko.emoji + ' ' + _esc(lbl) + '</div>'
+      + '<div class="ps-meta" style="margin:16px 0;color:rgba(255,255,255,.85);line-height:1.5;">' + msg + '</div>'
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+      +   simBtn
+      +   '<button type="button" class="ps-btn ghost" id="ps-eurko-posp">📌 POSPONER</button>'
+      +   '<button type="button" class="ps-btn ghost" id="ps-eurko-cont">CONTINUAR ▶</button>'
+      + '</div>'
+      + '</div>';
+    var bs = document.getElementById('ps-eurko-sim');
+    if (bs) bs.onclick = function(){
+      bs.disabled = true;
+      var n = 0;
+      try { if (typeof window._eurKoSimPendingIA === 'function') n = window._eurKoSimPendingIA(eko.comp); } catch(_){}
+      try { var stg = _stage(); if (stg) stg._psSig = null; } catch(_){}
+      _render();
+    };
+    var bp = document.getElementById('ps-eurko-posp');
+    if (bp) bp.onclick = function(){
+      try {
+        _psDeferCurrentMatch({
+          tourId: eko.comp, matchKey: mkUid,
+          home: { name: eko.hubName || _psHumanName() }, away: { name: 'Por definir' },
+          label: lbl, date: day.date, emoji: eko.emoji
+        });
+      } catch(_){ _markDoneAndAdvance(); }
+    };
+    var bc = document.getElementById('ps-eurko-cont');
+    if (bc) bc.onclick = function(){ _markDoneAndAdvance(); };
   }
 
   /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
@@ -8051,6 +8114,7 @@ window._showSimProgress = function(opts, onDone){
       /* CHAMPIONS / EUROPA fase de grupos ("Europa — Grupo JN"). La KO
          europea aún no es jugable → esos días caen al flujo genérico. */
       var _eko = _eurKoHubResolve(lbl);
+      if (_eko && _eko.pending){ _cardEurKoPending(day, _eko); return; }
       if (_eko && _cardCupCard(day, _eko.emoji, lbl, _eko)) return;
       var _eur = _eurHubResolve(lbl);
       if (_eur && _cardCupCard(day, _eur.emoji, lbl, _eur)) return;
@@ -36234,6 +36298,80 @@ window._showSimProgress = function(opts, onDone){
   window._eurKoBuild = _koBuild;
   window._eurKoAdvance = function(comp){ var st=_koLoad(comp); if(st){ _koAdvance(comp,st); _koSave(comp,st); } return st; };
 
+  /* Marcador IA síncrono (motor 4-ejes canónico, fallback aleatorio). */
+  function _koSimScore(home, away){
+    var gh = 0, ga = 0;
+    try {
+      if(typeof window._simIAvsIAWithContext === 'function'){
+        var r = window._simIAvsIAWithContext(home, away, 0);
+        gh = Math.max(0, Math.round(+(r && r.gh) || 0));
+        ga = Math.max(0, Math.round(+(r && r.ga) || 0));
+      } else { gh = Math.floor(Math.random()*4); ga = Math.floor(Math.random()*4); }
+    } catch(_){ gh = Math.floor(Math.random()*4); ga = Math.floor(Math.random()*4); }
+    return { gh:gh, ga:ga };
+  }
+  /* Nº de partidos IA-vs-IA actualmente jugables y pendientes (legs +
+     desempates + final). Si > 0, el botón "🤖 Simular previas" del hub
+     tiene trabajo que hacer. */
+  function _eurKoCountPendingIA(comp){
+    var st = _koLoad(comp); if(!st || !st.rounds) return 0;
+    var c = 0;
+    ['rep','oct','qf','sf'].forEach(function(rk){
+      (st.rounds[rk] || []).forEach(function(tie){
+        if(!tie || !tie.a || !tie.b || tie.winner) return;
+        if(tie.ida && !tie.ida.played && !_isHumanTeam(tie.ida.home) && !_isHumanTeam(tie.ida.away)) c++;
+        if(tie.vta && tie.ida && tie.ida.played && !tie.vta.played && !_isHumanTeam(tie.vta.home) && !_isHumanTeam(tie.vta.away)) c++;
+        if(tie.des && !tie.des.played && !_isHumanTeam(tie.des.home) && !_isHumanTeam(tie.des.away)) c++;
+      });
+    });
+    var fin = st.rounds.fin[0];
+    if(fin && fin.m && !fin.m.played && fin.a && fin.b && !_isHumanTeam(fin.m.home) && !_isHumanTeam(fin.m.away)) c++;
+    return c;
+  }
+  window._eurKoCountPendingIA = _eurKoCountPendingIA;
+  /* Auto-simula TODOS los partidos IA-vs-IA jugables del cuadro (legs,
+     desempates y final), avanzando en cascada, hasta que solo queden
+     partidos con HUMANO. Los partidos del propio humano NUNCA se tocan
+     (los salta el guard `_isHumanTeam`). Devuelve nº de partidos jugados. */
+  function _eurKoSimPendingIA(comp){
+    var st = _koLoad(comp); if(!st || !st.rounds) return 0;
+    var simmed = 0, guard = 0;
+    while(guard++ < 40){
+      _koAdvance(comp, st);
+      var did = false;
+      ['rep','oct','qf','sf'].forEach(function(rk){
+        (st.rounds[rk] || []).forEach(function(tie){
+          if(!tie || !tie.a || !tie.b || tie.winner) return;
+          if(tie.ida && !tie.ida.played && !_isHumanTeam(tie.ida.home) && !_isHumanTeam(tie.ida.away)){
+            var s = _koSimScore(tie.ida.home, tie.ida.away); tie.ida.gh = s.gh; tie.ida.ga = s.ga; tie.ida.played = true; simmed++; did = true;
+          }
+          if(tie.vta && tie.ida && tie.ida.played && !tie.vta.played && !_isHumanTeam(tie.vta.home) && !_isHumanTeam(tie.vta.away)){
+            var s2 = _koSimScore(tie.vta.home, tie.vta.away); tie.vta.gh = s2.gh; tie.vta.ga = s2.ga; tie.vta.played = true; simmed++; did = true;
+          }
+          var rr = _koTwoLegResult(tie);
+          if(rr.needDes){
+            if(!tie.des) tie.des = { home:tie.a, away:tie.b, gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[], mvp:'', mvpTeam:'' };
+            if(!tie.des.played && !_isHumanTeam(tie.des.home) && !_isHumanTeam(tie.des.away)){
+              var s3 = _koSimScore(tie.des.home, tie.des.away); tie.des.gh = s3.gh; tie.des.ga = s3.ga; tie.des.etGh = 0; tie.des.etGa = 0;
+              if(s3.gh === s3.ga){ var w = _koPenWinner(tie.des.home, tie.des.away); tie.des.penWinner = (w === tie.des.home) ? 'a' : 'b'; }
+              tie.des.played = true; simmed++; did = true;
+            }
+          }
+        });
+      });
+      var fin = st.rounds.fin[0];
+      if(fin && fin.m && !fin.m.played && fin.a && fin.b && !_isHumanTeam(fin.m.home) && !_isHumanTeam(fin.m.away)){
+        var sf = _koSimScore(fin.m.home, fin.m.away); fin.m.gh = sf.gh; fin.m.ga = sf.ga; fin.m.etGh = 0; fin.m.etGa = 0;
+        if(sf.gh === sf.ga){ var wf = _koPenWinner(fin.m.home, fin.m.away); fin.m.penWinner = (wf === fin.m.home) ? 'a' : 'b'; }
+        fin.m.played = true; simmed++; did = true;
+      }
+      if(!did) break;
+    }
+    _koAdvance(comp, st); _koSave(comp, st);
+    return simmed;
+  }
+  window._eurKoSimPendingIA = _eurKoSimPendingIA;
+
   /* ── Persistencia de resultados (humano + IA) ──────────────────── */
   window._eurKoSaveHumanResult = function(comp, roundKey, idx, leg, gh, ga, etGh, etGa, penWinner, events, mvp, mvpTeam, home, away){
     var st = _koLoad(comp); if(!st || !st.rounds) return;
@@ -36272,17 +36410,18 @@ window._showSimProgress = function(opts, onDone){
 
   /* ── Apertura de partido (humano → previa / IA → iaSimLive) ────── */
   window._eurKoOpenMatch = function(comp, roundKey, idx, leg){
-    var st = _koLoad(comp); if(!st || !st.rounds) return;
+    var st = _koLoad(comp); if(!st || !st.rounds) return false;
     var tie = (roundKey === 'fin') ? st.rounds.fin[0] : (st.rounds[roundKey] || [])[idx];
-    if(!tie) return;
+    if(!tie) return false;
     var m = leg==='i'?tie.ida : leg==='v'?tie.vta : leg==='d'?tie.des : tie.m;
-    if(!m || m.played) return;
+    if(!m || m.played || !m.home || !m.away) return false;
     var hH = _isHumanTeam(m.home), aH = _isHumanTeam(m.away);
     if(hH || aH){ _eurKoAbrirPrevia(comp, roundKey, idx, leg, m.home, m.away); }
     else {
       var mk = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
       if(typeof window.iaSimLive === 'function') window.iaSimLive(mk, m.home, m.away, 0);
     }
+    return true;
   };
   function _eurKoAbrirPrevia(comp, roundKey, idx, leg, home, away){
     var isHvH = _isHumanTeam(home) && _isHumanTeam(away);
@@ -51985,6 +52124,28 @@ https://api.sofascore.app/api/v1/team/44/image
       if (arr[i] && arr[i].uid === uid){ entry = arr[i]; break; }
     }
     if (!entry) return;
+    /* Eliminatorias europeas: el matchKey `eurko_<comp>_<round>_<idx>_<leg>`
+       se reabre por su propio motor (no por _tourOpenHumanMatch). Si el
+       rival sigue sin definirse, _eurKoOpenMatch no hace nada (el usuario
+       debe simular antes la eliminatoria previa). 2026-06-09. */
+    var _ek = /^eurko_([a-z]+)_([a-z]+)_(\d+)_([ivdf])$/.exec(String(entry.matchKey || ''));
+    if (_ek){
+      var _opened = false;
+      try { if (typeof window._eurKoOpenMatch === 'function') _opened = window._eurKoOpenMatch(_ek[1], _ek[2], parseInt(_ek[3],10), _ek[4]); } catch(_){}
+      if (_opened){
+        /* Quitar de PENDIENTES sólo cuando la previa se confirme. */
+        var _prevCb = window._ppCustomCallback;
+        window._ppCustomCallback = function(){
+          try { if (typeof _prevCb === 'function') _prevCb(); } catch(_){}
+          try { if (typeof window._pendHvHRemove === 'function') window._pendHvHRemove(uid); } catch(_){}
+          try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
+        };
+      } else {
+        /* Rival aún sin definir: hay que simular antes la eliminatoria previa. */
+        try { if (typeof window._psFlashToast === 'function') window._psFlashToast('Tu rival aún no está definido — simula antes la eliminatoria previa.', false); } catch(_){}
+      }
+      return;
+    }
     if (typeof window._tourOpenHumanMatch !== 'function') return;
     try {
       window._tourOpenHumanMatch(entry.tourId, entry.matchKey, entry.home, entry.away);

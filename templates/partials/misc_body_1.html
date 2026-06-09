@@ -7733,6 +7733,152 @@ window._showSimProgress = function(opts, onDone){
     return true;
   }
 
+  /* ── COPAS de partido único en la card del hub (2026-06-09) ──────
+     Recopa de Europa, Supercopa de España y Supercopa de Europa: cada
+     una es un bracket a partido único, persiste su estado en su propia
+     clave de localStorage y expone `_xxxAbrirPrevia(phaseKey, idx)`. Los
+     resolutores localizan el partido del club del hub en la ronda que
+     demanda el calendario; la card compartida lo deja JUGAR delegando en
+     el MISMO flujo que la pantalla de la competición. */
+  function _psIsPendName(n){
+    return !n || n === 'PENDIENTE' || n === '__BYE__' || /^@[a-z0-9]+#\d+$/i.test(String(n));
+  }
+  function _psCupTotals(m){
+    return { a: ((m.gh|0) + (m.etGh|0)), b: ((m.ga|0) + (m.etGa|0)) };
+  }
+  /* Card compartida de copa de partido único. `r` = objeto normalizado
+     {home,away,rival,played,gh,ga,events,mvp,mvpTeam,uid,open}. */
+  function _cardCupCard(day, emoji, lbl, r){
+    var st = _stage(); if (!st || !r) return false;
+    function _sh(n){ try { return (typeof window.getTeamLogoUrl === 'function') ? (window.getTeamLogoUrl(n) || '') : ''; } catch(_){ return ''; } }
+    var homeObj = { name:r.home, shield:_sh(r.home), icon:_psClubIcon(r.home) };
+    var awayObj = { name:r.away, shield:_sh(r.away), icon:_psClubIcon(r.away) };
+    if (r.played){
+      var actaHtml = '';
+      if (r.events && r.events.length && typeof window._eurFaseRenderActaPanel === 'function'){
+        try { actaHtml = window._eurFaseRenderActaPanel({ home:r.home, away:r.away, events:r.events, mvp:r.mvp, mvpTeam:r.mvpTeam }, r.uid); } catch(_){ actaHtml = ''; }
+      }
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
+        + _psVsBlockHtml(homeObj, awayObj, _psScoreCenterHtml(r.gh, r.ga))
+        + actaHtml
+        + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+        +   '<button type="button" class="ps-btn ghost" id="ps-cup-cont">CONTINUAR ▶</button>'
+        + '</div>'
+        + '</div>';
+      var bc = document.getElementById('ps-cup-cont');
+      if (bc) bc.onclick = function(){ _markDoneAndAdvance(); };
+      return true;
+    }
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
+      + _psVsBlockHtml(homeObj, awayObj, '<div class="ps-x">VS</div>')
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+      +   '<button type="button" class="ps-btn" id="ps-cup-previa">📋 PREVIA · JUGAR ▶</button>'
+      +   '<button type="button" class="ps-btn ghost" id="ps-cup-cont">CONTINUAR ▶</button>'
+      + '</div>'
+      + '</div>';
+    var bp = document.getElementById('ps-cup-previa');
+    if (bp) bp.onclick = function(){ try { r.open(); } catch(_){} };
+    var bc2 = document.getElementById('ps-cup-cont');
+    if (bc2) bc2.onclick = function(){ _markDoneAndAdvance(); };
+    return true;
+  }
+  /* RECOPA DE EUROPA: estado recopa_state_v1.sorteo[phase] (array). */
+  function _recopaHubResolve(lbl){
+    var s = String(lbl || '');
+    if (!/recopa/i.test(s)) return null;
+    var phase = /1\s*\/\s*64/.test(s) ? 'r64'
+      : /1\s*\/\s*32/.test(s) ? 'r32'
+      : /octavos/i.test(s) ? 'r16'
+      : /cuartos/i.test(s) ? 'r8'
+      : /semis|semifinal/i.test(s) ? 'sf'
+      : /final/i.test(s) ? 'fin' : null;
+    if (!phase) return null;
+    var cs = null;
+    try { cs = JSON.parse(localStorage.getItem('recopa_state_v1') || 'null'); } catch(_){}
+    if (!cs || !cs.sorteo || !Array.isArray(cs.sorteo[phase])) return null;
+    var arr = cs.sorteo[phase], idx = -1;
+    for (var i = 0; i < arr.length; i++){
+      var m = arr[i];
+      if (m && (_psHubClubMatches(m.home) || _psHubClubMatches(m.away))){ idx = i; break; }
+    }
+    if (idx < 0) return null;
+    var mm = arr[idx];
+    if (_psIsPendName(mm.home) || _psIsPendName(mm.away)) return null;
+    var t = _psCupTotals(mm);
+    return {
+      home:String(mm.home), away:String(mm.away),
+      rival:String(_psHubClubMatches(mm.home) ? mm.away : mm.home),
+      played:!!mm.played, gh:t.a, ga:t.b,
+      events:mm.events||[], mvp:mm.mvp||'', mvpTeam:mm.mvpTeam||'',
+      uid:'ps-recopa-acta-'+phase+'-'+idx,
+      open:function(){ try { if (typeof window._recopaAbrirPrevia === 'function') window._recopaAbrirPrevia(phase, idx); } catch(_){} }
+    };
+  }
+  /* SUPERCOPA DE ESPAÑA: estado sc_state_v1 {semis:[m0,m1], final}. */
+  function _scHubResolve(lbl){
+    var s = String(lbl || '');
+    if (!/supercopa\s*espa/i.test(s)) return null;
+    var cs = null;
+    try { cs = JSON.parse(localStorage.getItem('sc_state_v1') || 'null'); } catch(_){}
+    if (!cs) return null;
+    var phaseKey, idx, m;
+    if (/final/i.test(s)){
+      phaseKey = 'fin'; idx = 0; m = cs.final;
+      if (!m || !(_psHubClubMatches(m.home) || _psHubClubMatches(m.away))) return null;
+    } else {
+      phaseKey = 'sf'; var sm = cs.semis || []; idx = -1;
+      for (var i = 0; i < sm.length; i++){
+        if (sm[i] && (_psHubClubMatches(sm[i].home) || _psHubClubMatches(sm[i].away))){ idx = i; m = sm[i]; break; }
+      }
+      if (idx < 0) return null;
+    }
+    if (!m || _psIsPendName(m.home) || _psIsPendName(m.away)) return null;
+    var t = _psCupTotals(m);
+    return {
+      home:String(m.home), away:String(m.away),
+      rival:String(_psHubClubMatches(m.home) ? m.away : m.home),
+      played:!!m.played, gh:t.a, ga:t.b,
+      events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+      uid:'ps-sc-acta-'+phaseKey+'-'+idx,
+      open:function(){ try { if (typeof window._scAbrirPrevia === 'function') window._scAbrirPrevia(phaseKey, idx); } catch(_){} }
+    };
+  }
+  /* SUPERCOPA DE EUROPA (Supercup): estado usc_state_v1 {semis,final}. */
+  function _uscHubResolve(lbl){
+    var s = String(lbl || '');
+    if (!/supercup|supercopa\s*europa/i.test(s)) return null;
+    var cs = null;
+    try { cs = JSON.parse(localStorage.getItem('usc_state_v1') || 'null'); } catch(_){}
+    if (!cs) return null;
+    var phaseKey, idx, m;
+    if (/final/i.test(s)){
+      phaseKey = 'fin'; idx = 0; m = cs.final;
+      if (!m || !(_psHubClubMatches(m.home) || _psHubClubMatches(m.away))) return null;
+    } else {
+      phaseKey = 'sf'; var sm = cs.semis || []; idx = -1;
+      for (var i = 0; i < sm.length; i++){
+        if (sm[i] && (_psHubClubMatches(sm[i].home) || _psHubClubMatches(sm[i].away))){ idx = i; m = sm[i]; break; }
+      }
+      if (idx < 0) return null;
+    }
+    if (!m || _psIsPendName(m.home) || _psIsPendName(m.away)) return null;
+    var t = _psCupTotals(m);
+    return {
+      home:String(m.home), away:String(m.away),
+      rival:String(_psHubClubMatches(m.home) ? m.away : m.home),
+      played:!!m.played, gh:t.a, ga:t.b,
+      events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+      uid:'ps-usc-acta-'+phaseKey+'-'+idx,
+      open:function(){ try { if (typeof window._uscAbrirPrevia === 'function') window._uscAbrirPrevia(phaseKey, idx); } catch(_){} }
+    };
+  }
+
   /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
      Petición usuario (foto 2): TODAS las cards del hub (Liga, Copa,
      competiciones europeas, torneos de verano, Mundialito y Selección)
@@ -7812,6 +7958,17 @@ window._showSimProgress = function(opts, onDone){
     try {
       var _copaInfo = _copaRondaFromLabel(lbl);
       if (_copaInfo && _cardCopa(day, _copaInfo)) return;
+    } catch(_){}
+    /* RECOPA / SUPERCOPA ESPAÑA / SUPERCOPA EUROPA: copas de partido
+       único. Si el hub juega esa ronda, card jugable; si no, seguimos
+       al flujo genérico. 2026-06-09. */
+    try {
+      var _rec = _recopaHubResolve(lbl);
+      if (_rec && _cardCupCard(day, '🟤', lbl, _rec)) return;
+      var _scc = _scHubResolve(lbl);
+      if (_scc && _cardCupCard(day, '🏆', lbl, _scc)) return;
+      var _uscc = _uscHubResolve(lbl);
+      if (_uscc && _cardCupCard(day, '🇪🇺', lbl, _uscc)) return;
     } catch(_){}
     /* Liga EA Sports: parseamos la jornada del label para (a) abrir la
        previa del partido del Liverpool directamente y (b) como respaldo,

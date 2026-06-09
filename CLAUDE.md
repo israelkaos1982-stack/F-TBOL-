@@ -1322,6 +1322,36 @@ diferido llegaba a completar — y fallaba repetidamente (2026-06-01,
    síncrono ANTES del esqueleto: bloquea el hilo al abrir la caja. Va
    diferido a `setTimeout`, igual que `_tourStatsOpen` / `STATS_SCREENS`.
 
+### TODA caja de stats tiene go-wrap + observer (no un solo disparo, 2026-06-09)
+
+**Auditoría 2026-06-09 (todos los torneos de clubes y selecciones)**:
+el síntoma "caja colgada en el placeholder" (Mundialito) se debía a un
+ÚNICO disparo (MutationObserver) que, si no saltaba, dejaba el
+placeholder para siempre. Las cajas que NUNCA fallaron (Liga, Superliga,
+Mundialito tras el fix) tienen DOS disparos independientes: el observer
+de `.active` **Y** un wrap de `window.go`. Se igualó el resto:
+
+- **`STATS_SCREENS`** (Recopa · USC · Inter · Supercopa España,
+  `misc_body_1.html`): se añadió `_installStatsGoWrap` (wrap de
+  `window.go` → `_renderOne` por `screenId`), instalado YA + en
+  DOMContentLoaded. Antes solo tenían el observer.
+- **Cajas europeas** (Champions · Europa League · Conference,
+  `part2/misc_body_2.html`): go-wrap único (`MAP` screenId→`_renderXStats`)
+  tras el bloque UECL. Antes solo observer + DOMContentLoaded.
+
+**Reglas a respetar**:
+7. **PROHIBIDO** que una caja de stats dependa de UN SOLO disparo
+   (solo observer, o solo go-wrap, o solo onclick). SIEMPRE observer de
+   `.active` **+** wrap de `window.go`. El bundle re-define `window.go`
+   tras evaluar el partial, así que el go-wrap se instala TAMBIÉN en
+   `DOMContentLoaded` (no solo a parse-time).
+8. Todo wrap de `window.go` lleva su FLAG propio (`_statsScreensWrap`,
+   `_eurStatsWrap`, `_mclStatsGoWrap`…) para no re-envolverse y para
+   COEXISTIR encadenando el `go` anterior. NUNCA pisar un wrap existente.
+9. El render que dispara el wrap debe SIEMPRE asignar `innerHTML`
+   (`_lextBuildCompStatsDashboard` lo hace con try/catch → estado vacío),
+   nunca `return` antes de pintar dejando el placeholder.
+
 ## Separación CLUBES vs SELECCIONES en estadísticas (obligatorio, 2026-05-27)
 
 **REGLA BLOQUEANTE ABSOLUTA**: las **estadísticas de jugadores** del

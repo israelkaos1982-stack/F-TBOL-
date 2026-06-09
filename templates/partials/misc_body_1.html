@@ -16790,6 +16790,32 @@ window._showSimProgress = function(opts, onDone){
       }, 0);
     }
   }
+  /* TRIGGER ROBUSTO (2026-06-09) — además del MutationObserver, envolvemos
+     `window.go` para disparar el render al navegar a CUALQUIERA de estas
+     pantallas (Recopa · USC · Inter · Supercopa España), igual que ya hacen
+     s-liga-stats / s-superliga-stats / s-mundial-stats. El observer por sí
+     solo fue el punto único de fallo que dejó al Mundialito colgado en
+     "Calculando estadísticas…"; el go-wrap lo elimina. Se instala YA (si
+     `go` existe) y en DOMContentLoaded (tras el bundle fijar su `window.go`
+     definitivo, que se evalúa DESPUÉS de este partial). Flag propio para no
+     re-envolver ni chocar con los otros wraps (cada uno encadena el anterior). */
+  var _statsByScreen = {};
+  STATS_SCREENS.forEach(function(c){ _statsByScreen[c.screenId] = c; });
+  function _installStatsGoWrap(){
+    try {
+      var g = window.go;
+      if (typeof g === 'function' && !g._statsScreensWrap) {
+        window.go = function(id){
+          var r = g.apply(this, arguments);
+          var c = _statsByScreen[id];
+          if (c) { try { _renderOne(c); } catch(_){} }
+          return r;
+        };
+        window.go._statsScreensWrap = true;
+      }
+    } catch(_){}
+  }
+  _installStatsGoWrap();
   STATS_SCREENS.forEach(function(cfg){
     try {
       var el = document.getElementById(cfg.screenId);
@@ -16810,6 +16836,7 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
   });
   document.addEventListener('DOMContentLoaded', function(){
+    _installStatsGoWrap();
     STATS_SCREENS.forEach(_renderOne);
   });
 })();

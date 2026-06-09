@@ -2605,6 +2605,41 @@
 </script>
 </div>
 
+<script>
+/* TRIGGER ROBUSTO (2026-06-09) — go-wrap ÚNICO para las 3 cajas europeas
+   (Champions · Europa League · Conference). Igual que el resto de cajas de
+   stats del juego (Liga, Superliga, Recopa/USC/Inter/SC, Mundialito):
+   además del MutationObserver de cada pantalla, envolvemos `window.go` para
+   disparar el render al navegar — el observer por sí solo era el punto único
+   de fallo que podía dejar la caja en su placeholder pese a haber datos. Se
+   instala YA (si `go` existe) y en DOMContentLoaded (tras el bundle fijar su
+   `window.go` definitivo, que se evalúa DESPUÉS de este partial). Flag propio
+   para no re-envolver; encadena el `go` anterior (coexiste con los otros wraps). */
+(function(){
+  var MAP = {
+    's-ucl-stats':  '_renderUclStats',
+    's-uel-stats':  '_renderUelStats',
+    's-uecl-stats': '_renderUeclStats'
+  };
+  function _install(){
+    try {
+      var g = window.go;
+      if (typeof g === 'function' && !g._eurStatsWrap) {
+        window.go = function(id){
+          var r = g.apply(this, arguments);
+          var fn = MAP[id] && window[MAP[id]];
+          if (typeof fn === 'function') { try { fn(); } catch(_){} }
+          return r;
+        };
+        window.go._eurStatsWrap = true;
+      }
+    } catch(_){}
+  }
+  _install();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _install);
+})();
+</script>
+
 <div id="ucl-intro">
 <!-- ===========================================================
      SPLASH UCL ELIMINADO (petición usuario 2026-05-09, 4ª iter):

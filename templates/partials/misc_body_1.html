@@ -7368,6 +7368,22 @@ window._showSimProgress = function(opts, onDone){
             }
           }
         } catch(_){}
+        /* Asegurar `cfg.koBracket[0]` si la fase de grupos YA terminó pero
+           la 1ª ronda KO aún no se construyó (se hace LAZY en el render del
+           torneo, que el usuario no visita: juega desde la card del hub).
+           Sin esto, el día de Octavos/Cuartos/… mostraba «Sin partido ·
+           eliminado o torneo terminado» pese a que el humano SÍ juega esa
+           ronda. Bug Mundialito de Clubes 2026-06-09 (foto usuario:
+           Salzburg vs Liverpool en Octavos). El builder es determinista
+           (mismos cruces que el render), así que los matchKeys coinciden. */
+        try {
+          if (typeof window._tourEnsureKoBracket === 'function'){
+            var _builtKo = window._tourEnsureKoBracket(cfg, tid);
+            if (_builtKo && typeof window._tourSave === 'function'){
+              try { window._tourSave(tid, cfg); } catch(_){}
+            }
+          }
+        } catch(_){}
         /* Número de jornadas de grupos (necesario para decidir si el
            "Partido N" del calendario cae en grupos o en KO). Leemos de
            cfg.groupFixtures (cualquier grupo, todos tienen el mismo
@@ -29149,6 +29165,96 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){ return false; }
   }
   try { window._tourEnsureGroupFixtures = _tourEnsureGroupFixtures; } catch(_){}
+
+  /* Construye `cfg.koBracket[0]` (1ª ronda KO) desde los grupos YA
+     completados — EXACTAMENTE como el render `_renderGroupsKO` (líneas
+     ~26155) — para que la CARD DEL HUB (`_realPair`) localice el partido
+     KO del humano SIN que el usuario tenga que abrir antes la pantalla del
+     torneo. Bug Mundialito de Clubes 2026-06-09 (foto usuario): tras jugar
+     la fase de grupos, la card del hub del día de OCTAVOS mostraba «Sin
+     partido del Liverpool en este día · eliminado o torneo terminado»
+     mientras la pantalla del torneo SÍ pintaba Salzburg vs Liverpool. Causa:
+     el koBracket se construía LAZY solo en el render (no siempre persistido),
+     así que el hub lo veía vacío; con los grupos terminados,
+     `_realPendingShape` no detectaba fase previa pendiente → `_dayInKo`
+     caía a `return null`. Mismo patrón anti-bug que `_tourEnsureGroupFixtures`.
+     Devuelve true si construyó algo (para persistir con `_tourSave`). */
+  function _tourEnsureKoBracket(cfg, tourId) {
+    try {
+      if (!cfg) return false;
+      if (cfg.format !== 'groups-ko' && cfg.format !== 'league-ko' && cfg.format !== 'swiss') return false;
+      if (Array.isArray(cfg.koBracket) && cfg.koBracket.length) return false; /* ya construido */
+      var teams = Array.isArray(cfg.teams) ? cfg.teams : [];
+      if (!teams.length) return false;
+      var fc = cfg.formatConfig || {};
+      var advancePerGroup = (typeof fc.advancePerGroup === 'number') ? fc.advancePerGroup : 2;
+      if (advancePerGroup <= 0) return false; /* sin fase final (suizo/liga) */
+      var nGroups = fc.groups || 1;
+      var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
+      cfg.results = cfg.results || {};
+      cfg.groupFixtures = cfg.groupFixtures || {};
+      /* Necesitamos los fixtures de grupo para saber si están completos. */
+      _tourEnsureGroupFixtures(cfg);
+      var slices = [];
+      var allGroupsDone = true;
+      for (var g = 0; g < nGroups; g++) {
+        var slice = teams.slice(g*perGroup, (g+1)*perGroup);
+        if (!slice.length) break;
+        slices.push(slice);
+        var fix = cfg.groupFixtures[g];
+        if (!Array.isArray(fix) || !fix.length) { allGroupsDone = false; continue; }
+        if (!_tourFixtureProgress(fix, cfg.results, 'g'+g+'_').allDone) allGroupsDone = false;
+      }
+      /* Fase de grupos aún en curso → NO construir KO. `_realPair` mostrará
+         RIVAL PENDIENTE (auto-sim de la fase previa). */
+      if (!allGroupsDone) return false;
+      var round0 = null;
+      /* Mundialito de Clubes: bracket custom (1º vs 2º, mismo grupo nunca
+         hasta la Final, humanos en cuadrantes opuestos). */
+      if (tourId === 'mundial' && typeof window._mundialitoBuildBracket === 'function') {
+        var _mcBracket = window._mundialitoBuildBracket(cfg, slices);
+        if (_mcBracket && _mcBracket.length === 16) round0 = _mcBracket;
+      }
+      if (!round0) {
+        var qualifiers = [];
+        for (var gi = 0; gi < slices.length; gi++) {
+          var rs = _tourComputeStandings(slices[gi], cfg.groupFixtures[gi], cfg.results, 'g'+gi+'_', fc.tieBreak);
+          for (var p = 0; p < advancePerGroup; p++) {
+            if (rs[p] && slices[gi][rs[p].idx]) {
+              qualifiers.push({ groupIdx: gi, pos: p+1, team: slices[gi][rs[p].idx] });
+            }
+          }
+        }
+        round0 = [];
+        if (advancePerGroup === 2 && slices.length % 2 === 0) {
+          for (var pair = 0; pair < slices.length; pair += 2) {
+            var gA = pair, gB = pair + 1;
+            var qA1 = qualifiers.filter(function(q){return q.groupIdx===gA && q.pos===1;})[0];
+            var qA2 = qualifiers.filter(function(q){return q.groupIdx===gA && q.pos===2;})[0];
+            var qB1 = qualifiers.filter(function(q){return q.groupIdx===gB && q.pos===1;})[0];
+            var qB2 = qualifiers.filter(function(q){return q.groupIdx===gB && q.pos===2;})[0];
+            if (qA1 && qB2) round0.push(qA1.team, qB2.team);
+            if (qB1 && qA2) round0.push(qB1.team, qA2.team);
+          }
+        } else {
+          var seeded = [];
+          for (var pp = 0; pp < advancePerGroup; pp++) {
+            qualifiers.forEach(function(q){ if (q.pos === pp+1) seeded.push(q.team); });
+          }
+          if (seeded.length % 2) seeded.pop();
+          for (var si = 0; si < seeded.length/2; si++) {
+            round0.push(seeded[si], seeded[seeded.length-1-si]);
+          }
+        }
+        round0 = (typeof _tourRebalanceHumans === 'function') ? _tourRebalanceHumans(round0) : round0;
+      }
+      if (!round0 || !round0.length) return false;
+      cfg.koBracket = [round0];
+      if (typeof cfg.koCurrentRound !== 'number') cfg.koCurrentRound = 0;
+      return true;
+    } catch(_){ return false; }
+  }
+  try { window._tourEnsureKoBracket = _tourEnsureKoBracket; } catch(_){}
 
   /* ─── Standings de un grupo o liga ────────────────────────
      `teams` = array de teamObjs (con .name).

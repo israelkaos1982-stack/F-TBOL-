@@ -1280,6 +1280,48 @@ el store en memoria está vacío (tras recarga).
    `_tourSaveHumanResult` para humanos). Sin events no hay goleadores
    que mostrar — es la fuente única de las cajas "en vivo".
 
+### La caja `s-mundial-stats` (Mundialito Clubes) — RENDER-FIRST como el Mundial 2032 (obligatorio, 2026-06-09)
+
+**Bug (fotos usuario 2026-06-09)**: con la fase de grupos del Mundialito
+de Clubes jugada (goles visibles en la clasificación), la pantalla
+`Mundialito Clubes · Estadísticas` (`s-mundial-stats`) se quedaba
+**colgada en el placeholder "Calculando estadísticas…"** — no emergía
+NI UNA estadística. La caja del **Mundial 2032** (Selecciones) sí
+muestra todo al instante.
+
+**Causa raíz — separate-screen vs inline**: el Mundial 2032 pinta su
+caja de stats **INLINE y SÍNCRONA**: `_mundialGo('mundial','stats')`
+llama a `_tourRender` DIRECTO (función plana) → `_mundialStatsHtml`
+devuelve el HTML y se asigna `innerHTML` en el mismo tick. NUNCA
+depende de timing. El Mundialito de Clubes usaba una pantalla SEPARADA
+(`s-mundial-stats`) cuyo `_renderMundialitoStats` solo corría vía
+disparos diferidos (`setTimeout` de `_mclSchedule`, wraps de
+`window.go`, MutationObserver). El placeholder hardcoded
+"Calculando estadísticas…" SOLO se reemplazaba si/cuando ese render
+diferido llegaba a completar — y fallaba repetidamente (2026-06-01,
+06-04, 06-09).
+
+**Fix — copiar los 2 rasgos de fiabilidad del Mundial 2032**:
+1. **RENDER-FIRST**: `_renderMundialitoStats` pinta el ESQUELETO de las
+   11 cajas (`_mundialRenderStatsGrid({})`) de forma SÍNCRONA al entrar,
+   antes de cualquier agregación. El placeholder "Calculando…" JAMÁS
+   persiste, pase lo que pase con el cómputo. El cómputo PESADO
+   (backfill + robustScan + fallbacks) se DIFIERE a `setTimeout(0)` en
+   `_mclComputeAndPaint` (regla "render no bloqueante").
+2. **INVOCACIÓN SÍNCRONA**: `_mclSchedule` llama a
+   `_renderMundialitoStats()` SÍNCRONO en el mismo tick del clic (como
+   `_mundialGo` → `_tourRender`), no solo vía `setTimeout`. + 2ª pasada
+   a 260 ms tras la hidratación de plantillas.
+
+**Reglas a respetar**:
+5. **PROHIBIDO** que `s-mundial-stats` vuelva a depender SOLO de
+   disparos diferidos (`setTimeout`/go-wrap) para matar el placeholder.
+   `_renderMundialitoStats` debe pintar el esqueleto SÍNCRONO al entrar
+   (render-first) y `_mclSchedule` invocarlo SÍNCRONO en el clic.
+6. **PROHIBIDO** correr el cómputo pesado (`_mclComputeAndPaint`)
+   síncrono ANTES del esqueleto: bloquea el hilo al abrir la caja. Va
+   diferido a `setTimeout`, igual que `_tourStatsOpen` / `STATS_SCREENS`.
+
 ## Separación CLUBES vs SELECCIONES en estadísticas (obligatorio, 2026-05-27)
 
 **REGLA BLOQUEANTE ABSOLUTA**: las **estadísticas de jugadores** del

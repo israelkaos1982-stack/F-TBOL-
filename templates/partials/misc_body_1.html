@@ -16499,7 +16499,13 @@ window._showSimProgress = function(opts, onDone){
     if (best) { try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE.mundial = best; } catch(_){} }
     return best;
   }
-  function _renderMundialitoStats(){
+  /* Cómputo PESADO (backfill de actas + escaneo robusto + fallbacks) +
+     pintado final del grid. Lo DIFIERE `_renderMundialitoStats` al siguiente
+     tick para no bloquear el hilo al abrir la caja (regla "render no
+     bloqueante" 2026-05-28) — el esqueleto ya está pintado, así que esto
+     solo rellena los datos cuando estén listos. Misma cadena infalible que
+     el Mundial 2032 (`_mundialStatsHtml`). */
+  function _mclComputeAndPaint(){
     var root = document.getElementById('mundial-stats-dashboard');
     if (!root) return;
     var cfg = _mclLoadRichestCfg();
@@ -16554,19 +16560,49 @@ window._showSimProgress = function(opts, onDone){
           if (ch && typeof window._tourSave === 'function') { try { window._tourSave('mundial', c2); } catch(_){} }
         }
       } catch(_){}
-      setTimeout(_renderMundialitoStats, 60);
+      setTimeout(_mclComputeAndPaint, 60);
     });
   }
+  function _renderMundialitoStats(){
+    var root = document.getElementById('mundial-stats-dashboard');
+    if (!root) return;
+    /* RENDER-FIRST (2026-06-09) — copia del patrón infalible del Mundial
+       2032 (_tourStatsOpen / _mundialStatsHtml): pinta el ESQUELETO de las
+       11 cajas (grid vacío) de forma SÍNCRONA antes de cualquier agregación
+       pesada, así el placeholder "Calculando estadísticas…" JAMÁS persiste
+       —ni aunque el cómputo tarde, pete, o el cfg llegue pobre—. Solo si la
+       caja aún no muestra tarjetas (evita parpadeo al re-render con datos ya
+       pintados). El cómputo PESADO se difiere al siguiente tick para no
+       bloquear el hilo al abrir la caja (regla "render no bloqueante"). Este
+       es el motivo por el que el Mundial 2032 nunca se queda colgado: el
+       render avanza pase lo que pase. */
+    if (!root.querySelector('.liga-stat-card')) {
+      try {
+        var _skel = (typeof window._mundialRenderStatsGrid === 'function') ? window._mundialRenderStatsGrid({}) : '';
+        if (_skel) root.innerHTML = _skel;
+      } catch(_){}
+    }
+    setTimeout(_mclComputeAndPaint, 0);
+  }
   window._renderMundialitoStats = _renderMundialitoStats;
+  window._mclComputeAndPaint = _mclComputeAndPaint;
   /* Programa el render (2 pasadas: inmediata + a 260ms tras hidratación).
      Debounced: las tres rutas de disparo (onclick de la card, wrap de
      `window.go` y MutationObserver) pueden coincidir → coalescen en UNA
      sola pasada por ventana en vez de re-renderizar 6 veces. */
-  var _mclT0 = null, _mclT1 = null;
+  var _mclT1 = null;
   function _mclSchedule(){
-    if (_mclT0) clearTimeout(_mclT0);
     if (_mclT1) clearTimeout(_mclT1);
-    _mclT0 = setTimeout(function(){ _mclT0 = null; try { _renderMundialitoStats(); } catch(_){} }, 0);
+    /* SÍNCRONO (2026-06-09): pinta el esqueleto + los datos disponibles YA,
+       en el MISMO tick del clic — igual que el Mundial 2032, donde
+       `_mundialGo` llama a `_tourRender` directo (no a un setTimeout). Sin
+       esto, el render quedaba a merced de un `setTimeout(…,0)` que, si el
+       hilo estaba ocupado o la navegación SPA tardaba, dejaba la caja
+       colgada en "Calculando…". Como `_renderMundialitoStats` ahora hace
+       render-first, esta llamada síncrona MATA el placeholder al instante. */
+    try { _renderMundialitoStats(); } catch(_){}
+    /* 2ª pasada tras la hidratación de plantillas (nombres reales / datos
+       llegados del server) — re-pinta con los goleadores ya resueltos. */
     _mclT1 = setTimeout(function(){ _mclT1 = null; try { _renderMundialitoStats(); } catch(_){} }, 260);
   }
   window._mclSchedule = _mclSchedule;

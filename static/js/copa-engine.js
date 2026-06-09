@@ -3415,7 +3415,11 @@
        `_renderPreviaMeta` cae a `getTeamLogoUrl`/`getLogoEquipo`, que
        no ven las plantillas fuera del main key, y los equipos de PF
        (p.ej. Teruel) salían con el escudo genérico 🛡️ apagado. */
-    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !_isDes && !!esVuelta, esDesempate: _isDes, homeLogo: _shieldUrl(local), awayLogo: _shieldUrl(visit) };
+    /* Desempate: mismo ESTADIO que la vuelta (la vuelta la juega m.v en
+       su campo). 5 min · ambos ↘️ (forma Mala) · prórroga+penaltis. */
+    var _desStad = _isDes && (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(m.v) || '') : '';
+    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !_isDes && !!esVuelta, esDesempate: _isDes, stadium: _desStad, homeLogo: _shieldUrl(local), awayLogo: _shieldUrl(visit) };
+    if (_isDes) { try { window._ppSetMatchCtx && window._ppSetMatchCtx({ durMin: 5, formHome: '↘️', formAway: '↘️' }); } catch (_) {} }
     window._ppCustomCallback = function () {
       window._ppPreviaTeams = null;
       /* Tras "▶ COMENZAR PARTIDO" en la previa, abrimos el gm-modal de

@@ -7593,6 +7593,511 @@ window._showSimProgress = function(opts, onDone){
     return null;
   }
 
+  /* ── COPA DEL REY en la card del hub (2026-06-09) ────────────────
+     Petición usuario: TODA competición marcada en el editor
+     «COMPETICIONES LIVERPOOL-FRANCIA» debe poder jugarse desde la card
+     central del hub (como Liga / Mundial 2032 / Mundialito / Joan
+     Gamper), además de desde su propia pantalla. Estos helpers resuelven
+     el partido del club del hub en la ronda de Copa que demanda el
+     calendario individual leyendo copa_state_v1 (sorteo + resultados) y
+     delegan EXACTAMENTE en el mismo flujo que la pantalla de la Copa
+     (`window.copaAbrirPrevia` → showPrePartidoOverlay → abrirCopa). */
+  /* ¿`name` es el club del hub? Alias-tolerante (Bayern↔Liverpool) +
+     mismo mister, sin colar otros humanos. */
+  function _psHubClubMatches(name){
+    if (!name) return false;
+    try {
+      var k = _psNameKey(name);
+      var hub = (typeof _psHumanLogicName === 'function') ? String(_psHumanLogicName()||'') : '';
+      if (hub && k === _psNameKey(hub)) return true;
+      if (k === _psNameKey('Bayern Munich') || k === _psNameKey('Bayern') || k === _psNameKey('Liverpool')) return true;
+      if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)
+          && typeof window._mhSameMister === 'function' && hub && window._mhSameMister(hub, name)) return true;
+    } catch(_){}
+    return false;
+  }
+  /* Etiqueta del calendario individual → ronda+leg del motor de Copa.
+     Mapeo por POSICIÓN del bracket (engine ROUNDS = r1,r2,r16,oct,cua,
+     sf,fin): 1/128→r1, 1/64→r2, 1/32→r16, Octavos→oct, Cuartos→cua,
+     Semis→sf, FINAL→fin. Las rondas de ida+vuelta (oct/cua/sf) leen
+     "Vuelta" del label. */
+  function _copaRondaFromLabel(lbl){
+    var s = String(lbl || '');
+    if (!/copa\s*del\s*rey|final\s*copa/i.test(s)) return null;
+    var esV = /vuelta/i.test(s);
+    if (/final\s*copa\s*del\s*rey/i.test(s)) return { ronda:'fin', esVuelta:false };
+    if (/1\s*\/\s*128/.test(s)) return { ronda:'r1',  esVuelta:false };
+    if (/1\s*\/\s*64/.test(s))  return { ronda:'r2',  esVuelta:false };
+    if (/1\s*\/\s*32/.test(s))  return { ronda:'r16', esVuelta:false };
+    if (/octavos/i.test(s))     return { ronda:'oct', esVuelta:esV };
+    if (/cuartos/i.test(s))     return { ronda:'cua', esVuelta:esV };
+    if (/semis|semifinal/i.test(s)) return { ronda:'sf', esVuelta:esV };
+    return null;
+  }
+  /* Lee copa_state_v1 y resuelve el partido del hub en la ronda dada.
+     Devuelve {ronda,idx,esVuelta,home,away,rival,played,gh,ga,events,mvp,
+     mvpTeam} o null si el hub no juega esa ronda (no sorteado / eliminado). */
+  function _copaHubResolve(info){
+    if (!info || !info.ronda) return null;
+    var cs = null;
+    try { var raw = localStorage.getItem('copa_state_v1'); if (raw) cs = JSON.parse(raw); } catch(_){}
+    if (!cs || !cs.sorteo) return null;
+    var matches = cs.sorteo[info.ronda] || [];
+    if (!matches.length) return null;
+    var idx = -1;
+    for (var i = 0; i < matches.length; i++){
+      var mm = matches[i]; if (!mm) continue;
+      if (_psHubClubMatches(mm.l) || _psHubClubMatches(mm.v)){ idx = i; break; }
+    }
+    if (idx < 0) return null;
+    var m = matches[idx];
+    var _R = cs.resultados || {};
+    var _twoLeg = (info.ronda === 'oct' || info.ronda === 'cua' || info.ronda === 'sf');
+    /* TERCER PARTIDO el MISMO día de la vuelta: si la vuelta de una
+       eliminatoria a doble partido ya se jugó y el global + goles fuera
+       quedaron empatados, el partido de ese día pasa a ser el DESEMPATE
+       (local = m.l, prórroga+penaltis, forma ↘️, 5 min). 2026-06-09. */
+    if (info.esVuelta && _twoLeg){
+      var _ida = (_R[info.ronda + '_ida'] || [])[idx] || null;
+      var _vta = (_R[info.ronda + '_vta'] || [])[idx] || null;
+      if (_ida && _ida.jugado && _vta && _vta.jugado){
+        var _aggL = (_ida.gl|0) + (_vta.gv|0), _aggV = (_ida.gv|0) + (_vta.gl|0);
+        var _awL = (_vta.gv|0), _awV = (_ida.gv|0);
+        if (_aggL === _aggV && _awL === _awV){
+          var _des = (_R[info.ronda + '_des'] || [])[idx] || null;
+          return {
+            ronda: info.ronda, idx: idx, esVuelta: false, desLeg: true, isDesempate: true,
+            home: String(m.l), away: String(m.v),
+            rival: String(_psHubClubMatches(m.l) ? m.v : m.l),
+            played: !!(_des && _des.jugado),
+            gh: _des ? (_des.gl|0) : 0, ga: _des ? (_des.gv|0) : 0,
+            events: (_des && _des.events) || [], mvp: (_des && _des.mvp) || '', mvpTeam: (_des && _des.mvpTeam) || ''
+          };
+        }
+      }
+    }
+    /* El LOCAL de la pierna jugada es m.v en la vuelta, m.l en la ida
+       (mismo criterio que copaAbrirPrevia). */
+    var legHome = info.esVuelta ? m.v : m.l;
+    var legAway = info.esVuelta ? m.l : m.v;
+    if (!legHome || !legAway || legHome === 'PENDIENTE' || legAway === 'PENDIENTE') return null;
+    var rival = _psHubClubMatches(m.l) ? m.v : m.l;
+    /* Estado JUGADO: resultados con clave según ida/vuelta (oct/cua/sf
+       son _ida/_vta; r16 puede vivir bajo 'r16' o 'r16_ida'). */
+    var res = null;
+    try {
+      var R = cs.resultados || {};
+      var keys = info.esVuelta
+        ? [info.ronda + '_vta']
+        : [info.ronda, info.ronda + '_ida'];
+      for (var ki = 0; ki < keys.length && !res; ki++){
+        var lst = R[keys[ki]];
+        if (Array.isArray(lst) && lst[idx] && lst[idx].jugado) res = lst[idx];
+      }
+    } catch(_){}
+    return {
+      ronda: info.ronda, idx: idx, esVuelta: !!info.esVuelta,
+      home: String(legHome), away: String(legAway), rival: String(rival),
+      played: !!res,
+      gh: res ? (res.gl|0) : 0, ga: res ? (res.gv|0) : 0,
+      events: (res && res.events) || [], mvp: (res && res.mvp) || '', mvpTeam: (res && res.mvpTeam) || ''
+    };
+  }
+  /* Escudo de un equipo de Copa (incluye PF/Hypermotion vía la cadena
+     de la Copa, que sí conoce esas plantillas). */
+  function _copaShieldFor(name){
+    try { if (typeof window._copaResolveShield === 'function') return window._copaResolveShield(name) || ''; } catch(_){}
+    return '';
+  }
+  /* Pinta la card de un día de Copa del Rey en el hub. Devuelve true si
+     pintó (hub juega esa ronda), false para que `_cardNonTour` siga con
+     su flujo genérico (hub eliminado / ronda sin sortear). */
+  function _cardCopa(day, info){
+    var st = _stage(); if (!st) return false;
+    var r = _copaHubResolve(info);
+    if (!r) return false;
+    var lbl = day.label || 'Copa del Rey';
+    var homeObj = { name: r.home, shield: _copaShieldFor(r.home), icon: _psClubIcon(r.home) };
+    var awayObj = { name: r.away, shield: _copaShieldFor(r.away), icon: _psClubIcon(r.away) };
+    if (r.played){
+      var actaHtml = '';
+      if (r.events && r.events.length && typeof window._eurFaseRenderActaPanel === 'function'){
+        var uid = 'ps-copa-acta-' + r.ronda + '-' + r.idx + (r.esVuelta?'-v':'-i');
+        try { actaHtml = window._eurFaseRenderActaPanel({ home:r.home, away:r.away, events:r.events, mvp:r.mvp, mvpTeam:r.mvpTeam }, uid); } catch(_){ actaHtml = ''; }
+      }
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">🏆 ' + _esc(lbl) + '</div>'
+        + _psVsBlockHtml(homeObj, awayObj, _psScoreCenterHtml(r.gh, r.ga))
+        + actaHtml
+        + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+        +   '<button type="button" class="ps-btn ghost" id="ps-copa-cont">CONTINUAR ▶</button>'
+        + '</div>'
+        + '</div>';
+      var bc = document.getElementById('ps-copa-cont');
+      if (bc) bc.onclick = function(){ _markDoneAndAdvance(); };
+      return true;
+    }
+    var desNoteC = r.isDesempate
+      ? '<div class="ps-meta" style="margin:4px 0 0;color:#ff9040;font-size:11px;letter-spacing:.5px;">🔁 TERCER PARTIDO (desempate) · empate global y goles fuera · 5 min · prórroga + penaltis</div>'
+      : '';
+    var posponerC = r.isDesempate
+      ? '<button type="button" class="ps-btn ghost" id="ps-copa-posp">📌 POSPONER</button>'
+      : '';
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">🏆 ' + _esc(lbl) + (r.isDesempate ? ' · 3er Partido' : '') + '</div>'
+      + desNoteC
+      + _psVsBlockHtml(homeObj, awayObj, '<div class="ps-x">VS</div>')
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+      +   '<button type="button" class="ps-btn" id="ps-copa-previa">📋 PREVIA · JUGAR ▶</button>'
+      +   posponerC
+      +   '<button type="button" class="ps-btn ghost" id="ps-copa-cont">CONTINUAR ▶</button>'
+      + '</div>'
+      + '</div>';
+    var bp = document.getElementById('ps-copa-previa');
+    if (bp) bp.onclick = function(){
+      try { if (typeof window.copaAbrirPrevia === 'function') window.copaAbrirPrevia(r.ronda, r.idx, r.desLeg ? 'des' : r.esVuelta); } catch(_){}
+    };
+    var bppC = document.getElementById('ps-copa-posp');
+    if (bppC) bppC.onclick = function(){
+      try {
+        _psDeferCurrentMatch({
+          tourId: 'copa', matchKey: 'copa_' + r.ronda + '_' + r.idx + '_d',
+          home: { name: r.home }, away: { name: r.away },
+          label: lbl, date: day.date, emoji: '🏆'
+        });
+      } catch(_){ _markDoneAndAdvance(); }
+    };
+    var bc2 = document.getElementById('ps-copa-cont');
+    if (bc2) bc2.onclick = function(){ _markDoneAndAdvance(); };
+    return true;
+  }
+
+  /* ── COPAS de partido único en la card del hub (2026-06-09) ──────
+     Recopa de Europa, Supercopa de España y Supercopa de Europa: cada
+     una es un bracket a partido único, persiste su estado en su propia
+     clave de localStorage y expone `_xxxAbrirPrevia(phaseKey, idx)`. Los
+     resolutores localizan el partido del club del hub en la ronda que
+     demanda el calendario; la card compartida lo deja JUGAR delegando en
+     el MISMO flujo que la pantalla de la competición. */
+  function _psIsPendName(n){
+    return !n || n === 'PENDIENTE' || n === '__BYE__' || /^@[a-z0-9]+#\d+$/i.test(String(n));
+  }
+  function _psCupTotals(m){
+    return { a: ((m.gh|0) + (m.etGh|0)), b: ((m.ga|0) + (m.etGa|0)) };
+  }
+  /* Card compartida de copa de partido único. `r` = objeto normalizado
+     {home,away,rival,played,gh,ga,events,mvp,mvpTeam,uid,open}. */
+  function _cardCupCard(day, emoji, lbl, r){
+    var st = _stage(); if (!st || !r) return false;
+    function _sh(n){ try { return (typeof window.getTeamLogoUrl === 'function') ? (window.getTeamLogoUrl(n) || '') : ''; } catch(_){ return ''; } }
+    var homeObj = { name:r.home, shield:_sh(r.home), icon:_psClubIcon(r.home) };
+    var awayObj = { name:r.away, shield:_sh(r.away), icon:_psClubIcon(r.away) };
+    if (r.played){
+      var actaHtml = '';
+      if (r.events && r.events.length && typeof window._eurFaseRenderActaPanel === 'function'){
+        try { actaHtml = window._eurFaseRenderActaPanel({ home:r.home, away:r.away, events:r.events, mvp:r.mvp, mvpTeam:r.mvpTeam }, r.uid); } catch(_){ actaHtml = ''; }
+      }
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
+        + _psVsBlockHtml(homeObj, awayObj, _psScoreCenterHtml(r.gh, r.ga))
+        + actaHtml
+        + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+        +   '<button type="button" class="ps-btn ghost" id="ps-cup-cont">CONTINUAR ▶</button>'
+        + '</div>'
+        + '</div>';
+      var bc = document.getElementById('ps-cup-cont');
+      if (bc) bc.onclick = function(){ _markDoneAndAdvance(); };
+      return true;
+    }
+    var desNote = r.isDesempate
+      ? '<div class="ps-meta" style="margin:4px 0 0;color:#ff9040;font-size:11px;letter-spacing:.5px;">🔁 TERCER PARTIDO (desempate) · empate global y goles fuera · 5 min · prórroga + penaltis</div>'
+      : '';
+    var posponerBtn = r.defer
+      ? '<button type="button" class="ps-btn ghost" id="ps-cup-posp">📌 POSPONER</button>'
+      : '';
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + (r.isDesempate ? ' · 3er Partido' : '') + '</div>'
+      + desNote
+      + _psVsBlockHtml(homeObj, awayObj, '<div class="ps-x">VS</div>')
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+      +   '<button type="button" class="ps-btn" id="ps-cup-previa">📋 PREVIA · JUGAR ▶</button>'
+      +   posponerBtn
+      +   '<button type="button" class="ps-btn ghost" id="ps-cup-cont">CONTINUAR ▶</button>'
+      + '</div>'
+      + '</div>';
+    var bp = document.getElementById('ps-cup-previa');
+    if (bp) bp.onclick = function(){ try { r.open(); } catch(_){} };
+    var bpp = document.getElementById('ps-cup-posp');
+    if (bpp && r.defer) bpp.onclick = function(){
+      try {
+        _psDeferCurrentMatch({
+          tourId: r.defer.tourId, matchKey: r.defer.matchKey,
+          home: { name: r.home }, away: { name: r.away },
+          label: lbl, date: day.date, emoji: emoji
+        });
+      } catch(_){ _markDoneAndAdvance(); }
+    };
+    var bc2 = document.getElementById('ps-cup-cont');
+    if (bc2) bc2.onclick = function(){ _markDoneAndAdvance(); };
+    return true;
+  }
+  /* RECOPA DE EUROPA: estado recopa_state_v1.sorteo[phase] (array). */
+  function _recopaHubResolve(lbl){
+    var s = String(lbl || '');
+    if (!/recopa/i.test(s)) return null;
+    var phase = /1\s*\/\s*64/.test(s) ? 'r64'
+      : /1\s*\/\s*32/.test(s) ? 'r32'
+      : /octavos/i.test(s) ? 'r16'
+      : /cuartos/i.test(s) ? 'r8'
+      : /semis|semifinal/i.test(s) ? 'sf'
+      : /final/i.test(s) ? 'fin' : null;
+    if (!phase) return null;
+    var cs = null;
+    try { cs = JSON.parse(localStorage.getItem('recopa_state_v1') || 'null'); } catch(_){}
+    if (!cs || !cs.sorteo || !Array.isArray(cs.sorteo[phase])) return null;
+    var arr = cs.sorteo[phase], idx = -1;
+    for (var i = 0; i < arr.length; i++){
+      var m = arr[i];
+      if (m && (_psHubClubMatches(m.home) || _psHubClubMatches(m.away))){ idx = i; break; }
+    }
+    if (idx < 0) return null;
+    var mm = arr[idx];
+    if (_psIsPendName(mm.home) || _psIsPendName(mm.away)) return null;
+    var t = _psCupTotals(mm);
+    return {
+      home:String(mm.home), away:String(mm.away),
+      rival:String(_psHubClubMatches(mm.home) ? mm.away : mm.home),
+      played:!!mm.played, gh:t.a, ga:t.b,
+      events:mm.events||[], mvp:mm.mvp||'', mvpTeam:mm.mvpTeam||'',
+      uid:'ps-recopa-acta-'+phase+'-'+idx,
+      open:function(){ try { if (typeof window._recopaAbrirPrevia === 'function') window._recopaAbrirPrevia(phase, idx); } catch(_){} }
+    };
+  }
+  /* SUPERCOPA DE ESPAÑA: estado sc_state_v1 {semis:[m0,m1], final}. */
+  function _scHubResolve(lbl){
+    var s = String(lbl || '');
+    if (!/supercopa\s*espa/i.test(s)) return null;
+    var cs = null;
+    try { cs = JSON.parse(localStorage.getItem('sc_state_v1') || 'null'); } catch(_){}
+    if (!cs) return null;
+    var phaseKey, idx, m;
+    if (/final/i.test(s)){
+      phaseKey = 'fin'; idx = 0; m = cs.final;
+      if (!m || !(_psHubClubMatches(m.home) || _psHubClubMatches(m.away))) return null;
+    } else {
+      phaseKey = 'sf'; var sm = cs.semis || []; idx = -1;
+      for (var i = 0; i < sm.length; i++){
+        if (sm[i] && (_psHubClubMatches(sm[i].home) || _psHubClubMatches(sm[i].away))){ idx = i; m = sm[i]; break; }
+      }
+      if (idx < 0) return null;
+    }
+    if (!m || _psIsPendName(m.home) || _psIsPendName(m.away)) return null;
+    var t = _psCupTotals(m);
+    return {
+      home:String(m.home), away:String(m.away),
+      rival:String(_psHubClubMatches(m.home) ? m.away : m.home),
+      played:!!m.played, gh:t.a, ga:t.b,
+      events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+      uid:'ps-sc-acta-'+phaseKey+'-'+idx,
+      open:function(){ try { if (typeof window._scAbrirPrevia === 'function') window._scAbrirPrevia(phaseKey, idx); } catch(_){} }
+    };
+  }
+  /* SUPERCOPA DE EUROPA (Supercup): estado usc_state_v1 {semis,final}. */
+  function _uscHubResolve(lbl){
+    var s = String(lbl || '');
+    if (!/supercup|supercopa\s*europa/i.test(s)) return null;
+    var cs = null;
+    try { cs = JSON.parse(localStorage.getItem('usc_state_v1') || 'null'); } catch(_){}
+    if (!cs) return null;
+    var phaseKey, idx, m;
+    if (/final/i.test(s)){
+      phaseKey = 'fin'; idx = 0; m = cs.final;
+      if (!m || !(_psHubClubMatches(m.home) || _psHubClubMatches(m.away))) return null;
+    } else {
+      phaseKey = 'sf'; var sm = cs.semis || []; idx = -1;
+      for (var i = 0; i < sm.length; i++){
+        if (sm[i] && (_psHubClubMatches(sm[i].home) || _psHubClubMatches(sm[i].away))){ idx = i; m = sm[i]; break; }
+      }
+      if (idx < 0) return null;
+    }
+    if (!m || _psIsPendName(m.home) || _psIsPendName(m.away)) return null;
+    var t = _psCupTotals(m);
+    return {
+      home:String(m.home), away:String(m.away),
+      rival:String(_psHubClubMatches(m.home) ? m.away : m.home),
+      played:!!m.played, gh:t.a, ga:t.b,
+      events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+      uid:'ps-usc-acta-'+phaseKey+'-'+idx,
+      open:function(){ try { if (typeof window._uscAbrirPrevia === 'function') window._uscAbrirPrevia(phaseKey, idx); } catch(_){} }
+    };
+  }
+
+  /* CHAMPIONS / EUROPA · FASE DE GRUPOS (Swiss league phase). Estado en
+     {comp}_phase_v1 = {teams, pairs:[{jornada,home,away,gh,ga,played,...}]}.
+     El label del calendario es "Europa — Grupo JN" y NO indica la comp
+     (ucl/uel/uecl), así que probamos las tres y usamos aquella donde el
+     hub juega esa jornada (el hub juega UNA sola europea por temporada).
+     Solo la FASE DE GRUPOS es jugable: la KO europea está «próximamente»
+     (s-ucl-playoffs: «Cuadro de Eliminatorias — próximamente»), así que
+     los días KO («Octavos/Cuartos/Semis/Repesca Ida/Vuelta», «FINALES
+     EUROPA») caen al flujo genérico. `_eurFaseAbrirPrevia(comp,jor,idx)`
+     usa `state.pairs[idx]`, así que idx = índice en `state.pairs`. */
+  function _eurHubResolve(lbl){
+    var s = String(lbl || '');
+    var mj = /Europa\s*[—\-]\s*Grupo\s*J\s*(\d+)/i.exec(s);
+    if (!mj) return null;
+    var jor = parseInt(mj[1], 10);
+    if (!(jor > 0)) return null;
+    var comps = ['ucl','uel','uecl'];
+    for (var ci = 0; ci < comps.length; ci++){
+      var comp = comps[ci], stt = null;
+      try { stt = JSON.parse(localStorage.getItem(comp + '_phase_v1') || 'null'); } catch(_){}
+      if (!stt || !Array.isArray(stt.pairs)) continue;
+      for (var i = 0; i < stt.pairs.length; i++){
+        var p = stt.pairs[i];
+        if (!p || (p.jornada|0) !== jor) continue;
+        if (!_psHubClubMatches(p.home) && !_psHubClubMatches(p.away)) continue;
+        if (_psIsPendName(p.home) || _psIsPendName(p.away)) return null;
+        var EMOJI = comp === 'ucl' ? '🔵' : (comp === 'uel' ? '🟠' : '🟢');
+        return {
+          home:String(p.home), away:String(p.away),
+          rival:String(_psHubClubMatches(p.home) ? p.away : p.home),
+          played:!!p.played, gh:(p.gh|0), ga:(p.ga|0),
+          events:p.events||[], mvp:p.mvp||'', mvpTeam:p.mvpTeam||'',
+          uid:'ps-eur-acta-'+comp+'-'+jor+'-'+i, emoji:EMOJI,
+          open:(function(_c,_j,_i){ return function(){ try { if (typeof window._eurFaseAbrirPrevia === 'function') window._eurFaseAbrirPrevia(_c,_j,_i); } catch(_){} }; })(comp, jor, i)
+        };
+      }
+    }
+    return null;
+  }
+  /* CHAMPIONS / EUROPA · ELIMINATORIAS (playoffs). Días "Europa —
+     Repesca/Octavos/Cuartos/Semis Ida/Vuelta" y "FINALES EUROPA".
+     Localiza el partido del hub en {comp}_ko_state_v1 y lo abre con el
+     MISMO flujo que la pantalla de playoffs (_eurKoOpenMatch). 2026-06-09. */
+  function _eurKoHubResolve(lbl){
+    var s = String(lbl || '');
+    var round = null, leg = null;
+    if(/finales?\s+europa|final\s+europa/i.test(s)){ round='fin'; leg='f'; }
+    else if(!/europa/i.test(s)) return null;
+    else if(/repesca/i.test(s)){ round='rep'; leg=/vuelta/i.test(s)?'v':'i'; }
+    else if(/octavos/i.test(s)){ round='oct'; leg=/vuelta/i.test(s)?'v':'i'; }
+    else if(/cuartos/i.test(s)){ round='qf'; leg=/vuelta/i.test(s)?'v':'i'; }
+    else if(/semis|semifinal/i.test(s)){ round='sf'; leg=/vuelta/i.test(s)?'v':'i'; }
+    else return null;
+    var comps = ['ucl','uel','uecl'];
+    function _isPend(n){ return !n || n === 'PENDIENTE' || n === '__BYE__' || /^@/.test(String(n)); }
+    for(var ci=0; ci<comps.length; ci++){
+      var comp = comps[ci], st = null;
+      /* Avanzar el cuadro para que el desempate (tie.des) se cree si la
+         vuelta del hub quedó empatada. */
+      try { if(typeof window._eurKoAdvance === 'function') window._eurKoAdvance(comp); } catch(_){}
+      try { st = JSON.parse(localStorage.getItem(comp + '_ko_state_v1') || 'null'); } catch(_){}
+      if(!st || !st.rounds) continue;
+      var EMOJI = comp === 'ucl' ? '🔵' : (comp === 'uel' ? '🟠' : '🟢');
+      var arr = (round === 'fin') ? st.rounds.fin : st.rounds[round];
+      if(!Array.isArray(arr)) continue;
+      for(var i=0; i<arr.length; i++){
+        var tie = arr[i]; if(!tie) continue;
+        var hubInTie = _psHubClubMatches(tie.a) || _psHubClubMatches(tie.b);
+        var m = (round === 'fin') ? tie.m : (leg === 'v' ? tie.vta : tie.ida);
+        var _legUsed = leg;
+        /* TERCER PARTIDO el MISMO día de la vuelta: si la vuelta ya se
+           jugó y el global + goles fuera quedaron empatados, el partido
+           que toca ese día pasa a ser el DESEMPATE. 2026-06-09. */
+        if(round !== 'fin' && leg === 'v' && tie.vta && tie.vta.played && tie.ida && tie.ida.played){
+          var _aAgg=(tie.vta.gh|0)+(tie.ida.ga|0), _bAgg=(tie.ida.gh|0)+(tie.vta.ga|0);
+          var _aAw=(tie.ida.ga|0), _bAw=(tie.vta.ga|0);
+          if(_aAgg===_bAgg && _aAw===_bAw && tie.des && tie.des.home && tie.des.away){
+            m = tie.des; _legUsed = 'd';
+          }
+        }
+        /* Caso JUGABLE: el leg existe con ambos equipos definidos. */
+        if(m && m.home && m.away && !_isPend(m.home) && !_isPend(m.away)
+           && (_psHubClubMatches(m.home) || _psHubClubMatches(m.away))){
+          return {
+            home:String(m.home), away:String(m.away),
+            rival:String(_psHubClubMatches(m.home) ? m.away : m.home),
+            played:!!m.played, gh:(m.gh|0), ga:(m.ga|0),
+            events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+            uid:'ps-eurko-'+comp+'-'+round+'-'+i+'-'+_legUsed, emoji:EMOJI,
+            comp:comp, koRound:round, koIdx:i, koLeg:_legUsed,
+            isDesempate: (_legUsed === 'd'),
+            defer: { tourId:comp, matchKey:'eurko_'+comp+'_'+round+'_'+i+'_'+_legUsed },
+            open:(function(_c,_r,_i,_l){ return function(){ try { if(typeof window._eurKoOpenMatch === 'function') window._eurKoOpenMatch(_c,_r,_i,_l); } catch(_){} }; })(comp, round, i, _legUsed)
+          };
+        }
+        /* Caso RIVAL PENDIENTE: el hub está en la eliminatoria pero su
+           rival aún no se conoce (la eliminatoria previa no se ha jugado).
+           El humano puede auto-simular los IA-vs-IA previos o posponer. */
+        if(hubInTie){
+          var nPendIA = 0;
+          try { nPendIA = (typeof window._eurKoCountPendingIA === 'function') ? window._eurKoCountPendingIA(comp) : 0; } catch(_){}
+          return {
+            pending:true, comp:comp, koRound:round, koIdx:i, koLeg:leg, emoji:EMOJI,
+            pendingIA: nPendIA > 0,
+            hubName: _psHubClubMatches(tie.a) ? String(tie.a) : String(tie.b)
+          };
+        }
+      }
+    }
+    return null;
+  }
+  /* Card "RIVAL PENDIENTE" de un playoff europeo: el humano está en la
+     eliminatoria pero su rival aún no se conoce. Ofrece 🤖 Simular
+     eliminatorias previas (IA-vs-IA) y 📌 POSPONER (→ PARTIDOS
+     PENDIENTES). 2026-06-09. */
+  function _cardEurKoPending(day, eko){
+    var st = _stage(); if (!st) return;
+    var lbl = day.label || 'Eliminatoria';
+    var mkUid = 'eurko_' + eko.comp + '_' + eko.koRound + '_' + eko.koIdx + '_' + eko.koLeg;
+    var simBtn = eko.pendingIA
+      ? '<button type="button" class="ps-btn" id="ps-eurko-sim">🤖 Simular eliminatorias previas</button>'
+      : '';
+    var msg = eko.pendingIA
+      ? '⚠️ RIVAL PENDIENTE<br><span style="font-size:11px;opacity:.75;">La eliminatoria previa (IA) aún no se ha jugado. Simúlala para conocer a tu rival, o pospón este partido.</span>'
+      : '⏳ ESPERANDO RIVAL<br><span style="font-size:11px;opacity:.75;">Tu rival saldrá de una eliminatoria que debe jugar otro equipo humano. Puedes posponer este partido.</span>';
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + eko.emoji + ' ' + _esc(lbl) + '</div>'
+      + '<div class="ps-meta" style="margin:16px 0;color:rgba(255,255,255,.85);line-height:1.5;">' + msg + '</div>'
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+      +   simBtn
+      +   '<button type="button" class="ps-btn ghost" id="ps-eurko-posp">📌 POSPONER</button>'
+      +   '<button type="button" class="ps-btn ghost" id="ps-eurko-cont">CONTINUAR ▶</button>'
+      + '</div>'
+      + '</div>';
+    var bs = document.getElementById('ps-eurko-sim');
+    if (bs) bs.onclick = function(){
+      bs.disabled = true;
+      var n = 0;
+      try { if (typeof window._eurKoSimPendingIA === 'function') n = window._eurKoSimPendingIA(eko.comp); } catch(_){}
+      try { var stg = _stage(); if (stg) stg._psSig = null; } catch(_){}
+      _render();
+    };
+    var bp = document.getElementById('ps-eurko-posp');
+    if (bp) bp.onclick = function(){
+      try {
+        _psDeferCurrentMatch({
+          tourId: eko.comp, matchKey: mkUid,
+          home: { name: eko.hubName || _psHumanName() }, away: { name: 'Por definir' },
+          label: lbl, date: day.date, emoji: eko.emoji
+        });
+      } catch(_){ _markDoneAndAdvance(); }
+    };
+    var bc = document.getElementById('ps-eurko-cont');
+    if (bc) bc.onclick = function(){ _markDoneAndAdvance(); };
+  }
+
   /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
      Petición usuario (foto 2): TODAS las cards del hub (Liga, Copa,
      competiciones europeas, torneos de verano, Mundialito y Selección)
@@ -7664,6 +8169,33 @@ window._showSimProgress = function(opts, onDone){
     var lbl = day.label || 'Partido';
     var emoji = (typeof _pendHvHEmojiFromLabel === 'function')
                 ? _pendHvHEmojiFromLabel(lbl) : '⚽';
+    /* COPA DEL REY: si el día es de Copa y el hub juega esa ronda,
+       pintamos la card jugable (escudos + PREVIA·JUGAR ▶) que delega en
+       el mismo flujo que la pantalla de la Copa. Si el hub NO juega
+       (eliminado / sin sortear), `_cardCopa` devuelve false y seguimos
+       con el flujo genérico de abajo. 2026-06-09. */
+    try {
+      var _copaInfo = _copaRondaFromLabel(lbl);
+      if (_copaInfo && _cardCopa(day, _copaInfo)) return;
+    } catch(_){}
+    /* RECOPA / SUPERCOPA ESPAÑA / SUPERCOPA EUROPA: copas de partido
+       único. Si el hub juega esa ronda, card jugable; si no, seguimos
+       al flujo genérico. 2026-06-09. */
+    try {
+      var _rec = _recopaHubResolve(lbl);
+      if (_rec && _cardCupCard(day, '🟤', lbl, _rec)) return;
+      var _scc = _scHubResolve(lbl);
+      if (_scc && _cardCupCard(day, '🏆', lbl, _scc)) return;
+      var _uscc = _uscHubResolve(lbl);
+      if (_uscc && _cardCupCard(day, '🇪🇺', lbl, _uscc)) return;
+      /* CHAMPIONS / EUROPA fase de grupos ("Europa — Grupo JN"). La KO
+         europea aún no es jugable → esos días caen al flujo genérico. */
+      var _eko = _eurKoHubResolve(lbl);
+      if (_eko && _eko.pending){ _cardEurKoPending(day, _eko); return; }
+      if (_eko && _cardCupCard(day, _eko.emoji, lbl, _eko)) return;
+      var _eur = _eurHubResolve(lbl);
+      if (_eur && _cardCupCard(day, _eur.emoji, lbl, _eur)) return;
+    } catch(_){}
     /* Liga EA Sports: parseamos la jornada del label para (a) abrir la
        previa del partido del Liverpool directamente y (b) como respaldo,
        el atajo "VER JORNADA N" hacia la lista de la jornada. El resto de
@@ -35686,6 +36218,505 @@ window._showSimProgress = function(opts, onDone){
   window._eurFaseSave   = saveState;
   window._eurFaseDraw   = drawPairs;
   window._eurFaseAssign = assignJornadas;
+
+  /* ════════════════════════════════════════════════════════════════
+     PLAYOFFS / ELIMINATORIAS · UCL · UEL · UECL (2026-06-09)
+     Petición usuario: copiar la interfaz de la Copa del Rey. Tras los
+     8 partidos de la fase de liga (Swiss), los 8 primeros pasan directos
+     a Octavos (juegan la VUELTA como local); del 9 al 24 disputan la
+     REPESCA (1/32). Emparejamientos fijos (por puesto):
+       24v9→ganador vs 8 · 17v16→vs1 · 21v11→vs5 · 20v13→vs4
+       19v14→vs3 · 22v12→vs6 · 23v10→vs7 · 18v15→vs2
+     Rondas Repesca→Octavos→Cuartos→Semis a IDA/VUELTA con GOLES FUERA
+     DOBLES; si el global sigue empatado → TERCER PARTIDO (desempate, y
+     si éste acaba empatado → prórroga+penaltis). La FINAL es a partido
+     único con prórroga+penaltis. Estado en `{comp}_ko_state_v1`. ════ */
+  var _KO_KEY = { ucl:'ucl_ko_state_v1', uel:'uel_ko_state_v1', uecl:'uecl_ko_state_v1' };
+  var _KO_TAG = { ucl:'UCL', uel:'Europa', uecl:'UECL' };
+  var _KO_DOT = { ucl:'🔵', uel:'🟠', uecl:'🟢' };
+  /* Paleta por comp para las cards (azul UCL · naranja UEL · verde UECL). */
+  var _KO_COL = {
+    ucl:  { main:'#3b6cff', soft:'rgba(59,108,255,.30)', bg:'linear-gradient(120deg,rgba(40,80,220,.28),rgba(10,25,80,.45))', bd:'rgba(99,140,255,.45)' },
+    uel:  { main:'#ff8c1a', soft:'rgba(255,140,26,.30)', bg:'linear-gradient(120deg,rgba(200,110,10,.26),rgba(70,35,0,.45))',  bd:'rgba(255,160,60,.50)' },
+    uecl: { main:'#39d353', soft:'rgba(57,211,83,.30)',  bg:'linear-gradient(120deg,rgba(30,150,55,.26),rgba(5,45,15,.45))',   bd:'rgba(90,220,120,.45)' }
+  };
+  /* DOM de cada caja por ronda+pierna. */
+  var _KO_DOM = {
+    ucl:  { rep_i:'ucl-rep-i',  rep_v:'ucl-rep-v',  oct_i:'ucl-oct-i',  oct_v:'ucl-oct-v',  qf_i:'ucl-qf-i',  qf_v:'ucl-qf-v',  sf_i:'ucl-sf-i',  sf_v:'ucl-sf-v',  fin:'ucl-fin'  },
+    uel:  { rep_i:'uel-rep-i',  rep_v:'uel-rep-v',  oct_i:'uel-oct-i',  oct_v:'uel-oct-v',  qf_i:'uel-qf-i',  qf_v:'uel-qf-v',  sf_i:'uel-sf-i',  sf_v:'uel-sf-v',  fin:'uel-fin'  },
+    uecl: { rep_i:'uecl-rep-i', rep_v:'uecl-rep-v', oct_i:'uecl-oct-i', oct_v:'uecl-oct-v', qf_i:'uecl-qf-i', qf_v:'uecl-qf-v', sf_i:'uecl-sf-i', sf_v:'uecl-sf-v', fin:'uecl-fin' }
+  };
+  /* Repesca por PUESTO (1-indexed): [mejor, peor, rivalTop8EnOctavos].
+     El mejor sembrado juega la VUELTA como local (ida visitante). */
+  var _KO_REP_SEEDS = [
+    [9,24,8],[16,17,1],[11,21,5],[13,20,4],[14,19,3],[12,22,6],[10,23,7],[15,18,2]
+  ];
+  var _KO_ROUND_LBL = { rep:'Repesca 1/32', oct:'Octavos', qf:'Cuartos', sf:'Semis', fin:'FINAL' };
+
+  function _koLoad(comp){ try { return JSON.parse(localStorage.getItem(_KO_KEY[comp]) || 'null'); } catch(_){ return null; } }
+  function _koSave(comp, st){
+    try { localStorage.setItem(_KO_KEY[comp], JSON.stringify(st)); } catch(_){}
+    try {
+      fetch('/api/kv/' + _KO_KEY[comp], { method:'POST', headers:{'Content-Type':'application/json'},
+        credentials:'same-origin', body: JSON.stringify({ value: st || {} }) }).catch(function(){});
+    } catch(_){}
+  }
+  function _koLeg(home, away){ return { home:home, away:away, gh:null, ga:null, played:false, events:[], mvp:'', mvpTeam:'' }; }
+  function _koGroupComplete(comp){
+    var state = loadState(comp);
+    if(!state || !Array.isArray(state.pairs) || !state.pairs.length) return false;
+    if((state.teams||[]).length < 24) return false;
+    return state.pairs.every(function(p){ return p && p.played; });
+  }
+  /* Construye el cuadro completo (esqueleto) cuando la fase de liga
+     está terminada. Idempotente: si ya existe `built`, no rehace. */
+  function _koBuild(comp){
+    var ex = _koLoad(comp);
+    if(ex && ex.built) return ex;
+    if(!_koGroupComplete(comp)) return null;
+    var rank = _eurFaseComputeStandings(comp);
+    if(rank.length < 24) return null;
+    var seed = {}; for(var i=0;i<24;i++) seed[i+1] = rank[i].name;
+    var seedOf = {}; for(var s=1;s<=24;s++) seedOf[seed[s]] = s;
+    var st = { built:true, comp:comp, seeds:[], seedOf:seedOf,
+               rounds:{ rep:[], oct:[], qf:[], sf:[], fin:[] }, champion:null, runnerUp:null };
+    for(var s2=1;s2<=24;s2++) st.seeds.push(seed[s2]);
+    /* Repesca: el mejor (a) hace la VUELTA en casa; el peor (b) la IDA. */
+    _KO_REP_SEEDS.forEach(function(p){
+      var better = seed[p[0]], worse = seed[p[1]];
+      st.rounds.rep.push({
+        a:better, b:worse, aSeed:p[0], bSeed:p[1], octTop:p[2],
+        ida:_koLeg(worse, better), vta:_koLeg(better, worse), des:null, winner:null
+      });
+    });
+    /* Octavos: el cabeza de serie top (octTop) espera al ganador de su
+       repesca. El top siembra como local de VUELTA. b = TBD. */
+    _KO_REP_SEEDS.forEach(function(p, ri){
+      st.rounds.oct.push({ a:seed[p[2]], b:null, aSeed:p[2], bSeed:null,
+        repFrom:ri, ida:null, vta:null, des:null, winner:null });
+    });
+    /* Cuartos / Semis / Final: esqueleto vacío (se llenan al avanzar). */
+    for(var q=0;q<4;q++) st.rounds.qf.push({ a:null, b:null, aSeed:null, bSeed:null, ida:null, vta:null, des:null, winner:null });
+    for(var sm=0;sm<2;sm++) st.rounds.sf.push({ a:null, b:null, aSeed:null, bSeed:null, ida:null, vta:null, des:null, winner:null });
+    st.rounds.fin.push({ a:null, b:null, aSeed:null, bSeed:null, m:null, winner:null });
+    _koSave(comp, st);
+    return st;
+  }
+  /* Resuelve una eliminatoria a doble partido. Devuelve:
+       {winner, loser, aggA, aggB, awayA, awayB, decided:bool, needDes:bool} */
+  function _koTwoLegResult(tie){
+    var ida = tie.ida, vta = tie.vta;
+    if(!ida || !vta || !ida.played || !vta.played) return { decided:false };
+    /* ida: home=b, away=a · vta: home=a, away=b. */
+    var aAgg = (vta.gh|0) + (ida.ga|0);     /* a: local en vuelta + visitante en ida */
+    var bAgg = (ida.gh|0) + (vta.ga|0);     /* b: local en ida + visitante en vuelta */
+    var aAway = (ida.ga|0);                 /* goles de a fuera (en la ida) */
+    var bAway = (vta.ga|0);                 /* goles de b fuera (en la vuelta) */
+    if(aAgg !== bAgg) return { decided:true, winner: aAgg>bAgg?tie.a:tie.b, loser: aAgg>bAgg?tie.b:tie.a, aAgg:aAgg, bAgg:bAgg, aAway:aAway, bAway:bAway };
+    if(aAway !== bAway) return { decided:true, winner: aAway>bAway?tie.a:tie.b, loser: aAway>bAway?tie.b:tie.a, aAgg:aAgg, bAgg:bAgg, aAway:aAway, bAway:bAway };
+    /* Global Y goles fuera empatados → TERCER PARTIDO (desempate). */
+    if(tie.des && tie.des.played){
+      var dh = (tie.des.gh|0) + (tie.des.etGh|0), da = (tie.des.ga|0) + (tie.des.etGa|0);   /* des: home=a, away=b (incluye prórroga) */
+      var w;
+      if(dh > da) w = tie.a; else if(da > dh) w = tie.b;
+      else { /* desempate empatado → penaltis */ w = (tie.des.penWinner === 'b') ? tie.b : (tie.des.penWinner === 'a' ? tie.a : null); }
+      if(w) return { decided:true, winner:w, loser: w===tie.a?tie.b:tie.a, aAgg:aAgg, bAgg:bAgg, aAway:aAway, bAway:bAway, viaDes:true };
+    }
+    return { decided:false, needDes:true, aAgg:aAgg, bAgg:bAgg, aAway:aAway, bAway:bAway };
+  }
+  function _koPenWinner(a, b){
+    /* Penaltis IA: ponderado por poder del equipo (fallback aleatorio). */
+    var pa = 50, pb = 50;
+    try { if(typeof window._teamOffense === 'function'){ pa = (window._teamOffense(a)||50); pb = (window._teamOffense(b)||50); } } catch(_){}
+    return (Math.random() * (pa + pb) < pa) ? a : b;
+  }
+  /* Avanza el cuadro: rellena `b` de Octavos con ganadores de Repesca,
+     crea ida/vta cuando ambos equipos se conocen, y compone QF/SF/FIN.
+     Idempotente. */
+  function _koAdvance(comp, st){
+    if(!st || !st.rounds) return;
+    function ensureLegs(tie, betterFirst){
+      /* betterFirst: a = mejor sembrado (local de vuelta). */
+      if(tie.a && tie.b && !tie.ida){ tie.ida = _koLeg(tie.b, tie.a); tie.vta = _koLeg(tie.a, tie.b); }
+    }
+    function resolveRound(roundKey, nextKey, pairMap){
+      var R = st.rounds[roundKey];
+      R.forEach(function(tie, idx){
+        if(tie.winner) return;
+        if(tie.a && tie.b){
+          ensureLegs(tie);
+          var r = _koTwoLegResult(tie);
+          if(r.needDes && !tie.des){ tie.des = { home:tie.a, away:tie.b, gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[], mvp:'', mvpTeam:'' }; }
+          if(r.decided){ tie.winner = r.winner; tie.loser = r.loser; }
+        }
+      });
+    }
+    /* Repesca → Octavos.b */
+    resolveRound('rep');
+    st.rounds.rep.forEach(function(tie, ri){
+      if(tie.winner){
+        var oct = st.rounds.oct[ri];
+        if(oct && !oct.b){ oct.b = tie.winner; oct.bSeed = st.seedOf[tie.winner] || 99; }
+      }
+    });
+    /* Octavos (resuelve). El emparejamiento de Octavos respeta el orden
+       de _KO_REP_SEEDS (idx ri); QF empareja oct adyacentes. */
+    resolveRound('oct');
+    /* Octavos → Cuartos (oct[0]&oct[1]→qf0, etc.). El mejor sembrado de
+       los dos ganadores hace la vuelta en casa. */
+    function feed(srcKey, dstKey){
+      var S = st.rounds[srcKey], D = st.rounds[dstKey];
+      for(var d=0; d<D.length; d++){
+        var t1 = S[d*2], t2 = S[d*2+1];
+        var dst = D[d];
+        if(dst.a && dst.b) continue;
+        if(t1 && t1.winner && t2 && t2.winner){
+          var s1 = st.seedOf[t1.winner] || 99, s2 = st.seedOf[t2.winner] || 99;
+          var better = (s1 <= s2) ? t1.winner : t2.winner;
+          var worse  = (s1 <= s2) ? t2.winner : t1.winner;
+          dst.a = better; dst.b = worse; dst.aSeed = Math.min(s1,s2); dst.bSeed = Math.max(s1,s2);
+        }
+      }
+    }
+    feed('oct','qf'); resolveRound('qf');
+    feed('qf','sf');  resolveRound('sf');
+    /* Semis → Final (partido único). */
+    var fin = st.rounds.fin[0];
+    if(fin && !fin.a && st.rounds.sf[0].winner && st.rounds.sf[1].winner){
+      var w0 = st.rounds.sf[0].winner, w1 = st.rounds.sf[1].winner;
+      var f0 = st.seedOf[w0] || 99, f1 = st.seedOf[w1] || 99;
+      fin.a = (f0 <= f1) ? w0 : w1; fin.b = (f0 <= f1) ? w1 : w0;
+      fin.m = { home:fin.a, away:fin.b, gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[], mvp:'', mvpTeam:'' };
+    }
+    if(fin && fin.m && fin.m.played && !fin.winner){
+      var fh = (fin.m.gh|0) + (fin.m.etGh|0), fa = (fin.m.ga|0) + (fin.m.etGa|0);
+      if(fh > fa) fin.winner = fin.a;
+      else if(fa > fh) fin.winner = fin.b;
+      else fin.winner = (fin.m.penWinner === 'b') ? fin.b : (fin.m.penWinner === 'a' ? fin.a : null);
+      if(fin.winner){ st.champion = fin.winner; st.runnerUp = (fin.winner === fin.a) ? fin.b : fin.a; }
+    }
+  }
+  window._eurKoBuild = _koBuild;
+  window._eurKoAdvance = function(comp){ var st=_koLoad(comp); if(st){ _koAdvance(comp,st); _koSave(comp,st); } return st; };
+
+  /* Marcador IA síncrono (motor 4-ejes canónico, fallback aleatorio). */
+  function _koSimScore(home, away){
+    var gh = 0, ga = 0;
+    try {
+      if(typeof window._simIAvsIAWithContext === 'function'){
+        var r = window._simIAvsIAWithContext(home, away, 0);
+        gh = Math.max(0, Math.round(+(r && r.gh) || 0));
+        ga = Math.max(0, Math.round(+(r && r.ga) || 0));
+      } else { gh = Math.floor(Math.random()*4); ga = Math.floor(Math.random()*4); }
+    } catch(_){ gh = Math.floor(Math.random()*4); ga = Math.floor(Math.random()*4); }
+    return { gh:gh, ga:ga };
+  }
+  /* Nº de partidos IA-vs-IA actualmente jugables y pendientes (legs +
+     desempates + final). Si > 0, el botón "🤖 Simular previas" del hub
+     tiene trabajo que hacer. */
+  function _eurKoCountPendingIA(comp){
+    var st = _koLoad(comp); if(!st || !st.rounds) return 0;
+    var c = 0;
+    ['rep','oct','qf','sf'].forEach(function(rk){
+      (st.rounds[rk] || []).forEach(function(tie){
+        if(!tie || !tie.a || !tie.b || tie.winner) return;
+        if(tie.ida && !tie.ida.played && !_isHumanTeam(tie.ida.home) && !_isHumanTeam(tie.ida.away)) c++;
+        if(tie.vta && tie.ida && tie.ida.played && !tie.vta.played && !_isHumanTeam(tie.vta.home) && !_isHumanTeam(tie.vta.away)) c++;
+        if(tie.des && !tie.des.played && !_isHumanTeam(tie.des.home) && !_isHumanTeam(tie.des.away)) c++;
+      });
+    });
+    var fin = st.rounds.fin[0];
+    if(fin && fin.m && !fin.m.played && fin.a && fin.b && !_isHumanTeam(fin.m.home) && !_isHumanTeam(fin.m.away)) c++;
+    return c;
+  }
+  window._eurKoCountPendingIA = _eurKoCountPendingIA;
+  /* Auto-simula TODOS los partidos IA-vs-IA jugables del cuadro (legs,
+     desempates y final), avanzando en cascada, hasta que solo queden
+     partidos con HUMANO. Los partidos del propio humano NUNCA se tocan
+     (los salta el guard `_isHumanTeam`). Devuelve nº de partidos jugados. */
+  function _eurKoSimPendingIA(comp){
+    var st = _koLoad(comp); if(!st || !st.rounds) return 0;
+    var simmed = 0, guard = 0;
+    while(guard++ < 40){
+      _koAdvance(comp, st);
+      var did = false;
+      ['rep','oct','qf','sf'].forEach(function(rk){
+        (st.rounds[rk] || []).forEach(function(tie){
+          if(!tie || !tie.a || !tie.b || tie.winner) return;
+          if(tie.ida && !tie.ida.played && !_isHumanTeam(tie.ida.home) && !_isHumanTeam(tie.ida.away)){
+            var s = _koSimScore(tie.ida.home, tie.ida.away); tie.ida.gh = s.gh; tie.ida.ga = s.ga; tie.ida.played = true; simmed++; did = true;
+          }
+          if(tie.vta && tie.ida && tie.ida.played && !tie.vta.played && !_isHumanTeam(tie.vta.home) && !_isHumanTeam(tie.vta.away)){
+            var s2 = _koSimScore(tie.vta.home, tie.vta.away); tie.vta.gh = s2.gh; tie.vta.ga = s2.ga; tie.vta.played = true; simmed++; did = true;
+          }
+          var rr = _koTwoLegResult(tie);
+          if(rr.needDes){
+            if(!tie.des) tie.des = { home:tie.a, away:tie.b, gh:null, ga:null, etGh:null, etGa:null, penWinner:null, played:false, events:[], mvp:'', mvpTeam:'' };
+            if(!tie.des.played && !_isHumanTeam(tie.des.home) && !_isHumanTeam(tie.des.away)){
+              var s3 = _koSimScore(tie.des.home, tie.des.away); tie.des.gh = s3.gh; tie.des.ga = s3.ga; tie.des.etGh = 0; tie.des.etGa = 0;
+              if(s3.gh === s3.ga){ var w = _koPenWinner(tie.des.home, tie.des.away); tie.des.penWinner = (w === tie.des.home) ? 'a' : 'b'; }
+              tie.des.played = true; simmed++; did = true;
+            }
+          }
+        });
+      });
+      var fin = st.rounds.fin[0];
+      if(fin && fin.m && !fin.m.played && fin.a && fin.b && !_isHumanTeam(fin.m.home) && !_isHumanTeam(fin.m.away)){
+        var sf = _koSimScore(fin.m.home, fin.m.away); fin.m.gh = sf.gh; fin.m.ga = sf.ga; fin.m.etGh = 0; fin.m.etGa = 0;
+        if(sf.gh === sf.ga){ var wf = _koPenWinner(fin.m.home, fin.m.away); fin.m.penWinner = (wf === fin.m.home) ? 'a' : 'b'; }
+        fin.m.played = true; simmed++; did = true;
+      }
+      if(!did) break;
+    }
+    _koAdvance(comp, st); _koSave(comp, st);
+    return simmed;
+  }
+  window._eurKoSimPendingIA = _eurKoSimPendingIA;
+
+  /* ── Contexto de partido que SOBREVIVE al reset de la previa ──────
+     `showPrePartidoOverlay` llama a `_ppResetFormStates` (borra forma +
+     _ppDurationMin). Para el TERCER PARTIDO (desempate) y la FINAL
+     necesitamos imponer: estado de forma de ambos equipos, duración y
+     prórroga. Parcheamos el reset (patrón Superliga `_slPendingDur`) para
+     re-aplicar `window._ppPendingMatchCtx` justo después. Reintenta hasta
+     que el bundle defina la función. 2026-06-09. */
+  (function(){
+    function _patch(){
+      var orig = window._ppResetFormStates;
+      if(typeof orig !== 'function') return false;
+      if(orig._desCtxPatched) return true;
+      window._ppResetFormStates = function(){
+        orig.apply(this, arguments);
+        var c = window._ppPendingMatchCtx;
+        if(c){
+          if(c.durMin != null) window._ppDurationMin = c.durMin;
+          window._ppFormStates = window._ppFormStates || { home:'🎲', away:'🎲' };
+          if(c.formHome) window._ppFormStates.home = c.formHome;
+          if(c.formAway) window._ppFormStates.away = c.formAway;
+          window._ppPendingMatchCtx = null;
+        }
+      };
+      window._ppResetFormStates._desCtxPatched = true;
+      return true;
+    }
+    if(!_patch()){
+      var t = 0, iv = setInterval(function(){ if(_patch() || t++ > 60) clearInterval(iv); }, 200);
+    }
+    /* Fija el contexto del PRÓXIMO partido (se consume en el reset). */
+    window._ppSetMatchCtx = function(ctx){ window._ppPendingMatchCtx = ctx || null; };
+  })();
+
+  /* ── Persistencia de resultados (humano + IA) ──────────────────── */
+  window._eurKoSaveHumanResult = function(comp, roundKey, idx, leg, gh, ga, etGh, etGa, penWinner, events, mvp, mvpTeam, home, away){
+    var st = _koLoad(comp); if(!st || !st.rounds) return;
+    var tie = (roundKey === 'fin') ? st.rounds.fin[0] : (st.rounds[roundKey] || [])[idx];
+    if(!tie) return;
+    var m = leg==='i'?tie.ida : leg==='v'?tie.vta : leg==='d'?tie.des : tie.m;
+    if(!m) return;
+    m.gh = gh|0; m.ga = ga|0; m.played = true;
+    m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    m.mvp = mvp||''; m.mvpTeam = mvpTeam||'';
+    if(leg==='d' || leg==='f'){ m.etGh = etGh|0; m.etGa = etGa|0; m.penWinner = penWinner || null; }
+    _koAdvance(comp, st); _koSave(comp, st);
+    setTimeout(function(){ try { _koRenderAll(comp); } catch(_){} }, 150);
+  };
+  window._eurKoPersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam){
+    var mm = /^eurko_([a-z]+)_([a-z]+)_(\d+)_([ivdf])$/.exec(String(mk||''));
+    if(!mm) return;
+    var comp = mm[1], roundKey = mm[2], idx = parseInt(mm[3],10), leg = mm[4];
+    var st = _koLoad(comp); if(!st || !st.rounds) return;
+    var tie = (roundKey === 'fin') ? st.rounds.fin[0] : (st.rounds[roundKey] || [])[idx];
+    if(!tie) return;
+    var m = leg==='i'?tie.ida : leg==='v'?tie.vta : leg==='d'?tie.des : tie.m;
+    if(!m) return;
+    m.gh = scA|0; m.ga = scB|0; m.played = true;
+    m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    m.mvp = mvp||''; m.mvpTeam = mvpTeam||'';
+    if(leg==='d' || leg==='f'){
+      /* IA: desempate/final a partido único → si empata, penaltis. */
+      m.etGh = 0; m.etGa = 0;
+      if((m.gh|0) === (m.ga|0)){ var w = _koPenWinner(m.home, m.away); m.penWinner = (w === m.home) ? 'a' : 'b'; }
+      else m.penWinner = null;
+    }
+    _koAdvance(comp, st); _koSave(comp, st);
+    setTimeout(function(){ try { _koRenderAll(comp); } catch(_){} }, 120);
+  };
+
+  /* ── Apertura de partido (humano → previa / IA → iaSimLive) ────── */
+  window._eurKoOpenMatch = function(comp, roundKey, idx, leg){
+    var st = _koLoad(comp); if(!st || !st.rounds) return false;
+    var tie = (roundKey === 'fin') ? st.rounds.fin[0] : (st.rounds[roundKey] || [])[idx];
+    if(!tie) return false;
+    var m = leg==='i'?tie.ida : leg==='v'?tie.vta : leg==='d'?tie.des : tie.m;
+    if(!m || m.played || !m.home || !m.away) return false;
+    var hH = _isHumanTeam(m.home), aH = _isHumanTeam(m.away);
+    if(hH || aH){ _eurKoAbrirPrevia(comp, roundKey, idx, leg, m.home, m.away); }
+    else {
+      var mk = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
+      if(typeof window.iaSimLive === 'function') window.iaSimLive(mk, m.home, m.away, 0);
+    }
+    return true;
+  };
+  function _eurKoAbrirPrevia(comp, roundKey, idx, leg, home, away){
+    var isHvH = _isHumanTeam(home) && _isHumanTeam(away);
+    var isSL = (roundKey === 'fin' || leg === 'd');
+    var mk = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
+    var dur = (typeof window._mlRealDurationLabel === 'function')
+      ? window._mlRealDurationLabel({ isHvH:isHvH, humanInvolved:!isHvH })
+      : (isHvH ? '15 min 45 s' : '9 min 45 s');
+    /* Estadio: el desempate y la final usan el del LOCAL (en el desempate
+       `home`=tie.a = local de la vuelta → mismo estadio que la vuelta). */
+    var _stad = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || '') : '';
+    window._ppPreviaTeams = { home:home, away:away, j:0, comp:comp,
+      eurKoComp:comp, eurKoRound:roundKey, eurKoIdx:idx, eurKoLeg:leg,
+      stadium: _stad };
+    /* TERCER PARTIDO (desempate): 5 min · ambos ↘️ (forma Mala) · ET+pen.
+       FINAL: 10 min · ambos ⬆️ (forma Excelente) · ET+pen. 2026-06-09. */
+    if(leg === 'd')      { try { window._ppSetMatchCtx({ durMin:5,  formHome:'↘️', formAway:'↘️' }); } catch(_){} }
+    else if(roundKey === 'fin') { try { window._ppSetMatchCtx({ durMin:10, formHome:'⬆️', formAway:'⬆️' }); } catch(_){} }
+    window._ppCustomCallback = function(){
+      window._ppPreviaTeams = null;
+      try { ['prepartido-overlay','sancion-overlay','_copaAliasOv'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); }); } catch(_){}
+      try { window.abrirEurKo(comp, roundKey, idx, leg, home, away); } catch(_){}
+    };
+    if(typeof window.showPrePartidoOverlay === 'function'){
+      window.showPrePartidoOverlay(mk, comp, isSL ? 'Sí' : 'No', dur, isHvH);
+    }
+  }
+  window.abrirEurKo = function(comp, roundKey, idx, leg, home, away){
+    var isHvH = _isHumanTeam(home) && _isHumanTeam(away);
+    if(typeof window.gmOpen !== 'function') return;
+    try { window.gmOpen(0, home, away, isHvH, comp, false, false); } catch(e){ return; }
+    try {
+      if(window.__GM_LIVE){
+        var G = window.__GM_LIVE;
+        G._isEurKo = true; G._eurKoComp = comp; G._eurKoRound = roundKey;
+        G._eurKoIdx = idx; G._eurKoLeg = leg; G.comp = comp;
+      }
+    } catch(_){}
+    try {
+      var gm = document.getElementById('gm-modal'); if(gm) gm.style.display = '';
+      ['prepartido-overlay','sancion-overlay','_copaAliasOv','ml-evt-cd-overlay','gm-evt-countdown-ov'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(el){ el.classList.remove('show'); if(el.style && el.style.display && el.style.display !== 'none' && id !== 'gm-modal') el.style.display='none'; }
+      });
+      window.scrollTo(0,0);
+    } catch(_){}
+  };
+
+  /* ── Render (estilo Copa del Rey, coloreado por comp) ───────────── */
+  function _koTeamHtml(name){
+    var logo = _resolveLogoFor(name, '');
+    var sh = logo ? '<img src="'+_esc(logo)+'" style="width:34px;height:34px;object-fit:contain;" onerror="this.style.display=\'none\'">' : '<span style="font-size:26px;color:rgba(200,210,230,.55);">🛡</span>';
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;">'
+      + sh + '<span style="font-family:Rajdhani,sans-serif;font-size:12px;font-weight:600;color:#fff;text-align:center;line-height:1.1;">' + _humanIcoFor(name) + _esc(name) + '</span></div>';
+  }
+  function _koMatchCard(comp, m, roundKey, idx, leg){
+    var col = _KO_COL[comp];
+    var hH = _isHumanTeam(m.home), aH = _isHumanTeam(m.away), anyH = hH || aH;
+    var mk = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
+    var legLbl = leg==='i'?'IDA':leg==='v'?'VUELTA':leg==='d'?'DESEMPATE':'FINAL';
+    var center;
+    if(m.played){
+      var pen = ((leg==='d'||leg==='f') && m.penWinner)
+        ? '<div style="font-size:9px;color:'+col.main+';font-family:Oswald,sans-serif;letter-spacing:1px;margin-top:2px;">PEN '+_esc(String(m.penWinner==='a'?m.home:m.away).split(' ')[0])+'</div>' : '';
+      center = '<div style="text-align:center;flex:0 0 auto;padding:0 6px;">'
+        + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:#fff;letter-spacing:1px;">'+(m.gh|0)+' – '+(m.ga|0)+'</div>'
+        + pen + '<div style="font-size:8px;color:rgba(255,255,255,.5);letter-spacing:1px;">🏁 '+legLbl+'</div></div>';
+    } else if(anyH){
+      center = '<div style="text-align:center;flex:0 0 auto;padding:0 6px;">'
+        + '<div style="color:rgba(255,255,255,.5);font-size:18px;">– – –</div>'
+        + '<button onclick="window._eurKoOpenMatch(\''+comp+'\',\''+roundKey+'\','+idx+',\''+leg+'\')" style="margin-top:4px;background:'+col.main+';color:#fff;border:none;border-radius:6px;padding:5px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">📋 PREVIA</button></div>';
+    } else {
+      center = '<div style="text-align:center;flex:0 0 auto;padding:0 6px;">'
+        + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:18px;color:rgba(255,255,255,.7);"><span id="ia-sc-'+mk+'-a">–</span> – <span id="ia-sc-'+mk+'-b">–</span></div>'
+        + '<button id="ia-sim-btn-'+mk+'" onclick="window._eurKoOpenMatch(\''+comp+'\',\''+roundKey+'\','+idx+',\''+leg+'\')" style="margin-top:4px;background:transparent;color:'+col.main+';border:1px solid '+col.bd+';border-radius:6px;padding:5px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;">▶ SIMULAR</button></div>';
+    }
+    var actaSlot = (!anyH && !m.played) ? '<div id="ia-acta-'+mk+'" style="display:none;"></div>' : '';
+    return '<div style="background:'+col.bg+';border:1px solid '+col.bd+';border-radius:10px;padding:10px 8px;margin:6px 0;display:flex;align-items:center;gap:8px;">'
+      + _koTeamHtml(m.home) + center + _koTeamHtml(m.away) + '</div>' + actaSlot;
+  }
+  function _koTBDrow(){ return '<div style="text-align:center;padding:8px;color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;font-size:12px;font-style:italic;">Por definir</div>'; }
+  function _koPendRow(comp, a, b, txt){
+    var col = _KO_COL[comp];
+    return '<div style="background:'+col.bg+';border:1px solid '+col.bd+';border-radius:10px;padding:10px 8px;margin:6px 0;display:flex;align-items:center;gap:8px;opacity:.55;">'
+      + _koTeamHtml(a) + '<div style="flex:0 0 auto;font-size:9px;color:rgba(255,255,255,.6);text-align:center;padding:0 6px;">'+txt+'</div>' + _koTeamHtml(b) + '</div>';
+  }
+  function _koAggHtml(comp, r){
+    var col = _KO_COL[comp];
+    if(r.needDes){
+      return '<div style="text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:'+col.main+';margin:0 0 8px;">Global '+r.aAgg+'–'+r.bAgg+' · empate → 🔁 TERCER PARTIDO</div>';
+    }
+    if(r.decided){
+      return '<div style="text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:rgba(255,255,255,.7);margin:0 0 8px;">Global '+r.aAgg+'–'+r.bAgg+' · ✅ clasifica <b style="color:'+col.main+';">'+_esc(r.winner)+'</b></div>';
+    }
+    return '';
+  }
+  function _fillBox(comp, domId, ties, roundKey, leg){
+    var box = document.getElementById(domId); if(!box) return;
+    var html = '';
+    ties.forEach(function(tie, idx){
+      if(!tie.a || !tie.b || !tie.ida){ html += _koTBDrow(); return; }
+      if(leg === 'i'){ html += _koMatchCard(comp, tie.ida, roundKey, idx, 'i'); return; }
+      /* vuelta */
+      if(!tie.ida.played){ html += _koPendRow(comp, tie.a, tie.b, '⏳ Tras la IDA'); return; }
+      html += _koMatchCard(comp, tie.vta, roundKey, idx, 'v');
+      if(tie.vta.played){
+        var r = _koTwoLegResult(tie);
+        html += _koAggHtml(comp, r);
+        if(r.needDes && tie.des){ html += _koMatchCard(comp, tie.des, roundKey, idx, 'd'); }
+      }
+    });
+    box.innerHTML = html || _koTBDrow();
+  }
+  function _fillFinBox(comp, domId, fin){
+    var box = document.getElementById(domId); if(!box) return;
+    if(!fin || !fin.a || !fin.b || !fin.m){ box.innerHTML = _koTBDrow(); return; }
+    var html = _koMatchCard(comp, fin.m, 'fin', 0, 'f');
+    if(fin.winner){
+      var col = _KO_COL[comp];
+      html += '<div style="text-align:center;font-family:\'Bebas Neue\',sans-serif;font-size:18px;letter-spacing:1px;color:'+col.main+';margin-top:6px;">🏆 CAMPEÓN: '+_esc(fin.winner)+'</div>';
+    }
+    box.innerHTML = html;
+  }
+  function _koRenderAll(comp){
+    var st = _koLoad(comp);
+    if(!st || !st.built){ if(_koGroupComplete(comp)) st = _koBuild(comp); }
+    if(!st || !st.built) return;
+    _koAdvance(comp, st); _koSave(comp, st);
+    var dom = _KO_DOM[comp]; if(!dom) return;
+    _fillBox(comp, dom.rep_i, st.rounds.rep, 'rep', 'i');
+    _fillBox(comp, dom.rep_v, st.rounds.rep, 'rep', 'v');
+    _fillBox(comp, dom.oct_i, st.rounds.oct, 'oct', 'i');
+    _fillBox(comp, dom.oct_v, st.rounds.oct, 'oct', 'v');
+    _fillBox(comp, dom.qf_i,  st.rounds.qf,  'qf',  'i');
+    _fillBox(comp, dom.qf_v,  st.rounds.qf,  'qf',  'v');
+    _fillBox(comp, dom.sf_i,  st.rounds.sf,  'sf',  'i');
+    _fillBox(comp, dom.sf_v,  st.rounds.sf,  'sf',  'v');
+    _fillFinBox(comp, dom.fin, st.rounds.fin[0]);
+    /* Ocultar la caja "Cuadro de Eliminatorias — próximamente". */
+    try {
+      var scr = document.getElementById('s-'+comp+'-playoffs');
+      if(scr){ scr.querySelectorAll('.jblock').forEach(function(b){ if(/próximamente/i.test(b.textContent||'')) b.style.display='none'; }); }
+    } catch(_){}
+  }
+  window._eurKoRender = _koRenderAll;
+  /* Render perezoso al entrar en cada pantalla de playoffs. */
+  (function(){
+    var pg = window.go;
+    if(typeof pg !== 'function' || pg._eurKoPatched) return;
+    window.go = function(id){
+      var ret = pg.apply(this, arguments);
+      try {
+        var s = String(id||'');
+        if(s === 's-ucl-playoffs')       setTimeout(function(){ _koRenderAll('ucl'); }, 60);
+        else if(s === 's-uel-playoffs')  setTimeout(function(){ _koRenderAll('uel'); }, 60);
+        else if(s === 's-uecl-playoffs') setTimeout(function(){ _koRenderAll('uecl'); }, 60);
+      } catch(_){}
+      return ret;
+    };
+    window.go._eurKoPatched = true;
+  })();
 })();
 </script>
 </div>
@@ -51235,6 +52266,44 @@ https://api.sofascore.app/api/v1/team/44/image
       if (arr[i] && arr[i].uid === uid){ entry = arr[i]; break; }
     }
     if (!entry) return;
+    /* Eliminatorias europeas: el matchKey `eurko_<comp>_<round>_<idx>_<leg>`
+       se reabre por su propio motor (no por _tourOpenHumanMatch). Si el
+       rival sigue sin definirse, _eurKoOpenMatch no hace nada (el usuario
+       debe simular antes la eliminatoria previa). 2026-06-09. */
+    /* Desempate de Copa del Rey: matchKey `copa_<ronda>_<idx>_d`. */
+    var _cd = /^copa_([a-z0-9]+)_(\d+)_d$/.exec(String(entry.matchKey || ''));
+    if (_cd){
+      try {
+        if (typeof window.copaAbrirPrevia === 'function'){
+          window.copaAbrirPrevia(_cd[1], parseInt(_cd[2],10), 'des');
+          var _pcb = window._ppCustomCallback;
+          window._ppCustomCallback = function(){
+            try { if (typeof _pcb === 'function') _pcb(); } catch(_){}
+            try { if (typeof window._pendHvHRemove === 'function') window._pendHvHRemove(uid); } catch(_){}
+            try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
+          };
+        }
+      } catch(_){}
+      return;
+    }
+    var _ek = /^eurko_([a-z]+)_([a-z]+)_(\d+)_([ivdf])$/.exec(String(entry.matchKey || ''));
+    if (_ek){
+      var _opened = false;
+      try { if (typeof window._eurKoOpenMatch === 'function') _opened = window._eurKoOpenMatch(_ek[1], _ek[2], parseInt(_ek[3],10), _ek[4]); } catch(_){}
+      if (_opened){
+        /* Quitar de PENDIENTES sólo cuando la previa se confirme. */
+        var _prevCb = window._ppCustomCallback;
+        window._ppCustomCallback = function(){
+          try { if (typeof _prevCb === 'function') _prevCb(); } catch(_){}
+          try { if (typeof window._pendHvHRemove === 'function') window._pendHvHRemove(uid); } catch(_){}
+          try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
+        };
+      } else {
+        /* Rival aún sin definir: hay que simular antes la eliminatoria previa. */
+        try { if (typeof window._psFlashToast === 'function') window._psFlashToast('Tu rival aún no está definido — simula antes la eliminatoria previa.', false); } catch(_){}
+      }
+      return;
+    }
     if (typeof window._tourOpenHumanMatch !== 'function') return;
     try {
       window._tourOpenHumanMatch(entry.tourId, entry.matchKey, entry.home, entry.away);

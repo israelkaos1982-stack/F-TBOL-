@@ -36393,6 +36393,19 @@ window._showSimProgress = function(opts, onDone){
               +'  · Wild Card (alimenta Open Qualifier)\n\n'
               +'A partir de aquí las pantallas europeas usarán esta snapshot, no el cálculo en vivo.\n\n'
               +'⚠️ Solo pulsa esto cuando todas las ligas estén SIMULADAS al 100 %.')) return;
+    /* CAUSA RAÍZ (foto usuario 2026-06-09, "25/25/56/31/17/11" vs
+       canónico 28/34/88/72/18/12): el cómputo lee EXCLUSIVAMENTE las
+       `ligaExt_<slug>` presentes en localStorage, y esas SOLO se cargan
+       al ABRIR cada pantalla de liga. En un móvil recién abierto faltan
+       casi todas → los pools FEEDER (Wild Card -41, Open Qualifier -32,
+       Previa -9), que dependen de DECENAS de ligas, salen muy por debajo
+       (las directas UCL/UEL/UECL solo -3/-1/-1 porque vienen de pocas
+       ligas top que el admin sí abrió). El botón "Re-cuadrar" ya hidrata
+       las ligas que faltan ANTES de calcular; el de congelar NO lo hacía.
+       Fix: hidratar primero (mismo helper) y luego congelar. */
+    _eurHydrateMissingLeagues(function(recovered){ _doCommitEurope(recovered); });
+  };
+  function _doCommitEurope(recovered){
     function _safeCompute(fn){
       try { return (typeof fn === 'function') ? (fn() || []) : []; }
       catch(_){ return []; }
@@ -36434,6 +36447,7 @@ window._showSimProgress = function(opts, onDone){
     try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
     _saveEuropeCommitServer(blob);
     alert('✅ Pools europeos congelados:\n\n'
+        + (recovered ? ('🌐 Ligas recuperadas del servidor: ' + recovered + '\n\n') : '')
         + '🔵 Champions League: ' + totalUcl + ' equipos\n'
         + '🇪🇺 Previa de Champions: ' + totalPrev + ' equipos\n'
         + '🟡 Open Qualifier: ' + totalOq + ' equipos\n'

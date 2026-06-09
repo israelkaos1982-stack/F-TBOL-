@@ -7678,6 +7678,31 @@ window._showSimProgress = function(opts, onDone){
     if (_ligaPlayed){
       var _gh = _ligaPlayed.gh|0;
       var _ga = _ligaPlayed.ga|0;
+      /* 📋 ACTA DEL PARTIDO desplegable INLINE en la card del hub (igual
+         que el resto de partidos de la jornada y que el camino
+         `_payAlreadyPlayed`), en vez del overlay a pantalla completa
+         `showMatchActaModal` que mostraba los eventos crudos (incluida la
+         alineación "0' · 17,A.Budimir,F" sin filtrar) — petición usuario
+         2026-06-09 («el acta sale raro, tenía que salir un desplegable
+         como el resto de partidos»). `_eurFaseRenderActaPanel` filtra
+         played/sust/mvp y limpia el nº del nombre, así que el acta sale
+         limpia y colapsable como la foto 2 del usuario. */
+      var _ligaActaHtml = '';
+      if (_ligaPlayed.events && _ligaPlayed.events.length
+          && typeof window._eurFaseRenderActaPanel === 'function'){
+        var _ligaActaUid = 'ps-liga-acta-' + ligaJor + '-'
+          + String(ligaMatch.home).replace(/[^A-Za-z0-9_-]/g,'_') + '-'
+          + String(ligaMatch.away).replace(/[^A-Za-z0-9_-]/g,'_');
+        try {
+          _ligaActaHtml = window._eurFaseRenderActaPanel({
+            home: ligaMatch.home,
+            away: ligaMatch.away,
+            events: (_ligaPlayed.events || []),
+            mvp: _ligaPlayed.mvp || '',
+            mvpTeam: _ligaPlayed.mvpTeam || ''
+          }, _ligaActaUid);
+        } catch(_){ _ligaActaHtml = ''; }
+      }
       st.innerHTML =
         '<div class="ps-card">'
         + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
@@ -7686,35 +7711,12 @@ window._showSimProgress = function(opts, onDone){
             { name: ligaMatch.home, icon: _psClubIcon(ligaMatch.home) },
             { name: ligaMatch.away, icon: _psClubIcon(ligaMatch.away) },
             _psScoreCenterHtml(_gh, _ga))
+        + _ligaActaHtml
         + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
-        +   '<button type="button" class="ps-btn" id="ps-nontour-acta">📋 ACTA DEL PARTIDO</button>'
         +   '<button type="button" class="ps-btn" id="ps-nontour-open">📅 VER JORNADA ' + ligaJor + '</button>'
         +   '<button type="button" class="ps-btn ghost" id="ps-nontour-cont">CONTINUAR ▶</button>'
         + '</div>'
         + '</div>';
-      /* 📋 ACTA DEL PARTIDO: abre el acta (goles/tarjetas/MVP) de ESTE
-         partido directamente desde la card del hub, sin tener que entrar
-         a "VER JORNADA" y desplegar el toggle del acta. El acta del
-         partido del hub (HvIA/HvH o pagar-simulación) se persiste en el
-         MISMO store de Liga (`loadResults`, key `j|home|away`) con sus
-         `events`, así que `showMatchActaModal` lo resuelve con los mismos
-         nombres con que `_ligaPlayed` lo encontró. Si por cualquier
-         motivo el resultado no trae `events`, caemos a abrir la jornada
-         (donde el acta se ve como toggle) para no dejar al usuario sin
-         feedback (bug 2026-06-05 «no sale el acta del partido»). */
-      var bA0 = document.getElementById('ps-nontour-acta');
-      if (bA0) bA0.onclick = function(){
-        try {
-          var _res = (_ligaPlayed && _ligaPlayed.events && _ligaPlayed.events.length) ? _ligaPlayed : null;
-          if (_res && typeof window.showMatchActaModal === 'function'){
-            window.showMatchActaModal(ligaJor, ligaMatch.home, ligaMatch.away);
-            return;
-          }
-          if (ligaJor > 0 && typeof window.openLigaJornada === 'function'){
-            window.openLigaJornada(ligaJor);
-          }
-        } catch(_){}
-      };
       var bV0 = document.getElementById('ps-nontour-open');
       if (bV0) bV0.onclick = function(){
         try { if (ligaJor > 0 && typeof window.openLigaJornada === 'function') window.openLigaJornada(ligaJor); } catch(_){}

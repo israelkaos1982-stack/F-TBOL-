@@ -7593,6 +7593,146 @@ window._showSimProgress = function(opts, onDone){
     return null;
   }
 
+  /* ── COPA DEL REY en la card del hub (2026-06-09) ────────────────
+     Petición usuario: TODA competición marcada en el editor
+     «COMPETICIONES LIVERPOOL-FRANCIA» debe poder jugarse desde la card
+     central del hub (como Liga / Mundial 2032 / Mundialito / Joan
+     Gamper), además de desde su propia pantalla. Estos helpers resuelven
+     el partido del club del hub en la ronda de Copa que demanda el
+     calendario individual leyendo copa_state_v1 (sorteo + resultados) y
+     delegan EXACTAMENTE en el mismo flujo que la pantalla de la Copa
+     (`window.copaAbrirPrevia` → showPrePartidoOverlay → abrirCopa). */
+  /* ¿`name` es el club del hub? Alias-tolerante (Bayern↔Liverpool) +
+     mismo mister, sin colar otros humanos. */
+  function _psHubClubMatches(name){
+    if (!name) return false;
+    try {
+      var k = _psNameKey(name);
+      var hub = (typeof _psHumanLogicName === 'function') ? String(_psHumanLogicName()||'') : '';
+      if (hub && k === _psNameKey(hub)) return true;
+      if (k === _psNameKey('Bayern Munich') || k === _psNameKey('Bayern') || k === _psNameKey('Liverpool')) return true;
+      if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)
+          && typeof window._mhSameMister === 'function' && hub && window._mhSameMister(hub, name)) return true;
+    } catch(_){}
+    return false;
+  }
+  /* Etiqueta del calendario individual → ronda+leg del motor de Copa.
+     Mapeo por POSICIÓN del bracket (engine ROUNDS = r1,r2,r16,oct,cua,
+     sf,fin): 1/128→r1, 1/64→r2, 1/32→r16, Octavos→oct, Cuartos→cua,
+     Semis→sf, FINAL→fin. Las rondas de ida+vuelta (oct/cua/sf) leen
+     "Vuelta" del label. */
+  function _copaRondaFromLabel(lbl){
+    var s = String(lbl || '');
+    if (!/copa\s*del\s*rey|final\s*copa/i.test(s)) return null;
+    var esV = /vuelta/i.test(s);
+    if (/final\s*copa\s*del\s*rey/i.test(s)) return { ronda:'fin', esVuelta:false };
+    if (/1\s*\/\s*128/.test(s)) return { ronda:'r1',  esVuelta:false };
+    if (/1\s*\/\s*64/.test(s))  return { ronda:'r2',  esVuelta:false };
+    if (/1\s*\/\s*32/.test(s))  return { ronda:'r16', esVuelta:false };
+    if (/octavos/i.test(s))     return { ronda:'oct', esVuelta:esV };
+    if (/cuartos/i.test(s))     return { ronda:'cua', esVuelta:esV };
+    if (/semis|semifinal/i.test(s)) return { ronda:'sf', esVuelta:esV };
+    return null;
+  }
+  /* Lee copa_state_v1 y resuelve el partido del hub en la ronda dada.
+     Devuelve {ronda,idx,esVuelta,home,away,rival,played,gh,ga,events,mvp,
+     mvpTeam} o null si el hub no juega esa ronda (no sorteado / eliminado). */
+  function _copaHubResolve(info){
+    if (!info || !info.ronda) return null;
+    var cs = null;
+    try { var raw = localStorage.getItem('copa_state_v1'); if (raw) cs = JSON.parse(raw); } catch(_){}
+    if (!cs || !cs.sorteo) return null;
+    var matches = cs.sorteo[info.ronda] || [];
+    if (!matches.length) return null;
+    var idx = -1;
+    for (var i = 0; i < matches.length; i++){
+      var mm = matches[i]; if (!mm) continue;
+      if (_psHubClubMatches(mm.l) || _psHubClubMatches(mm.v)){ idx = i; break; }
+    }
+    if (idx < 0) return null;
+    var m = matches[idx];
+    /* El LOCAL de la pierna jugada es m.v en la vuelta, m.l en la ida
+       (mismo criterio que copaAbrirPrevia). */
+    var legHome = info.esVuelta ? m.v : m.l;
+    var legAway = info.esVuelta ? m.l : m.v;
+    if (!legHome || !legAway || legHome === 'PENDIENTE' || legAway === 'PENDIENTE') return null;
+    var rival = _psHubClubMatches(m.l) ? m.v : m.l;
+    /* Estado JUGADO: resultados con clave según ida/vuelta (oct/cua/sf
+       son _ida/_vta; r16 puede vivir bajo 'r16' o 'r16_ida'). */
+    var res = null;
+    try {
+      var R = cs.resultados || {};
+      var keys = info.esVuelta
+        ? [info.ronda + '_vta']
+        : [info.ronda, info.ronda + '_ida'];
+      for (var ki = 0; ki < keys.length && !res; ki++){
+        var lst = R[keys[ki]];
+        if (Array.isArray(lst) && lst[idx] && lst[idx].jugado) res = lst[idx];
+      }
+    } catch(_){}
+    return {
+      ronda: info.ronda, idx: idx, esVuelta: !!info.esVuelta,
+      home: String(legHome), away: String(legAway), rival: String(rival),
+      played: !!res,
+      gh: res ? (res.gl|0) : 0, ga: res ? (res.gv|0) : 0,
+      events: (res && res.events) || [], mvp: (res && res.mvp) || '', mvpTeam: (res && res.mvpTeam) || ''
+    };
+  }
+  /* Escudo de un equipo de Copa (incluye PF/Hypermotion vía la cadena
+     de la Copa, que sí conoce esas plantillas). */
+  function _copaShieldFor(name){
+    try { if (typeof window._copaResolveShield === 'function') return window._copaResolveShield(name) || ''; } catch(_){}
+    return '';
+  }
+  /* Pinta la card de un día de Copa del Rey en el hub. Devuelve true si
+     pintó (hub juega esa ronda), false para que `_cardNonTour` siga con
+     su flujo genérico (hub eliminado / ronda sin sortear). */
+  function _cardCopa(day, info){
+    var st = _stage(); if (!st) return false;
+    var r = _copaHubResolve(info);
+    if (!r) return false;
+    var lbl = day.label || 'Copa del Rey';
+    var homeObj = { name: r.home, shield: _copaShieldFor(r.home), icon: _psClubIcon(r.home) };
+    var awayObj = { name: r.away, shield: _copaShieldFor(r.away), icon: _psClubIcon(r.away) };
+    if (r.played){
+      var actaHtml = '';
+      if (r.events && r.events.length && typeof window._eurFaseRenderActaPanel === 'function'){
+        var uid = 'ps-copa-acta-' + r.ronda + '-' + r.idx + (r.esVuelta?'-v':'-i');
+        try { actaHtml = window._eurFaseRenderActaPanel({ home:r.home, away:r.away, events:r.events, mvp:r.mvp, mvpTeam:r.mvpTeam }, uid); } catch(_){ actaHtml = ''; }
+      }
+      st.innerHTML =
+        '<div class="ps-card">'
+        + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+        + '<div class="ps-sub">🏆 ' + _esc(lbl) + '</div>'
+        + _psVsBlockHtml(homeObj, awayObj, _psScoreCenterHtml(r.gh, r.ga))
+        + actaHtml
+        + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+        +   '<button type="button" class="ps-btn ghost" id="ps-copa-cont">CONTINUAR ▶</button>'
+        + '</div>'
+        + '</div>';
+      var bc = document.getElementById('ps-copa-cont');
+      if (bc) bc.onclick = function(){ _markDoneAndAdvance(); };
+      return true;
+    }
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">🏆 ' + _esc(lbl) + '</div>'
+      + _psVsBlockHtml(homeObj, awayObj, '<div class="ps-x">VS</div>')
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+      +   '<button type="button" class="ps-btn" id="ps-copa-previa">📋 PREVIA · JUGAR ▶</button>'
+      +   '<button type="button" class="ps-btn ghost" id="ps-copa-cont">CONTINUAR ▶</button>'
+      + '</div>'
+      + '</div>';
+    var bp = document.getElementById('ps-copa-previa');
+    if (bp) bp.onclick = function(){
+      try { if (typeof window.copaAbrirPrevia === 'function') window.copaAbrirPrevia(r.ronda, r.idx, r.esVuelta); } catch(_){}
+    };
+    var bc2 = document.getElementById('ps-copa-cont');
+    if (bc2) bc2.onclick = function(){ _markDoneAndAdvance(); };
+    return true;
+  }
+
   /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
      Petición usuario (foto 2): TODAS las cards del hub (Liga, Copa,
      competiciones europeas, torneos de verano, Mundialito y Selección)
@@ -7664,6 +7804,15 @@ window._showSimProgress = function(opts, onDone){
     var lbl = day.label || 'Partido';
     var emoji = (typeof _pendHvHEmojiFromLabel === 'function')
                 ? _pendHvHEmojiFromLabel(lbl) : '⚽';
+    /* COPA DEL REY: si el día es de Copa y el hub juega esa ronda,
+       pintamos la card jugable (escudos + PREVIA·JUGAR ▶) que delega en
+       el mismo flujo que la pantalla de la Copa. Si el hub NO juega
+       (eliminado / sin sortear), `_cardCopa` devuelve false y seguimos
+       con el flujo genérico de abajo. 2026-06-09. */
+    try {
+      var _copaInfo = _copaRondaFromLabel(lbl);
+      if (_copaInfo && _cardCopa(day, _copaInfo)) return;
+    } catch(_){}
     /* Liga EA Sports: parseamos la jornada del label para (a) abrir la
        previa del partido del Liverpool directamente y (b) como respaldo,
        el atajo "VER JORNADA N" hacia la lista de la jornada. El resto de

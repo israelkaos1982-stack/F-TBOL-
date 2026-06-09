@@ -3320,6 +3320,17 @@
      y prórroga + penaltis automáticos (showPrePartidoOverlay del
      index.bundle.js ya lo cablea). */
   window.copaAbrirPrevia = function (ronda, idx, esVuelta) {
+    /* Hidratación defensiva: la card del hub (Liverpool-Francia) puede
+       llamar a copaAbrirPrevia SIN que el usuario haya abierto antes la
+       pantalla de la Copa esta sesión (init() es async). Si _copa aún no
+       tiene sorteo, lo rehidratamos del mirror local copa_state_v1 para
+       que la previa encuentre el match. 2026-06-09. */
+    if (!_copa || !_copa.sorteo) {
+      try {
+        var _rawCS = localStorage.getItem('copa_state_v1');
+        if (_rawCS) { var _pcs = JSON.parse(_rawCS); if (_pcs && typeof _pcs === 'object') _copa = _pcs; }
+      } catch (_) {}
+    }
     var sorteo = (_copa && _copa.sorteo) || {};
     var matches = sorteo[ronda] || [];
     var m = matches[idx];

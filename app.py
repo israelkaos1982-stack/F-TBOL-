@@ -1057,6 +1057,43 @@ COPA_NEXT_PHASE = {"r1": "r2", "r2": "r16", "r16": "oct",
                    "oct": "cua", "cua": "sf", "sf": "fin", "fin": "campeon"}
 
 
+def _copa_two_leg_winner(ida, vta, des, local, visit):
+    """Decide el clasificado de una eliminatoria copera a doble partido
+    (Octavos/Cuartos/Semis):
+      1) GLOBAL (suma de ida + vuelta),
+      2) GOLES FUERA DE CASA (cuentan doble: a igualdad de global, pasa
+         quien marcó más como visitante),
+      3) TERCER PARTIDO (desempate con prórroga+penaltis) si global y
+         goles fuera están empatados.
+    Devuelve el nombre del ganador, o None si el global y los goles fuera
+    están empatados y el desempate aún no se ha jugado. Convención:
+    ida = {gl,gv} con local en casa; vta = {gl,gv} con visit en casa.
+    """
+    ida = ida or {}
+    vta = vta or {}
+    total_l = (ida.get("gl") or 0) + (vta.get("gv") or 0)
+    total_v = (ida.get("gv") or 0) + (vta.get("gl") or 0)
+    if total_l > total_v:
+        return local
+    if total_v > total_l:
+        return visit
+    away_l = vta.get("gv") or 0   # local marcó fuera (en la vuelta)
+    away_v = ida.get("gv") or 0   # visit marcó fuera (en la ida)
+    if away_l > away_v:
+        return local
+    if away_v > away_l:
+        return visit
+    if des and des.get("jugado"):
+        dl = (des.get("gl") or 0) + (des.get("et_gl") or 0)
+        dv = (des.get("gv") or 0) + (des.get("et_gv") or 0)
+        if dl > dv:
+            return local
+        if dv > dl:
+            return visit
+        return des.get("pen_winner") or None
+    return None
+
+
 @app.route("/api/copa/sorteo", methods=["POST"])
 def copa_sorteo():
     """Sortear una ronda de Copa del Rey.
@@ -1156,15 +1193,16 @@ def copa_simular_ia():
                 resultados[key_vta] = [None] * len(sorteo_ronda)
             resultados[key_vta][idx] = res
             ida = (resultados.get(key_ida) or [None]*len(sorteo_ronda))[idx] or {}
-            total_l = ida.get("gl", 0) + res["gv"]
-            total_v = ida.get("gv", 0) + res["gl"]
-            if total_l > total_v:
-                winner = local
-            elif total_v > total_l:
-                winner = visitante
-            else:
-                winner = random.choice([local, visitante])
-                resultados[key_vta][idx]["pen_winner"] = winner
+            winner = _copa_two_leg_winner(ida, resultados[key_vta][idx], None, local, visitante)
+            if not winner:
+                # Global + goles fuera empatados → TERCER PARTIDO. En IA se
+                # juega automáticamente (prórroga+penaltis garantizan ganador).
+                key_des = ronda + "_des"
+                if key_des not in resultados:
+                    resultados[key_des] = [None] * len(sorteo_ronda)
+                des = copa_sim_partido(local, visitante, two_leg=False)
+                resultados[key_des][idx] = des
+                winner = _copa_two_leg_winner(ida, resultados[key_vta][idx], des, local, visitante)
             resultados[key_vta][idx]["winner"] = winner
     else:
         res = copa_sim_partido(local, visitante, two_leg=False)
@@ -1182,6 +1220,8 @@ def copa_guardar_resultado():
     ronda = payload.get("ronda")
     idx = int(payload.get("idx", 0))
     es_vuelta = payload.get("es_vuelta", False)
+    es_desempate = payload.get("es_desempate", False)
+    is_ia = payload.get("ia", False)
     gl = int(payload.get("gl", 0))
     gv = int(payload.get("gv", 0))
     et_gl = int(payload.get("et_gl", 0))
@@ -1213,23 +1253,41 @@ def copa_guardar_resultado():
     # al bracket. Reportado 2026-05-07 (Atlético 3-1 Las Palmas IDA
     # octavos).
     winner = None
+    needs_desempate = False
     if two_leg:
-        key = ronda + ("_vta" if es_vuelta else "_ida")
-        if key not in resultados:
-            resultados[key] = [None] * len(sorteo_ronda)
-        resultados[key][idx] = res
-        if es_vuelta:
-            key_ida = ronda + "_ida"
+        key_ida = ronda + "_ida"
+        key_vta = ronda + "_vta"
+        key_des = ronda + "_des"
+        if es_desempate:
+            # TERCER PARTIDO (desempate, single-leg con prórroga+penaltis).
+            if key_des not in resultados:
+                resultados[key_des] = [None] * len(sorteo_ronda)
+            resultados[key_des][idx] = res
             ida = (resultados.get(key_ida) or [None]*len(sorteo_ronda))[idx] or {}
-            total_l = ida.get("gl", 0) + gv
-            total_v = ida.get("gv", 0) + gl
-            if total_l > total_v:
-                winner = local_orig
-            elif total_v > total_l:
-                winner = visit_orig
-            else:
-                winner = pen_winner or local_orig
-            resultados[key][idx]["winner"] = winner
+            vta = (resultados.get(key_vta) or [None]*len(sorteo_ronda))[idx] or {}
+            winner = _copa_two_leg_winner(ida, vta, res, local_orig, visit_orig)
+            resultados[key_des][idx]["winner"] = winner
+        else:
+            key = ronda + ("_vta" if es_vuelta else "_ida")
+            if key not in resultados:
+                resultados[key] = [None] * len(sorteo_ronda)
+            resultados[key][idx] = res
+            if es_vuelta:
+                ida = (resultados.get(key_ida) or [None]*len(sorteo_ronda))[idx] or {}
+                winner = _copa_two_leg_winner(ida, res, None, local_orig, visit_orig)
+                if winner:
+                    resultados[key][idx]["winner"] = winner
+                elif is_ia:
+                    # IA: global + goles fuera empatados → desempate automático.
+                    if key_des not in resultados:
+                        resultados[key_des] = [None] * len(sorteo_ronda)
+                    des = copa_sim_partido(local_orig, visit_orig, two_leg=False)
+                    resultados[key_des][idx] = des
+                    winner = _copa_two_leg_winner(ida, res, des, local_orig, visit_orig)
+                    resultados[key_des][idx]["winner"] = winner
+                else:
+                    # Humano: hace falta TERCER PARTIDO (lo juega el usuario).
+                    needs_desempate = True
     else:
         total_l = gl + et_gl
         total_v = gv + et_gv
@@ -1276,7 +1334,7 @@ def copa_guardar_resultado():
             copa["subcampeon"] = loser
     data["copa_state"] = copa
     save_global_state(data)
-    return jsonify({"ok": True, "copa": copa})
+    return jsonify({"ok": True, "copa": copa, "needs_desempate": needs_desempate})
 
 @app.route("/api/copa/clasificar", methods=["POST"])
 def copa_clasificar():

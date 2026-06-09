@@ -1306,14 +1306,30 @@
     return meta.join('');
   }
 
-  function getAggregateWinner(match, ida, vuelta) {
+  /* Clasificado de una eliminatoria a doble partido (oct/cua/sf):
+       1) GLOBAL, 2) GOLES FUERA DE CASA (doble), 3) TERCER PARTIDO
+       (desempate con prórroga+penaltis). Espejo de `_copa_two_leg_winner`
+       del servidor. Devuelve '' si global+fuera empatados y el desempate
+       aún no se ha jugado (→ hace falta el tercer partido). */
+  function getAggregateWinner(match, ida, vuelta, des) {
     if (!match || !ida || !vuelta || !ida.jugado || !vuelta.jugado) return '';
-    if (vuelta.winner) return vuelta.winner;
     var totalL = Number(ida.gl || 0) + Number(vuelta.gv || 0);
     var totalV = Number(ida.gv || 0) + Number(vuelta.gl || 0);
     if (totalL > totalV) return match.l;
     if (totalV > totalL) return match.v;
-    return vuelta.pen_winner || '';
+    var awayL = Number(vuelta.gv || 0);   /* local marcó fuera en la vuelta */
+    var awayV = Number(ida.gv || 0);      /* visit marcó fuera en la ida */
+    if (awayL > awayV) return match.l;
+    if (awayV > awayL) return match.v;
+    if (des && des.jugado) {
+      var dl = Number(des.gl || 0) + Number(des.et_gl || 0);
+      var dv = Number(des.gv || 0) + Number(des.et_gv || 0);
+      if (dl > dv) return match.l;
+      if (dv > dl) return match.v;
+      return des.pen_winner || '';
+    }
+    if (vuelta.winner) return vuelta.winner;   /* fallback: desempate IA ya resuelto en server */
+    return '';
   }
 
   function getBracketRoundData(copa, ronda) {
@@ -1324,24 +1340,37 @@
       if (TWO_LEG[ronda]) {
         var ida = (resultados[ronda + '_ida'] || [])[idx] || null;
         var vuelta = (resultados[ronda + '_vta'] || [])[idx] || null;
-        var winner = getAggregateWinner(match, ida, vuelta);
-        var status = !ida || !ida.jugado ? 'Ida pendiente' : (!vuelta || !vuelta.jugado ? 'Vuelta pendiente' : 'Eliminatoria cerrada');
+        var des = (resultados[ronda + '_des'] || [])[idx] || null;
+        var winner = getAggregateWinner(match, ida, vuelta, des);
+        var bothLegs = !!(ida && ida.jugado && vuelta && vuelta.jugado);
+        /* ¿Global + goles fuera empatados y sin desempate jugado? → hace
+           falta el TERCER PARTIDO. */
+        var needsDes = bothLegs && !winner;
+        var status = !ida || !ida.jugado ? 'Ida pendiente'
+                   : (!vuelta || !vuelta.jugado ? 'Vuelta pendiente'
+                   : (needsDes ? 'Desempate pendiente' : 'Eliminatoria cerrada'));
         var detail = 'Global pendiente';
         if (ida && ida.jugado) detail = 'Ida: ' + match.l + ' ' + ida.gl + '–' + ida.gv + ' ' + match.v;
-        if (ida && ida.jugado && vuelta && vuelta.jugado) {
+        if (bothLegs) {
           var aggL = Number(ida.gl || 0) + Number(vuelta.gv || 0);
           var aggV = Number(ida.gv || 0) + Number(vuelta.gl || 0);
           detail = 'Global: ' + match.l + ' ' + aggL + '–' + aggV + ' ' + match.v;
-          if (vuelta.pen_winner) detail += ' · PEN ' + vuelta.pen_winner;
+          if (aggL === aggV) {
+            var awL = Number(vuelta.gv || 0), awV = Number(ida.gv || 0);
+            if (awL !== awV) detail += ' · gol fuera (' + (awL > awV ? match.l : match.v) + ')';
+            else if (des && des.jugado) detail += ' · 3er partido: ' + des.gl + '–' + des.gv + (des.pen_winner ? ' · PEN ' + des.pen_winner : '');
+            else detail += ' · empate → 3er partido';
+          }
         }
         return {
           home: match.l,
           away: match.v,
           winner: winner,
-          played: !!(ida && ida.jugado && vuelta && vuelta.jugado),
+          played: bothLegs && !needsDes,
+          needsDesempate: needsDes,
           status: status,
           detail: detail,
-          mvp: (vuelta && vuelta.mvp) || (ida && ida.mvp) || '',
+          mvp: (des && des.mvp) || (vuelta && vuelta.mvp) || (ida && ida.mvp) || '',
           neutral: false
         };
       }
@@ -1679,6 +1708,7 @@
       ronda: ronda,
       idx: idx,
       es_vuelta: !!esVuelta,
+      ia: true,   /* IA: si la vuelta empata en global+fuera, el server juega el desempate solo */
       gl: result.gl,
       gv: result.gv,
       et_gl: result.et_gl || 0,
@@ -1963,6 +1993,16 @@
     return '<button id="ia-sim-btn-' + mk + '" class="copa-btn-sim-rich" '
       + 'onclick="window.copaSimLive(\'' + ronda + '\',' + idx + ',' + leg + ')">'
       + '▶ SIMULAR</button>';
+  }
+
+  /* Botón del TERCER PARTIDO (desempate). Solo aparece para humanos: las
+     eliminatorias IA-vs-IA empatadas en global+fuera ya resuelven su
+     desempate automáticamente en el servidor. 2026-06-09. */
+  function _matchDesempateButton(ronda, idx, m) {
+    if (_tbdParse(m.l) || _tbdParse(m.v)) return '';
+    return '<button class="ml-previa-btn copa-btn-previa-rich" '
+      + 'onclick="window.copaAbrirPrevia(\'' + ronda + '\',' + idx + ',\'des\')">'
+      + '📋 PREVIA · 3er PARTIDO</button>';
   }
 
   /* Render de un partido SINGLE-LEG (1ª, 2ª, FINAL) o de un sub-row
@@ -2421,24 +2461,44 @@
         actaUniqueId: ronda + '-' + idx + '-vta'
       });
       if (ida && ida.jugado && vta && vta.jugado) {
+        var des = (resultados[ronda + '_des'] || [])[idx] || null;
         var sumL = Number(ida.gl||0) + Number(vta.gv||0);
         var sumV = Number(ida.gv||0) + Number(vta.gl||0);
-        var winner;
-        if (sumL > sumV)      winner = m.l;
-        else if (sumV > sumL) winner = m.v;
-        else                  winner = vta.pen_winner || m.l;
-        var loser = winner === m.l ? m.v : m.l;
-        var winSum = winner === m.l ? sumL : sumV;
-        var losSum = winner === m.l ? sumV : sumL;
-        var globalScore = {
-          jugado: true, gl: winSum, gv: losSum,
-          et_gl: 0, et_gv: 0,
-          pen_winner: (sumL === sumV) ? (vta.pen_winner || winner) : null
-        };
-        out += _renderMatchCard({
-          local: winner, visit: loser, score: globalScore, actionBtn: '',
-          legLabel: 'Global', subtle: true
-        });
+        var aggWinner = getAggregateWinner(m, ida, vta, des);
+        if (aggWinner) {
+          var winner = aggWinner;
+          var loser = winner === m.l ? m.v : m.l;
+          var winSum = winner === m.l ? sumL : sumV;
+          var losSum = winner === m.l ? sumV : sumL;
+          var globalScore = {
+            jugado: true, gl: winSum, gv: losSum, et_gl: 0, et_gv: 0,
+            pen_winner: (des && des.jugado && des.pen_winner) ? des.pen_winner : null
+          };
+          out += _renderMatchCard({
+            local: winner, visit: loser, score: globalScore, actionBtn: '',
+            legLabel: 'Global', subtle: true
+          });
+          /* Si se jugó un TERCER PARTIDO, lo mostramos como sub-row. */
+          if (des && des.jugado) {
+            out += _renderMatchCard({
+              local: m.l, visit: m.v, score: des, actionBtn: '',
+              legLabel: '3er Partido', subtle: true,
+              events: (des.events || []), actaUniqueId: ronda + '-' + idx + '-des'
+            });
+          }
+        } else {
+          /* Global + goles fuera EMPATADOS → TERCER PARTIDO pendiente. */
+          out += _renderMatchCard({
+            local: m.l, visit: m.v,
+            score: { jugado: true, gl: sumL, gv: sumV, et_gl: 0, et_gv: 0, pen_winner: null },
+            actionBtn: '', legLabel: 'Global (empate)', subtle: true
+          });
+          out += _renderMatchCard({
+            local: m.l, visit: m.v, score: null,
+            actionBtn: _matchDesempateButton(ronda, idx, m),
+            legLabel: '3er Partido', subtle: true
+          });
+        }
       } else {
         out += _renderMatchCard({
           local: m.l, visit: m.v, score: null, actionBtn: '',
@@ -3335,13 +3395,16 @@
     var matches = sorteo[ronda] || [];
     var m = matches[idx];
     if (!m) return;
-    var local = esVuelta ? m.v : m.l;
-    var visit = esVuelta ? m.l : m.v;
+    /* TERCER PARTIDO (desempate): single-leg con prórroga+penaltis. El
+       local es m.l (campo neutral a efectos prácticos). 2026-06-09. */
+    var _isDes = (esVuelta === 'des' || esVuelta === 'd');
+    var local = _isDes ? m.l : (esVuelta ? m.v : m.l);
+    var visit = _isDes ? m.v : (esVuelta ? m.l : m.v);
     var isHvH = (typeof esHumano === 'function')
       ? (esHumano(local) && esHumano(visit))
       : (HUMAN_TEAMS.indexOf(canonicalTeam(local)) !== -1 && HUMAN_TEAMS.indexOf(canonicalTeam(visit)) !== -1);
     var compKey = (ronda === 'fin') ? 'copa-fin' : 'copa';
-    var matchKey = 'copa_' + ronda + '_' + idx + (esVuelta ? '_v' : '_i');
+    var matchKey = 'copa_' + ronda + '_' + idx + (_isDes ? '_d' : (esVuelta ? '_v' : '_i'));
     var duracion = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
       : (isHvH ? '16.5 min' : '13.5 min');
@@ -3352,7 +3415,7 @@
        `_renderPreviaMeta` cae a `getTeamLogoUrl`/`getLogoEquipo`, que
        no ven las plantillas fuera del main key, y los equipos de PF
        (p.ej. Teruel) salían con el escudo genérico 🛡️ apagado. */
-    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !!esVuelta, homeLogo: _shieldUrl(local), awayLogo: _shieldUrl(visit) };
+    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !_isDes && !!esVuelta, esDesempate: _isDes, homeLogo: _shieldUrl(local), awayLogo: _shieldUrl(visit) };
     window._ppCustomCallback = function () {
       window._ppPreviaTeams = null;
       /* Tras "▶ COMENZAR PARTIDO" en la previa, abrimos el gm-modal de
@@ -3361,7 +3424,7 @@
          el resultado vía /api/copa/guardar_resultado y refresque la
          pantalla de la ronda al terminar. */
       if (typeof window.abrirCopa === 'function') {
-        try { window.abrirCopa(ronda, idx, !!esVuelta, local, visit); }
+        try { window.abrirCopa(ronda, idx, _isDes ? 'des' : !!esVuelta, local, visit); }
         catch(e) { try { console.error('[copa] abrirCopa', e); } catch(_){} }
       }
       try { copaInit(); } catch(_){}
@@ -4051,6 +4114,7 @@
     var penWin = penEv ? (penEv.team === 'a' ? home : away) : null;
     var payload = {
       ronda: ronda, idx: idx, es_vuelta: esVuelta,
+      ia: true,   /* IA-live: server juega el desempate solo si la vuelta empata global+fuera */
       gl: gh, gv: gv,
       et_gl: et_gh, et_gv: et_gv,
       pen_winner: penWin,

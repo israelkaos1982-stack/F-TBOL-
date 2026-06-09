@@ -12847,7 +12847,7 @@
       /* Detectar contexto eliminatoria para PRÓRROGA / PENALTIS. Mismo
          shape que `gmEndMatch` (línea ~10300). */
       var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
-                    && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
+                    && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin' || !!_gm._copaDesempate);
       var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
       var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
       /* Eliminatorias europeas: SOLO desempate ('d') y FINAL ('f') son a
@@ -14694,7 +14694,7 @@
        tiene que haber un ganador. Aquí bloqueamos el FINALIZAR si
        el match termina empatado y forzamos la siguiente fase. */
     var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
-                  && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
+                  && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin' || !!_gm._copaDesempate);
     /* Supercopa de España (sc): single-leg con ET+pen igual que Copa. */
     var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
     /* Recopa de Europa: TODAS las rondas son single-leg con ET+pen.
@@ -15129,7 +15129,8 @@
             _cpPenWin,
             _cpMvp ? (_cpMvp.player || _cpMvp.name || '') : '',
             _gm.events || [],
-            _gm.home, _gm.away
+            _gm.home, _gm.away,
+            !!_gm._copaDesempate
           );
         }
       } catch(_e){}
@@ -15791,6 +15792,7 @@
       _copaRonda: _gm._copaRonda,
       _copaIdx: _gm._copaIdx,
       _copaVuelta: !!_gm._copaVuelta,
+      _copaDesempate: !!_gm._copaDesempate,
       _isWprev: !!_gm._isWprev,
       _wprevGi: _gm._wprevGi,
       _wprevJ: _gm._wprevJ,
@@ -15945,6 +15947,7 @@
     _gm._copaRonda = saved ? saved._copaRonda : null;
     _gm._copaIdx = saved ? saved._copaIdx : null;
     _gm._copaVuelta = saved ? !!saved._copaVuelta : false;
+    _gm._copaDesempate = saved ? !!saved._copaDesempate : false;
     /* Consumir contexto Copa pre-seteado por abrirCopa. Antes el flag
        _isCopa se ponía DESPUÉS de gmOpen (vía window.__GM_LIVE), lo
        que dejaba una ventana donde gmEndMatch (disparada por el
@@ -15958,6 +15961,7 @@
       if (window._gmPendingCopa.ronda != null) _gm._copaRonda = window._gmPendingCopa.ronda;
       if (window._gmPendingCopa.idx != null) _gm._copaIdx = window._gmPendingCopa.idx;
       _gm._copaVuelta = !!window._gmPendingCopa.esVuelta;
+      _gm._copaDesempate = !!window._gmPendingCopa.desempate;
     }
     _gm._isWprev = saved ? !!saved._isWprev : false;
     _gm._wprevGi = saved ? saved._wprevGi : null;
@@ -16135,7 +16139,7 @@
          no hace falta porque la prórroga del aggregate la maneja el
          engine de Copa al confirmar la vuelta. */
       var _isCopa = !!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin';
-      var _isCopaSingleLeg = _isCopa && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin');
+      var _isCopaSingleLeg = _isCopa && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin' || !!_gm._copaDesempate);
       var _isRecopaCfg = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
       /* Supercopa España: el botón PRÓRROGA NO se muestra. El sistema
          fuerza prórroga + penaltis automáticamente cuando hay empate
@@ -16610,13 +16614,14 @@
      que el persistor sepa dónde guardar el resultado. */
   window.abrirCopa = function (ronda, idx, esVuelta, home, away) {
     var isHvH = esHumano(home) && esHumano(away);
+    var _isDes = (esVuelta === 'des' || esVuelta === 'd');
     var compKey = (ronda === 'fin') ? 'copa-fin' : 'copa';
     /* Pre-cargar contexto Copa para que gmOpen lo consuma DENTRO del
        reset de flags (en lugar de depender del post-set vía
        __GM_LIVE, que dejaba una ventana de race en la primera
        apertura — bug 2ª Ronda 2026-05-09: empate 2-2 al 90' no
        disparaba PRÓRROGA hasta cerrar y reabrir la previa). */
-    window._gmPendingCopa = { ronda: ronda, idx: idx, esVuelta: !!esVuelta };
+    window._gmPendingCopa = { ronda: ronda, idx: idx, esVuelta: _isDes ? false : !!esVuelta, desempate: _isDes };
     try {
       gmOpen(0, home, away, isHvH, compKey, false, false);
       /* Doble seguridad: post-set también, por si gmOpen no consumió
@@ -16626,7 +16631,8 @@
         window.__GM_LIVE._isCopa = true;
         window.__GM_LIVE._copaRonda = ronda;
         window.__GM_LIVE._copaIdx = idx;
-        window.__GM_LIVE._copaVuelta = !!esVuelta;
+        window.__GM_LIVE._copaVuelta = _isDes ? false : !!esVuelta;
+        window.__GM_LIVE._copaDesempate = _isDes;
         window.__GM_LIVE.comp = compKey;
       }
     } catch(_){}
@@ -16637,9 +16643,10 @@
      gmEndMatch cuando _gm._isCopa === true. Posta a
      /api/copa/guardar_resultado con los datos del partido (incluido
      prórroga + penaltis) y refresca la pantalla de Copa después. */
-  window._copaSaveHumanResult = function (ronda, idx, esVuelta, gh, ga, et_gh, et_ga, pen_winner, mvp, events, home, away) {
+  window._copaSaveHumanResult = function (ronda, idx, esVuelta, gh, ga, et_gh, et_ga, pen_winner, mvp, events, home, away, esDesempate) {
     var payload = {
       ronda: ronda, idx: idx, es_vuelta: !!esVuelta,
+      es_desempate: !!esDesempate,
       gl: gh, gv: ga,
       et_gl: et_gh || 0, et_gv: et_ga || 0,
       pen_winner: pen_winner || null,

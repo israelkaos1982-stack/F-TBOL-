@@ -7879,6 +7879,46 @@ window._showSimProgress = function(opts, onDone){
     };
   }
 
+  /* CHAMPIONS / EUROPA · FASE DE GRUPOS (Swiss league phase). Estado en
+     {comp}_phase_v1 = {teams, pairs:[{jornada,home,away,gh,ga,played,...}]}.
+     El label del calendario es "Europa — Grupo JN" y NO indica la comp
+     (ucl/uel/uecl), así que probamos las tres y usamos aquella donde el
+     hub juega esa jornada (el hub juega UNA sola europea por temporada).
+     Solo la FASE DE GRUPOS es jugable: la KO europea está «próximamente»
+     (s-ucl-playoffs: «Cuadro de Eliminatorias — próximamente»), así que
+     los días KO («Octavos/Cuartos/Semis/Repesca Ida/Vuelta», «FINALES
+     EUROPA») caen al flujo genérico. `_eurFaseAbrirPrevia(comp,jor,idx)`
+     usa `state.pairs[idx]`, así que idx = índice en `state.pairs`. */
+  function _eurHubResolve(lbl){
+    var s = String(lbl || '');
+    var mj = /Europa\s*[—\-]\s*Grupo\s*J\s*(\d+)/i.exec(s);
+    if (!mj) return null;
+    var jor = parseInt(mj[1], 10);
+    if (!(jor > 0)) return null;
+    var comps = ['ucl','uel','uecl'];
+    for (var ci = 0; ci < comps.length; ci++){
+      var comp = comps[ci], stt = null;
+      try { stt = JSON.parse(localStorage.getItem(comp + '_phase_v1') || 'null'); } catch(_){}
+      if (!stt || !Array.isArray(stt.pairs)) continue;
+      for (var i = 0; i < stt.pairs.length; i++){
+        var p = stt.pairs[i];
+        if (!p || (p.jornada|0) !== jor) continue;
+        if (!_psHubClubMatches(p.home) && !_psHubClubMatches(p.away)) continue;
+        if (_psIsPendName(p.home) || _psIsPendName(p.away)) return null;
+        var EMOJI = comp === 'ucl' ? '🔵' : (comp === 'uel' ? '🟠' : '🟢');
+        return {
+          home:String(p.home), away:String(p.away),
+          rival:String(_psHubClubMatches(p.home) ? p.away : p.home),
+          played:!!p.played, gh:(p.gh|0), ga:(p.ga|0),
+          events:p.events||[], mvp:p.mvp||'', mvpTeam:p.mvpTeam||'',
+          uid:'ps-eur-acta-'+comp+'-'+jor+'-'+i, emoji:EMOJI,
+          open:(function(_c,_j,_i){ return function(){ try { if (typeof window._eurFaseAbrirPrevia === 'function') window._eurFaseAbrirPrevia(_c,_j,_i); } catch(_){} }; })(comp, jor, i)
+        };
+      }
+    }
+    return null;
+  }
+
   /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
      Petición usuario (foto 2): TODAS las cards del hub (Liga, Copa,
      competiciones europeas, torneos de verano, Mundialito y Selección)
@@ -7969,6 +8009,10 @@ window._showSimProgress = function(opts, onDone){
       if (_scc && _cardCupCard(day, '🏆', lbl, _scc)) return;
       var _uscc = _uscHubResolve(lbl);
       if (_uscc && _cardCupCard(day, '🇪🇺', lbl, _uscc)) return;
+      /* CHAMPIONS / EUROPA fase de grupos ("Europa — Grupo JN"). La KO
+         europea aún no es jugable → esos días caen al flujo genérico. */
+      var _eur = _eurHubResolve(lbl);
+      if (_eur && _cardCupCard(day, _eur.emoji, lbl, _eur)) return;
     } catch(_){}
     /* Liga EA Sports: parseamos la jornada del label para (a) abrir la
        previa del partido del Liverpool directamente y (b) como respaldo,

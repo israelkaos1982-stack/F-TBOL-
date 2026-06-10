@@ -426,6 +426,51 @@ window.getTeamStadium = function(name) {
 };
 
 window.SQUAD_REGISTRY={};
+
+/* ── Lesionados ACTIVOS que NO pueden jugar (excluir del acta/goleadores) ──
+   Devuelve los nombres de jugadores de `teamName` con una lesión ACTIVA
+   (partidos > 0) en window.LESION_STORE, resolviendo el alias del hub
+   (Bayern↔Liverpool). Se centraliza aquí para que TODA ruta que monte una
+   plantilla excluya a los MISMOS lesionados: la propia sqFromRegistry y el
+   wrapper de ligaExt en misc_body_1 (que construye la plantilla desde
+   ligaExt_* y, antes, se saltaba esta exclusión). Bug 2026-06-10: M. Salah
+   salía como goleador al simular el partido estando lesionado 2 partidos. */
+window._sqLesionExcludedFor = function(teamName){
+  var out = [];
+  try {
+    var _lesMap = window.LESION_STORE || {};
+    var _teamNorm = String(teamName || '').trim().toLowerCase();
+    var _hubAliases = null;
+    function _hubAliasSet() {
+      if (_hubAliases) return _hubAliases;
+      _hubAliases = {};
+      var lg = '';
+      try { lg = typeof window._psHumanLogicName === 'function' ? (window._psHumanLogicName() || '') : ''; } catch(_){ lg = ''; }
+      var lgN = String(lg).trim().toLowerCase();
+      if (lgN) _hubAliases[lgN] = 1;
+      try { if (window._mkHubTeamName) _hubAliases[String(window._mkHubTeamName).trim().toLowerCase()] = 1; } catch(_){}
+      if (lgN && lgN !== 'bayern munich' && lgN !== 'bayern múnich') {
+        _hubAliases['bayern munich'] = 1;
+        _hubAliases['bayern múnich'] = 1;
+      }
+      return _hubAliases;
+    }
+    Object.keys(_lesMap).forEach(function(pn){
+      var rec = _lesMap[pn];
+      if (!rec || !(Number(rec.partidos) > 0)) return;
+      var eqNorm = String(rec.equipo || '').trim().toLowerCase();
+      var match = (!eqNorm || eqNorm === _teamNorm);
+      if (!match) {
+        var al = _hubAliasSet();
+        if (al[eqNorm] && al[_teamNorm]) match = true;
+      }
+      if (!match) return;
+      if (out.indexOf(pn) === -1) out.push(pn);
+    });
+  } catch(_){}
+  return out;
+};
+
 window.sqFromRegistry = function(teamName, opts) {
   // opts: { excluded: ['NombreJugador',...] }  ← lesionados/sancionados
   // Resolver alias (ej: 'Sevilla' → 'Sevilla FC', 'Villarreal' → 'Villarreal CF')
@@ -638,54 +683,15 @@ window.sqFromRegistry = function(teamName, opts) {
      Antes sqFromRegistry solo excluía lo que el caller pasara en
      opts.excluded — pero ningún caller (simularJornadaIA, Copa,
      genMatchEvents, HvIA) lo hacía, así que los lesionados salían en
-     los 11 titulares, marcaban goles y ganaban MVPs. Ahora leemos
-     automáticamente window.LESION_STORE y añadimos a `excluded` a
+     los 11 titulares, marcaban goles y ganaban MVPs. Leemos
+     automáticamente window.LESION_STORE (vía `_sqLesionExcludedFor`,
+     compartido con el wrapper de ligaExt) y añadimos a `excluded` a
      todos los jugadores del equipo con `partidos > 0`. El admin no
      tiene que acordarse de propagar nada — cualquier camino que use
-     sqFromRegistry los saltará. */
+     sqFromRegistry los saltará. Bug 2026-05-27: Hugo Ekitiké marcó
+     pagando la simulación del Joan Gamper estando lesionado 3 partidos. */
   try {
-    var _lesMap = window.LESION_STORE || {};
-    var _teamNorm = String(teamName || '').trim().toLowerCase();
-    /* Alias del hub: si el slot del hub está renombrado (p.ej. usuario
-       cambió "Bayern Munich" → "Liverpool" en 2026-05-23), las entradas
-       legacy de LESION_STORE pueden tener equipo:'Bayern Munich' aunque
-       el jugador ya pertenezca al slot renombrado. Resolvemos el nombre
-       lógico del hub para tratar ambas variantes como equivalentes y
-       que el simulador IA-vs-IA NUNCA elija a un lesionado como
-       goleador / MVP por un equipo desincronizado. Bug 2026-05-27:
-       Hugo Ekitiké marcó pagando la simulación del Joan Gamper estando
-       lesionado 3 partidos. */
-    var _hubAliases = null;
-    function _hubAliasSet() {
-      if (_hubAliases) return _hubAliases;
-      _hubAliases = {};
-      var lg = '';
-      try { lg = typeof window._psHumanLogicName === 'function' ? (window._psHumanLogicName() || '') : ''; } catch(_){ lg = ''; }
-      var lgN = String(lg).trim().toLowerCase();
-      if (lgN) _hubAliases[lgN] = 1;
-      try { if (window._mkHubTeamName) _hubAliases[String(window._mkHubTeamName).trim().toLowerCase()] = 1; } catch(_){}
-      /* Solo añadimos 'bayern munich' como alias legacy si el hub ya
-         fue RENOMBRADO a otro nombre — sin esto un usuario con hub aún
-         en Bayern obtendría falsos positivos al cruzar con otro equipo
-         IA inexistente. La heurística es: el hub lógico no es Bayern. */
-      if (lgN && lgN !== 'bayern munich' && lgN !== 'bayern múnich') {
-        _hubAliases['bayern munich'] = 1;
-        _hubAliases['bayern múnich'] = 1;
-      }
-      return _hubAliases;
-    }
-    Object.keys(_lesMap).forEach(function(pn){
-      var rec = _lesMap[pn];
-      if (!rec || !(Number(rec.partidos) > 0)) return;
-      /* Match por nombre de equipo normalizado — cubre "Atlético
-         Madrid" / "Atletico Madrid" / "Atl Madrid" consistentemente. */
-      var eqNorm = String(rec.equipo || '').trim().toLowerCase();
-      var match = (!eqNorm || eqNorm === _teamNorm);
-      if (!match) {
-        var al = _hubAliasSet();
-        if (al[eqNorm] && al[_teamNorm]) match = true;
-      }
-      if (!match) return;
+    window._sqLesionExcludedFor(teamName).forEach(function(pn){
       if (excluded.indexOf(pn) === -1) excluded.push(pn);
     });
   } catch(_){}

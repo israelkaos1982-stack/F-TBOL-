@@ -14005,11 +14005,35 @@ window._showSimProgress = function(opts, onDone){
           if (t) {
             var built = _lextBuildSqShortFromTeam(t);
             if (built && built.length) {
-              /* Respeta el filtro `opts.excluded` (lesionados/sancionados)
-                 que el caller pase. Igual que el original. */
-              if (opts && Array.isArray(opts.excluded) && opts.excluded.length) {
-                var exNorm = {};
+              /* Conjunto de jugadores a EXCLUIR (lesionados/sancionados).
+                 Este wrapper construye la plantilla desde ligaExt_* y NO
+                 pasa por la cadena del bundle (sqFromRegistry → LESION_STORE,
+                 wrapper de BAJA_STORE), así que antes un lesionado salía como
+                 titular/goleador al simular. Bug 2026-06-10: M. Salah marcó
+                 estando lesionado 2 partidos. Reaplicamos AQUÍ las 3 fuentes:
+                   1) opts.excluded que pase el caller.
+                   2) LESION_STORE (vía el helper compartido del bundle,
+                      con alias del hub Bayern↔Liverpool).
+                   3) BAJA_STORE — jugadores de ESTA plantilla con baja
+                      manual/sanción (mismo criterio que el wrapper del bundle). */
+              var exNorm = {};
+              if (opts && Array.isArray(opts.excluded)) {
                 opts.excluded.forEach(function(n){ exNorm[_lextNormForLookup(n)] = true; });
+              }
+              try {
+                if (typeof window._sqLesionExcludedFor === 'function') {
+                  window._sqLesionExcludedFor(teamName).forEach(function(n){
+                    exNorm[_lextNormForLookup(n)] = true;
+                  });
+                }
+              } catch(_){}
+              try {
+                var _bs = window.BAJA_STORE || {};
+                built.forEach(function(e){
+                  if (e && !e.h && _bs[e[1]]) exNorm[_lextNormForLookup(e[1]||'')] = true;
+                });
+              } catch(_){}
+              if (Object.keys(exNorm).length) {
                 built = built.filter(function(e){
                   if (e && e.h) return true;
                   return !exNorm[_lextNormForLookup(e[1]||'')];

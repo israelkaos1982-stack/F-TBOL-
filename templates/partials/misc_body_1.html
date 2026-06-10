@@ -5378,6 +5378,146 @@ window._showSimProgress = function(opts, onDone){
     return changed;
   }
 
+  /* Localiza el partido del HUMANO (selección del hub, p.ej. Francia) en
+     un torneo ROAD / Ronda Previa de Selecciones (board sel-previa:
+     formato `qualifier-route` "Road Copa Asia/América/…" o `groups-ko` en
+     slots spv/sfn) para una fila «Selecciones — JN» del calendario
+     (icono 🌍 / clase ag-sel, label SIN «mundial»).
+
+     El humano juega OBLIGATORIAMENTE las PRIMERAS jornadas de su grupo
+     (sus byes van al final vía `_selArrangeHumanByesLast`), que es justo
+     lo que mapea el calendario: J1 = 1er partido de la selección, J2 = 2º,
+     … Así «Selecciones — JN» → jornada `N-1` del round-robin reordenado.
+
+     Devuelve el mismo shape que `_selPair` (mundial): { tourId, matchKey,
+     home, away, rival, jor } o null. Bug usuario 2026-06-10 (fotos «Road
+     Copa Asia · Francia · 21 Ago»): la card del hub mostraba «no hay
+     partido programado» porque `_selPair` solo resolvía Mundial-48 y los
+     días «Selecciones — JN» (no «Mundial …») caían a null → JUGADORES
+     FUERA pese a que Francia juega 8 partidos en la Road Copa Asia. */
+  function _selPairRoad(day, lbl){
+    try {
+      var mJ = /j\s*(\d+)/i.exec(String(lbl || ''));
+      if (!mJ) return null;
+      var jorN = parseInt(mJ[1], 10);
+      if (isNaN(jorN) || jorN < 1) return null;
+      var jor = jorN - 1;                       /* J1 → jornada 0 */
+      /* Hidratar plantillas de selecciones (idempotente) → nombres reales
+         + detección de humanos (`isHuman`/icono) ANTES de resolver. */
+      try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+      /* Selección DEL HUB: la dirige el mismo mister que el club del hub
+         (registro MISTERS_HUMANOS). Filtramos a ella para no mostrar la
+         Road de OTRA caja (misma regla que `_selPair` mundial). */
+      var _selKey = '';
+      try {
+        var _hubClub = (typeof _psHumanLogicName === 'function')
+          ? String(_psHumanLogicName() || '') : '';
+        var _hubMister = (_hubClub && typeof window._mhFindMister === 'function')
+          ? window._mhFindMister(_hubClub) : null;
+        if (_hubMister && _hubMister.seleccion) _selKey = _psNameKey(_hubMister.seleccion);
+      } catch(_){}
+      /* ¿Es un cfg de torneo Road de Selecciones? qualifier-route (sin KO
+         propio) en cualquier slot, o groups-ko en un slot spv/sfn. */
+      function _isRoadCfg(c, id){
+        if (!c || !Array.isArray(c.teams) || !c.teams.length) return false;
+        if (c.format === 'qualifier-route') return true;
+        if (c.format === 'groups-ko' && /^(spv|sfn)\d+$/.test(String(id || ''))) return true;
+        return false;
+      }
+      /* Recolectar todas las cfgs Road disponibles: cache en memoria +
+         slots spv/sfn del localStorage (mismo patrón que `_selPair`). */
+      var _rCfgs = [];
+      var cache = window._TOUR_CACHE || {};
+      Object.keys(cache).forEach(function(k){
+        if (_isRoadCfg(cache[k], k)) _rCfgs.push({ id: k, cfg: cache[k] });
+      });
+      if (typeof window._tourLoadCachedSync === 'function'){
+        var _SLOTS = ['spv1','spv2','spv3','spv4','spv5','spv6','spv7','spv8','spv9','spv10',
+                      'sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
+        for (var s = 0; s < _SLOTS.length; s++){
+          if (cache[_SLOTS[s]]) continue;
+          try {
+            var sc = window._tourLoadCachedSync(_SLOTS[s]);
+            if (_isRoadCfg(sc, _SLOTS[s])) _rCfgs.push({ id: _SLOTS[s], cfg: sc });
+          } catch(_){}
+        }
+      }
+      if (!_rCfgs.length) return null;
+      /* Resuelve el partido de la jornada `jor` para un (cfg, huIdx). */
+      function _resolveRoad(_cfg, _cfgId, _huIdx){
+        var fc = _cfg.formatConfig || {};
+        var pg = fc.perGroup || 4;
+        var gIdx = Math.floor(_huIdx / pg);
+        var gStart = gIdx * pg;
+        var slice = (_cfg.teams || []).slice(gStart, gStart + pg);
+        var huInSlice = _huIdx - gStart;
+        /* Asegurar fixtures de grupo + byes del humano al final (MISMO
+           builder que el render `_renderQualifierRoute`), para que los
+           matchKeys `g<g>_<jor>_<mi>` coincidan con la pantalla del
+           torneo aunque el usuario no la haya abierto. */
+        try {
+          if (typeof window._tourEnsureRoadFixtures === 'function')
+            window._tourEnsureRoadFixtures(_cfg, _cfgId);
+        } catch(_){}
+        var fixs = (_cfg.groupFixtures && _cfg.groupFixtures[gIdx]) || null;
+        if (!Array.isArray(fixs) || !fixs[jor]) return null;
+        var matchups = fixs[jor];
+        for (var mi = 0; mi < matchups.length; mi++){
+          var mm = matchups[mi];
+          if (!mm) continue;
+          if (mm.home === huInSlice || mm.away === huInSlice){
+            var hT = slice[mm.home], aT = slice[mm.away];
+            if (!hT || !aT || !hT.name || !aT.name) return null;
+            if (hT.name === 'PENDIENTE' || aT.name === 'PENDIENTE') return null;
+            return {
+              tourId: _cfgId,
+              matchKey: 'g' + gIdx + '_' + jor + '_' + mi,
+              home: hT,
+              away: aT,
+              rival: (mm.home === huInSlice ? aT.name : hT.name),
+              jor: jor + 1
+            };
+          }
+        }
+        return null;
+      }
+      /* Candidatos (cfg, huIdx) = la SELECCIÓN DEL HUB en cada Road.
+         Detección de humano: flag isHuman + `_esSelHumana` (lista
+         canónica, sin depender de hidratación) + `_tourIsHumanSel`. */
+      var _candidates = [];
+      for (var ci = 0; ci < _rCfgs.length; ci++){
+        var _C = _rCfgs[ci].cfg, _Cid = _rCfgs[ci].id, _T = _C.teams || [];
+        for (var ti = 0; ti < _T.length; ti++){
+          var t = _T[ti];
+          if (!t || !t.name || t.name === 'PENDIENTE') continue;
+          var _isHu = !!t.isHuman;
+          if (!_isHu && typeof window._esSelHumana === 'function'){
+            try { _isHu = window._esSelHumana(t.name); } catch(_){}
+          }
+          if (!_isHu && typeof window._tourIsHumanSel === 'function'){
+            try { _isHu = window._tourIsHumanSel(t); } catch(_){}
+          }
+          if (!_isHu) continue;
+          /* Filtro estricto a la selección del hub (si la conocemos). */
+          if (_selKey){
+            var _ok = (_psNameKey(t.name) === _selKey);
+            if (!_ok && typeof window._canonSelHumana === 'function'){
+              try { _ok = (_psNameKey(window._canonSelHumana(t.name)) === _selKey); } catch(_){}
+            }
+            if (!_ok) continue;
+          }
+          _candidates.push({ cfg: _C, id: _Cid, huIdx: ti });
+        }
+      }
+      for (var ki = 0; ki < _candidates.length; ki++){
+        var _res = _resolveRoad(_candidates[ki].cfg, _candidates[ki].id, _candidates[ki].huIdx);
+        if (_res) return _res;
+      }
+      return null;
+    } catch(_){}
+    return null;
+  }
+
   /* Localiza el partido del HUMANO (Francia) en el Mundial 2032 para
      una fila `ag-sel` del calendario:
        - "Mundial Grupo — JN"  → busca en cfg.groupFixtures[gIdx][jor]
@@ -5396,7 +5536,10 @@ window._showSimProgress = function(opts, onDone){
     try {
       if (!day || !/\bag-sel\b/.test(day.cls)) return null;
       var lbl = String(day.label || '');
-      if (!/mundial/i.test(lbl)) return null;
+      /* Día «Selecciones — JN» (Rondas Previas / Road, board sel-previa:
+         qualifier-route o groups-ko). El partido del humano NO vive en un
+         Mundial-48 sino en un torneo Road (slot spv/sfn). 2026-06-10. */
+      if (!/mundial/i.test(lbl)) return _selPairRoad(day, lbl);
       var isGroup = /grupo/i.test(lbl);
       var jor = -1, koRoundIdx = -1, koLabelKind = '';
       if (isGroup) {
@@ -29765,6 +29908,67 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){ return false; }
   }
   try { window._tourEnsureGroupFixtures = _tourEnsureGroupFixtures; } catch(_){}
+
+  /* Igual que `_tourEnsureGroupFixtures` pero para torneos ROAD / Rondas
+     Previas de Selecciones (board sel-previa): formato `qualifier-route`
+     (fase de grupos sin KO propio) o `groups-ko` en slots spv/sfn (spv1..spv10, sfn1..sfn10).
+     Construye los fixtures de grupo Y aplica `_selArrangeHumanByesLast`
+     (el humano juega las PRIMERAS jornadas, sus byes al final) —
+     EXACTAMENTE como el render `_renderQualifierRoute` (línea ~26899) y
+     `_renderGroupsKO` para sel-previa. Lo necesita la CARD DEL HUB
+     (`_selPairRoad`) para localizar el partido de la selección humana en
+     el día «Selecciones — JN» SIN que el usuario abra antes la pantalla
+     del torneo (los fixtures se construyen LAZY en el render y no siempre
+     se persisten, así que tras recargar la card los veía undefined → «no
+     hay partido programado»). El builder es determinista, así que los
+     matchKeys `g<g>_<jor>_<mi>` coinciden con la pantalla del torneo.
+     Devuelve true si construyó/reordenó algo. Bug usuario 2026-06-10
+     («Road Copa Asia · Francia · 21 Ago»). */
+  function _tourEnsureRoadFixtures(cfg, tourId) {
+    try {
+      if (!cfg) return false;
+      var _isQr = (cfg.format === 'qualifier-route');
+      var _board = (typeof _tvBoardOf === 'function') ? _tvBoardOf(tourId) : '';
+      var _isSelGko = (cfg.format === 'groups-ko'
+        && (_board === 'sel-previa' || _board === 'sel-final'
+            || /^(spv|sfn)\d+$/.test(String(tourId || ''))));
+      if (!_isQr && !_isSelGko) return false;
+      var teams = Array.isArray(cfg.teams) ? cfg.teams : [];
+      if (!teams.length) return false;
+      var fc = cfg.formatConfig || {};
+      var nGroups = fc.groups || (_isQr ? 4 : 1);
+      var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
+      cfg.groupFixtures = cfg.groupFixtures || {};
+      cfg.currentJornadaByGroup = cfg.currentJornadaByGroup || {};
+      var changed = false;
+      for (var g = 0; g < nGroups; g++) {
+        var slice = teams.slice(g*perGroup, (g+1)*perGroup);
+        if (slice.length < 2) break;
+        /* Reconstruir si falta o quedó obsoleto (reconfig de equipos /
+           doble vuelta) sin partidos jugados — igual que el render. */
+        var _gKey = 'g'+g+'_';
+        var _need = !cfg.groupFixtures[g];
+        if (!_need && _tourFixtureStale(cfg.groupFixtures[g], slice, fc)
+            && !_tourGroupHasPlayed(cfg, _gKey)) {
+          _need = true;
+        }
+        if (_need) {
+          var _gFix = _tourBuildRoundRobin(slice.map(function(_, i){ return i; }));
+          if (fc.groupDoubleLegs) _gFix = _tourDoubleFixture(_gFix);
+          cfg.groupFixtures[g] = _gFix;
+          changed = true;
+        }
+        if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
+        /* Humano: byes al final (mismo helper que el render). */
+        if (_selArrangeHumanByesLast(cfg, g, slice)) changed = true;
+      }
+      if (changed && tourId && typeof window._tourSave === 'function') {
+        try { window._tourSave(tourId, cfg); } catch(_){}
+      }
+      return changed;
+    } catch(_){ return false; }
+  }
+  try { window._tourEnsureRoadFixtures = _tourEnsureRoadFixtures; } catch(_){}
 
   /* Construye `cfg.koBracket[0]` (1ª ronda KO) desde los grupos YA
      completados — EXACTAMENTE como el render `_renderGroupsKO` (líneas

@@ -12647,16 +12647,23 @@ window._fallbackSq11 = function(){
   }
 
   /* compKey de partido de selección. Cubre J1-J10 ('sel'), Mundial fase
-     final ('sel-fin') y partidos del Mundial 2032 lanzados desde el hub
-     ('torneo' + format 'mundial-48'). */
+     final ('sel-fin') y partidos de torneo de Selecciones lanzados desde
+     el hub ('torneo'): Mundial 2032 (format 'mundial-48') Y los torneos
+     ROAD / Rondas Previas-Finales (format 'qualifier-route' o cualquier
+     slot spv/sfn). Sin la rama Road, un partido de la Road Copa Asia
+     (Francia) caería a club → contaminaría el store de sanciones del
+     club y el balón (rompiendo la separación CLUBES vs SELECCIONES).
+     Bug usuario 2026-06-10 (card «no hay partido programado» 21 Ago). */
   function esCompSel(compKey){
     if (compKey === 'sel' || compKey === 'sel-fin') return true;
     if (compKey === 'torneo') {
       try {
         var pt = window._ppPreviaTeams;
-        var tcfg = (pt && pt.tourId && window._TOUR_CACHE)
-          ? window._TOUR_CACHE[pt.tourId] : null;
+        var tid = pt && pt.tourId;
+        var tcfg = (tid && window._TOUR_CACHE) ? window._TOUR_CACHE[tid] : null;
         if (tcfg && tcfg.format === 'mundial-48') return true;
+        if (tcfg && tcfg.format === 'qualifier-route') return true;
+        if (tid && /^(spv|sfn)\d+$/.test(String(tid))) return true;
       } catch(_){}
     }
     return false;

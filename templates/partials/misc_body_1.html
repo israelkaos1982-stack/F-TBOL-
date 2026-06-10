@@ -54533,6 +54533,24 @@ https://api.sofascore.app/api/v1/team/44/image
       window._bayernEditValuesClose();
       return;
     }
+    /* PRESERVAR el modelo de objetivos a través del guardado AUTORITATIVO
+       (replace total). Sin esto el replace BORRA `objRating`/`objMoney` y
+       el siguiente `liverpoolObjEarnings` re-sumaba el aporte de objetivos
+       → doble conteo del 💼 (0,55 con 1 objetivo). Además fijamos
+       `ratingBase` = (rating tecleado − aporte de objetivos) para que el
+       💼 mostrado sea EXACTAMENTE lo que el admin escribió, conservando el
+       modelo absoluto base+objetivos. */
+    try {
+      var _oPrev = (typeof window._bayernHudGet === 'function') ? (window._bayernHudGet() || {}) : {};
+      var _objR = parseFloat(_oPrev.objRating) || 0;
+      var _objM = parseFloat(_oPrev.objMoney)  || 0;
+      o.objRating = _objR;
+      o.objMoney  = _objM;
+      if (o.rating != null) {
+        var _base = (parseFloat(o.rating) || 0) - _objR;
+        o.ratingBase = (_base < 0) ? 0 : Math.round(_base * 1000) / 1000;
+      }
+    } catch(_){}
     /* Sin toast intermedio: el usuario pidió ocultar el mensaje
        "Guardando HUD en 5 capas…" — el feedback llega con el toast
        final 'ok' / 'err'. */
@@ -54671,7 +54689,7 @@ https://api.sofascore.app/api/v1/team/44/image
            explícita del admin: el 0/0 debe GANAR en el server (sello del
            reloj del server) y propagarse a todos los móviles, no quedar
            gateado ni ser rechazado por un ts futuro de otro dispositivo. */
-        window._bayernHudMerge({ rating: 0, money: 0, objRating: 0, objMoney: 0 }, true, true);
+        window._bayernHudMerge({ rating: 0, money: 0, ratingBase: 0, objRating: 0, objMoney: 0 }, true, true);
       }
     } catch(_){}
     try {
@@ -57029,13 +57047,33 @@ https://api.sofascore.app/api/v1/team/44/image
     var prevObjRating = parseFloat(o.objRating) || 0;
     var newObjMoney  = done * OBJ_MONEY_PER;
     var newObjRating = Math.min(OBJ_RATING_CAP, Math.round(done * OBJ_RATING_PER * 1000) / 1000);
-    if (newObjMoney === prevObjMoney && newObjRating === prevObjRating) return;
-    var money  = ((o.money  != null) ? (parseFloat(o.money)  || 0) : 0) + (newObjMoney  - prevObjMoney);
-    var rating = ((o.rating != null) ? (parseFloat(o.rating) || 0) : 0) + (newObjRating - prevObjRating);
-    if (money  < 0) money  = 0;
-    if (rating < 0) rating = 0;
-    rating = Math.round(rating * 1000) / 1000;
-    window._bayernHudMerge({ money: money, rating: rating,
+    /* 💼 VALORACIÓN — modelo ABSOLUTO (base del admin + aporte de
+       objetivos), NUNCA por delta. El delta dejaba `rating` y `objRating`
+       desincronizados: un guardado AUTORITATIVO del editor del HUD hace
+       replace total y BORRABA `objRating`; el siguiente recálculo leía
+       prevObjRating=0 y SUMABA otra vez el aporte de objetivos sobre un
+       `rating` que YA lo incluía → 0,55 💼 con 1 solo objetivo (=2×0,275)
+       y el offset se quedaba clavado para siempre. Como las ÚNICAS
+       fuentes de `rating` son el admin (base, vía `ratingBase`) y los
+       objetivos, recalcular el ABSOLUTO `ratingBase + aporte` es completo
+       y no puede driftear. `ratingBase` ausente (datos viejos / drift
+       previo) ⇒ base 0 ⇒ AUTOCORRIGE el valor doblado en el próximo
+       recálculo. */
+    var ratingBase = (o.ratingBase != null) ? (parseFloat(o.ratingBase) || 0) : 0;
+    if (ratingBase < 0) ratingBase = 0;
+    var rating = Math.round((ratingBase + newObjRating) * 1000) / 1000;
+    /* 🪙 PRESUPUESTO — se mantiene por DELTA porque coexiste con otros
+       writers que suman a `money` sin pasar por aquí (premios de torneo
+       `_bayernHudCreditMoney`, apuestas…). Su anti-drift es que el
+       guardado autoritativo del editor PRESERVA `objMoney`. */
+    var money = ((o.money != null) ? (parseFloat(o.money) || 0) : 0) + (newObjMoney - prevObjMoney);
+    if (money < 0) money = 0;
+    var curRating = (o.rating != null) ? (Math.round((parseFloat(o.rating) || 0) * 1000) / 1000) : null;
+    /* Salir solo si NADA cambia Y `ratingBase` ya está sellado (la 1ª
+       pasada tras el deploy debe sellarlo para autocorregir el drift). */
+    if (o.ratingBase != null && newObjMoney === prevObjMoney
+        && newObjRating === prevObjRating && curRating === rating) return;
+    window._bayernHudMerge({ money: money, rating: rating, ratingBase: ratingBase,
                              objMoney: newObjMoney, objRating: newObjRating });
     /* Barras de progreso del HUD coherentes con los nuevos valores
        (athObjCount las pinta con su escala vieja; aquí las corregimos

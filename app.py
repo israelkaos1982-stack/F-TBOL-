@@ -3467,6 +3467,16 @@ _KV_ALLOWED_EXACT = {
     # reiniciar la web no se guarda lo editado"). Patrón "_save = push
     # autoritativo · _boot = pull aditivo" como selecciones_squad_v1.
     "munich-obj-overrides-v1",
+    # PROGRESO de los Objetivos del Club: ✅ marcados + contadores MANUALES
+    # (p.ej. "Marcar 5 goles en 3 partidos" del Mundialito, que el usuario
+    # avanza con ➖/➕). Vivía SOLO en localStorage → al borrar datos de
+    # navegación / cambiar de móvil el progreso volvía a 0 (foto usuario
+    # 2026-06-10: "añadí en global 1/3, borro datos y al volver pone 0/3").
+    # localStorage es solo caché; el server es la fuente de verdad. Merge por
+    # RECENCIA (updatedAt): un avance/reset legítimo no se revierte y un POST
+    # stale no pisa una copia más nueva. Es el PROGRESO (separado de
+    # munich-obj-overrides-v1, que son las CANTIDADES/textos de cada misión).
+    "munich-obj-state-v4",
     # Lesiones / sanciones del CLUB del hub y de las SELECCIONES. Vivían
     # SOLO en localStorage → al borrar datos de navegación / cambiar de
     # móvil se perdía TODO lo editado a mano (foto usuario 2026-06-04:
@@ -3532,6 +3542,10 @@ _KV_ALLOWED_EXACT = {
 _KV_RECENCY_BLOB_KEYS = {
     "ftbol_sel_sanciones_v1", "ftbol_lesiones_v1", "ftbol_sanciones_v1",
     "bplant_stat_adjust_v1", "mu_messages_v1", "bplant_match_stats_v1",
+    # Progreso de los Objetivos del Club (✅ + contadores manuales): el blob
+    # con `updatedAt` mayor gana entero (avance/reset no se revierte; POST
+    # stale no pisa lo más nuevo).
+    "munich-obj-state-v4",
     # Tabla EDITABLE de premios CASH: la última edición del admin gana entera.
     "cash_rewards_v1",
     # HUD del hub (🪙💊💼 + objetivos): running total / consumible. El blob

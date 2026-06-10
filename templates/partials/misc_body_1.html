@@ -8289,10 +8289,18 @@ window._showSimProgress = function(opts, onDone){
       ? '<div style="margin-top:2px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST, PS_PAY_SIM_COST) + '</div>'
       : '';
     if (ligaMatch){
+      /* 📌 Posponer (top-left): aparece SIEMPRE que el partido de Liga
+         del hub no se haya jugado todavía. Mueve el partido a la caja
+         POSPUESTOS (tourId 'liga' + matchKey = la clave del store de
+         resultados de Liga, j|home|away) igual que las cards de torneo
+         / copa / selección. Petición usuario 2026-06-10: «en la card
+         falta la caja Posponer como hay en todos los torneos». */
+      var _deferHtmlLiga = (ligaJor > 0) ? _psDeferTopBtnHtml() : '';
       /* Día de Liga con partido del hub resuelto → DISEÑO ÚNICO de la
          card (escudos grandes + VS), idéntico a la de Selección. */
       st.innerHTML =
         '<div class="ps-card">'
+        + _deferHtmlLiga
         + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
         + '<div class="ps-sub">' + emoji + ' ' + _esc(lbl) + '</div>'
         + _psVsBlockHtml(
@@ -8348,6 +8356,25 @@ window._showSimProgress = function(opts, onDone){
         if (_payBtnL.disabled) return;
         _payBtnL.disabled = true;
         if (!_psPayAndSimHubLigaMatch(ligaJor, ligaMatch)) _payBtnL.disabled = false;
+      };
+    }
+    var _deferBtnLiga = document.getElementById('ps-defer-top-btn');
+    if (_deferBtnLiga && ligaMatch && ligaJor > 0){
+      _deferBtnLiga.onclick = function(){
+        if (_deferBtnLiga.disabled) return;
+        _deferBtnLiga.disabled = true;
+        try {
+          _psDeferCurrentMatch({
+            tourId: 'liga',
+            matchKey: ligaJor + '|' + ligaMatch.home + '|' + ligaMatch.away,
+            home: { name: ligaMatch.home },
+            away: { name: ligaMatch.away },
+            jor:  ligaJor,
+            date: day && day.date,
+            label: lbl,
+            emoji: emoji
+          });
+        } catch(_){ _markDoneAndAdvance(); }
       };
     }
   }

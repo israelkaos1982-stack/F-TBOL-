@@ -3794,10 +3794,38 @@ def api_kv_set(key):
         if authoritative and isinstance(value, dict):
             srv_now = time.time() * 1000.0
             value["updatedAt"] = max(new_ts, old_ts + 1.0, srv_now)
+            # REV MONOTÓNICO (reloj LÓGICO): la acción AUTORITATIVA del admin
+            # (✅ Guardar / ♻ / 📅) SIEMPRE gana y deja el `rev` por ENCIMA de
+            # cualquier copia — incluidos los clientes VIEJOS (sin `rev`, =0).
+            # Así, una vez el admin guarda desde un cliente actualizado, ningún
+            # móvil sin actualizar ni con el reloj adelantado puede volver a
+            # pisar el HUD por recencia (causa raíz «el 🪙 vuelve a 0 al borrar
+            # datos» en un parque de 6 móviles + PC, foto usuario 2026-06-11).
+            if key == "bayern_hud_overrides_v1":
+                _old_rev = 0
+                if isinstance(old, dict):
+                    try:
+                        _old_rev = int(old.get("rev") or 0)
+                    except (TypeError, ValueError):
+                        _old_rev = 0
+                try:
+                    _new_rev = int(value.get("rev") or 0)
+                except (TypeError, ValueError):
+                    _new_rev = 0
+                value["rev"] = max(_old_rev, _new_rev) + 1
             payload = json.dumps(value, ensure_ascii=False)
         elif key == "bayern_hud_overrides_v1" and isinstance(old, dict) and isinstance(value, dict):
-            # HUD no-authoritative: defensa a prueba de balas (2026-06-08).
+            # HUD no-authoritative: defensa a prueba de balas.
             #
+            # (0) REV MONOTÓNICO (2026-06-11). El blob lleva un reloj LÓGICO
+            #     `rev` que SOLO crece en cada cambio real (espejo del `dayIdx`
+            #     del cursor de fecha, que por eso SÍ sobrevive al wipe). Un
+            #     push con `rev` MENOR que el almacenado es STALE — un cliente
+            #     VIEJO sin actualizar (no manda `rev`, =0), un dispositivo con
+            #     el RELOJ ADELANTADO, o una copia con defaults — y se RECHAZA
+            #     ENTERO, NUNCA pisa el valor más nuevo por recencia. Es lo que
+            #     hacía que la FECHA sobreviviera y el 🪙 no (recencia por reloj
+            #     de pared, vulnerable a clock-skew + clientes stale).
             # (A) RECHAZO de POST PARCIAL sin campos ANCLA. El seed de
             #     arranque de un móvil con código viejo manda
             #     `{pi:8, updatedAt}` (el PI por defecto leído antes de
@@ -3812,15 +3840,28 @@ def api_kv_set(key):
             # (B) FIELD-MERGE que PRESERVA campos: los que el POST no trae se
             #     rellenan desde lo almacenado, así un write de un solo campo
             #     jamás vacía el resto. Recencia en los compartidos.
+            try:
+                old_rev = int(old.get("rev") or 0)
+            except (TypeError, ValueError):
+                old_rev = 0
+            try:
+                new_rev = int(value.get("rev") or 0)
+            except (TypeError, ValueError):
+                new_rev = 0
             _ANCHOR = ("money", "rating", "ratingTarget", "moneyTarget")
             inc_has_anchor = any(k in value for k in _ANCHOR)
             old_has_anchor = any(k in old for k in _ANCHOR)
-            if old_has_anchor and not inc_has_anchor:
+            if new_rev < old_rev:
+                # (0) STALE por reloj lógico (cliente viejo/stale/clock-skew):
+                # conserva lo almacenado ENTERO.
+                value, payload = old, row.valor_json
+            elif old_has_anchor and not inc_has_anchor:
                 # POST parcial (seed `{pi:8}`): conserva lo almacenado entero.
                 value, payload = old, row.valor_json
-            elif new_ts >= old_ts:
+            elif new_rev > old_rev or new_ts >= old_ts:
                 merged = dict(old)
                 merged.update(value)
+                merged["rev"] = max(old_rev, new_rev)
                 value, payload = merged, json.dumps(merged, ensure_ascii=False)
             else:
                 value, payload = old, row.valor_json

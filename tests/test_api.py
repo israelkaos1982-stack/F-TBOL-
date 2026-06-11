@@ -1057,3 +1057,61 @@ class TestCalendario:
         self._login(client)
         rv = client.post("/api/calendario/delete", json={"event_id": "ev-zzz"})
         assert rv.status_code == 404
+
+
+class TestBayernHudRevGuard:
+    """El HUD del hub (bayern_hud_overrides_v1) lleva un reloj LÓGICO `rev`
+    monotónico: un push con `rev` MENOR (cliente viejo sin actualizar, copia
+    stale, o dispositivo con el reloj adelantado) NUNCA debe pisar el valor
+    más nuevo por recencia de reloj de pared. Causa raíz del bug «el 🪙
+    presupuesto vuelve a 0 al borrar datos de navegación» en un parque de
+    6 móviles + PC (foto usuario 2026-06-11)."""
+
+    KEY = "/api/kv/bayern_hud_overrides_v1"
+
+    def _get(self, client):
+        return _json(client.get(self.KEY)).get("value")
+
+    def test_authoritative_save_sets_rev_above_old(self, client):
+        client.post(self.KEY, json={"value": {"money": 4500, "pi": 5,
+                    "ratingTarget": 8.8, "moneyTarget": 1300, "updatedAt": 1000,
+                    "rev": 1}, "authoritative": True})
+        v = self._get(client)
+        assert v["money"] == 4500
+        assert v["rev"] >= 2  # el server bumpea por encima del entrante
+
+    def test_stale_old_client_future_ts_money_zero_rejected(self, client):
+        # Admin guarda 4500 (autoritativo) y un running-total legítimo baja a 4350.
+        client.post(self.KEY, json={"value": {"money": 4500, "pi": 5,
+                    "ratingTarget": 8.8, "moneyTarget": 1300, "updatedAt": 1000,
+                    "rev": 1}, "authoritative": True})
+        cur = self._get(client)["rev"]
+        client.post(self.KEY, json={"value": {"money": 4350, "pi": 5,
+                    "ratingTarget": 8.8, "moneyTarget": 1300, "objMoney": 0,
+                    "updatedAt": 2000, "rev": cur + 1}})
+        assert self._get(client)["money"] == 4350
+        # Cliente VIEJO (sin `rev` => 0) con el RELOJ ADELANTADO empuja money=0.
+        client.post(self.KEY, json={"value": {"money": 0, "pi": 8,
+                    "ratingTarget": 8.8, "moneyTarget": 1300,
+                    "updatedAt": 9_999_999}})
+        assert self._get(client)["money"] == 4350  # RECHAZADO, no clobber
+
+    def test_higher_rev_running_total_applies(self, client):
+        client.post(self.KEY, json={"value": {"money": 4500, "pi": 5,
+                    "ratingTarget": 8.8, "moneyTarget": 1300, "updatedAt": 1000,
+                    "rev": 1}, "authoritative": True})
+        cur = self._get(client)["rev"]
+        client.post(self.KEY, json={"value": {"money": 4600, "pi": 5,
+                    "ratingTarget": 8.8, "moneyTarget": 1300, "updatedAt": 3000,
+                    "rev": cur + 1}})
+        v = self._get(client)
+        assert v["money"] == 4600 and v["pi"] == 5
+
+    def test_admin_reset_authoritative_still_wins(self, client):
+        client.post(self.KEY, json={"value": {"money": 4500, "rev": 1,
+                    "updatedAt": 1000}, "authoritative": True})
+        # ♻ Restablecer: blob autoritativo "vacío" — debe ganar (intención admin).
+        client.post(self.KEY, json={"value": {"updatedAt": 2000},
+                    "authoritative": True})
+        v = self._get(client)
+        assert "money" not in v or v.get("money") in (None, 0)

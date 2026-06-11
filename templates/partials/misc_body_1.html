@@ -56673,13 +56673,34 @@ https://api.sofascore.app/api/v1/team/44/image
         return;
       }
       _objLastSer = ser;
-      _objStateUpdatedAt = Date.now();
-      data.updatedAt = _objStateUpdatedAt;
-      localStorage.setItem(LS_OBJ, JSON.stringify(data));
-      /* Sync al servidor (gateado por hidratación dentro de _kvBlobSync:
-         no sube nada antes de reconciliar, así un autosave temprano no
-         pisa el server con un progreso vacío). */
-      if (_objStateSync) _objStateSync.touch(_objStateUpdatedAt);
+      /* GATE de hidratación (regla _kvBlobSync 2026-06-04 + bug 2026-06-11):
+         ANTES de que la hidratación haya reconciliado con el server NO
+         sellamos un `updatedAt` FRESCO ni hacemos `touch`. Si lo hiciéramos,
+         el estado INICIAL / por defecto que pintan `athObjCount` y
+         `_munichAutoEval` al arrancar (o el que queda tras BORRAR DATOS DE
+         NAVEGACIÓN) parecería "más nuevo" que el progreso REAL del server:
+         `hydrate` entonces NO adopta el server y, si el DOM no está vacío
+         (un contador no-cero o un objetivo auto-marcado por `_munichAutoEval`),
+         RE-SUBE ese estado en blanco y MACHACA el progreso real → ✅ +
+         contadores volvían a 0 tras borrar datos / cambiar de móvil (foto
+         usuario 2026-06-11: marco "2 penaltis parados", borro datos y vuelve a
+         0). Pre-hidratación persistimos el contenido en localStorage para la
+         sesión, pero CONSERVANDO el `updatedAt` SEMBRADO (0 tras un wipe) para
+         que el server gane la reconciliación. El `touch` post-hidratación es
+         lo que sube el progreso real del usuario. */
+      var _objHyd = !_objStateSync || _objStateSync.isHydrated();
+      if (_objHyd){
+        _objStateUpdatedAt = Date.now();
+        data.updatedAt = _objStateUpdatedAt;
+        localStorage.setItem(LS_OBJ, JSON.stringify(data));
+        /* Sync al servidor (gateado por hidratación dentro de _kvBlobSync:
+           no sube nada antes de reconciliar, así un autosave temprano no
+           pisa el server con un progreso vacío). */
+        if (_objStateSync) _objStateSync.touch(_objStateUpdatedAt);
+      } else {
+        data.updatedAt = _objStateUpdatedAt || 0;
+        localStorage.setItem(LS_OBJ, JSON.stringify(data));
+      }
     } catch(e){}
   }
 

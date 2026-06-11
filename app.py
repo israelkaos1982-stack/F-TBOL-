@@ -2851,6 +2851,32 @@ def _lx_norm_name(raw):
     return s
 
 
+# Afijos de club que el CLIENTE (`_canonTeamName`, misc_body_1.html) elimina
+# para colapsar "Europa FC" / "CE Europa" / "Europa" al mismo canónico. El
+# servidor — chokepoint por el que pasan los 3 móviles + PC — DEBE usar la
+# MISMA canonicalización en el colapso por nombre; si no, dos grafías del
+# mismo club (id distinto por re-pegar la lista) SOBREVIVEN como filas
+# duplicadas tras la fusión cross-device (bug 2026-06-11: "se duplican
+# equipos"). NO toca "real"/"atletico" (parte semántica del nombre).
+_LX_AFFIX_RE = _re_liga_ext.compile(
+    r"\b(?:fc|cf|cd|sd|ud|ad|ce|sc|rc|cp|ac|club|football|deportivo|deportiva)\b")
+
+
+def _lx_canon_name(raw):
+    """Como `_lx_norm_name` pero además elimina afijos de club (FC, CF,
+    CD…) — espejo del `_canonTeamName` del cliente. Se usa SOLO para el
+    colapso/dedup por nombre y los backfills de identidad (escudo/estadio),
+    nunca para `deletedTeamNames` (que viaja por nombre normalizado del
+    cliente)."""
+    s = _lx_norm_name(raw)
+    if not s:
+        return s
+    s = _LX_AFFIX_RE.sub("", s)
+    s = _re_liga_ext.sub(r"\s+", " ", s).strip()
+    # Si quitar afijos vacía el nombre (p.ej. "FC"), conserva el normalizado.
+    return s or _lx_norm_name(raw)
+
+
 def _lx_team_key(t):
     """Clave estable de un equipo: id si existe, si no nombre normalizado."""
     if not isinstance(t, dict):
@@ -2988,26 +3014,30 @@ def _lx_merge_teams(old_data, new_data):
     # pegada con valoraciones nuevas).
     out_teams = []
     out_incoming = []
-    by_name = {}     # nombre normalizado -> índice en out_teams
+    by_name = {}     # nombre CANÓNICO (afijo-aware) -> índice en out_teams
     for key in order:
         t = merged[key]
         nm = _lx_norm_name(t.get("name"))
         if nm in del_set:
             continue
         inc = bool(meta.get(key))
-        if not nm:
+        # Clave de dedup AFIJO-AWARE (= cliente `_teamCanonKey`): colapsa
+        # "Europa"/"Europa FC"/"CE Europa" (y acentos/case) a una fila, que
+        # `_lx_norm_name` (solo acentos/puntuación) dejaba escapar → dupes.
+        cnm = _lx_canon_name(t.get("name"))
+        if not cnm:
             out_teams.append(t)
             out_incoming.append(inc)
             continue
-        if nm not in by_name:
-            by_name[nm] = len(out_teams)
+        if cnm not in by_name:
+            by_name[cnm] = len(out_teams)
             out_teams.append(t)
             out_incoming.append(inc)
             continue
         # Colisión de nombre: mismo equipo con id distinto. Elegimos
         # ganador igual que en la fusión por id (updatedAt; empate sin
         # sellar → la entrante).
-        idx = by_name[nm]
+        idx = by_name[cnm]
         cur = out_teams[idx]
         cu = _lx_updated_at(cur)
         tu = _lx_updated_at(t)
@@ -3023,49 +3053,85 @@ def _lx_merge_teams(old_data, new_data):
             out_teams[idx] = t
             out_incoming[idx] = inc
 
-    # BACKFILL DE ESCUDOS POR NOMBRE (2026-06-02) ─────────────────────
-    # Bug usuario: "mi amigo puso todos los escudos de la Liga Grecia
-    # desde su PC pero no sale ninguno". La fusión por equipo elige al
-    # ganador por `updatedAt`; si el ganador de un equipo NO trae escudo
-    # (p.ej. la copia de otro dispositivo con plantilla más reciente pero
-    # sin el escudo que el amigo acababa de pegar), el escudo se perdía
-    # aunque existiera en la otra versión del MISMO equipo. El escudo es
-    # un dato de IDENTIDAD: una vez puesto en CUALQUIER dispositivo no
-    # debe desaparecer nunca. Aquí, tras elegir ganadores, rellenamos el
-    # `shield` de los equipos que se quedaron sin él tomándolo de la
-    # versión más reciente (de old o new) que SÍ tenía escudo. Nunca
-    # PISA un escudo ya presente en el ganador (su edición manda).
-    def _lx_shield_of(t):
+    # BACKFILL DE IDENTIDAD POR NOMBRE — ESCUDO + ESTADIO (2026-06-02 /
+    # 2026-06-11) ─────────────────────────────────────────────────────
+    # Bug escudo (2026-06-02): "mi amigo puso todos los escudos de la Liga
+    # Grecia desde su PC pero no sale ninguno". Bug estadio (2026-06-11):
+    # "no se puede añadir estadios a los equipos" — un dispositivo con
+    # `updatedAt` mayor pero sin estadio pisaba el que otro acababa de
+    # poner. La fusión por equipo elige al ganador por `updatedAt`; si ese
+    # ganador NO trae escudo/estadio (copia de otro dispositivo con
+    # plantilla más reciente pero sin ese campo), el dato se perdía aunque
+    # existiera en otra versión del MISMO equipo. Escudo Y estadio son
+    # datos de IDENTIDAD: una vez puestos en CUALQUIER dispositivo no
+    # deben desaparecer. Tras elegir ganadores rellenamos el campo de los
+    # equipos que se quedaron sin él tomándolo de la versión más reciente
+    # (old o new) que SÍ lo tenía. Indexado por nombre CANÓNICO
+    # (afijo-aware) para que la identidad viaje también entre grafías del
+    # mismo club. NUNCA pisa un valor ya presente en el ganador.
+    def _lx_str_field(t, fld):
         if not isinstance(t, dict):
             return ""
-        s = t.get("shield")
+        s = t.get(fld)
         return s.strip() if isinstance(s, str) and s.strip() else ""
 
-    shield_by_name = {}   # nombre normalizado -> (ts, shield)
-    for t in (old_teams + new_teams):
-        if not isinstance(t, dict):
-            continue
-        nm = _lx_norm_name(t.get("name"))
-        sh = _lx_shield_of(t)
-        if not nm or not sh:
-            continue
-        ts = _lx_updated_at(t) or 0
-        cur = shield_by_name.get(nm)
-        if cur is None or ts >= cur[0]:
-            shield_by_name[nm] = (ts, sh)
-    if shield_by_name:
-        for t in out_teams:
-            if not isinstance(t, dict) or _lx_shield_of(t):
+    for _fld in ("shield", "stadium"):
+        best_by_name = {}   # nombre canónico -> (ts, valor)
+        for t in (old_teams + new_teams):
+            if not isinstance(t, dict):
                 continue
-            nm = _lx_norm_name(t.get("name"))
-            best = shield_by_name.get(nm) if nm else None
-            if best:
-                t["shield"] = best[1]
+            nm = _lx_canon_name(t.get("name"))
+            val = _lx_str_field(t, _fld)
+            if not nm or not val:
+                continue
+            ts = _lx_updated_at(t) or 0
+            cur = best_by_name.get(nm)
+            if cur is None or ts >= cur[0]:
+                best_by_name[nm] = (ts, val)
+        if best_by_name:
+            for t in out_teams:
+                if not isinstance(t, dict) or _lx_str_field(t, _fld):
+                    continue
+                nm = _lx_canon_name(t.get("name"))
+                best = best_by_name.get(nm) if nm else None
+                if best:
+                    t[_fld] = best[1]
 
     result = dict(new_data)
     result["teams"] = out_teams
     if del_set:
         result["deletedTeamNames"] = sorted(del_set)
+
+    # BACKFILL DEL LOGO DE LA LIGA (2026-06-11) ───────────────────────
+    # Bug usuario: "se borran logos de ligas". El logo PROPIO de la
+    # competición vive en `config.logo`/`config.cupLogo` (top-level del
+    # documento), que esta fusión adopta VERBATIM del entrante
+    # (`dict(new_data)`). Como `ensureConfig` (cliente) fuerza
+    # `config.logo = ''` en TODO dispositivo que nunca lo puso, un POST de
+    # ese dispositivo BORRABA el logo que otro había guardado
+    # (last-write-wins, sin arbitraje). El logo es IDENTIDAD (igual que el
+    # escudo): si el entrante no lo trae pero el almacenado SÍ, lo
+    # CONSERVAMOS. Nunca pisa un logo entrante no vacío (edición real del
+    # admin manda).
+    try:
+        old_cfg = old_data.get("config") if isinstance(old_data, dict) else None
+        if isinstance(old_cfg, dict):
+            new_cfg = result.get("config")
+            new_cfg = dict(new_cfg) if isinstance(new_cfg, dict) else {}
+            changed_cfg = False
+            for _lf in ("logo", "cupLogo"):
+                nv = new_cfg.get(_lf)
+                ov = old_cfg.get(_lf)
+                nv_ok = isinstance(nv, str) and nv.strip()
+                ov_ok = isinstance(ov, str) and ov.strip()
+                if (not nv_ok) and ov_ok:
+                    new_cfg[_lf] = ov
+                    changed_cfg = True
+            if changed_cfg:
+                result["config"] = new_cfg
+    except Exception:
+        pass
+
     return result
 
 

@@ -1087,6 +1087,70 @@ independientemente de qué lado «gane» el roster.
 4. Toda nueva ruta de sync de `ligaExt_*` que adopte una de las dos
    copias debe pasar por el backfill de escudos antes de cachear/render.
 
+## Resto de Ligas con 3 móviles + PC — dedup canónico, estadio y logo de liga NUNCA se pierden (obligatorio, 2026-06-11)
+
+**Bug (petición usuario 2026-06-11, «3 móviles y cpus editando resto de
+ligas errores graves»)**: con varios dispositivos editando a la vez
+`ligaExt_<slug>`: (1) **se duplican equipos**, (2) **no se puede añadir
+estadios a los equipos** (se borran al sincronizar), (3) **se borran
+logos de ligas**.
+
+### Causas raíz (todas en la fusión cross-device, chokepoint `_lx_merge_teams`)
+
+1. **Duplicados**: el colapso final por nombre del servidor usaba
+   `_lx_norm_name` (solo acentos/puntuación), MÁS DÉBIL que el dedup del
+   cliente `_teamCanonKey`/`_canonTeamName` (que además quita afijos
+   FC/CF/CD…). Re-pegar la lista regenera ids → «Olympiacos» (id A) y
+   «Olympiacos FC» (id B) eran claves distintas, el `_lx_norm_name` no
+   las colapsaba y AMBAS sobrevivían. Y el cliente no las re-colapsaba
+   porque `_sanitizeLigaTeamNames` hace early-out si `d._sanV ===
+   _SAN_VER` (sello persistido y sincronizado).
+2. **Estadio**: `_lx_merge_teams` elegía al ganador por `updatedAt` y se
+   quedaba con su dict ENTERO; si ese ganador no traía `stadium` (otra
+   copia más reciente sin el estadio recién puesto), se perdía. El
+   `shield` tenía backfill de identidad; el `stadium` NO.
+3. **Logo de liga**: `config.logo`/`config.cupLogo` (logo PROPIO de la
+   competición) viven en el config TOP-LEVEL del documento, que la
+   fusión adopta VERBATIM del entrante (`result = dict(new_data)`). Como
+   `ensureConfig` (cliente) fuerza `config.logo = ''` en TODO dispositivo
+   que nunca lo puso, un POST de ese dispositivo BORRABA el logo que otro
+   guardó (last-write-wins, sin arbitraje ni backfill).
+
+### Fix
+
+- **Servidor** (`app.py`, `_lx_merge_teams`):
+  - `_lx_canon_name` (afijo-aware, espejo del `_canonTeamName` del
+    cliente) se usa en el colapso final por nombre (`by_name`) y en los
+    backfills de identidad. El `del_set`/`deletedTeamNames` sigue por
+    `_lx_norm_name` (nombre del cliente).
+  - Backfill de identidad GENERALIZADO a `shield` **y** `stadium`,
+    indexado por nombre CANÓNICO (viaja entre grafías del mismo club).
+    Nunca pisa un valor presente en el ganador.
+  - Backfill del logo de liga: tras `dict(new_data)`, si el entrante
+    trae `config.logo`/`cupLogo` VACÍO pero el almacenado SÍ lo tiene,
+    se CONSERVA el almacenado. Un logo entrante NO vacío (edición real)
+    gana.
+- **Cliente** (`misc_body_1.html`): `_lextBackfillLeagueLogo(target,
+  source)` (espejo de `_lextBackfillShields`) en las 3 rutas de adopción
+  de `fetchData`. `_protected` empty-roster restore incluye `stadium`.
+  `_SAN_VER` bump 1→2 (re-saneo único que colapsa dups EXISTENTES vía
+  `_teamCanonKey` sin esperar a la próxima edición).
+- Tests: `tests/test_api.py::TestLigaExtMerge`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el colapso por nombre del servidor vuelva a usar
+   `_lx_norm_name` (débil). Usar `_lx_canon_name` (afijo-aware = cliente)
+   o los duplicados por grafía/afijo vuelven.
+2. **PROHIBIDO** que `stadium` o `config.logo`/`cupLogo` se pierdan en la
+   fusión: ambos son IDENTIDAD con backfill (igual que `shield`). Un
+   POST con el campo vacío NO borra el valor de otro dispositivo.
+3. El backfill de logo es ADITIVO: solo restaura el campo VACÍO entrante
+   desde el almacenado; nunca pisa un logo entrante no vacío.
+4. Toda comp/campo de identidad NUEVO de `ligaExt_*` (que no viaje por
+   equipo o que un ganador por recencia pueda no traer) hereda este
+   patrón de backfill.
+
 ## Plantilla de selecciones — sync que NO pierde datos + sin «Pacífico» (obligatorio, 2026-06-02)
 
 **Bug (foto usuario 2026-06-02)**: en «🌐 Plantilla de selecciones»

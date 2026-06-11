@@ -8527,15 +8527,15 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       o.updatedAt = st.updatedAt || Date.now();
       return o;
     }
-    function _push(tries){
+    function _push(tries, authoritative){
       tries = tries || 0;
       try {
         fetch('/api/kv/' + key, {
           method:'POST', headers:{'Content-Type':'application/json'},
-          credentials:'same-origin', body: JSON.stringify({ value: _blob() })
+          credentials:'same-origin', body: JSON.stringify({ value: _blob(), authoritative: !!authoritative })
         }).then(function(r){ return r && r.ok ? r.json() : null; })
-          .then(function(j){ if (!(j && j.ok) && tries < 3) setTimeout(function(){ _push(tries+1); }, 1000*(tries+1)); })
-          .catch(function(){ if (tries < 3) setTimeout(function(){ _push(tries+1); }, 1000*(tries+1)); });
+          .then(function(j){ if (!(j && j.ok) && tries < 3) setTimeout(function(){ _push(tries+1, authoritative); }, 1000*(tries+1)); })
+          .catch(function(){ if (tries < 3) setTimeout(function(){ _push(tries+1, authoritative); }, 1000*(tries+1)); });
       } catch(_){}
     }
     return {
@@ -8552,7 +8552,11 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         if (st.timer) return;
         st.timer = setTimeout(function(){ st.timer = null; _push(0); }, 1200);
       },
-      pushNow: function(){ _push(0); },
+      /* `authoritative` (opcional): acción EXPLÍCITA del usuario/admin →
+         el server la sella con SU reloj y gana aunque otro dispositivo
+         tenga el reloj adelantado (clock-skew). Los re-push/self-heal lo
+         llaman SIN flag (recencia pura). */
+      pushNow: function(authoritative){ _push(0, authoritative); },
       isHydrated: function(){ return st.hydrated; },
       hydrate: function(onAdopt){
         try {

@@ -57385,7 +57385,11 @@ https://api.sofascore.app/api/v1/team/44/image
          progreso viejo al rehidratar / en otro móvil. */
       _objStateUpdatedAt = Date.now();
       try { localStorage.setItem(LS_OBJ, JSON.stringify({ checks:{}, counters:{}, updatedAt:_objStateUpdatedAt })); } catch(_){}
-      if (_objStateSync){ try { _objStateSync.touch(_objStateUpdatedAt); _objStateSync.pushNow(); } catch(_){} }
+      /* Reset AUTORITATIVO: un borrado intencional (Reiniciar Temporada /
+         ♻) debe GANAR en el server (lo sella con su reloj) y pasar la
+         defensa "rechazo de POST vacío" del server (que solo bloquea los
+         blancos NO autoritativos de un autosave de arranque). */
+      if (_objStateSync){ try { _objStateSync.touch(_objStateUpdatedAt); _objStateSync.pushNow(true); } catch(_){} }
       if (typeof window.athObjCount === 'function') window.athObjCount();
     } catch(_){}
   };
@@ -57429,6 +57433,59 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     /* Primera auto-evaluación (si la Liga ya tiene datos). */
     setTimeout(function(){ try { if (typeof window._munichAutoEval === 'function') window._munichAutoEval(); } catch(_){} }, 300);
+
+    /* ── CAPA: marca EXPLÍCITA del usuario = push AUTORITATIVO ──────────
+       Cuando el usuario marca ✅ un objetivo o pulsa ➕/➖ (acción real,
+       NO el athObjCount/_munichAutoEval de arranque), sellamos el progreso
+       con el reloj del SERVER (authoritative) para que GANE aunque otro
+       dispositivo tenga el reloj adelantado (clock-skew) — igual que la
+       acción del admin en el HUD. Los saves automáticos siguen por
+       recencia. Gateado por hidratación (no clobberea antes de reconciliar)
+       y debounced para no spamear POSTs al togglear rápido. */
+    var _objUserPushT = null;
+    function _objStateOnUserEdit(){
+      if (!_objStateSync || !_objStateSync.isHydrated()) return;
+      if (_objUserPushT) return;
+      _objUserPushT = setTimeout(function(){
+        _objUserPushT = null;
+        /* Acción REAL del usuario: autoritativo aunque quede vacío
+           (desmarcar el último ✅ es intención legítima y debe saltarse el
+           "rechazo de vacío" del server). El programático no llega aquí
+           (set .checked= no dispara 'change'; los steppers son .oc-btn). */
+        try { _objStateSync.touch(Date.now()); _objStateSync.pushNow(true); } catch(_){}
+      }, 500);
+    }
+    var _objHost = document.getElementById('ath-obj-club');
+    if (_objHost){
+      _objHost.addEventListener('change', function(e){
+        if (window.__munichObjEditing) return;
+        if (e && e.target && e.target.type === 'checkbox') setTimeout(_objStateOnUserEdit, 0);
+      });
+      _objHost.addEventListener('click', function(e){
+        if (window.__munichObjEditing) return;
+        /* steppers ➕/➖ del progreso (NO otros botones de la pantalla) */
+        if (e && e.target && e.target.closest && e.target.closest('.oc-btn')) setTimeout(_objStateOnUserEdit, 0);
+      });
+    }
+
+    /* ── CAPA: re-pull + self-heal (sobrevive a BD efímera + converge) ──
+       Al volver el foco / cambiar de pestaña / a intervalo, re-hidratamos:
+       `hydrate` ADOPTA el server si es más nuevo (otro móvil) y RE-SUBE el
+       progreso local si el server lo perdió (reset de la BD efímera de
+       Railway) o está más viejo. Mismo patrón que el re-push del HUD. */
+    function _objStateRefresh(){
+      if (!_objStateSync) return;
+      try { _objStateSync.hydrate(function(){
+        try { loadObjState(); } catch(_){}
+        try { if (typeof window.athObjCount === 'function') window.athObjCount(); } catch(_){}
+      }); } catch(_){}
+    }
+    try {
+      window.addEventListener('focus', _objStateRefresh);
+      window.addEventListener('pageshow', _objStateRefresh);
+      document.addEventListener('visibilitychange', function(){ if (!document.hidden) _objStateRefresh(); });
+      setInterval(_objStateRefresh, 30000);
+    } catch(_){}
   });
 })();
 </script>

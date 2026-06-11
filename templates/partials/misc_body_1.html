@@ -57080,10 +57080,26 @@ https://api.sofascore.app/api/v1/team/44/image
        (foto usuario: 🪙 5025→0 · 💼 0.28→0). Diferimos hasta que el obj-state
        hidrate; su adopt vuelve a llamarnos con el done correcto, y el poll
        cubre el caso en que el local es autoritativo (no hay adopt). */
-    if (_objStateSync && !_objStateSync.isHydrated()){
+    /* Exigimos hidratación VÍA RESPUESTA HTTP (`isHttpHydrated`), NO la
+       `isHydrated` genérica: ésta se marca true aunque el GET del progreso
+       FALLE por red. Si recalculáramos con un progreso que NO se reconcilió
+       (DOM en done=0 tras un wipe) restaríamos TODO el aporte de objetivos
+       (hasta 68×25) y el 🪙 presupuesto «vuelve a 0» (foto usuario
+       2026-06-11). Con el gate HTTP, un fallo de red deja el recálculo EN
+       COLA hasta que el server responda (el re-pull por focus/intervalo
+       reintenta) — nunca deflaciona sobre un base sin reconciliar. */
+    var _objHttpHyd = !_objStateSync
+      || (typeof _objStateSync.isHttpHydrated === 'function'
+            ? _objStateSync.isHttpHydrated()
+            : _objStateSync.isHydrated());
+    if (!_objHttpHyd){
       if (!_objEarnRearm){
         _objEarnRearm = setInterval(function(){
-          if (!_objStateSync || _objStateSync.isHydrated()){
+          var _hyd = !_objStateSync
+            || (typeof _objStateSync.isHttpHydrated === 'function'
+                  ? _objStateSync.isHttpHydrated()
+                  : _objStateSync.isHydrated());
+          if (_hyd){
             clearInterval(_objEarnRearm); _objEarnRearm = null;
             try { liverpoolObjEarnings(); } catch(_){}
           }

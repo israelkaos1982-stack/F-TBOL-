@@ -54116,7 +54116,16 @@ https://api.sofascore.app/api/v1/team/44/image
       try { var r = localStorage.getItem(KEY); if (r) loc = JSON.parse(r); } catch(_){}
     }
     var localEmpty = !loc || typeof loc !== 'object' || !Object.keys(loc).length;
-    if (!localEmpty && _tsOf(loc) > _tsOf(srv)) {
+    /* "Local más nuevo" se decide PRIMERO por `rev` (reloj lógico
+       monotónico, inmune a clock-skew) y solo en empate por `updatedAt`.
+       Sin esto, una copia local con el reloj adelantado (ts futuro) pero
+       rev MENOR re-subía datos viejos y pisaba el valor bueno del server
+       → el 🪙 «vuelve a 0/stale». Con rev, si el server trae un rev mayor
+       lo ADOPTAMOS aunque nuestro ts local sea (falsamente) mayor. */
+    var _locRev = (loc && typeof loc === 'object' && loc.rev != null) ? (Number(loc.rev) || 0) : 0;
+    var _srvRev = (srv && srv.rev != null) ? (Number(srv.rev) || 0) : 0;
+    var _localNewer = (_locRev !== _srvRev) ? (_locRev > _srvRev) : (_tsOf(loc) > _tsOf(srv));
+    if (!localEmpty && _localNewer) {
       /* Local más nuevo → re-subir para converger, sin adoptar. */
       try { _serverPush(loc); } catch(_){}
       return;
@@ -54247,6 +54256,26 @@ https://api.sofascore.app/api/v1/team/44/image
        ENTERO. Sin esto, 🪙💊 (running totals locales) divergían entre
        PC y móvil porque /api/state hacía last-write-wins sin árbitro. */
     data.updatedAt = Date.now();
+    /* REV MONOTÓNICO (reloj LÓGICO, espejo del `dayIdx` del cursor de
+       fecha) — cada cambio REAL incrementa `rev` sobre el máximo conocido
+       (cache + localStorage + el propio blob). El server conserva el blob
+       con `rev` MAYOR, así un push de un cliente VIEJO/stale (sin `rev`,
+       =0), de un dispositivo con el RELOJ ADELANTADO, o de una copia con
+       defaults NUNCA puede pisar un valor más nuevo. Es justo lo que hace
+       que la FECHA sobreviva al wipe y el 🪙 no lo hacía: la fecha tiene un
+       monotónico que rechaza downgrades; el HUD solo tenía recencia por
+       reloj de pared (vulnerable a clock-skew + clientes sin actualizar en
+       un parque de 6 móviles + PC). NO bumpea el re-push self-heal (ese va
+       por `_serverPush` directo, sin pasar por save()), así que re-asserta
+       el mismo `rev` sin ganar artificialmente. */
+    try {
+      var _prevRev = 0;
+      var _cRev = window._BAYERN_HUD_CACHE;
+      if (_cRev && typeof _cRev === 'object' && _cRev.rev != null) _prevRev = Number(_cRev.rev) || 0;
+      try { var _lr = localStorage.getItem(KEY); if (_lr){ var _lrj = JSON.parse(_lr); if (_lrj && _lrj.rev != null) _prevRev = Math.max(_prevRev, Number(_lrj.rev) || 0); } } catch(_){}
+      if (data.rev != null) _prevRev = Math.max(_prevRev, Number(data.rev) || 0);
+      data.rev = _prevRev + 1;
+    } catch(_){ if (data.rev == null) data.rev = 1; }
     /* Capa 1: in-memory. */
     window._BAYERN_HUD_CACHE = data;
     /* Capa 2: localStorage. */

@@ -366,6 +366,52 @@ hidratar); (2) el server aplicaba ese `pi` aunque el POST fuera parcial.
     (`athSetMedicalPI` en boot) o quitar el rechazo de POST parcial sin
     campos ancla: cualquiera de los dos hace que el 💊 vuelva a 8.
 
+### El HUD lleva un RELOJ LÓGICO `rev` monotónico (obligatorio, 2026-06-11)
+
+**Bug (3 fotos usuario 2026-06-11, «Liverpool/Francia»)**: el admin tiene
+🪙 4500 (PI 5), juega y el presupuesto baja a 4350 (running total) — la
+FECHA avanza 01→15 May —, pero al **borrar datos de navegación** el HUD
+entero vuelve a defaults (🪙 **0**, 💊 en blanco). La **FECHA (15 May)
+SOBREVIVE al wipe** en la misma pantalla → la BD del server ES persistente;
+es el blob del HUD el que se pierde, NO la fecha.
+
+**Causa raíz**: el cursor de fecha (`liverpool_preseason_v1`,
+`_STATE_CURSOR_KEYS`) sobrevive porque tiene un **monotónico** (`dayIdx`):
+el server RECHAZA cualquier push con un `dayIdx` MENOR, así que ninguna
+copia stale/clock-skew puede arrastrarlo hacia atrás. El HUD solo tenía
+**recencia por reloj de pared** (`updatedAt`). En un parque de **6 móviles
++ PC**, un dispositivo con **JS viejo en caché** (otro móvil sin recargar,
+aún con bugs de deflación), con el **reloj adelantado**, o con el blob en
+**defaults**, re-empuja un HUD deflactado/vacío que **GANA por recencia** y
+machaca el server para todos. Al borrar datos, el GET trae ese blob
+machacado → 🪙 0.
+
+**Fix — `rev` (reloj lógico, espejo del `dayIdx`)**:
+- **Cliente** (`misc_body_1.html`, `save()`): cada cambio REAL incrementa
+  `rev` sobre el máximo conocido (cache + localStorage). `_adoptFromServer`
+  decide «local más nuevo» PRIMERO por `rev` (no por `updatedAt`): si el
+  server trae un `rev` mayor lo ADOPTA aunque el `ts` local sea (falsamente)
+  mayor; solo re-sube si el `rev` local es mayor. El re-push self-heal
+  (`_serverPush` directo, sin `save()`) re-asserta el MISMO `rev`, no bumpea.
+- **Servidor** (`app.py`, `api_kv_set`, `bayern_hud_overrides_v1`): un push
+  no-authoritative con `rev` MENOR que el almacenado se **RECHAZA ENTERO**
+  (cliente viejo sin `rev`=0, stale, o clock-skew). `rev` mayor ⇒ field-merge
+  (preserva campos); `rev` igual ⇒ recencia por `ts` + field-merge. La acción
+  **AUTORITATIVA** del admin (✅/♻/📅) bumpea `rev = max(old,new)+1` y GANA
+  siempre — una vez el admin guarda desde un cliente actualizado, ningún
+  móvil sin actualizar puede volver a pisar el HUD. Tests en
+  `tests/test_api.py::TestBayernHudRevGuard`.
+
+**Reglas a respetar**:
+13b. **PROHIBIDO** quitar el `rev` del HUD ni volver a arbitrar el merge del
+     server SOLO por `updatedAt`: sin el monotónico lógico, un cliente
+     stale/viejo/clock-skew vuelve a machacar el 🪙 por recencia (el HUD es
+     tan frágil como la fecha es robusta — la diferencia es el monotónico).
+13c. **PROHIBIDO** que el re-push self-heal bumpee `rev` (debe re-assertar el
+     mismo) ni que un writer automático lo decremente. Solo `save()` (cambio
+     real) lo incrementa; la acción autoritativa del admin lo bumpea +1 para
+     ganar a cualquier copia, incluidos clientes sin `rev`.
+
 ### El progreso de OBJETIVOS no se sube VACÍO tras un re-render (obligatorio, 2026-06-11)
 
 **Bug (2 fotos usuario 2026-06-11, «Liverpool»)**: el admin edita el

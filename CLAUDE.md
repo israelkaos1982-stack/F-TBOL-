@@ -405,7 +405,43 @@ sobreviva). Tras el wipe la hidratación recuperaba ese blob ya en blanco.
     un progreso VACÍO que machaca el server.
 15. **PROHIBIDO** que `liverpoolObjEarnings` recalcule 🪙/💼 desde `done`
     (DOM) antes de que el PROGRESO (`munich-obj-state-v4`) haya hidratado.
-    Gate `_objStateSync.isHydrated()` + rearme; igual que el gate del HUD.
+    Gate `_objStateSync.isHttpHydrated()` + rearme; igual que el gate del HUD.
+
+### El gate del recálculo exige RESPUESTA HTTP, no la `isHydrated` genérica (obligatorio, 2026-06-11)
+
+**Bug (queja usuario 2026-06-11, «añado presupuesto y guardo; al borrar
+datos de navegación los contadores de presupuesto vuelven a 0»)**: el
+guardado AUTORITATIVO del 🪙 llegaba bien al server y el GET tras el wipe lo
+restauraba, pero acto seguido `liverpoolObjEarnings` lo PONÍA A 0.
+
+**Causa raíz**: el gate de la regla 15 usaba `_objStateSync.isHydrated()`.
+En `_kvBlobSync.hydrate` (`index.bundle.js`) `st.hydrated` se marca `true`
+**también en el `.catch` de un FALLO DE RED** (es deliberado para poder
+re-empujar la copia local al volver la conexión). Si tras el wipe el GET del
+PROGRESO (`munich-obj-state-v4`) fallaba pero el del HUD NO (cold start de
+Railway, un GET sí y otro no), `isHydrated()` daba `true` SIN haber
+restaurado los ✅ → `done=0` aunque el server tuviera objetivos cumplidos.
+`liverpoolObjEarnings` restaba TODO el aporte de objetivos
+(`prevObjMoney` − 0, hasta 68×25 = 1700) a `money`, lo CLAMPEABA a 0 y
+empujaba ese 0 al server (field-merge no-authoritative) → el presupuesto
+«vuelve a 0».
+
+**Fix**: `_kvBlobSync` expone `isHttpHydrated()` (true SOLO al recibir una
+RESPUESTA HTTP del GET, jamás en el `.catch` de red). `liverpoolObjEarnings`
+y su poll de rearme gatean con `isHttpHydrated()` en vez de `isHydrated()`:
+un fallo de red deja el recálculo EN COLA hasta que el server responda (el
+re-pull por focus/intervalo reintenta), nunca deflaciona sobre un progreso
+sin reconciliar. Espejo de la regla HUD 6 («PROHIBIDO marcar hidratado en un
+fallo de red» para los recálculos de running-total).
+
+**Reglas a respetar**:
+16. **PROHIBIDO** gatear un recálculo de running-total (que DEFLACIONA un
+    valor leyendo el DOM/estado adoptado) con `_objStateSync.isHydrated()`:
+    ésta es `true` en fallo de red. Usar `isHttpHydrated()` (solo respuesta
+    HTTP). `isHydrated()` sigue siendo correcto para gatear el PUSH (re-subir
+    la copia local al reconectar).
+17. **PROHIBIDO** marcar `httpOk` en el `.catch` de `_kvBlobSync.hydrate`.
+    Solo en la rama de respuesta HTTP recibida.
 
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 

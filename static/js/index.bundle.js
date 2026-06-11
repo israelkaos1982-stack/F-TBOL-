@@ -8520,7 +8520,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
      La clave debe estar en `_KV_ALLOWED_EXACT` (app.py) con su merge por
      recencia (defensa en profundidad anti-wipe stale cross-device). */
   window._kvBlobSync = window._kvBlobSync || function(key){
-    var st = { hydrated:false, timer:null, snapshot:null, adopt:null, empty:null, updatedAt:0 };
+    var st = { hydrated:false, httpOk:false, timer:null, snapshot:null, adopt:null, empty:null, updatedAt:0 };
     function _blob(){
       var d = st.snapshot ? (st.snapshot() || {}) : {};
       var o = {}; for (var k in d) o[k] = d[k];
@@ -8558,11 +8558,28 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
          llaman SIN flag (recencia pura). */
       pushNow: function(authoritative){ _push(0, authoritative); },
       isHydrated: function(){ return st.hydrated; },
+      /* HYDRATED VÍA RESPUESTA HTTP (no por fallo de red). `isHydrated()`
+         se marca true aunque el GET FALLE (`.catch`) — es deliberado para
+         que un store pueda re-empujar su copia local cuando vuelve la
+         conexión. PERO un consumidor que RECALCULA un running-total a
+         partir del estado adoptado (p.ej. `liverpoolObjEarnings`, que lee
+         `done` del DOM y deflaciona el 🪙 presupuesto si el progreso no se
+         restauró) NO debe correr hasta que el server haya RECONCILIADO de
+         verdad: si el GET del progreso falla pero el del HUD no, leería
+         done=0 y restaría TODO el aporte de objetivos (hasta 68×25) → el
+         presupuesto «vuelve a 0» tras borrar datos (regla HUD 6/15: nunca
+         marcar hidratado en un fallo de red para los recálculos). */
+      isHttpHydrated: function(){ return st.httpOk; },
       hydrate: function(onAdopt){
         try {
           fetch('/api/kv/' + key, { credentials:'same-origin', headers:{'Cache-Control':'no-store'} })
             .then(function(r){ return r && r.ok ? r.json() : null; })
             .then(function(j){
+              /* Respuesta VÁLIDA del KV (incluye el caso legítimo
+                 `value:null` = el server confirma que no hay fila). Un 500 /
+                 no-ok / JSON ilegible deja `j` null → NO cuenta como
+                 reconciliado (no marcamos httpOk). */
+              if (j && j.ok) st.httpOk = true;
               var sv = j && j.ok ? j.value : null;
               /* Recalcular el estado local AHORA (puede haber mutado
                  mientras volaba el GET): una edición hecha entre el GET y

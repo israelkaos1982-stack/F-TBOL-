@@ -3574,6 +3574,30 @@ def _kv_is_allowed(key):
     return bool(_KV_ALLOWED_REGEX.match(key))
 
 
+def _obj_state_is_empty(d):
+    """True si el blob de PROGRESO de objetivos del club no tiene NINGÚN
+    ✅ marcado ni contador con valor real (0 / - / vacío = sin progreso).
+    Espejo del cliente `_objStateIsEmpty`. Lo usa `api_kv_set` como defensa
+    a prueba de balas: un POST VACÍO no-autoritativo NUNCA machaca un
+    progreso real almacenado (bug 2026-06-11: marco ✅, borro datos de
+    navegación y vuelve a 0 porque un autosave de arranque subía el estado
+    en blanco)."""
+    if not isinstance(d, dict):
+        return True
+    checks = d.get("checks") or {}
+    counters = d.get("counters") or {}
+    if isinstance(checks, dict):
+        for v in checks.values():
+            if v:
+                return False
+    if isinstance(counters, dict):
+        for v in counters.values():
+            s = str("" if v is None else v).strip().replace("%", "").replace("+", "")
+            if s and s != "0" and s != "-":
+                return False
+    return True
+
+
 def _tour_registry_merge(old_json, new_value):
     """Fusión local∪server del registro de torneos RESUELTA POR RECENCIA.
 
@@ -3799,6 +3823,21 @@ def api_kv_set(key):
                 merged.update(value)
                 value, payload = merged, json.dumps(merged, ensure_ascii=False)
             else:
+                value, payload = old, row.valor_json
+        elif key == "munich-obj-state-v4" and isinstance(old, dict) and isinstance(value, dict):
+            # PROGRESO de objetivos del club: defensa a prueba de balas
+            # (2026-06-11). Un cliente que arranca / auto-evalúa ANTES de
+            # hidratar puede mandar un blob VACÍO (sin ✅ ni contadores)
+            # sellado con ts fresco; sin esto MACHACABA el progreso real →
+            # al borrar datos de navegación el ✅ marcado volvía a 0 (foto
+            # usuario: "marco un objetivo, borro datos y se borra"). Si el
+            # entrante está VACÍO y el almacenado NO, se CONSERVA lo
+            # almacenado ENTERO. Un borrado LEGÍTIMO (Reiniciar Temporada /
+            # ♻) va por authoritative=true → rama de arriba (gana + sella
+            # reloj del server). Si no, recencia normal.
+            if _obj_state_is_empty(value) and not _obj_state_is_empty(old):
+                value, payload = old, row.valor_json
+            elif old_ts > new_ts:
                 value, payload = old, row.valor_json
         elif row and row.valor_json and old_ts > new_ts:
             value, payload = old, row.valor_json

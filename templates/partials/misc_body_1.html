@@ -56700,8 +56700,21 @@ https://api.sofascore.app/api/v1/team/44/image
     _hydrateOverridesFromServer(function(changed){
       if (!changed || window.__munichObjEditing) return;
       renderAll('ath-obj-club', 'Liverpool', false);
-      if (typeof athObjCount === 'function') athObjCount();
-      try { if (typeof window._munichObjAfterRender === 'function') window._munichObjAfterRender(); } catch(_){}
+      /* PROHIBIDO contar/persistir sobre el DOM recién re-renderizado: tras
+         `renderAll` los ✅ del progreso quedan DESMARCADOS (HTML nuevo). Como
+         `athObjCount` está ENVUELTO (patchAthObjCount), llamarlo aquí dispara
+         `saveObjState` → sube un progreso VACÍO que MACHACA el server
+         (munich-obj-state-v4) y `liverpoolObjEarnings` con done=0 hunde 🪙/💼
+         (field-merge en el server los machaca conservando los targets). Hay que
+         RESTAURAR primero los ✅ (`loadObjState`, dentro de
+         `_munichObjAfterRender`) y SÓLO DESPUÉS contar/persistir. Bug
+         2026-06-11 (foto usuario): tras borrar datos los objetivos vuelven a
+         0/68 y el presupuesto 🪙/valoración 💼 a 0. */
+      if (typeof window._munichObjAfterRender === 'function') {
+        try { window._munichObjAfterRender(); } catch(_){}
+      } else if (typeof athObjCount === 'function') {
+        athObjCount();
+      }
     });
   }
   if (document.readyState === 'loading') {
@@ -57043,6 +57056,7 @@ https://api.sofascore.app/api/v1/team/44/image
   var OBJ_MONEY_PER = 25;     /* 🪙 por objetivo, sin cap */
   var OBJ_RATING_PER = 0.275; /* 💼 por objetivo */
   var OBJ_RATING_CAP = 10;    /* tope de la aportación 💼 */
+  var _objEarnRearm = null;   /* poll de rearme tras hidratar el progreso */
   function liverpoolObjEarnings(){
     if (typeof window._bayernHudGet !== 'function'
         || typeof window._bayernHudMerge !== 'function') return;
@@ -57053,6 +57067,27 @@ https://api.sofascore.app/api/v1/team/44/image
     if (window._BAYERN_HUD_HYDRATED === false){
       if (typeof window._bayernHudOnHydrate === 'function'){
         window._bayernHudOnHydrate(function(){ try { liverpoolObjEarnings(); } catch(_){} });
+      }
+      return;
+    }
+    /* GATE de hidratación del PROGRESO de objetivos (bug 2026-06-11): `done`
+       se CUENTA de los checkboxes del DOM, que sólo reflejan el progreso REAL
+       cuando `munich-obj-state-v4` ha reconciliado con el server. Si
+       recalculamos ANTES (tras borrar datos / móvil nuevo, p.ej. cuando el
+       HUD hidrata y nos rearma vía `_bayernHudOnHydrate`) leemos done=0 aunque
+       el server tenga objetivos cumplidos → 🪙/💼 se hunden y el push
+       no-authoritative (field-merge) los machaca conservando los targets
+       (foto usuario: 🪙 5025→0 · 💼 0.28→0). Diferimos hasta que el obj-state
+       hidrate; su adopt vuelve a llamarnos con el done correcto, y el poll
+       cubre el caso en que el local es autoritativo (no hay adopt). */
+    if (_objStateSync && !_objStateSync.isHydrated()){
+      if (!_objEarnRearm){
+        _objEarnRearm = setInterval(function(){
+          if (!_objStateSync || _objStateSync.isHydrated()){
+            clearInterval(_objEarnRearm); _objEarnRearm = null;
+            try { liverpoolObjEarnings(); } catch(_){}
+          }
+        }, 150);
       }
       return;
     }

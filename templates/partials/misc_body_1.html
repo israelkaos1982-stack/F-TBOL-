@@ -58138,15 +58138,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     var all = _loadAll();
     if (!all[_curSeasonId]) all[_curSeasonId] = [];
+    /* Un partido AÑADIDO A MANO es una afirmación EXPLÍCITA del usuario:
+       siempre debe verse en la temporada Y sumar en el global, aunque
+       el equipo del hub no sea uno de los 5 humanos canónicos que
+       reconoce `esHumano` (p. ej. Ath Bilbao). Por eso sellamos
+       `isHvH:true` → `_matchIsHvH` lo acepta sin consultar `esHumano`
+       (bug 2026-06-11: el partido se guardaba pero `_matchIsHvH` lo
+       ocultaba de la temporada mientras seguía contando en otros sitios). */
     if (_editingMatchId){
       for (var i=0; i<all[_curSeasonId].length; i++){
         if (all[_curSeasonId][i].id === _editingMatchId){
-          all[_curSeasonId][i] = { id:_editingMatchId, jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit };
+          all[_curSeasonId][i] = { id:_editingMatchId, jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true };
           break;
         }
       }
     } else {
-      all[_curSeasonId].push({ id:_newId(), jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit });
+      all[_curSeasonId].push({ id:_newId(), jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true });
     }
     _saveAll(all);
     window.munichDerbyMatchClose();

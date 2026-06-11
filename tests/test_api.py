@@ -1057,3 +1057,85 @@ class TestCalendario:
         self._login(client)
         rv = client.post("/api/calendario/delete", json={"event_id": "ev-zzz"})
         assert rv.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Fusión cross-device de Resto de Ligas (_lx_merge_teams) — bugs 2026-06-11:
+# "se duplican equipos", "no se puede añadir estadios", "se borran logos".
+# Stdlib pura (no necesita el `client`); solo llama la función de merge.
+# ---------------------------------------------------------------------------
+class TestLigaExtMerge:
+    def _merge(self, old, new):
+        return app_module._lx_merge_teams(old, new)
+
+    def _names(self, res):
+        return [t.get("name") for t in res.get("teams", [])]
+
+    def test_no_duplica_por_afijo_id_distinto(self):
+        # Mismo club re-pegado (id nuevo) con afijo de grafía distinta:
+        # "Olympiacos FC" (server) vs "Olympiacos" (entrante). El colapso
+        # por nombre canónico afijo-aware debe dejar UNA sola fila.
+        old = {"teams": [{"id": "a1", "name": "Olympiacos FC", "updatedAt": 100}]}
+        new = {"teams": [{"id": "b2", "name": "Olympiacos", "updatedAt": 200}]}
+        res = self._merge(old, new)
+        names = self._names(res)
+        assert len(names) == 1, names
+        # Gana la edición más reciente (entrante, updatedAt 200).
+        assert names[0] == "Olympiacos"
+
+    def test_no_duplica_por_acento_y_afijo(self):
+        old = {"teams": [{"id": "x", "name": "Atlético Madrid", "updatedAt": 50}]}
+        new = {"teams": [{"id": "y", "name": "Atletico Madrid CF", "updatedAt": 10}]}
+        res = self._merge(old, new)
+        assert len(self._names(res)) == 1, self._names(res)
+        # Empate decidido por updatedAt → gana el almacenado (más reciente).
+        assert self._names(res)[0] == "Atlético Madrid"
+
+    def test_no_colapsa_clubes_distintos(self):
+        # Afijo-stripping NUNCA debe fusionar dos clubes distintos.
+        old = {"teams": [{"id": "1", "name": "Real Madrid", "updatedAt": 1}]}
+        new = {"teams": [{"id": "2", "name": "Real Sociedad", "updatedAt": 1}]}
+        res = self._merge(old, new)
+        assert len(self._names(res)) == 2, self._names(res)
+
+    def test_estadio_no_se_pierde_si_ganador_no_lo_trae(self):
+        # Una copia con updatedAt MAYOR pero SIN estadio no debe borrar el
+        # estadio que otra copia (más vieja) sí puso. (Bug "no se pueden
+        # añadir estadios": el ganador por recencia lo machacaba.)
+        old = {"teams": [{"id": "z", "name": "PAOK", "stadium": "Toumba", "updatedAt": 100}]}
+        new = {"teams": [{"id": "z", "name": "PAOK", "updatedAt": 200}]}
+        res = self._merge(old, new)
+        assert len(res["teams"]) == 1
+        assert res["teams"][0].get("stadium") == "Toumba", res["teams"][0]
+
+    def test_estadio_viaja_entre_grafias_del_mismo_club(self):
+        old = {"teams": [{"id": "z", "name": "PAOK FC", "stadium": "Toumba", "updatedAt": 100}]}
+        new = {"teams": [{"id": "w", "name": "PAOK", "updatedAt": 200}]}
+        res = self._merge(old, new)
+        assert len(res["teams"]) == 1
+        assert res["teams"][0].get("stadium") == "Toumba", res["teams"][0]
+
+    def test_escudo_no_se_pierde_si_ganador_no_lo_trae(self):
+        old = {"teams": [{"id": "z", "name": "AEK", "shield": "data:img", "updatedAt": 100}]}
+        new = {"teams": [{"id": "z", "name": "AEK", "updatedAt": 200}]}
+        res = self._merge(old, new)
+        assert res["teams"][0].get("shield") == "data:img"
+
+    def test_logo_liga_no_se_borra_por_post_vacio(self):
+        # Un dispositivo que nunca puso el logo POSTea config.logo='' →
+        # el servidor debe CONSERVAR el logo almacenado (identidad).
+        old = {"teams": [{"id": "1", "name": "A", "updatedAt": 1}],
+               "config": {"logo": "http://logo.png", "cupLogo": "http://cup.png"}}
+        new = {"teams": [{"id": "1", "name": "A", "updatedAt": 2}],
+               "config": {"logo": "", "cupLogo": ""}}
+        res = self._merge(old, new)
+        assert res["config"]["logo"] == "http://logo.png", res["config"]
+        assert res["config"]["cupLogo"] == "http://cup.png", res["config"]
+
+    def test_logo_liga_edicion_real_gana(self):
+        # Si el entrante trae un logo NUEVO no vacío, ese gana (edición
+        # explícita del admin, no se revierte al viejo).
+        old = {"teams": [], "config": {"logo": "http://old.png"}}
+        new = {"teams": [], "config": {"logo": "http://new.png"}}
+        res = self._merge(old, new)
+        assert res["config"]["logo"] == "http://new.png"

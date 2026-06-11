@@ -12396,7 +12396,7 @@ window._showSimProgress = function(opts, onDone){
                 try {
                   if (typeof window._cleanSquadPlayers === 'function') found.players = window._cleanSquadPlayers(found.players);
                 } catch(_){}
-                ['power','atk','mid','def','shield','country','rules','isHuman','humanEmoji'].forEach(function(_fk){
+                ['power','atk','mid','def','shield','stadium','country','rules','isHuman','humanEmoji'].forEach(function(_fk){
                   if (_protMatch[_fk] != null) found[_fk] = _protMatch[_fk];
                 });
                 /* Persistir en main para que la próxima visita sea
@@ -40529,7 +40529,13 @@ https://api.sofascore.app/api/v1/team/44/image
      (que NO ponen el sello) + saveData → saveData re-sanea (el objeto
      mutado conserva el sello viejo solo si NADIE tocó players; las
      ediciones reales del editor borran d._sanV antes de guardar). */
-  var _SAN_VER = 1;
+  /* v2 (2026-06-11): re-saneo único para colapsar dups que escaparon a
+     la fusión por-id del servidor (re-pegar lista regenera ids; grafías
+     afijo/alias del mismo club coexistían). El servidor ahora colapsa
+     por nombre canónico afijo-aware (_lx_canon_name), y este bump fuerza
+     a cada dispositivo a re-correr el dedup fuerte (_teamCanonKey) UNA
+     vez, sanando dups EXISTENTES sin esperar a la próxima edición. */
+  var _SAN_VER = 2;
   function _sanitizeLigaTeamNames(d){
     if (!d || !Array.isArray(d.teams)) return false;
     if (d._sanV === _SAN_VER) return false;   /* ya saneada → O(1) */
@@ -41983,6 +41989,31 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){ return false; }
   }
 
+  /* BACKFILL DEL LOGO DE LA LIGA (2026-06-11). Espejo de
+     _lextBackfillShields pero para el logo PROPIO de la competición
+     (`config.logo`/`config.cupLogo`, top-level del documento — NO por
+     equipo). Bug usuario "se borran logos de ligas": el logo es
+     identidad; si `target` no lo trae pero `source` SÍ, lo rellenamos.
+     NUNCA pisa un logo ya presente en target (la edición del target
+     manda). Defensa en profundidad sobre el backfill del servidor.
+     Devuelve true si rellenó alguno. */
+  function _lextBackfillLeagueLogo(target, source){
+    try {
+      if (!target || !source) return false;
+      var sc = source.config;
+      if (!sc || typeof sc !== 'object') return false;
+      var tc = target.config;
+      if (!tc || typeof tc !== 'object') { tc = target.config = {}; }
+      var changed = false;
+      ['logo','cupLogo'].forEach(function(fld){
+        var tv = (typeof tc[fld] === 'string') ? tc[fld].trim() : '';
+        var sv = (typeof sc[fld] === 'string') ? sc[fld].trim() : '';
+        if (!tv && sv) { tc[fld] = sc[fld]; changed = true; }
+      });
+      return changed;
+    } catch(_){ return false; }
+  }
+
   function fetchData(k, cb){
     try{
       var since = LIGA_UPDATED[k] || '';
@@ -42033,6 +42064,7 @@ https://api.sofascore.app/api/v1/team/44/image
               data.deletedTeamNames = (_locForCmp && Array.isArray(_locForCmp.deletedTeamNames))
                 ? _locForCmp.deletedTeamNames.slice() : [];
               try { _lextBackfillShields(data, _locForCmp); } catch(_){}
+              try { _lextBackfillLeagueLogo(data, _locForCmp); } catch(_){}
               try { _sanitizeLigaTeamNames(data); } catch(_){}
               LIGA_CACHE[k] = data;
               try { localStorage.setItem(storeKey(k), JSON.stringify(data)); } catch(_){}
@@ -42220,6 +42252,7 @@ https://api.sofascore.app/api/v1/team/44/image
              2026-06-02). El re-push de abajo propaga los escudos
              rellenados de vuelta al servidor. */
           try { _lextBackfillShields(localCache, data); } catch(_){}
+          try { _lextBackfillLeagueLogo(localCache, data); } catch(_){}
           // Conservamos la versión local en memoria y disco.
           LIGA_CACHE[k] = localCache;
           try{ localStorage.setItem(storeKey(k), JSON.stringify(localCache)); }catch(_){}
@@ -42249,6 +42282,7 @@ https://api.sofascore.app/api/v1/team/44/image
            backfill del anti-wipe: el escudo es identidad y nunca se
            pierde por dirección de sync (bug Liga Grecia 2026-06-02). */
         try { _lextBackfillShields(data, localCache || LIGA_CACHE[k]); } catch(_){}
+        try { _lextBackfillLeagueLogo(data, localCache || LIGA_CACHE[k]); } catch(_){}
         if (_sanitizeLigaTeamNames(data)) {
           try {
             fetch('/api/liga-ext/'+encodeURIComponent(k), {

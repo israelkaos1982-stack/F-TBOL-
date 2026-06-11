@@ -366,6 +366,47 @@ hidratar); (2) el server aplicaba ese `pi` aunque el POST fuera parcial.
     (`athSetMedicalPI` en boot) o quitar el rechazo de POST parcial sin
     campos ancla: cualquiera de los dos hace que el 💊 vuelva a 8.
 
+### El progreso de OBJETIVOS no se sube VACÍO tras un re-render (obligatorio, 2026-06-11)
+
+**Bug (2 fotos usuario 2026-06-11, «Liverpool»)**: el admin edita el
+🪙 presupuesto (5025) y cumple objetivos (1/68 ✅, 💼 0.28), pero al
+**borrar datos de navegación** vuelve TODO a 0 (🪙 0 · 💼 0.00 ·
+objetivos 0/68) — sólo los TARGETS (8.80 /1300€) sobreviven.
+
+**Causa raíz**: `boot()` del editor de objetivos hace un pull aditivo de
+`munich-obj-overrides-v1` (`_hydrateOverridesFromServer`). Cuando el
+server trae overrides que el dispositivo no tiene (caso típico tras un
+WIPE: local vacío, server con datos ⇒ `changed=true`) re-renderiza
+`#ath-obj-club` con `renderAll`, dejando TODOS los ✅ DESMARCADOS (HTML
+nuevo). Acto seguido llamaba a `athObjCount()` —que está ENVUELTO por
+`patchAthObjCount`— ANTES de restaurar los ✅ con `loadObjState`
+(`_munichObjAfterRender`). Ese `athObjCount` prematuro disparaba:
+(1) `saveObjState` → subía un progreso VACÍO que MACHACABA
+`munich-obj-state-v4` en el server (objetivos → 0/68), y (2)
+`liverpoolObjEarnings` con `done=0` → hundía 🪙/💼, y el field-merge del
+server los machacaba CONSERVANDO los targets (de ahí que sólo el target
+sobreviva). Tras el wipe la hidratación recuperaba ese blob ya en blanco.
+
+**Fix**:
+- (`misc_body_1.html`, callback de `_hydrateOverridesFromServer`): tras
+  `renderAll` se llama SIEMPRE a `_munichObjAfterRender` (que hace
+  `loadObjState` → restaura los ✅ → `athObjCount`), NUNCA un
+  `athObjCount` suelto sobre el DOM recién re-renderizado.
+- (`liverpoolObjEarnings`): GATE de hidratación del PROGRESO (`_objStateSync.isHydrated()`),
+  espejo del gate del HUD. No recalcula 🪙/💼 leyendo `done` del DOM
+  hasta que `munich-obj-state-v4` haya reconciliado; se rearma vía el
+  adopt del obj-state + un poll (cubre el caso local-autoritativo sin adopt).
+
+**Reglas a respetar**:
+14. **PROHIBIDO** contar/persistir objetivos (`athObjCount`/`saveObjState`/
+    `liverpoolObjEarnings`) sobre un `#ath-obj-club` recién re-renderizado
+    por `renderAll` SIN haber restaurado antes los ✅ con `loadObjState`
+    (vía `_munichObjAfterRender`). Un conteo sobre el DOM desmarcado sube
+    un progreso VACÍO que machaca el server.
+15. **PROHIBIDO** que `liverpoolObjEarnings` recalcule 🪙/💼 desde `done`
+    (DOM) antes de que el PROGRESO (`munich-obj-state-v4`) haya hidratado.
+    Gate `_objStateSync.isHydrated()` + rearme; igual que el gate del HUD.
+
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:

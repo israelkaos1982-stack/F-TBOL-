@@ -42029,6 +42029,41 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){ return false; }
   }
 
+  /* BACKFILL DE RESULTADOS POR RECENCIA (2026-06-12) ────────────────
+     Bug usuario ("simulo las ligas de Resto de Ligas una a una y al
+     abrirlas no se guarda"): la CLASIFICACIÓN se calcula 100% desde
+     `data.results`. Ni el servidor (`_lx_merge_teams`) ni el cliente
+     (`fetchData`) protegían `results` por recencia, así que:
+       (a) un GET en vuelo lanzado ANTES de que terminara la sim devolvía
+           la copia PRE-sim (sin resultados) y, al llegar la respuesta
+           DESPUÉS del saveData, machacaba la clasificación recién
+           simulada → al reabrir, todo a 0;
+       (b) un POST stale de otro dispositivo (que nunca simuló esa liga)
+           vaciaba los resultados en el servidor.
+     Solución (espejo de `_lextBackfillShields` / la regla del acta de la
+     Liga EA): cada cambio REAL de `data.results` (sim/reset) sella
+     `data.resultsStamp` (ms). Entre dos copias de la MISMA liga gana
+     SIEMPRE la de `resultsStamp` mayor — un reset legítimo (sello fresco)
+     gana; un GET/POST stale (sello menor o ausente) jamás pisa una
+     clasificación más nueva. ADITIVO: rellena `target` desde `source`
+     solo cuando `source` es más reciente; nunca borra resultados nuevos. */
+  function _lextResultsStamp(d){
+    return (d && Number(d.resultsStamp)) || 0;
+  }
+  function _lextBackfillResults(target, source){
+    try {
+      if (!target || !source) return false;
+      var ts = _lextResultsStamp(target);
+      var ss = _lextResultsStamp(source);
+      if (ss > ts && Array.isArray(source.results)) {
+        target.results = source.results.slice();
+        target.resultsStamp = ss;
+        return true;
+      }
+      return false;
+    } catch(_){ return false; }
+  }
+
   function fetchData(k, cb){
     try{
       var since = LIGA_UPDATED[k] || '';
@@ -42080,6 +42115,7 @@ https://api.sofascore.app/api/v1/team/44/image
                 ? _locForCmp.deletedTeamNames.slice() : [];
               try { _lextBackfillShields(data, _locForCmp); } catch(_){}
               try { _lextBackfillLeagueLogo(data, _locForCmp); } catch(_){}
+              try { _lextBackfillResults(data, _locForCmp); } catch(_){}
               try { _sanitizeLigaTeamNames(data); } catch(_){}
               LIGA_CACHE[k] = data;
               try { localStorage.setItem(storeKey(k), JSON.stringify(data)); } catch(_){}
@@ -42268,6 +42304,7 @@ https://api.sofascore.app/api/v1/team/44/image
              rellenados de vuelta al servidor. */
           try { _lextBackfillShields(localCache, data); } catch(_){}
           try { _lextBackfillLeagueLogo(localCache, data); } catch(_){}
+          try { _lextBackfillResults(localCache, data); } catch(_){}
           // Conservamos la versión local en memoria y disco.
           LIGA_CACHE[k] = localCache;
           try{ localStorage.setItem(storeKey(k), JSON.stringify(localCache)); }catch(_){}
@@ -42298,6 +42335,11 @@ https://api.sofascore.app/api/v1/team/44/image
            pierde por dirección de sync (bug Liga Grecia 2026-06-02). */
         try { _lextBackfillShields(data, localCache || LIGA_CACHE[k]); } catch(_){}
         try { _lextBackfillLeagueLogo(data, localCache || LIGA_CACHE[k]); } catch(_){}
+        /* Si el servidor trae resultados MÁS VIEJOS que los locales (un
+           GET en vuelo que salió ANTES de terminar la sim de esta liga,
+           o un POST stale de otro dispositivo), conservamos la
+           clasificación local recién simulada en vez de vaciarla. */
+        try { _lextBackfillResults(data, localCache || LIGA_CACHE[k]); } catch(_){}
         if (_sanitizeLigaTeamNames(data)) {
           try {
             fetch('/api/liga-ext/'+encodeURIComponent(k), {
@@ -43146,6 +43188,12 @@ https://api.sofascore.app/api/v1/team/44/image
            liga+copa en team.players[], y la Recopa recibe campeón fresco.
            Cae a no-op en ligas con < 12 equipos. */
         try { _lecSimCupOn(data, { force:true }); } catch(_){}
+        /* Sello de recencia de la CLASIFICACIÓN (2026-06-12): cada sim
+           real estampa `resultsStamp` para que esta clasificación gane
+           SIEMPRE a una copia stale (GET en vuelo / POST de otro
+           dispositivo sin estos resultados). Cliente y servidor
+           preservan la copia de mayor `resultsStamp`. */
+        try { data.resultsStamp = Date.now(); } catch(_){}
         try { saveData(slug, data); } catch(_){}
         try { window._ligaExtSimInProgress = _gatePrev; } catch(_){}
         try { _lecSyncPlayerStatsCache(data); } catch(_){}
@@ -43603,6 +43651,11 @@ https://api.sofascore.app/api/v1/team/44/image
     if(!confirm('¿Reiniciar puntos/partidos de '+CURRENT_NAME+'?')) return;
     var data = loadData(CURRENT_KEY);
     data.results = [];
+    /* Sello fresco: un reset DELIBERADO debe ganar a cualquier copia
+       simulada anterior (cliente y servidor preservan el resultsStamp
+       mayor). Sin esto, el guard de recencia conservaría los resultados
+       viejos y el reset «no se vería». */
+    data.resultsStamp = Date.now();
     /* Reset también los contadores per-jugador. ligaExtSimular escribe
        p.{pj,gol,pen,fk,mvp,ta,tr,imbat,penSaved} directamente sobre el
        objeto del jugador (vía applyMatchStats). Si no los limpiamos
@@ -43644,6 +43697,7 @@ https://api.sofascore.app/api/v1/team/44/image
     var data = loadData(slug);
     if(!data) return false;
     data.results = [];
+    data.resultsStamp = Date.now();   /* reset deliberado gana por recencia */
     if(Array.isArray(data.teams)){
       data.teams.forEach(function(t){ (t.players||[]).forEach(resetPlayerStats); });
     }

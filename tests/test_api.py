@@ -1197,3 +1197,45 @@ class TestLigaExtMerge:
         new = {"teams": [], "config": {"logo": "http://new.png"}}
         res = self._merge(old, new)
         assert res["config"]["logo"] == "http://new.png"
+
+    # ── Preservación de la CLASIFICACIÓN por recencia (resultsStamp) ──────
+    # Bug usuario 2026-06-12: "simulo las ligas una a una y al abrirlas no se
+    # guarda". La clasificación se calcula desde `data.results`; un POST/GET
+    # stale sin esos resultados los vaciaba en el servidor.
+    def test_results_stale_no_machaca_clasificacion_simulada(self):
+        # Servidor con la liga ya simulada (resultsStamp fresco). Un POST de
+        # otro dispositivo que nunca simuló (results vacío, sin sello) NO debe
+        # vaciar la clasificación.
+        old = {"teams": [{"id": "1", "name": "A", "updatedAt": 1}],
+               "results": [{"h": "1", "a": "2", "gh": 2, "ga": 0}],
+               "resultsStamp": 5000}
+        new = {"teams": [{"id": "1", "name": "A", "updatedAt": 2}],
+               "results": []}
+        res = self._merge(old, new)
+        assert res["results"] == old["results"], res.get("results")
+        assert res["resultsStamp"] == 5000
+
+    def test_results_sim_mas_reciente_gana(self):
+        # Una sim con sello MAYOR sí adopta sus resultados (no se revierte a
+        # la copia vieja).
+        old = {"teams": [{"id": "1", "name": "A"}],
+               "results": [{"h": "1", "a": "2", "gh": 1, "ga": 1}],
+               "resultsStamp": 1000}
+        new = {"teams": [{"id": "1", "name": "A"}],
+               "results": [{"h": "1", "a": "2", "gh": 3, "ga": 0}],
+               "resultsStamp": 2000}
+        res = self._merge(old, new)
+        assert res["results"] == new["results"]
+        assert res["resultsStamp"] == 2000
+
+    def test_results_reset_deliberado_limpia(self):
+        # Un reset (results=[] con sello fresco) SÍ debe vaciar la
+        # clasificación almacenada (sello mayor gana).
+        old = {"teams": [{"id": "1", "name": "A"}],
+               "results": [{"h": "1", "a": "2", "gh": 2, "ga": 0}],
+               "resultsStamp": 1000}
+        new = {"teams": [{"id": "1", "name": "A"}],
+               "results": [], "resultsStamp": 2000}
+        res = self._merge(old, new)
+        assert res["results"] == []
+        assert res["resultsStamp"] == 2000

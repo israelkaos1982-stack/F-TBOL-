@@ -43124,6 +43124,11 @@ https://api.sofascore.app/api/v1/team/44/image
         if (!window._restoSimBulkInProgress) {
           try { window._ligaExtSimInProgress = false; } catch(_){}
         }
+        /* Re-aplicar la COPA YA JUGADA sobre las plantillas: la sim de
+           liga acaba de hacer `resetPlayerStats`, así que sin esto los
+           goles/MVP de copa se perderían y la caja saldría a 0 (suma
+           liga+copa pedida por el usuario, 2026-06-12). */
+        try { _lecReapplyCupStatsToPlayers(data); } catch(_){}
         try { saveData(slug, data); } catch(_){}
         try { window._ligaExtSimInProgress = _gatePrev; } catch(_){}
         try { _lecSyncPlayerStatsCache(data); } catch(_){}
@@ -45597,6 +45602,19 @@ https://api.sofascore.app/api/v1/team/44/image
   function _lextRenderSquadStatsHeader(team) {
     var box = document.getElementById('lext-squad-stats-header');
     if (!box || !team) return;
+
+    /* Refrescar `ef_player_stats_v1` desde `team.players[]` (liga+copa
+       acumulado) ANTES de leer los líderes. La cabecera se pinta ANTES
+       que `renderSquadList` (que hace este mismo sync), así que sin esto
+       leía un cache que `rebuildPlayerStatsStore` pudo dejar vacío para
+       las ligas externas → «Máximo goleador: sin registros» aunque el
+       equipo jugó. 2026-06-12. */
+    try {
+      if (typeof _lecSyncPlayerStatsCache === 'function') {
+        var _hdrData = (typeof loadData === 'function') ? loadData(CURRENT_KEY) : null;
+        if (_hdrData) _lecSyncPlayerStatsCache(_hdrData);
+      }
+    } catch(_){}
 
     function _normName(s){
       return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
@@ -48225,6 +48243,71 @@ https://api.sofascore.app/api/v1/team/44/image
     saveData(CURRENT_KEY, data);
     _lecSyncPlayerStatsCache(data);
     _lecRender();
+  }
+
+  /* RE-LAYER de la COPA sobre la plantilla (2026-06-12, petición usuario
+     «las estadísticas de copa y Liga se suman a cada jugador»).
+     PROBLEMA: `ligaExtSimular` hace `resetPlayerStats` a TODOS los
+     jugadores y re-aplica SOLO la liga. Si la copa ya estaba jugada,
+     su aportación (goles/MVP) en `team.players[]` se BORRA al re-simular
+     la liga (p.ej. el botón global «Sim» que rejuega las 51 ligas). Como
+     `data.copa` sigue con sus partidos jugados, `_lextComputeRealStats`
+     calcula `teamPJ = liga + copa` mientras `p.pj` quedó en liga sola →
+     el check `ownPj === teamPJ` falla y la caja de la plantilla sale a
+     CERO («Máximo goleador: sin registros») aunque el equipo jugó.
+     FIX: tras la sim de liga, re-aplicamos las stats de los partidos de
+     copa YA JUGADOS (gh/ga almacenados) sobre las plantillas, igual que
+     `_lecSimMatch` lo hizo en su día — así `p.*` vuelve a ser liga+copa.
+     Las tarjetas de copa no se almacenan por partido, así que solo se
+     re-distribuyen goles+MVP (idéntico al criterio del resto de la sim,
+     que tampoco persiste goleadores). NO hay doble conteo: el motor de
+     copa (`_lecRunAllAuto`) solo corre sobre una copa NO terminada y la
+     marca `done`; este re-layer SIEMPRE parte del reset de la liga. */
+  function _lecReapplyCupStatsToPlayers(data){
+    if(!data || !data.copa || !Array.isArray(data.teams)) return;
+    var cp = data.copa;
+    var byName = {};
+    data.teams.forEach(function(t){ if(t && t.name) byName[t.name] = t; });
+    function applyLeg(homeName, awayName, gh, ga){
+      var tA = byName[homeName], tB = byName[awayName];
+      if(!tA || !tB) return;
+      gh = Number(gh)||0; ga = Number(ga)||0;
+      var infoA = null, infoB = null;
+      try { infoA = applyMatchStats(tA, gh, ga, 0, 0); } catch(_){}
+      try { infoB = applyMatchStats(tB, ga, gh, 0, 0); } catch(_){}
+      if(infoA && infoB){
+        try {
+          if(gh > ga)      assignMVP(tA, infoA, tB, infoB, false);
+          else if(ga > gh) assignMVP(tB, infoB, tA, infoA, false);
+          else             assignMVP(tA, infoA, tB, infoB, true);
+        } catch(_){}
+      }
+    }
+    /* Grupos: 1 partido por entrada. */
+    if(Array.isArray(cp.groups)){
+      cp.groups.forEach(function(g){
+        (g && Array.isArray(g.matches) ? g.matches : []).forEach(function(m){
+          if(!m || !m.played) return;
+          applyLeg(m.home, m.away, m.gh, m.ga);
+        });
+      });
+    }
+    /* KO: doble partido (ida/vta) o partido único (home/away). Mismo
+       reparto de legs que `_lecSim2Leg`/`_lecSim1Leg` → cuadra con el
+       `cupPj` que cuenta `_lecSyncPlayerStatsCache`. */
+    function koApply(node){
+      if(!node || !node.played) return;
+      if(node.ida && node.vta){
+        var ida = node.ida || {}, vta = node.vta || {};
+        applyLeg(node.tieAway, node.tieHome, ida.gh, ida.ga);  /* ida: local = tieAway */
+        applyLeg(node.tieHome, node.tieAway, vta.gh, vta.ga);  /* vta: local = tieHome */
+      } else if(node.home && node.away){
+        applyLeg(node.home, node.away, node.gh, node.ga);
+      }
+    }
+    if(Array.isArray(cp.cuartos)) cp.cuartos.forEach(koApply);
+    if(Array.isArray(cp.semis))   cp.semis.forEach(koApply);
+    if(cp.final) koApply(cp.final);
   }
 
   /* DEFENSA contra render-stale: tras simular la copa, escribimos

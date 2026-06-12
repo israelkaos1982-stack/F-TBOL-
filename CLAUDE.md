@@ -1087,6 +1087,57 @@ independientemente de qué lado «gane» el roster.
 4. Toda nueva ruta de sync de `ligaExt_*` que adopte una de las dos
    copias debe pasar por el backfill de escudos antes de cachear/render.
 
+## Resto de Ligas — las stats de COPA + LIGA se SUMAN por jugador y sobreviven al re-sim de liga (obligatorio, 2026-06-12)
+
+**Bug (fotos usuario 2026-06-12, «Campionato Sammarinese»)**: un equipo
+de una liga externa (CALUNGO) tenía la liga Y la copa jugadas (PJ 38 a
+nivel de equipo) pero la caja de la plantilla salía «Máximo goleador:
+sin registros · MVP: sin registros» con TODOS los jugadores a 0.
+
+### Causa raíz
+
+Para Resto de Ligas las stats per-jugador viven en `team.players[]`
+(la sim NO guarda goleadores en `results[]`). `ligaExtSimular` hace
+`resetPlayerStats` a TODOS los jugadores y re-aplica SOLO la liga. La
+copa (`_lecRunAllAuto`/`_lecSimMatch`) suma su aportación ENCIMA. Pero
+si la liga se vuelve a simular DESPUÉS de la copa (típico: el botón
+global «Sim» que rejuega las 51 ligas), el reset BORRA la aportación de
+copa de `team.players[]`. Como `data.copa` sigue con sus partidos
+jugados, `_lextComputeRealStats` calcula `teamPJ = liga + copa` mientras
+`p.pj` quedó en liga sola → el check anti-stale `ownPj === teamPJ` falla
+y `_lextHydratePlayerStats` devuelve TODO a 0 → «sin registros».
+Agravante: la cabecera (`_lextRenderSquadStatsHeader`) se pinta ANTES
+que `renderSquadList` (el único que sincronizaba el cache desde
+`team.players[]`), así que leía un `ef_player_stats_v1` que
+`rebuildPlayerStatsStore` deja VACÍO de equipos de ligas externas.
+
+### Fix
+
+- **`_lecReapplyCupStatsToPlayers(data)`**: tras la sim de liga
+  (`ligaExtSimular._finishSim`, antes de `saveData`), re-aplica las
+  stats de los partidos de copa YA JUGADOS (gh/ga almacenados en
+  `data.copa`, mismo reparto de legs que `_lecSim2Leg`/`_lecSim1Leg`)
+  sobre las plantillas → `team.players[]` vuelve a ser liga+copa. Sin
+  doble conteo: `_lecRunAllAuto` solo corre sobre una copa NO terminada;
+  el re-layer SIEMPRE parte del reset de la liga.
+- **Cabecera sincroniza primero**: `_lextRenderSquadStatsHeader` llama a
+  `_lecSyncPlayerStatsCache(loadData(CURRENT_KEY))` ANTES de leer los
+  líderes (espejo de lo que ya hacía `renderSquadList`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `ligaExtSimular` deje `team.players[]` con stats de
+   liga sola cuando exista una copa jugada: tras el reset+liga debe
+   re-aplicar la copa (`_lecReapplyCupStatsToPlayers`) para que la suma
+   liga+copa sobreviva a cualquier re-sim de liga (incluido el bulk).
+2. **PROHIBIDO** que `_lecReapplyCupStatsToPlayers` se llame fuera del
+   reset de `ligaExtSimular` (doble conteo). El motor de copa
+   (`_lecRunAllAuto`) sigue aplicando su sim UNA vez, on-top.
+3. Toda caja/cabecera que lea líderes de una liga externa debe
+   sincronizar el cache desde `team.players[]` (`_lecSyncPlayerStatsCache`)
+   ANTES de leer, no fiarse de `ef_player_stats_v1` (lo vacía
+   `rebuildPlayerStatsStore` para los equipos no-EA).
+
 ## Resto de Ligas con 3 móviles + PC — dedup canónico, estadio y logo de liga NUNCA se pierden (obligatorio, 2026-06-11)
 
 **Bug (petición usuario 2026-06-11, «3 móviles y cpus editando resto de

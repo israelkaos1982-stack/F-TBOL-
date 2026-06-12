@@ -1111,32 +1111,62 @@ que `renderSquadList` (el único que sincronizaba el cache desde
 `team.players[]`), así que leía un `ef_player_stats_v1` que
 `rebuildPlayerStatsStore` deja VACÍO de equipos de ligas externas.
 
-### Fix
+### Fix — el 🎮 Sim simula LIGA + COPA (global e individual, 2026-06-12)
 
-- **`_lecReapplyCupStatsToPlayers(data)`**: tras la sim de liga
-  (`ligaExtSimular._finishSim`, antes de `saveData`), re-aplica las
-  stats de los partidos de copa YA JUGADOS (gh/ga almacenados en
-  `data.copa`, mismo reparto de legs que `_lecSim2Leg`/`_lecSim1Leg`)
-  sobre las plantillas → `team.players[]` vuelve a ser liga+copa. Sin
-  doble conteo: `_lecRunAllAuto` solo corre sobre una copa NO terminada;
-  el re-layer SIEMPRE parte del reset de la liga.
+Petición usuario: «el botón 🎮 Sim simule tanto Liga como copa, tanto
+global como individual». La raíz del «sin registros» era que la liga se
+re-simulaba (reset) sin re-jugar la copa. Solución definitiva: cada Sim
+deja la liga Y la copa jugadas, así `team.players[]` siempre = liga+copa.
+
+- **`_lecSimCupOn(data, opts)`** (motor de copa reutilizable, SIN efectos
+  colaterales: no usa `CURRENT_KEY`, no `saveData`, no render, no alert):
+  ensura el cfg de copa según las REGLAS de esa copa (formato por nº de
+  equipos + toggles), simula grupos + KO + final, aplica stats a las
+  plantillas y proclama campeón. `opts.force=true` REDIBUJA la copa de
+  cero (nuevo sorteo + sim). Devuelve false si la liga no llega a 12
+  equipos. `_lecRunAllAuto` (botón Copa) y `ligaExtSimular._finishSim`
+  comparten este motor.
+- **`ligaExtSimular._finishSim`** llama `_lecSimCupOn(data,{force:true})`
+  tras la sim de liga (que acaba de hacer `resetPlayerStats`): la copa se
+  re-simula de cero ENCIMA de la liga fresca → stats = liga+copa, sin
+  doble conteo (la copa siempre parte del reset de la liga). Como el Sim
+  global (`_restoLigasSimAll`) llama a `ligaExtSimular` por liga, hereda
+  liga+copa automáticamente.
 - **Cabecera sincroniza primero**: `_lextRenderSquadStatsHeader` llama a
   `_lecSyncPlayerStatsCache(loadData(CURRENT_KEY))` ANTES de leer los
   líderes (espejo de lo que ya hacía `renderSquadList`).
 
+### Pool de la Recopa — 54 campeones + 10 subcampeones = 64 (2026-06-12)
+
+Petición usuario: el campeón de las 53 ligas externas + Liga EA Sports
+(54) va a Recopa, MÁS el subcampeón de 10 copas concretas (EA Sport,
+Inglaterra, Italia, Alemania, Francia, Portugal, Países Bajos, Bélgica,
+Turquía, Dinamarca) = 64. `_buildPool` (IIFE `recopa_state_v1`):
+- TODOS los campeones de ligas externas europeas (ya lo hacía).
+- Subcampeón SOLO de la whitelist `RECOPA_SUBCAMPEON_SLUGS` (las 9
+  externas: `inglaterra,italia,alemania,francia,portugal,p-bajos,belgica,
+  turquia,dinamarca`). El toggle per-cup `recopaSubcampeon` puede
+  DESACTIVAR una de las 9, nunca AÑADIR una fuera de la lista.
+- EA Sports (campeón + subcampeón de la Copa del Rey, la 10ª copa con
+  sub) entra por los MANUALES de «EA Sports → Europa» slug `recopa`
+  (`_meaTeamsFor('recopa')`), porque `liga-ea-sports` está en
+  `EUROPE_BLACKLIST`. El bracket de 64 rellena con BYE si faltan equipos.
+
 ### Reglas a respetar
 
 1. **PROHIBIDO** que `ligaExtSimular` deje `team.players[]` con stats de
-   liga sola cuando exista una copa jugada: tras el reset+liga debe
-   re-aplicar la copa (`_lecReapplyCupStatsToPlayers`) para que la suma
-   liga+copa sobreviva a cualquier re-sim de liga (incluido el bulk).
-2. **PROHIBIDO** que `_lecReapplyCupStatsToPlayers` se llame fuera del
-   reset de `ligaExtSimular` (doble conteo). El motor de copa
-   (`_lecRunAllAuto`) sigue aplicando su sim UNA vez, on-top.
+   liga sola cuando la liga tenga ≥12 equipos: tras el reset+liga debe
+   re-simular la copa (`_lecSimCupOn(data,{force:true})`) para que la
+   suma liga+copa sobreviva a cualquier re-sim (incluido el bulk global).
+2. **PROHIBIDO** que `_lecSimCupOn` haga `saveData`/render/alert: es el
+   motor puro, el caller persiste. `_lecRunAllAuto` y `_finishSim` son
+   los únicos call sites (no duplicar el motor de copa en otra ruta).
 3. Toda caja/cabecera que lea líderes de una liga externa debe
    sincronizar el cache desde `team.players[]` (`_lecSyncPlayerStatsCache`)
    ANTES de leer, no fiarse de `ef_player_stats_v1` (lo vacía
    `rebuildPlayerStatsStore` para los equipos no-EA).
+4. **PROHIBIDO** que la Recopa vuelva al «subcampeón de TODAS las copas
+   con toggle ON». Solo las 9 de `RECOPA_SUBCAMPEON_SLUGS` + EA manual.
 
 ## Resto de Ligas con 3 móviles + PC — dedup canónico, estadio y logo de liga NUNCA se pierden (obligatorio, 2026-06-11)
 
@@ -2323,18 +2353,19 @@ Motor en `misc_body_1.html` (IIFE `STORE_KEY='recopa_state_v1'`):
 `s-recopa` muestra las **6 cajas** (`recopa-rd-<phase>-blk`) + sus 6
 sub-pantallas `s-recopa-rd-<phase>`.
 
-**Pool — modelo histórico Cup Winners' Cup** (`_buildPool`): los
-**campeones** de las copas nacionales europeas
-(`ligaExt_<slug>.copa.champion`, motor `_lecCopa`) + los
-**subcampeones** de las copas con `data.config.recopaSubcampeon !==
-false` (toggle, default ON) + los **manuales** de "EA Sports →
-Europa" slug 'recopa' (`_meaTeamsFor('recopa')`, donde entran
-campeón/subcampeón de la Copa del Rey española porque Liga EA está
-en `EUROPE_BLACKLIST`). Prioridad al capar a 64: manuales → campeones
-→ subcampeones. Se saltan las ligas NO europeas (mismo
-`EUROPE_BLACKLIST` que `_computeQualifiedFromLeagues`:
-`resto-mundo`, `liga-ea-sports`, `liga-hypermotion`,
-`liga-primera-federacion`).
+**Pool — 54 campeones + 10 subcampeones = 64** (`_buildPool`, regla
+2026-06-12): TODOS los **campeones** de las copas nacionales europeas
+(`ligaExt_<slug>.copa.champion`, motor `_lecCopa`) — 53 ligas externas —
++ el campeón de EA Sports (manual) = 54. + los **subcampeones** SOLO de
+la whitelist `RECOPA_SUBCAMPEON_SLUGS` (9 externas: `inglaterra,italia,
+alemania,francia,portugal,p-bajos,belgica,turquia,dinamarca`; el toggle
+per-cup `recopaSubcampeon` puede desactivar una, nunca añadir fuera) + el
+subcampeón de EA Sports (manual) = 10. Los **manuales** de "EA Sports →
+Europa" slug 'recopa' (`_meaTeamsFor('recopa')`) aportan campeón+sub de la
+Copa del Rey porque Liga EA está en `EUROPE_BLACKLIST`. Prioridad al capar
+a 64: manuales → campeones → subcampeones. Se saltan las ligas NO europeas
+(mismo `EUROPE_BLACKLIST`: `resto-mundo`, `liga-ea-sports`,
+`liga-hypermotion`, `liga-primera-federacion`).
 
 **Relleno con BYE**: si el pool < 64, el sorteo de 1/64
 (`_drawFirstRound`) rellena con `BYE='__BYE__'` de forma que cada BYE

@@ -17980,6 +17980,18 @@ window._showSimProgress = function(opts, onDone){
        Primero TODOS los campeones, luego TODOS los subcampeones, para
        que al capar a 64 los campeones siempre entren antes. */
     var EUROPE_BLACKLIST = { 'liga-hypermotion':1, 'liga-primera-federacion':1, 'liga-ea-sports':1, 'resto-mundo':1 };
+    /* SUBCAMPEONES a Recopa (petición usuario 2026-06-12): de las ligas
+       externas SOLO estas 9 copas mandan también su subcampeón; el resto
+       solo el campeón. EA Sports (la 10ª copa con subcampeón) entra por
+       los manuales de «EA Sports → Europa» (campeón + subcampeón de la
+       Copa del Rey), ya que Liga EA está en EUROPE_BLACKLIST. Total
+       objetivo: 54 campeones (53 ligas externas + EA) + 10 subcampeones
+       (9 de aquí + EA manual) = 64. El toggle per-cup `recopaSubcampeon`
+       puede DESACTIVAR una de estas 9, nunca AÑADIR una fuera de la lista. */
+    var RECOPA_SUBCAMPEON_SLUGS = {
+      'inglaterra':1, 'italia':1, 'alemania':1, 'francia':1, 'portugal':1,
+      'p-bajos':1, 'belgica':1, 'turquia':1, 'dinamarca':1
+    };
     var champs = [], runners = [];
     try {
       if(typeof localStorage !== 'undefined'){
@@ -18000,9 +18012,12 @@ window._showSimProgress = function(opts, onDone){
           var cp = data && data.copa;
           if(!cp) return;
           if(cp.champion) champs.push(cp.champion);
-          /* Subcampeón: default incluido salvo que el admin lo desactive. */
+          /* Subcampeón: SOLO las 9 copas de la whitelist (petición usuario
+             2026-06-12). El toggle per-cup puede desactivar una de ellas,
+             pero ninguna fuera de la lista aporta subcampeón. */
+          var subWhitelisted = !!RECOPA_SUBCAMPEON_SLUGS[slug];
           var subOn = !(data.config && data.config.recopaSubcampeon === false);
-          if(subOn && cp.runnerUp) runners.push(cp.runnerUp);
+          if(subWhitelisted && subOn && cp.runnerUp) runners.push(cp.runnerUp);
         });
       }
     } catch(_){}
@@ -37871,7 +37886,7 @@ window._showSimProgress = function(opts, onDone){
     _eachLeagueCard(function(name){ leagues.push(name); });
     var total = leagues.length;
     if(!total){ alert('No hay ligas para simular.'); return; }
-    if(!confirm('¿Simular las ' + total + ' ligas? Reseteará los resultados y stats actuales antes de simular.')) return;
+    if(!confirm('¿Simular las ' + total + ' ligas (liga + copa)? Reseteará los resultados y stats actuales antes de simular.')) return;
 
     /* 2026-05-26: la sim global ahora corre EN SEGUNDO PLANO con un
        único chip "Sim global · N/51" abajo derecha. El usuario puede
@@ -43124,11 +43139,13 @@ https://api.sofascore.app/api/v1/team/44/image
         if (!window._restoSimBulkInProgress) {
           try { window._ligaExtSimInProgress = false; } catch(_){}
         }
-        /* Re-aplicar la COPA YA JUGADA sobre las plantillas: la sim de
-           liga acaba de hacer `resetPlayerStats`, así que sin esto los
-           goles/MVP de copa se perderían y la caja saldría a 0 (suma
-           liga+copa pedida por el usuario, 2026-06-12). */
-        try { _lecReapplyCupStatsToPlayers(data); } catch(_){}
+        /* 🎮 Sim = liga + copa (petición usuario 2026-06-12). Tras la sim
+           de liga (que acaba de hacer resetPlayerStats), re-simulamos la
+           COPA de cero (force) aplicando sus reglas: así cada Sim — global
+           o individual — deja la liga Y la copa jugadas, las stats suman
+           liga+copa en team.players[], y la Recopa recibe campeón fresco.
+           Cae a no-op en ligas con < 12 equipos. */
+        try { _lecSimCupOn(data, { force:true }); } catch(_){}
         try { saveData(slug, data); } catch(_){}
         try { window._ligaExtSimInProgress = _gatePrev; } catch(_){}
         try { _lecSyncPlayerStatsCache(data); } catch(_){}
@@ -48176,14 +48193,40 @@ https://api.sofascore.app/api/v1/team/44/image
       alert('La copa ya está en la fase final. Pulsa ▶ Simular en la card de la FINAL para terminarla, o ♻️ Reset si quieres rehacerla.');
       return;
     }
-    /* Asegurar que los stats existen (pj, gol, mvp, ta, tr, imbat,
-       penSaved, pen, fk) en CADA jugador de TODAS las plantillas.
-       Sin esto, si el admin nunca pulsó Sim Liga, los players llegan
-       sin esos campos y `applyMatchStats` no inicializa porque el
-       `_rosterCache._statsEnsured` está en false → primera ronda OK,
-       siguientes rondas también, pero el roster cache previo de la
-       liga ya estaba marcado y nuestros players nuevos podrían
-       quedarse sin inicializar. Hacemos un ensure global aquí. */
+    _lecSimCupOn(data, { force:false });
+    saveData(CURRENT_KEY, data);
+    _lecSyncPlayerStatsCache(data);
+    _lecRender();
+  }
+
+  /* MOTOR DE COPA reutilizable y SIN efectos colaterales (2026-06-12,
+     petición usuario «el botón 🎮 Sim simule tanto Liga como copa, global
+     e individual»). Opera sobre un objeto `data` YA CARGADO: NO usa
+     CURRENT_KEY, NO hace saveData, NO renderiza ni alerta. El caller
+     persiste (`ligaExtSimular._finishSim` o `_lecRunAllAuto`). Aplica las
+     reglas de ESTA copa (formato por nº de equipos + toggles de config).
+     - opts.force = true → REDIBUJA la copa entera (nuevo sorteo + sim),
+       como pide «Sim» (re-simula liga + copa de cero).
+     Devuelve true si simuló una copa, false si la liga no llega a 12
+     equipos o la copa ya estaba terminada (sin force). */
+  function _lecSimCupOn(data, opts){
+    opts = opts || {};
+    if(!data || !Array.isArray(data.teams)) return false;
+    var fmt = _lecDetectFormat(data);
+    if(fmt < 12) return false;                 /* sin copa: < 12 equipos */
+    if(opts.force) data.copa = null;           /* Sim = sorteo + sim de cero */
+    if(!data.copa){
+      data.copa = {
+        format: fmt, status:'pending',
+        groups: _lecBuildGroups(fmt, data.teams),
+        cuartos:null, semis:null, final:null, champion:null, runnerUp:null
+      };
+    }
+    var copa = data.copa;
+    if(copa.status === 'final-pending' || copa.status === 'done') return false;
+    /* Asegurar stats en CADA jugador de TODAS las plantillas (idéntico a
+       la antigua rama de `_lecRunAllAuto`): si el admin nunca pulsó Sim
+       Liga, los players llegan sin campos y applyMatchStats no inicializa. */
     (data.teams||[]).forEach(function(t){
       if (t && (!t.players || !t.players.length)) {
         try {
@@ -48194,9 +48237,6 @@ https://api.sofascore.app/api/v1/team/44/image
       }
       (t && t.players ? t.players : []).forEach(ensurePlayerStats);
     });
-    /* Invalidar el roster cache para que applyMatchStats relea
-       cualquier cambio de plantilla (jugadores nuevos, edits) y no
-       reuse el `_statsEnsured` de la última simulación de liga. */
     if (typeof window._invalidateLineStatsCache === 'function') {
       try { window._invalidateLineStatsCache(); } catch(_){}
     }
@@ -48226,11 +48266,7 @@ https://api.sofascore.app/api/v1/team/44/image
       var s12 = copa.groups[0].standings;
       copa.final = { home:s12[0].name, away:s12[1].name, played:false };
     }
-    /* Auto-jugar la final para que `copa.champion` quede SIEMPRE
-       seteado tras un Sim Copa. Antes la final se quedaba en
-       `final-pending` y el usuario tenía que pulsar ▶ Simular en
-       la card de la FINAL — si no lo hacía, la Recopa no recibía
-       campeón de esta liga. Reportado 2026-05-07. */
+    /* Auto-jugar la final para que `copa.champion` quede SIEMPRE seteado. */
     if(copa.final && copa.final.home && copa.final.away){
       var finRes = _lecSim1Leg(data, copa.final.home, copa.final.away);
       copa.final = finRes;
@@ -48240,75 +48276,9 @@ https://api.sofascore.app/api/v1/team/44/image
     } else {
       copa.status = 'final-pending';
     }
-    saveData(CURRENT_KEY, data);
-    _lecSyncPlayerStatsCache(data);
-    _lecRender();
+    return true;
   }
-
-  /* RE-LAYER de la COPA sobre la plantilla (2026-06-12, petición usuario
-     «las estadísticas de copa y Liga se suman a cada jugador»).
-     PROBLEMA: `ligaExtSimular` hace `resetPlayerStats` a TODOS los
-     jugadores y re-aplica SOLO la liga. Si la copa ya estaba jugada,
-     su aportación (goles/MVP) en `team.players[]` se BORRA al re-simular
-     la liga (p.ej. el botón global «Sim» que rejuega las 51 ligas). Como
-     `data.copa` sigue con sus partidos jugados, `_lextComputeRealStats`
-     calcula `teamPJ = liga + copa` mientras `p.pj` quedó en liga sola →
-     el check `ownPj === teamPJ` falla y la caja de la plantilla sale a
-     CERO («Máximo goleador: sin registros») aunque el equipo jugó.
-     FIX: tras la sim de liga, re-aplicamos las stats de los partidos de
-     copa YA JUGADOS (gh/ga almacenados) sobre las plantillas, igual que
-     `_lecSimMatch` lo hizo en su día — así `p.*` vuelve a ser liga+copa.
-     Las tarjetas de copa no se almacenan por partido, así que solo se
-     re-distribuyen goles+MVP (idéntico al criterio del resto de la sim,
-     que tampoco persiste goleadores). NO hay doble conteo: el motor de
-     copa (`_lecRunAllAuto`) solo corre sobre una copa NO terminada y la
-     marca `done`; este re-layer SIEMPRE parte del reset de la liga. */
-  function _lecReapplyCupStatsToPlayers(data){
-    if(!data || !data.copa || !Array.isArray(data.teams)) return;
-    var cp = data.copa;
-    var byName = {};
-    data.teams.forEach(function(t){ if(t && t.name) byName[t.name] = t; });
-    function applyLeg(homeName, awayName, gh, ga){
-      var tA = byName[homeName], tB = byName[awayName];
-      if(!tA || !tB) return;
-      gh = Number(gh)||0; ga = Number(ga)||0;
-      var infoA = null, infoB = null;
-      try { infoA = applyMatchStats(tA, gh, ga, 0, 0); } catch(_){}
-      try { infoB = applyMatchStats(tB, ga, gh, 0, 0); } catch(_){}
-      if(infoA && infoB){
-        try {
-          if(gh > ga)      assignMVP(tA, infoA, tB, infoB, false);
-          else if(ga > gh) assignMVP(tB, infoB, tA, infoA, false);
-          else             assignMVP(tA, infoA, tB, infoB, true);
-        } catch(_){}
-      }
-    }
-    /* Grupos: 1 partido por entrada. */
-    if(Array.isArray(cp.groups)){
-      cp.groups.forEach(function(g){
-        (g && Array.isArray(g.matches) ? g.matches : []).forEach(function(m){
-          if(!m || !m.played) return;
-          applyLeg(m.home, m.away, m.gh, m.ga);
-        });
-      });
-    }
-    /* KO: doble partido (ida/vta) o partido único (home/away). Mismo
-       reparto de legs que `_lecSim2Leg`/`_lecSim1Leg` → cuadra con el
-       `cupPj` que cuenta `_lecSyncPlayerStatsCache`. */
-    function koApply(node){
-      if(!node || !node.played) return;
-      if(node.ida && node.vta){
-        var ida = node.ida || {}, vta = node.vta || {};
-        applyLeg(node.tieAway, node.tieHome, ida.gh, ida.ga);  /* ida: local = tieAway */
-        applyLeg(node.tieHome, node.tieAway, vta.gh, vta.ga);  /* vta: local = tieHome */
-      } else if(node.home && node.away){
-        applyLeg(node.home, node.away, node.gh, node.ga);
-      }
-    }
-    if(Array.isArray(cp.cuartos)) cp.cuartos.forEach(koApply);
-    if(Array.isArray(cp.semis))   cp.semis.forEach(koApply);
-    if(cp.final) koApply(cp.final);
-  }
+  try { window._lecSimCupOn = _lecSimCupOn; } catch(_){}
 
   /* DEFENSA contra render-stale: tras simular la copa, escribimos
      manualmente las stats acumuladas (liga + cup) de cada jugador a

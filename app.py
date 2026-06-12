@@ -3132,6 +3132,29 @@ def _lx_merge_teams(old_data, new_data):
     except Exception:
         pass
 
+    # PRESERVAR LA CLASIFICACIÓN POR RECENCIA — `results`/`resultsStamp`
+    # (2026-06-12) ─────────────────────────────────────────────────────
+    # Bug usuario ("simulo las ligas de Resto de Ligas una a una y al
+    # abrirlas no se guarda"): la clasificación se calcula 100% desde
+    # `data.results`, pero la fusión adoptaba `results` VERBATIM del
+    # entrante (`dict(new_data)`). Un POST stale de otro dispositivo (que
+    # nunca simuló esa liga, o aún tiene la temporada vieja) vaciaba los
+    # resultados recién simulados por otro. Es el mismo principio que el
+    # acta de la Liga EA (`_preserve_results_acta`): los `results` NO se
+    # pierden por una copia más vieja. Cada sim/reset del cliente sella
+    # `resultsStamp` (ms); preservamos los `results` de la copia con el
+    # sello MAYOR. Un reset legítimo (sello fresco) sí limpia; un POST con
+    # sello menor o ausente nunca pisa una clasificación más nueva.
+    try:
+        new_stamp = float(new_data.get("resultsStamp") or 0)
+        old_stamp = float(old_data.get("resultsStamp") or 0) if isinstance(old_data, dict) else 0.0
+        old_results = old_data.get("results") if isinstance(old_data, dict) else None
+        if old_stamp > new_stamp and isinstance(old_results, list):
+            result["results"] = old_results
+            result["resultsStamp"] = old_stamp
+    except Exception:
+        pass
+
     return result
 
 

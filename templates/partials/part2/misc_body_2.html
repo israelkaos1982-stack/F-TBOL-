@@ -23857,6 +23857,158 @@ window.goLiveMatches = function() {
       }
     } catch(_){}
 
+    /* (6) Scan de TORNEOS (`tour_<id>_v1`) — petición usuario 2026-06-13.
+           Cubre TODA competición que vive en el motor `_tour*` y que NO
+           pasa por `cal-*`/`match-live-wrap`:
+             · Selecciones · Rondas Previas (spv*, qualifier-route/groups-ko)
+             · Selecciones · Rondas Finales (sfn*) + Mundial 2032 (mundial-48)
+             · Torneos de Verano (jg/sct/pss/asia/tx*) — Joan Gamper, etc.
+             · Mundialito de Clubes (mundial)
+           Un partido es DERBY si AMBOS lados son humanos: dos SELECCIONES
+           humanas (Francia/Brasil/…) o dos CLUBES humanos (incl. los que
+           el admin marca isHuman en el propio torneo). Se escanean los
+           fixtures de GRUPO, de LIGA y los brackets KO; el estado/marcador
+           se lee de `cfg.results[matchKey]`. */
+    try {
+      /* ¿`teamObj` (o nombre) es HUMANO a efectos de derby? Reconoce las
+         3 fuentes del proyecto + el flag isHuman del propio torneo (que
+         el admin marca para verano/Mundialito/Superliga). */
+      var _isHumanForDerby = function(teamObj){
+        if (!teamObj) return false;
+        var nm = (typeof teamObj === 'string') ? teamObj : (teamObj.name || '');
+        nm = String(nm || '').trim();
+        if (!nm || nm === 'PENDIENTE' || nm === 'Por definir' || nm === 'TBD') return false;
+        if (teamObj && teamObj.isHuman) return true;
+        try { if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(nm)) return true; } catch(_){}
+        try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(nm)) return true; } catch(_){}
+        try { if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(nm)) return true; } catch(_){}
+        try { if (typeof window.esHumano === 'function' && window.esHumano(nm)) return true; } catch(_){}
+        return false;
+      };
+      /* Info de competición (nombre/icono/color) por id de torneo. El
+         nombre lo aporta el cfg (custom: "Road Copa Asia", "Mundial 2032",
+         "Trofeo Joan Gamper"); el color/icono salen del BOARD del slot. */
+      var _tourCompInfo = function(id, cfg){
+        var nm = (cfg && cfg.name) ? String(cfg.name) : id;
+        if (/^spv\d+$/.test(id))
+          return { name: nm, ico:'🌐', color:'#3b82f6', jornadaLabel:'Jornada' };
+        if (/^sfn\d+$/.test(id) || (cfg && cfg.format === 'mundial-48'))
+          return { name: nm, ico:'🌐', color:'#ec4899', jornadaLabel:'Jornada' };
+        if (id === 'mundial')
+          return { name: (nm && nm !== id) ? nm : 'Mundialito de Clubes', ico:'🏆', color:'#ffd633', jornadaLabel:'Fase' };
+        /* verano (jg/sct/pss/asia/tx*) o cualquier slot custom */
+        return { name: nm, ico:'🏖️', color:'#2dd4bf', jornadaLabel:'Jornada' };
+      };
+      /* Emite un derby de torneo si ambos lados son humanos. */
+      var _emitTourMatch = function(tourId, cfg, compInfo, hObj, aObj, matchKey, jLabelText, jSort){
+        if (!hObj || !aObj) return;
+        var hName = (typeof hObj === 'string') ? hObj : (hObj.name || '');
+        var aName = (typeof aObj === 'string') ? aObj : (aObj.name || '');
+        hName = String(hName||'').trim(); aName = String(aName||'').trim();
+        if (!hName || !aName) return;
+        if (!_isHumanForDerby(hObj) || !_isHumanForDerby(aObj)) return;
+        var results = (cfg && cfg.results) || {};
+        var res = results[matchKey] || results[matchKey + '|L2'];
+        var state = 'pending', score = { a:'0', b:'0' };
+        if (res && res.played){
+          state = 'finished';
+          var sa = (res.a != null) ? res.a : (res.gh != null ? res.gh : 0);
+          var sb = (res.b != null) ? res.b : (res.ga != null ? res.ga : 0);
+          score = { a: String(sa||0), b: String(sb||0) };
+        }
+        try {
+          var gm = window.__GM_LIVE;
+          if (gm && !gm.finished && gm.kickoffDone &&
+              String(gm.home||'').trim() === hName &&
+              String(gm.away||'').trim() === aName){
+            state = 'playing';
+            if (gm.sc) score = { a: String(gm.sc.a||0), b: String(gm.sc.b||0) };
+          }
+        } catch(_){}
+        _addUnique({
+          source: 'tour', tourId: tourId, matchKey: matchKey,
+          homeObj: hObj, awayObj: aObj,
+          home: hName, away: aName,
+          j: jSort, jLabelText: jLabelText,
+          comp: compInfo, state: state, score: score
+        });
+      };
+      /* Recolectar todas las cfgs de torneo: cache en memoria + claves
+         tour_*_v1 de localStorage (cargadas vía _tourLoadCachedSync). */
+      var _tourCfgs = {};
+      var _cache = window._TOUR_CACHE || {};
+      Object.keys(_cache).forEach(function(k){ if (_cache[k]) _tourCfgs[k] = _cache[k]; });
+      try {
+        for (var _li = 0; _li < localStorage.length; _li++){
+          var _lk = localStorage.key(_li);
+          var _mid = _lk && _lk.match(/^tour_(.+)_v1$/);
+          if (!_mid) continue;
+          var _tid = _mid[1];
+          if (_tourCfgs[_tid]) continue;
+          if (typeof window._tourLoadCachedSync === 'function'){
+            try { var _c0 = window._tourLoadCachedSync(_tid); if (_c0) _tourCfgs[_tid] = _c0; } catch(_){}
+          }
+        }
+      } catch(_){}
+      Object.keys(_tourCfgs).forEach(function(id){
+        var cfg = _tourCfgs[id];
+        if (!cfg || !Array.isArray(cfg.teams) || !cfg.teams.length) return;
+        var fc = cfg.formatConfig || {};
+        var teams = cfg.teams;
+        var compInfo = _tourCompInfo(id, cfg);
+        /* (a) Fixtures de GRUPO: groupFixtures[g][jor][mi] = {home,away}
+               índices dentro del slice del grupo. */
+        var gf = cfg.groupFixtures;
+        if (gf && (Array.isArray(gf) ? gf.length : 0)){
+          var pg = fc.perGroup || 4;
+          for (var g = 0; g < gf.length; g++){
+            var fixs = gf[g];
+            if (!Array.isArray(fixs)) continue;
+            var slice = teams.slice(g*pg, g*pg + pg);
+            for (var jr = 0; jr < fixs.length; jr++){
+              var mus = fixs[jr];
+              if (!Array.isArray(mus)) continue;
+              for (var mi = 0; mi < mus.length; mi++){
+                var mm = mus[mi];
+                if (!mm) continue;
+                _emitTourMatch(id, cfg, compInfo, slice[mm.home], slice[mm.away],
+                  'g'+g+'_'+jr+'_'+mi, (compInfo.jornadaLabel||'Jornada')+' '+(jr+1), (jr+1));
+              }
+            }
+          }
+        }
+        /* (b) Fixture de LIGA: cfg.fixture[jor][mi] = {home,away} índices
+               en cfg.teams (matchKey sin prefijo de grupo). */
+        if (Array.isArray(cfg.fixture)){
+          for (var jr2 = 0; jr2 < cfg.fixture.length; jr2++){
+            var mus2 = cfg.fixture[jr2];
+            if (!Array.isArray(mus2)) continue;
+            for (var mi2 = 0; mi2 < mus2.length; mi2++){
+              var mm2 = mus2[mi2];
+              if (!mm2) continue;
+              _emitTourMatch(id, cfg, compInfo, teams[mm2.home], teams[mm2.away],
+                jr2+'_'+mi2, (compInfo.jornadaLabel||'Jornada')+' '+(jr2+1), (jr2+1));
+            }
+          }
+        }
+        /* (c) Bracket KO: koBracket/bracket[round] = array PLANO de slots;
+               el par p = slots [2p, 2p+1]; matchKey 'ko_<round>_<p>'. */
+        var kb = cfg.koBracket || cfg.bracket;
+        if (Array.isArray(kb)){
+          var koNames = fc.koRounds || [];
+          for (var r = 0; r < kb.length; r++){
+            var round = kb[r];
+            if (!Array.isArray(round)) continue;
+            for (var p = 0; (p*2 + 1) < round.length; p++){
+              var rname = koNames[r] || ('Ronda '+(r+1));
+              _emitTourMatch(id, cfg, compInfo, round[p*2], round[p*2+1],
+                'ko_'+r+'_'+p, rname, 1000 + r);
+            }
+          }
+        }
+      });
+    } catch(_){}
+
     return out;
   }
 
@@ -25447,7 +25599,9 @@ window.goLiveMatches = function() {
        COMP_INFO para que Liga sea "Jornada 5" pero Copa sea
        "Ronda 16" y Mundial sea "Fase 3", etc. */
     var jLabel = '';
-    if (item.j) {
+    if (item.jLabelText) {
+      jLabel = item.jLabelText;       /* torneos: "Jornada 3", "Cuartos", "Final"… */
+    } else if (item.j) {
       jLabel = (comp.jornadaLabel || 'Jornada') + ' ' + item.j;
     }
     /* Color por competición — petición usuario 2026-05-04: cada comp
@@ -25527,6 +25681,14 @@ window.goLiveMatches = function() {
       /* Si terminado y hay un wrap DOM, scroll a él. Si no, abrir
          el acta via modal genérico si existe. */
       if (state === 'finished') {
+        /* Derby de torneo finalizado: no hay wrap DOM ni acta de Liga.
+           Reabrimos su pantalla de torneo (mejor que no hacer nada). */
+        if (item.source === 'tour') {
+          if (typeof window._tourOpenHumanMatch === 'function' && item.homeObj && item.awayObj) {
+            try { window._tourOpenHumanMatch(item.tourId, item.matchKey, item.homeObj, item.awayObj); } catch(_){}
+          }
+          return;
+        }
         if (item.wrap) {
           var scFinEl = item.wrap;
           while (scFinEl && !scFinEl.classList.contains('screen')) scFinEl = scFinEl.parentElement;
@@ -25556,6 +25718,9 @@ window.goLiveMatches = function() {
          los resultados en `superliga_results_v1` (no en la tabla
          de Liga). Sin este routing, la card abriría la previa
          de Liga y el resultado iría a la tabla equivocada. */
+      if (item.source === 'tour' && typeof window._tourOpenHumanMatch === 'function' && item.homeObj && item.awayObj) {
+        try { window._tourOpenHumanMatch(item.tourId, item.matchKey, item.homeObj, item.awayObj); return; } catch(_){}
+      }
       if (item.source === 'superliga' && typeof window._openSuperligaMatch === 'function') {
         try { window._openSuperligaMatch(item.j || 0, home, away); return; } catch(_){}
       }

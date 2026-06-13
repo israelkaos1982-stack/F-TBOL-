@@ -13815,6 +13815,13 @@ window._showSimProgress = function(opts, onDone){
       teams.forEach(function(t){
         var norm = _normName(t.name);
         if(existing[norm]) return;
+        // El slot LEGACY del hub ("Bayern Munich") NO se pinta en la Liga EA
+        // Sports: es el nombre interno antiguo del slot humano de Toñín
+        // (renombrado a Liverpool sólo en display; el dato interno siguió
+        // siendo "Bayern"), NO un equipo IA. El Bayern IA real juega en la
+        // Liga Alemana (Resto de Ligas). El motor de la liga ya juega con
+        // "Liverpool", que figura en la tabla; este Bayern fantasma sobra.
+        if(norm.indexOf('bayern') !== -1) return;
         var shortForm = SHORT_NAMES_CANON_TO_DISPLAY[norm];
         if(shortForm && existing[_normName(shortForm)]) return;
         startPos++;

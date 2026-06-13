@@ -1117,6 +1117,84 @@ class TestBayernHudRevGuard:
         assert "money" not in v or v.get("money") in (None, 0)
 
 
+class TestMultiHubKeys:
+    """Multi-hub (2026-06-13): cada caja de mister humano (Arsenal-Brasil,
+    etc.) tiene datos INDEPENDIENTES en variantes POR HUB de las claves base
+    (`bayern_hud_overrides_v1_<id>`, `munich-obj-state-v4_<id>`,
+    `liverpool_preseason_v1_<id>`). Cada variante HEREDA EXACTAMENTE el mismo
+    merge/proteccion que su base; Liverpool (clave base, sin sufijo) jamas se
+    ve afectado por la caja de otro mister."""
+
+    HUD_BASE = "/api/kv/bayern_hud_overrides_v1"
+    HUD_ALV = "/api/kv/bayern_hud_overrides_v1_alvaro"
+    CUR = "liverpool_preseason_v1"
+    CUR_ALV = "liverpool_preseason_v1_alvaro"
+
+    def _kv(self, client, url):
+        return _json(client.get(url)).get("value")
+
+    def _post_cursor(self, client, key, blob):
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"competition_state": {key: json.dumps(blob)}}}),
+            content_type="application/json",
+        )
+
+    def _get_cursor(self, client, key):
+        raw = _json(client.get("/api/state"))["state"]["competition_state"].get(key)
+        return json.loads(raw) if raw else None
+
+    # ── allow-list ──────────────────────────────────────────────────
+    def test_suffixed_hud_key_is_allowed(self):
+        assert app_module._kv_is_allowed("bayern_hud_overrides_v1_alvaro")
+        assert app_module._kv_is_allowed("munich-obj-state-v4_alvaro")
+        assert app_module._kv_is_allowed("bayern_trofeos_v1_alvaro")
+        # Una clave arbitraria con sufijo NO listada sigue rechazada.
+        assert not app_module._kv_is_allowed("totally_made_up_key_alvaro")
+
+    def test_hub_base_maps_variants(self):
+        assert app_module._kv_hub_base("bayern_hud_overrides_v1_alvaro") == "bayern_hud_overrides_v1"
+        assert app_module._kv_hub_base("bayern_hud_overrides_v1") == "bayern_hud_overrides_v1"
+        # No-variante se devuelve tal cual.
+        assert app_module._kv_hub_base("cash_ledger_v1") == "cash_ledger_v1"
+
+    # ── HUD por hub: misma proteccion rev/field-merge que la base ────
+    def test_suffixed_hud_rev_guard(self, client):
+        client.post(self.HUD_ALV, json={"value": {"money": 999, "pi": 5,
+                    "ratingTarget": 8.8, "moneyTarget": 1300, "updatedAt": 1000,
+                    "rev": 1}, "authoritative": True})
+        cur = self._kv(client, self.HUD_ALV)["rev"]
+        assert self._kv(client, self.HUD_ALV)["money"] == 999
+        # Cliente VIEJO (sin rev=0) con reloj adelantado NO clobberea.
+        client.post(self.HUD_ALV, json={"value": {"money": 0, "pi": 8,
+                    "ratingTarget": 8.8, "moneyTarget": 1300,
+                    "updatedAt": 9_999_999}})
+        assert self._kv(client, self.HUD_ALV)["money"] == 999
+        assert self._kv(client, self.HUD_ALV)["rev"] == cur
+
+    def test_hud_hubs_are_independent(self, client):
+        client.post(self.HUD_BASE, json={"value": {"money": 100, "pi": 5,
+                    "ratingTarget": 8.8, "moneyTarget": 1300, "updatedAt": 1000,
+                    "rev": 1}, "authoritative": True})
+        client.post(self.HUD_ALV, json={"value": {"money": 777, "pi": 3,
+                    "ratingTarget": 8.8, "moneyTarget": 1300, "updatedAt": 1000,
+                    "rev": 1}, "authoritative": True})
+        assert self._kv(client, self.HUD_BASE)["money"] == 100
+        assert self._kv(client, self.HUD_ALV)["money"] == 777
+
+    # ── cursor por hub: merge monotonico + independencia ─────────────
+    def test_suffixed_cursor_monotonic(self, client):
+        self._post_cursor(client, self.CUR_ALV, {"dayIdx": 40, "ts": 1000})
+        self._post_cursor(client, self.CUR_ALV, {"dayIdx": 20, "ts": 9999})  # stale
+        assert self._get_cursor(client, self.CUR_ALV)["dayIdx"] == 40
+
+    def test_cursor_hubs_are_independent(self, client):
+        self._post_cursor(client, self.CUR, {"dayIdx": 70, "ts": 1000})
+        self._post_cursor(client, self.CUR_ALV, {"dayIdx": 5, "ts": 1000})
+        assert self._get_cursor(client, self.CUR)["dayIdx"] == 70
+        assert self._get_cursor(client, self.CUR_ALV)["dayIdx"] == 5
+
+
 # ---------------------------------------------------------------------------
 # Fusión cross-device de Resto de Ligas (_lx_merge_teams) — bugs 2026-06-11:
 # "se duplican equipos", "no se puede añadir estadios", "se borran logos".

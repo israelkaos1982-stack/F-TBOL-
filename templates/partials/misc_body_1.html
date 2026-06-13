@@ -42472,7 +42472,8 @@ https://api.sofascore.app/api/v1/team/44/image
      DEFAULT_ZONES. TODO sigue siendo EDITABLE desde 📜 Reglas — esto solo
      ahorra teclear ~54 ligas a mano.
        Sumas de control (con España manual 4/1/2/1):
-       🔵28 · 🟣34 · 🟠18 · 🟢12 · 🟡88 · ⚪71. */
+       🔵28 · 🟣34 · 🟠18 · 🟢12 · 🟡88 · ⚪72 (San Marino ⚪2 cierra el
+       hueco que dejaba el viejo ⚪71). */
   var LEAGUE_DEFAULT_ZONES = (function(){
     var Z = {};
     function set(slugs, z){ slugs.forEach(function(s){ Z[s] = z; }); }
@@ -42501,8 +42502,13 @@ https://api.sofascore.app/api/v1/team/44/image
     set(['estonia','n-maced','lituania','n-irlanda','gibraltar','andorra',
          'bielorrsa','luxembgo','montenegro','georgia'],
         {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2});
-    // 🟡2 ⚪1 — Gales / San Marino
-    set(['gales','san-marino'], {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:1});
+    // 🟡2 ⚪1 — Gales
+    set(['gales'], {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:1});
+    // 🟡2 ⚪2 — San Marino (manda el 3º Y el 4º a Wild Card). Con ⚪1 el
+    // total de Wild Card quedaba en 71 (1 hueco TBD); con ⚪2 cuadra a 72
+    // exacto (24 grupos de 3). Petición usuario 2026-06-13. FIJO — solo
+    // editable por el admin desde 📜 Reglas.
+    set(['san-marino'], {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2});
     return Z;
   })();
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
@@ -47652,6 +47658,49 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   window._fixupLeagueZonesV2 = _fixupLeagueZonesV2;
+  /* Fixup San Marino ⚪ (2026-06-13): San Marino debe mandar el 3º Y el 4º
+     a Wild Card (⚪2). El seed v1 / fixup v2 lo dejaron en ⚪1, así que el
+     total de Wild Card quedaba en 71 (1 hueco TBD). Para navegadores que ya
+     sembraron San Marino con el valor viejo, re-aplicamos ⚪2 SOLO si sus
+     euro-zonas siguen EXACTAMENTE en el valor viejo (= lo puso el seed, no
+     el admin a mano) o en el genérico. NUNCA pisa una edición manual.
+     Idempotente vía flag propio. */
+  function _fixupSanMarinoWcV1(){
+    var FLAG = 'ftbol_san_marino_wc_fix_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var slug = 'san-marino';
+    /* valor VIEJO que tenía el seed/fixup (San Marino con ⚪1). */
+    var OLD = {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:1};
+    var GEN = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0};
+    function eqEuro(z, r){
+      if(!z) return false;
+      return Number(z.ucl||0)===r.ucl && Number(z.uclPrev||0)===r.uclPrev
+          && Number(z.uclQual||0)===r.uclQual && Number(z.uel||0)===r.uel
+          && Number(z.uecl||0)===r.uecl && Number(z.wildcard||0)===r.wildcard;
+    }
+    try {
+      var key = 'ligaExt_' + slug;
+      var raw = localStorage.getItem(key);
+      var nw = LEAGUE_DEFAULT_ZONES[slug];
+      if(raw && nw){                 // no sembrada → la cubre ensureConfig
+        var d = JSON.parse(raw);
+        if(d){
+          if(!d.config) d.config = {};
+          var z = d.config.zones;
+          /* Solo re-aplica si está en el valor VIEJO o en el genérico —
+             en ambos casos no es edición manual del admin. */
+          if(eqEuro(z, OLD) || eqEuro(z, GEN) || !z){
+            d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), nw);
+            localStorage.setItem(key, JSON.stringify(d));
+            try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+            try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+          }
+        }
+      }
+      localStorage.setItem(FLAG, '1');
+    } catch(_){}
+  }
+  window._fixupSanMarinoWcV1 = _fixupSanMarinoWcV1;
   function _ensureRestoMundoSeed(){
     var slug = 'resto-mundo';
     var hasTeams = false;
@@ -47767,6 +47816,7 @@ https://api.sofascore.app/api/v1/team/44/image
      corre una sola vez vía flag en localStorage. */
   try { _seedLeagueDefaultZonesV1(); } catch(_){}
   try { _fixupLeagueZonesV2(); } catch(_){}
+  try { _fixupSanMarinoWcV1(); } catch(_){}
   /* Defensa adicional: si en algún momento el storage queda vacío
      (reset / sync server que devuelve {teams:[]}), re-sembramos al
      abrir la pantalla. */

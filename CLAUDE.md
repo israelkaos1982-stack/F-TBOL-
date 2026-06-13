@@ -1392,9 +1392,15 @@ de la liga.
 - **España = `liga-ea-sports`** está en la tabla (🔵4 🟣1 🟠2 🟢1) pero
   sus plazas europeas entran por la pantalla manual "EA Sports → Europa"
   (está en `EUROPE_BLACKLIST` para el cómputo automático).
-- Totales (incluida España): 🔵28 🟣34 🟠18 🟢12 🟡88 ⚪️71. Todo cuadra
-  exacto salvo ⚪️ WC = 71 (1 hueco TBD en un grupo, sin efecto aguas
-  abajo: WC saca 24, OQ 88+24=112, Previa 34+28=62).
+- Totales (incluida España): 🔵28 🟣34 🟠18 🟢12 🟡88 ⚪️72. Todo cuadra
+  EXACTO: WC = 72 → 24 grupos de 3 sin hueco TBD. **San Marino = 🟡2 ⚪️2**
+  (manda 3º Y 4º a Wild Card) — petición usuario 2026-06-13. Con el viejo
+  San Marino ⚪️1 el total quedaba en 71 (1 hueco TBD); el ⚪️2 lo cierra.
+  Aguas abajo: WC saca 24, OQ 88+24=112, Previa 34+28=62.
+  `_fixupSanMarinoWcV1` (flag `ftbol_san_marino_wc_fix_v1`) re-aplica ⚪️2
+  a navegadores ya sembrados con ⚪️1 — SOLO si San Marino sigue en el
+  valor viejo o genérico (nunca pisa edición manual). **PROHIBIDO** volver
+  San Marino a ⚪️1: reabre el hueco TBD (WC 71).
 - `_fixupLeagueZonesV2` (flag `ftbol_league_zones_fix_v2`) re-aplica el
   cuadro CORREGIDO (Albania→🟣, Feroe/Malta→🟡3, Montenegro/Georgia→⚪️2,
   Bélgica/Turquía/Chequia/Grecia→🟣1) a navegadores que ya corrieron el

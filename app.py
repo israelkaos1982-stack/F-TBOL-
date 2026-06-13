@@ -404,6 +404,48 @@ def _recency_winner(old_blob, new_blob):
 # un reinicio explícito (marca `resetAt`/`_reset`) gana por `ts`; un
 # downgrade a un día anterior > 0 SIN marca de reinicio se RECHAZA.
 _STATE_CURSOR_KEYS = {"liverpool_preseason_v1", "bayern_preseason_v2"}
+# Multi-hub (2026-06-13): cada caja de mister humano lleva su PROPIO
+# cursor del calendario con sufijo `_<id>` (ej. liverpool_preseason_v1_alvaro
+# para Arsenal). Heredan EL MISMO merge monotonico que el cursor base
+# (un POST stale jamas devuelve el dia del hub a un dia anterior).
+_STATE_CURSOR_PREFIXES = ("liverpool_preseason_v1_", "bayern_preseason_v2_")
+
+
+def _is_cursor_key(k):
+    try:
+        if k in _STATE_CURSOR_KEYS:
+            return True
+        return any(str(k).startswith(p) for p in _STATE_CURSOR_PREFIXES)
+    except Exception:
+        return False
+
+
+# Multi-hub (2026-06-13): el HUD (💼🪙💊), trofeos y objetivos de cada
+# caja de mister humano viven en una variante POR HUB de su clave base,
+# con sufijo `_<id>` (ej. bayern_hud_overrides_v1_alvaro = HUD de Arsenal).
+# Cada variante HEREDA EXACTAMENTE el mismo merge/proteccion que su base
+# (recencia, rev monotonico, field-merge, anchor-guard, empty-guard).
+_KV_HUB_BASE_KEYS = (
+    "bayern_hud_overrides_v1",
+    "bayern_trofeos_v1",
+    "munich-obj-overrides-v1",
+    "munich-obj-state-v4",
+)
+
+
+def _kv_hub_base(key):
+    """Si `key` es una variante por-hub (`base_<id>`) de una clave base
+    conocida, devuelve la clave BASE; si no, devuelve `key` tal cual.
+    Permite que toda la logica especial keyed por la clave literal
+    (recencia/rev/field-merge/empty-guard) cubra tambien las variantes
+    por hub sin duplicarla."""
+    try:
+        for b in _KV_HUB_BASE_KEYS:
+            if key == b or str(key).startswith(b + "_"):
+                return b
+    except Exception:
+        pass
+    return key
 
 
 def _parse_json_blob(s):
@@ -543,8 +585,8 @@ def save_global_state(new_state, replace=False):
         # ya los fundió campo a campo arriba; lo CORREGIMOS aquí cuando
         # el POST entrante porta la clave, para que un POST stale no
         # pueda pisar (ni mezclar con) una copia más nueva del server.
-        for rk in _STATE_RECENCY_BLOB_KEYS:
-            if rk in incoming:
+        for rk in list(incoming.keys()):
+            if _kv_hub_base(rk) in _STATE_RECENCY_BLOB_KEYS:
                 merged[rk] = _recency_winner(base.get(rk), incoming.get(rk))
         # Cursor del día del hub (liverpool_preseason_v1 + legacy):
         # merge MONOTÓNICO. `merge_dict` ya copió el string entrante en
@@ -558,8 +600,8 @@ def save_global_state(new_state, replace=False):
             if isinstance(merged_comp, dict):
                 if not isinstance(base_comp, dict):
                     base_comp = {}
-                for ck in _STATE_CURSOR_KEYS:
-                    if ck in inc_comp:
+                for ck in list(inc_comp.keys()):
+                    if _is_cursor_key(ck):
                         merged_comp[ck] = _cursor_winner(
                             base_comp.get(ck), inc_comp.get(ck))
         # Anti-pérdida de acta de Liga EA: si el POST entrante trae
@@ -3668,6 +3710,10 @@ def _kv_is_allowed(key):
         return False
     if key in _KV_ALLOWED_EXACT:
         return True
+    # Multi-hub: variantes por hub (`base_<id>`) de las claves base de
+    # HUD/trofeos/objetivos quedan permitidas igual que su base.
+    if _kv_hub_base(key) in _KV_ALLOWED_EXACT:
+        return True
     return bool(_KV_ALLOWED_REGEX.match(key))
 
 
@@ -3881,7 +3927,7 @@ def api_kv_set(key):
     # ("vuelven a datos antiguos", foto usuario 2026-06-07). Sellar con el
     # reloj del server (única fuente monotónica) hace que la acción
     # explícita del admin domine y converja en todos los dispositivos.
-    elif key in _KV_RECENCY_BLOB_KEYS:
+    elif _kv_hub_base(key) in _KV_RECENCY_BLOB_KEYS:
         try:
             old = json.loads(row.valor_json) if (row and row.valor_json) else None
         except Exception:
@@ -3898,7 +3944,7 @@ def api_kv_set(key):
             # móvil sin actualizar ni con el reloj adelantado puede volver a
             # pisar el HUD por recencia (causa raíz «el 🪙 vuelve a 0 al borrar
             # datos» en un parque de 6 móviles + PC, foto usuario 2026-06-11).
-            if key == "bayern_hud_overrides_v1":
+            if _kv_hub_base(key) == "bayern_hud_overrides_v1":
                 _old_rev = 0
                 if isinstance(old, dict):
                     try:
@@ -3911,7 +3957,7 @@ def api_kv_set(key):
                     _new_rev = 0
                 value["rev"] = max(_old_rev, _new_rev) + 1
             payload = json.dumps(value, ensure_ascii=False)
-        elif key == "bayern_hud_overrides_v1" and isinstance(old, dict) and isinstance(value, dict):
+        elif _kv_hub_base(key) == "bayern_hud_overrides_v1" and isinstance(old, dict) and isinstance(value, dict):
             # HUD no-authoritative: defensa a prueba de balas.
             #
             # (0) REV MONOTÓNICO (2026-06-11). El blob lleva un reloj LÓGICO
@@ -3962,7 +4008,7 @@ def api_kv_set(key):
                 value, payload = merged, json.dumps(merged, ensure_ascii=False)
             else:
                 value, payload = old, row.valor_json
-        elif key == "munich-obj-state-v4" and isinstance(old, dict) and isinstance(value, dict):
+        elif _kv_hub_base(key) == "munich-obj-state-v4" and isinstance(old, dict) and isinstance(value, dict):
             # PROGRESO de objetivos del club: defensa a prueba de balas
             # (2026-06-11). Un cliente que arranca / auto-evalúa ANTES de
             # hidratar puede mandar un blob VACÍO (sin ✅ ni contadores)

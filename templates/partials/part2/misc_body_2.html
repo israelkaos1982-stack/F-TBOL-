@@ -21289,17 +21289,22 @@
      porque éste se basaba sólo en KEY_TITLE (que no se actualiza
      cuando se renombra el hub). Reportado por el usuario 2026-05-23. */
   function _hubTeamName(){
+    /* HUB ACTIVO (multi-hub 2026-06-13): título del calendario del mister
+       abierto. */
+    var _ah=null; try { _ah=window._activeHub&&window._activeHub(); } catch(_){}
+    var _scr=(_ah&&_ah.screen)||'s-munich';
     try {
       var r = localStorage.getItem('menu_home_v1');
       if (r) {
         var d = JSON.parse(r);
-        var ov = d && d.ov && d.ov['go:s-munich'];
+        var ov = d && d.ov && d.ov['go:'+_scr];
         if (ov && ov.label) {
           var s = String(ov.label).trim();
           if (s) return s;
         }
       }
     } catch(_){}
+    if (_ah && _ah.club && _ah.id!=='tonin') return String(_ah.club);
     try {
       if (typeof window._ligaEaSubName === 'function') {
         var sub = window._ligaEaSubName('Bayern Munich');
@@ -21309,7 +21314,7 @@
         }
       }
     } catch(_){}
-    return null;
+    return (_ah && _ah.id!=='tonin' && _ah.club) ? String(_ah.club) : null;
   }
   function _loadTitleRaw(){
     try {
@@ -32011,6 +32016,11 @@ document.addEventListener('DOMContentLoaded', function() {
        congelado y el nuevo gana por last-write-wins (ts). */
     'liverpool_preseason_v1',        /* cursor día (dayIdx) + tour elegido + rivales */
     'bayern_preseason_v2',           /* legacy — solo lectura para migración */
+    /* Multi-hub (2026-06-13): cursor del calendario de las OTRAS cajas
+       de mister humano (Arsenal/Brasil, etc.). Cada una sobrevive al
+       reload / cambio de móvil igual que el de Liverpool, con su PROPIO
+       progreso de día (merge monotónico por hub en el server). */
+    'liverpool_preseason_v1_alvaro', /* cursor día — caja Arsenal-Brasil */
     /* 2026-05-23 (petición usuario "todo igual en cualquier
        móvil/PC"): el estado de TODAS las competiciones restantes
        que aún vivían SOLO en localStorage del dispositivo admin.
@@ -32122,8 +32132,14 @@ document.addEventListener('DOMContentLoaded', function() {
              misc_body_1.html tiene su _MEM cacheado con el dayIdx
              stale → la caja del hub mostraría el día viejo. Le
              pedimos que invalide y re-renderice. */
-          if (restored.indexOf('liverpool_preseason_v1') !== -1
-              || restored.indexOf('bayern_preseason_v2') !== -1) {
+          var _curRestored = false;
+          for (var _ri=0; _ri<restored.length; _ri++){
+            var _rk = restored[_ri];
+            if (_rk === 'liverpool_preseason_v1' || _rk === 'bayern_preseason_v2'
+                || _rk.indexOf('liverpool_preseason_v1_') === 0
+                || _rk.indexOf('bayern_preseason_v2_') === 0){ _curRestored = true; break; }
+          }
+          if (_curRestored) {
             try {
               if (typeof window._psInvalidateCache === 'function') {
                 window._psInvalidateCache();

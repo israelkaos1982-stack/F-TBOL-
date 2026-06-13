@@ -51956,6 +51956,12 @@ https://api.sofascore.app/api/v1/team/44/image
      del nombre/escudo del nuevo mister. */
   window._mkHubResync=function(){
     try{ var host=document.getElementById('s-munich'); if(host) host.__mkHubSig=null; }catch(_){ }
+    /* SÍNCRONO: actualiza la cabecera (nombre/escudo/míster/estadio) YA, en
+       el mismo tick del clic, ANTES de que los renders pesados del hub (pull
+       del HUD/objetivos/derbys) bloqueen el hilo y retrasen el setTimeout.
+       Sin esto se veía "Liverpool" arriba un buen rato antes de cambiar a
+       "Arsenal" (foto usuario 2026-06-13 "tarda mucho · crea confusión"). */
+    try{ _sync(); }catch(_){ }
     run();
     try{ if(window.athRefreshInjuryHud) window.athRefreshInjuryHud(); }catch(_){ }
   };
@@ -51966,6 +51972,7 @@ https://api.sofascore.app/api/v1/team/44/image
   try {
     window.addEventListener('hubchange', function(){
       try{ var host=document.getElementById('s-munich'); if(host) host.__mkHubSig=null; }catch(_){ }
+      try{ _sync(); }catch(_){ }   /* síncrono (anti-flash) + backups temporizados */
       run();
     });
   } catch(_){ }

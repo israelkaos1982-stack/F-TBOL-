@@ -3533,6 +3533,12 @@ _KV_ALLOWED_EXACT = {
     # sobrevivan a wipes de navegador / cambio de móvil (mismo patrón
     # que comp_icons_v1 / bayern_trofeos_v1). 2026-05-17.
     "ball_inventory_v1", "ball_by_comp_v1", "ball_comp_db_v1",
+    # Info card EDITABLE por torneo (la «I» de cada caja de torneo · 6
+    # campos: Participación/Humanos/Nivel/Formato/Información/Dinero).
+    # Editable por el admin (PIN 747) desde el panel; localStorage es
+    # solo cache, el server es la fuente de verdad para que sobreviva al
+    # borrado de datos de navegación / cambio de móvil. 2026-06-13.
+    "tour_info_cards_v1",
     # Editor del menú principal: cajas creadas/editadas/eliminadas
     # (overrides + added + removed). localStorage es solo cache; el
     # server es la fuente de verdad para que sobrevivan a wipes de
@@ -3641,6 +3647,8 @@ _KV_RECENCY_BLOB_KEYS = {
     # con `updatedAt` mayor gana ENTERO — un consumo legítimo (PI gastado,
     # presupuesto sumado) no se revierte y un POST stale no pisa lo más nuevo.
     "bayern_hud_overrides_v1",
+    # Info card editable por torneo: la última edición del admin gana entera.
+    "tour_info_cards_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

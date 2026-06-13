@@ -55963,15 +55963,20 @@ https://api.sofascore.app/api/v1/team/44/image
   if (window.__MUNICH_TROFEOS_READY) return;
   window.__MUNICH_TROFEOS_READY = true;
 
-  var STORE_KEY = 'bayern_trofeos_v1';
+  /* HUB ACTIVO (multi-hub 2026-06-13): la vitrina de trofeos es POR HUB.
+     Liverpool/Toñín = 'bayern_trofeos_v1' (intacta, con su semilla);
+     Arsenal/etc. → '..._<id>'. Reasignable en 'hubchange'. */
+  function _trofLegacy(){ try { return window._activeHubIsLegacy ? window._activeHubIsLegacy() : true; } catch(_){ return true; } }
+  var STORE_KEY = (window._hubKey ? window._hubKey('bayern_trofeos_v1') : 'bayern_trofeos_v1');
   /* Semilla por defecto — los 2 títulos que estaban hardcodeados antes
-     en el HTML. Solo se aplica si el storage está vacío. Una vez el
-     admin añade/elimina algo, las modificaciones quedan persistidas
-     y la semilla no vuelve a aplicarse. */
-  var DEFAULTS = [
+     en el HTML. Solo se aplica al hub LEGACY (Liverpool) y solo si el
+     storage está vacío. Otros hubs (Arsenal…) arrancan SIN trofeos: cada
+     mister construye su propio palmarés. */
+  var DEFAULTS_LIVERPOOL = [
     { id:'def-fcwc',   icon:'https://upload.wikimedia.org/wikipedia/en/9/9e/FIFA_Club_World_Cup_logo.svg', title:'MUNDIAL DE CLUBES',   sub:'FIFA Club World Cup',          count:1 },
     { id:'def-supesp', icon:'/static/img/logos/spain_supercopa-de-espana.football-logos.cc.svg',         title:'SUPERCOPA DE ESPAÑA', sub:'RFEF – Competición Nacional',  count:1 }
   ];
+  function _defaults(){ return _trofLegacy() ? DEFAULTS_LIVERPOOL : []; }
 
   /* Normaliza el texto del título para detectar duplicados (mismo
      título en mayúsculas/minúsculas/acentos → cuenta como mismo
@@ -55992,8 +55997,9 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
     if (!arr){
       /* Persistir la semilla en la primera lectura para que el admin
-         pueda eliminar los defaults sin que vuelvan a aparecer. */
-      arr = DEFAULTS.map(function(t){ var c = {}; for (var k in t) c[k]=t[k]; return c; });
+         pueda eliminar los defaults sin que vuelvan a aparecer. Otros
+         hubs (no-Liverpool) arrancan con vitrina vacía. */
+      arr = _defaults().map(function(t){ var c = {}; for (var k in t) c[k]=t[k]; return c; });
       try { localStorage.setItem(STORE_KEY, JSON.stringify(arr)); } catch(_){}
     }
     /* Backfill de `count` para entradas guardadas con la versión antigua
@@ -56015,7 +56021,7 @@ https://api.sofascore.app/api/v1/team/44/image
      lectura caía a defaults). */
   function _saveTrofServer(arr){
     try {
-      fetch('/api/kv/bayern_trofeos_v1', {
+      fetch('/api/kv/'+STORE_KEY, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         credentials: 'same-origin',
@@ -56054,7 +56060,7 @@ https://api.sofascore.app/api/v1/team/44/image
       return;
     }
     try {
-      fetch('/api/kv/bayern_trofeos_v1', {credentials:'same-origin'})
+      fetch('/api/kv/'+STORE_KEY, {credentials:'same-origin'})
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
           if (!j || !j.ok || !Array.isArray(j.value) || !j.value.length){
@@ -56537,6 +56543,16 @@ https://api.sofascore.app/api/v1/team/44/image
        contador de la HUB-card que vive fuera del screen. */
     _hydrateTrofFromServer(function(){ render(); });
   }
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver
+     la clave de la vitrina, re-hidratar del server y re-renderizar el
+     contador + la lista del nuevo hub. */
+  try {
+    window.addEventListener('hubchange', function(){
+      try { STORE_KEY = window._hubKey('bayern_trofeos_v1'); } catch(_){}
+      try { _hydrateTrofFromServer(function(){ render(); }); } catch(_){}
+      try { render(); } catch(_){}
+    });
+  } catch(_){}
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', _wire);
   } else {
@@ -56582,8 +56598,11 @@ https://api.sofascore.app/api/v1/team/44/image
   if (window.__MUNICH_DERBYS_HUB_READY) return;
   window.__MUNICH_DERBYS_HUB_READY = true;
 
-  var SEASONS_KEY = 'bayern_derbys_seasons_v1';
-  var MATCHES_KEY = 'bayern_derbys_matches_v1';
+  /* HUB ACTIVO (multi-hub 2026-06-13): claves del fallback POR HUB. El
+     `refresh` delega en `munichDerbyAggregateAll` (ya hub-aware), pero la
+     ruta de respaldo lee estas claves directamente. Reasignables. */
+  var SEASONS_KEY = (window._hubKey ? window._hubKey('bayern_derbys_seasons_v1') : 'bayern_derbys_seasons_v1');
+  var MATCHES_KEY = (window._hubKey ? window._hubKey('bayern_derbys_matches_v1') : 'bayern_derbys_matches_v1');
 
   function _setNum(cls, val){
     var el = document.querySelector('#munich-derbys-stats .hub-derbys-num.' + cls);
@@ -56723,6 +56742,17 @@ https://api.sofascore.app/api/v1/team/44/image
   }
 
   window.refreshMunichDerbysHub = refresh;
+
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver
+     las claves del fallback y refrescar el contador del HUB del nuevo
+     hub (el agregador ya es hub-aware). */
+  try {
+    window.addEventListener('hubchange', function(){
+      try { SEASONS_KEY = window._hubKey('bayern_derbys_seasons_v1'); } catch(_){}
+      try { MATCHES_KEY = window._hubKey('bayern_derbys_matches_v1'); } catch(_){}
+      try { refresh(); } catch(_){}
+    });
+  } catch(_){}
 
   function _wire(){
     refresh();
@@ -56928,8 +56958,11 @@ https://api.sofascore.app/api/v1/team/44/image
   });
   window.OBJECTIVES_SPEC = SECTIONS;
 
-  /* ── Overrides de cantidad (config; sobrevive al reset de temporada) ── */
-  var OVR_KEY = 'munich-obj-overrides-v1';
+  /* ── Overrides de cantidad (config; sobrevive al reset de temporada) ──
+     HUB ACTIVO (multi-hub 2026-06-13): config de objetivos POR HUB.
+     Liverpool/Toñín = 'munich-obj-overrides-v1' (intacta); Arsenal/etc.
+     → '..._<id>'. Reasignable en 'hubchange'. */
+  var OVR_KEY = (window._hubKey ? window._hubKey('munich-obj-overrides-v1') : 'munich-obj-overrides-v1');
   var OVR = {};
   function loadOverrides(){ try { OVR = JSON.parse(localStorage.getItem(OVR_KEY) || '{}') || {}; } catch(_){ OVR = {}; } }
   /* Persistencia del editor de Objetivos del Club (cantidades + textos
@@ -57248,8 +57281,9 @@ https://api.sofascore.app/api/v1/team/44/image
     if (btn) btn.textContent = window.__munichObjEditing ? '💾 Guardar' : '🖍 Editar';
   };
 
+  function _objHubName(){ try { return (window._psHumanLogicName && window._psHumanLogicName()) || 'Liverpool'; } catch(_){ return 'Liverpool'; } }
   function boot() {
-    var ok = renderAll('ath-obj-club', 'Liverpool', false);
+    var ok = renderAll('ath-obj-club', _objHubName(), false);
     if (!ok) { setTimeout(boot, 120); return; }
     if (typeof athObjCount === 'function') athObjCount();
     /* Pull aditivo del server: si trae overrides que este dispositivo no
@@ -57257,7 +57291,7 @@ https://api.sofascore.app/api/v1/team/44/image
        interrumpir una edición en curso. */
     _hydrateOverridesFromServer(function(changed){
       if (!changed || window.__munichObjEditing) return;
-      renderAll('ath-obj-club', 'Liverpool', false);
+      renderAll('ath-obj-club', _objHubName(), false);
       /* PROHIBIDO contar/persistir sobre el DOM recién re-renderizado: tras
          `renderAll` los ✅ del progreso quedan DESMARCADOS (HTML nuevo). Como
          `athObjCount` está ENVUELTO (patchAthObjCount), llamarlo aquí dispara
@@ -57280,6 +57314,29 @@ https://api.sofascore.app/api/v1/team/44/image
   } else {
     boot();
   }
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver
+     la clave de CONFIG de objetivos y re-renderizar la lista para el hub
+     activo. DIFERIDO (setTimeout 0) para correr DESPUÉS de que la IIFE del
+     PROGRESO (más abajo) reasigne su LS_OBJ síncronamente → así
+     `_munichObjAfterRender` (loadObjState) restaura los ✅ de la clave
+     del nuevo hub, no de la anterior (regla CLAUDE.md 14). */
+  try {
+    window.addEventListener('hubchange', function(){
+      setTimeout(function(){
+        try { OVR_KEY = window._hubKey('munich-obj-overrides-v1'); } catch(_){}
+        OVR = {}; try { loadOverrides(); } catch(_){}
+        try { renderAll('ath-obj-club', _objHubName(), false); } catch(_){}
+        try { if (typeof window._munichObjAfterRender === 'function') window._munichObjAfterRender(); } catch(_){}
+        try {
+          _hydrateOverridesFromServer(function(changed){
+            if (!changed || window.__munichObjEditing) return;
+            renderAll('ath-obj-club', _objHubName(), false);
+            if (typeof window._munichObjAfterRender === 'function') { try { window._munichObjAfterRender(); } catch(_){} }
+          });
+        } catch(_){}
+      }, 0);
+    });
+  } catch(_){}
 })();
 </script>
 
@@ -57337,7 +57394,11 @@ https://api.sofascore.app/api/v1/team/44/image
   /* v4: el set de objetivos cambió a 68 (boceto usuario 2026-06-01),
      así que el índice de checkbox y los ids de contador difieren del
      v3 — clave nueva para arrancar limpio. */
-  var LS_OBJ = 'munich-obj-state-v4';
+  /* HUB ACTIVO (multi-hub 2026-06-13): PROGRESO de objetivos POR HUB.
+     Liverpool/Toñín = 'munich-obj-state-v4' (intacta, con su _kvBlobSync
+     + gate de hidratación); Arsenal/etc. → '..._<id>'. Reasignable +
+     re-init de _objStateSync en 'hubchange'. */
+  var LS_OBJ = (window._hubKey ? window._hubKey('munich-obj-state-v4') : 'munich-obj-state-v4');
   var LS_MVP = 'munich-mvp-tracker-v2';
   var LS_RIVAL = 'munich-obj-rival';
   var TEAM_NAME = 'Bayern Munich';
@@ -58171,6 +58232,20 @@ https://api.sofascore.app/api/v1/team/44/image
       document.addEventListener('visibilitychange', function(){ if (!document.hidden) _objStateRefresh(); });
       setInterval(_objStateRefresh, 30000);
     } catch(_){}
+    /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver
+       la clave del PROGRESO SÍNCRONAMENTE (para que el render diferido de
+       la IIFE de config restaure los ✅ del hub correcto), re-crear el
+       _kvBlobSync ligado a la nueva clave y re-hidratar. El gate de
+       hidratación del nuevo sync evita que `liverpoolObjEarnings` deflacte
+       el 🪙/💼 del nuevo hub antes de reconciliar (reglas 15-17). */
+    try {
+      window.addEventListener('hubchange', function(){
+        try { LS_OBJ = window._hubKey('munich-obj-state-v4'); } catch(_){}
+        _objStateSync = null; _objLastSer = null; _objStateUpdatedAt = 0;
+        try { _objStateSyncInit(); } catch(_){}
+        try { _objStateRefresh(); } catch(_){}
+      });
+    } catch(_){}
   });
 })();
 </script>
@@ -58256,7 +58331,10 @@ https://api.sofascore.app/api/v1/team/44/image
   if (window.__MUNICH_DERBYS_SEASONS_READY) return;
   window.__MUNICH_DERBYS_SEASONS_READY = true;
 
-  var STORE_KEY = 'bayern_derbys_seasons_v1';
+  /* HUB ACTIVO (multi-hub 2026-06-13): histórico de derbys POR HUB.
+     Liverpool/Toñín = 'bayern_derbys_seasons_v1' (intacta); Arsenal/etc.
+     → '..._<id>'. Reasignable en 'hubchange'. */
+  var STORE_KEY = (window._hubKey ? window._hubKey('bayern_derbys_seasons_v1') : 'bayern_derbys_seasons_v1');
   var DEFAULTS = [
     { id:'def-3233', season:'32-33', teamName:'' },
     { id:'def-3132', season:'31-32', teamName:'' },
@@ -58288,10 +58366,11 @@ https://api.sofascore.app/api/v1/team/44/image
      reciente la sobrescribe. */
   function _serverPush(arr){
     try {
+      var _body = {}; _body[STORE_KEY] = arr || [];
       fetch('/api/state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bayern_derbys_seasons_v1: arr || [] })
+        body: JSON.stringify(_body)
       }).catch(function(){});
     } catch(_){}
   }
@@ -58301,7 +58380,7 @@ https://api.sofascore.app/api/v1/team/44/image
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(d){
           if(!d || !d.state) return;
-          var srv = d.state.bayern_derbys_seasons_v1;
+          var srv = d.state[STORE_KEY];
           if (Array.isArray(srv) && srv.length){
             try { localStorage.setItem(STORE_KEY, JSON.stringify(srv)); } catch(_){}
             if (typeof cb === 'function') cb(srv);
@@ -58477,6 +58556,15 @@ https://api.sofascore.app/api/v1/team/44/image
     /* Pull inicial al cargar la app (no esperar a abrir la pantalla). */
     _serverPull(function(){ render(); });
   }
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver
+     la clave de temporadas de derbys, re-pull del server y re-render. */
+  try {
+    window.addEventListener('hubchange', function(){
+      try { STORE_KEY = window._hubKey('bayern_derbys_seasons_v1'); } catch(_){}
+      try { render(); } catch(_){}
+      try { _serverPull(function(){ render(); }); } catch(_){}
+    });
+  } catch(_){}
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', _wire);
   } else {
@@ -58608,8 +58696,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      matches). Persistencia dual localStorage + /api/state, igual que
      `bayern_derbys_seasons_v1`. Petición usuario 2026-05-07: añadir
      partidos derbys manualmente, agregación al HUB. */
-  var STORE_KEY = 'bayern_derbys_matches_v1';
-  var SEASONS_KEY = 'bayern_derbys_seasons_v1';
+  /* HUB ACTIVO (multi-hub 2026-06-13): partidos de derbys POR HUB.
+     Liverpool/Toñín = claves base (intactas); Arsenal/etc. → '..._<id>'.
+     Reasignables en 'hubchange'. */
+  var STORE_KEY = (window._hubKey ? window._hubKey('bayern_derbys_matches_v1') : 'bayern_derbys_matches_v1');
+  var SEASONS_KEY = (window._hubKey ? window._hubKey('bayern_derbys_seasons_v1') : 'bayern_derbys_seasons_v1');
   var COMP_LABEL = {
     liga:'Liga EA Sports', copa:'Copa del Rey', sc:'Supercopa España',
     ucl:'Champions', uel:'Europa League', uecl:'Conference League',
@@ -58680,10 +58771,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _saveAll(obj){
     try { localStorage.setItem(STORE_KEY, JSON.stringify(obj || {})); } catch(_){}
     try {
+      var _body = {}; _body[STORE_KEY] = obj || {};
       fetch('/api/state', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bayern_derbys_matches_v1: obj || {} })
+        body: JSON.stringify(_body)
       }).catch(function(){});
     } catch(_){}
   }
@@ -58733,7 +58825,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(d){
           if (!d || !d.state) return;
-          var srv = d.state.bayern_derbys_matches_v1;
+          var srv = d.state[STORE_KEY];
           if (srv && typeof srv === 'object'){
             var local = _loadAll();
             var merged = _mergeMatchMaps(local, srv);
@@ -58743,10 +58835,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
                dispositivo los reciba). Sin re-sellar nada — es aditivo. */
             if (_countMatches(merged) > _countMatches(srv)){
               try {
+                var _b = {}; _b[STORE_KEY] = merged;
                 fetch('/api/state', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ bayern_derbys_matches_v1: merged })
+                  body: JSON.stringify(_b)
                 }).catch(function(){});
               } catch(_){}
             }
@@ -59227,6 +59320,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       }
     });
   }
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver
+     las claves de partidos+temporadas de derbys, re-pull del server y
+     refrescar el contador del HUB + la temporada abierta para el nuevo
+     hub. */
+  try {
+    window.addEventListener('hubchange', function(){
+      try { STORE_KEY = window._hubKey('bayern_derbys_matches_v1'); } catch(_){}
+      try { SEASONS_KEY = window._hubKey('bayern_derbys_seasons_v1'); } catch(_){}
+      try { if (typeof _renderSeason === 'function') _renderSeason(); } catch(_){}
+      try { if (typeof window.refreshMunichDerbysHub === 'function') window.refreshMunichDerbysHub(); } catch(_){}
+      try { _serverPullAll(function(){
+        try { if (typeof _renderSeason === 'function') _renderSeason(); } catch(_){}
+        try { if (typeof window.refreshMunichDerbysHub === 'function') window.refreshMunichDerbysHub(); } catch(_){}
+      }); } catch(_){}
+    });
+  } catch(_){}
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', _wire);
   } else {

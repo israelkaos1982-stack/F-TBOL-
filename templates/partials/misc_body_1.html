@@ -4954,9 +4954,13 @@ window._showSimProgress = function(opts, onDone){
          podía ser Atlético Madrid → las lesiones del entrenamiento
          eran de su plantilla, no de la del Liverpool. */
       var OTHER = {'liverpool':1,'real madrid':1,'fc barcelona':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1};
-      /* HUB ACTIVO: nunca excluir al CLUB del hub abierto (si es Arsenal,
-         Arsenal debe poder caer aquí). */
+      /* HUB ACTIVO: nunca excluir al CLUB del hub abierto. Borramos por el
+         nombre lógico (hubL) Y por el club CANÓNICO del mister activo: para
+         Liverpool `hubL` suele ser 'bayern munich' (fallback legacy) y NO
+         está en OTHER, así que sin borrar por el club canónico ('liverpool')
+         el slot Liverpool quedaría excluido → plantilla vacía. */
       if (hubL) delete OTHER[hubL];
+      try { var _ahC = window._activeHub && window._activeHub(); if (_ahC && _ahC.club) delete OTHER[String(_ahC.club).toLowerCase().trim()]; } catch(_){}
       for (var j=0;j<teams.length;j++){
         var t2 = teams[j];
         if (!t2 || !t2.isHuman || !Array.isArray(t2.players) || !t2.players.length) continue;
@@ -9518,7 +9522,8 @@ window._showSimProgress = function(opts, onDone){
        arranque restauraría el cursor pre-reset. ts=Date.now() ya
        garantiza last-write-wins contra cualquier estado stale. */
     try {
-      var _resetBody = JSON.stringify({ competition_state: { 'liverpool_preseason_v1': _resetJson } });
+      var _rc = {}; _rc[KEY] = _resetJson;
+      var _resetBody = JSON.stringify({ competition_state: _rc });
       if (typeof navigator !== 'undefined' && navigator.sendBeacon){
         navigator.sendBeacon('/api/state', new Blob([_resetBody], { type:'application/json' }));
       } else if (typeof fetch === 'function'){
@@ -35301,6 +35306,31 @@ window._showSimProgress = function(opts, onDone){
     try { window.dispatchEvent(new CustomEvent('hubchange', { detail:{ hub:m } })); } catch(_){ }
     return m;
   };
+  /* COLD-START RESYNC (multi-hub 2026-06-13): si al ARRANCAR el hub activo
+     persistido NO es el legacy (Liverpool), hay que disparar `hubchange`
+     UNA vez tras cargar el DOM. Motivo: varias IIFEs (cursor de calendario,
+     etc.) cachean su clave con `window._hubKey(...)` a parse-time, pero esta
+     IIFE de MISTERS —donde se define `_hubKey`— se evalúa DESPUÉS de algunas
+     de ellas, así que en ese momento `_hubKey` aún no existía y la clave
+     quedó en la BASE (Liverpool). Sin un `hubchange` en el arranque (que
+     SOLO lo dispara `setActiveHub` al pulsar una caja), un reload/deep-link
+     estando en Arsenal leería/escribiría el cursor de Liverpool. Disparamos
+     `hubchange` tras DOMContentLoaded (cuando TODOS los listeners de las
+     IIFEs ya están registrados). Para Toñín NO se dispara nada → camino
+     Liverpool intacto y sin churn. */
+  (function _bootHubResync(){
+    function _fire(){
+      try {
+        var h = window._ACTIVE_HUB;
+        if (h && h.id !== 'tonin' && h.screen !== 's-munich'){
+          try { if (typeof window._mkHubResync === 'function') window._mkHubResync(); } catch(_){ }
+          window.dispatchEvent(new CustomEvent('hubchange', { detail:{ hub:h, boot:true } }));
+        }
+      } catch(_){ }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _fire);
+    else setTimeout(_fire, 0);
+  })();
   function _hasHumanIcon(name){
     try {
       if(typeof window.humanIcon === 'function'){
@@ -55200,7 +55230,15 @@ https://api.sofascore.app/api/v1/team/44/image
        congelar de paso la clasificación/resultados de la Liga EA. La
        plantilla de la SELECCIÓN sí es una clave propia
        (selecciones_squad_v1) y se protege aquí. */
-    var _PRESERVE_KEYS = ['bayern_derbys_seasons_v1','bayern_derbys_matches_v1','bayern_trofeos_v1','selecciones_squad_v1'];
+    /* HUB ACTIVO (multi-hub 2026-06-13): proteger las claves del mister
+       ABIERTO (derbys/trofeos por hub) + la plantilla de selección (común).
+       `_hubKey` deja las bases intactas para Liverpool. */
+    var _PRESERVE_KEYS = [
+      (window._hubKey ? window._hubKey('bayern_derbys_seasons_v1') : 'bayern_derbys_seasons_v1'),
+      (window._hubKey ? window._hubKey('bayern_derbys_matches_v1') : 'bayern_derbys_matches_v1'),
+      (window._hubKey ? window._hubKey('bayern_trofeos_v1') : 'bayern_trofeos_v1'),
+      'selecciones_squad_v1'
+    ];
     var _preserveSnap = {};
     _PRESERVE_KEYS.forEach(function(k){
       try { var v = localStorage.getItem(k); if (v != null) _preserveSnap[k] = v; } catch(_){}
@@ -57292,7 +57330,7 @@ https://api.sofascore.app/api/v1/team/44/image
     if (btn) btn.textContent = window.__munichObjEditing ? '💾 Guardar' : '🖍 Editar';
   };
 
-  function _objHubName(){ try { return (window._psHumanLogicName && window._psHumanLogicName()) || 'Liverpool'; } catch(_){ return 'Liverpool'; } }
+  function _objHubName(){ try { return (window._psHumanName && window._psHumanName()) || 'Liverpool'; } catch(_){ return 'Liverpool'; } }
   function boot() {
     var ok = renderAll('ath-obj-club', _objHubName(), false);
     if (!ok) { setTimeout(boot, 120); return; }
@@ -59537,16 +59575,21 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      IndexedDB y server no se pueden leer SÍNCRONAMENTE, así que se
      reaplican vía el observador del IIFE de override cuando llegan. */
   try {
+    /* HUB ACTIVO (multi-hub 2026-06-13): sembrar el HUD del mister abierto,
+       no siempre el de Liverpool (evita el flash de los valores de Liverpool
+       en la cabecera de otra caja tras un reload). */
+    var __hudK = (window._hubKey ? window._hubKey('bayern_hud_overrides_v1') : 'bayern_hud_overrides_v1');
+    var __ckName = (window._activeHubIsLegacy && !window._activeHubIsLegacy()) ? ('bayhud_'+window._activeHub().id) : 'bayhud';
     var __seedRaw = null;
-    try { __seedRaw = localStorage.getItem('bayern_hud_overrides_v1'); } catch(_){}
+    try { __seedRaw = localStorage.getItem(__hudK); } catch(_){}
     if (!__seedRaw) {
-      try { __seedRaw = sessionStorage.getItem('bayern_hud_overrides_v1'); } catch(_){}
+      try { __seedRaw = sessionStorage.getItem(__hudK); } catch(_){}
     }
     if (!__seedRaw) {
       /* Cookie fallback: misma codificación que en el IIFE de
          override (base64(JSON), o JSON plano en versiones antiguas). */
       try {
-        var __ckm = (document.cookie || '').match(/(?:^|; )bayhud=([^;]*)/);
+        var __ckm = (document.cookie || '').match(new RegExp('(?:^|; )' + __ckName + '=([^;]*)'));
         if (__ckm) {
           var __ckRaw = decodeURIComponent(__ckm[1] || '');
           if (__ckRaw) {

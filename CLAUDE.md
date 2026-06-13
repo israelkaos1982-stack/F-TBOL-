@@ -672,6 +672,60 @@ jugada tras un reinicio viaje con el sello correcto.
    «partidos jugados TRAS un reset previo NO se pierden» y «copia stale
    anterior al reset sigue sin resucitar»).
 
+## Auto-log de Derbys — HvH club + SELECCIÓN, nunca se pierden (obligatorio, 2026-06-13)
+
+**Bug (fotos usuario 2026-06-13, «Histórico Derbys»)**: el HUB (caja
+`s-munich-derbys`) mostraba PJ=3 (agregado de TODAS las temporadas) pero
+al abrir la temporada actual (32-33 Liverpool 🇫🇷) los derbys de
+Liverpool/Francia jugados NO aparecían. «No se están guardando los
+partidos.»
+
+### Causa raíz (auto-log)
+
+`_munichDerbyAutoLog` (`misc_body_1.html`) tenía 3 bloqueos:
+1. **Gate HvH solo con `esHumano`**: `esHumano` lee el flag `isHuman`
+   de Liga EA (5 clubes legacy) → devuelve `false` para SELECCIONES
+   (Francia) y puede no ver el alias Liverpool. Un derby Francia-vs-Brasil
+   (o Liverpool-vs-Arsenal) nunca pasaba el gate.
+2. **Match de temporada solo por nombre de CLUB** (`local !== t`): un
+   derby de SELECCIÓN (Francia) no coincidía con la temporada cuyo
+   `teamName` es «Liverpool».
+3. **Solo lo llamaba el gm-modal**: el flujo de las cards del calendario
+   (`_mlFinishMatchGen`) no auto-logueaba.
+
+### Fix
+
+- **Gate HvH ampliado** (`_derbyIsHuman`): humano si `esHumano` **o**
+  `_isHumanClubCanonico` (alias Bayern↔Liverpool) **o** `_esSelHumana` /
+  `_isHumanSeleccionCanonica`. Liverpool-vs-IA / Francia-vs-IA NO se
+  registra.
+- **Match de temporada por club O su selección**: el mismo mister dirige
+  club Y selección (`_mhFindMister(teamName).seleccion`), así que un
+  derby de Francia se registra en la temporada «Liverpool». Comparación
+  TOLERANTE (`_mDerbyTeamMatch`).
+- **comp 'seleccion' automático** cuando ambos lados son selecciones
+  humanas (el caller pasa 'liga'/'torneo').
+- **`_mlFinishMatchGen` llama también** a `_munichDerbyAutoLog`
+  (best-effort comp desde `st`); el helper filtra HvH + involucra-
+  temporada + dedup, así que es no-op para no-derbys.
+- **Pull ADITIVO** (`_serverPullAll` → `_mergeMatchMaps`): unión por id
+  de partido por temporada (server gana en conflicto de id, local-only
+  se conserva) + re-push si la unión es mayor. Antes el pull SOBRESCRIBÍA
+  ciegamente localStorage con el server → un partido recién auto-logueado
+  (POST en vuelo) se perdía con un GET stale.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a gatear el auto-log SOLO con `esHumano`: no ve
+   selecciones ni el alias Liverpool. Usar `_derbyIsHuman` (3 fuentes).
+2. **PROHIBIDO** matchear la temporada solo por nombre de club: un derby
+   de selección del mismo mister debe registrarse en la temporada del
+   club (`_mhFindMister(...).seleccion`).
+3. **PROHIBIDO** que `_serverPullAll` vuelva al overwrite ciego de
+   `bayern_derbys_matches_v1`. La hidratación es unión aditiva por id.
+4. El HUB `s-munich-derbys` AGREGA todas las temporadas (PJ/G/E/P del
+   histórico); cada temporada muestra solo los suyos — no es un bug.
+
 ## «Reiniciar Temporada» NUNCA borra Derbys / Trofeos / Plantillas (obligatorio, 2026-06-04)
 
 **Regla usuario 2026-06-04 (3 fotos)**: el botón **«Reiniciar

@@ -23957,11 +23957,15 @@ window.goLiveMatches = function() {
         var teams = cfg.teams;
         var compInfo = _tourCompInfo(id, cfg);
         /* (a) Fixtures de GRUPO: groupFixtures[g][jor][mi] = {home,away}
-               índices dentro del slice del grupo. */
+               índices dentro del slice del grupo. OJO: en mundial-48 y
+               groups-ko `groupFixtures` es un OBJETO `{0:[...],1:[...]}`
+               (no un array), así que el nº de grupos se resuelve de
+               formatConfig.groups / Object.keys, nunca de `.length`. */
         var gf = cfg.groupFixtures;
-        if (gf && (Array.isArray(gf) ? gf.length : 0)){
+        if (gf){
           var pg = fc.perGroup || 4;
-          for (var g = 0; g < gf.length; g++){
+          var nGroups = fc.groups || (Array.isArray(gf) ? gf.length : Object.keys(gf).length);
+          for (var g = 0; g < nGroups; g++){
             var fixs = gf[g];
             if (!Array.isArray(fixs)) continue;
             var slice = teams.slice(g*pg, g*pg + pg);

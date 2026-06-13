@@ -20921,6 +20921,111 @@ window._showSimProgress = function(opts, onDone){
 })();
 </script>
 
+<!-- ═══ «I» de información en Competiciones + España (2026-06-13) ═══
+     Misma «I» pequeña y coloreada como la caja que en Selecciones; abre
+     el MISMO panel editable (muTourInfo + 🖍 PIN 747). Se inyecta por JS
+     en cada .submenu-card de s-competiciones y s-espana, así también
+     cubre las cajas añadidas por el admin (comp_cards_v1). -->
+<style>
+  #s-competiciones .submenu-card .sc-info-btn,
+  #s-espana .submenu-card .sc-info-btn{
+    background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.35);
+    color:rgba(255,255,255,.85);width:23px;height:23px;border-radius:50%;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-family:'Bebas Neue','Georgia',serif;font-style:italic;font-weight:700;
+    font-size:13px;line-height:1;flex-shrink:0;padding:0;margin-left:auto;
+  }
+  #s-competiciones .submenu-card .sc-info-btn:active,
+  #s-espana .submenu-card .sc-info-btn:active{background:rgba(255,255,255,.18);}
+  #s-competiciones .submenu-card .sc-arr,
+  #s-espana .submenu-card .sc-arr{margin-left:6px;}
+</style>
+<script>
+(function(){
+  if (window.__COMP_INFO_BTN_READY) return;
+  window.__COMP_INFO_BTN_READY = true;
+  var SCREENS = ['s-competiciones','s-espana'];
+  function _norm(s){
+    return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
+      .replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase();
+  }
+  function _label(card){
+    var sp = card.querySelector('.sc-label');
+    if (!sp) return '';
+    var t = (sp.firstChild && sp.firstChild.nodeType === 3)
+      ? sp.firstChild.nodeValue : sp.textContent;
+    return String(t||'').replace(/\s+/g,' ').trim();
+  }
+  function _icon(card){
+    var em = card.querySelector('.sc-emoji');
+    if (em && em.textContent.trim()) return em.textContent.trim();
+    return '🏅';
+  }
+  /* Color = el de la caja (su borde/acento). Fallback dorado. */
+  function _accent(card){
+    try {
+      var cs = getComputedStyle(card);
+      var bc = cs.borderTopColor || cs.borderColor || '';
+      if (bc && bc !== 'transparent'
+          && bc.replace(/\s/g,'') !== 'rgba(0,0,0,0)') return bc;
+    } catch(_){}
+    return '#f0c040';
+  }
+  function _inject(screenId){
+    var scr = document.getElementById(screenId);
+    if (!scr) return;
+    var list = scr.querySelector('.submenu-list');
+    if (!list) return;
+    var cards = list.querySelectorAll(':scope > .submenu-card');
+    Array.prototype.forEach.call(cards, function(card){
+      if (card.querySelector('.sc-info-btn')) return;
+      var label = _label(card);
+      if (!label) return;
+      var id  = screenId.replace(/^s-/,'') + '-' + _norm(label);
+      var col = _accent(card);
+      var icon = _icon(card);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sc-info-btn';
+      btn.title = 'Info';
+      btn.textContent = 'i';
+      btn.style.color = col;
+      btn.style.borderColor = col;
+      btn.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        if (window.muTourInfo) window.muTourInfo(id, false, { name: label, flag: icon });
+      });
+      var arr = card.querySelector('.sc-arr');
+      if (arr) card.insertBefore(btn, arr); else card.appendChild(btn);
+    });
+  }
+  function _injectAll(){ SCREENS.forEach(_inject); }
+  /* Re-inyecta al entrar a cada pantalla (cubre cajas añadidas
+     dinámicamente). El bundle puede REDEFINIR window.go tras evaluar el
+     partial, así que el wrap se (re)instala también en DOMContentLoaded;
+     flag propio para no encadenarse infinitamente sobre sí mismo. */
+  function _installGoWrap(){
+    if (typeof window.go !== 'function' || window.go.__compInfoWrap) return;
+    var prev = window.go;
+    var wrapped = function(id){
+      var r = prev.apply(this, arguments);
+      if (SCREENS.indexOf(id) !== -1){
+        setTimeout(function(){ _inject(id); }, 0);
+        setTimeout(function(){ _inject(id); }, 250);
+      }
+      return r;
+    };
+    wrapped.__compInfoWrap = true;
+    window.go = wrapped;
+  }
+  function _boot(){ _installGoWrap(); _injectAll(); setTimeout(_injectAll,250); setTimeout(_injectAll,600); }
+  _installGoWrap();
+  if (document.readyState === 'loading')
+    document.addEventListener('DOMContentLoaded', _boot);
+  else _boot();
+})();
+</script>
+
 <!-- ═══ PANTALLA s-torneos-verano ═══
      Se abre desde Competiciones; contiene las 3 sub-cajas de
      pretemporada con los colores de la bandera anfitriona. -->
@@ -59517,16 +59622,21 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     });
     return out;
   }
-  window.muTourInfo = function(id, _editMode) {
+  window.muTourInfo = function(id, _editMode, _meta) {
     /* Si el admin ha editado este torneo (botón 🖍 en s-sct/s-pss/s-jg/s-asia),
        `_tourMuInfoData` devuelve la config custom convertida al formato de
-       SUMMER_TOURS. Si no, fallback al objeto hardcoded. */
+       SUMMER_TOURS. Si no, fallback al objeto hardcoded. Para cajas que NO
+       son torneos (Competiciones / España) `_meta` aporta título+icono. */
     var t = (typeof window._tourMuInfoData === 'function' && window._tourMuInfoData(id))
             || SUMMER_TOURS[id] || {};
     var box = getEl('munich-tour-ov-box');
     if (!box) return;
+    var meta = _meta || _tourInfoEdit.meta || {};
     _tourInfoEdit.id = id;
     _tourInfoEdit.on = !!_editMode;
+    _tourInfoEdit.meta = meta;
+    var ttlFlag = t.flag || meta.flag || '🏆';
+    var ttlName = t.name || meta.name || id;
     var vals = _tourInfoFor(id, t);
     function esc(s){
       return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
@@ -59555,7 +59665,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         + ' onclick="document.getElementById(\'munich-tour-ov\').classList.remove(\'show\')">Cerrar</button>';
     box.innerHTML =
       '<h3 class="munich-tour-ov-title">'
-        + '<span class="tour-info-ttl-txt">' + (t.flag || '🏆') + ' ' + esc(t.name || id) + '</span>'
+        + '<span class="tour-info-ttl-txt">' + ttlFlag + ' ' + esc(ttlName) + '</span>'
         + pencil
       + '</h3>'
       + rows

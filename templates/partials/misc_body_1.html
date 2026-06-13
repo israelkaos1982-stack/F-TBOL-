@@ -31623,7 +31623,9 @@ window._showSimProgress = function(opts, onDone){
         + 'onclick="go(\'s-' + id + '\')">'
         + '<span class="sc-emoji">' + _tourFlagHtml(_tvFlag(id), 'sc-flag-img') + '</span>'
         + '<span class="sc-label"' + _ccLabelStyle + '>' + _tvEsc(_tvName(id)) + '</span>'
-        + '<button type="button" class="sc-info-btn" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
+        /* La «I» de información va del MISMO color que la caja (su acento
+           col[1] = borde/etiqueta) — petición usuario 2026-06-13. */
+        + '<button type="button" class="sc-info-btn" style="color:' + col[1] + ';border-color:' + col[1] + ';" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
         + '<span class="sc-arr">▶</span>'
         + '</div>';
       /* Caja "📊 Estadísticas" DEBAJO de la card de cada Torneo de Verano
@@ -51195,6 +51197,35 @@ https://api.sofascore.app/api/v1/team/44/image
     font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;color:#fff;
     background:rgba(255,80,80,.18);border:1px solid rgba(255,120,120,.4);
   }
+  /* Info card EDITABLE (admin · PIN 747) — 2026-06-13. */
+  .munich-tour-ov-title .tour-info-ttl-txt{flex:1;}
+  .munich-tour-ov-title .tour-info-edit{
+    margin-left:auto;background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.28);border-radius:7px;
+    width:30px;height:30px;font-size:15px;line-height:1;cursor:pointer;
+    flex-shrink:0;color:#fff;padding:0;
+  }
+  .munich-tour-ov-title .tour-info-edit:active{background:rgba(255,255,255,.18);}
+  .munich-tour-ov-box .tour-info-val{font-size:14px;font-weight:600;color:#fff;}
+  .munich-tour-ov-box .tour-info-empty{color:rgba(255,255,255,.32);}
+  .munich-tour-ov-box .tour-info-inp{
+    width:100%;box-sizing:border-box;padding:8px 10px;border-radius:7px;
+    background:rgba(0,0,0,.4);border:1px solid rgba(176,144,255,.5);
+    color:#fff;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;
+  }
+  .munich-tour-ov-box .tour-info-inp:focus{outline:none;border-color:#b090ff;}
+  .munich-tour-ov-box .tour-info-actions{display:flex;gap:8px;margin-top:14px;}
+  .munich-tour-ov-box .tour-info-save,
+  .munich-tour-ov-box .tour-info-cancel{
+    flex:1;padding:10px;border-radius:8px;cursor:pointer;
+    font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2px;color:#fff;
+  }
+  .munich-tour-ov-box .tour-info-save{
+    background:rgba(80,220,140,.22);border:1px solid rgba(80,220,140,.55);
+  }
+  .munich-tour-ov-box .tour-info-cancel{
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.3);
+  }
 
   /* ── Caja "Competiciones" del hub (debajo del Próximo partido) ───
      Plegada por defecto. Al abrirla, muestra una fila horizontal con
@@ -59430,57 +59461,146 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     updateHud();
   };
 
-  window.muTourInfo = function(id) {
+  /* ── Info card EDITABLE por torneo · formato UNIFORME (2026-06-13) ──
+     Petición usuario: la «I» abre SIEMPRE el mismo formato para TODA
+     caja de torneo, con 6 campos (Participación / Humanos / Nivel /
+     Formato / Información / Dinero). Un 🖍 muy pequeño dentro del panel
+     pide PIN 747 (requireAdmin) y deja editar los números de todo.
+     Persiste en localStorage + KV (recencia) → sobrevive al borrado de
+     datos de navegación / cambio de móvil. */
+  var _TOUR_INFO_KEY = 'tour_info_cards_v1';
+  var _TOUR_INFO_FIELDS = [
+    ['participacion','Participación'],
+    ['humanos','Humanos'],
+    ['nivel','Nivel'],
+    ['formato','Formato'],
+    ['informacion','Información'],
+    ['dinero','Dinero']
+  ];
+  var _tourInfoEdit = { id:null, on:false };
+  function _tourInfoLoadAll(){
+    try { return JSON.parse(localStorage.getItem(_TOUR_INFO_KEY)||'{}') || {}; }
+    catch(_){ return {}; }
+  }
+  function _tourInfoSaveAll(all){
+    all.updatedAt = Date.now();
+    try { localStorage.setItem(_TOUR_INFO_KEY, JSON.stringify(all)); } catch(_){}
+    try {
+      if (typeof window.fetch === 'function'){
+        window.fetch('/api/kv/' + _TOUR_INFO_KEY, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ value: all })
+        }).catch(function(){});
+      }
+    } catch(_){}
+  }
+  /* Defaults derivados de la cfg (solo si el admin aún no editó el campo). */
+  function _tourInfoDefaults(t){
+    t = t || {};
+    var nivel = (t.aiMin || t.aiMax) ? (t.aiMin + '–' + t.aiMax) : '';
+    return {
+      participacion: t.teams ? (t.teams + ' equipos') : '',
+      humanos: (typeof t.humans !== 'undefined' && t.humans !== null && t.humans !== '') ? String(t.humans) : '',
+      nivel: nivel,
+      formato: t.format || '',
+      informacion: '',
+      dinero: t.fee ? (t.fee + ' 🪙') : ''
+    };
+  }
+  function _tourInfoFor(id, t){
+    var def = _tourInfoDefaults(t);
+    var ov = (_tourInfoLoadAll()[id]) || {};
+    var out = {};
+    _TOUR_INFO_FIELDS.forEach(function(f){
+      var k = f[0];
+      out[k] = (typeof ov[k] !== 'undefined' && ov[k] !== null && ov[k] !== '') ? ov[k] : def[k];
+    });
+    return out;
+  }
+  window.muTourInfo = function(id, _editMode) {
     /* Si el admin ha editado este torneo (botón 🖍 en s-sct/s-pss/s-jg/s-asia),
        `_tourMuInfoData` devuelve la config custom convertida al formato de
        SUMMER_TOURS. Si no, fallback al objeto hardcoded. */
     var t = (typeof window._tourMuInfoData === 'function' && window._tourMuInfoData(id))
-            || SUMMER_TOURS[id];
-    if (!t) return;
+            || SUMMER_TOURS[id] || {};
     var box = getEl('munich-tour-ov-box');
     if (!box) return;
-    var prizesHtml = t.prizes.map(function(p){
-      return '<li><b>' + p[0] + ':</b> +' + p[1] + ' 🪙</li>';
+    _tourInfoEdit.id = id;
+    _tourInfoEdit.on = !!_editMode;
+    var vals = _tourInfoFor(id, t);
+    function esc(s){
+      return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+    var rows = _TOUR_INFO_FIELDS.map(function(f){
+      var k=f[0], lbl=f[1], v=vals[k];
+      var valHtml = _editMode
+        ? '<input type="text" class="tour-info-inp" data-k="'+k+'" value="'+esc(v)+'">'
+        : (esc(v) || '<span class="tour-info-empty">—</span>');
+      return '<div class="munich-tour-ov-section">'
+        + '<div class="munich-tour-ov-lbl">'+lbl+'</div>'
+        + '<div class="tour-info-val">'+valHtml+'</div>'
+        + '</div>';
     }).join('');
-    /* Bloques extra que solo aparecen si la config custom los aporta
-       (humanos / nivel IA). Si no, fallback al objeto hardcoded que no
-       tiene esos campos → no se renderizan. */
-    var extraHtml = '';
-    if (typeof t.humans !== 'undefined') {
-      extraHtml +=
-        '<div class="munich-tour-ov-section">' +
-          '<div class="munich-tour-ov-lbl">Humanos</div>' +
-          t.humans + ' 👤' +
-        '</div>';
-    }
-    if (typeof t.aiMin !== 'undefined' && (t.aiMin || t.aiMax)) {
-      extraHtml +=
-        '<div class="munich-tour-ov-section">' +
-          '<div class="munich-tour-ov-lbl">Nivel IA</div>' +
-          t.aiMin + '–' + t.aiMax +
-        '</div>';
-    }
+    /* 🖍 muy pequeño dentro del panel (solo en modo lectura). */
+    var pencil = _editMode ? '' :
+      '<button type="button" class="tour-info-edit" title="Editar (admin · PIN 747)"'
+      + ' onclick="window._muTourInfoEdit&&window._muTourInfoEdit(\''+id+'\')">🖍</button>';
+    var actions = _editMode
+      ? '<div class="tour-info-actions">'
+        + '<button type="button" class="tour-info-save" onclick="window._muTourInfoSave&&window._muTourInfoSave(\''+id+'\')">✅ Guardar</button>'
+        + '<button type="button" class="tour-info-cancel" onclick="window.muTourInfo(\''+id+'\')">Cancelar</button>'
+        + '</div>'
+      : '<button type="button" class="munich-tour-ov-close"'
+        + ' onclick="document.getElementById(\'munich-tour-ov\').classList.remove(\'show\')">Cerrar</button>';
     box.innerHTML =
-      '<h3 class="munich-tour-ov-title">' + t.flag + ' ' + t.name + '</h3>' +
-      '<div class="munich-tour-ov-section">' +
-        '<div class="munich-tour-ov-lbl">Participación</div>' +
-        t.fee + ' 🪙 · ' + t.teams + ' equipos' +
-      '</div>' +
-      extraHtml +
-      '<div class="munich-tour-ov-section">' +
-        '<div class="munich-tour-ov-lbl">Fechas</div>' + t.dates +
-      '</div>' +
-      '<div class="munich-tour-ov-section">' +
-        '<div class="munich-tour-ov-lbl">Formato</div>' + t.format +
-      '</div>' +
-      '<div class="munich-tour-ov-section">' +
-        '<div class="munich-tour-ov-lbl">Premios</div>' +
-        '<ul>' + prizesHtml + '</ul>' +
-      '</div>' +
-      '<button type="button" class="munich-tour-ov-close"' +
-      ' onclick="document.getElementById(\'munich-tour-ov\').classList.remove(\'show\')">Cerrar</button>';
+      '<h3 class="munich-tour-ov-title">'
+        + '<span class="tour-info-ttl-txt">' + (t.flag || '🏆') + ' ' + esc(t.name || id) + '</span>'
+        + pencil
+      + '</h3>'
+      + rows
+      + actions;
     getEl('munich-tour-ov').classList.add('show');
   };
+  /* El 🖍 pide PIN 747 antes de entrar en modo edición. */
+  window._muTourInfoEdit = function(id){
+    var run = function(){ window.muTourInfo(id, true); };
+    if (typeof window.requireAdmin === 'function') window.requireAdmin(run);
+    else run();
+  };
+  window._muTourInfoSave = function(id){
+    var box = getEl('munich-tour-ov-box');
+    if (!box) return;
+    var all = _tourInfoLoadAll();
+    var rec = all[id] || {};
+    var inps = box.querySelectorAll('.tour-info-inp');
+    Array.prototype.forEach.call(inps, function(inp){
+      rec[inp.getAttribute('data-k')] = inp.value;
+    });
+    all[id] = rec;
+    _tourInfoSaveAll(all);
+    window.muTourInfo(id, false);
+  };
+  /* Hidratación KV (recencia): el server gana si trae un blob más nuevo,
+     así la info editada en PC aparece en el móvil / sobrevive a un wipe. */
+  (function _tourInfoHydrate(){
+    try {
+      if (typeof window.fetch !== 'function') return;
+      window.fetch('/api/kv/' + _TOUR_INFO_KEY)
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if (!j || !j.value || typeof j.value !== 'object') return;
+          var sv = j.value, local = _tourInfoLoadAll();
+          if ((+sv.updatedAt||0) > (+local.updatedAt||0)){
+            try { localStorage.setItem(_TOUR_INFO_KEY, JSON.stringify(sv)); } catch(_){}
+            var ov = document.getElementById('munich-tour-ov');
+            if (ov && ov.classList.contains('show') && _tourInfoEdit.id && !_tourInfoEdit.on){
+              window.muTourInfo(_tourInfoEdit.id, false);
+            }
+          }
+        }).catch(function(){});
+    } catch(_){}
+  })();
 
   /* Parsea la agenda oficial (<div id="s-agenda">) una sola vez y la
      memoriza en `state.events`. Cada entrada tiene fecha visible,

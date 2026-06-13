@@ -55091,6 +55091,7 @@ https://api.sofascore.app/api/v1/team/44/image
       +     '<button type="button" class="me-btn ghost" onclick="window._bayernEditValuesClose()">Cancelar</button>'
       +     '<button type="button" class="me-btn danger" onclick="window._bayernEditValuesReset()">♻ Restablecer</button>'
       +     '<button type="button" class="me-btn danger" onclick="window._bayernEditValuesResetCal()">📅 Reiniciar Temporada</button>'
+      +     '<button type="button" class="me-btn ghost" onclick="window._adminClearLocalCache()">🧹 Limpiar caché</button>'
       +   '</div>'
       + '</div>';
     ov.addEventListener('click', function(e){ if (e.target === ov) window._bayernEditValuesClose(); });
@@ -55107,6 +55108,61 @@ https://api.sofascore.app/api/v1/team/44/image
     });
     document.body.appendChild(ov);
   }
+  /* ── 🧹 LIMPIAR CACHÉ LOCAL (admin, PIN 747) ──────────────────────
+     El usuario veía el toast "⚠️ Navegador sin espacio" al simular las
+     54 ligas: localStorage lleno → el guardado LOCAL se desactiva esa
+     sesión (los datos SÍ siguen subiendo al servidor). Hasta ahora la
+     única forma de reactivar el guardado local era ir a los ajustes del
+     navegador y "borrar datos de navegación" a mano. Este botón hace lo
+     mismo SIN salir de la app: purga la caché local de las ligas
+     (`ligaExt_*`: main + _protected + snapshots + backups), que se
+     REHIDRATAN solas desde el servidor (`/api/liga-ext/<slug>`) al
+     recargar. NO se pierde nada porque el servidor es la fuente de
+     verdad. PROTEGE las ligas con un push aún SIN CONFIRMAR
+     (`liga_ext_pending_v1`): borrar su copia local perdería esa edición
+     antes de que el boot-repush la suba. */
+  window._adminClearLocalCache = function(){
+    var msg = '🧹 LIMPIAR CACHÉ LOCAL\n\n'
+      + 'Libera el almacenamiento del navegador borrando las copias '
+      + 'LOCALES de las ligas (clasificaciones, plantillas, snapshots).\n\n'
+      + 'NO se pierde nada: todo está guardado en el SERVIDOR y se '
+      + 'vuelve a descargar al recargar. Reactiva el guardado local '
+      + 'cuando el navegador se queda sin espacio.\n\n¿Continuar?';
+    try { if (!window.confirm(msg)) return; } catch(_){ return; }
+    /* Slugs con push pendiente de confirmar → NO tocar su caché. */
+    var pending = {};
+    try {
+      var raw = localStorage.getItem('liga_ext_pending_v1');
+      if (raw) { var a = JSON.parse(raw); if (Array.isArray(a)) a.forEach(function(s){ if (s) pending[s] = 1; }); }
+    } catch(_){}
+    function _slugOf(kk){
+      var s = kk.replace(/^ligaExt_/, '');
+      s = s.replace(/_(protected|backup)$/, '');
+      s = s.replace(/_snap_\d+$/, '');
+      return s;
+    }
+    var kill = [], skipped = 0, freed = 0;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var kk = localStorage.key(i);
+        if (!kk || kk.indexOf('ligaExt_') !== 0) continue;
+        if (pending[_slugOf(kk)]) { skipped++; continue; }
+        kill.push(kk);
+      }
+    } catch(_){}
+    kill.forEach(function(kk){
+      try { freed += (localStorage.getItem(kk) || '').length; localStorage.removeItem(kk); } catch(_){}
+    });
+    /* Reabrir la puerta del guardado local para la próxima escritura. */
+    try { window._lextQuotaWarned = false; } catch(_){}
+    try { window._trofQuotaWarned  = false; } catch(_){}
+    var info = '✅ Caché liberada: ' + kill.length + ' claves ('
+      + Math.round(freed / 1024) + ' KB).'
+      + (skipped ? '\n\n(' + skipped + ' clave(s) con cambios sin confirmar se conservaron.)' : '')
+      + '\n\nLa página se recargará y volverá a sincronizar desde el servidor.';
+    try { window.alert(info); } catch(_){}
+    try { location.reload(); } catch(_){}
+  };
   window._bayernEditValuesOpen = function(){
     ensureOverlay();
     var o = load();

@@ -23956,6 +23956,23 @@ window.goLiveMatches = function() {
         var fc = cfg.formatConfig || {};
         var teams = cfg.teams;
         var compInfo = _tourCompInfo(id, cfg);
+        /* Asegurar que los fixtures de grupo existan AUNQUE el usuario no
+           haya abierto la pantalla del torneo esta sesión (cold open de
+           la caja Derbys). Los builders son idempotentes y los mismos
+           que usa el hub/_selPair. Solo se llama si faltan los fixtures. */
+        try {
+          var _hasGf = cfg.groupFixtures &&
+            (Array.isArray(cfg.groupFixtures) ? cfg.groupFixtures.length
+                                              : Object.keys(cfg.groupFixtures).length);
+          if (!_hasGf){
+            if (cfg.format === 'mundial-48' && typeof window._mundialGroupState === 'function')
+              window._mundialGroupState(cfg, teams);
+            else if (cfg.format === 'qualifier-route' && typeof window._tourEnsureRoadFixtures === 'function')
+              window._tourEnsureRoadFixtures(cfg, id);
+            else if (typeof window._tourEnsureGroupFixtures === 'function')
+              window._tourEnsureGroupFixtures(cfg);
+          }
+        } catch(_){}
         /* (a) Fixtures de GRUPO: groupFixtures[g][jor][mi] = {home,away}
                índices dentro del slice del grupo. OJO: en mundial-48 y
                groups-ko `groupFixtures` es un OBJETO `{0:[...],1:[...]}`

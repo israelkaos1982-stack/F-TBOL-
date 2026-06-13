@@ -56360,6 +56360,22 @@ https://api.sofascore.app/api/v1/team/44/image
   }
 
   function refresh(){
+    /* FUENTE ÚNICA: delegamos en `munichDerbyAggregateAll` (el mismo
+       agregador que usa el detalle de cada temporada y el override del
+       HUB). Antes este `refresh` —invocado por el polling de 1 s— contaba
+       SIN el filtro `_matchIsHvH`, así que podía DISCREPAR del detalle
+       (HUB=3 vs temporada=1). Bug 2026-06-13. Con la delegación, el
+       contador del HUB y los partidos visibles SIEMPRE cuadran. */
+    if (typeof window.munichDerbyAggregateAll === 'function'){
+      var agg = window.munichDerbyAggregateAll();
+      _setNum('pj',  agg.pj);
+      _setNum('g',   agg.g);
+      _setNum('e',   agg.e);
+      _setNum('p',   agg.p);
+      _setNum('pct', agg.pct);
+      return;
+    }
+    /* Fallback (si el agregador aún no se evaluó): cuenta directa. */
     var seasons = _loadSeasons();
     var matchesAll = _loadMatches();
     var pj = 0, g = 0, e = 0, p = 0;
@@ -58799,22 +58815,24 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (_curSeasonId === current.id) _renderSeason();
   };
 
-  /* Filtro HvH aplicado en LECTURA: descarta matches donde alguno
-     de los dos equipos NO sea humano. Cubre matches LEGACY (saved
-     antes del fix del autolog) y partidos donde el flag isHuman
-     cambió desde que se guardó. Si el match tiene `isHvH:true`
-     explícito (saved tras el fix), confiamos en ese flag y
-     evitamos la consulta runtime. */
+  /* Filtro HvH aplicado en LECTURA. El gate REAL es ahora al ESCRIBIR:
+     tanto el alta MANUAL (`munichDerbyMatchSave`) como el AUTO-LOG
+     (`_munichDerbyAutoLog`, que gatea HvH club+selección) sellan
+     `isHvH:true`. Por eso en LECTURA confiamos en los datos:
+       · `isHvH === false` → excluido explícito (nunca se escribe hoy).
+       · cualquier otro caso (true o LEGACY sin flag) → VISIBLE.
+     Bug 2026-06-13: los derbys históricos de Toñín con OTROS clubes /
+     selecciones (Ath Bilbao, etc., añadidos a mano ANTES del sello
+     `isHvH:true` de 2026-06-11) caían al gate `esHumano` —que NO
+     reconoce a Ath Bilbao ni a las selecciones— y se OCULTABAN del
+     detalle de la temporada, mientras el contador del HUB (que NO
+     filtraba) seguía contándolos → «pone 3 jugados y solo sale 1».
+     Mostramos los legacy (afirmación explícita del usuario al crearlos,
+     espejo de la regla del alta manual). */
   function _matchIsHvH(m){
     if (!m) return false;
-    if (m.isHvH === true) return true;       /* explícito (post-fix) */
-    if (m.isHvH === false) return false;
-    var _esHum = (typeof window.esHumano === 'function') ? window.esHumano : null;
-    if (!_esHum) return true;                /* sin esHumano, no filtramos (defensiva) */
-    var lOk = false, vOk = false;
-    try { lOk = !!_esHum(_stripLeadingIcon(String(m.local||''))); } catch(_){}
-    try { vOk = !!_esHum(_stripLeadingIcon(String(m.visitante||''))); } catch(_){}
-    return lOk && vOk;
+    if (m.isHvH === false) return false;     /* excluido explícito */
+    return true;                             /* isHvH:true o legacy → VISIBLE */
   }
 
   /* Helper público para que el HUB de la pantalla principal sume todas

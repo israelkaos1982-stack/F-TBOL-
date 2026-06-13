@@ -714,6 +714,24 @@ partidos.»
   ciegamente localStorage con el server → un partido recién auto-logueado
   (POST en vuelo) se perdía con un GET stale.
 
+### Causa raíz (HUB 3 vs detalle 1 — «el resto no sale», 2ª foto)
+
+Dos fuentes DISTINTAS pintaban el contador del HUB y discrepaban:
+- El **polling de 1 s** (`refresh` del IIFE `__MUNICH_DERBYS_HUB_READY`)
+  contaba SIN el filtro `_matchIsHvH` → contaba TODOS (3).
+- El **detalle de cada temporada** (`_renderSeason`/`_summaryForSeason`) y
+  el override del HUB usan `_matchIsHvH`, que mandaba al gate `esHumano`
+  los partidos LEGACY (sin `isHvH:true`). Los derbys históricos de Toñín
+  con OTROS clubes/selecciones (Ath Bilbao, etc., añadidos a mano ANTES
+  del sello `isHvH:true` de 2026-06-11) NO son `esHumano` canónicos →
+  se OCULTABAN (1 visible) aunque el HUB los contara (3).
+
+**Fix**: (a) `_matchIsHvH` en LECTURA solo excluye `isHvH===false`; todo
+lo demás (incluido legacy sin flag) es VISIBLE — el gate REAL es al
+ESCRIBIR (manual + auto-log sellan `isHvH:true`). (b) el `refresh` del
+polling DELEGA en `munichDerbyAggregateAll` (fuente única) → HUB y
+detalle SIEMPRE cuadran.
+
 ### Reglas a respetar
 
 1. **PROHIBIDO** volver a gatear el auto-log SOLO con `esHumano`: no ve
@@ -725,6 +743,13 @@ partidos.»
    `bayern_derbys_matches_v1`. La hidratación es unión aditiva por id.
 4. El HUB `s-munich-derbys` AGREGA todas las temporadas (PJ/G/E/P del
    histórico); cada temporada muestra solo los suyos — no es un bug.
+5. **PROHIBIDO** que el contador del HUB y el detalle usen agregadores
+   distintos: el polling de 1 s DEBE delegar en `munichDerbyAggregateAll`
+   (fuente única) o volverá a discrepar.
+6. **PROHIBIDO** que `_matchIsHvH` (LECTURA) vuelva a filtrar por
+   `esHumano`: ocultaba los derbys históricos legacy de clubes/
+   selecciones no-canónicos. El filtro HvH va al ESCRIBIR (sello
+   `isHvH:true`); en lectura solo se excluye `isHvH===false`.
 
 ## «Reiniciar Temporada» NUNCA borra Derbys / Trofeos / Plantillas (obligatorio, 2026-06-04)
 

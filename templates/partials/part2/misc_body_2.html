@@ -6473,7 +6473,42 @@
      en memoria. Solo recarga DESPUÉS de que el servidor confirme el
      guardado (POST 200) — así la rehidratación post-recarga lee el
      calendario nuevo y no el viejo. */
+  /* Overlay de fondo «se está creando el calendario al azar» —
+     emerge en cuanto se pulsa 🎲 y permanece hasta que la página
+     recarga con el calendario nuevo (o se quita si hay error). */
+  function _sorteoOverlayShow() {
+    try {
+      if (document.getElementById('liga-sorteo-ov')) return;
+      var ov = document.createElement('div');
+      ov.id = 'liga-sorteo-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;'
+        + 'flex-direction:column;align-items:center;justify-content:center;gap:18px;'
+        + 'background:rgba(6,0,8,.94);backdrop-filter:blur(3px);'
+        + 'font-family:Oswald,sans-serif;color:#ffd24a;text-align:center;padding:24px;';
+      ov.innerHTML =
+          '<div style="font-size:46px;line-height:1;animation:ligaSorteoSpin 1.1s linear infinite;">🎲</div>'
+        + '<div style="font-size:clamp(16px,5vw,22px);letter-spacing:1px;font-weight:600;">Creando calendario al azar…</div>'
+        + '<div style="font-size:12px;letter-spacing:1px;color:rgba(255,255,255,.55);max-width:280px;">Sorteando las 38 jornadas de la Liga EA Sports. La pantalla se recargará al terminar.</div>'
+        + '<style>@keyframes ligaSorteoSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}</style>';
+      document.body.appendChild(ov);
+    } catch (_) {}
+  }
+  function _sorteoOverlayHide() {
+    try {
+      var ov = document.getElementById('liga-sorteo-ov');
+      if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    } catch (_) {}
+  }
+
   window.sortearCalendarioLiga = function () {
+    /* Mostramos el overlay YA y diferimos el trabajo pesado un tick
+       para que el navegador lo pinte antes de bloquear el hilo con la
+       generación + el guardado. */
+    _sorteoOverlayShow();
+    setTimeout(_sortearCalendarioLigaRun, 30);
+  };
+
+  function _sortearCalendarioLigaRun() {
     var nuevo = null;
     try {
       var prev = '';
@@ -6487,10 +6522,12 @@
       }
       if (!isValidLigaSchedule(nuevo)) nuevo = generarCalendario(_rotarPorReloj(TEAMS.slice()));
     } catch (err) {
+      _sorteoOverlayHide();
       alert('⚠️ Error generando el calendario:\n' + (err && err.message ? err.message : String(err)));
       return;
     }
     if (!isValidLigaSchedule(nuevo)) {
+      _sorteoOverlayHide();
       alert('⚠️ No se pudo generar el calendario. Inténtalo de nuevo.');
       return;
     }
@@ -6555,13 +6592,15 @@
       if (r && r.ok) {
         _recargar();
       } else {
+        _sorteoOverlayHide();
         alert('⚠️ El servidor no pudo guardar el calendario (HTTP ' +
               (r && r.status ? r.status : '?') + ').\nInténtalo otra vez.');
       }
     }).catch(function () {
+      _sorteoOverlayHide();
       alert('⚠️ Sin conexión con el servidor. No se pudo sortear.\nInténtalo otra vez.');
     });
-  };
+  }
 
   /* ── TRIGGER POR URL (?reset=liga) ────────────────────────────
      Escotilla de emergencia: abrir cualquier URL de la app con el

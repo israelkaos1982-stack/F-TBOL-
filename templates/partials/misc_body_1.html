@@ -9067,8 +9067,19 @@ window._showSimProgress = function(opts, onDone){
     /* 📌 Posponer (top-left): aparece si el partido pertenece a un
        torneo (tourId+matchKey conocidos). Sin ellos no podemos
        reabrirlo desde POSPUESTOS, así que ocultamos el botón. */
-    var _deferHtmlClub = (pair && pair.tourId && pair.matchKey)
-      ? _psDeferTopBtnHtml() : '';
+    var _canDeferClub = !!(pair && pair.tourId && pair.matchKey);
+    var _deferHtmlClub = _canDeferClub ? _psDeferTopBtnHtml() : '';
+    /* GARANTÍA DE AVANCE (2026-06-13): si NO podemos ofrecer 📌 Posponer
+       (faltan tourId/matchKey ⇒ no se puede guardar en POSPUESTOS), el
+       único botón sería 📋 PREVIA·JUGAR ▶, lo que OBLIGA a jugar el
+       partido para pasar de día. Añadimos un CONTINUAR ▶ (saltar día)
+       de respaldo —igual que el `_cardRest` sospechoso— que salta el
+       día con `_markDoneAndAdvance()` SIN intentar persistir el partido
+       (no hay matchKey con el que reabrirlo). Así el humano NUNCA se
+       queda atascado sin poder avanzar. */
+    var _skipFallbackHtml = (!_canDeferClub)
+      ? '<button type="button" class="ps-btn ghost" id="ps-match-skip" style="margin-top:4px;font-size:11px;opacity:.85;">CONTINUAR ▶ (saltar día)</button>'
+      : '';
     /* Escudos + emoji humano del bracket para el DISEÑO ÚNICO (escudos
        grandes + VS), idéntico a la card de Selección. Fallback de
        escudo por nombre dentro de `_psVsBlockHtml` (getTeamLogoUrl). */
@@ -9091,10 +9102,17 @@ window._showSimProgress = function(opts, onDone){
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:8px;">'
       +   '<button type="button" class="ps-btn" id="ps-match-play">📋 PREVIA · JUGAR ▶</button>'
       +   _payHtml
+      +   _skipFallbackHtml
       + '</div>'
       + '</div>';
     var play = document.getElementById('ps-match-play');
     if (play) play.onclick = function(){ _openPreseasonPrevia(day, rv, tourNm); };
+    var _skipBtn = document.getElementById('ps-match-skip');
+    if (_skipBtn) _skipBtn.onclick = function(){
+      if (_skipBtn.disabled) return;
+      _skipBtn.disabled = true;
+      _markDoneAndAdvance();
+    };
     var _payBtn = document.getElementById('ps-pay-sim-btn');
     if (_payBtn){
       _payBtn.onclick = function(){

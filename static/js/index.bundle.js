@@ -8559,6 +8559,15 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
          tenga el reloj adelantado (clock-skew). Los re-push/self-heal lo
          llaman SIN flag (recencia pura). */
       pushNow: function(authoritative){ _push(0, authoritative); },
+      /* HUB ACTIVO (multi-hub 2026-06-13): vacía el push DEBOUNCED pendiente
+         AHORA (con la clave/datos actuales) y CANCELA su timer. Lo llaman los
+         listeners de `hubchange` ANTES de reasignar su clave / re-crear el
+         sync. Sin esto, un timer pendiente del hub ANTERIOR dispararía
+         DESPUÉS del cambio: `_push` postea a la fila KV del hub anterior
+         (closure `key`) pero `snapshot()` lee la clave de módulo YA
+         reasignada (datos del hub NUEVO) → corrupción cross-hub. */
+      flush: function(){ if (st.timer){ clearTimeout(st.timer); st.timer = null; _push(0); } },
+      cancel: function(){ if (st.timer){ clearTimeout(st.timer); st.timer = null; } },
       isHydrated: function(){ return st.hydrated; },
       /* HYDRATED VÍA RESPUESTA HTTP (no por fallo de red). `isHydrated()`
          se marca true aunque el GET FALLE (`.catch`) — es deliberado para

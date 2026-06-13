@@ -5662,12 +5662,48 @@
      — se sustituyó por el Liverpool (el reemplazo que el admin ya
      hizo en el editor de Liga EA). El Bayern compite en la
      Bundesliga (Resto de Ligas). */
-  var TEAMS = [
+  var TEAMS_DEFAULT = [
     'Real Madrid','Athletic Club','Real Sociedad','Sevilla','Villarreal',
     'Mallorca','Valencia CF','Espanyol','Liverpool','Celta de Vigo',
     'Deportivo Alavés','Osasuna','Getafe CF','Arsenal','Girona FC',
     'Elche CF','Atlético Madrid','Rayo Vallecano','Real Betis','FC Barcelona'
   ];
+  /* Motor por PLANTILLA EDITABLE (2026-06-13): los 20 participantes de la
+     Liga EA Sports se DERIVAN del calendario vivo (que ya se sincroniza por
+     /api/state), no de una lista fija. Así los ascensos/descensos pueden
+     cambiar QUÉ 20 equipos juegan (regenerando el calendario) y el cambio se
+     propaga a todos los dispositivos vía el calendario. La lista hardcodeada
+     queda como SEMILLA/fallback. Se mantiene el invariante 20 equipos = 38
+     jornadas (4 bajan / 4 suben → siguen 20). */
+  function _teamsFromSchedule(sched){
+    if(!Array.isArray(sched) || sched.length !== 38) return null;
+    var seen = {}, out = [];
+    for(var r=0;r<sched.length;r++){
+      var round = sched[r]; if(!Array.isArray(round)) continue;
+      for(var m=0;m<round.length;m++){
+        var mt = round[m]; if(!Array.isArray(mt)) continue;
+        if(mt[0] && !seen[mt[0]]){ seen[mt[0]]=1; out.push(mt[0]); }
+        if(mt[1] && !seen[mt[1]]){ seen[mt[1]]=1; out.push(mt[1]); }
+      }
+    }
+    return out.length === 20 ? out : null;
+  }
+  function _teamsFromScheduleStored(){
+    try { return _teamsFromSchedule(JSON.parse(localStorage.getItem('ef_liga38_schedule_v2') || 'null')); }
+    catch(_){ return null; }
+  }
+  var TEAMS = _teamsFromScheduleStored() || TEAMS_DEFAULT.slice();
+  // Re-deriva los 20 participantes del calendario indicado (o del guardado).
+  // Lo llaman setLigaSchedule y los puntos de adopción del calendario del
+  // servidor para que TEAMS (usado por el reset y generarCalendario) siga al
+  // roster vigente tras un ascenso/descenso aplicado en otro dispositivo.
+  window._ligaEaRefreshTeams = function(sched){
+    var t = _teamsFromSchedule(sched) || _teamsFromScheduleStored();
+    if(t && t.length === 20) TEAMS = t;
+    return TEAMS;
+  };
+  window._ligaEaTeamsList = function(){ return TEAMS.slice(); };
+
   /* Equipos humanos grabados a fuego. Object.freeze impide mutación. */
   // HUMANOS ahora se lee dinámicamente del storage ligaExt.
   // Si el admin tiene equipos con isHuman=true, esos son los humanos.
@@ -5804,13 +5840,15 @@
        cuando el Bayern aún estaba en la Liga EA, antes de sustituirlo
        por el Liverpool) se considera caducado → se devuelve false
        para forzar su regeneración con la plantilla de liga actual. */
-    var valid = {};
-    for (var t = 0; t < TEAMS.length; t++) valid[TEAMS[t]] = true;
+    /* Motor por plantilla editable (2026-06-13): validación ESTRUCTURAL
+       (38 jornadas × 10 partidos, cada partido 2 equipos DISTINTOS). Ya NO se
+       exige que los equipos estén en una lista fija: el roster puede cambiar
+       legítimamente por ascensos/descensos, y un calendario nuevo (con equipos
+       distintos) DEBE aceptarse para que se propague entre dispositivos. */
     return schedule.every(function(round) {
       return Array.isArray(round) && round.length === 10 && round.every(function(match) {
         return Array.isArray(match) && match.length === 2
-          && match[0] && match[1]
-          && valid[match[0]] && valid[match[1]];
+          && match[0] && match[1] && match[0] !== match[1];
       });
     });
   }
@@ -6016,6 +6054,9 @@
     if (!Array.isArray(schedule) || schedule.length !== 38) return;
     SCHEDULE = schedule;
     window.LIGA_SCHEDULE = schedule;
+    // Motor editable: re-deriva los 20 participantes del calendario adoptado
+    // (cubre el caso de un ascenso/descenso aplicado en otro dispositivo).
+    try { window._ligaEaRefreshTeams(schedule); } catch(_){}
     if (persist !== false) saveSchedule(schedule);
   }
   window.setLigaSchedule = setLigaSchedule;
@@ -6484,6 +6525,7 @@
     saveSchedule(SCHEDULE);
   }
   window.LIGA_SCHEDULE = SCHEDULE;
+  try { window._ligaEaRefreshTeams(SCHEDULE); } catch(_){}
   hydrateLigaStateFromBackend();
 
   /* ── PERSISTENCIA ────────────────────────────────── */

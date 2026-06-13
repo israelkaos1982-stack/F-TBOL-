@@ -13119,7 +13119,7 @@ window._showSimProgress = function(opts, onDone){
                  así que va AUTORITATIVA → el server la guarda GANANDO y bumpea
                  rev=max(old,new)+1 (regla CLAUDE.md 13b). Sin esto, si Railway
                  tiene un rev mayor el HUD importado NO se restauraría. */
-              if (k === 'bayern_hud_overrides_v1') _kvBody.authoritative = true;
+              if (k === 'bayern_hud_overrides_v1' || String(k).indexOf('bayern_hud_overrides_v1') === 0) _kvBody.authoritative = true;
               serverPushes.push(fetch('/api/kv/'+encodeURIComponent(k), {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify(_kvBody)
@@ -29575,11 +29575,12 @@ window._showSimProgress = function(opts, onDone){
         try { window._bayernHudCreditMoney(coins); return; } catch(_){}
       }
       try {
-        var raw = localStorage.getItem(BAYERN_HUD_KEY);
+        var _hk = (window._hubKey ? window._hubKey(BAYERN_HUD_KEY) : BAYERN_HUD_KEY);
+        var raw = localStorage.getItem(_hk);
         var o = raw ? (JSON.parse(raw) || {}) : {};
         var prev = (o.money != null) ? (parseInt(o.money,10) || 0) : 0;
         o.money = prev + coins;
-        localStorage.setItem(BAYERN_HUD_KEY, JSON.stringify(o));
+        localStorage.setItem(_hk, JSON.stringify(o));
         if (window._BAYERN_HUD_CACHE) window._BAYERN_HUD_CACHE = o;
       } catch(_){}
       return;
@@ -54349,11 +54350,19 @@ https://api.sofascore.app/api/v1/team/44/image
      · 💊 Puntos de Fisio (default 8)
 */
 (function(){
-  var KEY = 'bayern_hud_overrides_v1';
-  var COOKIE_KEY = 'bayhud';
+  /* HUB ACTIVO (multi-hub 2026-06-13): el HUD (💼🪙💊) es POR HUB.
+     Liverpool/Toñín usa las claves BASE (intactas, con TODAS sus reglas
+     de sync: KV propio, recencia, authoritative, rev monotónico,
+     anchor-guard, gate-on-hydrate); Arsenal/etc. → sufijo `_<id>` en KEY,
+     cookie, IndexedDB row y la URL del KV. Se re-resuelven en 'hubchange'
+     (reset de hidratación + cache + re-pull). */
+  function _hudIsLegacy(){ try { return window._activeHubIsLegacy ? window._activeHubIsLegacy() : true; } catch(_){ return true; } }
+  function _hudSuffix(){ try { return _hudIsLegacy() ? '' : ('_'+window._activeHub().id); } catch(_){ return ''; } }
+  var KEY = (window._hubKey ? window._hubKey('bayern_hud_overrides_v1') : 'bayern_hud_overrides_v1');
+  var COOKIE_KEY = 'bayhud' + _hudSuffix();
   var IDB_DB = 'bayernHudV1';
   var IDB_STORE = 'overrides';
-  var IDB_ROW_ID = 'singleton';
+  var IDB_ROW_ID = 'singleton' + _hudSuffix();
   var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 1300, pi: null };
   var applying = false;
   var observers = [];
@@ -54498,7 +54507,7 @@ https://api.sofascore.app/api/v1/team/44/image
      dedicado + re-push frecuente). El KV por-clave elimina la contención:
      ningún otro writer toca esta fila. SAVE: keepalive + sendBeacon de
      respaldo (sobrevive cierre de tab, no se cancela en una recarga rápida). */
-  var KV_URL = '/api/kv/bayern_hud_overrides_v1';
+  var KV_URL = '/api/kv/' + KEY;
   function _serverPush(o, force, authoritative){
     /* GATE: una escritura automática NO sale al server antes de hidratar
        (evita clobber con un base vacío/stale sellado con ts fresco). La
@@ -54597,7 +54606,7 @@ https://api.sofascore.app/api/v1/team/44/image
       fetch('/api/state', { method:'GET' })
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(d){
-          var srv = d && d.state && d.state.bayern_hud_overrides_v1;
+          var srv = d && d.state && d.state[KEY];
           if (srv && typeof srv === 'object' && Object.keys(srv).length) {
             _adoptFromServer(srv, cb);
             try { _serverPush(srv); } catch(_){}   /* migra al KV */
@@ -55786,6 +55795,26 @@ https://api.sofascore.app/api/v1/team/44/image
       try { setTimeout(_serverRepush, 1200); } catch(_){}
     });
   });
+
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister re-resolver
+     las claves del HUD por hub, RESET del gate de hidratación + cache, y
+     re-pull del KV del nuevo hub. Se trata como un cold-start: ningún
+     writer automático escribe antes de que _serverPull responda (la
+     regla del gate sigue intacta). */
+  try {
+    window.addEventListener('hubchange', function(){
+      try { KEY = window._hubKey('bayern_hud_overrides_v1'); } catch(_){}
+      try { COOKIE_KEY = 'bayhud' + _hudSuffix(); } catch(_){}
+      try { IDB_ROW_ID = 'singleton' + _hudSuffix(); } catch(_){}
+      try { KV_URL = '/api/kv/' + KEY; } catch(_){}
+      _hudHydrated = false;
+      try { window._BAYERN_HUD_HYDRATED = false; } catch(_){}
+      _pendingMoneyDelta = 0;
+      window._BAYERN_HUD_CACHE = null;
+      try { apply(); } catch(_){}
+      try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
+    });
+  } catch(_){}
 
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 200); });

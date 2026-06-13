@@ -10041,6 +10041,24 @@
       setTimeout(function(){ try { window.buildLigaClas(); } catch(_){} }, 0);
     }
     athApplyMedicalFromActa(st);
+    /* AUTO-LOG al Histórico Derbys (petición usuario 2026-06-13): el
+       flujo de las cards del calendario (_mlFinishMatchGen) tampoco
+       guardaba los derbys — solo lo hacía el gm-modal. Llamamos al
+       mismo helper, que internamente filtra HvH (clubes canónicos +
+       selecciones), comprueba que el partido involucra a la temporada
+       actual (club o su selección) y deduplica. comp best-effort desde
+       el state; el helper fuerza 'seleccion' si ambos son selecciones. */
+    try {
+      if (typeof window._munichDerbyAutoLog === 'function'){
+        var _mdComp = st.comp || st.compKey || st._comp || 'liga';
+        window._munichDerbyAutoLog({
+          comp: _mdComp,
+          jornada: String(st.j || ''),
+          local: st.home, gl: st.sc.a,
+          gv: st.sc.b, visitante: st.away
+        });
+      }
+    } catch(_e){}
     /* Estadísticas: por defecto se piden ANTES del MVP en mlEndMatchGen
        (st.matchStats ya está en el state). Aquí solo las pedimos como
        fallback si el flujo entró por otra ruta (p. ej. tanda de penaltis

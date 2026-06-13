@@ -58344,6 +58344,46 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       }).catch(function(){});
     } catch(_){}
   }
+  /* Fusión ADITIVA (unión por id de partido, por temporada) entre la
+     copia local y la del servidor. NUNCA pierde un partido que solo
+     existe en un lado. Ante el MISMO id en ambos, gana la copia del
+     SERVIDOR (puede traer una corrección). Bug 2026-06-13: el pull
+     BLINDLY sobrescribía localStorage con el server → un partido recién
+     auto-logueado (POST en vuelo) o añadido en otro dispositivo se
+     PERDÍA si el GET traía una copia stale/más corta. */
+  function _mergeMatchMaps(localObj, srvObj){
+    localObj = (localObj && typeof localObj === 'object') ? localObj : {};
+    srvObj   = (srvObj   && typeof srvObj   === 'object') ? srvObj   : {};
+    var out = {}, seen = {};
+    Object.keys(srvObj).forEach(function(k){ seen[k] = 1; });
+    Object.keys(localObj).forEach(function(k){ seen[k] = 1; });
+    Object.keys(seen).forEach(function(sid){
+      var S = Array.isArray(srvObj[sid])   ? srvObj[sid]   : [];
+      var L = Array.isArray(localObj[sid]) ? localObj[sid] : [];
+      var byId = {}, order = [];
+      function add(m){
+        if (!m) return;
+        var id = m.id || ('_anon-' + order.length);
+        if (!byId[id]) order.push(id);
+        byId[id] = m;   /* server primero, local después: local no pisa */
+      }
+      S.forEach(add);
+      L.forEach(function(m){            /* solo añade local-only (no pisa server) */
+        if (!m) return;
+        var id = m.id || ('_anon-' + order.length);
+        if (!byId[id]){ byId[id] = m; order.push(id); }
+      });
+      out[sid] = order.map(function(id){ return byId[id]; });
+    });
+    return out;
+  }
+  function _countMatches(obj){
+    var n = 0;
+    Object.keys(obj || {}).forEach(function(k){
+      if (Array.isArray(obj[k])) n += obj[k].length;
+    });
+    return n;
+  }
   function _serverPullAll(cb){
     try {
       fetch('/api/state', { method: 'GET' })
@@ -58352,8 +58392,22 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           if (!d || !d.state) return;
           var srv = d.state.bayern_derbys_matches_v1;
           if (srv && typeof srv === 'object'){
-            try { localStorage.setItem(STORE_KEY, JSON.stringify(srv)); } catch(_){}
-            if (typeof cb === 'function') cb(srv);
+            var local = _loadAll();
+            var merged = _mergeMatchMaps(local, srv);
+            try { localStorage.setItem(STORE_KEY, JSON.stringify(merged)); } catch(_){}
+            /* Si la unión tiene MÁS partidos que el server (el local
+               tenía extras), re-subimos para CONVERGER (que el otro
+               dispositivo los reciba). Sin re-sellar nada — es aditivo. */
+            if (_countMatches(merged) > _countMatches(srv)){
+              try {
+                fetch('/api/state', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ bayern_derbys_matches_v1: merged })
+                }).catch(function(){});
+              } catch(_){}
+            }
+            if (typeof cb === 'function') cb(merged);
           }
         }).catch(function(){});
     } catch(_){}
@@ -58643,32 +58697,79 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      (arr[0]), se añade automáticamente.
      Dedup: si ya existe un partido con la misma comp + jornada +
      local + visit + score, no duplica. */
+  /* ¿Es `name` un equipo HUMANO a efectos del Histórico Derbys?
+     Reconoce las TRES fuentes de humanidad del proyecto (no solo el
+     `esHumano` de Liga EA, que NO ve selecciones ni el alias Liverpool):
+       1. `esHumano`               → flag isHuman de Liga EA (5 clubes legacy).
+       2. `_isHumanClubCanonico`   → 6 clubes mister, alias-safe Bayern↔Liverpool.
+       3. `_esSelHumana` / `_isHumanSeleccionCanonica` → 6 selecciones
+          humanas (Francia/Brasil/…).
+     Bug 2026-06-13: un derby Francia-vs-Brasil (o Liverpool-vs-Arsenal)
+     NO se auto-guardaba porque el gate usaba SOLO `esHumano`, que
+     devuelve false para selecciones y para el alias Liverpool. */
+  function _derbyIsHuman(name){
+    if (!name) return false;
+    try { if (typeof window.esHumano === 'function' && window.esHumano(name)) return true; } catch(_){}
+    try { if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)) return true; } catch(_){}
+    try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true; } catch(_){}
+    try { if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(name)) return true; } catch(_){}
+    return false;
+  }
+  /* ¿Es `name` una SELECCIÓN humana? (para forzar comp='seleccion'). */
+  function _derbyIsSeleccion(name){
+    if (!name) return false;
+    try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true; } catch(_){}
+    try { if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(name)) return true; } catch(_){}
+    return false;
+  }
+
   window._munichDerbyAutoLog = function(opts){
     if (!opts) return;
     var seasons = _loadSeasons();
     if (!seasons.length) return;
     var current = seasons[0]; /* la más reciente está arriba */
     if (!current || !current.teamName) return;
-    var t = _stripLeadingIcon(current.teamName).toLowerCase();
-    var local = _stripLeadingIcon(opts.local || opts.home || '').toLowerCase();
-    var visit = _stripLeadingIcon(opts.visitante || opts.away || '').toLowerCase();
-    if (local !== t && visit !== t) return; /* el partido no involucra a este equipo */
-    /* FILTRO HvH (petición usuario 2026-05-09): el Histórico Derbys
-       solo registra partidos donde AMBOS equipos son humanos. Antes
-       cualquier partido que pasara por gmEndMatch se logueaba si
-       coincidía con el teamName de la temporada — incluso si el rival
-       era IA y el motor sólo tenía marcado uno como humano. Ahora
-       descartamos cualquier partido donde al menos una de las dos
-       cajas NO esté flageada como humano por `window.esHumano`. */
-    var _esHum = (typeof window.esHumano === 'function') ? window.esHumano : function(){ return false; };
-    var _humL = false, _humV = false;
-    try { _humL = !!_esHum(opts.local || opts.home || ''); } catch(_){}
-    try { _humV = !!_esHum(opts.visitante || opts.away || ''); } catch(_){}
-    if (!_humL || !_humV) return;
+    var localRaw = opts.local || opts.home || '';
+    var visitRaw = opts.visitante || opts.away || '';
+    var localName = _stripLeadingIcon(localRaw);
+    var visitName = _stripLeadingIcon(visitRaw);
+    /* ── ¿El partido involucra a la temporada actual? ──────────────────
+       La temporada se identifica por su `teamName` (el CLUB del hub,
+       p.ej. "Liverpool"). PERO el mismo mister dirige club Y selección
+       (Liverpool ↔ Francia, Toñín), así que un derby de SELECCIÓN debe
+       registrarse en la MISMA temporada. Aceptamos el partido si alguno
+       de los dos lados coincide con el `teamName` de la temporada O con
+       la SELECCIÓN del mister que dirige ese club. Comparación TOLERANTE
+       (acentos, banderas/iconos embebidos, abreviaturas) vía
+       `_mDerbyTeamMatch`. Bug 2026-06-13: el match estricto por nombre de
+       club ("Liverpool") descartaba los derbys de Francia. */
+    var seasonTeam = current.teamName;
+    var seasonSel = '';
+    try {
+      var _m = (typeof window._mhFindMister === 'function')
+                 ? window._mhFindMister(_stripLeadingIcon(seasonTeam)) : null;
+      if (_m && _m.seleccion) seasonSel = _m.seleccion;
+    } catch(_){}
+    var _fz = window._mDerbyTeamMatch || function(){ return false; };
+    function _involves(side){
+      if (!side) return false;
+      if (_fz(side, seasonTeam)) return true;
+      if (seasonSel && _fz(side, seasonSel)) return true;
+      return false;
+    }
+    if (!_involves(localRaw) && !_involves(visitRaw)) return;
+    /* FILTRO HvH (petición usuario 2026-05-09 + 2026-06-13): el Histórico
+       Derbys solo registra partidos donde AMBOS equipos son humanos. El
+       gate reconoce clubes canónicos (alias Liverpool), selecciones
+       humanas (Francia/Brasil/…) y el legacy `esHumano`. Liverpool-vs-IA
+       o Francia-vs-IA NO se registra. */
+    if (!_derbyIsHuman(localName) || !_derbyIsHuman(visitName)) return;
     var comp = String(opts.comp || 'liga').trim();
+    /* Si AMBOS lados son selecciones humanas, es un derby de SELECCIÓN →
+       comp 'seleccion' (el caller del gm-modal pasa 'liga'/'torneo' sin
+       distinguir selecciones). */
+    if (_derbyIsSeleccion(localName) && _derbyIsSeleccion(visitName)) comp = 'seleccion';
     var jornada = String(opts.jornada || opts.j || '').trim();
-    var localName = _stripLeadingIcon(opts.local || opts.home || '');
-    var visitName = _stripLeadingIcon(opts.visitante || opts.away || '');
     var gl = Number(opts.gl != null ? opts.gl : (opts.gh != null ? opts.gh : 0)) || 0;
     var gv = Number(opts.gv != null ? opts.gv : (opts.ga != null ? opts.ga : 0)) || 0;
     var all = _loadAll();

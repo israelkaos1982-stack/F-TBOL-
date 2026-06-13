@@ -1258,7 +1258,9 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     if(pos === 5) return 'zone-ucl-prev';
     if(pos === 6 || pos === 7) return 'zone-uel';
     if(pos === 8) return 'zone-conf';
-    if(pos >= 17) return 'zone-desc';
+    // Descenso = los ÚLTIMOS 4 según el total real (antes pos>=17 fijo
+    // para 20 equipos → con 21 pintaba 5 en rojo).
+    if((total || 0) > 4 ? pos > (total - 4) : pos >= 17) return 'zone-desc';
     return '';
   }
 
@@ -10130,7 +10132,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     if(pos === 5) return 'zone-ucl-prev';
     if(pos === 6 || pos === 7) return 'zone-uel';
     if(pos === 8) return 'zone-conf';
-    if(pos >= 17) return 'zone-desc';
+    // Descenso = los ÚLTIMOS 4 según el total real (antes pos>=17 fijo
+    // para 20 equipos → con 21 pintaba 5 en rojo).
+    if((total || 0) > 4 ? pos > (total - 4) : pos >= 17) return 'zone-desc';
     return '';
   }
   function renderSavedLigaClas(){

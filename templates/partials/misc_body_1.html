@@ -51920,7 +51920,7 @@ https://api.sofascore.app/api/v1/team/44/image
 <div style="display:flex;flex-direction:column;gap:2px;">
 <div style="display:flex;align-items:center;gap:6px;">
 <span id="mk-hub-name" style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;color:#dc052d;">Liverpool</span>
-<span style="font-family:'Oswald',sans-serif;font-size:15px;font-weight:400;letter-spacing:1px;color:#dc052d;opacity:0.75;">· TOÑÍN</span>
+<span id="mk-hub-mister" style="font-family:'Oswald',sans-serif;font-size:15px;font-weight:400;letter-spacing:1px;color:#dc052d;opacity:0.75;">· TOÑÍN</span>
 <button type="button" class="munich-edit-pencil" onclick="window._bayernEditValuesGated&&window._bayernEditValuesGated()" title="Editar valores del HUD (admin PIN 747)" aria-label="Editar valores del HUD">🖍</button>
 </div>
 <div style="display:flex;align-items:center;gap:5px;margin-top:1px;">
@@ -52050,8 +52050,20 @@ https://api.sofascore.app/api/v1/team/44/image
     if(host.__mkHubSig===sig) return; host.__mkHubSig=sig;
     if(n) n.textContent=r.name;
     if(b){ b.src=r.esc; b.alt=r.name; }
+    /* HUB ACTIVO (multi-hub 2026-06-13): míster + estadio del mister abierto
+       (la caja Arsenal mostraba "Liverpool · TOÑÍN · NEW BALANCE ARENA"). El
+       span del míster era estático (sin id) y el estadio sólo se actualizaba
+       con override del menú. */
+    try {
+      var _ahH = window._activeHub && window._activeHub();
+      var mEl = document.getElementById('mk-hub-mister');
+      if (mEl && _ahH && _ahH.mister) mEl.textContent = '· ' + String(_ahH.mister).toUpperCase();
+    } catch(_){}
     var st=document.getElementById('mk-hub-stadium');
-    if(st && r.stad) st.textContent=r.stad.toUpperCase();
+    if(st){
+      var _stad = r.stad || _defaultStad(r.name);
+      if (_stad) st.textContent = String(_stad).toUpperCase();
+    }
     /* Bloque VS estático (no lo pinta JS): escudo/nombre local. */
     var hs=document.getElementById('munich-home-shield');
     if(hs) hs.src=r.esc;
@@ -52070,6 +52082,15 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     }
   }
+  /* Estadio por defecto del club del hub cuando no hay override de menú.
+     Sin esto la caja Arsenal mostraba "NEW BALANCE ARENA" (Liverpool). */
+  function _defaultStad(name){
+    var k=String(name||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+    var M={ 'liverpool':'New Balance Arena','bayern munich':'New Balance Arena','arsenal':'Emirates Stadium',
+            'real madrid':'Santiago Bernabéu','atletico madrid':'Riyadh Air Metropolitano','atlético madrid':'Riyadh Air Metropolitano',
+            'fc barcelona':'Spotify Camp Nou','barcelona':'Spotify Camp Nou','psg':'Parc des Princes','paris saint-germain':'Parc des Princes' };
+    return M[k] || '';
+  }
   function run(){ setTimeout(_sync,0); setTimeout(_sync,80); setTimeout(_sync,240); }
   /* Re-sincroniza la cabecera del hub al cambiar de hub activo
      (setActiveHub). Invalida la firma cacheada para forzar el repintado
@@ -52079,6 +52100,16 @@ https://api.sofascore.app/api/v1/team/44/image
     run();
     try{ if(window.athRefreshInjuryHud) window.athRefreshInjuryHud(); }catch(_){ }
   };
+  /* HUB ACTIVO (multi-hub 2026-06-13): re-sincroniza la cabecera SIEMPRE que
+     cambie el hub activo (no sólo vía setActiveHub → _mkHubResync, también
+     en el re-sync de arranque y cualquier dispatch futuro). Resetea la firma
+     cacheada para forzar el repintado de nombre/escudo/míster/estadio. */
+  try {
+    window.addEventListener('hubchange', function(){
+      try{ var host=document.getElementById('s-munich'); if(host) host.__mkHubSig=null; }catch(_){ }
+      run();
+    });
+  } catch(_){ }
   /* ROBUSTEZ DE NAVEGACIÓN (fix bug 2026-06-03, foto usuario: la caja
      del menú decía LIVERPOOL pero el hub se abría como "Bayern Munich").
      NO podemos envolver `window.go` aquí: el bundle (index.bundle.js,
@@ -58455,6 +58486,10 @@ https://api.sofascore.app/api/v1/team/44/image
        el 🪙/💼 del nuevo hub antes de reconciliar (reglas 15-17). */
     try {
       window.addEventListener('hubchange', function(){
+        /* Vacía el push pendiente del progreso del hub ANTERIOR a SU clave y
+           cancela su timer ANTES de reasignar LS_OBJ (evita corrupción
+           cross-hub por un timer debounced stale). */
+        try { if (_objStateSync && _objStateSync.flush) _objStateSync.flush(); } catch(_){}
         try { LS_OBJ = window._hubKey('munich-obj-state-v4'); } catch(_){}
         _objStateSync = null; _objLastSer = null; _objStateUpdatedAt = 0;
         try { _objStateSyncInit(); } catch(_){}
@@ -61910,11 +61945,6 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     try { var h = window._activeHub && window._activeHub(); if (h && h.seleccion) return String(h.seleccion); } catch(_){}
     return 'Francia';
   }
-  /* "Casa" del hub para los textos (estadio del header, si está). */
-  function _hubHome(){
-    try { var el = document.getElementById('mk-hub-stadium'); var t = el && String(el.textContent||'').trim(); if (t) return t; } catch(_){}
-    return 'casa';
-  }
 
   /* ── Sync localStorage ⇄ servidor (2026-06-05) ───────────────────
      La bandeja vivía SOLO en localStorage → se perdía al borrar datos
@@ -61957,6 +61987,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      mostraría los mensajes del Liverpool (foto usuario 2026-06-13). */
   try {
     window.addEventListener('hubchange', function(){
+      /* Vacía el push pendiente del hub ANTERIOR a SU fila (clave aún actual)
+         y cancela su timer ANTES de reasignar KEY — evita que un timer stale
+         suba los mensajes del hub nuevo a la fila del anterior (corrupción
+         cross-hub). */
+      try { if (_muSync && _muSync.flush) _muSync.flush(); } catch(_){}
       try { KEY = window._hubKey('mu_messages_v1'); } catch(_){}
       _muUpdatedAt = 0; _muSync = null; _muSyncReady = false;
       try { _muSetupSync(); } catch(_){}

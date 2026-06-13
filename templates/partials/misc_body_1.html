@@ -57257,7 +57257,6 @@ https://api.sofascore.app/api/v1/team/44/image
   var OBJ_RATING_PER = 0.275; /* 💼 por objetivo */
   var OBJ_RATING_CAP = 10;    /* tope de la aportación 💼 */
   var _objEarnRearm = null;   /* poll de rearme tras hidratar el progreso */
-  var _objEarnRestoreTried = false;  /* one-shot: evita bucle restore↔recount */
   function liverpoolObjEarnings(){
     if (typeof window._bayernHudGet !== 'function'
         || typeof window._bayernHudMerge !== 'function') return;
@@ -57308,35 +57307,41 @@ https://api.sofascore.app/api/v1/team/44/image
       }
       return;
     }
-    var items = document.querySelectorAll('#ath-obj-club .obj-item');
-    if (!items.length) return;   /* objetivos no renderizados todavía */
+    /* ── `done` desde la FUENTE DE VERDAD PERSISTIDA, no del DOM ────────
+       El DOM (`#ath-obj-club` checkboxes) puede estar TRANSITORIAMENTE en
+       blanco (reload / re-render por overrides antes de `loadObjState`),
+       y contar done=0 ahí DEFLACTA 💼/🪙 a 0 aunque el objetivo SÍ esté
+       guardado (bug usuario 2026-06-13: "el objetivo se guarda pero la
+       puntuación 0,28 💼 vuelve a cero"). El progreso PERSISTIDO
+       (`munich-obj-state-v4`, ya reconciliado por la hidratación gateada
+       arriba con `isHttpHydrated`) es la fuente correcta: contamos los ✅
+       de ahí. Sólo caemos al DOM si no hay progreso persistido (sesión
+       fresca real). Edit 2 garantiza que ese persistido NUNCA es un blanco
+       espurio. */
     var done = 0;
-    items.forEach(function(lbl){
-      var cb = lbl.querySelector('input[type=checkbox]');
-      if (cb && cb.checked) done++;
-    });
-    /* DEFENSA contra la DEFLACIÓN espuria (bug usuario 2026-06-13, foto: 💼
-       0.28 → 0.00 · 🪙 baja al pasar días/borrar datos): si el DOM cuenta
-       done=0 pero el PROGRESO PERSISTIDO tiene ✅, el DOM aún NO se restauró
-       (reload race / re-render sin loadObjState). Recalcular aquí restaría
-       TODO el aporte de objetivos sobre un base sin reconciliar. RESTAURAMOS
-       el DOM y reintentamos en el próximo tick (ya con `done` correcto), sin
-       deflactar este pase. */
-    if (done === 0){
-      try {
-        var _rawObj = JSON.parse(localStorage.getItem(LS_OBJ) || 'null');
-        /* one-shot (`_objEarnRestoreTried`): si tras restaurar el DOM `done`
-           sigue 0 (mismatch de índices, datos legacy…) NO reintentamos en
-           bucle — sólo una pasada por ráfaga; se rearma al ver done>0. */
-        if (_rawObj && !_objStateIsEmpty(_rawObj) && !_objEarnRestoreTried){
-          _objEarnRestoreTried = true;
-          try { loadObjState(); } catch(_){}
-          setTimeout(function(){ try { if (typeof window.athObjCount === 'function') window.athObjCount(); } catch(_){} }, 0);
-          return;
-        }
-      } catch(_){}
+    var _persObj = null;
+    try { _persObj = JSON.parse(localStorage.getItem(LS_OBJ) || 'null'); } catch(_){ _persObj = null; }
+    if (_persObj && _persObj.checks && typeof _persObj.checks === 'object'){
+      var _pch = _persObj.checks;
+      for (var _pk in _pch){ if (_pch.hasOwnProperty(_pk) && _pch[_pk]) done++; }
     } else {
-      _objEarnRestoreTried = false;
+      var items = document.querySelectorAll('#ath-obj-club .obj-item');
+      if (!items.length) return;   /* objetivos no renderizados todavía y sin persistido */
+      items.forEach(function(lbl){
+        var cb = lbl.querySelector('input[type=checkbox]');
+        if (cb && cb.checked) done++;
+      });
+    }
+    /* Si el persistido cuenta ✅ pero el DOM está sin restaurar, re-pintarlo
+       (cosmético: que la pantalla de objetivos muestre los ✅). No bloquea
+       el crédito — `done` ya es correcto desde el persistido. loadObjState
+       sólo LEE (idempotente, no recurre). */
+    if (done > 0){
+      try {
+        var _domChecked = document.querySelectorAll('#ath-obj-club .obj-item input[type=checkbox]:checked');
+        var _domItems = document.querySelectorAll('#ath-obj-club .obj-item');
+        if (_domItems.length && !_domChecked.length){ try { loadObjState(); } catch(_){} }
+      } catch(_){}
     }
     var o = window._bayernHudGet() || {};
     var prevObjMoney  = parseFloat(o.objMoney)  || 0;

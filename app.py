@@ -430,6 +430,7 @@ _KV_HUB_BASE_KEYS = (
     "bayern_trofeos_v1",
     "munich-obj-overrides-v1",
     "munich-obj-state-v4",
+    "mu_messages_v1",
 )
 
 

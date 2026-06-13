@@ -2302,6 +2302,19 @@ window._showSimProgress = function(opts, onDone){
        NO por "Bayern Munich" (legacy). Resolver el nombre dinámico evita
        que la agregación devuelva ceros tras renombrar el slot. */
     function _hubTeamName(){
+      /* HUB ACTIVO (multi-hub 2026-06-13): para un hub NO-legacy (Arsenal…)
+         el club es el del mister activo (`_psHumanLogicName`='Arsenal', que
+         coincide con el nombre de equipo de los eventos). Para el hub legacy
+         (Liverpool) se usa el slot Bayern/Liverpool real (`_findBayernRow`),
+         cuyo nombre ("Liverpool") es el que indexan los stats — NO el lógico
+         'Bayern Munich'. Sin este orden la plantilla del Arsenal mostraba el
+         roster del Liverpool (bug fotos usuario 2026-06-13). */
+      try {
+        if (window._activeHubIsLegacy && !window._activeHubIsLegacy()){
+          if (typeof window._psHumanLogicName === 'function'){ var n0 = window._psHumanLogicName(); if (n0) return String(n0); }
+          var ah = window._activeHub && window._activeHub(); if (ah && ah.club) return String(ah.club);
+        }
+      } catch(_){}
       try {
         var t = (typeof _findBayernRow === 'function') ? _findBayernRow() : null;
         if (t && t.name) return String(t.name);
@@ -3759,6 +3772,18 @@ window._showSimProgress = function(opts, onDone){
         + '<div class="bpl-tot-strip">'+strip+'</div></div>';
     };
 
+    /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, invalidar el
+       cache de stats (evita servir las del Liverpool ~1.5 s) y re-pintar la
+       plantilla si está abierta, para el club+selección del nuevo hub. */
+    try {
+      window.addEventListener('hubchange', function(){
+        try { if (typeof window._invalidateBayernStatsCache === 'function') window._invalidateBayernStatsCache(); } catch(_){}
+        var scr = document.getElementById('s-bayern-plantilla');
+        if (scr && scr.classList.contains('active')){
+          try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(_){}
+        }
+      });
+    } catch(_){}
     window.renderBayernPlantillaScreen = function(){
       var host = document.getElementById('bayern-plantilla-host');
       if (!host) return;
@@ -4954,9 +4979,13 @@ window._showSimProgress = function(opts, onDone){
          podía ser Atlético Madrid → las lesiones del entrenamiento
          eran de su plantilla, no de la del Liverpool. */
       var OTHER = {'liverpool':1,'real madrid':1,'fc barcelona':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1};
-      /* HUB ACTIVO: nunca excluir al CLUB del hub abierto (si es Arsenal,
-         Arsenal debe poder caer aquí). */
+      /* HUB ACTIVO: nunca excluir al CLUB del hub abierto. Borramos por el
+         nombre lógico (hubL) Y por el club CANÓNICO del mister activo: para
+         Liverpool `hubL` suele ser 'bayern munich' (fallback legacy) y NO
+         está en OTHER, así que sin borrar por el club canónico ('liverpool')
+         el slot Liverpool quedaría excluido → plantilla vacía. */
       if (hubL) delete OTHER[hubL];
+      try { var _ahC = window._activeHub && window._activeHub(); if (_ahC && _ahC.club) delete OTHER[String(_ahC.club).toLowerCase().trim()]; } catch(_){}
       for (var j=0;j<teams.length;j++){
         var t2 = teams[j];
         if (!t2 || !t2.isHuman || !Array.isArray(t2.players) || !t2.players.length) continue;
@@ -9518,7 +9547,8 @@ window._showSimProgress = function(opts, onDone){
        arranque restauraría el cursor pre-reset. ts=Date.now() ya
        garantiza last-write-wins contra cualquier estado stale. */
     try {
-      var _resetBody = JSON.stringify({ competition_state: { 'liverpool_preseason_v1': _resetJson } });
+      var _rc = {}; _rc[KEY] = _resetJson;
+      var _resetBody = JSON.stringify({ competition_state: _rc });
       if (typeof navigator !== 'undefined' && navigator.sendBeacon){
         navigator.sendBeacon('/api/state', new Blob([_resetBody], { type:'application/json' }));
       } else if (typeof fetch === 'function'){
@@ -35413,6 +35443,31 @@ window._showSimProgress = function(opts, onDone){
     try { window.dispatchEvent(new CustomEvent('hubchange', { detail:{ hub:m } })); } catch(_){ }
     return m;
   };
+  /* COLD-START RESYNC (multi-hub 2026-06-13): si al ARRANCAR el hub activo
+     persistido NO es el legacy (Liverpool), hay que disparar `hubchange`
+     UNA vez tras cargar el DOM. Motivo: varias IIFEs (cursor de calendario,
+     etc.) cachean su clave con `window._hubKey(...)` a parse-time, pero esta
+     IIFE de MISTERS —donde se define `_hubKey`— se evalúa DESPUÉS de algunas
+     de ellas, así que en ese momento `_hubKey` aún no existía y la clave
+     quedó en la BASE (Liverpool). Sin un `hubchange` en el arranque (que
+     SOLO lo dispara `setActiveHub` al pulsar una caja), un reload/deep-link
+     estando en Arsenal leería/escribiría el cursor de Liverpool. Disparamos
+     `hubchange` tras DOMContentLoaded (cuando TODOS los listeners de las
+     IIFEs ya están registrados). Para Toñín NO se dispara nada → camino
+     Liverpool intacto y sin churn. */
+  (function _bootHubResync(){
+    function _fire(){
+      try {
+        var h = window._ACTIVE_HUB;
+        if (h && h.id !== 'tonin' && h.screen !== 's-munich'){
+          try { if (typeof window._mkHubResync === 'function') window._mkHubResync(); } catch(_){ }
+          window.dispatchEvent(new CustomEvent('hubchange', { detail:{ hub:h, boot:true } }));
+        }
+      } catch(_){ }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _fire);
+    else setTimeout(_fire, 0);
+  })();
   function _hasHumanIcon(name){
     try {
       if(typeof window.humanIcon === 'function'){
@@ -52124,7 +52179,7 @@ https://api.sofascore.app/api/v1/team/44/image
     <span class="hub-calendario-title">CALENDARIO</span>
     <span class="hub-calendario-sub" id="munich-cal-fecha">01 May</span>
   </button>
-  <button class="hub-card hub-card-isramax" onclick="window._isramaxOpen&&window._isramaxOpen('tonin')">
+  <button class="hub-card hub-card-isramax" onclick="window._isramaxOpen&&window._isramaxOpen((window._activeHub&&window._activeHub().id)||'tonin')">
     <span class="hub-isramax-i">I</span>
     <span class="hub-isramax-title">ISRAMAX</span>
     <span class="hub-isramax-sub" id="munich-isramax-bets">0</span>
@@ -55341,7 +55396,15 @@ https://api.sofascore.app/api/v1/team/44/image
        congelar de paso la clasificación/resultados de la Liga EA. La
        plantilla de la SELECCIÓN sí es una clave propia
        (selecciones_squad_v1) y se protege aquí. */
-    var _PRESERVE_KEYS = ['bayern_derbys_seasons_v1','bayern_derbys_matches_v1','bayern_trofeos_v1','selecciones_squad_v1'];
+    /* HUB ACTIVO (multi-hub 2026-06-13): proteger las claves del mister
+       ABIERTO (derbys/trofeos por hub) + la plantilla de selección (común).
+       `_hubKey` deja las bases intactas para Liverpool. */
+    var _PRESERVE_KEYS = [
+      (window._hubKey ? window._hubKey('bayern_derbys_seasons_v1') : 'bayern_derbys_seasons_v1'),
+      (window._hubKey ? window._hubKey('bayern_derbys_matches_v1') : 'bayern_derbys_matches_v1'),
+      (window._hubKey ? window._hubKey('bayern_trofeos_v1') : 'bayern_trofeos_v1'),
+      'selecciones_squad_v1'
+    ];
     var _preserveSnap = {};
     _PRESERVE_KEYS.forEach(function(k){
       try { var v = localStorage.getItem(k); if (v != null) _preserveSnap[k] = v; } catch(_){}
@@ -57433,7 +57496,7 @@ https://api.sofascore.app/api/v1/team/44/image
     if (btn) btn.textContent = window.__munichObjEditing ? '💾 Guardar' : '🖍 Editar';
   };
 
-  function _objHubName(){ try { return (window._psHumanLogicName && window._psHumanLogicName()) || 'Liverpool'; } catch(_){ return 'Liverpool'; } }
+  function _objHubName(){ try { return (window._psHumanName && window._psHumanName()) || 'Liverpool'; } catch(_){ return 'Liverpool'; } }
   function boot() {
     var ok = renderAll('ath-obj-club', _objHubName(), false);
     if (!ok) { setTimeout(boot, 120); return; }
@@ -59678,16 +59741,21 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      IndexedDB y server no se pueden leer SÍNCRONAMENTE, así que se
      reaplican vía el observador del IIFE de override cuando llegan. */
   try {
+    /* HUB ACTIVO (multi-hub 2026-06-13): sembrar el HUD del mister abierto,
+       no siempre el de Liverpool (evita el flash de los valores de Liverpool
+       en la cabecera de otra caja tras un reload). */
+    var __hudK = (window._hubKey ? window._hubKey('bayern_hud_overrides_v1') : 'bayern_hud_overrides_v1');
+    var __ckName = (window._activeHubIsLegacy && !window._activeHubIsLegacy()) ? ('bayhud_'+window._activeHub().id) : 'bayhud';
     var __seedRaw = null;
-    try { __seedRaw = localStorage.getItem('bayern_hud_overrides_v1'); } catch(_){}
+    try { __seedRaw = localStorage.getItem(__hudK); } catch(_){}
     if (!__seedRaw) {
-      try { __seedRaw = sessionStorage.getItem('bayern_hud_overrides_v1'); } catch(_){}
+      try { __seedRaw = sessionStorage.getItem(__hudK); } catch(_){}
     }
     if (!__seedRaw) {
       /* Cookie fallback: misma codificación que en el IIFE de
          override (base64(JSON), o JSON plano en versiones antiguas). */
       try {
-        var __ckm = (document.cookie || '').match(/(?:^|; )bayhud=([^;]*)/);
+        var __ckm = (document.cookie || '').match(new RegExp('(?:^|; )' + __ckName + '=([^;]*)'));
         if (__ckm) {
           var __ckRaw = decodeURIComponent(__ckm[1] || '');
           if (__ckRaw) {
@@ -61824,8 +61892,29 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   if (window.__MU_MSG_READY) return;
   window.__MU_MSG_READY = true;
 
-  var KEY  = 'mu_messages_v1';
+  /* HUB ACTIVO (multi-hub 2026-06-13): la bandeja es POR HUB. Liverpool/
+     Toñín = 'mu_messages_v1' (intacta); Arsenal/etc. → '..._<id>'.
+     Reasignable + re-creación del _kvBlobSync en 'hubchange'. */
+  var KEY  = (window._hubKey ? window._hubKey('mu_messages_v1') : 'mu_messages_v1');
   var CAP  = 500;     /* mensajes máx. por lado (FIFO) */
+  /* Nombre VISIBLE del club del hub para los textos de los mensajes (NO el
+     lógico, que para Liverpool es 'Bayern Munich'). Para Arsenal = 'Arsenal'. */
+  function _hubDisp(){
+    try { if (typeof window._psHumanName === 'function'){ var n = window._psHumanName(); if (n) return String(n); } } catch(_){}
+    try { var a = _userTeamAlias(); if (a) return a; } catch(_){}
+    return 'Liverpool';
+  }
+  /* Selección VISIBLE del hub (Francia para Toñín, Brasil para Álvaro…). */
+  function _hubSelDisp(){
+    try { var m = window._mhFindMister && window._mhFindMister(_userTeamAlias()); if (m && m.seleccion) return String(m.seleccion); } catch(_){}
+    try { var h = window._activeHub && window._activeHub(); if (h && h.seleccion) return String(h.seleccion); } catch(_){}
+    return 'Francia';
+  }
+  /* "Casa" del hub para los textos (estadio del header, si está). */
+  function _hubHome(){
+    try { var el = document.getElementById('mk-hub-stadium'); var t = el && String(el.textContent||'').trim(); if (t) return t; } catch(_){}
+    return 'casa';
+  }
 
   /* ── Sync localStorage ⇄ servidor (2026-06-05) ───────────────────
      La bandeja vivía SOLO en localStorage → se perdía al borrar datos
@@ -61862,6 +61951,20 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     _muSync.seed(_muUpdatedAt);
     try { _muSync.hydrate(function(){ try { _refresh(); } catch(_){} }); } catch(_){}
   }
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver la
+     clave de la bandeja, re-crear el _kvBlobSync ligado a ella y refrescar
+     (badge + overlay + subtítulo del nuevo hub). Sin esto la caja de Arsenal
+     mostraría los mensajes del Liverpool (foto usuario 2026-06-13). */
+  try {
+    window.addEventListener('hubchange', function(){
+      try { KEY = window._hubKey('mu_messages_v1'); } catch(_){}
+      _muUpdatedAt = 0; _muSync = null; _muSyncReady = false;
+      try { _muSetupSync(); } catch(_){}
+      /* Actualiza el subtítulo del header del overlay si está montado. */
+      try { var sub = document.querySelector('#mu-msg-ov .mmo-title-sub'); if (sub) sub.textContent = String(_hubDisp()).toUpperCase(); } catch(_){}
+      try { _refresh(); } catch(_){}
+    });
+  } catch(_){}
 
   /* Valida que una cadena sea un data-URI de imagen seguro (lo usamos
      para renderizar sin escapar — base64 no contiene comillas, así que
@@ -62087,6 +62190,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _isFra(name){
     if (!name) return false;
     var n = String(name).toLowerCase().trim();
+    /* HUB ACTIVO (multi-hub 2026-06-13): la selección del hub no siempre es
+       Francia (Arsenal → Brasil). Detecta la del mister activo. */
+    try {
+      var sel = _hubSelDisp();
+      if (sel){ var s = String(sel).toLowerCase().trim(); if (s && (n === s || n.indexOf(s) >= 0)) return true; }
+    } catch(_){}
     return n === 'francia' || n === 'france' || n.indexOf('francia') >= 0;
   }
   function _fraCompLabel(c){
@@ -62141,7 +62250,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       side:   opts.side || 'liv',
       type:   opts.type || 'info',
       icon:   opts.icon || '📰',
-      sender: opts.sender || (opts.side === 'fra' ? 'FFF · Selección Francia' : 'Liverpool FC'),
+      sender: opts.sender || (opts.side === 'fra' ? ('Selección '+_hubSelDisp()) : (_hubDisp()+' FC')),
       title:  String(opts.title),
       body:   String(opts.body || ''),
       ts:     opts.ts || _now(),
@@ -62286,7 +62395,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       '<div class="mmo-bd"></div>'
     + '<div class="mmo-modal" role="dialog" aria-label="Mensajes">'
     +   '<div class="mmo-hdr">'
-    +     '<span class="mmo-title">✉️ MENSAJES <span class="mmo-title-sub">LIVERPOOL</span>'
+    +     '<span class="mmo-title">✉️ MENSAJES <span class="mmo-title-sub">'+_esc(String(_hubDisp()).toUpperCase())+'</span>'
     +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-all" hidden></i></span>'
     +     '<button type="button" class="mmo-pen" id="mu-msg-pen" aria-label=" " title=""'
     +       ' style="background:none;border:none;color:#fff;opacity:.18;font-size:12px;line-height:1;cursor:pointer;padding:2px 5px;margin-right:2px;">🖍</button>'
@@ -62301,8 +62410,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     +     ' style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);display:none;flex-direction:column;gap:7px;">'
     +     '<div style="display:flex;gap:7px;align-items:center;">'
     +       '<select id="mu-cmp-side" style="flex:1;min-width:0;padding:6px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
-    +         '<option value="liv">🔴 Liverpool</option>'
-    +         '<option value="fra">🇫🇷 Selección Francia</option>'
+    +         '<option value="liv">🔴 '+_esc(_hubDisp())+'</option>'
+    +         '<option value="fra">🇫🇷 Selección '+_esc(_hubSelDisp())+'</option>'
     +       '</select>'
     +       '<input id="mu-cmp-icon" maxlength="3" placeholder="🖍" value="🖍" style="width:52px;text-align:center;padding:6px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:15px;">'
     +     '</div>'
@@ -62590,24 +62699,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             var riv = livHome ? tB : tA;
             var diff = lg - rg;
             var ic, title, body;
-            var whereW = livHome ? 'en Anfield' : 'a domicilio';
+            var whereW = livHome ? 'en casa' : 'a domicilio';
+            var _hd = 'el '+_hubDisp();
             if (diff > 0){
               ic = '🏆';
               title = 'Victoria '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = _pick(_winPhrases('el Liverpool', riv, lg, rg, whereW));
+              body  = _pick(_winPhrases(_hd, riv, lg, rg, whereW));
             } else if (diff < 0){
               ic = '❌';
               title = 'Derrota '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = _pick(_lossPhrases('el Liverpool', riv, lg, rg, whereW));
+              body  = _pick(_lossPhrases(_hd, riv, lg, rg, whereW));
             } else {
               ic = '🤝';
               title = 'Empate '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = _pick(_drawPhrases('el Liverpool', riv, lg, rg, whereW));
+              body  = _pick(_drawPhrases(_hd, riv, lg, rg, whereW));
             }
             var mvp = livHome ? mvp_a : mvp_b;
             if (mvp) body += ' ⭐ MVP: '+mvp+'.';
             push({ side:'liv', type:'result', icon:ic,
-                   sender:'Liverpool FC', title:title, body:body });
+                   sender:_hubDisp()+' FC', title:title, body:body });
             /* Portería imbatida — comp: registrarResultadoLiga es de Liga. */
             _checkCleanSheet(rg, 'liga');
             /* Racha de resultados (V/D/E ≥3) en Liga */
@@ -62678,7 +62788,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
          con el nombre erróneo. Si NO tenemos roster aún cargado, dejamos
          pasar el mensaje con el nombre tal cual (no romper en arranque). */
       if (rosterHasAny && pl && !rosterLiv[pl]) return;
-      if (!pl) pl = 'Un jugador del Liverpool';
+      if (!pl) pl = 'Un jugador del '+_hubDisp();
       if (ev.type === 'lesion'){
         var grade  = ev.lesGrado || 'leve';
         var ng = Array.isArray(ev.lesPartidos) ? ev.lesPartidos[0] : (ev.lesPartidos || 2);
@@ -62783,8 +62893,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             side:'liv', type:'draw', icon:'🏆',
             sender:'RFEF · Sorteo Copa',
             title:'Copa del Rey · '+_ronLabel(ronda),
-            body:'El Liverpool se enfrenta a '+rival+' en '+_ronLabel(ronda)+
-                 ' de la Copa del Rey. '+(local?'Juega en Anfield.':'Juega como visitante.')
+            body:'El '+_hubDisp()+' se enfrenta a '+rival+' en '+_ronLabel(ronda)+
+                 ' de la Copa del Rey. '+(local?'Juega en casa.':'Juega como visitante.')
           });
         });
       });
@@ -62818,7 +62928,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         side:'liv', type:'rank', icon:'📊',
         sender:'LaLiga · Clasificación',
         title:'Vamos '+ordin+' tras la jornada '+milestone,
-        body:'El Liverpool ocupa la '+ordin+' plaza con '+(row.pts||0)+
+        body:'El '+_hubDisp()+' ocupa la '+ordin+' plaza con '+(row.pts||0)+
              ' puntos (PJ '+pj+', GF '+(row.gf||0)+', GC '+(row.gc||0)+').'
       });
     } catch(_){}
@@ -62901,6 +63011,21 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _findHumanTeam(mundialCfg){
     if (!mundialCfg) return null;
     var teams = mundialCfg.teams || [];
+    /* HUB ACTIVO (multi-hub 2026-06-13): preferir la selección del mister
+       ABIERTO (Arsenal → Brasil), no la PRIMERA humana del cfg (que sería
+       Francia). Así los mensajes de selección de la bandeja del Arsenal son
+       de Brasil. */
+    try {
+      var _selH = _hubSelDisp();
+      if (_selH){
+        var _sN = String(_selH).toLowerCase().trim();
+        for (var ts = 0; ts < teams.length; ts++){
+          var ts2 = teams[ts];
+          if (ts2 && ts2.name && ts2.name !== 'PENDIENTE'
+              && String(ts2.name).toLowerCase().trim().indexOf(_sN) >= 0) return { team:ts2, idx:ts };
+        }
+      }
+    } catch(_){}
     for (var ti = 0; ti < teams.length; ti++){
       var t = teams[ti];
       if (t && t.isHuman && t.name && t.name !== 'PENDIENTE') return { team:t, idx:ti };
@@ -63026,20 +63151,24 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       _setCursor('fra:last', _now());
       var rival = nxt.rival;
       var jor   = nxt.jor;
-      var franceName = nxt.franceName || 'Francia';
+      /* HUB ACTIVO (multi-hub 2026-06-13): selección + míster del hub
+         abierto (Arsenal → Brasil / Álvaro), no Francia/Toñín fijos. */
+      var franceName = nxt.franceName || _hubSelDisp();
+      var _mister = 'Toñín';
+      try { var _ah = window._activeHub && window._activeHub(); if (_ah && _ah.mister) _mister = String(_ah.mister); } catch(_){}
       var hostTxt = nxt.isHome ? 'en casa' : 'fuera de casa';
       var tipos = [
         { ic:'🌍', tit:'Mundial · J'+jor+' · '+franceName+' vs '+rival,
           body:'Próxima jornada del Mundial: '+franceName+' se medirá a '+rival+' ('+hostTxt+').' },
-        { ic:'🇫🇷', tit:'Convocatoria · Bleus · J'+jor,
-          body:'Toñín cita a 23 jugadores para la jornada '+jor+' del Mundial frente a '+rival+'.' },
-        { ic:'📋', tit:'Lista provisional · Bleus',
-          body:'Toñín prepara la lista provisional de '+franceName+' para la jornada '+jor+' del Mundial frente a '+rival+'.' }
+        { ic:'📋', tit:'Convocatoria · '+franceName+' · J'+jor,
+          body:_mister+' cita a 23 jugadores para la jornada '+jor+' del Mundial frente a '+rival+'.' },
+        { ic:'📋', tit:'Lista provisional · '+franceName,
+          body:_mister+' prepara la lista provisional de '+franceName+' para la jornada '+jor+' del Mundial frente a '+rival+'.' }
       ];
       var t = tipos[Math.floor(Math.random() * tipos.length)];
       push({
         side:'fra', type:'callup', icon:t.ic,
-        sender:'FFF · Selección Francia',
+        sender:'Selección '+_hubSelDisp(),
         title:t.tit, body:t.body
       });
     } catch(_){}

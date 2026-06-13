@@ -21112,10 +21112,14 @@
    header en `bayern_calendar_title_v1` (default "BAYERN MUNICH",
    editable con 🖍 + PIN 747). */
 (function(){
-  var KEY_COMPS = 'bayern_calendar_comps_v1';
-  var KEY_CAL   = 'bayern_cal_v2';   /* bump 2026-05-08: descarta overrides v1 obsoletos */
+  /* HUB ACTIVO (multi-hub 2026-06-13): config del calendario POR HUB
+     (competiciones mostradas, eventos add/edit/delete, título del header).
+     Liverpool/Toñín = claves base (intactas); Arsenal/etc. → '..._<id>'.
+     Reasignables en 'hubchange'. */
+  var KEY_COMPS = (window._hubKey ? window._hubKey('bayern_calendar_comps_v1') : 'bayern_calendar_comps_v1');
+  var KEY_CAL   = (window._hubKey ? window._hubKey('bayern_cal_v2') : 'bayern_cal_v2');   /* bump 2026-05-08: descarta overrides v1 obsoletos */
   var KEY_CAL_LEGACY = 'bayern_cal_v1';
-  var KEY_TITLE = 'bayern_calendar_title_v1';
+  var KEY_TITLE = (window._hubKey ? window._hubKey('bayern_calendar_title_v1') : 'bayern_calendar_title_v1');
   var DEFAULT_TITLE = 'BAYERN MUNICH';
 
   /* Cleanup defensivo: borra el store v1 una sola vez por navegador
@@ -21279,6 +21283,19 @@
       try { _renderAll(); } catch(_){}
     }
   };
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver
+     las claves del calendario (comps/eventos/título) e invalidar los
+     caches en memoria para que el calendario muestre el del nuevo hub. */
+  try {
+    window.addEventListener('hubchange', function(){
+      try { KEY_COMPS = window._hubKey('bayern_calendar_comps_v1'); } catch(_){}
+      try { KEY_CAL   = window._hubKey('bayern_cal_v2'); } catch(_){}
+      try { KEY_TITLE = window._hubKey('bayern_calendar_title_v1'); } catch(_){}
+      _MEM_COMPS = null; _MEM_OVR = null;
+      try { _applyTitle(); } catch(_){}
+      try { _renderAll(); } catch(_){}
+    });
+  } catch(_){}
   /* Nombre del equipo del hub `s-munich`, derivado de:
        1. La etiqueta del menú principal (`menu_home_v1.ov['go:s-munich'].label`)
           — la fuente canónica que usa _psHumanName en misc_body_1.html.
@@ -32001,6 +32018,10 @@ document.addEventListener('DOMContentLoaded', function() {
     'bayern_calendar_comps_v1',      /* selección de competiciones del modal */
     'bayern_calendar_title_v1',      /* título del calendario ("LIVERPOOL", etc.) */
     'bayern_cal_v2',                 /* add/edit/delete de eventos del calendario */
+    /* Multi-hub (2026-06-13): config del calendario de la caja Arsenal-Brasil. */
+    'bayern_calendar_comps_v1_alvaro',
+    'bayern_calendar_title_v1_alvaro',
+    'bayern_cal_v2_alvaro',
     /* 2026-05-23 (petición usuario): el cursor del día de la
        pretemporada (caja Liverpool / Bayern del hub) debe sobrevivir
        al reload. Antes vivía solo en localStorage → un setItem que
@@ -32119,8 +32140,8 @@ document.addEventListener('DOMContentLoaded', function() {
              fueron restaurados, el cache en memoria de esa IIFE está
              desincronizado con el disco. Le pedimos que se invalide
              y re-renderice si la pantalla está abierta. */
-          if (restored.indexOf('bayern_calendar_comps_v1') !== -1
-              || restored.indexOf('bayern_calendar_title_v1') !== -1) {
+          if (restored.some(function(k){ return k.indexOf('bayern_calendar_comps_v1') === 0
+                || k.indexOf('bayern_calendar_title_v1') === 0; })) {
             try {
               if (typeof window._bayernCalInvalidateCache === 'function') {
                 window._bayernCalInvalidateCache();

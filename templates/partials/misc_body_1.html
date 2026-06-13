@@ -56968,6 +56968,15 @@ https://api.sofascore.app/api/v1/team/44/image
      `munich-obj-overrides-v1`, que son las CANTIDADES/textos de cada misión. */
   var _objStateUpdatedAt = 0;
   var _objLastSer = null;   /* última firma {checks,counters} subida/cargada */
+  /* Sello (ms) de la ÚLTIMA acción REAL del usuario sobre los objetivos
+     (marcar/desmarcar ✅ o pulsar ➕/➖). Lo fija un listener en FASE DE
+     CAPTURA (corre ANTES del onchange inline → saveObjState), así el guard
+     anti-borrado de `saveObjState` distingue un VACIADO LEGÍTIMO (el usuario
+     desmarcó el último ✅, dentro de la ventana) de un VACÍO ESPURIO (un
+     athObjCount programático sobre un DOM aún sin restaurar tras un reload /
+     una Sim). Bug 2026-06-13: el progreso "Parar 2 penaltis" volvía a 0 al
+     pasar días / borrar datos. */
+  var _objUserEditTs = 0;
   /* `_kvBlobSync` vive en index.bundle.js, que carga DESPUÉS de este
      partial → se crea en DOMContentLoaded (cuando el bundle ya ejecutó),
      no a parse-time. */
@@ -57140,6 +57149,27 @@ https://api.sofascore.app/api/v1/team/44/image
       document.querySelectorAll('#ath-obj-club .obj-counter[id]').forEach(function(el){
         if (el.childNodes[0]) data.counters[el.id] = el.childNodes[0].textContent.trim();
       });
+      /* ── GUARD ANTI-BORRADO (espejo del server `_obj_state_is_empty`) ──
+         Si el DOM da un blob VACÍO (sin ✅ ni contadores) pero el progreso
+         YA PERSISTIDO en localStorage NO está vacío, este vaciado es
+         SOSPECHOSO: casi siempre es un `athObjCount` programático que corrió
+         sobre un `#ath-obj-club` aún SIN RESTAURAR (reload race: `loadObjState`
+         se ejecuta en otro IIFE y puede llegar tarde; o una Sim que dispara
+         athObjCount antes del restore). Persistir ese blanco MACHACA el
+         progreso real (y `liverpoolObjEarnings` deflacta 🪙/💼) → al borrar
+         datos / pasar días el ✅ "Parar 2 penaltis" volvía a 0 (bug usuario
+         2026-06-13). Lo RECHAZAMOS, salvo que venga de una acción REAL del
+         usuario reciente (desmarcar el último ✅ es un vaciado LEGÍTIMO — su
+         change/click marcó `_objUserEditTs` en captura, antes de este save).
+         No tocamos `_objLastSer` para no suprimir un guardado legítimo
+         posterior con la misma firma. */
+      if (_objStateIsEmpty(data)){
+        var _persisted = _objStateRaw();
+        var _recentUserEdit = (Date.now() - _objUserEditTs) < 2500;
+        if (_persisted && !_objStateIsEmpty(_persisted) && !_recentUserEdit){
+          return;
+        }
+      }
       var ser = JSON.stringify({ checks:data.checks, counters:data.counters });
       if (ser === _objLastSer){
         /* Sin cambio real de progreso: NO re-sellar updatedAt (evita que un
@@ -57227,6 +57257,7 @@ https://api.sofascore.app/api/v1/team/44/image
   var OBJ_RATING_PER = 0.275; /* 💼 por objetivo */
   var OBJ_RATING_CAP = 10;    /* tope de la aportación 💼 */
   var _objEarnRearm = null;   /* poll de rearme tras hidratar el progreso */
+  var _objEarnRestoreTried = false;  /* one-shot: evita bucle restore↔recount */
   function liverpoolObjEarnings(){
     if (typeof window._bayernHudGet !== 'function'
         || typeof window._bayernHudMerge !== 'function') return;
@@ -57284,6 +57315,29 @@ https://api.sofascore.app/api/v1/team/44/image
       var cb = lbl.querySelector('input[type=checkbox]');
       if (cb && cb.checked) done++;
     });
+    /* DEFENSA contra la DEFLACIÓN espuria (bug usuario 2026-06-13, foto: 💼
+       0.28 → 0.00 · 🪙 baja al pasar días/borrar datos): si el DOM cuenta
+       done=0 pero el PROGRESO PERSISTIDO tiene ✅, el DOM aún NO se restauró
+       (reload race / re-render sin loadObjState). Recalcular aquí restaría
+       TODO el aporte de objetivos sobre un base sin reconciliar. RESTAURAMOS
+       el DOM y reintentamos en el próximo tick (ya con `done` correcto), sin
+       deflactar este pase. */
+    if (done === 0){
+      try {
+        var _rawObj = JSON.parse(localStorage.getItem(LS_OBJ) || 'null');
+        /* one-shot (`_objEarnRestoreTried`): si tras restaurar el DOM `done`
+           sigue 0 (mismatch de índices, datos legacy…) NO reintentamos en
+           bucle — sólo una pasada por ráfaga; se rearma al ver done>0. */
+        if (_rawObj && !_objStateIsEmpty(_rawObj) && !_objEarnRestoreTried){
+          _objEarnRestoreTried = true;
+          try { loadObjState(); } catch(_){}
+          setTimeout(function(){ try { if (typeof window.athObjCount === 'function') window.athObjCount(); } catch(_){} }, 0);
+          return;
+        }
+      } catch(_){}
+    } else {
+      _objEarnRestoreTried = false;
+    }
     var o = window._bayernHudGet() || {};
     var prevObjMoney  = parseFloat(o.objMoney)  || 0;
     var prevObjRating = parseFloat(o.objRating) || 0;
@@ -57608,6 +57662,24 @@ https://api.sofascore.app/api/v1/team/44/image
     hookGoAutoEval();
     /* Run initial count to sync the hub badge */
     if (typeof window.athObjCount === 'function') window.athObjCount();
+    /* ── CAPA: RESTAURAR cuando el DOM esté listo ──────────────────────
+       `renderAll` (la pinta los objetivos) vive en OTRO IIFE y puede llegar
+       DESPUÉS de este `loadObjState` (o reintentarse: `if(!ok) setTimeout`).
+       Si loadObjState corrió con `#ath-obj-club` aún VACÍO, los ✅ guardados
+       NO se aplicaban al DOM y un athObjCount/Sim posterior lo leía en blanco.
+       Reintentamos restaurar en cuanto haya `.obj-item`, así el progreso
+       persistido SIEMPRE se re-pinta tras un reload (sin esto, "se borra al
+       pasar días"). loadObjState sólo LEE localStorage → idempotente. */
+    (function _objRestoreWhenReady(tries){
+      tries = tries || 0;
+      var host = document.getElementById('ath-obj-club');
+      if (host && host.querySelectorAll('.obj-item').length){
+        try { loadObjState(); } catch(_){}
+        try { if (typeof window.athObjCount === 'function') window.athObjCount(); } catch(_){}
+        return;
+      }
+      if (tries < 50) setTimeout(function(){ _objRestoreWhenReady(tries + 1); }, 120);
+    })(0);
     /* Hidrata el progreso desde el server: si el local está vacío (borrado
        de navegación / móvil nuevo) o el server es más reciente, ADOPTA el
        server y repinta; si el local es autoritativo, lo re-sube. */
@@ -57629,20 +57701,54 @@ https://api.sofascore.app/api/v1/team/44/image
        recencia. Gateado por hidratación (no clobberea antes de reconciliar)
        y debounced para no spamear POSTs al togglear rápido. */
     var _objUserPushT = null;
+    var _objAuthRearm = null;
+    function _objFlushAuthPush(){
+      /* Acción REAL del usuario: autoritativo aunque quede vacío
+         (desmarcar el último ✅ es intención legítima y debe saltarse el
+         "rechazo de vacío" del server). El programático no llega aquí
+         (set .checked= no dispara 'change'; los steppers son .oc-btn). */
+      try { _objStateSync.touch(Date.now()); _objStateSync.pushNow(true); } catch(_){}
+    }
     function _objStateOnUserEdit(){
-      if (!_objStateSync || !_objStateSync.isHydrated()) return;
+      if (!_objStateSync) return;
+      /* GATE de hidratación — pero NO se descarta la intención: si el usuario
+         marca un objetivo ANTES de que el progreso haya reconciliado con el
+         server (GET lento / sesión recién abierta), ENCOLAMOS el push
+         autoritativo y lo lanzamos en cuanto hidrate. Antes se hacía
+         `return` seco y la marca explícita NUNCA llegaba autoritativa al
+         server → en un parque de 6 móviles un clock-skew la podía revertir
+         (bug usuario 2026-06-13: "no se guarda"). */
+      if (!_objStateSync.isHydrated()){
+        if (!_objAuthRearm){
+          _objAuthRearm = setInterval(function(){
+            if (_objStateSync.isHydrated()){
+              clearInterval(_objAuthRearm); _objAuthRearm = null;
+              _objFlushAuthPush();
+            }
+          }, 200);
+        }
+        return;
+      }
       if (_objUserPushT) return;
       _objUserPushT = setTimeout(function(){
         _objUserPushT = null;
-        /* Acción REAL del usuario: autoritativo aunque quede vacío
-           (desmarcar el último ✅ es intención legítima y debe saltarse el
-           "rechazo de vacío" del server). El programático no llega aquí
-           (set .checked= no dispara 'change'; los steppers son .oc-btn). */
-        try { _objStateSync.touch(Date.now()); _objStateSync.pushNow(true); } catch(_){}
+        _objFlushAuthPush();
       }, 500);
     }
     var _objHost = document.getElementById('ath-obj-club');
     if (_objHost){
+      /* Sello de acción REAL del usuario en FASE DE CAPTURA: corre ANTES del
+         onchange inline del checkbox (→ athObjCount → saveObjState), así el
+         guard anti-borrado de saveObjState reconoce un VACIADO LEGÍTIMO
+         (desmarcar el último ✅) y no lo confunde con un vacío espurio. */
+      function _objMarkUserEdit(e){
+        if (window.__munichObjEditing) return;
+        var t = e && e.target;
+        if (!t) return;
+        if (t.type === 'checkbox' || (t.closest && t.closest('.oc-btn'))) _objUserEditTs = Date.now();
+      }
+      _objHost.addEventListener('change', _objMarkUserEdit, true);
+      _objHost.addEventListener('click', _objMarkUserEdit, true);
       _objHost.addEventListener('change', function(e){
         if (window.__munichObjEditing) return;
         if (e && e.target && e.target.type === 'checkbox') setTimeout(_objStateOnUserEdit, 0);

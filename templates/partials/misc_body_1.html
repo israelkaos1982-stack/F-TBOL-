@@ -778,13 +778,13 @@ window._showSimProgress = function(opts, onDone){
 <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-family:Oswald,sans-serif;font-size:14px;font-weight:800;letter-spacing:3.6px;color:#ffe7a6;text-shadow:0 0 16px rgba(240,192,64,.55);padding:0 4px 8px;"><span>👤 EQUIPOS</span><button id="mk-edit-btn" type="button" class="mk-edit-pencil" onclick="window._mkToggleEditMode&&window._mkToggleEditMode()" title="Editar menú (admin · PIN 747)" aria-label="Editar menú">🖍</button></div>
 </div>
 
-<div class="menu-card equipo-card mc-athletic" onclick="go('s-munich')" style="background:linear-gradient(135deg,#8b001c 0%,#dc052d 55%,#ff5c7a 100%);height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
+<div class="menu-card equipo-card mc-athletic" data-hub="tonin" onclick="window.setActiveHub&&window.setActiveHub('tonin');go('s-munich')" style="background:linear-gradient(135deg,#8b001c 0%,#dc052d 55%,#ff5c7a 100%);height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
 <img alt="" class="mc-equipo-badge-bg" src="/static/img/escudos-1/england_liverpool.football-logos.cc.svg"/>
 <div class="mc-equipo-overlay"></div>
 <div class="mc-equipo-content">
 <img alt="Liverpool" class="mc-img" src="/static/img/escudos-1/england_liverpool.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/><span class="mc-label team-meta"><span>Liverpool</span><span class="team-sep">·</span><span class="team-coach">Toñín💡</span></span>
 </div></div>
-<div class="menu-card equipo-card mc-betis" onclick="go('s-arsenal')" style="background:linear-gradient(135deg,#7a0000 0%,#c40010 55%,#ef0107 100%);height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
+<div class="menu-card equipo-card mc-betis" data-hub="alvaro" onclick="window.setActiveHub&&window.setActiveHub('alvaro');go('s-arsenal')" style="background:linear-gradient(135deg,#7a0000 0%,#c40010 55%,#ef0107 100%);height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
 <img alt="" class="mc-equipo-badge-bg" src="/static/img/escudos-1/england_arsenal.football-logos.cc.svg"/>
 <div class="mc-equipo-overlay"></div>
 <div class="mc-equipo-content">
@@ -1267,6 +1267,10 @@ window._showSimProgress = function(opts, onDone){
         }
         var nv=card.__mkNav;
         if(!nv) return;
+        /* HUB ACTIVO (multi-hub 2026-06-13): la caja lleva data-hub con
+           el id del mister; fijarlo ANTES de navegar para que el hub
+           genérico s-munich muestre los datos de ESA caja. */
+        if(card.dataset && card.dataset.hub && window.setActiveHub){ try{ window.setActiveHub(card.dataset.hub); }catch(_){} }
         if(nv.type==='go' && typeof window.go==='function') window.go(nv.id);
         else if(nv.type==='fn' && typeof window[nv.fn]==='function') window[nv.fn]();
       }, false);
@@ -3004,6 +3008,8 @@ window._showSimProgress = function(opts, onDone){
         var m = window._mhFindMister && window._mhFindMister(_hubTeamName());
         if (m && m.seleccion) return String(m.seleccion);
       } catch(_){}
+      /* Fallback = selección del HUB ACTIVO (no siempre Francia). */
+      try { var h=window._activeHub&&window._activeHub(); if(h&&h.seleccion) return String(h.seleccion); } catch(_){}
       return 'Francia';
     }
     /* Mapa CANÓNICO club humano → archivo de escudo bundleado. Es la
@@ -4404,12 +4410,16 @@ window._showSimProgress = function(opts, onDone){
      (1) el reemplazo real de Liga EA (_ligaEaSubName) o (2) la caja
      del menú (menu_home_v1 → go:s-munich). Fallback: Bayern. */
   function _psHumanName(){
-    /* La caja del menú manda; si no, reemplazo real Liga EA; si no, Bayern. */
+    /* La caja del menú del HUB ACTIVO manda; si no, club canónico del
+       mister; si no (solo Liverpool), reemplazo Liga EA; si no, Bayern. */
+    var _ah=null; try{ _ah=window._activeHub&&window._activeHub(); }catch(_){}
+    var _scr=(_ah&&_ah.screen)||'s-munich';
     try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r);
-      var ov=d&&d.ov&&d.ov['go:s-munich']; if(ov&&ov.label) return String(ov.label); } }catch(_){}
+      var ov=d&&d.ov&&d.ov['go:'+_scr]; if(ov&&ov.label) return String(ov.label); } }catch(_){}
+    if(_ah && _ah.club && _ah.id!=='tonin') return String(_ah.club);
     try{ if(window._ligaEaSubName){ var s=window._ligaEaSubName('Bayern Munich');
       if(s && String(s).toLowerCase()!=='bayern munich') return String(s); } }catch(_){}
-    return 'Liverpool';
+    return (_ah&&_ah.club)||'Liverpool';
   }
   /* El slot del hub se renombró de "Bayern Munich" a Liverpool, pero su
      campo `shield` (y `_ligaEaShields[<nombre>]`) puede seguir apuntando
@@ -4460,8 +4470,9 @@ window._showSimProgress = function(opts, onDone){
     /* Si el hub es un club humano canónico, su escudo es el archivo
        bundleado — autoritativo sobre cualquier dato stale (bug 2026-06-04). */
     var canon=_psCanonCrest(); if(canon) return canon;
+    var _scrS='s-munich'; try{ var _hS=window._activeHub&&window._activeHub(); if(_hS&&_hS.screen) _scrS=_hS.screen; }catch(_){}
     try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r);
-      var ov=d&&d.ov&&d.ov['go:s-munich']; if(ov&&ov.escudo && !_isStaleBayernShield(ov.escudo)) return String(ov.escudo); } }catch(_){}
+      var ov=d&&d.ov&&d.ov['go:'+_scrS]; if(ov&&ov.escudo && !_isStaleBayernShield(ov.escudo)) return String(ov.escudo); } }catch(_){}
     try{ if(window._ligaEaSubName){ var s=window._ligaEaSubName('Bayern Munich');
       if(s && String(s).toLowerCase()!=='bayern munich' && window.getTeamLogoUrl){
         var u=window.getTeamLogoUrl(String(s)); if(u && !_isStaleBayernShield(u)) return u; } } }catch(_){}
@@ -4497,11 +4508,17 @@ window._showSimProgress = function(opts, onDone){
        exista en `ligaExt_liga-ea-sports.teams` para que la lógica
        (registry de jugadores) no se rompa si el label es puramente
        visual. */
+    /* HUB ACTIVO (multi-hub 2026-06-13): el nombre LÓGICO es el club
+       del mister cuya caja está abierta. Toñín/Liverpool conserva el
+       comportamiento legacy EXACTO (fallback 'Bayern Munich'). */
+    var _ahL=null; try{ _ahL=window._activeHub&&window._activeHub(); }catch(_){}
+    var _scrL=(_ahL&&_ahL.screen)||'s-munich';
+    var _legacyL=!(_ahL)|| _ahL.id==='tonin';
     try{
       var raw = localStorage.getItem('menu_home_v1');
       if (raw){
         var d = JSON.parse(raw);
-        var ov = d && d.ov && d.ov['go:s-munich'];
+        var ov = d && d.ov && d.ov['go:'+_scrL];
         var lbl = ov && ov.label ? String(ov.label).trim() : '';
         if (lbl){
           try{
@@ -4519,6 +4536,16 @@ window._showSimProgress = function(opts, onDone){
         }
       }
     }catch(_){}
+    /* Hub NO-legacy: devuelve el club canónico del mister (validado
+       contra los teams de Liga EA si existe; si no, el club tal cual). */
+    if (!_legacyL && _ahL && _ahL.club){
+      try{
+        var rl2 = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (rl2){ var lex2=JSON.parse(rl2); var teams2=(lex2&&lex2.teams)||[]; var cL=String(_ahL.club).toLowerCase().trim();
+          for(var k=0;k<teams2.length;k++){ var tk=teams2[k]; if(tk&&tk.name&&String(tk.name).toLowerCase().trim()===cL) return String(tk.name); } }
+      }catch(_){}
+      return String(_ahL.club);
+    }
     try{
       if(window._ligaEaSubName){
         var s = window._ligaEaSubName('Bayern Munich');
@@ -4905,7 +4932,10 @@ window._showSimProgress = function(opts, onDone){
          2026-05-26: sin la exclusión, el primer isHuman del array
          podía ser Atlético Madrid → las lesiones del entrenamiento
          eran de su plantilla, no de la del Liverpool. */
-      var OTHER = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+      var OTHER = {'liverpool':1,'real madrid':1,'fc barcelona':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1};
+      /* HUB ACTIVO: nunca excluir al CLUB del hub abierto (si es Arsenal,
+         Arsenal debe poder caer aquí). */
+      if (hubL) delete OTHER[hubL];
       for (var j=0;j<teams.length;j++){
         var t2 = teams[j];
         if (!t2 || !t2.isHuman || !Array.isArray(t2.players) || !t2.players.length) continue;
@@ -29488,11 +29518,16 @@ window._showSimProgress = function(opts, onDone){
      por el Liverpool. Misma resolución que `_resolve()` del mkHubSync:
      manda la caja del menú; si no, el reemplazo de Liga EA. */
   function _hubTeamName() {
+    /* HUB ACTIVO (multi-hub 2026-06-13): delega en el resolutor lógico
+       común (ya hub-aware) para que el premio/coste vaya al HUD del
+       mister abierto. Fallback al comportamiento legacy. */
+    try { if (typeof window._psHumanLogicName === 'function'){ var ln = window._psHumanLogicName(); if (ln) return String(ln); } } catch(_){}
+    var _scrW='s-munich'; try{ var _hW=window._activeHub&&window._activeHub(); if(_hW&&_hW.screen) _scrW=_hW.screen; }catch(_){}
     try {
       var r = localStorage.getItem('menu_home_v1');
       if (r) {
         var d = JSON.parse(r);
-        var ov = d && d.ov && d.ov['go:s-munich'];
+        var ov = d && d.ov && d.ov['go:'+_scrW];
         if (ov && ov.label) return String(ov.label);
       }
     } catch(_){}
@@ -35189,6 +35224,60 @@ window._showSimProgress = function(opts, onDone){
     var mA = window._mhFindMister(a);
     var mB = window._mhFindMister(b);
     return !!(mA && mB && mA.id === mB.id);
+  };
+  /* ── HUB ACTIVO (multi-hub, 2026-06-13) ──────────────────────────
+     El hub `s-munich` es GENÉRICO: sirve a CUALQUIER caja de mister
+     humano. `window._ACTIVE_HUB` apunta al mister cuya caja se pulsó
+     en la pantalla 👤 EQUIPOS. Por defecto = Toñín/Liverpool (el
+     s-munich legacy). Cada hub tiene datos INDEPENDIENTES vía
+     `window._hubKey(base)`: Liverpool/Toñín usa la clave BASE sin
+     sufijo (preserva TODOS sus datos + reglas de sync existentes);
+     el resto de misters añaden `_<id>` (ej. Arsenal → `..._alvaro`).
+     PROHIBIDO romper esto: si `_ACTIVE_HUB` es Toñín, todo resuelve
+     EXACTAMENTE como antes (Liverpool intacto). */
+  var _ACTIVE_HUB_LS = 'active_hub_v1';
+  function _mhById(id){
+    for (var i=0;i<MISTERS_HUMANOS.length;i++){ if(MISTERS_HUMANOS[i].id===id) return MISTERS_HUMANOS[i]; }
+    return null;
+  }
+  function _mhByScreen(scr){
+    for (var i=0;i<MISTERS_HUMANOS.length;i++){ if(MISTERS_HUMANOS[i].screen===scr) return MISTERS_HUMANOS[i]; }
+    return null;
+  }
+  /* Rehidrata el hub activo de localStorage al arrancar (un reload
+     estando en la pantalla del hub debe conservar el mister correcto).
+     Default = Toñín (MISTERS_HUMANOS[0]). */
+  (function _initActiveHub(){
+    var def = MISTERS_HUMANOS[0];
+    try { var id = localStorage.getItem(_ACTIVE_HUB_LS); var m = id && _mhById(id); if (m) def = m; } catch(_){ }
+    window._ACTIVE_HUB = def;
+  })();
+  window._activeHub = function(){ return window._ACTIVE_HUB || MISTERS_HUMANOS[0]; };
+  /* ¿El hub activo es el legacy Liverpool/Toñín (claves base sin sufijo)? */
+  window._activeHubIsLegacy = function(){
+    var h = window._activeHub();
+    return !h || h.id === 'tonin' || h.screen === 's-munich';
+  };
+  /* Clave de almacenamiento namespaced por hub. Liverpool/Toñín = base
+     (sin sufijo); el resto = `base_<id>`. Funciona para localStorage,
+     `/api/kv/<key>` y los blobs de `/api/state`. */
+  window._hubKey = function(base){
+    if (window._activeHubIsLegacy()) return base;
+    return base + '_' + window._activeHub().id;
+  };
+  /* Cambia el hub activo y refresca lo que dependa de él. Se llama al
+     pulsar una caja de EQUIPOS, SIEMPRE antes de go('s-munich'). */
+  window.setActiveHub = function(id){
+    var m = (id && typeof id === 'object') ? id : (_mhById(id) || _mhByScreen(id));
+    if (!m) m = MISTERS_HUMANOS[0];
+    window._ACTIVE_HUB = m;
+    try { localStorage.setItem(_ACTIVE_HUB_LS, m.id); } catch(_){ }
+    /* Re-resolver cabecera del hub (nombre/escudo) + refrescar cajas que
+       cachean su clave/estado al boot (HUD, trofeos, derbys, objetivos,
+       plantilla, calendario). */
+    try { if (typeof window._mkHubResync === 'function') window._mkHubResync(); } catch(_){ }
+    try { window.dispatchEvent(new CustomEvent('hubchange', { detail:{ hub:m } })); } catch(_){ }
+    return m;
   };
   function _hasHumanIcon(name){
     try {
@@ -51634,7 +51723,11 @@ https://api.sofascore.app/api/v1/team/44/image
      no el del Bayern IA. */
   var BAYERN_SVG='/static/img/escudos-1/england_liverpool.football-logos.cc.svg';
   function _teams(){ try{ var r=localStorage.getItem('ligaExt_liga-ea-sports'); if(r){ var d=JSON.parse(r); if(d&&d.teams) return d.teams; } }catch(_){ } return []; }
-  function _boxOv(){ try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r); if(d&&d.ov) return d.ov['go:s-munich']||null; } }catch(_){ } return null; }
+  /* Pantalla/override del menú del HUB ACTIVO (multi-hub 2026-06-13).
+     Liverpool/Toñín = 'go:s-munich'; Arsenal = 'go:s-arsenal'; etc. */
+  function _ahScreen(){ try{ var h=window._activeHub&&window._activeHub(); return (h&&h.screen)||'s-munich'; }catch(_){ return 's-munich'; } }
+  function _ahLegacy(){ try{ return window._activeHubIsLegacy ? window._activeHubIsLegacy() : true; }catch(_){ return true; } }
+  function _boxOv(){ try{ var r=localStorage.getItem('menu_home_v1'); if(r){ var d=JSON.parse(r); if(d&&d.ov) return d.ov['go:'+_ahScreen()]||null; } }catch(_){ } return null; }
   /* Club CANÓNICO del hub de Toñín (s-munich) según MISTERS_REGISTRY
      (CLAUDE.md, 2026-05-27): hardcoded, sync, infalible. Es 'Liverpool'.
      Lo usamos para que el hub NUNCA muestre el nombre legacy "Bayern
@@ -51642,6 +51735,8 @@ https://api.sofascore.app/api/v1/team/44/image
      (el rename `_ligaEaSubName` NUNCA llegó a existir — ver línea 2919),
      pero lo que se MUESTRA debe ser siempre el club canónico. */
   function _canonHubName(){
+    /* Club canónico del HUB ACTIVO (no siempre Liverpool). */
+    try{ var h=window._activeHub&&window._activeHub(); if(h&&h.club) return String(h.club); }catch(_){ }
     try{
       var M=window._MISTERS_HUMANOS;
       if(M&&M.length){ for(var i=0;i<M.length;i++){ if(M[i]&&M[i].screen==='s-munich'&&M[i].club) return String(M[i].club); } }
@@ -51663,12 +51758,19 @@ https://api.sofascore.app/api/v1/team/44/image
     var wants=[], ov=_boxOv();
     if(ov&&ov.label) wants.push(String(ov.label).toLowerCase());
     wants.push(_canonHubName().toLowerCase());
-    wants.push('bayern munich');
+    if(_ahLegacy()) wants.push('bayern munich');
     for(var w=0;w<wants.length;w++){
       for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.name.toLowerCase()===wants[w]) return t; }
     }
-    for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&/bayern/i.test(t.name)) return t; }
-    var o={'real madrid':1,'real madrid cf':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+    /* El fallback /bayern/ y "primer humano" SOLO aplica al hub legacy
+       Liverpool: para otro hub se descartan los OTROS clubes humanos,
+       conservando el del hub activo. */
+    if(_ahLegacy()){
+      for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&/bayern/i.test(t.name)) return t; }
+    }
+    var canonLow=_canonHubName().toLowerCase();
+    var o={'liverpool':1,'real madrid':1,'real madrid cf':1,'fc barcelona':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1};
+    delete o[canonLow];
     for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.isHuman&&!o[t.name.toLowerCase()]) return t; }
     return null;
   }
@@ -51751,6 +51853,14 @@ https://api.sofascore.app/api/v1/team/44/image
     }
   }
   function run(){ setTimeout(_sync,0); setTimeout(_sync,80); setTimeout(_sync,240); }
+  /* Re-sincroniza la cabecera del hub al cambiar de hub activo
+     (setActiveHub). Invalida la firma cacheada para forzar el repintado
+     del nombre/escudo del nuevo mister. */
+  window._mkHubResync=function(){
+    try{ var host=document.getElementById('s-munich'); if(host) host.__mkHubSig=null; }catch(_){ }
+    run();
+    try{ if(window.athRefreshInjuryHud) window.athRefreshInjuryHud(); }catch(_){ }
+  };
   /* ROBUSTEZ DE NAVEGACIÓN (fix bug 2026-06-03, foto usuario: la caja
      del menú decía LIVERPOOL pero el hub se abría como "Bayern Munich").
      NO podemos envolver `window.go` aquí: el bundle (index.bundle.js,
@@ -60180,6 +60290,38 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 </script>
 
 <div class="screen" id="s-arsenal">
+<script>
+/* La caja Arsenal-Brasil (Álvaro 🐭🇧🇷) REUTILIZA el hub genérico
+   `s-munich` parametrizado por HUB ACTIVO (multi-hub 2026-06-13): al
+   activarse esta pantalla fija el hub activo = Álvaro y abre s-munich,
+   que muestra plantilla / histórico derbys / calendario / trofeos /
+   objetivos / HUD CORRESPONDIENTES al Arsenal. El callback del
+   MutationObserver corre como microtask ANTES del paint, así que no
+   hay parpadeo del placeholder. También cubre cualquier go('s-arsenal')
+   directo de otro código. */
+(function(){
+  if(window.__arsHubRedirectReady) return; window.__arsHubRedirectReady=true;
+  function _redir(){
+    try{ if(window.setActiveHub) window.setActiveHub('alvaro'); }catch(_){}
+    try{ if(window.go) window.go('s-munich'); }catch(_){}
+  }
+  function _wire(){
+    var scr=document.getElementById('s-arsenal');
+    if(!scr) return;
+    if(scr.classList.contains('active')) _redir();
+    try{
+      var obs=new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          if(muts[i].attributeName==='class' && scr.classList.contains('active')){ _redir(); return; }
+        }
+      });
+      obs.observe(scr, { attributes:true, attributeFilter:['class'] });
+    }catch(_){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _wire);
+  else _wire();
+})();
+</script>
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><img alt="Arsenal" src="/static/img/escudos-1/england_arsenal.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">

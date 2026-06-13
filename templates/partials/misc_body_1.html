@@ -52206,21 +52206,26 @@ https://api.sofascore.app/api/v1/team/44/image
     });
   }
   function _hubName(){
+    /* HUB ACTIVO (multi-hub 2026-06-13): el equipo de las cajas de
+       partidos del hub es el del mister abierto. */
+    var _ah=null; try { _ah=window._activeHub&&window._activeHub(); } catch(_){}
+    var _scr=(_ah&&_ah.screen)||'s-munich';
     try {
       var r = localStorage.getItem('menu_home_v1');
       if (r){
         var d = JSON.parse(r);
-        var ov = d && d.ov && d.ov['go:s-munich'];
+        var ov = d && d.ov && d.ov['go:'+_scr];
         if (ov && ov.label) return String(ov.label);
       }
     } catch(_){}
+    if (_ah && _ah.club && _ah.id!=='tonin') return String(_ah.club);
     try {
       if (typeof window._ligaEaSubName === 'function'){
         var s = window._ligaEaSubName('Bayern Munich');
         if (s) return String(s);
       }
     } catch(_){}
-    return 'Liverpool';
+    return (_ah&&_ah.club)||'Liverpool';
   }
   /* Alias para SCHEDULE de Liga EA Sports: el calendario interno
      guarda "Bayern Munich" hardcoded en TEAMS, así que el equipo
@@ -53736,21 +53741,25 @@ https://api.sofascore.app/api/v1/team/44/image
     }catch(_){ return String(s||'').toLowerCase().trim(); }
   }
   function _hubName(){
+    /* HUB ACTIVO (multi-hub 2026-06-13). */
+    var _ah=null; try { _ah=window._activeHub&&window._activeHub(); } catch(_){}
+    var _scr=(_ah&&_ah.screen)||'s-munich';
     try{
       var r = localStorage.getItem('menu_home_v1');
       if (r){
         var d = JSON.parse(r);
-        var ov = d && d.ov && d.ov['go:s-munich'];
+        var ov = d && d.ov && d.ov['go:'+_scr];
         if (ov && ov.label) return String(ov.label);
       }
     }catch(_){}
+    if (_ah && _ah.club && _ah.id!=='tonin') return String(_ah.club);
     try{
       if (typeof window._ligaEaSubName === 'function'){
         var s = window._ligaEaSubName('Bayern Munich');
         if (s) return String(s);
       }
     }catch(_){}
-    return 'Liverpool';
+    return (_ah&&_ah.club)||'Liverpool';
   }
   function _hubAliases(){
     var nm = _hubName();
@@ -54923,9 +54932,10 @@ https://api.sofascore.app/api/v1/team/44/image
     try {
       var rawM = localStorage.getItem('menu_home_v1');
       var ovM = {};
+      var _scrM='s-munich'; try { var _hM=window._activeHub&&window._activeHub(); if(_hM&&_hM.screen) _scrM=_hM.screen; } catch(_){}
       if (rawM) {
         var dM = JSON.parse(rawM);
-        ovM = (dM && dM.ov && dM.ov['go:s-munich']) || {};
+        ovM = (dM && dM.ov && dM.ov['go:'+_scrM]) || {};
       }
       var sfM = (typeof window._teamSeasonForm === 'function') ? (window._teamSeasonForm() || {}) : {};
       function _markSel(gridId, value){
@@ -55004,11 +55014,12 @@ https://api.sofascore.app/api/v1/team/44/image
         var dMH = rawMH ? JSON.parse(rawMH) : {};
         if (!dMH || typeof dMH !== 'object') dMH = {};
         if (!dMH.ov) dMH.ov = {};
-        var ovMH = dMH.ov['go:s-munich'] || {};
+        var _scrMH='s-munich'; try { var _hMH=window._activeHub&&window._activeHub(); if(_hMH&&_hMH.screen) _scrMH=_hMH.screen; } catch(_){}
+        var ovMH = dMH.ov['go:'+_scrMH] || {};
         if (pickLvl !== null) ovMH.level     = pickLvl;
         if (pickYo  !== null) ovMH.formState = pickYo;
         if (pickRiv !== null) ovMH.formRival = pickRiv;
-        dMH.ov['go:s-munich'] = ovMH;
+        dMH.ov['go:'+_scrMH] = ovMH;
         try { localStorage.setItem('menu_home_v1', JSON.stringify(dMH)); } catch(__){}
         /* Best-effort server push (mismo endpoint que el editor del menú). */
         try {
@@ -61080,7 +61091,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var rawMH = localStorage.getItem('menu_home_v1');
       if (rawMH){
         var dMH = JSON.parse(rawMH);
-        var ovMH = dMH && dMH.ov && dMH.ov['go:s-munich'];
+        var _scrSF='s-munich'; try { var _hSF=window._activeHub&&window._activeHub(); if(_hSF&&_hSF.screen) _scrSF=_hSF.screen; } catch(_){}
+        var ovMH = dMH && dMH.ov && dMH.ov['go:'+_scrSF];
         if (ovMH && typeof ovMH === 'object'){
           if (typeof ovMH.formState === 'string' && ovMH.formState.trim()) d.yo    = ovMH.formState;
           if (typeof ovMH.formRival === 'string' && ovMH.formRival.trim()) d.rival = ovMH.formRival;

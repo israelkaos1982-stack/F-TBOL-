@@ -21250,17 +21250,22 @@
      porque éste se basaba sólo en KEY_TITLE (que no se actualiza
      cuando se renombra el hub). Reportado por el usuario 2026-05-23. */
   function _hubTeamName(){
+    /* HUB ACTIVO (multi-hub 2026-06-13): título del calendario del mister
+       abierto. */
+    var _ah=null; try { _ah=window._activeHub&&window._activeHub(); } catch(_){}
+    var _scr=(_ah&&_ah.screen)||'s-munich';
     try {
       var r = localStorage.getItem('menu_home_v1');
       if (r) {
         var d = JSON.parse(r);
-        var ov = d && d.ov && d.ov['go:s-munich'];
+        var ov = d && d.ov && d.ov['go:'+_scr];
         if (ov && ov.label) {
           var s = String(ov.label).trim();
           if (s) return s;
         }
       }
     } catch(_){}
+    if (_ah && _ah.club && _ah.id!=='tonin') return String(_ah.club);
     try {
       if (typeof window._ligaEaSubName === 'function') {
         var sub = window._ligaEaSubName('Bayern Munich');
@@ -21270,7 +21275,7 @@
         }
       }
     } catch(_){}
-    return null;
+    return (_ah && _ah.id!=='tonin' && _ah.club) ? String(_ah.club) : null;
   }
   function _loadTitleRaw(){
     try {

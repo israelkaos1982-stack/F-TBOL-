@@ -13774,6 +13774,22 @@ window._showSimProgress = function(opts, onDone){
     + '</div>';
   }
   var _appending = false;
+  // Recolorea la zona de DESCENSO (los 4 últimos por defecto) sobre el
+  // total REAL de filas = base (TEAM_ORDER, 20) + extras añadidos por
+  // appendLigaEaExtras. La tabla base se pinta con total=20, así que sin
+  // este repaso un 21º equipo dejaría 5 en rojo (17-20 de la base + el
+  // extra). Solo togglea `zone-desc`; las zonas europeas de arriba no
+  // dependen del total y se conservan. Respeta z.desc vía _ligaEaZoneClass.
+  function _recolorLigaEaRelegation(cont){
+    if(!cont || typeof window._ligaEaZoneClass !== 'function') return;
+    var rows = cont.querySelectorAll('.clas-row');
+    var total = rows.length;
+    if(!total) return;
+    for(var i=0;i<rows.length;i++){
+      var isDesc = window._ligaEaZoneClass(i+1, total) === 'zone-desc';
+      rows[i].classList.toggle('zone-desc', isDesc);
+    }
+  }
   function appendLigaEaExtras(){
     if(_appending) return;
     var cont = document.getElementById('clas-liga-content');
@@ -13807,6 +13823,9 @@ window._showSimProgress = function(opts, onDone){
     } finally {
       _appending = false;
     }
+    // El nº real de equipos (base+extras) ya está en el DOM: recalcula la
+    // zona de descenso sobre ese total (4 últimos), no sobre los 20 base.
+    _recolorLigaEaRelegation(cont);
   }
 
   // Envuelve window.buildLigaClas (lo publica el bundle al cargar) para

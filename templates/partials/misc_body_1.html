@@ -2928,7 +2928,13 @@ window._showSimProgress = function(opts, onDone){
       var bj = _bedBajaState(name);
       var bjCls = bj ? (' bed-'+bj) : '';
       return '<div class="lext-sq-row '+cls+bjCls+'" data-player="'+name.replace(/"/g,'&quot;')+'">'
-           + '<span class="lext-sq-name tier-'+tier+'">'+nameHtml+_badges(p)+_bedBajaBadge(name)+'</span>'
+           /* Badges de rol (C/F/P/⭐/⚾/🏀) RETIRADOS de la plantilla del hub
+              (petición usuario 2026-06-13): recortaban el nombre en la celda
+              estrecha. Son puramente informativos — el motor lee los flags
+              del objeto del jugador, no estos badges; siguen editándose en
+              el editor de Liga EA Sports. Solo se mantiene el badge de baja
+              (lesión/sanción), que sí aporta info útil aquí. */
+           + '<span class="lext-sq-name tier-'+tier+'">'+nameHtml+_bedBajaBadge(name)+'</span>'
            + cells
            + '<span class="lext-sq-actions"></span>'
            + '</div>';

@@ -20945,6 +20945,9 @@ window._showSimProgress = function(opts, onDone){
   if (window.__COMP_INFO_BTN_READY) return;
   window.__COMP_INFO_BTN_READY = true;
   var SCREENS = ['s-competiciones','s-espana'];
+  /* Cajas que NO llevan «I» (petición usuario 2026-06-13): la utilidad
+     «Estadísticas» y la navegación «Torneos de Verano». El resto sí. */
+  var SKIP_LABELS = { 'estadisticas':1, 'torneos-de-verano':1 };
   function _norm(s){
     return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'')
       .replace(/[^A-Za-z0-9]+/g,'-').replace(/^-+|-+$/g,'').toLowerCase();
@@ -20981,7 +20984,9 @@ window._showSimProgress = function(opts, onDone){
       if (card.querySelector('.sc-info-btn')) return;
       var label = _label(card);
       if (!label) return;
-      var id  = screenId.replace(/^s-/,'') + '-' + _norm(label);
+      var nlbl = _norm(label);
+      if (SKIP_LABELS[nlbl]) return;
+      var id  = screenId.replace(/^s-/,'') + '-' + nlbl;
       var col = _accent(card);
       var icon = _icon(card);
       var btn = document.createElement('button');

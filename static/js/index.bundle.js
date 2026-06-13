@@ -10076,9 +10076,29 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     }
     return false;
   }
+  // Motor por plantilla editable (2026-06-13): los 20 participantes se
+  // derivan del calendario vivo (sincronizado), no de la lista fija
+  // TEAM_ORDER (que queda como semilla/fallback). Así un ascenso/descenso
+  // (que regenera el calendario con otros 20 equipos) cambia la tabla.
+  function _ligaEaCurrentTeams(){
+    var sch = window.LIGA_SCHEDULE;
+    if(Array.isArray(sch) && sch.length === 38){
+      var seen = {}, out = [];
+      for(var r=0;r<sch.length;r++){
+        var round = sch[r]; if(!Array.isArray(round)) continue;
+        for(var m=0;m<round.length;m++){
+          var mt = round[m]; if(!Array.isArray(mt)) continue;
+          if(mt[0] && !seen[mt[0]]){ seen[mt[0]]=1; out.push(mt[0]); }
+          if(mt[1] && !seen[mt[1]]){ seen[mt[1]]=1; out.push(mt[1]); }
+        }
+      }
+      if(out.length === 20) return out;
+    }
+    return TEAM_ORDER;
+  }
   function getSavedLigaTable(){
     var teams = {};
-    TEAM_ORDER.forEach(function(name){ ensureTeam(teams, name); });
+    _ligaEaCurrentTeams().forEach(function(name){ ensureTeam(teams, name); });
     var results = parseSavedResults();
     Object.keys(results).forEach(function(key){
       /* Saltar keys que no pertenecen al SCHEDULE actual (sims
@@ -10111,6 +10131,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       return a.name.localeCompare(b.name,'es');
     });
   }
+  // Expuesto para los ASCENSOS/DESCENSOS (motor editable): la lógica de
+  // movimientos lee de aquí los 4 últimos de la Liga EA Sports para bajarlos
+  // a Hypermotion. Devuelve la tabla ordenada [{name,pts,pj,dg,...}].
+  window.getLigaEaStandings = getSavedLigaTable;
   function formHtml(form){
     var last = (form || []).slice(-5);
     if(!last.length) return '<span class="clas-dot pending" title="Sin resultados"></span>';

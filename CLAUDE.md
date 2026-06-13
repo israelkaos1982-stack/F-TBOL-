@@ -1,5 +1,84 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## HUB MULTI-MISTER — el hub `s-munich` es GENÉRICO, datos por hub (obligatorio, 2026-06-13)
+
+**Petición usuario 2026-06-13 («al pulsar la caja del Arsenal-Brasil sea
+exactamente igual que la del Liverpool-Francia pero con los datos del
+Arsenal: plantilla, histórico derbys, calendario, todo correspondiente al
+Arsenal»)**: el hub rico (`s-munich`) deja de ser exclusivo de Liverpool y
+pasa a ser un hub GENÉRICO que sirve a CUALQUIER caja de mister humano del
+`MISTERS_HUMANOS`. Empezando por **Arsenal-Brasil** (Álvaro 🐭🇧🇷).
+
+### Arquitectura: 1 pantalla parametrizada + datos POR HUB (NO duplicar)
+
+- `window._ACTIVE_HUB` (en el IIFE de `MISTERS_HUMANOS`, `misc_body_1.html`)
+  apunta al mister cuya caja se pulsó. Default = Toñín/Liverpool. Se
+  persiste en `active_hub_v1` (cliente). Setter `window.setActiveHub(id)`
+  (dispara `_mkHubResync` + evento `hubchange`). Accesores
+  `window._activeHub()`, `window._activeHubIsLegacy()`.
+- **Clave de almacenamiento POR HUB**: `window._hubKey(base)` devuelve la
+  clave BASE sin sufijo para Liverpool/Toñín (datos + sync EXISTENTES
+  intactos) y `base+'_'+id` para el resto (Arsenal → `..._alvaro`).
+- **PROHIBIDO duplicar la pantalla** `s-munich` ni clonar sus IIFEs por
+  hub: se REUTILIZA parametrizada. La caja Arsenal navega a `s-arsenal`,
+  que tiene un MutationObserver que (pre-paint) hace
+  `setActiveHub('alvaro'); go('s-munich')`. La caja Liverpool y la grid de
+  EQUIPOS fijan el hub vía `data-hub` (handler del grid) + onclick inline.
+
+### Resolutores hub-aware (default = Liverpool, byte-for-byte intacto)
+
+`_psHumanName`, `_psHumanLogicName`, `_psHumanShield`/`_psCanonCrest`,
+`_hubTeamName` (wallet + calendario misc_body_2), `_hubSelName`, el header
+`_boxOv/_canonHubName/_slot` (+ `_mkHubResync`), `_bayernSquad` (exclusión
+ya no descarta el club activo), los `_hubName` de las cajas de partidos, y
+los prefill/save de Nivel/Forma del modal HUD: TODOS leen el HUB ACTIVO
+(`_activeHub().screen/club`) ANTES de los fallbacks legacy. Si el hub es
+Toñín, devuelven EXACTAMENTE lo de antes (Liverpool).
+
+### Stores namespaced por hub (cada uno re-resuelve en `hubchange`)
+
+| Dato | Clave base | Re-resolución |
+|---|---|---|
+| Cursor calendario | `liverpool_preseason_v1` (+cookie `livps`) | IIFE pretemporada: reasigna KEY + `_psInvalidateCache` |
+| HUD 💼🪙💊 | `bayern_hud_overrides_v1` (+cookie `bayhud`, IDB row) | IIFE HUD: reasigna KEY/KV_URL, RESET gate hidratación + cache, re-pull |
+| Trofeos | `bayern_trofeos_v1` | IIFE trofeos: reasigna + re-hidrata + render (no-Liverpool arranca VACÍO) |
+| Objetivos config | `munich-obj-overrides-v1` | IIFE config: render DIFERIDO (tras reasignar progreso) |
+| Objetivos progreso | `munich-obj-state-v4` | IIFE progreso: reasigna LS_OBJ SÍNCRONO + re-crea `_kvBlobSync` |
+| Derbys temporadas/partidos | `bayern_derbys_seasons_v1` / `bayern_derbys_matches_v1` | 3 IIFEs (render/seasons/matches): reasignan + re-pull + render |
+
+- Plantilla (`s-bayern-plantilla`) y card "Próximo partido" NO necesitan
+  clave propia: resuelven el club/selección por los resolutores hub-aware
+  (Arsenal = roster real de `ligaExt_liga-ea-sports` + selección Brasil).
+
+### Servidor (app.py) — heredar TODAS las protecciones, sin duplicarlas
+
+`_kv_hub_base(key)` mapea una variante `base_<id>` a su BASE, y se usa en
+`_kv_is_allowed`, el branch `_KV_RECENCY_BLOB_KEYS`, los special-cases
+`bayern_hud_overrides_v1` (rev guard + field-merge + anchor-guard) y
+`munich-obj-state-v4` (empty-guard), y el merge de `_STATE_RECENCY_BLOB_KEYS`.
+El cursor: `_is_cursor_key(k)` cubre `liverpool_preseason_v1_<id>` con el
+MISMO merge monotónico (`_cursor_winner`). Derbys: viajan por `/api/state`
+(merge_dict genérico acepta claves arbitrarias) + unión cliente. Tests en
+`tests/test_api.py::TestMultiHubKeys`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** romper el camino Liverpool: si `_ACTIVE_HUB` es Toñín,
+   `_hubKey` devuelve la clave BASE y TODO resuelve como antes. Cualquier
+   refactor debe preservar esto (los tests del HUD/cursor base no bajan).
+2. **PROHIBIDO** duplicar físicamente la pantalla `s-munich` o sus IIFEs por
+   hub. Se parametriza por `_ACTIVE_HUB` + `_hubKey`. Toda caja de mister
+   nueva se habilita igual que Arsenal (registro + `data-hub` + redirect).
+3. **PROHIBIDO** que un store de hub NUEVO use la clave base cruda: debe
+   pasar por `_hubKey(base)`, re-resolverse en `hubchange`, y —si va a KV—
+   añadir su base a `_KV_HUB_BASE_KEYS` (servidor) para heredar el merge.
+4. **PROHIBIDO** que un writer AUTOMÁTICO del HUD escriba antes de hidratar
+   tras un `hubchange`: el listener resetea el gate (`_hudHydrated=false`)
+   y re-pull; trátalo como cold-start (reglas 5-7 del HUD siguen vigentes).
+5. El gate de objetivos (reglas 14-17) sobrevive: al cambiar de hub se
+   re-crea `_objStateSync` ligado a la nueva clave; `liverpoolObjEarnings`
+   no deflacta hasta que el nuevo progreso HTTP-hidrate.
+
 ## El ACTA de un partido NUNCA se pierde en la fusión cross-device — TODA competición (obligatorio, 2026-06-06)
 
 **Regla general (petición usuario 2026-06-06, «que no vuelva a pasar con

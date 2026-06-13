@@ -24037,6 +24037,10 @@ window.goLiveMatches = function() {
         try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(nm)) return true; } catch(_){}
         try { if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(nm)) return true; } catch(_){}
         try { if (typeof window.esHumano === 'function' && window.esHumano(nm)) return true; } catch(_){}
+        /* `humanIcon` es la señal canónica "este equipo es humano" que el
+           editor de plantilla asigna (💡/✏️/🐭…). Cubre clubes humanos
+           NO canónicos marcados a mano en cualquier torneo. */
+        try { if (typeof window.humanIcon === 'function' && window.humanIcon(nm)) return true; } catch(_){}
         return false;
       };
       /* Info de competición (nombre/icono/color) por id de torneo. El
@@ -24110,12 +24114,33 @@ window.goLiveMatches = function() {
         var fc = cfg.formatConfig || {};
         var teams = cfg.teams;
         var compInfo = _tourCompInfo(id, cfg);
+        /* Asegurar que los fixtures de grupo existan AUNQUE el usuario no
+           haya abierto la pantalla del torneo esta sesión (cold open de
+           la caja Derbys). Los builders son idempotentes y los mismos
+           que usa el hub/_selPair. Solo se llama si faltan los fixtures. */
+        try {
+          var _hasGf = cfg.groupFixtures &&
+            (Array.isArray(cfg.groupFixtures) ? cfg.groupFixtures.length
+                                              : Object.keys(cfg.groupFixtures).length);
+          if (!_hasGf){
+            if (cfg.format === 'mundial-48' && typeof window._mundialGroupState === 'function')
+              window._mundialGroupState(cfg, teams);
+            else if (cfg.format === 'qualifier-route' && typeof window._tourEnsureRoadFixtures === 'function')
+              window._tourEnsureRoadFixtures(cfg, id);
+            else if (typeof window._tourEnsureGroupFixtures === 'function')
+              window._tourEnsureGroupFixtures(cfg);
+          }
+        } catch(_){}
         /* (a) Fixtures de GRUPO: groupFixtures[g][jor][mi] = {home,away}
-               índices dentro del slice del grupo. */
+               índices dentro del slice del grupo. OJO: en mundial-48 y
+               groups-ko `groupFixtures` es un OBJETO `{0:[...],1:[...]}`
+               (no un array), así que el nº de grupos se resuelve de
+               formatConfig.groups / Object.keys, nunca de `.length`. */
         var gf = cfg.groupFixtures;
-        if (gf && (Array.isArray(gf) ? gf.length : 0)){
+        if (gf){
           var pg = fc.perGroup || 4;
-          for (var g = 0; g < gf.length; g++){
+          var nGroups = fc.groups || (Array.isArray(gf) ? gf.length : Object.keys(gf).length);
+          for (var g = 0; g < nGroups; g++){
             var fixs = gf[g];
             if (!Array.isArray(fixs)) continue;
             var slice = teams.slice(g*pg, g*pg + pg);
@@ -24149,14 +24174,18 @@ window.goLiveMatches = function() {
                el par p = slots [2p, 2p+1]; matchKey 'ko_<round>_<p>'. */
         var kb = cfg.koBracket || cfg.bracket;
         if (Array.isArray(kb)){
-          var koNames = fc.koRounds || [];
+          var koNames = fc.koRounds || (fc.rounds || []);
+          /* El prefijo del matchKey de KO depende de dónde viva el bracket:
+             'ko_' si es koBracket (groups-ko/mundial-48), '' si es bracket
+             (ko/ko-2leg). Mismo criterio que _koPlacement. */
+          var koPrefix = cfg.koBracket ? 'ko_' : '';
           for (var r = 0; r < kb.length; r++){
             var round = kb[r];
             if (!Array.isArray(round)) continue;
             for (var p = 0; (p*2 + 1) < round.length; p++){
               var rname = koNames[r] || ('Ronda '+(r+1));
               _emitTourMatch(id, cfg, compInfo, round[p*2], round[p*2+1],
-                'ko_'+r+'_'+p, rname, 1000 + r);
+                koPrefix+r+'_'+p, rname, 1000 + r);
             }
           }
         }

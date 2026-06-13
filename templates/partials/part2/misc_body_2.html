@@ -31972,6 +31972,11 @@ document.addEventListener('DOMContentLoaded', function() {
        congelado y el nuevo gana por last-write-wins (ts). */
     'liverpool_preseason_v1',        /* cursor día (dayIdx) + tour elegido + rivales */
     'bayern_preseason_v2',           /* legacy — solo lectura para migración */
+    /* Multi-hub (2026-06-13): cursor del calendario de las OTRAS cajas
+       de mister humano (Arsenal/Brasil, etc.). Cada una sobrevive al
+       reload / cambio de móvil igual que el de Liverpool, con su PROPIO
+       progreso de día (merge monotónico por hub en el server). */
+    'liverpool_preseason_v1_alvaro', /* cursor día — caja Arsenal-Brasil */
     /* 2026-05-23 (petición usuario "todo igual en cualquier
        móvil/PC"): el estado de TODAS las competiciones restantes
        que aún vivían SOLO en localStorage del dispositivo admin.
@@ -32083,8 +32088,14 @@ document.addEventListener('DOMContentLoaded', function() {
              misc_body_1.html tiene su _MEM cacheado con el dayIdx
              stale → la caja del hub mostraría el día viejo. Le
              pedimos que invalide y re-renderice. */
-          if (restored.indexOf('liverpool_preseason_v1') !== -1
-              || restored.indexOf('bayern_preseason_v2') !== -1) {
+          var _curRestored = false;
+          for (var _ri=0; _ri<restored.length; _ri++){
+            var _rk = restored[_ri];
+            if (_rk === 'liverpool_preseason_v1' || _rk === 'bayern_preseason_v2'
+                || _rk.indexOf('liverpool_preseason_v1_') === 0
+                || _rk.indexOf('bayern_preseason_v2_') === 0){ _curRestored = true; break; }
+          }
+          if (_curRestored) {
             try {
               if (typeof window._psInvalidateCache === 'function') {
                 window._psInvalidateCache();

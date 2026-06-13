@@ -4387,12 +4387,16 @@ window._showSimProgress = function(opts, onDone){
   if (window.__PS_READY) return;
   window.__PS_READY = true;
 
-  var KEY = 'liverpool_preseason_v1';   /* rebrand 2026-05-24: caja Liverpool en el hub (antes nombre legacy 'bayern_preseason_v2'). */
+  /* HUB ACTIVO (multi-hub 2026-06-13): el cursor del calendario es POR
+     HUB. Liverpool/Toñín usa la clave BASE 'liverpool_preseason_v1'
+     (intacta); Arsenal/etc. → '..._<id>'. `KEY` es reasignable y se
+     re-resuelve en el listener 'hubchange' (con invalidación de _MEM). */
+  var KEY = (window._hubKey ? window._hubKey('liverpool_preseason_v1') : 'liverpool_preseason_v1');
   /* Clave legacy: si el usuario tiene su temporada bajo el nombre viejo,
      `_load` la lee como fallback y el primer `_save` la migra al nombre
-     nuevo. No la borramos — mientras coexista, el cursor sobrevive a
-     cualquier hueco entre lecturas/escrituras. */
-  var KEY_LEGACY = 'bayern_preseason_v2';
+     nuevo. Solo aplica al hub legacy (Liverpool); otros hubs no tienen
+     historia previa. */
+  var KEY_LEGACY = (window._activeHubIsLegacy && !window._activeHubIsLegacy()) ? '' : 'bayern_preseason_v2';
   /* Limpieza one-shot del store v1 muy viejo (apuntaba a un calendario
      con filas pre-Mayo). Así el cursor arranca limpio en 01 May. */
   try { localStorage.removeItem('bayern_preseason_v1'); } catch(_){}
@@ -4617,17 +4621,17 @@ window._showSimProgress = function(opts, onDone){
      en móvil aunque el usuario hubiera avanzado. Con el payload
      minimal (~80 bytes) la cookie siempre cabe; rivals/done/
      injuries se restauran de localStorage/server. */
-  var COOKIE_KEY = 'livps';
+  /* Cookie de respaldo del cursor — POR HUB (multi-hub 2026-06-13).
+     Liverpool/Toñín = 'livps' (intacta); otros hubs = 'livps_<id>'. */
+  var COOKIE_KEY = (window._activeHubIsLegacy && !window._activeHubIsLegacy()) ? ('livps_'+window._activeHub().id) : 'livps';
   /* Cookie legacy (rebrand 2026-05-24): si el navegador todavía guarda
-     'bayps' del nombre viejo, la leemos como fallback. La nueva
-     'livps' se escribe en el siguiente _save y desde ese momento gana.
-     No borramos 'bayps' explícitamente — expira sola en 1 año. */
-  var COOKIE_KEY_LEGACY = 'bayps';
+     'bayps' del nombre viejo, la leemos como fallback. Solo hub legacy. */
+  var COOKIE_KEY_LEGACY = (window._activeHubIsLegacy && !window._activeHubIsLegacy()) ? '' : 'bayps';
   function _cookieRead(){
     try {
       var ck = (document.cookie || '');
       var m = ck.match(new RegExp('(?:^|; )' + COOKIE_KEY + '=([^;]*)'));
-      if (!m) m = ck.match(new RegExp('(?:^|; )' + COOKIE_KEY_LEGACY + '=([^;]*)'));
+      if (!m && COOKIE_KEY_LEGACY) m = ck.match(new RegExp('(?:^|; )' + COOKIE_KEY_LEGACY + '=([^;]*)'));
       if (!m) return null;
       var raw = decodeURIComponent(m[1] || '');
       if (!raw) return null;
@@ -4805,7 +4809,8 @@ window._showSimProgress = function(opts, onDone){
        localStorage falla) — el coste es 1 fetch por avance de día
        (puntual, no en loop) y el sync de 3 s actúa como respaldo. */
     try {
-      var body = JSON.stringify({ competition_state: { 'liverpool_preseason_v1': _json } });
+      var _cs = {}; _cs[KEY] = _json;
+      var body = JSON.stringify({ competition_state: _cs });
       if (typeof navigator !== 'undefined' && navigator.sendBeacon){
         navigator.sendBeacon('/api/state', new Blob([body], { type:'application/json' }));
       } else if (typeof fetch === 'function'){
@@ -4828,6 +4833,22 @@ window._showSimProgress = function(opts, onDone){
     try { if (typeof window._psRender === 'function') window._psRender(); } catch(_){}
     try { if (typeof window._bayernCalMarkToday === 'function') window._bayernCalMarkToday(); } catch(_){}
   };
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver
+     las claves del cursor (por hub) e invalidar el cache _MEM para que
+     la card "Próximo partido" + el calendario muestren el progreso de
+     ESE hub. */
+  try {
+    window.addEventListener('hubchange', function(){
+      try { KEY = window._hubKey('liverpool_preseason_v1'); } catch(_){}
+      try {
+        var _lg = window._activeHubIsLegacy ? window._activeHubIsLegacy() : true;
+        KEY_LEGACY = _lg ? 'bayern_preseason_v2' : '';
+        COOKIE_KEY = _lg ? 'livps' : ('livps_'+window._activeHub().id);
+        COOKIE_KEY_LEGACY = _lg ? 'bayps' : '';
+      } catch(_){}
+      try { window._psInvalidateCache(); } catch(_){}
+    });
+  } catch(_){}
   /* MULTI-PESTAÑA / RESET CROSS-TAB (2026-06-04): si OTRA pestaña del
      mismo navegador cambia el cursor en localStorage (típicamente el
      usuario pulsa «Reiniciar Temporada» en la pestaña A mientras la B

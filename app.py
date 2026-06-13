@@ -404,6 +404,20 @@ def _recency_winner(old_blob, new_blob):
 # un reinicio explícito (marca `resetAt`/`_reset`) gana por `ts`; un
 # downgrade a un día anterior > 0 SIN marca de reinicio se RECHAZA.
 _STATE_CURSOR_KEYS = {"liverpool_preseason_v1", "bayern_preseason_v2"}
+# Multi-hub (2026-06-13): cada caja de mister humano lleva su PROPIO
+# cursor del calendario con sufijo `_<id>` (ej. liverpool_preseason_v1_alvaro
+# para Arsenal). Heredan EL MISMO merge monotonico que el cursor base
+# (un POST stale jamas devuelve el dia del hub a un dia anterior).
+_STATE_CURSOR_PREFIXES = ("liverpool_preseason_v1_", "bayern_preseason_v2_")
+
+
+def _is_cursor_key(k):
+    try:
+        if k in _STATE_CURSOR_KEYS:
+            return True
+        return any(str(k).startswith(p) for p in _STATE_CURSOR_PREFIXES)
+    except Exception:
+        return False
 
 
 def _parse_json_blob(s):
@@ -558,8 +572,8 @@ def save_global_state(new_state, replace=False):
             if isinstance(merged_comp, dict):
                 if not isinstance(base_comp, dict):
                     base_comp = {}
-                for ck in _STATE_CURSOR_KEYS:
-                    if ck in inc_comp:
+                for ck in list(inc_comp.keys()):
+                    if _is_cursor_key(ck):
                         merged_comp[ck] = _cursor_winner(
                             base_comp.get(ck), inc_comp.get(ck))
         # Anti-pérdida de acta de Liga EA: si el POST entrante trae

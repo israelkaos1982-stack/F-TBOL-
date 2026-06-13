@@ -23883,6 +23883,10 @@ window.goLiveMatches = function() {
         try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(nm)) return true; } catch(_){}
         try { if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(nm)) return true; } catch(_){}
         try { if (typeof window.esHumano === 'function' && window.esHumano(nm)) return true; } catch(_){}
+        /* `humanIcon` es la señal canónica "este equipo es humano" que el
+           editor de plantilla asigna (💡/✏️/🐭…). Cubre clubes humanos
+           NO canónicos marcados a mano en cualquier torneo. */
+        try { if (typeof window.humanIcon === 'function' && window.humanIcon(nm)) return true; } catch(_){}
         return false;
       };
       /* Info de competición (nombre/icono/color) por id de torneo. El
@@ -24016,14 +24020,18 @@ window.goLiveMatches = function() {
                el par p = slots [2p, 2p+1]; matchKey 'ko_<round>_<p>'. */
         var kb = cfg.koBracket || cfg.bracket;
         if (Array.isArray(kb)){
-          var koNames = fc.koRounds || [];
+          var koNames = fc.koRounds || (fc.rounds || []);
+          /* El prefijo del matchKey de KO depende de dónde viva el bracket:
+             'ko_' si es koBracket (groups-ko/mundial-48), '' si es bracket
+             (ko/ko-2leg). Mismo criterio que _koPlacement. */
+          var koPrefix = cfg.koBracket ? 'ko_' : '';
           for (var r = 0; r < kb.length; r++){
             var round = kb[r];
             if (!Array.isArray(round)) continue;
             for (var p = 0; (p*2 + 1) < round.length; p++){
               var rname = koNames[r] || ('Ronda '+(r+1));
               _emitTourMatch(id, cfg, compInfo, round[p*2], round[p*2+1],
-                'ko_'+r+'_'+p, rname, 1000 + r);
+                koPrefix+r+'_'+p, rname, 1000 + r);
             }
           }
         }

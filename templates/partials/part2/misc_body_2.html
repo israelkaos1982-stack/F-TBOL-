@@ -5439,7 +5439,8 @@
   function renderMovement(){
     var root=document.getElementById('primf-mov-content'); if(!root) return;
     var preview = loadJSON(TRANSITION_KEY, null) || buildMovementPreview();
-    if(!preview){root.innerHTML='<div class="clas-empty">Necesitas simular <b>Liga Hypermotion</b> y los dos grupos de <b>Primera Federación</b> para calcular ascensos y descensos.</div>'; return;}
+    var eaPrev = (typeof buildEaHyperPreview==='function') ? buildEaHyperPreview() : null;
+    if(!preview && !eaPrev){root.innerHTML='<div class="clas-empty">Necesitas simular <b>Liga Hypermotion</b> y los dos grupos de <b>Primera Federación</b>, y haber jugado la <b>Liga EA Sports</b>, para calcular ascensos y descensos.</div>'; return;}
 
     function teamRow(t, arrow, bg, accentColor, badge){
       return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:'+bg+';border-radius:8px;margin-bottom:6px;border-left:3px solid '+accentColor+';">'
@@ -5463,13 +5464,19 @@
         +'</div>';
     }
 
-    var html='<div style="padding:2px 0;">'
-      +section('🔵','ASCENSO DIRECTO A HYPERMOTION','#4a9eff',preview.direct,'⬆️','Ascenso directo')
-      +section('🟠','GANADORES DEL PLAYOFF','#ff8214',preview.playoff,'⬆️','Vía playoff')
-      +section('🔴','DESCENSO DESDE HYPERMOTION','#ff4444',preview.relegated,'⬇️','Descienden')
-      +'</div>'
+    var html='<div style="padding:2px 0;">';
+    if(eaPrev){
+      html += section('🔼','ASCENSO A EA SPORTS','#4a9eff',eaPrev.eaPromoted,'⬆️','Sube a EA Sports')
+            + section('🔻','DESCENSO DE EA SPORTS','#ff4444',eaPrev.eaRelegated,'⬇️','Baja a Hypermotion');
+    }
+    if(preview){
+      html += section('🔵','ASCENSO DIRECTO A HYPERMOTION','#4a9eff',preview.direct,'⬆️','Ascenso directo')
+            + section('🟠','GANADORES DEL PLAYOFF','#ff8214',preview.playoff,'⬆️','Vía playoff')
+            + section('🔴','DESCENSO DESDE HYPERMOTION','#ff4444',preview.relegated,'⬇️','Descienden');
+    }
+    html += '</div>'
       +'<div style="margin-top:4px;padding:12px 14px;background:rgba(255,255,255,.04);border-radius:8px;font-size:12px;color:rgba(255,255,255,.45);line-height:1.6;">'
-      +'⚠️ Al aplicar movimientos se prepara una <b style="color:rgba(255,255,255,.7);">temporada nueva</b>: suben 4 a Hypermotion y bajan 4 a Primera Federación (2 a cada grupo).'
+      +'⚠️ <b style="color:rgba(255,255,255,.7);">Aplicar movimientos</b> = Hypermotion↔Primera (suben 4 / bajan 4, 2 a cada grupo). <b style="color:rgba(255,255,255,.7);">Aplicar EA Sports↔Hypermotion</b> = bajan 4 de EA Sports y suben 4 de Hypermotion (regenera el calendario de EA Sports).'
       +'</div>';
     root.innerHTML=html;
   }
@@ -5559,6 +5566,7 @@
     +'<button class="btn-action btn-action-sim" onclick="pG(function(){simularPrimeraGrupo(1)})"><span class="btn-action-ico">🎮</span>Simular G1</button>'
     +'<button class="btn-action btn-action-sim" onclick="pG(function(){simularPrimeraGrupo(2)})"><span class="btn-action-ico">🎮</span>Simular G2</button>'
     +'<button class="btn-action btn-action-stats" onclick="pG(function(){applyPrimeraMovements()})"><span class="btn-action-ico">✅</span>Aplicar movimientos</button>'
+    +'<button class="btn-action btn-action-stats" style="border-color:#4a9eff" onclick="pG(function(){applyEaHyperMovements()})"><span class="btn-action-ico">🔼</span>Aplicar EA Sports ↔ Hypermotion</button>'
     +'</div><div id="primf-mov-content"></div></div>'
     /* ── Pantallas de grupo legacy (redirigen al combinado) ── */
     +'<div class="screen" id="s-primf-g1"><button class="back-btn" onclick="go(\'s-primf-clas\')">◀ Volver</button></div>'
@@ -5608,6 +5616,110 @@
   window.simularAmbosPrimera=function(){ var teams=getPrimeraTeams(), state=getPrimeraState(); state.g1=simulateLeague(teams.g1); state.g2=simulateLeague(teams.g2); saveJSON(TRANSITION_KEY, null); setPrimeraState(state); renderPrimera(); if(typeof go==='function') go('s-primf-clas'); };
   window.reiniciarAmbosPrimera=function(){ var state=getPrimeraState(), teams=getPrimeraTeams(); state.g1={table:[],players:[]}; state.g2={table:[],players:[]}; _clearPlayerStatsForTeams(teams.g1); _clearPlayerStatsForTeams(teams.g2); setPrimeraState(state); localStorage.removeItem(TRANSITION_KEY); renderPrimera(); };
   window.applyPrimeraMovements=function(){ applyMovements(); };
+
+  /* ── EA Sports ↔ Hypermotion (motor editable, 2026-06-13) ──────────
+     Los 4 ÚLTIMOS de la Liga EA Sports BAJAN a Hypermotion; los 4
+     PRIMEROS de Hypermotion SUBEN a EA Sports. EA Sports se mantiene en
+     20 (4 fuera + 4 dentro): se regenera su calendario de 38 jornadas con
+     los nuevos 20 y la clasificación se resetea SOLA, porque
+     getSavedLigaTable ignora los resultados que no casan con el calendario
+     vigente. Se mueve la plantilla COMPLETA (jugadores/medias/escudo) por
+     la ruta sincronizada saveData(slug,data). Operación manual e
+     idempotente — la lanza el admin al acabar la temporada. */
+  function _movNorm(n){ return String(n||'').toLowerCase().replace(/ |\s/g,'').trim(); }
+  function _readLigaExt(slug){
+    try { var d = JSON.parse(localStorage.getItem('ligaExt_'+slug)||'null'); if(d && Array.isArray(d.teams)) return d; } catch(_){}
+    return null;
+  }
+  function _eaTeamPower(name){
+    var d=_readLigaExt('liga-ea-sports'); if(d){ var nn=_movNorm(name);
+      for(var i=0;i<d.teams.length;i++){ if(_movNorm(d.teams[i].name)===nn) return Number(d.teams[i].power)||70; } }
+    return 70;
+  }
+  function _hypTeamObj(name){
+    var d=_readLigaExt('liga-hypermotion'); var nn=_movNorm(name); var i;
+    if(d){ for(i=0;i<d.teams.length;i++){ if(_movNorm(d.teams[i].name)===nn) return deepCopy(d.teams[i]); } }
+    var seg=getSegundaTeams(); for(i=0;i<seg.length;i++){ if(_movNorm(seg[i].name)===nn) return { name:seg[i].name, power:Number(seg[i].media)||70 }; }
+    return { name:name, power:70 };
+  }
+  function buildEaHyperPreview(){
+    var eaTable = (typeof window.getLigaEaStandings === 'function') ? window.getLigaEaStandings() : null;
+    var seg = loadSegundaState();
+    if(!Array.isArray(eaTable) || eaTable.length < 8) return null;
+    if(!seg || !Array.isArray(seg.table) || seg.table.length < 4) return null;
+    // EA Sports debe estar JUGADA (si nadie ha jugado, los 4 últimos no
+    // significan nada).
+    if(!eaTable.some(function(t){ return (t.pj|0) > 0; })) return null;
+    return {
+      eaRelegated: eaTable.slice(-4).map(function(t){ return { name:t.name, media:_eaTeamPower(t.name) }; }),
+      eaPromoted:  seg.table.slice(0,4).map(deepCopy)
+    };
+  }
+  window.applyEaHyperMovements = function(){
+    var prev = buildEaHyperPreview();
+    if(!prev){
+      alert('Para aplicar EA Sports ↔ Hypermotion necesitas:\n· La Liga EA Sports JUGADA (al menos una jornada)\n· La Liga Hypermotion simulada (botón 🎮 Simular Hypermotion).');
+      return;
+    }
+    if(!window.confirm('Vas a preparar TEMPORADA NUEVA en la cima:\n\n⬇️ Bajan a Hypermotion: '+prev.eaRelegated.map(function(t){return t.name;}).join(', ')+'\n⬆️ Suben a EA Sports: '+prev.eaPromoted.map(function(t){return t.name;}).join(', ')+'\n\nSe regenerará el calendario de la Liga EA Sports y su clasificación volverá a 0. ¿Continuar?')) return;
+
+    var relNames={}, promNames={};
+    prev.eaRelegated.forEach(function(t){ relNames[_movNorm(t.name)]=true; });
+    prev.eaPromoted.forEach(function(t){ promNames[_movNorm(t.name)]=true; });
+
+    // 1) Nueva lista de 20 equipos de EA Sports (quita 4 últimos, añade 4 de Hyp).
+    var eaTable = window.getLigaEaStandings();
+    var newEaNames = eaTable.map(function(t){ return t.name; })
+       .filter(function(n){ return !relNames[_movNorm(n)]; })
+       .concat(prev.eaPromoted.map(function(t){ return t.name; }));
+    if(newEaNames.length !== 20){
+      alert('No se pudo calcular 20 equipos para EA Sports (salió '+newEaNames.length+'). Operación cancelada.');
+      return;
+    }
+
+    // 2) Mover plantillas COMPLETAS entre ligaExt (ruta sincronizada saveData).
+    var eaData  = _readLigaExt('liga-ea-sports')  || { teams: [] };
+    var hypData = _readLigaExt('liga-hypermotion') || { teams: [] };
+    function takeTeam(arr, name){
+      var nn=_movNorm(name);
+      for(var i=0;i<arr.length;i++){ if(_movNorm(arr[i].name)===nn){ return arr.splice(i,1)[0]; } }
+      return null;
+    }
+    // EA pierde los 4 relegados → Hypermotion.
+    prev.eaRelegated.forEach(function(t){
+      var obj = takeTeam(eaData.teams, t.name) || { name:t.name, power:t.media||70 };
+      obj.updatedAt = Date.now();
+      takeTeam(hypData.teams, t.name);   // evita duplicado
+      hypData.teams.push(obj);
+    });
+    // Hypermotion pierde los 4 ascendidos → EA Sports.
+    prev.eaPromoted.forEach(function(t){
+      var obj = takeTeam(hypData.teams, t.name) || _hypTeamObj(t.name);
+      obj.updatedAt = Date.now();
+      takeTeam(eaData.teams, t.name);    // evita duplicado
+      eaData.teams.push(obj);
+    });
+    try { if(window.saveData) window.saveData('liga-ea-sports', eaData); } catch(_){}
+    try { if(window.saveData) window.saveData('liga-hypermotion', hypData); } catch(_){}
+    try { if(window.invalidateLigaCache){ window.invalidateLigaCache('liga-ea-sports'); window.invalidateLigaCache('liga-hypermotion'); } } catch(_){}
+
+    // 3) Regenerar calendario EA con los nuevos 20 + resetear su clasificación.
+    var newSchedule = generarCalendario(mezclarEquipos(newEaNames.slice()));
+    setLigaSchedule(newSchedule); // persiste local+server y refresca TEAMS
+    try { localStorage.removeItem(LS_KEY); } catch(_){}      // ef_liga38_v4 (resultados viejos)
+    try { sharedLigaResultsCache = {}; } catch(_){}
+
+    // 4) Resetear estado de Hypermotion (su roster cambió) y su cache de equipos.
+    saveSegundaState({table:[],players:[]});
+    try { setSegundaTeams(hypData.teams.map(function(t){ return { name:t.name, short:(t.short||t.name), media:Number(t.power||t.media)||70 }; })); } catch(_){}
+
+    // 5) Re-render in-place.
+    try { if(typeof window.buildLigaClas==='function') window.buildLigaClas(); } catch(_){}
+    try { renderSegunda(); } catch(_){}
+    renderMovement();
+    var root=document.getElementById('primf-mov-content');
+    if(root){ root.insertAdjacentHTML('afterbegin','<div class="clas-empty" style="margin-bottom:12px;background:rgba(20,55,110,.4);border-color:rgba(90,160,255,.4)">✅ EA Sports ↔ Hypermotion aplicado: 4 equipos bajan y 4 suben. La Liga EA Sports tiene calendario nuevo y clasificación a 0. <b>Refresca la página</b> para que se actualice en todas las pantallas.</div>'); }
+  };
 
   document.addEventListener('DOMContentLoaded', function(){
     ensurePrimeraCard();

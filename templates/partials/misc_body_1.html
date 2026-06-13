@@ -12997,6 +12997,12 @@ window._showSimProgress = function(opts, onDone){
           'ucl_phase_v1':1,'uel_phase_v1':1,'uecl_phase_v1':1,'tour_registry_v1':1,
           'ball_inventory_v1':1,'ball_by_comp_v1':1,'ball_comp_db_v1':1,'menu_home_v1':1,
           'selecciones_squad_v1':1,'sel_fin_stadiums_v1':1,'munich-obj-overrides-v1':1,
+          /* PROGRESO de objetivos (✅ + contadores manuales). Está en el
+             allowlist del server (_KV_ALLOWED_EXACT) pero antes faltaba aquí
+             → la importación lo restauraba en local pero NO lo re-subía, así
+             que al recargar el pull por recencia lo pisaba con la copia stale
+             de Railway (la importación "no llegaba" a los objetivos). */
+          'munich-obj-state-v4':1,
           'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
           'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
           'cash_rewards_v1':1,'cash_ledger_v1':1,'bayern_hud_overrides_v1':1
@@ -13005,6 +13011,9 @@ window._showSimProgress = function(opts, onDone){
         var _KV_RECENCY = {
           'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
           'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
+          /* Recencia en el server (_KV_RECENCY_BLOB_KEYS): estampamos
+             updatedAt=ahora para que el progreso importado gane entero. */
+          'munich-obj-state-v4':1,
           'cash_rewards_v1':1,'bayern_hud_overrides_v1':1
         };
         /* competition_state: el cursor del día + pospuestos. El valor que
@@ -13033,9 +13042,18 @@ window._showSimProgress = function(opts, onDone){
                    arranque (que adopta por recencia) converja al mismo blob. */
                 try { localStorage.setItem(k, JSON.stringify(val)); } catch(_){}
               }
+              var _kvBody = { value: val };
+              /* HUD: lleva un reloj LÓGICO `rev`; el server RECHAZA un push
+                 NO-autoritativo con `rev` menor que el almacenado (cliente
+                 stale / clock-skew / defaults). La importación es una acción
+                 EXPLÍCITA del admin ("restaurar TODO · gana sobre Railway"),
+                 así que va AUTORITATIVA → el server la guarda GANANDO y bumpea
+                 rev=max(old,new)+1 (regla CLAUDE.md 13b). Sin esto, si Railway
+                 tiene un rev mayor el HUD importado NO se restauraría. */
+              if (k === 'bayern_hud_overrides_v1') _kvBody.authoritative = true;
               serverPushes.push(fetch('/api/kv/'+encodeURIComponent(k), {
                 method:'POST', headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ value: val })
+                body: JSON.stringify(_kvBody)
               }).catch(function(){}));
               nPushed++;
             }

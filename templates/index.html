@@ -337,5 +337,91 @@
       });
     });
   </script>
+  <script>
+  /* ════════════════════════════════════════════════════════════════
+     AVISO DE BD EFÍMERA (2026-06-13) — petición usuario:
+     «el resto de ligas da muchos dolores de cabeza, ahora salen ligas
+     de países sin equipos y estaban absolutamente todos hechos».
+
+     Causa raíz CONFIRMADA (/api/debug → backend "sqlite", EFÍMERA): en
+     Railway sin plugin Postgres la SQLite del contenedor se BORRA en
+     CADA deploy/restart → el servidor pierde TODOS los `liga_ext_*`.
+     Cuando además el navegador del usuario tiene los datos borrados (o
+     entra desde otro dispositivo), no hay de dónde recuperar y las
+     ligas salen «sin equipos» aunque estuvieran todas hechas. NO es un
+     bug de fusión (el anti-wipe funciona); es que no hay nada DURABLE
+     debajo. Es exactamente la regla 9 de CLAUDE.md.
+
+     No podemos arreglar la persistencia desde el código (es config de
+     Railway). Lo que SÍ hacemos: convertir esta catástrofe SILENCIOSA
+     en un aviso VISIBLE y accionable, para que el usuario sepa al
+     instante que sus datos NO se están guardando y cómo arreglarlo de
+     forma permanente. El aviso desaparece solo cuando la BD pasa a ser
+     Postgres persistente (backend === "postgresql").
+     ════════════════════════════════════════════════════════════════ */
+  (function(){
+    function showEphemeralBanner(info){
+      try {
+        if (document.getElementById('ephemeral-db-warning')) return;
+        var nTeams = 0;
+        try {
+          (info.ligas_ext || []).forEach(function(l){ nTeams += (l && +l.teams) || 0; });
+        } catch(_){}
+        var nLigas = (info.counts && info.counts.liga_ext_rows) || 0;
+        var bar = document.createElement('div');
+        bar.id = 'ephemeral-db-warning';
+        bar.style.cssText = [
+          'position:fixed','top:0','left:0','right:0','z-index:99999',
+          'background:linear-gradient(90deg,#7a0010,#cf142b,#7a0010)',
+          'color:#fff','font-family:Oswald,Rajdhani,sans-serif',
+          'padding:10px 44px 10px 14px','box-shadow:0 2px 12px rgba(0,0,0,.6)',
+          'border-bottom:2px solid #ffd633','line-height:1.32','font-size:13px'
+        ].join(';');
+        bar.innerHTML =
+          '<div style="max-width:760px;margin:0 auto;">'
+          + '<b style="color:#ffd633;font-size:14px;">⚠️ ATENCIÓN: el servidor NO está guardando los datos de forma permanente.</b><br>'
+          + 'La base de datos es <b>efímera (SQLite)</b>: en cada actualización de la app se BORRA todo lo del servidor '
+          + '(por eso «Resto de Ligas» aparece sin equipos aunque los tuvieras todos hechos). '
+          + 'Ahora mismo el servidor guarda <b>' + nLigas + '</b> ligas / <b>' + nTeams + '</b> equipos.<br>'
+          + '<b style="color:#ffd633;">Arreglo permanente (2 min):</b> en Railway → tu proyecto → <b>+ New → Database → Add PostgreSQL</b>. '
+          + 'Railway inyecta <code>DATABASE_URL</code> automáticamente y la app pasa a Postgres persistente al re-desplegar. '
+          + '<b>Antes de hacerlo, exporta un backup</b> desde 🖍 Editar → 💾 (por si acaso).'
+          + '</div>'
+          + '<button id="ephemeral-db-warning-x" aria-label="Cerrar" style="position:absolute;top:6px;right:10px;'
+          + 'background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;">✕</button>';
+        document.body.appendChild(bar);
+        /* Empujar el contenido hacia abajo para no tapar la cabecera. */
+        try { document.body.style.paddingTop = (bar.offsetHeight + 4) + 'px'; } catch(_){}
+        var x = document.getElementById('ephemeral-db-warning-x');
+        if (x) x.addEventListener('click', function(){
+          try { bar.remove(); document.body.style.paddingTop = ''; } catch(_){}
+          /* Solo se oculta para ESTA sesión: vuelve a salir en el
+             próximo arranque mientras la BD siga siendo efímera. */
+          try { sessionStorage.setItem('ephemeralDbWarnDismissed', '1'); } catch(_){}
+        });
+      } catch(_){}
+    }
+    function checkDb(){
+      try {
+        var dismissed = false;
+        try { dismissed = sessionStorage.getItem('ephemeralDbWarnDismissed') === '1'; } catch(_){}
+        if (dismissed) return;
+        fetch('/api/debug', { credentials:'same-origin' })
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(j){
+            if (!j) return;
+            /* Solo avisamos si NO es Postgres persistente. */
+            if (j.backend !== 'postgresql') showEphemeralBanner(j);
+          })
+          .catch(function(){});
+      } catch(_){}
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function(){ setTimeout(checkDb, 800); });
+    } else {
+      setTimeout(checkDb, 800);
+    }
+  })();
+  </script>
 </body>
 </html>

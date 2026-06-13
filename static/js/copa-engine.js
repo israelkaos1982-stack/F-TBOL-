@@ -3002,6 +3002,31 @@
     });
   };
 
+  /* Sim HEADLESS de UN partido de Copa (sin cuenta atrás ni DOM) para la
+     caja «🤖 PAGAR SIMULACIÓN» del hub y de PARTIDOS POSPUESTOS. Persiste
+     vía `saveSimulatedMatch` (backend de Copa, async) y deja que copaRender
+     refresque la pantalla de la Copa si está visible. Devuelve true si
+     pudo lanzar la simulación (NO espera la respuesta del servidor; el
+     marcador se materializa al converger el estado). El guard HvH lo hace
+     el caller (_psPaySimByDescriptor). 2026-06-13. */
+  window._copaSimMatchHeadless = function (ronda, idx, esVuelta) {
+    try {
+      if (!_copa || !_copa.sorteo) {
+        try { var raw = localStorage.getItem('copa_state_v1'); if (raw) _copa = JSON.parse(raw); } catch (_) {}
+      }
+      var matches = (_copa && _copa.sorteo && _copa.sorteo[ronda]) || [];
+      if (idx < 0 || idx >= matches.length) return false;
+      var m = matches[idx];
+      if (!m) return false;
+      var local = esVuelta ? m.v : m.l;
+      var visit = esVuelta ? m.l : m.v;
+      if (!local || !visit || local === 'PENDIENTE' || visit === 'PENDIENTE') return false;
+      var result = simulateCupMatch(local, visit, { twoLeg: !!TWO_LEG[ronda] });
+      saveSimulatedMatch(ronda, idx, !!esVuelta, { local: local, visitante: visit }, result);
+      return true;
+    } catch (_) { return false; }
+  };
+
   window.copaSimTodosIA = function (ronda, esVuelta) {
     /* Para evitar simulaciones en masa accidentales, el botón
        "⚡ Simular IA" pide el PIN admin 747. Se usa el teclado digital

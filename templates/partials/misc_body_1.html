@@ -6429,6 +6429,20 @@ window._showSimProgress = function(opts, onDone){
     if (/^usc_/.test(mk))     return _psSimChargedCup({ persist:'usc',     mk:mk, home:hN, away:aN, single:true });
     if (/^eurfase_/.test(mk)) return _psSimChargedCup({ persist:'eurfase', mk:mk, home:hN, away:aN, single:false });
     if (/^eurko_/.test(mk))   return _psSimChargedCup({ persist:'eurko',   mk:mk, home:hN, away:aN, single:false });
+    /* Copa del Rey: matchKey `copa_<ronda>_<idx>_<i|v|d>`. El sim es
+       HEADLESS vía el motor de la Copa (`_copaSimMatchHeadless`), que
+       persiste en el backend de Copa (async). Solo ida/vuelta (i|v): el
+       desempate (d) lo juega el servidor solo cuando la vuelta empata.
+       2026-06-13. */
+    var _cmk = /^copa_([^_]+)_(\d+)_([iv])$/.exec(mk);
+    if (_cmk){
+      if (_psGetHubMoney() < PS_PAY_SIM_COST) return false;
+      if (typeof window._bayernHudCreditMoney !== 'function') return false;
+      if (typeof window._copaSimMatchHeadless !== 'function') return false;
+      if (!window._copaSimMatchHeadless(_cmk[1], parseInt(_cmk[2],10), _cmk[3] === 'v')) return false;
+      try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
+      return true;
+    }
     if (d.tourId === 'liga'){
       var p = mk.split('|');
       return _psSimChargeLiga(parseInt(p[0],10)||0, p[1], p[2]);
@@ -8044,6 +8058,15 @@ window._showSimProgress = function(opts, onDone){
        según la pierna en juego (desempate / vuelta / ida). */
     var _copaLeg = r.desLeg ? 'd' : (r.esVuelta ? 'v' : 'i');
     var _copaMk = 'copa_' + r.ronda + '_' + r.idx + '_' + _copaLeg;
+    /* 🤖 PAGAR SIMULACIÓN: igual que Liga/Champions, salvo que el rival
+       sea humano (un HvH no se simula pagando) o sea el 3er partido /
+       desempate (lo juega el servidor solo). 2026-06-13. */
+    var _copaRivalHuman = false;
+    try { _copaRivalHuman = _psNameIsHuman(r.rival); } catch(_){}
+    var _copaPayable = (_copaLeg === 'i' || _copaLeg === 'v') && !_copaRivalHuman;
+    var _payHtmlCopa = _copaPayable
+      ? '<div style="margin-top:2px;">' + _psPayBtnHtml(_psGetHubMoney() < PS_PAY_SIM_COST, PS_PAY_SIM_COST) + '</div>'
+      : '';
     st.innerHTML =
       '<div class="ps-card">'
       + _psDeferTopBtnHtml()
@@ -8053,12 +8076,34 @@ window._showSimProgress = function(opts, onDone){
       + _psVsBlockHtml(homeObj, awayObj, '<div class="ps-x">VS</div>')
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
       +   '<button type="button" class="ps-btn" id="ps-copa-previa">📋 PREVIA · JUGAR ▶</button>'
+      +   _payHtmlCopa
       + '</div>'
       + '</div>';
     var bp = document.getElementById('ps-copa-previa');
     if (bp) bp.onclick = function(){
       try { if (typeof window.copaAbrirPrevia === 'function') window.copaAbrirPrevia(r.ronda, r.idx, r.desLeg ? 'des' : r.esVuelta); } catch(_){}
     };
+    var _copaPayBtn = document.getElementById('ps-pay-sim-btn');
+    if (_copaPayBtn && _copaPayable){
+      _copaPayBtn.onclick = function(){
+        if (_copaPayBtn.disabled) return;
+        _copaPayBtn.disabled = true;
+        var ok = false;
+        try {
+          ok = (typeof window._psPaySimByDescriptor === 'function')
+            && window._psPaySimByDescriptor({ tourId:'copa', matchKey:_copaMk, home:r.home, away:r.away });
+        } catch(_){}
+        if (ok){
+          try { if (typeof window._psFlashToast === 'function') window._psFlashToast('Partido simulado · −' + PS_PAY_SIM_COST + ' 🪙', true); } catch(_){}
+          /* La Copa persiste async en su backend → avanzamos el día (el
+             marcador se materializa al converger el estado de la Copa). */
+          _markDoneAndAdvance();
+        } else {
+          _copaPayBtn.disabled = false;
+          try { if (typeof window._psFlashToast === 'function') window._psFlashToast('No se pudo simular (fondos insuficientes o rival humano).', false); } catch(_){}
+        }
+      };
+    }
     var bppC = document.getElementById('ps-defer-top-btn');
     if (bppC) bppC.onclick = function(){
       if (bppC.disabled) return;
@@ -52752,6 +52797,25 @@ https://api.sofascore.app/api/v1/team/44/image
      (24px) y el botón ▶ JUGAR en el medio en lugar del J22/score. La
      cabecera de la fila lleva el emoji + label de la comp (🌍 Mundial
      Grupo — J3, 🏆 Champions, etc.). 2026-05-24. */
+  /* Resuelve el escudo de un equipo por NOMBRE para las filas de
+     POSPUESTOS cuando el descriptor no lo trajo. La Copa tiene su propio
+     resolutor (`_copaResolveShield`, conoce PF/Hypermotion); el resto cae
+     a `getTeamLogoUrl`. 2026-06-13. */
+  function _rowShieldFor(name, entry){
+    if (!name) return '';
+    try {
+      if (/^copa_/.test(String((entry && entry.matchKey) || ''))
+          && typeof window._copaResolveShield === 'function'){
+        var c = window._copaResolveShield(name); if (c) return c;
+      }
+    } catch(_){}
+    try {
+      if (typeof window.getTeamLogoUrl === 'function'){
+        var u = window.getTeamLogoUrl(name); if (u) return u;
+      }
+    } catch(_){}
+    return '';
+  }
   function _renderDeferredHvHRow(entry){
     if (!entry) return '';
     /* entry.home / entry.away pueden ser objeto {name, shield} (camino
@@ -52765,8 +52829,12 @@ https://api.sofascore.app/api/v1/team/44/image
     var entryComp = (entry.tourId === 'liga') ? 'liga' : '';
     var hN = _displayName(_n(entry.home), entryComp);
     var aN = _displayName(_n(entry.away), entryComp);
-    var hS = _s(entry.home);
-    var aS = _s(entry.away);
+    /* Escudos: el descriptor del partido puede no haberlos traído (p.ej.
+       el defer de Liga guarda solo el nombre). Backfill por nombre para
+       que NUNCA salga el cuadro gris vacío. La Copa usa su propio
+       resolutor (conoce PF/Hypermotion). 2026-06-13. */
+    var hS = _s(entry.home) || _rowShieldFor(_n(entry.home), entry);
+    var aS = _s(entry.away) || _rowShieldFor(_n(entry.away), entry);
     var label = entry.label || 'Partido';
     var emoji = entry.emoji || '🌍';
     var uid = entry.uid || '';
@@ -52801,9 +52869,11 @@ https://api.sofascore.app/api/v1/team/44/image
     var _payCost = (entry.tourId && /^(sct|pss|jg|asia|mundial|tx\d+)$/.test(String(entry.tourId))) ? 20 : 50;
     var _hubMoney = 0;
     try { if (typeof window._psHubMoney === 'function') _hubMoney = window._psHubMoney(); } catch(_){}
-    /* La Copa del Rey persiste vía su motor de servidor (sin sim
-       headless instantánea), así que no ofrece PAGAR SIMULACIÓN aquí. */
-    var _payable = isTour && !/^copa_/.test(String(entry.matchKey || ''));
+    /* La Copa del Rey persiste vía su motor de servidor (async): ofrece
+       PAGAR SIMULACIÓN para ida/vuelta (i|v), no para el 3er partido /
+       desempate (d), que lo juega el servidor solo. 2026-06-13. */
+    var _mkStr = String(entry.matchKey || '');
+    var _payable = isTour && (!/^copa_/.test(_mkStr) || /^copa_[^_]+_\d+_[iv]$/.test(_mkStr));
     var paySimHtml = (_payable && !_bothHuman)
       ? '<div style="flex:1 1 100%;display:flex;justify-content:center;margin-top:2px;">'
         + '<button type="button" class="mu-hvh-paysim" data-uid="' + _esc(uid) + '"'
@@ -53078,24 +53148,48 @@ https://api.sofascore.app/api/v1/team/44/image
         if (typeof g0 === 'function') deferred = g0() || [];
       } catch(_){}
       var hub = _hubName();
-      var clubAl = _aliasesTour(hub);
-      var selAl  = ['francia','france'];
+      /* Selección del hub vía el registro de misters (generaliza a las 6
+         cajas: Liverpool→Francia, Arsenal→Brasil, PSG→España…). Antes
+         estaba hardcodeada a 'francia'. 2026-06-13. */
+      var hubSelName = 'Francia';
+      try {
+        var _mhSel = (typeof window._mhFindMister === 'function') ? window._mhFindMister(hub) : null;
+        if (_mhSel && _mhSel.seleccion) hubSelName = _mhSel.seleccion;
+      } catch(_){}
+      var selAl = [_norm(hubSelName), 'francia', 'france'];
+      function _eName(v){ return (v && typeof v === 'object') ? (v.name || '') : (v || ''); }
+      function _isSelName(n){
+        if (_match(n, selAl)) return true;
+        try {
+          if (typeof window._isHumanSeleccionCanonica === 'function'
+              && window._isHumanSeleccionCanonica(n)
+              && typeof window._mhSameMister === 'function'
+              && window._mhSameMister(hub, n)) return true;
+        } catch(_){}
+        return false;
+      }
+      /* Bug 2026-06-13 (foto usuario «pospuse 4 y solo salen 2»): el
+         bucketing ESTRICTO descartaba (return null) los partidos cuyo
+         nombre no casaba con el hub ni con la selección — típicamente las
+         copas/Champions del club guardadas como alias legacy "Bayern
+         Munich". Ahora: si toca la SELECCIÓN del hub → 'sel'; TODO lo
+         demás (club + cualquier competición del club) → 'club'. Así
+         NINGÚN partido pospuesto se pierde. */
       function _entrySide(e){
-        if (!e) return null;
-        var hN = (e.home && e.home.name) || '';
-        var aN = (e.away && e.away.name) || '';
-        if (_match(hN, clubAl) || _match(aN, clubAl)) return 'club';
-        if (_match(hN, selAl)  || _match(aN, selAl))  return 'sel';
-        return null;
+        if (!e) return 'club';
+        var hN = _eName(e.home);
+        var aN = _eName(e.away);
+        if (_isSelName(hN) || _isSelName(aN)) return 'sel';
+        return 'club';
       }
       var bySide = { club: [], sel: [] };
       deferred.forEach(function(e){
         var s = _entrySide(e);
-        if (s) bySide[s].push(e);
+        bySide[s].push(e);
       });
       var posTabs = [
-        { id:'club', label:'Club',      emoji:'🛡', name:hub,       items:bySide.club },
-        { id:'sel',  label:'Selección', emoji:'🌍', name:'Francia', items:bySide.sel  }
+        { id:'club', label:'Club',      emoji:'🛡', name:hub,        items:bySide.club },
+        { id:'sel',  label:'Selección', emoji:'🌍', name:hubSelName, items:bySide.sel  }
       ];
       var anyTab = false;
       posTabs.forEach(function(t){ if (t.items.length) anyTab = true; });

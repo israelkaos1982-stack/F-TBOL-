@@ -7912,7 +7912,14 @@ window._bajaClose = function() {
   });
 };
 function addBajaButtonsToExistingRows() {
-  document.querySelectorAll('.plant-row').forEach(function(row) {
+  /* PERF 2026-06-14: acotado a la pantalla activa/overlays visibles
+     (antes escaneaba TODAS las .plant-row de las decenas de pantallas
+     ocultas en CADA navegacion). Idempotente: cada pantalla recibe sus
+     botones al hacerse activa. */
+  var _rows = (typeof window._ptpScan === 'function')
+    ? window._ptpScan('.plant-row')
+    : document.querySelectorAll('.plant-row');
+  _rows.forEach(function(row) {
     // Añadir long press a todas las filas
     addLongPressToRow(row);
     if (row.querySelector('.plant-baja-btn')) return; // ya tiene botón
@@ -9040,8 +9047,39 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     el.title = teamName + ' · Poder ' + poder + '/100';
   }
 
+  /* PERF 2026-06-14: estos scanners corrian `document.querySelectorAll`
+     sobre TODO el DOM (6MB, decenas de pantallas ocultas) en CADA
+     navegacion (+ un observer cada 400ms). Como solo decoran contenido
+     VISIBLE (chips de poder), los acotamos a la pantalla activa + los
+     overlays visibles. Es cosmetico e idempotente: cada pantalla se
+     decora al hacerse activa (toda navegacion re-ejecuta esto). */
+  function _ptpScan(sel){
+    var out = [];
+    try {
+      var roots = [];
+      var act = document.querySelector('.screen.active');
+      if (act) roots.push(act);
+      var ids = ['gm-modal','prepartido-overlay','sancion-overlay'];
+      for (var i=0;i<ids.length;i++){
+        var e = document.getElementById(ids[i]);
+        if (!e) continue;
+        var shown = (e.classList && e.classList.contains('show')) ||
+                    (e.style && e.style.display && e.style.display !== 'none');
+        if (shown) roots.push(e);
+      }
+      if (!roots.length) roots.push(document);
+      for (var r=0;r<roots.length;r++){
+        var nl = roots[r].querySelectorAll(sel);
+        for (var j=0;j<nl.length;j++) out.push(nl[j]);
+      }
+    } catch(_){
+      try { return Array.prototype.slice.call(document.querySelectorAll(sel)); } catch(__){ return []; }
+    }
+    return out;
+  }
+  try { window._ptpScan = _ptpScan; } catch(_){}
   function injectCalendarPower() {
-    document.querySelectorAll('.mrow .mn').forEach(function(el) {
+    _ptpScan('.mrow .mn').forEach(function(el) {
       decorateTeamEl(el);
       var oldBadge = el.querySelector('.team-poder-badge');
       if (oldBadge) oldBadge.remove();
@@ -9049,7 +9087,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   }
 
   function injectLiveHeaderPower() {
-    document.querySelectorAll('.ml-header').forEach(function(header) {
+    _ptpScan('.ml-header').forEach(function(header) {
       var names = header.querySelectorAll('.ml-team-name');
       if (names[0]) decorateTeamEl(names[0]);
       if (names[1]) decorateTeamEl(names[1]);
@@ -9057,7 +9095,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   }
 
   function injectGenericPower() {
-    document.querySelectorAll('[data-team-a],[data-team-b]').forEach(function(box) {
+    _ptpScan('[data-team-a],[data-team-b]').forEach(function(box) {
       var aName = box.getAttribute('data-team-a');
       var bName = box.getAttribute('data-team-b');
       var names = box.querySelectorAll('.ml-team-name,.mn,.team-name');

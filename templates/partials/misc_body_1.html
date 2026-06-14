@@ -790,7 +790,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="mc-equipo-content">
 <img alt="Arsenal" class="mc-img" src="/static/img/escudos-1/england_arsenal.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/><span class="mc-label team-meta"><span>Arsenal</span><span class="team-sep">·</span><span class="team-coach">Álvaro🐭</span></span>
 </div></div>
-<div class="menu-card equipo-card mc-sociedad" onclick="go('s-madrid')" style="height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
+<div class="menu-card equipo-card mc-sociedad" data-hub="acsa" onclick="window.setActiveHub&&window.setActiveHub('acsa');go('s-madrid')" style="height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
 <img alt="" class="mc-equipo-badge-bg" src="/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg"/>
 <div class="mc-equipo-overlay"></div>
 <div class="mc-equipo-content">
@@ -60961,6 +60961,38 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 </div>
 
 <div class="screen" id="s-madrid">
+<script>
+/* La caja Real Madrid-Inglaterra (Acsa 🔨🏴) REUTILIZA el hub genérico
+   `s-munich` parametrizado por HUB ACTIVO (multi-hub 2026-06-14): al
+   activarse esta pantalla fija el hub activo = Acsa y abre s-munich, que
+   muestra plantilla (Real Madrid + Inglaterra) / derbys / calendario /
+   trofeos / objetivos / HUD / mensajes CORRESPONDIENTES al Real Madrid.
+   El callback del MutationObserver corre como microtask ANTES del paint,
+   así que no hay parpadeo del placeholder. Cubre también cualquier
+   go('s-madrid') directo. */
+(function(){
+  if(window.__madHubRedirectReady) return; window.__madHubRedirectReady=true;
+  function _redir(){
+    try{ if(window.setActiveHub) window.setActiveHub('acsa'); }catch(_){}
+    try{ if(window.go) window.go('s-munich'); }catch(_){}
+  }
+  function _wire(){
+    var scr=document.getElementById('s-madrid');
+    if(!scr) return;
+    if(scr.classList.contains('active')) _redir();
+    try{
+      var obs=new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          if(muts[i].attributeName==='class' && scr.classList.contains('active')){ _redir(); return; }
+        }
+      });
+      obs.observe(scr, { attributes:true, attributeFilter:['class'] });
+    }catch(_){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _wire);
+  else _wire();
+})();
+</script>
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><img alt="Real Madrid" src="/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">

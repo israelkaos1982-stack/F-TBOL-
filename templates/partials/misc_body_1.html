@@ -52011,11 +52011,17 @@ https://api.sofascore.app/api/v1/team/44/image
       if(ov.colors && ov.colors.length) cols=ov.colors;
     }
     var canon=_canonHubName();
+    var t=_slot();
     if(!name){
-      var t=_slot();
       name=(t&&t.name)||canon;
       if(!esc) esc=(t&&(t.escudo||t.shield))||'';
     }
+    /* Estadio editado en "Editar equipos · Liga EA Sports" (t.stadium del
+       slot del hub). El override del menú (ov.stadium) GANA si existe; si
+       no, el estadio del slot manda sobre el _defaultStad hardcoded — sin
+       esto, editar el estadio de Real Madrid a "Wembley Stadium" no se
+       reflejaba (la cabecera mostraba el default "Santiago Bernabéu"). */
+    if(!stad && t && t.stadium) stad=String(t.stadium).trim();
     /* El slot legacy se llama "Bayern Munich" pero el hub de Toñín es
        canónicamente Liverpool. Nunca mostrar "Bayern Munich": usar el
        club canónico y descartar el escudo legacy del Bayern para que
@@ -62039,12 +62045,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     try { var a = _userTeamAlias(); if (a) return a; } catch(_){}
     return 'Liverpool';
   }
-  /* Selección VISIBLE del hub (Francia para Toñín, Brasil para Álvaro…). */
+  /* Selección VISIBLE del hub (Francia para Toñín, Brasil para Álvaro…).
+     El HUB ACTIVO manda PRIMERO: se fija SÍNCRONO al pulsar la caja
+     (`setActiveHub`), mientras `_userTeamAlias()` (=_mkHubTeamName) lo
+     actualiza `_sync()` de forma ASÍNCRONA y puede ir STALE tras un
+     hubchange → la convocatoria salía "Francia" en la bandeja del Arsenal
+     (el mister sí era Álvaro porque venía del hub activo). */
   function _hubSelDisp(){
-    try { var m = window._mhFindMister && window._mhFindMister(_userTeamAlias()); if (m && m.seleccion) return String(m.seleccion); } catch(_){}
     try { var h = window._activeHub && window._activeHub(); if (h && h.seleccion) return String(h.seleccion); } catch(_){}
+    try { var m = window._mhFindMister && window._mhFindMister(_userTeamAlias()); if (m && m.seleccion) return String(m.seleccion); } catch(_){}
     return 'Francia';
   }
+  /* Bandera + acrónimo de la selección del hub para los senders de la
+     bandeja (antes hardcodeados a 🇫🇷 / "FFF · Selección Francia"). */
+  function _hubSelFlag(){
+    var nn = String(_hubSelDisp()||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+    var F = { francia:'🇫🇷', brasil:'🇧🇷', inglaterra:'🏴', noruega:'🇳🇴', argentina:'🇦🇷', espana:'🇪🇸' };
+    return F[nn] || '🌍';
+  }
+  function _fraSender(){ return 'Selección ' + _hubSelDisp(); }
 
   /* ── Sync localStorage ⇄ servidor (2026-06-05) ───────────────────
      La bandeja vivía SOLO en localStorage → se perdía al borrar datos
@@ -62776,7 +62795,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var stateCls = m.read ? ' is-read' : ' is-unread';
       var stamp = m.read ? '<span class="mmo-read-stamp">leído</span>' : '';
       var fraChip = (m.side === 'fra')
-        ? '<span class="mmo-fra-chip" title="Selección Francia">🇫🇷 SELECCIÓN</span>'
+        ? '<span class="mmo-fra-chip" title="Selección '+_esc(_hubSelDisp())+'">'+_hubSelFlag()+' SELECCIÓN</span>'
         : '';
       return '<div class="mmo-msg'+stateCls+'" data-id="'+_esc(m.id)+'">'
         + '<div class="mmo-msg-ico">'+_esc(m.icon)+'</div>'
@@ -63368,7 +63387,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           side: c.side,
           type: 'eliminacion',
           icon: icon,
-          sender: (c.side === 'fra') ? 'FFF · Selección Francia' : 'Liverpool FC',
+          sender: (c.side === 'fra') ? _fraSender() : (_hubDisp()+' FC'),
           title: 'Fuera de la ' + c.label,
           body : body
         });
@@ -63893,8 +63912,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (franceCtx && franceCtx.rival){
         rival   = franceCtx.rival;
         sideMsg = 'fra';
-        sender  = 'FFF · Selección Francia';
-        icon    = '🇫🇷';
+        sender  = _fraSender();
+        icon    = _hubSelFlag();
       }
     }
     var sig = 'pre:' + (rival || head.slice(0,30)) + ':' + dateStr;
@@ -64053,7 +64072,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
       var mk = info.mk || (comp + ':' + home + '-' + away + ':' + ga + '-' + gb);
       var compName = (side === 'fra') ? _fraCompLabel(comp) : _compLabel(comp);
-      var sender   = (side === 'fra') ? 'FFF · Selección Francia' : 'Liverpool FC';
+      var sender   = (side === 'fra') ? _fraSender() : (_hubDisp()+' FC');
 
       /* ── Mensaje de resultado (salta liga-liv: ya lo hace el hook 1) ── */
       if (!(side === 'liv' && comp === 'liga')){

@@ -21497,7 +21497,12 @@
       if (typeof m === 'number' && m >= 0) return m;
     } catch(_){}
     try {
-      var raw = localStorage.getItem('liverpool_preseason_v1')
+      /* HUB ACTIVO (multi-hub): cursor del día POR HUB (Arsenal →
+         '..._alvaro'). Sin esto el calendario de otra caja leía el día del
+         Liverpool. */
+      var _curK = (window._hubKey ? window._hubKey('liverpool_preseason_v1') : 'liverpool_preseason_v1');
+      var raw = localStorage.getItem(_curK)
+              || localStorage.getItem('liverpool_preseason_v1')
               || localStorage.getItem('bayern_preseason_v2')
               || localStorage.getItem('bayern_preseason_v1');
       if (raw){

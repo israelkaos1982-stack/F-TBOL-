@@ -10005,7 +10005,22 @@ window._showSimProgress = function(opts, onDone){
     function startObserver(){
       dedupeActiveScreens();
       if (typeof MutationObserver !== 'function') return;
-      var obs = new MutationObserver(dedupeActiveScreens);
+      /* PERF 2026-06-14: este observer veía CADA cambio de clase en
+         todo el DOM (6MB). Con las animaciones / pulses / hints (100ms)
+         / temas de cards, disparaba miles de veces/seg ejecutando un
+         querySelectorAll sobre el árbol entero → el hilo se atascaba
+         "estando dentro" y al moverse entre cajas (una navegación cambia
+         `.active` en ~80 `.screen`). COALESCEMOS a 1 ejecución por frame:
+         `dedupeActiveScreens` es idempotente y el caso inmediato ya lo
+         cubre `enforceSingleActive` síncrono del wrap de go(). */
+      var _dedRaf = 0;
+      function _dedupeSched(){
+        if (_dedRaf) return;
+        _dedRaf = (window.requestAnimationFrame || function(f){ return setTimeout(f, 16); })(function(){
+          _dedRaf = 0; dedupeActiveScreens();
+        });
+      }
+      var obs = new MutationObserver(_dedupeSched);
       obs.observe(document.body, {
         subtree: true, attributes: true, attributeFilter: ['class']
       });

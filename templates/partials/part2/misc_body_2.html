@@ -29395,10 +29395,14 @@ document.addEventListener('DOMContentLoaded', function() {
   var _tPatch = null;
   function scheduleRun(){
     if (_tPatch) clearTimeout(_tPatch);
-    _tPatch = setTimeout(runAll, 150);
+    _tPatch = setTimeout(function(){ _tPatch = null; runAll(); }, 150);
   }
   try {
     var obs = new MutationObserver(function(muts){
+      /* PERF 2026-06-14: si ya hay un runAll programado, no re-inspeccionar
+         el batch de mutaciones (ahorra el loop + classList checks bajo la
+         tormenta de cambios class/style/childList de todo el DOM). */
+      if (_tPatch) return;
       for (var i = 0; i < muts.length; i++) {
         var m = muts[i];
         if (m.type === 'childList' && (m.addedNodes.length || m.removedNodes.length)) {
@@ -29444,6 +29448,12 @@ document.addEventListener('DOMContentLoaded', function() {
 (function(){
   var ov, _safety, _anim, _animRaf, _animStop, _newsAnim, _gen = 0;
   function _el(){ ov = ov || document.getElementById('ml-loading-ov'); return ov; }
+  /* PERF 2026-06-14: flag de spinner visible. El observer obs2 (abajo)
+     vigila TODO el DOM por cambios class/style solo para ocultar este
+     spinner cuando emerge un overlay post-partido. Sin spinner activo no
+     hay nada que hacer, así que el callback hace early-return y deja de
+     escanear en cada animación / pulse / hint del juego. */
+  var _spinnerOn = false;
 
   /* ── Generador de titulares post-partido (2026-05-08) ────────────
      Mientras procesa el partido, mostramos mensajes tipo prensa
@@ -29578,6 +29588,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (bar) bar.style.width = '0%';
     if (pct) pct.textContent = '0%';
     e.classList.add('show');
+    _spinnerOn = true;
     /* ── Splash post-partido AUTO-TERMINANTE (2026-05-16) ────────────
        FOTOS 2 y 3 del usuario: "la pantalla sale con el 100 % pero se
        queda fija siempre, no puedes avanzar". Causa raíz: la versión
@@ -29677,6 +29688,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function _hide(){
     var e = _el(); if (!e) return;
+    _spinnerOn = false;
     _gen++;   /* invalida cierres / settles diferidos pendientes */
     try {
       var _b = document.getElementById('ml-loading-bar');
@@ -29761,6 +29773,10 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   try {
     var obs2 = new MutationObserver(function(muts){
+      /* PERF 2026-06-14: solo trabajamos si el spinner está visible
+         (caso raro y breve, tras FINALIZAR/CONFIRMAR). El resto del
+         tiempo el callback no escanea nada → no satura el hilo. */
+      if (!_spinnerOn) return;
       for (var i = 0; i < muts.length; i++) {
         var m = muts[i];
         if (m.type === 'attributes' && m.target && m.target.nodeType === 1) {

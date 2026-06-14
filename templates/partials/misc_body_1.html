@@ -796,7 +796,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="mc-equipo-content">
 <img alt="Real Madrid" class="mc-img" src="/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/><span class="mc-label team-meta"><span>Real Madrid</span><span class="team-sep">·</span><span class="team-coach">Acsa🔨</span></span>
 </div></div>
-<div class="menu-card equipo-card mc-atletico" data-hub="isra" onclick="window.setActiveHub&&window.setActiveHub('isra');go('s-atletico')" style="background:linear-gradient(135deg,#3a3f49 0%,#727884 26%,#aab0bc 50%,#dde0e8 76%,#ffffff 100%) !important;height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
+<div class="menu-card equipo-card mc-atletico" data-hub="isra" onclick="window.setActiveHub&&window.setActiveHub('isra');go('s-atletico')" style="background:linear-gradient(135deg,#1a0000 0%,#8a0000 45%,#cc0000 75%,#ff3030 100%) !important;height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
 <img alt="" class="mc-equipo-badge-bg" src="/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg"/>
 <div class="mc-equipo-overlay"></div>
 <div class="mc-equipo-content">
@@ -1134,6 +1134,26 @@ window._showSimProgress = function(opts, onDone){
     }
   }
 
+  /* COLOR FIJO de las cajas de los hubs humanos (petición usuario): cada
+     equipo lleva el degradado de su identidad y NINGÚN override viejo de
+     menu_home_v1 lo repinta. Real Madrid morado · Atlético rojo · FC
+     Barcelona azul · PSG azul. Resuelve por `data-hub` (cajas SSR) o por
+     la pantalla destino `__mkNav.id` (cajas añadidas por el admin, p.ej.
+     PSG). Devuelve el `background` CSS o null si la caja no es canónica. */
+  function _canonBoxBg(card){
+    var key='';
+    try{
+      if(card && card.dataset && card.dataset.hub) key=card.dataset.hub;
+      if(!key && card && card.__mkNav && card.__mkNav.id) key=card.__mkNav.id;
+    }catch(_){ }
+    var MOR='linear-gradient(135deg,#1a0033 0%,#4a148c 35%,#7b2cbf 60%,#9d4edd 82%,#c77dff 100%)';
+    var ROJ='linear-gradient(135deg,#1a0000 0%,#8a0000 45%,#cc0000 75%,#ff3030 100%)';
+    var AZU='linear-gradient(135deg,#00142e 0%,#003a8c 35%,#0050c8 60%,#2e7fe0 82%,#5ba3ff 100%)';
+    var M={ 'acsa':MOR,'s-madrid':MOR, 'isra':ROJ,'s-atletico':ROJ,
+            'angel':AZU,'s-barca':AZU, 'izan':AZU,'s-psg':AZU };
+    return M[key]||null;
+  }
+
   /* ── apply override (idempotente vía firma) ──────────────── */
   function applyOverride(card,o){
     var sig=JSON.stringify(o||{});
@@ -1160,13 +1180,13 @@ window._showSimProgress = function(opts, onDone){
       var em=card.querySelector('.mc-emoji'); if(em) em.textContent=o.emoji;
     }
     if(o.colors && o.colors.length){
-      /* Los 3 humanos canónicos tienen color FIJO por petición del usuario
-         (Real Madrid morado · Atlético blanco · FC Barcelona azul). NO
-         dejamos que un override viejo de menu_home_v1 los repinte: se respeta
-         el degradado SSR inline (!important) de la caja. */
-      var _hubC=(card.dataset&&card.dataset.hub)||'';
-      var _canonFixed={ 'acsa':1, 'isra':1, 'angel':1 };
-      if(!_canonFixed[_hubC]){
+      /* Los hubs humanos canónicos tienen color FIJO (Real Madrid morado ·
+         Atlético rojo · FC Barcelona azul · PSG azul): un override viejo de
+         menu_home_v1 NO los repinta. El resto usa el override del admin. */
+      var _cbg=_canonBoxBg(card);
+      if(_cbg){
+        card.style.setProperty('background', _cbg, 'important');
+      } else {
         var gr=gradientFrom(o.colors);
         card.style.setProperty('background', gr.outer, 'important');
         card.style.setProperty('border-color', gr.primary, 'important');
@@ -1259,6 +1279,10 @@ window._showSimProgress = function(opts, onDone){
       var inn=card.querySelector('.mc-equipo-overlay,.mc-main-overlay');
       if(inn) inn.style.background=gr.inner;
     }
+    /* COLOR FIJO de los hubs humanos (p.ej. la caja PSG añadida por el
+       admin → azul): gana a entry.colors. */
+    var _cbgA=_canonBoxBg(card);
+    if(_cbgA) card.style.setProperty('background', _cbgA, 'important');
     var _bc=_norm6(entry.bcolor
       || (entry.colors&&entry.colors.length ? gradientFrom(entry.colors).primary : '#f0c040'));
     var _gl=(entry.glow!=null ? entry.glow : 2);
@@ -52126,7 +52150,7 @@ https://api.sofascore.app/api/v1/team/44/image
     var _idT=''; try{ var _ahT=window._activeHub&&window._activeHub(); _idT=(_ahT&&_ahT.id)||''; }catch(_){ }
     var _THEME={
       'acsa':{ cols:['#6b21a8','#a855f7'], text:'#c77dff' },
-      'isra':{ cols:['#aeb4c2','#f6f8fd'], text:'#eef2fb' },
+      'isra':{ cols:['#8a0d16','#e01228'], text:'#ffffff' },
       'angel':{ cols:['#1e40af','#3b82f6'], text:'#5ba3ff' }
     };
     var _th=_THEME[_idT]||null;

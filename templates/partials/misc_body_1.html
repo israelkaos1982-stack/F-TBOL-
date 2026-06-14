@@ -2177,7 +2177,61 @@ window._showSimProgress = function(opts, onDone){
     if (window.__BAYERN_PLANT_HOST_READY) return;
     window.__BAYERN_PLANT_HOST_READY = true;
 
+    /* Busca el team object (con players/shield) por NOMBRE de club, en
+       TODAS las ligaExt_* (priorizando liga-ea-sports). Insensible a
+       mayúsculas/acentos vía `_normForStats`. Lo usa el branch hub-aware
+       de `_findBayernRow` para resolver la plantilla del CLUB del mister
+       cuya caja está abierta (Arsenal, Atlético, Real Madrid, Barça, PSG). */
+    function _findTeamRowByName(name){
+      var want = _normForStats(name || '');
+      if (!want) return null;
+      function _scan(key){
+        try {
+          var raw = localStorage.getItem(key);
+          if (!raw) return null;
+          var data = JSON.parse(raw);
+          var teams = (data && data.teams) || [];
+          for (var i=0;i<teams.length;i++){
+            var t = teams[i];
+            if (t && t.name && _normForStats(t.name) === want) return t;
+          }
+        } catch(_){}
+        return null;
+      }
+      var hit = _scan('ligaExt_liga-ea-sports');
+      if (hit) return hit;
+      try {
+        for (var ii=0; ii<localStorage.length; ii++){
+          var k = localStorage.key(ii);
+          if (!k || k.indexOf('ligaExt_') !== 0) continue;
+          if (k === 'ligaExt_liga-ea-sports') continue;
+          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
+          hit = _scan(k);
+          if (hit) return hit;
+        }
+      } catch(_){}
+      return null;
+    }
     function _findBayernRow(){
+      /* HUB ACTIVO (multi-hub 2026-06-13): para un hub NO-legacy (Arsenal,
+         Atlético, Real Madrid, Barça, PSG) la plantilla del hub es la del
+         CLUB de ESE mister, NO la de Toñín. Sin esto, el resolutor legacy
+         (basado en emoji 💡 / "primer humano no canónico") devolvía un
+         equipo cualquiera (p.ej. PSG) en la caja del Atlético — bug
+         "fallos en todas las plantillas humanas" (fotos usuario
+         2026-06-14). Resolvemos el team por el nombre del club activo
+         (`_psHumanLogicName` → club del hub); solo si no se encuentra
+         caemos al path legacy. Para el hub legacy (Toñín) NO se entra aquí
+         → comportamiento byte-for-byte intacto. */
+      try {
+        if (window._activeHubIsLegacy && !window._activeHubIsLegacy()){
+          var _hubClub = '';
+          try { if (typeof _psHumanLogicName === 'function') _hubClub = String(_psHumanLogicName() || ''); } catch(_){}
+          try { if (!_hubClub){ var _ah = window._activeHub && window._activeHub(); if (_ah && _ah.club) _hubClub = String(_ah.club); } } catch(_){}
+          var _hubRow = _hubClub ? _findTeamRowByName(_hubClub) : null;
+          if (_hubRow) return _hubRow;
+        }
+      } catch(_){}
       /* Resolución por emoji estable del humano (Toñín 💡), no por nombre.
          La identidad de Toñín es su emoji (mismo principio que
          `_isramaxTeamMap` en misc_body_2). Si Toñín cambia de equipo en

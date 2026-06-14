@@ -790,7 +790,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="mc-equipo-content">
 <img alt="Arsenal" class="mc-img" src="/static/img/escudos-1/england_arsenal.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/><span class="mc-label team-meta"><span>Arsenal</span><span class="team-sep">·</span><span class="team-coach">Álvaro🐭</span></span>
 </div></div>
-<div class="menu-card equipo-card mc-sociedad" onclick="go('s-madrid')" style="height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
+<div class="menu-card equipo-card mc-sociedad" data-hub="acsa" onclick="window.setActiveHub&&window.setActiveHub('acsa');go('s-madrid')" style="height:80px;min-height:80px;max-height:80px;overflow:hidden;position:relative;box-sizing:border-box;">
 <img alt="" class="mc-equipo-badge-bg" src="/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg"/>
 <div class="mc-equipo-overlay"></div>
 <div class="mc-equipo-content">
@@ -2326,6 +2326,27 @@ window._showSimProgress = function(opts, onDone){
     function _teamKeyMatches(t, teamNorm){
       return (t === teamNorm) || (t.indexOf(teamNorm) !== -1) || (teamNorm.indexOf(t) !== -1);
     }
+    /* HUB ACTIVO (multi-hub 2026-06-14): fila del CLUB del hub abierto en
+       ligaExt_liga-ea-sports. `_findBayernRow()` resuelve SOLO el slot de
+       Toñín (💡/Bayern) → siempre Liverpool; para Arsenal/Real Madrid/etc.
+       la plantilla mostraba el roster del Liverpool. Resolvemos por el
+       nombre del hub activo (`_hubTeamName`) y, si no, por match alias-mister
+       (`_hubTeamKeyMatch`); `_findBayernRow` queda solo de fallback legacy. */
+    function _hubClubRow(){
+      try {
+        var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+        if (raw){
+          var d = JSON.parse(raw); var teams = (d && d.teams) || [];
+          var n = _normForStats(_hubTeamName());
+          var i, t;
+          for (i=0;i<teams.length;i++){ t=teams[i]; if (t && t.name && Array.isArray(t.players) && t.players.length && _normForStats(t.name) === n) return t; }
+          for (i=0;i<teams.length;i++){ t=teams[i]; if (t && t.name && Array.isArray(t.players) && t.players.length && _hubTeamKeyMatch(t)) return t; }
+        }
+      } catch(_){}
+      try { return (typeof _findBayernRow === 'function') ? _findBayernRow() : null; } catch(_){}
+      return null;
+    }
+    try { window._hubClubRow = _hubClubRow; } catch(_){}
     function _normForStats(s){
       try {
         return String(s||'').toLowerCase()
@@ -3813,7 +3834,7 @@ window._showSimProgress = function(opts, onDone){
         }
         /* Banda de TOTALES del club (suma de todas las comps oficiales). */
         try { window._bplantRenderTotals && window._bplantRenderTotals('club'); } catch(_){}
-        var t = _findBayernRow();
+        var t = _hubClubRow();
         if (!t || !Array.isArray(t.players) || !t.players.length){
           _renderEmpty(host);
           return;
@@ -52501,6 +52522,23 @@ https://api.sofascore.app/api/v1/team/44/image
     for (var i=0;i<al.length;i++){ if (x === al[i]) return true; }
     return false;
   }
+  /* HUB ACTIVO (multi-hub 2026-06-13): selección del mister abierto
+     (Francia/Toñín, Brasil/Álvaro, …) + sus alias ES+EN. Lo usan el
+     agregador de PARTIDOS JUGADOS y el coloreo win/loss. */
+  function _fixSelName(){
+    try { var _m = window._mhFindMister && window._mhFindMister(_hubName()); if (_m && _m.seleccion) return String(_m.seleccion); } catch(_){}
+    try { var _ah = window._activeHub && window._activeHub(); if (_ah && _ah.seleccion) return String(_ah.seleccion); } catch(_){}
+    return 'Francia';
+  }
+  var _FIX_SEL_EN = { 'francia':'france','brasil':'brazil','inglaterra':'england','noruega':'norway','argentina':'argentina','espana':'spain' };
+  function _fixSelAliases(){
+    var s = _fixSelName();
+    var nrm = String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+    var out = [String(s).toLowerCase().trim()];
+    if (nrm && out.indexOf(nrm) === -1) out.push(nrm);
+    if (_FIX_SEL_EN[nrm]) out.push(_FIX_SEL_EN[nrm]);
+    return out;
+  }
 
   /* Display name corto para no romper el layout 2-col (50% ancho).
      "FC Barcelona" → "Barcelona", "Real Sociedad" → "R. Sociedad". */
@@ -53089,9 +53127,11 @@ https://api.sofascore.app/api/v1/team/44/image
        son residuos previos a la sustitución y no son del Liverpool. */
     var clubAliasLiga = _aliasesLiga(hub);
     var clubAliasTour = _aliasesTour(hub);
-    /* Selección Francia no tiene historial de sustitución, mismo alias
-       en ambos contextos. */
-    var franceAlias   = ['francia','france'];
+    /* HUB ACTIVO (multi-hub 2026-06-13): la selección del hub abierto no
+       siempre es Francia (Arsenal → Brasil). Para que sus partidos de
+       Mundial / clasificación aparezcan en PARTIDOS JUGADOS de ESA caja. */
+    var selName = _fixSelName();
+    var franceAlias = _fixSelAliases();
 
     /* Agrupamos por la competición REAL de cada partido (`m.comp`), NO
        por la entrada de `_COMPS` que lo recolectó. El colector `verano`
@@ -53143,7 +53183,7 @@ https://api.sofascore.app/api/v1/team/44/image
 
     return {
       club: { name: hub,       emoji: '🛡', label: 'CLUB',       groups: _gatherFor(clubAliasLiga, clubAliasTour) },
-      sel:  { name: 'Francia', emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(franceAlias, franceAlias) }
+      sel:  { name: selName, emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(franceAlias, franceAlias) }
     };
   }
   /* Expuesto para la BANDA DE TOTALES de la plantilla del hub
@@ -53211,9 +53251,9 @@ https://api.sofascore.app/api/v1/team/44/image
     if (typeof m.gh !== 'number' || typeof m.ga !== 'number') return '';
     var hubName = _hubName();
     var ourHome = _match(m.home, _aliases(hubName)) ||
-                  _match(m.home, ['francia','france']);
+                  _match(m.home, _fixSelAliases());
     var ourAway = _match(m.away, _aliases(hubName)) ||
-                  _match(m.away, ['francia','france']);
+                  _match(m.away, _fixSelAliases());
     if (m.gh === m.ga) return 'draw';
     var homeWin = m.gh > m.ga;
     if (ourHome && !ourAway) return homeWin ? 'win' : 'loss';
@@ -53650,7 +53690,12 @@ https://api.sofascore.app/api/v1/team/44/image
         var _mhSel = (typeof window._mhFindMister === 'function') ? window._mhFindMister(hub) : null;
         if (_mhSel && _mhSel.seleccion) hubSelName = _mhSel.seleccion;
       } catch(_){}
-      var selAl = [_norm(hubSelName), 'francia', 'france'];
+      /* Alias de la selección del HUB ACTIVO (ES + EN). Antes añadía
+         'francia'/'france' fijos → partidos de Francia se colaban en la
+         pestaña POSPUESTOS de otra caja. 2026-06-14. */
+      var _selEnP = {'francia':'france','brasil':'brazil','inglaterra':'england','noruega':'norway','argentina':'argentina','espana':'spain'};
+      var _hsNP = _norm(hubSelName);
+      var selAl = [_hsNP]; if (_selEnP[_hsNP]) selAl.push(_selEnP[_hsNP]);
       function _eName(v){ return (v && typeof v === 'object') ? (v.name || '') : (v || ''); }
       function _isSelName(n){
         if (_match(n, selAl)) return true;
@@ -53936,6 +53981,10 @@ https://api.sofascore.app/api/v1/team/44/image
       if (box && box.classList.contains('open')) _render(m);
     });
   };
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-render de
+     las cajas POSPUESTOS/PENDIENTES/JUGADOS para el club+selección del nuevo
+     hub (Arsenal+Brasil), por si el wrap de `go` no se disparó. */
+  try { window.addEventListener('hubchange', function(){ try { window.muFixRefresh(); } catch(_){} }); } catch(_){}
 
   /* Refresca al volver al hub (igual patrón que muCompsRefresh). */
   function _hookGo(){
@@ -60509,7 +60558,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (plantillaCountEl) {
       var realCount = null;
       try {
-        var hubRow = (typeof window._findBayernRow === 'function') ? window._findBayernRow() : null;
+        /* HUB ACTIVO: roster del club del hub abierto (no siempre Liverpool). */
+        var hubRow = (typeof window._hubClubRow === 'function') ? window._hubClubRow()
+                   : ((typeof window._findBayernRow === 'function') ? window._findBayernRow() : null);
         if (hubRow && Array.isArray(hubRow.players)) {
           var n = 0;
           hubRow.players.forEach(function(p){ if (p && p.name) n++; });
@@ -60523,11 +60574,19 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var hasInjury = false;
       try {
         var lesionStore = window.LESION_STORE || {};
-        /* Liga la lista de nombres de jugadores del Bayern para
-           filtrar el LESION_STORE (que es global a toda la liga). */
+        /* Liga la lista de nombres de jugadores del CLUB DEL HUB ACTIVO para
+           filtrar el LESION_STORE (global a toda la liga). Antes fijaba
+           'Bayern Munich' → en Arsenal/Real Madrid filtraba por Liverpool. */
         var bayernNames = {};
-        if (typeof window.sqFromRegistry === 'function') {
-          var sq = window.sqFromRegistry('Bayern Munich') || [];
+        var _hubRowI = (typeof window._hubClubRow === 'function') ? window._hubClubRow() : null;
+        if (_hubRowI && Array.isArray(_hubRowI.players)) {
+          _hubRowI.players.forEach(function(p){
+            var nm = (p && (p.name || (Array.isArray(p)?p[1]:''))) || '';
+            if (nm) bayernNames[nm] = true;
+          });
+        } else if (typeof window.sqFromRegistry === 'function') {
+          var _hubNmI = (typeof window._psHumanLogicName === 'function') ? window._psHumanLogicName() : 'Bayern Munich';
+          var sq = window.sqFromRegistry(_hubNmI) || [];
           sq.forEach(function(p){
             var nm = (p && (p.name || (Array.isArray(p)?p[1]:''))) || '';
             if (nm) bayernNames[nm] = true;
@@ -60553,9 +60612,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         if (raw) {
           var data = JSON.parse(raw) || {};
           var bets = (data.bets || []);
+          /* HUB ACTIVO: apuestas abiertas del mister del hub abierto (no 'tonin' fijo). */
+          var _uid = (window._activeHub && window._activeHub().id) || 'tonin';
           for (var bi = 0; bi < bets.length; bi++) {
             var b = bets[bi];
-            if (b && b.userId === 'tonin' && b.status === 'open') openCount++;
+            if (b && b.userId === _uid && b.status === 'open') openCount++;
           }
         }
       } catch(_){}
@@ -61234,6 +61295,38 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 </div>
 
 <div class="screen" id="s-madrid">
+<script>
+/* La caja Real Madrid-Inglaterra (Acsa 🔨🏴) REUTILIZA el hub genérico
+   `s-munich` parametrizado por HUB ACTIVO (multi-hub 2026-06-14): al
+   activarse esta pantalla fija el hub activo = Acsa y abre s-munich, que
+   muestra plantilla (Real Madrid + Inglaterra) / derbys / calendario /
+   trofeos / objetivos / HUD / mensajes CORRESPONDIENTES al Real Madrid.
+   El callback del MutationObserver corre como microtask ANTES del paint,
+   así que no hay parpadeo del placeholder. Cubre también cualquier
+   go('s-madrid') directo. */
+(function(){
+  if(window.__madHubRedirectReady) return; window.__madHubRedirectReady=true;
+  function _redir(){
+    try{ if(window.setActiveHub) window.setActiveHub('acsa'); }catch(_){}
+    try{ if(window.go) window.go('s-munich'); }catch(_){}
+  }
+  function _wire(){
+    var scr=document.getElementById('s-madrid');
+    if(!scr) return;
+    if(scr.classList.contains('active')) _redir();
+    try{
+      var obs=new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          if(muts[i].attributeName==='class' && scr.classList.contains('active')){ _redir(); return; }
+        }
+      });
+      obs.observe(scr, { attributes:true, attributeFilter:['class'] });
+    }catch(_){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _wire);
+  else _wire();
+})();
+</script>
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><img alt="Real Madrid" src="/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg" style="width:44px;height:44px;object-fit:contain;"/>
 <div style="display:flex;flex-direction:column;gap:2px;">
@@ -63286,9 +63379,17 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _scanEliminations(){
     try {
       var aliases = _userTeamAlias ? [String(_userTeamAlias()).toLowerCase()].filter(Boolean) : [];
-      ['bayern','liverpool','bayern munich','bayern múnich'].forEach(function(a){
-        if (aliases.indexOf(a) < 0) aliases.push(a);
-      });
+      /* HUB ACTIVO (multi-hub): solo los alias del club del hub abierto +
+         legacy Bayern↔Liverpool SOLO si el hub es el legacy (Toñín). Sin el
+         gate, una eliminación del Liverpool disparaba un mensaje en la
+         bandeja del Arsenal/Real Madrid. */
+      try {
+        if (window._activeHubIsLegacy && window._activeHubIsLegacy()){
+          ['bayern','liverpool','bayern munich','bayern múnich'].forEach(function(a){
+            if (aliases.indexOf(a) < 0) aliases.push(a);
+          });
+        }
+      } catch(_){}
       function _ch(key){
         try {
           var raw = localStorage.getItem(key);
@@ -63336,7 +63437,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           side: c.side,
           type: 'eliminacion',
           icon: icon,
-          sender: (c.side === 'fra') ? 'FFF · Selección Francia' : 'Liverpool FC',
+          sender: (c.side === 'fra') ? ('Selección '+_hubSelDisp()) : (_hubDisp()+' FC'),
           title: 'Fuera de la ' + c.label,
           body : body
         });
@@ -63468,7 +63569,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       push({ side:'liv', type:'pichichi', icon:'🥇',
         sender:'LaLiga · Trofeo Zarra',
         title:'¡Pichichi! '+pl+' lidera con '+top.n+' goles',
-        body : pl+' es el máximo goleador de LaLiga con '+top.n+' goles. Una temporada de récord en Anfield.'
+        body : pl+' es el máximo goleador de LaLiga con '+top.n+' goles. Una temporada de récord en casa.'
       });
     } catch(_){}
   }
@@ -63611,7 +63712,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         push({ side:'liv', type:'elim', icon:'💀',
           sender:'RFEF · Copa del Rey',
           title:'Eliminados de la Copa del Rey',
-          body :'El Liverpool queda eliminado en '+_ronLabel(r)+' de la Copa del Rey. Toca pensar en la Liga y Europa.'
+          body :'El '+_hubDisp()+' queda eliminado en '+_ronLabel(r)+' de la Copa del Rey. Toca pensar en la Liga y Europa.'
         });
       });
     } catch(_){}
@@ -63861,8 +63962,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (franceCtx && franceCtx.rival){
         rival   = franceCtx.rival;
         sideMsg = 'fra';
-        sender  = 'FFF · Selección Francia';
-        icon    = '🇫🇷';
+        sender  = 'Selección '+_hubSelDisp();
+        icon    = '🌍';
       }
     }
     var sig = 'pre:' + (rival || head.slice(0,30)) + ':' + dateStr;
@@ -63875,7 +63976,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     else if (days != null && days >= 2 && days <= 7) when = 'en ' + days + ' días';
     var venue;
     if (sideMsg === 'fra' && franceCtx) venue = franceCtx.isHome ? 'en casa' : 'fuera de casa';
-    else                                venue = /\@\s/.test(t) ? 'fuera de casa' : 'en Anfield';
+    else                                venue = /\@\s/.test(t) ? 'fuera de casa' : 'en casa';
     var phaseTxt = (franceCtx && franceCtx.phaseLabel) ? franceCtx.phaseLabel : '';
     var title;
     if (rival){
@@ -63943,7 +64044,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (t === 'W'){
       ic = '🚀';
       title = n + ' victorias consecutivas en Liga';
-      body  = 'El Liverpool encadena ' + n + ' triunfos seguidos en LaLiga. ¡Anfield está en llamas!';
+      body  = 'El '+_hubDisp()+' encadena ' + n + ' triunfos seguidos en LaLiga. ¡La afición está en llamas!';
     } else if (t === 'L'){
       ic = '🚨';
       title = n + ' derrotas seguidas en Liga';
@@ -64021,14 +64122,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
       var mk = info.mk || (comp + ':' + home + '-' + away + ':' + ga + '-' + gb);
       var compName = (side === 'fra') ? _fraCompLabel(comp) : _compLabel(comp);
-      var sender   = (side === 'fra') ? 'FFF · Selección Francia' : 'Liverpool FC';
+      var sender   = (side === 'fra') ? ('Selección '+_hubSelDisp()) : (_hubDisp()+' FC');
 
       /* ── Mensaje de resultado (salta liga-liv: ya lo hace el hook 1) ── */
       if (!(side === 'liv' && comp === 'liga')){
         var sigR = 'res:' + mk;
         if (!_getCursor(sigR)){
           _setCursor(sigR, _now());
-          var whereW = humanIsHome ? (side === 'liv' ? 'en Anfield' : 'en casa') : 'a domicilio';
+          var whereW = humanIsHome ? 'en casa' : 'a domicilio';
           var teamW  = (side === 'fra') ? 'Francia' : 'el Liverpool';
           var ic, title, body;
           if (diff > 0){

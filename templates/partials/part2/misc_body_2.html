@@ -21536,7 +21536,12 @@
       if (typeof m === 'number' && m >= 0) return m;
     } catch(_){}
     try {
-      var raw = localStorage.getItem('liverpool_preseason_v1')
+      /* HUB ACTIVO (multi-hub): cursor del día POR HUB (Arsenal →
+         '..._alvaro'). Sin esto el calendario de otra caja leía el día del
+         Liverpool. */
+      var _curK = (window._hubKey ? window._hubKey('liverpool_preseason_v1') : 'liverpool_preseason_v1');
+      var raw = localStorage.getItem(_curK)
+              || localStorage.getItem('liverpool_preseason_v1')
               || localStorage.getItem('bayern_preseason_v2')
               || localStorage.getItem('bayern_preseason_v1');
       if (raw){
@@ -32022,6 +32027,9 @@ document.addEventListener('DOMContentLoaded', function() {
     'bayern_calendar_comps_v1_alvaro',
     'bayern_calendar_title_v1_alvaro',
     'bayern_cal_v2_alvaro',
+    'bayern_calendar_comps_v1_acsa',
+    'bayern_calendar_title_v1_acsa',
+    'bayern_cal_v2_acsa',
     /* 2026-05-23 (petición usuario): el cursor del día de la
        pretemporada (caja Liverpool / Bayern del hub) debe sobrevivir
        al reload. Antes vivía solo en localStorage → un setItem que
@@ -32042,6 +32050,7 @@ document.addEventListener('DOMContentLoaded', function() {
        reload / cambio de móvil igual que el de Liverpool, con su PROPIO
        progreso de día (merge monotónico por hub en el server). */
     'liverpool_preseason_v1_alvaro', /* cursor día — caja Arsenal-Brasil */
+    'liverpool_preseason_v1_acsa',   /* cursor día — caja Real Madrid-Inglaterra */
     /* 2026-05-23 (petición usuario "todo igual en cualquier
        móvil/PC"): el estado de TODAS las competiciones restantes
        que aún vivían SOLO en localStorage del dispositivo admin.

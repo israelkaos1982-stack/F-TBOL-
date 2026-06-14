@@ -1166,11 +1166,19 @@ window._showSimProgress = function(opts, onDone){
       var em=card.querySelector('.mc-emoji'); if(em) em.textContent=o.emoji;
     }
     if(o.colors && o.colors.length){
-      var gr=gradientFrom(o.colors);
-      card.style.setProperty('background', gr.outer, 'important');
-      card.style.setProperty('border-color', gr.primary, 'important');
-      var inn=card.querySelector('.mc-equipo-overlay,.mc-main-overlay');
-      if(inn) inn.style.background=gr.inner;
+      /* Los 3 humanos canónicos tienen color FIJO por petición del usuario
+         (Real Madrid morado · Atlético blanco · FC Barcelona azul). NO
+         dejamos que un override viejo de menu_home_v1 los repinte: se respeta
+         el degradado SSR inline (!important) de la caja. */
+      var _hubC=(card.dataset&&card.dataset.hub)||'';
+      var _canonFixed={ 'acsa':1, 'isra':1, 'angel':1 };
+      if(!_canonFixed[_hubC]){
+        var gr=gradientFrom(o.colors);
+        card.style.setProperty('background', gr.outer, 'important');
+        card.style.setProperty('border-color', gr.primary, 'important');
+        var inn=card.querySelector('.mc-equipo-overlay,.mc-main-overlay');
+        if(inn) inn.style.background=gr.inner;
+      }
     }
     if(o.nav!=null) card.__mkNav = o.nav ? { type:'go', id:o.nav } : null;
   }
@@ -52103,42 +52111,44 @@ https://api.sofascore.app/api/v1/team/44/image
     if(host.__mkHubSig===sig) return; host.__mkHubSig=sig;
     if(n) n.textContent=r.name;
     if(b){ b.src=r.esc; b.alt=r.name; }
-    /* HUB ACTIVO (multi-hub 2026-06-13): míster + estadio del mister abierto
-       (la caja Arsenal mostraba "Liverpool · TOÑÍN · NEW BALANCE ARENA"). El
-       span del míster era estático (sin id) y el estadio sólo se actualizaba
-       con override del menú. */
+    /* HUB ACTIVO (multi-hub): TEMA DE COLOR por hub para la CABECERA
+       (nombre/míster/estadio) y el FONDO del hub. Para los 3 humanos
+       pedidos el tema es AUTORITATIVO (gana a cualquier override stale de
+       menu_home_v1): Real Madrid (acsa)=morado · Atlético (isra)=blanco ·
+       FC Barcelona (angel)=azul. El resto (Liverpool/Arsenal/PSG) conserva
+       el rojo legacy de la cabecera + su fondo CSS por defecto. */
+    var _idT=''; try{ var _ahT=window._activeHub&&window._activeHub(); _idT=(_ahT&&_ahT.id)||''; }catch(_){ }
+    var _THEME={
+      'acsa':{ cols:['#6b21a8','#a855f7'], text:'#c77dff' },
+      'isra':{ cols:['#aeb4c2','#f6f8fd'], text:'#eef2fb' },
+      'angel':{ cols:['#1e40af','#3b82f6'], text:'#5ba3ff' }
+    };
+    var _th=_THEME[_idT]||null;
+    var _txt=_th?_th.text:'#dc052d';
+    if(n) n.style.color=_txt;
+    /* HUB ACTIVO (multi-hub 2026-06-13): míster + estadio del mister abierto. */
     try {
       var _ahH = window._activeHub && window._activeHub();
       var mEl = document.getElementById('mk-hub-mister');
-      if (mEl && _ahH && _ahH.mister) mEl.textContent = '· ' + String(_ahH.mister).toUpperCase();
+      if (mEl){ if(_ahH && _ahH.mister) mEl.textContent = '· ' + String(_ahH.mister).toUpperCase(); mEl.style.color=_txt; }
     } catch(_){}
     var st=document.getElementById('mk-hub-stadium');
     if(st){
       var _stad = r.stad || _defaultStad(r.name);
       if (_stad) st.textContent = String(_stad).toUpperCase();
+      st.style.color=_txt;
     }
     /* Bloque VS estático (no lo pinta JS): escudo/nombre local. */
     var hs=document.getElementById('munich-home-shield');
     if(hs) hs.src=r.esc;
     var hn=document.getElementById('munich-home-name');
     if(hn) hn.textContent=r.name;
-    /* Caja interior del hub con los colores del escudo elegido. */
+    /* Caja interior del hub: el TEMA del hub GANA a r.cols para los 3
+       humanos canónicos (self-healing aunque haya un override viejo); el
+       resto usa el override del menú (r.cols) o el fondo CSS. */
     var bg=document.getElementById('mk-hub-bg');
     if(bg){
-      /* HUB ACTIVO (multi-hub): si el admin NO fijó colores propios en el
-         menú (r.cols), aplicamos el TEMA POR DEFECTO del hub activo para que
-         el "estadio" (fondo del hub) lleve el color de su caja:
-         Real Madrid (acsa)=morado · Atlético (isra)=blanco · Barça (angel)=azul.
-         El resto (Liverpool/Arsenal/PSG) cae al fondo CSS por defecto. */
-      var _cols=r.cols;
-      if(!_cols){
-        try{
-          var _ahBg=window._activeHub&&window._activeHub();
-          var _idBg=_ahBg&&_ahBg.id;
-          var _HUBBG={ 'acsa':['#6b21a8','#a855f7'], 'isra':['#aeb4c2','#f6f8fd'], 'angel':['#1e40af','#3b82f6'] };
-          if(_idBg&&_HUBBG[_idBg]) _cols=_HUBBG[_idBg];
-        }catch(_){ }
-      }
+      var _cols=_th?_th.cols:r.cols;
       if(_cols){
         var c0=_norm6(_cols[0]||'#dc052d'), c1=_norm6(_cols[1]||_cols[0]||'#3a0b3f');
         bg.style.background=_DIAMONDS+",radial-gradient(ellipse at 50% 35%,"+c1+" 0%,"+c0+" 45%,#160a22 80%,#06101f 100%)";

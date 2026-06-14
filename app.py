@@ -3945,7 +3945,7 @@ def api_kv_set(key):
             # móvil sin actualizar ni con el reloj adelantado puede volver a
             # pisar el HUD por recencia (causa raíz «el 🪙 vuelve a 0 al borrar
             # datos» en un parque de 6 móviles + PC, foto usuario 2026-06-11).
-            if _kv_hub_base(key) == "bayern_hud_overrides_v1":
+            if _kv_hub_base(key) in ("bayern_hud_overrides_v1", "tour_info_cards_v1"):
                 _old_rev = 0
                 if isinstance(old, dict):
                     try:
@@ -4023,6 +4023,28 @@ def api_kv_set(key):
             if _obj_state_is_empty(value) and not _obj_state_is_empty(old):
                 value, payload = old, row.valor_json
             elif old_ts > new_ts:
+                value, payload = old, row.valor_json
+        elif _kv_hub_base(key) == "tour_info_cards_v1" and isinstance(old, dict) and isinstance(value, dict):
+            # Info card editable por torneo, NO-authoritative (re-push
+            # self-heal del cliente): REV MONOTÓNICO igual que el HUD. Un push
+            # con `rev` MENOR que el almacenado es STALE (cliente viejo sin
+            # `rev`=0, o copia atrasada) y se RECHAZA ENTERO; a igualdad de
+            # `rev`, recencia por `updatedAt`. El ✅ Guardar del admin va por
+            # authoritative=true (rama de arriba: sella reloj + bumpea rev y
+            # gana siempre), así un reloj adelantado de otro móvil ya no puede
+            # revivir un valor viejo (causa raíz «no se guarda ninguno»,
+            # 2026-06-14).
+            try:
+                _old_rev = int(old.get("rev") or 0)
+            except (TypeError, ValueError):
+                _old_rev = 0
+            try:
+                _new_rev = int(value.get("rev") or 0)
+            except (TypeError, ValueError):
+                _new_rev = 0
+            if _new_rev < _old_rev:
+                value, payload = old, row.valor_json
+            elif _new_rev == _old_rev and old_ts > new_ts:
                 value, payload = old, row.valor_json
         elif row and row.valor_json and old_ts > new_ts:
             value, payload = old, row.valor_json

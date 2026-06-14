@@ -38338,8 +38338,25 @@ window._showSimProgress = function(opts, onDone){
         p = Promise.resolve(false);
         skippedSlugs.push({slug: slug, name: name, error: String(e && e.message || e)});
       }
-      Promise.resolve(p).then(function(simOk){
-        if(simOk){ ok++; }
+      /* AVANCE ÚNICO (2026-06-14): la liga avanza con lo que llegue
+         PRIMERO — el .then/.catch de la sim O un TIMEOUT de seguridad.
+         Sin el timeout, una liga cuya promesa nunca resuelve (yield
+         perdido, motor colgado en un equipo concreto) dejaba la barra
+         global clavada a 0% PARA SIEMPRE (queja usuario: portátil 20 min
+         a 0%). Con el timeout, la liga problemática se SALTA y el resto
+         se simula. */
+      var _settled = false;
+      var _toId = null;
+      function _advance(simOk, timedOut){
+        if(_settled) return;
+        _settled = true;
+        if(_toId != null){ try { clearTimeout(_toId); } catch(_){} _toId = null; }
+        if(timedOut){
+          if(!skippedSlugs.some(function(s){ return s.slug === slug; })){
+            skippedSlugs.push({slug: slug, name: name, error: 'timeout (>120s) — saltada'});
+          }
+          skip++;
+        } else if(simOk){ ok++; }
         else if(!skippedSlugs.some(function(s){ return s.slug === slug; })){
           skip++;
           skippedSlugs.push({slug: slug, name: name});
@@ -38350,14 +38367,15 @@ window._showSimProgress = function(opts, onDone){
         }
         /* setTimeout(0) cede el hilo entre ligas. */
         setTimeout(step, 0);
+      }
+      _toId = setTimeout(function(){ _advance(false, true); }, 120000);
+      Promise.resolve(p).then(function(simOk){
+        _advance(simOk, false);
       }, function(){
-        idx++;
-        skip++;
-        skippedSlugs.push({slug: slug, name: name, error: 'promise rejected'});
-        if(typeof window._bgSimProgress === 'function'){
-          try { window._bgSimProgress(globalSlug, idx, total); } catch(_){}
+        if(!skippedSlugs.some(function(s){ return s.slug === slug; })){
+          skippedSlugs.push({slug: slug, name: name, error: 'promise rejected'});
         }
-        setTimeout(step, 0);
+        _advance(false, false);
       });
     }
 
@@ -43626,18 +43644,32 @@ https://api.sofascore.app/api/v1/team/44/image
          navegadores que no soporten MessageChannel. */
       var _yieldChannel = null;
       function _yieldToEventLoop(cb){
+        /* Ejecutar `cb` UNA sola vez aunque disparen los dos caminos
+           (MessageChannel + setTimeout de respaldo). */
+        var ran = false;
+        function _run(){ if (ran) return; ran = true; cb(); }
+        var usedChannel = false;
         try {
           if (typeof MessageChannel !== 'undefined') {
             var ch = new MessageChannel();
             ch.port1.onmessage = function(){
               try { ch.port1.close(); } catch(_){}
-              cb();
+              _run();
             };
             ch.port2.postMessage(0);
-            return;
+            usedChannel = true;
           }
         } catch(_){}
-        setTimeout(cb, 0);
+        /* RESPALDO SIEMPRE ACTIVO (2026-06-14): el yield NO puede
+           depender SOLO de MessageChannel. En algunos navegadores /
+           portátiles el mensaje del MessageChannel no se entrega (o se
+           entrega con retraso enorme), y como el watchdog re-kickeaba
+           TAMBIÉN por MessageChannel, la sim se quedaba clavada a 0%
+           para siempre (queja usuario: "20 min a 0% desde portátil").
+           Un setTimeout de respaldo garantiza que el siguiente chunk se
+           ejecute aunque el canal falle; el guard `ran` evita el doble
+           tick cuando ambos llegan. */
+        setTimeout(_run, usedChannel ? 300 : 0);
       }
       /* Watchdog (2026-05-27): defensa en profundidad — si por lo que
          sea (MessageChannel pierde el mensaje, setTimeout es throttled
@@ -43658,7 +43690,11 @@ https://api.sofascore.app/api/v1/team/44/image
             if (idx < total && Date.now() - lastIdxAt > 10000) {
               try { console.warn('[ligaExtSimular] '+slug+': stall en '+idx+'/'+total+' — re-kick'); } catch(_){}
               lastIdxAt = Date.now();
-              _yieldToEventLoop(step);
+              /* Re-kick por setTimeout DIRECTO, NO por _yieldToEventLoop:
+                 si el stall lo causó MessageChannel, re-kickear por el
+                 mismo canal repetía el fallo. setTimeout es el camino
+                 fiable de recuperación. 2026-06-14. */
+              setTimeout(step, 0);
             }
           }, 4000);
         } catch(_){}

@@ -1117,6 +1117,61 @@ class TestBayernHudRevGuard:
         assert "money" not in v or v.get("money") in (None, 0)
 
 
+class TestTourInfoCardsRevGuard:
+    """La info card editable por torneo (tour_info_cards_v1) es UN blob
+    compartido sincronizado por recencia. Antes (2026-06-13) no llevaba ni
+    `authoritative` ni `rev`: en un parque de 6 móviles + PC, un dispositivo
+    con el reloj ADELANTADO dejaba un valor con `updatedAt` FUTURO que RECHAZABA
+    por recencia el guardado legítimo del admin (el POST devolvía 200 pero el
+    valor se descartaba) → al recargar «no se guarda ninguno» (foto usuario
+    2026-06-14). Ahora el ✅ Guardar va authoritative (sella reloj + bumpea rev)
+    y gana SIEMPRE; el re-push self-heal no-authoritative lleva rev-guard."""
+
+    KEY = "/api/kv/tour_info_cards_v1"
+
+    def _get(self, client):
+        return _json(client.get(self.KEY)).get("value")
+
+    def test_key_is_allowed(self):
+        assert app_module._kv_is_allowed("tour_info_cards_v1")
+
+    def test_authoritative_save_seals_clock_and_bumps_rev(self, client):
+        # El admin guarda con un updatedAt PEQUEÑO (reloj correcto/lento).
+        client.post(self.KEY, json={"value": {
+            "competiciones-superliga": {"informacion": "texto A"},
+            "updatedAt": 1000, "rev": 1}, "authoritative": True})
+        v = self._get(client)
+        assert v["competiciones-superliga"]["informacion"] == "texto A"
+        # El server sella updatedAt con SU reloj (>> 1000) y bumpea rev.
+        assert v["updatedAt"] > 1000
+        assert v["rev"] >= 2
+
+    def test_future_ts_stale_does_not_reject_admin_save(self, client):
+        # Un móvil con el RELOJ ADELANTADO deja un valor FUTURO (sin rev).
+        client.post(self.KEY, json={"value": {
+            "competiciones-superliga": {"informacion": "viejo"},
+            "updatedAt": 9_999_999_999}})
+        # El admin (reloj correcto, ts MUCHO menor) edita autoritativamente.
+        client.post(self.KEY, json={"value": {
+            "competiciones-superliga": {"informacion": "EDITADO"},
+            "updatedAt": 1000, "rev": 1}, "authoritative": True})
+        # Antes del fix esto se RECHAZABA por recencia; ahora GANA.
+        assert self._get(client)["competiciones-superliga"]["informacion"] == "EDITADO"
+
+    def test_repush_lower_rev_is_rejected(self, client):
+        client.post(self.KEY, json={"value": {
+            "asia": {"informacion": "B"}, "updatedAt": 5000, "rev": 1},
+            "authoritative": True})
+        cur = self._get(client)["rev"]
+        # Re-push self-heal NO-authoritative con rev MENOR (cliente atrasado):
+        # rechazado entero, no pisa lo guardado.
+        client.post(self.KEY, json={"value": {
+            "asia": {"informacion": "viejo"}, "updatedAt": 9_999_999, "rev": 0}})
+        v = self._get(client)
+        assert v["asia"]["informacion"] == "B"
+        assert v["rev"] == cur
+
+
 class TestMultiHubKeys:
     """Multi-hub (2026-06-13): cada caja de mister humano (Arsenal-Brasil,
     etc.) tiene datos INDEPENDIENTES en variantes POR HUB de las claves base

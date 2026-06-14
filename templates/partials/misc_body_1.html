@@ -60107,12 +60107,27 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
   function _tourInfoSaveAll(all){
     all.updatedAt = Date.now();
+    /* RELOJ LÓGICO `rev` monotónico (espejo del HUD/cursor de fecha): cada
+       guardado REAL del admin lo incrementa. Sin él, el merge del server
+       arbitra SOLO por `updatedAt` (reloj de pared) y, en un parque de 6
+       móviles + PC, un dispositivo con el reloj ADELANTADO dejaba un valor
+       con `updatedAt` FUTURO que RECHAZABA por recencia el guardado legítimo
+       del admin (el POST devolvía 200 pero el valor se descartaba) → al
+       recargar/borrar datos «no se guarda ninguno» (foto usuario 2026-06-14).
+       Como es UN blob compartido, un solo ts futuro envenenaba TODOS los
+       torneos. */
+    all.rev = (parseInt(all.rev, 10) || 0) + 1;
     try { localStorage.setItem(_TOUR_INFO_KEY, JSON.stringify(all)); } catch(_){}
     try {
       if (typeof window.fetch === 'function'){
+        /* `authoritative:true`: el ✅ Guardar del admin es una acción
+           EXPLÍCITA → GANA SIEMPRE; el server sella `updatedAt` con SU
+           reloj y bumpea `rev` por encima de cualquier copia (defeat
+           clock-skew). Es el ÚNICO writer de este blob (no hay automáticos),
+           así que siempre es autoritativo. */
         window.fetch('/api/kv/' + _TOUR_INFO_KEY, {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ value: all })
+          body: JSON.stringify({ value: all, authoritative: true })
         }).catch(function(){});
       }
     } catch(_){}
@@ -60209,8 +60224,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     _tourInfoSaveAll(all);
     window.muTourInfo(id, false);
   };
-  /* Hidratación KV (recencia): el server gana si trae un blob más nuevo,
-     así la info editada en PC aparece en el móvil / sobrevive a un wipe. */
+  /* Hidratación KV: el server gana si trae un blob más nuevo (PRIMERO por
+     `rev` lógico, luego por `updatedAt`), así la info editada en PC aparece
+     en el móvil / sobrevive a un wipe. Si el LOCAL es más nuevo (server
+     atrás por BD efímera reseteada / POST perdido) se RE-SUBE la copia local
+     para repoblar el server (self-heal, espejo del cursor de fecha). */
   (function _tourInfoHydrate(){
     try {
       if (typeof window.fetch !== 'function') return;
@@ -60219,12 +60237,23 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         .then(function(j){
           if (!j || !j.value || typeof j.value !== 'object') return;
           var sv = j.value, local = _tourInfoLoadAll();
-          if ((+sv.updatedAt||0) > (+local.updatedAt||0)){
+          var svRev = +sv.rev||0, locRev = +local.rev||0;
+          var svTs  = +sv.updatedAt||0, locTs = +local.updatedAt||0;
+          var serverNewer = (svRev > locRev) || (svRev === locRev && svTs > locTs);
+          var localNewer  = (locRev > svRev) || (locRev === svRev && locTs > svTs);
+          if (serverNewer){
             try { localStorage.setItem(_TOUR_INFO_KEY, JSON.stringify(sv)); } catch(_){}
             var ov = document.getElementById('munich-tour-ov');
             if (ov && ov.classList.contains('show') && _tourInfoEdit.id && !_tourInfoEdit.on){
               window.muTourInfo(_tourInfoEdit.id, false);
             }
+          } else if (localNewer && locRev > 0){
+            try {
+              window.fetch('/api/kv/' + _TOUR_INFO_KEY, {
+                method:'POST', headers:{'Content-Type':'application/json'},
+                body: JSON.stringify({ value: local })
+              }).catch(function(){});
+            } catch(_){}
           }
         }).catch(function(){});
     } catch(_){}

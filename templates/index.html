@@ -136,65 +136,119 @@
     }
   </style>
   <script>
-    /* Splash auto-hide RÁPIDO atado a DOMContentLoaded (NO a
-       window.load). 2026-05-21 — el usuario reportó que la web
-       tardaba 45+ s en abrir (antes <5 s).
+    /* Splash auto-hide atado a la HIDRATACIÓN REAL del servidor
+       (NO a un temporizador fijo).  2026-06-14 — el usuario reportó
+       que «al abrir la web sale durante ~1 segundo la web antigua,
+       creando confusión» (foto pantalla EQUIPOS).
 
-       Causa: el commit 1dd5623 ató el splash a `window.load`, que
-       NO dispara hasta que el navegador descarga TODOS los assets
-       (cientos de escudos PNG/SVG). En móvil eso son 45+ s — la
-       "barra azul" del browser no se completa hasta entonces.
+       Causa raíz: el splash se ocultaba por temporizador
+       (DOMContentLoaded + grace, mínimo 1200 ms).  La app renderiza
+       primero con los datos de localStorage (que pueden ser viejos de
+       la sesión anterior / de otro dispositivo) y luego los fetches de
+       hidratación (/api/kv/*, /api/liga-ext/*, /api/state) reconcilian
+       el contenido con el servidor.  Si esa hidratación llegaba DESPUÉS
+       de que el splash se ocultara (red móvil / server frío), el usuario
+       veía la copia vieja durante ~1 s y luego «saltaba» a la nueva →
+       el flash de la «web antigua».
 
-       window.load ≠ "app hidratada". La app está USABLE en
-       DOMContentLoaded: el HTML está parseado y el bundle
-       (index.bundle.js, script bloqueante) ya ha ejecutado, así que
-       el render inicial + el arranque de los fetches de hidratación
-       (/api/liga-ext/*, /api/kv/*) ya ocurrieron. Los escudos
-       siguen bajando en segundo plano SIN bloquear nada.
-
-       Flujo:
-       - hide() se programa en DOMContentLoaded + GRACE_MS. El grace
-         da un margen a que los fetches de hidratación más rápidos
-         (cache-hit / server caliente) re-rendericen antes de quitar
-         la cortina.
-       - Caps: MIN 1200 ms (no flashear ultra rápido) y MAX 8000 ms
-         (backstop si el bundle tarda mucho en parsear — nunca dejar
-         al usuario clavado).
+       Fix: el splash OBSERVA las peticiones de hidratación y no se
+       retira hasta que esa reconciliación se ha ASENTADO (todas las
+       peticiones de arranque resueltas + una ventana de silencio), de
+       forma que los datos viejos se reemplazan DEBAJO de la cortina.
+       Sigue acotado por:
+       - MIN 1200 ms  → no flashear ultra rápido.
+       - GRACE 700 ms → si NO se observa hidratación (offline), margen
+         tras DOM listo y se retira (no hay nada que esperar).
+       - MAX 8000 ms  → backstop absoluto, nunca dejar al usuario
+         clavado aunque el polling no pare o la red cuelgue.
        - Tap/click cierra antes. */
     (function(){
+      /* ── 1. Observador de fetches de HIDRATACIÓN ─────────────────
+         Se instala ANTES de los includes y del bundle, así captura
+         TODAS las peticiones de arranque que reconcilian el contenido
+         con el servidor (las que causan el flash de datos viejos). */
+      var _pending = 0, _lastSettle = Date.now(), _sawHydration = false;
+      var _HYDRATION_RE = /\/api\/(kv|liga-ext|liga-ext-protected|liga-ext-restore|state|copa\/state)\b/;
+      try {
+        if (window.fetch && !window.__bootSplashFetchWrapped){
+          window.__bootSplashFetchWrapped = true;
+          var _origFetch = window.fetch;
+          window.fetch = function(input){
+            var url = '';
+            try { url = (typeof input === 'string') ? input : (input && input.url) || ''; } catch(_){}
+            var track = false;
+            try { track = _HYDRATION_RE.test(url); } catch(_){}
+            if (track){ _pending++; _sawHydration = true; }
+            var p;
+            try { p = _origFetch.apply(this, arguments); }
+            catch(e){ if (track){ _pending = Math.max(0, _pending - 1); _lastSettle = Date.now(); } throw e; }
+            if (track && p && typeof p.then === 'function'){
+              var _settle = function(){ _pending = Math.max(0, _pending - 1); _lastSettle = Date.now(); };
+              try { p.then(_settle, _settle); } catch(_){}
+            }
+            return p;
+          };
+        }
+      } catch(_){}
+      function _hydrationSettled(quietMs){
+        /* Asentada: vimos ≥1 hidratación, no queda ninguna en vuelo y
+           ha pasado una ventana de silencio desde la última (evita
+           ocultar entre dos peticiones encadenadas de la misma ráfaga). */
+        return _sawHydration && _pending === 0 && (Date.now() - _lastSettle) >= (quietMs || 0);
+      }
+
+      /* ── 2. Splash ──────────────────────────────────────────────── */
       var MIN_MS   = (typeof window._BOOT_SPLASH_MIN_MS   === 'number') ? window._BOOT_SPLASH_MIN_MS   : 1200;
       var GRACE_MS = (typeof window._BOOT_SPLASH_GRACE_MS === 'number') ? window._BOOT_SPLASH_GRACE_MS :  700;
       var MAX_MS   = (typeof window._BOOT_SPLASH_MAX_MS   === 'number') ? window._BOOT_SPLASH_MAX_MS   : 8000;
+      var QUIET_MS = (typeof window._BOOT_SPLASH_QUIET_MS === 'number') ? window._BOOT_SPLASH_QUIET_MS :  350;
       var el = document.getElementById('boot-splash');
       if (!el) return;
       var hidden = false;
       var startedAt = Date.now();
-      function hide(){
+      var domReady = false, domReadyAt = 0;
+      function doHide(){
         if (hidden) return;
-        var elapsed = Date.now() - startedAt;
-        if (elapsed < MIN_MS) { setTimeout(hide, MIN_MS - elapsed); return; }
         hidden = true;
         el.classList.add('hide');
         setTimeout(function(){ if (el && el.parentNode) el.parentNode.removeChild(el); }, 380);
       }
-      /* Tap-to-close (no atascar al usuario si la red va muy lenta). */
+      /* hide() público / tap-to-close: fuerza ocultar respetando MIN. */
+      function hide(){
+        if (hidden) return;
+        var elapsed = Date.now() - startedAt;
+        if (elapsed < MIN_MS) { setTimeout(hide, MIN_MS - elapsed); return; }
+        doHide();
+      }
       el.addEventListener('click', hide, { once:true });
       el.addEventListener('touchend', hide, { once:true });
 
-      /* Trigger principal: DOMContentLoaded + GRACE_MS (app usable,
-         el bundle ya ejecutó). NO window.load — eso espera a TODOS
-         los escudos y dispara los 45 s. */
-      function _scheduleAfterReady(){ setTimeout(hide, GRACE_MS); }
-      if (document.readyState === 'interactive' || document.readyState === 'complete') {
-        _scheduleAfterReady();
-      } else {
-        document.addEventListener('DOMContentLoaded', _scheduleAfterReady, { once:true });
+      /* Bucle de decisión: oculta cuando la hidratación se asienta
+         (datos del server ya pintados), o —si no hubo hidratación—
+         tras el grace; siempre dentro de [MIN_MS, MAX_MS]. */
+      function tick(){
+        if (hidden) return;
+        var now = Date.now(), elapsed = now - startedAt;
+        if (elapsed >= MAX_MS){ doHide(); return; }
+        if (elapsed < MIN_MS){ setTimeout(tick, MIN_MS - elapsed); return; }
+        if (!domReady){ setTimeout(tick, 80); return; }
+        if (_hydrationSettled(QUIET_MS)){ doHide(); return; }
+        /* Sin hidratación observada y ya pasó el grace tras DOM listo:
+           no hay nada que esperar → retirar la cortina. */
+        if (!_sawHydration && domReadyAt && (now - domReadyAt) >= GRACE_MS){ doHide(); return; }
+        setTimeout(tick, 100);
       }
+      function _onReady(){ domReady = true; domReadyAt = Date.now(); tick(); }
+      if (document.readyState === 'interactive' || document.readyState === 'complete') { _onReady(); }
+      else { document.addEventListener('DOMContentLoaded', _onReady, { once:true }); }
+
       /* Backstop absoluto. */
-      setTimeout(hide, MAX_MS);
+      setTimeout(doHide, MAX_MS);
       /* Hook por si un flujo crítico (ej. partido live restaurándose
          del wprev_state_v1) quiere ocultarlo antes via _bootSplashHide(). */
       window._bootSplashHide = hide;
+      /* Arranca el bucle (por si el DOM ya estaba listo). */
+      tick();
     })();
   </script>
 

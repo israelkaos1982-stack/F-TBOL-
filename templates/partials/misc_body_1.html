@@ -52355,6 +52355,23 @@ https://api.sofascore.app/api/v1/team/44/image
     for (var i=0;i<al.length;i++){ if (x === al[i]) return true; }
     return false;
   }
+  /* HUB ACTIVO (multi-hub 2026-06-13): selección del mister abierto
+     (Francia/Toñín, Brasil/Álvaro, …) + sus alias ES+EN. Lo usan el
+     agregador de PARTIDOS JUGADOS y el coloreo win/loss. */
+  function _fixSelName(){
+    try { var _m = window._mhFindMister && window._mhFindMister(_hubName()); if (_m && _m.seleccion) return String(_m.seleccion); } catch(_){}
+    try { var _ah = window._activeHub && window._activeHub(); if (_ah && _ah.seleccion) return String(_ah.seleccion); } catch(_){}
+    return 'Francia';
+  }
+  var _FIX_SEL_EN = { 'francia':'france','brasil':'brazil','inglaterra':'england','noruega':'norway','argentina':'argentina','espana':'spain' };
+  function _fixSelAliases(){
+    var s = _fixSelName();
+    var nrm = String(s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+    var out = [String(s).toLowerCase().trim()];
+    if (nrm && out.indexOf(nrm) === -1) out.push(nrm);
+    if (_FIX_SEL_EN[nrm]) out.push(_FIX_SEL_EN[nrm]);
+    return out;
+  }
 
   /* Display name corto para no romper el layout 2-col (50% ancho).
      "FC Barcelona" → "Barcelona", "Real Sociedad" → "R. Sociedad". */
@@ -52943,9 +52960,11 @@ https://api.sofascore.app/api/v1/team/44/image
        son residuos previos a la sustitución y no son del Liverpool. */
     var clubAliasLiga = _aliasesLiga(hub);
     var clubAliasTour = _aliasesTour(hub);
-    /* Selección Francia no tiene historial de sustitución, mismo alias
-       en ambos contextos. */
-    var franceAlias   = ['francia','france'];
+    /* HUB ACTIVO (multi-hub 2026-06-13): la selección del hub abierto no
+       siempre es Francia (Arsenal → Brasil). Para que sus partidos de
+       Mundial / clasificación aparezcan en PARTIDOS JUGADOS de ESA caja. */
+    var selName = _fixSelName();
+    var franceAlias = _fixSelAliases();
 
     /* Agrupamos por la competición REAL de cada partido (`m.comp`), NO
        por la entrada de `_COMPS` que lo recolectó. El colector `verano`
@@ -52997,7 +53016,7 @@ https://api.sofascore.app/api/v1/team/44/image
 
     return {
       club: { name: hub,       emoji: '🛡', label: 'CLUB',       groups: _gatherFor(clubAliasLiga, clubAliasTour) },
-      sel:  { name: 'Francia', emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(franceAlias, franceAlias) }
+      sel:  { name: selName, emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(franceAlias, franceAlias) }
     };
   }
   /* Expuesto para la BANDA DE TOTALES de la plantilla del hub
@@ -53065,9 +53084,9 @@ https://api.sofascore.app/api/v1/team/44/image
     if (typeof m.gh !== 'number' || typeof m.ga !== 'number') return '';
     var hubName = _hubName();
     var ourHome = _match(m.home, _aliases(hubName)) ||
-                  _match(m.home, ['francia','france']);
+                  _match(m.home, _fixSelAliases());
     var ourAway = _match(m.away, _aliases(hubName)) ||
-                  _match(m.away, ['francia','france']);
+                  _match(m.away, _fixSelAliases());
     if (m.gh === m.ga) return 'draw';
     var homeWin = m.gh > m.ga;
     if (ourHome && !ourAway) return homeWin ? 'win' : 'loss';
@@ -53790,6 +53809,10 @@ https://api.sofascore.app/api/v1/team/44/image
       if (box && box.classList.contains('open')) _render(m);
     });
   };
+  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-render de
+     las cajas POSPUESTOS/PENDIENTES/JUGADOS para el club+selección del nuevo
+     hub (Arsenal+Brasil), por si el wrap de `go` no se disparó. */
+  try { window.addEventListener('hubchange', function(){ try { window.muFixRefresh(); } catch(_){} }); } catch(_){}
 
   /* Refresca al volver al hub (igual patrón que muCompsRefresh). */
   function _hookGo(){

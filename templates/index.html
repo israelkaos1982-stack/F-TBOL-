@@ -136,77 +136,37 @@
     }
   </style>
   <script>
-    /* Splash auto-hide atado a la HIDRATACIÓN REAL del servidor
-       (NO a un temporizador fijo).  2026-06-14 — el usuario reportó
-       que «al abrir la web sale durante ~1 segundo la web antigua,
-       creando confusión» (foto pantalla EQUIPOS).
+    /* Splash auto-hide RÁPIDO y A PRUEBA DE BLOQUEO.  2026-06-14 — el
+       usuario reportó «no se abre la web» (foto: clavada en CARGANDO…).
 
-       Causa raíz: el splash se ocultaba por temporizador
-       (DOMContentLoaded + grace, mínimo 1200 ms).  La app renderiza
-       primero con los datos de localStorage (que pueden ser viejos de
-       la sesión anterior / de otro dispositivo) y luego los fetches de
-       hidratación (/api/kv/*, /api/liga-ext/*, /api/state) reconcilian
-       el contenido con el servidor.  Si esa hidratación llegaba DESPUÉS
-       de que el splash se ocultara (red móvil / server frío), el usuario
-       veía la copia vieja durante ~1 s y luego «saltaba» a la nueva →
-       el flash de la «web antigua».
+       Causa raíz de la regresión: el commit abfcd57 ató el ocultado del
+       splash a que TODA la hidratación del servidor «se asentara»
+       (/api/kv/*, /api/liga-ext/* de decenas de ligas, /api/state…),
+       con un tope de 8 s.  En un móvil contra un server frío de Railway
+       esas peticiones se solapan continuamente, así que la cortina se
+       quedaba los 8 s ENTEROS en cada arranque → se percibe como «la web
+       no abre».  Además envolvía `window.fetch` globalmente en el
+       arranque, un riesgo innecesario.
 
-       Fix: el splash OBSERVA las peticiones de hidratación y no se
-       retira hasta que esa reconciliación se ha ASENTADO (todas las
-       peticiones de arranque resueltas + una ventana de silencio), de
-       forma que los datos viejos se reemplazan DEBAJO de la cortina.
-       Sigue acotado por:
-       - MIN 1200 ms  → no flashear ultra rápido.
-       - GRACE 700 ms → si NO se observa hidratación (offline), margen
-         tras DOM listo y se retira (no hay nada que esperar).
-       - MAX 8000 ms  → backstop absoluto, nunca dejar al usuario
-         clavado aunque el polling no pare o la red cuelgue.
+       Fix: volvemos al modelo simple y robusto (probado desde
+       2026-05-21).  La app es USABLE en DOMContentLoaded (el HTML está
+       parseado y el bundle ya ejecutó: render inicial + arranque de la
+       hidratación).  Ocultamos poco después de DOM listo:
+       - MIN 1000 ms  → no flashear ultra rápido; da a la hidratación
+         cache-hit / server caliente un margen para repintar BAJO la
+         cortina (reduce el flash de datos viejos) sin bloquear.
+       - GRACE 500 ms → margen tras DOM listo.
+       - MAX 2500 ms  → tope DURO. La web SIEMPRE abre en ≤2.5 s, pase
+         lo que pase con la red o el polling.
        - Tap/click cierra antes. */
     (function(){
-      /* ── 1. Observador de fetches de HIDRATACIÓN ─────────────────
-         Se instala ANTES de los includes y del bundle, así captura
-         TODAS las peticiones de arranque que reconcilian el contenido
-         con el servidor (las que causan el flash de datos viejos). */
-      var _pending = 0, _lastSettle = Date.now(), _sawHydration = false;
-      var _HYDRATION_RE = /\/api\/(kv|liga-ext|liga-ext-protected|liga-ext-restore|state|copa\/state)\b/;
-      try {
-        if (window.fetch && !window.__bootSplashFetchWrapped){
-          window.__bootSplashFetchWrapped = true;
-          var _origFetch = window.fetch;
-          window.fetch = function(input){
-            var url = '';
-            try { url = (typeof input === 'string') ? input : (input && input.url) || ''; } catch(_){}
-            var track = false;
-            try { track = _HYDRATION_RE.test(url); } catch(_){}
-            if (track){ _pending++; _sawHydration = true; }
-            var p;
-            try { p = _origFetch.apply(this, arguments); }
-            catch(e){ if (track){ _pending = Math.max(0, _pending - 1); _lastSettle = Date.now(); } throw e; }
-            if (track && p && typeof p.then === 'function'){
-              var _settle = function(){ _pending = Math.max(0, _pending - 1); _lastSettle = Date.now(); };
-              try { p.then(_settle, _settle); } catch(_){}
-            }
-            return p;
-          };
-        }
-      } catch(_){}
-      function _hydrationSettled(quietMs){
-        /* Asentada: vimos ≥1 hidratación, no queda ninguna en vuelo y
-           ha pasado una ventana de silencio desde la última (evita
-           ocultar entre dos peticiones encadenadas de la misma ráfaga). */
-        return _sawHydration && _pending === 0 && (Date.now() - _lastSettle) >= (quietMs || 0);
-      }
-
-      /* ── 2. Splash ──────────────────────────────────────────────── */
-      var MIN_MS   = (typeof window._BOOT_SPLASH_MIN_MS   === 'number') ? window._BOOT_SPLASH_MIN_MS   : 1200;
-      var GRACE_MS = (typeof window._BOOT_SPLASH_GRACE_MS === 'number') ? window._BOOT_SPLASH_GRACE_MS :  700;
-      var MAX_MS   = (typeof window._BOOT_SPLASH_MAX_MS   === 'number') ? window._BOOT_SPLASH_MAX_MS   : 8000;
-      var QUIET_MS = (typeof window._BOOT_SPLASH_QUIET_MS === 'number') ? window._BOOT_SPLASH_QUIET_MS :  350;
+      var MIN_MS   = (typeof window._BOOT_SPLASH_MIN_MS   === 'number') ? window._BOOT_SPLASH_MIN_MS   : 1000;
+      var GRACE_MS = (typeof window._BOOT_SPLASH_GRACE_MS === 'number') ? window._BOOT_SPLASH_GRACE_MS :  500;
+      var MAX_MS   = (typeof window._BOOT_SPLASH_MAX_MS   === 'number') ? window._BOOT_SPLASH_MAX_MS   : 2500;
       var el = document.getElementById('boot-splash');
       if (!el) return;
       var hidden = false;
       var startedAt = Date.now();
-      var domReady = false, domReadyAt = 0;
       function doHide(){
         if (hidden) return;
         hidden = true;
@@ -223,32 +183,18 @@
       el.addEventListener('click', hide, { once:true });
       el.addEventListener('touchend', hide, { once:true });
 
-      /* Bucle de decisión: oculta cuando la hidratación se asienta
-         (datos del server ya pintados), o —si no hubo hidratación—
-         tras el grace; siempre dentro de [MIN_MS, MAX_MS]. */
-      function tick(){
-        if (hidden) return;
-        var now = Date.now(), elapsed = now - startedAt;
-        if (elapsed >= MAX_MS){ doHide(); return; }
-        if (elapsed < MIN_MS){ setTimeout(tick, MIN_MS - elapsed); return; }
-        if (!domReady){ setTimeout(tick, 80); return; }
-        if (_hydrationSettled(QUIET_MS)){ doHide(); return; }
-        /* Sin hidratación observada y ya pasó el grace tras DOM listo:
-           no hay nada que esperar → retirar la cortina. */
-        if (!_sawHydration && domReadyAt && (now - domReadyAt) >= GRACE_MS){ doHide(); return; }
-        setTimeout(tick, 100);
-      }
-      function _onReady(){ domReady = true; domReadyAt = Date.now(); tick(); }
-      if (document.readyState === 'interactive' || document.readyState === 'complete') { _onReady(); }
-      else { document.addEventListener('DOMContentLoaded', _onReady, { once:true }); }
+      /* Trigger principal: DOMContentLoaded + GRACE (app usable, el
+         bundle ya ejecutó). NO window.load — eso espera a TODOS los
+         escudos y dispara decenas de segundos en móvil. */
+      function _afterReady(){ setTimeout(hide, GRACE_MS); }
+      if (document.readyState === 'interactive' || document.readyState === 'complete') { _afterReady(); }
+      else { document.addEventListener('DOMContentLoaded', _afterReady, { once:true }); }
 
-      /* Backstop absoluto. */
+      /* Backstop absoluto: la web abre en ≤MAX_MS pase lo que pase. */
       setTimeout(doHide, MAX_MS);
       /* Hook por si un flujo crítico (ej. partido live restaurándose
          del wprev_state_v1) quiere ocultarlo antes via _bootSplashHide(). */
       window._bootSplashHide = hide;
-      /* Arranca el bucle (por si el DOM ya estaba listo). */
-      tick();
     })();
   </script>
 

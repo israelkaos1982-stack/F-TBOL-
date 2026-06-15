@@ -873,10 +873,20 @@ regenera.
 ### Blindaje implementado
 
 `_bayernEditValuesResetCal` hace **snapshot ANTES** del reset de
-`_PRESERVE_KEYS = ['bayern_derbys_seasons_v1','bayern_derbys_matches_v1',
-'bayern_trofeos_v1','selecciones_squad_v1']` y los **restaura AL FINAL**
-(solo si cambiaron). Defensa en profundidad: aunque un cambio futuro
-añada por error un borrado, estas claves se devuelven a su valor previo.
+`_PRESERVE_KEYS` y los **restaura AL FINAL** (solo si cambiaron). Defensa
+en profundidad: aunque un cambio futuro añada por error un borrado, estas
+claves se devuelven a su valor previo.
+
+**HUB MULTI-MISTER (2026-06-15)** — `_PRESERVE_KEYS` cubre los DATOS
+HISTÓRICOS (Histórico Derbys + Vitrina Trofeos) de las **6 cajas de mister
+humano**, NO solo la del hub ACTIVO. Se construye desde `_PRESERVE_BASES =
+['bayern_derbys_seasons_v1','bayern_derbys_matches_v1','bayern_trofeos_v1']`
+× `window._MISTERS_HUMANOS` (Toñín/Liverpool = clave BASE sin sufijo; el
+resto → `..._<id>`: `_alvaro`/`_acsa`/`_isra`/`_angel`/`_izan`) + la
+plantilla de selección común `selecciones_squad_v1`. Así «Reiniciar
+Temporada» —se pulse desde la caja que se pulse— jamás borra el palmarés ni
+los derbys de NINGUNA caja (son históricos, se guardan para SIEMPRE,
+petición usuario 2026-06-15).
 
 ### Reglas a respetar
 
@@ -887,6 +897,10 @@ añada por error un borrado, estas claves se devuelven a su valor previo.
 2. **PROHIBIDO** quitar el snapshot+restore de `_PRESERVE_KEYS`. Toda
    clave nueva que represente histórico/palmarés/plantilla del usuario
    debe AÑADIRSE a `_PRESERVE_KEYS`, no quedar expuesta al reset.
+2b. **PROHIBIDO** reducir `_PRESERVE_KEYS` a SOLO el hub ACTIVO: los
+   derbys/trofeos de las 6 cajas se preservan SIEMPRE (snapshot por-hub de
+   TODOS los misters vía `_PRESERVE_BASES × _MISTERS_HUMANOS`). Toda caja de
+   mister NUEVA hereda la protección automáticamente al estar en el registro.
 3. La plantilla del CLUB NO se mete en `_PRESERVE_KEYS` (congelaría la
    clasificación de Liga); se protege porque el reset no toca
    `ligaExt_*`. Si algún día el reset SÍ debe limpiar resultados de Liga,

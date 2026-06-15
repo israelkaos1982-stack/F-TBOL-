@@ -55667,15 +55667,33 @@ https://api.sofascore.app/api/v1/team/44/image
        congelar de paso la clasificación/resultados de la Liga EA. La
        plantilla de la SELECCIÓN sí es una clave propia
        (selecciones_squad_v1) y se protege aquí. */
-    /* HUB ACTIVO (multi-hub 2026-06-13): proteger las claves del mister
-       ABIERTO (derbys/trofeos por hub) + la plantilla de selección (común).
-       `_hubKey` deja las bases intactas para Liverpool. */
-    var _PRESERVE_KEYS = [
-      (window._hubKey ? window._hubKey('bayern_derbys_seasons_v1') : 'bayern_derbys_seasons_v1'),
-      (window._hubKey ? window._hubKey('bayern_derbys_matches_v1') : 'bayern_derbys_matches_v1'),
-      (window._hubKey ? window._hubKey('bayern_trofeos_v1') : 'bayern_trofeos_v1'),
-      'selecciones_squad_v1'
-    ];
+    /* HUB MULTI-MISTER (2026-06-15): los DATOS HISTÓRICOS (Histórico Derbys
+       + Vitrina Trofeos) de las 6 cajas de mister humano son PALMARÉS — se
+       guardan PARA SIEMPRE (petición usuario 2026-06-15). Por eso «Reiniciar
+       Temporada» —se pulse desde la caja que se pulse— jamás puede borrar los
+       derbys/trofeos de NINGUNA caja, no solo la del hub ACTIVO. Snapshot+
+       restore de las claves por-hub de TODOS los misters (Liverpool/Toñín =
+       base sin sufijo; Arsenal/Álvaro, R.Madrid/Acsa, Atlético/Isra,
+       Barça/Ángel, PSG/Izan → `..._<id>`). La plantilla de la SELECCIÓN
+       (`selecciones_squad_v1`) es común a todos los hubs. */
+    var _PRESERVE_BASES = ['bayern_derbys_seasons_v1','bayern_derbys_matches_v1','bayern_trofeos_v1'];
+    var _PRESERVE_KEYS = ['selecciones_squad_v1'];
+    (function(){
+      function _push(k){ if (k && _PRESERVE_KEYS.indexOf(k) < 0) _PRESERVE_KEYS.push(k); }
+      var misters = (window._MISTERS_HUMANOS && window._MISTERS_HUMANOS.length)
+        ? window._MISTERS_HUMANOS : [{ id:'tonin', screen:'s-munich' }];
+      _PRESERVE_BASES.forEach(function(base){
+        misters.forEach(function(m){
+          /* Mismo criterio "legacy" que `_hubKey`: Toñín/Liverpool usa la
+             clave BASE (sin sufijo); el resto añade `_<id>`. */
+          var legacy = !m || m.id === 'tonin' || m.screen === 's-munich';
+          _push(legacy ? base : (base + '_' + m.id));
+        });
+        /* Defensa extra: si el registro fallara, asegura SIEMPRE la clave
+           del hub ACTIVO vía `_hubKey`. */
+        try { if (window._hubKey) _push(window._hubKey(base)); } catch(_){}
+      });
+    })();
     var _preserveSnap = {};
     _PRESERVE_KEYS.forEach(function(k){
       try { var v = localStorage.getItem(k); if (v != null) _preserveSnap[k] = v; } catch(_){}
@@ -55945,8 +55963,8 @@ https://api.sofascore.app/api/v1/team/44/image
        arriba): si alguna se vació/borró/cambió durante el reset (no
        debería, pero defensa en profundidad), la devolvemos a su valor
        previo. Solo escribe si cambió → no toca el server si no hace
-       falta. Histórico Derbys, Vitrina Trofeos y Plantilla Selección
-       quedan SIEMPRE intactos tras Reiniciar Temporada. */
+       falta. Histórico Derbys y Vitrina Trofeos de las 6 cajas (+ Plantilla
+       Selección común) quedan SIEMPRE intactos tras Reiniciar Temporada. */
     try {
       Object.keys(_preserveSnap).forEach(function(k){
         var cur = null;

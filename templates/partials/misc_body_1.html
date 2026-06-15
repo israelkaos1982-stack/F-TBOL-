@@ -14979,6 +14979,44 @@ window._showSimProgress = function(opts, onDone){
     return PLAYER_STATS_KEY; /* liga + copa + sc (EA Sports) */
   };
 
+  /* ════════════════════════════════════════════════════════════════
+     SUMA TOTAL de competiciones para la PLANTILLA de un equipo IA
+     (Resto de Ligas + Liga EA Sports) — petición usuario 2026-06-15.
+     ════════════════════════════════════════════════════════════════
+     Al pulsar un equipo de Resto de Ligas / Liga EA y ver su plantilla,
+     las stats de cada jugador (y del equipo) deben SUMAR todas las
+     competiciones OFICIALES que ese equipo juega ese año, no solo
+     Liga + Copa:
+       · Liga + Copa (+ Supercopa España en EA) → `ef_player_stats_v1`
+       · Champions (Fase de Grupos + Playoff)   → `ef_player_stats_ucl_main_v1`
+       · Europa League                          → caché UEL
+       · Conference League                      → caché UECL
+       · Recopa de Europa                       → `ef_player_stats_recopa_v1`
+       · Supercopa de Europa                    → `ef_player_stats_usc_v1`
+       · Intercontinental                       → `ef_player_stats_inter_v1`
+       · Mundialito de Clubes                   → `ef_player_stats_mundial_v1`
+     (Un equipo solo juega UNA de UCL/UEL/UECL, así que añadir las tres
+     es inocuo: las cajas que no jugó no aportan entradas.)
+
+     `_lextComputeRealStats` ya suma por competición leyendo cada caché
+     `ef_player_stats_<comp>_v1` (la SINGLE SOURCE OF TRUTH que rellena
+     `rebuildPlayerStatsStore`), así que basta con AMPLIAR el set de
+     comps que se le pasa. Espejo de los `_STATS_STORES` de la plantilla
+     del hub (`#s-bayern-plantilla`).
+
+     SOLO se expande en contextos DOMÉSTICOS (el set base contiene
+     'liga'). Las vistas AISLADAS por competición (clic en la tabla de
+     Champions/Europa/Conference/Superliga, que pasan ['ucl']/['uel']/…)
+     NO se expanden — siguen mostrando los stats de esa comp sola. */
+  window._lextDomesticAllComps = function(comps){
+    comps = (Array.isArray(comps) && comps.length) ? comps : ['liga','copa'];
+    if (comps.indexOf('liga') === -1) return comps; /* vista aislada → no expandir */
+    var EXTRA = ['ucl','uel','uecl','recopa','usc','inter','mundial'];
+    var out = comps.slice();
+    EXTRA.forEach(function(c){ if (out.indexOf(c) === -1) out.push(c); });
+    return out;
+  };
+
   /* Renderiza un dashboard de estadísticas a partir de UNO de los
      caches `ef_player_stats_<comp>_v1`. Mismo look & feel que el
      dashboard de Liga EA Sports (s-liga-stats) — paleta verde,
@@ -46428,6 +46466,13 @@ https://api.sofascore.app/api/v1/team/44/image
     var players = Array.isArray(team.players) ? team.players : [];
     var _compsHdr = (typeof window.CURRENT_SQUAD_COMPETITIONS !== 'undefined' && window.CURRENT_SQUAD_COMPETITIONS)
       ? window.CURRENT_SQUAD_COMPETITIONS : ['liga','copa'];
+    /* Líderes del equipo (Máximo goleador / MVP / Mejor puntuación) =
+       suma de TODAS las comps oficiales del equipo (2026-06-15), espejo
+       de la tabla per-jugador de `renderSquadList`. Solo expande en
+       contexto doméstico; las vistas aisladas (UCL/UEL/Superliga) no. */
+    if (typeof window._lextDomesticAllComps === 'function') {
+      try { _compsHdr = window._lextDomesticAllComps(_compsHdr); } catch(_){}
+    }
     var _realLeaders = (typeof window._lextComputeRealStats === 'function')
       ? window._lextComputeRealStats(team,
           (typeof loadData === 'function' ? loadData(CURRENT_KEY) : null),
@@ -46724,6 +46769,24 @@ https://api.sofascore.app/api/v1/team/44/image
       ? window._lextComputeRealStats(t, data, { competitions: _comps })
       : { teamPJ: 0, liveStats: {} };
     var _teamPJ = _real.teamPJ;
+    /* SUMA TOTAL de competiciones (2026-06-15, petición usuario): en
+       Resto de Ligas + Liga EA Sports la plantilla muestra las stats de
+       cada jugador SUMADAS de TODAS las comps oficiales del equipo
+       (Liga+Copa + Champions/Europa/Conference + Recopa + Supercopa
+       Europa + Intercontinental + Mundialito de Clubes). Es SOLO para
+       DISPLAY (`_DISP`): el `p.*` del jugador se sigue escribiendo SOLO
+       con liga+copa (`_real`, la fuente que alimenta `ef_player_stats_v1`)
+       para NO contaminar la caché liga-only — si persistiéramos la suma,
+       el siguiente `rebuildPlayerStatsStore` la volvería a sumar (doble
+       conteo). En vistas aisladas (UCL/UEL/Superliga) `_dispComps`
+       === `_comps` y no hay segunda agregación. */
+    var _dispComps = (typeof window._lextDomesticAllComps === 'function')
+      ? window._lextDomesticAllComps(_comps) : _comps;
+    var _realDisp = (_dispComps === _comps) ? _real
+      : ((typeof window._lextComputeRealStats === 'function')
+          ? window._lextComputeRealStats(t, data, { competitions: _dispComps })
+          : _real);
+    var _DISP = new Map();
     t.players.forEach(function(p){
       try { ensurePlayerStats(p); } catch(_){}
       var clean = (typeof window._lextHydratePlayerStats === 'function')
@@ -46748,10 +46811,22 @@ https://api.sofascore.app/api/v1/team/44/image
         p.imbat    = clean.imbat;
         p.penSaved = clean.penSaved;
       }
+      /* Stats de DISPLAY (suma de TODAS las comps) — NO muta `p.*`.
+         Si la suma no aporta datos reales (`pj===0`), cae a `clean`
+         (liga+copa) y, si tampoco, al propio `p` (valores ya escritos).*/
+      var disp = (clean && clean.pj > 0) ? clean : p;
+      if (_realDisp !== _real && typeof window._lextHydratePlayerStats === 'function') {
+        var cd = window._lextHydratePlayerStats(t, p, _realDisp);
+        if (cd && cd.pj > 0) disp = cd;
+      }
+      _DISP.set(p, disp);
       (byPos[p.pos]||byPos.MED).push(p);
     });
 
     function rowFor(p, isGK){
+      /* `d` = stats de DISPLAY (suma de todas las comps oficiales del
+         equipo; ver `_DISP`). Si no hay override, es el propio `p`. */
+      var d = _DISP.get(p) || p;
       /* Badges C/F/P/⭐/⚾ visibles cuando el rol está asignado + botones
          para alternarlos. Cada botón va envuelto en pG(...) para que
          exija el PIN admin 747 antes de modificar nada, incluso si el
@@ -46777,22 +46852,26 @@ https://api.sofascore.app/api/v1/team/44/image
         var _lesDesc = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _lesPart + ' partido(s) restante(s)';
         badges += '<span class="lext-badge injury" title="' + _lesDesc.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _lesIco + ' ' + _lesPart + 'P</span>';
       }
-      var rating = computePlayerRating(p);
+      /* La valoración usa las stats de DISPLAY (suma de comps). Cuando
+         `d` es un override, fusionamos sobre `p` para conservar
+         pos/power/flags que `computePlayerRating` también lee. */
+      var _pRate = (d === p) ? p : Object.assign({}, p, d);
+      var rating = computePlayerRating(_pRate);
       var rStr = rating>0 ? rating.toFixed(2) : '0.00';
       var rCls = 'rating '+ratingClass(rating);
       var pTier = poderToneLocal(p.power||0);
       var power = '<span class="lext-sq-cell pw tier-'+pTier+'" title="Poder '+(p.power||0)+'/99 · '+pTier.toUpperCase()+'">'+(p.power||0)+'</span>';
-      var pj = fmtCell(p.pj,'');
-      var mvp = fmtCell(p.mvp,'mvp');
-      var ta = fmtCell(p.ta,'ta');
-      var tr = fmtCell(p.tr,'tr');
+      var pj = fmtCell(d.pj,'');
+      var mvp = fmtCell(d.mvp,'mvp');
+      var ta = fmtCell(d.ta,'ta');
+      var tr = fmtCell(d.tr,'tr');
       var rCell = '<span class="lext-sq-cell '+rCls+'">'+rStr+'</span>';
       var cls = isGK ? 'gk' : 'ot';
       var cells;
       if(isGK){
-        cells = power + pj + fmtCell(p.imbat,'imbat') + fmtCell(p.penSaved,'psave') + mvp + ta + tr + rCell;
+        cells = power + pj + fmtCell(d.imbat,'imbat') + fmtCell(d.penSaved,'psave') + mvp + ta + tr + rCell;
       } else {
-        cells = power + pj + fmtCell(p.gol,'gol') + fmtCell(p.pen,'pen') + fmtCell(p.fk,'fk') + mvp + ta + tr + rCell;
+        cells = power + pj + fmtCell(d.gol,'gol') + fmtCell(d.pen,'pen') + fmtCell(d.fk,'fk') + mvp + ta + tr + rCell;
       }
       function togBtn(flag, ico, on, title){
         /* pG(...) exige el PIN 747 si la sesión admin está cerrada.
@@ -46853,7 +46932,11 @@ https://api.sofascore.app/api/v1/team/44/image
           + '</div>';
       }
       list.sort(function(a,b){
-        var ra = computePlayerRating(a), rb = computePlayerRating(b);
+        /* Ordena por la valoración de DISPLAY (suma de comps), igual
+           que la celda 📈 de cada fila. */
+        var da = _DISP.get(a) || a, db = _DISP.get(b) || b;
+        var ra = computePlayerRating(da === a ? a : Object.assign({}, a, da));
+        var rb = computePlayerRating(db === b ? b : Object.assign({}, b, db));
         if(rb !== ra) return rb-ra;
         return (Number(b.power)||0)-(Number(a.power)||0);
       });

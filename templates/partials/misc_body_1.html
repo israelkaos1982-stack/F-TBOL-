@@ -60498,6 +60498,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     ['dinero','Dinero']
   ];
   var _tourInfoEdit = { id:null, on:false };
+  /* Sello del último save: evita que la hidratación KV (fetch lento en
+     arranque de Railway) pise un save hecho DURANTE la misma sesión. */
+  var _tourInfoLastSaveTs = 0;
   function _tourInfoLoadAll(){
     try { return JSON.parse(localStorage.getItem(_TOUR_INFO_KEY)||'{}') || {}; }
     catch(_){ return {}; }
@@ -60514,6 +60517,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        Como es UN blob compartido, un solo ts futuro envenenaba TODOS los
        torneos. */
     all.rev = (parseInt(all.rev, 10) || 0) + 1;
+    /* Marca el instante del save para que _tourInfoHydrate no lo pise. */
+    _tourInfoLastSaveTs = all.updatedAt;
     try { localStorage.setItem(_TOUR_INFO_KEY, JSON.stringify(all)); } catch(_){}
     try {
       if (typeof window.fetch === 'function'){
@@ -60629,10 +60634,17 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   (function _tourInfoHydrate(){
     try {
       if (typeof window.fetch !== 'function') return;
+      /* Captura el instante del fetch: si el admin guarda DURANTE la espera
+         de la respuesta (arranque lento de Railway), la respuesta traerá datos
+         de ANTES del save → ignorarla para no pisar el save recién hecho. */
+      var _fetchStart = Date.now();
       window.fetch('/api/kv/' + _TOUR_INFO_KEY)
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
           if (!j || !j.value || typeof j.value !== 'object') return;
+          /* Si se hizo un save DESPUÉS de que el fetch salió, la respuesta
+             es STALE (capturada antes del save). No pisar el save. */
+          if (_tourInfoLastSaveTs >= _fetchStart) return;
           var sv = j.value, local = _tourInfoLoadAll();
           var svRev = +sv.rev||0, locRev = +local.rev||0;
           var svTs  = +sv.updatedAt||0, locTs = +local.updatedAt||0;

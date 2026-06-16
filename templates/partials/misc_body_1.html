@@ -35678,6 +35678,14 @@ window._showSimProgress = function(opts, onDone){
     for (var la = 0; la < liverpoolAlias.length; la++){
       if (_mhNorm(name) === _mhNorm(liverpoolAlias[la])) return true;
     }
+    /* PSG vive como "Paris Saint-Germain" en algunos saves de Liga EA —
+       `_mhMatchName("paris saint-germain","PSG")` falla porque "psg" no
+       es subcadena de "paris saint-germain". Alias exacto igual que el
+       legacy Bayern↔Liverpool. */
+    var psgAlias = ['PSG', 'Paris Saint-Germain', 'Paris Saint Germain', 'Paris SG'];
+    for (var pa = 0; pa < psgAlias.length; pa++){
+      if (_mhNorm(name) === _mhNorm(psgAlias[pa])) return true;
+    }
     for (var i = 1; i < MISTERS_HUMANOS.length; i++){
       if (_mhMatchName(name, MISTERS_HUMANOS[i].club)) return true;
     }
@@ -35697,6 +35705,12 @@ window._showSimProgress = function(opts, onDone){
        Leverkusen. Bug 2026-06-03. */
     if (_mhNorm(name) === _mhNorm('Bayern Munich') || _mhNorm(name) === _mhNorm('LFC')){
       return MISTERS_HUMANOS[0];
+    }
+    /* PSG aliases: "Paris Saint-Germain" / "Paris SG" → Izan */
+    if (_mhNorm(name) === _mhNorm('Paris Saint-Germain') || _mhNorm(name) === _mhNorm('Paris Saint Germain') || _mhNorm(name) === _mhNorm('Paris SG')){
+      for (var j = 0; j < MISTERS_HUMANOS.length; j++){
+        if (MISTERS_HUMANOS[j].club === 'PSG') return MISTERS_HUMANOS[j];
+      }
     }
     return null;
   };
@@ -52382,6 +52396,8 @@ https://api.sofascore.app/api/v1/team/44/image
     if(ov&&ov.label) wants.push(String(ov.label).toLowerCase());
     wants.push(_canonHubName().toLowerCase());
     if(_ahLegacy()) wants.push('bayern munich');
+    /* PSG puede estar guardado como "Paris Saint-Germain" en Liga EA */
+    if(_canonHubName().toLowerCase()==='psg') wants.push('paris saint-germain');
     for(var w=0;w<wants.length;w++){
       for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.name.toLowerCase()===wants[w]) return t; }
     }
@@ -52394,6 +52410,8 @@ https://api.sofascore.app/api/v1/team/44/image
     var canonLow=_canonHubName().toLowerCase();
     var o={'liverpool':1,'real madrid':1,'real madrid cf':1,'fc barcelona':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1};
     delete o[canonLow];
+    /* Para PSG: quitar también el nombre largo del exclude list */
+    if(canonLow==='psg') delete o['paris saint-germain'];
     for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.isHuman&&!o[t.name.toLowerCase()]) return t; }
     return null;
   }
@@ -52516,7 +52534,7 @@ https://api.sofascore.app/api/v1/team/44/image
     var k=String(name||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
     var M={ 'liverpool':'New Balance Arena','bayern munich':'New Balance Arena','arsenal':'Emirates Stadium',
             'real madrid':'Santiago Bernabéu','atletico madrid':'Riyadh Air Metropolitano','atlético madrid':'Riyadh Air Metropolitano',
-            'fc barcelona':'Spotify Camp Nou','barcelona':'Spotify Camp Nou','psg':'Parc des Princes','paris saint-germain':'Parc des Princes' };
+            'fc barcelona':'Spotify Camp Nou','barcelona':'Spotify Camp Nou','psg':'Johan Cruijff Arena','paris saint-germain':'Johan Cruijff Arena' };
     return M[k] || '';
   }
   function run(){ setTimeout(_sync,0); setTimeout(_sync,80); setTimeout(_sync,240); }

@@ -3328,18 +3328,24 @@ window._showSimProgress = function(opts, onDone){
        cajas de humano del MISTERS_REGISTRY (regla "toda caja de humano
        nueva hereda"); el slot legacy 'Bayern Munich' del hub = Liverpool. */
     var _CANON_CLUB_CREST = {
-      'liverpool':           '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
-      'bayern munich':       '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
-      'bayern':              '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
-      'lfc':                 '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
-      'arsenal':             '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
-      'real madrid':         '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
-      'atletico madrid':     '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
-      'fc barcelona':        '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-      'barcelona':           '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-      'psg':                 '/static/img/escudos-1/france_paris-saint-germain.svg',
-      'paris saint germain': '/static/img/escudos-1/france_paris-saint-germain.svg',
-      'paris saint-germain': '/static/img/escudos-1/france_paris-saint-germain.svg'
+      'liverpool':                '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+      'bayern munich':            '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+      'bayern':                   '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+      'lfc':                      '/static/img/escudos-1/england_liverpool.football-logos.cc.svg',
+      'arsenal':                  '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
+      'arsenal fc':               '/static/img/escudos-1/england_arsenal.football-logos.cc.svg',
+      'real madrid':              '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+      'real madrid cf':           '/static/img/escudos-1/spain_real-madrid.football-logos.cc.svg',
+      'atletico madrid':          '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+      'atletico de madrid':       '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+      'club atletico de madrid':  '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
+      'fc barcelona':             '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+      'fc barcelona cf':          '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+      'barcelona':                '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
+      'psg':                      '/static/img/escudos-1/france_paris-saint-germain.svg',
+      'paris saint germain':      '/static/img/escudos-1/france_paris-saint-germain.svg',
+      'paris saint-germain':      '/static/img/escudos-1/france_paris-saint-germain.svg',
+      'paris sg':                 '/static/img/escudos-1/france_paris-saint-germain.svg'
     };
     function _canonClubCrest(name){
       try { var c = _CANON_CLUB_CREST[_normForStats(name)]; return c || ''; } catch(_){ return ''; }
@@ -52422,10 +52428,18 @@ https://api.sofascore.app/api/v1/team/44/image
        3) el nombre legacy "Bayern Munich" (saves antiguos sin renombrar). */
     var wants=[], ov=_boxOv();
     if(ov&&ov.label) wants.push(String(ov.label).toLowerCase());
-    wants.push(_canonHubName().toLowerCase());
+    var _chn=_canonHubName();
+    var _chnLow=_chn.toLowerCase();
+    /* Nombre canónico (con y sin acentos para tolerancia de saves). */
+    wants.push(_chnLow);
+    try{ var _chnNorm=_chn.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); if(_chnNorm!==_chnLow) wants.push(_chnNorm); }catch(_){}
     if(_ahLegacy()) wants.push('bayern munich');
-    /* PSG puede estar guardado como "Paris Saint-Germain" en Liga EA */
-    if(_canonHubName().toLowerCase()==='psg') wants.push('paris saint-germain');
+    /* Aliases por hub: cada club puede estar guardado con variantes en Liga EA */
+    if(_chnLow==='psg'){ wants.push('paris saint-germain'); wants.push('paris sg'); }
+    if(_chnLow==='real madrid') wants.push('real madrid cf');
+    if(_chnLow==='fc barcelona'){ wants.push('barcelona'); wants.push('fc barcelona cf'); }
+    if(_chnLow==='atlético madrid'||_chnLow==='atletico madrid'){ wants.push('atletico madrid'); wants.push('atlético madrid'); wants.push('atletico de madrid'); wants.push('club atletico de madrid'); }
+    if(_chnLow==='arsenal'){ wants.push('arsenal fc'); wants.push('arsenal london'); }
     for(var w=0;w<wants.length;w++){
       for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.name.toLowerCase()===wants[w]) return t; }
     }
@@ -52435,11 +52449,11 @@ https://api.sofascore.app/api/v1/team/44/image
     if(_ahLegacy()){
       for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&/bayern/i.test(t.name)) return t; }
     }
-    var canonLow=_canonHubName().toLowerCase();
-    var o={'liverpool':1,'real madrid':1,'real madrid cf':1,'fc barcelona':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1};
+    var canonLow=_chnLow;
+    var o={'liverpool':1,'real madrid':1,'real madrid cf':1,'fc barcelona':1,'fc barcelona cf':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'atletico de madrid':1,'club atletico de madrid':1,'arsenal':1,'arsenal fc':1,'psg':1,'paris saint-germain':1,'paris sg':1};
+    /* Quitar del exclusion list TODOS los aliases del hub activo */
+    wants.forEach(function(a){ delete o[a]; });
     delete o[canonLow];
-    /* Para PSG: quitar también el nombre largo del exclude list */
-    if(canonLow==='psg') delete o['paris saint-germain'];
     for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&t.isHuman&&!o[t.name.toLowerCase()]) return t; }
     return null;
   }

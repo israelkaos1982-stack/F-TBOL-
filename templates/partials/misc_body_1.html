@@ -55464,12 +55464,20 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!o || !Object.keys(o).length) return;
     applying = true;
     try {
+      /* Un blob con campos ancla (moneyTarget/ratingTarget) pero sin
+         valores actuales (rating/money null) significa que el hub NO tiene
+         todavía un valor guardado. Mostramos 0 para no heredar el valor
+         del hub anterior al cambiar de mister. */
+      var _hasAnchor = (o.moneyTarget != null || o.ratingTarget != null);
       if (o.rating != null){
         var rEl = document.getElementById('ath-pts-val');
         if (rEl){
           var nv = Number(o.rating);
           if (!isNaN(nv)) rEl.textContent = nv.toFixed(2);
         }
+      } else if (_hasAnchor) {
+        var rEl = document.getElementById('ath-pts-val');
+        if (rEl) rEl.textContent = '0.00';
       }
       if (o.money != null){
         var mEl = document.getElementById('ath-money-val');
@@ -55477,6 +55485,9 @@ https://api.sofascore.app/api/v1/team/44/image
           var mv = parseInt(o.money, 10);
           if (!isNaN(mv)) mEl.textContent = String(mv);
         }
+      } else if (_hasAnchor) {
+        var mEl = document.getElementById('ath-money-val');
+        if (mEl) mEl.textContent = '0';
       }
       if (o.pi != null){
         var pEl = document.getElementById('ath-med-val');
@@ -55815,6 +55826,25 @@ https://api.sofascore.app/api/v1/team/44/image
       var _objM = parseFloat(_oPrev.objMoney)  || 0;
       o.objRating = _objR;
       o.objMoney  = _objM;
+      /* Si el usuario dejó el campo "actual" en blanco, preservar el valor
+         del caché (o del DOM como último recurso). Así el admin puede tocar
+         solo los TARGETS sin borrar el 💼/🪙 ya guardado. */
+      if (o.rating == null) {
+        if (_oPrev.rating != null) {
+          o.rating = _oPrev.rating;
+        } else {
+          var _domR = parseFloat((document.getElementById('ath-pts-val')||{}).textContent) || 0;
+          if (_domR) o.rating = _domR;
+        }
+      }
+      if (o.money == null) {
+        if (_oPrev.money != null) {
+          o.money = _oPrev.money;
+        } else {
+          var _domM = parseInt(((document.getElementById('ath-money-val')||{}).textContent||'').replace(/[^\d-]/g,''), 10) || 0;
+          if (_domM) o.money = _domM;
+        }
+      }
       if (o.rating != null) {
         var _base = (parseFloat(o.rating) || 0) - _objR;
         o.ratingBase = (_base < 0) ? 0 : Math.round(_base * 1000) / 1000;

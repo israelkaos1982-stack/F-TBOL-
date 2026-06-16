@@ -8269,10 +8269,13 @@
     row.setAttribute('data-id', id);
     var emk = mk.replace(/'/g,"\\'");
     var _shortTeam = teamLabel.length > 16 ? teamLabel.substring(0,14)+'\u2026' : teamLabel;
+    var _teamLogo = typeof getLogoEquipo === 'function' ? (getLogoEquipo(teamLabel) || '') : '';
     row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
       +'<span class="ml-evt-ico">'+ico+'</span>'
       +'<span class="ml-evt-name">'+name+'</span>'
-      +'<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>'
+      +(_teamLogo
+        ? '<img class="ml-evt-shield" src="'+_teamLogo+'" alt="'+escapeHtml(_shortTeam)+'" title="'+escapeHtml(_shortTeam)+'">'
+        : '<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>')
       +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\',\''+id+'\')" title="Editar">🖍</button>'
       +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\'](\''+id+'\')">✕</button>';
     var items = list.querySelectorAll('.ml-evt-item');
@@ -8633,6 +8636,17 @@
          VER RESUMEN, así que `.is-finishable` ya pinta rojo brillante
          con su keyframe — solo bajamos el umbral 85→80. */
       endBtn.classList.toggle('is-finishable', matchOver || rawSec >= 80 * 60);
+      /* ELIMINATORIA: actualizar label según fase cuando hay empate. */
+      if (!st.finished) {
+        var _elimTied = !!st.isFriendly && st.matchType === 'elim' && st.sc.a === st.sc.b;
+        if (_elimTied && !st.etDone && rawSec >= fullMax) {
+          endBtn.textContent = '▶ PRÓRROGA';
+        } else if (_elimTied && st.etDone) {
+          endBtn.textContent = '🥅 PENALTIS';
+        } else {
+          endBtn.textContent = '🏁 FINALIZAR';
+        }
+      }
     }
     if (st.finished) { btn.textContent='🏁 Final'; btn.className='ml-timer finished'; return; }
     if (st.inDescanso) { btn.textContent='⏸ HT'; btn.className='ml-timer running'; return; }
@@ -10101,7 +10115,15 @@
   window.mlEndMatchGen = function(mk, winner) {
     var st=_mlSt(mk);
     if (st.finished) return;
-    /* Liga: empate es válido. Solo forzar penaltis si hay prórroga activada (eliminatorias futuras) */
+    /* Amistoso ELIMINATORIA: empate → prórroga primero, luego penaltis. */
+    if (!winner && st.sc.a===st.sc.b && !!st.isFriendly && st.matchType === 'elim') {
+      if (!st.etDone) {
+        alert('⏱ EMPATE — la eliminatoria exige PRÓRROGA.\n\nSe han añadido 30 minutos extra (15 cada parte).\nPulsa ▶ para reanudar el cronómetro.');
+        window.mlActivateETGen(mk); return;
+      }
+      window.mlShowPenPanelGen(mk); return;
+    }
+    /* Liga / HvH con prórroga ya activa: forzar penaltis. */
     if (!winner && st.sc.a===st.sc.b && st.isHvH && st.etDone) {
       window.mlShowPenPanelGen(mk); return;
     }
@@ -10862,7 +10884,11 @@
     var penRow = document.getElementById('ml-post-pen-row');
     if (penRow) {
       var penSc = document.getElementById('pen-score-'+mk);
-      var penText = penSc ? penSc.textContent.trim() : '';
+      /* Solo mostrar el marcador de penaltis si el elemento es visible
+         (display!=='none'), es decir, si los penaltis se jugaron de verdad.
+         Sin este check se mostraba el texto inicial "⚽ 0-0 (pen.)" aunque
+         no se hubieran jugado. */
+      var penText = (penSc && penSc.style.display !== 'none') ? penSc.textContent.trim() : '';
       penRow.textContent = penText;
       penRow.style.display = penText ? '' : 'none';
     }
@@ -13037,6 +13063,7 @@
         var emp=list.querySelector('.ml-acta-empty'); if(emp)emp.remove();
         var teamLabel = team==='a' ? st.home : st.away;
         var _shortTeam = teamLabel.length > 16 ? teamLabel.substring(0,14)+'\u2026' : teamLabel;
+        var _teamLogo2 = typeof getLogoEquipo === 'function' ? (getLogoEquipo(teamLabel) || '') : '';
         var row = document.createElement('div');
         row.className='ml-evt-item';
         row.setAttribute('data-team',team);
@@ -13045,7 +13072,9 @@
         row.innerHTML = '<span class="ml-evt-min">'+min+"'</span>"
           +'<span class="ml-evt-ico">'+ico+'</span>'
           +'<span class="ml-evt-name">'+(name||'')+'</span>'
-          +'<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>'
+          +(_teamLogo2
+            ? '<img class="ml-evt-shield" src="'+_teamLogo2+'" alt="'+escapeHtml(_shortTeam)+'" title="'+escapeHtml(_shortTeam)+'">'
+            : '<span class="ml-evt-team">'+escapeHtml(_shortTeam)+'</span>')
           +'<button class="ml-evt-edit" onclick="window._openEditModal(\''+emk+'\',\''+id+'\')" title="Editar">🖍</button>'
           +'<button class="ml-evt-del" onclick="window[\'mlDelEvt_'+mk+'\'](\''+id+'\')">✕</button>';
         var items = list.querySelectorAll('.ml-evt-item');
@@ -19226,6 +19255,8 @@
   function _iaEventsHtml(m) {
     if (!m.events || !m.events.length) return '<div style="padding:10px 12px;color:#555;font-size:11px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:1px;">SIN ACTA DISPONIBLE</div>';
     var h = '';
+    var _shA = typeof getLogoEquipo === 'function' ? (getLogoEquipo(m.home) || '') : '';
+    var _shB = typeof getLogoEquipo === 'function' ? (getLogoEquipo(m.away) || '') : '';
     /* Reparación de eventos "Jugador A"/"Jugador B" legacy. Si el acta
        del partido viene con nombres placeholder (guardados en una
        simulación previa cuando SQUAD_REGISTRY estaba vacío) los
@@ -19295,7 +19326,7 @@
         + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#6ab0d8;min-width:26px;">' + ev.min + '\'</span>'
         + '<span style="font-size:14px;">' + ico + '</span>'
         + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;color:' + nameColor + ';flex:1;">' + playerHtmlH + '</span>'
-        + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (ev.team === 'a' ? m.home : m.away) + '</span>'
+        + (function(){ var _sh = ev.team==='a' ? _shA : _shB; var _tn = ev.team==='a' ? m.home : m.away; return _sh ? '<img src="'+_sh+'" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;" title="'+_tn+'" onerror="this.style.display=\'none\';">' : '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">'+_tn+'</span>'; })()
         + '</div>';
     });
     if (m.mvp) {
@@ -19303,7 +19334,7 @@
         + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:26px;">FIN</span>'
         + '<span style="font-size:14px;">&#11088;</span>'
         + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + m.mvp + '</span>'
-        + '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">' + (m.mvpTeam || '') + '</span>'
+        + (function(){ var _shMvp = m.mvpTeam ? (typeof getLogoEquipo==='function' ? (getLogoEquipo(m.mvpTeam)||'') : '') : ''; return _shMvp ? '<img src="'+_shMvp+'" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;" title="'+(m.mvpTeam||'')+'" onerror="this.style.display=\'none\';">' : '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">'+(m.mvpTeam||'')+'</span>'; })()
         + '</div>';
     }
     return h;
@@ -20402,6 +20433,7 @@
 /* ── Eventos del acta ────────────────────────────────────────── */
 .ml-evt-item{padding-left:10px!important;}
 .ml-evt-team{font-size:11px;color:rgba(255,255,255,.45);font-family:"Rajdhani",sans-serif;white-space:nowrap;}
+.ml-evt-shield{width:18px;height:18px;object-fit:contain;flex-shrink:0;}
 </style>
 <script>
 /* ── Parches post-bundle: balón, estadio, duración, Twitch, botones ── */

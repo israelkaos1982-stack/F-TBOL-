@@ -1,5 +1,6 @@
 from flask import Flask, render_template, redirect, url_for, request, jsonify, abort, session, make_response
 from flask_sqlalchemy import SQLAlchemy
+from flask_compress import Compress
 import random
 import os
 import time
@@ -15,6 +16,36 @@ from logica_liga import calcular_tabla, obtener_resultados_ia
 from sync_merge import tour_cfg_merge, sel_squad_merge
 
 app = Flask(__name__)
+
+# ── COMPRESIÓN GZIP ────────────────────────────────────────────────────────
+# El HTML renderizado (~6.5 MB inline) y los bundles JS/CSS (~900 KB) se
+# comprimen automáticamente. En un Samsung S21 FE con datos móviles esto
+# reduce la descarga inicial de ~7.5 MB a ~1.4 MB (≈80 % menos).
+app.config['COMPRESS_MIMETYPES'] = [
+    'text/html',
+    'text/css',
+    'application/javascript',
+    'text/javascript',
+    'application/json',
+    'image/svg+xml',
+    'text/plain',
+]
+app.config['COMPRESS_LEVEL'] = 6      # equilibrio compresión/CPU
+app.config['COMPRESS_MIN_SIZE'] = 860  # no comprimir respuestas < 860 B
+Compress(app)
+
+# ── CACHÉ DE ESTÁTICOS VERSIONADOS ────────────────────────────────────────
+# Los archivos JS/CSS llevan ?v=X.X → pueden cachearse 30 días.
+# Las respuestas de API y el HTML principal ya llevan no-cache explícito;
+# este hook no los toca.
+@app.after_request
+def _static_cache_headers(response):
+    path = request.path
+    if path.startswith('/static/js/') or path.startswith('/static/css/'):
+        response.headers['Cache-Control'] = 'public, max-age=2592000'  # 30 días
+        response.headers.pop('Pragma', None)
+        response.headers.pop('Expires', None)
+    return response
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 

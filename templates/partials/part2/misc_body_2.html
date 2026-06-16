@@ -24405,7 +24405,7 @@ window.goLiveMatches = function() {
     { id:'tonin',  name:'Toñín',  team:'Bayern Munich',     icon:'💡', pin:'666', color:'#fbbf24', dark:'#7c5800' },
     { id:'alvaro', name:'Álvaro', team:'Arsenal',           icon:'🐭', pin:'609', color:'#a8a29e', dark:'#3f3f3a' },
     { id:'acsa',   name:'Acsa',   team:'Real Madrid',       icon:'🔨', pin:'216', color:'#fb923c', dark:'#7c2d12' },
-    { id:'israel', name:'Israel', team:'Atlético Madrid',   icon:'✏️', pin:'646', color:'#facc15', dark:'#854d0e' },
+    { id:'israel', misterId:'isra', name:'Israel', team:'Atlético Madrid',   icon:'✏️', pin:'646', color:'#facc15', dark:'#854d0e' },
     { id:'angel',  name:'Ángel',  team:'FC Barcelona',      icon:'👿', pin:'171', color:'#c084fc', dark:'#581c87' }
   ];
   var ISRAMAX_INITIAL_CASH = 1300;
@@ -24491,7 +24491,8 @@ window.goLiveMatches = function() {
   }
   function _isramaxFindUser(userId){
     for (var i=0; i<ISRAMAX_USERS.length; i++){
-      if (ISRAMAX_USERS[i].id === userId) return ISRAMAX_USERS[i];
+      var u = ISRAMAX_USERS[i];
+      if (u.id === userId || u.misterId === userId) return u;
     }
     return null;
   }

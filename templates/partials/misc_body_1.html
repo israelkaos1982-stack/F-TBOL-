@@ -2728,6 +2728,34 @@ window._showSimProgress = function(opts, onDone){
           });
         }
       } catch(_){}
+      /* ── Liga ext del hub (hubs no-legacy: PSG, Arsenal, etc.) ──────────
+         Para un hub cuyo club NO vive en Liga EA Sports (PSG en Ligue 1,
+         Arsenal en la Premier League externa, etc.) las stats de la liga
+         doméstica están en `team.players[]` del row del liga-ext, NO en
+         `ef_player_stats_v1`. Se leen aquí SOLO para hubs no-legacy para
+         evitar doble conteo con lo que ya viene de `ef_player_stats_v1`
+         para Liverpool/Toñín (que sí está en Liga EA). */
+      try {
+        var _isLegacyHub = !window._activeHubIsLegacy || window._activeHubIsLegacy();
+        if (!_isLegacyHub && typeof _findBayernRow === 'function'){
+          var _hubRow = _findBayernRow();
+          if (_hubRow && Array.isArray(_hubRow.players) && _hubRow.players.length){
+            var _hubTeamKey = _normForStats(_hubRow.name || _hubTeamName());
+            _hubRow.players.forEach(function(p){
+              if (!p || !p.name) return;
+              var pjV = Number(p.pj||0);
+              if (!pjV) return;  /* jugador sin partidos → no aporta nada */
+              var pName = String(p.name);
+              var bucket = cache[pName] = cache[pName] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+              _STATS_FIELDS.forEach(function(f){ bucket[f] += Number(p[f]||0); });
+              /* Desglose para la nota media: clave '__ligaext_<hubTeamKey>' */
+              var byComp = nota[pName] = nota[pName] || {};
+              var d2 = byComp['__ligaext_'+_hubTeamKey] = byComp['__ligaext_'+_hubTeamKey] || {pj:0,gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+              _STATS_FIELDS.forEach(function(f){ d2[f] += Number(p[f]||0); });
+            });
+          }
+        }
+      } catch(_){}
       _STATS_CACHE = cache;
       _NOTA_CACHE = nota;
       _STATS_CACHE_TS = now;
@@ -54443,7 +54471,15 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   function _hubAliases(){
     var nm = _hubName();
-    var raw = [nm, 'Liverpool', 'Bayern Munich', 'Bayern Múnich', 'Bayern'];
+    /* Liverpool/Toñín heredan los alias legacy Bayern↔Liverpool.
+       Los otros hubs (Arsenal, PSG, etc.) solo tienen su propio nombre:
+       evita que la detección en stores de Copa/Supercopa España de Liverpool
+       haga aparecer esos chips en cajas que no juegan esas competiciones. */
+    var isLegacy = true;
+    try { var _ahA = window._activeHub && window._activeHub(); isLegacy = (!_ahA || _ahA.id === 'tonin'); } catch(_){}
+    var raw = isLegacy
+      ? [nm, 'Liverpool', 'Bayern Munich', 'Bayern Múnich', 'Bayern']
+      : [nm];
     var out = [], seen = {};
     raw.forEach(function(x){
       var n = _norm(x);
@@ -54503,12 +54539,22 @@ https://api.sofascore.app/api/v1/team/44/image
     sel:true, torneo:true, amist:true
   };
   function _loadCalSel(){
+    /* Clave y defaults POR HUB: Liverpool/Toñín usa la clave BASE con
+       defaults que incluyen Liga/Copa/Supercopa España; el resto de hubs
+       (Arsenal, PSG…) usa su clave namespaced y no activa por defecto las
+       competiciones domésticas españolas que no juegan. */
+    var isLegacy = true;
+    try { var _ahC = window._activeHub && window._activeHub(); isLegacy = (!_ahC || _ahC.id === 'tonin'); } catch(_){}
+    var key = _CAL_COMPS_KEY;
+    try { if (!isLegacy && window._hubKey) key = window._hubKey(_CAL_COMPS_KEY); } catch(_){}
     var sel = {};
-    Object.keys(_CAL_COMP_DEFAULTS).forEach(function(k){
-      sel[k] = _CAL_COMP_DEFAULTS[k];
-    });
+    Object.keys(_CAL_COMP_DEFAULTS).forEach(function(k){ sel[k] = _CAL_COMP_DEFAULTS[k]; });
+    if (!isLegacy){
+      /* Hubs no-Liverpool: domésticas españolas apagadas por defecto */
+      sel.liga = false; sel.copa = false; sel['sup-esp'] = false;
+    }
     try {
-      var raw = localStorage.getItem(_CAL_COMPS_KEY);
+      var raw = localStorage.getItem(key);
       if (raw){
         var d = JSON.parse(raw);
         if (d && typeof d === 'object'){

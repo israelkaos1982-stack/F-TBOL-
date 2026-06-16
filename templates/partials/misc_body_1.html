@@ -58126,11 +58126,26 @@ https://api.sofascore.app/api/v1/team/44/image
     return h;
   }
 
+  function _objSelIcon(){
+    try {
+      var hub = window._activeHub && window._activeHub();
+      var sel = (hub && hub.seleccion) ? hub.seleccion : '';
+      if (!sel){ var m = window._mhFindMister && window._mhFindMister(window._mkHubTeamName && window._mkHubTeamName()); if (m) sel = m.seleccion || ''; }
+      if (sel){
+        var nn = sel.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+        var F = { francia:'🇫🇷', brasil:'🇧🇷', inglaterra:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', noruega:'🇳🇴', argentina:'🇦🇷', espana:'🇪🇸' };
+        return F[nn] || '🌍';
+      }
+    } catch(_){}
+    return '🇫🇷';
+  }
+
   function renderSection(sec, edit) {
     var color = effSecColor(sec);
+    var icon  = (sec.id === 'sel') ? (effSecIcon(sec) !== sec.icon ? effSecIcon(sec) : _objSelIcon()) : effSecIcon(sec);
     var h  = '<div class="obj-sub-section">';
         h += '<button class="obj-sub-hdr" onclick="subTog(\'obj-' + sec.id + '\')" data-defcolor="' + sec.color + '" style="color:' + color + ';">';
-        h += effSecIcon(sec) + ' <span class="obj-sec-title">' + esc(effSecTitle(sec)) + '</span> ';
+        h += icon + ' <span class="obj-sec-title">' + esc(effSecTitle(sec)) + '</span> ';
         h += '<span class="obj-sub-arr" id="obj-' + sec.id + '-arr">▼</span>';
         h += '</button>';
         h += '<div class="obj-sub-body open" id="obj-' + sec.id + '">';

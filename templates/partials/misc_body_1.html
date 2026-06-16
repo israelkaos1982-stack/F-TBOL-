@@ -62658,6 +62658,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      ver `_kvBlobSync` en index.bundle.js). */
   var _muUpdatedAt = 0;
   var _muSync = null, _muSyncReady = false;
+  var _muRunScans = null; /* ref al `run` de _bootStage2; se asigna ahí para re-lanzar scans en hubchange */
   function _muSetupSync(){
     if (_muSyncReady) return;
     if (typeof window._kvBlobSync !== 'function'){
@@ -62667,15 +62668,21 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       return;
     }
     _muSyncReady = true;
-    _muSync = window._kvBlobSync(KEY);
+    /* CRÍTICO: capturar KEY por VALOR en este momento. Si el usuario cambia
+       de hub antes de que llegue la respuesta HTTP, el adopt callback NO debe
+       escribir los mensajes del hub anterior en el localStorage del hub nuevo.
+       La guard `KEY !== _thisKey` descarta respuestas tardías/stale. */
+    var _thisKey = KEY;
+    _muSync = window._kvBlobSync(_thisKey);
     _muSync.config(
       function(){ var d = _read(); return { msgs:d.msgs, cursors:d.cursors }; },
       function(sv){
+        if (KEY !== _thisKey) return; /* hub cambió antes de que llegara la respuesta — ignorar */
         try {
           var msgs    = Array.isArray(sv && sv.msgs) ? sv.msgs : [];
           var cursors = (sv && sv.cursors) || {};
           _muUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
-          localStorage.setItem(KEY, JSON.stringify({ msgs:msgs, cursors:cursors, updatedAt:_muUpdatedAt }));
+          localStorage.setItem(_thisKey, JSON.stringify({ msgs:msgs, cursors:cursors, updatedAt:_muUpdatedAt }));
         } catch(_){}
         try { _refresh(); } catch(_){}
       },
@@ -62697,10 +62704,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       try { if (_muSync && _muSync.flush) _muSync.flush(); } catch(_){}
       try { KEY = window._hubKey('mu_messages_v1'); } catch(_){}
       _muUpdatedAt = 0; _muSync = null; _muSyncReady = false;
+      _muSetupSync._t = 0; /* resetea contador de reintentos para el nuevo hub */
       try { _muSetupSync(); } catch(_){}
       /* Actualiza el subtítulo del header del overlay si está montado. */
       try { var sub = document.querySelector('#mu-msg-ov .mmo-title-sub'); if (sub) sub.textContent = String(_hubDisp()).toUpperCase(); } catch(_){}
       try { _refresh(); } catch(_){}
+      /* Relanza los scans para el nuevo hub (Copa, selección, Liga, etc.)
+         con un tick de delay para que _mkHubTeamName/_hubSelDisp hayan
+         resuelto el nuevo mister antes de que los helpers _isLiv/_isFra lean. */
+      if (_muRunScans) setTimeout(_muRunScans, 80);
     });
   } catch(_){}
 
@@ -63961,7 +63973,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         if (_getCursor(sig)) return;
         _setCursor(sig, _now());
         var chLower = String(ch).toLowerCase();
+        var selLower = String(_hubSelDisp()||'').toLowerCase();
         var ours = aliases.some(function(a){ return chLower.indexOf(a) !== -1; })
+                || (c.side === 'fra' && selLower && chLower.indexOf(selLower) !== -1)
                 || (c.side === 'fra' && /francia|france/.test(chLower));
         if (ours) return; /* somos campeones — lo cubre otro hook */
         var pool = (Math.random() < 0.25) ? bodiesSurp : bodiesElim;
@@ -63999,7 +64013,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       push({ side:'liv', type:'hat-trick', icon:ic,
         sender:'LaLiga · Goleadores',
         title: lbl+' de '+pl,
-        body : pl+' ha marcado '+n+' goles en un solo partido. ¡Noche histórica en el Liverpool!'
+        body : pl+' ha marcado '+n+' goles en un solo partido. ¡Noche histórica en el '+_hubDisp()+'!'
       });
     });
   }
@@ -64103,7 +64117,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       push({ side:'liv', type:'pichichi', icon:'🥇',
         sender:'LaLiga · Trofeo Zarra',
         title:'¡Pichichi! '+pl+' lidera con '+top.n+' goles',
-        body : pl+' es el máximo goleador de LaLiga con '+top.n+' goles. Una temporada de récord en Anfield.'
+        body : pl+' es el máximo goleador de LaLiga con '+top.n+' goles. Una temporada de récord en el '+_hubDisp()+'.'
       });
     } catch(_){}
   }
@@ -64246,7 +64260,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         push({ side:'liv', type:'elim', icon:'💀',
           sender:'RFEF · Copa del Rey',
           title:'Eliminados de la Copa del Rey',
-          body :'El Liverpool queda eliminado en '+_ronLabel(r)+' de la Copa del Rey. Toca pensar en la Liga y Europa.'
+          body :'El '+_hubDisp()+' queda eliminado en '+_ronLabel(r)+' de la Copa del Rey. Toca pensar en la Liga y Europa.'
         });
       });
     } catch(_){}
@@ -64298,8 +64312,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         push({ side:'liv', type:'leader', icon:'👑',
           sender:'LaLiga · Líder',
           title:'¡Liderato de LaLiga!',
-          body :'El Liverpool ocupa la primera posición de LaLiga con '+(arr[0].pts||0)+
-                ' puntos. Anfield sueña con el título.'
+          body :'El '+_hubDisp()+' ocupa la primera posición de LaLiga con '+(arr[0].pts||0)+
+                ' puntos. '+_hubDisp()+' sueña con el título.'
         });
       } else if (!firstIsLiv && prev === '1'){
         _setCursor('liga:leader-state', '0');
@@ -64309,7 +64323,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         push({ side:'liv', type:'leader-lost', icon:'📉',
           sender:'LaLiga · Líder',
           title:'Adiós al liderato',
-          body :'El Liverpool deja la primera posición'+(pos ? ' (ahora '+pos+')' : '')+
+          body :'El '+_hubDisp()+' deja la primera posición'+(pos ? ' (ahora '+pos+')' : '')+
                 '. Toca pelearlo en la próxima jornada.'
         });
       }
@@ -64510,7 +64524,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     else if (days != null && days >= 2 && days <= 7) when = 'en ' + days + ' días';
     var venue;
     if (sideMsg === 'fra' && franceCtx) venue = franceCtx.isHome ? 'en casa' : 'fuera de casa';
-    else                                venue = /\@\s/.test(t) ? 'fuera de casa' : 'en Anfield';
+    else                                venue = /\@\s/.test(t) ? 'fuera de casa' : 'en casa';
     var phaseTxt = (franceCtx && franceCtx.phaseLabel) ? franceCtx.phaseLabel : '';
     var title;
     if (rival){
@@ -64578,7 +64592,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (t === 'W'){
       ic = '🚀';
       title = n + ' victorias consecutivas en Liga';
-      body  = 'El Liverpool encadena ' + n + ' triunfos seguidos en LaLiga. ¡Anfield está en llamas!';
+      body  = 'El '+_hubDisp()+' encadena ' + n + ' triunfos seguidos en LaLiga. ¡El estadio está en llamas!';
     } else if (t === 'L'){
       ic = '🚨';
       title = n + ' derrotas seguidas en Liga';
@@ -64663,8 +64677,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var sigR = 'res:' + mk;
         if (!_getCursor(sigR)){
           _setCursor(sigR, _now());
-          var whereW = humanIsHome ? (side === 'liv' ? 'en Anfield' : 'en casa') : 'a domicilio';
-          var teamW  = (side === 'fra') ? 'Francia' : 'el Liverpool';
+          var whereW = humanIsHome ? 'en casa' : 'a domicilio';
+          var teamW  = (side === 'fra') ? _hubSelDisp() : 'el '+_hubDisp();
           var ic, title, body;
           if (diff > 0){
             ic = '🏆';
@@ -64715,7 +64729,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             var n = Array.isArray(ev.lesPartidos) ? ev.lesPartidos[0] : (ev.lesPartidos || 1);
             _setCursor(sig, '1');
             push({ side:'fra', type:'injury', icon:'🏥',
-              sender:'Servicios Médicos · Francia',
+              sender:'Servicios Médicos · '+_hubSelDisp(),
               title:'Lesión ' + grade + ': ' + pl,
               body: pl + ' cae lesionado (' + grade + ') y se perderá aprox. ' + n +
                     ' partido' + (n === 1 ? '' : 's') + ' con la selección.' });
@@ -64756,9 +64770,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             var lbl = (gN === 2) ? 'Doblete' : (gN === 3) ? 'Hat-trick' : (gN === 4) ? '¡Cuádruple!' : '¡Manita!';
             var icg = (gN === 2) ? '⚽⚽' : (gN === 3) ? '🎩' : '👑';
             push({ side:'fra', type:'hat-trick', icon:icg,
-              sender:"L'Équipe · Goleadores",
+              sender:_fraSender()+' · Goleadores',
               title: lbl + ' de ' + pl,
-              body : pl + ' firma ' + gN + ' goles con Francia en un solo partido. ¡Está imparable! ' + (gN >= 3 ? '🎉' : '🔥') });
+              body : pl + ' firma ' + gN + ' goles con '+_hubSelDisp()+' en un solo partido. ¡Está imparable! ' + (gN >= 3 ? '🎉' : '🔥') });
           }
           /* Racha multi-partido viendo puerta. */
           var ks = 'strkfra:' + pl;
@@ -64766,9 +64780,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           _setCursor(ks, sn);
           if (sn === 3 || sn === 5 || sn === 7 || sn === 10){
             push({ side:'fra', type:'streak', icon:'🔥',
-              sender:"L'Équipe · Goleadores",
+              sender:_fraSender()+' · Goleadores',
               title: pl + ' marca en ' + sn + ' partidos seguidos',
-              body : pl + ' encadena ' + sn + ' partidos consecutivos viendo puerta con Les Bleus. ¡En racha! ⚡' });
+              body : pl + ' encadena ' + sn + ' partidos consecutivos viendo puerta con la selección. ¡En racha! ⚡' });
           }
         });
       }
@@ -64816,12 +64830,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
             push({ side:'fra', type:'card-warn', icon:'🟨',
               sender:'Comité de Competición',
               title:'Aviso amarillas: ' + name,
-              body: name + ' suma una amarilla con Francia. Otra más y se perderá el próximo partido por acumulación.' });
+              body: name + ' suma una amarilla con '+_hubSelDisp()+'. Otra más y se perderá el próximo partido por acumulación.' });
           } else {
             push({ side:'fra', type:'card-susp', icon:'⛔',
               sender:'Comité de Competición',
               title:'Sanción amarillas: ' + name,
-              body: name + ' cumple ciclo de amarillas con Francia: se pierde el próximo partido por acumulación.' });
+              body: name + ' cumple ciclo de amarillas con '+_hubSelDisp()+': se pierde el próximo partido por acumulación.' });
           }
         });
       });
@@ -65044,6 +65058,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       _observeNextMatch();
       _refresh();
     };
+    _muRunScans = run; /* expone run al hubchange listener para relanzar scans al cambiar hub */
     run();
     setInterval(run, 30000);
     /* Disparador inmediato cuando el usuario marca un objetivo o

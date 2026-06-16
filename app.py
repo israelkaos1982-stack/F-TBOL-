@@ -3988,6 +3988,19 @@ def api_kv_set(key):
                 except (TypeError, ValueError):
                     _new_rev = 0
                 value["rev"] = max(_old_rev, _new_rev) + 1
+            # MERGE POR ID DE TORNEO (tour_info_cards_v1): un save autoritativo
+            # desde un dispositivo con localStorage vacío (tras wipe) solo contiene
+            # los IDs que editó; sin merge, borra el resto. Preserva los IDs del
+            # server que el cliente NO trae; el cliente SIEMPRE gana en los suyos.
+            if _kv_hub_base(key) == "tour_info_cards_v1" and isinstance(old, dict):
+                _META_K = {"rev", "updatedAt"}
+                _merged = {k: v for k, v in old.items() if k not in _META_K}
+                for k, v in value.items():
+                    if k not in _META_K:
+                        _merged[k] = v  # el save del cliente gana por cada ID
+                _merged["rev"] = value["rev"]
+                _merged["updatedAt"] = value["updatedAt"]
+                value = _merged
             payload = json.dumps(value, ensure_ascii=False)
         elif _kv_hub_base(key) == "bayern_hud_overrides_v1" and isinstance(old, dict) and isinstance(value, dict):
             # HUD no-authoritative: defensa a prueba de balas.
@@ -4077,6 +4090,18 @@ def api_kv_set(key):
                 value, payload = old, row.valor_json
             elif _new_rev == _old_rev and old_ts > new_ts:
                 value, payload = old, row.valor_json
+            else:
+                # Merge por ID de torneo (mismo principio que en el save
+                # autoritativo): el re-push solo trae los IDs que el
+                # cliente conoce; conservar los del server que falten.
+                _META_K = {"rev", "updatedAt"}
+                _merged = {k: v for k, v in old.items() if k not in _META_K}
+                for k, v in value.items():
+                    if k not in _META_K:
+                        _merged[k] = v
+                _merged["rev"] = max(_old_rev, _new_rev)
+                _merged["updatedAt"] = max(old_ts, new_ts)
+                value, payload = _merged, json.dumps(_merged, ensure_ascii=False)
         elif row and row.valor_json and old_ts > new_ts:
             value, payload = old, row.valor_json
     # LEDGER de pagos CASH (cash_ledger_v1): merge por UNIÓN del mapa `paid`.

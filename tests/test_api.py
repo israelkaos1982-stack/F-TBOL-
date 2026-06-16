@@ -1171,6 +1171,57 @@ class TestTourInfoCardsRevGuard:
         assert v["asia"]["informacion"] == "B"
         assert v["rev"] == cur
 
+    def test_authoritative_merge_preserves_other_ids(self, client):
+        """Un save autoritativo desde un dispositivo con localStorage parcial
+        (solo sfn1) NO borra los datos de otros IDs ya en el server (spv1).
+        Causa raíz del bug 2026-06-16: wipe → save solo con los IDs editados
+        → reemplazaba el blob entero → otros torneos perdían su info."""
+        # Dispositivo A guarda sfn1 (autoritative, datos completos).
+        client.post(self.KEY, json={"value": {
+            "sfn1": {"informacion": "mundial-info"},
+            "spv1": {"informacion": "previa-info"},
+            "updatedAt": 1000, "rev": 1}, "authoritative": True})
+        # Dispositivo B (wipe/fresco) solo conoce spv2 y lo guarda autoritativamente.
+        client.post(self.KEY, json={"value": {
+            "spv2": {"informacion": "nueva-previa"},
+            "updatedAt": 2000, "rev": 1}, "authoritative": True})
+        v = self._get(client)
+        # spv2 (del save de B) EXISTE.
+        assert v["spv2"]["informacion"] == "nueva-previa"
+        # sfn1 y spv1 (del save anterior de A) NO se han borrado.
+        assert v["sfn1"]["informacion"] == "mundial-info"
+        assert v["spv1"]["informacion"] == "previa-info"
+
+    def test_authoritative_client_wins_same_id(self, client):
+        """Cuando el cliente edita un ID que ya existe en el server, su valor
+        gana (el merge no bloquea actualizaciones legítimas del mismo ID)."""
+        client.post(self.KEY, json={"value": {
+            "sfn1": {"informacion": "texto viejo"},
+            "updatedAt": 1000, "rev": 1}, "authoritative": True})
+        client.post(self.KEY, json={"value": {
+            "sfn1": {"informacion": "texto nuevo"},
+            "updatedAt": 2000, "rev": 1}, "authoritative": True})
+        v = self._get(client)
+        assert v["sfn1"]["informacion"] == "texto nuevo"
+
+    def test_repush_merge_preserves_other_ids(self, client):
+        """El re-push non-authoritative (self-heal) también hace merge por ID:
+        no borra los IDs del server que el cliente no trae."""
+        # Estado inicial: sfn1 en el server con rev=3.
+        client.post(self.KEY, json={"value": {
+            "sfn1": {"informacion": "sfn1-data"},
+            "updatedAt": 1000, "rev": 3}, "authoritative": True})
+        cur_rev = self._get(client)["rev"]  # server bumpeó a 4
+        # Re-push non-auth con solo spv1, rev=4 (igual al server → merge por ts).
+        client.post(self.KEY, json={"value": {
+            "spv1": {"informacion": "spv1-data"},
+            "updatedAt": 9999, "rev": cur_rev}})
+        v = self._get(client)
+        # spv1 del re-push presente.
+        assert v["spv1"]["informacion"] == "spv1-data"
+        # sfn1 del estado anterior NO borrado.
+        assert v["sfn1"]["informacion"] == "sfn1-data"
+
 
 class TestMultiHubKeys:
     """Multi-hub (2026-06-13): cada caja de mister humano (Arsenal-Brasil,

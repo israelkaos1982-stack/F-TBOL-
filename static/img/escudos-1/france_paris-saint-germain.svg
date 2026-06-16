@@ -1,41 +1,72 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-  <title id="title">Paris Saint-Germain crest</title>
-  <desc id="desc">Original stylized circular Paris Saint-Germain style crest: navy disc, red ring, white wordmark, Eiffel tower and gold fleur-de-lis.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512" role="img" aria-label="Paris Saint-Germain">
 
-  <!-- Disc + rings -->
-  <circle cx="256" cy="256" r="250" fill="#0a1f4d"/>
-  <circle cx="256" cy="256" r="232" fill="none" stroke="#ffffff" stroke-width="6"/>
-  <circle cx="256" cy="256" r="210" fill="none" stroke="#d3122a" stroke-width="34"/>
-  <circle cx="256" cy="256" r="174" fill="#0a1f4d"/>
-  <circle cx="256" cy="256" r="170" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.55"/>
+  <!-- ── OUTER RINGS ── -->
+  <circle cx="256" cy="256" r="252" fill="#002B65"/>
+  <circle cx="256" cy="256" r="247" fill="none" stroke="#FFFFFF" stroke-width="5"/>
+  <!-- Red band: stroke centred at r=227, width 44 → spans r=205…249 -->
+  <circle cx="256" cy="256" r="227" fill="none" stroke="#DA291C" stroke-width="44"/>
+  <circle cx="256" cy="256" r="205" fill="none" stroke="#FFFFFF" stroke-width="5"/>
+  <!-- Inner navy disc r=200 -->
+  <circle cx="256" cy="256" r="200" fill="#002B65"/>
 
-  <!-- Wordmark ring -->
-  <text x="256" y="60" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="42" font-weight="800" fill="#ffffff" letter-spacing="7">PARIS</text>
-  <text x="256" y="468" text-anchor="middle" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="30" font-weight="800" fill="#ffffff" letter-spacing="3">SAINT-GERMAIN</text>
+  <!-- ── ARC PATH defs ── -->
+  <defs>
+    <!-- Counter-clockwise arc from left through TOP to right, r=140
+         Used for PARIS text sitting at the top of the inner disc -->
+    <path id="psg-arc-top" d="M 116,256 A 140,140 0 0,0 396,256"/>
+  </defs>
 
-  <!-- Eiffel tower silhouette -->
-  <g fill="#d3122a">
-    <path d="M256 112
-             L246 168 L266 168 Z"/>
-    <path d="M244 170 L268 170 L286 250 L274 250 L262 206 256 206 256 206 250 206 238 250 226 250 Z"/>
-    <path d="M270 252 L300 344 L284 344 L274 300 256 300 238 300 228 344 212 344 242 252 Z"/>
-    <rect x="247" y="110" width="18" height="8"/>
-    <rect x="232" y="248" width="48" height="10"/>
-    <rect x="222" y="300" width="68" height="10"/>
+  <!-- PARIS (arc, top of inner disc) -->
+  <text font-family="'Arial Black','Arial',Helvetica,sans-serif"
+        font-size="50" font-weight="900" fill="#FFFFFF" letter-spacing="7">
+    <textPath href="#psg-arc-top" xlink:href="#psg-arc-top" startOffset="50%" text-anchor="middle">PARIS</textPath>
+  </text>
+
+  <!-- SAINT-GERMAIN (straight, bottom of inner disc — avoids upside-down arc) -->
+  <text x="256" y="418" text-anchor="middle"
+        font-family="'Arial Black','Arial',Helvetica,sans-serif"
+        font-size="24" font-weight="700" fill="#FFFFFF" letter-spacing="2">SAINT-GERMAIN</text>
+
+  <!-- ── EIFFEL TOWER ── white silhouette, centre (256,265), h≈165px -->
+  <g fill="#FFFFFF">
+    <!-- Antenna -->
+    <rect x="253" y="172" width="6" height="22" rx="2"/>
+    <!-- Top peak -->
+    <polygon points="256,192  247,213  265,213"/>
+    <!-- Upper body -->
+    <polygon points="247,213  236,251  276,251  265,213"/>
+    <!-- Platform 1 -->
+    <rect x="230" y="249" width="52" height="8" rx="2"/>
+    <!-- Middle body -->
+    <polygon points="236,257  219,296  293,296  276,257"/>
+    <!-- Platform 2 -->
+    <rect x="215" y="294" width="82" height="8" rx="2"/>
+    <!-- Lower left arch leg -->
+    <path d="M 219,302 Q 199,330 195,344 L 215,344 Q 217,331 231,314 Z"/>
+    <!-- Lower right arch leg -->
+    <path d="M 293,302 Q 313,330 317,344 L 297,344 Q 295,331 281,314 Z"/>
+    <!-- Inner strut between legs -->
+    <rect x="233" y="302" width="46" height="11" rx="2"/>
+    <!-- Base platform -->
+    <rect x="193" y="341" width="126" height="8" rx="2"/>
   </g>
-  <path fill="#ffffff" opacity="0.92" d="M256 196 L274 286 H238 Z"/>
-  <path d="M214 344 Q256 322 298 344" fill="none" stroke="#d3122a" stroke-width="9"/>
 
-  <!-- Gold cradle + fleur-de-lis -->
-  <ellipse cx="256" cy="372" rx="58" ry="40" fill="#f4c542"/>
-  <ellipse cx="256" cy="372" rx="58" ry="40" fill="none" stroke="#caa12f" stroke-width="3"/>
-  <g fill="#0a1f4d">
-    <path d="M256 344c8 0 14 7 14 16 0 11-6 20-14 28-8-8-14-17-14-28 0-9 6-16 14-16z"/>
-    <path d="M232 372c0-9 8-15 16-13-6 6-7 14-3 22-8 0-13-3-13-9z"/>
-    <path d="M280 372c0-9-8-15-16-13 6 6 7 14 3 22 8 0 13-3 13-9z"/>
-    <rect x="248" y="386" width="16" height="14" rx="3"/>
+  <!-- ── FLEUR-DE-LIS ── gold, below tower -->
+  <g fill="#F4C542" transform="translate(256,392)">
+    <!-- Central upward petal -->
+    <path d="M 0,-28 C -9,-15 -9,1 0,14 C 9,1 9,-15 0,-28 Z"/>
+    <!-- Tip accent -->
+    <polygon points="0,-28  -5,-20  5,-20"/>
+    <!-- Left spread petal -->
+    <path d="M -1,-5 C -8,-15 -26,-13 -22,-1 C -18,7 -7,4 -1,1 Z"/>
+    <!-- Right spread petal -->
+    <path d="M 1,-5 C 8,-15 26,-13 22,-1 C 18,7 7,4 1,1 Z"/>
+    <!-- Collar -->
+    <rect x="-10" y="9" width="20" height="6" rx="3"/>
+    <!-- Stem -->
+    <rect x="-4" y="14" width="8" height="13" rx="2"/>
+    <!-- Base bulb -->
+    <ellipse cx="0" cy="29" rx="6" ry="4"/>
   </g>
 
-  <!-- Year tab -->
-  <text x="256" y="430" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#ffffff" letter-spacing="3">1970</text>
 </svg>

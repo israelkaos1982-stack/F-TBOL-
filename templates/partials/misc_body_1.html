@@ -518,10 +518,11 @@ window._showSimProgress = function(opts, onDone){
     }
     box.classList.add('is-open');
     try { document.body.style.overflow='hidden'; }catch(_){ }
-    if (!window._premiosLoaded){
-      try { window._populatePremios(); window._premiosLoaded = true; }
-      catch(e){ try{ console.warn('[premios] populate fail', e); }catch(_){ } }
-    }
+    /* Recalcular SIEMPRE al abrir: las stats suman los partidos jugados
+       desde la última apertura (antes se cacheaba con `_premiosLoaded` y
+       no reflejaba sims posteriores). */
+    try { window._populatePremios(); window._premiosLoaded = true; }
+    catch(e){ try{ console.warn('[premios] populate fail', e); }catch(_){ } }
   };
   window._premiosBackdrop = function(e){
     var box = document.getElementById('premios-box');
@@ -571,13 +572,91 @@ window._showSimProgress = function(opts, onDone){
     var fifaSel   = document.getElementById('premios-sel-fifa');
     if (!balonSel || !botaSel || !guanteSel || !fifaSel) return;
 
-    var byPlayer = {};
-    var teamRatings = {};
+    /* ════════════════════════════════════════════════════════════════
+       SUMA TODAS las competiciones oficiales (2026-06-16, petición
+       usuario): los premios ya NO salen solo de Liga+Copa
+       (`team.players[]`) sino de la SUMA de Liga + Copa + Supercopa
+       España + Champions (Grupos+Playoff) + Europa + Conference + Recopa
+       + Supercopa de Europa + Intercontinental + Mundialito de Clubes —
+       las MISMAS cajas `ef_player_stats_<comp>_v1` que rellena
+       `rebuildPlayerStatsStore` (single source of truth) y que ya usa la
+       plantilla de cada equipo. Para EQUIPOS, además del nivel, se
+       cuentan los TÍTULOS ganados (Liga, Copa nacional + europeas/
+       mundial) y los campeones flotan al top del Ranking FIFA. */
+    try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
+    var _np = (typeof window._normPS === 'function') ? window._normPS
+            : function(s){ return String(s||'').toLowerCase().trim(); };
+
+    var byPlayer = {};      /* key normalizada teamNorm::playerNorm */
+    var teamRatings = {};   /* key normalizada → {name, power} */
+    var teamTitles  = {};   /* key normalizada → nº de títulos */
     var posIsKeeper = function(pos){
       var s = String(pos||'').toUpperCase();
       return s === 'POR' || s === 'GK' || s === 'P' || /port/i.test(pos||'') || /goalk/i.test(pos||'');
     };
+    function _ensurePlayer(teamRaw, playerRaw, pos){
+      var k = _np(teamRaw) + '::' + _np(playerRaw);
+      var e = byPlayer[k];
+      if (!e){ e = byPlayer[k] = { name:playerRaw, team:teamRaw, pos:pos||'', gol:0, mvp:0, imbat:0 }; }
+      if (!e.name && playerRaw) e.name = playerRaw;
+      if (!e.team && teamRaw)   e.team = teamRaw;
+      if (!e.pos  && pos)       e.pos  = pos;
+      return e;
+    }
+    function _addTitle(teamRaw){
+      if (!teamRaw || typeof teamRaw !== 'string') return;
+      var k = _np(teamRaw);
+      if (!k) return;
+      teamTitles[k] = (teamTitles[k]||0) + 1;
+      if (!teamRatings[k]) teamRatings[k] = { name: teamRaw, power: 0 };
+    }
+    /* Campeón de liga = líder por puntos de data.results (tiebreak simple). */
+    function _leagueChampion(data){
+      try {
+        if (!data || !Array.isArray(data.results) || !data.results.length || !Array.isArray(data.teams)) return null;
+        var pts = {}, idName = {};
+        data.teams.forEach(function(t){ if (t && t.id){ idName[t.id] = t.name; pts[t.id] = 0; } });
+        data.results.forEach(function(r){
+          if (!r) return;
+          var gh = Number(r.gh||0), ga = Number(r.ga||0);
+          if (r.h != null && pts[r.h] != null){ if (gh>ga) pts[r.h]+=3; else if (gh===ga) pts[r.h]+=1; }
+          if (r.a != null && pts[r.a] != null){ if (ga>gh) pts[r.a]+=3; else if (ga===gh) pts[r.a]+=1; }
+        });
+        var bestId=null, best=-1;
+        Object.keys(pts).forEach(function(id){ if (pts[id] > best){ best = pts[id]; bestId = id; } });
+        return (bestId != null && best > 0) ? idName[bestId] : null;
+      } catch(_){ return null; }
+    }
+    /* Mergea una caja `ef_player_stats_*_v1`. mode='add' suma; mode=
+       'replace' sustituye (para la caja de Liga EA Sports, que tras el
+       rebuild contiene SOLO equipos EA con su liga+copa+SC — así no se
+       duplica lo que ya aportó `team.players` para esos jugadores). */
+    function _mergeStore(skey, mode){
+      var raw; try { raw = localStorage.getItem(skey); } catch(_){ return; }
+      if (!raw) return;
+      var st; try { st = JSON.parse(raw); } catch(_){ return; }
+      if (!st || typeof st !== 'object') return;
+      Object.keys(st).forEach(function(k){
+        var sep = k.indexOf('::'); if (sep < 0) return;
+        var teamN = k.slice(0, sep), playN = k.slice(sep+2);
+        if (!teamN || !playN) return;
+        var ent = st[k] || {};
+        var e = byPlayer[k];
+        if (!e){ e = byPlayer[k] = { name: playN, team: teamN, pos: ent.pos||'', gol:0, mvp:0, imbat:0 }; }
+        if (mode === 'replace'){
+          e.gol   = Number(ent.gol||0);
+          e.mvp   = Number(ent.mvp||0);
+          e.imbat = Number(ent.imbat||0);
+        } else {
+          e.gol   += Number(ent.gol||0);
+          e.mvp   += Number(ent.mvp||0);
+          e.imbat += Number(ent.imbat||0);
+        }
+      });
+    }
 
+    /* ── 1) Liga + Copa: team.players[] de cada ligaExt_* (fuente de las
+          ligas externas) + nivel del equipo + títulos liga/copa. ── */
     for (var i = 0; i < localStorage.length; i++){
       var key = localStorage.key(i);
       if (!key || key.indexOf('ligaExt_') !== 0) continue;
@@ -591,33 +670,53 @@ window._showSimProgress = function(opts, onDone){
       data.teams.forEach(function(t){
         if (!t || !t.name) return;
         var power = Number(t.power || t.global || (t.lineStats && t.lineStats.global) || 0);
-        var cur = teamRatings[t.name];
+        var tk = _np(t.name);
+        var cur = teamRatings[tk];
         if (!cur || (power > cur.power)){
-          teamRatings[t.name] = { name: t.name, power: power };
+          teamRatings[tk] = { name: t.name, power: power };
         }
-        var players = Array.isArray(t.players) ? t.players : [];
-        players.forEach(function(p){
+        (Array.isArray(t.players) ? t.players : []).forEach(function(p){
           if (!p || !p.name) return;
-          var pkey = t.name + '::' + p.name;
-          if (!byPlayer[pkey]){
-            byPlayer[pkey] = { name:p.name, team:t.name, pos:p.pos||'',
-              gol:0, mvp:0, imbat:0 };
-          }
-          var e = byPlayer[pkey];
+          var e = _ensurePlayer(t.name, p.name, p.pos);
           e.gol   += Number(p.gol||0);
           e.mvp   += Number(p.mvp||0);
           e.imbat += Number(p.imbat||0);
-          if (!e.pos && p.pos) e.pos = p.pos;
         });
       });
+      try { var lc = _leagueChampion(data); if (lc) _addTitle(lc); } catch(_){}
+      try { if (data.copa && data.copa.champion) _addTitle(data.copa.champion); } catch(_){}
     }
+
+    /* ── 2) Liga EA Sports: su liga+copa+SC viven en `ef_player_stats_v1`
+          (rebuildPlayerStatsStore vacía de ahí a los NO-EA). REEMPLAZA. ── */
+    _mergeStore('ef_player_stats_v1', 'replace');
+
+    /* ── 3) Europeas + Mundialito: SUMAN sobre lo anterior (comps
+          disjuntas de liga+copa → sin doble conteo). ── */
+    ['ef_player_stats_ucl_main_v1','ef_player_stats_uel_v1','ef_player_stats_uecl_v1',
+     'ef_player_stats_recopa_v1','ef_player_stats_usc_v1','ef_player_stats_inter_v1',
+     'ef_player_stats_mundial_v1'].forEach(function(k){ _mergeStore(k, 'add'); });
+
+    /* ── 4) Títulos europeos / mundiales: campeón guardado en cada estado
+          de competición (`.champion`). ── */
+    ['recopa_state_v1','inter_state_v1','intercontinental_state_v1','usc_state_v1',
+     'sc_state_v1','ucl_ko_state_v1','uel_ko_state_v1','uecl_ko_state_v1',
+     'copa_state_v1','copa_state','tour_mundial_v1'].forEach(function(k){
+      try {
+        var sraw = localStorage.getItem(k); if (!sraw) return;
+        var s = JSON.parse(sraw); if (!s) return;
+        var champ = s.champion || (s.copa && s.copa.champion) || (s.cfg && s.cfg.champion) || null;
+        if (champ && typeof champ === 'string') _addTitle(champ);
+      } catch(_){}
+    });
 
     try {
       var TR = window.TEAM_RATINGS || {};
       Object.keys(TR).forEach(function(name){
         var m = Number((TR[name]||{}).media || 0);
-        if (m > 0 && (!teamRatings[name] || !teamRatings[name].power)){
-          teamRatings[name] = { name: name, power: m };
+        var nk = _np(name);
+        if (m > 0 && (!teamRatings[nk] || !teamRatings[nk].power)){
+          teamRatings[nk] = { name: name, power: m };
         }
       });
     } catch(_){}
@@ -634,14 +733,19 @@ window._showSimProgress = function(opts, onDone){
       });
       return list.slice(0, n);
     }
-    var balon  = topBy('mvp',   50);
-    var bota   = topBy('gol',   50);
-    var guante = topBy('imbat', 50, function(p){
+    var balon  = topBy('mvp',   50);   /* Balón de Oro = mejores jugadores (MVP) */
+    var bota   = topBy('gol',   50);   /* Bota de Oro  = máximos goleadores      */
+    var guante = topBy('imbat', 50, function(p){   /* Guante de Oro = porteros   */
       return posIsKeeper(p.pos) || Number(p.imbat||0) > 0;
     });
-    var fifa = Object.keys(teamRatings).map(function(k){ return teamRatings[k]; })
-      .filter(function(t){ return Number(t.power||0) > 0; })
+    var fifa = Object.keys(teamRatings).map(function(k){
+        var t = teamRatings[k];
+        t.titles = teamTitles[k] || 0;
+        return t;
+      })
+      .filter(function(t){ return Number(t.power||0) > 0 || t.titles > 0; })
       .sort(function(a,b){
+        if (b.titles !== a.titles) return b.titles - a.titles;   /* títulos primero */
         var d = Number(b.power||0) - Number(a.power||0);
         if (d) return d;
         return String(a.name).localeCompare(String(b.name),'es');
@@ -670,7 +774,9 @@ window._showSimProgress = function(opts, onDone){
       var html = '<option value="">— TOP ' + items.length + ' —</option>';
       items.forEach(function(it, i){
         var v = Number(it.power||0);
-        html += '<option>' + esc((i+1) + '. ' + it.name + ' · ' + v + ' pts') + '</option>';
+        var ti = Number(it.titles||0);
+        var tStr = ti > 0 ? (' · ' + ti + '🏆') : '';
+        html += '<option>' + esc((i+1) + '. ' + it.name + tStr + ' · ' + v + ' pts') + '</option>';
       });
       sel.innerHTML = html;
     }

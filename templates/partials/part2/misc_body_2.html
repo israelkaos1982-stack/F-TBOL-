@@ -24505,35 +24505,93 @@ window.goLiveMatches = function() {
     }
     return d;
   }
-  /* ── Cash pool por usuario (2026-05-24) ────────────────────────
-     Toñín juega en el Liverpool, así que su CASH de ISRAMAX es la
-     CAJA REAL del Liverpool (`_bayernHudGet().money`) — no una bolsa
-     interna separada. Stakes y devoluciones se aplican directamente
-     al presupuesto del club vía `_bayernHudCreditMoney`. El resto de
-     humanos aún no tiene su caja propia montada; usan la bolsa
-     interna `d.users[userId].cash` con default `ISRAMAX_INITIAL_CASH`. */
-  function _isramaxGetCash(userId){
+  /* ── Cash pool por usuario (2026-06-17) ────────────────────────
+     TODOS los entrenadores usan su caja HUD REAL como saldo de ISRAMAX.
+     Toñín → `_bayernHudGet()` / `_bayernHudCreditMoney` (hub activo).
+     El resto → lectura/escritura directa en su clave localStorage hub
+     (`bayern_hud_overrides_v1_<misterId>`) + sync no-autoritativo al KV.
+     Bets legacy con `cashPool:'cash'` siguen liquidándose contra la
+     bolsa interna (retrocompatibilidad). */
+
+  /* Devuelve el misterId del hub para un userId de ISRAMAX. */
+  function _isramaxMisterId(userId){
+    var u = ISRAMAX_USERS.filter(function(x){ return x.id === userId; })[0];
+    return (u && u.misterId) || userId;
+  }
+  /* Devuelve la clave localStorage del HUD del entrenador. */
+  function _isramaxHudKey(userId){
+    var mid = _isramaxMisterId(userId);
+    if (mid === 'tonin') return 'bayern_hud_overrides_v1';
+    return 'bayern_hud_overrides_v1_' + mid;
+  }
+  /* Lee el blob HUD del entrenador desde localStorage. */
+  function _isramaxReadHudBlob(userId){
+    try {
+      var raw = localStorage.getItem(_isramaxHudKey(userId));
+      if (raw){ var p = JSON.parse(raw); if (p && typeof p === 'object') return p; }
+    } catch(_){}
+    return {};
+  }
+  /* Aplica `delta` al campo `money` del HUD del entrenador y sincroniza. */
+  function _isramaxCreditHubMoney(userId, delta){
+    delta = Number(delta) || 0;
+    if (!delta) return;
     if (userId === 'tonin'){
-      try {
+      if (typeof window._bayernHudCreditMoney === 'function'){
+        try { window._bayernHudCreditMoney(delta); } catch(_){}
+      }
+      return;
+    }
+    var key = _isramaxHudKey(userId);
+    var o = _isramaxReadHudBlob(userId);
+    var prev = Number(o.money) || 0;
+    o.money = Math.max(0, prev + delta);
+    o.updatedAt = Date.now();
+    try { localStorage.setItem(key, JSON.stringify(o)); } catch(_){}
+    /* Sync no-autoritativo al servidor (fire-and-forget). */
+    try {
+      fetch('/api/kv/' + key, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({value: o})
+      });
+    } catch(_){}
+    /* Si este hub es el activo, actualizar también el cache en memoria. */
+    try {
+      if (typeof window._activeHub === 'function'){
+        var ah = window._activeHub();
+        var mid = _isramaxMisterId(userId);
+        if (ah && ah.id === mid && window._BAYERN_HUD_CACHE){
+          window._BAYERN_HUD_CACHE.money = o.money;
+          window._BAYERN_HUD_CACHE.updatedAt = o.updatedAt;
+        }
+      }
+    } catch(_){}
+  }
+
+  function _isramaxGetCash(userId){
+    /* Leer el presupuesto REAL del HUD del entrenador para todos. */
+    try {
+      if (userId === 'tonin'){
         var o = (typeof window._bayernHudGet === 'function') ? window._bayernHudGet() : null;
         if (o && o.money != null) return Number(o.money) || 0;
-      } catch(_){}
-    }
+      } else {
+        var blob = _isramaxReadHudBlob(userId);
+        if (blob && blob.money != null) return Number(blob.money) || 0;
+      }
+    } catch(_){}
+    /* Fallback: bolsa interna legacy (bets con cashPool:'cash'). */
     var d = _isramaxLoad();
     var u = d.users && d.users[userId];
     if (u && typeof u.cash === 'number') return Number(u.cash) || 0;
     return ISRAMAX_INITIAL_CASH;
   }
-  /* Suma `delta` a la caja del pool indicado. `pool` puede ser 'hub'
-     (caja real del Liverpool de Toñín) o 'cash' (bolsa interna del
-     usuario). Mutates `d` para el pool 'cash'; el caller persiste. */
+  /* Suma `delta` a la caja del pool indicado. `pool:'hub'` = HUD real
+     del entrenador; `pool:'cash'` = bolsa interna (legacy). */
   function _isramaxAdjustPool(d, userId, pool, delta){
     delta = Number(delta) || 0;
     if (!delta) return;
     if (pool === 'hub'){
-      if (typeof window._bayernHudCreditMoney === 'function'){
-        try { window._bayernHudCreditMoney(delta); } catch(_){}
-      }
+      _isramaxCreditHubMoney(userId, delta);
       return;
     }
     if (!d.users) d.users = {};
@@ -24542,7 +24600,7 @@ window.goLiveMatches = function() {
     d.users[userId].cash = Math.max(0, next);
   }
   function _isramaxPoolFor(userId){
-    return userId === 'tonin' ? 'hub' : 'cash';
+    return 'hub';
   }
   function _isramaxStats(userId){
     var d = _isramaxLoad();

@@ -53572,9 +53572,14 @@ https://api.sofascore.app/api/v1/team/44/image
        son residuos previos a la sustitución y no son del Liverpool. */
     var clubAliasLiga = _aliasesLiga(hub);
     var clubAliasTour = _aliasesTour(hub);
-    /* Selección Francia no tiene historial de sustitución, mismo alias
-       en ambos contextos. */
-    var franceAlias   = ['francia','france'];
+    /* Selección del hub activo — se resuelve dinámicamente desde el
+       registro de misters para ser hub-aware (no hardcodear Francia). */
+    var selName = 'Francia';
+    try {
+      var _mr = window._mhFindMister && window._mhFindMister(hub);
+      if (_mr && _mr.seleccion) selName = _mr.seleccion;
+    } catch(_){}
+    var selAlias = [_norm(selName)];
 
     /* Agrupamos por la competición REAL de cada partido (`m.comp`), NO
        por la entrada de `_COMPS` que lo recolectó. El colector `verano`
@@ -53625,8 +53630,8 @@ https://api.sofascore.app/api/v1/team/44/image
     }
 
     return {
-      club: { name: hub,       emoji: '🛡', label: 'CLUB',       groups: _gatherFor(clubAliasLiga, clubAliasTour) },
-      sel:  { name: 'Francia', emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(franceAlias, franceAlias) }
+      club: { name: hub,     emoji: '🛡', label: 'CLUB',       groups: _gatherFor(clubAliasLiga, clubAliasTour) },
+      sel:  { name: selName, emoji: '🌍', label: 'SELECCIÓN', groups: _gatherFor(selAlias, selAlias) }
     };
   }
   /* Expuesto para la BANDA DE TOTALES de la plantilla del hub
@@ -53693,10 +53698,13 @@ https://api.sofascore.app/api/v1/team/44/image
   function _outcomeCls(m){
     if (typeof m.gh !== 'number' || typeof m.ga !== 'number') return '';
     var hubName = _hubName();
-    var ourHome = _match(m.home, _aliases(hubName)) ||
-                  _match(m.home, ['francia','france']);
-    var ourAway = _match(m.away, _aliases(hubName)) ||
-                  _match(m.away, ['francia','france']);
+    var _selNorm = 'francia';
+    try {
+      var _mr2 = window._mhFindMister && window._mhFindMister(hubName);
+      if (_mr2 && _mr2.seleccion) _selNorm = _norm(_mr2.seleccion);
+    } catch(_){}
+    var ourHome = _match(m.home, _aliases(hubName)) || _match(m.home, [_selNorm]);
+    var ourAway = _match(m.away, _aliases(hubName)) || _match(m.away, [_selNorm]);
     if (m.gh === m.ga) return 'draw';
     var homeWin = m.gh > m.ga;
     if (ourHome && !ourAway) return homeWin ? 'win' : 'loss';

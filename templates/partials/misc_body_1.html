@@ -55121,6 +55121,19 @@ https://api.sofascore.app/api/v1/team/44/image
   var IDB_STORE = 'overrides';
   var IDB_ROW_ID = 'singleton' + _hudSuffix();
   var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 1300, pi: null };
+  /* Defaults POR HUB — se usan cuando un hub aún no tiene datos guardados */
+  var _HUB_DEF = {
+    tonin:  { ratingTarget: 8.70, moneyTarget: 1370, pi: 2, nivel: 'CRACK'   },
+    alvaro: { ratingTarget: 8.85, moneyTarget: 1370, pi: 2, nivel: 'CRACK'   },
+    acsa:   { ratingTarget: 9,    moneyTarget: 1400, pi: 2, nivel: 'CRACK'   },
+    isra:   { ratingTarget: 9,    moneyTarget: 1410, pi: 2, nivel: 'LEYENDA' },
+    angel:  { ratingTarget: 9,    moneyTarget: 1400, pi: 2, nivel: 'CRACK'   },
+    izan:   { ratingTarget: 8.75, moneyTarget: 1330, pi: 2, nivel: 'CRACK'   }
+  };
+  function _hubDef(){
+    try { var h=window._activeHub&&window._activeHub(); if(h&&h.id&&_HUB_DEF[h.id]) return _HUB_DEF[h.id]; } catch(_){}
+    return DEF;
+  }
   var applying = false;
   var observers = [];
 
@@ -55628,7 +55641,7 @@ https://api.sofascore.app/api/v1/team/44/image
     ov.id = 'munich-edit-ov';
     ov.innerHTML = ''
       + '<div class="me-box">'
-      +   '<div class="me-title">🖍 EDITAR HUD · BAYERN</div>'
+      +   '<div class="me-title" id="me-hub-title">🖍 EDITAR HUD · LIVERPOOL</div>'
       +   '<div class="me-row"><label class="me-lbl">💼 Valoración actual</label><input class="me-input" id="me-rating" type="number" step="0.01" min="0" max="20"/></div>'
       +   '<div class="me-row"><label class="me-lbl">💼 Valoración objetivo</label><input class="me-input" id="me-rating-target" type="number" step="0.01" min="0.01" max="20"/></div>'
       +   '<div class="me-row"><label class="me-lbl">🪙 Presupuesto actual (€)</label><input class="me-input" id="me-money" type="number" step="1" min="0"/></div>'
@@ -55733,17 +55746,27 @@ https://api.sofascore.app/api/v1/team/44/image
   };
   window._bayernEditValuesOpen = function(){
     ensureOverlay();
+    /* Actualizar título con el nombre del hub activo */
+    try {
+      var tEl = document.getElementById('me-hub-title');
+      if (tEl) {
+        var _hClub = '';
+        try { var _hN=window._activeHub&&window._activeHub(); if(_hN&&_hN.club) _hClub=String(_hN.club).toUpperCase(); } catch(_){}
+        tEl.textContent = '🖍 EDITAR HUD · ' + (_hClub || 'LIVERPOOL');
+      }
+    } catch(_){}
+    var hd = _hubDef();
     var o = load();
     var curR = parseFloat((document.getElementById('ath-pts-val')||{}).textContent) || 0;
     var curM = parseInt(((document.getElementById('ath-money-val')||{}).textContent||'').replace(/[^\d-]/g,''), 10) || 0;
     var curP = parseInt((document.getElementById('ath-med-val')||{}).textContent, 10) || 0;
-    var rTgt = (o.ratingTarget != null) ? o.ratingTarget : DEF.ratingTarget;
-    var mTgt = (o.moneyTarget  != null) ? o.moneyTarget  : DEF.moneyTarget;
+    var rTgt = (o.ratingTarget != null) ? o.ratingTarget : hd.ratingTarget;
+    var mTgt = (o.moneyTarget  != null) ? o.moneyTarget  : hd.moneyTarget;
     document.getElementById('me-rating').value = (o.rating != null) ? o.rating : curR.toFixed(2);
     document.getElementById('me-rating-target').value = rTgt;
     document.getElementById('me-money').value = (o.money != null) ? o.money : curM;
     document.getElementById('me-money-target').value = mTgt;
-    document.getElementById('me-pi').value = (o.pi != null) ? o.pi : curP;
+    document.getElementById('me-pi').value = (o.pi != null) ? o.pi : (hd.pi != null ? hd.pi : curP);
     /* Prefill Nivel / Forma yo / Forma Rival desde menu_home_v1 y, como
        fallback, desde team_season_form_v1 (clave que en versiones
        anteriores escribía el bloque duplicado inyectado en este modal,
@@ -55762,7 +55785,7 @@ https://api.sofascore.app/api/v1/team/44/image
         var g = document.getElementById(gridId); if (!g) return;
         g.querySelectorAll('.me-pick-btn').forEach(function(b){ b.classList.toggle('sel', b.getAttribute('data-v') === String(value||'')); });
       }
-      _markSel('me-level-grid',  ovM.level     || sfM.nivel  || '');
+      _markSel('me-level-grid',  ovM.level     || sfM.nivel  || hd.nivel || '');
       _markSel('me-formyo-grid', ovM.formState || sfM.yo     || '');
       _markSel('me-formriv-grid', ovM.formRival || sfM.rival || '');
     } catch(_){}
@@ -56005,10 +56028,11 @@ https://api.sofascore.app/api/v1/team/44/image
        se recalcularán en la siguiente llamada a athObjCount. */
     applying = true;
     try {
+      var _hd = _hubDef();
       var rT = _smallTarget('.munich-hud-val');
-      if (rT) rT.textContent = '/ ' + DEF.ratingTarget.toFixed(2);
+      if (rT) rT.textContent = '/ ' + _hd.ratingTarget.toFixed(2);
       var mT = _smallTarget('.munich-hud-money');
-      if (mT) mT.textContent = '/ ' + DEF.moneyTarget + '€';
+      if (mT) mT.textContent = '/ ' + _hd.moneyTarget + '€';
     } finally { applying = false; }
     if (typeof window.athObjCount === 'function') { try { window.athObjCount(); } catch(_){} }
     window._bayernEditValuesClose();

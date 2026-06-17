@@ -55123,12 +55123,12 @@ https://api.sofascore.app/api/v1/team/44/image
   var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 1300, pi: null };
   /* Defaults POR HUB — se usan cuando un hub aún no tiene datos guardados */
   var _HUB_DEF = {
-    tonin:  { ratingTarget: 8.70, moneyTarget: 1370, pi: 2, nivel: 'CRACK'   },
-    alvaro: { ratingTarget: 8.85, moneyTarget: 1370, pi: 2, nivel: 'CRACK'   },
-    acsa:   { ratingTarget: 9,    moneyTarget: 1400, pi: 2, nivel: 'CRACK'   },
-    isra:   { ratingTarget: 9,    moneyTarget: 1410, pi: 2, nivel: 'LEYENDA' },
-    angel:  { ratingTarget: 9,    moneyTarget: 1400, pi: 2, nivel: 'CRACK'   },
-    izan:   { ratingTarget: 8.75, moneyTarget: 1330, pi: 2, nivel: 'CRACK'   }
+    tonin:  { ratingTarget: 8.70, moneyTarget: 1300, pi: 2, nivel: 'CRACK',   formYo: '⬇️' },
+    alvaro: { ratingTarget: 8.85, moneyTarget: 1370, pi: 2, nivel: 'CRACK',   formYo: '↘️' },
+    acsa:   { ratingTarget: 9,    moneyTarget: 1400, pi: 2, nivel: 'CRACK',   formYo: '🎲' },
+    isra:   { ratingTarget: 9,    moneyTarget: 1410, pi: 2, nivel: 'LEYENDA', formYo: '🎲' },
+    angel:  { ratingTarget: 9,    moneyTarget: 1400, pi: 2, nivel: 'CRACK',   formYo: '↘️' },
+    izan:   { ratingTarget: 8.75, moneyTarget: 1330, pi: 2, nivel: 'CRACK',   formYo: '⬇️' }
   };
   function _hubDef(){
     try { var h=window._activeHub&&window._activeHub(); if(h&&h.id&&_HUB_DEF[h.id]) return _HUB_DEF[h.id]; } catch(_){}
@@ -55376,6 +55376,25 @@ https://api.sofascore.app/api/v1/team/44/image
      está vacío; si encuentra una copia buena la adopta por recencia Y la
      re-sube al KV para converger. Así un dispositivo que aún no había
      migrado no pierde su HUD. */
+  function _seedHubDefaults(){
+    /* Solo cuando NO hay NINGÚN dato en ninguna capa (hub nuevo /
+       primer arranque tras wipe sin backup). Sembramos los targets
+       y el PI por defecto del hub activo en cache + localStorage +
+       server, para que apply() los pinte y el usuario no tenga que
+       entrar en EDITAR HUD solo para verlos la primera vez. */
+    try {
+      var _c = window._BAYERN_HUD_CACHE;
+      if (_c && typeof _c === 'object' && Object.keys(_c).length) return; /* ya hay datos */
+      var _hd = _hubDef();
+      if (!_hd || (_hd.ratingTarget == null && _hd.moneyTarget == null)) return;
+      var _seed = {};
+      if (_hd.ratingTarget != null) _seed.ratingTarget = _hd.ratingTarget;
+      if (_hd.moneyTarget  != null) _seed.moneyTarget  = _hd.moneyTarget;
+      if (_hd.pi           != null) _seed.pi           = _hd.pi;
+      save(_seed, false, false);
+      try { apply(); } catch(_){}
+    } catch(_){}
+  }
   function _legacyStatePull(cb){
     try {
       fetch('/api/state', { method:'GET' })
@@ -55385,8 +55404,13 @@ https://api.sofascore.app/api/v1/team/44/image
           if (srv && typeof srv === 'object' && Object.keys(srv).length) {
             _adoptFromServer(srv, cb);
             try { _serverPush(srv); } catch(_){}   /* migra al KV */
+          } else {
+            /* Nada en KV ni en /api/state → hub completamente virgen.
+               Sembramos los defaults del hub para que el widget muestre
+               los targets correctos sin que el usuario abra EDITAR HUD. */
+            _seedHubDefaults();
           }
-        }).catch(function(){});
+        }).catch(function(){ _seedHubDefaults(); });
     } catch(_){}
   }
   function _serverPull(cb){
@@ -55786,7 +55810,7 @@ https://api.sofascore.app/api/v1/team/44/image
         g.querySelectorAll('.me-pick-btn').forEach(function(b){ b.classList.toggle('sel', b.getAttribute('data-v') === String(value||'')); });
       }
       _markSel('me-level-grid',  ovM.level     || sfM.nivel  || hd.nivel || '');
-      _markSel('me-formyo-grid', ovM.formState || sfM.yo     || '');
+      _markSel('me-formyo-grid', ovM.formState || sfM.yo     || hd.formYo || '');
       _markSel('me-formriv-grid', ovM.formRival || sfM.rival || '');
     } catch(_){}
     document.getElementById('munich-edit-ov').classList.add('show');

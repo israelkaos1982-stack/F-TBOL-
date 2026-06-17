@@ -55275,13 +55275,18 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!force && !_hudHydrated){
       return Promise.resolve(false);
     }
+    /* Captura la URL del hub ACTIVO en este momento (por valor).
+       Evita que un hubchange posterior actualice KV_URL y los
+       reintentos pendientes envíen datos de un hub a la clave de otro
+       (race condition clausura: bug cross-hub 2026-06-17). */
+    var _pushUrl = KV_URL;
     var body = JSON.stringify({ value: o || {}, authoritative: !!authoritative });
     /* sendBeacon: garantiza entrega incluso si la página se está
        descargando. No espera respuesta — perfecto para esto. */
     try {
       if (navigator.sendBeacon) {
         var blob = new Blob([body], {type:'application/json'});
-        navigator.sendBeacon(KV_URL, blob);
+        navigator.sendBeacon(_pushUrl, blob);
       }
     } catch(_){}
     /* fetch con REINTENTOS (backoff 1s/2s/4s). Bug raíz 2026-06-07: el
@@ -55292,7 +55297,7 @@ https://api.sofascore.app/api/v1/team/44/image
        demás stores (`_kvBlobSync`) ya reintentan; el HUD no lo hacía. */
     function _attempt(n){
       try {
-        return fetch(KV_URL, {
+        return fetch(_pushUrl, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           credentials:'same-origin',

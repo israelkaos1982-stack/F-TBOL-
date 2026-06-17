@@ -29732,8 +29732,8 @@ window._showSimProgress = function(opts, onDone){
      premios si la final acaba de jugarse. */
   window._tourSaveHumanResult = function(tourId, key, gh, ga, penWinner, extra) {
     if (!tourId || !key || TOUR_IDS.indexOf(tourId) === -1) return;
-    var cfg = _tourLoadCachedSync(tourId);
-    if (!cfg) return;
+    var cfg = _tourLoadCachedSync(tourId) || _cloneDefault(tourId);
+    if (!cfg || !Object.keys(cfg).length) return;
     cfg.results = cfg.results || {};
     /* ── Eliminatoria a IDA Y VUELTA con humano ─────────────────
        key = "<mk>|L1" (ida, teamA local) o "<mk>|L2" (vuelta, teamB
@@ -29827,13 +29827,15 @@ window._showSimProgress = function(opts, onDone){
       if (extra.away)    out.away = extra.away;
     }
     cfg.results[key] = out;
-    /* Acumular stats al store de torneos (s-torneos-stats), igual
-       que los partidos auto-simulados. NO toca la plantilla global. */
+    /* Acumular stats al store correcto según el formato del torneo:
+       mundial-48 (Mundial 2032 selecciones) → bucket 'sel';
+       resto (torneos de verano, Mundialito Clubes) → bucket 'torneos'. */
     if (out.events && out.events.length && typeof window.registrarLigaPlayerStats === 'function') {
       try {
+        var _statsBucket = (cfg.format === 'mundial-48') ? 'sel' : 'torneos';
         window.registrarLigaPlayerStats('tour_' + tourId + '_' + key,
           out.home || '', out.away || '',
-          out.events, out.mvp || '', out.mvpTeam || '', 'torneos');
+          out.events, out.mvp || '', out.mvpTeam || '', _statsBucket);
       } catch(_){}
     }
     _tourSaveAndRender(tourId, cfg);
@@ -31273,6 +31275,15 @@ window._showSimProgress = function(opts, onDone){
         var teamsForMatch, fixForMatch;
         if (prefix.indexOf('g') === 0) {
           var gIdx = parseInt(prefix.substring(1), 10);
+          /* Build groupFixtures lazily if not yet constructed (mundial-48 builds
+             them only when the tournament screen is rendered). */
+          if (!cfg.groupFixtures || !cfg.groupFixtures[gIdx]) {
+            if (typeof window._mundialGroupState === 'function') {
+              try { window._mundialGroupState(cfg, cfg.teams || []); } catch(_){}
+            } else if (typeof _mundialGroupState === 'function') {
+              try { _mundialGroupState(cfg, cfg.teams || []); } catch(_){}
+            }
+          }
           var sliceLen = _tourPerGroup(cfg);
           teamsForMatch = (cfg.teams||[]).slice(gIdx*sliceLen, (gIdx+1)*sliceLen);
           fixForMatch = cfg.groupFixtures && cfg.groupFixtures[gIdx];

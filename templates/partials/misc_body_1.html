@@ -62787,7 +62787,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _hubSelDisp(){
     try { var h = window._activeHub && window._activeHub(); if (h && h.seleccion) return String(h.seleccion); } catch(_){}
     try { var m = window._mhFindMister && window._mhFindMister(_userTeamAlias()); if (m && m.seleccion) return String(m.seleccion); } catch(_){}
-    return 'Francia';
+    return '';
   }
   /* Bandera + acrónimo de la selección del hub para los senders de la
      bandeja (antes hardcodeados a 🇫🇷 / "FFF · Selección Francia"). */
@@ -64082,9 +64082,18 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _scanEliminations(){
     try {
       var aliases = _userTeamAlias ? [String(_userTeamAlias()).toLowerCase()].filter(Boolean) : [];
-      ['bayern','liverpool','bayern munich','bayern múnich'].forEach(function(a){
-        if (aliases.indexOf(a) < 0) aliases.push(a);
-      });
+      /* Para el hub de Toñín/Liverpool añadimos los alias legacy Bayern↔Liverpool
+         (el slot fue renombrado; datos de torneos viejos pueden traer cualquiera).
+         Solo cuando el hub activo ES Liverpool (Toñín): no contaminar otros hubs. */
+      try {
+        var _ahSe = window._activeHub && window._activeHub();
+        var _hubClub = _ahSe && String(_ahSe.club||'').toLowerCase();
+        if (_hubClub === 'liverpool'){
+          ['bayern','liverpool','bayern munich','bayern múnich','lfc'].forEach(function(a){
+            if (aliases.indexOf(a) < 0) aliases.push(a);
+          });
+        }
+      } catch(_){}
       function _ch(key){
         try {
           var raw = localStorage.getItem(key);
@@ -64124,8 +64133,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var chLower = String(ch).toLowerCase();
         var selLower = String(_hubSelDisp()||'').toLowerCase();
         var ours = aliases.some(function(a){ return chLower.indexOf(a) !== -1; })
-                || (c.side === 'fra' && selLower && chLower.indexOf(selLower) !== -1)
-                || (c.side === 'fra' && /francia|france/.test(chLower));
+                || (c.side === 'fra' && selLower && chLower.indexOf(selLower) !== -1);
         if (ours) return; /* somos campeones — lo cubre otro hook */
         var pool = (Math.random() < 0.25) ? bodiesSurp : bodiesElim;
         var body = pool[Math.floor(Math.random() * pool.length)].replace('%CAMP%', ch);
@@ -64951,20 +64959,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
   function _checkFraYellowBrink(selName){
     try {
-      /* La bandeja solo tiene lado 'fra' para selección (hub
-         Liverpool/Francia). Si lo llaman con OTRA selección (la plantilla
-         del hub es genérica por caja), no inventamos un mensaje "con
-         Francia" para Brasil/Argentina/… */
+      /* Gate hub: solo genera mensajes si selName ES la selección del hub
+         activo (_isFra es hub-aware: devuelve true para Noruega en Atlético,
+         true para Francia en Liverpool, etc.). Evita mensajes de la selección
+         de OTRO mister en la bandeja de este hub. */
       if (selName && typeof _isFra === 'function' && !_isFra(selName)) return;
       var store = window.YELLOW_STORE_SEL || {};
       Object.keys(store).forEach(function(tk){
         var bySel = store[tk] || {};
-        var players = bySel[selName] || bySel['Francia'] || null;
-        if (!players){
-          Object.keys(bySel).forEach(function(sn){
-            if (String(sn).toLowerCase().indexOf('franc') >= 0) players = bySel[sn];
-          });
-        }
+        var players = selName ? (bySel[selName] || null) : null;
         if (!players) return;
         Object.keys(players).forEach(function(pn){
           var rec = players[pn] || {};

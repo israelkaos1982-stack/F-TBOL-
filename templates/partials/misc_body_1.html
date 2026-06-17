@@ -29636,8 +29636,12 @@ window._showSimProgress = function(opts, onDone){
     matchKey = useKey;
     var nameA = homeObj.name || '?';
     var nameB = awayObj.name || '?';
-    var isHvH = !!homeObj.isHuman && !!awayObj.isHuman;
-    var humanInvolved = !!homeObj.isHuman || !!awayObj.isHuman;
+    var isHvH = (typeof _tourSlotIsHuman === 'function')
+      ? (_tourSlotIsHuman(homeObj) && _tourSlotIsHuman(awayObj))
+      : (!!homeObj.isHuman && !!awayObj.isHuman);
+    var humanInvolved = (typeof _tourSlotIsHuman === 'function')
+      ? (_tourSlotIsHuman(homeObj) || _tourSlotIsHuman(awayObj))
+      : (!!homeObj.isHuman || !!awayObj.isHuman);
     var duracion = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: humanInvolved })
       : (isHvH ? '15 min 45 s' : '9 min 45 s');

@@ -59917,9 +59917,20 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var team = s && s.teamName ? s.teamName : '';
     var ms = _matchesFor(seasonId);
     var pj=0, g=0, e=0, p=0;
+    /* Selección del mister (para derbys de selección: el teamName de
+       la temporada es el CLUB, pero el partido tiene "Francia"/"Noruega").
+       2026-06-17. */
+    var _teamSel = '';
+    try {
+      var _tmR = (typeof window._mhFindMister === 'function') ? window._mhFindMister(team) : null;
+      if (_tmR && _tmR.seleccion) _teamSel = _tmR.seleccion;
+    } catch(_){}
     ms.forEach(function(m){
       if (!_matchIsHvH(m)) return;          /* solo HvH (2026-05-09) */
       var o = _outcomeFor(m, team);
+      /* Si el club no aparece en el partido, intentar con la selección
+         del mister (derby de selecciones: "Francia" / "Noruega"). */
+      if (!o && _teamSel) o = _outcomeFor(m, _teamSel);
       if (!o) return;
       pj++;
       if (o === 'g') g++;
@@ -60175,6 +60186,71 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     return false;
   }
 
+  /* ── ESPEJO MULTI-HUB ──────────────────────────────────────────────────
+     Escribe un partido de derby en el almacenamiento del hub de un mister
+     CONCRETO (puede ser el hub activo o cualquier otro). Usa las claves de
+     almacenamiento propias del mister (igual que `_hubKey` pero calculado
+     inline para no depender del hub ACTIVO). Llama a la lógica de dedup,
+     guarda en localStorage y sube al servidor vía /api/state.
+     Parámetros:
+       misterObj   – entrada de MISTERS_HUMANOS (con .id, .club, .seleccion)
+       localName   – nombre local ya limpio (sin emoji líder)
+       visitName   – nombre visitante ya limpio
+       comp, jornada, gl, gv – datos del partido
+  ─────────────────────────────────────────────────────────────────────── */
+  function _derbyMirrorForHub(misterObj, localName, visitName, comp, jornada, gl, gv){
+    if (!misterObj) return;
+    var mid = misterObj.id || '';
+    /* Claves de almacenamiento ESPECÍFICAS de este mister (espejo de _hubKey). */
+    var matchKey   = (mid === 'tonin') ? 'bayern_derbys_matches_v1'
+                                       : 'bayern_derbys_matches_v1_' + mid;
+    var seasonKey  = (mid === 'tonin') ? 'bayern_derbys_seasons_v1'
+                                       : 'bayern_derbys_seasons_v1_' + mid;
+    /* Cargamos seasons y matches del hub destino. */
+    var seasons;
+    try { seasons = JSON.parse(localStorage.getItem(seasonKey) || '[]'); } catch(_){ seasons = []; }
+    if (!Array.isArray(seasons) || !seasons.length) return; /* sin temporada activa → skip */
+    var current = seasons[0];
+    if (!current || !current.id || !current.teamName) return;
+    var all;
+    try { all = JSON.parse(localStorage.getItem(matchKey) || '{}'); } catch(_){ all = {}; }
+    if (typeof all !== 'object' || !all) all = {};
+    if (!Array.isArray(all[current.id])) all[current.id] = [];
+    /* Dedup: misma comp + jornada + nombres + score → ya está. */
+    var dup = all[current.id].some(function(m){
+      if (!m) return false;
+      return String(m.comp||'') === comp
+          && String(m.jornada||'') === jornada
+          && String(m.local||'').replace(/^\S*\s/,'').toLowerCase()    === localName.toLowerCase()
+          && String(m.visitante||'').replace(/^\S*\s/,'').toLowerCase()=== visitName.toLowerCase()
+          && Number(m.gl||0) === gl && Number(m.gv||0) === gv;
+    });
+    if (dup) return;
+    all[current.id].push({
+      id: _newId(), jornada: jornada, comp: comp,
+      local: localName, gl: gl, gv: gv, visitante: visitName,
+      isHvH: true
+    });
+    /* Guardar en localStorage del hub destino. */
+    try { localStorage.setItem(matchKey, JSON.stringify(all)); } catch(_){}
+    /* Subir al servidor: usa /api/state con merge_dict genérico. */
+    try {
+      var payload = {};
+      payload[matchKey] = all;
+      if (typeof window._postState === 'function') {
+        window._postState(payload);
+      } else if (typeof window.saveGlobalState === 'function') {
+        window.saveGlobalState(payload);
+      } else {
+        fetch('/api/state', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        }).catch(function(){});
+      }
+    } catch(_){}
+  }
+
   window._munichDerbyAutoLog = function(opts){
     if (!opts) return;
     var seasons = _loadSeasons();
@@ -60249,6 +60325,33 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     /* Si la sub-pantalla está abierta para esta temporada, re-render. */
     if (_curSeasonId === current.id) _renderSeason();
+
+    /* ── ESPEJO MULTI-HUB ────────────────────────────────────────────────
+       Un derby de selección (ej. Francia 0-2 Noruega) implica a DOS misters
+       (Toñín y Isra). El autolog de arriba escribió en el hub ACTIVO. Ahora
+       replicamos el partido en el hub de CADA mister cuya selección o club
+       esté involucrado en este partido, saltando el hub que ya escribimos. */
+    try {
+      var _misters = window._MISTERS_HUMANOS || [];
+      /* id del hub activo para no re-escribir lo que ya guardamos arriba */
+      var _activeId = '';
+      try {
+        var _am = (typeof window._mhFindMister === 'function') ? window._mhFindMister(seasonTeam) : null;
+        if (_am) _activeId = _am.id || '';
+      } catch(_){}
+      _misters.forEach(function(mr){
+        if (!mr || !mr.id) return;
+        if (mr.id === _activeId) return; /* hub activo ya escrito */
+        /* ¿Alguno de los lados del derby involucra al club o selección de este mister? */
+        var clubMatch = _fz(localRaw, mr.club) || _fz(visitRaw, mr.club)
+                     || _fz(localName, mr.club) || _fz(visitName, mr.club);
+        var selMatch  = mr.seleccion
+                     && (_fz(localRaw,  mr.seleccion) || _fz(visitRaw,  mr.seleccion)
+                      || _fz(localName, mr.seleccion) || _fz(visitName, mr.seleccion));
+        if (!clubMatch && !selMatch) return;
+        _derbyMirrorForHub(mr, localName, visitName, comp, jornada, gl, gv);
+      });
+    } catch(_){}
   };
 
   /* Filtro HvH aplicado en LECTURA. El gate REAL es ahora al ESCRIBIR:
@@ -60284,6 +60387,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       ms.forEach(function(m){
         if (!_matchIsHvH(m)) return;       /* solo HvH */
         var o = _outcomeFor(m, s.teamName);
+        /* El teamName de la temporada es el CLUB (ej. "Atlético Madrid")
+           pero los derbys de SELECCIÓN almacenan "Noruega"/"Francia".
+           Fallback: buscamos la selección del mister que dirige ese club. */
+        if (!o) {
+          try {
+            var _mRes = (typeof window._mhFindMister === 'function') ? window._mhFindMister(s.teamName) : null;
+            if (_mRes && _mRes.seleccion) o = _outcomeFor(m, _mRes.seleccion);
+          } catch(_){}
+        }
         if (!o) return;
         pj++;
         if (o === 'g') g++;

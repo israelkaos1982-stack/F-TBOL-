@@ -59506,21 +59506,24 @@ https://api.sofascore.app/api/v1/team/44/image
     <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">JORNADA</label>
     <input id="munich-derby-match-jornada" placeholder="p. ej. 3" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:10px;"/>
     <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">COMPETICIÓN</label>
-    <select id="munich-derby-match-comp" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;margin-bottom:10px;">
-      <option value="liga" style="background:#1a2030;color:#fff;">Liga EA Sports</option>
-      <option value="copa" style="background:#1a2030;color:#fff;">Copa del Rey</option>
-      <option value="sc" style="background:#1a2030;color:#fff;">Supercopa España</option>
-      <option value="ucl" style="background:#1a2030;color:#fff;">Champions League</option>
-      <option value="uel" style="background:#1a2030;color:#fff;">Europa League</option>
-      <option value="uecl" style="background:#1a2030;color:#fff;">Conference League</option>
-      <option value="recopa" style="background:#1a2030;color:#fff;">Recopa Europa</option>
-      <option value="usc" style="background:#1a2030;color:#fff;">Supercopa Europa</option>
-      <option value="inter" style="background:#1a2030;color:#fff;">Intercontinental</option>
-      <option value="superliga" style="background:#1a2030;color:#fff;">Superliga</option>
-      <option value="amistoso" style="background:#1a2030;color:#fff;">Amistoso</option>
-      <option value="torneo" style="background:#1a2030;color:#fff;">Torneo Verano</option>
-      <option value="seleccion" style="background:#1a2030;color:#fff;">Selección</option>
+    <!-- select oculto — el JS existente sigue leyendo/escribiendo .value -->
+    <select id="munich-derby-match-comp" style="display:none;">
+      <option value="liga">Liga EA Sports</option>
+      <option value="copa">Copa del Rey</option>
+      <option value="sc">Supercopa España</option>
+      <option value="ucl">Champions League</option>
+      <option value="uel">Europa League</option>
+      <option value="uecl">Conference League</option>
+      <option value="recopa">Recopa Europa</option>
+      <option value="usc">Supercopa Europa</option>
+      <option value="inter">Intercontinental</option>
+      <option value="superliga">Superliga</option>
+      <option value="amistoso">Amistoso</option>
+      <option value="torneo">Torneo Verano</option>
+      <option value="seleccion">Selección</option>
     </select>
+    <!-- Picker visual de competición -->
+    <div id="munich-derby-comp-picker" style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:10px;max-height:220px;overflow-y:auto;padding-right:2px;"></div>
     <div style="display:grid;grid-template-columns:1fr 50px 50px 1fr;gap:6px;align-items:end;margin-bottom:10px;">
       <div>
         <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">LOCAL</label>
@@ -59628,6 +59631,35 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
   var _curSeasonId = null;
   var _editingMatchId = null;
+
+  /* Picker visual de competición — renderiza el grid de botones y marca
+     el seleccionado con ✅. Sincroniza además el <select> oculto para que
+     el JS existente siga leyendo .value sin cambios. */
+  var _COMP_ORDER = ['liga','copa','sc','ucl','uel','uecl','recopa','usc','inter','superliga','amistoso','torneo','seleccion'];
+  function _munichDerbyPickComp(val){
+    var sel = document.getElementById('munich-derby-match-comp');
+    if (sel) sel.value = val;
+    var picker = document.getElementById('munich-derby-comp-picker');
+    if (!picker) return;
+    var html = '';
+    for (var i = 0; i < _COMP_ORDER.length; i++){
+      var v = _COMP_ORDER[i];
+      var active = v === val;
+      var color = COMP_COLOR[v] || '#9fdcff';
+      var border = active ? ('2px solid ' + color) : '1px solid rgba(255,255,255,.10)';
+      var bg     = active ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.04)';
+      html += '<button type="button" onclick="window._munichDerbyPickComp(\''+v+'\')"'
+            + ' style="display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:7px;'
+            + 'border:'+border+';background:'+bg+';cursor:pointer;font-family:Rajdhani,sans-serif;'
+            + 'font-size:12px;color:#fff;text-align:left;transition:background .15s;">'
+            + '<span style="font-size:13px;">'+( COMP_ICON[v]||'🏅' )+'</span>'
+            + '<span style="flex:1;line-height:1.2;">'+( COMP_LABEL[v]||v )+'</span>'
+            + '<span style="font-size:14px;min-width:16px;text-align:right;">'+( active ? '✅' : '' )+'</span>'
+            + '</button>';
+    }
+    picker.innerHTML = html;
+  }
+  window._munichDerbyPickComp = _munichDerbyPickComp;
 
   function _esc(s){
     return String(s == null ? '' : s)
@@ -59942,11 +59974,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (!modal) return;
       document.getElementById('munich-derby-match-modal-title').textContent = '📋 Añadir partido';
       document.getElementById('munich-derby-match-jornada').value = '';
-      document.getElementById('munich-derby-match-comp').value = 'liga';
       document.getElementById('munich-derby-match-local').value = defaultTeam;
       document.getElementById('munich-derby-match-gl').value = '0';
       document.getElementById('munich-derby-match-gv').value = '0';
       document.getElementById('munich-derby-match-visit').value = '';
+      _munichDerbyPickComp('liga');
       modal.style.display = 'flex';
     };
     if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();

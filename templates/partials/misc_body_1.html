@@ -57890,6 +57890,7 @@ https://api.sofascore.app/api/v1/team/44/image
   function _secKey(sec){ return 'sec-' + sec.id; }
   function effSecTitle(sec){ var o = OVR[_secKey(sec)]; return (o && typeof o.t === 'string' && o.t.length) ? o.t : sec.title; }
   function effSecComp(sec){ var o = OVR[_secKey(sec)]; return (o && o.comp) ? o.comp : null; }
+  function effSecIcon(sec){ var o = OVR[_secKey(sec)]; return (o && typeof o.icon === 'string' && o.icon.length) ? o.icon : sec.icon; }
   function effSecColor(sec){
     if (sec.comps && sec.comps.length){
       var c = effSecComp(sec);
@@ -57978,8 +57979,12 @@ https://api.sofascore.app/api/v1/team/44/image
      tiene `comps`) selector de competición que tiñe la cabecera. */
   function renderSectionEditHead(sec) {
     var h = '<div class="obj-sec-edit">';
+    h += '<div class="obj-sec-edit-row">';
+    h += '<input class="obj-sec-edit-icon" type="text" data-secid="' + sec.id + '" value="'
+       + esc(effSecIcon(sec)) + '" placeholder="🏳️" title="Bandera o icono de la sección"/>';
     h += '<input class="obj-sec-edit-title" type="text" data-secid="' + sec.id + '" value="'
        + esc(effSecTitle(sec)) + '" placeholder="Título de la sección"/>';
+    h += '</div>';
     if (sec.comps && sec.comps.length) {
       var cur = effSecComp(sec);
       h += '<div class="obj-sec-comps" data-secid="' + sec.id + '">';
@@ -57999,7 +58004,7 @@ https://api.sofascore.app/api/v1/team/44/image
     var color = effSecColor(sec);
     var h  = '<div class="obj-sub-section">';
         h += '<button class="obj-sub-hdr" onclick="subTog(\'obj-' + sec.id + '\')" data-defcolor="' + sec.color + '" style="color:' + color + ';">';
-        h += sec.icon + ' <span class="obj-sec-title">' + esc(effSecTitle(sec)) + '</span> ';
+        h += effSecIcon(sec) + ' <span class="obj-sec-title">' + esc(effSecTitle(sec)) + '</span> ';
         h += '<span class="obj-sub-arr" id="obj-' + sec.id + '-arr">▼</span>';
         h += '</button>';
         h += '<div class="obj-sub-body open" id="obj-' + sec.id + '">';
@@ -58126,6 +58131,11 @@ https://api.sofascore.app/api/v1/team/44/image
             var tv = (tInp.value || '').trim();
             if (!tv || tv === String(sec.title)) delete o.t; else o.t = tv;
           }
+          var iInp = host.querySelector('.obj-sec-edit-icon[data-secid="' + sec.id + '"]');
+          if (iInp){
+            var iv = (iInp.value || '').trim();
+            if (!iv || iv === String(sec.icon)) delete o.icon; else o.icon = iv;
+          }
           var box = host.querySelector('.obj-sec-comps[data-secid="' + sec.id + '"]');
           if (box){
             var ab = box.querySelector('.obj-sec-comp-btn.active');
@@ -58238,9 +58248,12 @@ https://api.sofascore.app/api/v1/team/44/image
 #s-munich-objetivos .obj-edit-txt-input:focus{outline:none;border-color:rgba(95,200,200,.85);background:rgba(0,0,0,.5);}
 #s-munich-objetivos .obj-edit-num{width:62px;flex-shrink:0;background:rgba(0,0,0,.35);border:1px solid rgba(95,200,200,.55);color:#bfeff0;border-radius:6px;padding:4px 6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;}
 #s-munich-objetivos .obj-edit-na{flex-shrink:0;font-size:9px;color:rgba(255,255,255,.3);font-style:italic;}
-/* Editor de cabecera de SECCIÓN: título editable + selector de competición. */
+/* Editor de cabecera de SECCIÓN: icono + título editable + selector de competición. */
 #s-munich-objetivos .obj-sec-edit{display:flex;flex-direction:column;gap:8px;padding:8px 2px 12px;border-bottom:1px solid rgba(255,255,255,.1);margin-bottom:6px;}
-#s-munich-objetivos .obj-sec-edit-title{width:100%;background:rgba(0,0,0,.35);border:1px solid rgba(95,200,200,.4);color:#eafdfd;border-radius:6px;padding:6px 8px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;line-height:1.2;}
+#s-munich-objetivos .obj-sec-edit-row{display:flex;gap:6px;align-items:center;}
+#s-munich-objetivos .obj-sec-edit-icon{width:42px;flex-shrink:0;background:rgba(0,0,0,.35);border:1px solid rgba(95,200,200,.4);color:#eafdfd;border-radius:6px;padding:4px 4px;font-size:18px;text-align:center;cursor:text;}
+#s-munich-objetivos .obj-sec-edit-icon:focus{outline:none;border-color:rgba(95,200,200,.85);background:rgba(0,0,0,.5);}
+#s-munich-objetivos .obj-sec-edit-title{flex:1;min-width:0;background:rgba(0,0,0,.35);border:1px solid rgba(95,200,200,.4);color:#eafdfd;border-radius:6px;padding:6px 8px;font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;line-height:1.2;}
 #s-munich-objetivos .obj-sec-edit-title:focus{outline:none;border-color:rgba(95,200,200,.85);background:rgba(0,0,0,.5);}
 #s-munich-objetivos .obj-sec-comps{display:flex;gap:6px;flex-wrap:wrap;}
 #s-munich-objetivos .obj-sec-comp-btn{flex:1;min-width:96px;background:rgba(0,0,0,.35);border:1px solid var(--cc,#888);color:var(--cc,#ccc);border-radius:6px;padding:6px 8px;font-family:Oswald,sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.5px;cursor:pointer;-webkit-tap-highlight-color:transparent;opacity:.5;transition:opacity .12s;}

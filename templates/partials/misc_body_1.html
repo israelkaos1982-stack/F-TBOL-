@@ -55123,12 +55123,12 @@ https://api.sofascore.app/api/v1/team/44/image
   var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 1300, pi: null };
   /* Defaults POR HUB — se usan cuando un hub aún no tiene datos guardados */
   var _HUB_DEF = {
-    tonin:  { ratingTarget: 8.70, moneyTarget: 1300, pi: 2, nivel: 'CRACK',   formYo: '⬇️' },
-    alvaro: { ratingTarget: 8.85, moneyTarget: 1370, pi: 2, nivel: 'CRACK',   formYo: '↘️' },
-    acsa:   { ratingTarget: 9,    moneyTarget: 1400, pi: 2, nivel: 'CRACK',   formYo: '🎲' },
-    isra:   { ratingTarget: 9,    moneyTarget: 1410, pi: 2, nivel: 'LEYENDA', formYo: '🎲' },
-    angel:  { ratingTarget: 9,    moneyTarget: 1400, pi: 2, nivel: 'CRACK',   formYo: '↘️' },
-    izan:   { ratingTarget: 8.75, moneyTarget: 1330, pi: 2, nivel: 'CRACK',   formYo: '⬇️' }
+    tonin:  { ratingTarget: 8.70, moneyTarget: 1300, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
+    alvaro: { ratingTarget: 8.85, moneyTarget: 1370, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
+    acsa:   { ratingTarget: 9,    moneyTarget: 1400, money: 200, pi: 2, nivel: 'CRACK',   formRival: '🎲' },
+    isra:   { ratingTarget: 9,    moneyTarget: 1410, money: 200, pi: 2, nivel: 'LEYENDA', formRival: '🎲' },
+    angel:  { ratingTarget: 9,    moneyTarget: 1400, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
+    izan:   { ratingTarget: 8.75, moneyTarget: 1330, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' }
   };
   function _hubDef(){
     try { var h=window._activeHub&&window._activeHub(); if(h&&h.id&&_HUB_DEF[h.id]) return _HUB_DEF[h.id]; } catch(_){}
@@ -55378,10 +55378,12 @@ https://api.sofascore.app/api/v1/team/44/image
      migrado no pierde su HUD. */
   function _seedHubDefaults(){
     /* Solo cuando NO hay NINGÚN dato en ninguna capa (hub nuevo /
-       primer arranque tras wipe sin backup). Sembramos los targets
-       y el PI por defecto del hub activo en cache + localStorage +
-       server, para que apply() los pinte y el usuario no tenga que
-       entrar en EDITAR HUD solo para verlos la primera vez. */
+       primer arranque tras wipe sin backup). Sembramos los targets,
+       PI, presupuesto inicial (200€) y forma rival por defecto del
+       hub activo en cache + localStorage + server.
+       AUTORITATIVO: el servidor acepta este seed SIEMPRE, incluso
+       si tenía datos stale con el mismo rev (evita que datos viejos
+       o incorrectos del server impidan ver los targets correctos). */
     try {
       var _c = window._BAYERN_HUD_CACHE;
       if (_c && typeof _c === 'object' && Object.keys(_c).length) return; /* ya hay datos */
@@ -55390,8 +55392,10 @@ https://api.sofascore.app/api/v1/team/44/image
       var _seed = {};
       if (_hd.ratingTarget != null) _seed.ratingTarget = _hd.ratingTarget;
       if (_hd.moneyTarget  != null) _seed.moneyTarget  = _hd.moneyTarget;
+      if (_hd.money        != null) _seed.money        = _hd.money;
       if (_hd.pi           != null) _seed.pi           = _hd.pi;
-      save(_seed, false, false);
+      /* Autoritativo: gana sobre cualquier dato stale del servidor */
+      save(_seed, true, true);
       try { apply(); } catch(_){}
     } catch(_){}
   }
@@ -55809,9 +55813,9 @@ https://api.sofascore.app/api/v1/team/44/image
         var g = document.getElementById(gridId); if (!g) return;
         g.querySelectorAll('.me-pick-btn').forEach(function(b){ b.classList.toggle('sel', b.getAttribute('data-v') === String(value||'')); });
       }
-      _markSel('me-level-grid',  ovM.level     || sfM.nivel  || hd.nivel || '');
-      _markSel('me-formyo-grid', ovM.formState || sfM.yo     || hd.formYo || '');
-      _markSel('me-formriv-grid', ovM.formRival || sfM.rival || '');
+      _markSel('me-level-grid',   ovM.level     || sfM.nivel  || hd.nivel     || '');
+      _markSel('me-formyo-grid',  ovM.formState || sfM.yo    || '');
+      _markSel('me-formriv-grid', ovM.formRival || sfM.rival || hd.formRival || '');
     } catch(_){}
     document.getElementById('munich-edit-ov').classList.add('show');
   };
@@ -56735,6 +56739,14 @@ https://api.sofascore.app/api/v1/team/44/image
       try { window._BAYERN_HUD_HYDRATED = false; } catch(_){}
       _pendingMoneyDelta = 0;
       window._BAYERN_HUD_CACHE = null;
+      /* Limpiar los targets del DOM ANTES de apply() para que los
+         valores del hub anterior NO se queden visibles mientras el
+         nuevo hub carga. apply() retorna temprano si la cache está
+         vacía, así que sin esta limpieza el DOM muestra datos viejos. */
+      try { var _rT2 = _smallTarget('.munich-hud-val');   if (_rT2) _rT2.textContent = '/---'; } catch(_){}
+      try { var _mT2 = _smallTarget('.munich-hud-money'); if (_mT2) _mT2.textContent = '/---€'; } catch(_){}
+      try { var _vE2 = document.getElementById('ath-pts-val');   if (_vE2) _vE2.textContent = '0.00'; } catch(_){}
+      try { var _wE2 = document.getElementById('ath-money-val'); if (_wE2) _wE2.textContent = '0'; } catch(_){}
       try { apply(); } catch(_){}
       try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
     });

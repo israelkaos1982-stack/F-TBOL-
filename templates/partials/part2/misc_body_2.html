@@ -24843,7 +24843,7 @@ window.goLiveMatches = function() {
       var c2 = u.dark;
       var c3 = u.color;
       html += '<div class="isr-user-card" style="--isr-c1:'+c1+';--isr-c2:'+c2+';--isr-c3:'+c3+';"'
-            + ' onclick="window._isramaxLogin&&window._isramaxLogin(\'' + u.id + '\')">'
+            + ' onclick="window._isramaxPublicBets&&window._isramaxPublicBets(\'' + u.id + '\')">'
             +   '<div class="isr-user-icon">' + u.icon + '</div>'
             +   '<div class="isr-user-name">' + u.name + '</div>'
             +   '<div class="isr-user-team">' + _isramaxTeam(u) + '</div>'
@@ -24868,7 +24868,35 @@ window.goLiveMatches = function() {
     } catch(_){ return hex; }
   }
 
-  /* Pantalla 2: login con PIN + apuestas públicas (sin PIN). */
+  /* Pantalla 2a: vista pública — apuestas sin PIN. */
+  function _isramaxRenderPublicBets(userId){
+    var u = _isramaxFindUser(userId);
+    if (!u) return _isramaxRenderUsers();
+    var c1 = _isramaxLighten(u.color, 0.20);
+    var c2 = u.dark;
+    var c3 = u.color;
+    var backFn = _isramaxRestrict
+      ? 'window._isramaxClose&&window._isramaxClose()'
+      : 'window._isramaxBackToUsers&&window._isramaxBackToUsers()';
+    var html = ''
+      + '<button class="isr-back" onclick="' + backFn + '">◀ Volver</button>'
+      + '<div class="isr-login-card" style="--isr-c1:'+c1+';--isr-c2:'+c2+';--isr-c3:'+c3+';padding:14px;">'
+      +   '<div style="display:flex;align-items:center;gap:10px;justify-content:space-between;">'
+      +     '<div style="display:flex;align-items:center;gap:10px;">'
+      +       '<span style="font-size:30px;">' + u.icon + '</span>'
+      +       '<div>'
+      +         '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:22px;letter-spacing:2px;color:#fff;line-height:1;">' + u.name + '</div>'
+      +         '<div style="font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.75);">' + _isramaxTeam(u) + '</div>'
+      +       '</div>'
+      +     '</div>'
+      +     '<button class="isr-btn ghost" style="font-size:11px;padding:6px 10px;" onclick="window._isramaxLogin&&window._isramaxLogin(\'' + userId + '\')">🔐 Admin</button>'
+      +   '</div>'
+      + '</div>'
+      + _isramaxRenderBetsBoxes(userId);
+    _isramaxRender(html);
+  }
+
+  /* Pantalla 2b: login con PIN (solo admin). */
   function _isramaxRenderLogin(userId){
     var u = _isramaxFindUser(userId);
     if (!u) return _isramaxRenderUsers();
@@ -24876,7 +24904,7 @@ window.goLiveMatches = function() {
     var c2 = u.dark;
     var c3 = u.color;
     var html = ''
-      + '<button class="isr-back" onclick="window._isramaxBackToUsers&&window._isramaxBackToUsers()">◀ Volver</button>'
+      + '<button class="isr-back" onclick="window._isramaxPublicBets&&window._isramaxPublicBets(\'' + userId + '\')">◀ Apuestas</button>'
       + '<div class="isr-login-card" style="--isr-c1:'+c1+';--isr-c2:'+c2+';--isr-c3:'+c3+';">'
       +   '<div class="isr-login-icon">' + u.icon + '</div>'
       +   '<div class="isr-login-name">' + u.name + '</div>'
@@ -24886,8 +24914,7 @@ window.goLiveMatches = function() {
       +   '<div class="isr-btn-row">'
       +     '<button class="isr-btn primary" onclick="window._isramaxAuth&&window._isramaxAuth(\'' + userId + '\')">🔐 Entrar como ' + u.name + '</button>'
       +   '</div>'
-      + '</div>'
-      + _isramaxRenderBetsBoxes(userId);
+      + '</div>';
     _isramaxRender(html);
     setTimeout(function(){
       var inp = document.getElementById('isramax-pin');
@@ -25139,6 +25166,7 @@ window.goLiveMatches = function() {
   };
   window._isramaxClose = _isramaxClose;
   window._isramaxBackToUsers = function(){ _isramaxSession = null; _isramaxRenderUsers(); };
+  window._isramaxPublicBets = function(userId){ _isramaxRenderPublicBets(userId); };
   window._isramaxLogin = function(userId){ _isramaxRenderLogin(userId); };
   window._isramaxRenderDashboard = _isramaxRenderDashboard;
   window._isramaxRenderMarkets = _isramaxRenderMarkets;

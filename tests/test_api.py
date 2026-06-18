@@ -1423,3 +1423,51 @@ class TestLigaExtMerge:
         res = self._merge(old, new)
         assert res["results"] == []
         assert res["resultsStamp"] == 2000
+
+    # ── EMPTY-GUARD (2026-06-18): seed vacío SIN sello no machaca ──────────
+    # Bug usuario "Montenegro e Irlanda del Norte se ponen a cero": son las
+    # únicas ligas SEMBRADAS en el cliente; la semilla escribe results=[] sin
+    # resultsStamp (sello 0). Si un dispositivo que solo sembró empuja esa
+    # semilla y los sellos EMPATAN a 0, el results vacío vaciaba la liga.
+    def test_results_seed_vacio_sin_sello_no_machaca_sim_sin_sello(self):
+        # Ambos SIN sello (0). El almacenado tiene clasificación simulada, el
+        # entrante (seed de otro móvil) viene vacío → se CONSERVA la sim.
+        old = {"teams": [{"id": "1", "name": "A"}],
+               "results": [{"h": "1", "a": "2", "gh": 2, "ga": 0}]}
+        new = {"teams": [{"id": "1", "name": "A"}], "results": []}
+        res = self._merge(old, new)
+        assert res["results"] == old["results"], res.get("results")
+
+    def test_results_seed_vacio_no_machaca_sim_con_sello(self):
+        # El almacenado tiene sello, el seed entrante viene sin sello (0) y
+        # vacío → la clasificación simulada se conserva.
+        old = {"teams": [{"id": "1", "name": "A"}],
+               "results": [{"h": "1", "a": "2", "gh": 3, "ga": 1}],
+               "resultsStamp": 7000}
+        new = {"teams": [{"id": "1", "name": "A"}], "results": []}
+        res = self._merge(old, new)
+        assert res["results"] == old["results"]
+        assert res["resultsStamp"] == 7000
+
+    def test_results_reset_sin_sello_previo_si_limpia_con_sello_fresco(self):
+        # Defensa: un reset legítimo (vacío + sello fresco) SÍ limpia aunque
+        # el almacenado no tuviera sello (estrictamente mayor gana).
+        old = {"teams": [{"id": "1", "name": "A"}],
+               "results": [{"h": "1", "a": "2", "gh": 2, "ga": 0}]}
+        new = {"teams": [{"id": "1", "name": "A"}],
+               "results": [], "resultsStamp": 1}
+        res = self._merge(old, new)
+        assert res["results"] == []
+        assert res["resultsStamp"] == 1
+
+    def test_results_sim_entrante_no_vacia_gana_siempre(self):
+        # Un POST con clasificación (no vacía) y sello igual/mayor adopta sus
+        # resultados con normalidad (el empty-guard no estorba al caso real).
+        old = {"teams": [{"id": "1", "name": "A"}],
+               "results": [{"h": "1", "a": "2", "gh": 1, "ga": 1}],
+               "resultsStamp": 100}
+        new = {"teams": [{"id": "1", "name": "A"}],
+               "results": [{"h": "1", "a": "2", "gh": 4, "ga": 0}],
+               "resultsStamp": 100}
+        res = self._merge(old, new)
+        assert res["results"] == new["results"]

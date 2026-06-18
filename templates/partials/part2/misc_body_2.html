@@ -24835,7 +24835,7 @@ window.goLiveMatches = function() {
     } catch(_){ return hex; }
   }
 
-  /* Pantalla 2: login con PIN. */
+  /* Pantalla 2: login con PIN + apuestas públicas (sin PIN). */
   function _isramaxRenderLogin(userId){
     var u = _isramaxFindUser(userId);
     if (!u) return _isramaxRenderUsers();
@@ -24852,9 +24852,9 @@ window.goLiveMatches = function() {
       +   '<div id="isramax-pin-err" class="isr-pin-err"></div>'
       +   '<div class="isr-btn-row">'
       +     '<button class="isr-btn primary" onclick="window._isramaxAuth&&window._isramaxAuth(\'' + userId + '\')">🔐 Entrar como ' + u.name + '</button>'
-      +     '<button class="isr-btn ghost" onclick="window._isramaxGuestEnter&&window._isramaxGuestEnter(\'' + userId + '\')">👁 Como invitado</button>'
       +   '</div>'
-      + '</div>';
+      + '</div>'
+      + _isramaxRenderBetsBoxes(userId);
     _isramaxRender(html);
     setTimeout(function(){
       var inp = document.getElementById('isramax-pin');

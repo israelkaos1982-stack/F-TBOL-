@@ -24533,7 +24533,9 @@ window.goLiveMatches = function() {
     } catch(_){}
     return {};
   }
-  /* Aplica `delta` al campo `money` del HUD del entrenador y sincroniza. */
+  /* Aplica `delta` al campo `money` del HUD del entrenador y sincroniza.
+     Para usuarios no-tonin: GET del servidor primero para obtener el `rev`
+     correcto (evita el rechazo del rev-guard incluso tras un wipe). */
   function _isramaxCreditHubMoney(userId, delta){
     delta = Number(delta) || 0;
     if (!delta) return;
@@ -24544,32 +24546,54 @@ window.goLiveMatches = function() {
       return;
     }
     var key = _isramaxHudKey(userId);
-    var o = _isramaxReadHudBlob(userId);
-    var prev = Number(o.money) || 0;
-    o.money = Math.max(0, prev + delta);
-    o.updatedAt = Date.now();
-    /* Preservar/incrementar `rev` para pasar el guard del servidor. */
-    o.rev = (Number(o.rev) || 0) + 1;
-    try { localStorage.setItem(key, JSON.stringify(o)); } catch(_){}
-    /* Sync no-autoritativo al servidor (fire-and-forget). */
-    try {
-      fetch('/api/kv/' + key, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({value: o})
-      });
-    } catch(_){}
-    /* Si este hub es el activo, actualizar también el cache en memoria. */
-    try {
-      if (typeof window._activeHub === 'function'){
-        var ah = window._activeHub();
-        var mid = _isramaxMisterId(userId);
-        if (ah && ah.id === mid && window._BAYERN_HUD_CACHE){
-          window._BAYERN_HUD_CACHE.money = o.money;
-          window._BAYERN_HUD_CACHE.updatedAt = o.updatedAt;
-          window._BAYERN_HUD_CACHE.rev = o.rev;
+    /* Función interna que aplica el delta sobre un blob base y sube. */
+    function _applyAndPost(base){
+      var o = base || {};
+      var prev = Number(o.money) || 0;
+      o.money = Math.max(0, prev + delta);
+      o.updatedAt = Date.now();
+      /* rev monotónico: servidor gana si tiene uno mayor, luego +1. */
+      var localRev = Number((_isramaxReadHudBlob(userId)).rev) || 0;
+      o.rev = Math.max(Number(o.rev) || 0, localRev) + 1;
+      try { localStorage.setItem(key, JSON.stringify(o)); } catch(_){}
+      try {
+        fetch('/api/kv/' + key, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({value: o})
+        });
+      } catch(_){}
+      /* Si este hub es el activo, actualizar el cache en memoria. */
+      try {
+        if (typeof window._activeHub === 'function'){
+          var ah = window._activeHub();
+          var mid = _isramaxMisterId(userId);
+          if (ah && ah.id === mid && window._BAYERN_HUD_CACHE){
+            window._BAYERN_HUD_CACHE.money = o.money;
+            window._BAYERN_HUD_CACHE.updatedAt = o.updatedAt;
+            window._BAYERN_HUD_CACHE.rev = o.rev;
+          }
         }
-      }
-    } catch(_){}
+      } catch(_){}
+    }
+    /* GET del blob servidor para obtener el rev real; fallback a local. */
+    try {
+      fetch('/api/kv/' + key, { method:'GET', headers:{'Accept':'application/json'} })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          var serverBlob = (j && j.value && typeof j.value === 'object') ? j.value : null;
+          /* Fusionar: tomar el blob más rico (server o local) como base. */
+          var local = _isramaxReadHudBlob(userId);
+          var base;
+          if (!serverBlob){ base = local; }
+          else if (!local || !local.money){ base = serverBlob; }
+          else {
+            /* Gana el de mayor rev; a igualdad el del servidor. */
+            base = (Number(local.rev)||0) > (Number(serverBlob.rev)||0) ? local : serverBlob;
+          }
+          _applyAndPost(Object.assign({}, base));
+        })
+        .catch(function(){ _applyAndPost(Object.assign({}, _isramaxReadHudBlob(userId))); });
+    } catch(_){ _applyAndPost(Object.assign({}, _isramaxReadHudBlob(userId))); }
   }
 
   function _isramaxGetCash(userId){
@@ -24765,17 +24789,23 @@ window.goLiveMatches = function() {
         '#isramax-ov .isr-ticket-v.win{font-family:"Bebas Neue",sans-serif;font-size:18px;color:#5fe08a;}' +
         '#isramax-ov .isr-ticket-cuota{color:#9fdcff;font-family:Oswald,sans-serif;font-size:11px;}' +
         /* Tickets reducidos (Ganadas/Perdidas/Anuladas) */
-        '#isramax-ov .isr-ticket-mini{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:8px 10px;margin-bottom:6px;}' +
+        '#isramax-ov .isr-ticket-mini{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:10px 12px;margin-bottom:7px;}' +
         '#isramax-ov .isr-ticket-mini:last-child{margin-bottom:0;}' +
         '#isramax-ov .isr-ticket-mini-won{border-color:rgba(95,224,138,.45);background:rgba(95,224,138,.07);}' +
         '#isramax-ov .isr-ticket-mini-lost{border-color:rgba(255,128,128,.40);background:rgba(255,128,128,.06);}' +
         '#isramax-ov .isr-ticket-mini-void{border-color:rgba(180,180,200,.40);background:rgba(180,180,200,.06);}' +
-        '#isramax-ov .isr-mini-match{font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;}' +
-        '#isramax-ov .isr-mini-sub{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.55);}' +
-        '#isramax-ov .isr-mini-r{font-family:"Bebas Neue",sans-serif;font-size:18px;letter-spacing:1px;white-space:nowrap;}' +
+        '#isramax-ov .isr-mini-l{flex:1;min-width:0;}' +
+        '#isramax-ov .isr-mini-match{font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#fff;margin-bottom:2px;}' +
+        '#isramax-ov .isr-mini-score{display:inline-block;font-family:"Bebas Neue",sans-serif;font-size:11px;letter-spacing:.5px;padding:1px 6px;border-radius:4px;margin-bottom:4px;background:rgba(255,255,255,.10);color:rgba(255,255,255,.8);}' +
+        '#isramax-ov .isr-mini-sub{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.55);margin-bottom:2px;}' +
+        '#isramax-ov .isr-mini-detail{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.45);}' +
+        '#isramax-ov .isr-mini-r{font-family:"Bebas Neue",sans-serif;font-size:20px;letter-spacing:1px;white-space:nowrap;padding-top:2px;}' +
         '#isramax-ov .isr-ticket-mini-won .isr-mini-r{color:#5fe08a;}' +
         '#isramax-ov .isr-ticket-mini-lost .isr-mini-r{color:#ff8080;}' +
-        '#isramax-ov .isr-ticket-mini-void .isr-mini-r{color:#c8c8d8;}';
+        '#isramax-ov .isr-ticket-mini-void .isr-mini-r{color:#c8c8d8;}' +
+        '#isramax-ov .isr-ticket-mini-won .isr-mini-score{background:rgba(95,224,138,.18);color:#5fe08a;}' +
+        '#isramax-ov .isr-ticket-mini-lost .isr-mini-score{background:rgba(255,128,128,.15);color:#ff8080;}' +
+        '#isramax-ov .isr-mini-retorno{font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.35);white-space:nowrap;margin-top:2px;text-align:right;}';
       document.head.appendChild(css);
     }
     return wrap;
@@ -24947,15 +24977,36 @@ window.goLiveMatches = function() {
           var stake = Number(b.stake)||0;
           var cuota = Number(b.cuota)||0;
           var ret   = stake * cuota;
-          var resTxt = def.key === 'won'  ? '+' + (ret - stake).toFixed(0) + '€'
+          var profit = ret - stake;
+          /* Línea principal del resultado a la derecha. */
+          var resTxt = def.key === 'won'  ? '+' + profit.toFixed(0) + '€'
                      : def.key === 'lost' ? '−' + stake.toFixed(0) + '€'
-                     : stake.toFixed(0) + '€ ↩';
+                     : '↩ ' + stake.toFixed(0) + '€';
+          /* Subtexto de retorno (bajo el importe). */
+          var retTxt = def.key === 'won'  ? 'Retorno: ' + ret.toFixed(0) + '€'
+                     : def.key === 'lost' ? 'Apostado: ' + stake.toFixed(0) + '€'
+                     : 'Devuelto';
+          /* Marcador final si está disponible. */
+          var scoreBadge = '';
+          if (b.settledScore){
+            /* "gh-ga" → "Home N - M Away" */
+            var parts = String(b.settledScore).split('-');
+            if (parts.length === 2){
+              var gh = parts[0], ga = parts[1];
+              scoreBadge = '<span class="isr-mini-score">🏁 ' + _escHtml(b.home) + ' ' + gh + ' - ' + ga + ' ' + _escHtml(b.away) + '</span><br>';
+            }
+          }
           html += '<div class="isr-ticket-mini isr-ticket-mini-' + def.cls + '">'
                +    '<div class="isr-mini-l">'
                +      '<div class="isr-mini-match">' + _escHtml(b.home) + ' vs ' + _escHtml(b.away) + '</div>'
-               +      '<div class="isr-mini-sub">' + _escHtml(b.label||'') + ' · ' + stake.toFixed(0) + '€ @' + cuota.toFixed(2) + '</div>'
+               +      scoreBadge
+               +      '<div class="isr-mini-sub">' + _escHtml(b.label||'') + ' @' + cuota.toFixed(2) + '</div>'
+               +      '<div class="isr-mini-detail">Apostado: ' + stake.toFixed(0) + '€</div>'
                +    '</div>'
-               +    '<div class="isr-mini-r">' + resTxt + '</div>'
+               +    '<div style="display:flex;flex-direction:column;align-items:flex-end;">'
+               +      '<div class="isr-mini-r">' + resTxt + '</div>'
+               +      '<div class="isr-mini-retorno">' + retTxt + '</div>'
+               +    '</div>'
                + '</div>';
         });
       }

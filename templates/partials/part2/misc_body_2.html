@@ -12430,9 +12430,27 @@
        vez (regla del usuario, 2026-05-06). */
     var ov = document.getElementById('gm-fin-ov');
     if (!ov) {
-      document.getElementById('gm-modal').style.display = 'none';
-      window.gmShowPost && window.gmShowPost();
-      return;
+      /* Recrear el overlay si el bloque DOMContentLoaded falló (error JS, timing, etc.)
+         — en vez de silenciar el fallo y saltarse MVP+compartir */
+      ov = document.createElement('div');
+      ov.id = 'gm-fin-ov';
+      ov.style.cssText = 'display:none;position:fixed;inset:0;background:linear-gradient(160deg,#050a10 0%,#0d1a28 100%);z-index:10001;overflow-y:auto;';
+      ov.innerHTML = '<div style="max-width:480px;margin:0 auto;padding:24px 16px 48px;">'
+        +'<div style="text-align:center;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:3px;color:#666;margin-bottom:20px;">🏁 PARTIDO FINALIZADO</div>'
+        +'<div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px;">'
+          +'<div style="text-align:center;flex:1;"><img id="gm-fin-logo-a" src="" style="width:52px;height:52px;object-fit:contain;" onerror="this.style.display=\'none\'"><div id="gm-fin-name-a" style="font-family:Oswald,sans-serif;font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;word-break:break-word;"></div></div>'
+          +'<div style="text-align:center;padding:0 8px;"><div id="gm-fin-score" style="font-family:Oswald,sans-serif;font-size:52px;font-weight:900;color:#fff;line-height:1;white-space:nowrap;"></div></div>'
+          +'<div style="text-align:center;flex:1;"><img id="gm-fin-logo-b" src="" style="width:52px;height:52px;object-fit:contain;" onerror="this.style.display=\'none\'"><div id="gm-fin-name-b" style="font-family:Oswald,sans-serif;font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;word-break:break-word;"></div></div>'
+        +'</div>'
+        +'<div id="gm-fin-mvp" style="text-align:center;font-family:Oswald,sans-serif;font-size:16px;color:#ffd700;margin-bottom:20px;letter-spacing:1px;"></div>'
+        +'<div style="margin-bottom:24px;">'
+          +'<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.3);margin-bottom:8px;">ACTA COMPLETA</div>'
+          +'<div id="gm-fin-events" style="border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;"></div>'
+        +'</div>'
+        +'<button id="gm-fin-share-btn" onclick="window._gmShareFinal()" style="width:100%;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;margin-bottom:12px;">🟢 COMPARTIR PARTIDO FINALIZADO</button>'
+        +'<button id="gm-fin-exit-btn" onclick="window.gmExitFinal()" style="display:none;width:100%;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;">✅ SALIR AL MENÚ</button>'
+        +'</div>';
+      document.body.appendChild(ov);
     }
     document.getElementById('gm-fin-score').textContent = _gm.sc.a + ' - ' + _gm.sc.b;
     var _hiFa = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.home)||'') : '';
@@ -12617,7 +12635,8 @@
       + (mvpEvt ? '<div style="font-family:Rajdhani,sans-serif;font-size:15px;color:#ffd700;margin-top:8px;">⭐ MVP: ' + mvpName + (mvpTeam ? ' (' + mvpTeam + ')' : '') + '</div>' : '')
       + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.62);margin-top:14px;max-width:340px;line-height:1.45;">Comparte el resultado, las estadísticas, el acta y el MVP por WhatsApp. Es obligatorio compartir para finalizar el partido.</div>'
       + '<button id="gm-mvp-share-btn" style="margin-top:22px;width:100%;max-width:340px;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;">🟢 COMPARTIR POR WHATSAPP</button>'
-      + '<button id="gm-mvp-cont-btn" disabled style="margin-top:12px;width:100%;max-width:340px;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:not-allowed;opacity:.4;">🏁 FINALIZAR PARTIDO</button>';
+      + '<button id="gm-mvp-cont-btn" disabled style="margin-top:12px;width:100%;max-width:340px;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:not-allowed;opacity:.4;">🏁 FINALIZAR PARTIDO</button>'
+      + '<button id="gm-mvp-skip-btn" style="margin-top:18px;background:transparent;border:none;color:rgba(255,255,255,.28);font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;text-decoration:underline;padding:4px 8px;">⚠️ WhatsApp no abre · continuar sin compartir</button>';
     ov.style.display = 'flex';
     var shared = false;
     var shareBtn = document.getElementById('gm-mvp-share-btn');
@@ -12696,6 +12715,20 @@
         try { onContinue(); } catch(_){}
       }
     };
+    var skipBtn = document.getElementById('gm-mvp-skip-btn');
+    if (skipBtn) {
+      skipBtn.onclick = function() {
+        if (!confirm('¿Finalizar partido sin compartir por WhatsApp?')) return;
+        shared = true;
+        _gm._mvpShareDone = true;
+        _gm.finalShared = false;
+        ov.style.display = 'none';
+        ov.innerHTML = '';
+        if (typeof onContinue === 'function') {
+          try { onContinue(); } catch(_){}
+        }
+      };
+    }
   }
   try { window._gmFinalShareGate = _gmFinalShareGate; } catch(_){}
 
@@ -14531,6 +14564,12 @@
     var _evId = window._evtId();
     _gm.events.push({ id: _evId, type: evt.type, label: evt.label, team: team, min: min, num: num || '', player: playerName || '', ico: ico });
 
+    /* MVP elegido desde el gate de gmEndMatch → re-disparar automáticamente */
+    if (evt.type === 'mvp' && _gm._awaitMvp) {
+      _gm._awaitMvp = false;
+      try { setTimeout(function(){ window.gmEndMatch && window.gmEndMatch(); }, 80); } catch(_){}
+    }
+
     /* actualizar marcador */
     var goalTypes = ['gol','falta-gol','pen-gol'];
     if (goalTypes.indexOf(evt.type) !== -1) {
@@ -15208,6 +15247,7 @@
     var mvpExists = _gm.events.some(function(e){ return e && e.type === 'mvp'; });
     if (!mvpExists && !_gm.isFriendly) {
       alert('⭐ Debes elegir MVP antes de finalizar el acta.');
+      _gm._awaitMvp = true;
       window.gmPickEvent('MVP del Partido','mvp');
       return;
     }
@@ -20046,6 +20086,7 @@
     </div>
     <div class="ml-stats-grid" id="ml-stats-grid"></div>
     <button id="ml-stats-confirm-btn" class="ml-stats-confirm" onclick="window._mlStatsConfirm()">✓ CONFIRMAR ESTADÍSTICAS</button>
+    <button id="ml-stats-skip-btn" onclick="window._mlStatsConfirm()" style="margin-top:8px;width:100%;padding:9px;background:transparent;border:1px solid rgba(255,255,255,.15);border-radius:8px;color:rgba(255,255,255,.4);font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">⏭ Saltar estadísticas</button>
   </div>
 </div>
 
@@ -29955,6 +29996,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return /^ml-btn-end-/.test(id)
         || id === 'gm-btn-end'
         || id === 'ml-stats-confirm-btn'
+        || id === 'ml-stats-skip-btn'
         || id === 'ml-post-close-btn';
   }
   document.addEventListener('click', function(e){

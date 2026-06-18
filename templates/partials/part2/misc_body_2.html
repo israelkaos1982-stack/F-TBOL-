@@ -24548,6 +24548,8 @@ window.goLiveMatches = function() {
     var prev = Number(o.money) || 0;
     o.money = Math.max(0, prev + delta);
     o.updatedAt = Date.now();
+    /* Preservar/incrementar `rev` para pasar el guard del servidor. */
+    o.rev = (Number(o.rev) || 0) + 1;
     try { localStorage.setItem(key, JSON.stringify(o)); } catch(_){}
     /* Sync no-autoritativo al servidor (fire-and-forget). */
     try {
@@ -24564,6 +24566,7 @@ window.goLiveMatches = function() {
         if (ah && ah.id === mid && window._BAYERN_HUD_CACHE){
           window._BAYERN_HUD_CACHE.money = o.money;
           window._BAYERN_HUD_CACHE.updatedAt = o.updatedAt;
+          window._BAYERN_HUD_CACHE.rev = o.rev;
         }
       }
     } catch(_){}
@@ -25013,13 +25016,75 @@ window.goLiveMatches = function() {
     _isramaxRender(html);
   }
 
+  /* ── Hidratación cross-device desde el servidor ─────────────────
+     Al abrir el panel, fusiona las apuestas del servidor con las
+     locales: una apuesta LIQUIDADA (status!=='open') nunca se puede
+     revertir a 'open'; a igual id, la copia con más información gana.
+     Cuando el servidor tiene datos que el local no tiene, los adopta
+     y re-renderiza. */
+  function _isramaxHydrateFromServer(cb){
+    try {
+      fetch('/api/state', { method:'GET', headers:{'Accept':'application/json'} })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if (!j) { if (cb) cb(); return; }
+          var remote = j.isramax_v1;
+          if (!remote || typeof remote !== 'object') { if (cb) cb(); return; }
+          var local = _isramaxLoad();
+          /* Fusionar bets: la versión liquidada gana sobre la abierta. */
+          var merged = { users: {}, bets: [] };
+          /* Unir usuarios (local tiene prioridad en campos no-bets). */
+          var allUsers = {};
+          Object.keys(remote.users || {}).forEach(function(uid){ allUsers[uid] = true; });
+          Object.keys(local.users || {}).forEach(function(uid){ allUsers[uid] = true; });
+          Object.keys(allUsers).forEach(function(uid){
+            var ru = (remote.users || {})[uid] || {};
+            var lu = (local.users || {})[uid] || {};
+            merged.users[uid] = Object.assign({}, ru, lu);
+          });
+          /* Fusionar apuestas por id: settled > open. */
+          var byId = {};
+          (remote.bets || []).forEach(function(b){ if (b && b.id) byId[b.id] = b; });
+          (local.bets || []).forEach(function(b){
+            if (!b || !b.id){ merged.bets.push(b); return; }
+            var rv = byId[b.id];
+            if (!rv){ byId[b.id] = b; return; }
+            /* Settled gana sobre open. */
+            var remoteOpen = rv.status === 'open';
+            var localOpen  = b.status === 'open';
+            if (remoteOpen && !localOpen) byId[b.id] = b;   /* local settled */
+            else if (!remoteOpen && localOpen) {}             /* remote settled, keep remote */
+            else byId[b.id] = b;                             /* prefer local (más reciente) */
+          });
+          Object.keys(byId).forEach(function(id){ merged.bets.push(byId[id]); });
+          /* Solo guardar si la fusión aportó algo nuevo. */
+          var localIds = {};
+          (local.bets || []).forEach(function(b){ if (b && b.id) localIds[b.id] = b.status; });
+          var changed = false;
+          merged.bets.forEach(function(b){
+            if (!b || !b.id) return;
+            if (!(b.id in localIds) || localIds[b.id] !== b.status) changed = true;
+          });
+          if (changed) _isramaxSave(merged);
+          if (cb) cb();
+        })
+        .catch(function(){ if (cb) cb(); });
+    } catch(_){ if (cb) cb(); }
+  }
+
   /* ── API pública ──────────────────────────────────────────── */
   window._isramaxOpen = function(restrictUserId){
     /* Modo PERSONAL: si llega un userId válido (caja del hub de un
        humano, p.ej. Liverpool → 'tonin'), solo se muestra su tarjeta. */
     _isramaxRestrict = (restrictUserId && _isramaxFindUser(restrictUserId)) ? restrictUserId : null;
+    /* Renderizar con datos locales mientras llega el servidor. */
     try { _isramaxSettleOpenBets(); } catch(_){}
     _isramaxRenderUsers();
+    /* Luego hidratar desde el servidor y re-renderizar si hay cambios. */
+    _isramaxHydrateFromServer(function(){
+      try { _isramaxSettleOpenBets(); } catch(_){}
+      _isramaxRenderUsers();
+    });
   };
   window._isramaxClose = _isramaxClose;
   window._isramaxBackToUsers = function(){ _isramaxSession = null; _isramaxRenderUsers(); };
@@ -25156,11 +25221,11 @@ window.goLiveMatches = function() {
   }
   var _ISRAMAX_TEAM_TO_MANAGER = (function(){
     var pairs = [
-      ['tonin',  ['Athletic Club','Athletic','Athletic Bilbao','Athletic Club de Bilbao','Bayern Munich','FC Bayern','FC Bayern Munich','Bayern Munchen','Bayern']],
-      ['alvaro', ['Real Betis','Betis','Real Betis Balompie','Arsenal','Arsenal FC']],
-      ['acsa',   ['Real Sociedad','Sociedad','Real Sociedad de Futbol','Manchester City','Man City','Manchester City FC']],
-      ['israel', ['Real Madrid','Real Madrid CF','Vallecas BR','Rayo Vallecano','Rayo','Rayo Vallecano de Madrid']],
-      ['angel',  ['FC Barcelona','Barcelona','Futbol Club Barcelona','Barca','Barça','FCBarcelona']]
+      ['tonin',  ['Athletic Club','Athletic','Athletic Bilbao','Athletic Club de Bilbao','Bayern Munich','FC Bayern','FC Bayern Munich','Bayern Munchen','Bayern','Liverpool','LFC','Liverpool FC','Francia','France']],
+      ['alvaro', ['Arsenal','Arsenal FC','Real Betis','Betis','Real Betis Balompie','Brasil','Brazil']],
+      ['acsa',   ['Real Madrid','Real Madrid CF','Real Sociedad','Sociedad','Real Sociedad de Futbol','Manchester City','Man City','Manchester City FC','Inglaterra','England','Gran Bretaña']],
+      ['israel', ['Atlético Madrid','Atletico Madrid','Atletico de Madrid','Atleti','Vallecas BR','Rayo Vallecano','Rayo','Rayo Vallecano de Madrid','Noruega','Norway']],
+      ['angel',  ['FC Barcelona','Barcelona','Futbol Club Barcelona','Barca','Barça','FCBarcelona','Argentina']]
     ];
     var out = {};
     pairs.forEach(function(p){

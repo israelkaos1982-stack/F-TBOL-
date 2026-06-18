@@ -5172,6 +5172,9 @@ window._showSimProgress = function(opts, onDone){
         COOKIE_KEY_LEGACY = _lg ? 'bayps' : '';
       } catch(_){}
       try { window._psInvalidateCache(); } catch(_){}
+      /* Re-ejecutar self-heal al cambiar de hub: la nueva caja puede
+         tener su propio cursor adelantado (el gate es per-hub). */
+      try { setTimeout(function(){ try { _psCursorHeal(); } catch(_){}}, 0); } catch(_){}
     });
   } catch(_){}
   /* MULTI-PESTAÑA / RESET CROSS-TAB (2026-06-04): si OTRA pestaña del
@@ -9945,102 +9948,96 @@ window._showSimProgress = function(opts, onDone){
     try { var _st2 = _stage(); if (_st2) _st2._psSig = null; } catch(_){}
   }
 
-  /* ── SELF-HEALING MUNDIAL CURSOR (2026-06-18) ──────────────────────────
-     Detecta y corrige un cursor que avanzó por delante de rondas KO del
-     Mundial 2032 (Selecciones) que aún no se han jugado. Causa raíz: el
-     merge monotónico cross-device en el servidor adopta el dayIdx mayor
-     de cualquier dispositivo; si otro dispositivo tenía dayIdx=47 (16 Jun)
-     el cursor de TODOS saltó al 16 de Junio omitiendo los KO pendientes.
-     Se ejecuta UNA vez por sesión desde _bootStage. NO toca resultados,
-     actas ni estadísticas. */
-  function _psMundialCursorHeal(){
+  /* ── SELF-HEALING DE CURSOR (2026-06-18, generalizado 2026-06-18) ────────
+     Detecta y corrige un cursor que avanzó por delante de partidos de
+     SELECCIÓN pendientes para la caja activa (Mundial 2032, Rondas Previas/
+     Finales Road, o cualquier torneo ag-sel). Causa raíz: el merge
+     monotónico cross-device adopta el dayIdx mayor de cualquier dispositivo
+     del parque; si otro dispositivo tenía un cursor adelantado TODOS los
+     hubs afectados saltan al mismo. Se ejecuta UNA vez por sesión y por hub
+     (gate per-hub) desde _bootStage Y desde el listener de hubchange, para
+     cubrir las 6 cajas humanas. NO toca resultados, actas ni estadísticas. */
+  function _psCursorHeal(){
     try {
-      if (window._psMundialHealRan) return;
+      /* Gate PER HUB: cada caja humana tiene su propia bandera de sesión. */
+      var _hubId = 'tonin';
+      try {
+        var _ah = window._activeHub ? window._activeHub() : null;
+        if (_ah && _ah.id) _hubId = _ah.id;
+      } catch(_){}
+      var _gk = '_psCursorHealRan_' + _hubId;
+      if (window[_gk]) return;
 
       var d = _load();
       if (!d) return;
       var curIdx = parseInt(d.dayIdx, 10) || 0;
-      /* Cursor a 0 o sin filas → nada que corregir, marcar como hecho. */
-      if (curIdx === 0){ window._psMundialHealRan = true; return; }
+      /* Cursor a 0 → nada que corregir para este hub. */
+      if (curIdx === 0){ window[_gk] = true; return; }
 
       var rows = _calRows();
       if (!rows || !rows.length) return; /* DOM no listo — retry en el próximo _bootStage. */
 
-      /* Solo operar si hay al menos una fila ag-sel "Mundial KO" (sin
-         "Grupo") ANTES del cursor actual — si no, no hay nada que corregir. */
-      var hasKoBefore = false;
-      for (var _i = 0; _i < Math.min(curIdx, rows.length); _i++){
-        var _r = rows[_i] || {};
-        if (/\bag-sel\b/.test(_r.cls || '') &&
-            /mundial/i.test(_r.label || '') &&
-            !/grupo/i.test(_r.label || '')){
-          hasKoBefore = true; break;
+      /* Solo operar si hay alguna fila ag-sel (partido de selección) antes
+         del cursor actual. Si no hay ninguna, este hub no tiene selección en
+         el calendario → marcar como hecho sin corrección. */
+      var hasSelBefore = false;
+      for (var _ci = 0; _ci < Math.min(curIdx, rows.length); _ci++){
+        if (/\bag-sel\b/.test((rows[_ci] || {}).cls || '')){
+          hasSelBefore = true; break;
         }
       }
-      if (!hasKoBefore){ window._psMundialHealRan = true; return; }
+      if (!hasSelBefore){ window[_gk] = true; return; }
 
-      /* Solo corregir si hay al menos un cfg mundial-48 en la caché
-         de torneos (si la caché aún está vacía, retrasamos hasta el
-         siguiente _bootStage que tenga la caché hidratada). */
-      var hasMundial48 = false;
-      try {
-        var _tids = Object.keys(window._TOUR_CACHE || {});
-        for (var _ti = 0; _ti < _tids.length; _ti++){
-          if ((window._TOUR_CACHE[_tids[_ti]] || {}).format === 'mundial-48'){
-            hasMundial48 = true; break;
-          }
-        }
-      } catch(_){}
-      if (!hasMundial48) return; /* Caché vacía — retry en el próximo _bootStage. */
+      /* Esperar a que _TOUR_CACHE tenga al menos un cfg cargado.
+         Si tras 6 intentos sigue vacío, asumimos que no hay torneos
+         y marcamos como hecho (no puede haber partidos pendientes). */
+      var _cacheKeys = Object.keys(window._TOUR_CACHE || {});
+      if (!_cacheKeys.length){
+        var _atk = '_psCursorHealAtt_' + _hubId;
+        window[_atk] = (window[_atk] || 0) + 1;
+        if (window[_atk] > 6){ window[_gk] = true; return; }
+        return; /* Retry en el próximo _bootStage / hubchange. */
+      }
 
       /* Marcar como ya procesado ANTES de la corrección para evitar loops. */
-      window._psMundialHealRan = true;
+      window[_gk] = true;
 
-      /* Busca el primer partido KO del Mundial 2032 antes del cursor
-         que todavía no haya sido jugado por Francia. */
+      /* Busca el primer partido ag-sel antes del cursor que no haya sido
+         jugado por la selección de esta caja. Cubre tanto jornadas de grupo
+         (Mundial J1-J3) como rondas KO y Road (Rondas Previas/Finales). */
       var targetIdx = -1;
-      for (var j = 0; j < Math.min(curIdx, rows.length); j++){
-        var row = rows[j];
-        if (!row || !/\bag-sel\b/.test(row.cls || '')) continue;
-        var rowLbl = String(row.label || '');
-        if (!/mundial/i.test(rowLbl)) continue;
-        if (/grupo/i.test(rowLbl)) continue; /* Jornadas de grupo: ya jugadas o excludidas. */
+      for (var _si = 0; _si < Math.min(curIdx, rows.length); _si++){
+        var _srow = rows[_si];
+        if (!_srow || !/\bag-sel\b/.test(_srow.cls || '')) continue;
 
-        var played = false;
+        var _played = false;
         try {
-          var pair = _selPair(row);
-          if (pair && pair.eliminated){
-            /* Francia ya eliminada en este punto — todo lo posterior es OK. */
-            break;
-          }
-          if (!pair || pair.pending){
-            /* Sin par o bracket pendiente → partido no jugado. */
-            played = false;
-          } else if (pair.matchKey){
-            /* Verifica en los cfgs mundiales si el partido tiene played:true. */
-            var _tks = Object.keys(window._TOUR_CACHE || {});
-            for (var _tk = 0; _tk < _tks.length; _tk++){
-              var _cfg = window._TOUR_CACHE[_tks[_tk]] || {};
-              if (_cfg.format !== 'mundial-48') continue;
-              if (((_cfg.results || {})[pair.matchKey] || {}).played){
-                played = true; break;
+          var _pair = _selPair(_srow);
+          if (!_pair) continue; /* No es un partido para la selección de esta caja. */
+          if (_pair.eliminated) break; /* Selección ya eliminada — no hay más pendiente. */
+          if (_pair.pending){
+            _played = false; /* Bracket no construido → partido no jugado. */
+          } else if (_pair.matchKey){
+            /* Verifica en TODOS los cfgs de torneo cargados. */
+            for (var _tc = 0; _tc < _cacheKeys.length; _tc++){
+              var _tcfg = window._TOUR_CACHE[_cacheKeys[_tc]] || {};
+              if (((_tcfg.results || {})[_pair.matchKey] || {}).played){
+                _played = true; break;
               }
             }
           }
-        } catch(_e){ played = false; }
+        } catch(_e){ continue; }
 
-        if (!played){
-          targetIdx = j;
+        if (!_played){
+          targetIdx = _si;
           break;
         }
       }
 
-      /* Sin partido KO pendiente antes del cursor → cursor correcto. */
-      if (targetIdx < 0 || targetIdx >= curIdx) return;
-      /* Salto mínimo de 2 días para evitar falsos positivos. */
-      if (curIdx - targetIdx < 2) return;
+      if (targetIdx < 0 || targetIdx >= curIdx) return; /* Nada pendiente antes del cursor. */
+      if (curIdx - targetIdx < 2) return; /* Salto no significativo (≤1 día): OK. */
 
-      /* Corregir el cursor al primer partido KO pendiente. */
+      /* Corregir el cursor al primer partido de selección pendiente. */
       _psCursorCorrectTo(targetIdx);
       try { _render(); } catch(_){}
     } catch(_){}
@@ -10102,9 +10099,11 @@ window._showSimProgress = function(opts, onDone){
           if (parseInt(d.dayIdx,10) < firstMay){ d.dayIdx = 0; _save(d); }
         }
       }
-      /* Self-healing: corrige cursor que saltó por delante de KO del
-         Mundial 2032 pendientes por merge monotónico cross-device. */
-      try { _psMundialCursorHeal(); } catch(_){}
+      /* Self-healing: corrige cursor que saltó por delante de partidos
+         de selección pendientes por merge monotónico cross-device.
+         Cubre todas las cajas humanas (6 misters) y todos los formatos
+         de torneo de selección (Mundial 2032, Road Copa Asia/América, etc.). */
+      try { _psCursorHeal(); } catch(_){}
       if (d && d.tour) _render();
     } catch(_){}
   }

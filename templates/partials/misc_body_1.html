@@ -9831,6 +9831,9 @@ window._showSimProgress = function(opts, onDone){
      y _advance() tras resolver cada día. Exponemos _render para el
      hub y un pre-render por si el torneo ya estaba elegido al cargar. */
   window._psRender = _render;
+  try { window._psCalRows = _calRows; } catch(_){}
+  try { window._psLoadState = _load; } catch(_){}
+  try { window._psCursorCorrectTo = _psCursorCorrectTo; } catch(_){}
 
   /* Reset del cursor del calendario a la primera fila de Mayo (inicio
      de temporada). Usado por el botón "Reiniciar Temporada"
@@ -10209,6 +10212,24 @@ window._showSimProgress = function(opts, onDone){
   #munich-edit-ov .me-pick-grid{display:flex;flex-wrap:wrap;gap:6px;}
   #munich-edit-ov .me-pick-btn{flex:0 0 auto;min-width:44px;padding:8px 12px;background:rgba(0,0,0,.45);border:1px solid rgba(255,120,140,.30);border-radius:8px;color:#ffe1e8;font-family:'Bebas Neue',sans-serif;font-size:18px;cursor:pointer;-webkit-tap-highlight-color:transparent;letter-spacing:1px;}
   #munich-edit-ov .me-pick-btn.sel{background:rgba(220,5,45,.30);border-color:#ff5575;color:#fff;box-shadow:0 0 10px rgba(255,80,100,.40);}
+  /* ── Calendario picker (📅 Ir a día) ──────────────────────── */
+  #me-cal-pick-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:99999;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
+  #me-cal-pick-ov.show{display:flex;}
+  #me-cal-pick-ov .mcp-box{background:linear-gradient(160deg,#0d0a1a 0%,#1a0a28 100%);border:1px solid rgba(120,80,220,.50);border-radius:14px;padding:18px 16px 14px;width:360px;max-width:94vw;}
+  #me-cal-pick-ov .mcp-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:20px;letter-spacing:3px;color:#c8a8ff;text-align:center;margin:0 0 12px;}
+  #me-cal-pick-ov .mcp-month{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(200,168,255,.70);text-transform:uppercase;margin:10px 0 6px;padding-bottom:4px;border-bottom:1px solid rgba(120,80,220,.25);}
+  #me-cal-pick-ov .mcp-grid{display:flex;flex-direction:column;gap:4px;}
+  #me-cal-pick-ov .mcp-day{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;border:1px solid rgba(120,80,220,.20);background:rgba(0,0,0,.30);cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background .12s,border-color .12s;}
+  #me-cal-pick-ov .mcp-day:active{transform:scale(.97);}
+  #me-cal-pick-ov .mcp-day.cur{border-color:rgba(120,80,220,.70);background:rgba(80,40,160,.30);}
+  #me-cal-pick-ov .mcp-day.sel{border-color:#a080ff;background:rgba(120,80,220,.40);box-shadow:0 0 10px rgba(140,90,255,.40);}
+  #me-cal-pick-ov .mcp-day-num{font-family:'Bebas Neue',sans-serif;font-size:16px;color:#c8a8ff;min-width:48px;text-align:center;}
+  #me-cal-pick-ov .mcp-day-lbl{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.65);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #me-cal-pick-ov .mcp-day-ico{font-size:14px;flex-shrink:0;}
+  #me-cal-pick-ov .mcp-foot{display:flex;gap:8px;justify-content:center;margin-top:14px;flex-wrap:wrap;}
+  #me-cal-pick-ov .mcp-btn{padding:9px 20px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;-webkit-tap-highlight-color:transparent;}
+  #me-cal-pick-ov .mcp-btn.go{background:linear-gradient(145deg,#6030c0,#3a1680);color:#fff;border-color:#a080ff;}
+  #me-cal-pick-ov .mcp-btn.cancel{background:transparent;color:rgba(255,255,255,.65);border-color:rgba(255,255,255,.22);}
   .hub-match-engine{background:rgba(0,0,0,.42);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:10px;display:flex;flex-direction:column;gap:10px}
   .fixture-label{margin:0;font-size:11px;color:#f6f6f6}
   .fixture-value{margin:0;font-size:14px;color:#fff;font-weight:700}
@@ -55883,6 +55904,9 @@ https://api.sofascore.app/api/v1/team/44/image
       +     '<button type="button" class="me-pick-btn" data-v="↘️">↘️</button>'
       +     '<button type="button" class="me-pick-btn" data-v="⬇️">⬇️</button>'
       +   '</div></div>'
+      +   '<div class="me-pick-row" style="border-top:1px solid rgba(255,120,140,.18);padding-top:12px;margin-top:4px;">'
+      +     '<button type="button" class="me-btn ghost" style="width:100%;font-size:13px;padding:10px;" onclick="window._psCalPickerOpen()">📅 Ir a día del calendario</button>'
+      +   '</div>'
       +   '<div class="me-actions">'
       +     '<button type="button" class="me-btn primary" onclick="window._bayernEditValuesSave()">✅ Guardar</button>'
       +     '<button type="button" class="me-btn ghost" onclick="window._bayernEditValuesClose()">Cancelar</button>'
@@ -55918,6 +55942,119 @@ https://api.sofascore.app/api/v1/team/44/image
      verdad. PROTEGE las ligas con un push aún SIN CONFIRMAR
      (`liga_ext_pending_v1`): borrar su copia local perdería esa edición
      antes de que el boot-repush la suba. */
+  /* ── 📅 CALENDARIO PICKER — Ir a un día concreto (admin PIN 747) ───────
+     Permite al admin mover manualmente el cursor del calendario a cualquier
+     día de la temporada. Usa _psCursorCorrectTo (resetAt) para que el merge
+     monotónico del servidor acepte la corrección hacia atrás. */
+  window._psCalPickerOpen = function(){
+    var rows = (typeof window._psCalRows === 'function') ? window._psCalRows() : [];
+    var state = (typeof window._psLoadState === 'function') ? (window._psLoadState() || {}) : {};
+    var curIdx = parseInt(state.dayIdx, 10) || 0;
+    if (!rows.length){ alert('Calendario no disponible.'); return; }
+
+    /* Construir overlay si no existe */
+    var ov = document.getElementById('me-cal-pick-ov');
+    if (!ov){
+      ov = document.createElement('div');
+      ov.id = 'me-cal-pick-ov';
+      ov.innerHTML = ''
+        + '<div class="mcp-box">'
+        +   '<div class="mcp-title">📅 IR A DÍA</div>'
+        +   '<div class="mcp-grid" id="mcp-day-grid"></div>'
+        +   '<div class="mcp-foot">'
+        +     '<button type="button" class="mcp-btn go" onclick="window._psCalPickerGo()">✅ IR A ESTE DÍA</button>'
+        +     '<button type="button" class="mcp-btn cancel" onclick="window._psCalPickerClose()">Cancelar</button>'
+        +   '</div>'
+        + '</div>';
+      ov.addEventListener('click', function(e){ if (e.target === ov) window._psCalPickerClose(); });
+      document.body.appendChild(ov);
+    }
+
+    /* Rellenar la cuadrícula por meses */
+    var grid = document.getElementById('mcp-day-grid');
+    grid.innerHTML = '';
+    var curMonth = '';
+    rows.forEach(function(row, idx){
+      /* Mes */
+      var dateStr = row.date || '';
+      /* dateStr is like "01 May", "16 Jun" etc */
+      var parts = dateStr.split(' ');
+      var monthLabel = parts[1] || '';
+      if (monthLabel !== curMonth){
+        curMonth = monthLabel;
+        var mh = document.createElement('div');
+        mh.className = 'mcp-month';
+        mh.textContent = monthLabel;
+        grid.appendChild(mh);
+      }
+      /* Día */
+      var d = document.createElement('div');
+      d.className = 'mcp-day' + (idx === curIdx ? ' cur' : '');
+      d.dataset.idx = idx;
+      var ico = row.icon || (row.type === 'train' ? '🏃' : (row.type === 'rest' ? '💤' : '⚽'));
+      var lbl = (row.label || row.type || '').slice(0, 50);
+      d.innerHTML = ''
+        + '<span class="mcp-day-ico">' + ico + '</span>'
+        + '<span class="mcp-day-num">' + dateStr + '</span>'
+        + '<span class="mcp-day-lbl">' + lbl + '</span>';
+      d.addEventListener('click', function(){
+        grid.querySelectorAll('.mcp-day').forEach(function(b){ b.classList.remove('sel'); });
+        d.classList.add('sel');
+        ov._selIdx = idx;
+      });
+      grid.appendChild(d);
+    });
+
+    /* Pre-seleccionar día actual y hacer scroll a él */
+    ov._selIdx = curIdx;
+    var curEl = grid.querySelector('[data-idx="' + curIdx + '"]');
+    if (curEl){
+      curEl.classList.add('sel');
+      setTimeout(function(){ try { curEl.scrollIntoView({ block:'center' }); } catch(_){}}, 60);
+    }
+
+    ov.classList.add('show');
+  };
+
+  window._psCalPickerClose = function(){
+    var ov = document.getElementById('me-cal-pick-ov');
+    if (ov) ov.classList.remove('show');
+  };
+
+  window._psCalPickerGo = function(){
+    var ov = document.getElementById('me-cal-pick-ov');
+    if (!ov) return;
+    var targetIdx = ov._selIdx;
+    if (targetIdx == null || isNaN(targetIdx)){ alert('Selecciona un día primero.'); return; }
+
+    var rows = (typeof window._psCalRows === 'function') ? window._psCalRows() : [];
+    if (targetIdx < 0 || targetIdx >= rows.length){ alert('Día no válido.'); return; }
+
+    var row = rows[targetIdx];
+    var confirmMsg = '¿Ir al día ' + (row.date || targetIdx) + '?\n\n'
+      + (row.label || '') + '\n\n'
+      + 'La card principal del hub irá a este día y continuará desde ahí.\n'
+      + 'Los partidos ya jugados y estadísticas NO se borran.';
+    try { if (!window.confirm(confirmMsg)) return; } catch(_){ return; }
+
+    if (typeof window._psCursorCorrectTo !== 'function'){
+      alert('Error: función de corrección no disponible. Recarga la página e inténtalo de nuevo.');
+      return;
+    }
+    window._psCursorCorrectTo(targetIdx);
+
+    window._psCalPickerClose();
+    window._bayernEditValuesClose();
+
+    try { if (typeof window._psInvalidateCache === 'function') window._psInvalidateCache(); } catch(_){}
+
+    try {
+      if (typeof window._psFlashToast === 'function'){
+        window._psFlashToast('📅 Calendario → ' + (row.date || ('Día ' + targetIdx)), true);
+      }
+    } catch(_){}
+  };
+
   window._adminClearLocalCache = function(){
     var msg = '🧹 LIMPIAR CACHÉ LOCAL\n\n'
       + 'Libera el almacenamiento del navegador borrando las copias '

@@ -3219,11 +3219,36 @@ def _lx_merge_teams(old_data, new_data):
     # `resultsStamp` (ms); preservamos los `results` de la copia con el
     # sello MAYOR. Un reset legítimo (sello fresco) sí limpia; un POST con
     # sello menor o ausente nunca pisa una clasificación más nueva.
+    #
+    # EMPTY-GUARD (2026-06-18) ──────────────────────────────────────────
+    # Bug usuario ("simulo Montenegro e Irlanda del Norte y al volver están
+    # a cero"): estas DOS ligas son las únicas SEMBRADAS en el cliente
+    # (`_ensureExtraLeagueSeed`), y la semilla escribe `results: []` SIN
+    # `resultsStamp` (sello 0). El guard de recencia de arriba solo
+    # preservaba cuando `old_stamp > new_stamp` (estricto): si un
+    # dispositivo que SOLO sembró la liga (nunca la simuló) empuja su
+    # semilla vacía y los sellos EMPATAN a 0 (o el almacenado no tiene
+    # sello), el `results: []` entrante MACHACABA la clasificación simulada
+    # por otro dispositivo. Espejo de la regla del acta: una clasificación
+    # NO vacía nunca se pierde por una copia VACÍA salvo que ésta porte un
+    # sello ESTRICTAMENTE mayor (un reset legítimo). Así un seed/stale vacío
+    # (sello ≤ almacenado) jamás vacía una liga simulada, aunque ambos
+    # sellos sean 0.
     try:
         new_stamp = float(new_data.get("resultsStamp") or 0)
         old_stamp = float(old_data.get("resultsStamp") or 0) if isinstance(old_data, dict) else 0.0
         old_results = old_data.get("results") if isinstance(old_data, dict) else None
+        new_results = new_data.get("results")
+        old_nonempty = isinstance(old_results, list) and len(old_results) > 0
+        new_empty = (not isinstance(new_results, list)) or len(new_results) == 0
         if old_stamp > new_stamp and isinstance(old_results, list):
+            # El almacenado es ESTRICTAMENTE más reciente → se conserva entero.
+            result["results"] = old_results
+            result["resultsStamp"] = old_stamp
+        elif old_nonempty and new_empty and new_stamp <= old_stamp:
+            # El entrante viene VACÍO sin un sello mayor (seed/stale): NO
+            # puede vaciar una clasificación ya simulada. Solo un reset
+            # (vacío + sello estrictamente mayor) cae en la rama de arriba.
             result["results"] = old_results
             result["resultsStamp"] = old_stamp
     except Exception:

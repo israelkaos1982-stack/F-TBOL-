@@ -43050,6 +43050,19 @@ https://api.sofascore.app/api/v1/team/44/image
         target.resultsStamp = ss;
         return true;
       }
+      /* EMPTY-GUARD (2026-06-18, espejo del server): si `target` viene
+         VACÍO (seed de Montenegro/Irlanda del Norte, o un GET stale) pero
+         `source` SÍ tiene clasificación, la adoptamos aunque el sello
+         empate — un `results:[]` sin sello mayor nunca debe ganar a una
+         clasificación simulada. Solo un reset (vacío + sello ESTRICTAMENTE
+         mayor) cae en la rama de arriba. */
+      var tEmpty = !(Array.isArray(target.results) && target.results.length);
+      var sNonEmpty = Array.isArray(source.results) && source.results.length;
+      if (tEmpty && sNonEmpty && ss >= ts) {
+        target.results = source.results.slice();
+        if (ss) target.resultsStamp = ss;
+        return true;
+      }
       return false;
     } catch(_){ return false; }
   }

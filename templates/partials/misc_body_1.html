@@ -7219,10 +7219,36 @@ window._showSimProgress = function(opts, onDone){
       deferBtn.onclick = function(){
         if (deferBtn.disabled) return;
         deferBtn.disabled = true;
-        /* Sin matchKey real (rival TBD) → NO añadimos a PARTIDOS
-           PENDIENTES; simplemente saltamos el día (el usuario debe
-           esperar al admin o auto-simular antes para no perder el
-           partido). */
+        /* Sin matchKey real (rival TBD) → añadimos a POSPUESTOS con
+           flag noRival:true para que el cursor avance pero el partido
+           quede recordado. */
+        var _nrTourId = (info && info.tourId) || '';
+        var _nrComp   = (info && info.compName) || (day && day.label) || 'Ronda KO';
+        var _nrEmoji  = (info && info.compEmoji) || '🌍';
+        var _nrRef    = day && day.dayIdx != null ? String(day.dayIdx) : ((day && day.date) || _nrComp);
+        var _nrUid    = _nrTourId + '::RIVAL_PENDING::' + _nrRef;
+        var _nrSelName = '';
+        try {
+          var _nrMister = (typeof window._mhFindMister === 'function')
+            ? window._mhFindMister(_psHumanLogicName()) : null;
+          if (_nrMister && _nrMister.seleccion) _nrSelName = _nrMister.seleccion;
+        } catch(_){}
+        if (_nrUid && typeof window._pendHvHAdd === 'function'){
+          window._pendHvHAdd({
+            uid:      _nrUid,
+            tourId:   _nrTourId,
+            matchKey: null,
+            home:     { name: _nrSelName || _psHumanLogicName(), shield: '' },
+            away:     { name: 'Sin rival', shield: '' },
+            jor:      _nrComp,
+            date:     (day && day.date) || '',
+            label:    _nrComp,
+            emoji:    _nrEmoji,
+            noRival:  true,
+            addedAt:  Date.now()
+          });
+          try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
+        }
         _markDoneAndAdvance();
       };
     }
@@ -54093,7 +54119,17 @@ https://api.sofascore.app/api/v1/team/44/image
         + '</div>'
       : '';
     var center;
-    if (isTour){
+    if (entry.noRival){
+      /* Partido pospuesto sin rival conocido (bracket no construido).
+         No hay botón JUGAR — el rival se conocerá cuando el admin
+         simule la fase previa. */
+      center = '<span class="mu-hvh-diferido" '
+        + 'style="flex:0 0 auto;border:1px solid rgba(255,160,60,.55);'
+        + 'border-radius:8px;padding:6px 12px;font-family:Oswald,sans-serif;'
+        + 'font-size:11px;letter-spacing:1.5px;font-weight:700;color:#ffd070;'
+        + 'background:linear-gradient(135deg,rgba(255,140,40,.22),rgba(255,80,20,.20));">'
+        + '⌛ SIN RIVAL</span>';
+    } else if (isTour){
       center = '<button type="button" class="mu-hvh-play" '
         +   'data-uid="' + _esc(uid) + '" '
         +   'style="flex:0 0 auto;border:none;border-radius:8px;cursor:pointer;'

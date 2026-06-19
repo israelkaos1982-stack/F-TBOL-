@@ -10019,7 +10019,7 @@ window._showSimProgress = function(opts, onDone){
           if (!_pair) continue; /* No es un partido para la selección de esta caja. */
           if (_pair.eliminated) break; /* Selección ya eliminada — no hay más pendiente. */
           if (_pair.pending){
-            _played = false; /* Bracket no construido → partido no jugado. */
+            continue; /* RIVAL PENDIENTE — bracket no construido, no bloquea el cursor. */
           } else if (_pair.matchKey){
             /* Verifica en TODOS los cfgs de torneo cargados. */
             for (var _tc = 0; _tc < _cacheKeys.length; _tc++){

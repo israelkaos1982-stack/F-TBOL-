@@ -53408,6 +53408,7 @@ https://api.sofascore.app/api/v1/team/44/image
       var gFix = cfg.groupFixtures || {};
       var nGroups = Math.max(12, Math.ceil((teams.length || 0) / pg));
       var resAll = cfg.results || {};
+      var coveredKeys = {};
       for (var gi = 0; gi < nGroups; gi++){
         var fixs = gFix[gi]; if (!Array.isArray(fixs)) continue;
         var slice = teams.slice(gi*pg, gi*pg + pg);
@@ -53415,6 +53416,7 @@ https://api.sofascore.app/api/v1/team/44/image
           var matchups = fixs[jj]; if (!Array.isArray(matchups)) continue;
           for (var mi = 0; mi < matchups.length; mi++){
             var mm = matchups[mi]; if (!mm) continue;
+            coveredKeys['g' + gi + '_' + jj + '_' + mi] = 1;
             var hT = slice[mm.home], aT = slice[mm.away];
             if (!hT || !aT) continue;
             var hN = hT.name || '', aN = aT.name || '';
@@ -53439,6 +53441,32 @@ https://api.sofascore.app/api/v1/team/44/image
                 aShield:(aT && aT.shield) || '' });
             }
           }
+        }
+      }
+      /* Fallback: si cfg.groupFixtures estaba vacío o incompleto (cfg
+         guardado desde un dispositivo que nunca visitó la pantalla del
+         Mundial 2032), escaneamos cfg.results directamente. Los campos
+         home/away los persisten _tourSaveHumanResult y _tourAttachActa
+         en cada resultado, independientemente de groupFixtures. */
+      for (var rrk in resAll){
+        if (coveredKeys[rrk]) continue;
+        var grpM = /^g(\d+)_(\d+)_\d+$/.exec(rrk);
+        if (!grpM) continue;
+        var rrd = resAll[rrk];
+        if (!rrd || !rrd.home || !rrd.away) continue;
+        if (!_match(rrd.home, aliases) && !_match(rrd.away, aliases)) continue;
+        var lblFb = 'Grupo · J' + (parseInt(grpM[2], 10) + 1);
+        var uidFb = String(tourId) + '-res-' + rrk;
+        if (rrd.played || rrd.done){
+          out.played.push({ comp:'sel', emoji:'🌍',
+            home:rrd.home, away:rrd.away,
+            gh:(rrd.a|0), ga:(rrd.b|0),
+            label:lblFb, uid:uidFb,
+            events:rrd.events||[], mvp:rrd.mvp||'', mvpTeam:rrd.mvpTeam||'' });
+        } else {
+          out.pending.push({ comp:'sel', emoji:'🌍',
+            home:rrd.home, away:rrd.away,
+            label:lblFb, tourId:tourId, matchKey:rrk });
         }
       }
       /* ── Rondas KO (Dieciseisavos → Final) ──────────────── */
@@ -53604,6 +53632,7 @@ https://api.sofascore.app/api/v1/team/44/image
         var nGroups = fc.groups || 1;
         var perGroup = fc.perGroup || Math.ceil(teams.length / nGroups);
         var gFix = cfg.groupFixtures || {};
+        var covSummer = {};
         for (var gi = 0; gi < nGroups; gi++){
           var fixs = gFix[gi]; if (!Array.isArray(fixs)) continue;
           var slice = teams.slice(gi*perGroup, gi*perGroup + perGroup);
@@ -53612,6 +53641,7 @@ https://api.sofascore.app/api/v1/team/44/image
             var ms = fixs[jj]; if (!Array.isArray(ms)) continue;
             for (var mi = 0; mi < ms.length; mi++){
               var mm = ms[mi]; if (!mm) continue;
+              covSummer['g' + gi + '_' + jj + '_' + mi] = 1;
               var hT = slice[mm.home], aT = slice[mm.away];
               if (!hT || !aT) continue;
               var hN = hT.name || '', aN = aT.name || '';
@@ -53626,6 +53656,29 @@ https://api.sofascore.app/api/v1/team/44/image
                 _pushPending(meta, tourId, 'g'+gi+'_'+jj+'_'+mi, hN, aN, lblG, hT, aT);
               }
             }
+          }
+        }
+        /* Fallback: si cfg.groupFixtures estaba vacío, escaneamos
+           cfg.results directamente por home/away (persisten desde
+           _tourSaveHumanResult/_tourAttachActa). Cubre el caso en que
+           el torneo se jugó en un dispositivo que no llegó a visitar
+           la pantalla del torneo y groupFixtures quedó sin construir. */
+        for (var fk in resAll){
+          if (covSummer[fk]) continue;
+          var fgrpM = /^g(\d+)_(\d+)_\d+$/.exec(fk);
+          if (!fgrpM) continue;
+          var frd = resAll[fk];
+          if (!frd || !frd.home || !frd.away) continue;
+          if (!_match(frd.home, aliases) && !_match(frd.away, aliases)) continue;
+          var fgi = parseInt(fgrpM[1], 10);
+          var fletter = (nGroups > 1) ? String.fromCharCode(65 + fgi) : '';
+          var flblG = (fletter ? ('Grupo ' + fletter + ' · J') : 'J') + (parseInt(fgrpM[2], 10) + 1);
+          if (frd.played || frd.done){
+            _pushPlayed(meta, tourId, fk, frd.home, frd.away, frd.a, frd.b, flblG, frd);
+          } else {
+            out.pending.push({ comp:meta.id, emoji:meta.emoji,
+              home:frd.home, away:frd.away,
+              label:flblG, tourId:tourId, matchKey:fk });
           }
         }
       }

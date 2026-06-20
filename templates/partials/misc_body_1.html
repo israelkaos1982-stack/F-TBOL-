@@ -44092,7 +44092,14 @@ https://api.sofascore.app/api/v1/team/44/image
     if(window._ligaExtSimSlugs[slug]) return Promise.resolve();
     window._ligaExtSimSlugs[slug] = true;
     var data;
-    try { data = loadData(slug); }
+    try {
+      var _rawLigaData = loadData(slug);
+      /* Deep-copy para aislar LIGA_CACHE de la mutación mid-sim
+         (data.results = [] más abajo borraba el cache antes de que
+         saveData lo volviera a escribir, provocando que un F5 durante
+         la sim viera clasificaciones a 0 para ligas sin snapshot). */
+      data = _rawLigaData ? JSON.parse(JSON.stringify(_rawLigaData)) : _rawLigaData;
+    }
     catch(_){
       delete window._ligaExtSimSlugs[slug];
       return Promise.resolve();

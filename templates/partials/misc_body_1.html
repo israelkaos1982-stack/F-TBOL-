@@ -23587,6 +23587,22 @@ window._showSimProgress = function(opts, onDone){
              Copa Asia», fotos usuario). Rellenamos el acta desde el local
              para que las stats no se vacíen al sincronizar. */
           try { _tourBackfillActaFromLocal(cfg, localCfg); } catch(_){}
+          /* Garantía cross-device: si el cfg descargado del server carece
+             de groupFixtures (guardado por un cliente sin el fix, o sync
+             de un dispositivo que nunca visitó la pantalla), construirlos
+             ANTES de cachear localmente. Así un wipe+rehidratación entrega
+             siempre un cfg con fixtures para los consumidores. Se omite
+             _tourEnsureRoadFixtures aquí (llama a _tourSave internamente)
+             para evitar re-entrancy en el flujo async. */
+          try {
+            if (cfg.format === 'mundial-48') {
+              if (typeof window._mundialGroupState === 'function'
+                  && Array.isArray(cfg.teams) && cfg.teams.length)
+                window._mundialGroupState(cfg, cfg.teams);
+            } else if (typeof window._tourEnsureGroupFixtures === 'function') {
+              window._tourEnsureGroupFixtures(cfg);
+            }
+          } catch(_){}
           try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
           try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
           return cfg;
@@ -30062,6 +30078,25 @@ window._showSimProgress = function(opts, onDone){
           out.events, out.mvp || '', out.mvpTeam || '', _statsBucket);
       } catch(_){}
     }
+    /* Garantía permanente anti-groupFixtures-vacío: construir los fixtures
+       ANTES de persistir el resultado. Si el cfg llegó sin ellos (dispositivo
+       que nunca visitó la pantalla del torneo), se construyen y se persisten
+       en el mismo save. Todos los consumidores — colectores PARTIDOS JUGADOS,
+       _psListPendingGroupMatches, _mundialAggregateStats, _collectSummer,
+       _collectMundial48 — los encontrarán ya construidos sin depender del
+       lazy-build del render. */
+    try {
+      if (cfg.format === 'mundial-48') {
+        if (typeof window._mundialGroupState === 'function'
+            && Array.isArray(cfg.teams) && cfg.teams.length)
+          window._mundialGroupState(cfg, cfg.teams);
+      } else {
+        if (typeof window._tourEnsureGroupFixtures === 'function')
+          window._tourEnsureGroupFixtures(cfg);
+        if (typeof window._tourEnsureRoadFixtures === 'function')
+          window._tourEnsureRoadFixtures(cfg, tourId);
+      }
+    } catch(_){}
     _tourSaveAndRender(tourId, cfg);
     /* Si esto cierra el torneo → acreditar premios a wallets humanas. */
     setTimeout(function(){ _tourMaybeCreditPrizes(tourId); }, 200);

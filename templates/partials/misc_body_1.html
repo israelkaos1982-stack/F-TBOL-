@@ -43288,6 +43288,17 @@ https://api.sofascore.app/api/v1/team/44/image
         var _slugPending = false;
         try { _slugPending = _ligaExtPendingSet().indexOf(k) !== -1; } catch(_){}
         var localDirty = !!LIGA_LOCAL_DIRTY_AT[k] || _slugPending;
+        /* resultsWipe: el local YA tiene resultados de simulación y el
+           servidor devuelve results vacío (p.ej. ligas pre-seed como
+           Montenegro / N. Irlanda simuladas en bulk — el bulk sim no
+           lanza POST al server, así que tras F5 el server siempre
+           devuelve results:[]).  Sin este check las ligas seed con
+           0 jugadores nunca disparaban el anti-wipe (teamsWipe /
+           playersWipe / perTeamWipe siempre FALSE) → la clasificación
+           local se machacaba con el results:[] del servidor. */
+        var localResultsCount = (localCache && Array.isArray(localCache.results)) ? localCache.results.length : 0;
+        var serverResultsCount = (data && Array.isArray(data.results)) ? data.results.length : 0;
+        var resultsWipe = localResultsCount > 0 && serverResultsCount === 0;
         /* ─── SYNC MULTI-DISPOSITIVO (2026-05-29) ─────────────────────
            Bug usuario: "mi amigo edita los equipos de Resto de Ligas
            (Portugal) desde su móvil, pero desde mi móvil/PC no sale
@@ -43323,8 +43334,8 @@ https://api.sofascore.app/api/v1/team/44/image
         if (_adoptRemoteEdit) {
           try{ console.warn('[ligaExt] '+k+': edición remota más reciente — adoptando copia del servidor (otro dispositivo).'); }catch(_){}
         }
-        if (!_adoptRemoteEdit && (teamsWipe || playersWipe || perTeamWipe || localDirty)) {
-          try{ console.warn('[ligaExt] anti-wipe activado ('+k+'): local='+localTeams.length+'T/'+localPlayerCount+'J vs server='+(data.teams||[]).length+'T/'+serverPlayerCount+'J'+(perTeamWipe?' (per-team)':'')+(localDirty?' (dirty)':'')+'. Conservando local y re-subiendo.'); }catch(_){}
+        if (!_adoptRemoteEdit && (teamsWipe || playersWipe || perTeamWipe || localDirty || resultsWipe)) {
+          try{ console.warn('[ligaExt] anti-wipe activado ('+k+'): local='+localTeams.length+'T/'+localPlayerCount+'J/'+localResultsCount+'R vs server='+(data.teams||[]).length+'T/'+serverPlayerCount+'J/'+serverResultsCount+'R'+(perTeamWipe?' (per-team)':'')+(localDirty?' (dirty)':'')+(resultsWipe?' (results-wipe)':'')+'. Conservando local y re-subiendo.'); }catch(_){}
           /* Aunque conservemos la copia local (rosters más ricos),
              RELLENAMOS los escudos que falten desde la copia del
              servidor — un escudo puesto en otro dispositivo no se

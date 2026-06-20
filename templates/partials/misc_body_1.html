@@ -55666,10 +55666,12 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   function _legacyStatePull(cb){
     try {
+      var _lk = KEY;   /* bug cross-hub 2026-06-20: captura la clave del hub activo */
       fetch('/api/state', { method:'GET' })
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(d){
-          var srv = d && d.state && d.state[KEY];
+          if (KEY !== _lk) return;   /* hub cambió mientras volaba el fetch → abortar */
+          var srv = d && d.state && d.state[_lk];
           if (srv && typeof srv === 'object' && Object.keys(srv).length) {
             _adoptFromServer(srv, cb);
             try { _serverPush(srv); } catch(_){}   /* migra al KV */
@@ -55679,11 +55681,12 @@ https://api.sofascore.app/api/v1/team/44/image
                los targets correctos sin que el usuario abra EDITAR HUD. */
             _seedHubDefaults();
           }
-        }).catch(function(){ _seedHubDefaults(); });
+        }).catch(function(){ if (KEY === _lk) _seedHubDefaults(); });
     } catch(_){}
   }
   function _serverPull(cb){
     try {
+      var _pullKey = KEY;   /* bug cross-hub 2026-06-20: captura la clave del hub activo */
       fetch(KV_URL, { method:'GET', headers:{'Cache-Control':'no-store'} })
         .then(function(r){
           var ok = !!(r && r.ok);
@@ -55692,6 +55695,7 @@ https://api.sofascore.app/api/v1/team/44/image
           });
         })
         .then(function(res){
+          if (KEY !== _pullKey) return;   /* hub cambió mientras volaba el fetch → abortar */
           /* Marcamos hidratado SOLO si hubo respuesta HTTP válida: a
              partir de aquí los writers automáticos ya pueden salir al
              server sin clobber (el base local está reconciliado). Un
@@ -55708,7 +55712,7 @@ https://api.sofascore.app/api/v1/team/44/image
                próximo wipe. Solo si NO hay local probamos /api/state. */
             var loc = window._BAYERN_HUD_CACHE;
             if (!loc || typeof loc !== 'object') {
-              try { var r0 = localStorage.getItem(KEY); if (r0) loc = JSON.parse(r0); } catch(_){}
+              try { var r0 = localStorage.getItem(_pullKey); if (r0) loc = JSON.parse(r0); } catch(_){}
             }
             if (loc && typeof loc === 'object' && Object.keys(loc).length) {
               try { _serverPush(loc, true); } catch(_){}
@@ -55717,7 +55721,7 @@ https://api.sofascore.app/api/v1/team/44/image
             }
           }
           else { _legacyStatePull(cb); }   /* server con error → intenta /api/state */
-        }).catch(function(){ try { _legacyStatePull(cb); } catch(_){} });
+        }).catch(function(){ if (KEY === _pullKey) { try { _legacyStatePull(cb); } catch(_){} } });
     } catch(_){}
   }
   function load(){

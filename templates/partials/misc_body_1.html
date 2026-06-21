@@ -10047,11 +10047,25 @@ window._showSimProgress = function(opts, onDone){
           if (_pair.pending){
             continue; /* RIVAL PENDIENTE — bracket no construido, no bloquea el cursor. */
           } else if (_pair.matchKey){
-            /* Verifica en TODOS los cfgs de torneo cargados. */
-            for (var _tc = 0; _tc < _cacheKeys.length; _tc++){
-              var _tcfg = window._TOUR_CACHE[_cacheKeys[_tc]] || {};
-              if (((_tcfg.results || {})[_pair.matchKey] || {}).played){
-                _played = true; break;
+            /* Verificar en el cfg ESPECÍFICO del torneo (pair.tourId).
+               Si el cfg no está en memoria ni en localStorage, se SALTA
+               la fila — no se asume "no jugado" para no retroceder el
+               cursor cuando el cfg aún no ha cargado. */
+            var _chkTour = _pair.tourId || null;
+            if (_chkTour){
+              var _chkCfg = (window._TOUR_CACHE || {})[_chkTour];
+              if (!_chkCfg && typeof window._tourLoadCachedSync === 'function'){
+                try { _chkCfg = window._tourLoadCachedSync(_chkTour); } catch(_){}
+              }
+              if (!_chkCfg){ continue; } /* cfg no disponible → no retroceder */
+              if (((_chkCfg.results || {})[_pair.matchKey] || {}).played) _played = true;
+            } else {
+              /* Fallback legacy sin tourId: iterar todos los cfgs cargados. */
+              for (var _tc = 0; _tc < _cacheKeys.length; _tc++){
+                var _tcfg = window._TOUR_CACHE[_cacheKeys[_tc]] || {};
+                if (((_tcfg.results || {})[_pair.matchKey] || {}).played){
+                  _played = true; break;
+                }
               }
             }
           }

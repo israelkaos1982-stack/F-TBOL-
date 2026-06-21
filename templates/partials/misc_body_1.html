@@ -29177,6 +29177,19 @@ window._showSimProgress = function(opts, onDone){
           }
         }
       });
+      /* Liga / league format: fixtures live in cfg.fixture with keys '${j}_${mi}' */
+      if (cfg.fixture && cfg.fixture.length) {
+        for (var _lj = 0; _lj < cfg.fixture.length; _lj++) {
+          var _ljor = cfg.fixture[_lj]; if (!_ljor) continue;
+          for (var _lmi = 0; _lmi < _ljor.length; _lmi++) {
+            var _lpr = _ljor[_lmi]; if (!_lpr) continue;
+            idx[_lj + '_' + _lmi] = {
+              a: tt[_lpr.home] && tt[_lpr.home].name,
+              b: tt[_lpr.away] && tt[_lpr.away].name
+            };
+          }
+        }
+      }
       var kb = cfg.koBracket || [];
       for (var r2 = 0; r2 < kb.length; r2++) {
         var rt = kb[r2] || [];
@@ -29275,6 +29288,19 @@ window._showSimProgress = function(opts, onDone){
           idx['g'+g+'_'+j+'_'+mi] = { a: (slice[pr.home]||{}).name, b: (slice[pr.away]||{}).name };
         }
       });
+      /* Liga / league format: fixtures live in cfg.fixture with keys '${j}_${mi}' */
+      if (cfg.fixture && cfg.fixture.length) {
+        for (var _flj = 0; _flj < cfg.fixture.length; _flj++) {
+          var _fljor = cfg.fixture[_flj]; if (!_fljor) continue;
+          for (var _flmi = 0; _flmi < _fljor.length; _flmi++) {
+            var _flpr = _fljor[_flmi]; if (!_flpr) continue;
+            idx[_flj + '_' + _flmi] = {
+              a: tt[_flpr.home] && tt[_flpr.home].name,
+              b: tt[_flpr.away] && tt[_flpr.away].name
+            };
+          }
+        }
+      }
       var kb = cfg.koBracket || [];
       for (var r = 0; r < kb.length; r++) { var rt = kb[r]||[]; for (var i = 0; i+1 < rt.length; i += 2) {
         idx['ko_'+r+'_'+(i/2)] = { a:(rt[i]||{}).name, b:(rt[i+1]||{}).name };

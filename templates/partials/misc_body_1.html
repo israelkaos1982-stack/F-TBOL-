@@ -26471,6 +26471,21 @@ window._showSimProgress = function(opts, onDone){
   function _tourCollectStatsForTour(tourId){
     var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tourId]) || null;
     if (!cfg) { try { cfg = (typeof _tourLoadCachedSync === 'function') ? _tourLoadCachedSync(tourId) : null; } catch(_){} }
+    /* Último recurso: leer directamente de localStorage si la cache
+       in-memory está vacía (race on fresh load / post-navigation). */
+    if (!cfg || !cfg.teams) {
+      try {
+        var _lsStr = localStorage.getItem('tour_' + tourId + '_v1');
+        if (_lsStr) {
+          var _lsParsed = JSON.parse(_lsStr);
+          if (_lsParsed && _lsParsed.teams) {
+            window._TOUR_CACHE = window._TOUR_CACHE || {};
+            window._TOUR_CACHE[tourId] = _lsParsed;
+            cfg = _lsParsed;
+          }
+        }
+      } catch(_){}
+    }
     cfg = cfg || {};
     var teams = cfg.teams || [];
     var stats = {};
@@ -26692,6 +26707,22 @@ window._showSimProgress = function(opts, onDone){
     if (!dEl) return;
     /* Si el usuario ya navegó a OTRA caja de stats, no pisar. */
     if (!window._tourStatsActive || window._tourStatsActive.tourId !== tid) return;
+    /* Refresca la cache desde localStorage para no leer una cache
+       in-memory vacía/stale (race: _tourRender pone una cfg vacía
+       y el async _tourLoad no ha terminado cuando abrimos las stats). */
+    try {
+      var _lsRaw = localStorage.getItem('tour_' + tid + '_v1');
+      if (_lsRaw) {
+        var _lsFresh = JSON.parse(_lsRaw);
+        window._TOUR_CACHE = window._TOUR_CACHE || {};
+        var _lsCached = window._TOUR_CACHE[tid];
+        var _lsCachedUpd = (_lsCached && _lsCached.updatedAt) || '';
+        var _lsFreshUpd = (_lsFresh && _lsFresh.updatedAt) || '';
+        if (!_lsCachedUpd || (_lsFreshUpd && _lsFreshUpd >= _lsCachedUpd)) {
+          window._TOUR_CACHE[tid] = _lsFresh;
+        }
+      }
+    } catch(_){}
     var stats = null;
     try { stats = _tourCollectStatsForTour(tid); } catch(_){}
     var _hasData = stats && Object.keys(stats).length > 0;

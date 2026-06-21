@@ -14188,30 +14188,46 @@
       }
     } catch(_){}
 
-    /* 2ª pasada: selecciones_squad_v1 (selecciones nacionales). */
-    try {
-      var srRaw = localStorage.getItem('selecciones_squad_v1');
-      if (srRaw) {
-        var sr = JSON.parse(srRaw);
-        var sTeams = (sr && Array.isArray(sr.teams)) ? sr.teams : [];
-        for (var si = 0; si < sTeams.length; si++) {
-          var st = sTeams[si];
-          if (!st || !st.name) continue;
-          var stn = _norm(st.name);
-          var stnA = _normA(st.name);
-          var sHit = (stn === target) || (stn === resolved) || (stnA === targetA) || (stnA === resolvedA);
-          if (!sHit) continue;
-          if (!Array.isArray(st.players)) st.players = [];
-          var sdup = st.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
-          if (sdup) return { ok:false, reason:'duplicate', key:'selecciones_squad_v1', teamName:st.name };
-          st.players.push(playerEntry);
-          try { localStorage.setItem('selecciones_squad_v1', JSON.stringify(sr)); }
-          catch(e) { return { ok:false, reason:'storage', key:'selecciones_squad_v1' }; }
-          try { if (window.SQUAD_REGISTRY) { delete window.SQUAD_REGISTRY[teamName]; delete window.SQUAD_REGISTRY[st.name]; } } catch(_){}
-          return { ok:true, key:'selecciones_squad_v1', teamName:st.name };
+    /* 2ª pasada: selecciones_squad_v1 (selecciones nacionales).
+       Usa window._selSquadAddPlayer (expuesto por el IIFE de selecciones)
+       que internamente llama a _save() → localStorage silencioso + POST
+       al servidor. Así el jugador se persiste aunque localStorage esté
+       lleno, y siempre se sincroniza al servidor. */
+    if (typeof window._selSquadAddPlayer === 'function') {
+      try {
+        var selRes = window._selSquadAddPlayer(teamName, playerEntry);
+        if (selRes.ok || selRes.reason !== 'team-not-found') {
+          return selRes.ok
+            ? { ok:true, key:'selecciones_squad_v1', teamName:selRes.teamName }
+            : { ok:false, reason:selRes.reason, key:'selecciones_squad_v1', teamName:selRes.teamName };
         }
-      }
-    } catch(_){}
+      } catch(_){}
+    } else {
+      /* Fallback legacy: acceso directo a localStorage (sin sync servidor). */
+      try {
+        var srRaw = localStorage.getItem('selecciones_squad_v1');
+        if (srRaw) {
+          var sr = JSON.parse(srRaw);
+          var sTeams = (sr && Array.isArray(sr.teams)) ? sr.teams : [];
+          for (var si = 0; si < sTeams.length; si++) {
+            var st = sTeams[si];
+            if (!st || !st.name) continue;
+            var stn = _norm(st.name);
+            var stnA = _normA(st.name);
+            var sHit = (stn === target) || (stn === resolved) || (stnA === targetA) || (stnA === resolvedA);
+            if (!sHit) continue;
+            if (!Array.isArray(st.players)) st.players = [];
+            var sdup = st.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
+            if (sdup) return { ok:false, reason:'duplicate', key:'selecciones_squad_v1', teamName:st.name };
+            st.players.push(playerEntry);
+            try { localStorage.setItem('selecciones_squad_v1', JSON.stringify(sr)); }
+            catch(e) { return { ok:false, reason:'storage', key:'selecciones_squad_v1' }; }
+            try { if (window.SQUAD_REGISTRY) { delete window.SQUAD_REGISTRY[teamName]; delete window.SQUAD_REGISTRY[st.name]; } } catch(_){}
+            return { ok:true, key:'selecciones_squad_v1', teamName:st.name };
+          }
+        }
+      } catch(_){}
+    }
 
     return { ok:false, reason:'team-not-found' };
   };

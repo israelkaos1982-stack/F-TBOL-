@@ -51135,6 +51135,46 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   window._selSquadLoad=_load;
   window._selSquadHydrate=_hydrate;
+  /* Añade un jugador a una selección y sincroniza (localStorage + servidor).
+     Devuelve {ok:true,teamName} | {ok:false,reason:'duplicate'|'team-not-found'|'invalid'}.
+     Usa _save() internamente → si localStorage está lleno el POST al servidor
+     aún ocurre, así que el jugador nunca se pierde. */
+  window._selSquadAddPlayer=function(teamName, playerEntry){
+    if(!teamName || !playerEntry || !playerEntry.name) return {ok:false,reason:'invalid'};
+    function _n(s){ return String(s==null?'':s).trim().toLowerCase(); }
+    function _nA(s){
+      var x=String(s==null?'':s).trim().toLowerCase();
+      try{ x=x.normalize('NFD').replace(/[̀-ͯ]/g,''); }catch(_){}
+      x=x.replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+      return x;
+    }
+    var tgt=_n(teamName), tgtA=_nA(teamName);
+    var entry={
+      name:String(playerEntry.name).trim(),
+      num:String(playerEntry.num!=null?playerEntry.num:'').trim(),
+      pos:String(playerEntry.pos||'MED'),
+      power:Math.max(1,Math.min(99,Number(playerEntry.power)||70))
+    };
+    var d=_load();
+    if(!Array.isArray(d.teams)) return {ok:false,reason:'team-not-found'};
+    for(var i=0;i<d.teams.length;i++){
+      var t=d.teams[i];
+      if(!t||!t.name) continue;
+      var tn=_n(t.name), tnA=_nA(t.name);
+      var canon=_selCanon(t.name);
+      var hit=(tn===tgt)||(tnA===tgtA)||(_n(canon)===tgt)||(_nA(canon)===tgtA);
+      if(!hit) continue;
+      if(!Array.isArray(t.players)) t.players=[];
+      if(t.players.some(function(p){ return p&&_n(p.name)===_n(entry.name); }))
+        return {ok:false,reason:'duplicate',teamName:t.name};
+      t.players.push(entry);
+      _save(d); /* localStorage (silencioso si lleno) + POST servidor */
+      try{ if(window.SQUAD_REGISTRY){ delete window.SQUAD_REGISTRY[teamName]; delete window.SQUAD_REGISTRY[t.name]; } }catch(_){}
+      try{ if(typeof window.applyEngineOverrides==='function') window.applyEngineOverrides(); }catch(_){}
+      return {ok:true,teamName:t.name};
+    }
+    return {ok:false,reason:'team-not-found'};
+  };
   /* Icono humano de una selección por nombre ('' si no tiene). */
   window._selSquadIcon=function(name){
     try{

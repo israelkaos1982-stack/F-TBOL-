@@ -4360,6 +4360,17 @@ def api_debug():
         "database_url_env_set": bool(os.environ.get("DATABASE_URL")),
     })
 
+@app.route("/sw.js")
+def service_worker():
+    sw_path = os.path.join(app.static_folder, 'js', 'sw.js')
+    with open(sw_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+    resp = make_response(content)
+    resp.headers['Content-Type'] = 'application/javascript; charset=utf-8'
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Service-Worker-Allowed'] = '/'
+    return resp
+
 @app.route("/")
 def inicio():
     resp = make_response(render_template("index.html"))

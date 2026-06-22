@@ -93,6 +93,15 @@
     window.BACKEND_ESCUDOS_ALIASES = {{ escudos_aliases | tojson }};
     window.BACKEND_ESCUDO_DEFAULT = {{ escudo_default | tojson }};
   </script>
+  <script>
+    /* Registrar Service Worker para cachear activos estáticos (JS/CSS).
+       Beneficio: en la 2ª visita o tras un cold-start de Railway, los
+       1.4 MB de activos se sirven desde caché → sin descarga → JS thread
+       más libre → splash se cierra antes en dispositivos lentos. */
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(function(){});
+    }
+  </script>
 </head>
 <body>
 
@@ -114,6 +123,7 @@
     </div>
     <div class="boot-splash-spinner"></div>
     <div class="boot-splash-hint">Cargando…</div>
+    <div class="boot-splash-tap">▶ Toca para continuar</div>
   </div>
   <style>
     #boot-splash{
@@ -146,6 +156,16 @@
       font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;
       color:rgba(255,255,255,.45);text-transform:uppercase;
     }
+    /* Pista "Toca para continuar": emerge a los 2.8 s via animación CSS
+       que corre en el compositor — funciona aunque el hilo JS esté ocupado
+       parseando los 100 k líneas de scripts inline. */
+    .boot-splash-tap{
+      font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;
+      color:rgba(240,192,64,0);text-transform:uppercase;
+      animation:bootSplashTapIn .7s ease forwards;
+      animation-delay:2.8s;
+    }
+    @keyframes bootSplashTapIn{to{color:rgba(240,192,64,.85);}}
   </style>
   <script>
     /* Splash auto-hide RÁPIDO y A PRUEBA DE BLOQUEO.  2026-06-14 — el
@@ -207,10 +227,24 @@
       /* Hook por si un flujo crítico (ej. partido live restaurándose
          del wprev_state_v1) quiere ocultarlo antes via _bootSplashHide(). */
       window._bootSplashHide = hide;
+
+      /* BFCache: si el navegador restaura la página desde la caché de
+         historial (pageshow.persisted=true) mientras el splash aún está
+         visible, lo cerramos de inmediato — el DOM ya está listo. */
+      window.addEventListener('pageshow', function(e){ if(e.persisted) doHide(); });
     })();
   </script>
 
   {% include 'partials/misc_body_1.html' %}
+  <script>
+    /* Cierre anticipado del splash: misc_body_1.html ya ejecutó (los IIFEs
+       mayores: pretemporada, torneos, etc.).  En un Android lento esto ocurre
+       ~3-4 s después del inicio — el MIN_MS (1 s) ya se superó, así que
+       hide() cierra el splash de inmediato sin esperar a misc_body_2.html
+       ni al bundle.  El usuario ve la pantalla antes aunque misc_body_2
+       y el bundle aún se estén cargando. */
+    if (typeof window._bootSplashHide === 'function') window._bootSplashHide();
+  </script>
   {% include 'partials/part2/misc_body_2.html' %}
   <script src="{{ url_for('static', filename='js/goal-notification-improved.js') }}?v=2.0"></script>
   <script src="{{ url_for('static', filename='js/var-system.js') }}?v=1.0"></script>

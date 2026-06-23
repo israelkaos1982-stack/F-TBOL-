@@ -42076,6 +42076,35 @@ https://api.sofascore.app/api/v1/team/44/image
               }).catch(function(){});
             } catch(_){}
           }
+          /* Proteger resultados locales con stamp mayor que el servidor:
+             el sync XHR ocurre durante/después del bulk-sim; si el
+             POST aún no llegó al server (o la BD efímera fue
+             reiniciada), el GET trae results:[] y machacaría los
+             resultados recién simulados. Si el backfill aporta
+             resultados, re-sube al server async para converger. */
+          try {
+            var _lsExistingRaw = localStorage.getItem(storeKey(k));
+            if (_lsExistingRaw) {
+              var _lsExisting = JSON.parse(_lsExistingRaw);
+              if (_lsExisting) {
+                var _bf = _lextBackfillResults(d, _lsExisting);
+                if (_bf) {
+                  /* Local tenía results más recientes → repush async */
+                  try { if (typeof window._ligaExtMarkPending === 'function') window._ligaExtMarkPending(k); } catch(_){}
+                  (function(_k, _d){
+                    try {
+                      fetch('/api/liga-ext/'+encodeURIComponent(_k), {
+                        method:'POST',
+                        headers:{'Content-Type':'application/json'},
+                        credentials:'same-origin',
+                        body: JSON.stringify({data:_d})
+                      }).then(function(r){ if(r.ok) { try { if(typeof window._ligaExtClearPending==='function') window._ligaExtClearPending(_k); } catch(_){} } }).catch(function(){});
+                    } catch(_){}
+                  })(k, d);
+                }
+              }
+            }
+          } catch(_){}
           LIGA_CACHE[k] = d;
           if (resp.updated_at) LIGA_UPDATED[k] = resp.updated_at;
           try { localStorage.setItem(storeKey(k), JSON.stringify(d)); } catch(_){}
@@ -49106,6 +49135,30 @@ https://api.sofascore.app/api/v1/team/44/image
         {name:'FK Grbalj',              power:58, atk:58, mid:58, def:58},
         {name:'FK Internacional Podgorica', power:58, atk:58, mid:58, def:58},
         {name:'FK Cetinje',             power:57, atk:57, mid:57, def:57}
+      ]
+    },
+    'albania': {
+      teams: [
+        {name:'FK Tirana',              power:70, atk:70, mid:70, def:70},
+        {name:'SK Tirana',              power:69, atk:69, mid:69, def:69},
+        {name:'FK Partizani',           power:68, atk:68, mid:68, def:68},
+        {name:'FK Vllaznia',            power:67, atk:67, mid:67, def:67},
+        {name:'FK Teuta',               power:66, atk:66, mid:66, def:66},
+        {name:'FK Kukësi',              power:66, atk:66, mid:66, def:66},
+        {name:'FK Laçi',                power:65, atk:65, mid:65, def:65},
+        {name:'FK Egnatia',             power:64, atk:64, mid:64, def:64},
+        {name:'FK Bylis',               power:63, atk:63, mid:63, def:63},
+        {name:'FK Dinamo Tirana',       power:63, atk:63, mid:63, def:63},
+        {name:'FK Erzeni',              power:62, atk:62, mid:62, def:62},
+        {name:'FK Apolonia',            power:62, atk:62, mid:62, def:62},
+        {name:'FK Flamurtari',          power:61, atk:61, mid:61, def:61},
+        {name:'FK Elbasani',            power:60, atk:60, mid:60, def:60},
+        {name:'FK Skënderbeu',          power:60, atk:60, mid:60, def:60},
+        {name:'FK Besa',                power:59, atk:59, mid:59, def:59},
+        {name:'FK Luftëtari',           power:59, atk:59, mid:59, def:59},
+        {name:'FK Sopoti',              power:58, atk:58, mid:58, def:58},
+        {name:'FK Kastrioti',           power:58, atk:58, mid:58, def:58},
+        {name:'FK Tomori',              power:57, atk:57, mid:57, def:57}
       ]
     }
   };

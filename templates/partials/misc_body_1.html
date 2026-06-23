@@ -33464,7 +33464,18 @@ window._showSimProgress = function(opts, onDone){
            wildcard, porque indica que el usuario ha configurado el
            cupo en Reglas. */
         var zones = (data.config && data.config.zones) || {};
-        var slots = Number(zones[zoneKey] || 0);
+        /* Zonas efectivas: LEAGUE_DEFAULT_ZONES es autoritativo para los
+           6 campos euro (ucl/uclPrev/uclQual/uel/uecl/wildcard). Esto
+           cubre ligas que llevan el DEFAULT_ZONES genérico
+           (ucl:1/uclPrev:1/uclQual:1/uel:1/uecl:1/wildcard:0) porque el
+           seed one-shot de su dispositivo ya se marcó como ejecutado antes
+           de añadir esta liga, o el servidor las devolvió con las zonas
+           que tenía (potencialmente viejas). LEAGUE_DEFAULT_ZONES solo
+           define los 6 campos euro → desc/intercontinental/mundialClubes
+           siguen viniendo de `zones`. */
+        var _ldzEntry = window.LEAGUE_DEFAULT_ZONES && window.LEAGUE_DEFAULT_ZONES[slug];
+        var effZones = _ldzEntry ? Object.assign({}, zones, _ldzEntry) : zones;
+        var slots = Number(effZones[zoneKey] || 0);
         if(!(slots > 0)){
           if(!isWcAuto){
             diag.push({slug:slug, n:N, results:rN, needed:needed, status:'sin-plazas', note:'zones.'+zoneKey+'='+slots});
@@ -33490,25 +33501,25 @@ window._showSimProgress = function(opts, onDone){
         seenLeagueHash[hash] = slug;
         var skip = 0;
         if(zoneKey === 'uclPrev'){
-          skip = (Number(zones.ucl)||0);
+          skip = (Number(effZones.ucl)||0);
         } else if(zoneKey === 'uclQual'){
-          skip = (Number(zones.ucl)||0)
-               + (Number(zones.uclPrev)||0);
+          skip = (Number(effZones.ucl)||0)
+               + (Number(effZones.uclPrev)||0);
         } else if(zoneKey === 'uel'){
-          skip = (Number(zones.ucl)||0)
-               + (Number(zones.uclPrev)||0)
-               + (Number(zones.uclQual)||0);
+          skip = (Number(effZones.ucl)||0)
+               + (Number(effZones.uclPrev)||0)
+               + (Number(effZones.uclQual)||0);
         } else if(zoneKey === 'uecl'){
-          skip = (Number(zones.ucl)||0)
-               + (Number(zones.uclPrev)||0)
-               + (Number(zones.uclQual)||0)
-               + (Number(zones.uel)||0);
+          skip = (Number(effZones.ucl)||0)
+               + (Number(effZones.uclPrev)||0)
+               + (Number(effZones.uclQual)||0)
+               + (Number(effZones.uel)||0);
         } else if(zoneKey === 'wildcard'){
-          skip = (Number(zones.ucl)||0)
-               + (Number(zones.uclPrev)||0)
-               + (Number(zones.uclQual)||0)
-               + (Number(zones.uel)||0)
-               + (Number(zones.uecl)||0);
+          skip = (Number(effZones.ucl)||0)
+               + (Number(effZones.uclPrev)||0)
+               + (Number(effZones.uclQual)||0)
+               + (Number(effZones.uel)||0)
+               + (Number(effZones.uecl)||0);
         }
         /* Auto-cupo: si la liga no tiene zonas europeas configuradas
            (skip=0 porque el usuario nunca abrió Reglas), por defecto
@@ -39181,6 +39192,35 @@ window._showSimProgress = function(opts, onDone){
     _eurHydrateMissingLeagues(function(recovered){ _doCommitEurope(recovered); });
   };
   function _doCommitEurope(recovered){
+    /* Aplicar zonas canónicas a todas las ligas en localStorage ANTES
+       del cómputo. Cubre las ligas recién hidratadas del servidor (que
+       llegan con las zonas que tenía el server, potencialmente
+       DEFAULT_ZONES genérico) y las que ya estaban en local pero con
+       valores no corregidos por los seeds one-shot. Mismo comportamiento
+       que _recuadrarApply paso (a), pero sin confirm ni alert. */
+    if(window.LEAGUE_DEFAULT_ZONES && window._zonesDefaultFor){
+      Object.keys(window.LEAGUE_DEFAULT_ZONES).forEach(function(slug){
+        if(slug === 'liga-ea-sports') return;
+        try {
+          var key = 'ligaExt_' + slug;
+          var raw = localStorage.getItem(key);
+          if(!raw) return;
+          var d = JSON.parse(raw);
+          if(!d || !Array.isArray(d.teams) || d.teams.length < 2) return;
+          if(!d.config) d.config = {};
+          var prev = d.config.zones || {};
+          var canon = window._zonesDefaultFor(slug) || {};
+          d.config.zones = Object.assign({}, canon, {
+            desc:             (prev.desc != null ? prev.desc : canon.desc),
+            intercontinental: (prev.intercontinental != null ? prev.intercontinental : (canon.intercontinental||0)),
+            mundialClubes:    (prev.mundialClubes != null ? prev.mundialClubes : (canon.mundialClubes||0))
+          });
+          localStorage.setItem(key, JSON.stringify(d));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        } catch(_){}
+      });
+    }
     function _safeCompute(fn){
       try { return (typeof fn === 'function') ? (fn() || []) : []; }
       catch(_){ return []; }

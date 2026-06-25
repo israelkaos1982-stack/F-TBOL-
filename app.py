@@ -13,7 +13,7 @@ from functools import wraps
 
 from jugadores_data import jugadores_por_equipo
 from logica_liga import calcular_tabla, obtener_resultados_ia
-from sync_merge import tour_cfg_merge, sel_squad_merge
+from sync_merge import tour_cfg_merge, sel_squad_merge, _count_played as _tour_count_played
 
 app = Flask(__name__)
 
@@ -3905,6 +3905,81 @@ def api_kv_get(key):
     })
 
 
+def _tour_reset_ms(data):
+    """`resetAt` (ms) de una cfg de torneo. Ausente/inválido → 0."""
+    try:
+        return float(data.get("resetAt") or 0) if isinstance(data, dict) else 0.0
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _tour_protected_guard(base_key, value, now):
+    """RED DE SEGURIDAD server-side para las cfgs de torneo — espejo del
+    snapshot `_protected` de las ligas, pero MONOTÓNICO por nº de partidos
+    JUGADOS (`_count_played`) en vez de por jugadores.
+
+    Mantiene un high-water mark `tour_<id>_v1_protected` con el cuadro de MÁS
+    progreso visto. Si un guardado REGRESA (menos partidos jugados) SIN un
+    `resetAt` más reciente — el síntoma del bug 2026-06-25 «Mundial 2032: el
+    80% de la fase de grupos se borró y salen grupos distintos» — se RESTAURA
+    el snapshot (auto-recuperación), aunque TODOS los dispositivos hayan
+    perdido su copia local. Un reinicio DELIBERADO (`resetAt` mayor) reemplaza
+    el snapshot (nueva baseline). Devuelve el dict que se debe guardar en el
+    main. No lanza."""
+    if not isinstance(value, dict):
+        return value
+    pkey = base_key + "_protected"
+    prow = GlobalState.query.filter_by(clave=pkey).first()
+    prot = None
+    if prow and prow.valor_json:
+        try:
+            prot = json.loads(prow.valor_json)
+        except Exception:
+            prot = None
+    if isinstance(prot, dict):
+        deliberate = _tour_reset_ms(value) > _tour_reset_ms(prot)
+        if not deliberate and _tour_count_played(value) < _tour_count_played(prot):
+            # Regresión sin reinicio deliberado → restaurar el snapshot. El
+            # high-water mark NO baja (sigue protegiendo el progreso).
+            return prot
+    # value progresa, es un reinicio deliberado, o no había snapshot →
+    # actualizar el high-water mark al valor entrante.
+    try:
+        pbody = json.dumps(value, ensure_ascii=False)
+        if len(pbody.encode("utf-8")) <= _KV_MAX_BYTES:
+            if prow:
+                prow.valor_json = pbody
+                prow.updated_at = now
+            else:
+                db.session.add(GlobalState(clave=pkey, valor_json=pbody, updated_at=now))
+    except Exception:
+        pass
+    return value
+
+
+@app.route("/api/tour-protected/<tid>", methods=["GET"])
+def api_tour_protected_get(tid):
+    """Diagnóstico/recuperación del high-water mark de un torneo (espejo del
+    GET de `liga_ext_<slug>_protected`). Devuelve el snapshot protegido y su
+    nº de partidos jugados. Útil para verificar que el cuadro está a salvo
+    aunque el main se haya quedado vacío."""
+    base = "tour_" + tid + "_v1"
+    row = GlobalState.query.filter_by(clave=base + "_protected").first()
+    if not row or not row.valor_json:
+        return jsonify({"ok": True, "tour": tid, "data": None, "played": 0, "updated_at": ""})
+    try:
+        data = json.loads(row.valor_json)
+    except Exception:
+        data = None
+    return jsonify({
+        "ok": True,
+        "tour": tid,
+        "data": data,
+        "played": _tour_count_played(data) if isinstance(data, dict) else 0,
+        "updated_at": row.updated_at or "",
+    })
+
+
 @app.route("/api/kv/<key>", methods=["POST"])
 def api_kv_set(key):
     if not _kv_is_allowed(key):
@@ -3946,15 +4021,22 @@ def api_kv_set(key):
     # para que un partido jugado en CUALQUIER móvil sobreviva, en vez de que
     # el último POST borre los de los demás (bug 2026-06-03, 6 móviles + PC).
     elif (key.startswith("tour_") and key.endswith("_v1")
-          and key != "tour_registry_v1" and row and row.valor_json):
+          and key != "tour_registry_v1" and not key.endswith("_v1_protected")):
         try:
-            merged = tour_cfg_merge(row.valor_json, value)
-            cand = json.dumps(merged, ensure_ascii=False)
+            merged = tour_cfg_merge(row.valor_json, value) if (row and row.valor_json) else value
+            # RED DE SEGURIDAD: high-water mark por partidos jugados (espejo
+            # del _protected de las ligas). Un guardado que regresa sin
+            # `resetAt` se restaura desde el snapshot → el torneo NO se pierde
+            # aunque TODOS los dispositivos pierdan su copia local (bug
+            # 2026-06-25 «Mundial 2032»). Corre también en el primer save (sin
+            # `row`) para sembrar el snapshot.
+            guarded = _tour_protected_guard(key, merged, now)
+            cand = json.dumps(guarded, ensure_ascii=False)
             # La unión nunca debería pasar de 2 MB (resultados acotados por
             # el tamaño del torneo), pero si lo hiciera, conservamos el
             # entrante sin fusionar para no rebotar el guardado.
             if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
-                value, payload = merged, cand
+                value, payload = guarded, cand
         except Exception:
             pass
     # FUSIÓN de la plantilla de selecciones (selecciones_squad_v1): unión por

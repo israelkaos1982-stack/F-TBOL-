@@ -765,6 +765,31 @@ salvaba → pérdida total, irreversible.
    `_tourConfirmAndStampRedraw` (confirma + sella `resetAt`). Todo flujo
    NUEVO que regenere `cfg.teams` + vacíe `results` hereda este guard.
 
+### Los torneos tienen SNAPSHOT `_protected` igual que las ligas (obligatorio, 2026-06-25)
+
+**Petición usuario 2026-06-25 («quiero que todo se guarde igual que
+liga»)**: las ligas (`ligaExt_<slug>`) tienen un snapshot server-side
+`liga_ext_<slug>_protected` MONOTÓNICO (nunca acepta menos jugadores) que
+sobrevive aunque todos los dispositivos pierdan su copia. Los torneos NO lo
+tenían → un cuadro machacado en el server era irrecuperable.
+
+**Fix** (`app.py`, `_tour_protected_guard`): cada save de `tour_<id>_v1`
+mantiene un high-water mark `tour_<id>_v1_protected` MONOTÓNICO por **nº de
+partidos JUGADOS** (`_count_played`). Un guardado que REGRESA (menos jugados)
+SIN un `resetAt` más reciente se **RESTAURA** automáticamente desde el
+snapshot — el torneo NO se pierde aunque el main quede vacío. Un reinicio
+DELIBERADO (`resetAt` mayor) reemplaza el snapshot (nueva baseline). Corre en
+el chokepoint del merge KV (tras `tour_cfg_merge`), incluido el primer save
+(siembra el snapshot). Diagnóstico: `GET /api/tour-protected/<id>`.
+
+**Reglas a respetar**:
+4. **PROHIBIDO** que un save de `tour_<id>_v1` salte `_tour_protected_guard`:
+   es la red de último recurso (espejo del `_protected` de las ligas). El
+   snapshot solo baja con un `resetAt` deliberato, nunca por una regresión.
+5. **PROHIBIDO** permitir POST externo a `tour_<id>_v1_protected` (el regex
+   `_KV_ALLOWED_REGEX` exige `_v1$`, así que ya queda fuera): el snapshot lo
+   escribe SOLO el servidor, o un cliente malicioso/viejo podría rebajarlo.
+
 ## El `resetAt` de torneo NO debe descartar partidos jugados DESPUÉS del reinicio (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Ronda Previa 1»)**: el usuario tenía

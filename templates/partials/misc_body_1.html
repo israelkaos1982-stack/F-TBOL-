@@ -110,6 +110,86 @@ window.pG = function(fn) {
 })();
 
 /* ══════════════════════════════════════════════════════════════════
+   ESPEJO DURABLE EN INDEXEDDB — window._idbKV (2026-06-25)
+
+   localStorage da ~5 MB en móvil; Resto de Ligas sola (51 ligas con
+   plantillas) ya se pasa de ahí, así que el limpiador de cuota tiene
+   que expulsar ligas y se "pierden". IndexedDB da CIENTOS de MB.
+
+   Este KV genérico (DB 'ftbol_kv', store 'kv') es el espejo durable:
+   `saveData` escribe SIEMPRE aquí la copia completa de cada liga
+   (aunque no quepa en localStorage), y al arrancar el hidratador
+   repuebla LIGA_CACHE con lo que localStorage perdió. Es ASÍNCRONO y
+   100% ADITIVO: el contrato SÍNCRONO de loadData/saveData no cambia
+   (lo sigue dando LIGA_CACHE en memoria + localStorage). Si IDB no
+   existe o falla, TODO cae al flujo de siempre. Guarda STRINGS JSON
+   (clone barato), no objetos. ══════════════════════════════════════ */
+window._idbKV = window._idbKV || (function(){
+  var DB_NAME = 'ftbol_kv', STORE = 'kv', _dbPromise = null;
+  function _open(){
+    if (_dbPromise) return _dbPromise;
+    _dbPromise = new Promise(function(res){
+      try {
+        if (!window.indexedDB) { res(null); return; }
+        var rq = indexedDB.open(DB_NAME, 1);
+        rq.onupgradeneeded = function(){
+          try { var db = rq.result; if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE); } catch(_){}
+        };
+        rq.onsuccess = function(){ res(rq.result || null); };
+        rq.onerror   = function(){ res(null); };
+        rq.onblocked = function(){ res(null); };
+      } catch(_){ res(null); }
+    });
+    return _dbPromise;
+  }
+  function set(key, val){
+    return _open().then(function(db){
+      if (!db) return false;
+      return new Promise(function(res){
+        try {
+          var tx = db.transaction(STORE, 'readwrite');
+          tx.objectStore(STORE).put(val, key);
+          tx.oncomplete = function(){ res(true); };
+          tx.onerror = function(){ res(false); };
+          tx.onabort = function(){ res(false); };
+        } catch(_){ res(false); }
+      });
+    }).catch(function(){ return false; });
+  }
+  function get(key){
+    return _open().then(function(db){
+      if (!db) return null;
+      return new Promise(function(res){
+        try {
+          var rq = db.transaction(STORE, 'readonly').objectStore(STORE).get(key);
+          rq.onsuccess = function(){ res(rq.result == null ? null : rq.result); };
+          rq.onerror = function(){ res(null); };
+        } catch(_){ res(null); }
+      });
+    }).catch(function(){ return null; });
+  }
+  function keys(){
+    return _open().then(function(db){
+      if (!db) return [];
+      return new Promise(function(res){
+        try {
+          var rq = db.transaction(STORE, 'readonly').objectStore(STORE).getAllKeys();
+          rq.onsuccess = function(){ res(rq.result || []); };
+          rq.onerror = function(){ res([]); };
+        } catch(_){ res([]); }
+      });
+    }).catch(function(){ return []; });
+  }
+  function del(key){
+    return _open().then(function(db){
+      if (!db) return;
+      try { db.transaction(STORE, 'readwrite').objectStore(STORE).delete(key); } catch(_){}
+    }).catch(function(){});
+  }
+  return { set:set, get:get, keys:keys, del:del };
+})();
+
+/* ══════════════════════════════════════════════════════════════════
    _normPS bootstrap GLOBAL — se define aquí ANTES que cualquier otro
    <script>, por lo que los IIFEs posteriores siempre encuentran
    window._normPS disponible como red de seguridad definitiva.
@@ -41769,6 +41849,58 @@ https://api.sofascore.app/api/v1/team/44/image
     else LIGA_CACHE = {};
   };
 
+  /* ── HIDRATADOR INDEXEDDB → LIGA_CACHE (2026-06-25) ──
+     IndexedDB es el espejo durable que escribe `saveData` (alta cuota).
+     Al arrancar repobla LIGA_CACHE (memoria) SOLO con las ligas que
+     localStorage NO tiene (las que el limpiador de cuota tuvo que
+     expulsar) para que `loadData` las devuelva sin ir al servidor y
+     sin que se hayan perdido. 100% ADITIVO:
+       · NO pisa una liga que localStorage ya tenga con equipos
+         (localStorage/edición viva manda).
+       · NO reescribe localStorage (evita thrash con el limpiador de
+         cuota): LIGA_CACHE en memoria basta — loadData lo lee primero.
+       · Si IDB no existe / no tiene la liga, loadData cae al flujo de
+         siempre (localStorage → server). No fuerza re-render: la
+         próxima navegación (o el fetchData en vuelo) ya pinta. */
+  (function _hydrateLigasFromIDB(){
+    try {
+      if (!window._idbKV || typeof window._idbKV.keys !== 'function') return;
+      window._idbKV.keys().then(function(allKeys){
+        if (!Array.isArray(allKeys) || !allKeys.length) return;
+        allKeys.forEach(function(fullKey){
+          if (typeof fullKey !== 'string') return;
+          if (fullKey.indexOf('ligaExt_') !== 0) return;
+          /* Solo las claves "main" de liga, no sus derivadas. */
+          if (/_(protected|backup|snap_\d+)$/.test(fullKey)) return;
+          var slug = fullKey.slice('ligaExt_'.length);
+          /* localStorage vivo manda: si ya tiene esta liga con equipos,
+             no la tocamos. */
+          try {
+            var lr = localStorage.getItem(fullKey);
+            if (lr) {
+              var lp = JSON.parse(lr);
+              if (lp && Array.isArray(lp.teams) && lp.teams.length) return;
+            }
+          } catch(_){}
+          if (LIGA_CACHE[slug] && Array.isArray(LIGA_CACHE[slug].teams)
+              && LIGA_CACHE[slug].teams.length) return;
+          window._idbKV.get(fullKey).then(function(val){
+            try {
+              if (!val) return;
+              var data = (typeof val === 'string') ? JSON.parse(val) : val;
+              if (!data || !Array.isArray(data.teams) || !data.teams.length) return;
+              /* Re-comprobar: la liga pudo llegar del server mientras
+                 esperábamos el get async. */
+              if (LIGA_CACHE[slug] && Array.isArray(LIGA_CACHE[slug].teams)
+                  && LIGA_CACHE[slug].teams.length) return;
+              LIGA_CACHE[slug] = data;
+            } catch(_){}
+          }).catch(function(){});
+        });
+      }).catch(function(){});
+    } catch(_){}
+  })();
+
   /* Sanitize de nombres de equipo (2026-05-08, ampliado el mismo día):
      el usuario reportó que algunos equipos de Primera Federación
      aparecían con un `*` prefijo en el nombre y, peor aún, que tras
@@ -42978,6 +43110,19 @@ https://api.sofascore.app/api/v1/team/44/image
       var nTeamsNew = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
       if (nTeamsNew > 0) {
         _setItemSafe(storeKey(k) + '_protected', serialized);
+      }
+      /* ── ESPEJO DURABLE EN INDEXEDDB (2026-06-25) ──
+         IndexedDB da cientos de MB (vs ~5 MB de localStorage). Guardamos
+         SIEMPRE la copia completa de la liga aquí, aunque localStorage
+         esté lleno y `_setItemSafe` haya tenido que evacuar esta clave.
+         Fire-and-forget y ADITIVO: si IDB falla o no existe, la liga
+         sigue en LIGA_CACHE (memoria) + el POST al server de abajo, y
+         el comportamiento es EXACTAMENTE el de antes. En el próximo
+         arranque el hidratador repuebla LIGA_CACHE con lo perdido.
+         Solo espejamos estados con equipos (un vacío por bug no debe
+         pisar la copia durable). */
+      if (nTeamsNew > 0) {
+        try { if (window._idbKV) window._idbKV.set(storeKey(k), serialized); } catch(_){}
       }
     }
     /* Si la clave principal NO se pudo escribir (quota lleno tras

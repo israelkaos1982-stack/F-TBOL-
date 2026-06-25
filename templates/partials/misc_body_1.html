@@ -42413,6 +42413,17 @@ https://api.sofascore.app/api/v1/team/44/image
   var _ALIAS_CACHE_TTL = 3000;
   function _buildAliasCache(){
     var map = Object.create(null);
+    /* Helper: indexa un equipo en el mapa (solo RELLENA huecos — nunca
+       pisa un alias/estadio ya presente). Compartido por el pase de
+       localStorage y el de LIGA_CACHE. */
+    function _idxTeam(t){
+      if(!t || !t.name) return;
+      var nm = _aliasNormName(t.name);
+      if(!nm) return;
+      var entry = map[nm] || (map[nm] = {alias:'', stadium:''});
+      if(!entry.alias){ var a = String(t.efootballAlias||'').trim(); if(a) entry.alias = a; }
+      if(!entry.stadium){ var s = String(t.stadium || t.estadio || '').trim(); if(s) entry.stadium = s; }
+    }
     try {
       for(var i=0;i<localStorage.length;i++){
         var key = localStorage.key(i);
@@ -42425,19 +42436,26 @@ https://api.sofascore.app/api/v1/team/44/image
         try {
           var data = JSON.parse(raw);
           var teams = data && Array.isArray(data.teams) ? data.teams : [];
-          for(var j=0;j<teams.length;j++){
-            var t = teams[j];
-            if(!t || !t.name) continue;
-            var nm = _aliasNormName(t.name);
-            if(!nm) continue;
-            var entry = map[nm] || (map[nm] = {alias:'', stadium:''});
-            var a = String(t.efootballAlias||'').trim();
-            if(a) entry.alias = a;
-            var s = String(t.stadium || t.estadio || '').trim();
-            if(s) entry.stadium = s;
-          }
+          for(var j=0;j<teams.length;j++){ _idxTeam(teams[j]); }
         } catch(_){}
       }
+      /* LIGA_CACHE en memoria (2026-06-25): incluye ligas bajadas del
+         SERVIDOR que aún no están en localStorage (móvil nuevo, otra
+         sesión, o tras un borrado de datos / quota). Sin este pase, el
+         alias eFootball de un equipo de una liga "solo-servidor" (p.ej.
+         Kí Klaksvík en `ligaExt_is-feroe`) NO se resolvía y el ❓ que
+         indica "¿qué equipo es en eFootball?" NUNCA aparecía en la
+         previa / cards HvIA. Espejo del escaneo que ya hace
+         getTeamStadium. Solo rellena huecos (localStorage manda). */
+      try {
+        if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE) {
+          for (var ck in LIGA_CACHE) {
+            var dC = LIGA_CACHE[ck];
+            var tsC = (dC && Array.isArray(dC.teams)) ? dC.teams : [];
+            for (var ci=0; ci<tsC.length; ci++){ _idxTeam(tsC[ci]); }
+          }
+        }
+      } catch(_){}
       /* SELECCIONES (2026-05-25): las selecciones sin licencia en
          eFootball (Trinidad y Tobago, El Salvador, Curazao, …) llevan
          su alias en `selecciones_squad_v1[].efootballAlias`. Las

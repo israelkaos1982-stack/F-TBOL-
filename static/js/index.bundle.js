@@ -6645,8 +6645,21 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
          se muestra alias. */
       var _aliasFor = (typeof window.getTeamEfootballAlias === 'function')
         ? window.getTeamEfootballAlias : function(){ return ''; };
-      var _ppHomeAliasTxt = (_humAway && !_humHome) ? _aliasFor(home) : '';
-      var _ppAwayAliasTxt = (_humHome && !_humAway) ? _aliasFor(away) : '';
+      /* Gate HUMANO ampliado SOLO para el alias (2026-06-25): el rival
+         humano puede NO ser uno de los 5 canónicos de Liga EA (p.ej. un
+         humano de torneo de verano / europeo marcado con `humanIcon`, o
+         una selección humana). Sin esto, el ❓ que indica "¿qué equipo es
+         en eFootball?" no aparecía bajo el equipo IA cuando el rival
+         humano no era canónico. NO toca la duración (que sigue por
+         esHumano). Cada lado se considera humano si esHumano O tiene
+         humanIcon — así el alias se muestra bajo el lado IA (sin icono)
+         cuando el otro lado es humano. */
+      var _hiAliasHome = (typeof window.humanIcon === 'function') ? (window.humanIcon(home)||'') : '';
+      var _hiAliasAway = (typeof window.humanIcon === 'function') ? (window.humanIcon(away)||'') : '';
+      var _humHomeAlias = _humHome || !!_hiAliasHome;
+      var _humAwayAlias = _humAway || !!_hiAliasAway;
+      var _ppHomeAliasTxt = (_humAwayAlias && !_humHomeAlias) ? _aliasFor(home) : '';
+      var _ppAwayAliasTxt = (_humHomeAlias && !_humAwayAlias) ? _aliasFor(away) : '';
       function _ppAliasHtml(txt){
         if(!txt) return '';
         /* ❓ animado renderizado DIRECTAMENTE en el primer paint de la

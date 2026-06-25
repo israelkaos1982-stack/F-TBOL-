@@ -1082,11 +1082,17 @@ window._showSimProgress = function(opts, onDone){
      server es la fuente de verdad para que las cajas creadas /
      editadas / eliminadas sobrevivan a un borrado de datos de
      navegación o a un cambio de dispositivo. */
-  function _saveMenuServer(s){
+  function _saveMenuServer(s, authoritative){
     try{
+      var _b={ value: s || {} };
+      /* La edición EXPLÍCITA del admin va AUTORITATIVA: el server la sella
+         con su propio reloj y gana SIEMPRE (inmune a clock-skew y a un
+         cliente viejo que re-empuje un menú stale). El re-push self-heal
+         (local más nuevo en _hydrateMenuFromServer) NO es autoritativo. */
+      if(authoritative) _b.authoritative=true;
       fetch('/api/kv/menu_home_v1', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        credentials:'same-origin', body:JSON.stringify({ value: s || {} })
+        credentials:'same-origin', body:JSON.stringify(_b)
       }).catch(function(){});
     }catch(_){}
   }
@@ -1099,7 +1105,7 @@ window._showSimProgress = function(opts, onDone){
     try{ if(s && typeof s==='object') s.updatedAt = Date.now(); }catch(_){}
     try{ localStorage.setItem(KEY, JSON.stringify(s)); }
     catch(e){ ok=false; }
-    _saveMenuServer(s);
+    _saveMenuServer(s, true);
     return ok;
   }
   function _menuHasContent(o){

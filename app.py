@@ -3748,6 +3748,12 @@ _KV_RECENCY_BLOB_KEYS = {
     "bayern_hud_overrides_v1",
     # Info card editable por torneo: la última edición del admin gana entera.
     "tour_info_cards_v1",
+    # Menú principal editable (cajas del home: crear/editar/eliminar). Merge
+    # por RECENCIA: el blob con `updatedAt` mayor gana ENTERO. La edición
+    # EXPLÍCITA del admin va `authoritative` (sella reloj del server, gana
+    # siempre) → un navegador con un menú stale ya no puede pisar el nuevo,
+    # y al borrar datos / cambiar de móvil se recupera la última versión.
+    "menu_home_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

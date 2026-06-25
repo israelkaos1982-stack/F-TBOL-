@@ -6105,7 +6105,11 @@
 
         if (state.liga_results && typeof state.liga_results === 'object') {
           sharedLigaResultsCache = state.liga_results;
-          try { localStorage.setItem(LS_KEY, JSON.stringify(sharedLigaResultsCache)); } catch (e) {}
+          try {
+            var _lrPoll = JSON.stringify(sharedLigaResultsCache);
+            if (window._lsSetSafe) window._lsSetSafe(LS_KEY, _lrPoll);
+            else localStorage.setItem(LS_KEY, _lrPoll);
+          } catch (e) {}
         }
 
         /* Copa del Rey: mirror del estado (con los `events` de cada cruce)
@@ -6117,7 +6121,11 @@
            `copa_state_merge`). Mismo patrón durable que `inter_state_v1`.
            2026-06-06. */
         if (state.copa_state && typeof state.copa_state === 'object') {
-          try { localStorage.setItem('copa_state_v1', JSON.stringify(state.copa_state)); } catch (e) {}
+          try {
+            var _copaJson = JSON.stringify(state.copa_state);
+            if (window._lsSetSafe) window._lsSetSafe('copa_state_v1', _copaJson);
+            else localStorage.setItem('copa_state_v1', _copaJson);
+          } catch (e) {}
         }
 
         /* No re-imponer el calendario del backend justo después de un
@@ -6780,7 +6788,14 @@
   }
   function saveResults(r) {
     sharedLigaResultsCache = (r && typeof r === 'object') ? r : {};
-    try { localStorage.setItem(LS_KEY, JSON.stringify(sharedLigaResultsCache)); } catch (e) {}
+    /* A prueba de cuota: si localStorage está lleno, libera espacio
+       reconstruible y reintenta en vez de perder el resultado del
+       partido en silencio (2026-06-25). El POST al server va igual. */
+    try {
+      var _lrJson = JSON.stringify(sharedLigaResultsCache);
+      if (window._lsSetSafe) window._lsSetSafe(LS_KEY, _lrJson);
+      else localStorage.setItem(LS_KEY, _lrJson);
+    } catch (e) {}
     /* 2026-05-20: durante un batch (simularTodasJornadasIAAsync) NO
        persistimos al server por jornada — eran 38 POSTs con un payload
        que crece hasta varios MB y costaba minutos en 4G/5G. El wrapper

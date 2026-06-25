@@ -1600,7 +1600,7 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
       var onerrorHandler = skipAdmin
         ? 'this.outerHTML=window.getTeamBadgeHtmlLetter(\'' + fallbackName + '\')'
         : 'this.outerHTML=window.getTeamBadgeHtml(\'' + fallbackName + '\', true)';
-      return '<img class="clas-team-logo" src="' + logoUrl + '" onerror="' + onerrorHandler + '" alt="Escudo de ' + safeName.replace(/"/g, '&quot;') + '"/>';
+      return '<img class="clas-team-logo" src="' + logoUrl + '" onerror="' + onerrorHandler + '" alt="Escudo de ' + safeName.replace(/"/g, '&quot;') + '" loading="lazy" decoding="async"/>';
     }
     return window.getTeamBadgeHtmlLetter(name);
   };

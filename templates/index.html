@@ -133,8 +133,21 @@
       transition:opacity .35s ease;
       cursor:pointer;
       -webkit-tap-highlight-color:transparent;
+      /* BACKSTOP A PRUEBA DE BLOQUEO (2026-06-25 — usuario «no me abre la web»,
+         foto clavada en CARGANDO…).  El setTimeout(doHide) del IIFE corre en el
+         HILO PRINCIPAL, que queda BLOQUEADO 5-15 s en móvil parseando/ejecutando
+         los ~6.5 MB inline + decenas de IIFEs síncronos → el timer se encola pero
+         NO dispara, y el tap tampoco responde (su handler también es JS).  Esta
+         animación de OPACIDAD corre en el COMPOSITOR (igual que el spinner, que
+         por eso sí gira durante el bloqueo), así que levanta la cortina aunque el
+         hilo JS esté atascado.  `pointer-events:none` al final deja pasar los
+         toques a la app de debajo aunque el elemento siga en el DOM.  En una carga
+         sana el JS oculta+elimina el splash a ~1.5 s y esta animación nunca llega
+         a importar (arranca a los 5 s). */
+      animation:bootSplashAutoFade .6s ease 5s forwards;
     }
     #boot-splash.hide{opacity:0;pointer-events:none;}
+    @keyframes bootSplashAutoFade{to{opacity:0;visibility:hidden;pointer-events:none;}}
     .boot-splash-logo{display:flex;align-items:baseline;gap:10px;}
     .boot-splash-11{
       font-family:'Bebas Neue',Oswald,sans-serif;font-size:48px;font-weight:900;
@@ -161,11 +174,13 @@
        parseando los 100 k líneas de scripts inline. */
     .boot-splash-tap{
       font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;
-      color:rgba(240,192,64,0);text-transform:uppercase;
-      animation:bootSplashTapIn .7s ease forwards;
-      animation-delay:2.8s;
+      color:rgba(240,192,64,.85);text-transform:uppercase;
+      opacity:0;
+      /* OPACITY (no color) → compositor-thread, aparece aunque el hilo JS esté
+         bloqueado parseando los scripts inline (color NO se compone y no se veía). */
+      animation:bootSplashTapIn .7s ease 2.8s forwards;
     }
-    @keyframes bootSplashTapIn{to{color:rgba(240,192,64,.85);}}
+    @keyframes bootSplashTapIn{to{opacity:1;}}
   </style>
   <script>
     /* Splash auto-hide RÁPIDO y A PRUEBA DE BLOQUEO.  2026-06-14 — el

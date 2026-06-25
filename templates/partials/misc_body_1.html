@@ -12,6 +12,104 @@ window.pG = function(fn) {
 };
 
 /* ══════════════════════════════════════════════════════════════════
+   GUARDADO A PRUEBA DE CUOTA — window._lsSetSafe (2026-06-25)
+
+   Síntoma del usuario: "no se guardan los partidos ni datos". Causa
+   raíz: hay ~250 `localStorage.setItem(...)` envueltos en `try{}catch(_){}`
+   pelado. Cuando el navegador del móvil se queda sin espacio (tope
+   típico ~5 MB; lo llenan 12+ ligas con plantillas, escudos, decenas
+   de blobs de torneos, copa y stats) `setItem` lanza QuotaExceededError, el
+   catch lo TRAGA, y el partido PARECE guardado pero NO lo está → al
+   recargar ha desaparecido.
+
+   Este helper GLOBAL (definido en el primer <script>, disponible para
+   todos los partials y para el bundle que carga después) intenta el
+   setItem y, si salta cuota, LIBERA datos reconstruibles/redundantes en
+   cascada (snapshots → backups → stores de stats → _protected de otras
+   ligas → iconos) reintentando tras cada borrado. Si tras todo sigue sin
+   caber, AVISA al usuario UNA vez (toast no bloqueante) en lugar de
+   fallar callado. Devuelve true/false; NUNCA lanza.
+   ══════════════════════════════════════════════════════════════════ */
+(function(){
+  if (window._lsSetSafe) return;
+  function _isQuotaErr(err){
+    return !!(err && (
+      err.code === 22 || err.code === 1014 ||
+      err.name === 'QuotaExceededError' ||
+      err.name === 'NS_ERROR_DOM_QUOTA_REACHED'));
+  }
+  /* Libera espacio por orden de MENOR a MAYOR importancia, reintentando
+     el setItem tras cada borrado. Nunca borra la clave que se escribe. */
+  function _freeAndRetry(key, value){
+    function _retry(){
+      try { localStorage.setItem(key, value); return true; } catch(_){ return false; }
+    }
+    try {
+      var snaps=[], backups=[], protibs=[], stats=[];
+      for (var i=0; i<localStorage.length; i++){
+        var kk = localStorage.key(i);
+        if (!kk || kk === key) continue;
+        if (/^ligaExt_.+_snap_\d+$/.test(kk)) snaps.push(kk);
+        else if (/^ligaExt_.+_backup$/.test(kk)) backups.push(kk);
+        else if (/^ligaExt_.+_protected$/.test(kk)) protibs.push(kk);
+        else if (/^ef_player_stats_.*v1$/.test(kk)) stats.push(kk);
+      }
+      /* 1. Snapshots datados (históricos) — los más viejos primero. */
+      snaps.sort();
+      while (snaps.length){ try { localStorage.removeItem(snaps.shift()); } catch(_){} if(_retry()) return true; }
+      /* 2. _backup legacy (redundante con _protected). */
+      for (var b=0; b<backups.length; b++){ try { localStorage.removeItem(backups[b]); } catch(_){} if(_retry()) return true; }
+      /* 3. Stores de estadísticas (los reconstruye rebuildPlayerStatsStore
+            desde cfg.results/liga_results — se pueden tirar sin perder nada). */
+      for (var s=0; s<stats.length; s++){ try { localStorage.removeItem(stats[s]); } catch(_){} if(_retry()) return true; }
+      /* 4. _protected de OTRAS ligas (su copia vive en el servidor; se
+            re-descarga al abrir esa liga). NO tocamos la clave actual. */
+      for (var p=0; p<protibs.length; p++){ try { localStorage.removeItem(protibs[p]); } catch(_){} if(_retry()) return true; }
+      /* 5. Iconos custom de competiciones (re-subibles por el admin). */
+      try {
+        if (localStorage.getItem('comp_icons_v1')){
+          localStorage.removeItem('comp_icons_v1');
+          if(_retry()) return true;
+        }
+      } catch(_){}
+    } catch(_){}
+    return false;
+  }
+  function _warnOnce(){
+    if (window._lsQuotaWarned) return;
+    window._lsQuotaWarned = true;
+    try { console.warn('[ftbol] localStorage lleno tras limpieza — los datos siguen subiendo al servidor, guardado LOCAL degradado esta sesión.'); } catch(_){}
+    try {
+      var t = document.createElement('div');
+      t.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
+        + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);border-radius:10px;'
+        + 'padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;font-size:13px;'
+        + 'letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
+        + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+      t.innerHTML = '⚠️ El navegador se quedó sin espacio. Los partidos se '
+        + '<b>siguen subiendo al servidor</b>, pero conviene limpiar la '
+        + 'caché del navegador para reactivar el guardado local.';
+      (document.body || document.documentElement).appendChild(t);
+      setTimeout(function(){ try { t.parentNode.removeChild(t); } catch(_){} }, 8000);
+    } catch(_){}
+  }
+  /* true = guardado (con o sin limpieza); false = imposible incluso tras
+     liberar espacio. NUNCA lanza. */
+  window._lsSetSafe = function(key, value){
+    try { localStorage.setItem(key, value); return true; }
+    catch(err){
+      if (!_isQuotaErr(err)){
+        try { console.warn('[ftbol] setItem falló (no-cuota):', key, err && err.name); } catch(_){}
+        return false;
+      }
+      if (_freeAndRetry(key, value)) return true;
+      _warnOnce();
+      return false;
+    }
+  };
+})();
+
+/* ══════════════════════════════════════════════════════════════════
    _normPS bootstrap GLOBAL — se define aquí ANTES que cualquier otro
    <script>, por lo que los IIFEs posteriores siempre encuentran
    window._normPS disponible como red de seguridad definitiva.
@@ -23787,8 +23885,15 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
     /* Persistencia LOCAL (sync, siempre primero). Esto garantiza que
-       el sorteo no se pierde aunque la red falle o el server tarde. */
-    try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
+       el sorteo no se pierde aunque la red falle o el server tarde.
+       A prueba de cuota: si localStorage está lleno, `_lsSetSafe` libera
+       datos reconstruibles y reintenta en vez de fallar callado (causa
+       raíz de "los partidos no se guardan", 2026-06-25). */
+    try {
+      var _cfgJson = JSON.stringify(cfg);
+      if (window._lsSetSafe) window._lsSetSafe(_key(id), _cfgJson);
+      else localStorage.setItem(_key(id), _cfgJson);
+    } catch(_){}
     /* Refresca cache sincrónico para `_tourMuInfoData` / `muTourInfo`. */
     window._TOUR_CACHE = window._TOUR_CACHE || {};
     window._TOUR_CACHE[id] = cfg;

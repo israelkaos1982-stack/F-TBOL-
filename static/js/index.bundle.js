@@ -10456,7 +10456,11 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         }
       });
       if (dirty) {
-        try { localStorage.setItem(storeKey, JSON.stringify(cfg)); } catch(_){}
+        try {
+          var _cfgJ = JSON.stringify(cfg);
+          if (window._lsSetSafe) window._lsSetSafe(storeKey, _cfgJ);
+          else localStorage.setItem(storeKey, _cfgJ);
+        } catch(_){}
         try {
           window._TOUR_CACHE = window._TOUR_CACHE || {};
           if (cfg.id) window._TOUR_CACHE[cfg.id] = cfg;
@@ -10614,7 +10618,11 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     });
     /* Persistir la migración para que no haya que rehacerla cada carga. */
     if (_dirtyMigration) {
-      try { localStorage.setItem('ef_liga38_v4', JSON.stringify(results)); } catch(_){}
+      try {
+        var _migJ = JSON.stringify(results);
+        if (window._lsSetSafe) window._lsSetSafe('ef_liga38_v4', _migJ);
+        else localStorage.setItem('ef_liga38_v4', _migJ);
+      } catch(_){}
     }
   }
   var _origRebuildFixed = window.rebuildLigaPlayerStatsFixed;

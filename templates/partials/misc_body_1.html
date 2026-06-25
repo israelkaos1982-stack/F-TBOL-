@@ -14886,6 +14886,40 @@ window._showSimProgress = function(opts, onDone){
         if (preferred) break;
       }
     } catch(_){}
+    /* LIGA_CACHE en memoria (2026-06-25): ligas bajadas del SERVIDOR que
+       aún no están en localStorage (móvil nuevo, otra sesión, o tras un
+       borrado de datos / quota). Sin este pase, sqFromRegistry /
+       sqFromRegistryFull caían al placeholder «Jugador A/B» para un
+       equipo cuya liga vive SOLO en memoria (p.ej. Kí Klaksvík en
+       `ligaExt_is-feroe`): al añadir un evento contra ellos no salían
+       los nombres reales. Espejo del escaneo que ya hacen getTeamStadium
+       y _buildAliasCache. LIGA_CACHE se indexa por slug DESNUDO (sin el
+       prefijo `ligaExt_`), así que el slug principal es `liga-ea-sports`. */
+    if (!preferred) {
+      try {
+        if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE) {
+          for (var ckc in LIGA_CACHE) {
+            if (!Object.prototype.hasOwnProperty.call(LIGA_CACHE, ckc)) continue;
+            var dC = LIGA_CACHE[ckc];
+            var teamsC = (dC && Array.isArray(dC.teams)) ? dC.teams : [];
+            for (var jc = 0; jc < teamsC.length; jc++) {
+              var tc = teamsC[jc];
+              if (!tc || !tc.name) continue;
+              if (!Array.isArray(tc.players) || !tc.players.length) continue;
+              var nmc = _lextNormForLookup(tc.name);
+              var hitc = false;
+              for (var tic = 0; tic < targets.length; tic++) {
+                if (nmc === targets[tic]) { hitc = true; break; }
+              }
+              if (!hitc) continue;
+              if (ckc === 'liga-ea-sports') { preferred = tc; break; }
+              else if (!fallback) { fallback = tc; }
+            }
+            if (preferred) break;
+          }
+        }
+      } catch(_){}
+    }
     /* Fallback a selecciones nacionales (`selecciones_squad_v1`).
        Sin esto, sqFromRegistry / sqFromRegistryFull caían al placeholder
        "Jugador A/B" en los actas y stats del Mundial 48 / fase final

@@ -1082,33 +1082,70 @@ window._showSimProgress = function(opts, onDone){
      server es la fuente de verdad para que las cajas creadas /
      editadas / eliminadas sobrevivan a un borrado de datos de
      navegación o a un cambio de dispositivo. */
-  function _saveMenuServer(s){
+  function _saveMenuServer(s, authoritative){
     try{
+      var _b={ value: s || {} };
+      /* La edición EXPLÍCITA del admin va AUTORITATIVA: el server la sella
+         con su propio reloj y gana SIEMPRE (inmune a clock-skew y a un
+         cliente viejo que re-empuje un menú stale). El re-push self-heal
+         (local más nuevo en _hydrateMenuFromServer) NO es autoritativo. */
+      if(authoritative) _b.authoritative=true;
       fetch('/api/kv/menu_home_v1', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        credentials:'same-origin', body:JSON.stringify({ value: s || {} })
+        credentials:'same-origin', body:JSON.stringify(_b)
       }).catch(function(){});
     }catch(_){}
   }
   function saveState(s){
     var ok=true;
+    /* Sello de recencia (2026-06-25): cada guardado estampa updatedAt para
+       que la hidratación cross-device pueda arbitrar por recencia (ver
+       _hydrateMenuFromServer). Sin él, un navegador con copia vieja se
+       quedaba clavado en la "web antigua". */
+    try{ if(s && typeof s==='object') s.updatedAt = Date.now(); }catch(_){}
     try{ localStorage.setItem(KEY, JSON.stringify(s)); }
     catch(e){ ok=false; }
-    _saveMenuServer(s);
+    _saveMenuServer(s, true);
     return ok;
   }
+  function _menuHasContent(o){
+    try{ return !!(o && ((o.added&&o.added.length) || (o.removed&&o.removed.length) || (o.ov&&Object.keys(o.ov).length))); }
+    catch(_){ return false; }
+  }
+  /* Sync por RECENCIA (2026-06-25).  ANTES sólo se descargaba del server
+     si el localStorage estaba VACÍO, así que un navegador con una copia
+     VIEJA de menu_home_v1 (p.ej. de antes de añadir la caja PSG o las
+     banderas del coach) NUNCA recibía la actualización → se quedaba en la
+     "web antigua" PARA SIEMPRE (bug usuario 2026-06-25: Chrome mostraba 5
+     cajas sin banderas, Brave 6 con banderas).  AHORA siempre consultamos
+     el server y ADOPTAMOS su copia si es MÁS RECIENTE (updatedAt) o si
+     ambas carecen de sello (datos pre-recencia → el server es la fuente de
+     verdad).  Si la local es más nueva, la RE-SUBIMOS para que el server
+     converja.  GUARDA anti-wipe: un server VACÍO nunca pisa una copia
+     local con contenido. */
   function _hydrateMenuFromServer(cb){
-    var raw;
-    try{ raw=localStorage.getItem(KEY); }catch(_){}
-    if(raw && raw!=='{}' && raw!=='null'){ if(typeof cb==='function') cb(false); return; }
+    var localObj=null, localTs=0;
+    try{ var raw=localStorage.getItem(KEY); if(raw){ localObj=JSON.parse(raw); } }catch(_){}
+    try{ localTs=(localObj && typeof localObj.updatedAt==='number') ? localObj.updatedAt : 0; }catch(_){}
     try{
       fetch('/api/kv/menu_home_v1', {credentials:'same-origin'})
         .then(function(r){ return r.ok? r.json() : null; })
         .then(function(j){
-          if(j && j.ok && j.value && typeof j.value==='object'){
-            try{ localStorage.setItem(KEY, JSON.stringify(j.value)); }catch(_){}
+          var srv=(j && j.ok && j.value && typeof j.value==='object') ? j.value : null;
+          if(srv){
+            var srvTs=(typeof srv.updatedAt==='number') ? srv.updatedAt : 0;
+            var adopt = _menuHasContent(srv) && (srvTs > localTs || (srvTs===0 && localTs===0));
+            if(adopt){
+              try{ localStorage.setItem(KEY, JSON.stringify(srv)); }catch(_){}
+              if(typeof cb==='function') cb(true);
+              return;
+            }
+            /* Local autoritativa (más nueva) o server vacío → re-subir. */
+            if(localObj && (localTs>srvTs || (!_menuHasContent(srv) && _menuHasContent(localObj)))){
+              _saveMenuServer(localObj);
+            }
           }
-          if(typeof cb==='function') cb(true);
+          if(typeof cb==='function') cb(false);
         }).catch(function(){ if(typeof cb==='function') cb(false); });
     }catch(_){ if(typeof cb==='function') cb(false); }
   }
@@ -2271,7 +2308,7 @@ window._showSimProgress = function(opts, onDone){
     /* Si localStorage está vacío (primer arranque o tras borrar datos
        de navegación) hidrata desde el server y luego aplica; si ya hay
        datos locales, _hydrateMenuFromServer no pisa nada y aplica. */
-    _hydrateMenuFromServer(function(){ _applyTriple(); });
+    _hydrateMenuFromServer(function(){ _applyTriple(); try{ if(window._bootSplashHide) window._bootSplashHide(); }catch(_){} });
     _applyTriple();
     if(!window.__mkGoWrapped && typeof window.go==='function'){
       window.__mkGoWrapped=true;

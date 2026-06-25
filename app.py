@@ -45,6 +45,17 @@ def _static_cache_headers(response):
         response.headers['Cache-Control'] = 'public, max-age=2592000'  # 30 días
         response.headers.pop('Pragma', None)
         response.headers.pop('Expires', None)
+    # Imágenes (escudos, logos de competición): son archivos de
+    # CONTENIDO FIJO (un escudo no cambia). Sin caché larga se
+    # revalidaban en CADA navegación — y pesan ~8 MB en total
+    # (escudos SVG de 100-600 KB). Con 30 días el navegador los
+    # descarga UNA vez y nunca más, lo que quita el grueso de "la web
+    # va lenta al abrir tablas". 2026-06-25. `immutable` evita incluso
+    # la petición condicional 304 en navegadores que lo soportan.
+    elif path.startswith('/static/img/'):
+        response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'
+        response.headers.pop('Pragma', None)
+        response.headers.pop('Expires', None)
     return response
 
 basedir = os.path.abspath(os.path.dirname(__file__))

@@ -124,6 +124,16 @@ def _acta_len(r):
     return 0
 
 
+def _count_played(cfg):
+    """Nº de partidos JUGADOS en la cfg de un torneo. Mide el "progreso" para
+    arbitrar un re-sorteo (equipos distintos): un cuadro vacío recién sorteado
+    nunca debe machacar uno con la fase de grupos ya jugada."""
+    res = cfg.get("results") if isinstance(cfg, dict) else None
+    if not isinstance(res, dict):
+        return 0
+    return sum(1 for r in res.values() if _result_is_played(r))
+
+
 def _score_pair(r):
     """Marcador (local, visitante) de un resultado, o None si no es numérico.
     Tolera las dos convenciones del cliente (a/b y gh/ga)."""
@@ -190,10 +200,31 @@ def tour_cfg_merge(old_json, new_value):
     new_sig = _teams_sig(new_value)
     old_sig = _teams_sig(old)
 
-    # Sorteo distinto (re-sorteo / torneo recreado) → gana el documento
-    # más reciente por updatedAt. Nunca mezclamos resultados de fixtures
-    # que ya no existen.
+    # Sorteo distinto (re-sorteo / torneo recreado). No se pueden mezclar
+    # resultados de fixtures que ya no existen, así que gana UNA copia entera.
+    # PERO un re-sorteo ACCIDENTAL o un cfg STALE con otro orden de equipos
+    # NUNCA debe machacar un torneo con partidos ya jugados solo por ser
+    # "más nuevo" por reloj de pared (bug 2026-06-25, «Mundial 2032: el 80%
+    # de la fase de grupos se borró y salen grupos distintos» — un dispositivo
+    # re-sorteó/recreó el cuadro con results={} y, al tener un updatedAt mayor,
+    # clobbereó el progreso jugado en los otros 6 dispositivos).
+    #
+    # El re-sorteo DELIBERADO sella `resetAt` (Date.now()): ESE sello —no la
+    # hora de pared— es lo que autoriza a descartar el progreso anterior. Sin
+    # sello, gana la copia con MÁS partidos jugados; así un cuadro vacío sin
+    # `resetAt` no borra nada y cualquier dispositivo que aún conserve el
+    # torneo lo CURA en el servidor al re-sincronizar (recuperación automática).
     if new_sig != old_sig:
+        new_reset = _num(new_value.get("resetAt"))
+        old_reset = _num(old.get("resetAt"))
+        if new_reset != old_reset:
+            return new_value if new_reset > old_reset else old
+        new_pl = _count_played(new_value)
+        old_pl = _count_played(old)
+        if new_pl != old_pl:
+            return new_value if new_pl > old_pl else old
+        # Empate de progreso (ambos vacíos / ambos iguales) → last-write por
+        # updatedAt, como antes (no hay nada que proteger).
         return new_value if _iso(new_value.get("updatedAt")) >= _iso(old.get("updatedAt")) else old
 
     # Reinicio deliberado (tombstone con sello ms). El usuario que pulsa

@@ -23496,6 +23496,57 @@ window._showSimProgress = function(opts, onDone){
   function _key(id){ return 'tour_' + id + '_v1'; }
   function _cloneDefault(id){ return JSON.parse(JSON.stringify(DEFAULTS[id] || {})); }
 
+  /* Nº de partidos JUGADOS de un cfg (mide el progreso real del torneo).
+     Lo usan los guards anti-borrado de los re-sorteos: un re-sorteo que
+     descarta el progreso (results={}) sobre un torneo con la fase de grupos
+     ya jugada debe CONFIRMARSE y sellar `resetAt` (intención explícita), o el
+     merge del servidor lo trataría como un clobber accidental y lo
+     rechazaría. Bug 2026-06-25 («Mundial 2032: 80% de los grupos borrado»). */
+  function _tourCfgPlayedCount(cfg){
+    var n = 0;
+    try {
+      var r = cfg && cfg.results;
+      if (r && typeof r === 'object') {
+        Object.keys(r).forEach(function(k){
+          var v = r[k];
+          if (v && (v.played || typeof v.gh === 'number' || typeof v.a === 'number'
+                    || typeof v.golesLocal === 'number')) n++;
+        });
+      }
+    } catch(_){}
+    return n;
+  }
+  /* Confirma un re-sorteo DESTRUCTIVO (borra results) cuando ya hay partidos
+     jugados, y SELLA `resetAt` para que el cuadro nuevo gane la fusión del
+     servidor (sin el sello, el merge lo rechaza para proteger el progreso de
+     los otros dispositivos). Devuelve false si el usuario cancela. */
+  /* Firma del sorteo = nombres de equipos EN ORDEN (espejo de `_teams_sig`
+     del servidor). Mismo sorteo ⇒ misma firma ⇒ los resultados se unen; si
+     difiere es otro sorteo/recreación. Sirve para detectar un re-sorteo
+     entrante que machacaría el progreso local. */
+  function _tourTeamsSig(cfg){
+    try {
+      var ts = cfg && cfg.teams;
+      if (!Array.isArray(ts)) return '';
+      return ts.map(function(t){
+        var nm = (t && typeof t === 'object') ? t.name : t;
+        return String(nm == null ? '' : nm).trim().toLowerCase();
+      }).join('¬');
+    } catch(_){ return ''; }
+  }
+  function _tourConfirmAndStampRedraw(cfg, label){
+    var played = _tourCfgPlayedCount(cfg);
+    if (played > 0) {
+      var msg = '⚠️ Este torneo ya tiene ' + played + ' partido(s) jugado(s).\n\n'
+        + 'Un nuevo sorteo BORRARÁ toda la fase de grupos y el cuadro actual '
+        + '(en TODOS los dispositivos).\n\n¿Seguro que quieres re-sortear «'
+        + (label || 'el torneo') + '»?';
+      try { if (!window.confirm(msg)) return false; } catch(_){}
+    }
+    cfg.resetAt = Date.now();   /* autoriza el descarte cross-device */
+    return true;
+  }
+
   /* Lectura SINCRÓNICA del torneo desde memoria → localStorage →
      defaults. NO toca el servidor — para usar cuando queremos
      pintar/abrir el editor sin esperar (petición usuario 2026-05-08:
@@ -23591,6 +23642,29 @@ window._showSimProgress = function(opts, onDone){
           if (srvUpd && localUpd && srvUpd <= localUpd) {
             return localCfg || cfg;
           }
+          /* ANTI-CLOBBER DE RE-SORTEO (bug 2026-06-25, «Mundial 2032: el 80%
+             de la fase de grupos se borró y salen grupos distintos»): si el
+             server trae OTRO sorteo (equipos en otro orden) con MENOS partidos
+             jugados que el local y SIN un `resetAt` más reciente, NO adoptarlo
+             — es un cuadro vacío recién re-sorteado en otro dispositivo que,
+             por tener un updatedAt mayor, machacaría el progreso local. Lo
+             RECHAZAMOS y RE-SUBIMOS el local para CURAR el servidor (mismo
+             criterio que el merge del server: gana la copia con más jugados,
+             salvo `resetAt` deliberado). Así basta con que UN dispositivo
+             conserve el torneo para restaurarlo en todos. */
+          try {
+            if (localCfg) {
+              var _lsig = _tourTeamsSig(localCfg), _ssig = _tourTeamsSig(cfg);
+              if (_lsig && _ssig && _lsig !== _ssig) {
+                var _lReset = (+localCfg.resetAt) || 0, _sReset = (+cfg.resetAt) || 0;
+                if (_sReset <= _lReset
+                    && _tourCfgPlayedCount(localCfg) > _tourCfgPlayedCount(cfg)) {
+                  try { if (typeof window._tourSave === 'function') window._tourSave(id, localCfg); } catch(_){}
+                  return localCfg;
+                }
+              }
+            }
+          } catch(_){}
           /* ANTI-PÉRDIDA DE ACTA (2026-06-06): aunque el server sea más
              reciente, NUNCA descartar los eventos que la copia LOCAL ya
              tenía para un partido con el MISMO marcador. Un merge del server
@@ -25728,6 +25802,10 @@ window._showSimProgress = function(opts, onDone){
               teams.push(eurs[g2*2], eurs[g2*2+1], rms[g2*2], rms[g2*2+1]);
             }
           }
+          /* Anti-borrado accidental: confirmar si ya hay partidos jugados y
+             sellar `resetAt` para que el cuadro nuevo gane la fusión del
+             servidor (bug 2026-06-25). */
+          if (!_tourConfirmAndStampRedraw(cfg, cfg.name)) return;
           cfg.teams = teams;
           cfg.numTeams = total;
           cfg.numHumans = teams.filter(function(t){ return t && t.isHuman; }).length;
@@ -26102,6 +26180,13 @@ window._showSimProgress = function(opts, onDone){
         var ic = iconOf(v.name);
         teams.push({ name:v.name, isHuman:!!ic, icon:ic||'', shield:v.shield||'', power:v.power||75 });
       }
+      /* Anti-borrado accidental (bug 2026-06-25, «Mundial 2032: 80% de la
+         fase de grupos borrada y grupos distintos»): si el torneo ya tiene
+         partidos jugados, confirmar la recomposición destructiva y sellar
+         `resetAt` para que el cuadro nuevo gane la fusión del servidor. Sin
+         el sello, el merge trata el cfg vacío como un clobber accidental y lo
+         RECHAZA — protegiendo a los otros dispositivos. */
+      if (!_tourConfirmAndStampRedraw(cfg, cfg.name)) return;
       cfg.teams = teams;
       cfg.numTeams = total;
       cfg.numHumans = teams.filter(function(t){ return t.isHuman; }).length;
@@ -30579,6 +30664,10 @@ window._showSimProgress = function(opts, onDone){
           _setFeedback('⚠ ' + draw.error + '  ·  Nombre y formato guardados igualmente.', false);
           return;
         }
+        /* Anti-borrado accidental: si ya hay partidos jugados, confirmar
+           el re-sorteo destructivo y sellar `resetAt` para que el cuadro
+           nuevo gane la fusión del servidor (bug 2026-06-25). */
+        if (!_tourConfirmAndStampRedraw(_open.cfg, _open.cfg.name)) return;
         _open.cfg.teams = draw.teams;
         /* Un sorteo nuevo descarta el progreso anterior: los fixtures,
            el cuadro KO y los resultados ya no corresponden a estos

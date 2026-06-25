@@ -95,24 +95,50 @@ m = tour_cfg_merge(json.dumps(old), new)
 check("torneo: POST stale/vacío NO borra resultados existentes",
       "a1" in m["results"])
 
-# Re-sorteo (equipos distintos) → gana el documento más reciente, sin
-# mezclar resultados de fixtures que ya no existen.
+# Re-sorteo DELIBERADO (equipos distintos + `resetAt` fresco) → gana el
+# cuadro nuevo, descartando el progreso anterior (intención explícita del
+# admin). El sello `resetAt` es lo que autoriza el descarte.
 old = _cfg({"x": {"played": True, "a": 1, "b": 0}},
            "2026-06-03T10:00:00.000Z", teams=[{"name": "Francia"}, {"name": "Vietnam"}])
 new = _cfg({}, "2026-06-03T14:00:00.000Z",
            teams=[{"name": "Brasil"}, {"name": "Japon"}])
+new["resetAt"] = 1759000000000
 m = tour_cfg_merge(json.dumps(old), new)
-check("torneo: re-sorteo (equipos distintos) toma el más reciente",
-      _norm := [t["name"] for t in m["teams"]] == ["Brasil", "Japon"] and m["results"] == {})
+check("torneo: re-sorteo DELIBERADO (resetAt) adopta el cuadro nuevo",
+      [t["name"] for t in m["teams"]] == ["Brasil", "Japon"] and m["results"] == {})
 
-# Re-sorteo pero el entrante es MÁS VIEJO → se conserva el del servidor
-# (anti-stale; mejor que el last-write actual).
-old = _cfg({"x": {"played": True, "a": 1, "b": 0}},
-           "2026-06-03T15:00:00.000Z", teams=[{"name": "Brasil"}, {"name": "Japon"}])
-new = _cfg({}, "2026-06-03T09:00:00.000Z",
-           teams=[{"name": "Francia"}, {"name": "Vietnam"}])
+# ── ANTI-CLOBBER DE RE-SORTEO ACCIDENTAL (bug «Mundial 2032» 2026-06-25) ──
+# Re-sorteo SIN `resetAt` (equipos distintos + results={}) con updatedAt MÁS
+# NUEVO: NO debe borrar un torneo con la fase de grupos ya jugada. Gana la
+# copia con más partidos jugados aunque su updatedAt sea menor → el 80% del
+# Mundial 2032 sobrevive y se cura solo en el servidor al re-sincronizar.
+old = _cfg({"g0_0_0": {"played": True, "a": 3, "b": 1},
+            "g0_0_1": {"played": True, "a": 1, "b": 0}},
+           "2026-06-03T10:00:00.000Z", teams=[{"name": "Francia"}, {"name": "Senegal"}])
+new = _cfg({}, "2026-06-25T14:00:00.000Z",
+           teams=[{"name": "Camboya"}, {"name": "Nepal"}])  # cuadro re-sorteado vacío, SIN resetAt
 m = tour_cfg_merge(json.dumps(old), new)
-check("torneo: entrante stale con otro sorteo NO machaca al servidor",
+check("torneo: re-sorteo ACCIDENTAL vacío (sin resetAt) NO borra el 80% jugado",
+      [t["name"] for t in m["teams"]] == ["Francia", "Senegal"]
+      and "g0_0_0" in m["results"] and "g0_0_1" in m["results"])
+
+# Y al revés: el dispositivo que CONSERVA el torneo lo re-sube como ENTRANTE
+# y CURA el servidor que tenía el cuadro vacío (recuperación cross-device).
+old = _cfg({}, "2026-06-25T14:00:00.000Z",
+           teams=[{"name": "Camboya"}, {"name": "Nepal"}])  # servidor clobbereado
+new = _cfg({"g0_0_0": {"played": True, "a": 3, "b": 1}},
+           "2026-06-03T10:00:00.000Z", teams=[{"name": "Francia"}, {"name": "Senegal"}])
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: el dispositivo con el torneo CURA el servidor vacío (recuperación)",
+      [t["name"] for t in m["teams"]] == ["Francia", "Senegal"]
+      and "g0_0_0" in m["results"])
+
+# Re-sorteo pero el entrante es MÁS VIEJO y AMBOS vacíos → se conserva el del
+# servidor (anti-stale; mejor que el last-write actual).
+old = _cfg({}, "2026-06-03T15:00:00.000Z", teams=[{"name": "Brasil"}, {"name": "Japon"}])
+new = _cfg({}, "2026-06-03T09:00:00.000Z", teams=[{"name": "Francia"}, {"name": "Vietnam"}])
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: entrante stale con otro sorteo (ambos vacíos) NO machaca al servidor",
       [t["name"] for t in m["teams"]] == ["Brasil", "Japon"])
 
 # RESET deliberado: el usuario reinicia (results={} + resetAt) → el

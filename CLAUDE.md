@@ -702,6 +702,69 @@ pantalla** que tiene 1 partido de lesión + el tipo. En `misc_body_1.html`
    genéricos por equipo/selección; el badge y la sync no hardcodean
    Liverpool/Francia).
 
+## Un RE-SORTEO de torneo NO machaca un cuadro con partidos jugados — anti-clobber + recuperación (obligatorio, 2026-06-25)
+
+**Bug (fotos usuario 2026-06-25, «Mundial 2032 Selecciones»)**: con el
+**80% de la fase de grupos** jugada en 6 móviles + PC (Francia 3-1
+Senegal, Inglaterra 0-2 Panamá, Iraq 0-4 Noruega…), de repente **se
+borró TODO y aparecieron grupos DISTINTOS** (Grupo A pasó a
+Camboya/EE.UU./India/Nepal, todo 0/6). «Estaba todo guardado, qué ha
+pasado.»
+
+### Causa raíz
+
+El Mundial 2032 es un torneo `format='mundial-48'`: los 12 grupos de 4
+salen de `cfg.teams` **EN ORDEN** (`teams.slice(g*4, g*4+4)`), y los
+resultados se indexan por matchKey `g<g>_<jor>_<mi>`. Si el ORDEN de
+`cfg.teams` cambia, cambian los grupos Y los matchKeys dejan de
+corresponder. Un re-sorteo (manual roster editor `sr-ok`, `_drawTeams`,
+o el split del Mundialito) genera un `cfg.teams` nuevo con `results={}`.
+
+El clobber lo amplificaba la fusión: en `tour_cfg_merge`
+(`sync_merge.py`), cuando las firmas de equipos diferían
+(`new_sig != old_sig`) se devolvía SIEMPRE **la copia con `updatedAt`
+más reciente**. Un cuadro vacío recién re-sorteado en UN dispositivo
+(updatedAt fresco, sin `resetAt`) **GANABA** y machacaba el 80% jugado
+en los otros 6. Y en el cliente, `_tourLoad` adoptaba ese cfg vacío del
+server (su `updatedAt` era mayor) y **sobrescribía su propio
+localStorage**, así que ni el dispositivo que conservaba el torneo lo
+salvaba → pérdida total, irreversible.
+
+### Fix — el progreso jugado es lo que manda; el descarte exige `resetAt`
+
+- **Servidor** (`tour_cfg_merge`, rama `new_sig != old_sig`): ya NO gana
+  el `updatedAt`. Decide así: (1) si un lado trae `resetAt` **mayor**
+  (re-sorteo DELIBERADO sellado), gana ese; (2) si no, gana la copia con
+  **más partidos jugados** (`_count_played`); (3) empate de progreso →
+  `updatedAt`. Un cuadro vacío sin `resetAt` NUNCA borra una fase de
+  grupos jugada.
+- **Cliente** (`_tourLoad`, `misc_body_1.html`): tras el GET, si el
+  server trae OTRO sorteo (`_tourTeamsSig` distinta) con MENOS jugados y
+  sin `resetAt` mayor, **NO lo adopta**: conserva el local y lo
+  **RE-SUBE** (`_tourSave`) para CURAR el servidor. Basta con que UN
+  dispositivo conserve el torneo para restaurarlo en todos
+  (recuperación automática).
+- **Cliente** (los 3 re-sorteos destructivos: `sr-ok`, `_drawTeams`,
+  split Mundialito): `_tourConfirmAndStampRedraw` pide CONFIRMACIÓN si ya
+  hay partidos jugados y SELLA `cfg.resetAt = Date.now()` para que un
+  re-sorteo INTENCIONADO sí gane la fusión.
+- Tests en `tests/test_sync_merge.py` (re-sorteo accidental vacío NO
+  borra · re-sorteo deliberato con `resetAt` sí · recuperación
+  cross-device).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `tour_cfg_merge` vuelva a arbitrar el caso
+   `new_sig != old_sig` SOLO por `updatedAt`. El progreso (`_count_played`)
+   gana salvo `resetAt` deliberado más reciente. Sin esto, un re-sorteo
+   accidental/stale machaca el torneo de todos.
+2. **PROHIBIDO** que `_tourLoad` adopte un cfg del server con OTRO sorteo
+   y menos jugados sin `resetAt` mayor: debe conservar el local y
+   re-subirlo (la recuperación depende de esto).
+3. **PROHIBIDO** que un re-sorteo destructivo (borra `results`) corra sin
+   `_tourConfirmAndStampRedraw` (confirma + sella `resetAt`). Todo flujo
+   NUEVO que regenere `cfg.teams` + vacíe `results` hereda este guard.
+
 ## El `resetAt` de torneo NO debe descartar partidos jugados DESPUÉS del reinicio (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Ronda Previa 1»)**: el usuario tenía

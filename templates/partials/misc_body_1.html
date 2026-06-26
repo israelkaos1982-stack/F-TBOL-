@@ -46754,6 +46754,30 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     if (!pickedCount) { alert('No has seleccionado ningún equipo.'); return; }
 
+    /* TOPE de Liga EA Sports (20 equipos): si el destino es EA Sports,
+       no permitir que la fusión lo deje por encima de 20 — si no, el
+       editor de EA Sports queda bloqueado ("Borra alguno antes de
+       guardar"). Solo cuentan los equipos NUEVOS (los que no estén ya
+       en EA por nombre). 2026-06-26. */
+    if (destSlug === 'liga-ea-sports') {
+      var _eaData = loadData(destSlug) || {teams:[]};
+      var _eaTeams = Array.isArray(_eaData.teams) ? _eaData.teams : [];
+      var _eaNames = {};
+      _eaTeams.forEach(function(t){ if (t && t.name) _eaNames[_lextNormName(t.name)] = true; });
+      var _srcD = loadData(CURRENT_KEY) || {teams:[]};
+      var _netNew = 0;
+      (Array.isArray(_srcD.teams) ? _srcD.teams : []).forEach(function(t){
+        if (t && t.id && selectedIds[t.id] && !_eaNames[_lextNormName(t.name||'')]) _netNew++;
+      });
+      if (_eaTeams.length + _netNew > 20) {
+        alert('⚠️ Liga EA Sports tiene un tope de 20 equipos.\n\n'
+          + 'Ahora tiene ' + _eaTeams.length + ' y moverías ' + _netNew + ' nuevo(s) → '
+          + (_eaTeams.length + _netNew) + '.\n\n'
+          + 'Mueve o borra alguno de EA Sports a otra liga primero.');
+        return;
+      }
+    }
+
     var doMove = function(){
       if (!confirm('Vas a mover ' + pickedCount + ' equipo(s) desde "' + _lextSlugLabel(CURRENT_KEY) + '" a "' + _lextSlugLabel(destSlug) + '".\n\n¿Continuar?')) return;
 
@@ -46819,6 +46843,17 @@ https://api.sofascore.app/api/v1/team/44/image
       try { if (typeof renderTeamsList === 'function') renderTeamsList(); } catch(_){}
       try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
       try { if (typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides(); } catch(_){}
+      /* Si el editor de CARDS está abierto para la liga origen, sus
+         equipos en memoria (`_LC_STATE`) están desfasados respecto al
+         storage recién guardado. Re-cargarlo evita que un posterior
+         «Guardar» re-escriba los equipos que acabamos de mover (lo que
+         re-superaría el tope de EA Sports). 2026-06-26. */
+      try {
+        var _cardsOv = document.getElementById('lext-cards-ov');
+        if (_cardsOv && _cardsOv.classList.contains('show') && typeof _lcReload === 'function') {
+          _lcReload();
+        }
+      } catch(_){}
       if (typeof lextCloseOv === 'function') lextCloseOv('lext-ov-move-teams');
 
       var msg = '✅ ' + moved + ' equipo(s) movido(s) a "' + _lextSlugLabel(destSlug) + '".';

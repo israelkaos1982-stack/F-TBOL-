@@ -29042,8 +29042,27 @@ window._showSimProgress = function(opts, onDone){
       /* Defensa Mundialito (2026-06-03): si un equipo de Resto del Mundo
          quedó con el alias eFootball corto como nombre, mostrar el real. */
       try { if (typeof window._rmRealName === 'function') nm = window._rmRealName(nm); } catch(_){}
-      var shield = t && t.shield
-        ? '<img src="'+t.shield+'" onerror="this.style.display=\'none\'" style="width:22px;height:22px;object-fit:contain;flex-shrink:0;">'
+      /* Escudo: preferimos el de cfg.teams, pero un equipo de Resto del
+         Mundo (u otra liga) elegido para el torneo puede NO traerlo en
+         cfg.teams (se añadió a la liga DESPUÉS de crear el torneo, o el
+         pick no copió el escudo). El escudo vive en
+         ligaExt_*.teams[].shield → window._ligaEaShields, que
+         getTeamLogoUrl resuelve por NOMBRE. Backfill por nombre (escudo =
+         identidad, espejo de la regla de Resto de Ligas). Bug 2026-06-26:
+         EC Bahia salía sin escudo en el Trofeo Joan Gamper pese a tenerlo
+         en Resto del Mundo. */
+      var _shieldUrl = (t && t.shield) ? String(t.shield) : '';
+      if (!_shieldUrl) {
+        try {
+          if (typeof window.getTeamLogoUrl === 'function') {
+            _shieldUrl = window.getTeamLogoUrl(nm)
+              || window.getTeamLogoUrl((t && t.name) || '')
+              || '';
+          }
+        } catch(_){}
+      }
+      var shield = _shieldUrl
+        ? '<img src="'+_shieldUrl+'" onerror="this.style.display=\'none\'" style="width:22px;height:22px;object-fit:contain;flex-shrink:0;">'
         : '';
       /* Selección humana de una caja del menú (Francia 💡, …): icono
          SIEMPRE presente + nombre en AMARILLO para encontrarla rápido

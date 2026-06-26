@@ -10440,6 +10440,12 @@ window._showSimProgress = function(opts, onDone){
   .hub-isramax-i{font-family:'Bebas Neue','Oswald',sans-serif;font-size:36px;line-height:.85;color:#ffffff;font-weight:900;text-shadow:0 0 12px rgba(255,80,100,.65),0 1px 2px rgba(0,0,0,.55);letter-spacing:0;background:linear-gradient(135deg,#a01030,#e02040,#ff3b5c,#e02040,#a01030);width:46px;height:46px;border-radius:10px;border:1.5px solid #ffffff;display:flex;align-items:center;justify-content:center;margin-bottom:2px;}
   .hub-isramax-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:15px;font-weight:700;letter-spacing:2.2px;color:#ffc0cf;text-shadow:0 0 8px rgba(255,80,100,.65),0 1px 0 rgba(0,0,0,.55);white-space:nowrap;}
   .hub-isramax-sub{font-family:'Bebas Neue',sans-serif;font-size:22px;line-height:1;color:#fff;text-shadow:0 0 8px rgba(255,80,100,.65);letter-spacing:1.5px;}
+  /* ISRAMAX bloqueada (menor de edad — Izan 🦆 / PSG): caja GRIS,
+     no accesible, patito en vez del logo "I" (2026-06-26). */
+  .hub-card-isramax.is-minor{cursor:not-allowed !important;opacity:.9;filter:grayscale(1) brightness(.72);background:radial-gradient(ellipse at center,rgba(120,128,140,.18),rgba(0,0,0,.35) 65%),linear-gradient(160deg,rgba(42,44,50,.6),rgba(0,0,0,.5)) !important;border:1px solid rgba(150,160,175,.45) !important;box-shadow:0 0 10px rgba(120,130,140,.18),inset 0 0 14px rgba(120,130,140,.05) !important;}
+  .hub-card-isramax.is-minor .hub-isramax-title{color:#c8ccd6 !important;text-shadow:0 1px 0 rgba(0,0,0,.55) !important;}
+  .hub-card-isramax.is-minor .hub-isramax-sub{color:#c8ccd6 !important;text-shadow:0 1px 0 rgba(0,0,0,.55) !important;}
+  .hub-isramax-i.hub-isramax-duck{background:transparent !important;border:none !important;font-size:34px !important;width:auto !important;height:auto !important;text-shadow:0 0 10px rgba(255,210,90,.5),0 1px 2px rgba(0,0,0,.55) !important;}
   /* HUD edit · 🖍 lápiz junto a TOÑÍN — admin PIN 747 abre modal con
      5 inputs (rating, target, money, target, PI). El override
      persiste en localStorage y se re-aplica vía MutationObserver
@@ -53638,7 +53644,7 @@ https://api.sofascore.app/api/v1/team/44/image
     <span class="hub-calendario-title">CALENDARIO</span>
     <span class="hub-calendario-sub" id="munich-cal-fecha">01 May</span>
   </button>
-  <button class="hub-card hub-card-isramax" onclick="window._isramaxOpen&&window._isramaxOpen((window._activeHub&&window._activeHub().id)||'tonin')">
+  <button class="hub-card hub-card-isramax" onclick="if((window._activeHub&&window._activeHub().id)==='izan'){return;}window._isramaxOpen&&window._isramaxOpen((window._activeHub&&window._activeHub().id)||'tonin')">
     <span class="hub-isramax-i">I</span>
     <span class="hub-isramax-title">ISRAMAX</span>
     <span class="hub-isramax-sub" id="munich-isramax-bets">0</span>
@@ -62510,7 +62516,29 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           }
         }
       } catch(_){}
-      isramaxBetsEl.textContent = String(openCount);
+      /* ISRAMAX bloqueada para Izan 🦆 (PSG): es menor de edad (12
+         años), así que su caja de apuestas se vuelve GRIS, no se puede
+         acceder y muestra un patito (su emoji) en vez del logo "I"
+         (petición usuario 2026-06-26). Para el resto de hubs la caja
+         es normal y accesible. */
+      var _isrHubId = '';
+      try { var _ahIsr = window._activeHub && window._activeHub(); if (_ahIsr && _ahIsr.id) _isrHubId = String(_ahIsr.id); } catch(_){}
+      var _isrMinor = (_isrHubId === 'izan');
+      var isramaxCard = (isramaxBetsEl.closest ? isramaxBetsEl.closest('.hub-card-isramax') : null)
+                        || document.querySelector('.hub-card-isramax');
+      var isramaxIEl = isramaxCard ? isramaxCard.querySelector('.hub-isramax-i') : null;
+      var isramaxTitleEl = isramaxCard ? isramaxCard.querySelector('.hub-isramax-title') : null;
+      if (_isrMinor) {
+        if (isramaxCard) isramaxCard.classList.add('is-minor');
+        if (isramaxIEl) { isramaxIEl.textContent = '🦆'; isramaxIEl.classList.add('hub-isramax-duck'); }
+        if (isramaxTitleEl) isramaxTitleEl.textContent = 'SOLO +18';
+        isramaxBetsEl.textContent = '🔒';
+      } else {
+        if (isramaxCard) isramaxCard.classList.remove('is-minor');
+        if (isramaxIEl) { isramaxIEl.textContent = 'I'; isramaxIEl.classList.remove('hub-isramax-duck'); }
+        if (isramaxTitleEl) isramaxTitleEl.textContent = 'ISRAMAX';
+        isramaxBetsEl.textContent = String(openCount);
+      }
     }
     /* Re-aplicar overrides del HUD (presupuesto/valoración/PI custom)
        después de que esta función haya reescrito los spans con los

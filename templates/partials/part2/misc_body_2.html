@@ -398,6 +398,47 @@
 </div>
 </div>
 </div>
+<div class="screen" id="s-internazionale">
+<script>
+/* La caja Inter (🐲, 7º mister 2026-06-26) REUTILIZA el hub genérico
+   `s-munich` parametrizado por HUB ACTIVO (multi-hub): al activarse esta
+   pantalla fija el hub activo = Inter y abre s-munich, que muestra
+   plantilla / histórico derbys / calendario / trofeos / objetivos / HUD
+   del Inter. Cubre también la caja dinámica del menú (admin) que sólo hace
+   go('s-internazionale'). Mismo patrón que s-psg / s-arsenal. */
+(function(){
+  if(window.__interHubRedirectReady) return; window.__interHubRedirectReady=true;
+  function _redir(){
+    try{ if(window.setActiveHub) window.setActiveHub('inter'); }catch(_){}
+    try{ if(window.go) window.go('s-munich'); }catch(_){}
+  }
+  function _wire(){
+    var scr=document.getElementById('s-internazionale');
+    if(!scr) return;
+    if(scr.classList.contains('active')) _redir();
+    try{
+      var obs=new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          if(muts[i].attributeName==='class' && scr.classList.contains('active')){ _redir(); return; }
+        }
+      });
+      obs.observe(scr, { attributes:true, attributeFilter:['class'] });
+    }catch(_){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _wire);
+  else _wire();
+})();
+</script>
+<button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+<div class="sec-hdr">
+<div style="display:flex;flex-direction:column;gap:2px;">
+<div style="display:flex;align-items:center;gap:6px;">
+<span style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;color:#2563eb;">🐲 Inter</span>
+</div>
+</div></div>
+<div class="empty-ph" style="padding:40px 14px;">Abriendo el hub del Inter…</div>
+</div>
+
 <div class="screen" id="s-psg">
 <script>
 /* La caja PSG-España (Izan 🦆🇪🇸) REUTILIZA el hub genérico `s-munich`
@@ -992,7 +1033,8 @@
   var STORAGE_KEY_TEAMS    = 'manual_ea_superliga_v1';
   var STORAGE_KEY_CALENDAR = 'superliga_calendar_v1';
   var STORAGE_KEY_RESULTS  = 'superliga_results_v1';
-  var TOTAL_TEAMS = 6;
+  var TOTAL_TEAMS = 7;
+  var _BYE = '__sl_bye__'; // descanso ficticio para circle method con nº IMPAR
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function _logoFor(name){
@@ -1025,15 +1067,19 @@
     try { localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(r||{})); } catch(_){}
   }
 
-  /* Genera 5 jornadas (round-robin simple) con 6 equipos por circle method. */
+  /* Round-robin simple por circle method. Soporta nº IMPAR de equipos con
+     un descanso (BYE) ficticio: la pareja contra el BYE no genera partido.
+     Con 7 equipos → 7 jornadas, 3 partidos por jornada, 6 partidos/ciclo. */
   function singleRoundRobin(teams){
-    var n = teams.length;
     var arr = teams.slice();
+    if(arr.length % 2 !== 0) arr.push(_BYE); // impar → añade descanso
+    var n = arr.length;
     var rounds = [];
     for(var r = 0; r < n - 1; r++){
       var round = [];
       for(var i = 0; i < n / 2; i++){
         var t1 = arr[i], t2 = arr[n - 1 - i];
+        if(t1 === _BYE || t2 === _BYE) continue; // descanso → sin partido
         if(r % 2 === 0) round.push([t1, t2]);
         else            round.push([t2, t1]);
       }
@@ -1044,7 +1090,8 @@
     }
     return rounds;
   }
-  /* 20 jornadas: 4 ciclos (ida-vuelta-ida-vuelta) → 4 partidos por pareja. */
+  /* 28 jornadas: 4 ciclos (ida-vuelta-ida-vuelta) → cada pareja 4 veces;
+     con 7 equipos = 24 partidos por equipo. */
   function buildSchedule(teams){
     var first = singleRoundRobin(teams);
     var second = first.map(function(round){ return round.map(function(m){ return [m[1], m[0]]; }); });
@@ -1141,10 +1188,10 @@
     }).join('');
   }
   function rowZone(pos){
-    /* 1º y 2º amarillo (zona campeonato), 3º verde, 6º rojo. */
+    /* 1º y 2º amarillo (zona campeonato), 3º verde, último rojo. */
     if(pos === 1 || pos === 2) return 'zone-champ';
     if(pos === 3) return 'zone-third';
-    if(pos === 6) return 'zone-bot';
+    if(pos === TOTAL_TEAMS) return 'zone-bot';
     return '';
   }
 
@@ -15801,6 +15848,12 @@
         else if (_gm._isWprev)                                                       _adComp = 'ucl';
         else if (_gm._isEurFase)                                                     _adComp = (_gm._eurFaseComp || 'ucl');
         else if (_gm._isSuperliga|| _gm.comp === 'superliga')                       _adComp = 'superliga';
+        /* Torneos del motor `_tour*` (Joan Gamper y demás de Verano) — los
+           HvH entre humanos también son derbys (petición usuario 2026-06-26).
+           Antes caían al fallback 'liga'. `_munichDerbyAutoLog` re-clasifica
+           a 'seleccion' si ambos lados son selecciones humanas. comp
+           'torneo' → COMP_LABEL "Torneo Verano". */
+        else if (_gm._isTour)                                                        _adComp = 'torneo';
         else if (_gm.isFriendly)                                                     _adComp = 'amistoso';
         var _adJornada = '';
         if (_adComp === 'liga')      _adJornada = String(_gm.j || '');
@@ -24479,7 +24532,10 @@ window.goLiveMatches = function() {
     { id:'alvaro', name:'Álvaro', team:'Arsenal',           icon:'🐭', pin:'609', color:'#a8a29e', dark:'#3f3f3a' },
     { id:'acsa',   name:'Acsa',   team:'Real Madrid',       icon:'🔨', pin:'216', color:'#fb923c', dark:'#7c2d12' },
     { id:'israel', misterId:'isra', name:'Israel', team:'Atlético Madrid',   icon:'✏️', pin:'646', color:'#facc15', dark:'#854d0e' },
-    { id:'angel',  name:'Ángel',  team:'FC Barcelona',      icon:'👿', pin:'171', color:'#c084fc', dark:'#581c87' }
+    { id:'angel',  name:'Ángel',  team:'FC Barcelona',      icon:'👿', pin:'171', color:'#c084fc', dark:'#581c87' },
+    /* 7º entrenador (2026-06-26): Inter🐲. misterId 'inter' → su HUD vive
+       en `bayern_hud_overrides_v1_inter` (consistente con el registro). */
+    { id:'inter',  misterId:'inter', name:'Inter', team:'Inter', icon:'🐲', pin:'414', color:'#2563eb', dark:'#0a1740' }
   ];
   var ISRAMAX_INITIAL_CASH = 1300;
   var _isramaxSession = null; /* {userId, isGuest} en memoria */
@@ -25376,7 +25432,8 @@ window.goLiveMatches = function() {
       ['alvaro', ['Arsenal','Arsenal FC','Real Betis','Betis','Real Betis Balompie','Brasil','Brazil']],
       ['acsa',   ['Real Madrid','Real Madrid CF','Real Sociedad','Sociedad','Real Sociedad de Futbol','Manchester City','Man City','Manchester City FC','Inglaterra','England','Gran Bretaña']],
       ['israel', ['Atlético Madrid','Atletico Madrid','Atletico de Madrid','Atleti','Vallecas BR','Rayo Vallecano','Rayo','Rayo Vallecano de Madrid','Noruega','Norway']],
-      ['angel',  ['FC Barcelona','Barcelona','Futbol Club Barcelona','Barca','Barça','FCBarcelona','Argentina']]
+      ['angel',  ['FC Barcelona','Barcelona','Futbol Club Barcelona','Barca','Barça','FCBarcelona','Argentina']],
+      ['inter',  ['Inter','Internazionale','FC Internazionale','Inter Milan','Inter Milán','Inter de Milan','Inter de Milán']]
     ];
     var out = {};
     pairs.forEach(function(p){

@@ -1244,7 +1244,7 @@ window._showSimProgress = function(opts, onDone){
 (function(){
   var KEY = 'menu_home_v1';
   var GRID_SEL = '#s-home .menu-grid';
-  var NAV_TARGETS = ['', 's-munich','s-arsenal','s-madrid','s-atletico','s-barca','s-psg',
+  var NAV_TARGETS = ['', 's-munich','s-arsenal','s-madrid','s-atletico','s-barca','s-psg','s-internazionale',
     's-espana','s-competiciones','s-champions','s-uel','s-uecl','s-usc',
     's-intercontinental','s-ligas','s-selecciones','s-pendientes',
     's-liga','s-copa','s-segunda','s-home'];
@@ -36362,7 +36362,14 @@ window._showSimProgress = function(opts, onDone){
     { id:'acsa',   emoji:'🔨', mister:'Acsa',   club:'Real Madrid',    seleccion:'Inglaterra', screen:'s-madrid'   },
     { id:'isra',   emoji:'✏️', mister:'Isra',   club:'Atlético Madrid', seleccion:'Noruega',    screen:'s-atletico' },
     { id:'angel',  emoji:'😈', mister:'Ángel',  club:'FC Barcelona',   seleccion:'Argentina',  screen:'s-barca'    },
-    { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',            seleccion:'España',     screen:'s-psg'      }
+    { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',            seleccion:'España',     screen:'s-psg'      },
+    /* 7º mister (2026-06-26, petición usuario): Inter🐲. Club humano de la
+       Superliga (7 equipos). Sin selección asignada (seleccion:'' → los
+       resolutores de selección lo ignoran). Hereda automáticamente:
+       reconocimiento humano (_isHumanClubCanonico → derbys + Superliga),
+       claves de hub namespaced `_inter` (Histórico Derbys / Trofeos
+       preservados en "Reiniciar Temporada"), e ISRAMAX. */
+    { id:'inter',  emoji:'🐲', mister:'Inter',  club:'Inter',          seleccion:'',           screen:'s-internazionale' }
   ];
   function _mhNorm(s){
     return String(s||'')
@@ -36417,18 +36424,38 @@ window._showSimProgress = function(opts, onDone){
     for (var pa = 0; pa < psgAlias.length; pa++){
       if (_mhNorm(name) === _mhNorm(psgAlias[pa])) return true;
     }
+    /* Inter (2026-06-26): nombre corto. El match laxo `_mhMatchName`
+       atraparía "Inter Miami" / "Internacional" (otros clubes reales)
+       como substring. Igual que Liverpool/PSG → alias EXACTO. */
+    if (_mhIsInterName(name)) return true;
     for (var i = 1; i < MISTERS_HUMANOS.length; i++){
+      if (MISTERS_HUMANOS[i].id === 'inter') continue; /* manejado exacto arriba */
       if (_mhMatchName(name, MISTERS_HUMANOS[i].club)) return true;
     }
     return false;
   };
+  /* Alias EXACTO del Inter de Milán (nerazzurro). Distingue del resto de
+     "Inter*" reales (Inter Miami, Internacional de Porto Alegre…). */
+  var _INTER_ALIASES = ['Inter','Internazionale','FC Internazionale','FC Internazionale Milano',
+                        'Inter Milan','Inter Milán','Inter de Milan','Inter de Milán'];
+  function _mhIsInterName(name){
+    if (!name) return false;
+    var nn = _mhNorm(name);
+    for (var k = 0; k < _INTER_ALIASES.length; k++){
+      if (nn === _mhNorm(_INTER_ALIASES[k])) return true;
+    }
+    return false;
+  }
   /* Devuelve el mister que dirige a este team (club o selección), o
      null si no es humano. Util para emparejar Liverpool ↔ Francia
      ("el mismo Toñín dirige ambos"). */
   window._mhFindMister = function(name){
     if (!name) return null;
+    /* Inter → alias EXACTO (evita atrapar "Inter Miami"/"Internacional"). */
+    if (_mhIsInterName(name)) return _mhById('inter');
     for (var i = 0; i < MISTERS_HUMANOS.length; i++){
       var m = MISTERS_HUMANOS[i];
+      if (m.id === 'inter') continue; /* manejado exacto arriba */
       if (_mhMatchName(name, m.club) || _mhMatchName(name, m.seleccion)) return m;
     }
     /* Liverpool alias legacy — EXACTO (ver _isHumanClubCanonico): la

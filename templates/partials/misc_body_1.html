@@ -41091,8 +41091,8 @@ Tottenham
     </div>
     <div class="lext-sub" id="lext-mv-source-info" style="margin-bottom:8px;"></div>
 
-    <label class="lext-label" style="margin-top:6px;">Liga destino</label>
-    <select id="lext-mv-dest-slug" class="lext-select" style="width:100%;"></select>
+    <label class="lext-label" style="margin-top:6px;">Liga destino — toca ✅ la liga a la que mover</label>
+    <div id="lext-mv-dest-picker" style="max-height:30vh;overflow-y:auto;border:1px solid rgba(120,200,255,.35);border-radius:8px;background:rgba(120,200,255,.04);padding:4px;"></div>
 
     <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
       <button class="lext-btn" type="button" onclick="lextMoveTeamsToggleAll(true)" style="font-size:11px;padding:5px 10px;">☑ Todos</button>
@@ -46616,19 +46616,31 @@ https://api.sofascore.app/api/v1/team/44/image
       info.innerHTML = 'Origen: <b>'+_lextSlugLabel(CURRENT_KEY)+'</b> · '+teams.length+' equipos';
     }
 
-    var sel = document.getElementById('lext-mv-dest-slug');
-    if (sel) {
+    /* Picker ✅ (NO <select> nativo: en móvil cancelaba la elección al
+       primer toque — mismo bug que el picker de balones, 2026-05-24).
+       El admin TOCA la fila de la liga destino y queda marcada con ✅. */
+    _lextMvDestSlug = '';
+    var picker = document.getElementById('lext-mv-dest-picker');
+    if (picker) {
       var slugs = _lextListAllSlugs();
-      var html = '';
-      slugs.forEach(function(s){
-        if (s === CURRENT_KEY) return;
-        html += '<option value="'+s+'">'+_lextSlugLabel(s)+'</option>';
-      });
-      sel.innerHTML = html;
       /* Preferencia por defecto: Primera Fed si origen es Hypermotion,
          y viceversa (caso reportado). */
-      if (CURRENT_KEY === 'liga-hypermotion')        sel.value = 'liga-primera-federacion';
-      else if (CURRENT_KEY === 'liga-primera-federacion') sel.value = 'liga-hypermotion';
+      var pref = '';
+      if (CURRENT_KEY === 'liga-hypermotion')             pref = 'liga-primera-federacion';
+      else if (CURRENT_KEY === 'liga-primera-federacion') pref = 'liga-hypermotion';
+      var phtml = '';
+      slugs.forEach(function(s){
+        if (s === CURRENT_KEY) return;
+        var lbl = _lextSlugLabel(s).replace(/[<>&]/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});
+        phtml += '<div class="lext-mv-dest-opt" data-slug="'+s+'" role="button" tabindex="0" '
+          + 'onclick="lextMoveTeamsPickDest(\''+s+'\')" '
+          + 'style="display:flex;align-items:center;gap:8px;padding:9px 8px;border-radius:6px;cursor:pointer;font-size:13.5px;color:#fff;">'
+          + '<span class="lext-mv-dest-tick" style="flex:0 0 20px;font-size:15px;text-align:center;color:#a8d8ff;"></span>'
+          + '<span style="flex:1;">'+lbl+'</span>'
+          + '</div>';
+      });
+      picker.innerHTML = phtml || '<div class="lext-sub" style="padding:10px;">No hay otras ligas disponibles.</div>';
+      if (pref) lextMoveTeamsPickDest(pref);
     }
 
     var list = document.getElementById('lext-mv-list');
@@ -46650,6 +46662,22 @@ https://api.sofascore.app/api/v1/team/44/image
     if (f) f.value = '';
     lextMoveTeamsUpdateCounter();
     if (typeof lextOpenOv === 'function') lextOpenOv('lext-ov-move-teams');
+  };
+
+  /* Slug de la liga destino elegida con ✅ (reemplaza el .value del
+     antiguo <select>). */
+  var _lextMvDestSlug = '';
+
+  window.lextMoveTeamsPickDest = function(slug){
+    _lextMvDestSlug = slug || '';
+    var opts = document.querySelectorAll('#lext-mv-dest-picker .lext-mv-dest-opt');
+    for (var i = 0; i < opts.length; i++) {
+      var on = (opts[i].getAttribute('data-slug') === _lextMvDestSlug);
+      var tick = opts[i].querySelector('.lext-mv-dest-tick');
+      if (tick) tick.textContent = on ? '✅' : '';
+      opts[i].style.background = on ? 'rgba(120,200,255,.22)' : '';
+      opts[i].style.border = on ? '1px solid rgba(120,200,255,.6)' : '1px solid transparent';
+    }
   };
 
   window.lextMoveTeamsToggleAll = function(on){
@@ -46689,9 +46717,8 @@ https://api.sofascore.app/api/v1/team/44/image
 
   window.lextExecuteMoveTeams = function(){
     if (!CURRENT_KEY) return;
-    var dest = document.getElementById('lext-mv-dest-slug');
-    var destSlug = dest ? dest.value : '';
-    if (!destSlug) { alert('Elige una liga destino.'); return; }
+    var destSlug = _lextMvDestSlug || '';
+    if (!destSlug) { alert('Toca ✅ la liga destino primero.'); return; }
     if (destSlug === CURRENT_KEY) { alert('La liga destino debe ser distinta de la origen.'); return; }
     var chks = document.querySelectorAll('#lext-mv-list .lext-mv-chk');
     var selectedIds = {};

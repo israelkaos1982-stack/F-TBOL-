@@ -51224,8 +51224,18 @@ https://api.sofascore.app/api/v1/team/44/image
   };
   window.lextCardsSave = function(){ _lcCommit(false); };
   window.lextCardsAdvanced = function(){
+    /* Excepción al commit-antes-de-abrir: si EA Sports está por encima
+       del tope de 20 (p.ej. tras mover un equipo de más), `_lcCommit`
+       falla SIEMPRE y dejaría al admin ATRAPADO sin poder llegar al
+       form avanzado — que es justo donde está el 🔀 «Mover equipos»
+       para arreglarlo. En ese caso abrimos el avanzado SIN commit (los
+       datos ya están en storage). 2026-06-26. */
+    var _overCap = (CURRENT_KEY === 'liga-ea-sports' && _LC_STATE &&
+                    Array.isArray(_LC_STATE.teams) && _LC_STATE.teams.length > 20);
     /* aplastar silent + abrir el editor clásico (form single-team) */
-    if(!_lcCommit(true)) return;
+    if(!_overCap){
+      if(!_lcCommit(true)) return;
+    }
     window.lextCardsClose();
     if(typeof ligaExtEditarLegacy === 'function') ligaExtEditarLegacy();
   };

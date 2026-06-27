@@ -53627,7 +53627,12 @@ https://api.sofascore.app/api/v1/team/44/image
        menu_home_v1): Real Madrid (acsa)=morado · Atlético (isra)=blanco ·
        FC Barcelona (angel)=azul. El resto (Liverpool/Arsenal/PSG) conserva
        el rojo legacy de la cabecera + su fondo CSS por defecto. */
-    var _idT=''; try{ var _ahT=window._activeHub&&window._activeHub(); _idT=(_ahT&&_ahT.id)||''; }catch(_){ }
+    /* El TEMA de color también sigue al CLUB mostrado (r.name), no al
+       _activeHub() (que puede ir stale tras navegar). Así Inter siempre usa
+       el tema de Rubén, no el de otro hub. */
+    var _idT='';
+    try{ var _mmT=window._mhFindMister&&window._mhFindMister(r.name); if(_mmT&&_mmT.id) _idT=_mmT.id; }catch(_){ }
+    if(!_idT){ try{ var _ahT=window._activeHub&&window._activeHub(); _idT=(_ahT&&_ahT.id)||''; }catch(_){ } }
     var _THEME={
       'acsa':{ cols:['#6b21a8','#a855f7'], text:'#c77dff' },
       'isra':{ cols:['#8a0d16','#e01228'], text:'#ffffff' },
@@ -53639,11 +53644,21 @@ https://api.sofascore.app/api/v1/team/44/image
     var _th=_THEME[_idT]||null;
     var _txt=_th?_th.text:'#dc052d';
     if(n) n.style.color=_txt;
-    /* HUB ACTIVO (multi-hub 2026-06-13): míster + estadio del mister abierto. */
+    /* HUB ACTIVO (multi-hub): el MÍSTER mostrado debe corresponder al CLUB
+       mostrado (r.name), igual que el estadio (_defaultStad(r.name)). Antes se
+       leía de `_activeHub().mister`, que por un desfase de navegación podía ir
+       STALE y dejar el míster de OTRO hub (bug usuario 2026-06-27: "Inter ·
+       IZAN" — Izan es PSG, no Inter). Se deriva del registro por r.name. */
     try {
       var _ahH = window._activeHub && window._activeHub();
       var mEl = document.getElementById('mk-hub-mister');
-      if (mEl){ if(_ahH && _ahH.mister) mEl.textContent = '· ' + String(_ahH.mister).toUpperCase(); mEl.style.color=_txt; }
+      if (mEl){
+        var _mis = '';
+        try { var _mm = window._mhFindMister && window._mhFindMister(r.name); if (_mm && _mm.mister) _mis = _mm.mister; } catch(_){}
+        if (!_mis && _ahH && _ahH.mister) _mis = _ahH.mister;  /* fallback legacy */
+        if (_mis) mEl.textContent = '· ' + String(_mis).toUpperCase();
+        mEl.style.color=_txt;
+      }
     } catch(_){}
     var st=document.getElementById('mk-hub-stadium');
     if(st){

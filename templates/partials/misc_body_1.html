@@ -64301,7 +64301,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      bandeja (antes hardcodeados a 🇫🇷 / "FFF · Selección Francia"). */
   function _hubSelFlag(){
     var nn = String(_hubSelDisp()||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
-    var F = { francia:'🇫🇷', brasil:'🇧🇷', inglaterra:'🏴', noruega:'🇳🇴', argentina:'🇦🇷', espana:'🇪🇸' };
+    var F = { francia:'🇫🇷', brasil:'🇧🇷', inglaterra:'🏴', noruega:'🇳🇴', argentina:'🇦🇷', espana:'🇪🇸', portugal:'🇵🇹' };
     return F[nn] || '🌍';
   }
   function _fraSender(){ return 'Selección ' + _hubSelDisp(); }
@@ -64754,15 +64754,37 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     _write(d);
     try { _refresh(); } catch(_){}
   }
+  /* ¿El mensaje pertenece a ESTE hub? El store ya es por-hub, pero un
+     generador con bug pudo dejar en la bandeja del Inter un mensaje de la
+     selección de OTRO mister (Francia). Filtro de display: un mensaje de
+     SELECCIÓN (side 'fra') que nombra a una selección humana canónica
+     DISTINTA a la del hub activo —y NO nombra la del hub— NO se muestra
+     (individualización por caja humana, petición usuario 2026-06-27). Los
+     mensajes de club ya van por-hub (sender = club del hub). Un mensaje sin
+     selección reconocible (admin/custom) NUNCA se oculta. */
+  var _CANON_SELS = ['francia','brasil','inglaterra','noruega','argentina','espana','portugal'];
+  function _msgBelongsToHub(m){
+    if (!m || m.side !== 'fra') return true;
+    var _n = function(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); };
+    var sel = _n(typeof _hubSelDisp === 'function' ? _hubSelDisp() : '');
+    var hay = _n(m.sender) + ' ' + _n(m.title) + ' ' + _n(m.body);
+    if (sel && hay.indexOf(sel) >= 0) return true;        /* nombra la selección del hub → sí */
+    for (var i = 0; i < _CANON_SELS.length; i++){
+      if (_CANON_SELS[i] === sel) continue;
+      if (hay.indexOf(_CANON_SELS[i]) >= 0) return false;  /* nombra OTRA selección humana → no */
+    }
+    return true;
+  }
   function list(side, kind){
     var d = _read();
     return d.msgs
       .filter(function(m){ return kind === 'read' ? !!m.read : !m.read; })
+      .filter(_msgBelongsToHub)
       .sort(function(a,b){ return (b.ts||0) - (a.ts||0); });
   }
   function unreadCount(side){
     var d = _read();
-    return d.msgs.filter(function(m){ return !m.read; }).length;
+    return d.msgs.filter(function(m){ return !m.read && _msgBelongsToHub(m); }).length;
   }
   function _setCursor(name, val){
     var d = _read();
@@ -65023,7 +65045,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var totalN = 0;
       try {
         var allD = _read();
-        totalN = (allD && allD.msgs) ? allD.msgs.length : 0;
+        /* Cuenta SOLO los mensajes que pertenecen a este hub (mismo filtro
+           que el listado), para que el contador cuadre con lo visible. */
+        totalN = (allD && allD.msgs) ? allD.msgs.filter(_msgBelongsToHub).length : 0;
       } catch(_){}
       if (totalN > 0){
         clr.textContent = '🗑 BORRAR TODO (' + totalN + ')';
@@ -65418,21 +65442,30 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function _findHumanTeam(mundialCfg){
     if (!mundialCfg) return null;
     var teams = mundialCfg.teams || [];
-    /* HUB ACTIVO (multi-hub 2026-06-13): preferir la selección del mister
-       ABIERTO (Arsenal → Brasil), no la PRIMERA humana del cfg (que sería
-       Francia). Así los mensajes de selección de la bandeja del Arsenal son
-       de Brasil. */
-    try {
-      var _selH = _hubSelDisp();
-      if (_selH){
-        var _sN = String(_selH).toLowerCase().trim();
-        for (var ts = 0; ts < teams.length; ts++){
-          var ts2 = teams[ts];
-          if (ts2 && ts2.name && ts2.name !== 'PENDIENTE'
-              && String(ts2.name).toLowerCase().trim().indexOf(_sN) >= 0) return { team:ts2, idx:ts };
-        }
+    /* HUB ACTIVO (multi-hub): los mensajes de selección son INDIVIDUALES por
+       caja humana → SOLO la selección del mister ABIERTO (Inter → Portugal,
+       Arsenal → Brasil…). Si esa selección NO juega este Mundial, se devuelve
+       null y el generador CALLA: NUNCA se cae a la PRIMERA humana del cfg
+       (sería la de OTRO hub, p.ej. Francia/Toñín en la bandeja del Inter →
+       mensajes cruzados). Petición usuario 2026-06-27 («los mensajes tienen
+       que ser solo del Inter o Portugal; cada equipo y selección corresponde
+       a cada humano individualmente»). */
+    var _selH = '';
+    try { _selH = _hubSelDisp(); } catch(_){}
+    if (_selH){
+      var _norm = function(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); };
+      var _sN = _norm(_selH);
+      for (var ts = 0; ts < teams.length; ts++){
+        var ts2 = teams[ts];
+        if (!ts2 || !ts2.name || ts2.name === 'PENDIENTE') continue;
+        var _tn = _norm(ts2.name);
+        if (_tn.indexOf(_sN) >= 0 || _sN.indexOf(_tn) >= 0) return { team:ts2, idx:ts };
       }
-    } catch(_){}
+      return null;  /* la selección del hub no está en este Mundial → sin mensaje */
+    }
+    /* Fallback LEGACY: solo si NO se pudo resolver la selección del hub (no
+       debería ocurrir con los misters registrados). Nunca cruza hubs porque
+       arriba ya se filtra estrictamente cuando hay selección de hub. */
     for (var ti = 0; ti < teams.length; ti++){
       var t = teams[ti];
       if (t && t.isHuman && t.name && t.name !== 'PENDIENTE') return { team:t, idx:ti };

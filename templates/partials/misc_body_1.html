@@ -61174,6 +61174,49 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     return null;
   }
+  /* Resuelve la SELECCIÓN del mister dueño de una temporada de derbys.
+     El `teamName` de la temporada es el CLUB del hub, pero un derby de
+     SELECCIÓN guarda "Francia"/"Noruega" (no el club). Para contar ese
+     derby hay que conocer la selección del hub. Resolución robusta:
+       (1) `_mhFindMister(team).seleccion` (camino normal);
+       (2) scan TOLERANTE de los misters con `_mDerbyTeamMatch` por club
+           (cubre abreviaturas que sí emparejan por token);
+       (3) último recurso: la selección del HUB ACTIVO — el store de
+           derbys es POR HUB (namespaced), así que TODAS estas temporadas
+           le pertenecen.
+     Bug 2026-06-27 (foto usuario, hub At. Madrid-Noruega): la temporada
+     32-33 NO contaba el derby de selección "Francia 0-2 Noruega" porque
+     el `teamName` "At. Madrid" no resolvía a la selección "Noruega"
+     (`_mhFindMister`/`_mDerbyTeamMatch` no casan "At. Madrid" con
+     "Atlético Madrid": el token "at" es de 2 chars). Tanto el detalle de
+     la temporada como el contador del HUB salían en 0. */
+  function _seasonSel(team){
+    var sel = '';
+    try {
+      var m = (typeof window._mhFindMister === 'function') ? window._mhFindMister(team) : null;
+      if (m && m.seleccion) sel = m.seleccion;
+    } catch(_){}
+    if (!sel && team){
+      try {
+        var fz = window._mDerbyTeamMatch;
+        var list = window._MISTERS_HUMANOS || [];
+        if (fz){
+          for (var i = 0; i < list.length; i++){
+            if (list[i] && list[i].club && fz(team, list[i].club)){
+              sel = list[i].seleccion || ''; break;
+            }
+          }
+        }
+      } catch(_){}
+    }
+    if (!sel){
+      try {
+        var h = (typeof window._activeHub === 'function') ? window._activeHub() : null;
+        if (h && h.seleccion) sel = h.seleccion;
+      } catch(_){}
+    }
+    return sel;
+  }
   function _summaryForSeason(seasonId){
     var s = _findSeason(seasonId);
     var team = s && s.teamName ? s.teamName : '';
@@ -61181,12 +61224,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var pj=0, g=0, e=0, p=0;
     /* Selección del mister (para derbys de selección: el teamName de
        la temporada es el CLUB, pero el partido tiene "Francia"/"Noruega").
-       2026-06-17. */
-    var _teamSel = '';
-    try {
-      var _tmR = (typeof window._mhFindMister === 'function') ? window._mhFindMister(team) : null;
-      if (_tmR && _tmR.seleccion) _teamSel = _tmR.seleccion;
-    } catch(_){}
+       Resolución robusta (incl. abreviaturas + hub activo). 2026-06-27. */
+    var _teamSel = _seasonSel(team);
     ms.forEach(function(m){
       if (!_matchIsHvH(m)) return;          /* solo HvH (2026-05-09) */
       var o = _outcomeFor(m, team);
@@ -61243,8 +61282,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       if (!isNaN(na) && !isNaN(nb)) return na - nb;
       return String(a.jornada||'').localeCompare(String(b.jornada||''));
     });
+    var _rowSel = _seasonSel(s.teamName);
     listEl.innerHTML = ms.map(function(m){
       var o = _outcomeFor(m, s.teamName);
+      /* Derby de selección: el club no aparece en el partido → resolver
+         por la selección del hub para colorear W/L/D correctamente. */
+      if (!o && _rowSel) o = _outcomeFor(m, _rowSel);
       var rowCls = o === 'g' ? 'win' : o === 'p' ? 'lose' : o === 'e' ? 'draw' : 'skip';
       var scoreCls = rowCls === 'skip' ? '' : rowCls;
       var compIco = COMP_ICON[m.comp] || '⚽';
@@ -61651,12 +61694,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var o = _outcomeFor(m, s.teamName);
         /* El teamName de la temporada es el CLUB (ej. "Atlético Madrid")
            pero los derbys de SELECCIÓN almacenan "Noruega"/"Francia".
-           Fallback: buscamos la selección del mister que dirige ese club. */
+           Fallback: la selección del mister que dirige ese club —
+           resolución robusta a abreviaturas + hub activo (`_seasonSel`). */
         if (!o) {
-          try {
-            var _mRes = (typeof window._mhFindMister === 'function') ? window._mhFindMister(s.teamName) : null;
-            if (_mRes && _mRes.seleccion) o = _outcomeFor(m, _mRes.seleccion);
-          } catch(_){}
+          var _sel = _seasonSel(s.teamName);
+          if (_sel) o = _outcomeFor(m, _sel);
         }
         if (!o) return;
         pj++;

@@ -70,9 +70,10 @@
   var STORAGE_KEY_TEAMS    = 'manual_ea_superliga_v1';
   var STORAGE_KEY_CALENDAR = 'superliga_calendar_v1';
   var STORAGE_KEY_RESULTS  = 'superliga_results_v1';
-  var TOTAL_TEAMS = 6;
-  var ROUND_ROBINS = 4; // 4 ciclos → 20 jornadas, 4 partidos por pareja
-  var MATCHES_PER_JORNADA = TOTAL_TEAMS / 2;
+  var TOTAL_TEAMS = 7;
+  var ROUND_ROBINS = 4; // 4 ciclos → 28 jornadas; cada equipo juega 24 partidos (6 rivales × 4)
+  var MATCHES_PER_JORNADA = Math.floor(TOTAL_TEAMS / 2);
+  var _BYE = '__sl_bye__'; // descanso ficticio para circle method con nº IMPAR
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function _logoFor(name){
@@ -106,16 +107,21 @@
     try { localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(r||{})); } catch(_){}
   }
 
-  /* Genera 5 jornadas (round-robin simple) con 6 equipos por circle method.
-     `teams` debe tener exactamente 6 entradas. */
+  /* Genera las jornadas de un round-robin simple por circle method.
+     Soporta nº IMPAR de equipos añadiendo un descanso (BYE) ficticio: la
+     pareja que cae contra el BYE NO genera partido (ese equipo descansa
+     esa jornada). Con 7 equipos → 7 jornadas, 3 partidos por jornada, y
+     cada equipo juega 6 partidos por ciclo. */
   function singleRoundRobin(teams){
-    var n = teams.length;
     var arr = teams.slice();
+    if(arr.length % 2 !== 0) arr.push(_BYE); // impar → añade descanso
+    var n = arr.length;
     var rounds = [];
     for(var r = 0; r < n - 1; r++){
       var round = [];
       for(var i = 0; i < n / 2; i++){
         var t1 = arr[i], t2 = arr[n - 1 - i];
+        if(t1 === _BYE || t2 === _BYE) continue; // descanso → sin partido
         // Alterna home/away por ronda para repartir local/visitante
         if(r % 2 === 0) round.push([t1, t2]);
         else            round.push([t2, t1]);
@@ -129,8 +135,9 @@
     return rounds;
   }
 
-  /* 20 jornadas: 4 ciclos (ida-vuelta-ida-vuelta) → cada pareja se enfrenta
-     4 veces (2 en casa de A, 2 en casa de B). */
+  /* 28 jornadas: 4 ciclos (ida-vuelta-ida-vuelta) → cada pareja se enfrenta
+     4 veces (2 en casa de A, 2 en casa de B). Con 7 equipos = 24 partidos
+     por equipo. */
   function buildSchedule(teams){
     var first = singleRoundRobin(teams);                 // ida 1
     var second = first.map(function(round){              // vuelta 1 (swap)
@@ -153,7 +160,7 @@
   }
 
   /* Devuelve el calendario válido. Si la lista de equipos cambió respecto
-     al guardado (orden o composición de los 6), regenera y resetea
+     al guardado (orden o composición de los 7), regenera y resetea
      resultados — la temporada parte de cero al cambiar la plantilla. */
   function ensureCalendar(){
     var teamNames = loadTeams();
@@ -230,7 +237,7 @@
   function rowZone(pos){
     if(pos === 1) return 'zone-champ';
     if(pos === 2 || pos === 3) return 'zone-top';
-    if(pos === 6) return 'zone-bot';
+    if(pos === TOTAL_TEAMS) return 'zone-bot';
     return '';
   }
 

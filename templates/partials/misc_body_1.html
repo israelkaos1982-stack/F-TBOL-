@@ -36407,6 +36407,9 @@ window._showSimProgress = function(opts, onDone){
     { id:'isra',   emoji:'✏️', mister:'Isra',   club:'Atlético Madrid', seleccion:'Noruega',    screen:'s-atletico' },
     { id:'angel',  emoji:'😈', mister:'Ángel',  club:'FC Barcelona',   seleccion:'Argentina',  screen:'s-barca'    },
     { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',            seleccion:'España',     screen:'s-psg'      },
+    /* 7º mister (2026-06-26): Inter🐲 = Rubén (club Inter + selección Portugal).
+       Hereda reconocimiento humano (_isHumanClubCanonico → derbys + Superliga),
+       claves de hub namespaced `_ruben`, e ISRAMAX. */
     { id:'ruben',  emoji:'🐲', mister:'Rubén',  club:'Inter',          seleccion:'Portugal',   screen:'s-internazionale' }
   ];
   function _mhNorm(s){
@@ -36462,18 +36465,43 @@ window._showSimProgress = function(opts, onDone){
     for (var pa = 0; pa < psgAlias.length; pa++){
       if (_mhNorm(name) === _mhNorm(psgAlias[pa])) return true;
     }
+    /* Inter (2026-06-26): nombre corto. El match laxo `_mhMatchName`
+       atraparía "Inter Miami" / "Internacional" (otros clubes reales)
+       como substring. Igual que Liverpool/PSG → alias EXACTO. */
+    if (_mhIsInterName(name)) return true;
     for (var i = 1; i < MISTERS_HUMANOS.length; i++){
+      if (MISTERS_HUMANOS[i].id === 'ruben') continue; /* club Inter manejado exacto arriba */
       if (_mhMatchName(name, MISTERS_HUMANOS[i].club)) return true;
     }
     return false;
   };
+  /* Alias EXACTO del Inter de Milán (nerazzurro). Distingue del resto de
+     "Inter*" reales (Inter Miami, Internacional de Porto Alegre…). */
+  var _INTER_ALIASES = ['Inter','Internazionale','FC Internazionale','FC Internazionale Milano',
+                        'Inter Milan','Inter Milán','Inter de Milan','Inter de Milán'];
+  function _mhIsInterName(name){
+    if (!name) return false;
+    var nn = _mhNorm(name);
+    for (var k = 0; k < _INTER_ALIASES.length; k++){
+      if (nn === _mhNorm(_INTER_ALIASES[k])) return true;
+    }
+    return false;
+  }
   /* Devuelve el mister que dirige a este team (club o selección), o
      null si no es humano. Util para emparejar Liverpool ↔ Francia
      ("el mismo Toñín dirige ambos"). */
   window._mhFindMister = function(name){
     if (!name) return null;
+    /* Inter → alias EXACTO (evita atrapar "Inter Miami"/"Internacional"). */
+    if (_mhIsInterName(name)) return _mhById('ruben');
     for (var i = 0; i < MISTERS_HUMANOS.length; i++){
       var m = MISTERS_HUMANOS[i];
+      if (m.id === 'ruben'){
+        /* club Inter manejado exacto arriba; la selección (Portugal) sí
+           se resuelve por el loop normal. */
+        if (m.seleccion && _mhMatchName(name, m.seleccion)) return m;
+        continue;
+      }
       if (_mhMatchName(name, m.club) || _mhMatchName(name, m.seleccion)) return m;
     }
     /* Liverpool alias legacy — EXACTO (ver _isHumanClubCanonico): la

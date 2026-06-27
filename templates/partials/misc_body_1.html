@@ -13923,7 +13923,13 @@ window._showSimProgress = function(opts, onDone){
                 body: JSON.stringify({ competition_state: _cs })
               }).catch(function(){}));
               nPushed++;
-            } else if (_KV_EXACT[k] || _KV_REGEX.test(k)) {
+            } else if (_KV_EXACT[k] || _KV_REGEX.test(k)
+                       || String(k).indexOf('bayern_trofeos_v1_') === 0) {
+              /* `bayern_trofeos_v1_<id>`: la VITRINA por hub (Arsenal-Álvaro,
+                 R.Madrid-Acsa, …). El allowlist del server ya las admite vía
+                 `_kv_hub_base`; aquí las re-subimos para que el backup
+                 restaure el palmarés de TODAS las cajas de mister, no solo el
+                 Liverpool legacy (clave base). */
               var val; try { val = JSON.parse(raw); } catch(_){ return; }
               /* Blob de recencia → estampa updatedAt=ahora para ganar entero
                  frente a lo que tenga el servidor (incluido el estado roto). */
@@ -13942,6 +13948,10 @@ window._showSimProgress = function(opts, onDone){
                  rev=max(old,new)+1 (regla CLAUDE.md 13b). Sin esto, si Railway
                  tiene un rev mayor el HUD importado NO se restauraría. */
               if (k === 'bayern_hud_overrides_v1' || String(k).indexOf('bayern_hud_overrides_v1') === 0) _kvBody.authoritative = true;
+              /* Vitrina (base + por hub): la importación es una restauración
+                 EXPLÍCITA del admin → AUTORITATIVA (gana sobre Railway y
+                 bypassa el empty-guard si el backup vacía a propósito). */
+              if (String(k).indexOf('bayern_trofeos_v1') === 0) _kvBody.authoritative = true;
               serverPushes.push(fetch('/api/kv/'+encodeURIComponent(k), {
                 method:'POST', headers:{'Content-Type':'application/json'},
                 body: JSON.stringify(_kvBody)
@@ -58280,63 +58290,120 @@ https://api.sofascore.app/api/v1/team/44/image
     return arr;
   }
 
-  /* Sync con servidor (GlobalState `bayern_trofeos_v1`). Igual patrón
-     que `comp_icons_v1` (línea 8049): localStorage es cache rápido
-     pero el server es la fuente de verdad para que las ediciones de
-     iconos sobrevivan a wipes del navegador y cambios de dispositivo
-     (reportado 2026-05-08: el icono "desaparecía o salía roto" tras
-     guardar — el setItem fallaba en silencio por quota y la próxima
-     lectura caía a defaults). */
-  function _saveTrofServer(arr){
+  /* Sync con servidor (GlobalState `bayern_trofeos_v1` + variantes por
+     hub). localStorage es cache rápido; el server es la fuente de verdad
+     para que la vitrina sobreviva a wipes del navegador / cambio de móvil
+     de CUALQUIERA de las 6 cajas de mister (bug 2026-06-27: «tenía toda la
+     vitrina del Arsenal-Álvaro y del Real Madrid-Acsa y no se han
+     guardado»). El merge del server es RECENCIA + EMPTY-GUARD.
+
+     Sello de recencia POR HUB. Cada vitrina (`STORE_KEY`) lleva su
+     `updatedAt` en una clave hermana `<STORE_KEY>_ts`. El servidor
+     arbitra el merge por RECENCIA + EMPTY-GUARD, así que el cliente
+     SELLA cada guardado real y compara al hidratar. Sin el sello, una
+     copia stale/vacía (otro móvil tras un wipe) machacaba la vitrina
+     de toda la red por last-write-wins. */
+  function _trofTsKey(){ return STORE_KEY + '_ts'; }
+  function _trofLocalTs(){
+    try { return parseInt(localStorage.getItem(_trofTsKey())||'0',10) || 0; }
+    catch(_){ return 0; }
+  }
+  function _trofSetLocalTs(ts){
+    try { localStorage.setItem(_trofTsKey(), String(ts|0)); } catch(_){}
+  }
+  /* Desempaqueta el valor del server: acepta el formato NUEVO sellado
+     (`{updatedAt, items}`) y el LEGACY (array crudo, sin sello). */
+  function _trofUnwrap(v){
+    if (v && typeof v === 'object' && !Array.isArray(v)){
+      var items = Array.isArray(v.items) ? v.items : [];
+      var ts = parseInt(v.updatedAt, 10) || 0;
+      return { items: items, ts: ts };
+    }
+    if (Array.isArray(v)) return { items: v, ts: 0 };
+    return { items: [], ts: 0 };
+  }
+  /* ¿El local es SOLO los defaults intactos (sin edición real)? Para el
+     hub legacy (Liverpool) los defaults son los 2 títulos sembrados; para
+     el resto, `[]`. Si es así NO es autoritativo: el server gana y NUNCA
+     re-empujamos (evita que un dispositivo recién sembrado machaque la
+     vitrina real con los 2 defaults). */
+  function _trofIsJustDefaults(arr){
+    var d = _defaults();
+    if (!arr || arr.length !== d.length) return false;
+    for (var i=0;i<d.length;i++){
+      var di = d[i];
+      var hit = arr.some(function(t){
+        return t && t.id === di.id && (t.count|0) === (di.count|0);
+      });
+      if (!hit) return false;
+    }
+    return arr.every(function(t){
+      return t && String(t.icon||'').indexOf('data:') !== 0 && (t.count|0) <= 1;
+    });
+  }
+  /* POST con 3 reintentos (la red móvil pierde requests; un save
+     fire-and-forget perdido dejaba el server sin la vitrina y, tras un
+     wipe, los trofeos «no se guardaban»). Captura la clave del hub en el
+     momento del POST por si cambia el hub durante el vuelo. */
+  function _trofPost(key, arr, ts, authoritative, tries){
+    var body = { value: { updatedAt: ts, items: arr || [] } };
+    if (authoritative) body.authoritative = true;
     try {
-      fetch('/api/kv/'+STORE_KEY, {
+      fetch('/api/kv/'+key, {
         method: 'POST',
         headers: {'Content-Type':'application/json'},
         credentials: 'same-origin',
-        body: JSON.stringify({ value: arr || [] })
-      }).catch(function(){});
+        body: JSON.stringify(body)
+      }).then(function(r){
+        if ((!r || !r.ok) && (tries|0) < 3){
+          setTimeout(function(){ _trofPost(key, arr, ts, authoritative, (tries|0)+1); },
+            500 * Math.pow(2, tries|0));
+        }
+      }).catch(function(){
+        if ((tries|0) < 3){
+          setTimeout(function(){ _trofPost(key, arr, ts, authoritative, (tries|0)+1); },
+            500 * Math.pow(2, tries|0));
+        }
+      });
     } catch(_){}
   }
+  function _saveTrofServer(arr, ts, authoritative){
+    ts = ts || Date.now();
+    _trofSetLocalTs(ts);
+    _trofPost(STORE_KEY, arr, ts, authoritative, 0);
+  }
   function _hydrateTrofFromServer(cb){
-    /* Solo ejecuta GET si el localStorage está vacío o solo contiene
-       los DEFAULTS originales (caso típico tras limpiar caché o
-       cambiar de dispositivo). No queremos sobreescribir cambios
-       locales recientes. */
-    var localRaw;
-    try { localRaw = localStorage.getItem(STORE_KEY); } catch(_){}
-    var hasMeaningful = false;
-    if (localRaw){
-      try {
-        var parsed = JSON.parse(localRaw);
-        if (Array.isArray(parsed) && parsed.length){
-          /* Heurística: si TODOS los trofeos tienen icon que empieza
-             por '/static/' (defaults) y count===1, asumimos defaults
-             intactos y dejamos que el server se imponga. Si alguno
-             tiene icon `data:` o un count>1, es edición real → no
-             pisar. */
-          hasMeaningful = parsed.some(function(t){
-            if (!t || !t.icon) return false;
-            if (String(t.icon).indexOf('data:') === 0) return true;
-            if ((t.count|0) > 1) return true;
-            return false;
-          });
-        }
-      } catch(_){}
-    }
-    if (hasMeaningful){
-      if (typeof cb === 'function') cb(false);
-      return;
-    }
+    /* SIEMPRE consultamos el server y resolvemos por RECENCIA:
+       - Si el server tiene vitrina y es MÁS NUEVA (o el local solo trae
+         los defaults), la ADOPTAMOS (recupera tras wipe / cambio de móvil).
+       - Si el local es autoritativo (edición real y >= server, o server
+         vacío), lo RE-EMPUJAMOS para CURAR el server (basta con que UN
+         dispositivo conserve la vitrina para restaurarla en todos). */
+    var key = STORE_KEY;
+    var localArr = load();
+    var localTs = _trofLocalTs();
+    var localMeaningful = localArr.length > 0 && !_trofIsJustDefaults(localArr);
     try {
-      fetch('/api/kv/'+STORE_KEY, {credentials:'same-origin'})
+      fetch('/api/kv/'+key, {credentials:'same-origin'})
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
-          if (!j || !j.ok || !Array.isArray(j.value) || !j.value.length){
-            if (typeof cb === 'function') cb(false);
+          /* El hub pudo cambiar mientras volaba el GET — ignora respuesta
+             obsoleta. */
+          if (key !== STORE_KEY){ if (typeof cb === 'function') cb(false); return; }
+          var srv = _trofUnwrap(j && j.ok ? j.value : null);
+          var hasServer = srv.items && srv.items.length;
+          if (hasServer && (srv.ts > localTs || !localMeaningful)){
+            try { localStorage.setItem(key, JSON.stringify(srv.items)); } catch(_){}
+            _trofSetLocalTs(srv.ts);
+            if (typeof cb === 'function') cb(true);
             return;
           }
-          try { localStorage.setItem(STORE_KEY, JSON.stringify(j.value)); } catch(_){}
-          if (typeof cb === 'function') cb(true);
+          if (localMeaningful){
+            /* Local manda (server vacío o más viejo) → curar el server,
+               conservando el sello local (no es una edición nueva). */
+            _saveTrofServer(localArr, localTs || Date.now(), false);
+          }
+          if (typeof cb === 'function') cb(false);
         }).catch(function(){ if (typeof cb === 'function') cb(false); });
     } catch(_) { if (typeof cb === 'function') cb(false); }
   }
@@ -58376,8 +58443,12 @@ https://api.sofascore.app/api/v1/team/44/image
         } catch(_){}
       }
     }
-    /* Server-side: siempre, aunque local haya fallado. */
-    _saveTrofServer(arr);
+    /* Server-side: siempre, aunque local haya fallado. Todo `save()` es
+       una acción EXPLÍCITA del admin (añadir / editar / eliminar título
+       tras PIN 747) → AUTORITATIVA: gana por recencia con sello del reloj
+       del server y puede vaciar la vitrina a mano (bypass del empty-guard
+       que sí frena los POST vacíos stale de clientes recién wipeados). */
+    _saveTrofServer(arr, Date.now(), true);
   }
 
   function esc(s){

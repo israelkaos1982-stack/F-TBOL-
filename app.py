@@ -3815,6 +3815,68 @@ def _obj_state_is_empty(d):
     return True
 
 
+def _trofeos_unwrap(v):
+    """Normaliza un blob de vitrina de trofeos a `(items, updatedAt)`.
+
+    Acepta DOS formatos para back-compat: el LEGACY (array crudo de
+    trofeos, sin sello) y el NUEVO (`{updatedAt, items}`). El array crudo
+    se trata como `updatedAt=0` (lo más viejo posible) para que cualquier
+    copia sellada gane por recencia."""
+    if isinstance(v, dict):
+        items = v.get("items")
+        items = items if isinstance(items, list) else []
+        try:
+            ts = float(v.get("updatedAt") or 0)
+        except (TypeError, ValueError):
+            ts = 0.0
+        return items, ts
+    if isinstance(v, list):
+        return v, 0.0
+    return [], 0.0
+
+
+def _trofeos_merge(old_json, new_value, authoritative):
+    """Fusión de la VITRINA DE TROFEOS (`bayern_trofeos_v1` + variantes por
+    hub `_<id>`) — RECENCIA + EMPTY-GUARD.
+
+    Mismo patrón «sobrevive al wipe / cambio de móvil» que el HUD/derbys:
+    la vitrina es un registro PERSISTENTE aditivo del admin que NO se
+    recalcula. Como hay 6 móviles + PC y no todos tienen el último cliente,
+    la defensa va en el SERVER:
+
+    - **EMPTY-GUARD**: un POST con la lista VACÍA NUNCA machaca una vitrina
+      no vacía almacenada (un cliente que arranca con localStorage limpio
+      —tras un wipe / hub nuevo— no debe borrar los trofeos que otro
+      dispositivo ya subió). La acción AUTORITATIVA del admin (vaciar la
+      vitrina a mano) SÍ puede dejarla vacía.
+    - **RECENCIA**: a igualdad de no-vacío, gana el `updatedAt` mayor; un
+      POST stale (reloj viejo) no pisa una edición más nueva.
+
+    Devuelve SIEMPRE el formato sellado `{updatedAt, items}` para que el
+    siguiente merge pueda arbitrar por recencia."""
+    old_items, old_ts = _trofeos_unwrap(_safe_json_load(old_json))
+    new_items, new_ts = _trofeos_unwrap(new_value)
+
+    # EMPTY-GUARD: lista entrante vacía no borra una almacenada con datos,
+    # salvo acción autoritativa explícita del admin.
+    if not new_items and old_items and not authoritative:
+        return {"updatedAt": old_ts, "items": old_items}
+
+    # RECENCIA: el sello mayor gana; empate / entrante autoritativo → entrante.
+    if not authoritative and new_ts < old_ts and old_items:
+        return {"updatedAt": old_ts, "items": old_items}
+
+    ts = max(new_ts, old_ts) if not authoritative else max(new_ts, old_ts + 1.0)
+    return {"updatedAt": ts, "items": new_items}
+
+
+def _safe_json_load(s):
+    try:
+        return json.loads(s) if s else None
+    except Exception:
+        return None
+
+
 def _tour_registry_merge(old_json, new_value):
     """Fusión local∪server del registro de torneos RESUELTA POR RECENCIA.
 
@@ -4267,6 +4329,22 @@ def api_kv_set(key):
             merged_paid.update(new_paid)
             merged = dict(new) if isinstance(new, dict) else {}
             merged["paid"] = merged_paid
+            cand = json.dumps(merged, ensure_ascii=False)
+            if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
+                value, payload = merged, cand
+        except Exception:
+            pass
+    # VITRINA DE TROFEOS (bayern_trofeos_v1 + variantes por hub _<id>):
+    # RECENCIA + EMPTY-GUARD. Es un registro PERSISTENTE del admin que debe
+    # SOBREVIVIR al borrado de datos / cambio de móvil de cualquiera de las 6
+    # cajas de mister humano. Un POST vacío de un cliente recién wipeado NO
+    # borra la vitrina que otro dispositivo ya subió (bug usuario 2026-06-27:
+    # «tenía toda la vitrina del Arsenal-Álvaro y del Real Madrid-Acsa y no se
+    # han guardado»). Corre también en el primer save (sin `row`) para sellar.
+    elif _kv_hub_base(key) == "bayern_trofeos_v1":
+        try:
+            merged = _trofeos_merge(
+                row.valor_json if row else None, value, authoritative)
             cand = json.dumps(merged, ensure_ascii=False)
             if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
                 value, payload = merged, cand

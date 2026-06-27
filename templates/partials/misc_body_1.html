@@ -3587,10 +3587,10 @@ window._showSimProgress = function(opts, onDone){
       'fc barcelona':             '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
       'fc barcelona cf':          '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
       'barcelona':                '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-      'psg':                      '/static/img/escudos-1/france_paris-saint-germain.svg',
-      'paris saint germain':      '/static/img/escudos-1/france_paris-saint-germain.svg',
-      'paris saint-germain':      '/static/img/escudos-1/france_paris-saint-germain.svg',
-      'paris sg':                 '/static/img/escudos-1/france_paris-saint-germain.svg',
+      'psg':                      'https://img0.aiscore.com/football/team/3b720f181ce9993f9422d276acf7b292.png!w60',
+      'paris saint germain':      'https://img0.aiscore.com/football/team/3b720f181ce9993f9422d276acf7b292.png!w60',
+      'paris saint-germain':      'https://img0.aiscore.com/football/team/3b720f181ce9993f9422d276acf7b292.png!w60',
+      'paris sg':                 'https://img0.aiscore.com/football/team/3b720f181ce9993f9422d276acf7b292.png!w60',
       'inter':                    '/static/img/escudos-1/italy_inter.svg',
       'inter milan':              '/static/img/escudos-1/italy_inter.svg',
       'inter de milan':           '/static/img/escudos-1/italy_inter.svg',
@@ -5029,9 +5029,9 @@ window._showSimProgress = function(opts, onDone){
     'atlético madrid':'/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
     'fc barcelona':'/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
     'barcelona':'/static/img/escudos-1/spain_barcelona.football-logos.cc.svg',
-    'psg':'/static/img/escudos-1/france_paris-saint-germain.svg',
-    'paris saint-germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
-    'paris saint germain':'/static/img/escudos-1/france_paris-saint-germain.svg',
+    'psg':'https://img0.aiscore.com/football/team/3b720f181ce9993f9422d276acf7b292.png!w60',
+    'paris saint-germain':'https://img0.aiscore.com/football/team/3b720f181ce9993f9422d276acf7b292.png!w60',
+    'paris saint germain':'https://img0.aiscore.com/football/team/3b720f181ce9993f9422d276acf7b292.png!w60',
     'inter':'/static/img/escudos-1/italy_inter.svg',
     'inter milan':'/static/img/escudos-1/italy_inter.svg',
     'inter de milan':'/static/img/escudos-1/italy_inter.svg',
@@ -53571,6 +53571,23 @@ https://api.sofascore.app/api/v1/team/44/image
       if(ov.colors && ov.colors.length) cols=ov.colors;
     }
     var canon=_canonHubName();
+    /* ANTI-CONTAMINACIÓN multi-hub (2026-06-27): si ESTE hub es un CLUB
+       humano canónico y el override del menú apunta a OTRO club humano
+       canónico (p.ej. la caja del PSG quedó con label/escudo/estadio del
+       Inter → la cabecera mostraba "Inter · IZAN · Giuseppe Meazza"), se
+       DESCARTA la identidad del override y se usa la del PROPIO hub. Así la
+       caja del PSG SIEMPRE muestra el PSG. NO afecta a un override del MISMO
+       club (la caja del Inter con su escudo real) ni a un label NO canónico
+       (renombrado custom del admin). */
+    try{
+      if(name && window._mhFindMister){
+        var _mHub = window._mhFindMister(canon);
+        var _mOv  = window._mhFindMister(name);
+        if(_mHub && _mOv && _mHub.id !== _mOv.id){
+          name=''; esc=''; stad=''; cols=null;
+        }
+      }
+    }catch(_){}
     var t=_slot();
     if(!name){
       name=(t&&t.name)||canon;

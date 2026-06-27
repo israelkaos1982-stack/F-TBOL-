@@ -29589,6 +29589,29 @@ window._showSimProgress = function(opts, onDone){
      Persiste una sola vez. Hace que la caja de estadisticas se rellene
      sin tener que resetear el torneo. Generico: lo usan Mundial 2032 y
      cualquier otra caja "en vivo". */
+  /* Reconstruye (idempotente, determinista) `cfg.fixture` de un torneo en
+     formato LIGA cuando falta. Igual que `groupFixtures`, `cfg.fixture` se
+     construye lazy al renderizar la pantalla de LIGA (`_renderLeague`). Si el
+     usuario entra DIRECTO a Estadísticas, recarga la página, o el cfg llegó de
+     otro dispositivo / del servidor SIN fixture (resultados guardados
+     solo-marcador, sin `home`/`away`), no existe → sin él NINGÚN partido de
+     liga resuelve su home/away → la caja de Estadísticas salía VACÍA aunque
+     hubiera partidos jugados (bug Trofeo Joan Gamper 2026-06-27).
+     El round-robin es determinista sobre el ORDEN de `cfg.teams` (el mismo
+     que se usó al simular), así que las claves del fixture reconstruido
+     (`<j>_<mi>`) coinciden con las de `cfg.results`. Devuelve el fixture. */
+  function _tourEnsureLeagueFixture(cfg, tt){
+    if (!cfg) return null;
+    var fix = cfg.fixture;
+    if ((!fix || !fix.length) && cfg.format === 'league' && tt && tt.length >= 2) {
+      try {
+        fix = _tourBuildRoundRobin(tt.map(function(_, i){ return i; }));
+        cfg.fixture = fix;
+      } catch(_){ fix = cfg.fixture; }
+    }
+    return fix;
+  }
+
   function _tourBackfillActasFromResults(cfg, teams, force){
     if (!cfg || !cfg.results) return false;
     if (typeof window.genMatchEventsEnhanced !== 'function') return false;
@@ -29606,8 +29629,9 @@ window._showSimProgress = function(opts, onDone){
          la página) aún no existe, y sin él no se puede resolver el
          home/away de cada partido de grupo → la caja salía VACÍA. Lo
          reconstruimos aquí con el MISMO builder canónico (_tourBuildRoundRobin)
-         y lo persistimos para los próximos renders. */
-      if (!Object.keys(gf).length && tt.length) {
+         y lo persistimos para los próximos renders. En formato LIGA NO hay
+         grupos (usa cfg.fixture) → no construimos groupFixtures bogus. */
+      if (cfg.format !== 'league' && !Object.keys(gf).length && tt.length) {
         var _bng = _bfc.groups || Math.ceil(tt.length / _bpg);
         gf = {};
         for (var _bg = 0; _bg < _bng; _bg++) {
@@ -29628,10 +29652,12 @@ window._showSimProgress = function(opts, onDone){
           }
         }
       });
-      /* Liga / league format: fixtures live in cfg.fixture with keys '${j}_${mi}' */
-      if (cfg.fixture && cfg.fixture.length) {
-        for (var _lj = 0; _lj < cfg.fixture.length; _lj++) {
-          var _ljor = cfg.fixture[_lj]; if (!_ljor) continue;
+      /* Liga / league format: fixtures live in cfg.fixture with keys '${j}_${mi}'.
+         Reconstruido si falta (idéntico builder determinista). */
+      var _lfix = _tourEnsureLeagueFixture(cfg, tt);
+      if (_lfix && _lfix.length) {
+        for (var _lj = 0; _lj < _lfix.length; _lj++) {
+          var _ljor = _lfix[_lj]; if (!_ljor) continue;
           for (var _lmi = 0; _lmi < _ljor.length; _lmi++) {
             var _lpr = _ljor[_lmi]; if (!_lpr) continue;
             idx[_lj + '_' + _lmi] = {
@@ -29739,10 +29765,12 @@ window._showSimProgress = function(opts, onDone){
           idx['g'+g+'_'+j+'_'+mi] = { a: (slice[pr.home]||{}).name, b: (slice[pr.away]||{}).name };
         }
       });
-      /* Liga / league format: fixtures live in cfg.fixture with keys '${j}_${mi}' */
-      if (cfg.fixture && cfg.fixture.length) {
-        for (var _flj = 0; _flj < cfg.fixture.length; _flj++) {
-          var _fljor = cfg.fixture[_flj]; if (!_fljor) continue;
+      /* Liga / league format: fixtures live in cfg.fixture with keys '${j}_${mi}'.
+         Reconstruido si falta (mismo helper determinista que el backfill). */
+      var _flfix = _tourEnsureLeagueFixture(cfg, tt);
+      if (_flfix && _flfix.length) {
+        for (var _flj = 0; _flj < _flfix.length; _flj++) {
+          var _fljor = _flfix[_flj]; if (!_fljor) continue;
           for (var _flmi = 0; _flmi < _fljor.length; _flmi++) {
             var _flpr = _fljor[_flmi]; if (!_flpr) continue;
             idx[_flj + '_' + _flmi] = {

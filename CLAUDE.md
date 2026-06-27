@@ -1850,6 +1850,24 @@ el store en memoria está vacío (tras recarga).
    `home`/`away` al `cfg.results[mk]` vía `_tourAttachActa` (o
    `_tourSaveHumanResult` para humanos). Sin events no hay goleadores
    que mostrar — es la fuente única de las cajas "en vivo".
+5. **El índice key→{home,away} de los agregadores DEBE reconstruir el
+   fixture cuando falte** (bug Trofeo Joan Gamper 2026-06-27, foto
+   usuario: torneo de verano `format='league'` con J1 jugada y la caja
+   `s-tour-stats` en «Sin datos todavía»). `cfg.fixture` (liga) y
+   `cfg.groupFixtures` (grupos) se construyen LAZY al renderizar la
+   pantalla del torneo (`_renderLeague`/grupos). Si el usuario entra
+   DIRECTO a Estadísticas, recarga, o el cfg llegó de otro dispositivo /
+   del servidor con los resultados guardados SOLO-MARCADOR (sin
+   `home`/`away`), no existen → sin ellos NINGÚN partido resuelve su
+   equipo → caja VACÍA pese a haber partidos jugados. `groupFixtures` ya
+   se reconstruía en `_tourBackfillActasFromResults`; faltaba reconstruir
+   `cfg.fixture` (liga). Helper único `_tourEnsureLeagueFixture(cfg, tt)`
+   (round-robin DETERMINISTA sobre el orden de `cfg.teams`, idéntico al
+   de `_renderLeague` → las claves `<j>_<mi>` coinciden con `cfg.results`),
+   usado por `_tourBackfillActasFromResults` Y `_mundialStatsRobustScan`.
+   **PROHIBIDO** que un agregador de torneo lea `cfg.fixture`/
+   `groupFixtures` SOLO si están presentes sin reconstruirlos: un cfg sin
+   fixture (entrada directa, recarga, sync solo-marcador) vacía la caja.
 
 ### La caja `s-mundial-stats` (Mundialito Clubes) — RENDER-FIRST como el Mundial 2032 (obligatorio, 2026-06-09)
 

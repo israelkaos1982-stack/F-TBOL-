@@ -1280,7 +1280,19 @@ window._showSimProgress = function(opts, onDone){
        que la hidratación cross-device pueda arbitrar por recencia (ver
        _hydrateMenuFromServer). Sin él, un navegador con copia vieja se
        quedaba clavado en la "web antigua". */
-    try{ if(s && typeof s==='object') s.updatedAt = Date.now(); }catch(_){}
+    try{ if(s && typeof s==='object'){
+      s.updatedAt = Date.now();
+      /* REV monotónico (reloj LÓGICO, 2026-06-27): cada cambio REAL del menú
+         (añadir / editar / ELIMINAR caja) incrementa `rev` sobre el máximo
+         conocido. El server RECHAZA un push NO-authoritative con `rev` MENOR,
+         así un dispositivo con copia VIEJA o el RELOJ ADELANTADO no puede
+         RESUCITAR una caja borrada por recencia de reloj de pared (causa raíz
+         «el borrar desde el editor no funciona» en un parque de varios móviles
+         + PC). Espejo del `rev` del HUD / tour_info_cards. */
+      var _pr=0; try{ var _r=localStorage.getItem(KEY); if(_r){ var _d=JSON.parse(_r); if(_d&&typeof _d.rev==='number') _pr=_d.rev; } }catch(_){}
+      var _sr=(typeof s.rev==='number')?s.rev:0;
+      s.rev = Math.max(_pr,_sr) + 1;
+    } }catch(_){}
     try{ localStorage.setItem(KEY, JSON.stringify(s)); }
     catch(e){ ok=false; }
     _saveMenuServer(s, true);
@@ -1312,14 +1324,29 @@ window._showSimProgress = function(opts, onDone){
           var srv=(j && j.ok && j.value && typeof j.value==='object') ? j.value : null;
           if(srv){
             var srvTs=(typeof srv.updatedAt==='number') ? srv.updatedAt : 0;
-            var adopt = _menuHasContent(srv) && (srvTs > localTs || (srvTs===0 && localTs===0));
+            /* REV (reloj lógico) decide PRIMERO; a igualdad, recencia por ts.
+               Si el server trae un `rev` mayor lo ADOPTA aunque el ts local
+               sea (falsamente) mayor → una caja borrada en otro dispositivo
+               (rev mayor) gana sobre una copia stale local con reloj
+               adelantado, y no reaparece. */
+            var localRev=(localObj && typeof localObj.rev==='number') ? localObj.rev : 0;
+            var srvRev=(typeof srv.rev==='number') ? srv.rev : 0;
+            var adopt = _menuHasContent(srv) && (
+                 srvRev > localRev ||
+                 (srvRev === localRev && (srvTs > localTs || (srvTs===0 && localTs===0)))
+               );
             if(adopt){
               try{ localStorage.setItem(KEY, JSON.stringify(srv)); }catch(_){}
               if(typeof cb==='function') cb(true);
               return;
             }
-            /* Local autoritativa (más nueva) o server vacío → re-subir. */
-            if(localObj && (localTs>srvTs || (!_menuHasContent(srv) && _menuHasContent(localObj)))){
+            /* Local autoritativa (rev mayor, o igual rev + más nueva) o server
+               vacío → re-subir (re-asserta el MISMO rev, no lo bumpea). */
+            if(localObj && (
+                 localRev > srvRev ||
+                 (localRev === srvRev && localTs > srvTs) ||
+                 (!_menuHasContent(srv) && _menuHasContent(localObj))
+               )){
               _saveMenuServer(localObj);
             }
           }

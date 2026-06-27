@@ -4100,7 +4100,7 @@ def api_kv_set(key):
             # móvil sin actualizar ni con el reloj adelantado puede volver a
             # pisar el HUD por recencia (causa raíz «el 🪙 vuelve a 0 al borrar
             # datos» en un parque de 6 móviles + PC, foto usuario 2026-06-11).
-            if _kv_hub_base(key) in ("bayern_hud_overrides_v1", "tour_info_cards_v1"):
+            if _kv_hub_base(key) in ("bayern_hud_overrides_v1", "tour_info_cards_v1", "menu_home_v1"):
                 _old_rev = 0
                 if isinstance(old, dict):
                     try:
@@ -4226,6 +4226,29 @@ def api_kv_set(key):
                 _merged["rev"] = max(_old_rev, _new_rev)
                 _merged["updatedAt"] = max(old_ts, new_ts)
                 value, payload = _merged, json.dumps(_merged, ensure_ascii=False)
+        elif _kv_hub_base(key) == "menu_home_v1" and isinstance(old, dict) and isinstance(value, dict):
+            # MENÚ del home (cajas EQUIPOS): REV MONOTÓNICO (2026-06-27). El
+            # re-push self-heal de un dispositivo NO-authoritative no puede
+            # RESUCITAR una caja borrada: un push con `rev` MENOR que el
+            # almacenado es STALE (copia vieja / reloj adelantado) y se RECHAZA
+            # ENTERO; a igualdad de `rev`, recencia por `updatedAt`. La acción
+            # del admin (añadir/editar/eliminar) va por authoritative=true (rama
+            # de arriba: sella reloj + bumpea rev y gana siempre). Sin esto, en
+            # un parque de varios móviles + PC un dispositivo con copia stale
+            # revivía la caja borrada por recencia de reloj de pared (causa raíz
+            # «el borrar desde el editor no funciona»).
+            try:
+                _old_rev = int(old.get("rev") or 0)
+            except (TypeError, ValueError):
+                _old_rev = 0
+            try:
+                _new_rev = int(value.get("rev") or 0)
+            except (TypeError, ValueError):
+                _new_rev = 0
+            if _new_rev < _old_rev:
+                value, payload = old, row.valor_json
+            elif _new_rev == _old_rev and old_ts > new_ts:
+                value, payload = old, row.valor_json
         elif row and row.valor_json and old_ts > new_ts:
             value, payload = old, row.valor_json
     # LEDGER de pagos CASH (cash_ledger_v1): merge por UNIÓN del mapa `paid`.

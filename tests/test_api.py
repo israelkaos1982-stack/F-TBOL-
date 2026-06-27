@@ -1301,6 +1301,89 @@ class TestMultiHubKeys:
         assert self._get_cursor(client, self.CUR_ALV)["dayIdx"] == 5
 
 
+class TestTrofeosMerge:
+    """Vitrina de trofeos (bayern_trofeos_v1 + variantes por hub) — RECENCIA
+    + EMPTY-GUARD (bug usuario 2026-06-27: «tenía toda la vitrina del
+    Arsenal-Álvaro y del Real Madrid-Acsa y no se han guardado»). La vitrina
+    es un registro PERSISTENTE del admin que debe sobrevivir al wipe / cambio
+    de móvil de CUALQUIERA de las 6 cajas humanas; un POST vacío de un
+    dispositivo recién wipeado no puede borrar lo que otro ya subió."""
+
+    BASE = "/api/kv/bayern_trofeos_v1"
+    ALV = "/api/kv/bayern_trofeos_v1_alvaro"
+    ACSA = "/api/kv/bayern_trofeos_v1_acsa"
+
+    def _items(self, client, url):
+        v = _json(client.get(url)).get("value")
+        if isinstance(v, dict):
+            return v.get("items")
+        return v
+
+    def _trof(self, n, count=1):
+        return {"id": "tr-" + str(n), "icon": "/static/x.svg",
+                "title": "TÍTULO " + str(n), "count": count}
+
+    def test_first_save_persists(self, client):
+        client.post(self.ALV, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(1), self._trof(2)]}})
+        items = self._items(client, self.ALV)
+        assert isinstance(items, list) and len(items) == 2
+
+    def test_empty_does_not_clobber_non_empty(self, client):
+        client.post(self.ALV, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(1)]}})
+        # Otro móvil recién wipeado sube la vitrina VACÍA (no autoritativo).
+        client.post(self.ALV, json={"value": {"updatedAt": 2000, "items": []}})
+        assert len(self._items(client, self.ALV)) == 1
+
+    def test_legacy_empty_array_does_not_clobber(self, client):
+        client.post(self.ALV, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(1)]}})
+        # Cliente VIEJO que aún manda el array crudo vacío.
+        client.post(self.ALV, json={"value": []})
+        assert len(self._items(client, self.ALV)) == 1
+
+    def test_authoritative_can_clear(self, client):
+        client.post(self.ALV, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(1)]}})
+        # El admin vacía la vitrina a mano → acción AUTORITATIVA.
+        client.post(self.ALV, json={"value": {"updatedAt": 2000, "items": []},
+                    "authoritative": True})
+        assert self._items(client, self.ALV) == []
+
+    def test_stale_does_not_overwrite_newer(self, client):
+        client.post(self.ALV, json={"value": {"updatedAt": 5000,
+                    "items": [self._trof(1), self._trof(2)]}})
+        # POST stale (reloj viejo) con OTRA lista no pisa la más nueva.
+        client.post(self.ALV, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(9)]}})
+        items = self._items(client, self.ALV)
+        assert len(items) == 2
+
+    def test_newer_overwrites_older(self, client):
+        client.post(self.ALV, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(1)]}})
+        client.post(self.ALV, json={"value": {"updatedAt": 9000,
+                    "items": [self._trof(1), self._trof(2), self._trof(3)]}})
+        assert len(self._items(client, self.ALV)) == 3
+
+    def test_legacy_array_with_items_is_accepted(self, client):
+        # Un cliente viejo que manda el array crudo (sin sello) se acepta.
+        client.post(self.ALV, json={"value": [self._trof(1), self._trof(2)]})
+        assert len(self._items(client, self.ALV)) == 2
+
+    def test_hubs_are_independent(self, client):
+        client.post(self.ALV, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(1)]}})
+        client.post(self.ACSA, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(2), self._trof(3)]}})
+        client.post(self.BASE, json={"value": {"updatedAt": 1000,
+                    "items": [self._trof(4), self._trof(5), self._trof(6)]}})
+        assert len(self._items(client, self.ALV)) == 1
+        assert len(self._items(client, self.ACSA)) == 2
+        assert len(self._items(client, self.BASE)) == 3
+
+
 # ---------------------------------------------------------------------------
 # Fusión cross-device de Resto de Ligas (_lx_merge_teams) — bugs 2026-06-11:
 # "se duplican equipos", "no se puede añadir estadios", "se borran logos".

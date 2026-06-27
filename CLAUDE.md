@@ -41,7 +41,7 @@ Toñín, devuelven EXACTAMENTE lo de antes (Liverpool).
 |---|---|---|
 | Cursor calendario | `liverpool_preseason_v1` (+cookie `livps`) | IIFE pretemporada: reasigna KEY + `_psInvalidateCache` |
 | HUD 💼🪙💊 | `bayern_hud_overrides_v1` (+cookie `bayhud`, IDB row) | IIFE HUD: reasigna KEY/KV_URL, RESET gate hidratación + cache, re-pull |
-| Trofeos | `bayern_trofeos_v1` | IIFE trofeos: reasigna + re-hidrata + render (no-Liverpool arranca VACÍO) |
+| Trofeos | `bayern_trofeos_v1` | IIFE trofeos: reasigna + re-hidrata + render (no-Liverpool arranca VACÍO). Sync RECENCIA + EMPTY-GUARD por hub (ver abajo) |
 | Objetivos config | `munich-obj-overrides-v1` | IIFE config: render DIFERIDO (tras reasignar progreso) |
 | Objetivos progreso | `munich-obj-state-v4` | IIFE progreso: reasigna LS_OBJ SÍNCRONO + re-crea `_kvBlobSync` |
 | Derbys temporadas/partidos | `bayern_derbys_seasons_v1` / `bayern_derbys_matches_v1` | 3 IIFEs (render/seasons/matches): reasignan + re-pull + render |
@@ -60,6 +60,43 @@ El cursor: `_is_cursor_key(k)` cubre `liverpool_preseason_v1_<id>` con el
 MISMO merge monotónico (`_cursor_winner`). Derbys: viajan por `/api/state`
 (merge_dict genérico acepta claves arbitrarias) + unión cliente. Tests en
 `tests/test_api.py::TestMultiHubKeys`.
+
+### Vitrina de trofeos POR HUB — RECENCIA + EMPTY-GUARD (obligatorio, 2026-06-27)
+
+**Bug (fotos usuario 2026-06-27, «Arsenal-Álvaro» + «Real Madrid-Acsa»)**:
+el admin tenía la vitrina de trofeos llena para esas cajas de mister y al
+volver salían a **0** («no se han guardado»). El sync de `bayern_trofeos_v1`
+(+ variantes por hub) era frágil: `save()` era fire-and-forget SIN sello ni
+reintentos, el server hacía **last-write-wins** (un POST vacío de un móvil
+recién wipeado borraba la vitrina de toda la red), y la hidratación usaba una
+heurística que podía saltar el GET. Mismo patrón «se pierde al borrar datos»
+que el HUD/derbys/sanciones.
+
+**Fix** — la vitrina hereda la durabilidad documentada:
+- **Cliente** (`misc_body_1.html`, IIFE trofeos): cada `save()` (acción
+  EXPLÍCITA del admin tras PIN 747) sella `updatedAt` en `<STORE_KEY>_ts`,
+  POSTea el formato `{updatedAt, items}` con **3 reintentos** y marca
+  `authoritative:true` (gana por recencia, puede vaciar a mano).
+  `_hydrateTrofFromServer` SIEMPRE hace GET y resuelve por recencia: adopta
+  el server si es más nuevo (o el local solo trae defaults), o RE-EMPUJA el
+  local autoritativo para CURAR el server (basta un dispositivo con la
+  vitrina para restaurarla en todos). Acepta el formato legacy (array crudo).
+- **Servidor** (`app.py`, `_trofeos_merge` en `api_kv_set`, vía
+  `_kv_hub_base == 'bayern_trofeos_v1'`): **EMPTY-GUARD** (un POST vacío
+  NO-autoritativo nunca borra una vitrina almacenada con datos) +
+  **RECENCIA** (sello mayor gana; stale no pisa lo nuevo). La acción
+  autoritativa del admin SÍ puede vaciar. Acepta legacy bare-array. Tests en
+  `tests/test_api.py::TestTrofeosMerge`.
+
+**Reglas a respetar**:
+- **PROHIBIDO** que el sync de la vitrina vuelva al fire-and-forget sin
+  sello / al last-write-wins del server. Toda variante por hub
+  (`bayern_trofeos_v1_<id>`) hereda RECENCIA + EMPTY-GUARD vía `_kv_hub_base`.
+- **PROHIBIDO** que un POST vacío NO-autoritativo borre la vitrina: solo la
+  acción autoritativa del admin (✏️/🗑 tras PIN) puede vaciarla.
+- La importación de backup (V2) re-sube TODAS las variantes
+  `bayern_trofeos_v1_<id>` (no solo la base) autoritativas, para restaurar el
+  palmarés de las 6 cajas.
 
 ### Reglas a respetar
 

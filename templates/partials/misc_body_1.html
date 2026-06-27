@@ -1244,7 +1244,7 @@ window._showSimProgress = function(opts, onDone){
 (function(){
   var KEY = 'menu_home_v1';
   var GRID_SEL = '#s-home .menu-grid';
-  var NAV_TARGETS = ['', 's-munich','s-arsenal','s-madrid','s-atletico','s-barca','s-psg',
+  var NAV_TARGETS = ['', 's-munich','s-arsenal','s-madrid','s-atletico','s-barca','s-psg','s-internazionale',
     's-espana','s-competiciones','s-champions','s-uel','s-uecl','s-usc',
     's-intercontinental','s-ligas','s-selecciones','s-pendientes',
     's-liga','s-copa','s-segunda','s-home'];
@@ -1559,8 +1559,10 @@ window._showSimProgress = function(opts, onDone){
     var MOR='linear-gradient(135deg,#1a0033 0%,#4a148c 35%,#7b2cbf 60%,#9d4edd 82%,#c77dff 100%)';
     var ROJ='linear-gradient(135deg,#1a0000 0%,#8a0000 45%,#cc0000 75%,#ff3030 100%)';
     var AZU='linear-gradient(135deg,#00142e 0%,#003a8c 35%,#0050c8 60%,#2e7fe0 82%,#5ba3ff 100%)';
+    var INT='linear-gradient(135deg,#001b3d 0%,#0061b0 48%,#0a0a0a 100%)';
     var M={ 'acsa':MOR,'s-madrid':MOR, 'isra':ROJ,'s-atletico':ROJ,
-            'angel':AZU,'s-barca':AZU, 'izan':AZU,'s-psg':AZU };
+            'angel':AZU,'s-barca':AZU, 'izan':AZU,'s-psg':AZU,
+            'ruben':INT,'s-internazionale':INT };
     return M[key]||null;
   }
 
@@ -36425,7 +36427,12 @@ window._showSimProgress = function(opts, onDone){
     { id:'acsa',   emoji:'🔨', mister:'Acsa',   club:'Real Madrid',    seleccion:'Inglaterra', screen:'s-madrid'   },
     { id:'isra',   emoji:'✏️', mister:'Isra',   club:'Atlético Madrid', seleccion:'Noruega',    screen:'s-atletico' },
     { id:'angel',  emoji:'😈', mister:'Ángel',  club:'FC Barcelona',   seleccion:'Argentina',  screen:'s-barca'    },
-    { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',            seleccion:'España',     screen:'s-psg'      }
+    { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',            seleccion:'España',     screen:'s-psg'      },
+    /* 7º mister (2026-06-26): Inter🐲 = Rubén (club Inter + selección Portugal).
+       Hereda reconocimiento humano (_isHumanClubCanonico → derbys + Superliga),
+       claves de hub namespaced `_ruben`, e ISRAMAX. La TARJETA del menú es la
+       que añade el usuario a mano (escudo real); aquí solo vive el hub. */
+    { id:'ruben',  emoji:'🐲', mister:'Rubén',  club:'Inter',          seleccion:'Portugal',   screen:'s-internazionale' }
   ];
   function _mhNorm(s){
     return String(s||'')
@@ -53625,7 +53632,9 @@ https://api.sofascore.app/api/v1/team/44/image
       'acsa':{ cols:['#6b21a8','#a855f7'], text:'#c77dff' },
       'isra':{ cols:['#8a0d16','#e01228'], text:'#ffffff' },
       'angel':{ cols:['#1e40af','#3b82f6'], text:'#5ba3ff' },
-      'izan':{ cols:['#0a2a6e','#2e7fe0'], text:'#5ba3ff' }
+      'izan':{ cols:['#0a2a6e','#2e7fe0'], text:'#5ba3ff' },
+      /* Inter (Rubén): nerazzurri — azul Inter + negro. */
+      'ruben':{ cols:['#003c82','#0a84e0'], text:'#4da6ff' }
     };
     var _th=_THEME[_idT]||null;
     var _txt=_th?_th.text:'#dc052d';
@@ -63054,6 +63063,44 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   };
 })();
 </script>
+
+<div class="screen" id="s-internazionale">
+<script>
+/* La caja Inter-Portugal (Rubén 🐲🇵🇹) REUTILIZA el hub genérico
+   `s-munich` parametrizado por HUB ACTIVO (multi-hub 2026-06-13): al
+   activarse esta pantalla fija el hub activo = Rubén y abre s-munich,
+   que muestra plantilla / histórico derbys / calendario / trofeos /
+   objetivos / HUD CORRESPONDIENTES al Inter. El callback del
+   MutationObserver corre como microtask ANTES del paint, así que no
+   hay parpadeo del placeholder. También cubre cualquier
+   go('s-internazionale') directo de otro código. (Mismo patrón que
+   s-arsenal.) */
+(function(){
+  if(window.__interHubRedirectReady) return; window.__interHubRedirectReady=true;
+  function _redir(){
+    try{ if(window.setActiveHub) window.setActiveHub('ruben'); }catch(_){}
+    try{ if(window.go) window.go('s-munich'); }catch(_){}
+  }
+  function _wire(){
+    var scr=document.getElementById('s-internazionale');
+    if(!scr) return;
+    if(scr.classList.contains('active')) _redir();
+    try{
+      var obs=new MutationObserver(function(muts){
+        for(var i=0;i<muts.length;i++){
+          if(muts[i].attributeName==='class' && scr.classList.contains('active')){ _redir(); return; }
+        }
+      });
+      obs.observe(scr, { attributes:true, attributeFilter:['class'] });
+    }catch(_){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _wire);
+  else _wire();
+})();
+</script>
+<button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+<div style="padding:60px 20px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.6);">Cargando hub del Inter…</div>
+</div>
 
 <div class="screen" id="s-arsenal">
 <script>

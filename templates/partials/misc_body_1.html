@@ -58211,6 +58211,16 @@ https://api.sofascore.app/api/v1/team/44/image
 </div>
 
 <style>
+  /* Secciones de la vitrina: ENTRENADOR (club/selección) y TROFEOS
+     INDIVIDUALES (Pichichi, Zamora, Balón de Oro…). 2026-06-27. */
+  #s-munich-trofeos .trof-cat-block{display:flex;flex-direction:column;gap:12px;}
+  #s-munich-trofeos .trof-cat-block + .trof-cat-block{margin-top:22px;}
+  #s-munich-trofeos .trof-cat-hdr{display:flex;align-items:center;gap:10px;padding:6px 4px 8px;border-bottom:1px solid rgba(240,192,64,.28);}
+  #s-munich-trofeos .trof-cat-emoji{font-size:20px;line-height:1;}
+  #s-munich-trofeos .trof-cat-title{flex:1;font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:3px;color:#ffd55a;text-shadow:0 0 10px rgba(240,192,64,.40);}
+  #s-munich-trofeos .trof-cat-n{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:1px;color:rgba(240,192,64,.65);}
+  #s-munich-trofeos .trof-cat-rows{display:flex;flex-direction:column;gap:14px;}
+  #s-munich-trofeos .trof-cat-empty{text-align:center;padding:16px 14px;color:rgba(255,255,255,.40);font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:1px;}
   #s-munich-trofeos .ath-titulo-row{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,rgba(220,5,45,.15),rgba(240,192,64,.08));border:1px solid rgba(240,192,64,.3);border-radius:12px;padding:8px 14px;position:relative;}
   /* Icono del título — círculo incrustado en la caja, mismo estilo
      que las cajas de #s-competiciones. Fondo radial con sombra
@@ -58309,14 +58319,22 @@ https://api.sofascore.app/api/v1/team/44/image
       try { localStorage.setItem(STORE_KEY, JSON.stringify(arr)); } catch(_){}
     }
     /* Backfill de `count` para entradas guardadas con la versión antigua
-       (antes solo había 1 fila por trofeo, sin contador explícito). */
+       (antes solo había 1 fila por trofeo, sin contador explícito).
+       Backfill de `cat` (2026-06-27): los títulos LEGACY (sin categoría)
+       son del ENTRENADOR (club/selección); los individuales se crean ya
+       con `cat:'ind'`. */
     arr.forEach(function(t){
       if (!t) return;
       var n = parseInt(t.count, 10);
       t.count = (isNaN(n) || n < 1) ? 1 : n;
+      t.cat = (t.cat === 'ind') ? 'ind' : 'club';
     });
     return arr;
   }
+  /* Categoría de un trofeo: 'club' (ENTRENADOR — palmarés del club o la
+     selección) o 'ind' (TROFEOS INDIVIDUALES — Pichichi, Zamora, Balón de
+     Oro…). Default 'club' para datos legacy. */
+  function _trofCat(t){ return (t && t.cat === 'ind') ? 'ind' : 'club'; }
 
   /* Sync con servidor (GlobalState `bayern_trofeos_v1` + variantes por
      hub). localStorage es cache rápido; el server es la fuente de verdad
@@ -58514,15 +58532,33 @@ https://api.sofascore.app/api/v1/team/44/image
     return s;
   }
 
+  /* Una SECCIÓN de la vitrina (Entrenador / Individuales): cabecera +
+     filas (o aviso si está vacía). El total por sección se muestra a la
+     derecha de la cabecera. */
+  function _sectionHtml(emoji, title, rows){
+    var sub = _sumTotal(rows);
+    var body = rows.length
+      ? rows.map(_rowHtml).join('')
+      : '<div class="trof-cat-empty">— Sin títulos todavía —</div>';
+    return '<div class="trof-cat-block">'
+         +   '<div class="trof-cat-hdr">'
+         +     '<span class="trof-cat-emoji">'+emoji+'</span>'
+         +     '<span class="trof-cat-title">'+esc(title)+'</span>'
+         +     '<span class="trof-cat-n">'+sub+'</span>'
+         +   '</div>'
+         +   '<div class="trof-cat-rows">'+body+'</div>'
+         + '</div>';
+  }
+
   function render(){
     var list = load();
     var host = document.getElementById('munich-trofeos-list');
     if (host){
-      if (!list.length){
-        host.innerHTML = '<div style="text-align:center;padding:30px 14px;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:1px;">— Sin títulos —<br><span style="font-size:11px;color:rgba(255,255,255,.35);">Pulsa <b>➕ AÑADIR TÍTULO</b> para empezar.</span></div>';
-      } else {
-        host.innerHTML = list.map(_rowHtml).join('');
-      }
+      var club = list.filter(function(t){ return _trofCat(t) === 'club'; });
+      var ind  = list.filter(function(t){ return _trofCat(t) === 'ind'; });
+      host.innerHTML =
+          _sectionHtml('🧑‍💼', 'ENTRENADOR', club)
+        + _sectionHtml('🎖️', 'TROFEOS INDIVIDUALES', ind);
     }
     var total = _sumTotal(list);
     var totEl = document.getElementById('munich-trofeos-total');
@@ -58555,6 +58591,9 @@ https://api.sofascore.app/api/v1/team/44/image
         + '#munich-trof-add-ov .ta-box{background:linear-gradient(160deg,#1a1408 0%,#2a1a08 100%);border:1px solid rgba(240,192,64,.55);border-radius:14px;padding:20px 18px 16px;width:340px;max-width:94vw;box-shadow:0 0 36px rgba(240,192,64,.30);}'
         + '#munich-trof-add-ov .ta-title{font-family:"Bebas Neue","Oswald",sans-serif;font-size:22px;letter-spacing:3px;color:#ffd55a;text-align:center;margin:0 0 14px;text-shadow:0 0 12px rgba(240,192,64,.50);}'
         + '#munich-trof-add-ov .ta-row{display:flex;flex-direction:column;gap:5px;padding:7px 0;}'
+        + '#munich-trof-add-ov .ta-cat-wrap{display:flex;gap:8px;}'
+        + '#munich-trof-add-ov .ta-cat-btn{flex:1;padding:10px 8px;background:rgba(0,0,0,.40);border:1px solid rgba(240,192,64,.35);border-radius:8px;color:rgba(255,228,168,.75);font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:all .14s;}'
+        + '#munich-trof-add-ov .ta-cat-btn.active{background:linear-gradient(145deg,#f8c44e,#b88915);border-color:#ffd55a;color:#1a0800;font-weight:700;box-shadow:0 0 12px rgba(255,198,77,.35);}'
         + '#munich-trof-add-ov .ta-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,228,168,.85);}'
         + '#munich-trof-add-ov .ta-input{background:rgba(0,0,0,.45);border:1px solid rgba(240,192,64,.40);border-radius:7px;padding:9px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:14px;width:100%;}'
         + '#munich-trof-add-ov .ta-input:focus{outline:none;border-color:#ffd55a;box-shadow:0 0 10px rgba(240,192,64,.40);}'
@@ -58586,11 +58625,18 @@ https://api.sofascore.app/api/v1/team/44/image
       +     '</div>'
       +   '</div>'
       +   '<div class="ta-row">'
-      +     '<label class="ta-lbl">🏆 Texto del título</label>'
+      +     '<label class="ta-lbl">📂 Categoría</label>'
+      +     '<div class="ta-cat-wrap">'
+      +       '<button type="button" id="munich-trof-cat-club" class="ta-cat-btn active" onclick="window._munichTrofSetCat(\'club\')">🧑‍💼 ENTRENADOR</button>'
+      +       '<button type="button" id="munich-trof-cat-ind" class="ta-cat-btn" onclick="window._munichTrofSetCat(\'ind\')">🎖️ INDIVIDUAL</button>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="ta-row">'
+      +     '<label class="ta-lbl" id="munich-trof-title-lbl">🏆 Texto del título</label>'
       +     '<input id="munich-trof-title" class="ta-input" type="text" placeholder="LIGA EA SPORTS" autocomplete="off"/>'
       +   '</div>'
       +   '<div class="ta-row">'
-      +     '<label class="ta-lbl">📝 Subtítulo (opcional)</label>'
+      +     '<label class="ta-lbl" id="munich-trof-sub-lbl">📝 Subtítulo (opcional)</label>'
       +     '<input id="munich-trof-sub" class="ta-input" type="text" placeholder="UEFA · Final 25-Mayo-2032" autocomplete="off"/>'
       +   '</div>'
       +   '<div class="ta-actions">'
@@ -58690,6 +58736,34 @@ https://api.sofascore.app/api/v1/team/44/image
     reader.onerror = function(){ cb(null, 'no se pudo leer el archivo'); };
     reader.readAsDataURL(file);
   }
+  /* Selector de categoría del modal (Entrenador / Individual). Guarda la
+     elección en `ov.dataset.cat` y adapta los placeholders/labels (un
+     trofeo individual lleva el NOMBRE DEL JUGADOR en el subtítulo). */
+  window._munichTrofSetCat = function(cat){
+    var ov = document.getElementById('munich-trof-add-ov');
+    if (!ov) return;
+    cat = (cat === 'ind') ? 'ind' : 'club';
+    ov.dataset.cat = cat;
+    var bC = document.getElementById('munich-trof-cat-club');
+    var bI = document.getElementById('munich-trof-cat-ind');
+    if (bC) bC.classList.toggle('active', cat === 'club');
+    if (bI) bI.classList.toggle('active', cat === 'ind');
+    var tLbl = document.getElementById('munich-trof-title-lbl');
+    var sLbl = document.getElementById('munich-trof-sub-lbl');
+    var tInp = document.getElementById('munich-trof-title');
+    var sInp = document.getElementById('munich-trof-sub');
+    if (cat === 'ind'){
+      if (tLbl) tLbl.textContent = '🎖️ Premio individual';
+      if (tInp) tInp.placeholder = 'PICHICHI · ZAMORA · BALÓN DE ORO…';
+      if (sLbl) sLbl.textContent = '👤 Jugador (opcional)';
+      if (sInp) sInp.placeholder = 'Kylian Mbappé · 2031-32';
+    } else {
+      if (tLbl) tLbl.textContent = '🏆 Texto del título';
+      if (tInp) tInp.placeholder = 'LIGA EA SPORTS';
+      if (sLbl) sLbl.textContent = '📝 Subtítulo (opcional)';
+      if (sInp) sInp.placeholder = 'UEFA · Final 25-Mayo-2032';
+    }
+  };
   window._munichTrofAddOpen = function(existing, isEditMode){
     _ensureTrofeoAddOv();
     var ov = document.getElementById('munich-trof-add-ov');
@@ -58698,6 +58772,8 @@ https://api.sofascore.app/api/v1/team/44/image
     var titleInp = document.getElementById('munich-trof-title');
     var subInp = document.getElementById('munich-trof-sub');
     var prev = document.getElementById('munich-trof-icon-preview');
+    /* Categoría: la del trofeo en edición, o 'club' por defecto al crear. */
+    window._munichTrofSetCat((existing && existing.cat === 'ind') ? 'ind' : 'club');
     if (urlInp) urlInp.value = (existing && existing.icon && existing.icon.indexOf('data:') !== 0) ? existing.icon : '';
     if (titleInp) titleInp.value = (existing && existing.title) || '';
     if (subInp) subInp.value = (existing && existing.sub) || '';
@@ -58744,6 +58820,7 @@ https://api.sofascore.app/api/v1/team/44/image
     var iconFinal = dataUrl || iconUrl; /* archivo prevalece sobre URL pegada */
     var titleTxt = (titleInp && titleInp.value || '').trim();
     var subTxt = (subInp && subInp.value || '').trim();
+    var catSel  = (ov.dataset.cat === 'ind') ? 'ind' : 'club';
     var isEdit  = ov.dataset.editMode === '1';
     var editId  = ov.dataset.editId || '';
     if (!iconFinal){ alert('⚠️ Pega una URL o sube un archivo para el icono.'); return; }
@@ -58765,6 +58842,7 @@ https://api.sofascore.app/api/v1/team/44/image
         found.icon  = iconFinal;
         found.title = titleTxt;
         found.sub   = subTxt;  /* permite vaciar el sub poniendo "" */
+        found.cat   = catSel;  /* permite recategorizar un título */
         save(arr);
         render();
         window._munichTrofAddClose();
@@ -58773,9 +58851,13 @@ https://api.sofascore.app/api/v1/team/44/image
       /* Si no encontramos el id (edge case: borrado entre tanto),
          caemos al flujo Add normal. */
     }
-    /* MODO ADD: dedupe por título, incrementa count si ya existe. */
+    /* MODO ADD: dedupe por título DENTRO de su categoría (un mismo nombre
+       puede existir como Entrenador e Individual sin fusionarse), incrementa
+       count si ya existe. */
     var key = _normTitle(titleTxt);
-    var existing = arr.filter(function(t){ return t && _normTitle(t.title) === key; })[0];
+    var existing = arr.filter(function(t){
+      return t && _trofCat(t) === catSel && _normTitle(t.title) === key;
+    })[0];
     if (existing){
       existing.count = (existing.count|0) + 1;
       if (iconFinal) existing.icon = iconFinal;
@@ -58786,7 +58868,8 @@ https://api.sofascore.app/api/v1/team/44/image
         icon:  iconFinal,
         title: titleTxt,
         sub:   subTxt,
-        count: 1
+        count: 1,
+        cat:   catSel
       });
     }
     save(arr);
@@ -58852,7 +58935,8 @@ https://api.sofascore.app/api/v1/team/44/image
         return;
       }
       var menu = arr.map(function(t, i){
-        return (i + 1) + ') ' + t.title + (t.count > 1 ? '  ×' + t.count : '');
+        var tag = _trofCat(t) === 'ind' ? '🎖️ ' : '🧑‍💼 ';
+        return (i + 1) + ') ' + tag + t.title + (t.count > 1 ? '  ×' + t.count : '');
       }).join('\n');
       var raw = window.prompt('🗑  ELIMINAR TÍTULO\n\nEscribe el número del título a quitar:\n\n' + menu + '\n\nDeja vacío para cancelar.', '');
       if (!raw) return;

@@ -398,47 +398,6 @@
 </div>
 </div>
 </div>
-<div class="screen" id="s-internazionale">
-<script>
-/* La caja Inter (🐲, 7º mister 2026-06-26) REUTILIZA el hub genérico
-   `s-munich` parametrizado por HUB ACTIVO (multi-hub): al activarse esta
-   pantalla fija el hub activo = Inter y abre s-munich, que muestra
-   plantilla / histórico derbys / calendario / trofeos / objetivos / HUD
-   del Inter. Cubre también la caja dinámica del menú (admin) que sólo hace
-   go('s-internazionale'). Mismo patrón que s-psg / s-arsenal. */
-(function(){
-  if(window.__interHubRedirectReady) return; window.__interHubRedirectReady=true;
-  function _redir(){
-    try{ if(window.setActiveHub) window.setActiveHub('inter'); }catch(_){}
-    try{ if(window.go) window.go('s-munich'); }catch(_){}
-  }
-  function _wire(){
-    var scr=document.getElementById('s-internazionale');
-    if(!scr) return;
-    if(scr.classList.contains('active')) _redir();
-    try{
-      var obs=new MutationObserver(function(muts){
-        for(var i=0;i<muts.length;i++){
-          if(muts[i].attributeName==='class' && scr.classList.contains('active')){ _redir(); return; }
-        }
-      });
-      obs.observe(scr, { attributes:true, attributeFilter:['class'] });
-    }catch(_){}
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _wire);
-  else _wire();
-})();
-</script>
-<button class="back-btn" onclick="go('s-home')">◀ Volver</button>
-<div class="sec-hdr">
-<div style="display:flex;flex-direction:column;gap:2px;">
-<div style="display:flex;align-items:center;gap:6px;">
-<span style="font-family:'Oswald',sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;color:#2563eb;">🐲 Inter</span>
-</div>
-</div></div>
-<div class="empty-ph" style="padding:40px 14px;">Abriendo el hub del Inter…</div>
-</div>
-
 <div class="screen" id="s-psg">
 <script>
 /* La caja PSG-España (Izan 🦆🇪🇸) REUTILIZA el hub genérico `s-munich`
@@ -24533,9 +24492,9 @@ window.goLiveMatches = function() {
     { id:'acsa',   name:'Acsa',   team:'Real Madrid',       icon:'🔨', pin:'216', color:'#fb923c', dark:'#7c2d12' },
     { id:'israel', misterId:'isra', name:'Israel', team:'Atlético Madrid',   icon:'✏️', pin:'646', color:'#facc15', dark:'#854d0e' },
     { id:'angel',  name:'Ángel',  team:'FC Barcelona',      icon:'👿', pin:'171', color:'#c084fc', dark:'#581c87' },
-    /* 7º entrenador (2026-06-26): Inter🐲. misterId 'inter' → su HUD vive
-       en `bayern_hud_overrides_v1_inter` (consistente con el registro). */
-    { id:'inter',  misterId:'inter', name:'Inter', team:'Inter', icon:'🐲', pin:'414', color:'#2563eb', dark:'#0a1740' }
+    /* 7º entrenador (2026-06-26): Inter🐲 = Rubén. HUD en
+       `bayern_hud_overrides_v1_ruben` (consistente con el registro). */
+    { id:'ruben',  name:'Rubén',  team:'Inter',             icon:'🐲', pin:'888', color:'#3b9ae1', dark:'#01285a' }
   ];
   var ISRAMAX_INITIAL_CASH = 1300;
   var _isramaxSession = null; /* {userId, isGuest} en memoria */
@@ -25433,7 +25392,7 @@ window.goLiveMatches = function() {
       ['acsa',   ['Real Madrid','Real Madrid CF','Real Sociedad','Sociedad','Real Sociedad de Futbol','Manchester City','Man City','Manchester City FC','Inglaterra','England','Gran Bretaña']],
       ['israel', ['Atlético Madrid','Atletico Madrid','Atletico de Madrid','Atleti','Vallecas BR','Rayo Vallecano','Rayo','Rayo Vallecano de Madrid','Noruega','Norway']],
       ['angel',  ['FC Barcelona','Barcelona','Futbol Club Barcelona','Barca','Barça','FCBarcelona','Argentina']],
-      ['inter',  ['Inter','Internazionale','FC Internazionale','Inter Milan','Inter Milán','Inter de Milan','Inter de Milán']]
+      ['ruben',  ['Inter','Inter Milan','Inter Milán','Inter de Milan','Inter de Milán','Internazionale','FC Internazionale','Portugal']]
     ];
     var out = {};
     pairs.forEach(function(p){

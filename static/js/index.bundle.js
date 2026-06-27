@@ -12736,7 +12736,7 @@ window._fallbackSq11 = function(){
 (function(){
 
   // ── Lista canónica de selecciones humanas ────────────────────────
-  var SEL_HUMANAS = ['Francia','Brasil','Inglaterra','Noruega','Argentina','España'];
+  var SEL_HUMANAS = ['Francia','Brasil','Inglaterra','Noruega','Argentina','España','Portugal'];
 
   function _normSel(s){
     return String(s||'').trim().toLowerCase()

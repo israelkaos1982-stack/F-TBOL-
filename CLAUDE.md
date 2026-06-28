@@ -1,5 +1,62 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El picker de eventos de una caja humana muestra SIEMPRE la plantilla de SU mister (obligatorio, 2026-06-28)
+
+**Los 7 misters canónicos (club ↔ selección) — fuente de verdad, NUNCA mezclar**:
+
+| Mister | Club | Selección |
+|---|---|---|
+| Toñín 💡 | Liverpool | Francia |
+| Álvaro 🐭 | Arsenal | Brasil |
+| Acsa 🔨 | Real Madrid | Inglaterra |
+| Isra ✏️ | Atlético Madrid | Noruega |
+| Ángel 😈 | FC Barcelona | Argentina |
+| Izan 🦆 | PSG | España |
+| Rubén 🐲 | Inter | Portugal |
+
+**Bug (fotos usuario 2026-06-28, «Liverpool-Francia-Toñín»)**: al jugar la
+card del Liverpool y pulsar **+ AÑADIR EVENTO**, el selector de jugador
+(«GOL · LIVERPOOL») mostraba la plantilla del **INTER** (Sommer, Bastoni,
+Lautaro, Thuram…) en vez de la del Liverpool. Coincidió con la alta del 7º
+mister **Rubén = Inter** (2026-06-26). Causa raíz combinada: (1) el slot
+«Liverpool» de `ligaExt_liga-ea-sports` tenía guardada físicamente la
+plantilla del Inter (corrupción de datos del save del usuario — se resuelve
+re-metiendo la plantilla del Liverpool en el editor); (2) los resolutores
+del hub (`_bayernSquad`, `_findBayernRow`, `_lextFindHubTeamRow`, el
+`_resolve` del header) llevaban listas `OTHER`/`others`/`o` de «clubes
+humanos a excluir para encontrar MI slot» que **NO se actualizaron** al
+añadir Inter/PSG → el fallback de un hub podía coger el slot del Inter.
+
+**Fix (código, permanente)**:
+- **`window._humanClubSlotName(teamName)`** (`misc_body_1.html`, junto a
+  `_mhSameMister`): para un CLUB humano canónico, devuelve el NOMBRE del
+  slot de `ligaExt_liga-ea-sports` que pertenece a SU MISTER (exacto si el
+  slot se llama igual que el club — preserva byte-for-byte Liverpool/Toñín;
+  si no, el slot del MISMO mister vía `_mhSameMister`, gateado a clubes
+  humanos con `_isHumanClubCanonico` para NUNCA cruzar a otro mister).
+  No-op para IA / selecciones / nombres no canónicos.
+- **El event picker lo usa SIEMPRE**: gm-modal `_gmGetSquad` y ml-card
+  `genTpSelect` resuelven el nombre por `_humanClubSlotName` ANTES de
+  `sqFromRegistryFull`. Así cada caja humana muestra SU plantilla y jamás
+  la de otro club humano.
+- **Listas de exclusión completadas** con Inter (+ PSG donde faltaba) en
+  los 4 resolutores del hub (`_bayernSquad` OTHER, `_findBayernRow` others,
+  `_lextFindHubTeamRow` others, `_resolve` o): ningún hub humano puede
+  coger por fallback el slot de OTRO mister.
+
+**Reglas a respetar**:
+1. **PROHIBIDO** que el event picker (gm-modal o ml-card) resuelva la
+   plantilla de un club humano por nombre crudo sin pasar por
+   `_humanClubSlotName`. Cada caja humana = la plantilla de SU mister.
+2. **PROHIBIDO** añadir un mister nuevo sin meter su club (todos los alias)
+   en las 4 listas de exclusión del hub (`OTHER`/`others`/`o`) y en
+   `_MISTERS_HUMANOS`. El registro es la fuente única; toda caja nueva
+   hereda `_humanClubSlotName` automáticamente.
+3. La plantilla VIVE en `ligaExt_liga-ea-sports.teams[].players`. Si está
+   corrupta (un club humano con la plantilla de otro), el código no puede
+   inventarla: se restaura en el editor. El fix garantiza que, con datos
+   correctos, cada caja muestre SIEMPRE su plantilla y nunca la cruce.
+
 ## HUB MULTI-MISTER — el hub `s-munich` es GENÉRICO, datos por hub (obligatorio, 2026-06-13)
 
 **Petición usuario 2026-06-13 («al pulsar la caja del Arsenal-Brasil sea

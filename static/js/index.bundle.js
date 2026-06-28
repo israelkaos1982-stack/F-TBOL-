@@ -5043,6 +5043,11 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     /* Torneos de verano + amistosos: no suman amarillas ni generan
        sanción (2026-05-23). */
     if (EXCLUDED_COMPS[compKey]) return result;
+    /* Una SELECCIÓN (humana o IA) jamás acumula sanción en el sistema de
+       CLUB: las humanas las gestiona el motor `_sel*`; las IA (Suiza, etc.)
+       se DESCARTAN — no son un club y contaminaban el overlay de otras
+       cajas humanas (bug usuario 2026-06-28). */
+    try { if (window._isSeleccionName && window._isSeleccionName(teamName)) return result; } catch(_){}
 
     var cfg = COMP_CONFIG[compKey] || { label: compKey, ciclo: 3, esFinal: false };
     /* Bucket global cross-comp para acumulación de amarillas. */
@@ -5712,43 +5717,103 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       .replace(/^(fc|cf|ud)\s+/,'');
   };
 
-  /* ── Helper global: ¿un jugador pertenece a alguno de los 2 equipos del partido? ── */
-  window._ppPlayerBelongsToMatch = function(playerName) {
-    var teams = window._ppGetCurrentMatchTeams();
-    if (!teams) return true; /* no match context → show everything (fallback) */
-    var normHome = window._ppNormTeam(teams.home);
-    var normAway = window._ppNormTeam(teams.away);
-    function matches(teamName) {
-      var nt = window._ppNormTeam(teamName);
-      return nt === normHome || nt === normAway
-        || (nt && (nt.indexOf(normHome) !== -1 || normHome.indexOf(nt) !== -1))
-        || (nt && (nt.indexOf(normAway) !== -1 || normAway.indexOf(nt) !== -1));
-    }
-    /* LESION_STORE.equipo */
-    var les = window.LESION_STORE && window.LESION_STORE[playerName];
-    if (les && les.equipo && matches(les.equipo)) return true;
-    /* SANCION_STORE[comp][i].team */
-    var sancionStore = window.SANCION_STORE || {};
-    for (var comp in sancionStore) {
-      if (!sancionStore.hasOwnProperty(comp)) continue;
-      var arr = sancionStore[comp] || [];
-      for (var i = 0; i < arr.length; i++) {
-        if (arr[i] && arr[i].name === playerName && matches(arr[i].team)) return true;
-      }
-    }
-    /* SQUAD_REGISTRY fallback */
-    if (window.SQUAD_REGISTRY) {
-      var candidateTeams = Object.keys(window.SQUAD_REGISTRY).filter(matches);
-      for (var t = 0; t < candidateTeams.length; t++) {
-        var sq = window.SQUAD_REGISTRY[candidateTeams[t]] || [];
-        for (var p = 0; p < sq.length; p++) {
-          var pl = sq[p];
-          if (!pl || pl.h) continue;
-          if (Array.isArray(pl) && pl[1] === playerName) return true;
-          if (pl && pl.nombre === playerName) return true;
+  /* ── Helper global: ¿`name` es una SELECCIÓN nacional (humana o IA)? ──
+     Las cajas de CLUB (esta previa / "BAJAS PARA EL PARTIDO") NUNCA deben
+     mostrar jugadores de una selección. Un partido del Mundial 2032 entre
+     selecciones IA (p.ej. Suiza) registraba la lesión en el store de CLUB
+     y se colaba en el overlay de otra caja humana (bug usuario 2026-06-28,
+     "Johan Manzambi · Suiza" en el torneo de verano del Atlético Madrid).
+     Detecta humanas (`_esSelHumana`) Y cualquier selección del registro
+     canónico `selecciones_squad_v1` (`_selSquadLoad`). Si la lista aún no
+     ha hidratado devuelve false (jamás borra/oculta un club por error). */
+  window._isSeleccionName = function(name){
+    if (!name) return false;
+    try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true; } catch(_){}
+    try {
+      var store = (typeof window._selSquadLoad === 'function') ? window._selSquadLoad() : null;
+      var arr = (store && store.teams) || [];
+      if (arr.length) {
+        var nt = window._ppNormTeam(name);
+        for (var i = 0; i < arr.length; i++) {
+          var t = arr[i];
+          if (t && t.name && window._ppNormTeam(t.name) === nt) return true;
         }
       }
+    } catch(_){}
+    return false;
+  };
+
+  /* ── Helper global: ¿un jugador pertenece a alguno de los 2 equipos del partido? ──
+     Filtro ESTRICTO (petición usuario 2026-06-28): el overlay de una caja
+     humana SOLO muestra bajas/sanciones de SU equipo (el club del partido,
+     o el club del hub si no hay contexto). NUNCA muestra:
+       · jugadores de una SELECCIÓN (este overlay es de CLUB),
+       · jugadores de OTRA caja humana / equipo ajeno al partido. */
+  window._ppPlayerBelongsToMatch = function(playerName) {
+    /* Resolver el equipo del jugador: lesión → sanción → plantilla. */
+    function _resolvePlayerTeam(){
+      var les = window.LESION_STORE && window.LESION_STORE[playerName];
+      if (les && les.equipo) return les.equipo;
+      var sancionStore = window.SANCION_STORE || {};
+      for (var comp in sancionStore) {
+        if (!sancionStore.hasOwnProperty(comp)) continue;
+        var arr = sancionStore[comp] || [];
+        for (var i = 0; i < arr.length; i++) {
+          if (arr[i] && arr[i].name === playerName && arr[i].team) return arr[i].team;
+        }
+      }
+      if (window.SQUAD_REGISTRY) {
+        var found = '';
+        Object.keys(window.SQUAD_REGISTRY).some(function(tn){
+          var sq = window.SQUAD_REGISTRY[tn] || [];
+          for (var j = 0; j < sq.length; j++) {
+            var pl = sq[j];
+            if (pl && !pl.h && Array.isArray(pl) && pl[1] === playerName) { found = tn; return true; }
+            if (pl && pl.nombre === playerName) { found = tn; return true; }
+          }
+          return false;
+        });
+        return found;
+      }
+      return '';
     }
+    var playerTeam = _resolvePlayerTeam();
+    /* Una caja de CLUB jamás muestra jugadores de SELECCIÓN. */
+    if (window._isSeleccionName(playerTeam)) return false;
+
+    /* Equipos objetivo = los 2 del partido; si no hay contexto, el club del
+       HUB activo (NO "mostrar todo", que colaba bajas de otras cajas). */
+    var teams = window._ppGetCurrentMatchTeams();
+    var normTargets = [];
+    if (teams) {
+      if (teams.home) normTargets.push(window._ppNormTeam(teams.home));
+      if (teams.away) normTargets.push(window._ppNormTeam(teams.away));
+    } else {
+      var hub = '';
+      try {
+        hub = (window._psHumanLogicName && window._psHumanLogicName())
+           || (window._mkHubTeamName ? String(window._mkHubTeamName) : '') || '';
+      } catch(_){}
+      if (hub) normTargets.push(window._ppNormTeam(hub));
+    }
+    normTargets = normTargets.filter(function(s){ return s && s.length; });
+    if (!normTargets.length) return false; /* sin objetivo → no mostrar ajenos */
+
+    function matches(teamName){
+      var nt = window._ppNormTeam(teamName);
+      if (!nt) return false;
+      for (var i = 0; i < normTargets.length; i++) {
+        var g = normTargets[i];
+        if (nt === g) return true;
+        /* substring tolerante (FC Barcelona ↔ Barcelona) exigiendo AMBOS
+           lados ≥ 3 chars: evita el bug de `indexOf('')===0` (cadena vacía
+           casaba con TODOS los equipos) y los matches triviales. */
+        if (nt.length >= 3 && g.length >= 3 && (nt.indexOf(g) !== -1 || g.indexOf(nt) !== -1)) return true;
+      }
+      return false;
+    }
+    if (playerTeam) return matches(playerTeam);
+    /* Sin equipo resuelto no podemos confirmar pertenencia → no mostrar. */
     return false;
   };
   var _ppItems    = [];
@@ -8325,6 +8390,9 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   window._refreshSancionInjList = function() {
     var listInj = document.getElementById('sancion-ov-list-inj');
     if (!listInj) return;
+    /* Limpia cualquier baja de SELECCIÓN colada en el store de CLUB antes
+       de leer (defensa en profundidad para la caja de mister humano). */
+    try { if (window._purgeSeleccionFromClubStores) window._purgeSeleccionFromClubStores(); } catch(_){}
     var belongs = window._ppPlayerBelongsToMatch || function(){ return true; };
     var lesiones = Object.keys(window.LESION_STORE).filter(belongs);
     if (!lesiones.length) {
@@ -8696,6 +8764,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   } catch (_) {}
   try {
     _lesionSync.hydrate(function(){
+      try { if (window._purgeSeleccionFromClubStores) window._purgeSeleccionFromClubStores(); } catch(_){}
       try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(_){}
       try { if (window.renderBayernPlantillaScreen) window.renderBayernPlantillaScreen(); } catch(_){}
     });
@@ -8754,9 +8823,45 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   } catch (_) {}
   try {
     _sancSync.hydrate(function(){
+      try { if (window._purgeSeleccionFromClubStores) window._purgeSeleccionFromClubStores(); } catch(_){}
       try { if (window.renderBayernPlantillaScreen) window.renderBayernPlantillaScreen(); } catch(_){}
     });
   } catch (_) {}
+
+  /* PURGA de contaminación cross-store (2026-06-28): elimina del store de
+     CLUB cualquier baja/lesión/sanción cuyo equipo sea una SELECCIÓN
+     nacional (humana o IA). Un partido de selecciones IA (Suiza, etc.)
+     registraba la lesión aquí y se colaba en el overlay de otra caja
+     humana. Idempotente y SEGURA: `_isSeleccionName` casa por nombre
+     EXACTO contra `selecciones_squad_v1`, así que jamás borra un club. Si
+     la lista aún no hidrató no borra nada (false). Persiste si cambia. */
+  window._purgeSeleccionFromClubStores = function(){
+    var changed = false;
+    try {
+      if (typeof window._isSeleccionName !== 'function') return false;
+      var ls = window.LESION_STORE || {};
+      Object.keys(ls).forEach(function(name){
+        var eq = ls[name] && ls[name].equipo;
+        if (eq && window._isSeleccionName(eq)) {
+          delete ls[name];
+          if (window.BAJA_STORE && window.BAJA_STORE[name]) delete window.BAJA_STORE[name];
+          changed = true;
+        }
+      });
+      var g = window.SANCION_STORE && window.SANCION_STORE.__global;
+      if (Array.isArray(g)) {
+        var kept = g.filter(function(s){ return !(s && s.team && window._isSeleccionName(s.team)); });
+        if (kept.length !== g.length) { window.SANCION_STORE.__global = kept; changed = true; }
+      }
+    } catch(_){}
+    if (changed) {
+      try { _persistInjuries(); } catch(_){}
+      try { _persistSancionesClub(); } catch(_){}
+    }
+    return changed;
+  };
+  /* Barrido diferido al arranque (deja que `_selSquadLoad` hidrate). */
+  try { setTimeout(function(){ try { window._purgeSeleccionFromClubStores(); } catch(_){} }, 1800); } catch(_){}
 
   /* FLUSH INMEDIATO al servidor de las bajas/sanciones de CLUB tras una
      edición MANUAL (editor azul de la plantilla: añadir / QUITAR baja).
@@ -8809,6 +8914,11 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       var teamName = (ev.realTeam) ? String(ev.realTeam)
                    : (ev.team === 'a') ? String(homeName || '')
                    : String(awayName || '');
+      /* Una SELECCIÓN (humana o IA) jamás registra lesión en el store de
+         CLUB: las humanas ya las desvió el override a LESION_STORE_SEL; las
+         IA (Suiza, etc.) se DESCARTAN — no son un club y contaminaban el
+         overlay de otras cajas humanas (bug usuario 2026-06-28). */
+      try { if (window._isSeleccionName && window._isSeleccionName(teamName)) return; } catch(_){}
       var partidos = Number(ev.lesPartidos || ev.partidos) || 1;
       var grado   = Number(ev.lesGrado   || ev.grado)   || 1;
       var desc    = String(ev.lesDesc    || ev.descripcion || '');

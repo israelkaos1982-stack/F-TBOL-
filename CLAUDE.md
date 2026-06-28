@@ -605,6 +605,67 @@ fallo de red» para los recálculos de running-total).
 17. **PROHIBIDO** marcar `httpOk` en el `.catch` de `_kvBlobSync.hydrate`.
     Solo en la rama de respuesta HTTP recibida.
 
+## La caja de CLUB nunca muestra bajas de SELECCIÓN ni de equipos ajenos al partido (obligatorio, 2026-06-28)
+
+**Bug (foto usuario 2026-06-28, «Atlético Madrid · ISRA», torneo de
+verano Joan Gamper)**: en la pantalla **«BAJAS PARA EL PARTIDO»** de un
+partido de CLUB, la sección 🚑 LESIONADOS mostraba a **«Johan Manzambi ·
+Suiza»** (un jugador de la SELECCIÓN de Suiza — ni Atlético Madrid ni la
+selección humana del mister, Noruega). Regla del usuario: cada caja
+muestra SOLO su equipo humano y su selección humana; **no pueden salir
+otros lesionados, sancionados ni amonestados**.
+
+### Causa raíz (doble)
+
+1. **Contaminación del store de CLUB**: un partido del Mundial 2032 entre
+   selecciones IA (Suiza vs X) registraba la lesión en `LESION_STORE`
+   (store de CLUB). El override de `_registrarLesionesDesdeEventos` solo
+   desvía a `LESION_STORE_SEL` las selecciones **humanas**
+   (`esSelHumana`); las IA caían al motor de club (`_origReg`) →
+   `LESION_STORE['Johan Manzambi'] = {equipo:'Suiza', …}`. Igual para
+   sanciones (`calcularSancionesPartido` → `_origCalc` con teamName de
+   selección IA).
+2. **Filtro de display débil**: `_ppPlayerBelongsToMatch` (el filtro de
+   la previa/overlay de CLUB) hacía `if (!teams) return true` («mostrar
+   TODO») y su match por substring sufría el bug `nt.indexOf('')===0`
+   (un equipo del partido VACÍO casaba con CUALQUIER jugador).
+
+### Fix (`static/js/index.bundle.js`)
+
+- **`window._isSeleccionName(name)`** — detector de selección nacional
+  (humana o IA): `_esSelHumana` ∪ nombre EXACTO normalizado en
+  `selecciones_squad_v1` (`_selSquadLoad`). Si la lista no hidrató,
+  devuelve `false` (jamás borra/oculta un club por error).
+- **`_ppPlayerBelongsToMatch` ESTRICTO**: (a) si el equipo del jugador es
+  una selección → `false` (la caja de CLUB nunca muestra selecciones);
+  (b) objetivo = los 2 equipos del partido, o el club del HUB si no hay
+  contexto (NUNCA «mostrar todo»); (c) substring tolerante exigiendo
+  AMBOS lados ≥ 3 chars (mata el bug de la cadena vacía).
+- **Prevención en origen**: `_registrarLesionesDesdeEventos` (motor de
+  club) DESCARTA eventos cuyo equipo sea selección; `calcularSancionesPartido`
+  (motor de club) devuelve `[]` si `teamName` es selección.
+- **Purga de contaminación existente**: `window._purgeSeleccionFromClubStores`
+  elimina de `LESION_STORE`/`BAJA_STORE`/`SANCION_STORE.__global` toda
+  entrada cuyo equipo sea selección (idempotente, persiste si cambia).
+  Corre al hidratar (lesiones+sanciones del server), al abrir el overlay
+  (`_refreshSancionInjList`) y diferida al arranque.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_ppPlayerBelongsToMatch` (o cualquier filtro de la
+   caja de CLUB) vuelva a `return true` cuando no hay equipos del partido,
+   ni a hacer substring sin exigir longitud mínima en ambos lados (el bug
+   `indexOf('')` reintroduce el leak).
+2. **PROHIBIDO** que un partido de SELECCIÓN (humana o IA) registre baja
+   o sanción en el store de CLUB. Las humanas van al motor `_sel*`; las IA
+   se DESCARTAN. Todo motor/ruta nueva de club hereda el gate
+   `_isSeleccionName(teamName)`.
+3. **PROHIBIDO** que la caja de un mister muestre bajas de OTRA caja
+   humana o de una selección. El filtro resuelve el equipo del jugador y
+   lo compara con los equipos del partido / club del hub.
+4. Generaliza a las 6 cajas humanas (no hardcodea Atlético/Noruega): el
+   detector y el filtro son genéricos por equipo/selección.
+
 ## El decremento de lesiones de CLUB es alias-tolerante (obligatorio, 2026-06-05)
 
 **Bug (fotos usuario 2026-06-05, «Harvey Davies 4 · Kaide Gordon 6»)**:

@@ -2682,7 +2682,7 @@ window._showSimProgress = function(opts, onDone){
           for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && /bayern/i.test(t.name)) return t; }
           /* Último recurso intra-EA: el humano que NO sea uno de los
              otros 4 canónicos (ese es el 5º slot, el de Toñín). */
-          var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+          var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1,'inter':1,'internazionale':1,'fc internazionale':1,'inter milan':1,'inter milán':1};
           for (i=0; i<teams.length; i++){ t=teams[i]; if (t&&t.name && t.isHuman && !others[t.name.toLowerCase()]) return t; }
         }
         /* 2) Cross-liga por emoji 💡: si Toñín se cambió a un equipo
@@ -4510,7 +4510,7 @@ window._showSimProgress = function(opts, onDone){
           var wl = want.toLowerCase(), i2, t2;
           for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && t2.name.toLowerCase()===wl) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
           for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && /bayern/i.test(t2.name)) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
-          var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1};
+          var others = {'real madrid':1,'fc barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1,'inter':1,'internazionale':1,'fc internazionale':1,'inter milan':1,'inter milán':1};
           for (i2=0; i2<eaTeams.length; i2++){ t2=eaTeams[i2]; if (t2&&t2.name && t2.isHuman && !others[t2.name.toLowerCase()]) return {slug:'liga-ea-sports', data:eaData, team:t2}; }
         }
         /* 2) Cross-liga por emoji 💡. */
@@ -5536,7 +5536,7 @@ window._showSimProgress = function(opts, onDone){
          2026-05-26: sin la exclusión, el primer isHuman del array
          podía ser Atlético Madrid → las lesiones del entrenamiento
          eran de su plantilla, no de la del Liverpool. */
-      var OTHER = {'liverpool':1,'real madrid':1,'fc barcelona':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1};
+      var OTHER = {'liverpool':1,'real madrid':1,'fc barcelona':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'arsenal':1,'psg':1,'paris saint-germain':1,'inter':1,'internazionale':1,'fc internazionale':1,'inter milan':1,'inter milán':1};
       /* HUB ACTIVO: nunca excluir al CLUB del hub abierto. Borramos por el
          nombre lógico (hubL) Y por el club CANÓNICO del mister activo: para
          Liverpool `hubL` suele ser 'bayern munich' (fallback legacy) y NO
@@ -36618,6 +36618,50 @@ window._showSimProgress = function(opts, onDone){
     var mB = window._mhFindMister(b);
     return !!(mA && mB && mA.id === mB.id);
   };
+  /* ── PLANTILLA DEL CLUB HUMANO POR MISTER (obligatorio, 2026-06-28) ─
+     Bug crítico (fotos usuario «Liverpool-Francia-Toñín»): al añadir un
+     evento en la card del Liverpool, el picker mostraba la plantilla del
+     INTER (el 7º mister, Rubén). Cada caja de mister humano debe mostrar
+     SIEMPRE SU plantilla correspondiente y NUNCA la de otro club humano:
+
+         Toñín → Liverpool · Álvaro → Arsenal · Acsa → Real Madrid
+         Isra  → Atlético  · Ángel  → FC Barcelona · Izan → PSG
+         Rubén → Inter
+
+     `_humanClubSlotName(teamName)` resuelve, para un CLUB humano canónico,
+     el NOMBRE del slot de `ligaExt_liga-ea-sports` que pertenece a SU
+     MISTER (alias-safe Bayern↔Liverpool, Paris↔PSG, Inter*), de modo que
+     el picker (gm-modal `_gmGetSquad` y ml-card) lea la plantilla del
+     equipo correcto:
+       · Si existe un slot con nombre EXACTO = club pedido → ése (caso
+         normal; preserva byte-for-byte el camino Liverpool/Toñín).
+       · Si no (slot legacy con otro nombre, p.ej. ex-Bayern), el slot del
+         MISMO mister (`_mhSameMister`), gateado a clubes humanos
+         (`_isHumanClubCanonico`) para NUNCA cruzar a otro mister.
+     Si el nombre NO es un club humano canónico (IA, selección, etc.) lo
+     devuelve TAL CUAL → cero efecto fuera de las 7 cajas humanas. */
+  window._humanClubSlotName = function(teamName){
+    try {
+      if (typeof window._isHumanClubCanonico !== 'function'
+          || !window._isHumanClubCanonico(teamName)) return teamName;
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (!raw) return teamName;
+      var data = JSON.parse(raw);
+      var teams = (data && data.teams) || [];
+      var want = String(teamName || '').toLowerCase().trim();
+      var exact = null, sameMister = null;
+      for (var i = 0; i < teams.length; i++){
+        var t = teams[i];
+        if (!t || !t.name || !Array.isArray(t.players) || !t.players.length) continue;
+        if (!window._isHumanClubCanonico(t.name)) continue;
+        if (typeof window._mhSameMister !== 'function'
+            || !window._mhSameMister(teamName, t.name)) continue;
+        if (String(t.name).toLowerCase().trim() === want) { exact = t.name; break; }
+        if (!sameMister) sameMister = t.name;
+      }
+      return exact || sameMister || teamName;
+    } catch(_){ return teamName; }
+  };
   /* ── HUB ACTIVO (multi-hub, 2026-06-13) ──────────────────────────
      El hub `s-munich` es GENÉRICO: sirve a CUALQUIER caja de mister
      humano. `window._ACTIVE_HUB` apunta al mister cuya caja se pulsó
@@ -53729,7 +53773,7 @@ https://api.sofascore.app/api/v1/team/44/image
       for(i=0;i<teams.length;i++){ t=teams[i]; if(t&&t.name&&/bayern/i.test(t.name)) return t; }
     }
     var canonLow=_chnLow;
-    var o={'liverpool':1,'real madrid':1,'real madrid cf':1,'fc barcelona':1,'fc barcelona cf':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'atletico de madrid':1,'club atletico de madrid':1,'arsenal':1,'arsenal fc':1,'psg':1,'paris saint-germain':1,'paris sg':1};
+    var o={'liverpool':1,'real madrid':1,'real madrid cf':1,'fc barcelona':1,'fc barcelona cf':1,'barcelona':1,'atletico madrid':1,'atlético madrid':1,'atletico de madrid':1,'club atletico de madrid':1,'arsenal':1,'arsenal fc':1,'psg':1,'paris saint-germain':1,'paris sg':1,'inter':1,'internazionale':1,'fc internazionale':1,'inter milan':1,'inter milán':1};
     /* Quitar del exclusion list TODOS los aliases del hub activo */
     wants.forEach(function(a){ delete o[a]; });
     delete o[canonLow];

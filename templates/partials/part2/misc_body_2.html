@@ -12909,8 +12909,12 @@
     var plList=document.getElementById('gen-pl-list');
     if (plEvt) plEvt.textContent=evt.label.toUpperCase();
     if (plTeam) plTeam.textContent=teamName.toUpperCase();
-    var sq=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(teamName))||[];
-    if(!sq.length) sq=(typeof window.sqFromRegistry==='function'&&window.sqFromRegistry(teamName))||[];
+    /* CLUB humano → plantilla de SU mister (Toñín=Liverpool, Rubén=Inter,
+       …), nunca la de otro club humano. No-op fuera de las 7 cajas. */
+    var _sqLookup=teamName;
+    try { if (typeof window._humanClubSlotName==='function') _sqLookup=window._humanClubSlotName(teamName)||teamName; } catch(_){}
+    var sq=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(_sqLookup))||[];
+    if(!sq.length) sq=(typeof window.sqFromRegistry==='function'&&window.sqFromRegistry(_sqLookup))||[];
     /* ── DEDUP DEL PICKER DE EVENTO (bug usuario 2026-05-18) ──────────
        En el Betis (y otros equipos) salían jugadores DUPLICADOS al
        añadir un evento: la entrada del editor con dorsal+nombre
@@ -14472,8 +14476,18 @@
   };
 
   function _gmGetSquad(teamName) {
-    var sq = (typeof window.sqFromRegistryFull === 'function' && window.sqFromRegistryFull(teamName)) || [];
-    if (!sq.length) sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(teamName)) || [];
+    /* CLUB humano → resolver el slot de SU mister (Toñín=Liverpool,
+       Rubén=Inter, …) para que el picker SIEMPRE muestre la plantilla
+       correspondiente y nunca la de otro club humano. No-op para IA /
+       selecciones / nombres no canónicos. (Bug 2026-06-28.) */
+    var lookup = teamName;
+    try {
+      if (typeof window._humanClubSlotName === 'function') {
+        lookup = window._humanClubSlotName(teamName) || teamName;
+      }
+    } catch(_){}
+    var sq = (typeof window.sqFromRegistryFull === 'function' && window.sqFromRegistryFull(lookup)) || [];
+    if (!sq.length) sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(lookup)) || [];
     if (!sq.length && typeof window._fallbackSq11 === 'function') return window._fallbackSq11();
     return sq;
   }

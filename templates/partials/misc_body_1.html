@@ -7971,6 +7971,18 @@ window._showSimProgress = function(opts, onDone){
        legacy de torneos guardados antes del fix. */
     var away = (rv && rv.away) || rv.name;
     var comp = /amist/i.test(day.label || '') ? 'amistoso' : 'torneo';
+    /* ¿Partido de un TORNEO real (Joan Gamper, Soccer Champions Tour,
+       Premier Summer Series, Asian Tournament, Mundialito de Clubes…)?
+       Lo sabemos por el contexto del bracket (`tourId` + `tourKey`)
+       que `_realPair` adjunta a `rv`. Si lo es, se abre como TORNEO
+       (no como amistoso) para que el MVP y la puerta de WhatsApp sean
+       OBLIGATORIOS y el resultado se PERSISTA en cfg.results (acta +
+       premios). Bug 2026-06-27 (fotos usuario, Joan Gamper): la card
+       del hub abría SIEMPRE vía `abrirAmistoso` → `_gm.isFriendly=true`
+       → `gmEndMatch` saltaba el MVP (`!_gm.isFriendly`) y la puerta de
+       WhatsApp (depende de `mvpExists`), y el partido no contaba para
+       el torneo. */
+    var _isTourMatch = (comp === 'torneo' && rv && rv.tourId && rv.tourKey);
     var dur = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH:false, humanInvolved:true })
       : '8 min';
@@ -7992,14 +8004,34 @@ window._showSimProgress = function(opts, onDone){
       if (advanced) return; advanced = true;
       /* Al confirmar la previa (y compartir WhatsApp), abrimos la
          CARD DE SIMULACIÓN del partido — el gm-modal estándar del
-         proyecto, vía window.abrirAmistoso (Bayern humano vs rival
-         IA). NO navegamos a la caja Bayern: la simulación queda en
-         primer plano. El cursor de pretemporada avanza al día
-         siguiente para que, al terminar el partido y volver a la
-         caja Bayern, se vea el día correcto. */
+         proyecto. NO navegamos a la caja del hub: la simulación queda
+         en primer plano. El cursor de pretemporada avanza al día
+         siguiente para que, al terminar el partido y volver a la caja
+         del hub, se vea el día correcto.
+         · Partido de TORNEO real → `abrirTorneo` (comp='torneo',
+           `_isTour=true` → MVP + WhatsApp OBLIGATORIOS, resultado
+           persistido en cfg.results vía `_tourSaveHumanResult`).
+         · Amistoso de pretemporada → `abrirAmistoso` (sin MVP/WhatsApp
+           obligatorios, no cuenta para ningún torneo). */
       var opened = false;
       try {
-        if (typeof window.abrirAmistoso === 'function'){
+        if (_isTourMatch && typeof window.abrirTorneo === 'function'){
+          /* HvH solo si AMBOS lados son humanos del torneo (raro: dos
+             cajas de mister enfrentadas). El lado del hub siempre es
+             humano; el rival suele ser IA → HvIA. Misma heurística que
+             usa `abrirAmistoso` (esHumano), con preferencia por el
+             detector específico de torneo si está en alcance. */
+          var _hvh = false;
+          try {
+            if (typeof _isHumanTeamForTour === 'function'){
+              _hvh = !!(_isHumanTeamForTour(home) && _isHumanTeamForTour(away));
+            } else if (typeof window.esHumano === 'function'){
+              _hvh = !!(window.esHumano(home) && window.esHumano(away));
+            }
+          } catch(_){}
+          window.abrirTorneo(home, away, _hvh, rv.tourId, rv.tourKey);
+          opened = true;
+        } else if (typeof window.abrirAmistoso === 'function'){
           window.abrirAmistoso(home, away);
           opened = true;
         }

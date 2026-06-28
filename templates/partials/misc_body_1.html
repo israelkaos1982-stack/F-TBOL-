@@ -42501,6 +42501,15 @@ https://api.sofascore.app/api/v1/team/44/image
           }
         } catch(_){}
       }
+      /* Recuperación de clasificación: si la copia en cache perdió sus
+         resultados (re-seed / GET stale cacheado) pero `_protected`/snaps
+         los tienen, los restauramos antes de devolver (bug Albania
+         2026-06-28). Barato: no-op si el cache ya trae resultados. */
+      try {
+        if (_lextRecoverResultsFromBackups(k, LIGA_CACHE[k])) {
+          try { localStorage.setItem(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
+        }
+      } catch(_){}
       return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     }
     /* Lectura del main, pero CON DETECCIÓN DE WIPE: si el main
@@ -42546,6 +42555,16 @@ https://api.sofascore.app/api/v1/team/44/image
             }
           } catch(_){}
         }
+        /* Recuperación de clasificación desde copias durables locales:
+           si el main de localStorage trae los equipos del seed pero
+           SIN resultados (eviction de Android / re-seed / GET stale que
+           se cacheó en main) y `_protected`/snaps tienen la sim, los
+           restauramos (bug Albania/Montenegro/N.Irlanda 2026-06-28). */
+        try {
+          if (_lextRecoverResultsFromBackups(k, parsed)) {
+            try { localStorage.setItem(storeKey(k), JSON.stringify(parsed)); } catch(_){}
+          }
+        } catch(_){}
         LIGA_CACHE[k] = parsed;
         return _applyForcedBlacklist(k, LIGA_CACHE[k]);
       }
@@ -43859,6 +43878,61 @@ https://api.sofascore.app/api/v1/team/44/image
       }
       return false;
     } catch(_){ return false; }
+  }
+
+  /* RECUPERACIÓN DE LA CLASIFICACIÓN DESDE COPIAS DURABLES LOCALES
+     (2026-06-28) ──────────────────────────────────────────────────────
+     Bug usuario (fotos «Abissnet Superiore / Albania»): se simula una liga
+     SEMBRADA (Albania, Montenegro, N. Irlanda — `_EXTRA_LEAGUE_SEEDS`), se
+     ve la clasificación con 38 PJ, se RECARGA la web y vuelve a 0.
+     Causa raíz: el seed eager escribe `results: []` y, si el `main` de
+     localStorage pierde sus resultados (eviction agresiva de Android, un
+     GET stale del servidor que se cacheó, o un re-seed con la liga ya
+     simulada), el `main` queda con los 20 EQUIPOS del seed pero SIN
+     resultados. `loadData` solo restaura desde `_protected` cuando el main
+     tiene 0 EQUIPOS — un main re-sembrado (20 equipos, results:[]) NO
+     disparaba esa restauración, así que la clasificación simulada (que SÍ
+     vive en `_protected`/`_snap_*`, escritos por `saveData` en cada sim)
+     no se recuperaba nunca.
+     Fix: cuando el `main` viene SIN resultados, los rellenamos desde la
+     copia durable local con clasificación más reciente (`_protected` +
+     snapshots) vía `_lextBackfillResults` (mismo arbitraje por
+     `resultsStamp` + EMPTY-GUARD del servidor). NUNCA resucita un reset
+     DELIBERADO: el reset (`ligaExtReiniciar`) pasa por `saveData`, que
+     ACTUALIZA `_protected` con la clasificación VACÍA y su sello fresco,
+     así que `_protected` también está vacío → no hay nada que restaurar.
+     Devuelve true si restauró algo (el caller persiste el main curado). */
+  function _lextRecoverResultsFromBackups(k, data){
+    if (!data) return false;
+    /* Hot-path barato: si el main ya trae clasificación, no tocamos nada
+       (la reconciliación más fina la hace fetchData con el servidor). */
+    if (Array.isArray(data.results) && data.results.length) return false;
+    var restored = false;
+    try {
+      var srcs = [];
+      try {
+        var pr = localStorage.getItem(storeKey(k) + '_protected');
+        if (pr) srcs.push(JSON.parse(pr));
+      } catch(_){}
+      try {
+        var snapKeys = [];
+        for (var si = 0; si < localStorage.length; si++) {
+          var sk = localStorage.key(si);
+          if (sk && sk.indexOf(storeKey(k) + '_snap_') === 0) snapKeys.push(sk);
+        }
+        snapKeys.sort();   /* ts ascendente: el más reciente al final */
+        for (var sj = snapKeys.length - 1; sj >= 0 && srcs.length < 4; sj--) {
+          try { var sr = localStorage.getItem(snapKeys[sj]); if (sr) srcs.push(JSON.parse(sr)); } catch(_){}
+        }
+      } catch(_){}
+      for (var i = 0; i < srcs.length; i++) {
+        try { if (_lextBackfillResults(data, srcs[i])) restored = true; } catch(_){}
+      }
+      if (restored) {
+        try { console.warn('[ligaExt] '+k+': clasificación del main vacía — restaurada desde copia durable local ('+((data.results&&data.results.length)||0)+' resultados).'); } catch(_){}
+      }
+    } catch(_){}
+    return restored;
   }
 
   function fetchData(k, cb){
@@ -49869,6 +49943,41 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     } catch(_){}
     if (hasTeams) return;
+    /* ANTES de sembrar VACÍO (results:[]) : si esta liga YA se editó o
+       simuló y su `main` se perdió (eviction agresiva de localStorage en
+       Android, wipe, etc.), su clasificación + plantilla siguen vivas en
+       las copias durables `_protected` / `_snap_*` que `saveData` escribe
+       en cada guardado. Restaurar ESA copia (con sus resultados) en vez de
+       pisar con el seed vacío — sin esto el seed eager borraba la sim de
+       Albania/Montenegro/N.Irlanda al recargar tras una eviction
+       (2026-06-28). */
+    try {
+      var _recov = null;
+      try {
+        var _pr = localStorage.getItem('ligaExt_' + slug + '_protected');
+        if (_pr) { var _pd = JSON.parse(_pr); if (_pd && Array.isArray(_pd.teams) && _pd.teams.length) _recov = _pd; }
+      } catch(_){}
+      if (!_recov) {
+        try {
+          var _snapKeys = [];
+          for (var _si = 0; _si < localStorage.length; _si++) {
+            var _sk = localStorage.key(_si);
+            if (_sk && _sk.indexOf('ligaExt_' + slug + '_snap_') === 0) _snapKeys.push(_sk);
+          }
+          _snapKeys.sort();
+          for (var _sj = _snapKeys.length - 1; _sj >= 0 && !_recov; _sj--) {
+            try { var _sd = JSON.parse(localStorage.getItem(_snapKeys[_sj]) || 'null'); if (_sd && Array.isArray(_sd.teams) && _sd.teams.length) _recov = _sd; } catch(_){}
+          }
+        } catch(_){}
+      }
+      if (_recov) {
+        try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(_recov)); } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = _recov; } catch(_){}
+        try { console.warn('[ligaExt] seed '+slug+': main perdido — restaurado desde copia durable ('+_recov.teams.length+' equipos, '+((_recov.results&&_recov.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
+        return;
+      }
+    } catch(_){}
     var teams = spec.teams.map(function(s, idx){
       return {
         id: slug + '-' + (idx + 1),

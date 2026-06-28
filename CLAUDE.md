@@ -1590,6 +1590,56 @@ logos de ligas**.
    equipo o que un ganador por recencia pueda no traer) hereda este
    patrón de backfill.
 
+## La CLASIFICACIÓN simulada de una liga SEMBRADA se RECUPERA desde copias durables locales (obligatorio, 2026-06-28)
+
+**Bug (fotos usuario «Abissnet Superiore / Albania»)**: se simula una liga
+SEMBRADA (`_EXTRA_LEAGUE_SEEDS`: Albania, Montenegro, N. Irlanda), se ve la
+clasificación con 38 PJ, se RECARGA la web y vuelve a **0 partidos** con el
+roster del seed (mismos equipos, results vacíos). Pasa lo mismo en cualquier
+liga de Resto de Ligas cuyo `main` pierda la clasificación.
+
+### Causa raíz
+
+El seed eager (`_ensureExtraLeagueSeed`) escribe `results: []`. Si el `main`
+de `localStorage['ligaExt_<slug>']` pierde sus resultados (eviction agresiva
+de localStorage en Android, un GET stale del servidor que se cacheó en main,
+o un re-seed con la liga ya simulada) el `main` queda con los EQUIPOS del
+seed pero SIN resultados. `loadData` solo restauraba desde `_protected`
+cuando el main tenía **0 EQUIPOS** — un main re-sembrado (20 equipos,
+`results:[]`) NO disparaba esa restauración. La clasificación simulada SÍ
+vivía en las copias durables `_protected` / `_snap_*` (las escribe `saveData`
+en CADA sim con `resultsStamp`), pero nada las consultaba → 0 PJ para
+siempre.
+
+### Fix — recuperar `results` desde `_protected`/snapshots por recencia
+
+- **`_lextRecoverResultsFromBackups(k, data)`** (`misc_body_1.html`, junto a
+  `_lextBackfillResults`): si el `main` viene SIN `results`, rellena la
+  clasificación desde la copia durable local más reciente (`_protected` +
+  snapshots) vía `_lextBackfillResults` (mismo arbitraje por `resultsStamp` +
+  EMPTY-GUARD). Hot-path barato: **no-op si el main ya trae clasificación**.
+  Lo llaman las DOS ramas de `loadData` (cache-hit + lectura de localStorage)
+  y persisten el main curado.
+- **`_ensureExtraLeagueSeed`**: ANTES de sembrar VACÍO, si existe una copia
+  durable (`_protected`/`_snap_*`) con equipos — la liga YA se simuló y el
+  main se perdió — RESTAURA esa copia (con sus resultados) en vez de pisar
+  con el seed `results:[]`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el seed eager escriba `results:[]` encima de una liga
+   YA simulada cuyo main se perdió: debe restaurar `_protected`/snapshot
+   primero (la clasificación es durable, no se siembra vacía).
+2. **PROHIBIDO** que la recuperación resucite un RESET deliberado: el reset
+   (`ligaExtReiniciar`) pasa por `saveData`, que ACTUALIZA `_protected` con
+   la clasificación VACÍA + sello fresco → `_protected` también está vacío y
+   no hay nada que restaurar (cubierto por el arbitraje de `resultsStamp`).
+3. La recuperación SOLO actúa cuando el main viene sin `results` (hot-path
+   no-op si ya los tiene); la reconciliación fina cross-device la sigue
+   haciendo `fetchData` con el servidor (empty-guard de `resultsStamp`).
+4. Toda liga SEMBRADA nueva (`_EXTRA_LEAGUE_SEEDS`) hereda esto
+   automáticamente; no hardcodear slugs en la recuperación.
+
 ## Plantilla de selecciones — sync que NO pierde datos + sin «Pacífico» (obligatorio, 2026-06-02)
 
 **Bug (foto usuario 2026-06-02)**: en «🌐 Plantilla de selecciones»

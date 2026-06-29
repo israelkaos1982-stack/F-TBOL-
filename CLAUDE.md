@@ -57,6 +57,35 @@ añadir Inter/PSG → el fallback de un hub podía coger el slot del Inter.
    inventarla: se restaura en el editor. El fix garantiza que, con datos
    correctos, cada caja muestre SIEMPRE su plantilla y nunca la cruce.
 
+### La CABECERA del hub no se contamina con el override de OTRO mister — `_slot` también gateado (obligatorio, 2026-06-29)
+
+**Bug (foto usuario «caja PSG → Inter»)**: al abrir la caja del **PSG**
+(Izan 🦆🇪🇸) la cabecera del hub mostraba **«Inter · RUBÉN · GIUSEPPE
+MEAZZA»** con el escudo del Inter, aunque el hub activo era Izan/PSG.
+
+**Causa raíz**: el override del menú de la caja del PSG
+(`menu_home_v1.ov['go:s-psg']`) había quedado con `label/escudo/estadio`
+del **Inter** (contaminación del save). El guard anti-contaminación vivía
+SOLO en `_resolve()` (descarta la identidad del override si apunta a OTRO
+club humano canónico), pero **`_slot()` leía `_boxOv().label` por su
+cuenta** y lo metía como PRIMERA pista de búsqueda → encontraba el slot
+del «Inter» y lo devolvía; `_resolve` tomaba entonces `name=t.name=
+"Inter"`. Como el míster y el tema se derivan del club RESUELTO `r.name`
+(commit «el míster SIGUE al club mostrado»), la cabecera mostraba Rubén +
+Giuseppe Meazza pese a estar en la caja de Izan.
+
+**Fix** (`misc_body_1.html`, `_slot()`): el `label` del override SOLO
+entra en `wants` si NO apunta a otro mister (`_mhFindMister(canon).id ===
+_mhFindMister(ov.label).id`). Mismo guard que `_resolve()`. Así la caja
+del PSG localiza SIEMPRE el slot del PSG por su nombre canónico, jamás el
+del Inter por el label contaminado.
+
+**Reglas a respetar**:
+4. **PROHIBIDO** que `_slot()` (o cualquier resolutor de identidad del hub)
+   use `_boxOv().label`/`escudo`/`stadium` SIN el guard anti-contaminación
+   (`_mhFindMister(canon).id !== _mhFindMister(label).id` ⇒ descartar). El
+   guard de `_resolve` no basta si `_slot` reintroduce el label por su lado.
+
 ## HUB MULTI-MISTER — el hub `s-munich` es GENÉRICO, datos por hub (obligatorio, 2026-06-13)
 
 **Petición usuario 2026-06-13 («al pulsar la caja del Arsenal-Brasil sea

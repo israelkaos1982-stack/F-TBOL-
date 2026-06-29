@@ -27205,7 +27205,64 @@ window._showSimProgress = function(opts, onDone){
       try { if (typeof _mundialRenderStatsGrid === 'function') inner = _mundialRenderStatsGrid(stats); } catch(_){}
       if (!inner) { try { if (typeof window._lextStatsDashHtml === 'function') inner = window._lextStatsDashHtml(stats, true); } catch(_){} }
     }
-    dEl.innerHTML = inner || _tourStatsEmptyCardsHtml();
+    /* DIAGNÓSTICO (temporal) cuando la caja queda vacía pese a haber
+       partidos jugados: muestra la forma real de los datos para localizar
+       por qué el merge no agrega (cfg presente, nº de partidos jugados,
+       cuántos traen acta/home-away, si el motor de actas está cargado). */
+    var _diag = '';
+    if (!_hasData) { try { _diag = _tourStatsDiagHtml(tid); } catch(_){} }
+    dEl.innerHTML = (inner || _tourStatsEmptyCardsHtml()) + _diag;
+  }
+
+  /* Panel de diagnóstico de la caja de stats de torneo. Inspecciona la
+     cfg cargada y reporta por qué no hay datos. Se pinta DEBAJO de las
+     cajas vacías. Sin PIN — solo lectura, no toca datos. */
+  function _tourStatsDiagHtml(tid){
+    var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tid]) || null;
+    if (!cfg && typeof _tourLoadCachedSync === 'function') { try { cfg = _tourLoadCachedSync(tid); } catch(_){} }
+    cfg = cfg || {};
+    var results = cfg.results || {};
+    var rKeys = Object.keys(results);
+    var played = 0, withEv = 0, withReal = 0, withHA = 0, sample = '';
+    var _isReal = function(arr){
+      return Array.isArray(arr) && arr.some(function(e){
+        if (!e) return false;
+        var pn = Array.isArray(e.player) ? (e.player[1]||e.player[0]) : (e.player||e.name||e.playerName||'');
+        pn = String(pn||'').trim();
+        return pn && pn !== '?' && !/^(?:\d+\.?\s*)?(?:jugador|portero)\s*[a-k]?$/i.test(pn);
+      });
+    };
+    rKeys.forEach(function(k){
+      var r = results[k] || {};
+      if (!r.played) return;
+      played++;
+      var ev = r.events || r.acta;
+      if (Array.isArray(ev) && ev.length) { withEv++; if (_isReal(ev)) withReal++; }
+      if (r.home && r.away) withHA++;
+      if (!sample) {
+        sample = k + ' → ' + (r.home||'?') + ' ' + (r.a!=null?r.a:r.gh) + '-'
+               + (r.b!=null?r.b:r.ga) + ' ' + (r.away||'?')
+               + ' · ev:' + (Array.isArray(ev)?ev.length:0);
+      }
+    });
+    var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+    var lines = [
+      'tourId: ' + tid + ' · format: ' + (cfg.format||'(none)'),
+      'teams: ' + ((cfg.teams||[]).length) + ' · fixture jornadas: ' + ((cfg.fixture||[]).length)
+        + ' · groupFixtures: ' + Object.keys(cfg.groupFixtures||{}).length
+        + ' · koBracket: ' + ((cfg.koBracket||[]).length),
+      'results: ' + rKeys.length + ' · jugados: ' + played
+        + ' · con acta: ' + withEv + ' · con nombres reales: ' + withReal
+        + ' · con home/away: ' + withHA,
+      'genMatchEventsEnhanced: ' + (typeof window.genMatchEventsEnhanced === 'function' ? 'OK' : 'AUSENTE')
+        + ' · _tourStatsFromCfgResults: ' + (typeof window._tourStatsFromCfgResults === 'function' ? 'OK' : 'AUSENTE'),
+      'ejemplo: ' + (sample || '(ningún partido jugado)')
+    ];
+    return '<div style="margin:14px 4px 4px;padding:12px 14px;border:1px dashed rgba(120,255,150,.4);'
+      + 'border-radius:8px;background:rgba(5,40,20,.45);font-family:monospace;font-size:11px;'
+      + 'line-height:1.7;color:#bfeccb;white-space:pre-wrap;word-break:break-word;">'
+      + '🔎 DIAGNÓSTICO (temporal)\n' + lines.map(esc).join('\n')
+      + '</div>';
   }
 
   /* ALIAS legacy `_tourStatsForceRefresh` (el botón ▶️ se eliminó el

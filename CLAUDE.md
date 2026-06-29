@@ -691,6 +691,46 @@ fallo de red» para los recálculos de running-total).
 17. **PROHIBIDO** marcar `httpOk` en el `.catch` de `_kvBlobSync.hydrate`.
     Solo en la rama de respuesta HTTP recibida.
 
+### Un objetivo NO se concede si su competición no ha empezado / no ha acabado (obligatorio, 2026-06-29)
+
+**Bug (3 fotos usuario, «Liverpool 2/68 falsos»)**: la pantalla
+**Objetivos del Club** marcaba como cumplidos «1 jugador entre los {9} máx
+goleadores Liga» y «1 jugador marca en {3} partidos en UCL» (✅ verde) en
+plena PRETEMPORADA (calendario 03 Jun, todo a 0). «La liga ni ha acabado y
+Champions ni ha empezado.» Eran objetivos MANUALES (sin `data-auto`) que un
+estado guardado / sync stale dejó marcados, y la auto-evaluación
+(`_munichAutoEval`) nunca los corregía porque solo tocaba los `data-auto`.
+
+**Fix** (`misc_body_1.html`, IIFE de objetivos del club):
+- **«máx goleadores Liga» y «máx MVP Liga» son AUTO `data-auto`**
+  (`liga-top-scorer` / `liga-top-mvp`), métricas de CLASIFICACIÓN **FINAL**:
+  solo se conceden cuando la Liga ha TERMINADO (`ligaComplete`, 38 J) y un
+  jugador del hub está en el Top N del ranking LIGA-WIDE
+  (`_ligaWideRank` sobre `ef_player_stats_liga_only_v1`). Se quitó el
+  marcador «(Si/No)» del texto por defecto para que `useAuto` los active.
+- **GUARD «temporada NO empezada»**: `_munichAutoEval` calcula
+  `_hubSeasonStarted()` (¿el hub jugó ≥1 partido competitivo? señales:
+  clasificación Liga EA, Superliga, los 11 stores `ef_player_stats_*`, y la
+  liga externa del hub no-legacy). Mientras NO haya arranque, DESMARCA todo
+  ✅ falso (incluidos los manuales). SOLO desmarca, nunca marca, y SOLO sin
+  arranque → en temporada en curso no toca nada (no pierde progreso real).
+  Hub-aware → vale para las 6 cajas humanas.
+
+**Reglas a respetar**:
+18. **PROHIBIDO** conceder un objetivo de CLASIFICACIÓN FINAL (máx
+    goleadores/MVP/posición/dif. goles de Liga) antes de que la competición
+    termine (`ligaComplete`). Van en `LIGA_FINAL`; a mitad de temporada se
+    mantienen SIN marcar aunque ahora mismo se cumplan.
+19. **PROHIBIDO** que un objetivo de cualquier competición quede ✅ cuando el
+    hub no ha empezado la temporada (`_hubSeasonStarted()` falso). El guard
+    solo DESMARCA y solo sin arranque; nunca marca ni toca una temporada en
+    curso (no clobberea progreso real ni el server — save no-authoritative).
+20. **PROHIBIDO** que el guard haga un push AUTORITATIVO (bypassando el
+    empty-guard cliente/server): una falsa «no empezada» transitoria
+    (stores aún sin reconstruir al cargar) podría borrar progreso real. El
+    display se corrige en cada `_munichAutoEval`; la persistencia sigue las
+    reglas 14-17.
+
 ## La caja de CLUB nunca muestra bajas de SELECCIÓN ni de equipos ajenos al partido (obligatorio, 2026-06-28)
 
 **Bug (foto usuario 2026-06-28, «Atlético Madrid · ISRA», torneo de

@@ -59613,8 +59613,8 @@ https://api.sofascore.app/api/v1/team/44/image
       { t:'Finalizar entre los {N} primeros (Si/No)', c:6, auto:'liga-pos' },
       { t:'Ganar {N} partidos en casa', c:10, track:true, auto:'liga-wins-casa' },
       { t:'Ganar {N} partidos seguidos en Liga', c:4, track:true, auto:'liga-wins-streak' },
-      { t:'1 jugador entre los {N} máx goleadores (Si/No)', c:10 },
-      { t:'1 jugador entre los {N} máxi MVP Liga (Si/No)', c:15 },
+      { t:'1 jugador entre los {N} máx goleadores Liga', c:10, auto:'liga-top-scorer' },
+      { t:'1 jugador entre los {N} máxi MVP Liga', c:15, auto:'liga-top-mvp' },
       { t:'Lograr {N} partidos imbatido Liga', c:7, track:true, auto:'liga-unbeaten' },
       { t:'Marcar {N} goles en la liga', c:68, track:true, auto:'liga-gf' },
       { t:'Diferencia goles positiva (+{N} o +) (Si/No)', c:15, dg:true, track:true, auto:'liga-dg' },
@@ -60719,6 +60719,54 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!autoInputs.length) return;
     var tnorm = _norm(_hubTeamName());
 
+    /* ── ¿el equipo/jugador `t` (clave `team::player`) es del HUB? ──
+       Alias-tolerante (Bayern↔Liverpool y cualquier caja de mister vía el
+       registro canónico) para no perder las stats por desajuste de grafía. */
+    function _hubMatchTeam(t){
+      if (!t) return false;
+      if (_norm(t) === tnorm) return true;
+      try {
+        if (window._isHumanClubCanonico && window._isHumanClubCanonico(t)
+            && window._mhSameMister && window._mhSameMister(_hubTeamName(), t)) return true;
+      } catch(_){}
+      return false;
+    }
+    /* Suma de PJ de los jugadores del HUB en un store `ef_player_stats_*`. */
+    function _hubPjInStore(key){
+      var data; try { data = JSON.parse(localStorage.getItem(key) || 'null'); } catch(_){ data = null; }
+      if (!data || typeof data !== 'object') return 0;
+      var pj = 0;
+      Object.keys(data).forEach(function(k){
+        var sep = k.indexOf('::'); if (sep < 0) return;
+        if (!_hubMatchTeam(k.slice(0, sep))) return;
+        pj += Number((data[k] || {}).pj || 0);
+      });
+      return pj;
+    }
+    /* Ranking LIGA-WIDE (todos los equipos) por goles (gol+pen+fk) o MVP,
+       leído del snapshot Liga-sola `ef_player_stats_liga_only_v1`. Devuelve
+       el MEJOR puesto de un jugador del HUB (1 = líder) y su valor. Si el
+       hub no tiene a nadie con dato → { hubRank:null }. */
+    function _ligaWideRank(field){
+      var data; try { data = JSON.parse(localStorage.getItem('ef_player_stats_liga_only_v1') || 'null'); } catch(_){ data = null; }
+      if (!data || typeof data !== 'object') return { hubRank:null, hubVal:0 };
+      var vals = [], hubVals = [];
+      Object.keys(data).forEach(function(k){
+        var sep = k.indexOf('::'); if (sep < 0) return;
+        var ps = data[k] || {};
+        var v = field === 'mvp'
+          ? Number(ps.mvp || 0)
+          : (Number(ps.gol || 0) + Number(ps.pen || 0) + Number(ps.fk || 0));
+        if (v <= 0) return;
+        vals.push(v);
+        if (_hubMatchTeam(k.slice(0, sep))) hubVals.push(v);
+      });
+      if (!hubVals.length) return { hubRank:null, hubVal:0 };
+      var hubBest = Math.max.apply(null, hubVals);
+      var greater = 0; for (var i = 0; i < vals.length; i++){ if (vals[i] > hubBest) greater++; }
+      return { hubRank: greater + 1, hubVal: hubBest };   /* mejor puesto entre empates */
+    }
+
     /* ── Contexto LIGA EA (puede ser null si aún no hay datos) ── */
     var standings = [];
     try { standings = window.collectStandings ? (window.collectStandings() || []) : []; } catch(_){}
@@ -60739,6 +60787,40 @@ https://api.sofascore.app/api/v1/team/44/image
        solo tienen sentido cuando la temporada ha terminado. */
     var ligaComplete = !!(lRow && (parseInt(lRow.pj,10)||0) >= 38);
 
+    /* Ranking LIGA-WIDE de goleadores / MVP (para los objetivos «1 jugador
+       entre los N máx goleadores / máx MVP de Liga»). Son objetivos de
+       CLASIFICACIÓN FINAL: solo se conceden cuando la Liga ha terminado. */
+    var _ligaScorer = _ligaWideRank('gf');   /* gol+pen+fk */
+    var _ligaMvp    = _ligaWideRank('mvp');
+
+    /* ── ¿El equipo del HUB ha EMPEZADO la temporada? ──────────────────
+       SENTIDO COMÚN (petición usuario 2026-06-29, foto «Liverpool 2/68
+       falsos»): si el equipo del hub NO ha jugado NI UN partido competitivo
+       esta temporada, NINGÚN objetivo (Liga, Copa, Champions, Superliga…)
+       puede estar cumplido — «el de Champions ni siquiera hemos empezado».
+       Detecta participación por CUALQUIER señal persistida: clasificación de
+       Liga EA, Superliga, los stores de stats por jugador de cada comp, y la
+       liga externa del hub (hubs no-legacy: Arsenal/PSG/…). Mientras NO se
+       detecte arranque, el guard de abajo limpia los ✅ falsos. */
+    function _hubSeasonStarted(){
+      if (lRow && (parseInt(lRow.pj,10)||0) > 0) return true;
+      try { if (SL() && SL().hubMatches && SL().hubMatches.length > 0) return true; } catch(_){}
+      var STORES = ['ef_player_stats_v1','ef_player_stats_liga_only_v1','ef_player_stats_copa_v1',
+        'ef_player_stats_sc_v1','ef_player_stats_ucl_main_v1','ef_player_stats_uel_v1',
+        'ef_player_stats_uecl_v1','ef_player_stats_recopa_v1','ef_player_stats_usc_v1',
+        'ef_player_stats_inter_v1','ef_player_stats_mundial_v1'];
+      for (var i = 0; i < STORES.length; i++){ if (_hubPjInStore(STORES[i]) > 0) return true; }
+      try {
+        if (window._activeHubIsLegacy && !window._activeHubIsLegacy() && typeof _findBayernRow === 'function'){
+          var hr = _findBayernRow();
+          if (hr && Array.isArray(hr.players)){
+            for (var j = 0; j < hr.players.length; j++){ if ((parseInt(hr.players[j].pj,10)||0) > 0) return true; }
+          }
+        }
+      } catch(_){}
+      return false;
+    }
+
     /* ── Contexto SUPERLIGA (lazy; null si no hay datos) ── */
     var sl; /* undefined = aún no calculado; null = sin datos */
     function SL(){ if (sl === undefined) sl = _superligaCtx(tnorm); return sl; }
@@ -60746,7 +60828,7 @@ https://api.sofascore.app/api/v1/team/44/image
     /* Métricas de CLASIFICACIÓN FINAL (solo se confirman al terminar la
        competición). El resto son ACUMULATIVAS / de hito (se enganchan al
        alcanzarse y no se desmarcan). */
-    var LIGA_FINAL = { 'liga-pos':1, 'liga-dg':1 };
+    var LIGA_FINAL = { 'liga-pos':1, 'liga-dg':1, 'liga-top-scorer':1, 'liga-top-mvp':1 };
     var SL_FINAL   = { 'sl-not-most-conceded':1, 'sl-top-scorer':1, 'sl-least-cards':1, 'sl-no-loss-by':1, 'sl-ahead-rival':1 };
 
     function evalLiga(metric, N){
@@ -60758,6 +60840,8 @@ https://api.sofascore.app/api/v1/team/44/image
       else if (metric === 'liga-unbeaten')    r = { ok: lUnbeaten >= N,  val: lUnbeaten };
       else if (metric === 'liga-gf')          r = { ok: lGf >= N,        val: lGf };
       else if (metric === 'liga-dg')          r = { ok: lDg >= N,        val: lDg, dg:true };
+      else if (metric === 'liga-top-scorer')  r = { ok: _ligaScorer.hubRank != null && _ligaScorer.hubRank <= N };
+      else if (metric === 'liga-top-mvp')     r = { ok: _ligaMvp.hubRank   != null && _ligaMvp.hubRank   <= N };
       else return null;
       r.kind = LIGA_FINAL[metric] ? 'final' : 'cumulative';
       r.complete = ligaComplete;
@@ -60817,6 +60901,25 @@ https://api.sofascore.app/api/v1/team/44/image
       }
       if (lbl) lbl.classList.toggle('done', cb.checked);
     });
+
+    /* ── GUARD «temporada NO empezada» (petición usuario 2026-06-29) ──────
+       Si el equipo del hub no ha jugado NI UN partido competitivo esta
+       temporada, NINGÚN objetivo puede estar cumplido. Limpia TODO ✅ falso
+       (incluidos los MANUALES que un estado viejo / sync stale dejó marcado:
+       «máx goleadores de Liga» sin acabar la liga, «marca en 3 partidos de
+       Champions» sin haber empezado, etc.). Solo DESMARCA (nunca marca), y
+       SOLO cuando no hay arranque → en una temporada en curso no toca nada,
+       así no se pierde progreso real. Generaliza a las 6 cajas humanas
+       (resuelve el equipo del hub dinámicamente). */
+    try {
+      if (!_hubSeasonStarted()){
+        host.querySelectorAll('.obj-item').forEach(function(lbl){
+          var cb = lbl.querySelector('input[type=checkbox]');
+          if (cb && cb.checked){ cb.checked = false; lbl.classList.remove('done'); }
+        });
+      }
+    } catch(_){}
+
     /* Recalcula recompensas + badges + persiste (versión parcheada). */
     try { if (typeof window.athObjCount === 'function') window.athObjCount(); } catch(_){}
   };

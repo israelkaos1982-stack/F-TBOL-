@@ -1949,6 +1949,44 @@ nunca están en `cfg.teams` de un torneo de verano).
    demás pantallas (Recopa, USC, Inter, Mundial, SC, UCL, Superliga)
    lo llaman con 2 args y NO filtran. No cambiar esa firma.
 
+### La caja `s-tour-stats` MERGEA SOLA — sin botón ▶️ manual (obligatorio, 2026-06-29)
+
+**Bug (fotos usuario 2026-06-29, «Trofeo Joan Gamper · Estadísticas»)**:
+una LIGA de 63 equipos (`format='league'`) con varios partidos jugados
+(clasificación con PJ correctos) mostraba TODAS las categorías de
+Estadísticas en «Sin datos todavía». El merge dependía de un botón ▶️
+manual (PIN 747, `_tourStatsForceRefresh`, añadido 2026-06-08) que el
+usuario no debería tener que pulsar.
+
+**Fix**: el botón ▶️ se ELIMINÓ (`s-tour-stats-refresh` del markup). La
+caja `s-tour-stats` AHORA MERGEA AUTOMÁTICAMENTE en cada apertura:
+`_tourStatsPaint` ejecuta sola el pipeline completo que hacía el botón —
+(1) `_selSquadHydrate` (nombres reales), (2)
+`_tourBackfillActasFromResults(cfg, teams, true)` (regenera/MERGEA el
+acta de cada partido solo-marcador desde su marcador + home/away;
+RESPETA las actas con nombres reales que el humano jugó, no las pisa),
+(3) `_tourCollectStatsForTour` (agrega los eventos por jugador/equipo de
+TODAS las actas), y SOLO si eso vino vacío, (4) `syncLigaEaPlayerStats`
+(rebuild del store persistido que lee el paso 6 del recolector) +
+reintento. Todo DIFERIDO desde `_tourStatsOpen` (render no bloqueante:
+skeleton primero, cómputo en `setTimeout`).
+
+**Reglas a respetar**:
+5. **PROHIBIDO** reintroducir un botón manual (▶️/PIN) para refrescar las
+   estadísticas de `s-tour-stats`. La caja MERGEA SOLA en cada apertura
+   vía `_tourStatsPaint`. `_tourStatsForceRefresh` queda como alias no-op
+   (re-dispara el merge automático) por compat; no volver a gatearlo con
+   `requireAdmin`.
+6. **PROHIBIDO** que `_tourStatsPaint` salte el `_tourBackfillActasFromResults`
+   con `force:true` en la apertura: es lo que rellena las actas de los
+   partidos solo-marcador (IA-vs-IA simulados antes del motor de actas, o
+   copias del servidor sin events) para que la liga grande no salga a 0.
+   El backfill es ADITIVO (respeta los goleadores reales ya presentes).
+7. El `syncLigaEaPlayerStats` (O(partidos × comps), pesado) solo corre
+   como ÚLTIMO RECURSO cuando la lectura directa de `cfg.results` vino
+   vacía — no en el camino común. No moverlo a incondicional (congelaría
+   la apertura en torneos grandes).
+
 ## Mundial 2032 + cajas de stats que computan EN VIVO desde cfg.results (obligatorio, 2026-05-28)
 
 **Bug (foto usuario 2026-05-28)**: el Mundial 2032 (Selecciones,

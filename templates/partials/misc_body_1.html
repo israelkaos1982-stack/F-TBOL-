@@ -5577,6 +5577,21 @@ window._showSimProgress = function(opts, onDone){
      `_rollInjuries` tenía pool vacío porque Bayern ya no está en Liga
      EA Sports → 0 lesiones de entrenamiento NUNCA pasaban). */
   function _bayernSquad(){
+    /* HUB NO-legacy (PSG, Arsenal, Atlético…): el club vive en su liga
+       doméstica EXTERNA (PSG en «Liga Francia»…), NO en liga-ea-sports.
+       Resolvemos su fila con `window._findBayernRow()` (la misma que usa la
+       plantilla del hub, que ya elige la fila con datos reales entre todas
+       las ligaExt_*). Sin esto el escaneo de abajo solo miraba
+       liga-ea-sports → devolvía [] → el entrenamiento NUNCA generaba
+       lesiones para esas cajas y cualquier consumidor del squad del hub
+       quedaba vacío (queja usuario 2026-06-29, menú PSG/Izan). El hub legacy
+       (Liverpool/Toñín) mantiene el camino byte-for-byte de abajo. */
+    try {
+      if (window._activeHubIsLegacy && !window._activeHubIsLegacy()){
+        var _hr = (typeof window._findBayernRow === 'function') ? window._findBayernRow() : null;
+        if (_hr && Array.isArray(_hr.players) && _hr.players.length) return _hr.players;
+      }
+    } catch(_){}
     try {
       var raw = localStorage.getItem('ligaExt_liga-ea-sports');
       if (!raw) return [];

@@ -28794,6 +28794,99 @@ document.addEventListener('DOMContentLoaded', function() {
 }());
 </script>
 
+<!-- ══ RENDER FIABLE de las 3 cajas dinámicas del Panel Admin ══════════════
+     Stadium Hub (#stadium-list) · Ball Storage (#balls-list) · CASH (#cash-host).
+
+     Bug (fotos usuario 2026-06-29, «pin 747 → Estadios / Balones / CASH»): al
+     abrir cualquiera de las tres pantallas la CABECERA salía pero la CAJA
+     quedaba VACÍA / oculta.
+
+     Causa: el render de cada caja solo se disparaba por el `setTimeout(...,30)`
+     INLINE del onclick de la card del menú admin (`s-admin`) y, para
+     stadiums/balls, por un go-wrap en el IIFE de arriba. Al llegar a la
+     pantalla por el ROUTER SPA del bundle (recarga de la web, botón ATRÁS,
+     restauración de la URL en `bootRouter`/`popstate` — que llaman a
+     `navigateWithRetry` SIN pasar por el onclick), ese setTimeout NUNCA corre,
+     y CASH ni siquiera tenía go-wrap. Las funciones `adminRenderStadiums` /
+     `adminRenderBalls` / `adminRenderCash` YA funcionan (renderizan ~21-29 KB
+     verificado); lo que faltaba era un DISPARO FIABLE en CADA activación de la
+     pantalla, venga de donde venga.
+
+     Fix — DOBLE DISPARO (observer + go-wrap), mismo patrón que las cajas de
+     estadísticas (regla CLAUDE.md): (1) un MutationObserver por pantalla que
+     renderiza cuando pasa a `.active` (cubre router/popstate/boot/atrás);
+     (2) un go-wrap NO destructivo instalado en DOMContentLoaded (tras el boot
+     del bundle, que re-define `window.go`) como segundo disparo. Idempotente
+     y aditivo: re-renderizar es barato y no rompe nada. -->
+<script>
+(function(){
+  'use strict';
+  var MAP = {
+    's-admin-stadiums': 'adminRenderStadiums',
+    's-admin-balls':    'adminRenderBalls',
+    's-admin-cash':     'adminRenderCash'
+  };
+  /* Llama a la función de render con un breve reintento por si aún no se
+     definió (los IIFEs que las definen corren en otros <script>). */
+  function renderFor(id){
+    var fn = MAP[id]; if(!fn) return;
+    var tries = 0;
+    (function attempt(){
+      if (typeof window[fn] === 'function'){ try{ window[fn](); }catch(_){ } return; }
+      if (tries++ < 25) setTimeout(attempt, 50);
+    })();
+  }
+  /* go-wrap NO destructivo: encadena el window.go ACTUAL (el router final del
+     bundle) y, si navega a una de las 3 pantallas, dispara su render. */
+  function installGoWrap(){
+    if (window._adminDynGoWrapped) return;
+    var prev = window.go;
+    if (typeof prev !== 'function') return;
+    window.go = function(id){
+      var r = prev.apply(this, arguments);
+      if (MAP[id]) setTimeout(function(){ renderFor(id); }, 30);
+      return r;
+    };
+    window._adminDynGoWrapped = true;
+  }
+  /* MutationObserver por pantalla: renderiza al pasar a `.active`. Es el
+     disparo CANÓNICO porque cubre TODA forma de navegación (incluido el
+     router SPA / popstate / boot, que no pasan por el onclick ni por go()). */
+  function installObservers(){
+    Object.keys(MAP).forEach(function(id){
+      var el = document.getElementById(id);
+      if (!el || el._adminDynObs) return;
+      el._adminDynObs = true;
+      var was = el.classList.contains('active');
+      if (typeof MutationObserver === 'undefined') return;
+      new MutationObserver(function(){
+        var now = el.classList.contains('active');
+        if (now && !was) renderFor(id);
+        was = now;
+      }).observe(el, { attributes:true, attributeFilter:['class'] });
+    });
+  }
+  function boot(){
+    installObservers();
+    installGoWrap();
+    /* Si ya estamos en una de las 3 al cargar (deep-link / recarga). */
+    var a = document.querySelector('.screen.active');
+    if (a && MAP[a.id]) renderFor(a.id);
+  }
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+  /* El bundle re-define window.go durante su carga síncrona; re-instalar el
+     go-wrap tras DOMContentLoaded garantiza que envolvemos el router FINAL. */
+  document.addEventListener('DOMContentLoaded', function(){
+    setTimeout(installGoWrap, 0);
+    setTimeout(installGoWrap, 600);
+  });
+})();
+</script>
+
 <!-- ══ MÓDULO AMISTOSOS ══ -->
 <script>
 (function(){

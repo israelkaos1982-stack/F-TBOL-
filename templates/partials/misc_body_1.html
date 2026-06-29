@@ -53750,9 +53750,26 @@ https://api.sofascore.app/api/v1/team/44/image
        2) el club canónico (Liverpool),
        3) el nombre legacy "Bayern Munich" (saves antiguos sin renombrar). */
     var wants=[], ov=_boxOv();
-    if(ov&&ov.label) wants.push(String(ov.label).toLowerCase());
     var _chn=_canonHubName();
     var _chnLow=_chn.toLowerCase();
+    /* ANTI-CONTAMINACIÓN multi-hub (2026-06-29): el label del override del
+       menú SOLO entra como pista si NO apunta a OTRO club humano canónico.
+       Bug usuario (foto «caja PSG → Inter»): el override de la caja del PSG
+       (`menu_home_v1.ov['go:s-psg']`) había quedado con label "Inter", así que
+       `_slot()` buscaba primero un equipo "Inter" y devolvía el slot del Inter
+       → `_resolve` tomaba `name=t.name="Inter"` y la cabecera mostraba
+       "Inter · RUBÉN · Giuseppe Meazza". El guard de `_resolve` descartaba la
+       identidad del override pero `_slot` la reintroducía por su cuenta. Aquí
+       lo gateamos igual: si el label es de OTRO mister, NO se usa (la caja del
+       PSG localiza SIEMPRE el slot del PSG vía su nombre canónico). */
+    var _useOvLabel=true;
+    try{
+      if(ov&&ov.label&&window._mhFindMister){
+        var _mHubS=window._mhFindMister(_chn), _mOvS=window._mhFindMister(String(ov.label));
+        if(_mHubS&&_mOvS&&_mHubS.id!==_mOvS.id) _useOvLabel=false;
+      }
+    }catch(_){}
+    if(ov&&ov.label&&_useOvLabel) wants.push(String(ov.label).toLowerCase());
     /* Nombre canónico (con y sin acentos para tolerancia de saves). */
     wants.push(_chnLow);
     try{ var _chnNorm=_chn.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); if(_chnNorm!==_chnLow) wants.push(_chnNorm); }catch(_){}

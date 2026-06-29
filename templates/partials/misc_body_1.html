@@ -27157,21 +27157,32 @@ window._showSimProgress = function(opts, onDone){
     if (!dEl) return;
     /* Si el usuario ya navegó a OTRA caja de stats, no pisar. */
     if (!window._tourStatsActive || window._tourStatsActive.tourId !== tid) return;
-    /* Refresca la cache desde localStorage para no leer una cache
-       in-memory vacía/stale (race: _tourRender pone una cfg vacía
-       y el async _tourLoad no ha terminado cuando abrimos las stats). */
+    /* Elegir el cfg MÁS RICO (más partidos jugados CON acta) entre la
+       cache in-memory y localStorage, y dejarlo en _TOUR_CACHE para que
+       `_tourCollectStatsForTour` lo lea. NO basta con `updatedAt`: una
+       liga de 63 equipos genera un cfg enorme (>2 MB) que NO cabe en
+       localStorage → `_lsSetSafe` lo descarta y localStorage queda con una
+       copia VIEJA/recortada SIN events, mientras la cache in-memory (de
+       `_tourLoad` del servidor) SÍ los tiene. Un refresco por `updatedAt`
+       podía pisar la copia buena con la pobre → caja a 0. Aquí ganamos
+       siempre la copia con MÁS actas (bug Joan Gamper 2026-06-29). */
     try {
-      var _lsRaw = localStorage.getItem('tour_' + tid + '_v1');
-      if (_lsRaw) {
-        var _lsFresh = JSON.parse(_lsRaw);
-        window._TOUR_CACHE = window._TOUR_CACHE || {};
-        var _lsCached = window._TOUR_CACHE[tid];
-        var _lsCachedUpd = (_lsCached && _lsCached.updatedAt) || '';
-        var _lsFreshUpd = (_lsFresh && _lsFresh.updatedAt) || '';
-        if (!_lsCachedUpd || (_lsFreshUpd && _lsFreshUpd >= _lsCachedUpd)) {
-          window._TOUR_CACHE[tid] = _lsFresh;
-        }
-      }
+      window._TOUR_CACHE = window._TOUR_CACHE || {};
+      var _cfgCache = window._TOUR_CACHE[tid] || null;
+      var _cfgLs = null;
+      try { var _lsRaw = localStorage.getItem('tour_' + tid + '_v1'); if (_lsRaw) _cfgLs = JSON.parse(_lsRaw); } catch(_){}
+      var _richness = function(c){
+        if (!c || !c.results) return -1;
+        var n = 0;
+        Object.keys(c.results).forEach(function(k){
+          var r = c.results[k]; if (!r || !r.played) return;
+          var ev = r.events || r.acta;
+          n += (Array.isArray(ev) && ev.length) ? 1000 : 1;  /* con acta pesa mucho más */
+        });
+        return n;
+      };
+      var _best = (_richness(_cfgLs) > _richness(_cfgCache)) ? _cfgLs : _cfgCache;
+      if (_best) window._TOUR_CACHE[tid] = _best;
     } catch(_){}
     /* MERGE AUTOMÁTICO de las actas ANTES de recolectar (lo que antes
        hacía el botón ▶️, ahora en cada apertura, sin PIN). */
@@ -27192,11 +27203,28 @@ window._showSimProgress = function(opts, onDone){
        datos el store está vacío; rebuildPlayerStatsStore lo repuebla
        desde los eventos. Es O(partidos × comps) → SOLO se ejecuta cuando
        hace falta (no en el caso común, donde las actas ya resolvieron). */
-    if (!(stats && Object.keys(stats).length)) {
+    var _statsHasValue = function(s){
+      if (!s) return false;
+      var ks = Object.keys(s); if (!ks.length) return false;
+      for (var i = 0; i < ks.length; i++) {
+        var v = s[ks[i]] || {};
+        if ((v.gol|0)+(v.pen|0)+(v.fk|0)+(v.ta|0)+(v.tr|0)+(v.mvp|0)
+           +(v.imbat|0)+(v.penSaved|0)+(v.penProv|0)+(v.penFall|0)+(v.propia|0) > 0) return true;
+      }
+      return false;
+    };
+    /* Si la lectura directa de las actas (`cfg.results`) vino vacía O con
+       solo claves a CERO (eventos que no aportaron ningún conteo),
+       reconstruir los stores persistidos (`ef_player_stats_torneos_v1` /
+       `_sel_v1`, que lee el paso 6 del recolector) y reintentar. Tras un
+       cambio de móvil / borrado de datos el store está vacío;
+       rebuildPlayerStatsStore lo repuebla desde los eventos. Es
+       O(partidos × comps) → SOLO se ejecuta cuando hace falta. */
+    if (!_statsHasValue(stats)) {
       try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
       try { stats = _tourCollectStatsForTour(tid); } catch(_){}
     }
-    var _hasData = stats && Object.keys(stats).length > 0;
+    var _hasData = _statsHasValue(stats);
     var inner = '';
     if (_hasData) {
       /* Renderer AUTOCONTENIDO primero (mismo que el Mundial 2032) — el
@@ -27206,12 +27234,12 @@ window._showSimProgress = function(opts, onDone){
       if (!inner) { try { if (typeof window._lextStatsDashHtml === 'function') inner = window._lextStatsDashHtml(stats, true); } catch(_){} }
     }
     /* DIAGNÓSTICO (temporal) cuando la caja queda vacía pese a haber
-       partidos jugados: muestra la forma real de los datos para localizar
-       por qué el merge no agrega (cfg presente, nº de partidos jugados,
-       cuántos traen acta/home-away, si el motor de actas está cargado). */
+       partidos jugados: muestra la forma real de los datos (cfg, nº de
+       jugados, cuántos con acta/home-away) Y la salida directa de los
+       agregadores, para localizar por qué el merge no agrega. Va ARRIBA. */
     var _diag = '';
     if (!_hasData) { try { _diag = _tourStatsDiagHtml(tid); } catch(_){} }
-    dEl.innerHTML = (inner || _tourStatsEmptyCardsHtml()) + _diag;
+    dEl.innerHTML = _diag + (inner || _tourStatsEmptyCardsHtml());
   }
 
   /* Panel de diagnóstico de la caja de stats de torneo. Inspecciona la
@@ -27245,6 +27273,20 @@ window._showSimProgress = function(opts, onDone){
                + ' · ev:' + (Array.isArray(ev)?ev.length:0);
       }
     });
+    /* Salida DIRECTA de los agregadores sobre la cfg cargada — distingue
+       "cfg sin events" de "agregador no cuenta". */
+    var _aggCounts = function(fn){
+      try {
+        var s = fn(cfg) || {};
+        var ks = Object.keys(s), keys = ks.length, gol = 0, cards = 0;
+        ks.forEach(function(k){ var v = s[k]||{}; gol += (v.gol|0)+(v.pen|0)+(v.fk|0); cards += (v.ta|0)+(v.tr|0); });
+        return keys + ' jug · ' + gol + ' goles · ' + cards + ' tarj';
+      } catch(e){ return 'ERROR ' + (e && e.message || e); }
+    };
+    var _rsOut = (typeof window._mundialStatsRobustScan === 'function')
+      ? _aggCounts(function(c){ return window._mundialStatsRobustScan(c, c.teams||[]); }) : 'AUSENTE';
+    var _fcOut = (typeof window._tourStatsFromCfgResults === 'function')
+      ? _aggCounts(window._tourStatsFromCfgResults) : 'AUSENTE';
     var esc = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
     var lines = [
       'tourId: ' + tid + ' · format: ' + (cfg.format||'(none)'),
@@ -27254,8 +27296,9 @@ window._showSimProgress = function(opts, onDone){
       'results: ' + rKeys.length + ' · jugados: ' + played
         + ' · con acta: ' + withEv + ' · con nombres reales: ' + withReal
         + ' · con home/away: ' + withHA,
-      'genMatchEventsEnhanced: ' + (typeof window.genMatchEventsEnhanced === 'function' ? 'OK' : 'AUSENTE')
-        + ' · _tourStatsFromCfgResults: ' + (typeof window._tourStatsFromCfgResults === 'function' ? 'OK' : 'AUSENTE'),
+      'robustScan: ' + _rsOut,
+      'fromCfgResults: ' + _fcOut,
+      'genMatchEventsEnhanced: ' + (typeof window.genMatchEventsEnhanced === 'function' ? 'OK' : 'AUSENTE'),
       'ejemplo: ' + (sample || '(ningún partido jugado)')
     ];
     return '<div style="margin:14px 4px 4px;padding:12px 14px;border:1px dashed rgba(120,255,150,.4);'

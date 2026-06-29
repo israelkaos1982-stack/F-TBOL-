@@ -2625,6 +2625,67 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){}
       return null;
     }
+    /* «Riqueza» de una fila de equipo = Σ (pj + goles) de sus jugadores.
+       Sirve para elegir, entre varias copias del MISMO club repartidas por
+       distintas ligaExt_*, la que trae datos REALES. */
+    function _hubRowRichness(t){
+      if (!t || !Array.isArray(t.players)) return -1;
+      var sc = 0;
+      for (var i=0;i<t.players.length;i++){
+        var p = t.players[i]; if (!p) continue;
+        sc += Number(p.pj||0) + Number(p.gol||0) + Number(p.pen||0) + Number(p.fk||0);
+      }
+      return sc;
+    }
+    /* Para un hub NO-legacy (PSG, Arsenal, Atlético…), la plantilla del
+       club vive en su liga doméstica EXTERNA (PSG en «Liga Francia»,
+       Arsenal en la Premier externa…). Si el MISMO club aparece en VARIAS
+       ligaExt_* (típicamente un duplicado vacío en liga-ea-sports tras
+       MOVER el equipo de liga), `_findTeamRowByName` devolvía SIEMPRE la
+       copia de liga-ea-sports (la escanea primero) aunque estuviera vacía,
+       así que las stats de la liga donde el club REALMENTE juega como IA
+       (la que «tiene muchas estadísticas» — petición usuario PSG/Izan
+       2026-06-29) NO llegaban a la plantilla. Aquí elegimos, entre todas
+       las filas que casan el club, la que trae MÁS datos reales
+       (`_hubRowRichness`); a igualdad gana liga-ea-sports (legacy). Match
+       por nombre exacto normalizado O por club humano canónico del MISMO
+       mister (alias PSG↔Paris Saint-Germain, Liverpool↔Bayern…). */
+    function _findRichestHubRow(name){
+      var want = _normForStats(name || '');
+      if (!want) return null;
+      function _rowMatchesClub(t){
+        if (!t || !t.name) return false;
+        if (_normForStats(t.name) === want) return true;
+        try {
+          if (typeof window._isHumanClubCanonico === 'function'
+              && typeof window._mhSameMister === 'function'
+              && window._isHumanClubCanonico(t.name)
+              && window._mhSameMister(name, t.name)) return true;
+        } catch(_){}
+        return false;
+      }
+      var best = null, bestScore = -1, bestEa = false;
+      try {
+        for (var ii=0; ii<localStorage.length; ii++){
+          var k = localStorage.key(ii);
+          if (!k || k.indexOf('ligaExt_') !== 0) continue;
+          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
+          var raw = localStorage.getItem(k); if (!raw) continue;
+          var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+          var teams = (data && data.teams) || [];
+          for (var i=0;i<teams.length;i++){
+            var t = teams[i];
+            if (!_rowMatchesClub(t)) continue;
+            var sc = _hubRowRichness(t);
+            var isEa = (k === 'ligaExt_liga-ea-sports');
+            if (sc > bestScore || (sc === bestScore && isEa && !bestEa)){
+              best = t; bestScore = sc; bestEa = isEa;
+            }
+          }
+        }
+      } catch(_){}
+      return best;
+    }
     function _findBayernRow(){
       /* HUB ACTIVO (multi-hub 2026-06-13): para un hub NO-legacy (Arsenal,
          Atlético, Real Madrid, Barça, PSG) la plantilla del hub es la del
@@ -2641,7 +2702,11 @@ window._showSimProgress = function(opts, onDone){
           var _hubClub = '';
           try { if (typeof _psHumanLogicName === 'function') _hubClub = String(_psHumanLogicName() || ''); } catch(_){}
           try { if (!_hubClub){ var _ah = window._activeHub && window._activeHub(); if (_ah && _ah.club) _hubClub = String(_ah.club); } } catch(_){}
-          var _hubRow = _hubClub ? _findTeamRowByName(_hubClub) : null;
+          /* Preferimos la fila con datos REALES (la liga donde el club
+             juega de verdad como IA) sobre un duplicado vacío en
+             liga-ea-sports; fallback al primer match exacto si no hay
+             ninguna con datos. */
+          var _hubRow = _hubClub ? (_findRichestHubRow(_hubClub) || _findTeamRowByName(_hubClub)) : null;
           if (_hubRow) return _hubRow;
         }
       } catch(_){}

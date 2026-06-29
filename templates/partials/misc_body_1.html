@@ -40037,7 +40037,7 @@ window._showSimProgress = function(opts, onDone){
     try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
     _saveEuropeCommitServer(blob);
     alert('✅ Pools europeos congelados:\n\n'
-        + (recovered ? ('🌐 Ligas recuperadas del servidor: ' + recovered + '\n\n') : '')
+        + (recovered ? ('🌐 Ligas recuperadas (servidor + copia local): ' + recovered + '\n\n') : '')
         + '🔵 Champions League: ' + totalUcl + ' equipos\n'
         + '🇪🇺 Previa de Champions: ' + totalPrev + ' equipos\n'
         + '🟡 Open Qualifier: ' + totalOq + ' equipos\n'
@@ -40110,22 +40110,76 @@ window._showSimProgress = function(opts, onDone){
 
      SEGURO: solo trae las que FALTAN (sin plantilla local ≥2 equipos).
      Nunca pisa una copia local más rica (guard `keep`). Tope de 25 s. */
+  /* Recupera el roster de una liga desde sus copias durables LOCALES
+     (`_protected` / `_snap_<ts>`) cuando el main `ligaExt_<slug>` fue
+     EVICTADO (eviction agresiva de localStorage en Android) o quedó
+     vacío. El compute europeo (`_computeQualifiedFromLeagues`) SKIPea
+     las claves `_protected`/`_snap_`, así que sin esta restauración la
+     liga NO aporta NINGÚN equipo al pool aunque su plantilla siga viva
+     en la copia durable → el reparto europeo sale corto (síntoma
+     recurrente del usuario: Wild Card 73→31→26, etc.). Es el espejo de
+     `_lextRecoverResultsFromBackups` (2026-06-28) pero para el roster
+     COMPLETO, en el chokepoint del reparto europeo. Devuelve el nº de
+     equipos restaurados (0 si no había copia durable usable). */
+  function _eurRecoverMainFromDurable(slug){
+    var key = 'ligaExt_' + slug;
+    var best = null, bestN = 0;
+    function consider(raw){
+      if(!raw) return;
+      try {
+        var d = JSON.parse(raw);
+        var n = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
+        if(n >= 2 && n > bestN){ best = d; bestN = n; }
+      } catch(_){}
+    }
+    try { consider(localStorage.getItem(key + '_protected')); } catch(_){}
+    try {
+      var snaps = [];
+      for(var i=0;i<localStorage.length;i++){
+        var kk = localStorage.key(i);
+        if(kk && kk.indexOf(key + '_snap_') === 0) snaps.push(kk);
+      }
+      snaps.sort(); // `_snap_<ts>` → orden ascendente por timestamp
+      for(var s=snaps.length-1; s>=0; s--){ consider(localStorage.getItem(snaps[s])); }
+    } catch(_){}
+    if(best && bestN >= 2){
+      try {
+        best.results = best.results || [];
+        localStorage.setItem(key, JSON.stringify(best));
+        if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
+        return bestN;
+      } catch(_){}
+    }
+    return 0;
+  }
   function _eurHydrateMissingLeagues(done){
     var slugs;
     try { slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {}); }
     catch(_){ slugs = []; }
+    /* Paso A (LOCAL, síncrono): las ligas cuyo main falta pero conservan
+       una copia durable (`_protected`/`_snap_`) se restauran SIN tocar la
+       red. Cubre la eviction de localStorage en Android, que es la causa
+       más común del descuadre (el server efímero puede haber perdido la
+       liga, pero la copia durable local sobrevive). */
+    var localRecovered = 0;
     var toFetch = slugs.filter(function(slug){
       if(slug === 'liga-ea-sports') return false; // blacklist europeo: manual
+      var ok = false;
       try {
         var raw = localStorage.getItem('ligaExt_' + slug);
-        if(!raw) return true;
-        var d = JSON.parse(raw);
-        return !(d && Array.isArray(d.teams) && d.teams.length >= 2);
-      } catch(_){ return true; }
+        var d = raw ? JSON.parse(raw) : null;
+        ok = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
+      } catch(_){ ok = false; }
+      if(ok) return false;                       // main ya válido
+      if(_eurRecoverMainFromDurable(slug) >= 2){  // restaurado del durable local
+        localRecovered++;
+        return false;
+      }
+      return true;                                // sigue faltando → al server
     });
-    if(!toFetch.length){ done(0, 0); return; }
-    var pending = toFetch.length, recovered = 0, finished = false;
-    function finish(){ if(finished) return; finished = true; done(recovered, toFetch.length); }
+    if(!toFetch.length){ done(localRecovered, localRecovered); return; }
+    var pending = toFetch.length, recovered = localRecovered, finished = false;
+    function finish(){ if(finished) return; finished = true; done(recovered, toFetch.length + localRecovered); }
     var timer = setTimeout(finish, 25000);
     function step(){ if(--pending <= 0){ try{ clearTimeout(timer); }catch(_){} finish(); } }
     toFetch.forEach(function(slug){
@@ -40311,7 +40365,7 @@ window._showSimProgress = function(opts, onDone){
       }
     }
     alert('♻️ Reparto europeo re-cuadrado.\n\n'
-        + (recovered ? ('🌐 Ligas recuperadas del servidor: ' + recovered + '\n') : '')
+        + (recovered ? ('🌐 Ligas recuperadas (servidor + copia local): ' + recovered + '\n') : '')
         + 'Ligas corregidas: ' + fixed + (missing? '  ·  sin sembrar: '+missing : '') + '\n'
         + 'Feeders WC/OQ/Previa limpiados + snapshot recongelada.\n\n'
         + '🔵 Champions League: ' + tUcl + '  ' + _mark(tUcl,28) + '\n'

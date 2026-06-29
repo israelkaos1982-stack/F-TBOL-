@@ -22500,12 +22500,11 @@ window._showSimProgress = function(opts, onDone){
     margin-left:auto;letter-spacing:.5px;
   }
   /* Botón "📊 Estadísticas" inyectado por `_paintTourScreen` en
-     los torneos de Selecciones (spv, sfn) Y en los Torneos de Verano
-     (board 'verano': Joan Gamper, Asian, SCT, PSS, tx*) — excepto
-     formato `mundial-48` y el Mundialito de Clubes (`mundial`), que
-     ya incluyen su propia entrada de Estadísticas. Petición usuario
-     2026-06-29: las cajas de Estadísticas van DENTRO de su torneo, no
-     sueltas en el listado. Al pulsar abre la pantalla
+     los torneos de Selecciones (spv, sfn) excepto formato
+     `mundial-48` (ese formato ya incluye la entrada de Estadísticas
+     en su propio menú de 7 cajas). Los Torneos de Verano usan su
+     propio desplegable inline (`_tourInlineStatsHtml`). Al pulsar
+     abre la pantalla
      dedicada `s-tour-stats` con el dashboard completo (mismo look
      que la Caja España / s-liga-stats). Petición usuario 2026-05-24:
      "no es desplegable, es una caja que al pulsar se abre".         */
@@ -27602,18 +27601,16 @@ window._showSimProgress = function(opts, onDone){
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
     if (flagEl  && cfg.flag) flagEl.innerHTML    = _tourFlagHtml(cfg.flag, 'sec-flag-img');
     if (!infoEl) return;
-    /* Botón "📊 Estadísticas" DENTRO de la pantalla del torneo, tanto para
-       Selecciones (spv, sfn) como para los Torneos de Verano (board
-       'verano': Joan Gamper, Asian, SCT, PSS, tx*). Petición usuario
-       2026-06-29: las cajas de Estadísticas dejan de ir sueltas en el
-       listado `s-torneos-verano` y pasan DENTRO de su caja de torneo
-       correspondiente (como ya hacían las de Selecciones). Excepciones:
-       `mundial-48` (ya incluye Estadísticas en su menú de 7 cajas) y el
-       Mundialito de Clubes `mundial` (tiene su pantalla propia
-       `s-mundial-stats`). */
+    /* Botón "📊 Estadísticas" DENTRO de la pantalla del torneo sólo para
+       Selecciones (spv, sfn), excepto `mundial-48` (ya incluye Estadísticas
+       en su menú de 7 cajas). Los Torneos de Verano (board 'verano') NO lo
+       usan: ya muestran su caja de Estadísticas DENTRO de la pantalla vía
+       `_tourInlineStatsHtml` (el desplegable verde ▼ encima de la
+       clasificación). Añadir aquí `_statsBoxHtml` para verano duplicaba la
+       caja (petición usuario 2026-06-29: "hay 2 cajas de estadísticas,
+       elimina la de arriba"). */
     var _statsBoard = (typeof _tvBoardOf === 'function') ? _tvBoardOf(id) : null;
-    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final' || _statsBoard === 'verano')
-                        && id !== 'mundial'
+    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final')
                         && (cfg.format !== 'mundial-48');
     var _statsBoxHtml = _statsAllowed ? _tourStatsBtnHtml(id) : '';
     var teams = cfg.teams || [];

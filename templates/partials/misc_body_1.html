@@ -22500,9 +22500,12 @@ window._showSimProgress = function(opts, onDone){
     margin-left:auto;letter-spacing:.5px;
   }
   /* Botón "📊 Estadísticas" inyectado por `_paintTourScreen` en
-     los torneos de Selecciones (spv, sfn) excepto formato
-     `mundial-48` (ese formato ya incluye la entrada de Estadísticas
-     en su propio menú de 7 cajas). Al pulsar abre la pantalla
+     los torneos de Selecciones (spv, sfn) Y en los Torneos de Verano
+     (board 'verano': Joan Gamper, Asian, SCT, PSS, tx*) — excepto
+     formato `mundial-48` y el Mundialito de Clubes (`mundial`), que
+     ya incluyen su propia entrada de Estadísticas. Petición usuario
+     2026-06-29: las cajas de Estadísticas van DENTRO de su torneo, no
+     sueltas en el listado. Al pulsar abre la pantalla
      dedicada `s-tour-stats` con el dashboard completo (mismo look
      que la Caja España / s-liga-stats). Petición usuario 2026-05-24:
      "no es desplegable, es una caja que al pulsar se abre".         */
@@ -27599,14 +27602,18 @@ window._showSimProgress = function(opts, onDone){
     if (titleEl && cfg.name) titleEl.textContent = cfg.name;
     if (flagEl  && cfg.flag) flagEl.innerHTML    = _tourFlagHtml(cfg.flag, 'sec-flag-img');
     if (!infoEl) return;
-    /* Botón "📊 Estadísticas" sólo en torneos de Selecciones (spv, sfn)
-       — NO para `mundial-48` (ya incluye Estadísticas en su menú de 7
-       cajas). Los Torneos de Verano tienen su caja de Estadísticas en la
-       LISTA (s-torneos-verano), DEBAJO de cada card — no dentro de la
-       pantalla del torneo (petición usuario 2026-06-02). La pinta
-       `_tvRenderCards`. */
+    /* Botón "📊 Estadísticas" DENTRO de la pantalla del torneo, tanto para
+       Selecciones (spv, sfn) como para los Torneos de Verano (board
+       'verano': Joan Gamper, Asian, SCT, PSS, tx*). Petición usuario
+       2026-06-29: las cajas de Estadísticas dejan de ir sueltas en el
+       listado `s-torneos-verano` y pasan DENTRO de su caja de torneo
+       correspondiente (como ya hacían las de Selecciones). Excepciones:
+       `mundial-48` (ya incluye Estadísticas en su menú de 7 cajas) y el
+       Mundialito de Clubes `mundial` (tiene su pantalla propia
+       `s-mundial-stats`). */
     var _statsBoard = (typeof _tvBoardOf === 'function') ? _tvBoardOf(id) : null;
-    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final')
+    var _statsAllowed = (_statsBoard === 'sel-previa' || _statsBoard === 'sel-final' || _statsBoard === 'verano')
+                        && id !== 'mundial'
                         && (cfg.format !== 'mundial-48');
     var _statsBoxHtml = _statsAllowed ? _tourStatsBtnHtml(id) : '';
     var teams = cfg.teams || [];
@@ -33235,21 +33242,11 @@ window._showSimProgress = function(opts, onDone){
         + '<button type="button" class="sc-info-btn" style="color:' + col[1] + ';border-color:' + col[1] + ';" onclick="event.stopPropagation();window.muTourInfo&&window.muTourInfo(\'' + id + '\')" title="Info">i</button>'
         + '<span class="sc-arr">▶</span>'
         + '</div>';
-      /* Caja "📊 Estadísticas" DEBAJO de la card de cada Torneo de Verano
-         (petición usuario 2026-06-02). MISMO tamaño/estilo que la card del
-         torneo (.submenu-card, full-width) — como las cajas ESTADÍSTICAS
-         del Mundialito / Recopa — pero en gradiente VERDE-TEAL. Abre
-         s-tour-stats con las stats EN VIVO del propio torneo. El Mundialito
-         de Clubes (id 'mundial') tiene su pantalla propia, se excluye. */
-      if (bd === 'verano' && id !== 'mundial') {
-        slot.html += '<div class="submenu-card sc-' + id + '-stats" '
-          + 'style="margin-top:2px;background:linear-gradient(135deg,#00221d 0%,#003a32 16%,#006e5c 36%,#0aa386 52%,#2dd4bf 60%,#0aa386 70%,#006e5c 84%,#00221d 100%) !important;border:1.5px solid #2dd4bf !important;box-shadow:0 4px 18px rgba(45,212,191,.38),inset 0 1px 0 rgba(255,255,255,.16) !important;" '
-          + 'onclick="window._tourStatsOpen&&window._tourStatsOpen(\'' + id + '\',\'s-torneos-verano\')">'
-          + '<span class="sc-emoji">📊</span>'
-          + '<span class="sc-label" style="flex:1;">Estadísticas</span>'
-          + '<span class="sc-arr" style="margin-left:auto;">▶</span>'
-          + '</div>';
-      }
+      /* La caja "📊 Estadísticas" YA NO va suelta en el listado: ahora vive
+         DENTRO de la pantalla de cada torneo (la pinta `_paintTourScreen`
+         vía `_tourStatsBtnHtml`, igual que las de Selecciones). Petición
+         usuario 2026-06-29: "todas las cajas de estadísticas tienen que ir
+         dentro de su caja de torneo correspondiente". */
     });
     Object.keys(boards).forEach(function(bd){
       var box = document.getElementById(boards[bd].box);

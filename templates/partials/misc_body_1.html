@@ -27774,11 +27774,17 @@ window._showSimProgress = function(opts, onDone){
         try { Promise.resolve(window._tourSave(id, cfg)).catch(function(){}); } catch(_){}
       }
     } else if (cfg.format === 'league') {
-      infoEl.innerHTML = _statsBoxHtml + hint + _renderLeague(cfg, id, teams);
+      /* Panel de estadísticas INLINE encima de la clasificación, del
+         MISMO cfg (petición usuario 2026-06-29). */
+      var _ilStatsL = '';
+      try { _ilStatsL = _tourInlineStatsHtml(cfg, id, teams); } catch(_){}
+      infoEl.innerHTML = _statsBoxHtml + hint + _ilStatsL + _renderLeague(cfg, id, teams);
     } else if (cfg.format === 'groups-ko' || cfg.format === 'league-ko' || cfg.format === 'swiss') {
       /* Liga+Playoff y Suizo reutilizan el motor de grupos-ko con
          1 solo grupo (config normalizada en _readForm). */
-      infoEl.innerHTML = _statsBoxHtml + hint + _renderGroupsKO(cfg, id, teams);
+      var _ilStatsG = '';
+      try { _ilStatsG = _tourInlineStatsHtml(cfg, id, teams); } catch(_){}
+      infoEl.innerHTML = _statsBoxHtml + hint + _ilStatsG + _renderGroupsKO(cfg, id, teams);
     } else if (cfg.format === 'qualifier-route') {
       infoEl.innerHTML = _statsBoxHtml + hint + _renderQualifierRoute(cfg, id, teams);
     } else if (cfg.format === 'mundial-48') {
@@ -28002,6 +28008,61 @@ window._showSimProgress = function(opts, onDone){
       html += '</div></div>';   /* cierra .tour-jor-body + .tour-jor */
     });
     return html;
+  }
+
+  /* Panel de ESTADÍSTICAS INLINE (petición usuario 2026-06-29: "poner la
+     caja estadísticas dentro del propio torneo, encima de la
+     clasificación"). Se calcula del cfg EN MANO — el MISMO que pinta la
+     clasificación y las actas — así NO depende de la pantalla separada
+     `s-tour-stats` ni de re-cargar la cfg (que era la causa de que la
+     caja saliera a 0). Colapsable (cerrado por defecto) para no empujar
+     la clasificación. Igual que el Mundial 2032: agrega los eventos de
+     CADA acta del propio cfg. */
+  function _tourInlineStatsHtml(cfg, tourId, teams){
+    var stats = {};
+    var _hasVal = function(s){
+      if (!s) return false; var ks = Object.keys(s); if (!ks.length) return false;
+      for (var i=0;i<ks.length;i++){ var v=s[ks[i]]||{};
+        if ((v.gol|0)+(v.pen|0)+(v.fk|0)+(v.ta|0)+(v.tr|0)+(v.mvp|0)+(v.imbat|0)+(v.penSaved|0)+(v.penProv|0)+(v.penFall|0)+(v.propia|0)>0) return true; }
+      return false;
+    };
+    try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+    /* AGREGACIÓN PURA del cfg en mano — los eventos de cada acta YA están
+       en `cfg.results[].events` (se ven en pantalla). NO hacemos backfill
+       ni guardado durante el render (evita churn de goleadores placeholder
+       y POSTs en cada repintado). Si una acta resolviera placeholder, el
+       merge real lo cura por otras rutas. */
+    try { var _rs = _mundialStatsRobustScan(cfg, teams); if (_rs && Object.keys(_rs).length) stats = _rs; } catch(_){}
+    if (!_hasVal(stats)) { try { var _fc = _tourStatsFromCfgResults(cfg); if (_fc && Object.keys(_fc).length) stats = _fc; } catch(_){} }
+    var grid = '';
+    if (_hasVal(stats)) {
+      try { grid = _mundialRenderStatsGrid(stats); } catch(_){}
+      if (!grid) { try { if (typeof window._lextStatsDashHtml === 'function') grid = window._lextStatsDashHtml(stats, true); } catch(_){} }
+    }
+    if (!grid) {
+      grid = '<div style="padding:18px;text-align:center;font-family:Oswald,sans-serif;'
+           + 'letter-spacing:1.5px;font-size:12px;color:rgba(255,255,255,.5);">'
+           + 'Sin datos todavía — juega o simula partidos para ver estadísticas.</div>';
+    }
+    var bodyId = 'tour-inline-stats-' + String(tourId).replace(/[^A-Za-z0-9_-]/g,'_');
+    var btnSt = 'display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;'
+      + 'border:none;border-radius:8px;cursor:pointer;font-family:Oswald,sans-serif;'
+      + 'font-size:13px;font-weight:700;letter-spacing:2px;text-align:left;color:#ecffe9;'
+      + 'text-transform:uppercase;text-shadow:0 0 9px rgba(120,255,150,.5);'
+      + 'background:linear-gradient(90deg,#053a16,#0c7a30,#1ec64e,#0c7a30,#053a16);'
+      + 'box-shadow:0 3px 14px rgba(30,198,78,.30),inset 0 1px 0 rgba(255,255,255,.16);';
+    var toggle = "var e=document.getElementById('"+bodyId+"');"
+      + "var o=(e.style.display==='none'||!e.style.display);"
+      + "e.style.display=o?'block':'none';"
+      + "var a=this.querySelector('.tis-arr');if(a)a.textContent=o?'▲':'▼';";
+    return '<div style="margin:0 0 12px;">'
+      + '<button type="button" style="'+btnSt+'" onclick="'+toggle+'">'
+      + '📊 <span style="flex:1;">Estadísticas</span>'
+      + '<span class="tis-arr" style="font-size:13px;color:rgba(255,255,255,.9);">▼</span>'
+      + '</button>'
+      + '<div id="'+bodyId+'" class="liga-stats-wrap" style="display:none;margin-top:8px;">'
+      + grid + '</div>'
+      + '</div>';
   }
 
   function _renderLeague(cfg, tourId, teams) {

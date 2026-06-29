@@ -31348,6 +31348,14 @@ window._showSimProgress = function(opts, onDone){
         } catch(_){}
       }
       allEvents.sort(function(a,b){ return (Number(a.min)||0) - (Number(b.min)||0); });
+      /* Sellar `realTeam` en cada evento → AUTODESCRIPTIVO: la caja de
+         Estadísticas resuelve el equipo del evento aunque `home`/`away`
+         se pierdan en la fusión cross-device (el agregador cae a
+         `ev.realTeam` cuando el mapeo a/b no da nombre). 2026-06-29. */
+      allEvents.forEach(function(e){
+        if (e && !e.realTeam) e.realTeam = (e.team === 'a' || e.team === 'home') ? nameA
+          : (e.team === 'b' || e.team === 'away') ? nameB : e.realTeam;
+      });
       out.events = allEvents;
       if (mvp) out.mvp = mvp;
       if (mvpTeam) out.mvpTeam = mvpTeam;

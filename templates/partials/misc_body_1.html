@@ -58532,6 +58532,18 @@ https://api.sofascore.app/api/v1/team/44/image
       try { window._BAYERN_HUD_HYDRATED = false; } catch(_){}
       _pendingMoneyDelta = 0;
       window._BAYERN_HUD_CACHE = null;
+      /* RESET del state LEGACY del hub (pi/budget/rating). `updateHud()`
+         (el actualizador legacy de #s-munich, línea ~63150) repinta
+         ath-med-val/ath-money-val/ath-pts-val desde `_bayernLegacyState`
+         y SOLO lo sobreescribe con `_BAYERN_HUD_CACHE` si existe. Al haber
+         nulado la cache, un `updateHud()` que corra ANTES de que cargue el
+         nuevo hub repintaría los valores del hub ANTERIOR (Liverpool). Los
+         ponemos a 0 → muestra neutro hasta que apply()/server traen los
+         reales (queja usuario 2026-06-29: cada caja debe tener SUS 💼🪙💊). */
+      try {
+        var _legHc = window._bayernLegacyState;
+        if (_legHc){ _legHc.pi = 0; _legHc.budgetSpent = 0; _legHc.rating = 0; }
+      } catch(_){}
       /* Limpiar los targets del DOM ANTES de apply() para que los
          valores del hub anterior NO se queden visibles mientras el
          nuevo hub carga. apply() retorna temprano si la cache está
@@ -58540,6 +58552,13 @@ https://api.sofascore.app/api/v1/team/44/image
       try { var _mT2 = _smallTarget('.munich-hud-money'); if (_mT2) _mT2.textContent = '/---€'; } catch(_){}
       try { var _vE2 = document.getElementById('ath-pts-val');   if (_vE2) _vE2.textContent = '0.00'; } catch(_){}
       try { var _wE2 = document.getElementById('ath-money-val'); if (_wE2) _wE2.textContent = '0'; } catch(_){}
+      /* También el 💊 PI (ath-med-val) — antes NO se limpiaba, así que al
+         cambiar de caja el PI del hub anterior se quedaba visible hasta que
+         respondía el server (queja usuario 2026-06-29: «emerge lo que tiene
+         el Liverpool»). Lo reseteamos a «—»; apply() lo repinta al instante
+         desde la cache LOCAL del nuevo hub si existe. */
+      try { var _pE2 = document.getElementById('ath-med-val');    if (_pE2) _pE2.textContent = '—'; } catch(_){}
+      try { var _pI2 = document.getElementById('ath-med-injury'); if (_pI2) _pI2.textContent = '—'; } catch(_){}
       try { apply(); } catch(_){}
       try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
     });
@@ -60221,7 +60240,16 @@ https://api.sofascore.app/api/v1/team/44/image
      del nuevo hub, no de la anterior (regla CLAUDE.md 14). */
   try {
     window.addEventListener('hubchange', function(){
-      setTimeout(function(){
+      /* MICROTASK (no setTimeout): corre DESPUÉS de que la IIFE del PROGRESO
+         reasigne LS_OBJ síncronamente (durante el mismo dispatch del evento)
+         pero ANTES del paint → así los objetivos del hub anterior NO
+         «parpadean» en pantalla al cambiar de caja (queja usuario
+         2026-06-29). El setTimeout(0) anterior era un macrotask POST-paint:
+         se veía un instante la lista del Liverpool antes de repintar la del
+         nuevo hub. La restauración de ✅ sigue íntegra (renderAll →
+         _munichObjAfterRender → loadObjState), así que no se sube progreso
+         vacío (reglas 14-17). */
+      Promise.resolve().then(function(){
         try { OVR_KEY = window._hubKey('munich-obj-overrides-v1'); } catch(_){}
         OVR = {}; try { loadOverrides(); } catch(_){}
         try { renderAll('ath-obj-club', _objHubName(), false); } catch(_){}
@@ -60233,7 +60261,7 @@ https://api.sofascore.app/api/v1/team/44/image
             if (typeof window._munichObjAfterRender === 'function') { try { window._munichObjAfterRender(); } catch(_){} }
           });
         } catch(_){}
-      }, 0);
+      });
     });
   } catch(_){}
 })();

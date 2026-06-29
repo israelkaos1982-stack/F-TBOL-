@@ -6663,7 +6663,24 @@ window._showSimProgress = function(opts, onDone){
      los 2 escudos + botón ▶ JUGAR que reabre la previa estándar
      (`_tourOpenHumanMatch` → previa → gm-modal). */
   var PEND_HVH_KEY = 'pend_hvh_deferred_v1';
-  function _pendHvHGetRaw(){
+  /* DURABILIDAD cross-device (2026-06-29, petición usuario «los partidos
+     de Selecciones pospuestos del Mundial 2032 no salen — eso se tiene que
+     guardar SIEMPRE hasta que los juguemos»): `pend_hvh_deferred_v1` viaja
+     en el blob compartido de `/api/state` (last-write-wins), así que un
+     push de OTRO dispositivo / un wipe de datos borraba los pospuestos de
+     una caja (típico: las rondas KO de selección, cuyo rival aún es TBD).
+     Solución: el store es un ARRAY con TOMBSTONES + sello por entrada, y se
+     FUSIONA por `uid` (unión auto-curativa, mismo patrón que derbys/HUD):
+       · cada entrada activa lleva `addedAt`;
+       · al despoponer/jugar, la entrada NO se borra: se sustituye por un
+         TOMBSTONE `{uid, tombstone:true, removedAt}` que se propaga;
+       · la fusión (cliente, en hydrate) elige por `uid` la versión con la
+         ACCIÓN más reciente (max addedAt vs removedAt) → un pospuesto
+         nunca se pierde y un jugado nunca resucita.
+     `window._pendHvHGet` devuelve SOLO las activas (sin tombstones) para
+     el render; el push sube el array crudo (con tombstones) para que las
+     bajas viajen. */
+  function _pendHvHRaw(){
     try {
       var s = localStorage.getItem(PEND_HVH_KEY);
       if (!s) return [];
@@ -6671,33 +6688,82 @@ window._showSimProgress = function(opts, onDone){
       return Array.isArray(a) ? a : [];
     } catch(_){ return []; }
   }
+  function _pendHvHActive(){
+    return _pendHvHRaw().filter(function(e){ return e && e.uid && !e.tombstone; });
+  }
+  function _pendHvHStamp(e){
+    return (e && (e.tombstone ? (e.removedAt || 1) : (e.addedAt || 1))) || 1;
+  }
   function _pendHvHSave(arr){
-    try { localStorage.setItem(PEND_HVH_KEY, JSON.stringify(arr || [])); } catch(_){}
+    /* Poda tombstones muy viejos (>120 días) para no inflar el blob —
+       un partido pospuesto y jugado hace meses ya no necesita propagarse. */
+    var now = Date.now();
+    var out = (arr || []).filter(function(e){
+      if (!e || !e.uid) return false;
+      if (e.tombstone && e.removedAt && (now - e.removedAt) > 120 * 864e5) return false;
+      return true;
+    });
+    try { localStorage.setItem(PEND_HVH_KEY, JSON.stringify(out)); } catch(_){}
   }
   function _pendHvHUid(tourId, matchKey){
     return String(tourId == null ? '' : tourId) + '::' + String(matchKey == null ? '' : matchKey);
   }
   function _pendHvHAdd(entry){
     if (!entry || !entry.uid) return false;
-    var a = _pendHvHGetRaw();
+    if (!entry.addedAt) entry.addedAt = Date.now();
+    var a = _pendHvHRaw();
     for (var i = 0; i < a.length; i++){
-      if (a[i] && a[i].uid === entry.uid) return false;
+      if (a[i] && a[i].uid === entry.uid){
+        /* Re-postponer un partido que se había jugado/despuesto: el
+           tombstone se reemplaza por la entrada activa (gana por recencia
+           porque su addedAt es nuevo). Si ya estaba activo, no duplicar. */
+        if (a[i].tombstone){ a[i] = entry; _pendHvHSave(a); return true; }
+        return false;
+      }
     }
     a.push(entry);
     _pendHvHSave(a);
     return true;
   }
   function _pendHvHRemove(uid){
-    var a = _pendHvHGetRaw();
-    var out = []; var removed = false;
+    if (!uid) return false;
+    var a = _pendHvHRaw();
+    var found = false;
     for (var i = 0; i < a.length; i++){
-      if (a[i] && a[i].uid === uid){ removed = true; continue; }
-      out.push(a[i]);
+      if (a[i] && a[i].uid === uid){
+        a[i] = { uid: uid, tombstone: true, removedAt: Date.now() };
+        found = true;
+        break;
+      }
     }
-    if (removed) _pendHvHSave(out);
-    return removed;
+    /* Aunque no estuviera local (lo añadió otro dispositivo), sembramos el
+       tombstone para que la baja viaje y no reaparezca tras la fusión. */
+    if (!found) a.push({ uid: uid, tombstone: true, removedAt: Date.now() });
+    _pendHvHSave(a);
+    return true;
   }
-  window._pendHvHGet = _pendHvHGetRaw;
+  /* Fusión por uid de dos arrays (local ∪ server) auto-curativa: por cada
+     uid gana la versión con la ACCIÓN más reciente. Devuelve el array
+     fusionado (con tombstones) o null si no cambió respecto a `localArr`. */
+  function _pendHvHMerge(localArr, serverArr){
+    localArr = Array.isArray(localArr) ? localArr : [];
+    serverArr = Array.isArray(serverArr) ? serverArr : [];
+    var byUid = {};
+    function ingest(e){
+      if (!e || !e.uid) return;
+      var cur = byUid[e.uid];
+      if (!cur || _pendHvHStamp(e) >= _pendHvHStamp(cur)) byUid[e.uid] = e;
+    }
+    localArr.forEach(ingest);
+    serverArr.forEach(ingest);
+    var merged = Object.keys(byUid).map(function(k){ return byUid[k]; });
+    var a = JSON.stringify(localArr);
+    var b = JSON.stringify(merged);
+    return (a === b) ? null : merged;
+  }
+  window._pendHvHGet = _pendHvHActive;     /* render → solo activas */
+  window._pendHvHGetRaw = _pendHvHRaw;     /* sync/push → con tombstones */
+  window._pendHvHMerge = _pendHvHMerge;
   window._pendHvHAdd = _pendHvHAdd;
   window._pendHvHRemove = _pendHvHRemove;
   window._pendHvHUid = _pendHvHUid;
@@ -58225,11 +58291,26 @@ https://api.sofascore.app/api/v1/team/44/image
 
     /* PARTIDOS POSPUESTOS: vacía el store manual + servidor. Sin
        esto, los partidos pospuestos vía 📌 POSPONER sobrevivían al
-       reset y seguían en la caja de POSPUESTOS. */
+       reset y seguían en la caja de POSPUESTOS.
+       2026-06-29: el store ahora se FUSIONA por uid (unión con tombstones),
+       así que un POST vacío `[]` NO borra nada (union([],srv)=srv). Para
+       que el vaciado se PROPAGUE hay que sembrar un TOMBSTONE por cada
+       pospuesto activo (gana por recencia en la fusión de todos los
+       dispositivos). */
     try {
-      localStorage.setItem('pend_hvh_deferred_v1', JSON.stringify([]));
+      var _pdNow = Date.now();
+      var _pdRaw = [];
       try {
-        var _body = JSON.stringify({ competition_state: { 'pend_hvh_deferred_v1': '[]' } });
+        if (typeof window._pendHvHGetRaw === 'function') _pdRaw = window._pendHvHGetRaw() || [];
+        else { var _pdS = localStorage.getItem('pend_hvh_deferred_v1'); _pdRaw = _pdS ? (JSON.parse(_pdS)||[]) : []; }
+      } catch(_){}
+      var _pdTomb = (Array.isArray(_pdRaw) ? _pdRaw : []).map(function(e){
+        return (e && e.uid) ? { uid: e.uid, tombstone: true, removedAt: _pdNow } : null;
+      }).filter(Boolean);
+      var _pdStr = JSON.stringify(_pdTomb);
+      localStorage.setItem('pend_hvh_deferred_v1', _pdStr);
+      try {
+        var _body = JSON.stringify({ competition_state: { 'pend_hvh_deferred_v1': _pdStr } });
         if (typeof navigator !== 'undefined' && navigator.sendBeacon){
           navigator.sendBeacon('/api/state', new Blob([_body], { type:'application/json' }));
         } else if (typeof fetch === 'function'){

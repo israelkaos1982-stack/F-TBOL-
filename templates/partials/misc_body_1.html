@@ -7413,8 +7413,7 @@ window._showSimProgress = function(opts, onDone){
       setTimeout(function(){ try { t.parentNode && t.parentNode.removeChild(t); } catch(_){} }, 2800);
     } catch(_){}
   }
-  /* Exponer el toast para otros bloques (lo usa `_toast` más abajo y el
-     botón ▶️ Actualizar estadísticas de `s-tour-stats`). */
+  /* Exponer el toast para otros bloques (lo usa `_toast` más abajo). */
   try { window._psFlashToast = _psFlashToast; } catch(_){}
   /* Card "BLOQUEADO · Rival pendiente" sustituye a JUGADORES FUERA
      cuando la fase previa de un KO no se ha simulado. `info` viene
@@ -18728,16 +18727,11 @@ window._showSimProgress = function(opts, onDone){
 <div class="screen" id="s-tour-stats">
 <button class="back-btn" id="s-tour-stats-back" onclick="window._tourStatsBack&&window._tourStatsBack()">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji" id="s-tour-stats-emoji">📊</span><h2 id="s-tour-stats-title">Estadísticas</h2></div>
-<!-- ▶️ ACTUALIZAR ESTADÍSTICAS (icono solo, arriba a la derecha) —
-     petición usuario 2026-06-08 (foto Trofeo Joan Gamper: "no se
-     actualizan las estadísticas de los jugadores · solo quiero arriba a
-     la derecha el icono ▶️ y que funcione"). Al pulsarlo pide PIN 747 y
-     fuerza el pipeline completo (hidratar plantillas → backfill de
-     actas → rebuildPlayerStatsStore → recolectar del cfg) y re-pinta la
-     caja. Posición absoluta top-right (la `.screen` es position:relative). -->
-<button type="button" id="s-tour-stats-refresh" title="Actualizar estadísticas"
-  onclick="window._tourStatsForceRefresh&amp;&amp;window._tourStatsForceRefresh()"
-  style="position:absolute;top:14px;right:16px;z-index:5;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid rgba(120,255,150,.45);border-radius:50%;cursor:pointer;font-size:18px;line-height:1;color:#fff;background:radial-gradient(circle at 35% 30%,#1ec64e,#0c7a30 70%,#053a16);box-shadow:0 3px 14px rgba(30,198,78,.40),inset 0 1px 0 rgba(255,255,255,.20);">▶️</button>
+<!-- Botón ▶️ ACTUALIZAR ESTADÍSTICAS ELIMINADO (petición usuario
+     2026-06-29, fotos «Trofeo Joan Gamper · Estadísticas» a 0): la caja
+     MERGEA AUTOMÁTICAMENTE los eventos de cada acta en cada apertura
+     (`_tourStatsPaint` → hidratar plantillas + `_tourBackfillActasFromResults`
+     forzado + recolectar). Ya no hace falta un botón manual con PIN. -->
 <div class="liga-stats-wrap" id="tour-stats-dashboard"><div class="liga-stat-empty">Sin datos todavía — juega o simula partidos para ver estadísticas.</div></div>
 <style>
   /* Título de la pantalla de estadísticas de torneo en UNA sola línea
@@ -27144,7 +27138,20 @@ window._showSimProgress = function(opts, onDone){
 
   /* Recolecta los stats del torneo `tid` y re-pinta el dashboard. Es el
      paso de render compartido por `_tourStatsOpen` (al abrir) y por
-     `_tourStatsForceRefresh` (▶️ botón admin). */
+     `_tourStatsForceRefresh` (alias legacy).
+
+     MERGE AUTOMÁTICO (petición usuario 2026-06-29, fotos «Trofeo Joan
+     Gamper · Estadísticas» a 0): la caja YA NO depende del botón ▶️
+     manual (PIN 747). En CADA apertura ejecuta sola el pipeline completo
+     —hidratar plantillas → regenerar/MERGEAR el acta (events) de cada
+     partido jugado desde su marcador + home/away → recolectar— igual que
+     hacía el botón. Como `_tourBackfillActasFromResults` RESPETA las
+     actas que ya traen nombres reales (no las pisa) y solo rellena las
+     que faltan o son placeholder, esto es SEGURO y aditivo: no borra los
+     goleadores reales que el humano jugó, solo completa los partidos
+     solo-marcador (IA-vs-IA simulados antes de cargar el motor de actas,
+     o copias del servidor sin events). El cómputo va DIFERIDO desde
+     `_tourStatsOpen` (render no bloqueante), así que no congela la web. */
   function _tourStatsPaint(tid){
     var dEl = document.getElementById('tour-stats-dashboard');
     if (!dEl) return;
@@ -27166,8 +27173,29 @@ window._showSimProgress = function(opts, onDone){
         }
       }
     } catch(_){}
+    /* MERGE AUTOMÁTICO de las actas ANTES de recolectar (lo que antes
+       hacía el botón ▶️, ahora en cada apertura, sin PIN). */
+    try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+    try {
+      var _cfgM = (window._TOUR_CACHE && window._TOUR_CACHE[tid]) || null;
+      if (!_cfgM && typeof _tourLoadCachedSync === 'function') { try { _cfgM = _tourLoadCachedSync(tid); } catch(_){} }
+      if (_cfgM && typeof _tourBackfillActasFromResults === 'function') {
+        _tourBackfillActasFromResults(_cfgM, _cfgM.teams || [], true);
+      }
+    } catch(_){}
     var stats = null;
     try { stats = _tourCollectStatsForTour(tid); } catch(_){}
+    /* ÚLTIMO RECURSO si la lectura directa de las actas (`cfg.results`)
+       vino vacía: reconstruir los stores persistidos
+       (`ef_player_stats_torneos_v1` / `_sel_v1`, que lee el paso 6 del
+       recolector) y reintentar. Tras un cambio de móvil / borrado de
+       datos el store está vacío; rebuildPlayerStatsStore lo repuebla
+       desde los eventos. Es O(partidos × comps) → SOLO se ejecuta cuando
+       hace falta (no en el caso común, donde las actas ya resolvieron). */
+    if (!(stats && Object.keys(stats).length)) {
+      try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
+      try { stats = _tourCollectStatsForTour(tid); } catch(_){}
+    }
     var _hasData = stats && Object.keys(stats).length > 0;
     var inner = '';
     if (_hasData) {
@@ -27180,57 +27208,16 @@ window._showSimProgress = function(opts, onDone){
     dEl.innerHTML = inner || _tourStatsEmptyCardsHtml();
   }
 
-  /* ▶️ ACTUALIZAR ESTADÍSTICAS (admin · PIN 747) — petición usuario
-     2026-06-08 ("no se actualizan las estadísticas de los jugadores ·
-     crea un botón ▶️ pin 747 que actualice y automatice todas las
-     estadísticas y sean visibles en la caja").
-
-     Fuerza el pipeline COMPLETO de reconstrucción para el torneo que se
-     está viendo en `s-tour-stats`:
-       1. `_selSquadHydrate` → nombres reales (no «Jugador A/B»).
-       2. `_tourBackfillActasFromResults(cfg, teams, true)` → regenera el
-          acta (events) de los partidos que solo guardaron el marcador,
-          incluso forzando placeholders.
-       3. `syncLigaEaPlayerStats` (= rebuildPlayerStatsStore) → reconstruye
-          TODOS los stores persistidos desde los eventos.
-       4. `_tourStatsPaint` → recolecta (`_tourCollectStatsForTour`) y
-          re-pinta la caja.
-     Gateado por PIN 747 (`requireAdmin`). NO bloquea: muestra
-     «Actualizando…» y difiere el trabajo pesado un tick. */
-  function _tourStatsToast(msg, ok){
-    try { if (typeof window._psFlashToast === 'function') { window._psFlashToast(msg, ok !== false); return; } } catch(_){}
-    try { alert(msg); } catch(_){}
-  }
+  /* ALIAS legacy `_tourStatsForceRefresh` (el botón ▶️ se eliminó el
+     2026-06-29 — la caja ahora MERGEA SOLA en cada apertura vía
+     `_tourStatsPaint`). Se conserva como no-op seguro por si algún
+     código viejo / cacheado aún lo invoca: re-dispara el merge
+     automático SIN PIN ni toast. */
   window._tourStatsForceRefresh = function(){
     var a = window._tourStatsActive || {};
     var tid = a.tourId;
-    if (!tid) {
-      _tourStatsToast('Abre primero la caja Estadísticas de un torneo', false);
-      return;
-    }
-    var run = function(){
-      var dEl = document.getElementById('tour-stats-dashboard');
-      if (dEl) dEl.innerHTML = '<div class="liga-stat-empty">⏳ Actualizando estadísticas…</div>';
-      /* Diferimos el cómputo pesado para que el «Actualizando…» se pinte
-         antes (regla render no bloqueante 2026-05-28). */
-      setTimeout(function(){
-        /* Re-validar el torneo activo por si el usuario navegó fuera. */
-        if (!window._tourStatsActive || window._tourStatsActive.tourId !== tid) return;
-        try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
-        try {
-          var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tid]) || null;
-          if (!cfg && typeof _tourLoadCachedSync === 'function') { try { cfg = _tourLoadCachedSync(tid); } catch(_){} }
-          if (cfg && typeof _tourBackfillActasFromResults === 'function') {
-            _tourBackfillActasFromResults(cfg, cfg.teams || [], true);
-          }
-        } catch(_){}
-        try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
-        _tourStatsPaint(tid);
-        _tourStatsToast('✅ Estadísticas actualizadas', true);
-      }, 30);
-    };
-    if (typeof window.requireAdmin === 'function') window.requireAdmin(run);
-    else run();
+    if (!tid) return;
+    setTimeout(function(){ try { _tourStatsPaint(tid); } catch(_){} }, 0);
   };
 
   /* HTML de las 8 cajas vacías (mismas categorías que `_lextStatsDashHtml`)

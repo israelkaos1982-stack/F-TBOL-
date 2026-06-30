@@ -59590,6 +59590,53 @@ https://api.sofascore.app/api/v1/team/44/image
       try { render(); } catch(_){}
     });
   } catch(_){}
+
+  /* ── AUTO-CURADO de la vitrina (self-heal), 2026-06-30 ─────────────
+     Bug (fotos usuario «Arsenal-Brasil-Álvaro»): el PC tenía la vitrina
+     llena pero el MÓVIL la veía VACÍA. La vitrina por hub
+     (`bayern_trofeos_v1_<id>`) solo se hidrataba al abrir la caja / en
+     `hubchange`, y solo se re-empujaba dentro de ese mismo GET. Si el GET
+     del móvil cayó en una ventana en la que el server estaba VACÍO (BD
+     efímera reseteada, o el PC aún no había curado), el móvil se quedaba a
+     0 hasta reabrir la caja. El HUD y los derbys ya tienen re-push
+     periódico + re-pull al volver el foco; la vitrina NO lo tenía.
+
+     Solución (espejo del HUD): cualquier dispositivo que CONSERVE una
+     vitrina real (no vacía, no solo defaults) la RE-EMPUJA periódicamente
+     y al volver el foco para mantener el server poblado (cura la BD
+     efímera). Y al volver el foco se RE-HIDRATA, así el móvil que estaba a
+     0 ADOPTA la vitrina en cuanto el server tiene datos — sin reabrir la
+     caja. Es ADITIVO y respeta el EMPTY-GUARD: NUNCA empuja una lista
+     vacía no-autoritativa (solo el admin con PIN puede vaciarla). */
+  function _trofRepushSelfHeal(){
+    try {
+      var localArr = load();
+      if (localArr.length > 0 && !_trofIsJustDefaults(localArr)){
+        /* Re-empuje NO-autoritativo conservando el sello local (no es una
+           edición nueva): el server toma el `max` por recencia y el
+           empty-guard ya protege; nunca pisa una edición más nueva. */
+        _saveTrofServer(localArr, _trofLocalTs() || Date.now(), false);
+      }
+    } catch(_){}
+  }
+  function _trofOnFocusConverge(){
+    /* Re-hidrata (móvil a 0 adopta la vitrina del server) y, dentro del
+       mismo flujo, `_hydrateTrofFromServer` re-empuja el local si manda
+       (PC cura el server). Cubre el caso «3 días sin entrar / cambio de
+       móvil» igual que el HUD. */
+    try { _hydrateTrofFromServer(function(){ render(); }); } catch(_){}
+  }
+  try {
+    window.addEventListener('focus', _trofOnFocusConverge);
+    window.addEventListener('pageshow', _trofOnFocusConverge);
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState === 'visible') _trofOnFocusConverge();
+    });
+    /* Re-push periódico self-heal (ligero: solo POST, sin GET ni render)
+       para mantener el server poblado tras un reset de BD efímera. */
+    setInterval(_trofRepushSelfHeal, 45000);
+  } catch(_){}
+
   if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', _wire);
   } else {

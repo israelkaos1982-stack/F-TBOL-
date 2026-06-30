@@ -39915,6 +39915,19 @@ window._showSimProgress = function(opts, onDone){
     function _onDone(){
       window._restoSimBulkInProgress = false;
       try { window._lastSkippedLeagues = skippedSlugs; } catch(_){}
+      /* CURADO PROACTIVO (2026-06-30): tras la sim masiva, confirmamos que
+         la clasificación de CADA liga simulada quedó subida al servidor.
+         Con localStorage lleno (banner «Navegador sin espacio») los POSTs
+         async de la ráfaga pueden perderse (Railway frío + thundering
+         herd) y nada re-empujaba la copia durable (IndexedDB) → el móvil
+         las veía a 0. La reconciliación secuencial+pausada cura el server
+         desde la copia durable, sin depender de localStorage. Diferida
+         unos segundos para dejar asentar los POSTs async en vuelo. */
+      try {
+        setTimeout(function(){
+          try { window._lextReconcileResultsToServer && window._lextReconcileResultsToServer({ force:true }); } catch(_){}
+        }, 4000);
+      } catch(_){}
       try {
         if (skippedSlugs.length) {
           console.log('[restoLigas] ligas saltadas (' + skippedSlugs.length + '):');
@@ -40276,18 +40289,30 @@ window._showSimProgress = function(opts, onDone){
     var localRecovered = 0;
     var toFetch = slugs.filter(function(slug){
       if(slug === 'liga-ea-sports') return false; // blacklist europeo: manual
-      var ok = false;
+      var d = null;
       try {
         var raw = localStorage.getItem('ligaExt_' + slug);
-        var d = raw ? JSON.parse(raw) : null;
-        ok = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
-      } catch(_){ ok = false; }
-      if(ok) return false;                       // main ya válido
-      if(_eurRecoverMainFromDurable(slug) >= 2){  // restaurado del durable local
-        localRecovered++;
-        return false;
+        d = raw ? JSON.parse(raw) : null;
+      } catch(_){ d = null; }
+      var hasTeams = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
+      if(!hasTeams){
+        if(_eurRecoverMainFromDurable(slug) >= 2){  // restaurado del durable local
+          localRecovered++;
+          try { d = JSON.parse(localStorage.getItem('ligaExt_' + slug) || 'null'); } catch(_){ d = null; }
+        } else {
+          return true;                              // sin equipos → al server (plantilla)
+        }
       }
-      return true;                                // sigue faltando → al server
+      /* La liga tiene equipos pero la CLASIFICACIÓN está VACÍA en este
+         dispositivo (móvil que nunca abrió la liga, eviction de Android,
+         re-seed): el reparto europeo / Wild Card se calcula desde
+         `results`, así que sin ellos el pool sale corto (síntoma usuario
+         «Wild Card 16/72»). El servidor SÍ tiene la sim (la cura el PC vía
+         `_lextReconcileResultsToServer`); la traemos para que el recálculo
+         use la clasificación real. 2026-06-30. */
+      var resEmpty = !(d && Array.isArray(d.results) && d.results.length);
+      if(resEmpty) return true;                     // tiene equipos, faltan results → al server
+      return false;                                  // equipos + clasificación ya presentes
     });
     if(!toFetch.length){ done(localRecovered, localRecovered); return; }
     var pending = toFetch.length, recovered = localRecovered, finished = false;
@@ -40302,18 +40327,38 @@ window._showSimProgress = function(opts, onDone){
           try {
             var data = j && j.data;
             if(data && Array.isArray(data.teams) && data.teams.length >= 2){
-              /* No pisar si por carrera ya hay copia local igual o más
-                 rica (otro flujo la cargó mientras tanto). */
+              /* No pisar la PLANTILLA si por carrera ya hay copia local
+                 igual o más rica (otro flujo la cargó mientras tanto). */
               var keep = false;
+              var ld = null;
               try {
                 var lr = localStorage.getItem(key);
-                if(lr){ var ld = JSON.parse(lr);
+                if(lr){ ld = JSON.parse(lr);
                   if(ld && Array.isArray(ld.teams) && ld.teams.length >= data.teams.length) keep = true; }
               } catch(_){}
               if(!keep){
                 data.results = data.results || [];
                 localStorage.setItem(key, JSON.stringify(data));
                 try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+              } else {
+                /* Conservamos la plantilla local (más rica) PERO traemos la
+                   CLASIFICACIÓN del servidor si la local está vacía y la
+                   del servidor SÍ existe (arbitraje por `resultsStamp` +
+                   empty-guard, igual que `fetchData`). Sin esto el reparto
+                   europeo seguía corto aunque el servidor ya tuviera la sim
+                   (Wild Card 16/72 en el móvil). 2026-06-30. */
+                try {
+                  var _lEmpty = !(ld && Array.isArray(ld.results) && ld.results.length);
+                  var _sHas   = Array.isArray(data.results) && data.results.length;
+                  var _lStamp = (ld && Number(ld.resultsStamp)) || 0;
+                  var _sStamp = (data && Number(data.resultsStamp)) || 0;
+                  if(ld && _sHas && (_lEmpty ? (_sStamp >= _lStamp) : (_sStamp > _lStamp))){
+                    ld.results = data.results.slice();
+                    if(_sStamp) ld.resultsStamp = _sStamp;
+                    localStorage.setItem(key, JSON.stringify(ld));
+                    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+                  }
+                } catch(_){}
               }
               recovered++;
             }
@@ -44670,6 +44715,186 @@ https://api.sofascore.app/api/v1/team/44/image
     }catch(_){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); }
   }
 
+  /* ══════════════════════════════════════════════════════════════════
+     RECONCILIACIÓN DURABLE → SERVIDOR (CURADO PROACTIVO, 2026-06-30)
+     ════════════════════════════════════════════════════════════════
+
+     Bug usuario (RECURRENTE, fotos «Resto Mundo / N.Irlanda / Montenegro
+     / Albania simuladas en PC, a 0 en el móvil» + banner «Navegador sin
+     espacio»): el PC simula las ligas (la clasificación se ve en el PC),
+     pero al abrir la web en el MÓVIL salen a 0 y el pool de Wild Card sale
+     16/72. Causa raíz combinada con el `QuotaExceededError`:
+
+       · Cuando localStorage está LLENO, las redes de seguridad basadas en
+         localStorage quedan inutilizadas: el set `liga_ext_pending_v1`
+         (re-push en boot) no se puede escribir, los snapshots tampoco, y
+         el XHR síncrono de `saveData` se SALTA en la sim masiva (gate
+         anti-freeze de las 54 ligas).
+       · El ÚNICO camino al servidor durante la sim masiva es la ráfaga de
+         POSTs async (x5 reintentos). Con Railway frío + thundering herd
+         (54 ligas a la vez) muchos agotan los reintentos y se PIERDEN.
+       · El espejo IndexedDB (`_idbKV`) SÍ guarda la liga (alta cuota), y
+         el hidratador IDB→LIGA_CACHE repuebla la memoria al arrancar —
+         por eso el PC SIGUE mostrando los 380 partidos tras recargar.
+       · PERO NADA re-empujaba la copia durable (IDB/memoria) al servidor:
+         el servidor se quedaba VACÍO para siempre → el móvil (que lee
+         bien del servidor) sacaba 0, y el reparto europeo / Wild Card
+         salían cortos.
+
+     Fix: un curado PROACTIVO e INDEPENDIENTE de la cuota. Para cada liga
+     con clasificación durable LOCAL (LIGA_CACHE / localStorage main /
+     `_protected` / IndexedDB), comprueba el servidor y, si está VACÍO o
+     ATRASADO, RE-EMPUJA la copia local — confirmando (reintentos). El
+     arbitraje es el MISMO `resultsStamp` + EMPTY-GUARD que usan cliente y
+     servidor: `localResults > 0 && localStamp >= srvStamp && localResults
+     > srvResults`. Así:
+       · cura un servidor vacío (nunca recibió la sim) o atrasado;
+       · NUNCA resucita un RESET legítimo de otro dispositivo (el reset
+         sella `resultsStamp` fresco → `localStamp < srvStamp` → no empuja);
+       · NUNCA pisa una sim más nueva de otro dispositivo (mismo guard).
+     Secuencial + pausado (evita el thundering herd que rompía la subida
+     original). NO escribe localStorage (inmune a la cuota llena). En un
+     dispositivo SIN clasificación local (móvil recién abierto) es no-op:
+     cada liga se SALTA (localResults===0) → el móvil sigue haciendo PULL
+     vía `fetchData`. Es, por construcción, un curado PC→servidor. */
+  function _lextStampOf(d){
+    try { return (d && Number(d.resultsStamp)) || 0; } catch(_){ return 0; }
+  }
+  function _lextResLen(d){
+    return (d && Array.isArray(d.results)) ? d.results.length : 0;
+  }
+  /* Mejor copia LOCAL (la de clasificación más reciente/rica) para un
+     slug, mirando LIGA_CACHE → localStorage main → `_protected` → IDB.
+     Devuelve una Promise (IDB es async). */
+  function _lextBestLocalForReconcile(slug){
+    var best = null;
+    function consider(d){
+      if (!d || !Array.isArray(d.teams) || !d.teams.length) return;
+      if (!best) { best = d; return; }
+      var rl = _lextResLen(d),   st = _lextStampOf(d);
+      var brl = _lextResLen(best), bst = _lextStampOf(best);
+      if (st > bst || (st === bst && rl > brl)) best = d;
+    }
+    try { consider(LIGA_CACHE[slug]); } catch(_){}
+    try { var lr = localStorage.getItem(storeKey(slug)); if (lr) consider(JSON.parse(lr)); } catch(_){}
+    try { var pr = localStorage.getItem(storeKey(slug)+'_protected'); if (pr) consider(JSON.parse(pr)); } catch(_){}
+    if (window._idbKV && typeof window._idbKV.get === 'function') {
+      return window._idbKV.get(storeKey(slug)).then(function(val){
+        try { if (val) consider((typeof val === 'string') ? JSON.parse(val) : val); } catch(_){}
+        return best;
+      }).catch(function(){ return best; });
+    }
+    return Promise.resolve(best);
+  }
+  function _lextConfirmPush(slug, data, tries, cb){
+    var attempt = 0;
+    function go(){
+      attempt++;
+      try {
+        fetch('/api/liga-ext/'+encodeURIComponent(slug), {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          credentials:'same-origin', body:JSON.stringify({data:data})
+        }).then(function(r){ return (r && r.ok) ? r.json() : null; })
+          .then(function(j){
+            if (j){
+              try { if (j.updated_at) LIGA_UPDATED[slug] = j.updated_at; } catch(_){}
+              try { console.warn('[ligaExt] reconcile → servidor curado: '+slug+' ('+_lextResLen(data)+' resultados subidos desde copia durable).'); } catch(_){}
+              cb && cb(true);
+            } else if (attempt < tries) { setTimeout(go, 600*attempt); }
+            else cb && cb(false);
+          })
+          .catch(function(){ if (attempt < tries) setTimeout(go, 600*attempt); else cb && cb(false); });
+      } catch(_){ cb && cb(false); }
+    }
+    go();
+  }
+  var _lextReconcileInFlight = false;
+  var _lextReconcileLastAt = 0;
+  window._lextReconcileResultsToServer = function(opts){
+    opts = opts || {};
+    /* No competir con una sim en curso (saveData ya está empujando) ni
+       solaparse consigo mismo; throttle de 20 s salvo `force`. */
+    if (_lextReconcileInFlight) return;
+    if ((window._restoSimBulkInProgress || window._ligaExtSimInProgress) && !opts.force) return;
+    var nowT = Date.now();
+    if (!opts.force && (nowT - _lextReconcileLastAt) < 20000) return;
+    _lextReconcileInFlight = true;
+    _lextReconcileLastAt = nowT;
+    function _fin(){ _lextReconcileInFlight = false; }
+    /* Reúne slugs candidatos de LIGA_CACHE + localStorage main + IDB. */
+    var slugs = {};
+    try { Object.keys(LIGA_CACHE || {}).forEach(function(s){ if (s) slugs[s] = 1; }); } catch(_){}
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var kk = localStorage.key(i);
+        if (kk && kk.indexOf('ligaExt_') === 0 && !/_(protected|backup|snap_\d+)$/.test(kk)) {
+          slugs[kk.slice('ligaExt_'.length)] = 1;
+        }
+      }
+    } catch(_){}
+    function _idbKeysP(){
+      if (window._idbKV && typeof window._idbKV.keys === 'function') {
+        return window._idbKV.keys().catch(function(){ return []; });
+      }
+      return Promise.resolve([]);
+    }
+    _idbKeysP().then(function(ik){
+      try {
+        (ik || []).forEach(function(kk){
+          if (typeof kk === 'string' && kk.indexOf('ligaExt_') === 0 && !/_(protected|backup|snap_\d+)$/.test(kk)) {
+            slugs[kk.slice('ligaExt_'.length)] = 1;
+          }
+        });
+      } catch(_){}
+      var list = Object.keys(slugs);
+      var idx = 0, healed = 0;
+      function step(){
+        if (idx >= list.length) { _fin(); if (opts.cb) try { opts.cb(healed); } catch(_){} return; }
+        var slug = list[idx++];
+        _lextBestLocalForReconcile(slug).then(function(local){
+          var localResults = _lextResLen(local);
+          if (!local || localResults === 0) { setTimeout(step, 0); return; }  /* nada que curar */
+          var localStamp = _lextStampOf(local);
+          fetch('/api/liga-ext/'+encodeURIComponent(slug), { credentials:'same-origin' })
+            .then(function(r){ return (r && r.ok) ? r.json() : null; })
+            .then(function(j){
+              var sd = j && j.data;
+              var srvResults = _lextResLen(sd);
+              var srvStamp = _lextStampOf(sd);
+              /* Espejo del empty-guard server/cliente: subimos SOLO si la
+                 copia local es NO-vacía, no es más vieja que el servidor
+                 (respeta un reset/sim más reciente de otro dispositivo) y
+                 aporta MÁS clasificación de la que el servidor tiene. */
+              var needPush = localResults > 0 && localStamp >= srvStamp && localResults > srvResults;
+              if (!needPush) { setTimeout(step, 90); return; }
+              _lextConfirmPush(slug, local, 3, function(ok){
+                if (ok) healed++;
+                setTimeout(step, 160);
+              });
+            })
+            .catch(function(){ setTimeout(step, 160); });
+        }).catch(function(){ setTimeout(step, 0); });
+      }
+      step();
+    }).catch(function(){ _fin(); });
+  };
+  /* Disparos del curado: al arrancar (diferido, tras la hidratación IDB +
+     los primeros fetch), al volver el foco / mostrarse la pestaña (caso
+     «vuelvo tras estar fuera»). El curado es barato si no hay nada que
+     subir (cada liga sin clasificación local se salta). */
+  try {
+    setTimeout(function(){ try { window._lextReconcileResultsToServer(); } catch(_){} }, 9000);
+    var _lextReconcileOnWake = function(){
+      try {
+        if (document.visibilityState && document.visibilityState !== 'visible') return;
+        window._lextReconcileResultsToServer();
+      } catch(_){}
+    };
+    window.addEventListener('pageshow', _lextReconcileOnWake);
+    window.addEventListener('focus', _lextReconcileOnWake);
+    document.addEventListener('visibilitychange', _lextReconcileOnWake);
+  } catch(_){}
+
   function avg(arr){
     if(!arr.length) return 0;
     return Math.round(arr.reduce(function(a,b){return a+b;},0)/arr.length);
@@ -45535,6 +45760,18 @@ https://api.sofascore.app/api/v1/team/44/image
           if(!window._bgSimsActive) window._ligaExtSimInProgress = false;
         }
         try { delete window._ligaExtSimSlugs[slug]; } catch(_){}
+        /* CURADO PROACTIVO (2026-06-30): tras una sim individual, si el
+           localStorage está lleno el POST async de `saveData` puede
+           perderse y nada re-empujaría la copia durable (IndexedDB) → el
+           móvil vería la liga a 0. Programamos una reconciliación (NO
+           force: respeta otras sims concurrentes y se auto-throttlea) que
+           cura el servidor desde la copia durable cuando todas las sims
+           hayan terminado. */
+        try {
+          setTimeout(function(){
+            try { window._lextReconcileResultsToServer && window._lextReconcileResultsToServer(); } catch(_){}
+          }, 5000);
+        } catch(_){}
         resolve();
       }
       /* Yield al event loop entre chunks (2026-05-27).

@@ -1766,6 +1766,62 @@ siempre.
 4. Toda liga SEMBRADA nueva (`_EXTRA_LEAGUE_SEEDS`) hereda esto
    automáticamente; no hardcodear slugs en la recuperación.
 
+### La clasificación durable se CURA en el SERVIDOR (PC→server), no solo en local (obligatorio, 2026-06-30)
+
+**Bug (fotos usuario «Resto Mundo / N.Irlanda / Montenegro / Albania
+simuladas en el PC, a 0 en el MÓVIL» + banner «Navegador sin espacio»)**:
+el PC simula las ligas (clasificación visible, 380 partidos) pero al abrir
+la web en el MÓVIL salen a 0 y el pool de Wild Card sale **16/72**. La
+recuperación 2026-06-28 cura el LOCAL (`_protected`/snaps) pero un móvil
+NUEVO no tiene copias durables locales — depende del SERVIDOR, y el
+servidor estaba VACÍO.
+
+**Causa raíz (combinada con `QuotaExceededError`)**: con localStorage
+LLENO, las redes de seguridad basadas en localStorage quedan inutilizadas
+(el set `liga_ext_pending_v1` de re-push en boot no se puede escribir, los
+snapshots tampoco, y el XHR síncrono de `saveData` se SALTA en la sim
+masiva por el gate anti-freeze). El ÚNICO camino al servidor durante la
+sim es la ráfaga de POSTs async (x5) que, con Railway frío + thundering
+herd (54 ligas a la vez), agota reintentos y se PIERDE. El espejo
+IndexedDB (`_idbKV`) SÍ guarda la liga (por eso el PC la sigue mostrando
+tras recargar), pero **NADA re-empujaba esa copia durable al servidor** →
+el servidor se quedaba vacío para siempre → el móvil (que lee bien del
+servidor vía `fetchData`) sacaba 0.
+
+**Fix** (`misc_body_1.html`):
+- **`window._lextReconcileResultsToServer(opts)`** (junto a `fetchData`):
+  curado PROACTIVO e INDEPENDIENTE de la cuota. Para cada liga con
+  clasificación durable LOCAL (LIGA_CACHE / localStorage main /
+  `_protected` / IndexedDB vía `_lextBestLocalForReconcile`), GET del
+  servidor y, si está VACÍO o ATRASADO, RE-EMPUJA la copia local
+  confirmando (3 reintentos). Arbitraje = el MISMO `resultsStamp` +
+  EMPTY-GUARD: sube SOLO si `localResults>0 && localStamp>=srvStamp &&
+  localResults>srvResults`. Secuencial+pausado (mata el thundering herd
+  que rompía la subida original). NO escribe localStorage (inmune a la
+  cuota). Disparos: boot (diferido 9 s), `pageshow`/`focus`/`visibility`,
+  fin de sim masiva (`_onDone`, force) y fin de sim individual
+  (`_finishSim`).
+- **`_eurHydrateMissingLeagues`** (botón «♻️ Re-cuadrar reparto europeo»):
+  ahora también trae del servidor la CLASIFICACIÓN de las ligas que
+  localmente tienen equipos pero `results` VACÍO (antes solo traía las que
+  faltaban plantilla). Sin esto, recalcular el reparto en el móvil seguía
+  saliendo corto (Wild Card 16/72) aunque el servidor ya estuviera curado.
+
+**Reglas a respetar**:
+5. **PROHIBIDO** confiar SOLO en la ráfaga de POSTs async de `saveData`
+   para subir la sim: con localStorage lleno se pierde y nada la recupera.
+   `_lextReconcileResultsToServer` es la red que cura el servidor desde la
+   copia durable (IndexedDB/`_protected`/memoria), y DEBE seguir
+   disparándose en boot + foco + fin de sim.
+6. **PROHIBIDO** que la reconciliación pise un RESET o una sim más nueva de
+   otro dispositivo: el guard `localStamp>=srvStamp && localResults>srvResults`
+   (espejo del empty-guard server/cliente) lo impide. No relajarlo a
+   last-write o a comparar solo por longitud sin el sello.
+7. **PROHIBIDO** que el recálculo del reparto europeo (Wild Card / pools)
+   compute sobre ligas con `results` vacío sin intentar traerlos del
+   servidor primero (`_eurHydrateMissingLeagues` incluye ahora las ligas
+   con equipos pero sin clasificación).
+
 ## Plantilla de selecciones — sync que NO pierde datos + sin «Pacífico» (obligatorio, 2026-06-02)
 
 **Bug (foto usuario 2026-06-02)**: en «🌐 Plantilla de selecciones»

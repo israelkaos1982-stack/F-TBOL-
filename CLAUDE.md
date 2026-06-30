@@ -2056,6 +2056,46 @@ skeleton primero, cómputo en `setTimeout`).
    vacía — no en el camino común. No moverlo a incondicional (congelaría
    la apertura en torneos grandes).
 
+### El backfill RE-HIDRATA el roster GENÉRICO numerado, no solo «Jugador A/B» (obligatorio, 2026-06-30)
+
+**Bug (4 fotos usuario, «Trofeo Joan Gamper» liga 63 equipos)**: la caja
+de Estadísticas mostraba a los equipos IA con nombres del roster genérico
+(«Jugador 22 · ANTWERP», «Portero B · ARIS», «Jugador 10 · MACCABI»,
+«Jugador 1 · GENK»…) en Goleadores / Portería imbatida / Tarjetas, aunque
+esos equipos YA tenían su plantilla REAL. Los equipos cuya plantilla se
+pegó antes de simular sí salían reales (Göztepe→Mateusz Lis,
+Torino→Vlasic, Liverpool→Salah).
+
+**Causa raíz**: el acta IA-vs-IA se persistió con el roster genérico de
+`_lextBuildDefaultRoster` («Jugador 1..30» — dorsal NUMÉRICO) porque se
+simuló ANTES de que el equipo tuviera plantilla real. El auto-backfill
+(`_tourBackfillActasFromResults`, que `_tourStatsPaint` ejecuta con
+`force` en cada apertura) DEBERÍA regenerar el acta vía
+`genMatchEventsEnhanced` (resuelve la plantilla REAL desde `ligaExt_*`),
+pero su detector `_bfIsRealName` usaba la regex `(?:jugador|portero)\s*[a-k]?$`
+que SOLO reconocía las LETRAS A–K como placeholder — los números 1..30 del
+roster por defecto se daban por «nombre real» → el acta nunca se
+re-hidrataba.
+
+**Fix** (`misc_body_1.html`, `_tourBackfillActasFromResults`):
+- `_bfIsRealName` amplía la regex a `(?:[a-k]|ia|\d+)?$` → detecta TAMBIÉN
+  «Jugador N» / «Portero N» (roster genérico) y «Jugador IA» como
+  placeholder, sin marcar como placeholder ningún nombre real.
+- El guard AUTO-HEAL deja de depender de `force`: un placeholder solo se
+  pisa cuando la regeneración produce nombres REALES (`_bfActaHasReal`).
+  Así un equipo que de verdad solo tiene el roster genérico NO churnea el
+  acta/server (regeneraría otro placeholder); en cuanto la plantilla real
+  está disponible, el acta se re-hidrata sola en la siguiente apertura.
+
+**Reglas a respetar**:
+8. **PROHIBIDO** que el detector de placeholder del backfill vuelva a
+   reconocer SOLO las letras A–K: debe cubrir el roster genérico numerado
+   («Jugador N» / «Portero N» de `_lextBuildDefaultRoster`) o las actas
+   simuladas antes de tener plantilla real jamás se re-hidratan.
+9. **PROHIBIDO** pisar un acta-placeholder con OTRO placeholder (ni
+   siquiera en `force`): solo se re-hidrata si la regeneración da nombres
+   REALES. Las actas VACÍAS (solo-marcador) sí se rellenan siempre.
+
 ## Mundial 2032 + cajas de stats que computan EN VIVO desde cfg.results (obligatorio, 2026-05-28)
 
 **Bug (foto usuario 2026-05-28)**: el Mundial 2032 (Selecciones,

@@ -10460,61 +10460,83 @@ window._showSimProgress = function(opts, onDone){
         return; /* Retry en el próximo _bootStage / hubchange. */
       }
 
-      /* Marcar como ya procesado ANTES de la corrección para evitar loops. */
+      /* Marcar como ya procesado ANTES de actuar para evitar loops. */
       window[_gk] = true;
 
-      /* Busca el primer partido ag-sel antes del cursor que no haya sido
-         jugado por la selección de esta caja. Cubre tanto jornadas de grupo
-         (Mundial J1-J3) como rondas KO y Road (Rondas Previas/Finales). */
-      var targetIdx = -1;
+      /* ── CAMBIO 2026-06-30 (petición usuario «error letal»): el cursor
+         NUNCA RETROCEDE. ──────────────────────────────────────────────
+         Antes, este self-heal arrastraba el cursor ATRÁS al primer
+         partido de SELECCIÓN sin jugar que hubiera quedado por detrás
+         (típico: Mundial Grupo J1 · 03 May). Eso es justo lo que el
+         usuario reporta: una caja que ya está en, p.ej., 17 Jun, al
+         reabrir la web VOLVÍA al 03 May — un partido de selección
+         pendiente porque otra caja humana aún no jugó su eliminatoria.
+         El usuario los POSPONE a propósito (caja POSPUESTOS) y continúa
+         con su club; arrastrar el cursor atrás le obligaba a re-simular,
+         re-entrenar y rezar por no lesionar jugadores en fechas ya
+         cumplidas.
+
+         Nuevo comportamiento: por cada partido de SELECCIÓN sin jugar y
+         NO pospuesto que haya quedado por detrás del cursor, lo
+         AÑADIMOS a POSPUESTOS (no se pierde: sale en su caja con su 📌)
+         y DEJAMOS EL CURSOR DONDE ESTÁ. La fecha de la caja es siempre
+         la última a la que el humano avanzó. */
+      function _healIsDeferred(_tid, _mk){
+        try {
+          var _uid = _pendHvHUid(_tid, _mk);
+          var _act = (typeof _pendHvHActive === 'function') ? (_pendHvHActive() || []) : [];
+          for (var _di = 0; _di < _act.length; _di++){
+            if (_act[_di] && _act[_di].uid === _uid) return true;
+          }
+        } catch(_){}
+        return false;
+      }
+      var _addedAny = false;
       for (var _si = 0; _si < Math.min(curIdx, rows.length); _si++){
         var _srow = rows[_si];
         if (!_srow || !/\bag-sel\b/.test(_srow.cls || '')) continue;
-
-        var _played = false;
         try {
           var _pair = _selPair(_srow);
-          if (!_pair) continue; /* No es un partido para la selección de esta caja. */
-          if (_pair.eliminated) break; /* Selección ya eliminada — no hay más pendiente. */
-          if (_pair.pending){
-            continue; /* RIVAL PENDIENTE — bracket no construido, no bloquea el cursor. */
-          } else if (_pair.matchKey){
-            /* Verificar en el cfg ESPECÍFICO del torneo (pair.tourId).
-               Si el cfg no está en memoria ni en localStorage, se SALTA
-               la fila — no se asume "no jugado" para no retroceder el
-               cursor cuando el cfg aún no ha cargado. */
-            var _chkTour = _pair.tourId || null;
-            if (_chkTour){
-              var _chkCfg = (window._TOUR_CACHE || {})[_chkTour];
-              if (!_chkCfg && typeof window._tourLoadCachedSync === 'function'){
-                try { _chkCfg = window._tourLoadCachedSync(_chkTour); } catch(_){}
-              }
-              if (!_chkCfg){ continue; } /* cfg no disponible → no retroceder */
-              if (((_chkCfg.results || {})[_pair.matchKey] || {}).played) _played = true;
-            } else {
-              /* Fallback legacy sin tourId: iterar todos los cfgs cargados. */
-              for (var _tc = 0; _tc < _cacheKeys.length; _tc++){
-                var _tcfg = window._TOUR_CACHE[_cacheKeys[_tc]] || {};
-                if (((_tcfg.results || {})[_pair.matchKey] || {}).played){
-                  _played = true; break;
-                }
-              }
-            }
+          if (!_pair) continue;                /* no es partido de la selección de esta caja */
+          if (_pair.eliminated) break;         /* selección eliminada — no hay más pendiente */
+          if (_pair.pending) continue;         /* RIVAL PENDIENTE — ya vive en POSPUESTOS vía _realPair */
+          if (!_pair.matchKey || !_pair.home || !_pair.away) continue;
+          var _chkTour = _pair.tourId || null;
+          if (!_chkTour) continue;
+          var _chkCfg = (window._TOUR_CACHE || {})[_chkTour];
+          if (!_chkCfg && typeof window._tourLoadCachedSync === 'function'){
+            try { _chkCfg = window._tourLoadCachedSync(_chkTour); } catch(_){}
           }
+          if (!_chkCfg) continue;              /* cfg no disponible → no tocar */
+          var _resAll = _chkCfg.results || {};
+          /* Cold-boot guard: si el cfg aún no tiene NINGÚN resultado, está
+             sin hidratar / sin empezar → NO posponer prematuramente (evita
+             entradas espurias antes de que el server hidrate las actas). */
+          if (!Object.keys(_resAll).length) continue;
+          if ((_resAll[_pair.matchKey] || {}).played) continue;  /* ya jugado */
+          if (_healIsDeferred(_chkTour, _pair.matchKey)) continue; /* ya pospuesto */
+          /* Partido de selección que quedó atrás sin jugar ni posponer:
+             lo guardamos en POSPUESTOS (no se pierde) SIN mover el cursor. */
+          _pendHvHAdd({
+            uid: _pendHvHUid(_chkTour, _pair.matchKey),
+            tourId: _chkTour,
+            matchKey: _pair.matchKey,
+            home: { name: _pair.home && _pair.home.name, shield: _pair.home && _pair.home.shield },
+            away: { name: _pair.away && _pair.away.name, shield: _pair.away && _pair.away.shield },
+            jor:  _pair.jor || '',
+            date: _srow.date || '',
+            label: _srow.label || 'Mundial',
+            emoji: '🌍',
+            addedAt: Date.now()
+          });
+          _addedAny = true;
         } catch(_e){ continue; }
-
-        if (!_played){
-          targetIdx = _si;
-          break;
-        }
       }
-
-      if (targetIdx < 0 || targetIdx >= curIdx) return; /* Nada pendiente antes del cursor. */
-      if (curIdx - targetIdx < 2) return; /* Salto no significativo (≤1 día): OK. */
-
-      /* Corregir el cursor al primer partido de selección pendiente. */
-      _psCursorCorrectTo(targetIdx);
-      try { _render(); } catch(_){}
+      /* Solo refrescamos la caja POSPUESTOS si añadimos algo. El cursor
+         JAMÁS se toca aquí (no más `_psCursorCorrectTo` de retroceso). */
+      if (_addedAny){
+        try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
+      }
     } catch(_){}
   }
 

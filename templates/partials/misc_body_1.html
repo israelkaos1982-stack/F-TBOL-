@@ -4173,9 +4173,12 @@ window._showSimProgress = function(opts, onDone){
       return out;
     }
     function _btSelAliases(selName){
+      /* PROHIBIDO sembrar 'France' fijo aquí (bug 2026-06-30): contaminaba
+         las stats/totales de SELECCIÓN de cualquier hub no-Francia con los
+         partidos de Francia. Solo la selección del hub que llama. */
       var out = [], seen = {};
       function add(n){ n = _normForStats(n||''); if (n && !seen[n]){ seen[n]=1; out.push(n); } }
-      add(selName); add('France');
+      add(selName);
       return out;
     }
     function _btHit(name, aliases){
@@ -56202,7 +56205,14 @@ https://api.sofascore.app/api/v1/team/44/image
         var _mhSel = (typeof window._mhFindMister === 'function') ? window._mhFindMister(hub) : null;
         if (_mhSel && _mhSel.seleccion) hubSelName = _mhSel.seleccion;
       } catch(_){}
-      var selAl = [_norm(hubSelName), 'francia', 'france'];
+      /* PROHIBIDO añadir 'francia'/'france' fijos aquí (bug 2026-06-30,
+         fotos usuario: la caja Atlético Madrid·Noruega mostraba en su tab
+         Selección los partidos pospuestos de Francia — Mundial Octavos/
+         Cuartos/Semis SIN RIVAL — que no le pertenecían). El alias debe
+         ser SOLO el de la selección de ESTE hub; `_isSelName` ya cubre
+         variantes/alias reales vía `_isHumanSeleccionCanonica` +
+         `_mhSameMister`, sin necesidad de sembrar Francia a mano. */
+      var selAl = [_norm(hubSelName)];
       function _eName(v){ return (v && typeof v === 'object') ? (v.name || '') : (v || ''); }
       function _isSelName(n){
         if (_match(n, selAl)) return true;

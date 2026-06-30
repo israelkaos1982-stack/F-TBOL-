@@ -32659,6 +32659,28 @@ document.addEventListener('DOMContentLoaded', function() {
           var srv = srvComp[k];
           if(typeof srv !== 'string' || !srv) return;
           var local = _readLs(k);
+          /* Partidos pospuestos (📌): NO restaurar-o-conservar (last-write
+             clobbera los pospuestos de otra caja / se pierden tras un wipe).
+             Se FUSIONA por uid (unión auto-curativa con tombstones), igual
+             que derbys/HUD. Petición usuario 2026-06-29: «se tiene que
+             guardar SIEMPRE hasta que los juguemos». */
+          if(k === 'pend_hvh_deferred_v1' && typeof window._pendHvHMerge === 'function'){
+            var _la = [], _sa = [];
+            try { _la = local ? JSON.parse(local) : []; } catch(_){}
+            try { _sa = JSON.parse(srv); } catch(_){}
+            if(!Array.isArray(_la)) _la = [];
+            if(!Array.isArray(_sa)) _sa = [];
+            var _merged = window._pendHvHMerge(_la, _sa); /* null si == local */
+            var _finalStr = JSON.stringify(_merged || _la);
+            if(_finalStr !== local && _writeLs(k, _finalStr)){
+              restored.push(k);
+            }
+            /* Si nuestra vista fusionada difiere del server, forzamos el
+               re-push (snapshot = server) para CURAR el servidor; si no,
+               sembramos snapshot = vista final (sin re-push). */
+            _lastSnapshot[k] = (_finalStr !== srv) ? srv : _finalStr;
+            return;
+          }
           var doRestore = false;
           if(!local){
             doRestore = true; /* local no existe → restaurar siempre */

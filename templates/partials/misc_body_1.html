@@ -30039,13 +30039,22 @@ window._showSimProgress = function(opts, onDone){
       }
     } catch(_){}
     /* Placeholder = «Jugador A..K» / «Portero A..K» (con o sin nº de
-       dorsal delante), o el «?» sintético. Cubre porteros y de campo. */
+       dorsal delante), «Jugador N» / «Portero N» (roster genérico por
+       defecto `_lextBuildDefaultRoster`, dorsal NUMÉRICO 1..30),
+       «Jugador IA», o el «?» sintético. Cubre porteros y de campo.
+       Bug 2026-06-30 (fotos usuario «Joan Gamper»): los equipos IA del
+       torneo mostraban «Jugador 22 · ANTWERP», «Portero B», «Jugador 10»
+       en las estadísticas aunque YA tenían su plantilla real. Causa: el
+       acta IA-vs-IA se persistió con el roster genérico ANTES de tener la
+       plantilla real, y este detector solo reconocía las letras A–K como
+       placeholder (no los números 1..30 del roster por defecto), así que
+       el auto-backfill los daba por «reales» y NUNCA los re-hidrataba. */
     function _bfIsRealName(e){
       if (!e) return false;
       var pn = Array.isArray(e.player) ? (e.player[1]||e.player[0]) : (e.player || e.name || e.playerName || '');
       pn = String(pn||'').trim();
       if (!pn || pn === '?') return false;
-      return !/^(?:\d+\.?\s*)?(?:jugador|portero)\s*[a-k]?$/i.test(pn);
+      return !/^(?:\d+\.?\s*)?(?:jugador|portero)\s*(?:[a-k]|ia|\d+)?$/i.test(pn);
     }
     function _bfActaHasReal(arr){
       return Array.isArray(arr) && arr.some(_bfIsRealName);
@@ -30079,10 +30088,16 @@ window._showSimProgress = function(opts, onDone){
       if (gh == null || ga == null) return;
       var gen = window.genMatchEventsEnhanced(home, away, gh|0, ga|0, null);
       var ev = (gen && gen.events) ? gen.events : (Array.isArray(gen) ? gen : []);
-      /* AUTO-HEAL: si veníamos de un placeholder y NO es force, exigimos
-         que la plantilla ya resuelva (acta nueva con nombres reales)
-         antes de pisar; si no, dejamos el placeholder intacto. */
-      if (_wasPlaceholder && !force && !_bfActaHasReal(ev)) return;
+      /* AUTO-HEAL: si veníamos de un placeholder, exigimos que la
+         plantilla ya resuelva (acta nueva con nombres REALES) antes de
+         pisar; si no, dejamos el placeholder intacto. Esto aplica TAMBIÉN
+         en modo `force` (2026-06-30): un equipo que de verdad solo tiene
+         el roster genérico («Jugador N») regeneraría otro placeholder, y
+         pisarlo en cada apertura churnearía el acta/server sin ganar nada.
+         Solo se re-hidrata cuando la regeneración produce nombres reales
+         (la plantilla real ya está disponible). Las actas VACÍAS
+         (solo-marcador, `!_wasPlaceholder`) sí se rellenan siempre. */
+      if (_wasPlaceholder && !_bfActaHasReal(ev)) return;
       ev.forEach(function(e){ if (e && !e.realTeam) e.realTeam = ((e.team==='a'||e.side==='a'||e.team==='home'||e.team===home) ? home : (e.team==='b'||e.side==='b'||e.team==='away'||e.team===away) ? away : home); });
       if (!r.home) r.home = home;
       if (!r.away) r.away = away;

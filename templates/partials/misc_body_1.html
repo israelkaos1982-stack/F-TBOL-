@@ -57944,39 +57944,73 @@ https://api.sofascore.app/api/v1/team/44/image
       + 'vuelve a descargar al recargar. Reactiva el guardado local '
       + 'cuando el navegador se queda sin espacio.\n\n¿Continuar?';
     try { if (!window.confirm(msg)) return; } catch(_){ return; }
-    /* Slugs con push pendiente de confirmar → NO tocar su caché. */
-    var pending = {};
-    try {
-      var raw = localStorage.getItem('liga_ext_pending_v1');
-      if (raw) { var a = JSON.parse(raw); if (Array.isArray(a)) a.forEach(function(s){ if (s) pending[s] = 1; }); }
-    } catch(_){}
-    function _slugOf(kk){
-      var s = kk.replace(/^ligaExt_/, '');
-      s = s.replace(/_(protected|backup)$/, '');
-      s = s.replace(/_snap_\d+$/, '');
-      return s;
-    }
-    var kill = [], skipped = 0, freed = 0;
-    try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var kk = localStorage.key(i);
-        if (!kk || kk.indexOf('ligaExt_') !== 0) continue;
-        if (pending[_slugOf(kk)]) { skipped++; continue; }
-        kill.push(kk);
+    /* CURADO FORZADO ANTES DE BORRAR (2026-06-30, bug usuario «simulo
+       Montenegro/N.Irlanda/Albania/Resto del Mundo y al Limpiar caché
+       vuelve a 0 partidos»): este botón asume "todo está guardado en
+       el SERVIDOR", pero hasta ahora era una asunción sin verificar —
+       si el POST síncrono/async de `saveData` tras la sim todavía no
+       había confirmado (Railway frío, red intermitente), borrar la
+       copia local de inmediato perdía la clasificación recién simulada
+       para SIEMPRE (el guard `liga_ext_pending_v1` solo protege
+       ediciones registradas como pendientes, no cubre una confirmación
+       fallida que ya se dio por buena). Reutilizamos el mismo curado
+       proactivo PC→servidor (`_lextReconcileResultsToServer`, ver
+       arriba) en modo `force` y esperamos su confirmación (con un
+       timeout de seguridad) ANTES de tocar localStorage — así la
+       garantía "no se pierde nada" pasa de ser una suposición a una
+       comprobación real. */
+    function _doWipe(){
+      /* Slugs con push pendiente de confirmar → NO tocar su caché. */
+      var pending = {};
+      try {
+        var raw = localStorage.getItem('liga_ext_pending_v1');
+        if (raw) { var a = JSON.parse(raw); if (Array.isArray(a)) a.forEach(function(s){ if (s) pending[s] = 1; }); }
+      } catch(_){}
+      function _slugOf(kk){
+        var s = kk.replace(/^ligaExt_/, '');
+        s = s.replace(/_(protected|backup)$/, '');
+        s = s.replace(/_snap_\d+$/, '');
+        return s;
       }
-    } catch(_){}
-    kill.forEach(function(kk){
-      try { freed += (localStorage.getItem(kk) || '').length; localStorage.removeItem(kk); } catch(_){}
-    });
-    /* Reabrir la puerta del guardado local para la próxima escritura. */
-    try { window._lextQuotaWarned = false; } catch(_){}
-    try { window._trofQuotaWarned  = false; } catch(_){}
-    var info = '✅ Caché liberada: ' + kill.length + ' claves ('
-      + Math.round(freed / 1024) + ' KB).'
-      + (skipped ? '\n\n(' + skipped + ' clave(s) con cambios sin confirmar se conservaron.)' : '')
-      + '\n\nLa página se recargará y volverá a sincronizar desde el servidor.';
-    try { window.alert(info); } catch(_){}
-    try { location.reload(); } catch(_){}
+      var kill = [], skipped = 0, freed = 0;
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var kk = localStorage.key(i);
+          if (!kk || kk.indexOf('ligaExt_') !== 0) continue;
+          if (pending[_slugOf(kk)]) { skipped++; continue; }
+          kill.push(kk);
+        }
+      } catch(_){}
+      kill.forEach(function(kk){
+        try { freed += (localStorage.getItem(kk) || '').length; localStorage.removeItem(kk); } catch(_){}
+      });
+      /* Reabrir la puerta del guardado local para la próxima escritura. */
+      try { window._lextQuotaWarned = false; } catch(_){}
+      try { window._trofQuotaWarned  = false; } catch(_){}
+      var info = '✅ Caché liberada: ' + kill.length + ' claves ('
+        + Math.round(freed / 1024) + ' KB).'
+        + (skipped ? '\n\n(' + skipped + ' clave(s) con cambios sin confirmar se conservaron.)' : '')
+        + '\n\nLa página se recargará y volverá a sincronizar desde el servidor.';
+      try { window.alert(info); } catch(_){}
+      try { location.reload(); } catch(_){}
+    }
+    var _proceeded = false;
+    function _proceedOnce(){
+      if (_proceeded) return;
+      _proceeded = true;
+      _doWipe();
+    }
+    try {
+      if (typeof window._lextReconcileResultsToServer === 'function') {
+        /* Failsafe: si la red está caída o el reconcile no puede correr
+           (p.ej. ya hay uno en curso y no invoca el callback), no
+           dejamos el botón colgado — procedemos igualmente a los 12 s. */
+        setTimeout(_proceedOnce, 12000);
+        window._lextReconcileResultsToServer({ force: true, cb: _proceedOnce });
+      } else {
+        _proceedOnce();
+      }
+    } catch(_){ _proceedOnce(); }
   };
   window._bayernEditValuesOpen = function(){
     ensureOverlay();

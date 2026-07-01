@@ -50465,6 +50465,56 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   window._fixupLeagueZonesV3 = _fixupLeagueZonesV3;
+  /* Top-up ASÍNCRONO desde IndexedDB (2026-07-01) — red de seguridad
+     compartida por los "ensure seed" de Resto Mundo / N.Irlanda /
+     Montenegro / Albania (las ÚNICAS ligas con seed automático — el
+     resto las rellena el admin a mano y nada las re-siembra).
+     Bug usuario («por más que las simulo no se quedan guardados los
+     datos» en estas 4 ligas concretas): estas ligas son GRANDES (44
+     equipos / hasta 903 partidos en Resto Mundo, 20/380 en las otras) y
+     su `main` de localStorage es el primer candidato a una eviction
+     agresiva (Android) o a un `QuotaExceededError` silencioso en
+     `saveData` (el toast «Navegador sin espacio» ya documentado). Si
+     ESO pasa, `_ensureRestoMundoSeed`/`_ensureExtraLeagueSeed` (que leen
+     el `main` CRUDO de localStorage, no la cache en memoria) ya
+     recuperan desde `_protected`/`_snap_*` — pero esas copias viven en
+     el MISMO storage que se quedó sin espacio, así que también pueden
+     faltar. El espejo IndexedDB (`_idbKV`, alta cuota, `saveData` lo
+     escribe SIEMPRE que hay ≥1 equipo) es la última copia local que
+     sobrevive. Si el main recién sembrado/leído sigue SIN resultados,
+     comprobamos IDB en segundo plano y, si trae clasificación, la
+     adoptamos — sin bloquear el primer render (fire-and-forget). NUNCA
+     pisa una clasificación que YA esté presente (ni la que un sim
+     concurrente acabe de escribir mientras el GET async volaba). */
+  function _lextIdbTopupIfEmpty(slug){
+    try {
+      if (!window._idbKV || typeof window._idbKV.get !== 'function') return;
+      var key = 'ligaExt_' + slug;
+      function _hasResults(d){ return !!(d && Array.isArray(d.results) && d.results.length); }
+      var cur = null;
+      try { var raw = localStorage.getItem(key); cur = raw ? JSON.parse(raw) : null; } catch(_){}
+      if (_hasResults(cur)) return; // ya hay clasificación — nada que curar
+      window._idbKV.get(key).then(function(val){
+        try {
+          if (!val) return;
+          var idbData = (typeof val === 'string') ? JSON.parse(val) : val;
+          if (!idbData || !Array.isArray(idbData.teams) || !idbData.teams.length) return;
+          if (!_hasResults(idbData)) return; // IDB tampoco trae partidos
+          /* Re-leer AHORA: un sim concurrente (o esta misma función
+             disparada dos veces) puede haber poblado el main mientras
+             el GET de IDB volaba. Nunca pisar clasificación ya presente. */
+          var curNow = null;
+          try { var rawNow = localStorage.getItem(key); curNow = rawNow ? JSON.parse(rawNow) : null; } catch(_){}
+          if (_hasResults(curNow)) return;
+          localStorage.setItem(key, JSON.stringify(idbData));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = idbData; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+          try { console.warn('[ligaExt] '+slug+': clasificación vacía en localStorage — recuperada desde IndexedDB ('+idbData.results.length+' resultados).'); } catch(_){}
+          try { if (CURRENT_KEY === slug && typeof renderTable === 'function') renderTable(); } catch(_){}
+        } catch(_){}
+      }).catch(function(){});
+    } catch(_){}
+  }
   function _ensureRestoMundoSeed(){
     var slug = 'resto-mundo';
     var hasTeams = false;
@@ -50475,7 +50525,41 @@ https://api.sofascore.app/api/v1/team/44/image
         if (d && Array.isArray(d.teams) && d.teams.length > 0) hasTeams = true;
       }
     } catch(_){}
-    if (hasTeams) { _upgradeRestoMundoZones(); return; }
+    if (hasTeams) { _upgradeRestoMundoZones(); _lextIdbTopupIfEmpty(slug); return; }
+    /* ANTES de sembrar VACÍO (results:[]): si esta liga YA se simuló y
+       su `main` se perdió (eviction agresiva / QuotaExceededError
+       silencioso), su clasificación sigue viva en las copias durables
+       `_protected` / `_snap_*` que `saveData` escribe en cada guardado.
+       Restaurar ESA copia en vez de pisar con el seed vacío — mismo fix
+       que ya tenía `_ensureExtraLeagueSeed` para Montenegro/N.Irlanda/
+       Albania (2026-06-28), que a Resto Mundo nunca le llegó. */
+    try {
+      var _recovRM = null;
+      try {
+        var _prRM = localStorage.getItem('ligaExt_' + slug + '_protected');
+        if (_prRM) { var _pdRM = JSON.parse(_prRM); if (_pdRM && Array.isArray(_pdRM.teams) && _pdRM.teams.length) _recovRM = _pdRM; }
+      } catch(_){}
+      if (!_recovRM) {
+        try {
+          var _snapKeysRM = [];
+          for (var _siRM = 0; _siRM < localStorage.length; _siRM++) {
+            var _skRM = localStorage.key(_siRM);
+            if (_skRM && _skRM.indexOf('ligaExt_' + slug + '_snap_') === 0) _snapKeysRM.push(_skRM);
+          }
+          _snapKeysRM.sort();
+          for (var _sjRM = _snapKeysRM.length - 1; _sjRM >= 0 && !_recovRM; _sjRM--) {
+            try { var _sdRM = JSON.parse(localStorage.getItem(_snapKeysRM[_sjRM]) || 'null'); if (_sdRM && Array.isArray(_sdRM.teams) && _sdRM.teams.length) _recovRM = _sdRM; } catch(_){}
+          }
+        } catch(_){}
+      }
+      if (_recovRM) {
+        try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(_recovRM)); } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = _recovRM; } catch(_){}
+        try { console.warn('[ligaExt] seed '+slug+': main perdido — restaurado desde copia durable ('+_recovRM.teams.length+' equipos, '+((_recovRM.results&&_recovRM.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
+        return;
+      }
+    } catch(_){}
     var teams = RESTO_MUNDO_TEAMS.map(function(spec, idx){
       return {
         id: 'rm-' + (idx + 1),
@@ -50511,6 +50595,9 @@ https://api.sofascore.app/api/v1/team/44/image
        pintaba (porque `data` arrancaba sin teams, el sim devolvía
        false en la guarda de ≥2 equipos). */
     try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = data; } catch(_){}
+    /* Ni localStorage ni sus copias durables tenían nada — última red:
+       comprobar IndexedDB en segundo plano (no bloquea este render). */
+    _lextIdbTopupIfEmpty(slug);
   }
   /* ═══════════════════════════════════════════════════════════════
      Resto Mundo — nombres REALES + alias eFootball (2026-06-02)
@@ -50693,7 +50780,7 @@ https://api.sofascore.app/api/v1/team/44/image
         if (d && Array.isArray(d.teams) && d.teams.length > 0) hasTeams = true;
       }
     } catch(_){}
-    if (hasTeams) return;
+    if (hasTeams) { _lextIdbTopupIfEmpty(slug); return; }
     /* ANTES de sembrar VACÍO (results:[]) : si esta liga YA se editó o
        simuló y su `main` se perdió (eviction agresiva de localStorage en
        Android, wipe, etc.), su clasificación + plantilla siguen vivas en
@@ -50759,6 +50846,9 @@ https://api.sofascore.app/api/v1/team/44/image
     try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
     try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = data; } catch(_){}
+    /* Ni localStorage ni sus copias durables tenían nada — última red:
+       comprobar IndexedDB en segundo plano (no bloquea este render). */
+    _lextIdbTopupIfEmpty(slug);
   }
   /* Seed eager (al cargar) para que Sim All y aperturas directas vean
      los 20 equipos sin abrir antes la pantalla. */

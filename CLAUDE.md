@@ -1822,6 +1822,60 @@ servidor vía `fetchData`) sacaba 0.
    servidor primero (`_eurHydrateMissingLeagues` incluye ahora las ligas
    con equipos pero sin clasificación).
 
+### El "ensure seed" de las 4 ligas auto-sembradas también recupera de `_protected`/IndexedDB en LOCAL (obligatorio, 2026-07-01)
+
+**Bug (queja usuario 2026-07-01, «Montenegro / N.Irlanda / Albania / Resto
+del Mundo — por más que las simulo no se quedan guardados los datos de
+simulación y se resetean automáticamente»)**: estas 4 son las ÚNICAS ligas
+de "Resto de Ligas" con un **seed automático de equipos** hardcodeado en
+el código (`_EXTRA_LEAGUE_SEEDS` para Montenegro/N.Irlanda/Albania,
+`RESTO_MUNDO_TEAMS` para Resto del Mundo). El resto de las ~50 ligas
+dependen de que el admin pegue la plantilla a mano — nada las re-siembra
+nunca. Estas 4 tienen una función `_ensureRestoMundoSeed`/
+`_ensureExtraLeagueSeed` que corre en CADA boot **y en CADA apertura**
+(`openLigaExt` envuelto) y que, si no encuentra equipos en el `main` crudo
+de localStorage, escribe una plantilla fresca con `results:[]`.
+
+**Causa raíz (asimetría entre las dos funciones)**: el fix 2026-06-28 le
+dio a `_ensureExtraLeagueSeed` (Montenegro/N.Irlanda/Albania) la
+recuperación desde `_protected`/`_snap_*` ANTES de sembrar vacío — pero
+**`_ensureRestoMundoSeed` nunca recibió ese mismo fix**. Si el `main` de
+`ligaExt_resto-mundo` se perdía (eviction agresiva de Android, o un
+`QuotaExceededError` silencioso de `saveData` con esta liga tan grande —
+44 equipos, hasta 903 partidos), la función sobreescribía DIRECTAMENTE con
+la plantilla vacía sin mirar si `_protected`/snapshots aún tenían la
+clasificación — perdiendo la sim en cada apertura si el `main` se había
+evictado. Además, si localStorage se queda sin espacio, `_protected` y los
+snapshots pueden perderse TAMBIÉN (viven en el mismo storage) — solo el
+espejo IndexedDB (`_idbKV`, alta cuota) sobrevive, y ninguna de las dos
+funciones lo consultaba antes de sembrar vacío.
+
+**Fix** (`misc_body_1.html`):
+- `_ensureRestoMundoSeed` gana la MISMA recuperación local
+  (`_protected`/`_snap_*`) que ya tenía `_ensureExtraLeagueSeed` — deja de
+  ser la única de las 4 sin esa red.
+- **`window._lextIdbTopupIfEmpty(slug)`** (nuevo, compartido por las 4):
+  si tras la recuperación local el `main` sigue sin `results`, hace un GET
+  ASÍNCRONO a `_idbKV` (fire-and-forget, no bloquea el primer render) y,
+  si IndexedDB trae una clasificación que localStorage no tiene, la
+  adopta — releyendo el `main` justo antes de escribir para no pisar una
+  sim concurrente que haya llegado mientras el GET volaba. Se llama desde
+  las DOS ramas de ambas funciones (cuando ya hay equipos y cuando se
+  acaba de sembrar vacío), así una liga con `main` intacto pero
+  `results` vacíos también se cura.
+
+**Reglas a respetar**:
+8. **PROHIBIDO** que una liga con seed automático nuevo (si se añade una
+   5ª en el futuro) tenga su propia función "ensure seed" SIN la
+   recuperación `_protected`/`_snap_*` + `_lextIdbTopupIfEmpty` antes de
+   escribir una plantilla vacía. Las 4 actuales son las únicas con este
+   patrón — toda liga nueva de este tipo lo hereda.
+9. **PROHIBIDO** que `_lextIdbTopupIfEmpty` sobreescriba una clasificación
+   YA presente en localStorage (relee el `main` justo antes de escribir)
+   ni que bloquee el render con una espera síncrona de IndexedDB — es
+   fire-and-forget, complementa a `_lextReconcileResultsToServer`
+   (2026-06-30) que cura el SERVIDOR; este fix cura el propio dispositivo.
+
 ## Plantilla de selecciones — sync que NO pierde datos + sin «Pacífico» (obligatorio, 2026-06-02)
 
 **Bug (foto usuario 2026-06-02)**: en «🌐 Plantilla de selecciones»

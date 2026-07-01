@@ -1983,19 +1983,36 @@ de la liga.
   sus plazas europeas entran por la pantalla manual "EA Sports → Europa"
   (está en `EUROPE_BLACKLIST` para el cómputo automático).
 - Totales (incluida España): 🔵28 🟣34 🟠18 🟢12 🟡88 ⚪️72. Todo cuadra
-  EXACTO: WC = 72 → 24 grupos de 3 sin hueco TBD. **San Marino = 🟡2 ⚪️2**
-  (manda 3º Y 4º a Wild Card) — petición usuario 2026-06-13. Con el viejo
-  San Marino ⚪️1 el total quedaba en 71 (1 hueco TBD); el ⚪️2 lo cierra.
+  EXACTO: WC = 72 → 24 grupos de 3 sin hueco TBD.
   Aguas abajo: WC saca 24, OQ 88+24=112, Previa 34+28=62.
-  `_fixupSanMarinoWcV1` (flag `ftbol_san_marino_wc_fix_v1`) re-aplica ⚪️2
-  a navegadores ya sembrados con ⚪️1 — SOLO si San Marino sigue en el
-  valor viejo o genérico (nunca pisa edición manual). **PROHIBIDO** volver
-  San Marino a ⚪️1: reabre el hueco TBD (WC 71).
 - `_fixupLeagueZonesV2` (flag `ftbol_league_zones_fix_v2`) re-aplica el
   cuadro CORREGIDO (Albania→🟣, Feroe/Malta→🟡3, Montenegro/Georgia→⚪️2,
   Bélgica/Turquía/Chequia/Grecia→🟣1) a navegadores que ya corrieron el
   seed v1 con los valores viejos — SOLO si la liga sigue en el valor
   viejo o genérico (nunca pisa edición manual). Idempotente.
+
+  **⚠️ SUPERSEDE 2026-07-01 (tabla UNIFICADA, petición usuario, fotos
+  "Wild Card 17/72" · "Open Qualifier 12/62 con TBD" · "Previa 12/62")**:
+  el usuario entregó la lista completa y unificada de las 53 ligas +
+  España (europa + ⚫ descenso). En esa lista **Bulgaria va en el bloque
+  ⚪2** (medio, 17 ligas junto a Polonia/Noruega/Chipre/Austria/Escocia/
+  Suecia/Croacia/Israel/Hungría/Ucrania/Serbia/Rumanía/Eslovenia/
+  Azerbaiyán/Rusia/Eslovaquia) y **San Marino vuelve a ⚪1** (con Gales,
+  bloque menor). El total de Wild Card se mantiene en 72 — Bulgaria pasa a
+  ocupar el cupo extra que San Marino cubría desde 2026-06-13, no se
+  reabre ningún hueco. **La prohibición "San Marino NUNCA vuelve a ⚪1"
+  del párrafo anterior queda SUPERADA por esta reasignación** (San Marino
+  ⚪1 + Bulgaria ⚪2 = mismo total 72 que San Marino ⚪2 + Bulgaria ⚪1).
+  Además se añadió un ⚫ descenso PROPIO por liga (antes todas caían al
+  genérico ⚫3 de `DEFAULT_ZONES`): la mayoría ⚫1, con ⚫2 en Inglaterra/
+  Italia/Alemania/Francia/Portugal/Países Bajos/Bélgica/Turquía/
+  Dinamarca/Suiza (y España ⚫2, manual). `_fixupLeagueZonesV3` (flag
+  `ftbol_league_zones_fix_v3`) re-aplica Bulgaria/San Marino y siembra el
+  ⚫ por liga en navegadores ya sembrados — SOLO si siguen en el valor
+  VIEJO/genérico exacto (nunca pisa edición manual del admin). Idempotente.
+  **PROHIBIDO** revertir este swap a la asignación 2026-06-13 (Bulgaria
+  ⚪1 / San Marino ⚪2): es la MISMA suma total, pero la lista del usuario
+  es la fuente de verdad por liga.
 - **N. Irlanda + Montenegro — pre-seed de 20 equipos** (`_EXTRA_LEAGUE_SEEDS`,
   `_ensureExtraLeagueSeed`): sus zonas iniciales se leen de
   `_zonesDefaultFor(slug)` (= 🟡OQ2 ⚪️WC2). **PROHIBIDO** volver a

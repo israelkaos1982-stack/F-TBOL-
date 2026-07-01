@@ -45004,52 +45004,66 @@ https://api.sofascore.app/api/v1/team/44/image
 
   var DEFAULT_ZONES = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0, intercontinental:0, mundialClubes:0, desc:3};
 
-  /* ── Reparto europeo POR DEFECTO por liga (petición usuario 2026-05-30) ──
+  /* ── Reparto europeo POR DEFECTO por liga (petición usuario 2026-05-30;
+     tabla UNIFICADA corregida 2026-07-01) ──
      Cada liga del "Resto de Ligas" arranca con el cupo europeo que le
      corresponde según el bracket del usuario, en vez del genérico
-     1/1/1/1/1. Solo se precargan los campos europeos
-     (🔵ucl 🟣uclPrev 🟠uel 🟢uecl 🟡uclQual ⚪wildcard); `desc` y los
-     campos de Resto del Mundo (intercontinental/mundialClubes) caen al
-     DEFAULT_ZONES. TODO sigue siendo EDITABLE desde 📜 Reglas — esto solo
-     ahorra teclear ~54 ligas a mano.
+     1/1/1/1/1. Se precargan los campos europeos
+     (🔵ucl 🟣uclPrev 🟠uel 🟢uecl 🟡uclQual ⚪wildcard) **y** el ⚫ descenso
+     propio de cada liga; los campos de Resto del Mundo
+     (intercontinental/mundialClubes) siguen cayendo al DEFAULT_ZONES. TODO
+     sigue siendo EDITABLE desde 📜 Reglas — esto solo ahorra teclear ~54
+     ligas a mano.
        Sumas de control (con España manual 4/1/2/1):
-       🔵28 · 🟣34 · 🟠18 · 🟢12 · 🟡88 · ⚪72 (San Marino ⚪2 cierra el
-       hueco que dejaba el viejo ⚪71). */
+       🔵28 · 🟣34 · 🟠18 · 🟢12 · 🟡88 · ⚪72.
+       2026-07-01 (petición usuario, tabla unificada + fotos "Wild Card
+       17/72" · "Open Qualifier 12/62 con TBD" · "Previa 12/62"): la tabla
+       traía a Bulgaria en el bloque ⚪1 (medio-bajo) y a San Marino en ⚪2
+       para compensar — el usuario entregó la lista completa por liga y en
+       ella Bulgaria va en el bloque ⚪2 (medio, 17 ligas) y San Marino
+       vuelve a ⚪1. El total de Wild Card se mantiene en 72 (Bulgaria pasa
+       a ocupar el cupo extra que antes tenía San Marino) — **NO** es un
+       recorte, es la reasignación exacta que pidió el usuario. Ver
+       `_fixupLeagueZonesV3` para la migración de navegadores ya sembrados
+       con el cuadro viejo. Esto SUPERSEDE la prohibición previa
+       "San Marino NUNCA vuelve a ⚪1" (2026-06-13) — con Bulgaria en ⚪2 el
+       total sigue siendo 72, no se reabre el hueco. */
   var LEAGUE_DEFAULT_ZONES = (function(){
     var Z = {};
     function set(slugs, z){ slugs.forEach(function(s){ Z[s] = z; }); }
-    // 🔵4 🟣1 🟠2 🟢1 — España (Liga EA Sports; manual/blacklist europeo)
-    Z['liga-ea-sports'] = {ucl:4, uclPrev:1, uclQual:0, uel:2, uecl:1, wildcard:0};
-    // 🔵4 🟠2 🟢2 — Inglaterra
-    Z['inglaterra']     = {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:2, wildcard:0};
-    // 🔵4 🟠2 🟢1 — Italia / Alemania / Francia
-    set(['italia','alemania','francia'],      {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0});
-    // 🔵2 🟠2 🟢1 — Portugal / Países Bajos
-    set(['portugal','p-bajos'],               {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0});
-    // 🔵1 🟣1 🟠1 🟢1 — Bélgica / Turquía / Chequia / Grecia
-    set(['belgica','turquia','rep-checa','grecia'], {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0});
-    // 🟣1 🟡2 ⚪2 — bloque medio (18 ligas)
-    set(['polonia','dinamarca','noruega','chipre','suiza','austria','escocia',
-         'suecia','croacia','israel','hungria','ucrania','serbia','rumania',
-         'eslovenia','azerbayan','rusia','eslovaquia'],
-        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2});
-    // 🟣1 🟡2 ⚪1 — bloque medio-bajo (11 ligas, incluye Albania)
-    set(['bulgaria','irlanda','islandia','armenia','moldavia','finlandia',
-         'kosovo','kazajst','bosnia','letonia','albania'],
-        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1});
-    // 🟡3 ⚪1 — Islas Feroe / Malta
-    set(['is-feroe','malta'], {ucl:0, uclPrev:0, uclQual:3, uel:0, uecl:0, wildcard:1});
-    // 🟡2 ⚪2 — bloque menor (10 ligas, incluye Montenegro / Georgia)
+    // 🔵4 🟣1 🟠2 🟢1 ⚫2 — España (Liga EA Sports; manual/blacklist europeo)
+    Z['liga-ea-sports'] = {ucl:4, uclPrev:1, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2};
+    // 🔵4 🟠2 🟢2 ⚫2 — Inglaterra
+    Z['inglaterra']     = {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:2, wildcard:0, desc:2};
+    // 🔵4 🟠2 🟢1 ⚫2 — Italia / Alemania / Francia
+    set(['italia','alemania','francia'],      {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
+    // 🔵2 🟠2 🟢1 ⚫2 — Portugal / Países Bajos
+    set(['portugal','p-bajos'],               {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
+    // 🔵1 🟣1 🟠1 🟢1 ⚫2 — Bélgica / Turquía
+    set(['belgica','turquia'],                {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2});
+    // 🔵1 🟣1 🟠1 🟢1 ⚫1 — Chequia / Grecia
+    set(['rep-checa','grecia'],                {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:1});
+    // 🟣1 🟡2 ⚪2 ⚫2 — Dinamarca / Suiza
+    set(['dinamarca','suiza'], {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:2});
+    // 🟣1 🟡2 ⚪2 ⚫1 — bloque medio (17 ligas, incluye Bulgaria)
+    set(['polonia','noruega','chipre','austria','escocia','suecia','croacia',
+         'israel','hungria','ucrania','serbia','rumania','eslovenia','azerbayan',
+         'rusia','eslovaquia','bulgaria'],
+        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:1});
+    // 🟣1 🟡2 ⚪1 ⚫1 — bloque medio-bajo (9 ligas)
+    set(['irlanda','islandia','armenia','moldavia','finlandia',
+         'kosovo','kazajst','bosnia','letonia'],
+        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
+    // 🟡3 ⚪1 ⚫1 — Islas Feroe / Malta
+    set(['is-feroe','malta'], {ucl:0, uclPrev:0, uclQual:3, uel:0, uecl:0, wildcard:1, desc:1});
+    // 🟡2 ⚪2 ⚫1 — bloque menor (10 ligas, incluye Montenegro / Georgia)
     set(['estonia','n-maced','lituania','n-irlanda','gibraltar','andorra',
          'bielorrsa','luxembgo','montenegro','georgia'],
-        {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2});
-    // 🟡2 ⚪1 — Gales
-    set(['gales'], {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:1});
-    // 🟡2 ⚪2 — San Marino (manda el 3º Y el 4º a Wild Card). Con ⚪1 el
-    // total de Wild Card quedaba en 71 (1 hueco TBD); con ⚪2 cuadra a 72
-    // exacto (24 grupos de 3). Petición usuario 2026-06-13. FIJO — solo
-    // editable por el admin desde 📜 Reglas.
-    set(['san-marino'], {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2});
+        {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2, desc:1});
+    // 🟣1 🟡2 ⚪1 ⚫1 — Albania
+    set(['albania'], {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
+    // 🟡2 ⚪1 ⚫1 — Gales / San Marino
+    set(['gales','san-marino'], {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
     return Z;
   })();
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
@@ -50386,6 +50400,71 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   window._fixupSanMarinoWcV1 = _fixupSanMarinoWcV1;
+  /* Fixup v3 (2026-07-01, tabla unificada del usuario): reasigna Bulgaria
+     ⚪1→⚪2 (pasa del bloque medio-bajo al bloque medio de 17 ligas) y San
+     Marino ⚪2→⚪1 (vuelve a su valor original — Bulgaria ocupa ahora el
+     cupo extra que San Marino cubría desde 2026-06-13). El total de Wild
+     Card se mantiene en 72 en ambos casos — no es una regresión del fix
+     de San Marino, es la reasignación exacta que pidió el usuario. Además
+     siembra el ⚫ descenso propio de cada liga (hasta ahora todas caían al
+     genérico ⚫3 de DEFAULT_ZONES). Ambos pasos son NO-OP sobre una liga
+     que el admin ya editó a mano (solo tocan el valor VIEJO/genérico
+     exacto). Idempotente vía flag propio. */
+  function _fixupLeagueZonesV3(){
+    var FLAG = 'ftbol_league_zones_fix_v3';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var OLD_EURO = {
+      'bulgaria':   {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1},
+      'san-marino': {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2}
+    };
+    var GEN = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0};
+    function eqEuro(z, r){
+      if(!z) return false;
+      return Number(z.ucl||0)===r.ucl && Number(z.uclPrev||0)===r.uclPrev
+          && Number(z.uclQual||0)===r.uclQual && Number(z.uel||0)===r.uel
+          && Number(z.uecl||0)===r.uecl && Number(z.wildcard||0)===r.wildcard;
+    }
+    try {
+      Object.keys(OLD_EURO).forEach(function(slug){
+        try {
+          var key = 'ligaExt_' + slug;
+          var raw = localStorage.getItem(key);
+          if(!raw) return;                 // no sembrada → la cubre ensureConfig
+          var d = JSON.parse(raw);
+          if(!d) return;
+          if(!d.config) d.config = {};
+          var z = d.config.zones;
+          var nw = LEAGUE_DEFAULT_ZONES[slug];
+          if(!nw) return;
+          if(!(eqEuro(z, OLD_EURO[slug]) || eqEuro(z, GEN) || !z)) return;
+          d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), nw);
+          localStorage.setItem(key, JSON.stringify(d));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        } catch(_){}
+      });
+      /* ⚫ descenso propio por liga — solo si sigue EXACTAMENTE en el
+         genérico ⚫3 (nunca pisa un valor que el admin haya editado). */
+      Object.keys(LEAGUE_DEFAULT_ZONES).forEach(function(slug){
+        try {
+          var key2 = 'ligaExt_' + slug;
+          var raw2 = localStorage.getItem(key2);
+          if(!raw2) return;
+          var d2 = JSON.parse(raw2);
+          if(!d2 || !d2.config || !d2.config.zones) return;
+          var nw2 = LEAGUE_DEFAULT_ZONES[slug];
+          if(!nw2 || typeof nw2.desc !== 'number') return;
+          if(Number(d2.config.zones.desc) !== 3) return;
+          d2.config.zones.desc = nw2.desc;
+          localStorage.setItem(key2, JSON.stringify(d2));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d2; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        } catch(_){}
+      });
+      localStorage.setItem(FLAG, '1');
+    } catch(_){}
+  }
+  window._fixupLeagueZonesV3 = _fixupLeagueZonesV3;
   function _ensureRestoMundoSeed(){
     var slug = 'resto-mundo';
     var hasTeams = false;
@@ -50502,6 +50581,7 @@ https://api.sofascore.app/api/v1/team/44/image
   try { _seedLeagueDefaultZonesV1(); } catch(_){}
   try { _fixupLeagueZonesV2(); } catch(_){}
   try { _fixupSanMarinoWcV1(); } catch(_){}
+  try { _fixupLeagueZonesV3(); } catch(_){}
   /* Defensa adicional: si en algún momento el storage queda vacío
      (reset / sync server que devuelve {teams:[]}), re-sembramos al
      abrir la pantalla. */

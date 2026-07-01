@@ -1822,6 +1822,60 @@ servidor vía `fetchData`) sacaba 0.
    servidor primero (`_eurHydrateMissingLeagues` incluye ahora las ligas
    con equipos pero sin clasificación).
 
+### El "ensure seed" de las 4 ligas auto-sembradas también recupera de `_protected`/IndexedDB en LOCAL (obligatorio, 2026-07-01)
+
+**Bug (queja usuario 2026-07-01, «Montenegro / N.Irlanda / Albania / Resto
+del Mundo — por más que las simulo no se quedan guardados los datos de
+simulación y se resetean automáticamente»)**: estas 4 son las ÚNICAS ligas
+de "Resto de Ligas" con un **seed automático de equipos** hardcodeado en
+el código (`_EXTRA_LEAGUE_SEEDS` para Montenegro/N.Irlanda/Albania,
+`RESTO_MUNDO_TEAMS` para Resto del Mundo). El resto de las ~50 ligas
+dependen de que el admin pegue la plantilla a mano — nada las re-siembra
+nunca. Estas 4 tienen una función `_ensureRestoMundoSeed`/
+`_ensureExtraLeagueSeed` que corre en CADA boot **y en CADA apertura**
+(`openLigaExt` envuelto) y que, si no encuentra equipos en el `main` crudo
+de localStorage, escribe una plantilla fresca con `results:[]`.
+
+**Causa raíz (asimetría entre las dos funciones)**: el fix 2026-06-28 le
+dio a `_ensureExtraLeagueSeed` (Montenegro/N.Irlanda/Albania) la
+recuperación desde `_protected`/`_snap_*` ANTES de sembrar vacío — pero
+**`_ensureRestoMundoSeed` nunca recibió ese mismo fix**. Si el `main` de
+`ligaExt_resto-mundo` se perdía (eviction agresiva de Android, o un
+`QuotaExceededError` silencioso de `saveData` con esta liga tan grande —
+44 equipos, hasta 903 partidos), la función sobreescribía DIRECTAMENTE con
+la plantilla vacía sin mirar si `_protected`/snapshots aún tenían la
+clasificación — perdiendo la sim en cada apertura si el `main` se había
+evictado. Además, si localStorage se queda sin espacio, `_protected` y los
+snapshots pueden perderse TAMBIÉN (viven en el mismo storage) — solo el
+espejo IndexedDB (`_idbKV`, alta cuota) sobrevive, y ninguna de las dos
+funciones lo consultaba antes de sembrar vacío.
+
+**Fix** (`misc_body_1.html`):
+- `_ensureRestoMundoSeed` gana la MISMA recuperación local
+  (`_protected`/`_snap_*`) que ya tenía `_ensureExtraLeagueSeed` — deja de
+  ser la única de las 4 sin esa red.
+- **`window._lextIdbTopupIfEmpty(slug)`** (nuevo, compartido por las 4):
+  si tras la recuperación local el `main` sigue sin `results`, hace un GET
+  ASÍNCRONO a `_idbKV` (fire-and-forget, no bloquea el primer render) y,
+  si IndexedDB trae una clasificación que localStorage no tiene, la
+  adopta — releyendo el `main` justo antes de escribir para no pisar una
+  sim concurrente que haya llegado mientras el GET volaba. Se llama desde
+  las DOS ramas de ambas funciones (cuando ya hay equipos y cuando se
+  acaba de sembrar vacío), así una liga con `main` intacto pero
+  `results` vacíos también se cura.
+
+**Reglas a respetar**:
+8. **PROHIBIDO** que una liga con seed automático nuevo (si se añade una
+   5ª en el futuro) tenga su propia función "ensure seed" SIN la
+   recuperación `_protected`/`_snap_*` + `_lextIdbTopupIfEmpty` antes de
+   escribir una plantilla vacía. Las 4 actuales son las únicas con este
+   patrón — toda liga nueva de este tipo lo hereda.
+9. **PROHIBIDO** que `_lextIdbTopupIfEmpty` sobreescriba una clasificación
+   YA presente en localStorage (relee el `main` justo antes de escribir)
+   ni que bloquee el render con una espera síncrona de IndexedDB — es
+   fire-and-forget, complementa a `_lextReconcileResultsToServer`
+   (2026-06-30) que cura el SERVIDOR; este fix cura el propio dispositivo.
+
 ## Plantilla de selecciones — sync que NO pierde datos + sin «Pacífico» (obligatorio, 2026-06-02)
 
 **Bug (foto usuario 2026-06-02)**: en «🌐 Plantilla de selecciones»
@@ -1983,19 +2037,36 @@ de la liga.
   sus plazas europeas entran por la pantalla manual "EA Sports → Europa"
   (está en `EUROPE_BLACKLIST` para el cómputo automático).
 - Totales (incluida España): 🔵28 🟣34 🟠18 🟢12 🟡88 ⚪️72. Todo cuadra
-  EXACTO: WC = 72 → 24 grupos de 3 sin hueco TBD. **San Marino = 🟡2 ⚪️2**
-  (manda 3º Y 4º a Wild Card) — petición usuario 2026-06-13. Con el viejo
-  San Marino ⚪️1 el total quedaba en 71 (1 hueco TBD); el ⚪️2 lo cierra.
+  EXACTO: WC = 72 → 24 grupos de 3 sin hueco TBD.
   Aguas abajo: WC saca 24, OQ 88+24=112, Previa 34+28=62.
-  `_fixupSanMarinoWcV1` (flag `ftbol_san_marino_wc_fix_v1`) re-aplica ⚪️2
-  a navegadores ya sembrados con ⚪️1 — SOLO si San Marino sigue en el
-  valor viejo o genérico (nunca pisa edición manual). **PROHIBIDO** volver
-  San Marino a ⚪️1: reabre el hueco TBD (WC 71).
 - `_fixupLeagueZonesV2` (flag `ftbol_league_zones_fix_v2`) re-aplica el
   cuadro CORREGIDO (Albania→🟣, Feroe/Malta→🟡3, Montenegro/Georgia→⚪️2,
   Bélgica/Turquía/Chequia/Grecia→🟣1) a navegadores que ya corrieron el
   seed v1 con los valores viejos — SOLO si la liga sigue en el valor
   viejo o genérico (nunca pisa edición manual). Idempotente.
+
+  **⚠️ SUPERSEDE 2026-07-01 (tabla UNIFICADA, petición usuario, fotos
+  "Wild Card 17/72" · "Open Qualifier 12/62 con TBD" · "Previa 12/62")**:
+  el usuario entregó la lista completa y unificada de las 53 ligas +
+  España (europa + ⚫ descenso). En esa lista **Bulgaria va en el bloque
+  ⚪2** (medio, 17 ligas junto a Polonia/Noruega/Chipre/Austria/Escocia/
+  Suecia/Croacia/Israel/Hungría/Ucrania/Serbia/Rumanía/Eslovenia/
+  Azerbaiyán/Rusia/Eslovaquia) y **San Marino vuelve a ⚪1** (con Gales,
+  bloque menor). El total de Wild Card se mantiene en 72 — Bulgaria pasa a
+  ocupar el cupo extra que San Marino cubría desde 2026-06-13, no se
+  reabre ningún hueco. **La prohibición "San Marino NUNCA vuelve a ⚪1"
+  del párrafo anterior queda SUPERADA por esta reasignación** (San Marino
+  ⚪1 + Bulgaria ⚪2 = mismo total 72 que San Marino ⚪2 + Bulgaria ⚪1).
+  Además se añadió un ⚫ descenso PROPIO por liga (antes todas caían al
+  genérico ⚫3 de `DEFAULT_ZONES`): la mayoría ⚫1, con ⚫2 en Inglaterra/
+  Italia/Alemania/Francia/Portugal/Países Bajos/Bélgica/Turquía/
+  Dinamarca/Suiza (y España ⚫2, manual). `_fixupLeagueZonesV3` (flag
+  `ftbol_league_zones_fix_v3`) re-aplica Bulgaria/San Marino y siembra el
+  ⚫ por liga en navegadores ya sembrados — SOLO si siguen en el valor
+  VIEJO/genérico exacto (nunca pisa edición manual del admin). Idempotente.
+  **PROHIBIDO** revertir este swap a la asignación 2026-06-13 (Bulgaria
+  ⚪1 / San Marino ⚪2): es la MISMA suma total, pero la lista del usuario
+  es la fuente de verdad por liga.
 - **N. Irlanda + Montenegro — pre-seed de 20 equipos** (`_EXTRA_LEAGUE_SEEDS`,
   `_ensureExtraLeagueSeed`): sus zonas iniciales se leen de
   `_zonesDefaultFor(slug)` (= 🟡OQ2 ⚪️WC2). **PROHIBIDO** volver a

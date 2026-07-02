@@ -1571,6 +1571,93 @@ independientemente de qué lado «gane» el roster.
 4. Toda nueva ruta de sync de `ligaExt_*` que adopte una de las dos
    copias debe pasar por el backfill de escudos antes de cachear/render.
 
+## Resto del Mundo — la PLANTILLA de jugadores es IDENTIDAD igual que el escudo, nunca se pierde (obligatorio, 2026-07-02)
+
+**Bug (foto usuario 2026-07-02, «Resto Mundo»)**: la clasificación de
+Resto del Mundo mostraba los 44 equipos con nombre real pero **escudo
+gris (vacío) y 0 PJ** en TODOS — como si nunca se hubiera editado ni
+simulado nada, pese a que el admin ya había pegado plantillas y escudos.
+
+### Causa raíz
+
+Toda la red de recuperación de las 4 ligas con seed automático (Resto
+Mundo / Montenegro / N. Irlanda / Albania — `_ensureRestoMundoSeed`,
+`_ensureExtraLeagueSeed`, `_lextIdbTopupIfEmpty`,
+`_lextRecoverResultsFromBackups`, documentada en las secciones
+2026-06-28/06-30/07-01/07-02 de más arriba) solo comprobaba si faltaban
+**`results`** (la clasificación/PJ). Ninguna capa comprobaba si faltaban
+**`players`** (la plantilla) o **`shield`** (el escudo):
+
+1. El seed en blanco escribe `teams` con NOMBRE pero `players:[]` /
+   `shield:''`. Una vez ese blanco queda escrito en el `main`,
+   `hasTeams` (solo mira `teams.length > 0`) es **true para siempre**,
+   así que el `return` temprano de `_ensureRestoMundoSeed`/
+   `_ensureExtraLeagueSeed` saltaba TODA la cadena de recuperación
+   (`_protected` → snapshots → servidor), aunque esas copias durables
+   tuvieran la plantilla y los escudos reales.
+2. `_lextIdbTopupIfEmpty` y `_lextRecoverResultsFromBackups` solo
+   miraban `results` para decidir si había «algo que curar»; con
+   `results` presente (o ausente pero sin roster) nunca intentaban
+   restaurar `players`/`shield`.
+3. Ni el merge del cliente (`fetchData`) ni el del servidor
+   (`_lx_merge_teams`) rellenaban `players` de la versión perdedora — el
+   backfill de identidad de 2026-06-02/06-11 cubría `shield` y
+   `stadium`, pero nunca `players`.
+
+### Fix — la plantilla de jugadores hereda el backfill de identidad
+
+- **`window._lextHasRosterOrShield(d)`** (nuevo, junto a
+  `_lextIdbTopupIfEmpty`): true si CUALQUIER equipo del documento tiene
+  `players.length` o `shield` no vacío. Es el detector de «esto es un
+  seed en blanco, no datos reales».
+- **`_lextBackfillRoster(target, source)`** (nuevo, espejo EXACTO de
+  `_lextBackfillShields`): rellena `players` de cada equipo de `target`
+  que venga vacío, tomándolo del equipo del MISMO nombre normalizado en
+  `source`. NUNCA pisa un roster ya presente.
+- **`_ensureRestoMundoSeed` / `_ensureExtraLeagueSeed`**: el guard
+  `hasTeams` ya NO basta por sí solo — `isBlank` detecta el estado
+  «equipos con nombre pero sin plantilla/escudos/resultados» y, aunque
+  `hasTeams` sea true, fuerza el MISMO intento de recuperación
+  (`_protected` → snapshots → servidor) que si `hasTeams` fuera false.
+  Si se encuentra una copia rica, se hace backfill de `players` +
+  `shield` + `results` SOBRE el documento actual (preservando
+  `config.zones` ya editadas), en vez de reemplazar el documento entero.
+- **`_lextIdbTopupIfEmpty`**: el gate de «necesita top-up» ahora
+  comprueba `results` **y** `_lextHasRosterOrShield`; el top-up desde
+  IndexedDB hace backfill por nombre (`_lextBackfillShields`/
+  `_lextBackfillResults`) en vez de reemplazo ciego.
+- **`_lextRecoverResultsFromBackups`**: el hot-path también comprueba
+  `_lextHasRosterOrShield`; el bucle de restauración llama además a
+  `_lextBackfillRoster`/`_lextBackfillShields`, no solo a
+  `_lextBackfillResults`.
+- **`fetchData`** (las 3 rutas de adopción): añadido
+  `_lextBackfillRoster(...)` junto a cada `_lextBackfillShields(...)`
+  existente — la plantilla viaja con la misma garantía que el escudo en
+  CUALQUIER sync cross-device, para las ~50 ligas normales también.
+- **Servidor (`_lx_merge_teams`, `app.py`)**: nuevo bloque de backfill
+  `best_roster_by_name`, espejo EXACTO del bucle `for _fld in ("shield",
+  "stadium")` pero para `players[]` — el ganador de la fusión por
+  `updatedAt` que se quede sin roster lo recupera de la versión (old o
+  new) más reciente que sí lo tenga.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que cualquier guard de «¿hace falta recuperar/sembrar
+   esta liga?» mire SOLO `teams.length` o SOLO `results`. Debe
+   comprobar también `_lextHasRosterOrShield` (o el equivalente
+   servidor) — si no, un seed en blanco que ya quedó escrito bloquea la
+   recuperación PARA SIEMPRE aunque existan copias durables ricas.
+2. **PROHIBIDO** que `_lextBackfillRoster` pise un roster ya presente en
+   `target` (mismo contrato que `_lextBackfillShields`): solo rellena
+   equipos con `players` vacío.
+3. **PROHIBIDO** que el backfill de identidad del servidor
+   (`_lx_merge_teams`) cubra `shield`/`stadium` pero no `players`. Toda
+   fusión por-equipo nueva hereda los 3 campos.
+4. Toda liga NUEVA con seed automático (una 5ª futura, si se añade)
+   hereda `isBlank` + el backfill de roster/escudos automáticamente al
+   reutilizar `_ensureExtraLeagueSeed`/`_lextIdbTopupIfEmpty`; no
+   duplicar esta lógica en un guard ad-hoc.
+
 ## Resto de Ligas — las stats de COPA + LIGA se SUMAN por jugador y sobreviven al re-sim de liga (obligatorio, 2026-06-12)
 
 **Bug (fotos usuario 2026-06-12, «Campionato Sammarinese»)**: un equipo

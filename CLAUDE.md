@@ -1876,6 +1876,50 @@ funciones lo consultaba antes de sembrar vacío.
    fire-and-forget, complementa a `_lextReconcileResultsToServer`
    (2026-06-30) que cura el SERVIDOR; este fix cura el propio dispositivo.
 
+### El "ensure seed" de las 4 ligas auto-sembradas pregunta al SERVIDOR antes de sembrar vacío (obligatorio, 2026-07-02)
+
+**Bug (foto usuario 2026-07-02, «Abissnet Superiore / Albania», 20 equipos
+a 0 PTS/0 PJ)**: pese a los fixes 2026-06-28/06-30/07-01, el usuario seguía
+viendo la liga de Albania a 0 «por más que la simulo».
+
+**Causa raíz remanente**: `_ensureExtraLeagueSeed`/`_ensureRestoMundoSeed`
+(las 4 ligas con seed automático) solo recuperaban de copias durables
+**LOCALES** (`_protected`/`_snap_*`) antes de sembrar vacío. Si esas
+copias TAMBIÉN se habían perdido (eviction agresiva de Android que borra
+localStorage entero, no solo el main — el mismo fenómeno que motivó el fix
+de 2026-06-28), el seed escribía `results:[]` de inmediato y de forma
+SÍNCRONA **sin preguntar nunca al servidor**. Esto es MENOS robusto que
+`loadData()` (la función que usan las ~50 ligas normales), que sí hace un
+XHR síncrono a `/api/liga-ext/<slug>` + `-protected` antes de rendirse a un
+objeto vacío. Si justo después el `fetchData` asíncrono de `openLigaExt`
+fallaba (red móvil intermitente, documentada por todo este proyecto), la
+semilla vacía quedaba plantada en firme — sin que nada volviera a preguntar
+al servidor — y el usuario veía 0 PJ aunque el servidor SÍ tuviera la
+clasificación simulada de la última vez.
+
+**Fix** (`misc_body_1.html`): nuevo helper compartido
+`window._lextSeedRecoverFromServer(slug)` que replica el MISMO XHR síncrono
+de `loadData()` (GET a `/api/liga-ext/<slug>`, con fallback a
+`/api/liga-ext-protected/<slug>`). `_ensureExtraLeagueSeed` y
+`_ensureRestoMundoSeed` lo consultan justo ANTES de sembrar vacío (después
+de agotar `_protected`/`_snap_*` locales): si el servidor trae equipos
+(con o sin resultados), se adoptan vía `_lextAdoptServerSeedRecovery`
+en vez de sembrar la plantilla en blanco. Solo se ejecuta en el caso raro
+«ni local ni sus copias durables tienen NADA» — en el caso normal
+(`hasTeams===true`) el seed sigue devolviendo de inmediato sin tocar red.
+
+**Reglas a respetar**:
+10. **PROHIBIDO** que el "ensure seed" de una liga auto-sembrada (las 4
+    actuales, o una 5ª futura) escriba una plantilla vacía sin antes
+    intentar `_lextSeedRecoverFromServer(slug)` cuando local no tiene
+    nada. Es la MISMA red que ya protege a las ~50 ligas normales vía
+    `loadData()` — estas 4 no pueden tener una recuperación más débil.
+11. **PROHIBIDO** que `_lextSeedRecoverFromServer` sea asíncrono/fire-and-
+    forget: tiene que resolver ANTES de que el seed decida escribir vacío,
+    igual que los XHR síncronos de `loadData()`. Solo corre en el caso
+    raro de local totalmente vacío, así que el coste (1-2 XHR bloqueantes)
+    es aceptable y no afecta el boot normal.
+
 ## Plantilla de selecciones — sync que NO pierde datos + sin «Pacífico» (obligatorio, 2026-06-02)
 
 **Bug (foto usuario 2026-06-02)**: en «🌐 Plantilla de selecciones»

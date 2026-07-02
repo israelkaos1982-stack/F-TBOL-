@@ -50486,6 +50486,65 @@ https://api.sofascore.app/api/v1/team/44/image
      adoptamos — sin bloquear el primer render (fire-and-forget). NUNCA
      pisa una clasificación que YA esté presente (ni la que un sim
      concurrente acabe de escribir mientras el GET async volaba). */
+  /* RECUPERACIÓN SÍNCRONA DESDE EL SERVIDOR para el "ensure seed"
+     (2026-07-02) ──────────────────────────────────────────────────────
+     Bug usuario (persiste pese a 2026-06-28/06-30/07-01, fotos «Abissnet
+     Superiore / Albania», 38 PJ tras simular y 0 al reabrir): el "ensure
+     seed" de las 4 ligas auto-sembradas (`_ensureExtraLeagueSeed` /
+     `_ensureRestoMundoSeed`) SOLO recuperaba de copias durables LOCALES
+     (`_protected`/`_snap_*`). Si éstas TAMBIÉN se perdieron (eviction
+     agresiva de Android borra localStorage entero, no solo el main), el
+     seed escribía `results:[]` de inmediato y de forma SÍNCRONA — sin
+     preguntar nunca al servidor. Esto es MENOS robusto que `loadData()`
+     (usado por las ~50 ligas normales), que SÍ hace un XHR síncrono a
+     `/api/liga-ext/<slug>` + `-protected` antes de rendirse a un objeto
+     vacío. Si justo después el `fetchData` asíncrono de `openLigaExt`
+     fallaba (red móvil intermitente, ampliamente documentada en este
+     proyecto), la semilla vacía quedaba plantada en firme sin que nadie
+     volviera a preguntar al servidor — el usuario veía 0 PJ aunque el
+     servidor SÍ tuviera la clasificación simulada. Fix: antes de sembrar
+     vacío, replicamos el MISMO XHR síncrono que `loadData()` (main →
+     protected). Devuelve los datos del servidor (con `teams`) o null. */
+  function _lextSeedRecoverFromServer(slug){
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
+      xhr.send();
+      if (xhr.status === 200) {
+        var resp = JSON.parse(xhr.responseText);
+        if (resp && resp.data && Array.isArray(resp.data.teams) && resp.data.teams.length) {
+          var d = resp.data;
+          d.teams = d.teams || [];
+          d.results = d.results || [];
+          return d;
+        }
+      }
+    } catch(_){}
+    try {
+      var xhrP = new XMLHttpRequest();
+      xhrP.open('GET', '/api/liga-ext-protected/' + encodeURIComponent(slug), false);
+      xhrP.send();
+      if (xhrP.status === 200) {
+        var respP = JSON.parse(xhrP.responseText);
+        if (respP && respP.data && Array.isArray(respP.data.teams) && respP.data.teams.length) {
+          var dP = respP.data;
+          dP.teams = dP.teams || [];
+          dP.results = dP.results || [];
+          return dP;
+        }
+      }
+    } catch(_){}
+    return null;
+  }
+  /* Aplica la copia del servidor recuperada por _lextSeedRecoverFromServer
+     como main local + LIGA_CACHE, en vez de sembrar vacío. */
+  function _lextAdoptServerSeedRecovery(slug, d){
+    try { _sanitizeLigaTeamNames(d); } catch(_){}
+    try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(d)); } catch(_){}
+    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+    try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+    try { console.warn('[ligaExt] seed '+slug+': sin copia local — restaurado desde el SERVIDOR ('+d.teams.length+' equipos, '+((d.results&&d.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
+  }
   function _lextIdbTopupIfEmpty(slug){
     try {
       if (!window._idbKV || typeof window._idbKV.get !== 'function') return;
@@ -50559,6 +50618,13 @@ https://api.sofascore.app/api/v1/team/44/image
         try { console.warn('[ligaExt] seed '+slug+': main perdido — restaurado desde copia durable ('+_recovRM.teams.length+' equipos, '+((_recovRM.results&&_recovRM.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
         return;
       }
+    } catch(_){}
+    /* Ni el main ni sus copias durables LOCALES tenían nada (eviction
+       agresiva que se llevó TODO localStorage): preguntamos al SERVIDOR
+       antes de sembrar vacío (2026-07-02, ver _lextSeedRecoverFromServer). */
+    try {
+      var _recovSrvRM = _lextSeedRecoverFromServer(slug);
+      if (_recovSrvRM) { _lextAdoptServerSeedRecovery(slug, _recovSrvRM); return; }
     } catch(_){}
     var teams = RESTO_MUNDO_TEAMS.map(function(spec, idx){
       return {
@@ -50815,6 +50881,13 @@ https://api.sofascore.app/api/v1/team/44/image
         try { console.warn('[ligaExt] seed '+slug+': main perdido — restaurado desde copia durable ('+_recov.teams.length+' equipos, '+((_recov.results&&_recov.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
         return;
       }
+    } catch(_){}
+    /* Ni el main ni sus copias durables LOCALES tenían nada (eviction
+       agresiva que se llevó TODO localStorage): preguntamos al SERVIDOR
+       antes de sembrar vacío (2026-07-02, ver _lextSeedRecoverFromServer). */
+    try {
+      var _recovSrv = _lextSeedRecoverFromServer(slug);
+      if (_recovSrv) { _lextAdoptServerSeedRecovery(slug, _recovSrv); return; }
     } catch(_){}
     var teams = spec.teams.map(function(s, idx){
       return {

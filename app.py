@@ -3182,6 +3182,39 @@ def _lx_merge_teams(old_data, new_data):
                 if best:
                     t[_fld] = best[1]
 
+    # BACKFILL DE IDENTIDAD — PLANTILLA DE JUGADORES (2026-07-02) ───────
+    # Bug usuario ("Resto del Mundo no guarda plantillas ni escudos"):
+    # espejo EXACTO del backfill de escudo/estadio de arriba, pero para
+    # `players[]`. El ganador por `updatedAt` de un equipo puede venir de
+    # un dispositivo/simulación que tocó solo el nivel/power (sin roster
+    # todavía) mientras OTRA copia del MISMO equipo sí tiene la plantilla
+    # completa — sin este backfill esa plantilla se perdía en cuanto la
+    # copia sin jugadores ganaba la fusión por ser más reciente. NUNCA
+    # pisa un roster ya presente en el ganador (gana la edición real).
+    best_roster_by_name = {}   # nombre canónico -> (ts, players)
+    for t in (old_teams + new_teams):
+        if not isinstance(t, dict):
+            continue
+        nm = _lx_canon_name(t.get("name"))
+        players = t.get("players")
+        if not nm or not isinstance(players, list) or not players:
+            continue
+        ts = _lx_updated_at(t) or 0
+        cur = best_roster_by_name.get(nm)
+        if cur is None or ts >= cur[0]:
+            best_roster_by_name[nm] = (ts, players)
+    if best_roster_by_name:
+        for t in out_teams:
+            if not isinstance(t, dict):
+                continue
+            players = t.get("players")
+            if isinstance(players, list) and players:
+                continue
+            nm = _lx_canon_name(t.get("name"))
+            best = best_roster_by_name.get(nm) if nm else None
+            if best:
+                t["players"] = best[1]
+
     result = dict(new_data)
     result["teams"] = out_teams
     if del_set:

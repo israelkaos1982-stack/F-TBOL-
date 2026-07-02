@@ -44343,6 +44343,40 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){ return false; }
   }
 
+  /* BACKFILL DE LA PLANTILLA DE JUGADORES (2026-07-02). Espejo EXACTO de
+     `_lextBackfillShields` pero para `players[]`: rellena el roster de
+     cada equipo de `target` que venga SIN jugadores (`players` vacío o
+     ausente), tomándolo del equipo con el MISMO nombre normalizado en
+     `source`. NUNCA pisa un roster ya presente en target (gana la
+     edición del propio target). Es la pieza que faltaba junto al
+     backfill de escudos/logo/resultados: sin ella, un equipo con
+     plantilla real en una copia durable (`_protected`/snapshot/servidor)
+     nunca la recuperaba si el `main` local traía el mismo equipo con
+     `players:[]` (el estado que escribe el seed en blanco de las 4 ligas
+     auto-sembradas — Resto Mundo / Montenegro / N. Irlanda / Albania).
+     Devuelve true si rellenó algún equipo. */
+  function _lextBackfillRoster(target, source){
+    try {
+      if (!target || !Array.isArray(target.teams) ||
+          !source || !Array.isArray(source.teams)) return false;
+      var byName = {};
+      source.teams.forEach(function(st){
+        if (!st || !st.name) return;
+        if (!Array.isArray(st.players) || !st.players.length) return;
+        var nm = _lextNormName(st.name);
+        if (nm && !byName[nm]) byName[nm] = st.players;
+      });
+      var changed = false;
+      target.teams.forEach(function(tt){
+        if (!tt || !tt.name) return;
+        if (Array.isArray(tt.players) && tt.players.length) return;
+        var nm = _lextNormName(tt.name);
+        if (nm && byName[nm]) { tt.players = byName[nm]; changed = true; }
+      });
+      return changed;
+    } catch(_){ return false; }
+  }
+
   /* BACKFILL DEL LOGO DE LA LIGA (2026-06-11). Espejo de
      _lextBackfillShields pero para el logo PROPIO de la competición
      (`config.logo`/`config.cupLogo`, top-level del documento — NO por
@@ -44437,12 +44471,29 @@ https://api.sofascore.app/api/v1/team/44/image
      DELIBERADO: el reset (`ligaExtReiniciar`) pasa por `saveData`, que
      ACTUALIZA `_protected` con la clasificación VACÍA y su sello fresco,
      así que `_protected` también está vacío → no hay nada que restaurar.
-     Devuelve true si restauró algo (el caller persiste el main curado). */
+     Devuelve true si restauró algo (el caller persiste el main curado).
+
+     AMPLIADO 2026-07-02 (bug «Resto del Mundo — no guarda plantillas ni
+     escudos»): esta función SOLO miraba `results` (clasificación). Un
+     `main` con equipos sembrados en BLANCO (`players:[]`, `shield:''` —
+     el estado que escribe `_ensureRestoMundoSeed`/`_ensureExtraLeagueSeed`
+     cuando no encuentran nada que recuperar) nunca disparaba el "hot-path
+     barato" de arriba si además tenía `results` (p.ej. tras una sim de
+     liga con roster en blanco), y aunque lo disparara, el bucle de abajo
+     solo llamaba a `_lextBackfillResults` — jamás a
+     `_lextBackfillRoster`/`_lextBackfillShields` — así que la plantilla y
+     los escudos de `_protected`/snapshots JAMÁS se restauraban al `main`,
+     aunque estuvieran ahí. Ahora el hot-path también comprueba
+     `_lextHasRosterOrShield` y el bucle rellena roster + escudos además
+     de resultados. */
   function _lextRecoverResultsFromBackups(k, data){
     if (!data) return false;
-    /* Hot-path barato: si el main ya trae clasificación, no tocamos nada
-       (la reconciliación más fina la hace fetchData con el servidor). */
-    if (Array.isArray(data.results) && data.results.length) return false;
+    /* Hot-path barato: si el main ya trae clasificación Y plantilla/
+       escudos, no tocamos nada (la reconciliación más fina la hace
+       fetchData con el servidor). */
+    var needResults = !(Array.isArray(data.results) && data.results.length);
+    var needRoster = !_lextHasRosterOrShield(data);
+    if (!needResults && !needRoster) return false;
     var restored = false;
     try {
       var srcs = [];
@@ -44463,6 +44514,8 @@ https://api.sofascore.app/api/v1/team/44/image
       } catch(_){}
       for (var i = 0; i < srcs.length; i++) {
         try { if (_lextBackfillResults(data, srcs[i])) restored = true; } catch(_){}
+        try { if (needRoster && _lextBackfillRoster(data, srcs[i])) restored = true; } catch(_){}
+        try { if (needRoster && _lextBackfillShields(data, srcs[i])) restored = true; } catch(_){}
       }
       if (restored) {
         try { console.warn('[ligaExt] '+k+': clasificación del main vacía — restaurada desde copia durable local ('+((data.results&&data.results.length)||0)+' resultados).'); } catch(_){}
@@ -44521,6 +44574,7 @@ https://api.sofascore.app/api/v1/team/44/image
               data.deletedTeamNames = (_locForCmp && Array.isArray(_locForCmp.deletedTeamNames))
                 ? _locForCmp.deletedTeamNames.slice() : [];
               try { _lextBackfillShields(data, _locForCmp); } catch(_){}
+              try { _lextBackfillRoster(data, _locForCmp); } catch(_){}
               try { _lextBackfillLeagueLogo(data, _locForCmp); } catch(_){}
               try { _lextBackfillResults(data, _locForCmp); } catch(_){}
               try { _sanitizeLigaTeamNames(data); } catch(_){}
@@ -44721,6 +44775,7 @@ https://api.sofascore.app/api/v1/team/44/image
              2026-06-02). El re-push de abajo propaga los escudos
              rellenados de vuelta al servidor. */
           try { _lextBackfillShields(localCache, data); } catch(_){}
+          try { _lextBackfillRoster(localCache, data); } catch(_){}
           try { _lextBackfillLeagueLogo(localCache, data); } catch(_){}
           try { _lextBackfillResults(localCache, data); } catch(_){}
           // Conservamos la versión local en memoria y disco.
@@ -44752,6 +44807,7 @@ https://api.sofascore.app/api/v1/team/44/image
            backfill del anti-wipe: el escudo es identidad y nunca se
            pierde por dirección de sync (bug Liga Grecia 2026-06-02). */
         try { _lextBackfillShields(data, localCache || LIGA_CACHE[k]); } catch(_){}
+        try { _lextBackfillRoster(data, localCache || LIGA_CACHE[k]); } catch(_){}
         try { _lextBackfillLeagueLogo(data, localCache || LIGA_CACHE[k]); } catch(_){}
         /* Si el servidor trae resultados MÁS VIEJOS que los locales (un
            GET en vuelo que salió ANTES de terminar la sim de esta liga,
@@ -50602,30 +50658,74 @@ https://api.sofascore.app/api/v1/team/44/image
     try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
     try { console.warn('[ligaExt] seed '+slug+': sin copia local — restaurado desde el SERVIDOR ('+d.teams.length+' equipos, '+((d.results&&d.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
   }
+  /* ¿Tiene ESTA liga plantilla/escudos reales, o son solo nombres con
+     `players:[]` / `shield:''` (el estado que escribe el seed en blanco)?
+     (2026-07-02, ver nota junto a `_ensureRestoMundoSeed` más abajo — toda
+     la red de recuperación anterior solo miraba `results`, nunca
+     plantilla/escudos, así que un seed en blanco que sobrevivía a una
+     eviction quedaba PLANTADO para siempre aunque hubiera una copia rica
+     en `_protected`/snapshots/IndexedDB/servidor). */
+  function _lextHasRosterOrShield(d){
+    try {
+      if (!d || !Array.isArray(d.teams)) return false;
+      for (var i = 0; i < d.teams.length; i++) {
+        var t = d.teams[i];
+        if (!t) continue;
+        if (Array.isArray(t.players) && t.players.length) return true;
+        if (t.shield && String(t.shield).trim()) return true;
+      }
+    } catch(_){}
+    return false;
+  }
+  window._lextHasRosterOrShield = _lextHasRosterOrShield;
   function _lextIdbTopupIfEmpty(slug){
     try {
       if (!window._idbKV || typeof window._idbKV.get !== 'function') return;
       var key = 'ligaExt_' + slug;
       function _hasResults(d){ return !!(d && Array.isArray(d.results) && d.results.length); }
+      /* Falta algo que curar si NO hay resultados O NO hay plantilla/
+         escudos — antes solo se miraba `results`, así que una liga con
+         nombres pero SIN plantilla/escudos (seed en blanco) nunca
+         disparaba el top-up de IndexedDB aunque IDB tuviera la copia
+         rica guardada por el admin antes de la eviction. */
+      function _needsTopup(d){ return !_hasResults(d) || !_lextHasRosterOrShield(d); }
       var cur = null;
       try { var raw = localStorage.getItem(key); cur = raw ? JSON.parse(raw) : null; } catch(_){}
-      if (_hasResults(cur)) return; // ya hay clasificación — nada que curar
+      if (!_needsTopup(cur)) return; // ya hay clasificación Y plantilla/escudos — nada que curar
       window._idbKV.get(key).then(function(val){
         try {
           if (!val) return;
           var idbData = (typeof val === 'string') ? JSON.parse(val) : val;
           if (!idbData || !Array.isArray(idbData.teams) || !idbData.teams.length) return;
-          if (!_hasResults(idbData)) return; // IDB tampoco trae partidos
-          /* Re-leer AHORA: un sim concurrente (o esta misma función
-             disparada dos veces) puede haber poblado el main mientras
-             el GET de IDB volaba. Nunca pisar clasificación ya presente. */
+          var idbHasResults = _hasResults(idbData);
+          var idbHasRoster = _lextHasRosterOrShield(idbData);
+          if (!idbHasResults && !idbHasRoster) return; // IDB tampoco trae nada útil
+          /* Re-leer AHORA: un sim/edición concurrente (o esta misma
+             función disparada dos veces) puede haber poblado el main
+             mientras el GET de IDB volaba. Nunca pisar clasificación o
+             plantilla/escudos ya presentes. */
           var curNow = null;
           try { var rawNow = localStorage.getItem(key); curNow = rawNow ? JSON.parse(rawNow) : null; } catch(_){}
-          if (_hasResults(curNow)) return;
-          localStorage.setItem(key, JSON.stringify(idbData));
-          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = idbData; } catch(_){}
+          if (!_needsTopup(curNow)) return;
+          /* MERGE, no reemplazo ciego: si el local YA tiene resultados
+             (o plantilla) que IDB no trae, los conservamos y solo
+             rellenamos lo que falte, para no perder progreso reciente
+             que aún no llegó a IDB por el lado que sí tenía algo. */
+          var merged = curNow && Array.isArray(curNow.teams) && curNow.teams.length
+            ? curNow : idbData;
+          if (merged !== idbData) {
+            try { _lextBackfillShields(merged, idbData); } catch(_){}
+            try { _lextBackfillResults(merged, idbData); } catch(_){}
+          }
+          if (!_needsTopup(merged)) {
+            /* el merge por nombre ya cubrió lo que faltaba */
+          } else if (merged === curNow && !_hasResults(curNow) && idbHasResults) {
+            merged.results = idbData.results;
+          }
+          localStorage.setItem(key, JSON.stringify(merged));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = merged; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
-          try { console.warn('[ligaExt] '+slug+': clasificación vacía en localStorage — recuperada desde IndexedDB ('+idbData.results.length+' resultados).'); } catch(_){}
+          try { console.warn('[ligaExt] '+slug+': localStorage sin clasificación y/o plantilla/escudos — recuperado desde IndexedDB.'); } catch(_){}
           try { if (CURRENT_KEY === slug && typeof renderTable === 'function') renderTable(); } catch(_){}
         } catch(_){}
       }).catch(function(){});
@@ -50634,17 +50734,32 @@ https://api.sofascore.app/api/v1/team/44/image
   function _ensureRestoMundoSeed(){
     var slug = 'resto-mundo';
     var hasTeams = false;
+    var curData = null;
     try {
       var raw = localStorage.getItem('ligaExt_' + slug);
       if (raw) {
-        var d = JSON.parse(raw);
-        if (d && Array.isArray(d.teams) && d.teams.length > 0) hasTeams = true;
+        curData = JSON.parse(raw);
+        if (curData && Array.isArray(curData.teams) && curData.teams.length > 0) hasTeams = true;
       }
     } catch(_){}
-    if (hasTeams) { _upgradeRestoMundoZones(); _lextIdbTopupIfEmpty(slug); return; }
-    /* ANTES de sembrar VACÍO (results:[]): si esta liga YA se simuló y
-       su `main` se perdió (eviction agresiva / QuotaExceededError
-       silencioso), su clasificación sigue viva en las copias durables
+    /* «hasTeams» por sí solo NO basta (bug usuario 2026-07-02, «Resto del
+       Mundo no guarda plantillas ni escudos»): el seed en blanco escribe
+       44 equipos con NOMBRE pero `players:[]`/`shield:''`. Si ese blanco
+       sobrevive o se re-escribe (eviction parcial / re-seed accidental),
+       `hasTeams` queda true PARA SIEMPRE y TODA la recuperación de abajo
+       (protected/snapshots/servidor) se salta con el `return` de la línea
+       siguiente — aunque esas copias durables SÍ tengan la plantilla y
+       los escudos reales que el admin guardó antes de perderlos del
+       `main`. `isBlank` detecta ese estado (nombres pero sin plantilla,
+       sin escudos y sin resultados) para forzar el mismo intento de
+       recuperación que si `hasTeams` fuera false. */
+    var isBlank = hasTeams && curData && !_lextHasRosterOrShield(curData) &&
+      !(Array.isArray(curData.results) && curData.results.length);
+    if (hasTeams && !isBlank) { _upgradeRestoMundoZones(); _lextIdbTopupIfEmpty(slug); return; }
+    /* ANTES de sembrar VACÍO (o de conformarnos con el blanco ya
+       plantado): si esta liga YA se editó/simuló y su `main` se perdió
+       (eviction agresiva / QuotaExceededError silencioso), su plantilla +
+       escudos + clasificación siguen vivos en las copias durables
        `_protected` / `_snap_*` que `saveData` escribe en cada guardado.
        Restaurar ESA copia en vez de pisar con el seed vacío — mismo fix
        que ya tenía `_ensureExtraLeagueSeed` para Montenegro/N.Irlanda/
@@ -50669,6 +50784,24 @@ https://api.sofascore.app/api/v1/team/44/image
         } catch(_){}
       }
       if (_recovRM) {
+        if (isBlank && curData) {
+          /* El `main` ya tiene los 44 equipos (posiblemente con zonas ya
+             editadas por el admin en `config`) pero en blanco — RELLENAMOS
+             roster/escudos/resultados por nombre en vez de reemplazar el
+             documento entero, para no perder ediciones de `config`. */
+          var _chRM = false;
+          try { if (_lextBackfillRoster(curData, _recovRM)) _chRM = true; } catch(_){}
+          try { if (_lextBackfillShields(curData, _recovRM)) _chRM = true; } catch(_){}
+          try { if (_lextBackfillResults(curData, _recovRM)) _chRM = true; } catch(_){}
+          if (_chRM) {
+            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
+            try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+            try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = curData; } catch(_){}
+            try { console.warn('[ligaExt] seed '+slug+': plantilla/escudos en blanco — rellenados desde copia durable local.'); } catch(_){}
+          }
+          _lextIdbTopupIfEmpty(slug);
+          return;
+        }
         try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(_recovRM)); } catch(_){}
         try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = _recovRM; } catch(_){}
@@ -50681,8 +50814,29 @@ https://api.sofascore.app/api/v1/team/44/image
        antes de sembrar vacío (2026-07-02, ver _lextSeedRecoverFromServer). */
     try {
       var _recovSrvRM = _lextSeedRecoverFromServer(slug);
-      if (_recovSrvRM) { _lextAdoptServerSeedRecovery(slug, _recovSrvRM); return; }
+      if (_recovSrvRM) {
+        if (isBlank && curData) {
+          var _chRM2 = false;
+          try { if (_lextBackfillRoster(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
+          try { if (_lextBackfillShields(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
+          try { if (_lextBackfillResults(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
+          if (_chRM2) {
+            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
+            try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+            try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = curData; } catch(_){}
+            try { console.warn('[ligaExt] seed '+slug+': plantilla/escudos en blanco — rellenados desde el SERVIDOR.'); } catch(_){}
+          }
+          return;
+        }
+        _lextAdoptServerSeedRecovery(slug, _recovSrvRM);
+        return;
+      }
     } catch(_){}
+    /* Ya estaba sembrada en blanco y ninguna copia durable ni el servidor
+       tenían nada mejor: dejamos el blanco tal cual (NO lo re-escribimos
+       con un documento nuevo, que perdería `config`/zonas ya editadas) y
+       probamos IndexedDB en segundo plano como último recurso. */
+    if (isBlank) { _lextIdbTopupIfEmpty(slug); return; }
     var teams = RESTO_MUNDO_TEAMS.map(function(spec, idx){
       return {
         id: 'rm-' + (idx + 1),
@@ -50896,20 +51050,31 @@ https://api.sofascore.app/api/v1/team/44/image
     var spec = _EXTRA_LEAGUE_SEEDS[slug];
     if (!spec) return;
     var hasTeams = false;
+    var curData = null;
     try {
       var raw = localStorage.getItem('ligaExt_' + slug);
       if (raw) {
-        var d = JSON.parse(raw);
-        if (d && Array.isArray(d.teams) && d.teams.length > 0) hasTeams = true;
+        curData = JSON.parse(raw);
+        if (curData && Array.isArray(curData.teams) && curData.teams.length > 0) hasTeams = true;
       }
     } catch(_){}
-    if (hasTeams) { _lextIdbTopupIfEmpty(slug); return; }
-    /* ANTES de sembrar VACÍO (results:[]) : si esta liga YA se editó o
-       simuló y su `main` se perdió (eviction agresiva de localStorage en
-       Android, wipe, etc.), su clasificación + plantilla siguen vivas en
-       las copias durables `_protected` / `_snap_*` que `saveData` escribe
-       en cada guardado. Restaurar ESA copia (con sus resultados) en vez de
-       pisar con el seed vacío — sin esto el seed eager borraba la sim de
+    /* «hasTeams» por sí solo NO basta (mismo bug que Resto Mundo,
+       2026-07-02): el seed en blanco escribe equipos con NOMBRE pero
+       `players:[]`/`shield:''`. Si ese blanco queda plantado, `hasTeams`
+       es true PARA SIEMPRE y la recuperación de abajo nunca se intenta
+       aunque `_protected`/snapshots/servidor tengan la plantilla+escudos
+       reales. `isBlank` fuerza el mismo intento de recuperación que si
+       `hasTeams` fuera false. */
+    var isBlank = hasTeams && curData && !_lextHasRosterOrShield(curData) &&
+      !(Array.isArray(curData.results) && curData.results.length);
+    if (hasTeams && !isBlank) { _lextIdbTopupIfEmpty(slug); return; }
+    /* ANTES de sembrar VACÍO (o de conformarnos con el blanco ya
+       plantado): si esta liga YA se editó o simuló y su `main` se perdió
+       (eviction agresiva de localStorage en Android, wipe, etc.), su
+       clasificación + plantilla siguen vivas en las copias durables
+       `_protected` / `_snap_*` que `saveData` escribe en cada guardado.
+       Restaurar ESA copia (con sus resultados) en vez de pisar con el
+       seed vacío — sin esto el seed eager borraba la sim de
        Albania/Montenegro/N.Irlanda al recargar tras una eviction
        (2026-06-28). */
     try {
@@ -50932,6 +51097,20 @@ https://api.sofascore.app/api/v1/team/44/image
         } catch(_){}
       }
       if (_recov) {
+        if (isBlank && curData) {
+          var _ch = false;
+          try { if (_lextBackfillRoster(curData, _recov)) _ch = true; } catch(_){}
+          try { if (_lextBackfillShields(curData, _recov)) _ch = true; } catch(_){}
+          try { if (_lextBackfillResults(curData, _recov)) _ch = true; } catch(_){}
+          if (_ch) {
+            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
+            try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+            try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = curData; } catch(_){}
+            try { console.warn('[ligaExt] seed '+slug+': plantilla/escudos en blanco — rellenados desde copia durable local.'); } catch(_){}
+          }
+          _lextIdbTopupIfEmpty(slug);
+          return;
+        }
         try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(_recov)); } catch(_){}
         try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = _recov; } catch(_){}
@@ -50944,8 +51123,29 @@ https://api.sofascore.app/api/v1/team/44/image
        antes de sembrar vacío (2026-07-02, ver _lextSeedRecoverFromServer). */
     try {
       var _recovSrv = _lextSeedRecoverFromServer(slug);
-      if (_recovSrv) { _lextAdoptServerSeedRecovery(slug, _recovSrv); return; }
+      if (_recovSrv) {
+        if (isBlank && curData) {
+          var _ch2 = false;
+          try { if (_lextBackfillRoster(curData, _recovSrv)) _ch2 = true; } catch(_){}
+          try { if (_lextBackfillShields(curData, _recovSrv)) _ch2 = true; } catch(_){}
+          try { if (_lextBackfillResults(curData, _recovSrv)) _ch2 = true; } catch(_){}
+          if (_ch2) {
+            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
+            try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+            try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = curData; } catch(_){}
+            try { console.warn('[ligaExt] seed '+slug+': plantilla/escudos en blanco — rellenados desde el SERVIDOR.'); } catch(_){}
+          }
+          return;
+        }
+        _lextAdoptServerSeedRecovery(slug, _recovSrv);
+        return;
+      }
     } catch(_){}
+    /* Ya estaba sembrada en blanco y ninguna copia durable ni el servidor
+       tenían nada mejor: dejamos el blanco tal cual (NO lo re-escribimos
+       con un documento nuevo, que perdería `config`/zonas ya editadas) y
+       probamos IndexedDB en segundo plano como último recurso. */
+    if (isBlank) { _lextIdbTopupIfEmpty(slug); return; }
     var teams = spec.teams.map(function(s, idx){
       return {
         id: slug + '-' + (idx + 1),

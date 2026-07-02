@@ -40164,15 +40164,106 @@ window._showSimProgress = function(opts, onDone){
     /* Persistir en localStorage + server (fire-and-forget). */
     try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
     _saveEuropeCommitServer(blob);
-    alert('✅ Pools europeos congelados:\n\n'
-        + (recovered ? ('🌐 Ligas recuperadas (servidor + copia local): ' + recovered + '\n\n') : '')
-        + '🔵 Champions League: ' + totalUcl + ' equipos\n'
-        + '🇪🇺 Previa de Champions: ' + totalPrev + ' equipos\n'
-        + '🟡 Open Qualifier: ' + totalOq + ' equipos\n'
-        + '🎟️ Wild Card: ' + totalWc + ' equipos\n'
-        + '🟠 Europa League: ' + totalUel + ' equipos\n'
-        + '🟢 Conference League: ' + totalUecl + ' equipos\n\n'
-        + 'A partir de ahora estas pantallas usarán esta snapshot. Si vuelves a simular las ligas, pulsa este botón otra vez para refrescar.');
+    /* Informe DETALLADO con nombre de equipo + liga por competición
+       (petición usuario 2026-07-02: "quiero que me digas el nombre de
+       los equipos y su liga que van a cada competición para que no
+       haya errores"). El resumen de arriba solo daba TOTALES — sin
+       los nombres el admin no podía verificar contra la tabla de
+       coeficientes (p.ej. "¿de verdad son 4 los de Inglaterra en
+       Champions, o hay un descuadre?"). `_eurShowCommitReport` pinta
+       un overlay con cada zona agrupada por liga. */
+    try {
+      window._eurShowCommitReport(blob, recovered);
+    } catch(_){
+      alert('✅ Pools europeos congelados:\n\n'
+          + (recovered ? ('🌐 Ligas recuperadas (servidor + copia local): ' + recovered + '\n\n') : '')
+          + '🔵 Champions League: ' + totalUcl + ' equipos\n'
+          + '🇪🇺 Previa de Champions: ' + totalPrev + ' equipos\n'
+          + '🟡 Open Qualifier: ' + totalOq + ' equipos\n'
+          + '🎟️ Wild Card: ' + totalWc + ' equipos\n'
+          + '🟠 Europa League: ' + totalUel + ' equipos\n'
+          + '🟢 Conference League: ' + totalUecl + ' equipos\n\n'
+          + 'A partir de ahora estas pantallas usarán esta snapshot. Si vuelves a simular las ligas, pulsa este botón otra vez para refrescar.');
+    }
+  };
+
+  /* ── Informe de equipos por competición (nombre + liga) ──────────
+     Petición usuario 2026-07-02: tras pulsar "Enviar", quiere ver el
+     nombre de cada equipo y su liga en cada competición (Champions,
+     Previa, Open Qualifier, Wild Card, Europa League, Conference)
+     para poder verificarlo contra la tabla oficial de coeficientes
+     (país → cuántas plazas 🔵🟣🟠🟢🟡⚪ le tocan). Agrupa por liga
+     DENTRO de cada zona para que el conteo por país sea fácil de
+     comparar con esa tabla de un vistazo, y lista los equipos
+     concretos debajo por si hay que detectar un error puntual
+     (equipo equivocado / liga mal etiquetada). */
+  var _EUR_REPORT_ZONES = [
+    { key:'ucl',      label:'Champions League',     emoji:'🔵', color:'#42a5f5' },
+    { key:'uclPrev',  label:'Previa de Champions',   emoji:'🇪🇺', color:'#a855f7' },
+    { key:'uel',      label:'Europa League',         emoji:'🟠', color:'#F37335' },
+    { key:'uecl',     label:'Conference League',     emoji:'🟢', color:'#3cc878' },
+    { key:'uclQual',  label:'Open Qualifier',        emoji:'🟡', color:'#FDC830' },
+    { key:'wildcard', label:'Wild Card',             emoji:'⚪', color:'#cccccc' }
+  ];
+  function _eurLeagueLabel(t){
+    var lg = (t && t.league) || '';
+    if(lg === 'ea-sports-manual') return 'España (EA Sports · manual)';
+    if(lg === 'previa-champions')  return 'Previa Champions (feeder)';
+    if(lg === 'open-qualifier')    return 'Open Qualifier (feeder)';
+    if(lg === 'previa-rf')         return 'Previa (feeder)';
+    if(!lg) return 'Liga desconocida';
+    if(window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[lg]){
+      return lg.charAt(0).toUpperCase()+lg.slice(1).replace(/-/g,' ')+' ('+window.LEAGUE_DEFAULT_NAMES[lg]+')';
+    }
+    return lg.charAt(0).toUpperCase()+lg.slice(1).replace(/-/g,' ');
+  }
+  function _eurEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function _eurZoneSectionHtml(zone, teams){
+    teams = teams || [];
+    var byLeague = {}, order = [];
+    teams.forEach(function(t){
+      var lbl = _eurLeagueLabel(t);
+      if(!byLeague[lbl]){ byLeague[lbl] = []; order.push(lbl); }
+      byLeague[lbl].push((t && t.name) || '?');
+    });
+    order.sort(function(a,b){ return byLeague[b].length - byLeague[a].length || a.localeCompare(b,'es'); });
+    var body = order.map(function(lbl){
+      var names = byLeague[lbl].slice().sort(function(a,b){ return a.localeCompare(b,'es'); });
+      return '<div style="margin:4px 0 2px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:.5px;color:'+zone.color+';">'
+           +   _eurEsc(lbl) + ' <span style="color:rgba(255,255,255,.5);">(' + names.length + ')</span>'
+           + '</div>'
+           + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.85);padding-left:10px;line-height:1.6;">'
+           +   names.map(_eurEsc).join(' · ')
+           + '</div>';
+    }).join('');
+    if(!teams.length) body = '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,150,150,.85);padding:4px 0;">⚠️ Sin equipos — revisa esta competición.</div>';
+    return '<div style="margin:0 0 18px;border:1px solid '+zone.color+'55;border-radius:10px;overflow:hidden;">'
+         +   '<div style="padding:8px 12px;background:linear-gradient(90deg,rgba(0,0,0,.6),'+zone.color+'33,rgba(0,0,0,.6));font-family:Bebas Neue,Oswald,sans-serif;letter-spacing:1px;font-size:15px;color:#fff;">'
+         +     zone.emoji + ' ' + _eurEsc(zone.label) + ' <span style="color:rgba(255,255,255,.6);font-size:12px;">— ' + teams.length + ' equipos</span>'
+         +   '</div>'
+         +   '<div style="padding:8px 12px;">' + body + '</div>'
+         + '</div>';
+  }
+  window._eurShowCommitReport = function(blob, recovered){
+    var ov = document.getElementById('eur-report-ov');
+    if(!ov){
+      ov = document.createElement('div');
+      ov.id = 'eur-report-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,6,.94);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px 60px;';
+      document.body.appendChild(ov);
+    }
+    var html = '<div style="width:100%;max-width:640px;">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+      +     '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">✅ Reparto europeo enviado</div>'
+      +     '<button id="eur-report-close" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;letter-spacing:1px;">✕ Cerrar</button>'
+      +   '</div>'
+      +   (recovered ? ('<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.6);margin-bottom:14px;">🌐 Ligas recuperadas del servidor: '+recovered+'</div>') : '')
+      +   _EUR_REPORT_ZONES.map(function(z){ return _eurZoneSectionHtml(z, blob[z.key]); }).join('')
+      + '</div>';
+    ov.innerHTML = html;
+    var closeBtn = document.getElementById('eur-report-close');
+    if(closeBtn) closeBtn.onclick = function(){ ov.remove(); };
+    ov.onclick = function(ev){ if(ev.target === ov) ov.remove(); };
   };
 
   /* ── Re-cuadrar reparto europeo (canónico) ───────────────────────

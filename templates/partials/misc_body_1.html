@@ -40371,6 +40371,63 @@ window._showSimProgress = function(opts, onDone){
         .then(step);
     });
   }
+
+  /* ── AUTO-hidratación de ligas para el reparto europeo ───────────
+     Bug 2026-07-02 (fotos usuario "he tenido que añadir uno a uno
+     manualmente todos los equipos"): `_eurHydrateMissingLeagues` ya
+     existía y resuelve exactamente el problema (trae del servidor las
+     `ligaExt_<slug>` que faltan en ESTE dispositivo antes de calcular
+     el reparto), pero solo estaba cableado a los 2 botones manuales
+     de admin ("Enviar realidad" / "Re-cuadrar"). Las pantallas reales
+     (Open Qualifier, Wild Card, Champions/Europa/Conference, Previa)
+     llaman a `_computeQualifiedFromLeagues` DIRECTAMENTE sobre lo que
+     ya hay en localStorage — en un dispositivo que no ha abierto las
+     ~50 ligas una a una, el pool sale casi vacío y la única forma de
+     rellenarlo era el inyector manual "EA Sports → Europa" equipo a
+     equipo (lo que el usuario reportó tener que hacer).
+
+     Fix: hidratar automáticamente en segundo plano — al boot
+     (diferido) y al volver el foco a la pestaña (throttle 5 min) — y
+     re-pintar las pantallas europeas si trajo algo nuevo. Idempotente
+     y barato cuando no falta nada (`_eurHydrateMissingLeagues` hace
+     no-op si todas las ligas ya tienen equipos + resultados). */
+  var _EUR_AUTO_HYDRATE_MIN_GAP = 5 * 60 * 1000;
+  var _eurAutoHydrateLast = 0;
+  var _eurAutoHydrateRunning = false;
+  function _eurAutoHydrateAndRender(){
+    if (_eurAutoHydrateRunning) return;
+    var now = Date.now();
+    if (now - _eurAutoHydrateLast < _EUR_AUTO_HYDRATE_MIN_GAP) return;
+    if (typeof window.LEAGUE_DEFAULT_ZONES !== 'object') return;
+    _eurAutoHydrateRunning = true;
+    _eurAutoHydrateLast = now;
+    try {
+      _eurHydrateMissingLeagues(function(recovered){
+        _eurAutoHydrateRunning = false;
+        if (!recovered) return;
+        try { console.log('[eur-auto-hydrate] ligas recuperadas del servidor:', recovered); } catch(_){}
+        /* Reparto dinámico (no toca `europe_committed_v1`): si el admin
+           ya congeló una snapshot manual, `_europeFrozenFor` la sigue
+           prefiriendo — esto solo alimenta el cálculo EN VIVO para
+           cuando no hay snapshot o se resetee. */
+        try { if (typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
+        try { if (typeof window._wcRender === 'function') window._wcRender(); } catch(_){}
+        try { if (typeof window.buildUclGruposClas === 'function') window.buildUclGruposClas(); } catch(_){}
+        try { if (typeof window.buildUelGruposClas === 'function') window.buildUelGruposClas(); } catch(_){}
+        try { if (typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
+        try { if (typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); } catch(_){}
+        try { if (typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
+      });
+    } catch(_){ _eurAutoHydrateRunning = false; }
+  }
+  window._eurAutoHydrateAndRender = _eurAutoHydrateAndRender;
+  setTimeout(_eurAutoHydrateAndRender, 4000);
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible') _eurAutoHydrateAndRender();
+  });
+  window.addEventListener('pageshow', _eurAutoHydrateAndRender);
+  window.addEventListener('focus', _eurAutoHydrateAndRender);
+
   window._restoLigasRecuadrarEurope = function(){
     if(typeof window.LEAGUE_DEFAULT_ZONES !== 'object'
        || typeof window._zonesDefaultFor !== 'function'){
@@ -64540,18 +64597,38 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        `if(typeof srv !== 'string' || !srv) return;`, así que NO
        restaurarán al boot. También seedeamos `_lastSnapshot` para
        evitar que el polling siguiente intente re-pushear lo que
-       acabamos de limpiar. */
-    if (keysToClear.length){
-      var patch = {};
-      keysToClear.forEach(function(k){ patch[k] = ''; });
+       acabamos de limpiar.
+
+       CON REINTENTOS (bug 2026-07-02, foto usuario "el Reset del
+       Open Qualifier no funciona"): el POST era fire-and-forget con
+       `.catch()` mudo — en red móvil se pierde con frecuencia. Si se
+       pierde, el server conserva el blob viejo y el siguiente
+       `hydrateFromServer()` (dispara en CADA focus/resume de pestaña,
+       no solo al boot) lo restaura sin más, deshaciendo el reset en
+       silencio. `_postClearRetry` reintenta hasta 3 veces con backoff
+       exponencial (mismo patrón que `_resetLigaServer`), igual que la
+       limpieza de `europe_committed_v1` de abajo. */
+    function _postClearRetry(url, body, tries){
+      tries = tries || 0;
       try {
-        fetch('/api/state', {
+        fetch(url, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           credentials:'same-origin',
-          body: JSON.stringify({ competition_state: patch })
-        }).catch(function(){});
-      } catch(_){}
+          body: JSON.stringify(body)
+        }).then(function(r){
+          if (!r || !r.ok) throw new Error('bad status');
+        }).catch(function(){
+          if (tries < 3) setTimeout(function(){ _postClearRetry(url, body, tries+1); }, Math.pow(2, tries+1) * 1000);
+        });
+      } catch(_){
+        if (tries < 3) setTimeout(function(){ _postClearRetry(url, body, tries+1); }, Math.pow(2, tries+1) * 1000);
+      }
+    }
+    if (keysToClear.length){
+      var patch = {};
+      keysToClear.forEach(function(k){ patch[k] = ''; });
+      _postClearRetry('/api/state', { competition_state: patch }, 0);
       try {
         if (window._compStateSyncSnapshot && typeof window._compStateSyncSnapshot === 'object'){
           keysToClear.forEach(function(k){ window._compStateSyncSnapshot[k] = null; });
@@ -64562,14 +64639,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        el frozen list del snapshot sigue mandando teams al UCL/
        UEL/UECL aunque las feeder keys ya estén vacías. */
     try { localStorage.removeItem('europe_committed_v1'); } catch(_){}
-    try {
-      fetch('/api/kv/europe_committed_v1', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        credentials:'same-origin',
-        body: JSON.stringify({value: null})
-      }).catch(function(){});
-    } catch(_){}
+    _postClearRetry('/api/kv/europe_committed_v1', {value: null}, 0);
     /* Re-render de las clasificaciones que dependen de los pools.
        Si una pantalla no está montada todavía, el build hace
        early-return en `getElementById(container)` — no rompe. */

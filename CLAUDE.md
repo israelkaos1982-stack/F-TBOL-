@@ -2125,6 +2125,77 @@ de la liga.
 - **PROHIBIDO** hardcodear plazas en builders nuevos: leer siempre de
   `data.config.zones` con fallback `window._zonesDefaultFor(slug)`.
 
+### El reparto europeo se AUTO-hidrata — sin él, el admin tenía que añadir cada equipo a mano (obligatorio, 2026-07-02)
+
+**Bug (fotos usuario 2026-07-02, "he tenido que añadir uno a uno
+manualmente todos los equipos a competiciones europeas ya que no
+funciona")**: las pantallas de Champions/Europa/Conference/Previa/Open
+Qualifier/Wild Card/Recopa mostraban pools casi vacíos, así que el
+admin acababa metiendo los 28+18+12+34+88+70+64 equipos a mano por el
+inyector "EA Sports → Europa" (pensado SOLO para inyectar Liga EA
+Sports, no como sustituto del cómputo automático de las ~50 ligas
+externas).
+
+**Causa raíz**: `_computeQualifiedFromLeagues` (fuente del reparto
+automático) SOLO lee las `ligaExt_<slug>` que YA están en el
+localStorage de ESE dispositivo — y esas solo se cargan al abrir cada
+pantalla de liga una a una. El helper que ya existía para arreglar
+esto (`_eurHydrateMissingLeagues`, trae del servidor las ligas que
+faltan) estaba cableado ÚNICAMENTE a 2 botones manuales de admin
+("📤 Enviar realidad de cada equipo a su Europa" / "♻️ Re-cuadrar
+reparto europeo") — las pantallas reales (Open Qualifier, Wild Card,
+UCL/UEL/UECL, Previa) nunca lo llamaban, así que sin pulsar esos
+botones el pool automático seguía vacío.
+
+**Fix** (`misc_body_1.html`, junto a `_eurHydrateMissingLeagues`):
+`window._eurAutoHydrateAndRender()` llama a `_eurHydrateMissingLeagues`
+en segundo plano — al boot (diferido 4 s) y al volver el foco a la
+pestaña (throttle 5 min) — y, si trajo ligas nuevas, re-pinta
+`buildOpenQualifierClas`/`_wcRender`/`buildUclGruposClas`/
+`buildUelGruposClas`/`buildUeclGruposClas`/`buildUclPrevClas`. No toca
+`europe_committed_v1` (si el admin congeló una snapshot manual, sigue
+mandando); solo alimenta el cálculo EN VIVO. Idempotente y barato
+cuando no falta nada.
+
+**Reglas a respetar**:
+1. **PROHIBIDO** que `_eurHydrateMissingLeagues` vuelva a estar cableado
+   SOLO a botones manuales de admin. El reparto automático debe
+   auto-sanarse sin que el usuario tenga que saber que ese botón existe.
+2. **PROHIBIDO** que el auto-hidratado corra sin throttle (mínimo 5 min
+   entre pasadas) — son hasta ~50 fetches, no debe dispararse en cada
+   focus/render.
+3. El inyector manual "EA Sports → Europa" sigue existiendo para su
+   propósito original (Liga EA Sports, blacklisted del cómputo
+   automático) — no es la vía para el resto de ligas.
+
+### El reset de pools europeos (WC/OQ/Previa) reintenta el POST al servidor (obligatorio, 2026-07-02)
+
+**Bug (foto usuario 2026-07-02, "el Open Qualifier no funciona el
+reset")**: `_resetEuropePoolFeeders` limpiaba localStorage al instante,
+pero el POST que limpia el espejo del servidor (`/api/state` con las
+claves a `''`, + `/api/kv/europe_committed_v1` a `null`) era
+fire-and-forget con `.catch()` mudo, sin reintentos. En red móvil ese
+POST se pierde con frecuencia; si se pierde, el server conserva el
+blob viejo y el siguiente `hydrateFromServer()` — que dispara en CADA
+`focus`/`pageshow`/`visibilitychange`, no solo al boot — lo restaura
+sin más (no hay concepto de tombstone: `local===null` ⇒ "restaurar
+siempre que el server tenga algo"). El reset se deshacía solo, en
+silencio, en cuanto el usuario cambiaba de app o el móvil se bloqueaba.
+
+**Fix**: `_postClearRetry(url, body, tries)` reintenta hasta 3 veces
+con backoff exponencial (2 s/4 s/8 s, mismo patrón que
+`_resetLigaServer`) tanto el clear de `/api/state` como el de
+`/api/kv/europe_committed_v1`.
+
+**Reglas a respetar**:
+4. **PROHIBIDO** que un reset que limpia estado compartido (server)
+   vuelva a un POST fire-and-forget sin reintentos. `hydrateFromServer`
+   restaura ciegamente cualquier valor no vacío que el server conserve
+   cuando el local está `null` — el POST de limpieza DEBE llegar.
+5. Todo reset nuevo de pools europeos (o cualquier store en
+   `SYNC_KEYS` de `misc_body_2.html`) que borre localStorage debe
+   persistir el borrado en servidor con reintentos, no un fetch suelto.
+
 ## Caja "Torneos de Verano · Estadísticas" — render no bloqueante + equipos vigentes (obligatorio, 2026-05-28)
 
 **Bug (foto usuario 2026-05-28)**: con el Trofeo Joan Gamper a 46/48

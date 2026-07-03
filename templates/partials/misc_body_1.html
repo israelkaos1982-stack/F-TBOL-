@@ -21231,6 +21231,18 @@ window._showSimProgress = function(opts, onDone){
   /* Defaults sobrios para tarjetas que no declaren paleta propia. */
   --cir-bg:rgba(0,0,0,.55);
   --cir-bd:rgba(255,255,255,.22);
+  /* `position:relative` — SIN esto, el overlay de edición
+     (`.comp-edit-overlay`, `position:absolute;inset:0`) no tiene aquí
+     un ancestro posicionado y su containing block salta hasta `.screen`
+     (el único ancestro con `position` != static). Con 10 cajas en modo
+     edición, las 10 copias de `.comp-edit-overlay` acaban con el MISMO
+     rect (todo `#s-competiciones`), apiladas unas sobre otras: solo la
+     ÚLTIMA (la de la caja final de la lista) es la que realmente recibe
+     los toques, sea cual sea la caja que el usuario CREE estar tocando.
+     Por eso "por más que edito los iconos, no funcionan" — el usuario
+     siempre editaba (a ciegas) la MISMA caja, nunca la que veía debajo
+     del dedo. */
+  position:relative;
 }
 #s-competiciones .submenu-card.sc-ucl1{--cir-bg:#1538a0;--cir-bd:#2848c8;}
 #s-competiciones .submenu-card.sc-uel1{--cir-bg:#a03a00;--cir-bd:#c04800;}

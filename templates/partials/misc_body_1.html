@@ -21502,11 +21502,26 @@ window._showSimProgress = function(opts, onDone){
     }
   }
   function applyAllOverrides(){
+    /* El icono se guarda SIEMPRE bajo la key `data-orig-label` (el texto
+       ORIGINAL de la caja, sellado por `_stampOrigLabel` — ver el guardado
+       en `.comp-edit-pick` más abajo, que usa exactamente
+       `card.getAttribute('data-orig-label') || cardLabel(card)`).
+       Si aquí se buscara por `cardLabel(card)` (el texto ACTUAL) y la caja
+       ya se hubiese renombrado (✏️ TEXTO) por `applyCardsState()` ANTES de
+       que esta función corriera, la key ya no coincidiría con la guardada
+       y el icono JAMÁS se reaplicaría — silencioso, sin error visible
+       ("por más que edito los iconos, no funcionan"). En un dispositivo
+       con localStorage vacío (primer arranque / datos borrados) las dos
+       hidrataciones (`_hydrateIconsFromServer` / `_hydrateCardsFromServer`)
+       son async de verdad y pueden resolver en CUALQUIER orden, así que
+       depender del orden de aplicación era una carrera real, no solo
+       teórica. Usar la MISMA key estable que al guardar elimina la carrera
+       por completo. */
     var screen = document.getElementById('s-competiciones');
     if(!screen) return;
     var icons = loadIcons();
     screen.querySelectorAll('.submenu-card').forEach(function(card){
-      var lbl = cardLabel(card);
+      var lbl = card.getAttribute('data-orig-label') || cardLabel(card);
       if(lbl && icons[lbl]) applyIconToCard(card, icons[lbl]);
     });
   }

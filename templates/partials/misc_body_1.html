@@ -21407,6 +21407,54 @@ window._showSimProgress = function(opts, onDone){
     return Math.ceil(payload.length * 3 / 4);
   }
 
+  /* Quita el fondo blanco/claro "horneado" en la propia foto (petición
+     usuario 2026-07-03, "mejora la integración de añadir para que quede
+     perfecto"): las fotos de trofeo que suele subir el admin son JPEG
+     con fondo blanco OPACO — sin esto, cualquier icono nuevo saldría con
+     el mismo rectángulo blanco feo que hubo que corregir a mano para los
+     12 trofeos iniciales (Champions/Europa/Recopa/…). Flood-fill 4-conexo
+     desde los 4 bordes del canvas: solo convierte a transparente el
+     fondo CLARO que está CONECTADO al borde, así que un brillo/reflejo
+     plateado interno del propio trofeo (rodeado de metal más oscuro, NO
+     conectado al borde) se conserva intacto. Si el fondo no es claro (o
+     el sujeto ya toca los 4 bordes, p.ej. un escudo ya recortado) no
+     encuentra nada que rellenar y no toca ni un píxel — no-op seguro. */
+  function _removeFlatBackground(ctx, w, h){
+    if(w < 2 || h < 2) return;
+    var imgData;
+    try { imgData = ctx.getImageData(0,0,w,h); } catch(_){ return; }
+    var data = imgData.data;
+    var THRESH = 235;
+    function isBg(p){
+      var i = p*4;
+      return data[i] >= THRESH && data[i+1] >= THRESH && data[i+2] >= THRESH;
+    }
+    var n = w*h;
+    var visited = new Uint8Array(n);
+    var queue = new Int32Array(n);
+    var qLen = 0;
+    function maybePush(x,y){
+      var p = y*w+x;
+      if(visited[p]) return;
+      if(isBg(p)){ visited[p]=1; queue[qLen++]=p; }
+    }
+    for(var x=0;x<w;x++){ maybePush(x,0); maybePush(x,h-1); }
+    for(var y=0;y<h;y++){ maybePush(0,y); maybePush(w-1,y); }
+    var qi = 0;
+    while(qi < qLen){
+      var p = queue[qi++];
+      var cx = p % w, cy = (p - cx) / w;
+      if(cx>0) maybePush(cx-1, cy);
+      if(cx<w-1) maybePush(cx+1, cy);
+      if(cy>0) maybePush(cx, cy-1);
+      if(cy<h-1) maybePush(cx, cy+1);
+    }
+    var changed = false;
+    for(var p2=0;p2<n;p2++){
+      if(visited[p2]){ data[p2*4+3] = 0; changed = true; }
+    }
+    if(changed) ctx.putImageData(imgData, 0, 0);
+  }
   function _compressIcon(file, cb){
     /* `cb` se llama EXACTAMENTE una vez — guard anti-doble-llamada (por si
        el timeout de seguridad y un evento legítimo llegan a la vez). */
@@ -21446,15 +21494,32 @@ window._showSimProgress = function(opts, onDone){
              escudo rectangular queda centrado con transparencia
              alrededor. */
           var scale = Math.min(MAX_ICON_PX / w, MAX_ICON_PX / h, 1);
-          var dw = Math.round(w * scale);
-          var dh = Math.round(h * scale);
+          var dw = Math.max(1, Math.round(w * scale));
+          var dh = Math.max(1, Math.round(h * scale));
+          /* Escalar primero a un canvas pequeño (dw×dh, ≤256×256) y
+             quitar ahí el fondo — el flood-fill corre sobre, como mucho,
+             256×256 px (barato) en vez de la resolución original de la
+             cámara (podrían ser varios MPX), y el recorte se calcula UNA
+             sola vez sobre el tamaño final, no hay que repetirlo por
+             intento de compresión (PNG/JPEG) más abajo. */
+          var small = document.createElement('canvas');
+          small.width = dw; small.height = dh;
+          var srcForFinal = img;
+          var sctx = small.getContext('2d');
+          if(sctx){
+            try {
+              sctx.drawImage(img, 0, 0, dw, dh);
+              _removeFlatBackground(sctx, dw, dh);
+              srcForFinal = small;
+            } catch(_){ srcForFinal = img; }
+          }
           var canvas = document.createElement('canvas');
           canvas.width = MAX_ICON_PX;
           canvas.height = MAX_ICON_PX;
           var ctx = canvas.getContext('2d');
           if(!ctx){ finish(null, 'no canvas context'); return; }
           ctx.clearRect(0,0,MAX_ICON_PX,MAX_ICON_PX);
-          ctx.drawImage(img, (MAX_ICON_PX-dw)/2, (MAX_ICON_PX-dh)/2, dw, dh);
+          ctx.drawImage(srcForFinal, (MAX_ICON_PX-dw)/2, (MAX_ICON_PX-dh)/2, dw, dh);
           /* Intento 1: PNG (preserva transparencia — los escudos suelen
              tenerla). */
           var pngUrl;

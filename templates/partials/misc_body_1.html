@@ -34608,26 +34608,34 @@ window._showSimProgress = function(opts, onDone){
   };
   /* ── MODO MANUAL por zona (obligatorio, 2026-07-03) ───────────────
      Petición usuario (fotos "Champions League — 31 equipos" con un
-     revoltijo de países + "Previa de Champions — 9 equipos"): "todos
-     esos equipos que están automáticamente en las competiciones
-     elimínalos, lo hago yo manualmente". El cómputo automático
-     (`_computeQualifiedFromLeagues` + feeders de Previa/OQ/WC + EA
-     manual) sigue siendo útil para OTRAS zonas, así que el modo manual
-     es POR ZONA, no global: el admin decide, zona a zona, si quiere el
-     cómputo automático o SOLO lo que añada a mano
-     (`eur_manual_extra_v1`). Al activarlo, esa zona IGNORA por completo
-     el cómputo automático (incluida cualquier snapshot congelada previa
-     de `europe_committed_v1` para esa zona) — el picker "Añadir por
-     liga" y el buscador manual pasan a ser la ÚNICA fuente. */
+     revoltijo de países + "Previa de Champions — 9 equipos", y de
+     nuevo "siguen saliendo los equipos, elimínalos, los añado yo
+     manualmente" tras el primer fix con toggle opt-in): el cómputo
+     automático (`_computeQualifiedFromLeagues` + feeders de
+     Previa/OQ/WC + EA manual) sigue siendo útil en general, pero el
+     admin pidió DOS VECES que los equipos automáticos desaparezcan de
+     TODAS las competiciones — no solo que exista un botón que tendría
+     que ir a pulsar zona por zona.
+
+     Fix: el DEFAULT pasa a ser MANUAL en las 6 zonas (antes era
+     automático por defecto y el admin tenía que activar el candado 🔒
+     zona a zona). Con esto, en cuanto este código carga, las 6 zonas
+     dejan de mostrar equipos automáticos SIN que el admin tenga que
+     tocar nada — el toggle 🔓 Auto / 🔒 Manual del overlay sigue ahí
+     por si en el futuro quiere reactivar el cómputo automático de
+     alguna zona en concreto (esa elección explícita se persiste y
+     GANA sobre el nuevo default). */
   var EUR_MANUAL_OVERRIDE_KEY = 'eur_manual_override_v1';
   function _eurManualOverrideLoad(){
     var out = {};
-    EUR_MANUAL_ZONES.forEach(function(z){ out[z] = false; });
+    EUR_MANUAL_ZONES.forEach(function(z){ out[z] = true; }); // default: manual en las 6 zonas
     try {
       var raw = localStorage.getItem(EUR_MANUAL_OVERRIDE_KEY);
       var d = raw ? JSON.parse(raw) : null;
       if(d && typeof d === 'object'){
-        EUR_MANUAL_ZONES.forEach(function(z){ out[z] = !!d[z]; });
+        EUR_MANUAL_ZONES.forEach(function(z){
+          if(typeof d[z] === 'boolean') out[z] = d[z]; // elección EXPLÍCITA previa del admin gana
+        });
       }
     } catch(_){}
     return out;
@@ -40941,8 +40949,9 @@ window._showSimProgress = function(opts, onDone){
       btn.onclick = function(){
         var zone = btn.getAttribute('data-eur-override');
         var overridesNow = (window._eurManualOverrideLoad && window._eurManualOverrideLoad()) || {};
-        var turningOn = !overridesNow[zone];
-        if(turningOn && !confirm('🔒 Modo MANUAL para esta zona\n\nDejará de contar los equipos automáticos (ligas + Previa/OQ/Wild Card + EA Sports). Solo se verán y se usarán los que añadas tú a mano (formulario / "Añadir por liga").\n\n¿Continuar?')) return;
+        var isManualNow = !!overridesNow[zone];
+        var turningOn = !isManualNow; // pasa a manual
+        if(!turningOn && !confirm('🔓 Modo AUTOMÁTICO para esta zona\n\nVolverá a contar los equipos automáticos (ligas + Previa/OQ/Wild Card + EA Sports) además de los que hayas añadido a mano.\n\n¿Continuar?')) return;
         window._eurManualOverrideSet(zone, turningOn);
         _eurManualOverlayRender();
       };

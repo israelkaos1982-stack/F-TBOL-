@@ -1384,6 +1384,57 @@ class TestTrofeosMerge:
         assert len(self._items(client, self.BASE)) == 3
 
 
+class TestEurManualExtraMerge:
+    """Extras manuales del reparto europeo (eur_manual_extra_v1) — UNIÓN
+    por (zona, nombre) (bug usuario 2026-07-03: tras el fix de hidratación
+    secuencial el pool de Wild Card seguía muy por debajo de 72, el admin
+    pidió poder añadir equipos a mano desde varios dispositivos sin que
+    uno se coma la adición del otro)."""
+
+    URL = "/api/kv/eur_manual_extra_v1"
+
+    def _zone(self, client, zone):
+        v = _json(client.get(self.URL)).get("value") or {}
+        return v.get(zone) or []
+
+    def test_first_save_persists(self, client):
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo A", "league": "Bulgaria"}], "updatedAt": 1000}})
+        assert len(self._zone(client, "wildcard")) == 1
+
+    def test_additions_from_two_devices_are_unioned(self, client):
+        # Móvil A añade un equipo a Wild Card.
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo A", "league": "Bulgaria"}], "updatedAt": 1000}})
+        # Móvil B, que aún no vio la adición de A, añade OTRO equipo distinto
+        # (su copia local solo trae el suyo) — un merge por recencia pura
+        # perdería "Equipo A" porque el blob de B no lo incluye.
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo B", "league": "Albania"}], "updatedAt": 2000}})
+        names = sorted(t["name"] for t in self._zone(client, "wildcard"))
+        assert names == ["Equipo A", "Equipo B"]
+
+    def test_zones_are_independent(self, client):
+        client.post(self.URL, json={"value": {
+            "wildcard": [{"name": "Equipo A", "league": "Bulgaria"}],
+            "uclQual": [{"name": "Equipo C", "league": "Chipre"}],
+            "updatedAt": 1000}})
+        assert len(self._zone(client, "wildcard")) == 1
+        assert len(self._zone(client, "uclQual")) == 1
+        assert len(self._zone(client, "ucl")) == 0
+
+    def test_duplicate_name_not_duplicated(self, client):
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo A", "league": ""}], "updatedAt": 1000}})
+        # Mismo nombre re-enviado con más información (league) — no duplica,
+        # y conserva la versión con más datos.
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo A", "league": "Bulgaria"}], "updatedAt": 2000}})
+        zone = self._zone(client, "wildcard")
+        assert len(zone) == 1
+        assert zone[0]["league"] == "Bulgaria"
+
+
 # ---------------------------------------------------------------------------
 # Fusión cross-device de Resto de Ligas (_lx_merge_teams) — bugs 2026-06-11:
 # "se duplican equipos", "no se puede añadir estadios", "se borran logos".

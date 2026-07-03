@@ -3668,6 +3668,13 @@ _KV_ALLOWED_EXACT = {
     "comp_icons_v1", "comp_cards_v1",
     "europe_committed_v1", "bayern_trofeos_v1",
     "ucl_phase_v1", "uel_phase_v1", "uecl_phase_v1",
+    # Extras manuales del reparto europeo (equipo añadido a mano por el
+    # admin a cualquiera de las 6 zonas — ucl/uclPrev/uel/uecl/uclQual/
+    # wildcard — cuando una liga no consigue hidratarse automáticamente.
+    # Independiente de manual_ea_<slug>_v1 (ese es solo para España).
+    # localStorage es solo cache; el server es la fuente de verdad para
+    # que sobreviva al borrado de datos / cambio de móvil. 2026-07-03.
+    "eur_manual_extra_v1",
     # Registro de torneos visibles (añadir/eliminar · 2026-05-16 #5).
     "tour_registry_v1",
     # Ball Storage: inventario de balones, balón-por-competición y
@@ -3908,6 +3915,59 @@ def _safe_json_load(s):
         return json.loads(s) if s else None
     except Exception:
         return None
+
+
+_EUR_MANUAL_EXTRA_ZONES = ("ucl", "uclPrev", "uel", "uecl", "uclQual", "wildcard")
+
+
+def _eur_manual_extra_merge(old_json, new_value):
+    """Fusión ADITIVA (unión) de `eur_manual_extra_v1` — equipos que el
+    admin añade a mano a cualquiera de las 6 zonas europeas cuando una
+    liga no consigue hidratarse automáticamente (ver CLAUDE.md 2026-07-03).
+
+    Con 6 móviles + PC, dos dispositivos pueden añadir equipos DISTINTOS a
+    la MISMA zona (o a zonas distintas) sin haberse sincronizado entre
+    ellos todavía. Un merge por RECENCIA (blob más nuevo gana ENTERO)
+    perdería silenciosamente la adición del dispositivo más lento — por
+    eso aquí la fusión es UNIÓN por (zona, nombre), nunca reemplazo total.
+    Si el mismo nombre aparece en ambos lados con distinta `league`, gana
+    la versión que trae más información (una `league` no vacía).
+
+    Compromiso aceptado: un ✕ (borrado) hecho en un dispositivo puede
+    resucitar si otro dispositivo, que aún no vio ese borrado, hace un
+    POST después — mismo trade-off que el resto de listas aditivas del
+    proyecto (derbys, ledger de CASH): preferimos nunca perder una
+    adición legítima antes que hacer desaparecer un borrado al instante."""
+    old = _safe_json_load(old_json)
+    if not isinstance(old, dict):
+        old = {}
+    new = new_value if isinstance(new_value, dict) else {}
+    out = {}
+    for zone in _EUR_MANUAL_EXTRA_ZONES:
+        by_name = {}
+        for src in (old.get(zone), new.get(zone)):
+            if not isinstance(src, list):
+                continue
+            for t in src:
+                if not isinstance(t, dict):
+                    continue
+                name = str(t.get("name") or "").strip()
+                if not name:
+                    continue
+                prev = by_name.get(name)
+                if prev is None or (not prev.get("league") and t.get("league")):
+                    by_name[name] = t
+        out[zone] = list(by_name.values())
+    try:
+        old_ts = float(old.get("updatedAt") or 0)
+    except (TypeError, ValueError):
+        old_ts = 0.0
+    try:
+        new_ts = float(new.get("updatedAt") or 0)
+    except (TypeError, ValueError):
+        new_ts = 0.0
+    out["updatedAt"] = max(old_ts, new_ts)
+    return out
 
 
 def _tour_registry_merge(old_json, new_value):
@@ -4362,6 +4422,21 @@ def api_kv_set(key):
             merged_paid.update(new_paid)
             merged = dict(new) if isinstance(new, dict) else {}
             merged["paid"] = merged_paid
+            cand = json.dumps(merged, ensure_ascii=False)
+            if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
+                value, payload = merged, cand
+        except Exception:
+            pass
+    # EXTRAS MANUALES del reparto europeo (eur_manual_extra_v1): el admin
+    # añade equipos a mano desde varios dispositivos (móvil A añade un
+    # equipo a Wild Card, móvil B añade otro a Open Qualifier) para
+    # rellenar huecos de ligas que no consiguieron hidratarse. Merge por
+    # UNIÓN por (zona, nombre) — NUNCA se pierde una adición legítima de
+    # otro dispositivo por un POST que aún no la conoce (mismo principio
+    # aditivo que `cash_ledger_v1` / el histórico de derbys). 2026-07-03.
+    elif key == "eur_manual_extra_v1" and row and row.valor_json:
+        try:
+            merged = _eur_manual_extra_merge(row.valor_json, value)
             cand = json.dumps(merged, ensure_ascii=False)
             if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
                 value, payload = merged, cand

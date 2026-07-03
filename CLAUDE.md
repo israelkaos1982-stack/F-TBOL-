@@ -2255,6 +2255,39 @@ cuando no falta nada.
    propósito original (Liga EA Sports, blacklisted del cómputo
    automático) — no es la vía para el resto de ligas.
 
+### El informe de "Enviar realidad de cada equipo a su Europa" lista equipo + liga por competición (obligatorio, 2026-07-02)
+
+**Petición usuario 2026-07-02**: tras simular todas las ligas y pulsar
+"📤 Enviar realidad de cada equipo a su Europa", el admin solo veía un
+`alert()` con TOTALES por competición (28/34/18/12/88/70). Sin los
+NOMBRES no podía verificar el resultado contra la tabla oficial de
+coeficientes (país → cuántas plazas 🔵🟣🟠🟢🟡⚪ le corresponden) para
+detectar errores (un equipo mal clasificado, una liga con más/menos
+plazas de las que le tocan).
+
+**Fix** (`misc_body_1.html`, junto a `_doCommitEurope`):
+`window._eurShowCommitReport(blob, recovered)` sustituye el `alert()`
+por un overlay (`#eur-report-ov`) con las 6 zonas (Champions/Previa/
+Europa League/Conference/Open Qualifier/Wild Card), cada una AGRUPADA
+POR LIGA (`_eurLeagueLabel` resuelve el slug vía
+`window.LEAGUE_DEFAULT_NAMES`, formato "País (Nombre liga)" — igual
+formato que usa el admin al pegar la tabla de coeficientes) con el
+conteo por país y el listado de equipos concretos debajo, para poder
+comparar de un vistazo contra la tabla oficial. Fallback: si el overlay
+falla por cualquier motivo, se conserva el `alert()` de totales
+(catch), para no dejar al admin sin ningún feedback tras pulsar el
+botón.
+
+**Reglas a respetar**:
+1. **PROHIBIDO** volver a un `alert()` de solo-totales como ÚNICA
+   confirmación de "Enviar realidad…". El admin necesita ver equipo +
+   liga para poder detectar errores, no solo el conteo.
+2. **PROHIBIDO** que el informe oculte equipos: SIEMPRE lista TODOS los
+   de cada zona (agrupados por liga), nunca trunca ni pagina.
+3. Toda liga NUEVA que se añada a `LEAGUE_DEFAULT_NAMES` aparece
+   automáticamente con su nombre bonito en el informe — no hardcodear
+   nombres de liga en `_eurLeagueLabel`.
+
 ### El reset de pools europeos (WC/OQ/Previa) reintenta el POST al servidor (obligatorio, 2026-07-02)
 
 **Bug (foto usuario 2026-07-02, "el Open Qualifier no funciona el

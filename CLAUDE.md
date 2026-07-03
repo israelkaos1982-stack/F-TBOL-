@@ -1142,6 +1142,86 @@ detalle SIEMPRE cuadran.
    selecciones no-canónicos. El filtro HvH va al ESCRIBIR (sello
    `isHvH:true`); en lectura solo se excluye `isHvH===false`.
 
+## La pantalla "🔥 DERBYS" (`s-derbys`) reconoce a LOS 7 clubes + LAS 7 selecciones en CUALQUIER competición (obligatorio, 2026-07-03)
+
+**Bug (2 fotos usuario, «Inter-Portugal-Rubén»)**: en la pantalla
+`s-derbys` (la caja "🔥 DERBYS" del home, distinta de "Histórico Derbys"
+`s-munich-derbys`), la sección **LIGA EA SPORTS** mostraba los derbys de
+los 5 humanos clásicos, pero **ningún partido del Inter (Rubén, 7º
+mister) contra otro humano** aparecía en ninguna competición europea
+(Champions/Europa/Conference "fase de liga", Copa del Rey, Supercopa de
+España, Nations League). Petición usuario: además, **las selecciones
+humanas** (Francia/Brasil/Inglaterra/Noruega/Argentina/España/Portugal)
+**deben salir siempre que se enfrenten**, tanto en la fase de Ligas
+(Selecciones J1-J10) como en Eliminatorias (Mundial fase final). Y los
+**Torneos de Verano** (Trofeo Joan Gamper) con enfrentamientos humanos
+son obligatorios también.
+
+### Causa raíz (2 bugs independientes en `_scanAllDerbies`, `part2/misc_body_2.html`)
+
+1. **`_normalizeHumanName`** (fuentes 1 y 3 del scanner: `.match-live-wrap`
+   y `.mrow` dentro de contenedores `cal-*` — Copa, Supercopa España,
+   Champions, Europa, Conference, Nations League, y CUALQUIER `cal-sel*`
+   de Selecciones) solo reconocía los **5 humanos legacy de Liga EA
+   Sports** (`DERBYS_HUMANOS`, poblado desde `ligaExt_liga-ea-sports`).
+   Inter (Rubén) y PSG (Izan) viven en ligas externas (`ligaExt_<slug>`
+   de Resto de Ligas), NO en `ligaExt_liga-ea-sports` → nunca se
+   reconocían como humanos ahí, así que sus partidos de Champions/Europa/
+   Conference/Copa/Supercopa/Nations League contra otro humano quedaban
+   invisibles. Ninguna selección (Francia, Portugal, …) estaba en esa
+   lista tampoco → los derbys de Selecciones J1-J10 y Mundial fase final
+   quedaban igual de invisibles ahí. La fuente 6 (scan de `tour_<id>_v1`,
+   añadida 2026-06-13) sí usaba el registro canónico completo
+   (`_isHumanForDerby`), así que Mundialito/Selecciones/Verano YA
+   funcionaban — el hueco estaba en las fuentes 1 y 3.
+2. **`cfg.fixture` de un torneo `format:'league'`** (Trofeo Joan Gamper,
+   liga de 63 equipos) se construye LAZY al renderizar la pantalla del
+   torneo (regla 2026-06-27, "El índice key→{home,away}…"). El bloque
+   "asegurar fixtures" de la fuente 6 solo reconstruía `cfg.groupFixtures`
+   (`_tourEnsureGroupFixtures`/`_tourEnsureRoadFixtures`/
+   `_mundialGroupState`) — NINGUNO de los 3 hace nada para
+   `format==='league'` (`_tourEnsureGroupFixtures` retorna `false` de
+   inmediato si el format no es `groups-ko`/`league-ko`/`swiss`). Si el
+   usuario abría la caja Derbys SIN haber abierto antes la pantalla del
+   Joan Gamper esa sesión, `cfg.fixture` seguía vacío y NINGÚN partido
+   (humano o no) del torneo se detectaba como derby.
+
+### Fix
+
+- `_normalizeHumanName` ahora cae, tras el match exacto contra los 5
+  legacy, al **registro canónico completo**: `window._isHumanClubCanonico`
+  (7 clubes, alias-safe Bayern↔Liverpool/PSG/Inter) →
+  `window._esSelHumana` / `window._isHumanSeleccionCanonica` (7
+  selecciones, incluye Portugal). Mismas funciones que ya usaba la
+  fuente 6 (`_isHumanForDerby`) — una sola fuente de verdad para "¿es
+  humano?" en las 6 fuentes del scanner.
+- Nuevo `window._tourEnsureLeagueFixture` (expone la función ya existente
+  `_tourEnsureLeagueFixture` de `misc_body_1.html`, usada por
+  `_tourBackfillActasFromResults`). El bloque "asegurar fixtures" de la
+  fuente 6 ahora, para `cfg.format === 'league'`, llama a
+  `window._tourEnsureLeagueFixture(cfg, teams)` si `cfg.fixture` está
+  vacío — el mismo round-robin determinista que usa el render de la
+  pantalla, así los derbys de Joan Gamper (y cualquier torneo de verano
+  `format:'league'`) se detectan en un cold-open de la caja Derbys.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_normalizeHumanName` (o cualquier normalizador de
+   nombre humano nuevo en el scanner de Derbys) reconozca SOLO los 5
+   humanos de `ligaExt_liga-ea-sports`. Debe caer siempre al registro
+   canónico completo (`_isHumanClubCanonico`/`_esSelHumana`/
+   `_isHumanSeleccionCanonica`) para que un mister/selección NUEVO se
+   reconozca automáticamente sin tocar este archivo.
+2. **PROHIBIDO** que el bloque "asegurar fixtures" de la fuente 6 llame
+   solo a builders de GRUPO (`_tourEnsureGroupFixtures`/
+   `_tourEnsureRoadFixtures`/`_mundialGroupState`) sin cubrir
+   `format==='league'` vía `_tourEnsureLeagueFixture`. Sin él, todo
+   torneo de verano en formato liga (Joan Gamper y futuros) queda
+   invisible en un cold-open de la caja Derbys.
+3. Toda caja de mister/selección humana NUEVA hereda el reconocimiento
+   automáticamente (el registro `MISTERS_HUMANOS` es la fuente única);
+   no hardcodear nombres nuevos en `DERBYS_HUMANOS` ni en el scanner.
+
 ## «Reiniciar Temporada» NUNCA borra Derbys / Trofeos / Plantillas (obligatorio, 2026-06-04)
 
 **Regla usuario 2026-06-04 (3 fotos)**: el botón **«Reiniciar

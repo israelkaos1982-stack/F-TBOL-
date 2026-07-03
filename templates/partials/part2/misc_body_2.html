@@ -23868,9 +23868,13 @@ window.goLiveMatches = function() {
 <!-- ══ MÓDULO DERBYS (Humano vs Humano de cualquier competición) ══ -->
 <script>
 /* La Caja "🔥 DERBYS" del home abre una pantalla dedicada que lista
-   todos los enfrentamientos directos entre los 5 equipos humanos
-   (Bayern Munich, Arsenal, Real Madrid, Atlético Madrid, FC Barcelona)
-   detectados en el calendario. Amistosos NO entran aquí. */
+   todos los enfrentamientos directos entre CUALQUIERA de los 7 clubes
+   humanos (Liverpool, Arsenal, Real Madrid, Atlético Madrid, FC
+   Barcelona, PSG, Inter) y/o las 7 selecciones humanas (Francia, Brasil,
+   Inglaterra, Noruega, Argentina, España, Portugal), en CUALQUIER
+   competición (Liga, Copa, Champions/Europa/Conference, Supercopas,
+   Selecciones J1-J10, Mundial fase final, Superliga, Mundialito de
+   Clubes, Torneos de Verano). Amistosos NO entran aquí. */
 (function(){
   var DERBYS_SCREEN_ID = 's-derbys';
   var DERBYS_HUMANOS = (function(){
@@ -23993,17 +23997,32 @@ window.goLiveMatches = function() {
 
   /* Normaliza un nombre de equipo quitando emojis, NBSP y trim para
      que `.mn` con `data-team` atribute o sin él convierta al nombre
-     canónico. Si el equipo no es uno de los 5 humanos, devuelve ''. */
+     canónico. Si el equipo no es humano (ninguno de los 7 clubes o 7
+     selecciones canónicas), devuelve ''. */
   function _normalizeHumanName(rawText) {
     if (!rawText) return '';
     var s = String(rawText).replace(/\u00a0/g, ' ').trim();
     /* Strip leading emojis (humanIcon prefix) */
     s = s.replace(/^[^A-Za-z0-9À-ÿ]+/, '').trim();
-    if (!s || s === 'Por definir') return '';
-    /* Match case-insensitive contra HUMANOS */
+    if (!s || s === 'Por definir' || s === 'TBD' || s === 'PENDIENTE') return '';
+    /* Match case-insensitive contra HUMANOS legacy de Liga EA Sports */
     for (var i = 0; i < DERBYS_HUMANOS.length; i++) {
       if (DERBYS_HUMANOS[i].toLowerCase() === s.toLowerCase()) return DERBYS_HUMANOS[i];
     }
+    /* Registro canónico completo (2026-07-03, fotos usuario
+       «Inter-Portugal-Rubén»): antes esta función SOLO reconocía los 5
+       humanos legacy de Liga EA Sports, así que las fuentes que dependen
+       de ella (scan de `.match-live-wrap` y de `.mrow` en Copa/Champions/
+       Europa/Conference/Supercopa España/Nations League/Selecciones
+       J1-J10/Mundial fase final) NUNCA detectaban como derby un partido
+       de Inter (Rubén), PSG (Izan) ni de NINGUNA selección humana
+       (Francia/Brasil/Inglaterra/Noruega/Argentina/España/Portugal) —
+       esos torneos SÍ pasan por contenedores `cal-*`. Ahora cae al
+       registro canónico completo (7 clubes + 7 selecciones), igual que
+       ya hacía el scanner de torneos (fuente 6, `_isHumanForDerby`). */
+    try { if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(s)) return s; } catch(_){}
+    try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(s)) return s; } catch(_){}
+    try { if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(s)) return s; } catch(_){}
     return '';
   }
 
@@ -24401,16 +24420,27 @@ window.goLiveMatches = function() {
            la caja Derbys). Los builders son idempotentes y los mismos
            que usa el hub/_selPair. Solo se llama si faltan los fixtures. */
         try {
-          var _hasGf = cfg.groupFixtures &&
-            (Array.isArray(cfg.groupFixtures) ? cfg.groupFixtures.length
-                                              : Object.keys(cfg.groupFixtures).length);
-          if (!_hasGf){
-            if (cfg.format === 'mundial-48' && typeof window._mundialGroupState === 'function')
-              window._mundialGroupState(cfg, teams);
-            else if (cfg.format === 'qualifier-route' && typeof window._tourEnsureRoadFixtures === 'function')
-              window._tourEnsureRoadFixtures(cfg, id);
-            else if (typeof window._tourEnsureGroupFixtures === 'function')
-              window._tourEnsureGroupFixtures(cfg);
+          /* Formato LIGA (torneos de verano tipo Trofeo Joan Gamper): los
+             fixtures viven en `cfg.fixture`, NO en `cfg.groupFixtures`, y
+             se construyen LAZY al renderizar la pantalla del torneo (regla
+             CLAUDE.md 2026-06-27). Sin reconstruirlo aquí, un cold-open de
+             la caja Derbys (el usuario no ha abierto el torneo esta sesión)
+             deja `cfg.fixture` vacío y sus derbys HvH nunca se detectan. */
+          if (cfg.format === 'league'){
+            if ((!Array.isArray(cfg.fixture) || !cfg.fixture.length) && typeof window._tourEnsureLeagueFixture === 'function')
+              window._tourEnsureLeagueFixture(cfg, teams);
+          } else {
+            var _hasGf = cfg.groupFixtures &&
+              (Array.isArray(cfg.groupFixtures) ? cfg.groupFixtures.length
+                                                : Object.keys(cfg.groupFixtures).length);
+            if (!_hasGf){
+              if (cfg.format === 'mundial-48' && typeof window._mundialGroupState === 'function')
+                window._mundialGroupState(cfg, teams);
+              else if (cfg.format === 'qualifier-route' && typeof window._tourEnsureRoadFixtures === 'function')
+                window._tourEnsureRoadFixtures(cfg, id);
+              else if (typeof window._tourEnsureGroupFixtures === 'function')
+                window._tourEnsureGroupFixtures(cfg);
+            }
           }
         } catch(_){}
         /* (a) Fixtures de GRUPO: groupFixtures[g][jor][mi] = {home,away}

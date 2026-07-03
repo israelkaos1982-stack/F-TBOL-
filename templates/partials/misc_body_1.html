@@ -34972,6 +34972,14 @@ window._showSimProgress = function(opts, onDone){
   window.computeUeclClassified = computeUeclClassified;
   window.computeOpenQualifierTeams = computeOpenQualifierTeams;
   window.computeWildCardClassified = computeWildCardClassified;
+  /* Expuestos para el picker "Añadir por liga" del overlay de admin
+     (`_eurManualOverlayOpen`, otro IIFE): reutiliza EXACTAMENTE el mismo
+     ranking (por resultados o por poder) que usa el cómputo automático,
+     para que la clasificación que ve el admin al elegir una liga sea la
+     MISMA que usaría el reparto automático — 2026-07-03. */
+  window._eurRankByPower = _rankByPower;
+  window._eurStandingsFromResults = _standingsFromResults;
+  window._eurTeamName = _teamName;
 
   function buildUclGruposClas(){
     var container = document.getElementById('clas-ucl-grupos-content');
@@ -40520,7 +40528,16 @@ window._showSimProgress = function(opts, onDone){
        · Lista los extras manuales ya añadidos con botón ✕ para quitarlos.
        · El listado completo (agrupado por liga) reutiliza
          `_eurZoneSectionHtml`/`_EUR_REPORT_ZONES`. */
-  var _EUR_ZONE_TARGET = { ucl:28, uclPrev:34, uel:18, uecl:12, uclQual:88, wildcard:72 };
+  /* OJO: ucl/uel/uecl NO son 28/18/12 (esas son solo las plazas
+     DIRECTAS por liga) — `computeUclClassified`/`computeUelClassified`/
+     `computeUeclClassified` YA le suman el corte de la Previa (12/22/28)
+     ANTES de devolver, así que el pool final objetivo es 40/40/40 (ver
+     CLAUDE.md "🔵 UCL 28+12=40 · 🟠 UEL 18+22=40 · 🟢 UECL 12+28=40").
+     Bug 2026-07-03: este overlay mostraba "38/28" en VERDE (¡como si
+     sobrasen equipos!) cuando en realidad estaba a 2 de completar los
+     40 reales — confundía al admin haciéndole creer que algo estaba
+     "sobrecargado" cuando esas 3 zonas eran las que MEJOR estaban. */
+  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:34, uel:40, uecl:40, uclQual:88, wildcard:72 };
   function _eurLiveBlob(){
     function _safeCompute(fn){
       try { return (typeof fn === 'function') ? (fn() || []) : []; }
@@ -40591,6 +40608,162 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return out;
   }
+
+  /* ── 📋 Añadir por liga (clasificación completa) ──────────────────
+     Petición usuario 2026-07-03 ("cuando le doy a la lupa que salga
+     cada liga y pueda añadir varios equipos a la vez de esa liga, con
+     la clasificación final para saber cuáles tengo que añadir a cada
+     competición"): en vez de depender de hidratar las ~53 ligas de
+     golpe (lento, poco fiable), el admin elige UNA liga del desplegable
+     → se trae SOLO esa liga (rápido, 1 petición) → se ve su
+     clasificación completa con la zona SUGERIDA por posición (misma
+     lógica de "skip" que `_computeQualifiedFromLeagues`) → añade una a
+     una o TODAS de golpe con un botón. */
+  function _eurSlugLabel(slug){
+    var nm = (window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[slug]) || '';
+    return slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g,' ') + (nm ? ' (' + nm + ')' : '');
+  }
+  function _eurAllLeagueSlugsSorted(){
+    var slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {});
+    return slugs.map(function(s){ return {slug:s, label:_eurSlugLabel(s)}; })
+      .sort(function(a,b){ return a.label.localeCompare(b.label,'es'); });
+  }
+  /* Busca equipos por nombre en TODAS las `ligaExt_*` YA cacheadas en
+     este dispositivo (best-effort — si una liga no está hidratada aquí
+     no aparecerá; para eso está el picker por liga, que trae del
+     servidor bajo demanda). */
+  function _eurSearchAllTeams(query, limit){
+    var q = String(query||'').trim().toLowerCase();
+    if(q.length < 2) return [];
+    var out = [];
+    try {
+      for(var i=0; i<localStorage.length && out.length < (limit||8)*4; i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_') !== 0) continue;
+        if(/_backup|_snap_|_snapshot|_protected|_v\d+$/.test(k)) continue;
+        var slug = k.substring('ligaExt_'.length);
+        var raw = localStorage.getItem(k);
+        if(!raw) continue;
+        var d; try { d = JSON.parse(raw); } catch(_){ continue; }
+        if(!d || !Array.isArray(d.teams)) continue;
+        d.teams.forEach(function(t){
+          var nm = String((t && t.name) || '').trim();
+          if(!nm || nm.toLowerCase().indexOf(q) < 0) return;
+          out.push({ name:nm, league:slug, logo:(t && (t.shield||t.logo||t.escudo)) || '' });
+        });
+      }
+    } catch(_){}
+    var seen = {};
+    return out.filter(function(t){
+      if(seen[t.name]) return false;
+      seen[t.name] = true;
+      return true;
+    }).slice(0, limit||8);
+  }
+  var _eurPickerSlug = '';
+  var _eurPickerData = null;
+  var _eurPickerLoading = false;
+  var _eurPickerError = '';
+  function _eurPickerLoadLeague(slug){
+    _eurPickerSlug = slug;
+    _eurPickerData = null;
+    _eurPickerError = '';
+    if(!slug){ _eurManualOverlayRender(); return; }
+    _eurPickerLoading = true;
+    _eurManualOverlayRender();
+    function _finish(d){
+      _eurPickerLoading = false;
+      _eurPickerData = d;
+      if(!d) _eurPickerError = 'No se ha podido cargar esta liga (ni local ni servidor).';
+      _eurManualOverlayRender();
+    }
+    var local = null;
+    try {
+      var raw = localStorage.getItem('ligaExt_' + slug);
+      local = raw ? JSON.parse(raw) : null;
+    } catch(_){}
+    if(local && Array.isArray(local.teams) && local.teams.length >= 2){ _finish(local); return; }
+    fetch('/api/liga-ext/' + encodeURIComponent(slug), { credentials:'same-origin' })
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        var data = j && j.data;
+        if(data && Array.isArray(data.teams) && data.teams.length >= 2){ _finish(data); }
+        else { _finish(null); }
+      })
+      .catch(function(){ _finish(null); });
+  }
+  /* Devuelve las filas {pos, name, pj, zone} de la liga cargada en el
+     picker, con la ZONA SUGERIDA por posición (mismo orden/"skip" que
+     `_computeQualifiedFromLeagues`: ucl → uclPrev → uclQual → uel →
+     uecl → wildcard). */
+  function _eurPickerRows(){
+    var d = _eurPickerData;
+    if(!d || !Array.isArray(d.teams)) return [];
+    var slug = _eurPickerSlug;
+    var zonesDefault = (window.LEAGUE_DEFAULT_ZONES && window.LEAGUE_DEFAULT_ZONES[slug]) || {};
+    var zones = Object.assign({}, zonesDefault, (d.config && d.config.zones) || {});
+    var rN = Array.isArray(d.results) ? d.results.length : 0;
+    var ranking = (rN === 0 && window._eurRankByPower)
+      ? window._eurRankByPower(d.teams)
+      : (window._eurStandingsFromResults ? window._eurStandingsFromResults(d.teams, d.results||[]) : []);
+    var ORDER = ['ucl','uclPrev','uclQual','uel','uecl','wildcard'];
+    var ranges = []; var acc = 0;
+    ORDER.forEach(function(z){
+      var n = Number(zones[z]||0);
+      ranges.push({ zone:z, from:acc, to:acc+n });
+      acc += n;
+    });
+    return ranking.map(function(t, i){
+      var zone = null;
+      for(var r=0; r<ranges.length; r++){
+        if(i >= ranges[r].from && i < ranges[r].to){ zone = ranges[r].zone; break; }
+      }
+      return { pos:i+1, name:t.name, pj:t.pj||0, zone:zone };
+    });
+  }
+  var _EUR_ZONE_BY_KEY = {};
+  _EUR_REPORT_ZONES.forEach(function(z){ _EUR_ZONE_BY_KEY[z.key] = z; });
+  function _eurPickerSectionHtml(){
+    var opts = '<option value="">— Elige una liga —</option>' + _eurAllLeagueSlugsSorted().map(function(o){
+      return '<option value="'+_eurEsc(o.slug)+'"'+(o.slug===_eurPickerSlug?' selected':'')+'>'+_eurEsc(o.label)+'</option>';
+    }).join('');
+    var body = '';
+    if(_eurPickerLoading){
+      body = '<div style="padding:10px;font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.7);">⏳ Cargando clasificación…</div>';
+    } else if(_eurPickerError){
+      body = '<div style="padding:10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#ff8080;">⚠️ ' + _eurEsc(_eurPickerError) + '</div>';
+    } else if(_eurPickerSlug && _eurPickerData){
+      var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()) || {};
+      var rows = _eurPickerRows();
+      var rowsHtml = rows.map(function(r){
+        var z = r.zone ? _EUR_ZONE_BY_KEY[r.zone] : null;
+        var already = z && (manual[r.zone]||[]).some(function(t){ return t.name === r.name; });
+        var zoneBadge = z
+          ? ('<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:'+z.color+';border:1px solid '+z.color+'55;border-radius:4px;padding:2px 6px;white-space:nowrap;">'+z.emoji+' '+_eurEsc(z.label)+'</span>')
+          : '<span style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.35);">— sin zona —</span>';
+        var actionBtn = z
+          ? ('<button data-eur-pick-add="1" data-zone="'+r.zone+'" data-name="'+_eurEsc(r.name)+'" style="background:'+(already?'rgba(255,255,255,.08)':'rgba(60,200,120,.15)')+';border:1px solid '+(already?'rgba(255,255,255,.25)':'#3cc878')+';color:'+(already?'rgba(255,255,255,.5)':'#bfffbf')+';border-radius:4px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;white-space:nowrap;">'+(already?'✓ Añadido':'➕ Añadir')+'</button>')
+          : '';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.06);font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;">'
+          + '<span style="width:22px;color:rgba(255,255,255,.5);">'+r.pos+'</span>'
+          + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_eurEsc(r.name)+'</span>'
+          + '<span style="width:34px;text-align:right;color:rgba(255,255,255,.4);font-size:11px;">'+r.pj+'pj</span>'
+          + zoneBadge
+          + actionBtn
+          + '</div>';
+      }).join('');
+      var anyZoned = rows.some(function(r){ return r.zone; });
+      body = '<div style="max-height:280px;overflow-y:auto;margin:6px 0;">' + rowsHtml + '</div>'
+        + (anyZoned ? '<button id="eur-pick-add-all" style="width:100%;margin-top:4px;background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:6px;padding:9px 14px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;font-weight:700;">✅ AÑADIR TODOS LOS SUGERIDOS DE ESTA LIGA</button>' : '');
+    } else {
+      body = '<div style="padding:6px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);">Elige una liga arriba para ver su clasificación completa y qué equipo va a cada competición según su posición.</div>';
+    }
+    return '<div style="border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.03);">'
+      +   '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">📋 AÑADIR POR LIGA (clasificación completa, varios de golpe)</div>'
+      +   '<select id="eur-pick-league" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">' + opts + '</select>'
+      +   body
+      + '</div>';
+  }
   function _eurManualOverlayRender(){
     var ov = document.getElementById('eur-manual-ov');
     if(!ov) return;
@@ -40643,14 +40816,18 @@ window._showSimProgress = function(opts, onDone){
       +   '</div>'
       +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' + countsHtml + '</div>'
       +   '<div style="border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.03);">'
-      +     '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">➕ AÑADIR EQUIPO MANUAL</div>'
+      +     '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">➕ AÑADIR EQUIPO MANUAL (uno a uno)</div>'
       +     '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">' + zoneChips + '</div>'
       +     '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
-      +       '<input id="eur-manual-name" placeholder="Nombre del equipo" style="flex:1 1 160px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">'
+      +       '<div style="position:relative;flex:1 1 160px;">'
+      +         '<input id="eur-manual-name" placeholder="Nombre del equipo (busca 2+ letras)" autocomplete="off" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">'
+      +         '<div id="eur-manual-name-drop" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#12161c;border:1px solid rgba(255,255,255,.25);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.6);max-height:220px;overflow-y:auto;z-index:200002;"></div>'
+      +       '</div>'
       +       '<input id="eur-manual-league" placeholder="País / liga (opcional)" style="flex:1 1 140px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">'
       +       '<button id="eur-manual-add" style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:6px;padding:8px 16px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;font-weight:700;">AÑADIR</button>'
       +     '</div>'
       +   '</div>'
+      +   _eurPickerSectionHtml()
       +   (manualListHtml ? ('<div style="margin-bottom:14px;">' + manualListHtml + '</div>') : '')
       +   (missing.length ? (
             '<div style="margin:0 0 14px;border:1px solid rgba(255,150,80,.4);border-radius:10px;padding:8px 12px;background:rgba(255,150,80,.06);">'
@@ -40684,6 +40861,59 @@ window._showSimProgress = function(opts, onDone){
       var added = window._eurManualExtraAdd(_eurManualSelZone, name, league);
       if(!added){ alert('Ya hay un equipo con ese nombre en esta zona (o el nombre está vacío).'); return; }
       _eurManualOverlayRender();
+    };
+    /* Buscador del nombre de equipo — typeahead sobre TODAS las ligas ya
+       cacheadas en este dispositivo (2026-07-03, petición usuario "que
+       salga un buscador para que sea más rápido"). */
+    var nameInput = document.getElementById('eur-manual-name');
+    var nameDrop = document.getElementById('eur-manual-name-drop');
+    if(nameInput && nameDrop){
+      nameInput.oninput = function(){
+        var matches = _eurSearchAllTeams(nameInput.value, 8);
+        if(!matches.length){ nameDrop.style.display = 'none'; nameDrop.innerHTML = ''; return; }
+        nameDrop.innerHTML = matches.map(function(m){
+          return '<div data-eur-name-sug="1" data-name="'+_eurEsc(m.name)+'" data-league="'+_eurEsc(_eurSlugLabel(m.league))+'" '
+            + 'style="padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;display:flex;justify-content:space-between;gap:8px;">'
+            + '<span>'+_eurEsc(m.name)+'</span><span style="color:rgba(255,255,255,.4);font-size:11px;white-space:nowrap;">'+_eurEsc(m.league)+'</span>'
+            + '</div>';
+        }).join('');
+        nameDrop.style.display = 'block';
+      };
+      nameDrop.onclick = function(ev){
+        var it = ev.target && ev.target.closest && ev.target.closest('[data-eur-name-sug]');
+        if(!it) return;
+        nameInput.value = it.getAttribute('data-name');
+        var leagueEl = document.getElementById('eur-manual-league');
+        if(leagueEl && !leagueEl.value) leagueEl.value = it.getAttribute('data-league');
+        nameDrop.style.display = 'none';
+        nameDrop.innerHTML = '';
+      };
+      document.addEventListener('click', function(ev){
+        if(ev.target !== nameInput && !nameDrop.contains(ev.target)) nameDrop.style.display = 'none';
+      });
+    }
+    /* Picker "Añadir por liga". */
+    var pickSel = document.getElementById('eur-pick-league');
+    if(pickSel) pickSel.onchange = function(){ _eurPickerLoadLeague(pickSel.value); };
+    ov.querySelectorAll('[data-eur-pick-add]').forEach(function(btn){
+      btn.onclick = function(){
+        var zone = btn.getAttribute('data-zone');
+        var name = btn.getAttribute('data-name');
+        window._eurManualExtraAdd(zone, name, _eurSlugLabel(_eurPickerSlug));
+        _eurManualOverlayRender();
+      };
+    });
+    var addAllBtn = document.getElementById('eur-pick-add-all');
+    if(addAllBtn) addAllBtn.onclick = function(){
+      var rows = _eurPickerRows();
+      var label = _eurSlugLabel(_eurPickerSlug);
+      var added = 0;
+      rows.forEach(function(r){
+        if(!r.zone) return;
+        if(window._eurManualExtraAdd(r.zone, r.name, label)) added++;
+      });
+      _eurManualOverlayRender();
+      if(!added) alert('Todos los equipos sugeridos de esta liga ya estaban añadidos.');
     };
   }
   window._eurManualOverlayOpen = function(){

@@ -40151,6 +40151,25 @@ window._showSimProgress = function(opts, onDone){
      compute*Classified() en este mismo archivo ya tiene el hook
      necesario (`_europeFrozenFor`); aquí solo construimos el blob. */
   var EUROPE_COMMIT_KEY = 'europe_committed_v1';
+  /* Toast mínimo autocontenido — la hidratación secuencial de hasta
+     ~53 ligas (fix 2026-07-03, ver `_eurHydrateMissingLeagues`) puede
+     tardar varios segundos; sin feedback el admin puede pensar que el
+     botón se quedó colgado tras el confirm(). */
+  function _eurToast(msg){
+    try {
+      var t = document.createElement('div');
+      t.textContent = msg;
+      t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);'
+        + 'max-width:90vw;z-index:1000000;padding:12px 18px;border-radius:10px;'
+        + 'font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;letter-spacing:.4px;'
+        + 'color:#fff;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.55);'
+        + 'background:linear-gradient(135deg,#1a3a6b,#2b6cb0);'
+        + 'border:1px solid rgba(255,255,255,.25);opacity:0;transition:opacity .2s;';
+      document.body.appendChild(t);
+      requestAnimationFrame(function(){ t.style.opacity = '1'; });
+      setTimeout(function(){ t.style.opacity = '0'; setTimeout(function(){ try{ t.remove(); }catch(_){} }, 250); }, 6000);
+    } catch(_){}
+  }
   function _saveEuropeCommitServer(blob){
     try {
       fetch('/api/kv/'+EUROPE_COMMIT_KEY, {
@@ -40187,6 +40206,7 @@ window._showSimProgress = function(opts, onDone){
        ligas top que el admin sí abrió). El botón "Re-cuadrar" ya hidrata
        las ligas que faltan ANTES de calcular; el de congelar NO lo hacía.
        Fix: hidratar primero (mismo helper) y luego congelar. */
+    _eurToast('⏳ Cargando ligas del servidor (puede tardar unos segundos)…');
     _eurHydrateMissingLeagues(function(recovered){ _doCommitEurope(recovered); });
   };
   function _doCommitEurope(recovered){
@@ -40504,58 +40524,88 @@ window._showSimProgress = function(opts, onDone){
       return false;                                  // equipos + clasificación ya presentes
     });
     if(!toFetch.length){ done(localRecovered, localRecovered); return; }
-    var pending = toFetch.length, recovered = localRecovered, finished = false;
+    var recovered = localRecovered, finished = false;
     function finish(){ if(finished) return; finished = true; done(recovered, toFetch.length + localRecovered); }
-    var timer = setTimeout(finish, 25000);
-    function step(){ if(--pending <= 0){ try{ clearTimeout(timer); }catch(_){} finish(); } }
-    toFetch.forEach(function(slug){
+    /* SECUENCIAL + PAUSADO, con reintentos (obligatorio, 2026-07-03).
+       Bug (fotos usuario, "Wild Card 8/72 · Open Qualifier 6/62 con
+       TBD por todas partes · LIGAS QUE APORTAN (0)" tras pulsar
+       "Re-cuadrar" + "Enviar realidad"): esta función antes disparaba
+       TODOS los fetch de `toFetch` EN PARALELO (`toFetch.forEach`) — un
+       thundering herd de hasta ~53 GETs simultáneos contra Railway. En
+       frío (o bajo carga) la mayoría timeaba/fallaba en silencio
+       (`.catch(function(){})`) y el timer fijo de 25 s cortaba el resto
+       aunque siguieran en vuelo → el pool europeo se congelaba con solo
+       las 6-8 ligas que habían respondido a tiempo. Es EXACTAMENTE el
+       mismo patrón ya documentado y arreglado en
+       `_lextReconcileResultsToServer` ("Secuencial+pausado (mata el
+       thundering herd que rompía la subida original)") — aquí faltaba
+       aplicar el mismo remedio al lado PULL (traer ligas del servidor).
+       Ahora: una liga a la vez, con 2 reintentos en fallo de red/HTTP
+       (nunca en "el servidor no tiene esa liga" — eso no es un fallo
+       que reintentar) y una pausa corta entre pasos. */
+    var timer = setTimeout(finish, 90000);
+    var idx = 0;
+    function step(){
+      if(idx >= toFetch.length){ try{ clearTimeout(timer); }catch(_){} finish(); return; }
+      var slug = toFetch[idx++];
       var key = 'ligaExt_' + slug;
-      fetch('/api/liga-ext/' + encodeURIComponent(slug), { credentials:'same-origin' })
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(j){
-          try {
-            var data = j && j.data;
-            if(data && Array.isArray(data.teams) && data.teams.length >= 2){
-              /* No pisar la PLANTILLA si por carrera ya hay copia local
-                 igual o más rica (otro flujo la cargó mientras tanto). */
-              var keep = false;
-              var ld = null;
-              try {
-                var lr = localStorage.getItem(key);
-                if(lr){ ld = JSON.parse(lr);
-                  if(ld && Array.isArray(ld.teams) && ld.teams.length >= data.teams.length) keep = true; }
-              } catch(_){}
-              if(!keep){
-                data.results = data.results || [];
-                localStorage.setItem(key, JSON.stringify(data));
-                try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
-              } else {
-                /* Conservamos la plantilla local (más rica) PERO traemos la
-                   CLASIFICACIÓN del servidor si la local está vacía y la
-                   del servidor SÍ existe (arbitraje por `resultsStamp` +
-                   empty-guard, igual que `fetchData`). Sin esto el reparto
-                   europeo seguía corto aunque el servidor ya tuviera la sim
-                   (Wild Card 16/72 en el móvil). 2026-06-30. */
-                try {
-                  var _lEmpty = !(ld && Array.isArray(ld.results) && ld.results.length);
-                  var _sHas   = Array.isArray(data.results) && data.results.length;
-                  var _lStamp = (ld && Number(ld.resultsStamp)) || 0;
-                  var _sStamp = (data && Number(data.resultsStamp)) || 0;
-                  if(ld && _sHas && (_lEmpty ? (_sStamp >= _lStamp) : (_sStamp > _lStamp))){
-                    ld.results = data.results.slice();
-                    if(_sStamp) ld.resultsStamp = _sStamp;
-                    localStorage.setItem(key, JSON.stringify(ld));
-                    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
-                  }
-                } catch(_){}
-              }
-              recovered++;
+      function attempt(triesLeft){
+        fetch('/api/liga-ext/' + encodeURIComponent(slug), { credentials:'same-origin' })
+          .then(function(r){ return r.ok ? r.json().then(function(j){ return {ok:true, j:j}; }) : {ok:false, j:null}; })
+          .then(function(res){
+            if(!res.ok){
+              if(triesLeft > 1){ setTimeout(function(){ attempt(triesLeft-1); }, 500); return; }
+              setTimeout(step, 80); return;
             }
-          } catch(_){}
-        })
-        .catch(function(){})
-        .then(step);
-    });
+            try {
+              var data = res.j && res.j.data;
+              if(data && Array.isArray(data.teams) && data.teams.length >= 2){
+                /* No pisar la PLANTILLA si por carrera ya hay copia local
+                   igual o más rica (otro flujo la cargó mientras tanto). */
+                var keep = false;
+                var ld = null;
+                try {
+                  var lr = localStorage.getItem(key);
+                  if(lr){ ld = JSON.parse(lr);
+                    if(ld && Array.isArray(ld.teams) && ld.teams.length >= data.teams.length) keep = true; }
+                } catch(_){}
+                if(!keep){
+                  data.results = data.results || [];
+                  localStorage.setItem(key, JSON.stringify(data));
+                  try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+                } else {
+                  /* Conservamos la plantilla local (más rica) PERO traemos la
+                     CLASIFICACIÓN del servidor si la local está vacía y la
+                     del servidor SÍ existe (arbitraje por `resultsStamp` +
+                     empty-guard, igual que `fetchData`). Sin esto el reparto
+                     europeo seguía corto aunque el servidor ya tuviera la sim
+                     (Wild Card 16/72 en el móvil). 2026-06-30. */
+                  try {
+                    var _lEmpty = !(ld && Array.isArray(ld.results) && ld.results.length);
+                    var _sHas   = Array.isArray(data.results) && data.results.length;
+                    var _lStamp = (ld && Number(ld.resultsStamp)) || 0;
+                    var _sStamp = (data && Number(data.resultsStamp)) || 0;
+                    if(ld && _sHas && (_lEmpty ? (_sStamp >= _lStamp) : (_sStamp > _lStamp))){
+                      ld.results = data.results.slice();
+                      if(_sStamp) ld.resultsStamp = _sStamp;
+                      localStorage.setItem(key, JSON.stringify(ld));
+                      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+                    }
+                  } catch(_){}
+                }
+                recovered++;
+              }
+            } catch(_){}
+            setTimeout(step, 80);
+          })
+          .catch(function(){
+            if(triesLeft > 1){ setTimeout(function(){ attempt(triesLeft-1); }, 500); return; }
+            setTimeout(step, 80);
+          });
+      }
+      attempt(2);
+    }
+    step();
   }
 
   /* ── AUTO-hidratación de ligas para el reparto europeo ───────────
@@ -40632,6 +40682,7 @@ window._showSimProgress = function(opts, onDone){
 
     /* Paso 0: traer del servidor las ligas que falten en este
        dispositivo ANTES de forzar zonas / recomputar (ver helper). */
+    _eurToast('⏳ Cargando ligas del servidor (puede tardar unos segundos)…');
     _eurHydrateMissingLeagues(function(recovered){
       _recuadrarApply(recovered);
     });

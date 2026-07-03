@@ -31813,8 +31813,36 @@ document.addEventListener('DOMContentLoaded', function() {
          'duplicada', etc.)
        · Total rellenado con placeholders TBD. */
   window._wcDebugPool = function(){
-    var classified = (typeof window.computeWildCardClassified === 'function')
-      ? (window.computeWildCardClassified() || []) : [];
+    /* Diagnóstico SIEMPRE EN VIVO (2026-07-03) — bug reportado por el
+       usuario: tras congelar un snapshot (`europe_committed_v1`) con un
+       pool corto (p.ej. 8/72, thundering herd de la hidratación —
+       ver `_eurHydrateMissingLeagues`), `computeWildCardClassified()`
+       devolvía el snapshot congelado SIN llamar a
+       `_computeQualifiedFromLeagues`, así que `window._lastQualDiag`
+       quedaba obsoleto (vacío o de otra pantalla) → el diagnóstico
+       mostraba "Pool real detectado: 8/72" pero "LIGAS QUE APORTAN (0)",
+       información contradictoria e inútil para depurar. El botón 🔍 es
+       precisamente la herramienta de depuración: debe reflejar SIEMPRE
+       el cálculo en vivo por liga, e indicar aparte si hay un snapshot
+       congelado y cuántos trae (para que el admin sepa si necesita
+       volver a pulsar "Enviar realidad de cada equipo a su Europa"). */
+    var frozenCount = -1;
+    try {
+      var raw = localStorage.getItem('europe_committed_v1');
+      if(raw){
+        var blob = JSON.parse(raw);
+        if(blob && Array.isArray(blob.wildcard)) frozenCount = blob.wildcard.length;
+      }
+    } catch(_){}
+    var _prevIgnore = window._europeIgnoreFrozen;
+    window._europeIgnoreFrozen = true;
+    var classified = [];
+    try {
+      classified = (typeof window.computeWildCardClassified === 'function')
+        ? (window.computeWildCardClassified() || []) : [];
+    } finally {
+      window._europeIgnoreFrozen = _prevIgnore;
+    }
     var diag = (window._lastQualDiag || []).slice();
     var ok = diag.filter(function(d){ return d.status === 'ok'; });
     var skipped = diag.filter(function(d){ return d.status !== 'ok'; });
@@ -31825,14 +31853,23 @@ document.addEventListener('DOMContentLoaded', function() {
       poolTarget: POOL_TARGET,
       placeholders: placeholders,
       contributing: ok,
-      skipped: skipped
+      skipped: skipped,
+      frozenActive: frozenCount >= 0,
+      frozenCount: frozenCount
     };
   };
 
   function _renderDebugPool(d){
     var lines = [];
-    lines.push('🔍 DIAGNÓSTICO POOL WILD CARD');
+    lines.push('🔍 DIAGNÓSTICO POOL WILD CARD (cálculo EN VIVO)');
     lines.push('───────────────────────────');
+    if(d.frozenActive && d.frozenCount !== d.poolReal){
+      lines.push('⚠️ Hay un snapshot CONGELADO ("Enviar realidad…") con ' + d.frozenCount + ' equipos,');
+      lines.push('   distinto del cálculo en vivo (' + d.poolReal + '). Las pantallas (Draw/Sim)');
+      lines.push('   usan el snapshot congelado. Vuelve a pulsar "📤 Enviar realidad de');
+      lines.push('   cada equipo a su Europa" para refrescarlo con este cálculo en vivo.');
+      lines.push('');
+    }
     lines.push('Pool real detectado: ' + d.poolReal + ' / ' + d.poolTarget);
     if(d.placeholders > 0){
       lines.push('⚠️ Faltan ' + d.placeholders + ' equipos → se rellenan con TBD ' + (d.poolReal+1) + (d.placeholders>1 ? '..TBD ' + d.poolTarget : ''));

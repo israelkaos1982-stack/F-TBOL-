@@ -168,6 +168,65 @@ cada competición según su posición, añadiendo varios de golpe, y
    (eso lo hace el picker por liga, con 1 fetch explícito por selección
    del admin, nunca en cada tecla escrita).
 
+### Modo MANUAL por zona — "elimina los equipos automáticos, lo hago yo" (obligatorio, 2026-07-03)
+
+**Petición usuario** (fotos "Champions League — 31 equipos" con
+mezcolanza de países, "Previa de Champions — 9 equipos"): "todos esos
+equipos que están automáticamente en las competiciones elimínalos, lo
+hago yo manualmente". El cómputo automático sigue siendo útil para
+otras zonas, así que el modo manual es **POR ZONA**, no global.
+
+- **`eur_manual_override_v1`** (nuevo store, junto a
+  `eur_manual_extra_v1`): `{ucl,uclPrev,uel,uecl,uclQual,wildcard}`
+  booleanos. `window._eurManualOnly(zone)` / `window._eurManualOverrideSet(zone,bool)`.
+- Cada uno de los 6 `compute*Classified()` comprueba
+  `window._eurManualOnly(zone)` **AL PRINCIPIO**, ANTES incluso de mirar
+  `_europeFrozenFor` (una snapshot congelada previa NO debe resucitar
+  los automáticos si el admin activó manual): si está activo, devuelve
+  `_appendManualExtra([], zone)` — SOLO lo que el admin haya añadido a
+  mano (formulario / picker por liga), cero automático.
+- **UI**: cada tarjeta de conteo del overlay lleva un botón
+  `🔓 Auto` / `🔒 Manual` que alterna el flag (con `confirm()` al
+  ACTIVAR, para que no sea un toque accidental). El conteo, la lista
+  agrupada por liga (`_eurZoneSectionHtml`) y el picker por liga siguen
+  funcionando igual — simplemente `blob[zone]` pasa a ser 100% manual.
+- Servidor: `eur_manual_override_v1` en `_KV_ALLOWED_EXACT` +
+  `_KV_RECENCY_BLOB_KEYS` (edición rara de admin, recencia simple).
+
+**Reglas a respetar**:
+4. **PROHIBIDO** que el check de `_eurManualOnly(zone)` se coloque
+   DESPUÉS de `_europeFrozenFor` en cualquiera de los 6 compute
+   functions — si no, una snapshot congelada antigua seguiría
+   devolviendo los equipos automáticos aunque el admin haya activado
+   modo manual para esa zona.
+5. El modo manual NUNCA borra `eur_manual_extra_v1` ni
+   `europe_committed_v1` — solo cambia qué fuente se LEE. Desactivar el
+   modo manual (volver a 🔓 Auto) restaura el cómputo automático tal
+   cual sin perder nada.
+6. Toda zona nueva que se añada al reparto (7ª futura) hereda el modo
+   manual automáticamente en cuanto se añada a `EUR_MANUAL_ZONES` +
+   tenga su propio check `_eurManualOnly` al principio de su función de
+   cómputo.
+
+### El picker de liga es un botón/lista PROPIO, no un `<select>` nativo (obligatorio, 2026-07-03)
+
+**Petición usuario** (foto del `<select>` nativo de Android abierto a
+pantalla completa con radios ⭕): "mejor para seleccionar liga que sea
+marcar ✅". El `<select>` nativo rompe el look de la app (picker gris
+del sistema operativo) y usa radios genéricos.
+
+**Fix**: `_eurPickerButtonHtml()` sustituye el `<select>` por un botón
+`#eur-pick-league-btn` que despliega una lista propia
+`#eur-pick-league-list` (mismo estilo oscuro que el resto del overlay),
+con un ✅ junto a la liga seleccionada en vez de un radio. Estado
+`_eurPickerListOpen` controla la visibilidad; clicar una fila cierra la
+lista y dispara `_eurPickerLoadLeague` igual que antes.
+
+**Regla a respetar**: **PROHIBIDO** volver a un `<select>` nativo para
+selecciones dentro de overlays de admin de esta pantalla — usar el
+patrón botón + lista propia con ✅ (mismo que otros pickers custom del
+proyecto, p.ej. `.mea-drop` de "EA Sports → Europa").
+
 ## La hidratación de ligas para el reparto europeo es SECUENCIAL + PAUSADA, nunca thundering herd (obligatorio, 2026-07-03)
 
 **Bug (fotos usuario 2026-07-03, «solo detecta 8 en Wild Card, tienen

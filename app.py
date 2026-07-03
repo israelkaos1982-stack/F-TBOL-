@@ -8,6 +8,12 @@ import json
 import re
 import unicodedata
 import uuid
+import socket
+import ipaddress
+import html as html_lib
+import urllib.request
+import urllib.parse
+import urllib.error
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -4056,6 +4062,104 @@ def _tour_registry_merge(old_json, new_value):
     out["hiddenAt"] = {k: int(v) for k, v in hidden_at.items()}
     out["shownAt"] = {k: int(v) for k, v in shown_at.items()}
     return out
+
+
+_OG_IMAGE_PATTERNS = [
+    re.compile(r'<meta[^>]+property=["\']og:image(?::secure_url)?["\'][^>]+content=["\']([^"\']+)["\']', re.IGNORECASE),
+    re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:image(?::secure_url)?["\']', re.IGNORECASE),
+    re.compile(r'<meta[^>]+name=["\']twitter:image(?::src)?["\'][^>]+content=["\']([^"\']+)["\']', re.IGNORECASE),
+    re.compile(r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']twitter:image(?::src)?["\']', re.IGNORECASE),
+]
+
+
+def _url_resolves_to_public_ip(url):
+    """SSRF guard: rechaza URLs que no sean http(s) o que resuelvan a una IP
+    privada/loopback/link-local (localhost, red interna del propio servidor,
+    metadata de la nube, etc). No es a prueba de DNS-rebinding perfecto (el
+    check y la conexión real no están atómicamente pineados), pero cubre el
+    caso común de SSRF hacia recursos internos — proporcional para un
+    endpoint de conveniencia de admin, no una superficie pública de alto
+    valor."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except Exception:
+        return False
+    if not infos:
+        return False
+    for info in infos:
+        ip_str = info[4][0]
+        try:
+            ip = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
+@app.route("/api/extract-page-image", methods=["GET"])
+def api_extract_page_image():
+    """Dado el link a una página (p.ej. una ficha de competición de
+    besoccer.com), visita la página EN EL SERVIDOR (sin CORS, a diferencia
+    de un fetch desde el navegador) y devuelve la imagen representativa
+    (og:image / twitter:image) para usarla como icono — petición usuario
+    2026-07-03 ("quiero que merga enlaces así [link de una página, no de
+    una imagen directa]"). Usado por `_pickIconFromUrl` en
+    misc_body_1.html como fallback cuando la URL pegada no es ya
+    directamente una imagen."""
+    url = (request.args.get("url") or "").strip()
+    if not url:
+        return jsonify({"ok": False, "error": "falta url"}), 400
+    if not _url_resolves_to_public_ip(url):
+        return jsonify({"ok": False, "error": "esa URL no es accesible o no está permitida"}), 400
+    try:
+        req = urllib.request.Request(url, headers={
+            "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
+            "Accept": "text/html,application/xhtml+xml",
+        })
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            content_type = resp.headers.get("Content-Type", "") or ""
+            if "html" not in content_type.lower() and "xml" not in content_type.lower():
+                return jsonify({"ok": False, "error": "esa URL no devolvió una página web"}), 400
+            raw = resp.read(1_500_000)
+    except urllib.error.HTTPError as e:
+        return jsonify({"ok": False, "error": "el servidor de esa página respondió con error " + str(e.code)}), 502
+    except Exception:
+        return jsonify({"ok": False, "error": "no se pudo acceder a esa URL"}), 502
+
+    charset = "utf-8"
+    m_charset = re.search(r"charset=([\w-]+)", content_type)
+    if m_charset:
+        charset = m_charset.group(1)
+    try:
+        page_html = raw.decode(charset, errors="ignore")
+    except Exception:
+        page_html = raw.decode("utf-8", errors="ignore")
+
+    img_url = None
+    for pattern in _OG_IMAGE_PATTERNS:
+        m = pattern.search(page_html)
+        if m:
+            img_url = html_lib.unescape(m.group(1)).strip()
+            break
+    if not img_url:
+        return jsonify({"ok": False, "error": "no se encontró ninguna imagen representativa en esa página"}), 404
+
+    abs_url = urllib.parse.urljoin(url, img_url)
+    if not _url_resolves_to_public_ip(abs_url):
+        return jsonify({"ok": False, "error": "la imagen encontrada no es una URL válida"}), 400
+    return jsonify({"ok": True, "image": abs_url})
 
 
 @app.route("/api/kv/<key>", methods=["GET"])

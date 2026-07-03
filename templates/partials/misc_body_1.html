@@ -22240,8 +22240,17 @@ window._showSimProgress = function(opts, onDone){
           });
           input.click();
         }
+        /* Prueba si `url` carga como imagen (con timeout). `cb(true/false)`. */
+        function _tryLoadImageUrl(url, cb){
+          var settled = false;
+          var testImg = new Image();
+          var to = setTimeout(function(){ if(settled) return; settled = true; cb(false); }, 10000);
+          testImg.onload = function(){ if(settled) return; settled = true; clearTimeout(to); cb(true); };
+          testImg.onerror = function(){ if(settled) return; settled = true; clearTimeout(to); cb(false); };
+          testImg.src = url;
+        }
         function _pickIconFromUrl(){
-          var url = window.prompt('Pega la URL directa de una imagen (empieza por http:// o https://):', '');
+          var url = window.prompt('Pega la URL de una imagen, o el link de la página de la competición (p.ej. una ficha de besoccer.com):', '');
           if(url == null) return;
           url = String(url).trim();
           if(!url) return;
@@ -22249,23 +22258,30 @@ window._showSimProgress = function(opts, onDone){
             alert('La URL debe empezar por http:// o https://');
             return;
           }
-          var settled = false;
-          var testImg = new Image();
-          var to = setTimeout(function(){
-            if(settled) return; settled = true;
-            alert('La imagen tardó demasiado en cargar. Comprueba la URL o tu conexión.');
-          }, 10000);
-          testImg.onload = function(){
-            if(settled) return; settled = true;
-            clearTimeout(to);
-            _applyPickedIcon(url);
-          };
-          testImg.onerror = function(){
-            if(settled) return; settled = true;
-            clearTimeout(to);
-            alert('No se pudo cargar esa URL como imagen.\n\nComprueba que es un enlace DIRECTO a una foto (termina en .jpg/.png/.webp…) y que es pública/accesible.');
-          };
-          testImg.src = url;
+          _tryLoadImageUrl(url, function(ok){
+            if(ok){ _applyPickedIcon(url); return; }
+            /* No es una imagen directa — petición usuario 2026-07-03
+               ("quiero que merga enlaces así", pegando un link de FICHA
+               de competición, no de imagen): probamos a que el SERVIDOR
+               visite esa página (sin CORS, a diferencia de un fetch desde
+               el navegador) y extraiga su imagen representativa
+               (og:image/twitter:image). */
+            fetch('/api/extract-page-image?url='+encodeURIComponent(url), {credentials:'same-origin'})
+              .then(function(r){ return r.json(); })
+              .then(function(j){
+                if(!j || !j.ok || !j.image){
+                  alert('No se pudo usar esa URL como icono.\n\n'+((j && j.error) || 'Prueba con el enlace DIRECTO a una foto (mantén pulsado sobre la imagen → "Copiar dirección de imagen"), o con el link de la página de la competición.'));
+                  return;
+                }
+                _tryLoadImageUrl(j.image, function(ok2){
+                  if(ok2) _applyPickedIcon(j.image);
+                  else alert('Encontré una imagen en esa página pero no se pudo cargar. Prueba con otro enlace.');
+                });
+              })
+              .catch(function(){
+                alert('No se pudo usar esa URL como icono (sin respuesta del servidor). Comprueba tu conexión y vuelve a intentarlo.');
+              });
+          });
         }
         overlay.querySelector('.comp-edit-pick').addEventListener('click', function(e){
           e.stopPropagation();

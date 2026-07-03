@@ -21953,6 +21953,18 @@ window._showSimProgress = function(opts, onDone){
                 return;
               }
               var lbl = card.getAttribute('data-orig-label') || cardLabel(card);
+              /* Pintar SIEMPRE de inmediato, ANTES de intentar persistir.
+                 Bug reportado 2026-07-03 ("subo un icono y no se aplica"):
+                 antes, si el guardado en localStorage fallaba (cuota del
+                 navegador llena, o el soft-cap de 1.5 MB de este propio
+                 store), la función hacía `return`/mostraba solo un alert
+                 SIN llamar a `applyIconToCard` — el admin elegía la foto y
+                 la caja se quedaba exactamente igual, sin ningún cambio
+                 visible. El usuario debe ver SIEMPRE su elección reflejada
+                 en la caja; la persistencia (localStorage + servidor) es
+                 un problema aparte que como mucho amerita un aviso de que
+                 podría no sobrevivir a un recargo, nunca ocultar el cambio. */
+              applyIconToCard(card, dataUrl);
               if(card.classList.contains('sc-user-added')){
                 /* Caja añadida → guardamos icon dentro de su entrada en `added`. */
                 var aid = card.getAttribute('data-added-id');
@@ -21961,7 +21973,6 @@ window._showSimProgress = function(opts, onDone){
                   if(s.added[i].id === aid){ s.added[i].icon = dataUrl; break; }
                 }
                 saveCards(s);
-                applyIconToCard(card, dataUrl);
                 return;
               }
               var icons = loadIcons();
@@ -21971,17 +21982,15 @@ window._showSimProgress = function(opts, onDone){
               var totalBytes = 0;
               try { totalBytes = JSON.stringify(probe).length; } catch(_){}
               if(totalBytes > TOTAL_BYTES_SOFT_CAP){
-                alert('⚠️ Los iconos personalizados superan 1.5 MB en total ('+Math.round(totalBytes/1024)+' KB).\n\nElimina algún icono con 🗑 RESET o sube imágenes más pequeñas.');
+                alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero los iconos personalizados superan 1.5 MB en total ('+Math.round(totalBytes/1024)+' KB) y NO se ha podido guardar — se perderá al recargar la página.\n\nElimina algún icono con 🗑 ICONO o sube imágenes más pequeñas, y vuelve a intentarlo.');
                 return;
               }
               icons[lbl] = dataUrl;
               var saveResult = saveIcons(icons);
-              if(saveResult === true){
-                applyIconToCard(card, dataUrl);
-              } else if(saveResult === 'quota'){
-                alert('⚠️ El navegador está sin espacio (localStorage lleno) y no he podido guardar el icono.\n\nVe a la pestaña de Resto de Ligas y verás que se intentó liberar espacio automáticamente. Reintenta este icono o limpia caché del navegador.');
-              } else {
-                alert('No se pudo guardar el icono (error desconocido).');
+              if(saveResult === 'quota'){
+                alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero el navegador está sin espacio (localStorage lleno) y no he podido guardarlo — se perderá al recargar la página.\n\nVe a la pestaña de Resto de Ligas y verás que se intentó liberar espacio automáticamente. Reintenta o limpia caché del navegador.');
+              } else if(saveResult !== true){
+                alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero no se pudo guardar (error desconocido) — se perderá al recargar la página.');
               }
             });
           });

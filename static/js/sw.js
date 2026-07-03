@@ -84,8 +84,14 @@ self.addEventListener('fetch', function (e) {
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).then(function (res) {
-        if (res && res.ok) {
-          caches.open(CACHE_HTML).then(function (c) { c.put('/', res.clone()); });
+        /* clonar YA, síncrono: si se difiere dentro del .then() de
+           caches.open() (async, IndexedDB), el navegador puede empezar
+           a consumir el body de `res` (para pintar la página) antes de
+           que el clone() llegue a ejecutarse → "Response body is
+           already used". Clonar aquí evita la carrera. */
+        var resClone = (res && res.ok) ? res.clone() : null;
+        if (resClone) {
+          caches.open(CACHE_HTML).then(function (c) { c.put('/', resClone); }).catch(function () {});
         }
         return res;
       }).catch(function () {

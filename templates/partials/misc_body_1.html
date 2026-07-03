@@ -21298,19 +21298,20 @@ window._showSimProgress = function(opts, onDone){
    Ver guarda global .sc-comp-img{animation:none !important;} en
    static/css/index.bundle.css. */
 
-/* Champions League / Europa League — icono SIN círculo, mismo tamaño
-   "plano" que los logos de España (petición usuario 2026-07-03, fotos
-   "Competiciones" vs "España"): el círculo (--cir-bg + padding:5px)
-   dejaba solo ~28px visibles del logo, notablemente más pequeño que
-   el logo de LIGA EA SPORTS/COPA DEL REY (36px, sin círculo ni
-   padding). Se retira el círculo/borde/fondo SOLO para estas 2 cajas
-   (las señaladas por el usuario) y se agranda a 44px, igual que
-   `.sc-brand-shell .sc-comp-img` de España. El resto de cajas de
-   Competiciones (Conference, Recopa, USC…) mantienen su círculo. */
+/* Champions League / Europa League — icono SIN círculo, más grande que
+   los logos de España (petición usuario 2026-07-03 ×2: primero "mismo
+   tamaño que España", luego "más grandes"). El círculo (--cir-bg +
+   padding:5px) dejaba solo ~28px visibles del logo; se retira el
+   círculo/borde/fondo SOLO para estas 2 cajas (las señaladas por el
+   usuario) y se agranda a 56px (60px en pantallas ≥480px) — por
+   encima incluso de los 36px "planos" de España. El resto de cajas de
+   Competiciones (Conference, Recopa, USC…) mantienen su círculo.
+   `.submenu-card` no recorta overflow, así que el icono puede exceder
+   ligeramente el alto de la fila (52px) sin cortarse. */
 #s-competiciones .submenu-card.sc-ucl1 .sc-comp-img,
 #s-competiciones .submenu-card.sc-uel1 .sc-comp-img{
-  width:44px;
-  height:44px;
+  width:56px;
+  height:56px;
   border-radius:0;
   background:none;
   border:none;
@@ -21320,8 +21321,8 @@ window._showSimProgress = function(opts, onDone){
 @media (min-width:480px){
   #s-competiciones .submenu-card.sc-ucl1 .sc-comp-img,
   #s-competiciones .submenu-card.sc-uel1 .sc-comp-img{
-    width:48px;
-    height:48px;
+    width:60px;
+    height:60px;
   }
 }
 </style>
@@ -21427,24 +21428,46 @@ window._showSimProgress = function(opts, onDone){
   function loadIcons(){
     try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(_){ return {}; }
   }
+  /* POST con reintentos (3×, backoff 0.6/1.2/1.8s) — petición usuario
+     2026-07-03 ("cuando borro datos y cookies no se guarda el icono
+     asignado nuevo"). El POST anterior era fire-and-forget
+     (`.catch(function(){})` mudo): en red móvil, un request perdido
+     dejaba el server SIN el icono nuevo; como `_hydrateIconsFromServer`
+     solo hace GET cuando el localStorage está VACÍO, borrar datos de
+     navegación (o cambiar de móvil) recuperaba del server un blob que
+     nunca llegó a recibir el último icono — el icono "desaparecía"
+     igual que si nunca se hubiera guardado. Mismo patrón de reintentos
+     que el resto de stores `_kvBlobSync` del proyecto. */
+  function _postJsonRetry(url, payloadStr, triesLeft){
+    triesLeft = triesLeft == null ? 3 : triesLeft;
+    try {
+      fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: payloadStr
+      }).then(function(r){
+        if(!r.ok && triesLeft > 1){
+          setTimeout(function(){ _postJsonRetry(url, payloadStr, triesLeft - 1); }, 700);
+        }
+      }).catch(function(){
+        if(triesLeft > 1) setTimeout(function(){ _postJsonRetry(url, payloadStr, triesLeft - 1); }, 700);
+      });
+    } catch(_){}
+  }
   /* Sync con servidor (GlobalState): los iconos custom se persisten
      también en /api/kv/comp_icons_v1 desde 2026-05-02 — antes vivían
      SOLO en localStorage y se perdían si el navegador limpiaba caché
      o el usuario cambiaba de dispositivo (reportado por el usuario
      con foto). Estrategia:
-       - Al guardar: localStorage primero (cache rápido) + POST async
-         al server (best-effort).
+       - Al guardar: localStorage primero (cache rápido) + POST con
+         reintentos al server.
        - Al cargar: si localStorage está vacío, GET del server y
          volcar a localStorage para futuras lecturas. */
   function _saveIconsServer(icons){
-    try {
-      fetch('/api/kv/comp_icons_v1', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        credentials: 'same-origin',
-        body: JSON.stringify({value: icons || {}})
-      }).catch(function(){});
-    } catch(_){}
+    var payload;
+    try { payload = JSON.stringify({value: icons || {}}); } catch(_){ return; }
+    _postJsonRetry('/api/kv/comp_icons_v1', payload);
   }
   function _hydrateIconsFromServer(cb){
     /* Solo ejecuta GET si el localStorage está vacío. No queremos
@@ -21588,12 +21611,13 @@ window._showSimProgress = function(opts, onDone){
     return s;
   }
   function _saveCardsServer(state){
-    try {
-      fetch('/api/kv/comp_cards_v1', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        credentials:'same-origin', body:JSON.stringify({value: state || {}})
-      }).catch(function(){});
-    } catch(_){}
+    /* Mismo fix de reintentos que `_saveIconsServer` (petición usuario
+       2026-07-03): sin reintentos, un POST perdido en red móvil dejaba
+       el textos/cajas quitadas/añadidas SIN persistir en el server, y
+       borrar datos de navegación las recuperaba desde un blob viejo. */
+    var payload;
+    try { payload = JSON.stringify({value: state || {}}); } catch(_){ return; }
+    _postJsonRetry('/api/kv/comp_cards_v1', payload);
   }
   function saveCards(state){
     var payload;

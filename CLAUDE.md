@@ -2185,6 +2185,56 @@ con backoff exponencial (2 s/4 s/8 s, mismo patrón que
    `SYNC_KEYS` de `misc_body_2.html`) que borre localStorage debe
    persistir el borrado en servidor con reintentos, no un fetch suelto.
 
+### Open Qualifier y Wild Card NUNCA leen el inyector manual "EA Sports → Europa" (obligatorio, 2026-07-03)
+
+**Bug (foto usuario 2026-07-03, "Wild Card 75/72")**: el admin había
+metido a mano ~70 equipos en la sección Wild Card del inyector manual
+"EA Sports → Europa" (workaround usado mientras el cómputo automático
+estaba roto, ver sección "El reparto europeo se AUTO-hidrata" arriba).
+Con el cómputo automático ya arreglado, la pantalla Wild Card mostraba
+**75/72** — por encima del total oficial (72) — y el admin no sabía
+qué equipos/países sobraban o faltaban.
+
+**Causa raíz**: `computeWildCardClassified()` y
+`computeOpenQualifierTeams()` llamaban a `_prependManualEa(arr, slug)`,
+que prepone los equipos de `manual_ea_<slug>_v1` al pool automático con
+dedupe SOLO por nombre EXACTO. Pero **España (Liga EA Sports) tiene
+cupo 0 en ambas zonas** en la tabla oficial de coeficientes
+(`LEAGUE_DEFAULT_ZONES['liga-ea-sports'].uclQual === 0` y
+`.wildcard === 0`) — el cómputo automático YA cubre el 100% de las 88 /
+72 plazas por sí solo. Los equipos manuales que sobrevivían de la época
+en que el cómputo automático estaba vacío se SUMABAN encima (grafías
+distintas para el mismo hueco de liga no dedupean) y el pool superaba
+el total oficial — la Wild Card recorta silenciosamente a 72 por poder
+(`_normalizePool`), así que el admin veía "75/72" sin saber cuáles 3
+equipos se estaban descartando ni por qué.
+
+**Fix** (`misc_body_1.html`): `computeWildCardClassified` y
+`computeOpenQualifierTeams` YA NO llaman a `_prependManualEa` — ambas
+zonas devuelven EXCLUSIVAMENTE `_computeQualifiedFromLeagues(...)`, que
+por construcción nunca puede superar el total oficial (cada liga está
+capada a su `zones.uclQual`/`zones.wildcard` exacto, que suman
+88/72 respectivamente). La pantalla "EA Sports → Europa" ahora muestra
+un aviso ámbar en las secciones Open Qualifier y Wild Card («España
+tiene cupo 0 aquí — esta lista ya NO se usa en el cálculo») para que el
+admin sepa que puede quitar esos equipos sin que afecte a nada — no se
+borran automáticamente (son datos del usuario).
+
+**Reglas a respetar**:
+1. **PROHIBIDO** volver a llamar `_prependManualEa` desde
+   `computeWildCardClassified`/`computeOpenQualifierTeams`. España
+   tiene cupo 0 en ambas zonas por diseño — el inyector manual es SOLO
+   para zonas donde España SÍ tiene plazas (`ucl`/`uclPrev`/`uel`/`uecl`).
+2. **PROHIBIDO** quitar el aviso ámbar de la pantalla "EA Sports →
+   Europa" en las secciones Open Qualifier/Wild Card mientras esas
+   listas sigan existiendo en `manual_ea_uclQual_v1`/`manual_ea_wildcard_v1`
+   — sin el aviso el admin no entiende por qué sus equipos "no hacen
+   nada".
+3. Si en el futuro España consigue plaza en Open Qualifier o Wild Card
+   (cambio de la tabla de coeficientes), hay que revertir este fix
+   (recuperar `_prependManualEa` ahí) Y quitar el aviso ámbar — no
+   dejar el código a medias.
+
 ## Caja "Torneos de Verano · Estadísticas" — render no bloqueante + equipos vigentes (obligatorio, 2026-05-28)
 
 **Bug (foto usuario 2026-05-28)**: con el Trofeo Joan Gamper a 46/48
@@ -3256,6 +3306,34 @@ BYE pierde).
   `recopa_<phase>_<idx>` → `Recopa Europa — 1/64 … FINAL RECOPA`).
   Toda ronda nueva debe tener su fila en `calendario.json` y su
   entrada en ese mapa.
+
+### El Subcampeón de cada copa arranca en 0 (editable), el Campeón siempre 1 (obligatorio, 2026-07-03)
+
+**Petición usuario 2026-07-03**: "las reglas de copa por defecto que
+siempre ponga el campeón 1 y el Subcampeón 0, pudiendo editarlo
+manualmente". Antes el toggle `data.config.recopaSubcampeon` (modal
+📜 Reglas de cada copa nacional, `_lecRenderReglas`) arrancaba en
+**TRUE** por defecto (`!(recopaSubcampeon === false)`) — cualquier
+copa de la whitelist `RECOPA_SUBCAMPEON_SLUGS` que el admin NUNCA
+tocara aportaba su subcampeón a la Recopa sin que él lo hubiera
+decidido.
+
+**Fix** (`misc_body_1.html`, `_buildPool` + `_lecRenderReglas` +
+`_lecCopa.toggleSubcampeon`): el default se invierte a **FALSE** —
+`subOn = (data.config.recopaSubcampeon === true)`. El Campeón sigue
+`fijo, siempre 1` (no editable, sin cambios). El toggle sigue
+funcionando igual (pulsar el chip 0/1 alterna), solo cambia el valor
+de arranque cuando el admin nunca lo ha tocado.
+
+**Reglas a respetar**:
+- **PROHIBIDO** volver a que `recopaSubcampeon` sin definir cuente
+  como `true`. Solo cuenta el subcampeón si el admin lo puso a `true`
+  explícitamente desde el toggle.
+- El Campeón (`fixed`, valor "1") sigue sin ser editable — solo el
+  Subcampeón tiene toggle.
+- `_buildPool` (Recopa) y `_lecRenderReglas` (display del toggle)
+  DEBEN leer el mismo criterio (`=== true`) para no discrepar entre lo
+  que se ve en Reglas y lo que realmente entra al pool.
 
 ### Reglas a respetar
 

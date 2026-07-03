@@ -16168,9 +16168,17 @@ window._showSimProgress = function(opts, onDone){
       var playerN = k.slice(sep + 2);
       var s = stats[k] || {};
       var golTotal = Number(s.gol||0) + Number(s.pen||0) + Number(s.fk||0);
+      /* Preferir el nombre RAW (`s.team`/`s.player`, sin pasar por
+         `_normPS`) que `getOrCreateInBucket` guarda desde 2026-07-03,
+         sobre reconstruirlo con `_titleCase()` a partir de la clave
+         normalizada — esa clave sustituye por espacio cualquier letra
+         no-ASCII sin descomposición NFD (ø, ı turca, ß…) y corrompe
+         nombres reales («K. Yıldız» → «K Y Ld Z»). `_titleCase(...)`
+         queda solo como fallback para caches persistidos ANTES de este
+         fix (sin los campos raw todavía). */
       return {
-        team: _titleCase(teamN),
-        name: _titleCase(playerN),
+        team: s.team || _titleCase(teamN),
+        name: s.player || _titleCase(playerN),
         stats: {
           'goles-total': golTotal,
           'cs':          Number(s.imbat||0),
@@ -16407,6 +16415,14 @@ window._showSimProgress = function(opts, onDone){
     function getOrCreateInBucket(bucket, teamName, playerName){
       var key = _normPS(teamName) + '::' + _normPS(playerName);
       if(!bucket[key]) bucket[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+      /* Nombre RAW (sin pasar por `_normPS`) para el display — `_normPS`
+         sustituye por espacio cualquier letra no-ASCII sin descomposición
+         NFD (ø, ı turca, ß…), así que un dashboard que reconstruya el
+         nombre a partir de la CLAVE normalizada lo corrompe («K. Yıldız»
+         → «K Y Ld Z», bug 2026-07-03). `_lextStatsDashHtml` prefiere
+         estos campos sobre reconstruir con `_titleCase(key)`. */
+      if (!bucket[key].team && teamName) bucket[key].team = teamName;
+      if (!bucket[key].player && playerName) bucket[key].player = playerName;
       return bucket[key];
     }
     function _competitionFromMatchKey(mk){
@@ -16935,6 +16951,8 @@ window._showSimProgress = function(opts, onDone){
         dst.penProv  = (dst.penProv ||0) + (src.penProv ||0);
         dst.penFall  = (dst.penFall ||0) + (src.penFall ||0);
         dst.propia   = (dst.propia  ||0) + (src.propia  ||0);
+        if (!dst.team && src.team) dst.team = src.team;
+        if (!dst.player && src.player) dst.player = src.player;
         /* PJ NO se suma jugador a jugador (ya viene del equipo). */
         target[k] = dst;
       });
@@ -17125,6 +17143,8 @@ window._showSimProgress = function(opts, onDone){
           d.penProv  = (d.penProv ||0) + (s.penProv ||0);
           d.penFall  = (d.penFall ||0) + (s.penFall ||0);
           d.propia   = (d.propia  ||0) + (s.propia  ||0);
+          if (!d.team && s.team) d.team = s.team;
+          if (!d.player && s.player) d.player = s.player;
           merged[k] = d;
         });
         var pj = teamPJByComp[id] || {};
@@ -17303,6 +17323,24 @@ window._showSimProgress = function(opts, onDone){
        stale, y sumamos entre caches distintos. */
     var liveStats = {};
     var teamPJ = 0;
+    /* Clave del cache doméstico (Liga+Copa+SC) — se usa para el gate
+       de recuperación de abajo. Bug 2026-07-03 (foto usuario Juventus:
+       «terminó liga y copa, PJ 3 en la plantilla»): en contexto
+       DOMÉSTICO `_lextDomesticAllComps` amplía `compFilter` con
+       ucl/uel/uecl/recopa/usc/inter/mundial (petición 2026-06-15,
+       "SUMA TOTAL de competiciones"). Si el equipo SÍ tiene entradas en
+       una de esas cajas extra (p.ej. jugó 3 partidos del Mundialito de
+       Clubes) pero la caja doméstica `ef_player_stats_v1` está vacía
+       (rebuildPlayerStatsStore la vacía para equipos no-EA hasta que
+       `_lecSyncPlayerStatsCache` la re-sincroniza), el `teamPJ` SUMADO
+       ya no da 0 (da el PJ del Mundialito, p.ej. 3) — el gate antiguo
+       `teamPJ === 0` NUNCA se disparaba y esos 3 partidos del
+       Mundialito TAPABAN los 51 de Liga+Copa para siempre. El gate
+       correcto mira SOLO si la caja doméstica aportó algo, no la suma
+       total (que puede tener datos de otras comps). */
+    var _ligaCacheKey = (typeof window._lextStatsKeyForCompetition === 'function')
+      ? window._lextStatsKeyForCompetition('liga') : 'ef_player_stats_v1';
+    var _ligaCachePJ = 0;
     statsKeys.forEach(function(key){
       try {
         var raw = localStorage.getItem(key);
@@ -17330,11 +17368,20 @@ window._showSimProgress = function(opts, onDone){
           liveStats[pn] = rec;
         });
         teamPJ += perCacheTeamPJ;
+        if (key === _ligaCacheKey) _ligaCachePJ = perCacheTeamPJ;
       } catch(_){}
     });
-    /* Compatibilidad Resto de Ligas: si la caja Liga no aportó PJ,
-       leer de leagueData.results + leagueData.copa (motor _lecCopa). */
-    if (compSet.liga && teamPJ === 0 && team) {
+    /* Compatibilidad Resto de Ligas: si la caja Liga (doméstica) no
+       aportó PJ, leer de leagueData.results + leagueData.copa (motor
+       _lecCopa) y SUMAR (no reemplazar) sobre lo que ya hayan aportado
+       otras cajas expandidas. También rellenamos `liveStats` per-jugador
+       desde `team.players[]` (los campos que `applyMatchStats` escribe
+       de forma autoritativa durante la sim) para que un jugador que solo
+       marcó en Liga/Copa —y no en ninguna otra comp expandida— no salga
+       con sus goles a 0 (la rama `liveHasAny` de `_lextHydratePlayerStats`
+       lo trataría como "no marcó" si la única entrada viva fuera la de
+       otra comp). */
+    if (compSet.liga && _ligaCachePJ === 0 && team) {
       try {
         if (leagueData && Array.isArray(leagueData.results) && team.id) {
           for (var ri = 0; ri < leagueData.results.length; ri++) {
@@ -17374,6 +17421,33 @@ window._showSimProgress = function(opts, onDone){
           if (cp.final && cp.final.played) {
             if(cp.final.home === tName || cp.final.away === tName) teamPJ += 1;
           }
+        }
+      } catch(_){}
+      /* Backfill de `liveStats` doméstico desde `team.players[]` — fuente
+         autoritativa que `applyMatchStats`/`resetPlayerStats` mantienen
+         SIEMPRE en sync con la sim, independiente de si la caja
+         `ef_player_stats_v1` llegó a re-sincronizarse. SUMA sobre
+         cualquier entrada que otras comps ya hayan aportado (nunca la
+         pisa) para no perder, p.ej., los goles del Mundialito de Clubes
+         de un jugador que TAMBIÉN marcó en Liga/Copa. */
+      try {
+        if (Array.isArray(team.players)) {
+          team.players.forEach(function(p){
+            if (!p || !p.name) return;
+            var pj = Number(p.pj || 0);
+            if (pj <= 0) return;
+            var pn = _np(p.name);
+            var rec = liveStats[pn] || {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,imbat:0,penSaved:0};
+            rec.gol      += Number(p.gol)||0;
+            rec.pen      += Number(p.pen)||0;
+            rec.fk       += Number(p.fk)||0;
+            rec.mvp      += Number(p.mvp)||0;
+            rec.ta       += Number(p.ta)||0;
+            rec.tr       += Number(p.tr)||0;
+            rec.imbat    += Number(p.imbat)||0;
+            rec.penSaved += Number(p.penSaved)||0;
+            liveStats[pn] = rec;
+          });
         }
       } catch(_){}
     }
@@ -30132,6 +30206,11 @@ window._showSimProgress = function(opts, onDone){
     function rec(teamName, playerName){
       var key = norm(teamName) + '::' + norm(playerName);
       if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+      /* Nombre RAW (sin normalizar) para el display — ver nota en
+         `_mundialStatsRobustScan`/`_mundialRenderStatsGrid` sobre por
+         qué `norm()` no debe usarse para reconstruir texto visible. */
+      if (!stats[key].team && teamName) stats[key].team = teamName;
+      if (!stats[key].player && playerName) stats[key].player = playerName;
       return stats[key];
     }
     /* Índice clave-de-partido → { a, b } nombres reales. */
@@ -30219,6 +30298,8 @@ window._showSimProgress = function(opts, onDone){
       if (!tk || !pk) return null;
       var key = tk + '::' + pk;
       if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+      if (!stats[key].team && teamName) stats[key].team = teamName;
+      if (!stats[key].player && playerName) stats[key].player = playerName;
       return stats[key];
     }
     var results = (cfg && cfg.results) || {};
@@ -30409,51 +30490,131 @@ window._showSimProgress = function(opts, onDone){
     function _bfActaHasReal(arr){
       return Array.isArray(arr) && arr.some(_bfIsRealName);
     }
+    function _bfPlayerName(e){
+      if (!e) return '';
+      return String(Array.isArray(e.player) ? (e.player[1]||e.player[0]) : (e.player || e.name || e.playerName || '')).trim();
+    }
+    /* Lado ('a'/'b') al que pertenece un evento — mismo criterio que
+       `_mundialStatsRobustScan`: primero el marcador literal 'a'/'home'
+       o 'b'/'away' que pone genMatchEvents/genMatchEventsEnhanced,
+       luego el nombre de equipo literal (por si el evento viene de otra
+       fuente que ya lo resolvió a home/away). */
+    function _bfEventSide(e, home, away){
+      if (!e) return null;
+      var t = e.team || e.side;
+      if (t === 'a' || t === 'home') return 'a';
+      if (t === 'b' || t === 'away') return 'b';
+      if (home && t === home) return 'a';
+      if (away && t === away) return 'b';
+      return null;
+    }
     var changed = false;
     Object.keys(cfg.results).forEach(function(mk){
       var r = cfg.results[mk]; if (!r || !r.played) return;
       if (/\|L[12]$/.test(mk)) return;
       var evs = r.events || r.acta;
+      var info = idx[mk] || {};
+      var home = r.home || info.a, away = r.away || info.b;
       /* Regeneramos el acta SOLO si la existente es placeholder
          ("Jugador A/B" / "Portero A/B", sin nombre real) — útil si el
          acta vieja se guardó antes de que la plantilla del equipo
          estuviera disponible (simulada antes de crear el roster en el
-         editor de Liga/Selecciones/Torneo). Si ya hay goleadores con
-         nombre real, NO la tocamos (preserva los scorers originales).
+         editor de Liga/Selecciones/Torneo). Si AMBOS lados ya tienen
+         goleadores con nombre real, NO la tocamos (preserva los scorers
+         originales).
+         Bug 2026-07-03 (fotos usuario «FK Bodø Glimt» en Mundialito de
+         Clubes: «Jugador A» / «Portero A» pese a tener plantilla real):
+         antes, un SOLO evento real en CUALQUIER lado (típicamente el
+         rival, que sí tenía plantilla cuando se simuló el partido) hacía
+         que `_bfActaHasReal` diera el acta ENTERA por buena y el lado
+         cuya plantilla aún no existía en ese momento se quedaba con
+         «Jugador A»/«Portero A» PARA SIEMPRE — ni el auto-heal ni el
+         botón 🔄 Recalcular (force) lo arreglaban, porque el guard
+         miraba el acta completa, no cada lado por separado. Ahora se
+         detecta el placeholder POR LADO y, si solo uno está roto, se
+         sana SOLO ESE LADO (ver más abajo), preservando intactos los
+         goleadores reales del lado que ya funcionaba.
          El modo AUTO (no `force`, llamado en cada `_tourRender`) además
-         SOLO pisa el placeholder si la regeneración produce nombres
-         REALES (la plantilla ya resuelve) — así no churnea ni cambia un
-         placeholder por otro en cada render. El modo `force` (botón 🔄
-         Recalcular) regenera siempre. */
+         SOLO pisa un lado si la regeneración produce nombres REALES
+         para ESE lado (la plantilla ya resuelve) — así no churnea ni
+         cambia un placeholder por otro en cada render. El modo `force`
+         (botón 🔄 Recalcular) intenta sanar igual, con la misma guarda. */
       var _wasPlaceholder = false;
+      var _healSideA = false, _healSideB = false;
       if (evs && evs.length) {
-        if (_bfActaHasReal(evs)) return;   /* ya tiene nombres reales → respetar */
-        _wasPlaceholder = true;            /* acta solo-placeholder → intentar sanar */
+        if (!home || !away) {
+          /* Sin nombres resueltos no se puede aislar por lado — mismo
+             comportamiento histórico (todo o nada). */
+          if (_bfActaHasReal(evs)) return;
+          _wasPlaceholder = true;
+        } else {
+          evs.forEach(function(e){
+            var pn = _bfPlayerName(e);
+            if (!pn || pn === '?') return;      /* evento sin jugador propio (p.ej. descanso) */
+            if (_bfIsRealName(e)) return;        /* nombre real → este evento no está roto */
+            var side = _bfEventSide(e, home, away);
+            if (side === 'a') _healSideA = true;
+            else if (side === 'b') _healSideB = true;
+          });
+          if (!_healSideA && !_healSideB) return;  /* ambos lados ya reales → respetar */
+          _wasPlaceholder = true;
+        }
       }
-      var info = idx[mk] || {};
-      var home = r.home || info.a, away = r.away || info.b;
       if (!home || !away) return;
       var gh = (typeof r.gh === 'number') ? r.gh : ((typeof r.a === 'number') ? r.a : null);
       var ga = (typeof r.ga === 'number') ? r.ga : ((typeof r.b === 'number') ? r.b : null);
       if (gh == null || ga == null) return;
       var gen = window.genMatchEventsEnhanced(home, away, gh|0, ga|0, null);
-      var ev = (gen && gen.events) ? gen.events : (Array.isArray(gen) ? gen : []);
-      /* AUTO-HEAL: si veníamos de un placeholder, exigimos que la
-         plantilla ya resuelva (acta nueva con nombres REALES) antes de
-         pisar; si no, dejamos el placeholder intacto. Esto aplica TAMBIÉN
-         en modo `force` (2026-06-30): un equipo que de verdad solo tiene
-         el roster genérico («Jugador N») regeneraría otro placeholder, y
-         pisarlo en cada apertura churnearía el acta/server sin ganar nada.
-         Solo se re-hidrata cuando la regeneración produce nombres reales
-         (la plantilla real ya está disponible). Las actas VACÍAS
-         (solo-marcador, `!_wasPlaceholder`) sí se rellenan siempre. */
-      if (_wasPlaceholder && !_bfActaHasReal(ev)) return;
-      ev.forEach(function(e){ if (e && !e.realTeam) e.realTeam = ((e.team==='a'||e.side==='a'||e.team==='home'||e.team===home) ? home : (e.team==='b'||e.side==='b'||e.team==='away'||e.team===away) ? away : home); });
+      var genEv = (gen && gen.events) ? gen.events : (Array.isArray(gen) ? gen : []);
+      genEv.forEach(function(e){ if (e && !e.realTeam) e.realTeam = ((e.team==='a'||e.side==='a'||e.team==='home'||e.team===home) ? home : (e.team==='b'||e.side==='b'||e.team==='away'||e.team===away) ? away : home); });
+      var ev;
+      var _fullRegen = !evs || !evs.length || (_healSideA && _healSideB);
+      if (!evs || !evs.length) {
+        /* Acta vacía (solo-marcador) → se rellena entera, como antes:
+           sin datos previos que preservar, no hay nada que perder. */
+        ev = genEv;
+      } else if (_healSideA && _healSideB) {
+        /* AUTO-HEAL de acta completa (ambos lados rotos, o home/away no
+           resueltos): exigimos que la regeneración produzca nombres
+           REALES antes de pisar — igual que antes de 2026-07-03. */
+        if (!_bfActaHasReal(genEv)) return;
+        ev = genEv;
+      } else {
+        /* SANAR SOLO EL LADO ROTO (2026-07-03): sustituimos únicamente
+           los eventos del lado con placeholder por los recién generados
+           PARA ESE LADO, dejando intactos los eventos (y goleadores
+           reales) del lado que ya funcionaba. Si la regeneración
+           tampoco resuelve nombres reales para el lado roto (la
+           plantilla de ese equipo sigue sin existir), no tocamos nada
+           — ni siquiera en modo `force` — para no cambiar un
+           placeholder por otro. */
+        var healSide = _healSideA ? 'a' : 'b';
+        var freshForHealSide = genEv.filter(function(e){ return _bfEventSide(e, home, away) === healSide; });
+        if (!freshForHealSide.some(_bfIsRealName)) return;
+        ev = evs.filter(function(e){ return _bfEventSide(e, home, away) !== healSide; }).concat(freshForHealSide);
+        /* Reordenar por minuto — los eventos del lado sanado se
+           concatenaron al final y quedarían fuera de orden cronológico
+           en el panel 📋 ACTA (las stats no dependen del orden, pero el
+           acta visual sí). */
+        ev.sort(function(a,b){ return (Number(a && a.min) || 0) - (Number(b && b.min) || 0); });
+      }
       if (!r.home) r.home = home;
       if (!r.away) r.away = away;
       r.events = ev; r.acta = ev; changed = true;
-      /* MVP también puede haber quedado en placeholder ("⭐ Jugador B"). */
-      if (gen && gen.mvp) { r.mvp = gen.mvp; r.mvpTeam = gen.mvpTeam || r.mvpTeam || ''; }
+      /* MVP también puede haber quedado en placeholder ("⭐ Jugador B").
+         Solo se reasigna si el acta se regeneró ENTERA, si el MVP
+         guardado era placeholder, o si el equipo del MVP guardado es el
+         lado que acabamos de sanar — nunca pisa un MVP real ya asignado
+         al lado que seguía intacto. */
+      if (gen && gen.mvp) {
+        var _mvpTeamHealed = _fullRegen
+          || (_healSideA && r.mvpTeam === home)
+          || (_healSideB && r.mvpTeam === away);
+        var _mvpWasPlaceholder = !_bfIsRealName({player: r.mvp});
+        if (_mvpTeamHealed || _mvpWasPlaceholder || !r.mvpTeam) {
+          r.mvp = gen.mvp; r.mvpTeam = gen.mvpTeam || r.mvpTeam || '';
+        }
+      }
     });
     if (changed) { try { if (typeof window._tourSave === 'function') window._tourSave(cfg.id, cfg); } catch(_){} }
     return changed;
@@ -30474,6 +30635,16 @@ window._showSimProgress = function(opts, onDone){
       if (!tk || !pk) return null;
       var key = tk + '::' + pk;
       if (!stats[key]) stats[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+      /* Nombre RAW (sin pasar por `norm()`) para el display. `norm()`
+         reemplaza por espacio cualquier letra no-ASCII que no
+         descomponga vía NFD (ø, ı turca, ß…), así que reconstruir el
+         nombre a partir de la CLAVE normalizada corrompe nombres reales
+         — bug 2026-07-03, foto usuario «K. Yıldız» (Juventus) saliendo
+         como «K Y Ld Z» en Estadísticas. Guardamos el nombre tal cual
+         llegó la PRIMERA vez que se ve esta clave; `_mundialRenderStatsGrid`
+         lo usa en vez de reconstruirlo con `tc()` sobre la clave. */
+      if (!stats[key].team && teamName) stats[key].team = teamName;
+      if (!stats[key].player && playerName) stats[key].player = playerName;
       return stats[key];
     }
     var tt = teams || cfg.teams || [];
@@ -30585,9 +30756,17 @@ window._showSimProgress = function(opts, onDone){
       var sep = k.indexOf('::'); if (sep < 0) return null;
       var s = stats[k] || {};
       var golTotal = Number(s.gol||0) + Number(s.pen||0) + Number(s.fk||0);
+      /* Preferir el nombre RAW guardado por el agregador (`s.team`/
+         `s.player`, sin pasar por `norm()`) sobre reconstruirlo con
+         `tc()` desde la clave normalizada — esa clave reemplaza por
+         espacio cualquier letra no-ASCII sin descomposición NFD (ø, ı
+         turca, ß…) y corrompe nombres reales («K. Yıldız» → «K Y Ld Z»,
+         bug 2026-07-03). `tc(k...)` queda solo como fallback para
+         fuentes que no aporten el nombre raw (stores persistidos
+         antiguos vía `_statsFromStoreFilteredToTeams`). */
       return {
-        team: tc(k.slice(0, sep)),
-        name: tc(k.slice(sep + 2)),
+        team: s.team || tc(k.slice(0, sep)),
+        name: s.player || tc(k.slice(sep + 2)),
         v: {
           'goles-total': golTotal,
           'cs':          Number(s.imbat||0),

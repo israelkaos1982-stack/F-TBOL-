@@ -40544,11 +40544,59 @@ window._showSimProgress = function(opts, onDone){
     return blob;
   }
   var _eurManualSelZone = 'wildcard';
+  var _eurManualHydrating = false;
+  var _eurManualLastHydrateAt = 0;
+  /* Dispara `_eurHydrateMissingLeagues` (trae del servidor las ligas que
+     falten EN ESTE DISPOSITIVO) y re-renderiza el overlay al terminar.
+     Petición usuario 2026-07-03 (fotos "no me cuadra nada", pool 9/72
+     al abrir el overlay): antes el overlay solo leía lo que YA hubiera
+     en localStorage — si el admin no había pulsado "Re-cuadrar"/"Enviar
+     realidad" antes, el conteo mostrado no reflejaba lo que el servidor
+     realmente tiene. Ahora el overlay se auto-hidrata SOLO, sin depender
+     de esos 2 botones. */
+  function _eurManualTriggerHydrate(){
+    if(_eurManualHydrating) return;
+    _eurManualHydrating = true;
+    _eurManualOverlayRender();
+    try {
+      _eurHydrateMissingLeagues(function(recovered, total){
+        _eurManualHydrating = false;
+        _eurManualLastHydrateAt = Date.now();
+        _eurManualOverlayRender();
+      });
+    } catch(_){
+      _eurManualHydrating = false;
+      _eurManualOverlayRender();
+    }
+  }
+  /* Ligas del reparto canónico (`LEAGUE_DEFAULT_ZONES`) que en ESTE
+     dispositivo no tienen plantilla (≥2 equipos) todavía — la lista
+     ACCIONABLE de "qué liga concreta falta por hidratar/simular",
+     complemento del conteo agregado por zona. */
+  function _eurMissingLeaguesList(){
+    var out = [];
+    try {
+      var slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {});
+      slugs.forEach(function(slug){
+        if(slug === 'liga-ea-sports') return;
+        var d = null;
+        try { var raw = localStorage.getItem('ligaExt_' + slug); d = raw ? JSON.parse(raw) : null; } catch(_){}
+        var hasTeams = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
+        if(!hasTeams){
+          var nm = (window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[slug]) || slug;
+          out.push(slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g,' ') + ' (' + nm + ')');
+        }
+      });
+      out.sort();
+    } catch(_){}
+    return out;
+  }
   function _eurManualOverlayRender(){
     var ov = document.getElementById('eur-manual-ov');
     if(!ov) return;
     var blob = _eurLiveBlob();
     var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()) || {};
+    var missing = _eurManualHydrating ? [] : _eurMissingLeaguesList();
     var countsHtml = _EUR_REPORT_ZONES.map(function(z){
       var n = (blob[z.key]||[]).length, t = _EUR_ZONE_TARGET[z.key];
       var ok = n >= t;
@@ -40576,10 +40624,22 @@ window._showSimProgress = function(opts, onDone){
           }).join('')
         + '</div>';
     }).join('');
+    var statusHtml;
+    if(_eurManualHydrating){
+      statusHtml = '⏳ Cargando ligas del servidor (puede tardar hasta 1-2 min con ~50 ligas)…';
+    } else if(_eurManualLastHydrateAt){
+      statusHtml = '✅ Actualizado desde el servidor — ' + new Date(_eurManualLastHydrateAt).toLocaleTimeString();
+    } else {
+      statusHtml = '⚠️ Conteo con lo que ya hay en ESTE dispositivo (aún no se ha cargado del servidor).';
+    }
     var html = '<div style="width:100%;max-width:640px;">'
-      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
       +     '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">👁 Equipos por competición (en vivo)</div>'
       +     '<button id="eur-manual-close" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;letter-spacing:1px;">✕ Cerrar</button>'
+      +   '</div>'
+      +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'
+      +     '<div style="flex:1;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);">' + statusHtml + '</div>'
+      +     '<button id="eur-manual-refresh" '+(_eurManualHydrating?'disabled':'')+' style="background:linear-gradient(135deg,#0e2e4a,#1a5a7a);border:1px solid #3ca0cc;color:#bfe8ff;border-radius:6px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;'+(_eurManualHydrating?'opacity:.5;':'')+'">🔄 Cargar del servidor</button>'
       +   '</div>'
       +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' + countsHtml + '</div>'
       +   '<div style="border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.03);">'
@@ -40592,11 +40652,19 @@ window._showSimProgress = function(opts, onDone){
       +     '</div>'
       +   '</div>'
       +   (manualListHtml ? ('<div style="margin-bottom:14px;">' + manualListHtml + '</div>') : '')
+      +   (missing.length ? (
+            '<div style="margin:0 0 14px;border:1px solid rgba(255,150,80,.4);border-radius:10px;padding:8px 12px;background:rgba(255,150,80,.06);">'
+          +   '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#ffb060;margin-bottom:6px;">⚠️ LIGAS SIN DATOS EN ESTE DISPOSITIVO (' + missing.length + ') — abre cada una en "Resto de Ligas" para que hidrate, o añade sus equipos a mano arriba:</div>'
+          +   '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.75);line-height:1.6;">' + missing.map(_eurEsc).join(' · ') + '</div>'
+          + '</div>'
+          ) : '')
       +   _EUR_REPORT_ZONES.map(function(z){ return _eurZoneSectionHtml(z, blob[z.key]); }).join('')
       + '</div>';
     ov.innerHTML = html;
     var closeBtn = document.getElementById('eur-manual-close');
     if(closeBtn) closeBtn.onclick = function(){ ov.remove(); };
+    var refreshBtn = document.getElementById('eur-manual-refresh');
+    if(refreshBtn) refreshBtn.onclick = function(){ _eurManualTriggerHydrate(); };
     ov.querySelectorAll('[data-eur-zone]').forEach(function(btn){
       btn.onclick = function(){ _eurManualSelZone = btn.getAttribute('data-eur-zone'); _eurManualOverlayRender(); };
     });
@@ -40620,6 +40688,7 @@ window._showSimProgress = function(opts, onDone){
   }
   window._eurManualOverlayOpen = function(){
     var ov = document.getElementById('eur-manual-ov');
+    var isNew = !ov;
     if(!ov){
       ov = document.createElement('div');
       ov.id = 'eur-manual-ov';
@@ -40628,6 +40697,12 @@ window._showSimProgress = function(opts, onDone){
       ov.onclick = function(ev){ if(ev.target === ov) ov.remove(); };
     }
     _eurManualOverlayRender();
+    /* Auto-hidrata al abrir (throttle 2 min) — así el conteo que ve el
+       admin refleja el servidor de verdad, sin depender de que antes
+       haya pulsado "Re-cuadrar"/"Enviar realidad". */
+    if(isNew && !_eurManualHydrating && (Date.now() - _eurManualLastHydrateAt) > 120000){
+      _eurManualTriggerHydrate();
+    }
   };
 
   /* ── Re-cuadrar reparto europeo (canónico) ───────────────────────

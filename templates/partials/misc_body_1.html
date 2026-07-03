@@ -22008,6 +22008,56 @@ window._showSimProgress = function(opts, onDone){
       addBtn.remove();
     }
 
+    /* ── Panel "🔁 CAJAS OCULTAS" (petición usuario 2026-07-03) ─────────
+       "❌ QUITAR" no tenía forma de deshacerse: el usuario borró sin
+       querer la caja de Europa League y no había manera de recuperarla
+       desde la propia app. En modo edición, si `comp_cards_v1.removed`
+       tiene entradas, se lista cada una con un botón ↩️ RESTAURAR que la
+       quita de `removed` (persistiendo local + server) y vuelve a
+       mostrar la caja original. Solo afecta a cajas ORIGINALES (las
+       añadidas por el admin se quitan por completo con QUITAR, no se
+       ocultan, así que no aparecen aquí). */
+    var hiddenPanel = screen.querySelector('.comp-hidden-panel');
+    if(on){
+      var stateNow = loadCards();
+      var hiddenList = (stateNow.removed || []).slice();
+      if(hiddenList.length && list){
+        if(!hiddenPanel){
+          hiddenPanel = document.createElement('div');
+          hiddenPanel.className = 'comp-hidden-panel';
+          hiddenPanel.style.cssText = 'margin:16px 4px 4px;padding:12px;border-radius:12px;background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.25);';
+          list.parentNode.insertBefore(hiddenPanel, list.nextSibling);
+        }
+        var escH = function(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+        hiddenPanel.innerHTML = '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.4px;color:rgba(255,255,255,.55);margin-bottom:8px;">🔁 CAJAS OCULTAS</div>'
+          + hiddenList.map(function(lbl){
+              return '<div class="comp-hidden-row" data-orig="'+escH(lbl)+'" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.08);">'
+                + '<span style="font-family:Rajdhani,sans-serif;font-size:14px;color:#fff;">'+escH(lbl)+'</span>'
+                + '<button type="button" class="comp-hidden-restore" style="background:#3cc878;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-family:Oswald,sans-serif;font-size:10.5px;letter-spacing:1px;font-weight:700;cursor:pointer;">↩️ RESTAURAR</button>'
+                + '</div>';
+            }).join('');
+        hiddenPanel.querySelectorAll('.comp-hidden-restore').forEach(function(btn){
+          btn.addEventListener('click', function(e){
+            e.stopPropagation();
+            var row = btn.closest('.comp-hidden-row');
+            var orig = row && row.getAttribute('data-orig');
+            if(orig == null) return;
+            var s = loadCards();
+            s.removed = (s.removed || []).filter(function(x){ return x !== orig; });
+            if(!saveCards(s)){ alert('No se pudo guardar el cambio.'); return; }
+            screen.querySelectorAll('.submenu-card:not(.sc-user-added)').forEach(function(c){
+              if((c.getAttribute('data-orig-label') || cardLabel(c)) === orig) c.style.display = '';
+            });
+            setEditMode(true); /* re-pinta el panel sin la fila ya restaurada */
+          });
+        });
+      } else if(hiddenPanel){
+        hiddenPanel.remove();
+      }
+    } else if(hiddenPanel){
+      hiddenPanel.remove();
+    }
+
     var editBtn = document.getElementById('comp-edit-btn');
     if(editBtn){
       editBtn.textContent = on ? '✓' : '🖍';

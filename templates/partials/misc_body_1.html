@@ -29694,8 +29694,24 @@ window._showSimProgress = function(opts, onDone){
     if (hasHuman) rowCls += ' tour-match-has-human';
     function side(t, isRight){
       var nm = (t && t.name) || '?';
-      var sh = t && t.shield
-        ? '<img src="'+t.shield+'" loading="lazy" decoding="async" onerror="this.style.display=\'none\'" style="width:38px;height:38px;object-fit:contain;">'
+      try { if (typeof window._rmRealName === 'function') nm = window._rmRealName(nm); } catch(_){}
+      /* Escudo: mismo backfill que _mundialClasTableHtml (2026-06-26) —
+         un equipo puede no traer `.shield` en cfg.teams (se añadió a la
+         liga DESPUÉS de crear el torneo, o el pick no lo copió). Sin este
+         fallback la tabla de clasificación mostraba el escudo pero la
+         card del partido no (bug 2026-07-03, foto usuario). */
+      var _shieldUrl = (t && t.shield) ? String(t.shield) : '';
+      if (!_shieldUrl) {
+        try {
+          if (typeof window.getTeamLogoUrl === 'function') {
+            _shieldUrl = window.getTeamLogoUrl(nm)
+              || window.getTeamLogoUrl((t && t.name) || '')
+              || '';
+          }
+        } catch(_){}
+      }
+      var sh = _shieldUrl
+        ? '<img src="'+_shieldUrl+'" loading="lazy" decoding="async" onerror="this.style.display=\'none\'" style="width:38px;height:38px;object-fit:contain;">'
         : '<div style="width:38px;height:38px;"></div>';
       /* Selección humana canónica → icono SIEMPRE + nombre AMARILLO
          (petición usuario 2026-05-28). */

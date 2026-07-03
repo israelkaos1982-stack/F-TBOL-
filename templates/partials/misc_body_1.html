@@ -21297,6 +21297,33 @@ window._showSimProgress = function(opts, onDone){
 /* Movimiento de iconos desactivado a petición del usuario (2026-07-03).
    Ver guarda global .sc-comp-img{animation:none !important;} en
    static/css/index.bundle.css. */
+
+/* Champions League / Europa League — icono SIN círculo, mismo tamaño
+   "plano" que los logos de España (petición usuario 2026-07-03, fotos
+   "Competiciones" vs "España"): el círculo (--cir-bg + padding:5px)
+   dejaba solo ~28px visibles del logo, notablemente más pequeño que
+   el logo de LIGA EA SPORTS/COPA DEL REY (36px, sin círculo ni
+   padding). Se retira el círculo/borde/fondo SOLO para estas 2 cajas
+   (las señaladas por el usuario) y se agranda a 44px, igual que
+   `.sc-brand-shell .sc-comp-img` de España. El resto de cajas de
+   Competiciones (Conference, Recopa, USC…) mantienen su círculo. */
+#s-competiciones .submenu-card.sc-ucl1 .sc-comp-img,
+#s-competiciones .submenu-card.sc-uel1 .sc-comp-img{
+  width:44px;
+  height:44px;
+  border-radius:0;
+  background:none;
+  border:none;
+  box-shadow:none;
+  padding:0;
+}
+@media (min-width:480px){
+  #s-competiciones .submenu-card.sc-ucl1 .sc-comp-img,
+  #s-competiciones .submenu-card.sc-uel1 .sc-comp-img{
+    width:48px;
+    height:48px;
+  }
+}
 </style>
 
 <!-- ═══ EDITOR DE ICONOS — COMPETICIONES (admin PIN 747) ═══

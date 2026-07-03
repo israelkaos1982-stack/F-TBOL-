@@ -21291,7 +21291,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="submenu-card sc-torneos-verano"
      style="background:linear-gradient(135deg,#ffffff 0%,#f0f0f0 35%,#e2e2e2 55%,#f0f0f0 75%,#ffffff 100%) !important;border:1.5px solid #8a8a8a !important;box-shadow:0 4px 18px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.55) !important;"
      onclick="go('s-torneos-verano')">
-  <span class="sc-emoji">🌞</span><span class="sc-label" style="color:#000;">Torneos de Verano</span><span class="sc-arr" style="color:rgba(0,0,0,.45);">▶</span>
+  <img class="sc-comp-img" src="/static/img/comp/trophy-torneos-verano.png" alt="Torneos de Verano"/><span class="sc-label" style="color:#000;">Torneos de Verano</span><span class="sc-arr" style="color:rgba(0,0,0,.45);">▶</span>
 </div>
 <!-- EA Sports → Europa: inyección manual de equipos en cualquier
      competición europea. La navegación pasa por window.pG → exige
@@ -21412,7 +21412,8 @@ window._showSimProgress = function(opts, onDone){
 #s-competiciones .submenu-card.sc-usc1 .sc-comp-img,
 #s-competiciones .submenu-card.sc-inter1 .sc-comp-img,
 #s-competiciones .submenu-card.sc-mundial1 .sc-comp-img,
-#s-competiciones .submenu-card.sc-superliga-main .sc-comp-img{
+#s-competiciones .submenu-card.sc-superliga-main .sc-comp-img,
+#s-competiciones .submenu-card.sc-torneos-verano .sc-comp-img{
   width:56px;
   height:56px;
   border-radius:0;
@@ -21429,7 +21430,8 @@ window._showSimProgress = function(opts, onDone){
   #s-competiciones .submenu-card.sc-usc1 .sc-comp-img,
   #s-competiciones .submenu-card.sc-inter1 .sc-comp-img,
   #s-competiciones .submenu-card.sc-mundial1 .sc-comp-img,
-  #s-competiciones .submenu-card.sc-superliga-main .sc-comp-img{
+  #s-competiciones .submenu-card.sc-superliga-main .sc-comp-img,
+  #s-competiciones .submenu-card.sc-torneos-verano .sc-comp-img{
     width:60px;
     height:60px;
   }
@@ -21479,6 +21481,28 @@ window._showSimProgress = function(opts, onDone){
     var i = dataUrl.indexOf(',');
     var payload = i >= 0 ? dataUrl.slice(i+1) : dataUrl;
     return Math.ceil(payload.length * 3 / 4);
+  }
+
+  /* Toast pequeño y no-bloqueante para dar feedback DURANTE el
+     procesamiento de una imagen (picker → compresión → aplicar), en
+     vez de dejar al usuario sin ninguna señal de que algo está
+     ocurriendo entre elegir la foto y verla aplicada. */
+  function _iconToast(msg, isError){
+    try {
+      var id = 'comp-icon-toast';
+      var t = document.getElementById(id);
+      if(!t){
+        t = document.createElement('div');
+        t.id = id;
+        t.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);max-width:90vw;z-index:1000000;padding:12px 18px;border-radius:10px;font-family:Rajdhani,sans-serif;font-size:14px;font-weight:600;letter-spacing:.4px;color:#fff;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.25);transition:opacity .2s;opacity:0;';
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.background = isError ? 'linear-gradient(135deg,#6b1a1a,#b02b2b)' : 'linear-gradient(135deg,#1a3a6b,#2b6cb0)';
+      requestAnimationFrame(function(){ t.style.opacity = '1'; });
+      clearTimeout(t._hideTo);
+      t._hideTo = setTimeout(function(){ t.style.opacity = '0'; }, isError ? 4500 : 2200);
+    } catch(_){}
   }
 
   /* Quita el fondo blanco/claro "horneado" en la propia foto (petición
@@ -21541,10 +21565,16 @@ window._showSimProgress = function(opts, onDone){
     /* Red de seguridad: si por lo que sea ni `onload` ni `onerror` de la
        imagen llegan a disparar (raro, pero visto en según qué formato
        exótico de cámara), no dejamos al usuario esperando en silencio
-       para siempre — a los 8s se avisa igual que un error normal. */
+       para siempre — pasado el plazo se avisa igual que un error normal.
+       Subido de 8s a 20s (2026-07-03): una FOTO REAL de cámara (varios
+       MP, no los iconos pequeños de prueba) puede tardar bastante más
+       en decodificar + recortar fondo + comprimir en un móvil modesto;
+       8s podían agotarse ANTES de que el procesamiento legítimo
+       terminara, hacer creer que "no pasó nada" con la foto en realidad
+       aplicándose unos instantes después (el guard `done` la descarta). */
     var safety = setTimeout(function(){
       finish(null, 'tiempo de espera agotado procesando la imagen');
-    }, 8000);
+    }, 20000);
     var reader = new FileReader();
     reader.onload = function(){
       var raw = String(reader.result || '');
@@ -22229,12 +22259,23 @@ window._showSimProgress = function(opts, onDone){
           input.addEventListener('change', function(){
             var file = input.files && input.files[0];
             if(!file){ document.body.removeChild(input); return; }
+            /* Feedback visual INMEDIATO al elegir la foto — petición
+               usuario 2026-07-03 ("es un desastre", tras ver el picker
+               nativo abrirse pero no notar ningún cambio después). Una
+               foto real de cámara (varios MP) puede tardar bastante más
+               que mis iconos de prueba pequeños en decodificarse +
+               recortar fondo + comprimir; sin ESTE aviso, el usuario no
+               tenía forma de distinguir "está trabajando" de "no ha
+               pasado nada". */
+            _iconToast('⏳ Procesando imagen…');
             _compressIcon(file, function(dataUrl, err){
               try { document.body.removeChild(input); } catch(_){}
               if(err || !dataUrl){
+                _iconToast('❌ '+(err||'no se pudo procesar la imagen'), true);
                 alert('No se pudo procesar la imagen: '+(err||'desconocido'));
                 return;
               }
+              _iconToast('✅ Icono aplicado');
               _applyPickedIcon(dataUrl);
             });
           });
@@ -22438,6 +22479,45 @@ window._showSimProgress = function(opts, onDone){
       setEditMode(on);
     }
   };
+  /* El "fondo difuminado" [data-bg-enhanced] de cada caja (el trofeo
+     grande y tenue a la derecha de la card) lo crea el bundle (script
+     block 28) clonando `.sc-img` — una clase que NINGUNA caja de
+     Competiciones usa (usan `.sc-comp-img`). Por eso caía siempre al
+     emoji genérico de su tabla (⭐/🔶/🟢) o, para las cajas sin ese
+     emoji en la tabla (Recopa/Supercopa/Intercontinental/Mundialito/
+     Superliga/Torneos de Verano), al ⚽ de repuesto — un emoji distinto
+     en cada caja, nada que ver con SU trofeo real. Petición usuario
+     2026-07-03 ("quiero que todos los trofeos... tengan... el trofeo a
+     la derecha de la card que el de champions"): esta función clona el
+     `.sc-comp-img` REAL de cada caja como fondo, sustituyendo/creando
+     el `[data-bg-enhanced]` — consistente en las 12 cajas. */
+  function _fixTrophyBackgrounds(){
+    ['s-competiciones','s-espana'].forEach(function(scrId){
+      var scr = document.getElementById(scrId);
+      if(!scr) return;
+      scr.querySelectorAll(':scope > .submenu-list > .submenu-card').forEach(function(card){
+        var icoEl = card.querySelector('.sc-comp-img');
+        if(!icoEl || !icoEl.getAttribute('src')) return;
+        var wantSrc = icoEl.getAttribute('src');
+        var bg = card.querySelector('[data-bg-enhanced]');
+        if(bg && bg.tagName === 'IMG'){
+          if(bg.getAttribute('src') !== wantSrc) bg.setAttribute('src', wantSrc);
+          return;
+        }
+        var img = document.createElement('img');
+        img.src = wantSrc;
+        img.setAttribute('aria-hidden','true');
+        img.setAttribute('data-bg-enhanced','1');
+        img.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;width:auto;object-fit:contain;opacity:0.22;pointer-events:none;z-index:0;';
+        if(bg && bg.parentNode) bg.parentNode.replaceChild(img, bg);
+        else {
+          card.style.position = 'relative';
+          card.style.overflow = 'hidden';
+          card.insertBefore(img, card.firstChild);
+        }
+      });
+    });
+  }
   /* Aplicamos overrides después de que el bundle script (block 28)
      monte los `[data-bg-enhanced]`. Lo hacemos al cargar la página y
      también al entrar a s-competiciones por si el usuario importa el
@@ -22462,6 +22542,9 @@ window._showSimProgress = function(opts, onDone){
       setTimeout(applyCardsState, 50);
       setTimeout(applyCardsState, 200);
     });
+    setTimeout(_fixTrophyBackgrounds, 0);
+    setTimeout(_fixTrophyBackgrounds, 50);
+    setTimeout(_fixTrophyBackgrounds, 200);
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', init);
@@ -22486,6 +22569,14 @@ window._showSimProgress = function(opts, onDone){
           setTimeout(applyCardsState, 50);
           setTimeout(applyCardsState, 200);
         });
+        setTimeout(_fixTrophyBackgrounds, 0);
+        setTimeout(_fixTrophyBackgrounds, 50);
+        setTimeout(_fixTrophyBackgrounds, 200);
+      }
+      if(id === 's-espana'){
+        setTimeout(_fixTrophyBackgrounds, 0);
+        setTimeout(_fixTrophyBackgrounds, 50);
+        setTimeout(_fixTrophyBackgrounds, 200);
       }
       return r;
     };

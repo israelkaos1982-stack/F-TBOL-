@@ -229,7 +229,6 @@ window.TEAM_RATINGS={
   'Valladolid':67,
   'Leganés':66,
   'Huesca':66,
-  'Zaragoza':65,
   'Mirandés':64,
   // ── PRIMERA FEDERACIÓN – GRUPO 1 ────────────────────────
   'Real Madrid Castilla':67,
@@ -254,6 +253,10 @@ window.TEAM_RATINGS={
   'CP Cacereño':53,
   'Arenas de Getxo':51,
   'Real Avilés Industrial':50,
+  'CD Tenerife':66,
+  'Tenerife':66,
+  'Pontevedra CF':52,
+  'Pontevedra':52,
   // ── PRIMERA FEDERACIÓN – GRUPO 2 ────────────────────────
   'UD Ibiza':67,
   'Real Murcia':66,
@@ -280,6 +283,10 @@ window.TEAM_RATINGS={
   'CD Teruel':54,
   'Juventud Torremolinos':52,
   'Estepona':50,
+  'Real Zaragoza':67,
+  'Zaragoza':67,
+  'CD Numancia':58,
+  'Numancia':58,
 };
 
 /* Nombres duplicados que NO deben aparecer en el lupa de amistosos.
@@ -389,6 +396,10 @@ window.TEAM_STADIUMS = {
   'CP Cacereño':            'ESTADIO DEL MARTINGAL',
   'Arenas de Getxo':        'SPORTS PARK',
   'Real Avilés Industrial': 'ESTADIO OLÍMPICO UNIVERSITARIO',
+  'CD Tenerife':            'ESTADIO OLÍMPICO UNIVERSITARIO',
+  'Tenerife':               'ESTADIO OLÍMPICO UNIVERSITARIO',
+  'Pontevedra CF':          'ESTADIO URBANO CALDEIRA',
+  'Pontevedra':             'ESTADIO URBANO CALDEIRA',
   // --- PRIMERA RFEF GRUPO 2 ---
   'UD Ibiza':               'ESTADIO AKRON',
   'Real Murcia':            'STADIO ORIONE',
@@ -415,6 +426,8 @@ window.TEAM_STADIUMS = {
   'CD Teruel':              'SPORTS PARK',
   'Juventud Torremolinos':  'ESTADIO BANORTE',
   'Estepona':               'ESTADIO BANORTE',
+  'CD Numancia':            'SPORTS PARK',
+  'Numancia':               'SPORTS PARK',
   // --- EUROPEOS / INTERNACIONALES ---
   'PSG':                    'PARC DES PRINCES',
   'Paris Saint-Germain':    'PARC DES PRINCES',
@@ -1436,6 +1449,10 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Arenas de Getxo':    '/static/img/escudos-3/spain_arenas-club.football-logos.cc.svg',
     'Real Avilés Industrial': '/static/img/escudos-3/spain_real-aviles-industrial.football-logos.cc.svg',
     'Real Unión':         '/static/img/escudos-3/spain_real-union.football-logos.cc.svg',
+    'CD Tenerife':        '/static/img/escudos-3/spain_tenerife.football-logos.cc.svg',
+    'Tenerife':           '/static/img/escudos-3/spain_tenerife.football-logos.cc.svg',
+    'Pontevedra CF':      '/static/img/escudos-3/spain_pontevedra-cf.football-logos.cc.svg',
+    'Pontevedra':         '/static/img/escudos-3/spain_pontevedra-cf.football-logos.cc.svg',
     'UD Ibiza':           '/static/img/escudos-2/spain_ud-ibiza.football-logos.cc.svg',
     'Real Murcia':        '/static/img/escudos-3/spain_murcia.football-logos.cc.svg',
     'Eldense':            '/static/img/escudos-3/spain_eldense.football-logos.cc.svg',
@@ -1457,6 +1474,8 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'CD Teruel':          '/static/img/escudos-3/spain_teruel.football-logos.cc.svg',
     'Juventud Torremolinos': '/static/img/escudos-2/spain_juventud-torremolinos.football-logos.cc.svg',
     'Estepona':           '/static/img/escudos-fallback/estepona.svg',
+    'CD Numancia':        '/static/img/escudos-3/spain_numancia.football-logos.cc.svg',
+    'Numancia':           '/static/img/escudos-3/spain_numancia.football-logos.cc.svg',
     'Recreativo de Huelva': 'https://commons.wikimedia.org/wiki/Special:FilePath/Recreativo_de_Huelva.svg',
     'Mérida AD':          '/static/img/escudos-3/spain_ad-merida.football-logos.cc.svg',
     'Algeciras CF':       '/static/img/escudos-3/spain_algeciras.football-logos.cc.svg',

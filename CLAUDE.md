@@ -208,6 +208,24 @@ otras zonas, así que el modo manual es **POR ZONA**, no global.
    tenga su propio check `_eurManualOnly` al principio de su función de
    cómputo.
 
+**Refuerzo (mismo día, fotos usuario "siguen saliendo los equipos,
+elimínalos, los añado yo manualmente" — el toggle opt-in de arriba no
+bastó)**: el admin pidió DOS VECES que los equipos automáticos
+desaparezcan de las 6 competiciones, no que exista un botón que hay
+que ir a pulsar zona por zona. **El DEFAULT de `_eurManualOverrideLoad`
+pasa a ser `true` (manual) en las 6 zonas** — antes era `false`
+(automático) y el admin tenía que activar el candado 🔒 uno a uno.
+Cualquier elección EXPLÍCITA previa del admin (guardada en
+`eur_manual_override_v1`) sigue ganando sobre este default — si en
+algún momento vuelve a poner una zona en 🔓 Auto, esa elección se
+respeta y persiste.
+
+**Regla a respetar**: **PROHIBIDO** volver a poner `false` (automático)
+como default de `_eurManualOverrideLoad` sin acuerdo explícito del
+usuario — es la 2ª vez que pide esto y la 1ª implementación (opt-in vía
+toggle) no fue suficiente porque requería una acción por zona que el
+admin no había hecho.
+
 ### El picker de liga es un botón/lista PROPIO, no un `<select>` nativo (obligatorio, 2026-07-03)
 
 **Petición usuario** (foto del `<select>` nativo de Android abierto a

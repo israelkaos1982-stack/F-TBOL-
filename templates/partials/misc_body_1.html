@@ -22037,6 +22037,31 @@ window._showSimProgress = function(opts, onDone){
   }
   try { window._compShowAddBoxModal = _compShowAddBoxModal; } catch(_){}
 
+  /* Modal "CAMBIAR ICONO" — elige entre subir una foto del móvil (picker
+     nativo del SO, el eslabón que no se puede probar en automático) o
+     pegar la URL de una imagen ya alojada en internet (no toca el picker
+     de archivos ni el canvas de compresión — vía alternativa robusta,
+     petición usuario 2026-07-03 "facilita el menú"). */
+  function _compShowIconSourceModal(onFile, onUrl){
+    if(document.getElementById('cis-modal')) return;
+    var ov = document.createElement('div');
+    ov.id = 'cis-modal';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:24px;';
+    ov.innerHTML =
+      '<div style="max-width:340px;width:100%;background:linear-gradient(160deg,#15151f,#0e0e16);border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:22px 18px;box-shadow:0 18px 50px rgba(0,0,0,.6);text-align:center;">'
+      +   '<div style="font-family:\'Bebas Neue\',Oswald,sans-serif;font-size:20px;letter-spacing:2px;color:#f0c040;margin-bottom:14px;">CAMBIAR ICONO</div>'
+      +   '<button type="button" id="cis-file" style="width:100%;background:linear-gradient(145deg,#3cc878,#1f7a45);color:#fff;border:none;border-radius:9px;padding:13px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;font-weight:700;cursor:pointer;margin-bottom:10px;">📁 Subir foto del móvil</button>'
+      +   '<button type="button" id="cis-url" style="width:100%;background:linear-gradient(145deg,#4080ff,#1f4aa0);color:#fff;border:none;border-radius:9px;padding:13px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;font-weight:700;cursor:pointer;margin-bottom:10px;">🔗 Pegar URL de imagen</button>'
+      +   '<button type="button" id="cis-cancel" style="width:100%;background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:none;border-radius:9px;padding:11px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;">Cancelar</button>'
+      + '</div>';
+    document.body.appendChild(ov);
+    function close(){ try { document.body.removeChild(ov); } catch(_){} }
+    ov.addEventListener('click', function(e){ if(e.target === ov) close(); });
+    ov.querySelector('#cis-file').addEventListener('click', function(e){ e.stopPropagation(); close(); onFile(); });
+    ov.querySelector('#cis-url').addEventListener('click', function(e){ e.stopPropagation(); close(); onUrl(); });
+    ov.querySelector('#cis-cancel').addEventListener('click', function(e){ e.stopPropagation(); close(); });
+  }
+
   function setEditMode(on){
     var screen = document.getElementById('s-competiciones');
     if(!screen) return;
@@ -22064,9 +22089,64 @@ window._showSimProgress = function(opts, onDone){
           + '<button type="button" class="comp-edit-clear"  title="Reset icono" style="'+BTN_BASE+'background:#aa6633;">🗑 ICONO</button>'
           + '<button type="button" class="comp-edit-remove" title="Quitar caja" style="'+BTN_BASE+'background:#cc3030;">❌ QUITAR</button>';
 
-        /* 1) Cambiar icono */
-        overlay.querySelector('.comp-edit-pick').addEventListener('click', function(e){
-          e.stopPropagation();
+        /* 1) Cambiar icono — DOS caminos (petición usuario 2026-07-03,
+           "llevamos mucho con esto, facilita el menú"): tras muchas
+           rondas de fixes al pipeline de subida de foto (posición del
+           overlay, tamaño, reintentos de guardado, quitar fondo…) el
+           admin seguía reportando que "no cambia". El selector nativo
+           de archivos de Android (`input.click()` → picker del SO) es
+           el ESLABÓN QUE NO SE PUEDE PROBAR en un entorno automatizado
+           (Playwright simula el resultado sin pasar por el picker real
+           del sistema operativo), así que un fallo específico de ESE
+           picker en el dispositivo del usuario podía pasar inadvertido
+           pese a que todo lo demás quedara verificado. En vez de seguir
+           adivinando, se ofrece una vía alternativa que NO depende del
+           picker de archivos ni del canvas/compresión: pegar la URL de
+           una imagen ya alojada en internet. Sigue disponible subir
+           foto del móvil para quien le funcione. */
+        function _applyPickedIcon(dataUrlOrUrl){
+          var lbl = card.getAttribute('data-orig-label') || cardLabel(card);
+          /* Pintar SIEMPRE de inmediato, ANTES de intentar persistir.
+             Bug reportado 2026-07-03 ("subo un icono y no se aplica"):
+             antes, si el guardado en localStorage fallaba (cuota del
+             navegador llena, o el soft-cap de 1.5 MB de este propio
+             store), la función hacía `return`/mostraba solo un alert
+             SIN llamar a `applyIconToCard` — el admin elegía la foto y
+             la caja se quedaba exactamente igual, sin ningún cambio
+             visible. El usuario debe ver SIEMPRE su elección reflejada
+             en la caja; la persistencia (localStorage + servidor) es
+             un problema aparte que como mucho amerita un aviso de que
+             podría no sobrevivir a un recargo, nunca ocultar el cambio. */
+          applyIconToCard(card, dataUrlOrUrl);
+          if(card.classList.contains('sc-user-added')){
+            /* Caja añadida → guardamos icon dentro de su entrada en `added`. */
+            var aid = card.getAttribute('data-added-id');
+            var s = loadCards();
+            for(var i=0;i<(s.added||[]).length;i++){
+              if(s.added[i].id === aid){ s.added[i].icon = dataUrlOrUrl; break; }
+            }
+            saveCards(s);
+            return;
+          }
+          var icons = loadIcons();
+          var probe = {};
+          for(var pk in icons){ if(Object.prototype.hasOwnProperty.call(icons,pk)) probe[pk] = icons[pk]; }
+          probe[lbl] = dataUrlOrUrl;
+          var totalBytes = 0;
+          try { totalBytes = JSON.stringify(probe).length; } catch(_){}
+          if(totalBytes > TOTAL_BYTES_SOFT_CAP){
+            alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero los iconos personalizados superan 1.5 MB en total ('+Math.round(totalBytes/1024)+' KB) y NO se ha podido guardar — se perderá al recargar la página.\n\nElimina algún icono con 🗑 ICONO o sube imágenes más pequeñas, y vuelve a intentarlo.');
+            return;
+          }
+          icons[lbl] = dataUrlOrUrl;
+          var saveResult = saveIcons(icons);
+          if(saveResult === 'quota'){
+            alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero el navegador está sin espacio (localStorage lleno) y no he podido guardarlo — se perderá al recargar la página.\n\nVe a la pestaña de Resto de Ligas y verás que se intentó liberar espacio automáticamente. Reintenta o limpia caché del navegador.');
+          } else if(saveResult !== true){
+            alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero no se pudo guardar (error desconocido) — se perderá al recargar la página.');
+          }
+        }
+        function _pickIconFromFile(){
           var input = document.createElement('input');
           input.type = 'file';
           input.accept = 'image/*';
@@ -22081,49 +22161,41 @@ window._showSimProgress = function(opts, onDone){
                 alert('No se pudo procesar la imagen: '+(err||'desconocido'));
                 return;
               }
-              var lbl = card.getAttribute('data-orig-label') || cardLabel(card);
-              /* Pintar SIEMPRE de inmediato, ANTES de intentar persistir.
-                 Bug reportado 2026-07-03 ("subo un icono y no se aplica"):
-                 antes, si el guardado en localStorage fallaba (cuota del
-                 navegador llena, o el soft-cap de 1.5 MB de este propio
-                 store), la función hacía `return`/mostraba solo un alert
-                 SIN llamar a `applyIconToCard` — el admin elegía la foto y
-                 la caja se quedaba exactamente igual, sin ningún cambio
-                 visible. El usuario debe ver SIEMPRE su elección reflejada
-                 en la caja; la persistencia (localStorage + servidor) es
-                 un problema aparte que como mucho amerita un aviso de que
-                 podría no sobrevivir a un recargo, nunca ocultar el cambio. */
-              applyIconToCard(card, dataUrl);
-              if(card.classList.contains('sc-user-added')){
-                /* Caja añadida → guardamos icon dentro de su entrada en `added`. */
-                var aid = card.getAttribute('data-added-id');
-                var s = loadCards();
-                for(var i=0;i<(s.added||[]).length;i++){
-                  if(s.added[i].id === aid){ s.added[i].icon = dataUrl; break; }
-                }
-                saveCards(s);
-                return;
-              }
-              var icons = loadIcons();
-              var probe = {};
-              for(var pk in icons){ if(Object.prototype.hasOwnProperty.call(icons,pk)) probe[pk] = icons[pk]; }
-              probe[lbl] = dataUrl;
-              var totalBytes = 0;
-              try { totalBytes = JSON.stringify(probe).length; } catch(_){}
-              if(totalBytes > TOTAL_BYTES_SOFT_CAP){
-                alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero los iconos personalizados superan 1.5 MB en total ('+Math.round(totalBytes/1024)+' KB) y NO se ha podido guardar — se perderá al recargar la página.\n\nElimina algún icono con 🗑 ICONO o sube imágenes más pequeñas, y vuelve a intentarlo.');
-                return;
-              }
-              icons[lbl] = dataUrl;
-              var saveResult = saveIcons(icons);
-              if(saveResult === 'quota'){
-                alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero el navegador está sin espacio (localStorage lleno) y no he podido guardarlo — se perderá al recargar la página.\n\nVe a la pestaña de Resto de Ligas y verás que se intentó liberar espacio automáticamente. Reintenta o limpia caché del navegador.');
-              } else if(saveResult !== true){
-                alert('✅ Icono aplicado en esta pantalla.\n\n⚠️ Pero no se pudo guardar (error desconocido) — se perderá al recargar la página.');
-              }
+              _applyPickedIcon(dataUrl);
             });
           });
           input.click();
+        }
+        function _pickIconFromUrl(){
+          var url = window.prompt('Pega la URL directa de una imagen (empieza por http:// o https://):', '');
+          if(url == null) return;
+          url = String(url).trim();
+          if(!url) return;
+          if(!/^https?:\/\//i.test(url)){
+            alert('La URL debe empezar por http:// o https://');
+            return;
+          }
+          var settled = false;
+          var testImg = new Image();
+          var to = setTimeout(function(){
+            if(settled) return; settled = true;
+            alert('La imagen tardó demasiado en cargar. Comprueba la URL o tu conexión.');
+          }, 10000);
+          testImg.onload = function(){
+            if(settled) return; settled = true;
+            clearTimeout(to);
+            _applyPickedIcon(url);
+          };
+          testImg.onerror = function(){
+            if(settled) return; settled = true;
+            clearTimeout(to);
+            alert('No se pudo cargar esa URL como imagen.\n\nComprueba que es un enlace DIRECTO a una foto (termina en .jpg/.png/.webp…) y que es pública/accesible.');
+          };
+          testImg.src = url;
+        }
+        overlay.querySelector('.comp-edit-pick').addEventListener('click', function(e){
+          e.stopPropagation();
+          _compShowIconSourceModal(_pickIconFromFile, _pickIconFromUrl);
         });
 
         /* 2) Editar texto */

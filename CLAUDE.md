@@ -101,6 +101,73 @@ debajo del objetivo, la lista de "LIGAS SIN DATOS" debe explicar por qué
 (dato ausente en el servidor, no un fallo de red) — no dejar al admin
 adivinando.
 
+### El objetivo de ucl/uel/uecl en el overlay es 40, NO 28/18/12 (bug propio, 2026-07-03)
+
+**Bug (fotos usuario "no me cuadra nada", Champions 38/28 · Europa
+38/18 · Conference 40/12, las 3 en VERDE)**: el overlay mostraba las 3
+zonas directas como si tuvieran DEMASIADOS equipos (verde = "por
+encima del objetivo"), haciendo creer al admin que algo estaba
+sobrecargado, cuando en realidad `computeUclClassified()` /
+`computeUelClassified()` / `computeUeclClassified()` YA suman el corte
+de la Previa de Champions (12/22/28) a las plazas directas por liga
+(28/18/12) — el pool final de esas 3 pantallas es **40/40/40** (ver
+sección "Wild Card + Open Qualifier — FASE DE GRUPOS": «🔵 UCL 28+12=40
+· 🟠 UEL 18+22=40 · 🟢 UECL 12+28=40»). `_EUR_ZONE_TARGET` usaba por
+error las plazas DIRECTAS (28/18/12) como si fueran el total.
+
+**Fix**: `_EUR_ZONE_TARGET = { ucl:40, uclPrev:34, uel:40, uecl:40,
+uclQual:88, wildcard:72 }`. **PROHIBIDO** volver a poner 28/18/12 como
+objetivo de ucl/uel/uecl en este overlay (ni en ningún diagnóstico
+nuevo) — esas son solo las plazas DIRECTAS de liga, el objetivo real
+del pool completo de la pantalla es 40 en las 3.
+
+### Añadir por liga — clasificación completa + buscador + quitar (obligatorio, 2026-07-03)
+
+**Petición usuario** (fotos "no me cuadra nada"): el añadido manual
+equipo-a-equipo escribiendo el nombre a mano es lento y propenso a
+error. Pidió: (1) un buscador al escribir el nombre, (2) poder elegir
+una liga y ver su clasificación completa para saber qué equipo va a
+cada competición según su posición, añadiendo varios de golpe, y
+(3) poder quitar un equipo ya añadido.
+
+- **Buscador typeahead** (`#eur-manual-name` + `_eurSearchAllTeams`):
+  al escribir 2+ letras, busca por substring en TODAS las
+  `ligaExt_<slug>` YA cacheadas en este dispositivo (best-effort — no
+  trae del servidor, para eso está el picker por liga) y muestra un
+  dropdown clicable que rellena nombre + liga.
+- **📋 Añadir por liga** (`_eurPickerSectionHtml`/`_eurPickerLoadLeague`/
+  `_eurPickerRows`): un `<select>` con las 54 ligas
+  (`_eurAllLeagueSlugsSorted`, vía `LEAGUE_DEFAULT_ZONES`/
+  `LEAGUE_DEFAULT_NAMES`). Al elegir una, trae ESA liga SOLA (local si
+  ya está cacheada, si no 1 sola petición al servidor — nunca las 53 de
+  golpe, así es rápido y fiable) y pinta su clasificación completa
+  (posición, nombre, PJ) con la **zona SUGERIDA por posición** — misma
+  lógica de rangos ("skip") que `_computeQualifiedFromLeagues`: ucl →
+  uclPrev → uclQual → uel → uecl → wildcard, en ese orden, según
+  `zones.<zona>` de la liga. Cada fila tiene un botón "➕ Añadir" (pasa a
+  "✓ Añadido" si ya está) y hay un botón "✅ AÑADIR TODOS LOS SUGERIDOS"
+  para volcar de golpe todas las filas con zona.
+- **Quitar equipo añadido**: ya existía (botón ✕ junto a cada entrada en
+  la lista de "extras manuales" agrupada por zona, sección justo debajo
+  del formulario) — se mantiene sin cambios, solo se hace más visible
+  al quedar bajo las dos formas de añadir.
+
+**Reglas a respetar**:
+1. `_eurPickerLoadLeague` **NUNCA** dispara una hidratación masiva de
+   las 53 ligas — es SIEMPRE 1 sola liga (local o 1 fetch). Si se
+   necesita traer todas, existe `_eurManualTriggerHydrate` (botón
+   "🔄 Cargar del servidor" / auto-hidrata al abrir) — son mecanismos
+   DISTINTOS y complementarios, no fusionar.
+2. El orden de rangos por posición (`ORDER = ['ucl','uclPrev','uclQual',
+   'uel','uecl','wildcard']`) en `_eurPickerRows` **DEBE** coincidir
+   exactamente con el orden de `skip` de `_computeQualifiedFromLeagues`
+   — si ese orden cambia algún día, cambiar aquí también o la zona
+   sugerida por posición dejará de coincidir con el cómputo automático.
+3. El buscador (`_eurSearchAllTeams`) es de solo LECTURA de lo que ya
+   hay en localStorage — **PROHIBIDO** que dispare peticiones de red
+   (eso lo hace el picker por liga, con 1 fetch explícito por selección
+   del admin, nunca en cada tecla escrita).
+
 ## La hidratación de ligas para el reparto europeo es SECUENCIAL + PAUSADA, nunca thundering herd (obligatorio, 2026-07-03)
 
 **Bug (fotos usuario 2026-07-03, «solo detecta 8 en Wild Card, tienen

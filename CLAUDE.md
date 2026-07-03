@@ -1,5 +1,76 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Extras manuales del reparto europeo — rellenar huecos cuando la hidratación automática no basta (obligatorio, 2026-07-03)
+
+**Contexto (fotos usuario 2026-07-03, «ahora van menos», Wild Card 8/72
+→ 11/72 tras el fix de hidratación secuencial)**: incluso con
+`_eurHydrateMissingLeagues` arreglado (secuencial + pausado + reintentos,
+ver sección anterior), el pool puede seguir muy por debajo del objetivo
+si el SERVIDOR simplemente no tiene guardada la clasificación de esa
+liga todavía (dato, no código — p.ej. una liga que solo se ha simulado
+en un móvil que nunca llegó a sincronizar). El admin pidió: (1) un botón
+que le muestre qué equipos van a cada competición SIN tener que pulsar
+"Enviar realidad" (que congela una snapshot), y (2) poder añadir un
+equipo a mano, rápido, a CUALQUIER zona — no solo a las que ya cubría el
+inyector "EA Sports → Europa" (que es solo para España).
+
+### Fix — nuevo botón + store genérico, independiente de "EA Sports → Europa"
+
+- **`window._eurManualOverlayOpen()`** (`misc_body_1.html`, botón "👁 Ver
+  / Añadir equipos por competición (admin)" bajo Resto de Ligas, ANTES
+  de "Enviar realidad"): overlay de consulta + edición INMEDIATA.
+  Calcula el pool **EN VIVO** (`_eurLiveBlob`, bypass de
+  `europe_committed_v1` vía `_europeIgnoreFrozen`) cada vez que se abre
+  o se añade/quita un equipo — el admin ve el estado real sin congelar
+  nada. Muestra el conteo real vs el objetivo oficial por zona
+  (`_EUR_ZONE_TARGET`), un formulario para añadir un equipo (nombre +
+  país/liga opcional + chip de zona) y la lista de extras manuales ya
+  añadidos con botón ✕ para quitarlos. El listado completo agrupado por
+  liga reutiliza `_eurZoneSectionHtml`/`_EUR_REPORT_ZONES` (los mismos
+  que ya pintaba `_eurShowCommitReport`).
+- **`eur_manual_extra_v1`** (nuevo store, `misc_body_1.html` junto a
+  `_prependManualEa`): `{ucl:[],uclPrev:[],uel:[],uecl:[],uclQual:[],
+  wildcard:[]}`, cada entrada `{name,league,logo}`.
+  **INDEPENDIENTE** de `manual_ea_<slug>_v1` (el inyector "EA Sports →
+  Europa", solo para las plazas manuales de España). Los 6
+  `compute*Classified()` lo consumen vía `_appendManualExtra(arr,zone)`
+  **AL FINAL** (tras `_prependManualEa` + el cómputo automático,
+  dedupe por nombre) — incluidas `uclQual`/`wildcard`, que desde
+  2026-07-03 NO leen `_prependManualEa` (España tiene cupo 0 ahí) pero
+  SÍ deben poder recibir extras genéricos de CUALQUIER país para tapar
+  huecos.
+- **Servidor** (`app.py`): `eur_manual_extra_v1` en `_KV_ALLOWED_EXACT`
+  + merge dedicado `_eur_manual_extra_merge` — **UNIÓN por (zona,
+  nombre)**, NUNCA reemplazo por recencia. Con 6 móviles + PC, dos
+  dispositivos pueden añadir equipos DISTINTOS sin haberse sincronizado
+  entre ellos; un merge por recencia pura (`_KV_RECENCY_BLOB_KEYS`)
+  perdería la adición del dispositivo más lento. Compromiso aceptado:
+  un ✕ (borrado) puede resucitar si otro dispositivo con una copia sin
+  ese borrado hace POST después — mismo trade-off que el resto de listas
+  aditivas del proyecto (derbys, `cash_ledger_v1`). Tests en
+  `tests/test_api.py::TestEurManualExtraMerge`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** mezclar `eur_manual_extra_v1` con `manual_ea_<slug>_v1`.
+   El inyector EA es SOLO para las plazas manuales de España (limitado a
+   `ucl`/`uclPrev`/`uel`/`uecl`, cupo 0 en `uclQual`/`wildcard` — regla
+   2026-07-03 "Open Qualifier y Wild Card NUNCA leen el inyector
+   manual"). `eur_manual_extra_v1` es agnóstico de liga y SÍ se lee en
+   las 6 zonas — son mecanismos distintos con propósitos distintos.
+2. **PROHIBIDO** que el merge del servidor de `eur_manual_extra_v1`
+   vuelva a un reemplazo por recencia (`_KV_RECENCY_BLOB_KEYS`): es una
+   lista ADITIVA multi-dispositivo, la fusión es SIEMPRE unión por
+   (zona, nombre).
+3. **PROHIBIDO** que `_eurManualOverlayOpen`/`_eurLiveBlob` escriban en
+   `europe_committed_v1`: es una vista EN VIVO, de solo-lectura respecto
+   a la snapshot. Solo "Enviar realidad de cada equipo a su Europa"
+   congela.
+4. Toda zona nueva que se añada al reparto europeo (si en el futuro hay
+   una 7ª) hereda el patrón añadiendo su key a `EUR_MANUAL_ZONES`
+   (cliente) y `_EUR_MANUAL_EXTRA_ZONES` (servidor) — deben ir siempre
+   sincronizadas entre sí.
+
 ## La hidratación de ligas para el reparto europeo es SECUENCIAL + PAUSADA, nunca thundering herd (obligatorio, 2026-07-03)
 
 **Bug (fotos usuario 2026-07-03, «solo detecta 8 en Wild Card, tienen

@@ -34542,6 +34542,105 @@ window._showSimProgress = function(opts, onDone){
     return out;
   }
 
+  /* ── EXTRAS MANUALES GENÉRICOS (rellenar huecos de hidratación) ──
+     Petición usuario 2026-07-03 (fotos "8/72" → "11/72" tras el fix de
+     hidratación secuencial — la mayoría de las ~53 ligas seguía sin
+     aparecer, «el error persiste y es frustrante»): mientras la
+     hidratación automática no consiga traer TODAS las ligas (el
+     servidor puede simplemente no tenerlas guardadas todavía, o la red
+     del dispositivo puede fallar), el admin necesita poder añadir un
+     equipo a mano a CUALQUIERA de las 6 zonas europeas — incluidas
+     Wild Card y Open Qualifier, las 2 zonas feeder que más equipos
+     necesitan (72 y 88) y las que más sufren cuando faltan ligas.
+     Es INDEPENDIENTE del inyector "EA Sports → Europa"
+     (`manual_ea_<slug>_v1` / `_prependManualEa`): ese es SOLO para las
+     plazas manuales de España (que tiene cupo 0 en uclQual/wildcard, ver
+     regla 2026-07-03 "Open Qualifier y Wild Card NUNCA leen el inyector
+     manual") — mezclar ambos reintroduciría ese bug. Este store nuevo
+     (`eur_manual_extra_v1`) es agnóstico de liga: cualquier equipo, de
+     cualquier país, en cualquiera de las 6 zonas. */
+  var EUR_MANUAL_EXTRA_KEY = 'eur_manual_extra_v1';
+  var EUR_MANUAL_ZONES = ['ucl','uclPrev','uel','uecl','uclQual','wildcard'];
+  function _eurManualExtraLoad(){
+    var out = {};
+    EUR_MANUAL_ZONES.forEach(function(z){ out[z] = []; });
+    try {
+      var raw = localStorage.getItem(EUR_MANUAL_EXTRA_KEY);
+      var d = raw ? JSON.parse(raw) : null;
+      if(d && typeof d === 'object'){
+        EUR_MANUAL_ZONES.forEach(function(z){
+          if(Array.isArray(d[z])) out[z] = d[z].filter(function(t){ return t && t.name; });
+        });
+      }
+    } catch(_){}
+    return out;
+  }
+  function _eurManualExtraSave(d){
+    d = d || {};
+    d.updatedAt = Date.now();
+    try { localStorage.setItem(EUR_MANUAL_EXTRA_KEY, JSON.stringify(d)); } catch(_){}
+    try {
+      fetch('/api/kv/' + EUR_MANUAL_EXTRA_KEY, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({value: d})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  window._eurManualExtraLoad = _eurManualExtraLoad;
+  window._eurManualExtraZones = EUR_MANUAL_ZONES;
+  window._eurManualExtraAdd = function(zone, name, league){
+    if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return false;
+    name = String(name || '').trim();
+    if(!name) return false;
+    var d = _eurManualExtraLoad();
+    if(d[zone].some(function(t){ return t.name === name; })) return false;
+    d[zone].push({ name: name, league: (String(league||'').trim() || 'manual'), logo: '' });
+    _eurManualExtraSave(d);
+    return true;
+  };
+  window._eurManualExtraRemove = function(zone, name){
+    if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
+    var d = _eurManualExtraLoad();
+    d[zone] = d[zone].filter(function(t){ return t.name !== name; });
+    _eurManualExtraSave(d);
+  };
+  /* Añade los extras manuales al array computado, dedupe por nombre
+     (nunca pisa un equipo que ya venga del cómputo automático o del
+     inyector EA). Se llama al FINAL de cada compute*Classified(), tras
+     `_prependManualEa`, así que un extra manual con el mismo nombre que
+     una plaza EA ya inyectada no se duplica. */
+  function _appendManualExtra(arr, zone){
+    var list = _eurManualExtraLoad()[zone] || [];
+    if(!list.length) return arr;
+    arr = arr || [];
+    var seen = {};
+    arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    list.forEach(function(t){
+      if(!t || !t.name || seen[t.name]) return;
+      seen[t.name] = true;
+      arr.push({ name: t.name, logo: t.logo || '', league: t.league || 'manual' });
+    });
+    return arr;
+  }
+  /* Hidratación desde servidor (una vez, si local está vacío) — mismo
+     patrón que `europe_committed_v1` (`_hydrateEuropeCommit` abajo). */
+  (function _hydrateEurManualExtra(){
+    var local;
+    try { local = localStorage.getItem(EUR_MANUAL_EXTRA_KEY); } catch(_){}
+    if(local) return;
+    try {
+      fetch('/api/kv/' + EUR_MANUAL_EXTRA_KEY, {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value){
+            try { localStorage.setItem(EUR_MANUAL_EXTRA_KEY, JSON.stringify(j.value)); } catch(_){}
+          }
+        }).catch(function(){});
+    } catch(_){}
+  })();
+
   /* ── SNAPSHOT MANUAL DE POOLS EUROPEOS ───────────────────────────
      Petición usuario 2026-05-02: tras el botón "📤 Enviar realidad
      de cada equipo a su Europa", los compute*Classified() devuelven
@@ -34672,7 +34771,7 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     var out = _prependManualEa(arr, 'ucl');
     _eurFixupLeagues(out);
-    return out;
+    return _appendManualExtra(out, 'ucl');
   }
   function computeUclPrevTeams(){
     /* Base = 34 directos (zona uclPrev). Si los pools europeos están
@@ -34714,7 +34813,7 @@ window._showSimProgress = function(opts, onDone){
        (`_distributeGroups`, anti-mismo-país) no trate a todos los del
        OQ como un mismo país. */
     _eurFixupLeagues(arr);
-    return _prependManualEa(arr, 'uclPrev');
+    return _appendManualExtra(_prependManualEa(arr, 'uclPrev'), 'uclPrev');
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
   function computeUelClassified(){
@@ -34741,7 +34840,7 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     var out = _prependManualEa(arr, 'uel');
     _eurFixupLeagues(out);
-    return out;
+    return _appendManualExtra(out, 'uel');
   }
   function computeUeclClassified(){
     var frozen = _europeFrozenFor('uecl');
@@ -34782,7 +34881,7 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     var out = _prependManualEa(arr, 'uecl');
     _eurFixupLeagues(out);
-    return out;
+    return _appendManualExtra(out, 'uecl');
   }
   function computeOpenQualifierTeams(){
     var frozen = _europeFrozenFor('uclQual');
@@ -34846,7 +34945,12 @@ window._showSimProgress = function(opts, onDone){
        usado mientras el cómputo automático estaba roto), se sumaban a
        los computados sin garantía de dedupe (nombres/grafías distintas
        para el mismo hueco de liga) y el pool superaba el total oficial.
-       Mismo fix en `computeWildCardClassified` de abajo. */
+       Mismo fix en `computeWildCardClassified` de abajo. Los EXTRAS
+       MANUALES GENÉRICOS (`eur_manual_extra_v1`, 2026-07-03) SÍ se
+       añaden aquí — a diferencia de `_prependManualEa`/España, son
+       agnósticos de liga y existen precisamente para rellenar huecos de
+       ligas que no consiguieron hidratarse. */
+    arr = _appendManualExtra(arr, 'uclQual');
 
     /* Cap final por seguridad. */
     if(arr.length > 112) arr = arr.slice(0, 112);
@@ -34858,8 +34962,10 @@ window._showSimProgress = function(opts, onDone){
     /* Sin `_prependManualEa`: España tiene cupo 0 en Wild Card
        (`LEAGUE_DEFAULT_ZONES['liga-ea-sports'].wildcard` = 0), así que
        el cómputo automático ya es el 100% del pool oficial de 72. Ver
-       nota extendida en `computeOpenQualifierTeams` (mismo bug). */
-    return _computeQualifiedFromLeagues('wildcard');
+       nota extendida en `computeOpenQualifierTeams` (mismo bug). Los
+       EXTRAS MANUALES GENÉRICOS (`eur_manual_extra_v1`) sí se añaden —
+       ver comentario en `computeOpenQualifierTeams`. */
+    return _appendManualExtra(_computeQualifiedFromLeagues('wildcard'), 'wildcard');
   }
   window.computeUclClassified = computeUclClassified;
   window.computeUelClassified = computeUelClassified;
@@ -39867,6 +39973,22 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#5eb6e4,#fff,#5eb6e4);border-color:rgba(94,182,228,.5);"><span class="mc-emoji">🇸🇲</span><span class="mc-label" style="color:#003d80;text-shadow:0 0 3px rgba(255,255,255,.8);">San Marino</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
 </div>
+<!-- Botón "👁 Ver / Añadir equipos por competición" (PIN admin 747).
+     Petición usuario 2026-07-03 ("quiero un botón que me muestre los
+     equipos que van a cada competición... déjame añadirlos en esa
+     lista manualmente de manera rápida y sencilla"): abre un overlay
+     de CONSULTA + EDICIÓN en vivo (sin necesidad de "Enviar realidad"),
+     con el conteo real vs objetivo por zona y un formulario para
+     añadir un equipo a mano a cualquiera de las 6 zonas cuando una
+     liga no consigue hidratarse automáticamente. -->
+<div class="restoligas-actions" style="margin-top:14px;">
+  <button class="restoligas-btn restoligas-btn-commit"
+          onclick="window.pG(function(){window._eurManualOverlayOpen&&window._eurManualOverlayOpen();})"
+          style="flex:1 1 auto;background:linear-gradient(90deg,#0a1a2e,#0e2e4a,#1a5a7a,#0e2e4a,#0a1a2e);">
+    <span class="restoligas-ico">👁</span>
+    <span>Ver / Añadir equipos por competición (admin)</span>
+  </button>
+</div>
 <!-- Botón "Enviar a Europa" (PIN admin 747). Va al FINAL de la lista
      de ligas — debajo de Kosovo (la última) — para que el admin lo
      pulse cuando haya simulado todas las ligas. Petición usuario
@@ -39874,7 +39996,7 @@ window._showSimProgress = function(opts, onDone){
      Wild Card, UEL, UECL); las pantallas europeas leen del snapshot
      si existe (evita race condition con escrituras async tras Sim
      batched). -->
-<div class="restoligas-actions" style="margin-top:14px;">
+<div class="restoligas-actions" style="margin-top:10px;">
   <button class="restoligas-btn restoligas-btn-commit"
           onclick="window.pG(function(){window._restoLigasCommitEurope&&window._restoLigasCommitEurope();})"
           style="flex:1 1 auto;">
@@ -40379,6 +40501,133 @@ window._showSimProgress = function(opts, onDone){
     var closeBtn = document.getElementById('eur-report-close');
     if(closeBtn) closeBtn.onclick = function(){ ov.remove(); };
     ov.onclick = function(ev){ if(ev.target === ov) ov.remove(); };
+  };
+
+  /* ── 👁 Ver / Añadir equipos por competición (en vivo) ────────────
+     Petición usuario 2026-07-03 ("quiero un botón que me muestre los
+     equipos que van a cada competición... si no se automatizan equipos
+     de alguna manera déjame añadirlos en esa lista manualmente de
+     manera rápida y sencilla"): a diferencia de `_eurShowCommitReport`
+     (que solo se ve DESPUÉS de pulsar "Enviar realidad" y persiste una
+     snapshot), este overlay es de CONSULTA + EDICIÓN inmediata:
+       · Calcula el pool EN VIVO (bypass de `europe_committed_v1`) cada
+         vez que se abre/refresca — así el admin ve el estado actual
+         SIN tener que congelar nada.
+       · Muestra el conteo real vs el objetivo oficial por zona.
+       · Formulario para añadir un equipo A MANO a cualquiera de las 6
+         zonas (`eur_manual_extra_v1`, ver `_appendManualExtra`) — para
+         cuando una liga no consigue hidratarse automáticamente.
+       · Lista los extras manuales ya añadidos con botón ✕ para quitarlos.
+       · El listado completo (agrupado por liga) reutiliza
+         `_eurZoneSectionHtml`/`_EUR_REPORT_ZONES`. */
+  var _EUR_ZONE_TARGET = { ucl:28, uclPrev:34, uel:18, uecl:12, uclQual:88, wildcard:72 };
+  function _eurLiveBlob(){
+    function _safeCompute(fn){
+      try { return (typeof fn === 'function') ? (fn() || []) : []; }
+      catch(_){ return []; }
+    }
+    var _prevIgnore = window._europeIgnoreFrozen;
+    window._europeIgnoreFrozen = true;
+    var blob;
+    try {
+      blob = {
+        ucl:      _safeCompute(window.computeUclClassified),
+        uclPrev:  _safeCompute(window.computeUclPrevTeams),
+        uel:      _safeCompute(window.computeUelClassified),
+        uecl:     _safeCompute(window.computeUeclClassified),
+        uclQual:  _safeCompute(window.computeOpenQualifierTeams),
+        wildcard: _safeCompute(window.computeWildCardClassified)
+      };
+    } finally {
+      window._europeIgnoreFrozen = _prevIgnore;
+    }
+    return blob;
+  }
+  var _eurManualSelZone = 'wildcard';
+  function _eurManualOverlayRender(){
+    var ov = document.getElementById('eur-manual-ov');
+    if(!ov) return;
+    var blob = _eurLiveBlob();
+    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()) || {};
+    var countsHtml = _EUR_REPORT_ZONES.map(function(z){
+      var n = (blob[z.key]||[]).length, t = _EUR_ZONE_TARGET[z.key];
+      var ok = n >= t;
+      return '<div style="flex:1 1 30%;min-width:90px;padding:6px 8px;border:1px solid '+z.color+'55;border-radius:8px;text-align:center;">'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:'+z.color+';">'+z.emoji+' '+_eurEsc(z.label)+'</div>'
+        + '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:20px;color:'+(ok?'#7fe08a':'#ff8080')+';">'+n+' / '+t+'</div>'
+        + '</div>';
+    }).join('');
+    var zoneChips = _EUR_REPORT_ZONES.map(function(z){
+      var sel = (z.key === _eurManualSelZone);
+      return '<button data-eur-zone="'+z.key+'" style="padding:6px 10px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;cursor:pointer;'
+        + (sel ? ('background:'+z.color+';border:1px solid '+z.color+';color:#000;font-weight:700;') : 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:#fff;')
+        + '">'+z.emoji+' '+_eurEsc(z.label)+'</button>';
+    }).join('');
+    var manualListHtml = _EUR_REPORT_ZONES.map(function(z){
+      var items = manual[z.key] || [];
+      if(!items.length) return '';
+      return '<div style="margin:6px 0;">'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:'+z.color+';">'+z.emoji+' '+_eurEsc(z.label)+' — manuales ('+items.length+')</div>'
+        + items.map(function(t){
+            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;">'
+              + '<span style="flex:1;">'+_eurEsc(t.name)+' <span style="color:rgba(255,255,255,.5);">('+_eurEsc(t.league||'manual')+')</span></span>'
+              + '<button data-eur-rm-zone="'+z.key+'" data-eur-rm-name="'+_eurEsc(t.name)+'" style="background:rgba(255,80,80,.12);border:1px solid rgba(255,80,80,.5);color:#ff8080;border-radius:4px;padding:2px 8px;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;">✕</button>'
+              + '</div>';
+          }).join('')
+        + '</div>';
+    }).join('');
+    var html = '<div style="width:100%;max-width:640px;">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">'
+      +     '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">👁 Equipos por competición (en vivo)</div>'
+      +     '<button id="eur-manual-close" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;letter-spacing:1px;">✕ Cerrar</button>'
+      +   '</div>'
+      +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' + countsHtml + '</div>'
+      +   '<div style="border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.03);">'
+      +     '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">➕ AÑADIR EQUIPO MANUAL</div>'
+      +     '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">' + zoneChips + '</div>'
+      +     '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+      +       '<input id="eur-manual-name" placeholder="Nombre del equipo" style="flex:1 1 160px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">'
+      +       '<input id="eur-manual-league" placeholder="País / liga (opcional)" style="flex:1 1 140px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">'
+      +       '<button id="eur-manual-add" style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:6px;padding:8px 16px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;font-weight:700;">AÑADIR</button>'
+      +     '</div>'
+      +   '</div>'
+      +   (manualListHtml ? ('<div style="margin-bottom:14px;">' + manualListHtml + '</div>') : '')
+      +   _EUR_REPORT_ZONES.map(function(z){ return _eurZoneSectionHtml(z, blob[z.key]); }).join('')
+      + '</div>';
+    ov.innerHTML = html;
+    var closeBtn = document.getElementById('eur-manual-close');
+    if(closeBtn) closeBtn.onclick = function(){ ov.remove(); };
+    ov.querySelectorAll('[data-eur-zone]').forEach(function(btn){
+      btn.onclick = function(){ _eurManualSelZone = btn.getAttribute('data-eur-zone'); _eurManualOverlayRender(); };
+    });
+    ov.querySelectorAll('[data-eur-rm-zone]').forEach(function(btn){
+      btn.onclick = function(){
+        window._eurManualExtraRemove(btn.getAttribute('data-eur-rm-zone'), btn.getAttribute('data-eur-rm-name'));
+        _eurManualOverlayRender();
+      };
+    });
+    var addBtn = document.getElementById('eur-manual-add');
+    if(addBtn) addBtn.onclick = function(){
+      var nameEl = document.getElementById('eur-manual-name');
+      var leagueEl = document.getElementById('eur-manual-league');
+      var name = nameEl ? nameEl.value : '';
+      var league = leagueEl ? leagueEl.value : '';
+      if(!name || !name.trim()){ nameEl && nameEl.focus(); return; }
+      var added = window._eurManualExtraAdd(_eurManualSelZone, name, league);
+      if(!added){ alert('Ya hay un equipo con ese nombre en esta zona (o el nombre está vacío).'); return; }
+      _eurManualOverlayRender();
+    };
+  }
+  window._eurManualOverlayOpen = function(){
+    var ov = document.getElementById('eur-manual-ov');
+    if(!ov){
+      ov = document.createElement('div');
+      ov.id = 'eur-manual-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,6,.94);display:flex;align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 12px 60px;';
+      document.body.appendChild(ov);
+      ov.onclick = function(ev){ if(ev.target === ov) ov.remove(); };
+    }
+    _eurManualOverlayRender();
   };
 
   /* ── Re-cuadrar reparto europeo (canónico) ───────────────────────

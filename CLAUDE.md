@@ -1,5 +1,77 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La hidratación de ligas para el reparto europeo es SECUENCIAL + PAUSADA, nunca thundering herd (obligatorio, 2026-07-03)
+
+**Bug (fotos usuario 2026-07-03, «solo detecta 8 en Wild Card, tienen
+que ser 72»)**: tras pulsar «♻️ Re-cuadrar reparto europeo (canónico)»
+y «📤 Enviar realidad de cada equipo a su Europa», el diagnóstico de la
+Wild Card mostraba **«Pool real detectado: 8 / 72»** con **«LIGAS QUE
+APORTAN (0)»**, y las pantallas de Open Qualifier / Previa de Champions
+se quedaban llenas de placeholders `TBD-OQ-XX` (6/62 · 12/62).
+
+### Causa raíz (2 bugs)
+
+1. **`_eurHydrateMissingLeagues`** (`misc_body_1.html`) — la función que
+   trae del servidor las `ligaExt_<slug>` que faltan en el dispositivo
+   ANTES de recalcular el reparto europeo — disparaba **TODOS** los
+   `fetch('/api/liga-ext/<slug>')` de golpe con `toFetch.forEach(...)`:
+   un **thundering herd** de hasta ~53 GETs simultáneos contra Railway.
+   En frío (o bajo carga) la mayoría fallaba/timeaba en silencio
+   (`.catch(function(){})`, sin reintento) y el timer fijo de 25 s
+   cortaba el resto aunque siguieran en vuelo. Solo las ~8 ligas que
+   respondían a tiempo hidrataban `localStorage` → el cómputo en vivo
+   (`_computeQualifiedFromLeagues`) solo veía esas 8. Es el MISMO patrón
+   ya identificado y arreglado para la subida PC→servidor
+   (`_lextReconcileResultsToServer`, «Secuencial+pausado (mata el
+   thundering herd que rompía la subida original)») — aquí faltaba
+   aplicar el mismo remedio al lado PULL (servidor→dispositivo).
+2. **`window._wcDebugPool`** (`part2/misc_body_2.html`) — el diagnóstico
+   🔍 llamaba a `computeWildCardClassified()`, que si existe un snapshot
+   congelado (`europe_committed_v1`) lo devuelve TAL CUAL sin llamar a
+   `_computeQualifiedFromLeagues` → `window._lastQualDiag` queda
+   obsoleto (de otra pantalla, o vacío) → el diagnóstico mostraba un
+   `poolReal` (del snapshot) y un `contributing` (de un cálculo viejo)
+   que NO correspondían entre sí — «8/72 pero 0 ligas aportan» no tiene
+   sentido y no ayuda a depurar.
+
+### Fix
+
+- `_eurHydrateMissingLeagues` hidrata las ligas **una a una** (`step()`
+  secuencial), con **2 reintentos** en fallo de red/HTTP (nunca cuando
+  el servidor responde OK pero sin esa liga — eso no es un fallo) y una
+  pausa corta entre pasos. Timer de seguridad subido de 25 s a 90 s
+  (una pasada secuencial completa tarda más que una ráfaga paralela,
+  pero AHORA SÍ completa en vez de cortarse a los 25 s con la mayoría
+  sin intentar). `_eurToast(...)` da feedback visual mientras tanto —
+  antes el admin no tenía ninguna señal de que el botón seguía
+  trabajando tras el `confirm()`.
+- `window._wcDebugPool` fuerza el cálculo **EN VIVO** (bypass del
+  snapshot vía `window._europeIgnoreFrozen`) para el diagnóstico —
+  SIEMPRE refleja el desglose real por liga — e informa APARTE si hay
+  un snapshot congelado con un recuento distinto, indicando que hay que
+  volver a pulsar «Enviar realidad…» para refrescarlo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_eurHydrateMissingLeagues` (o cualquier hidratador
+   nuevo que traiga N recursos del servidor en un mismo golpe) dispare
+   los `fetch` en paralelo sin cap de concurrencia. Contra Railway, un
+   thundering herd de decenas de requests simultáneos falla en silencio
+   para la mayoría. Todo fetch masivo nuevo hereda el patrón secuencial
+   + pausado + reintentos de `_lextReconcileResultsToServer` /
+   `_eurHydrateMissingLeagues`.
+2. **PROHIBIDO** que una herramienta de diagnóstico (`_wcDebugPool` o
+   cualquier futura) lea `window._lastQualDiag` sin garantizar que se
+   acaba de poblar para la MISMA zona que está reportando. Si la
+   función que lo puebla puede quedar short-circuited por un snapshot
+   congelado (`_europeFrozenFor`), el diagnóstico debe forzar el cálculo
+   en vivo (`_europeIgnoreFrozen=true`) para no mostrar cifras
+   contradictorias.
+3. Si el diagnóstico detecta un snapshot congelado con un recuento
+   distinto del cálculo en vivo, debe decírselo EXPLÍCITAMENTE al admin
+   (qué botón pulsar para refrescarlo) en vez de dejarle adivinar por
+   qué el número de la pantalla no coincide con el del diagnóstico.
+
 ## El picker de eventos de una caja humana muestra SIEMPRE la plantilla de SU mister (obligatorio, 2026-06-28)
 
 **Los 7 misters canónicos (club ↔ selección) — fuente de verdad, NUNCA mezclar**:

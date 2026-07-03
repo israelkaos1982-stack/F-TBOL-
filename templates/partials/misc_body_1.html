@@ -44073,14 +44073,15 @@ https://api.sofascore.app/api/v1/team/44/image
       } catch(_){}
     }
     /* ── BACKUPS AUTOMÁTICOS ──
-       Snapshots datados (_snap_<ts>) hasta 2 más recientes. El
-       _backup separado se eliminó (2026-05-02) por redundancia con
-       _protected y por el peso en localStorage (51 ligas × 8 copias
-       = quota fácilmente). Si el admin pierde la plantilla, queda:
+       Snapshot datado (_snap_<ts>) — solo el más reciente (recortado de
+       2026-07-03 3→2→1: cada copia extra son ~54 ligas duplicadas en
+       localStorage, y el histórico de snapshots es la red MENOS crítica
+       — _protected ya cubre el anti-wipe). El _backup separado se
+       eliminó (2026-05-02) por el mismo motivo. Si el admin pierde la
+       plantilla, queda:
          · main (autoritativo)
          · _protected (mirror anti-wipe, escrito en cada saveData)
-         · _snap_<ts> × 2 (historial mínimo, útil para recuperación
-           de cambios accidentales)
+         · _snap_<ts> × 1 (último cambio, red mínima de recuperación)
        loadData mantiene el fallback completo: main → _protected →
        _backup (legacy, se ignora si no existe) → snaps. */
     if (serialized != null && _saveOk) {
@@ -44088,7 +44089,7 @@ https://api.sofascore.app/api/v1/team/44/image
         var nowMs = Date.now();
         if (_countPlayers(d) > 0) {
           _setItemSafe('ligaExt_'+k+'_snap_'+nowMs, serialized);
-          /* Limpieza: mantener solo los 2 snapshots más recientes */
+          /* Limpieza: mantener solo el snapshot más reciente */
           var snaps = [];
           for (var i = 0; i < localStorage.length; i++) {
             var kk = localStorage.key(i);
@@ -44096,9 +44097,9 @@ https://api.sofascore.app/api/v1/team/44/image
               snaps.push(kk);
             }
           }
-          if (snaps.length > 2) {
+          if (snaps.length > 1) {
             snaps.sort();
-            snaps.slice(0, snaps.length - 2).forEach(function(old){
+            snaps.slice(0, snaps.length - 1).forEach(function(old){
               try { localStorage.removeItem(old); } catch(_){}
             });
           }

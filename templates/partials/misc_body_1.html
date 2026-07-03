@@ -21373,55 +21373,84 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _compressIcon(file, cb){
+    /* `cb` se llama EXACTAMENTE una vez — guard anti-doble-llamada (por si
+       el timeout de seguridad y un evento legítimo llegan a la vez). */
+    var done = false;
+    function finish(dataUrl, err){
+      if(done) return;
+      done = true;
+      try { cb(dataUrl, err); } catch(_){}
+    }
+    /* Red de seguridad: si por lo que sea ni `onload` ni `onerror` de la
+       imagen llegan a disparar (raro, pero visto en según qué formato
+       exótico de cámara), no dejamos al usuario esperando en silencio
+       para siempre — a los 8s se avisa igual que un error normal. */
+    var safety = setTimeout(function(){
+      finish(null, 'tiempo de espera agotado procesando la imagen');
+    }, 8000);
     var reader = new FileReader();
     reader.onload = function(){
       var raw = String(reader.result || '');
       var img = new Image();
       img.onload = function(){
-        var w = img.naturalWidth || img.width || MAX_ICON_PX;
-        var h = img.naturalHeight || img.height || MAX_ICON_PX;
-        /* Escalar manteniendo aspect ratio dentro de un cuadrado
-           MAX_ICON_PX × MAX_ICON_PX. Un escudo cuadrado queda 1:1; un
-           escudo rectangular queda centrado con transparencia
-           alrededor. */
-        var scale = Math.min(MAX_ICON_PX / w, MAX_ICON_PX / h, 1);
-        var dw = Math.round(w * scale);
-        var dh = Math.round(h * scale);
-        var canvas = document.createElement('canvas');
-        canvas.width = MAX_ICON_PX;
-        canvas.height = MAX_ICON_PX;
-        var ctx = canvas.getContext('2d');
-        if(!ctx){ cb(null, 'no canvas context'); return; }
-        ctx.clearRect(0,0,MAX_ICON_PX,MAX_ICON_PX);
-        ctx.drawImage(img, (MAX_ICON_PX-dw)/2, (MAX_ICON_PX-dh)/2, dw, dh);
-        /* Intento 1: PNG (preserva transparencia — los escudos suelen
-           tenerla). */
-        var pngUrl;
-        try { pngUrl = canvas.toDataURL('image/png'); } catch(_){ pngUrl = null; }
-        if(pngUrl && _approxBlobBytes(pngUrl) <= ICON_BYTES_HARD_CAP){
-          cb(pngUrl, null); return;
+        /* TODO el pipeline de canvas dentro de try/catch — bug reportado
+           2026-07-03 ("sigue sin funcionar", tras descartar caché/deploy):
+           `ctx.drawImage(...)` NO estaba protegido. Si lanzaba (imagen
+           gigante de cámara, formato que decodifica pero con dimensiones
+           raras, etc.) la excepción quedaba SIN CAPTURAR dentro de un
+           handler de evento — `cb` nunca se llamaba, no salía ningún
+           alert, y la caja se quedaba exactamente igual: el usuario veía
+           "no pasa nada" al elegir la foto, sin ningún mensaje de error
+           que diera pista de qué había fallado. */
+        try {
+          clearTimeout(safety);
+          var w = img.naturalWidth || img.width || MAX_ICON_PX;
+          var h = img.naturalHeight || img.height || MAX_ICON_PX;
+          /* Escalar manteniendo aspect ratio dentro de un cuadrado
+             MAX_ICON_PX × MAX_ICON_PX. Un escudo cuadrado queda 1:1; un
+             escudo rectangular queda centrado con transparencia
+             alrededor. */
+          var scale = Math.min(MAX_ICON_PX / w, MAX_ICON_PX / h, 1);
+          var dw = Math.round(w * scale);
+          var dh = Math.round(h * scale);
+          var canvas = document.createElement('canvas');
+          canvas.width = MAX_ICON_PX;
+          canvas.height = MAX_ICON_PX;
+          var ctx = canvas.getContext('2d');
+          if(!ctx){ finish(null, 'no canvas context'); return; }
+          ctx.clearRect(0,0,MAX_ICON_PX,MAX_ICON_PX);
+          ctx.drawImage(img, (MAX_ICON_PX-dw)/2, (MAX_ICON_PX-dh)/2, dw, dh);
+          /* Intento 1: PNG (preserva transparencia — los escudos suelen
+             tenerla). */
+          var pngUrl;
+          try { pngUrl = canvas.toDataURL('image/png'); } catch(_){ pngUrl = null; }
+          if(pngUrl && _approxBlobBytes(pngUrl) <= ICON_BYTES_HARD_CAP){
+            finish(pngUrl, null); return;
+          }
+          /* Intento 2: JPEG calidad 0.85 (mucho más pequeño pero pierde
+             el alpha — quedará fondo negro/blanco según el navegador).
+             Para escudos es un mal aceptable si la alternativa es no
+             guardar. */
+          var jpgUrl;
+          try { jpgUrl = canvas.toDataURL('image/jpeg', 0.85); } catch(_){ jpgUrl = null; }
+          if(jpgUrl && _approxBlobBytes(jpgUrl) <= ICON_BYTES_HARD_CAP){
+            finish(jpgUrl, null); return;
+          }
+          /* Intento 3: JPEG calidad 0.7. */
+          var jpgUrl2;
+          try { jpgUrl2 = canvas.toDataURL('image/jpeg', 0.70); } catch(_){ jpgUrl2 = null; }
+          if(jpgUrl2 && _approxBlobBytes(jpgUrl2) <= ICON_BYTES_HARD_CAP){
+            finish(jpgUrl2, null); return;
+          }
+          finish(null, 'la imagen sigue pesando '+Math.round(_approxBlobBytes(jpgUrl2||jpgUrl||pngUrl||raw)/1024)+' KB tras comprimir; sube una imagen más pequeña.');
+        } catch(errProc){
+          finish(null, 'no se pudo procesar la imagen ('+((errProc && errProc.message) || 'error de dibujo')+')');
         }
-        /* Intento 2: JPEG calidad 0.85 (mucho más pequeño pero pierde
-           el alpha — quedará fondo negro/blanco según el navegador).
-           Para escudos es un mal aceptable si la alternativa es no
-           guardar. */
-        var jpgUrl;
-        try { jpgUrl = canvas.toDataURL('image/jpeg', 0.85); } catch(_){ jpgUrl = null; }
-        if(jpgUrl && _approxBlobBytes(jpgUrl) <= ICON_BYTES_HARD_CAP){
-          cb(jpgUrl, null); return;
-        }
-        /* Intento 3: JPEG calidad 0.7. */
-        var jpgUrl2;
-        try { jpgUrl2 = canvas.toDataURL('image/jpeg', 0.70); } catch(_){ jpgUrl2 = null; }
-        if(jpgUrl2 && _approxBlobBytes(jpgUrl2) <= ICON_BYTES_HARD_CAP){
-          cb(jpgUrl2, null); return;
-        }
-        cb(null, 'la imagen sigue pesando '+Math.round(_approxBlobBytes(jpgUrl2||jpgUrl||pngUrl||raw)/1024)+' KB tras comprimir; sube una imagen más pequeña.');
       };
-      img.onerror = function(){ cb(null, 'no se pudo decodificar la imagen'); };
+      img.onerror = function(){ clearTimeout(safety); finish(null, 'no se pudo decodificar la imagen'); };
       img.src = raw;
     };
-    reader.onerror = function(){ cb(null, 'no se pudo leer el archivo'); };
+    reader.onerror = function(){ clearTimeout(safety); finish(null, 'no se pudo leer el archivo'); };
     reader.readAsDataURL(file);
   }
 

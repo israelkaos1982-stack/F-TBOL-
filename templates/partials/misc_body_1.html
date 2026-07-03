@@ -19210,7 +19210,8 @@ window._showSimProgress = function(opts, onDone){
      Modelo histórico Recopa / Cup Winners' Cup. El pool son los
      CAMPEONES de las copas nacionales europeas (`ligaExt_<slug>.copa`,
      motor _lecCopa) + los SUBCAMPEONES de las copas que tengan el
-     toggle `recopaSubcampeon` activado (default ON) + los equipos
+     toggle `recopaSubcampeon` activado a mano (default OFF desde
+     2026-07-03) + los equipos
      manuales de "EA Sports → Europa" slug 'recopa' (donde entran el
      campeón/subcampeón de la Copa del Rey española, ya que Liga EA
      está en EUROPE_BLACKLIST). Tope POOL_TARGET (64). El bracket de
@@ -19281,7 +19282,11 @@ window._showSimProgress = function(opts, onDone){
              2026-06-12). El toggle per-cup puede desactivar una de ellas,
              pero ninguna fuera de la lista aporta subcampeón. */
           var subWhitelisted = !!RECOPA_SUBCAMPEON_SLUGS[slug];
-          var subOn = !(data.config && data.config.recopaSubcampeon === false);
+          /* Default = FALSE (petición usuario 2026-07-03: "por defecto
+             que siempre ponga el campeón 1 y el subcampeón 0, pudiendo
+             editarlo manualmente"). Solo cuenta si el admin lo activó
+             explícitamente (=== true) desde el toggle de Reglas. */
+          var subOn = (data.config && data.config.recopaSubcampeon === true);
           if(subWhitelisted && subOn && cp.runnerUp) runners.push(cp.runnerUp);
         });
       }
@@ -34767,8 +34772,16 @@ window._showSimProgress = function(opts, onDone){
       arr.push({ name: w.name, league: country, logo: w.logo || '' });
     });
 
-    /* Prepende equipos manuales (EA Sports → Europa) y recapa. */
-    arr = _prependManualEa(arr, 'uclQual');
+    /* NO se prependen equipos manuales (EA Sports → Europa) aquí:
+       España (Liga EA Sports) tiene cupo 0 en Open Qualifier según la
+       tabla oficial de coeficientes (`LEAGUE_DEFAULT_ZONES['liga-ea-sports'].uclQual`
+       = 0) — el cómputo automático de arriba YA cubre el 100% de las
+       88 plazas. Bug 2026-07-03 (foto usuario "Wild Card 75/72"): si
+       el admin dejaba equipos manuales en esta zona (rastro del workaround
+       usado mientras el cómputo automático estaba roto), se sumaban a
+       los computados sin garantía de dedupe (nombres/grafías distintas
+       para el mismo hueco de liga) y el pool superaba el total oficial.
+       Mismo fix en `computeWildCardClassified` de abajo. */
 
     /* Cap final por seguridad. */
     if(arr.length > 112) arr = arr.slice(0, 112);
@@ -34777,7 +34790,11 @@ window._showSimProgress = function(opts, onDone){
   function computeWildCardClassified(){
     var frozen = _europeFrozenFor('wildcard');
     if(frozen) return frozen.slice();
-    return _prependManualEa(_computeQualifiedFromLeagues('wildcard'), 'wildcard');
+    /* Sin `_prependManualEa`: España tiene cupo 0 en Wild Card
+       (`LEAGUE_DEFAULT_ZONES['liga-ea-sports'].wildcard` = 0), así que
+       el cómputo automático ya es el 100% del pool oficial de 72. Ver
+       nota extendida en `computeOpenQualifierTeams` (mismo bug). */
+    return _computeQualifiedFromLeagues('wildcard');
   }
   window.computeUclClassified = computeUclClassified;
   window.computeUelClassified = computeUelClassified;
@@ -36170,11 +36187,24 @@ window._showSimProgress = function(opts, onDone){
       }
       var inputId = 'mea-input-'+ev.slug;
       var dropId  = 'mea-drop-'+ev.slug;
+      /* Open Qualifier y Wild Card: la cuota de España (Liga EA
+         Sports) en la tabla oficial de coeficientes es 0 en AMBAS
+         zonas — el cómputo automático (`_computeQualifiedFromLeagues`)
+         ya cubre el 100% de sus 88/72 plazas. Desde 2026-07-03 estas
+         2 zonas YA NO leen esta lista (bug "Wild Card 75/72": equipos
+         manuales + auto-calculados se sumaban sin dedupe fiable y
+         desbordaban el total oficial). Se avisa aquí para que el
+         admin no crea que sus "Quitar" pendientes siguen influyendo. */
+      var isDeadZone = (ev.slug === 'uclQual' || ev.slug === 'wildcard');
+      var deadNote = isDeadZone
+        ? '<div style="padding:6px 12px;font-family:Rajdhani,sans-serif;font-size:12px;color:#ffb84d;background:rgba(255,150,50,.08);border-bottom:1px solid rgba(255,150,50,.25);">⚠️ España tiene cupo 0 aquí — esta lista ya NO se usa en el cálculo (el reparto automático cubre el 100% de esta competición). Puedes quitar estos equipos, no afectan a nada.</div>'
+        : '';
       html += '<div class="mea-sec" style="border-color:'+ev.accent+'55;">'
         +    '<div class="mea-hdr" style="background:linear-gradient(90deg,rgba(0,0,0,.6),'+ev.accent+'33,rgba(0,0,0,.6));">'
         +      _esc(ev.label)
         +      '<span class="mea-count">'+teams.length+' añadido'+(teams.length===1?'':'s')+'</span>'
         +    '</div>'
+        +    deadNote
         +    '<div class="mea-list">'+rows+'</div>'
         +    '<div class="mea-add">'
         +      '<div style="position:relative;flex:1;">'
@@ -52121,15 +52151,17 @@ https://api.sofascore.app/api/v1/team/44/image
       _lecRender();
     },
     /* Alterna 0/1 plazas del subcampeón a Recopa de Europa. Default =
-       TRUE (incluido). Si está sin definir (undefined) lo tratamos
-       como TRUE → primer click apaga (false). Persiste en
+       FALSE (petición usuario 2026-07-03: el campeón siempre cuenta
+       como 1 fijo; el subcampeón arranca en 0 y el admin lo activa a
+       mano copa por copa). Si está sin definir (undefined) lo
+       tratamos como FALSE → primer click enciende (true). Persiste en
        data.config.recopaSubcampeon y re-renderiza el bloque de Reglas. */
     toggleSubcampeon: function(){
       if(!CURRENT_KEY) return;
       var data = loadData(CURRENT_KEY);
       if(!data) return;
       if(!data.config) data.config = {};
-      var current = !(data.config.recopaSubcampeon === false);
+      var current = (data.config.recopaSubcampeon === true);
       data.config.recopaSubcampeon = !current;
       saveData(CURRENT_KEY, data);
       _lecRenderReglas();
@@ -52148,8 +52180,9 @@ https://api.sofascore.app/api/v1/team/44/image
      automáticas, Recopa de Europa) que el usuario consideró
      "innecesarias de ver". Ahora solo:
        1. Una línea con el formato detectado por nº de equipos.
-       2. Plazas a Recopa de Europa: Campeón = 1 (fijo, siempre).
-          Subcampeón = 0 ó 1, configurable por el admin via toggle
+       2. Plazas a Recopa de Europa: Campeón = 1 (fijo, siempre, NO
+          editable). Subcampeón = 0 por defecto (petición usuario
+          2026-07-03), editable a 1 por el admin via toggle
           (persistido en data.config.recopaSubcampeon — booleano).
      El toggle alterna entre "0" y "1" al pulsar el chip; saveData
      guarda el cambio inmediatamente en el ligaExt_<slug>. */
@@ -52171,9 +52204,10 @@ https://api.sofascore.app/api/v1/team/44/image
             + 'Esta copa no clasifica a ninguna competición europea — solo se corona al campeón.'
             + '</p>';
     } else {
-      /* Default = TRUE (incluido). Solo es FALSE si el admin lo desactivó
-         explícitamente. Mantiene coherencia con `_buildPool` (Recopa). */
-      var sub = !(data && data.config && data.config.recopaSubcampeon === false);
+      /* Default = FALSE (excluido). Solo es TRUE si el admin lo activó
+         explícitamente desde este toggle. Mantiene coherencia con
+         `_buildPool` (Recopa). Petición usuario 2026-07-03. */
+      var sub = !!(data && data.config && data.config.recopaSubcampeon === true);
       html += '<h4>🛡 Recopa de Europa · Plazas</h4>'
         + '<div class="lec-recopa-row">'
         +   '<span class="lec-recopa-lbl">🏆 Campeón</span>'

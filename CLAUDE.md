@@ -4439,8 +4439,9 @@ Reglas a respetar:
    históricos, reducir JSON, mover datos al servidor).
 2. **No acumular tantos derivados que la suma por carpeta supere
    2 MB.** Por eso `saveData` mantiene como mucho `main` +
-   `_protected` + 2 snapshots por liga (drop de `_backup` legacy
-    2026-05-02 — ver sección de quota más abajo).
+   `_protected` + 1 snapshot por liga (drop de `_backup` legacy
+    2026-05-02, recorte de 2→1 snapshot 2026-07-03 — ver sección de
+    quota más abajo).
 3. **Si añades una nueva clave**, calcula su tamaño máximo plausible
    y déjalo bajo 2 MB. Los datos masivos (miles de eventos, históricos
    largos) van al servidor (`GlobalState` row con su clave) o se

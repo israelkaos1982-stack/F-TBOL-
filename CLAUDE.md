@@ -71,6 +71,36 @@ inyector "EA Sports → Europa" (que es solo para España).
    (cliente) y `_EUR_MANUAL_EXTRA_ZONES` (servidor) — deben ir siempre
    sincronizadas entre sí.
 
+### El overlay se AUTO-hidrata al abrirse — no depende de otros botones (obligatorio, 2026-07-03)
+
+**Refuerzo (mismo día, fotos usuario "no me cuadra nada" — Wild Card
+9/72 al abrir el overlay recién publicado)**: el overlay inicial solo
+LEÍA lo que ya hubiera en `localStorage`; si el admin abría "👁 Ver /
+Añadir equipos" sin haber pulsado antes "♻️ Re-cuadrar" o
+"📤 Enviar realidad", veía un conteo bajo que no reflejaba lo que el
+servidor realmente tiene guardado.
+
+- **`_eurManualOverlayOpen`** ahora dispara `_eurManualTriggerHydrate()`
+  (= `_eurHydrateMissingLeagues` + re-render) automáticamente al abrirse
+  (throttle 2 min), con un estado visible en el header: `⏳ Cargando
+  ligas del servidor…` mientras hidrata, `✅ Actualizado — <hora>` al
+  terminar. Botón `🔄 Cargar del servidor` para forzar un refresco manual
+  en cualquier momento sin cerrar/reabrir el overlay.
+- **`_eurMissingLeaguesList()`**: lista, por NOMBRE de país/liga (vía
+  `LEAGUE_DEFAULT_NAMES`), las ligas de `LEAGUE_DEFAULT_ZONES` que en
+  ESTE dispositivo siguen sin plantilla (≥2 equipos) tras la hidratación
+  — convierte "el número no cuadra" en "estas ligas concretas faltan":
+  el admin sabe exactamente cuáles abrir/simular en algún dispositivo
+  que sí las tenga, o rellenar a mano con el formulario de arriba.
+
+**Regla a respetar**: **PROHIBIDO** que el overlay vuelva a depender de
+que el admin haya pulsado "Re-cuadrar"/"Enviar realidad" ANTES de
+abrirlo para mostrar un conteo fiable — debe auto-hidratarse él solo.
+Si tras una hidratación COMPLETA (`✅ Actualizado`) una zona sigue por
+debajo del objetivo, la lista de "LIGAS SIN DATOS" debe explicar por qué
+(dato ausente en el servidor, no un fallo de red) — no dejar al admin
+adivinando.
+
 ## La hidratación de ligas para el reparto europeo es SECUENCIAL + PAUSADA, nunca thundering herd (obligatorio, 2026-07-03)
 
 **Bug (fotos usuario 2026-07-03, «solo detecta 8 en Wild Card, tienen

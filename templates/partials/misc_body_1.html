@@ -35169,6 +35169,67 @@ window._showSimProgress = function(opts, onDone){
     d[zone] = d[zone].filter(function(t){ return t.name !== name; });
     _eurManualExtraSave(d);
   };
+  /* ── MODO MANUAL por zona (obligatorio, 2026-07-03) ───────────────
+     Petición usuario (fotos "Champions League — 31 equipos" con un
+     revoltijo de países + "Previa de Champions — 9 equipos"): "todos
+     esos equipos que están automáticamente en las competiciones
+     elimínalos, lo hago yo manualmente". El cómputo automático
+     (`_computeQualifiedFromLeagues` + feeders de Previa/OQ/WC + EA
+     manual) sigue siendo útil para OTRAS zonas, así que el modo manual
+     es POR ZONA, no global: el admin decide, zona a zona, si quiere el
+     cómputo automático o SOLO lo que añada a mano
+     (`eur_manual_extra_v1`). Al activarlo, esa zona IGNORA por completo
+     el cómputo automático (incluida cualquier snapshot congelada previa
+     de `europe_committed_v1` para esa zona) — el picker "Añadir por
+     liga" y el buscador manual pasan a ser la ÚNICA fuente. */
+  var EUR_MANUAL_OVERRIDE_KEY = 'eur_manual_override_v1';
+  function _eurManualOverrideLoad(){
+    var out = {};
+    EUR_MANUAL_ZONES.forEach(function(z){ out[z] = false; });
+    try {
+      var raw = localStorage.getItem(EUR_MANUAL_OVERRIDE_KEY);
+      var d = raw ? JSON.parse(raw) : null;
+      if(d && typeof d === 'object'){
+        EUR_MANUAL_ZONES.forEach(function(z){ out[z] = !!d[z]; });
+      }
+    } catch(_){}
+    return out;
+  }
+  function _eurManualOverrideSave(d){
+    d = d || {};
+    d.updatedAt = Date.now();
+    try { localStorage.setItem(EUR_MANUAL_OVERRIDE_KEY, JSON.stringify(d)); } catch(_){}
+    try {
+      fetch('/api/kv/' + EUR_MANUAL_OVERRIDE_KEY, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin',
+        body: JSON.stringify({value: d})
+      }).catch(function(){});
+    } catch(_){}
+  }
+  window._eurManualOverrideLoad = _eurManualOverrideLoad;
+  window._eurManualOnly = function(zone){ return !!_eurManualOverrideLoad()[zone]; };
+  window._eurManualOverrideSet = function(zone, on){
+    if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
+    var d = _eurManualOverrideLoad();
+    d[zone] = !!on;
+    _eurManualOverrideSave(d);
+  };
+  (function _hydrateEurManualOverride(){
+    var local;
+    try { local = localStorage.getItem(EUR_MANUAL_OVERRIDE_KEY); } catch(_){}
+    if(local) return;
+    try {
+      fetch('/api/kv/' + EUR_MANUAL_OVERRIDE_KEY, {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(j && j.ok && j.value){
+            try { localStorage.setItem(EUR_MANUAL_OVERRIDE_KEY, JSON.stringify(j.value)); } catch(_){}
+          }
+        }).catch(function(){});
+    } catch(_){}
+  })();
   /* Añade los extras manuales al array computado, dedupe por nombre
      (nunca pisa un equipo que ya venga del cómputo automático o del
      inyector EA). Se llama al FINAL de cada compute*Classified(), tras
@@ -35302,6 +35363,7 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function computeUclClassified(){
+    if(window._eurManualOnly && window._eurManualOnly('ucl')) return _appendManualExtra([], 'ucl');
     var frozen = _europeFrozenFor('ucl');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('ucl');
@@ -35337,6 +35399,7 @@ window._showSimProgress = function(opts, onDone){
     return _appendManualExtra(out, 'ucl');
   }
   function computeUclPrevTeams(){
+    if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return _appendManualExtra([], 'uclPrev');
     /* Base = 34 directos (zona uclPrev). Si los pools europeos están
        CONGELADOS (`europe_committed_v1`) usamos esa snapshot como base,
        PERO seguimos mergeando el Open Qualifier (la snapshot solo
@@ -35380,6 +35443,7 @@ window._showSimProgress = function(opts, onDone){
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
   function computeUelClassified(){
+    if(window._eurManualOnly && window._eurManualOnly('uel')) return _appendManualExtra([], 'uel');
     var frozen = _europeFrozenFor('uel');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uel');
@@ -35406,6 +35470,7 @@ window._showSimProgress = function(opts, onDone){
     return _appendManualExtra(out, 'uel');
   }
   function computeUeclClassified(){
+    if(window._eurManualOnly && window._eurManualOnly('uecl')) return _appendManualExtra([], 'uecl');
     var frozen = _europeFrozenFor('uecl');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uecl');
@@ -35447,6 +35512,7 @@ window._showSimProgress = function(opts, onDone){
     return _appendManualExtra(out, 'uecl');
   }
   function computeOpenQualifierTeams(){
+    if(window._eurManualOnly && window._eurManualOnly('uclQual')) return _appendManualExtra([], 'uclQual');
     var frozen = _europeFrozenFor('uclQual');
     if(frozen) return frozen.slice();
     /* Pool del Open Qualifier (cap a 112 = 28 grupos × 4). Composición
@@ -35520,6 +35586,7 @@ window._showSimProgress = function(opts, onDone){
     return arr;
   }
   function computeWildCardClassified(){
+    if(window._eurManualOnly && window._eurManualOnly('wildcard')) return _appendManualExtra([], 'wildcard');
     var frozen = _europeFrozenFor('wildcard');
     if(frozen) return frozen.slice();
     /* Sin `_prependManualEa`: España tiene cupo 0 en Wild Card
@@ -41286,10 +41353,33 @@ window._showSimProgress = function(opts, onDone){
   }
   var _EUR_ZONE_BY_KEY = {};
   _EUR_REPORT_ZONES.forEach(function(z){ _EUR_ZONE_BY_KEY[z.key] = z; });
-  function _eurPickerSectionHtml(){
-    var opts = '<option value="">— Elige una liga —</option>' + _eurAllLeagueSlugsSorted().map(function(o){
-      return '<option value="'+_eurEsc(o.slug)+'"'+(o.slug===_eurPickerSlug?' selected':'')+'>'+_eurEsc(o.label)+'</option>';
+  var _eurPickerListOpen = false;
+  /* Picker de liga CUSTOM (no `<select>` nativo) — petición usuario
+     2026-07-03 ("mejor para seleccionar liga que sea marcar ✅"): el
+     `<select>` nativo se abre como un picker del SISTEMA (Android),
+     rompiendo el look de la app y mostrando radios ⭕ genéricos en vez
+     de un check ✅ acorde al resto de la UI. Botón que despliega una
+     lista propia, estilizada, con ✅ en la liga elegida. */
+  function _eurPickerButtonHtml(){
+    var current = _eurPickerSlug ? _eurSlugLabel(_eurPickerSlug) : '— Elige una liga —';
+    var rows = _eurAllLeagueSlugsSorted().map(function(o){
+      var sel = (o.slug === _eurPickerSlug);
+      return '<div data-eur-pick-league="'+_eurEsc(o.slug)+'" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;'
+        + (sel ? 'background:rgba(60,200,120,.12);' : '') + '">'
+        + '<span>'+_eurEsc(o.label)+'</span>'
+        + '<span style="color:#3cc878;font-size:14px;">'+(sel ? '✅' : '')+'</span>'
+        + '</div>';
     }).join('');
+    return '<div style="position:relative;">'
+      +   '<button id="eur-pick-league-btn" style="width:100%;text-align:left;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:9px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;">'
+      +     '<span>'+_eurEsc(current)+'</span><span style="color:rgba(255,255,255,.5);">'+(_eurPickerListOpen?'▴':'▾')+'</span>'
+      +   '</button>'
+      +   (_eurPickerListOpen
+            ? ('<div id="eur-pick-league-list" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#12161c;border:1px solid rgba(60,200,120,.5);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.6);max-height:280px;overflow-y:auto;z-index:200003;">' + rows + '</div>')
+            : '')
+      + '</div>';
+  }
+  function _eurPickerSectionHtml(){
     var body = '';
     if(_eurPickerLoading){
       body = '<div style="padding:10px;font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.7);">⏳ Cargando clasificación…</div>';
@@ -41323,7 +41413,7 @@ window._showSimProgress = function(opts, onDone){
     }
     return '<div style="border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.03);">'
       +   '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">📋 AÑADIR POR LIGA (clasificación completa, varios de golpe)</div>'
-      +   '<select id="eur-pick-league" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">' + opts + '</select>'
+      +   _eurPickerButtonHtml()
       +   body
       + '</div>';
   }
@@ -41333,12 +41423,17 @@ window._showSimProgress = function(opts, onDone){
     var blob = _eurLiveBlob();
     var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()) || {};
     var missing = _eurManualHydrating ? [] : _eurMissingLeaguesList();
+    var overrides = (window._eurManualOverrideLoad && window._eurManualOverrideLoad()) || {};
     var countsHtml = _EUR_REPORT_ZONES.map(function(z){
       var n = (blob[z.key]||[]).length, t = _EUR_ZONE_TARGET[z.key];
       var ok = n >= t;
+      var isManual = !!overrides[z.key];
       return '<div style="flex:1 1 30%;min-width:90px;padding:6px 8px;border:1px solid '+z.color+'55;border-radius:8px;text-align:center;">'
         + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:'+z.color+';">'+z.emoji+' '+_eurEsc(z.label)+'</div>'
         + '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:20px;color:'+(ok?'#7fe08a':'#ff8080')+';">'+n+' / '+t+'</div>'
+        + '<button data-eur-override="'+z.key+'" style="margin-top:3px;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 6px;border-radius:4px;cursor:pointer;'
+        +   (isManual ? 'background:rgba(255,180,60,.18);border:1px solid rgba(255,180,60,.6);color:#ffcf7a;' : 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);')
+        + '">'+(isManual ? '🔒 Manual' : '🔓 Auto')+'</button>'
         + '</div>';
     }).join('');
     var zoneChips = _EUR_REPORT_ZONES.map(function(z){
@@ -41405,6 +41500,16 @@ window._showSimProgress = function(opts, onDone){
     if(closeBtn) closeBtn.onclick = function(){ ov.remove(); };
     var refreshBtn = document.getElementById('eur-manual-refresh');
     if(refreshBtn) refreshBtn.onclick = function(){ _eurManualTriggerHydrate(); };
+    ov.querySelectorAll('[data-eur-override]').forEach(function(btn){
+      btn.onclick = function(){
+        var zone = btn.getAttribute('data-eur-override');
+        var overridesNow = (window._eurManualOverrideLoad && window._eurManualOverrideLoad()) || {};
+        var turningOn = !overridesNow[zone];
+        if(turningOn && !confirm('🔒 Modo MANUAL para esta zona\n\nDejará de contar los equipos automáticos (ligas + Previa/OQ/Wild Card + EA Sports). Solo se verán y se usarán los que añadas tú a mano (formulario / "Añadir por liga").\n\n¿Continuar?')) return;
+        window._eurManualOverrideSet(zone, turningOn);
+        _eurManualOverlayRender();
+      };
+    });
     ov.querySelectorAll('[data-eur-zone]').forEach(function(btn){
       btn.onclick = function(){ _eurManualSelZone = btn.getAttribute('data-eur-zone'); _eurManualOverlayRender(); };
     });
@@ -41455,9 +41560,16 @@ window._showSimProgress = function(opts, onDone){
         if(ev.target !== nameInput && !nameDrop.contains(ev.target)) nameDrop.style.display = 'none';
       });
     }
-    /* Picker "Añadir por liga". */
-    var pickSel = document.getElementById('eur-pick-league');
-    if(pickSel) pickSel.onchange = function(){ _eurPickerLoadLeague(pickSel.value); };
+    /* Picker "Añadir por liga" — botón custom + lista con ✅ (no
+       `<select>` nativo, ver `_eurPickerButtonHtml`). */
+    var pickBtn = document.getElementById('eur-pick-league-btn');
+    if(pickBtn) pickBtn.onclick = function(){ _eurPickerListOpen = !_eurPickerListOpen; _eurManualOverlayRender(); };
+    ov.querySelectorAll('[data-eur-pick-league]').forEach(function(row){
+      row.onclick = function(){
+        _eurPickerListOpen = false;
+        _eurPickerLoadLeague(row.getAttribute('data-eur-pick-league'));
+      };
+    });
     ov.querySelectorAll('[data-eur-pick-add]').forEach(function(btn){
       btn.onclick = function(){
         var zone = btn.getAttribute('data-zone');

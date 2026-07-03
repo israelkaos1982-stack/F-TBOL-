@@ -3681,6 +3681,11 @@ _KV_ALLOWED_EXACT = {
     # localStorage es solo cache; el server es la fuente de verdad para
     # que sobreviva al borrado de datos / cambio de móvil. 2026-07-03.
     "eur_manual_extra_v1",
+    # MODO MANUAL por zona del reparto europeo: flags booleanas
+    # {ucl,uclPrev,uel,uecl,uclQual,wildcard} — cuando el admin activa
+    # una, esa zona ignora el cómputo automático y usa SOLO
+    # eur_manual_extra_v1. Edición rara/admin, recencia simple basta.
+    "eur_manual_override_v1",
     # Registro de torneos visibles (añadir/eliminar · 2026-05-16 #5).
     "tour_registry_v1",
     # Ball Storage: inventario de balones, balón-por-competición y
@@ -3799,6 +3804,9 @@ _KV_RECENCY_BLOB_KEYS = {
     "munich-obj-state-v4",
     # Tabla EDITABLE de premios CASH: la última edición del admin gana entera.
     "cash_rewards_v1",
+    # Modo manual por zona del reparto europeo: la última edición del
+    # admin (toggle 🔒/🔓) gana entera.
+    "eur_manual_override_v1",
     # HUD del hub (🪙💊💼 + objetivos): running total / consumible. El blob
     # con `updatedAt` mayor gana ENTERO — un consumo legítimo (PI gastado,
     # presupuesto sumado) no se revierte y un POST stale no pisa lo más nuevo.

@@ -21536,13 +21536,24 @@ window._showSimProgress = function(opts, onDone){
   justify-content:center;
   width:56px;
   height:56px;
-  font-size:34px;
+  font-size:28px;
+  /* Petición usuario 2026-07-04 ("quítale el círculo verde que le
+     rodea y el 🎮 un poco más pequeño"): el resto de cajas de esta
+     pantalla ya quitaron el círculo (--cir-bg/--cir-bd) al pasar a
+     `.sc-comp-img` sin fondo; esta seguía con el círculo verde de
+     `.sc-emoji` porque nunca se le retiró explícitamente. Font-size
+     bajado de 34/36px a 28/30px ("un poco más pequeño"). */
+  background:none;
+  border:none;
+  border-radius:0;
+  box-shadow:none;
+  padding:0;
 }
 @media (min-width:480px){
   #s-competiciones .submenu-card.sc-ea-manual .sc-emoji{
     width:60px;
     height:60px;
-    font-size:36px;
+    font-size:30px;
   }
 }
 </style>

@@ -157,6 +157,72 @@ correctamente.
    pasar antes por `_humanClubSlotName`. Toda caja de humano nueva lo
    hereda automáticamente en cuanto esté en el registro `MISTERS_HUMANOS`.
 
+### Refuerzo 2 — el tap real seguía sin responder + el ❓ desaparecía sin alias (obligatorio, 2026-07-04)
+
+**El refuerzo 1 no bastó**: el amigo repitió la prueba y el botón
+"Alisson" se quedaba resaltado (color `:active`) al tocarlo pero el
+partido seguía bloqueado — ni elegir portero ni "Cancelar (no
+finalizar)" hacían nada, sin forma de avanzar ni de salir. A la vez, en
+la PANTALLA DE PREVIA del mismo partido, el botón **❓** (alias
+eFootball, bajo el equipo IA cuando el rival es humano) había
+desaparecido por completo.
+
+**Causa raíz 1 — ambigüedad táctil real, invisible para tests con `.click()`**:
+un tap dentro de un contenedor `overflow-y:auto` anidado
+(`.mvp-pl-list` dentro de `.mvp-force-overlay`) puede ser reinterpretado
+por el navegador como intento de scroll si detecta el mínimo movimiento
+del dedo entre `touchstart`/`touchend` — en ese caso el evento `click`
+sintético **NUNCA se dispara**, aunque el botón SÍ muestra su estado
+`:active` (que depende solo del `touchstart`, no del click). Un test
+automatizado con `.click()` directo no lo reproduce porque no simula
+touchstart→touchmove→touchend con micro-movimiento real. Verificado
+con Playwright + `Input.dispatchTouchEvent` (CDP) disparando la
+secuencia táctil SIN click sintético: reproduce el bloqueo exacto.
+Afecta IGUAL al botón "Cancelar" (misma clase de contenedor), por eso
+tampoco dejaba salir del overlay.
+
+**Fix 1**: `showImbatForce` cablea un respaldo `touchend` (con
+comprobación de que el dedo no se movió >12px desde el `touchstart`,
+para no confundir un scroll real con un tap) en CADA botón del overlay
+— porteros y "Cancelar" por igual. `confirmImbatForce`/`cancelImbatForce`
+son idempotentes (el overlay ya se removió, `_imbatForceCallback` ya es
+null), así que si el `click` normal SÍ llega después no hay doble
+confirmación.
+
+**Causa raíz 2 — el ❓ solo se dibujaba SI ya había un alias configurado**:
+`_ppAliasHtml(txt)` hacía `if(!txt) return ''` — el botón entero
+desaparecía (no solo su contenido) cuando `getTeamEfootballAlias(team)`
+venía vacío. Un equipo IA sin alias configurado (nunca editado, o
+perdido) se quedaba sin NINGÚN botón, sin pista de que la función
+existe ni forma de comprobarlo/configurarlo desde la previa.
+
+**Fix 2**: el ❓ se muestra SIEMPRE que el rival sea humano y este lado
+no lo sea (misma condición de siempre, `_ppHomeAliasShow`/
+`_ppAwayAliasShow`, ya independiente del texto). Si el alias viene
+vacío, `window._copaShowAlias` (`copa-engine.js`) ya no hace `return`
+en silencio — muestra un aviso "⚠️ Sin alias eFootball configurado para
+`<equipo>` — ve al editor de Resto de Ligas…" en vez de no responder al
+pulsar.
+
+**Reglas a respetar**:
+8. **PROHIBIDO** que un botón crítico dentro de un contenedor
+   `overflow-y:auto` (picker de porteros, MVP, jugador de evento, o
+   cualquier overlay obligatorio nuevo) dependa ÚNICAMENTE del evento
+   `click` sintético. Todo botón así DEBE cablear también un respaldo
+   `touchend` con comprobación de movimiento (patrón
+   `_imbatWireTapFallback` en `showImbatForce`), para que un tap real en
+   móvil con la mínima ambigüedad de scroll no deje al usuario sin
+   forma de avanzar NI de cancelar/salir.
+9. **PROHIBIDO** que el botón ❓ (alias eFootball) desaparezca por no
+   haber alias configurado. La condición de mostrarlo depende SOLO de
+   quién es humano (`_ppHomeAliasShow`/`_ppAwayAliasShow`); el texto
+   vacío se gestiona dentro del popup (`_copaShowAlias`), nunca
+   ocultando el botón entero.
+10. **PROHIBIDO** que `_copaShowAlias` (o cualquier popup de alias
+    nuevo) haga `return` en silencio cuando el alias viene vacío — debe
+    informar al usuario qué hacer (dónde configurarlo) en vez de no
+    responder al pulsar.
+
 ## Extras manuales del reparto europeo — rellenar huecos cuando la hidratación automática no basta (obligatorio, 2026-07-03)
 
 **Contexto (fotos usuario 2026-07-03, «ahora van menos», Wild Card 8/72

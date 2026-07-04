@@ -142,6 +142,48 @@ window.showImbatForce = function(teamName, onConfirm) {
     + '<button class="ml-pl-ov-close" style="margin-top:20px;" onclick="window.cancelImbatForce()">✕ Cancelar (no finalizar)</button>';
   document.body.appendChild(ov);
   window._imbatForceCallback = onConfirm;
+  /* Respaldo táctil (2026-07-04): en móvil real, un tap dentro de un
+     contenedor `overflow-y:auto` (`.mvp-pl-list` dentro de
+     `.mvp-force-overlay`, ambos scrollables) puede ser reinterpretado
+     por el navegador como un intento de scroll si detecta el mínimo
+     movimiento del dedo entre touchstart/touchend — en ese caso el
+     evento `click` sintético NUNCA se dispara (aunque el botón SÍ
+     muestra su estado `:active`, que es justo el síntoma reportado:
+     "el portero se queda resaltado pero no pasa nada" / "la pantalla se
+     bloquea y no deja avanzar ni ir hacia atrás" — el mismo problema
+     afecta IGUAL al botón Cancelar, dejando al usuario sin salida
+     ninguna). Un test automatizado con `.click()` directo NUNCA
+     reproduce esto porque no simula la ambigüedad táctil real de un
+     dedo de verdad. Añadimos un manejador de touchend, para CADA botón
+     del overlay (porteros + Cancelar), que actúa si el dedo no se
+     movió más de 12px — si el `click` normal SÍ llega después,
+     `confirmImbatForce`/`cancelImbatForce` son idempotentes (el overlay
+     ya fue removido, `_imbatForceCallback` ya es null) así que no hay
+     doble confirmación. */
+  function _imbatWireTapFallback(el, action){
+    var sx = 0, sy = 0, moved = false;
+    el.addEventListener('touchstart', function(e){
+      var t = e.touches && e.touches[0];
+      sx = t ? t.clientX : 0; sy = t ? t.clientY : 0; moved = false;
+    }, { passive:true });
+    el.addEventListener('touchmove', function(e){
+      var t = e.touches && e.touches[0];
+      if (!t) return;
+      if (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) moved = true;
+    }, { passive:true });
+    el.addEventListener('touchend', function(e){
+      if (moved) return;
+      try { e.preventDefault(); } catch(_){}
+      action(el);
+    });
+  }
+  try {
+    ov.querySelectorAll('.mvp-pl-btn').forEach(function(b){
+      _imbatWireTapFallback(b, function(btn){ window.confirmImbatForce(btn); });
+    });
+    var _cancelBtn = ov.querySelector('.ml-pl-ov-close');
+    if (_cancelBtn) _imbatWireTapFallback(_cancelBtn, function(){ window.cancelImbatForce(); });
+  } catch(err) { try { console.warn('showImbatForce: respaldo táctil fallo:', err); } catch(_){} }
 };
 
 window.confirmImbatForce = function(btn) {
@@ -169,12 +211,17 @@ window.confirmImbatForce = function(btn) {
    `null` para que _ensureImbatEvents detecte la cancelación y aborte
    la cadena de finalización. */
 window.cancelImbatForce = function() {
-  var ov = document.getElementById('imbat-force-ov');
-  if (ov) ov.remove();
-  if (window._imbatForceCallback) {
-    var cb = window._imbatForceCallback;
-    window._imbatForceCallback = null;
-    cb(null, null);
+  try {
+    var ov = document.getElementById('imbat-force-ov');
+    if (ov) ov.remove();
+    if (window._imbatForceCallback) {
+      var cb = window._imbatForceCallback;
+      window._imbatForceCallback = null;
+      cb(null, null);
+    }
+  } catch(err) {
+    try { console.error('cancelImbatForce fallo:', err); } catch(_){}
+    try { alert('⚠️ No se pudo cancelar (' + (err && err.message || err) + '). Recarga la página si la pantalla sigue bloqueada.'); } catch(_){}
   }
 };
 
@@ -6797,25 +6844,41 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var _hiAliasAway = (typeof window.humanIcon === 'function') ? (window.humanIcon(away)||'') : '';
       var _humHomeAlias = _humHome || !!_hiAliasHome;
       var _humAwayAlias = _humAway || !!_hiAliasAway;
-      var _ppHomeAliasTxt = (_humAwayAlias && !_humHomeAlias) ? _aliasFor(home) : '';
-      var _ppAwayAliasTxt = (_humHomeAlias && !_humAwayAlias) ? _aliasFor(away) : '';
-      function _ppAliasHtml(txt){
-        if(!txt) return '';
+      /* El lado IA que se enfrenta a un humano SIEMPRE debe mostrar el
+         botón ❓ — antes solo aparecía si YA había un alias configurado
+         (`if(!txt) return ''`), así que un equipo sin alias (nunca
+         editado por el admin, o perdido por cualquier motivo) se
+         quedaba SIN NINGÚN botón, sin pista de que existe esta función
+         ni forma de comprobarlo desde la previa (petición usuario
+         2026-07-04, "TIENE QUE SALIR SI O SI LA ❓"). Ahora `_ppAliasShow`
+         indica SI se muestra el botón (solo depende de quién es humano),
+         y el TEXTO (puede venir vacío) se resuelve aparte — el propio
+         botón informa "sin configurar" en vez de no aparecer. */
+      var _ppHomeAliasShow = (_humAwayAlias && !_humHomeAlias);
+      var _ppAwayAliasShow = (_humHomeAlias && !_humAwayAlias);
+      var _ppHomeAliasTxt = _ppHomeAliasShow ? _aliasFor(home) : '';
+      var _ppAwayAliasTxt = _ppAwayAliasShow ? _aliasFor(away) : '';
+      function _ppAliasHtml(show, txt, teamName){
+        if(!show) return '';
         /* ❓ animado renderizado DIRECTAMENTE en el primer paint de la
            previa — NO esperamos al swap async de copa-engine (que tardaba
            hasta confirmar el balón). Así el rival eFootball es visible
            desde que se abre la previa. El alias completo se ve al pulsar
            → window._copaShowAlias. `data-copa-alias-replaced` evita que
-           copa-engine reprocese el bloque. */
-        var _aSafe = String(txt).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+           copa-engine reprocese el bloque. Sin alias aún configurado,
+           `data-copa-alias-full` viaja VACÍO y `data-copa-alias-team`
+           lleva el nombre del equipo — _copaShowAlias muestra un aviso
+           de "aún sin configurar" en vez de no hacer nada. */
+        var _aSafe = String(txt||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        var _tSafe = String(teamName||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         return '<div data-copa-alias-replaced="1" style="text-align:center;line-height:1;margin-top:3px;">'
           + '<button type="button" class="copa-alias-help" onclick="window._copaShowAlias&&window._copaShowAlias(this)" '
-          + 'data-copa-alias-full="'+_aSafe+'" aria-label="Ver alias eFootball completo" '
+          + 'data-copa-alias-full="'+_aSafe+'" data-copa-alias-team="'+_tSafe+'" aria-label="Ver alias eFootball completo" '
           + 'style="background:none;border:none;color:#ffd54a;font-size:20px;cursor:pointer;padding:2px 8px;line-height:1;animation:copaAliasPulse 1.4s ease-in-out infinite;">❓</button>'
           + '</div>';
       }
-      var _ppHomeAliasHtml = _ppAliasHtml(_ppHomeAliasTxt);
-      var _ppAwayAliasHtml = _ppAliasHtml(_ppAwayAliasTxt);
+      var _ppHomeAliasHtml = _ppAliasHtml(_ppHomeAliasShow, _ppHomeAliasTxt, home);
+      var _ppAwayAliasHtml = _ppAliasHtml(_ppAwayAliasShow, _ppAwayAliasTxt, away);
       var durText;
       if (window._ppDurationMin) {
         durText = window._ppDurationMin + ' min';

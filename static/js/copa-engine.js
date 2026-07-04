@@ -3928,7 +3928,18 @@
   window._copaShowAlias = function (btn) {
     if (!btn) return;
     var alias = btn.getAttribute('data-copa-alias-full') || '';
-    if (!alias) return;
+    /* Sin alias configurado aún (2026-07-04, petición usuario "TIENE QUE
+       SALIR SI O SI LA ❓"): antes esto simplemente no hacía nada (el
+       botón ni se dibujaba si el alias venía vacío), dejando al usuario
+       sin ninguna pista sobre esta función para un equipo que aún no
+       tiene alias. Mostramos un aviso explicando qué hacer en vez de
+       fallar en silencio. */
+    if (!alias) {
+      var team = btn.getAttribute('data-copa-alias-team') || 'este equipo';
+      alias = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
+        + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
+        + '"Alias eFootball" con el equipo real que uses en el juego.';
+    }
     var ov = document.getElementById('_copaAliasOv');
     if (!ov) {
       ov = document.createElement('div');

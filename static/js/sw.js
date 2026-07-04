@@ -16,13 +16,13 @@ var CACHE_HTML   = 'ftbol-html-v1';
 
 /* Activos a pre-cachear en el install.  Actualizar ?v= aquí cuando cambien. */
 var PRECACHE = [
-  '/static/css/index.bundle.css?v=5.5',
+  '/static/css/index.bundle.css?v=5.6',
   '/static/css/goal-notification-improved.css?v=2.1',
   '/static/js/goal-notification-improved.js?v=2.0',
   '/static/js/var-system.js?v=1.0',
-  '/static/js/index.bundle.js?v=9.12',
+  '/static/js/index.bundle.js?v=9.14',
   '/static/js/goal-notification-patch.js?v=2.1',
-  '/static/js/copa-engine.js?v=1.2',
+  '/static/js/copa-engine.js?v=1.3',
 ];
 
 /* ── INSTALL: pre-cachear activos estáticos ─────────────────────────────── */

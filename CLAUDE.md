@@ -2340,6 +2340,51 @@ les añadiera backfill.
    `_lx_merge_teams` si es un campo string simple, o su propio bloque
    `best_*_by_name` si es más complejo como `players[]`).
 
+### Refuerzo — el alias puede existir en el servidor SIN que el dispositivo lo tenga cacheado (obligatorio, 2026-07-05)
+
+**Bug (fotos usuario 2026-07-05, «si tiene alias»)**: tras el fix de
+backfill de arriba, el ❓ seguía sin mostrar el alias de Maccabi Tel
+Aviv aunque el editor de "Resto de Ligas" (misma sesión) lo mostraba
+guardado (`Sudamérica - 1🇦🇷 - Rosario AA - 1ª👕 - ⭐⭐⭐⭐`).
+
+**Causa raíz — el escaneo de `_buildAliasCache` es SOLO LOCAL**:
+`getTeamEfootballAlias` resuelve el alias escaneando `ligaExt_*` en
+`localStorage` + `LIGA_CACHE` (memoria) del PROPIO dispositivo — nunca
+pregunta al servidor. Resto de Ligas tiene ~54 ligas; si ESE
+dispositivo nunca había abierto la liga concreta de Maccabi Tel Aviv,
+esa liga no existía ni en `localStorage` ni en `LIGA_CACHE` todavía —
+el escaneo no tenía NADA que mirar, aunque el servidor sí tuviera el
+equipo con su alias. Abrir el editor de esa liga (como hizo el admin
+para comprobarlo) es precisamente lo que la carga por primera vez —
+por eso el editor SÍ lo mostraba justo después, sin que eso arregle la
+consulta anterior de la previa.
+
+**Fix** (`misc_body_1.html`): `window._efAliasServerSearch(teamName,
+onDone)` — cuando el ❓ no encuentra nada en el cache local, busca en
+el SERVIDOR liga por liga, **secuencial** (nunca en paralelo — mismo
+patrón anti-thundering-herd que `_eurHydrateMissingLeagues`/
+`_eurPickerLoadLeague`), parando en cuanto encuentra el equipo. Solo se
+dispara BAJO DEMANDA al pulsar el ❓ (nunca en el arranque ni en el
+render de la previa). `_copaShowAlias` (`copa-engine.js`) muestra
+"🔄 Buscando en el servidor…" mientras busca y rellena el popup en
+cuanto lo encuentra, además de sembrar `_ALIAS_CACHE` para que la
+siguiente consulta de ese equipo sea instantánea. `_buildAliasCache`
+también escanea `window._TOUR_CACHE` (cfgs de torneo ya cargados) como
+fuente adicional, por si algún formato de torneo llega a copiar el
+alias al roster del torneo.
+
+**Reglas a respetar**:
+4. **PROHIBIDO** asumir que "el alias no aparece" significa "el alias
+   no existe" — puede significar simplemente que ESTE dispositivo nunca
+   cargó la liga de ese equipo. Todo lookup de identidad por nombre
+   (alias, y si se añade un campo similar en el futuro) que dependa de
+   un escaneo LOCAL de `ligaExt_*` debe tener un fallback de búsqueda en
+   servidor bajo demanda, no limitarse a devolver vacío.
+5. **PROHIBIDO** que la búsqueda en servidor dispare las ~54 ligas en
+   paralelo. Siempre secuencial con parada temprana, y siempre
+   disparada por una acción EXPLÍCITA del usuario (pulsar el ❓), nunca
+   automática en el arranque o en cada render de la previa.
+
 ## Resto de Ligas — las stats de COPA + LIGA se SUMAN por jugador y sobreviven al re-sim de liga (obligatorio, 2026-06-12)
 
 **Bug (fotos usuario 2026-06-12, «Campionato Sammarinese»)**: un equipo

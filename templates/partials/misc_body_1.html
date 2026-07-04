@@ -45146,6 +45146,28 @@ https://api.sofascore.app/api/v1/team/44/image
           }
         }
       } catch(_){}
+      /* TORNEOS (2026-07-05): el ❓ de la previa puede fallar aunque el
+         alias SÍ esté guardado en `ligaExt_<slug>` — si ESE dispositivo
+         nunca abrió esa liga concreta (Resto de Ligas tiene ~53), su
+         copia local nunca llegó a existir y el escaneo de arriba no
+         encuentra nada, aunque el servidor SÍ tenga el alias (bug
+         usuario 2026-07-04/05, «si tiene alias» — el admin lo veía en
+         el editor de OTRO momento/sesión, pero la previa del torneo no
+         lo encontraba). La previa SIEMPRE tiene cargado el cfg del
+         propio torneo (`window._TOUR_CACHE[tourId]`, con los equipos ya
+         sorteados/añadidos) — si ese cfg lleva `efootballAlias` copiado
+         al añadir el equipo, lo indexamos aquí sin depender de que la
+         liga origen esté cacheada localmente. Solo RELLENA huecos
+         (nunca pisa un alias ya indexado). */
+      try {
+        if (typeof window._TOUR_CACHE !== 'undefined' && window._TOUR_CACHE) {
+          for (var tk in window._TOUR_CACHE) {
+            var dT = window._TOUR_CACHE[tk];
+            var tsT = (dT && Array.isArray(dT.teams)) ? dT.teams : [];
+            for (var ti=0; ti<tsT.length; ti++){ _idxTeam(tsT[ti]); }
+          }
+        }
+      } catch(_){}
       /* SELECCIONES (2026-05-25): las selecciones sin licencia en
          eFootball (Trinidad y Tobago, El Salvador, Curazao, …) llevan
          su alias en `selecciones_squad_v1[].efootballAlias`. Las
@@ -45199,6 +45221,51 @@ https://api.sofascore.app/api/v1/team/44/image
     var entry = _aliasCache()[targetNorm];
     if(entry) window.__aliasFoundInEditor[targetNorm] = true;
     return entry ? entry.alias : '';
+  };
+
+  /* Búsqueda en SERVIDOR del alias cuando el escaneo local no lo
+     encuentra (2026-07-05, «si tiene alias» — el admin lo tenía
+     guardado en `ligaExt_<slug>` pero ESTE dispositivo nunca había
+     abierto esa liga concreta, así que su copia local ni existía y el
+     escaneo de `_buildAliasCache` no tenía nada que mirar, aunque el
+     servidor SÍ tuviera el alias). Recorre las ~54 ligas UNA A UNA
+     (nunca en paralelo — mismo patrón anti-thundering-herd que
+     `_eurHydrateMissingLeagues`/`_eurPickerLoadLeague`), parando en
+     cuanto encuentra el equipo. Solo se dispara bajo demanda (al pulsar
+     el ❓ y no encontrar nada local), nunca en el arranque. */
+  window._efAliasServerSearch = function(teamName, onDone){
+    var targetNorm = _aliasNormName(teamName);
+    if(!targetNorm){ onDone(null); return; }
+    var slugs = [];
+    try { slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {}); } catch(_){}
+    var i = 0;
+    function step(){
+      if(i >= slugs.length){ onDone(null); return; }
+      var slug = slugs[i++];
+      fetch('/api/liga-ext/' + encodeURIComponent(slug)).then(function(r){
+        return r.ok ? r.json() : null;
+      }).then(function(j){
+        var teams = (j && j.data && Array.isArray(j.data.teams)) ? j.data.teams : [];
+        for(var k=0; k<teams.length; k++){
+          var t = teams[k];
+          if(t && t.name && _aliasNormName(t.name) === targetNorm){
+            var a = String(t.efootballAlias||'').trim();
+            if(a){
+              /* Backfill inmediato del cache local para que la próxima
+                 consulta (de este equipo, en esta u otra previa) sea
+                 instantánea sin repetir la búsqueda. */
+              try {
+                if(_ALIAS_CACHE) _ALIAS_CACHE[targetNorm] = { alias:a, stadium:(_ALIAS_CACHE[targetNorm]||{}).stadium||'' };
+              } catch(_){}
+              onDone(a);
+              return;
+            }
+          }
+        }
+        step();
+      }).catch(function(){ step(); });
+    }
+    step();
   };
 
   /* Override de getTeamStadium para PRIORIZAR el estadio que el admin

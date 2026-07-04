@@ -12346,6 +12346,29 @@ window._showSimProgress = function(opts, onDone){
     height:60px;
   }
 }
+/* La caja Estadísticas es la ÚNICA de #s-espana que se quedó con
+   `.sc-emoji` (📊) en vez de un trofeo real `.sc-comp-img`. Sin un
+   ancho de icono igual al de las otras 5 (56/60px), su slot medía solo
+   ~20px y el `.sc-label` arrancaba mucho antes en el eje horizontal que
+   en el resto de filas — "la caja estadísticas que las letras vayan en
+   la misma línea que el resto de cajas, ya que están muy hacia la
+   izquierda" (petición usuario 2026-07-03). Le damos el MISMO ancho de
+   slot que `.sc-comp-img` para que las 6 etiquetas arranquen alineadas. */
+#s-espana .submenu-card .sc-emoji{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:56px;
+  height:56px;
+  font-size:34px;
+}
+@media (min-width:480px){
+  #s-espana .submenu-card .sc-emoji{
+    width:60px;
+    height:60px;
+    font-size:36px;
+  }
+}
 </style>
 <div class="screen" id="s-segunda">
 <button class="back-btn" onclick="go('s-espana')">◀ Volver</button>
@@ -21783,14 +21806,14 @@ window._showSimProgress = function(opts, onDone){
       img.src = dataUrl;
       img.setAttribute('aria-hidden','true');
       img.setAttribute('data-bg-enhanced','1');
-      img.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;width:auto;object-fit:contain;opacity:0.22;pointer-events:none;z-index:0;';
+      img.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;aspect-ratio:1/1;object-fit:contain;opacity:0.22;pointer-events:none;z-index:0;';
       bg.parentNode.replaceChild(img, bg);
     } else {
       var img2 = document.createElement('img');
       img2.src = dataUrl;
       img2.setAttribute('aria-hidden','true');
       img2.setAttribute('data-bg-enhanced','1');
-      img2.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;width:auto;object-fit:contain;opacity:0.22;pointer-events:none;z-index:0;';
+      img2.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;aspect-ratio:1/1;object-fit:contain;opacity:0.22;pointer-events:none;z-index:0;';
       card.style.position = 'relative';
       card.style.overflow = 'hidden';
       card.insertBefore(img2, card.firstChild);
@@ -22490,7 +22513,24 @@ window._showSimProgress = function(opts, onDone){
      2026-07-03 ("quiero que todos los trofeos... tengan... el trofeo a
      la derecha de la card que el de champions"): esta función clona el
      `.sc-comp-img` REAL de cada caja como fondo, sustituyendo/creando
-     el `[data-bg-enhanced]` — consistente en las 12 cajas. */
+     el `[data-bg-enhanced]` — consistente en las 12 cajas.
+
+     2026-07-03 (refuerzo, foto usuario "el resto les veo muy alrededor,
+     no tienen la misma distribución que Champions/Torneos de Verano"):
+     el estilo previo (`height:175%;width:auto`) deja que el ANCHO salga
+     del ratio NATIVO de cada foto. Las 12 fotos de trofeo NO comparten
+     proporción (el SVG de Champions y el medallón de Torneos de Verano
+     son casi cuadrados; el resto son fotos de copa recortadas ~120×180,
+     bastante más estrechas y altas) — a igual altura, una imagen alta y
+     estrecha se ve como una columna vertical desproporcionada ("muy alto
+     y grande"), mientras la cuadrada se ve compacta y equilibrada.
+     `aspect-ratio:1/1` fuerza la MISMA caja cuadrada (175% de alto ×
+     175% de alto de ancho) para las 12 cajas — `object-fit:contain`
+     mete cada foto dentro sin recortarla, con barras vacías a los lados
+     si es alta/estrecha. Para una foto ya casi cuadrada (Champions/
+     Torneos) el resultado es IDÉNTICO a antes (no cambia su aspecto
+     "perfecto"); para el resto, ahora ocupan la MISMA caja en vez de
+     una franja más estrecha/alta descompensada. */
   function _fixTrophyBackgrounds(){
     ['s-competiciones','s-espana'].forEach(function(scrId){
       var scr = document.getElementById(scrId);
@@ -22508,7 +22548,7 @@ window._showSimProgress = function(opts, onDone){
         img.src = wantSrc;
         img.setAttribute('aria-hidden','true');
         img.setAttribute('data-bg-enhanced','1');
-        img.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;width:auto;object-fit:contain;opacity:0.22;pointer-events:none;z-index:0;';
+        img.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;aspect-ratio:1/1;object-fit:contain;opacity:0.22;pointer-events:none;z-index:0;';
         if(bg && bg.parentNode) bg.parentNode.replaceChild(img, bg);
         else {
           card.style.position = 'relative';

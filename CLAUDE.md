@@ -2055,6 +2055,68 @@ Mundo / Montenegro / N. Irlanda / Albania — `_ensureRestoMundoSeed`,
    reutilizar `_ensureExtraLeagueSeed`/`_lextIdbTopupIfEmpty`; no
    duplicar esta lógica en un guard ad-hoc.
 
+## El ALIAS de eFootball de un equipo es IDENTIDAD igual que escudo/estadio/plantilla, nunca se pierde (obligatorio, 2026-07-04)
+
+**Bug (fotos usuario 2026-07-04, «a mi amigo no le sale la ❓️ pero a mí
+sí»)**: en la pantalla de PREVIA de un partido, bajo el nombre de un
+equipo sin licencia real en eFootball (p.ej. Maccabi Tel Aviv), el
+admin ve un botón **❓** que al pulsarlo muestra con qué equipo REAL de
+eFootball hay que jugar (`t.efootballAlias`, editado a mano en el
+editor de Resto de Ligas — campo `#lext-team-efootball-alias`). Ese
+botón salía en el móvil del usuario pero NO en el de su amigo, para el
+MISMO equipo de la MISMA liga.
+
+### Causa raíz
+
+`efootballAlias` es un campo de equipo dentro de `ligaExt_<slug>`,
+exactamente del mismo tipo que `shield` (escudo, protegido desde
+2026-06-02), `stadium` (estadio, protegido desde 2026-06-11) y
+`players` (plantilla, protegida desde 2026-07-02) — un dato de
+IDENTIDAD que el admin pone en UN dispositivo y que debe propagarse a
+TODOS. Pero, a diferencia de esos 3, **nunca se incluyó en NINGÚN
+backfill** — ni el cliente (`_lextBackfillShields`/`_lextBackfillRoster`/
+`_lextBackfillLeagueLogo`) ni el servidor (`_lx_merge_teams`, bucle
+`for _fld in ("shield", "stadium")`) lo cubrían. Así, cuando la fusión
+por equipo (cliente o servidor) elige un ganador por `updatedAt` y ese
+ganador viene de una copia que nunca tuvo el alias puesto (el
+dispositivo del amigo, que no editó ese equipo), el alias desaparecía
+para ese dispositivo sin que nada lo recuperase — exactamente el mismo
+mecanismo que ya rompió escudos/estadios/plantillas antes de que se
+les añadiera backfill.
+
+### Fix
+
+- **Cliente** (`misc_body_1.html`): nuevo `_lextBackfillAlias(target,
+  source)`, espejo EXACTO de `_lextBackfillShields` pero para
+  `efootballAlias`. Se invoca en LOS MISMOS 10 puntos donde ya se llama
+  a `_lextBackfillShields` (las 3 rutas de adopción de `fetchData`, el
+  top-up desde IndexedDB, y las 4 rutas de recuperación de seed —local
+  y servidor— de Resto del Mundo + Montenegro/N.Irlanda/Albania).
+  Invalida `_ALIAS_CACHE` (`_invalidateAliasCache`) cuando rellena algo,
+  para que el ❓ aparezca sin esperar el TTL de 3 s.
+- **Servidor** (`app.py`, `_lx_merge_teams`): `efootballAlias` se añade
+  al bucle `for _fld in ("shield", "stadium", "efootballAlias")` —
+  mismo backfill por nombre canónico, mismo criterio (NUNCA pisa un
+  valor ya presente en el ganador). Tests en
+  `tests/test_api.py::TestLigaExtMerge` (`test_alias_efootball_no_se_pierde_si_ganador_no_lo_trae`,
+  `test_alias_efootball_viaja_entre_grafias_del_mismo_club`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el backfill de identidad (cliente o servidor)
+   cubra escudo/estadio/plantilla pero no el alias de eFootball. Los 4
+   son el mismo tipo de dato (campo de equipo puesto a mano por el
+   admin en UN dispositivo) y viajan igual.
+2. **PROHIBIDO** que `_lextBackfillAlias` pise un alias ya presente en
+   `target` (mismo contrato que `_lextBackfillShields`/`_lextBackfillRoster`):
+   solo rellena equipos con `efootballAlias` vacío.
+3. Todo campo NUEVO de identidad por equipo que se añada en el futuro
+   al editor de Resto de Ligas (junto a escudo/estadio/alias/plantilla)
+   hereda este patrón: backfill cliente (`_lextBackfillXxx`, llamado en
+   los mismos 10 puntos) + backfill servidor (añadido al bucle de
+   `_lx_merge_teams` si es un campo string simple, o su propio bloque
+   `best_*_by_name` si es más complejo como `players[]`).
+
 ## Resto de Ligas — las stats de COPA + LIGA se SUMAN por jugador y sobreviven al re-sim de liga (obligatorio, 2026-06-12)
 
 **Bug (fotos usuario 2026-06-12, «Campionato Sammarinese»)**: un equipo

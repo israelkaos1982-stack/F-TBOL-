@@ -45228,44 +45228,74 @@ https://api.sofascore.app/api/v1/team/44/image
      guardado en `ligaExt_<slug>` pero ESTE dispositivo nunca había
      abierto esa liga concreta, así que su copia local ni existía y el
      escaneo de `_buildAliasCache` no tenía nada que mirar, aunque el
-     servidor SÍ tuviera el alias). Recorre las ~54 ligas UNA A UNA
-     (nunca en paralelo — mismo patrón anti-thundering-herd que
-     `_eurHydrateMissingLeagues`/`_eurPickerLoadLeague`), parando en
-     cuanto encuentra el equipo. Solo se dispara bajo demanda (al pulsar
-     el ❓ y no encontrar nada local), nunca en el arranque. */
+     servidor SÍ tuviera el alias).
+
+     Refuerzo 2026-07-05 (petición usuario, «se tira mucho tiempo
+     buscando, tendría que salir al momento»): recorrer las ~54 ligas
+     UNA A UNA (secuencial puro) tardaba demasiado — cada fetch en
+     serie suma su latencia completa, y con Railway pueden ser varios
+     segundos por liga. Se sube a un **lote de 8 en paralelo** (ni
+     secuencial-lento ni las 54 de golpe — mismo espíritu anti-
+     thundering-herd que `_eurHydrateMissingLeagues`, pero con
+     concurrencia acotada en vez de 1 a la vez) para que el resultado
+     típico llegue en 1-2 rondas en vez de hasta 54 peticiones en fila.
+     Para el CASO COMÚN (la liga del equipo ya está cacheada localmente
+     por haberse abierto antes), esta búsqueda de servidor NUNCA se
+     dispara — solo entra en juego la primera vez que un dispositivo
+     nuevo consulta un equipo de una liga que nunca cargó. */
   window._efAliasServerSearch = function(teamName, onDone){
     var targetNorm = _aliasNormName(teamName);
     if(!targetNorm){ onDone(null); return; }
     var slugs = [];
     try { slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {}); } catch(_){}
-    var i = 0;
-    function step(){
-      if(i >= slugs.length){ onDone(null); return; }
-      var slug = slugs[i++];
-      fetch('/api/liga-ext/' + encodeURIComponent(slug)).then(function(r){
+    var BATCH = 8;
+    var i = 0, done = false;
+    function finish(result){
+      if(done) return;
+      done = true;
+      onDone(result);
+    }
+    function checkTeams(teams){
+      for(var k=0; k<teams.length; k++){
+        var t = teams[k];
+        if(t && t.name && _aliasNormName(t.name) === targetNorm){
+          var a = String(t.efootballAlias||'').trim();
+          if(a) return a;
+        }
+      }
+      return null;
+    }
+    function fetchOne(slug){
+      return fetch('/api/liga-ext/' + encodeURIComponent(slug)).then(function(r){
         return r.ok ? r.json() : null;
       }).then(function(j){
         var teams = (j && j.data && Array.isArray(j.data.teams)) ? j.data.teams : [];
-        for(var k=0; k<teams.length; k++){
-          var t = teams[k];
-          if(t && t.name && _aliasNormName(t.name) === targetNorm){
-            var a = String(t.efootballAlias||'').trim();
-            if(a){
-              /* Backfill inmediato del cache local para que la próxima
-                 consulta (de este equipo, en esta u otra previa) sea
-                 instantánea sin repetir la búsqueda. */
-              try {
-                if(_ALIAS_CACHE) _ALIAS_CACHE[targetNorm] = { alias:a, stadium:(_ALIAS_CACHE[targetNorm]||{}).stadium||'' };
-              } catch(_){}
-              onDone(a);
-              return;
-            }
+        return checkTeams(teams);
+      }).catch(function(){ return null; });
+    }
+    function round(){
+      if(done) return;
+      if(i >= slugs.length){ finish(null); return; }
+      var batchSlugs = slugs.slice(i, i + BATCH);
+      i += BATCH;
+      Promise.all(batchSlugs.map(fetchOne)).then(function(results){
+        if(done) return;
+        for(var r=0; r<results.length; r++){
+          if(results[r]){
+            /* Backfill inmediato del cache local para que la próxima
+               consulta (de este equipo, en esta u otra previa) sea
+               instantánea sin repetir la búsqueda. */
+            try {
+              if(_ALIAS_CACHE) _ALIAS_CACHE[targetNorm] = { alias:results[r], stadium:(_ALIAS_CACHE[targetNorm]||{}).stadium||'' };
+            } catch(_){}
+            finish(results[r]);
+            return;
           }
         }
-        step();
-      }).catch(function(){ step(); });
+        round();
+      });
     }
-    step();
+    round();
   };
 
   /* Override de getTeamStadium para PRIORIZAR el estadio que el admin

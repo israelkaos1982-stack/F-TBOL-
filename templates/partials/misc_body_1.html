@@ -21348,7 +21348,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="submenu-card sc-ea-manual"
      style="background:linear-gradient(135deg,#0a1f0a,#1e4a1e,#2d6b2d,#1e4a1e,#0a1f0a) !important;border:1.5px solid #3cc878 !important;box-shadow:0 4px 18px rgba(60,200,120,.30),inset 0 1px 0 rgba(255,255,255,.08) !important;"
      onclick="window.pG&&window.pG(function(){if(window._meaRender)window._meaRender();go('s-ea-manual');})">
-  <span class="sc-emoji">🎮</span><span class="sc-label">EA Sports → Europa <span style="font-size:10px;opacity:.7;">(admin)</span></span><span class="sc-arr">▶</span>
+  <span class="sc-emoji">🎮</span><span class="sc-label">Admin - Europa</span><span class="sc-arr">▶</span>
 </div>
 </div>
 </div>
@@ -21524,6 +21524,29 @@ window._showSimProgress = function(opts, onDone){
     height:60px !important;
     max-width:60px !important;
     max-height:60px !important;
+  }
+}
+/* La caja "🎮 Admin - Europa" es la ÚNICA de #s-competiciones que se
+   quedó con `.sc-emoji` (icono pequeño ~22/24px) mientras las 9 de
+   trofeo pasaron a `.sc-comp-img` (56/60px) — su slot de icono más
+   estrecho hacía que su etiqueta arrancara antes que el resto (mismo
+   desajuste que "Estadísticas" en España, petición usuario 2026-07-04
+   "el icono no está en línea con el resto"). Igualamos el ancho del
+   slot al de `.sc-comp-img` para que las 10 etiquetas de esta pantalla
+   arranquen alineadas. */
+#s-competiciones .submenu-card.sc-ea-manual .sc-emoji{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:56px;
+  height:56px;
+  font-size:34px;
+}
+@media (min-width:480px){
+  #s-competiciones .submenu-card.sc-ea-manual .sc-emoji{
+    width:60px;
+    height:60px;
+    font-size:36px;
   }
 }
 </style>

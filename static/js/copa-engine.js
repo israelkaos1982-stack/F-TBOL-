@@ -3925,21 +3925,7 @@
   /* Overlay full-screen con el alias completo cuando el usuario pulsa
      el ❓. Texto grande, con color llamativo dorado, fondo oscuro
      semitransparente. Click fuera o en la X cierra. */
-  window._copaShowAlias = function (btn) {
-    if (!btn) return;
-    var alias = btn.getAttribute('data-copa-alias-full') || '';
-    /* Sin alias configurado aún (2026-07-04, petición usuario "TIENE QUE
-       SALIR SI O SI LA ❓"): antes esto simplemente no hacía nada (el
-       botón ni se dibujaba si el alias venía vacío), dejando al usuario
-       sin ninguna pista sobre esta función para un equipo que aún no
-       tiene alias. Mostramos un aviso explicando qué hacer en vez de
-       fallar en silencio. */
-    if (!alias) {
-      var team = btn.getAttribute('data-copa-alias-team') || 'este equipo';
-      alias = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
-        + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
-        + '"Alias eFootball" con el equipo real que uses en el juego.';
-    }
+  function _copaAliasEnsureOv(){
     var ov = document.getElementById('_copaAliasOv');
     if (!ov) {
       ov = document.createElement('div');
@@ -3956,8 +3942,46 @@
       });
       document.body.appendChild(ov);
     }
-    document.getElementById('_copaAliasText').textContent = alias;
+    return ov;
+  }
+
+  window._copaShowAlias = function (btn) {
+    if (!btn) return;
+    var alias = btn.getAttribute('data-copa-alias-full') || '';
+    var team = btn.getAttribute('data-copa-alias-team') || 'este equipo';
+    var ov = _copaAliasEnsureOv();
+    if (alias) {
+      document.getElementById('_copaAliasText').textContent = alias;
+      ov.style.display = 'flex';
+      return;
+    }
+    /* Sin alias en el cache LOCAL (2026-07-04/05, petición usuario
+       "TIENE QUE SALIR SI O SI LA ❓" + "si tiene alias"): puede que el
+       admin SÍ lo haya guardado en `ligaExt_<slug>`, pero este
+       dispositivo nunca cargó esa liga concreta (de las ~54 de Resto de
+       Ligas) y por tanto no tiene copia local que escanear. Antes de
+       rendirnos con "sin configurar", buscamos en el SERVIDOR liga por
+       liga (secuencial, para el equipo con ese nombre exacto). */
+    document.getElementById('_copaAliasText').textContent = '🔄 Buscando en el servidor…';
     ov.style.display = 'flex';
+    if (typeof window._efAliasServerSearch === 'function') {
+      window._efAliasServerSearch(team, function(found){
+        var txtEl = document.getElementById('_copaAliasText');
+        if (!txtEl) return;
+        if (found) {
+          btn.setAttribute('data-copa-alias-full', found);
+          txtEl.textContent = found;
+        } else {
+          txtEl.textContent = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
+            + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
+            + '"Alias eFootball" con el equipo real que uses en el juego.';
+        }
+      });
+    } else {
+      document.getElementById('_copaAliasText').textContent = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
+        + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
+        + '"Alias eFootball" con el equipo real que uses en el juego.';
+    }
   };
 
   /* Observer sobre `#pp-vs`: cada vez que el bundle re-renderiza el

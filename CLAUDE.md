@@ -1,5 +1,92 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Todo cambio en `index.bundle.js`/`.css` (o cualquier asset del Service Worker) DEBE bumpear su `?v=X.X` — si no, no llega NUNCA a dispositivos con caché (obligatorio, 2026-07-04)
+
+**Bug (foto usuario 2026-07-04, «Maccabi vs Liverpool», portería imbatida
+— tocar cualquiera de los 5 porteros de la lista «no funciona»)**: un
+amigo terminó un partido de Trofeo Joan Gamper y, al abrirse el overlay
+obligatorio «🧤 PORTERÍA IMBATIDA» (elegir qué portero mantuvo la
+portería a 0), pulsar CUALQUIERA de los 5 nombres (Alisson, Mamardashvili,
+Woodman, Pecsi, Davies) no hacía nada — el overlay se quedaba fijo.
+
+### Investigación — el código en sí es correcto
+
+`showImbatForce`/`confirmImbatForce`/`_ensureImbatEvents`
+(`static/js/index.bundle.js`) se reprodujeron de forma aislada
+(Playwright + harness mínimo) con el roster exacto de la foto: el click
+en cualquier botón SÍ dispara `confirmImbatForce` → resuelve la promesa
+→ cierra el overlay correctamente. El código servido HOY no tiene el bug.
+
+### Causa raíz real — caché de 30 días + Service Worker "cache-first" sin versión bumpeada
+
+- **`app.py`** (`_static_cache_headers`): toda respuesta bajo
+  `/static/js/` o `/static/css/` lleva `Cache-Control: public,
+  max-age=2592000` (30 DÍAS). El comentario del propio código lo dice:
+  «Los archivos JS/CSS llevan `?v=X.X` → pueden cachearse 30 días» — la
+  estrategia ENTERA depende de que el número de versión se incremente
+  cada vez que el contenido cambia.
+- **`static/js/sw.js`** (Service Worker): además del caché HTTP, el SW
+  precachea `index.bundle.js?v=9.10` (junto a `index.bundle.css`,
+  `copa-engine.js`, `goal-notification-*`, `var-system.js`) en el
+  `install`, y sirve TODO `/static/` con estrategia **cache-first**
+  (`cache.match(e.request)` — si hay un HIT, se devuelve la copia
+  cacheada **sin comprobar la red jamás**, para esa URL exacta).
+- **El número de versión llevaba en `9.10` sin tocarse** pese a que
+  `static/js/index.bundle.js` — donde vive literalmente
+  `showImbatForce`/`confirmImbatForce`/`_ensureImbatEvents` — se ha
+  modificado varias veces en el historial visible del repo. Cualquier
+  dispositivo (móvil, PC, portátil) que instaló el Service Worker o
+  cacheó el bundle ANTES de una de esas modificaciones se queda
+  **ATRAPADO PARA SIEMPRE** con esa copia vieja — el navegador no tiene
+  ningún motivo para volver a pedir `index.bundle.js?v=9.10`: la URL no
+  cambió, así que ni el caché HTTP ni el Service Worker la consideran
+  stale. Esto explica el patrón «funciona en mi móvil, no en el de mi
+  amigo»: quien recargó/reinstaló recientemente obtiene el bundle
+  actual; quien no, se queda con el que tenía cacheado desde hace
+  semanas, con bugs ya corregidos en el servidor pero invisibles para
+  ese dispositivo.
+- **Los partials `misc_body_1.html`/`misc_body_2.html` NO sufren esto**:
+  se sirven inline dentro del HTML de navegación (`network-first` en el
+  SW, `no-cache` en las rutas dinámicas) — por eso la inmensa mayoría de
+  fixes de este CLAUDE.md (que viven en esos partials) SÍ llegan a todos
+  los dispositivos de inmediato. El problema es exclusivo de los assets
+  bajo `/static/js/` y `/static/css/` referenciados por `?v=`.
+
+### Fix
+
+Bump de `9.10` → `9.11` en **AMBOS** sitios donde aparece la URL
+(`templates/index.html` y el array `PRECACHE` de `static/js/sw.js`,
+que deben coincidir siempre) — fuerza a todo dispositivo, tenga la
+caché que tenga, a descargar el bundle actual en su próxima carga.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** modificar `static/js/index.bundle.js`,
+   `static/css/index.bundle.css`, `static/js/copa-engine.js`,
+   `static/js/var-system.js`, `static/js/goal-notification-improved.js`,
+   `static/js/goal-notification-improved.css` o
+   `static/js/goal-notification-patch.js` sin **incrementar su `?v=X.X`
+   en LOS DOS sitios donde vive**: la etiqueta `<script>`/`<link>` de
+   `templates/index.html` Y la entrada correspondiente del array
+   `PRECACHE` de `static/js/sw.js`. Si solo se bumpea uno de los dos
+   sitios, quedan desincronizados (el HTML pide una URL que el SW no
+   tiene precacheada con ese número, o viceversa) — deben ir SIEMPRE
+   juntos.
+2. **PROHIBIDO** asumir que un fix en `index.bundle.js`/`.css` "ya está
+   arreglado" solo porque el código fuente en el repo es correcto: sin
+   el bump de versión, los dispositivos con caché (HTTP de 30 días +
+   Service Worker cache-first) NUNCA reciben el cambio. Todo bug
+   reportado en algo que vive en estos archivos debe hacer sospechar
+   PRIMERO si el dispositivo que falla tiene una versión vieja cacheada
+   (pedir al usuario recargar forzado / borrar caché del navegador como
+   diagnóstico, y bumpear la versión como fix).
+3. Todo asset NUEVO que se añada al array `PRECACHE` de `sw.js` hereda
+   esta regla: su URL debe llevar `?v=` y esa versión debe bumpearse en
+   ambos sitios cada vez que su contenido cambie.
+4. Los partials `misc_body_1.html`/`misc_body_2.html` (inline en el HTML
+   de navegación, `network-first`) NO necesitan este bump — solo los
+   archivos servidos como `<script src>`/`<link href>` bajo `/static/`.
+
 ## Extras manuales del reparto europeo — rellenar huecos cuando la hidratación automática no basta (obligatorio, 2026-07-03)
 
 **Contexto (fotos usuario 2026-07-03, «ahora van menos», Wild Card 8/72

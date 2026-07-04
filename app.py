@@ -3144,18 +3144,20 @@ def _lx_merge_teams(old_data, new_data):
             out_teams[idx] = t
             out_incoming[idx] = inc
 
-    # BACKFILL DE IDENTIDAD POR NOMBRE — ESCUDO + ESTADIO (2026-06-02 /
-    # 2026-06-11) ─────────────────────────────────────────────────────
+    # BACKFILL DE IDENTIDAD POR NOMBRE — ESCUDO + ESTADIO + ALIAS eFOOTBALL
+    # (2026-06-02 / 2026-06-11 / 2026-07-04) ────────────────────────────
     # Bug escudo (2026-06-02): "mi amigo puso todos los escudos de la Liga
     # Grecia desde su PC pero no sale ninguno". Bug estadio (2026-06-11):
     # "no se puede añadir estadios a los equipos" — un dispositivo con
     # `updatedAt` mayor pero sin estadio pisaba el que otro acababa de
-    # poner. La fusión por equipo elige al ganador por `updatedAt`; si ese
-    # ganador NO trae escudo/estadio (copia de otro dispositivo con
+    # poner. Bug alias eFootball (2026-07-04): "a mi amigo no le sale la
+    # ❓️ pero a mí sí" — mismo mecanismo exacto, el campo que faltaba por
+    # cubrir. La fusión por equipo elige al ganador por `updatedAt`; si ese
+    # ganador NO trae escudo/estadio/alias (copia de otro dispositivo con
     # plantilla más reciente pero sin ese campo), el dato se perdía aunque
-    # existiera en otra versión del MISMO equipo. Escudo Y estadio son
-    # datos de IDENTIDAD: una vez puestos en CUALQUIER dispositivo no
-    # deben desaparecer. Tras elegir ganadores rellenamos el campo de los
+    # existiera en otra versión del MISMO equipo. Los 3 son datos de
+    # IDENTIDAD: una vez puestos en CUALQUIER dispositivo no deben
+    # desaparecer. Tras elegir ganadores rellenamos el campo de los
     # equipos que se quedaron sin él tomándolo de la versión más reciente
     # (old o new) que SÍ lo tenía. Indexado por nombre CANÓNICO
     # (afijo-aware) para que la identidad viaje también entre grafías del
@@ -3166,7 +3168,7 @@ def _lx_merge_teams(old_data, new_data):
         s = t.get(fld)
         return s.strip() if isinstance(s, str) and s.strip() else ""
 
-    for _fld in ("shield", "stadium"):
+    for _fld in ("shield", "stadium", "efootballAlias"):
         best_by_name = {}   # nombre canónico -> (ts, valor)
         for t in (old_teams + new_teams):
             if not isinstance(t, dict):

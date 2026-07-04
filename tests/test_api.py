@@ -1497,6 +1497,25 @@ class TestLigaExtMerge:
         res = self._merge(old, new)
         assert res["teams"][0].get("shield") == "data:img"
 
+    def test_alias_efootball_no_se_pierde_si_ganador_no_lo_trae(self):
+        # Bug 2026-07-04: "a mi amigo no le sale la ❓️ pero a mí sí". Una
+        # copia con updatedAt MAYOR pero SIN alias no debe borrar el alias
+        # que otra copia (más vieja) sí puso — mismo mecanismo que
+        # escudo/estadio.
+        old = {"teams": [{"id": "z", "name": "Maccabi Tel Aviv",
+                           "efootballAlias": "Rosario Central", "updatedAt": 100}]}
+        new = {"teams": [{"id": "z", "name": "Maccabi Tel Aviv", "updatedAt": 200}]}
+        res = self._merge(old, new)
+        assert res["teams"][0].get("efootballAlias") == "Rosario Central", res["teams"][0]
+
+    def test_alias_efootball_viaja_entre_grafias_del_mismo_club(self):
+        old = {"teams": [{"id": "z", "name": "Maccabi Tel Aviv FC",
+                           "efootballAlias": "Rosario Central", "updatedAt": 100}]}
+        new = {"teams": [{"id": "w", "name": "Maccabi Tel Aviv", "updatedAt": 200}]}
+        res = self._merge(old, new)
+        assert len(res["teams"]) == 1
+        assert res["teams"][0].get("efootballAlias") == "Rosario Central", res["teams"][0]
+
     def test_logo_liga_no_se_borra_por_post_vacio(self):
         # Un dispositivo que nunca puso el logo POSTea config.logo='' →
         # el servidor debe CONSERVAR el logo almacenado (identidad).

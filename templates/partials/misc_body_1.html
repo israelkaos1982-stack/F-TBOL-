@@ -45917,6 +45917,44 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){ return false; }
   }
 
+  /* BACKFILL DEL ALIAS DE eFOOTBALL (2026-07-04). Espejo EXACTO de
+     _lextBackfillShields pero para `efootballAlias`: el alias que el
+     admin pone a mano para saber con qué equipo REAL de eFootball hay
+     que jugar (cuando el equipo de la liga no existe en el juego) es
+     un dato de IDENTIDAD igual que el escudo o el estadio — puesto en
+     CUALQUIER dispositivo, debe propagarse a todos. Antes de este fix
+     NINGÚN backfill lo cubría: si la fusión (cliente o servidor)
+     resolvía el equipo desde la copia de OTRO dispositivo que nunca
+     puso el alias, éste desaparecía para siempre en ese dispositivo —
+     el ❓ "Equipo eFootball" de la previa dejaba de salir (bug 2026-07-04,
+     "a mi amigo no le sale la ❓️ pero a mí sí"). NUNCA pisa un alias ya
+     presente en target (gana la edición del propio target). Devuelve
+     true si rellenó alguno. */
+  function _lextBackfillAlias(target, source){
+    try {
+      if (!target || !Array.isArray(target.teams) ||
+          !source || !Array.isArray(source.teams)) return false;
+      var byName = {};
+      source.teams.forEach(function(st){
+        if (!st || !st.name) return;
+        var al = (typeof st.efootballAlias === 'string') ? st.efootballAlias.trim() : '';
+        if (!al) return;
+        var nm = _lextNormName(st.name);
+        if (nm && !byName[nm]) byName[nm] = al;
+      });
+      var changed = false;
+      target.teams.forEach(function(tt){
+        if (!tt || !tt.name) return;
+        var has = (typeof tt.efootballAlias === 'string') && tt.efootballAlias.trim();
+        if (has) return;
+        var nm = _lextNormName(tt.name);
+        if (nm && byName[nm]) { tt.efootballAlias = byName[nm]; changed = true; }
+      });
+      if (changed) { try { window._invalidateAliasCache && window._invalidateAliasCache(); } catch(_){} }
+      return changed;
+    } catch(_){ return false; }
+  }
+
   /* BACKFILL DE LA PLANTILLA DE JUGADORES (2026-07-02). Espejo EXACTO de
      `_lextBackfillShields` pero para `players[]`: rellena el roster de
      cada equipo de `target` que venga SIN jugadores (`players` vacío o
@@ -46090,6 +46128,7 @@ https://api.sofascore.app/api/v1/team/44/image
         try { if (_lextBackfillResults(data, srcs[i])) restored = true; } catch(_){}
         try { if (needRoster && _lextBackfillRoster(data, srcs[i])) restored = true; } catch(_){}
         try { if (needRoster && _lextBackfillShields(data, srcs[i])) restored = true; } catch(_){}
+        try { if (needRoster && _lextBackfillAlias(data, srcs[i])) restored = true; } catch(_){}
       }
       if (restored) {
         try { console.warn('[ligaExt] '+k+': clasificación del main vacía — restaurada desde copia durable local ('+((data.results&&data.results.length)||0)+' resultados).'); } catch(_){}
@@ -46150,6 +46189,7 @@ https://api.sofascore.app/api/v1/team/44/image
               try { _lextBackfillShields(data, _locForCmp); } catch(_){}
               try { _lextBackfillRoster(data, _locForCmp); } catch(_){}
               try { _lextBackfillLeagueLogo(data, _locForCmp); } catch(_){}
+              try { _lextBackfillAlias(data, _locForCmp); } catch(_){}
               try { _lextBackfillResults(data, _locForCmp); } catch(_){}
               try { _sanitizeLigaTeamNames(data); } catch(_){}
               LIGA_CACHE[k] = data;
@@ -46351,6 +46391,7 @@ https://api.sofascore.app/api/v1/team/44/image
           try { _lextBackfillShields(localCache, data); } catch(_){}
           try { _lextBackfillRoster(localCache, data); } catch(_){}
           try { _lextBackfillLeagueLogo(localCache, data); } catch(_){}
+          try { _lextBackfillAlias(localCache, data); } catch(_){}
           try { _lextBackfillResults(localCache, data); } catch(_){}
           // Conservamos la versión local en memoria y disco.
           LIGA_CACHE[k] = localCache;
@@ -46383,6 +46424,7 @@ https://api.sofascore.app/api/v1/team/44/image
         try { _lextBackfillShields(data, localCache || LIGA_CACHE[k]); } catch(_){}
         try { _lextBackfillRoster(data, localCache || LIGA_CACHE[k]); } catch(_){}
         try { _lextBackfillLeagueLogo(data, localCache || LIGA_CACHE[k]); } catch(_){}
+        try { _lextBackfillAlias(data, localCache || LIGA_CACHE[k]); } catch(_){}
         /* Si el servidor trae resultados MÁS VIEJOS que los locales (un
            GET en vuelo que salió ANTES de terminar la sim de esta liga,
            o un POST stale de otro dispositivo), conservamos la
@@ -52289,6 +52331,7 @@ https://api.sofascore.app/api/v1/team/44/image
             ? curNow : idbData;
           if (merged !== idbData) {
             try { _lextBackfillShields(merged, idbData); } catch(_){}
+            try { _lextBackfillAlias(merged, idbData); } catch(_){}
             try { _lextBackfillResults(merged, idbData); } catch(_){}
           }
           if (!_needsTopup(merged)) {
@@ -52366,6 +52409,7 @@ https://api.sofascore.app/api/v1/team/44/image
           var _chRM = false;
           try { if (_lextBackfillRoster(curData, _recovRM)) _chRM = true; } catch(_){}
           try { if (_lextBackfillShields(curData, _recovRM)) _chRM = true; } catch(_){}
+          try { if (_lextBackfillAlias(curData, _recovRM)) _chRM = true; } catch(_){}
           try { if (_lextBackfillResults(curData, _recovRM)) _chRM = true; } catch(_){}
           if (_chRM) {
             try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
@@ -52393,6 +52437,7 @@ https://api.sofascore.app/api/v1/team/44/image
           var _chRM2 = false;
           try { if (_lextBackfillRoster(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
           try { if (_lextBackfillShields(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
+          try { if (_lextBackfillAlias(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
           try { if (_lextBackfillResults(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
           if (_chRM2) {
             try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
@@ -52675,6 +52720,7 @@ https://api.sofascore.app/api/v1/team/44/image
           var _ch = false;
           try { if (_lextBackfillRoster(curData, _recov)) _ch = true; } catch(_){}
           try { if (_lextBackfillShields(curData, _recov)) _ch = true; } catch(_){}
+          try { if (_lextBackfillAlias(curData, _recov)) _ch = true; } catch(_){}
           try { if (_lextBackfillResults(curData, _recov)) _ch = true; } catch(_){}
           if (_ch) {
             try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
@@ -52702,6 +52748,7 @@ https://api.sofascore.app/api/v1/team/44/image
           var _ch2 = false;
           try { if (_lextBackfillRoster(curData, _recovSrv)) _ch2 = true; } catch(_){}
           try { if (_lextBackfillShields(curData, _recovSrv)) _ch2 = true; } catch(_){}
+          try { if (_lextBackfillAlias(curData, _recovSrv)) _ch2 = true; } catch(_){}
           try { if (_lextBackfillResults(curData, _recovSrv)) _ch2 = true; } catch(_){}
           if (_ch2) {
             try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}

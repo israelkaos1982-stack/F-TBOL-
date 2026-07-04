@@ -87,6 +87,76 @@ caché que tenga, a descargar el bundle actual en su próxima carga.
    de navegación, `network-first`) NO necesitan este bump — solo los
    archivos servidos como `<script src>`/`<link href>` bajo `/static/`.
 
+### Refuerzo — el propio picker se blinda además del bump de versión (obligatorio, 2026-07-04)
+
+**El bump de versión (9.10→9.11) no bastó**: el amigo repitió la prueba
+(mismo partido Maccabi vs Liverpool) y la portería imbatida seguía sin
+responder a ningún portero. En vez de seguir asumiendo caché, se
+blindó el propio código de `showImbatForce`/`confirmImbatForce`/
+`_ensureImbatEvents` (`static/js/index.bundle.js`) contra TODOS los
+fallos silenciosos posibles, en vez de depender de una única teoría:
+
+1. **Cierre determinístico del spinner "Procesando partido…"**
+   (`#ml-loading-ov`, z-index 100020): `showImbatForce` llama
+   `window._mlHideLoading()` de inmediato al abrirse, en vez de confiar
+   en el `MutationObserver` que lo auto-cierra — ese observer NUNCA
+   detecta este overlay concreto porque se crea con la clase `show` YA
+   puesta antes de insertarse en el DOM (no genera una mutación de
+   atributo observable; solo lo salvaban 3 temporizadores de hasta
+   4.5 s, confirmado con un test de `MutationObserver` aislado).
+2. **z-index inline 100050** en el propio overlay del picker — por
+   encima de CUALQUIER spinner/overlay de proceso — como red de
+   seguridad adicional aunque el cierre determinístico fallara por
+   cualquier motivo no previsto.
+3. **`confirmImbatForce` envuelto en try/catch con `alert()` visible
+   en caso de error**: antes, si algo dentro de la función reventaba
+   (p.ej. un dato inesperado en la plantilla), el fallo era
+   COMPLETAMENTE SILENCIOSO — exactamente el síntoma "no funciona el
+   elegir ninguno de los porteros". Ahora cualquier excepción se
+   muestra al usuario en vez de dejar el overlay atascado sin
+   explicación.
+4. **Resolución de plantilla por el registro CANÓNICO del mister**
+   (`_humanClubSlotName`, si existe) antes de caer al nombre crudo en
+   `_getTopGk`/`showImbatForce` — estos dos eran los ÚNICOS pickers de
+   plantilla humana que aún resolvían por nombre crudo (regla
+   2026-06-28 "El picker de eventos de una caja humana muestra SIEMPRE
+   la plantilla de SU mister" solo cubría `_gmGetSquad`/`genTpSelect`).
+5. **Detección de humano con capas** (`_isHumanClubCanonico`/
+   `_esSelHumana` como fallback de `esHumano`) en `_ensureImbatEvents`:
+   `esHumano()` solo reconoce los 5 humanos legacy de Liga EA Sports;
+   sin el fallback, un club/selección humano nuevo (PSG, Inter, o
+   cualquier selección canónica) caía al auto-pick silencioso de IA en
+   vez de mostrar el picker al humano.
+
+Verificado con un harness Playwright aislado que reproduce exactamente
+la cadena `_ensureImbatEvents → showImbatForce → confirmImbatForce`
+con el roster real de la foto (Alisson, Mamardashvili, Woodman, Pecsi,
+Davies): tras el fix, el cierre del spinner es determinístico (no
+depende del observer), el z-index del picker queda por encima de
+cualquier overlay de proceso, y el click resuelve la cadena
+correctamente.
+
+**Reglas a respetar (además de las 4 de arriba)**:
+5. **PROHIBIDO** que un overlay obligatorio nuevo (picker de un solo
+   uso creado con `document.createElement` + `className` puesto ANTES
+   de insertarse en el DOM) dependa SOLO del `MutationObserver` de
+   `misc_body_2.html` (`obs2`, TARGETS/TARGET_CLASSES) para cerrar el
+   spinner "Procesando partido…". Ese observer solo detecta cambios de
+   atributo en nodos YA insertados (`classList.add` posterior, como
+   hace `showMvpForce` reutilizando un div ya en el DOM) — un nodo
+   nuevo con la clase ya puesta es invisible para él. Todo picker
+   nuevo de este tipo debe llamar `window._mlHideLoading()`
+   explícitamente al abrirse.
+6. **PROHIBIDO** que un handler de confirmación de un overlay
+   obligatorio (imbatida, MVP, sanciones…) falle en silencio. Envolver
+   siempre en try/catch con un aviso VISIBLE (`alert`/toast) — un fallo
+   silencioso en un flujo obligatorio dejaba al usuario sin ninguna
+   pista de qué había pasado.
+7. **PROHIBIDO** que `_getTopGk`/`showImbatForce` (o cualquier picker
+   de plantilla humana nuevo) resuelvan el roster por nombre crudo sin
+   pasar antes por `_humanClubSlotName`. Toda caja de humano nueva lo
+   hereda automáticamente en cuanto esté en el registro `MISTERS_HUMANOS`.
+
 ## Extras manuales del reparto europeo — rellenar huecos cuando la hidratación automática no basta (obligatorio, 2026-07-03)
 
 **Contexto (fotos usuario 2026-07-03, «ahora van menos», Wild Card 8/72

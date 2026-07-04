@@ -56,25 +56,55 @@ window.confirmMvpForce = function(btn) {
 // mayor poder vía window.sqFromRegistryFull.
 window._imbatForceCallback = null;
 
+/* Resuelve el nombre del roster a consultar por el registro CANÓNICO del
+   mister (alias-safe, ej. Bayern↔Liverpool) antes de caer al nombre
+   crudo — mismo contrato que el resto de pickers de plantilla humana
+   (`_gmGetSquad`/`genTpSelect`, regla CLAUDE.md 2026-06-28 "El picker de
+   eventos de una caja humana muestra SIEMPRE la plantilla de SU
+   mister"). `showImbatForce`/`_getTopGk` eran los ÚNICOS pickers que
+   seguían resolviendo por nombre crudo. */
+function _imbatRosterName(teamName) {
+  try {
+    if (typeof window._humanClubSlotName === 'function') {
+      var slot = window._humanClubSlotName(teamName);
+      if (slot) return slot;
+    }
+  } catch(_){}
+  return teamName;
+}
+
 window._getTopGk = function(teamName) {
-  if (typeof window.sqFromRegistryFull === 'function') {
-    var full = window.sqFromRegistryFull(teamName) || [];
-    var gks = full.filter(function(p){ return p[2] === 'P'; })
-                  .sort(function(a,b){ return (b[3]||0) - (a[3]||0); });
-    if (gks.length) return { num: String(gks[0][0]||''), name: String(gks[0][1]||'') };
-  }
+  try {
+    if (typeof window.sqFromRegistryFull === 'function') {
+      var full = window.sqFromRegistryFull(_imbatRosterName(teamName)) || [];
+      var gks = full.filter(function(p){ return p && p[2] === 'P'; })
+                    .sort(function(a,b){ return (Number(b && b[3])||0) - (Number(a && a[3])||0); });
+      if (gks.length) return { num: String(gks[0][0]||''), name: String(gks[0][1]||'') };
+    }
+  } catch(err) { try { console.warn('_getTopGk fallo:', err); } catch(_){} }
   return { num: '', name: '' };
 };
 
 window.showImbatForce = function(teamName, onConfirm) {
+  /* Cierra INMEDIATA Y DETERMINÍSTICAMENTE el spinner "Procesando
+     partido…" (#ml-loading-ov, z-index 100020) en vez de depender del
+     MutationObserver que lo auto-cierra — ese observer NUNCA detecta
+     este overlay porque se crea con la clase `show` ya puesta ANTES de
+     insertarse en el DOM (no genera mutación de atributo). Sin esto el
+     spinner (opaco, por encima del picker) podía tapar los botones
+     durante los ~1.1-4.5 s que tardan sus temporizadores de seguridad
+     en cerrarlo, dejando los primeros toques "sin efecto aparente". */
+  try { window._mlHideLoading && window._mlHideLoading(); } catch(_){}
   var prev = document.getElementById('imbat-force-ov');
   if (prev) prev.remove();
   var gks = [];
-  if (typeof window.sqFromRegistryFull === 'function') {
-    var full = window.sqFromRegistryFull(teamName) || [];
-    gks = full.filter(function(p){ return p[2] === 'P'; })
-              .sort(function(a,b){ return (b[3]||0) - (a[3]||0); });
-  }
+  try {
+    if (typeof window.sqFromRegistryFull === 'function') {
+      var full = window.sqFromRegistryFull(_imbatRosterName(teamName)) || [];
+      gks = full.filter(function(p){ return p && p[2] === 'P'; })
+                .sort(function(a,b){ return (Number(b && b[3])||0) - (Number(a && a[3])||0); });
+    }
+  } catch(err) { try { console.warn('showImbatForce fallo al leer plantilla:', err); } catch(_){} gks = []; }
   if (!gks.length) {
     // Sin porteros en registry — fallback silencioso con GK por defecto
     if (onConfirm) onConfirm('1', 'Portero');
@@ -83,9 +113,15 @@ window.showImbatForce = function(teamName, onConfirm) {
   var ov = document.createElement('div');
   ov.id = 'imbat-force-ov';
   ov.className = 'mvp-force-overlay show';
+  /* z-index inline por encima de CUALQUIER overlay de proceso (el
+     spinner "Procesando partido…" usa 100020): red de seguridad
+     adicional al cierre determinístico de arriba — aunque el spinner
+     quedara vivo por cualquier motivo, el picker sigue siendo
+     clicable por estar SIEMPRE por encima. */
+  ov.style.zIndex = '100050';
   var btns = gks.map(function(g){
-    var num = String(g[0]||'');
-    var name = String(g[1]||'');
+    var num = String((g && g[0]) || '');
+    var name = String((g && g[1]) || '');
     return '<button class="mvp-pl-btn" data-num="'+num+'" data-name="'+name.replace(/"/g,'&quot;')
          + '" onclick="window.confirmImbatForce(this)">'
          + '<span class="mvp-pl-num">'+num+'</span>'
@@ -109,14 +145,23 @@ window.showImbatForce = function(teamName, onConfirm) {
 };
 
 window.confirmImbatForce = function(btn) {
-  var num = btn.getAttribute('data-num');
-  var name = btn.getAttribute('data-name');
-  var ov = document.getElementById('imbat-force-ov');
-  if (ov) ov.remove();
-  if (window._imbatForceCallback) {
-    var cb = window._imbatForceCallback;
-    window._imbatForceCallback = null;
-    cb(num, name);
+  try {
+    var num = btn.getAttribute('data-num');
+    var name = btn.getAttribute('data-name');
+    var ov = document.getElementById('imbat-force-ov');
+    if (ov) ov.remove();
+    if (window._imbatForceCallback) {
+      var cb = window._imbatForceCallback;
+      window._imbatForceCallback = null;
+      cb(num, name);
+    }
+  } catch(err) {
+    /* Nunca dejar al usuario atrapado en silencio: si algo revienta al
+       confirmar, avisamos visiblemente (antes esto fallaba callado y
+       el partido quedaba bloqueado sin explicación — "no funciona el
+       elegir ninguno de los porteros"). */
+    try { console.error('confirmImbatForce fallo:', err); } catch(_){}
+    try { alert('⚠️ No se pudo registrar la portería imbatida (' + (err && err.message || err) + '). Vuelve a intentarlo o pulsa Cancelar.'); } catch(_){}
   }
 };
 
@@ -141,7 +186,17 @@ window._ensureImbatEvents = function(opts, onDone){
   var evts = opts.events || [];
   var hasA = evts.some(function(e){ return e && e.type==='imbat' && e.team==='a'; });
   var hasB = evts.some(function(e){ return e && e.type==='imbat' && e.team==='b'; });
-  var esH = (typeof window.esHumano === 'function') ? window.esHumano : function(){ return false; };
+  /* Capa 0 + fallback (regla CLAUDE.md "Humanidad por competición" /
+     MISTERS_REGISTRY): esHumano() solo reconoce los 5 humanos legacy de
+     Liga EA Sports. Si un club/selección humano NUEVO llega aquí (PSG,
+     Inter, o cualquier selección canónica) y esHumano() no lo ve, caía
+     al auto-pick silencioso de IA en vez de mostrar el picker. */
+  var esH = function(name){
+    try { if (typeof window.esHumano === 'function' && window.esHumano(name)) return true; } catch(_){}
+    try { if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)) return true; } catch(_){}
+    try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true; } catch(_){}
+    return false;
+  };
 
   function _step(side){
     var teamName = side==='a' ? opts.home : opts.away;

@@ -41238,7 +41238,6 @@ window._showSimProgress = function(opts, onDone){
     }
     return blob;
   }
-  var _eurManualSelZone = 'wildcard';
   var _eurManualHydrating = false;
   var _eurManualLastHydrateAt = 0;
   /* Dispara `_eurHydrateMissingLeagues` (trae del servidor las ligas que
@@ -41306,42 +41305,34 @@ window._showSimProgress = function(opts, onDone){
     return slugs.map(function(s){ return {slug:s, label:_eurSlugLabel(s)}; })
       .sort(function(a,b){ return a.label.localeCompare(b.label,'es'); });
   }
-  /* Busca equipos por nombre en TODAS las `ligaExt_*` YA cacheadas en
-     este dispositivo (best-effort — si una liga no está hidratada aquí
-     no aparecerá; para eso está el picker por liga, que trae del
-     servidor bajo demanda). */
-  function _eurSearchAllTeams(query, limit){
-    var q = String(query||'').trim().toLowerCase();
-    if(q.length < 2) return [];
-    var out = [];
-    try {
-      for(var i=0; i<localStorage.length && out.length < (limit||8)*4; i++){
-        var k = localStorage.key(i);
-        if(!k || k.indexOf('ligaExt_') !== 0) continue;
-        if(/_backup|_snap_|_snapshot|_protected|_v\d+$/.test(k)) continue;
-        var slug = k.substring('ligaExt_'.length);
-        var raw = localStorage.getItem(k);
-        if(!raw) continue;
-        var d; try { d = JSON.parse(raw); } catch(_){ continue; }
-        if(!d || !Array.isArray(d.teams)) continue;
-        d.teams.forEach(function(t){
-          var nm = String((t && t.name) || '').trim();
-          if(!nm || nm.toLowerCase().indexOf(q) < 0) return;
-          out.push({ name:nm, league:slug, logo:(t && (t.shield||t.logo||t.escudo)) || '' });
-        });
-      }
-    } catch(_){}
-    var seen = {};
-    return out.filter(function(t){
-      if(seen[t.name]) return false;
-      seen[t.name] = true;
-      return true;
-    }).slice(0, limit||8);
-  }
   var _eurPickerSlug = '';
   var _eurPickerData = null;
   var _eurPickerLoading = false;
   var _eurPickerError = '';
+  /* Fetch con TIMEOUT + reintentos — sin esto, un fetch colgado (Railway
+     frío / red móvil intermitente) deja el picker congelado para siempre
+     en "⏳ Cargando clasificación…" (bug 2026-07-04: un solo intento sin
+     timeout nunca liberaba `_eurPickerLoading`, así que ni el error ni
+     los datos llegaban a pintarse). Mismo patrón "secuencial + pausado +
+     reintentos" que `_eurHydrateMissingLeagues`. */
+  function _eurFetchWithRetry(url, tries, timeoutMs){
+    tries = tries || 3; timeoutMs = timeoutMs || 12000;
+    return new Promise(function(resolve){
+      function attempt(n){
+        var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var to = ctrl ? setTimeout(function(){ ctrl.abort(); }, timeoutMs) : null;
+        fetch(url, { credentials:'same-origin', signal: ctrl ? ctrl.signal : undefined })
+          .then(function(r){ if(to) clearTimeout(to); return r.ok ? r.json() : null; })
+          .then(function(j){ resolve(j); })
+          .catch(function(){
+            if(to) clearTimeout(to);
+            if(n < tries) setTimeout(function(){ attempt(n+1); }, 1200 * n);
+            else resolve(null);
+          });
+      }
+      attempt(1);
+    });
+  }
   function _eurPickerLoadLeague(slug){
     _eurPickerSlug = slug;
     _eurPickerData = null;
@@ -41352,8 +41343,16 @@ window._showSimProgress = function(opts, onDone){
     function _finish(d){
       _eurPickerLoading = false;
       _eurPickerData = d;
-      if(!d) _eurPickerError = 'No se ha podido cargar esta liga (ni local ni servidor).';
-      _eurManualOverlayRender();
+      if(!d) _eurPickerError = 'No se ha podido cargar esta liga (ni local ni servidor tras varios intentos). Pulsa la liga otra vez para reintentar.';
+      try { _eurManualOverlayRender(); }
+      catch(_e){
+        /* Si el render de la fila lanza (dato corrupto de esta liga
+           concreta), no dejar el overlay congelado en "Cargando…": se
+           muestra el error en vez de la clasificación. */
+        _eurPickerData = null;
+        _eurPickerError = 'No se pudo mostrar la clasificación de esta liga (dato corrupto).';
+        try { _eurManualOverlayRender(); } catch(_e2){}
+      }
     }
     var local = null;
     try {
@@ -41361,14 +41360,17 @@ window._showSimProgress = function(opts, onDone){
       local = raw ? JSON.parse(raw) : null;
     } catch(_){}
     if(local && Array.isArray(local.teams) && local.teams.length >= 2){ _finish(local); return; }
-    fetch('/api/liga-ext/' + encodeURIComponent(slug), { credentials:'same-origin' })
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(j){
-        var data = j && j.data;
-        if(data && Array.isArray(data.teams) && data.teams.length >= 2){ _finish(data); }
+    _eurFetchWithRetry('/api/liga-ext/' + encodeURIComponent(slug), 3, 12000).then(function(j){
+      var data = j && j.data;
+      if(data && Array.isArray(data.teams) && data.teams.length >= 2){ _finish(data); return; }
+      /* Fallback: snapshot `_protected` (última clasificación durable
+         conocida por el servidor), igual que `_lextSeedRecoverFromServer`. */
+      _eurFetchWithRetry('/api/liga-ext-protected/' + encodeURIComponent(slug), 2, 12000).then(function(j2){
+        var data2 = j2 && j2.data;
+        if(data2 && Array.isArray(data2.teams) && data2.teams.length >= 2){ _finish(data2); }
         else { _finish(null); }
-      })
-      .catch(function(){ _finish(null); });
+      });
+    });
   }
   /* Devuelve las filas {pos, name, pj, zone} de la liga cargada en el
      picker, con la ZONA SUGERIDA por posición (mismo orden/"skip" que
@@ -41484,12 +41486,6 @@ window._showSimProgress = function(opts, onDone){
         + '">'+(isManual ? '🔒 Manual' : '🔓 Auto')+'</button>'
         + '</div>';
     }).join('');
-    var zoneChips = _EUR_REPORT_ZONES.map(function(z){
-      var sel = (z.key === _eurManualSelZone);
-      return '<button data-eur-zone="'+z.key+'" style="padding:6px 10px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;cursor:pointer;'
-        + (sel ? ('background:'+z.color+';border:1px solid '+z.color+';color:#000;font-weight:700;') : 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:#fff;')
-        + '">'+z.emoji+' '+_eurEsc(z.label)+'</button>';
-    }).join('');
     var manualListHtml = _EUR_REPORT_ZONES.map(function(z){
       var items = manual[z.key] || [];
       if(!items.length) return '';
@@ -41521,18 +41517,6 @@ window._showSimProgress = function(opts, onDone){
       +     '<button id="eur-manual-refresh" '+(_eurManualHydrating?'disabled':'')+' style="background:linear-gradient(135deg,#0e2e4a,#1a5a7a);border:1px solid #3ca0cc;color:#bfe8ff;border-radius:6px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;'+(_eurManualHydrating?'opacity:.5;':'')+'">🔄 Cargar del servidor</button>'
       +   '</div>'
       +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' + countsHtml + '</div>'
-      +   '<div style="border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.03);">'
-      +     '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">➕ AÑADIR EQUIPO MANUAL (uno a uno)</div>'
-      +     '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">' + zoneChips + '</div>'
-      +     '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
-      +       '<div style="position:relative;flex:1 1 160px;">'
-      +         '<input id="eur-manual-name" placeholder="Nombre del equipo (busca 2+ letras)" autocomplete="off" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">'
-      +         '<div id="eur-manual-name-drop" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#12161c;border:1px solid rgba(255,255,255,.25);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.6);max-height:220px;overflow-y:auto;z-index:200002;"></div>'
-      +       '</div>'
-      +       '<input id="eur-manual-league" placeholder="País / liga (opcional)" style="flex:1 1 140px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;outline:none;">'
-      +       '<button id="eur-manual-add" style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:6px;padding:8px 16px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;font-weight:700;">AÑADIR</button>'
-      +     '</div>'
-      +   '</div>'
       +   _eurPickerSectionHtml()
       +   (manualListHtml ? ('<div style="margin-bottom:14px;">' + manualListHtml + '</div>') : '')
       +   (missing.length ? (
@@ -41559,56 +41543,12 @@ window._showSimProgress = function(opts, onDone){
         _eurManualOverlayRender();
       };
     });
-    ov.querySelectorAll('[data-eur-zone]').forEach(function(btn){
-      btn.onclick = function(){ _eurManualSelZone = btn.getAttribute('data-eur-zone'); _eurManualOverlayRender(); };
-    });
     ov.querySelectorAll('[data-eur-rm-zone]').forEach(function(btn){
       btn.onclick = function(){
         window._eurManualExtraRemove(btn.getAttribute('data-eur-rm-zone'), btn.getAttribute('data-eur-rm-name'));
         _eurManualOverlayRender();
       };
     });
-    var addBtn = document.getElementById('eur-manual-add');
-    if(addBtn) addBtn.onclick = function(){
-      var nameEl = document.getElementById('eur-manual-name');
-      var leagueEl = document.getElementById('eur-manual-league');
-      var name = nameEl ? nameEl.value : '';
-      var league = leagueEl ? leagueEl.value : '';
-      if(!name || !name.trim()){ nameEl && nameEl.focus(); return; }
-      var added = window._eurManualExtraAdd(_eurManualSelZone, name, league);
-      if(!added){ alert('Ya hay un equipo con ese nombre en esta zona (o el nombre está vacío).'); return; }
-      _eurManualOverlayRender();
-    };
-    /* Buscador del nombre de equipo — typeahead sobre TODAS las ligas ya
-       cacheadas en este dispositivo (2026-07-03, petición usuario "que
-       salga un buscador para que sea más rápido"). */
-    var nameInput = document.getElementById('eur-manual-name');
-    var nameDrop = document.getElementById('eur-manual-name-drop');
-    if(nameInput && nameDrop){
-      nameInput.oninput = function(){
-        var matches = _eurSearchAllTeams(nameInput.value, 8);
-        if(!matches.length){ nameDrop.style.display = 'none'; nameDrop.innerHTML = ''; return; }
-        nameDrop.innerHTML = matches.map(function(m){
-          return '<div data-eur-name-sug="1" data-name="'+_eurEsc(m.name)+'" data-league="'+_eurEsc(_eurSlugLabel(m.league))+'" '
-            + 'style="padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;display:flex;justify-content:space-between;gap:8px;">'
-            + '<span>'+_eurEsc(m.name)+'</span><span style="color:rgba(255,255,255,.4);font-size:11px;white-space:nowrap;">'+_eurEsc(m.league)+'</span>'
-            + '</div>';
-        }).join('');
-        nameDrop.style.display = 'block';
-      };
-      nameDrop.onclick = function(ev){
-        var it = ev.target && ev.target.closest && ev.target.closest('[data-eur-name-sug]');
-        if(!it) return;
-        nameInput.value = it.getAttribute('data-name');
-        var leagueEl = document.getElementById('eur-manual-league');
-        if(leagueEl && !leagueEl.value) leagueEl.value = it.getAttribute('data-league');
-        nameDrop.style.display = 'none';
-        nameDrop.innerHTML = '';
-      };
-      document.addEventListener('click', function(ev){
-        if(ev.target !== nameInput && !nameDrop.contains(ev.target)) nameDrop.style.display = 'none';
-      });
-    }
     /* Picker "Añadir por liga" — botón custom + lista con ✅ (no
        `<select>` nativo, ver `_eurPickerButtonHtml`). */
     var pickBtn = document.getElementById('eur-pick-league-btn');

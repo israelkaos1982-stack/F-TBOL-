@@ -2380,10 +2380,53 @@ alias al roster del torneo.
    (alias, y si se añade un campo similar en el futuro) que dependa de
    un escaneo LOCAL de `ligaExt_*` debe tener un fallback de búsqueda en
    servidor bajo demanda, no limitarse a devolver vacío.
-5. **PROHIBIDO** que la búsqueda en servidor dispare las ~54 ligas en
-   paralelo. Siempre secuencial con parada temprana, y siempre
-   disparada por una acción EXPLÍCITA del usuario (pulsar el ❓), nunca
-   automática en el arranque o en cada render de la previa.
+5. **PROHIBIDO** que la búsqueda en servidor dispare las ~54 ligas TODAS
+   de golpe (thundering herd real) NI una a una completamente en serie
+   (demasiado lenta — ver refuerzo de abajo). Lotes acotados en
+   paralelo (`BATCH=8`) con parada temprana en cuanto se encuentra el
+   equipo, y siempre disparada por una acción EXPLÍCITA del usuario
+   (pulsar el ❓), nunca automática en el arranque o en cada render de
+   la previa.
+
+### Refuerzo — búsqueda por lotes (no 1-a-1) + selector de portero a prueba de balas con `touchstart` (obligatorio, 2026-07-05)
+
+**El fix anterior no bastó (2 quejas del mismo usuario)**:
+1. «se tira mucho tiempo buscando el equipo, tendría que salir al
+   momento, siempre ha sido así» — la búsqueda de `_efAliasServerSearch`
+   recorría las ~54 ligas **una a una en serie**: cada peticion suma su
+   latencia COMPLETA a la siguiente, así que en el peor caso (equipo en
+   una liga tardía del recorrido, con Railway lento) podían pasar varios
+   segundos. Fix: lotes de **8 peticiones en paralelo** por ronda en vez
+   de 1 en serie — mismo espíritu anti-thundering-herd (no las 54 de
+   golpe) pero con concurrencia acotada, típicamente 1-2 rondas en vez
+   de hasta 54 peticiones en fila. El caso común (liga ya cacheada
+   localmente) sigue sin disparar NINGUNA petición.
+2. «la foto 2 no funciona para nada» (selector de portero, otra vez) —
+   el respaldo `touchend` con comprobación de movimiento (refuerzo
+   anterior) esperaba a que el gesto TERMINARA para decidir si era un
+   tap o un scroll. Se endurece aún más: dispara en el propio
+   `touchstart` (el instante exacto en que el dedo toca), sin esperar a
+   ver qué pasa después. Esta lista es corta y no crítica para
+   scrollear, así que el coste de un falso positivo (elegir portero por
+   un roce accidental) es mucho menor que el de dejar al usuario
+   COMPLETAMENTE bloqueado. Verificado con Playwright: un touchstart
+   seguido de un touchmove GRANDE (200px, inequívocamente un scroll) YA
+   NO cancela la selección porque esta se resuelve antes de que el
+   touchmove llegue a evaluarse.
+
+**Reglas a respetar**:
+6. **PROHIBIDO** que una búsqueda de respaldo en servidor (alias,
+   escudo, o cualquier campo de identidad futuro) sea estrictamente
+   secuencial 1-a-1 cuando el usuario está esperando activamente el
+   resultado en pantalla (no es un proceso de fondo). Usar lotes en
+   paralelo acotados (`BATCH`, no todas de golpe) para que la latencia
+   percibida sea de 1-2 rondas, no de hasta N peticiones en fila.
+7. **PROHIBIDO** que el respaldo táctil de un overlay OBLIGATORIO
+   crítico (picker de porteros, MVP, o cualquier futuro) espere al
+   `touchend`/gesto completo para decidir si actuar. Dispara en
+   `touchstart` — el coste de un falso positivo ocasional es siempre
+   menor que el de un usuario completamente bloqueado sin forma de
+   avanzar ni cancelar.
 
 ## Resto de Ligas — las stats de COPA + LIGA se SUMAN por jugador y sobreviven al re-sim de liga (obligatorio, 2026-06-12)
 

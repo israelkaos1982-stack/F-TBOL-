@@ -142,40 +142,39 @@ window.showImbatForce = function(teamName, onConfirm) {
     + '<button class="ml-pl-ov-close" style="margin-top:20px;" onclick="window.cancelImbatForce()">✕ Cancelar (no finalizar)</button>';
   document.body.appendChild(ov);
   window._imbatForceCallback = onConfirm;
-  /* Respaldo táctil (2026-07-04): en móvil real, un tap dentro de un
-     contenedor `overflow-y:auto` (`.mvp-pl-list` dentro de
-     `.mvp-force-overlay`, ambos scrollables) puede ser reinterpretado
-     por el navegador como un intento de scroll si detecta el mínimo
-     movimiento del dedo entre touchstart/touchend — en ese caso el
-     evento `click` sintético NUNCA se dispara (aunque el botón SÍ
-     muestra su estado `:active`, que es justo el síntoma reportado:
-     "el portero se queda resaltado pero no pasa nada" / "la pantalla se
-     bloquea y no deja avanzar ni ir hacia atrás" — el mismo problema
-     afecta IGUAL al botón Cancelar, dejando al usuario sin salida
-     ninguna). Un test automatizado con `.click()` directo NUNCA
+  /* Respaldo táctil (2026-07-04, endurecido 2026-07-05): en móvil real,
+     un tap dentro de un contenedor `overflow-y:auto` (`.mvp-pl-list`
+     dentro de `.mvp-force-overlay`, ambos scrollables) puede ser
+     reinterpretado por el navegador como un intento de scroll si
+     detecta el mínimo movimiento del dedo entre touchstart/touchend —
+     en ese caso el evento `click` sintético NUNCA se dispara (aunque el
+     botón SÍ muestra su estado `:active`, que es justo el síntoma
+     reportado: "el portero se queda resaltado pero no pasa nada" / "la
+     pantalla se bloquea y no deja avanzar ni ir hacia atrás" — el mismo
+     problema afecta IGUAL al botón Cancelar, dejando al usuario sin
+     salida ninguna). Un test automatizado con `.click()` directo NUNCA
      reproduce esto porque no simula la ambigüedad táctil real de un
-     dedo de verdad. Añadimos un manejador de touchend, para CADA botón
-     del overlay (porteros + Cancelar), que actúa si el dedo no se
-     movió más de 12px — si el `click` normal SÍ llega después,
-     `confirmImbatForce`/`cancelImbatForce` son idempotentes (el overlay
-     ya fue removido, `_imbatForceCallback` ya es null) así que no hay
-     doble confirmación. */
+     dedo de verdad.
+
+     La 1ª versión de este respaldo esperaba a `touchend` con
+     comprobación de movimiento (para no confundir un scroll con un
+     tap) — pero el usuario reportó que el bloqueo seguía. Para eliminar
+     TODA ambigüedad se dispara en `touchstart` (el instante exacto en
+     que el dedo toca, sin esperar a ver qué pasa después): esta lista
+     es corta (contenido fijo, no crítico scrollear sobre ella) así que
+     el riesgo de un falso positivo por scroll accidental es mínimo
+     comparado con el coste real de dejar al usuario completamente
+     bloqueado. Guardia `_fired` para no disparar dos veces si el click
+     normal SÍ llega después (además, `confirmImbatForce`/
+     `cancelImbatForce` ya son idempotentes por su cuenta). */
   function _imbatWireTapFallback(el, action){
-    var sx = 0, sy = 0, moved = false;
+    var fired = false;
     el.addEventListener('touchstart', function(e){
-      var t = e.touches && e.touches[0];
-      sx = t ? t.clientX : 0; sy = t ? t.clientY : 0; moved = false;
-    }, { passive:true });
-    el.addEventListener('touchmove', function(e){
-      var t = e.touches && e.touches[0];
-      if (!t) return;
-      if (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) moved = true;
-    }, { passive:true });
-    el.addEventListener('touchend', function(e){
-      if (moved) return;
+      if (fired) return;
+      fired = true;
       try { e.preventDefault(); } catch(_){}
       action(el);
-    });
+    }, { passive:false });
   }
   try {
     ov.querySelectorAll('.mvp-pl-btn').forEach(function(b){

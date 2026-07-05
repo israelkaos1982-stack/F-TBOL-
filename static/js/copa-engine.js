@@ -3964,23 +3964,54 @@
        liga (secuencial, para el equipo con ese nombre exacto). */
     document.getElementById('_copaAliasText').textContent = '🔄 Buscando en el servidor…';
     ov.style.display = 'flex';
-    if (typeof window._efAliasServerSearch === 'function') {
-      window._efAliasServerSearch(team, function(found){
-        var txtEl = document.getElementById('_copaAliasText');
-        if (!txtEl) return;
-        if (found) {
-          btn.setAttribute('data-copa-alias-full', found);
-          txtEl.textContent = found;
-        } else {
-          txtEl.textContent = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
-            + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
-            + '"Alias eFootball" con el equipo real que uses en el juego.';
-        }
-      });
-    } else {
-      document.getElementById('_copaAliasText').textContent = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
-        + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
-        + '"Alias eFootball" con el equipo real que uses en el juego.';
+    var _notConfiguredMsg = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
+      + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
+      + '"Alias eFootball" con el equipo real que uses en el juego.';
+    /* Watchdog INDEPENDIENTE del timeout interno de _efAliasServerSearch
+       (2026-07-05, "la pantalla se tira minutos así y no busca ningún
+       equipo"): el timeout de 6 s de _efAliasServerSearch solo protege
+       la promesa del fetch — si CUALQUIER otra cosa falla antes de
+       llegar a ese punto (fetch no definido en un WebView viejo,
+       _aliasNormName lanzando, o cualquier excepción síncrona no
+       prevista), `onDone` nunca se invoca y el overlay se queda en
+       "Buscando…" para siempre sin que el usuario tenga más salida que
+       CERRAR a ciegas. Este watchdog garantiza que, pase lo que pase,
+       el texto SIEMPRE se resuelve como máximo a los 7 s. Guardia
+       `settled` para que solo el primero en llegar (respuesta real o
+       watchdog) escriba el resultado. */
+    var settled = false;
+    var watchdog = setTimeout(function(){
+      if (settled) return;
+      settled = true;
+      var txtEl = document.getElementById('_copaAliasText');
+      if (txtEl) txtEl.textContent = _notConfiguredMsg;
+    }, 7000);
+    function _onFound(found){
+      if (settled) return;
+      settled = true;
+      try { clearTimeout(watchdog); } catch(_){}
+      var txtEl = document.getElementById('_copaAliasText');
+      if (!txtEl) return;
+      if (found) {
+        btn.setAttribute('data-copa-alias-full', found);
+        txtEl.textContent = found;
+      } else {
+        txtEl.textContent = _notConfiguredMsg;
+      }
+    }
+    try {
+      if (typeof window._efAliasServerSearch === 'function') {
+        window._efAliasServerSearch(team, _onFound);
+      } else {
+        _onFound(null);
+      }
+    } catch(err) {
+      /* _efAliasServerSearch nunca debería lanzar de forma síncrona,
+         pero si lo hace (p.ej. `fetch` no existe en un WebView viejo)
+         no puede dejar el overlay colgado — resolvemos como "no
+         encontrado" igual que si el servidor no lo tuviera. */
+      try { console.error('_copaShowAlias: busqueda en servidor fallo:', err); } catch(_){}
+      _onFound(null);
     }
   };
 

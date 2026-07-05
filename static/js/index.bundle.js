@@ -258,24 +258,58 @@ window._ensureImbatEvents = function(opts, onDone){
              escape: el usuario veía el modal de "Portería imbatida" y
              no podía cerrar; el partido parecía bloqueado. */
           if (num === null) return reject(new Error('imbat_cancelled'));
-          opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:num, player:name, name:name });
+          /* pushEv toca el DOM (acta del partido) — si algo ahí revienta
+             (bug 2026-07-05: "elijo portero y no pasa nada", 12 intentos
+             sin poder terminar el partido) la excepción caía DENTRO del
+             executor de la Promise, que la convierte en un rechazo
+             SILENCIOSO — nunca llegaba a mostrarse ningún aviso, el
+             overlay ya se había cerrado, y el usuario se quedaba sin
+             ninguna pista de qué había pasado. Se envuelve para que el
+             registro del evento NUNCA bloquee el avance: si falla el
+             pintado del acta, seguimos igualmente (el evento ya quedó
+             en el array `events`, que es lo que de verdad decide si
+             hace falta volver a pedir portero). */
+          try { opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:num, player:name, name:name }); }
+          catch(pushErr) { try { console.error('_ensureImbatEvents pushEv falló:', pushErr); } catch(_){} }
           resolve();
         });
       });
     } else {
       var gk = window._getTopGk(teamName);
-      if (gk.name) opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name });
+      if (gk.name) {
+        try { opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name }); }
+        catch(pushErr2) { try { console.error('_ensureImbatEvents pushEv (auto) falló:', pushErr2); } catch(_){} }
+      }
       return Promise.resolve();
     }
   }
   _step('a').then(function(){ return _step('b'); }).then(function(){
-    if (typeof onDone === 'function') onDone();
+    /* PROHIBIDO (regla CLAUDE.md "el handler de confirmación de un
+       overlay obligatorio NUNCA falla en silencio") que onDone() —el
+       gmEndMatch()/mlEndMatch() que reanuda el flujo tras elegir
+       portero— reviente sin avisar. Antes esta llamada vivía fuera de
+       cualquier try/catch: si algo posterior (stats/MVP/guardado)
+       lanzaba una excepción, el picker ya se había cerrado (parecía
+       "funcionar") pero el partido se quedaba congelado sin overlay
+       siguiente ni explicación — exactamente el síntoma "elijo
+       Alisson y no pasa nada, imposible continuar" reportado tras
+       varios intentos. */
+    if (typeof onDone === 'function') {
+      try { onDone(); }
+      catch(doneErr) {
+        try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
+        try { alert('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
+      }
+    }
   }).catch(function(err){
     /* Cancelación del usuario: cerramos silenciosamente. El partido
        queda como estaba (abierto). No repintamos ni llamamos a onDone. */
     if (err && err.message === 'imbat_cancelled') return;
-    /* Cualquier otro error — lo logueamos pero tampoco bloqueamos. */
-    try { console.warn('_ensureImbatEvents fallo:', err); } catch(_){}
+    /* Cualquier otro error — antes solo se logueaba (silencioso para el
+       usuario, que veía el overlay cerrarse sin que nada avanzara).
+       Ahora se avisa visiblemente, igual que confirmImbatForce. */
+    try { console.error('_ensureImbatEvents fallo:', err); } catch(_){}
+    try { alert('⚠️ No se pudo continuar tras la portería imbatida (' + (err && err.message || err) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
   });
 };
 // ══════════════════════════════════════════════════════════════

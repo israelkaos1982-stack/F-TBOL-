@@ -311,11 +311,25 @@ window._ensureImbatEvents = function(opts, onDone){
         });
       });
     } else {
+      /* Bug 2026-07-05 (Maccabi Tel Aviv vs Liverpool, «se atasca» tras
+         elegir a Alisson): si `_getTopGk` no encuentra un portero para el
+         equipo IA (roster no resuelto en SQUAD_REGISTRY/ligaExt_* en ese
+         instante), ANTES esta rama simplemente NO llamaba a `pushEv` — el
+         lado 'a'/'b' se quedaba SIN evento 'imbat' para siempre. Como
+         `needsImbat` (gmEndMatch) se recalcula en CADA llamada mirando si
+         existe ese evento, la ausencia perpetua provocaba un bucle
+         invisible: _ensureImbatEvents → onDone → gmEndMatch →
+         needsImbat sigue true → _ensureImbatEvents → ... para siempre,
+         sin error visible (todo "resuelve" con éxito) y sin que el
+         usuario viera nada más que el acta congelada con solo el evento
+         del humano. Fallback a un portero genérico (mismo patrón que
+         `showImbatForce` cuando no hay porteros en el picker humano)
+         para GARANTIZAR que el evento se registra siempre y la cadena
+         pueda completarse. */
       var gk = window._getTopGk(teamName);
-      if (gk.name) {
-        try { opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name }); }
-        catch(pushErr2) { try { console.error('_ensureImbatEvents pushEv (auto) falló:', pushErr2); } catch(_){} }
-      }
+      if (!gk.name) gk = { num: '1', name: 'Portero' };
+      try { opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name }); }
+      catch(pushErr2) { try { console.error('_ensureImbatEvents pushEv (auto) falló:', pushErr2); } catch(_){} }
       return Promise.resolve();
     }
   }

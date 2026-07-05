@@ -1,5 +1,67 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El auto-pick de portero IA en la portería imbatida SIEMPRE registra un evento — nunca deja `needsImbat` en true para siempre (obligatorio, 2026-07-05)
+
+**Bug (fotos usuario 2026-07-05, «Maccabi Tel Aviv (IA) vs Liverpool
+(humano)», 0-0, Trofeo Joan Gamper)**: tras elegir Alisson en el picker
+de portería imbatida, el acta registraba SOLO ese evento («90' Portería
+Imbatida — Alisson · Liverpool») y el partido se quedaba congelado ahí
+para siempre — sin el evento automático de portero del Maccabi (equipo
+IA), sin la pantalla obligatoria de Estadísticas, sin MVP, sin
+WhatsApp y sin FINALIZAR. El botón FINALIZAR permanecía deshabilitado
+sin ningún error visible.
+
+### Causa raíz
+
+En `_ensureImbatEvents` (`static/js/index.bundle.js`), la rama IA
+(auto-pick, sin overlay) de `_step(side)` hacía:
+```js
+var gk = window._getTopGk(teamName);
+if (gk.name) { opts.pushEv({...}); }   // ← si gk.name viene vacío, NO se llama pushEv
+return Promise.resolve();
+```
+Si `_getTopGk` no lograba resolver un portero del equipo IA (roster
+aún no indexado en `SQUAD_REGISTRY`/`ligaExt_*` en ese instante —
+Maccabi Tel Aviv es un equipo con alias/roster de "Resto de Ligas"),
+`pushEv` NUNCA se llamaba para ese lado. Como `gmEndMatch()` recalcula
+`needsImbat` en CADA invocación comprobando si existe un evento
+`imbat` para ese lado, la ausencia PERPETUA de ese evento hacía que
+`needsImbat` siguiera `true` para siempre. La cadena
+`gmEndMatch → _ensureImbatEvents → onDone (gmEndMatch) → needsImbat
+sigue true → ...` se repetía en un bucle SILENCIOSO e invisible (todo
+"resuelve" con éxito, no hay excepción que capturar ni alertar) — el
+usuario veía el acta congelada con un solo evento y el botón FINALIZAR
+deshabilitado sin explicación, indistinguible de "se atasca".
+
+### Fix
+
+La rama auto-IA de `_step` ahora GARANTIZA que `pushEv` se llama
+siempre: si `_getTopGk` no resuelve un portero real, cae a un
+fallback genérico `{num:'1', name:'Portero'}` (mismo patrón que ya
+usaba `showImbatForce` cuando el picker humano no encuentra porteros).
+Así el evento `imbat` de ese lado SIEMPRE queda registrado y
+`needsImbat` puede volver a `false`, permitiendo que la cadena
+continúe a Estadísticas → MVP → WhatsApp → FINALIZAR tal como está
+diseñada en `gmEndMatch`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que la rama auto-IA de `_ensureImbatEvents._step`
+   condicione la llamada a `pushEv` a que `_getTopGk` haya resuelto un
+   nombre real. `pushEv` debe llamarse SIEMPRE (con fallback genérico
+   si no hay portero resuelto) — de lo contrario `needsImbat` puede
+   quedar perpetuamente `true` y `gmEndMatch` entra en un bucle
+   silencioso indistinguible de un partido bloqueado.
+2. **PROHIBIDO** que un gate obligatorio de `gmEndMatch` (imbatida,
+   stats, MVP, WhatsApp) dependa de una condición que pueda no
+   cumplirse NUNCA (como "encontrar un portero real") sin un fallback
+   que garantice progreso. Todo gate nuevo de este tipo hereda el
+   patrón: fallback genérico que desbloquea la cadena en vez de dejarla
+   pendiente para siempre.
+3. Bump `index.bundle.js` 9.19 → 9.20 en `templates/index.html` y el
+   `PRECACHE` de `static/js/sw.js` (regla obligatoria de versión de
+   assets estáticos).
+
 ## El ❓ de alias eFootball SOLO sale si el equipo TIENE alias — «ficticio» = «tiene alias», nunca al revés (obligatorio, 2026-07-05)
 
 **Bug (fotos + grabación usuario 2026-07-05, «Torino»/«Timor Oriental»/

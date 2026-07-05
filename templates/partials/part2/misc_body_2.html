@@ -10166,12 +10166,10 @@
       setTimeout(function(){
         try {
           var b = document.getElementById('gm-btn-end');
-          if (!b || !b.disabled) return;
-          if (window._gm && window._gm.finished) return;
           var overlayIds = ['imbat-force-ov','ml-stats-ov','ml-stats-entry-ov',
             'gen-mvp-ov','mvp-force-overlay','gm-event-panel','gm-team-pick',
             'gm-player-pick','ml-post-ov','gm-post-ov','ml-final-ov',
-            'ml-loading-ov','ml-confirm-end-ov'];
+            'ml-loading-ov','ml-confirm-end-ov','gm-mvp-share-gate','gm-fin-ov'];
           var anyVisible = overlayIds.some(function(id){
             var el = document.getElementById(id);
             if (!el) return false;
@@ -10180,6 +10178,20 @@
             return !!d && d !== 'none';
           });
           if (anyVisible) return;
+          /* Caso 1: el partido YA quedó `finished` (marcador guardado)
+             pero NINGÚN overlay terminal (`gm-fin-ov`) llegó a hacerse
+             visible — la pantalla de resumen falló en silencio ANTES
+             de que su propio blindaje interno pudiera mostrarla (p.ej.
+             el `setTimeout` que la dispara nunca llegó a ejecutarse).
+             El resultado ya está guardado; ofrecemos salir en vez de
+             dejar al usuario mirando el modal congelado para siempre. */
+          if (window._gm && window._gm.finished) {
+            try { console.warn('[gmEndMatch watchdog] partido finished sin pantalla final visible tras 9s.'); } catch(_){}
+            alert('⚠️ El partido ya finalizó y el resultado quedó guardado, pero la pantalla de resumen no se pudo mostrar. Vuelve al menú — el resultado ya está registrado.');
+            try { if (typeof window.gmVolver === 'function') window.gmVolver(); } catch(_){}
+            return;
+          }
+          if (!b || !b.disabled) return;
           b.disabled = false; b.style.opacity = '';
           try { console.warn('[gmEndMatch watchdog] cadena post-imbatida sin progreso visible tras 9s — botón reactivado.'); } catch(_){}
           alert('⚠️ El partido no ha podido continuar automáticamente. Pulsa FINALIZAR de nuevo para reintentar.');
@@ -12528,57 +12540,82 @@
         +'</div>';
       document.body.appendChild(ov);
     }
-    document.getElementById('gm-fin-score').textContent = _gm.sc.a + ' - ' + _gm.sc.b;
-    var _hiFa = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.home)||'') : '';
-    var _hiFb = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.away)||'') : '';
-    document.getElementById('gm-fin-name-a').textContent = _hiFa + _gm.home;
-    document.getElementById('gm-fin-name-b').textContent = _hiFb + _gm.away;
-    var logoA = document.getElementById('gm-fin-logo-a');
-    var logoB = document.getElementById('gm-fin-logo-b');
-    if (logoA) { logoA.src = _gmLogoUrl(_gm.home) || ''; }
-    if (logoB) { logoB.src = _gmLogoUrl(_gm.away) || ''; }
-    var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
-    var mvpEl = document.getElementById('gm-fin-mvp');
-    if (mvpEl) {
-      if (mvpEvt) {
-        var _mvpName = mvpEvt.player || mvpEvt.name || '';
-        var _mvpTeam = (mvpEvt.team === 'a') ? (_gm.home || '') : (_gm.away || '');
-        mvpEl.textContent = '⭐ MVP: ' + _mvpName + (_mvpTeam ? ' (' + _mvpTeam + ')' : '');
-      } else {
-        mvpEl.textContent = '';
+    /* Blindaje (2026-07-05, «se atasca» con FINALIZAR deshabilitado y
+       ninguna pantalla siguiente): en este punto `gmEndMatch` YA marcó
+       `_gm.finished=true` — si CUALQUIER parte del relleno de esta
+       pantalla revienta (un evento del acta con datos inesperados, un
+       helper de escudo/humanIcon fallando, etc.), antes la excepción
+       abortaba `_gmShowFinalOv` ANTES de llegar a `ov.style.display =
+       'flex'`. El usuario se quedaba mirando el gm-modal congelado sin
+       ninguna pantalla ni forma de recuperar el partido — `gmEndMatch()`
+       ya no hace nada más (`if (_gm.finished) return;`) y el watchdog de
+       `_mlConfirmEnd` tampoco reactiva el botón para un partido ya
+       finalizado. Ahora el relleno va en try/catch: un fallo parcial se
+       loguea pero el overlay SIEMPRE se hace visible al final (con lo
+       que se haya podido rellenar), nunca se queda sin mostrar. */
+    try {
+      document.getElementById('gm-fin-score').textContent = _gm.sc.a + ' - ' + _gm.sc.b;
+      var _hiFa = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.home)||'') : '';
+      var _hiFb = (typeof window.humanIcon === 'function') ? (window.humanIcon(_gm.away)||'') : '';
+      document.getElementById('gm-fin-name-a').textContent = _hiFa + _gm.home;
+      document.getElementById('gm-fin-name-b').textContent = _hiFb + _gm.away;
+      var logoA = document.getElementById('gm-fin-logo-a');
+      var logoB = document.getElementById('gm-fin-logo-b');
+      if (logoA) { logoA.src = _gmLogoUrl(_gm.home) || ''; }
+      if (logoB) { logoB.src = _gmLogoUrl(_gm.away) || ''; }
+    } catch(errHdr) { try { console.error('_gmShowFinalOv fallo en cabecera:', errHdr); } catch(_){} }
+    try {
+      var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
+      var mvpEl = document.getElementById('gm-fin-mvp');
+      if (mvpEl) {
+        if (mvpEvt) {
+          var _mvpName = mvpEvt.player || mvpEvt.name || '';
+          var _mvpTeam = (mvpEvt.team === 'a') ? (_gm.home || '') : (_gm.away || '');
+          mvpEl.textContent = '⭐ MVP: ' + _mvpName + (_mvpTeam ? ' (' + _mvpTeam + ')' : '');
+        } else {
+          mvpEl.textContent = '';
+        }
       }
-    }
-    var allEvts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
-    var evList = document.getElementById('gm-fin-events');
-    if (evList) {
-      if (allEvts.length === 0) {
-        evList.innerHTML = '<div style="padding:14px 12px;color:rgba(255,255,255,.3);font-family:Rajdhani,sans-serif;font-size:13px;text-align:center;">Sin eventos registrados</div>';
-      } else {
-        evList.innerHTML = allEvts.map(function(e){ return _gmEvtRow(e, _gm.home, _gm.away); }).join('');
+    } catch(errMvp) { try { console.error('_gmShowFinalOv fallo en MVP:', errMvp); } catch(_){} }
+    try {
+      var allEvts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
+      var evList = document.getElementById('gm-fin-events');
+      if (evList) {
+        if (allEvts.length === 0) {
+          evList.innerHTML = '<div style="padding:14px 12px;color:rgba(255,255,255,.3);font-family:Rajdhani,sans-serif;font-size:13px;text-align:center;">Sin eventos registrados</div>';
+        } else {
+          evList.innerHTML = allEvts.map(function(e){ return _gmEvtRow(e, _gm.home, _gm.away); }).join('');
+        }
       }
-    }
-    var exitBtn = document.getElementById('gm-fin-exit-btn');
-    var shareBtn = document.getElementById('gm-fin-share-btn');
-    /* Si la puerta obligatoria post-MVP ya se cumplió (_mvpShareDone),
-       el botón SALIR AL MENÚ aparece de entrada — la pantalla FINAL
-       pasa a ser solo un resumen. El botón COMPARTIR se mantiene
-       visible por si el usuario quiere re-compartir. Sin esto se
-       pediría al usuario que comparta dos veces (gate + final). */
-    var _alreadyShared = !!_gm._mvpShareDone || !!_gm.finalShared;
-    if (exitBtn) exitBtn.style.display = _alreadyShared ? '' : 'none';
-    if (shareBtn) shareBtn.style.display = '';
-    ov.style.display = 'flex';
-    if (_gm.isHvH && !_alreadyShared) {
-      var finPoll = setInterval(function() {
-        try {
-          if (localStorage.getItem('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
-            clearInterval(finPoll);
-            var eb = document.getElementById('gm-fin-exit-btn');
-            if (eb) eb.style.display = '';
-          }
-        } catch(e) { clearInterval(finPoll); }
-      }, 3000);
-    }
+    } catch(errActa) { try { console.error('_gmShowFinalOv fallo en acta:', errActa); } catch(_){} }
+    var _alreadyShared = false;
+    try {
+      var exitBtn = document.getElementById('gm-fin-exit-btn');
+      var shareBtn = document.getElementById('gm-fin-share-btn');
+      /* Si la puerta obligatoria post-MVP ya se cumplió (_mvpShareDone),
+         el botón SALIR AL MENÚ aparece de entrada — la pantalla FINAL
+         pasa a ser solo un resumen. El botón COMPARTIR se mantiene
+         visible por si el usuario quiere re-compartir. Sin esto se
+         pediría al usuario que comparta dos veces (gate + final). */
+      _alreadyShared = !!_gm._mvpShareDone || !!_gm.finalShared;
+      if (exitBtn) exitBtn.style.display = _alreadyShared ? '' : 'none';
+      if (shareBtn) shareBtn.style.display = '';
+    } catch(errBtn) { try { console.error('_gmShowFinalOv fallo en botones:', errBtn); } catch(_){} }
+    /* GARANTIZADO pase lo que pase arriba: el overlay se hace visible. */
+    try { ov.style.display = 'flex'; } catch(errShow) { try { console.error('_gmShowFinalOv fallo al mostrar:', errShow); } catch(_){} }
+    try {
+      if (_gm.isHvH && !_alreadyShared) {
+        var finPoll = setInterval(function() {
+          try {
+            if (localStorage.getItem('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
+              clearInterval(finPoll);
+              var eb = document.getElementById('gm-fin-exit-btn');
+              if (eb) eb.style.display = '';
+            }
+          } catch(e) { clearInterval(finPoll); }
+        }, 3000);
+      }
+    } catch(_){}
   }
 
   /* ── Estado del gm-modal cuando el partido ya terminó ─────────────
@@ -15981,8 +16018,24 @@
        gmEndMatch). Aquí solo lanzamos la pantalla FINAL — nada más.
        Antes 420 ms — petición usuario 2026-05-02: la transición tras
        FIN era demasiado lenta. Bajado a 80 ms (suficiente para que
-       acabe el frame actual y el spinner se actualice). */
-    setTimeout(function(){ _gmShowFinalOv(); }, 80);
+       acabe el frame actual y el spinner se actualice).
+       Envuelto en try/catch + aviso visible (2026-07-05): `_gm.finished`
+       ya está en `true` en este punto — si `_gmShowFinalOv()` reventara
+       ANTES de llegar a su propio blindaje interno (p.ej. `gm-fin-ov`
+       no existe ni se puede crear), el usuario se quedaba sin ninguna
+       pantalla ni forma de recuperar el partido ya finalizado. */
+    setTimeout(function(){
+      try { _gmShowFinalOv(); }
+      catch(errFin) {
+        try { console.error('gmEndMatch: _gmShowFinalOv falló', errFin); } catch(_){}
+        try { alert('⚠️ El partido finalizó pero la pantalla de resumen no se pudo mostrar (' + (errFin && errFin.message || errFin) + '). El resultado ya quedó guardado — vuelve al menú y compártelo desde el histórico si hace falta.'); } catch(_){}
+        try {
+          var _gm2 = window._gm;
+          if (_gm2) { _gm2.finished = true; }
+          if (typeof window.gmVolver === 'function') window.gmVolver();
+        } catch(_){}
+      }
+    }, 80);
   };
 
   window.gmClose = function () {

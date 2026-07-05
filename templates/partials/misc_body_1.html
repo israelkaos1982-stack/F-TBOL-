@@ -34120,11 +34120,11 @@ window._showSimProgress = function(opts, onDone){
     return s;
   }
   var _TV_AUTO_TROPHY = [
-    { re:/\basia\b/,    img:'/static/img/comp/trophy-copa-asia.jpg' },
-    { re:/\bafrica\b/,  img:'/static/img/comp/trophy-copa-africa.jpg' },
-    { re:/\bamerica\b/, img:'/static/img/comp/trophy-copa-america.jpg' },
-    { re:/eurocopa/,    img:'/static/img/comp/trophy-eurocopa.jpg' },
-    { re:/\bmundial\b/, img:'/static/img/comp/trophy-mundial.jpg' }
+    { re:/\basia\b/,    img:'/static/img/comp/trophy-copa-asia.png' },
+    { re:/\bafrica\b/,  img:'/static/img/comp/trophy-copa-africa.png' },
+    { re:/\bamerica\b/, img:'/static/img/comp/trophy-copa-america.png' },
+    { re:/eurocopa/,    img:'/static/img/comp/trophy-eurocopa.png' },
+    { re:/\bmundial\b/, img:'/static/img/comp/trophy-mundial.png' }
   ];
   function _tvAutoTrophyForName(name){
     var n = _tvNormName(name);
@@ -34223,7 +34223,7 @@ window._showSimProgress = function(opts, onDone){
         img.src = wantSrc;
         img.setAttribute('aria-hidden','true');
         img.setAttribute('data-bg-enhanced','1');
-        img.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;aspect-ratio:1/1;object-fit:contain;opacity:0.22;mix-blend-mode:multiply;pointer-events:none;z-index:0;';
+        img.style.cssText = 'position:absolute;right:-12px;top:50%;transform:translateY(-50%);height:175%;aspect-ratio:1/1;object-fit:contain;opacity:0.22;pointer-events:none;z-index:0;';
         card.style.position = 'relative';
         card.style.overflow = 'hidden';
         card.insertBefore(img, card.firstChild);
@@ -54540,14 +54540,13 @@ https://api.sofascore.app/api/v1/team/44/image
   #s-selecciones .submenu-card .sc-arr{margin-left:6px;}
   /* Trofeos reales por competición (fotos usuario 2026-07-05): mismo
      tamaño/estilo que los 9 de la pantalla Competiciones — sin círculo,
-     sin fondo, 56px (60px en pantallas ≥480px). Las fotos tienen fondo
-     blanco (no PNG transparente); mix-blend-mode:multiply funde el
-     blanco con el degradado de la caja y deja visible solo el trofeo. */
+     sin fondo, 56px (60px en pantallas ≥480px). Los PNG ya llevan fondo
+     transparente real (recortado con canvas, ver static/img/comp/), así
+     que se muestran con su color original, sin blend ni tinte. */
   #s-selecciones .submenu-card .sc-trophy-real{
     width:56px;height:56px;max-width:56px;max-height:56px;
     border-radius:0;background:none;border:none;box-shadow:none;
     padding:0;object-fit:contain;flex-shrink:0;
-    mix-blend-mode:multiply;
   }
   #s-selecciones .submenu-card:has(.sc-trophy-real){
     min-height:76px;overflow:hidden;position:relative;

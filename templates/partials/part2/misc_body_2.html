@@ -10090,6 +10090,7 @@
      FINALIZAR (ml-action-end inline + gm-btn-end del modal). El
      callback se ejecuta solo si el usuario pulsa SÍ. */
   window._mlConfirmEnd = function(yesCb){
+    try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('_mlConfirmEnd() llamado. yesCb=' + typeof yesCb); } catch(_){}
     if(typeof yesCb !== 'function') return;
     /* El click en FINALIZAR ya activó el spinner global "Procesando
        partido…" (delegación de body al final del archivo). Lo ocultamos
@@ -10149,7 +10150,11 @@
         var _endBtnNow = document.getElementById('gm-btn-end');
         if (_endBtnNow) { _endBtnNow.disabled = true; _endBtnNow.style.opacity = '0.35'; }
       } catch(_){}
-      try { yesCb(); } catch(_){}
+      try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('SÍ pulsado → llamando yesCb()'); } catch(_){}
+      try { yesCb(); }
+      catch(errYes) {
+        try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('yesCb() LANZÓ: ' + (errYes && errYes.message || errYes)); } catch(_){}
+      }
       /* Watchdog anti-bloqueo-silencioso (2026-07-05, refuerzo): la
          cadena imbatida→Estadísticas→MVP→WhatsApp se re-dispara SOLA
          sin overlay visible en la breve ventana entre gates, pero si
@@ -15277,8 +15282,39 @@
      siempre (el partido "no se podía ni cancelar ni finalizar"). */
   window._gmReenableEndBtn = _gmReenableEndBtn;
 
+  /* ══ PANEL DE DIAGNÓSTICO TEMPORAL (2026-07-05) ══════════════════════
+     El usuario lleva varios intentos con FINALIZAR atascado en distintos
+     puntos de la cadena imbatida→Estadísticas→MVP→WhatsApp y cada fix
+     revela un fallo distinto más adelante. En vez de seguir adivinando
+     a ciegas, este panel muestra EN PANTALLA (no en la consola, que un
+     móvil no puede abrir fácilmente) qué rama de `gmEndMatch()` se
+     ejecuta cada vez que se pulsa FINALIZAR, para localizar el punto
+     EXACTO donde se detiene. Se puede quitar en cuanto se identifique
+     y arregle la causa real. */
+  function _gmDiagLog(msg){
+    try {
+      var box = document.getElementById('gm-diag-box');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'gm-diag-box';
+        box.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:999998;'
+          + 'background:rgba(0,0,0,.92);border:1px solid rgba(240,192,64,.6);border-radius:8px;'
+          + 'padding:8px 10px;font-family:monospace;font-size:10px;line-height:1.5;color:#9f9;'
+          + 'max-height:38vh;overflow-y:auto;white-space:pre-wrap;pointer-events:none;';
+        document.body.appendChild(box);
+      }
+      var t = new Date().toISOString().substr(11,8);
+      box.textContent = (box.textContent ? box.textContent + '\n' : '') + '[' + t + '] ' + msg;
+      var lines = box.textContent.split('\n');
+      if (lines.length > 16) box.textContent = lines.slice(lines.length - 16).join('\n');
+      box.scrollTop = box.scrollHeight;
+    } catch(_){}
+  }
+  window._gmDiagLog = _gmDiagLog;
+
   window.gmEndMatch = function () {
-    if (_gm.finished) return;
+    _gmDiagLog('gmEndMatch() llamado. finished=' + !!_gm.finished + ' sc=' + _gm.sc.a + '-' + _gm.sc.b);
+    if (_gm.finished) { _gmDiagLog('→ ya finished, return.'); return; }
     /* ── COPA SINGLE-LEG: empate al 90' / 120' ─────────────────────
        Reglamento del usuario: en partidos a partido único de Copa
        del Rey (1ª Ronda, 2ª Ronda, FINAL), si hay empate al final
@@ -15389,6 +15425,7 @@
       (_gm.sc.b === 0 && !_gm.events.some(function(e){ return e && e.type==='imbat' && e.team==='a'; })) ||
       (_gm.sc.a === 0 && !_gm.events.some(function(e){ return e && e.type==='imbat' && e.team==='b'; }))
     );
+    _gmDiagLog('needsImbat=' + needsImbat + ' hasEnsureImbat=' + (typeof window._ensureImbatEvents === 'function'));
     if (needsImbat && typeof window._ensureImbatEvents === 'function') {
       window._ensureImbatEvents({
         events: _gm.events,
@@ -15430,7 +15467,9 @@
        Francia (humano) vs UAE (IA) el match se finalizaba sin pedir
        posesión/tiros/faltas. Ahora usamos _gmHumanInvolved() (mismo
        helper que ya usan gmStartTimer y la pausa de descanso). */
+    _gmDiagLog('stats: matchStats=' + !!_gm.matchStats + ' hasOverlay=' + (typeof _mlShowStatsOverlay === 'function') + ' humanInvolved=' + (function(){ try { return _gmHumanInvolved(); } catch(eDiag){ return 'ERR:'+eDiag; } })());
     if (!_gm.matchStats && typeof _mlShowStatsOverlay === 'function' && _gmHumanInvolved()) {
+      _gmDiagLog('→ abriendo _mlShowStatsOverlay');
       _mlShowStatsOverlay(_gm, function(){ window.gmEndMatch(); });
       return;
     }
@@ -15439,7 +15478,9 @@
        solo bloquea el flujo. Para Liga / Copa / etc. sigue siendo
        obligatorio. */
     var mvpExists = _gm.events.some(function(e){ return e && e.type === 'mvp'; });
+    _gmDiagLog('mvp: mvpExists=' + mvpExists + ' isFriendly=' + !!_gm.isFriendly);
     if (!mvpExists && !_gm.isFriendly) {
+      _gmDiagLog('→ abriendo gmPickEvent MVP');
       alert('⭐ Debes elegir MVP antes de finalizar el acta.');
       _gm._awaitMvp = true;
       window.gmPickEvent('MVP del Partido','mvp');
@@ -15453,7 +15494,9 @@
        gmEndMatch y este bloque se salta. Para partidos sin humano
        (IA vs IA en gm-modal — caso rarísimo, solo por debug) la puerta
        no aparece. */
+    _gmDiagLog('whatsapp: mvpShareDone=' + !!_gm._mvpShareDone + ' hasGate=' + (typeof _gmFinalShareGate === 'function'));
     if (!_gm._mvpShareDone && mvpExists && _gmHumanInvolved()) {
+      _gmDiagLog('→ abriendo _gmFinalShareGate');
       _gmFinalShareGate(function(){
         _gm._mvpShareDone = true;
         window.gmEndMatch();
@@ -15496,6 +15539,7 @@
         });
       } catch(_){}
     }
+    _gmDiagLog('→ TODOS los gates pasados, marcando finished=true.');
     _gm.finished = true;
     /* Lesiones: registrar las generadas en este partido y decrementar
        la baja de ambos equipos (1 partido jugado = 1 partido menos de

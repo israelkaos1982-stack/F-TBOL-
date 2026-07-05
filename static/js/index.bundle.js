@@ -169,12 +169,25 @@ window.showImbatForce = function(teamName, onConfirm) {
      `cancelImbatForce` ya son idempotentes por su cuenta). */
   function _imbatWireTapFallback(el, action){
     var fired = false;
-    el.addEventListener('touchstart', function(e){
+    function _fire(e){
       if (fired) return;
       fired = true;
-      try { e.preventDefault(); } catch(_){}
+      try { e && e.preventDefault && e.preventDefault(); } catch(_){}
       action(el);
-    }, { passive:false });
+    }
+    el.addEventListener('touchstart', _fire, { passive:false });
+    /* Respaldo #3 (2026-07-05, el usuario sigue bloqueado tras el
+       respaldo de touchstart): Pointer Events unifican touch/ratón/lápiz
+       y en Chrome/Android son la vía que el propio navegador usa
+       internamente para decidir scroll-vs-tap ANTES incluso de decidir
+       si dispara `touchstart` como cancelable — cablear también
+       `pointerdown` cubre el caso (no reproducible sin un dispositivo
+       real) de que algo en la cadena de eventos táctil se pierda pero
+       el puntero genérico sí llegue. Comparte la misma guardia `fired`
+       — sea cual sea el que dispare primero, gana y el resto es no-op. */
+    el.addEventListener('pointerdown', _fire, { passive:false });
+    /* Respaldo #4: ratón puro (desktop / emulador con mouse-only). */
+    el.addEventListener('mousedown', _fire);
   }
   try {
     ov.querySelectorAll('.mvp-pl-btn').forEach(function(b){
@@ -183,6 +196,29 @@ window.showImbatForce = function(teamName, onConfirm) {
     var _cancelBtn = ov.querySelector('.ml-pl-ov-close');
     if (_cancelBtn) _imbatWireTapFallback(_cancelBtn, function(){ window.cancelImbatForce(); });
   } catch(err) { try { console.warn('showImbatForce: respaldo táctil fallo:', err); } catch(_){} }
+  /* Respaldo #5 — DELEGACIÓN en el propio overlay (2026-07-05): todos
+     los respaldos anteriores dependen de que el listener se enganchase
+     correctamente en CADA botón individual al crearlos. Si por lo que
+     sea uno de esos `addEventListener` no llegó a engancharse (o el
+     navegador del usuario no dispara `touchstart`/`pointerdown` sobre
+     el botón concreto por cualquier motivo no reproducible desde aquí),
+     un listener en el CONTENEDOR que delega por `closest()` es
+     independiente de eso — solo necesita que el toque llegue a
+     CUALQUIER punto dentro del overlay. `confirmImbatForce`/
+     `cancelImbatForce` ya son 100% idempotentes (comprueban
+     `_imbatForceCallback`/el overlay antes de actuar), así que no hay
+     riesgo de doble confirmación aunque este handler y los de arriba
+     se disparen ambos para el mismo toque. */
+  try {
+    ov.addEventListener('pointerdown', function(e){
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var pl = t.closest('.mvp-pl-btn');
+      if (pl) { window.confirmImbatForce(pl); return; }
+      var cc = t.closest('.ml-pl-ov-close');
+      if (cc) { window.cancelImbatForce(); }
+    }, { passive:true });
+  } catch(err) { try { console.warn('showImbatForce: delegación de respaldo falló:', err); } catch(_){} }
 };
 
 window.confirmImbatForce = function(btn) {
@@ -258,24 +294,77 @@ window._ensureImbatEvents = function(opts, onDone){
              escape: el usuario veía el modal de "Portería imbatida" y
              no podía cerrar; el partido parecía bloqueado. */
           if (num === null) return reject(new Error('imbat_cancelled'));
-          opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:num, player:name, name:name });
+          /* pushEv toca el DOM (acta del partido) — si algo ahí revienta
+             (bug 2026-07-05: "elijo portero y no pasa nada", 12 intentos
+             sin poder terminar el partido) la excepción caía DENTRO del
+             executor de la Promise, que la convierte en un rechazo
+             SILENCIOSO — nunca llegaba a mostrarse ningún aviso, el
+             overlay ya se había cerrado, y el usuario se quedaba sin
+             ninguna pista de qué había pasado. Se envuelve para que el
+             registro del evento NUNCA bloquee el avance: si falla el
+             pintado del acta, seguimos igualmente (el evento ya quedó
+             en el array `events`, que es lo que de verdad decide si
+             hace falta volver a pedir portero). */
+          try { opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:num, player:name, name:name }); }
+          catch(pushErr) { try { console.error('_ensureImbatEvents pushEv falló:', pushErr); } catch(_){} }
           resolve();
         });
       });
     } else {
       var gk = window._getTopGk(teamName);
-      if (gk.name) opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name });
+      if (gk.name) {
+        try { opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name }); }
+        catch(pushErr2) { try { console.error('_ensureImbatEvents pushEv (auto) falló:', pushErr2); } catch(_){} }
+      }
       return Promise.resolve();
     }
   }
   _step('a').then(function(){ return _step('b'); }).then(function(){
-    if (typeof onDone === 'function') onDone();
+    /* PROHIBIDO (regla CLAUDE.md "el handler de confirmación de un
+       overlay obligatorio NUNCA falla en silencio") que onDone() —el
+       gmEndMatch()/mlEndMatch() que reanuda el flujo tras elegir
+       portero— reviente sin avisar. Antes esta llamada vivía fuera de
+       cualquier try/catch: si algo posterior (stats/MVP/guardado)
+       lanzaba una excepción, el picker ya se había cerrado (parecía
+       "funcionar") pero el partido se quedaba congelado sin overlay
+       siguiente ni explicación — exactamente el síntoma "elijo
+       Alisson y no pasa nada, imposible continuar" reportado tras
+       varios intentos. */
+    if (typeof onDone === 'function') {
+      /* Diferido a un frame + tick (2026-07-05, "se congela la
+         pantalla obligando a cerrar la web"): `onDone()` (gmEndMatch/
+         mlEndMatch) puede desencadenar trabajo pesado (overlay de
+         stats, guardado de un torneo grande de 63 equipos, etc.). Si
+         se llama de forma SÍNCRONA aquí, el navegador no llega a
+         PINTAR siquiera el cierre del overlay de porteros antes de
+         quedarse ocupado con lo siguiente — desde el punto de vista
+         del usuario es indistinguible de "no ha pasado nada, se ha
+         congelado", aunque el código internamente sí avanzara. Con
+         `requestAnimationFrame` + `setTimeout(0)` forzamos al menos UN
+         repintado (el overlay desaparece visiblemente) antes de que
+         corra el resto de la cadena. */
+      var _runOnDone = function(){
+        try { onDone(); }
+        catch(doneErr) {
+          try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
+          try { alert('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
+        }
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function(){ setTimeout(_runOnDone, 0); });
+      } else {
+        setTimeout(_runOnDone, 0);
+      }
+    }
   }).catch(function(err){
     /* Cancelación del usuario: cerramos silenciosamente. El partido
        queda como estaba (abierto). No repintamos ni llamamos a onDone. */
     if (err && err.message === 'imbat_cancelled') return;
-    /* Cualquier otro error — lo logueamos pero tampoco bloqueamos. */
-    try { console.warn('_ensureImbatEvents fallo:', err); } catch(_){}
+    /* Cualquier otro error — antes solo se logueaba (silencioso para el
+       usuario, que veía el overlay cerrarse sin que nada avanzara).
+       Ahora se avisa visiblemente, igual que confirmImbatForce. */
+    try { console.error('_ensureImbatEvents fallo:', err); } catch(_){}
+    try { alert('⚠️ No se pudo continuar tras la portería imbatida (' + (err && err.message || err) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
   });
 };
 // ══════════════════════════════════════════════════════════════

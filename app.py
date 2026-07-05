@@ -3477,6 +3477,51 @@ def api_liga_ext_post(slug):
         "updated_at": row.updated_at or "",
     })
 
+
+@app.route("/api/team-alias/<name>", methods=["GET"])
+def api_team_alias(name):
+    """Busca el alias de eFootball de un equipo por NOMBRE en TODAS las
+    ligas del servidor de una sola vez (búsqueda server-side).
+
+    Sustituye a la búsqueda client-side por lotes (2026-07-05): el
+    cliente hacía hasta ~54 peticiones HTTP (una por liga) desde el
+    propio móvil para encontrar un equipo — lento y frágil en redes
+    móviles (una sola petición que se cuelga bloqueaba toda la
+    búsqueda, "se queda cargando"). Aquí es UNA sola petición: el
+    servidor consulta su propia base de datos directamente (rápido,
+    sin depender de la red del cliente para cada liga) y devuelve el
+    alias ya resuelto. Match por nombre canónico (afijo-aware, mismo
+    criterio que `_lx_merge_teams`) para tolerar variantes de grafía.
+    """
+    target = _lx_canon_name(name)
+    if not target:
+        return jsonify({"ok": True, "alias": None})
+    try:
+        rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
+    except Exception:
+        rows = []
+    for row in rows or []:
+        clave = row.clave or ""
+        rest = clave[len("liga_ext_"):] if clave.startswith("liga_ext_") else ""
+        if not rest or rest.endswith("_protected") or "_snap_" in rest:
+            continue
+        try:
+            data = json.loads(row.valor_json or "{}")
+        except Exception:
+            continue
+        teams = data.get("teams") if isinstance(data, dict) else None
+        if not isinstance(teams, list):
+            continue
+        for t in teams:
+            if not isinstance(t, dict) or not t.get("name"):
+                continue
+            if _lx_canon_name(t.get("name")) != target:
+                continue
+            alias = t.get("efootballAlias")
+            if isinstance(alias, str) and alias.strip():
+                return jsonify({"ok": True, "alias": alias.strip()})
+    return jsonify({"ok": True, "alias": None})
+
 # ══════════════════════════════════════════════════════════════════
 # PROTECTED snapshot (server-side, monotónico) — 2026-05-08
 # ══════════════════════════════════════════════════════════════════

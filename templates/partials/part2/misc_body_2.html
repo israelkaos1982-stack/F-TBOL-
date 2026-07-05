@@ -10150,6 +10150,41 @@
         if (_endBtnNow) { _endBtnNow.disabled = true; _endBtnNow.style.opacity = '0.35'; }
       } catch(_){}
       try { yesCb(); } catch(_){}
+      /* Watchdog anti-bloqueo-silencioso (2026-07-05, refuerzo): la
+         cadena imbatida→Estadísticas→MVP→WhatsApp se re-dispara SOLA
+         sin overlay visible en la breve ventana entre gates, pero si
+         CUALQUIER gate de esa cadena falla en silencio (una condición
+         que debería mostrar un overlay pero no lo hace, por el motivo
+         que sea) el usuario se queda mirando el marcador con FINALIZAR
+         deshabilitado PARA SIEMPRE, sin ninguna pista ni forma de
+         reintentar. Pasados unos segundos, si ninguno de los overlays
+         obligatorios conocidos está visible y el partido AÚN no está
+         `finished`, asumimos que la cadena se atascó y reactivamos el
+         botón con un aviso — el usuario puede pulsar FINALIZAR de
+         nuevo (gmEndMatch/mlEndMatchGen son idempotentes: retoman la
+         cadena desde el primer gate pendiente, no duplican eventos). */
+      setTimeout(function(){
+        try {
+          var b = document.getElementById('gm-btn-end');
+          if (!b || !b.disabled) return;
+          if (window._gm && window._gm.finished) return;
+          var overlayIds = ['imbat-force-ov','ml-stats-ov','ml-stats-entry-ov',
+            'gen-mvp-ov','mvp-force-overlay','gm-event-panel','gm-team-pick',
+            'gm-player-pick','ml-post-ov','gm-post-ov','ml-final-ov',
+            'ml-loading-ov','ml-confirm-end-ov'];
+          var anyVisible = overlayIds.some(function(id){
+            var el = document.getElementById(id);
+            if (!el) return false;
+            if (el.classList && el.classList.contains('show')) return true;
+            var d = el.style && el.style.display;
+            return !!d && d !== 'none';
+          });
+          if (anyVisible) return;
+          b.disabled = false; b.style.opacity = '';
+          try { console.warn('[gmEndMatch watchdog] cadena post-imbatida sin progreso visible tras 9s — botón reactivado.'); } catch(_){}
+          alert('⚠️ El partido no ha podido continuar automáticamente. Pulsa FINALIZAR de nuevo para reintentar.');
+        } catch(_){}
+      }, 9000);
     };
   };
 
@@ -13769,6 +13804,27 @@
     try {
       if (typeof esHumano === 'function') {
         if (esHumano(_gm.home) || esHumano(_gm.away)) return true;
+      }
+    } catch(_){}
+    /* Capa 0 de refuerzo (registro MISTERS_HUMANOS, 2026-07-05): las
+       3 comprobaciones de arriba pueden fallar todas para un club/
+       selección humano NUEVO o con alias (p.ej. el slot renombrado
+       Bayern→Liverpool en un torneo `format:'league'` de 63 equipos,
+       cuyo `cfg.teams[].isHuman` puede no coincidir por grafía y cuyo
+       `humanIcon` puede no estar asignado). `_ensureImbatEvents` YA
+       usa este mismo fallback (`_isHumanClubCanonico`/`_esSelHumana`)
+       para decidir si mostrar el picker de portero — si ese picker se
+       mostró (porque SÍ hay un humano), `_gmHumanInvolved()` debe
+       coincidir, o la cadena obligatoria (Estadísticas→MVP→WhatsApp)
+       se salta el gate de Estadísticas en silencio. */
+    try {
+      if (typeof window._isHumanClubCanonico === 'function') {
+        if (window._isHumanClubCanonico(_gm.home) || window._isHumanClubCanonico(_gm.away)) return true;
+      }
+    } catch(_){}
+    try {
+      if (typeof window._esSelHumana === 'function') {
+        if (window._esSelHumana(_gm.home) || window._esSelHumana(_gm.away)) return true;
       }
     } catch(_){}
     return false;

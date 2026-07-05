@@ -1,5 +1,70 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `_gmHumanInvolved` reconoce al humano por el registro canónico + watchdog anti-bloqueo-silencioso tras FINALIZAR (obligatorio, 2026-07-05)
+
+**Bug (foto usuario 2026-07-05, mismo partido «Maccabi Tel Aviv (IA) vs
+Liverpool (humano)», Trofeo Joan Gamper)**: tras el fix del auto-pick de
+portero de arriba, el acta ya registraba las 2 porterías imbatidas
+(Maccabi automático + Alisson elegido), pero el partido "sigue igual,
+no deja finalizar" — el botón FINALIZAR seguía deshabilitado sin que
+apareciera la pantalla obligatoria de Estadísticas, ni MVP, ni WhatsApp.
+
+### Causa raíz
+
+`_gmHumanInvolved()` (`part2/misc_body_2.html`) — la función que decide
+si `gmEndMatch()` debe abrir la pantalla OBLIGATORIA de Estadísticas
+antes del MVP — solo reconocía al humano por 3 vías: (1) `cfg.teams[].
+isHuman` del torneo con match EXACTO de nombre, (2) `isHumanInComp`, (3)
+`esHumano()` (los 5 humanos legacy de Liga EA Sports por su nombre
+crudo). Ninguna de las 3 usa el registro canónico `MISTERS_HUMANOS`
+(`_isHumanClubCanonico`/`_esSelHumana`, alias-safe Bayern↔Liverpool)
+que SÍ usa `_ensureImbatEvents` (por eso el picker de Alisson SÍ se
+mostró: esa función usa el fallback correcto). Con el slot de Liga EA
+Sports renombrado Bayern→Liverpool y un torneo de 63 equipos
+(`format:'league'`) donde el nombre guardado en `cfg.teams[]` o el
+`humanIcon` puede no coincidir exactamente, `_gmHumanInvolved()` podía
+devolver `false` mientras `_ensureImbatEvents` (con el fallback
+correcto) sí reconocía a Liverpool como humano — inconsistencia entre
+dos detectores de "¿es humano?" para el MISMO partido, saltándose en
+silencio el gate de Estadísticas.
+
+### Fix
+
+1. `_gmHumanInvolved()` añade la MISMA capa 0 de refuerzo que ya usa
+   `_ensureImbatEvents` (`esH`): fallback a `window._isHumanClubCanonico`
+   y `window._esSelHumana` tras agotar las 3 vías anteriores. Ahora
+   AMBOS detectores usan la fuente canónica como última red, así que no
+   pueden discrepar sobre el mismo partido.
+2. **Watchdog anti-bloqueo-silencioso** en `_mlConfirmEnd` (el handler
+   de "SÍ" de la confirmación de FINALIZAR): 9 s después de confirmar,
+   si `#gm-btn-end` sigue deshabilitado, el partido no está `finished`,
+   y NINGÚN overlay obligatorio conocido (imbatida, stats, MVP, team/
+   player pick, post-partido, loading…) está visible, se asume que la
+   cadena se atascó por CUALQUIER motivo no previsto y se reactiva el
+   botón con un aviso, para que el usuario pueda reintentar en vez de
+   quedarse mirando el marcador sin ninguna pista ni forma de avanzar.
+   `gmEndMatch`/`mlEndMatchGen` son idempotentes (retoman desde el
+   primer gate pendiente), así que reintentar es seguro.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un detector nuevo de "¿hay un humano en este
+   partido?" (para gatear Estadísticas, MVP, cronómetro, sanciones,
+   etc.) omita el fallback al registro canónico
+   (`_isHumanClubCanonico`/`_esSelHumana`) cuando OTRO detector del
+   MISMO flujo (p.ej. `_ensureImbatEvents`) ya lo usa. Dos detectores
+   de humanidad para el mismo partido que puedan discrepar reintroducen
+   gates obligatorios que se saltan en silencio para unos partidos sí y
+   para otros no.
+2. **PROHIBIDO** que la confirmación de FINALIZAR (`_mlConfirmEnd`)
+   deshabilite el botón sin un watchdog de resolución acotada. La
+   cadena de gates automáticos (imbatida→stats→MVP→WhatsApp) se
+   re-dispara sola sin interacción del usuario en la ventana normal,
+   pero CUALQUIER gate que falle en silencio (ahora o en el futuro) deja
+   al usuario sin ninguna salida si no hay un timeout que reactive el
+   botón. Todo gate NUEVO que se añada a esta cadena hereda esta red de
+   seguridad automáticamente (el watchdog es genérico, no por-gate).
+
 ## El auto-pick de portero IA en la portería imbatida SIEMPRE registra un evento — nunca deja `needsImbat` en true para siempre (obligatorio, 2026-07-05)
 
 **Bug (fotos usuario 2026-07-05, «Maccabi Tel Aviv (IA) vs Liverpool

@@ -169,12 +169,25 @@ window.showImbatForce = function(teamName, onConfirm) {
      `cancelImbatForce` ya son idempotentes por su cuenta). */
   function _imbatWireTapFallback(el, action){
     var fired = false;
-    el.addEventListener('touchstart', function(e){
+    function _fire(e){
       if (fired) return;
       fired = true;
-      try { e.preventDefault(); } catch(_){}
+      try { e && e.preventDefault && e.preventDefault(); } catch(_){}
       action(el);
-    }, { passive:false });
+    }
+    el.addEventListener('touchstart', _fire, { passive:false });
+    /* Respaldo #3 (2026-07-05, el usuario sigue bloqueado tras el
+       respaldo de touchstart): Pointer Events unifican touch/ratón/lápiz
+       y en Chrome/Android son la vía que el propio navegador usa
+       internamente para decidir scroll-vs-tap ANTES incluso de decidir
+       si dispara `touchstart` como cancelable — cablear también
+       `pointerdown` cubre el caso (no reproducible sin un dispositivo
+       real) de que algo en la cadena de eventos táctil se pierda pero
+       el puntero genérico sí llegue. Comparte la misma guardia `fired`
+       — sea cual sea el que dispare primero, gana y el resto es no-op. */
+    el.addEventListener('pointerdown', _fire, { passive:false });
+    /* Respaldo #4: ratón puro (desktop / emulador con mouse-only). */
+    el.addEventListener('mousedown', _fire);
   }
   try {
     ov.querySelectorAll('.mvp-pl-btn').forEach(function(b){
@@ -183,6 +196,29 @@ window.showImbatForce = function(teamName, onConfirm) {
     var _cancelBtn = ov.querySelector('.ml-pl-ov-close');
     if (_cancelBtn) _imbatWireTapFallback(_cancelBtn, function(){ window.cancelImbatForce(); });
   } catch(err) { try { console.warn('showImbatForce: respaldo táctil fallo:', err); } catch(_){} }
+  /* Respaldo #5 — DELEGACIÓN en el propio overlay (2026-07-05): todos
+     los respaldos anteriores dependen de que el listener se enganchase
+     correctamente en CADA botón individual al crearlos. Si por lo que
+     sea uno de esos `addEventListener` no llegó a engancharse (o el
+     navegador del usuario no dispara `touchstart`/`pointerdown` sobre
+     el botón concreto por cualquier motivo no reproducible desde aquí),
+     un listener en el CONTENEDOR que delega por `closest()` es
+     independiente de eso — solo necesita que el toque llegue a
+     CUALQUIER punto dentro del overlay. `confirmImbatForce`/
+     `cancelImbatForce` ya son 100% idempotentes (comprueban
+     `_imbatForceCallback`/el overlay antes de actuar), así que no hay
+     riesgo de doble confirmación aunque este handler y los de arriba
+     se disparen ambos para el mismo toque. */
+  try {
+    ov.addEventListener('pointerdown', function(e){
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var pl = t.closest('.mvp-pl-btn');
+      if (pl) { window.confirmImbatForce(pl); return; }
+      var cc = t.closest('.ml-pl-ov-close');
+      if (cc) { window.cancelImbatForce(); }
+    }, { passive:true });
+  } catch(err) { try { console.warn('showImbatForce: delegación de respaldo falló:', err); } catch(_){} }
 };
 
 window.confirmImbatForce = function(btn) {

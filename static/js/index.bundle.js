@@ -6989,24 +6989,49 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
          candidato no tiene alias resuelto LOCALMENTE, no significa que
          no exista — puede que este dispositivo nunca haya cargado esa
          liga concreta (Resto de Ligas tiene ~54). Preguntamos al
-         servidor UNA sola vez (rápido, `/api/team-alias/<nombre>`) y, si
-         aparece, inyectamos el botón ❓ en el placeholder ya pintado. Si
-         el servidor tampoco lo tiene, el equipo es real de verdad — no
-         se muestra nada, nunca (regla "ficticio = tiene alias"). */
+         servidor (`/api/team-alias/<nombre>`) y, si aparece, inyectamos
+         el botón ❓ en el placeholder ya pintado. Si el servidor tampoco
+         lo tiene, el equipo es real de verdad — no se muestra nada,
+         nunca (regla "ficticio = tiene alias").
+
+         REINTENTOS (2026-07-05, refuerzo — bug "otra vez no sale la ❓"
+         reportado tras confirmar que el alias SÍ existe en servidor):
+         `_efAliasServerSearch` resuelve `found=null` tanto si el
+         servidor de verdad no tiene el alias COMO si la petición falló
+         (red móvil, timeout de 6s, Railway recién desplegado
+         despertando tras el merge). Sin reintento, un solo fallo
+         transitorio deja el botón SIN INYECTAR para siempre — no hay
+         forma de distinguir "no tiene alias" de "no se pudo preguntar"
+         desde fuera, así que reintentamos unas pocas veces con backoff
+         antes de rendirnos. Barato: solo se dispara para el lado
+         candidato sin alias local, nunca en bucle infinito (tope de
+         intentos), y cada intento es una única petición ligera. */
       function _ppAliasDeferredCheck(side, teamName, isCandidate, txt){
         if(!isCandidate || txt) return;
         if(typeof window._efAliasServerSearch !== 'function') return;
-        window._efAliasServerSearch(teamName, function(found){
-          if(!found) return;
-          var host = document.getElementById('pp-alias-' + side);
-          if(!host) return;
-          var _aSafe = String(found||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-          var _tSafe = String(teamName||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-          host.setAttribute('data-copa-alias-replaced', '1');
-          host.innerHTML = '<button type="button" class="copa-alias-help" onclick="window._copaShowAlias&&window._copaShowAlias(this)" '
-            + 'data-copa-alias-full="'+_aSafe+'" data-copa-alias-team="'+_tSafe+'" aria-label="Ver alias eFootball completo" '
-            + 'style="background:none;border:none;color:#ffd54a;font-size:20px;cursor:pointer;padding:2px 8px;line-height:1;animation:copaAliasPulse 1.4s ease-in-out infinite;">❓</button>';
-        });
+        var MAX_TRIES = 3;
+        var DELAYS = [0, 1500, 3500];
+        var tries = 0;
+        function _attempt(){
+          window._efAliasServerSearch(teamName, function(found){
+            if(found){
+              var host = document.getElementById('pp-alias-' + side);
+              if(!host) return;
+              var _aSafe = String(found||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+              var _tSafe = String(teamName||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+              host.setAttribute('data-copa-alias-replaced', '1');
+              host.innerHTML = '<button type="button" class="copa-alias-help" onclick="window._copaShowAlias&&window._copaShowAlias(this)" '
+                + 'data-copa-alias-full="'+_aSafe+'" data-copa-alias-team="'+_tSafe+'" aria-label="Ver alias eFootball completo" '
+                + 'style="background:none;border:none;color:#ffd54a;font-size:20px;cursor:pointer;padding:2px 8px;line-height:1;animation:copaAliasPulse 1.4s ease-in-out infinite;">❓</button>';
+              return;
+            }
+            tries++;
+            if (tries < MAX_TRIES) {
+              setTimeout(_attempt, DELAYS[tries] || 3500);
+            }
+          });
+        }
+        _attempt();
       }
       var durText;
       if (window._ppDurationMin) {

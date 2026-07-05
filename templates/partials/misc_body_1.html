@@ -45223,6 +45223,25 @@ https://api.sofascore.app/api/v1/team/44/image
     return entry ? entry.alias : '';
   };
 
+  /* ¿Este equipo YA es conocido en algún dato cargado localmente
+     (ligaExt_, LIGA_CACHE, selecciones_squad_v1), aunque sea SIN alias?
+     (2026-07-05, bug "Timor Oriental" — una selección REAL sin alias
+     configurado porque no lo necesita, no porque falte sincronizar).
+     Si el equipo ya está indexado localmente, un alias vacío es una
+     respuesta DEFINITIVA ("no tiene, no hace falta buscar en ningún
+     sitio más") — la búsqueda en servidor es SOLO para equipos que
+     este dispositivo no conoce en absoluto todavía (típicamente un
+     club de una de las ~54 ligas de Resto de Ligas que nunca se abrió
+     en este dispositivo). Evita disparar una búsqueda de servidor
+     inútil (y su "Buscando..." innecesario) para cualquier equipo sin
+     alias que sí está cacheado. */
+  window._efAliasKnownLocally = function(teamName){
+    var targetNorm = _aliasNormName(teamName);
+    if(!targetNorm) return false;
+    _aliasCache(); // fuerza construir/refrescar el cache si hace falta
+    return !!window.__aliasFoundInEditor[targetNorm];
+  };
+
   /* Búsqueda en SERVIDOR del alias cuando el escaneo local no lo
      encuentra (2026-07-05, «si tiene alias» — el admin lo tenía
      guardado en `ligaExt_<slug>` pero ESTE dispositivo nunca había

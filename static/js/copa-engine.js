@@ -3945,6 +3945,15 @@
     return ov;
   }
 
+  function _copaAliasNotConfiguredMsg(team){
+    return '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
+      + 'Si el equipo NO existe en eFootball, ve al editor de Resto de '
+      + 'Ligas → busca ' + team + ' → rellena "Alias eFootball" con el '
+      + 'equipo real que uses en el juego.\n\nSi el equipo SÍ existe tal '
+      + 'cual en eFootball, no hace falta rellenar nada — este aviso es '
+      + 'normal.';
+  }
+
   window._copaShowAlias = function (btn) {
     if (!btn) return;
     var alias = btn.getAttribute('data-copa-alias-full') || '';
@@ -3955,13 +3964,26 @@
       ov.style.display = 'flex';
       return;
     }
-    /* Sin alias en el cache LOCAL (2026-07-04/05, petición usuario
-       "TIENE QUE SALIR SI O SI LA ❓" + "si tiene alias"): puede que el
-       admin SÍ lo haya guardado en `ligaExt_<slug>`, pero este
-       dispositivo nunca cargó esa liga concreta (de las ~54 de Resto de
-       Ligas) y por tanto no tiene copia local que escanear. Antes de
-       rendirnos con "sin configurar", buscamos en el SERVIDOR liga por
-       liga (secuencial, para el equipo con ese nombre exacto). */
+    /* Si el equipo YA es conocido localmente (ligaExt_, LIGA_CACHE,
+       selecciones_squad_v1) aunque sin alias, es una respuesta
+       DEFINITIVA — no hace falta preguntar al servidor (2026-07-05,
+       bug "Timor Oriental": una selección REAL sin alias porque no lo
+       necesita se quedaba "Buscando en el servidor…" sin sentido). Solo
+       se busca en servidor si este dispositivo NO conoce el equipo en
+       absoluto (típico de un club de Resto de Ligas cuya liga nunca se
+       cargó aquí). */
+    if (typeof window._efAliasKnownLocally === 'function' && window._efAliasKnownLocally(team)) {
+      document.getElementById('_copaAliasText').textContent = _copaAliasNotConfiguredMsg(team);
+      ov.style.display = 'flex';
+      return;
+    }
+    /* Sin alias en el cache LOCAL Y equipo desconocido aquí (2026-07-04/
+       05, petición usuario "TIENE QUE SALIR SI O SI LA ❓" + "si tiene
+       alias"): puede que el admin SÍ lo haya guardado en
+       `ligaExt_<slug>`, pero este dispositivo nunca cargó esa liga
+       concreta y por tanto no tiene copia local que escanear. Antes de
+       rendirnos con "sin configurar", preguntamos al SERVIDOR (una
+       sola petición, ver `/api/team-alias/<nombre>`). */
     document.getElementById('_copaAliasText').textContent = '🔄 Buscando en el servidor…';
     ov.style.display = 'flex';
     if (typeof window._efAliasServerSearch === 'function') {
@@ -3972,15 +3994,11 @@
           btn.setAttribute('data-copa-alias-full', found);
           txtEl.textContent = found;
         } else {
-          txtEl.textContent = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
-            + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
-            + '"Alias eFootball" con el equipo real que uses en el juego.';
+          txtEl.textContent = _copaAliasNotConfiguredMsg(team);
         }
       });
     } else {
-      document.getElementById('_copaAliasText').textContent = '⚠️ Sin alias eFootball configurado para ' + team + '.\n\n'
-        + 'Ve al editor de Resto de Ligas → busca ' + team + ' → rellena '
-        + '"Alias eFootball" con el equipo real que uses en el juego.';
+      document.getElementById('_copaAliasText').textContent = _copaAliasNotConfiguredMsg(team);
     }
   };
 

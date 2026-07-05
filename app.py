@@ -3478,10 +3478,25 @@ def api_liga_ext_post(slug):
     })
 
 
+def _team_alias_scan_teams(teams, target):
+    if not isinstance(teams, list):
+        return None
+    for t in teams:
+        if not isinstance(t, dict) or not t.get("name"):
+            continue
+        if _lx_canon_name(t.get("name")) != target:
+            continue
+        alias = t.get("efootballAlias")
+        if isinstance(alias, str) and alias.strip():
+            return alias.strip()
+    return None
+
+
 @app.route("/api/team-alias/<name>", methods=["GET"])
 def api_team_alias(name):
     """Busca el alias de eFootball de un equipo por NOMBRE en TODAS las
-    ligas del servidor de una sola vez (búsqueda server-side).
+    ligas + selecciones nacionales del servidor de una sola vez
+    (búsqueda server-side).
 
     Sustituye a la búsqueda client-side por lotes (2026-07-05): el
     cliente hacía hasta ~54 peticiones HTTP (una por liga) desde el
@@ -3492,6 +3507,11 @@ def api_team_alias(name):
     sin depender de la red del cliente para cada liga) y devuelve el
     alias ya resuelto. Match por nombre canónico (afijo-aware, mismo
     criterio que `_lx_merge_teams`) para tolerar variantes de grafía.
+
+    Cubre TAMBIÉN `selecciones_squad_v1` (2026-07-05, bug "Timor
+    Oriental" — una SELECCIÓN nacional, no un club de Resto de Ligas;
+    el primer endpoint solo miraba `liga_ext_*` y nunca podía
+    encontrarla aunque tuviera alias configurado).
     """
     target = _lx_canon_name(name)
     if not target:
@@ -3510,16 +3530,20 @@ def api_team_alias(name):
         except Exception:
             continue
         teams = data.get("teams") if isinstance(data, dict) else None
-        if not isinstance(teams, list):
-            continue
-        for t in teams:
-            if not isinstance(t, dict) or not t.get("name"):
-                continue
-            if _lx_canon_name(t.get("name")) != target:
-                continue
-            alias = t.get("efootballAlias")
-            if isinstance(alias, str) and alias.strip():
-                return jsonify({"ok": True, "alias": alias.strip()})
+        found = _team_alias_scan_teams(teams, target)
+        if found:
+            return jsonify({"ok": True, "alias": found})
+    try:
+        selrow = GlobalState.query.filter_by(clave="selecciones_squad_v1").first()
+        if selrow and selrow.valor_json:
+            seldata = json.loads(selrow.valor_json)
+            selval = seldata.get("value") if isinstance(seldata, dict) and "value" in seldata else seldata
+            selteams = selval.get("teams") if isinstance(selval, dict) else None
+            found = _team_alias_scan_teams(selteams, target)
+            if found:
+                return jsonify({"ok": True, "alias": found})
+    except Exception:
+        pass
     return jsonify({"ok": True, "alias": None})
 
 # ══════════════════════════════════════════════════════════════════

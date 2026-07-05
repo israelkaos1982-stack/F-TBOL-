@@ -2475,6 +2475,59 @@ encontrado" pasado ese tiempo.
     filtro anti-derivados (`_protected`/`_snap_*`) que `_lx_merge_teams`,
     para no duplicar lógica de canonicalización.
 
+### Refuerzo 3 — la búsqueda cubre SELECCIONES + no se dispara si el equipo ya es conocido sin alias (obligatorio, 2026-07-05)
+
+**Bug (fotos usuario, «Timor Oriental», foto "pero si es equipo real,
+por qué sale ❓")**: en un partido de Selecciones (Road Copa Asia,
+Inglaterra vs Timor Oriental), el ❓ bajo Timor Oriental se quedaba
+`🔄 Buscando en el servidor…` sin resolver nunca.
+
+**Causa raíz 1**: `/api/team-alias/<nombre>` (refuerzo 2 de arriba)
+solo consultaba filas `liga_ext_*` — **nunca** `selecciones_squad_v1`.
+Timor Oriental es una SELECCIÓN nacional, no un club de Resto de Ligas,
+así que la búsqueda jamás podía encontrarla aunque tuviera alias
+guardado en el sitio correcto.
+
+**Causa raíz 2 (más de fondo)**: Timor Oriental **es un equipo real**
+en el juego — el admin nunca configuró alias porque no hace falta.
+Pero el código no distinguía "este equipo no está cacheado en este
+dispositivo" (sí amerita preguntar al servidor) de "este equipo SÍ está
+cacheado, simplemente no tiene alias porque no lo necesita" (una
+respuesta ya definitiva, preguntar al servidor es tiempo perdido). Con
+`selecciones_squad_v1` casi siempre cacheado localmente (es una sola
+clave global, no 54 ligas fragmentadas), este caso iba a ser MUY común
+para selecciones.
+
+**Fix**:
+- `/api/team-alias/<nombre>` (`app.py`) ahora también consulta la fila
+  `selecciones_squad_v1` si no encontró nada en `liga_ext_*`.
+- Nuevo `window._efAliasKnownLocally(teamName)` (`misc_body_1.html`):
+  usa el flag `window.__aliasFoundInEditor` (ya lo pone
+  `getTeamEfootballAlias` cuando encuentra el equipo en CUALQUIER
+  fuente local, aunque el alias venga vacío) para saber si el equipo ya
+  es conocido. `_copaShowAlias` (`copa-engine.js`) comprueba esto
+  ANTES de disparar `_efAliasServerSearch`: si el equipo ya es
+  conocido localmente (con o sin alias), muestra el aviso al instante
+  sin preguntar al servidor. El aviso ahora también aclara "si el
+  equipo SÍ existe tal cual en eFootball, no hace falta rellenar nada
+  — este aviso es normal" para no sugerir un fallo cuando no lo hay.
+
+**Reglas a respetar**:
+11. **PROHIBIDO** que un endpoint de búsqueda de identidad por nombre
+    cubra solo `liga_ext_*` cuando el dato (alias, o cualquier campo
+    similar) también puede vivir en `selecciones_squad_v1` (selecciones
+    nacionales) o cualquier otro store de equipos. Cubrir TODAS las
+    fuentes donde ese campo pueda existir.
+12. **PROHIBIDO** disparar la búsqueda en servidor para un equipo que
+    YA está indexado localmente (`window.__aliasFoundInEditor`), aunque
+    su alias venga vacío — un alias vacío de un equipo CONOCIDO es una
+    respuesta definitiva ("no lo necesita"), no una señal de que falte
+    sincronizar. Solo preguntar al servidor cuando el equipo no está
+    indexado en ABSOLUTO localmente.
+13. Todo aviso de "sin alias configurado" debe dejar claro que es un
+    estado NORMAL para un equipo con licencia real en eFootball, no
+    solo un error a corregir — para no generar la misma confusión.
+
 ## Resto de Ligas — las stats de COPA + LIGA se SUMAN por jugador y sobreviven al re-sim de liga (obligatorio, 2026-06-12)
 
 **Bug (fotos usuario 2026-06-12, «Campionato Sammarinese»)**: un equipo

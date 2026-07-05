@@ -331,10 +331,29 @@ window._ensureImbatEvents = function(opts, onDone){
        Alisson y no pasa nada, imposible continuar" reportado tras
        varios intentos. */
     if (typeof onDone === 'function') {
-      try { onDone(); }
-      catch(doneErr) {
-        try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
-        try { alert('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
+      /* Diferido a un frame + tick (2026-07-05, "se congela la
+         pantalla obligando a cerrar la web"): `onDone()` (gmEndMatch/
+         mlEndMatch) puede desencadenar trabajo pesado (overlay de
+         stats, guardado de un torneo grande de 63 equipos, etc.). Si
+         se llama de forma SÍNCRONA aquí, el navegador no llega a
+         PINTAR siquiera el cierre del overlay de porteros antes de
+         quedarse ocupado con lo siguiente — desde el punto de vista
+         del usuario es indistinguible de "no ha pasado nada, se ha
+         congelado", aunque el código internamente sí avanzara. Con
+         `requestAnimationFrame` + `setTimeout(0)` forzamos al menos UN
+         repintado (el overlay desaparece visiblemente) antes de que
+         corra el resto de la cadena. */
+      var _runOnDone = function(){
+        try { onDone(); }
+        catch(doneErr) {
+          try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
+          try { alert('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
+        }
+      };
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(function(){ setTimeout(_runOnDone, 0); });
+      } else {
+        setTimeout(_runOnDone, 0);
       }
     }
   }).catch(function(err){

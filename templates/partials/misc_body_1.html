@@ -34102,13 +34102,18 @@ window._showSimProgress = function(opts, onDone){
     return (c && typeof c === 'object') ? c : {};
   }
   function _tvName(id){ var c=_tvCfgOf(id); return (c.name) || (DEFAULTS[id] && DEFAULTS[id].name) || id; }
-  /* Trofeos reales de Selecciones (fotos usuario 2026-07-05): si el
-     admin NUNCA tocó la bandera (sigue en el emoji genérico por
-     defecto 🌐/🏆), se resuelve el trofeo real por el NOMBRE del
-     torneo — así "Road Copa Asia"/"Copa Asia" muestran el trofeo de
-     la Copa de Asia sea cual sea el slot (spv o sfn) que ocupen, sin
-     depender de qué id concreto eligió el admin. Si el admin SÍ puso
-     su propia bandera/emoji/URL, esa elección manda siempre. */
+  /* Trofeos reales de Selecciones (fotos usuario 2026-07-05): si la
+     bandera NO es ya una imagen real (sigue siendo cualquier emoji —
+     🌐/🏆 genérico, o un resto de una versión antigua del código que ya
+     no coincide con el default ACTUAL), se resuelve el trofeo real por
+     el NOMBRE del torneo — así "Road Copa Asia"/"Copa Asia" muestran el
+     trofeo de la Copa de Asia sea cual sea el slot (spv o sfn) que
+     ocupen y sea cual sea el emoji concreto que tuvieran guardado.
+     Solo si el admin puso una IMAGEN propia (URL/ruta) esa elección
+     manda y no se sustituye. (2026-07-05, refuerzo: comparar contra un
+     único "default" fijo fallaba con banderas legacy que ya no
+     coincidían con el marcador actual — solo "Mundial 2032" coincidía
+     por casualidad, el resto de cajas se quedaban con el globo.) */
   function _tvNormName(s){
     s = String(s == null ? '' : s).toLowerCase();
     try { s = s.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch(_){}
@@ -34140,7 +34145,7 @@ window._showSimProgress = function(opts, onDone){
     var def = (DEFAULTS[id] && DEFAULTS[id].flag) || '🏆';
     var cur = c.flag || def;
     var bd = _tvBoardOf(id);
-    if ((bd === 'sel-previa' || bd === 'sel-final') && cur === def){
+    if ((bd === 'sel-previa' || bd === 'sel-final') && !_tourIsImgFlag(cur)){
       var auto = _tvAutoTrophyForName(_tvName(id));
       if (auto) return auto;
     }

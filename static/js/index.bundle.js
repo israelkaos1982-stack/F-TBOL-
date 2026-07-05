@@ -268,6 +268,7 @@ window._ensureImbatEvents = function(opts, onDone){
   var evts = opts.events || [];
   var hasA = evts.some(function(e){ return e && e.type==='imbat' && e.team==='a'; });
   var hasB = evts.some(function(e){ return e && e.type==='imbat' && e.team==='b'; });
+  try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('_ensureImbatEvents() llamado. hasA=' + hasA + ' hasB=' + hasB); } catch(_){}
   /* Capa 0 + fallback (regla CLAUDE.md "Humanidad por competición" /
      MISTERS_REGISTRY): esHumano() solo reconoce los 5 humanos legacy de
      Liga EA Sports. Si un club/selección humano NUEVO llega aquí (PSG,
@@ -358,6 +359,7 @@ window._ensureImbatEvents = function(opts, onDone){
          repintado (el overlay desaparece visiblemente) antes de que
          corra el resto de la cadena. */
       var _runOnDone = function(){
+        try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('_ensureImbatEvents: ambos steps resueltos → llamando onDone()'); } catch(_){}
         try { onDone(); }
         catch(doneErr) {
           try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}

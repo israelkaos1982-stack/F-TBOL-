@@ -1,5 +1,71 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La pantalla FINAL (`_gmShowFinalOv`) NUNCA se queda sin mostrar tras `_gm.finished=true` (obligatorio, 2026-07-05)
+
+**Bug (foto usuario 2026-07-05, mismo partido «Maccabi Tel Aviv vs
+Liverpool», Trofeo Joan Gamper)**: tras los 2 fixes anteriores (auto-pick
+del portero IA + `_gmHumanInvolved` con registro canónico), el partido
+avanzó más — la portería imbatida de AMBOS lados y el MVP («Jugador A»,
+placeholder porque el roster de Maccabi no resuelve nombres reales)
+quedaron registrados en el acta — pero el partido volvió a quedarse
+igual: FINALIZAR deshabilitado, sin pantalla de resumen ni de WhatsApp.
+
+### Causa raíz
+
+`gmEndMatch()` marca `_gm.finished = true` y hace
+`setTimeout(function(){ _gmShowFinalOv(); }, 80)` para abrir la pantalla
+FINAL (marcador + acta completa + MVP + botón compartir). `_gmShowFinalOv`
+rellenaba TODO su contenido (cabecera, escudos, MVP, acta completa vía
+`_gmEvtRow`) en línea recta, SIN try/catch, y solo al FINAL hacía
+`ov.style.display = 'flex'`. Si CUALQUIER paso de ese relleno lanzaba una
+excepción (un dato inesperado en un evento del acta, un helper de
+escudo/humanIcon fallando, etc.), la función abortaba ANTES de llegar a
+esa línea — el overlay JAMÁS se hacía visible. Como `_gm.finished` ya es
+`true` en ese punto, `gmEndMatch()` no vuelve a hacer nada
+(`if (_gm.finished) return;`) y el watchdog de `_mlConfirmEnd` (sección
+de arriba) explícitamente SALTA la reactivación cuando el partido está
+`finished` — así que el usuario se quedaba mirando el gm-modal congelado
+sin NINGUNA pantalla ni forma de recuperar el partido, aunque el
+resultado ya estuviera guardado internamente.
+
+### Fix
+
+1. `_gmShowFinalOv` envuelve cada bloque de relleno (cabecera/escudos,
+   MVP, acta, botones) en su propio try/catch — un fallo parcial se
+   loguea pero NUNCA impide llegar a `ov.style.display = 'flex'`, que
+   ahora es INCONDICIONAL al final de la función.
+2. El `setTimeout` que llama a `_gmShowFinalOv()` desde `gmEndMatch`
+   también va envuelto: si pese al blindaje interno algo revienta,
+   se avisa con `alert()` (el resultado ya está guardado) y se llama a
+   `gmVolver()` para no dejar al usuario atrapado en el modal.
+3. El watchdog de `_mlConfirmEnd` (9 s) ya NO ignora los partidos
+   `finished`: si el partido está `finished` pero NINGÚN overlay
+   terminal (`gm-fin-ov` incluido en la lista vigilada, junto con
+   `gm-mvp-share-gate` que faltaba en la lista) está visible, avisa que
+   el resultado ya se guardó y ofrece `gmVolver()` en vez de dejar la
+   pantalla congelada silenciosamente para siempre.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_gmShowFinalOv` (o cualquier pantalla terminal
+   obligatoria equivalente: descanso, prórroga, penaltis…) rellene su
+   contenido SIN try/catch antes de hacerse visible. El `display=flex`
+   (o `.show`) que revela el overlay debe ser INCONDICIONAL — un dato
+   inesperado en un solo evento del acta no puede impedir que el
+   usuario vea NINGUNA pantalla tras finalizar.
+2. **PROHIBIDO** que un watchdog anti-bloqueo (el de `_mlConfirmEnd`, o
+   cualquier futuro) descarte por completo los partidos `finished`. Un
+   partido puede quedar `finished=true` internamente y aun así no haber
+   mostrado NINGUNA pantalla al usuario si el paso que la muestra
+   falló — el watchdog debe cubrir también ese caso (ofreciendo salir,
+   ya que el resultado está guardado, en vez de reactivar un botón que
+   ya no sirve de nada).
+3. Toda lista de "overlays terminales conocidos" que use un watchdog o
+   un observer de UI (spinner, watchdog de finalizar, etc.) debe incluir
+   TODOS los overlays reales del flujo — `gm-mvp-share-gate` faltaba en
+   la lista del watchdog anterior. Al añadir un overlay obligatorio
+   nuevo a la cadena, añadirlo también a estas listas.
+
 ## `_gmHumanInvolved` reconoce al humano por el registro canónico + watchdog anti-bloqueo-silencioso tras FINALIZAR (obligatorio, 2026-07-05)
 
 **Bug (foto usuario 2026-07-05, mismo partido «Maccabi Tel Aviv (IA) vs

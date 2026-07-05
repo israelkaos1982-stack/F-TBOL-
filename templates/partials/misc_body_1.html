@@ -45230,72 +45230,42 @@ https://api.sofascore.app/api/v1/team/44/image
      escaneo de `_buildAliasCache` no tenía nada que mirar, aunque el
      servidor SÍ tuviera el alias).
 
-     Refuerzo 2026-07-05 (petición usuario, «se tira mucho tiempo
-     buscando, tendría que salir al momento»): recorrer las ~54 ligas
-     UNA A UNA (secuencial puro) tardaba demasiado — cada fetch en
-     serie suma su latencia completa, y con Railway pueden ser varios
-     segundos por liga. Se sube a un **lote de 8 en paralelo** (ni
-     secuencial-lento ni las 54 de golpe — mismo espíritu anti-
-     thundering-herd que `_eurHydrateMissingLeagues`, pero con
-     concurrencia acotada en vez de 1 a la vez) para que el resultado
-     típico llegue en 1-2 rondas en vez de hasta 54 peticiones en fila.
-     Para el CASO COMÚN (la liga del equipo ya está cacheada localmente
-     por haberse abierto antes), esta búsqueda de servidor NUNCA se
-     dispara — solo entra en juego la primera vez que un dispositivo
-     nuevo consulta un equipo de una liga que nunca cargó. */
+     Refuerzo 2026-07-05 #2 (petición usuario, «porque tiene que buscar
+     en el servidor, la búsqueda no funciona, se queda cargando» —
+     razón: el lote de 8 peticiones en paralelo seguía dependiendo de
+     que el PROPIO MÓVIL hiciera hasta ~54 peticiones HTTP una por una
+     por lote, y una sola petición colgada en una red móvil floja
+     bloqueaba el `Promise.all` de todo el lote para siempre, sin
+     timeout). Sustituido por **una única petición** a
+     `/api/team-alias/<nombre>` — el SERVIDOR busca en su propia base de
+     datos (rápido, sin depender de la red del cliente para cada liga) y
+     devuelve el alias ya resuelto en una sola respuesta. Con timeout de
+     6 s (AbortController) para que, si la red falla, la búsqueda NUNCA
+     se quede "cargando" para siempre — a los 6 s se resuelve como "no
+     encontrado" en vez de colgarse. */
   window._efAliasServerSearch = function(teamName, onDone){
     var targetNorm = _aliasNormName(teamName);
     if(!targetNorm){ onDone(null); return; }
-    var slugs = [];
-    try { slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {}); } catch(_){}
-    var BATCH = 8;
-    var i = 0, done = false;
-    function finish(result){
-      if(done) return;
-      done = true;
-      onDone(result);
-    }
-    function checkTeams(teams){
-      for(var k=0; k<teams.length; k++){
-        var t = teams[k];
-        if(t && t.name && _aliasNormName(t.name) === targetNorm){
-          var a = String(t.efootballAlias||'').trim();
-          if(a) return a;
+    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var timer = setTimeout(function(){ try { ctrl && ctrl.abort(); } catch(_){} }, 6000);
+    fetch('/api/team-alias/' + encodeURIComponent(teamName), ctrl ? { signal: ctrl.signal } : {})
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(j){
+        clearTimeout(timer);
+        var a = (j && j.alias) ? String(j.alias).trim() : '';
+        if(a){
+          /* Backfill inmediato del cache local para que la próxima
+             consulta (de este equipo, en esta u otra previa) sea
+             instantánea sin repetir la búsqueda. */
+          try {
+            if(_ALIAS_CACHE) _ALIAS_CACHE[targetNorm] = { alias:a, stadium:(_ALIAS_CACHE[targetNorm]||{}).stadium||'' };
+          } catch(_){}
+          onDone(a);
+        } else {
+          onDone(null);
         }
-      }
-      return null;
-    }
-    function fetchOne(slug){
-      return fetch('/api/liga-ext/' + encodeURIComponent(slug)).then(function(r){
-        return r.ok ? r.json() : null;
-      }).then(function(j){
-        var teams = (j && j.data && Array.isArray(j.data.teams)) ? j.data.teams : [];
-        return checkTeams(teams);
-      }).catch(function(){ return null; });
-    }
-    function round(){
-      if(done) return;
-      if(i >= slugs.length){ finish(null); return; }
-      var batchSlugs = slugs.slice(i, i + BATCH);
-      i += BATCH;
-      Promise.all(batchSlugs.map(fetchOne)).then(function(results){
-        if(done) return;
-        for(var r=0; r<results.length; r++){
-          if(results[r]){
-            /* Backfill inmediato del cache local para que la próxima
-               consulta (de este equipo, en esta u otra previa) sea
-               instantánea sin repetir la búsqueda. */
-            try {
-              if(_ALIAS_CACHE) _ALIAS_CACHE[targetNorm] = { alias:results[r], stadium:(_ALIAS_CACHE[targetNorm]||{}).stadium||'' };
-            } catch(_){}
-            finish(results[r]);
-            return;
-          }
-        }
-        round();
-      });
-    }
-    round();
+      })
+      .catch(function(){ clearTimeout(timer); onDone(null); });
   };
 
   /* Override de getTeamStadium para PRIORIZAR el estadio que el admin

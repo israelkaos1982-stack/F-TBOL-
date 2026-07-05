@@ -2415,18 +2415,65 @@ alias al roster del torneo.
    touchmove llegue a evaluarse.
 
 **Reglas a respetar**:
-6. **PROHIBIDO** que una búsqueda de respaldo en servidor (alias,
-   escudo, o cualquier campo de identidad futuro) sea estrictamente
-   secuencial 1-a-1 cuando el usuario está esperando activamente el
-   resultado en pantalla (no es un proceso de fondo). Usar lotes en
-   paralelo acotados (`BATCH`, no todas de golpe) para que la latencia
-   percibida sea de 1-2 rondas, no de hasta N peticiones en fila.
+6. ~~PROHIBIDO que una búsqueda de respaldo en servidor sea secuencial
+   1-a-1... usar lotes en paralelo acotados~~ — **SUPERADO por el
+   refuerzo de abajo (2026-07-05 #2)**: ni siquiera por lotes, el
+   cliente NO debe repetir peticiones HTTP (una por liga) para buscar
+   un dato por nombre. La búsqueda de identidad por nombre (alias, o
+   cualquier campo similar futuro) se hace con **UNA sola petición a un
+   endpoint server-side dedicado** que recorre las ligas en la propia
+   base de datos del servidor. Ver `/api/team-alias/<nombre>`.
 7. **PROHIBIDO** que el respaldo táctil de un overlay OBLIGATORIO
    crítico (picker de porteros, MVP, o cualquier futuro) espere al
    `touchend`/gesto completo para decidir si actuar. Dispara en
    `touchstart` — el coste de un falso positivo ocasional es siempre
    menor que el de un usuario completamente bloqueado sin forma de
    avanzar ni cancelar.
+
+### Refuerzo 2 — la búsqueda de identidad por nombre es SERVER-SIDE, una sola petición (obligatorio, 2026-07-05)
+
+**El refuerzo anterior (lotes de 8) no bastó**: el usuario preguntó,
+con toda la razón, «¿por qué tiene que buscar en el servidor si el
+alias YA está ahí?», y además reportó que la búsqueda «no funciona, se
+queda cargando» — nunca llegaba a completarse.
+
+**Causa raíz**: el lote de 8 en paralelo seguía dependiendo de que el
+PROPIO MÓVIL hiciera hasta ~54 peticiones HTTP (una por liga), solo que
+agrupadas de 8 en 8. `fetch()` **no tiene timeout por defecto** — si
+UNA sola petición de un lote se quedaba colgada por una red móvil
+floja, el `Promise.all()` de ESE lote entero esperaba para siempre, y
+la búsqueda jamás avanzaba ni concluía "no encontrado". Además, hacer
+que el cliente escanee ~54 blobs JSON completos para encontrar UN
+equipo por nombre es trabajo que el SERVIDOR puede hacer en una
+fracción del tiempo (consultas a su propia base de datos) sin depender
+en absoluto de la calidad de la conexión del móvil.
+
+**Fix — nuevo endpoint `GET /api/team-alias/<nombre>`** (`app.py`):
+recorre TODAS las filas `liga_ext_*` de `GlobalState` DIRECTAMENTE en
+el servidor (excluyendo `_protected`/`_snap_*`), compara por nombre
+CANÓNICO (`_lx_canon_name`, mismo criterio que `_lx_merge_teams`) y
+devuelve `{ok:true, alias: "..."}` o `{alias: null}` en una ÚNICA
+respuesta. `_efAliasServerSearch` (`misc_body_1.html`) pasa de hacer
+hasta 54 fetches del cliente a hacer **UNA sola petición**, con
+`AbortController` + timeout de 6 s para que, aunque la red falle, la
+búsqueda NUNCA se quede "cargando" para siempre — se resuelve como "no
+encontrado" pasado ese tiempo.
+
+**Reglas a respetar**:
+8. **PROHIBIDO** que una búsqueda de identidad por nombre (alias, o
+   cualquier campo similar futuro) haga que el CLIENTE recorra las
+   ligas una por una o por lotes vía HTTP. Esa búsqueda vive en el
+   SERVIDOR (un endpoint dedicado que consulta su propia base de datos)
+   y el cliente hace UNA sola petición.
+9. **PROHIBIDO** que una petición `fetch()` de la que depende un
+   resultado visible en pantalla (spinner "Buscando…") carezca de
+   timeout. Sin `AbortController` (o equivalente), una petición colgada
+   deja al usuario mirando un spinner infinito sin ninguna forma de
+   saber que algo falló.
+10. Todo endpoint server-side de búsqueda por nombre NUEVO hereda el
+    mismo criterio de normalización (`_lx_canon_name`) y el mismo
+    filtro anti-derivados (`_protected`/`_snap_*`) que `_lx_merge_teams`,
+    para no duplicar lógica de canonicalización.
 
 ## Resto de Ligas — las stats de COPA + LIGA se SUMAN por jugador y sobreviven al re-sim de liga (obligatorio, 2026-06-12)
 

@@ -223,6 +223,98 @@ pulsar.
     informar al usuario qué hacer (dónde configurarlo) en vez de no
     responder al pulsar.
 
+## El picker de portería imbatida y el popup de alias NUNCA se quedan colgados en silencio — la continuación tras confirmar también va blindada (obligatorio, 2026-07-05)
+
+**Bug (4 fotos usuario, «Maccabi Tel Aviv vs Liverpool», 0-0, 12
+intentos para terminar el partido)**: pese a los refuerzos anteriores
+(touchstart inmediato en el picker, búsqueda de alias server-side de
+una sola petición), el usuario seguía reportando: (1) el popup ❓ se
+quedaba en «🔄 Buscando en el servidor…» varios MINUTOS sin resolver
+nunca, y (2) pulsar cualquiera de los 5 porteros del picker «PORTERÍA
+IMBATIDA» no hacía avanzar el partido — «imposible continuar».
+
+### Causa raíz — los fixes anteriores blindaban el TAP, no lo que pasa DESPUÉS
+
+Investigación exhaustiva confirmó que el código de `showImbatForce` /
+`confirmImbatForce` / `_efAliasServerSearch` / `/api/team-alias/<name>`
+ya estaba correctamente implementado y mergeado a `main` (verificado
+con `git log`, `py_compile` y un parser JS sobre cada bloque
+`<script>`). El hueco real estaba en la CONTINUACIÓN, no en la
+detección del toque:
+
+1. **`_ensureImbatEvents`**: `opts.pushEv(...)` se llamaba SIN
+   try/catch dentro del executor de una `new Promise(...)` — si algo
+   en el pintado del acta (`document.getElementById('gm-acta-list')`,
+   construcción del `<li>`, etc.) lanzaba, la excepción se convertía
+   automáticamente en un **rechazo silencioso** de la promesa. Peor
+   aún: la llamada a `onDone()` (el `gmEndMatch()`/`mlEndMatch()` que
+   debe reanudar el partido tras registrar la portería) vivía FUERA de
+   cualquier try/catch — si `onDone()` reventaba por cualquier motivo
+   posterior (stats, MVP, guardado…), el picker YA se había cerrado
+   (parecía que el tap "funcionó") pero el partido se quedaba
+   congelado sin overlay siguiente ni ninguna explicación. El `.catch`
+   final solo hacía `console.warn` — invisible para el usuario,
+   violando la propia regla de este archivo ("un handler de
+   confirmación de un overlay obligatorio NUNCA falla en silencio").
+2. **`_copaShowAlias`**: el timeout de 6 s vivía DENTRO de
+   `_efAliasServerSearch`, protegiendo solo la promesa del `fetch`. Si
+   algo ANTES de esa promesa reventaba de forma SÍNCRONA (`fetch`/
+   `AbortController` no definidos en un WebView viejo, o
+   `_aliasNormName` lanzando), `onDone` nunca llegaba a invocarse y el
+   overlay se quedaba en «Buscando…» para siempre — sin más salida que
+   pulsar CERRAR a ciegas, sin saber si alguna vez iba a resolver.
+
+### Fix
+
+- **`_ensureImbatEvents`** (`static/js/index.bundle.js`): las dos
+  llamadas a `opts.pushEv(...)` (humano y auto-pick IA) van envueltas
+  en try/catch — un fallo al pintar el acta ya NUNCA bloquea el
+  registro del evento ni el avance del partido. La llamada a
+  `onDone()` va envuelta en try/catch con `alert()` visible si falla.
+  El `.catch` final de la cadena de promesas también avisa con
+  `alert()` (antes solo `console.warn`) para cualquier error que no
+  sea la cancelación explícita del usuario.
+- **`_copaShowAlias`** (`static/js/copa-engine.js`): watchdog
+  `setTimeout` de 7 s **independiente** del timeout interno de
+  `_efAliasServerSearch` — resuelve el overlay a «sin alias
+  configurado» pase lo que pase, aunque algo reviente antes de que el
+  timeout interno llegue a arrancar. La llamada a
+  `window._efAliasServerSearch` va envuelta en try/catch. Guardia
+  `settled` para que solo el primero en llegar (respuesta real o
+  watchdog) escriba el resultado.
+- **`_efAliasServerSearch`** (`templates/partials/misc_body_1.html`):
+  todo el cuerpo envuelto en try/catch — un fallo síncrono (p.ej.
+  `fetch` no definido) se resuelve como "no encontrado" en vez de
+  dejar `onDone` sin invocar nunca.
+- Bump `index.bundle.js` 9.15 → 9.16 y `copa-engine.js` 1.4 → 1.5 en
+  `templates/index.html` y el `PRECACHE` de `static/js/sw.js`.
+
+### Reglas a respetar
+
+11. **PROHIBIDO** que `opts.pushEv(...)` dentro de `_ensureImbatEvents`
+    (o cualquier callback de un overlay obligatorio que registre un
+    evento en el acta) se llame sin try/catch cuando vive dentro del
+    executor de una `new Promise(...)`: una excepción ahí se convierte
+    en un rechazo silencioso indistinguible de una cancelación real.
+12. **PROHIBIDO** que la llamada a `onDone()` (o cualquier callback de
+    "continuar tras confirmar" de un overlay obligatorio) viva fuera de
+    un try/catch con aviso visible. El picker puede cerrarse
+    correctamente y aun así dejar al usuario bloqueado si lo que viene
+    DESPUÉS falla en silencio — el `alert()` es lo único que distingue
+    "tap no detectado" de "tap detectado pero la continuación reventó".
+13. **PROHIBIDO** que un watchdog de timeout para un overlay de
+    "buscando…" viva SOLO dentro de la función que hace la petición de
+    red. Debe existir un watchdog independiente en el CALLER (quien
+    pinta el "Buscando…") que garantice una resolución acotada aunque
+    la función interna falle antes de llegar a su propio timeout.
+14. Antes de asumir que un bug "ya arreglado" sigue reproduciéndose por
+    una regresión de código, comprobar primero con `git log`/`git
+    fetch origin main` si el fix realmente llegó a `main` y cuánto
+    tiempo llevaba desplegado en el momento de la prueba — un fix
+    mergeado minutos antes de la prueba puede no haber terminado de
+    desplegarse/activarse (Service Worker `skipWaiting`+`clients.claim`
+    necesita una recarga real de la pestaña, no solo el merge).
+
 ## Extras manuales del reparto europeo — rellenar huecos cuando la hidratación automática no basta (obligatorio, 2026-07-03)
 
 **Contexto (fotos usuario 2026-07-03, «ahora van menos», Wild Card 8/72

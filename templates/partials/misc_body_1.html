@@ -45244,28 +45244,41 @@ https://api.sofascore.app/api/v1/team/44/image
      se quede "cargando" para siempre — a los 6 s se resuelve como "no
      encontrado" en vez de colgarse. */
   window._efAliasServerSearch = function(teamName, onDone){
-    var targetNorm = _aliasNormName(teamName);
-    if(!targetNorm){ onDone(null); return; }
-    var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
-    var timer = setTimeout(function(){ try { ctrl && ctrl.abort(); } catch(_){} }, 6000);
-    fetch('/api/team-alias/' + encodeURIComponent(teamName), ctrl ? { signal: ctrl.signal } : {})
-      .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(j){
-        clearTimeout(timer);
-        var a = (j && j.alias) ? String(j.alias).trim() : '';
-        if(a){
-          /* Backfill inmediato del cache local para que la próxima
-             consulta (de este equipo, en esta u otra previa) sea
-             instantánea sin repetir la búsqueda. */
-          try {
-            if(_ALIAS_CACHE) _ALIAS_CACHE[targetNorm] = { alias:a, stadium:(_ALIAS_CACHE[targetNorm]||{}).stadium||'' };
-          } catch(_){}
-          onDone(a);
-        } else {
-          onDone(null);
-        }
-      })
-      .catch(function(){ clearTimeout(timer); onDone(null); });
+    /* Envuelto en try/catch (2026-07-05, "se tira minutos así y no
+       busca ningún equipo"): si `fetch`/`AbortController` no existen
+       (WebView viejo) o `_aliasNormName` lanza por cualquier motivo,
+       la llamada revienta de forma SÍNCRONA antes de llegar al timeout
+       interno de 6 s — sin este try/catch, `onDone` nunca se invoca y
+       el overlay que lo llama se queda colgado en "Buscando…" para
+       siempre. Ahora cualquier fallo síncrono se resuelve igual que un
+       "no encontrado". */
+    try {
+      var targetNorm = _aliasNormName(teamName);
+      if(!targetNorm){ onDone(null); return; }
+      var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var timer = setTimeout(function(){ try { ctrl && ctrl.abort(); } catch(_){} }, 6000);
+      fetch('/api/team-alias/' + encodeURIComponent(teamName), ctrl ? { signal: ctrl.signal } : {})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          clearTimeout(timer);
+          var a = (j && j.alias) ? String(j.alias).trim() : '';
+          if(a){
+            /* Backfill inmediato del cache local para que la próxima
+               consulta (de este equipo, en esta u otra previa) sea
+               instantánea sin repetir la búsqueda. */
+            try {
+              if(_ALIAS_CACHE) _ALIAS_CACHE[targetNorm] = { alias:a, stadium:(_ALIAS_CACHE[targetNorm]||{}).stadium||'' };
+            } catch(_){}
+            onDone(a);
+          } else {
+            onDone(null);
+          }
+        })
+        .catch(function(){ clearTimeout(timer); onDone(null); });
+    } catch(err) {
+      try { console.error('_efAliasServerSearch fallo sincrono:', err); } catch(_){}
+      try { onDone(null); } catch(_){}
+    }
   };
 
   /* Override de getTeamStadium para PRIORIZAR el estadio que el admin

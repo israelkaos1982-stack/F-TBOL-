@@ -347,6 +347,7 @@ window._ensureImbatEvents = function(opts, onDone){
         try { onDone(); }
         catch(doneErr) {
           try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
+          try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
           try { alert('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
         }
       };
@@ -358,12 +359,22 @@ window._ensureImbatEvents = function(opts, onDone){
     }
   }).catch(function(err){
     /* Cancelación del usuario: cerramos silenciosamente. El partido
-       queda como estaba (abierto). No repintamos ni llamamos a onDone. */
-    if (err && err.message === 'imbat_cancelled') return;
+       queda como estaba (abierto). No repintamos ni llamamos a onDone.
+       El botón FINALIZAR se reactiva (2026-07-05): `_mlConfirmEnd` lo
+       deshabilita nada más confirmar "SÍ", asumiendo que la cadena de
+       gates automáticos (imbatida→stats→MVP→WhatsApp) lo reactivará al
+       terminar. Si el usuario CANCELA el picker de portero, esa cadena
+       nunca llega a completarse — sin reactivarlo aquí, el partido se
+       quedaba sin forma de finalizar NI de reintentar. */
+    if (err && err.message === 'imbat_cancelled') {
+      try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
+      return;
+    }
     /* Cualquier otro error — antes solo se logueaba (silencioso para el
        usuario, que veía el overlay cerrarse sin que nada avanzara).
        Ahora se avisa visiblemente, igual que confirmImbatForce. */
     try { console.error('_ensureImbatEvents fallo:', err); } catch(_){}
+    try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
     try { alert('⚠️ No se pudo continuar tras la portería imbatida (' + (err && err.message || err) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
   });
 };
@@ -6932,41 +6943,71 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var _hiAliasAway = (typeof window.humanIcon === 'function') ? (window.humanIcon(away)||'') : '';
       var _humHomeAlias = _humHome || !!_hiAliasHome;
       var _humAwayAlias = _humAway || !!_hiAliasAway;
-      /* El lado IA que se enfrenta a un humano SIEMPRE debe mostrar el
-         botón ❓ — antes solo aparecía si YA había un alias configurado
-         (`if(!txt) return ''`), así que un equipo sin alias (nunca
-         editado por el admin, o perdido por cualquier motivo) se
-         quedaba SIN NINGÚN botón, sin pista de que existe esta función
-         ni forma de comprobarlo desde la previa (petición usuario
-         2026-07-04, "TIENE QUE SALIR SI O SI LA ❓"). Ahora `_ppAliasShow`
-         indica SI se muestra el botón (solo depende de quién es humano),
-         y el TEXTO (puede venir vacío) se resuelve aparte — el propio
-         botón informa "sin configurar" en vez de no aparecer. */
-      var _ppHomeAliasShow = (_humAwayAlias && !_humHomeAlias);
-      var _ppAwayAliasShow = (_humHomeAlias && !_humAwayAlias);
-      var _ppHomeAliasTxt = _ppHomeAliasShow ? _aliasFor(home) : '';
-      var _ppAwayAliasTxt = _ppAwayAliasShow ? _aliasFor(away) : '';
-      function _ppAliasHtml(show, txt, teamName){
-        if(!show) return '';
+      /* REGLA 2026-07-05 (petición explícita del usuario, "Los equipos
+         ficticios son unicamente los que en su liga tienen un ALIAS"):
+         el botón ❓ SOLO se muestra cuando el equipo IA realmente TIENE
+         un alias configurado. Un equipo real con licencia en eFootball
+         (Torino, Timor Oriental…) NUNCA debe mostrar ni el botón ni
+         ningún aviso — mostrarlo incondicionalmente (diseño anterior,
+         "TIENE QUE SALIR SI O SI LA ❓") confundía al usuario haciéndole
+         pensar que un equipo real era ficticio.
+         `_humCandidateHome/Away` marca el lado que PODRÍA necesitar el
+         alias (rival humano, este lado no) — es una condición necesaria
+         pero YA NO suficiente por sí sola. */
+      var _humCandidateHome = (_humAwayAlias && !_humHomeAlias);
+      var _humCandidateAway = (_humHomeAlias && !_humAwayAlias);
+      var _ppHomeAliasTxt = _humCandidateHome ? _aliasFor(home) : '';
+      var _ppAwayAliasTxt = _humCandidateAway ? _aliasFor(away) : '';
+      var _ppHomeAliasShow = _humCandidateHome && !!_ppHomeAliasTxt;
+      var _ppAwayAliasShow = _humCandidateAway && !!_ppAwayAliasTxt;
+      function _ppAliasHtml(show, txt, teamName, side){
+        /* Placeholder SIEMPRE presente (con id) cuando el lado es
+           candidato, aunque no se muestre nada todavía — permite que la
+           comprobación diferida en servidor (más abajo) inyecte el botón
+           si el alias existe mas no se conoce localmente todavía (bug
+           2026-07-05 "Maccabi Tel Aviv" — este dispositivo puede no
+           tener cacheada la liga con el alias ya guardado). */
+        var idAttr = side ? ' id="pp-alias-'+side+'"' : '';
+        if(!show) return '<div'+idAttr+' style="text-align:center;line-height:1;margin-top:3px;"></div>';
         /* ❓ animado renderizado DIRECTAMENTE en el primer paint de la
            previa — NO esperamos al swap async de copa-engine (que tardaba
            hasta confirmar el balón). Así el rival eFootball es visible
            desde que se abre la previa. El alias completo se ve al pulsar
            → window._copaShowAlias. `data-copa-alias-replaced` evita que
-           copa-engine reprocese el bloque. Sin alias aún configurado,
-           `data-copa-alias-full` viaja VACÍO y `data-copa-alias-team`
-           lleva el nombre del equipo — _copaShowAlias muestra un aviso
-           de "aún sin configurar" en vez de no hacer nada. */
+           copa-engine reprocese el bloque. */
         var _aSafe = String(txt||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         var _tSafe = String(teamName||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-        return '<div data-copa-alias-replaced="1" style="text-align:center;line-height:1;margin-top:3px;">'
+        return '<div'+idAttr+' data-copa-alias-replaced="1" style="text-align:center;line-height:1;margin-top:3px;">'
           + '<button type="button" class="copa-alias-help" onclick="window._copaShowAlias&&window._copaShowAlias(this)" '
           + 'data-copa-alias-full="'+_aSafe+'" data-copa-alias-team="'+_tSafe+'" aria-label="Ver alias eFootball completo" '
           + 'style="background:none;border:none;color:#ffd54a;font-size:20px;cursor:pointer;padding:2px 8px;line-height:1;animation:copaAliasPulse 1.4s ease-in-out infinite;">❓</button>'
           + '</div>';
       }
-      var _ppHomeAliasHtml = _ppAliasHtml(_ppHomeAliasShow, _ppHomeAliasTxt, home);
-      var _ppAwayAliasHtml = _ppAliasHtml(_ppAwayAliasShow, _ppAwayAliasTxt, away);
+      var _ppHomeAliasHtml = _ppAliasHtml(_ppHomeAliasShow, _ppHomeAliasTxt, home, 'home');
+      var _ppAwayAliasHtml = _ppAliasHtml(_ppAwayAliasShow, _ppAwayAliasTxt, away, 'away');
+      /* Comprobación DIFERIDA en servidor (2026-07-05): si el lado
+         candidato no tiene alias resuelto LOCALMENTE, no significa que
+         no exista — puede que este dispositivo nunca haya cargado esa
+         liga concreta (Resto de Ligas tiene ~54). Preguntamos al
+         servidor UNA sola vez (rápido, `/api/team-alias/<nombre>`) y, si
+         aparece, inyectamos el botón ❓ en el placeholder ya pintado. Si
+         el servidor tampoco lo tiene, el equipo es real de verdad — no
+         se muestra nada, nunca (regla "ficticio = tiene alias"). */
+      function _ppAliasDeferredCheck(side, teamName, isCandidate, txt){
+        if(!isCandidate || txt) return;
+        if(typeof window._efAliasServerSearch !== 'function') return;
+        window._efAliasServerSearch(teamName, function(found){
+          if(!found) return;
+          var host = document.getElementById('pp-alias-' + side);
+          if(!host) return;
+          var _aSafe = String(found||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          var _tSafe = String(teamName||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+          host.setAttribute('data-copa-alias-replaced', '1');
+          host.innerHTML = '<button type="button" class="copa-alias-help" onclick="window._copaShowAlias&&window._copaShowAlias(this)" '
+            + 'data-copa-alias-full="'+_aSafe+'" data-copa-alias-team="'+_tSafe+'" aria-label="Ver alias eFootball completo" '
+            + 'style="background:none;border:none;color:#ffd54a;font-size:20px;cursor:pointer;padding:2px 8px;line-height:1;animation:copaAliasPulse 1.4s ease-in-out infinite;">❓</button>';
+        });
+      }
       var durText;
       if (window._ppDurationMin) {
         durText = window._ppDurationMin + ' min';
@@ -6987,6 +7028,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       vs.innerHTML = '<div style="flex:1;text-align:center;min-width:0;">'+imgA+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_hiPvA+home.toUpperCase()+'</div>'+_ppHomeAliasHtml+_formBtnHtml('home')+'</div>'
         + centerHtml
         + '<div style="flex:1;text-align:center;min-width:0;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_hiPvB+away.toUpperCase()+'</div>'+_ppAwayAliasHtml+_formBtnHtml('away')+'</div>';
+      _ppAliasDeferredCheck('home', home, _humCandidateHome, _ppHomeAliasTxt);
+      _ppAliasDeferredCheck('away', away, _humCandidateAway, _ppAwayAliasTxt);
       /* Wire form buttons via addEventListener (more reliable on mobile than inline onclick) */
       ['home','away'].forEach(function(side) {
         var b = document.getElementById('pp-form-' + side);

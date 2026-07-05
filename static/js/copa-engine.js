@@ -3964,26 +3964,17 @@
       ov.style.display = 'flex';
       return;
     }
-    /* Si el equipo YA es conocido localmente (ligaExt_, LIGA_CACHE,
-       selecciones_squad_v1) aunque sin alias, es una respuesta
-       DEFINITIVA — no hace falta preguntar al servidor (2026-07-05,
-       bug "Timor Oriental": una selección REAL sin alias porque no lo
-       necesita se quedaba "Buscando en el servidor…" sin sentido). Solo
-       se busca en servidor si este dispositivo NO conoce el equipo en
-       absoluto (típico de un club de Resto de Ligas cuya liga nunca se
-       cargó aquí). */
-    if (typeof window._efAliasKnownLocally === 'function' && window._efAliasKnownLocally(team)) {
-      document.getElementById('_copaAliasText').textContent = _copaAliasNotConfiguredMsg(team);
-      ov.style.display = 'flex';
-      return;
-    }
-    /* Sin alias en el cache LOCAL Y equipo desconocido aquí (2026-07-04/
-       05, petición usuario "TIENE QUE SALIR SI O SI LA ❓" + "si tiene
-       alias"): puede que el admin SÍ lo haya guardado en
-       `ligaExt_<slug>`, pero este dispositivo nunca cargó esa liga
-       concreta y por tanto no tiene copia local que escanear. Antes de
-       rendirnos con "sin configurar", preguntamos al SERVIDOR (una
-       sola petición, ver `/api/team-alias/<nombre>`). */
+    /* PROHIBIDO fiarse de "conocido localmente sin alias" como
+       respuesta definitiva (bug 2026-07-05, Maccabi Tel Aviv: el admin
+       SÍ tiene el alias guardado — visible en el editor — pero la copia
+       LOCAL de `ligaExt_<slug>` de ESTE dispositivo puede ser anterior a
+       esa edición, o venir de otro dispositivo que aún no sincronizó. Un
+       escaneo local que no encuentra el alias NO prueba que no exista —
+       solo prueba que este dispositivo no lo tiene todavía. El servidor
+       es la fuente de verdad; se pregunta SIEMPRE que el alias no venga
+       ya resuelto en el propio botón. La búsqueda es una única petición
+       rápida (`/api/team-alias/<nombre>`), así que preguntar siempre no
+       reintroduce la lentitud del escaneo secuencial antiguo. */
     document.getElementById('_copaAliasText').textContent = '🔄 Buscando en el servidor…';
     ov.style.display = 'flex';
     /* Watchdog INDEPENDIENTE del timeout interno de _efAliasServerSearch

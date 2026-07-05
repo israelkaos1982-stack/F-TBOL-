@@ -10131,6 +10131,24 @@
       if(typeof window._mlShowLoading === 'function') {
         window._mlShowLoading('Procesando partido…', window._lastFinalizeCtx || null);
       }
+      /* Deshabilitar FINALIZAR ahora mismo (2026-07-05, bug "se queda
+         en bucle y jamás se cierra"): tras confirmar, el flujo puede
+         encadenar varios gates automáticos (imbatida → stats → MVP →
+         WhatsApp) que se re-disparan SOLOS sin que el usuario tenga
+         que volver a pulsar nada. Si el botón sigue activo durante la
+         breve ventana entre "se cierra un overlay" y "se abre el
+         siguiente" (picker de portero cerrado, stats aún no pintado),
+         un usuario que no ve progreso puede volver a pulsar FINALIZAR
+         — eso dispara una 2ª cadena de gmEndMatch() EN PARALELO con la
+         1ª, dos cadenas peleando por los mismos overlays. Se reactiva
+         SOLO en los gates que de verdad requieren que el usuario haga
+         algo antes de reintentar (prórroga, min 110) vía
+         _gmReenableEndBtn(), o si el usuario cancela el picker de
+         portero (ver catch de _ensureImbatEvents). */
+      try {
+        var _endBtnNow = document.getElementById('gm-btn-end');
+        if (_endBtnNow) { _endBtnNow.disabled = true; _endBtnNow.style.opacity = '0.35'; }
+      } catch(_){}
       try { yesCb(); } catch(_){}
     };
   };
@@ -15139,6 +15157,33 @@
     });
   };
 
+  /* Reactiva el botón FINALIZAR tras un gate que exige que el usuario
+     haga algo ANTES de poder volver a pulsarlo (reanudar el cronómetro
+     para la prórroga, esperar al min 110…). Los demás gates
+     (imbatida/stats/MVP/WhatsApp) NO llaman a esto — se resuelven solos
+     re-invocando gmEndMatch() internamente, así que el botón debe
+     permanecer deshabilitado durante toda esa cadena (ver
+     _mlConfirmEnd, que lo deshabilita nada más confirmar). Sin este
+     guard, un usuario que no ve progreso visible durante la breve
+     ventana entre "cierro el picker de portero" y "se abre stats/MVP"
+     podía volver a pulsar FINALIZAR, disparando una 2ª invocación de
+     gmEndMatch() en paralelo con la 1ª ya en curso — dos cadenas
+     compitiendo por los mismos overlays, indistinguible para el
+     usuario de "se queda en bucle y jamás se cierra" (bug 2026-07-05,
+     Alisson/portería imbatida). */
+  function _gmReenableEndBtn(){
+    try {
+      var b = document.getElementById('gm-btn-end');
+      if (b) { b.disabled = false; b.style.opacity = ''; }
+    } catch(_){}
+  }
+  /* Expuesta en window: la cancelación/error de _ensureImbatEvents
+     (static/js/index.bundle.js) también debe poder reactivar el botón
+     si el usuario cancela el picker de portero o algo revienta — sin
+     esto, tras cancelar, el botón se quedaba deshabilitado para
+     siempre (el partido "no se podía ni cancelar ni finalizar"). */
+  window._gmReenableEndBtn = _gmReenableEndBtn;
+
   window.gmEndMatch = function () {
     if (_gm.finished) return;
     /* ── COPA SINGLE-LEG: empate al 90' / 120' ─────────────────────
@@ -15205,6 +15250,7 @@
             + 'Se han añadido 30 minutos extra (15 cada parte).\n'
             + 'Pulsa ▶ para reanudar el cronómetro.');
         window.gmActivateET();
+        _gmReenableEndBtn();
         return;
       }
       /* Penaltis disponibles desde el min 110 de la prórroga
@@ -15234,11 +15280,13 @@
             }
           }
         });
+        _gmReenableEndBtn();
         return;
       }
       /* ET activa pero aún no llegó al min 110 — bloqueo defensivo
          para que no se cuele un FINALIZAR temprano. */
       alert('⏱ Aún no se han jugado los 110 minutos mínimos de la prórroga. Continúa el partido — desde el 110\' podrás saltar a penaltis.');
+      _gmReenableEndBtn();
       return;
     }
     // ── Portería imbatida obligatoria antes del MVP ──

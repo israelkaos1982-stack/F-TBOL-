@@ -1,5 +1,141 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El ❓ de alias eFootball SOLO sale si el equipo TIENE alias — «ficticio» = «tiene alias», nunca al revés (obligatorio, 2026-07-05)
+
+**Bug (fotos + grabación usuario 2026-07-05, «Torino»/«Timor Oriental»/
+«Maccabi Tel Aviv»)**: el diseño de 2026-07-04 («TIENE QUE SALIR SI O SI
+LA ❓») hacía que el botón ❓ apareciera SIEMPRE bajo cualquier equipo IA
+que se enfrentara a un humano, tuviera o no alias configurado. Resultado:
+**Torino** (equipo real con licencia en eFootball) y **Timor Oriental**
+(selección real) mostraban el ❓ como si fueran equipos ficticios sin
+licencia — al pulsarlo, el aviso "sin alias configurado" confundía al
+usuario haciéndole creer que algo estaba mal configurado cuando en
+realidad esos equipos simplemente no necesitan alias. El usuario corrigió
+la regla explícitamente: **"Los equipos ficticios son unicamente los que
+en su liga tienen un ALIAS"**.
+
+Por separado, **Maccabi Tel Aviv** (SÍ tiene alias configurado —
+"Sudamérica - 1🇦🇷 - Rosario AA - 1ª👕 - ⭐⭐⭐⭐", visible en el editor de
+Resto de Ligas) seguía mostrando "no tiene alias" al pulsar el ❓, pese a
+la búsqueda en servidor de la sección anterior.
+
+### Fix 1 — visibilidad del ❓ gobernada por la existencia real del alias
+
+`static/js/index.bundle.js` (bloque de la previa, ~línea 6930): antes,
+`_ppHomeAliasShow`/`_ppAwayAliasShow` dependían SOLO de quién es humano
+(`_humAwayAlias && !_humHomeAlias`). Ahora esa condición (`_humCandidateHome`/
+`_humCandidateAway`) es NECESARIA pero YA NO SUFICIENTE: el botón solo se
+pinta si además `_aliasFor(team)` (resolución LOCAL, síncrona) devuelve
+texto no vacío. Un equipo real (sin alias en ningún lado) nunca muestra
+nada — ni botón, ni aviso.
+
+**Comprobación DIFERIDA para el caso "alias existe pero no está cacheado
+en ESTE dispositivo"** (el bug real de Maccabi): cuando el lado candidato
+no tiene alias resuelto localmente, se pinta un placeholder VACÍO con id
+(`pp-alias-home`/`pp-alias-away`) y, tras insertar la previa en el DOM, se
+llama a `_ppAliasDeferredCheck(side, team, isCandidate, txt)` — si `txt`
+viene vacío, pregunta a `window._efAliasServerSearch` (servidor, una sola
+petición) y, si encuentra alias, INYECTA el botón ❓ en el placeholder. Si
+el servidor tampoco lo tiene, no se inyecta nada — el equipo es real de
+verdad.
+
+### Fix 2 — `_copaShowAlias` deja de fiarse de "conocido localmente sin alias" como respuesta definitiva
+
+`static/js/copa-engine.js`: se eliminó el atajo que devolvía "sin alias
+configurado" en cuanto `window._efAliasKnownLocally(team)` era true, SIN
+preguntar nunca al servidor. Ese atajo asumía que si el equipo estaba
+indexado localmente (en `ligaExt_<slug>`, `LIGA_CACHE` o
+`selecciones_squad_v1`) con alias vacío, la respuesta era definitiva —
+pero la copia LOCAL de ese dispositivo puede ser ANTERIOR a la edición
+del admin (guardada en otro dispositivo, o en una sesión previa de este
+mismo dispositivo antes de refrescar `ligaExt_<slug>`). Un escaneo local
+que no encuentra el alias **no prueba que no exista**, solo prueba que
+este dispositivo no lo tiene todavía. Ahora `_copaShowAlias` **SIEMPRE**
+pregunta al servidor (`/api/team-alias/<nombre>`, una sola petición
+rápida con timeout de 6 s) cuando el botón no trae ya el alias resuelto —
+sin excepción, ya no hay atajo local.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el ❓ (o cualquier indicador de "equipo ficticio")
+   se muestre basándose SOLO en "el rival es humano". La condición
+   necesaria es esa, pero la SUFICIENTE es que el alias exista de verdad
+   (local o, si no está cacheado, confirmado por el servidor). Un equipo
+   real (Torino, Timor Oriental, o cualquier otro con licencia) JAMÁS
+   debe mostrar el botón ni ningún aviso.
+2. **PROHIBIDO** que la ausencia de alias en el escaneo LOCAL se trate
+   como respuesta definitiva de "no tiene". Solo el servidor (fuente de
+   verdad, recibe los guardados de TODOS los dispositivos) puede
+   confirmar "no tiene alias" — el cliente pregunta siempre que su copia
+   local venga vacía, sin atajos por "ya lo conozco sin alias".
+3. Toda pantalla NUEVA que muestre el ❓/alias hereda el patrón: mostrar
+   solo si hay alias YA resuelto (local o servidor), placeholder vacío +
+   comprobación diferida si no está cacheado localmente, nunca mostrar
+   basándose solo en la condición de humanidad del rival.
+
+## FINALIZAR no se queda en bucle — el botón se deshabilita mientras la cadena de gates automáticos corre sola (obligatorio, 2026-07-05)
+
+**Bug (grabación usuario 2026-07-05, «Maccabi Tel Aviv vs Liverpool»)**:
+tras elegir el portero de la portería imbatida (Alisson), el partido "no
+continúa al finalizar" — debería encadenar Estadísticas + MVP obligatorio
+pero en vez de eso "se queda en bucle y jamás se cierra ese partido".
+
+### Causa raíz
+
+`gmEndMatch()` encadena varios gates OBLIGATORIOS que se re-disparan SOLOS
+sin que el usuario tenga que volver a pulsar nada: portería imbatida →
+estadísticas → MVP → compartir por WhatsApp → fin real. Cada gate hace
+`return` tras mostrar su overlay, y el propio overlay (al confirmarse)
+vuelve a llamar a `gmEndMatch()` internamente. El botón `#gm-btn-end`
+(FINALIZAR) **seguía activo** durante toda esta cadena — solo se
+deshabilitaba al terminar de verdad (`_gm.finished = true`). Entre el
+cierre de un overlay (p.ej. el picker de portero, cerrado por
+`confirmImbatForce`) y la apertura del siguiente (estadísticas), el
+`onDone()` que continúa la cadena está DIFERIDO a
+`requestAnimationFrame + setTimeout(0)` (fix 2026-07-05 anterior, para
+forzar un repintado) — durante esa breve ventana el gm-modal queda
+visible SIN ningún overlay tapando el botón. Un usuario que no ve
+progreso inmediato podía volver a pulsar FINALIZAR, disparando una
+**segunda invocación de `gmEndMatch()` en PARALELO** con la primera
+cadena aún en curso — dos cadenas compitiendo por los mismos overlays es
+indistinguible, desde fuera, de "se queda en bucle y jamás se cierra".
+
+### Fix
+
+- `window._mlConfirmEnd` (`part2/misc_body_2.html`) deshabilita
+  `#gm-btn-end` (`disabled=true` + opacidad reducida) INMEDIATAMENTE
+  al confirmar "SÍ", antes de llamar a `yesCb()` (`gmEndMatch`). Ninguna
+  segunda pulsación puede volver a disparar la cadena mientras la
+  primera sigue en curso.
+- Nuevo helper `_gmReenableEndBtn()` (expuesto como
+  `window._gmReenableEndBtn`) — lo llaman los ÚNICOS 3 puntos donde
+  `gmEndMatch()` hace `return` esperando que el usuario haga algo FUERA
+  de la cadena automática antes de poder reintentar (forzar prórroga,
+  bloqueo defensivo antes del min 110 de la prórroga, puerta pre-penaltis):
+  ahí SÍ hace falta reactivar el botón, porque el siguiente paso depende
+  de una acción del usuario (reanudar el cronómetro), no de un gate que
+  se resuelve solo.
+- La cancelación del picker de portero (`imbat_cancelled` en el `.catch`
+  de `_ensureImbatEvents`, `static/js/index.bundle.js`) y cualquier error
+  de la cadena (`onDone` fallando, o el `.catch` genérico) también llaman
+  a `window._gmReenableEndBtn()` — si el usuario cancela o algo revienta,
+  el botón vuelve a estar disponible para reintentar en vez de quedar
+  permanentemente bloqueado.
+
+### Reglas a respetar
+
+4. **PROHIBIDO** que `#gm-btn-end` (o cualquier botón FINALIZAR
+   equivalente) permanezca activo mientras una cadena de gates
+   automáticos (imbatida/stats/MVP/WhatsApp) está en curso. Se
+   deshabilita al confirmar "SÍ" en `_mlConfirmEnd` y solo se reactiva:
+   (a) en los puntos de `gmEndMatch()` que exigen una acción del usuario
+   fuera de la cadena (prórroga, min 110), vía `_gmReenableEndBtn()`; o
+   (b) si el usuario cancela un picker obligatorio o la cadena revienta.
+5. **PROHIBIDO** añadir un gate automático nuevo a `gmEndMatch()`
+   (que haga `return` y se re-dispare solo al confirmarse) sin mantener
+   el botón deshabilitado durante su espera — heredarlo es automático
+   mientras el gate no llame a `_gmReenableEndBtn()`.
+
 ## Todo cambio en `index.bundle.js`/`.css` (o cualquier asset del Service Worker) DEBE bumpear su `?v=X.X` — si no, no llega NUNCA a dispositivos con caché (obligatorio, 2026-07-04)
 
 **Bug (foto usuario 2026-07-04, «Maccabi vs Liverpool», portería imbatida

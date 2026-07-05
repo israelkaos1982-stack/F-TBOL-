@@ -1,5 +1,53 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La inyección diferida del ❓ REINTENTA — un fallo de red no debe dejar el botón sin aparecer para siempre (obligatorio, 2026-07-05)
+
+**Bug (foto usuario 2026-07-05, «Maccabi Tel Aviv vs Liverpool», misma
+previa que ya se había confirmado con alias guardado en servidor)**:
+tras el fix "el ❓ solo sale si el equipo tiene alias" (sección
+siguiente), el usuario reportó "otra vez no sale la ❓" para un partido
+donde el alias SÍ existía (confirmado vía `/api/debug` — la liga de
+Israel estaba guardada en el servidor con `updated_at` de ese mismo
+día).
+
+### Causa raíz
+
+`_ppAliasDeferredCheck` (`static/js/index.bundle.js`) hacía **UNA sola**
+llamada a `window._efAliasServerSearch` para el lado candidato sin alias
+local. Esa función no distingue, de cara al caller, entre "el servidor
+respondió: no hay alias" y "la petición falló" (red móvil, timeout de
+6 s, o el servidor recién desplegado tras el merge de este mismo fix
+aún arrancando) — en ambos casos `onDone(null)`. Sin reintento, un
+único fallo transitorio (muy probable justo después de un deploy,
+cuando Railway está reiniciando el proceso) dejaba el botón **sin
+inyectar para siempre**, indistinguible de "el equipo es real y no
+necesita alias" — exactamente el síntoma reportado.
+
+Verificado en aislado (simulación Node con DOM falso): la lógica de
+inyección en sí es correcta cuando el servidor responde — el bug es la
+falta de reintento ante un fallo transitorio de la ÚNICA petición.
+
+### Fix
+
+`_ppAliasDeferredCheck` reintenta hasta 3 veces con backoff (0 ms,
+1.5 s, 3.5 s) antes de rendirse. Cada intento sigue siendo una única
+petición ligera (`_efAliasServerSearch`); el tope de intentos evita un
+bucle infinito. Solo se dispara para el lado candidato sin alias local
+(nunca para equipos ya resueltos ni para HvH/IAvIA).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una comprobación diferida en servidor (la de este
+   botón, o cualquier otra que dependa de una única petición para
+   decidir "mostrar algo o no") se rinda tras el PRIMER fallo sin
+   reintentar. Un fallo de red o un cold-start del servidor (típico
+   justo tras un deploy) es indistinguible, desde el cliente, de "el
+   dato no existe" — sin reintento, ambos casos producen el mismo
+   síntoma silencioso.
+2. **PROHIBIDO** subir el tope de reintentos sin límite (bucle
+   infinito): 3 intentos con backoff corto es suficiente para cubrir un
+   cold-start o un blip de red sin machacar al servidor.
+
 ## El auto-pick de portero IA en la portería imbatida SIEMPRE registra un evento — nunca deja `needsImbat` en true para siempre (obligatorio, 2026-07-05)
 
 **Bug (fotos usuario 2026-07-05, «Maccabi Tel Aviv (IA) vs Liverpool

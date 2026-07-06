@@ -6011,13 +6011,34 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     /* Una caja de CLUB jamás muestra jugadores de SELECCIÓN. */
     if (window._isSeleccionName(playerTeam)) return false;
 
-    /* Equipos objetivo = los 2 del partido; si no hay contexto, el club del
-       HUB activo (NO "mostrar todo", que colaba bajas de otras cajas). */
+    /* Equipos objetivo = SOLO el/los lado(s) HUMANO(s) del partido (petición
+       usuario 2026-07-06, foto «Inter vs Antwerp»: "no tienen que salirme
+       los lesionados del Antwerp, solo los de mi equipo"). La pantalla
+       BAJAS PARA EL PARTIDO es para que el humano sepa a QUIÉN de SU
+       plantilla no puede convocar — el rival IA no aporta nada ahí y antes
+       se colaba igual que el propio equipo. Si NINGÚN lado resuelve humano
+       (detección aún hidratando / dato raro), no restringimos: mejor
+       mostrar de más que arriesgarnos a ocultar las bajas del propio
+       humano por un falso negativo transitorio. */
     var teams = window._ppGetCurrentMatchTeams();
     var normTargets = [];
     if (teams) {
-      if (teams.home) normTargets.push(window._ppNormTeam(teams.home));
-      if (teams.away) normTargets.push(window._ppNormTeam(teams.away));
+      var _ppbCompK = window._ppCompKey || 'liga';
+      function _ppbIsHumanSide(name){
+        if (!name) return false;
+        try { if (typeof window.isHumanInComp === 'function' && window.isHumanInComp(name, _ppbCompK)) return true; } catch(_){}
+        try { if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)) return true; } catch(_){}
+        try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true; } catch(_){}
+        try { if (typeof window.esHumano === 'function' && window.esHumano(name)) return true; } catch(_){}
+        return false;
+      }
+      if (teams.home && _ppbIsHumanSide(teams.home)) normTargets.push(window._ppNormTeam(teams.home));
+      if (teams.away && _ppbIsHumanSide(teams.away)) normTargets.push(window._ppNormTeam(teams.away));
+      if (!normTargets.length) {
+        /* Fallback: ningún lado resolvió humano — no restringir. */
+        if (teams.home) normTargets.push(window._ppNormTeam(teams.home));
+        if (teams.away) normTargets.push(window._ppNormTeam(teams.away));
+      }
     } else {
       var hub = '';
       try {

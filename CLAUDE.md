@@ -51,6 +51,67 @@ igual que todas las demás reentradas.
    call-site olvidado reproduce el bug original de forma intermitente
    y muy difícil de diagnosticar a distancia.
 
+## Las plantillas de los equipos IA JAMÁS muestran jugadores lesionados (obligatorio, 2026-07-06 #5)
+
+**Bug (foto usuario 2026-07-06, «EC Bahía», Resto Mundo)**: la pantalla
+de PLANTILLA del editor de Resto de Ligas (`renderSquadList`, pantalla
+genérica que edita el roster de CUALQUIER equipo — Liga EA Sports,
+Resto de Ligas, Resto del Mundo, etc.) mostraba jugadores con roster
+genérico («Jugador 7», «Jugador 8», «Jugador 19»…) marcados con un
+badge de LESIÓN («1P»/«2P»/«3P»). EC Bahía es un equipo 100% IA — no
+tiene ningún mister humano — y NUNCA debería mostrar bajas por lesión.
+El usuario fue tajante: **"las plantillas de los equipos IA jamás
+pueden tener jugadores lesionados, ese invento elimínalo"**.
+
+### Causa raíz
+
+El badge de lesión de `rowFor` (dentro de `renderSquadList`,
+`templates/partials/misc_body_1.html`) leía
+`(window.LESION_STORE || {})[p.name]` **sin comprobar en absoluto de
+qué equipo es `p`**. `LESION_STORE` es un diccionario plano indexado
+por NOMBRE de jugador (no por equipo), y los rosters GENÉRICOS por
+defecto (`_lextBuildDefaultRoster`: «Jugador 1».."Jugador 30") se
+REPITEN literalmente en decenas de equipos IA distintos de Resto de
+Ligas. Si el hub humano (o cualquier otro flujo que escriba en
+`LESION_STORE`) tenía una lesión registrada para un jugador llamado
+"Jugador 8", **CUALQUIER equipo IA con un jugador del mismo nombre
+genérico heredaba visualmente esa lesión** — aunque fuera de un club
+completamente distinto y nunca hubiera jugado ese partido. El
+comentario original del código incluso admitía la intención real:
+"Pedido por el usuario: en las plantillas de las cajas de los
+equipos HUMANOS salga los partidos lesionados" — pero el gate a
+"solo humanos" nunca se implementó.
+
+### Fix
+
+El badge de lesión en `rowFor` ahora solo se calcula si
+`window._isHumanClubCanonico(t.name)` es `true` (el mismo registro
+canónico de los 6 misters humanos que usa el resto del proyecto). Un
+equipo IA (Resto de Ligas, Resto del Mundo, Liga EA Sports IA, o
+cualquier otro) JAMÁS entra en el `if` y por tanto JAMÁS puede
+mostrar el badge de lesión, sin importar coincidencias de nombre
+genérico con `LESION_STORE`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `renderSquadList` (o cualquier editor de roster
+   genérico que sirva para editar equipos IA Y humanos por igual)
+   lea `LESION_STORE[p.name]` sin comprobar primero
+   `window._isHumanClubCanonico(t.name)`. Es un store indexado SOLO
+   por nombre de jugador — sin ese gate, los rosters genéricos
+   compartidos entre decenas de equipos IA contaminan el display.
+2. **PROHIBIDO** que un equipo IA muestre CUALQUIER indicador de baja
+   por lesión en su plantilla. Las bajas por lesión son un dato
+   EXCLUSIVO de las 6 cajas de mister humano (Liverpool, Arsenal,
+   Real Madrid, Atlético Madrid, FC Barcelona, PSG) y de sus
+   selecciones (vía el motor `_sel*` paralelo). Ningún equipo IA
+   "inventa" lesiones visibles en su plantilla.
+3. Si en el futuro se añade OTRO editor de roster genérico nuevo que
+   pinte badges de estado (lesión, sanción, etc.), debe heredar el
+   mismo gate `_isHumanClubCanonico` — nunca fiarse de que el nombre
+   del jugador por sí solo identifique de forma única a quién
+   pertenece esa baja.
+
 ## Dos sesiones en paralelo arreglaron el mismo bug del ❓ — consolidado en `index.bundle.js` 9.26 (2026-07-06 #3)
 
 Dos ramas distintas (`claude/team-alias-display-issue-99z45k` y

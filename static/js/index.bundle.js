@@ -329,8 +329,25 @@ window._ensureImbatEvents = function(opts, onDone){
     /* onDone (gmEndMatch/mlEndMatch) va envuelto en try/catch con aviso
        visible (regla CLAUDE.md "el handler NUNCA falla en silencio") y
        diferido un frame+tick para que el navegador PINTE el cierre del
-       picker antes del trabajo pesado (stats/MVP/guardado). */
+       picker antes del trabajo pesado (stats/MVP/guardado).
+
+       REFUERZO (2026-07-06, «vuelve a congelarse tras elegir portero
+       humano, ya con el bundle 9.24 confirmado por el log»): depender
+       ÚNICAMENTE de `requestAnimationFrame` es fràgil — los navegadores
+       (sobre todo móviles) pueden PAUSAR por completo los callbacks de
+       rAF si la pestaña pierde visibilidad aunque sea un instante (paso
+       a segundo plano, bloqueo de pantalla, otra app al frente) justo
+       tras el tap que cierra el picker, y el callback simplemente NUNCA
+       llega a ejecutarse — sin excepción, sin log, indistinguible del
+       "se congela" reportado. `setTimeout` SÍ se seguirá disparando
+       (aunque throttled) cuando la pestaña vuelva a primer plano, así
+       que actúa de red de seguridad independiente del rAF: gana el que
+       llegue antes, con guarda `_ran` para no ejecutar `onDone()` dos
+       veces. */
+    var _ran = false;
     var _run = function(){
+      if (_ran) return;
+      _ran = true;
       try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat: todos los lados resueltos → onDone()'); } catch(_){}
       try { onDone(); }
       catch(doneErr) {
@@ -339,8 +356,13 @@ window._ensureImbatEvents = function(opts, onDone){
         try { alert('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
       }
     };
-    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function(){ setTimeout(_run, 0); });
-    else setTimeout(_run, 0);
+    try {
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function(){ setTimeout(_run, 0); });
+    } catch(_){}
+    /* Red de seguridad independiente: dispara SIEMPRE, rAF haya
+       llegado o no. Si rAF ya ejecutó `_run`, esta 2ª llamada es un
+       no-op por el guard `_ran`. */
+    setTimeout(_run, 300);
   }
 
   var _hi = 0;

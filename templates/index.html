@@ -99,7 +99,66 @@
        1.4 MB de activos se sirven desde caché → sin descarga → JS thread
        más libre → splash se cierra antes en dispositivos lentos. */
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(function(){});
+      navigator.serviceWorker.register('/sw.js').then(function(reg){
+        /* ── AVISO DE VERSIÓN NUEVA (2026-07-06) ──────────────────────
+           Bug recurrente documentado en CLAUDE.md (regla "Todo cambio en
+           index.bundle.js/.css DEBE bumpear su ?v=X.X"): aunque el bundle
+           se bumpee y despliegue correctamente, una pestaña que lleva
+           tiempo abierta sigue ejecutando el JS que cargó en su momento —
+           el navegador solo descarga el bundle nuevo en la PRÓXIMA carga
+           completa de la página. Sin ningún aviso, el usuario reintenta
+           una y otra vez sobre el mismo JS viejo (p.ej. el picker de
+           portería imbatida con un fix ya mergeado en el servidor pero
+           nunca descargado en su pestaña) creyendo que el bug sigue sin
+           arreglar. Este banner detecta cuándo hay una versión más nueva
+           disponible y deja que el usuario decida cuándo recargar (NUNCA
+           recarga solo — un partido en curso vive en memoria y una
+           recarga forzada lo perdería). */
+        function _showSwUpdateBanner(){
+          try {
+            if (document.getElementById('sw-update-banner')) return;
+            var b = document.createElement('div');
+            b.id = 'sw-update-banner';
+            /* Arriba (no abajo): el borde inferior de la pantalla suele
+               tener los botones de acción del partido (FINALIZAR/Menú) y,
+               si el panel de diagnóstico temporal está activo, también
+               ocupa esa zona — un banner fijo abajo se solaparía con
+               ambos. */
+            b.style.cssText = 'position:fixed;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top,0px));z-index:2147483000;'
+              + 'background:linear-gradient(160deg,#0a2a1a,#062015);border:1px solid rgba(120,220,150,.6);'
+              + 'border-radius:10px;padding:12px 14px;font-family:Oswald,Rajdhani,sans-serif;color:#eafff0;'
+              + 'box-shadow:0 4px 20px rgba(0,0,0,.5);display:flex;align-items:center;gap:10px;'
+              + 'justify-content:space-between;animation:swBannerIn .25s ease-out;';
+            b.innerHTML = '<style>@keyframes swBannerIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}</style>'
+              + '<span style="font-size:12.5px;line-height:1.35;">🔄 Hay una versión más nueva de la web (corrige bloqueos). Recarga cuando no tengas un partido a medias.</span>'
+              + '<button id="sw-update-btn" style="flex:none;background:rgba(120,220,150,.25);border:1px solid rgba(120,220,150,.7);'
+              + 'color:#c8ffd8;border-radius:8px;padding:9px 12px;font-family:Oswald,sans-serif;font-size:12px;'
+              + 'letter-spacing:1px;cursor:pointer;white-space:nowrap;">RECARGAR</button>';
+            document.body.appendChild(b);
+            var btn = document.getElementById('sw-update-btn');
+            if (btn) btn.onclick = function(){ try { window.location.reload(); } catch(_){} };
+          } catch(_){}
+        }
+        /* Ya había una versión nueva instalada esperando (deploy previo a
+           esta carga). */
+        if (reg.waiting && navigator.serviceWorker.controller) _showSwUpdateBanner();
+        reg.addEventListener('updatefound', function(){
+          var nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', function(){
+            /* `installed` + ya hay un controller (no es la 1ª instalación
+               de este navegador) = versión nueva disponible. */
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) _showSwUpdateBanner();
+          });
+        });
+        /* La pestaña puede llevar horas/días abierta sin recargar — se
+           comprueba periódicamente si hay una versión nueva en el
+           servidor (barato: solo un fetch condicional de /sw.js). */
+        setInterval(function(){ try { reg.update(); } catch(_){} }, 120000);
+        document.addEventListener('visibilitychange', function(){
+          if (document.visibilityState === 'visible') { try { reg.update(); } catch(_){} }
+        });
+      }).catch(function(){});
     }
   </script>
 </head>

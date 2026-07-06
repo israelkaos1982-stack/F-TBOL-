@@ -73,6 +73,146 @@ que fallara las veces que hiciera falta probarlo.
    5 s de margen: un cold-start de Railway puede tardar bastante más y
    esa era la causa exacta de este bug.
 
+## La continuación tras elegir portero NUNCA depende solo de `requestAnimationFrame` (obligatorio, 2026-07-06)
+
+**Bug (foto usuario 2026-07-06, «Atlético Madrid vs Villarreal», Liga ·
+Jornada 3, "no funciona el finalizar ningún partido humano vs ia o
+humano vs humano")**: con el bundle YA en 9.24 (confirmado por el log
+en pantalla: aparecían las líneas nuevas `imbat IA auto-registrado…` e
+`imbat: portero humano elegido lado a (Jan Oblak)`, que solo existen
+desde la reescritura sin promesas), el partido se congelaba en el
+MISMO punto de siempre — tras elegir portero, nunca aparecía
+`imbat: todos los lados resueltos → onDone()` ni ninguna pantalla
+posterior (Estadísticas/MVP/WhatsApp), y FINALIZAR seguía
+deshabilitado. Esta vez NO era caché vieja (el log lo demuestra).
+
+### Causa raíz
+
+`_finish()` (dentro de `_ensureImbatEvents`, `static/js/index.bundle.js`)
+diferá la llamada a `onDone()` ÚNICAMENTE con
+`requestAnimationFrame(function(){ setTimeout(_run, 0); })` (añadido
+2026-07-05 para forzar un repintado del cierre del picker antes del
+trabajo pesado). Los navegadores móviles PUEDEN pausar por completo los
+callbacks de `requestAnimationFrame` si la pestaña pierde visibilidad
+aunque sea un instante (paso a 2º plano, bloqueo de pantalla, cambio de
+app) justo después del tap que cierra el picker — el callback
+simplemente NUNCA se ejecuta, sin excepción, sin log, indistinguible
+del "se congela" reportado. Verificado en aislado (harness Node con
+`requestAnimationFrame` que nunca invoca su callback, simulando el
+throttling real): sin red de seguridad, `onDone()` no se llamaba jamás.
+
+### Fix
+
+`_finish()` añade una red de seguridad independiente:
+`setTimeout(_run, 300)` que se dispara SIEMPRE, haya disparado el rAF o
+no, con una guarda `_ran` para que `onDone()` no se llame dos veces si
+ambos mecanismos llegan a ejecutarse. `setTimeout` sigue disparándose
+(aunque con throttling) cuando la pestaña estuvo en 2º plano, a
+diferencia de `requestAnimationFrame`, que puede quedar completamente
+suspendido. Bump `index.bundle.js` 9.24 → 9.25.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que la continuación de un flujo obligatorio
+   (imbatida→Estadísticas→MVP→WhatsApp, o cualquier cadena similar)
+   dependa ÚNICAMENTE de `requestAnimationFrame` para programar el
+   siguiente paso. Todo diferido con rAF que exista para forzar un
+   repintado debe llevar TAMBIÉN un `setTimeout` de red de seguridad
+   (con guarda anti-doble-ejecución) que garantice progreso aunque el
+   rAF quede suspendido por pérdida de visibilidad de la pestaña.
+2. Antes de asumir "esto ya no puede ser caché vieja" basta con mirar
+   si el panel de diagnóstico (`_gmDiagLog`) muestra las líneas nuevas
+   del último fix — si aparecen (como en este caso), el bloqueo es un
+   bug DISTINTO y hay que seguir investigando la cadena, no repetir el
+   diagnóstico de "recarga la página".
+
+## Aviso de versión nueva — una pestaña vieja YA NO se queda bloqueada en silencio para siempre (obligatorio, 2026-07-06)
+
+**Bug (2 fotos usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool»,
+Trofeo Joan Gamper — «vez número 20» del mismo bloqueo de la portería
+imbatida)**: el usuario reportó, con el panel de diagnóstico en
+pantalla visible, que tras elegir a Alisson en el picker de portería
+imbatida el partido se congelaba exactamente en el mismo punto que ya
+se había arreglado varias veces (commits `9cff430`/`1635b6a`, bundle
+9.22→9.24, que reescribió `_ensureImbatEvents` sin cadena de promesas).
+
+### Causa raíz — el fix YA estaba en `main`, pero la pestaña del usuario nunca lo descargó
+
+El propio log de diagnóstico (`_gmDiagLog`, panel visible en pantalla)
+lo demuestra: tras `_ensureImbatEvents() llamado. hasA=false
+hasB=false` no aparece NINGUNA de las líneas nuevas que la reescritura
+9.24 añade (`imbat IA auto-registrado…`, `imbat: pidiendo portero
+humano…`, `imbat: portero humano elegido…`, `imbat: todos los lados
+resueltos → onDone()`) — esas cadenas literales no existían en el
+bundle antes de 9.24 (verificado con `git log -S`). Es decir, el
+navegador del usuario seguía ejecutando una copia de
+`index.bundle.js` de ANTES de la reescritura, aunque el servidor ya
+serviría 9.24 a una carga nueva. Como `misc_body_2.html` (donde vive
+`gmEndMatch`/el watchdog de 9 s) es un partial INLINE que SIEMPRE se
+sirve fresco, pero `index.bundle.js` (donde vive
+`_ensureImbatEvents`) SÍ se cachea por `?v=`, el código fresco de
+`gmEndMatch` llamaba a la función VIEJA (con la cadena de promesas
+frágil) — el bug ya arreglado en el repo se seguía reproduciendo en
+cualquier pestaña que llevara abierta desde antes del deploy del fix.
+Exactamente el patrón ya documentado en la regla "Todo cambio en
+`index.bundle.js`/`.css`… DEBE bumpear su `?v=X.X`" — pero esa regla
+solo cubre EVITAR que el fix no llegue nunca; no había ningún
+mecanismo para AVISAR al usuario cuando su pestaña ya tenía una
+versión vieja cargada en memoria (el bump correcto en el servidor no
+sirve de nada si nadie le dice a la pestaña abierta que recargue).
+
+### Fix — banner de actualización + watchdog más honesto
+
+1. **`templates/index.html`** (registro del Service Worker): tras
+   `register('/sw.js')`, se escucha `updatefound` +
+   `statechange==='installed'` con `navigator.serviceWorker.controller`
+   ya existente (= hay una versión más nueva que la que controla esta
+   pestaña) y se muestra un banner fijo abajo
+   ("🔄 Hay una versión más nueva… RECARGAR") con un botón que hace
+   `location.reload()`. **NUNCA recarga solo/automático** — un partido
+   en curso vive en memoria (`_gm`) y una recarga forzada sin avisar
+   lo perdería; el usuario decide cuándo es buen momento. Se
+   comprueba también `reg.waiting` al registrar (ya había una versión
+   esperando) y se hace `reg.update()` cada 2 min + en cada
+   `visibilitychange` a visible (una pestaña puede llevar horas
+   abiertas sin recargar).
+2. **`misc_body_2.html`** (watchdog de 9 s de `_mlConfirmEnd`, ya
+   existente desde 2026-07-05): si el watchdog salta una 2ª vez en el
+   MISMO partido (`window._gmWatchdogRetries >= 2`), el aviso deja de
+   sugerir solo "pulsa FINALIZAR de nuevo" (que no sirve de nada si la
+   causa es JS viejo cacheado) y apunta explícitamente al banner de
+   arriba / a recargar manualmente — siendo HONESTO en que el
+   marcador/acta de ESE partido concreto aún no están guardados en
+   ese punto de la cadena (a diferencia del caso `_gm.finished===true`
+   del mismo watchdog, que si puede prometer que el resultado ya está
+   guardado).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** asumir que un fix de `index.bundle.js` ya
+   desplegado y bumpeado en `main` "no puede seguir reproduciéndose".
+   Una pestaña abierta ANTES del deploy sigue ejecutando el JS viejo
+   indefinidamente hasta que el usuario recarga — el bump de versión
+   solo garantiza que la PRÓXIMA carga completa reciba el fix, nunca
+   que una pestaña ya abierta lo reciba sola.
+2. **PROHIBIDO** quitar el banner de actualización de
+   `templates/index.html` o hacerlo recargar la página
+   automáticamente sin acción del usuario — el estado de un partido en
+   curso vive en memoria (`_gm`/`st` de las ml-cards) y no se persiste
+   hasta que el partido finaliza del todo; un `location.reload()` sin
+   avisar lo perdería.
+3. **PROHIBIDO** que un mensaje de watchdog/aviso afirme "el
+   resultado ya está guardado" en un punto de la cadena
+   (imbatida/stats/MVP/WhatsApp) ANTERIOR a que `_gm.finished`/
+   `st.finished` se ponga a `true`. Solo se puede prometer eso DESPUÉS
+   de ese punto (como ya hace el watchdog para el caso
+   `_gm.finished===true` sin pantalla final visible).
+4. Antes de investigar una regresión de código en un bug que la
+   sesión anterior "ya arregló", comprobar primero (regla 14 de la
+   sección de portería imbatida, más abajo) si el log de diagnóstico
+   en pantalla muestra las líneas de log que el fix más reciente
+   introdujo — si faltan, es carga vieja, no una regresión nueva.
+
 ## El alias eFootball VIAJA DENTRO de la cfg del torneo — el ❓ ya no depende de que el dispositivo tenga la liga origen (obligatorio, 2026-07-06)
 
 **Bug (2 fotos usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool» y

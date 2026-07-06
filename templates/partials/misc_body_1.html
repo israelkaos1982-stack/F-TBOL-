@@ -24726,17 +24726,123 @@ window._showSimProgress = function(opts, onDone){
      "tarda más de 7 s en mergear / 10 s en abrir el editor"). El
      fetch al servidor lo hace `_tourLoad` en paralelo y refresca
      después. */
+  /* El ALIAS de eFootball es un dato de IDENTIDAD por equipo (igual que
+     escudo/estadio/plantilla — regla 2026-07-04) que debe VIAJAR con el
+     dato sincronizado. Los equipos de un torneo (`cfg.teams[]`) NO lo
+     llevan cuando se añaden (el roster editor solo copia name/shield/
+     power), así que un dispositivo que NO tenga cacheada la liga origen
+     (`ligaExt_<slug>`) del equipo ficticio no podía resolver el alias y
+     el botón ❓ de la previa NUNCA aparecía — dependiendo por completo de
+     una búsqueda ASÍNCRONA en servidor, frágil en red móvil / cold-start
+     (bug usuario, «de repente la ❓ ya no emerge», reincidente).
+
+     `_tourBackfillEfootballAlias` RESUELVE el alias de cada equipo del
+     torneo desde el cache local (`getTeamEfootballAlias`, que escanea
+     ligaExt_/LIGA_CACHE/selecciones/TOUR_CACHE) y lo GRABA en el propio
+     `cfg.teams[]`. Así, en cuanto UN dispositivo que tenga la liga origen
+     abra el torneo, el alias queda baked en la cfg → se sincroniza al
+     servidor (`_tourSave`) → todos los demás dispositivos lo reciben
+     DENTRO de la cfg. `_buildAliasCache` ya escanea `window._TOUR_CACHE`,
+     así que a partir de ahí `getTeamEfootballAlias` lo resuelve de forma
+     SÍNCRONA en la propia previa (❓ instantáneo, sin round-trip).
+
+     Contrato de identidad: NUNCA pisa un alias ya presente (solo rellena
+     huecos). Throttle de 4 s por cfg (no un flag permanente) para no
+     re-escanear en cada apertura PERO permitir re-intentar tras cargar la
+     liga origen — si el admin abre el editor de esa liga DESPUÉS de haber
+     visto ya el torneo, la siguiente apertura resuelve el alias que antes
+     no estaba cacheado localmente. */
+  function _tourBackfillEfootballAlias(cfg){
+    try {
+      if (!cfg) return false;
+      var _now = Date.now();
+      if (_now - (cfg._aliasBackfillTs || 0) < 4000) return false;
+      cfg._aliasBackfillTs = _now;
+      if (!Array.isArray(cfg.teams) || !cfg.teams.length) return false;
+      if (typeof window.getTeamEfootballAlias !== 'function') return false;
+      var changed = false;
+      for (var i = 0; i < cfg.teams.length; i++){
+        var t = cfg.teams[i];
+        if (!t || !t.name) continue;
+        var have = (typeof t.efootballAlias === 'string') ? t.efootballAlias.trim() : '';
+        if (have) continue;                     /* ya lo lleva → no tocar */
+        var a = '';
+        try { a = String(window.getTeamEfootballAlias(t.name) || '').trim(); } catch(_){}
+        if (a){ t.efootballAlias = a; changed = true; }
+      }
+      if (changed){
+        /* Persistir + sincronizar para propagar el alias a los demás
+           dispositivos DENTRO de la cfg del torneo. Diferido para no
+           bloquear el render de la previa que acaba de pedir el cfg. */
+        try {
+          if (typeof window._tourSave === 'function' && cfg.id){
+            var _id = cfg.id;
+            setTimeout(function(){ try { window._tourSave(_id, cfg); } catch(_){} }, 0);
+          }
+        } catch(_){}
+        /* El alias recién baked debe verse YA en esta misma sesión. */
+        try { window._invalidateAliasCache && window._invalidateAliasCache(); } catch(_){}
+      }
+      return changed;
+    } catch(_){ return false; }
+  }
+  try { window._tourBackfillEfootballAlias = _tourBackfillEfootballAlias; } catch(_){}
+
+  /* Graba un alias RESUELTO POR SERVIDOR dentro de las cfgs de torneo
+     cacheadas que contengan ese equipo (match por nombre canónico), para
+     hacerlo permanente y propagarlo. Lo llama `_efAliasServerSearch`
+     cuando el servidor devuelve un alias que este dispositivo no tenía
+     local. NUNCA pisa un alias ya presente. */
+  try {
+    window._efAliasBakeIntoTours = function(teamName, alias){
+      try {
+        var _norm = (typeof window._aliasNormName === 'function') ? window._aliasNormName : null;
+        if (!_norm) return;
+        var a = String(alias || '').trim();
+        if (!teamName || !a) return;
+        var target = _norm(teamName);
+        if (!target) return;
+        var cache = window._TOUR_CACHE;
+        if (!cache) return;
+        Object.keys(cache).forEach(function(id){
+          try {
+            var cfg = cache[id];
+            if (!cfg || !Array.isArray(cfg.teams)) return;
+            var changed = false;
+            for (var i = 0; i < cfg.teams.length; i++){
+              var t = cfg.teams[i];
+              if (!t || !t.name) continue;
+              if (_norm(t.name) !== target) continue;
+              var have = (typeof t.efootballAlias === 'string') ? t.efootballAlias.trim() : '';
+              if (have) continue;
+              t.efootballAlias = a; changed = true;
+            }
+            if (changed && typeof window._tourSave === 'function' && cfg.id){
+              var _id = cfg.id;
+              setTimeout(function(){ try { window._tourSave(_id, cfg); } catch(_){} }, 0);
+            }
+          } catch(_){}
+        });
+        try { window._invalidateAliasCache && window._invalidateAliasCache(); } catch(_){}
+      } catch(_){}
+    };
+  } catch(_){}
+
   function _tourLoadCachedSync(id){
     if (TOUR_IDS.indexOf(id) === -1) return null;
     try {
       window._TOUR_CACHE = window._TOUR_CACHE || {};
-      if (window._TOUR_CACHE[id]) return window._TOUR_CACHE[id];
+      if (window._TOUR_CACHE[id]) {
+        try { _tourBackfillEfootballAlias(window._TOUR_CACHE[id]); } catch(_){}
+        return window._TOUR_CACHE[id];
+      }
     } catch(_){}
     try {
       var raw = localStorage.getItem(_key(id));
       if (raw) {
         var cfg = _migrateCfg(JSON.parse(raw));
         try { window._TOUR_CACHE[id] = cfg; } catch(_){}
+        try { _tourBackfillEfootballAlias(cfg); } catch(_){}
         return cfg;
       }
     } catch(_){}
@@ -24866,6 +24972,13 @@ window._showSimProgress = function(opts, onDone){
           } catch(_){}
           try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
           try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
+          /* Baked-in del alias de eFootball (identidad, viaja con la cfg):
+             tras adoptar la cfg del servidor, resuelve desde el cache local
+             el alias de los equipos ficticios que aún no lo lleven y lo
+             graba en la cfg → la próxima consulta de la previa lo encuentra
+             SÍNCRONO (❓ instantáneo). Si algo cambió, re-sincroniza para
+             propagarlo. */
+          try { _tourBackfillEfootballAlias(cfg); } catch(_){}
           return cfg;
         }
       }
@@ -45366,6 +45479,16 @@ https://api.sofascore.app/api/v1/team/44/image
             try {
               if(_ALIAS_CACHE) _ALIAS_CACHE[targetNorm] = { alias:a, stadium:(_ALIAS_CACHE[targetNorm]||{}).stadium||'' };
             } catch(_){}
+            /* PERMANENTE + propagación: el backfill de `_ALIAS_CACHE` es
+               efímero (se reconstruye al expirar el TTL de 3 s, y como la
+               liga origen no está local, se pierde). Grabamos el alias
+               encontrado en el servidor DENTRO de la(s) cfg(s) de torneo
+               cacheadas que tengan este equipo → queda baked en el dato que
+               `_buildAliasCache` sí escanea (TOUR_CACHE) y, al re-guardar,
+               se sincroniza a TODOS los dispositivos. Así el primer acierto
+               de servidor en CUALQUIER dispositivo cura el ❓ para toda la
+               flota, sin depender ya de repetir la búsqueda. */
+            try { window._efAliasBakeIntoTours && window._efAliasBakeIntoTours(teamName, a); } catch(_){}
             onDone(a);
           } else {
             onDone(null);

@@ -1,5 +1,71 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El alias eFootball VIAJA DENTRO de la cfg del torneo — el ❓ ya no depende de que el dispositivo tenga la liga origen (obligatorio, 2026-07-06)
+
+**Bug (2 fotos usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool» y
+«FK Bodø Glimt vs Arsenal», Trofeo Joan Gamper — «vez número 15», «de
+repente la ❓ ya no emerge»)**: en la PANTALLA DE PREVIA de un torneo de
+verano, bajo el equipo IA ficticio (Maccabi Tel Aviv, que SÍ tiene alias
+configurado) NO aparecía el botón ❓ que indica con qué equipo real de
+eFootball hay que jugar.
+
+### Causa raíz — el alias es IDENTIDAD pero NO viajaba con el torneo
+
+`efootballAlias` es un dato de identidad por equipo (igual que escudo/
+estadio/plantilla, regla 2026-07-04) que vive en `ligaExt_<slug>`. PERO
+los equipos de un torneo (`cfg.teams[]`) se añaden copiando SOLO
+`name/shield/power` (el roster editor, `sr-ok` y equivalentes) — **NUNCA
+copiaban `efootballAlias`**. Así, la resolución del alias en la previa
+(`getTeamEfootballAlias` → `_buildAliasCache`) dependía de que ESE
+dispositivo tuviera cacheada la liga origen del equipo ficticio en
+`ligaExt_*`/`LIGA_CACHE`. Un dispositivo que nunca abrió esa liga (el
+móvil del amigo, o el propio tras un borrado de datos / eviction) no
+podía resolverlo y el ❓ quedaba dependiendo por completo de una búsqueda
+ASÍNCRONA en servidor (`/api/team-alias/<nombre>`) — frágil en red móvil
+/ cold-start / deploy reciente, y EFÍMERA (el backfill de `_ALIAS_CACHE`
+se reconstruye al expirar el TTL de 3 s y se pierde porque la liga no
+está local). Resultado: el ❓ "de repente ya no emerge".
+
+### Fix — bake del alias DENTRO de `cfg.teams[]` (identity-propagation)
+
+`window._tourBackfillEfootballAlias(cfg)` (`misc_body_1.html`, junto a
+`_tourLoadCachedSync`): al cargar un torneo, RESUELVE desde el cache
+LOCAL (`getTeamEfootballAlias`, que escanea ligaExt_/LIGA_CACHE/
+selecciones/TOUR_CACHE) el alias de cada equipo del torneo que aún no lo
+lleve y lo GRABA en el propio `cfg.teams[].efootballAlias`. Al cambiar
+algo, `_tourSave` lo sincroniza → todos los dispositivos reciben el alias
+DENTRO de la cfg del torneo. Como `_buildAliasCache` YA escanea
+`window._TOUR_CACHE`, a partir de ahí `getTeamEfootballAlias` lo resuelve
+de forma SÍNCRONA en la previa (❓ instantáneo, sin round-trip). Se llama
+en las 3 rutas de carga (`_tourLoadCachedSync` cache-hit + lectura de
+localStorage, y `_tourLoad` tras adoptar el server). Throttle de 4 s por
+cfg (no flag permanente) para permitir re-intentar tras cargar la liga
+origen. NUNCA pisa un alias ya presente.
+
+`window._efAliasBakeIntoTours(teamName, alias)`: cuando `_efAliasServerSearch`
+resuelve un alias POR SERVIDOR (dispositivo sin la liga local), lo graba
+en las cfgs de torneo cacheadas que tengan ese equipo → permanente +
+propagado. Así el PRIMER acierto de servidor en CUALQUIER dispositivo
+cura el ❓ para toda la flota, sin depender de repetir la búsqueda.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un equipo de torneo (`cfg.teams[]`) dependa SOLO de
+   que el dispositivo tenga la `ligaExt_<slug>` origen cacheada para
+   resolver su alias eFootball. El alias es IDENTIDAD y debe VIAJAR
+   dentro de la cfg del torneo vía `_tourBackfillEfootballAlias` (bake
+   local) + `_efAliasBakeIntoTours` (bake del acierto de servidor).
+2. **PROHIBIDO** que el bake pise un alias ya presente en `cfg.teams[]`
+   (mismo contrato que `_lextBackfillAlias`/`_lextBackfillShields`): solo
+   rellena huecos.
+3. **PROHIBIDO** que el bake sea síncrono-bloqueante o entre en bucle de
+   guardado: solo `_tourSave` (diferido) cuando algo CAMBIÓ; tras bakear,
+   el siguiente escaneo no cambia nada (throttle + guard de "ya lo lleva").
+4. Todo campo de identidad por equipo que en el futuro deba verse en la
+   previa de un torneo (no solo el alias) hereda este patrón: bakearlo en
+   `cfg.teams[]` al cargar el torneo, no resolverlo solo desde la liga
+   origen local.
+
 ## La pantalla FINAL (`_gmShowFinalOv`) NUNCA se queda sin mostrar tras `_gm.finished=true` (obligatorio, 2026-07-05)
 
 **Bug (foto usuario 2026-07-05, mismo partido «Maccabi Tel Aviv vs

@@ -1,5 +1,78 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El alias eFootball se PREGUNTA AL SERVIDOR EN EL INSTANTE del tap, no solo cuando la previa ya se está pintando (obligatorio, 2026-07-06 #2)
+
+**Bug (5 fotos usuario 2026-07-06, mismo día del fix anterior — «Arsenal
+vs Maccabi Tel Aviv», «Maccabi Tel Aviv vs Liverpool», «FK Bodø Glimt vs
+Arsenal», Trofeo Joan Gamper — "llevamos 20 veces intentando y no
+funciona")**: pese al fix de arriba (bake del alias dentro de
+`cfg.teams[]`), el ❓ seguía sin aparecer bajo Maccabi Tel Aviv ni bajo FK
+Bodø Glimt en NINGUNO de los 3 partidos probados, aunque el editor de
+Resto de Ligas mostraba el alias ya guardado para ambos equipos
+(confirmado en las mismas capturas: Maccabi con «Sudamérica - 1🇦🇷 -
+Rosario AA…», Bodø Glimt con «Sudamérica - 🇦🇷 - Boca Juniors…»).
+
+### Causa raíz — la única vía a servidor arrancaba TARDE y con poco margen
+
+El bake local (`_tourBackfillEfootballAlias`) solo puede rellenar el
+alias si ESTE dispositivo tiene cacheada la liga origen; si no, la ÚNICA
+vía que pregunta al servidor era `_ppAliasDeferredCheck`
+(`index.bundle.js`), y esa función **arranca justo cuando la pantalla de
+previa ya se está pintando** — con solo 3 intentos y ~5 s de margen
+propio (cada intento puede tardar hasta 6 s por el timeout interno de
+`_efAliasServerSearch` antes de fallar y pasar al siguiente). Con
+Railway en cold-start o una red móvil floja, esa única ventana se agotaba
+antes de que el servidor respondiera, y como el resultado no se
+reintenta por ninguna otra vía, CADA apertura de la previa volvía a
+depender de ganar la misma carrera contra el mismo cold-start — de ahí
+que fallara las veces que hiciera falta probarlo.
+
+### Fix — prefetch dirigido en el instante del TAP, más reintentos
+
+- **`window._tourPrefetchMatchAlias(nameA, nameB)`** (nuevo,
+  `misc_body_1.html`, junto a `_efAliasBakeIntoTours`): dispara
+  `_efAliasServerSearch` para los 2 equipos del partido **en el instante
+  en que `_tourOpenHumanMatch` procesa el tap** — ANTES de que la
+  pantalla de previa empiece siquiera a construirse. Le da a la petición
+  todo el tiempo de la carga/animación previa como margen EXTRA, y si el
+  admin reabre el mismo partido el resultado cacheado
+  (`_TOUR_ALIAS_PREFETCHED`) evita repetir la petición. Si el alias
+  llega ANTES de que `_ppPreviaTeams`/`_renderPreviaMeta` corran, el
+  bake en `cfg.teams[]` hace que el PRIMER pintado ya salga con el ❓ —
+  sin depender en absoluto del deferred check del bundle. Si llega
+  DESPUÉS (previa ya pintada sin alias), `_tourAliasInjectIfOpen`
+  localiza el placeholder correcto por LADO (`window._ppPreviaTeams.home/
+  away`, no por atributo — el placeholder vacío no lleva el nombre del
+  equipo) e inyecta el botón ❓ directamente, cubriendo el caso de que el
+  deferred check del bundle ya se hubiera rendido. Es ADITIVO — nunca
+  sustituye el deferred check existente, es una segunda vía
+  independiente — y son SOLO 2 peticiones como máximo por partido, nunca
+  la liga/torneo entera.
+- **`_ppAliasDeferredCheck`** (`index.bundle.js`): reintentos ampliados
+  de 3 a 6 (`DELAYS = [0, 1500, 3000, 5000, 8000, 12000]`) — 3
+  intentos/5 s no sobrevivían a un cold-start lento de Railway.
+- Bump `index.bundle.js` 9.24 → 9.25.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que la búsqueda de alias en servidor dependa de una
+   ÚNICA vía que arranca cuando la previa YA se está pintando. Todo
+   opener de partido humano (`_tourOpenHumanMatch`, `copaAbrirPrevia`, o
+   cualquier futuro) debe disparar el prefetch de alias EN EL INSTANTE
+   del tap, antes de construir la previa, para maximizar el margen
+   contra cold-starts / red móvil lenta.
+2. **PROHIBIDO** ampliar `_tourPrefetchMatchAlias` a recorrer más de los
+   2 equipos del partido concreto (nunca la liga/torneo entera de golpe)
+   — eso reintroduce el thundering herd contra el servidor que este
+   proyecto lleva evitando desde 2026-06-25.
+3. **PROHIBIDO** que `_tourAliasInjectIfOpen` identifique el placeholder
+   por un atributo con el nombre del equipo: el placeholder vacío
+   (`_ppAliasHtml` con `show=false`) NO lo lleva. Identificar SIEMPRE por
+   LADO contra `window._ppPreviaTeams.home`/`.away`.
+4. **PROHIBIDO** volver a bajar `_ppAliasDeferredCheck` a 3 intentos /
+   5 s de margen: un cold-start de Railway puede tardar bastante más y
+   esa era la causa exacta de este bug.
+
 ## El alias eFootball VIAJA DENTRO de la cfg del torneo — el ❓ ya no depende de que el dispositivo tenga la liga origen (obligatorio, 2026-07-06)
 
 **Bug (2 fotos usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool» y

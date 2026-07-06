@@ -6997,8 +6997,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       function _ppAliasDeferredCheck(side, teamName, isCandidate, txt){
         if(!isCandidate || txt) return;
         if(typeof window._efAliasServerSearch !== 'function') return;
-        var MAX_TRIES = 3;
-        var DELAYS = [0, 1500, 3500];
+        /* 3 intentos / 5 s de margen no bastaban con Railway en
+           cold-start (CLAUDE.md 2026-07-06, "llevamos 20 veces
+           intentando y el ❓ no sale"): cada intento ya puede tardar
+           hasta 6 s (timeout interno de _efAliasServerSearch) antes de
+           fallar, así que un cold-start lento agotaba las 3 rondas sin
+           éxito. Ampliado a 6 intentos con backoff más largo — barato
+           (una única petición ligera por intento, nunca en bucle
+           infinito) y da mucho más margen antes de rendirse. */
+        var MAX_TRIES = 6;
+        var DELAYS = [0, 1500, 3000, 5000, 8000, 12000];
         var tries = 0;
         function _attempt(){
           window._efAliasServerSearch(teamName, function(found){

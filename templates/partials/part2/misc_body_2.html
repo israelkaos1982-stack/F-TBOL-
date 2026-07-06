@@ -10151,9 +10151,32 @@
         if (_endBtnNow) { _endBtnNow.disabled = true; _endBtnNow.style.opacity = '0.35'; }
       } catch(_){}
       try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('SÍ pulsado → llamando yesCb()'); } catch(_){}
-      try { yesCb(); }
-      catch(errYes) {
-        try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('yesCb() LANZÓ: ' + (errYes && errYes.message || errYes)); } catch(_){}
+      /* PRIMER disparo de la cadena — mismo blindaje que las reentradas
+         (obligatorio, 2026-07-06, refuerzo tras foto usuario «Maccabi Tel
+         Aviv vs Liverpool», "sigue igual" tras varios arreglos previos):
+         `_gmSafeReenter` ya protege cada reentrada DIFERIDA a gmEndMatch
+         (tras MVP/estadísticas/WhatsApp/penaltis), pero esta primera
+         llamada — la que corre nada más pulsar "SÍ" — seguía envuelta en
+         un try/catch que solo LOGUEABA en consola (`_gmDiagLog`, ya sin
+         panel visible) sin alertar ni reactivar el botón. Si el partido
+         llega aquí con `matchStats` y MVP YA puestos de antes (p.ej. el
+         usuario los añadió a mano vía + AÑADIR EVENTO antes de pulsar
+         FINALIZAR), esta ÚNICA llamada puede recorrer TODA la cadena
+         hasta el gate de WhatsApp en el mismo tick — si ese gate revienta
+         aquí, antes no quedaba NINGÚN rastro visible, exactamente el
+         "no pasa nada" reportado pese a los arreglos anteriores. */
+      if (typeof window._gmSafeReenter === 'function') {
+        window._gmSafeReenter(yesCb, 'al confirmar FINALIZAR');
+      } else {
+        try { yesCb(); }
+        catch(errYes) {
+          try { console.error('[gmEndMatch] yesCb() falló:', errYes); } catch(_){}
+          try {
+            var _endBtnErr = document.getElementById('gm-btn-end');
+            if (_endBtnErr) { _endBtnErr.disabled = false; _endBtnErr.style.opacity = ''; }
+          } catch(_){}
+          try { alert('⚠️ El partido no ha podido continuar (' + (errYes && errYes.message || errYes) + '). Pulsa FINALIZAR de nuevo para reintentar.'); } catch(_){}
+        }
       }
       /* Watchdog anti-bloqueo-silencioso — POLL RECURRENTE, no un único
          disparo (obligatorio, 2026-07-06, refuerzo tras foto usuario

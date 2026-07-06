@@ -1,5 +1,56 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El PRIMER disparo de `gmEndMatch()` (al confirmar "SÍ") también va protegido con `_gmSafeReenter` (obligatorio, 2026-07-06 #4)
+
+**Bug (foto usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool», 1-1,
+MVP ya elegido — "sigue igual", tras 3 rondas previas de fixes en el
+mismo día sobre esta misma cadena)**: pese a que `_gmSafeReenter` ya
+protegía TODAS las reentradas diferidas a `gmEndMatch()` (tras
+MVP/estadísticas/WhatsApp/penaltis), el bloqueo seguía reproduciéndose
+sin ningún aviso.
+
+### Causa raíz — el PRIMER disparo de la cadena se quedó sin blindar
+
+`_mlConfirmEnd` (el handler de "SÍ" en el diálogo de confirmar
+FINALIZAR) llama a `yesCb()` — la primerísima invocación de
+`gmEndMatch()` de todo el partido — con:
+```js
+try { yesCb(); }
+catch(errYes) {
+  try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('yesCb() LANZÓ: ' + ...); } catch(_){}
+}
+```
+Este `catch` NUNCA se actualizó a `_gmSafeReenter` cuando se introdujo
+el helper — solo logueaba (antes en el panel visible, ahora solo en
+consola tras quitar ese panel). Si un partido llega a este punto con
+`matchStats` y MVP YA puestos de antes (p.ej. añadidos a mano vía
++ AÑADIR EVENTO antes de pulsar FINALIZAR, en vez de a través de los
+gates automáticos), esta ÚNICA llamada puede recorrer TODA la cadena
+—incluido el gate de WhatsApp— en el mismo tick sin pasar nunca por
+ninguna de las reentradas diferidas que sí estaban protegidas. Si algo
+revienta ahí, no quedaba NINGÚN rastro visible: ni alert, ni
+reactivación del botón — indistinguible del bloqueo original.
+
+### Fix
+
+`_mlConfirmEnd` llama a `yesCb()` a través de `window._gmSafeReenter`
+(con fallback equivalente in-place si el helper no estuviera cargado),
+igual que todas las demás reentradas.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que la llamada INICIAL a `gmEndMatch()`/`mlEndMatchGen`
+   (la que dispara `_mlConfirmEnd` al confirmar "SÍ") tenga un
+   tratamiento de errores distinto — más débil — que las reentradas
+   diferidas posteriores. Es la MISMA función y puede recorrer la MISMA
+   cadena completa en una sola llamada si los gates previos ya estaban
+   satisfechos de antemano.
+2. Todo helper de blindaje nuevo (`_gmSafeReenter` o el que lo suceda)
+   debe auditarse contra **todos** los call-sites de la función que
+   protege, no solo los que se tocaron en el momento de crearlo — un
+   call-site olvidado reproduce el bug original de forma intermitente
+   y muy difícil de diagnosticar a distancia.
+
 ## Dos sesiones en paralelo arreglaron el mismo bug del ❓ — consolidado en `index.bundle.js` 9.26 (2026-07-06 #3)
 
 Dos ramas distintas (`claude/team-alias-display-issue-99z45k` y

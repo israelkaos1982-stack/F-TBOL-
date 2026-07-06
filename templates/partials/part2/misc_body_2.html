@@ -15304,32 +15304,26 @@
      siempre (el partido "no se podía ni cancelar ni finalizar"). */
   window._gmReenableEndBtn = _gmReenableEndBtn;
 
-  /* ══ PANEL DE DIAGNÓSTICO TEMPORAL (2026-07-05) ══════════════════════
-     El usuario lleva varios intentos con FINALIZAR atascado en distintos
-     puntos de la cadena imbatida→Estadísticas→MVP→WhatsApp y cada fix
-     revela un fallo distinto más adelante. En vez de seguir adivinando
-     a ciegas, este panel muestra EN PANTALLA (no en la consola, que un
-     móvil no puede abrir fácilmente) qué rama de `gmEndMatch()` se
-     ejecuta cada vez que se pulsa FINALIZAR, para localizar el punto
-     EXACTO donde se detiene. Se puede quitar en cuanto se identifique
-     y arregle la causa real. */
+  /* ══ DIAGNÓSTICO DE gmEndMatch — SOLO CONSOLA (obligatorio, 2026-07-06) ══
+     El panel visible en pantalla (caja verde monospace) que existió aquí
+     desde el 2026-07-05 era TEMPORAL a propósito ("se puede quitar en
+     cuanto se identifique y arregle la causa real" — ver su propio
+     comentario original) y el usuario reportó explícitamente que ese
+     texto NO debía estar visible en la app. Las dos causas reales que
+     ese panel ayudó a identificar ya están arregladas (banner de versión
+     nueva del Service Worker + red de seguridad `setTimeout` cuando
+     `requestAnimationFrame` queda suspendido, ambas 2026-07-06), así que
+     se retira la caja del DOM. La función se mantiene (mismo nombre,
+     mismos call-sites en index.bundle.js y aquí) pero ahora solo escribe
+     a `console.log` — sigue siendo útil para depurar por remote-debugging
+     si hiciera falta, sin ensuciar la pantalla del usuario. Si esta caja
+     reaparece en el DOM (sesión antigua que la creó antes de este fix),
+     se elimina en el primer log nuevo. */
   function _gmDiagLog(msg){
     try {
-      var box = document.getElementById('gm-diag-box');
-      if (!box) {
-        box = document.createElement('div');
-        box.id = 'gm-diag-box';
-        box.style.cssText = 'position:fixed;left:6px;right:6px;bottom:6px;z-index:999998;'
-          + 'background:rgba(0,0,0,.92);border:1px solid rgba(240,192,64,.6);border-radius:8px;'
-          + 'padding:8px 10px;font-family:monospace;font-size:10px;line-height:1.5;color:#9f9;'
-          + 'max-height:38vh;overflow-y:auto;white-space:pre-wrap;pointer-events:none;';
-        document.body.appendChild(box);
-      }
-      var t = new Date().toISOString().substr(11,8);
-      box.textContent = (box.textContent ? box.textContent + '\n' : '') + '[' + t + '] ' + msg;
-      var lines = box.textContent.split('\n');
-      if (lines.length > 16) box.textContent = lines.slice(lines.length - 16).join('\n');
-      box.scrollTop = box.scrollHeight;
+      var oldBox = document.getElementById('gm-diag-box');
+      if (oldBox) oldBox.remove();
+      console.log('[gmEndMatch] ' + msg);
     } catch(_){}
   }
   window._gmDiagLog = _gmDiagLog;

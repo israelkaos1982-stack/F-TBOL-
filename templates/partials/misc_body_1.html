@@ -51026,17 +51026,24 @@ https://api.sofascore.app/api/v1/team/44/image
       if(p.elite)      badges += '<span class="lext-badge star"   title="Estrella del equipo">⭐</span>';
       if(p.natGoal)    badges += '<span class="lext-badge scorer" title="Goleador nato (~30% goles)">⚾</span>';
       if(p.natGoalPro) badges += '<span class="lext-badge scorer" title="Goleador estrella (~45% goles)">🏀</span>';
-      /* Badge de lesión: si el jugador está en LESION_STORE y aún tiene
-         partidos pendientes, mostramos el emoji de gravedad y "N P" de
-         partidos restantes, con tooltip con la descripción. Pedido por
-         el usuario: "en las plantillas de las cajas de los equipos
-         humanos salga los partidos lesionados". */
-      var _les = (window.LESION_STORE || {})[p.name];
-      if (_les && _les.partidos > 0) {
-        var _lesIco = _les.gradoEmoji || '🩹';
-        var _lesPart = Math.max(0, parseInt(_les.partidos) || 0);
-        var _lesDesc = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _lesPart + ' partido(s) restante(s)';
-        badges += '<span class="lext-badge injury" title="' + _lesDesc.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _lesIco + ' ' + _lesPart + 'P</span>';
+      /* Badge de lesión: SOLO para clubes HUMANOS canónicos. LESION_STORE
+         está indexado por NOMBRE de jugador (no por equipo), y los
+         rosters genéricos ("Jugador 8", "Jugador 20"...) se REPITEN en
+         decenas de equipos IA de Resto de Ligas — sin este gate, la
+         lesión de un jugador del hub humano "contaminaba" por nombre la
+         plantilla de CUALQUIER equipo IA con un jugador del mismo nombre
+         genérico (bug usuario 2026-07-06, «EC Bahia» con jugadores
+         genéricos marcados como lesionados). Los equipos IA JAMÁS tienen
+         jugadores lesionados — es un dato que solo existe para las 6
+         cajas de mister humano. */
+      if (t && window._isHumanClubCanonico && window._isHumanClubCanonico(t.name)) {
+        var _les = (window.LESION_STORE || {})[p.name];
+        if (_les && _les.partidos > 0) {
+          var _lesIco = _les.gradoEmoji || '🩹';
+          var _lesPart = Math.max(0, parseInt(_les.partidos) || 0);
+          var _lesDesc = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _lesPart + ' partido(s) restante(s)';
+          badges += '<span class="lext-badge injury" title="' + _lesDesc.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _lesIco + ' ' + _lesPart + 'P</span>';
+        }
       }
       /* La valoración usa las stats de DISPLAY (suma de comps). Cuando
          `d` es un override, fusionamos sobre `p` para conservar

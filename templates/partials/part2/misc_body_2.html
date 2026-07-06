@@ -10325,8 +10325,18 @@
     if (_isHumanInvolved && !st.isFriendly) {
       var hasMvp=st.events.some(function(e){return e.type==='mvp';});
       if (!hasMvp) {
-        var sqA=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.home])||[];
-        var sqB=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.away])||[];
+        /* Resolver la plantilla vía sqFromRegistryFull/sqFromRegistry
+           (con TODOS sus fallbacks: applyEngineOverrides, escaneo de
+           ligaExt_*, LIGA_CACHE en memoria) en vez de leer
+           window.SQUAD_REGISTRY[team] a pelo. Un equipo IA de Resto de
+           Ligas cuyo registro aún no se hubiera "calentado" por otro
+           picker (imbat, evento manual…) devolvía [] aquí → la columna
+           del MVP para ese equipo salía vacía/con placeholder. Bug
+           2026-07-06 (fotos usuario «Maccabi Tel Aviv», "así con todas"). */
+        var sqA=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(st.home))||[];
+        if(!sqA.length) sqA=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.home])||[];
+        var sqB=(typeof window.sqFromRegistryFull==='function'&&window.sqFromRegistryFull(st.away))||[];
+        if(!sqB.length) sqB=(window.SQUAD_REGISTRY&&window.SQUAD_REGISTRY[st.away])||[];
         _genActiveMk=mk;
         window.showMvpForceGen(mk, st.home, st.away, sqA, sqB, st.sc.a, st.sc.b, function(team,num,name){
           var icos={gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅','pen-fallo':'❌','pen-prov':'🤦','pen-parado':'🖐',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
@@ -19675,19 +19685,35 @@
     var h = '';
     var _shA = typeof getLogoEquipo === 'function' ? (function(u){ return u && u.indexOf('estepona')===-1 ? u : ''; })(getLogoEquipo(m.home)) : '';
     var _shB = typeof getLogoEquipo === 'function' ? (function(u){ return u && u.indexOf('estepona')===-1 ? u : ''; })(getLogoEquipo(m.away)) : '';
-    /* Reparación de eventos "Jugador A"/"Jugador B" legacy. Si el acta
-       del partido viene con nombres placeholder (guardados en una
-       simulación previa cuando SQUAD_REGISTRY estaba vacío) los
-       sustituimos aquí al vuelo por nombres reales de la plantilla
-       actual. Así evitamos hacer una migración destructiva del
-       localStorage y el usuario ve el acta coherente sin necesidad
-       de resetear. */
-    function _realFallbackName(teamLetter){
+    /* Reparación de eventos "Jugador A"/"Jugador B"/"Portero"/"Jugador N"
+       legacy. Si el acta del partido viene con nombres placeholder
+       (guardados en una simulación/gate previo cuando la plantilla del
+       equipo IA aún no se pudo resolver — `sqFromRegistry`/`_getTopGk`
+       cayeron al fallback genérico) los sustituimos aquí al vuelo por
+       nombres reales de la plantilla actual. Así evitamos hacer una
+       migración destructiva del localStorage y el usuario ve el acta
+       coherente sin necesidad de resetear.
+       Bug 2026-07-06 (fotos usuario «Maccabi Tel Aviv», "así con
+       todas"): el detector previo solo reconocía "Jugador A"/"Jugador B"
+       exactos — no cubría "Portero" (fallback de portería imbatida,
+       `_getTopGk`/`_ensureImbatEvents`) ni "Jugador N" (roster genérico
+       numérico) ni el MVP mostrado al FIN (`m.mvp`, que ni siquiera
+       pasaba por esta reparación). Mismo regex que `_bfIsRealName`
+       (backfill persistente de `_tourBackfillActasFromResults`), para
+       que la detección de placeholder sea consistente en todo el
+       proyecto. */
+    function _isPlaceholderName(raw){
+      var s = String(raw || '').trim();
+      if (!s || s === '?') return true;
+      return /^(?:\d+\.?\s*)?(?:jugador|portero)\s*(?:[a-k]|ia|\d+)?$/i.test(s);
+    }
+    function _realFallbackName(teamLetter, preferGk){
       try {
         var tName = teamLetter === 'a' ? m.home : m.away;
         if (!tName || typeof window.sqFromRegistry !== 'function') return null;
         var sq = window.sqFromRegistry(tName) || [];
-        var out = sq.filter(function(p){ return p && p[2] && p[2] !== 'P'; });
+        var out = preferGk ? sq.filter(function(p){ return p && p[2] === 'P'; }) : [];
+        if (!out.length) out = sq.filter(function(p){ return p && p[2] && p[2] !== 'P'; });
         if (!out.length) out = sq;
         if (!out.length) return null;
         var p = out[Math.floor(Math.random() * out.length)];
@@ -19697,8 +19723,8 @@
     }
     function _fixPlayer(ev){
       var raw = String(ev && ev.player || '').trim();
-      if (/^\d+\.\s*Jugador [AB]$/.test(raw) || raw === 'Jugador A' || raw === 'Jugador B') {
-        var real = _realFallbackName(ev.team);
+      if (_isPlaceholderName(raw)) {
+        var real = _realFallbackName(ev && ev.team, ev && ev.type === 'imbat');
         if (real) return real;
       }
       return raw;
@@ -19748,10 +19774,20 @@
         + '</div>';
     });
     if (m.mvp) {
+      /* El MVP se pasaba directo a pantalla sin la misma reparación de
+         placeholder que el resto del acta — un "⭐ Jugador A" (MVP
+         asignado a un equipo IA cuya plantilla no se pudo resolver en su
+         momento) se mostraba tal cual para siempre. */
+      var _mvpLabel = m.mvp;
+      if (_isPlaceholderName(_mvpLabel)) {
+        var _mvpSide = (m.mvpTeam && m.mvpTeam === m.away) ? 'b' : 'a';
+        var _mvpReal = _realFallbackName(_mvpSide, false);
+        if (_mvpReal) _mvpLabel = _mvpReal;
+      }
       h += '<div style="display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid rgba(240,192,64,.2);">'
         + '<span style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;color:#f0c040;min-width:26px;">FIN</span>'
         + '<span style="font-size:14px;">&#11088;</span>'
-        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + m.mvp + '</span>'
+        + '<span style="font-family:Rajdhani,sans-serif;font-size:13px;font-weight:700;color:#f0c040;flex:1;">' + _mvpLabel + '</span>'
         + (function(){ var _shMvp = m.mvpTeam ? (typeof getLogoEquipo==='function' ? (getLogoEquipo(m.mvpTeam)||'') : '') : ''; return _shMvp ? '<img src="'+_shMvp+'" style="width:16px;height:16px;object-fit:contain;flex-shrink:0;" title="'+(m.mvpTeam||'')+'" onerror="this.style.display=\'none\';">' : '<span style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.4);">'+(m.mvpTeam||'')+'</span>'; })()
         + '</div>';
     }

@@ -740,6 +740,48 @@ window.sqFromRegistry = function(teamName, opts) {
       var targetAggro = _normAggro(teamName);
       var targetAggroR = _normAggro(resolved);
       var match = null;
+      /* Matching de 3 pasadas (exacto → substring → agresivo sin sufijos)
+         extraído a un helper para poder aplicarlo tanto a los documentos
+         `ligaExt_*` de localStorage como a `window.LIGA_CACHE` (memoria).
+         Una liga grande (Resto de Ligas, 40+ equipos) puede superar la
+         cuota de localStorage y quedar SOLO en memoria (`LIGA_CACHE`,
+         poblado por `loadData()` al abrir su pantalla) sin llegar nunca a
+         `ligaExt_<slug>` — antes esta función solo miraba localStorage, así
+         que esos equipos (con plantilla real ya cargada en memoria) caían
+         al placeholder "Jugador A/Portero" en el acta pese a existir.
+         2026-07-06. */
+      function _matchTeamInArray(teams){
+        if (!Array.isArray(teams) || !teams.length) return null;
+        for (var ti = 0; ti < teams.length; ti++) {
+          var tn = _normAmSq(teams[ti] && teams[ti].name);
+          if (!tn) continue;
+          if (tn === target || tn === targetResolved) return teams[ti];
+        }
+        /* Segunda pasada tolerante (substring) sólo si no hubo match
+           exacto, para evitar que "Real Madrid" pille "Real Madrid
+           Castilla" por contener la cadena. */
+        for (var ti2 = 0; ti2 < teams.length; ti2++) {
+          var tn2 = _normAmSq(teams[ti2] && teams[ti2].name);
+          if (!tn2) continue;
+          if (tn2.indexOf(target) !== -1 || target.indexOf(tn2) !== -1 ||
+              tn2.indexOf(targetResolved) !== -1 || targetResolved.indexOf(tn2) !== -1) {
+            return teams[ti2];
+          }
+        }
+        /* Tercera pasada: match agresivo sin sufijos/diacríticos.
+           Cubre "Liverpool" ↔ "Liverpool FC", "Atletico" ↔ "Atlético",
+           "Bayern" ↔ "Bayern München", etc. */
+        for (var ti3 = 0; ti3 < teams.length; ti3++) {
+          var tn3a = _normAggro(teams[ti3] && teams[ti3].name);
+          if (!tn3a) continue;
+          if (tn3a === targetAggro || tn3a === targetAggroR ||
+              tn3a.indexOf(targetAggro) !== -1 || targetAggro.indexOf(tn3a) !== -1 ||
+              tn3a.indexOf(targetAggroR) !== -1 || targetAggroR.indexOf(tn3a) !== -1) {
+            return teams[ti3];
+          }
+        }
+        return null;
+      }
       for (var li = 0; li < localStorage.length && !match; li++) {
         var lk = localStorage.key(li);
         if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
@@ -748,38 +790,25 @@ window.sqFromRegistry = function(teamName, opts) {
         if (!raw) continue;
         var data; try { data = JSON.parse(raw); } catch(_e){ continue; }
         var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
-        for (var ti = 0; ti < teams.length; ti++) {
-          var tn = _normAmSq(teams[ti] && teams[ti].name);
-          if (!tn) continue;
-          if (tn === target || tn === targetResolved) { match = teams[ti]; break; }
-        }
-        /* Segunda pasada tolerante (substring) sólo si no hubo match
-           exacto, para evitar que "Real Madrid" pille "Real Madrid
-           Castilla" por contener la cadena. */
-        if (!match) {
-          for (var ti2 = 0; ti2 < teams.length; ti2++) {
-            var tn2 = _normAmSq(teams[ti2] && teams[ti2].name);
-            if (!tn2) continue;
-            if (tn2.indexOf(target) !== -1 || target.indexOf(tn2) !== -1 ||
-                tn2.indexOf(targetResolved) !== -1 || targetResolved.indexOf(tn2) !== -1) {
-              match = teams[ti2]; break;
+        match = _matchTeamInArray(teams);
+      }
+      /* Fallback adicional EN MEMORIA: `window.LIGA_CACHE` (poblado por
+         `loadData()` de cada liga visitada esta sesión) puede tener ligas
+         que no llegaron a persistirse en localStorage (cuota superada) o
+         que el escaneo de arriba no vio por cualquier motivo. Barato:
+         solo itera las ligas YA cargadas en memoria, sin tocar red. */
+      if (!match) {
+        try {
+          var _lc = window.LIGA_CACHE;
+          if (_lc && typeof _lc === 'object') {
+            var _lcKeys = Object.keys(_lc);
+            for (var lci = 0; lci < _lcKeys.length && !match; lci++) {
+              var _lcData = _lc[_lcKeys[lci]];
+              var _lcTeams = (_lcData && Array.isArray(_lcData.teams)) ? _lcData.teams : [];
+              match = _matchTeamInArray(_lcTeams);
             }
           }
-        }
-        /* Tercera pasada: match agresivo sin sufijos/diacríticos.
-           Cubre "Liverpool" ↔ "Liverpool FC", "Atletico" ↔ "Atlético",
-           "Bayern" ↔ "Bayern München", etc. */
-        if (!match) {
-          for (var ti3 = 0; ti3 < teams.length; ti3++) {
-            var tn3a = _normAggro(teams[ti3] && teams[ti3].name);
-            if (!tn3a) continue;
-            if (tn3a === targetAggro || tn3a === targetAggroR ||
-                tn3a.indexOf(targetAggro) !== -1 || targetAggro.indexOf(tn3a) !== -1 ||
-                tn3a.indexOf(targetAggroR) !== -1 || targetAggroR.indexOf(tn3a) !== -1) {
-              match = teams[ti3]; break;
-            }
-          }
-        }
+        } catch(_){}
       }
       /* Fallback adicional: plantilla de Selecciones (`selecciones_squad_v1`).
          Los torneos de Selecciones (spv-/sfn-, formato mundial-48) guardan

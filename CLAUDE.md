@@ -89,6 +89,154 @@ que fallara las veces que hiciera falta probarlo.
    5 s de margen: un cold-start de Railway puede tardar bastante más y
    esa era la causa exacta de este bug.
 
+## La pantalla BAJAS PARA EL PARTIDO solo muestra las bajas del lado HUMANO (obligatorio, 2026-07-06)
+
+**Bug (foto usuario 2026-07-06, «Inter vs Antwerp», Trofeo Joan Gamper)**:
+la pantalla previa "🚑 LESIONADOS" mostraba a «Farouck Adekami · Antwerp»
+y «Jugador 28 · Antwerp» — jugadores del rival IA — en la caja del
+usuario, que juega con el Inter (humano). El usuario: "no tienen que
+salirme los lesionados del Antwerp, solo los de mi equipo".
+
+### Causa raíz
+
+`window._ppPlayerBelongsToMatch` (filtro compartido de la pantalla BAJAS
+PARA EL PARTIDO, usado tanto por la lista de LESIONADOS como por el
+resto de la card) aceptaba un jugador si su equipo era CUALQUIERA de
+los 2 equipos del partido (`teams.home` **o** `teams.away`), sin mirar
+si ese lado era humano o IA. La regla previa (2026-06-28) solo excluía
+selecciones y cajas de OTRO mister humano — nunca contempló que el
+propio RIVAL IA del partido también debía quedar fuera: esta pantalla
+es para que el humano sepa a quién de SU plantilla no puede convocar,
+el rival IA no aporta nada ahí.
+
+### Fix
+
+`_ppPlayerBelongsToMatch` ahora construye `normTargets` filtrando
+`teams.home`/`teams.away` por humanidad (`isHumanInComp` →
+`_isHumanClubCanonico` → `_esSelHumana` → `esHumano`, mismas capas que
+`_gmHumanInvolved`). Si NINGÚN lado resuelve humano (detección aún
+hidratando), no se restringe — mejor mostrar de más que arriesgarse a
+ocultar las bajas del propio humano por un falso negativo transitorio.
+Bump `index.bundle.js` 9.25 → 9.26.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_ppPlayerBelongsToMatch` (o cualquier filtro de la
+   pantalla BAJAS PARA EL PARTIDO) acepte un jugador solo por pertenecer
+   a "alguno de los 2 equipos del partido" sin comprobar que ese lado es
+   HUMANO. El rival IA nunca aporta bajas relevantes para el humano.
+2. **PROHIBIDO** quitar el fallback "si ningún lado resuelve humano, no
+   restringir" — es la red que evita ocultar las bajas del propio
+   humano si la detección de humanidad falla transitoriamente.
+
+## El watchdog anti-bloqueo de FINALIZAR es un POLL recurrente, no un único disparo a los 9s (obligatorio, 2026-07-06)
+
+**Bug (2 fotos usuario 2026-07-06, «Inter vs Antwerp»)**: con el MVP ya
+elegido (Marcus Thuram) y las estadísticas ya confirmadas, la pantalla
+obligatoria "📲 COMPARTIR PARTIDO" nunca llegó a aparecer y FINALIZAR se
+quedó bloqueado para siempre — sin ningún aviso, ni siquiera el del
+watchdog ya existente.
+
+### Causa raíz
+
+El watchdog de `_mlConfirmEnd` (introducido 2026-07-05) comprobaba
+UNA SOLA VEZ, a los 9 segundos exactos desde que el usuario confirma
+"SÍ", si algún overlay conocido de la cadena estaba visible. El
+problema: la cadena real (rellenar estadísticas + elegir equipo/jugador
+del MVP) tarda, de sobra, MÁS de 9 segundos para un humano — así que a
+los 9s casi siempre hay un overlay legítimo abierto (`gm-team-pick`,
+`gm-player-pick`, el propio `alert()` de "elige MVP"…), el chequeo
+único se descartaba a sí mismo PARA SIEMPRE sin volver a mirar nunca
+más. Si el fallo real ocurría DESPUÉS (como aquí, la puerta de
+WhatsApp que no llegó a pintarse), no quedaba NINGUNA red que lo
+detectara.
+
+### Fix
+
+El watchdog pasa de `setTimeout` único a `setInterval` cada 4s,
+indefinido mientras el botón siga deshabilitado. Cualquier overlay
+conocido visible en un tick RESETEA el contador de estancamiento (hay
+progreso legítimo); solo tras 4 comprobaciones SEGUIDAS sin nada
+visible (~16s de estancamiento REAL, no 9s desde el clic inicial) se
+reactiva el botón + aviso. Se detiene solo si `#gm-modal` se cierra, si
+el partido termina (`_gm.finished`, con su propio aviso) o si el botón
+deja de estar deshabilitado.
+
+### Reglas a respetar
+
+3. **PROHIBIDO** que un watchdog anti-bloqueo de una cadena
+   MULTI-PASO con interacción humana real (rellenar formularios, elegir
+   equipo/jugador…) sea un chequeo ÚNICO a un tiempo fijo corto. Debe
+   ser un POLL recurrente que resetee su contador de estancamiento cada
+   vez que detecta progreso legítimo (un overlay conocido visible), y
+   solo actuar tras varias comprobaciones SEGUIDAS sin nada — nunca tras
+   una única foto fija del estado a los pocos segundos del clic inicial.
+4. Todo watchdog recurrente nuevo de este tipo debe pararse solo
+   (`clearInterval`) al cerrarse el modal/pantalla que vigila, al
+   terminar el partido, o al reactivar el botón — nunca dejar el
+   intervalo corriendo indefinidamente de fondo.
+
+## Toda reentrada a `gmEndMatch()` desde un callback diferido va protegida con `_gmSafeReenter` (obligatorio, 2026-07-06)
+
+**Bug (5 fotos usuario 2026-07-06, «España vs Líbano», Road Copa Asia)**:
+partido HvIA con MVP ya elegido (Mikel Oyarzabal, visible en el acta a
+91') y estadísticas ya confirmadas — "va todo bien hasta la última
+foto". Tras elegir el MVP, la pantalla OBLIGATORIA de "📲 COMPARTIR
+PARTIDO" (WhatsApp) nunca llegó a aparecer y el botón FINALIZAR se
+quedó bloqueado (deshabilitado) para siempre, sin ningún aviso.
+
+### Causa raíz
+
+`gmPickPlayer` (el handler que registra al MVP elegido) re-disparaba
+`gmEndMatch()` así:
+```js
+try { setTimeout(function(){ window.gmEndMatch && window.gmEndMatch(); }, 80); } catch(_){}
+```
+El `try/catch` envuelve la llamada a `setTimeout(...)`, que NUNCA lanza
+— el código que de verdad puede reventar (`gmEndMatch()` → el siguiente
+gate, `_gmFinalShareGate`) corre DENTRO del callback, en un macrotask
+POSTERIOR, fuera de ese `try/catch`. Cualquier excepción real ahí queda
+TOTALMENTE sin capturar: no hay `alert`, no hay log, el overlay de
+WhatsApp nunca se pinta y el botón FINALIZAR — deshabilitado por
+`_mlConfirmEnd` al confirmar "SÍ" — jamás se reactiva. Mismo patrón que
+el bug de portería imbatida (2026-07-05/06): un `try/catch` que solo
+protege la PROGRAMACIÓN del callback, no su EJECUCIÓN real, es
+indistinguible de no tener ningún try/catch en absoluto.
+
+### Fix
+
+Nuevo helper `window._gmSafeReenter(fn, label)` (junto a
+`_gmReenableEndBtn`, `part2/misc_body_2.html`): ejecuta `fn()` en su
+propio try/catch — si revienta, loguea, **reactiva FINALIZAR**
+(`_gmReenableEndBtn`) y muestra un `alert` con el punto exacto donde
+falló, para que el usuario pueda reintentar en vez de quedarse
+mirando la pantalla congelada sin ninguna pista. Se usa en TODAS las
+reentradas diferidas a `gmEndMatch()`: tras elegir MVP (`gmPickPlayer`),
+tras confirmar estadísticas (`_mlShowStatsOverlay`), tras compartir por
+WhatsApp (`_gmFinalShareGate`) y tras la tanda de penaltis. Además,
+`_gmFinalShareGate` (la propia pantalla de compartir) se blinda con el
+MISMO patrón que `_gmShowFinalOv` (regla 2026-07-05, más abajo): el
+cálculo de cabecera y el pintado del overlay van en try/catch con
+fallback mínimo, y `ov.style.display='flex'` es INCONDICIONAL — un
+dato inesperado ya no puede impedir que el gate se muestre.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un `try/catch` alrededor de un `setTimeout(...)`
+   (o cualquier otro programador de macrotask/microtask) se considere
+   protección del código que corre DENTRO del callback. El try/catch
+   debe envolver la EJECUCIÓN real, no la llamada de programación.
+2. **PROHIBIDO** añadir una reentrada nueva a `gmEndMatch()` (o a
+   `mlEndMatchGen`, su equivalente en ml-card) sin pasar por
+   `_gmSafeReenter`/un patrón equivalente que reactive el botón y avise
+   visiblemente si falla. Toda la cadena imbatida→Estadísticas→MVP→
+   WhatsApp→fin hereda esto — un gate nuevo que se añada a la cadena
+   debe re-disparar el siguiente paso a través del helper.
+3. **PROHIBIDO** que `_gmFinalShareGate` (o cualquier gate obligatorio
+   nuevo con overlay propio) calcule su contenido o pinte su HTML sin
+   try/catch, o que el `display='flex'`/`.show` dependa de que ese
+   pintado saliera perfecto. Mismo contrato que `_gmShowFinalOv`.
+
 ## La continuación tras elegir portero NUNCA depende solo de `requestAnimationFrame` (obligatorio, 2026-07-06)
 
 **Bug (foto usuario 2026-07-06, «Atlético Madrid vs Villarreal», Liga ·

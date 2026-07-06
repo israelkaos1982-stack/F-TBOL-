@@ -12763,24 +12763,59 @@
         + 'padding:24px;text-align:center;font-family:Oswald,sans-serif;overflow-y:auto;';
       document.body.appendChild(ov);
     }
-    var sH = (typeof window._waShortName === 'function' ? window._waShortName(_gm.home) : _gm.home) || 'Local';
-    var sA = (typeof window._waShortName === 'function' ? window._waShortName(_gm.away) : _gm.away) || 'Visitante';
-    var scoreLine = sH + '  ' + (_gm.sc.a != null ? _gm.sc.a : 0) + ' - ' + (_gm.sc.b != null ? _gm.sc.b : 0) + '  ' + sA;
-    var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
-    var mvpName = mvpEvt ? (mvpEvt.player || mvpEvt.name || '') : '';
-    var mvpTeam = mvpEvt ? (mvpEvt.team === 'a' ? _gm.home : _gm.away) : '';
-    ov.innerHTML = ''
-      + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:30px;letter-spacing:3px;color:#f0c040;text-shadow:0 0 22px rgba(240,192,64,.55);line-height:1.1;">📲 COMPARTIR PARTIDO</div>'
-      + '<div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:20px;color:#fff;margin-top:10px;">' + scoreLine + '</div>'
-      + (mvpEvt ? '<div style="font-family:Rajdhani,sans-serif;font-size:15px;color:#ffd700;margin-top:8px;">⭐ MVP: ' + mvpName + (mvpTeam ? ' (' + mvpTeam + ')' : '') + '</div>' : '')
-      + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.62);margin-top:14px;max-width:340px;line-height:1.45;">Comparte el resultado, las estadísticas, el acta y el MVP por WhatsApp. Es obligatorio compartir para finalizar el partido.</div>'
-      + '<button id="gm-mvp-share-btn" style="margin-top:22px;width:100%;max-width:340px;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;">🟢 COMPARTIR POR WHATSAPP</button>'
-      + '<button id="gm-mvp-cont-btn" disabled style="margin-top:12px;width:100%;max-width:340px;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:not-allowed;opacity:.4;">🏁 FINALIZAR PARTIDO</button>'
-      + '<button id="gm-mvp-skip-btn" style="margin-top:18px;background:transparent;border:none;color:rgba(255,255,255,.28);font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;text-decoration:underline;padding:4px 8px;">⚠️ WhatsApp no abre · continuar sin compartir</button>';
+    /* Cálculo de cabecera + pintado envueltos en try/catch (regla
+       CLAUDE.md "toda pantalla terminal obligatoria rellena su contenido
+       con try/catch y el display=flex es INCONDICIONAL"): un dato
+       inesperado (p.ej. _waShortName reventando con un nombre raro) no
+       puede impedir que este gate obligatorio se muestre — sin él, el
+       usuario se queda con FINALIZAR bloqueado y ningún overlay visible,
+       indistinguible de un bloqueo total. */
+    var scoreLine = '', mvpEvt = null, mvpName = '', mvpTeam = '';
+    try {
+      var sH = (typeof window._waShortName === 'function' ? window._waShortName(_gm.home) : _gm.home) || 'Local';
+      var sA = (typeof window._waShortName === 'function' ? window._waShortName(_gm.away) : _gm.away) || 'Visitante';
+      scoreLine = sH + '  ' + (_gm.sc.a != null ? _gm.sc.a : 0) + ' - ' + (_gm.sc.b != null ? _gm.sc.b : 0) + '  ' + sA;
+      mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
+      mvpName = mvpEvt ? (mvpEvt.player || mvpEvt.name || '') : '';
+      mvpTeam = mvpEvt ? (mvpEvt.team === 'a' ? _gm.home : _gm.away) : '';
+    } catch(errMeta) { try { console.error('_gmFinalShareGate: fallo calculando cabecera', errMeta); } catch(_){} }
+    try {
+      ov.innerHTML = ''
+        + '<div style="font-family:\'Bebas Neue\',sans-serif;font-size:30px;letter-spacing:3px;color:#f0c040;text-shadow:0 0 22px rgba(240,192,64,.55);line-height:1.1;">📲 COMPARTIR PARTIDO</div>'
+        + '<div style="font-family:Rajdhani,sans-serif;font-weight:700;font-size:20px;color:#fff;margin-top:10px;">' + scoreLine + '</div>'
+        + (mvpEvt ? '<div style="font-family:Rajdhani,sans-serif;font-size:15px;color:#ffd700;margin-top:8px;">⭐ MVP: ' + mvpName + (mvpTeam ? ' (' + mvpTeam + ')' : '') + '</div>' : '')
+        + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.62);margin-top:14px;max-width:340px;line-height:1.45;">Comparte el resultado, las estadísticas, el acta y el MVP por WhatsApp. Es obligatorio compartir para finalizar el partido.</div>'
+        + '<button id="gm-mvp-share-btn" style="margin-top:22px;width:100%;max-width:340px;padding:14px;background:linear-gradient(135deg,#25d366,#128c7e);border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;">🟢 COMPARTIR POR WHATSAPP</button>'
+        + '<button id="gm-mvp-cont-btn" disabled style="margin-top:12px;width:100%;max-width:340px;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:not-allowed;opacity:.4;">🏁 FINALIZAR PARTIDO</button>'
+        + '<button id="gm-mvp-skip-btn" style="margin-top:18px;background:transparent;border:none;color:rgba(255,255,255,.28);font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;text-decoration:underline;padding:4px 8px;">⚠️ WhatsApp no abre · continuar sin compartir</button>';
+    } catch(errHtml) {
+      /* Fallback mínimo: el usuario SIEMPRE debe tener un botón de
+         compartir + continuar, aunque la plantilla rica haya reventado. */
+      try { console.error('_gmFinalShareGate: fallo pintando overlay, usando fallback mínimo', errHtml); } catch(_){}
+      try {
+        ov.innerHTML = '<div style="font-family:Oswald,sans-serif;color:#f0c040;font-size:20px;padding:10px;">📲 COMPARTIR PARTIDO</div>'
+          + '<div style="font-family:Rajdhani,sans-serif;color:#fff;font-size:14px;padding:6px;">Comparte el resultado por WhatsApp antes de finalizar.</div>'
+          + '<button id="gm-mvp-share-btn" style="margin-top:18px;width:100%;max-width:340px;padding:14px;background:#25d366;border:none;border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;cursor:pointer;">🟢 COMPARTIR POR WHATSAPP</button>'
+          + '<button id="gm-mvp-cont-btn" disabled style="margin-top:12px;width:100%;max-width:340px;padding:14px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:10px;color:#fff;font-family:Oswald,sans-serif;font-size:15px;opacity:.4;">🏁 FINALIZAR PARTIDO</button>'
+          + '<button id="gm-mvp-skip-btn" style="margin-top:18px;background:transparent;border:none;color:rgba(255,255,255,.28);font-family:Rajdhani,sans-serif;font-size:12px;cursor:pointer;text-decoration:underline;">⚠️ WhatsApp no abre · continuar sin compartir</button>';
+      } catch(_){}
+    }
+    /* INCONDICIONAL: hacerse visible no depende de que el pintado de
+       arriba haya salido perfecto. */
     ov.style.display = 'flex';
     var shared = false;
     var shareBtn = document.getElementById('gm-mvp-share-btn');
     var contBtn  = document.getElementById('gm-mvp-cont-btn');
+    if (!shareBtn || !contBtn) {
+      /* Red de seguridad final: si ni siquiera el fallback consiguió
+         crear los botones, no dejamos al usuario mirando una pantalla
+         muerta — avisamos y reactivamos FINALIZAR para reintentar. */
+      try { console.error('_gmFinalShareGate: no se pudieron crear los botones del gate'); } catch(_){}
+      try { ov.style.display = 'none'; } catch(_){}
+      try { _gmReenableEndBtn(); } catch(_){}
+      try { alert('⚠️ No se pudo mostrar la pantalla de compartir por WhatsApp. Pulsa FINALIZAR de nuevo para reintentar.'); } catch(_){}
+      return;
+    }
     shareBtn.onclick = function() {
       var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
                     'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
@@ -14755,10 +14790,16 @@
     var _evId = window._evtId();
     _gm.events.push({ id: _evId, type: evt.type, label: evt.label, team: team, min: min, num: num || '', player: playerName || '', ico: ico });
 
-    /* MVP elegido desde el gate de gmEndMatch → re-disparar automáticamente */
+    /* MVP elegido desde el gate de gmEndMatch → re-disparar automáticamente.
+       El try/catch de fuera solo protegía la llamada a `setTimeout`, NO lo
+       que corre dentro de su callback — una excepción real ahí (p.ej. en
+       el siguiente gate, compartir por WhatsApp) quedaba sin capturar en
+       absoluto. `_gmSafeReenter` sí envuelve la ejecución real. */
     if (evt.type === 'mvp' && _gm._awaitMvp) {
       _gm._awaitMvp = false;
-      try { setTimeout(function(){ window.gmEndMatch && window.gmEndMatch(); }, 80); } catch(_){}
+      setTimeout(function(){
+        if (window.gmEndMatch) window._gmSafeReenter(window.gmEndMatch, 'tras elegir MVP');
+      }, 80);
     }
 
     /* actualizar marcador */
@@ -15304,6 +15345,30 @@
      siempre (el partido "no se podía ni cancelar ni finalizar"). */
   window._gmReenableEndBtn = _gmReenableEndBtn;
 
+  /* Reentrada SEGURA a gmEndMatch() desde cualquier callback diferido
+     (setTimeout, onclick de un picker, confirmación de un overlay…).
+     Bug (2026-07-06, «España vs Líbano», foto usuario): tras elegir MVP,
+     `gmPickPlayer` reprogramaba `gmEndMatch()` dentro de un
+     `setTimeout(...)` cuyo try/catch envolvía SOLO la llamada a
+     `setTimeout`, no la función que corre DENTRO — una excepción real
+     lanzada por esa 2ª invocación (p.ej. dentro de `_gmFinalShareGate`,
+     el siguiente gate: compartir por WhatsApp) quedaba COMPLETAMENTE sin
+     capturar: no hay alert, no hay log, el botón FINALIZAR se queda
+     deshabilitado para siempre y la pantalla de compartir nunca
+     aparece — exactamente "elijo MVP y no pasa nada". Todo re-entrada
+     a `gmEndMatch()` que no sea el primer click del usuario (ese ya lo
+     protege `_mlConfirmEnd`) debe pasar por este helper. */
+  function _gmSafeReenter(fn, label){
+    try { fn(); }
+    catch(err){
+      try { console.error('[gmEndMatch] reentrada "' + label + '" falló:', err); } catch(_){}
+      try { _gmReenableEndBtn(); } catch(_){}
+      try { alert('⚠️ El partido no ha podido continuar (' + label + '): '
+          + (err && err.message || err) + '.\nPulsa FINALIZAR de nuevo para reintentar.'); } catch(_){}
+    }
+  }
+  window._gmSafeReenter = _gmSafeReenter;
+
   /* ══ DIAGNÓSTICO DE gmEndMatch — SOLO CONSOLA (obligatorio, 2026-07-06) ══
      El panel visible en pantalla (caja verde monospace) que existió aquí
      desde el 2026-07-05 era TEMPORAL a propósito ("se puede quitar en
@@ -15486,7 +15551,7 @@
     _gmDiagLog('stats: matchStats=' + !!_gm.matchStats + ' hasOverlay=' + (typeof _mlShowStatsOverlay === 'function') + ' humanInvolved=' + (function(){ try { return _gmHumanInvolved(); } catch(eDiag){ return 'ERR:'+eDiag; } })());
     if (!_gm.matchStats && typeof _mlShowStatsOverlay === 'function' && _gmHumanInvolved()) {
       _gmDiagLog('→ abriendo _mlShowStatsOverlay');
-      _mlShowStatsOverlay(_gm, function(){ window.gmEndMatch(); });
+      _mlShowStatsOverlay(_gm, function(){ _gmSafeReenter(window.gmEndMatch, 'tras confirmar estadísticas'); });
       return;
     }
     /* MVP opcional en amistosos (petición usuario 2026-05-05) — no
@@ -15515,7 +15580,7 @@
       _gmDiagLog('→ abriendo _gmFinalShareGate');
       _gmFinalShareGate(function(){
         _gm._mvpShareDone = true;
-        window.gmEndMatch();
+        _gmSafeReenter(window.gmEndMatch, 'tras compartir por WhatsApp');
       });
       return;
     }
@@ -17278,7 +17343,7 @@
       _gm.penScore = out.aTotal + '-' + out.bTotal;
       ov.style.display = 'none';
       /* Continúa el flujo normal de gmEndMatch ahora que penDone=true. */
-      window.gmEndMatch();
+      _gmSafeReenter(window.gmEndMatch, 'tras la tanda de penaltis');
     });
 
     _renderGrid();

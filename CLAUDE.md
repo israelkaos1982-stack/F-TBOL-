@@ -89,6 +89,67 @@ que fallara las veces que hiciera falta probarlo.
    5 s de margen: un cold-start de Railway puede tardar bastante más y
    esa era la causa exacta de este bug.
 
+## Toda reentrada a `gmEndMatch()` desde un callback diferido va protegida con `_gmSafeReenter` (obligatorio, 2026-07-06)
+
+**Bug (5 fotos usuario 2026-07-06, «España vs Líbano», Road Copa Asia)**:
+partido HvIA con MVP ya elegido (Mikel Oyarzabal, visible en el acta a
+91') y estadísticas ya confirmadas — "va todo bien hasta la última
+foto". Tras elegir el MVP, la pantalla OBLIGATORIA de "📲 COMPARTIR
+PARTIDO" (WhatsApp) nunca llegó a aparecer y el botón FINALIZAR se
+quedó bloqueado (deshabilitado) para siempre, sin ningún aviso.
+
+### Causa raíz
+
+`gmPickPlayer` (el handler que registra al MVP elegido) re-disparaba
+`gmEndMatch()` así:
+```js
+try { setTimeout(function(){ window.gmEndMatch && window.gmEndMatch(); }, 80); } catch(_){}
+```
+El `try/catch` envuelve la llamada a `setTimeout(...)`, que NUNCA lanza
+— el código que de verdad puede reventar (`gmEndMatch()` → el siguiente
+gate, `_gmFinalShareGate`) corre DENTRO del callback, en un macrotask
+POSTERIOR, fuera de ese `try/catch`. Cualquier excepción real ahí queda
+TOTALMENTE sin capturar: no hay `alert`, no hay log, el overlay de
+WhatsApp nunca se pinta y el botón FINALIZAR — deshabilitado por
+`_mlConfirmEnd` al confirmar "SÍ" — jamás se reactiva. Mismo patrón que
+el bug de portería imbatida (2026-07-05/06): un `try/catch` que solo
+protege la PROGRAMACIÓN del callback, no su EJECUCIÓN real, es
+indistinguible de no tener ningún try/catch en absoluto.
+
+### Fix
+
+Nuevo helper `window._gmSafeReenter(fn, label)` (junto a
+`_gmReenableEndBtn`, `part2/misc_body_2.html`): ejecuta `fn()` en su
+propio try/catch — si revienta, loguea, **reactiva FINALIZAR**
+(`_gmReenableEndBtn`) y muestra un `alert` con el punto exacto donde
+falló, para que el usuario pueda reintentar en vez de quedarse
+mirando la pantalla congelada sin ninguna pista. Se usa en TODAS las
+reentradas diferidas a `gmEndMatch()`: tras elegir MVP (`gmPickPlayer`),
+tras confirmar estadísticas (`_mlShowStatsOverlay`), tras compartir por
+WhatsApp (`_gmFinalShareGate`) y tras la tanda de penaltis. Además,
+`_gmFinalShareGate` (la propia pantalla de compartir) se blinda con el
+MISMO patrón que `_gmShowFinalOv` (regla 2026-07-05, más abajo): el
+cálculo de cabecera y el pintado del overlay van en try/catch con
+fallback mínimo, y `ov.style.display='flex'` es INCONDICIONAL — un
+dato inesperado ya no puede impedir que el gate se muestre.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un `try/catch` alrededor de un `setTimeout(...)`
+   (o cualquier otro programador de macrotask/microtask) se considere
+   protección del código que corre DENTRO del callback. El try/catch
+   debe envolver la EJECUCIÓN real, no la llamada de programación.
+2. **PROHIBIDO** añadir una reentrada nueva a `gmEndMatch()` (o a
+   `mlEndMatchGen`, su equivalente en ml-card) sin pasar por
+   `_gmSafeReenter`/un patrón equivalente que reactive el botón y avise
+   visiblemente si falla. Toda la cadena imbatida→Estadísticas→MVP→
+   WhatsApp→fin hereda esto — un gate nuevo que se añada a la cadena
+   debe re-disparar el siguiente paso a través del helper.
+3. **PROHIBIDO** que `_gmFinalShareGate` (o cualquier gate obligatorio
+   nuevo con overlay propio) calcule su contenido o pinte su HTML sin
+   try/catch, o que el `display='flex'`/`.show` dependa de que ese
+   pintado saliera perfecto. Mismo contrato que `_gmShowFinalOv`.
+
 ## La continuación tras elegir portero NUNCA depende solo de `requestAnimationFrame` (obligatorio, 2026-07-06)
 
 **Bug (foto usuario 2026-07-06, «Atlético Madrid vs Villarreal», Liga ·

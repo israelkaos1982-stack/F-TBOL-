@@ -10199,6 +10199,28 @@
           if (!b || !b.disabled) return;
           b.disabled = false; b.style.opacity = '';
           try { console.warn('[gmEndMatch watchdog] cadena post-imbatida sin progreso visible tras 9s — botón reactivado.'); } catch(_){}
+          /* Contador de reintentos en este partido (2026-07-06): si el
+             watchdog ya saltó antes en el MISMO partido, un 2º reintento
+             con el mismo resultado normalmente significa que la pestaña
+             sigue ejecutando una versión antigua del JS (el fix real vive
+             en el servidor pero esta pestaña nunca lo descargó — ver
+             banner "🔄 Hay una versión más nueva" en la esquina inferior).
+             Recargar la página (guardando antes el resultado, ya
+             persistido) resuelve esto; simplemente reintentar FINALIZAR
+             sobre el mismo JS viejo repite el mismo bloqueo. */
+          try {
+            window._gmWatchdogRetries = (window._gmWatchdogRetries || 0) + 1;
+            if (window._gmWatchdogRetries >= 2) {
+              alert('⚠️ El partido sigue sin poder continuar automáticamente tras varios intentos.\n\n'
+                  + 'Esto suele pasar cuando esta pestaña lleva abierta un tiempo y no tiene la última '
+                  + 'versión de la web (mira si aparece el aviso "🔄 Hay una versión más nueva" abajo del '
+                  + 'todo y pulsa RECARGAR ahí). Si no aparece, prueba a pulsar FINALIZAR una vez más; '
+                  + 'si sigue sin avanzar, recarga la página manualmente — el marcador y los eventos del '
+                  + 'acta aún NO están guardados hasta que el partido finaliza del todo, así que anota el '
+                  + 'resultado antes de recargar si quieres reintroducirlo.');
+              return;
+            }
+          } catch(_){}
           alert('⚠️ El partido no ha podido continuar automáticamente. Pulsa FINALIZAR de nuevo para reintentar.');
         } catch(_){}
       }, 9000);

@@ -24883,13 +24883,33 @@ window._showSimProgress = function(opts, onDone){
       });
     } catch(_){}
   }
+  /* Cooldown corto (no permanente) entre intentos fallidos para el MISMO
+     equipo (2026-07-06, refuerzo): `_TOUR_ALIAS_PREFETCHED[norm]` guardaba
+     SOLO `true`/ausente — un intento que arranca (línea de abajo) queda
+     marcado `true` ANTES de conocer la respuesta, y si el servidor
+     respondía "no encontrado" (cold-start, o el admin aún no había
+     terminado de guardar el alias en OTRO dispositivo), el callback nunca
+     lo desmarcaba. Resultado: ese equipo quedaba BLOQUEADO para SIEMPRE en
+     esta sesión — ningún tap futuro (de NINGÚN partido con ese equipo)
+     volvía a preguntar al servidor, aunque el alias ya estuviera guardado
+     minutos después (bug "Maccabi Tel Aviv": un primer tap fallido en un
+     partido anterior de la misma sesión dejaba TODOS los partidos
+     posteriores con ese equipo sin ❓, mientras equipos tocados por primera
+     vez sí funcionaban). Ahora solo un ÉXITO marca `true` (permanente,
+     resuelto); un fallo guarda el timestamp del intento y permite
+     reintentar pasado `_ALIAS_PREFETCH_COOLDOWN_MS`. */
+  var _ALIAS_PREFETCH_COOLDOWN_MS = 15000;
   window._tourPrefetchMatchAlias = function(nameA, nameB){
     try {
       if (typeof window._efAliasServerSearch !== 'function') return;
       [nameA, nameB].forEach(function(nm){
         if (!nm) return;
         var norm = (typeof window._aliasNormName === 'function') ? window._aliasNormName(nm) : String(nm||'').trim().toLowerCase();
-        if (!norm || _TOUR_ALIAS_PREFETCHED[norm]) return;
+        if (!norm) return;
+        var mark = _TOUR_ALIAS_PREFETCHED[norm];
+        if (mark === true) return; /* ya resuelto (encontrado) — no repetir */
+        var _now0 = Date.now();
+        if (typeof mark === 'number' && (_now0 - mark) < _ALIAS_PREFETCH_COOLDOWN_MS) return; /* intento reciente en curso/fallido */
         /* Ya resuelto localmente (torneo YA lo lleva baked, u otra liga
            cacheada) → nada que preguntar al servidor para este equipo. */
         try {
@@ -24898,9 +24918,10 @@ window._showSimProgress = function(opts, onDone){
             return;
           }
         } catch(_){}
-        _TOUR_ALIAS_PREFETCHED[norm] = true; /* marca "en curso" para no duplicar peticiones */
+        _TOUR_ALIAS_PREFETCHED[norm] = _now0; /* marca intento EN CURSO (temporal, no permanente) */
         window._efAliasServerSearch(nm, function(found){
-          if (!found) return;
+          if (!found) return; /* NO permanente: el cooldown numérico ya puesto permite reintentar */
+          _TOUR_ALIAS_PREFETCHED[norm] = true;
           try { window._efAliasBakeIntoTours && window._efAliasBakeIntoTours(nm, found); } catch(_){}
           _tourAliasInjectIfOpen(nm, found);
         });

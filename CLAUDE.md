@@ -1,5 +1,58 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La continuación tras elegir portero NUNCA depende solo de `requestAnimationFrame` (obligatorio, 2026-07-06)
+
+**Bug (foto usuario 2026-07-06, «Atlético Madrid vs Villarreal», Liga ·
+Jornada 3, "no funciona el finalizar ningún partido humano vs ia o
+humano vs humano")**: con el bundle YA en 9.24 (confirmado por el log
+en pantalla: aparecían las líneas nuevas `imbat IA auto-registrado…` e
+`imbat: portero humano elegido lado a (Jan Oblak)`, que solo existen
+desde la reescritura sin promesas), el partido se congelaba en el
+MISMO punto de siempre — tras elegir portero, nunca aparecía
+`imbat: todos los lados resueltos → onDone()` ni ninguna pantalla
+posterior (Estadísticas/MVP/WhatsApp), y FINALIZAR seguía
+deshabilitado. Esta vez NO era caché vieja (el log lo demuestra).
+
+### Causa raíz
+
+`_finish()` (dentro de `_ensureImbatEvents`, `static/js/index.bundle.js`)
+diferá la llamada a `onDone()` ÚNICAMENTE con
+`requestAnimationFrame(function(){ setTimeout(_run, 0); })` (añadido
+2026-07-05 para forzar un repintado del cierre del picker antes del
+trabajo pesado). Los navegadores móviles PUEDEN pausar por completo los
+callbacks de `requestAnimationFrame` si la pestaña pierde visibilidad
+aunque sea un instante (paso a 2º plano, bloqueo de pantalla, cambio de
+app) justo después del tap que cierra el picker — el callback
+simplemente NUNCA se ejecuta, sin excepción, sin log, indistinguible
+del "se congela" reportado. Verificado en aislado (harness Node con
+`requestAnimationFrame` que nunca invoca su callback, simulando el
+throttling real): sin red de seguridad, `onDone()` no se llamaba jamás.
+
+### Fix
+
+`_finish()` añade una red de seguridad independiente:
+`setTimeout(_run, 300)` que se dispara SIEMPRE, haya disparado el rAF o
+no, con una guarda `_ran` para que `onDone()` no se llame dos veces si
+ambos mecanismos llegan a ejecutarse. `setTimeout` sigue disparándose
+(aunque con throttling) cuando la pestaña estuvo en 2º plano, a
+diferencia de `requestAnimationFrame`, que puede quedar completamente
+suspendido. Bump `index.bundle.js` 9.24 → 9.25.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que la continuación de un flujo obligatorio
+   (imbatida→Estadísticas→MVP→WhatsApp, o cualquier cadena similar)
+   dependa ÚNICAMENTE de `requestAnimationFrame` para programar el
+   siguiente paso. Todo diferido con rAF que exista para forzar un
+   repintado debe llevar TAMBIÉN un `setTimeout` de red de seguridad
+   (con guarda anti-doble-ejecución) que garantice progreso aunque el
+   rAF quede suspendido por pérdida de visibilidad de la pestaña.
+2. Antes de asumir "esto ya no puede ser caché vieja" basta con mirar
+   si el panel de diagnóstico (`_gmDiagLog`) muestra las líneas nuevas
+   del último fix — si aparecen (como en este caso), el bloqueo es un
+   bug DISTINTO y hay que seguir investigando la cadena, no repetir el
+   diagnóstico de "recarga la página".
+
 ## Aviso de versión nueva — una pestaña vieja YA NO se queda bloqueada en silencio para siempre (obligatorio, 2026-07-06)
 
 **Bug (2 fotos usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool»,

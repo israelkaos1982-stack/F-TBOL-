@@ -6940,6 +6940,47 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
          se muestra alias. */
       var _aliasFor = (typeof window.getTeamEfootballAlias === 'function')
         ? window.getTeamEfootballAlias : function(){ return ''; };
+      /* Fuente ADICIONAL, SÍNCRONA y SIEMPRE disponible en la previa de un
+         torneo: el propio cfg del torneo (`_TOUR_CACHE[tourId]`) que ya se
+         cargó para abrir esta previa. Si el alias está baked en
+         `cfg.teams[].efootballAlias` (lo hacen `_tourBackfillEfootballAlias`
+         al cargar el torneo y `_efAliasBakeIntoTours` tras un acierto de
+         servidor — 2026-07-06), lo resolvemos aquí AUNQUE la liga origen no
+         esté cacheada en este dispositivo. Cerrar el círculo: el escaneo de
+         `_buildAliasCache` sobre TOUR_CACHE depende del TTL de 3 s y de que
+         el cfg ya esté en cache; este lookup es directo e inmune a eso.
+         Además dispara `_tourLoadCachedSync` (que ejecuta el backfill), así
+         que si la liga origen SÍ está cargada, el alias se bakea al vuelo. */
+      function _ppTourAliasFor(teamName){
+        try {
+          var pt = window._ppPreviaTeams;
+          var tid = pt && pt.tourId;
+          if (!tid) return '';
+          var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[tid]) || null;
+          if (!cfg && typeof window._tourLoadCachedSync === 'function') {
+            try { cfg = window._tourLoadCachedSync(tid); } catch(_){}
+          }
+          if (!cfg || !Array.isArray(cfg.teams)) return '';
+          var _norm = (typeof window._aliasNormName === 'function')
+            ? window._aliasNormName
+            : function(s){ return String(s||'').trim().toLowerCase(); };
+          var tgt = _norm(teamName);
+          for (var i = 0; i < cfg.teams.length; i++){
+            var t = cfg.teams[i];
+            if (t && t.name && _norm(t.name) === tgt){
+              var a = (typeof t.efootballAlias === 'string') ? t.efootballAlias.trim() : '';
+              if (a) return a;
+            }
+          }
+        } catch(_){}
+        return '';
+      }
+      function _ppResolveAlias(teamName){
+        var a = '';
+        try { a = String(_aliasFor(teamName) || '').trim(); } catch(_){}
+        if (a) return a;
+        return _ppTourAliasFor(teamName);
+      }
       /* Gate HUMANO ampliado SOLO para el alias (2026-06-25): el rival
          humano puede NO ser uno de los 5 canónicos de Liga EA (p.ej. un
          humano de torneo de verano / europeo marcado con `humanIcon`, o
@@ -6966,8 +7007,8 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
          pero YA NO suficiente por sí sola. */
       var _humCandidateHome = (_humAwayAlias && !_humHomeAlias);
       var _humCandidateAway = (_humHomeAlias && !_humAwayAlias);
-      var _ppHomeAliasTxt = _humCandidateHome ? _aliasFor(home) : '';
-      var _ppAwayAliasTxt = _humCandidateAway ? _aliasFor(away) : '';
+      var _ppHomeAliasTxt = _humCandidateHome ? _ppResolveAlias(home) : '';
+      var _ppAwayAliasTxt = _humCandidateAway ? _ppResolveAlias(away) : '';
       var _ppHomeAliasShow = _humCandidateHome && !!_ppHomeAliasTxt;
       var _ppAwayAliasShow = _humCandidateAway && !!_ppAwayAliasTxt;
       function _ppAliasHtml(show, txt, teamName, side){

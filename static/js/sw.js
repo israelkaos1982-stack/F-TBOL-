@@ -20,7 +20,7 @@ var PRECACHE = [
   '/static/css/goal-notification-improved.css?v=2.1',
   '/static/js/goal-notification-improved.js?v=2.0',
   '/static/js/var-system.js?v=1.0',
-  '/static/js/index.bundle.js?v=9.27',
+  '/static/js/index.bundle.js?v=9.28',
   '/static/js/goal-notification-patch.js?v=2.1',
   '/static/js/copa-engine.js?v=1.7',
 ];

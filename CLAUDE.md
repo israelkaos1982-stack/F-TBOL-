@@ -1,5 +1,95 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El acta/MVP de un equipo IA con plantilla REAL completa NUNCA muestra "Jugador A"/"Portero" (obligatorio, 2026-07-06 #6)
+
+**Bug (3 fotos usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool», 0-0,
+Trofeo Joan Gamper — "la plantilla del Maccabi Tel Aviv está completa
+pero en el acta salen jugador A etc, así con todas")**: el acta del
+partido mostraba «90' 🧤 Portero» (imbatida) y «FIN ⭐ Jugador A» (MVP)
+para el Maccabi Tel Aviv, pese a que la pantalla de PLANTILLA del mismo
+equipo (misma sesión) mostraba su roster REAL y completo (Sagiv
+Jehezkel, O. Davida, Hélio Varela… 46 partidos cada uno, `PJ`/goles/MVP
+ya acumulados). El usuario confirmó que le pasa "así con todas" las
+cajas IA, no solo Maccabi.
+
+### Causa raíz (2 bugs independientes)
+
+1. **`sqFromRegistry` (`static/js/index.bundle.js`) solo escaneaba
+   `localStorage['ligaExt_*']`**, nunca `window.LIGA_CACHE` (el cache EN
+   MEMORIA que `loadData()` rellena al abrir la pantalla de una liga).
+   Una liga grande de Resto de Ligas (40+ equipos con plantilla
+   completa) puede superar la cuota de `localStorage` y quedar
+   `_lsSetSafe`-descartada — la liga sigue viva en `LIGA_CACHE` (por
+   eso la pantalla de PLANTILLA, que lee de ahí, mostraba el roster
+   real) pero `sqFromRegistry`/`sqFromRegistryFull` (usados por
+   `_getTopGk`, `genMatchEventsEnhanced`, el MVP obligatorio…) no la
+   veían — caían al placeholder `['','Jugador A','F',76]` /
+   `{num:'1', name:'Portero'}` documentado en las reglas de arriba.
+2. **`_mlEndMatchGen` (MVP obligatorio genérico, `part2/misc_body_2.html`)
+   leía `window.SQUAD_REGISTRY[st.home]`/`[st.away]` DIRECTAMENTE**, sin
+   pasar por `sqFromRegistryFull`/`sqFromRegistry` (ni sus fallbacks:
+   `applyEngineOverrides`, escaneo `ligaExt_*`, ahora `LIGA_CACHE`).
+   `SQUAD_REGISTRY[team]` solo se "calienta" como efecto colateral de
+   una llamada previa a `sqFromRegistry`/`sqFromRegistryFull` para ESE
+   equipo exacto — en un partido sin portería a cero (por tanto sin
+   `_ensureImbatEvents`/`_getTopGk` de por medio) el MVP era el PRIMER
+   punto que tocaba la plantilla del IA, y como leía el registro a
+   pelo, la devolvía vacía.
+3. **`_iaEventsHtml` (el render del acta, mismo archivo) reparaba EN
+   VIVO solo "Jugador A"/"Jugador B" exactos** (`_fixPlayer`, comentario
+   "evitamos migración destructiva"). No cubría "Portero" (placeholder
+   de portería imbatida), ni "Jugador N" (roster genérico numérico,
+   `_lextBuildDefaultRoster`), y el MVP mostrado en la fila "FIN ⭐"
+   (`m.mvp`) NI SIQUIERA pasaba por esa reparación — se imprimía tal
+   cual viniera guardado.
+
+### Fix
+
+- `sqFromRegistry`: el escaneo de `ligaExt_*` se extrajo a un helper
+  `_matchTeamInArray(teams)` (mismas 3 pasadas: exacto → substring →
+  agresivo sin sufijos) reutilizado también contra
+  `Object.keys(window.LIGA_CACHE)` cuando el escaneo de localStorage no
+  encuentra nada. Barato (solo ligas ya cargadas en memoria esta
+  sesión), sin tocar red.
+- `_mlEndMatchGen`: `sqA`/`sqB` del MVP obligatorio se resuelven vía
+  `sqFromRegistryFull(st.home)`/`sqFromRegistryFull(st.away)` primero
+  (con TODOS sus fallbacks), cayendo a `SQUAD_REGISTRY[...]` crudo solo
+  si `sqFromRegistryFull` también viene vacío.
+- `_iaEventsHtml`: `_isPlaceholderName` generaliza el detector al MISMO
+  regex que `_bfIsRealName` (backfill persistente,
+  `/^(?:\d+\.?\s*)?(?:jugador|portero)\s*(?:[a-k]|ia|\d+)?$/i`) — cubre
+  "Portero"/"Portero A"/"Jugador N" además de "Jugador A/B".
+  `_realFallbackName` acepta un 2º parámetro `preferGk`: para un evento
+  `imbat` (portería a cero) elige un PORTERO real del roster en vez de
+  cualquier jugador de campo. El MVP (`m.mvp`) ahora pasa por la MISMA
+  reparación antes de imprimirse.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `sqFromRegistry` (o cualquier resolutor de
+   plantilla nuevo) escanee SOLO `localStorage['ligaExt_*']` sin
+   consultar también `window.LIGA_CACHE`. Una liga grande puede vivir
+   SOLO en memoria si superó la cuota de `localStorage` — el escaneo
+   debe cubrir ambas fuentes, igual que el bake de alias eFootball
+   escanea `window._TOUR_CACHE` además de localStorage.
+2. **PROHIBIDO** que un gate obligatorio nuevo (MVP, imbat, sanciones,
+   evento manual…) lea `window.SQUAD_REGISTRY[team]` DIRECTAMENTE sin
+   pasar antes por `sqFromRegistryFull`/`sqFromRegistry`. El registro
+   solo se puebla como efecto colateral de una llamada previa a esas
+   funciones — un gate que sea el PRIMERO en tocar la plantilla de un
+   equipo (p.ej. MVP en un partido sin portería a cero) se queda con
+   `[]` si no dispara él mismo la resolución completa.
+3. **PROHIBIDO** que el detector de "nombre placeholder" de un reparador
+   EN VIVO del acta (`_iaEventsHtml`/`_fixPlayer` o cualquier futuro)
+   reconozca SOLO "Jugador A"/"Jugador B" exactos. Debe compartir el
+   MISMO regex que `_bfIsRealName` (backfill persistente) — de lo
+   contrario un placeholder tipo "Portero"/"Jugador 22" pasa la
+   reparación de display pero no la de persistencia (o viceversa),
+   dando inconsistencias entre lo que se ve y lo que se guarda.
+4. **PROHIBIDO** que el MVP mostrado al final del acta (`m.mvp`) se
+   imprima sin pasar por el mismo reparador de placeholder que el resto
+   de eventos — es el ÚNICO valor que quedaba sin blindar.
+
 ## El PRIMER disparo de `gmEndMatch()` (al confirmar "SÍ") también va protegido con `_gmSafeReenter` (obligatorio, 2026-07-06 #4)
 
 **Bug (foto usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool», 1-1,

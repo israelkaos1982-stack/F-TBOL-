@@ -1,5 +1,21 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Dos sesiones en paralelo arreglaron el mismo bug del ❓ — consolidado en `index.bundle.js` 9.26 (2026-07-06 #3)
+
+Dos ramas distintas (`claude/team-alias-display-issue-99z45k` y
+`claude/efootball-alias-team-indicator-tt4oyf`) atacaron el mismo bug del
+❓ de alias eFootball en paralelo con fixes COMPLEMENTARIOS, no
+contradictorios: una añade `_ppTourAliasFor`/`_ppResolveAlias` (lee
+`cfg.teams[].efootballAlias` directo y síncrono en el render, inmune al
+TTL de 3 s de `_ALIAS_CACHE`); la otra añade `_tourPrefetchMatchAlias`
+(pregunta al servidor en el instante del tap, antes de pintar la previa)
++ amplía los reintentos de `_ppAliasDeferredCheck` de 3 a 6. Ambas se
+consolidaron en una sola rama — **`index.bundle.js` queda en 9.26**
+(9.24→9.25 de cada fix por separado colisionaba en el mismo número).
+**PROHIBIDO** asumir que solo una de las dos vías es la "buena": las 3
+capas (síncrona vía cfg del torneo, prefetch al tap, deferred check con
+más reintentos) son necesarias y se complementan.
+
 ## El alias eFootball se PREGUNTA AL SERVIDOR EN EL INSTANTE del tap, no solo cuando la previa ya se está pintando (obligatorio, 2026-07-06 #2)
 
 **Bug (5 fotos usuario 2026-07-06, mismo día del fix anterior — «Arsenal

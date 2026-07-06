@@ -328,9 +328,34 @@ window._ensureImbatEvents = function(opts, onDone){
          para GARANTIZAR que el evento se registra siempre y la cadena
          pueda completarse. */
       var gk = window._getTopGk(teamName);
-      if (!gk.name) gk = { num: '1', name: 'Portero' };
-      try { opts.pushEv({ type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name }); }
+      if (!gk || !gk.name) gk = { num: '1', name: 'Portero' };
+      var _autoEv = { type:'imbat', ico:'🧤', min:90, team:side, num:gk.num, player:gk.name, name:gk.name };
+      try { opts.pushEv(_autoEv); }
       catch(pushErr2) { try { console.error('_ensureImbatEvents pushEv (auto) falló:', pushErr2); } catch(_){} }
+      /* GARANTÍA ANTI-BUCLE-INFINITO (2026-07-06, «empate 0-0, 12 intentos,
+         no avanza»): `needsImbat` en gmEndMatch se recalcula SOLO mirando
+         si existe un evento 'imbat' de este lado en el ARRAY de eventos
+         (opts.events === _gm.events, misma referencia). El fallback de
+         portero genérico de arriba NO basta si `opts.pushEv(...)` reventó
+         ANTES de hacer el `array.push` interno (p.ej. `window._evtId()` u
+         otro paso previo lanzando, o una versión ANTIGUA cacheada del
+         bundle donde esta rama condicionaba el push a que hubiera nombre
+         real): en ese caso el evento NUNCA entra en el array, `needsImbat`
+         se queda `true` PARA SIEMPRE y gmEndMatch entra en un bucle
+         silencioso (acta con solo el portero del humano, FINALIZAR
+         bloqueado, "se congela"). Aquí verificamos que el evento haya
+         quedado realmente en `opts.events` y, si no, lo insertamos
+         DIRECTAMENTE — el push al array es lo único que rompe el bucle;
+         el pintado en el acta (pushEv) es cosmético. */
+      try {
+        var _arr = opts.events || [];
+        var _inArr = _arr.some(function(e){ return e && e.type==='imbat' && e.team===side; });
+        if (!_inArr) {
+          if (!_autoEv.id) { try { _autoEv.id = window._evtId(); } catch(_){ _autoEv.id = 'imb_' + side + '_' + Date.now(); } }
+          _autoEv.label = _autoEv.label || '🧤 Portería Imbatida';
+          _arr.push(_autoEv);
+        }
+      } catch(_){}
       return Promise.resolve();
     }
   }

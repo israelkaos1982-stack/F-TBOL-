@@ -24828,6 +24828,86 @@ window._showSimProgress = function(opts, onDone){
     };
   } catch(_){}
 
+  /* Prefetch DIRIGIDO del alias de los 2 equipos de un partido humano
+     (obligatorio, 2026-07-06 — «llevamos 20 veces intentando y el ❓ no
+     sale»). Causa raíz real: el ÚNICO camino que preguntaba al servidor
+     era el "deferred check" de la propia PANTALLA DE PREVIA
+     (`_ppAliasDeferredCheck`, index.bundle.js), que arranca la petición
+     justo cuando la previa YA está pintándose. Con Railway en cold-start
+     o una red móvil floja, esa única ventana (3 intentos) podía agotarse
+     antes de que el servidor respondiera — y como el bake resultante solo
+     vive en `cfg.teams[].efootballAlias` (nunca se reintenta solo, cada
+     apertura de previa vuelve a depender de ganar esa misma carrera).
+
+     `_tourPrefetchMatchAlias(nameA, nameB)` dispara la búsqueda en
+     servidor para AMBOS equipos del partido en el INSTANTE en que se
+     pulsa la card (`_tourOpenHumanMatch`), antes incluso de que la
+     pantalla de previa empiece a construirse — le da a la petición todo
+     el tiempo de la animación/carga previa como margen extra, y si el
+     admin reabre el mismo partido (o pulsa "Volver" y vuelve a entrar)
+     el resultado ya cacheado (`_TOUR_ALIAS_PREFETCHED`) evita repetir la
+     petición. Es ADITIVO al deferred check existente (no lo sustituye,
+     es una segunda vía independiente) y, a diferencia de un bake ciego
+     en `cfg.teams[]`, TAMBIÉN inyecta el botón ❓ directamente en el DOM
+     si la previa de ESTE MISMO partido sigue abierta cuando la respuesta
+     llega — cubre el caso de que el deferred check del bundle ya se
+     hubiera rendido antes de que el servidor respondiera. Solo 2
+     peticiones como máximo por partido (nunca la liga/torneo entera —
+     PROHIBIDO ampliar esto a "recorrer los 63 equipos", eso sí sería el
+     thundering herd que este proyecto lleva evitando desde 2026-06-25). */
+  var _TOUR_ALIAS_PREFETCHED = Object.create(null);
+  function _tourAliasInjectIfOpen(teamName, alias){
+    try {
+      var norm = (typeof window._aliasNormName === 'function') ? window._aliasNormName(teamName) : '';
+      if (!norm) return;
+      /* El placeholder vacío (`_ppAliasHtml` con show=false, index.bundle.js)
+         no lleva el nombre de equipo en el DOM — se identifica por el LADO
+         (home/away) contra `window._ppPreviaTeams`, la misma fuente que usó
+         `_renderPreviaMeta` para decidir qué lado es candidato. */
+      var pt = window._ppPreviaTeams;
+      if (!pt) return;
+      ['home','away'].forEach(function(side){
+        var sideName = pt[side];
+        if (!sideName) return;
+        var sideNorm = (typeof window._aliasNormName === 'function') ? window._aliasNormName(sideName) : String(sideName||'').trim().toLowerCase();
+        if (sideNorm !== norm) return;
+        var host = document.getElementById('pp-alias-' + side);
+        if (!host) return;
+        if (host.getAttribute('data-copa-alias-replaced') === '1') return; /* ya pintado (bundle o deferred check ganaron la carrera) */
+        var aSafe = String(alias||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        var tSafe = String(teamName||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        host.setAttribute('data-copa-alias-replaced', '1');
+        host.innerHTML = '<button type="button" class="copa-alias-help" onclick="window._copaShowAlias&&window._copaShowAlias(this)" '
+          + 'data-copa-alias-full="'+aSafe+'" data-copa-alias-team="'+tSafe+'" aria-label="Ver alias eFootball completo" '
+          + 'style="background:none;border:none;color:#ffd54a;font-size:20px;cursor:pointer;padding:2px 8px;line-height:1;animation:copaAliasPulse 1.4s ease-in-out infinite;">❓</button>';
+      });
+    } catch(_){}
+  }
+  window._tourPrefetchMatchAlias = function(nameA, nameB){
+    try {
+      if (typeof window._efAliasServerSearch !== 'function') return;
+      [nameA, nameB].forEach(function(nm){
+        if (!nm) return;
+        var norm = (typeof window._aliasNormName === 'function') ? window._aliasNormName(nm) : String(nm||'').trim().toLowerCase();
+        if (!norm || _TOUR_ALIAS_PREFETCHED[norm]) return;
+        /* Ya resuelto localmente (torneo YA lo lleva baked, u otra liga
+           cacheada) → nada que preguntar al servidor para este equipo. */
+        try {
+          if (typeof window.getTeamEfootballAlias === 'function' && window.getTeamEfootballAlias(nm)) {
+            _TOUR_ALIAS_PREFETCHED[norm] = true;
+            return;
+          }
+        } catch(_){}
+        _TOUR_ALIAS_PREFETCHED[norm] = true; /* marca "en curso" para no duplicar peticiones */
+        window._efAliasServerSearch(nm, function(found){
+          if (!found) return;
+          try { window._efAliasBakeIntoTours && window._efAliasBakeIntoTours(nm, found); } catch(_){}
+          _tourAliasInjectIfOpen(nm, found);
+        });
+      });
+    } catch(_){}
+  };
+
   function _tourLoadCachedSync(id){
     if (TOUR_IDS.indexOf(id) === -1) return null;
     try {
@@ -31651,6 +31731,12 @@ window._showSimProgress = function(opts, onDone){
     matchKey = useKey;
     var nameA = homeObj.name || '?';
     var nameB = awayObj.name || '?';
+    /* Prefetch del alias eFootball de AMBOS equipos EN EL INSTANTE del tap,
+       antes de que se pinte la previa (CLAUDE.md 2026-07-06, "llevamos 20
+       veces intentando y el ❓ no sale"). Le da a la búsqueda en servidor
+       todo el margen de la carga de la previa como cabeza de salida, en
+       vez de arrancar justo cuando la previa ya se está pintando. */
+    try { window._tourPrefetchMatchAlias && window._tourPrefetchMatchAlias(nameA, nameB); } catch(_){}
     var isHvH = (typeof _tourSlotIsHuman === 'function')
       ? (_tourSlotIsHuman(homeObj) && _tourSlotIsHuman(awayObj))
       : (!!homeObj.isHuman && !!awayObj.isHuman);

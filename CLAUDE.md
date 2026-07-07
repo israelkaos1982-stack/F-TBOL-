@@ -414,6 +414,71 @@ cajas IA, no solo Maccabi.
    imprima sin pasar por el mismo reparador de placeholder que el resto
    de eventos — es el ÚNICO valor que quedaba sin blindar.
 
+## Los avisos CRÍTICOS de la cadena FINALIZAR usan un banner propio, NUNCA `alert()` a secas (obligatorio, 2026-07-06 #5)
+
+**Bug (foto usuario 2026-07-06, «Real Madrid vs CA Boca Juniors», MVP y
+estadísticas ya confirmados, "error crítico" — reproducido tras varias
+rondas previas de fixes que SÍ deberían haber mostrado un aviso)**: el
+botón FINALIZAR seguía quedando bloqueado sin ningún mensaje visible,
+pese a que `_gmSafeReenter` y el watchdog recurrente (ambos ya
+mergeados) deberían capturar CUALQUIER fallo de la cadena y mostrar un
+`alert()`.
+
+### Causa raíz — Chrome puede SUPRIMIR `alert()` sin avisar
+
+Verificado en un harness Playwright real (Chromium) que la pantalla de
+"📲 COMPARTIR PARTIDO" se pinta correctamente cuando se la invoca
+directamente — el código de esa pantalla no tiene ningún bug de
+renderizado. La sesión de este usuario lleva HORAS de pruebas con
+docenas de `alert()`/`confirm()` disparados (confirmaciones de
+FINALIZAR, "elige MVP", avisos de error de rondas anteriores…). Chrome
+(y otros navegadores) puede **suprimir silenciosamente** los diálogos
+`alert()`/`confirm()` de una pestaña que ya mostró varios seguidos — es
+un comportamiento anti-spam del propio navegador, el usuario no tiene
+que marcar ninguna casilla a propósito. El JS sigue corriendo con total
+normalidad (el `catch` se ejecuta, `_gmReenableEndBtn()` reactiva el
+botón — de ahí que el botón cambiara de aspecto en las fotos) pero el
+`alert()` final NUNCA llega a pintarse en pantalla: desde el punto de
+vista del usuario es indistinguible de "no ha pasado nada".
+
+### Fix
+
+Nuevo `window._gmCriticalNotice(msg)` (`part2/misc_body_2.html`, junto
+a `_gmSafeReenter`): un `<div>` fijo (`z-index:2147483647`, el máximo
+posible) creado con `document.createElement` y añadido directamente a
+`document.body`, con su propio botón "ENTENDIDO" — **NUNCA usa la API
+`alert()`/`confirm()` del navegador**, así que es inmune a la supresión
+anti-spam. Sustituye a `alert(...)` en TODOS los puntos críticos de la
+cadena FINALIZAR: `_gmSafeReenter`, las 3 alertas del watchdog
+recurrente, el fallback de `_mlConfirmEnd`, el fallback interno de
+`_gmFinalShareGate`, y los 3 `alert()` de `_ensureImbatEvents`/
+`confirmImbatForce`/`cancelImbatForce` en `index.bundle.js` (con
+`(window._gmCriticalNotice || alert)(...)` como patrón, para que
+funcione aunque `misc_body_2.html` no haya cargado aún). Bump
+`index.bundle.js` 9.27 → 9.29 (9.28 colisionaba con el bump en paralelo
+de otra sesión, "La plantilla del HUB…", mergeada a la vez).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un aviso CRÍTICO de un flujo obligatorio largo
+   (imbatida→Estadísticas→MVP→WhatsApp→fin, o cualquier cadena similar
+   con múltiples diálogos previos) dependa ÚNICAMENTE de `alert()`.
+   Sesiones largas con muchos diálogos previos pueden hacer que el
+   navegador los suprima en silencio — usar `window._gmCriticalNotice`
+   (o el patrón `(window._gmCriticalNotice || alert)(...)`) para
+   cualquier aviso nuevo de esta cadena.
+2. **PROHIBIDO** asumir que "el catch no mostró alert visible" significa
+   "el catch no se ejecutó". El `console.warn`/`console.error` que
+   acompaña a cada aviso sigue siendo la única forma fiable de
+   confirmarlo por remote-debugging si hiciera falta — `_gmCriticalNotice`
+   igual logea a consola además de pintar el banner.
+3. Antes de seguir buscando un bug de LÓGICA en una cadena ya
+   fuertemente blindada (`_gmSafeReenter` + watchdog recurrente) que
+   "sigue sin mostrar ningún aviso", verificar primero con un harness
+   real (Playwright) si la función implicada renderiza correctamente en
+   aislado — si SÍ renderiza, el hueco está en la VISIBILIDAD del aviso
+   de error (esta regla), no en la lógica de la cadena.
+
 ## El PRIMER disparo de `gmEndMatch()` (al confirmar "SÍ") también va protegido con `_gmSafeReenter` (obligatorio, 2026-07-06 #4)
 
 **Bug (foto usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool», 1-1,

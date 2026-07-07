@@ -10175,7 +10175,8 @@
             var _endBtnErr = document.getElementById('gm-btn-end');
             if (_endBtnErr) { _endBtnErr.disabled = false; _endBtnErr.style.opacity = ''; }
           } catch(_){}
-          try { alert('⚠️ El partido no ha podido continuar (' + (errYes && errYes.message || errYes) + '). Pulsa FINALIZAR de nuevo para reintentar.'); } catch(_){}
+          var _noticeFn = (typeof window._gmCriticalNotice === 'function') ? window._gmCriticalNotice : alert;
+          try { _noticeFn('⚠️ El partido no ha podido continuar (' + (errYes && errYes.message || errYes) + '). Pulsa FINALIZAR de nuevo para reintentar.'); } catch(_){}
         }
       }
       /* Watchdog anti-bloqueo-silencioso — POLL RECURRENTE, no un único
@@ -10225,7 +10226,7 @@
           if (window._gm && window._gm.finished) {
             clearInterval(_wdInterval);
             try { console.warn('[gmEndMatch watchdog] partido finished sin pantalla final visible.'); } catch(_){}
-            alert('⚠️ El partido ya finalizó y el resultado quedó guardado, pero la pantalla de resumen no se pudo mostrar. Vuelve al menú — el resultado ya está registrado.');
+            (window._gmCriticalNotice || alert)('⚠️ El partido ya finalizó y el resultado quedó guardado, pero la pantalla de resumen no se pudo mostrar. Vuelve al menú — el resultado ya está registrado.');
             try { if (typeof window.gmVolver === 'function') window.gmVolver(); } catch(_){}
             return;
           }
@@ -10247,7 +10248,7 @@
           try {
             window._gmWatchdogRetries = (window._gmWatchdogRetries || 0) + 1;
             if (window._gmWatchdogRetries >= 2) {
-              alert('⚠️ El partido sigue sin poder continuar automáticamente tras varios intentos.\n\n'
+              (window._gmCriticalNotice || alert)('⚠️ El partido sigue sin poder continuar automáticamente tras varios intentos.\n\n'
                   + 'Esto suele pasar cuando esta pestaña lleva abierta un tiempo y no tiene la última '
                   + 'versión de la web (mira si aparece el aviso "🔄 Hay una versión más nueva" abajo del '
                   + 'todo y pulsa RECARGAR ahí). Si no aparece, prueba a pulsar FINALIZAR una vez más; '
@@ -10257,7 +10258,7 @@
               return;
             }
           } catch(_){}
-          alert('⚠️ El partido no ha podido continuar automáticamente. Pulsa FINALIZAR de nuevo para reintentar.');
+          (window._gmCriticalNotice || alert)('⚠️ El partido no ha podido continuar automáticamente. Pulsa FINALIZAR de nuevo para reintentar.');
         } catch(_){}
       }, 4000);
     };
@@ -12859,7 +12860,7 @@
       try { console.error('_gmFinalShareGate: no se pudieron crear los botones del gate'); } catch(_){}
       try { ov.style.display = 'none'; } catch(_){}
       try { _gmReenableEndBtn(); } catch(_){}
-      try { alert('⚠️ No se pudo mostrar la pantalla de compartir por WhatsApp. Pulsa FINALIZAR de nuevo para reintentar.'); } catch(_){}
+      (window._gmCriticalNotice || alert)('⚠️ No se pudo mostrar la pantalla de compartir por WhatsApp. Pulsa FINALIZAR de nuevo para reintentar.');
       return;
     }
     shareBtn.onclick = function() {
@@ -15391,6 +15392,45 @@
      siempre (el partido "no se podía ni cancelar ni finalizar"). */
   window._gmReenableEndBtn = _gmReenableEndBtn;
 
+  /* Aviso crítico NO BLOQUEABLE (obligatorio, 2026-07-06). Chrome (y otros
+     navegadores) SUPRIME silenciosamente `alert()`/`confirm()` en una
+     pestaña que ya mostró varios diálogos seguidos ("Evitar que esta
+     página cree más cuadros de diálogo" — el navegador puede activarlo
+     solo, sin que el usuario marque nada a propósito, tras detectar
+     varios alerts en poco tiempo). En una sesión con MUCHOS alerts
+     (confirmaciones, "elige MVP", avisos de error…) esto es real: el JS
+     sigue ejecutándose con normalidad (el catch corre, `_gmReenableEndBtn()`
+     reactiva el botón) pero el `alert()` final NUNCA llega a pintarse —
+     indistinguible, para el usuario, de que no ha pasado nada. Este
+     banner NO usa `alert()`: es un `<div>` fijo de máxima prioridad que
+     SIEMPRE se pinta, con botón propio de cierre. */
+  function _gmCriticalNotice(msg){
+    try {
+      var old = document.getElementById('gm-critical-notice');
+      if (old) old.remove();
+      var b = document.createElement('div');
+      b.id = 'gm-critical-notice';
+      b.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;z-index:2147483647;'
+        + 'background:linear-gradient(160deg,#2a0a0a,#1a0505);border:2px solid rgba(255,90,90,.75);'
+        + 'border-radius:12px;padding:14px 16px;font-family:Rajdhani,sans-serif;color:#ffecec;'
+        + 'box-shadow:0 6px 26px rgba(0,0,0,.65);text-align:left;';
+      var textEl = document.createElement('div');
+      textEl.style.cssText = 'font-size:13.5px;line-height:1.4;white-space:pre-wrap;';
+      textEl.textContent = msg;
+      var btn = document.createElement('button');
+      btn.textContent = 'ENTENDIDO';
+      btn.style.cssText = 'margin-top:10px;width:100%;padding:10px;background:rgba(255,90,90,.22);'
+        + 'border:1px solid rgba(255,90,90,.6);border-radius:8px;color:#fff;font-family:Oswald,sans-serif;'
+        + 'font-size:13px;letter-spacing:1.5px;cursor:pointer;';
+      btn.onclick = function(){ try { b.remove(); } catch(_){} };
+      b.appendChild(textEl);
+      b.appendChild(btn);
+      document.body.appendChild(b);
+      try { console.warn('[gmEndMatch CRÍTICO] ' + msg); } catch(_){}
+    } catch(_){}
+  }
+  window._gmCriticalNotice = _gmCriticalNotice;
+
   /* Reentrada SEGURA a gmEndMatch() desde cualquier callback diferido
      (setTimeout, onclick de un picker, confirmación de un overlay…).
      Bug (2026-07-06, «España vs Líbano», foto usuario): tras elegir MVP,
@@ -15409,8 +15449,8 @@
     catch(err){
       try { console.error('[gmEndMatch] reentrada "' + label + '" falló:', err); } catch(_){}
       try { _gmReenableEndBtn(); } catch(_){}
-      try { alert('⚠️ El partido no ha podido continuar (' + label + '): '
-          + (err && err.message || err) + '.\nPulsa FINALIZAR de nuevo para reintentar.'); } catch(_){}
+      _gmCriticalNotice('⚠️ El partido no ha podido continuar (' + label + '): '
+          + (err && err.message || err) + '.\nPulsa FINALIZAR de nuevo para reintentar.');
     }
   }
   window._gmSafeReenter = _gmSafeReenter;

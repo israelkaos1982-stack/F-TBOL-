@@ -1434,6 +1434,52 @@ class TestEurManualExtraMerge:
         assert len(zone) == 1
         assert zone[0]["league"] == "Bulgaria"
 
+    def test_vaciar_lista_persiste_aunque_otro_dispositivo_la_reenvie_llena(self, client):
+        # Bug 2026-07-07 ("quiero un botón para limpiar la lista entera de
+        # equipos... que ese borrado se guarde"): sin el tombstone
+        # `clearedAt`, la unión aditiva resucitaría al instante los equipos
+        # borrados en cuanto CUALQUIER dispositivo (incluso el mismo, con
+        # una copia local vieja) reenviara la zona con esos nombres.
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000},
+            {"name": "Equipo B", "league": "Albania", "addedAt": 1000},
+        ], "updatedAt": 1000}})
+        assert len(self._zone(client, "wildcard")) == 2
+        # El admin pulsa "🗑 Vaciar lista" — vacía el array y sella clearedAt.
+        client.post(self.URL, json={"value": {
+            "wildcard": [], "clearedAt": {"wildcard": 2000}, "updatedAt": 2000}})
+        assert self._zone(client, "wildcard") == []
+        # Otro dispositivo (o el mismo, con una copia local stale) reenvía
+        # la zona TAL COMO estaba antes de vaciar — el vaciado debe ganar.
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000},
+        ], "updatedAt": 1500}})
+        assert self._zone(client, "wildcard") == []
+
+    def test_vaciar_lista_no_bloquea_altas_posteriores(self, client):
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000},
+        ], "updatedAt": 1000}})
+        client.post(self.URL, json={"value": {
+            "wildcard": [], "clearedAt": {"wildcard": 2000}, "updatedAt": 2000}})
+        # Un equipo NUEVO añadido DESPUÉS del vaciado (addedAt > clearedAt)
+        # sí debe sobrevivir con normalidad.
+        client.post(self.URL, json={"value": {"wildcard": [
+            {"name": "Equipo C", "league": "Chipre", "addedAt": 3000},
+        ], "updatedAt": 3000}})
+        names = [t["name"] for t in self._zone(client, "wildcard")]
+        assert names == ["Equipo C"]
+
+    def test_vaciar_lista_no_afecta_otras_zonas(self, client):
+        client.post(self.URL, json={"value": {
+            "wildcard": [{"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000}],
+            "uclQual": [{"name": "Equipo C", "league": "Chipre", "addedAt": 1000}],
+            "updatedAt": 1000}})
+        client.post(self.URL, json={"value": {
+            "wildcard": [], "clearedAt": {"wildcard": 2000}, "updatedAt": 2000}})
+        assert self._zone(client, "wildcard") == []
+        assert len(self._zone(client, "uclQual")) == 1
+
 
 # ---------------------------------------------------------------------------
 # Fusión cross-device de Resto de Ligas (_lx_merge_teams) — bugs 2026-06-11:

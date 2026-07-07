@@ -35581,7 +35581,7 @@ window._showSimProgress = function(opts, onDone){
   var EUR_MANUAL_EXTRA_KEY = 'eur_manual_extra_v1';
   var EUR_MANUAL_ZONES = ['ucl','uclPrev','uel','uecl','uclQual','wildcard'];
   function _eurManualExtraLoad(){
-    var out = {};
+    var out = { clearedAt: {} };
     EUR_MANUAL_ZONES.forEach(function(z){ out[z] = []; });
     try {
       var raw = localStorage.getItem(EUR_MANUAL_EXTRA_KEY);
@@ -35590,6 +35590,15 @@ window._showSimProgress = function(opts, onDone){
         EUR_MANUAL_ZONES.forEach(function(z){
           if(Array.isArray(d[z])) out[z] = d[z].filter(function(t){ return t && t.name; });
         });
+        /* `clearedAt` (por zona) — necesario preservarlo en CADA round-trip
+           load→save, si no un add/remove posterior en OTRA zona lo pisaría
+           con `{}` y el "🗑 Vaciar lista" dejaría de recordarse tras la
+           siguiente acción (ver `_eurManualExtraClearZone`). */
+        if(d.clearedAt && typeof d.clearedAt === 'object'){
+          EUR_MANUAL_ZONES.forEach(function(z){
+            if(typeof d.clearedAt[z] === 'number') out.clearedAt[z] = d.clearedAt[z];
+          });
+        }
       }
     } catch(_){}
     return out;
@@ -35615,7 +35624,7 @@ window._showSimProgress = function(opts, onDone){
     if(!name) return false;
     var d = _eurManualExtraLoad();
     if(d[zone].some(function(t){ return t.name === name; })) return false;
-    d[zone].push({ name: name, league: (String(league||'').trim() || 'manual'), logo: '' });
+    d[zone].push({ name: name, league: (String(league||'').trim() || 'manual'), logo: '', addedAt: Date.now() });
     _eurManualExtraSave(d);
     return true;
   };
@@ -35623,6 +35632,24 @@ window._showSimProgress = function(opts, onDone){
     if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
     var d = _eurManualExtraLoad();
     d[zone] = d[zone].filter(function(t){ return t.name !== name; });
+    _eurManualExtraSave(d);
+  };
+  /* 🗑 Vaciar lista ENTERA de una zona — petición usuario 2026-07-07
+     ("quiero un botón para limpiar la lista entera de equipos de cada
+     competición y que ese borrado se guarde hasta que vuelva a añadir
+     equipos"). Vaciar el array local no basta: el merge del servidor
+     (`_eur_manual_extra_merge`) es una UNIÓN aditiva por (zona,nombre) —
+     un POST con la zona vacía se fusionaría con lo que el servidor YA
+     tenía guardado y los equipos "borrados" resucitarían enteros en el
+     siguiente pull. `clearedAt[zone]` es un sello (tombstone) que el
+     servidor usa para descartar cualquier entrada de esa zona con
+     `addedAt` anterior al borrado — un equipo añadido DESPUÉS del
+     borrado (addedAt > clearedAt) sí sobrevive con normalidad. */
+  window._eurManualExtraClearZone = function(zone){
+    if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
+    var d = _eurManualExtraLoad();
+    d[zone] = [];
+    d.clearedAt[zone] = Date.now();
     _eurManualExtraSave(d);
   };
   /* ── MODO MANUAL por zona (obligatorio, 2026-07-03) ───────────────
@@ -41947,7 +41974,10 @@ window._showSimProgress = function(opts, onDone){
       var items = manual[z.key] || [];
       if(!items.length) return '';
       return '<div style="margin:6px 0;">'
-        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:'+z.color+';">'+z.emoji+' '+_eurEsc(z.label)+' — manuales ('+items.length+')</div>'
+        + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
+        +   '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:'+z.color+';">'+z.emoji+' '+_eurEsc(z.label)+' — manuales ('+items.length+')</div>'
+        +   '<button data-eur-clear-zone="'+z.key+'" style="background:rgba(255,80,80,.1);border:1px solid rgba(255,80,80,.4);color:#ff9a9a;border-radius:4px;padding:2px 8px;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;cursor:pointer;white-space:nowrap;">🗑 Vaciar lista</button>'
+        + '</div>'
         + items.map(function(t){
             return '<div style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;">'
               + '<span style="flex:1;">'+_eurEsc(t.name)+' <span style="color:rgba(255,255,255,.5);">('+_eurEsc(t.league||'manual')+')</span></span>'
@@ -42003,6 +42033,16 @@ window._showSimProgress = function(opts, onDone){
     ov.querySelectorAll('[data-eur-rm-zone]').forEach(function(btn){
       btn.onclick = function(){
         window._eurManualExtraRemove(btn.getAttribute('data-eur-rm-zone'), btn.getAttribute('data-eur-rm-name'));
+        _eurManualOverlayRender();
+      };
+    });
+    ov.querySelectorAll('[data-eur-clear-zone]').forEach(function(btn){
+      btn.onclick = function(){
+        var zone = btn.getAttribute('data-eur-clear-zone');
+        var z = _EUR_ZONE_BY_KEY[zone];
+        var label = z ? (z.emoji + ' ' + z.label) : zone;
+        if(!confirm('🗑 Vaciar lista — ' + label + '\n\nSe borran TODOS los equipos añadidos a mano de esta competición. El borrado se guarda — no volverán a aparecer hasta que los añadas de nuevo.\n\n¿Continuar?')) return;
+        window._eurManualExtraClearZone(zone);
         _eurManualOverlayRender();
       };
     });

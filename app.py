@@ -4052,13 +4052,38 @@ def _eur_manual_extra_merge(old_json, new_value):
     resucitar si otro dispositivo, que aún no vio ese borrado, hace un
     POST después — mismo trade-off que el resto de listas aditivas del
     proyecto (derbys, ledger de CASH): preferimos nunca perder una
-    adición legítima antes que hacer desaparecer un borrado al instante."""
+    adición legítima antes que hacer desaparecer un borrado al instante.
+
+    EXCEPCIÓN — "🗑 Vaciar lista" (2026-07-07): el botón que vacía TODA
+    una zona de golpe necesita que su borrado SÍ persista (petición
+    usuario: "que ese borrado se guarde hasta que vuelva a añadir
+    equipos"), cosa que la unión pura de arriba no puede garantizar por
+    sí sola (un POST de otro dispositivo con la zona aún llena
+    resucitaría el vaciado al instante). Cada entrada lleva un sello
+    `addedAt` (cuándo se añadió) y cada zona puede llevar un
+    `clearedAt` (cuándo se vació por última vez, tombstone). Tras la
+    unión por nombre, se descarta cualquier entrada cuyo `addedAt` sea
+    ANTERIOR o igual al `clearedAt` vigente de esa zona — un equipo
+    añadido DESPUÉS del vaciado (addedAt > clearedAt) sobrevive con
+    normalidad. Entradas legacy sin `addedAt` (anteriores a esta regla)
+    se tratan como `addedAt=0` — un vaciado las descarta también, que es
+    el comportamiento esperado por el usuario ("limpiar la lista
+    ENTERA")."""
     old = _safe_json_load(old_json)
     if not isinstance(old, dict):
         old = {}
     new = new_value if isinstance(new_value, dict) else {}
+    old_cleared = old.get("clearedAt") if isinstance(old.get("clearedAt"), dict) else {}
+    new_cleared = new.get("clearedAt") if isinstance(new.get("clearedAt"), dict) else {}
     out = {}
+    out_cleared = {}
     for zone in _EUR_MANUAL_EXTRA_ZONES:
+        try:
+            cleared_at = max(float(old_cleared.get(zone) or 0), float(new_cleared.get(zone) or 0))
+        except (TypeError, ValueError):
+            cleared_at = 0.0
+        if cleared_at:
+            out_cleared[zone] = cleared_at
         by_name = {}
         for src in (old.get(zone), new.get(zone)):
             if not isinstance(src, list):
@@ -4069,10 +4094,18 @@ def _eur_manual_extra_merge(old_json, new_value):
                 name = str(t.get("name") or "").strip()
                 if not name:
                     continue
+                try:
+                    added_at = float(t.get("addedAt") or 0)
+                except (TypeError, ValueError):
+                    added_at = 0.0
+                if cleared_at and added_at <= cleared_at:
+                    continue
                 prev = by_name.get(name)
                 if prev is None or (not prev.get("league") and t.get("league")):
                     by_name[name] = t
         out[zone] = list(by_name.values())
+    if out_cleared:
+        out["clearedAt"] = out_cleared
     try:
         old_ts = float(old.get("updatedAt") or 0)
     except (TypeError, ValueError):

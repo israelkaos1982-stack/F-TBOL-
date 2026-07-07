@@ -35707,19 +35707,39 @@ window._showSimProgress = function(opts, onDone){
     d[zone] = !!on;
     _eurManualOverrideSave(d);
   };
+  /* Fetch con reintentos para las hidrataciones one-shot de arranque de
+     este bloque (override + extras manuales) — sin esto, UN solo fallo
+     de red (cold-start de Railway, blip móvil) deja el store local
+     VACÍO para siempre, aunque el servidor SÍ tenga los datos (bug
+     2026-07-07: "Champions League — 0 equipos" con 24 manuales YA
+     guardados en el servidor — el `.catch(function(){})` mudo se
+     rendía al primer intento fallido sin reintentar). Mismo principio
+     "un fallo de red nunca es la respuesta definitiva" que el resto
+     del proyecto (regla 2026-07-05, `_ppAliasDeferredCheck`). */
+  function _eurBootFetchRetry(url, tries){
+    tries = tries || 3;
+    return new Promise(function(resolve){
+      function attempt(n){
+        fetch(url, {credentials:'same-origin'})
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(j){ resolve(j); })
+          .catch(function(){
+            if(n < tries) setTimeout(function(){ attempt(n+1); }, 1000 * n);
+            else resolve(null);
+          });
+      }
+      attempt(1);
+    });
+  }
   (function _hydrateEurManualOverride(){
     var local;
     try { local = localStorage.getItem(EUR_MANUAL_OVERRIDE_KEY); } catch(_){}
     if(local) return;
-    try {
-      fetch('/api/kv/' + EUR_MANUAL_OVERRIDE_KEY, {credentials:'same-origin'})
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(j){
-          if(j && j.ok && j.value){
-            try { localStorage.setItem(EUR_MANUAL_OVERRIDE_KEY, JSON.stringify(j.value)); } catch(_){}
-          }
-        }).catch(function(){});
-    } catch(_){}
+    _eurBootFetchRetry('/api/kv/' + EUR_MANUAL_OVERRIDE_KEY, 3).then(function(j){
+      if(j && j.ok && j.value){
+        try { localStorage.setItem(EUR_MANUAL_OVERRIDE_KEY, JSON.stringify(j.value)); } catch(_){}
+      }
+    });
   })();
   /* Añade los extras manuales al array computado, dedupe por nombre
      (nunca pisa un equipo que ya venga del cómputo automático o del
@@ -35740,20 +35760,19 @@ window._showSimProgress = function(opts, onDone){
     return arr;
   }
   /* Hidratación desde servidor (una vez, si local está vacío) — mismo
-     patrón que `europe_committed_v1` (`_hydrateEuropeCommit` abajo). */
+     patrón que `europe_committed_v1` (`_hydrateEuropeCommit` abajo).
+     CON reintentos (`_eurBootFetchRetry`) — un solo fallo aquí dejaba
+     "Champions League — 0 equipos" aunque el servidor tuviera 24
+     guardados (bug 2026-07-07). */
   (function _hydrateEurManualExtra(){
     var local;
     try { local = localStorage.getItem(EUR_MANUAL_EXTRA_KEY); } catch(_){}
     if(local) return;
-    try {
-      fetch('/api/kv/' + EUR_MANUAL_EXTRA_KEY, {credentials:'same-origin'})
-        .then(function(r){ return r.ok ? r.json() : null; })
-        .then(function(j){
-          if(j && j.ok && j.value){
-            try { localStorage.setItem(EUR_MANUAL_EXTRA_KEY, JSON.stringify(j.value)); } catch(_){}
-          }
-        }).catch(function(){});
-    } catch(_){}
+    _eurBootFetchRetry('/api/kv/' + EUR_MANUAL_EXTRA_KEY, 3).then(function(j){
+      if(j && j.ok && j.value){
+        try { localStorage.setItem(EUR_MANUAL_EXTRA_KEY, JSON.stringify(j.value)); } catch(_){}
+      }
+    });
   })();
 
   /* ── SNAPSHOT MANUAL DE POOLS EUROPEOS ───────────────────────────
@@ -42090,8 +42109,19 @@ window._showSimProgress = function(opts, onDone){
     _eurManualOverlayRender();
     /* Auto-hidrata al abrir (throttle 2 min) — así el conteo que ve el
        admin refleja el servidor de verdad, sin depender de que antes
-       haya pulsado "Re-cuadrar"/"Enviar realidad". */
-    if(isNew && !_eurManualHydrating && (Date.now() - _eurManualLastHydrateAt) > 120000){
+       haya pulsado "Re-cuadrar"/"Enviar realidad".
+       EXCEPCIÓN (2026-07-07, "sigue sin cargar"): si las 6 zonas están
+       en modo 🔒 Manual (el DEFAULT desde 2026-07-03), los 6
+       `compute*Classified()` ignoran por completo el cómputo automático
+       (`_eurManualOnly(zone)` corta en la primera línea) — hidratar las
+       ~50 ligas en ese caso es trabajo TOTALMENTE desperdiciado que
+       además compite por red/servidor con el fetch del picker "AÑADIR
+       POR LIGA" abierto en la MISMA pantalla, haciendo que este último
+       se sienta "eterno". Si CUALQUIER zona sigue en 🔓 Auto, sí hace
+       falta hidratar para esa zona. */
+    var overridesNow = (window._eurManualOverrideLoad && window._eurManualOverrideLoad()) || {};
+    var anyAutomatic = EUR_MANUAL_ZONES.some(function(z){ return !overridesNow[z]; });
+    if(isNew && anyAutomatic && !_eurManualHydrating && (Date.now() - _eurManualLastHydrateAt) > 120000){
       _eurManualTriggerHydrate();
     }
   };

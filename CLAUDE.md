@@ -1,5 +1,131 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El click en "COMPARTIR POR WHATSAPP" SIEMPRE marca compartido, aunque el armado del mensaje reviente (obligatorio, 2026-07-07 #6)
+
+**Bug (foto usuario 2026-07-07, «Real Madrid vs Al Hilal SFC», Mundialito
+de Clubes — "después de darle decenas de veces consigo hacerlo hay algún
+bloqueo, tiene que ser sencillo y facil")**: en la puerta obligatoria
+"📲 COMPARTIR PARTIDO" (tras elegir MVP), pulsar "🟢 COMPARTIR POR
+WHATSAPP" no producía ninguna reacción visible — el botón seguía verde
+sin cambiar a "✅ COMPARTIDO" y "🏁 FINALIZAR PARTIDO" seguía gris/
+deshabilitado. Hacía falta pulsar el botón decenas de veces hasta que,
+en algún intento, "funcionaba".
+
+### Causa raíz
+
+Los 3 handlers que arman el mensaje de WhatsApp y comparten
+(`_gmFinalShareGate.shareBtn.onclick`, `window._waShareGate.shareBtn.onclick`,
+`_mlBuildAndShareWA`, todos en `part2/misc_body_2.html`) construían el
+texto completo (cabecera vía `_waBuildHeaderLines`, líneas del acta,
+bloque de estadísticas vía `_waFmtStatsBlock`, línea del MVP) **SIN
+try/catch**, y solo AL FINAL de esa construcción — tras `_waShareToGroup(...)`
+— marcaban `shared = true` y habilitaban el botón "FINALIZAR"/
+"CONTINUAR". Si CUALQUIER paso del armado lanzaba una excepción (un
+evento del acta con datos inesperados de un torneo nuevo como el
+Mundialito de Clubes, un helper de abreviatura de equipo fallando,
+etc.), el click terminaba ahí mismo: ni se copiaba nada al portapapeles,
+ni se marcaba compartido, ni se habilitaba el botón siguiente — el
+usuario veía el botón "sin reaccionar" al pulsarlo, indistinguible de
+un bloqueo total. Coincide exactamente con el patrón "clicar decenas de
+veces hasta que un intento cuela" (la condición de fallo puede depender
+de datos que varían ligeramente entre reintentos, p.ej. un evento en
+concreto del acta).
+
+### Fix
+
+Los 3 puntos separan el ARMADO del mensaje (try/catch, con fallback al
+marcador simple `Local X - Y Visitante` si falla) de la ACCIÓN de
+compartir/marcar (incondicional): `_waShareToGroup(...)` va en su
+propio try/catch, y **`shared = true` + habilitar el botón siguiente
++ el cambio visual del botón a "✅ COMPARTIDO" SIEMPRE se ejecutan**,
+pase lo que pase con el armado del texto rico. `_mlBuildAndShareWA`
+(compartida por el post-partido de ml-card y el descanso) envuelve TODO
+su cuerpo en try/catch con un fallback de una sola línea, para que
+NUNCA propague una excepción a sus 2 callers (que desbloquean un botón
+justo después de llamarla, sin su propio try/catch).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un handler de "COMPARTIR POR WHATSAPP" (o
+   cualquier botón nuevo de esta cadena que arme un mensaje rico antes
+   de compartir) marque `shared`/habilite el botón siguiente SOLO tras
+   una construcción de texto sin try/catch. El armado del mensaje puede
+   fallar por datos de UN torneo/competición concreta; el marcado de
+   "compartido" + la habilitación del siguiente paso son
+   SIEMPRE incondicionales (con fallback de texto mínimo si el armado
+   rico revienta).
+2. **PROHIBIDO** que `_mlBuildAndShareWA` (o cualquier función de
+   armado+compartir reutilizada por varios callers que desbloquean UI
+   justo después de invocarla) propague una excepción a sus callers.
+   Debe atrapar sus propios fallos y compartir como mínimo el marcador
+   simple.
+3. Si un click en un botón de esta cadena "no reacciona" de forma
+   intermitente (funciona a la enésima pulsación), sospechar primero de
+   un armado de mensaje sin try/catch antes que de un problema de
+   captura del evento táctil/click — es el mismo síntoma pero con causa
+   distinta a los bugs táctiles ya documentados de esta cadena.
+
+## El overlay de ESTADÍSTICAS del FINALIZAR también se blinda con try/catch + display incondicional (obligatorio, 2026-07-07 #5)
+
+**Bug (2 fotos usuario 2026-07-07, «Real Madrid vs Al Hilal SFC»,
+Mundialito de Clubes — "ni deja finalizar (caja opaca) / ni deja poner
+estadísticas / ni deja poner MVP / ni deja compartir por WhatsApp /
+SOLUCION YA")**: tras elegir el portero en el picker de portería
+imbatida (Thibaut Courtois), el partido se quedaba congelado — nunca
+aparecía la pantalla de Estadísticas, ni MVP, ni WhatsApp, y FINALIZAR
+seguía deshabilitado.
+
+### Causa raíz
+
+`_mlShowStatsOverlay` (`part2/misc_body_2.html`, el overlay de
+posesión/tiros/faltas/córners que se abre tras la portería imbatida,
+compartido por gm-modal y ml-card) construye TODO su contenido
+(cabecera con escudos vía `getLogoEquipo`, `humanIcon`, el grid de filas
+vía `_mlCountAutoStats` + `appendRow`) **SIN try/catch**, y solo al
+FINAL hacía `ov.classList.add('show')`. Exactamente el mismo
+anti-patrón ya corregido en `_gmShowFinalOv` (2026-07-05) y
+`_gmFinalShareGate` (2026-07-06): si CUALQUIER paso del relleno lanzaba
+una excepción (un dato inesperado del roster, un helper de escudo
+fallando…), la función abortaba ANTES de mostrar el overlay — invisible
+para el usuario, indistinguible de "se ha congelado". Como el botón
+FINALIZAR ya estaba deshabilitado desde `_mlConfirmEnd` (regla
+2026-07-05, botón se deshabilita al confirmar SÍ para evitar doble
+disparo), el usuario se quedaba con la caja opaca sin ninguna pantalla
+posterior. `_mlOpenStatsEntry` (el equivalente en ml-cards vía
+`_mlShowFinalThenPost`) tenía el mismo hueco, más pequeño pero del
+mismo patrón. Además, el callback `onDone` de `_ensureImbatEvents` en
+la cadena de portería imbatida (`part2/misc_body_2.html`, la llamada
+que re-dispara `gmEndMatch()` tras registrar el portero) invocaba
+`window.gmEndMatch()` DIRECTAMENTE, sin pasar por `_gmSafeReenter`
+(regla 2026-07-06 #4) — un único punto de reentrada que se había
+quedado fuera de la auditoría de esa regla.
+
+### Fix
+
+- `_mlShowStatsOverlay`: todo el relleno de contenido (cabecera +
+  grid de filas) envuelto en try/catch. Si falla, pinta un mensaje de
+  aviso mínimo en el grid («No se pudieron cargar los detalles… pulsa
+  CONFIRMAR para continuar sin estadísticas manuales») + banner
+  `_gmCriticalNotice`. `ov.classList.add('show')` es **incondicional**,
+  fuera del try/catch — el overlay SIEMPRE se muestra, con contenido
+  completo o con el fallback.
+- `_mlOpenStatsEntry`: mismo patrón (try/catch + display incondicional).
+- El callback `onDone` de `_ensureImbatEvents` en `gmEndMatch` pasa a
+  `window._gmSafeReenter(window.gmEndMatch, 'tras registrar portería
+  imbatida')` en vez de `window.gmEndMatch()` directo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_mlShowStatsOverlay`/`_mlOpenStatsEntry` (o
+   cualquier overlay obligatorio nuevo de la cadena FINALIZAR) rellene
+   su contenido sin try/catch antes de `classList.add('show')`. Mismo
+   contrato que `_gmShowFinalOv`/`_gmFinalShareGate`: el display es
+   SIEMPRE incondicional, con fallback mínimo si el relleno revienta.
+2. **PROHIBIDO** que un callback `onDone`/reentrada a `gmEndMatch()`
+   nuevo (o ya existente pero no auditado) llame a
+   `window.gmEndMatch()` directo sin `_gmSafeReenter`. Auditar TODOS
+   los call sites de `_ensureImbatEvents`, no solo los ya conocidos.
+
 ## La plantilla del HUB (caja "PLANTILLA" de un mister) nunca prefiere una fila "genérica" (power 70 / pos MED para todos) sobre la plantilla REAL editada (obligatorio, 2026-07-07 #4)
 
 **Bug (6 fotos usuario 2026-07-07, «Arsenal-Brasil-Álvaro»)**: dentro de

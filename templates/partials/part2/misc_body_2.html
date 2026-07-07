@@ -10651,6 +10651,7 @@
     _mlStatsCallback = onConfirm || function(){};
     var ov = document.getElementById('ml-stats-ov');
     if (!ov) { _mlStatsCallback(); return; }
+    try {
     /* Cabecera: escudos, nombres, marcador */
     var _hiSa = (typeof window.humanIcon === 'function') ? (window.humanIcon(st.home)||'') : '';
     var _hiSb = (typeof window.humanIcon === 'function') ? (window.humanIcon(st.away)||'') : '';
@@ -10813,6 +10814,22 @@
     appendRow(_STAT_DEFS_AUTO[3], autos.a.rojas,     autos.b.rojas,     true); // rojas
     appendRow(_STAT_DEFS_MANUAL[3], '', '', false); // corners
     /* remates y paradas removidos — ya no forman parte de _STAT_DEFS_MANUAL */
+    } catch(errStatsBuild) {
+      /* Un dato inesperado (roster raro, helper que revienta…) NO puede
+         dejar la cadena FINALIZAR congelada sin ninguna pantalla — mismo
+         contrato que _gmShowFinalOv / _gmFinalShareGate (CLAUDE.md
+         2026-07-05/06). Fallback mínimo + el overlay se muestra IGUAL. */
+      try { console.error('[_mlShowStatsOverlay] fallo al construir el overlay de estadísticas:', errStatsBuild); } catch(_){}
+      try {
+        var _gridFallback = document.getElementById('ml-stats-grid');
+        if (_gridFallback) _gridFallback.innerHTML = '<div style="padding:14px 8px;color:#ffe9b0;font-family:Rajdhani,sans-serif;font-size:14px;line-height:1.4;">⚠️ No se pudieron cargar los detalles de estadísticas (datos inesperados del partido). Pulsa CONFIRMAR para continuar el partido sin estadísticas manuales.</div>';
+      } catch(_){}
+      try { (window._gmCriticalNotice || function(){})('⚠️ Las estadísticas no se pudieron rellenar del todo (' + (errStatsBuild && errStatsBuild.message || errStatsBuild) + '). Pulsa CONFIRMAR para continuar igualmente.'); } catch(_){}
+    }
+    /* display SIEMPRE incondicional — un fallo al construir el contenido
+       no puede dejar al usuario sin NINGUNA pantalla tras la portería
+       imbatida (regla CLAUDE.md "La pantalla FINAL NUNCA se queda sin
+       mostrar"). */
     ov.classList.add('show');
   }
   window._mlStatsConfirm = function(){
@@ -10915,7 +10932,7 @@
     var ov = document.getElementById('ml-stats-entry-ov');
     var rows = document.getElementById('ml-stats-entry-rows');
     if (!ov || !rows) { _mlOpenPostMatch(mk); return; }
-
+    try {
     /* Pre-rellenar amarillas y rojas a partir del acta para ahorrar
        clicks (son datos que ya tenemos). Posesión arranca en 50/50. */
     var evts = st.events || [];
@@ -10975,6 +10992,11 @@
         if (el) el.textContent = next + (def.pct ? '%' : '');
       });
     });
+    } catch(errStatsEntry) {
+      try { console.error('[_mlOpenStatsEntry] fallo al construir el overlay de estadísticas:', errStatsEntry); } catch(_){}
+      try { (window._gmCriticalNotice || function(){})('⚠️ Las estadísticas no se pudieron rellenar del todo. Pulsa CONFIRMAR para continuar igualmente.'); } catch(_){}
+    }
+    /* display SIEMPRE incondicional — mismo contrato que _mlShowStatsOverlay. */
     ov.classList.add('show');
   }
 
@@ -11985,22 +12007,30 @@
     var contBtn  = document.getElementById('wa-gate-continue');
     var shared = false;
     shareBtn.onclick = function() {
-      var lines = [];
-      _waBuildHeaderLines({
-        comp: opts.comp, j: opts.j,
-        copaRonda: opts.copaRonda, copaVuelta: opts.copaVuelta,
-        home: opts.home, away: opts.away,
-        scA: (opts.scA != null ? opts.scA : 0),
-        scB: (opts.scB != null ? opts.scB : 0),
-        eventType: opts.eventType
-      }).forEach(function(l){ lines.push(l); });
-      var acta = _waGateActaLines(opts.events, opts.home, opts.away, opts.maxMin);
-      if (acta.length) {
-        lines.push('');
-        lines.push('ACTA DEL PARTIDO:');
-        acta.forEach(function(l){ lines.push(l); });
-      }
-      _waShareToGroup(lines.join('\n'));
+      /* try/catch: mismo contrato que _gmFinalShareGate — un dato
+         inesperado en el armado del mensaje no puede dejar el click sin
+         ningún efecto visible (CLAUDE.md 2026-07-07 #6). */
+      var shareText = scoreLine;
+      try {
+        var lines = [];
+        _waBuildHeaderLines({
+          comp: opts.comp, j: opts.j,
+          copaRonda: opts.copaRonda, copaVuelta: opts.copaVuelta,
+          home: opts.home, away: opts.away,
+          scA: (opts.scA != null ? opts.scA : 0),
+          scB: (opts.scB != null ? opts.scB : 0),
+          eventType: opts.eventType
+        }).forEach(function(l){ lines.push(l); });
+        var acta = _waGateActaLines(opts.events, opts.home, opts.away, opts.maxMin);
+        if (acta.length) {
+          lines.push('');
+          lines.push('ACTA DEL PARTIDO:');
+          acta.forEach(function(l){ lines.push(l); });
+        }
+        shareText = lines.join('\n');
+      } catch(errMsg) { try { console.error('_waShareGate: fallo armando el mensaje, usando fallback mínimo', errMsg); } catch(_){} }
+      try { _waShareToGroup(shareText); } catch(errShare) { try { console.error('_waShareGate: fallo compartiendo', errShare); } catch(_){} }
+      /* INCONDICIONAL */
       shared = true;
       shareBtn.innerHTML = '✅ COMPARTIDO · PEGA EN EL GRUPO';
       shareBtn.style.background = 'linear-gradient(135deg,#128c7e,#0a5d52)';
@@ -12021,6 +12051,14 @@
 
   /* Build the standard WA message and open WhatsApp */
   function _mlBuildAndShareWA(mk, st, isFinal) {
+    /* Todo el armado del mensaje va en try/catch: sus 3 callers
+       (waBtn.onclick del post-partido, _mlShareHalfTime) desbloquean un
+       botón INMEDIATAMENTE DESPUÉS de llamar a esta función sin su
+       propio try/catch — si esta función revienta, el botón se queda
+       bloqueado para siempre sin ninguna reacción visible al click
+       (CLAUDE.md 2026-07-07 #6, mismo contrato que _gmFinalShareGate/
+       _waShareGate). Esta función NUNCA debe propagar una excepción. */
+    try {
     var allIco = {gol:'⚽',propia:'🚫','falta-gol':'🎯','pen-gol':'🥅',amarilla:'🟨','d-amarilla':'🟨🟥',roja:'🟥',lesion:'🩹',porteria:'🧤'};
     var lines = [];
     /* Cabecera nueva (2026-05-09): fecha + icono comp + label + ronda
@@ -12113,6 +12151,13 @@
     /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09).
        _waShareToGroup copia al portapapeles y abre el chat de grupo. */
     _waShareToGroup(lines.join('\n'));
+    } catch(errWaBuild) {
+      try { console.error('_mlBuildAndShareWA: fallo armando/compartiendo el mensaje, usando fallback mínimo', errWaBuild); } catch(_){}
+      try {
+        var _fallbackLine = String((st&&st.home)||'Local') + ' ' + ((st&&st.sc&&st.sc.a!=null)?st.sc.a:0) + ' - ' + ((st&&st.sc&&st.sc.b!=null)?st.sc.b:0) + ' ' + String((st&&st.away)||'Visitante');
+        _waShareToGroup(_fallbackLine);
+      } catch(_){}
+    }
   }
 
   /* Entrada al descanso compartida por la ruta manual (botón
@@ -12864,58 +12909,77 @@
       return;
     }
     shareBtn.onclick = function() {
-      var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
-                    'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
-                    roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
-      var lines = [];
-      var _evType = 'final';
-      if (_gm.penDone || _gm.penShootDone || _gm._penWinner != null) _evType = 'penaltis';
-      else if (_gm.etDone) _evType = 'prorroga-fin';
-      _waBuildHeaderLines({
-        comp: _gm.comp, j: _gm.j,
-        copaRonda: _gm._copaRonda, copaVuelta: _gm._copaVuelta,
-        home: _gm.home, away: _gm.away,
-        scA: _gm.sc.a, scB: _gm.sc.b,
-        eventType: _evType
-      }).forEach(function(l){ lines.push(l); });
-      var _abbr = (typeof window.getTeamAbbr === 'function')
-        ? window.getTeamAbbr
-        : function(s){ return String(s||'').substring(0,3).toUpperCase(); };
-      var evts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp' && icoMap[e.type]; });
-      if (evts.length) {
-        lines.push('');
-        lines.push('ACTA DEL PARTIDO:');
-        evts.forEach(function(e){
-          var ico = icoMap[e.type] || '📋';
-          var tName = e.team === 'a' ? _gm.home : _gm.away;
-          lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr(tName) + ')');
-        });
-      }
-      if (_gm.matchStats && (_gm.matchStats.a || _gm.matchStats.b)) {
-        var _sa = _gm.matchStats.a || {};
-        var _sb = _gm.matchStats.b || {};
-        var statRows = [
-          ['posesion',  '➗', 'Posesión (%)',       false],
-          ['tiros',     '🚪', 'Tiros a puerta',      false],
-          ['penGol',    '🥅', 'Goles de penalti',    true],
-          ['faltaGol',  '🎯', 'Goles de falta',      true],
-          ['amarillas', '🟨', 'Amarillas',           false],
-          ['rojas',     '🟥', 'Rojas',               false],
-          ['corners',   '⛳', 'Córners',             false],
-          ['paradas',   '🧤', 'Paradas',             false]
-        ];
-        var outBlock = _waFmtStatsBlock(statRows, _sa, _sb, _gm.home, _gm.sc.a, _gm.sc.b, _gm.away);
-        if (outBlock) {
+      /* Todo el armado del mensaje (líneas del acta, stats, MVP) va en
+         try/catch: un dato inesperado (p.ej. un evento sin `min`, un
+         helper de abreviatura reventando con un nombre raro de un
+         torneo nuevo como Mundialito de Clubes) NO puede dejar el click
+         SIN NINGÚN efecto visible — antes, si algo de esto lanzaba, ni
+         siquiera se copiaba el resultado al portapapeles ni se
+         habilitaba FINALIZAR, y el usuario veía el botón "sin reaccionar"
+         (CLAUDE.md: mismo contrato que el resto de la cadena FINALIZAR —
+         2026-07-07 #6). */
+      var shareText = '';
+      try {
+        var icoMap = {gol:'⚽',propia:'🚫⚽','falta-gol':'🎯⚽','pen-gol':'🥅⚽','pen-fallo':'❌🥅',
+                      'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',
+                      roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
+        var lines = [];
+        var _evType = 'final';
+        if (_gm.penDone || _gm.penShootDone || _gm._penWinner != null) _evType = 'penaltis';
+        else if (_gm.etDone) _evType = 'prorroga-fin';
+        _waBuildHeaderLines({
+          comp: _gm.comp, j: _gm.j,
+          copaRonda: _gm._copaRonda, copaVuelta: _gm._copaVuelta,
+          home: _gm.home, away: _gm.away,
+          scA: _gm.sc.a, scB: _gm.sc.b,
+          eventType: _evType
+        }).forEach(function(l){ lines.push(l); });
+        var _abbr = (typeof window.getTeamAbbr === 'function')
+          ? window.getTeamAbbr
+          : function(s){ return String(s||'').substring(0,3).toUpperCase(); };
+        var evts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp' && icoMap[e.type]; });
+        if (evts.length) {
           lines.push('');
-          lines.push('ESTADÍSTICAS:');
-          lines.push(outBlock);
+          lines.push('ACTA DEL PARTIDO:');
+          evts.forEach(function(e){
+            var ico = icoMap[e.type] || '📋';
+            var tName = e.team === 'a' ? _gm.home : _gm.away;
+            lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr(tName) + ')');
+          });
         }
+        if (_gm.matchStats && (_gm.matchStats.a || _gm.matchStats.b)) {
+          var _sa = _gm.matchStats.a || {};
+          var _sb = _gm.matchStats.b || {};
+          var statRows = [
+            ['posesion',  '➗', 'Posesión (%)',       false],
+            ['tiros',     '🚪', 'Tiros a puerta',      false],
+            ['penGol',    '🥅', 'Goles de penalti',    true],
+            ['faltaGol',  '🎯', 'Goles de falta',      true],
+            ['amarillas', '🟨', 'Amarillas',           false],
+            ['rojas',     '🟥', 'Rojas',               false],
+            ['corners',   '⛳', 'Córners',             false],
+            ['paradas',   '🧤', 'Paradas',             false]
+          ];
+          var outBlock = _waFmtStatsBlock(statRows, _sa, _sb, _gm.home, _gm.sc.a, _gm.sc.b, _gm.away);
+          if (outBlock) {
+            lines.push('');
+            lines.push('ESTADÍSTICAS:');
+            lines.push(outBlock);
+          }
+        }
+        if (mvpEvt) {
+          lines.push('');
+          lines.push('⭐ MVP: ' + mvpName + (mvpTeam ? ' (' + _abbr(mvpTeam) + ')' : ''));
+        }
+        shareText = lines.join('\n');
+      } catch(errMsg) {
+        try { console.error('_gmFinalShareGate: fallo armando el mensaje, usando fallback mínimo', errMsg); } catch(_){}
+        shareText = scoreLine || (String(_gm.home||'Local') + ' ' + (_gm.sc.a!=null?_gm.sc.a:0) + ' - ' + (_gm.sc.b!=null?_gm.sc.b:0) + ' ' + String(_gm.away||'Visitante'));
       }
-      if (mvpEvt) {
-        lines.push('');
-        lines.push('⭐ MVP: ' + mvpName + (mvpTeam ? ' (' + _abbr(mvpTeam) + ')' : ''));
-      }
-      _waShareToGroup(lines.join('\n'));
+      try { _waShareToGroup(shareText); } catch(errShare) { try { console.error('_gmFinalShareGate: fallo compartiendo', errShare); } catch(_){} }
+      /* INCONDICIONAL: pase lo que pase con el armado del mensaje o el
+         share, el click SIEMPRE marca "compartido" y habilita FINALIZAR
+         — el usuario no puede quedarse dando al botón sin ver reacción. */
       shared = true;
       _gm.finalShared = true;
       _gm._mvpShareDone = true;
@@ -15620,7 +15684,7 @@
             list.appendChild(li);
           }
         }
-      }, function(){ window.gmEndMatch(); });
+      }, function(){ window._gmSafeReenter(window.gmEndMatch, 'tras registrar portería imbatida'); });
       return;
     }
     /* ── Estadísticas OBLIGATORIAS (HvH / HvIA) — ANTES del MVP ──

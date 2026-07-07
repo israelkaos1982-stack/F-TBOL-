@@ -1,5 +1,60 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## 🗑 "Vaciar lista" por zona europea — el borrado es un TOMBSTONE (`clearedAt`) que sobrevive a la unión aditiva (obligatorio, 2026-07-07 #2)
+
+**Petición usuario 2026-07-07** ("la lista entera de equipos en
+Competiciones Europeas quiero un botón para limpiar la lista entera de
+equipos de cada competición y si lo pulso que ese borrado se guarde
+hasta que vuelva a añadir equipos"): en el overlay "👁 Ver / Añadir
+equipos por competición", cada zona (Champions/Previa/Europa League/
+Conference/Open Qualifier/Wild Card) solo tenía un ✕ POR EQUIPO. Vaciar
+una lista de 24+ equipos a mano, uno a uno, es tedioso.
+
+### Por qué no basta con vaciar el array local
+
+`eur_manual_extra_v1` se fusiona en el servidor por **UNIÓN aditiva**
+(`_eur_manual_extra_merge`, regla 2026-07-03: "con 6 móviles + PC, dos
+dispositivos pueden añadir equipos DISTINTOS... un merge por recencia
+perdería la adición del más lento"). Si el botón se limitara a mandar
+`{zone: []}`, el servidor fusionaría ese array vacío con lo que YA
+tenía guardado (`old[zone] ∪ [] = old[zone]`) — el vaciado sería
+**invisible**, los equipos "borrados" seguirían ahí en el siguiente pull.
+
+### Fix — tombstone `clearedAt` por zona + `addedAt` por entrada
+
+- **Cliente** (`misc_body_1.html`): cada entrada añadida
+  (`_eurManualExtraAdd`) lleva ahora `addedAt: Date.now()`.
+  `window._eurManualExtraClearZone(zone)` vacía el array de esa zona Y
+  sella `clearedAt[zone] = Date.now()`. `_eurManualExtraLoad` preserva
+  `clearedAt` en cada round-trip load→save (si no, un add/remove
+  posterior en OTRA zona lo pisaría con `{}` sin querer).
+- **Servidor** (`_eur_manual_extra_merge`, `app.py`): tras la unión por
+  nombre, se descarta cualquier entrada cuyo `addedAt` sea ANTERIOR o
+  igual al `clearedAt` vigente de esa zona (el mayor entre lo
+  almacenado y lo entrante). Un equipo añadido DESPUÉS del vaciado
+  (`addedAt > clearedAt`) sobrevive con normalidad — así el vaciado
+  persiste pero NO bloquea altas futuras. Entradas legacy sin
+  `addedAt` cuentan como `addedAt=0` (un vaciado las descarta también,
+  que es justo "limpiar la lista ENTERA"). Tests en
+  `tests/test_api.py::TestEurManualExtraMerge`.
+- **UI**: botón "🗑 Vaciar lista" junto a la cabecera de cada zona en la
+  lista de manuales (`_eurManualOverlayRender`), con `confirm()` antes
+  de vaciar (mismo patrón que el toggle 🔓 Auto / 🔒 Manual).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un "vaciar lista"/"borrar todo" sobre un store con
+   merge ADITIVO (unión) se implemente mandando el array vacío sin más:
+   la unión lo resucitaría con la copia que el servidor ya tenía. Todo
+   vaciado masivo nuevo sobre un store aditivo de este proyecto hereda
+   el patrón tombstone (`clearedAt` por grupo + timestamp por entrada).
+2. **PROHIBIDO** que `_eurManualExtraLoad` deje de preservar
+   `clearedAt` en el objeto que devuelve — sin esto, cualquier
+   add/remove en OTRA zona borraría el tombstone de la zona vaciada al
+   guardar, y el vaciado "se olvidaría" en el siguiente ciclo.
+3. **PROHIBIDO** que el vaciado bloquee altas futuras: una entrada con
+   `addedAt` posterior al `clearedAt` de su zona SIEMPRE sobrevive.
+
 ## El picker "AÑADIR POR LIGA" (equipos por competición) resuelve el fallback `_protected` EN EL SERVIDOR — una sola petición (obligatorio, 2026-07-07)
 
 **Bug (5 fotos usuario 2026-07-07, «Andorra», «Armenia», «Austria»,

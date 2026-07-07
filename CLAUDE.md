@@ -1,5 +1,70 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El click en "COMPARTIR POR WHATSAPP" SIEMPRE marca compartido, aunque el armado del mensaje reviente (obligatorio, 2026-07-07 #6)
+
+**Bug (foto usuario 2026-07-07, «Real Madrid vs Al Hilal SFC», Mundialito
+de Clubes — "después de darle decenas de veces consigo hacerlo hay algún
+bloqueo, tiene que ser sencillo y facil")**: en la puerta obligatoria
+"📲 COMPARTIR PARTIDO" (tras elegir MVP), pulsar "🟢 COMPARTIR POR
+WHATSAPP" no producía ninguna reacción visible — el botón seguía verde
+sin cambiar a "✅ COMPARTIDO" y "🏁 FINALIZAR PARTIDO" seguía gris/
+deshabilitado. Hacía falta pulsar el botón decenas de veces hasta que,
+en algún intento, "funcionaba".
+
+### Causa raíz
+
+Los 3 handlers que arman el mensaje de WhatsApp y comparten
+(`_gmFinalShareGate.shareBtn.onclick`, `window._waShareGate.shareBtn.onclick`,
+`_mlBuildAndShareWA`, todos en `part2/misc_body_2.html`) construían el
+texto completo (cabecera vía `_waBuildHeaderLines`, líneas del acta,
+bloque de estadísticas vía `_waFmtStatsBlock`, línea del MVP) **SIN
+try/catch**, y solo AL FINAL de esa construcción — tras `_waShareToGroup(...)`
+— marcaban `shared = true` y habilitaban el botón "FINALIZAR"/
+"CONTINUAR". Si CUALQUIER paso del armado lanzaba una excepción (un
+evento del acta con datos inesperados de un torneo nuevo como el
+Mundialito de Clubes, un helper de abreviatura de equipo fallando,
+etc.), el click terminaba ahí mismo: ni se copiaba nada al portapapeles,
+ni se marcaba compartido, ni se habilitaba el botón siguiente — el
+usuario veía el botón "sin reaccionar" al pulsarlo, indistinguible de
+un bloqueo total. Coincide exactamente con el patrón "clicar decenas de
+veces hasta que un intento cuela" (la condición de fallo puede depender
+de datos que varían ligeramente entre reintentos, p.ej. un evento en
+concreto del acta).
+
+### Fix
+
+Los 3 puntos separan el ARMADO del mensaje (try/catch, con fallback al
+marcador simple `Local X - Y Visitante` si falla) de la ACCIÓN de
+compartir/marcar (incondicional): `_waShareToGroup(...)` va en su
+propio try/catch, y **`shared = true` + habilitar el botón siguiente
++ el cambio visual del botón a "✅ COMPARTIDO" SIEMPRE se ejecutan**,
+pase lo que pase con el armado del texto rico. `_mlBuildAndShareWA`
+(compartida por el post-partido de ml-card y el descanso) envuelve TODO
+su cuerpo en try/catch con un fallback de una sola línea, para que
+NUNCA propague una excepción a sus 2 callers (que desbloquean un botón
+justo después de llamarla, sin su propio try/catch).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un handler de "COMPARTIR POR WHATSAPP" (o
+   cualquier botón nuevo de esta cadena que arme un mensaje rico antes
+   de compartir) marque `shared`/habilite el botón siguiente SOLO tras
+   una construcción de texto sin try/catch. El armado del mensaje puede
+   fallar por datos de UN torneo/competición concreta; el marcado de
+   "compartido" + la habilitación del siguiente paso son
+   SIEMPRE incondicionales (con fallback de texto mínimo si el armado
+   rico revienta).
+2. **PROHIBIDO** que `_mlBuildAndShareWA` (o cualquier función de
+   armado+compartir reutilizada por varios callers que desbloquean UI
+   justo después de invocarla) propague una excepción a sus callers.
+   Debe atrapar sus propios fallos y compartir como mínimo el marcador
+   simple.
+3. Si un click en un botón de esta cadena "no reacciona" de forma
+   intermitente (funciona a la enésima pulsación), sospechar primero de
+   un armado de mensaje sin try/catch antes que de un problema de
+   captura del evento táctil/click — es el mismo síntoma pero con causa
+   distinta a los bugs táctiles ya documentados de esta cadena.
+
 ## El overlay de ESTADÍSTICAS del FINALIZAR también se blinda con try/catch + display incondicional (obligatorio, 2026-07-07 #5)
 
 **Bug (2 fotos usuario 2026-07-07, «Real Madrid vs Al Hilal SFC»,

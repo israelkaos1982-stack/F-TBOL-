@@ -61825,12 +61825,26 @@ https://api.sofascore.app/api/v1/team/44/image
        (antes solo había 1 fila por trofeo, sin contador explícito).
        Backfill de `cat` (2026-06-27): los títulos LEGACY (sin categoría)
        son del ENTRENADOR (club/selección); los individuales se crean ya
-       con `cat:'ind'`. */
+       con `cat:'ind'`.
+       Backfill de `subs` (2026-07-07, petición usuario: "el FC Barcelona
+       ha ganado 2 Supercopas de España pero solo deja poner una línea").
+       `subs` es un ARRAY con una línea de detalle POR CADA título ganado
+       (invariante: `subs.length === count`, siempre) — sustituye al
+       antiguo campo `sub` (string único) que solo podía guardar el
+       detalle de UNA consecución aunque `count` fuera 2, 3… Migración:
+       el `sub` legacy pasa a ser la 1ª línea; el resto se rellena con
+       líneas vacías hasta igualar `count` (el admin las completa desde
+       el editor ✏️, que ahora gestiona la lista completa). */
     arr.forEach(function(t){
       if (!t) return;
       var n = parseInt(t.count, 10);
       t.count = (isNaN(n) || n < 1) ? 1 : n;
       t.cat = (t.cat === 'ind') ? 'ind' : 'club';
+      if (!Array.isArray(t.subs)){
+        t.subs = t.sub ? [String(t.sub)] : [];
+      }
+      while (t.subs.length < t.count) t.subs.push('');
+      if (t.subs.length > t.count) t.count = t.subs.length;
     });
     return arr;
   }
@@ -61838,6 +61852,14 @@ https://api.sofascore.app/api/v1/team/44/image
      selección) o 'ind' (TROFEOS INDIVIDUALES — Pichichi, Zamora, Balón de
      Oro…). Default 'club' para datos legacy. */
   function _trofCat(t){ return (t && t.cat === 'ind') ? 'ind' : 'club'; }
+  /* Líneas de detalle de un trofeo (una por consecución). Fallback al
+     legacy `sub` string por si algo externo (import de backup) trajera
+     un objeto sin pasar por `load()`. */
+  function _trofSubs(t){
+    if (t && Array.isArray(t.subs)) return t.subs.slice();
+    if (t && t.sub) return [String(t.sub)];
+    return [];
+  }
 
   /* Sync con servidor (GlobalState `bayern_trofeos_v1` + variantes por
      hub). localStorage es cache rápido; el server es la fuente de verdad
@@ -62014,14 +62036,22 @@ https://api.sofascore.app/api/v1/team/44/image
     /* Icono envuelto en `.ath-titulo-icon` (círculo incrustado, mismo
        estilo que cajas de Competiciones). Botón ✏️ visible solo con
        sesión admin (CSS `body.adm-on .ath-titulo-edit{display:flex}`).
-       La eliminación va por el botón "🗑 ELIMINAR TÍTULO" del pie. */
+       La eliminación va por el botón "🗑 ELIMINAR TÍTULO" del pie.
+       Cada consecución del título tiene su PROPIA línea de detalle
+       (`subs[i]`) — un título ganado 2 veces muestra 2 líneas, cada
+       una con su marcador/rival (petición usuario 2026-07-07). Las
+       líneas vacías (aún sin rellenar por el admin) no se pintan. */
+    var subLines = _trofSubs(t).filter(function(s){ return s && String(s).trim(); });
+    var subHtml = subLines.map(function(s){
+      return '<div class="ath-titulo-sub">'+esc(s)+'</div>';
+    }).join('');
     return '<div class="ath-titulo-row" data-trofeo-id="'+esc(t.id)+'">'
          +   '<div class="ath-titulo-icon">'
          +     '<img src="'+esc(t.icon)+'" alt="'+esc(t.title)+'" onerror="this.style.visibility=\'hidden\'">'
          +   '</div>'
          +   '<div class="ath-titulo-info">'
          +     '<div class="ath-titulo-name">'+esc(t.title)+'</div>'
-         +     (t.sub ? '<div class="ath-titulo-sub">'+esc(t.sub)+'</div>' : '')
+         +     subHtml
          +   '</div>'
          +   '<button type="button" class="ath-titulo-edit" title="Editar título"'
          +     ' onclick="window.munichTrofeosPromptEdit&&window.munichTrofeosPromptEdit(\''+esc(t.id)+'\')">🖍</button>'
@@ -62109,7 +62139,14 @@ https://api.sofascore.app/api/v1/team/44/image
         + '#munich-trof-add-ov .ta-actions{display:flex;gap:8px;justify-content:center;margin-top:14px;}'
         + '#munich-trof-add-ov .ta-btn{padding:9px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;border:1px solid;-webkit-tap-highlight-color:transparent;}'
         + '#munich-trof-add-ov .ta-btn.primary{background:linear-gradient(145deg,#f8c44e,#b88915);color:#1a0800;border-color:#ffd55a;}'
-        + '#munich-trof-add-ov .ta-btn.ghost{background:transparent;color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);}';
+        + '#munich-trof-add-ov .ta-btn.ghost{background:transparent;color:rgba(255,255,255,.7);border-color:rgba(255,255,255,.25);}'
+        + '#munich-trof-add-ov .ta-subs-list{display:flex;flex-direction:column;gap:6px;}'
+        + '#munich-trof-add-ov .ta-sub-row{display:flex;gap:6px;align-items:center;}'
+        + '#munich-trof-add-ov .ta-sub-row .ta-input{flex:1;}'
+        + '#munich-trof-add-ov .ta-sub-del-btn{flex:none;width:30px;height:30px;border-radius:7px;background:rgba(220,60,60,.18);border:1px solid rgba(240,120,120,.4);color:#ffb0b0;font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;}'
+        + '#munich-trof-add-ov .ta-sub-del-btn:hover{background:rgba(220,60,60,.32);}'
+        + '#munich-trof-add-ov .ta-sub-add-btn{margin-top:8px;padding:8px 10px;background:rgba(240,192,64,.10);border:1px dashed rgba(240,192,64,.45);border-radius:8px;color:#ffd55a;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;width:100%;}'
+        + '#munich-trof-add-ov .ta-sub-add-btn:hover{background:rgba(240,192,64,.18);}';
       document.head.appendChild(css);
     }
     var ov = document.createElement('div');
@@ -62139,8 +62176,9 @@ https://api.sofascore.app/api/v1/team/44/image
       +     '<input id="munich-trof-title" class="ta-input" type="text" placeholder="LIGA EA SPORTS" autocomplete="off"/>'
       +   '</div>'
       +   '<div class="ta-row">'
-      +     '<label class="ta-lbl" id="munich-trof-sub-lbl">📝 Subtítulo (opcional)</label>'
-      +     '<input id="munich-trof-sub" class="ta-input" type="text" placeholder="UEFA · Final 25-Mayo-2032" autocomplete="off"/>'
+      +     '<label class="ta-lbl" id="munich-trof-sub-lbl">📝 Detalle (una línea por título ganado)</label>'
+      +     '<div id="munich-trof-subs-list" class="ta-subs-list"></div>'
+      +     '<button type="button" class="ta-sub-add-btn" onclick="window._munichTrofAddSubLine()">➕ Añadir línea · otra consecución de este título</button>'
       +   '</div>'
       +   '<div class="ta-actions">'
       +     '<button type="button" class="ta-btn primary" onclick="window._munichTrofAddSave()">✅ Guardar</button>'
@@ -62254,32 +62292,94 @@ https://api.sofascore.app/api/v1/team/44/image
     var tLbl = document.getElementById('munich-trof-title-lbl');
     var sLbl = document.getElementById('munich-trof-sub-lbl');
     var tInp = document.getElementById('munich-trof-title');
-    var sInp = document.getElementById('munich-trof-sub');
     if (cat === 'ind'){
       if (tLbl) tLbl.textContent = '🎖️ Premio individual';
       if (tInp) tInp.placeholder = 'PICHICHI · ZAMORA · BALÓN DE ORO…';
-      if (sLbl) sLbl.textContent = '👤 Jugador (opcional)';
-      if (sInp) sInp.placeholder = 'Kylian Mbappé · 2031-32';
+      if (sLbl) sLbl.textContent = '👤 Jugador (uno por temporada ganada)';
+      ov.dataset.subPlaceholder = 'Kylian Mbappé · 2031-32';
     } else {
       if (tLbl) tLbl.textContent = '🏆 Texto del título';
       if (tInp) tInp.placeholder = 'LIGA EA SPORTS';
-      if (sLbl) sLbl.textContent = '📝 Subtítulo (opcional)';
-      if (sInp) sInp.placeholder = 'UEFA · Final 25-Mayo-2032';
+      if (sLbl) sLbl.textContent = '📝 Detalle (una línea por título ganado)';
+      ov.dataset.subPlaceholder = 'FC Barcelona 4-2 Villarreal';
+    }
+    /* Refresca el placeholder de las líneas YA pintadas (si el admin
+       cambia de categoría con el modal ya abierto). */
+    var subHost = document.getElementById('munich-trof-subs-list');
+    if (subHost){
+      var subInputs = subHost.querySelectorAll('.ta-sub-input');
+      for (var _si = 0; _si < subInputs.length; _si++) subInputs[_si].placeholder = ov.dataset.subPlaceholder;
     }
   };
+  /* Una fila editable de la lista de líneas (una por consecución del
+     título). El placeholder sale de `ov.dataset.subPlaceholder`
+     (fijado por `_munichTrofSetCat`). */
+  function _trofSubRowHtml(val){
+    var ov = document.getElementById('munich-trof-add-ov');
+    var ph = (ov && ov.dataset.subPlaceholder) || 'FC Barcelona 4-2 Villarreal';
+    return '<div class="ta-sub-row">'
+         +   '<input class="ta-input ta-sub-input" type="text" value="'+esc(val||'')+'" placeholder="'+esc(ph)+'" autocomplete="off"/>'
+         +   '<button type="button" class="ta-sub-del-btn" onclick="window._munichTrofRemoveSubLine(this)" title="Quitar esta línea">✕</button>'
+         + '</div>';
+  }
+  function _trofRenderSubLines(vals){
+    var host = document.getElementById('munich-trof-subs-list');
+    if (!host) return;
+    var arr = (vals && vals.length) ? vals : [''];
+    host.innerHTML = arr.map(_trofSubRowHtml).join('');
+  }
+  /* ➕ Añadir línea — una consecución más del MISMO título (petición
+     usuario 2026-07-07: "el FC Barcelona ha ganado 2 Supercopas de
+     España pero solo deja poner una línea"). Disponible tanto al crear
+     un título nuevo (varias líneas de una vez) como al editar uno ya
+     existente (completar/corregir el histórico). */
+  window._munichTrofAddSubLine = function(){
+    var host = document.getElementById('munich-trof-subs-list');
+    if (!host) return;
+    host.insertAdjacentHTML('beforeend', _trofSubRowHtml(''));
+    var inputs = host.querySelectorAll('.ta-sub-input');
+    var last = inputs[inputs.length - 1];
+    if (last) last.focus();
+  };
+  /* ✕ Quitar línea. Si es la única, se limpia en vez de eliminarse (el
+     título siempre necesita al menos 1 línea, aunque esté vacía). */
+  window._munichTrofRemoveSubLine = function(btn){
+    var host = document.getElementById('munich-trof-subs-list');
+    if (!host) return;
+    var rows = host.querySelectorAll('.ta-sub-row');
+    if (rows.length <= 1){
+      var onlyInp = rows[0] && rows[0].querySelector('.ta-sub-input');
+      if (onlyInp) onlyInp.value = '';
+      return;
+    }
+    var row = btn && btn.closest ? btn.closest('.ta-sub-row') : null;
+    if (row && row.parentNode) row.parentNode.removeChild(row);
+  };
+  /* Recoge el valor actual de cada línea del modal, en orden. Siempre
+     devuelve al menos 1 elemento (puede ser ''). */
+  function _trofCollectSubLines(){
+    var host = document.getElementById('munich-trof-subs-list');
+    if (!host) return [''];
+    var inputs = host.querySelectorAll('.ta-sub-input');
+    var out = [];
+    for (var i = 0; i < inputs.length; i++) out.push(inputs[i].value || '');
+    return out.length ? out : [''];
+  }
   window._munichTrofAddOpen = function(existing, isEditMode){
     _ensureTrofeoAddOv();
     var ov = document.getElementById('munich-trof-add-ov');
     if (!ov) return;
     var urlInp = document.getElementById('munich-trof-icon-url');
     var titleInp = document.getElementById('munich-trof-title');
-    var subInp = document.getElementById('munich-trof-sub');
     var prev = document.getElementById('munich-trof-icon-preview');
     /* Categoría: la del trofeo en edición, o 'club' por defecto al crear. */
     window._munichTrofSetCat((existing && existing.cat === 'ind') ? 'ind' : 'club');
     if (urlInp) urlInp.value = (existing && existing.icon && existing.icon.indexOf('data:') !== 0) ? existing.icon : '';
     if (titleInp) titleInp.value = (existing && existing.title) || '';
-    if (subInp) subInp.value = (existing && existing.sub) || '';
+    /* Editando un título ya existente → precarga TODAS sus líneas
+       (una por consecución) para poder corregir/completar el histórico
+       o añadir una nueva consecución. Creando uno nuevo → 1 línea vacía. */
+    _trofRenderSubLines(existing ? _trofSubs(existing) : ['']);
     /* En modo edit, si el icono es data: (archivo subido antes), lo
        precargamos como preview para que el usuario sepa que ya tiene
        icono y solo cambie lo que quiera. */
@@ -62317,25 +62417,25 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!ov) return;
     var urlInp = document.getElementById('munich-trof-icon-url');
     var titleInp = document.getElementById('munich-trof-title');
-    var subInp = document.getElementById('munich-trof-sub');
     var dataUrl = ov.dataset.iconData || '';
     var iconUrl = (urlInp && urlInp.value || '').trim();
     var iconFinal = dataUrl || iconUrl; /* archivo prevalece sobre URL pegada */
     var titleTxt = (titleInp && titleInp.value || '').trim();
-    var subTxt = (subInp && subInp.value || '').trim();
+    var subLines = _trofCollectSubLines();
     var catSel  = (ov.dataset.cat === 'ind') ? 'ind' : 'club';
     var isEdit  = ov.dataset.editMode === '1';
     var editId  = ov.dataset.editId || '';
     if (!iconFinal){ alert('⚠️ Pega una URL o sube un archivo para el icono.'); return; }
     if (!titleTxt){ alert('⚠️ Escribe el nombre del título.'); return; }
     var arr = load();
-    /* MODO EDIT (✏️): localizamos el trofeo por su id (no por título)
-       y actualizamos icono/título/subtítulo SIN tocar el contador.
-       Petición usuario 2026-05-08: al editar el sub a
-       "💡At. Madrid 3-2 Las Palmas" la info no se quedaba guardada.
-       El modal Add detectaba el título existente y solo incrementaba
-       count + sobrescribía sub si tenía algo, sin un flujo limpio
-       de edición. Ahora UPDATE in-place sin efectos colaterales. */
+    /* MODO EDIT (✏️): localizamos el trofeo por su id (no por título) y
+       actualizamos icono/título/TODAS sus líneas SIN pasar por el
+       dedupe de Add. `subLines` es exactamente lo que el admin dejó en
+       el modal (una fila = una consecución) — el `count` se deriva de
+       cuántas filas queden, así que añadir/quitar líneas con ➕/✕ ajusta
+       el contador automáticamente (petición usuario 2026-07-07: poder
+       ver/corregir CADA consecución de un título ganado varias veces,
+       no solo la última). */
     if (isEdit && editId){
       var found = null;
       for (var ei = 0; ei < arr.length; ei++){
@@ -62344,7 +62444,9 @@ https://api.sofascore.app/api/v1/team/44/image
       if (found){
         found.icon  = iconFinal;
         found.title = titleTxt;
-        found.sub   = subTxt;  /* permite vaciar el sub poniendo "" */
+        found.subs  = subLines;
+        found.count = subLines.length;
+        delete found.sub; /* migrado a `subs` — evita arrastrar el legacy stale */
         found.cat   = catSel;  /* permite recategorizar un título */
         save(arr);
         render();
@@ -62355,23 +62457,27 @@ https://api.sofascore.app/api/v1/team/44/image
          caemos al flujo Add normal. */
     }
     /* MODO ADD: dedupe por título DENTRO de su categoría (un mismo nombre
-       puede existir como Entrenador e Individual sin fusionarse), incrementa
-       count si ya existe. */
+       puede existir como Entrenador e Individual sin fusionarse). Si el
+       título YA existe, las líneas del modal se AÑADEN al histórico
+       (nunca lo pisan) — así "Supercopa España" ganada 2 veces guarda
+       las 2 líneas de detalle en vez de perder la primera. */
     var key = _normTitle(titleTxt);
     var existing = arr.filter(function(t){
       return t && _trofCat(t) === catSel && _normTitle(t.title) === key;
     })[0];
     if (existing){
-      existing.count = (existing.count|0) + 1;
+      var prevSubs = _trofSubs(existing);
+      existing.subs = prevSubs.concat(subLines);
+      existing.count = existing.subs.length;
+      delete existing.sub;
       if (iconFinal) existing.icon = iconFinal;
-      if (subTxt) existing.sub = subTxt;
     } else {
       arr.push({
         id:    _newId(),
         icon:  iconFinal,
         title: titleTxt,
-        sub:   subTxt,
-        count: 1,
+        subs:  subLines,
+        count: subLines.length,
         cat:   catSel
       });
     }
@@ -62456,6 +62562,12 @@ https://api.sofascore.app/api/v1/team/44/image
       if (!window.confirm(msg + ' ?')) return;
       if (n > 1){
         victim.count = n - 1;
+        /* Quita la ÚLTIMA línea de detalle para mantener el invariante
+           subs.length === count (petición usuario 2026-07-07: cada
+           consecución tiene su propia línea). */
+        if (Array.isArray(victim.subs) && victim.subs.length > victim.count){
+          victim.subs.length = victim.count;
+        }
       } else {
         arr.splice(idx, 1);
       }

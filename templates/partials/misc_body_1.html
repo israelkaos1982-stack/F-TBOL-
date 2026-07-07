@@ -2637,6 +2637,34 @@ window._showSimProgress = function(opts, onDone){
       }
       return sc;
     }
+    /* Detecta una fila «placeholder auto-reconstruida»: TODOS (o casi
+       todos) sus jugadores con power EXACTAMENTE 70 y pos vacía/'MED'.
+       Es la firma exacta de los fallbacks stats-only (Fuentes C/D/E/F/G
+       del rebuild de `_lextTeamDetail` — power:70,pos:'MED' porque esas
+       fuentes solo traen el NOMBRE del jugador, nunca su posición/media
+       real) cuando ese rebuild corrió y se PERSISTIÓ en OTRO ligaExt_*
+       donde el club tenía 0 jugadores. Esa fila puede acumular `pj`/`gol`
+       reales (los trae directamente de `ef_player_stats_v1`) y por tanto
+       "ganar" a la plantilla REAL editada a mano (que nunca guarda
+       pj/gol en `t.players[]` — esas stats viven aparte, vía
+       `_statsFor`/`ef_player_stats_*`, así que su `_hubRowRichness` da
+       0 SIEMPRE). Sin este gate, la fila degradada (nombres reales pero
+       posiciones/medias inventadas) le gana a la real por "riqueza" y la
+       plantilla del hub muestra TODOS los jugadores en ⚙ MEDIOS a 70
+       (bug usuario 2026-07-07, foto Arsenal-Brasil-Álvaro). */
+    function _hubRowLooksGeneric(t){
+      if (!t || !Array.isArray(t.players) || !t.players.length) return false;
+      var total = 0, genericCnt = 0;
+      for (var i=0;i<t.players.length;i++){
+        var p = t.players[i]; if (!p || !p.name) continue;
+        total++;
+        var pw = Number(p.power);
+        var isGenericPw  = (!pw || pw === 70);
+        var isGenericPos = (!p.pos || p.pos === 'MED');
+        if (isGenericPw && isGenericPos) genericCnt++;
+      }
+      return total > 0 && (genericCnt / total) >= 0.9;
+    }
     /* Para un hub NO-legacy (PSG, Arsenal, Atlético…), la plantilla del
        club vive en su liga doméstica EXTERNA (PSG en «Liga Francia»,
        Arsenal en la Premier externa…). Si el MISMO club aparece en VARIAS
@@ -2664,7 +2692,7 @@ window._showSimProgress = function(opts, onDone){
         } catch(_){}
         return false;
       }
-      var best = null, bestScore = -1, bestEa = false;
+      var best = null, bestScore = -1, bestEa = false, bestGeneric = true;
       try {
         for (var ii=0; ii<localStorage.length; ii++){
           var k = localStorage.key(ii);
@@ -2676,10 +2704,21 @@ window._showSimProgress = function(opts, onDone){
           for (var i=0;i<teams.length;i++){
             var t = teams[i];
             if (!_rowMatchesClub(t)) continue;
-            var sc = _hubRowRichness(t);
             var isEa = (k === 'ligaExt_liga-ea-sports');
+            var generic = _hubRowLooksGeneric(t);
+            /* Una fila REAL (posiciones/medias editadas) SIEMPRE gana a
+               una genérica, sin importar cuánta "riqueza" de stats haya
+               acumulado esta última — ver `_hubRowLooksGeneric`. Entre
+               dos filas del mismo tipo (ambas reales o ambas genéricas)
+               se sigue desempatando por riqueza + preferencia EA. */
+            if (best === null || (bestGeneric && !generic)){
+              best = t; bestScore = _hubRowRichness(t); bestEa = isEa; bestGeneric = generic;
+              continue;
+            }
+            if (generic && !bestGeneric) continue;
+            var sc = _hubRowRichness(t);
             if (sc > bestScore || (sc === bestScore && isEa && !bestEa)){
-              best = t; bestScore = sc; bestEa = isEa;
+              best = t; bestScore = sc; bestEa = isEa; bestGeneric = generic;
             }
           }
         }

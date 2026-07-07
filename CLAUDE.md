@@ -1,5 +1,97 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La plantilla del HUB (caja "PLANTILLA" de un mister) nunca prefiere una fila "genérica" (power 70 / pos MED para todos) sobre la plantilla REAL editada (obligatorio, 2026-07-07 #4)
+
+**Bug (6 fotos usuario 2026-07-07, «Arsenal-Brasil-Álvaro»)**: dentro de
+la caja Arsenal-Brasil-Álvaro → 👕 PLANTILLA, TODOS los jugadores del
+Arsenal aparecían bajo un único encabezado «⚙ MEDIOS» (porteros,
+defensas y delanteros incluidos) con la media (🛡) fija en **70 para
+absolutamente todos**. El editor de Resto de Ligas, para el MISMO
+Arsenal, muestra la plantilla real con sus posiciones correctas
+(PORTEROS/DEFENSAS/CENTROCAMPISTAS/DELANTEROS) y sus medias reales
+(David Raya 86, Kepa 82, Saliba 87, Rice 88, Saka 88…).
+
+### Causa raíz
+
+`_findBayernRow()` (hub NO-legacy, `misc_body_1.html`) resuelve la
+plantilla del club vía `_findRichestHubRow(name)`, que escanea TODAS
+las `ligaExt_*` buscando filas que casen con el club (nombre exacto o
+alias del mismo mister) y se queda con la de MÁS «riqueza»
+(`_hubRowRichness` = Σ pj+gol+pen+fk de `t.players[]`), a propósito:
+un club NO-legacy juega su liga doméstica como IA en una liga EXTERNA
+(Resto de Ligas), así que esa fila —con partidos y goles reales— debe
+ganar a un posible duplicado vacío en `liga-ea-sports`.
+
+El problema: existen varios reconstructores de plantilla en el mismo
+archivo (Fuentes C/D/E/F/G del rebuild de detalle de equipo,
+~línea 13203 en adelante) que, cuando un equipo aparece con
+`players:[]` en algún `ligaExt_<slug>`, lo RECONSTRUYEN a partir de
+`ef_player_stats_v1` / `SQUAD_REGISTRY` / eventos de acta / resultados
+— fuentes que solo traen el NOMBRE del jugador (además de sus
+stats: pj/gol/mvp/ta/tr, que SÍ vienen reales), nunca su posición ni
+su media real, así que rellenan `power:70, pos:'MED'` como placeholder
+— y **persisten** ese resultado de vuelta en `ligaExt_<slug>` (local +
+servidor). Esa fila "reconstruida" trae `pj`/`gol` reales embebidos en
+cada jugador (porque las Fuentes C-G los copian directamente de
+`ef_player_stats_v1`), así que su `_hubRowRichness` da un número
+positivo. La plantilla REAL editada a mano, en cambio, JAMÁS guarda
+`pj`/`gol` dentro de `t.players[]` (esas stats se calculan aparte, vía
+`_statsFor`/`ef_player_stats_*`, para pintarlas en la columna de la
+plantilla del hub) — su `_hubRowRichness` da **0 siempre**. Resultado:
+la fila degradada (nombres reales, posiciones/medias inventadas)
+"gana" por riqueza a la plantilla real, y `_findBayernRow` devuelve la
+fila mala → `renderBayernPlantillaScreen` agrupa por `p.pos` (todo
+`'MED'` o vacío → cae al bucket `by.MED`) y pinta `p.power` (70 fijo).
+
+### Fix
+
+Nuevo `_hubRowLooksGeneric(t)` (`misc_body_1.html`, junto a
+`_hubRowRichness`): detecta la firma exacta de una fila
+auto-reconstruida — **≥90% de sus jugadores con `power` vacío/exactamente
+70 Y `pos` vacía/`'MED'`** (un roster real jamás tiene esa distribución
+degenerada). `_findRichestHubRow` ahora compara primero por este flag:
+una fila REAL siempre gana a una genérica, sin importar cuánta
+"riqueza" de stats acumulada tenga esta última; solo si TODAS las
+filas encontradas son genéricas se devuelve la de mayor riqueza (mismo
+comportamiento de antes, para no dejar la caja vacía si de verdad no
+hay ningún roster real en ningún dispositivo).
+
+### Confirmación de la 2ª parte de la petición del usuario
+
+Las estadísticas por jugador (goles/MVP/tarjetas/nota) de la plantilla
+del hub YA se suman automáticamente de TODAS las competiciones
+oficiales del club (Liga EA Sports, Copa del Rey, Supercopa de España,
+Champions/Europa/Conference, Recopa, Supercopa de Europa,
+Intercontinental, Mundialito de Clubes) **excepto Superliga, amistosos
+y torneos de verano** — ver sección "Plantilla del hub (Liverpool-
+Francia) — stats SUMADAS…" (2026-06-03) más abajo. Ese cálculo busca
+por NOMBRE de jugador en `_STATS_STORES`/`_NOTA_STORES`
+(`_buildStatsCache`), es independiente de qué fila de `t.players[]` se
+haya resuelto como "la plantilla" — así que, con el roster REAL del
+Arsenal ya resuelto correctamente por este fix, las estadísticas se
+siguen sumando exactamente igual que en la caja de Liverpool, sin
+tocar nada más.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_findRichestHubRow` (o cualquier resolutor de
+   "la fila más rica" entre duplicados de un mismo club) compare
+   ÚNICAMENTE por `_hubRowRichness` (stats acumuladas). Debe descartar
+   primero las filas `_hubRowLooksGeneric` (placeholder auto-
+   reconstruido) — una fila real con posiciones/medias editadas SIEMPRE
+   gana a una degradada, aunque la degradada tenga más partidos/goles
+   embebidos.
+2. **PROHIBIDO** que las Fuentes C/D/E/F/G del rebuild de plantilla
+   (`misc_body_1.html`, ~línea 13203, disparado cuando un equipo tiene
+   `players:[]` en algún `ligaExt_<slug>`) dejen de usar `power:70,
+   pos:'MED'` como placeholder explícito — el propio `_hubRowLooksGeneric`
+   depende de esa firma exacta para poder distinguir "reconstruido" de
+   "real". Si algún día se cambia el placeholder, actualizar el
+   detector a la vez.
+3. Toda caja de mister NUEVA hereda el fix automáticamente (el gate
+   vive en `_findRichestHubRow`, genérico por club vía
+   `_isHumanClubCanonico`/`_mhSameMister`, no hardcodea Arsenal).
+
 ## El overlay "Equipos por competición" NO hidrata las ~50 ligas si las 6 zonas están en modo Manual + las hidrataciones one-shot de arranque reintentan (obligatorio, 2026-07-07 #3)
 
 **Bug (foto usuario 2026-07-07, «sigue sin cargar»)**: con las 6 zonas

@@ -19443,6 +19443,17 @@ window._showSimProgress = function(opts, onDone){
         manual.forEach(function(t){ if(t && t.name) _push(t.name); });
       }
     } catch(_){}
+    /* (1b) Extras manuales del overlay unificado "Equipos por
+       competición" (2026-07-07, petición usuario "vuelve a añadir el
+       poder añadir manualmente equipo a equipo"). Misma prioridad que
+       los manuales de "EA Sports → Europa" — el admin los puso a mano
+       a propósito. Se leen SIEMPRE (no hay modo "solo manual" para
+       Recopa: es aditivo sobre el cómputo automático de campeones). */
+    try {
+      if(typeof window._eurManualExtraTeamNames === 'function'){
+        window._eurManualExtraTeamNames('recopa').forEach(_push);
+      }
+    } catch(_){}
     /* (2) Campeones (y subcampeones si procede) de las copas europeas.
        Recorremos todas las claves `ligaExt_<slug>` reales (igual que
        _computeQualifiedFromLeagues: sin _backup/_snap/_protected/_vN).
@@ -19500,6 +19511,9 @@ window._showSimProgress = function(opts, onDone){
     if (pool.length > POOL_TARGET) pool = pool.slice(0, POOL_TARGET);
     return pool;
   }
+  /* Público — el overlay "Equipos por competición" lo usa para mostrar
+     el pool EN VIVO (nombre + conteo) sin duplicar esta lógica. */
+  window._recopaLivePool = function(){ return _buildPool(); };
 
   function _mkMatch(home, away){
     return { home: home, away: away, played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null };
@@ -20882,6 +20896,19 @@ window._showSimProgress = function(opts, onDone){
           if(seen[t.name]) return;
           seen[t.name] = true;
           out.push({ name:t.name, label:t.name + ' · ' + lbl });
+        });
+      }
+    } catch(_){}
+    /* Extras manuales del overlay unificado "Equipos por competición"
+       (2026-07-07): un equipo añadido a mano a la zona 'usc' aparece
+       también aquí como candidato, aunque no exista en ninguna
+       ligaExt_<slug> local todavía. */
+    try {
+      if(typeof window._eurManualExtraTeamNames === 'function'){
+        window._eurManualExtraTeamNames('usc').forEach(function(nm){
+          if(seen[nm]) return;
+          seen[nm] = true;
+          out.push({ name:nm, label:nm + ' · Manual' });
         });
       }
     } catch(_){}
@@ -26961,6 +26988,23 @@ window._showSimProgress = function(opts, onDone){
       var q = _norm(qEl.value || '');
       if (q.length < 2) { resEl.innerHTML = '<div class="mr-hint">Escribe ≥2 letras…</div>'; return; }
       var all = []; try { all = _allTeams(); } catch(_){}
+      /* Extras manuales del overlay unificado "Equipos por competición"
+         (2026-07-07, zona 'mundial'): candidatos añadidos a mano que no
+         viven en ninguna ligaExt_<slug> local todavía. Se etiquetan
+         `_leagues:['manual']` (≠ 'resto-mundo') para que cuenten SIEMPRE
+         como europeos en el filtro EUR/RM de abajo — es justo el
+         concepto de "16 europeos elegidos a mano". NO se tocan al buscar
+         para la zona RM (solo aparecen si `activeZone==='eur'`). */
+      try {
+        if (typeof window._eurManualExtraTeamNames === 'function') {
+          var seenAll = {}; all.forEach(function(t){ seenAll[t.name] = true; });
+          window._eurManualExtraTeamNames('mundial').forEach(function(nm){
+            if (seenAll[nm]) return;
+            seenAll[nm] = true;
+            all.push({ name:nm, power:70, shield:'', _leagues:['manual'], _league:'manual' });
+          });
+        }
+      } catch(_){}
       /* CLUBES ≠ SELECCIONES: el Mundialito de Clubes (board 'verano')
          NUNCA debe ofrecer selecciones nacionales en su roster editor
          (leak vía SQUAD_REGISTRY → `_allTeams`). Bug 2026-06-03. */
@@ -35618,7 +35662,15 @@ window._showSimProgress = function(opts, onDone){
      (`eur_manual_extra_v1`) es agnóstico de liga: cualquier equipo, de
      cualquier país, en cualquiera de las 6 zonas. */
   var EUR_MANUAL_EXTRA_KEY = 'eur_manual_extra_v1';
-  var EUR_MANUAL_ZONES = ['ucl','uclPrev','uel','uecl','uclQual','wildcard'];
+  /* Extendido 2026-07-07 (petición usuario "vuelve a añadir el poder
+     añadir manualmente equipo a equipo a la competición Europea que
+     queramos"): de las 6 zonas originales a las 10 competiciones
+     europeas/mundiales del juego. Las 4 nuevas (recopa/usc/inter/
+     mundial) se enganchan a sus motores respectivos más abajo
+     (`window._recopaLivePool`, `window._interLivePool`,
+     `_availableTeams` de Supercopa de Europa, `doSearch` del roster
+     del Mundialito) — ver bloque "AÑADIR MANUAL — 10 competiciones". */
+  var EUR_MANUAL_ZONES = ['ucl','uclPrev','uel','uecl','uclQual','wildcard','recopa','usc','inter','mundial'];
   function _eurManualExtraLoad(){
     var out = { clearedAt: {} };
     EUR_MANUAL_ZONES.forEach(function(z){ out[z] = []; });
@@ -35798,6 +35850,25 @@ window._showSimProgress = function(opts, onDone){
     });
     return arr;
   }
+  /* Lista de nombres planos (sin objeto {name,logo,league}) para que
+     motores AJENOS a este bloque (Recopa, Intercontinental, Supercopa
+     de Europa, Mundialito) puedan leer los extras manuales de SU zona
+     sin depender de la forma interna de `_eurManualExtraLoad`. Dedup
+     por nombre, recorta espacios. Público (`window._eurManualExtraTeamNames`)
+     porque esos motores viven en IIFEs distintas de este archivo. */
+  window._eurManualExtraTeamNames = function(zone){
+    var list = _eurManualExtraLoad()[zone] || [];
+    var seen = {}, out = [];
+    list.forEach(function(t){
+      var nm = (t && t.name) ? String(t.name).trim() : '';
+      if(!nm) return;
+      var k = nm.toLowerCase();
+      if(seen[k]) return;
+      seen[k] = true;
+      out.push(nm);
+    });
+    return out;
+  };
   /* Hidratación desde servidor (una vez, si local está vacío) — mismo
      patrón que `europe_committed_v1` (`_hydrateEuropeCommit` abajo).
      CON reintentos (`_eurBootFetchRetry`) — un solo fallo aquí dejaba
@@ -40783,13 +40854,27 @@ window._showSimProgress = function(opts, onDone){
     return { ranking:arr, complete:complete, N:N };
   }
 
-  /* Construye el pool de 8: 2 manuales (Champions) + 6 primeros de Resto
-     del Mundo (solo si la liga está TODA simulada). */
+  /* Construye el pool de 8: 2 manuales (Champions, vía "EA Sports →
+     Europa" o el overlay unificado "Equipos por competición") + 6
+     primeros de Resto del Mundo (solo si la liga está TODA simulada).
+     2026-07-07: los extras manuales del overlay unificado
+     (`window._eurManualExtraTeamNames('inter')`) se fusionan con los
+     de "EA Sports → Europa" — el admin ya no depende SOLO de esa
+     pantalla para rellenar los 2 huecos de Europa, y si añade MÁS de
+     2 a mano también pueden rellenar el resto del pool sin esperar a
+     que Resto del Mundo termine de simularse. */
   function _buildPool(){
     var manual=[];
+    var seenManual={};
+    function pushManual(n){ n=String(n||'').trim(); if(!n) return; var k=n.toLowerCase(); if(seenManual[k]) return; seenManual[k]=true; manual.push(n); }
     try {
       if(typeof window._meaTeamsFor==='function'){
-        (window._meaTeamsFor('intercontinental')||[]).forEach(function(t){ if(t && t.name) manual.push(t.name); });
+        (window._meaTeamsFor('intercontinental')||[]).forEach(function(t){ if(t && t.name) pushManual(t.name); });
+      }
+    } catch(_){}
+    try {
+      if(typeof window._eurManualExtraTeamNames==='function'){
+        window._eurManualExtraTeamNames('inter').forEach(pushManual);
       }
     } catch(_){}
     var rs=_restoStandings();
@@ -40797,10 +40882,16 @@ window._showSimProgress = function(opts, onDone){
     var restoTop6=(rs && restoComplete) ? rs.ranking.slice(0,6).map(function(t){ return t.name; }) : [];
     var seen={}, pool=[];
     function push(n){ n=String(n||'').trim(); if(!n) return; var k=n.toLowerCase(); if(seen[k]) return; seen[k]=true; pool.push(n); }
-    manual.slice(0,2).forEach(push);
+    /* TODOS los manuales entran (no solo los 2 primeros) — si el admin
+       añadió 8 a mano, el pool queda completo sin depender de Resto del
+       Mundo. Si añadió menos de 8, Resto del Mundo rellena el resto. */
+    manual.forEach(push);
     restoTop6.forEach(push);
-    return { pool:pool.slice(0,8), manualCount:manual.length, restoComplete:restoComplete, ready:(manual.length>=2 && restoComplete && pool.length>=8) };
+    return { pool:pool.slice(0,8), manualCount:manual.length, restoComplete:restoComplete, ready:(pool.length>=8) };
   }
+  /* Público — el overlay "Equipos por competición" lo usa para mostrar
+     el pool EN VIVO sin duplicar esta lógica. */
+  window._interLivePool = function(){ return _buildPool(); };
 
   function _mkMatch(h,a){ return { home:h, away:a, played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null }; }
   function _drawQuarters(pool){ var sh=_shuffle(pool).slice(0,8); var m=[]; for(var i=0;i<8;i+=2) m.push(_mkMatch(sh[i],sh[i+1])); return m; }
@@ -40824,7 +40915,7 @@ window._showSimProgress = function(opts, onDone){
     if(!s.sorteo || !s.sorteo.q || !s.sorteo.q.length){
       var info=_buildPool();
       if(!info.ready){
-        alert('⚠️ La Copa Intercontinental necesita EXACTAMENTE 8 equipos:\n\n· 2 de Europa (campeón + subcampeón de Champions) añadidos a mano en «EA Sports → Europa → 🌐 Intercontinental» — ahora '+info.manualCount+'/2.\n· Los 6 primeros de la Liga Resto del Mundo, que entran solos cuando ESTÉ TODA simulada — ahora '+(info.restoComplete?'lista ✅':'incompleta ⏳')+'.');
+        alert('⚠️ La Copa Intercontinental necesita EXACTAMENTE 8 equipos:\n\n· Manuales (campeón/subcampeón de Champions vía «EA Sports → Europa → 🌐 Intercontinental», o cualquier equipo añadido en «👁 Equipos por competición → 🌐 Intercontinental») — ahora '+info.manualCount+'.\n· Los 6 primeros de la Liga Resto del Mundo, que entran solos cuando ESTÉ TODA simulada — ahora '+(info.restoComplete?'lista ✅':'incompleta ⏳')+'.\n\nCon 8 manuales no hace falta esperar a Resto del Mundo.');
         return;
       }
       s={ sorteo:{ q:_drawQuarters(info.pool), s:[], f:[] }, champion:null, runnerUp:null };
@@ -41585,7 +41676,13 @@ window._showSimProgress = function(opts, onDone){
       alert('⚠️ No se pudo calcular ningún equipo. Verifica que las ligas estén simuladas y vuelve a intentarlo.');
       return;
     }
-    /* Persistir en localStorage + server (fire-and-forget). */
+    /* Persistir en localStorage + server (fire-and-forget). SOLO las 6
+       zonas originales — Recopa/Intercontinental/Supercopa Europa/
+       Mundialito NO se congelan aquí (sus motores YA leen los extras
+       manuales en vivo en cada cómputo, ver `_eurPoolToTeams`/
+       `_eurManualExtraTeamNames` más arriba) — persistirlas en
+       `europe_committed_v1` no aportaría nada y agrandaría el blob sin
+       necesidad (regla de cuota 2 MB por clave, CLAUDE.md). */
     try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
     _saveEuropeCommitServer(blob);
     /* Informe DETALLADO con nombre de equipo + liga por competición
@@ -41595,9 +41692,23 @@ window._showSimProgress = function(opts, onDone){
        los nombres el admin no podía verificar contra la tabla de
        coeficientes (p.ej. "¿de verdad son 4 los de Inglaterra en
        Champions, o hay un descuadre?"). `_eurShowCommitReport` pinta
-       un overlay con cada zona agrupada por liga. */
+       un overlay con cada zona agrupada por liga.
+       2026-07-07: el informe se ENRIQUECE (solo para mostrar, no se
+       persiste) con Recopa/Intercontinental (pool en vivo) y con los
+       candidatos manuales de Supercopa de Europa/Mundialito, para que
+       el botón "📤 Enviar todos los equipos" del overlay unificado
+       reporte las 10 competiciones de un vistazo. */
+    var reportBlob = Object.assign({}, blob);
+    try { reportBlob.recopa = _eurPoolToTeams('recopa'); } catch(_){ reportBlob.recopa = []; }
+    try { reportBlob.inter  = _eurPoolToTeams('inter'); } catch(_){ reportBlob.inter = []; }
     try {
-      window._eurShowCommitReport(blob, recovered);
+      reportBlob.usc = (_eurManualExtraLoad().usc || []).map(function(t){ return { name:t.name, league:t.league||'manual' }; });
+    } catch(_){ reportBlob.usc = []; }
+    try {
+      reportBlob.mundial = (_eurManualExtraLoad().mundial || []).map(function(t){ return { name:t.name, league:t.league||'manual' }; });
+    } catch(_){ reportBlob.mundial = []; }
+    try {
+      window._eurShowCommitReport(reportBlob, recovered);
     } catch(_){
       alert('✅ Pools europeos congelados:\n\n'
           + (recovered ? ('🌐 Ligas recuperadas (servidor + copia local): ' + recovered + '\n\n') : '')
@@ -41621,13 +41732,29 @@ window._showSimProgress = function(opts, onDone){
      comparar con esa tabla de un vistazo, y lista los equipos
      concretos debajo por si hay que detectar un error puntual
      (equipo equivocado / liga mal etiquetada). */
+  /* Extendido 2026-07-07 de 6 → 10 competiciones (petición usuario
+     "vuelve a añadir el poder añadir manualmente equipo a equipo a la
+     competición Europea que queramos... Champions, Previa Champions,
+     Europa League, Conference League, Open Qualifier, Wild Card,
+     Recopa, Supercopa Europa, Intercontinental, Mundialito Clubes").
+     `kind:'pool'` = competición cuyo motor computa un POOL en vivo (las
+     6 originales + Recopa + Intercontinental, que ya enganchan
+     `window._eurManualExtraTeamNames` más arriba en este archivo);
+     `kind:'candidates'` = competición con setup 100% manual propio
+     (Supercopa de Europa, Mundialito) donde los extras de aquí solo
+     aparecen como candidatos DENTRO de su picker dedicado, sin pool
+     "n/objetivo" real que mostrar. */
   var _EUR_REPORT_ZONES = [
-    { key:'ucl',      label:'Champions League',     emoji:'🔵', color:'#42a5f5' },
-    { key:'uclPrev',  label:'Previa de Champions',   emoji:'🇪🇺', color:'#a855f7' },
-    { key:'uel',      label:'Europa League',         emoji:'🟠', color:'#F37335' },
-    { key:'uecl',     label:'Conference League',     emoji:'🟢', color:'#3cc878' },
-    { key:'uclQual',  label:'Open Qualifier',        emoji:'🟡', color:'#FDC830' },
-    { key:'wildcard', label:'Wild Card',             emoji:'⚪', color:'#cccccc' }
+    { key:'ucl',      label:'Champions League',     emoji:'🔵', color:'#42a5f5', kind:'pool', toggle:true },
+    { key:'uclPrev',  label:'Previa de Champions',   emoji:'🇪🇺', color:'#a855f7', kind:'pool', toggle:true },
+    { key:'uel',      label:'Europa League',         emoji:'🟠', color:'#F37335', kind:'pool', toggle:true },
+    { key:'uecl',     label:'Conference League',     emoji:'🟢', color:'#3cc878', kind:'pool', toggle:true },
+    { key:'uclQual',  label:'Open Qualifier',        emoji:'🟡', color:'#FDC830', kind:'pool', toggle:true },
+    { key:'wildcard', label:'Wild Card',             emoji:'⚪', color:'#cccccc', kind:'pool', toggle:true },
+    { key:'recopa',   label:'Recopa de Europa',      emoji:'🥈', color:'#ff8060', kind:'pool' },
+    { key:'usc',      label:'Supercopa de Europa',   emoji:'⭐', color:'#f0c820', kind:'candidates' },
+    { key:'inter',    label:'Intercontinental',      emoji:'🌐', color:'#f0a040', kind:'pool' },
+    { key:'mundial',  label:'Mundialito de Clubes',  emoji:'🏆', color:'#ffd700', kind:'candidates' }
   ];
   function _eurLeagueLabel(t){
     var lg = (t && t.league) || '';
@@ -41660,10 +41787,14 @@ window._showSimProgress = function(opts, onDone){
            +   names.map(_eurEsc).join(' · ')
            + '</div>';
     }).join('');
-    if(!teams.length) body = '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,150,150,.85);padding:4px 0;">⚠️ Sin equipos — revisa esta competición.</div>';
+    var isCandidates = (zone.kind === 'candidates');
+    if(!teams.length) body = isCandidates
+      ? '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.5);padding:4px 0;">Sin candidatos manuales añadidos todavía — esta competición se configura en su propia pantalla (equipo a equipo).</div>'
+      : '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,150,150,.85);padding:4px 0;">⚠️ Sin equipos — revisa esta competición.</div>';
+    var countLbl = isCandidates ? ' candidatos' : ' equipos';
     return '<div style="margin:0 0 18px;border:1px solid '+zone.color+'55;border-radius:10px;overflow:hidden;">'
          +   '<div style="padding:8px 12px;background:linear-gradient(90deg,rgba(0,0,0,.6),'+zone.color+'33,rgba(0,0,0,.6));font-family:Bebas Neue,Oswald,sans-serif;letter-spacing:1px;font-size:15px;color:#fff;">'
-         +     zone.emoji + ' ' + _eurEsc(zone.label) + ' <span style="color:rgba(255,255,255,.6);font-size:12px;">— ' + teams.length + ' equipos</span>'
+         +     zone.emoji + ' ' + _eurEsc(zone.label) + ' <span style="color:rgba(255,255,255,.6);font-size:12px;">— ' + teams.length + countLbl + '</span>'
          +   '</div>'
          +   '<div style="padding:8px 12px;">' + body + '</div>'
          + '</div>';
@@ -41716,7 +41847,46 @@ window._showSimProgress = function(opts, onDone){
      sobrasen equipos!) cuando en realidad estaba a 2 de completar los
      40 reales — confundía al admin haciéndole creer que algo estaba
      "sobrecargado" cuando esas 3 zonas eran las que MEJOR estaban. */
-  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:34, uel:40, uecl:40, uclQual:88, wildcard:72 };
+  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:34, uel:40, uecl:40, uclQual:88, wildcard:72, recopa:64, inter:8 };
+  /* Resuelve la "liga" de un nombre de equipo del pool de Recopa/
+     Intercontinental para poder agruparlo en el informe igual que los
+     equipos de las 6 zonas originales (que ya vienen con `.league`).
+     Prioridad: (1) si el propio admin lo añadió a mano en ESTA zona vía
+     el overlay, usamos la `league` que guardó entonces; (2) si no,
+     buscamos en qué `ligaExt_<slug>` local vive ese nombre; (3) si nada
+     de eso resuelve, 'manual' (campeón EA / entrada sin liga conocida). */
+  function _eurResolveLeagueForName(name, zone){
+    try {
+      var manual = (_eurManualExtraLoad()[zone] || []);
+      for(var i=0;i<manual.length;i++){ if(manual[i].name === name) return manual[i].league || 'manual'; }
+    } catch(_){}
+    try {
+      for(var k=0;k<localStorage.length;k++){
+        var key = localStorage.key(k);
+        if(!key || key.indexOf('ligaExt_')!==0) continue;
+        if(key.indexOf('_backup')>=0 || key.indexOf('_snap_')>=0 || key.indexOf('_protected')>=0) continue;
+        if(/_v\d+$/.test(key)) continue;
+        var slug = key.substring('ligaExt_'.length);
+        var d; try { d = JSON.parse(localStorage.getItem(key)||'null'); } catch(_){ continue; }
+        if(!d || !Array.isArray(d.teams)) continue;
+        for(var t=0;t<d.teams.length;t++){ if(d.teams[t] && d.teams[t].name === name) return slug; }
+      }
+    } catch(_){}
+    return 'manual';
+  }
+  /* Convierte el pool (array de nombres planos) de Recopa/Intercontinental
+     al formato {name,league} que usa `_eurZoneSectionHtml`. */
+  function _eurPoolToTeams(zone){
+    var names = [];
+    try {
+      if(zone === 'recopa' && typeof window._recopaLivePool === 'function'){
+        names = window._recopaLivePool() || [];
+      } else if(zone === 'inter' && typeof window._interLivePool === 'function'){
+        names = (window._interLivePool() || {}).pool || [];
+      }
+    } catch(_){}
+    return names.map(function(n){ return { name:n, league:_eurResolveLeagueForName(n, zone) }; });
+  }
   function _eurLiveBlob(){
     function _safeCompute(fn){
       try { return (typeof fn === 'function') ? (fn() || []) : []; }
@@ -41737,6 +41907,8 @@ window._showSimProgress = function(opts, onDone){
     } finally {
       window._europeIgnoreFrozen = _prevIgnore;
     }
+    try { blob.recopa = _eurPoolToTeams('recopa'); } catch(_){ blob.recopa = []; }
+    try { blob.inter  = _eurPoolToTeams('inter'); } catch(_){ blob.inter = []; }
     return blob;
   }
   var _eurManualHydrating = false;
@@ -42009,6 +42181,145 @@ window._showSimProgress = function(opts, onDone){
       +   body
       + '</div>';
   }
+
+  /* ── 🔍 Buscar equipo por nombre (2026-07-07) ──────────────────────
+     Petición usuario: además de "AÑADIR POR LIGA", poder escribir el
+     nombre del equipo directamente y añadirlo a la competición elegida
+     (chips, no `<select>` nativo — mismo criterio que el resto de
+     pickers de este overlay). Busca por substring en TODAS las
+     `ligaExt_<slug>` ya cacheadas en este dispositivo — NUNCA dispara
+     peticiones de red (para eso está "AÑADIR POR LIGA", con su propio
+     fetch por-liga bajo demanda). Permite además añadir el texto TAL
+     CUAL aunque no haya coincidencias (equipo que no vive en ninguna
+     liga local, p.ej. un fichaje reciente). Solo el DIV de resultados
+     se actualiza al escribir (`_eurRenderNameSearchResults`) — NUNCA el
+     overlay entero, para no perder el foco/cursor del input en cada
+     letra (el resto de acciones discretas —cambiar de zona, añadir— sí
+     re-renderizan todo, igual que el resto del overlay). */
+  var _eurNameSearchZone = 'ucl';
+  var _eurNameSearchQ = '';
+  function _eurNormNameSafe(s){
+    try { if(typeof window._normPS === 'function') return window._normPS(s); } catch(_){}
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  }
+  function _eurSearchTeamsByName(q){
+    var norm = _eurNormNameSafe(q).trim();
+    if(norm.length < 2) return [];
+    var out = [], seen = {};
+    try {
+      for(var i=0;i<localStorage.length && out.length < 150;i++){
+        var key = localStorage.key(i);
+        if(!key || key.indexOf('ligaExt_')!==0) continue;
+        if(key.indexOf('_backup')>=0 || key.indexOf('_snap_')>=0 || key.indexOf('_protected')>=0) continue;
+        if(/_v\d+$/.test(key)) continue;
+        var slug = key.substring('ligaExt_'.length);
+        var d; try { d = JSON.parse(localStorage.getItem(key)||'null'); } catch(_){ continue; }
+        if(!d || !Array.isArray(d.teams)) continue;
+        d.teams.forEach(function(t){
+          if(!t || !t.name || seen[t.name]) return;
+          if(_eurNormNameSafe(t.name).indexOf(norm) === -1) return;
+          seen[t.name] = true;
+          out.push({ name:t.name, league:slug });
+        });
+      }
+    } catch(_){}
+    out.sort(function(a,b){ return a.name.localeCompare(b.name,'es'); });
+    return out.slice(0,150);
+  }
+  function _eurNameSearchZoneChipsHtml(){
+    return '<div style="display:flex;flex-wrap:wrap;gap:6px;">' + _EUR_REPORT_ZONES.map(function(z){
+      var sel = (z.key === _eurNameSearchZone);
+      return '<button type="button" data-eur-name-zone="'+z.key+'" style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;padding:5px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;'
+        + (sel ? ('background:'+z.color+'33;border:1px solid '+z.color+';color:#fff;') : 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.7);')
+        + '">'+z.emoji+' '+_eurEsc(z.label)+'</button>';
+    }).join('') + '</div>';
+  }
+  function _eurWireNameSearchResultButtons(){
+    var box = document.getElementById('eur-name-search-results');
+    if(!box) return;
+    box.querySelectorAll('[data-eur-name-add]').forEach(function(btn){
+      btn.onclick = function(){
+        var name = btn.getAttribute('data-name');
+        var league = btn.getAttribute('data-league') || '';
+        window._eurManualExtraAdd(_eurNameSearchZone, name, league ? _eurSlugLabel(league) : 'manual');
+        _eurManualOverlayRender();
+      };
+    });
+    var customBtn = document.getElementById('eur-name-add-custom');
+    if(customBtn) customBtn.onclick = function(){
+      var name = customBtn.getAttribute('data-name');
+      if(!name) return;
+      window._eurManualExtraAdd(_eurNameSearchZone, name, 'manual');
+      _eurManualOverlayRender();
+    };
+  }
+  function _eurRenderNameSearchResults(){
+    var box = document.getElementById('eur-name-search-results');
+    if(!box) return;
+    var qTrim = String(_eurNameSearchQ||'').trim();
+    if(qTrim.length < 2){
+      box.innerHTML = '<div style="padding:6px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);">Escribe al menos 2 letras del nombre del equipo…</div>';
+      return;
+    }
+    var results = _eurSearchTeamsByName(qTrim);
+    var manualNow = (_eurManualExtraLoad()[_eurNameSearchZone] || []);
+    var already = {}; manualNow.forEach(function(t){ already[t.name] = true; });
+    var html = '';
+    if(results.length){
+      html += '<div style="max-height:220px;overflow-y:auto;margin-top:6px;">' + results.map(function(r){
+        var isAdded = !!already[r.name];
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.06);font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;">'
+          + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_eurEsc(r.name)+'</span>'
+          + '<span style="color:rgba(255,255,255,.4);font-size:11px;white-space:nowrap;">'+_eurEsc(_eurSlugLabel(r.league))+'</span>'
+          + '<button data-eur-name-add="1" data-name="'+_eurEsc(r.name)+'" data-league="'+_eurEsc(r.league||'')+'" style="background:'+(isAdded?'rgba(255,255,255,.08)':'rgba(60,200,120,.15)')+';border:1px solid '+(isAdded?'rgba(255,255,255,.25)':'#3cc878')+';color:'+(isAdded?'rgba(255,255,255,.5)':'#bfffbf')+';border-radius:4px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;white-space:nowrap;">'+(isAdded?'✓ Añadido':'➕ Añadir')+'</button>'
+          + '</div>';
+      }).join('') + '</div>';
+    } else {
+      html += '<div style="padding:8px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);">Sin coincidencias en las ligas cargadas en este dispositivo — puedes añadirlo tal cual con el botón de abajo.</div>';
+    }
+    var zoneNow = _EUR_ZONE_BY_KEY[_eurNameSearchZone] || _EUR_REPORT_ZONES[0];
+    html += '<button id="eur-name-add-custom" data-name="'+_eurEsc(qTrim)+'" style="width:100%;margin-top:6px;background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.35);color:rgba(255,255,255,.85);border-radius:6px;padding:7px 10px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;cursor:pointer;">➕ Añadir «'+_eurEsc(qTrim)+'» tal cual a '+zoneNow.emoji+' '+_eurEsc(zoneNow.label)+'</button>';
+    box.innerHTML = html;
+    _eurWireNameSearchResultButtons();
+  }
+  function _eurNameSearchSectionHtml(){
+    return '<div style="border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.03);">'
+      +   '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">🔍 BUSCAR EQUIPO POR NOMBRE</div>'
+      +   '<div style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.55);margin:0 0 4px;">Añadir a:</div>'
+      +   _eurNameSearchZoneChipsHtml()
+      +   '<input id="eur-name-search-input" type="text" value="'+_eurEsc(_eurNameSearchQ)+'" placeholder="Nombre del equipo (mínimo 2 letras)…" autocomplete="off" style="width:100%;box-sizing:border-box;margin-top:8px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:9px 10px;font-family:Rajdhani,sans-serif;font-size:14px;color:#fff;">'
+      +   '<div id="eur-name-search-results"></div>'
+      + '</div>';
+  }
+
+  /* ── 📤 Enviar todos los equipos (2026-07-07) ─────────────────────
+     Botón único del overlay unificado: recalcula + muestra en un solo
+     informe las 10 competiciones. Las 6 originales se CONGELAN
+     (`europe_committed_v1`, igual que "Enviar realidad…"); Recopa/
+     Intercontinental ya leen los manuales en vivo (no necesitan
+     congelarse); Supercopa de Europa/Mundialito muestran los
+     candidatos manuales disponibles para su picker dedicado. */
+  function _eurManualSendAllTeams(){
+    if(typeof window._computeQualifiedFromLeagues !== 'function' && typeof window.computeUclClassified !== 'function'){
+      alert('Motor de clasificación no disponible. Recarga la página.');
+      return;
+    }
+    if(!confirm('📤 Enviar todos los equipos a su competición\n\n'
+              +'Se recalculan y se muestran, agrupadas por competición:\n\n'
+              +'  · Champions · Previa Champions · Europa League · Conference League\n'
+              +'  · Open Qualifier · Wild Card\n'
+              +'  · Recopa de Europa · Intercontinental\n'
+              +'  · Supercopa de Europa · Mundialito de Clubes (candidatos manuales)\n\n'
+              +'Las 6 primeras quedan congeladas para las pantallas correspondientes; '
+              +'el resto ya lee los equipos añadidos aquí en vivo.\n\n'
+              +'¿Continuar?')) return;
+    _eurToast('⏳ Enviando equipos a cada competición…');
+    _eurHydrateMissingLeagues(function(recovered){
+      _doCommitEurope(recovered);
+      _eurManualOverlayRender();
+    });
+  }
+
   function _eurManualOverlayRender(){
     var ov = document.getElementById('eur-manual-ov');
     if(!ov) return;
@@ -42016,16 +42327,32 @@ window._showSimProgress = function(opts, onDone){
     var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()) || {};
     var missing = _eurManualHydrating ? [] : _eurMissingLeaguesList();
     var overrides = (window._eurManualOverrideLoad && window._eurManualOverrideLoad()) || {};
-    var countsHtml = _EUR_REPORT_ZONES.map(function(z){
-      var n = (blob[z.key]||[]).length, t = _EUR_ZONE_TARGET[z.key];
-      var ok = n >= t;
+    var poolZones = _EUR_REPORT_ZONES.filter(function(z){ return z.kind === 'pool'; });
+    var candidateZones = _EUR_REPORT_ZONES.filter(function(z){ return z.kind === 'candidates'; });
+    var countsHtml = poolZones.map(function(z){
+      var n = (blob[z.key]||[]).length, t = _EUR_ZONE_TARGET[z.key] || 0;
+      var ok = t ? (n >= t) : true;
       var isManual = !!overrides[z.key];
+      /* Recopa/Intercontinental no tienen modo "solo manual" (son
+         aditivos SIEMPRE sobre el cómputo automático) — solo las 6
+         zonas originales llevan el toggle 🔓/🔒. */
+      var toggleHtml = z.toggle
+        ? ('<button data-eur-override="'+z.key+'" style="margin-top:3px;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 6px;border-radius:4px;cursor:pointer;'
+            + (isManual ? 'background:rgba(255,180,60,.18);border:1px solid rgba(255,180,60,.6);color:#ffcf7a;' : 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);')
+            + '">'+(isManual ? '🔒 Manual' : '🔓 Auto')+'</button>')
+        : '<div style="margin-top:3px;font-family:Oswald,sans-serif;font-size:9px;color:rgba(255,255,255,.35);">＋ manuales</div>';
       return '<div style="flex:1 1 30%;min-width:90px;padding:6px 8px;border:1px solid '+z.color+'55;border-radius:8px;text-align:center;">'
         + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:'+z.color+';">'+z.emoji+' '+_eurEsc(z.label)+'</div>'
         + '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:20px;color:'+(ok?'#7fe08a':'#ff8080')+';">'+n+' / '+t+'</div>'
-        + '<button data-eur-override="'+z.key+'" style="margin-top:3px;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;padding:2px 6px;border-radius:4px;cursor:pointer;'
-        +   (isManual ? 'background:rgba(255,180,60,.18);border:1px solid rgba(255,180,60,.6);color:#ffcf7a;' : 'background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.55);')
-        + '">'+(isManual ? '🔒 Manual' : '🔓 Auto')+'</button>'
+        + toggleHtml
+        + '</div>';
+    }).join('');
+    var candidatesHtml = candidateZones.map(function(z){
+      var n = ((manual[z.key])||[]).length;
+      return '<div style="flex:1 1 45%;min-width:140px;padding:6px 8px;border:1px solid '+z.color+'55;border-radius:8px;text-align:center;">'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:'+z.color+';">'+z.emoji+' '+_eurEsc(z.label)+'</div>'
+        + '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:20px;color:#bfe8ff;">'+n+'</div>'
+        + '<div style="margin-top:2px;font-family:Rajdhani,sans-serif;font-size:9px;color:rgba(255,255,255,.5);">candidatos disponibles en su pantalla</div>'
         + '</div>';
     }).join('');
     var manualListHtml = _EUR_REPORT_ZONES.map(function(z){
@@ -42057,11 +42384,14 @@ window._showSimProgress = function(opts, onDone){
       +     '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">👁 Equipos por competición (en vivo)</div>'
       +     '<button id="eur-manual-close" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;letter-spacing:1px;">✕ Cerrar</button>'
       +   '</div>'
-      +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">'
+      +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'
       +     '<div style="flex:1;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);">' + statusHtml + '</div>'
       +     '<button id="eur-manual-refresh" '+(_eurManualHydrating?'disabled':'')+' style="background:linear-gradient(135deg,#0e2e4a,#1a5a7a);border:1px solid #3ca0cc;color:#bfe8ff;border-radius:6px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;'+(_eurManualHydrating?'opacity:.5;':'')+'">🔄 Cargar del servidor</button>'
       +   '</div>'
-      +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' + countsHtml + '</div>'
+      +   '<button id="eur-manual-send-all" style="width:100%;margin-bottom:14px;background:linear-gradient(135deg,#1a3a14,#2a6a24);border:1px solid #3cc878;color:#d8ffd8;border-radius:8px;padding:10px 14px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;font-weight:700;">📤 ENVIAR TODOS LOS EQUIPOS A SU COMPETICIÓN</button>'
+      +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">' + countsHtml + '</div>'
+      +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' + candidatesHtml + '</div>'
+      +   _eurNameSearchSectionHtml()
       +   _eurPickerSectionHtml()
       +   (manualListHtml ? ('<div style="margin-bottom:14px;">' + manualListHtml + '</div>') : '')
       +   (missing.length ? (
@@ -42070,13 +42400,26 @@ window._showSimProgress = function(opts, onDone){
           +   '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.75);line-height:1.6;">' + missing.map(_eurEsc).join(' · ') + '</div>'
           + '</div>'
           ) : '')
-      +   _EUR_REPORT_ZONES.map(function(z){ return _eurZoneSectionHtml(z, blob[z.key]); }).join('')
+      +   poolZones.map(function(z){ return _eurZoneSectionHtml(z, blob[z.key]); }).join('')
       + '</div>';
     ov.innerHTML = html;
     var closeBtn = document.getElementById('eur-manual-close');
     if(closeBtn) closeBtn.onclick = function(){ ov.remove(); };
     var refreshBtn = document.getElementById('eur-manual-refresh');
     if(refreshBtn) refreshBtn.onclick = function(){ _eurManualTriggerHydrate(); };
+    var sendAllBtn = document.getElementById('eur-manual-send-all');
+    if(sendAllBtn) sendAllBtn.onclick = function(){ _eurManualSendAllTeams(); };
+    /* 🔍 Buscar equipo por nombre — el input solo actualiza SU propio
+       contenedor de resultados (no re-renderiza el overlay entero), así
+       el admin no pierde el foco/cursor al escribir letra a letra. */
+    var nameInput = document.getElementById('eur-name-search-input');
+    if(nameInput){
+      nameInput.oninput = function(){ _eurNameSearchQ = this.value; _eurRenderNameSearchResults(); };
+    }
+    _eurRenderNameSearchResults();
+    ov.querySelectorAll('[data-eur-name-zone]').forEach(function(btn){
+      btn.onclick = function(){ _eurNameSearchZone = btn.getAttribute('data-eur-name-zone'); _eurManualOverlayRender(); };
+    });
     ov.querySelectorAll('[data-eur-override]').forEach(function(btn){
       btn.onclick = function(){
         var zone = btn.getAttribute('data-eur-override');

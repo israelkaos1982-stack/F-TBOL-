@@ -1,5 +1,70 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El overlay "Equipos por competición" NO hidrata las ~50 ligas si las 6 zonas están en modo Manual + las hidrataciones one-shot de arranque reintentan (obligatorio, 2026-07-07 #3)
+
+**Bug (foto usuario 2026-07-07, «sigue sin cargar»)**: con las 6 zonas
+en 🔒 Manual (el DEFAULT desde 2026-07-03), el overlay mostraba TODAS
+las cajas a "0/40"/"0/34"/etc. y "CHAMPIONS LEAGUE — 0 EQUIPOS — Sin
+equipos, revisa esta competición" — pese a que el servidor tenía
+guardados 24 equipos manuales en Champions, 73/88 en Open Qualifier y
+61/72 en Wild Card (confirmado en capturas anteriores del mismo día).
+Encima el picker "AÑADIR POR LIGA" (Andorra) seguía atascado en
+"⏳ Cargando clasificación…" y el banner superior en
+"⏳ Cargando ligas del servidor (puede tardar 1-2 min con ~50 ligas)…".
+
+### Causa raíz (2 bugs independientes)
+
+1. **`_eurManualOverlayOpen` auto-hidrataba las ~50 ligas SIEMPRE al
+   abrirse**, aunque las 6 zonas estuvieran en modo 🔒 Manual — en ese
+   caso los 6 `compute*Classified()` cortan en la primera línea
+   (`if(_eurManualOnly(zone)) return _appendManualExtra([], zone)`) y
+   **NUNCA llegan a usar** los datos de las ~50 ligas. Era trabajo 100%
+   desperdiciado que además competía por red/servidor (Railway) con el
+   fetch del picker "AÑADIR POR LIGA" abierto en la MISMA pantalla,
+   haciendo que este último se sintiera "eterno" por contención de
+   recursos, no por su propio código (que ya tenía timeout+reintentos
+   del fix anterior del mismo día).
+2. **Las hidrataciones one-shot de arranque de `eur_manual_extra_v1` y
+   `eur_manual_override_v1` (`_hydrateEurManualExtra`/
+   `_hydrateEurManualOverride`) no tenían NINGÚN reintento** — un solo
+   `fetch(...).catch(function(){})` mudo. Si ese único intento fallaba
+   (cold-start de Railway, blip de red, justo la ventana de contención
+   del bug 1), el store local se quedaba **VACÍO PARA SIEMPRE** en ese
+   dispositivo — aunque el servidor SÍ tuviera los 24/73/61 equipos
+   guardados, el dispositivo nunca los veía porque ya no reintentaba
+   (y el guard `if(local) return;` significa que solo se hidrata UNA
+   vez por dispositivo mientras no haya ninguna escritura local).
+
+### Fix
+
+- `_eurManualOverlayOpen` solo dispara el auto-hidrate de las ~50
+  ligas si **al menos una** de las 6 zonas sigue en 🔓 Auto
+  (`EUR_MANUAL_ZONES.some(z => !overridesNow[z])`). Con las 6 en
+  Manual (caso más común tras el default 2026-07-03), el overlay abre
+  sin disparar ni una sola petición de liga — solo lee
+  `eur_manual_extra_v1` (ya local o ya hidratado).
+- `_hydrateEurManualExtra`/`_hydrateEurManualOverride` pasan a usar
+  `_eurBootFetchRetry` (3 intentos, backoff 1s/2s/3s) — mismo
+  principio "un fallo de red nunca es la respuesta definitiva" que
+  `_ppAliasDeferredCheck` (regla 2026-07-05).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un auto-hidratador que trae datos para el cómputo
+   AUTOMÁTICO se dispare cuando NINGUNA zona/consumidor va a usar ese
+   cómputo (p.ej. las 6 zonas en modo Manual). Comprobar primero si el
+   resultado se va a usar — si no, no hacer la petición.
+2. **PROHIBIDO** que una hidratación one-shot de arranque (dispara solo
+   si `!local`, nunca más mientras no haya escritura local) haga UN
+   solo intento sin reintentos. Un fallo aquí no es recuperable después
+   sin que el usuario añada manualmente algo (lo que dispara un save
+   que sí persiste) — el coste de NO reintentar es un store que parece
+   vacío para siempre en ese dispositivo, indistinguible de "no hay
+   datos" cuando en realidad el servidor SÍ los tiene.
+3. Toda hidratación one-shot NUEVA de este mismo patrón
+   (`if(local) return; fetch(...)`) hereda `_eurBootFetchRetry` (o un
+   helper equivalente) en vez de un `fetch` suelto con `.catch` mudo.
+
 ## 🗑 "Vaciar lista" por zona europea — el borrado es un TOMBSTONE (`clearedAt`) que sobrevive a la unión aditiva (obligatorio, 2026-07-07 #2)
 
 **Petición usuario 2026-07-07** ("la lista entera de equipos en

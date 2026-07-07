@@ -62726,9 +62726,22 @@ https://api.sofascore.app/api/v1/team/44/image
       var ms = (matchesAll && matchesAll[s.id]) || [];
       if (!Array.isArray(ms) || !ms.length) return;
       ms.forEach(function(m){
-        var o = _outcomeFor(m, s.teamName);
-        if (!o) return;
+        if (!m || m.isHvH === false) return;   /* solo HvH (2026-05-09) */
+        /* PJ cuenta SIEMPRE (mismo criterio que `munichDerbyAggregateAll` /
+           `_summaryForSeason` — 2026-07-07): un nombre que ya no case con
+           `s.teamName` (renombrado, selección) nunca debe silenciar el
+           partido del total. `mySide`, si el partido lo trae, resuelve
+           W/E/L sin depender del nombre en absoluto. */
         pj++;
+        var o = null;
+        if (m.mySide === 'local' || m.mySide === 'visit'){
+          var _gl = Number(m.gl||0), _gv = Number(m.gv||0);
+          var _mine  = m.mySide === 'local' ? _gl : _gv;
+          var _other = m.mySide === 'local' ? _gv : _gl;
+          o = _mine > _other ? 'g' : (_mine < _other ? 'p' : 'e');
+        } else {
+          o = _outcomeFor(m, s.teamName);
+        }
         if (o === 'g') g++;
         else if (o === 'e') e++;
         else if (o === 'p') p++;
@@ -65116,6 +65129,48 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     }
     return sel;
   }
+  /* ¿`a` y `b` son el mismo equipo/selección (tolerante)? Se usa al
+     GUARDAR un partido (auto-log, espejo multi-hub, alta manual) para
+     sellar `mySide` — ver `_resolveOutcome`. */
+  function _isSameTeam(a, b){
+    if (!a || !b) return false;
+    var na = _stripLeadingIcon(String(a)).toLowerCase();
+    var nb = _stripLeadingIcon(String(b)).toLowerCase();
+    if (na === nb) return true;
+    var fz = window._mDerbyTeamMatch;
+    return !!(fz && fz(a, b));
+  }
+  /* Resuelve el outcome (g/e/p) de un match PARA ESTA TEMPORADA sin
+     depender de que el nombre guardado en el partido siga coincidiendo
+     con el nombre ACTUAL del club/selección del mister.
+     Bug 2026-07-07 (fotos usuario, «Liverpool-Francia-Toñín», caja
+     Histórico Derbys: "pone 12 PJ... ha jugado 17 partidos... los
+     partidos de selecciones no se van sumando"): si el club o la
+     selección del mister se RENOMBRA después de guardar un partido (o
+     si el nombre tecleado a mano no casa por abreviatura/emoji), el
+     matching por nombre contra el `teamName`/selección ACTUALES deja
+     de funcionar PARA SIEMPRE sobre esos registros — el partido seguía
+     VISIBLE en la lista (`_renderSeason` no lo excluye) pero
+     desaparecía del PJ/G/E/P (`if (!o) return` en los 3 agregadores).
+     Fix: todo partido NUEVO se sella con `mySide` ('local'/'visit') en
+     el momento de guardarlo (auto-log, espejo multi-hub y alta manual),
+     cuando SÍ se sabe sin ambigüedad qué lado es "nuestro" — inmune a
+     cualquier renombrado posterior. Los partidos legacy sin `mySide`
+     siguen resolviendo por nombre (mismos fallbacks de siempre). */
+  function _resolveOutcome(m, team, teamSel){
+    if (!m) return null;
+    if (m.mySide === 'local' || m.mySide === 'visit'){
+      var gl = Number(m.gl||0), gv = Number(m.gv||0);
+      var mine  = m.mySide === 'local' ? gl : gv;
+      var other = m.mySide === 'local' ? gv : gl;
+      if (mine > other) return 'g';
+      if (mine < other) return 'p';
+      return 'e';
+    }
+    var o = _outcomeFor(m, team);
+    if (!o && teamSel) o = _outcomeFor(m, teamSel);
+    return o;
+  }
   function _summaryForSeason(seasonId){
     var s = _findSeason(seasonId);
     var team = s && s.teamName ? s.teamName : '';
@@ -65127,12 +65182,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     var _teamSel = _seasonSel(team);
     ms.forEach(function(m){
       if (!_matchIsHvH(m)) return;          /* solo HvH (2026-05-09) */
-      var o = _outcomeFor(m, team);
-      /* Si el club no aparece en el partido, intentar con la selección
-         del mister (derby de selecciones: "Francia" / "Noruega"). */
-      if (!o && _teamSel) o = _outcomeFor(m, _teamSel);
-      if (!o) return;
+      /* PJ cuenta SIEMPRE que el partido esté visible en la lista de la
+         temporada (misma condición `_matchIsHvH` que `_renderSeason`) —
+         nunca se silencia solo porque el nombre guardado no case ya con
+         el `teamName`/selección ACTUALES. 2026-07-07. */
       pj++;
+      var o = _resolveOutcome(m, team, _teamSel);
       if (o === 'g') g++;
       else if (o === 'e') e++;
       else if (o === 'p') p++;
@@ -65183,10 +65238,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     });
     var _rowSel = _seasonSel(s.teamName);
     listEl.innerHTML = ms.map(function(m){
-      var o = _outcomeFor(m, s.teamName);
-      /* Derby de selección: el club no aparece en el partido → resolver
-         por la selección del hub para colorear W/L/D correctamente. */
-      if (!o && _rowSel) o = _outcomeFor(m, _rowSel);
+      /* Mismo resolver que `_summaryForSeason`/`munichDerbyAggregateAll`
+         (incluye `mySide` para partidos nuevos) — evita que la fila se
+         pinte "skip" mientras el sumatorio de arriba cuenta distinto. */
+      var o = _resolveOutcome(m, s.teamName, _rowSel);
       var rowCls = o === 'g' ? 'win' : o === 'p' ? 'lose' : o === 'e' ? 'draw' : 'skip';
       var scoreCls = rowCls === 'skip' ? '' : rowCls;
       var compIco = COMP_ICON[m.comp] || '⚽';
@@ -65321,15 +65376,27 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        `isHvH:true` → `_matchIsHvH` lo acepta sin consultar `esHumano`
        (bug 2026-06-11: el partido se guardaba pero `_matchIsHvH` lo
        ocultaba de la temporada mientras seguía contando en otros sitios). */
+    /* `mySide` — best-effort AL GUARDAR (comparando contra el club/
+       selección ACTUALES de la temporada): si el admin renombra el club
+       o la selección MÁS TARDE, este sello sigue siendo válido porque
+       ya no depende de re-matchear el nombre. Bug 2026-07-07. */
+    var _seasonForSave = _findSeason(_curSeasonId);
+    var _seasonTeamForSave = _seasonForSave && _seasonForSave.teamName ? _seasonForSave.teamName : '';
+    var _seasonSelForSave = _seasonSel(_seasonTeamForSave);
+    var mySide = _isSameTeam(local, _seasonTeamForSave) ? 'local'
+               : _isSameTeam(visit, _seasonTeamForSave) ? 'visit'
+               : (_seasonSelForSave && _isSameTeam(local, _seasonSelForSave)) ? 'local'
+               : (_seasonSelForSave && _isSameTeam(visit, _seasonSelForSave)) ? 'visit'
+               : '';
     if (_editingMatchId){
       for (var i=0; i<all[_curSeasonId].length; i++){
         if (all[_curSeasonId][i].id === _editingMatchId){
-          all[_curSeasonId][i] = { id:_editingMatchId, jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true };
+          all[_curSeasonId][i] = { id:_editingMatchId, jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true, mySide:mySide };
           break;
         }
       }
     } else {
-      all[_curSeasonId].push({ id:_newId(), jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true });
+      all[_curSeasonId].push({ id:_newId(), jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true, mySide:mySide });
     }
     _saveAll(all);
     window.munichDerbyMatchClose();
@@ -65401,8 +65468,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
        localName   – nombre local ya limpio (sin emoji líder)
        visitName   – nombre visitante ya limpio
        comp, jornada, gl, gv – datos del partido
+       mySide      – 'local'/'visit', qué lado es el club/selección de
+                     ESTE `misterObj` (sellado en el partido — ver
+                     `_resolveOutcome`, bug 2026-07-07)
   ─────────────────────────────────────────────────────────────────────── */
-  function _derbyMirrorForHub(misterObj, localName, visitName, comp, jornada, gl, gv){
+  function _derbyMirrorForHub(misterObj, localName, visitName, comp, jornada, gl, gv, mySide){
     if (!misterObj) return;
     var mid = misterObj.id || '';
     /* Claves de almacenamiento ESPECÍFICAS de este mister (espejo de _hubKey). */
@@ -65433,7 +65503,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     all[current.id].push({
       id: _newId(), jornada: jornada, comp: comp,
       local: localName, gl: gl, gv: gv, visitante: visitName,
-      isHvH: true
+      isHvH: true,
+      mySide: (mySide === 'local' || mySide === 'visit') ? mySide : ''
     });
     /* Guardar en localStorage del hub destino. */
     try { localStorage.setItem(matchKey, JSON.stringify(all)); } catch(_){}
@@ -65490,6 +65561,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       return false;
     }
     if (!_involves(localRaw) && !_involves(visitRaw)) return;
+    /* `mySide` — qué lado del partido es el de ESTA temporada (club o
+       selección del mister), sellado AQUÍ porque es el ÚNICO momento en
+       que se sabe sin ambigüedad. Inmune a que `seasonTeam`/`seasonSel`
+       se renombren después (bug 2026-07-07: un renombrado posterior hacía
+       que el partido siguiera visible pero desapareciera del PJ). */
+    var mySide = _involves(localRaw) ? 'local' : 'visit';
     /* FILTRO HvH (petición usuario 2026-05-09 + 2026-06-13): el Histórico
        Derbys solo registra partidos donde AMBOS equipos son humanos. El
        gate reconoce clubes canónicos (alias Liverpool), selecciones
@@ -65519,8 +65596,9 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     all[current.id].push({
       id: _newId(), jornada: jornada, comp: comp,
       local: localName, gl: gl, gv: gv, visitante: visitName,
-      isHvH: true   /* marker explícito para distinguir de matches
+      isHvH: true,  /* marker explícito para distinguir de matches
                       legacy (sin flag) en filtro de lectura */
+      mySide: mySide
     });
     _saveAll(all);
     /* Refrescar HUB inmediatamente. */
@@ -65546,14 +65624,15 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       _misters.forEach(function(mr){
         if (!mr || !mr.id) return;
         if (mr.id === _activeId) return; /* hub activo ya escrito */
-        /* ¿Alguno de los lados del derby involucra al club o selección de este mister? */
-        var clubMatch = _fz(localRaw, mr.club) || _fz(visitRaw, mr.club)
-                     || _fz(localName, mr.club) || _fz(visitName, mr.club);
-        var selMatch  = mr.seleccion
-                     && (_fz(localRaw,  mr.seleccion) || _fz(visitRaw,  mr.seleccion)
-                      || _fz(localName, mr.seleccion) || _fz(visitName, mr.seleccion));
-        if (!clubMatch && !selMatch) return;
-        _derbyMirrorForHub(mr, localName, visitName, comp, jornada, gl, gv);
+        /* ¿Alguno de los lados del derby involucra al club o selección de
+           este mister? Se calcula POR LADO (no solo "alguno de los 2")
+           para poder sellar `mySide` sin ambigüedad — bug 2026-07-07. */
+        var localIsMr = _fz(localRaw, mr.club) || _fz(localName, mr.club)
+                     || (mr.seleccion && (_fz(localRaw, mr.seleccion) || _fz(localName, mr.seleccion)));
+        var visitIsMr = _fz(visitRaw, mr.club) || _fz(visitName, mr.club)
+                     || (mr.seleccion && (_fz(visitRaw, mr.seleccion) || _fz(visitName, mr.seleccion)));
+        if (!localIsMr && !visitIsMr) return;
+        _derbyMirrorForHub(mr, localName, visitName, comp, jornada, gl, gv, localIsMr ? 'local' : 'visit');
       });
     } catch(_){}
   };
@@ -65588,19 +65667,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     seasons.forEach(function(s){
       if (!s || !s.teamName) return;
       var ms = Array.isArray(all[s.id]) ? all[s.id] : [];
+      var _sel = _seasonSel(s.teamName);
       ms.forEach(function(m){
         if (!_matchIsHvH(m)) return;       /* solo HvH */
-        var o = _outcomeFor(m, s.teamName);
-        /* El teamName de la temporada es el CLUB (ej. "Atlético Madrid")
-           pero los derbys de SELECCIÓN almacenan "Noruega"/"Francia".
-           Fallback: la selección del mister que dirige ese club —
-           resolución robusta a abreviaturas + hub activo (`_seasonSel`). */
-        if (!o) {
-          var _sel = _seasonSel(s.teamName);
-          if (_sel) o = _outcomeFor(m, _sel);
-        }
-        if (!o) return;
+        /* PJ cuenta SIEMPRE (mismo criterio que `_summaryForSeason` /
+           `_renderSeason`) — un partido de selección (u otro cuyo nombre
+           guardado ya no case con el club/selección ACTUALES del mister,
+           p.ej. tras un renombrado) NUNCA desaparece del total solo
+           porque `_resolveOutcome` no pueda clasificar W/E/L. 2026-07-07. */
         pj++;
+        var o = _resolveOutcome(m, s.teamName, _sel);
         if (o === 'g') g++;
         else if (o === 'e') e++;
         else if (o === 'p') p++;

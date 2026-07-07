@@ -3460,6 +3460,36 @@ def api_liga_ext_get(slug):
         "updated_at": updated_at or "",
     })
 
+@app.route("/api/liga-ext-any/<slug>", methods=["GET"])
+def api_liga_ext_any_get(slug):
+    """Como `/api/liga-ext/<slug>` pero con el fallback a `_protected`
+    resuelto EN EL SERVIDOR (una sola petición del cliente). Antes el
+    picker "AÑADIR POR LIGA" (`_eurPickerLoadLeague`) hacía 2 fetches
+    CLIENT-SIDE secuenciales (main, y si viene vacío, protected), cada
+    uno con sus propios reintentos — hasta 5 round-trips en cadena
+    (60 s de espera en el peor caso) para una liga menor nunca tocada
+    en este dispositivo. Mismo principio que `/api/team-alias/<nombre>`
+    (2026-07-05): la búsqueda con fallback vive en el servidor, el
+    cliente hace UNA sola petición."""
+    data = _liga_ext_load(slug)
+    source = "main"
+    if not (isinstance(data.get("teams"), list) and len(data["teams"]) >= 2):
+        prow = GlobalState.query.filter_by(clave=_protected_key(slug)).first()
+        if prow and prow.valor_json:
+            try:
+                pdata = json.loads(prow.valor_json)
+            except Exception:
+                pdata = None
+            if isinstance(pdata, dict) and isinstance(pdata.get("teams"), list) and len(pdata["teams"]) >= 2:
+                data = pdata
+                source = "protected"
+    return jsonify({
+        "ok": True,
+        "slug": _liga_ext_slug(slug),
+        "data": data,
+        "source": source,
+    })
+
 @app.route("/api/liga-ext/<slug>", methods=["POST"])
 def api_liga_ext_post(slug):
     payload = request.get_json(silent=True) or {}

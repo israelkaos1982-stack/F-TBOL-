@@ -41749,6 +41749,31 @@ window._showSimProgress = function(opts, onDone){
       attempt(1);
     });
   }
+  /* Índice ligero de QUÉ ligas tienen datos reales en el SERVIDOR
+     (`/api/liga-ext` sin slug, ya existía para el editor de torneos —
+     UNA sola petición barata que devuelve {slug,count} de TODAS las
+     ligas con equipos). Se carga UNA vez (o se reintenta si falló) y
+     sirve para saltar por completo la espera de red cuando el admin
+     elige una liga que NUNCA se ha tocado en NINGÚN dispositivo — sin
+     esto, cada liga "menor" (Andorra, Armenia, Austria, Azerbaiyán…)
+     obligaba a esperar el fetch completo (con reintentos) solo para
+     descubrir, al final, que no había nada que mostrar. */
+  var _eurLeagueIndexSlugs = null; // null = aún no se ha intentado cargar
+  var _eurLeagueIndexLoading = false;
+  function _eurEnsureLeagueIndex(cb){
+    if(_eurLeagueIndexSlugs){ cb(); return; }
+    if(_eurLeagueIndexLoading){ setTimeout(function(){ _eurEnsureLeagueIndex(cb); }, 400); return; }
+    _eurLeagueIndexLoading = true;
+    _eurFetchWithRetry('/api/liga-ext', 2, 6000).then(function(j){
+      _eurLeagueIndexLoading = false;
+      var leagues = j && Array.isArray(j.leagues) ? j.leagues : null;
+      if(leagues){
+        _eurLeagueIndexSlugs = {};
+        leagues.forEach(function(l){ if(l && l.slug) _eurLeagueIndexSlugs[l.slug] = true; });
+      }
+      cb();
+    });
+  }
   function _eurPickerLoadLeague(slug){
     _eurPickerSlug = slug;
     _eurPickerData = null;
@@ -41776,14 +41801,30 @@ window._showSimProgress = function(opts, onDone){
       local = raw ? JSON.parse(raw) : null;
     } catch(_){}
     if(local && Array.isArray(local.teams) && local.teams.length >= 2){ _finish(local); return; }
-    _eurFetchWithRetry('/api/liga-ext/' + encodeURIComponent(slug), 3, 12000).then(function(j){
-      var data = j && j.data;
-      if(data && Array.isArray(data.teams) && data.teams.length >= 2){ _finish(data); return; }
-      /* Fallback: snapshot `_protected` (última clasificación durable
-         conocida por el servidor), igual que `_lextSeedRecoverFromServer`. */
-      _eurFetchWithRetry('/api/liga-ext-protected/' + encodeURIComponent(slug), 2, 12000).then(function(j2){
-        var data2 = j2 && j2.data;
-        if(data2 && Array.isArray(data2.teams) && data2.teams.length >= 2){ _finish(data2); }
+    _eurEnsureLeagueIndex(function(){
+      /* Si el índice cargó bien Y esta liga NO aparece en él, es que
+         NINGÚN dispositivo tiene datos reales para ella todavía — no
+         merece la pena esperar el fetch con reintentos, el resultado
+         va a ser vacío igualmente. (Si el índice no cargó, `_eurLeagueIndexSlugs`
+         sigue null → no se salta nada, se intenta el fetch normal.) */
+      if(_eurLeagueIndexSlugs && !_eurLeagueIndexSlugs[slug]){
+        _eurPickerLoading = false;
+        _eurPickerData = null;
+        _eurPickerError = 'Esta liga aún no tiene equipos guardados en NINGÚN dispositivo (0 equipos en el servidor). Simúlala o pega su plantilla primero en "Resto de Ligas".';
+        _eurManualOverlayRender();
+        return;
+      }
+      /* UNA sola petición — el fallback a `_protected` (última clasificación
+         durable conocida por el servidor) ya lo resuelve el SERVIDOR
+         (`/api/liga-ext-any/<slug>`), igual que `/api/team-alias/<nombre>`
+         (2026-07-05 "la búsqueda de identidad por nombre es SERVER-SIDE").
+         Antes eran 2 fetches CLIENT-SIDE secuenciales (main 3×12s + protected
+         2×12s = hasta 60s de espera en cadena) para una liga menor que este
+         dispositivo nunca abrió — el picker se sentía "eterno" para las ~50
+         ligas nunca visitadas mientras las ya cacheadas cargaban al instante. */
+      _eurFetchWithRetry('/api/liga-ext-any/' + encodeURIComponent(slug), 3, 6000).then(function(j){
+        var data = j && j.data;
+        if(data && Array.isArray(data.teams) && data.teams.length >= 2){ _finish(data); }
         else { _finish(null); }
       });
     });

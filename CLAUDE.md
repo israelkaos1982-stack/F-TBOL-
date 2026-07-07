@@ -1,5 +1,66 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El picker "AÑADIR POR LIGA" (equipos por competición) resuelve el fallback `_protected` EN EL SERVIDOR — una sola petición (obligatorio, 2026-07-07)
+
+**Bug (5 fotos usuario 2026-07-07, «Andorra», «Armenia», «Austria»,
+«Azerbaiyán» — "la mayoría de las Ligas pone Cargando y se queda una
+eternidad, no pudiendo añadir los equipos de esas ligas"; "en Ligas
+como Alemania, Inglaterra, Italia etc la carga es rapidísima pero en
+otras es eterna y ni siquiera carga")**: en el overlay "👁 Ver / Añadir
+equipos por competición" → "📋 AÑADIR POR LIGA", elegir una liga menor
+(nunca abierta en ESTE dispositivo) dejaba el picker congelado en
+"⏳ Cargando clasificación…" durante mucho tiempo, mientras que las
+ligas grandes/populares (ya cacheadas localmente por haberse abierto
+antes en "Resto de Ligas") cargaban al instante.
+
+### Causa raíz
+
+`_eurPickerLoadLeague` (`misc_body_1.html`) ya tenía timeout+reintentos
+(fix 2026-07-04) pero encadenaba **2 fetches CLIENT-SIDE secuenciales**:
+primero `/api/liga-ext/<slug>` (hasta 3 intentos × 12 s = 36 s), y SOLO
+si ese venía vacío, `/api/liga-ext-protected/<slug>` (hasta 2 intentos
+× 12 s = 24 s más). Para una liga menor que NINGÚN dispositivo ha
+tocado nunca (Andorra, Armenia, Austria, Azerbaiyán…, sin plantilla ni
+clasificación en ningún lado), el picker tenía que agotar la cadena
+COMPLETA — hasta 60 segundos — antes de poder mostrar el mensaje de
+error. Las ligas "rapidísimas" (Alemania, Inglaterra, Italia) en
+realidad no pasaban por red en absoluto: ya estaban cacheadas en
+`localStorage` de ese dispositivo (`_finish(local)` síncrono), lo que
+hacía el contraste con las demás aún más chocante.
+
+### Fix
+
+- **Nuevo endpoint `GET /api/liga-ext-any/<slug>`** (`app.py`): resuelve
+  el fallback main→`_protected` **EN EL SERVIDOR**, en una sola
+  petición — mismo principio que `/api/team-alias/<nombre>`
+  (2026-07-05, "la búsqueda de identidad por nombre es SERVER-SIDE").
+  `_eurPickerLoadLeague` pasa a hacer UNA sola llamada con reintentos
+  más cortos (3 × 6 s = 18 s peor caso, antes 60 s).
+- **Índice pre-cargado** (`_eurEnsureLeagueIndex`, reutiliza
+  `GET /api/liga-ext` sin slug, ya existente para el editor de
+  torneos): una única petición barata trae qué ligas tienen equipos
+  reales en el servidor. Si la liga elegida NO aparece en ese índice,
+  el picker se salta el fetch por completo y muestra al instante
+  "esta liga aún no tiene equipos guardados en ningún dispositivo" —
+  sin esperar ningún timeout, porque el resultado ya se sabe de
+  antemano que va a ser vacío.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un picker/búsqueda que dependa de un fallback
+   servidor (main → `_protected`, o cualquier par similar) encadene
+   2+ fetches CLIENT-SIDE secuenciales, cada uno con sus propios
+   reintentos. El fallback se resuelve en el SERVIDOR en una sola
+   petición (patrón ya establecido por `/api/team-alias/<nombre>`).
+2. **PROHIBIDO** que el picker espere el timeout completo para una
+   liga que un índice barato (`/api/liga-ext` sin slug) ya puede
+   confirmar que no tiene equipos en ningún dispositivo. Consultar
+   el índice primero y solo hacer el fetch por-liga si hace falta.
+3. **PROHIBIDO** volver a subir el timeout por intento por encima de
+   6-8 s o los reintentos por encima de 3 para este picker — el
+   objetivo es que el peor caso se sienta como "unos segundos", no
+   "un minuto".
+
 ## Un fallo del prefetch de alias NO bloquea PARA SIEMPRE los reintentos de ESE equipo en la sesión (obligatorio, 2026-07-06 #7)
 
 **Bug (3 fotos usuario 2026-07-06, «Arsenal vs Maccabi Tel Aviv» ·

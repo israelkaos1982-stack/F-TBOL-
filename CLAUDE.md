@@ -1,5 +1,56 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Un fallo del prefetch de alias NO bloquea PARA SIEMPRE los reintentos de ESE equipo en la sesión (obligatorio, 2026-07-06 #7)
+
+**Bug (3 fotos usuario 2026-07-06, «Arsenal vs Maccabi Tel Aviv» ·
+«Inter vs Aris Thessaloniki» · «FK Bodø Glimt vs Arsenal», Trofeo Joan
+Gamper — "el arista es harónico [Aris y Bodø funcionan], pero Maccabi
+Tel Aviv, que SÍ tiene alias (Sudamérica - Argentina - Rosario AA), no
+emerge la interrogación")**: en la misma sesión/dispositivo, el botón ❓
+aparecía correctamente para Aris Thessaloniki y FK Bodø Glimt (equipos
+tocados por PRIMERA vez) pero NUNCA para Maccabi Tel Aviv, pese a tener
+alias configurado y confirmado guardado en servidor.
+
+### Causa raíz
+
+`window._tourPrefetchMatchAlias` (misc_body_1.html, fix 2026-07-06 #2)
+usa `_TOUR_ALIAS_PREFETCHED[norm]` como guarda para no repetir la
+petición de servidor en cada tap. El bug: la marca se ponía a `true`
+**ANTES** de conocer la respuesta (para evitar peticiones duplicadas
+concurrentes), y el callback **NUNCA la desmarcaba** cuando el servidor
+respondía "no encontrado" (`if (!found) return;`, sin tocar la marca).
+Efecto: el PRIMER intento fallido de un equipo (p.ej. un tap anterior en
+la misma sesión, antes de que el admin terminara de guardar el alias en
+otro dispositivo, o un cold-start de Railway) dejaba ese nombre de
+equipo **bloqueado para SIEMPRE** — ningún tap futuro de NINGÚN partido
+con ese equipo volvía a preguntar al servidor, aunque el alias ya
+estuviera disponible minutos después. Los equipos tocados por primera
+vez (Aris, Bodø) no tenían ese lastre y funcionaban a la primera.
+
+### Fix
+
+`_tourPrefetchMatchAlias` distingue ÉXITO de FALLO: solo un alias
+ENCONTRADO marca `_TOUR_ALIAS_PREFETCHED[norm] = true` (permanente, ya
+resuelto). Un fallo guarda el **timestamp** del intento
+(`_TOUR_ALIAS_PREFETCHED[norm] = Date.now()`) y permite reintentar
+pasados `_ALIAS_PREFETCH_COOLDOWN_MS` (15 s) — evita machacar al
+servidor en taps consecutivos inmediatos del mismo partido, pero ya NO
+bloquea el equipo para el resto de la sesión.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_TOUR_ALIAS_PREFETCHED` (o cualquier guarda anti-
+   duplicados de una búsqueda de identidad por nombre) marque un fallo
+   igual que un éxito. Solo un resultado POSITIVO puede marcarse como
+   "resuelto, no repetir nunca más" — un fallo es SIEMPRE temporal
+   (cooldown corto), nunca un bloqueo permanente de sesión.
+2. Este bug es el mismo patrón, en otra capa, que la regla 2026-07-05
+   ("PROHIBIDO que una búsqueda... se rinda tras el PRIMER fallo sin
+   reintentar") — esa regla ya protegía `_ppAliasDeferredCheck`
+   (reintentos dentro de un mismo render de previa); esta capa protege
+   el prefetch DISPARADO AL TAP entre distintas aperturas de previa /
+   distintos partidos con el mismo equipo a lo largo de la sesión.
+
 ## El acta/MVP de un equipo IA con plantilla REAL completa NUNCA muestra "Jugador A"/"Portero" (obligatorio, 2026-07-06 #6)
 
 **Bug (3 fotos usuario 2026-07-06, «Maccabi Tel Aviv vs Liverpool», 0-0,

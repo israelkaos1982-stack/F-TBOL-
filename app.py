@@ -4032,7 +4032,16 @@ def _safe_json_load(s):
         return None
 
 
-_EUR_MANUAL_EXTRA_ZONES = ("ucl", "uclPrev", "uel", "uecl", "uclQual", "wildcard")
+_EUR_MANUAL_EXTRA_ZONES = (
+    "ucl", "uclPrev", "uel", "uecl", "uclQual", "wildcard",
+    # Extendido 2026-07-07: el admin puede añadir equipos a mano también a
+    # Recopa, Supercopa de Europa, Intercontinental y Mundialito de Clubes
+    # desde el mismo overlay "Equipos por competición". Debe ir SIEMPRE
+    # sincronizada con `EUR_MANUAL_ZONES` del cliente (misc_body_1.html) —
+    # si una zona nueva falta aquí, el merge aditivo la descarta en
+    # silencio en cada guardado (ver CLAUDE.md).
+    "recopa", "usc", "inter", "mundial",
+)
 
 
 def _eur_manual_extra_merge(old_json, new_value):

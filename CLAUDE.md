@@ -1,5 +1,100 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El overlay "Equipos por competición" cubre las 10 competiciones europeas/mundiales + buscador por nombre + envío único (obligatorio, 2026-07-07 #4)
+
+**Petición usuario 2026-07-07**: "vuelve a añadir el poder añadir
+manualmente equipo a equipo a la competición Europea que queramos:
+CHAMPIONS, PREVIA CHAMPIONS, EUROPA LEAGUE, CONFERENCE LEAGUE, OPEN
+QUALIFIER, WILD CARD, RECOPA, SUPERCOPA EUROPA, INTERCONTINENTAL,
+MUNDIALITO CLUBES. Quiero un buscador lupa... por liga o por nombre...
+un botón de enviar todos los equipos y que emerjan en cada
+competición asignada." El overlay `_eurManualOverlayOpen`
+(`misc_body_1.html`) solo cubría 6 zonas (`ucl/uclPrev/uel/uecl/
+uclQual/wildcard`).
+
+### Extensión a 10 zonas
+
+`EUR_MANUAL_ZONES` (cliente) y `_EUR_MANUAL_EXTRA_ZONES` (servidor,
+`app.py`) pasan de 6 a 10: se añaden `recopa`, `usc`, `inter`,
+`mundial`. `_EUR_REPORT_ZONES` marca cada zona con `kind:'pool'` (las
+6 originales + Recopa + Intercontinental — motores que computan un
+POOL en vivo) o `kind:'candidates'` (Supercopa de Europa + Mundialito
+— setups 100% manuales con su propio picker dedicado).
+
+- **Recopa** (`_buildPool()`, IIFE `recopa_state_v1`): los extras de
+  `window._eurManualExtraTeamNames('recopa')` se empujan con la MISMA
+  prioridad que los manuales de "EA Sports → Europa", ANTES de los
+  campeones/subcampeones automáticos. Aditivo siempre (no hay modo
+  "solo manual" para esta zona). Expone `window._recopaLivePool()`.
+- **Intercontinental** (`_buildPool()`, IIFE `inter_state_v1`): los
+  extras de `_eurManualExtraTeamNames('inter')` se fusionan con
+  `_meaTeamsFor('intercontinental')`; a diferencia de antes, TODOS los
+  manuales entran al pool de 8 (no solo los 2 primeros) — si el admin
+  añade 8 a mano, la Copa Intercontinental se puede sortear SIN
+  esperar a que Resto del Mundo termine de simularse. Expone
+  `window._interLivePool()`.
+- **Supercopa de Europa** (`_availableTeams()`, IIFE `usc_state_v1`):
+  los extras de `_eurManualExtraTeamNames('usc')` se añaden como
+  candidatos pseudo-equipo (`nombre · Manual`) al buscador con lupa
+  YA existente del setup de 4 equipos — no auto-configura nada, solo
+  los hace elegibles.
+- **Mundialito de Clubes** (`doSearch()` dentro de
+  `_mundialRosterEditor`): los extras de
+  `_eurManualExtraTeamNames('mundial')` se añaden como candidatos
+  etiquetados `_leagues:['manual']` (cuentan como EUROPEOS, nunca como
+  Resto del Mundo) al buscador por slot ya existente del roster de 32.
+
+### Buscador por NOMBRE (además de "por liga")
+
+Nueva sección "🔍 BUSCAR EQUIPO POR NOMBRE" en el overlay: chips para
+elegir la zona destino (10, sin `<select>` nativo — mismo criterio que
+el resto de pickers de esta pantalla) + input de texto que busca por
+substring en TODAS las `ligaExt_<slug>` cacheadas localmente (NUNCA
+dispara peticiones de red — para eso está "AÑADIR POR LIGA") + botón
+para añadir el texto ESCRITO tal cual aunque no haya coincidencias
+(equipo que no vive en ninguna liga local). El input solo refresca su
+propio contenedor de resultados (`_eurRenderNameSearchResults`), NUNCA
+el overlay entero, para no perder el foco/cursor en cada letra.
+
+### Botón único "📤 ENVIAR TODOS LOS EQUIPOS A SU COMPETICIÓN"
+
+Hidrata + llama a `_doCommitEurope` (igual que "Enviar realidad...") y
+muestra un informe (`_eurShowCommitReport`) con las 10 competiciones:
+las 6 originales desde el blob persistido en `europe_committed_v1`
+(sin cambios), Recopa/Intercontinental desde su pool EN VIVO
+(`_eurPoolToTeams`, con la liga de cada equipo resuelta vía
+`_eurResolveLeagueForName`), y Supercopa/Mundialito desde sus listas
+de candidatos manuales. Solo las 6 originales se PERSISTEN en
+`europe_committed_v1` — Recopa/Intercontinental ya leen los manuales
+en vivo en cada cómputo (persistirlos ahí no aportaría nada y
+agrandaría esa clave sin necesidad, regla de cuota 2 MB).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** desincronizar `EUR_MANUAL_ZONES` (cliente) de
+   `_EUR_MANUAL_EXTRA_ZONES` (servidor): toda zona nueva se añade a
+   AMBOS a la vez — si falta en el servidor, el merge aditivo
+   (`_eur_manual_extra_merge`) descarta esa zona en SILENCIO en cada
+   guardado.
+2. **PROHIBIDO** añadir un toggle 🔓Auto/🔒Manual (`_eurManualOnly`) a
+   Recopa o Intercontinental sin implementar también el bypass
+   correspondiente en su `_buildPool()` — tal como está, son SIEMPRE
+   aditivos sobre el cómputo automático, nunca "solo manual".
+3. **PROHIBIDO** que Supercopa de Europa/Mundialito auto-configuren su
+   bracket/roster desde los candidatos manuales sin acción explícita
+   del admin en su pantalla dedicada — el overlay unificado solo los
+   hace ELEGIBLES en el picker existente, nunca clobberea un setup ya
+   en curso.
+4. **PROHIBIDO** que el input de búsqueda por nombre dispare
+   `_eurManualOverlayRender()` completo en cada `oninput` — pierde el
+   foco/cursor. Solo `_eurRenderNameSearchResults()` (contenedor
+   propio) en cada tecla; el re-render completo queda para acciones
+   discretas (cambiar de zona, añadir, cerrar picker…).
+5. Toda competición NUEVA que se añada a este overlay hereda el mismo
+   patrón: si tiene un motor de POOL propio, se engancha ahí
+   (`_eurManualExtraTeamNames(zone)`, aditivo); si es 100% manual con
+   picker propio, se engancha como candidato en ESE picker.
+
 ## El overlay "Equipos por competición" NO hidrata las ~50 ligas si las 6 zonas están en modo Manual + las hidrataciones one-shot de arranque reintentan (obligatorio, 2026-07-07 #3)
 
 **Bug (foto usuario 2026-07-07, «sigue sin cargar»)**: con las 6 zonas

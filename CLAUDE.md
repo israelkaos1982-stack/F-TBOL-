@@ -1,5 +1,66 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El overlay de ESTADÍSTICAS del FINALIZAR también se blinda con try/catch + display incondicional (obligatorio, 2026-07-07 #5)
+
+**Bug (2 fotos usuario 2026-07-07, «Real Madrid vs Al Hilal SFC»,
+Mundialito de Clubes — "ni deja finalizar (caja opaca) / ni deja poner
+estadísticas / ni deja poner MVP / ni deja compartir por WhatsApp /
+SOLUCION YA")**: tras elegir el portero en el picker de portería
+imbatida (Thibaut Courtois), el partido se quedaba congelado — nunca
+aparecía la pantalla de Estadísticas, ni MVP, ni WhatsApp, y FINALIZAR
+seguía deshabilitado.
+
+### Causa raíz
+
+`_mlShowStatsOverlay` (`part2/misc_body_2.html`, el overlay de
+posesión/tiros/faltas/córners que se abre tras la portería imbatida,
+compartido por gm-modal y ml-card) construye TODO su contenido
+(cabecera con escudos vía `getLogoEquipo`, `humanIcon`, el grid de filas
+vía `_mlCountAutoStats` + `appendRow`) **SIN try/catch**, y solo al
+FINAL hacía `ov.classList.add('show')`. Exactamente el mismo
+anti-patrón ya corregido en `_gmShowFinalOv` (2026-07-05) y
+`_gmFinalShareGate` (2026-07-06): si CUALQUIER paso del relleno lanzaba
+una excepción (un dato inesperado del roster, un helper de escudo
+fallando…), la función abortaba ANTES de mostrar el overlay — invisible
+para el usuario, indistinguible de "se ha congelado". Como el botón
+FINALIZAR ya estaba deshabilitado desde `_mlConfirmEnd` (regla
+2026-07-05, botón se deshabilita al confirmar SÍ para evitar doble
+disparo), el usuario se quedaba con la caja opaca sin ninguna pantalla
+posterior. `_mlOpenStatsEntry` (el equivalente en ml-cards vía
+`_mlShowFinalThenPost`) tenía el mismo hueco, más pequeño pero del
+mismo patrón. Además, el callback `onDone` de `_ensureImbatEvents` en
+la cadena de portería imbatida (`part2/misc_body_2.html`, la llamada
+que re-dispara `gmEndMatch()` tras registrar el portero) invocaba
+`window.gmEndMatch()` DIRECTAMENTE, sin pasar por `_gmSafeReenter`
+(regla 2026-07-06 #4) — un único punto de reentrada que se había
+quedado fuera de la auditoría de esa regla.
+
+### Fix
+
+- `_mlShowStatsOverlay`: todo el relleno de contenido (cabecera +
+  grid de filas) envuelto en try/catch. Si falla, pinta un mensaje de
+  aviso mínimo en el grid («No se pudieron cargar los detalles… pulsa
+  CONFIRMAR para continuar sin estadísticas manuales») + banner
+  `_gmCriticalNotice`. `ov.classList.add('show')` es **incondicional**,
+  fuera del try/catch — el overlay SIEMPRE se muestra, con contenido
+  completo o con el fallback.
+- `_mlOpenStatsEntry`: mismo patrón (try/catch + display incondicional).
+- El callback `onDone` de `_ensureImbatEvents` en `gmEndMatch` pasa a
+  `window._gmSafeReenter(window.gmEndMatch, 'tras registrar portería
+  imbatida')` en vez de `window.gmEndMatch()` directo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_mlShowStatsOverlay`/`_mlOpenStatsEntry` (o
+   cualquier overlay obligatorio nuevo de la cadena FINALIZAR) rellene
+   su contenido sin try/catch antes de `classList.add('show')`. Mismo
+   contrato que `_gmShowFinalOv`/`_gmFinalShareGate`: el display es
+   SIEMPRE incondicional, con fallback mínimo si el relleno revienta.
+2. **PROHIBIDO** que un callback `onDone`/reentrada a `gmEndMatch()`
+   nuevo (o ya existente pero no auditado) llame a
+   `window.gmEndMatch()` directo sin `_gmSafeReenter`. Auditar TODOS
+   los call sites de `_ensureImbatEvents`, no solo los ya conocidos.
+
 ## La plantilla del HUB (caja "PLANTILLA" de un mister) nunca prefiere una fila "genérica" (power 70 / pos MED para todos) sobre la plantilla REAL editada (obligatorio, 2026-07-07 #4)
 
 **Bug (6 fotos usuario 2026-07-07, «Arsenal-Brasil-Álvaro»)**: dentro de

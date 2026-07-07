@@ -10651,6 +10651,7 @@
     _mlStatsCallback = onConfirm || function(){};
     var ov = document.getElementById('ml-stats-ov');
     if (!ov) { _mlStatsCallback(); return; }
+    try {
     /* Cabecera: escudos, nombres, marcador */
     var _hiSa = (typeof window.humanIcon === 'function') ? (window.humanIcon(st.home)||'') : '';
     var _hiSb = (typeof window.humanIcon === 'function') ? (window.humanIcon(st.away)||'') : '';
@@ -10813,6 +10814,22 @@
     appendRow(_STAT_DEFS_AUTO[3], autos.a.rojas,     autos.b.rojas,     true); // rojas
     appendRow(_STAT_DEFS_MANUAL[3], '', '', false); // corners
     /* remates y paradas removidos — ya no forman parte de _STAT_DEFS_MANUAL */
+    } catch(errStatsBuild) {
+      /* Un dato inesperado (roster raro, helper que revienta…) NO puede
+         dejar la cadena FINALIZAR congelada sin ninguna pantalla — mismo
+         contrato que _gmShowFinalOv / _gmFinalShareGate (CLAUDE.md
+         2026-07-05/06). Fallback mínimo + el overlay se muestra IGUAL. */
+      try { console.error('[_mlShowStatsOverlay] fallo al construir el overlay de estadísticas:', errStatsBuild); } catch(_){}
+      try {
+        var _gridFallback = document.getElementById('ml-stats-grid');
+        if (_gridFallback) _gridFallback.innerHTML = '<div style="padding:14px 8px;color:#ffe9b0;font-family:Rajdhani,sans-serif;font-size:14px;line-height:1.4;">⚠️ No se pudieron cargar los detalles de estadísticas (datos inesperados del partido). Pulsa CONFIRMAR para continuar el partido sin estadísticas manuales.</div>';
+      } catch(_){}
+      try { (window._gmCriticalNotice || function(){})('⚠️ Las estadísticas no se pudieron rellenar del todo (' + (errStatsBuild && errStatsBuild.message || errStatsBuild) + '). Pulsa CONFIRMAR para continuar igualmente.'); } catch(_){}
+    }
+    /* display SIEMPRE incondicional — un fallo al construir el contenido
+       no puede dejar al usuario sin NINGUNA pantalla tras la portería
+       imbatida (regla CLAUDE.md "La pantalla FINAL NUNCA se queda sin
+       mostrar"). */
     ov.classList.add('show');
   }
   window._mlStatsConfirm = function(){
@@ -10915,7 +10932,7 @@
     var ov = document.getElementById('ml-stats-entry-ov');
     var rows = document.getElementById('ml-stats-entry-rows');
     if (!ov || !rows) { _mlOpenPostMatch(mk); return; }
-
+    try {
     /* Pre-rellenar amarillas y rojas a partir del acta para ahorrar
        clicks (son datos que ya tenemos). Posesión arranca en 50/50. */
     var evts = st.events || [];
@@ -10975,6 +10992,11 @@
         if (el) el.textContent = next + (def.pct ? '%' : '');
       });
     });
+    } catch(errStatsEntry) {
+      try { console.error('[_mlOpenStatsEntry] fallo al construir el overlay de estadísticas:', errStatsEntry); } catch(_){}
+      try { (window._gmCriticalNotice || function(){})('⚠️ Las estadísticas no se pudieron rellenar del todo. Pulsa CONFIRMAR para continuar igualmente.'); } catch(_){}
+    }
+    /* display SIEMPRE incondicional — mismo contrato que _mlShowStatsOverlay. */
     ov.classList.add('show');
   }
 
@@ -15620,7 +15642,7 @@
             list.appendChild(li);
           }
         }
-      }, function(){ window.gmEndMatch(); });
+      }, function(){ window._gmSafeReenter(window.gmEndMatch, 'tras registrar portería imbatida'); });
       return;
     }
     /* ── Estadísticas OBLIGATORIAS (HvH / HvIA) — ANTES del MVP ──

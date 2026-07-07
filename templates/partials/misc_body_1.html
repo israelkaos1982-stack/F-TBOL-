@@ -64959,6 +64959,22 @@ https://api.sofascore.app/api/v1/team/44/image
         <input id="munich-derby-match-visit" placeholder="Equipo visitante" style="width:100%;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:8px 10px;color:#fff;font-family:Rajdhani,sans-serif;font-size:13px;"/>
       </div>
     </div>
+    <!-- Icono humano por lado — petición usuario 2026-07-07: "al lado de
+         cada nombre de equipo un cuadrado con los iconos humanos". Un
+         icono ELEGIDO aquí es la ÚNICA fuente del icono mostrado en la
+         card (sustituye por completo a adivinarlo del texto del nombre
+         o de humanIcon() — "ese icono tiene que ir automatizado con ese
+         entrenador"). Opcional: dejar en "✕ Ninguno" para un rival IA. -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div>
+        <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">ICONO LOCAL</label>
+        <div id="munich-derby-icon-local" class="derby-icon-picker"></div>
+      </div>
+      <div>
+        <label style="display:block;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:rgba(255,255,255,.55);margin-bottom:3px;">ICONO VISITANTE</label>
+        <div id="munich-derby-icon-visit" class="derby-icon-picker"></div>
+      </div>
+    </div>
     <div style="display:flex;gap:8px;margin-top:14px;">
       <button onclick="window.munichDerbyMatchClose&&window.munichDerbyMatchClose()" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:rgba(255,255,255,.70);padding:9px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;">CANCELAR</button>
       <button onclick="window.munichDerbyMatchSave&&window.munichDerbyMatchSave()" style="flex:1;background:linear-gradient(145deg,#3a78d8,#1a3e88);border:1px solid rgba(96,180,255,.65);color:#eaf3ff;padding:9px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;cursor:pointer;font-weight:700;">💾 GUARDAR</button>
@@ -64967,6 +64983,11 @@ https://api.sofascore.app/api/v1/team/44/image
 </div>
 
 <style>
+#munich-derby-match-modal .derby-icon-picker{display:flex;flex-wrap:wrap;gap:5px;}
+#munich-derby-match-modal .derby-icon-btn{width:32px;height:32px;flex-shrink:0;border-radius:7px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent;padding:0;}
+#munich-derby-match-modal .derby-icon-btn.active{background:rgba(96,180,255,.30);border-color:#9fdcff;box-shadow:0 0 8px rgba(96,180,255,.45);}
+#munich-derby-match-modal .derby-icon-btn.clear{font-size:13px;color:rgba(255,255,255,.55);}
+#munich-derby-match-modal .derby-icon-btn.clear.active{background:rgba(197,15,31,.25);border-color:rgba(197,15,31,.55);color:#ffb0b0;}
 #s-munich-derby-season .mderby-summary-cell{flex:1;}
 #s-munich-derby-season .mderby-summary-num{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:1.5px;line-height:1;}
 #s-munich-derby-season .mderby-summary-num.pj{color:#9fdcff;}
@@ -65051,6 +65072,77 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
   var _curSeasonId = null;
   var _editingMatchId = null;
+
+  /* ── Icono humano por lado (cuadrado de selección) ──────────────
+     Petición usuario 2026-07-07: "al lado de cada nombre de equipo un
+     cuadrado con los iconos humanos... ese icono tiene que ir
+     automatizado con ese entrenador". Los 7 misters canónicos, en el
+     MISMO orden que `MISTERS_HUMANOS` (Toñín·Álvaro·Acsa·Isra·Ángel·
+     Izan·Rubén). Elegir uno aquí es la ÚNICA fuente del icono que se
+     muestra en la card — sustituye por completo cualquier intento de
+     adivinarlo del texto del nombre (ahí es donde salían los iconos
+     dobles: el usuario tecleaba uno a mano Y el código añadía otro). */
+  var _HUMAN_ICON_LIST = ['💡','🐭','🔨','✏️','👿','🦆','🐲'];
+  function _iconPickerHtml(hostKey, selected){
+    var html = '';
+    for (var i = 0; i < _HUMAN_ICON_LIST.length; i++){
+      var ic = _HUMAN_ICON_LIST[i];
+      var active = (selected === ic);
+      html += '<button type="button" class="derby-icon-btn'+(active?' active':'')+'"'
+            + ' onclick="window._munichDerbyPickIcon(\''+hostKey+'\',\''+ic+'\')" title="'+ic+'">'+ic+'</button>';
+    }
+    html += '<button type="button" class="derby-icon-btn clear'+(!selected?' active':'')+'"'
+          + ' onclick="window._munichDerbyPickIcon(\''+hostKey+'\',\'\')" title="Sin icono (rival IA)">✕</button>';
+    return html;
+  }
+  function _setIconPicker(hostKey, icon){
+    var host = document.getElementById('munich-derby-icon-' + hostKey);
+    if (!host) return;
+    icon = icon || '';
+    host.dataset.selected = icon;
+    host.innerHTML = _iconPickerHtml(hostKey, icon);
+  }
+  function _getIconPicker(hostKey){
+    var host = document.getElementById('munich-derby-icon-' + hostKey);
+    return (host && host.dataset.selected) || '';
+  }
+  window._munichDerbyPickIcon = function(hostKey, icon){
+    _setIconPicker(hostKey, icon);
+  };
+  /* Adivina un icono de entre los 7 canónicos a partir de un nombre YA
+     guardado (partidos añadidos ANTES de que existiera este selector):
+     busca cualquiera de los 7 embebido en el texto, y si no hay,
+     cae a humanIcon(name) filtrado a los 7 conocidos. Solo se usa para
+     PRE-RELLENAR el selector al editar — nunca se persiste sin que el
+     usuario confirme guardando. */
+  function _guessIconFromName(name){
+    var s = String(name || '');
+    for (var i = 0; i < _HUMAN_ICON_LIST.length; i++){
+      if (s.indexOf(_HUMAN_ICON_LIST[i]) !== -1) return _HUMAN_ICON_LIST[i];
+    }
+    if (typeof window.humanIcon === 'function'){
+      try {
+        var h = String(window.humanIcon(s) || '').replace(/[\s ]/g, '');
+        for (var j = 0; j < _HUMAN_ICON_LIST.length; j++){
+          if (h.indexOf(_HUMAN_ICON_LIST[j]) !== -1) return _HUMAN_ICON_LIST[j];
+        }
+      } catch(_){}
+    }
+    return '';
+  }
+  /* Limpia cualquiera de los 7 iconos (y cualquier otro símbolo/emoji
+     no-letra embebido al principio o al final) del texto del nombre —
+     desde que el icono vive en su propio selector, el campo de nombre
+     vuelve a ser texto puro. Nunca vacía el nombre entero por error
+     (si tras limpiar no queda nada, se conserva el original). */
+  function _stripEmbeddedIconFromName(s){
+    var raw = String(s || '');
+    var clean = raw
+      .replace(/^[^A-Za-zÀ-ɏͰ-῿Ⰰ-퟿0-9]+/, '')
+      .replace(/[^A-Za-zÀ-ɏͰ-῿Ⰰ-퟿0-9]+$/, '')
+      .trim();
+    return clean || raw.trim();
+  }
 
   /* Picker visual de competición — renderiza el grid de botones y marca
      el seleccionado con ✅. Sincroniza además el <select> oculto para que
@@ -65448,11 +65540,20 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var visitTxt = String(m.visitante || '?');
       var localIco = '';
       var visitIco = '';
-      if (!_hasLeadingIcon(localTxt) && typeof window.humanIcon === 'function'){
+      /* Icono explícito del cuadrado de selección (2026-07-07) — fuente
+         ÚNICA y autoritativa en cuanto el partido se guardó/editó con
+         él. `m.localIcon`/`m.visitIcon` presentes (aunque sea '') gana
+         SIEMPRE; solo los partidos de ANTES de este selector (campo
+         ausente) caen al detector legacy (nombre embebido / humanIcon). */
+      if (m.localIcon != null){
+        localIco = m.localIcon;
+      } else if (!_hasLeadingIcon(localTxt) && typeof window.humanIcon === 'function'){
         var hL = window.humanIcon(localTxt);
         if (hL) localIco = hL.replace(/ /g,'');
       }
-      if (!_hasLeadingIcon(visitTxt) && typeof window.humanIcon === 'function'){
+      if (m.visitIcon != null){
+        visitIco = m.visitIcon;
+      } else if (!_hasLeadingIcon(visitTxt) && typeof window.humanIcon === 'function'){
         var hV = window.humanIcon(visitTxt);
         if (hV) visitIco = hV.replace(/ /g,'');
       }
@@ -65508,6 +65609,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       document.getElementById('munich-derby-match-gv').value = '0';
       document.getElementById('munich-derby-match-visit').value = '';
       _munichDerbyPickComp('liga');
+      /* El icono LOCAL se sugiere del entrenador del hub (el equipo por
+         defecto es el club/selección de la temporada); el VISITANTE
+         arranca sin icono — el admin lo elige si el rival también es
+         humano. Ambos son editables libremente. */
+      _setIconPicker('local', _guessIconFromName(defaultTeam));
+      _setIconPicker('visit', '');
       modal.style.display = 'flex';
     };
     if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
@@ -65539,6 +65646,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       document.getElementById('munich-derby-match-gv').value = String(Number(m.gv) || 0);
       document.getElementById('munich-derby-match-visit').value = m.visitante || '';
       _munichDerbyPickComp(m.comp || 'liga');
+      /* Icono guardado explícitamente (partido creado/editado ya con
+         este selector) gana siempre; si el partido es de ANTES de que
+         existiera (`localIcon`/`visitIcon` ausentes), se sugiere uno
+         adivinándolo del texto — el admin lo confirma o lo cambia. */
+      _setIconPicker('local', (m.localIcon != null) ? m.localIcon : _guessIconFromName(m.local));
+      _setIconPicker('visit', (m.visitIcon != null) ? m.visitIcon : _guessIconFromName(m.visitante));
       modal.style.display = 'flex';
     };
     if (typeof window.pG === 'function') window.pG(doEdit); else doEdit();
@@ -65566,6 +65679,16 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       alert('⚠️ Los goles deben ser números ≥ 0.');
       return;
     }
+    /* Icono elegido en el cuadrado — fuente ÚNICA y explícita del
+       icono mostrado (petición usuario 2026-07-07). Se guarda SIEMPRE
+       (aunque quede vacío/"✕ Ninguno") para que este partido ya no
+       vuelva a depender de adivinarlo del nombre. El nombre se limpia
+       de cualquier icono que hubiera quedado embebido de antes — el
+       icono vive solo en su selector, nunca duplicado en el texto. */
+    var localIcon = _getIconPicker('local');
+    var visitIcon = _getIconPicker('visit');
+    local = _stripEmbeddedIconFromName(local);
+    visit = _stripEmbeddedIconFromName(visit);
     var all = _loadAll();
     if (!all[_curSeasonId]) all[_curSeasonId] = [];
     /* Un partido AÑADIDO A MANO es una afirmación EXPLÍCITA del usuario:
@@ -65590,12 +65713,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     if (_editingMatchId){
       for (var i=0; i<all[_curSeasonId].length; i++){
         if (all[_curSeasonId][i].id === _editingMatchId){
-          all[_curSeasonId][i] = { id:_editingMatchId, jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true, mySide:mySide };
+          all[_curSeasonId][i] = { id:_editingMatchId, jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true, mySide:mySide, localIcon:localIcon, visitIcon:visitIcon };
           break;
         }
       }
     } else {
-      all[_curSeasonId].push({ id:_newId(), jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true, mySide:mySide });
+      all[_curSeasonId].push({ id:_newId(), jornada:jornada, comp:comp, local:local, gl:gl, gv:gv, visitante:visit, isHvH:true, mySide:mySide, localIcon:localIcon, visitIcon:visitIcon });
     }
     _saveAll(all);
     window.munichDerbyMatchClose();

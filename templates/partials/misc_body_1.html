@@ -64932,7 +64932,10 @@ https://api.sofascore.app/api/v1/team/44/image
 #s-munich-derby-season .mderby-match-top .mderby-comp-label{color:#9fdcff;font-weight:700;letter-spacing:1.6px;}
 #s-munich-derby-season .mderby-match-top .mderby-comp-sep{color:rgba(255,255,255,.30);}
 #s-munich-derby-season .mderby-match-top .mderby-comp-jornada{color:rgba(255,255,255,.65);font-weight:600;}
-#s-munich-derby-season .mderby-match-top .mderby-del-btn{margin-left:auto;background:rgba(197,15,31,.20);border:1px solid rgba(197,15,31,.45);color:#ffb0b0;border-radius:4px;font-size:11px;cursor:pointer;padding:3px 6px;}
+#s-munich-derby-season .mderby-match-top .mderby-match-actions{margin-left:auto;display:flex;gap:5px;}
+#s-munich-derby-season .mderby-match-top .mderby-edit-btn{background:rgba(96,180,255,.18);border:1px solid rgba(96,180,255,.45);color:#cfe6ff;border-radius:4px;font-size:11px;cursor:pointer;padding:3px 6px;}
+#s-munich-derby-season .mderby-match-top .mderby-del-btn{background:rgba(197,15,31,.20);border:1px solid rgba(197,15,31,.45);color:#ffb0b0;border-radius:4px;font-size:11px;cursor:pointer;padding:3px 6px;}
+body:not(.adm-on) #s-munich-derby-season .mderby-edit-btn{display:none;}
 body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 #s-munich-derby-season .mderby-match-body{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:14px;}
 #s-munich-derby-season .mderby-match-body .mderby-team{font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -65328,13 +65331,23 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
          petición usuario 2026-05-07: "FC Barcelona 👿 2-2 💡 Bayern
          Munich". Si el nombre del equipo ya lleva un emoji embebido
          (edit manual del usuario), respeta ese; si no, añade el de
-         humanIcon() automáticamente. _hasLeadingIcon detecta si el
-         primer carácter es no-letra (emoji/símbolo). */
+         humanIcon() automáticamente.
+         Bug 2026-07-07 (fotos usuario, "iconos dobles" en cada equipo/
+         selección humana): antes solo se miraba el PRIMER carácter
+         del nombre. Un icono tecleado AL FINAL ("Barcelona 😈", o una
+         bandera de selección "Atl Madrid🇪🇸" — cada temporada el mismo
+         mister puede haber sido un CLUB o una SELECCIÓN distinta, y el
+         usuario anota a mano cuál era) no se detectaba → el código
+         añadía TAMBIÉN el icono automático de humanIcon() encima,
+         duplicando. Ahora se mira el PRIMER Y el ÚLTIMO carácter:
+         cualquier icono ya puesto por el usuario, en cualquier
+         posición, es el ÚNICO que se muestra. */
       function _hasLeadingIcon(s){
         if (!s) return false;
-        var first = String(s).trim().charAt(0);
-        if (!first) return false;
-        return !/[A-Za-zÀ-ɏ]/.test(first);
+        var str = String(s).trim();
+        if (!str) return false;
+        var isNonLetter = function(ch){ return !!ch && !/[A-Za-zÀ-ɏ]/.test(ch); };
+        return isNonLetter(str.charAt(0)) || isNonLetter(str.charAt(str.length - 1));
       }
       var localTxt = String(m.local || '?');
       var visitTxt = String(m.visitante || '?');
@@ -65358,7 +65371,10 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
            +     '<span class="mderby-comp-ico">' + compIco + '</span>'
            +     '<span class="mderby-comp-label"' + compStyleAttr + '>' + _esc(compLbl) + '</span>'
            +     (jornadaPretty ? '<span class="mderby-comp-sep">·</span><span class="mderby-comp-jornada">' + _esc(jornadaPretty) + '</span>' : '')
-           +     '<button class="mderby-del-btn" onclick="window.munichDerbyMatchDelete&amp;&amp;window.munichDerbyMatchDelete(\'' + _esc(m.id) + '\')" title="Eliminar partido">🗑</button>'
+           +     '<span class="mderby-match-actions">'
+           +       '<button class="mderby-edit-btn" onclick="window.munichDerbyMatchPromptEdit&amp;&amp;window.munichDerbyMatchPromptEdit(\'' + _esc(m.id) + '\')" title="Editar partido">✏️</button>'
+           +       '<button class="mderby-del-btn" onclick="window.munichDerbyMatchDelete&amp;&amp;window.munichDerbyMatchDelete(\'' + _esc(m.id) + '\')" title="Eliminar partido">🗑</button>'
+           +     '</span>'
            +   '</div>'
            +   '<div class="mderby-match-body">'
            +     '<span class="mderby-team local">' + localHtml + '</span>'
@@ -65400,6 +65416,37 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       modal.style.display = 'flex';
     };
     if (typeof window.pG === 'function') window.pG(doAdd); else doAdd();
+  };
+
+  /* ✏️ Editar un partido ya guardado — antes el único control era 🗑
+     ELIMINAR (petición usuario 2026-07-07: "si quiero editar algún
+     partido no se puede, solo me da la opción de borrar"). Reabre el
+     MISMO modal de Añadir precargado con los datos existentes;
+     `munichDerbyMatchSave` YA sabía actualizar in-place cuando
+     `_editingMatchId` está seteado (lo hacía desde 2026-05-07 para el
+     flujo de auto-log), solo faltaba un punto de entrada en la UI. */
+  window.munichDerbyMatchPromptEdit = function(matchId){
+    var doEdit = function(){
+      if (!_curSeasonId || !matchId) return;
+      var ms = _matchesFor(_curSeasonId);
+      var m = null;
+      for (var i = 0; i < ms.length; i++){
+        if (ms[i] && ms[i].id === matchId){ m = ms[i]; break; }
+      }
+      if (!m){ alert('⚠️ Partido no encontrado.'); return; }
+      _editingMatchId = matchId;
+      var modal = document.getElementById('munich-derby-match-modal');
+      if (!modal) return;
+      document.getElementById('munich-derby-match-modal-title').textContent = '✏️ Editar partido';
+      document.getElementById('munich-derby-match-jornada').value = m.jornada || '';
+      document.getElementById('munich-derby-match-local').value = m.local || '';
+      document.getElementById('munich-derby-match-gl').value = String(Number(m.gl) || 0);
+      document.getElementById('munich-derby-match-gv').value = String(Number(m.gv) || 0);
+      document.getElementById('munich-derby-match-visit').value = m.visitante || '';
+      _munichDerbyPickComp(m.comp || 'liga');
+      modal.style.display = 'flex';
+    };
+    if (typeof window.pG === 'function') window.pG(doEdit); else doEdit();
   };
 
   window.munichDerbyMatchClose = function(){

@@ -1624,3 +1624,43 @@ class TestLigaExtMerge:
                "resultsStamp": 100}
         res = self._merge(old, new)
         assert res["results"] == new["results"]
+
+
+class TestLigaExtAnyEndpoint:
+    """`/api/liga-ext-any/<slug>` resuelve main→protected EN EL SERVIDOR,
+    para que el picker "AÑADIR POR LIGA" (`_eurPickerLoadLeague`) haga
+    UNA sola petición en vez de 2 fetches secuenciales cliente-side."""
+
+    def test_devuelve_main_cuando_tiene_equipos(self, client):
+        c = client
+        c.post("/api/liga-ext/testliga", json={"data": {
+            "teams": [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}],
+            "results": [],
+        }})
+        r = c.get("/api/liga-ext-any/testliga")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["source"] == "main"
+        assert len(j["data"]["teams"]) == 2
+
+    def test_cae_a_protected_cuando_main_esta_vacio(self, client):
+        c = client
+        # main vacío (nunca se guardó), protected con clasificación real.
+        c.post("/api/liga-ext-protected/testliga2", json={"data": {
+            "teams": [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}],
+            "results": [{"h": "1", "a": "2", "gh": 1, "ga": 0}],
+        }})
+        r = c.get("/api/liga-ext-any/testliga2")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["source"] == "protected"
+        assert len(j["data"]["teams"]) == 2
+
+    def test_sin_datos_en_ningun_lado_no_revienta(self, client):
+        c = client
+        r = c.get("/api/liga-ext-any/liga-nunca-tocada")
+        assert r.status_code == 200
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["data"]["teams"] == []
+        assert j["source"] == "main"

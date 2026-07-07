@@ -238,7 +238,7 @@ window.confirmImbatForce = function(btn) {
        el partido quedaba bloqueado sin explicación — "no funciona el
        elegir ninguno de los porteros"). */
     try { console.error('confirmImbatForce fallo:', err); } catch(_){}
-    try { alert('⚠️ No se pudo registrar la portería imbatida (' + (err && err.message || err) + '). Vuelve a intentarlo o pulsa Cancelar.'); } catch(_){}
+    try { (window._gmCriticalNotice || alert)('⚠️ No se pudo registrar la portería imbatida (' + (err && err.message || err) + '). Vuelve a intentarlo o pulsa Cancelar.'); } catch(_){}
   }
 };
 
@@ -256,7 +256,7 @@ window.cancelImbatForce = function() {
     }
   } catch(err) {
     try { console.error('cancelImbatForce fallo:', err); } catch(_){}
-    try { alert('⚠️ No se pudo cancelar (' + (err && err.message || err) + '). Recarga la página si la pantalla sigue bloqueada.'); } catch(_){}
+    try { (window._gmCriticalNotice || alert)('⚠️ No se pudo cancelar (' + (err && err.message || err) + '). Recarga la página si la pantalla sigue bloqueada.'); } catch(_){}
   }
 };
 
@@ -353,7 +353,7 @@ window._ensureImbatEvents = function(opts, onDone){
       catch(doneErr) {
         try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
         try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
-        try { alert('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
+        try { (window._gmCriticalNotice || alert)('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
       }
     };
     try {

@@ -17646,6 +17646,28 @@ window._showSimProgress = function(opts, onDone){
      Devuelve un objeto con los stats limpios; NO muta `p` (eso lo
      hace el caller para preservar otros campos). */
   window._lextHydratePlayerStats = function(team, p, real){
+    /* CORRECCIÓN MANUAL (admin, editor 🖍 de un jugador) — máxima
+       prioridad, por delante incluso del `teamPJ===0` de abajo. Un
+       jugador con `p.statsOverride` fijado por el admin (petición
+       usuario 2026-07-10: «un jugador con 89 goles cuando el equipo
+       solo ha marcado 71 — edita las estadísticas o déjame editarlas
+       a mi») SIEMPRE muestra esos números, ignorando por completo el
+       cálculo automático (eventos reales / cachés), hasta que el
+       admin quite la corrección desde el mismo editor. */
+    if (p && p.statsOverride) {
+      var ov = p.statsOverride;
+      return {
+        pj:       Number(ov.pj)       || 0,
+        gol:      Number(ov.gol)      || 0,
+        pen:      Number(ov.pen)      || 0,
+        fk:       Number(ov.fk)       || 0,
+        mvp:      Number(ov.mvp)      || 0,
+        ta:       Number(ov.ta)       || 0,
+        tr:       Number(ov.tr)       || 0,
+        imbat:    Number(ov.imbat)    || 0,
+        penSaved: Number(ov.penSaved) || 0
+      };
+    }
     var _np = (typeof _normPS === 'function') ? _normPS
             : (typeof window !== 'undefined' && typeof window._normPS === 'function') ? window._normPS
             : function(s){ return String(s||'').toLowerCase(); };
@@ -44654,6 +44676,30 @@ https://api.sofascore.app/api/v1/team/44/image
         <br>· <b>⭐ Estrella</b> — prioridad MEDIA, solo empuja la elección de MVP del partido, no cambia el resultado.
         <br>· <b>C Capitán</b> — soporte invisible, +5% al poder del equipo en la sim (mejor resultado global).
       </div>
+
+      <label class="lext-pl-role" style="width:100%;margin-top:10px;">
+        <input type="checkbox" id="lext-pl-stats-ov-toggle" onchange="window._lextToggleStatsOvUI()"/>
+        <span class="lext-pl-role-ico">🔒</span><span>Corregir estadísticas a mano</span>
+      </label>
+      <div id="lext-pl-stats-ov-grid" style="display:none;">
+        <div class="lext-grid4">
+          <div><span class="lext-mini-lbl">👤 PJ</span><input class="lext-input lext-mini" id="lext-pl-ov-pj" type="number" min="0" value="0" /></div>
+          <div><span class="lext-mini-lbl">⚽ GOLES</span><input class="lext-input lext-mini" id="lext-pl-ov-gol" type="number" min="0" value="0" /></div>
+          <div><span class="lext-mini-lbl">🥅 PENALTIS</span><input class="lext-input lext-mini" id="lext-pl-ov-pen" type="number" min="0" value="0" /></div>
+          <div><span class="lext-mini-lbl">🎯 FALTAS</span><input class="lext-input lext-mini" id="lext-pl-ov-fk" type="number" min="0" value="0" /></div>
+        </div>
+        <div class="lext-grid4">
+          <div><span class="lext-mini-lbl">⭐ MVP</span><input class="lext-input lext-mini" id="lext-pl-ov-mvp" type="number" min="0" value="0" /></div>
+          <div><span class="lext-mini-lbl">🟨 AMARILLAS</span><input class="lext-input lext-mini" id="lext-pl-ov-ta" type="number" min="0" value="0" /></div>
+          <div><span class="lext-mini-lbl">🟥 ROJAS</span><input class="lext-input lext-mini" id="lext-pl-ov-tr" type="number" min="0" value="0" /></div>
+          <div><span class="lext-mini-lbl">🧤 IMBATIDAS</span><input class="lext-input lext-mini" id="lext-pl-ov-imbat" type="number" min="0" value="0" /></div>
+        </div>
+        <div class="lext-grid4">
+          <div><span class="lext-mini-lbl">🖐 PEN. PARADOS</span><input class="lext-input lext-mini" id="lext-pl-ov-psave" type="number" min="0" value="0" /></div>
+        </div>
+        <div class="lext-sub">Estos números SUSTITUYEN al cálculo automático (suma de los eventos reales de todas las competiciones oficiales) SOLO para este jugador, hasta que desmarques la casilla de arriba.</div>
+      </div>
+
       <div class="lext-btn-row">
         <button class="lext-btn green" id="lext-pl-save-btn" onclick="lextSavePlayer()">💾 Añadir jugador</button>
         <button class="lext-btn" id="lext-pl-cancel-btn" onclick="lextCancelEditPlayer()" style="display:none;">✕ Cancelar</button>
@@ -51772,7 +51818,12 @@ https://api.sofascore.app/api/v1/team/44/image
          sim. Sin este guard, una hidratación fallida pintaba todo a 0
          y, al siguiente saveData (toggle flag, edit), las stats se
          perdían para siempre en localStorage. */
-      if (clean.pj > 0) {
+      /* `p.statsOverride` (corrección manual del admin) cuenta como
+         "clean" SIEMPRE, aunque su `pj` sea 0 (p.ej. el admin quiere
+         dejar al jugador a cero) — sin este OR, un override a 0
+         quedaría descartado por el guard de abajo y el display caería
+         de vuelta a los valores viejos/corruptos de `p.*`. */
+      if (clean.pj > 0 || p.statsOverride) {
         p.pj       = clean.pj;
         p.gol      = clean.gol;
         p.pen      = clean.pen;
@@ -51786,10 +51837,10 @@ https://api.sofascore.app/api/v1/team/44/image
       /* Stats de DISPLAY (suma de TODAS las comps) — NO muta `p.*`.
          Si la suma no aporta datos reales (`pj===0`), cae a `clean`
          (liga+copa) y, si tampoco, al propio `p` (valores ya escritos).*/
-      var disp = (clean && clean.pj > 0) ? clean : p;
+      var disp = (clean && (clean.pj > 0 || p.statsOverride)) ? clean : p;
       if (_realDisp !== _real && typeof window._lextHydratePlayerStats === 'function') {
         var cd = window._lextHydratePlayerStats(t, p, _realDisp);
-        if (cd && cd.pj > 0) disp = cd;
+        if (cd && (cd.pj > 0 || p.statsOverride)) disp = cd;
       }
       _DISP.set(p, disp);
       (byPos[p.pos]||byPos.MED).push(p);
@@ -51812,6 +51863,7 @@ https://api.sofascore.app/api/v1/team/44/image
       if(p.elite)      badges += '<span class="lext-badge star"   title="Estrella del equipo">⭐</span>';
       if(p.natGoal)    badges += '<span class="lext-badge scorer" title="Goleador nato (~30% goles)">⚾</span>';
       if(p.natGoalPro) badges += '<span class="lext-badge scorer" title="Goleador estrella (~45% goles)">🏀</span>';
+      if(p.statsOverride) badges += '<span class="lext-badge" style="background:rgba(120,180,255,.2);border:1px solid rgba(120,180,255,.5);color:#78b4ff;" title="Estadísticas corregidas a mano por el admin — pulsa 🖍 para editarlas o quitar la corrección">🔒</span>';
       /* Badge de lesión: SOLO para clubes HUMANOS canónicos. LESION_STORE
          está indexado por NOMBRE de jugador (no por equipo), y los
          rosters genéricos ("Jugador 8", "Jugador 20"...) se REPITEN en
@@ -52162,6 +52214,27 @@ https://api.sofascore.app/api/v1/team/44/image
     if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
     t.players = t.players || [];
 
+    /* Corrección manual de estadísticas — lee el toggle + la rejilla
+       del form. Si el toggle está desmarcado, `null`: se borra
+       cualquier corrección previa y el jugador vuelve al cálculo
+       automático (suma de eventos reales de todas las comps). */
+    var _ovToggleEl = document.getElementById('lext-pl-stats-ov-toggle');
+    var _statsOv = null;
+    var _ovNum = function(id){ var el = document.getElementById(id); var n = parseInt(el && el.value, 10); return isFinite(n) && n >= 0 ? n : 0; };
+    if (_ovToggleEl && _ovToggleEl.checked) {
+      _statsOv = {
+        pj:       _ovNum('lext-pl-ov-pj'),
+        gol:      _ovNum('lext-pl-ov-gol'),
+        pen:      _ovNum('lext-pl-ov-pen'),
+        fk:       _ovNum('lext-pl-ov-fk'),
+        mvp:      _ovNum('lext-pl-ov-mvp'),
+        ta:       _ovNum('lext-pl-ov-ta'),
+        tr:       _ovNum('lext-pl-ov-tr'),
+        imbat:    _ovNum('lext-pl-ov-imbat'),
+        penSaved: _ovNum('lext-pl-ov-psave')
+      };
+    }
+
     if(_editingPlayerId){
       var target = t.players.filter(function(p){ return p.id === _editingPlayerId; })[0];
       if(!target){ _editingPlayerId = null; return; }
@@ -52177,6 +52250,8 @@ https://api.sofascore.app/api/v1/team/44/image
       target.elite    = isStar;
       target.natGoal  = isScorer;
       target.natGoalPro = isScorerPro;
+      if (_statsOv) { target.statsOverride = _statsOv; }
+      else { delete target.statsOverride; }
     } else {
       if(isCap) t.players.forEach(function(p){ if(p.captain) p.captain = false; });
       var newP = {
@@ -52190,6 +52265,7 @@ https://api.sofascore.app/api/v1/team/44/image
         natGoalPro: isScorerPro,
         pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
       };
+      if (_statsOv) newP.statsOverride = _statsOv;
       t.players.push(newP);
     }
     // El poder del equipo NO se recalcula — es fijo.
@@ -52249,6 +52325,41 @@ https://api.sofascore.app/api/v1/team/44/image
     if(pkChk)     pkChk.checked     = !!target.penalty;
     if(starChk)   starChk.checked   = !!target.elite;
     if(scorerChk) scorerChk.checked = !!target.natGoal;
+
+    /* Corrección manual de estadísticas (petición usuario 2026-07-10:
+       «un jugador con 89 goles cuando el equipo solo ha marcado 71 —
+       edita las estadísticas o déjame editarlas a mi»). Si el jugador
+       ya tiene una corrección guardada (`target.statsOverride`), la
+       precargamos y activamos el toggle. Si no, precargamos con los
+       números que la plantilla está mostrando AHORA MISMO (el mismo
+       cálculo — real/DISP — de `renderSquadList`) para que el admin
+       parta de un valor con sentido en vez de 0, con el toggle
+       apagado (el cálculo automático sigue mandando hasta que lo
+       active). */
+    var _ovBase = target.statsOverride || null;
+    if (!_ovBase) {
+      try {
+        var _compsEP = (typeof window.CURRENT_SQUAD_COMPETITIONS !== 'undefined' && window.CURRENT_SQUAD_COMPETITIONS)
+          ? window.CURRENT_SQUAD_COMPETITIONS : ['liga','copa'];
+        if (typeof window._lextDomesticAllComps === 'function') _compsEP = window._lextDomesticAllComps(_compsEP);
+        var _realEP = (typeof window._lextComputeRealStats === 'function')
+          ? window._lextComputeRealStats(t, data, { competitions: _compsEP })
+          : { teamPJ: 0, liveStats: {} };
+        _ovBase = (typeof window._lextHydratePlayerStats === 'function')
+          ? window._lextHydratePlayerStats(t, target, _realEP)
+          : null;
+      } catch(_){}
+    }
+    var _ovToggle = document.getElementById('lext-pl-stats-ov-toggle');
+    if (_ovToggle) _ovToggle.checked = !!target.statsOverride;
+    var _ovIds = {pj:'lext-pl-ov-pj', gol:'lext-pl-ov-gol', pen:'lext-pl-ov-pen', fk:'lext-pl-ov-fk',
+      mvp:'lext-pl-ov-mvp', ta:'lext-pl-ov-ta', tr:'lext-pl-ov-tr', imbat:'lext-pl-ov-imbat', penSaved:'lext-pl-ov-psave'};
+    Object.keys(_ovIds).forEach(function(k){
+      var el = document.getElementById(_ovIds[k]);
+      if (el) el.value = String((_ovBase && Number(_ovBase[k])) || 0);
+    });
+    try { window._lextToggleStatsOvUI(); } catch(_){}
+
     var sum = document.getElementById('lext-pl-summary');
     if(sum) sum.textContent = '🖍 Editando: ' + (target.name || '?');
     var btn = document.getElementById('lext-pl-save-btn');
@@ -52263,6 +52374,13 @@ https://api.sofascore.app/api/v1/team/44/image
     }
   };
 
+  /* Muestra/oculta la rejilla de corrección manual según el toggle. */
+  window._lextToggleStatsOvUI = function(){
+    var t = document.getElementById('lext-pl-stats-ov-toggle');
+    var g = document.getElementById('lext-pl-stats-ov-grid');
+    if (g) g.style.display = (t && t.checked) ? '' : 'none';
+  };
+
   window.lextCancelEditPlayer = function(){ _exitEditPlayerMode(); };
 
   function _exitEditPlayerMode(){
@@ -52273,6 +52391,9 @@ https://api.sofascore.app/api/v1/team/44/image
     if(btn) btn.innerHTML = '💾 Añadir jugador';
     var cancel = document.getElementById('lext-pl-cancel-btn');
     if(cancel) cancel.style.display = 'none';
+    var _ovToggle = document.getElementById('lext-pl-stats-ov-toggle');
+    if (_ovToggle) _ovToggle.checked = false;
+    try { window._lextToggleStatsOvUI(); } catch(_){}
   }
 
   /* Selector de posición por botones (reemplaza al <select> nativo

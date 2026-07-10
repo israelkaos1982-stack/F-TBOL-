@@ -3891,6 +3891,11 @@ _KV_ALLOWED_EXACT = {
     # sin contención con otros writers — con merge por RECENCIA (updatedAt): un
     # POST stale (otro móvil, request perdido) nunca pisa una copia más nueva.
     "bayern_hud_overrides_v1",
+    # Etiqueta de TEMPORADA de la cabecera del home ("Temporada 32-33").
+    # El admin la edita tocando el texto (prompt). localStorage es solo
+    # caché; el server es la fuente de verdad para que la edición viaje a
+    # los 6 móviles + PC y sobreviva al borrado de datos (2026-07-10).
+    "season_label_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -3920,6 +3925,9 @@ _KV_RECENCY_BLOB_KEYS = {
     # siempre) → un navegador con un menú stale ya no puede pisar el nuevo,
     # y al borrar datos / cambiar de móvil se recupera la última versión.
     "menu_home_v1",
+    # Etiqueta de temporada de la cabecera del home: la última edición del
+    # admin gana entera (va `authoritative` → sella reloj del server).
+    "season_label_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

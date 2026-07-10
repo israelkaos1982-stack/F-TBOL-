@@ -6896,6 +6896,26 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
             }
           }
         } catch(_){}
+        /* Nivel POR CAJA (obligatorio, 2026-07-10): el club/selección de
+           CUALQUIER mister humano del registro muestra el nivel de SU
+           caja (defaults por hub + override del editor 🖍 de esa caja,
+           vía window._misterSeasonFormFor de misc_body_1) — p.ej.
+           Inter/Rubén = 🌟 ESTRELLA en cada partido, aunque el hub
+           activo sea otro y aunque la previa se abra desde la pantalla
+           del torneo. Los hardcodes de abajo quedan como fallback si el
+           helper aún no está cargado. */
+        try {
+          if (typeof window._misterSeasonFormFor === 'function'){
+            var fLvl = window._misterSeasonFormFor(name);
+            if (fLvl && fLvl.none) return null; /* admin eligió "Ninguno" para esa caja */
+            if (fLvl && fLvl.nivel){
+              var nvU = String(fLvl.nivel).toUpperCase();
+              if (nvU === 'CRACK')    return { lbl: '⭐ CRACK',    color: '#a0e0ff', short: 'CRACK' };
+              if (nvU === 'LEYENDA')  return { lbl: '🏅 LEYENDA',  color: '#ffbb33', short: 'LEYENDA' };
+              if (nvU === 'ESTRELLA') return { lbl: '🌟 ESTRELLA', color: '#ff77c2', short: 'ESTRELLA' };
+            }
+          }
+        } catch(_){}
         if (normFn('Atlético Madrid') === n || normFn('Atletico Madrid') === n) return { lbl: '🏅 LEYENDA', color: '#ffbb33', short: 'LEYENDA' };
         if (normFn('Real Madrid') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };
         if (normFn('FC Barcelona') === n || normFn('Barcelona') === n) return { lbl: '⭐ CRACK', color: '#a0e0ff', short: 'CRACK' };

@@ -60389,6 +60389,17 @@ https://api.sofascore.app/api/v1/team/44/image
       if (d) return { nivel: d.nivel || '', rival: d.formRival || '' }; } catch(_){}
     return null;
   };
+  /* Variante por-mister CONCRETO (2026-07-10): igual que
+     _hubSeasonDefaults pero para un mister dado, NO el hub activo. La
+     consume `window._misterSeasonFormFor` para que la PREVIA de
+     cualquier partido de una caja humana (p.ej. St. Gallen vs Inter,
+     abierto desde la pantalla del torneo sin pasar por el hub) muestre
+     el Nivel/Forma de SU caja (Rubén/Inter = ESTRELLA + 🎲🎲). */
+  window._hubSeasonDefaultsFor = function(id){
+    try { var d = id && _HUB_DEF[id];
+      if (d) return { nivel: d.nivel || '', rival: d.formRival || '' }; } catch(_){}
+    return null;
+  };
   var applying = false;
   var observers = [];
 
@@ -68622,6 +68633,69 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   window._teamSeasonFormSave = function(d){ _save(d); };
   window._teamSeasonFormRenderHeader = function(){ try { _renderHeader(); } catch(_){} };
 
+  /* ── Nivel/Forma POR EQUIPO (obligatorio, 2026-07-10) ─────────────
+     Resuelve el Nivel + Forma (yo/rival) del MISTER que dirige a
+     `teamName` (club O selección del registro MISTERS_HUMANOS),
+     independientemente de cuál sea el hub ACTIVO. Bug (fotos usuario
+     2026-07-10, «St. Gallen vs Inter», Torneos de Verano): la previa
+     de un partido del Inter (Rubén 🐲, nivel ESTRELLA, forma 🎲/🎲)
+     no mostraba la fila NIVEL y los dados salían con la forma del hub
+     activo (Liverpool) porque `_wrapPRFS` solo detectaba al humano
+     con `esHumano()` (5 legacy de Liga EA — el Inter vive en Resto de
+     Ligas) y `_teamLevel` (bundle) solo conocía el override de la
+     caja Liverpool + 5 clubes hardcodeados.
+     Fuentes (misma jerarquía que la cabecera del hub):
+       1. Si el mister ES el del hub activo → `_load()` completo
+          (defaults + team_season_form_v1 + menu_home_v1) — fidelidad
+          idéntica a la cabecera, el camino Liverpool no cambia.
+       2. Defaults por hub (`_hubSeasonDefaultsFor`, p.ej. ruben →
+          ESTRELLA + rival 🎲).
+       3. Override del editor 🖍 de ESA caja (menu_home_v1 →
+          ov['go:<screen>'], sincronizada con el servidor) — manda.
+     Devuelve { yo, rival, nivel, none } o null si el equipo no es de
+     ningún mister humano. `none:true` = el admin eligió "Ninguno"
+     explícitamente para el nivel de esa caja. */
+  window._misterSeasonFormFor = function(teamName){
+    try {
+      if (!teamName) return null;
+      var isClub = (typeof window._isHumanClubCanonico === 'function') && window._isHumanClubCanonico(teamName);
+      var isSel  = !isClub && (
+        ((typeof window._isHumanSeleccionCanonica === 'function') && window._isHumanSeleccionCanonica(teamName)) ||
+        ((typeof window._esSelHumana === 'function') && window._esSelHumana(teamName)));
+      if (!isClub && !isSel) return null;
+      var m = (typeof window._mhFindMister === 'function') ? window._mhFindMister(teamName) : null;
+      if (!m || !m.id) return null;
+      /* Mister del hub ACTIVO → fuente completa (byte-for-byte igual
+         que la cabecera del hub, incluye team_season_form_v1). */
+      try {
+        var hAct = window._activeHub && window._activeHub();
+        if (hAct && hAct.id === m.id){
+          var sAct = _load();
+          return { yo: sAct.yo || '🎲', rival: sAct.rival || '🎲', nivel: sAct.nivel || '', none: false };
+        }
+      } catch(_){}
+      var out = { yo: '🎲', rival: '🎲', nivel: '', none: false };
+      var hd = (typeof window._hubSeasonDefaultsFor === 'function') ? window._hubSeasonDefaultsFor(m.id) : null;
+      if (hd){ if (hd.nivel) out.nivel = hd.nivel; if (hd.rival) out.rival = hd.rival; }
+      try {
+        var rawM = localStorage.getItem('menu_home_v1');
+        if (rawM && m.screen){
+          var dM = JSON.parse(rawM);
+          var ovM = dM && dM.ov && dM.ov['go:' + m.screen];
+          if (ovM && typeof ovM === 'object'){
+            if (typeof ovM.formState === 'string' && ovM.formState.trim()) out.yo    = ovM.formState;
+            if (typeof ovM.formRival === 'string' && ovM.formRival.trim()) out.rival = ovM.formRival;
+            if (Object.prototype.hasOwnProperty.call(ovM, 'level')){
+              if (ovM.level != null && String(ovM.level).trim()){ out.nivel = String(ovM.level).trim(); }
+              else if (ovM.level === ''){ out.nivel = ''; out.none = true; } /* admin eligió "Ninguno" */
+            }
+          }
+        }
+      } catch(_){}
+      return out;
+    } catch(_){ return null; }
+  };
+
   /* ── Indicadores en la cabecera del hub (colores del Liverpool) ──
      2026-05-23: el badge 🎮 NIVEL (debajo de · TOÑÍN) y el cluster
      Yo/🎲/⬇️/Rival (arriba-dcha) se han sustituido por un único
@@ -68755,6 +68829,24 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         var eA = (typeof window.esHumano === 'function') && away && window.esHumano(away);
         var fs = { home: s.yo, away: s.rival };
         if (eA && !eH) fs = { home: s.rival, away: s.yo };
+        /* Refino POR CAJA (2026-07-10): si un lado es el club/selección
+           de un mister humano del registro (Inter/Rubén, PSG/Izan…),
+           usa la forma de SU caja — NO la del hub activo. `esHumano`
+           solo ve los 5 legacy de Liga EA, así que un partido del
+           Inter (Resto de Ligas) caía al mapeo por defecto con la
+           forma del hub activo. Para el hub activo el resolutor
+           devuelve `_load()` → mismo resultado que antes (el camino
+           Liverpool no cambia). HvH entre dos cajas: cada lado usa la
+           forma "yo" de su propio mister. */
+        try {
+          if (typeof window._misterSeasonFormFor === 'function'){
+            var fH = home ? window._misterSeasonFormFor(home) : null;
+            var fA = away ? window._misterSeasonFormFor(away) : null;
+            if (fH && fA)      fs = { home: fH.yo,    away: fA.yo };
+            else if (fH)       fs = { home: fH.yo,    away: fH.rival };
+            else if (fA)       fs = { home: fA.rival, away: fA.yo };
+          }
+        } catch(_){}
         window._ppFormStates = fs;
       } catch(_){}
     };

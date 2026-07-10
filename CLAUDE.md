@@ -72,6 +72,78 @@ pulsarlo:
    si existe, para que el admin tenga un control manual explícito
    cuando la propagación automática no baste.
 
+## Corrección manual de estadísticas por jugador (`p.statsOverride`) en Resto de Ligas / Liga EA Sports (obligatorio, 2026-07-10 #3)
+
+**Petición usuario 2026-07-10** (foto Salzburg, Liga Austria): «esas
+estadísticas del Salzburg… un jugador con 89 goles cuando el equipo
+solo ha marcado 71 — edita las estadísticas o déjame editarlas a mi».
+
+### Contexto
+
+La cabecera de la plantilla (`_lextRenderSquadStatsHeader`, "Máximo
+goleador") suma, por diseño, los goles del jugador en **TODAS** las
+competiciones oficiales del equipo (regla "SUMA TOTAL de competiciones",
+2026-06-15: Liga+Copa+UCL+UEL+UECL+Recopa+USC+Inter+Mundialito), mientras
+que la caja de arriba (GF) solo muestra Liga+Copa. Con un equipo que
+juega también competición europea, el total del jugador puede superar
+a simple vista el GF doméstico visible — pero, sea o no ese el caso
+exacto de Karim Konaté, el pedido explícito del usuario es tener control
+manual sobre estos números cuando algo se vea mal, sin depender de que
+se investigue cada caso puntual.
+
+### Fix — `p.statsOverride`, máxima prioridad sobre el cálculo automático
+
+Nuevo campo opcional `p.statsOverride = {pj,gol,pen,fk,mvp,ta,tr,imbat,
+penSaved}` en cada jugador de `team.players[]` (Resto de Ligas + Liga EA
+Sports). Se edita desde el mismo editor 🖍 de plantilla
+(`lextEditPlayer`/`lextSavePlayer`, `misc_body_1.html`):
+
+- Nuevo toggle **"🔒 Corregir estadísticas a mano"** + una rejilla de 9
+  campos (PJ/Goles/Penaltis/Faltas/MVP/Amarillas/Rojas/Imbatidas/Pen.
+  parados) dentro del form "➕ Añadir jugador individual" / edición.
+- Al abrir el editor de un jugador SIN corrección previa, la rejilla se
+  precarga con los números que la plantilla está mostrando AHORA MISMO
+  (mismo cálculo que `renderSquadList`), para que el admin parta de un
+  valor con sentido en vez de 0.
+- Al guardar con el toggle marcado, se persiste `target.statsOverride`;
+  al guardarlo DESMARCADO, se borra (`delete target.statsOverride`) y el
+  jugador vuelve al cálculo automático.
+- Badge 🔒 junto al nombre del jugador en la fila de la plantilla cuando
+  tiene una corrección activa.
+
+**`window._lextHydratePlayerStats(team, p, real)`** — el ÚNICO punto que
+resuelve "los stats limpios de un jugador" (lo usan `renderSquadList` Y
+`_lextRenderSquadStatsHeader`, así que ambos quedan sincronizados sin
+tocarlos por separado) — comprueba `p.statsOverride` **ANTES que
+cualquier otra cosa**, incluso antes del `teamPJ===0` early-return:
+si existe, se devuelve tal cual, ignorando eventos reales / cachés /
+`p.*` sin corregir. El guard de `renderSquadList` que decide si
+sobrescribir `p.*`/usar el valor de DISPLAY (`clean.pj > 0`) se amplía a
+`clean.pj > 0 || p.statsOverride`, para que una corrección a **0**
+(p.ej. "este jugador no ha jugado nada, ponlo a cero") no quede
+descartada por ese guard y no caiga de vuelta a los valores viejos.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un cálculo de stats de jugador nuevo (dashboard,
+   cabecera, ranking, lo que sea) lea `p.gol`/`p.pj`/etc. o los cachés
+   `ef_player_stats_*` SIN pasar antes por `_lextHydratePlayerStats` —
+   es el único chokepoint que respeta `p.statsOverride`. Leer directo se
+   salta la corrección manual del admin.
+2. **PROHIBIDO** que `applyMatchStats`/`resetPlayerStats`/cualquier
+   escritor de la simulación borre o modifique `p.statsOverride`. Es un
+   dato del admin (como derbys/trofeos/plantillas) — sobrevive a
+   partidos nuevos y a "Reiniciar Temporada" hasta que el admin lo quite
+   explícitamente desde el mismo editor.
+3. **PROHIBIDO** que `p.statsOverride` afecte al MOTOR de simulación
+   (elección de goleador, MVP, etc.). Es **solo de DISPLAY/rating** — la
+   ponderación real de goles sigue gobernada por los flags
+   `natGoal`/`natGoalPro`/`elite`/`captain`, nunca por el histórico de
+   goles marcados.
+4. Toda liga/competición NUEVA que reutilice `renderSquadList` /
+   `_lextHydratePlayerStats` hereda la corrección manual automáticamente
+   — no hace falta cablearla aparte.
+
 ## Wild Card → Open Qualifier → Previa de Champions: los ganadores se propagan EN EL MOMENTO, con invalidación en cascada al servidor (obligatorio, 2026-07-10)
 
 **Petición usuario 2026-07-10** (12 fotos: Wild Card "24 GANADORES →

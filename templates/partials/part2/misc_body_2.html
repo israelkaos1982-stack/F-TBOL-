@@ -31813,11 +31813,25 @@ document.addEventListener('DOMContentLoaded', function() {
        gana el last-write-wins. */
     state.ts = Date.now();
     _persistWinners(state);
-    /* El OQ y la Previa se reconstruyen desde estos ganadores —
-       limpiamos su caché para que vuelvan a sortearse. */
-    try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
-    try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
-    try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
+    /* El OQ y la Previa se reconstruyen desde estos ganadores — se
+       invalida en cascada (local + servidor, con reintentos) su
+       sorteo ya cacheado para que vuelvan a sortearse con el pool
+       real "en el momento". Un `removeItem` suelto NO basta: el sync
+       genérico salta los valores `null` al empujar al servidor, así
+       que el borrado nunca llegaba al servidor y una snapshot vieja
+       (con TBD-OQ-N placeholders) se resucitaba en el próximo
+       `hydrateFromServer()` — bug reportado 2026-07-10. */
+    if (typeof window._eurInvalidateDownstream === 'function' && window._EUR_DOWNSTREAM_OF_WC) {
+      window._eurInvalidateDownstream(window._EUR_DOWNSTREAM_OF_WC);
+    } else {
+      try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
+      try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+      try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
+      try { localStorage.removeItem('wprev_state_v1'); } catch(_){}
+      try { localStorage.removeItem('wprev_to_fase_grupos_v1'); } catch(_){}
+      try { localStorage.removeItem('wprev_to_europa_v1'); } catch(_){}
+      try { localStorage.removeItem('wprev_r1_to_conference_v1'); } catch(_){}
+    }
   }
 
   /* Versión EN SEGUNDO PLANO de simulateAll: simula las 24 liguillas
@@ -31855,9 +31869,22 @@ document.addEventListener('DOMContentLoaded', function() {
            sync multi-dispositivo (SYNC_KEYS → wc_state_v1). */
         state.ts = Date.now();
         _persistWinners(state);
-        try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
-        try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
-        try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
+        /* Misma invalidación en cascada (con reintentos al servidor)
+           que la ruta síncrona de `simulateAll` — ver comentario ahí.
+           Sin esto un `removeItem` suelto se pierde en el sync
+           multi-dispositivo y el Open Qualifier/Previa resucitan su
+           snapshot vieja con placeholders. */
+        if (typeof window._eurInvalidateDownstream === 'function' && window._EUR_DOWNSTREAM_OF_WC) {
+          window._eurInvalidateDownstream(window._EUR_DOWNSTREAM_OF_WC);
+        } else {
+          try { localStorage.removeItem('oq_simulation_v1'); } catch(_){}
+          try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
+          try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
+          try { localStorage.removeItem('wprev_state_v1'); } catch(_){}
+          try { localStorage.removeItem('wprev_to_fase_grupos_v1'); } catch(_){}
+          try { localStorage.removeItem('wprev_to_europa_v1'); } catch(_){}
+          try { localStorage.removeItem('wprev_r1_to_conference_v1'); } catch(_){}
+        }
       } catch(e){ try{console.error('[wc-sim finish]', e);}catch(_){} ok = false; }
       try { window._bgSimFinish('wild-card', ok!==false, {done:total, total:total}); } catch(_){}
       if(onDone) onDone(ok!==false);

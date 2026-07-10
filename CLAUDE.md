@@ -1,5 +1,77 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Botón "⬇️ Traer Wild Card" en Open Qualifier — recuperación manual si la propagación automática no llegó (obligatorio, 2026-07-10 #2)
+
+**Petición usuario 2026-07-10** (2 fotos, tras el fix de propagación en
+cascada de arriba): "no se lanzan al Open Qualifier, pon un botón en
+Open Qualifier para que lo haga". Pese a la invalidación en cascada
+(`_eurInvalidateDownstream`) y al botón "🟡 LANZAR CLASIFICADOS AL OPEN
+QUALIFIER" de la propia pantalla de la Wild Card (que re-persiste
+`wc_to_open_qualifier_v1` y navega a Open Qualifier), la Grupo A del
+Open Qualifier seguía mostrando `TBD-OQ-112` en vez de un ganador real.
+
+### Causa raíz — 2 caminos distintos por los que los 24 ganadores no llegan
+
+1. **Snapshot CONGELADA** (`europe_committed_v1`, del botón admin
+   "📤 Enviar realidad de cada equipo a su Europa" / "📤 ENVIAR TODOS
+   LOS EQUIPOS A SU COMPETICIÓN"): `computeOpenQualifierTeams()`
+   devuelve esa snapshot **VERBATIM** si existe y tiene la zona
+   `uclQual` no vacía (`_europeFrozenFor('uclQual')`), **sin mirar
+   `wc_to_open_qualifier_v1` en absoluto**. Si el admin congeló esa
+   snapshot ANTES de que la Wild Card terminara, se queda para
+   siempre sin los 24 ganadores — es el comportamiento DELIBERADO de
+   esa función (regla "se queda GUARDADO hasta editar/reenviar", más
+   abajo), pero significa que la cascada de invalidación (que solo
+   toca `oq_simulation_v1`/`wprev_*`, nunca `europe_committed_v1`) no
+   basta por sí sola.
+2. **El dispositivo que mira Open Qualifier no es el mismo que terminó
+   la Wild Card**: la invalidación en cascada llega al servidor con
+   reintentos pero de forma asíncrona; un dispositivo que abre la
+   pantalla justo en esa ventana, o que perdió el POST tras agotar los
+   3 reintentos (offline prolongado), puede seguir viendo el
+   `oq_simulation_v1` viejo.
+
+### Fix — `window._oqPullWildCardWinners()` + botón dedicado
+
+Nuevo botón **"⬇️ Traer Wild Card"** junto a 🎮 Sim / ♻️ Reset en
+`s-open-qualifier-clas` (mismo gate PIN 747 vía `pG(...)`). Al
+pulsarlo:
+1. Comprueba que `wc_to_open_qualifier_v1` tiene ganadores reales; si
+   no, avisa que hay que terminar la Wild Card primero.
+2. Invalida `oq_simulation_v1` vía `_eurInvalidateDownstream` (borra
+   local + servidor con reintentos) — cubre el caso 2.
+3. Recalcula el pool **EN VIVO** (`_europeIgnoreFrozen=true` temporal,
+   restaurado después) y, **si existe** una snapshot congelada
+   (`europe_committed_v1`), **actualiza su zona `uclQual`** con el
+   resultado en vivo (local + `POST /api/kv/europe_committed_v1`) —
+   cubre el caso 1. Es una acción EXPLÍCITA del admin (pulsar el
+   botón), tan legítima como pulsar "Enviar realidad..." de nuevo —
+   NO viola la regla de esa snapshot ("solo cambia al editar/reenviar
+   explícitamente").
+4. Re-pinta `buildOpenQualifierClas()` y confirma con un `alert()`
+   cuántos equipos reales quedaron en el pool (de 112).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** asumir que la invalidación en cascada
+   (`_eurInvalidateDownstream`) es suficiente por sí sola para que los
+   ganadores de una fase lleguen a la siguiente: si existe una
+   snapshot `europe_committed_v1` congelada para esa zona, seguirá
+   ganando hasta que algo la actualice explícitamente. Todo botón
+   nuevo de "traer ganadores a mano" de este tipo debe, además de
+   invalidar el sorteo cacheado, recalcular en vivo y refrescar esa
+   zona de la snapshot si existe.
+2. **PROHIBIDO** que este botón deje `window._europeIgnoreFrozen` en
+   `true` de forma permanente — se restaura al valor previo
+   inmediatamente después de leer el pool en vivo (mismo patrón que
+   `_doCommitEurope`).
+3. Todo par fase-anterior/fase-siguiente NUEVO que dependa de un pool
+   propagado (como WC→OQ, OQ→Previa) hereda este patrón: un botón
+   "Traer <fase anterior>" en la pantalla de la fase siguiente que
+   invalide el sorteo cacheado propio Y refresque la snapshot congelada
+   si existe, para que el admin tenga un control manual explícito
+   cuando la propagación automática no baste.
+
 ## Wild Card → Open Qualifier → Previa de Champions: los ganadores se propagan EN EL MOMENTO, con invalidación en cascada al servidor (obligatorio, 2026-07-10)
 
 **Petición usuario 2026-07-10** (12 fotos: Wild Card "24 GANADORES →

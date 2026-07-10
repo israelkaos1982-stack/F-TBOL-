@@ -36754,8 +36754,8 @@ window._showSimProgress = function(opts, onDone){
   <h2 style="margin:0;white-space:nowrap;">Open Qualifier · Clasificación</h2>
 </div>
 
-<!-- Sim / Reset (PIN 747 obligatorio) -->
-<div style="display:flex;gap:10px;justify-content:center;padding:8px 6px 4px;">
+<!-- Sim / Reset / Traer Wild Card (PIN 747 obligatorio) -->
+<div style="display:flex;gap:10px;justify-content:center;padding:8px 6px 4px;flex-wrap:wrap;">
   <button onclick="pG(function(){window.simulateOpenQualifier&&window.simulateOpenQualifier()})"
           style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 18px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎮 Sim
@@ -36763,6 +36763,16 @@ window._showSimProgress = function(opts, onDone){
   <button onclick="pG(function(){window.resetOpenQualifier&&window.resetOpenQualifier()})"
           style="background:linear-gradient(135deg,#3a1414,#5a2424);border:1px solid rgba(255,80,80,.5);border-radius:8px;padding:9px 18px;color:#ff8080;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     ♻️ Reset
+  </button>
+  <!-- Traer ganadores de la Wild Card a mano (2026-07-10): por si la
+       propagación automática (invalidación en cascada al terminar la
+       Wild Card) no llegó a este dispositivo, o hay una snapshot
+       congelada de "Enviar realidad..." de antes de que la Wild Card
+       terminara — el admin fuerza el recálculo del pool con los 24
+       ganadores reales sin tener que ir a Reset/Draw a ciegas. -->
+  <button onclick="pG(function(){window._oqPullWildCardWinners&&window._oqPullWildCardWinners()})"
+          style="background:linear-gradient(135deg,#3a2a00,#5a4400);border:1px solid rgba(253,200,48,.55);border-radius:8px;padding:9px 18px;color:#ffe680;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+    ⬇️ Traer Wild Card
   </button>
 </div>
 
@@ -37316,9 +37326,79 @@ window._showSimProgress = function(opts, onDone){
     buildOpenQualifierClas();
   }
 
-  window.buildOpenQualifierClas = buildOpenQualifierClas;
-  window.simulateOpenQualifier  = simulateOpenQualifier;
-  window.resetOpenQualifier     = resetOpenQualifier;
+  /* Botón "⬇️ Traer Wild Card" (2026-07-10): trae A MANO los 24
+     ganadores de la Wild Card al pool del Open Qualifier. Cubre 2
+     casos en los que la propagación automática (invalidación en
+     cascada de `_eurInvalidateDownstream` al terminar la Wild Card)
+     no basta:
+       1) Este dispositivo no recibió todavía la invalidación (llegó
+          por otro dispositivo, o el POST de invalidación aún está
+          reintentando en segundo plano) — `oq_simulation_v1` sigue
+          con el sorteo viejo (placeholders) en ESTE dispositivo.
+       2) Existe una snapshot CONGELADA (`europe_committed_v1`,
+          "📤 Enviar realidad de cada equipo a su Europa") que se
+          congeló ANTES de que la Wild Card terminara — esa snapshot
+          nunca conoció a los 24 ganadores y `computeOpenQualifierTeams`
+          la devuelve tal cual, ignorando `wc_to_open_qualifier_v1`
+          por diseño (regla "El overlay Equipos por competición... se
+          queda GUARDADO hasta editar/reenviar"). Este botón SÍ
+          recalcula en vivo y actualiza esa zona de la snapshot (si
+          existe) — es una acción EXPLÍCITA del admin, igual de
+          legítima que pulsar "Enviar realidad..." de nuevo. */
+  function pullWildCardWinners(){
+    var wc = null;
+    try {
+      var raw = localStorage.getItem('wc_to_open_qualifier_v1');
+      wc = raw ? JSON.parse(raw) : null;
+    } catch(_){}
+    var n = (wc && Array.isArray(wc.teams)) ? wc.teams.length : 0;
+    if(!n){
+      alert('La Wild Card todavía no tiene ganadores guardados.\n\nTermina de simular sus 24 grupos primero (🎮 Sim en la pantalla de la Wild Card).');
+      return;
+    }
+    try {
+      /* Invalida el sorteo cacheado del propio OQ para forzar el
+         recálculo del pool con los ganadores reales. */
+      if (typeof window._eurInvalidateDownstream === 'function') {
+        window._eurInvalidateDownstream(['oq_simulation_v1']);
+      } else {
+        try { localStorage.removeItem(STORE_KEY); } catch(_){}
+      }
+      /* Recalcula EN VIVO (bypass de cualquier snapshot congelada) y,
+         si esa snapshot existe, la actualizamos para que no vuelva a
+         tapar a los ganadores en el próximo render. */
+      var _prevIgnore = window._europeIgnoreFrozen;
+      window._europeIgnoreFrozen = true;
+      var live = [];
+      try { live = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || []; }
+      finally { window._europeIgnoreFrozen = _prevIgnore; }
+      try {
+        var craw = localStorage.getItem('europe_committed_v1');
+        if(craw){
+          var blob = JSON.parse(craw);
+          if(blob && typeof blob === 'object'){
+            blob.uclQual = live;
+            localStorage.setItem('europe_committed_v1', JSON.stringify(blob));
+            fetch('/api/kv/europe_committed_v1', {
+              method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+              body: JSON.stringify({value: blob})
+            }).catch(function(){});
+          }
+        }
+      } catch(_){}
+      buildOpenQualifierClas();
+      var real = live.filter(function(t){ return t && t.name && !/^TBD|^__placeholder_/.test(t.name); }).length;
+      alert('✅ Pool del Open Qualifier actualizado: '+real+' / 112 equipos reales (incluye los '+n+' ganadores de la Wild Card).');
+    } catch(e){
+      try { console.error('[oq-pull-wc]', e); } catch(_){}
+      alert('⚠️ Error trayendo los ganadores de la Wild Card: '+(e && e.message ? e.message : e));
+    }
+  }
+
+  window.buildOpenQualifierClas   = buildOpenQualifierClas;
+  window.simulateOpenQualifier    = simulateOpenQualifier;
+  window.resetOpenQualifier       = resetOpenQualifier;
+  window._oqPullWildCardWinners   = pullWildCardWinners;
   document.addEventListener('DOMContentLoaded', buildOpenQualifierClas);
 })();
 </script>

@@ -120,6 +120,73 @@ la(s) fase(s) siguiente(s):
    Una fase DINÁMICA (recalcula en cada render, como Champions/Europa/
    Conference fase de grupos) NO lo necesita — ya está siempre al día.
 
+## "📤 ENVIAR TODOS LOS EQUIPOS" del overlay europeo es a prueba de cuota + confirma con el servidor (obligatorio, 2026-07-10 #2)
+
+**Bug (foto usuario 2026-07-10, «porque no me deja guardar»)**: tras el
+fix del badge 💾 Guardado / 📝 Sin guardar (sección siguiente), el admin
+pulsaba "📤 ENVIAR TODOS LOS EQUIPOS A SU COMPETICIÓN" y el badge se
+quedaba SIEMPRE en 📝 Sin guardar, por más veces que lo intentara.
+
+### Causa raíz
+
+`_doCommitEurope` (`misc_body_1.html`) persistía la snapshot con un
+`localStorage.setItem(EUROPE_COMMIT_KEY, ...)` PELADO envuelto en
+`try{}catch(_){}` — exactamente el antipatrón que el propio archivo
+documenta en su cabecera («GUARDADO A PRUEBA DE CUOTA — `_lsSetSafe`»):
+si el navegador va sin espacio (banner «⚠️ Navegador sin espacio», ya
+visible en las capturas de este mismo usuario), `setItem` lanza
+`QuotaExceededError`, el catch lo TRAGA en silencio, y la snapshot
+(hasta ~250 equipos con escudos — puede pesar varios cientos de KB)
+JAMÁS se escribía. El POST al servidor (`_saveEuropeCommitServer`) era
+además fire-and-forget con `.catch()` mudo, sin reintentos — en red
+móvil se pierde con frecuencia. Con los DOS fallos combinados (local
+lleno + POST perdido), la snapshot no llegaba a ningún sitio y el badge
+`_eurEuropeCommitSaved()` (que solo miraba `localStorage`) nunca podía
+pasar a "Guardado" — el admin podía pulsar ENVIAR indefinidamente sin
+ningún resultado visible ni ningún aviso de error.
+
+### Fix
+
+- **Guardado local a prueba de cuota**: `_doCommitEurope` usa
+  `window._lsSetSafe(EUROPE_COMMIT_KEY, ...)` en vez del `setItem`
+  pelado — libera espacio reconstruible (snapshots viejos, `_backup`,
+  stores de stats, `_protected` de OTRAS ligas) y reintenta antes de
+  rendirse, mismo helper que ya protege el resto del proyecto.
+- **POST al servidor CON reintentos + confirmación**:
+  `_saveEuropeCommitServer(blob, onDone)` reintenta hasta 3 veces con
+  backoff exponencial (mismo patrón que `_postClearRetry`) y llama a
+  `onDone(true/false)` según si el servidor aceptó la snapshot.
+- **El badge confía en el servidor, no solo en `localStorage`**:
+  `_eurEuropeCommitSaved()` devuelve `true` si `window._eurCommitConfirmedAt`
+  está puesto (el servidor confirmó esta sesión), aunque el guardado
+  LOCAL de este dispositivo concreto haya fallado por falta de espacio
+  — el servidor es la fuente de verdad multi-dispositivo de este
+  proyecto (mismo principio que HUD/derbys/trofeos/lesiones).
+- **Aviso explícito si AMBOS fallan** (local Y servidor): `alert()` con
+  instrucciones (limpiar caché / reintentar con mejor conexión) en vez
+  de dejar al admin sin ninguna pista de por qué "no guarda".
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_doCommitEurope` (o cualquier guardado nuevo de
+   `europe_committed_v1`) vuelva a un `localStorage.setItem` pelado con
+   catch mudo. Debe usar `window._lsSetSafe` — este blob es lo bastante
+   grande (hasta ~250 equipos con escudos) para disparar
+   `QuotaExceededError` con facilidad en dispositivos ya cargados de
+   ligas.
+2. **PROHIBIDO** que `_saveEuropeCommitServer` vuelva a ser
+   fire-and-forget sin reintentos ni callback de confirmación. El badge
+   de guardado depende de saber si el servidor aceptó la snapshot.
+3. **PROHIBIDO** que `_eurEuropeCommitSaved()` dependa ÚNICAMENTE de
+   `localStorage.getItem('europe_committed_v1')`. Debe considerar
+   también `window._eurCommitConfirmedAt` — un dispositivo con
+   `localStorage` lleno puede seguir guardando correctamente en el
+   servidor, y el badge no debe mentir diciendo "sin guardar" en ese
+   caso.
+4. **PROHIBIDO** que un fallo COMPLETO de guardado (local Y servidor)
+   quede en silencio. Avisar siempre al admin con una acción concreta
+   a tomar (limpiar caché / revisar conexión).
+
 ## El overlay "Equipos por competición" ya NO fuerza cálculo en vivo — el conteo se queda GUARDADO hasta editar/reenviar (obligatorio, 2026-07-10)
 
 **Petición usuario 2026-07-10** (foto del header "👁 EQUIPOS POR

@@ -41669,15 +41669,36 @@ window._showSimProgress = function(opts, onDone){
       setTimeout(function(){ t.style.opacity = '0'; setTimeout(function(){ try{ t.remove(); }catch(_){} }, 250); }, 6000);
     } catch(_){}
   }
-  function _saveEuropeCommitServer(blob){
+  /* CON REINTENTOS + confirmación (bug 2026-07-10, foto usuario "no me
+     deja guardar" — el badge 💾/📝 se quedaba SIEMPRE en "Sin guardar"):
+     antes era fire-and-forget con `.catch()` mudo — si el POST se
+     perdía (red móvil) nadie se enteraba, y el guardado LOCAL (ver
+     `_doCommitEurope`) tampoco avisaba si `localStorage` estaba lleno
+     (banner «Navegador sin espacio» ya documentado en este archivo).
+     Con esos 2 fallos combinados la snapshot NUNCA llegaba a ningún
+     lado — el admin podía pulsar ENVIAR indefinidamente sin resultado
+     visible. Ahora reintenta hasta 3 veces con backoff exponencial
+     (mismo patrón que `_postClearRetry`) y llama a `onDone(true/false)`
+     para que el caller pueda reflejar el resultado real. */
+  function _saveEuropeCommitServer(blob, onDone, tries){
+    tries = tries || 0;
     try {
       fetch('/api/kv/'+EUROPE_COMMIT_KEY, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         credentials:'same-origin',
         body: JSON.stringify({value: blob})
-      }).catch(function(){});
-    } catch(_){}
+      }).then(function(r){
+        if(!r || !r.ok) throw new Error('bad status');
+        if(onDone) onDone(true);
+      }).catch(function(){
+        if(tries < 3){ setTimeout(function(){ _saveEuropeCommitServer(blob, onDone, tries+1); }, Math.pow(2, tries+1) * 1000); }
+        else if(onDone) onDone(false);
+      });
+    } catch(_){
+      if(tries < 3){ setTimeout(function(){ _saveEuropeCommitServer(blob, onDone, tries+1); }, Math.pow(2, tries+1) * 1000); }
+      else if(onDone) onDone(false);
+    }
   }
   window._restoLigasCommitEurope = function(){
     if(typeof window._computeQualifiedFromLeagues !== 'function'
@@ -41775,15 +41796,45 @@ window._showSimProgress = function(opts, onDone){
       alert('⚠️ No se pudo calcular ningún equipo. Verifica que las ligas estén simuladas y vuelve a intentarlo.');
       return;
     }
-    /* Persistir en localStorage + server (fire-and-forget). SOLO las 6
-       zonas originales — Recopa/Intercontinental/Supercopa Europa/
-       Mundialito NO se congelan aquí (sus motores YA leen los extras
-       manuales en vivo en cada cómputo, ver `_eurPoolToTeams`/
-       `_eurManualExtraTeamNames` más arriba) — persistirlas en
-       `europe_committed_v1` no aportaría nada y agrandaría el blob sin
-       necesidad (regla de cuota 2 MB por clave, CLAUDE.md). */
-    try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
-    _saveEuropeCommitServer(blob);
+    /* Persistir en localStorage + server. SOLO las 6 zonas originales —
+       Recopa/Intercontinental/Supercopa Europa/Mundialito NO se
+       congelan aquí (sus motores YA leen los extras manuales en vivo
+       en cada cómputo, ver `_eurPoolToTeams`/`_eurManualExtraTeamNames`
+       más arriba) — persistirlas en `europe_committed_v1` no aportaría
+       nada y agrandaría el blob sin necesidad (regla de cuota 2 MB por
+       clave, CLAUDE.md).
+
+       A PRUEBA DE CUOTA + CONFIRMADO (bug 2026-07-10, "no me deja
+       guardar" — el badge se quedaba SIEMPRE en "Sin guardar"): un
+       `localStorage.setItem` pelado con catch mudo se tragaba
+       QuotaExceededError en silencio (banner «Navegador sin espacio»
+       ya documentado — este blob puede pesar cientos de KB con ~250
+       equipos + escudos). `_lsSetSafe` libera espacio reconstruible
+       (snapshots/backups/stats/_protected de OTRAS ligas) y reintenta
+       antes de rendirse. El POST al servidor (`_saveEuropeCommitServer`)
+       ahora reintenta 3 veces y CONFIRMA — si el servidor acepta la
+       snapshot, se marca `_eurCommitConfirmedAt` para que el badge
+       💾 Guardado se pueda fiar de eso aunque el `localStorage` local
+       siga lleno (el servidor es la fuente de verdad multi-dispositivo
+       de este proyecto). Si AMBOS fallan (local Y servidor), se avisa
+       al admin explícitamente — nunca en silencio. */
+    var _localSaved = false;
+    try {
+      _localSaved = window._lsSetSafe
+        ? window._lsSetSafe(EUROPE_COMMIT_KEY, JSON.stringify(blob))
+        : (function(){ try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); return true; } catch(_){ return false; } })();
+    } catch(_){ _localSaved = false; }
+    _saveEuropeCommitServer(blob, function(serverOk){
+      if(serverOk){ window._eurCommitConfirmedAt = Date.now(); }
+      if(!_localSaved && !serverOk){
+        try {
+          alert('⚠️ No se pudo guardar la configuración de equipos por competición.\n\n'
+              + 'No hay espacio libre en el navegador Y no se pudo confirmar con el servidor.\n\n'
+              + 'Prueba a limpiar la caché del navegador (Ajustes → Privacidad → Borrar datos de navegación) y vuelve a pulsar ENVIAR, o inténtalo con mejor conexión.');
+        } catch(_){}
+      }
+      try { _eurManualOverlayRender(); } catch(_){}
+    });
     /* Informe DETALLADO con nombre de equipo + liga por competición
        (petición usuario 2026-07-02: "quiero que me digas el nombre de
        los equipos y su liga que van a cada competición para que no
@@ -42037,6 +42088,13 @@ window._showSimProgress = function(opts, onDone){
      (`europe_committed_v1`)? Gobierna el icono de guardado del header
      del overlay (sustituye al antiguo texto "(en vivo)"). */
   function _eurEuropeCommitSaved(){
+    /* El servidor es la fuente de verdad multi-dispositivo: si acaba de
+       confirmar la snapshot (`_eurCommitConfirmedAt`, ver
+       `_doCommitEurope`) contamos como guardado aunque el `localStorage`
+       de ESTE dispositivo esté lleno y no haya podido persistirla —
+       bug 2026-07-10, el badge se quedaba en "Sin guardar" para
+       siempre cuando el navegador iba sin espacio. */
+    if(window._eurCommitConfirmedAt) return true;
     try { return !!localStorage.getItem('europe_committed_v1'); } catch(_){ return false; }
   }
   var _eurManualHydrating = false;

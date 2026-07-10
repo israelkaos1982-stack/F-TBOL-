@@ -1,5 +1,73 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El Nivel + Forma (🎲) de la PREVIA se resuelven POR CAJA vía el registro de misters, no por el hub activo (obligatorio, 2026-07-10)
+
+**Bug (2 fotos usuario 2026-07-10, «St. Gallen vs Inter», Torneos de
+Verano)**: la caja Inter-Portugal-Rubén 🐲 juega en nivel **ESTRELLA**
+con forma **🎲/🎲** (Yo/Rival) — la cabecera de su hub lo muestra bien
+(foto 1) — pero la PANTALLA DE PREVIA de sus partidos (foto 2) no
+mostraba la fila NIVEL en absoluto y los dados salían con la forma de
+OTRO hub (⬇️ bajo St. Gallen, heredado del hub activo Liverpool).
+Petición: "tiene que salir en cada partido el nivel estrella y ambos
+🎲🎲".
+
+### Causa raíz (2 huecos del mismo patrón)
+
+1. **`_teamLevel`** (previa, `static/js/index.bundle.js`) solo conocía
+   el override de la caja Liverpool (`menu_home_v1.ov['go:s-munich']`)
+   + 5 clubes hardcodeados (Atlético/Real Madrid/Barcelona/Bayern/
+   Arsenal). Inter (Rubén) y PSG (Izan) — que viven en Resto de Ligas,
+   no en Liga EA — devolvían `null` → sin badge → la fila NIVEL ni se
+   pintaba (`nivelHtml` solo se genera si `lvlA || lvlB`).
+2. **`_wrapPRFS`** (forma de temporada, `misc_body_1.html`) detectaba
+   el lado humano SOLO con `esHumano()` (los 5 legacy de Liga EA) y
+   sembraba `window._ppFormStates` con la forma del **hub ACTIVO**
+   (`_load()`). Un partido del Inter abierto desde la pantalla del
+   torneo (sin pasar por su hub) no reconocía a Inter como humano y
+   colocaba la forma del hub activo (Liverpool) en el lado equivocado.
+
+### Fix — resolutor por equipo `window._misterSeasonFormFor(teamName)`
+
+Nuevo helper en el IIFE de forma de temporada (`misc_body_1.html`),
+junto a `_teamSeasonForm`: resuelve el Nivel + Forma (yo/rival) del
+MISTER que dirige a `teamName` (club O selección, vía
+`_isHumanClubCanonico`/`_isHumanSeleccionCanonica` + `_mhFindMister`),
+sea cual sea el hub activo. Jerarquía de fuentes:
+1. Mister del hub ACTIVO → `_load()` completo (defaults +
+   `team_season_form_v1` + `menu_home_v1`) — el camino Liverpool queda
+   byte-for-byte igual que antes.
+2. Defaults por hub (`window._hubSeasonDefaultsFor(id)`, nuevo, expone
+   `_HUB_DEF` del IIFE del HUD: ruben → ESTRELLA + rival 🎲).
+3. Override del editor 🖍 de ESA caja (`menu_home_v1.ov['go:<screen>']`,
+   sincronizada con servidor): `formState`/`formRival`/`level` mandan.
+   `level: ''` explícito → `none:true` (admin eligió "Ninguno").
+
+Consumidores:
+- **`_wrapPRFS`**: tras el mapeo legacy, refina `_ppFormStates` por
+  caja — el lado del mister usa SU "yo", el rival SU "rival"; HvH
+  entre dos cajas: cada lado usa el "yo" de su propio mister.
+- **`_teamLevel`** (bundle, bump 9.29 → 9.30): consulta el helper tras
+  el override explícito de la caja Liverpool (que mantiene prioridad)
+  y ANTES de los 5 hardcodes (que quedan como fallback si el helper no
+  cargó). Mapea CRACK ⭐ / LEYENDA 🏅 / ESTRELLA 🌟; `none` → sin badge.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que la previa (o cualquier pantalla nueva que muestre
+   Nivel/Forma de un partido) detecte al humano SOLO con `esHumano()`
+   o resuelva Nivel/Forma desde el hub ACTIVO / la caja Liverpool
+   hardcodeada. Se resuelve POR EQUIPO vía `_misterSeasonFormFor`
+   (registro `MISTERS_HUMANOS`) — toda caja de mister NUEVA lo hereda
+   automáticamente al estar en el registro + `_HUB_DEF`.
+2. **PROHIBIDO** que `_misterSeasonFormFor` deje de devolver `_load()`
+   completo cuando el mister ES el del hub activo — es lo que garantiza
+   que la cabecera del hub y la previa muestren EXACTAMENTE lo mismo
+   (incluida la fuente local `team_season_form_v1`, que no es por-hub).
+3. Todo mister nuevo que se añada a `_HUB_DEF` con `nivel`/`formRival`
+   propios (como Rubén = ESTRELLA/🎲) debe verse en la previa de CADA
+   partido de su club y su selección sin que el admin guarde nada — si
+   no sale, el hueco está en uno de los 2 consumidores de arriba.
+
 ## El overlay "Equipos por competición" cubre las 10 competiciones europeas/mundiales + buscador por nombre + envío único (obligatorio, 2026-07-07 #7)
 
 **Petición usuario 2026-07-07**: "vuelve a añadir el poder añadir

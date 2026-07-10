@@ -1,5 +1,125 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Wild Card → Open Qualifier → Previa de Champions: los ganadores se propagan EN EL MOMENTO, con invalidación en cascada al servidor (obligatorio, 2026-07-10)
+
+**Petición usuario 2026-07-10** (12 fotos: Wild Card "24 GANADORES →
+OPEN QUALIFIER" con nombres reales · Open Qualifier con `TBD-OQ-56/
+57/.../112` en vez de esos 24 ganadores, YA simulado (PJ=6) · Previa
+"34/62, PREVIA SIN SORTEAR" · Champions fase de grupos "28/40,
+posiciones 29-40 Por definir"): "LOS 24 equipos (primero de cada
+grupo una vez terminan todos los partidos) al darle a enviar deberían
+lanzarse en el momento a la OPEN QUALIFIER... Una vez se juegan todos
+los partidos del OPEN QUALIFIER, los 28 primeros de cada grupo pasan
+en ese mismo momento a la PREVIA DE CHAMPIONS... el primero de cada
+grupo de Previa de Champions una vez se jueguen todos los partidos
+los 12 primeros de cada grupo pasan al instante a la Fase de grupos
+de Champions". El reparto 24→OQ, 34+28=62→Previa, 28+12=40→Champions
+YA estaba bien implementado (`_persistWinners`, `_persistPreviaFlag`,
+`_persistDistribution`) — el bug es que la pantalla SIGUIENTE no
+reflejaba esos ganadores porque su sorteo ya estaba cacheado (drawn/
+simulado antes de que la fase anterior terminara) y ese caché nunca
+se invalidaba de forma que sobreviviera al sync multi-dispositivo.
+
+### Causa raíz
+
+`buildOpenQualifierClas()`/`buildUclPrevClas()` leen su propio estado
+persistido (`oq_simulation_v1`/`wprev_state_v1`) SI YA EXISTE — solo
+recalculan el pool fresco (`computeOpenQualifierTeams()`/`buildPool()`)
+cuando ese estado está AUSENTE. Si el admin sorteaba/simulaba el
+Open Qualifier ANTES de que la Wild Card terminara (con placeholders
+`TBD-OQ-N` reservados para los 24 ganadores aún desconocidos), ese
+sorteo quedaba fijado para siempre — aunque `simulateAll`/
+`simulateAllChunked` (Wild Card, `part2/misc_body_2.html`) hiciera
+`localStorage.removeItem('oq_simulation_v1')` al terminar, precisamente
+para forzar el re-sorteo.
+
+El problema: un `removeItem` SUELTO no es un borrado real en este
+proyecto. `pushPendingChanges` (sync genérico cada 3 s,
+`part2/misc_body_2.html`) SALTA los valores `null`
+(`if(v === null) return;`) — nunca empuja el borrado al servidor. El
+servidor conserva la snapshot vieja (con los placeholders) para
+siempre, y en el SIGUIENTE `hydrateFromServer()` (arranque de
+CUALQUIER pestaña, incluida la misma), como el local ya no existe,
+`if(!local){ doRestore = true; }` RESUCITA esa snapshot vieja —
+deshaciendo la invalidación en silencio. Mismo patrón exacto ya
+documentado para `_resetEuropePoolFeeders` (2026-07-02: "el Reset del
+Open Qualifier no funciona"), pero ese fix solo cubrió el botón
+♻️ Reset (acción explícita del admin) — la ruta de "Sim termina y
+limpia el caché de la fase siguiente" seguía con el `removeItem` sin
+avisar al servidor. El mismo hueco existía en Open Qualifier → Previa:
+`_finishOqSim` nunca invalidaba el sorteo ya cacheado de la Previa
+(`wprev_state_v1`), así que una Previa sorteada antes de que el Open
+Qualifier terminara se quedaba con su pool incompleto para siempre.
+
+Previa → Champions NO sufre este bug: `buildUclGruposClas()` es
+100% dinámica (recalcula `computeUclClassified()` en cada render, sin
+ningún "sorteo" persistido que invalidar) — en cuanto
+`_persistDistribution` (Previa) escribe `wprev_to_fase_grupos_v1` con
+los 12 ganadores, el siguiente render de Champions ya los ve.
+
+### Fix — `window._eurInvalidateDownstream(keys)` (misc_body_1.html)
+
+Nuevo helper compartido, hermano de `_resetEuropePoolFeeders` pero
+para la ruta de "Sim natural terminó" en vez de "Reset explícito del
+admin": borra las claves en local Y avisa al servidor con 3
+reintentos (`POST /api/state` con cadena vacía por clave — mismo
+patrón que `_postClearRetry`), sembrando `window._compStateSyncSnapshot`
+para que el push siguiente no intente resucitar lo que se acaba de
+limpiar. A diferencia de `_resetEuropePoolFeeders`, **NUNCA toca la
+fase que ACABA de terminar** — solo invalida el sorteo YA CACHEADO de
+la(s) fase(s) siguiente(s):
+
+- `window._EUR_DOWNSTREAM_OF_WC` (Wild Card termina): invalida
+  `oq_simulation_v1` + `oq_to_conference_v1` + `oq_to_previa_v1` +, en
+  CASCADA, las 4 claves de la Previa (`wprev_state_v1` +
+  `wprev_to_fase_grupos_v1` + `wprev_to_europa_v1` +
+  `wprev_r1_to_conference_v1`) — los ganadores del OQ (que dependen de
+  la WC) alimentan a su vez el pool de la Previa.
+- `window._EUR_DOWNSTREAM_OF_OQ` (Open Qualifier termina): invalida
+  SOLO las 4 claves de la Previa (no las del propio OQ, que se acaban
+  de escribir con datos frescos en esta misma sim).
+- Llamado desde `simulateAll`/`simulateAllChunked.finish` (Wild Card,
+  `part2/misc_body_2.html`, tras `_persistWinners`) y desde
+  `_finishOqSim` (Open Qualifier, `misc_body_1.html`, tras
+  `_persistPreviaFlag`). Fallback a los `removeItem` sueltos si el
+  helper no cargó (defensivo, no debería pasar dado el orden de carga
+  `misc_body_1.html` → `part2/misc_body_2.html`).
+- Re-pinta al instante `buildOpenQualifierClas`/`buildUclPrevClas`/
+  `buildUclGruposClas`/`buildUelGruposClas`/`buildUeclGruposClas`/
+  `_refreshChampionsDoneFlags` si esas pantallas ya están montadas —
+  el admin ve el pool actualizado sin tener que navegar fuera y volver.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una fase que acaba de terminar (Wild Card, Open
+   Qualifier, o cualquier fase previa futura) invalide el sorteo
+   cacheado de la fase SIGUIENTE con un `localStorage.removeItem`
+   suelto. El sync genérico (`pushPendingChanges`) salta los valores
+   `null` — ese borrado nunca llega al servidor y una snapshot vieja
+   se resucita en el próximo `hydrateFromServer()`. Usar SIEMPRE
+   `window._eurInvalidateDownstream(keys)` (borra local + avisa al
+   servidor con reintentos + siembra el snapshot del sync).
+2. **PROHIBIDO** que la invalidación de una fase hija toque las claves
+   de la fase que ACABA de producir el resultado (p.ej. que la
+   invalidación disparada por el Open Qualifier borre
+   `oq_simulation_v1`/`oq_to_previa_v1`, que se acaban de escribir en
+   la MISMA llamada). Cada lista `_EUR_DOWNSTREAM_OF_*` cubre
+   estrictamente lo que hay AGUAS ABAJO de la fase que terminó.
+3. **PROHIBIDO** duplicar la lista de claves de la Previa
+   (`wprev_state_v1`/`wprev_to_fase_grupos_v1`/`wprev_to_europa_v1`/
+   `wprev_r1_to_conference_v1`) entre `_EUR_DOWNSTREAM_OF_WC` y
+   `_EUR_DOWNSTREAM_OF_OQ` sin mantenerlas sincronizadas con las
+   mismas claves que usa `_resetEuropePoolFeeders` — si se añade una
+   fase europea nueva con su propio "sorteo cacheado" dependiente de
+   un pool aguas arriba, añadir su clave a la lista `_EUR_DOWNSTREAM_OF_*`
+   correspondiente Y a `_resetEuropePoolFeeders`.
+4. Toda fase NUEVA cuyo render sea del tipo "sorteo persistido, solo
+   se recalcula si el estado está ausente" (como OQ/Previa/WC) hereda
+   este patrón: su `finish`/`_persistXxx` debe invalidar en cascada el
+   sorteo cacheado de la fase siguiente vía `_eurInvalidateDownstream`.
+   Una fase DINÁMICA (recalcula en cada render, como Champions/Europa/
+   Conference fase de grupos) NO lo necesita — ya está siempre al día.
+
 ## El overlay "Equipos por competición" ya NO fuerza cálculo en vivo — el conteo se queda GUARDADO hasta editar/reenviar (obligatorio, 2026-07-10)
 
 **Petición usuario 2026-07-10** (foto del header "👁 EQUIPOS POR

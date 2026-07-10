@@ -37241,6 +37241,16 @@ window._showSimProgress = function(opts, onDone){
       return false;
     }
     _persistPreviaFlag(sim);
+    /* Los 28 ganadores recién calculados cambian el pool de la Previa
+       de Champions (34 directos + 28 OQ = 62) — si la Previa ya
+       estaba sorteada (con un pool más pequeño/con placeholders,
+       típico de sortear antes de que el OQ terminara), su sorteo
+       cacheado (`wprev_state_v1`) queda obsoleto. Lo invalidamos en
+       cascada para que se redibuje con el pool real "en el momento",
+       sin esperar a que el admin lo note y pulse Reset a mano. */
+    if (typeof window._eurInvalidateDownstream === 'function' && window._EUR_DOWNSTREAM_OF_OQ) {
+      window._eurInvalidateDownstream(window._EUR_DOWNSTREAM_OF_OQ);
+    }
     try { console.log('[oq-sim] guardado OK · pintando clas'); } catch(_){}
     buildOpenQualifierClas();
     return true;
@@ -67894,6 +67904,103 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     try { if (typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
     /* Hub Champions: las 3 cajas (Wild Card, Open Qualifier,
        Previa de Champions) recuperan color sin ✓ COMPLETADA. */
+    try { if (typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
+  };
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════
+     Propagación INMEDIATA de ganadores entre fases europeas
+     (Wild Card → Open Qualifier → Previa de Champions), 2026-07-10.
+
+     Petición usuario: al terminar los 24 grupos de la Wild Card (o
+     los 28 del Open Qualifier), esos ganadores deben "lanzarse en el
+     momento" a la fase siguiente — sin que el admin tenga que borrar
+     manualmente el sorteo ya cacheado de esa fase siguiente.
+
+     Causa raíz del bug reportado (fotos usuario: Open Qualifier con
+     TBD-OQ-56/57/... en vez de los 24 ganadores reales de la Wild
+     Card, pese a que la pantalla "24 GANADORES → OPEN QUALIFIER" ya
+     los mostraba con nombre real): `simulateAll`/`simulateAllChunked`
+     (Wild Card, part2/misc_body_2.html) invalidaban el sorteo
+     cacheado del Open Qualifier (`oq_simulation_v1`) con un
+     `localStorage.removeItem` SUELTO, sin avisar al servidor. El
+     sync genérico (`pushPendingChanges`, misc_body_2.html) SALTA los
+     valores `null` (`if(v===null) return;`), así que ese borrado
+     NUNCA se empujaba al servidor — el servidor conservaba la
+     snapshot vieja (con placeholders) para siempre. En el siguiente
+     `hydrateFromServer()` (arranque de CUALQUIER pestaña, incluida
+     la misma), como el local ya no existía,
+     `if(!local){ doRestore = true; }` RESUCITABA esa snapshot vieja
+     del servidor — deshaciendo la invalidación en silencio. Mismo
+     patrón exacto ya documentado para `_resetEuropePoolFeeders`
+     (2026-07-02): un `removeItem` suelto no es un borrado real en un
+     proyecto con sync multi-dispositivo. El mismo hueco existía en
+     el Open Qualifier → Previa (`_finishOqSim` nunca invalidaba el
+     sorteo ya cacheado de la Previa, `wprev_state_v1`).
+     ══════════════════════════════════════════════════ -->
+<script>
+(function(){
+  /* Claves cuyo sorteo/estado cacheado depende de los 24 ganadores de
+     la Wild Card. Se invalidan cuando la Wild Card termina, en
+     CASCADA hasta la Previa (sus ganadores también dependen del pool
+     del Open Qualifier). NUNCA incluye las propias claves de la Wild
+     Card (wc_state_v1/wc_champ_v1/wc_to_open_qualifier_v1) — esas se
+     acaban de escribir con los datos frescos. */
+  window._EUR_DOWNSTREAM_OF_WC = [
+    'oq_simulation_v1', 'oq_to_conference_v1', 'oq_to_previa_v1',
+    'wprev_state_v1', 'wprev_to_fase_grupos_v1', 'wprev_to_europa_v1', 'wprev_r1_to_conference_v1'
+  ];
+  /* Claves cuyo sorteo/estado cacheado depende de los 28 ganadores del
+     Open Qualifier. Se invalidan cuando el Open Qualifier termina. NO
+     incluye las propias claves del Open Qualifier
+     (oq_simulation_v1/oq_to_previa_v1/oq_to_conference_v1): esas se
+     acaban de ESCRIBIR con los datos frescos de esta misma sim —
+     invalidarlas aquí las borraría de inmediato. */
+  window._EUR_DOWNSTREAM_OF_OQ = [
+    'wprev_state_v1', 'wprev_to_fase_grupos_v1', 'wprev_to_europa_v1', 'wprev_r1_to_conference_v1'
+  ];
+
+  /* Invalida una lista de claves: borra local Y avisa al servidor con
+     reintentos (un solo POST fire-and-forget se pierde en red móvil
+     con frecuencia — mismo motivo que `_resetEuropePoolFeeders`,
+     2026-07-02). A diferencia de ese helper (reset EXPLÍCITO del
+     admin, borra también la fase que se resetea), este NUNCA toca la
+     fase que ACABA de terminar — solo invalida el sorteo YA CACHEADO
+     de la(s) fase(s) siguiente(s) para forzar su re-cómputo con el
+     pool real recién producido. */
+  window._eurInvalidateDownstream = function(keys){
+    if(!keys || !keys.length) return;
+    keys.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+    var patch = {};
+    keys.forEach(function(k){ patch[k] = ''; });
+    function _retry(tries){
+      tries = tries || 0;
+      try {
+        fetch('/api/state', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body: JSON.stringify({ competition_state: patch })
+        }).then(function(r){ if(!r || !r.ok) throw new Error('bad status'); })
+          .catch(function(){ if(tries<3) setTimeout(function(){ _retry(tries+1); }, Math.pow(2,tries+1)*1000); });
+      } catch(_){
+        if(tries<3) setTimeout(function(){ _retry(tries+1); }, Math.pow(2,tries+1)*1000);
+      }
+    }
+    _retry(0);
+    try {
+      if (window._compStateSyncSnapshot && typeof window._compStateSyncSnapshot === 'object'){
+        keys.forEach(function(k){ window._compStateSyncSnapshot[k] = null; });
+      }
+    } catch(_){}
+    /* Re-render inmediato de las pantallas afectadas, por si el admin
+       ya las tiene abiertas — sin esperar a la próxima navegación. */
+    try { if (typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
+    try { if (typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); } catch(_){}
+    try { if (typeof window.buildUclGruposClas === 'function') window.buildUclGruposClas(); } catch(_){}
+    try { if (typeof window.buildUelGruposClas === 'function') window.buildUelGruposClas(); } catch(_){}
+    try { if (typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
     try { if (typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
   };
 })();

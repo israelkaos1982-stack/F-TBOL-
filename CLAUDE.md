@@ -1,5 +1,76 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El overlay "Equipos por competición" ya NO fuerza cálculo en vivo — el conteo se queda GUARDADO hasta editar/reenviar (obligatorio, 2026-07-10)
+
+**Petición usuario 2026-07-10** (foto del header "👁 EQUIPOS POR
+COMPETICIÓN (EN VIVO)"): "Arriba el texto eliminado [EN VIVO]. En su
+lugar un icono dice de guardado, una vez se guarde quiero que se
+quede guardada esa configuración de distribución de equipos y que no
+se borre a no ser que yo lo edite manualmente."
+
+### Causa raíz
+
+El overlay (`_eurManualOverlayRender`, `misc_body_1.html`) pintaba sus
+6 cajas de conteo (Champions/Previa/Europa League/Conference/Open
+Qualifier/Wild Card) desde `_eurLiveBlob()`, que forzaba
+`window._europeIgnoreFrozen = true` alrededor de CADA
+`compute*Classified()` — a propósito, por diseño original (2026-07-03),
+para que el admin "viera el estado actual sin tener que congelar
+nada". El efecto secundario: el conteo NUNCA reflejaba la snapshot ya
+enviada (`europe_committed_v1`) — recalculaba desde las ligas en CADA
+apertura del overlay, así que dos aperturas seguidas podían mostrar
+números distintos aunque el admin ya hubiera pulsado "📤 ENVIAR TODOS
+LOS EQUIPOS" — de ahí el «(EN VIVO)» del título, que el usuario
+interpretó (con razón) como "esto no se está guardando de verdad".
+
+### Fix
+
+- **`_eurDisplayBlob()`** (antes `_eurLiveBlob`): llama a los 6
+  `compute*Classified()` SIN forzar `_europeIgnoreFrozen`. Esas
+  funciones YA respetan `europe_committed_v1` internamente
+  (`_europeFrozenFor`, chequeado tras el gate de `_eurManualOnly`) —
+  es EXACTAMENTE el mismo camino que usan las pantallas reales
+  (Champions/Europa/Conference/Previa/OQ/Wild Card), así el overlay
+  deja de divergir de lo que el juego muestra de verdad. Recopa/
+  Intercontinental (sin `europe_committed_v1`, regla ya existente: son
+  SIEMPRE aditivos en vivo) no cambian.
+- **Header**: el título pasa a "👁 Equipos por competición" (sin
+  sufijo) + un badge `_eurEuropeCommitSaved()`: 💾 **Guardado** (verde)
+  si `europe_committed_v1` existe, 📝 **Sin guardar** (ámbar) si el
+  admin nunca pulsó ENVIAR todavía.
+
+### Por qué el conteo se queda "clavado" hasta editar/reenviar
+
+- **Zonas en 🔒 Manual**: `_eurManualOnly(zone)` corta en la primera
+  línea de cada compute* (antes de mirar el congelado) — siempre
+  reflejan al instante lo que el admin añada/quite a mano
+  (`eur_manual_extra_v1`, ya persistido con tombstones — regla
+  2026-07-07 #2).
+- **Zonas en 🔓 Auto con snapshot guardada**: `_europeFrozenFor(zone)`
+  devuelve la snapshot congelada — el conteo NO cambia aunque una liga
+  se re-simule en segundo plano, hasta que el admin pulse
+  "📤 ENVIAR TODOS LOS EQUIPOS" de nuevo (`_doCommitEurope`, que SÍ
+  fuerza `_europeIgnoreFrozen` temporalmente para recalcular y
+  re-congelar).
+- **Zonas en 🔓 Auto sin snapshot todavía**: caen al cómputo dinámico
+  normal (mismo comportamiento que las pantallas reales antes de la
+  1ª vez que se congela algo) — el badge muestra 📝 Sin guardar.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el conteo de este overlay vuelva a forzar
+   `_europeIgnoreFrozen=true` fuera de `_doCommitEurope` (el único
+   punto legítimo de recálculo forzado, disparado por una acción
+   EXPLÍCITA del admin — pulsar ENVIAR). El overlay de consulta debe
+   leer SIEMPRE por el mismo camino que las pantallas reales.
+2. **PROHIBIDO** reintroducir el texto "(en vivo)"/"(EN VIVO)" en el
+   título de este overlay. El estado de guardado se comunica con el
+   badge 💾/📝 de `_eurEuropeCommitSaved()`, nunca con texto en el título.
+3. **PROHIBIDO** que `_eurManualOnly` dejar de cortocircuitar ANTES del
+   chequeo de congelado en cualquier compute*Classified() (regla ya
+   existente 2026-07-03 #4) — es lo que garantiza que una zona en
+   Manual siga reflejando ediciones al instante pese a este cambio.
+
 ## El Nivel + Forma (🎲) de la PREVIA se resuelven POR CAJA vía el registro de misters, no por el hub activo (obligatorio, 2026-07-10)
 
 **Bug (2 fotos usuario 2026-07-10, «St. Gallen vs Inter», Torneos de

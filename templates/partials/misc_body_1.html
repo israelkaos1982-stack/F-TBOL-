@@ -41910,23 +41910,38 @@ window._showSimProgress = function(opts, onDone){
     ov.onclick = function(ev){ if(ev.target === ov) ov.remove(); };
   };
 
-  /* ── 👁 Ver / Añadir equipos por competición (en vivo) ────────────
+  /* ── 👁 Ver / Añadir equipos por competición ───────────────────────
      Petición usuario 2026-07-03 ("quiero un botón que me muestre los
      equipos que van a cada competición... si no se automatizan equipos
      de alguna manera déjame añadirlos en esa lista manualmente de
      manera rápida y sencilla"): a diferencia de `_eurShowCommitReport`
      (que solo se ve DESPUÉS de pulsar "Enviar realidad" y persiste una
-     snapshot), este overlay es de CONSULTA + EDICIÓN inmediata:
-       · Calcula el pool EN VIVO (bypass de `europe_committed_v1`) cada
-         vez que se abre/refresca — así el admin ve el estado actual
-         SIN tener que congelar nada.
+     snapshot), este overlay es de CONSULTA + EDICIÓN.
        · Muestra el conteo real vs el objetivo oficial por zona.
        · Formulario para añadir un equipo A MANO a cualquiera de las 6
          zonas (`eur_manual_extra_v1`, ver `_appendManualExtra`) — para
          cuando una liga no consigue hidratarse automáticamente.
        · Lista los extras manuales ya añadidos con botón ✕ para quitarlos.
        · El listado completo (agrupado por liga) reutiliza
-         `_eurZoneSectionHtml`/`_EUR_REPORT_ZONES`. */
+         `_eurZoneSectionHtml`/`_EUR_REPORT_ZONES`.
+
+     Petición usuario 2026-07-10 ("elimina el texto [EN VIVO], en su
+     lugar un icono de guardado; una vez se guarde quiero que se quede
+     guardada esa configuración y que no se borre a no ser que yo lo
+     edite manualmente"): el título YA NO dice "(en vivo)" — el header
+     lleva un badge 💾 Guardado / 📝 Sin guardar (`_eurEuropeCommitSaved`)
+     y el conteo (`_eurDisplayBlob`, antes `_eurLiveBlob`) YA NO fuerza
+     `_europeIgnoreFrozen`: los compute*Classified() respetan la
+     snapshot `europe_committed_v1` exactamente igual que las pantallas
+     reales (Champions/Europa/Conference/Previa/OQ/Wild Card). El
+     conteo se queda CLAVADO en lo último enviado hasta que el admin
+     (a) pulse "📤 ENVIAR TODOS LOS EQUIPOS" de nuevo (`_doCommitEurope`
+     fuerza el recálculo + re-congela), o (b) ponga una zona en
+     🔒 Manual / añada-quite un equipo a mano (esas rutas YA bypassean
+     el congelado en la primera línea de cada compute*, así que siguen
+     reflejando la edición al instante). Recopa/Intercontinental
+     (kind:'pool' sin toggle) NUNCA se congelan — siguen 100% en vivo,
+     regla ya existente más abajo. */
   /* OJO: ucl/uel/uecl NO son 28/18/12 (esas son solo las plazas
      DIRECTAS por liga) — `computeUclClassified`/`computeUelClassified`/
      `computeUeclClassified` YA le suman el corte de la Previa (12/22/28)
@@ -41976,29 +41991,43 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return names.map(function(n){ return { name:n, league:_eurResolveLeagueForName(n, zone) }; });
   }
-  function _eurLiveBlob(){
+  /* Petición usuario 2026-07-10 ("quiero que se quede guardada esa
+     configuración... y que no se borre a no ser que yo lo edite
+     manualmente"): a diferencia del diseño original de este overlay
+     (forzar SIEMPRE cálculo en vivo vía `_europeIgnoreFrozen`), ahora
+     se llama a los compute*Classified() SIN forzar el bypass — así
+     respetan la snapshot `europe_committed_v1` exactamente igual que
+     las pantallas reales (Champions/Europa/Conference/Previa/OQ/Wild
+     Card). Mientras el admin no pulse "📤 ENVIAR TODOS LOS EQUIPOS"
+     (que sigue forzando el recálculo + re-congela, ver `_doCommitEurope`)
+     o edite a mano una zona en modo 🔒 Manual (que YA bypassea el
+     congelado en la primera línea de cada compute*), el conteo mostrado
+     aquí es EXACTAMENTE el guardado — no cambia solo porque una liga se
+     re-simuló en segundo plano. */
+  function _eurDisplayBlob(){
     function _safeCompute(fn){
       try { return (typeof fn === 'function') ? (fn() || []) : []; }
       catch(_){ return []; }
     }
-    var _prevIgnore = window._europeIgnoreFrozen;
-    window._europeIgnoreFrozen = true;
-    var blob;
-    try {
-      blob = {
-        ucl:      _safeCompute(window.computeUclClassified),
-        uclPrev:  _safeCompute(window.computeUclPrevTeams),
-        uel:      _safeCompute(window.computeUelClassified),
-        uecl:     _safeCompute(window.computeUeclClassified),
-        uclQual:  _safeCompute(window.computeOpenQualifierTeams),
-        wildcard: _safeCompute(window.computeWildCardClassified)
-      };
-    } finally {
-      window._europeIgnoreFrozen = _prevIgnore;
-    }
+    var blob = {
+      ucl:      _safeCompute(window.computeUclClassified),
+      uclPrev:  _safeCompute(window.computeUclPrevTeams),
+      uel:      _safeCompute(window.computeUelClassified),
+      uecl:     _safeCompute(window.computeUeclClassified),
+      uclQual:  _safeCompute(window.computeOpenQualifierTeams),
+      wildcard: _safeCompute(window.computeWildCardClassified)
+    };
+    /* Recopa/Intercontinental NUNCA se congelan (regla CLAUDE.md: son
+       SIEMPRE aditivos sobre el cómputo automático) — siguen en vivo. */
     try { blob.recopa = _eurPoolToTeams('recopa'); } catch(_){ blob.recopa = []; }
     try { blob.inter  = _eurPoolToTeams('inter'); } catch(_){ blob.inter = []; }
     return blob;
+  }
+  /* `_eurEuropeCommitSaved()` — ¿existe ya una snapshot guardada
+     (`europe_committed_v1`)? Gobierna el icono de guardado del header
+     del overlay (sustituye al antiguo texto "(en vivo)"). */
+  function _eurEuropeCommitSaved(){
+    try { return !!localStorage.getItem('europe_committed_v1'); } catch(_){ return false; }
   }
   var _eurManualHydrating = false;
   var _eurManualLastHydrateAt = 0;
@@ -42412,7 +42441,8 @@ window._showSimProgress = function(opts, onDone){
   function _eurManualOverlayRender(){
     var ov = document.getElementById('eur-manual-ov');
     if(!ov) return;
-    var blob = _eurLiveBlob();
+    var blob = _eurDisplayBlob();
+    var _eurSaved = _eurEuropeCommitSaved();
     var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()) || {};
     var missing = _eurManualHydrating ? [] : _eurMissingLeaguesList();
     var overrides = (window._eurManualOverrideLoad && window._eurManualOverrideLoad()) || {};
@@ -42469,8 +42499,13 @@ window._showSimProgress = function(opts, onDone){
       statusHtml = '⚠️ Conteo con lo que ya hay en ESTE dispositivo (aún no se ha cargado del servidor).';
     }
     var html = '<div style="width:100%;max-width:640px;">'
-      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">'
-      +     '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">👁 Equipos por competición (en vivo)</div>'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap;">'
+      +     '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      +       '<div style="font-family:Bebas Neue,Oswald,sans-serif;font-size:22px;letter-spacing:1px;color:#fff;">👁 Equipos por competición</div>'
+      +       (_eurSaved
+                ? '<span title="Configuración guardada — se mantiene hasta que la edites a mano o vuelvas a pulsar ENVIAR." style="display:inline-flex;align-items:center;gap:4px;background:rgba(60,200,120,.14);border:1px solid rgba(60,200,120,.55);color:#8af0b0;border-radius:20px;padding:3px 10px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;white-space:nowrap;">💾 Guardado</span>'
+                : '<span title="Todavía no has pulsado ENVIAR — esto es una vista previa que puede cambiar." style="display:inline-flex;align-items:center;gap:4px;background:rgba(255,180,60,.14);border:1px solid rgba(255,180,60,.55);color:#ffcf7a;border-radius:20px;padding:3px 10px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;white-space:nowrap;">📝 Sin guardar</span>')
+      +     '</div>'
       +     '<button id="eur-manual-close" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:8px;padding:6px 14px;font-family:Oswald,sans-serif;letter-spacing:1px;">✕ Cerrar</button>'
       +   '</div>'
       +   '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'

@@ -35836,6 +35836,59 @@ window._showSimProgress = function(opts, onDone){
     d[zone] = d[zone].filter(function(t){ return t.name !== name; });
     _eurManualExtraSave(d);
   };
+  /* Sincroniza los ganadores de una fase (Wild Card→OQ, OQ→Previa,
+     Previa→UCL/UEL/UECL) como EXTRAS MANUALES de la zona destino
+     (obligatorio, 2026-07-10 #3).
+
+     Causa raíz del bug "no se lanzan los 24 equipos de la Wild Card al
+     Open Qualifier" (pese a `_eurInvalidateDownstream` y al botón
+     "⬇️ Traer Wild Card"): las 6 zonas europeas (`ucl`/`uclPrev`/`uel`/
+     `uecl`/`uclQual`/`wildcard`) arrancan en 🔒 MANUAL por defecto desde
+     2026-07-03 (regla "el admin pidió DOS VECES que los equipos
+     automáticos desaparezcan"). En modo Manual, CADA
+     `compute*Classified()`/`computeOpenQualifierTeams()`/
+     `computeUclPrevTeams()` hace `return _appendManualExtra([], zone)`
+     en su PRIMERA línea — ANTES de mirar `_europeFrozenFor` o de leer
+     `wc_to_open_qualifier_v1`/`oq_to_previa_v1`/`wprev_to_*`. Así, si la
+     zona destino de una fase (p.ej. `uclQual`, la del Open Qualifier)
+     está en Manual, los ganadores de la fase anterior NUNCA llegan a
+     evaluarse — ni con la invalidación en cascada, ni con ningún botón
+     que solo recalcule "en vivo" (ese cálculo en vivo también hace el
+     mismo `return` temprano).
+
+     Fix: los ganadores de cada fase se registran TAMBIÉN como extras
+     manuales de la zona destino — `_appendManualExtra` se llama
+     SIEMPRE, en las DOS ramas (Manual e híbrida-automática), así que
+     esto los hace aparecer sin importar el modo. Marca cada entrada con
+     `feederTag` (el nombre de la fase de origen) para poder limpiar
+     SOLO sus propias entradas en la siguiente sincronización sin tocar
+     equipos que el admin haya añadido a mano de verdad (esos no llevan
+     `feederTag`). */
+  window._eurSyncManualExtraFromFeeder = function(zone, teams, feederTag){
+    if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
+    var d = _eurManualExtraLoad();
+    var list = (d[zone] || []).filter(function(t){ return !(t && t.feederTag === feederTag); });
+    var seen = {};
+    list.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    (teams || []).forEach(function(t){
+      if(!t || !t.name || seen[t.name]) return;
+      if(/^TBD/i.test(t.name) || /^__placeholder_/.test(t.league || '')) return;
+      seen[t.name] = true;
+      list.push({
+        name: t.name,
+        /* `sourceLeague` (si viene, p.ej. de la Wild Card: `league` ahí
+           es la constante 'wild-card', el país real vive en
+           `sourceLeague`) gana sobre `league` (que en el feeder de OQ→
+           Previa YA es el país real). */
+        league: t.sourceLeague || t.league || feederTag || 'manual',
+        logo: t.logo || '',
+        addedAt: Date.now(),
+        feederTag: feederTag
+      });
+    });
+    d[zone] = list;
+    _eurManualExtraSave(d);
+  };
   /* 🗑 Vaciar lista ENTERA de una zona — petición usuario 2026-07-07
      ("quiero un botón para limpiar la lista entera de equipos de cada
      competición y que ese borrado se guarde hasta que vuelva a añadir
@@ -37254,6 +37307,15 @@ window._showSimProgress = function(opts, onDone){
         }
       }
       localStorage.setItem('oq_to_previa_v1', JSON.stringify({teams:previaArr, ts:Date.now()}));
+      /* Los registra TAMBIÉN como extras manuales de la zona 'uclPrev' —
+         garantiza que lleguen a la Previa aunque esa zona esté en modo
+         🔒 Manual (mismo motivo que la Wild Card → Open Qualifier, ver
+         `_eurSyncManualExtraFromFeeder`). */
+      try {
+        if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
+          window._eurSyncManualExtraFromFeeder('uclPrev', previaArr, 'open-qualifier');
+        }
+      } catch(_){}
       /* La Conference ya NO se alimenta del OQ — limpiamos el flag por
          si quedaba estado de la versión antigua. */
       localStorage.removeItem('oq_to_conference_v1');
@@ -37348,47 +37410,53 @@ window._showSimProgress = function(opts, onDone){
     buildOpenQualifierClas();
   }
 
-  /* Botón "⬇️ Traer Wild Card" (2026-07-10): trae A MANO los 24
-     ganadores de la Wild Card al pool del Open Qualifier. Cubre 2
-     casos en los que la propagación automática (invalidación en
-     cascada de `_eurInvalidateDownstream` al terminar la Wild Card)
-     no basta:
-       1) Este dispositivo no recibió todavía la invalidación (llegó
-          por otro dispositivo, o el POST de invalidación aún está
-          reintentando en segundo plano) — `oq_simulation_v1` sigue
-          con el sorteo viejo (placeholders) en ESTE dispositivo.
+  /* Botón "⬇️ Traer Wild Card" (2026-07-10, reforzado #3): trae A MANO
+     los 24 ganadores de la Wild Card al pool del Open Qualifier. Cubre
+     3 causas distintas por las que "no se lanzan":
+       1) Este dispositivo no recibió todavía la invalidación en
+          cascada (llegó por otro dispositivo, o el POST aún está
+          reintentando en segundo plano) — `oq_simulation_v1` sigue con
+          el sorteo viejo (placeholders) en ESTE dispositivo.
        2) Existe una snapshot CONGELADA (`europe_committed_v1`,
           "📤 Enviar realidad de cada equipo a su Europa") que se
-          congeló ANTES de que la Wild Card terminara — esa snapshot
-          nunca conoció a los 24 ganadores y `computeOpenQualifierTeams`
-          la devuelve tal cual, ignorando `wc_to_open_qualifier_v1`
-          por diseño (regla "El overlay Equipos por competición... se
-          queda GUARDADO hasta editar/reenviar"). Este botón SÍ
-          recalcula en vivo y actualiza esa zona de la snapshot (si
-          existe) — es una acción EXPLÍCITA del admin, igual de
-          legítima que pulsar "Enviar realidad..." de nuevo. */
+          congeló ANTES de que la Wild Card terminara.
+       3) **La causa MÁS probable**: la zona `uclQual` está en modo
+          🔒 Manual (default de las 6 zonas europeas desde 2026-07-03).
+          En ese modo `computeOpenQualifierTeams()` hace
+          `return _appendManualExtra([], 'uclQual')` en su PRIMERA
+          línea — NUNCA llega a mirar `wc_to_open_qualifier_v1` ni la
+          snapshot congelada, así que recalcular "en vivo" (como hacía
+          la versión anterior de este botón) no servía de nada. El
+          registro como EXTRA MANUAL (`_eurSyncManualExtraFromFeeder`)
+          es la ÚNICA vía que `_appendManualExtra` SIEMPRE aplica, en
+          modo Manual o Automático. */
   function pullWildCardWinners(){
     var wc = null;
     try {
       var raw = localStorage.getItem('wc_to_open_qualifier_v1');
       wc = raw ? JSON.parse(raw) : null;
     } catch(_){}
-    var n = (wc && Array.isArray(wc.teams)) ? wc.teams.length : 0;
-    if(!n){
+    var teams = (wc && Array.isArray(wc.teams)) ? wc.teams : [];
+    if(!teams.length){
       alert('La Wild Card todavía no tiene ganadores guardados.\n\nTermina de simular sus 24 grupos primero (🎮 Sim en la pantalla de la Wild Card).');
       return;
     }
     try {
-      /* Invalida el sorteo cacheado del propio OQ para forzar el
-         recálculo del pool con los ganadores reales. */
+      /* Causa 3 (la más probable): los registra como extra manual de
+         'uclQual' — funciona esté esa zona en Auto o en Manual. */
+      if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
+        window._eurSyncManualExtraFromFeeder('uclQual', teams, 'wild-card');
+      }
+      /* Causa 1: invalida el sorteo cacheado del propio OQ para forzar
+         el recálculo del pool con los ganadores reales. */
       if (typeof window._eurInvalidateDownstream === 'function') {
         window._eurInvalidateDownstream(['oq_simulation_v1']);
       } else {
         try { localStorage.removeItem(STORE_KEY); } catch(_){}
       }
-      /* Recalcula EN VIVO (bypass de cualquier snapshot congelada) y,
-         si esa snapshot existe, la actualizamos para que no vuelva a
-         tapar a los ganadores en el próximo render. */
+      /* Causa 2: recalcula EN VIVO (bypass de cualquier snapshot
+         congelada) y, si esa snapshot existe, la actualizamos para que
+         no vuelva a tapar a los ganadores en el próximo render. */
       var _prevIgnore = window._europeIgnoreFrozen;
       window._europeIgnoreFrozen = true;
       var live = [];
@@ -37409,8 +37477,16 @@ window._showSimProgress = function(opts, onDone){
         }
       } catch(_){}
       buildOpenQualifierClas();
+      /* Confirmación HONESTA: cuenta cuántos de los ganadores de la
+         Wild Card están de verdad dentro del pool recalculado, en vez
+         de asumirlo (bug del primer intento de este botón: el mensaje
+         decía "incluye los 24 ganadores" aunque el pool devuelto por
+         el modo Manual no llevaba ninguno). */
       var real = live.filter(function(t){ return t && t.name && !/^TBD|^__placeholder_/.test(t.name); }).length;
-      alert('✅ Pool del Open Qualifier actualizado: '+real+' / 112 equipos reales (incluye los '+n+' ganadores de la Wild Card).');
+      var gotSet = {};
+      live.forEach(function(t){ if(t && t.name) gotSet[t.name] = true; });
+      var got = teams.filter(function(t){ return t && t.name && gotSet[t.name]; }).length;
+      alert('✅ Pool del Open Qualifier actualizado: '+real+' / 112 equipos reales · '+got+' / '+teams.length+' ganadores de la Wild Card confirmados dentro del pool.');
     } catch(e){
       try { console.error('[oq-pull-wc]', e); } catch(_){}
       alert('⚠️ Error trayendo los ganadores de la Wild Card: '+(e && e.message ? e.message : e));

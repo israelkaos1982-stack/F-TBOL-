@@ -1,5 +1,108 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Los ganadores de cada fase SIEMPRE se registran también como extra manual de la zona destino — si no, el modo 🔒 Manual (default de las 6 zonas) los bloquea del todo (obligatorio, 2026-07-10 #3)
+
+**Petición usuario 2026-07-10** (3 fotos, tras el botón "⬇️ Traer Wild
+Card" de arriba): "no funciona el pasar los 24 equipos de la Wild
+Card al Open Qualifier". El botón mostraba `✅ Pool del Open
+Qualifier actualizado: 88 / 112 equipos reales (incluye los 24
+ganadores de la Wild Card)` — pero la Grupo A seguía sin ningún
+ganador real de la Wild Card, y el mensaje mentía: 88 es EXACTAMENTE
+el número de plazas de liga sin los 24 de la Wild Card (88+24=112),
+así que los 24 nunca entraron pese al mensaje de éxito.
+
+### Causa raíz — el modo 🔒 Manual corta ANTES de mirar los ganadores
+
+Las 6 zonas europeas (`ucl`/`uclPrev`/`uel`/`uecl`/`uclQual`/
+`wildcard`) arrancan en **🔒 Manual por defecto** desde 2026-07-03
+(regla ya documentada: "el admin pidió DOS VECES que los equipos
+automáticos desaparezcan"). En ese modo, **CADA**
+`compute*Classified()`/`computeOpenQualifierTeams()`/
+`computeUclPrevTeams()` hace, literalmente en su PRIMERA línea:
+```js
+if(window._eurManualOnly && window._eurManualOnly(zone)) return _appendManualExtra([], zone);
+```
+Esto corta ANTES de mirar `_europeFrozenFor` (snapshot congelada) y
+ANTES de leer `wc_to_open_qualifier_v1`/`oq_to_previa_v1`/
+`wprev_to_*`. Con la zona `uclQual` en Manual (el default), el pool
+del Open Qualifier es SOLO lo que haya en `eur_manual_extra_v1.uclQual`
+(los equipos que el admin añadió a mano con el picker "AÑADIR POR
+LIGA" del overlay "Equipos por competición" — de ahí el 88, que
+coincide con el nº de plazas de liga que el admin fue añadiendo a
+mano ahí). El fix anterior (botón "⬇️ Traer Wild Card" recalculando
+"en vivo" con `_europeIgnoreFrozen`) **no servía de nada**: ese
+recálculo en vivo TAMBIÉN pasa por el mismo `computeOpenQualifierTeams()`,
+que sigue cortando en la primera línea si la zona está en Manual —
+nunca llega ni al bypass de la snapshot ni a leer los ganadores de la
+Wild Card. Este mismo hueco afecta EXACTAMENTE IGUAL a Open Qualifier
+→ Previa (zona `uclPrev`) y a Previa → Champions/Europa/Conference
+(zonas `ucl`/`uel`/`uecl`) — es un bug SISTÉMICO de toda la cadena de
+propagación, no solo de la Wild Card.
+
+### Fix — `window._eurSyncManualExtraFromFeeder(zone, teams, feederTag)`
+
+Nuevo helper (`misc_body_1.html`, junto a `_eurManualExtraAdd`):
+registra los ganadores de una fase **TAMBIÉN** como extras manuales de
+la zona destino. Como `_appendManualExtra(arr, zone)` se llama
+**SIEMPRE** al final de cada `compute*Classified()` —tanto en la rama
+Manual (`return _appendManualExtra([], zone)`) como en la rama
+automática/híbrida (`return _appendManualExtra(out, zone)`)— este es
+el ÚNICO camino que garantiza que los ganadores aparezcan **sin
+importar** si la zona está en 🔒 Manual o en 🔓 Auto.
+
+- Cada entrada añadida lleva `feederTag` (nombre de la fase de
+  origen: `'wild-card'`/`'open-qualifier'`/`'previa-champions'`). En
+  cada sincronización se **quitan primero** las entradas con ESE
+  MISMO `feederTag` (para no acumular ganadores de una simulación
+  anterior) y se añaden las actuales — sin tocar entradas SIN
+  `feederTag` (esas son manuales de verdad, añadidas a mano por el
+  admin con el picker, y nunca se tocan).
+- El campo `league` de la entrada prioriza `sourceLeague` (país real,
+  como en los ganadores de la Wild Card, donde `league` es la
+  constante `'wild-card'` y el país real vive en `sourceLeague`) sobre
+  `league` — así el anti-mismo-país de los sorteos siguientes no trata
+  a todos los ganadores como un único "país".
+- Llamado desde `_persistWinners` (Wild Card → zona `uclQual`,
+  `part2/misc_body_2.html`), `_persistPreviaFlag` (Open Qualifier →
+  zona `uclPrev`, `misc_body_1.html`) y `_persistDistribution` (Previa
+  → zonas `ucl`/`uel`/`uecl`, `part2/misc_body_2.html`) — los 3 puntos
+  donde cada fase persiste sus ganadores hacia la siguiente.
+- El botón "⬇️ Traer Wild Card" (sección de arriba) también lo usa
+  como PRIMER paso (antes de la invalidación de caché y del recálculo
+  en vivo), y su `alert()` de confirmación ahora VERIFICA de verdad
+  cuántos ganadores quedaron dentro del pool recalculado (`got`/`teams.length`)
+  en vez de asumirlo ciegamente por el tamaño de `wc_to_open_qualifier_v1`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** asumir que invalidar el sorteo cacheado
+   (`_eurInvalidateDownstream`) o recalcular "en vivo"
+   (`_europeIgnoreFrozen`) basta para que los ganadores de una fase
+   lleguen a la siguiente. Si la zona destino está en 🔒 Manual (el
+   DEFAULT), ambos mecanismos son inútiles — `compute*Classified()`
+   corta ANTES de llegar a ellos. La ÚNICA vía que funciona en
+   CUALQUIER modo es registrar los ganadores como extra manual
+   (`_eurSyncManualExtraFromFeeder`).
+2. **PROHIBIDO** que un mensaje de confirmación de un botón de
+   propagación diga "incluye los N ganadores" sin comprobar de verdad
+   que esos N nombres están presentes en el pool recalculado. Un
+   recuento que no verifica es indistinguible de un fallo silencioso
+   (exactamente el bug de este reporte: el botón "confirmaba" éxito
+   con 0 ganadores realmente incluidos).
+3. **PROHIBIDO** que `_eurSyncManualExtraFromFeeder` borre entradas SIN
+   `feederTag` (las manuales de verdad, añadidas a mano por el admin)
+   al re-sincronizar. Solo reemplaza las que llevan el MISMO
+   `feederTag` de la llamada actual.
+4. Toda fase NUEVA que produzca ganadores hacia una zona europea
+   (WC→OQ, OQ→Previa, Previa→UCL/UEL/UECL, o cualquier par nuevo
+   futuro) hereda este patrón: su función de persistencia
+   (`_persistXxx`) debe llamar a `_eurSyncManualExtraFromFeeder(zonaDestino,
+   ganadores, 'tag-de-esta-fase')` ADEMÁS de escribir su propia clave
+   feeder (`xxx_to_yyy_v1`) — la clave feeder sigue siendo necesaria
+   para el cómputo automático cuando la zona SÍ está en Auto, pero el
+   extra manual es la red que cubre el caso (mucho más común) de que la
+   zona esté en Manual.
+
 ## Botón "⬇️ Traer Wild Card" en Open Qualifier — recuperación manual si la propagación automática no llegó (obligatorio, 2026-07-10 #2)
 
 **Petición usuario 2026-07-10** (2 fotos, tras el fix de propagación en

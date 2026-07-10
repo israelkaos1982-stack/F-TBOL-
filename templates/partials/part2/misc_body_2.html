@@ -31772,6 +31772,17 @@ document.addEventListener('DOMContentLoaded', function() {
         ts: Date.now()
       }));
     } catch(_){}
+    /* Los registra TAMBIÉN como extras manuales de la zona 'uclQual' —
+       es lo que garantiza que aparezcan en el Open Qualifier aunque esa
+       zona esté en modo 🔒 Manual (default de las 6 zonas europeas
+       desde 2026-07-03): en ese modo, `computeOpenQualifierTeams()`
+       nunca llega a mirar `wc_to_open_qualifier_v1`. Ver comentario de
+       `_eurSyncManualExtraFromFeeder`. */
+    try {
+      if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
+        window._eurSyncManualExtraFromFeeder('uclQual', winners, 'wild-card');
+      }
+    } catch(_){}
     /* Limpiamos el flag legacy del campeón único — ya no aplica. */
     try { localStorage.removeItem(WC_CHAMP_KEY); } catch(_){}
   }
@@ -32717,6 +32728,17 @@ document.addEventListener('DOMContentLoaded', function() {
     try { localStorage.setItem(WPREV_FG_KEY,  JSON.stringify({teams:ucl,  ts:Date.now()})); } catch(_){}
     try { localStorage.setItem(WPREV_EUR_KEY, JSON.stringify({teams:uel,  ts:Date.now()})); } catch(_){}
     try { localStorage.setItem(WPREV_CONF_KEY,JSON.stringify({teams:uecl, ts:Date.now()})); } catch(_){}
+    /* Los registra TAMBIÉN como extras manuales de sus 3 zonas destino
+       — garantiza que lleguen a Champions/Europa/Conference aunque esas
+       zonas estén en modo 🔒 Manual (mismo motivo que WC→OQ y OQ→Previa,
+       ver `_eurSyncManualExtraFromFeeder`). */
+    try {
+      if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
+        window._eurSyncManualExtraFromFeeder('ucl',  ucl,  'previa-champions');
+        window._eurSyncManualExtraFromFeeder('uel',  uel,  'previa-champions');
+        window._eurSyncManualExtraFromFeeder('uecl', uecl, 'previa-champions');
+      }
+    } catch(_){}
   }
 
   function initState(){

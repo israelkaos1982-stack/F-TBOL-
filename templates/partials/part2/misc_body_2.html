@@ -31612,13 +31612,40 @@ document.addEventListener('DOMContentLoaded', function() {
     return la === lb;
   }
 
+  /* Baraja `arr` DENTRO de cada bombo de tamaño `tierSize` (Fisher-Yates
+     acotado al tramo), sin mover un equipo de un bombo a otro. Con el
+     pool ya ordenado por poder desc, cada tramo de `tierSize` equipos
+     consecutivos es un bombo de fuerza similar — barajarlo dentro de sí
+     mismo mantiene el reparto equilibrado (1 equipo de cada bombo por
+     grupo, vía el snake de abajo) pero hace que CUÁL equipo de ese bombo
+     cae en cada grupo cambie en cada sorteo. 2026-07-11: petición
+     usuario "el sorteo tiene que ser al azar cada vez que pulse, me da
+     la sensación que siempre son los mismos grupos con los mismos
+     equipos" — antes el snake-draft corría directo sobre el pool
+     ordenado por poder, así que con el mismo pool el reparto SIEMPRE
+     salía idéntico (cero aleatoriedad real pese al icono 🎲). */
+  function _shuffleTiered(arr, tierSize){
+    var out = arr.slice();
+    for(var start=0; start<out.length; start+=tierSize){
+      var end = Math.min(out.length, start+tierSize);
+      for(var i=end-1; i>start; i--){
+        var j = start + Math.floor(Math.random()*(i-start+1));
+        var tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+      }
+    }
+    return out;
+  }
+
   /* Reparte el pool (72) en 24 grupos de 3 con anti-mismo-país.
      Snake-draft por poder (el pool ya viene ordenado desc por
-     _normalizePool) para equilibrar la fuerza de los grupos, seguido
-     de pases greedy de intercambio que deshacen los grupos con dos
-     equipos del mismo país siempre que el swap no empeore el reparto
-     global. */
+     _normalizePool, y aquí barajado POR BOMBOS con _shuffleTiered para
+     que el sorteo sea de verdad al azar en cada pulsación sin perder el
+     equilibrio de fuerza) para equilibrar la fuerza de los grupos,
+     seguido de pases greedy de intercambio que deshacen los grupos con
+     dos equipos del mismo país siempre que el swap no empeore el
+     reparto global. */
   function _distributeWcGroups(pool){
+    pool = _shuffleTiered(pool, WC_N_GROUPS);
     var groups = [];
     for(var g=0; g<WC_N_GROUPS; g++) groups.push([]);
     pool.forEach(function(t, i){
@@ -32647,8 +32674,27 @@ document.addEventListener('DOMContentLoaded', function() {
     if(/^__placeholder_/.test(la) || /^__placeholder_/.test(lb)) return false;
     return la===lb;
   }
-  /* Reparte 62 en 16 grupos (snake por poder) con anti-mismo-país. */
+  /* Baraja `arr` DENTRO de cada bombo de tamaño `tierSize` — ver el
+     mismo helper en el motor de la Wild Card (más arriba en este mismo
+     archivo, otra IIFE) para la explicación completa. 2026-07-11:
+     petición usuario, el sorteo tiene que dar grupos distintos en cada
+     pulsación de 🎲 Draw, no siempre el mismo reparto para el mismo pool. */
+  function _shuffleTiered(arr, tierSize){
+    var out = arr.slice();
+    for(var start=0; start<out.length; start+=tierSize){
+      var end = Math.min(out.length, start+tierSize);
+      for(var i=end-1; i>start; i--){
+        var j = start + Math.floor(Math.random()*(i-start+1));
+        var tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+      }
+    }
+    return out;
+  }
+  /* Reparte 62 en 16 grupos (snake por poder, barajado por bombos con
+     _shuffleTiered para que el sorteo sea al azar en cada pulsación)
+     con anti-mismo-país. */
   function _distributeGroups(pool){
+    pool = _shuffleTiered(pool, N_GROUPS);
     var groups=[]; for(var g=0; g<N_GROUPS; g++) groups.push([]);
     pool.forEach(function(t,i){ var row=Math.floor(i/N_GROUPS), col=i%N_GROUPS, gi=(row%2===0)?col:(N_GROUPS-1-col); groups[gi].push(t); });
     function dupMax(grp){ var c={},m=0; for(var i=0;i<grp.length;i++){ var k=(grp[i]&&grp[i].league)||''; if(!k||/^__placeholder_/.test(k)) continue; c[k]=(c[k]||0)+1; if(c[k]>m) m=c[k]; } return m; }

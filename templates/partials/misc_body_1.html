@@ -36970,10 +36970,34 @@ window._showSimProgress = function(opts, onDone){
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
+  /* Baraja `arr` DENTRO de cada bombo de tamaño `tierSize` (Fisher-Yates
+     acotado al tramo). Mismo helper que usan Wild Card y Previa de
+     Champions (part2/misc_body_2.html) — ver ahí la explicación
+     completa. 2026-07-11: petición usuario, el sorteo del Open
+     Qualifier tiene que dar grupos distintos en cada pulsación, no
+     siempre el mismo reparto para el mismo pool. */
+  function _shuffleTiered(arr, tierSize){
+    var out = arr.slice();
+    for(var start=0; start<out.length; start+=tierSize){
+      var end = Math.min(out.length, start+tierSize);
+      for(var i=end-1; i>start; i--){
+        var j = start + Math.floor(Math.random()*(i-start+1));
+        var tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+      }
+    }
+    return out;
+  }
   function _distributeSnake(teams, nGroups){
+    /* Sembramos por poder (bombos de `nGroups` equipos, fuerza similar
+       dentro de cada uno) y barajamos CADA bombo antes del snake — así
+       el reparto sigue equilibrado (1 equipo de cada bombo por grupo)
+       pero cambia de verdad en cada sorteo, en vez de ser siempre el
+       mismo orden de entrada. */
+    var seeded = teams.slice().sort(function(a,b){ return (Number(b&&b.power)||50)-(Number(a&&a.power)||50); });
+    seeded = _shuffleTiered(seeded, nGroups);
     var groups = [];
     for(var g=0; g<nGroups; g++) groups.push([]);
-    teams.forEach(function(t, i){
+    seeded.forEach(function(t, i){
       var row = Math.floor(i / nGroups);
       var col = i % nGroups;
       var g = (row % 2 === 0) ? col : (nGroups - 1 - col);

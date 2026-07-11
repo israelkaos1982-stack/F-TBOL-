@@ -464,7 +464,10 @@ window._showSimProgress = function(opts, onDone){
       /* Personalización opcional (sorteos vs simulaciones). */
       unit: opts.unit || 'partidos',
       verb: opts.verb || 'simulada',
-      pctOnly: !!opts.pctOnly
+      pctOnly: !!opts.pctOnly,
+      /* Sello de "última señal de vida" (2026-07-11, ver _bgSimIsActive
+         más abajo) — arranca en el momento de crear el chip. */
+      lastAliveAt: Date.now()
     };
     window._bgSimsActive = (window._bgSimsActive | 0) + 1;
     /* Mantener el gate de saveData (XHR síncrono off) mientras haya
@@ -477,6 +480,7 @@ window._showSimProgress = function(opts, onDone){
     var s = window._bgSims[slug]; if (!s) return;
     s.done = done | 0;
     if (total != null) s.total = total | 0;
+    s.lastAliveAt = Date.now();
     _renderChip(slug);
   };
   window._bgSimFinish = function(slug, ok, opts){
@@ -492,9 +496,29 @@ window._showSimProgress = function(opts, onDone){
       delete window._bgSims[slug];
     }, 3400);
   };
+  /* STALE-GUARD (2026-07-11): si una sim en 'running' lleva >20s sin dar
+     ninguna señal de vida (ni _bgSimProgress ni _bgSimFinish), la damos
+     por abandonada (throttling de pestaña en background, excepción no
+     capturada, recarga a mitad de un chunk…) y la limpiamos SOLA en vez
+     de dejar el botón "Sim" bloqueado en silencio para siempre — mismo
+     patrón watchdog que el resto del proyecto (ver `_armWatchdog` de
+     `ligaExtSimular`). Bug reportado: el chunked del Open Qualifier se
+     quedó a medias con la pestaña en background (36/336, 9 min sin
+     avanzar) y el siguiente click en "Sim" no hacía NADA — el guard
+     "evitar doble lanzamiento" lo bloqueaba para siempre sin ningún
+     aviso, porque `window._bgSims` solo se limpia al terminar OK. */
   window._bgSimIsActive = function(slug){
     var s = window._bgSims[slug];
-    return !!(s && s.status === 'running');
+    if (!s || s.status !== 'running') return false;
+    if (Date.now() - (s.lastAliveAt || 0) > 20000){
+      try { console.warn('[bgSim] '+slug+' lleva >20s sin avanzar — se considera abandonada y se libera.'); } catch(_){}
+      try { _removeChip(slug); } catch(_){}
+      delete window._bgSims[slug];
+      window._bgSimsActive = Math.max(0, (window._bgSimsActive | 0) - 1);
+      if (!window._bgSimsActive) window._ligaExtSimInProgress = false;
+      return false;
+    }
+    return true;
   };
 
   /* Helper para SORTEOS / operaciones de duración desconocida (fetch al

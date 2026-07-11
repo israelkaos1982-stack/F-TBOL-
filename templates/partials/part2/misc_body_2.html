@@ -17632,7 +17632,14 @@
      persista vía _recopaSaveHumanResult en recopa_state_v1.
      Single-leg con ET+pen automático si empate al 90'. 2026-05-06. */
   window.abrirRecopa = function (phase, idx, home, away) {
-    var isHvH = esHumano(home) && esHumano(away);
+    /* Humanidad POR COMPETICIÓN (2026-05-10): un equipo puede ser
+       humano en Recopa (humanIcon del editor) sin ser uno de los 5
+       canónicos de Liga EA — esHumano() a pelo lo trataba como IA.
+       Mismo patrón ya usado en abrirInter() justo debajo. */
+    var _ih = (typeof window.isHumanInComp === 'function')
+      ? function(n){ return !!window.isHumanInComp(n, 'recopa'); }
+      : function(n){ return !!esHumano(n); };
+    var isHvH = _ih(home) && _ih(away);
     gmOpen(0, home, away, isHvH, 'recopa', false, false);
     try {
       if (window.__GM_LIVE) {

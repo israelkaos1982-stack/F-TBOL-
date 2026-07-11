@@ -19490,6 +19490,18 @@ window._showSimProgress = function(opts, onDone){
     if(s && s.sorteo && !s.sorteo.r64 && (s.sorteo.r8 || s.sorteo.sf || s.sorteo.fin)){
       return null;
     }
+    /* Migración 2026-07-11: `_drawFirstRound` SIEMPRE genera exactamente
+       32 partidos en 1/64 (rellena con BYE hasta el bracket completo,
+       ver PHASE_SIZE.r64). Un `sorteo.r64` con otra longitud (p.ej. "0/2",
+       reportado por el usuario tras añadir 64 equipos manualmente al pool
+       y ver la Recopa seguir "esperando" un sorteo viejo de 2 partidos)
+       solo puede venir de un guardado de una versión anterior del motor.
+       Se descarta para que la pantalla ofrezca "🎯 Sortear 1/64" de nuevo
+       con el pool ACTUAL (los equipos añadidos a mano no llegaban nunca a
+       usarse porque el sorteo ya "existía", aunque estuviera roto). */
+    if(s && s.sorteo && s.sorteo.r64 && s.sorteo.r64.length && s.sorteo.r64.length !== PHASE_SIZE.r64){
+      return null;
+    }
     return s;
   }
   function _save(s){

@@ -33150,10 +33150,12 @@ document.addEventListener('DOMContentLoaded', function() {
   function _badgeBig(name,logo){ var l=logo||_logoOf(name)||''; return l ? '<img src="'+_esc(l)+'" alt="" class="crest" onerror="this.style.display=\'none\'">' : ''; }
   function _groupTable(gi,grp,sorted,destMap){
     var src = (sorted&&sorted.length) ? sorted : grp.map(function(t,i){ return {idx:i,name:(t&&t.name)||'',logo:(t&&t.logo)||'',pts:0,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0}; });
+    var hasHuman = _groupHasHuman(grp);
     var rows='<div class="wprev-row hdr"><span class="wprev-pos">#</span><span class="wprev-name">Equipo</span><span class="wprev-cell">PTS</span><span class="wprev-cell">PJ</span><span class="wprev-cell">V</span><span class="wprev-cell">E</span><span class="wprev-cell">P</span><span class="wprev-cell">GF</span><span class="wprev-cell">GC</span><span class="wprev-cell">DG</span></div>';
     for(var i=0;i<src.length;i++){
       var r=src[i], dest=destMap?destMap[r.name]:null;
       var cls = dest==='ucl'?'qual-best':(dest==='uel'?'qual-death':(dest==='uecl'?'qual-conf':''));
+      if(_prevIsHuman(r.name)) cls += ' wprev-row-human';
       var nm = (r.name && !/^TBD|^__placeholder_/.test(r.name)) ? (_badge(r.name,r.logo)+_esc(r.name)) : '<span style="color:rgba(255,255,255,.35);">Por definir</span>';
       var dgClass='wprev-cell dg'+(r.dg>0?' pos':(r.dg<0?' neg':''));
       rows += '<div class="wprev-row '+cls+'"><span class="wprev-pos">'+(i+1)+'</span><span class="wprev-name">'+nm+'</span>'
@@ -33161,7 +33163,7 @@ document.addEventListener('DOMContentLoaded', function() {
         +'<span class="wprev-cell">'+(r.e||0)+'</span><span class="wprev-cell">'+(r.p||0)+'</span><span class="wprev-cell">'+(r.gf||0)+'</span>'
         +'<span class="wprev-cell">'+(r.gc||0)+'</span><span class="'+dgClass+'">'+((r.dg>0?'+':'')+(r.dg||0))+'</span></div>';
     }
-    return '<div class="wprev-group"><div class="wprev-group-h">GRUPO '+GROUP_LABELS[gi]+'<span class="wprev-group-count">'+grp.length+'</span></div><div class="wprev-table-scroll"><div class="wprev-table">'+rows+'</div></div></div>';
+    return '<div class="wprev-group'+(hasHuman?' wprev-group-human':'')+'"><div class="wprev-group-h">GRUPO '+GROUP_LABELS[gi]+'<span class="wprev-group-count">'+grp.length+'</span></div><div class="wprev-table-scroll"><div class="wprev-table">'+rows+'</div></div></div>';
   }
   /* Card de la Ronda Preliminar (2026-07-12, "un poco más como
      videojuego que salgan ver de los equipos que se clasifican"):
@@ -33266,11 +33268,19 @@ document.addEventListener('DOMContentLoaded', function() {
       matches.forEach(function(m){
         var isHuman = _fixtureMatchIsHuman(grp, m);
         var hLogo = _badge(m.home, (grp[m.hi]&&grp[m.hi].logo)), aLogo = _badge(m.away, (grp[m.ai]&&grp[m.ai].logo));
-        var scHtml = m.played ? ('<span class="sc">'+m.gh+'-'+m.ga+'</span>') : '<span class="sc" style="opacity:.5;">vs</span>';
-        html += '<div class="wprev-mrow'+(isHuman&&!m.played?' pending':'')+'"><span class="h"><span class="nm">'+hLogo+_esc(m.home)+'</span></span>'+scHtml+'<span class="a"><span class="nm">'+aLogo+_esc(m.away)+'</span></span></div>';
-        if(isHuman && !m.played){
-          html += '<button type="button" class="wprev-fg-play-btn" data-gi="'+gi+'" data-j="'+j+'">⭐ ▶ PREVIA · JUGAR</button>';
+        /* 2026-07-12 (petición usuario): el partido del humano SIN
+           jugar muestra "Previa" en la píldora central (en vez de
+           "vs") — es la que abre la previa+card, sin botón aparte
+           debajo. */
+        var scHtml;
+        if(m.played){
+          scHtml = '<span class="sc">'+m.gh+'-'+m.ga+'</span>';
+        } else if(isHuman){
+          scHtml = '<button type="button" class="sc wprev-fg-play-btn" data-gi="'+gi+'" data-j="'+j+'">Previa</button>';
+        } else {
+          scHtml = '<span class="sc" style="opacity:.5;">vs</span>';
         }
+        html += '<div class="wprev-mrow'+(isHuman&&!m.played?' pending':'')+'"><span class="h"><span class="nm">'+hLogo+_esc(m.home)+'</span></span>'+scHtml+'<span class="a"><span class="nm">'+aLogo+_esc(m.away)+'</span></span></div>';
       });
       html += '</div>';
     });
@@ -33329,7 +33339,7 @@ document.addEventListener('DOMContentLoaded', function() {
     html += '<div style="margin:0 4px 8px;padding:8px 14px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.35);border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#e0bfff;text-align:center;">'+banner+'</div>';
     if(s.phase==='done'){
       html += '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:0 4px 8px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;">'
-        +'<span style="color:#a855f7;">■ Champions (1º)</span><span style="color:#F37335;">■ Europa (2º + mejores 3º)</span><span style="color:#5fe08a;">■ Conference (4º + peores 3º)</span></div>';
+        +'<span style="color:#4aa3ff;">■ Champions (1º)</span><span style="color:#F37335;">■ Europa (2º + mejores 3º)</span><span style="color:#5fe08a;">■ Conference (4º + peores 3º)</span></div>';
     }
     (s.groups||[]).forEach(function(grp,gi){ html += _groupTable(gi, grp, (s.sortedTables&&s.sortedTables[gi])||null, destMap); html += _fgJornadaHtml(s, gi); });
     host.innerHTML=html;

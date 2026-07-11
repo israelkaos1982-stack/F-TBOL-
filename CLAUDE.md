@@ -1,5 +1,64 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Previa de Champions — grupo humano en AZUL, píldora "Previa" en vez de "vs" + sin botón aparte, Champions en azul (obligatorio, 2026-07-12 #3)
+
+**Petición usuario 2026-07-12** (foto de la jornada del grupo con
+Atlético Madrid): "el grupo de Previa de Champions que tengo equipo
+humano en color azul para diferenciarlo. La palabra previa en los
+partidos donde haya un humano en la fase previa tiene que ir en el
+medio donde pone VS (poniendo solo Previa) quitando lo de ⭐️>
+PREVIA > JUGAR. En cada grupo en color azul el primer clasificado (ya
+que va a Fase grupo Champions) en Naranja los que van a Europa League
+y en color verde los que van a conference".
+
+### 1) Grupo con club humano — AZUL (antes dorado/rojo Atlético)
+
+`.wprev-group.wprev-group-human`/`.wprev-row.wprev-row-human`
+(`misc_body_1.html`) pasan de la paleta dorado+rojo (`#f0c040`/
+`#c50f1f`, "Atlético-themed") a AZUL (`#4aa3ff`/`#1560c9`/`#0a2a5a`).
+`_groupTable` (`part2/misc_body_2.html`) ahora SÍ añade estas clases
+(antes existían en el CSS pero ninguna función las generaba —
+`wprev-group-human` en la fila del contenedor si `_groupHasHuman(grp)`,
+`wprev-row-human` en la fila de un jugador si `_prevIsHuman(r.name)`).
+
+### 2) La píldora central dice "Previa" en vez de "vs" — sin botón aparte
+
+`_fgJornadaHtml`: el partido del humano SIN jugar ya NO pinta
+`⭐ ▶ PREVIA · JUGAR` como botón debajo de la fila — la propia píldora
+central (`<span class="sc">`, donde antes ponía "vs") se convierte en
+un `<button class="sc wprev-fg-play-btn">Previa</button>` clicable
+(mismo `data-gi`/`data-j`, mismo wiring de `buildUclPrevClas` que ya
+buscaba `.wprev-fg-play-btn` por selector de clase — sigue funcionando
+sin cambios). CSS nuevo `.wprev-mrow .sc.wprev-fg-play-btn` resetea los
+estilos por defecto de `<button>` para que la píldora se vea igual de
+compacta que el "vs"/marcador, con el mismo dorado de "jugable" que
+tenía el botón antiguo.
+
+### 3) Colores del reparto de grupo — Champions AZUL (antes púrpura)
+
+`.wprev-row.qual-best` (1º de grupo → Champions) pasa de púrpura
+(`#a855f7`) a AZUL (`#4aa3ff`), igual en la leyenda superior ("1º grupo
+→ Champions", punto de color) y en la leyenda inferior tras simular
+("■ Champions (1º)"). `.wprev-row.qual-death` (Europa, naranja
+`#F37335`) y `.wprev-row.qual-conf` (Conference, verde `#5fe08a`) NO
+cambian — ya eran naranja/verde tal como pedía el usuario.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a pintar el grupo con club humano en dorado/rojo
+   — es AZUL (`#4aa3ff` de borde/acento). El resto de highlights de la
+   Previa (Ronda Preliminar, cruce del humano) siguen su propio
+   esquema dorado — NO se tocan, son una sección distinta.
+2. **PROHIBIDO** reintroducir el botón `⭐ ▶ PREVIA · JUGAR` como
+   elemento separado bajo la fila. El disparador del partido humano
+   pendiente ES la propia píldora central, con el texto "Previa".
+3. **PROHIBIDO** que `qual-best` (1º de grupo, destino Champions)
+   vuelva a `#a855f7` (púrpura). Es azul, a juego con el resto de la UI
+   de Champions (`--comp-color:#88aaff` del gm-modal).
+4. Toda tabla de grupo NUEVA de esta pantalla hereda el marcado
+   `wprev-group-human`/`wprev-row-human` automáticamente en cuanto
+   pase por `_groupTable` — no hardcodear qué grupo es "el humano".
+
 ## Previa de Champions — la Ronda Preliminar es "videojuego" + colapsable, y el club humano JUEGA sus propios partidos (obligatorio, 2026-07-12 #2)
 
 **Petición usuario 2026-07-12** (2 fotos: "Ronda Preliminar · Open

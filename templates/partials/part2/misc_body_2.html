@@ -32654,19 +32654,23 @@ document.addEventListener('DOMContentLoaded', function() {
   })();
 
   function loadState(){ try { return JSON.parse(localStorage.getItem(WPREV_KEY)||'null'); } catch(_){ return null; } }
-  function _freeSpace(){
-    var del = [];
-    try { for(var i=0;i<localStorage.length;i++){ var k=localStorage.key(i); if(k&&(k.indexOf('_backup')!==-1||k.indexOf('_snap_')!==-1||k.indexOf('_snapshot')!==-1||k.indexOf('_protected')!==-1)) del.push(k); } } catch(_){}
-    del.forEach(function(k){ try{ localStorage.removeItem(k); }catch(_){} });
-    return del.length;
-  }
+  /* 2026-07-11: mismo fix que `_saveSim` del Open Qualifier — usa el
+     limpiador de cuota GENÉRICO del proyecto (`window._lsSetSafe`,
+     libera más categorías que el ad-hoc de antes) y avisa con
+     `_gmCriticalNotice` (banner propio, inmune a que Chrome suprima
+     `alert()` tras muchos diálogos en la misma sesión) si aun así
+     falla. Antes: chip acababa en 336/336-equivalente sin guardar y el
+     usuario se quedaba sin ninguna pista visible de por qué. */
   function saveState(s){
-    try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); return true; }
-    catch(e){
-      var isQuota = /Quota|QUOTA_EXCEEDED|22|1014/i.test(String((e&&(e.name||e.code))||'')) || /quota/i.test(String(e&&e.message));
-      if(isQuota){ var f=_freeSpace(); try { localStorage.setItem(WPREV_KEY, JSON.stringify(s)); return true; } catch(e2){ alert('⚠️ Sin espacio en localStorage para guardar la Previa.\n\nLiberé '+f+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas.'); return false; } }
-      alert('⚠️ Error guardando la Previa: '+(e&&e.message?e.message:e)); return false;
+    var json = JSON.stringify(s);
+    var ok = (typeof window._lsSetSafe === 'function')
+      ? window._lsSetSafe(WPREV_KEY, json)
+      : (function(){ try { localStorage.setItem(WPREV_KEY, json); return true; } catch(_){ return false; } })();
+    if(!ok){
+      try { console.error('[wprev-saveState] setItem falló incluso tras liberar espacio'); } catch(_){}
+      (window._gmCriticalNotice || alert)('⚠️ No se pudo guardar la Previa: el navegador se quedó sin espacio incluso después de liberar caché.\n\nBorra alguna liga de "Resto de Ligas" y vuelve a intentarlo.');
     }
+    return ok;
   }
   function clearState(){ try { localStorage.removeItem(WPREV_KEY); } catch(_){} }
 
@@ -32929,6 +32933,83 @@ document.addEventListener('DOMContentLoaded', function() {
       buildUclPrevClas();
     }
     if(typeof window.pG==='function') window.pG(_do); else _do();
+  };
+
+  /* Botón "⬇️ Traer Open Qualifier" (2026-07-11) — mismo patrón que
+     "⬇️ Traer Wild Card" del Open Qualifier (misc_body_1.html,
+     `pullWildCardWinners`), heredado tal como manda la regla del
+     proyecto para todo par fase-anterior/fase-siguiente que dependa de
+     un pool propagado. Trae A MANO los 28 clasificados del Open
+     Qualifier al pool de la Previa, cubriendo las mismas 3 causas por
+     las que "no se lanzan": este dispositivo no recibió la
+     invalidación en cascada todavía, hay una snapshot congelada
+     (`europe_committed_v1`) de antes de que el OQ terminara, o la zona
+     `uclPrev` está en modo 🔒 Manual (default) — en ese caso
+     `computeUclPrevTeams()` corta en su primera línea y nunca llega a
+     mirar `oq_to_previa_v1`, así que el registro como EXTRA MANUAL
+     (`_eurSyncManualExtraFromFeeder`) es la ÚNICA vía que funciona
+     siempre. NO sortea los grupos por sí solo — solo refresca el pool;
+     el admin sigue pulsando 🎲 Draw + 🎮 Sim para formarlos y jugarlos. */
+  window._wprevPullOpenQualifier = function(){
+    var oq = null;
+    try {
+      var raw = localStorage.getItem('oq_to_previa_v1');
+      oq = raw ? JSON.parse(raw) : null;
+    } catch(_){}
+    var teams = (oq && Array.isArray(oq.teams)) ? oq.teams : [];
+    if(!teams.length){
+      alert('El Open Qualifier todavía no tiene clasificados guardados.\n\nTermina de simular sus 28 grupos primero (🎮 Sim en la pantalla del Open Qualifier).');
+      return;
+    }
+    try {
+      /* Causa más probable: los registra como extra manual de
+         'uclPrev' — funciona esté esa zona en Auto o en Manual. */
+      if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
+        window._eurSyncManualExtraFromFeeder('uclPrev', teams, 'open-qualifier');
+      }
+      /* Invalida el sorteo cacheado de la propia Previa para forzar el
+         recálculo del pool con los clasificados reales. */
+      if (typeof window._eurInvalidateDownstream === 'function') {
+        window._eurInvalidateDownstream([WPREV_KEY, WPREV_FG_KEY, WPREV_EUR_KEY, WPREV_CONF_KEY]);
+      } else {
+        try { clearState(); } catch(_){}
+      }
+      /* Recalcula EN VIVO (bypass de cualquier snapshot congelada) y,
+         si esa snapshot existe, la actualizamos para que no vuelva a
+         tapar a los clasificados en el próximo render. */
+      var _prevIgnore = window._europeIgnoreFrozen;
+      window._europeIgnoreFrozen = true;
+      var live = [];
+      try { live = (window.computeUclPrevTeams && window.computeUclPrevTeams()) || []; }
+      finally { window._europeIgnoreFrozen = _prevIgnore; }
+      try {
+        var craw = localStorage.getItem('europe_committed_v1');
+        if(craw){
+          var blob = JSON.parse(craw);
+          if(blob && typeof blob === 'object'){
+            blob.uclPrev = live;
+            localStorage.setItem('europe_committed_v1', JSON.stringify(blob));
+            fetch('/api/kv/europe_committed_v1', {
+              method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
+              body: JSON.stringify({value: blob})
+            }).catch(function(){});
+          }
+        }
+      } catch(_){}
+      buildUclPrevClas();
+      /* Confirmación HONESTA: cuenta cuántos de los clasificados del OQ
+         están de verdad dentro del pool recalculado, en vez de
+         asumirlo (mismo bug que ya se corrigió en el botón gemelo de
+         la Wild Card). */
+      var real = live.filter(function(t){ return t && t.name && !/^TBD|^__placeholder_/.test(t.name); }).length;
+      var gotSet = {};
+      live.forEach(function(t){ if(t && t.name) gotSet[t.name] = true; });
+      var got = teams.filter(function(t){ return t && t.name && gotSet[t.name]; }).length;
+      (window._gmCriticalNotice || alert)('✅ Pool de la Previa actualizado: '+real+' / 62 equipos reales · '+got+' / '+teams.length+' clasificados del Open Qualifier confirmados dentro del pool.\n\nPulsa 🎲 Draw para formar los 16 grupos.');
+    } catch(e){
+      try { console.error('[wprev-pull-oq]', e); } catch(_){}
+      (window._gmCriticalNotice || alert)('⚠️ Error trayendo los clasificados del Open Qualifier: '+(e && e.message ? e.message : e));
+    }
   };
   /* Compat: la Previa ya no tiene partidos humanos individuales (fase
      de grupos IA-vs-IA, solo tablas). Mantenemos estos exports como

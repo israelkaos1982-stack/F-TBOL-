@@ -36958,6 +36958,36 @@ window._showSimProgress = function(opts, onDone){
 #s-ucl-previa-clas .wprev-dr-agg .winner-mark{font-weight:700;color:#a855f7;}
 #s-ucl-previa-clas .wprev-dr-agg .loser-mark{color:rgba(255,255,255,.4);}
 #s-ucl-previa-clas .wprev-dr-agg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#fff;background:rgba(168,85,247,.25);border:1px solid rgba(168,85,247,.55);border-radius:4px;padding:2px 0;font-weight:900;}
+/* ─── Ronda Preliminar "videojuego" (2026-07-12): crests grandes +
+     card destacada para el cruce del equipo humano + botón JUGAR.
+     Petición usuario: "que sea un poco más como videojuego que
+     salgan ver de los equipos que se clasifican". ─────────────── */
+#s-ucl-previa-clas .wprev-dr-tie{position:relative;}
+#s-ucl-previa-clas .wprev-dr-leg .crest{width:30px;height:30px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5));}
+#s-ucl-previa-clas .wprev-dr-leg .h,
+#s-ucl-previa-clas .wprev-dr-leg .a{display:flex;align-items:center;gap:7px;min-width:0;}
+#s-ucl-previa-clas .wprev-dr-leg .h{justify-content:flex-end;}
+#s-ucl-previa-clas .wprev-dr-leg .a{justify-content:flex-start;}
+#s-ucl-previa-clas .wprev-dr-leg .h .nm,
+#s-ucl-previa-clas .wprev-dr-leg .a .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Cruce del/de los equipo(s) humano(s): borde+glow dorado, mismo
+   lenguaje visual que `.wprev-group-human` (grupo destacado). */
+#s-ucl-previa-clas .wprev-dr-tie.human{
+  border:2px solid #f0c040;
+  background:linear-gradient(135deg,rgba(240,192,64,.14),rgba(168,85,247,.05),rgba(0,0,0,.25));
+  box-shadow:0 0 16px rgba(240,192,64,.25),inset 0 0 0 1px rgba(240,192,64,.18);
+}
+#s-ucl-previa-clas .wprev-dr-tie.human .wprev-dr-leg .crest{width:38px;height:38px;}
+#s-ucl-previa-clas .wprev-dr-human-tag{font-family:Oswald,sans-serif;font-size:9.5px;letter-spacing:1.5px;color:#ffd700;text-align:center;padding:0 0 6px;}
+#s-ucl-previa-clas .wprev-dr-play-btn{display:block;width:calc(100% - 4px);margin:8px 2px 2px;padding:10px 12px;border:1px solid #ffd700;border-radius:8px;background:linear-gradient(135deg,#3a2a00,#7a5a00);color:#ffe480;font-family:Oswald,sans-serif;font-size:12.5px;font-weight:700;letter-spacing:1.5px;cursor:pointer;}
+#s-ucl-previa-clas .wprev-dr-play-btn:active{filter:brightness(.9);}
+/* Grupo del humano en la fase de grupos: bloque de jornadas (reusa
+   `.wprev-jbtn`/`.wprev-jmatches`, ya definidas para el calendario de
+   la Previa) + botón JUGAR por partido, mismo estilo que la Ronda
+   Preliminar. */
+#s-ucl-previa-clas .wprev-fg-jor{margin:8px 4px 0;}
+#s-ucl-previa-clas .wprev-fg-jor .wprev-mrow.pending{background:rgba(240,192,64,.08);}
+#s-ucl-previa-clas .wprev-fg-play-btn{display:block;width:calc(100% - 16px);margin:4px 8px 8px;padding:8px 12px;border:1px solid #ffd700;border-radius:6px;background:linear-gradient(135deg,#3a2a00,#7a5a00);color:#ffe480;font-family:Oswald,sans-serif;font-size:11.5px;font-weight:700;letter-spacing:1.2px;cursor:pointer;}
 #s-ucl-previa-clas .wprev-empty{padding:20px;text-align:center;color:rgba(255,255,255,.5);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.6;}
 /* ─── Panel de diagnóstico del pool (admin) ─────────────────────
    Petición usuario 2026-05-02: ver qué fuentes contribuyen al pool

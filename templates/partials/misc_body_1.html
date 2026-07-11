@@ -19962,7 +19962,20 @@ window._showSimProgress = function(opts, onDone){
     var s = _load() || {};
     var ms = (s.sorteo && s.sorteo[phase]) || [];
     if(!ms.length){
-      host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.<br>Vuelve a la pantalla de Recopa y pulsa <b>🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</b>.</div>';
+      /* Autosuficiente (petición usuario 2026-07-11, "fíjate en el
+         modelo de copa"): en vez de mandar al usuario de vuelta a la
+         pantalla de Recopa para pulsar Sortear, el botón vive AQUÍ
+         MISMO — igual que Copa del Rey, donde cada ronda es accionable
+         sin tener que salir de ella. Solo tiene sentido para 1/64 (la
+         única ronda sorteable sin depender de la anterior); el resto
+         siguen remitiendo al banner de arriba. */
+      if(phase === 'r64'){
+        var poolNow = _buildPool();
+        host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.</div>'
+          + '<button class="recopa-btn-sortear" style="margin:8px auto;display:block;" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + poolNow.length + ' equipos)</button>';
+      } else {
+        host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.<br>Vuelve a la pantalla de Recopa y pulsa <b>🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</b>.</div>';
+      }
       return;
     }
     var html = '';
@@ -20132,6 +20145,26 @@ window._showSimProgress = function(opts, onDone){
     };
     window.go._recopaPatched = true;
   })();
+  /* Red de seguridad independiente del hook de go() (2026-07-11): con
+     ~20 wraps encadenados de window.go en este proyecto, un fallo de
+     cadena en cualquiera de ellos dejaría la pantalla de la ronda en
+     blanco sin que _renderRound llegue a ejecutarse — exactamente el
+     síntoma reportado ("Recopa · 1/64" vacío tras entrar). Un
+     MutationObserver sobre CADA pantalla de ronda, que dispara al
+     recibir la clase `.active`, garantiza el render aunque el hook de
+     go() falle por cualquier motivo no previsto. Idempotente: llama a
+     la MISMA `_renderRound`, que es barata y determinista. */
+  PHASES.forEach(function(phase){
+    var scr = document.getElementById('s-recopa-rd-' + phase);
+    if(!scr || typeof MutationObserver === 'undefined') return;
+    var wasActive = scr.classList.contains('active');
+    if(wasActive) _renderRound(phase);
+    new MutationObserver(function(){
+      var isActive = scr.classList.contains('active');
+      if(isActive && !wasActive) _renderRound(phase);
+      wasActive = isActive;
+    }).observe(scr, { attributes:true, attributeFilter:['class'] });
+  });
 })();
 </script>
 

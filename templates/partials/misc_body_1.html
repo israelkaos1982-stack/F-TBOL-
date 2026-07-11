@@ -37375,35 +37375,38 @@ window._showSimProgress = function(opts, onDone){
     _finishOqSim(groups, matchesByGroup);
   }
 
-  /* Versión EN SEGUNDO PLANO: sortea (instantáneo), luego simula grupo
-     a grupo cediendo el hilo entre cada uno y reportando el % al chip
-     flotante global (_bgSim*). Si el chip no existe, cae al sync. */
+  /* Simulación SÍNCRONA en UN solo pase (2026-07-11, mismo fix que Wild
+     Card 2026-06-03: "En el MÓVIL, al atenuarse o apagarse la pantalla el
+     navegador PAUSA los timers de fondo"). ANTES esta función troceaba
+     los 28 grupos en 28 `setTimeout(step,0)` — uno por grupo — para que
+     el chip flotante subiera de 0% a 100% poco a poco. Con la pestaña en
+     background (pantalla apagada/bloqueada), Chrome aplica "intensive
+     throttling" a partir de los 5 min y esos `setTimeout` pasan a
+     dispararse 1 vez por minuto o menos — la cadena se queda colgada
+     durante DECENAS DE MINUTOS a mitad de sorteo (foto usuario: reloj
+     saltando 13:55→14:04→14:13 mientras el % subía 0%→7%→11%, ~1 grupo
+     cada 9 min). Los 336 partidos (28×12) son aritmética Poisson ligera
+     — bien por debajo de 1s de CPU — así que se juegan TODOS de golpe en
+     un único pase síncrono: imposible que quede a medias por throttling
+     de timers. Cedemos un tick antes de bloquear para que el chip pinte
+     "0%" y el usuario vea que arrancó. */
   function _doSimulateChunked(classified){
-    if(typeof window._bgSimStart !== 'function'){ _doSimulate(classified); return; }
     classified = _padToFull(classified);
     var groups = _distributeSnake(classified, N_GROUPS);
     var total = 0;
     groups.forEach(function(g){ var n=(g||[]).length; total += n*(n-1); });
-    try { window._bgSimStart('open-qualifier', 'Open Qualifier', total, { verb:'simulado' }); } catch(_){}
-    var matchesByGroup = new Array(groups.length);
-    var gi = 0, doneMatches = 0;
-    function step(){
-      var endG = Math.min(groups.length, gi + 1); /* 1 grupo por tick */
-      for(; gi<endG; gi++){
-        var ms;
-        try { ms = _simulateGroup(groups[gi]); }
-        catch(e){ try{console.error('[oq-sim grupo]', gi, e);}catch(_){} ms = []; }
-        matchesByGroup[gi] = ms;
-        doneMatches += ms.length;
-      }
-      try { window._bgSimProgress('open-qualifier', doneMatches, total); } catch(_){}
-      if(gi < groups.length){ setTimeout(step, 0); return; }
+    var hasChip = (typeof window._bgSimStart === 'function');
+    if(hasChip){ try { window._bgSimStart('open-qualifier', 'Open Qualifier', total, { verb:'simulado' }); } catch(_){} }
+    setTimeout(function(){
+      var matchesByGroup = groups.map(function(grp, gi){
+        try { return _simulateGroup(grp); }
+        catch(e){ try{console.error('[oq-sim grupo]', gi, e);}catch(_){} return []; }
+      });
       var ok = false;
       try { ok = _finishOqSim(groups, matchesByGroup); }
       catch(e){ try { console.error('[oq-sim] finish', e); } catch(_){} }
-      try { window._bgSimFinish('open-qualifier', ok, { done:total, total:total }); } catch(_){}
-    }
-    setTimeout(step, 0);
+      if(hasChip){ try { window._bgSimFinish('open-qualifier', ok, { done:total, total:total }); } catch(_){} }
+    }, 30);
   }
   function resetOpenQualifier(){
     try { localStorage.removeItem(STORE_KEY); } catch(_){}

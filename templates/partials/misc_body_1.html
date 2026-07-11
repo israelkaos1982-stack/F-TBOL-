@@ -2,9 +2,24 @@
 /* PIN Guard - global, sin dependencias */
 window._adm = false;
 window._admQ = null;
+/* 2026-07-11: `fn()` ya NO se llama a pelo. Es el chokepoint de
+   TODA acción admin del proyecto (Sim/Draw/Reset de docenas de
+   pantallas) — si `fn` revienta con una excepción, antes se perdía
+   en silencio (ni alert, ni consola visible al usuario): el botón
+   "no hacía nada" sin ninguna pista de por qué. Mismo patrón ya
+   establecido para la cadena FINALIZAR (`_gmSafeReenter`/
+   `_gmCriticalNotice`) — aplicado aquí porque es el punto único que
+   protege a TODOS los botones con PIN de golpe. */
 window.pG = function(fn) {
-  if (window._adm) { fn(); return; }
-  window._admQ = fn;
+  function _run(){
+    try { fn(); }
+    catch(e){
+      try { console.error('[pG]', e); } catch(_){}
+      (window._gmCriticalNotice || alert)('⚠️ La acción no se pudo completar: ' + (e && e.message ? e.message : e));
+    }
+  }
+  if (window._adm) { _run(); return; }
+  window._admQ = _run;
   var m = document.getElementById('pin-modal');
   if (m) m.style.display = 'flex';
   var er = document.getElementById('pin-err');

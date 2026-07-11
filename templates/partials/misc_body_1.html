@@ -19972,6 +19972,28 @@ window._showSimProgress = function(opts, onDone){
     });
   }
   function _renderRound(phase){
+    /* Blindaje 2026-07-11 (petición usuario "no hace nada" — la ronda se
+       quedaba en blanco sin ningún aviso): si CUALQUIER paso del render
+       revienta (un dato inesperado de uno de los 64 equipos reales del
+       pool, `_logo`/`humanIcon` fallando para un nombre concreto…), el
+       usuario debe ver SIEMPRE algo accionable en vez de una pantalla
+       muerta — mismo contrato que `_gmShowFinalOv`/`_mlShowStatsOverlay`
+       (display SIEMPRE incondicional, con fallback si el contenido rico
+       revienta). */
+    try { _renderRoundInner(phase); }
+    catch(errRR){
+      try { console.warn('[Recopa] _renderRound(' + phase + ') falló:', errRR); } catch(_){}
+      try {
+        var bodyIdErr = DOM_BODY[phase];
+        var hostErr = bodyIdErr && document.getElementById(bodyIdErr);
+        if(hostErr){
+          hostErr.innerHTML = '<div class="recopa-empty">⚠️ No se pudo pintar esta ronda (dato inesperado en el pool).<br>'
+            + '<button class="recopa-btn-sortear" style="margin:8px auto;display:block;" onclick="window._recopaSortear&&window._recopaSortear()">🔄 Reintentar</button></div>';
+        }
+      } catch(_){}
+    }
+  }
+  function _renderRoundInner(phase){
     var bodyId = DOM_BODY[phase]; if(!bodyId) return;
     var host = document.getElementById(bodyId); if(!host) return;
     var s = _load() || {};
@@ -20014,7 +20036,15 @@ window._showSimProgress = function(opts, onDone){
             + '</div>';
     }
     ms.forEach(function(m, i){
-      html += _renderMatchCard(m, phase, i);
+      /* Una tarjeta rota (dato inesperado de UN equipo del pool de 64)
+         NUNCA debe vaciar las otras 31 — fallback mínimo por tarjeta. */
+      try { html += _renderMatchCard(m, phase, i); }
+      catch(errCard){
+        try { console.warn('[Recopa] _renderMatchCard falló en ' + phase + '[' + i + ']:', errCard); } catch(_){}
+        html += '<div class="recopa-card" style="opacity:.6;"><div class="recopa-card-row" style="justify-content:center;">'
+          + '<div class="recopa-card-name" style="color:#ff8080;">⚠️ ' + _esc((m && m.home) || '?') + ' vs ' + _esc((m && m.away) || '?') + ' (error al pintar)</div>'
+          + '</div></div>';
+      }
     });
     host.innerHTML = html;
   }

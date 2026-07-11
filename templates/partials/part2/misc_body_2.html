@@ -10317,9 +10317,21 @@
     /* MVP picker: HvH (los dos humanos) y HvIA (al menos uno humano).
        Antes solo se mostraba para HvH, así que en partidos del humano
        contra IA nunca se asignaba MVP → la clasificación contaba 0
-       aunque el equipo hubiera jugado decenas de partidos. */
-    var _isHumanInvolved = st.isHvH
-      || (typeof esHumano === 'function' && (esHumano(st.home) || esHumano(st.away)));
+       aunque el equipo hubiera jugado decenas de partidos.
+       Bug 2026-07-10 (Inter/Rubén, 7º mister): esta condición usaba
+       SOLO `esHumano()` — pero la función `esHumano` de ESTE mismo
+       archivo (definida arriba, línea ~6864) es la versión LEGACY que
+       solo reconoce equipos de `ligaExt_liga-ea-sports`, y una
+       referencia suelta a `esHumano` dentro de este IIFE resuelve
+       SIEMPRE a esa versión local (nunca al `window.esHumano`
+       parcheado con el registro canónico). Un club humano cuyo slot
+       vive en otra liga externa (Inter → Resto de Ligas) nunca pasaba
+       este check → el MVP (y la puerta de compartir ligada a él) se
+       saltaba en silencio. Reutilizamos `_humAEnd`/`_humBEnd` (ya
+       calculados arriba con `_mlTeamIsHumanEnd`, que sí cae a
+       `window.isHumanInComp`/`_isHumanClubCanonico`) en vez de
+       recalcular con el `esHumano` local sin fallback. */
+    var _isHumanInvolved = st.isHvH || _humAEnd || _humBEnd;
     /* Petición usuario 2026-05-05: en partidos AMISTOSOS no se elige
        MVP (no aparecen jugadores de plantilla). El amistoso no
        alimenta clasificaciones, así que el MVP es opcional. */

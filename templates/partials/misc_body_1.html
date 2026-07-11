@@ -36304,35 +36304,58 @@ window._showSimProgress = function(opts, onDone){
     _eurFixupLeagues(out);
     return _appendManualExtra(out, 'ucl');
   }
-  function computeUclPrevTeams(){
+  /* 2026-07-12 — NUEVO FORMATO DE LA PREVIA (Ronda Preliminar + 12
+     grupos de 4). Petición usuario: los 28 del Open Qualifier YA NO
+     entran directos a la fase de grupos — primero juegan una ronda
+     PRELIMINAR eliminatoria entre ellos (14 cruces a doble partido,
+     con prórroga+penaltis si el global queda empatado) y SOLO los 14
+     ganadores se unen a los 34 directos de liga (34+14=48 → 12 grupos
+     de 4 exactos). Los 14 perdedores caen directos a Conference.
+     Resto del motor (sorteo/simulación de la ronda preliminar y de los
+     12 grupos) vive en part2/misc_body_2.html — aquí solo se separan
+     los DOS pools de entrada, porque ya no se pueden tratar como uno
+     solo (el del OQ pasa por un filtro antes de unirse al otro). */
+  function computeUclPrevDirectTeams(){
     if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return _appendManualExtra([], 'uclPrev');
     /* Base = 34 directos (zona uclPrev). Si los pools europeos están
-       CONGELADOS (`europe_committed_v1`) usamos esa snapshot como base,
-       PERO seguimos mergeando el Open Qualifier (la snapshot solo
-       congela las plazas de liga; el feeder del OQ es dinámico y
-       distinto). Antes había un `return frozen.slice()` que cortaba
-       aquí → la Previa se quedaba en 34/62 tras congelar Europa porque
-       NUNCA llegaba a añadir los 28 del OQ (foto usuario 2026-06-01). */
+       CONGELADOS (`europe_committed_v1`) usamos esa snapshot como base. */
     var frozen = _europeFrozenFor('uclPrev');
     var arr = frozen ? frozen.slice() : _computeQualifiedFromLeagues('uclPrev');
-    /* El 1º de cada grupo del Open Qualifier (28 grupos × 1 = 28
-       plazas, formato 28×4 desde 2026-05-30) se añade a la Previa
-       de Champions ese mismo año, AL MOMENTO. Los persiste
-       `simulateOpenQualifier` en `oq_to_previa_v1` con su país real.
-       Dedupe por nombre. */
+    _eurFixupLeagues(arr);
+    var out = _prependManualEa(arr, 'uclPrev');
+    /* Extras manuales de 'uclPrev' EXCLUYENDO los que llevan
+       `feederTag:'open-qualifier'` (esos son los ganadores del OQ
+       re-sincronizados como extra manual por `_eurSyncManualExtraFromFeeder`
+       para que lleguen aunque la zona esté en 🔒 Manual — deben pasar
+       por la ronda preliminar, NO colarse directos a los 34). */
+    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
+    var seen = {}; out.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    manual.forEach(function(t){
+      if(!t || !t.name || t.feederTag === 'open-qualifier' || seen[t.name]) return;
+      seen[t.name] = true;
+      out.push({ name:t.name, logo:t.logo||'', league:t.league||'manual' });
+    });
+    return out;
+  }
+  window.computeUclPrevDirectTeams = computeUclPrevDirectTeams;
+
+  /* Pool del Open Qualifier para la Previa (los 28 que deben jugar la
+     ronda preliminar). El 1º de cada grupo del Open Qualifier (28
+     grupos × 1, formato 28×4 desde 2026-05-30) lo persiste
+     `simulateOpenQualifier` en `oq_to_previa_v1` con su país real,
+     AL MOMENTO de terminar el Open Qualifier. */
+  function computeUclPrevOqPoolTeams(){
+    var arr = [];
     try {
       var raw = localStorage.getItem('oq_to_previa_v1');
       if(raw){
         var data = JSON.parse(raw);
         var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
-        var seen = {};
-        arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
         teams.forEach(function(t){
-          if(!t || !t.name || seen[t.name]) return;
+          if(!t || !t.name) return;
           /* Salta huecos TBD/placeholder (saves antiguos que los
              persistían). Solo equipos reales entran a la Previa. */
           if(/^TBD/i.test(t.name) || /^__placeholder_/.test(t.league||'')) return;
-          seen[t.name] = true;
           /* Conservamos el `league` real persistido (slug-país). Solo
              caemos a 'open-qualifier' si el dato es legacy (sin league);
              `_eurFixupLeagues` de abajo intentará recuperar el país. */
@@ -36340,12 +36363,38 @@ window._showSimProgress = function(opts, onDone){
         });
       }
     } catch(_){}
+    /* Extras manuales de 'uclPrev' CON `feederTag:'open-qualifier'`
+       (misma vía que arriba, en sentido contrario). Dedupe por nombre. */
+    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
+    var seen = {}; arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    manual.forEach(function(t){
+      if(!t || !t.name || t.feederTag !== 'open-qualifier' || seen[t.name]) return;
+      seen[t.name] = true;
+      arr.push({ name:t.name, logo:t.logo||'', league:t.league||'open-qualifier' });
+    });
     /* Recupera el slug-país real de los equipos del OQ (o de cualquier
        directo legacy sin league) para que el sorteo de la Previa
-       (`_distributeGroups`, anti-mismo-país) no trate a todos los del
-       OQ como un mismo país. */
+       (anti-mismo-país) no trate a todos los del OQ como un mismo país. */
     _eurFixupLeagues(arr);
-    return _appendManualExtra(_prependManualEa(arr, 'uclPrev'), 'uclPrev');
+    return arr;
+  }
+  window.computeUclPrevOqPoolTeams = computeUclPrevOqPoolTeams;
+
+  /* Unión de los dos pools (34 + 28 = 62), conservada para diagnósticos
+     y para el botón "⬇️ Traer Open Qualifier" (cuenta cuántos equipos
+     reales hay en total). El motor de la Previa YA NO usa esta función
+     para construir su pool de trabajo — usa las dos de arriba por
+     separado, porque el pool del OQ pasa por la ronda preliminar antes
+     de unirse al de liga. */
+  function computeUclPrevTeams(){
+    var arr = computeUclPrevDirectTeams();
+    var seen = {}; arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    computeUclPrevOqPoolTeams().forEach(function(t){
+      if(!t || !t.name || seen[t.name]) return;
+      seen[t.name] = true;
+      arr.push(t);
+    });
+    return arr;
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
   function computeUelClassified(){
@@ -36782,18 +36831,20 @@ window._showSimProgress = function(opts, onDone){
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🇪🇺</span><h2>UCL · Previa de Champions</h2></div>
 
-<!-- Sim contextual / Reset (PIN 747).
-     El label del botón Sim cambia según la fase (sortear cruces /
-     simular ida / simular vuelta / completado). Se actualiza en cada
-     render llamando a window._wprevNextLabel(). El id permite que el
-     bloque JS de la Previa lo localice y refresque el texto. -->
+<!-- Sim / Draw contextuales (PIN 747), 2 etapas:
+     Etapa 1 (Ronda Preliminar, 28 del Open Qualifier → 14 cruces ida+
+     vuelta): 🎲 Draw sortea los cruces, 🎮 Sim los juega (prórroga+
+     penaltis si hay empate global).
+     Etapa 2 (12 grupos de 4, 34 directos + 14 ganadores preliminar):
+     🎲 Draw sortea los grupos, 🎮 Sim juega las liguillas.
+     Los labels de AMBOS botones cambian según la fase — los actualiza
+     window._wprevNextLabel()/el propio buildUclPrevClas() en cada
+     render, vía los ids wprev-btn-sim/wprev-btn-draw. -->
 <div style="display:flex;gap:8px;justify-content:center;padding:8px 6px 4px;flex-wrap:wrap;">
   <button id="wprev-btn-sim" onclick="pG(function(){window.simulateUclPrev&&window.simulateUclPrev()})"
           style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 16px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎮 Sim
   </button>
-  <!-- 🎲 Draw — sortea los 16 grupos de la Previa (PIN admin 747),
-       sin jugar. 🎮 Sim juega las liguillas y aplica el corte global. -->
   <button id="wprev-btn-draw" onclick="window._wprevDraw&&window._wprevDraw()"
           style="background:linear-gradient(135deg,#3a2a00,#7a5a00);border:1px solid #ffd700;border-radius:8px;padding:9px 16px;color:#ffe480;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎲 Draw
@@ -36815,11 +36866,11 @@ window._showSimProgress = function(opts, onDone){
   </button>
 </div>
 
-<!-- Leyenda morada compacta -->
+<!-- Leyenda morada compacta (formato 2026-07-12: Ronda Preliminar + 12 grupos) -->
 <div style="display:flex;gap:10px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:11px;color:#fff;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;">
   <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>1º grupo → Champions</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>2º+3º → Europa</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>Perdedor R1 → Conference</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>2º + 10 mejores 3º → Europa</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>4º + 2 peores 3º + perdedor preliminar → Conference</span>
 </div>
 
 <style>
@@ -36943,11 +36994,12 @@ window._showSimProgress = function(opts, onDone){
     </div>
     <div class="wprev-diag-body" id="wprev-diag-body"></div>
   </div>
-  <!-- Ronda 1 (3 exentos + 30 cruces) ARRIBA, según pidió el usuario.
-       El id `wprev-deathround-container` se conserva para no romper el
-       JS — el módulo de la Previa Champions lo localiza por id. -->
+  <!-- Ronda Preliminar (14 cruces del Open Qualifier a doble partido)
+       ARRIBA — reutiliza el id `wprev-deathround-container` del
+       formato antiguo (Ronda 1 + exentos) para no romper el JS; el
+       módulo de la Previa Champions lo localiza por id. -->
   <div id="wprev-deathround-container"></div>
-  <!-- Ronda Final (11 grupos × 3) ABAJO. -->
+  <!-- Fase de grupos (12 grupos de 4) ABAJO. -->
   <div id="wprev-groups-container" style="margin-top:14px;"></div>
 </div>
 </div>

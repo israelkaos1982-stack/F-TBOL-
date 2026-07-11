@@ -1,5 +1,118 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Previa de Champions — Ronda Preliminar (28→14, Open Qualifier) + 12 grupos de 4 (obligatorio, 2026-07-12) ⚠️ SUPERSEDE el formato "16 grupos + corte global 12/22/28" de la sección "Wild Card + Open Qualifier — FASE DE GRUPOS" más abajo
+
+**Petición usuario 2026-07-12** ("LA FASE PREVIA CHAMPIONS TENIA UN
+ERROR DE FORMATO, LOS VAMOS A HACER ASÍ"): el formato v3 (62 = 34
+directos + 28 del Open Qualifier → 16 grupos de tamaño desigual (14×4 +
+2×3) → corte por RANKING GLOBAL 12/22/28) queda **sustituido** por un
+formato en DOS ETAPAS, más simétrico, que además arregló de paso el bug
+reportado el mismo día ("el botón 🎲 no hace nada, debería formar los
+grupos").
+
+### Formato nuevo
+
+**Etapa 1 — Ronda Preliminar** (SOLO los 28 clasificados del Open
+Qualifier, los 34 directos de liga NO participan aquí):
+- 28 equipos → **14 eliminatorias a doble partido** (ida + vuelta),
+  emparejados AL AZAR (sin bombos, es una eliminatoria 1v1, no un
+  reparto de grupos que necesite equilibrar fuerza).
+- Si el **global** (agregado ida+vuelta) queda empatado → **prórroga**
+  (motor de partido con lambda reducido, ~1/3 del habitual, para
+  representar 30 min en vez de 90) y, si sigue empatado, **penaltis**
+  (ponderados por poder del equipo, igual que el resto de penaltis IA
+  del proyecto).
+- **14 ganadores** → pasan a la Etapa 2 (fase de grupos).
+- **14 perdedores** → eliminados DIRECTOS a Conference League.
+
+**Etapa 2 — Fase de grupos** (34 directos + 14 ganadores de la
+preliminar = 48 equipos exactos):
+- **12 GRUPOS DE 4** (ya no hay grupos desiguales de 3 — 48/12=4
+  encaja perfecto). Snake por poder + barajado por bombos
+  (`_shuffleTiered`) + anti-mismo-país, liguilla a DOBLE ida y vuelta,
+  IA-vs-IA. La UI muestra SOLO las tablas de clasificación.
+- **Reparto POR POSICIÓN DE GRUPO** (ya NO por ranking global — ese
+  era precisamente el "error de formato" a corregir):
+  - **1º de cada grupo (12)** → Champions, SIEMPRE.
+  - **2º de cada grupo (12)** → Europa, SIEMPRE.
+  - **Los 12 terceros de grupo se rankean entre sí** (PTS→DG→GF→nombre):
+    los **10 mejores** → Europa (22 = 12+10). Los **2 peores** →
+    Conference.
+  - **4º de cada grupo (12)** → Conference, SIEMPRE.
+- **Conference final** = 2 peores terceros + 12 cuartos (14, de la
+  fase de grupos) **+ los 14 perdedores de la Ronda Preliminar** = 28.
+
+### Balance final (idéntico al de antes — verificado, no cambia)
+
+```
+Champions:  12 (Previa) + 28 directos = 40 🔵
+Europa:     22 (Previa) + 18 directos = 40 🟠
+Conference: 28 (Previa) + 12 directos = 40 🟢
+```
+
+### Implementación
+
+`part2/misc_body_2.html`, IIFE de la Previa (`WPREV_KEY='wprev_state_v1'`):
+- `computeUclPrevDirectTeams()`/`computeUclPrevOqPoolTeams()`
+  (**NUEVAS**, `misc_body_1.html`) separan el pool en DOS —
+  `computeUclPrevTeams()` (unión de ambas) se conserva solo para
+  diagnóstico/compat, el motor de la Previa YA NO la usa para construir
+  su pool de trabajo. La separación respeta `feederTag` de los extras
+  manuales (`eur_manual_extra_v1.uclPrev`): las entradas con
+  `feederTag:'open-qualifier'` (los ganadores del OQ re-sincronizados
+  para que lleguen en modo 🔒 Manual) van al pool del OQ, el resto
+  (extras genuinamente manuales del admin) van al pool directo.
+- Estado (`wprev_state_v1`) con 4 fases: `null` (nada sorteado) →
+  `'prelim-drawn'` → `'prelim-done'` → `'groups-drawn'` → `'done'`.
+  Guarda `prelim.ties[]` (cada uno con `a`/`b`/`legs`/`et`/`penWinner`/
+  `winner`/`loser`/`aggA`/`aggB`) y `direct[]` (los 34, capturados al
+  sortear la preliminar) además de `groups[]`/`matchesByGroup[]`/
+  `sortedTables[]` (fase de grupos, igual que antes).
+- **🎲 Draw** y **🎮 Sim** son contextuales por fase — cada uno hace
+  SOLO su paso (Draw sortea, Sim juega), y avanzan a la fase siguiente
+  automáticamente cuando corresponde (p.ej. pulsar Sim con
+  `phase===null` sortea Y juega la preliminar de un tirón, igual que el
+  comportamiento legacy de "Sim sin Draw previo"). El label de AMBOS
+  botones se recalcula en cada render (`_nextLabel`/`_drawLabel`).
+- Render: la Ronda Preliminar se pinta en el contenedor
+  `wprev-deathround-container` (reutilizado del formato viejo "Ronda 1
+  + exentos", mismas clases CSS `.wprev-dr`/`.wprev-mrow` ya existentes
+  — sin CSS nuevo), y la fase de grupos en `wprev-groups-container`
+  (sin cambios de markup, solo N_GROUPS 16→12).
+- **Se ELIMINÓ el wrapper decorativo de `ftbolLoaderRun`** que envolvía
+  `simulateUclPrev`/`_wprevDraw` con `setTimeout` fake-progress: el
+  overlay real llevaba deshabilitado desde 2026-05-21, así que ese
+  wrapper solo aportaba 400-900ms de latencia artificial sin ningún
+  beneficio visual — mismo antipatrón que Wild Card ya abandonó el
+  2026-06-03. Los botones llaman a `simulateUclPrev`/`_wprevDraw`
+  directamente.
+- Las 3 claves de salida (`wprev_to_fase_grupos_v1`/`wprev_to_europa_v1`/
+  `wprev_r1_to_conference_v1`) **NO cambian de nombre** — las fases
+  finales (UCL/UEL/UECL) las siguen consumiendo sin tocar nada.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que los 34 directos de liga participen en la Ronda
+   Preliminar — solo los 28 del Open Qualifier juegan esa eliminatoria.
+   Los directos entran DIRECTOS a la fase de grupos.
+2. **PROHIBIDO** volver al corte por RANKING GLOBAL (posición→PTS→DG→GF)
+   de la fase de grupos. El corte es POR POSICIÓN DE GRUPO: 1º/2º/4º
+   siempre van al mismo sitio; solo los 3º se rankean entre sí (mejores
+   10 → Europa, peores 2 → Conference).
+3. **PROHIBIDO** que los 14 perdedores de la Ronda Preliminar se
+   pierdan — `_persistDistribution` los concatena SIEMPRE al resultado
+   de Conference de la fase de grupos (14+14=28).
+4. **PROHIBIDO** reintroducir un wrapper de `ftbolLoaderRun`/fake-progress
+   sobre `simulateUclPrev`/`_wprevDraw`: el overlay real está
+   deshabilitado desde 2026-05-21, así que ese wrapper es SIEMPRE pura
+   latencia sin beneficio.
+5. Toda fase preliminar NUEVA de este tipo (eliminatoria de filtro antes
+   de una fase de grupos) hereda el patrón: pool de entrada SEPARADO
+   (nunca mezclado con el pool que entra directo), estado con fases
+   explícitas, Draw/Sim contextuales por fase, y los perdedores/
+   eliminados de la preliminar sumados al reparto final de la
+   competición inferior correspondiente.
+
 ## Los ganadores de cada fase SIEMPRE se registran también como extra manual de la zona destino — si no, el modo 🔒 Manual (default de las 6 zonas) los bloquea del todo (obligatorio, 2026-07-10 #3)
 
 **Petición usuario 2026-07-10** (3 fotos, tras el botón "⬇️ Traer Wild

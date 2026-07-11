@@ -32599,29 +32599,51 @@ document.addEventListener('DOMContentLoaded', function() {
 <script>
 (function(){
   /* ════════════════════════════════════════════════════════════
-     UCL · PREVIA DE CHAMPIONS — Fase de grupos pura (2026-05-30 v3)
-     · Pool: 62 equipos = 34 directos (zona `uclPrev` de las ligas)
-       + 28 del Open Qualifier (vía `oq_to_previa_v1`).
-     · 16 grupos (14 de 4 + 2 de 3, snake por poder + anti-mismo-país),
-       liguilla a DOBLE ida y vuelta. Cada grupo se simula IA-vs-IA y
-       la UI muestra SOLO las tablas de clasificación (sin jornadas).
-     · CORTE GLOBAL: se ordena el ranking global por
-       (posición en su grupo → PTS → DG → GF → nombre) y se reparte:
-         - Top 12  → Champions   (`wprev_to_fase_grupos_v1`)
-         - 13-34   → Europa (22)  (`wprev_to_europa_v1`)
-         - 35-62   → Conference(28)(`wprev_r1_to_conference_v1`)
-       Los 62 clasifican (ninguno eliminado). 12+22+28 = 62.
-     · Sustituye al formato anterior (Ronda 1 eliminatorias + Ronda
-       Final + EXENTOS). Las claves de salida se conservan para que
-       las fases finales (UCL/UEL/UECL) las consuman sin cambios.
+     UCL · PREVIA DE CHAMPIONS — Ronda Preliminar + 12 grupos (2026-07-12 v4)
+     Rediseño pedido por el usuario (formato v3, "16 grupos + corte
+     global 12/22/28", tenía un error de formato). Ahora en DOS ETAPAS:
+
+     ETAPA 1 — RONDA PRELIMINAR (solo los 28 del Open Qualifier):
+     · 28 equipos (`computeUclPrevOqPoolTeams`, vía `oq_to_previa_v1`)
+       se emparejan al azar en 14 eliminatorias a DOBLE PARTIDO (ida +
+       vuelta). Si el global queda empatado: PRÓRROGA y, si sigue
+       empatado, PENALTIS.
+     · 14 GANADORES → pasan a la fase de grupos (etapa 2).
+     · 14 PERDEDORES → eliminados directos a Conference League.
+
+     ETAPA 2 — FASE DE GRUPOS (34 directos + 14 ganadores de la
+     preliminar = 48 equipos):
+     · 12 GRUPOS DE 4 exactos (snake por poder, barajado por bombos +
+       anti-mismo-país), liguilla a DOBLE ida y vuelta. IA-vs-IA, la UI
+       muestra SOLO las tablas de clasificación.
+     · Reparto POR POSICIÓN DE GRUPO (no por ranking global):
+         - 1º de cada grupo (12)              → Champions
+         - 2º de cada grupo (12) + 10 MEJORES
+           3º de grupo (de los 12 terceros)   → Europa (22)
+         - 2 PEORES 3º de grupo + 4º de cada
+           grupo (12)                         → Conference (14)
+     · Los 14 perdedores de la Ronda Preliminar SE SUMAN a Conference:
+       14 (grupos) + 14 (preliminar) = 28 → Conference.
+
+     Balance final (igual que el formato anterior, verificado):
+       Champions:  12 (Previa) + 28 directos = 40 🔵
+       Europa:     22 (Previa) + 18 directos = 40 🟠
+       Conference: 28 (Previa) + 12 directos = 40 🟢
+
+     Las 3 claves de salida (`wprev_to_fase_grupos_v1`/`wprev_to_europa_v1`/
+     `wprev_r1_to_conference_v1`) se conservan sin cambios de nombre —
+     las fases finales (UCL/UEL/UECL) las consumen igual que siempre.
      ════════════════════════════════════════════════════════════ */
   var WPREV_KEY      = 'wprev_state_v1';
   var WPREV_FG_KEY   = 'wprev_to_fase_grupos_v1';   /* 12 → Champions  */
   var WPREV_EUR_KEY  = 'wprev_to_europa_v1';        /* 22 → Europa     */
   var WPREV_CONF_KEY = 'wprev_r1_to_conference_v1'; /* 28 → Conference */
-  var POOL_TARGET    = 62;
-  var N_GROUPS       = 16;                           /* 14×4 + 2×3 = 62 */
-  var CUT_UCL = 12, CUT_UEL = 22, CUT_UECL = 28;    /* suman 62        */
+  var POOL_DIRECT_TARGET = 34;   /* directos de liga (zona uclPrev) */
+  var POOL_OQ_TARGET     = 28;   /* clasificados del Open Qualifier */
+  var PRELIM_TIES        = 14;   /* 28 / 2 */
+  var N_GROUPS = 12;             /* 34 directos + 14 ganadores prelim = 48 / 12 = 4 exactos */
+  var CUT_UEL_BEST_THIRDS  = 10; /* de los 12 terceros de grupo, los 10 mejores → Europa */
+  var CUT_UECL_WORST_THIRDS = 2; /* los 2 peores terceros → Conference */
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function _logoOf(name){
@@ -32642,13 +32664,10 @@ document.addEventListener('DOMContentLoaded', function() {
   })();
 
   function loadState(){ try { return JSON.parse(localStorage.getItem(WPREV_KEY)||'null'); } catch(_){ return null; } }
-  /* 2026-07-11: mismo fix que `_saveSim` del Open Qualifier — usa el
-     limpiador de cuota GENÉRICO del proyecto (`window._lsSetSafe`,
-     libera más categorías que el ad-hoc de antes) y avisa con
-     `_gmCriticalNotice` (banner propio, inmune a que Chrome suprima
-     `alert()` tras muchos diálogos en la misma sesión) si aun así
-     falla. Antes: chip acababa en 336/336-equivalente sin guardar y el
-     usuario se quedaba sin ninguna pista visible de por qué. */
+  /* 2026-07-11: usa el limpiador de cuota GENÉRICO del proyecto
+     (`window._lsSetSafe`) y avisa con `_gmCriticalNotice` (banner
+     propio, inmune a que Chrome suprima `alert()` tras muchos diálogos
+     en la misma sesión) si aun así falla. */
   function saveState(s){
     var json = JSON.stringify(s);
     var ok = (typeof window._lsSetSafe === 'function')
@@ -32662,12 +32681,17 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function clearState(){ try { localStorage.removeItem(WPREV_KEY); } catch(_){} }
 
-  /* Pool: 34 directos (zona uclPrev) + 28 del OQ (oq_to_previa_v1). */
-  function buildPool(){
+  /* Los dos pools de ENTRADA se leen POR SEPARADO (misc_body_1.html,
+     `computeUclPrevDirectTeams`/`computeUclPrevOqPoolTeams`) — el del
+     Open Qualifier pasa por la ronda preliminar ANTES de poder unirse
+     al de liga, así que ya no se pueden mezclar en un único pool como
+     hacía el formato anterior (`computeUclPrevTeams`, que sigue
+     existiendo como UNIÓN de los dos, solo para diagnóstico). */
+  function buildDirectPool(){
     var raw = [];
-    if(typeof window.computeUclPrevTeams === 'function'){
+    if(typeof window.computeUclPrevDirectTeams === 'function'){
       try {
-        (window.computeUclPrevTeams()||[]).forEach(function(t){
+        (window.computeUclPrevDirectTeams()||[]).forEach(function(t){
           if(!t || !t.name) return;
           raw.push({ name:t.name, logo:t.logo||_logoOf(t.name), league:t.league||'', power:_powerOf(t.name) });
         });
@@ -32675,12 +32699,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return raw;
   }
-  function _normalizePool(raw){
-    var arr = raw.slice().sort(function(a,b){ return (b.power||0)-(a.power||0); });
-    if(arr.length > POOL_TARGET) arr = arr.slice(0, POOL_TARGET);
-    while(arr.length < POOL_TARGET){ var i=arr.length; arr.push({ name:'TBD '+(i+1), logo:'', league:'__placeholder_'+i, power:50 }); }
+  function buildOqPool(){
+    var raw = [];
+    if(typeof window.computeUclPrevOqPoolTeams === 'function'){
+      try {
+        (window.computeUclPrevOqPoolTeams()||[]).forEach(function(t){
+          if(!t || !t.name) return;
+          raw.push({ name:t.name, logo:t.logo||_logoOf(t.name), league:t.league||'', power:_powerOf(t.name) });
+        });
+      } catch(_){}
+    }
+    return raw;
+  }
+  function _normalizePoolTo(raw, target){
+    var arr = (raw||[]).slice().sort(function(a,b){ return (b.power||0)-(a.power||0); });
+    if(arr.length > target) arr = arr.slice(0, target);
+    while(arr.length < target){ var i=arr.length; arr.push({ name:'TBD '+(i+1), logo:'', league:'__placeholder_'+i, power:50 }); }
     return arr;
   }
+  function _isPlaceholder(t){ return !t || !t.name || /^TBD/i.test(t.name) || /^__placeholder_/.test(t.league||''); }
 
   function _sameLeague(a,b){
     var la=a&&a.league, lb=b&&b.league;
@@ -32690,9 +32727,12 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   /* Baraja `arr` DENTRO de cada bombo de tamaño `tierSize` — ver el
      mismo helper en el motor de la Wild Card (más arriba en este mismo
-     archivo, otra IIFE) para la explicación completa. 2026-07-11:
-     petición usuario, el sorteo tiene que dar grupos distintos en cada
-     pulsación de 🎲 Draw, no siempre el mismo reparto para el mismo pool. */
+     archivo, otra IIFE) para la explicación completa. Con
+     `tierSize >= arr.length` hace un barajado COMPLETO (un solo
+     "bombo") — así se reutiliza también para la ronda preliminar
+     (sorteo 1v1, sin necesidad de bombos por potencia). 2026-07-11:
+     petición usuario, el sorteo tiene que dar resultados distintos en
+     cada pulsación de 🎲 Draw, no siempre el mismo reparto. */
   function _shuffleTiered(arr, tierSize){
     var out = arr.slice();
     for(var start=0; start<out.length; start+=tierSize){
@@ -32704,9 +32744,68 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return out;
   }
-  /* Reparte 62 en 16 grupos (snake por poder, barajado por bombos con
-     _shuffleTiered para que el sorteo sea al azar en cada pulsación)
-     con anti-mismo-país. */
+
+  /* ═══ ETAPA 1 — RONDA PRELIMINAR (14 cruces a doble partido) ═══ */
+  /* Sortea los 28 (padeados si faltan) en 14 cruces al azar. Un cruce
+     contra un hueco TBD/placeholder se resuelve como BYE (el equipo
+     real pasa directo, sin jugar) — mismo criterio que el resto de
+     sorteos del proyecto con pool incompleto. */
+  function _drawPrelim(oqRaw){
+    var pool = _shuffleTiered(_normalizePoolTo(oqRaw, PRELIM_TIES*2), PRELIM_TIES*2);
+    var ties = [];
+    for(var i=0; i<pool.length; i+=2){
+      ties.push({ a:pool[i], b:pool[i+1], legs:[], et:null, penWinner:null, winner:null, loser:null, aggA:0, aggB:0, bye:false });
+    }
+    return ties;
+  }
+  function _prelimPenWinner(a,b){
+    var pa=_powerOf(a), pb=_powerOf(b);
+    return (Math.random()*(pa+pb) < pa) ? 'a' : 'b';
+  }
+  /* Prórroga: mismo motor que un partido normal pero con un lambda MUY
+     reducido (≈1/3 del habitual) para representar 30 min en vez de 90. */
+  function _simEt(home, away){
+    var ph=_powerOf(home), pa=_powerOf(away);
+    return { gh:_poisson(Math.max(0.08,0.42+(ph-pa)/135)), ga:_poisson(Math.max(0.08,0.32+(pa-ph)/135)) };
+  }
+  function _simulatePrelimTie(tie){
+    var aBye = _isPlaceholder(tie.a), bBye = _isPlaceholder(tie.b);
+    if(aBye || bBye){
+      tie.bye = true; tie.legs = []; tie.et = null; tie.penWinner = null; tie.aggA = 0; tie.aggB = 0;
+      tie.winner = aBye ? tie.b : tie.a;
+      tie.loser  = aBye ? tie.a : tie.b;
+      return;
+    }
+    var aName = tie.a.name, bName = tie.b.name;
+    var leg1 = _simMatch(aName, bName);   /* IDA: a local */
+    var leg2 = _simMatch(bName, aName);   /* VUELTA: b local */
+    tie.legs = [
+      { home:aName, away:bName, gh:leg1.gh, ga:leg1.ga },
+      { home:bName, away:aName, gh:leg2.gh, ga:leg2.ga }
+    ];
+    var aggA = leg1.gh + leg2.ga, aggB = leg1.ga + leg2.gh;
+    tie.aggA = aggA; tie.aggB = aggB;
+    tie.et = null; tie.penWinner = null;
+    if(aggA !== aggB){
+      tie.winner = aggA > aggB ? tie.a : tie.b;
+    } else {
+      var et = _simEt(aName, bName);
+      tie.et = et;
+      var etA = aggA + et.gh, etB = aggB + et.ga;
+      if(etA !== etB){
+        tie.winner = etA > etB ? tie.a : tie.b;
+      } else {
+        var pw = _prelimPenWinner(aName, bName);
+        tie.penWinner = pw;
+        tie.winner = (pw === 'a') ? tie.a : tie.b;
+      }
+    }
+    tie.loser = (tie.winner === tie.a) ? tie.b : tie.a;
+  }
+
+  /* ═══ ETAPA 2 — FASE DE GRUPOS (12 × 4) ═══ */
+  /* Reparte 48 en 12 grupos de 4 (snake por poder, barajado por bombos
+     con _shuffleTiered) con anti-mismo-país. */
   function _distributeGroups(pool){
     pool = _shuffleTiered(pool, N_GROUPS);
     var groups=[]; for(var g=0; g<N_GROUPS; g++) groups.push([]);
@@ -32759,32 +32858,45 @@ document.addEventListener('DOMContentLoaded', function() {
     return arr;
   }
 
-  /* Ranking GLOBAL: por posición en su grupo (0-indexed) → PTS → DG →
-     GF → nombre. La posición de grupo va primero para que el corte sea
-     justo entre grupos de tamaño desigual (3 ó 4). */
-  function _globalRanking(state){
-    var all=[];
-    (state.sortedTables||[]).forEach(function(st){ (st||[]).forEach(function(row,pos){ all.push({ name:row.name, logo:row.logo, league:row.league, pos:pos, pts:row.pts, dg:row.dg, gf:row.gf }); }); });
-    all.sort(function(a,b){ return (a.pos-b.pos)||(b.pts-a.pts)||(b.dg-a.dg)||(b.gf-a.gf)||String(a.name).localeCompare(String(b.name),'es'); });
-    return all;
+  /* Reparto POR POSICIÓN DE GRUPO (1º→Champions, 2º→Europa siempre,
+     4º→Conference siempre; los 3º se rankean entre sí y los 10
+     mejores van a Europa, los 2 peores a Conference). */
+  function _computeGroupResults(state){
+    var ucl=[], uel=[], thirds=[], ueclFromGroups=[];
+    (state.sortedTables||[]).forEach(function(table){
+      if(table && table[0]) ucl.push(table[0]);
+      if(table && table[1]) uel.push(table[1]);
+      if(table && table[2]) thirds.push(table[2]);
+      if(table && table[3]) ueclFromGroups.push(table[3]);
+    });
+    thirds.sort(function(a,b){ return (b.pts-a.pts)||(b.dg-a.dg)||(b.gf-a.gf)||String(a.name).localeCompare(String(b.name),'es'); });
+    uel = uel.concat(thirds.slice(0, CUT_UEL_BEST_THIRDS));
+    ueclFromGroups = ueclFromGroups.concat(thirds.slice(CUT_UEL_BEST_THIRDS));
+    return { ucl:ucl, uel:uel, ueclFromGroups:ueclFromGroups };
   }
   function _destMap(state){
-    var rank=_globalRanking(state), map={};
-    rank.forEach(function(r,i){ map[r.name]= (i<CUT_UCL)?'ucl':((i<CUT_UCL+CUT_UEL)?'uel':'uecl'); });
+    var dist=_computeGroupResults(state), map={};
+    dist.ucl.forEach(function(r){ if(r&&r.name) map[r.name]='ucl'; });
+    dist.uel.forEach(function(r){ if(r&&r.name) map[r.name]='uel'; });
+    dist.ueclFromGroups.forEach(function(r){ if(r&&r.name) map[r.name]='uecl'; });
     return map;
   }
-  /* Persiste el reparto 12/22/28 a las 3 claves de salida. Los huecos
-     TBD/placeholder NO se propagan a las fases finales. */
+  /* Persiste el reparto a las 3 claves de salida. Conference = los
+     eliminados de la fase de grupos (14) + los 14 perdedores de la
+     Ronda Preliminar (28 en total). Los huecos TBD/placeholder NUNCA
+     se propagan a las fases finales. */
   function _persistDistribution(state){
-    var rank=_globalRanking(state);
+    var dist = _computeGroupResults(state);
     function pack(r){ return { name:r.name, logo:r.logo||_logoOf(r.name)||'', league:r.league||'' }; }
-    var ucl=[], uel=[], uecl=[];
-    rank.forEach(function(r,i){
-      if(/^TBD|^__placeholder_/.test(r.name)) return;
-      if(i<CUT_UCL) ucl.push(pack(r));
-      else if(i<CUT_UCL+CUT_UEL) uel.push(pack(r));
-      else uecl.push(pack(r));
-    });
+    function real(r){ return r && r.name && !/^TBD|^__placeholder_/.test(r.name); }
+    var ucl = dist.ucl.filter(real).map(pack);
+    var uel = dist.uel.filter(real).map(pack);
+    var ueclFromGroups = dist.ueclFromGroups.filter(real).map(pack);
+    var prelimLosers = ((state.prelim && state.prelim.ties) || [])
+      .map(function(t){ return t.loser; })
+      .filter(real)
+      .map(pack);
+    var uecl = ueclFromGroups.concat(prelimLosers);
     try { localStorage.setItem(WPREV_FG_KEY,  JSON.stringify({teams:ucl,  ts:Date.now()})); } catch(_){}
     try { localStorage.setItem(WPREV_EUR_KEY, JSON.stringify({teams:uel,  ts:Date.now()})); } catch(_){}
     try { localStorage.setItem(WPREV_CONF_KEY,JSON.stringify({teams:uecl, ts:Date.now()})); } catch(_){}
@@ -32801,21 +32913,45 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch(_){}
   }
 
-  function initState(){
-    var raw=buildPool(); if(!raw.length) return null;
-    var pool=_normalizePool(raw);
-    var groups=_distributeGroups(pool);
-    return { pool:pool, groups:groups, matchesByGroup:[], sortedTables:[], phase:'drawn', ts:Date.now() };
+  /* ═══ Orquestación: 4 pasos plegados en 2 botones (Draw/Sim) ═══ */
+  function _doDrawPrelim(){
+    var oqRaw = buildOqPool();
+    if(!oqRaw.length) return { ok:false, msg:'⚠️ Sin equipos del Open Qualifier todavía.\n\nTermina de simular sus 28 grupos primero (🎮 Sim en la pantalla del Open Qualifier), o pulsa ⬇️ Traer Open Qualifier si ya terminó.' };
+    var directRaw = buildDirectPool();
+    var ns = {
+      phase:'prelim-drawn',
+      prelim:{ ties:_drawPrelim(oqRaw) },
+      direct:_normalizePoolTo(directRaw, POOL_DIRECT_TARGET),
+      groups:[], matchesByGroup:[], sortedTables:[], ts:Date.now()
+    };
+    if(!saveState(ns)) return { ok:false };
+    return { ok:true, state:ns };
   }
-  function simulateAll(state){
-    if(!state || !Array.isArray(state.groups)) return;
-    state.matchesByGroup = state.groups.map(function(grp){ try { return _simulateGroup(grp); } catch(e){ try{console.error('[wprev-sim grupo]',e);}catch(_){} return []; } });
-    state.sortedTables = state.groups.map(function(grp,gi){ try { return _standingsFor(grp, state.matchesByGroup[gi]||[]); } catch(e){ return []; } });
-    state.phase = 'done';
-    _persistDistribution(state);
+  function _doSimPrelim(s){
+    (s.prelim.ties||[]).forEach(function(tie){ try{ _simulatePrelimTie(tie); }catch(e){ try{console.error('[wprev-prelim]',e);}catch(_){} } });
+    s.phase = 'prelim-done';
+    if(!saveState(s)) return { ok:false };
+    return { ok:true, state:s };
+  }
+  function _doDrawGroups(s){
+    var winners = (s.prelim.ties||[]).map(function(t){ return t.winner; }).filter(function(t){ return t && t.name; });
+    var pool = (s.direct||[]).concat(winners);
+    pool = _normalizePoolTo(pool, N_GROUPS*4);
+    s.groups = _distributeGroups(pool);
+    s.matchesByGroup = []; s.sortedTables = []; s.phase = 'groups-drawn';
+    if(!saveState(s)) return { ok:false };
+    return { ok:true, state:s };
+  }
+  function _doSimGroups(s){
+    s.matchesByGroup = s.groups.map(function(grp){ try{ return _simulateGroup(grp); }catch(e){ try{console.error('[wprev-sim grupo]',e);}catch(_){} return []; } });
+    s.sortedTables = s.groups.map(function(grp,gi){ try{ return _standingsFor(grp, s.matchesByGroup[gi]||[]); }catch(e){ return []; } });
+    s.phase = 'done';
+    _persistDistribution(s);
+    if(!saveState(s)) return { ok:false };
+    return { ok:true, state:s };
   }
 
-  /* ════ RENDER (solo tablas) ════ */
+  /* ════ RENDER ════ */
   function _badge(name,logo){ var l=logo||_logoOf(name)||''; return l ? '<img src="'+_esc(l)+'" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display=\'none\'">' : ''; }
   function _groupTable(gi,grp,sorted,destMap){
     var src = (sorted&&sorted.length) ? sorted : grp.map(function(t,i){ return {idx:i,name:(t&&t.name)||'',logo:(t&&t.logo)||'',pts:0,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0}; });
@@ -32832,79 +32968,176 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return '<div class="wprev-group"><div class="wprev-group-h">GRUPO '+GROUP_LABELS[gi]+'<span class="wprev-group-count">'+grp.length+'</span></div><div class="wprev-table-scroll"><div class="wprev-table">'+rows+'</div></div></div>';
   }
+  /* Fila de la ronda preliminar — reusa las clases `.wprev-mrow`/`.h`/
+     `.sc`/`.a` ya definidas en el CSS de esta pantalla (venían del
+     "Death Round" del formato antiguo, con el mismo layout local/
+     marcador/visitante que necesita un cruce a doble partido). */
+  function _prelimTieHtml(tie){
+    var aName=(tie.a&&tie.a.name)||'?', bName=(tie.b&&tie.b.name)||'?';
+    var aLogo=_badge(aName, tie.a&&tie.a.logo), bLogo=_badge(bName, tie.b&&tie.b.logo);
+    var winnerName = tie.winner ? tie.winner.name : null;
+    var body;
+    if(tie.bye){
+      body = '<div class="wprev-mrow"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">BYE</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>';
+    } else if(tie.legs && tie.legs.length===2){
+      body = '<div class="wprev-mrow"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">'+tie.legs[0].gh+'-'+tie.legs[0].ga+'</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>'
+        +'<div class="wprev-mrow"><span class="h"><span class="nm">'+bLogo+_esc(bName)+'</span></span><span class="sc">'+tie.legs[1].gh+'-'+tie.legs[1].ga+'</span><span class="a"><span class="nm">'+aLogo+_esc(aName)+'</span></span></div>';
+      var aggLine = 'Global '+_esc(aName)+' '+tie.aggA+'-'+tie.aggB+' '+_esc(bName);
+      if(tie.et) aggLine += ' · Prórroga '+tie.et.gh+'-'+tie.et.ga;
+      if(tie.penWinner) aggLine += ' · Penaltis: '+(tie.penWinner==='a'?_esc(aName):_esc(bName));
+      body += '<div style="padding:2px 10px 6px;font-family:Rajdhani,sans-serif;font-size:10.5px;color:rgba(255,255,255,.55);text-align:center;">'+aggLine+'</div>';
+    } else {
+      body = '<div class="wprev-mrow"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc" style="opacity:.5;">vs</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>';
+    }
+    if(winnerName){
+      body += '<div style="padding:0 10px 8px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.6px;color:#ffd700;text-align:center;">🏆 '+_esc(winnerName)+' avanza a la fase de grupos</div>';
+    }
+    return body;
+  }
+  function _renderPrelim(s){
+    var dr=document.getElementById('wprev-deathround-container'); if(!dr) return;
+    if(!s || !s.prelim || !Array.isArray(s.prelim.ties) || !s.prelim.ties.length){ dr.innerHTML=''; return; }
+    var done = s.phase !== 'prelim-drawn';
+    var banner = done
+      ? '✓ RONDA PRELIMINAR JUGADA · 14 ganadores → fase de grupos · 14 perdedores → Conference'
+      : '⏳ RONDA PRELIMINAR SORTEADA · pulsa 🎮 Sim para jugarla';
+    var rows = s.prelim.ties.map(_prelimTieHtml).join('<div style="height:1px;background:rgba(168,85,247,.15);margin:4px 10px;"></div>');
+    dr.innerHTML = '<div class="wprev-dr'+(done?' is-done':'')+'">'
+      + '<div class="wprev-dr-hdr">🥊 RONDA PRELIMINAR · OPEN QUALIFIER (14 cruces)</div>'
+      + '<div class="wprev-dr-body">'
+      +   '<div style="padding:8px 10px;font-family:Oswald,sans-serif;font-size:10.5px;letter-spacing:1px;color:#e0bfff;text-align:center;">'+banner+'</div>'
+      +   '<div class="wprev-jmatches">'+rows+'</div>'
+      + '</div>'
+      + '</div>';
+  }
   function _renderDiag(){
     var body=document.getElementById('wprev-diag-body'); if(!body) return;
-    var raw=buildPool();
+    var direct=buildDirectPool(), oq=buildOqPool();
     body.innerHTML='<div style="padding:8px 10px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);line-height:1.7;">'
-      +'Pool: <b>'+raw.length+' / '+POOL_TARGET+'</b> · 34 directos (zona uclPrev) + 28 del Open Qualifier.<br>'
-      +'Formato: 16 grupos (liguilla a doble vuelta, IA-vs-IA) · corte global <b>12 / 22 / 28</b> → Champions / Europa / Conference.'
+      +'Directos (zona uclPrev): <b>'+direct.length+' / '+POOL_DIRECT_TARGET+'</b> · Open Qualifier: <b>'+oq.length+' / '+POOL_OQ_TARGET+'</b>.<br>'
+      +'Formato: Ronda Preliminar (14 cruces ida+vuelta entre los 28 del OQ, prórroga+penaltis si hay empate global) → 14 ganadores + 34 directos = 48 → <b>12 grupos de 4</b> (liguilla a doble vuelta, IA-vs-IA).<br>'
+      +'Reparto: <b>12 → Champions</b> (1º de grupo) · <b>22 → Europa</b> (2º de grupo + 10 mejores 3º) · <b>28 → Conference</b> (2 peores 3º + 4º de grupo + 14 perdedores de la preliminar).'
       +'</div>';
   }
   function buildUclPrevClas(){
     var host=document.getElementById('wprev-groups-container'); if(!host) return;
     _refreshButtons();
-    var dr=document.getElementById('wprev-deathround-container'); if(dr) dr.innerHTML='';
     var s=loadState();
     if(!s){
-      var raw=buildPool();
-      /* Aviso de carga: si el pool aún no llegó a 62 Y el sync del
-         servidor todavía no terminó de hidratar, los feeders (los 28 del
-         Open Qualifier) pueden estar en camino. Mostramos un aviso para
-         que el usuario espere unos segundos en vez de sortear un cuadro
-         incompleto (el re-render automático subirá el contador solo). */
+      var dr0=document.getElementById('wprev-deathround-container'); if(dr0) dr0.innerHTML='';
+      var direct=buildDirectPool(), oq=buildOqPool();
       var _hydrated = (window.__compStateSyncHydrated === true);
-      var _loadingHint = (raw.length < POOL_TARGET && !_hydrated)
+      var _loadingHint = ((direct.length < POOL_DIRECT_TARGET || oq.length < POOL_OQ_TARGET) && !_hydrated)
         ? '<div style="margin-top:10px;padding:8px 12px;background:rgba(255,200,60,.10);border:1px solid rgba(255,200,60,.45);border-radius:8px;color:#ffe08a;">⏳ Cargando equipos del Open Qualifier y las ligas… espera unos segundos (el contador subirá solo, sin recargar).</div>'
         : '';
       host.innerHTML='<div style="padding:24px 12px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.7;">'
         +'<div style="font-size:32px;margin-bottom:8px;">🇪🇺</div>'
         +'<div style="font-family:Oswald,sans-serif;letter-spacing:1.5px;color:rgba(255,255,255,.85);">PREVIA SIN SORTEAR</div>'
-        +'<div style="margin-top:6px;">Equipos detectados: <b>'+raw.length+' / '+POOL_TARGET+'</b> (34 directos + 28 del Open Qualifier).</div>'
+        +'<div style="margin-top:6px;">Directos: <b>'+direct.length+' / '+POOL_DIRECT_TARGET+'</b> · Open Qualifier: <b>'+oq.length+' / '+POOL_OQ_TARGET+'</b>.</div>'
         +_loadingHint
-        +'<div style="margin-top:12px;padding:10px 12px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.4);border-radius:8px;color:#e0bfff;">👉 Pulsa <b>🎲 Draw</b> para sortear los 16 grupos y <b>🎮 Sim</b> para jugar las liguillas. Clasifican los 62: <b>top 12 → Champions</b>, <b>13-34 → Europa</b>, <b>35-62 → Conference</b>.</div>'
+        +'<div style="margin-top:12px;padding:10px 12px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.4);border-radius:8px;color:#e0bfff;">👉 Pulsa <b>🎲 Draw</b> para sortear la <b>Ronda Preliminar</b> (14 cruces entre los 28 del Open Qualifier) y <b>🎮 Sim</b> para jugarla. Los 14 ganadores se unen a los 34 directos → 12 grupos de 4. Reparto: <b>1º → Champions</b>, <b>2º + 10 mejores 3º → Europa</b>, <b>2 peores 3º + 4º + eliminados de la preliminar → Conference</b>.</div>'
         +'</div>';
+      _renderDiag();
+      return;
+    }
+    _renderPrelim(s);
+    if(s.phase === 'prelim-drawn' || s.phase === 'prelim-done'){
+      host.innerHTML = '<div style="padding:24px 12px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.7;">'
+        + (s.phase === 'prelim-done'
+            ? '<div style="font-size:32px;margin-bottom:8px;">✅</div><div style="font-family:Oswald,sans-serif;letter-spacing:1.5px;color:rgba(255,255,255,.85);">RONDA PRELIMINAR COMPLETA</div><div style="margin-top:6px;">Pulsa <b>🎲 Draw</b> para sortear los <b>12 grupos de 4</b> con los 14 ganadores + los 34 directos.</div>'
+            : '<div style="font-size:32px;margin-bottom:8px;">⏳</div><div style="font-family:Oswald,sans-serif;letter-spacing:1.5px;color:rgba(255,255,255,.85);">RONDA PRELIMINAR SORTEADA</div><div style="margin-top:6px;">Pulsa <b>🎮 Sim</b> para jugar los 14 cruces antes de poder formar los grupos.</div>')
+        + '</div>';
       _renderDiag();
       return;
     }
     var destMap = (s.phase==='done') ? _destMap(s) : null;
     var html='';
-    var banner = (s.phase==='drawn')
-      ? '⏳ SORTEO LISTO · 16 grupos · pulsa 🎮 Sim para jugar las liguillas'
+    var banner = (s.phase==='groups-drawn')
+      ? '⏳ SORTEO LISTO · 12 grupos · pulsa 🎮 Sim para jugar las liguillas'
       : '✓ COMPLETO · 12 → Champions · 22 → Europa · 28 → Conference';
     html += '<div style="margin:0 4px 8px;padding:8px 14px;background:rgba(168,85,247,.10);border:1px solid rgba(168,85,247,.35);border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#e0bfff;text-align:center;">'+banner+'</div>';
     if(s.phase==='done'){
       html += '<div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:0 4px 8px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;">'
-        +'<span style="color:#a855f7;">■ Champions (1-12)</span><span style="color:#F37335;">■ Europa (13-34)</span><span style="color:#5fe08a;">■ Conference (35-62)</span></div>';
+        +'<span style="color:#a855f7;">■ Champions (1º)</span><span style="color:#F37335;">■ Europa (2º + mejores 3º)</span><span style="color:#5fe08a;">■ Conference (4º + peores 3º)</span></div>';
     }
     (s.groups||[]).forEach(function(grp,gi){ html += _groupTable(gi, grp, (s.sortedTables&&s.sortedTables[gi])||null, destMap); });
     host.innerHTML=html;
     _renderDiag();
   }
 
-  function _nextLabel(){ var s=loadState(); if(!s) return '🎮 Sim'; if(s.phase==='drawn') return '🎮 Simular grupos'; return '🔁 Re-simular'; }
+  function _nextLabel(){
+    var s=loadState();
+    if(!s) return '🎮 Sim';
+    if(s.phase==='prelim-drawn') return '🎮 Sim preliminar';
+    if(s.phase==='prelim-done')  return '🎮 Sim grupos';
+    if(s.phase==='groups-drawn') return '🎮 Simular grupos';
+    return '🔁 Re-simular';
+  }
+  function _drawLabel(){
+    var s=loadState();
+    if(!s || s.phase==='prelim-drawn') return '🎲 Draw preliminar';
+    if(s.phase==='prelim-done') return '🎲 Draw grupos';
+    return '🎲 Draw';
+  }
   function _refreshButtons(){
     var btn=document.getElementById('wprev-btn-sim'); if(btn) btn.textContent=_nextLabel();
-    var draw=document.getElementById('wprev-btn-draw'); if(draw) draw.disabled=false;
+    var draw=document.getElementById('wprev-btn-draw'); if(draw){ draw.disabled=false; draw.textContent=_drawLabel(); }
   }
 
   window.buildUclPrevClas = buildUclPrevClas;
   window.simulateUclPrev = function(){
     try {
       var s=loadState();
-      if(!s){ var pool=buildPool(); if(!pool.length){ alert('⚠️ Sin equipos en el pool de la Previa. Simula el Open Qualifier y/o configura zonas uclPrev en las ligas.'); return; } s=initState(); if(!s){ alert('⚠️ No se pudo inicializar la Previa.'); return; } if(!saveState(s)) return; }
-      simulateAll(s);
-      if(!saveState(s)) return;
+      if(!s){
+        var r0=_doDrawPrelim();
+        if(!r0.ok){ if(r0.msg) alert(r0.msg); return; }
+        s=r0.state;
+      }
+      if(s.phase==='prelim-drawn'){
+        var r1=_doSimPrelim(s);
+        if(!r1.ok) return;
+        buildUclPrevClas();
+        return; /* el usuario pulsa Sim otra vez para pasar a los grupos */
+      }
+      if(s.phase==='prelim-done'){
+        var r2=_doDrawGroups(s);
+        if(!r2.ok) return;
+        s=r2.state;
+      }
+      if(s.phase==='groups-drawn'){
+        var r3=_doSimGroups(s);
+        if(!r3.ok) return;
+      }
       buildUclPrevClas();
     } catch(e){ try{console.error('[simulateUclPrev]',e);}catch(_){} alert('⚠️ Error simulando la Previa: '+(e&&e.message?e.message:e)); }
   };
   window._wprevDraw = function(){
     function _do(){
-      var pool=buildPool();
-      if(!pool.length){ alert('⚠️ Sin equipos en el pool de la Previa.'); return; }
-      var prev=loadState();
-      if(prev && !confirm('Hay un sorteo previo'+(prev.phase==='done'?' Y simulado':'')+'. ¿Sobreescribirlo con uno nuevo?')) return;
-      var s=initState(); if(!s){ alert('⚠️ initState() falló.'); return; }
-      if(!saveState(s)) return;
+      var s=loadState();
+      if(!s){
+        var r0=_doDrawPrelim();
+        if(!r0.ok){ if(r0.msg) alert(r0.msg); return; }
+        buildUclPrevClas();
+        return;
+      }
+      if(s.phase==='prelim-drawn'){
+        if(!confirm('Hay una Ronda Preliminar sorteada sin jugar. ¿Volver a sortearla?')) return;
+        var r1=_doDrawPrelim();
+        if(!r1.ok){ if(r1.msg) alert(r1.msg); return; }
+        buildUclPrevClas();
+        return;
+      }
+      if(s.phase==='prelim-done'){
+        var r2=_doDrawGroups(s);
+        if(!r2.ok) return;
+        buildUclPrevClas();
+        return;
+      }
+      /* groups-drawn o done: re-sortea SOLO los 12 grupos, conserva la
+         Ronda Preliminar ya jugada. */
+      if(!confirm('¿Volver a sortear los 12 grupos'+(s.phase==='done'?' (ya estaban jugados)':'')+'?\n\nSe mantiene la Ronda Preliminar ya jugada.')) return;
+      var r3=_doDrawGroups(s);
+      if(!r3.ok) return;
       buildUclPrevClas();
     }
     if(typeof window.pG==='function') window.pG(_do); else _do();
@@ -32914,7 +33147,7 @@ document.addEventListener('DOMContentLoaded', function() {
   window._wprevDrawDisabled = function(){ return false; };
   window.resetUclPrev = function(){
     function _do(){
-      if(!confirm('¿Reiniciar la Previa de Champions?\n\nSe perderán las liguillas jugadas y se limpiarán las plazas que alimentan Champions (12), Europa (22) y Conference (28). Esos huecos volverán a "Por definir".')) return;
+      if(!confirm('¿Reiniciar la Previa de Champions?\n\nSe perderá la Ronda Preliminar y las liguillas jugadas, y se limpiarán las plazas que alimentan Champions (12), Europa (22) y Conference (28). Esos huecos volverán a "Por definir".')) return;
       clearState();
       try { localStorage.removeItem(WPREV_FG_KEY); localStorage.removeItem(WPREV_EUR_KEY); localStorage.removeItem(WPREV_CONF_KEY); } catch(_){}
       if(typeof window._resetEuropePoolFeeders==='function'){ window._resetEuropePoolFeeders('previa'); }
@@ -32933,11 +33166,11 @@ document.addEventListener('DOMContentLoaded', function() {
      invalidación en cascada todavía, hay una snapshot congelada
      (`europe_committed_v1`) de antes de que el OQ terminara, o la zona
      `uclPrev` está en modo 🔒 Manual (default) — en ese caso
-     `computeUclPrevTeams()` corta en su primera línea y nunca llega a
-     mirar `oq_to_previa_v1`, así que el registro como EXTRA MANUAL
-     (`_eurSyncManualExtraFromFeeder`) es la ÚNICA vía que funciona
-     siempre. NO sortea los grupos por sí solo — solo refresca el pool;
-     el admin sigue pulsando 🎲 Draw + 🎮 Sim para formarlos y jugarlos. */
+     `computeUclPrevOqPoolTeams()` corta en su primera línea y nunca
+     llega a mirar `oq_to_previa_v1`, así que el registro como EXTRA
+     MANUAL (`_eurSyncManualExtraFromFeeder`) es la ÚNICA vía que
+     funciona siempre. NO sortea nada por sí solo — solo refresca el
+     pool; el admin sigue pulsando 🎲 Draw + 🎮 Sim para sortear/jugar. */
   window._wprevPullOpenQualifier = function(){
     var oq = null;
     try {
@@ -32993,7 +33226,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var gotSet = {};
       live.forEach(function(t){ if(t && t.name) gotSet[t.name] = true; });
       var got = teams.filter(function(t){ return t && t.name && gotSet[t.name]; }).length;
-      (window._gmCriticalNotice || alert)('✅ Pool de la Previa actualizado: '+real+' / 62 equipos reales · '+got+' / '+teams.length+' clasificados del Open Qualifier confirmados dentro del pool.\n\nPulsa 🎲 Draw para formar los 16 grupos.');
+      (window._gmCriticalNotice || alert)('✅ Pool de la Previa actualizado: '+real+' / 62 equipos reales · '+got+' / '+teams.length+' clasificados del Open Qualifier confirmados dentro del pool.\n\nPulsa 🎲 Draw para sortear la Ronda Preliminar.');
     } catch(e){
       try { console.error('[wprev-pull-oq]', e); } catch(_){}
       (window._gmCriticalNotice || alert)('⚠️ Error trayendo los clasificados del Open Qualifier: '+(e && e.message ? e.message : e));
@@ -33020,117 +33253,19 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 })();
 
-/* Wrapper de overlay para `simulateUclPrev` — reusa el balón. */
-(function(){
-  function _wireOnce(){
-    if(window._uclPrevSimWired) return;
-    var orig = window.simulateUclPrev;
-    if(typeof orig !== 'function') return;
-    window.simulateUclPrev = function(){
-      if(typeof window.ftbolLoaderRun !== 'function') return orig();
-      /* Overlay contextual: labels y phases dependen de la fase actual.
-         Sortear cruces → ida → vuelta+RF. Cada acción tiene su propio
-         título y su set de phases para que el overlay muestre algo
-         coherente. */
-      var s = (function(){
-        try { return JSON.parse(localStorage.getItem('wprev_state_v1')||'null'); }
-        catch(_){ return null; }
-      })();
-      var title, phases, minMs = 1100;
-      if(!s){
-        title = 'PREVIA · SORTEO DE GRUPOS';
-        phases = [
-          { pct:30, sub:'Cargando plantillas…',            ms:120 },
-          { pct:60, sub:'Repartiendo 62 en 16 grupos…',    ms:160 },
-          { pct:90, sub:'Aplicando restricciones de país…',ms:140 }
-        ];
-      } else if(s.phase === 'drawn'){
-        title = 'PREVIA · LIGUILLA DE GRUPOS';
-        phases = [
-          { pct:30, sub:'Cargando 16 grupos…',                  ms:140 },
-          { pct:70, sub:'Simulando las liguillas IA-vs-IA…',    ms:240 },
-          { pct:90, sub:'Calculando corte global 12/22/28…',    ms:160 }
-        ];
-        minMs = 1400;
-      } else {
-        title = 'PREVIA DE CHAMPIONS';
-        phases = [{ pct:90, sub:'Refrescando…', ms:80 }];
-        minMs = 200;
-      }
-      var _scaleFn2 = (typeof window.ftbolLoaderScale === 'function')
-        ? window.ftbolLoaderScale : function(x){ return x; };
-      return window.ftbolLoaderRun(
-        { title: title, sub:'Preparando…', theme:'ucl', minMs: minMs },
-        function(ctx){
-          return new Promise(function(resolve){
-            var i = 0;
-            function next(){
-              if(i >= phases.length){
-                ctx.progress(95, 'Volcando estadísticas…');
-                setTimeout(function(){
-                  try { orig(); } catch(e){ try{console.error(e);}catch(_){} }
-                  ctx.progress(100, 'Hecho');
-                  resolve();
-                }, _scaleFn2(40));
-                return;
-              }
-              var ph = phases[i++];
-              ctx.progress(ph.pct, ph.sub);
-              setTimeout(next, _scaleFn2(ph.ms));
-            }
-            next();
-          });
-        }
-      );
-    };
-
-    /* Wrapper de overlay para `_wprevDraw` — solo sortea, overlay corto. */
-    var origWprevDraw = window._wprevDraw;
-    if(typeof origWprevDraw === 'function' && typeof window.ftbolLoaderRun === 'function'){
-      window._wprevDraw = function(){
-        return window.ftbolLoaderRun(
-          { title:'PREVIA · SORTEO DE GRUPOS', sub:'Preparando…', theme:'ucl', minMs:900 },
-          function(ctx){
-            return new Promise(function(resolve){
-              var phases = [
-                { pct:30, sub:'Ordenando 62 equipos por power…',   ms:120 },
-                { pct:60, sub:'Repartiendo en 16 grupos (snake)…', ms:160 },
-                { pct:88, sub:'Aplicando restricciones de país…',  ms:140 }
-              ];
-              var k = 0;
-              function step(){
-                if(k >= phases.length){
-                  ctx.progress(95, 'Cuadrando bracket…');
-                  setTimeout(function(){
-                    try { origWprevDraw(); } catch(_){}
-                    ctx.progress(100, 'Hecho');
-                    resolve();
-                  }, 40);
-                  return;
-                }
-                var p = phases[k++];
-                ctx.progress(p.pct, p.sub);
-                setTimeout(step, p.ms);
-              }
-              step();
-            });
-          }
-        );
-      };
-    }
-    window._uclPrevSimWired = true;
-  }
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', function(){ setTimeout(_wireOnce, 50); });
-  } else {
-    setTimeout(_wireOnce, 50);
-  }
-  var _tries = 0;
-  var _intv = setInterval(function(){
-    _wireOnce();
-    if(window._uclPrevSimWired || ++_tries >= 8) clearInterval(_intv);
-  }, 400);
-})();
+/* 2026-07-12: se ELIMINA el wrapper de overlay decorativo que envolvía
+   `simulateUclPrev`/`_wprevDraw` con `ftbolLoaderRun` + cadenas de
+   `setTimeout` fake-progress. El overlay real que dibujaba (`run()` en
+   el bloque de arriba) ya estaba DESHABILITADO desde 2026-05-21 ("quítame
+   todas esas pantallas de simulación"), así que este wrapper llevaba
+   meses siendo pura LATENCIA ARTIFICIAL (400-900ms de setTimeout
+   anidados) sin ningún beneficio visual — exactamente el mismo
+   antipatrón que Wild Card ya abandonó el 2026-06-03 ("en el MÓVIL, al
+   atenuarse la pantalla, la cadena se quedaba CONGELADA"). Además
+   dependía de `s.phase==='drawn'`, un valor que ya no existe en el
+   nuevo formato (Ronda Preliminar + 12 grupos). Los botones llaman
+   ahora DIRECTAMENTE a `window.simulateUclPrev`/`window._wprevDraw`
+   (definidos arriba), sin ninguna capa intermedia. */
 </script>
 
 <!-- ══════════════════════════════════════════════════

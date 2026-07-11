@@ -1,5 +1,147 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Previa de Champions — la Ronda Preliminar es "videojuego" + colapsable, y el club humano JUEGA sus propios partidos (obligatorio, 2026-07-12 #2)
+
+**Petición usuario 2026-07-12** (2 fotos: "Ronda Preliminar · Open
+Qualifier (14 cruces)" en texto plano · tabla morada "GRUPO A/B/C"):
+"La fase preliminar de eliminatoria de la previa de la champion, que
+sea un poco más como videojuego que salgan ver de los equipos que se
+clasifican, y cuando se acabe que se pueda cerrar la pestaña para ver
+bien los grupos de previa ya de champion, y el equipo humano hay que
+poder simular sus partidos como equipo humano, con sus cards y
+partidos. El resto de grupos se puede simular sin necesidad de
+desplegar las 6 jornadas". Hasta este cambio, la Ronda Preliminar
+(sección de arriba, 2026-07-12 #1) y la fase de grupos eran **100%
+IA-vs-IA**, incluso para el cruce/partidos del club humano — exactamente
+lo que ya avisaba esa misma sección ("Sin partidos humanos
+individuales... `_wprevPlayHumanMatch`/`_wprevSaveHumanResult` quedan
+como no-ops").
+
+### 1) Ronda Preliminar — cards con escudo grande + destacado dorado
+
+`_prelimTieHtml` (IIFE de la Previa, `part2/misc_body_2.html`) reactiva
+las clases CSS `.wprev-dr-tie`/`.wprev-dr-leg`/`.wprev-dr-agg`
+(definidas desde el formato "Death Round" antiguo pero sin usar —
+`_prelimTieHtml` pintaba con `.wprev-mrow`, la fila compacta de
+jornadas). Nuevo helper `_badgeBig(name,logo)` (escudo con `class="crest"`,
+30px normal / 38px si el cruce es del humano vía
+`.wprev-dr-tie.human .crest`, CSS en `misc_body_1.html`). El cruce
+con un club humano (`_tieHasHuman`) se destaca en dorado
+(`.wprev-dr-tie.human`, mismo lenguaje visual que `.wprev-group-human`)
+con la etiqueta "⭐ TU CRUCE".
+
+### 2) Colapsable — "cuando se acabe, cerrar para ver los grupos"
+
+`_renderPrelim` pinta un chevron clicable (`#wprev-dr-toggle`, CSS
+`.wprev-dr-chev`/`.collapsed` YA EXISTÍA del diseño antiguo, solo
+faltaba cablear el toggle). Estado por defecto: **colapsado** en cuanto
+existen los 12 grupos (`s.phase==='groups-drawn'||'done'`), **expandido**
+mientras la preliminar aún se está jugando — salvo que el admin fuerce
+lo contrario con el chevron (`_drCollapsedManual`, variable de módulo,
+persiste mientras la pantalla siga montada).
+
+### 3) El club humano JUEGA su cruce de la Ronda Preliminar (ida+vuelta)
+
+**Nunca se auto-simula** un cruce donde participe un club humano
+(`_tieHasHuman` + `_tieBothReal` — un BYE con hueco TBD sí se resuelve
+solo, haya humano o no en el lado real). Nuevas funciones (mismo
+patrón que `_eurKoOpenMatch`/`abrirEurKo`/`_eurKoSaveHumanResult` de
+Champions/Europa/Conference eliminatorias, pero AUTOCONTENIDAS en la
+propia IIFE de la Previa — no se generaliza el motor `_eurKo*` para no
+arriesgar UCL/UEL/UECL):
+
+- `window._wprevKoOpenMatch(idx)` — abre la previa + gm-modal (ida si
+  `tie.legs` vacío, vuelta si ya hay 1 leg jugado). `comp:'ucl'` (tema
+  azul Champions, igual que el resto de la Previa).
+- `window.abrirWprevKo(idx, leg, home, away)` — marca
+  `_gm._isWprevKo`/`_wprevTieIdx`/`_wprevLeg`/`_wprevIda` (la ida
+  persistida, para poder decidir el GLOBAL en la vuelta — mismo patrón
+  que `_gm.dobleIda` de los amistosos doble-vuelta).
+- `window._wprevKoSaveHumanResult(idx,leg,gh,ga,etGh,etGa,penWinner)` —
+  persiste el marcador en `wprev_state_v1.prelim.ties[idx]`. En la
+  VUELTA calcula el agregado; si empata, prórroga (lambda reducido,
+  igual que `_simulatePrelimTie` IA) y, si sigue empatado, penaltis.
+  Si con esto TODOS los cruces quedan decididos (`_allPrelimDecided`),
+  `phase` pasa a `'prelim-done'` sin que el admin tenga que volver a
+  pulsar Sim.
+- gm-modal (`part2/misc_body_2.html`, `gmRenderTimer`+`gmEndMatch`):
+  nuevas `_isWprevKoVuelta`+`_wprevKoTied` (mismo cálculo que
+  `_isAmsDobleVuelta`/`_amsDobleTied`) se añaden a `_shouldForceET` en
+  LOS 2 SITIOS donde ya vive esa fórmula. Nueva rama de persistencia
+  `else if (_gm._isWprevKo)` (junto a `_isWprev`/`_isEurKo`, mismo
+  patrón: lee `_gm.etScores`/`_gm.penWinner`, normaliza a 'a'/'b').
+  `_isWprevKoLeg` se añade a la fórmula `_showET` (botón manual
+  PRÓRROGA) para que NO aparezca ni en ida ni en vuelta — el forzado es
+  SIEMPRE automático al Finalizar, igual que `_isEurKoTwoLeg`. Flags
+  guardados/restaurados en el snapshot de resumen del partido
+  (`_isWprevKo`/`_wprevTieIdx`/`_wprevLeg`/`_wprevIda`), para que un
+  partido a medias sobreviva a un recargo de página.
+- `_wprevDraw`: re-sortear la preliminar (o los 12 grupos) con
+  progreso humano ya jugado muestra un aviso ESPECÍFICO de que ese
+  progreso se perdería (antes del genérico "¿sortear de nuevo?").
+
+### 4) El club humano JUEGA sus 6 partidos de grupo — el resto se simula de golpe
+
+`_doDrawGroups` marca con `_groupHasHuman(grp)` qué grupo(s) tienen un
+club humano y les construye un **fixture de 6 jornadas**
+(`_buildGroupFixture`, método del círculo para 4 equipos: 3 jornadas
+ida + 3 vuelta con los mismos pares invertidos) — los grupos SIN
+humano siguen sin fixture (`s.fixtures[gi]=null`) y se simulan de golpe
+con `_simulateGroup` tal cual antes, **sin desplegar jornadas**
+(petición explícita del usuario). Al pulsar Sim,
+`_autoSimNonHumanFixtures` resuelve YA los 6 partidos entre los 3
+rivales del grupo humano (no dependen del club humano); los OTROS 6
+(los del propio club humano) quedan pendientes.
+
+- `window._wprevPlayHumanMatch(gi, j)` — localiza el partido del
+  humano en la jornada `j` de su grupo, abre previa+gm-modal vía
+  `window.abrirPreviaChampionsMatch(home,away,isHvH,gi,j)` —
+  **YA EXISTÍA**, cableado con `_gm._isWprev`/`_wprevGi`/`_wprevJ` desde
+  un diseño anterior de la Previa (jamás activado: las dos funciones
+  de arriba eran no-ops). Solo hacía falta implementarlas de verdad.
+- `window._wprevSaveHumanResult(gi, j, gh, ga)` — persiste el
+  marcador en `s.fixtures[gi]`, recalcula `sortedTables[gi]` con los
+  partidos ya jugados de ese fixture, y si con esto TODOS los grupos
+  quedan completos (`_allGroupsDecided`) pasa `phase` a `'done'` y
+  llama a `_persistDistribution` (reparto final 12/22/28) — sin que el
+  admin tenga que volver a pulsar Sim.
+- Render: `_fgJornadaHtml(s, gi)` pinta, SOLO para el grupo con
+  humano, un bloque de 6 jornadas (reusa `.wprev-jbtn`/`.wprev-jmatches`
+  ya existentes) con un botón "⭐ ▶ PREVIA · JUGAR" en el partido del
+  humano de cada jornada. Los grupos sin humano NO llaman a esta
+  función — se quedan solo con `_groupTable` (tabla de clasificación).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un cruce de la Ronda Preliminar con un club humano
+   en un lado REAL (no BYE) se auto-simule. Se juega SIEMPRE con
+   card+previa vía `_wprevKoOpenMatch`. Un BYE (hueco TBD en el pool)
+   se resuelve solo, tenga o no humano el lado real.
+2. **PROHIBIDO** que los 6 partidos del club humano dentro de su grupo
+   se auto-simulen. `_autoSimNonHumanFixtures` SOLO toca los 6 partidos
+   entre los 3 rivales — nunca los que involucran al humano.
+3. **PROHIBIDO** que un grupo SIN club humano despliegue jornadas
+   (`_fgJornadaHtml` no se llama para esos grupos) — se simulan de
+   golpe con `_simulateGroup`, como pedía el usuario explícitamente.
+4. **PROHIBIDO** generalizar el motor `_eurKo*`/`_eurFase*` (Champions/
+   Europa/Conference eliminatorias) para que sirva también a la
+   Previa. Se creó un motor AUTOCONTENIDO (`_wprevKo*`) en la propia
+   IIFE de la Previa — mismo patrón conceptual, cero riesgo de romper
+   UCL/UEL/UECL.
+5. **PROHIBIDO** que `phase` pase a `'prelim-done'`/`'done'` mientras
+   quede CUALQUIER cruce/partido del club humano sin decidir —
+   `_allPrelimDecided`/`_allGroupsDecided` son la ÚNICA fuente de esa
+   transición, se comprueban tanto al pulsar Sim como al persistir un
+   resultado humano.
+6. **PROHIBIDO** volver a un re-sorteo (Draw) de la preliminar o de los
+   grupos sin avisar ESPECÍFICAMENTE si el club humano ya tiene
+   progreso jugado ahí — se perdería sin un aviso claro.
+7. Si en el futuro hay 2+ clubes humanos en la misma Previa
+   (simultáneos), el código NO asume "solo 1 grupo humano": cualquier
+   grupo con `_groupHasHuman` gana su fixture de jornadas
+   independientemente, y cualquier cruce con `_tieHasHuman` se juega
+   con card (incluido un HvH si 2 humanos caen en el mismo cruce/grupo).
+
 ## Previa de Champions — Ronda Preliminar (28→14, Open Qualifier) + 12 grupos de 4 (obligatorio, 2026-07-12) ⚠️ SUPERSEDE el formato "16 grupos + corte global 12/22/28" de la sección "Wild Card + Open Qualifier — FASE DE GRUPOS" más abajo
 
 **Petición usuario 2026-07-12** ("LA FASE PREVIA CHAMPIONS TENIA UN

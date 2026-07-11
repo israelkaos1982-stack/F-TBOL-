@@ -28450,9 +28450,19 @@ document.addEventListener('DOMContentLoaded', function() {
     _pinRender();
   };
 
+  /* 2026-07-11: mismo blindaje que `window.pG` (misc_body_1.html) — sin
+     el try/catch, una excepción dentro de `fn` se perdía en silencio
+     (ni alert, ni consola visible) y el botón "no hacía nada". */
   window.requireAdmin = function (fn) {
-    if (_adminUnlocked) { fn(); return; }
-    _adminPendingAction = fn;
+    function _run(){
+      try { fn(); }
+      catch(e){
+        try { console.error('[requireAdmin]', e); } catch(_){}
+        (window._gmCriticalNotice || alert)('⚠️ La acción no se pudo completar: ' + (e && e.message ? e.message : e));
+      }
+    }
+    if (_adminUnlocked) { _run(); return; }
+    _adminPendingAction = _run;
     _pinBuffer = '';
     _pinRender();
     var modal = document.getElementById('pin-modal');

@@ -19525,6 +19525,14 @@ window._showSimProgress = function(opts, onDone){
     return '';
   }
   function _isHuman(name){
+    /* Humanidad POR COMPETICIÓN (regla obligatoria 2026-05-10): un
+       equipo puede ser humano en Recopa (humanIcon asignado en el
+       editor de Resto de Ligas) sin ser uno de los humanos canónicos
+       de Liga EA Sports. `esHumano` a pelo se los saltaba y los
+       simulaba como IA-vs-IA en vez de abrir la previa/gm-modal.
+       Mismo patrón ya usado en Intercontinental (`_isHuman` de la
+       zona `inter`, más abajo en este archivo). */
+    try { if(typeof window.isHumanInComp==='function') return !!window.isHumanInComp(name,'recopa'); } catch(_){}
     if(typeof window.esHumano==='function'){
       try { return !!window.esHumano(name); } catch(_){}
     }

@@ -43486,22 +43486,30 @@ window._showSimProgress = function(opts, onDone){
          tiene escudo pero no sale ni en la card ni en la fase de
          grupos/calendario"): un dispositivo puede tener la liga
          COMPLETA (equipos + resultados) pero con `team.shield` vacío
-         para la mayoría — p.ej. porque nunca abrió esa liga y solo la
-         hidrató via un seed/backfill ligero, mientras OTRO dispositivo
-         (el que configuró las plantillas, como el iPad del usuario) sí
-         tiene los escudos guardados en el servidor. Sin este check la
-         liga se consideraba "ya completa" y jamás se volvía a pedir al
-         servidor, así que el escudo NUNCA llegaba — ni a la tabla de
-         grupos de la Previa (`_groupTable`) ni a la card del hub. Si
-         más de la mitad de los equipos no tienen escudo, se re-pide al
-         servidor (el fetch más abajo hace BACKFILL de escudos sin
-         pisar la clasificación local ya presente). */
+         para ALGUNOS equipos — p.ej. porque nunca abrió esa liga y solo
+         la hidrató via un seed/backfill ligero, mientras OTRO
+         dispositivo (el que configuró las plantillas, como el iPad del
+         usuario) sí tiene los escudos guardados en el servidor. Sin
+         este check la liga se consideraba "ya completa" y jamás se
+         volvía a pedir al servidor, así que el escudo NUNCA llegaba —
+         ni a la tabla de grupos de la Previa (`_groupTable`) ni a la
+         card del hub.
+         2026-07-12 #2 (refuerzo, "sigue sin salir el 90% de los
+         equipos que sí tienen escudo"): el umbral ANTERIOR ("re-pedir
+         SOLO si a la MAYORÍA le falta") dejaba sin arreglar los casos
+         reales más comunes — una liga con la mayoría de equipos YA
+         con escudo pero UN puñado concreto (p.ej. solo Maccabi Haifa)
+         sin él nunca disparaba el re-fetch de esa liga, así que esos
+         equipos concretos quedaban rotos para siempre. Ahora basta con
+         que a UN SOLO equipo le falte el escudo para re-pedir la liga
+         entera al servidor (el fetch más abajo hace BACKFILL de
+         escudos sin pisar la clasificación local ya presente). */
       var withShield = 0;
       d.teams.forEach(function(t){
         var sh = t && (t.shield || t.logo || t.escudo || t.img || t.src);
         if (typeof sh === 'string' && sh.trim()) withShield++;
       });
-      if (withShield < Math.ceil(d.teams.length / 2)) return true;
+      if (withShield < d.teams.length) return true;
       return false;                                  // equipos + clasificación + escudos ya presentes
     });
     if(!toFetch.length){ done(localRecovered, localRecovered); return; }
@@ -43593,6 +43601,13 @@ window._showSimProgress = function(opts, onDone){
                 }
                 recovered++;
                 try { if (typeof window._eurInvalidateLogoIndex === 'function') window._eurInvalidateLogoIndex(); } catch(_){}
+                /* `getLogoEquipo` (part2/misc_body_2.html) memoiza su
+                   resultado por nombre — un equipo consultado ANTES de
+                   que esta liga terminara de hidratarse quedaba con el
+                   escudo-default cacheado PARA SIEMPRE. Sin vaciar esta
+                   cache, la card/gm-modal seguían mostrando "sin
+                   escudo" aunque el escudo ya hubiera llegado. 2026-07-12 #2. */
+                try { if (typeof window._invalidateAllTeamLogos === 'function') window._invalidateAllTeamLogos(); } catch(_){}
               }
             } catch(_){}
             setTimeout(step, 80);

@@ -57,6 +57,90 @@ guardado al instante, sin esperar el TTL de 30s.
    `saveData` junto a `_invalidateAliasCache`/`_invalidateLineStatsCache`
    — un único chokepoint, no un botón/ruta aislada.
 
+## Previa de Champions — escudos AUSENTES, refuerzo #2: cache de `getLogoEquipo` STALE + escudo-default (Estepona) mostrándose como si fuera el escudo real (obligatorio, 2026-07-12 #6)
+
+**Petición usuario 2026-07-12** (sin fotos, tras el fix #5): "siguen sin
+salir los escudos y eso que el 90% de los equipos los tienen / en liga
+previa Champions tienes que salir en la clasificación y en las cards
+donde haya un humano implicado / en la card del Atlético Madrid el del
+Macca Haifa dale oculto". El fix anterior (`_eurResolveTeamLogo` +
+`_eurHydrateMissingLeagues` con escudos) era correcto pero insuficiente
+— 3 causas adicionales seguían bloqueando el resultado.
+
+### Causa raíz (3 capas más)
+
+1. **`getLogoEquipo` (`part2/misc_body_2.html`) MEMOIZA su resultado
+   por nombre en `TEAM_LOGO_CACHE`, para SIEMPRE**. Si un equipo se
+   consulta ANTES de que `_eurHydrateMissingLeagues` termine de traer
+   su escudo del servidor (típico: la Previa se renderiza nada más
+   entrar, la hidratación en segundo plano tarda unos segundos más),
+   el resultado (vacío o el escudo-default) queda cacheado — ninguna
+   hidratación POSTERIOR lo corrige en esa sesión. `window
+   ._invalidateTeamLogo(name)` ya existía para invalidar UNA entrada
+   pero ningún flujo de hidratación lo llamaba.
+2. **El umbral de re-hidratación era "re-pedir SOLO si a la MAYORÍA le
+   falta el escudo"** (fix #5). El caso real más común es justo lo
+   contrario: una liga con la mayoría de equipos YA con escudo pero
+   UN puñado concreto (p.ej. solo Maccabi Haifa) sin él — ese caso
+   nunca cruzaba el umbral de "mayoría" y la liga jamás se re-pedía.
+3. **`_pickLogo` (previa, `index.bundle.js`), `_gmLogo`/`_gmLogoUrl`×2
+   (gm-modal, `part2/misc_body_2.html`) caían a `getLogoEquipo(name)`
+   sin filtrar su escudo-default** (`/static/img/escudos-fallback/
+   estepona.svg`, `BACKEND_ESCUDO_DEFAULT`). A diferencia de otros
+   call-sites del proyecto que YA filtran este caso
+   (`indexOf('estepona')===-1`), estos 3 NO lo hacían — así que un
+   equipo sin escudo real en NINGUNA fuente no se ocultaba: mostraba
+   el escudo AJENO de Estepona como si fuera el suyo. Es lo que el
+   usuario ve como "el del Maccabi Haifa" — una imagen real pero
+   incorrecta, en vez de nada.
+
+### Fix
+
+- **`window._invalidateAllTeamLogos()`** (nuevo, `part2/misc_body_2.html`,
+  junto a `window._invalidateTeamLogo`): vacía TODA `TEAM_LOGO_CACHE`
+  de golpe (más simple y seguro que invalidar por nombre — es solo una
+  cache de rendimiento). `_eurHydrateMissingLeagues`
+  (`misc_body_1.html`) lo llama tras cada escudo nuevo traído del
+  servidor, junto a `_eurInvalidateLogoIndex()` (el propio índice de
+  `_eurResolveTeamLogo`).
+- **Umbral de re-hidratación**: de "re-pedir si a la MAYORÍA le falta
+  el escudo" a **"re-pedir si a UN SOLO equipo le falta"**
+  (`withShield < d.teams.length`). Más caro en peticiones pero
+  correcto para el caso real (equipos sueltos sin escudo dentro de una
+  liga ya casi completa); sigue siendo secuencial+pausado+con
+  reintentos (sin thundering herd) y throttled a 1 pasada/5 min.
+- **`_pickLogo`** (`index.bundle.js`, bump `9.30`→`9.31`), **`_gmLogo`**
+  y **`_gmLogoUrl`×2** (`part2/misc_body_2.html`): antes de caer a
+  `getLogoEquipo`, prueban `window._eurResolveTeamLogo(name)`. Si
+  `getLogoEquipo` como último recurso devuelve el escudo-default
+  (contiene `'estepona'`), se trata como **VACÍO** — el caller ya sabe
+  ocultar un escudo vacío (`lA ? <img> : ''` en `_gmLogo`, el fallback
+  procedural de iniciales `_ppShieldFallback` en la previa) en vez de
+  mostrar el escudo de un equipo ajeno.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un resolutor de escudo por nombre memoice su
+   resultado (`TEAM_LOGO_CACHE` o cualquier cache nueva) sin que TODO
+   flujo de hidratación que pueda traer un escudo nuevo (`_eurHydrateMissingLeagues`
+   o cualquier futuro) invalide esa cache al terminar. Una cache sin
+   invalidación convierte un fix correcto en inútil durante toda la
+   sesión del usuario.
+2. **PROHIBIDO** que el umbral de "¿hace falta re-hidratar esta liga
+   por escudos?" vuelva a ser "a la MAYORÍA le falta". El caso real es
+   equipos SUELTOS sin escudo dentro de ligas casi completas — el
+   umbral correcto es "a CUALQUIER equipo le falta".
+3. **PROHIBIDO** que un resolutor de escudo nuevo (previa, gm-modal, o
+   cualquier card futura) caiga a `getLogoEquipo`/cualquier fuente que
+   pueda devolver el escudo-default (Estepona) SIN filtrarlo. Un
+   escudo-default devuelto como si fuera real es PEOR que no mostrar
+   nada — todo caller debe tratarlo como vacío (`indexOf('estepona')`)
+   y dejar que el fallback de "sin escudo" (oculto / iniciales
+   procedurales) actúe.
+4. Recordatorio: cualquier edición de `index.bundle.js` exige bump de
+   `?v=X.X` en `templates/index.html` Y `static/js/sw.js` (regla ya
+   existente, 2026-07-04) — este fix la cumple (9.30→9.31).
+
 ## Previa de Champions — escudos AUSENTES en la card, la fase de grupos y los partidos del Atlético: resolutor cross-liga por nombre (obligatorio, 2026-07-12 #5)
 
 **Petición usuario 2026-07-12** (6 fotos): "mi hija iPad tiene escudo y

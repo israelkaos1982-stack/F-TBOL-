@@ -47183,22 +47183,60 @@ https://api.sofascore.app/api/v1/team/44/image
       return String(s==null?'':s).toLowerCase().trim()
         .normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
     }
+    /* Lee el estadio de un equipo DENTRO de un documento concreto
+       (LIGA_CACHE[slug] o el JSON parseado de `ligaExt_<slug>`), por
+       nombre canónico. Helper compartido por el paso 0 (prioridad al
+       club humano) y los pasos 1/2 (escaneo genérico). */
+    function _stadiumFromDoc(d, tgt){
+      var ts = (d && Array.isArray(d.teams)) ? d.teams : [];
+      for (var i=0;i<ts.length;i++){
+        var t=ts[i]; if(!t||!t.name) continue;
+        if(_canon(t.name)!==tgt) continue;
+        var s=String(t.stadium||t.estadio||'').trim();
+        if(s) return s;
+      }
+      return '';
+    }
     function _scanStadiumByCanon(teamName){
       var tgt = _canon(teamName);
       if(!tgt) return '';
+      /* 0) PRIORIDAD al slot de Liga EA Sports para los 7 clubes humanos
+         canónicos (obligatorio, 2026-07-12 — bug "Atlético Madrid ·
+         Emirates Stadium"): el escaneo genérico de los pasos 1/2 recorre
+         TODAS las ~54 ligas de Resto de Ligas en orden de iteración de
+         objeto SIN PRIORIDAD — si CUALQUIER liga externa tiene un equipo
+         homónimo (mismo nombre canónico, un IA duplicado/genérico de
+         otra liga, p.ej. otro "Atlético Madrid" en una liga sudamericana
+         con el estadio del admin puesto a mano en OTRA cosa, o incluso
+         "Arsenal"/"Emirates Stadium" si la normalización colisiona por
+         acentos/afijos), ese estadio AJENO gana por ser el primero
+         encontrado — mostrando el estadio de un equipo completamente
+         distinto en la previa del club humano. Los 7 clubes canónicos
+         (`_isHumanClubCanonico`) SIEMPRE resuelven su estadio desde
+         `ligaExt_liga-ea-sports` primero — ninguna otra liga puede
+         pisarlo. */
+      try {
+        if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(teamName)) {
+          if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE && LIGA_CACHE['liga-ea-sports']) {
+            var eaHit = _stadiumFromDoc(LIGA_CACHE['liga-ea-sports'], tgt);
+            if (eaHit) return eaHit;
+          }
+          var eaRaw = localStorage.getItem('ligaExt_liga-ea-sports');
+          if (eaRaw) {
+            var eaData; try { eaData = JSON.parse(eaRaw); } catch(_){ eaData = null; }
+            var eaHit2 = _stadiumFromDoc(eaData, tgt);
+            if (eaHit2) return eaHit2;
+          }
+        }
+      } catch(_){}
       /* 1) LIGA_CACHE en memoria — incluye lo bajado del servidor
          aunque localStorage local esté vacío (móvil nuevo / otra
          sesión). */
       try {
         if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE) {
           for (var ck in LIGA_CACHE) {
-            var d = LIGA_CACHE[ck];
-            var ts = (d && Array.isArray(d.teams)) ? d.teams : [];
-            for (var i=0;i<ts.length;i++){
-              var t=ts[i]; if(!t||!t.name) continue;
-              var s=String(t.stadium||t.estadio||'').trim(); if(!s) continue;
-              if(_canon(t.name)===tgt) return s;
-            }
+            var hit = _stadiumFromDoc(LIGA_CACHE[ck], tgt);
+            if (hit) return hit;
           }
         }
       } catch(_){}

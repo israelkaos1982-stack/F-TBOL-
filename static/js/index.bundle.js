@@ -12357,6 +12357,18 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       };
       if (INTER_RD[im[1].toLowerCase()]) return INTER_RD[im[1].toLowerCase()];
     }
+    /* Previa de Champions — fase de grupos (matchKey `wprevfg_<gi>_<j>`,
+       compKey 'ucl', lo abre `_wprevPlayHumanMatch`) y Ronda Preliminar
+       (matchKey `wprevko_<idx>_<i|v>`, compKey 'ucl', lo abre
+       `_wprevKoAbrirPrevia`). Sin esta rama caían a `MAP['ucl']`
+       (inexistente) → null → fallback a HOY + comp genérica — bug
+       2026-07-12, foto usuario: la previa de "Atlético Madrid vs
+       Dunajska Streda" (calendario: "04 Ago · Previa Champions — J3")
+       mostraba "12 de Julio" (=hoy) + "Champions League" genérico. */
+    var wfgM = String(matchKey || '').match(/^wprevfg_\d+_(\d+)$/);
+    if (wfgM) return 'Previa Champions — J' + (parseInt(wfgM[1], 10) + 1);
+    var wkoM = String(matchKey || '').match(/^wprevko_\d+_[iv]$/i);
+    if (wkoM) return 'Previa Champions — Ronda Preliminar';
     var MAP = {
       'copa':'Copa del Rey — 1/128','copa-fin':'FINAL COPA DEL REY',
       'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',

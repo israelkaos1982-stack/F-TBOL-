@@ -10316,6 +10316,20 @@
          contador a 0 igual que antes, así que esto NO afecta a un
          partido que SÍ está progresando (rellenar stats, elegir MVP). */
       var _wdMaxStall = 3; /* 3 × 2s = 6s de estancamiento continuo */
+      /* AUTO-REINTENTO SILENCIOSO (2026-07-12, refuerzo tras foto usuario
+         «Atlético Madrid vs Dunajska Streda» — tras elegir el portero de
+         la portería imbatida, ni una sola puerta más se abrió y el botón
+         quedó gris): la 1ª vez que el watchdog detecta el estancamiento
+         NO se limita a avisar — vuelve a llamar `gmEndMatch()` por su
+         cuenta, en silencio, vía `_gmSafeReenter` (que ya es idempotente:
+         retoma desde el primer gate pendiente, sin duplicar nada). Si la
+         causa real era que la reentrada diferida de `_ensureImbatEvents`
+         (rAF+setTimeout) se perdió por CUALQUIER motivo no capturado por
+         las redes existentes, este reintento la repite sin que el
+         usuario tenga que darse cuenta de nada ni volver a pulsar
+         FINALIZAR. Solo si SIGUE estancado tras el reintento se pasa al
+         aviso visible + reactivación del botón de siempre. */
+      var _wdAutoRetried = false;
       var _wdInterval = setInterval(function(){
         try {
           var modalEl = document.getElementById('gm-modal');
@@ -10349,9 +10363,16 @@
           if (!b || !b.disabled) { clearInterval(_wdInterval); return; }
           _wdStall++;
           if (_wdStall < _wdMaxStall) return; /* aún no lleva suficiente estancado */
+          if (!_wdAutoRetried) {
+            _wdAutoRetried = true;
+            _wdStall = 0;
+            try { console.warn('[gmEndMatch watchdog] estancado ' + (_wdMaxStall*2) + 's — auto-reintento silencioso. ' + _gmWatchdogDiag()); } catch(_){}
+            try { window._gmSafeReenter(window.gmEndMatch, 'auto-reintento del watchdog'); } catch(_){}
+            return; /* seguimos vigilando: si esto lo resuelve, el próximo tick verá overlay/finished */
+          }
           clearInterval(_wdInterval);
           b.disabled = false; b.style.opacity = '';
-          try { console.warn('[gmEndMatch watchdog] cadena sin progreso visible durante ' + (_wdMaxStall*4) + 's seguidos — botón reactivado. ' + _gmWatchdogDiag()); } catch(_){}
+          try { console.warn('[gmEndMatch watchdog] cadena sin progreso visible durante ' + (_wdMaxStall*4) + 's seguidos (auto-reintento incluido) — botón reactivado. ' + _gmWatchdogDiag()); } catch(_){}
           /* Contador de reintentos en este partido (2026-07-06): si el
              watchdog ya saltó antes en el MISMO partido, un 2º reintento
              con el mismo resultado normalmente significa que la pestaña

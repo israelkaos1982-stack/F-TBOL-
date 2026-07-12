@@ -326,43 +326,27 @@ window._ensureImbatEvents = function(opts, onDone){
 
   function _finish(){
     if (typeof onDone !== 'function') return;
-    /* onDone (gmEndMatch/mlEndMatch) va envuelto en try/catch con aviso
-       visible (regla CLAUDE.md "el handler NUNCA falla en silencio") y
-       diferido un frame+tick para que el navegador PINTE el cierre del
-       picker antes del trabajo pesado (stats/MVP/guardado).
-
-       REFUERZO (2026-07-06, «vuelve a congelarse tras elegir portero
-       humano, ya con el bundle 9.24 confirmado por el log»): depender
-       ÚNICAMENTE de `requestAnimationFrame` es fràgil — los navegadores
-       (sobre todo móviles) pueden PAUSAR por completo los callbacks de
-       rAF si la pestaña pierde visibilidad aunque sea un instante (paso
-       a segundo plano, bloqueo de pantalla, otra app al frente) justo
-       tras el tap que cierra el picker, y el callback simplemente NUNCA
-       llega a ejecutarse — sin excepción, sin log, indistinguible del
-       "se congela" reportado. `setTimeout` SÍ se seguirá disparando
-       (aunque throttled) cuando la pestaña vuelva a primer plano, así
-       que actúa de red de seguridad independiente del rAF: gana el que
-       llegue antes, con guarda `_ran` para no ejecutar `onDone()` dos
-       veces. */
-    var _ran = false;
-    var _run = function(){
-      if (_ran) return;
-      _ran = true;
-      try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat: todos los lados resueltos → onDone()'); } catch(_){}
-      try { onDone(); }
-      catch(doneErr) {
-        try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
-        try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
-        try { (window._gmCriticalNotice || alert)('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
-      }
-    };
-    try {
-      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function(){ setTimeout(_run, 0); });
-    } catch(_){}
-    /* Red de seguridad independiente: dispara SIEMPRE, rAF haya
-       llegado o no. Si rAF ya ejecutó `_run`, esta 2ª llamada es un
-       no-op por el guard `_ran`. */
-    setTimeout(_run, 300);
+    /* REESCRITURA 2026-07-12 (foto usuario, "vez número enésima": tras
+       elegir el portero humano el partido se queda igual de congelado
+       que antes, con el bundle ya incluyendo el diferido rAF+setTimeout
+       de 2026-07-06): ese diferido ("para que el navegador PINTE el
+       cierre del picker antes del trabajo pesado") era una mejora
+       puramente COSMÉTICA, nunca un requisito de corrección — y cada
+       capa de indirección (rAF, setTimeout) es una oportunidad más para
+       que el callback se pierda por CUALQUIER motivo no anticipado
+       (throttling de pestaña en 2º plano, un timer cancelado por otro
+       código, etc.). Se elimina el diferido por completo: `onDone()` se
+       llama YA, de forma SÍNCRONA, en el mismo tick del tap que confirma
+       el portero — el try/catch de abajo sigue garantizando que un fallo
+       real nunca quede en silencio, pero ya NO depende de que ningún
+       timer futuro llegue a disparar. */
+    try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat: todos los lados resueltos → onDone() SÍNCRONO'); } catch(_){}
+    try { onDone(); }
+    catch(doneErr) {
+      try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
+      try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
+      try { (window._gmCriticalNotice || alert)('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
+    }
   }
 
   var _hi = 0;

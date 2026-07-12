@@ -6860,26 +6860,29 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
          hardcodeado salía así en la previa Liverpool vs Como). El
          onerror llama a window._ppShieldFallback para cubrir también
          las URLs hardcodeadas que fallen (404, red caída). */
-      function _ppShieldFallback(nm, size){
+      function _ppShieldFallback(nm, size, idAttr){
         size = size || 84;
+        var idHtml = idAttr ? ' id="'+idAttr+'"' : '';
         if (typeof window.iaShieldSVG === 'function') {
-          return '<span style="display:inline-block;width:'+size+'px;height:'+size+'px;">' + window.iaShieldSVG(nm) + '</span>';
+          return '<span'+idHtml+' style="display:inline-block;width:'+size+'px;height:'+size+'px;">' + window.iaShieldSVG(nm) + '</span>';
         }
-        return '<span style="font-size:54px;">🛡️</span>';
+        return '<span'+idHtml+' style="font-size:54px;">🛡️</span>';
       }
       /* Helper expuesto a window para que el onerror del <img> pueda
          hacer el swap sin necesidad de embeber comillas raras en el
          atributo. Sobrescribe outerHTML por el SVG procedural. */
       window._ppShieldFallbackSwap = window._ppShieldFallbackSwap || function(imgEl, nm, size){
-        try { imgEl.outerHTML = _ppShieldFallback(nm, size); } catch(_){ try { imgEl.style.display = 'none'; } catch(__){} }
+        var idAttr = imgEl && imgEl.id;
+        try { imgEl.outerHTML = _ppShieldFallback(nm, size, idAttr); } catch(_){ try { imgEl.style.display = 'none'; } catch(__){} }
       };
-      function _ppImg(url, nm, size){
+      function _ppImg(url, nm, size, idAttr){
         var safeNm = String(nm||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         var safeJs = String(nm||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
-        return '<img src="'+url+'" alt="'+safeNm+'" onerror="window._ppShieldFallbackSwap(this,\''+safeJs+'\','+size+')" style="width:'+size+'px;height:'+size+'px;object-fit:contain;display:block;margin:0 auto;"/>';
+        var idHtml = idAttr ? ' id="'+idAttr+'"' : '';
+        return '<img'+idHtml+' src="'+url+'" alt="'+safeNm+'" onerror="window._ppShieldFallbackSwap(this,\''+safeJs+'\','+size+')" style="width:'+size+'px;height:'+size+'px;object-fit:contain;display:block;margin:0 auto;"/>';
       }
-      var imgA = lA ? _ppImg(lA, home, 84) : _ppShieldFallback(home, 84);
-      var imgB = lB ? _ppImg(lB, away, 84) : _ppShieldFallback(away, 84);
+      var imgA = lA ? _ppImg(lA, home, 84, 'pp-shield-home') : _ppShieldFallback(home, 84, 'pp-shield-home');
+      var imgB = lB ? _ppImg(lB, away, 84, 'pp-shield-away') : _ppShieldFallback(away, 84, 'pp-shield-away');
       /* Nivel por equipo: Crack / Leyenda (solo humanos) */
       function _teamLevel(name) {
         var normFn = window._ppNormTeam || function(s){return String(s||'').toLowerCase();};
@@ -7197,6 +7200,28 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         + '<div style="flex:1;text-align:center;min-width:0;">'+imgB+'<div style="font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;margin-top:6px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_hiPvB+away.toUpperCase()+'</div>'+_ppAwayAliasHtml+_formBtnHtml('away')+'</div>';
       _ppAliasDeferredCheck('home', home, _humCandidateHome, _ppHomeAliasTxt);
       _ppAliasDeferredCheck('away', away, _humCandidateAway, _ppAwayAliasTxt);
+      /* Comprobación DIFERIDA en servidor del ESCUDO (2026-07-12 #7,
+         mismo patrón que `_ppAliasDeferredCheck` de arriba): si la
+         resolución local (localStorage + LIGA_CACHE, vía `_logoOf`/
+         `_eurResolveTeamLogo`) no encontró un escudo real, puede que
+         ESTE dispositivo tenga `localStorage` lleno ("Navegador sin
+         espacio" — un guardado reciente del admin puede haberse
+         quedado SOLO en el servidor) o que nunca haya cargado la liga
+         origen en esta sesión. Pregunta una vez al servidor y, si lo
+         encuentra, sustituye el placeholder de iniciales por el <img>
+         real — sin esperar a que el admin recargue o reabra la previa. */
+      function _ppShieldDeferredCheck(side, teamName, wasEmpty){
+        if(!wasEmpty) return;
+        if(typeof window._eurTeamShieldServerSearch !== 'function') return;
+        window._eurTeamShieldServerSearch(teamName, function(found){
+          if(!found) return;
+          var host = document.getElementById('pp-shield-' + side);
+          if(!host) return;
+          try { host.outerHTML = _ppImg(found, teamName, 84, 'pp-shield-' + side); } catch(_){}
+        });
+      }
+      _ppShieldDeferredCheck('home', home, !lA);
+      _ppShieldDeferredCheck('away', away, !lB);
       /* Wire form buttons via addEventListener (more reliable on mobile than inline onclick) */
       ['home','away'].forEach(function(side) {
         var b = document.getElementById('pp-form-' + side);

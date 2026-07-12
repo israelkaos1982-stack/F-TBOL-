@@ -3576,6 +3576,131 @@ def api_team_alias(name):
         pass
     return jsonify({"ok": True, "alias": None})
 
+
+def _team_shield_scan_teams(teams, target):
+    if not isinstance(teams, list):
+        return None
+    for t in teams:
+        if not isinstance(t, dict) or not t.get("name"):
+            continue
+        if _lx_canon_name(t.get("name")) != target:
+            continue
+        shield = t.get("shield") or t.get("escudo") or t.get("img") or t.get("src")
+        if isinstance(shield, str) and shield.strip():
+            return shield.strip()
+    return None
+
+
+@app.route("/api/team-shield/<name>", methods=["GET"])
+def api_team_shield(name):
+    """Busca el escudo de un equipo por NOMBRE en TODAS las ligas del
+    servidor de una sola vez (búsqueda server-side) — mismo patrón que
+    `/api/team-alias/<name>` (2026-07-05).
+
+    2026-07-12 #7: `_eurResolveTeamLogo` (el resolutor cross-liga de la
+    Previa de Champions) SOLO escaneaba `localStorage`/`LIGA_CACHE` de
+    ESTE dispositivo — a diferencia del alias, nunca tuvo un fallback en
+    servidor. Un dispositivo cuyo `localStorage` está lleno (banner
+    "Navegador sin espacio") puede fallar al persistir un escudo recién
+    editado; ese dispositivo (o cualquier OTRO que no haya abierto esa
+    liga concreta) se queda con el placeholder genérico para siempre sin
+    este endpoint, aunque el servidor SÍ tenga el escudo guardado.
+    """
+    target = _lx_canon_name(name)
+    if not target:
+        return jsonify({"ok": True, "shield": None})
+    try:
+        rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
+    except Exception:
+        rows = []
+    for row in rows or []:
+        clave = row.clave or ""
+        rest = clave[len("liga_ext_"):] if clave.startswith("liga_ext_") else ""
+        if not rest or rest.endswith("_protected") or "_snap_" in rest:
+            continue
+        try:
+            data = json.loads(row.valor_json or "{}")
+        except Exception:
+            continue
+        teams = data.get("teams") if isinstance(data, dict) else None
+        found = _team_shield_scan_teams(teams, target)
+        if found:
+            return jsonify({"ok": True, "shield": found})
+    try:
+        selrow = GlobalState.query.filter_by(clave="selecciones_squad_v1").first()
+        if selrow and selrow.valor_json:
+            seldata = json.loads(selrow.valor_json)
+            selval = seldata.get("value") if isinstance(seldata, dict) and "value" in seldata else seldata
+            selteams = selval.get("teams") if isinstance(selval, dict) else None
+            found = _team_shield_scan_teams(selteams, target)
+            if found:
+                return jsonify({"ok": True, "shield": found})
+    except Exception:
+        pass
+    return jsonify({"ok": True, "shield": None})
+
+
+def _team_squad_scan_teams(teams, target):
+    if not isinstance(teams, list):
+        return None
+    for t in teams:
+        if not isinstance(t, dict) or not t.get("name"):
+            continue
+        if _lx_canon_name(t.get("name")) != target:
+            continue
+        players = t.get("players")
+        if isinstance(players, list) and players:
+            return {"name": t.get("name"), "players": players}
+    return None
+
+
+@app.route("/api/team-squad/<name>", methods=["GET"])
+def api_team_squad(name):
+    """Busca la PLANTILLA (players[]) de un equipo por NOMBRE en TODAS
+    las ligas del servidor de una sola vez — mismo patrón que
+    `/api/team-alias/<name>`/`/api/team-shield/<name>` (2026-07-12 #7).
+
+    Cierra el mismo hueco que esos 2 endpoints pero para el picker de
+    eventos (+ AÑADIR EVENTO): si `sqFromRegistry` no encuentra la
+    plantilla en `localStorage`/`LIGA_CACHE` de ESTE dispositivo (p.ej.
+    porque su `localStorage` está lleno y el guardado reciente del
+    admin se quedó solo en el servidor), el picker caía al roster
+    genérico "Jugador A/B/C…" pese a que la plantilla real SÍ existe en
+    el servidor.
+    """
+    target = _lx_canon_name(name)
+    if not target:
+        return jsonify({"ok": True, "team": None})
+    try:
+        rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
+    except Exception:
+        rows = []
+    for row in rows or []:
+        clave = row.clave or ""
+        rest = clave[len("liga_ext_"):] if clave.startswith("liga_ext_") else ""
+        if not rest or rest.endswith("_protected") or "_snap_" in rest:
+            continue
+        try:
+            data = json.loads(row.valor_json or "{}")
+        except Exception:
+            continue
+        teams = data.get("teams") if isinstance(data, dict) else None
+        found = _team_squad_scan_teams(teams, target)
+        if found:
+            return jsonify({"ok": True, "team": found})
+    try:
+        selrow = GlobalState.query.filter_by(clave="selecciones_squad_v1").first()
+        if selrow and selrow.valor_json:
+            seldata = json.loads(selrow.valor_json)
+            selval = seldata.get("value") if isinstance(seldata, dict) and "value" in seldata else seldata
+            selteams = selval.get("teams") if isinstance(selval, dict) else None
+            found = _team_squad_scan_teams(selteams, target)
+            if found:
+                return jsonify({"ok": True, "team": found})
+    except Exception:
+        pass
+    return jsonify({"ok": True, "team": None})
+
 # ══════════════════════════════════════════════════════════════════
 # PROTECTED snapshot (server-side, monotónico) — 2026-05-08
 # ══════════════════════════════════════════════════════════════════

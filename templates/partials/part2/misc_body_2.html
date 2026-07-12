@@ -10150,6 +10150,17 @@
         var _endBtnNow = document.getElementById('gm-btn-end');
         if (_endBtnNow) { _endBtnNow.disabled = true; _endBtnNow.style.opacity = '0.35'; }
       } catch(_){}
+      /* Captura extra de resiliencia (2026-07-12) EN EL MOMENTO EXACTO
+         de confirmar: si la cadena imbatida→stats→MVP→WhatsApp se
+         queda atascada (bug "caja opaca", fotos usuario Atlético
+         Madrid vs Maccabi Haifa) y el único disparador que llega a
+         tiempo es que el usuario cierre la pestaña por su cuenta, esta
+         captura ya deja el snapshot listo ANTES de que la cadena
+         empiece a mutar el partido — así la recarga reanuda desde
+         justo aquí en vez de perder el partido entero. Los 3
+         disparadores globales (pagehide/beforeunload/visibilitychange)
+         siguen siendo la red principal; esto es solo un refuerzo. */
+      try { if (typeof window._gmPersistNow === 'function') window._gmPersistNow(); } catch(_){}
       try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('SÍ pulsado → llamando yesCb()'); } catch(_){}
       /* PRIMER disparo de la cadena — mismo blindaje que las reentradas
          (obligatorio, 2026-07-06, refuerzo tras foto usuario «Maccabi Tel
@@ -15784,6 +15795,11 @@
     }
     _gmDiagLog('→ TODOS los gates pasados, marcando finished=true.');
     _gm.finished = true;
+    /* El partido ya no necesita reanudarse tras un cierre/recarga — se
+       limpia el snapshot de resiliencia para que no resucite un
+       partido ya terminado (mismo criterio que `_gmBg`, que también se
+       borra al finalizar). */
+    try { if (typeof _gmClearPersisted === 'function') _gmClearPersisted(); } catch(_){}
     /* Lesiones: registrar las generadas en este partido y decrementar
        la baja de ambos equipos (1 partido jugado = 1 partido menos de
        baja). Mismo criterio que _mlFinishMatchGen — necesario para que
@@ -16406,6 +16422,8 @@
       if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
       if (window._gmBg && window._gmBg[bgKey]) delete window._gmBg[bgKey];
     } catch(_){}
+    /* Un partido cancelado no debe resucitar al reabrir la previa. */
+    try { if (typeof _gmClearPersisted === 'function') _gmClearPersisted(); } catch(_){}
     try { if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub(); } catch(_){}
     try {
       var modal = document.getElementById('gm-modal');
@@ -16731,6 +16749,69 @@
       _eurKoLeg: _gm._eurKoLeg
     };
   }
+
+  /* ── PERSISTENCIA FRENTE A CIERRE/RECARGA (gm-modal) ───────────────
+     A diferencia de los partidos de Liga (`_liveStore`, con flush en
+     pagehide/beforeunload/visibilitychange + servidor — ver más abajo
+     en este archivo), el gm-modal (Copa, Champions, Recopa, Supercopa,
+     Torneos de Verano…) no guardaba NADA mientras el partido estaba en
+     curso: `window._gm`/`window.__GM_LIVE` viven SOLO en memoria JS.
+     Bug 2026-07-12 (fotos usuario, «Atlético Madrid vs Maccabi Haifa,
+     Champions League»): tras rellenar estadísticas + MVP y pulsar
+     FINALIZAR, la pantalla se quedaba con una caja opaca sin poder
+     avanzar; la ÚNICA recuperación era cerrar la web y volver a jugar
+     el partido ENTERO desde la previa (alineación, estadísticas y MVP
+     otra vez), porque no había ABSOLUTAMENTE NADA que restaurar.
+     Este bloque añade un snapshot en localStorage — SOLO del partido
+     actualmente visible, un único slot, mismo alcance que el propio
+     `_gm` (no cubre partidos de `_gmBg` en 2º plano) — que se refresca
+     en los MISMOS disparadores que ya protegen `_liveStore`, y se
+     consulta al reabrir el MISMO partido para reanudar en vez de
+     empezar de cero. */
+  var _GM_LS_KEY = 'gm_live_state_v1';
+  function _gmPersistKeyFor(j, home, away, comp, tourId, tourKey) {
+    return _gmKey(j, home, away) + '|' + (tourId||'') + '|' + (tourKey||'') + '|' + (comp||'');
+  }
+  function _gmPersistKey() {
+    return _gmPersistKeyFor(_gm.j, _gm.home, _gm.away, _gm.comp, _gm._tourId, _gm._tourKey);
+  }
+  function _gmPersistNow() {
+    try {
+      if (!_gmIsLiveCurrent()) return;
+      var payload = { key: _gmPersistKey(), snap: _gmSnapshotCurrent(), ts: Date.now() };
+      var json = JSON.stringify(payload);
+      if (typeof window._lsSetSafe === 'function') window._lsSetSafe(_GM_LS_KEY, json);
+      else localStorage.setItem(_GM_LS_KEY, json);
+    } catch(_){}
+  }
+  function _gmClearPersisted() {
+    try { localStorage.removeItem(_GM_LS_KEY); } catch(_){}
+  }
+  /* Lee el snapshot persistido SOLO si corresponde EXACTAMENTE al
+     partido que se está pidiendo abrir (mismo j/home/away/comp/torneo)
+     y no está ya marcado como finalizado (un partido finalizado no
+     debe resucitar — igual que `_gmBg` lo borra al terminar). */
+  function _gmReadPersisted(j, home, away, comp, tourId, tourKey) {
+    try {
+      var raw = localStorage.getItem(_GM_LS_KEY);
+      if (!raw) return null;
+      var payload = JSON.parse(raw);
+      if (!payload || !payload.snap) return null;
+      if (payload.key !== _gmPersistKeyFor(j, home, away, comp, tourId, tourKey)) return null;
+      if (payload.snap.finished) return null;
+      return payload.snap;
+    } catch(_){ return null; }
+  }
+  try { window._gmPersistNow = _gmPersistNow; window._gmClearPersisted = _gmClearPersisted; } catch(_){}
+  /* Mismos 3 disparadores que `_liveStore` (pagehide/beforeunload no
+     siempre saltan en móvil; visibilitychange→hidden es la red que
+     cubre el cambio de app, p.ej. al abrir WhatsApp para compartir). */
+  window.addEventListener('pagehide', _gmPersistNow);
+  window.addEventListener('beforeunload', _gmPersistNow);
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'hidden') _gmPersistNow();
+  });
+
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
      los parámetros del snapshot; la propia `gmOpen` se encarga de
      restaurarlo (snapshot-el-actual y luego load-el-pedido). */
@@ -16785,6 +16866,21 @@
     var reqKey = _gmKey(j, home, away);
     var saved = (window._gmBg && window._gmBg[reqKey]) || null;
     if (saved) { delete window._gmBg[reqKey]; }
+    /* Si NO hay snapshot en memoria (_gmBg — solo sobrevive mientras la
+       pestaña sigue viva), probar el de localStorage: sobrevive a un
+       cierre/recarga real de la pestaña (ver bloque "PERSISTENCIA
+       FRENTE A CIERRE/RECARGA" más abajo, junto a _gmSnapshotCurrent).
+       `window._gmPendingTour` ya lo deja puesto `abrirTorneo` justo
+       ANTES de llamar a `gmOpen`, así que está disponible aquí mismo
+       para identificar el torneo/ronda exactos. */
+    if (!saved && typeof _gmReadPersisted === 'function') {
+      try {
+        var _pendTourId  = (window._gmPendingTour && comp === 'torneo') ? window._gmPendingTour.tourId  : null;
+        var _pendTourKey = (window._gmPendingTour && comp === 'torneo') ? window._gmPendingTour.tourKey : null;
+        var _lsSaved = _gmReadPersisted(j, home, away, comp, _pendTourId, _pendTourKey);
+        if (_lsSaved) saved = _lsSaved;
+      } catch(_){}
+    }
     /* Si la clave quedó vetada por un CANCELAR previo, la liberamos
        — el usuario está abriendo el partido de nuevo, así que el flag
        trashed (que bloquea polls) ya no debe aplicar. Sin esto el

@@ -41230,21 +41230,35 @@ window._showSimProgress = function(opts, onDone){
 #s-intercontinental .inter-banner-det[open]>summary::after{transform:rotate(180deg);}
 #s-intercontinental .inter-banner-det .inter-banner-info{border:none;border-top:1px solid rgba(255,144,32,.20);border-radius:0;background:transparent;}
 #s-intercontinental .inter-empty{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,210,170,.6);text-align:center;padding:14px 10px;font-style:italic;}
-#s-intercontinental .inter-card{margin:8px 8px;background:linear-gradient(135deg,#1a0a02,#3a1808 50%,#1a0a02);border:1px solid rgba(255,144,32,.5);border-radius:12px;overflow:hidden;padding:10px 6px;}
-#s-intercontinental .inter-card.played{border-color:rgba(255,180,80,.5);}
-#s-intercontinental .inter-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+/* Rediseño videojuego (petición usuario 2026-07-11, "ocurre lo mismo
+   en la intercontinental — colores de la intercontinental, humanos
+   arriba, borde más llamativo, resultados IA en horizontal"): mismo
+   tratamiento que la Recopa, con la paleta PROPIA de Intercontinental
+   (wine oscuro + destello dorado-naranja, igual que `.c-inter`). */
+#s-intercontinental .inter-card{margin:12px 8px;background:linear-gradient(160deg,#1a0a02 0%,#4a1a04 45%,#1a0a02 100%);border:1px solid rgba(255,144,32,.45);border-radius:14px;overflow:hidden;padding:0;position:relative;box-shadow:0 5px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);}
+#s-intercontinental .inter-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#1a0404,#6a1818,#ff9020,#ffd54a,#ff9020,#6a1818,#1a0404);}
+#s-intercontinental .inter-card.played{border-color:rgba(255,180,80,.55);box-shadow:0 5px 16px rgba(0,0,0,.55),0 0 0 1px rgba(255,180,80,.18);}
+/* Equipos humanos arriba de la lista (regla más abajo) + borde más
+   llamativo para destacarlos entre la marea de IA-vs-IA. */
+#s-intercontinental .inter-card.has-human{border-color:rgba(255,213,74,.85);box-shadow:0 5px 22px rgba(255,180,40,.28),inset 0 1px 0 rgba(255,255,255,.08);}
+#s-intercontinental .inter-card-tag{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.8px;color:rgba(255,180,80,.65);text-align:center;padding:7px 0 0;text-transform:uppercase;}
+#s-intercontinental .inter-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px 12px;}
 #s-intercontinental .inter-card-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
-#s-intercontinental .inter-card-side img{width:48px;height:48px;object-fit:contain;}
+#s-intercontinental .inter-card-side img{width:46px;height:46px;object-fit:contain;filter:drop-shadow(0 2px 5px rgba(0,0,0,.6));}
 #s-intercontinental .inter-card-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.4px;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:700;}
 #s-intercontinental .inter-card-name.win{color:#ffd54a;text-shadow:0 0 12px rgba(255,200,80,.7);}
 #s-intercontinental .inter-card-name.lose{color:#ff8a8a;text-decoration:line-through;text-decoration-color:rgba(255,138,138,.5);opacity:.72;}
 #s-intercontinental .inter-card-mid{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:80px;flex-shrink:0;}
-#s-intercontinental .inter-card-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;letter-spacing:2px;background:rgba(0,0,0,.4);border-radius:8px;padding:3px 12px;border:1px solid rgba(255,144,32,.25);}
+#s-intercontinental .inter-card-score{font-family:'Bebas Neue',sans-serif;font-size:23px;color:#ffd54a;letter-spacing:2px;background:rgba(0,0,0,.5);border-radius:8px;padding:4px 14px;border:1px solid rgba(255,180,80,.4);text-shadow:0 0 8px rgba(255,180,80,.35);}
 #s-intercontinental .inter-card-score.played{color:#ffd54a;}
+#s-intercontinental .inter-card-vs{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.4);}
 #s-intercontinental .inter-card-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:#ffd080;background:rgba(255,160,40,.15);border:1px solid rgba(255,160,40,.4);border-radius:4px;padding:1px 5px;}
-#s-intercontinental .inter-card-act{padding:5px 12px;border-radius:7px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.1px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;}
-#s-intercontinental .inter-card-act.simular{background:rgba(255,144,32,.16);color:#ffb060;border-color:rgba(255,144,32,.6);}
+#s-intercontinental .inter-card-act{padding:6px 14px;border-radius:7px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.1px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;}
+#s-intercontinental .inter-card-act.simular{background:rgba(255,144,32,.16);color:#ffb060;border-color:rgba(255,144,32,.6);box-shadow:0 0 10px rgba(255,144,32,.18);}
 #s-intercontinental .inter-card-act.previa{background:rgba(120,180,255,.14);color:#9fc4ff;border-color:rgba(120,180,255,.55);}
+/* Separador visual entre cruces. */
+#s-intercontinental .inter-card + .inter-card{margin-top:4px;}
+#s-intercontinental .inter-card + .inter-card::after{content:'';position:absolute;top:-8px;left:16%;right:16%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,180,80,.3),transparent);}
 #s-intercontinental .inter-simall-wrap{display:flex;justify-content:center;padding:8px 8px 2px;}
 #s-intercontinental .inter-btn-simall{padding:8px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:rgba(255,160,40,.15);color:#ffa050;border:1.5px solid rgba(255,160,40,.55);}
 #s-intercontinental .inter-champ-row{display:flex;align-items:center;gap:14px;margin:10px 8px;padding:12px;border-radius:12px;background:linear-gradient(135deg,rgba(255,144,32,.18),rgba(110,40,0,.30));border:1.5px solid rgba(255,200,80,.6);box-shadow:0 0 22px rgba(255,144,32,.25);}
@@ -41497,6 +41511,19 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _renderRound(phase){
+    /* Blindaje (mismo contrato que la Recopa, 2026-07-11): un fallo al
+       pintar una tarjeta o la ronda entera NUNCA deja la pantalla en
+       blanco sin aviso. */
+    try { _renderRoundInner(phase); }
+    catch(errRR){
+      try { console.warn('[Inter] _renderRound(' + phase + ') falló:', errRR); } catch(_){}
+      try {
+        var hostErr = document.getElementById('inter-'+phase);
+        if(hostErr) hostErr.innerHTML = '<div class="inter-empty">⚠️ No se pudo pintar esta ronda.<br><button class="inter-btn-sortear" style="margin:8px auto;display:block;" onclick="window._interRender&&window._interRender()">🔄 Reintentar</button></div>';
+      } catch(_){}
+    }
+  }
+  function _renderRoundInner(phase){
     var host=document.getElementById('inter-'+phase); if(!host) return;
     var s=_load()||{}; var ms=(s.sorteo&&s.sorteo[phase])||[];
     if(!ms.length){
@@ -41510,16 +41537,38 @@ window._showSimProgress = function(opts, onDone){
       var l=_logo(s.champion);
       html+='<div class="inter-champ-row">'+(l?'<img src="'+_esc(l)+'"/>':'<span style="font-size:48px;">🏆</span>')+'<div><div class="inter-champ-lbl">CAMPEÓN INTERCONTINENTAL</div><div class="inter-champ-name">'+_esc(s.champion)+'</div></div></div>';
     }
-    ms.forEach(function(m,i){ html+=_renderMatchCard(m,phase,i); });
+    /* Equipos humanos ARRIBA (petición usuario 2026-07-11, mismo
+       tratamiento que la Recopa): sort estable por índice, el `idx`
+       que se pasa a `_renderMatchCard` sigue siendo el ORIGINAL del
+       array guardado (mk='inter_'+phase+'_'+idx depende de él). */
+    var order=ms.map(function(m,i){ return i; });
+    order.sort(function(ia,ib){
+      var ma=ms[ia], mb=ms[ib];
+      var ha=ma && (_isHuman(ma.home)||_isHuman(ma.away)) ? 0 : 1;
+      var hb=mb && (_isHuman(mb.home)||_isHuman(mb.away)) ? 0 : 1;
+      return ha-hb;
+    });
+    order.forEach(function(i){
+      var m = ms[i];
+      try { html+=_renderMatchCard(m,phase,i); }
+      catch(errCard){
+        try { console.warn('[Inter] _renderMatchCard falló en ' + phase + '[' + i + ']:', errCard); } catch(_){}
+        html += '<div class="inter-card" style="opacity:.6;"><div class="inter-card-row" style="justify-content:center;">'
+          + '<div class="inter-card-name" style="color:#ff8080;">⚠️ ' + _esc((m && m.home) || '?') + ' vs ' + _esc((m && m.away) || '?') + ' (error al pintar)</div>'
+          + '</div></div>';
+      }
+    });
     host.innerHTML=html;
   }
 
   function _renderMatchCard(m, phase, idx){
     var played=!!m.played;
+    var tag='<div class="inter-card-tag">CRUCE '+(idx+1)+'</div>';
     var totA=(m.gh||0)+(m.etGh||0), totB=(m.ga||0)+(m.etGa||0);
     var winner=_winnerOf(m), loser=winner?(winner===m.home?m.away:m.home):null;
     var humA=_isHuman(m.home), humB=_isHuman(m.away);
     var bothIA=!humA && !humB;
+    var anyHuman=humA || humB;
     var mk='inter_'+phase+'_'+idx;
     function side(name, isWin, isLose){
       var l=_logo(name); var cls=isWin?'win':(isLose?'lose':''); var hi=_humIco(name);
@@ -41530,15 +41579,22 @@ window._showSimProgress = function(opts, onDone){
       var penTxt=m.penWinner?'<div class="inter-card-pen">PEN '+_esc(m.penWinner==='a'?m.home:m.away)+'</div>':'';
       center='<div class="inter-card-mid"><div class="inter-card-score played">'+totA+'–'+totB+'</div>'+penTxt+'</div>';
     } else if(bothIA){
+      /* Resultado en horizontal (petición usuario) — `.ml-score` no
+         trae `display:flex` por defecto en este contexto, así que sus
+         2 `<div>` internos se apilaban en vertical (0 / – / 0). */
       center='<div class="inter-card-mid">'
-        +'<div class="ml-score" id="ia-sim-score-'+mk+'"><div id="ia-sc-'+mk+'-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div><span style="margin:0 4px;color:rgba(255,255,255,.5);">–</span><div id="ia-sc-'+mk+'-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div></div>'
+        +'<div class="ml-score" id="ia-sim-score-'+mk+'" style="display:flex;align-items:center;justify-content:center;gap:4px;">'
+        +   '<div id="ia-sc-'+mk+'-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div>'
+        +   '<span style="color:rgba(255,255,255,.5);">–</span>'
+        +   '<div id="ia-sc-'+mk+'-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div>'
+        + '</div>'
         +'<button class="inter-card-act simular" id="ia-sim-btn-'+mk+'" onclick="window.iaSimLive(\''+mk+'\',\''+_q(m.home)+'\',\''+_q(m.away)+'\',0)">▶ Simular</button>'
         +'</div>';
     } else {
-      center='<div class="inter-card-mid"><div class="inter-card-score">– –</div><button class="inter-card-act previa" onclick="window._interAbrirPrevia&&window._interAbrirPrevia(\''+phase+'\','+idx+')">📋 Previa</button></div>';
+      center='<div class="inter-card-mid"><div class="inter-card-vs">VS</div><button class="inter-card-act previa" onclick="window._interAbrirPrevia&&window._interAbrirPrevia(\''+phase+'\','+idx+')">📋 Previa</button></div>';
     }
     var actaId='ia-acta-'+mk;
-    return '<div class="inter-card '+(played?'played':'')+'"><div class="inter-card-row">'+side(m.home, winner===m.home, loser===m.home)+center+side(m.away, winner===m.away, loser===m.away)+'</div>'
+    return '<div class="inter-card '+(played?'played':'')+(anyHuman?' has-human':'')+'">'+tag+'<div class="inter-card-row">'+side(m.home, winner===m.home, loser===m.home)+center+side(m.away, winner===m.away, loser===m.away)+'</div>'
       +(bothIA && !played ? '<div id="'+actaId+'" style="display:none;border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;font-family:Rajdhani,sans-serif;font-size:12px;max-height:240px;overflow-y:auto;"></div>' : '')
       +'</div>';
   }

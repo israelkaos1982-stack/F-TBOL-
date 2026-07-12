@@ -8401,8 +8401,43 @@
     if (tx) tx.textContent = text;
     ov.className = 'show ' + (cssClass || 'goal');
     if (ov._fxTimer) clearTimeout(ov._fxTimer);
+    /* Bug 2026-07-12 (fotos usuario, «¡¡¡HATTRICK!!!» pegado en pantalla
+       de 19:10 a 19:18, 8 minutos): un `setTimeout` SUELTO no es fiable
+       para cerrar un overlay — si la pestaña pasa a segundo plano
+       (pantalla apagada, cambio de app para compartir por WhatsApp…)
+       Chrome/Android puede ralentizar los temporizadores hasta varios
+       MINUTOS. El overlay (`pointer-events:none`) no bloquea los clics
+       en sí, pero SÍ tapa visualmente TODA la pantalla (z-index 100000,
+       fondo radial casi opaco) — el usuario no puede ver ni la puerta
+       de MVP ni la de compartir que puedan estar esperando debajo,
+       indistinguible de "el partido se ha bloqueado". Mismo patrón ya
+       arreglado para el spinner "Procesando partido…" (`_mlShowLoading`):
+       nunca confiar en un único setTimeout para cerrar un overlay
+       crítico. Aquí añadimos un sello de tiempo + un chequeo en
+       `visibilitychange`: si la pestaña vuelve a primer plano y el
+       overlay lleva más de lo debido visible (el setTimeout se quedó
+       atascado en segundo plano), se cierra al instante en cuanto el
+       usuario vuelve a mirar la pantalla, sin esperar a que el
+       temporizador atascado despierte por su cuenta. */
+    ov._fxShownAt = Date.now();
     ov._fxTimer = setTimeout(function(){ ov.className = ''; ov._fxTimer = null; }, 2000);
   }
+  (function _mlFxOverlayVisibilityGuard(){
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState !== 'visible') return;
+      try {
+        var ov = document.getElementById('ml-event-fx-overlay');
+        if (!ov || !ov.className || ov.className.indexOf('show') === -1) return;
+        /* Margen generoso (3s) sobre los 2s normales de display —
+           evita cerrar de golpe un flash que genuinamente acaba de
+           aparecer justo cuando la pestaña recupera el foco. */
+        if (ov._fxShownAt && (Date.now() - ov._fxShownAt) > 3000) {
+          if (ov._fxTimer) { clearTimeout(ov._fxTimer); ov._fxTimer = null; }
+          ov.className = '';
+        }
+      } catch(_){}
+    });
+  })();
 
   /* HATTRICK / REPOQUER (petición usuario 2026-05-09): tras un gol,
      comprueba cuántos lleva ese jugador en el partido. 3 → HATTRICK,
@@ -10163,6 +10198,16 @@
       if(typeof window._mlShowLoading === 'function') {
         window._mlShowLoading('Procesando partido…', window._lastFinalizeCtx || null);
       }
+      /* Cerrar cualquier flash de hito (¡¡¡HATTRICK!!!/¡¡¡REPOQUER!!!)
+         que pueda haber quedado atascado de un gol anterior (bug
+         2026-07-12, ver _mlFxOverlayVisibilityGuard más arriba): tapa
+         TODA la pantalla y, aunque no bloquea clics, sí impide VER las
+         puertas siguientes (estadísticas/MVP/compartir) — mejor no
+         dejarlo competir con la cadena FINALIZAR en absoluto. */
+      try {
+        var _fxOv = document.getElementById('ml-event-fx-overlay');
+        if (_fxOv) { if (_fxOv._fxTimer) { clearTimeout(_fxOv._fxTimer); _fxOv._fxTimer = null; } _fxOv.className = ''; }
+      } catch(_){}
       /* Deshabilitar FINALIZAR ahora mismo (2026-07-05, bug "se queda
          en bucle y jamás se cierra"): tras confirmar, el flujo puede
          encadenar varios gates automáticos (imbatida → stats → MVP →

@@ -1,5 +1,114 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Escudo, alias Y plantilla de un equipo IA de Resto de Ligas — los 3 heredan búsqueda SERVER-SIDE, no solo local (obligatorio, 2026-07-12 #7)
+
+**Petición usuario 2026-07-12** (4 fotos, "Dunajska Streda" vs Atlético
+Madrid, Previa de Champions — "el escudo, plantilla y Alias del equipo
+IA lo tiene asignado y no sale reflejado en ninguna de las fotos, ni su
+escudo en la card, ni la ❓️ con su alias, ni cuando añades un evento
+los jugadores de la plantilla. Porque ocurre esto tan grave"): con el
+escudo, alias eFootball ("America - 1🇺🇸 MLS - Los Ángeles WY ⭐⭐⭐⭐")
+y plantilla (46 jugadores, stats reales) YA confirmados en el editor
+de «Eslovaquia», la PANTALLA DE PREVIA seguía mostrando el placeholder
+genérico de iniciales ("DUN") sin escudo, sin botón ❓, y el picker de
+"+ AÑADIR EVENTO" habría mostrado el roster genérico "Jugador A/B/C…"
+en vez de la plantilla real.
+
+### Causa raíz — `localStorage` lleno + el escudo/plantilla NUNCA tuvieron fallback en servidor
+
+El propio dispositivo mostraba el banner **"⚠️ Navegador sin espacio.
+Los cambios se siguen subiendo al servidor, pero conviene limpiar caché
+para reactivar el guardado local."** — `localStorage` está lleno y el
+guardado LOCAL de una edición reciente puede fallar aunque el POST al
+servidor SÍ se reintente hasta confirmar (patrón `_lsSetSafe` ya
+documentado en el resto de este archivo). Mientras el guardado local
+falla, la edición vive SOLO en (a) el servidor y (b) la memoria
+(`window.LIGA_CACHE`) del dispositivo/pestaña que hizo la edición —
+**NUNCA** en la pestaña de la Previa si es una sesión distinta (cada
+pestaña tiene su propio `LIGA_CACHE` en memoria; `localStorage` sí se
+comparte, pero justo ESE es el que falló al escribir).
+
+De los 3 resolutores de identidad por nombre de la Previa, solo el
+ALIAS ya tenía la cobertura completa (localStorage → `LIGA_CACHE` →
+`TOUR_CACHE` → selecciones → **SERVIDOR** con reintentos,
+`_efAliasServerSearch`/`/api/team-alias/<nombre>`, sección 2026-07-05
+de más abajo). Los otros 2 se quedaban cortos:
+- **`_eurResolveTeamLogo`** (escudo, sección #5/#6 de arriba): SOLO
+  escaneaba `localStorage` — a diferencia de `_buildAliasCache` y
+  `sqFromRegistry`, ni siquiera tenía el fallback a `window.LIGA_CACHE`
+  (memoria), y mucho menos un fallback en servidor.
+- **`sqFromRegistry`** (plantilla del picker de eventos): SÍ tenía el
+  fallback a `LIGA_CACHE` (2026-07-06 #6), pero tampoco tenía fallback
+  en servidor — si NINGUNA pestaña de este dispositivo tenía la liga en
+  memoria esta sesión, caía al roster genérico "Jugador A/B/C…".
+
+### Fix
+
+- **`_eurBuildTeamLogoIndex`** (`misc_body_1.html`, junto a
+  `_eurResolveTeamLogo`): añade el mismo pase por `window.LIGA_CACHE`
+  que ya tenían `_buildAliasCache`/`sqFromRegistry` (rellena huecos,
+  nunca pisa lo que ya encontró en `localStorage`).
+- **`GET /api/team-shield/<nombre>`** (`app.py`, nuevo endpoint,
+  mismo patrón exacto que `/api/team-alias/<nombre>`): busca el escudo
+  de un equipo por nombre canónico en TODAS las `liga_ext_*` +
+  `selecciones_squad_v1` del servidor, una sola petición.
+  `window._eurTeamShieldServerSearch(nombre, onDone)` (cliente,
+  timeout 6s) lo consume y backfillea `_eurLogoIdxCache` si lo
+  encuentra.
+- **`GET /api/team-squad/<nombre>`** (`app.py`, nuevo endpoint, mismo
+  patrón): busca la plantilla (`players[]`) de un equipo por nombre en
+  el servidor. `window._eurTeamSquadServerSearch(nombre, onDone)`
+  (cliente): si encuentra el equipo, lo inyecta en
+  `window.LIGA_CACHE.__server_squad_search__.teams[]` — **NO**
+  duplica el parser de `sqFromRegistry` (POS_MAP, auto-numerado de
+  dorsales, flags C/F/P/⭐/⚾); la siguiente llamada a
+  `sqFromRegistry`/`sqFromRegistryFull` lo encuentra vía su propio
+  escaneo de `LIGA_CACHE` y lo procesa con la lógica de siempre.
+- **PANTALLA DE PREVIA** (`index.bundle.js`, `_renderPreviaMeta`): el
+  `<img>`/fallback SVG del escudo de cada lado lleva ahora un id
+  (`pp-shield-home`/`pp-shield-away`). Si la resolución local vino
+  vacía, `_ppShieldDeferredCheck` llama a
+  `_eurTeamShieldServerSearch` y, si encuentra el escudo, sustituye el
+  placeholder por el `<img>` real — mismo patrón que
+  `_ppAliasDeferredCheck` ya usaba para el alias.
+- **Picker de eventos** (`part2/misc_body_2.html`, `_gmGetSquad`/
+  `_gmRenderPlayerPick`): `_gmGetSquad` marca
+  `_gmGetSquad._lastWasFallback` cuando cae al roster genérico. Si
+  ocurre, `_gmRenderPlayerPick` dispara `_eurTeamSquadServerSearch` y,
+  si encuentra la plantilla Y el picker sigue abierto para el MISMO
+  equipo (no pisa una selección en curso del usuario), se
+  re-renderiza con la plantilla real.
+- Bump `index.bundle.js` 9.30 → 9.31 (`templates/index.html` +
+  `PRECACHE` de `static/js/sw.js`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un resolutor de identidad por equipo NUEVO
+   (escudo, alias, plantilla, estadio, o cualquier campo similar
+   futuro) se quede SOLO en `localStorage`/`LIGA_CACHE`. Todo dato que
+   el admin edita en UN dispositivo debe ser encontrable desde
+   CUALQUIER OTRO vía un endpoint `GET /api/team-<campo>/<nombre>`
+   (mismo patrón exacto que `/api/team-alias/<nombre>`: búsqueda
+   server-side en `liga_ext_*` + `selecciones_squad_v1`, una sola
+   petición, timeout 6s en el cliente) — la alternativa (confiar en que
+   `localStorage`/`LIGA_CACHE` de ESE dispositivo concreto tengan el
+   dato) falla exactamente en el caso más común de "Navegador sin
+   espacio", que este proyecto ya documenta como frecuente.
+2. **PROHIBIDO** que la búsqueda en servidor de la plantilla duplique
+   el parser de `sqFromRegistry` (POS_MAP/dorsales/flags). Inyectar el
+   equipo encontrado en `LIGA_CACHE` y dejar que `sqFromRegistry` lo
+   procese con su lógica existente — un único punto de conversión.
+3. **PROHIBIDO** que el picker de eventos se re-renderice con la
+   plantilla recién encontrada en servidor SIN comprobar que sigue
+   abierto para el MISMO equipo — evita pisar una selección de
+   jugador ya en curso si el admin cambió de pantalla mientras la
+   búsqueda volaba.
+4. Toda tabla/card/cruce/picker NUEVO de la Previa (o de cualquier
+   competición que resuelva identidad de un equipo de Resto de Ligas
+   por nombre) hereda `_eurTeamShieldServerSearch`/
+   `_eurTeamSquadServerSearch` como último fallback, igual que ya
+   hereda `_eurResolveTeamLogo`/`getTeamEfootballAlias`.
+
 ## `saveData` también invalidaba el índice de escudos con retraso de hasta 30s — ahora invalida al instante (obligatorio, 2026-07-12 #6)
 
 **Petición usuario 2026-07-12** (2 fotos, Ronda Preliminar de la Previa

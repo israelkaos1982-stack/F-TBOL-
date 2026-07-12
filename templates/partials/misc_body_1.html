@@ -35483,6 +35483,13 @@ window._showSimProgress = function(opts, onDone){
   var _eurLogoIdxCache = null, _eurLogoIdxTs = 0;
   function _eurBuildTeamLogoIndex(){
     var idx = {};
+    function _idxTeam(t){
+      if(!t || !t.name) return;
+      var sh = _teamLogo(t);
+      if(!sh) return;
+      var nm = _normName(t.name);
+      if(nm && !idx[nm]) idx[nm] = sh;
+    }
     try {
       for(var i=0;i<localStorage.length;i++){
         var k = localStorage.key(i);
@@ -35493,14 +35500,25 @@ window._showSimProgress = function(opts, onDone){
         if(!raw) continue;
         var data; try { data = JSON.parse(raw); } catch(_){ continue; }
         if(!data || !Array.isArray(data.teams)) continue;
-        data.teams.forEach(function(t){
-          if(!t || !t.name) return;
-          var sh = _teamLogo(t);
-          if(!sh) return;
-          var nm = _normName(t.name);
-          if(nm && !idx[nm]) idx[nm] = sh;
-        });
+        data.teams.forEach(_idxTeam);
       }
+      /* Fallback EN MEMORIA: `window.LIGA_CACHE` (2026-07-12 #7, mismo
+         hueco ya arreglado en `_buildAliasCache`/`sqFromRegistry` —
+         2026-06-25/2026-07-06 #6). Una liga grande puede superar la
+         cuota de `localStorage` ("Navegador sin espacio") y el escudo
+         recién editado quedar SOLO en memoria (poblado por `saveData`/
+         `loadData` de esa liga en ESTA sesión) sin llegar nunca a
+         `ligaExt_<slug>` — sin este pase, `_eurResolveTeamLogo` nunca
+         lo encontraba pese a estar ya guardado (en memoria + servidor). */
+      try {
+        if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE) {
+          for (var ck in LIGA_CACHE) {
+            var dC = LIGA_CACHE[ck];
+            var tsC = (dC && Array.isArray(dC.teams)) ? dC.teams : [];
+            for (var ci=0; ci<tsC.length; ci++){ _idxTeam(tsC[ci]); }
+          }
+        }
+      } catch(_){}
     } catch(_){}
     return idx;
   }
@@ -35516,6 +35534,70 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){ return ''; }
   }
   window._eurResolveTeamLogo = _eurResolveTeamLogo;
+  /* Búsqueda en SERVIDOR del escudo cuando el escaneo local (localStorage
+     + LIGA_CACHE) no lo encuentra (2026-07-12 #7, mismo patrón que
+     `_efAliasServerSearch` para el alias — "el escudo, plantilla y
+     alias del equipo IA lo tiene asignado y no sale reflejado en
+     ninguna de las fotos"). Cubre el caso en que ESTE dispositivo tiene
+     `localStorage` lleno (banner "Navegador sin espacio" — el guardado
+     local puede fallar aunque el servidor SÍ reciba la edición) o
+     simplemente nunca cargó la liga origen en esta sesión: una única
+     petición al servidor, con timeout de 6s para no quedarse colgado. */
+  window._eurTeamShieldServerSearch = function(teamName, onDone){
+    try {
+      var targetNorm = _normName(teamName);
+      if(!targetNorm){ onDone(null); return; }
+      var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var timer = setTimeout(function(){ try { ctrl && ctrl.abort(); } catch(_){} }, 6000);
+      fetch('/api/team-shield/' + encodeURIComponent(teamName), ctrl ? { signal: ctrl.signal } : {})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          clearTimeout(timer);
+          var sh = (j && j.shield) ? String(j.shield).trim() : '';
+          if(sh){
+            try { if(_eurLogoIdxCache) _eurLogoIdxCache[targetNorm] = sh; } catch(_){}
+          }
+          onDone(sh || null);
+        })
+        .catch(function(){ clearTimeout(timer); onDone(null); });
+    } catch(_){ try { onDone(null); } catch(__){} }
+  };
+  /* Búsqueda en SERVIDOR de la PLANTILLA (2026-07-12 #7) — mismo hueco
+     que el escudo pero para el picker de eventos (+ AÑADIR EVENTO): si
+     `sqFromRegistry` no encuentra la plantilla ni en `localStorage` ni
+     en `LIGA_CACHE` de ESTE dispositivo, el picker mostraba el roster
+     genérico "Jugador A/B/C…". No duplicamos el parser de
+     `sqFromRegistry` (POS_MAP, auto-numerado de dorsales, flags C/F/P/
+     ⭐/⚾): en vez de eso, el equipo encontrado en el servidor se
+     inyecta en `window.LIGA_CACHE` bajo una clave sintética — la
+     PRÓXIMA llamada a `sqFromRegistry`/`sqFromRegistryFull` (que ya
+     escanea `LIGA_CACHE`, 2026-07-06 #6) lo encuentra y lo parsea con
+     su lógica de siempre, sin ningún camino nuevo que mantener. */
+  window._eurTeamSquadServerSearch = function(teamName, onDone){
+    try {
+      var targetNorm = _normName(teamName);
+      if(!targetNorm){ onDone(false); return; }
+      var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var timer = setTimeout(function(){ try { ctrl && ctrl.abort(); } catch(_){} }, 6000);
+      fetch('/api/team-squad/' + encodeURIComponent(teamName), ctrl ? { signal: ctrl.signal } : {})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          clearTimeout(timer);
+          var team = (j && j.team && Array.isArray(j.team.players) && j.team.players.length) ? j.team : null;
+          if(team){
+            try {
+              window.LIGA_CACHE = window.LIGA_CACHE || {};
+              var bucket = window.LIGA_CACHE.__server_squad_search__ || { teams: [] };
+              bucket.teams = bucket.teams.filter(function(t){ return _normName(t && t.name) !== targetNorm; });
+              bucket.teams.push(team);
+              window.LIGA_CACHE.__server_squad_search__ = bucket;
+            } catch(_){}
+          }
+          onDone(!!team);
+        })
+        .catch(function(){ clearTimeout(timer); onDone(false); });
+    } catch(_){ try { onDone(false); } catch(__){} }
+  };
   /* Invalidación explícita — llamada por `_eurHydrateMissingLeagues`
      tras traer/backfillar escudos nuevos del servidor, para que la
      PRÓXIMA fila/card ya los vea sin esperar el TTL de 30s. */

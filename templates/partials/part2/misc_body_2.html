@@ -14807,6 +14807,10 @@
     } catch(_){}
     var sq = (typeof window.sqFromRegistryFull === 'function' && window.sqFromRegistryFull(lookup)) || [];
     if (!sq.length) sq = (typeof window.sqFromRegistry === 'function' && window.sqFromRegistry(lookup)) || [];
+    /* Flag para que `_gmRenderPlayerPick` sepa si tuvo que caer al
+       roster genérico "Jugador A/B/C…" — dispara la búsqueda diferida
+       en servidor (2026-07-12 #7) solo en ese caso. */
+    _gmGetSquad._lastWasFallback = !sq.length;
     if (!sq.length && typeof window._fallbackSq11 === 'function') return window._fallbackSq11();
     return sq;
   }
@@ -14834,6 +14838,27 @@
 
     title.textContent = (_gm.pendingEvt ? _gm.pendingEvt.label : 'Evento') + ' · ' + teamName;
     var sq = _gmGetSquad(teamName);
+    /* Búsqueda DIFERIDA en servidor (2026-07-12 #7, "ni cuando añades
+       un evento los jugadores de la plantilla" — el equipo IA tenía
+       plantilla real asignada pero este dispositivo no la encontraba
+       ni en localStorage ni en LIGA_CACHE, típico con "Navegador sin
+       espacio"). Si `_gmGetSquad` cayó al roster genérico, pregunta UNA
+       vez al servidor; si lo encuentra, lo deja disponible en
+       `LIGA_CACHE` para que `sqFromRegistry` lo recoja y re-pinta el
+       picker SOLO si sigue abierto para el MISMO equipo (evita pisar
+       una selección de jugador ya en curso del usuario). */
+    if (_gmGetSquad._lastWasFallback && typeof window._eurTeamSquadServerSearch === 'function') {
+      (function(teamAtRequest){
+        window._eurTeamSquadServerSearch(teamAtRequest, function(found){
+          if (!found) return;
+          try {
+            var stillOpen = pick.style.display !== 'none'
+              && (teamAtRequest === (team === 'a' ? _gm.home : _gm.away));
+            if (stillOpen) _gmRenderPlayerPick(team);
+          } catch(_){}
+        });
+      })(teamName);
+    }
 
     /* Check if squad already has position headers (.h entries) */
     var hasHeaders = sq.some(function(p) { return p && p.h; });

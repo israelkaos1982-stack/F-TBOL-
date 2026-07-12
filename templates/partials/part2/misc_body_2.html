@@ -10089,6 +10089,37 @@
      Usa `window._mlConfirmEnd(yesCb)` desde cualquier botón
      FINALIZAR (ml-action-end inline + gm-btn-end del modal). El
      callback se ejecuta solo si el usuario pulsa SÍ. */
+
+  /* Diagnóstico VISIBLE del punto exacto donde se atascó la cadena
+     (2026-07-12, bug «portero imbatido elegido, ya no deja finalizar,
+     ni recargando»): hasta ahora los avisos de recuperación (watchdog
+     + `_gmSafeReenter`) eran genéricos ("no ha podido continuar") — el
+     usuario solo podía mandar una captura de pantalla sin ninguna
+     pista de en qué puerta se quedó. Este resumen de una línea
+     (needsImbat/matchStats/mvpExists/mvpShareDone/humano) se añade a
+     TODOS los avisos críticos de la cadena FINALIZAR para que, si
+     vuelve a pasar, la propia pantalla diga qué puerta NO se disparó
+     — en vez de tener que adivinarlo desde fuera. Top-level (no
+     anidada dentro de un solo handler) para que la reutilicen tanto
+     el watchdog de `_mlConfirmEnd` como `_gmSafeReenter`. */
+  function _gmWatchdogDiag(){
+    try {
+      var g = window._gm;
+      if (!g || !g.events) return '(sin datos de partido)';
+      var needsImb = (
+        (g.sc.b === 0 && !g.events.some(function(e){ return e && e.type==='imbat' && e.team==='a'; })) ||
+        (g.sc.a === 0 && !g.events.some(function(e){ return e && e.type==='imbat' && e.team==='b'; }))
+      );
+      var mvpEx = g.events.some(function(e){ return e && e.type === 'mvp'; });
+      var humInv = '?';
+      try { humInv = typeof _gmHumanInvolved === 'function' ? _gmHumanInvolved() : '?'; } catch(_){ humInv = 'ERR'; }
+      return 'comp=' + (g.comp||'?') + ' marcador=' + g.sc.a + '-' + g.sc.b
+        + ' faltaPortero=' + needsImb + ' humano=' + humInv
+        + ' statsHechas=' + (!!g.matchStats) + ' mvpElegido=' + mvpEx
+        + ' compartidoWA=' + (!!g._mvpShareDone) + ' finalizado=' + (!!g.finished);
+    } catch(eDiag) { return '(error leyendo diagnóstico: ' + (eDiag && eDiag.message || eDiag) + ')'; }
+  }
+
   window._mlConfirmEnd = function(yesCb){
     try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('_mlConfirmEnd() llamado. yesCb=' + typeof yesCb); } catch(_){}
     if(typeof yesCb !== 'function') return;
@@ -10236,8 +10267,8 @@
              dejar al usuario mirando el modal congelado para siempre. */
           if (window._gm && window._gm.finished) {
             clearInterval(_wdInterval);
-            try { console.warn('[gmEndMatch watchdog] partido finished sin pantalla final visible.'); } catch(_){}
-            (window._gmCriticalNotice || alert)('⚠️ El partido ya finalizó y el resultado quedó guardado, pero la pantalla de resumen no se pudo mostrar. Vuelve al menú — el resultado ya está registrado.');
+            try { console.warn('[gmEndMatch watchdog] partido finished sin pantalla final visible. ' + _gmWatchdogDiag()); } catch(_){}
+            (window._gmCriticalNotice || alert)('⚠️ El partido ya finalizó y el resultado quedó guardado, pero la pantalla de resumen no se pudo mostrar. Vuelve al menú — el resultado ya está registrado.\n\nDiagnóstico: ' + _gmWatchdogDiag());
             try { if (typeof window.gmVolver === 'function') window.gmVolver(); } catch(_){}
             return;
           }
@@ -10246,16 +10277,19 @@
           if (_wdStall < _wdMaxStall) return; /* aún no lleva suficiente estancado */
           clearInterval(_wdInterval);
           b.disabled = false; b.style.opacity = '';
-          try { console.warn('[gmEndMatch watchdog] cadena sin progreso visible durante ' + (_wdMaxStall*4) + 's seguidos — botón reactivado.'); } catch(_){}
+          try { console.warn('[gmEndMatch watchdog] cadena sin progreso visible durante ' + (_wdMaxStall*4) + 's seguidos — botón reactivado. ' + _gmWatchdogDiag()); } catch(_){}
           /* Contador de reintentos en este partido (2026-07-06): si el
              watchdog ya saltó antes en el MISMO partido, un 2º reintento
              con el mismo resultado normalmente significa que la pestaña
              sigue ejecutando una versión antigua del JS (el fix real vive
              en el servidor pero esta pestaña nunca lo descargó — ver
              banner "🔄 Hay una versión más nueva" en la esquina inferior).
-             Recargar la página (guardando antes el resultado, ya
-             persistido) resuelve esto; simplemente reintentar FINALIZAR
-             sobre el mismo JS viejo repite el mismo bloqueo. */
+             Recargar la página resuelve esto; simplemente reintentar
+             FINALIZAR sobre el mismo JS viejo repite el mismo bloqueo.
+             2026-07-12: el marcador/acta/estadísticas/MVP YA sobreviven
+             a una recarga (snapshot en localStorage, ver _gmPersistNow),
+             así que aquí ya no hace falta pedirle al usuario que anote
+             nada a mano antes de recargar. */
           try {
             window._gmWatchdogRetries = (window._gmWatchdogRetries || 0) + 1;
             if (window._gmWatchdogRetries >= 2) {
@@ -10263,13 +10297,13 @@
                   + 'Esto suele pasar cuando esta pestaña lleva abierta un tiempo y no tiene la última '
                   + 'versión de la web (mira si aparece el aviso "🔄 Hay una versión más nueva" abajo del '
                   + 'todo y pulsa RECARGAR ahí). Si no aparece, prueba a pulsar FINALIZAR una vez más; '
-                  + 'si sigue sin avanzar, recarga la página manualmente — el marcador y los eventos del '
-                  + 'acta aún NO están guardados hasta que el partido finaliza del todo, así que anota el '
-                  + 'resultado antes de recargar si quieres reintroducirlo.');
+                  + 'si sigue sin avanzar, recarga la página — el progreso del partido ya está guardado '
+                  + 'en este dispositivo y se retoma justo donde se quedó.\n\n'
+                  + 'Diagnóstico: ' + _gmWatchdogDiag());
               return;
             }
           } catch(_){}
-          (window._gmCriticalNotice || alert)('⚠️ El partido no ha podido continuar automáticamente. Pulsa FINALIZAR de nuevo para reintentar.');
+          (window._gmCriticalNotice || alert)('⚠️ El partido no ha podido continuar automáticamente. Pulsa FINALIZAR de nuevo para reintentar.\n\nDiagnóstico: ' + _gmWatchdogDiag());
         } catch(_){}
       }, 4000);
     };
@@ -15536,8 +15570,10 @@
     catch(err){
       try { console.error('[gmEndMatch] reentrada "' + label + '" falló:', err); } catch(_){}
       try { _gmReenableEndBtn(); } catch(_){}
+      var _diagStr = ''; try { _diagStr = (typeof _gmWatchdogDiag === 'function') ? _gmWatchdogDiag() : ''; } catch(_){}
       _gmCriticalNotice('⚠️ El partido no ha podido continuar (' + label + '): '
-          + (err && err.message || err) + '.\nPulsa FINALIZAR de nuevo para reintentar.');
+          + (err && err.message || err) + '.\nPulsa FINALIZAR de nuevo para reintentar.'
+          + (_diagStr ? ('\n\nDiagnóstico: ' + _diagStr) : ''));
     }
   }
   window._gmSafeReenter = _gmSafeReenter;

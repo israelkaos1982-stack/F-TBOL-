@@ -10411,8 +10411,11 @@
        PARTIDO" como cualquier otro partido humano. */
     if (st.isWprev) {
       try {
+        var _wgMvpEvMl = (st.events || []).find(function(e){ return e && e.type === 'mvp'; });
+        var _wgMvpNameMl = _wgMvpEvMl ? (_wgMvpEvMl.player || _wgMvpEvMl.name || '') : '';
+        var _wgMvpTeamMl = _wgMvpEvMl ? (_wgMvpEvMl.team === 'a' ? st.home : (_wgMvpEvMl.team === 'b' ? st.away : '')) : '';
         if (typeof window._wprevSaveHumanResult === 'function') {
-          window._wprevSaveHumanResult(st.wprevGi, st.wprevJ, st.sc.a, st.sc.b);
+          window._wprevSaveHumanResult(st.wprevGi, st.wprevJ, st.sc.a, st.sc.b, st.events || [], _wgMvpNameMl, _wgMvpTeamMl);
         }
       } catch(_e){}
       _mlShowFinalThenPost(mk);
@@ -15948,13 +15951,23 @@
         }
       } catch(_e){}
     } else if (_gm._isWprev) {
-      /* Previa Champions · Ronda Final: persistimos en wprev_state_v1
-         (no en la tabla de Liga). _wprevSaveHumanResult re-renderiza
-         buildUclPrevClas tras guardar, así la fila de la jornada pasa
-         de "📋 PREVIA" a mostrar el marcador final. */
+      /* Previa Champions · fase de grupos (jornada del grupo con
+         humano): persistimos en wprev_state_v1 (no en la tabla de
+         Liga). _wprevSaveHumanResult re-renderiza buildUclPrevClas
+         tras guardar, así la fila de la jornada pasa de "Previa" a
+         mostrar el marcador final. Acta/MVP igual que el resto de
+         comps (2026-07-12). */
       try {
+        var _wgMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
+        var _wgMvpName = _wgMvpEv ? (_wgMvpEv.player || _wgMvpEv.name || '') : '';
+        var _wgMvpTeam = _wgMvpEv ? (_wgMvpEv.team === 'a' ? _gm.home : (_wgMvpEv.team === 'b' ? _gm.away : '')) : '';
+        var _wgStatsEv = (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result' && !e._varAnulado; });
         if (typeof window._wprevSaveHumanResult === 'function') {
-          window._wprevSaveHumanResult(_gm._wprevGi, _gm._wprevJ, _gm.sc.a, _gm.sc.b);
+          window._wprevSaveHumanResult(_gm._wprevGi, _gm._wprevJ, _gm.sc.a, _gm.sc.b, _wgStatsEv, _wgMvpName, _wgMvpTeam);
+        }
+        if (typeof window.registrarLigaPlayerStats === 'function') {
+          var _wgMk = 'wprevfg_' + (_gm._wprevGi || 0) + '_' + (_gm._wprevJ || 0);
+          window.registrarLigaPlayerStats(_wgMk, _gm.home, _gm.away, _wgStatsEv, _wgMvpName, _wgMvpTeam, 'ucl');
         }
       } catch(_e){}
     } else if (_gm._isWprevKo) {
@@ -33583,7 +33596,23 @@ document.addEventListener('DOMContentLoaded', function() {
       ? window._mlRealDurationLabel({ isHvH:isHvH, humanInvolved:true })
       : (isHvH ? '15 min 45 s' : '9 min 45 s');
     var _stad = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || '') : '';
-    window._ppPreviaTeams = { home:home, away:away, j:0, comp:'ucl', wprevKoIdx:idx, wprevKoLeg:leg, stadium:_stad };
+    /* Escudos (2026-07-12, "el rival tiene escudo pero en la card del
+       partido no sale"): el pool de la Previa (`tie.a`/`tie.b`) ya
+       trae `.logo` resuelto al construir el pool
+       (`buildDirectPool`/`buildOqPool`) — se pasa explícito a la
+       previa en vez de dejar que la re-resuelva por nombre en
+       caliente (mismo patrón que `copaAbrirPrevia` con PF/
+       Hypermotion, `_ppPreviaTeams.homeLogo`/`.awayLogo`). */
+    var _hLogo = '', _aLogo = '';
+    try {
+      var s0 = loadState();
+      var tie0 = s0 && s0.prelim && s0.prelim.ties && s0.prelim.ties[idx];
+      if (tie0) {
+        _hLogo = (tie0.a && tie0.a.name === home) ? (tie0.a.logo||'') : ((tie0.b && tie0.b.name === home) ? (tie0.b.logo||'') : '');
+        _aLogo = (tie0.a && tie0.a.name === away) ? (tie0.a.logo||'') : ((tie0.b && tie0.b.name === away) ? (tie0.b.logo||'') : '');
+      }
+    } catch(_){}
+    window._ppPreviaTeams = { home:home, away:away, j:0, comp:'ucl', wprevKoIdx:idx, wprevKoLeg:leg, stadium:_stad, homeLogo:_hLogo, awayLogo:_aLogo };
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;
       try { ['prepartido-overlay','sancion-overlay','_copaAliasOv'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); }); } catch(_){}
@@ -33661,7 +33690,12 @@ document.addEventListener('DOMContentLoaded', function() {
       ? window._mlRealDurationLabel({ isHvH:isHvH, humanInvolved:true })
       : (isHvH ? '15 min 45 s' : '9 min 45 s');
     var _stad = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(m.home)||'') : '';
-    window._ppPreviaTeams = { home:m.home, away:m.away, j:j, comp:'ucl', wprevGi:gi, wprevJ:j, stadium:_stad };
+    /* Escudos (2026-07-12): `grp[hi]`/`grp[ai]` ya traen `.logo`
+       resuelto al construir el pool de la Previa — se pasa explícito
+       a la previa (mismo motivo que en `_wprevKoAbrirPrevia`). */
+    var _hLogo = (grp[m.hi] && grp[m.hi].logo) || '';
+    var _aLogo = (grp[m.ai] && grp[m.ai].logo) || '';
+    window._ppPreviaTeams = { home:m.home, away:m.away, j:j, comp:'ucl', wprevGi:gi, wprevJ:j, stadium:_stad, homeLogo:_hLogo, awayLogo:_aLogo };
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;
       try { ['prepartido-overlay','sancion-overlay','_copaAliasOv'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); }); } catch(_){}
@@ -33671,12 +33705,14 @@ document.addEventListener('DOMContentLoaded', function() {
       window.showPrePartidoOverlay('wprevfg_'+gi+'_'+j, 'ucl', 'No', dur, isHvH);
     }
   };
-  window._wprevSaveHumanResult = function(gi, j, gh, ga){
+  window._wprevSaveHumanResult = function(gi, j, gh, ga, events, mvp, mvpTeam){
     var s = loadState(); if(!s || !s.fixtures || !s.fixtures[gi]) return;
     var grp = s.groups[gi];
     var m = s.fixtures[gi].filter(function(x){ return x.jornada === j && _fixtureMatchIsHuman(grp, x); })[0];
     if(!m) return;
     m.gh = gh|0; m.ga = ga|0; m.played = true;
+    m.events = (events||[]).filter(function(e){ return e && e.type !== 'pen-result'; });
+    m.mvp = mvp||''; m.mvpTeam = mvpTeam||'';
     try { s.sortedTables[gi] = _standingsFor(grp, s.fixtures[gi].filter(function(x){ return x.played; })); } catch(_){}
     if(_allGroupsDecided(s)){ s.phase = 'done'; _persistDistribution(s); }
     saveState(s);

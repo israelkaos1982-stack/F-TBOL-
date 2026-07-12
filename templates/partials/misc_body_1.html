@@ -9168,8 +9168,12 @@ window._showSimProgress = function(opts, onDone){
   function _cardCupCard(day, emoji, lbl, r){
     var st = _stage(); if (!st || !r) return false;
     function _sh(n){ try { return (typeof window.getTeamLogoUrl === 'function') ? (window.getTeamLogoUrl(n) || '') : ''; } catch(_){ return ''; } }
-    var homeObj = { name:r.home, shield:_sh(r.home), icon:_psClubIcon(r.home) };
-    var awayObj = { name:r.away, shield:_sh(r.away), icon:_psClubIcon(r.away) };
+    /* `r.homeLogo`/`r.awayLogo`: el resolver puede traer el escudo YA
+       resuelto desde su propia fuente (p.ej. `_wprevHubResolve` con
+       equipos de Resto de Ligas, que `getTeamLogoUrl` no conoce) —
+       gana sobre `_sh`. 2026-07-12. */
+    var homeObj = { name:r.home, shield:r.homeLogo||_sh(r.home), icon:_psClubIcon(r.home) };
+    var awayObj = { name:r.away, shield:r.awayLogo||_sh(r.away), icon:_psClubIcon(r.away) };
     if (r.played){
       var actaHtml = '';
       if (r.events && r.events.length && typeof window._eurFaseRenderActaPanel === 'function'){
@@ -9503,6 +9507,55 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){ _markDoneAndAdvance(); }
     };
   }
+  /* PREVIA DE CHAMPIONS · fase de grupos (jornada JN del grupo con
+     club humano). Label "Previa Champions — J<N>". Estado en
+     `wprev_state_v1.fixtures[gi]` (SOLO existe para el grupo con
+     humano — el resto de los 12 grupos se simulan de golpe, sin
+     fixture). 2026-07-12: antes esta etiqueta caía siempre al flujo
+     genérico ("La jornada se juega desde la pantalla de la
+     competición") porque no había ningún resolver para ella — la card
+     del hub se quedaba pequeña en vez de mostrar los escudos grandes
+     como el resto de competiciones. */
+  function _wprevHubResolve(lbl){
+    var s = String(lbl || '');
+    var mj = /Previa\s*Champions\s*[—\-]\s*J\s*(\d+)/i.exec(s);
+    if (!mj) return null;
+    var jor = parseInt(mj[1], 10);
+    if (!(jor > 0)) return null;
+    var st = null;
+    try { st = JSON.parse(localStorage.getItem('wprev_state_v1') || 'null'); } catch(_){}
+    if (!st || !Array.isArray(st.groups) || !Array.isArray(st.fixtures)) return null;
+    var gi = -1;
+    for (var g = 0; g < st.groups.length; g++){
+      var grp = st.groups[g] || [];
+      if (grp.some(function(t){ return t && t.name && _psHubClubMatches(t.name); })){ gi = g; break; }
+    }
+    if (gi < 0 || !st.fixtures[gi]) return null;
+    var fx = st.fixtures[gi];
+    var m = null;
+    for (var i = 0; i < fx.length; i++){
+      var mm = fx[i];
+      if ((mm.jornada|0) !== (jor - 1)) continue;
+      if (_psHubClubMatches(mm.home) || _psHubClubMatches(mm.away)){ m = mm; break; }
+    }
+    if (!m) return null;
+    var _wpRival = String(_psHubClubMatches(m.home) ? m.away : m.home);
+    /* Escudos (2026-07-12, "el rival tiene escudo pero en la card del
+       partido no sale"): `grp[hi]`/`grp[ai]` ya traen `.logo` resuelto
+       DIRECTO de la liga origen (Resto de Ligas) al construir el pool
+       de la Previa — `getTeamLogoUrl` (que usa `_cardCupCard._sh`) NO
+       conoce Resto de Ligas, así que hay que pasarlo explícito. */
+    return {
+      home:String(m.home), away:String(m.away),
+      homeLogo:(grp[m.hi]&&grp[m.hi].logo)||'', awayLogo:(grp[m.ai]&&grp[m.ai].logo)||'',
+      rival:_wpRival,
+      rivalHuman:_psNameIsHuman(_wpRival),
+      played:!!m.played, gh:(m.gh|0), ga:(m.ga|0),
+      events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+      uid:'ps-wprevfg-'+gi+'-'+(jor-1), emoji:'🔵',
+      open:(function(_gi,_j){ return function(){ try { if (typeof window._wprevPlayHumanMatch === 'function') window._wprevPlayHumanMatch(_gi,_j); } catch(_){} }; })(gi, jor-1)
+    };
+  }
 
   /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
      Petición usuario (foto 2): TODAS las cards del hub (Liga, Copa,
@@ -9601,6 +9654,10 @@ window._showSimProgress = function(opts, onDone){
       if (_eko && _cardCupCard(day, _eko.emoji, lbl, _eko)) return;
       var _eur = _eurHubResolve(lbl);
       if (_eur && _cardCupCard(day, _eur.emoji, lbl, _eur)) return;
+      /* PREVIA DE CHAMPIONS · fase de grupos ("Previa Champions —
+         J<N>"), SOLO para el grupo con club humano. 2026-07-12. */
+      var _wpg = _wprevHubResolve(lbl);
+      if (_wpg && _cardCupCard(day, _wpg.emoji, lbl, _wpg)) return;
     } catch(_){}
     /* Liga EA Sports: parseamos la jornada del label para (a) abrir la
        previa del partido del Liverpool directamente y (b) como respaldo,

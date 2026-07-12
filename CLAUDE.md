@@ -1,5 +1,95 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Previa de Champions — card del HUB para "Previa Champions — J<N>" + el escudo del rival viaja con la previa (obligatorio, 2026-07-12 #4)
+
+**Petición usuario 2026-07-12** (4 fotos): "en la caja Atlético Madrid
+debe salir en grande como están el resto la card de la foto 2 (creo
+que solo es error en la Previa de Champions) / fijate en la foto 3 el
+calendario y automatizalo / el rival tiene escudo pero en la card del
+partido no sale". Con el fixture de 6 jornadas del grupo humano ya
+implementado (sección de arriba, 2026-07-12 #2), la card "Próximo
+partido" del hub (`s-atletico`/cualquier hub) en un día de calendario
+"Previa Champions — J1".."J6" seguía cayendo al placeholder genérico
+("La jornada se juega desde la pantalla de la competición" +
+CONTINUAR ▶) en vez de mostrar la card grande del partido — y, cuando
+el partido SÍ se abría desde la propia pantalla de Previa, el escudo
+del rival (equipo de Resto de Ligas, visible en la clasificación) no
+aparecía en la card ni en la previa.
+
+### Causa raíz 1 — sin resolver para el hub
+
+`_cardNonTour(day)` (`misc_body_1.html`, la cadena de resolvers que
+intenta mapear la etiqueta del calendario a un partido real de cada
+competición: Copa, Recopa, SC, USC, EurKo, Eur…) no tenía NINGUNA rama
+para "Previa Champions — J<N>". Ninguno de los resolvers existentes
+conoce `wprev_state_v1` ni su fixture por grupo, así que SIEMPRE caía
+al genérico.
+
+### Causa raíz 2 — `getTeamLogoUrl` no conoce Resto de Ligas
+
+`getTeamLogoUrl(name)` (`static/js/index.bundle.js`) solo resuelve
+escudos desde `_ligaEaShields`/`TEAM_LOGOS`/`TEAM_RATINGS`/
+`_TOUR_CACHE` — **nunca** escanea `ligaExt_<slug>` (Resto de Ligas).
+El pool de la Previa (`computeUclPrevDirectTeams`/
+`computeUclPrevOqPoolTeams`) SÍ trae el `.logo` correcto (via
+`_teamLogo(t)`, el mismo que usa la tabla de clasificación de Resto de
+Ligas), pero ese dato se perdía en cuanto la previa/card intentaban
+re-resolver el escudo por nombre con `getTeamLogoUrl`.
+
+### Fix
+
+- **`_wprevHubResolve(lbl)`** (nuevo, `misc_body_1.html`, junto a
+  `_cardEurKoPending`): parsea `Previa Champions — J<N>` con regex,
+  localiza el grupo con club humano en `wprev_state_v1.groups` y, en
+  su `fixtures[gi]`, el partido de esa jornada (`jornada === N-1`) que
+  involucra al humano. Devuelve el descriptor `{home, away, homeLogo,
+  awayLogo, rival, rivalHuman, played, gh, ga, events, mvp, mvpTeam,
+  uid, emoji:'🔵', open}` que ya consume `_cardCupCard`. Wireado en
+  `_cardNonTour` justo después de `_eurHubResolve`.
+- **`_cardCupCard`**: ahora prioriza `r.homeLogo`/`r.awayLogo` (si el
+  resolver los trae) sobre su propio `_sh()`/`getTeamLogoUrl()` —
+  mismo patrón que ya usaba `copaAbrirPrevia` para equipos de PF/
+  Hypermotion que tampoco están en `getTeamLogoUrl`.
+- **`_ppPreviaTeams.homeLogo`/`.awayLogo`** (override YA EXISTENTE que
+  lee `_renderPreviaMeta` con prioridad sobre su resolución interna):
+  se rellenan con el `.logo` correcto del pool en los 3 puntos que
+  abren la previa de un partido de la Previa de Champions —
+  `_wprevKoAbrirPrevia` (Ronda Preliminar), `window._wprevPlayHumanMatch`
+  (fixture de grupo, `part2/misc_body_2.html`) y el propio
+  `_wprevHubResolve` (`misc_body_1.html`).
+- **`window._wprevSaveHumanResult(gi, j, gh, ga, events, mvp, mvpTeam)`**
+  (firma ampliada, antes solo `(gi, j, gh, ga)`): persiste también el
+  acta (`m.events`, sin eventos `pen-result`) y el MVP
+  (`m.mvp`/`m.mvpTeam`) en el partido del fixture — necesarios para que
+  la card del hub pinte el resumen del partido jugado. Los 2 call
+  sites que lo invocan (`_gm._isWprev` en `gmEndMatch` y el
+  equivalente `st.isWprev` en `_mlFinishMatchGen`, ambos en
+  `part2/misc_body_2.html`) extraen MVP/eventos de `_gm.events`/
+  `st.events` y los pasan; el branch de gm-modal además llama a
+  `registrarLigaPlayerStats` (mismo patrón que el resto de comps
+  europeas) para que las stats del jugador computen igual.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una competición NUEVA con partidos humanos
+   propios (fixture, KO, lo que sea) quede sin resolver en la card del
+   hub. Toda comp nueva debe añadir su rama a la cadena de resolvers de
+   `_cardNonTour` (mismo patrón `_xxxHubResolve(lbl)` → descriptor
+   consumido por `_cardCupCard`), igual que Recopa/SC/USC/EurKo/Eur.
+2. **PROHIBIDO** confiar en `getTeamLogoUrl`/`_sh()` como ÚNICA fuente
+   del escudo cuando el rival puede venir de Resto de Ligas (esa
+   función NUNCA escanea `ligaExt_*`). Si el pool/estado de la comp ya
+   trae un `.logo` correcto (como el pool de la Previa, via
+   `_teamLogo(t)`), pasarlo explícitamente por
+   `_ppPreviaTeams.homeLogo`/`.awayLogo` (o el campo `homeLogo`/
+   `awayLogo` del descriptor de `_cardCupCard`) — NUNCA re-resolverlo
+   por nombre.
+3. **PROHIBIDO** que `window._wprevSaveHumanResult` (o cualquier
+   persistor de resultado humano de una comp con card propia) guarde
+   SOLO el marcador sin acta/MVP — la card del hub y las stats del
+   jugador dependen de que `events`/`mvp`/`mvpTeam` viajen con el
+   resultado.
+
 ## Previa de Champions — grupo humano en AZUL, píldora "Previa" en vez de "vs" + sin botón aparte, Champions en azul (obligatorio, 2026-07-12 #3)
 
 **Petición usuario 2026-07-12** (foto de la jornada del grupo con

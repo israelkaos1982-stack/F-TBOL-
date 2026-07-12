@@ -19447,25 +19447,40 @@ window._showSimProgress = function(opts, onDone){
 #s-competiciones .submenu-card.sc-superliga-main{border:1.5px solid #b040ff !important;box-shadow:0 4px 22px rgba(176,64,255,.35),inset 0 1px 0 rgba(255,255,255,.08) !important;}
 #s-competiciones .submenu-card.sc-torneos-verano{border:1.5px solid #8a8a8a !important;box-shadow:0 4px 18px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.55) !important;}
 #s-competiciones .submenu-card.sc-ea-manual{border:1.5px solid #3cc878 !important;box-shadow:0 4px 18px rgba(60,200,120,.30),inset 0 1px 0 rgba(255,255,255,.08) !important;}
-.recopa-card{margin:8px;padding:10px 12px;background:linear-gradient(135deg,#1a0c00 0%,#321a00 50%,#1a0c00 100%);border:1px solid rgba(160,80,0,.5);border-radius:10px;}
-.recopa-card.played{border-color:rgba(95,224,138,.45);}
-.recopa-card-row{display:grid;grid-template-columns:1fr 90px 1fr;align-items:center;gap:8px;}
-.recopa-card-side{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;}
-.recopa-card-side img{width:48px;height:48px;object-fit:contain;}
+/* Rediseño videojuego rojo/oro (petición usuario 2026-07-11, "es muy
+   cutre, mejoralo, mas como videojuego, el color de la recopa es
+   rojo"): mismo tema rojo+oro ya usado en el resto de la pantalla
+   (`.c-recopa`, `.sc-recopa-stats`) — antes las tarjetas de partido
+   eran marrón/naranja apagado, desentonando con el resto. */
+.recopa-card{margin:12px 8px;padding:0;background:linear-gradient(160deg,#1a0303 0%,#3a0808 45%,#1a0303 100%);border:1px solid rgba(255,215,0,.32);border-radius:14px;overflow:hidden;position:relative;box-shadow:0 5px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);}
+.recopa-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#4a0808,#c01a1a,#ff3838,#ffd700,#ff3838,#c01a1a,#4a0808);}
+.recopa-card.played{border-color:rgba(95,224,138,.5);box-shadow:0 5px 16px rgba(0,0,0,.55),0 0 0 1px rgba(95,224,138,.15);}
+/* Equipos humanos arriba (regla siguiente) + resalte dorado para que
+   destaquen a simple vista frente a la marea de IA-vs-IA. */
+.recopa-card.has-human{border-color:rgba(255,215,0,.7);box-shadow:0 5px 20px rgba(255,215,0,.16),inset 0 1px 0 rgba(255,255,255,.06);}
+.recopa-card-tag{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.8px;color:rgba(255,215,0,.6);text-align:center;padding:7px 0 0;text-transform:uppercase;}
+.recopa-card-row{display:grid;grid-template-columns:1fr 84px 1fr;align-items:center;gap:8px;padding:8px 12px 12px;}
+.recopa-card-side{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;}
+.recopa-card-side img{width:46px;height:46px;object-fit:contain;filter:drop-shadow(0 2px 5px rgba(0,0,0,.6));}
 .recopa-card-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;color:#fff;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;}
 .recopa-card-name.win{color:#5fe08a;text-shadow:0 0 10px rgba(95,224,138,.55);}
 .recopa-card-name.lose{color:rgba(255,255,255,.55);text-decoration:line-through;text-decoration-color:rgba(255,90,90,.4);}
 .recopa-card-mid{display:flex;flex-direction:column;align-items:center;gap:6px;}
-.recopa-card-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#f0c040;letter-spacing:2px;background:rgba(0,0,0,.4);border-radius:6px;padding:3px 12px;border:1px solid rgba(255,255,255,.12);}
-.recopa-card-score.played{color:#f0c040;}
+.recopa-card-score{font-family:'Bebas Neue',sans-serif;font-size:23px;color:#ffd700;letter-spacing:2px;background:rgba(0,0,0,.5);border-radius:8px;padding:4px 14px;border:1px solid rgba(255,215,0,.35);text-shadow:0 0 8px rgba(255,215,0,.35);}
+.recopa-card-score.played{color:#ffd700;}
+.recopa-card-vs{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.4);}
 .recopa-card-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.2px;color:#ffd54a;text-align:center;}
-.recopa-card-act{padding:5px 12px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;}
+.recopa-card-act{padding:6px 14px;border-radius:7px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;}
 .recopa-card-act.previa{background:rgba(255,90,170,.15);color:#ff80b0;border-color:rgba(255,90,170,.6);}
-.recopa-card-act.simular{background:rgba(60,200,120,.15);color:#7df0a0;border-color:rgba(60,200,120,.6);}
+.recopa-card-act.simular{background:rgba(60,200,120,.15);color:#7df0a0;border-color:rgba(60,200,120,.6);box-shadow:0 0 10px rgba(60,200,120,.18);}
 .recopa-card-act:disabled{opacity:.5;cursor:not-allowed;}
+/* Separador visual entre cruces (petición usuario) — línea fina
+   dorada entre una tarjeta y la siguiente, además del margen. */
+.recopa-card + .recopa-card{margin-top:4px;}
+.recopa-card + .recopa-card::after{content:'';position:absolute;top:-8px;left:16%;right:16%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,215,0,.25),transparent);}
 #recopa-banner button{padding:9px 18px;border-radius:8px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;width:100%;max-width:340px;}
-.recopa-btn-sortear{background:rgba(160,80,0,.18);color:#ffa050;border:1.5px solid rgba(255,160,80,.55);}
-.recopa-btn-sortear:hover{background:rgba(160,80,0,.30);}
+.recopa-btn-sortear{background:linear-gradient(135deg,rgba(192,26,26,.28),rgba(74,8,8,.4));color:#ffd700;border:1.5px solid rgba(255,215,0,.55);box-shadow:0 0 14px rgba(192,26,26,.25);}
+.recopa-btn-sortear:hover{background:linear-gradient(135deg,rgba(192,26,26,.42),rgba(74,8,8,.55));}
 .recopa-btn-reset{background:rgba(255,90,90,.10);color:#ff8080;border:1px solid rgba(255,90,90,.40);opacity:.65;}
 .recopa-banner-info{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.65);text-align:center;line-height:1.4;}
 .recopa-empty{padding:24px 14px;text-align:center;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;}
@@ -19682,39 +19697,74 @@ window._showSimProgress = function(opts, onDone){
     m.bye = true;
     return m;
   }
+  /* Los equipos humanos NUNCA se cruzan entre sí antes de Cuartos
+     (petición usuario 2026-07-11): 1/64, 1/32 y Octavos emparejan
+     evitando humano-vs-humano SIEMPRE que el pool tenga suficiente IA
+     para hacerlo (si algún día hay más humanos que rivales IA
+     disponibles en una ronda, el sobrante se empareja entre sí como
+     último recurso — mejor que perder equipos). Desde Cuartos (r8) en
+     adelante NO hay restricción: dos humanos clasificados sí pueden
+     tocarse. `_pairTeams` es el emparejador único que usan tanto
+     `_drawFirstRound` (1/64) como `_drawNext` (resto de rondas).
+     `BYE` cuenta como "no-humano" — puede emparejar con cualquiera. */
+  function _pairTeams(list, avoidHumanClash){
+    var shuffled = _shuffle(list);
+    if(!avoidHumanClash){
+      var pairs0 = [];
+      for(var i=0;i+1<shuffled.length;i+=2) pairs0.push([shuffled[i], shuffled[i+1]]);
+      var stray0 = (shuffled.length % 2 === 1) ? [shuffled[shuffled.length-1]] : [];
+      return { pairs: pairs0, strays: stray0 };
+    }
+    var humans = shuffled.filter(function(t){ return _isHuman(t); });
+    var others = shuffled.filter(function(t){ return !_isHuman(t); });
+    var pairs = [];
+    var hi = 0, oi = others.length - 1;
+    /* Cada humano se empareja con un no-humano primero — mientras haya
+       IA disponible, dos humanos JAMÁS caen en el mismo par aquí. */
+    while(hi < humans.length && oi >= 0){
+      pairs.push([humans[hi], others[oi]]);
+      hi++; oi--;
+    }
+    var leftHumans = humans.slice(hi);   /* sobran humanos sin rival IA */
+    var leftOthers = others.slice(0, oi+1);
+    /* Si sobran humanos SIN rival IA, es porque ya no queda ninguna IA
+       en el pool de esta ronda — inevitable que se crucen entre ellos. */
+    for(var a=0;a+1<leftHumans.length;a+=2) pairs.push([leftHumans[a], leftHumans[a+1]]);
+    for(var b=0;b+1<leftOthers.length;b+=2) pairs.push([leftOthers[b], leftOthers[b+1]]);
+    var strays = [];
+    if(leftHumans.length % 2 === 1) strays.push(leftHumans[leftHumans.length-1]);
+    if(leftOthers.length % 2 === 1) strays.push(leftOthers[leftOthers.length-1]);
+    if(strays.length === 2){ pairs.push([strays[0], strays[1]]); strays = []; }
+    return { pairs: pairs, strays: strays };
+  }
+  function _matchFromPair(p){
+    var m = _mkMatch(p[0], p[1]);
+    if(p[0] === BYE || p[1] === BYE) m = _resolveBye(m);
+    return m;
+  }
   /* Sortea la PRIMERA ronda (1/64) en 32 partidos. Si el pool < 64 se
-     rellena con BYE de forma que cada BYE empareje con un equipo real
-     (walkover) y nunca BYE-vs-BYE mientras queden reales. Rediseño
-     2026-06-02. */
+     rellena con BYE. Anti-cruce-humano SIEMPRE activo aquí (1/64 va
+     mucho antes de Cuartos). Rediseño 2026-06-02 + 2026-07-11. */
   function _drawFirstRound(pool){
-    var sh = _shuffle(pool);
     var nMatches = PHASE_SIZE.r64;          /* 32 */
     var capacity = nMatches * 2;            /* 64 */
-    if(sh.length > capacity) sh = sh.slice(0, capacity);
-    var byes = capacity - sh.length;        /* huecos a rellenar */
-    var matches = [];
-    /* (a) `byes` equipos reales reciben un BYE (pasan directo). */
-    var byeTeams = sh.slice(0, Math.min(byes, sh.length));
-    var rest = sh.slice(byeTeams.length);
-    byeTeams.forEach(function(t){ matches.push(_resolveBye(_mkMatch(t, BYE))); });
-    /* (b) el resto se empareja real-vs-real. */
-    for(var i=0; i+1<rest.length; i+=2){
-      matches.push(_mkMatch(rest[i], rest[i+1]));
-    }
-    /* (c) sobrante impar → BYE. */
-    if(rest.length % 2 === 1){
-      matches.push(_resolveBye(_mkMatch(rest[rest.length-1], BYE)));
-    }
-    /* (d) relleno final BYE-vs-BYE hasta 32 (solo si pool muy pequeño). */
+    var list = _shuffle(pool).slice(0, capacity);
+    while(list.length < capacity) list.push(BYE);
+    var res = _pairTeams(list, true);
+    var matches = res.pairs.map(_matchFromPair);
+    /* Defensivo: con capacity par (64) no debería sobrar nadie, pero
+       por si acaso — nunca se pierde un equipo. */
+    if(res.strays.length === 2) matches.push(_matchFromPair(res.strays));
+    else if(res.strays.length === 1) matches.push(_matchFromPair([res.strays[0], BYE]));
     while(matches.length < nMatches){
       matches.push(_resolveBye(_mkMatch(BYE, BYE)));
     }
     return _shuffle(matches);
   }
-  /* Sortea la siguiente ronda con los ganadores de la previa. Los BYE
-     que hayan propagado (bracket no lleno) se vuelven a emparejar de
-     forma que un equipo real con BYE pase directo. */
-  function _drawNext(prevMatches){
+  /* Sortea la siguiente ronda con los ganadores de la previa. Anti-
+     cruce-humano en 1/32 y Octavos (`phase` = ronda que se está
+     sorteando); desde Cuartos (r8) en adelante, sin restricción. */
+  function _drawNext(prevMatches, phase){
     var winners = [];
     prevMatches.forEach(function(m){
       if(m && m.played){
@@ -19722,23 +19772,12 @@ window._showSimProgress = function(opts, onDone){
         winners.push(w || BYE);   /* slot vacío → BYE para mantener el tamaño */
       }
     });
-    var sh = _shuffle(winners);
-    /* Separar reales y BYEs para que ningún real quede fuera por un
-       emparejamiento BYE-vs-real mal colocado. */
-    var reals = sh.filter(function(x){ return x && x !== BYE; });
-    var nByes = sh.length - reals.length;
-    if(sh.length % 2 === 1){ reals = reals.slice(); if(reals.length) reals.pop(); }
-    var matches = [];
-    var ri = 0;
-    /* Cada BYE empareja con un real (walkover). */
-    var byeUse = Math.min(nByes, reals.length);
-    for(var b=0; b<byeUse; b++){
-      matches.push(_resolveBye(_mkMatch(reals[ri++], BYE)));
-    }
-    /* El resto real-vs-real. */
-    for(; ri+1<reals.length; ri+=2){
-      matches.push(_mkMatch(reals[ri], reals[ri+1]));
-    }
+    var avoidClash = (phase === 'r32' || phase === 'r16');
+    var res = _pairTeams(winners, avoidClash);
+    var matches = res.pairs.map(_matchFromPair);
+    /* Sobrante suelto (nº de ganadores impar, caso raro) → BYE en vez
+       de perder al equipo (antes se descartaba en silencio). */
+    if(res.strays.length === 1) matches.push(_matchFromPair([res.strays[0], BYE]));
     return matches;
   }
   function _winnerOf(m){
@@ -19817,7 +19856,7 @@ window._showSimProgress = function(opts, onDone){
       alert('⚠️ Tienes que terminar todos los partidos de ' + (PHASE_LABEL[prev]||prev) + ' antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
       return;
     }
-    s.sorteo[phase] = _drawNext(s.sorteo[prev]);
+    s.sorteo[phase] = _drawNext(s.sorteo[prev], phase);
     _save(s);
     _recopaInit();
     try { go('s-recopa-rd-' + phase); } catch(_){}
@@ -20020,7 +20059,22 @@ window._showSimProgress = function(opts, onDone){
             + '<div><div class="recopa-champ-lbl">CAMPEÓN RECOPA</div><div class="recopa-champ-name">' + _esc(s.champion) + '</div></div>'
             + '</div>';
     }
-    ms.forEach(function(m, i){
+    /* Equipos humanos ARRIBA (petición usuario 2026-07-11): se pinta
+       en un orden distinto al de guardado (el índice `i` que se pasa a
+       `_renderMatchCard` sigue siendo el ORIGINAL de `s.sorteo[phase]`
+       — imprescindible, porque `mk='recopa_'+phase+'_'+idx` y todos los
+       botones/handlers de la tarjeta referencian ese índice real). Sort
+       estable: los cruces con algún humano primero, el resto detrás,
+       conservando el orden relativo dentro de cada grupo. */
+    var order = ms.map(function(m, i){ return i; });
+    order.sort(function(ia, ib){
+        var ma = ms[ia], mb = ms[ib];
+        var ha = ma && (_isHuman(ma.home) || _isHuman(ma.away)) ? 0 : 1;
+        var hb = mb && (_isHuman(mb.home) || _isHuman(mb.away)) ? 0 : 1;
+        return ha - hb; /* estable: Array.sort ya no reordena empates en los motores modernos */
+      });
+    order.forEach(function(i){
+      var m = ms[i];
       /* Una tarjeta rota (dato inesperado de UN equipo del pool de 64)
          NUNCA debe vaciar las otras 31 — fallback mínimo por tarjeta. */
       try { html += _renderMatchCard(m, phase, i); }
@@ -20035,15 +20089,18 @@ window._showSimProgress = function(opts, onDone){
   }
   function _renderMatchCard(m, phase, idx){
     var played = !!m.played;
+    var tag = '<div class="recopa-card-tag">CRUCE ' + (idx+1) + '</div>';
     /* Walkover por BYE: el equipo real pasa directo (sin partido). */
     if(m.home === BYE || m.away === BYE){
       var real = (m.home === BYE) ? m.away : m.home;
       if(real === BYE){
-        return '<div class="recopa-card" style="opacity:.45;"><div class="recopa-card-row" style="justify-content:center;"><div class="recopa-card-name" style="color:rgba(255,255,255,.4);">Plaza libre (BYE)</div></div></div>';
+        return '<div class="recopa-card" style="opacity:.45;">' + tag + '<div class="recopa-card-row" style="justify-content:center;"><div class="recopa-card-name" style="color:rgba(255,255,255,.4);">Plaza libre (BYE)</div></div></div>';
       }
       var lR = _logo(real);
       var hiR = (typeof window.humanIcon === 'function') ? (window.humanIcon(real)||'') : '';
-      return '<div class="recopa-card played" style="border-color:rgba(95,224,138,.35);">'
+      var realIsHuman = _isHuman(real);
+      return '<div class="recopa-card played' + (realIsHuman?' has-human':'') + '" style="border-color:rgba(95,224,138,.35);">'
+           + tag
            + '<div class="recopa-card-row">'
            + '<div class="recopa-card-side">' + (lR ? '<img src="' + _esc(lR) + '"/>' : '<span style="font-size:36px;">🛡</span>') + '<div class="recopa-card-name win">' + hiR + _esc(real) + '</div></div>'
            + '<div class="recopa-card-mid"><div class="recopa-card-pen" style="color:#5fe08a;">PASA DIRECTO</div></div>'
@@ -20073,18 +20130,27 @@ window._showSimProgress = function(opts, onDone){
       var penTxt = m.penWinner ? '<div class="recopa-card-pen">PEN ' + _esc(m.penWinner === 'a' ? m.home : m.away) + '</div>' : '';
       center = '<div class="recopa-card-mid"><div class="recopa-card-score played">' + totA + '–' + totB + '</div>' + penTxt + '</div>';
     } else if(bothIA){
+      /* Resultado en horizontal (petición usuario): `.ml-score` no trae
+         `display:flex` por defecto en este contexto — sus 2 `<div>`
+         internos se apilaban en vertical (0 / – / 0). Flex inline en el
+         propio contenedor, igual que `.lec-final-vs .ml-score`. */
       center = '<div class="recopa-card-mid">'
-             + '<div class="ml-score" id="ia-sim-score-' + mk + '"><div id="ia-sc-' + mk + '-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#f0c040;min-width:18px;text-align:center;">0</div><span style="margin:0 4px;color:rgba(255,255,255,.5);">–</span><div id="ia-sc-' + mk + '-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#f0c040;min-width:18px;text-align:center;">0</div></div>'
+             + '<div class="ml-score" id="ia-sim-score-' + mk + '" style="display:flex;align-items:center;justify-content:center;gap:4px;">'
+             +   '<div id="ia-sc-' + mk + '-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd700;min-width:18px;text-align:center;">0</div>'
+             +   '<span style="color:rgba(255,255,255,.5);">–</span>'
+             +   '<div id="ia-sc-' + mk + '-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd700;min-width:18px;text-align:center;">0</div>'
+             + '</div>'
              + '<button class="recopa-card-act simular" id="ia-sim-btn-' + mk + '" onclick="window.iaSimLive(\'' + mk + '\',\'' + _esc(m.home).replace(/\x27/g,"\\\x27") + '\',\'' + _esc(m.away).replace(/\x27/g,"\\\x27") + '\',0)">▶ Simular</button>'
              + '</div>';
     } else {
       /* Al menos un humano → previa + gm-modal */
-      center = '<div class="recopa-card-mid"><div class="recopa-card-score">– –</div>'
+      center = '<div class="recopa-card-mid"><div class="recopa-card-vs">VS</div>'
              + '<button class="recopa-card-act previa" onclick="window._recopaAbrirPrevia&&window._recopaAbrirPrevia(\'' + phase + '\',' + idx + ')">📋 Previa</button>'
              + '</div>';
     }
     var actaId = 'ia-acta-' + mk;
-    return '<div class="recopa-card ' + (played?'played':'') + '">'
+    return '<div class="recopa-card ' + (played?'played':'') + (anyHuman?' has-human':'') + '">'
+         + tag
          + '<div class="recopa-card-row">'
          + _sideHtml(m.home, winner===m.home, loser===m.home)
          + center

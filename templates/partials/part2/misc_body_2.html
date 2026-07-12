@@ -32761,8 +32761,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function _logoOf(name){
-    if(typeof window.getTeamLogoUrl === 'function'){ try { return window.getTeamLogoUrl(name) || ''; } catch(_){} }
-    return (window.TEAM_LOGOS && window.TEAM_LOGOS[name]) || '';
+    if(typeof window.getTeamLogoUrl === 'function'){ try { var u = window.getTeamLogoUrl(name) || ''; if(u) return u; } catch(_){} }
+    var l = (window.TEAM_LOGOS && window.TEAM_LOGOS[name]) || '';
+    if(l) return l;
+    /* Fallback (2026-07-12, "todos los equipos tienen escudo y no
+       salen ni en la fase de grupos ni en los partidos que va a
+       jugar"): la mayoría de equipos de la Previa vienen de Resto de
+       Ligas — getTeamLogoUrl/TEAM_LOGOS NUNCA los conocen. Busca el
+       escudo por nombre escaneando ligaExt_* (ver misc_body_1.html,
+       `window._eurResolveTeamLogo`). Cubre `_badge`/`_badgeBig` en
+       `_groupTable`/`_prelimTieHtml`/`_fgJornadaHtml`, aunque el
+       `.logo` quedara vacío en el momento del sorteo. */
+    try { return (typeof window._eurResolveTeamLogo === 'function') ? (window._eurResolveTeamLogo(name) || '') : ''; } catch(_){ return ''; }
   }
   function _powerOf(name){
     var r = window.TEAM_RATINGS || {}, e = r[name];
@@ -33612,6 +33622,10 @@ document.addEventListener('DOMContentLoaded', function() {
         _aLogo = (tie0.a && tie0.a.name === away) ? (tie0.a.logo||'') : ((tie0.b && tie0.b.name === away) ? (tie0.b.logo||'') : '');
       }
     } catch(_){}
+    /* Si el `.logo` del pool quedó vacío (dispositivo sin esa liga
+       hidratada al sortear), re-resuelve por nombre en caliente. */
+    if (!_hLogo) _hLogo = _logoOf(home);
+    if (!_aLogo) _aLogo = _logoOf(away);
     window._ppPreviaTeams = { home:home, away:away, j:0, comp:'ucl', wprevKoIdx:idx, wprevKoLeg:leg, stadium:_stad, homeLogo:_hLogo, awayLogo:_aLogo };
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;
@@ -33693,8 +33707,8 @@ document.addEventListener('DOMContentLoaded', function() {
     /* Escudos (2026-07-12): `grp[hi]`/`grp[ai]` ya traen `.logo`
        resuelto al construir el pool de la Previa — se pasa explícito
        a la previa (mismo motivo que en `_wprevKoAbrirPrevia`). */
-    var _hLogo = (grp[m.hi] && grp[m.hi].logo) || '';
-    var _aLogo = (grp[m.ai] && grp[m.ai].logo) || '';
+    var _hLogo = (grp[m.hi] && grp[m.hi].logo) || _logoOf(m.home);
+    var _aLogo = (grp[m.ai] && grp[m.ai].logo) || _logoOf(m.away);
     window._ppPreviaTeams = { home:m.home, away:m.away, j:j, comp:'ucl', wprevGi:gi, wprevJ:j, stadium:_stad, homeLogo:_hLogo, awayLogo:_aLogo };
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;

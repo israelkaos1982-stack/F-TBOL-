@@ -9167,7 +9167,13 @@ window._showSimProgress = function(opts, onDone){
      {home,away,rival,played,gh,ga,events,mvp,mvpTeam,uid,open}. */
   function _cardCupCard(day, emoji, lbl, r){
     var st = _stage(); if (!st || !r) return false;
-    function _sh(n){ try { return (typeof window.getTeamLogoUrl === 'function') ? (window.getTeamLogoUrl(n) || '') : ''; } catch(_){ return ''; } }
+    function _sh(n){
+      try { var u = (typeof window.getTeamLogoUrl === 'function') ? (window.getTeamLogoUrl(n) || '') : ''; if (u) return u; } catch(_){}
+      /* Fallback (2026-07-12): getTeamLogoUrl NUNCA escanea Resto de
+         Ligas — para un rival de esa fuente (Previa/OQ/Wild Card/etc.)
+         hay que buscarlo por nombre en las ligaExt_* cacheadas. */
+      try { return (typeof window._eurResolveTeamLogo === 'function') ? (window._eurResolveTeamLogo(n) || '') : ''; } catch(_){ return ''; }
+    }
     /* `r.homeLogo`/`r.awayLogo`: el resolver puede traer el escudo YA
        resuelto desde su propia fuente (p.ej. `_wprevHubResolve` con
        equipos de Resto de Ligas, que `getTeamLogoUrl` no conoce) —
@@ -35456,6 +35462,64 @@ window._showSimProgress = function(opts, onDone){
     if(!t || typeof t !== 'object') return '';
     return t.logo || t.escudo || t.shield || t.img || t.src || '';
   }
+  /* ── Resolutor de escudo POR NOMBRE, escaneando Resto de Ligas ──────
+     (2026-07-12, "Previa Champions — todos los equipos tienen escudo
+     y no salen ni en la card del calendario ni en la fase de grupos
+     ni en los partidos que va a jugar"). `getTeamLogoUrl` (bundle)
+     NUNCA escanea `ligaExt_<slug>` — solo conoce Liga EA/TEAM_LOGOS/
+     TEAM_RATINGS/torneos. Cuando un equipo de la Previa/OQ/Wild Card
+     viene de Resto de Ligas, su escudo real vive SOLO en su liga de
+     origen. `_teamLogo(t)` ya resuelve bien el escudo cuando se tiene
+     el OBJETO equipo (p.ej. al construir el pool en vivo), pero varias
+     pantallas (tabla de grupo, cruces KO, jornadas del fixture, card
+     del hub) solo tienen el NOMBRE + un `.logo` que pudo quedar vacío
+     en el momento en que se sorteó/persistió (p.ej. porque este
+     dispositivo aún no había hidratado esa liga). Este resolutor
+     escanea TODAS las `ligaExt_<slug>` cacheadas localmente y devuelve
+     el escudo por nombre normalizado, sin importar cuándo se sorteó.
+     Cache de 30s (barato, evita re-escanear ~50 ligas en cada fila de
+     una tabla) invalidado explícitamente por `_eurHydrateMissingLeagues`
+     en cuanto trae escudos nuevos del servidor. */
+  var _eurLogoIdxCache = null, _eurLogoIdxTs = 0;
+  function _eurBuildTeamLogoIndex(){
+    var idx = {};
+    try {
+      for(var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_')!==0) continue;
+        if(k.indexOf('_backup')>=0 || k.indexOf('_snap_')>=0 || k.indexOf('_snapshot')>=0 || k.indexOf('_protected')>=0) continue;
+        if(/_v\d+$/.test(k)) continue;
+        var raw; try { raw = localStorage.getItem(k); } catch(_){ raw = null; }
+        if(!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+        if(!data || !Array.isArray(data.teams)) continue;
+        data.teams.forEach(function(t){
+          if(!t || !t.name) return;
+          var sh = _teamLogo(t);
+          if(!sh) return;
+          var nm = _normName(t.name);
+          if(nm && !idx[nm]) idx[nm] = sh;
+        });
+      }
+    } catch(_){}
+    return idx;
+  }
+  function _eurResolveTeamLogo(name){
+    if(!name) return '';
+    try {
+      var now = Date.now();
+      if(!_eurLogoIdxCache || (now - _eurLogoIdxTs) > 30000){
+        _eurLogoIdxCache = _eurBuildTeamLogoIndex();
+        _eurLogoIdxTs = now;
+      }
+      return _eurLogoIdxCache[_normName(name)] || '';
+    } catch(_){ return ''; }
+  }
+  window._eurResolveTeamLogo = _eurResolveTeamLogo;
+  /* Invalidación explícita — llamada por `_eurHydrateMissingLeagues`
+     tras traer/backfillar escudos nuevos del servidor, para que la
+     PRÓXIMA fila/card ya los vea sin esperar el TTL de 30s. */
+  window._eurInvalidateLogoIndex = function(){ _eurLogoIdxCache = null; };
   /* Lee el poder/rating de un equipo. Prioridad: campos directos del
      objeto plantilla (power/media/poder) → TEAM_RATINGS global por
      nombre → 65 default. Lo usa el ranking sintético de Wild Card
@@ -43418,7 +43482,27 @@ window._showSimProgress = function(opts, onDone){
          use la clasificación real. 2026-06-30. */
       var resEmpty = !(d && Array.isArray(d.results) && d.results.length);
       if(resEmpty) return true;                     // tiene equipos, faltan results → al server
-      return false;                                  // equipos + clasificación ya presentes
+      /* ESCUDOS AUSENTES (2026-07-12, "Previa Champions — el rival
+         tiene escudo pero no sale ni en la card ni en la fase de
+         grupos/calendario"): un dispositivo puede tener la liga
+         COMPLETA (equipos + resultados) pero con `team.shield` vacío
+         para la mayoría — p.ej. porque nunca abrió esa liga y solo la
+         hidrató via un seed/backfill ligero, mientras OTRO dispositivo
+         (el que configuró las plantillas, como el iPad del usuario) sí
+         tiene los escudos guardados en el servidor. Sin este check la
+         liga se consideraba "ya completa" y jamás se volvía a pedir al
+         servidor, así que el escudo NUNCA llegaba — ni a la tabla de
+         grupos de la Previa (`_groupTable`) ni a la card del hub. Si
+         más de la mitad de los equipos no tienen escudo, se re-pide al
+         servidor (el fetch más abajo hace BACKFILL de escudos sin
+         pisar la clasificación local ya presente). */
+      var withShield = 0;
+      d.teams.forEach(function(t){
+        var sh = t && (t.shield || t.logo || t.escudo || t.img || t.src);
+        if (typeof sh === 'string' && sh.trim()) withShield++;
+      });
+      if (withShield < Math.ceil(d.teams.length / 2)) return true;
+      return false;                                  // equipos + clasificación + escudos ya presentes
     });
     if(!toFetch.length){ done(localRecovered, localRecovered); return; }
     var recovered = localRecovered, finished = false;
@@ -43468,6 +43552,10 @@ window._showSimProgress = function(opts, onDone){
                 } catch(_){}
                 if(!keep){
                   data.results = data.results || [];
+                  /* Escudos: si el local (descartado por menos rico en
+                     jugadores) tenía algún escudo que el server no trae
+                     todavía, no lo perdemos. 2026-07-12. */
+                  try { if (ld && typeof window._lextBackfillShields === 'function') window._lextBackfillShields(data, ld); } catch(_){}
                   localStorage.setItem(key, JSON.stringify(data));
                   try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
                 } else {
@@ -43477,6 +43565,7 @@ window._showSimProgress = function(opts, onDone){
                      empty-guard, igual que `fetchData`). Sin esto el reparto
                      europeo seguía corto aunque el servidor ya tuviera la sim
                      (Wild Card 16/72 en el móvil). 2026-06-30. */
+                  var _ldChanged = false;
                   try {
                     var _lEmpty = !(ld && Array.isArray(ld.results) && ld.results.length);
                     var _sHas   = Array.isArray(data.results) && data.results.length;
@@ -43485,12 +43574,25 @@ window._showSimProgress = function(opts, onDone){
                     if(ld && _sHas && (_lEmpty ? (_sStamp >= _lStamp) : (_sStamp > _lStamp))){
                       ld.results = data.results.slice();
                       if(_sStamp) ld.resultsStamp = _sStamp;
-                      localStorage.setItem(key, JSON.stringify(ld));
-                      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+                      _ldChanged = true;
                     }
                   } catch(_){}
+                  /* ESCUDOS AUSENTES: aunque la plantilla local "gane" por
+                     tener más jugadores, rellenamos con los escudos del
+                     server (nunca pisa uno ya presente) — es exactamente
+                     el caso de este bug: local tiene la liga completa pero
+                     sin escudos, server (el dispositivo que los configuró,
+                     p.ej. el iPad) sí los tiene. 2026-07-12. */
+                  try {
+                    if (ld && typeof window._lextBackfillShields === 'function' && window._lextBackfillShields(ld, data)) _ldChanged = true;
+                  } catch(_){}
+                  if(_ldChanged){
+                    localStorage.setItem(key, JSON.stringify(ld));
+                    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+                  }
                 }
                 recovered++;
+                try { if (typeof window._eurInvalidateLogoIndex === 'function') window._eurInvalidateLogoIndex(); } catch(_){}
               }
             } catch(_){}
             setTimeout(step, 80);
@@ -47610,6 +47712,11 @@ https://api.sofascore.app/api/v1/team/44/image
       return changed;
     } catch(_){ return false; }
   }
+  /* Expuesto en window: `_eurHydrateMissingLeagues` (otra IIFE, más
+     arriba en este mismo archivo) lo necesita para poder rellenar
+     escudos SIN sustituir la clasificación local ya presente
+     (2026-07-12, ver bloque "Previa Champions — escudos ausentes"). */
+  window._lextBackfillShields = _lextBackfillShields;
 
   /* BACKFILL DEL ALIAS DE eFOOTBALL (2026-07-04). Espejo EXACTO de
      _lextBackfillShields pero para `efootballAlias`: el alias que el

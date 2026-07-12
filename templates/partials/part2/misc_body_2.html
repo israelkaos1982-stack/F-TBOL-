@@ -8420,8 +8420,43 @@
     if (tx) tx.textContent = text;
     ov.className = 'show ' + (cssClass || 'goal');
     if (ov._fxTimer) clearTimeout(ov._fxTimer);
+    /* Bug 2026-07-12 (fotos usuario, «¡¡¡HATTRICK!!!» pegado en pantalla
+       de 19:10 a 19:18, 8 minutos): un `setTimeout` SUELTO no es fiable
+       para cerrar un overlay — si la pestaña pasa a segundo plano
+       (pantalla apagada, cambio de app para compartir por WhatsApp…)
+       Chrome/Android puede ralentizar los temporizadores hasta varios
+       MINUTOS. El overlay (`pointer-events:none`) no bloquea los clics
+       en sí, pero SÍ tapa visualmente TODA la pantalla (z-index 100000,
+       fondo radial casi opaco) — el usuario no puede ver ni la puerta
+       de MVP ni la de compartir que puedan estar esperando debajo,
+       indistinguible de "el partido se ha bloqueado". Mismo patrón ya
+       arreglado para el spinner "Procesando partido…" (`_mlShowLoading`):
+       nunca confiar en un único setTimeout para cerrar un overlay
+       crítico. Aquí añadimos un sello de tiempo + un chequeo en
+       `visibilitychange`: si la pestaña vuelve a primer plano y el
+       overlay lleva más de lo debido visible (el setTimeout se quedó
+       atascado en segundo plano), se cierra al instante en cuanto el
+       usuario vuelve a mirar la pantalla, sin esperar a que el
+       temporizador atascado despierte por su cuenta. */
+    ov._fxShownAt = Date.now();
     ov._fxTimer = setTimeout(function(){ ov.className = ''; ov._fxTimer = null; }, 2000);
   }
+  (function _mlFxOverlayVisibilityGuard(){
+    document.addEventListener('visibilitychange', function(){
+      if (document.visibilityState !== 'visible') return;
+      try {
+        var ov = document.getElementById('ml-event-fx-overlay');
+        if (!ov || !ov.className || ov.className.indexOf('show') === -1) return;
+        /* Margen generoso (3s) sobre los 2s normales de display —
+           evita cerrar de golpe un flash que genuinamente acaba de
+           aparecer justo cuando la pestaña recupera el foco. */
+        if (ov._fxShownAt && (Date.now() - ov._fxShownAt) > 3000) {
+          if (ov._fxTimer) { clearTimeout(ov._fxTimer); ov._fxTimer = null; }
+          ov.className = '';
+        }
+      } catch(_){}
+    });
+  })();
 
   /* HATTRICK / REPOQUER (petición usuario 2026-05-09): tras un gol,
      comprueba cuántos lleva ese jugador en el partido. 3 → HATTRICK,
@@ -10182,6 +10217,16 @@
       if(typeof window._mlShowLoading === 'function') {
         window._mlShowLoading('Procesando partido…', window._lastFinalizeCtx || null);
       }
+      /* Cerrar cualquier flash de hito (¡¡¡HATTRICK!!!/¡¡¡REPOQUER!!!)
+         que pueda haber quedado atascado de un gol anterior (bug
+         2026-07-12, ver _mlFxOverlayVisibilityGuard más arriba): tapa
+         TODA la pantalla y, aunque no bloquea clics, sí impide VER las
+         puertas siguientes (estadísticas/MVP/compartir) — mejor no
+         dejarlo competir con la cadena FINALIZAR en absoluto. */
+      try {
+        var _fxOv = document.getElementById('ml-event-fx-overlay');
+        if (_fxOv) { if (_fxOv._fxTimer) { clearTimeout(_fxOv._fxTimer); _fxOv._fxTimer = null; } _fxOv.className = ''; }
+      } catch(_){}
       /* Deshabilitar FINALIZAR ahora mismo (2026-07-05, bug "se queda
          en bucle y jamás se cierra"): tras confirmar, el flujo puede
          encadenar varios gates automáticos (imbatida → stats → MVP →
@@ -10254,13 +10299,23 @@
          fallo real ocurría DESPUÉS (p.ej. la puerta de WhatsApp que no
          llega a pintarse), no quedaba NINGUNA red que lo detectara — el
          usuario se quedaba mirando el marcador sin overlay ni aviso.
-         Ahora se sondea cada 4 s, indefinidamente mientras el botón siga
+         Ahora se sondea cada 2 s, indefinidamente mientras el botón siga
          deshabilitado: cualquier overlay conocido visible RESETEA el
          contador de estancamiento (hay progreso legítimo en curso); solo
-         tras varias comprobaciones SEGUIDAS sin nada visible (≈16 s de
-         estancamiento REAL, no 9 s desde el clic inicial) se actúa. */
+         tras varias comprobaciones SEGUIDAS sin nada visible (≈6 s de
+         estancamiento REAL, no 9 s desde el clic inicial — acortado de
+         16 a 6s el 2026-07-12 para que el banner de diagnóstico llegue
+         mucho antes) se actúa. */
       var _wdStall = 0;
-      var _wdMaxStall = 4; /* 4 × 4s ≈ 16s de estancamiento continuo */
+      /* Bajado 4×4s(16s) → 3×2s(6s) el 2026-07-12: el bug reportado
+         (portero imbatido elegido, ni una sola puerta más se abre) se
+         queda estancado desde el primer instante — no hace falta un
+         margen tan largo, y cuanto antes salga el banner de diagnóstico
+         antes lo puede capturar el usuario sin tener que adivinar
+         cuánto esperar. Cualquier overlay legítimo sigue reseteando el
+         contador a 0 igual que antes, así que esto NO afecta a un
+         partido que SÍ está progresando (rellenar stats, elegir MVP). */
+      var _wdMaxStall = 3; /* 3 × 2s = 6s de estancamiento continuo */
       var _wdInterval = setInterval(function(){
         try {
           var modalEl = document.getElementById('gm-modal');
@@ -10324,7 +10379,7 @@
           } catch(_){}
           (window._gmCriticalNotice || alert)('⚠️ El partido no ha podido continuar automáticamente. Pulsa FINALIZAR de nuevo para reintentar.\n\nDiagnóstico: ' + _gmWatchdogDiag());
         } catch(_){}
-      }, 4000);
+      }, 2000);
     };
   };
 

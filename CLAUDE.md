@@ -1,5 +1,76 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## 📌 PARTIDOS POSPUESTOS mezclaba los pospuestos de TODAS las cajas de mister — filtro de pertenencia por mister (obligatorio, 2026-07-12 #7)
+
+**Petición usuario 2026-07-12** (4 fotos, caja **Real Madrid-Inglaterra-
+Acsa**): la pestaña "CLUB (9)" de 📌 PARTIDOS POSPUESTOS mostraba
+`MUNDIAL · OCTAVOS/CUARTOS/SEMIS — Francia SIN RIVAL`, `Noruega vs
+Senegal`, `Noruega vs Iraq`, `Francia vs Noruega`, `Atlético vs Inter`,
+`Noruega SIN RIVAL (Mundialito Octavos)` — **ninguno de esos partidos
+involucra al Real Madrid**. Solo 1 de los 9 (Trofeo Joan Gamper ·
+Partido 1: Real Madrid vs Liverpool) pertenecía de verdad a esta caja.
+"No entiendo que tiene que ver Francia o Noruega — Francia tiene que ir
+con Francia, Noruega con Noruega, cada pospuesto con su equipo."
+
+### Causa raíz
+
+`pend_hvh_deferred_v1` (`misc_body_1.html`) es un store **GLOBAL**
+compartido por las 7 cajas de mister — cualquier partido pospuesto
+desde CUALQUIER hub (📌 Posponer) se añade al MISMO array. Eso es
+correcto (debe viajar cross-device); el bug estaba en el RENDER de
+`s-munich` → sección 📌 PARTIDOS POSPUESTOS (`_render('posp')`, dentro
+del IIFE "Cajas POSPUESTOS · PENDIENTES · JUGADOS"): leía el array
+COMPLETO (`_pendHvHGet()`, sin filtrar por hub) y bucketeaba CADA
+entrada en la pestaña "Club" o "Selección" de la caja ACTIVA. El
+bucketing (heredado del fix 2026-06-13 "el bucketing ESTRICTO
+descartaba partidos que no casaban con el hub ni con la selección")
+decidía: si toca la SELECCIÓN de este hub → 'sel'; **TODO LO DEMÁS →
+'club' por defecto** — sin comprobar si esa entrada pertenecía siquiera
+remotamente al CLUB de este hub. Cualquier pospuesto de OTRO mister
+(Francia/Toñín, Noruega/Isra) que no fuera la selección de ESTE hub
+(Inglaterra) caía en el catch-all "club" y contaminaba la caja del
+Real Madrid.
+
+### Fix
+
+`_entrySide(e)` (`misc_body_1.html`, IIFE de `s-munich`) ahora exige
+PERTENENCIA antes de bucketear: nuevo `_isClubName(n)` (nombre EXACTO
+del hub, o alias legacy del MISMO mister vía `_isHumanClubCanonico(n)
+&& _mhSameMister(hub, n)` — cubre "Bayern Munich"→Liverpool/Toñín,
+"Paris SG"→PSG/Izan, etc., SIN colar el alias de OTRO mister). Una
+entrada solo entra en 'sel' si `_isSelName` casa, en 'club' si
+`_isClubName` casa (en `home` o `away`), y si NINGUNO de los dos casa
+se **EXCLUYE** (`return null`) — no se pierde: sigue viva en el store
+global y aparece en la caja del mister al que sí pertenece.
+**Deliberadamente NO se reutiliza `_aliasesLiga(hub)`** para el check
+de club: esa función inyecta el alias "Bayern Munich" para CUALQUIER
+hub (genérica para el colector de Liga EA Sports), lo que habría vuelto
+a colar los pospuestos de Liverpool en la caja de cualquier otro
+mister — el check nuevo usa `_mhSameMister` para que el alias solo
+aplique al mister correcto.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un render que lea `pend_hvh_deferred_v1` (u otro
+   store GLOBAL compartido por las 7 cajas de mister) bucketee una
+   entrada en la caja ACTIVA sin comprobar antes que esa entrada
+   PERTENECE a ese mister (club O selección, en home o away). Un
+   catch-all "si no es la selección de este hub, es del club de este
+   hub" es SIEMPRE incorrecto — hay 6 OTROS misters cuyos pospuestos
+   viven en el MISMO array.
+2. **PROHIBIDO** reutilizar `_aliasesLiga(hub)` (o cualquier función que
+   inyecte el alias "Bayern Munich"/"Paris SG"/etc. de forma
+   INCONDICIONAL para cualquier hub) como filtro de pertenencia. El
+   alias legacy de un mister SOLO debe reconocerse para SU PROPIO hub —
+   usar `_isHumanClubCanonico(n) && _mhSameMister(hub, n)`.
+3. Toda caja de mister NUEVA hereda el filtro automáticamente (genérico
+   vía `_mhFindMister`/`_mhSameMister`/`_isHumanClubCanonico`/
+   `_isHumanSeleccionCanonica` — no hardcodea Real Madrid/Inglaterra).
+4. Una entrada que no pertenece a NINGÚN mister conocido (p.ej. un IA
+   vs IA que se pospuso por error) se excluye de las 7 cajas sin
+   perderse del store — sigue disponible si algún día se necesita
+   depurar el array global directamente.
+
 ## `saveData` también invalidaba el índice de escudos con retraso de hasta 30s — ahora invalida al instante (obligatorio, 2026-07-12 #6)
 
 **Petición usuario 2026-07-12** (2 fotos, Ronda Preliminar de la Previa

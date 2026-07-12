@@ -9575,23 +9575,70 @@ window._showSimProgress = function(opts, onDone){
      por nombre con `getTeamLogoUrl` si no viene explícito en `o.shield`
      (cubre Liga/Copa/Europa, donde solo tenemos el nombre). `o.icon` =
      emoji humano opcional (mister 💡/🐭/… o selección). */
-  function _psVsTeamHtml(o){
+  function _psResolveShield(o){
     var s = o && o.shield;
     if (!s && o && o.name && typeof window.getTeamLogoUrl === 'function'){
       try { s = window.getTeamLogoUrl(o.name) || ''; } catch(_){ s = ''; }
     }
+    return s || '';
+  }
+  function _psVsTeamHtml(o, side){
+    var s = _psResolveShield(o);
     var ic = (o && o.icon) ? (' ' + o.icon) : '';
+    var idAttr = side ? (' id="ps-shield-' + side + '"') : '';
     return '<div class="ps-team">'
-      + (s ? '<img class="ps-shield" src="'+_esc(s)+'" onerror="this.style.display=\'none\'" alt="">' : '<div class="ps-shield"></div>')
+      + (s ? '<img class="ps-shield"'+idAttr+' src="'+_esc(s)+'" onerror="this.style.display=\'none\'" alt="">' : '<div class="ps-shield"'+idAttr+'></div>')
       + '<div class="ps-tn">'+_esc((o&&o.name)||'')+ic+'</div>'
       + '</div>';
   }
+  /* Búsqueda DIFERIDA en servidor del escudo para la card del HUB
+     (2026-07-12 #7, refuerzo — "el escudo, plantilla y Alias del equipo
+     IA lo tiene asignado y no sale reflejado... ni su escudo en la
+     card"). `_psVsTeamHtml`/`_psVsBlockHtml` los usan TODAS las cards
+     del hub («Próximo partido», `_cardCupCard`, Liga, Selección…) — a
+     diferencia de la PANTALLA DE PREVIA (`_ppShieldDeferredCheck` en
+     index.bundle.js), esta card se quedaba con el placeholder vacío
+     para siempre si la resolución local (getTeamLogoUrl/
+     _eurResolveTeamLogo) no encontraba el escudo. Mismo patrón: una
+     única petición a `/api/team-shield/<nombre>` (servidor), y si lo
+     encuentra sustituye el placeholder por el `<img>` real. */
+  function _psShieldDeferredCheck(side, teamName){
+    if (!teamName || typeof window._eurTeamShieldServerSearch !== 'function') return;
+    try {
+      window._eurTeamShieldServerSearch(teamName, function(found){
+        if (!found) return;
+        var host = document.getElementById('ps-shield-' + side);
+        if (!host || !host.parentNode) return;
+        try {
+          var img = document.createElement('img');
+          img.className = 'ps-shield';
+          img.id = 'ps-shield-' + side;
+          img.alt = '';
+          img.src = found;
+          img.onerror = function(){ img.style.display = 'none'; };
+          host.parentNode.replaceChild(img, host);
+        } catch(_){}
+      });
+    } catch(_){}
+  }
   /* Bloque VS completo: equipo · centro (VS o marcador) · equipo. */
   function _psVsBlockHtml(home, away, centerHtml){
+    var homeShield = _psResolveShield(home);
+    var awayShield = _psResolveShield(away);
+    if (!homeShield || !awayShield){
+      var homeName = home && home.name, awayName = away && away.name;
+      /* Diferido: el HTML aún no está en el DOM en este punto (el
+         caller concatena esta cadena antes de asignar `st.innerHTML`).
+         setTimeout(0) corre justo después de esa asignación síncrona. */
+      setTimeout(function(){
+        if (!homeShield) _psShieldDeferredCheck('home', homeName);
+        if (!awayShield) _psShieldDeferredCheck('away', awayName);
+      }, 0);
+    }
     return '<div class="ps-vs" style="display:flex;align-items:center;justify-content:center;gap:12px;margin:14px 0;">'
-      + _psVsTeamHtml(home)
+      + _psVsTeamHtml(home, 'home')
       + (centerHtml || '<div class="ps-x">VS</div>')
-      + _psVsTeamHtml(away)
+      + _psVsTeamHtml(away, 'away')
       + '</div>';
   }
   /* Centro con MARCADOR (mismo estilo cian + 🏁 FIN que `_cardSelMatch`)

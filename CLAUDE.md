@@ -1,5 +1,935 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Escudo, alias Y plantilla de un equipo IA de Resto de Ligas — los 3 heredan búsqueda SERVER-SIDE, no solo local (obligatorio, 2026-07-12 #7)
+
+**Petición usuario 2026-07-12** (4 fotos, "Dunajska Streda" vs Atlético
+Madrid, Previa de Champions — "el escudo, plantilla y Alias del equipo
+IA lo tiene asignado y no sale reflejado en ninguna de las fotos, ni su
+escudo en la card, ni la ❓️ con su alias, ni cuando añades un evento
+los jugadores de la plantilla. Porque ocurre esto tan grave"): con el
+escudo, alias eFootball ("America - 1🇺🇸 MLS - Los Ángeles WY ⭐⭐⭐⭐")
+y plantilla (46 jugadores, stats reales) YA confirmados en el editor
+de «Eslovaquia», la PANTALLA DE PREVIA seguía mostrando el placeholder
+genérico de iniciales ("DUN") sin escudo, sin botón ❓, y el picker de
+"+ AÑADIR EVENTO" habría mostrado el roster genérico "Jugador A/B/C…"
+en vez de la plantilla real.
+
+### Causa raíz — `localStorage` lleno + el escudo/plantilla NUNCA tuvieron fallback en servidor
+
+El propio dispositivo mostraba el banner **"⚠️ Navegador sin espacio.
+Los cambios se siguen subiendo al servidor, pero conviene limpiar caché
+para reactivar el guardado local."** — `localStorage` está lleno y el
+guardado LOCAL de una edición reciente puede fallar aunque el POST al
+servidor SÍ se reintente hasta confirmar (patrón `_lsSetSafe` ya
+documentado en el resto de este archivo). Mientras el guardado local
+falla, la edición vive SOLO en (a) el servidor y (b) la memoria
+(`window.LIGA_CACHE`) del dispositivo/pestaña que hizo la edición —
+**NUNCA** en la pestaña de la Previa si es una sesión distinta (cada
+pestaña tiene su propio `LIGA_CACHE` en memoria; `localStorage` sí se
+comparte, pero justo ESE es el que falló al escribir).
+
+De los 3 resolutores de identidad por nombre de la Previa, solo el
+ALIAS ya tenía la cobertura completa (localStorage → `LIGA_CACHE` →
+`TOUR_CACHE` → selecciones → **SERVIDOR** con reintentos,
+`_efAliasServerSearch`/`/api/team-alias/<nombre>`, sección 2026-07-05
+de más abajo). Los otros 2 se quedaban cortos:
+- **`_eurResolveTeamLogo`** (escudo, sección #5/#6 de arriba): SOLO
+  escaneaba `localStorage` — a diferencia de `_buildAliasCache` y
+  `sqFromRegistry`, ni siquiera tenía el fallback a `window.LIGA_CACHE`
+  (memoria), y mucho menos un fallback en servidor.
+- **`sqFromRegistry`** (plantilla del picker de eventos): SÍ tenía el
+  fallback a `LIGA_CACHE` (2026-07-06 #6), pero tampoco tenía fallback
+  en servidor — si NINGUNA pestaña de este dispositivo tenía la liga en
+  memoria esta sesión, caía al roster genérico "Jugador A/B/C…".
+
+### Fix
+
+- **`_eurBuildTeamLogoIndex`** (`misc_body_1.html`, junto a
+  `_eurResolveTeamLogo`): añade el mismo pase por `window.LIGA_CACHE`
+  que ya tenían `_buildAliasCache`/`sqFromRegistry` (rellena huecos,
+  nunca pisa lo que ya encontró en `localStorage`).
+- **`GET /api/team-shield/<nombre>`** (`app.py`, nuevo endpoint,
+  mismo patrón exacto que `/api/team-alias/<nombre>`): busca el escudo
+  de un equipo por nombre canónico en TODAS las `liga_ext_*` +
+  `selecciones_squad_v1` del servidor, una sola petición.
+  `window._eurTeamShieldServerSearch(nombre, onDone)` (cliente,
+  timeout 6s) lo consume y backfillea `_eurLogoIdxCache` si lo
+  encuentra.
+- **`GET /api/team-squad/<nombre>`** (`app.py`, nuevo endpoint, mismo
+  patrón): busca la plantilla (`players[]`) de un equipo por nombre en
+  el servidor. `window._eurTeamSquadServerSearch(nombre, onDone)`
+  (cliente): si encuentra el equipo, lo inyecta en
+  `window.LIGA_CACHE.__server_squad_search__.teams[]` — **NO**
+  duplica el parser de `sqFromRegistry` (POS_MAP, auto-numerado de
+  dorsales, flags C/F/P/⭐/⚾); la siguiente llamada a
+  `sqFromRegistry`/`sqFromRegistryFull` lo encuentra vía su propio
+  escaneo de `LIGA_CACHE` y lo procesa con la lógica de siempre.
+- **PANTALLA DE PREVIA** (`index.bundle.js`, `_renderPreviaMeta`): el
+  `<img>`/fallback SVG del escudo de cada lado lleva ahora un id
+  (`pp-shield-home`/`pp-shield-away`). Si la resolución local vino
+  vacía, `_ppShieldDeferredCheck` llama a
+  `_eurTeamShieldServerSearch` y, si encuentra el escudo, sustituye el
+  placeholder por el `<img>` real — mismo patrón que
+  `_ppAliasDeferredCheck` ya usaba para el alias.
+- **Picker de eventos** (`part2/misc_body_2.html`, `_gmGetSquad`/
+  `_gmRenderPlayerPick`): `_gmGetSquad` marca
+  `_gmGetSquad._lastWasFallback` cuando cae al roster genérico. Si
+  ocurre, `_gmRenderPlayerPick` dispara `_eurTeamSquadServerSearch` y,
+  si encuentra la plantilla Y el picker sigue abierto para el MISMO
+  equipo (no pisa una selección en curso del usuario), se
+  re-renderiza con la plantilla real.
+- Bump `index.bundle.js` 9.30 → 9.31 (`templates/index.html` +
+  `PRECACHE` de `static/js/sw.js`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un resolutor de identidad por equipo NUEVO
+   (escudo, alias, plantilla, estadio, o cualquier campo similar
+   futuro) se quede SOLO en `localStorage`/`LIGA_CACHE`. Todo dato que
+   el admin edita en UN dispositivo debe ser encontrable desde
+   CUALQUIER OTRO vía un endpoint `GET /api/team-<campo>/<nombre>`
+   (mismo patrón exacto que `/api/team-alias/<nombre>`: búsqueda
+   server-side en `liga_ext_*` + `selecciones_squad_v1`, una sola
+   petición, timeout 6s en el cliente) — la alternativa (confiar en que
+   `localStorage`/`LIGA_CACHE` de ESE dispositivo concreto tengan el
+   dato) falla exactamente en el caso más común de "Navegador sin
+   espacio", que este proyecto ya documenta como frecuente.
+2. **PROHIBIDO** que la búsqueda en servidor de la plantilla duplique
+   el parser de `sqFromRegistry` (POS_MAP/dorsales/flags). Inyectar el
+   equipo encontrado en `LIGA_CACHE` y dejar que `sqFromRegistry` lo
+   procese con su lógica existente — un único punto de conversión.
+3. **PROHIBIDO** que el picker de eventos se re-renderice con la
+   plantilla recién encontrada en servidor SIN comprobar que sigue
+   abierto para el MISMO equipo — evita pisar una selección de
+   jugador ya en curso si el admin cambió de pantalla mientras la
+   búsqueda volaba.
+4. Toda tabla/card/cruce/picker NUEVO de la Previa (o de cualquier
+   competición que resuelva identidad de un equipo de Resto de Ligas
+   por nombre) hereda `_eurTeamShieldServerSearch`/
+   `_eurTeamSquadServerSearch` como último fallback, igual que ya
+   hereda `_eurResolveTeamLogo`/`getTeamEfootballAlias`.
+
+## 📌 PARTIDOS POSPUESTOS mezclaba los pospuestos de TODAS las cajas de mister — filtro de pertenencia por mister (obligatorio, 2026-07-12 #7)
+
+**Petición usuario 2026-07-12** (4 fotos, caja **Real Madrid-Inglaterra-
+Acsa**): la pestaña "CLUB (9)" de 📌 PARTIDOS POSPUESTOS mostraba
+`MUNDIAL · OCTAVOS/CUARTOS/SEMIS — Francia SIN RIVAL`, `Noruega vs
+Senegal`, `Noruega vs Iraq`, `Francia vs Noruega`, `Atlético vs Inter`,
+`Noruega SIN RIVAL (Mundialito Octavos)` — **ninguno de esos partidos
+involucra al Real Madrid**. Solo 1 de los 9 (Trofeo Joan Gamper ·
+Partido 1: Real Madrid vs Liverpool) pertenecía de verdad a esta caja.
+"No entiendo que tiene que ver Francia o Noruega — Francia tiene que ir
+con Francia, Noruega con Noruega, cada pospuesto con su equipo."
+
+### Causa raíz
+
+`pend_hvh_deferred_v1` (`misc_body_1.html`) es un store **GLOBAL**
+compartido por las 7 cajas de mister — cualquier partido pospuesto
+desde CUALQUIER hub (📌 Posponer) se añade al MISMO array. Eso es
+correcto (debe viajar cross-device); el bug estaba en el RENDER de
+`s-munich` → sección 📌 PARTIDOS POSPUESTOS (`_render('posp')`, dentro
+del IIFE "Cajas POSPUESTOS · PENDIENTES · JUGADOS"): leía el array
+COMPLETO (`_pendHvHGet()`, sin filtrar por hub) y bucketeaba CADA
+entrada en la pestaña "Club" o "Selección" de la caja ACTIVA. El
+bucketing (heredado del fix 2026-06-13 "el bucketing ESTRICTO
+descartaba partidos que no casaban con el hub ni con la selección")
+decidía: si toca la SELECCIÓN de este hub → 'sel'; **TODO LO DEMÁS →
+'club' por defecto** — sin comprobar si esa entrada pertenecía siquiera
+remotamente al CLUB de este hub. Cualquier pospuesto de OTRO mister
+(Francia/Toñín, Noruega/Isra) que no fuera la selección de ESTE hub
+(Inglaterra) caía en el catch-all "club" y contaminaba la caja del
+Real Madrid.
+
+### Fix
+
+`_entrySide(e)` (`misc_body_1.html`, IIFE de `s-munich`) ahora exige
+PERTENENCIA antes de bucketear: nuevo `_isClubName(n)` (nombre EXACTO
+del hub, o alias legacy del MISMO mister vía `_isHumanClubCanonico(n)
+&& _mhSameMister(hub, n)` — cubre "Bayern Munich"→Liverpool/Toñín,
+"Paris SG"→PSG/Izan, etc., SIN colar el alias de OTRO mister). Una
+entrada solo entra en 'sel' si `_isSelName` casa, en 'club' si
+`_isClubName` casa (en `home` o `away`), y si NINGUNO de los dos casa
+se **EXCLUYE** (`return null`) — no se pierde: sigue viva en el store
+global y aparece en la caja del mister al que sí pertenece.
+**Deliberadamente NO se reutiliza `_aliasesLiga(hub)`** para el check
+de club: esa función inyecta el alias "Bayern Munich" para CUALQUIER
+hub (genérica para el colector de Liga EA Sports), lo que habría vuelto
+a colar los pospuestos de Liverpool en la caja de cualquier otro
+mister — el check nuevo usa `_mhSameMister` para que el alias solo
+aplique al mister correcto.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un render que lea `pend_hvh_deferred_v1` (u otro
+   store GLOBAL compartido por las 7 cajas de mister) bucketee una
+   entrada en la caja ACTIVA sin comprobar antes que esa entrada
+   PERTENECE a ese mister (club O selección, en home o away). Un
+   catch-all "si no es la selección de este hub, es del club de este
+   hub" es SIEMPRE incorrecto — hay 6 OTROS misters cuyos pospuestos
+   viven en el MISMO array.
+2. **PROHIBIDO** reutilizar `_aliasesLiga(hub)` (o cualquier función que
+   inyecte el alias "Bayern Munich"/"Paris SG"/etc. de forma
+   INCONDICIONAL para cualquier hub) como filtro de pertenencia. El
+   alias legacy de un mister SOLO debe reconocerse para SU PROPIO hub —
+   usar `_isHumanClubCanonico(n) && _mhSameMister(hub, n)`.
+3. Toda caja de mister NUEVA hereda el filtro automáticamente (genérico
+   vía `_mhFindMister`/`_mhSameMister`/`_isHumanClubCanonico`/
+   `_isHumanSeleccionCanonica` — no hardcodea Real Madrid/Inglaterra).
+4. Una entrada que no pertenece a NINGÚN mister conocido (p.ej. un IA
+   vs IA que se pospuso por error) se excluye de las 7 cajas sin
+   perderse del store — sigue disponible si algún día se necesita
+   depurar el array global directamente.
+
+## `saveData` también invalidaba el índice de escudos con retraso de hasta 30s — ahora invalida al instante (obligatorio, 2026-07-12 #6)
+
+**Petición usuario 2026-07-12** (2 fotos, Ronda Preliminar de la Previa
+de Champions, "otra vez con el problema de los equipos que no existen
+en el juego, que tienen alias para que emerga la ❓️"): tras editar el
+equipo **Maccabi Haifa** en «Editar equipos · Israel» (escudo ya
+puesto + alias eFootball ya relleno: "Europa - 2ª 🏴 Norwich ⭐⭐⭐½"),
+el partido **Atlético Madrid vs Maccabi Haifa** de la Ronda Preliminar
+seguía mostrando el escudo genérico (iniciales "MAC" sobre fondo
+gris) en la PANTALLA DE PREVIA.
+
+### Causa raíz — el índice de escudos NUNCA se invalidaba al editar en local
+
+`_eurResolveTeamLogo` (el resolutor cross-liga por nombre que la
+sección #5 de arriba introdujo para `_logoOf` en la Previa/Ronda
+Preliminar/fase de grupos) cachea su índice `_eurLogoIdxCache` durante
+**30 segundos** — barato para no re-escanear ~50 `ligaExt_*` en cada
+fila de una tabla. La invalidación explícita
+(`window._eurInvalidateLogoIndex()`) SOLO se llamaba desde
+`_eurHydrateMissingLeagues` (cuando trae escudos NUEVOS del
+SERVIDOR) — **nunca** desde `saveData` (el chokepoint único por el
+que pasa CUALQUIER guardado de una liga en ESTE dispositivo, incluida
+la propia edición del admin en «Editar equipos»). El **alias**
+(`_ALIAS_CACHE`, TTL 3s) SÍ se invalidaba ya en `saveData` — por eso
+el alias podía llegar a aparecer tras unos segundos de espera (vía el
+`_ppAliasDeferredCheck` con reintentos + el TTL corto), mientras el
+escudo se quedaba con el placeholder genérico hasta 30s después de
+cada guardado, y CUALQUIER guardado posterior en OTRA liga
+reiniciaba la ventana de 30s sin que el admin lo supiera.
+
+### Fix
+
+`saveData(k,d)` (`misc_body_1.html`, el único punto por el que pasa
+TODO guardado de `ligaExt_<slug>` en este dispositivo — editor
+clásico `lextSaveTeam`, editor de cards `_lcCommit`, pegado masivo,
+sim de liga/copa, etc.) llama ahora también a
+`window._eurInvalidateLogoIndex()` justo después de
+`window._invalidateAliasCache()` — mismo patrón, mismo sitio. El
+siguiente render de la Previa de Champions (card del hub, tablas de
+grupo, Ronda Preliminar, jornadas del fixture) ve el escudo recién
+guardado al instante, sin esperar el TTL de 30s.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un cache nuevo de identidad por equipo (escudo,
+   alias, estadio, plantilla…) se invalide SOLO desde una ruta de
+   hidratación del SERVIDOR (`_eurHydrateMissingLeagues` y
+   equivalentes) sin invalidarse TAMBIÉN desde `saveData` — el guardado
+   LOCAL del propio admin es la ruta MÁS COMÚN de cambio, y sin
+   invalidación ahí el fix de resolución cross-liga (sección #5) se
+   siente "a medias" (funciona para escudos ya viejos, tarda hasta
+   30s para uno recién editado).
+2. Todo cache nuevo de este tipo hereda el patrón: su función
+   `_xxxInvalidateYyy()` se registra en `window.*` y se llama desde
+   `saveData` junto a `_invalidateAliasCache`/`_invalidateLineStatsCache`
+   — un único chokepoint, no un botón/ruta aislada.
+
+## Previa de Champions — escudos AUSENTES, refuerzo #2: cache de `getLogoEquipo` STALE + escudo-default (Estepona) mostrándose como si fuera el escudo real (obligatorio, 2026-07-12 #6)
+
+**Petición usuario 2026-07-12** (sin fotos, tras el fix #5): "siguen sin
+salir los escudos y eso que el 90% de los equipos los tienen / en liga
+previa Champions tienes que salir en la clasificación y en las cards
+donde haya un humano implicado / en la card del Atlético Madrid el del
+Macca Haifa dale oculto". El fix anterior (`_eurResolveTeamLogo` +
+`_eurHydrateMissingLeagues` con escudos) era correcto pero insuficiente
+— 3 causas adicionales seguían bloqueando el resultado.
+
+### Causa raíz (3 capas más)
+
+1. **`getLogoEquipo` (`part2/misc_body_2.html`) MEMOIZA su resultado
+   por nombre en `TEAM_LOGO_CACHE`, para SIEMPRE**. Si un equipo se
+   consulta ANTES de que `_eurHydrateMissingLeagues` termine de traer
+   su escudo del servidor (típico: la Previa se renderiza nada más
+   entrar, la hidratación en segundo plano tarda unos segundos más),
+   el resultado (vacío o el escudo-default) queda cacheado — ninguna
+   hidratación POSTERIOR lo corrige en esa sesión. `window
+   ._invalidateTeamLogo(name)` ya existía para invalidar UNA entrada
+   pero ningún flujo de hidratación lo llamaba.
+2. **El umbral de re-hidratación era "re-pedir SOLO si a la MAYORÍA le
+   falta el escudo"** (fix #5). El caso real más común es justo lo
+   contrario: una liga con la mayoría de equipos YA con escudo pero
+   UN puñado concreto (p.ej. solo Maccabi Haifa) sin él — ese caso
+   nunca cruzaba el umbral de "mayoría" y la liga jamás se re-pedía.
+3. **`_pickLogo` (previa, `index.bundle.js`), `_gmLogo`/`_gmLogoUrl`×2
+   (gm-modal, `part2/misc_body_2.html`) caían a `getLogoEquipo(name)`
+   sin filtrar su escudo-default** (`/static/img/escudos-fallback/
+   estepona.svg`, `BACKEND_ESCUDO_DEFAULT`). A diferencia de otros
+   call-sites del proyecto que YA filtran este caso
+   (`indexOf('estepona')===-1`), estos 3 NO lo hacían — así que un
+   equipo sin escudo real en NINGUNA fuente no se ocultaba: mostraba
+   el escudo AJENO de Estepona como si fuera el suyo. Es lo que el
+   usuario ve como "el del Maccabi Haifa" — una imagen real pero
+   incorrecta, en vez de nada.
+
+### Fix
+
+- **`window._invalidateAllTeamLogos()`** (nuevo, `part2/misc_body_2.html`,
+  junto a `window._invalidateTeamLogo`): vacía TODA `TEAM_LOGO_CACHE`
+  de golpe (más simple y seguro que invalidar por nombre — es solo una
+  cache de rendimiento). `_eurHydrateMissingLeagues`
+  (`misc_body_1.html`) lo llama tras cada escudo nuevo traído del
+  servidor, junto a `_eurInvalidateLogoIndex()` (el propio índice de
+  `_eurResolveTeamLogo`).
+- **Umbral de re-hidratación**: de "re-pedir si a la MAYORÍA le falta
+  el escudo" a **"re-pedir si a UN SOLO equipo le falta"**
+  (`withShield < d.teams.length`). Más caro en peticiones pero
+  correcto para el caso real (equipos sueltos sin escudo dentro de una
+  liga ya casi completa); sigue siendo secuencial+pausado+con
+  reintentos (sin thundering herd) y throttled a 1 pasada/5 min.
+- **`_pickLogo`** (`index.bundle.js`, bump `9.30`→`9.31`), **`_gmLogo`**
+  y **`_gmLogoUrl`×2** (`part2/misc_body_2.html`): antes de caer a
+  `getLogoEquipo`, prueban `window._eurResolveTeamLogo(name)`. Si
+  `getLogoEquipo` como último recurso devuelve el escudo-default
+  (contiene `'estepona'`), se trata como **VACÍO** — el caller ya sabe
+  ocultar un escudo vacío (`lA ? <img> : ''` en `_gmLogo`, el fallback
+  procedural de iniciales `_ppShieldFallback` en la previa) en vez de
+  mostrar el escudo de un equipo ajeno.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un resolutor de escudo por nombre memoice su
+   resultado (`TEAM_LOGO_CACHE` o cualquier cache nueva) sin que TODO
+   flujo de hidratación que pueda traer un escudo nuevo (`_eurHydrateMissingLeagues`
+   o cualquier futuro) invalide esa cache al terminar. Una cache sin
+   invalidación convierte un fix correcto en inútil durante toda la
+   sesión del usuario.
+2. **PROHIBIDO** que el umbral de "¿hace falta re-hidratar esta liga
+   por escudos?" vuelva a ser "a la MAYORÍA le falta". El caso real es
+   equipos SUELTOS sin escudo dentro de ligas casi completas — el
+   umbral correcto es "a CUALQUIER equipo le falta".
+3. **PROHIBIDO** que un resolutor de escudo nuevo (previa, gm-modal, o
+   cualquier card futura) caiga a `getLogoEquipo`/cualquier fuente que
+   pueda devolver el escudo-default (Estepona) SIN filtrarlo. Un
+   escudo-default devuelto como si fuera real es PEOR que no mostrar
+   nada — todo caller debe tratarlo como vacío (`indexOf('estepona')`)
+   y dejar que el fallback de "sin escudo" (oculto / iniciales
+   procedurales) actúe.
+4. Recordatorio: cualquier edición de `index.bundle.js` exige bump de
+   `?v=X.X` en `templates/index.html` Y `static/js/sw.js` (regla ya
+   existente, 2026-07-04) — este fix la cumple (9.30→9.31).
+
+## Previa de Champions — escudos AUSENTES en la card, la fase de grupos y los partidos del Atlético: resolutor cross-liga por nombre (obligatorio, 2026-07-12 #5)
+
+**Petición usuario 2026-07-12** (6 fotos): "mi hija iPad tiene escudo y
+no sale en la principal del calendario del Atlético Madrid en la
+previa de champion, todos los equipos tienen escudo y no salen en la
+fase de grupos ni los partidos que va a jugar el Atlético Madrid.
+Tienen que salir los escudos de todos los equipos." Las plantillas de
+Resto de Ligas SÍ tienen escudo configurado (confirmado en el iPad),
+pero en la Previa de Champions (card del hub, tablas de los 12 grupos,
+Ronda Preliminar, jornadas del fixture del Atlético) la inmensa
+mayoría de equipos salían SIN escudo — solo un puñado (los de unas
+pocas ligas concretas) lo mostraban.
+
+### Causa raíz (2 capas del mismo problema: "el escudo vive en OTRO dispositivo/liga que este render no consulta")
+
+1. **`_eurHydrateMissingLeagues`** (`misc_body_1.html`, el auto-
+   hidratador que trae del servidor las `ligaExt_<slug>` que faltan
+   antes de calcular cualquier reparto europeo) solo comprobaba si a
+   una liga le faltaban EQUIPOS o RESULTADOS — nunca si le faltaban
+   ESCUDOS. Una liga que YA tenía equipos+resultados completos en
+   ESTE dispositivo (aunque sin `team.shield`, por ejemplo porque este
+   móvil nunca abrió esa liga y solo la hidrató vía un seed/backfill
+   ligero) se consideraba "ya completa" y NUNCA se volvía a pedir al
+   servidor — así que el escudo (guardado en el servidor por el iPad)
+   jamás llegaba a este dispositivo.
+2. **`_logoOf`/`_sh`** (los resolutores de escudo por NOMBRE que usan
+   `_badge`/`_badgeBig` en la Previa — `_groupTable`, `_prelimTieHtml`,
+   `_fgJornadaHtml` — y `_cardCupCard` en la card del hub) caían
+   ÚNICAMENTE a `getTeamLogoUrl`/`TEAM_LOGOS`, que **nunca** escanean
+   `ligaExt_<slug>` (regla ya documentada, sección "escudo del rival
+   viaja con la previa" de arriba). Aunque el pool de la Previa SÍ
+   resuelve bien el `.logo` en el momento de construir el pool (vía
+   `_teamLogo(t)`), ese valor queda CONGELADO en `wprev_state_v1` en
+   cuanto se sortea — si en ese instante el dispositivo no tenía la
+   liga de origen hidratada, el `.logo` quedaba vacío PARA SIEMPRE en
+   ese grupo/cruce/fixture ya sorteado, sin que ninguna hidratación
+   posterior lo corrigiera retroactivamente.
+
+### Fix
+
+- **`_eurHydrateMissingLeagues`**: el filtro `toFetch` añade un 3er
+  motivo para re-pedir una liga al servidor — si menos de la mitad de
+  sus equipos tienen `shield`/`logo`/`escudo`/`img`/`src` no vacío, se
+  re-hidrata. En el fetch, la rama donde el local "gana" por tener más
+  jugadores (`keep=true`) ahora TAMBIÉN hace backfill de escudos desde
+  la respuesta del servidor hacia el local (antes solo mezclaba
+  `results`) — y la rama donde gana el servidor hace el backfill en
+  sentido inverso, para no perder un escudo que solo estuviera en la
+  copia local descartada. Usa `window._lextBackfillShields` (el helper
+  ya existente de la sección "Escudos de Resto de Ligas — backfill por
+  nombre", ahora expuesto en `window` para poder llamarlo desde esta
+  otra IIFE).
+- **`window._eurResolveTeamLogo(name)`** (nuevo, `misc_body_1.html`,
+  junto a `_teamLogo`): escanea TODAS las `ligaExt_<slug>` cacheadas
+  localmente y devuelve el escudo por nombre normalizado —
+  independientemente de cuándo se sorteó/persistió el equipo en
+  cualquier pool. Cache de 30s (`window._eurInvalidateLogoIndex()` la
+  invalida en cuanto `_eurHydrateMissingLeagues` trae escudos nuevos).
+  Es el resolutor "por nombre, en caliente" que faltaba: cubre tanto
+  equipos con `.logo` vacío en snapshots YA sorteados (Ronda
+  Preliminar, grupos, fixture) como cualquier pool futuro.
+- **`_sh` (card del hub, `misc_body_1.html`, dentro de
+  `_cardCupCard`)** y **`_logoOf` (Previa, `part2/misc_body_2.html`)**
+  caen a `window._eurResolveTeamLogo(name)` cuando `getTeamLogoUrl`/
+  `TEAM_LOGOS` no lo resuelven — esto arregla de un plumazo la card
+  del hub, la tabla de cada uno de los 12 grupos (`_groupTable`), los
+  cruces de la Ronda Preliminar (`_prelimTieHtml`) y las jornadas del
+  fixture del club humano (`_fgJornadaHtml`), sin tener que re-sortear
+  nada ni tocar los datos ya persistidos.
+- **`_wprevKoAbrirPrevia`/`window._wprevPlayHumanMatch`**
+  (`part2/misc_body_2.html`, los 2 puntos que abren la previa/gm-modal
+  de un partido concreto de la Previa): `_hLogo`/`_aLogo` caen a
+  `_logoOf(nombre)` cuando el `.logo` del pool venía vacío, para que
+  la PANTALLA DE PREVIA (no solo la tabla) también muestre el escudo
+  real al abrir el partido del Atlético.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un auto-hidratador de ligas (`_eurHydrateMissingLeagues`
+   o cualquier futuro) considere una liga "completa" mirando solo
+   equipos+resultados. Si le faltan escudos a la mayoría de sus
+   equipos, sigue necesitando re-hidratarse — el escudo es un dato de
+   IDENTIDAD que puede vivir en OTRO dispositivo aunque este ya tenga
+   la clasificación entera.
+2. **PROHIBIDO** que una tabla/card/cruce NUEVO de la Previa (o de
+   cualquier competición que dibuje escudos de Resto de Ligas) resuelva
+   el escudo SOLO desde el campo `.logo` congelado en el momento del
+   sorteo, sin un fallback que re-resuelva por nombre en caliente
+   (`window._eurResolveTeamLogo`). Un pool sorteado en un dispositivo
+   con hidratación incompleta congela escudos vacíos para siempre si no
+   hay este fallback.
+3. **PROHIBIDO** que `_sh`/`_logoOf` (o cualquier resolutor de escudo
+   por nombre nuevo en el hub o en una competición) se quede solo en
+   `getTeamLogoUrl`/`TEAM_LOGOS` — ambos NUNCA escanean `ligaExt_*`.
+   Todo resolutor de este tipo hereda `window._eurResolveTeamLogo` como
+   último fallback.
+4. Toda competición NUEVA que sortee equipos de Resto de Ligas hereda
+   este fix automáticamente en cuanto sus renders de escudo pasen por
+   `_sh`/`_logoOf` (o llamen directamente a `window._eurResolveTeamLogo`
+   como último recurso) — no hardcodear una lista de ligas "que sí
+   tienen escudo".
+
+## Previa de Champions — card del HUB para "Previa Champions — J<N>" + el escudo del rival viaja con la previa (obligatorio, 2026-07-12 #4)
+
+**Petición usuario 2026-07-12** (4 fotos): "en la caja Atlético Madrid
+debe salir en grande como están el resto la card de la foto 2 (creo
+que solo es error en la Previa de Champions) / fijate en la foto 3 el
+calendario y automatizalo / el rival tiene escudo pero en la card del
+partido no sale". Con el fixture de 6 jornadas del grupo humano ya
+implementado (sección de arriba, 2026-07-12 #2), la card "Próximo
+partido" del hub (`s-atletico`/cualquier hub) en un día de calendario
+"Previa Champions — J1".."J6" seguía cayendo al placeholder genérico
+("La jornada se juega desde la pantalla de la competición" +
+CONTINUAR ▶) en vez de mostrar la card grande del partido — y, cuando
+el partido SÍ se abría desde la propia pantalla de Previa, el escudo
+del rival (equipo de Resto de Ligas, visible en la clasificación) no
+aparecía en la card ni en la previa.
+
+### Causa raíz 1 — sin resolver para el hub
+
+`_cardNonTour(day)` (`misc_body_1.html`, la cadena de resolvers que
+intenta mapear la etiqueta del calendario a un partido real de cada
+competición: Copa, Recopa, SC, USC, EurKo, Eur…) no tenía NINGUNA rama
+para "Previa Champions — J<N>". Ninguno de los resolvers existentes
+conoce `wprev_state_v1` ni su fixture por grupo, así que SIEMPRE caía
+al genérico.
+
+### Causa raíz 2 — `getTeamLogoUrl` no conoce Resto de Ligas
+
+`getTeamLogoUrl(name)` (`static/js/index.bundle.js`) solo resuelve
+escudos desde `_ligaEaShields`/`TEAM_LOGOS`/`TEAM_RATINGS`/
+`_TOUR_CACHE` — **nunca** escanea `ligaExt_<slug>` (Resto de Ligas).
+El pool de la Previa (`computeUclPrevDirectTeams`/
+`computeUclPrevOqPoolTeams`) SÍ trae el `.logo` correcto (via
+`_teamLogo(t)`, el mismo que usa la tabla de clasificación de Resto de
+Ligas), pero ese dato se perdía en cuanto la previa/card intentaban
+re-resolver el escudo por nombre con `getTeamLogoUrl`.
+
+### Fix
+
+- **`_wprevHubResolve(lbl)`** (nuevo, `misc_body_1.html`, junto a
+  `_cardEurKoPending`): parsea `Previa Champions — J<N>` con regex,
+  localiza el grupo con club humano en `wprev_state_v1.groups` y, en
+  su `fixtures[gi]`, el partido de esa jornada (`jornada === N-1`) que
+  involucra al humano. Devuelve el descriptor `{home, away, homeLogo,
+  awayLogo, rival, rivalHuman, played, gh, ga, events, mvp, mvpTeam,
+  uid, emoji:'🔵', open}` que ya consume `_cardCupCard`. Wireado en
+  `_cardNonTour` justo después de `_eurHubResolve`.
+- **`_cardCupCard`**: ahora prioriza `r.homeLogo`/`r.awayLogo` (si el
+  resolver los trae) sobre su propio `_sh()`/`getTeamLogoUrl()` —
+  mismo patrón que ya usaba `copaAbrirPrevia` para equipos de PF/
+  Hypermotion que tampoco están en `getTeamLogoUrl`.
+- **`_ppPreviaTeams.homeLogo`/`.awayLogo`** (override YA EXISTENTE que
+  lee `_renderPreviaMeta` con prioridad sobre su resolución interna):
+  se rellenan con el `.logo` correcto del pool en los 3 puntos que
+  abren la previa de un partido de la Previa de Champions —
+  `_wprevKoAbrirPrevia` (Ronda Preliminar), `window._wprevPlayHumanMatch`
+  (fixture de grupo, `part2/misc_body_2.html`) y el propio
+  `_wprevHubResolve` (`misc_body_1.html`).
+- **`window._wprevSaveHumanResult(gi, j, gh, ga, events, mvp, mvpTeam)`**
+  (firma ampliada, antes solo `(gi, j, gh, ga)`): persiste también el
+  acta (`m.events`, sin eventos `pen-result`) y el MVP
+  (`m.mvp`/`m.mvpTeam`) en el partido del fixture — necesarios para que
+  la card del hub pinte el resumen del partido jugado. Los 2 call
+  sites que lo invocan (`_gm._isWprev` en `gmEndMatch` y el
+  equivalente `st.isWprev` en `_mlFinishMatchGen`, ambos en
+  `part2/misc_body_2.html`) extraen MVP/eventos de `_gm.events`/
+  `st.events` y los pasan; el branch de gm-modal además llama a
+  `registrarLigaPlayerStats` (mismo patrón que el resto de comps
+  europeas) para que las stats del jugador computen igual.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una competición NUEVA con partidos humanos
+   propios (fixture, KO, lo que sea) quede sin resolver en la card del
+   hub. Toda comp nueva debe añadir su rama a la cadena de resolvers de
+   `_cardNonTour` (mismo patrón `_xxxHubResolve(lbl)` → descriptor
+   consumido por `_cardCupCard`), igual que Recopa/SC/USC/EurKo/Eur.
+2. **PROHIBIDO** confiar en `getTeamLogoUrl`/`_sh()` como ÚNICA fuente
+   del escudo cuando el rival puede venir de Resto de Ligas (esa
+   función NUNCA escanea `ligaExt_*`). Si el pool/estado de la comp ya
+   trae un `.logo` correcto (como el pool de la Previa, via
+   `_teamLogo(t)`), pasarlo explícitamente por
+   `_ppPreviaTeams.homeLogo`/`.awayLogo` (o el campo `homeLogo`/
+   `awayLogo` del descriptor de `_cardCupCard`) — NUNCA re-resolverlo
+   por nombre.
+3. **PROHIBIDO** que `window._wprevSaveHumanResult` (o cualquier
+   persistor de resultado humano de una comp con card propia) guarde
+   SOLO el marcador sin acta/MVP — la card del hub y las stats del
+   jugador dependen de que `events`/`mvp`/`mvpTeam` viajen con el
+   resultado.
+
+## Previa de Champions — grupo humano en AZUL, píldora "Previa" en vez de "vs" + sin botón aparte, Champions en azul (obligatorio, 2026-07-12 #3)
+
+**Petición usuario 2026-07-12** (foto de la jornada del grupo con
+Atlético Madrid): "el grupo de Previa de Champions que tengo equipo
+humano en color azul para diferenciarlo. La palabra previa en los
+partidos donde haya un humano en la fase previa tiene que ir en el
+medio donde pone VS (poniendo solo Previa) quitando lo de ⭐️>
+PREVIA > JUGAR. En cada grupo en color azul el primer clasificado (ya
+que va a Fase grupo Champions) en Naranja los que van a Europa League
+y en color verde los que van a conference".
+
+### 1) Grupo con club humano — AZUL (antes dorado/rojo Atlético)
+
+`.wprev-group.wprev-group-human`/`.wprev-row.wprev-row-human`
+(`misc_body_1.html`) pasan de la paleta dorado+rojo (`#f0c040`/
+`#c50f1f`, "Atlético-themed") a AZUL (`#4aa3ff`/`#1560c9`/`#0a2a5a`).
+`_groupTable` (`part2/misc_body_2.html`) ahora SÍ añade estas clases
+(antes existían en el CSS pero ninguna función las generaba —
+`wprev-group-human` en la fila del contenedor si `_groupHasHuman(grp)`,
+`wprev-row-human` en la fila de un jugador si `_prevIsHuman(r.name)`).
+
+### 2) La píldora central dice "Previa" en vez de "vs" — sin botón aparte
+
+`_fgJornadaHtml`: el partido del humano SIN jugar ya NO pinta
+`⭐ ▶ PREVIA · JUGAR` como botón debajo de la fila — la propia píldora
+central (`<span class="sc">`, donde antes ponía "vs") se convierte en
+un `<button class="sc wprev-fg-play-btn">Previa</button>` clicable
+(mismo `data-gi`/`data-j`, mismo wiring de `buildUclPrevClas` que ya
+buscaba `.wprev-fg-play-btn` por selector de clase — sigue funcionando
+sin cambios). CSS nuevo `.wprev-mrow .sc.wprev-fg-play-btn` resetea los
+estilos por defecto de `<button>` para que la píldora se vea igual de
+compacta que el "vs"/marcador, con el mismo dorado de "jugable" que
+tenía el botón antiguo.
+
+### 3) Colores del reparto de grupo — Champions AZUL (antes púrpura)
+
+`.wprev-row.qual-best` (1º de grupo → Champions) pasa de púrpura
+(`#a855f7`) a AZUL (`#4aa3ff`), igual en la leyenda superior ("1º grupo
+→ Champions", punto de color) y en la leyenda inferior tras simular
+("■ Champions (1º)"). `.wprev-row.qual-death` (Europa, naranja
+`#F37335`) y `.wprev-row.qual-conf` (Conference, verde `#5fe08a`) NO
+cambian — ya eran naranja/verde tal como pedía el usuario.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a pintar el grupo con club humano en dorado/rojo
+   — es AZUL (`#4aa3ff` de borde/acento). El resto de highlights de la
+   Previa (Ronda Preliminar, cruce del humano) siguen su propio
+   esquema dorado — NO se tocan, son una sección distinta.
+2. **PROHIBIDO** reintroducir el botón `⭐ ▶ PREVIA · JUGAR` como
+   elemento separado bajo la fila. El disparador del partido humano
+   pendiente ES la propia píldora central, con el texto "Previa".
+3. **PROHIBIDO** que `qual-best` (1º de grupo, destino Champions)
+   vuelva a `#a855f7` (púrpura). Es azul, a juego con el resto de la UI
+   de Champions (`--comp-color:#88aaff` del gm-modal).
+4. Toda tabla de grupo NUEVA de esta pantalla hereda el marcado
+   `wprev-group-human`/`wprev-row-human` automáticamente en cuanto
+   pase por `_groupTable` — no hardcodear qué grupo es "el humano".
+
+## Previa de Champions — la Ronda Preliminar es "videojuego" + colapsable, y el club humano JUEGA sus propios partidos (obligatorio, 2026-07-12 #2)
+
+**Petición usuario 2026-07-12** (2 fotos: "Ronda Preliminar · Open
+Qualifier (14 cruces)" en texto plano · tabla morada "GRUPO A/B/C"):
+"La fase preliminar de eliminatoria de la previa de la champion, que
+sea un poco más como videojuego que salgan ver de los equipos que se
+clasifican, y cuando se acabe que se pueda cerrar la pestaña para ver
+bien los grupos de previa ya de champion, y el equipo humano hay que
+poder simular sus partidos como equipo humano, con sus cards y
+partidos. El resto de grupos se puede simular sin necesidad de
+desplegar las 6 jornadas". Hasta este cambio, la Ronda Preliminar
+(sección de arriba, 2026-07-12 #1) y la fase de grupos eran **100%
+IA-vs-IA**, incluso para el cruce/partidos del club humano — exactamente
+lo que ya avisaba esa misma sección ("Sin partidos humanos
+individuales... `_wprevPlayHumanMatch`/`_wprevSaveHumanResult` quedan
+como no-ops").
+
+### 1) Ronda Preliminar — cards con escudo grande + destacado dorado
+
+`_prelimTieHtml` (IIFE de la Previa, `part2/misc_body_2.html`) reactiva
+las clases CSS `.wprev-dr-tie`/`.wprev-dr-leg`/`.wprev-dr-agg`
+(definidas desde el formato "Death Round" antiguo pero sin usar —
+`_prelimTieHtml` pintaba con `.wprev-mrow`, la fila compacta de
+jornadas). Nuevo helper `_badgeBig(name,logo)` (escudo con `class="crest"`,
+30px normal / 38px si el cruce es del humano vía
+`.wprev-dr-tie.human .crest`, CSS en `misc_body_1.html`). El cruce
+con un club humano (`_tieHasHuman`) se destaca en dorado
+(`.wprev-dr-tie.human`, mismo lenguaje visual que `.wprev-group-human`)
+con la etiqueta "⭐ TU CRUCE".
+
+### 2) Colapsable — "cuando se acabe, cerrar para ver los grupos"
+
+`_renderPrelim` pinta un chevron clicable (`#wprev-dr-toggle`, CSS
+`.wprev-dr-chev`/`.collapsed` YA EXISTÍA del diseño antiguo, solo
+faltaba cablear el toggle). Estado por defecto: **colapsado** en cuanto
+existen los 12 grupos (`s.phase==='groups-drawn'||'done'`), **expandido**
+mientras la preliminar aún se está jugando — salvo que el admin fuerce
+lo contrario con el chevron (`_drCollapsedManual`, variable de módulo,
+persiste mientras la pantalla siga montada).
+
+### 3) El club humano JUEGA su cruce de la Ronda Preliminar (ida+vuelta)
+
+**Nunca se auto-simula** un cruce donde participe un club humano
+(`_tieHasHuman` + `_tieBothReal` — un BYE con hueco TBD sí se resuelve
+solo, haya humano o no en el lado real). Nuevas funciones (mismo
+patrón que `_eurKoOpenMatch`/`abrirEurKo`/`_eurKoSaveHumanResult` de
+Champions/Europa/Conference eliminatorias, pero AUTOCONTENIDAS en la
+propia IIFE de la Previa — no se generaliza el motor `_eurKo*` para no
+arriesgar UCL/UEL/UECL):
+
+- `window._wprevKoOpenMatch(idx)` — abre la previa + gm-modal (ida si
+  `tie.legs` vacío, vuelta si ya hay 1 leg jugado). `comp:'ucl'` (tema
+  azul Champions, igual que el resto de la Previa).
+- `window.abrirWprevKo(idx, leg, home, away)` — marca
+  `_gm._isWprevKo`/`_wprevTieIdx`/`_wprevLeg`/`_wprevIda` (la ida
+  persistida, para poder decidir el GLOBAL en la vuelta — mismo patrón
+  que `_gm.dobleIda` de los amistosos doble-vuelta).
+- `window._wprevKoSaveHumanResult(idx,leg,gh,ga,etGh,etGa,penWinner)` —
+  persiste el marcador en `wprev_state_v1.prelim.ties[idx]`. En la
+  VUELTA calcula el agregado; si empata, prórroga (lambda reducido,
+  igual que `_simulatePrelimTie` IA) y, si sigue empatado, penaltis.
+  Si con esto TODOS los cruces quedan decididos (`_allPrelimDecided`),
+  `phase` pasa a `'prelim-done'` sin que el admin tenga que volver a
+  pulsar Sim.
+- gm-modal (`part2/misc_body_2.html`, `gmRenderTimer`+`gmEndMatch`):
+  nuevas `_isWprevKoVuelta`+`_wprevKoTied` (mismo cálculo que
+  `_isAmsDobleVuelta`/`_amsDobleTied`) se añaden a `_shouldForceET` en
+  LOS 2 SITIOS donde ya vive esa fórmula. Nueva rama de persistencia
+  `else if (_gm._isWprevKo)` (junto a `_isWprev`/`_isEurKo`, mismo
+  patrón: lee `_gm.etScores`/`_gm.penWinner`, normaliza a 'a'/'b').
+  `_isWprevKoLeg` se añade a la fórmula `_showET` (botón manual
+  PRÓRROGA) para que NO aparezca ni en ida ni en vuelta — el forzado es
+  SIEMPRE automático al Finalizar, igual que `_isEurKoTwoLeg`. Flags
+  guardados/restaurados en el snapshot de resumen del partido
+  (`_isWprevKo`/`_wprevTieIdx`/`_wprevLeg`/`_wprevIda`), para que un
+  partido a medias sobreviva a un recargo de página.
+- `_wprevDraw`: re-sortear la preliminar (o los 12 grupos) con
+  progreso humano ya jugado muestra un aviso ESPECÍFICO de que ese
+  progreso se perdería (antes del genérico "¿sortear de nuevo?").
+
+### 4) El club humano JUEGA sus 6 partidos de grupo — el resto se simula de golpe
+
+`_doDrawGroups` marca con `_groupHasHuman(grp)` qué grupo(s) tienen un
+club humano y les construye un **fixture de 6 jornadas**
+(`_buildGroupFixture`, método del círculo para 4 equipos: 3 jornadas
+ida + 3 vuelta con los mismos pares invertidos) — los grupos SIN
+humano siguen sin fixture (`s.fixtures[gi]=null`) y se simulan de golpe
+con `_simulateGroup` tal cual antes, **sin desplegar jornadas**
+(petición explícita del usuario). Al pulsar Sim,
+`_autoSimNonHumanFixtures` resuelve YA los 6 partidos entre los 3
+rivales del grupo humano (no dependen del club humano); los OTROS 6
+(los del propio club humano) quedan pendientes.
+
+- `window._wprevPlayHumanMatch(gi, j)` — localiza el partido del
+  humano en la jornada `j` de su grupo, abre previa+gm-modal vía
+  `window.abrirPreviaChampionsMatch(home,away,isHvH,gi,j)` —
+  **YA EXISTÍA**, cableado con `_gm._isWprev`/`_wprevGi`/`_wprevJ` desde
+  un diseño anterior de la Previa (jamás activado: las dos funciones
+  de arriba eran no-ops). Solo hacía falta implementarlas de verdad.
+- `window._wprevSaveHumanResult(gi, j, gh, ga)` — persiste el
+  marcador en `s.fixtures[gi]`, recalcula `sortedTables[gi]` con los
+  partidos ya jugados de ese fixture, y si con esto TODOS los grupos
+  quedan completos (`_allGroupsDecided`) pasa `phase` a `'done'` y
+  llama a `_persistDistribution` (reparto final 12/22/28) — sin que el
+  admin tenga que volver a pulsar Sim.
+- Render: `_fgJornadaHtml(s, gi)` pinta, SOLO para el grupo con
+  humano, un bloque de 6 jornadas (reusa `.wprev-jbtn`/`.wprev-jmatches`
+  ya existentes) con un botón "⭐ ▶ PREVIA · JUGAR" en el partido del
+  humano de cada jornada. Los grupos sin humano NO llaman a esta
+  función — se quedan solo con `_groupTable` (tabla de clasificación).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un cruce de la Ronda Preliminar con un club humano
+   en un lado REAL (no BYE) se auto-simule. Se juega SIEMPRE con
+   card+previa vía `_wprevKoOpenMatch`. Un BYE (hueco TBD en el pool)
+   se resuelve solo, tenga o no humano el lado real.
+2. **PROHIBIDO** que los 6 partidos del club humano dentro de su grupo
+   se auto-simulen. `_autoSimNonHumanFixtures` SOLO toca los 6 partidos
+   entre los 3 rivales — nunca los que involucran al humano.
+3. **PROHIBIDO** que un grupo SIN club humano despliegue jornadas
+   (`_fgJornadaHtml` no se llama para esos grupos) — se simulan de
+   golpe con `_simulateGroup`, como pedía el usuario explícitamente.
+4. **PROHIBIDO** generalizar el motor `_eurKo*`/`_eurFase*` (Champions/
+   Europa/Conference eliminatorias) para que sirva también a la
+   Previa. Se creó un motor AUTOCONTENIDO (`_wprevKo*`) en la propia
+   IIFE de la Previa — mismo patrón conceptual, cero riesgo de romper
+   UCL/UEL/UECL.
+5. **PROHIBIDO** que `phase` pase a `'prelim-done'`/`'done'` mientras
+   quede CUALQUIER cruce/partido del club humano sin decidir —
+   `_allPrelimDecided`/`_allGroupsDecided` son la ÚNICA fuente de esa
+   transición, se comprueban tanto al pulsar Sim como al persistir un
+   resultado humano.
+6. **PROHIBIDO** volver a un re-sorteo (Draw) de la preliminar o de los
+   grupos sin avisar ESPECÍFICAMENTE si el club humano ya tiene
+   progreso jugado ahí — se perdería sin un aviso claro.
+7. Si en el futuro hay 2+ clubes humanos en la misma Previa
+   (simultáneos), el código NO asume "solo 1 grupo humano": cualquier
+   grupo con `_groupHasHuman` gana su fixture de jornadas
+   independientemente, y cualquier cruce con `_tieHasHuman` se juega
+   con card (incluido un HvH si 2 humanos caen en el mismo cruce/grupo).
+
+## Previa de Champions — Ronda Preliminar (28→14, Open Qualifier) + 12 grupos de 4 (obligatorio, 2026-07-12) ⚠️ SUPERSEDE el formato "16 grupos + corte global 12/22/28" de la sección "Wild Card + Open Qualifier — FASE DE GRUPOS" más abajo
+
+**Petición usuario 2026-07-12** ("LA FASE PREVIA CHAMPIONS TENIA UN
+ERROR DE FORMATO, LOS VAMOS A HACER ASÍ"): el formato v3 (62 = 34
+directos + 28 del Open Qualifier → 16 grupos de tamaño desigual (14×4 +
+2×3) → corte por RANKING GLOBAL 12/22/28) queda **sustituido** por un
+formato en DOS ETAPAS, más simétrico, que además arregló de paso el bug
+reportado el mismo día ("el botón 🎲 no hace nada, debería formar los
+grupos").
+
+### Formato nuevo
+
+**Etapa 1 — Ronda Preliminar** (SOLO los 28 clasificados del Open
+Qualifier, los 34 directos de liga NO participan aquí):
+- 28 equipos → **14 eliminatorias a doble partido** (ida + vuelta),
+  emparejados AL AZAR (sin bombos, es una eliminatoria 1v1, no un
+  reparto de grupos que necesite equilibrar fuerza).
+- Si el **global** (agregado ida+vuelta) queda empatado → **prórroga**
+  (motor de partido con lambda reducido, ~1/3 del habitual, para
+  representar 30 min en vez de 90) y, si sigue empatado, **penaltis**
+  (ponderados por poder del equipo, igual que el resto de penaltis IA
+  del proyecto).
+- **14 ganadores** → pasan a la Etapa 2 (fase de grupos).
+- **14 perdedores** → eliminados DIRECTOS a Conference League.
+
+**Etapa 2 — Fase de grupos** (34 directos + 14 ganadores de la
+preliminar = 48 equipos exactos):
+- **12 GRUPOS DE 4** (ya no hay grupos desiguales de 3 — 48/12=4
+  encaja perfecto). Snake por poder + barajado por bombos
+  (`_shuffleTiered`) + anti-mismo-país, liguilla a DOBLE ida y vuelta,
+  IA-vs-IA. La UI muestra SOLO las tablas de clasificación.
+- **Reparto POR POSICIÓN DE GRUPO** (ya NO por ranking global — ese
+  era precisamente el "error de formato" a corregir):
+  - **1º de cada grupo (12)** → Champions, SIEMPRE.
+  - **2º de cada grupo (12)** → Europa, SIEMPRE.
+  - **Los 12 terceros de grupo se rankean entre sí** (PTS→DG→GF→nombre):
+    los **10 mejores** → Europa (22 = 12+10). Los **2 peores** →
+    Conference.
+  - **4º de cada grupo (12)** → Conference, SIEMPRE.
+- **Conference final** = 2 peores terceros + 12 cuartos (14, de la
+  fase de grupos) **+ los 14 perdedores de la Ronda Preliminar** = 28.
+
+### Balance final (idéntico al de antes — verificado, no cambia)
+
+```
+Champions:  12 (Previa) + 28 directos = 40 🔵
+Europa:     22 (Previa) + 18 directos = 40 🟠
+Conference: 28 (Previa) + 12 directos = 40 🟢
+```
+
+### Implementación
+
+`part2/misc_body_2.html`, IIFE de la Previa (`WPREV_KEY='wprev_state_v1'`):
+- `computeUclPrevDirectTeams()`/`computeUclPrevOqPoolTeams()`
+  (**NUEVAS**, `misc_body_1.html`) separan el pool en DOS —
+  `computeUclPrevTeams()` (unión de ambas) se conserva solo para
+  diagnóstico/compat, el motor de la Previa YA NO la usa para construir
+  su pool de trabajo. La separación respeta `feederTag` de los extras
+  manuales (`eur_manual_extra_v1.uclPrev`): las entradas con
+  `feederTag:'open-qualifier'` (los ganadores del OQ re-sincronizados
+  para que lleguen en modo 🔒 Manual) van al pool del OQ, el resto
+  (extras genuinamente manuales del admin) van al pool directo.
+- Estado (`wprev_state_v1`) con 4 fases: `null` (nada sorteado) →
+  `'prelim-drawn'` → `'prelim-done'` → `'groups-drawn'` → `'done'`.
+  Guarda `prelim.ties[]` (cada uno con `a`/`b`/`legs`/`et`/`penWinner`/
+  `winner`/`loser`/`aggA`/`aggB`) y `direct[]` (los 34, capturados al
+  sortear la preliminar) además de `groups[]`/`matchesByGroup[]`/
+  `sortedTables[]` (fase de grupos, igual que antes).
+- **🎲 Draw** y **🎮 Sim** son contextuales por fase — cada uno hace
+  SOLO su paso (Draw sortea, Sim juega), y avanzan a la fase siguiente
+  automáticamente cuando corresponde (p.ej. pulsar Sim con
+  `phase===null` sortea Y juega la preliminar de un tirón, igual que el
+  comportamiento legacy de "Sim sin Draw previo"). El label de AMBOS
+  botones se recalcula en cada render (`_nextLabel`/`_drawLabel`).
+- Render: la Ronda Preliminar se pinta en el contenedor
+  `wprev-deathround-container` (reutilizado del formato viejo "Ronda 1
+  + exentos", mismas clases CSS `.wprev-dr`/`.wprev-mrow` ya existentes
+  — sin CSS nuevo), y la fase de grupos en `wprev-groups-container`
+  (sin cambios de markup, solo N_GROUPS 16→12).
+- **Se ELIMINÓ el wrapper decorativo de `ftbolLoaderRun`** que envolvía
+  `simulateUclPrev`/`_wprevDraw` con `setTimeout` fake-progress: el
+  overlay real llevaba deshabilitado desde 2026-05-21, así que ese
+  wrapper solo aportaba 400-900ms de latencia artificial sin ningún
+  beneficio visual — mismo antipatrón que Wild Card ya abandonó el
+  2026-06-03. Los botones llaman a `simulateUclPrev`/`_wprevDraw`
+  directamente.
+- Las 3 claves de salida (`wprev_to_fase_grupos_v1`/`wprev_to_europa_v1`/
+  `wprev_r1_to_conference_v1`) **NO cambian de nombre** — las fases
+  finales (UCL/UEL/UECL) las siguen consumiendo sin tocar nada.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que los 34 directos de liga participen en la Ronda
+   Preliminar — solo los 28 del Open Qualifier juegan esa eliminatoria.
+   Los directos entran DIRECTOS a la fase de grupos.
+2. **PROHIBIDO** volver al corte por RANKING GLOBAL (posición→PTS→DG→GF)
+   de la fase de grupos. El corte es POR POSICIÓN DE GRUPO: 1º/2º/4º
+   siempre van al mismo sitio; solo los 3º se rankean entre sí (mejores
+   10 → Europa, peores 2 → Conference).
+3. **PROHIBIDO** que los 14 perdedores de la Ronda Preliminar se
+   pierdan — `_persistDistribution` los concatena SIEMPRE al resultado
+   de Conference de la fase de grupos (14+14=28).
+4. **PROHIBIDO** reintroducir un wrapper de `ftbolLoaderRun`/fake-progress
+   sobre `simulateUclPrev`/`_wprevDraw`: el overlay real está
+   deshabilitado desde 2026-05-21, así que ese wrapper es SIEMPRE pura
+   latencia sin beneficio.
+5. Toda fase preliminar NUEVA de este tipo (eliminatoria de filtro antes
+   de una fase de grupos) hereda el patrón: pool de entrada SEPARADO
+   (nunca mezclado con el pool que entra directo), estado con fases
+   explícitas, Draw/Sim contextuales por fase, y los perdedores/
+   eliminados de la preliminar sumados al reparto final de la
+   competición inferior correspondiente.
+
+## Los ganadores de cada fase SIEMPRE se registran también como extra manual de la zona destino — si no, el modo 🔒 Manual (default de las 6 zonas) los bloquea del todo (obligatorio, 2026-07-10 #3)
+
+**Petición usuario 2026-07-10** (3 fotos, tras el botón "⬇️ Traer Wild
+Card" de arriba): "no funciona el pasar los 24 equipos de la Wild
+Card al Open Qualifier". El botón mostraba `✅ Pool del Open
+Qualifier actualizado: 88 / 112 equipos reales (incluye los 24
+ganadores de la Wild Card)` — pero la Grupo A seguía sin ningún
+ganador real de la Wild Card, y el mensaje mentía: 88 es EXACTAMENTE
+el número de plazas de liga sin los 24 de la Wild Card (88+24=112),
+así que los 24 nunca entraron pese al mensaje de éxito.
+
+### Causa raíz — el modo 🔒 Manual corta ANTES de mirar los ganadores
+
+Las 6 zonas europeas (`ucl`/`uclPrev`/`uel`/`uecl`/`uclQual`/
+`wildcard`) arrancan en **🔒 Manual por defecto** desde 2026-07-03
+(regla ya documentada: "el admin pidió DOS VECES que los equipos
+automáticos desaparezcan"). En ese modo, **CADA**
+`compute*Classified()`/`computeOpenQualifierTeams()`/
+`computeUclPrevTeams()` hace, literalmente en su PRIMERA línea:
+```js
+if(window._eurManualOnly && window._eurManualOnly(zone)) return _appendManualExtra([], zone);
+```
+Esto corta ANTES de mirar `_europeFrozenFor` (snapshot congelada) y
+ANTES de leer `wc_to_open_qualifier_v1`/`oq_to_previa_v1`/
+`wprev_to_*`. Con la zona `uclQual` en Manual (el default), el pool
+del Open Qualifier es SOLO lo que haya en `eur_manual_extra_v1.uclQual`
+(los equipos que el admin añadió a mano con el picker "AÑADIR POR
+LIGA" del overlay "Equipos por competición" — de ahí el 88, que
+coincide con el nº de plazas de liga que el admin fue añadiendo a
+mano ahí). El fix anterior (botón "⬇️ Traer Wild Card" recalculando
+"en vivo" con `_europeIgnoreFrozen`) **no servía de nada**: ese
+recálculo en vivo TAMBIÉN pasa por el mismo `computeOpenQualifierTeams()`,
+que sigue cortando en la primera línea si la zona está en Manual —
+nunca llega ni al bypass de la snapshot ni a leer los ganadores de la
+Wild Card. Este mismo hueco afecta EXACTAMENTE IGUAL a Open Qualifier
+→ Previa (zona `uclPrev`) y a Previa → Champions/Europa/Conference
+(zonas `ucl`/`uel`/`uecl`) — es un bug SISTÉMICO de toda la cadena de
+propagación, no solo de la Wild Card.
+
+### Fix — `window._eurSyncManualExtraFromFeeder(zone, teams, feederTag)`
+
+Nuevo helper (`misc_body_1.html`, junto a `_eurManualExtraAdd`):
+registra los ganadores de una fase **TAMBIÉN** como extras manuales de
+la zona destino. Como `_appendManualExtra(arr, zone)` se llama
+**SIEMPRE** al final de cada `compute*Classified()` —tanto en la rama
+Manual (`return _appendManualExtra([], zone)`) como en la rama
+automática/híbrida (`return _appendManualExtra(out, zone)`)— este es
+el ÚNICO camino que garantiza que los ganadores aparezcan **sin
+importar** si la zona está en 🔒 Manual o en 🔓 Auto.
+
+- Cada entrada añadida lleva `feederTag` (nombre de la fase de
+  origen: `'wild-card'`/`'open-qualifier'`/`'previa-champions'`). En
+  cada sincronización se **quitan primero** las entradas con ESE
+  MISMO `feederTag` (para no acumular ganadores de una simulación
+  anterior) y se añaden las actuales — sin tocar entradas SIN
+  `feederTag` (esas son manuales de verdad, añadidas a mano por el
+  admin con el picker, y nunca se tocan).
+- El campo `league` de la entrada prioriza `sourceLeague` (país real,
+  como en los ganadores de la Wild Card, donde `league` es la
+  constante `'wild-card'` y el país real vive en `sourceLeague`) sobre
+  `league` — así el anti-mismo-país de los sorteos siguientes no trata
+  a todos los ganadores como un único "país".
+- Llamado desde `_persistWinners` (Wild Card → zona `uclQual`,
+  `part2/misc_body_2.html`), `_persistPreviaFlag` (Open Qualifier →
+  zona `uclPrev`, `misc_body_1.html`) y `_persistDistribution` (Previa
+  → zonas `ucl`/`uel`/`uecl`, `part2/misc_body_2.html`) — los 3 puntos
+  donde cada fase persiste sus ganadores hacia la siguiente.
+- El botón "⬇️ Traer Wild Card" (sección de arriba) también lo usa
+  como PRIMER paso (antes de la invalidación de caché y del recálculo
+  en vivo), y su `alert()` de confirmación ahora VERIFICA de verdad
+  cuántos ganadores quedaron dentro del pool recalculado (`got`/`teams.length`)
+  en vez de asumirlo ciegamente por el tamaño de `wc_to_open_qualifier_v1`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** asumir que invalidar el sorteo cacheado
+   (`_eurInvalidateDownstream`) o recalcular "en vivo"
+   (`_europeIgnoreFrozen`) basta para que los ganadores de una fase
+   lleguen a la siguiente. Si la zona destino está en 🔒 Manual (el
+   DEFAULT), ambos mecanismos son inútiles — `compute*Classified()`
+   corta ANTES de llegar a ellos. La ÚNICA vía que funciona en
+   CUALQUIER modo es registrar los ganadores como extra manual
+   (`_eurSyncManualExtraFromFeeder`).
+2. **PROHIBIDO** que un mensaje de confirmación de un botón de
+   propagación diga "incluye los N ganadores" sin comprobar de verdad
+   que esos N nombres están presentes en el pool recalculado. Un
+   recuento que no verifica es indistinguible de un fallo silencioso
+   (exactamente el bug de este reporte: el botón "confirmaba" éxito
+   con 0 ganadores realmente incluidos).
+3. **PROHIBIDO** que `_eurSyncManualExtraFromFeeder` borre entradas SIN
+   `feederTag` (las manuales de verdad, añadidas a mano por el admin)
+   al re-sincronizar. Solo reemplaza las que llevan el MISMO
+   `feederTag` de la llamada actual.
+4. Toda fase NUEVA que produzca ganadores hacia una zona europea
+   (WC→OQ, OQ→Previa, Previa→UCL/UEL/UECL, o cualquier par nuevo
+   futuro) hereda este patrón: su función de persistencia
+   (`_persistXxx`) debe llamar a `_eurSyncManualExtraFromFeeder(zonaDestino,
+   ganadores, 'tag-de-esta-fase')` ADEMÁS de escribir su propia clave
+   feeder (`xxx_to_yyy_v1`) — la clave feeder sigue siendo necesaria
+   para el cómputo automático cuando la zona SÍ está en Auto, pero el
+   extra manual es la red que cubre el caso (mucho más común) de que la
+   zona esté en Manual.
+
 ## Botón "⬇️ Traer Wild Card" en Open Qualifier — recuperación manual si la propagación automática no llegó (obligatorio, 2026-07-10 #2)
 
 **Petición usuario 2026-07-10** (2 fotos, tras el fix de propagación en

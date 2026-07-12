@@ -2,9 +2,24 @@
 /* PIN Guard - global, sin dependencias */
 window._adm = false;
 window._admQ = null;
+/* 2026-07-11: `fn()` ya NO se llama a pelo. Es el chokepoint de
+   TODA acción admin del proyecto (Sim/Draw/Reset de docenas de
+   pantallas) — si `fn` revienta con una excepción, antes se perdía
+   en silencio (ni alert, ni consola visible al usuario): el botón
+   "no hacía nada" sin ninguna pista de por qué. Mismo patrón ya
+   establecido para la cadena FINALIZAR (`_gmSafeReenter`/
+   `_gmCriticalNotice`) — aplicado aquí porque es el punto único que
+   protege a TODOS los botones con PIN de golpe. */
 window.pG = function(fn) {
-  if (window._adm) { fn(); return; }
-  window._admQ = fn;
+  function _run(){
+    try { fn(); }
+    catch(e){
+      try { console.error('[pG]', e); } catch(_){}
+      (window._gmCriticalNotice || alert)('⚠️ La acción no se pudo completar: ' + (e && e.message ? e.message : e));
+    }
+  }
+  if (window._adm) { _run(); return; }
+  window._admQ = _run;
   var m = document.getElementById('pin-modal');
   if (m) m.style.display = 'flex';
   var er = document.getElementById('pin-err');
@@ -464,7 +479,10 @@ window._showSimProgress = function(opts, onDone){
       /* Personalización opcional (sorteos vs simulaciones). */
       unit: opts.unit || 'partidos',
       verb: opts.verb || 'simulada',
-      pctOnly: !!opts.pctOnly
+      pctOnly: !!opts.pctOnly,
+      /* Sello de "última señal de vida" (2026-07-11, ver _bgSimIsActive
+         más abajo) — arranca en el momento de crear el chip. */
+      lastAliveAt: Date.now()
     };
     window._bgSimsActive = (window._bgSimsActive | 0) + 1;
     /* Mantener el gate de saveData (XHR síncrono off) mientras haya
@@ -477,6 +495,7 @@ window._showSimProgress = function(opts, onDone){
     var s = window._bgSims[slug]; if (!s) return;
     s.done = done | 0;
     if (total != null) s.total = total | 0;
+    s.lastAliveAt = Date.now();
     _renderChip(slug);
   };
   window._bgSimFinish = function(slug, ok, opts){
@@ -492,9 +511,29 @@ window._showSimProgress = function(opts, onDone){
       delete window._bgSims[slug];
     }, 3400);
   };
+  /* STALE-GUARD (2026-07-11): si una sim en 'running' lleva >20s sin dar
+     ninguna señal de vida (ni _bgSimProgress ni _bgSimFinish), la damos
+     por abandonada (throttling de pestaña en background, excepción no
+     capturada, recarga a mitad de un chunk…) y la limpiamos SOLA en vez
+     de dejar el botón "Sim" bloqueado en silencio para siempre — mismo
+     patrón watchdog que el resto del proyecto (ver `_armWatchdog` de
+     `ligaExtSimular`). Bug reportado: el chunked del Open Qualifier se
+     quedó a medias con la pestaña en background (36/336, 9 min sin
+     avanzar) y el siguiente click en "Sim" no hacía NADA — el guard
+     "evitar doble lanzamiento" lo bloqueaba para siempre sin ningún
+     aviso, porque `window._bgSims` solo se limpia al terminar OK. */
   window._bgSimIsActive = function(slug){
     var s = window._bgSims[slug];
-    return !!(s && s.status === 'running');
+    if (!s || s.status !== 'running') return false;
+    if (Date.now() - (s.lastAliveAt || 0) > 20000){
+      try { console.warn('[bgSim] '+slug+' lleva >20s sin avanzar — se considera abandonada y se libera.'); } catch(_){}
+      try { _removeChip(slug); } catch(_){}
+      delete window._bgSims[slug];
+      window._bgSimsActive = Math.max(0, (window._bgSimsActive | 0) - 1);
+      if (!window._bgSimsActive) window._ligaExtSimInProgress = false;
+      return false;
+    }
+    return true;
   };
 
   /* Helper para SORTEOS / operaciones de duración desconocida (fetch al
@@ -9128,9 +9167,19 @@ window._showSimProgress = function(opts, onDone){
      {home,away,rival,played,gh,ga,events,mvp,mvpTeam,uid,open}. */
   function _cardCupCard(day, emoji, lbl, r){
     var st = _stage(); if (!st || !r) return false;
-    function _sh(n){ try { return (typeof window.getTeamLogoUrl === 'function') ? (window.getTeamLogoUrl(n) || '') : ''; } catch(_){ return ''; } }
-    var homeObj = { name:r.home, shield:_sh(r.home), icon:_psClubIcon(r.home) };
-    var awayObj = { name:r.away, shield:_sh(r.away), icon:_psClubIcon(r.away) };
+    function _sh(n){
+      try { var u = (typeof window.getTeamLogoUrl === 'function') ? (window.getTeamLogoUrl(n) || '') : ''; if (u) return u; } catch(_){}
+      /* Fallback (2026-07-12): getTeamLogoUrl NUNCA escanea Resto de
+         Ligas — para un rival de esa fuente (Previa/OQ/Wild Card/etc.)
+         hay que buscarlo por nombre en las ligaExt_* cacheadas. */
+      try { return (typeof window._eurResolveTeamLogo === 'function') ? (window._eurResolveTeamLogo(n) || '') : ''; } catch(_){ return ''; }
+    }
+    /* `r.homeLogo`/`r.awayLogo`: el resolver puede traer el escudo YA
+       resuelto desde su propia fuente (p.ej. `_wprevHubResolve` con
+       equipos de Resto de Ligas, que `getTeamLogoUrl` no conoce) —
+       gana sobre `_sh`. 2026-07-12. */
+    var homeObj = { name:r.home, shield:r.homeLogo||_sh(r.home), icon:_psClubIcon(r.home) };
+    var awayObj = { name:r.away, shield:r.awayLogo||_sh(r.away), icon:_psClubIcon(r.away) };
     if (r.played){
       var actaHtml = '';
       if (r.events && r.events.length && typeof window._eurFaseRenderActaPanel === 'function'){
@@ -9464,6 +9513,55 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){ _markDoneAndAdvance(); }
     };
   }
+  /* PREVIA DE CHAMPIONS · fase de grupos (jornada JN del grupo con
+     club humano). Label "Previa Champions — J<N>". Estado en
+     `wprev_state_v1.fixtures[gi]` (SOLO existe para el grupo con
+     humano — el resto de los 12 grupos se simulan de golpe, sin
+     fixture). 2026-07-12: antes esta etiqueta caía siempre al flujo
+     genérico ("La jornada se juega desde la pantalla de la
+     competición") porque no había ningún resolver para ella — la card
+     del hub se quedaba pequeña en vez de mostrar los escudos grandes
+     como el resto de competiciones. */
+  function _wprevHubResolve(lbl){
+    var s = String(lbl || '');
+    var mj = /Previa\s*Champions\s*[—\-]\s*J\s*(\d+)/i.exec(s);
+    if (!mj) return null;
+    var jor = parseInt(mj[1], 10);
+    if (!(jor > 0)) return null;
+    var st = null;
+    try { st = JSON.parse(localStorage.getItem('wprev_state_v1') || 'null'); } catch(_){}
+    if (!st || !Array.isArray(st.groups) || !Array.isArray(st.fixtures)) return null;
+    var gi = -1;
+    for (var g = 0; g < st.groups.length; g++){
+      var grp = st.groups[g] || [];
+      if (grp.some(function(t){ return t && t.name && _psHubClubMatches(t.name); })){ gi = g; break; }
+    }
+    if (gi < 0 || !st.fixtures[gi]) return null;
+    var fx = st.fixtures[gi];
+    var m = null;
+    for (var i = 0; i < fx.length; i++){
+      var mm = fx[i];
+      if ((mm.jornada|0) !== (jor - 1)) continue;
+      if (_psHubClubMatches(mm.home) || _psHubClubMatches(mm.away)){ m = mm; break; }
+    }
+    if (!m) return null;
+    var _wpRival = String(_psHubClubMatches(m.home) ? m.away : m.home);
+    /* Escudos (2026-07-12, "el rival tiene escudo pero en la card del
+       partido no sale"): `grp[hi]`/`grp[ai]` ya traen `.logo` resuelto
+       DIRECTO de la liga origen (Resto de Ligas) al construir el pool
+       de la Previa — `getTeamLogoUrl` (que usa `_cardCupCard._sh`) NO
+       conoce Resto de Ligas, así que hay que pasarlo explícito. */
+    return {
+      home:String(m.home), away:String(m.away),
+      homeLogo:(grp[m.hi]&&grp[m.hi].logo)||'', awayLogo:(grp[m.ai]&&grp[m.ai].logo)||'',
+      rival:_wpRival,
+      rivalHuman:_psNameIsHuman(_wpRival),
+      played:!!m.played, gh:(m.gh|0), ga:(m.ga|0),
+      events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
+      uid:'ps-wprevfg-'+gi+'-'+(jor-1), emoji:'🔵',
+      open:(function(_gi,_j){ return function(){ try { if (typeof window._wprevPlayHumanMatch === 'function') window._wprevPlayHumanMatch(_gi,_j); } catch(_){} }; })(gi, jor-1)
+    };
+  }
 
   /* ── DISEÑO ÚNICO de la card "Próximo partido" (2026-06-04) ───────
      Petición usuario (foto 2): TODAS las cards del hub (Liga, Copa,
@@ -9562,6 +9660,10 @@ window._showSimProgress = function(opts, onDone){
       if (_eko && _cardCupCard(day, _eko.emoji, lbl, _eko)) return;
       var _eur = _eurHubResolve(lbl);
       if (_eur && _cardCupCard(day, _eur.emoji, lbl, _eur)) return;
+      /* PREVIA DE CHAMPIONS · fase de grupos ("Previa Champions —
+         J<N>"), SOLO para el grupo con club humano. 2026-07-12. */
+      var _wpg = _wprevHubResolve(lbl);
+      if (_wpg && _cardCupCard(day, _wpg.emoji, lbl, _wpg)) return;
     } catch(_){}
     /* Liga EA Sports: parseamos la jornada del label para (a) abrir la
        previa del partido del Liverpool directamente y (b) como respaldo,
@@ -19423,25 +19525,40 @@ window._showSimProgress = function(opts, onDone){
 #s-competiciones .submenu-card.sc-superliga-main{border:1.5px solid #b040ff !important;box-shadow:0 4px 22px rgba(176,64,255,.35),inset 0 1px 0 rgba(255,255,255,.08) !important;}
 #s-competiciones .submenu-card.sc-torneos-verano{border:1.5px solid #8a8a8a !important;box-shadow:0 4px 18px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.55) !important;}
 #s-competiciones .submenu-card.sc-ea-manual{border:1.5px solid #3cc878 !important;box-shadow:0 4px 18px rgba(60,200,120,.30),inset 0 1px 0 rgba(255,255,255,.08) !important;}
-.recopa-card{margin:8px;padding:10px 12px;background:linear-gradient(135deg,#1a0c00 0%,#321a00 50%,#1a0c00 100%);border:1px solid rgba(160,80,0,.5);border-radius:10px;}
-.recopa-card.played{border-color:rgba(95,224,138,.45);}
-.recopa-card-row{display:grid;grid-template-columns:1fr 90px 1fr;align-items:center;gap:8px;}
-.recopa-card-side{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;}
-.recopa-card-side img{width:48px;height:48px;object-fit:contain;}
+/* Rediseño videojuego rojo/oro (petición usuario 2026-07-11, "es muy
+   cutre, mejoralo, mas como videojuego, el color de la recopa es
+   rojo"): mismo tema rojo+oro ya usado en el resto de la pantalla
+   (`.c-recopa`, `.sc-recopa-stats`) — antes las tarjetas de partido
+   eran marrón/naranja apagado, desentonando con el resto. */
+.recopa-card{margin:12px 8px;padding:0;background:linear-gradient(160deg,#1a0303 0%,#3a0808 45%,#1a0303 100%);border:1px solid rgba(255,215,0,.32);border-radius:14px;overflow:hidden;position:relative;box-shadow:0 5px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);}
+.recopa-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#4a0808,#c01a1a,#ff3838,#ffd700,#ff3838,#c01a1a,#4a0808);}
+.recopa-card.played{border-color:rgba(95,224,138,.5);box-shadow:0 5px 16px rgba(0,0,0,.55),0 0 0 1px rgba(95,224,138,.15);}
+/* Equipos humanos arriba (regla siguiente) + resalte dorado para que
+   destaquen a simple vista frente a la marea de IA-vs-IA. */
+.recopa-card.has-human{border-color:rgba(255,215,0,.7);box-shadow:0 5px 20px rgba(255,215,0,.16),inset 0 1px 0 rgba(255,255,255,.06);}
+.recopa-card-tag{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.8px;color:rgba(255,215,0,.6);text-align:center;padding:7px 0 0;text-transform:uppercase;}
+.recopa-card-row{display:grid;grid-template-columns:1fr 84px 1fr;align-items:center;gap:8px;padding:8px 12px 12px;}
+.recopa-card-side{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:0;}
+.recopa-card-side img{width:46px;height:46px;object-fit:contain;filter:drop-shadow(0 2px 5px rgba(0,0,0,.6));}
 .recopa-card-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.5px;color:#fff;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;}
 .recopa-card-name.win{color:#5fe08a;text-shadow:0 0 10px rgba(95,224,138,.55);}
 .recopa-card-name.lose{color:rgba(255,255,255,.55);text-decoration:line-through;text-decoration-color:rgba(255,90,90,.4);}
 .recopa-card-mid{display:flex;flex-direction:column;align-items:center;gap:6px;}
-.recopa-card-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#f0c040;letter-spacing:2px;background:rgba(0,0,0,.4);border-radius:6px;padding:3px 12px;border:1px solid rgba(255,255,255,.12);}
-.recopa-card-score.played{color:#f0c040;}
+.recopa-card-score{font-family:'Bebas Neue',sans-serif;font-size:23px;color:#ffd700;letter-spacing:2px;background:rgba(0,0,0,.5);border-radius:8px;padding:4px 14px;border:1px solid rgba(255,215,0,.35);text-shadow:0 0 8px rgba(255,215,0,.35);}
+.recopa-card-score.played{color:#ffd700;}
+.recopa-card-vs{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.4);}
 .recopa-card-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.2px;color:#ffd54a;text-align:center;}
-.recopa-card-act{padding:5px 12px;border-radius:6px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;}
+.recopa-card-act{padding:6px 14px;border-radius:7px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;-webkit-tap-highlight-color:transparent;}
 .recopa-card-act.previa{background:rgba(255,90,170,.15);color:#ff80b0;border-color:rgba(255,90,170,.6);}
-.recopa-card-act.simular{background:rgba(60,200,120,.15);color:#7df0a0;border-color:rgba(60,200,120,.6);}
+.recopa-card-act.simular{background:rgba(60,200,120,.15);color:#7df0a0;border-color:rgba(60,200,120,.6);box-shadow:0 0 10px rgba(60,200,120,.18);}
 .recopa-card-act:disabled{opacity:.5;cursor:not-allowed;}
+/* Separador visual entre cruces (petición usuario) — línea fina
+   dorada entre una tarjeta y la siguiente, además del margen. */
+.recopa-card + .recopa-card{margin-top:4px;}
+.recopa-card + .recopa-card::after{content:'';position:absolute;top:-8px;left:16%;right:16%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,215,0,.25),transparent);}
 #recopa-banner button{padding:9px 18px;border-radius:8px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.5px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;width:100%;max-width:340px;}
-.recopa-btn-sortear{background:rgba(160,80,0,.18);color:#ffa050;border:1.5px solid rgba(255,160,80,.55);}
-.recopa-btn-sortear:hover{background:rgba(160,80,0,.30);}
+.recopa-btn-sortear{background:linear-gradient(135deg,rgba(192,26,26,.28),rgba(74,8,8,.4));color:#ffd700;border:1.5px solid rgba(255,215,0,.55);box-shadow:0 0 14px rgba(192,26,26,.25);}
+.recopa-btn-sortear:hover{background:linear-gradient(135deg,rgba(192,26,26,.42),rgba(74,8,8,.55));}
 .recopa-btn-reset{background:rgba(255,90,90,.10);color:#ff8080;border:1px solid rgba(255,90,90,.40);opacity:.65;}
 .recopa-banner-info{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.65);text-align:center;line-height:1.4;}
 .recopa-empty{padding:24px 14px;text-align:center;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;}
@@ -19490,6 +19607,18 @@ window._showSimProgress = function(opts, onDone){
     if(s && s.sorteo && !s.sorteo.r64 && (s.sorteo.r8 || s.sorteo.sf || s.sorteo.fin)){
       return null;
     }
+    /* Migración 2026-07-11: `_drawFirstRound` SIEMPRE genera exactamente
+       32 partidos en 1/64 (rellena con BYE hasta el bracket completo,
+       ver PHASE_SIZE.r64). Un `sorteo.r64` con otra longitud (p.ej. "0/2",
+       reportado por el usuario tras añadir 64 equipos manualmente al pool
+       y ver la Recopa seguir "esperando" un sorteo viejo de 2 partidos)
+       solo puede venir de un guardado de una versión anterior del motor.
+       Se descarta para que la pantalla ofrezca "🎯 Sortear 1/64" de nuevo
+       con el pool ACTUAL (los equipos añadidos a mano no llegaban nunca a
+       usarse porque el sorteo ya "existía", aunque estuviera roto). */
+    if(s && s.sorteo && s.sorteo.r64 && s.sorteo.r64.length && s.sorteo.r64.length !== PHASE_SIZE.r64){
+      return null;
+    }
     return s;
   }
   function _save(s){
@@ -19513,6 +19642,14 @@ window._showSimProgress = function(opts, onDone){
     return '';
   }
   function _isHuman(name){
+    /* Humanidad POR COMPETICIÓN (regla obligatoria 2026-05-10): un
+       equipo puede ser humano en Recopa (humanIcon asignado en el
+       editor de Resto de Ligas) sin ser uno de los humanos canónicos
+       de Liga EA Sports. `esHumano` a pelo se los saltaba y los
+       simulaba como IA-vs-IA en vez de abrir la previa/gm-modal.
+       Mismo patrón ya usado en Intercontinental (`_isHuman` de la
+       zona `inter`, más abajo en este archivo). */
+    try { if(typeof window.isHumanInComp==='function') return !!window.isHumanInComp(name,'recopa'); } catch(_){}
     if(typeof window.esHumano==='function'){
       try { return !!window.esHumano(name); } catch(_){}
     }
@@ -19638,39 +19775,74 @@ window._showSimProgress = function(opts, onDone){
     m.bye = true;
     return m;
   }
+  /* Los equipos humanos NUNCA se cruzan entre sí antes de Cuartos
+     (petición usuario 2026-07-11): 1/64, 1/32 y Octavos emparejan
+     evitando humano-vs-humano SIEMPRE que el pool tenga suficiente IA
+     para hacerlo (si algún día hay más humanos que rivales IA
+     disponibles en una ronda, el sobrante se empareja entre sí como
+     último recurso — mejor que perder equipos). Desde Cuartos (r8) en
+     adelante NO hay restricción: dos humanos clasificados sí pueden
+     tocarse. `_pairTeams` es el emparejador único que usan tanto
+     `_drawFirstRound` (1/64) como `_drawNext` (resto de rondas).
+     `BYE` cuenta como "no-humano" — puede emparejar con cualquiera. */
+  function _pairTeams(list, avoidHumanClash){
+    var shuffled = _shuffle(list);
+    if(!avoidHumanClash){
+      var pairs0 = [];
+      for(var i=0;i+1<shuffled.length;i+=2) pairs0.push([shuffled[i], shuffled[i+1]]);
+      var stray0 = (shuffled.length % 2 === 1) ? [shuffled[shuffled.length-1]] : [];
+      return { pairs: pairs0, strays: stray0 };
+    }
+    var humans = shuffled.filter(function(t){ return _isHuman(t); });
+    var others = shuffled.filter(function(t){ return !_isHuman(t); });
+    var pairs = [];
+    var hi = 0, oi = others.length - 1;
+    /* Cada humano se empareja con un no-humano primero — mientras haya
+       IA disponible, dos humanos JAMÁS caen en el mismo par aquí. */
+    while(hi < humans.length && oi >= 0){
+      pairs.push([humans[hi], others[oi]]);
+      hi++; oi--;
+    }
+    var leftHumans = humans.slice(hi);   /* sobran humanos sin rival IA */
+    var leftOthers = others.slice(0, oi+1);
+    /* Si sobran humanos SIN rival IA, es porque ya no queda ninguna IA
+       en el pool de esta ronda — inevitable que se crucen entre ellos. */
+    for(var a=0;a+1<leftHumans.length;a+=2) pairs.push([leftHumans[a], leftHumans[a+1]]);
+    for(var b=0;b+1<leftOthers.length;b+=2) pairs.push([leftOthers[b], leftOthers[b+1]]);
+    var strays = [];
+    if(leftHumans.length % 2 === 1) strays.push(leftHumans[leftHumans.length-1]);
+    if(leftOthers.length % 2 === 1) strays.push(leftOthers[leftOthers.length-1]);
+    if(strays.length === 2){ pairs.push([strays[0], strays[1]]); strays = []; }
+    return { pairs: pairs, strays: strays };
+  }
+  function _matchFromPair(p){
+    var m = _mkMatch(p[0], p[1]);
+    if(p[0] === BYE || p[1] === BYE) m = _resolveBye(m);
+    return m;
+  }
   /* Sortea la PRIMERA ronda (1/64) en 32 partidos. Si el pool < 64 se
-     rellena con BYE de forma que cada BYE empareje con un equipo real
-     (walkover) y nunca BYE-vs-BYE mientras queden reales. Rediseño
-     2026-06-02. */
+     rellena con BYE. Anti-cruce-humano SIEMPRE activo aquí (1/64 va
+     mucho antes de Cuartos). Rediseño 2026-06-02 + 2026-07-11. */
   function _drawFirstRound(pool){
-    var sh = _shuffle(pool);
     var nMatches = PHASE_SIZE.r64;          /* 32 */
     var capacity = nMatches * 2;            /* 64 */
-    if(sh.length > capacity) sh = sh.slice(0, capacity);
-    var byes = capacity - sh.length;        /* huecos a rellenar */
-    var matches = [];
-    /* (a) `byes` equipos reales reciben un BYE (pasan directo). */
-    var byeTeams = sh.slice(0, Math.min(byes, sh.length));
-    var rest = sh.slice(byeTeams.length);
-    byeTeams.forEach(function(t){ matches.push(_resolveBye(_mkMatch(t, BYE))); });
-    /* (b) el resto se empareja real-vs-real. */
-    for(var i=0; i+1<rest.length; i+=2){
-      matches.push(_mkMatch(rest[i], rest[i+1]));
-    }
-    /* (c) sobrante impar → BYE. */
-    if(rest.length % 2 === 1){
-      matches.push(_resolveBye(_mkMatch(rest[rest.length-1], BYE)));
-    }
-    /* (d) relleno final BYE-vs-BYE hasta 32 (solo si pool muy pequeño). */
+    var list = _shuffle(pool).slice(0, capacity);
+    while(list.length < capacity) list.push(BYE);
+    var res = _pairTeams(list, true);
+    var matches = res.pairs.map(_matchFromPair);
+    /* Defensivo: con capacity par (64) no debería sobrar nadie, pero
+       por si acaso — nunca se pierde un equipo. */
+    if(res.strays.length === 2) matches.push(_matchFromPair(res.strays));
+    else if(res.strays.length === 1) matches.push(_matchFromPair([res.strays[0], BYE]));
     while(matches.length < nMatches){
       matches.push(_resolveBye(_mkMatch(BYE, BYE)));
     }
     return _shuffle(matches);
   }
-  /* Sortea la siguiente ronda con los ganadores de la previa. Los BYE
-     que hayan propagado (bracket no lleno) se vuelven a emparejar de
-     forma que un equipo real con BYE pase directo. */
-  function _drawNext(prevMatches){
+  /* Sortea la siguiente ronda con los ganadores de la previa. Anti-
+     cruce-humano en 1/32 y Octavos (`phase` = ronda que se está
+     sorteando); desde Cuartos (r8) en adelante, sin restricción. */
+  function _drawNext(prevMatches, phase){
     var winners = [];
     prevMatches.forEach(function(m){
       if(m && m.played){
@@ -19678,23 +19850,12 @@ window._showSimProgress = function(opts, onDone){
         winners.push(w || BYE);   /* slot vacío → BYE para mantener el tamaño */
       }
     });
-    var sh = _shuffle(winners);
-    /* Separar reales y BYEs para que ningún real quede fuera por un
-       emparejamiento BYE-vs-real mal colocado. */
-    var reals = sh.filter(function(x){ return x && x !== BYE; });
-    var nByes = sh.length - reals.length;
-    if(sh.length % 2 === 1){ reals = reals.slice(); if(reals.length) reals.pop(); }
-    var matches = [];
-    var ri = 0;
-    /* Cada BYE empareja con un real (walkover). */
-    var byeUse = Math.min(nByes, reals.length);
-    for(var b=0; b<byeUse; b++){
-      matches.push(_resolveBye(_mkMatch(reals[ri++], BYE)));
-    }
-    /* El resto real-vs-real. */
-    for(; ri+1<reals.length; ri+=2){
-      matches.push(_mkMatch(reals[ri], reals[ri+1]));
-    }
+    var avoidClash = (phase === 'r32' || phase === 'r16');
+    var res = _pairTeams(winners, avoidClash);
+    var matches = res.pairs.map(_matchFromPair);
+    /* Sobrante suelto (nº de ganadores impar, caso raro) → BYE en vez
+       de perder al equipo (antes se descartaba en silencio). */
+    if(res.strays.length === 1) matches.push(_matchFromPair([res.strays[0], BYE]));
     return matches;
   }
   function _winnerOf(m){
@@ -19773,7 +19934,7 @@ window._showSimProgress = function(opts, onDone){
       alert('⚠️ Tienes que terminar todos los partidos de ' + (PHASE_LABEL[prev]||prev) + ' antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
       return;
     }
-    s.sorteo[phase] = _drawNext(s.sorteo[prev]);
+    s.sorteo[phase] = _drawNext(s.sorteo[prev], phase);
     _save(s);
     _recopaInit();
     try { go('s-recopa-rd-' + phase); } catch(_){}
@@ -19913,12 +20074,47 @@ window._showSimProgress = function(opts, onDone){
     });
   }
   function _renderRound(phase){
+    /* Blindaje 2026-07-11 (petición usuario "no hace nada" — la ronda se
+       quedaba en blanco sin ningún aviso): si CUALQUIER paso del render
+       revienta (un dato inesperado de uno de los 64 equipos reales del
+       pool, `_logo`/`humanIcon` fallando para un nombre concreto…), el
+       usuario debe ver SIEMPRE algo accionable en vez de una pantalla
+       muerta — mismo contrato que `_gmShowFinalOv`/`_mlShowStatsOverlay`
+       (display SIEMPRE incondicional, con fallback si el contenido rico
+       revienta). */
+    try { _renderRoundInner(phase); }
+    catch(errRR){
+      try { console.warn('[Recopa] _renderRound(' + phase + ') falló:', errRR); } catch(_){}
+      try {
+        var bodyIdErr = DOM_BODY[phase];
+        var hostErr = bodyIdErr && document.getElementById(bodyIdErr);
+        if(hostErr){
+          hostErr.innerHTML = '<div class="recopa-empty">⚠️ No se pudo pintar esta ronda (dato inesperado en el pool).<br>'
+            + '<button class="recopa-btn-sortear" style="margin:8px auto;display:block;" onclick="window._recopaSortear&&window._recopaSortear()">🔄 Reintentar</button></div>';
+        }
+      } catch(_){}
+    }
+  }
+  function _renderRoundInner(phase){
     var bodyId = DOM_BODY[phase]; if(!bodyId) return;
     var host = document.getElementById(bodyId); if(!host) return;
     var s = _load() || {};
     var ms = (s.sorteo && s.sorteo[phase]) || [];
     if(!ms.length){
-      host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.<br>Vuelve a la pantalla de Recopa y pulsa <b>🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</b>.</div>';
+      /* Autosuficiente (petición usuario 2026-07-11, "fíjate en el
+         modelo de copa"): en vez de mandar al usuario de vuelta a la
+         pantalla de Recopa para pulsar Sortear, el botón vive AQUÍ
+         MISMO — igual que Copa del Rey, donde cada ronda es accionable
+         sin tener que salir de ella. Solo tiene sentido para 1/64 (la
+         única ronda sorteable sin depender de la anterior); el resto
+         siguen remitiendo al banner de arriba. */
+      if(phase === 'r64'){
+        var poolNow = _buildPool();
+        host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.</div>'
+          + '<button class="recopa-btn-sortear" style="margin:8px auto;display:block;" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + poolNow.length + ' equipos)</button>';
+      } else {
+        host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.<br>Vuelve a la pantalla de Recopa y pulsa <b>🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</b>.</div>';
+      }
       return;
     }
     var html = '';
@@ -19941,22 +20137,48 @@ window._showSimProgress = function(opts, onDone){
             + '<div><div class="recopa-champ-lbl">CAMPEÓN RECOPA</div><div class="recopa-champ-name">' + _esc(s.champion) + '</div></div>'
             + '</div>';
     }
-    ms.forEach(function(m, i){
-      html += _renderMatchCard(m, phase, i);
+    /* Equipos humanos ARRIBA (petición usuario 2026-07-11): se pinta
+       en un orden distinto al de guardado (el índice `i` que se pasa a
+       `_renderMatchCard` sigue siendo el ORIGINAL de `s.sorteo[phase]`
+       — imprescindible, porque `mk='recopa_'+phase+'_'+idx` y todos los
+       botones/handlers de la tarjeta referencian ese índice real). Sort
+       estable: los cruces con algún humano primero, el resto detrás,
+       conservando el orden relativo dentro de cada grupo. */
+    var order = ms.map(function(m, i){ return i; });
+    order.sort(function(ia, ib){
+        var ma = ms[ia], mb = ms[ib];
+        var ha = ma && (_isHuman(ma.home) || _isHuman(ma.away)) ? 0 : 1;
+        var hb = mb && (_isHuman(mb.home) || _isHuman(mb.away)) ? 0 : 1;
+        return ha - hb; /* estable: Array.sort ya no reordena empates en los motores modernos */
+      });
+    order.forEach(function(i){
+      var m = ms[i];
+      /* Una tarjeta rota (dato inesperado de UN equipo del pool de 64)
+         NUNCA debe vaciar las otras 31 — fallback mínimo por tarjeta. */
+      try { html += _renderMatchCard(m, phase, i); }
+      catch(errCard){
+        try { console.warn('[Recopa] _renderMatchCard falló en ' + phase + '[' + i + ']:', errCard); } catch(_){}
+        html += '<div class="recopa-card" style="opacity:.6;"><div class="recopa-card-row" style="justify-content:center;">'
+          + '<div class="recopa-card-name" style="color:#ff8080;">⚠️ ' + _esc((m && m.home) || '?') + ' vs ' + _esc((m && m.away) || '?') + ' (error al pintar)</div>'
+          + '</div></div>';
+      }
     });
     host.innerHTML = html;
   }
   function _renderMatchCard(m, phase, idx){
     var played = !!m.played;
+    var tag = '<div class="recopa-card-tag">CRUCE ' + (idx+1) + '</div>';
     /* Walkover por BYE: el equipo real pasa directo (sin partido). */
     if(m.home === BYE || m.away === BYE){
       var real = (m.home === BYE) ? m.away : m.home;
       if(real === BYE){
-        return '<div class="recopa-card" style="opacity:.45;"><div class="recopa-card-row" style="justify-content:center;"><div class="recopa-card-name" style="color:rgba(255,255,255,.4);">Plaza libre (BYE)</div></div></div>';
+        return '<div class="recopa-card" style="opacity:.45;">' + tag + '<div class="recopa-card-row" style="justify-content:center;"><div class="recopa-card-name" style="color:rgba(255,255,255,.4);">Plaza libre (BYE)</div></div></div>';
       }
       var lR = _logo(real);
       var hiR = (typeof window.humanIcon === 'function') ? (window.humanIcon(real)||'') : '';
-      return '<div class="recopa-card played" style="border-color:rgba(95,224,138,.35);">'
+      var realIsHuman = _isHuman(real);
+      return '<div class="recopa-card played' + (realIsHuman?' has-human':'') + '" style="border-color:rgba(95,224,138,.35);">'
+           + tag
            + '<div class="recopa-card-row">'
            + '<div class="recopa-card-side">' + (lR ? '<img src="' + _esc(lR) + '"/>' : '<span style="font-size:36px;">🛡</span>') + '<div class="recopa-card-name win">' + hiR + _esc(real) + '</div></div>'
            + '<div class="recopa-card-mid"><div class="recopa-card-pen" style="color:#5fe08a;">PASA DIRECTO</div></div>'
@@ -19986,18 +20208,27 @@ window._showSimProgress = function(opts, onDone){
       var penTxt = m.penWinner ? '<div class="recopa-card-pen">PEN ' + _esc(m.penWinner === 'a' ? m.home : m.away) + '</div>' : '';
       center = '<div class="recopa-card-mid"><div class="recopa-card-score played">' + totA + '–' + totB + '</div>' + penTxt + '</div>';
     } else if(bothIA){
+      /* Resultado en horizontal (petición usuario): `.ml-score` no trae
+         `display:flex` por defecto en este contexto — sus 2 `<div>`
+         internos se apilaban en vertical (0 / – / 0). Flex inline en el
+         propio contenedor, igual que `.lec-final-vs .ml-score`. */
       center = '<div class="recopa-card-mid">'
-             + '<div class="ml-score" id="ia-sim-score-' + mk + '"><div id="ia-sc-' + mk + '-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#f0c040;min-width:18px;text-align:center;">0</div><span style="margin:0 4px;color:rgba(255,255,255,.5);">–</span><div id="ia-sc-' + mk + '-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#f0c040;min-width:18px;text-align:center;">0</div></div>'
+             + '<div class="ml-score" id="ia-sim-score-' + mk + '" style="display:flex;align-items:center;justify-content:center;gap:4px;">'
+             +   '<div id="ia-sc-' + mk + '-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd700;min-width:18px;text-align:center;">0</div>'
+             +   '<span style="color:rgba(255,255,255,.5);">–</span>'
+             +   '<div id="ia-sc-' + mk + '-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd700;min-width:18px;text-align:center;">0</div>'
+             + '</div>'
              + '<button class="recopa-card-act simular" id="ia-sim-btn-' + mk + '" onclick="window.iaSimLive(\'' + mk + '\',\'' + _esc(m.home).replace(/\x27/g,"\\\x27") + '\',\'' + _esc(m.away).replace(/\x27/g,"\\\x27") + '\',0)">▶ Simular</button>'
              + '</div>';
     } else {
       /* Al menos un humano → previa + gm-modal */
-      center = '<div class="recopa-card-mid"><div class="recopa-card-score">– –</div>'
+      center = '<div class="recopa-card-mid"><div class="recopa-card-vs">VS</div>'
              + '<button class="recopa-card-act previa" onclick="window._recopaAbrirPrevia&&window._recopaAbrirPrevia(\'' + phase + '\',' + idx + ')">📋 Previa</button>'
              + '</div>';
     }
     var actaId = 'ia-acta-' + mk;
-    return '<div class="recopa-card ' + (played?'played':'') + '">'
+    return '<div class="recopa-card ' + (played?'played':'') + (anyHuman?' has-human':'') + '">'
+         + tag
          + '<div class="recopa-card-row">'
          + _sideHtml(m.home, winner===m.home, loser===m.home)
          + center
@@ -20088,6 +20319,26 @@ window._showSimProgress = function(opts, onDone){
     };
     window.go._recopaPatched = true;
   })();
+  /* Red de seguridad independiente del hook de go() (2026-07-11): con
+     ~20 wraps encadenados de window.go en este proyecto, un fallo de
+     cadena en cualquiera de ellos dejaría la pantalla de la ronda en
+     blanco sin que _renderRound llegue a ejecutarse — exactamente el
+     síntoma reportado ("Recopa · 1/64" vacío tras entrar). Un
+     MutationObserver sobre CADA pantalla de ronda, que dispara al
+     recibir la clase `.active`, garantiza el render aunque el hook de
+     go() falle por cualquier motivo no previsto. Idempotente: llama a
+     la MISMA `_renderRound`, que es barata y determinista. */
+  PHASES.forEach(function(phase){
+    var scr = document.getElementById('s-recopa-rd-' + phase);
+    if(!scr || typeof MutationObserver === 'undefined') return;
+    var wasActive = scr.classList.contains('active');
+    if(wasActive) _renderRound(phase);
+    new MutationObserver(function(){
+      var isActive = scr.classList.contains('active');
+      if(isActive && !wasActive) _renderRound(phase);
+      wasActive = isActive;
+    }).observe(scr, { attributes:true, attributeFilter:['class'] });
+  });
 })();
 </script>
 
@@ -35211,6 +35462,146 @@ window._showSimProgress = function(opts, onDone){
     if(!t || typeof t !== 'object') return '';
     return t.logo || t.escudo || t.shield || t.img || t.src || '';
   }
+  /* ── Resolutor de escudo POR NOMBRE, escaneando Resto de Ligas ──────
+     (2026-07-12, "Previa Champions — todos los equipos tienen escudo
+     y no salen ni en la card del calendario ni en la fase de grupos
+     ni en los partidos que va a jugar"). `getTeamLogoUrl` (bundle)
+     NUNCA escanea `ligaExt_<slug>` — solo conoce Liga EA/TEAM_LOGOS/
+     TEAM_RATINGS/torneos. Cuando un equipo de la Previa/OQ/Wild Card
+     viene de Resto de Ligas, su escudo real vive SOLO en su liga de
+     origen. `_teamLogo(t)` ya resuelve bien el escudo cuando se tiene
+     el OBJETO equipo (p.ej. al construir el pool en vivo), pero varias
+     pantallas (tabla de grupo, cruces KO, jornadas del fixture, card
+     del hub) solo tienen el NOMBRE + un `.logo` que pudo quedar vacío
+     en el momento en que se sorteó/persistió (p.ej. porque este
+     dispositivo aún no había hidratado esa liga). Este resolutor
+     escanea TODAS las `ligaExt_<slug>` cacheadas localmente y devuelve
+     el escudo por nombre normalizado, sin importar cuándo se sorteó.
+     Cache de 30s (barato, evita re-escanear ~50 ligas en cada fila de
+     una tabla) invalidado explícitamente por `_eurHydrateMissingLeagues`
+     en cuanto trae escudos nuevos del servidor. */
+  var _eurLogoIdxCache = null, _eurLogoIdxTs = 0;
+  function _eurBuildTeamLogoIndex(){
+    var idx = {};
+    function _idxTeam(t){
+      if(!t || !t.name) return;
+      var sh = _teamLogo(t);
+      if(!sh) return;
+      var nm = _normName(t.name);
+      if(nm && !idx[nm]) idx[nm] = sh;
+    }
+    try {
+      for(var i=0;i<localStorage.length;i++){
+        var k = localStorage.key(i);
+        if(!k || k.indexOf('ligaExt_')!==0) continue;
+        if(k.indexOf('_backup')>=0 || k.indexOf('_snap_')>=0 || k.indexOf('_snapshot')>=0 || k.indexOf('_protected')>=0) continue;
+        if(/_v\d+$/.test(k)) continue;
+        var raw; try { raw = localStorage.getItem(k); } catch(_){ raw = null; }
+        if(!raw) continue;
+        var data; try { data = JSON.parse(raw); } catch(_){ continue; }
+        if(!data || !Array.isArray(data.teams)) continue;
+        data.teams.forEach(_idxTeam);
+      }
+      /* Fallback EN MEMORIA: `window.LIGA_CACHE` (2026-07-12 #7, mismo
+         hueco ya arreglado en `_buildAliasCache`/`sqFromRegistry` —
+         2026-06-25/2026-07-06 #6). Una liga grande puede superar la
+         cuota de `localStorage` ("Navegador sin espacio") y el escudo
+         recién editado quedar SOLO en memoria (poblado por `saveData`/
+         `loadData` de esa liga en ESTA sesión) sin llegar nunca a
+         `ligaExt_<slug>` — sin este pase, `_eurResolveTeamLogo` nunca
+         lo encontraba pese a estar ya guardado (en memoria + servidor). */
+      try {
+        if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE) {
+          for (var ck in LIGA_CACHE) {
+            var dC = LIGA_CACHE[ck];
+            var tsC = (dC && Array.isArray(dC.teams)) ? dC.teams : [];
+            for (var ci=0; ci<tsC.length; ci++){ _idxTeam(tsC[ci]); }
+          }
+        }
+      } catch(_){}
+    } catch(_){}
+    return idx;
+  }
+  function _eurResolveTeamLogo(name){
+    if(!name) return '';
+    try {
+      var now = Date.now();
+      if(!_eurLogoIdxCache || (now - _eurLogoIdxTs) > 30000){
+        _eurLogoIdxCache = _eurBuildTeamLogoIndex();
+        _eurLogoIdxTs = now;
+      }
+      return _eurLogoIdxCache[_normName(name)] || '';
+    } catch(_){ return ''; }
+  }
+  window._eurResolveTeamLogo = _eurResolveTeamLogo;
+  /* Búsqueda en SERVIDOR del escudo cuando el escaneo local (localStorage
+     + LIGA_CACHE) no lo encuentra (2026-07-12 #7, mismo patrón que
+     `_efAliasServerSearch` para el alias — "el escudo, plantilla y
+     alias del equipo IA lo tiene asignado y no sale reflejado en
+     ninguna de las fotos"). Cubre el caso en que ESTE dispositivo tiene
+     `localStorage` lleno (banner "Navegador sin espacio" — el guardado
+     local puede fallar aunque el servidor SÍ reciba la edición) o
+     simplemente nunca cargó la liga origen en esta sesión: una única
+     petición al servidor, con timeout de 6s para no quedarse colgado. */
+  window._eurTeamShieldServerSearch = function(teamName, onDone){
+    try {
+      var targetNorm = _normName(teamName);
+      if(!targetNorm){ onDone(null); return; }
+      var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var timer = setTimeout(function(){ try { ctrl && ctrl.abort(); } catch(_){} }, 6000);
+      fetch('/api/team-shield/' + encodeURIComponent(teamName), ctrl ? { signal: ctrl.signal } : {})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          clearTimeout(timer);
+          var sh = (j && j.shield) ? String(j.shield).trim() : '';
+          if(sh){
+            try { if(_eurLogoIdxCache) _eurLogoIdxCache[targetNorm] = sh; } catch(_){}
+          }
+          onDone(sh || null);
+        })
+        .catch(function(){ clearTimeout(timer); onDone(null); });
+    } catch(_){ try { onDone(null); } catch(__){} }
+  };
+  /* Búsqueda en SERVIDOR de la PLANTILLA (2026-07-12 #7) — mismo hueco
+     que el escudo pero para el picker de eventos (+ AÑADIR EVENTO): si
+     `sqFromRegistry` no encuentra la plantilla ni en `localStorage` ni
+     en `LIGA_CACHE` de ESTE dispositivo, el picker mostraba el roster
+     genérico "Jugador A/B/C…". No duplicamos el parser de
+     `sqFromRegistry` (POS_MAP, auto-numerado de dorsales, flags C/F/P/
+     ⭐/⚾): en vez de eso, el equipo encontrado en el servidor se
+     inyecta en `window.LIGA_CACHE` bajo una clave sintética — la
+     PRÓXIMA llamada a `sqFromRegistry`/`sqFromRegistryFull` (que ya
+     escanea `LIGA_CACHE`, 2026-07-06 #6) lo encuentra y lo parsea con
+     su lógica de siempre, sin ningún camino nuevo que mantener. */
+  window._eurTeamSquadServerSearch = function(teamName, onDone){
+    try {
+      var targetNorm = _normName(teamName);
+      if(!targetNorm){ onDone(false); return; }
+      var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var timer = setTimeout(function(){ try { ctrl && ctrl.abort(); } catch(_){} }, 6000);
+      fetch('/api/team-squad/' + encodeURIComponent(teamName), ctrl ? { signal: ctrl.signal } : {})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          clearTimeout(timer);
+          var team = (j && j.team && Array.isArray(j.team.players) && j.team.players.length) ? j.team : null;
+          if(team){
+            try {
+              window.LIGA_CACHE = window.LIGA_CACHE || {};
+              var bucket = window.LIGA_CACHE.__server_squad_search__ || { teams: [] };
+              bucket.teams = bucket.teams.filter(function(t){ return _normName(t && t.name) !== targetNorm; });
+              bucket.teams.push(team);
+              window.LIGA_CACHE.__server_squad_search__ = bucket;
+            } catch(_){}
+          }
+          onDone(!!team);
+        })
+        .catch(function(){ clearTimeout(timer); onDone(false); });
+    } catch(_){ try { onDone(false); } catch(__){} }
+  };
+  /* Invalidación explícita — llamada por `_eurHydrateMissingLeagues`
+     tras traer/backfillar escudos nuevos del servidor, para que la
+     PRÓXIMA fila/card ya los vea sin esperar el TTL de 30s. */
+  window._eurInvalidateLogoIndex = function(){ _eurLogoIdxCache = null; };
   /* Lee el poder/rating de un equipo. Prioridad: campos directos del
      objeto plantilla (power/media/poder) → TEAM_RATINGS global por
      nombre → 65 default. Lo usa el ranking sintético de Wild Card
@@ -35836,6 +36227,59 @@ window._showSimProgress = function(opts, onDone){
     d[zone] = d[zone].filter(function(t){ return t.name !== name; });
     _eurManualExtraSave(d);
   };
+  /* Sincroniza los ganadores de una fase (Wild Card→OQ, OQ→Previa,
+     Previa→UCL/UEL/UECL) como EXTRAS MANUALES de la zona destino
+     (obligatorio, 2026-07-10 #3).
+
+     Causa raíz del bug "no se lanzan los 24 equipos de la Wild Card al
+     Open Qualifier" (pese a `_eurInvalidateDownstream` y al botón
+     "⬇️ Traer Wild Card"): las 6 zonas europeas (`ucl`/`uclPrev`/`uel`/
+     `uecl`/`uclQual`/`wildcard`) arrancan en 🔒 MANUAL por defecto desde
+     2026-07-03 (regla "el admin pidió DOS VECES que los equipos
+     automáticos desaparezcan"). En modo Manual, CADA
+     `compute*Classified()`/`computeOpenQualifierTeams()`/
+     `computeUclPrevTeams()` hace `return _appendManualExtra([], zone)`
+     en su PRIMERA línea — ANTES de mirar `_europeFrozenFor` o de leer
+     `wc_to_open_qualifier_v1`/`oq_to_previa_v1`/`wprev_to_*`. Así, si la
+     zona destino de una fase (p.ej. `uclQual`, la del Open Qualifier)
+     está en Manual, los ganadores de la fase anterior NUNCA llegan a
+     evaluarse — ni con la invalidación en cascada, ni con ningún botón
+     que solo recalcule "en vivo" (ese cálculo en vivo también hace el
+     mismo `return` temprano).
+
+     Fix: los ganadores de cada fase se registran TAMBIÉN como extras
+     manuales de la zona destino — `_appendManualExtra` se llama
+     SIEMPRE, en las DOS ramas (Manual e híbrida-automática), así que
+     esto los hace aparecer sin importar el modo. Marca cada entrada con
+     `feederTag` (el nombre de la fase de origen) para poder limpiar
+     SOLO sus propias entradas en la siguiente sincronización sin tocar
+     equipos que el admin haya añadido a mano de verdad (esos no llevan
+     `feederTag`). */
+  window._eurSyncManualExtraFromFeeder = function(zone, teams, feederTag){
+    if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
+    var d = _eurManualExtraLoad();
+    var list = (d[zone] || []).filter(function(t){ return !(t && t.feederTag === feederTag); });
+    var seen = {};
+    list.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    (teams || []).forEach(function(t){
+      if(!t || !t.name || seen[t.name]) return;
+      if(/^TBD/i.test(t.name) || /^__placeholder_/.test(t.league || '')) return;
+      seen[t.name] = true;
+      list.push({
+        name: t.name,
+        /* `sourceLeague` (si viene, p.ej. de la Wild Card: `league` ahí
+           es la constante 'wild-card', el país real vive en
+           `sourceLeague`) gana sobre `league` (que en el feeder de OQ→
+           Previa YA es el país real). */
+        league: t.sourceLeague || t.league || feederTag || 'manual',
+        logo: t.logo || '',
+        addedAt: Date.now(),
+        feederTag: feederTag
+      });
+    });
+    d[zone] = list;
+    _eurManualExtraSave(d);
+  };
   /* 🗑 Vaciar lista ENTERA de una zona — petición usuario 2026-07-07
      ("quiero un botón para limpiar la lista entera de equipos de cada
      competición y que ese borrado se guarde hasta que vuelva a añadir
@@ -36129,35 +36573,58 @@ window._showSimProgress = function(opts, onDone){
     _eurFixupLeagues(out);
     return _appendManualExtra(out, 'ucl');
   }
-  function computeUclPrevTeams(){
+  /* 2026-07-12 — NUEVO FORMATO DE LA PREVIA (Ronda Preliminar + 12
+     grupos de 4). Petición usuario: los 28 del Open Qualifier YA NO
+     entran directos a la fase de grupos — primero juegan una ronda
+     PRELIMINAR eliminatoria entre ellos (14 cruces a doble partido,
+     con prórroga+penaltis si el global queda empatado) y SOLO los 14
+     ganadores se unen a los 34 directos de liga (34+14=48 → 12 grupos
+     de 4 exactos). Los 14 perdedores caen directos a Conference.
+     Resto del motor (sorteo/simulación de la ronda preliminar y de los
+     12 grupos) vive en part2/misc_body_2.html — aquí solo se separan
+     los DOS pools de entrada, porque ya no se pueden tratar como uno
+     solo (el del OQ pasa por un filtro antes de unirse al otro). */
+  function computeUclPrevDirectTeams(){
     if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return _appendManualExtra([], 'uclPrev');
     /* Base = 34 directos (zona uclPrev). Si los pools europeos están
-       CONGELADOS (`europe_committed_v1`) usamos esa snapshot como base,
-       PERO seguimos mergeando el Open Qualifier (la snapshot solo
-       congela las plazas de liga; el feeder del OQ es dinámico y
-       distinto). Antes había un `return frozen.slice()` que cortaba
-       aquí → la Previa se quedaba en 34/62 tras congelar Europa porque
-       NUNCA llegaba a añadir los 28 del OQ (foto usuario 2026-06-01). */
+       CONGELADOS (`europe_committed_v1`) usamos esa snapshot como base. */
     var frozen = _europeFrozenFor('uclPrev');
     var arr = frozen ? frozen.slice() : _computeQualifiedFromLeagues('uclPrev');
-    /* El 1º de cada grupo del Open Qualifier (28 grupos × 1 = 28
-       plazas, formato 28×4 desde 2026-05-30) se añade a la Previa
-       de Champions ese mismo año, AL MOMENTO. Los persiste
-       `simulateOpenQualifier` en `oq_to_previa_v1` con su país real.
-       Dedupe por nombre. */
+    _eurFixupLeagues(arr);
+    var out = _prependManualEa(arr, 'uclPrev');
+    /* Extras manuales de 'uclPrev' EXCLUYENDO los que llevan
+       `feederTag:'open-qualifier'` (esos son los ganadores del OQ
+       re-sincronizados como extra manual por `_eurSyncManualExtraFromFeeder`
+       para que lleguen aunque la zona esté en 🔒 Manual — deben pasar
+       por la ronda preliminar, NO colarse directos a los 34). */
+    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
+    var seen = {}; out.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    manual.forEach(function(t){
+      if(!t || !t.name || t.feederTag === 'open-qualifier' || seen[t.name]) return;
+      seen[t.name] = true;
+      out.push({ name:t.name, logo:t.logo||'', league:t.league||'manual' });
+    });
+    return out;
+  }
+  window.computeUclPrevDirectTeams = computeUclPrevDirectTeams;
+
+  /* Pool del Open Qualifier para la Previa (los 28 que deben jugar la
+     ronda preliminar). El 1º de cada grupo del Open Qualifier (28
+     grupos × 1, formato 28×4 desde 2026-05-30) lo persiste
+     `simulateOpenQualifier` en `oq_to_previa_v1` con su país real,
+     AL MOMENTO de terminar el Open Qualifier. */
+  function computeUclPrevOqPoolTeams(){
+    var arr = [];
     try {
       var raw = localStorage.getItem('oq_to_previa_v1');
       if(raw){
         var data = JSON.parse(raw);
         var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
-        var seen = {};
-        arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
         teams.forEach(function(t){
-          if(!t || !t.name || seen[t.name]) return;
+          if(!t || !t.name) return;
           /* Salta huecos TBD/placeholder (saves antiguos que los
              persistían). Solo equipos reales entran a la Previa. */
           if(/^TBD/i.test(t.name) || /^__placeholder_/.test(t.league||'')) return;
-          seen[t.name] = true;
           /* Conservamos el `league` real persistido (slug-país). Solo
              caemos a 'open-qualifier' si el dato es legacy (sin league);
              `_eurFixupLeagues` de abajo intentará recuperar el país. */
@@ -36165,12 +36632,38 @@ window._showSimProgress = function(opts, onDone){
         });
       }
     } catch(_){}
+    /* Extras manuales de 'uclPrev' CON `feederTag:'open-qualifier'`
+       (misma vía que arriba, en sentido contrario). Dedupe por nombre. */
+    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
+    var seen = {}; arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    manual.forEach(function(t){
+      if(!t || !t.name || t.feederTag !== 'open-qualifier' || seen[t.name]) return;
+      seen[t.name] = true;
+      arr.push({ name:t.name, logo:t.logo||'', league:t.league||'open-qualifier' });
+    });
     /* Recupera el slug-país real de los equipos del OQ (o de cualquier
        directo legacy sin league) para que el sorteo de la Previa
-       (`_distributeGroups`, anti-mismo-país) no trate a todos los del
-       OQ como un mismo país. */
+       (anti-mismo-país) no trate a todos los del OQ como un mismo país. */
     _eurFixupLeagues(arr);
-    return _appendManualExtra(_prependManualEa(arr, 'uclPrev'), 'uclPrev');
+    return arr;
+  }
+  window.computeUclPrevOqPoolTeams = computeUclPrevOqPoolTeams;
+
+  /* Unión de los dos pools (34 + 28 = 62), conservada para diagnósticos
+     y para el botón "⬇️ Traer Open Qualifier" (cuenta cuántos equipos
+     reales hay en total). El motor de la Previa YA NO usa esta función
+     para construir su pool de trabajo — usa las dos de arriba por
+     separado, porque el pool del OQ pasa por la ronda preliminar antes
+     de unirse al de liga. */
+  function computeUclPrevTeams(){
+    var arr = computeUclPrevDirectTeams();
+    var seen = {}; arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    computeUclPrevOqPoolTeams().forEach(function(t){
+      if(!t || !t.name || seen[t.name]) return;
+      seen[t.name] = true;
+      arr.push(t);
+    });
+    return arr;
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
   function computeUelClassified(){
@@ -36607,18 +37100,20 @@ window._showSimProgress = function(opts, onDone){
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🇪🇺</span><h2>UCL · Previa de Champions</h2></div>
 
-<!-- Sim contextual / Reset (PIN 747).
-     El label del botón Sim cambia según la fase (sortear cruces /
-     simular ida / simular vuelta / completado). Se actualiza en cada
-     render llamando a window._wprevNextLabel(). El id permite que el
-     bloque JS de la Previa lo localice y refresque el texto. -->
+<!-- Sim / Draw contextuales (PIN 747), 2 etapas:
+     Etapa 1 (Ronda Preliminar, 28 del Open Qualifier → 14 cruces ida+
+     vuelta): 🎲 Draw sortea los cruces, 🎮 Sim los juega (prórroga+
+     penaltis si hay empate global).
+     Etapa 2 (12 grupos de 4, 34 directos + 14 ganadores preliminar):
+     🎲 Draw sortea los grupos, 🎮 Sim juega las liguillas.
+     Los labels de AMBOS botones cambian según la fase — los actualiza
+     window._wprevNextLabel()/el propio buildUclPrevClas() en cada
+     render, vía los ids wprev-btn-sim/wprev-btn-draw. -->
 <div style="display:flex;gap:8px;justify-content:center;padding:8px 6px 4px;flex-wrap:wrap;">
   <button id="wprev-btn-sim" onclick="pG(function(){window.simulateUclPrev&&window.simulateUclPrev()})"
           style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 16px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎮 Sim
   </button>
-  <!-- 🎲 Draw — sortea los 16 grupos de la Previa (PIN admin 747),
-       sin jugar. 🎮 Sim juega las liguillas y aplica el corte global. -->
   <button id="wprev-btn-draw" onclick="window._wprevDraw&&window._wprevDraw()"
           style="background:linear-gradient(135deg,#3a2a00,#7a5a00);border:1px solid #ffd700;border-radius:8px;padding:9px 16px;color:#ffe480;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     🎲 Draw
@@ -36627,13 +37122,24 @@ window._showSimProgress = function(opts, onDone){
           style="background:linear-gradient(135deg,#3a1414,#5a2424);border:1px solid rgba(255,80,80,.5);border-radius:8px;padding:9px 16px;color:#ff8080;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     ♻️ Reset
   </button>
+  <!-- Traer clasificados del Open Qualifier a mano (2026-07-11, mismo
+       patrón que "⬇️ Traer Wild Card" del Open Qualifier): por si la
+       propagación automática (invalidación en cascada al terminar el
+       Open Qualifier) no llegó a este dispositivo, o hay una snapshot
+       congelada de "Enviar realidad..." de antes de que el Open
+       Qualifier terminara — el admin fuerza el recálculo del pool con
+       los 28 clasificados reales sin tener que ir a Reset/Draw a ciegas. -->
+  <button onclick="pG(function(){window._wprevPullOpenQualifier&&window._wprevPullOpenQualifier()})"
+          style="background:linear-gradient(135deg,#3a2a00,#5a4400);border:1px solid rgba(253,200,48,.55);border-radius:8px;padding:9px 16px;color:#ffe680;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
+    ⬇️ Traer Open Qualifier
+  </button>
 </div>
 
-<!-- Leyenda morada compacta -->
+<!-- Leyenda morada compacta (formato 2026-07-12: Ronda Preliminar + 12 grupos) -->
 <div style="display:flex;gap:10px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:11px;color:#fff;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;">
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>1º grupo → Champions</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>2º+3º → Europa</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>Perdedor R1 → Conference</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4aa3ff;margin-right:4px;vertical-align:middle;"></span>1º grupo → Champions</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>2º + 10 mejores 3º → Europa</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>4º + 2 peores 3º + perdedor preliminar → Conference</span>
 </div>
 
 <style>
@@ -36641,34 +37147,35 @@ window._showSimProgress = function(opts, onDone){
 #s-ucl-previa-clas .wprev-group-h{padding:10px 14px;border-bottom:2px solid #7e22ce;background:linear-gradient(90deg,#5b1c8e,#a855f7,#7e22ce);border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;font-family:'Bebas Neue','Oswald',sans-serif;font-size:22px;color:#fff;font-weight:900;letter-spacing:2px;text-shadow:0 1px 0 rgba(0,0,0,.45);}
 #s-ucl-previa-clas .wprev-group-count{margin-left:auto;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#fff;font-weight:700;}
 /* ──────────────────────────────────────────────────────────────
-   Grupo del humano: petición usuario 2026-05-02 — destacar el
-   grupo donde juega el humano para encontrarlo rápido entre los 11.
-   Borde dorado, header rojo→dorado (Atlético-themed) y un glow
-   sutil para que destaque sobre el púrpura genérico.
+   Grupo del humano: destacar el grupo donde juega el club humano
+   para encontrarlo rápido entre los 12. AZUL (2026-07-12, petición
+   usuario: "el grupo de Previa de Champions que tengo equipo humano
+   en color azul para diferenciarlo") — antes dorado/rojo Atlético.
    ────────────────────────────────────────────────────────────── */
 #s-ucl-previa-clas .wprev-group.wprev-group-human{
-  border:2px solid #f0c040;
-  background:linear-gradient(135deg,rgba(240,192,64,.12),rgba(197,15,31,.04),rgba(0,0,0,0));
-  box-shadow:0 0 18px rgba(240,192,64,.28),inset 0 0 0 1px rgba(240,192,64,.20);
+  border:2px solid #4aa3ff;
+  background:linear-gradient(135deg,rgba(74,163,255,.14),rgba(10,40,90,.05),rgba(0,0,0,0));
+  box-shadow:0 0 18px rgba(74,163,255,.30),inset 0 0 0 1px rgba(74,163,255,.22);
 }
 #s-ucl-previa-clas .wprev-group.wprev-group-human .wprev-group-h{
-  border-bottom:2px solid #c50f1f;
-  background:linear-gradient(90deg,#7a0610,#c50f1f,#f0c040,#c50f1f,#7a0610);
-  text-shadow:0 1px 2px rgba(0,0,0,.7),0 0 12px rgba(240,192,64,.35);
+  border-bottom:2px solid #1560c9;
+  background:linear-gradient(90deg,#0a2a5a,#1560c9,#4aa3ff,#1560c9,#0a2a5a);
+  text-shadow:0 1px 2px rgba(0,0,0,.7),0 0 12px rgba(74,163,255,.35);
 }
 #s-ucl-previa-clas .wprev-group.wprev-group-human .wprev-row.wprev-row-human{
-  background:linear-gradient(90deg,rgba(240,192,64,.20),rgba(197,15,31,.10) 60%,rgba(240,192,64,.18));
-  border-left:3px solid #f0c040;
+  background:linear-gradient(90deg,rgba(74,163,255,.22),rgba(21,96,201,.12) 60%,rgba(74,163,255,.20));
+  border-left:3px solid #4aa3ff;
 }
 #s-ucl-previa-clas .wprev-group.wprev-group-human .wprev-row.wprev-row-human .wprev-name{
-  color:#ffe489;font-weight:700;
+  color:#bfe0ff;font-weight:700;
 }
 #s-ucl-previa-clas .wprev-table{padding:4px 6px 8px;}
 #s-ucl-previa-clas .wprev-row{display:grid;grid-template-columns:24px minmax(120px,1.5fr) 30px 26px 22px 22px 22px 28px 28px 32px;gap:2px;align-items:center;padding:5px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);min-width:420px;}
 #s-ucl-previa-clas .wprev-row.hdr{background:linear-gradient(90deg,#2a0a4a,#1a0535,#2a0a4a);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:#e0bfff;font-weight:700;text-transform:uppercase;border-bottom:1px solid rgba(168,85,247,.4);}
-#s-ucl-previa-clas .wprev-row.qual-best{background:rgba(168,85,247,.10);border-left:3px solid #a855f7;}
+/* Champions (1º de grupo) — AZUL (2026-07-12, antes púrpura #a855f7). */
+#s-ucl-previa-clas .wprev-row.qual-best{background:rgba(74,163,255,.12);border-left:3px solid #4aa3ff;}
 #s-ucl-previa-clas .wprev-row.qual-death{background:rgba(243,115,53,.10);border-left:3px solid #F37335;}
-/* Conference (corte global 35-62) — verde. */
+/* Conference (2 peores 3º + 4º de grupo) — verde. */
 #s-ucl-previa-clas .wprev-row.qual-conf{background:rgba(95,224,138,.08);border-left:3px solid #5fe08a;}
 #s-ucl-previa-clas .wprev-row.elim{background:rgba(255,80,80,.04);border-left:3px solid rgba(255,255,255,.05);}
 #s-ucl-previa-clas .wprev-pos{color:#fff;text-align:center;font-family:Bebas Neue,sans-serif;font-size:14px;}
@@ -36721,6 +37228,42 @@ window._showSimProgress = function(opts, onDone){
 #s-ucl-previa-clas .wprev-dr-agg .winner-mark{font-weight:700;color:#a855f7;}
 #s-ucl-previa-clas .wprev-dr-agg .loser-mark{color:rgba(255,255,255,.4);}
 #s-ucl-previa-clas .wprev-dr-agg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#fff;background:rgba(168,85,247,.25);border:1px solid rgba(168,85,247,.55);border-radius:4px;padding:2px 0;font-weight:900;}
+/* ─── Ronda Preliminar "videojuego" (2026-07-12): crests grandes +
+     card destacada para el cruce del equipo humano + botón JUGAR.
+     Petición usuario: "que sea un poco más como videojuego que
+     salgan ver de los equipos que se clasifican". ─────────────── */
+#s-ucl-previa-clas .wprev-dr-tie{position:relative;}
+#s-ucl-previa-clas .wprev-dr-leg .crest{width:30px;height:30px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5));}
+#s-ucl-previa-clas .wprev-dr-leg .h,
+#s-ucl-previa-clas .wprev-dr-leg .a{display:flex;align-items:center;gap:7px;min-width:0;}
+#s-ucl-previa-clas .wprev-dr-leg .h{justify-content:flex-end;}
+#s-ucl-previa-clas .wprev-dr-leg .a{justify-content:flex-start;}
+#s-ucl-previa-clas .wprev-dr-leg .h .nm,
+#s-ucl-previa-clas .wprev-dr-leg .a .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Cruce del/de los equipo(s) humano(s): borde+glow dorado, mismo
+   lenguaje visual que `.wprev-group-human` (grupo destacado). */
+#s-ucl-previa-clas .wprev-dr-tie.human{
+  border:2px solid #f0c040;
+  background:linear-gradient(135deg,rgba(240,192,64,.14),rgba(168,85,247,.05),rgba(0,0,0,.25));
+  box-shadow:0 0 16px rgba(240,192,64,.25),inset 0 0 0 1px rgba(240,192,64,.18);
+}
+#s-ucl-previa-clas .wprev-dr-tie.human .wprev-dr-leg .crest{width:38px;height:38px;}
+#s-ucl-previa-clas .wprev-dr-human-tag{font-family:Oswald,sans-serif;font-size:9.5px;letter-spacing:1.5px;color:#ffd700;text-align:center;padding:0 0 6px;}
+#s-ucl-previa-clas .wprev-dr-play-btn{display:block;width:calc(100% - 4px);margin:8px 2px 2px;padding:10px 12px;border:1px solid #ffd700;border-radius:8px;background:linear-gradient(135deg,#3a2a00,#7a5a00);color:#ffe480;font-family:Oswald,sans-serif;font-size:12.5px;font-weight:700;letter-spacing:1.5px;cursor:pointer;}
+#s-ucl-previa-clas .wprev-dr-play-btn:active{filter:brightness(.9);}
+/* Grupo del humano en la fase de grupos: bloque de jornadas (reusa
+   `.wprev-jbtn`/`.wprev-jmatches`, ya definidas para el calendario de
+   la Previa). 2026-07-12 (petición usuario): la etiqueta "Previa" vive
+   DENTRO de la píldora central donde antes ponía "vs" — ya no hay un
+   botón "⭐ ▶ PREVIA · JUGAR" aparte debajo de la fila. */
+#s-ucl-previa-clas .wprev-fg-jor{margin:8px 4px 0;}
+#s-ucl-previa-clas .wprev-fg-jor .wprev-mrow.pending{background:rgba(240,192,64,.08);}
+#s-ucl-previa-clas .wprev-mrow .sc.wprev-fg-play-btn{
+  cursor:pointer;border:1px solid #ffd700;background:linear-gradient(135deg,#3a2a00,#7a5a00);
+  color:#ffe480;font-family:Oswald,sans-serif;font-size:10.5px;font-weight:700;letter-spacing:.8px;
+  padding:3px 2px;margin:0;
+}
+#s-ucl-previa-clas .wprev-mrow .sc.wprev-fg-play-btn:active{filter:brightness(.9);}
 #s-ucl-previa-clas .wprev-empty{padding:20px;text-align:center;color:rgba(255,255,255,.5);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.6;}
 /* ─── Panel de diagnóstico del pool (admin) ─────────────────────
    Petición usuario 2026-05-02: ver qué fuentes contribuyen al pool
@@ -36757,11 +37300,12 @@ window._showSimProgress = function(opts, onDone){
     </div>
     <div class="wprev-diag-body" id="wprev-diag-body"></div>
   </div>
-  <!-- Ronda 1 (3 exentos + 30 cruces) ARRIBA, según pidió el usuario.
-       El id `wprev-deathround-container` se conserva para no romper el
-       JS — el módulo de la Previa Champions lo localiza por id. -->
+  <!-- Ronda Preliminar (14 cruces del Open Qualifier a doble partido)
+       ARRIBA — reutiliza el id `wprev-deathround-container` del
+       formato antiguo (Ronda 1 + exentos) para no romper el JS; el
+       módulo de la Previa Champions lo localiza por id. -->
   <div id="wprev-deathround-container"></div>
-  <!-- Ronda Final (11 grupos × 3) ABAJO. -->
+  <!-- Fase de grupos (12 grupos de 4) ABAJO. -->
   <div id="wprev-groups-container" style="margin-top:14px;"></div>
 </div>
 </div>
@@ -36881,10 +37425,34 @@ window._showSimProgress = function(opts, onDone){
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
       .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
+  /* Baraja `arr` DENTRO de cada bombo de tamaño `tierSize` (Fisher-Yates
+     acotado al tramo). Mismo helper que usan Wild Card y Previa de
+     Champions (part2/misc_body_2.html) — ver ahí la explicación
+     completa. 2026-07-11: petición usuario, el sorteo del Open
+     Qualifier tiene que dar grupos distintos en cada pulsación, no
+     siempre el mismo reparto para el mismo pool. */
+  function _shuffleTiered(arr, tierSize){
+    var out = arr.slice();
+    for(var start=0; start<out.length; start+=tierSize){
+      var end = Math.min(out.length, start+tierSize);
+      for(var i=end-1; i>start; i--){
+        var j = start + Math.floor(Math.random()*(i-start+1));
+        var tmp = out[i]; out[i] = out[j]; out[j] = tmp;
+      }
+    }
+    return out;
+  }
   function _distributeSnake(teams, nGroups){
+    /* Sembramos por poder (bombos de `nGroups` equipos, fuerza similar
+       dentro de cada uno) y barajamos CADA bombo antes del snake — así
+       el reparto sigue equilibrado (1 equipo de cada bombo por grupo)
+       pero cambia de verdad en cada sorteo, en vez de ser siempre el
+       mismo orden de entrada. */
+    var seeded = teams.slice().sort(function(a,b){ return (Number(b&&b.power)||50)-(Number(a&&a.power)||50); });
+    seeded = _shuffleTiered(seeded, nGroups);
     var groups = [];
     for(var g=0; g<nGroups; g++) groups.push([]);
-    teams.forEach(function(t, i){
+    seeded.forEach(function(t, i){
       var row = Math.floor(i / nGroups);
       var col = i % nGroups;
       var g = (row % 2 === 0) ? col : (nGroups - 1 - col);
@@ -37026,56 +37594,28 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     return null;
   }
-  /* Borra keys auxiliares para liberar localStorage cuando setItem
-     lanza QuotaExceededError. NO toca ligas reales. */
-  function _oqFreeStorageSpace(){
-    var toDelete = [];
-    try {
-      for(var i=0; i<localStorage.length; i++){
-        var k = localStorage.key(i);
-        if(!k) continue;
-        if(k.indexOf('_backup') !== -1
-        || k.indexOf('_snap_') !== -1
-        || k.indexOf('_snapshot') !== -1
-        || k.indexOf('_protected') !== -1){
-          toDelete.push(k);
-        }
-      }
-    } catch(_){}
-    toDelete.forEach(function(k){ try{ localStorage.removeItem(k); }catch(_){} });
-    return toDelete.length;
-  }
   function _saveSim(sim){
-    /* Antes era `try{ setItem }catch(_){}` puro — con localStorage al
-       límite (50+ ligas con resultados → ~5MB), `setItem` lanzaba
-       QuotaExceededError, el catch lo tragaba, `_doSimulate` salía
-       como si todo OK, `buildOpenQualifierClas` re-leía null y
-       pintaba los grupos con 0 PTS / 0 PJ → "no se simulan".
-       Ahora detectamos cuota, liberamos snapshots/backups y
-       reintentamos. Si sigue fallando avisamos. */
-    try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(sim));
-      return true;
-    } catch(e){
-      var name = (e && (e.name || e.code)) || '';
-      var isQuota = /Quota|QUOTA_EXCEEDED|22|1014/i.test(String(name)) || /quota/i.test(String(e && e.message));
-      try { console.error('[oq-saveSim]', e); } catch(_){}
-      if(isQuota){
-        var freed = _oqFreeStorageSpace();
-        try {
-          localStorage.setItem(STORE_KEY, JSON.stringify(sim));
-          try { console.warn('[oq-saveSim] retry OK tras liberar', freed, 'keys'); } catch(_){}
-          return true;
-        } catch(e2){
-          try { console.error('[oq-saveSim] retry falló', e2); } catch(_){}
-          alert('⚠️ Sin espacio en localStorage para guardar la simulación del Open Qualifier.\n\n'
-              + 'Liberé '+freed+' keys auxiliares pero sigue lleno. Borra alguna liga del Resto de Ligas.');
-          return false;
-        }
-      }
-      alert('⚠️ Error guardando la simulación del Open Qualifier: '+(e && e.message ? e.message : e));
-      return false;
+    /* 2026-07-11: antes esto tenía su PROPIO limpiador de cuota ad-hoc
+       (solo _backup/_snap_/_snapshot/_protected) + `alert()` a secas si
+       fallaba. Dos problemas: (1) `window._lsSetSafe` (helper genérico
+       del proyecto, arriba del todo del archivo) libera MÁS categorías
+       de espacio — también stores de stats reconstruibles e iconos de
+       comp — así que tenía más papeletas de fallar que el genérico;
+       (2) el `alert()` puede quedar SUPRIMIDO por Chrome tras muchos
+       diálogos en la misma sesión (patrón ya documentado en este mismo
+       proyecto para la cadena FINALIZAR) — el usuario veía "336/336"
+       con el chip en ámbar pero SIN ningún aviso visible de por qué la
+       tabla se quedaba en 0. Ahora usamos el helper compartido +
+       `_gmCriticalNotice` (banner propio, inmune a esa supresión). */
+    var json = JSON.stringify(sim);
+    var ok = (typeof window._lsSetSafe === 'function')
+      ? window._lsSetSafe(STORE_KEY, json)
+      : (function(){ try { localStorage.setItem(STORE_KEY, json); return true; } catch(_){ return false; } })();
+    if(!ok){
+      try { console.error('[oq-saveSim] setItem falló incluso tras liberar espacio'); } catch(_){}
+      (window._gmCriticalNotice || alert)('⚠️ No se pudo guardar la simulación del Open Qualifier: el navegador se quedó sin espacio incluso después de liberar caché.\n\nBorra alguna liga de "Resto de Ligas" y vuelve a intentarlo.');
     }
+    return ok;
   }
 
   /* Rellena `classified` hasta `N_GROUPS × TEAMS_PER_GROUP` (112) con
@@ -37254,6 +37794,15 @@ window._showSimProgress = function(opts, onDone){
         }
       }
       localStorage.setItem('oq_to_previa_v1', JSON.stringify({teams:previaArr, ts:Date.now()}));
+      /* Los registra TAMBIÉN como extras manuales de la zona 'uclPrev' —
+         garantiza que lleguen a la Previa aunque esa zona esté en modo
+         🔒 Manual (mismo motivo que la Wild Card → Open Qualifier, ver
+         `_eurSyncManualExtraFromFeeder`). */
+      try {
+        if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
+          window._eurSyncManualExtraFromFeeder('uclPrev', previaArr, 'open-qualifier');
+        }
+      } catch(_){}
       /* La Conference ya NO se alimenta del OQ — limpiamos el flag por
          si quedaba estado de la versión antigua. */
       localStorage.removeItem('oq_to_conference_v1');
@@ -37301,35 +37850,38 @@ window._showSimProgress = function(opts, onDone){
     _finishOqSim(groups, matchesByGroup);
   }
 
-  /* Versión EN SEGUNDO PLANO: sortea (instantáneo), luego simula grupo
-     a grupo cediendo el hilo entre cada uno y reportando el % al chip
-     flotante global (_bgSim*). Si el chip no existe, cae al sync. */
+  /* Simulación SÍNCRONA en UN solo pase (2026-07-11, mismo fix que Wild
+     Card 2026-06-03: "En el MÓVIL, al atenuarse o apagarse la pantalla el
+     navegador PAUSA los timers de fondo"). ANTES esta función troceaba
+     los 28 grupos en 28 `setTimeout(step,0)` — uno por grupo — para que
+     el chip flotante subiera de 0% a 100% poco a poco. Con la pestaña en
+     background (pantalla apagada/bloqueada), Chrome aplica "intensive
+     throttling" a partir de los 5 min y esos `setTimeout` pasan a
+     dispararse 1 vez por minuto o menos — la cadena se queda colgada
+     durante DECENAS DE MINUTOS a mitad de sorteo (foto usuario: reloj
+     saltando 13:55→14:04→14:13 mientras el % subía 0%→7%→11%, ~1 grupo
+     cada 9 min). Los 336 partidos (28×12) son aritmética Poisson ligera
+     — bien por debajo de 1s de CPU — así que se juegan TODOS de golpe en
+     un único pase síncrono: imposible que quede a medias por throttling
+     de timers. Cedemos un tick antes de bloquear para que el chip pinte
+     "0%" y el usuario vea que arrancó. */
   function _doSimulateChunked(classified){
-    if(typeof window._bgSimStart !== 'function'){ _doSimulate(classified); return; }
     classified = _padToFull(classified);
     var groups = _distributeSnake(classified, N_GROUPS);
     var total = 0;
     groups.forEach(function(g){ var n=(g||[]).length; total += n*(n-1); });
-    try { window._bgSimStart('open-qualifier', 'Open Qualifier', total, { verb:'simulado' }); } catch(_){}
-    var matchesByGroup = new Array(groups.length);
-    var gi = 0, doneMatches = 0;
-    function step(){
-      var endG = Math.min(groups.length, gi + 1); /* 1 grupo por tick */
-      for(; gi<endG; gi++){
-        var ms;
-        try { ms = _simulateGroup(groups[gi]); }
-        catch(e){ try{console.error('[oq-sim grupo]', gi, e);}catch(_){} ms = []; }
-        matchesByGroup[gi] = ms;
-        doneMatches += ms.length;
-      }
-      try { window._bgSimProgress('open-qualifier', doneMatches, total); } catch(_){}
-      if(gi < groups.length){ setTimeout(step, 0); return; }
+    var hasChip = (typeof window._bgSimStart === 'function');
+    if(hasChip){ try { window._bgSimStart('open-qualifier', 'Open Qualifier', total, { verb:'simulado' }); } catch(_){} }
+    setTimeout(function(){
+      var matchesByGroup = groups.map(function(grp, gi){
+        try { return _simulateGroup(grp); }
+        catch(e){ try{console.error('[oq-sim grupo]', gi, e);}catch(_){} return []; }
+      });
       var ok = false;
       try { ok = _finishOqSim(groups, matchesByGroup); }
       catch(e){ try { console.error('[oq-sim] finish', e); } catch(_){} }
-      try { window._bgSimFinish('open-qualifier', ok, { done:total, total:total }); } catch(_){}
-    }
-    setTimeout(step, 0);
+      if(hasChip){ try { window._bgSimFinish('open-qualifier', ok, { done:total, total:total }); } catch(_){} }
+    }, 30);
   }
   function resetOpenQualifier(){
     try { localStorage.removeItem(STORE_KEY); } catch(_){}
@@ -37348,47 +37900,53 @@ window._showSimProgress = function(opts, onDone){
     buildOpenQualifierClas();
   }
 
-  /* Botón "⬇️ Traer Wild Card" (2026-07-10): trae A MANO los 24
-     ganadores de la Wild Card al pool del Open Qualifier. Cubre 2
-     casos en los que la propagación automática (invalidación en
-     cascada de `_eurInvalidateDownstream` al terminar la Wild Card)
-     no basta:
-       1) Este dispositivo no recibió todavía la invalidación (llegó
-          por otro dispositivo, o el POST de invalidación aún está
-          reintentando en segundo plano) — `oq_simulation_v1` sigue
-          con el sorteo viejo (placeholders) en ESTE dispositivo.
+  /* Botón "⬇️ Traer Wild Card" (2026-07-10, reforzado #3): trae A MANO
+     los 24 ganadores de la Wild Card al pool del Open Qualifier. Cubre
+     3 causas distintas por las que "no se lanzan":
+       1) Este dispositivo no recibió todavía la invalidación en
+          cascada (llegó por otro dispositivo, o el POST aún está
+          reintentando en segundo plano) — `oq_simulation_v1` sigue con
+          el sorteo viejo (placeholders) en ESTE dispositivo.
        2) Existe una snapshot CONGELADA (`europe_committed_v1`,
           "📤 Enviar realidad de cada equipo a su Europa") que se
-          congeló ANTES de que la Wild Card terminara — esa snapshot
-          nunca conoció a los 24 ganadores y `computeOpenQualifierTeams`
-          la devuelve tal cual, ignorando `wc_to_open_qualifier_v1`
-          por diseño (regla "El overlay Equipos por competición... se
-          queda GUARDADO hasta editar/reenviar"). Este botón SÍ
-          recalcula en vivo y actualiza esa zona de la snapshot (si
-          existe) — es una acción EXPLÍCITA del admin, igual de
-          legítima que pulsar "Enviar realidad..." de nuevo. */
+          congeló ANTES de que la Wild Card terminara.
+       3) **La causa MÁS probable**: la zona `uclQual` está en modo
+          🔒 Manual (default de las 6 zonas europeas desde 2026-07-03).
+          En ese modo `computeOpenQualifierTeams()` hace
+          `return _appendManualExtra([], 'uclQual')` en su PRIMERA
+          línea — NUNCA llega a mirar `wc_to_open_qualifier_v1` ni la
+          snapshot congelada, así que recalcular "en vivo" (como hacía
+          la versión anterior de este botón) no servía de nada. El
+          registro como EXTRA MANUAL (`_eurSyncManualExtraFromFeeder`)
+          es la ÚNICA vía que `_appendManualExtra` SIEMPRE aplica, en
+          modo Manual o Automático. */
   function pullWildCardWinners(){
     var wc = null;
     try {
       var raw = localStorage.getItem('wc_to_open_qualifier_v1');
       wc = raw ? JSON.parse(raw) : null;
     } catch(_){}
-    var n = (wc && Array.isArray(wc.teams)) ? wc.teams.length : 0;
-    if(!n){
+    var teams = (wc && Array.isArray(wc.teams)) ? wc.teams : [];
+    if(!teams.length){
       alert('La Wild Card todavía no tiene ganadores guardados.\n\nTermina de simular sus 24 grupos primero (🎮 Sim en la pantalla de la Wild Card).');
       return;
     }
     try {
-      /* Invalida el sorteo cacheado del propio OQ para forzar el
-         recálculo del pool con los ganadores reales. */
+      /* Causa 3 (la más probable): los registra como extra manual de
+         'uclQual' — funciona esté esa zona en Auto o en Manual. */
+      if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
+        window._eurSyncManualExtraFromFeeder('uclQual', teams, 'wild-card');
+      }
+      /* Causa 1: invalida el sorteo cacheado del propio OQ para forzar
+         el recálculo del pool con los ganadores reales. */
       if (typeof window._eurInvalidateDownstream === 'function') {
         window._eurInvalidateDownstream(['oq_simulation_v1']);
       } else {
         try { localStorage.removeItem(STORE_KEY); } catch(_){}
       }
-      /* Recalcula EN VIVO (bypass de cualquier snapshot congelada) y,
-         si esa snapshot existe, la actualizamos para que no vuelva a
-         tapar a los ganadores en el próximo render. */
+      /* Causa 2: recalcula EN VIVO (bypass de cualquier snapshot
+         congelada) y, si esa snapshot existe, la actualizamos para que
+         no vuelva a tapar a los ganadores en el próximo render. */
       var _prevIgnore = window._europeIgnoreFrozen;
       window._europeIgnoreFrozen = true;
       var live = [];
@@ -37409,8 +37967,16 @@ window._showSimProgress = function(opts, onDone){
         }
       } catch(_){}
       buildOpenQualifierClas();
+      /* Confirmación HONESTA: cuenta cuántos de los ganadores de la
+         Wild Card están de verdad dentro del pool recalculado, en vez
+         de asumirlo (bug del primer intento de este botón: el mensaje
+         decía "incluye los 24 ganadores" aunque el pool devuelto por
+         el modo Manual no llevaba ninguno). */
       var real = live.filter(function(t){ return t && t.name && !/^TBD|^__placeholder_/.test(t.name); }).length;
-      alert('✅ Pool del Open Qualifier actualizado: '+real+' / 112 equipos reales (incluye los '+n+' ganadores de la Wild Card).');
+      var gotSet = {};
+      live.forEach(function(t){ if(t && t.name) gotSet[t.name] = true; });
+      var got = teams.filter(function(t){ return t && t.name && gotSet[t.name]; }).length;
+      alert('✅ Pool del Open Qualifier actualizado: '+real+' / 112 equipos reales · '+got+' / '+teams.length+' ganadores de la Wild Card confirmados dentro del pool.');
     } catch(e){
       try { console.error('[oq-pull-wc]', e); } catch(_){}
       alert('⚠️ Error trayendo los ganadores de la Wild Card: '+(e && e.message ? e.message : e));
@@ -40982,21 +41548,35 @@ window._showSimProgress = function(opts, onDone){
 #s-intercontinental .inter-banner-det[open]>summary::after{transform:rotate(180deg);}
 #s-intercontinental .inter-banner-det .inter-banner-info{border:none;border-top:1px solid rgba(255,144,32,.20);border-radius:0;background:transparent;}
 #s-intercontinental .inter-empty{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,210,170,.6);text-align:center;padding:14px 10px;font-style:italic;}
-#s-intercontinental .inter-card{margin:8px 8px;background:linear-gradient(135deg,#1a0a02,#3a1808 50%,#1a0a02);border:1px solid rgba(255,144,32,.5);border-radius:12px;overflow:hidden;padding:10px 6px;}
-#s-intercontinental .inter-card.played{border-color:rgba(255,180,80,.5);}
-#s-intercontinental .inter-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+/* Rediseño videojuego (petición usuario 2026-07-11, "ocurre lo mismo
+   en la intercontinental — colores de la intercontinental, humanos
+   arriba, borde más llamativo, resultados IA en horizontal"): mismo
+   tratamiento que la Recopa, con la paleta PROPIA de Intercontinental
+   (wine oscuro + destello dorado-naranja, igual que `.c-inter`). */
+#s-intercontinental .inter-card{margin:12px 8px;background:linear-gradient(160deg,#1a0a02 0%,#4a1a04 45%,#1a0a02 100%);border:1px solid rgba(255,144,32,.45);border-radius:14px;overflow:hidden;padding:0;position:relative;box-shadow:0 5px 16px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.05);}
+#s-intercontinental .inter-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#1a0404,#6a1818,#ff9020,#ffd54a,#ff9020,#6a1818,#1a0404);}
+#s-intercontinental .inter-card.played{border-color:rgba(255,180,80,.55);box-shadow:0 5px 16px rgba(0,0,0,.55),0 0 0 1px rgba(255,180,80,.18);}
+/* Equipos humanos arriba de la lista (regla más abajo) + borde más
+   llamativo para destacarlos entre la marea de IA-vs-IA. */
+#s-intercontinental .inter-card.has-human{border-color:rgba(255,213,74,.85);box-shadow:0 5px 22px rgba(255,180,40,.28),inset 0 1px 0 rgba(255,255,255,.08);}
+#s-intercontinental .inter-card-tag{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.8px;color:rgba(255,180,80,.65);text-align:center;padding:7px 0 0;text-transform:uppercase;}
+#s-intercontinental .inter-card-row{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px 12px;}
 #s-intercontinental .inter-card-side{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;}
-#s-intercontinental .inter-card-side img{width:48px;height:48px;object-fit:contain;}
+#s-intercontinental .inter-card-side img{width:46px;height:46px;object-fit:contain;filter:drop-shadow(0 2px 5px rgba(0,0,0,.6));}
 #s-intercontinental .inter-card-name{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:.4px;color:#fff;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-weight:700;}
 #s-intercontinental .inter-card-name.win{color:#ffd54a;text-shadow:0 0 12px rgba(255,200,80,.7);}
 #s-intercontinental .inter-card-name.lose{color:#ff8a8a;text-decoration:line-through;text-decoration-color:rgba(255,138,138,.5);opacity:.72;}
 #s-intercontinental .inter-card-mid{display:flex;flex-direction:column;align-items:center;gap:5px;min-width:80px;flex-shrink:0;}
-#s-intercontinental .inter-card-score{font-family:'Bebas Neue',sans-serif;font-size:24px;color:#fff;letter-spacing:2px;background:rgba(0,0,0,.4);border-radius:8px;padding:3px 12px;border:1px solid rgba(255,144,32,.25);}
+#s-intercontinental .inter-card-score{font-family:'Bebas Neue',sans-serif;font-size:23px;color:#ffd54a;letter-spacing:2px;background:rgba(0,0,0,.5);border-radius:8px;padding:4px 14px;border:1px solid rgba(255,180,80,.4);text-shadow:0 0 8px rgba(255,180,80,.35);}
 #s-intercontinental .inter-card-score.played{color:#ffd54a;}
+#s-intercontinental .inter-card-vs{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.4);}
 #s-intercontinental .inter-card-pen{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;color:#ffd080;background:rgba(255,160,40,.15);border:1px solid rgba(255,160,40,.4);border-radius:4px;padding:1px 5px;}
-#s-intercontinental .inter-card-act{padding:5px 12px;border-radius:7px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.1px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;}
-#s-intercontinental .inter-card-act.simular{background:rgba(255,144,32,.16);color:#ffb060;border-color:rgba(255,144,32,.6);}
+#s-intercontinental .inter-card-act{padding:6px 14px;border-radius:7px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.1px;font-weight:700;border:1px solid;cursor:pointer;text-transform:uppercase;}
+#s-intercontinental .inter-card-act.simular{background:rgba(255,144,32,.16);color:#ffb060;border-color:rgba(255,144,32,.6);box-shadow:0 0 10px rgba(255,144,32,.18);}
 #s-intercontinental .inter-card-act.previa{background:rgba(120,180,255,.14);color:#9fc4ff;border-color:rgba(120,180,255,.55);}
+/* Separador visual entre cruces. */
+#s-intercontinental .inter-card + .inter-card{margin-top:4px;}
+#s-intercontinental .inter-card + .inter-card::after{content:'';position:absolute;top:-8px;left:16%;right:16%;height:1px;background:linear-gradient(90deg,transparent,rgba(255,180,80,.3),transparent);}
 #s-intercontinental .inter-simall-wrap{display:flex;justify-content:center;padding:8px 8px 2px;}
 #s-intercontinental .inter-btn-simall{padding:8px 16px;border-radius:8px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;font-weight:700;cursor:pointer;background:rgba(255,160,40,.15);color:#ffa050;border:1.5px solid rgba(255,160,40,.55);}
 #s-intercontinental .inter-champ-row{display:flex;align-items:center;gap:14px;margin:10px 8px;padding:12px;border-radius:12px;background:linear-gradient(135deg,rgba(255,144,32,.18),rgba(110,40,0,.30));border:1.5px solid rgba(255,200,80,.6);box-shadow:0 0 22px rgba(255,144,32,.25);}
@@ -41249,6 +41829,19 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _renderRound(phase){
+    /* Blindaje (mismo contrato que la Recopa, 2026-07-11): un fallo al
+       pintar una tarjeta o la ronda entera NUNCA deja la pantalla en
+       blanco sin aviso. */
+    try { _renderRoundInner(phase); }
+    catch(errRR){
+      try { console.warn('[Inter] _renderRound(' + phase + ') falló:', errRR); } catch(_){}
+      try {
+        var hostErr = document.getElementById('inter-'+phase);
+        if(hostErr) hostErr.innerHTML = '<div class="inter-empty">⚠️ No se pudo pintar esta ronda.<br><button class="inter-btn-sortear" style="margin:8px auto;display:block;" onclick="window._interRender&&window._interRender()">🔄 Reintentar</button></div>';
+      } catch(_){}
+    }
+  }
+  function _renderRoundInner(phase){
     var host=document.getElementById('inter-'+phase); if(!host) return;
     var s=_load()||{}; var ms=(s.sorteo&&s.sorteo[phase])||[];
     if(!ms.length){
@@ -41262,16 +41855,38 @@ window._showSimProgress = function(opts, onDone){
       var l=_logo(s.champion);
       html+='<div class="inter-champ-row">'+(l?'<img src="'+_esc(l)+'"/>':'<span style="font-size:48px;">🏆</span>')+'<div><div class="inter-champ-lbl">CAMPEÓN INTERCONTINENTAL</div><div class="inter-champ-name">'+_esc(s.champion)+'</div></div></div>';
     }
-    ms.forEach(function(m,i){ html+=_renderMatchCard(m,phase,i); });
+    /* Equipos humanos ARRIBA (petición usuario 2026-07-11, mismo
+       tratamiento que la Recopa): sort estable por índice, el `idx`
+       que se pasa a `_renderMatchCard` sigue siendo el ORIGINAL del
+       array guardado (mk='inter_'+phase+'_'+idx depende de él). */
+    var order=ms.map(function(m,i){ return i; });
+    order.sort(function(ia,ib){
+      var ma=ms[ia], mb=ms[ib];
+      var ha=ma && (_isHuman(ma.home)||_isHuman(ma.away)) ? 0 : 1;
+      var hb=mb && (_isHuman(mb.home)||_isHuman(mb.away)) ? 0 : 1;
+      return ha-hb;
+    });
+    order.forEach(function(i){
+      var m = ms[i];
+      try { html+=_renderMatchCard(m,phase,i); }
+      catch(errCard){
+        try { console.warn('[Inter] _renderMatchCard falló en ' + phase + '[' + i + ']:', errCard); } catch(_){}
+        html += '<div class="inter-card" style="opacity:.6;"><div class="inter-card-row" style="justify-content:center;">'
+          + '<div class="inter-card-name" style="color:#ff8080;">⚠️ ' + _esc((m && m.home) || '?') + ' vs ' + _esc((m && m.away) || '?') + ' (error al pintar)</div>'
+          + '</div></div>';
+      }
+    });
     host.innerHTML=html;
   }
 
   function _renderMatchCard(m, phase, idx){
     var played=!!m.played;
+    var tag='<div class="inter-card-tag">CRUCE '+(idx+1)+'</div>';
     var totA=(m.gh||0)+(m.etGh||0), totB=(m.ga||0)+(m.etGa||0);
     var winner=_winnerOf(m), loser=winner?(winner===m.home?m.away:m.home):null;
     var humA=_isHuman(m.home), humB=_isHuman(m.away);
     var bothIA=!humA && !humB;
+    var anyHuman=humA || humB;
     var mk='inter_'+phase+'_'+idx;
     function side(name, isWin, isLose){
       var l=_logo(name); var cls=isWin?'win':(isLose?'lose':''); var hi=_humIco(name);
@@ -41282,15 +41897,22 @@ window._showSimProgress = function(opts, onDone){
       var penTxt=m.penWinner?'<div class="inter-card-pen">PEN '+_esc(m.penWinner==='a'?m.home:m.away)+'</div>':'';
       center='<div class="inter-card-mid"><div class="inter-card-score played">'+totA+'–'+totB+'</div>'+penTxt+'</div>';
     } else if(bothIA){
+      /* Resultado en horizontal (petición usuario) — `.ml-score` no
+         trae `display:flex` por defecto en este contexto, así que sus
+         2 `<div>` internos se apilaban en vertical (0 / – / 0). */
       center='<div class="inter-card-mid">'
-        +'<div class="ml-score" id="ia-sim-score-'+mk+'"><div id="ia-sc-'+mk+'-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div><span style="margin:0 4px;color:rgba(255,255,255,.5);">–</span><div id="ia-sc-'+mk+'-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div></div>'
+        +'<div class="ml-score" id="ia-sim-score-'+mk+'" style="display:flex;align-items:center;justify-content:center;gap:4px;">'
+        +   '<div id="ia-sc-'+mk+'-a" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div>'
+        +   '<span style="color:rgba(255,255,255,.5);">–</span>'
+        +   '<div id="ia-sc-'+mk+'-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div>'
+        + '</div>'
         +'<button class="inter-card-act simular" id="ia-sim-btn-'+mk+'" onclick="window.iaSimLive(\''+mk+'\',\''+_q(m.home)+'\',\''+_q(m.away)+'\',0)">▶ Simular</button>'
         +'</div>';
     } else {
-      center='<div class="inter-card-mid"><div class="inter-card-score">– –</div><button class="inter-card-act previa" onclick="window._interAbrirPrevia&&window._interAbrirPrevia(\''+phase+'\','+idx+')">📋 Previa</button></div>';
+      center='<div class="inter-card-mid"><div class="inter-card-vs">VS</div><button class="inter-card-act previa" onclick="window._interAbrirPrevia&&window._interAbrirPrevia(\''+phase+'\','+idx+')">📋 Previa</button></div>';
     }
     var actaId='ia-acta-'+mk;
-    return '<div class="inter-card '+(played?'played':'')+'"><div class="inter-card-row">'+side(m.home, winner===m.home, loser===m.home)+center+side(m.away, winner===m.away, loser===m.away)+'</div>'
+    return '<div class="inter-card '+(played?'played':'')+(anyHuman?' has-human':'')+'">'+tag+'<div class="inter-card-row">'+side(m.home, winner===m.home, loser===m.home)+center+side(m.away, winner===m.away, loser===m.away)+'</div>'
       +(bothIA && !played ? '<div id="'+actaId+'" style="display:none;border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px;font-family:Rajdhani,sans-serif;font-size:12px;max-height:240px;overflow-y:auto;"></div>' : '')
       +'</div>';
   }
@@ -42942,7 +43564,35 @@ window._showSimProgress = function(opts, onDone){
          use la clasificación real. 2026-06-30. */
       var resEmpty = !(d && Array.isArray(d.results) && d.results.length);
       if(resEmpty) return true;                     // tiene equipos, faltan results → al server
-      return false;                                  // equipos + clasificación ya presentes
+      /* ESCUDOS AUSENTES (2026-07-12, "Previa Champions — el rival
+         tiene escudo pero no sale ni en la card ni en la fase de
+         grupos/calendario"): un dispositivo puede tener la liga
+         COMPLETA (equipos + resultados) pero con `team.shield` vacío
+         para ALGUNOS equipos — p.ej. porque nunca abrió esa liga y solo
+         la hidrató via un seed/backfill ligero, mientras OTRO
+         dispositivo (el que configuró las plantillas, como el iPad del
+         usuario) sí tiene los escudos guardados en el servidor. Sin
+         este check la liga se consideraba "ya completa" y jamás se
+         volvía a pedir al servidor, así que el escudo NUNCA llegaba —
+         ni a la tabla de grupos de la Previa (`_groupTable`) ni a la
+         card del hub.
+         2026-07-12 #2 (refuerzo, "sigue sin salir el 90% de los
+         equipos que sí tienen escudo"): el umbral ANTERIOR ("re-pedir
+         SOLO si a la MAYORÍA le falta") dejaba sin arreglar los casos
+         reales más comunes — una liga con la mayoría de equipos YA
+         con escudo pero UN puñado concreto (p.ej. solo Maccabi Haifa)
+         sin él nunca disparaba el re-fetch de esa liga, así que esos
+         equipos concretos quedaban rotos para siempre. Ahora basta con
+         que a UN SOLO equipo le falte el escudo para re-pedir la liga
+         entera al servidor (el fetch más abajo hace BACKFILL de
+         escudos sin pisar la clasificación local ya presente). */
+      var withShield = 0;
+      d.teams.forEach(function(t){
+        var sh = t && (t.shield || t.logo || t.escudo || t.img || t.src);
+        if (typeof sh === 'string' && sh.trim()) withShield++;
+      });
+      if (withShield < d.teams.length) return true;
+      return false;                                  // equipos + clasificación + escudos ya presentes
     });
     if(!toFetch.length){ done(localRecovered, localRecovered); return; }
     var recovered = localRecovered, finished = false;
@@ -42992,6 +43642,10 @@ window._showSimProgress = function(opts, onDone){
                 } catch(_){}
                 if(!keep){
                   data.results = data.results || [];
+                  /* Escudos: si el local (descartado por menos rico en
+                     jugadores) tenía algún escudo que el server no trae
+                     todavía, no lo perdemos. 2026-07-12. */
+                  try { if (ld && typeof window._lextBackfillShields === 'function') window._lextBackfillShields(data, ld); } catch(_){}
                   localStorage.setItem(key, JSON.stringify(data));
                   try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
                 } else {
@@ -43001,6 +43655,7 @@ window._showSimProgress = function(opts, onDone){
                      empty-guard, igual que `fetchData`). Sin esto el reparto
                      europeo seguía corto aunque el servidor ya tuviera la sim
                      (Wild Card 16/72 en el móvil). 2026-06-30. */
+                  var _ldChanged = false;
                   try {
                     var _lEmpty = !(ld && Array.isArray(ld.results) && ld.results.length);
                     var _sHas   = Array.isArray(data.results) && data.results.length;
@@ -43009,12 +43664,32 @@ window._showSimProgress = function(opts, onDone){
                     if(ld && _sHas && (_lEmpty ? (_sStamp >= _lStamp) : (_sStamp > _lStamp))){
                       ld.results = data.results.slice();
                       if(_sStamp) ld.resultsStamp = _sStamp;
-                      localStorage.setItem(key, JSON.stringify(ld));
-                      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+                      _ldChanged = true;
                     }
                   } catch(_){}
+                  /* ESCUDOS AUSENTES: aunque la plantilla local "gane" por
+                     tener más jugadores, rellenamos con los escudos del
+                     server (nunca pisa uno ya presente) — es exactamente
+                     el caso de este bug: local tiene la liga completa pero
+                     sin escudos, server (el dispositivo que los configuró,
+                     p.ej. el iPad) sí los tiene. 2026-07-12. */
+                  try {
+                    if (ld && typeof window._lextBackfillShields === 'function' && window._lextBackfillShields(ld, data)) _ldChanged = true;
+                  } catch(_){}
+                  if(_ldChanged){
+                    localStorage.setItem(key, JSON.stringify(ld));
+                    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+                  }
                 }
                 recovered++;
+                try { if (typeof window._eurInvalidateLogoIndex === 'function') window._eurInvalidateLogoIndex(); } catch(_){}
+                /* `getLogoEquipo` (part2/misc_body_2.html) memoiza su
+                   resultado por nombre — un equipo consultado ANTES de
+                   que esta liga terminara de hidratarse quedaba con el
+                   escudo-default cacheado PARA SIEMPRE. Sin vaciar esta
+                   cache, la card/gm-modal seguían mostrando "sin
+                   escudo" aunque el escudo ya hubiera llegado. 2026-07-12 #2. */
+                try { if (typeof window._invalidateAllTeamLogos === 'function') window._invalidateAllTeamLogos(); } catch(_){}
               }
             } catch(_){}
             setTimeout(step, 80);
@@ -46561,6 +47236,19 @@ https://api.sofascore.app/api/v1/team/44/image
     if (typeof window._invalidateAliasCache === 'function') {
       try { window._invalidateAliasCache(); } catch(_){}
     }
+    /* Índice de escudos de la Previa de Champions (`_eurResolveTeamLogo`,
+       cache de 30s) — hasta 2026-07-12 #6 SOLO se invalidaba desde
+       `_eurHydrateMissingLeagues` (escudos traídos del servidor), nunca
+       al guardar una liga en ESTE dispositivo. Un admin que añadía/
+       editaba el escudo de un equipo (p.ej. "Editar equipos · Israel")
+       podía seguir viendo el placeholder genérico en la Previa/Ronda
+       Preliminar/fase de grupos hasta 30s después de guardar — el mismo
+       hueco que ya tenía el alias antes de este fix. Invalidar aquí,
+       igual que el alias, garantiza que el siguiente render de la
+       Previa vea el escudo recién guardado al instante. */
+    if (typeof window._eurInvalidateLogoIndex === 'function') {
+      try { window._eurInvalidateLogoIndex(); } catch(_){}
+    }
     /* Si se guardó una de las 3 ligas españolas upper-tier, los
        rosters cambiaron → invalidar el cache de
        `_spanishUpperTierTeamNames` para que el filtro universal
@@ -47134,6 +47822,11 @@ https://api.sofascore.app/api/v1/team/44/image
       return changed;
     } catch(_){ return false; }
   }
+  /* Expuesto en window: `_eurHydrateMissingLeagues` (otra IIFE, más
+     arriba en este mismo archivo) lo necesita para poder rellenar
+     escudos SIN sustituir la clasificación local ya presente
+     (2026-07-12, ver bloque "Previa Champions — escudos ausentes"). */
+  window._lextBackfillShields = _lextBackfillShields;
 
   /* BACKFILL DEL ALIAS DE eFOOTBALL (2026-07-04). Espejo EXACTO de
      _lextBackfillShields pero para `efootballAlias`: el alias que el
@@ -59668,24 +60361,45 @@ https://api.sofascore.app/api/v1/team/44/image
         } catch(_){}
         return false;
       }
-      /* Bug 2026-06-13 (foto usuario «pospuse 4 y solo salen 2»): el
-         bucketing ESTRICTO descartaba (return null) los partidos cuyo
-         nombre no casaba con el hub ni con la selección — típicamente las
-         copas/Champions del club guardadas como alias legacy "Bayern
-         Munich". Ahora: si toca la SELECCIÓN del hub → 'sel'; TODO lo
-         demás (club + cualquier competición del club) → 'club'. Así
-         NINGÚN partido pospuesto se pierde. */
+      /* Club de ESTE hub (alias-safe: nombre exacto, o alias legacy —
+         "Bayern Munich" para Toñín, "PSG"/"Paris SG" para Izan, etc. —
+         resuelto vía `_mhSameMister`, que solo casa si AMBOS nombres los
+         dirige el MISMO mister). NO usar `_aliasesLiga` aquí: esa función
+         inyecta el alias "Bayern Munich" para CUALQUIER hub (es genérica
+         para el colector de Liga EA), lo que colaría los partidos de
+         Liverpool en la caja de cualquier otro mister. */
+      function _isClubName(n){
+        if (_norm(n) === _norm(hub)) return true;
+        try {
+          if (typeof window._isHumanClubCanonico === 'function'
+              && window._isHumanClubCanonico(n)
+              && typeof window._mhSameMister === 'function'
+              && window._mhSameMister(hub, n)) return true;
+        } catch(_){}
+        return false;
+      }
+      /* Bug 2026-07-12 (fotos usuario, caja «Real Madrid-Inglaterra-Acsa»):
+         el bucketing SIN filtro de pertenencia mandaba CUALQUIER pospuesto
+         que no casara con la SELECCIÓN de este hub al bucket 'club' por
+         defecto — así los pospuestos de Francia (Toñín) y Noruega (Isra)
+         aparecían en la caja del Real Madrid/Inglaterra. `pend_hvh_deferred_v1`
+         es un store GLOBAL compartido por las 7 cajas de mister; hay que
+         filtrar primero por PERTENENCIA (club o selección de ESTE mister,
+         en home o away) y solo bucketear lo que sí pertenece. Lo que no
+         pertenece a NINGÚN lado se EXCLUYE (no se pierde: sigue en la caja
+         del mister correcto). */
       function _entrySide(e){
-        if (!e) return 'club';
+        if (!e) return null;
         var hN = _eName(e.home);
         var aN = _eName(e.away);
         if (_isSelName(hN) || _isSelName(aN)) return 'sel';
-        return 'club';
+        if (_isClubName(hN) || _isClubName(aN)) return 'club';
+        return null;
       }
       var bySide = { club: [], sel: [] };
       deferred.forEach(function(e){
         var s = _entrySide(e);
-        bySide[s].push(e);
+        if (s) bySide[s].push(e);
       });
       var posTabs = [
         { id:'club', label:'Club',      emoji:'🛡', name:hub,        items:bySide.club },

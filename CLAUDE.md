@@ -1,5 +1,62 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `saveData` también invalidaba el índice de escudos con retraso de hasta 30s — ahora invalida al instante (obligatorio, 2026-07-12 #6)
+
+**Petición usuario 2026-07-12** (2 fotos, Ronda Preliminar de la Previa
+de Champions, "otra vez con el problema de los equipos que no existen
+en el juego, que tienen alias para que emerga la ❓️"): tras editar el
+equipo **Maccabi Haifa** en «Editar equipos · Israel» (escudo ya
+puesto + alias eFootball ya relleno: "Europa - 2ª 🏴 Norwich ⭐⭐⭐½"),
+el partido **Atlético Madrid vs Maccabi Haifa** de la Ronda Preliminar
+seguía mostrando el escudo genérico (iniciales "MAC" sobre fondo
+gris) en la PANTALLA DE PREVIA.
+
+### Causa raíz — el índice de escudos NUNCA se invalidaba al editar en local
+
+`_eurResolveTeamLogo` (el resolutor cross-liga por nombre que la
+sección #5 de arriba introdujo para `_logoOf` en la Previa/Ronda
+Preliminar/fase de grupos) cachea su índice `_eurLogoIdxCache` durante
+**30 segundos** — barato para no re-escanear ~50 `ligaExt_*` en cada
+fila de una tabla. La invalidación explícita
+(`window._eurInvalidateLogoIndex()`) SOLO se llamaba desde
+`_eurHydrateMissingLeagues` (cuando trae escudos NUEVOS del
+SERVIDOR) — **nunca** desde `saveData` (el chokepoint único por el
+que pasa CUALQUIER guardado de una liga en ESTE dispositivo, incluida
+la propia edición del admin en «Editar equipos»). El **alias**
+(`_ALIAS_CACHE`, TTL 3s) SÍ se invalidaba ya en `saveData` — por eso
+el alias podía llegar a aparecer tras unos segundos de espera (vía el
+`_ppAliasDeferredCheck` con reintentos + el TTL corto), mientras el
+escudo se quedaba con el placeholder genérico hasta 30s después de
+cada guardado, y CUALQUIER guardado posterior en OTRA liga
+reiniciaba la ventana de 30s sin que el admin lo supiera.
+
+### Fix
+
+`saveData(k,d)` (`misc_body_1.html`, el único punto por el que pasa
+TODO guardado de `ligaExt_<slug>` en este dispositivo — editor
+clásico `lextSaveTeam`, editor de cards `_lcCommit`, pegado masivo,
+sim de liga/copa, etc.) llama ahora también a
+`window._eurInvalidateLogoIndex()` justo después de
+`window._invalidateAliasCache()` — mismo patrón, mismo sitio. El
+siguiente render de la Previa de Champions (card del hub, tablas de
+grupo, Ronda Preliminar, jornadas del fixture) ve el escudo recién
+guardado al instante, sin esperar el TTL de 30s.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un cache nuevo de identidad por equipo (escudo,
+   alias, estadio, plantilla…) se invalide SOLO desde una ruta de
+   hidratación del SERVIDOR (`_eurHydrateMissingLeagues` y
+   equivalentes) sin invalidarse TAMBIÉN desde `saveData` — el guardado
+   LOCAL del propio admin es la ruta MÁS COMÚN de cambio, y sin
+   invalidación ahí el fix de resolución cross-liga (sección #5) se
+   siente "a medias" (funciona para escudos ya viejos, tarda hasta
+   30s para uno recién editado).
+2. Todo cache nuevo de este tipo hereda el patrón: su función
+   `_xxxInvalidateYyy()` se registra en `window.*` y se llama desde
+   `saveData` junto a `_invalidateAliasCache`/`_invalidateLineStatsCache`
+   — un único chokepoint, no un botón/ruta aislada.
+
 ## Previa de Champions — escudos AUSENTES en la card, la fase de grupos y los partidos del Atlético: resolutor cross-liga por nombre (obligatorio, 2026-07-12 #5)
 
 **Petición usuario 2026-07-12** (6 fotos): "mi hija iPad tiene escudo y

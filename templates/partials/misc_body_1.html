@@ -47139,6 +47139,19 @@ https://api.sofascore.app/api/v1/team/44/image
     if (typeof window._invalidateAliasCache === 'function') {
       try { window._invalidateAliasCache(); } catch(_){}
     }
+    /* Índice de escudos de la Previa de Champions (`_eurResolveTeamLogo`,
+       cache de 30s) — hasta 2026-07-12 #6 SOLO se invalidaba desde
+       `_eurHydrateMissingLeagues` (escudos traídos del servidor), nunca
+       al guardar una liga en ESTE dispositivo. Un admin que añadía/
+       editaba el escudo de un equipo (p.ej. "Editar equipos · Israel")
+       podía seguir viendo el placeholder genérico en la Previa/Ronda
+       Preliminar/fase de grupos hasta 30s después de guardar — el mismo
+       hueco que ya tenía el alias antes de este fix. Invalidar aquí,
+       igual que el alias, garantiza que el siguiente render de la
+       Previa vea el escudo recién guardado al instante. */
+    if (typeof window._eurInvalidateLogoIndex === 'function') {
+      try { window._eurInvalidateLogoIndex(); } catch(_){}
+    }
     /* Si se guardó una de las 3 ligas españolas upper-tier, los
        rosters cambiaron → invalidar el cache de
        `_spanishUpperTierTeamNames` para que el filtro universal

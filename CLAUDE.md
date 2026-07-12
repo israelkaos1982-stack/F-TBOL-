@@ -1,5 +1,107 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Previa de Champions — escudos AUSENTES en la card, la fase de grupos y los partidos del Atlético: resolutor cross-liga por nombre (obligatorio, 2026-07-12 #5)
+
+**Petición usuario 2026-07-12** (6 fotos): "mi hija iPad tiene escudo y
+no sale en la principal del calendario del Atlético Madrid en la
+previa de champion, todos los equipos tienen escudo y no salen en la
+fase de grupos ni los partidos que va a jugar el Atlético Madrid.
+Tienen que salir los escudos de todos los equipos." Las plantillas de
+Resto de Ligas SÍ tienen escudo configurado (confirmado en el iPad),
+pero en la Previa de Champions (card del hub, tablas de los 12 grupos,
+Ronda Preliminar, jornadas del fixture del Atlético) la inmensa
+mayoría de equipos salían SIN escudo — solo un puñado (los de unas
+pocas ligas concretas) lo mostraban.
+
+### Causa raíz (2 capas del mismo problema: "el escudo vive en OTRO dispositivo/liga que este render no consulta")
+
+1. **`_eurHydrateMissingLeagues`** (`misc_body_1.html`, el auto-
+   hidratador que trae del servidor las `ligaExt_<slug>` que faltan
+   antes de calcular cualquier reparto europeo) solo comprobaba si a
+   una liga le faltaban EQUIPOS o RESULTADOS — nunca si le faltaban
+   ESCUDOS. Una liga que YA tenía equipos+resultados completos en
+   ESTE dispositivo (aunque sin `team.shield`, por ejemplo porque este
+   móvil nunca abrió esa liga y solo la hidrató vía un seed/backfill
+   ligero) se consideraba "ya completa" y NUNCA se volvía a pedir al
+   servidor — así que el escudo (guardado en el servidor por el iPad)
+   jamás llegaba a este dispositivo.
+2. **`_logoOf`/`_sh`** (los resolutores de escudo por NOMBRE que usan
+   `_badge`/`_badgeBig` en la Previa — `_groupTable`, `_prelimTieHtml`,
+   `_fgJornadaHtml` — y `_cardCupCard` en la card del hub) caían
+   ÚNICAMENTE a `getTeamLogoUrl`/`TEAM_LOGOS`, que **nunca** escanean
+   `ligaExt_<slug>` (regla ya documentada, sección "escudo del rival
+   viaja con la previa" de arriba). Aunque el pool de la Previa SÍ
+   resuelve bien el `.logo` en el momento de construir el pool (vía
+   `_teamLogo(t)`), ese valor queda CONGELADO en `wprev_state_v1` en
+   cuanto se sortea — si en ese instante el dispositivo no tenía la
+   liga de origen hidratada, el `.logo` quedaba vacío PARA SIEMPRE en
+   ese grupo/cruce/fixture ya sorteado, sin que ninguna hidratación
+   posterior lo corrigiera retroactivamente.
+
+### Fix
+
+- **`_eurHydrateMissingLeagues`**: el filtro `toFetch` añade un 3er
+  motivo para re-pedir una liga al servidor — si menos de la mitad de
+  sus equipos tienen `shield`/`logo`/`escudo`/`img`/`src` no vacío, se
+  re-hidrata. En el fetch, la rama donde el local "gana" por tener más
+  jugadores (`keep=true`) ahora TAMBIÉN hace backfill de escudos desde
+  la respuesta del servidor hacia el local (antes solo mezclaba
+  `results`) — y la rama donde gana el servidor hace el backfill en
+  sentido inverso, para no perder un escudo que solo estuviera en la
+  copia local descartada. Usa `window._lextBackfillShields` (el helper
+  ya existente de la sección "Escudos de Resto de Ligas — backfill por
+  nombre", ahora expuesto en `window` para poder llamarlo desde esta
+  otra IIFE).
+- **`window._eurResolveTeamLogo(name)`** (nuevo, `misc_body_1.html`,
+  junto a `_teamLogo`): escanea TODAS las `ligaExt_<slug>` cacheadas
+  localmente y devuelve el escudo por nombre normalizado —
+  independientemente de cuándo se sorteó/persistió el equipo en
+  cualquier pool. Cache de 30s (`window._eurInvalidateLogoIndex()` la
+  invalida en cuanto `_eurHydrateMissingLeagues` trae escudos nuevos).
+  Es el resolutor "por nombre, en caliente" que faltaba: cubre tanto
+  equipos con `.logo` vacío en snapshots YA sorteados (Ronda
+  Preliminar, grupos, fixture) como cualquier pool futuro.
+- **`_sh` (card del hub, `misc_body_1.html`, dentro de
+  `_cardCupCard`)** y **`_logoOf` (Previa, `part2/misc_body_2.html`)**
+  caen a `window._eurResolveTeamLogo(name)` cuando `getTeamLogoUrl`/
+  `TEAM_LOGOS` no lo resuelven — esto arregla de un plumazo la card
+  del hub, la tabla de cada uno de los 12 grupos (`_groupTable`), los
+  cruces de la Ronda Preliminar (`_prelimTieHtml`) y las jornadas del
+  fixture del club humano (`_fgJornadaHtml`), sin tener que re-sortear
+  nada ni tocar los datos ya persistidos.
+- **`_wprevKoAbrirPrevia`/`window._wprevPlayHumanMatch`**
+  (`part2/misc_body_2.html`, los 2 puntos que abren la previa/gm-modal
+  de un partido concreto de la Previa): `_hLogo`/`_aLogo` caen a
+  `_logoOf(nombre)` cuando el `.logo` del pool venía vacío, para que
+  la PANTALLA DE PREVIA (no solo la tabla) también muestre el escudo
+  real al abrir el partido del Atlético.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un auto-hidratador de ligas (`_eurHydrateMissingLeagues`
+   o cualquier futuro) considere una liga "completa" mirando solo
+   equipos+resultados. Si le faltan escudos a la mayoría de sus
+   equipos, sigue necesitando re-hidratarse — el escudo es un dato de
+   IDENTIDAD que puede vivir en OTRO dispositivo aunque este ya tenga
+   la clasificación entera.
+2. **PROHIBIDO** que una tabla/card/cruce NUEVO de la Previa (o de
+   cualquier competición que dibuje escudos de Resto de Ligas) resuelva
+   el escudo SOLO desde el campo `.logo` congelado en el momento del
+   sorteo, sin un fallback que re-resuelva por nombre en caliente
+   (`window._eurResolveTeamLogo`). Un pool sorteado en un dispositivo
+   con hidratación incompleta congela escudos vacíos para siempre si no
+   hay este fallback.
+3. **PROHIBIDO** que `_sh`/`_logoOf` (o cualquier resolutor de escudo
+   por nombre nuevo en el hub o en una competición) se quede solo en
+   `getTeamLogoUrl`/`TEAM_LOGOS` — ambos NUNCA escanean `ligaExt_*`.
+   Todo resolutor de este tipo hereda `window._eurResolveTeamLogo` como
+   último fallback.
+4. Toda competición NUEVA que sortee equipos de Resto de Ligas hereda
+   este fix automáticamente en cuanto sus renders de escudo pasen por
+   `_sh`/`_logoOf` (o llamen directamente a `window._eurResolveTeamLogo`
+   como último recurso) — no hardcodear una lista de ligas "que sí
+   tienen escudo".
+
 ## Previa de Champions — card del HUB para "Previa Champions — J<N>" + el escudo del rival viaja con la previa (obligatorio, 2026-07-12 #4)
 
 **Petición usuario 2026-07-12** (4 fotos): "en la caja Atlético Madrid

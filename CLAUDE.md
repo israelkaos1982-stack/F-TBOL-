@@ -1,5 +1,76 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La card del HUB ("Próximo partido") también hereda la búsqueda server-side del escudo — `_psVsBlockHtml` se había quedado fuera del fix #7 (obligatorio, 2026-07-12 #8)
+
+**Petición usuario 2026-07-12** (6 fotos, "Dunajska Streda" vs Atlético
+Madrid, Previa de Champions — mismo caso que la sección #7 de abajo):
+con el escudo y la plantilla de Dunajska Streda YA confirmados en el
+editor de «Eslovaquia» (39 jugadores, escudo `cdn.resfu.com` válido),
+la card **"Próximo partido"** del hub (la mini-card con escudo+VS+
+botón "PREVIA · JUGAR" que aparece ANTES de entrar a la Pantalla de
+Previa) seguía mostrando el hueco de Dunajska Streda completamente
+VACÍO (ni siquiera el placeholder de iniciales) — pese a que, al pulsar
+"PREVIA · JUGAR" y entrar a la Pantalla de Previa completa, el escudo
+sí terminaba apareciendo (gracias al fix #7).
+
+### Causa raíz — el fix #7 solo tocó la Pantalla de Previa, no la card del HUB
+
+El fix #7 (`_ppShieldDeferredCheck` en `index.bundle.js`) resuelve el
+escudo con búsqueda diferida en servidor SOLO dentro de
+`_renderPreviaMeta` (la Pantalla de Previa a pantalla completa). La
+card del HUB (`_cardCupCard`/`_wprevHubResolve` en `misc_body_1.html`,
+además de las cards de Liga/Selección que comparten el mismo helper)
+renderiza sus escudos vía `_psVsBlockHtml` → `_psVsTeamHtml`, que
+SOLO probaba `o.shield` (ya resuelto por el caller, típicamente
+`getTeamLogoUrl`/`_eurResolveTeamLogo`, ambos 100% locales) y, si
+venía vacío, pintaba un `<div class="ps-shield"></div>` MUDO — sin id,
+sin fallback de iniciales, y sin NINGÚN intento de preguntar al
+servidor. Un dispositivo con `localStorage` lleno (mismo escenario
+"Navegador sin espacio" de la sección #7) se quedaba con ese hueco
+vacío para siempre en la card del hub, aunque la Previa completa (una
+pantalla distinta, con su propio fix) sí lo resolviera segundos después.
+
+### Fix
+
+- **`_psVsTeamHtml(o, side)`** (`misc_body_1.html`): el `<img>`/`<div>`
+  del escudo lleva ahora un id (`ps-shield-home`/`ps-shield-away`).
+- **`_psResolveShield(o)`** (nuevo, extraído de la lógica que antes
+  vivía inline en `_psVsTeamHtml`): resuelve `o.shield` → fallback
+  `getTeamLogoUrl(o.name)`. Reutilizado por `_psVsBlockHtml` para saber
+  si hace falta el fallback de servidor SIN duplicar la resolución.
+- **`_psShieldDeferredCheck(side, teamName)`** (nuevo, mismo patrón
+  EXACTO que `_ppShieldDeferredCheck`): llama a
+  `window._eurTeamShieldServerSearch` (el endpoint
+  `/api/team-shield/<nombre>` ya introducido en el fix #7) y, si lo
+  encuentra, sustituye el placeholder vacío por el `<img>` real.
+- **`_psVsBlockHtml(home, away, centerHtml)`**: tras construir el HTML,
+  si a CUALQUIER lado le falta el escudo, agenda
+  (`setTimeout(fn, 0)`, para correr justo después de que el caller
+  asigne `st.innerHTML`) la comprobación diferida del lado que lo
+  necesite. Como `_psVsBlockHtml` es el ÚNICO punto por el que pasan
+  TODAS las cards del hub (Copa/Champions/Liga/Selección/Previa —
+  7 call-sites), el fix cubre todas de un plumazo sin tocar cada
+  call-site por separado.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un helper de escudo NUEVO del hub (o cualquier
+   variante futura de `_psVsTeamHtml`) pinte un placeholder vacío sin
+   id y sin invocar `_psShieldDeferredCheck` cuando la resolución local
+   viene vacía. El patrón "resolución local → placeholder con id →
+   búsqueda diferida en servidor" es el mismo en LA PANTALLA DE PREVIA
+   (`_ppShieldDeferredCheck`) y en LA CARD DEL HUB
+   (`_psShieldDeferredCheck`) — ambos son obligatorios, uno no sustituye
+   al otro (son 2 componentes de UI distintos).
+2. **PROHIBIDO** volver a resolver el escudo de `_psVsBlockHtml`/
+   `_psVsTeamHtml` de forma duplicada (una resolución para decidir si
+   hace falta el fallback, otra distinta para pintar el `<img>`). Usar
+   SIEMPRE `_psResolveShield` en ambos puntos para que no puedan
+   discrepar.
+3. Toda card NUEVA del hub que necesite escudo de equipo debe pasar por
+   `_psVsBlockHtml` (no reinventar el pintado de escudo) para heredar
+   este fallback automáticamente.
+
 ## Escudo, alias Y plantilla de un equipo IA de Resto de Ligas — los 3 heredan búsqueda SERVER-SIDE, no solo local (obligatorio, 2026-07-12 #7)
 
 **Petición usuario 2026-07-12** (4 fotos, "Dunajska Streda" vs Atlético

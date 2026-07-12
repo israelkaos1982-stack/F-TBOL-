@@ -60264,24 +60264,45 @@ https://api.sofascore.app/api/v1/team/44/image
         } catch(_){}
         return false;
       }
-      /* Bug 2026-06-13 (foto usuario «pospuse 4 y solo salen 2»): el
-         bucketing ESTRICTO descartaba (return null) los partidos cuyo
-         nombre no casaba con el hub ni con la selección — típicamente las
-         copas/Champions del club guardadas como alias legacy "Bayern
-         Munich". Ahora: si toca la SELECCIÓN del hub → 'sel'; TODO lo
-         demás (club + cualquier competición del club) → 'club'. Así
-         NINGÚN partido pospuesto se pierde. */
+      /* Club de ESTE hub (alias-safe: nombre exacto, o alias legacy —
+         "Bayern Munich" para Toñín, "PSG"/"Paris SG" para Izan, etc. —
+         resuelto vía `_mhSameMister`, que solo casa si AMBOS nombres los
+         dirige el MISMO mister). NO usar `_aliasesLiga` aquí: esa función
+         inyecta el alias "Bayern Munich" para CUALQUIER hub (es genérica
+         para el colector de Liga EA), lo que colaría los partidos de
+         Liverpool en la caja de cualquier otro mister. */
+      function _isClubName(n){
+        if (_norm(n) === _norm(hub)) return true;
+        try {
+          if (typeof window._isHumanClubCanonico === 'function'
+              && window._isHumanClubCanonico(n)
+              && typeof window._mhSameMister === 'function'
+              && window._mhSameMister(hub, n)) return true;
+        } catch(_){}
+        return false;
+      }
+      /* Bug 2026-07-12 (fotos usuario, caja «Real Madrid-Inglaterra-Acsa»):
+         el bucketing SIN filtro de pertenencia mandaba CUALQUIER pospuesto
+         que no casara con la SELECCIÓN de este hub al bucket 'club' por
+         defecto — así los pospuestos de Francia (Toñín) y Noruega (Isra)
+         aparecían en la caja del Real Madrid/Inglaterra. `pend_hvh_deferred_v1`
+         es un store GLOBAL compartido por las 7 cajas de mister; hay que
+         filtrar primero por PERTENENCIA (club o selección de ESTE mister,
+         en home o away) y solo bucketear lo que sí pertenece. Lo que no
+         pertenece a NINGÚN lado se EXCLUYE (no se pierde: sigue en la caja
+         del mister correcto). */
       function _entrySide(e){
-        if (!e) return 'club';
+        if (!e) return null;
         var hN = _eName(e.home);
         var aN = _eName(e.away);
         if (_isSelName(hN) || _isSelName(aN)) return 'sel';
-        return 'club';
+        if (_isClubName(hN) || _isClubName(aN)) return 'club';
+        return null;
       }
       var bySide = { club: [], sel: [] };
       deferred.forEach(function(e){
         var s = _entrySide(e);
-        bySide[s].push(e);
+        if (s) bySide[s].push(e);
       });
       var posTabs = [
         { id:'club', label:'Club',      emoji:'🛡', name:hub,        items:bySide.club },

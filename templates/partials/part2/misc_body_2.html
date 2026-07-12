@@ -6837,6 +6837,25 @@
       try { delete TEAM_LOGO_CACHE[String(name).trim()]; } catch(_){}
     };
   } catch(_){}
+  /* Vacía TODA la cache de `getLogoEquipo` (2026-07-12): un equipo
+     consultado ANTES de que su liga terminara de hidratarse desde el
+     servidor (`_eurHydrateMissingLeagues`) quedaba memoizado con el
+     escudo-default (Estepona) PARA SIEMPRE en esta sesión — ninguna
+     hidratación posterior lo corregía porque `getLogoEquipo` mira la
+     cache ANTES que cualquier fuente. `_eurHydrateMissingLeagues` llama
+     a esto tras traer escudos nuevos del servidor. Vaciar TODO el
+     objeto es más simple y seguro que invalidar por nombre (evita
+     desincronizar variantes de grafía) — es solo una cache de
+     rendimiento, recalcular no tiene coste de corrección. */
+  try {
+    window._invalidateAllTeamLogos = function(){
+      try {
+        for (var k in TEAM_LOGO_CACHE) {
+          if (Object.prototype.hasOwnProperty.call(TEAM_LOGO_CACHE, k)) delete TEAM_LOGO_CACHE[k];
+        }
+      } catch(_){}
+    };
+  } catch(_){}
   var BACKEND_ESCUDOS = window.BACKEND_ESCUDOS || {};
   var BACKEND_ESCUDOS_ALIASES = window.BACKEND_ESCUDOS_ALIASES || {};
   var BACKEND_ESCUDO_DEFAULT = window.BACKEND_ESCUDO_DEFAULT || '/static/img/escudos-fallback/estepona.svg';
@@ -10150,6 +10169,17 @@
         var _endBtnNow = document.getElementById('gm-btn-end');
         if (_endBtnNow) { _endBtnNow.disabled = true; _endBtnNow.style.opacity = '0.35'; }
       } catch(_){}
+      /* Captura extra de resiliencia (2026-07-12) EN EL MOMENTO EXACTO
+         de confirmar: si la cadena imbatida→stats→MVP→WhatsApp se
+         queda atascada (bug "caja opaca", fotos usuario Atlético
+         Madrid vs Maccabi Haifa) y el único disparador que llega a
+         tiempo es que el usuario cierre la pestaña por su cuenta, esta
+         captura ya deja el snapshot listo ANTES de que la cadena
+         empiece a mutar el partido — así la recarga reanuda desde
+         justo aquí en vez de perder el partido entero. Los 3
+         disparadores globales (pagehide/beforeunload/visibilitychange)
+         siguen siendo la red principal; esto es solo un refuerzo. */
+      try { if (typeof window._gmPersistNow === 'function') window._gmPersistNow(); } catch(_){}
       try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('SÍ pulsado → llamando yesCb()'); } catch(_){}
       /* PRIMER disparo de la cadena — mismo blindaje que las reentradas
          (obligatorio, 2026-07-06, refuerzo tras foto usuario «Maccabi Tel
@@ -12518,7 +12548,12 @@
     if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
     var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
     if (tlu) return tlu;
-    return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+    /* Resto de Ligas por nombre + oculta el escudo-default (2026-07-12,
+       ver `_pickLogo`/index.bundle.js para la explicación completa). */
+    var eurLogo = (typeof window._eurResolveTeamLogo === 'function') ? (window._eurResolveTeamLogo(name) || '') : '';
+    if (eurLogo) return eurLogo;
+    var ge = (typeof getLogoEquipo === 'function') ? getLogoEquipo(name) : '';
+    return (ge && ge.indexOf('estepona') === -1) ? ge : '';
   }
 
   function _gmEvtRow(e, homeTeam, awayTeam) {
@@ -14780,7 +14815,12 @@
       if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
       var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
       if (tlu) return tlu;
-      return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+      /* Resto de Ligas por nombre + oculta el escudo-default
+         (2026-07-12, ver `_pickLogo`/index.bundle.js). */
+      var eurLogo = (typeof window._eurResolveTeamLogo === 'function') ? (window._eurResolveTeamLogo(name) || '') : '';
+      if (eurLogo) return eurLogo;
+      var ge = (typeof getLogoEquipo === 'function') ? getLogoEquipo(name) : '';
+      return (ge && ge.indexOf('estepona') === -1) ? ge : '';
     }
     ['a','b'].forEach(function(side) {
       var name = side === 'a' ? _gm.home : _gm.away;
@@ -15844,6 +15884,11 @@
     }
     _gmDiagLog('→ TODOS los gates pasados, marcando finished=true.');
     _gm.finished = true;
+    /* El partido ya no necesita reanudarse tras un cierre/recarga — se
+       limpia el snapshot de resiliencia para que no resucite un
+       partido ya terminado (mismo criterio que `_gmBg`, que también se
+       borra al finalizar). */
+    try { if (typeof _gmClearPersisted === 'function') _gmClearPersisted(); } catch(_){}
     /* Lesiones: registrar las generadas en este partido y decrementar
        la baja de ambos equipos (1 partido jugado = 1 partido menos de
        baja). Mismo criterio que _mlFinishMatchGen — necesario para que
@@ -16509,6 +16554,8 @@
       if (window.__GM_LIVE === _gm) window.__GM_LIVE = null;
       if (window._gmBg && window._gmBg[bgKey]) delete window._gmBg[bgKey];
     } catch(_){}
+    /* Un partido cancelado no debe resucitar al reabrir la previa. */
+    try { if (typeof _gmClearPersisted === 'function') _gmClearPersisted(); } catch(_){}
     try { if (typeof window._rebuildLiveHub === 'function') window._rebuildLiveHub(); } catch(_){}
     try {
       var modal = document.getElementById('gm-modal');
@@ -16838,6 +16885,69 @@
       _eurKoLeg: _gm._eurKoLeg
     };
   }
+
+  /* ── PERSISTENCIA FRENTE A CIERRE/RECARGA (gm-modal) ───────────────
+     A diferencia de los partidos de Liga (`_liveStore`, con flush en
+     pagehide/beforeunload/visibilitychange + servidor — ver más abajo
+     en este archivo), el gm-modal (Copa, Champions, Recopa, Supercopa,
+     Torneos de Verano…) no guardaba NADA mientras el partido estaba en
+     curso: `window._gm`/`window.__GM_LIVE` viven SOLO en memoria JS.
+     Bug 2026-07-12 (fotos usuario, «Atlético Madrid vs Maccabi Haifa,
+     Champions League»): tras rellenar estadísticas + MVP y pulsar
+     FINALIZAR, la pantalla se quedaba con una caja opaca sin poder
+     avanzar; la ÚNICA recuperación era cerrar la web y volver a jugar
+     el partido ENTERO desde la previa (alineación, estadísticas y MVP
+     otra vez), porque no había ABSOLUTAMENTE NADA que restaurar.
+     Este bloque añade un snapshot en localStorage — SOLO del partido
+     actualmente visible, un único slot, mismo alcance que el propio
+     `_gm` (no cubre partidos de `_gmBg` en 2º plano) — que se refresca
+     en los MISMOS disparadores que ya protegen `_liveStore`, y se
+     consulta al reabrir el MISMO partido para reanudar en vez de
+     empezar de cero. */
+  var _GM_LS_KEY = 'gm_live_state_v1';
+  function _gmPersistKeyFor(j, home, away, comp, tourId, tourKey) {
+    return _gmKey(j, home, away) + '|' + (tourId||'') + '|' + (tourKey||'') + '|' + (comp||'');
+  }
+  function _gmPersistKey() {
+    return _gmPersistKeyFor(_gm.j, _gm.home, _gm.away, _gm.comp, _gm._tourId, _gm._tourKey);
+  }
+  function _gmPersistNow() {
+    try {
+      if (!_gmIsLiveCurrent()) return;
+      var payload = { key: _gmPersistKey(), snap: _gmSnapshotCurrent(), ts: Date.now() };
+      var json = JSON.stringify(payload);
+      if (typeof window._lsSetSafe === 'function') window._lsSetSafe(_GM_LS_KEY, json);
+      else localStorage.setItem(_GM_LS_KEY, json);
+    } catch(_){}
+  }
+  function _gmClearPersisted() {
+    try { localStorage.removeItem(_GM_LS_KEY); } catch(_){}
+  }
+  /* Lee el snapshot persistido SOLO si corresponde EXACTAMENTE al
+     partido que se está pidiendo abrir (mismo j/home/away/comp/torneo)
+     y no está ya marcado como finalizado (un partido finalizado no
+     debe resucitar — igual que `_gmBg` lo borra al terminar). */
+  function _gmReadPersisted(j, home, away, comp, tourId, tourKey) {
+    try {
+      var raw = localStorage.getItem(_GM_LS_KEY);
+      if (!raw) return null;
+      var payload = JSON.parse(raw);
+      if (!payload || !payload.snap) return null;
+      if (payload.key !== _gmPersistKeyFor(j, home, away, comp, tourId, tourKey)) return null;
+      if (payload.snap.finished) return null;
+      return payload.snap;
+    } catch(_){ return null; }
+  }
+  try { window._gmPersistNow = _gmPersistNow; window._gmClearPersisted = _gmClearPersisted; } catch(_){}
+  /* Mismos 3 disparadores que `_liveStore` (pagehide/beforeunload no
+     siempre saltan en móvil; visibilitychange→hidden es la red que
+     cubre el cambio de app, p.ej. al abrir WhatsApp para compartir). */
+  window.addEventListener('pagehide', _gmPersistNow);
+  window.addEventListener('beforeunload', _gmPersistNow);
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'hidden') _gmPersistNow();
+  });
+
   /* Reabre un partido guardado en `window._gmBg`. Invoca `gmOpen` con
      los parámetros del snapshot; la propia `gmOpen` se encarga de
      restaurarlo (snapshot-el-actual y luego load-el-pedido). */
@@ -16892,6 +17002,21 @@
     var reqKey = _gmKey(j, home, away);
     var saved = (window._gmBg && window._gmBg[reqKey]) || null;
     if (saved) { delete window._gmBg[reqKey]; }
+    /* Si NO hay snapshot en memoria (_gmBg — solo sobrevive mientras la
+       pestaña sigue viva), probar el de localStorage: sobrevive a un
+       cierre/recarga real de la pestaña (ver bloque "PERSISTENCIA
+       FRENTE A CIERRE/RECARGA" más abajo, junto a _gmSnapshotCurrent).
+       `window._gmPendingTour` ya lo deja puesto `abrirTorneo` justo
+       ANTES de llamar a `gmOpen`, así que está disponible aquí mismo
+       para identificar el torneo/ronda exactos. */
+    if (!saved && typeof _gmReadPersisted === 'function') {
+      try {
+        var _pendTourId  = (window._gmPendingTour && comp === 'torneo') ? window._gmPendingTour.tourId  : null;
+        var _pendTourKey = (window._gmPendingTour && comp === 'torneo') ? window._gmPendingTour.tourKey : null;
+        var _lsSaved = _gmReadPersisted(j, home, away, comp, _pendTourId, _pendTourKey);
+        if (_lsSaved) saved = _lsSaved;
+      } catch(_){}
+    }
     /* Si la clave quedó vetada por un CANCELAR previo, la liberamos
        — el usuario está abriendo el partido de nuevo, así que el flag
        trashed (que bloquea polls) ya no debe aplicar. Sin esto el
@@ -17050,25 +17175,17 @@
          Resto de Ligas con `t.shield` y `applyEngineOverrides` aún no
          lo ha promovido a TEAM_RATINGS. Sin esto, equipos creados en
          vivo (Backa Topola, Bistrica…) caían a estepona-default antes
-         de que el setTimeout del importador disparase. */
-      try {
-        var nm = String(name||'').trim().toLowerCase();
-        for (var li = 0; li < localStorage.length; li++) {
-          var lk = localStorage.key(li);
-          if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
-          if (lk.indexOf('_backup') !== -1 || lk.indexOf('_snap_') !== -1 || lk.indexOf('_protected') !== -1) continue;
-          var raw = localStorage.getItem(lk);
-          if (!raw) continue;
-          var parsed; try { parsed = JSON.parse(raw); } catch(_) { continue; }
-          var teams = (parsed && Array.isArray(parsed.teams)) ? parsed.teams : [];
-          for (var ti = 0; ti < teams.length; ti++) {
-            var t = teams[ti];
-            if (!t || !t.name || !t.shield) continue;
-            if (String(t.name).trim().toLowerCase() === nm) return String(t.shield);
-          }
-        }
-      } catch(_){}
-      return (typeof getLogoEquipo === 'function' && getLogoEquipo(name)) || '';
+         de que el setTimeout del importador disparase. Reutiliza el
+         índice compartido `window._eurResolveTeamLogo` (misc_body_1.html,
+         2026-07-12) en vez de escanear localStorage por su cuenta. */
+      var eurLogo = (typeof window._eurResolveTeamLogo === 'function') ? (window._eurResolveTeamLogo(name) || '') : '';
+      if (eurLogo) return eurLogo;
+      /* Si getLogoEquipo cae al escudo-default (Estepona) es que NO hay
+         escudo real en NINGUNA fuente — se OCULTA (el caller ya trata
+         un `''` como "sin escudo", ver `lA ? img : ''` más abajo) en vez
+         de mostrar el escudo de un equipo ajeno. */
+      var ge = (typeof getLogoEquipo === 'function') ? getLogoEquipo(name) : '';
+      return (ge && ge.indexOf('estepona') === -1) ? ge : '';
     }
     var lA = _gmLogo(home);
     var lB = _gmLogo(away);

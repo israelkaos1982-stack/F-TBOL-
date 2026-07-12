@@ -6828,7 +6828,20 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         if (byAlt && byAlt.src && byAlt.src.indexOf('estepona') === -1) return byAlt.src;
         var tlu = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : '';
         if (tlu) return tlu;
-        return (typeof getLogoEquipo === 'function') ? getLogoEquipo(name) : '';
+        /* Resto de Ligas por nombre (2026-07-12, "todos los equipos
+           tienen escudo y no salen en los partidos que va a jugar el
+           Atlético"): ni getTeamLogoUrl ni getLogoEquipo escanean
+           ligaExt_<slug> — `window._eurResolveTeamLogo` (misc_body_1.html)
+           sí lo hace, escaneando TODAS las ligas cacheadas por nombre. */
+        var eurLogo = (typeof window._eurResolveTeamLogo === 'function') ? (window._eurResolveTeamLogo(name) || '') : '';
+        if (eurLogo) return eurLogo;
+        var ge = (typeof getLogoEquipo === 'function') ? getLogoEquipo(name) : '';
+        /* Si getLogoEquipo cae al escudo-default (Estepona) es que NO
+           hay escudo real para este equipo en NINGUNA fuente — mejor
+           OCULTARLO (cae al fallback procedural de iniciales más abajo)
+           que mostrar el escudo de un equipo ajeno (petición usuario
+           2026-07-12: "el del Maccabi Haifa dale oculto"). */
+        return (ge && ge.indexOf('estepona') === -1) ? ge : '';
       }
       /* Override de escudo: el caller (p.ej. copaAbrirPrevia) puede
          pre-resolver el escudo y pasarlo en _ppPreviaTeams.homeLogo/

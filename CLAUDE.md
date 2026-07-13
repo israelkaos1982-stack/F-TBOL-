@@ -1,5 +1,89 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## TODO el proyecto queda libre de XHR síncrono — «Resto de Ligas» sufría el MISMO bug en 10 sitios más + guardián automático (obligatorio, 2026-07-13 #4)
+
+**Petición usuario 2026-07-13** ("en resto de ligas pasaba lo mismo,
+¿arreglado también? ¿podemos intentar que ese error no vuelva a
+suceder?"): tras el fix del click en la clasificación (sección
+siguiente, #3), se auditó el resto del proyecto en busca de la MISMA
+familia de bug. Resultado: había **10 sitios más** con
+`XMLHttpRequest` **síncrono** (`async=false`), todos alcanzables desde
+"Resto de Ligas" (y algunos desde Liga EA Sports también):
+
+1. **`loadData(k)`** (la función que carga CUALQUIER `ligaExt_<slug>` —
+   usada por `openLigaExt`, `renderTable`, `lextOpenSquad`, 76 sitios en
+   total): hasta 3 XHR síncronos encadenados (main → protected →
+   protected-solo) cuando no había NADA en cache local. Esto se disparaba
+   tanto al ABRIR la pantalla de una liga sin datos como al pulsar un
+   equipo suyo (`.lext-row onclick="lextOpenSquad(...)"`, un handler
+   DISTINTO del ya arreglado en #3 — usa clases/mecanismos propios).
+2. **`saveData(k,d)`** (guardado de CUALQUIER edición del editor, 40
+   sitios): hasta 6 XHR síncronos encadenados (POST main ×3 reintentos +
+   POST protected ×3 reintentos) en CADA guardado — congelaba la pestaña
+   al pulsar "Guardar" en el editor de cualquier equipo/liga.
+3. **`_readLigaData(slug)`** (agregador de "Resto de Ligas ·
+   Estadísticas"): llamado en un BUCLE sobre las ~51 ligas — el peor
+   caso, hasta 51 XHR síncronos ENCADENADOS con solo abrir esa pantalla.
+4. **`_lextSeedRecoverFromServer(slug)`** (recuperación de las 4 ligas
+   auto-sembradas: Resto Mundo/Montenegro/N.Irlanda/Albania): hasta 2 XHR
+   síncronos al abrir su pantalla si local+`_protected`+snapshots estaban
+   vacíos. **Esto SUPERSEDE la regla previa que prohibía hacerlo
+   asíncrono** ("el coste es aceptable, es un caso raro") — con la regla
+   general de abajo, ningún XHR síncrono es aceptable en ningún caso,
+   por raro que sea.
+5. **`emergencyRestore`/`lextDeepRecoverSlug`/`lextDeepRecoverAll`**
+   (herramientas de recuperación manual desde consola): hasta 55 XHR
+   síncronos encadenados en `lextDeepRecoverAll` (uno por liga conocida).
+6. **`rosterFor(team)`** (`part2/misc_body_2.html`, plantilla de la card
+   BAJAS PARA EL PARTIDO): hasta 3 XHR síncronos si el equipo humano no
+   tenía plantilla cacheada localmente.
+
+### Fix — mismo patrón en los 10 sitios: nunca bloquear, hidratar de fondo
+
+Todos sustituidos por `fetch()` con `AbortController` + timeout de 6s
+(`window._lextFetchJsonTimeout`, alias de `_lextClickFetchJson` del fix
+#3). Donde la función tenía un contrato de retorno SÍNCRONO usado por
+muchos callers (`loadData`, `saveData`, `_readLigaData`, `rosterFor`):
+se preserva ese contrato devolviendo lo que YA hay en local (o vacío) al
+instante, y la hidratación real del servidor corre en segundo plano,
+actualizando `localStorage`/`LIGA_CACHE` y re-pintando la pantalla si
+sigue abierta cuando el servidor responde — nunca bloquea, nunca pierde
+la capacidad de recuperar datos, solo lo hace un tick más tarde. Donde
+la función era una herramienta de consola sin otros callers
+(`emergencyRestore`, `lextDeepRecoverSlug/All`, `_lextSeedRecoverFromServer`)
+se convirtió directamente a `async`/callback.
+
+### El guardián de sintaxis (`tools/check_js_blocks.py`) ahora TAMBIÉN bloquea XHR síncrono
+
+Respuesta a "¿podemos intentar que no vuelva a pasar?": el hook de
+`SessionStart` que ya comprobaba sintaxis JS (`node --check` de cada
+`<script>`) ahora ADEMÁS escanea con regex cualquier
+`.open(MÉTODO, url, false)` en los archivos vigilados
+(`misc_body_1.html`, `misc_body_2.html`, `static/js/*.js`) y **falla la
+sesión** si encuentra uno. Antes esta regla solo vivía en texto
+(CLAUDE.md) — ahora un futuro Claude (o el propio código) que reintroduzca
+un XHR síncrono lo verá fallar el arranque de la sesión siguiente, en vez
+de depender de que alguien recuerde leer esta prohibición.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** usar `XMLHttpRequest` con `async=false` en NINGÚN sitio
+   del proyecto, sin excepción — ni siquiera en herramientas de consola,
+   flujos de recuperación "raros", o casos ya documentados como
+   "el coste es aceptable". La regla del fix #3 (más abajo) es absoluta
+   y SUPERSEDE cualquier excepción previa escrita para un caso concreto.
+2. **PROHIBIDO** que una función con contrato de retorno síncrono usado
+   por muchos callers (`loadData`, `saveData`, o cualquier función nueva
+   de este tipo) se vuelva `async` para "arreglar" esto — eso obligaría a
+   tocar decenas de callers. El patrón correcto es: devolver lo que haya
+   en local YA (o vacío) al instante, e hidratar el servidor en segundo
+   plano sin bloquear, re-pintando si la pantalla sigue abierta.
+3. **PROHIBIDO** quitar el chequeo de XHR síncrono de
+   `tools/check_js_blocks.py` (`SYNC_XHR_RE`/`check_sync_xhr`). Toda
+   liga/pantalla/herramienta NUEVA que añada un fetch al servidor hereda
+   esta protección automáticamente con solo estar en los archivos ya
+   vigilados por el guardián.
+
 ## El click en una fila de clasificación NUNCA hace XHR SÍNCRONO — congelaba la pestaña entera al pulsar CUALQUIER equipo (obligatorio, 2026-07-13 #3)
 
 **Petición usuario 2026-07-13** (3 fotos, «Liga EA Sports · Clasificación»,

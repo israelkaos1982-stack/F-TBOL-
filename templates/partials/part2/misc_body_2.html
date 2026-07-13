@@ -3985,29 +3985,27 @@
       return [];
     }
     if (!out.length) out = _scanLocalLigaExt();
-    /* Último recurso: si ninguna cache local tiene al equipo (típico
-       en dispositivo nuevo donde el usuario nunca abrió el editor),
-       bajar del servidor en sync XHR los slugs conocidos. Tras
-       persistir, volvemos a escanear localmente. Mismo patrón que
-       misc_body_1.html — pero AHORA ataca los tres slugs. */
-    if (!out.length) {
+    /* Último recurso: si ninguna cache local tiene al equipo (típico en
+       dispositivo nuevo donde el usuario nunca abrió el editor),
+       hidratar en SEGUNDO PLANO desde el servidor los slugs conocidos.
+       2026-07-13: ANTES esto era un XHR SÍNCRONO encadenado hasta 3
+       veces (uno por slug) — congelaba la pestaña entera al abrir la
+       card BAJAS PARA EL PARTIDO si el rival humano no tenía plantilla
+       cacheada localmente (ver CLAUDE.md regla 2026-07-13 #3). Ahora
+       `rosterFor` devuelve lo que YA tenga en local al instante (o
+       vacío, que el caller ya muestra como "plantilla no cargada aún" —
+       un estado existente, no una regresión) y la hidratación real
+       corre de fondo para la PRÓXIMA vez que se abra esta pantalla. */
+    if (!out.length && window._lextFetchJsonTimeout) {
       var slugs = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion'];
-      for (var si = 0; si < slugs.length && !out.length; si++) {
-        var slug = slugs[si];
-        if (localStorage.getItem('ligaExt_' + slug)) continue; /* ya cubierto por _scanLocalLigaExt */
-        try {
-          var xhrSq = new XMLHttpRequest();
-          xhrSq.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
-          xhrSq.send();
-          if (xhrSq.status === 200) {
-            var respSq = JSON.parse(xhrSq.responseText);
-            if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
-              try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(respSq.data)); } catch(_){}
-              out = _scanLocalLigaExt();
-            }
+      slugs.forEach(function(slug){
+        if (localStorage.getItem('ligaExt_' + slug)) return; /* ya cubierto por _scanLocalLigaExt */
+        window._lextFetchJsonTimeout('/api/liga-ext/' + encodeURIComponent(slug)).then(function(respSq){
+          if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
+            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(respSq.data)); } catch(_){}
           }
-        } catch(_){}
-      }
+        });
+      });
     }
     return out.filter(function(p){ return p && Array.isArray(p) && p[1]; });
   }

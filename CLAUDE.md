@@ -1,5 +1,109 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## 📌 PARTIDOS POSPUESTOS — club/sel mal clasificados (Mundialito vs "rival pendiente") + pospuestos STALE que ya se jugaron por otra vía + rondas KO bloqueadas que se perdían sin rastro (obligatorio, 2026-07-13)
+
+**Petición usuario 2026-07-13** (3 fotos, caja «Atlético Madrid-
+Noruega-Isra»): "con el Atlético Madrid tiene pendiente el partido del
+Joan Gamper y desde Octavos a la Final del Mundialito de Clubes / con
+Noruega pone pendiente J1 J2 J3 del grupo del Mundial pero eso ya lo
+jugó, faltaría desde Dieciseisavos hasta la final pendiente". La pestaña
+**Selección** de 📌 PARTIDOS POSPUESTOS mostraba `MUNDIAL GRUPO — J1/J2/J3`
+(Noruega vs Senegal/Iraq/Francia) con botón ▶ JUGAR pese a que la
+pantalla del propio Mundial confirmaba el grupo **6/6 jugado** (Noruega
+1ª, 9 PTS) — y la misma pestaña, no la de Club, mostraba
+`MUNDIALITO DE CLUBES · OCTAVOS` con "Noruega — SIN RIVAL", un partido
+de CLUB (Atlético Madrid) contaminando la caja de la selección.
+
+### 3 causas raíz, las 3 en la misma sección "Cajas POSPUESTOS · PENDIENTES
+· JUGADOS" (`misc_body_1.html`)
+
+1. **`_cardPendingPrevPhase`, el botón 📌 Posponer de la card "⚠️ RIVAL
+   PENDIENTE"** (se pinta tanto para el CLUB —Mundialito de Clubes,
+   torneos de verano— como para la SELECCIÓN —Mundial-48— reutilizando
+   la MISMA función): su `deferBtn.onclick` rellenaba `home.name`
+   **SIEMPRE** con el nombre de la selección del mister
+   (`_nrSelName || _psHumanLogicName()`) si el mister tenía selección
+   asignada — lo cual es SIEMPRE cierto para los 7 misters. Así, posponer
+   la card de "Mundialito de Clubes · Octavos" (bloqueo del CLUB, rival
+   TBD) guardaba la entrada con `home:'Noruega'`, y `_entrySide` (el
+   filtro de pertenencia del fix #7 de más abajo) la bucketeaba en la
+   pestaña Selección por pura coincidencia de nombre — un partido de
+   club apareciendo en la caja de la selección.
+2. **Un pospuesto solo se elimina de `pend_hvh_deferred_v1` si se
+   re-juega DESDE ESTA MISMA caja** (`_playDeferredHvH`/`_paySimDeferred`,
+   los únicos 2 puntos que llaman a `_pendHvHRemove`). Si el partido se
+   resuelve por CUALQUIER OTRA vía —entrar directo a la pantalla del
+   Mundial y jugar la jornada allí, como hizo el usuario con J1/J2/J3—
+   la entrada se queda **STALE para siempre**: el partido real ya tiene
+   resultado (`cfg.results[matchKey].played`) pero la caja POSPUESTOS lo
+   sigue anunciando como pendiente de jugar.
+3. **El self-heal de cursor (`_psCursorHeal`) descartaba, sin guardar
+   rastro, cualquier día `ag-sel` "RIVAL PENDIENTE" que el cursor hubiera
+   dejado atrás** (`if (_pair.pending) continue;`, con un comentario
+   —"ya vive en POSPUESTOS vía `_realPair`"— que resultó ser falso: esa
+   entrada SOLO se crea si el humano pulsó a mano el 📌 Posponer de la
+   card `_cardPendingPrevPhase` MIENTRAS estaba activa en pantalla). Una
+   ronda KO bloqueada (Dieciseisavos en adelante, rival TBD porque el
+   bracket del Mundial-48 aún no se ha construido) que el cursor superó
+   sin que el humano pulsara ese botón desaparecía sin dejar ningún
+   rastro — nunca volvía a mostrar esa card, y tampoco quedaba en
+   POSPUESTOS.
+
+### Fix
+
+- **`_cardPendingPrevPhase`**: el contexto (club vs selección) se
+  distingue por `info.compEmoji` — la rama de Mundial-48/selección
+  SIEMPRE lo pone a `'🌍'`; la rama de club (`_realPendingShape`,
+  reutilizada por Mundialito de Clubes Y por los torneos de verano)
+  SIEMPRE lo pone a `'🌞'`. `_nrIsSelCtx = (_nrEmoji === '🌍')`: solo en
+  contexto de selección se resuelve `_nrSelName` vía `_mhFindMister`; en
+  contexto de club, `home.name` es SIEMPRE `_psHumanLogicName()` (el
+  club del hub), nunca la selección.
+- **Auto-heal de pospuestos ya jugados** (`_render(mode==='posp')`, justo
+  antes de bucketear por `_entrySide`): `_entryAlreadyPlayed(e)` comprueba
+  `cfg.results[e.matchKey].played` (vía `_TOUR_CACHE`/`_tourLoadCachedSync`,
+  mismo patrón que usa `_psCursorHeal` para el guard "ya jugado"). Si el
+  partido ya se jugó por cualquier vía, la entrada se tombstonea
+  (`_pendHvHRemove`) y se EXCLUYE del render — nunca se pierde nada real,
+  solo se limpia un pospuesto que ya dejó de serlo. Solo aplica a
+  entradas `isTour` (con `tourId`+`matchKey`); las de Liga/Copa/europeas
+  (sin cfg en `_TOUR_CACHE`) no se tocan.
+- **`_psCursorHeal`**: la rama `_pair.pending` ya NO hace `continue` en
+  silencio — construye el MISMO shape `noRival:true` que el botón manual
+  (mismo formato de uid `tourId::RIVAL_PENDING::<ref>`, deduplicado vía
+  `_healIsDeferred`) usando `_pair.tourId`/`_pair.compEmoji`/
+  `_pair.compName` (ya vienen resueltos desde `_selPair`), y SOLO
+  entonces hace `continue`. Así una ronda KO bloqueada que el cursor deja
+  atrás sin intervención manual del usuario SIEMPRE queda visible en
+  POSPUESTOS · Selección, en vez de desaparecer sin rastro.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una card de bloqueo reutilizada por CLUB y por
+   SELECCIÓN (`_cardPendingPrevPhase` o cualquier futura de este tipo)
+   rellene el nombre del equipo con una fuente fija (siempre la
+   selección, o siempre el club) sin comprobar antes en qué contexto se
+   está — usar una señal explícita del `info` (como `compEmoji`), nunca
+   asumir "si el mister tiene selección, usarla siempre".
+2. **PROHIBIDO** que una entrada de `pend_hvh_deferred_v1` con
+   `tourId`+`matchKey` reales se muestre como pendiente de JUGAR sin
+   comprobar antes si `cfg.results[matchKey]` ya está `played`. Todo
+   render de esta caja hereda `_entryAlreadyPlayed` como filtro previo al
+   bucketing — un partido resuelto por CUALQUIER vía (no solo el botón
+   ▶ JUGAR de esta caja) debe autolimpiarse de la lista.
+3. **PROHIBIDO** que un self-heal de cursor (`_psCursorHeal` o cualquier
+   futuro) descarte en silencio un día bloqueado ("rival pendiente", sin
+   matchKey resuelto) que quedó atrás del cursor. Si el usuario no llegó
+   a posponerlo a mano mientras la card estaba activa, el self-heal debe
+   crearlo él mismo (mismo shape `noRival:true`) para que no desaparezca
+   sin dejar rastro — mismo principio que ya aplica a los días con
+   partido real (`matchKey` resuelto) de esta misma función.
+4. Toda caja de mister NUEVA hereda los 3 fixes automáticamente (el
+   discriminador club/sel es genérico vía `compEmoji`, el auto-heal de
+   pospuestos ya jugados es genérico por `tourId`+`matchKey`, y el
+   self-heal de rondas KO bloqueadas es genérico vía `_selPair`/
+   `_mhFindMister` — no hardcodea Atlético Madrid/Noruega).
+
 ## La card del HUB ("Próximo partido") también hereda la búsqueda server-side del escudo — `_psVsBlockHtml` se había quedado fuera del fix #7 (obligatorio, 2026-07-12 #8)
 
 **Petición usuario 2026-07-12** (6 fotos, "Dunajska Streda" vs Atlético

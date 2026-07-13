@@ -7797,18 +7797,33 @@ window._showSimProgress = function(opts, onDone){
         var _nrEmoji  = (info && info.compEmoji) || '🌍';
         var _nrRef    = day && day.dayIdx != null ? String(day.dayIdx) : ((day && day.date) || _nrComp);
         var _nrUid    = _nrTourId + '::RIVAL_PENDING::' + _nrRef;
+        /* Bug 2026-07-13 (fotos usuario, caja «Atlético Madrid-Noruega-Isra»):
+           esta card de bloqueo se reutiliza para el CLUB (Mundialito de
+           Clubes, torneos de verano, compEmoji '🌞') Y para la SELECCIÓN
+           (Mundial-48, compEmoji '🌍') — pero `home.name` SIEMPRE se
+           rellenaba con el nombre de la SELECCIÓN del mister si existía,
+           aunque el bloqueo fuera del CLUB. Así "Mundialito de Clubes ·
+           Octavos" (partido del Atlético Madrid) se posponía con
+           `home:'Noruega'` y `_entrySide` lo bucketeaba en la pestaña
+           Selección de la caja — un partido de club contaminando la caja
+           de la selección. El contexto lo delata `info.compEmoji`: solo
+           la rama de Mundial-48 (selección) lo pone a '🌍'; la de club
+           (`_realPendingShape`) SIEMPRE lo pone a '🌞'. */
+        var _nrIsSelCtx = _nrEmoji === '🌍';
         var _nrSelName = '';
-        try {
-          var _nrMister = (typeof window._mhFindMister === 'function')
-            ? window._mhFindMister(_psHumanLogicName()) : null;
-          if (_nrMister && _nrMister.seleccion) _nrSelName = _nrMister.seleccion;
-        } catch(_){}
+        if (_nrIsSelCtx){
+          try {
+            var _nrMister = (typeof window._mhFindMister === 'function')
+              ? window._mhFindMister(_psHumanLogicName()) : null;
+            if (_nrMister && _nrMister.seleccion) _nrSelName = _nrMister.seleccion;
+          } catch(_){}
+        }
         if (_nrUid && typeof window._pendHvHAdd === 'function'){
           window._pendHvHAdd({
             uid:      _nrUid,
             tourId:   _nrTourId,
             matchKey: null,
-            home:     { name: _nrSelName || _psHumanLogicName(), shield: '' },
+            home:     { name: (_nrIsSelCtx ? (_nrSelName || _psHumanLogicName()) : _psHumanLogicName()), shield: '' },
             away:     { name: 'Sin rival', shield: '' },
             jor:      _nrComp,
             date:     (day && day.date) || '',
@@ -10779,7 +10794,49 @@ window._showSimProgress = function(opts, onDone){
           var _pair = _selPair(_srow);
           if (!_pair) continue;                /* no es partido de la selección de esta caja */
           if (_pair.eliminated) break;         /* selección eliminada — no hay más pendiente */
-          if (_pair.pending) continue;         /* RIVAL PENDIENTE — ya vive en POSPUESTOS vía _realPair */
+          if (_pair.pending){
+            /* Bug 2026-07-13 (fotos usuario, «Noruega» mostraba solo
+               J1/J2/J3 del Mundial Grupo como pospuestos, ya jugados —
+               faltaba desde Dieciseisavos hasta la Final): el comentario
+               de esta rama decía "ya vive en POSPUESTOS vía _realPair",
+               pero esa entrada SOLO se crea cuando el usuario pulsa a
+               mano el 📌 Posponer de la card `_cardPendingPrevPhase`
+               MIENTRAS está activa. Un día bloqueado (rival TBD porque
+               la ronda KO aún no tiene bracket) que el cursor dejó atrás
+               sin que el humano pulsara ese botón se perdía para
+               siempre — nunca volvía a mostrar esa card. Lo recuperamos
+               con el MISMO shape `noRival:true` (mismo formato de uid
+               `tourId::RIVAL_PENDING::<ref>`) para que la ronda KO
+               bloqueada aparezca en POSPUESTOS · Selección en vez de
+               desaparecer sin dejar rastro. */
+            try {
+              var _prTourId = _pair.tourId || '';
+              var _prRef    = String(_si);
+              if (_prTourId && !_healIsDeferred(_prTourId, 'RIVAL_PENDING::' + _prRef)){
+                var _prSelName = '';
+                try {
+                  var _prMister = (typeof window._mhFindMister === 'function')
+                    ? window._mhFindMister(_psHumanLogicName()) : null;
+                  if (_prMister && _prMister.seleccion) _prSelName = _prMister.seleccion;
+                } catch(_){}
+                _pendHvHAdd({
+                  uid:      _prTourId + '::RIVAL_PENDING::' + _prRef,
+                  tourId:   _prTourId,
+                  matchKey: null,
+                  home:     { name: (_prSelName || _psHumanLogicName()), shield: '' },
+                  away:     { name: 'Sin rival', shield: '' },
+                  jor:      _pair.compName || 'Ronda KO',
+                  date:     _srow.date || '',
+                  label:    _pair.compName || 'Ronda KO',
+                  emoji:    _pair.compEmoji || '🌍',
+                  noRival:  true,
+                  addedAt:  Date.now()
+                });
+                _addedAny = true;
+              }
+            } catch(_){}
+            continue;
+          }
           if (!_pair.matchKey || !_pair.home || !_pair.away) continue;
           var _chkTour = _pair.tourId || null;
           if (!_chkTour) continue;
@@ -60481,11 +60538,46 @@ https://api.sofascore.app/api/v1/team/44/image
         if (_isClubName(hN) || _isClubName(aN)) return 'club';
         return null;
       }
+      /* Bug 2026-07-13 (fotos usuario, «Noruega» mostraba J1/J2/J3 del
+         Mundial Grupo como pospuestos pendientes de JUGAR pese a que el
+         grupo ya estaba 6/6 jugado desde la pantalla del propio torneo):
+         un pospuesto SOLO se quita de `pend_hvh_deferred_v1` cuando el
+         usuario lo re-juega desde ESTA caja (`_playDeferredHvH` /
+         `_paySimDeferred`, que llaman a `_pendHvHRemove`). Si el partido
+         se resuelve por CUALQUIER OTRA vía (entrar directo a la pantalla
+         del torneo y jugar la jornada allí), la entrada se queda
+         STALE para siempre — el partido real ya tiene resultado pero
+         la caja POSPUESTOS lo sigue anunciando como pendiente. Antes de
+         bucketear, si el cfg del torneo YA tiene ese matchKey jugado,
+         se tombstonea la entrada (auto-heal, mismo patrón que el resto
+         del proyecto) y se excluye del render — nunca se pierde nada
+         real, solo se limpia un pospuesto que ya no lo es. */
+      function _entryAlreadyPlayed(e){
+        if (!e || e.noRival || !e.tourId || !e.matchKey) return false;
+        try {
+          var cfg = (window._TOUR_CACHE || {})[e.tourId];
+          if (!cfg && typeof window._tourLoadCachedSync === 'function'){
+            cfg = window._tourLoadCachedSync(e.tourId);
+          }
+          if (!cfg || !cfg.results) return false;
+          var r = cfg.results[e.matchKey];
+          return !!(r && (r.played || r.done));
+        } catch(_){ return false; }
+      }
       var bySide = { club: [], sel: [] };
+      var _staleRemoved = false;
       deferred.forEach(function(e){
+        if (_entryAlreadyPlayed(e)){
+          try { if (typeof window._pendHvHRemove === 'function') window._pendHvHRemove(e.uid); } catch(_){}
+          _staleRemoved = true;
+          return;
+        }
         var s = _entrySide(e);
         if (s) bySide[s].push(e);
       });
+      if (_staleRemoved){
+        try { if (typeof window._muFixSyncVisibility === 'function') window._muFixSyncVisibility(); } catch(_){}
+      }
       var posTabs = [
         { id:'club', label:'Club',      emoji:'🛡', name:hub,        items:bySide.club },
         { id:'sel',  label:'Selección', emoji:'🌍', name:hubSelName, items:bySide.sel  }

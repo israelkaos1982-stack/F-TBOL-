@@ -33356,12 +33356,69 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   /* ════ RENDER ════ */
-  function _badge(name,logo){ var l=logo||_logoOf(name)||''; return l ? '<img src="'+_esc(l)+'" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display=\'none\'">' : ''; }
+  /* Placeholder con `data-shield-name` (2026-07-13, "cuando un equipo
+     está con su escudo y Plantilla, no sale ni su escudo ni su plantilla
+     a la hora de jugar cualquier competición"): `_logoOf` solo resuelve
+     de forma SÍNCRONA (localStorage + LIGA_CACHE de ESTE dispositivo,
+     `window._eurResolveTeamLogo`). Si el dispositivo nunca cargó la liga
+     origen del rival (típico: se entra directo a la Previa sin haber
+     abierto antes esa liga en Resto de Ligas), `_badge`/`_badgeBig`
+     devolvían '' — NINGÚN <img>, ni siquiera un placeholder — y el
+     escudo se quedaba vacío PARA SIEMPRE en esta pantalla, a diferencia
+     de la card del hub (`_psShieldDeferredCheck`) y la Pantalla de Previa
+     (`_ppShieldDeferredCheck` en index.bundle.js), que sí reintentan en
+     servidor. Aquí se deja un placeholder con el nombre del equipo para
+     que `_wprevShieldDeferredCheck` (más abajo) pueda sustituirlo por el
+     escudo real en cuanto el servidor lo confirme. */
+  function _badge(name,logo){
+    var l=logo||_logoOf(name)||'';
+    if(l) return '<img src="'+_esc(l)+'" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display=\'none\'">';
+    return '<span data-shield-name="'+_esc(name)+'" style="display:inline-block;width:18px;height:18px;vertical-align:middle;margin-right:5px;"></span>';
+  }
   /* Escudo GRANDE (2026-07-12, "un poco más como videojuego"): usado
      en la Ronda Preliminar para que se vean bien los equipos que se
      clasifican. Tamaño real lo pone el CSS `.crest` (30px normal,
      38px si el cruce es del humano — `.wprev-dr-tie.human .crest`). */
-  function _badgeBig(name,logo){ var l=logo||_logoOf(name)||''; return l ? '<img src="'+_esc(l)+'" alt="" class="crest" onerror="this.style.display=\'none\'">' : ''; }
+  function _badgeBig(name,logo){
+    var l=logo||_logoOf(name)||'';
+    if(l) return '<img src="'+_esc(l)+'" alt="" class="crest" onerror="this.style.display=\'none\'">';
+    return '<span data-shield-name="'+_esc(name)+'" class="crest" style="display:inline-block;"></span>';
+  }
+  /* Búsqueda diferida en SERVIDOR del escudo (mismo patrón EXACTO que
+     `_psShieldDeferredCheck` del hub y `_ppShieldDeferredCheck` de la
+     Pantalla de Previa, ambos ya obligatorios por CLAUDE.md 2026-07-12
+     #7/#8: "toda tabla/card/cruce/picker NUEVO de la Previa hereda
+     `_eurTeamShieldServerSearch` como último fallback"). Recorre TODOS
+     los placeholders sin resolver de `container` (tabla de grupos,
+     jornadas del fixture, cruces de la Ronda Preliminar), agrupa por
+     nombre de equipo ÚNICO (nunca 1 petición por fila repetida) y, si
+     el servidor lo encuentra, sustituye TODAS las apariciones de ese
+     equipo en `container` por el `<img>` real. */
+  function _wprevShieldDeferredCheck(container){
+    if(!container || typeof window._eurTeamShieldServerSearch !== 'function') return;
+    var nodes = container.querySelectorAll('[data-shield-name]');
+    if(!nodes.length) return;
+    var seen = {};
+    for(var i=0;i<nodes.length;i++){
+      var nm = nodes[i].getAttribute('data-shield-name');
+      if(!nm || seen[nm]) continue;
+      seen[nm] = true;
+      (function(teamName){
+        window._eurTeamShieldServerSearch(teamName, function(found){
+          if(!found) return;
+          var els = container.querySelectorAll('[data-shield-name]');
+          for(var j=0;j<els.length;j++){
+            if(els[j].getAttribute('data-shield-name') !== teamName) continue;
+            var isCrest = els[j].classList.contains('crest');
+            var imgHtml = isCrest
+              ? '<img src="'+_esc(found)+'" alt="" class="crest" onerror="this.style.display=\'none\'">'
+              : '<img src="'+_esc(found)+'" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:middle;margin-right:5px;" onerror="this.style.display=\'none\'">';
+            try { els[j].outerHTML = imgHtml; } catch(_){}
+          }
+        });
+      })(nm);
+    }
+  }
   function _groupTable(gi,grp,sorted,destMap){
     var src = (sorted&&sorted.length) ? sorted : grp.map(function(t,i){ return {idx:i,name:(t&&t.name)||'',logo:(t&&t.logo)||'',pts:0,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0}; });
     var hasHuman = _groupHasHuman(grp);
@@ -33445,6 +33502,7 @@ document.addEventListener('DOMContentLoaded', function() {
       +   rows
       + '</div>'
       + '</div>';
+    _wprevShieldDeferredCheck(dr);
     var tgl = document.getElementById('wprev-dr-toggle');
     if(tgl){
       tgl.onclick = function(){
@@ -33557,6 +33615,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     (s.groups||[]).forEach(function(grp,gi){ html += _groupTable(gi, grp, (s.sortedTables&&s.sortedTables[gi])||null, destMap); html += _fgJornadaHtml(s, gi); });
     host.innerHTML=html;
+    _wprevShieldDeferredCheck(host);
     /* Cablear ▶ PREVIA · JUGAR de los partidos del humano en su grupo
        (2026-07-12). Delegado tras cada render — los botones se
        recrean en cada build. */

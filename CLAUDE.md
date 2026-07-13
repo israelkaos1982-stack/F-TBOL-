@@ -1,5 +1,84 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La tabla de grupos / jornadas / cruces de la Previa de Champions también hereda la búsqueda server-side del escudo — `_badge`/`_badgeBig` se habían quedado fuera del fix #7/#8 (obligatorio, 2026-07-13)
+
+**Petición usuario 2026-07-13** (6 fotos, «Maccabi Haifa»/«Dunajska
+Streda»/«CF Univer Comrat» vs Atlético Madrid, GRUPO I de la Previa de
+Champions): "cuando un equipo está con su escudo y Plantilla, no
+entiendo porque a la hora de jugar cualquier competición no sale ni su
+escudo ni su plantilla" — con los 3 equipos rivales YA confirmados con
+escudo real en sus ligas de origen (Niké Liga de Eslovaquia para
+Dunajska Streda, Ligat Ha'al de Israel para Maccabi Haifa, visibles en
+capturas de "Resto de Ligas" del mismo dispositivo), la tabla
+**"GRUPO I"** de la Previa de Champions (`_groupTable`) mostraba los 3
+rivales SIN NINGÚN escudo — ni siquiera el placeholder de iniciales que
+sí muestra la Pantalla de Previa — y la propia Pantalla de Previa
+(`_renderPreviaMeta`) seguía mostrando el placeholder gris de iniciales.
+
+### Causa raíz — `_badge`/`_badgeBig` (WPREV) nunca heredaron el fallback server-side
+
+Las reglas 2026-07-12 #7 y #8 ya obligan a que "toda tabla/card/cruce/
+picker NUEVO de la Previa hereda `_eurTeamShieldServerSearch` como
+último fallback" — pero esa herencia solo se cableó en la card del hub
+(`_psShieldDeferredCheck`, `misc_body_1.html`) y en la Pantalla de
+Previa a pantalla completa (`_ppShieldDeferredCheck`,
+`index.bundle.js`). Los 3 puntos que pintan escudos DENTRO de la propia
+pantalla de la Previa (`part2/misc_body_2.html`, IIFE `wprev_state_v1`)
+— la tabla de cada grupo (`_groupTable`), las jornadas del fixture del
+grupo humano (`_fgJornadaHtml`) y los cruces de la Ronda Preliminar
+(`_prelimTieHtml`) — comparten los helpers `_badge`/`_badgeBig`, que
+SOLO probaban `_logoOf(name)` (resolución SÍNCRONA local: `getTeamLogoUrl`
+→ `TEAM_LOGOS` → `window._eurResolveTeamLogo`, que escanea
+`localStorage`+`LIGA_CACHE` de ESTE dispositivo) y, si venía vacío,
+devolvían la cadena vacía `''` — ni `<img>` ni placeholder, así que no
+había NADA a lo que engancharle una comprobación diferida en servidor.
+Un dispositivo que entra directo a la Previa sin haber abierto antes la
+liga de origen del rival (Eslovaquia/Israel/Moldavia) se queda con el
+hueco vacío para siempre en estas 3 vistas, aunque el servidor SÍ tenga
+el escudo guardado.
+
+### Fix
+
+- **`_badge(name,logo)`/`_badgeBig(name,logo)`**: cuando `_logoOf`
+  viene vacío, ya NO devuelven `''` — devuelven un placeholder
+  `<span data-shield-name="<nombre>">` (mismas dimensiones que el
+  `<img>` real: 18px inline para `_badge`, clase `.crest` para
+  `_badgeBig`) para que exista un nodo identificable al que sustituir.
+- **`_wprevShieldDeferredCheck(container)`** (nuevo, mismo patrón EXACTO
+  que `_psShieldDeferredCheck`/`_ppShieldDeferredCheck`): recorre TODOS
+  los placeholders `[data-shield-name]` de `container`, agrupa por
+  nombre de equipo ÚNICO (una sola petición aunque el mismo rival
+  aparezca en la tabla de clasificación Y en 6 jornadas del fixture) y
+  llama a `window._eurTeamShieldServerSearch(nombre, onDone)`. Si el
+  servidor lo encuentra, sustituye TODAS las apariciones de ese equipo
+  en `container` por el `<img>` real.
+- Llamado tras cada `innerHTML` que pueda contener escudos sin resolver:
+  `buildUclPrevClas` (tras `host.innerHTML=html`, cubre `_groupTable` +
+  `_fgJornadaHtml` de los 12 grupos) y `_renderPrelim` (tras
+  `dr.innerHTML=...`, cubre `_prelimTieHtml` de los 14 cruces).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_badge`/`_badgeBig` (o cualquier helper de escudo
+   nuevo de la Previa que viva DENTRO de `part2/misc_body_2.html`)
+   devuelvan `''` cuando la resolución local falla. Deben dejar un
+   placeholder identificable (`data-shield-name`) para que una
+   comprobación diferida en servidor pueda sustituirlo — el patrón
+   "resolución local → placeholder con identificador → búsqueda
+   diferida en servidor" es el mismo en LAS 3 CAPAS de esta pantalla
+   (card del hub, Pantalla de Previa a pantalla completa, Y la propia
+   tabla/fixture/cruces de la pantalla de la Previa) — ninguna sustituye
+   a las otras 2, son 3 componentes de UI distintos.
+2. **PROHIBIDO** que la comprobación diferida dispare una petición por
+   FILA en vez de por EQUIPO ÚNICO: un rival puede aparecer en la tabla
+   de clasificación Y en hasta 6 jornadas del fixture del grupo humano
+   — `_wprevShieldDeferredCheck` deduplica por nombre antes de llamar a
+   `_eurTeamShieldServerSearch`.
+3. Toda tabla/card/cruce NUEVO de esta pantalla (o de cualquier
+   competición que pinte escudos de Resto de Ligas por nombre) hereda
+   `_wprevShieldDeferredCheck` en cuanto use `_badge`/`_badgeBig` — no
+   reinventar el pintado de escudo con un `_logoOf(...)||''` suelto.
+
 ## 📌 PARTIDOS POSPUESTOS — club/sel mal clasificados (Mundialito vs "rival pendiente") + pospuestos STALE que ya se jugaron por otra vía + rondas KO bloqueadas que se perdían sin rastro (obligatorio, 2026-07-13)
 
 **Petición usuario 2026-07-13** (3 fotos, caja «Atlético Madrid-

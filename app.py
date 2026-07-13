@@ -3508,6 +3508,38 @@ def api_liga_ext_post(slug):
     })
 
 
+def _liga_ext_protected_scan(rows, target, scan_fn):
+    """Segunda pasada sobre los snapshots `liga_ext_<slug>_protected`
+    (2026-07-13, «siguen sin salir los escudos/alias/plantilla del
+    Maccabi Haifa» pese a que el admin ya los configuró): el escaneo
+    normal de `/api/team-alias|team-shield|team-squad` SOLO mira el
+    `main` de cada liga (`rest.endswith('_protected')` se salta a
+    propósito para no leer snapshots viejos en el camino feliz). Pero
+    si el `main` de la liga de origen se quedó ATRÁS de su propio
+    `_protected` — un guardado concurrente de OTRO dispositivo lo
+    regresó a una copia más pobre, y el guard anti-wipe de
+    `/api/liga-ext-protected/<slug>` (monotónico por nº de jugadores)
+    conservó la edición rica SOLO en el snapshot — el dato de identidad
+    (escudo/alias/plantilla) puede vivir EXCLUSIVAMENTE en `_protected`
+    y nunca reflejarse en `main`. Se usa como ÚLTIMO recurso, tras
+    fallar el escaneo de `main` en TODAS las ligas, reutilizando la
+    MISMA lista de filas ya consultada (sin una 2ª query a la BD)."""
+    for row in rows or []:
+        clave = row.clave or ""
+        rest = clave[len("liga_ext_"):] if clave.startswith("liga_ext_") else ""
+        if not rest.endswith("_protected"):
+            continue
+        try:
+            data = json.loads(row.valor_json or "{}")
+        except Exception:
+            continue
+        teams = data.get("teams") if isinstance(data, dict) else None
+        found = scan_fn(teams, target)
+        if found:
+            return found
+    return None
+
+
 def _team_alias_scan_teams(teams, target):
     if not isinstance(teams, list):
         return None
@@ -3563,6 +3595,9 @@ def api_team_alias(name):
         found = _team_alias_scan_teams(teams, target)
         if found:
             return jsonify({"ok": True, "alias": found})
+    found = _liga_ext_protected_scan(rows, target, _team_alias_scan_teams)
+    if found:
+        return jsonify({"ok": True, "alias": found})
     try:
         selrow = GlobalState.query.filter_by(clave="selecciones_squad_v1").first()
         if selrow and selrow.valor_json:
@@ -3626,6 +3661,9 @@ def api_team_shield(name):
         found = _team_shield_scan_teams(teams, target)
         if found:
             return jsonify({"ok": True, "shield": found})
+    found = _liga_ext_protected_scan(rows, target, _team_shield_scan_teams)
+    if found:
+        return jsonify({"ok": True, "shield": found})
     try:
         selrow = GlobalState.query.filter_by(clave="selecciones_squad_v1").first()
         if selrow and selrow.valor_json:
@@ -3688,6 +3726,9 @@ def api_team_squad(name):
         found = _team_squad_scan_teams(teams, target)
         if found:
             return jsonify({"ok": True, "team": found})
+    found = _liga_ext_protected_scan(rows, target, _team_squad_scan_teams)
+    if found:
+        return jsonify({"ok": True, "team": found})
     try:
         selrow = GlobalState.query.filter_by(clave="selecciones_squad_v1").first()
         if selrow and selrow.valor_json:

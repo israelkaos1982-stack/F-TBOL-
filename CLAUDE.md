@@ -1,5 +1,65 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La búsqueda server-side de escudo/alias/plantilla (`/api/team-shield`, `/api/team-alias`, `/api/team-squad`) también mira el snapshot `_protected` de cada liga (obligatorio, 2026-07-13 #2)
+
+**Petición usuario 2026-07-13** (2 fotos, «Maccabi Haifa vs Atlético
+Madrid», Previa Champions — J4): pese a los fixes de 2026-07-12 (#5,
+#6, #7) que añadieron búsqueda server-side de escudo/alias/plantilla,
+"siguen sin salir los escudos / sin salir la ❓ el alias / y sin salir
+los jugadores del Maccabi Haifa" — tanto en la card del hub (escudo
+totalmente vacío, ni siquiera el placeholder de iniciales) como en la
+PANTALLA DE PREVIA (escudo genérico "MAC", sin botón ❓).
+
+### Causa raíz — los 3 endpoints EXCLUYEN a propósito los snapshots `_protected`
+
+`api_team_shield`/`api_team_alias`/`api_team_squad` (`app.py`) escanean
+todas las filas `liga_ext_%` pero **saltan explícitamente** las que
+terminan en `_protected` (`rest.endswith("_protected")`) — a propósito,
+para no leer snapshots viejos en el camino feliz. El problema: el
+snapshot `liga_ext_<slug>_protected` es un **monotónico por nº de
+jugadores** (`/api/liga-ext-protected/<slug>` POST, sección "PROTECTED
+snapshot" más abajo) que puede llegar a tener MÁS datos que el propio
+`main` — si una escritura CONCURRENTE de otro dispositivo (3 móviles +
+PC editando la misma liga) regresó el `main` a una copia más pobre (sin
+el escudo/alias/plantilla recién editados), el guard anti-wipe de
+`_protected` conserva la edición rica **solo ahí**, y `main` nunca la
+recupera automáticamente. Como los 3 endpoints de búsqueda por nombre
+solo miran `main`, un dato de identidad que sobrevive ÚNICAMENTE en
+`_protected` es invisible para CUALQUIER dispositivo, para siempre —
+exactamente el síntoma reportado (no depende de qué móvil pregunte).
+
+### Fix
+
+Nuevo `_liga_ext_protected_scan(rows, target, scan_fn)` (`app.py`,
+junto a `_team_alias_scan_teams`): reutiliza la MISMA lista de filas ya
+consultada por el escaneo de `main` (sin una 2ª query a la BD) y hace
+una segunda pasada filtrando SOLO las que terminan en `_protected`, con
+el mismo `scan_fn` (`_team_alias_scan_teams`/`_team_shield_scan_teams`/
+`_team_squad_scan_teams`). Se invoca como ÚLTIMO RECURSO en los 3
+endpoints, DESPUÉS de fallar el escaneo de `main` en todas las ligas y
+ANTES del fallback a `selecciones_squad_v1` — `main` sigue ganando
+siempre que traiga el dato (esta pasada solo actúa si `main` viene
+vacío para ese campo). Tests en
+`tests/test_api.py::TestTeamIdentityProtectedFallback`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un endpoint de búsqueda de identidad por nombre
+   nuevo (escudo, alias, plantilla, estadio, o cualquier campo similar
+   futuro) descarte los snapshots `_protected` sin ofrecer un fallback
+   a ellos. El `main` de una liga puede quedar por detrás de su propio
+   `_protected` en cualquier momento (escritura concurrente de OTRO
+   dispositivo) — sin este fallback, un dato de identidad puede quedar
+   invisible PARA SIEMPRE, en CUALQUIER dispositivo, no solo el que lo
+   editó.
+2. **PROHIBIDO** que la pasada de `_protected` se ejecute ANTES que la
+   de `main`, o que gane sobre un dato que `main` SÍ trae. Es
+   estrictamente un último recurso: `main` es la fuente de verdad
+   cuando la tiene.
+3. Todo endpoint nuevo de este tipo reutiliza `_liga_ext_protected_scan`
+   (no duplicar el bucle de escaneo de `_protected`) pasándole su propia
+   función `_team_xxx_scan_teams`.
+
 ## 📌 PARTIDOS POSPUESTOS — club/sel mal clasificados (Mundialito vs "rival pendiente") + pospuestos STALE que ya se jugaron por otra vía + rondas KO bloqueadas que se perdían sin rastro (obligatorio, 2026-07-13)
 
 **Petición usuario 2026-07-13** (3 fotos, caja «Atlético Madrid-

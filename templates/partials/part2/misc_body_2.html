@@ -14909,8 +14909,14 @@
        picker SOLO si sigue abierto para el MISMO equipo (evita pisar
        una selección de jugador ya en curso del usuario). */
     if (_gmGetSquad._lastWasFallback && typeof window._eurTeamSquadServerSearch === 'function') {
+      /* Reintentos (2026-07-13, "sigue igual, no sale la plantilla"):
+         mismo helper genérico que ya protege al alias/escudo — una
+         única petición no sobrevivía a un cold-start de Railway. */
+      var _sqSearch = (typeof window._eurRetryServerSearch === 'function')
+        ? function(nm, cb){ window._eurRetryServerSearch(window._eurTeamSquadServerSearch, nm, cb); }
+        : window._eurTeamSquadServerSearch;
       (function(teamAtRequest){
-        window._eurTeamSquadServerSearch(teamAtRequest, function(found){
+        _sqSearch(teamAtRequest, function(found){
           if (!found) return;
           try {
             var stillOpen = pick.style.display !== 'none'
@@ -33398,13 +33404,21 @@ document.addEventListener('DOMContentLoaded', function() {
     if(!container || typeof window._eurTeamShieldServerSearch !== 'function') return;
     var nodes = container.querySelectorAll('[data-shield-name]');
     if(!nodes.length) return;
+    /* Reintentos (2026-07-13, "sigue igual, no salen ni los escudos"):
+       mismo helper genérico (`window._eurRetryServerSearch`) que ya
+       protege al alias desde 2026-07-05 — un cold-start de Railway no
+       puede volver a dejar el placeholder vacío para siempre tras un
+       único fallo de red. */
+    var _search = (typeof window._eurRetryServerSearch === 'function')
+      ? function(nm, cb){ window._eurRetryServerSearch(window._eurTeamShieldServerSearch, nm, cb); }
+      : window._eurTeamShieldServerSearch;
     var seen = {};
     for(var i=0;i<nodes.length;i++){
       var nm = nodes[i].getAttribute('data-shield-name');
       if(!nm || seen[nm]) continue;
       seen[nm] = true;
       (function(teamName){
-        window._eurTeamShieldServerSearch(teamName, function(found){
+        _search(teamName, function(found){
           if(!found) return;
           var els = container.querySelectorAll('[data-shield-name]');
           for(var j=0;j<els.length;j++){

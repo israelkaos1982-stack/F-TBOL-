@@ -10245,6 +10245,28 @@
         var _endBtnNow = document.getElementById('gm-btn-end');
         if (_endBtnNow) { _endBtnNow.disabled = true; _endBtnNow.style.opacity = '0.35'; }
       } catch(_){}
+      /* RED DE SEGURIDAD PLANA E INCONDICIONAL (2026-07-13, tras fotos
+         usuario mostrando el botón gris DURANTE MÁS DE 10 MINUTOS sin que
+         el watchdog de abajo — que sondea overlays y depende de que
+         `setInterval` siga vivo y de que `#gm-modal` siga con el mismo
+         `display` — llegara nunca a reactivarlo ni a avisar). Este
+         segundo temporizador es DELIBERADAMENTE tonto: no mira overlays,
+         no mira `_gm`, no depende de nada más que "han pasado 8s" — así
+         que ningún bug de la lógica de detección del watchdog complejo
+         puede impedir que el usuario recupere el botón. Si en 8s el botón
+         sigue disabled, se reactiva sin más — el usuario siempre puede
+         volver a pulsar FINALIZAR (gmEndMatch es idempotente, retoma
+         desde el primer gate pendiente). */
+      setTimeout(function(){
+        try {
+          var _hardBtn = document.getElementById('gm-btn-end');
+          if (_hardBtn && _hardBtn.disabled) {
+            _hardBtn.disabled = false;
+            _hardBtn.style.opacity = '';
+            console.warn('[gmEndMatch] red de seguridad plana (8s): botón FINALIZAR reactivado incondicionalmente.');
+          }
+        } catch(_){}
+      }, 8000);
       /* Captura extra de resiliencia (2026-07-12) EN EL MOMENTO EXACTO
          de confirmar: si la cadena imbatida→stats→MVP→WhatsApp se
          queda atascada (bug "caja opaca", fotos usuario Atlético

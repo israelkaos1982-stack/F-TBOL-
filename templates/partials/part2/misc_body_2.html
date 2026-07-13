@@ -16504,26 +16504,30 @@
 
     /* Estadísticas ya recogidas ANTES del MVP (ver bloque arriba en
        gmEndMatch). Aquí solo lanzamos la pantalla FINAL — nada más.
-       Antes 420 ms — petición usuario 2026-05-02: la transición tras
-       FIN era demasiado lenta. Bajado a 80 ms (suficiente para que
-       acabe el frame actual y el spinner se actualice).
-       Envuelto en try/catch + aviso visible (2026-07-05): `_gm.finished`
-       ya está en `true` en este punto — si `_gmShowFinalOv()` reventara
-       ANTES de llegar a su propio blindaje interno (p.ej. `gm-fin-ov`
-       no existe ni se puede crear), el usuario se quedaba sin ninguna
-       pantalla ni forma de recuperar el partido ya finalizado. */
-    setTimeout(function(){
-      try { _gmShowFinalOv(); }
-      catch(errFin) {
-        try { console.error('gmEndMatch: _gmShowFinalOv falló', errFin); } catch(_){}
-        try { alert('⚠️ El partido finalizó pero la pantalla de resumen no se pudo mostrar (' + (errFin && errFin.message || errFin) + '). El resultado ya quedó guardado — vuelve al menú y compártelo desde el histórico si hace falta.'); } catch(_){}
-        try {
-          var _gm2 = window._gm;
-          if (_gm2) { _gm2.finished = true; }
-          if (typeof window.gmVolver === 'function') window.gmVolver();
-        } catch(_){}
-      }
-    }, 80);
+       REESCRITURA 2026-07-13 (fotos usuario: el marcador/acta quedaban
+       CORRECTAMENTE guardados, FINALIZAR quedaba deshabilitado para
+       SIEMPRE, y NINGUNA pantalla de resumen llegaba a aparecer — ni
+       siquiera tras 30+ segundos ni tras el hard-timeout de 8s de
+       `_mlConfirmEnd`, porque ESE hard-timeout solo cubre el PRIMER
+       disable de `_mlConfirmEnd`; este disable de más arriba, ya
+       PERMANENTE una vez `_gm.finished=true`, es uno nuevo y posterior
+       sin ninguna red propia). La causa: exactamente el mismo patrón ya
+       corregido en `_ensureImbatEvents` — un `setTimeout(...,80)`
+       puramente cosmético ("dar tiempo a que acabe el frame") que
+       nunca llegaba a dispararse. Se llama `_gmShowFinalOv()` YA, de
+       forma SÍNCRONA, sin depender de ningún timer futuro. El
+       try/catch se mantiene intacto para que un fallo real siga
+       avisando visiblemente en vez de dejar al usuario sin pantalla. */
+    try { _gmShowFinalOv(); }
+    catch(errFin) {
+      try { console.error('gmEndMatch: _gmShowFinalOv falló', errFin); } catch(_){}
+      try { (window._gmCriticalNotice || alert)('⚠️ El partido finalizó pero la pantalla de resumen no se pudo mostrar (' + (errFin && errFin.message || errFin) + '). El resultado ya quedó guardado — vuelve al menú y compártelo desde el histórico si hace falta.'); } catch(_){}
+      try {
+        var _gm2 = window._gm;
+        if (_gm2) { _gm2.finished = true; }
+        if (typeof window.gmVolver === 'function') window.gmVolver();
+      } catch(_){}
+    }
   };
 
   window.gmClose = function () {

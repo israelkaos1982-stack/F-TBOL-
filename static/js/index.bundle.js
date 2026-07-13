@@ -7197,7 +7197,16 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       function _ppShieldDeferredCheck(side, teamName, wasEmpty){
         if(!wasEmpty) return;
         if(typeof window._eurTeamShieldServerSearch !== 'function') return;
-        window._eurTeamShieldServerSearch(teamName, function(found){
+        /* Reintentos (2026-07-13, "sigue igual, no salen ni los
+           escudos"): esta comprobación era UNA sola petición, sin la
+           red de reintentos que ya protege al alias
+           (`_ppAliasDeferredCheck`, 6 intentos/backoff largo) desde
+           2026-07-05/06 — un cold-start de Railway mataba el escudo
+           para siempre en la primera carga de la previa. */
+        var _search = (typeof window._eurRetryServerSearch === 'function')
+          ? function(nm, cb){ window._eurRetryServerSearch(window._eurTeamShieldServerSearch, nm, cb); }
+          : window._eurTeamShieldServerSearch;
+        _search(teamName, function(found){
           if(!found) return;
           var host = document.getElementById('pp-shield-' + side);
           if(!host) return;

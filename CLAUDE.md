@@ -1,5 +1,72 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Toda comprobación diferida en servidor (escudo Y plantilla, no solo alias) REINTENTA — un fallo de red no debe dejarla sin aparecer para siempre (obligatorio, 2026-07-13 #2)
+
+**Petición usuario 2026-07-13** (6 fotos, mismo caso «Maccabi Haifa»/
+«CF Univer Comrat»/«Dunajska Streda» vs Atlético Madrid, GRUPO I —
+"sigue igual, no salen los escudos ni las plantillas, no tan siquiera
+la ❓️ para saber el Alias de cada equipo", tras el fix anterior del
+mismo día): investigación exhaustiva de las 4 comprobaciones diferidas
+en servidor que ya existían (`_psShieldDeferredCheck` del hub,
+`_ppShieldDeferredCheck` de la Pantalla de Previa, la nueva
+`_wprevShieldDeferredCheck` de la tabla de grupos, y la búsqueda de
+plantilla dentro de `_gmRenderPlayerPick`).
+
+### Causa raíz — 3 de las 4 eran UNA sola petición, sin reintentos
+
+La regla ya obligatoria de 2026-07-05 ("PROHIBIDO que una búsqueda...
+se rinda tras el PRIMER fallo sin reintentar") solo se aplicó en su
+momento a `_ppAliasDeferredCheck` (❓ de alias — 6 intentos con backoff
+`[0,1500,3000,5000,8000,12000]` ms). Las comprobaciones de ESCUDO
+(`_psShieldDeferredCheck`, `_ppShieldDeferredCheck`,
+`_wprevShieldDeferredCheck`) y de PLANTILLA (`_gmRenderPlayerPick` →
+`_eurTeamSquadServerSearch`), aunque añadidas DESPUÉS (2026-07-12 #7)
+copiando "el mismo patrón", en realidad solo copiaron la PETICIÓN
+(`fetch` con timeout de 6s) — nunca los reintentos. Un cold-start de
+Railway o un blip de red (el escenario más documentado de todo este
+proyecto) mataba la comprobación ENTERA a la primera, dejando el
+placeholder vacío PARA SIEMPRE — exactamente el mismo síntoma que ya
+se arregló para el alias, reproducido en las otras 3 capas porque el
+fix de 2026-07-05 nunca se generalizó.
+
+### Fix — helper único `window._eurRetryServerSearch(searchFn, teamName, onFound)`
+
+Nuevo helper genérico (`misc_body_1.html`, junto a
+`_eurTeamShieldServerSearch`/`_eurTeamSquadServerSearch`): envuelve
+CUALQUIER función de búsqueda de identidad por nombre (`(teamName,
+onDone) => void`, un solo intento) con los MISMOS 6 intentos/backoff
+que ya probó su eficacia con el alias. Reutilizado por los 4 puntos:
+
+- `_psShieldDeferredCheck` (card del hub, `misc_body_1.html`).
+- `_ppShieldDeferredCheck` (Pantalla de Previa, `index.bundle.js`,
+  bump `9.33`→`9.34`).
+- `_wprevShieldDeferredCheck` (tabla de grupos/fixture/cruces de la
+  Previa, `part2/misc_body_2.html`, sección de arriba).
+- La búsqueda de plantilla dentro de `_gmRenderPlayerPick`
+  (`part2/misc_body_2.html`).
+
+Cada call site sigue el patrón `typeof window._eurRetryServerSearch
+=== 'function' ? envolver : fallback al single-shot original` — si el
+helper no cargó (orden de scripts roto por cualquier motivo), el
+comportamiento anterior se conserva en vez de romper por completo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una comprobación diferida en servidor NUEVA
+   (escudo, plantilla, alias, estadio, o cualquier campo de identidad
+   futuro) haga una única petición sin pasar por
+   `window._eurRetryServerSearch`. Es el ÚNICO punto que garantiza los
+   6 intentos/backoff — copiar "el patrón" sin usar el helper repite
+   exactamente este bug.
+2. **PROHIBIDO** asumir que porque una comprobación diferida "ya sigue
+   el mismo patrón que el alias" hereda también sus reintentos: hay que
+   verificar que llama de verdad a `_eurRetryServerSearch` (o al
+   `_attempt()`/`DELAYS` equivalente), no solo que hace un `fetch` con
+   timeout de 6s.
+3. Recordatorio: cualquier edición de `index.bundle.js` exige bump de
+   `?v=X.X` en `templates/index.html` Y `PRECACHE` de `static/js/sw.js`
+   (regla ya existente, 2026-07-04) — este fix la cumple (9.33→9.34).
+
 ## La tabla de grupos / jornadas / cruces de la Previa de Champions también hereda la búsqueda server-side del escudo — `_badge`/`_badgeBig` se habían quedado fuera del fix #7/#8 (obligatorio, 2026-07-13)
 
 **Petición usuario 2026-07-13** (6 fotos, «Maccabi Haifa»/«Dunajska

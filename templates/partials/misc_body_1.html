@@ -9620,7 +9620,10 @@ window._showSimProgress = function(opts, onDone){
   function _psShieldDeferredCheck(side, teamName){
     if (!teamName || typeof window._eurTeamShieldServerSearch !== 'function') return;
     try {
-      window._eurTeamShieldServerSearch(teamName, function(found){
+      var _search = (typeof window._eurRetryServerSearch === 'function')
+        ? function(nm, cb){ window._eurRetryServerSearch(window._eurTeamShieldServerSearch, nm, cb); }
+        : window._eurTeamShieldServerSearch;
+      _search(teamName, function(found){
         if (!found) return;
         var host = document.getElementById('ps-shield-' + side);
         if (!host || !host.parentNode) return;
@@ -35701,6 +35704,36 @@ window._showSimProgress = function(opts, onDone){
         })
         .catch(function(){ clearTimeout(timer); onDone(false); });
     } catch(_){ try { onDone(false); } catch(__){} }
+  };
+  /* Reintentos genéricos para una búsqueda diferida en servidor
+     (obligatorio, 2026-07-13 — "sigue igual, no salen ni los escudos ni
+     las plantillas ni la ❓ del alias"). `_eurTeamShieldServerSearch`/
+     `_eurTeamSquadServerSearch` (arriba) y el alias (`_efAliasServerSearch`,
+     no en este bloque) son UNA sola petición HTTP con timeout de 6s —
+     coherente con la regla ya obligatoria de 2026-07-05
+     ("PROHIBIDO que una búsqueda... se rinda tras el PRIMER fallo sin
+     reintentar", aplicada entonces solo al alias vía
+     `_ppAliasDeferredCheck`/6 intentos). El escudo (`_psShieldDeferredCheck`/
+     `_ppShieldDeferredCheck`/`_wprevShieldDeferredCheck`) y la plantilla
+     (`_gmRenderPlayerPick`) copiaban el patrón de UNA sola petición sin
+     heredar los reintentos — un cold-start de Railway o un blip de red
+     (el caso más común documentado en este proyecto) mataba la
+     comprobación ENTERA sin ninguna red de seguridad. Mismos 6 intentos/
+     backoff que ya probó su eficacia con el alias. */
+  window._eurRetryServerSearch = function(searchFn, teamName, onFound){
+    if (typeof searchFn !== 'function') { try { onFound(null); } catch(_){} return; }
+    var MAX_TRIES = 6;
+    var DELAYS = [0, 1500, 3000, 5000, 8000, 12000];
+    var tries = 0;
+    function _attempt(){
+      searchFn(teamName, function(found){
+        if (found) { try { onFound(found); } catch(_){} return; }
+        tries++;
+        if (tries < MAX_TRIES) setTimeout(_attempt, DELAYS[tries] || 3500);
+        else { try { onFound(found); } catch(_){} }
+      });
+    }
+    _attempt();
   };
   /* Invalidación explícita — llamada por `_eurHydrateMissingLeagues`
      tras traer/backfillar escudos nuevos del servidor, para que la

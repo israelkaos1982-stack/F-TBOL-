@@ -43631,7 +43631,14 @@ window._showSimProgress = function(opts, onDone){
        se sienta "eterno". Si CUALQUIER zona sigue en 🔓 Auto, sí hace
        falta hidratar para esa zona. */
     var overridesNow = (window._eurManualOverrideLoad && window._eurManualOverrideLoad()) || {};
-    var anyAutomatic = EUR_MANUAL_ZONES.some(function(z){ return !overridesNow[z]; });
+    /* `EUR_MANUAL_ZONES` (el array) es una var LOCAL de la IIFE donde se
+       declara (misc_body_1.html ~36388) — `_eurManualOverlayOpen` vive
+       en OTRA IIFE distinta, así que el nombre pelado no está en su
+       scope (`ReferenceError: EUR_MANUAL_ZONES is not defined`, bug
+       2026-07-13 desde el commit que introdujo este auto-hidrate). Se
+       usa la copia expuesta a propósito en `window._eurManualExtraZones`
+       (misc_body_1.html ~36426) para cruzar IIFEs. */
+    var anyAutomatic = (window._eurManualExtraZones || []).some(function(z){ return !overridesNow[z]; });
     if(isNew && anyAutomatic && !_eurManualHydrating && (Date.now() - _eurManualLastHydrateAt) > 120000){
       _eurManualTriggerHydrate();
     }

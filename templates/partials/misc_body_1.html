@@ -13191,10 +13191,73 @@ window._showSimProgress = function(opts, onDone){
     ov.innerHTML = html;
     document.body.appendChild(ov);
   };
+  /* Helper compartido: GET JSON con timeout duro de 6 s (AbortController).
+     Sustituye a los XMLHttpRequest SÍNCRONOS (`async=false`) que este
+     click handler usaba antes — un sync XHR bloquea el hilo principal
+     ENTERO hasta que el servidor responde, y con Railway en cold-start
+     (documentado en varios sitios de este proyecto) eso podía durar
+     muchos segundos por CADA una de las hasta ~14 peticiones
+     encadenadas de este handler → la pestaña entera se "congelaba" al
+     pulsar cualquier equipo (bug 2026-07-13). Nunca lanza: en fallo o
+     timeout resuelve `null`, igual que antes se comprobaba
+     `xhr.status === 200`. */
+  function _lextClickFetchJson(url){
+    return new Promise(function(resolve){
+      var done = false;
+      var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = setTimeout(function(){
+        if (done) return; done = true;
+        try { if (ac) ac.abort(); } catch(_){}
+        resolve(null);
+      }, 6000);
+      try {
+        fetch(url, ac ? {signal: ac.signal} : {}).then(function(r){
+          if (done) return;
+          if (!r || !r.ok) { done = true; clearTimeout(timer); resolve(null); return; }
+          r.json().then(function(j){
+            if (done) return;
+            done = true; clearTimeout(timer); resolve(j || null);
+          }).catch(function(){
+            if (done) return;
+            done = true; clearTimeout(timer); resolve(null);
+          });
+        }).catch(function(){
+          if (done) return;
+          done = true; clearTimeout(timer); resolve(null);
+        });
+      } catch(_){
+        if (!done) { done = true; clearTimeout(timer); resolve(null); }
+      }
+    });
+  }
+  /* Toast mínimo — feedback de "estoy trabajando" mientras el handler
+     de abajo hace las búsquedas en servidor de forma asíncrona (antes,
+     al ser síncronas, la pantalla se quedaba congelada sin ningún
+     aviso — ahora al menos no se congela, pero puede tardar 1-2 s). */
+  function _lextClickToast(msg){
+    try {
+      var ex = document.getElementById('lext-click-toast');
+      if (ex) ex.remove();
+      var d = document.createElement('div');
+      d.id = 'lext-click-toast';
+      d.textContent = msg;
+      d.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);'
+        + 'max-width:90vw;z-index:1000000;padding:10px 16px;border-radius:10px;'
+        + 'font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;letter-spacing:.4px;'
+        + 'color:#fff;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.55);'
+        + 'background:linear-gradient(135deg,#1a3a6b,#2b6cb0);'
+        + 'border:1px solid rgba(255,255,255,.25);';
+      document.body.appendChild(d);
+      return d;
+    } catch(_){ return null; }
+  }
+  function _lextClickToastDismiss(d){
+    try { if (d && d.parentNode) d.remove(); } catch(_){}
+  }
   // Delegación: cada click sobre una fila de la clasificación de Liga
   // EA Sports abre la plantilla (overlay lext-ov-squad) del equipo
   // correspondiente, recuperando los datos creados desde 🖍 Edit.
-  document.addEventListener('click', function(ev){
+  document.addEventListener('click', async function(ev){
     var t = ev.target;
     if(!t || typeof t.closest !== 'function') return;
     var row = t.closest('.clas-row');
@@ -13327,12 +13390,11 @@ window._showSimProgress = function(opts, onDone){
          usuario ve "Equipos guardados (0)" aunque el server tenga
          toda su plantilla. */
       if (!teams.length) {
+        var _clickToast1 = _lextClickToast('⏳ Cargando equipos…');
         try {
-          var xhrSq = new XMLHttpRequest();
-          xhrSq.open('GET', '/api/liga-ext/'+encodeURIComponent(slug), false);
-          xhrSq.send();
-          if (xhrSq.status === 200) {
-            var respSq = JSON.parse(xhrSq.responseText);
+          var respSq = await _lextClickFetchJson('/api/liga-ext/'+encodeURIComponent(slug));
+          _lextClickToastDismiss(_clickToast1);
+          {
             if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
               data = respSq.data;
               teams = data.teams;
@@ -13365,6 +13427,7 @@ window._showSimProgress = function(opts, onDone){
         } catch(errSrv) {
           /* sin conexión o server down — seguimos con teams=[] y
              mostraremos el alert con lista vacía pero informativo. */
+          _lextClickToastDismiss(_clickToast1);
         }
       }
       var target = _normForClick(displayName);
@@ -13579,19 +13642,20 @@ window._showSimProgress = function(opts, onDone){
 
         /* Fuente B: bajar TODOS los slugs conocidos del server y
            escanearlos. Si el admin guardó el equipo en otra liga, el
-           server tendrá su players allí. Síncrono para que sea simple. */
+           server tendrá su players allí. Peticiones ASÍNCRONAS (con
+           timeout de 6s cada una) — antes eran XHR SÍNCRONOS, hasta
+           12 seguidos, que congelaban la pestaña entera si el
+           servidor estaba lento/cold-start (bug 2026-07-13). */
         if (rebuilt.length === 0) {
           var knownSlugs = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion',
                             'inglaterra','alemania','italia','francia','portugal',
                             'holanda','belgica','brasil','argentina','turquia'];
+          var _clickToastB = _lextClickToast('⏳ Buscando plantilla…');
           for (var ks = 0; ks < knownSlugs.length && rebuilt.length === 0; ks++) {
             if (knownSlugs[ks] === slug) continue;
             try {
-              var xx = new XMLHttpRequest();
-              xx.open('GET', '/api/liga-ext/'+encodeURIComponent(knownSlugs[ks]), false);
-              xx.send();
-              if (xx.status !== 200) continue;
-              var rr = JSON.parse(xx.responseText);
+              var rr = await _lextClickFetchJson('/api/liga-ext/'+encodeURIComponent(knownSlugs[ks]));
+              if (!rr) continue;
               var ds = rr && rr.data; if (!ds || !Array.isArray(ds.teams)) continue;
               for (var tz = 0; tz < ds.teams.length; tz++) {
                 var tzt = ds.teams[tz];
@@ -13618,6 +13682,7 @@ window._showSimProgress = function(opts, onDone){
               }
             } catch(_){}
           }
+          _lextClickToastDismiss(_clickToastB);
         }
 
         /* Fuente C: ef_player_stats_v1 (nombres + stats). Último
@@ -13812,12 +13877,11 @@ window._showSimProgress = function(opts, onDone){
            power. Si el admin no ha editado nada, esto es lo que
            hay, y es lo que usa el motor Python al simular. */
         if (rebuilt.length === 0) {
+          var _clickToastH = _lextClickToast('⏳ Buscando plantilla…');
           try {
-            var xhrHc = new XMLHttpRequest();
-            xhrHc.open('GET', '/api/jugadores-hardcoded', false);
-            xhrHc.send();
-            if (xhrHc.status === 200) {
-              var rhc = JSON.parse(xhrHc.responseText);
+            var rhc = await _lextClickFetchJson('/api/jugadores-hardcoded');
+            _lextClickToastDismiss(_clickToastH);
+            if (rhc) {
               var hcTeams = (rhc && rhc.teams) || {};
               var hcKeys = Object.keys(hcTeams);
               for (var hk = 0; hk < hcKeys.length; hk++) {
@@ -13843,7 +13907,9 @@ window._showSimProgress = function(opts, onDone){
                 }
               }
             }
-          } catch(_){}
+          } catch(_){
+            _lextClickToastDismiss(_clickToastH);
+          }
         }
 
         if (rebuilt.length === 0) {

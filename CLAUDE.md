@@ -1,5 +1,76 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El click en una fila de clasificación NUNCA hace XHR SÍNCRONO — congelaba la pestaña entera al pulsar CUALQUIER equipo (obligatorio, 2026-07-13 #3)
+
+**Petición usuario 2026-07-13** (3 fotos, «Liga EA Sports · Clasificación»,
+temporada recién empezada/reiniciada, todos los equipos a 0 PJ): "la web
+se congela al meterte en cualquier caja donde al pulsar un equipo la
+pantalla se congela" — tocar CUALQUIER fila de la tabla de clasificación
+(Arsenal, Athletic Club, Real Madrid…) dejaba la pestaña entera
+congelada, sin ninguna reacción visible.
+
+### Causa raíz — hasta ~14 `XMLHttpRequest` SÍNCRONOS encadenados en el propio click handler
+
+El delegado único `document.addEventListener('click', …)` que abre la
+plantilla (overlay `lext-ov-squad`) al pulsar una fila `.clas-row` de
+CUALQUIER pantalla de clasificación (`s-liga-clas`, `s-segunda-clas`,
+`s-primf-clas`, `s-superliga-clas`, `s-champions`, `s-uel`, `s-uecl`, …)
+hacía, cuando el equipo tocado no tenía plantilla ya cacheada en
+`localStorage` (el caso típico de una temporada recién reiniciada, o de
+un dispositivo/instalación nueva — exactamente lo que muestran las 3
+fotos, TODOS los equipos a 0 PJ), hasta **3 bloques de peticiones
+`XMLHttpRequest` con `async=false`** (bloqueantes de verdad, congelan el
+hilo principal ENTERO hasta que el servidor responde):
+
+1. `GET /api/liga-ext/<slug>` inicial si `localStorage` está vacío
+   (`misc_body_1.html`, bloque "1.").
+2. **"Fuente B"**: un `for` que recorre hasta **12 slugs de liga
+   conocidos**, cada uno con su PROPIO XHR síncrono, **secuencial**
+   (`misc_body_1.html`, bloque "Fuente B").
+3. **"Fuente H"**: un XHR síncrono a `/api/jugadores-hardcoded`
+   (`misc_body_1.html`, bloque "Fuente H").
+
+Con el backend en cold-start (Railway/Render, documentado en varios
+sitios de este mismo archivo) cada una de esas peticiones puede tardar
+varios segundos — y al ser SÍNCRONAS, sin ningún timeout, la pestaña se
+queda congelada sin ninguna animación/feedback hasta que TODAS
+resuelven o el navegador las corta por su cuenta. Como una temporada
+recién empezada tiene TODOS los equipos sin plantilla cacheada
+todavía, el bug se reproducía con CUALQUIER equipo que se pulsara.
+
+### Fix
+
+Los 3 bloques de XHR síncrono se sustituyen por
+`window`-scoped `_lextClickFetchJson(url)` (`misc_body_1.html`, justo
+antes del handler): `fetch()` envuelto en `AbortController` con
+**timeout duro de 6 s** (mismo patrón que `_efAliasServerSearch`/
+`_eurTeamShieldServerSearch` de este mismo proyecto) que NUNCA lanza —
+resuelve `null` en fallo/timeout, igual que antes se comprobaba
+`xhr.status === 200`. El handler del click pasa a ser
+`async function(ev){...}` y usa `await` en los 3 puntos — el hilo
+principal deja de bloquearse mientras esperan al servidor. Se añade un
+toast mínimo (`_lextClickToast`/`_lextClickToastDismiss`) para que el
+usuario vea "⏳ Cargando…" en vez de una pantalla sin ninguna reacción
+mientras las peticiones (ahora asíncronas) resuelven.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** usar `XMLHttpRequest` con `async=false` (3er argumento
+   `false` de `.open()`) en NINGÚN handler de click/tap de este
+   proyecto. Un XHR síncrono congela la pestaña ENTERA hasta que el
+   servidor responde, sin límite de tiempo — con el backend en
+   cold-start (caso frecuente y ya documentado de este proyecto) eso
+   puede ser muchos segundos, y ENCADENAR varios (como hacían las
+   "Fuentes B/H" de este handler) los multiplica.
+2. **PROHIBIDO** que una petición de red de la que depende continuar un
+   flujo visible (abrir un overlay, resolver una plantilla) carezca de
+   timeout. Usar `_lextClickFetchJson` (o el patrón `fetch` +
+   `AbortController` + 6 s ya establecido en `_efAliasServerSearch`/
+   `_eurTeamShieldServerSearch`) — nunca un `fetch`/XHR sin límite.
+3. Todo nuevo fallback de resolución de plantilla por nombre (una
+   "Fuente I", J, etc. futura) que necesite preguntar al servidor debe
+   usar `_lextClickFetchJson`, nunca un XHR síncrono nuevo.
+
 ## Toda comprobación diferida en servidor (escudo Y plantilla, no solo alias) REINTENTA — un fallo de red no debe dejarla sin aparecer para siempre (obligatorio, 2026-07-13 #2)
 
 **Petición usuario 2026-07-13** (6 fotos, mismo caso «Maccabi Haifa»/

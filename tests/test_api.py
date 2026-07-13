@@ -1710,3 +1710,80 @@ class TestLigaExtAnyEndpoint:
         assert j["ok"] is True
         assert j["data"]["teams"] == []
         assert j["source"] == "main"
+
+
+class TestTeamIdentityProtectedFallback:
+    """/api/team-shield, /api/team-alias y /api/team-squad también miran
+    el snapshot `_protected` de cada liga cuando el `main` no trae el
+    dato (bug 2026-07-13, «siguen sin salir los escudos/alias/plantilla
+    del Maccabi Haifa»): si una escritura concurrente de OTRO dispositivo
+    regresó el `main` a una copia más pobre, el escudo/alias/plantilla
+    que el admin configuró puede sobrevivir SOLO en `_protected` — antes
+    estos 3 endpoints la excluían siempre del escaneo."""
+
+    def test_shield_cae_a_protected_si_main_no_lo_trae(self, client):
+        c = client
+        c.post("/api/liga-ext-protected/testligax", json={"data": {
+            "teams": [{"id": "1", "name": "Maccabi Haifa", "shield": "https://cdn/x.png"}],
+            "results": [],
+        }})
+        c.post("/api/liga-ext/testligax", json={"data": {
+            "teams": [{"id": "1", "name": "Maccabi Haifa"}],
+            "results": [],
+        }})
+        r = c.get("/api/team-shield/Maccabi Haifa")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["shield"] == "https://cdn/x.png"
+
+    def test_alias_cae_a_protected_si_main_no_lo_trae(self, client):
+        c = client
+        c.post("/api/liga-ext-protected/testligay", json={"data": {
+            "teams": [{"id": "1", "name": "Maccabi Haifa", "efootballAlias": "Rosario AA"}],
+            "results": [],
+        }})
+        c.post("/api/liga-ext/testligay", json={"data": {
+            "teams": [{"id": "1", "name": "Maccabi Haifa"}],
+            "results": [],
+        }})
+        r = c.get("/api/team-alias/Maccabi Haifa")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["alias"] == "Rosario AA"
+
+    def test_squad_cae_a_protected_si_main_no_lo_trae(self, client):
+        c = client
+        c.post("/api/liga-ext-protected/testligaz", json={"data": {
+            "teams": [{"id": "1", "name": "Maccabi Haifa", "players": [{"name": "Jugador X"}]}],
+            "results": [],
+        }})
+        c.post("/api/liga-ext/testligaz", json={"data": {
+            "teams": [{"id": "1", "name": "Maccabi Haifa", "players": []}],
+            "results": [],
+        }})
+        r = c.get("/api/team-squad/Maccabi Haifa")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["team"]["players"][0]["name"] == "Jugador X"
+
+    def test_main_gana_sobre_protected_si_ya_lo_trae(self, client):
+        c = client
+        c.post("/api/liga-ext-protected/testligaw", json={"data": {
+            "teams": [{"id": "1", "name": "Maccabi Haifa", "shield": "old.png"}],
+            "results": [],
+        }})
+        c.post("/api/liga-ext/testligaw", json={"data": {
+            "teams": [{"id": "1", "name": "Maccabi Haifa", "shield": "new.png"}],
+            "results": [],
+        }})
+        r = c.get("/api/team-shield/Maccabi Haifa")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["shield"] == "new.png"
+
+    def test_sin_datos_en_ningun_lado_devuelve_none(self, client):
+        c = client
+        r = c.get("/api/team-shield/Equipo Que No Existe En Ningun Lado")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["shield"] is None

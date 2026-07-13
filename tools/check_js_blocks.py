@@ -23,7 +23,7 @@ Uso manual (gratis, sin pagar nada):
 Devuelve código de salida != 0 si encuentra algún error (para que un
 hook de git / Claude pueda bloquear el commit).
 """
-import os, sys, subprocess, tempfile
+import os, re, sys, subprocess, tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -112,6 +112,34 @@ def check_file(rel):
     return problems
 
 
+# GUARDIÁN ANTI-XHR-SÍNCRONO (2026-07-13)
+# ----------------------------------------
+# Un `XMLHttpRequest` con `async=false` (3er argumento `false` de
+# `.open()`) BLOQUEA el hilo principal del navegador ENTERO hasta que
+# el servidor responde — con Railway/Render en cold-start (frecuente
+# y ya documentado en CLAUDE.md) eso puede tardar muchos segundos, y
+# encadenar varios (como pasó en el click handler de la clasificación,
+# bug 2026-07-13: "la web se congela al pulsar cualquier equipo")
+# congela la pestaña sin ninguna señal de vida. Este chequeo detecta
+# CUALQUIER `.open(METODO, url, false)` en los archivos vigilados para
+# que la regresión no pueda volver a colarse sin que salte esta alarma
+# en el próximo arranque de sesión (SessionStart hook).
+SYNC_XHR_RE = re.compile(r"\.open\(\s*['\"][A-Za-z]+['\"]\s*,[^,;]*,\s*false\s*\)")
+
+
+def check_sync_xhr(rel):
+    path = os.path.join(ROOT, rel)
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    problems = []
+    for m in SYNC_XHR_RE.finditer(text):
+        line_no = text.count("\n", 0, m.start()) + 1
+        problems.append((rel, line_no))
+    return problems
+
+
 def main():
     all_problems = []
     for rel in TARGETS:
@@ -126,7 +154,21 @@ def main():
         print("   '*/' que aparece DENTRO del texto de un comentario (p.ej.")
         print("   'spv*/sfn'), o un '/*' borrado. Busca cerca de esa línea.\n")
         return 1
+
+    sync_xhr_problems = []
+    for rel in TARGETS:
+        sync_xhr_problems += check_sync_xhr(rel)
+    if sync_xhr_problems:
+        print("\n❌ XHR SÍNCRONO DETECTADO — congela la pestaña entera al ejecutarse:\n")
+        for (rel, ln) in sync_xhr_problems:
+            print("   • %s:%s" % (rel, ln))
+        print("\n   PROHIBIDO por CLAUDE.md (regla 2026-07-13 #3): usa fetch() con")
+        print("   AbortController + timeout en su lugar (ver _lextClickFetchJson en")
+        print("   templates/partials/misc_body_1.html como patrón de referencia).\n")
+        return 1
+
     print("✅ Sintaxis JS OK — todos los bloques <script> y .js compilan.")
+    print("✅ Sin XHR síncrono — ningún .open(..., false) detectado.")
     return 0
 
 

@@ -60,6 +60,350 @@ vacío para ese campo). Tests en
    (no duplicar el bucle de escaneo de `_protected`) pasándole su propia
    función `_team_xxx_scan_teams`.
 
+## El overlay "Equipos por competición" lanzaba `ReferenceError: EUR_MANUAL_ZONES is not defined` en CADA apertura desde 2026-07-07 (obligatorio, 2026-07-13 #5)
+
+**Petición usuario 2026-07-13** (foto, overlay "👁 Ver / Añadir equipos
+por competición" abierto y funcionando, con un banner rojo debajo:
+"⚠️ La acción no se pudo completar: EUR_MANUAL_ZONES is not defined"):
+bug NO relacionado con los fixes de XHR síncrono de esta misma sesión —
+existe desde el commit `9a8fb78` (2026-07-07, "No hidratar las ~50 ligas
+si todas las zonas europeas son manuales").
+
+### Causa raíz
+
+`window._eurManualOverlayOpen` (`misc_body_1.html` ~43610) referenciaba
+la variable pelada `EUR_MANUAL_ZONES` en la línea
+`var anyAutomatic = EUR_MANUAL_ZONES.some(...)` — pero `EUR_MANUAL_ZONES`
+es un `var` **LOCAL** de la IIFE `(function(){...})()` que va de la línea
+~35611 a la ~37163, y `_eurManualOverlayOpen` vive en OTRA IIFE distinta
+que arranca después de la 37163. El nombre pelado no existe en ese scope
+→ `ReferenceError` en CADA apertura del overlay desde que se escribió
+esa línea. Como el `_eurManualOverlayRender()` que pinta el overlay se
+llama ANTES de la línea que revienta, el overlay se veía perfectamente
+bien — solo fallaba (en silencio hasta que `window.pG` lo capturó y
+mostró el banner) el auto-hidrate condicional de después.
+
+### Fix
+
+Usa `window._eurManualExtraZones` — la MISMA lista, ya expuesta
+deliberadamente en `window` (misc_body_1.html ~36426,
+`window._eurManualExtraZones = EUR_MANUAL_ZONES;`) precisamente para que
+otras IIFEs de este archivo puedan leerla sin duplicarla.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una IIFE lea una `var` de OTRA IIFE por su nombre
+   pelado. Si una constante/lista debe ser compartida entre IIFEs de
+   este archivo, se expone explícitamente en `window.*` (como ya se hizo
+   con `_eurManualExtraZones`) y el consumidor SIEMPRE lee la versión de
+   `window`, nunca el nombre local.
+2. Antes de dar por bueno un fix que añade lógica dentro de una función
+   ya existente (aquí, el auto-hidrate condicional dentro de
+   `_eurManualOverlayOpen`), verificar que toda variable referenciada
+   está en el scope de ESA función — un `grep` del nombre + confirmar en
+   qué IIFE vive cada aparición evita este tipo de regresión silenciosa.
+
+## TODO el proyecto queda libre de XHR síncrono — «Resto de Ligas» sufría el MISMO bug en 10 sitios más + guardián automático (obligatorio, 2026-07-13 #4)
+
+**Petición usuario 2026-07-13** ("en resto de ligas pasaba lo mismo,
+¿arreglado también? ¿podemos intentar que ese error no vuelva a
+suceder?"): tras el fix del click en la clasificación (sección
+siguiente, #3), se auditó el resto del proyecto en busca de la MISMA
+familia de bug. Resultado: había **10 sitios más** con
+`XMLHttpRequest` **síncrono** (`async=false`), todos alcanzables desde
+"Resto de Ligas" (y algunos desde Liga EA Sports también):
+
+1. **`loadData(k)`** (la función que carga CUALQUIER `ligaExt_<slug>` —
+   usada por `openLigaExt`, `renderTable`, `lextOpenSquad`, 76 sitios en
+   total): hasta 3 XHR síncronos encadenados (main → protected →
+   protected-solo) cuando no había NADA en cache local. Esto se disparaba
+   tanto al ABRIR la pantalla de una liga sin datos como al pulsar un
+   equipo suyo (`.lext-row onclick="lextOpenSquad(...)"`, un handler
+   DISTINTO del ya arreglado en #3 — usa clases/mecanismos propios).
+2. **`saveData(k,d)`** (guardado de CUALQUIER edición del editor, 40
+   sitios): hasta 6 XHR síncronos encadenados (POST main ×3 reintentos +
+   POST protected ×3 reintentos) en CADA guardado — congelaba la pestaña
+   al pulsar "Guardar" en el editor de cualquier equipo/liga.
+3. **`_readLigaData(slug)`** (agregador de "Resto de Ligas ·
+   Estadísticas"): llamado en un BUCLE sobre las ~51 ligas — el peor
+   caso, hasta 51 XHR síncronos ENCADENADOS con solo abrir esa pantalla.
+4. **`_lextSeedRecoverFromServer(slug)`** (recuperación de las 4 ligas
+   auto-sembradas: Resto Mundo/Montenegro/N.Irlanda/Albania): hasta 2 XHR
+   síncronos al abrir su pantalla si local+`_protected`+snapshots estaban
+   vacíos. **Esto SUPERSEDE la regla previa que prohibía hacerlo
+   asíncrono** ("el coste es aceptable, es un caso raro") — con la regla
+   general de abajo, ningún XHR síncrono es aceptable en ningún caso,
+   por raro que sea.
+5. **`emergencyRestore`/`lextDeepRecoverSlug`/`lextDeepRecoverAll`**
+   (herramientas de recuperación manual desde consola): hasta 55 XHR
+   síncronos encadenados en `lextDeepRecoverAll` (uno por liga conocida).
+6. **`rosterFor(team)`** (`part2/misc_body_2.html`, plantilla de la card
+   BAJAS PARA EL PARTIDO): hasta 3 XHR síncronos si el equipo humano no
+   tenía plantilla cacheada localmente.
+
+### Fix — mismo patrón en los 10 sitios: nunca bloquear, hidratar de fondo
+
+Todos sustituidos por `fetch()` con `AbortController` + timeout de 6s
+(`window._lextFetchJsonTimeout`, alias de `_lextClickFetchJson` del fix
+#3). Donde la función tenía un contrato de retorno SÍNCRONO usado por
+muchos callers (`loadData`, `saveData`, `_readLigaData`, `rosterFor`):
+se preserva ese contrato devolviendo lo que YA hay en local (o vacío) al
+instante, y la hidratación real del servidor corre en segundo plano,
+actualizando `localStorage`/`LIGA_CACHE` y re-pintando la pantalla si
+sigue abierta cuando el servidor responde — nunca bloquea, nunca pierde
+la capacidad de recuperar datos, solo lo hace un tick más tarde. Donde
+la función era una herramienta de consola sin otros callers
+(`emergencyRestore`, `lextDeepRecoverSlug/All`, `_lextSeedRecoverFromServer`)
+se convirtió directamente a `async`/callback.
+
+### El guardián de sintaxis (`tools/check_js_blocks.py`) ahora TAMBIÉN bloquea XHR síncrono
+
+Respuesta a "¿podemos intentar que no vuelva a pasar?": el hook de
+`SessionStart` que ya comprobaba sintaxis JS (`node --check` de cada
+`<script>`) ahora ADEMÁS escanea con regex cualquier
+`.open(MÉTODO, url, false)` en los archivos vigilados
+(`misc_body_1.html`, `misc_body_2.html`, `static/js/*.js`) y **falla la
+sesión** si encuentra uno. Antes esta regla solo vivía en texto
+(CLAUDE.md) — ahora un futuro Claude (o el propio código) que reintroduzca
+un XHR síncrono lo verá fallar el arranque de la sesión siguiente, en vez
+de depender de que alguien recuerde leer esta prohibición.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** usar `XMLHttpRequest` con `async=false` en NINGÚN sitio
+   del proyecto, sin excepción — ni siquiera en herramientas de consola,
+   flujos de recuperación "raros", o casos ya documentados como
+   "el coste es aceptable". La regla del fix #3 (más abajo) es absoluta
+   y SUPERSEDE cualquier excepción previa escrita para un caso concreto.
+2. **PROHIBIDO** que una función con contrato de retorno síncrono usado
+   por muchos callers (`loadData`, `saveData`, o cualquier función nueva
+   de este tipo) se vuelva `async` para "arreglar" esto — eso obligaría a
+   tocar decenas de callers. El patrón correcto es: devolver lo que haya
+   en local YA (o vacío) al instante, e hidratar el servidor en segundo
+   plano sin bloquear, re-pintando si la pantalla sigue abierta.
+3. **PROHIBIDO** quitar el chequeo de XHR síncrono de
+   `tools/check_js_blocks.py` (`SYNC_XHR_RE`/`check_sync_xhr`). Toda
+   liga/pantalla/herramienta NUEVA que añada un fetch al servidor hereda
+   esta protección automáticamente con solo estar en los archivos ya
+   vigilados por el guardián.
+
+## El click en una fila de clasificación NUNCA hace XHR SÍNCRONO — congelaba la pestaña entera al pulsar CUALQUIER equipo (obligatorio, 2026-07-13 #3)
+
+**Petición usuario 2026-07-13** (3 fotos, «Liga EA Sports · Clasificación»,
+temporada recién empezada/reiniciada, todos los equipos a 0 PJ): "la web
+se congela al meterte en cualquier caja donde al pulsar un equipo la
+pantalla se congela" — tocar CUALQUIER fila de la tabla de clasificación
+(Arsenal, Athletic Club, Real Madrid…) dejaba la pestaña entera
+congelada, sin ninguna reacción visible.
+
+### Causa raíz — hasta ~14 `XMLHttpRequest` SÍNCRONOS encadenados en el propio click handler
+
+El delegado único `document.addEventListener('click', …)` que abre la
+plantilla (overlay `lext-ov-squad`) al pulsar una fila `.clas-row` de
+CUALQUIER pantalla de clasificación (`s-liga-clas`, `s-segunda-clas`,
+`s-primf-clas`, `s-superliga-clas`, `s-champions`, `s-uel`, `s-uecl`, …)
+hacía, cuando el equipo tocado no tenía plantilla ya cacheada en
+`localStorage` (el caso típico de una temporada recién reiniciada, o de
+un dispositivo/instalación nueva — exactamente lo que muestran las 3
+fotos, TODOS los equipos a 0 PJ), hasta **3 bloques de peticiones
+`XMLHttpRequest` con `async=false`** (bloqueantes de verdad, congelan el
+hilo principal ENTERO hasta que el servidor responde):
+
+1. `GET /api/liga-ext/<slug>` inicial si `localStorage` está vacío
+   (`misc_body_1.html`, bloque "1.").
+2. **"Fuente B"**: un `for` que recorre hasta **12 slugs de liga
+   conocidos**, cada uno con su PROPIO XHR síncrono, **secuencial**
+   (`misc_body_1.html`, bloque "Fuente B").
+3. **"Fuente H"**: un XHR síncrono a `/api/jugadores-hardcoded`
+   (`misc_body_1.html`, bloque "Fuente H").
+
+Con el backend en cold-start (Railway/Render, documentado en varios
+sitios de este mismo archivo) cada una de esas peticiones puede tardar
+varios segundos — y al ser SÍNCRONAS, sin ningún timeout, la pestaña se
+queda congelada sin ninguna animación/feedback hasta que TODAS
+resuelven o el navegador las corta por su cuenta. Como una temporada
+recién empezada tiene TODOS los equipos sin plantilla cacheada
+todavía, el bug se reproducía con CUALQUIER equipo que se pulsara.
+
+### Fix
+
+Los 3 bloques de XHR síncrono se sustituyen por
+`window`-scoped `_lextClickFetchJson(url)` (`misc_body_1.html`, justo
+antes del handler): `fetch()` envuelto en `AbortController` con
+**timeout duro de 6 s** (mismo patrón que `_efAliasServerSearch`/
+`_eurTeamShieldServerSearch` de este mismo proyecto) que NUNCA lanza —
+resuelve `null` en fallo/timeout, igual que antes se comprobaba
+`xhr.status === 200`. El handler del click pasa a ser
+`async function(ev){...}` y usa `await` en los 3 puntos — el hilo
+principal deja de bloquearse mientras esperan al servidor. Se añade un
+toast mínimo (`_lextClickToast`/`_lextClickToastDismiss`) para que el
+usuario vea "⏳ Cargando…" en vez de una pantalla sin ninguna reacción
+mientras las peticiones (ahora asíncronas) resuelven.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** usar `XMLHttpRequest` con `async=false` (3er argumento
+   `false` de `.open()`) en NINGÚN handler de click/tap de este
+   proyecto. Un XHR síncrono congela la pestaña ENTERA hasta que el
+   servidor responde, sin límite de tiempo — con el backend en
+   cold-start (caso frecuente y ya documentado de este proyecto) eso
+   puede ser muchos segundos, y ENCADENAR varios (como hacían las
+   "Fuentes B/H" de este handler) los multiplica.
+2. **PROHIBIDO** que una petición de red de la que depende continuar un
+   flujo visible (abrir un overlay, resolver una plantilla) carezca de
+   timeout. Usar `_lextClickFetchJson` (o el patrón `fetch` +
+   `AbortController` + 6 s ya establecido en `_efAliasServerSearch`/
+   `_eurTeamShieldServerSearch`) — nunca un `fetch`/XHR sin límite.
+3. Todo nuevo fallback de resolución de plantilla por nombre (una
+   "Fuente I", J, etc. futura) que necesite preguntar al servidor debe
+   usar `_lextClickFetchJson`, nunca un XHR síncrono nuevo.
+
+## Toda comprobación diferida en servidor (escudo Y plantilla, no solo alias) REINTENTA — un fallo de red no debe dejarla sin aparecer para siempre (obligatorio, 2026-07-13 #2)
+
+**Petición usuario 2026-07-13** (6 fotos, mismo caso «Maccabi Haifa»/
+«CF Univer Comrat»/«Dunajska Streda» vs Atlético Madrid, GRUPO I —
+"sigue igual, no salen los escudos ni las plantillas, no tan siquiera
+la ❓️ para saber el Alias de cada equipo", tras el fix anterior del
+mismo día): investigación exhaustiva de las 4 comprobaciones diferidas
+en servidor que ya existían (`_psShieldDeferredCheck` del hub,
+`_ppShieldDeferredCheck` de la Pantalla de Previa, la nueva
+`_wprevShieldDeferredCheck` de la tabla de grupos, y la búsqueda de
+plantilla dentro de `_gmRenderPlayerPick`).
+
+### Causa raíz — 3 de las 4 eran UNA sola petición, sin reintentos
+
+La regla ya obligatoria de 2026-07-05 ("PROHIBIDO que una búsqueda...
+se rinda tras el PRIMER fallo sin reintentar") solo se aplicó en su
+momento a `_ppAliasDeferredCheck` (❓ de alias — 6 intentos con backoff
+`[0,1500,3000,5000,8000,12000]` ms). Las comprobaciones de ESCUDO
+(`_psShieldDeferredCheck`, `_ppShieldDeferredCheck`,
+`_wprevShieldDeferredCheck`) y de PLANTILLA (`_gmRenderPlayerPick` →
+`_eurTeamSquadServerSearch`), aunque añadidas DESPUÉS (2026-07-12 #7)
+copiando "el mismo patrón", en realidad solo copiaron la PETICIÓN
+(`fetch` con timeout de 6s) — nunca los reintentos. Un cold-start de
+Railway o un blip de red (el escenario más documentado de todo este
+proyecto) mataba la comprobación ENTERA a la primera, dejando el
+placeholder vacío PARA SIEMPRE — exactamente el mismo síntoma que ya
+se arregló para el alias, reproducido en las otras 3 capas porque el
+fix de 2026-07-05 nunca se generalizó.
+
+### Fix — helper único `window._eurRetryServerSearch(searchFn, teamName, onFound)`
+
+Nuevo helper genérico (`misc_body_1.html`, junto a
+`_eurTeamShieldServerSearch`/`_eurTeamSquadServerSearch`): envuelve
+CUALQUIER función de búsqueda de identidad por nombre (`(teamName,
+onDone) => void`, un solo intento) con los MISMOS 6 intentos/backoff
+que ya probó su eficacia con el alias. Reutilizado por los 4 puntos:
+
+- `_psShieldDeferredCheck` (card del hub, `misc_body_1.html`).
+- `_ppShieldDeferredCheck` (Pantalla de Previa, `index.bundle.js`,
+  bump `9.33`→`9.34`).
+- `_wprevShieldDeferredCheck` (tabla de grupos/fixture/cruces de la
+  Previa, `part2/misc_body_2.html`, sección de arriba).
+- La búsqueda de plantilla dentro de `_gmRenderPlayerPick`
+  (`part2/misc_body_2.html`).
+
+Cada call site sigue el patrón `typeof window._eurRetryServerSearch
+=== 'function' ? envolver : fallback al single-shot original` — si el
+helper no cargó (orden de scripts roto por cualquier motivo), el
+comportamiento anterior se conserva en vez de romper por completo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una comprobación diferida en servidor NUEVA
+   (escudo, plantilla, alias, estadio, o cualquier campo de identidad
+   futuro) haga una única petición sin pasar por
+   `window._eurRetryServerSearch`. Es el ÚNICO punto que garantiza los
+   6 intentos/backoff — copiar "el patrón" sin usar el helper repite
+   exactamente este bug.
+2. **PROHIBIDO** asumir que porque una comprobación diferida "ya sigue
+   el mismo patrón que el alias" hereda también sus reintentos: hay que
+   verificar que llama de verdad a `_eurRetryServerSearch` (o al
+   `_attempt()`/`DELAYS` equivalente), no solo que hace un `fetch` con
+   timeout de 6s.
+3. Recordatorio: cualquier edición de `index.bundle.js` exige bump de
+   `?v=X.X` en `templates/index.html` Y `PRECACHE` de `static/js/sw.js`
+   (regla ya existente, 2026-07-04) — este fix la cumple (9.33→9.34).
+
+## La tabla de grupos / jornadas / cruces de la Previa de Champions también hereda la búsqueda server-side del escudo — `_badge`/`_badgeBig` se habían quedado fuera del fix #7/#8 (obligatorio, 2026-07-13)
+
+**Petición usuario 2026-07-13** (6 fotos, «Maccabi Haifa»/«Dunajska
+Streda»/«CF Univer Comrat» vs Atlético Madrid, GRUPO I de la Previa de
+Champions): "cuando un equipo está con su escudo y Plantilla, no
+entiendo porque a la hora de jugar cualquier competición no sale ni su
+escudo ni su plantilla" — con los 3 equipos rivales YA confirmados con
+escudo real en sus ligas de origen (Niké Liga de Eslovaquia para
+Dunajska Streda, Ligat Ha'al de Israel para Maccabi Haifa, visibles en
+capturas de "Resto de Ligas" del mismo dispositivo), la tabla
+**"GRUPO I"** de la Previa de Champions (`_groupTable`) mostraba los 3
+rivales SIN NINGÚN escudo — ni siquiera el placeholder de iniciales que
+sí muestra la Pantalla de Previa — y la propia Pantalla de Previa
+(`_renderPreviaMeta`) seguía mostrando el placeholder gris de iniciales.
+
+### Causa raíz — `_badge`/`_badgeBig` (WPREV) nunca heredaron el fallback server-side
+
+Las reglas 2026-07-12 #7 y #8 ya obligan a que "toda tabla/card/cruce/
+picker NUEVO de la Previa hereda `_eurTeamShieldServerSearch` como
+último fallback" — pero esa herencia solo se cableó en la card del hub
+(`_psShieldDeferredCheck`, `misc_body_1.html`) y en la Pantalla de
+Previa a pantalla completa (`_ppShieldDeferredCheck`,
+`index.bundle.js`). Los 3 puntos que pintan escudos DENTRO de la propia
+pantalla de la Previa (`part2/misc_body_2.html`, IIFE `wprev_state_v1`)
+— la tabla de cada grupo (`_groupTable`), las jornadas del fixture del
+grupo humano (`_fgJornadaHtml`) y los cruces de la Ronda Preliminar
+(`_prelimTieHtml`) — comparten los helpers `_badge`/`_badgeBig`, que
+SOLO probaban `_logoOf(name)` (resolución SÍNCRONA local: `getTeamLogoUrl`
+→ `TEAM_LOGOS` → `window._eurResolveTeamLogo`, que escanea
+`localStorage`+`LIGA_CACHE` de ESTE dispositivo) y, si venía vacío,
+devolvían la cadena vacía `''` — ni `<img>` ni placeholder, así que no
+había NADA a lo que engancharle una comprobación diferida en servidor.
+Un dispositivo que entra directo a la Previa sin haber abierto antes la
+liga de origen del rival (Eslovaquia/Israel/Moldavia) se queda con el
+hueco vacío para siempre en estas 3 vistas, aunque el servidor SÍ tenga
+el escudo guardado.
+
+### Fix
+
+- **`_badge(name,logo)`/`_badgeBig(name,logo)`**: cuando `_logoOf`
+  viene vacío, ya NO devuelven `''` — devuelven un placeholder
+  `<span data-shield-name="<nombre>">` (mismas dimensiones que el
+  `<img>` real: 18px inline para `_badge`, clase `.crest` para
+  `_badgeBig`) para que exista un nodo identificable al que sustituir.
+- **`_wprevShieldDeferredCheck(container)`** (nuevo, mismo patrón EXACTO
+  que `_psShieldDeferredCheck`/`_ppShieldDeferredCheck`): recorre TODOS
+  los placeholders `[data-shield-name]` de `container`, agrupa por
+  nombre de equipo ÚNICO (una sola petición aunque el mismo rival
+  aparezca en la tabla de clasificación Y en 6 jornadas del fixture) y
+  llama a `window._eurTeamShieldServerSearch(nombre, onDone)`. Si el
+  servidor lo encuentra, sustituye TODAS las apariciones de ese equipo
+  en `container` por el `<img>` real.
+- Llamado tras cada `innerHTML` que pueda contener escudos sin resolver:
+  `buildUclPrevClas` (tras `host.innerHTML=html`, cubre `_groupTable` +
+  `_fgJornadaHtml` de los 12 grupos) y `_renderPrelim` (tras
+  `dr.innerHTML=...`, cubre `_prelimTieHtml` de los 14 cruces).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_badge`/`_badgeBig` (o cualquier helper de escudo
+   nuevo de la Previa que viva DENTRO de `part2/misc_body_2.html`)
+   devuelvan `''` cuando la resolución local falla. Deben dejar un
+   placeholder identificable (`data-shield-name`) para que una
+   comprobación diferida en servidor pueda sustituirlo — el patrón
+   "resolución local → placeholder con identificador → búsqueda
+   diferida en servidor" es el mismo en LAS 3 CAPAS de esta pantalla
+   (card del hub, Pantalla de Previa a pantalla completa, Y la propia
+   tabla/fixture/cruces de la pantalla de la Previa) — ninguna sustituye
+   a las otras 2, son 3 componentes de UI distintos.
+2. **PROHIBIDO** que la comprobación diferida dispare una petición por
+   FILA en vez de por EQUIPO ÚNICO: un rival puede aparecer en la tabla
+   de clasificación Y en hasta 6 jornadas del fixture del grupo humano
+   — `_wprevShieldDeferredCheck` deduplica por nombre antes de llamar a
+   `_eurTeamShieldServerSearch`.
+3. Toda tabla/card/cruce NUEVO de esta pantalla (o de cualquier
+   competición que pinte escudos de Resto de Ligas por nombre) hereda
+   `_wprevShieldDeferredCheck` en cuanto use `_badge`/`_badgeBig` — no
+   reinventar el pintado de escudo con un `_logoOf(...)||''` suelto.
+
 ## 📌 PARTIDOS POSPUESTOS — club/sel mal clasificados (Mundialito vs "rival pendiente") + pospuestos STALE que ya se jugaron por otra vía + rondas KO bloqueadas que se perdían sin rastro (obligatorio, 2026-07-13)
 
 **Petición usuario 2026-07-13** (3 fotos, caja «Atlético Madrid-

@@ -9620,7 +9620,10 @@ window._showSimProgress = function(opts, onDone){
   function _psShieldDeferredCheck(side, teamName){
     if (!teamName || typeof window._eurTeamShieldServerSearch !== 'function') return;
     try {
-      window._eurTeamShieldServerSearch(teamName, function(found){
+      var _search = (typeof window._eurRetryServerSearch === 'function')
+        ? function(nm, cb){ window._eurRetryServerSearch(window._eurTeamShieldServerSearch, nm, cb); }
+        : window._eurTeamShieldServerSearch;
+      _search(teamName, function(found){
         if (!found) return;
         var host = document.getElementById('ps-shield-' + side);
         if (!host || !host.parentNode) return;
@@ -13188,10 +13191,77 @@ window._showSimProgress = function(opts, onDone){
     ov.innerHTML = html;
     document.body.appendChild(ov);
   };
+  /* Helper compartido: GET JSON con timeout duro de 6 s (AbortController).
+     Sustituye a los XMLHttpRequest SÍNCRONOS (`async=false`) que este
+     click handler usaba antes — un sync XHR bloquea el hilo principal
+     ENTERO hasta que el servidor responde, y con Railway en cold-start
+     (documentado en varios sitios de este proyecto) eso podía durar
+     muchos segundos por CADA una de las hasta ~14 peticiones
+     encadenadas de este handler → la pestaña entera se "congelaba" al
+     pulsar cualquier equipo (bug 2026-07-13). Nunca lanza: en fallo o
+     timeout resuelve `null`, igual que antes se comprobaba
+     `xhr.status === 200`. */
+  function _lextClickFetchJson(url){
+    return new Promise(function(resolve){
+      var done = false;
+      var ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = setTimeout(function(){
+        if (done) return; done = true;
+        try { if (ac) ac.abort(); } catch(_){}
+        resolve(null);
+      }, 6000);
+      try {
+        fetch(url, ac ? {signal: ac.signal} : {}).then(function(r){
+          if (done) return;
+          if (!r || !r.ok) { done = true; clearTimeout(timer); resolve(null); return; }
+          r.json().then(function(j){
+            if (done) return;
+            done = true; clearTimeout(timer); resolve(j || null);
+          }).catch(function(){
+            if (done) return;
+            done = true; clearTimeout(timer); resolve(null);
+          });
+        }).catch(function(){
+          if (done) return;
+          done = true; clearTimeout(timer); resolve(null);
+        });
+      } catch(_){
+        if (!done) { done = true; clearTimeout(timer); resolve(null); }
+      }
+    });
+  }
+  /* Expuesto en window: otras funciones de este mismo archivo (fuera
+     de esta IIFE concreta) también sustituyen aquí sus XHR síncronos
+     por este helper — un único punto con el mismo timeout de 6s. */
+  window._lextFetchJsonTimeout = _lextClickFetchJson;
+  /* Toast mínimo — feedback de "estoy trabajando" mientras el handler
+     de abajo hace las búsquedas en servidor de forma asíncrona (antes,
+     al ser síncronas, la pantalla se quedaba congelada sin ningún
+     aviso — ahora al menos no se congela, pero puede tardar 1-2 s). */
+  function _lextClickToast(msg){
+    try {
+      var ex = document.getElementById('lext-click-toast');
+      if (ex) ex.remove();
+      var d = document.createElement('div');
+      d.id = 'lext-click-toast';
+      d.textContent = msg;
+      d.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);'
+        + 'max-width:90vw;z-index:1000000;padding:10px 16px;border-radius:10px;'
+        + 'font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;letter-spacing:.4px;'
+        + 'color:#fff;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.55);'
+        + 'background:linear-gradient(135deg,#1a3a6b,#2b6cb0);'
+        + 'border:1px solid rgba(255,255,255,.25);';
+      document.body.appendChild(d);
+      return d;
+    } catch(_){ return null; }
+  }
+  function _lextClickToastDismiss(d){
+    try { if (d && d.parentNode) d.remove(); } catch(_){}
+  }
   // Delegación: cada click sobre una fila de la clasificación de Liga
   // EA Sports abre la plantilla (overlay lext-ov-squad) del equipo
   // correspondiente, recuperando los datos creados desde 🖍 Edit.
-  document.addEventListener('click', function(ev){
+  document.addEventListener('click', async function(ev){
     var t = ev.target;
     if(!t || typeof t.closest !== 'function') return;
     var row = t.closest('.clas-row');
@@ -13324,12 +13394,11 @@ window._showSimProgress = function(opts, onDone){
          usuario ve "Equipos guardados (0)" aunque el server tenga
          toda su plantilla. */
       if (!teams.length) {
+        var _clickToast1 = _lextClickToast('⏳ Cargando equipos…');
         try {
-          var xhrSq = new XMLHttpRequest();
-          xhrSq.open('GET', '/api/liga-ext/'+encodeURIComponent(slug), false);
-          xhrSq.send();
-          if (xhrSq.status === 200) {
-            var respSq = JSON.parse(xhrSq.responseText);
+          var respSq = await _lextClickFetchJson('/api/liga-ext/'+encodeURIComponent(slug));
+          _lextClickToastDismiss(_clickToast1);
+          {
             if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
               data = respSq.data;
               teams = data.teams;
@@ -13362,6 +13431,7 @@ window._showSimProgress = function(opts, onDone){
         } catch(errSrv) {
           /* sin conexión o server down — seguimos con teams=[] y
              mostraremos el alert con lista vacía pero informativo. */
+          _lextClickToastDismiss(_clickToast1);
         }
       }
       var target = _normForClick(displayName);
@@ -13576,19 +13646,20 @@ window._showSimProgress = function(opts, onDone){
 
         /* Fuente B: bajar TODOS los slugs conocidos del server y
            escanearlos. Si el admin guardó el equipo en otra liga, el
-           server tendrá su players allí. Síncrono para que sea simple. */
+           server tendrá su players allí. Peticiones ASÍNCRONAS (con
+           timeout de 6s cada una) — antes eran XHR SÍNCRONOS, hasta
+           12 seguidos, que congelaban la pestaña entera si el
+           servidor estaba lento/cold-start (bug 2026-07-13). */
         if (rebuilt.length === 0) {
           var knownSlugs = ['liga-ea-sports','liga-hypermotion','liga-primera-federacion',
                             'inglaterra','alemania','italia','francia','portugal',
                             'holanda','belgica','brasil','argentina','turquia'];
+          var _clickToastB = _lextClickToast('⏳ Buscando plantilla…');
           for (var ks = 0; ks < knownSlugs.length && rebuilt.length === 0; ks++) {
             if (knownSlugs[ks] === slug) continue;
             try {
-              var xx = new XMLHttpRequest();
-              xx.open('GET', '/api/liga-ext/'+encodeURIComponent(knownSlugs[ks]), false);
-              xx.send();
-              if (xx.status !== 200) continue;
-              var rr = JSON.parse(xx.responseText);
+              var rr = await _lextClickFetchJson('/api/liga-ext/'+encodeURIComponent(knownSlugs[ks]));
+              if (!rr) continue;
               var ds = rr && rr.data; if (!ds || !Array.isArray(ds.teams)) continue;
               for (var tz = 0; tz < ds.teams.length; tz++) {
                 var tzt = ds.teams[tz];
@@ -13615,6 +13686,7 @@ window._showSimProgress = function(opts, onDone){
               }
             } catch(_){}
           }
+          _lextClickToastDismiss(_clickToastB);
         }
 
         /* Fuente C: ef_player_stats_v1 (nombres + stats). Último
@@ -13809,12 +13881,11 @@ window._showSimProgress = function(opts, onDone){
            power. Si el admin no ha editado nada, esto es lo que
            hay, y es lo que usa el motor Python al simular. */
         if (rebuilt.length === 0) {
+          var _clickToastH = _lextClickToast('⏳ Buscando plantilla…');
           try {
-            var xhrHc = new XMLHttpRequest();
-            xhrHc.open('GET', '/api/jugadores-hardcoded', false);
-            xhrHc.send();
-            if (xhrHc.status === 200) {
-              var rhc = JSON.parse(xhrHc.responseText);
+            var rhc = await _lextClickFetchJson('/api/jugadores-hardcoded');
+            _lextClickToastDismiss(_clickToastH);
+            if (rhc) {
               var hcTeams = (rhc && rhc.teams) || {};
               var hcKeys = Object.keys(hcTeams);
               for (var hk = 0; hk < hcKeys.length; hk++) {
@@ -13840,7 +13911,9 @@ window._showSimProgress = function(opts, onDone){
                 }
               }
             }
-          } catch(_){}
+          } catch(_){
+            _lextClickToastDismiss(_clickToastH);
+          }
         }
 
         if (rebuilt.length === 0) {
@@ -14192,7 +14265,12 @@ window._showSimProgress = function(opts, onDone){
   //  1) Backup local (ligaExt_XXX_backup)
   //  2) Servidor (/api/liga-ext/XXX)
   // Accesible desde consola: window.emergencyRestore('liga-ea-sports')
-  window.emergencyRestore = function(slug){
+  /* Async desde 2026-07-13 (usaba XHR síncrono — ver CLAUDE.md regla
+     2026-07-13 #3, "PROHIBIDO usar XMLHttpRequest con async=false").
+     Es una herramienta de consola invocada a mano, no un hot-path — el
+     await no cambia nada para quien la usa desde devtools, solo evita
+     que congele la pestaña si el servidor está lento/cold-start. */
+  window.emergencyRestore = async function(slug){
     slug = slug || 'liga-ea-sports';
     // 1. Intentar desde backup local
     try {
@@ -14209,17 +14287,12 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     // 2. Intentar desde servidor
     try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/api/liga-ext/'+encodeURIComponent(slug), false); // síncrono
-      xhr.send();
-      if(xhr.status === 200){
-        var resp = JSON.parse(xhr.responseText);
-        if(resp && resp.data && resp.data.teams && resp.data.teams.length > 0){
-          localStorage.setItem('ligaExt_'+slug, JSON.stringify(resp.data));
-          if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
-          alert('✅ Restaurados '+resp.data.teams.length+' equipos de '+slug+' desde el servidor.');
-          return;
-        }
+      var resp = await (window._lextFetchJsonTimeout ? window._lextFetchJsonTimeout('/api/liga-ext/'+encodeURIComponent(slug)) : null);
+      if(resp && resp.data && resp.data.teams && resp.data.teams.length > 0){
+        localStorage.setItem('ligaExt_'+slug, JSON.stringify(resp.data));
+        if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
+        alert('✅ Restaurados '+resp.data.teams.length+' equipos de '+slug+' desde el servidor.');
+        return;
       }
     } catch(_){}
     alert('❌ No se encontraron datos de backup para '+slug+'. Ni en local ni en el servidor.');
@@ -14944,15 +15017,14 @@ window._showSimProgress = function(opts, onDone){
        window.lextDeepRecoverSlug('liga-ea-sports')        // un slug
        window.lextDeepRecoverAll({reload:true})            // todos
   */
-  function _lextFetchServerSync(slug){
+  /* Async desde 2026-07-13 (era XHR síncrono — CLAUDE.md regla
+     2026-07-13 #3). Herramienta de recuperación manual/consola, nunca
+     un hot-path de click — el await solo evita que congele la pestaña
+     con Railway lento, no cambia cómo se usa desde devtools. */
+  async function _lextFetchServerSync(slug){
     try{
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/api/liga-ext/'+encodeURIComponent(slug), false);
-      xhr.send();
-      if (xhr.status === 200){
-        var resp = JSON.parse(xhr.responseText);
-        return resp && resp.data || null;
-      }
+      var resp = await (window._lextFetchJsonTimeout ? window._lextFetchJsonTimeout('/api/liga-ext/'+encodeURIComponent(slug)) : null);
+      return (resp && resp.data) || null;
     }catch(_){}
     return null;
   }
@@ -15062,11 +15134,11 @@ window._showSimProgress = function(opts, onDone){
     if (out.length){ team.players = out; return true; }
     return false;
   }
-  window.lextDeepRecoverSlug = function(slug){
+  window.lextDeepRecoverSlug = async function(slug){
     if (!slug) return { ok:false, reason:'no-slug' };
     var candidates = [
       { src:'main',    data: _lextReadMain(slug) },
-      { src:'server',  data: _lextFetchServerSync(slug) },
+      { src:'server',  data: await _lextFetchServerSync(slug) },
       { src:'backup',  data: _lextReadBackup(slug) }
     ];
     var best = null, bestScore = -1;
@@ -15131,7 +15203,7 @@ window._showSimProgress = function(opts, onDone){
     'resto-mundo'
   ];
 
-  window.lextDeepRecoverAll = function(opts){
+  window.lextDeepRecoverAll = async function(opts){
     opts = opts || {};
     /* Enumera TODOS los slugs: las 4 ligas españolas + los 51 países
        conocidos + cualquier otro `ligaExt_*` que ya esté en
@@ -15159,13 +15231,20 @@ window._showSimProgress = function(opts, onDone){
         slugs[k.replace(/^ligaExt_/,'')] = true;
       }
     }catch(_){}
+    /* Secuencial (no Promise.all): 55 peticiones en paralelo contra
+       Railway serían el mismo thundering-herd que este proyecto ya
+       evita en otros sitios (ver CLAUDE.md, `_eurHydrateMissingLeagues`).
+       Async/await en un for..of mantiene el orden y nunca bloquea el
+       hilo principal entre peticiones. */
     var summary = [];
-    Object.keys(slugs).forEach(function(s){
+    var _slugList = Object.keys(slugs);
+    for (var _si = 0; _si < _slugList.length; _si++) {
+      var s = _slugList[_si];
       try{
-        var r = window.lextDeepRecoverSlug(s);
+        var r = await window.lextDeepRecoverSlug(s);
         if (r && r.players > 0) summary.push(r);
       }catch(_){}
-    });
+    }
     summary.sort(function(a,b){ return b.players - a.players; });
     var msgLines = ['✅ Recuperación profunda completada.', ''];
     summary.forEach(function(r){
@@ -35702,6 +35781,36 @@ window._showSimProgress = function(opts, onDone){
         .catch(function(){ clearTimeout(timer); onDone(false); });
     } catch(_){ try { onDone(false); } catch(__){} }
   };
+  /* Reintentos genéricos para una búsqueda diferida en servidor
+     (obligatorio, 2026-07-13 — "sigue igual, no salen ni los escudos ni
+     las plantillas ni la ❓ del alias"). `_eurTeamShieldServerSearch`/
+     `_eurTeamSquadServerSearch` (arriba) y el alias (`_efAliasServerSearch`,
+     no en este bloque) son UNA sola petición HTTP con timeout de 6s —
+     coherente con la regla ya obligatoria de 2026-07-05
+     ("PROHIBIDO que una búsqueda... se rinda tras el PRIMER fallo sin
+     reintentar", aplicada entonces solo al alias vía
+     `_ppAliasDeferredCheck`/6 intentos). El escudo (`_psShieldDeferredCheck`/
+     `_ppShieldDeferredCheck`/`_wprevShieldDeferredCheck`) y la plantilla
+     (`_gmRenderPlayerPick`) copiaban el patrón de UNA sola petición sin
+     heredar los reintentos — un cold-start de Railway o un blip de red
+     (el caso más común documentado en este proyecto) mataba la
+     comprobación ENTERA sin ninguna red de seguridad. Mismos 6 intentos/
+     backoff que ya probó su eficacia con el alias. */
+  window._eurRetryServerSearch = function(searchFn, teamName, onFound){
+    if (typeof searchFn !== 'function') { try { onFound(null); } catch(_){} return; }
+    var MAX_TRIES = 6;
+    var DELAYS = [0, 1500, 3000, 5000, 8000, 12000];
+    var tries = 0;
+    function _attempt(){
+      searchFn(teamName, function(found){
+        if (found) { try { onFound(found); } catch(_){} return; }
+        tries++;
+        if (tries < MAX_TRIES) setTimeout(_attempt, DELAYS[tries] || 3500);
+        else { try { onFound(found); } catch(_){} }
+      });
+    }
+    _attempt();
+  };
   /* Invalidación explícita — llamada por `_eurHydrateMissingLeagues`
      tras traer/backfillar escudos nuevos del servidor, para que la
      PRÓXIMA fila/card ya los vea sin esperar el TTL de 30s. */
@@ -42266,12 +42375,22 @@ window._showSimProgress = function(opts, onDone){
   /* Lee la data de una liga buscando en VARIAS fuentes en orden:
      1. localStorage.ligaExt_<slug>                      (cache normal)
      2. localStorage.ligaExt_<slug>_protected            (refuerzo del lock)
-     3. sync XHR a /api/liga-ext/<slug>                  (servidor)
+     3. hidratación en SEGUNDO PLANO desde /api/liga-ext/<slug>
      Sin esto, ligas como Escocia/Grecia/Israel/Ucrania/Polonia
      que el usuario completó en otro dispositivo no aparecían en
      el agregado porque la cache local del móvil estaba vacía.
-     Al hacer sync XHR también persistimos en local para futuras
-     lecturas. Devuelve {teams:[...]} o null. */
+
+     2026-07-13: la fuente 3 YA NO es un XHR SÍNCRONO. Este helper lo
+     llama `_collectAggregateStats()` en un bucle sobre las ~51 ligas
+     (pantalla "Resto de Ligas · Estadísticas") — con la mitad de las
+     ligas sin cache local, eran hasta 51 XHR síncronos ENCADENADOS,
+     mucho peor que el bug original del click en la clasificación (ver
+     CLAUDE.md regla 2026-07-13 #3). Ahora, si no hay nada en local,
+     devuelve `null` AL INSTANTE (esa liga se salta del agregado, igual
+     que ya pasaba durante la sim masiva) y dispara una hidratación
+     asíncrona de fondo para que la PRÓXIMA vez que se abra esta
+     pantalla (o cualquier otra que lea `ligaExt_<slug>`) ya la
+     encuentre en local. Nunca bloquea. */
   function _readLigaData(slug){
     if(!slug) return null;
     var raw;
@@ -42279,30 +42398,20 @@ window._showSimProgress = function(opts, onDone){
     if(!raw){
       try { raw = localStorage.getItem('ligaExt_' + slug + '_protected'); } catch(_){}
     }
-    /* XHR SÍNCRONO a server — SOLO si NO estamos en el flujo de
-       simular las 51 ligas. Durante el bulk, 51 XHR sync sin
-       timeout contra Railway bloqueaban el thread > 1 h
-       (reportado: "0% INICIANDO" eterno). En bulk, una liga sin
-       cache local simplemente se salta ("sin equipos suficientes")
-       — el usuario puede abrirla individualmente luego para
-       hidratarla. 2026-05-12. */
-    if(!raw && !window._restoSimBulkInProgress && !window._ligaExtSimInProgress){
-      try {
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
-        xhr.send();
-        if(xhr.status === 200){
-          var resp = JSON.parse(xhr.responseText);
-          if(resp && resp.data && Array.isArray(resp.data.teams) && resp.data.teams.length){
-            raw = JSON.stringify(resp.data);
-            try { localStorage.setItem('ligaExt_' + slug, raw); } catch(_){}
-          }
+    if(!raw && !window._restoSimBulkInProgress && !window._ligaExtSimInProgress
+        && typeof window._lextFetchJsonTimeout === 'function' && !_readLigaData._bg[slug]){
+      _readLigaData._bg[slug] = true;
+      window._lextFetchJsonTimeout('/api/liga-ext/' + encodeURIComponent(slug)).then(function(resp){
+        delete _readLigaData._bg[slug];
+        if(resp && resp.data && Array.isArray(resp.data.teams) && resp.data.teams.length){
+          try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(resp.data)); } catch(_){}
         }
-      } catch(_){}
+      });
     }
     if(!raw) return null;
     try { return JSON.parse(raw); } catch(_){ return null; }
   }
+  _readLigaData._bg = {};
 
   window._restoLigasSimAll = function(){
     if(typeof window.ligaExtSimularSlug !== 'function'){
@@ -43522,7 +43631,14 @@ window._showSimProgress = function(opts, onDone){
        se sienta "eterno". Si CUALQUIER zona sigue en 🔓 Auto, sí hace
        falta hidratar para esa zona. */
     var overridesNow = (window._eurManualOverrideLoad && window._eurManualOverrideLoad()) || {};
-    var anyAutomatic = EUR_MANUAL_ZONES.some(function(z){ return !overridesNow[z]; });
+    /* `EUR_MANUAL_ZONES` (el array) es una var LOCAL de la IIFE donde se
+       declara (misc_body_1.html ~36388) — `_eurManualOverlayOpen` vive
+       en OTRA IIFE distinta, así que el nombre pelado no está en su
+       scope (`ReferenceError: EUR_MANUAL_ZONES is not defined`, bug
+       2026-07-13 desde el commit que introdujo este auto-hidrate). Se
+       usa la copia expuesta a propósito en `window._eurManualExtraZones`
+       (misc_body_1.html ~36426) para cruzar IIFEs. */
+    var anyAutomatic = (window._eurManualExtraZones || []).some(function(z){ return !overridesNow[z]; });
     if(isNew && anyAutomatic && !_eurManualHydrating && (Date.now() - _eurManualLastHydrateAt) > 120000){
       _eurManualTriggerHydrate();
     }
@@ -46634,123 +46750,43 @@ https://api.sofascore.app/api/v1/team/44/image
         } catch(_){}
       }
     } catch(_){}
-    /* Cache + protected + backup + snapshots vacíos → intento síncrono
-       al servidor para que la primera apertura de la liga en un
-       dispositivo nuevo NO muestre "No hay equipos" durante segundos
-       mientras la fetch async responde. Mismo patrón que rosterFor
-       (misc_body_2.html) y la rama de equipos editados de este mismo
-       archivo. Si el sync falla (offline / timeout), caemos al objeto
-       vacío y la fetchData posterior repoblará.
-
-       BULK 2026-05-12: durante la sim de las 51 ligas NO hacemos
-       estos 2 XHR síncronos sin timeout (main + protected). Eran la
-       causa REAL del "3 min por liga" — `_readLigaData` ya estaba
-       gateado pero `loadData` tenía SUS PROPIOS XHR sync. Sin cache
-       local la liga se salta limpiamente ("sin equipos suficientes")
-       y el usuario la abre individual luego para hidratarla. */
-    if (!window._restoSimBulkInProgress && !window._ligaExtSimInProgress) {
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(k), false);
-      xhr.send();
-      if (xhr.status === 200) {
-        var resp = JSON.parse(xhr.responseText);
-        if (resp && resp.data && Array.isArray(resp.data.teams)) {
-          var d = resp.data;
-          d.teams   = d.teams   || [];
-          d.results = d.results || [];
-          /* DEFENSA EN PROFUNDIDAD (2026-05-08): incluso cuando el
-             server devuelve un payload main válido, si existe un
-             snapshot `liga_ext_<slug>_protected` con MÁS jugadores
-             totales (saveData lo escribe en cada confirm), preferimos
-             ese — es el bug "ediciones perdidas al recargar al día
-             siguiente". El protected en server es monotónico: nunca
-             retrocede. */
+    /* Cache + protected + backup + snapshots vacíos → hidratación en
+       SEGUNDO PLANO desde el servidor (2026-07-13, ver CLAUDE.md regla
+       "El click en una fila de clasificación NUNCA hace XHR SÍNCRONO").
+       ANTES esto era un XHR SÍNCRONO (`async=false`) que congelaba la
+       PESTAÑA ENTERA hasta que el servidor respondía — con Railway/
+       Render en cold-start eso podía durar muchos segundos, y
+       reproducía el mismo bug de congelación al abrir/pulsar CUALQUIER
+       equipo de Resto de Ligas sin plantilla cacheada todavía (temporada
+       recién empezada, dispositivo nuevo). `loadData` SIGUE devolviendo
+       de forma SÍNCRONA (su contrato no cambia — 76 callers en este
+       archivo esperan el valor inmediato), pero ahora, si no hay NADA
+       en local, devuelve el objeto VACÍO al instante y dispara la
+       hidratación real de fondo — igual que ya hace `fetchData()` (la
+       misma función que `openLigaExt` ya llama justo después de
+       `loadData`, y que ESTA hidratación reutiliza en vez de duplicar
+       lógica). Si la pantalla de esa liga sigue abierta cuando el
+       servidor responde, se re-pinta sola. */
+    if (!window._restoSimBulkInProgress && !window._ligaExtSimInProgress
+        && typeof fetchData === 'function' && !LIGA_CACHE['__bgHydrating_'+k]) {
+      LIGA_CACHE['__bgHydrating_'+k] = true;
+      try {
+        fetchData(k, function(d, fromServer){
+          try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){}
+          if (!fromServer || !d) return;
           try {
-            var xhrP = new XMLHttpRequest();
-            xhrP.open('GET', '/api/liga-ext-protected/' + encodeURIComponent(k), false);
-            xhrP.send();
-            if (xhrP.status === 200) {
-              var respP = JSON.parse(xhrP.responseText);
-              if (respP && respP.data && Array.isArray(respP.data.teams) && _countPlayers(respP.data) > _countPlayers(d)) {
-                try { console.warn('[ligaExt] '+k+': server-protected tiene '+_countPlayers(respP.data)+' jugadores vs main '+_countPlayers(d)+' — usamos protected.'); } catch(_){}
-                d = respP.data;
-                d.teams = d.teams || [];
-                d.results = d.results || [];
-              }
+            if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
+              try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(d); } catch(_){}
+              try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
+              try {
+                var ov = document.getElementById('lext-ov-teams');
+                if (ov && ov.classList.contains('show') && typeof renderTeamsList === 'function') renderTeamsList();
+              } catch(_){}
             }
           } catch(_){}
-          /* Sanitize antes de cachear: cualquier `*` o duplicado
-             que vivía en el server queda limpio. Si el sanitize
-             cambia algo, re-empujamos al server async para que el
-             estado sucio desaparezca de la copia compartida. */
-          var dDirty = _sanitizeLigaTeamNames(d);
-          if (dDirty) {
-            try {
-              fetch('/api/liga-ext/'+encodeURIComponent(k), {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body:JSON.stringify({data:d})
-              }).catch(function(){});
-            } catch(_){}
-          }
-          /* Proteger resultados locales con stamp mayor que el servidor:
-             el sync XHR ocurre durante/después del bulk-sim; si el
-             POST aún no llegó al server (o la BD efímera fue
-             reiniciada), el GET trae results:[] y machacaría los
-             resultados recién simulados. Si el backfill aporta
-             resultados, re-sube al server async para converger. */
-          try {
-            var _lsExistingRaw = localStorage.getItem(storeKey(k));
-            if (_lsExistingRaw) {
-              var _lsExisting = JSON.parse(_lsExistingRaw);
-              if (_lsExisting) {
-                var _bf = _lextBackfillResults(d, _lsExisting);
-                if (_bf) {
-                  /* Local tenía results más recientes → repush async */
-                  try { if (typeof window._ligaExtMarkPending === 'function') window._ligaExtMarkPending(k); } catch(_){}
-                  (function(_k, _d){
-                    try {
-                      fetch('/api/liga-ext/'+encodeURIComponent(_k), {
-                        method:'POST',
-                        headers:{'Content-Type':'application/json'},
-                        credentials:'same-origin',
-                        body: JSON.stringify({data:_d})
-                      }).then(function(r){ if(r.ok) { try { if(typeof window._ligaExtClearPending==='function') window._ligaExtClearPending(_k); } catch(_){} } }).catch(function(){});
-                    } catch(_){}
-                  })(k, d);
-                }
-              }
-            }
-          } catch(_){}
-          LIGA_CACHE[k] = d;
-          if (resp.updated_at) LIGA_UPDATED[k] = resp.updated_at;
-          try { localStorage.setItem(storeKey(k), JSON.stringify(d)); } catch(_){}
-          return _applyForcedBlacklist(k, d);
-        }
-      }
-    } catch(_){}
-    /* Última esperanza: server-protected directo (caso main vacío
-       en server pero protected sobrevivió). */
-    try {
-      var xhrPL = new XMLHttpRequest();
-      xhrPL.open('GET', '/api/liga-ext-protected/' + encodeURIComponent(k), false);
-      xhrPL.send();
-      if (xhrPL.status === 200) {
-        var respPL = JSON.parse(xhrPL.responseText);
-        if (respPL && respPL.data && Array.isArray(respPL.data.teams) && respPL.data.teams.length) {
-          var dPL = respPL.data;
-          dPL.teams = dPL.teams || [];
-          dPL.results = dPL.results || [];
-          _sanitizeLigaTeamNames(dPL);
-          try { console.warn('[ligaExt] '+k+': main vacío local+server, restaurando desde server-protected ('+_countPlayers(dPL)+' jugadores).'); } catch(_){}
-          LIGA_CACHE[k] = dPL;
-          try { localStorage.setItem(storeKey(k), JSON.stringify(dPL)); } catch(_){}
-          return _applyForcedBlacklist(k, dPL);
-        }
-      }
-    } catch(_){}
-    } /* fin gate de los 2 XHR sync de loadData (bulk 51 ligas O sim individual — anti-cuelgue móvil) */
+        });
+      } catch(_){ try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){} }
+    }
     LIGA_CACHE[k] = {teams:[], results:[]};
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }
@@ -47638,120 +47674,65 @@ https://api.sofascore.app/api/v1/team/44/image
     var _dirtyAt = Date.now();
     LIGA_LOCAL_DIRTY_AT[k] = _dirtyAt;
     try { if (typeof window._ligaExtMarkPending === 'function') window._ligaExtMarkPending(k); } catch(_){}
-    /* ── CONFIRMACIÓN SÍNCRONA AL SERVIDOR (EL MAYOR ARREGLO 2026-05-18)
-       ════════════════════════════════════════════════════════════════
-       Bug usuario (4 capturas): edita "Joan García 82 → 85", guarda
-       (la modal muestra 85), pulsa "Borrar datos de navegación" y al
-       volver Joan García vuelve a 82. Al borrar datos de navegación se
-       VACÍA localStorage entero → la ÚNICA fuente que queda es el
-       SERVIDOR. El POST async con reintentos NO había llegado todavía
-       cuando el usuario borró/recargó (lo canceló la recarga) → el
-       servidor seguía con 82 → la edición se perdió DEFINITIVAMENTE.
-       El fix anterior (re-hidratar el dirty flag) sólo ayuda si
-       localStorage SOBREVIVE; aquí lo borran, así que no aplica.
-
-       Solución decisiva: un XHR POST SÍNCRONO y BLOQUEANTE al main
-       ANTES de devolver el control. Un XHR síncrono NO lo puede
-       cancelar una recarga/borrado posterior — bloquea el hilo hasta
-       que el servidor responde. Cuando saveData retorna (y la modal
-       pinta el cambio) el servidor YA tiene el dato de forma durable;
-       borrar datos de navegación después ya no puede perderlo.
-       Mismo patrón de XHR síncrono que ya usa loadData en este archivo.
-
-       · Se SALTA en la sim masiva (`_restoSimBulkInProgress`): 51
-         ligas × XHR síncrono reintroduciría el freeze documentado en
-         CLAUDE.md. En bulk sólo va el POST async de abajo.
-       · Si el síncrono falla (offline / server caído / bloqueado),
-         caemos al POST async x5 + cola pendiente + beacon de siempre
-         (red de seguridad intacta — no se regresiona el caso offline). */
-    var _syncConfirmed = false;
-    /* 2026-05-20: gate ampliado a `_ligaExtSimInProgress` (sim de UNA
-       liga de Resto de Ligas). El XHR síncrono se diseñó para asegurar
-       que las EDICIONES MANUALES del editor sobreviven a "borrar datos
-       de navegación", pero en una SIM automatizada esa garantía no
-       hace falta — si el POST async falla, el admin re-simula. Con 5G
-       intermitente el sync XHR sin timeout hacía 3-6 calls bloqueantes
-       de 30s+ cada una ⇒ "la sim de una liga tarda 10 min" (reportado
-       con captura del overlay 'LIGA' clavado en 8%). Bulk-sim de 51
-       ligas ya estaba gateado. */
-    if (!window._restoSimBulkInProgress && !window._ligaExtSimInProgress && serialized != null) {
-      /* REINTENTOS SÍNCRONOS (2026-05-19): el usuario reporta "muchas
-         veces no se queda guardado" tras editar y borrar datos de
-         navegación, sobre todo en móvil/5G/Railway frío. La causa: el
-         POST síncrono fallaba en el 1er intento (server lento/red
-         intermitente) → _syncConfirmed=false → solo quedaba el async,
-         que la recarga/borrado cancela. Reintentamos el XHR síncrono
-         hasta 3 veces ANTES de caer al async; un intento extra absorbe
-         el fallo transitorio típico. Gateado fuera de la sim masiva
-         (igual que antes) para no reintroducir el freeze. */
-      var _sjBody = JSON.stringify({data:d});
-      for (var _sjTry = 0; _sjTry < 3 && !_syncConfirmed; _sjTry++) {
-      try {
-        var _xhrSync = new XMLHttpRequest();
-        _xhrSync.open('POST', '/api/liga-ext/'+encodeURIComponent(k), false);
-        _xhrSync.setRequestHeader('Content-Type', 'application/json');
-        _xhrSync.send(_sjBody);
-        if (_xhrSync.status === 200) {
-          _syncConfirmed = true;
-          try {
-            var _sjr = JSON.parse(_xhrSync.responseText || '{}');
-            if (_sjr && _sjr.updated_at) LIGA_UPDATED[k] = _sjr.updated_at;
-          } catch(_){}
-          if (LIGA_LOCAL_DIRTY_AT[k] === _dirtyAt) delete LIGA_LOCAL_DIRTY_AT[k];
-          try { if (typeof window._ligaExtClearPending === 'function') window._ligaExtClearPending(k); } catch(_){}
-          /* ── PROTECTED FORZADO EN SAVE DELIBERADO (ARREGLO TOTAL
-             2026-05-18) ─────────────────────────────────────────────
-             El snapshot `_protected` del servidor es MONOTÓNICO:
-             rechaza (409) cualquier POST con menos jugadores que el
-             que ya tiene. Pensado contra wipes async/buggy. PERO si
-             el usuario edita la plantilla REEMPLAZÁNDOLA por una con
-             menos jugadores (botón "Reemplazar" del paste), el POST
-             normal a protected se RECHAZA → protected se queda con la
-             plantilla VIEJA (más jugadores). Al borrar datos de
-             navegación y recargar, loadData prefiere protected si
-             tiene MÁS jugadores → resucita la plantilla vieja. Por eso
-             "no funciona" aunque el main esté bien.
-
-             Como ESTE camino solo se alcanza desde un saveData
-             DELIBERADO del usuario (editor) y ya confirmado síncrono,
-             forzamos protected = la edición del usuario con
-             `force:true` (el endpoint salta el chequeo monotónico solo
-             cuando viene force — ver app.py). Síncrono para que esté
-             garantizado ANTES de que el usuario borre datos / recargue.
-             Los flujos async / boot / sim NO mandan force → la
-             protección monotónica contra wipes accidentales sigue
-             intacta para ellos. No se toca la precedencia de loadData. */
-          if (_countPlayers(d) > 0) {
-            /* protected forzado CON reintentos + verificación de status
-               (2026-05-19): antes era 1 intento best-effort sin mirar el
-               código → si fallaba en silencio, el main quedaba nuevo pero
-               protected viejo y, al borrar datos, loadData podía resucitar
-               lo viejo. Reintentamos hasta 3 y solo damos por bueno con
-               200. */
-            var _protBody = JSON.stringify({data:d, force:true});
-            for (var _pjTry = 0; _pjTry < 3; _pjTry++) {
-              try {
-                var _xhrProt = new XMLHttpRequest();
-                _xhrProt.open('POST', '/api/liga-ext-protected/'+encodeURIComponent(k), false);
-                _xhrProt.setRequestHeader('Content-Type', 'application/json');
-                _xhrProt.send(_protBody);
-                if (_xhrProt.status === 200) break;
-              } catch(_){ /* reintenta; el async no-forzado de abajo cubre */ }
-            }
-          }
-        }
-      } catch(_){ /* offline / CSP / server down → fallback async abajo */ }
-      } /* fin reintentos síncronos del POST main */
-    }
-    try { (window._ligaExtSyncOK = window._ligaExtSyncOK || {})[k] = _syncConfirmed; } catch(_){}
+    /* ── CONFIRMACIÓN ASÍNCRONA AL SERVIDOR (2026-07-13, reemplaza el
+       XHR POST SÍNCRONO del "ARREGLO 2026-05-18") ─────────────────────
+       Aquella versión hacía un POST síncrono y BLOQUEANTE (hasta 3
+       reintentos × 2 endpoints = hasta 6 llamadas encadenadas) para
+       garantizar que el servidor YA tuviera el dato antes de que
+       `saveData` devolviera el control — así "borrar datos de
+       navegación" justo después de guardar no podía perder la edición.
+       Con Railway/Render en cold-start eso podía congelar la pestaña
+       ENTERA durante el guardado (mismo síntoma que el click en la
+       clasificación, ver CLAUDE.md regla 2026-07-13 #3 — "PROHIBIDO
+       usar XMLHttpRequest con async=false"). `saveData` es una función
+       SIN valor de retorno (los ~40 callers de este archivo la llaman
+       "fire and forget", nunca esperan un valor) — no hace falta que
+       el POST termine ANTES de que la función retorne, solo que
+       termine cuanto antes. La confirmación pasa a ser 100% asíncrona
+       (fetch + reintentos con backoff, promesa expuesta en
+       `window._ligaExtSavePromise[k]` para quien SÍ quiera esperarla) —
+       el hilo principal nunca se bloquea, y el POST llega igual de
+       rápido en el caso normal (servidor respondiendo con normalidad),
+       solo que sin congelar la pestaña en el caso lento. */
     window._ligaExtSavePromise = window._ligaExtSavePromise || {};
-    window._ligaExtSavePromise[k] = _syncConfirmed ? Promise.resolve(true) : (function(slug, payload, dirtyStamp){
+    window._ligaExtSavePromise[k] = (function(slug, payload, dirtyStamp){
       return new Promise(function(resolve){
         var attempt = 0;
+        function forceProtected(){
+          /* ── PROTECTED FORZADO EN SAVE DELIBERADO (2026-05-18) ──────
+             El snapshot `_protected` del servidor es MONOTÓNICO:
+             rechaza (409) cualquier POST con menos jugadores que el
+             que ya tiene — pensado contra wipes async/buggy. Si el
+             usuario edita la plantilla REEMPLAZÁNDOLA por una con
+             menos jugadores, el POST normal a protected se rechaza y
+             protected se queda con la plantilla vieja. Como este save
+             es DELIBERADO del usuario (editor), forzamos protected con
+             `force:true` (el endpoint salta el chequeo monotónico solo
+             con force — ver app.py). Asíncrono, con reintentos —
+             best-effort, no bloquea nada. */
+          if (_countPlayers(payload) <= 0) return;
+          var _protBody = JSON.stringify({data:payload, force:true});
+          var _pAttempt = 0;
+          function goProt(){
+            _pAttempt++;
+            try {
+              fetch('/api/liga-ext-protected/'+encodeURIComponent(slug), {
+                method:'POST',
+                headers:{'Content-Type':'application/json'},
+                credentials:'same-origin',
+                body:_protBody
+              }).then(function(r){
+                if (!r || !r.ok) { if (_pAttempt < 3) setTimeout(goProt, 500 * _pAttempt); }
+              }).catch(function(){ if (_pAttempt < 3) setTimeout(goProt, 500 * _pAttempt); });
+            } catch(_){}
+          }
+          goProt();
+        }
         function ok2(j){
           if (j && j.updated_at) LIGA_UPDATED[slug] = j.updated_at;
           if (LIGA_LOCAL_DIRTY_AT[slug] === dirtyStamp) delete LIGA_LOCAL_DIRTY_AT[slug];
           try { if (typeof window._ligaExtClearPending === 'function') window._ligaExtClearPending(slug); } catch(_){}
+          try { forceProtected(); } catch(_){}
           resolve(true);
         }
         function fail(){
@@ -47760,6 +47741,7 @@ https://api.sofascore.app/api/v1/team/44/image
         }
         function go(){
           attempt++;
+          if (payload == null) { resolve(false); return; }
           try {
             var _r;
             fetch('/api/liga-ext/'+encodeURIComponent(slug), {
@@ -51735,24 +51717,17 @@ https://api.sofascore.app/api/v1/team/44/image
       data.teams.push(newTeam);
     }
     saveData(CURRENT_KEY,data);
-    /* AVISO INMEDIATO SI EL SERVER NO CONFIRMÓ (2026-05-19) ──────────
-       Causa raíz de "muchas veces no se queda guardado": el POST
-       síncrono al server falló (móvil/5G/Railway frío) y el usuario,
-       creyendo que estaba guardado, pulsó "Borrar datos de navegación"
-       → al vaciarse localStorage la ÚNICA fuente es el server (viejo)
-       y la edición se pierde. saveData ya reintenta 3× síncrono; si AUN
-       ASÍ no confirmó, avisamos AQUÍ con un alert bloqueante (no un
-       texto que se desvanece) para que el usuario NO borre datos ni
-       cierre hasta que vuelva la conexión. La copia local + la cola de
-       reintentos siguen ahí: si no borra nada, no se pierde. */
-    try {
-      if (!(window._ligaExtSyncOK && window._ligaExtSyncOK[CURRENT_KEY])) {
-        alert('⚠️ GUARDADO LOCAL, PERO EL SERVIDOR NO LO HA CONFIRMADO (sin conexión o servidor lento).\n\n' +
-              'Tus cambios están guardados en este dispositivo y se reintenta enviarlos solos.\n\n' +
-              '❗ NO borres los datos de navegación NI cierres la página hasta que veas «✅ Guardado y sincronizado». ' +
-              'Si borras ahora, se perderá esta edición.');
-      }
-    } catch(_){}
+    /* El aviso de "servidor no confirmado" ya NO es un alert() inmediato
+       (2026-07-13): la confirmación al servidor es ahora 100% asíncrona
+       (saveData ya no bloquea con XHR síncrono — ver CLAUDE.md regla
+       2026-07-13 #3), así que comprobar aquí, en el mismo tick, si el
+       servidor ya confirmó SIEMPRE daría "no" (el fetch async ni ha
+       empezado) y el alert saltaría en CADA guardado, no solo cuando
+       algo falla de verdad. El título "💾 Guardando en servidor…" de
+       abajo, que pasa a "✅ Guardado y sincronizado" o al banner rojo
+       persistente `_lextShowSaveError` cuando la promesa de
+       `_ligaExtSavePromise` resuelve, ya cubre exactamente este aviso
+       sin bloquear ni disparar falsos positivos. */
     populateStadiumsDatalist();
     /* Mensaje atado a la CONFIRMACIÓN del servidor (refuerzo máximo
        2026-05-17). Antes salía "✅ guardado" al instante aunque el
@@ -54350,55 +54325,50 @@ https://api.sofascore.app/api/v1/team/44/image
      adoptamos — sin bloquear el primer render (fire-and-forget). NUNCA
      pisa una clasificación que YA esté presente (ni la que un sim
      concurrente acabe de escribir mientras el GET async volaba). */
-  /* RECUPERACIÓN SÍNCRONA DESDE EL SERVIDOR para el "ensure seed"
-     (2026-07-02) ──────────────────────────────────────────────────────
+  /* RECUPERACIÓN EN SEGUNDO PLANO DESDE EL SERVIDOR para el "ensure
+     seed" (2026-07-02, reforzado 2026-07-13) ─────────────────────────
      Bug usuario (persiste pese a 2026-06-28/06-30/07-01, fotos «Abissnet
      Superiore / Albania», 38 PJ tras simular y 0 al reabrir): el "ensure
      seed" de las 4 ligas auto-sembradas (`_ensureExtraLeagueSeed` /
      `_ensureRestoMundoSeed`) SOLO recuperaba de copias durables LOCALES
      (`_protected`/`_snap_*`). Si éstas TAMBIÉN se perdieron (eviction
      agresiva de Android borra localStorage entero, no solo el main), el
-     seed escribía `results:[]` de inmediato y de forma SÍNCRONA — sin
-     preguntar nunca al servidor. Esto es MENOS robusto que `loadData()`
-     (usado por las ~50 ligas normales), que SÍ hace un XHR síncrono a
-     `/api/liga-ext/<slug>` + `-protected` antes de rendirse a un objeto
-     vacío. Si justo después el `fetchData` asíncrono de `openLigaExt`
-     fallaba (red móvil intermitente, ampliamente documentada en este
-     proyecto), la semilla vacía quedaba plantada en firme sin que nadie
-     volviera a preguntar al servidor — el usuario veía 0 PJ aunque el
-     servidor SÍ tuviera la clasificación simulada. Fix: antes de sembrar
-     vacío, replicamos el MISMO XHR síncrono que `loadData()` (main →
-     protected). Devuelve los datos del servidor (con `teams`) o null. */
-  function _lextSeedRecoverFromServer(slug){
-    try {
-      var xhr = new XMLHttpRequest();
-      xhr.open('GET', '/api/liga-ext/' + encodeURIComponent(slug), false);
-      xhr.send();
-      if (xhr.status === 200) {
-        var resp = JSON.parse(xhr.responseText);
-        if (resp && resp.data && Array.isArray(resp.data.teams) && resp.data.teams.length) {
-          var d = resp.data;
-          d.teams = d.teams || [];
-          d.results = d.results || [];
-          return d;
-        }
+     seed escribía `results:[]` de inmediato — sin preguntar nunca al
+     servidor. Fix 2026-07-02: preguntar al servidor (main → protected)
+     antes de sembrar vacío.
+
+     SUPERSEDE la regla previa "PROHIBIDO que sea asíncrono": aquella
+     versión usaba XHR SÍNCRONO, justificado entonces como "solo corre
+     en el caso raro de local vacío, el coste es aceptable". Con la
+     regla 2026-07-13 #3 ("PROHIBIDO usar XMLHttpRequest con
+     async=false" en CUALQUIER sitio del proyecto, sin excepción) ese
+     XHR síncrono queda prohibido también aquí — es el mismo bug de
+     congelación, solo que disparado al ABRIR la pantalla de una de
+     estas 4 ligas (Resto Mundo/Montenegro/N.Irlanda/Albania) en vez de
+     al pulsar un equipo. Ahora es 100% asíncrono: `onFound(data)` se
+     llama MÁS TARDE si el servidor tiene algo; mientras tanto, el
+     caller sigue su camino normal (siembra en blanco / se queda con lo
+     que tenga) SIN esperar — si la recuperación llega después, corrige
+     la liga ya sembrada en vez de bloquear su primera apertura. */
+  function _lextSeedRecoverFromServer(slug, onFound){
+    if (typeof onFound !== 'function' || !window._lextFetchJsonTimeout) return;
+    window._lextFetchJsonTimeout('/api/liga-ext/' + encodeURIComponent(slug)).then(function(resp){
+      if (resp && resp.data && Array.isArray(resp.data.teams) && resp.data.teams.length) {
+        var d = resp.data;
+        d.teams = d.teams || [];
+        d.results = d.results || [];
+        onFound(d);
+        return;
       }
-    } catch(_){}
-    try {
-      var xhrP = new XMLHttpRequest();
-      xhrP.open('GET', '/api/liga-ext-protected/' + encodeURIComponent(slug), false);
-      xhrP.send();
-      if (xhrP.status === 200) {
-        var respP = JSON.parse(xhrP.responseText);
+      return window._lextFetchJsonTimeout('/api/liga-ext-protected/' + encodeURIComponent(slug)).then(function(respP){
         if (respP && respP.data && Array.isArray(respP.data.teams) && respP.data.teams.length) {
           var dP = respP.data;
           dP.teams = dP.teams || [];
           dP.results = dP.results || [];
-          return dP;
+          onFound(dP);
         }
-      }
-    } catch(_){}
-    return null;
+      });
+    }).catch(function(){});
   }
   /* Aplica la copia del servidor recuperada por _lextSeedRecoverFromServer
      como main local + LIGA_CACHE, en vez de sembrar vacío. */
@@ -54564,10 +54534,12 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
     /* Ni el main ni sus copias durables LOCALES tenían nada (eviction
        agresiva que se llevó TODO localStorage): preguntamos al SERVIDOR
-       antes de sembrar vacío (2026-07-02, ver _lextSeedRecoverFromServer). */
+       EN SEGUNDO PLANO (nunca bloqueante — ver _lextSeedRecoverFromServer)
+       antes de conformarnos con sembrar vacío. Si encuentra algo, corrige
+       la liga (ya sembrada en blanco por el fallback de abajo) en cuanto
+       responda; si no, no cambia nada. */
     try {
-      var _recovSrvRM = _lextSeedRecoverFromServer(slug);
-      if (_recovSrvRM) {
+      _lextSeedRecoverFromServer(slug, function(_recovSrvRM){
         if (isBlank && curData) {
           var _chRM2 = false;
           try { if (_lextBackfillRoster(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
@@ -54583,13 +54555,14 @@ https://api.sofascore.app/api/v1/team/44/image
           return;
         }
         _lextAdoptServerSeedRecovery(slug, _recovSrvRM);
-        return;
-      }
+      });
     } catch(_){}
-    /* Ya estaba sembrada en blanco y ninguna copia durable ni el servidor
-       tenían nada mejor: dejamos el blanco tal cual (NO lo re-escribimos
-       con un documento nuevo, que perdería `config`/zonas ya editadas) y
-       probamos IndexedDB en segundo plano como último recurso. */
+    /* Ya estaba sembrada en blanco y ninguna copia durable local tenía
+       nada mejor: dejamos el blanco tal cual (NO lo re-escribimos con un
+       documento nuevo, que perdería `config`/zonas ya editadas) y
+       probamos IndexedDB en segundo plano como último recurso. La
+       comprobación del servidor de arriba sigue en vuelo y corregirá
+       esto solo si encuentra algo. */
     if (isBlank) { _lextIdbTopupIfEmpty(slug); return; }
     var teams = RESTO_MUNDO_TEAMS.map(function(spec, idx){
       return {
@@ -54875,10 +54848,12 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
     /* Ni el main ni sus copias durables LOCALES tenían nada (eviction
        agresiva que se llevó TODO localStorage): preguntamos al SERVIDOR
-       antes de sembrar vacío (2026-07-02, ver _lextSeedRecoverFromServer). */
+       EN SEGUNDO PLANO (nunca bloqueante — ver _lextSeedRecoverFromServer)
+       antes de conformarnos con sembrar vacío. Si encuentra algo, corrige
+       la liga (ya sembrada en blanco por el fallback de abajo) en cuanto
+       responda; si no, no cambia nada. */
     try {
-      var _recovSrv = _lextSeedRecoverFromServer(slug);
-      if (_recovSrv) {
+      _lextSeedRecoverFromServer(slug, function(_recovSrv){
         if (isBlank && curData) {
           var _ch2 = false;
           try { if (_lextBackfillRoster(curData, _recovSrv)) _ch2 = true; } catch(_){}
@@ -54894,13 +54869,14 @@ https://api.sofascore.app/api/v1/team/44/image
           return;
         }
         _lextAdoptServerSeedRecovery(slug, _recovSrv);
-        return;
-      }
+      });
     } catch(_){}
-    /* Ya estaba sembrada en blanco y ninguna copia durable ni el servidor
-       tenían nada mejor: dejamos el blanco tal cual (NO lo re-escribimos
-       con un documento nuevo, que perdería `config`/zonas ya editadas) y
-       probamos IndexedDB en segundo plano como último recurso. */
+    /* Ya estaba sembrada en blanco y ninguna copia durable local tenía
+       nada mejor: dejamos el blanco tal cual (NO lo re-escribimos con un
+       documento nuevo, que perdería `config`/zonas ya editadas) y
+       probamos IndexedDB en segundo plano como último recurso. La
+       comprobación del servidor de arriba sigue en vuelo y corregirá
+       esto solo si encuentra algo. */
     if (isBlank) { _lextIdbTopupIfEmpty(slug); return; }
     var teams = spec.teams.map(function(s, idx){
       return {

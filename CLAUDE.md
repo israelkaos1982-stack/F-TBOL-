@@ -1,5 +1,48 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El overlay "Equipos por competición" lanzaba `ReferenceError: EUR_MANUAL_ZONES is not defined` en CADA apertura desde 2026-07-07 (obligatorio, 2026-07-13 #5)
+
+**Petición usuario 2026-07-13** (foto, overlay "👁 Ver / Añadir equipos
+por competición" abierto y funcionando, con un banner rojo debajo:
+"⚠️ La acción no se pudo completar: EUR_MANUAL_ZONES is not defined"):
+bug NO relacionado con los fixes de XHR síncrono de esta misma sesión —
+existe desde el commit `9a8fb78` (2026-07-07, "No hidratar las ~50 ligas
+si todas las zonas europeas son manuales").
+
+### Causa raíz
+
+`window._eurManualOverlayOpen` (`misc_body_1.html` ~43610) referenciaba
+la variable pelada `EUR_MANUAL_ZONES` en la línea
+`var anyAutomatic = EUR_MANUAL_ZONES.some(...)` — pero `EUR_MANUAL_ZONES`
+es un `var` **LOCAL** de la IIFE `(function(){...})()` que va de la línea
+~35611 a la ~37163, y `_eurManualOverlayOpen` vive en OTRA IIFE distinta
+que arranca después de la 37163. El nombre pelado no existe en ese scope
+→ `ReferenceError` en CADA apertura del overlay desde que se escribió
+esa línea. Como el `_eurManualOverlayRender()` que pinta el overlay se
+llama ANTES de la línea que revienta, el overlay se veía perfectamente
+bien — solo fallaba (en silencio hasta que `window.pG` lo capturó y
+mostró el banner) el auto-hidrate condicional de después.
+
+### Fix
+
+Usa `window._eurManualExtraZones` — la MISMA lista, ya expuesta
+deliberadamente en `window` (misc_body_1.html ~36426,
+`window._eurManualExtraZones = EUR_MANUAL_ZONES;`) precisamente para que
+otras IIFEs de este archivo puedan leerla sin duplicarla.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una IIFE lea una `var` de OTRA IIFE por su nombre
+   pelado. Si una constante/lista debe ser compartida entre IIFEs de
+   este archivo, se expone explícitamente en `window.*` (como ya se hizo
+   con `_eurManualExtraZones`) y el consumidor SIEMPRE lee la versión de
+   `window`, nunca el nombre local.
+2. Antes de dar por bueno un fix que añade lógica dentro de una función
+   ya existente (aquí, el auto-hidrate condicional dentro de
+   `_eurManualOverlayOpen`), verificar que toda variable referenciada
+   está en el scope de ESA función — un `grep` del nombre + confirmar en
+   qué IIFE vive cada aparición evita este tipo de regresión silenciosa.
+
 ## TODO el proyecto queda libre de XHR síncrono — «Resto de Ligas» sufría el MISMO bug en 10 sitios más + guardián automático (obligatorio, 2026-07-13 #4)
 
 **Petición usuario 2026-07-13** ("en resto de ligas pasaba lo mismo,

@@ -48509,26 +48509,40 @@ https://api.sofascore.app/api/v1/team/44/image
          salían cortos.
 
      Fix: un curado PROACTIVO e INDEPENDIENTE de la cuota. Para cada liga
-     con clasificación durable LOCAL (LIGA_CACHE / localStorage main /
-     `_protected` / IndexedDB), comprueba el servidor y, si está VACÍO o
-     ATRASADO, RE-EMPUJA la copia local — confirmando (reintentos). El
-     arbitraje es el MISMO `resultsStamp` + EMPTY-GUARD que usan cliente y
-     servidor: `localResults > 0 && localStamp >= srvStamp && localResults
-     > srvResults`. Así:
+     con clasificación O ROSTER durable LOCAL (LIGA_CACHE / localStorage
+     main / `_protected` / IndexedDB), comprueba el servidor y, si está
+     VACÍO o ATRASADO, RE-EMPUJA la copia local — confirmando (reintentos).
+     El arbitraje de RESULTADOS es el `resultsStamp` + EMPTY-GUARD que usan
+     cliente y servidor: `localResults > 0 && localStamp >= srvStamp &&
+     localResults > srvResults`. Así:
        · cura un servidor vacío (nunca recibió la sim) o atrasado;
        · NUNCA resucita un RESET legítimo de otro dispositivo (el reset
          sella `resultsStamp` fresco → `localStamp < srvStamp` → no empuja);
        · NUNCA pisa una sim más nueva de otro dispositivo (mismo guard).
+
+     REFUERZO (2026-07-15, «Resto de Ligas: 20 equipos en un dispositivo,
+     0 en otro»): el guard original solo miraba `localResults` — una liga
+     con el ROSTER recién editado (20 equipos añadidos a mano) pero SIN
+     NINGÚN partido simulado todavía (`results:[]`, temporada recién
+     empezada) tenía `localResults===0` y el guard la saltaba ENTERA, así
+     que su roster NUNCA se curaba hacia el servidor si el POST de
+     `saveData` se había perdido en silencio. Ahora también se comprueba
+     `needPushRoster = localTeamsN > 0 && srvTeamsN < localTeamsN` — el
+     merge por equipo del servidor (`_lx_merge_teams`) es aditivo, así que
+     empujar el roster nunca pisa equipos que el servidor ya tuviera.
      Secuencial + pausado (evita el thundering herd que rompía la subida
      original). NO escribe localStorage (inmune a la cuota llena). En un
-     dispositivo SIN clasificación local (móvil recién abierto) es no-op:
-     cada liga se SALTA (localResults===0) → el móvil sigue haciendo PULL
-     vía `fetchData`. Es, por construcción, un curado PC→servidor. */
+     dispositivo SIN clasificación NI roster local (móvil recién abierto)
+     es no-op: cada liga se SALTA → el móvil sigue haciendo PULL vía
+     `fetchData`. Es, por construcción, un curado PC→servidor. */
   function _lextStampOf(d){
     try { return (d && Number(d.resultsStamp)) || 0; } catch(_){ return 0; }
   }
   function _lextResLen(d){
     return (d && Array.isArray(d.results)) ? d.results.length : 0;
+  }
+  function _lextTeamsLen(d){
+    return (d && Array.isArray(d.teams)) ? d.teams.length : 0;
   }
   /* Mejor copia LOCAL (la de clasificación más reciente/rica) para un
      slug, mirando LIGA_CACHE → localStorage main → `_protected` → IDB.
@@ -48565,7 +48579,7 @@ https://api.sofascore.app/api/v1/team/44/image
           .then(function(j){
             if (j){
               try { if (j.updated_at) LIGA_UPDATED[slug] = j.updated_at; } catch(_){}
-              try { console.warn('[ligaExt] reconcile → servidor curado: '+slug+' ('+_lextResLen(data)+' resultados subidos desde copia durable).'); } catch(_){}
+              try { console.warn('[ligaExt] reconcile → servidor curado: '+slug+' ('+_lextTeamsLen(data)+' equipos / '+_lextResLen(data)+' resultados subidos desde copia durable).'); } catch(_){}
               cb && cb(true);
             } else if (attempt < tries) { setTimeout(go, 600*attempt); }
             else cb && cb(false);
@@ -48620,7 +48634,16 @@ https://api.sofascore.app/api/v1/team/44/image
         var slug = list[idx++];
         _lextBestLocalForReconcile(slug).then(function(local){
           var localResults = _lextResLen(local);
-          if (!local || localResults === 0) { setTimeout(step, 0); return; }  /* nada que curar */
+          var localTeamsN  = _lextTeamsLen(local);
+          /* «nada que curar» = ni clasificación NI equipos en la copia
+             local. Antes solo se miraba `localResults` — una liga con
+             equipos recién añadidos (roster editado a mano, admin
+             pegó/creó 20 clubes) pero SIN ningún partido simulado
+             todavía tenía `results:[]` y este guard la saltaba
+             ENTERA, así que su roster nunca se curaba hacia el
+             servidor (bug 2026-07-15: "Resto de Ligas" con 20 equipos
+             en un dispositivo y 0 en otro, ninguno simulado aún). */
+          if (!local || (localResults === 0 && localTeamsN === 0)) { setTimeout(step, 0); return; }
           var localStamp = _lextStampOf(local);
           fetch('/api/liga-ext/'+encodeURIComponent(slug), { credentials:'same-origin' })
             .then(function(r){ return (r && r.ok) ? r.json() : null; })
@@ -48628,11 +48651,25 @@ https://api.sofascore.app/api/v1/team/44/image
               var sd = j && j.data;
               var srvResults = _lextResLen(sd);
               var srvStamp = _lextStampOf(sd);
+              var srvTeamsN = _lextTeamsLen(sd);
               /* Espejo del empty-guard server/cliente: subimos SOLO si la
                  copia local es NO-vacía, no es más vieja que el servidor
                  (respeta un reset/sim más reciente de otro dispositivo) y
                  aporta MÁS clasificación de la que el servidor tiene. */
-              var needPush = localResults > 0 && localStamp >= srvStamp && localResults > srvResults;
+              var needPushResults = localResults > 0 && localStamp >= srvStamp && localResults > srvResults;
+              /* Curado de ROSTER (2026-07-15): el guardado normal
+                 (`saveData`) ya intenta subir cada edición al instante,
+                 pero su POST puede perderse en silencio (localStorage
+                 lleno, red móvil, cold-start de Railway) sin que el
+                 admin lo note — no hay ningún aviso si falla. Si la
+                 copia local trae MÁS equipos que el servidor, la
+                 re-empujamos aquí como red de seguridad — igual que ya
+                 se hace con la clasificación, pero SIN exigir que la
+                 liga tenga partidos jugados. El merge por equipo del
+                 servidor (`_lx_merge_teams`) es aditivo, así que nunca
+                 pisa un roster más rico que ya tuviera el servidor. */
+              var needPushRoster = localTeamsN > 0 && srvTeamsN < localTeamsN;
+              var needPush = needPushResults || needPushRoster;
               if (!needPush) { setTimeout(step, 90); return; }
               _lextConfirmPush(slug, local, 3, function(ok){
                 if (ok) healed++;

@@ -1,5 +1,78 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La reconciliación proactiva al servidor también cura el ROSTER (equipos), no solo la clasificación (obligatorio, 2026-07-15)
+
+**Petición usuario 2026-07-15** (7 fotos, «Resto de Ligas» — Suecia,
+Escocia, Suiza, Chipre, Austria…): "todas esas ligas tienen 20 equipos
+cada una y no se ven cuando abres cada liga" — al abrir CUALQUIERA de
+varias ligas externas (no una de las 4 auto-sembradas — Suecia, Escocia,
+Suiza, Chipre, Austria son ligas normales, con roster 100% manual del
+admin), la pantalla mostraba "No hay equipos. Usa 🖍 Editar para
+añadir clubes." pese a que el admin insiste en que cada una tiene 20
+equipos ya añadidos (en OTRO dispositivo).
+
+### Causa raíz — la reconciliación proactiva (2026-06-30) solo curaba RESULTADOS, nunca el ROSTER
+
+`window._lextReconcileResultsToServer` (`misc_body_1.html`) es la red de
+seguridad que, cuando el POST normal de `saveData` se pierde en
+silencio (localStorage lleno, red móvil, cold-start de Railway — sin
+ningún aviso visible para el admin), re-empuja la copia local durable
+(`LIGA_CACHE` / main / `_protected` / IndexedDB) hacia el servidor. Se
+dispara sola al arrancar, al volver el foco a la pestaña, y tras cada
+simulación. Su guard de entrada era:
+```js
+var localResults = _lextResLen(local);
+if (!local || localResults === 0) { /* nada que curar */ return; }
+```
+Esto significa que una liga con el **ROSTER recién editado** (20 equipos
+pegados/creados a mano) pero **SIN NINGÚN partido simulado todavía**
+(`results:[]`, exactamente el estado de una liga recién configurada,
+antes de pulsar 🎮 Sim) tenía `localResults === 0` — el guard la
+saltaba ENTERA, tratándola como "nada que curar", cuando en realidad
+tenía 20 equipos completos esperando a subirse. Si el POST original de
+`saveData` para esa liga se había perdido (el escenario más común de
+todo este proyecto, documentado en la sección "Resto Mundo/Montenegro/
+N.Irlanda/Albania simuladas en PC, a 0 en el móvil" de más abajo, aquí
+generalizado a CUALQUIER liga externa), el roster se quedaba
+**invisible para siempre** en cualquier otro dispositivo — exactamente
+el síntoma: 20 equipos en el dispositivo que los editó, 0 equipos en
+cualquier otro que solo hace `GET`.
+
+### Fix
+
+`_lextReconcileResultsToServer`: el guard de entrada ahora comprueba
+TAMBIÉN el roster (`_lextTeamsLen(local)`) — solo se salta una liga si
+NI tiene resultados NI tiene equipos. Tras el `GET` al servidor, se
+añade `needPushRoster = localTeamsN > 0 && srvTeamsN < localTeamsN`
+(además del `needPushResults` ya existente) — si la copia local trae
+MÁS equipos que el servidor, se re-empuja, **sin exigir que la liga
+tenga partidos jugados**. El merge por equipo del servidor
+(`_lx_merge_teams`, `app.py`) es ADITIVO por diseño (fusiona por nombre
+canónico, nunca reemplaza el documento entero a lo bruto), así que
+empujar el roster nunca pisa equipos que el servidor ya tuviera de otro
+dispositivo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el guard de entrada de
+   `_lextReconcileResultsToServer` (o cualquier reconciliación
+   proactiva nueva de este tipo) mire SOLO `results`/clasificación para
+   decidir si una liga "tiene algo que curar". El ROSTER (equipos) es
+   un dato igual de crítico que puede quedarse sin subir — y es
+   PREVIO a cualquier resultado (una liga recién configurada, antes de
+   simular NADA, es exactamente el estado con más riesgo de perderse
+   sin este guard).
+2. **PROHIBIDO** que el push de roster de esta reconciliación reemplace
+   el documento del servidor a lo bruto en vez de pasar por el merge
+   por equipo (`_lx_merge_teams`). Es lo que garantiza que nunca se
+   pisa un roster que el servidor ya tuviera de otro dispositivo.
+3. Esta reconciliación aplica a **CUALQUIER liga externa** (las ~50
+   normales, no solo las 4 auto-sembradas Resto Mundo/Montenegro/
+   N.Irlanda/Albania) — el roster de esas 4 lo cubre además el seed
+   automático (`_ensureExtraLeagueSeed`/`_ensureRestoMundoSeed`), pero
+   las ~50 normales dependen ÚNICAMENTE de esta reconciliación + del
+   POST original de `saveData` para llegar al servidor.
+
 ## La búsqueda server-side de escudo/alias/plantilla (`/api/team-shield`, `/api/team-alias`, `/api/team-squad`) también mira el snapshot `_protected` de cada liga (obligatorio, 2026-07-13 #2)
 
 **Petición usuario 2026-07-13** (2 fotos, «Maccabi Haifa vs Atlético

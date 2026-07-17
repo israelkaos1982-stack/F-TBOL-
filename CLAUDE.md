@@ -1,5 +1,86 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `_tourLoad` UNE los partidos jugados que solo existen en LOCAL — un POST perdido del humano ya no se pierde al llegar una hidratación más reciente (obligatorio, 2026-07-17)
+
+**Petición usuario 2026-07-17** (3 fotos, «Arsenal-Brasil-Álvaro»,
+Mundial 2032 · Grupo C): el usuario jugó y compartió el acta completa
+de los 3 partidos de Brasil (J1 3-0 Escocia, J2 2-2 Haití, J3 1-0
+Marruecos — con eventos, estadísticas y MVP), pero al volver a la
+clasificación **Brasil sale a 0 PJ / 0 PTS** mientras los OTROS 3
+equipos del grupo (Haití, Escocia, Marruecos) sí muestran sus 2 PJ
+(los 3 partidos IA-vs-IA entre ellos en FIN). Los 3 partidos del
+HUMANO, en las 3 jornadas, volvieron a "PREVIA" (sin jugar) pese al
+acta ya compartida — mientras el partido IA-vs-IA de esa MISMA
+jornada sí quedó guardado.
+
+### Causa raíz — `_tourLoad` sustituye `cfg.results` ENTERO por el del servidor, sin unir lo que solo existe en local
+
+`window._tourSaveHumanResult` (misc_body_1.html) persiste el resultado
+del humano vía `_tourSave`, que además del `localStorage.setItem`
+SÍNCRONO hace un POST al servidor con un timeout DURO de 8 s
+(`AbortController`, `misc_body_1.html:25811-25823`) — en red móvil ese
+POST puede fallar/timeout SIN que el dispositivo se entere (el
+`localStorage` local ya quedó bien, así que el partido se ve "jugado"
+en ESE dispositivo). El servidor (`tour_cfg_merge`, `sync_merge.py`)
+SÍ hace una UNIÓN correcta de `results` por matchKey en cada POST que
+sí llega — pero si el POST del humano nunca llegó, el servidor
+sencillamente **nunca tuvo ese matchKey**, no hay nada que fusionar.
+
+El problema está en el LADO CLIENTE: cuando después llega una
+hidratación (`window._tourLoad`) con un `updatedAt` de servidor más
+reciente (por ejemplo, porque justo después se pulsó "▶ SIMULAR
+JORNADA" para los partidos IA-vs-IA de la MISMA jornada, y ese POST sí
+confirmó), `_tourLoad` **sustituye `cfg.results` completo** por el del
+servidor (`misc_body_1.html:25723-25724`). El único blindaje existente,
+`_tourBackfillActaFromLocal`, solo rellena el ACTA (`events`) de un
+matchKey presente **en AMBOS lados con el MISMO marcador** — no cubre
+el caso de un matchKey **AUSENTE del todo** en el servidor. Resultado:
+el partido del humano, jugado y perfectamente guardado en LOCAL,
+desaparece en silencio al adoptar la copia "más reciente" del
+servidor — que nunca llegó a tenerlo.
+
+### Fix — `_tourMergeMissingLocalResults(srv, loc)`, unión por matchKey en el cliente
+
+Nueva función (`misc_body_1.html`, junto a `_tourBackfillActaFromLocal`):
+recorre `loc.results` (la copia local) y, para cada matchKey **JUGADO**
+(`played:true`) que en `srv.results` (la copia del servidor) esté
+AUSENTE o NO jugado, lo copia hacia `srv.results[mk]`. Mismo principio
+de unión que ya aplica `tour_cfg_merge` en el servidor, llevado al
+cliente — nunca pisa un partido que el servidor YA tenga jugado (gana
+la fuente que lo tenga, nunca last-write-wins sobre `results` entero).
+
+Se llama en `_tourLoad` justo después de `_tourBackfillActaFromLocal`
+y ANTES de cachear el cfg del servidor. Si recuperó algo (devuelve el
+nº de matchKeys recuperados), el cfg curado se **re-sube** vía
+`_tourSave(id, cfg)` — el servidor nunca tuvo esos partidos, así que
+sin re-subir, un dispositivo nuevo (o el borrado de datos de éste)
+volvería a perderlos.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_tourLoad` (o cualquier hidratación de torneo
+   nueva) sustituya `cfg.results` ENTERO por la copia del servidor sin
+   pasar antes por `_tourMergeMissingLocalResults`. `_tourBackfillActaFromLocal`
+   protege el ACTA de un matchKey presente en ambos lados; esta función
+   protege el matchKey ENTERO cuando el servidor nunca llegó a tenerlo
+   — son complementarias, ninguna sustituye a la otra.
+2. **PROHIBIDO** que `_tourMergeMissingLocalResults` pise un matchKey
+   que el servidor YA tenga `played:true`: solo rellena huecos
+   (ausente o no-jugado en servidor), nunca decide entre dos resultados
+   YA jugados por recencia (eso lo sigue haciendo el `updatedAt`/
+   `resetAt` de más arriba).
+3. **PROHIBIDO** que la recuperación se quede solo en el cliente sin
+   re-subir: si `_tourMergeMissingLocalResults` recuperó algo, `_tourLoad`
+   DEBE llamar a `_tourSave(id, cfg)` para que el servidor deje de
+   estar "por detrás" — si no, el próximo dispositivo que hidrate desde
+   cero (o el mismo tras borrar datos) vuelve a perder el partido.
+4. Este bug es DISTINTO de los ya documentados de `tour_cfg_merge`/
+   `resetAt` (que cubren conflictos YA presentes en la unión del
+   servidor): aquí el servidor NUNCA recibió el matchKey — el hueco
+   está en que el cliente confiaba en que "servidor más reciente" ⇒
+   "servidor tiene todo lo que yo tengo", lo cual es falso si un POST
+   se perdió.
+
 ## La reconciliación proactiva al servidor también cura el ROSTER (equipos), no solo la clasificación (obligatorio, 2026-07-15)
 
 **Petición usuario 2026-07-15** (7 fotos, «Resto de Ligas» — Suecia,

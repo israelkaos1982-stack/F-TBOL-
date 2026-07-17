@@ -1,5 +1,80 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El cursor del calendario del hub AVANZA SOLO — SOLO hacia adelante, SOLO sobre partidos de selección YA jugados (obligatorio, 2026-07-17) ⚠️ REESCRIBE PARCIALMENTE la regla 4 de "Card 'Próximo partido' del hub" (2026-05-27)
+
+**Petición usuario 2026-07-17** (2 fotos, «Arsenal-Brasil-Álvaro»): tras
+jugar y confirmar los 3 partidos del Grupo C del Mundial 2032 (J1 03
+May, J2 07 May, J3 11 May — el mismo caso de la sección anterior), la
+caja del hub seguía mostrando **"01 MAY · Día de Descanso · CONTINUAR"**
+— antes incluso de la primera jornada. "Mínimo después de haber jugado
+los 3 partidos del Grupo debería estar en la fecha 12 de Mayo."
+
+### Causa raíz — `d.dayIdx` SOLO avanza con CONTINUAR, nunca por jugar el partido
+
+El cursor del calendario de cada hub (`d.dayIdx`, clave
+`liverpool_preseason_v1[_<hubId>]`) **solo** se mueve vía `_advance()` →
+`_markDoneAndAdvance()`, cableado a los botones CONTINUAR de la propia
+card del hub. El usuario jugó los 3 partidos **entrando directo a la
+pantalla "Mundial 2032"** desde el menú de competiciones, sin pasar
+NUNCA por la card "Próximo partido" del hub Arsenal-Brasil — así que
+`d.dayIdx` nunca se enteró de que pasaron 3 jornadas. `_psCursorHeal`
+(el self-heal existente) **NO** repara esto: desde el rewrite
+2026-06-30 ("el cursor NUNCA RETROCEDE") archiva en POSPUESTOS los
+partidos de selección sin jugar que quedaron detrás del cursor, pero
+**jamás mueve `d.dayIdx`** (ni adelante ni atrás) — y si `curIdx===0`
+ni siquiera llega a intentarlo (`return` inmediato).
+
+### Por qué esto SÍ se implementa pese a la regla previa "PROHIBIDO auto-avance"
+
+La sección "Card 'Próximo partido' del hub" (2026-05-27, regla 4)
+prohíbe el "auto-avance del cursor al jugar el partido" — pero esa
+regla nació para evitar usar el ESTADO DE UNA COMPETICIÓN (cursores
+internos tipo `cfg.currentJornadaByGroup`/`koCurrentRound`) como
+sustituto de leer el CALENDARIO para decidir QUÉ partido mostrar en un
+día — no para prohibir que `d.dayIdx` (el puntero de qué día es HOY en
+el calendario del hub) se autocorrija hacia adelante cuando es un
+HECHO objetivo que el día ya está resuelto. Se le preguntó
+explícitamente al usuario (dado que toca la misma zona del bug "letal"
+de 2026-06-30, donde un self-heal anterior arrastraba el cursor HACIA
+ATRÁS y obligaba a re-simular/re-entrenar días ya superados) y **eligió
+la opción de auto-heal hacia adelante, con las 2 salvaguardas**
+(nunca retrocede, nunca salta Descanso/Entrenamiento).
+
+### Fix — `_psCursorAdvancePastPlayed()`
+
+Nueva función (`misc_body_1.html`, junto a `_psCursorHeal`): desde
+`d.dayIdx`, mientras la fila del calendario sea `ag-sel` (partido de
+selección) y `_selPair(row)` resuelva un partido REAL (no `pending`, no
+`eliminated`) cuyo `cfg.results[matchKey].played` sea `true`, avanza el
+cursor +1 y repite. Se **detiene** en el primer día que no cumpla la
+condición — un partido pendiente, eliminado, sin resolver, o cualquier
+día que NO sea `ag-sel` (Descanso, Entrenamiento, partido de club)
+corta el avance ahí mismo, sin tocarlo. Llamada desde `_bootStage`
+(antes de `_psCursorHeal`, para que el self-heal de POSPUESTOS opere ya
+sobre el cursor corregido) y desde el listener de `hubchange` (cada
+caja humana se autocorrige al activarse).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_psCursorAdvancePastPlayed` mueva el cursor HACIA
+   ATRÁS bajo ninguna circunstancia — es exactamente el bug "letal" de
+   2026-06-30 que motivó que `_psCursorHeal` dejara de tocar el cursor.
+2. **PROHIBIDO** que salte un día `ag-rest`/`ag-train` (Descanso/
+   Entrenamiento): ahí se sortean lesiones y requieren pulsar
+   CONTINUAR/ENTRENAR a mano — el auto-avance es EXCLUSIVO de partidos
+   de selección (`ag-sel`) ya confirmados `played:true`.
+3. **PROHIBIDO** que avance sobre un partido `pending` (rival TBD,
+   `_pair.pending`) o `eliminated` (`_pair.eliminated`): esos casos los
+   sigue gestionando `_psCursorHeal` (POSPUESTOS), nunca el auto-avance.
+4. **PROHIBIDO** extenderlo a partidos de CLUB (`_realPair`) sin
+   acordarlo antes con el usuario — el scope aprobado es explícitamente
+   "SOLO partidos ya jugados" de selección (`ag-sel`), que es el caso
+   reportado. Si en el futuro se pide lo mismo para partidos de club,
+   es una decisión NUEVA, no una extensión automática de esta regla.
+5. Toda caja de mister NUEVA hereda el auto-avance automáticamente (la
+   función es genérica por hub vía `_load`/`_calRows`/`_selPair`, no
+   hardcodea Arsenal/Brasil/Álvaro).
+
 ## `_tourLoad` UNE los partidos jugados que solo existen en LOCAL — un POST perdido del humano ya no se pierde al llegar una hidratación más reciente (obligatorio, 2026-07-17)
 
 **Petición usuario 2026-07-17** (3 fotos, «Arsenal-Brasil-Álvaro»,
@@ -7947,10 +8022,18 @@ Liverpool repitiéndose).
    tener su rama en el parseo de "Partido N" / "J N" / "Ronda X" del
    calendario individual, ANTES de leer cualquier cursor del cfg.
 4. **PROHIBIDO** introducir "auto-avance del cursor al jugar el
-   partido" como alternativa a esta regla. Es un parche frágil: si el
-   usuario pospone un día, los cursores y el calendario se vuelven a
+   partido" como alternativa a esta regla — es decir, prohibido usar
+   "¿ya se jugó el partido?" como sustituto de leer el calendario para
+   decidir QUÉ partido corresponde a cada día. Es un parche frágil: si
+   el usuario pospone un día, los cursores y el calendario se vuelven a
    desincronizar. La regla `calendario = fuente única` es robusta
-   por construcción.
+   por construcción. **Matiz 2026-07-17** (ver sección "El cursor del
+   calendario del hub AVANZA SOLO"): esto NO prohíbe que `d.dayIdx` (el
+   puntero de qué día es HOY para el hub) se autocorrija hacia
+   ADELANTE cuando un partido de selección quedó confirmado `played`
+   sin que el usuario pasara por CONTINUAR — esa es una corrección
+   distinta, acotada, aprobada explícitamente por el usuario, que NUNCA
+   retrocede ni toca días de Descanso/Entrenamiento.
 5. **Fix de saves antiguos**: cuando un cfg legacy tenga cursores
    apuntando a una jornada distinta a la que demanda el calendario,
    `_realPair` ignora el cursor y respeta el calendario. La pantalla

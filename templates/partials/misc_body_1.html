@@ -5664,7 +5664,10 @@ window._showSimProgress = function(opts, onDone){
       try { window._psInvalidateCache(); } catch(_){}
       /* Re-ejecutar self-heal al cambiar de hub: la nueva caja puede
          tener su propio cursor adelantado (el gate es per-hub). */
-      try { setTimeout(function(){ try { _psCursorHeal(); } catch(_){}}, 0); } catch(_){}
+      try { setTimeout(function(){
+        try { _psCursorAdvancePastPlayed(); } catch(_){}
+        try { _psCursorHeal(); } catch(_){}
+      }, 0); } catch(_){}
     });
   } catch(_){}
   /* MULTI-PESTAÑA / RESET CROSS-TAB (2026-06-04): si OTRA pestaña del
@@ -10707,6 +10710,66 @@ window._showSimProgress = function(opts, onDone){
     try { var _st2 = _stage(); if (_st2) _st2._psSig = null; } catch(_){}
   }
 
+  /* ── AUTO-AVANCE HACIA ADELANTE, SOLO SOBRE PARTIDOS DE SELECCIÓN YA
+     JUGADOS (obligatorio, 2026-07-17 — petición EXPLÍCITA del usuario,
+     confirmada tras preguntarle porque toca la misma zona del bug
+     "letal" de 2026-06-30). Caso reportado: «Arsenal-Brasil-Álvaro»
+     jugó J1/J2/J3 del Mundial 2032 (03/07/11 May) ENTRANDO DIRECTO a la
+     pantalla del torneo, sin pasar por la card "Próximo partido" del
+     hub — el ÚNICO sitio que hasta ahora hacía avanzar `d.dayIdx` (solo
+     vía CONTINUAR, `_markDoneAndAdvance`/`_advance`). El cursor se
+     quedó clavado en "01 MAY · Día de Descanso" para siempre, aunque
+     los 3 partidos ya estaban jugados y con acta.
+
+     Este auto-avance es DISTINTO y más seguro que los dos patrones ya
+     PROHIBIDOS en este archivo:
+     - No sustituye el mapeo "calendario → partido" (regla 2026-05-27,
+       sigue vigente: seguimos derivando el partido de cada día vía
+       `_selPair`, nunca inventando uno).
+     - No retrocede NUNCA (el bug "letal" de 2026-06-30 era arrastrar el
+       cursor HACIA ATRÁS a un pendiente, forzando re-simular/re-entrenar
+       días ya superados — aquí solo se avanza, nunca se recula).
+     - No salta días de Descanso/Entrenamiento (`ag-rest`/`ag-train`):
+       ahí se sortean lesiones y hace falta pulsar CONTINUAR/ENTRENAR a
+       mano — SOLO se saltan días `ag-sel` cuyo partido ya está
+       `played:true` en el cfg del torneo. Un partido pendiente,
+       eliminado o sin resolver DETIENE el avance inmediatamente. */
+  function _psCursorAdvancePastPlayed(){
+    try {
+      var d = _load();
+      if (!d) return;
+      var rows = _calRows();
+      if (!rows || !rows.length) return;
+      var idx = parseInt(d.dayIdx, 10) || 0;
+      var advanced = false;
+      while (idx < rows.length - 1) {
+        var row = rows[idx];
+        if (!row || !/\bag-sel\b/.test(row.cls || '')) break;
+        var pair = null;
+        try { pair = _selPair(row); } catch(_){ pair = null; }
+        /* pending (rival TBD) / eliminated / null → NUNCA se salta en
+           silencio, se detiene aquí (lo gestiona _psCursorHeal/POSPUESTOS). */
+        if (!pair || pair.pending || pair.eliminated) break;
+        if (!pair.matchKey || !pair.tourId) break;
+        var cfg = (window._TOUR_CACHE || {})[pair.tourId];
+        if (!cfg && typeof window._tourLoadCachedSync === 'function'){
+          try { cfg = window._tourLoadCachedSync(pair.tourId); } catch(_){}
+        }
+        if (!cfg || !cfg.results) break;
+        var res = cfg.results[pair.matchKey];
+        if (!res || !res.played) break;   /* no jugado todavía → aquí se detiene */
+        idx++;
+        advanced = true;
+      }
+      if (advanced && idx !== (parseInt(d.dayIdx, 10) || 0)) {
+        d.dayIdx = idx;
+        _save(d);
+        try { window.__psDayIdx = idx; } catch(_){}
+        try { var _st3 = _stage(); if (_st3) _st3._psSig = null; } catch(_){}
+      }
+    } catch(_){}
+  }
+
   /* ── SELF-HEALING DE CURSOR (2026-06-18, generalizado 2026-06-18) ────────
      Detecta y corrige un cursor que avanzó por delante de partidos de
      SELECCIÓN pendientes para la caja activa (Mundial 2032, Rondas Previas/
@@ -10936,6 +10999,11 @@ window._showSimProgress = function(opts, onDone){
           if (parseInt(d.dayIdx,10) < firstMay){ d.dayIdx = 0; _save(d); }
         }
       }
+      /* Auto-avance (2026-07-17): primero recupera terreno sobre partidos
+         ya jugados fuera de la card del hub, ANTES del self-heal de abajo
+         (que archiva en POSPUESTOS lo que quede detrás del cursor YA
+         corregido). */
+      try { _psCursorAdvancePastPlayed(); } catch(_){}
       /* Self-healing: corrige cursor que saltó por delante de partidos
          de selección pendientes por merge monotónico cross-device.
          Cubre todas las cajas humanas (6 misters) y todos los formatos

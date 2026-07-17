@@ -1,5 +1,122 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Recopa/Supercopa España/Supercopa Europa/Champions-Europa-Conference (fase Y eliminatoria)/Previa Champions NUNCA tenían fusión en servidor — un partido jugado podía perderse en CUALQUIERA de las 7 cajas humanas (obligatorio, 2026-07-17)
+
+**Petición usuario 2026-07-17** (tras el bug de Mundial 2032 de
+Arsenal-Brasil-Álvaro, secciones de abajo): "no puede volver a suceder…
+quiero que investigues y que el guardado de los partidos sea automático
+como el avance en el calendario en los equipos humanos" — para las 7
+cajas: Liverpool-Francia-Toñín, Arsenal-Brasil-Álvaro,
+Real Madrid-Inglaterra-Acsa, Atlético Madrid-Noruega-Isra,
+FC Barcelona-Argentina-Ángel, PSG-España-Izan, Inter-Portugal-Rubén.
+
+### Investigación — el mismo fallo era SISTÉMICO, no exclusivo de Mundial 2032
+
+El bug de Mundial 2032 (ver sección "`_tourLoad` UNE los partidos…" más
+abajo) ya estaba cubierto en el servidor por `tour_cfg_merge`
+(`sync_merge.py`), que UNE `results` por matchKey en cada POST — el
+fallo ahí era puramente de CLIENTE. Al auditar el resto de
+competiciones de club se encontró que **7 claves adicionales NUNCA
+tuvieron NINGÚN merge, ni en cliente ni en servidor**:
+`wprev_state_v1` (Previa Champions), `sc_state_v1` (Supercopa España),
+`usc_state_v1` (Supercopa Europa), `recopa_state_v1`,
+`ucl_ko_state_v1`/`uel_ko_state_v1`/`uecl_ko_state_v1` (fase
+eliminatoria de Champions/Europa/Conference) — viajan como JSON opaco
+dentro de `competition_state` (`/api/state`), y `merge_dict` (app.py)
+solo recursa en dicts anidados: un valor STRING se sobreescribe
+ENTERO. Y `ucl_phase_v1`/`uel_phase_v1`/`uecl_phase_v1` (fase de
+grupos), que viajan por `/api/kv/<key>`, tampoco tenían merge alguno
+en `api_kv_set` — caían al `else` genérico de sobreescritura total. El
+MISMO mecanismo que perdió los 3 partidos de Brasil en Mundial 2032
+podía reproducirse en CUALQUIERA de estas 10 competiciones, para
+CUALQUIERA de los 7 misters humanos: un POST perdido/tardío + una
+hidratación posterior con `competition_state` "más reciente" (de
+CUALQUIER otro guardado, no necesariamente de la misma competición)
+sustituía el bracket entero, perdiendo en silencio un partido ya
+jugado y confirmado.
+
+**Bonus encontrado en la misma auditoría**: `copa_state_merge` (la
+fusión anti-pérdida-de-acta de la Copa del Rey, documentada como
+"obligatoria" desde 2026-06-06) **NUNCA estaba importada en `app.py`**
+— `/api/copa/state_set` la invocaba dentro de un `try/except Exception:
+pass` que tragaba el `NameError` en silencio, así que esa protección
+llevaba rota (sin dar ningún error visible) desde que se escribió.
+Corregido en el mismo `import`.
+
+### Fix — `bracket_state_merge`, unión GENÉRICA y ESTRUCTURAL (sync_merge.py)
+
+En vez de escribir un merge a medida para cada una de las 10
+competiciones (7 esquemas de datos distintos: `sorteo:{ronda:[m,...]}`
+en Recopa, `semis:[m,m], final:m` en Supercopa España/Europa, brackets
+propios de KO europea, fase de grupos con `results{matchKey}`, y la
+estructura compuesta de la Previa con `prelim.ties[].legs[]` +
+`groups[]` + `fixtures[gi][jornada][idx]`), `bracket_state_merge`
+recorre la estructura ESTRUCTURALMENTE, sin necesitar conocer el
+esquema exacto de cada una:
+
+- En cualquier punto donde encuentra un dict con pinta de "resultado de
+  un partido concreto" (`_looks_like_match`: tiene `played`/`jugado`, o
+  marcador numérico en los campos ya usados en todo el proyecto —
+  `a`/`b`/`gh`/`ga`/`gl`/`gv`), decide con el MISMO criterio que
+  `_pick_result`/`_copa_pick_result` (jugado > no jugado; a igualdad de
+  marcador gana el acta; si no, `ua`/`updatedAt` mayor o el entrante).
+- **ANTI-FRANKENSTEIN**: si `home`/`away` difieren entre las dos copias
+  en la MISMA posición del bracket, NO es el mismo partido — es un
+  re-sorteo/rebuild (p. ej. la Final de Supercopa se regenera cuando
+  cambia el ganador de una semifinal). En ese caso NO se fusiona: gana
+  el entrante, para que un slot recién reseteado a `played:false` NUNCA
+  resucite el resultado jugado del emparejamiento ANTERIOR.
+- El resto de la estructura (dicts/listas normales: pool, sorteo,
+  clasificados, cursores…) se UNE recursivamente sin perder ninguna
+  clave de ningún lado; un escalar suelto lo decide el entrante
+  (last-write, igual que el resto del proyecto para campos que no son
+  resultado de partido).
+
+Tests exhaustivos en `tests/test_sync_merge.py` (unión de 2
+dispositivos, anti-Frankenstein de re-sorteo, acta gana a igualdad de
+marcador, un `None` entrante no borra un partido jugado, estructura
+anidada tipo Previa Champions, campos no-partido siguen siendo
+last-write). Ejecutar con `python3 tests/test_sync_merge.py` (stdlib
+pura, sin Flask).
+
+**Wiring** (`app.py`): `_STATE_BRACKET_KEYS` (las 7 de
+`competition_state`) se fusionan en `save_global_state`, mismo patrón
+que `_is_cursor_key`/`_cursor_winner` ya usa para el cursor del día.
+Las 3 de `ucl_phase_v1`/`uel_phase_v1`/`uecl_phase_v1` se fusionan en
+`api_kv_set` (viajan por `/api/kv/<key>`, no por `competition_state`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una competición NUEVA con estado de
+   bracket/fixtures (una 11ª copa, una fase nueva de una competición
+   europea, etc.) viaje a `competition_state`/`/api/kv` sin pasar por
+   `bracket_state_merge`. Añadir su clave a `_STATE_BRACKET_KEYS`
+   (`competition_state`) o a la whitelist explícita de `api_kv_set`
+   (`/api/kv`) — NUNCA dejarla caer al `else` de sobreescritura total.
+2. **PROHIBIDO** escribir un merge a medida por competición cuando
+   `bracket_state_merge` ya cubre el caso genéricamente. Si una
+   competición nueva tiene una estructura tan distinta que el detector
+   `_looks_like_match` da falsos positivos/negativos, ampliar el
+   detector (o los campos que reconoce), no bifurcar la lógica.
+3. **PROHIBIDO** quitar el guard ANTI-FRANKENSTEIN (`_match_identity` /
+   comparación `home`/`away`) de `_pick_match`. Sin él, un re-sorteo de
+   cualquiera de estas competiciones podría resucitar el resultado
+   jugado del emparejamiento ANTERIOR en la misma posición del bracket.
+4. **PROHIBIDO** que `copa_state_merge` (o cualquier función de
+   `sync_merge.py` usada en `app.py`) se invoque sin estar en el
+   `from sync_merge import (...)` del principio del archivo — el
+   `try/except Exception: pass` que envuelve su uso TRAGA el
+   `NameError` en silencio, exactamente el bug que dejó esta protección
+   rota sin que nadie lo notara.
+5. **Esto NO sustituye la protección del lado CLIENTE** (que sigue
+   pendiente para estas 10 claves, ver limitación documentada en la
+   sección "`_tourLoad` UNE los partidos…" — el cliente aún puede
+   perder un partido si SU PROPIO POST nunca llegó a confirmarse en
+   NINGÚN intento). El servidor ahora garantiza que, una vez un partido
+   llega a CUALQUIER dispositivo con éxito, ningún otro POST puede
+   volver a perderlo — que es la mayoría de los casos reales (POST
+   tardío, no perdido del todo).
+
 ## El cursor del calendario del hub AVANZA SOLO — SOLO hacia adelante, SOLO sobre partidos de selección YA jugados (obligatorio, 2026-07-17) ⚠️ REESCRIBE PARCIALMENTE la regla 4 de "Card 'Próximo partido' del hub" (2026-05-27)
 
 **Petición usuario 2026-07-17** (2 fotos, «Arsenal-Brasil-Álvaro»): tras
@@ -43,16 +160,31 @@ la opción de auto-heal hacia adelante, con las 2 salvaguardas**
 ### Fix — `_psCursorAdvancePastPlayed()`
 
 Nueva función (`misc_body_1.html`, junto a `_psCursorHeal`): desde
-`d.dayIdx`, mientras la fila del calendario sea `ag-sel` (partido de
-selección) y `_selPair(row)` resuelva un partido REAL (no `pending`, no
-`eliminated`) cuyo `cfg.results[matchKey].played` sea `true`, avanza el
-cursor +1 y repite. Se **detiene** en el primer día que no cumpla la
-condición — un partido pendiente, eliminado, sin resolver, o cualquier
-día que NO sea `ag-sel` (Descanso, Entrenamiento, partido de club)
-corta el avance ahí mismo, sin tocarlo. Llamada desde `_bootStage`
-(antes de `_psCursorHeal`, para que el self-heal de POSPUESTOS opere ya
-sobre el cursor corregido) y desde el listener de `hubchange` (cada
-caja humana se autocorrige al activarse).
+`d.dayIdx`, mientras la fila del calendario sea un día de PARTIDO
+(selección `ag-sel`, o club `row.type==='match'`: Liga EA Sports, Copa
+del Rey, Recopa, Supercopa España/Europa, Champions/Europa/Conference
+fase de grupos y eliminatoria, Previa Champions) cuyo resultado ya está
+confirmado `played`, avanza el cursor +1 y repite. Se **detiene** en el
+primer día que no cumpla la condición — un partido pendiente,
+eliminado, sin resolver, un día que ningún resolver reconoce, o un día
+de Descanso/Entrenamiento, corta el avance ahí mismo, sin tocarlo.
+Llamada desde `_bootStage` (antes de `_psCursorHeal`, para que el
+self-heal de POSPUESTOS opere ya sobre el cursor corregido) y desde el
+listener de `hubchange` (cada caja humana se autocorrige al activarse).
+
+**AMPLIACIÓN el mismo día (petición usuario "que no vuelva a suceder…
+en todos los equipos humanos")**: el scope inicial (SOLO selección) se
+amplió a partidos de CLUB reutilizando los MISMOS resolvers que ya usa
+`_cardNonTour` para pintar la card (`_copaRondaFromLabel`+
+`_copaHubResolve`, `_recopaHubResolve`, `_scHubResolve`,
+`_uscHubResolve`, `_eurKoHubResolve`, `_eurHubResolve`,
+`_wprevHubResolve`, `_resolveHubLigaMatch`+`loadResults()`) — todos
+funciones PURAS por `label` (sin depender del cursor ambiente), así que
+es seguro llamarlas especulativamente para días futuros. **NO** cubre
+Torneos de Verano ni Mundialito de Clubes (`_realPair`, que lee el
+cursor AMBIENTE en vez de recibir el día como parámetro — su guardado
+YA es fiable vía `_tourMergeMissingLocalResults`, solo el auto-avance
+del calendario queda pendiente si se pide explícitamente en el futuro).
 
 ### Reglas a respetar
 
@@ -61,19 +193,19 @@ caja humana se autocorrige al activarse).
    2026-06-30 que motivó que `_psCursorHeal` dejara de tocar el cursor.
 2. **PROHIBIDO** que salte un día `ag-rest`/`ag-train` (Descanso/
    Entrenamiento): ahí se sortean lesiones y requieren pulsar
-   CONTINUAR/ENTRENAR a mano — el auto-avance es EXCLUSIVO de partidos
-   de selección (`ag-sel`) ya confirmados `played:true`.
-3. **PROHIBIDO** que avance sobre un partido `pending` (rival TBD,
-   `_pair.pending`) o `eliminated` (`_pair.eliminated`): esos casos los
-   sigue gestionando `_psCursorHeal` (POSPUESTOS), nunca el auto-avance.
-4. **PROHIBIDO** extenderlo a partidos de CLUB (`_realPair`) sin
-   acordarlo antes con el usuario — el scope aprobado es explícitamente
-   "SOLO partidos ya jugados" de selección (`ag-sel`), que es el caso
-   reportado. Si en el futuro se pide lo mismo para partidos de club,
-   es una decisión NUEVA, no una extensión automática de esta regla.
+   CONTINUAR/ENTRENAR a mano. El auto-avance es EXCLUSIVO de días de
+   PARTIDO (`ag-sel` o `row.type==='match'`) ya confirmados `played`.
+3. **PROHIBIDO** que avance sobre un partido `pending` (rival TBD) o
+   `eliminated`: esos casos los sigue gestionando `_psCursorHeal`
+   (POSPUESTOS), nunca el auto-avance. `_psClubDayPlayed` devuelve
+   `false`/`null` (nunca `true`) en cualquier caso ambiguo — el loop
+   SOLO avanza con `=== true` explícito.
+4. **PROHIBIDO** extenderlo a Torneos de Verano/Mundialito (`_realPair`)
+   sin resolver antes su acoplamiento al cursor ambiente — ver nota de
+   ALCANCE arriba.
 5. Toda caja de mister NUEVA hereda el auto-avance automáticamente (la
-   función es genérica por hub vía `_load`/`_calRows`/`_selPair`, no
-   hardcodea Arsenal/Brasil/Álvaro).
+   función es genérica por hub vía `_load`/`_calRows`/`_selPair`/los
+   `*HubResolve`, no hardcodea ningún club/selección/mister).
 
 ## `_tourLoad` UNE los partidos jugados que solo existen en LOCAL — un POST perdido del humano ya no se pierde al llegar una hidratación más reciente (obligatorio, 2026-07-17)
 
@@ -155,6 +287,36 @@ volvería a perderlos.
    está en que el cliente confiaba en que "servidor más reciente" ⇒
    "servidor tiene todo lo que yo tengo", lo cual es falso si un POST
    se perdió.
+
+## La caja Inter-Portugal-Rubén (7º mister) se quedó FUERA de `SYNC_KEYS` — su cursor de calendario nunca sincronizaba con el servidor (obligatorio, 2026-07-17)
+
+**Hallazgo** (auditoría derivada de la petición "que no vuelva a
+suceder en ninguno de los 7 equipos humanos"): `SYNC_KEYS`
+(`part2/misc_body_2.html`, la lista que `hydrateFromServer` usa para
+saber qué claves pedir/hidratar del servidor) tenía las variantes
+por-hub de `liverpool_preseason_v1`/`bayern_calendar_comps_v1`/
+`bayern_calendar_title_v1`/`bayern_cal_v2` para Álvaro/Acsa/Isra/Ángel/
+Izan (5 misters) — pero **NUNCA se añadieron las de Rubén** (`_ruben`)
+cuando se dio de alta el 7º mister (Inter-Portugal, 2026-06-26). El
+servidor YA soporta genéricamente cualquier sufijo de hub
+(`_STATE_CURSOR_PREFIXES = ("liverpool_preseason_v1_", ...)`, un
+`startswith` que no enumera hubs concretos) — el hueco era
+EXCLUSIVAMENTE del lado cliente: sin la entrada en `SYNC_KEYS`,
+`hydrateFromServer` nunca pedía `liverpool_preseason_v1_ruben` al
+servidor, así que el cursor de calendario (y la config del calendario)
+de esa caja NUNCA sobrevivía a un borrado de datos / cambio de móvil,
+a diferencia de las otras 6.
+
+**Fix**: añadidas `liverpool_preseason_v1_ruben`,
+`bayern_calendar_comps_v1_ruben`, `bayern_calendar_title_v1_ruben`,
+`bayern_cal_v2_ruben` a `SYNC_KEYS`.
+
+**Regla a respetar**: toda lista hardcoded de sufijos por-hub (como
+`SYNC_KEYS`, que NO es genérica por diseño — a diferencia del servidor)
+DEBE tener una entrada por cada uno de los 7 misters de
+`window._MISTERS_HUMANOS`. Al añadir un 8º mister en el futuro, auditar
+`SYNC_KEYS` explícitamente (no asumir que "hereda" el soporte del
+servidor — el servidor es genérico, esta lista cliente NO lo es).
 
 ## La reconciliación proactiva al servidor también cura el ROSTER (equipos), no solo la clasificación (obligatorio, 2026-07-15)
 

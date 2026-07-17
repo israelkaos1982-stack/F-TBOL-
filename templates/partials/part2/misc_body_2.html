@@ -10201,11 +10201,28 @@
       + '</div>';
     document.body.appendChild(ov);
     function close(){ try{ ov.remove(); }catch(_){} }
-    document.getElementById('ml-confirm-end-no').onclick = close;
-    document.getElementById('ml-confirm-end-back').onclick = close;
+    /* Respaldo táctil (2026-07-17): el cuadro de confirmación está
+       CENTRADO en un overlay fijo (no scrollable), así que su click
+       normalmente NO sufre la ambigüedad tap-vs-scroll del botón
+       FINALIZAR — pero como TODA esta cadena ha sido imposible de
+       finalizar durante semanas, cableamos también aquí un respaldo
+       táctil `touchstart`/`pointerdown` (guard `_fired` para no
+       disparar dos veces si el click normal SÍ llega). Así ni el
+       primer toque (FINALIZAR) ni el segundo (SÍ) pueden perderse. */
+    function _wireTap(el, fn){
+      if (!el) return;
+      var fired = false;
+      function go(e){ if (fired) return; fired = true; try{ fn(); }catch(_){} }
+      el.addEventListener('click', function(){ if(!fired){ fired = true; try{ fn(); }catch(_){} } });
+      el.addEventListener('touchstart', go, { passive:true });
+      el.addEventListener('pointerdown', go, { passive:true });
+    }
+    var _yesEl = document.getElementById('ml-confirm-end-yes');
+    _wireTap(document.getElementById('ml-confirm-end-no'), close);
+    _wireTap(document.getElementById('ml-confirm-end-back'), close);
     /* Click en el fondo (fuera del cuadro) cancela también. */
     ov.addEventListener('click', function(e){ if(e.target === ov) close(); });
-    document.getElementById('ml-confirm-end-yes').onclick = function(){
+    var _onYes = function(){
       close();
       /* Restaurar el spinner ahora que el usuario confirmó —
          el callback finaliza el partido y dispara stats/MVP/post.
@@ -10422,6 +10439,7 @@
         } catch(_){}
       }, 2000);
     };
+    _wireTap(_yesEl, _onYes);
   };
 
   /* ── Respaldo táctil de FINALIZAR (obligatorio, 2026-07-17) ──────────
@@ -21341,6 +21359,18 @@
   animation:gmNearEndPulse 1s ease-in-out infinite !important;
 }
 #gm-btn-end:disabled,#gm-btn-end.gm-end-moved.is-near-end:disabled{animation:none !important;}
+/* ── touch-action: manipulation en TODA la cadena FINALIZAR ──────────
+   (obligatorio, 2026-07-17). Le dice al navegador que estos botones son
+   para TOCAR, no para hacer scroll ni doble-tap-zoom — reduce en ORIGEN
+   la ambigüedad tap-vs-scroll que cancelaba el `click` del botón
+   FINALIZAR al vivir al fondo de `#gm-modal` (que es `overflow-y:auto`).
+   Complementa (no sustituye) el respaldo `touchstart`/`pointerdown`
+   delegado en `document`. Cubre el botón del gm-modal, los de las
+   cards de calendario (`ml-btn-end-*`/`.ml-action-end`) y el cuadro de
+   confirmación SÍ/NO. */
+#gm-btn-end,
+.ml-action-end,
+#ml-confirm-end-ov button{ touch-action: manipulation; }
 /* ── SALIR DEL PARTIDO · verde brillante pulsante ────────────────
    (petición usuario 2026-05-21). Tras finalizar es la ÚNICA acción
    del humano; los finales de partido eran confusos, así que el botón

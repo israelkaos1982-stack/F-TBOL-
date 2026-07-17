@@ -10710,30 +10710,77 @@ window._showSimProgress = function(opts, onDone){
     try { var _st2 = _stage(); if (_st2) _st2._psSig = null; } catch(_){}
   }
 
-  /* ── AUTO-AVANCE HACIA ADELANTE, SOLO SOBRE PARTIDOS DE SELECCIÓN YA
-     JUGADOS (obligatorio, 2026-07-17 — petición EXPLÍCITA del usuario,
-     confirmada tras preguntarle porque toca la misma zona del bug
-     "letal" de 2026-06-30). Caso reportado: «Arsenal-Brasil-Álvaro»
+  /* ── AUTO-AVANCE HACIA ADELANTE, SOLO SOBRE PARTIDOS YA JUGADOS
+     (obligatorio, 2026-07-17 — petición EXPLÍCITA del usuario, confirmada
+     tras preguntarle porque toca la misma zona del bug "letal" de
+     2026-06-30, y AMPLIADA el mismo día a partidos de CLUB tras la
+     petición explícita "que no vuelva a suceder... en todos los equipos
+     humanos" para las 7 cajas). Caso original: «Arsenal-Brasil-Álvaro»
      jugó J1/J2/J3 del Mundial 2032 (03/07/11 May) ENTRANDO DIRECTO a la
      pantalla del torneo, sin pasar por la card "Próximo partido" del
      hub — el ÚNICO sitio que hasta ahora hacía avanzar `d.dayIdx` (solo
      vía CONTINUAR, `_markDoneAndAdvance`/`_advance`). El cursor se
      quedó clavado en "01 MAY · Día de Descanso" para siempre, aunque
-     los 3 partidos ya estaban jugados y con acta.
+     los partidos ya estaban jugados y con acta.
 
      Este auto-avance es DISTINTO y más seguro que los dos patrones ya
      PROHIBIDOS en este archivo:
      - No sustituye el mapeo "calendario → partido" (regla 2026-05-27,
        sigue vigente: seguimos derivando el partido de cada día vía
-       `_selPair`, nunca inventando uno).
+       `_selPair`/los `*HubResolve`, nunca inventando uno).
      - No retrocede NUNCA (el bug "letal" de 2026-06-30 era arrastrar el
        cursor HACIA ATRÁS a un pendiente, forzando re-simular/re-entrenar
        días ya superados — aquí solo se avanza, nunca se recula).
      - No salta días de Descanso/Entrenamiento (`ag-rest`/`ag-train`):
        ahí se sortean lesiones y hace falta pulsar CONTINUAR/ENTRENAR a
-       mano — SOLO se saltan días `ag-sel` cuyo partido ya está
-       `played:true` en el cfg del torneo. Un partido pendiente,
-       eliminado o sin resolver DETIENE el avance inmediatamente. */
+       mano — SOLO se saltan días de PARTIDO (selección `ag-sel` o club
+       `type==='match'`) cuyo resultado ya está confirmado `played`. Un
+       partido pendiente, eliminado, sin resolver, o un día que ningún
+       resolver reconoce, DETIENE el avance inmediatamente.
+     - ALCANCE: cubre selección (Mundial 2032 / Rondas Road, vía
+       `_selPair`) y club NO-torneo (Liga EA Sports, Copa del Rey,
+       Recopa, Supercopa España/Europa, Champions/Europa/Conference fase
+       de grupos Y eliminatoria, Previa Champions — los mismos resolvers
+       que ya usa `_cardNonTour`). **NO** cubre Torneos de Verano ni
+       Mundialito de Clubes (`_realPair`, que lee el cursor AMBIENTE en
+       vez de recibir un día como parámetro — extenderlo ahí exige
+       tocar una función con efectos colaterales de auto-heal de
+       `d.tour`; su guardado YA es fiable vía `_tourMergeMissingLocalResults`,
+       solo el avance automático del calendario queda pendiente si algún
+       día se pide explícitamente). */
+  function _psClubDayPlayed(row){
+    var lbl = String((row && row.label) || '');
+    if (!lbl) return null;
+    try {
+      var ci = _copaRondaFromLabel(lbl);
+      if (ci){
+        var cr = _copaHubResolve(ci);
+        return cr ? !!cr.played : false;
+      }
+    } catch(_){}
+    try {
+      var rec = _recopaHubResolve(lbl); if (rec) return !!rec.played;
+      var scc = _scHubResolve(lbl);     if (scc) return !!scc.played;
+      var usc = _uscHubResolve(lbl);    if (usc) return !!usc.played;
+      var eko = _eurKoHubResolve(lbl);
+      if (eko) return eko.pending ? false : !!eko.played;
+      var eur = _eurHubResolve(lbl);    if (eur) return !!eur.played;
+      var wpg = _wprevHubResolve(lbl);  if (wpg) return !!wpg.played;
+    } catch(_){}
+    try {
+      var mL = /Liga\s*[—\-]\s*J(\d+)/i.exec(lbl);
+      if (mL){
+        var ligaJor = parseInt(mL[1], 10) || 0;
+        var ligaMatch = _resolveHubLigaMatch(ligaJor);
+        if (ligaMatch && ligaJor > 0 && typeof window.loadResults === 'function'){
+          var allLR = window.loadResults() || {};
+          return !!allLR[ligaJor + '|' + ligaMatch.home + '|' + ligaMatch.away];
+        }
+        return false;
+      }
+    } catch(_){}
+    return null;   /* ningún resolver reconoce este día → no tocar */
+  }
   function _psCursorAdvancePastPlayed(){
     try {
       var d = _load();
@@ -10744,20 +10791,27 @@ window._showSimProgress = function(opts, onDone){
       var advanced = false;
       while (idx < rows.length - 1) {
         var row = rows[idx];
-        if (!row || !/\bag-sel\b/.test(row.cls || '')) break;
-        var pair = null;
-        try { pair = _selPair(row); } catch(_){ pair = null; }
-        /* pending (rival TBD) / eliminated / null → NUNCA se salta en
-           silencio, se detiene aquí (lo gestiona _psCursorHeal/POSPUESTOS). */
-        if (!pair || pair.pending || pair.eliminated) break;
-        if (!pair.matchKey || !pair.tourId) break;
-        var cfg = (window._TOUR_CACHE || {})[pair.tourId];
-        if (!cfg && typeof window._tourLoadCachedSync === 'function'){
-          try { cfg = window._tourLoadCachedSync(pair.tourId); } catch(_){}
+        if (!row) break;
+        if (/\bag-sel\b/.test(row.cls || '')){
+          var pair = null;
+          try { pair = _selPair(row); } catch(_){ pair = null; }
+          /* pending (rival TBD) / eliminated / null → NUNCA se salta en
+             silencio, se detiene aquí (lo gestiona _psCursorHeal/POSPUESTOS). */
+          if (!pair || pair.pending || pair.eliminated) break;
+          if (!pair.matchKey || !pair.tourId) break;
+          var cfg = (window._TOUR_CACHE || {})[pair.tourId];
+          if (!cfg && typeof window._tourLoadCachedSync === 'function'){
+            try { cfg = window._tourLoadCachedSync(pair.tourId); } catch(_){}
+          }
+          if (!cfg || !cfg.results) break;
+          var res = cfg.results[pair.matchKey];
+          if (!res || !res.played) break;   /* no jugado todavía → aquí se detiene */
+        } else if (row.type === 'match'){
+          var clubPlayed = _psClubDayPlayed(row);
+          if (clubPlayed !== true) break;   /* false/null → sin confirmar, se detiene */
+        } else {
+          break;   /* Descanso/Entrenamiento → NUNCA se salta */
         }
-        if (!cfg || !cfg.results) break;
-        var res = cfg.results[pair.matchKey];
-        if (!res || !res.played) break;   /* no jugado todavía → aquí se detiene */
         idx++;
         advanced = true;
       }

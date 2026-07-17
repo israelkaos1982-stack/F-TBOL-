@@ -9,7 +9,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from sync_merge import tour_cfg_merge, sel_squad_merge, copa_state_merge  # noqa: E402
+from sync_merge import (  # noqa: E402
+    tour_cfg_merge, sel_squad_merge, copa_state_merge, bracket_state_merge,
+)
 
 _fails = []
 
@@ -287,6 +289,88 @@ new = _copa({"sf": [{"jugado": True, "gl": 3, "gv": 0}]})
 m = copa_state_merge(json.dumps(old), new)
 check("copa: marcador distinto no resucita el acta vieja",
       m["resultados"]["sf"][0]["gl"] == 3 and m["resultados"]["sf"][0]["gv"] == 0)
+
+
+# ──────────────────────────────────────────────────────────────────
+# bracket_state_merge — Recopa/SC/USC/UCL-KO/UEL-KO/UECL-KO/fases/Previa
+# (bug 2026-07-17, «Arsenal-Brasil-Álvaro» generalizado a las 10 comps
+# que no tenían NINGÚN merge — viajaban como JSON opaco).
+# ──────────────────────────────────────────────────────────────────
+
+# Recopa-shape: {sorteo:{r16:[m,...]}, pool:[...], champion:None}.
+# Un dispositivo juega el partido 0 de r16; otro (sin verlo) guarda el
+# torneo con el partido 1 recién jugado. Ninguno debe perderse.
+old = {"sorteo": {"r16": [
+    {"home": "Inter", "away": "Boca", "played": True, "gh": 2, "ga": 1},
+    {"home": "PSG", "away": "Ajax", "played": False, "gh": None, "ga": None},
+]}, "pool": ["Inter", "Boca", "PSG", "Ajax"], "champion": None}
+new = {"sorteo": {"r16": [
+    {"home": "Inter", "away": "Boca", "played": False, "gh": None, "ga": None},
+    {"home": "PSG", "away": "Ajax", "played": True, "gh": 0, "ga": 0},
+]}, "pool": ["Inter", "Boca", "PSG", "Ajax"], "champion": None}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: une partidos de 2 dispositivos (ninguno se pierde)",
+      m["sorteo"]["r16"][0]["played"] is True and m["sorteo"]["r16"][0]["gh"] == 2
+      and m["sorteo"]["r16"][1]["played"] is True and m["sorteo"]["r16"][1]["ga"] == 0)
+
+# SC/USC-shape: {semis:[m,m], final:m}. Un dispositivo juega SF1, la
+# hidratación de otro (SF1 sin jugar, SF2 jugada) no debe borrar SF1.
+old = {"semis": [
+    {"home": "Madrid", "away": "Barca", "played": True, "gh": 1, "ga": 0},
+    {"home": "Bayern", "away": "PSG", "played": False, "gh": None, "ga": None},
+], "final": None, "champion": None}
+new = {"semis": [
+    {"home": "Madrid", "away": "Barca", "played": False, "gh": None, "ga": None},
+    {"home": "Bayern", "away": "PSG", "played": True, "gh": 2, "ga": 2},
+], "final": None, "champion": None}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: semis+final (SC/USC) — ambas semis jugadas sobreviven",
+      m["semis"][0]["played"] is True and m["semis"][1]["played"] is True)
+
+# ANTI-FRANKENSTEIN: re-sorteo cambia el emparejamiento en la MISMA
+# posición (home/away distintos) — el resultado JUGADO del emparejamiento
+# VIEJO no debe resucitar sobre el nuevo (recién reseteado a played:false).
+old = {"final": {"home": "Madrid", "away": "Barca", "played": True, "gh": 3, "ga": 1}}
+new = {"final": {"home": "Bayern", "away": "PSG", "played": False, "gh": None, "ga": None}}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: re-sorteo (home/away distintos) NO resucita el resultado viejo",
+      m["final"]["home"] == "Bayern" and m["final"]["played"] is False)
+
+# A igualdad de marcador, la copia con acta (events) gana aunque la otra
+# tenga un sello 'ua' mayor — mismo principio que _pick_result/_copa_pick_result.
+old = {"final": {"home": "Inter", "away": "Boca", "played": True, "gh": 1, "ga": 0,
+                 "events": [{"type": "gol", "player": "Lautaro"}], "ua": 100}}
+new = {"final": {"home": "Inter", "away": "Boca", "played": True, "gh": 1, "ga": 0,
+                 "events": [], "ua": 500}}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: mismo marcador → gana la copia CON acta aunque su ua sea menor",
+      len(m["final"]["events"]) == 1)
+
+# Un partido jugado no lo borra un valor entrante None/ausente en esa clave.
+old = {"final": {"home": "A", "away": "B", "played": True, "gh": 2, "ga": 0}}
+new = {"final": None}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: un None entrante no borra el partido ya jugado",
+      m["final"]["played"] is True and m["final"]["gh"] == 2)
+
+# Estructura anidada tipo Previa Champions: fixtures[gi][jornada][idx].
+old = {"fixtures": [[
+    [{"home": "X", "away": "Y", "played": True, "a": 2, "b": 1}],
+]]}
+new = {"fixtures": [[
+    [{"home": "X", "away": "Y", "played": False, "a": None, "b": None}],
+]]}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: estructura anidada (Previa Champions) conserva el partido jugado",
+      m["fixtures"][0][0][0]["played"] is True and m["fixtures"][0][0][0]["a"] == 2)
+
+# Campos NO-partido (clasificados, pool, champion) siguen siendo last-write
+# del entrante — el merge no inventa datos donde no hay resultado de partido.
+old = {"champion": None, "pool": ["A", "B"]}
+new = {"champion": "A", "pool": ["A", "B", "C"]}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: campos no-partido son last-write del entrante",
+      m["champion"] == "A" and m["pool"] == ["A", "B", "C"])
 
 
 print()

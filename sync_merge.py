@@ -381,6 +381,163 @@ def copa_state_merge(old_json, new_value):
 
 
 # ──────────────────────────────────────────────────────────────────
+# Fusión GENÉRICA de estados de bracket/fixtures — Recopa, Supercopa de
+# España, Supercopa de Europa, Champions/Europa/Conference (fase de
+# grupos Y eliminatoria), Previa de Champions (obligatorio, 2026-07-17)
+# ──────────────────────────────────────────────────────────────────
+# Bug (petición usuario, «Arsenal-Brasil-Álvaro», Mundial 2032): un
+# partido jugado y confirmado (acta compartida) desapareció de la
+# clasificación — el POST del guardado se perdió en red móvil y una
+# hidratación posterior con un `updatedAt` más reciente (de OTRO
+# guardado de la MISMA jornada) sustituyó la copia local ENTERA, que
+# nunca llegó a tener ese partido. Ese bug ya estaba cubierto para
+# `tour_<id>_v1` (torneos: Mundial 2032, Mundialito, Torneos de Verano,
+# Rondas Previas/Finales de Selecciones) por `tour_cfg_merge` — pero
+# `wprev_state_v1` (Previa Champions), `sc_state_v1` (Supercopa España),
+# `usc_state_v1` (Supercopa Europa), `recopa_state_v1`,
+# `ucl_ko_state_v1`/`uel_ko_state_v1`/`uecl_ko_state_v1` (fase KO) y
+# `ucl_phase_v1`/`uel_phase_v1`/`uecl_phase_v1` (fase de grupos) NO
+# tenían NINGÚN merge — viajan como JSON opaco y el servidor los
+# sobreescribe enteros en cada POST (ver `merge_dict`, que solo recursa
+# en dicts anidados, nunca en un string). El MISMO fallo que ya se
+# arregló para Mundial 2032 podía reproducirse en CUALQUIERA de estas
+# 10 competiciones, para CUALQUIERA de los 7 misters humanos.
+#
+# En vez de escribir un merge a medida para cada una de las 10 (7
+# esquemas distintos: `sorteo:{ronda:[m,...]}` en Recopa,
+# `semis:[m,m], final:m` en Supercopa España/Europa, brackets propios de
+# KO europea, fase de grupos con `results{matchKey}`, y la estructura
+# compuesta de la Previa con `prelim.ties[].legs[]` + `groups[]` +
+# `fixtures[gi][jornada][idx]`), `bracket_state_merge` recorre la
+# estructura ESTRUCTURALMENTE: en cualquier punto donde encuentra un
+# dict con pinta de "resultado de un partido concreto" (`_looks_like_match`,
+# misma señal que `_result_is_played`: `played`/`jugado`, o marcador
+# numérico en los campos ya usados en todo el proyecto), decide con el
+# MISMO criterio que `_pick_result`/`_copa_pick_result` (jugado > no
+# jugado; a igualdad de marcador gana el acta; si no, `ua`/`updatedAt`
+# mayor o el entrante). El resto de la estructura (dicts/listas
+# "normales": pool, sorteo, clasificados, cursores…) se UNE
+# recursivamente sin perder ninguna clave de ningún lado; un escalar
+# suelto lo decide el entrante (last-write, igual que el resto del
+# proyecto para campos que no son resultado de partido).
+def _looks_like_match(d):
+    """¿Es `d` un dict que representa el resultado de UN partido
+    concreto (y no, p. ej., una fila de clasificación o un equipo)?"""
+    if not isinstance(d, dict):
+        return False
+    if "played" in d or "jugado" in d:
+        return True
+    for k in ("a", "b", "gh", "ga", "gl", "gv"):
+        if isinstance(d.get(k), (int, float)):
+            return True
+    return False
+
+
+def _match_is_played(d):
+    if not isinstance(d, dict):
+        return False
+    if d.get("played") or d.get("jugado") or d.get("winner"):
+        return True
+    for k in ("a", "b", "gh", "ga", "gl", "gv", "etGh", "etGa", "et_gl", "et_gv"):
+        if isinstance(d.get(k), (int, float)):
+            return True
+    return False
+
+
+def _match_identity(d):
+    """Pareja (local, visitante) de un partido, normalizada. `None` si el
+    dict no lleva `home`/`away` (nada que comparar → no se puede detectar
+    un re-sorteo en esta posición, se trata como compatible)."""
+    if not isinstance(d, dict):
+        return None
+    h, a = d.get("home"), d.get("away")
+    if h is None and a is None:
+        return None
+    return (
+        _norm_name(h) if isinstance(h, str) else h,
+        _norm_name(a) if isinstance(a, str) else a,
+    )
+
+
+def _pick_match(ex, inc):
+    """Reconcilia dos versiones del MISMO slot de un bracket/fixture.
+    Espejo de `_pick_result` (torneos) y `_copa_pick_result` (Copa),
+    generalizado a cualquier dict de partido detectado estructuralmente.
+
+    ANTI-FRANKENSTEIN: si `home`/`away` difieren entre las dos copias en
+    la MISMA posición, NO es el mismo partido — es un re-sorteo/rebuild
+    del bracket (p. ej. semis re-generadas tras cambiar el ganador
+    previo). En ese caso NO se intenta fusionar: gana el entrante
+    (last-write), igual que si esta posición nunca hubiera tenido merge
+    — así un re-sorteo que resetea un slot a `played:false` nunca
+    resucita el resultado JUGADO del emparejamiento anterior."""
+    if not isinstance(inc, dict):
+        return ex
+    if not isinstance(ex, dict):
+        return inc
+    ex_id, inc_id = _match_identity(ex), _match_identity(inc)
+    if ex_id is not None and inc_id is not None and ex_id != inc_id:
+        return inc
+    ex_p, inc_p = _match_is_played(ex), _match_is_played(inc)
+    if inc_p and not ex_p:
+        return inc
+    if ex_p and not inc_p:
+        return ex
+    ex_a, inc_a = _acta_len(ex), _acta_len(inc)
+    if (ex_a > 0) != (inc_a > 0):
+        return ex if ex_a > inc_a else inc
+    ua_ex = _num(ex.get("ua") if ex.get("ua") is not None else ex.get("updatedAt"))
+    ua_inc = _num(inc.get("ua") if inc.get("ua") is not None else inc.get("updatedAt"))
+    if ua_inc >= ua_ex:
+        return inc
+    return ex
+
+
+def _bracket_merge_value(old_v, new_v, depth=0):
+    if depth > 14:  # tope defensivo — estas estructuras no anidan tanto
+        return new_v if new_v is not None else old_v
+    if _looks_like_match(new_v) or _looks_like_match(old_v):
+        return _pick_match(old_v, new_v)
+    if isinstance(new_v, dict) and isinstance(old_v, dict):
+        out = dict(old_v)
+        for k, v in new_v.items():
+            out[k] = _bracket_merge_value(old_v.get(k), v, depth + 1)
+        return out
+    if isinstance(new_v, list) and isinstance(old_v, list):
+        n = max(len(old_v), len(new_v))
+        out = []
+        for i in range(n):
+            ov = old_v[i] if i < len(old_v) else None
+            nv = new_v[i] if i < len(new_v) else None
+            if ov is None:
+                out.append(nv)
+            elif nv is None:
+                out.append(ov)
+            else:
+                out.append(_bracket_merge_value(ov, nv, depth + 1))
+        return out
+    # Escalar / tipos distintos / uno de los dos ausente → entrante gana
+    # (last-write), salvo que el entrante sea None y el viejo no (un
+    # patch parcial no debe borrar un dato que el viejo sí tenía).
+    return new_v if new_v is not None else old_v
+
+
+def bracket_state_merge(old_json, new_value):
+    """Punto de entrada: fusiona el JSON de un estado de bracket/fixtures
+    (Recopa/SC/USC/UCL-KO/UEL-KO/UECL-KO/UCL-fase/UEL-fase/UECL-fase/
+    Previa Champions) sin perder NINGÚN partido jugado en NINGÚN
+    dispositivo. Nunca produce algo peor que el last-write actual: si
+    `old_json` no es legible, devuelve `new_value` tal cual."""
+    new_value = _loads(new_value)
+    if not isinstance(new_value, dict):
+        return new_value
+    old = _loads(old_json)
+    if not isinstance(old, dict):
+        return new_value
+    return _bracket_merge_value(old, new_value)
+
+
+# ──────────────────────────────────────────────────────────────────
 # Plantilla de selecciones (selecciones_squad_v1)
 # ──────────────────────────────────────────────────────────────────
 def _team_richness(t):

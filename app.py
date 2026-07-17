@@ -19,7 +19,10 @@ from functools import wraps
 
 from jugadores_data import jugadores_por_equipo
 from logica_liga import calcular_tabla, obtener_resultados_ia
-from sync_merge import tour_cfg_merge, sel_squad_merge, _count_played as _tour_count_played
+from sync_merge import (
+    tour_cfg_merge, sel_squad_merge, copa_state_merge, bracket_state_merge,
+    _count_played as _tour_count_played,
+)
 
 app = Flask(__name__)
 
@@ -468,6 +471,25 @@ def _is_cursor_key(k):
         return False
 
 
+# Claves de `competition_state` que son un estado de BRACKET/FIXTURES de
+# una competición europea/copa (obligatorio, 2026-07-17 — ver
+# `bracket_state_merge` en sync_merge.py). Viajaban como JSON opaco: el
+# merge de `competition_state` (campo a campo en `merge_dict`) las
+# sobreescribía ENTERAS en cada POST, exactamente el mismo fallo ya
+# corregido para `tour_<id>_v1` — un partido jugado en un dispositivo
+# podía desaparecer si otro POST (de OTRA jornada/torneo) llegaba con un
+# `competition_state` más completo pero sin ese partido.
+_STATE_BRACKET_KEYS = {
+    "wprev_state_v1",     # Previa Champions
+    "sc_state_v1",        # Supercopa de España
+    "usc_state_v1",       # Supercopa de Europa
+    "recopa_state_v1",    # Recopa de Europa
+    "ucl_ko_state_v1",    # Champions — fase eliminatoria
+    "uel_ko_state_v1",    # Europa League — fase eliminatoria
+    "uecl_ko_state_v1",   # Conference League — fase eliminatoria
+}
+
+
 # Multi-hub (2026-06-13): el HUD (💼🪙💊), trofeos y objetivos de cada
 # caja de mister humano viven en una variante POR HUB de su clave base,
 # con sufijo `_<id>` (ej. bayern_hud_overrides_v1_alvaro = HUD de Arsenal).
@@ -653,6 +675,19 @@ def save_global_state(new_state, replace=False):
                     if _is_cursor_key(ck):
                         merged_comp[ck] = _cursor_winner(
                             base_comp.get(ck), inc_comp.get(ck))
+                    elif ck in _STATE_BRACKET_KEYS:
+                        # Bracket/fixtures de Recopa/SC/USC/UCL-KO/UEL-KO/
+                        # UECL-KO/Previa Champions: UNIÓN por partido, nunca
+                        # sobreescritura ciega (ver `_STATE_BRACKET_KEYS`).
+                        # `competition_state[ck]` es SIEMPRE un JSON string
+                        # (espejo de localStorage) — hay que re-serializar.
+                        try:
+                            _bmerged = bracket_state_merge(
+                                base_comp.get(ck), inc_comp.get(ck))
+                            if _bmerged is not None:
+                                merged_comp[ck] = json.dumps(_bmerged, ensure_ascii=False)
+                        except Exception:
+                            pass
         # Anti-pérdida de acta de Liga EA: si el POST entrante trae
         # liga_results, restaurar el acta (events/MVP) de los partidos cuyo
         # marcador coincide pero el merge dejó sin eventos (copia
@@ -4882,6 +4917,20 @@ def api_kv_set(key):
         try:
             merged = _trofeos_merge(
                 row.valor_json if row else None, value, authoritative)
+            cand = json.dumps(merged, ensure_ascii=False)
+            if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
+                value, payload = merged, cand
+        except Exception:
+            pass
+    # Fase de grupos de Champions/Europa/Conference (ucl_phase_v1/
+    # uel_phase_v1/uecl_phase_v1): UNIÓN por partido, mismo criterio que
+    # `_STATE_BRACKET_KEYS` (obligatorio, 2026-07-17). Estas 3 viajan por
+    # `/api/kv/<key>` (whitelist `_KV_ALLOWED_EXACT`), no por
+    # `competition_state` — de ahí el branch separado aquí en vez de en
+    # `save_global_state`.
+    elif key in ("ucl_phase_v1", "uel_phase_v1", "uecl_phase_v1") and row and row.valor_json:
+        try:
+            merged = bracket_state_merge(row.valor_json, value)
             cand = json.dumps(merged, ensure_ascii=False)
             if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
                 value, payload = merged, cand

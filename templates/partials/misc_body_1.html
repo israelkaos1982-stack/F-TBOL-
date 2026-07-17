@@ -25607,6 +25607,44 @@ window._showSimProgress = function(opts, onDone){
     });
   }
 
+  /* UNIÓN de partidos jugados que existen SOLO en local (bug 2026-07-17,
+     «Mundial 2032»: los 3 partidos del humano — Brasil, jugados y con acta
+     compartida — volvían a PREVIA mientras los IA-vs-IA de la MISMA
+     jornada seguían en FIN). `_tourBackfillActaFromLocal` solo rellena el
+     ACTA de un matchKey presente en AMBOS lados con el MISMO marcador —
+     no cubre el caso de un matchKey AUSENTE del todo en el servidor (el
+     POST de `_tourSaveHumanResult` no llegó a confirmarse: timeout de 8s,
+     red móvil). Si después llega una hidratación con `updatedAt` de
+     servidor más reciente (p.ej. por el guardado, en la MISMA jornada, de
+     "▶ SIMULAR JORNADA" de los partidos IA-vs-IA), `_tourLoad` sustituía
+     `cfg.results` COMPLETO por el del servidor — que nunca tuvo ese
+     matchKey — perdiendo el partido humano en silencio pese a estar
+     jugado localmente. Mismo principio de unión por matchKey que ya
+     aplica el servidor (`tour_cfg_merge`, sync_merge.py), llevado al
+     cliente: cualquier partido JUGADO que exista solo en local (ausente
+     o no-`played` en el servidor) se copia hacia el cfg del servidor
+     ANTES de adoptarlo. Devuelve cuántos matchKeys se recuperaron, para
+     que el caller pueda re-subir el cfg curado (el servidor nunca llegó
+     a tener esos partidos — sin re-subir, un dispositivo nuevo o el
+     borrado de datos de éste los perdería otra vez). */
+  function _tourMergeMissingLocalResults(srv, loc){
+    if (!srv || !loc) return 0;
+    var lr = loc.results;
+    if (!lr || typeof lr !== 'object') return 0;
+    if (!srv.results || typeof srv.results !== 'object') srv.results = {};
+    var sr = srv.results;
+    var merged = 0;
+    Object.keys(lr).forEach(function(mk){
+      var l = lr[mk];
+      if (!l || !l.played) return;   /* solo partidos JUGADOS localmente */
+      var s = sr[mk];
+      if (s && s.played) return;     /* el server ya lo tiene → no tocar */
+      sr[mk] = l;
+      merged++;
+    });
+    return merged;
+  }
+
   /* ── Persistencia ──────────────────────────────────────── */
   window._tourLoad = async function(id){
     if (TOUR_IDS.indexOf(id) === -1) return null;
@@ -25666,6 +25704,13 @@ window._showSimProgress = function(opts, onDone){
              Copa Asia», fotos usuario). Rellenamos el acta desde el local
              para que las stats no se vacíen al sincronizar. */
           try { _tourBackfillActaFromLocal(cfg, localCfg); } catch(_){}
+          /* Recuperar partidos jugados que el servidor NUNCA llegó a tener
+             (POST perdido de un guardado anterior, ej. `_tourSaveHumanResult`)
+             — ver comentario de `_tourMergeMissingLocalResults`. Si se
+             recuperó algo, re-subimos el cfg curado para que el servidor
+             (y el resto de dispositivos) dejen de estar "por detrás". */
+          var _recoveredMissing = 0;
+          try { _recoveredMissing = _tourMergeMissingLocalResults(cfg, localCfg) || 0; } catch(_){}
           /* Garantía cross-device: si el cfg descargado del server carece
              de groupFixtures (guardado por un cliente sin el fix, o sync
              de un dispositivo que nunca visitó la pantalla), construirlos
@@ -25684,6 +25729,9 @@ window._showSimProgress = function(opts, onDone){
           } catch(_){}
           try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
           try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
+          if (_recoveredMissing > 0) {
+            try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg); } catch(_){}
+          }
           /* Baked-in del alias de eFootball (identidad, viaja con la cfg):
              tras adoptar la cfg del servidor, resuelve desde el cache local
              el alias de los equipos ficticios que aún no lo lleven y lo

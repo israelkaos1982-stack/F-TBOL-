@@ -1,5 +1,76 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El botón 🏁 FINALIZAR (`gm-btn-end`) NUNCA dependió solo del `click` sintético — respaldo táctil obligatorio (obligatorio, 2026-07-17)
+
+**Bug (7 fotos usuario 2026-07-17, «más de 50 intentos… es imposible
+finalizar», 3 partidos DISTINTOS del Mundial 2032 — Brasil vs Haití
+J1, Brasil vs Escocia J2, Brasil vs Marruecos J3)**: en los 3 partidos,
+con el acta completa (goles, portería imbatida, MVP ya elegido), pulsar
+🏁 FINALIZAR no producía NADA — ni siquiera aparecía el cuadro
+"¿Seguro que quieres finalizar?" (`_mlConfirmEnd`), el primer paso de
+toda la cadena. El usuario llevaba semanas reportando este mismo
+bloqueo en distintas variantes ("imposible compartir", "imposible
+finalizar") pese a docenas de fixes previos en pasos POSTERIORES de la
+cadena (imbatida, estadísticas, MVP, WhatsApp — ver secciones de más
+abajo).
+
+### Causa raíz — el botón MÁS crítico de la cadena era el ÚNICO sin respaldo táctil
+
+`#gm-btn-end` (el botón FINALIZAR del gm-modal) vive al fondo de una
+pantalla que hace scroll (acta de eventos + botones apilados) y
+dependía ÚNICAMENTE del atributo `onclick="window._mlConfirmEnd(...)"`
+— el evento `click` SINTÉTICO que el navegador solo dispara si
+`touchstart`/`touchend` ocurren en el MISMO punto sin movimiento
+detectable. Es EXACTAMENTE la misma ambigüedad tap-vs-scroll ya
+diagnosticada y arreglada para el selector de portero de la portería
+imbatida (`_imbatWireTapFallback`, sección "El decremento…"/"Card
+'Próximo partido'" más abajo, 2026-07-04/05): un dedo real con el
+mínimo movimiento dentro de un contenedor scrollable hace que el
+navegador interprete el toque como intento de scroll y CANCELE el
+`click` sintético — sin excepción, sin alert, sin log, indistinguible
+de "el botón no reacciona". Ese fix se aplicó al picker de porteros,
+al botón Cancelar de ese picker, y a varios overlays más — pero
+NUNCA al propio botón FINALIZAR, pese a ser el disparador de TODA la
+cadena y el que más se pulsa en cada partido.
+
+### Fix — delegación en `document` con disparo en `touchstart`/`pointerdown`
+
+`templates/partials/part2/misc_body_2.html`, justo tras la definición
+de `window._mlConfirmEnd`: un listener delegado en `document` (mismo
+patrón que ya usa este archivo para el spinner "Procesando partido…")
+detecta un toque sobre `#gm-btn-end` (gm-modal, botón único y
+estático) o `ml-btn-end-<mk>` (cards de calendario, uno por partido) y
+llama a `_mlConfirmEnd` en el instante `touchstart`/`pointerdown`, sin
+esperar al `click` sintético. `_mlConfirmEnd` es idempotente (si el
+diálogo ya está abierto, lo recrea) así que no hace falta
+`preventDefault` ni un guard complejo — solo un cooldown de 700 ms por
+elemento para no crear el overlay 2 veces en el mismo gesto físico
+(touchstart + pointerdown + el click normal, si llega, del mismo
+toque). Respeta `el.disabled` (no dispara mientras el botón está
+deshabilitado por la cadena de gates).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `#gm-btn-end` o `ml-btn-end-<mk>` (o cualquier
+   botón FINALIZAR nuevo de este tipo) dependa ÚNICAMENTE del `click`
+   sintético. Es el botón MÁS crítico de todo el proyecto — el que
+   arranca la cadena imbatida→estadísticas→MVP→WhatsApp→fin — y por
+   estar al fondo de una pantalla con scroll es el más expuesto a la
+   ambigüedad tap-vs-scroll.
+2. **PROHIBIDO** quitar el listener delegado de `touchstart`/
+   `pointerdown` de FINALIZAR sin sustituirlo por un mecanismo
+   equivalente. Es la causa raíz confirmada de "más de 50 intentos sin
+   poder finalizar" en 3 partidos distintos — todos los fixes previos
+   de esta cadena (documentados en las secciones de abajo) arreglaban
+   pasos POSTERIORES que nunca llegaban a dispararse porque el primer
+   paso ya fallaba en silencio.
+3. Todo botón NUEVO que se añada a esta cadena (imbatida, stats, MVP,
+   compartir, o cualquier gate futuro) y que pueda vivir dentro de un
+   contenedor con scroll hereda este patrón — no asumir que "ya
+   funciona en el emulador/con `.click()`" prueba nada: la ambigüedad
+   táctil real solo se reproduce con un dedo de verdad sobre un
+   contenedor scrollable.
+
 ## Recopa/Supercopa España/Supercopa Europa/Champions-Europa-Conference (fase Y eliminatoria)/Previa Champions NUNCA tenían fusión en servidor — un partido jugado podía perderse en CUALQUIERA de las 7 cajas humanas (obligatorio, 2026-07-17)
 
 **Petición usuario 2026-07-17** (tras el bug de Mundial 2032 de

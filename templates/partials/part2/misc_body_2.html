@@ -10424,6 +10424,62 @@
     };
   };
 
+  /* ── Respaldo táctil de FINALIZAR (obligatorio, 2026-07-17) ──────────
+     Bug reportado por el usuario (fotos, "más de 50 intentos", 3
+     partidos distintos del Mundial 2032 — Haití, Escocia, Marruecos):
+     pulsar 🏁 FINALIZAR no hacía NADA — nunca aparecía ni siquiera el
+     cuadro "¿Seguro que quieres finalizar?" (`_mlConfirmEnd`). El botón
+     `gm-btn-end` vive al fondo de una pantalla que hace scroll (acta +
+     eventos pueden ser larga) y dependía ÚNICAMENTE del evento `click`
+     sintético del navegador — exactamente la misma ambigüedad
+     tap-vs-scroll ya documentada y arreglada para el selector de
+     portero de la portería imbatida (`_imbatWireTapFallback`,
+     2026-07-04/05): si el navegador detecta el mínimo movimiento del
+     dedo entre el toque y la suelta dentro de un contenedor con
+     scroll, lo interpreta como intento de scroll y el `click` sintético
+     NUNCA se dispara — sin ningún aviso, indistinguible de "el botón no
+     funciona". Ese fix nunca se aplicó al botón MÁS crítico de toda la
+     cadena (FINALIZAR), pese a ser el mismo patrón.
+
+     Fix: delegación en `document` (mismo patrón ya usado en este mismo
+     archivo para el spinner "Procesando partido…") que dispara
+     `_mlConfirmEnd` en el instante `touchstart`/`pointerdown`, sin
+     esperar a ver si el `click` sintético llega. `_mlConfirmEnd` es
+     idempotente (si ya hay un diálogo de confirmación abierto, lo
+     recrea) así que no hay riesgo de doble-disparo si el click normal
+     SÍ llega después — no hace falta `preventDefault` ni un guard
+     complejo, solo un pequeño cooldown para no crear el overlay 2 veces
+     en el mismo gesto (touchstart + pointerdown + mousedown del mismo
+     toque). Cubre tanto el gm-modal (`gm-btn-end`, botón único y
+     estático) como las cards de calendario (`ml-btn-end-<mk>`, uno por
+     partido). */
+  (function(){
+    var _lastTap = { el: null, ts: 0 };
+    function _fireFinalizeTap(el){
+      if (!el || el.disabled) return;
+      var now = Date.now();
+      if (_lastTap.el === el && (now - _lastTap.ts) < 700) return;
+      _lastTap.el = el; _lastTap.ts = now;
+      try {
+        if (el.id === 'gm-btn-end') {
+          window._mlConfirmEnd(window.gmEndMatch);
+        } else {
+          var m = String(el.id||'').match(/^ml-btn-end-(.+)$/);
+          if (m) window._mlConfirmEnd(function(){ window.mlEndMatchGen(m[1]); });
+        }
+      } catch(err) { try { console.error('[FINALIZAR respaldo táctil] falló:', err); } catch(_){} }
+    }
+    function _onTouch(e){
+      var t = e.target;
+      while (t && t !== document.body) {
+        if (t.id === 'gm-btn-end' || /^ml-btn-end-/.test(t.id||'')) { _fireFinalizeTap(t); return; }
+        t = t.parentNode;
+      }
+    }
+    document.addEventListener('touchstart', _onTouch, { passive:true, capture:true });
+    document.addEventListener('pointerdown', _onTouch, { passive:true, capture:true });
+  })();
+
   window.mlEndMatchGen = function(mk, winner) {
     var st=_mlSt(mk);
     if (st.finished) return;

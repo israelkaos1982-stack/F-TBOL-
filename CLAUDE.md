@@ -1,5 +1,61 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `fetchData` recupera el snapshot `_protected` del servidor cuando el `main` viene VACÍO — regresión que dejó el 90% de "Resto de Ligas" sin equipos (obligatorio, 2026-07-18)
+
+**Bug (foto usuario 2026-07-18, «Israeli Premier League» + «el 90% de
+las ligas me sale sin equipos, pero realmente están el 100% de los
+equipos… cuando siempre se han visto»)**: al abrir casi cualquier liga
+de "Resto de Ligas" en un dispositivo sin la liga cacheada localmente,
+la pantalla `s-liga-ext` mostraba «No hay equipos. Usa 🖍 Editar para
+añadir clubes.» pese a que el roster completo seguía existiendo en el
+servidor.
+
+### Causa raíz — la conversión a hidratación async (2026-07-13) perdió el fallback a `_protected`
+
+Hasta el 2026-07-13, `loadData` hacía un XHR SÍNCRONO que, cuando el
+`main` de la liga en el servidor (`/api/liga-ext/<slug>`) venía VACÍO,
+caía como "última esperanza" a `/api/liga-ext-protected/<slug>` (el
+snapshot MONOTÓNICO por nº de jugadores, que NUNCA encoge). El commit
+`d7ef9e0` eliminó todo XHR síncrono y movió la hidratación a
+`fetchData` (async, en segundo plano) — pero `fetchData` SOLO consulta
+`/api/liga-ext/<slug>` (`main`) y **nunca** cayó al snapshot
+`_protected`. Así, cualquier liga cuyo `main` en el servidor se hubiera
+regresado a vacío por un guardado CONCURRENTE de otro dispositivo
+(escenario frecuente y ya documentado con varios móviles + PC) mostraba
+"No hay equipos" PARA SIEMPRE, aunque el `_protected` del servidor
+conservara el roster completo. Antes de 2026-07-13 el XHR síncrono lo
+restauraba; después, nada lo hacía.
+
+### Fix
+
+`fetchData` (`templates/partials/misc_body_1.html`): cuando el `main`
+del servidor viene VACÍO (0 equipos, o 304/error) **Y** el local
+(cache/localStorage) también está vacío de equipos (`_lxCacheEmpty()`),
+cae a `/api/liga-ext-any/<slug>` (`_lxAnyFallback()`) — el endpoint que
+resuelve main→protected EN EL SERVIDOR en UNA sola petición (existe
+desde 2026-07-07). Si trae equipos, los sanea + backfillea identidad
+(escudos/roster/logo/alias/resultados) desde lo local, cachea, persiste
+y re-pinta. Solo actúa cuando NO hay nada local que proteger — el resto
+de casos los sigue cubriendo el anti-wipe. Como es en `fetchData`, TODOS
+los caminos de hidratación (bg-hydrate de `loadData`, `openLigaExt`, el
+auto-hidratador de boot) heredan el fallback sin duplicar lógica ni
+carreras de doble fetch.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `fetchData` (o cualquier hidratación de
+   `ligaExt_<slug>` nueva) trate un `main` VACÍO del servidor como
+   respuesta definitiva sin caer al snapshot `_protected` cuando el
+   local también está vacío. El `main` de una liga puede regresar a
+   vacío por un guardado concurrente de otro dispositivo; el snapshot
+   `_protected` (monotónico) es la red que conserva el roster.
+2. **PROHIBIDO** reintroducir un XHR síncrono para este fallback (regla
+   2026-07-13 #4, absoluta): usar `/api/liga-ext-any/<slug>` (fallback
+   resuelto en el servidor, una sola petición async).
+3. El fallback solo dispara con local VACÍO (`_lxCacheEmpty()`): con
+   equipos locales, el anti-wipe manda (no pisar una copia local rica
+   con el `main` vacío del servidor).
+
 ## El botón 🏁 FINALIZAR (`gm-btn-end`) NUNCA dependió solo del `click` sintético — respaldo táctil obligatorio (obligatorio, 2026-07-17)
 
 **Bug (7 fotos usuario 2026-07-17, «más de 50 intentos… es imposible

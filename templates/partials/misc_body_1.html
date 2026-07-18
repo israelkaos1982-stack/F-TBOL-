@@ -48346,15 +48346,68 @@ https://api.sofascore.app/api/v1/team/44/image
     try{
       var since = LIGA_UPDATED[k] || '';
       var url = '/api/liga-ext/'+encodeURIComponent(k) + (since?('?since='+encodeURIComponent(since)):'');
+      /* ¿El local (cache/localStorage) está vacío de equipos? Sirve para
+         decidir si vale la pena caer al snapshot _protected del servidor. */
+      function _lxCacheEmpty(){
+        try {
+          var c = LIGA_CACHE[k];
+          if (c && Array.isArray(c.teams) && c.teams.length) return false;
+          var r = localStorage.getItem(storeKey(k));
+          if (r){ var p = JSON.parse(r); if (p && Array.isArray(p.teams) && p.teams.length) return false; }
+        } catch(_){}
+        return true;
+      }
+      /* SERVER-MAIN VACÍO + LOCAL VACÍO → snapshot _protected del
+         servidor (regresión 2026-07-13, ver CLAUDE.md). El `loadData`
+         SÍNCRONO viejo caía a /api/liga-ext-protected cuando el `main`
+         del servidor venía vacío; al pasar a hidratación async por
+         `fetchData`, ese fallback se PERDIÓ. Así, una liga cuyo `main`
+         en el servidor se regresó a vacío (guardado concurrente de otro
+         dispositivo — documentado como frecuente con varios móviles + PC)
+         mostraba "No hay equipos" PARA SIEMPRE, aunque el snapshot
+         `_protected` (monotónico por nº de jugadores, nunca encoge)
+         conservara el roster completo. `/api/liga-ext-any/<slug>` resuelve
+         main→protected EN EL SERVIDOR en UNA sola petición. Solo actúa
+         cuando NO hay nada local que proteger — el resto de casos los
+         cubre el anti-wipe de más abajo. */
+      function _lxAnyFallback(){
+        try {
+          fetch('/api/liga-ext-any/'+encodeURIComponent(k)).then(function(r2){
+            return r2.ok ? r2.json() : null;
+          }).then(function(j2){
+            var d2 = j2 && j2.data;
+            if (d2 && Array.isArray(d2.teams) && d2.teams.length){
+              d2.teams = d2.teams || []; d2.results = d2.results || [];
+              try { _sanitizeLigaTeamNames(d2); } catch(_){}
+              var _loc = LIGA_CACHE[k];
+              try { _lextBackfillShields(d2, _loc); } catch(_){}
+              try { _lextBackfillRoster(d2, _loc); } catch(_){}
+              try { _lextBackfillLeagueLogo(d2, _loc); } catch(_){}
+              try { _lextBackfillAlias(d2, _loc); } catch(_){}
+              try { _lextBackfillResults(d2, _loc); } catch(_){}
+              LIGA_CACHE[k] = d2;
+              try { localStorage.setItem(storeKey(k), JSON.stringify(d2)); } catch(_){}
+              try { console.warn('[ligaExt] '+k+': main del servidor VACÍO — restaurado desde snapshot _protected del servidor ('+d2.teams.length+' equipos).'); } catch(_){}
+              cb && cb(d2, true);
+            } else {
+              cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false);
+            }
+          }).catch(function(){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); });
+        } catch(_){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); }
+      }
       fetch(url).then(function(r){
-        if(r.status===304){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); return; }
-        if(!r.ok){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); return; }
+        if(r.status===304){ if(_lxCacheEmpty()){ _lxAnyFallback(); return; } cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); return; }
+        if(!r.ok){ if(_lxCacheEmpty()){ _lxAnyFallback(); return; } cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); return; }
         return r.json();
       }).then(function(j){
         if(!j) return;
         var data = (j && j.data) || {teams:[],results:[]};
         data.teams = data.teams || [];
         data.results = data.results || [];
+        /* Server main VACÍO + local vacío → snapshot _protected del
+           servidor (ver _lxAnyFallback arriba). Si hay algo local, el
+           anti-wipe de más abajo lo conserva; no hace falta el fallback. */
+        if ((!data.teams || !data.teams.length) && _lxCacheEmpty()) { _lxAnyFallback(); return; }
         /* ─── ADOPTAR COPIA MAYOR DEL SERVIDOR (2026-05-18) ──────────
            Bug usuario: móvil = Liga Inglesa 20 equipos (correcto, ya
            subido al servidor por su anti-wipe), PC = 9 (copia local

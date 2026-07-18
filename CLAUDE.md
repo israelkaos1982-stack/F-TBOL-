@@ -36,10 +36,24 @@ resuelve main→protected EN EL SERVIDOR en UNA sola petición (existe
 desde 2026-07-07). Si trae equipos, los sanea + backfillea identidad
 (escudos/roster/logo/alias/resultados) desde lo local, cachea, persiste
 y re-pinta. Solo actúa cuando NO hay nada local que proteger — el resto
-de casos los sigue cubriendo el anti-wipe. Como es en `fetchData`, TODOS
-los caminos de hidratación (bg-hydrate de `loadData`, `openLigaExt`, el
-auto-hidratador de boot) heredan el fallback sin duplicar lógica ni
-carreras de doble fetch.
+de casos los sigue cubriendo el anti-wipe. Como es en `fetchData`, los
+caminos de hidratación que pasan por él (bg-hydrate de `loadData`,
+`openLigaExt`) heredan el fallback sin duplicar lógica ni carreras de
+doble fetch.
+
+**Ampliación mismo día (fotos «faltan todos los equipos desde República
+Checa hasta San Marino… pero en la última foto [overlay Equipos por
+competición] están todos»)**: el auto-hidratador de boot
+`_eurHydrateMissingLeagues` (que corre en boot/focus/pageshow vía
+`_eurAutoHydrateAndRender` y rellena TODAS las ligas que faltan en este
+dispositivo) tenía su PROPIO `fetch('/api/liga-ext/<slug>')` (main), NO
+pasaba por `fetchData`, así que también se saltaba el `_protected`. Se
+cambió a `/api/liga-ext-any/<slug>` → ahora en cada arranque recupera de
+golpe TODAS las ligas cuyo main del servidor esté vacío, sin que el
+usuario abra cada una. Tras rellenar el `localStorage`, la reconciliación
+proactiva (`_lextReconcileResultsToServer`) empuja el roster recuperado de
+vuelta al `main` del servidor (`needPushRoster`), curándolo para todos los
+dispositivos. Si `s-liga-ext` está activa, se re-pinta al instante.
 
 ### Reglas a respetar
 

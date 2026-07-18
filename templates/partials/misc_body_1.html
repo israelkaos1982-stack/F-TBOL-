@@ -44011,7 +44011,14 @@ window._showSimProgress = function(opts, onDone){
       var slug = toFetch[idx++];
       var key = 'ligaExt_' + slug;
       function attempt(triesLeft){
-        fetch('/api/liga-ext/' + encodeURIComponent(slug), { credentials:'same-origin' })
+        /* `/api/liga-ext-any/<slug>` (no `/api/liga-ext/`): resuelve
+           main→`_protected` EN EL SERVIDOR en una sola petición. Si el
+           `main` de la liga se regresó a vacío por un guardado concurrente
+           de otro dispositivo, el snapshot `_protected` (monotónico) sigue
+           teniendo el roster — así el auto-hidratador de boot recupera TODAS
+           las ligas vacías de golpe, no solo al abrir cada una (regresión
+           2026-07-13, ver `fetchData`/`_lxAnyFallback`). */
+        fetch('/api/liga-ext-any/' + encodeURIComponent(slug), { credentials:'same-origin' })
           .then(function(r){ return r.ok ? r.json().then(function(j){ return {ok:true, j:j}; }) : {ok:false, j:null}; })
           .then(function(res){
             if(!res.ok){
@@ -44139,6 +44146,16 @@ window._showSimProgress = function(opts, onDone){
         try { if (typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
         try { if (typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); } catch(_){}
         try { if (typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
+        /* Si el usuario está viendo la pantalla de una liga que se acaba
+           de recuperar del servidor (`_protected`), re-pintarla al instante
+           para que los equipos aparezcan sin tener que salir y volver. */
+        try {
+          var _sc = document.getElementById('s-liga-ext');
+          if (_sc && _sc.classList.contains('active') && typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY) {
+            try { var _cd = loadData(CURRENT_KEY); if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(_cd); } catch(_){}
+            try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
+          }
+        } catch(_){}
       });
     } catch(_){ _eurAutoHydrateRunning = false; }
   }

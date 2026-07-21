@@ -21458,6 +21458,84 @@
         window.showPrePartidoOverlay._durPatched = true;
       }
 
+      /* ── Prefetch de PLANTILLA del rival IA en CUALQUIER previa (CLAUDE.md,
+         "no salen los jugadores del Young Boys, por defecto pone jugador A B C").
+         Mismo principio que `_tourPrefetchMatchAlias` (misc_body_1.html,
+         2026-07-06): `sqFromRegistry`/`sqFromRegistryFull` (el registro que
+         alimenta el picker "+ AÑADIR EVENTO" y el auto-pick de portero de la
+         portería imbatida) escanean SOLO lo que ESTE dispositivo tenga
+         cacheado localmente (localStorage `ligaExt_*` + `LIGA_CACHE` en
+         memoria + `selecciones_squad_v1`). Si el rival IA de un partido
+         humano —de CUALQUIER competición: Liga, Copa, Champions/Europa/
+         Conference, Recopa, Supercopa, Intercontinental, Previa Champions,
+         Torneos de Verano, Selecciones, Mundialito de Clubes, amistosos—
+         pertenece a una liga que este dispositivo no ha abierto todavía
+         esta sesión, la búsqueda local falla y:
+         (a) el picker de eventos muestra el roster genérico "Jugador
+             A/B/C…" (`_fallbackSq11`) — si el usuario toca un nombre ANTES
+             de que la búsqueda diferida en servidor de
+             `_gmRenderPlayerPick` (2026-07-12 #7) resuelva (razonable: el
+             partido real de eFootball sigue corriendo), el placeholder
+             queda grabado en el acta PARA SIEMPRE;
+         (b) el auto-pick del portero IA en la portería imbatida
+             (`_getTopGk`/`_ensureImbatEvents`, index.bundle.js) NO tiene
+             NINGÚN reintento — un solo fallo se convierte en "Portero"
+             genérico permanente, sin ninguna corrección posterior.
+         `showPrePartidoOverlay` es el chokepoint ÚNICO por el que pasa TODO
+         partido humano de CUALQUIER competición — un solo wrap aquí cubre
+         TODAS sin tocar cada call site. Prefetchear en el instante de abrir
+         la previa da a la búsqueda TODO el margen del partido (varios
+         minutos) para resolver ANTES de que el picker o el auto-pick de
+         portero la necesiten — igual que el prefetch de alias, pero para
+         la plantilla completa. */
+      var _SQ_PREFETCHED = window._SQ_PREFETCHED = window._SQ_PREFETCHED || Object.create(null);
+      var _SQ_PREFETCH_COOLDOWN_MS = 15000;
+      window._matchSquadPrefetch = window._matchSquadPrefetch || function(name){
+        try {
+          if (!name) return;
+          var norm = String(name).trim().toLowerCase();
+          if (!norm) return;
+          var mark = _SQ_PREFETCHED[norm];
+          if (mark === true) return; /* ya resuelto (encontrado), no repetir */
+          var now = Date.now();
+          if (typeof mark === 'number' && (now - mark) < _SQ_PREFETCH_COOLDOWN_MS) return; /* intento reciente en curso/fallido */
+          /* Ya resuelto LOCALMENTE (ligaExt_ / LIGA_CACHE / selecciones) → nada que preguntar al servidor. */
+          try {
+            var local = (typeof window.sqFromRegistry === 'function') ? window.sqFromRegistry(name) : [];
+            if (local && local.length) { _SQ_PREFETCHED[norm] = true; return; }
+          } catch(_){}
+          if (typeof window._eurRetryServerSearch !== 'function' || typeof window._eurTeamSquadServerSearch !== 'function') return;
+          _SQ_PREFETCHED[norm] = now; /* marca intento EN CURSO (temporal, no permanente) */
+          window._eurRetryServerSearch(window._eurTeamSquadServerSearch, name, function(found){
+            if (found) _SQ_PREFETCHED[norm] = true;
+            /* si no se encontró, el timestamp ya puesto permite reintentar pasado el cooldown */
+          });
+        } catch(_){}
+      };
+      var _oSPPsq = window.showPrePartidoOverlay;
+      if (typeof _oSPPsq === 'function' && !_oSPPsq._sqPrefetchPatched) {
+        window.showPrePartidoOverlay = function(matchKey, compKey, prorroga, duracion, isHvH) {
+          try {
+            var pt = window._ppPreviaTeams;
+            var hN, aN;
+            if (pt && pt.home && pt.away) { hN = pt.home; aN = pt.away; }
+            else {
+              var wrapEl = document.getElementById('mlw-' + matchKey);
+              if (wrapEl) {
+                var _names = wrapEl.querySelectorAll('.ml-team-name');
+                var _strip = function(s){ return String(s||'').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+\s*/, '').trim(); };
+                hN = _strip(_names[0] && _names[0].textContent);
+                aN = _strip(_names[1] && _names[1].textContent);
+              }
+            }
+            if (hN) window._matchSquadPrefetch(hN);
+            if (aN) window._matchSquadPrefetch(aN);
+          } catch(_){}
+          return _oSPPsq.apply(this, arguments);
+        };
+        window.showPrePartidoOverlay._sqPrefetchPatched = true;
+      }
+
       /* ── Bug 3: Balón + Estadio + mostrar botones al confirmar previa ── */
       var _oT = window._ppToggle;
       if (typeof _oT === 'function' && !_oT._vballPatched) {

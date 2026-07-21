@@ -1,5 +1,124 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La plantilla del rival IA se PREFETCHEA al abrir la previa de CUALQUIER partido humano — ya no depende de ganar la carrera contra el picker (obligatorio, 2026-07-21)
+
+**Bug (5 fotos usuario 2026-07-21, «Young Boys» — Liga Suiza, Torneo de
+Verano Joan Gamper J2, Arsenal 0-1 Young Boys)**: con la plantilla del
+Young Boys 100% completa y real (confirmado en el editor de "Resto de
+Ligas · Suiza", con estadísticas ya acumuladas — Christian Fassnacht 25
+goles, Marvin Keller portero titular, etc.), el acta del partido mostró
+`78' ⚽ Jugador F (YB)` y `90' 🧤 Portero (YB)` en vez de los nombres
+reales. El usuario preguntó explícitamente si esto era exclusivo de
+Torneos de Verano o pasaba en todas las competiciones.
+
+### Investigación — es un bug del MOTOR COMPARTIDO, no de una competición
+
+`sqFromRegistry`/`sqFromRegistryFull` (`static/js/index.bundle.js`) —
+las funciones que resuelven la plantilla de CUALQUIER equipo para
+CUALQUIER competición (picker "+ AÑADIR EVENTO" vía `_gmGetSquad`,
+auto-pick del portero en la portería imbatida vía `_getTopGk`, MVP,
+`genMatchEventsEnhanced`…) — solo escanean lo que ESTE dispositivo tenga
+cacheado LOCALMENTE (`localStorage['ligaExt_*']` + `window.LIGA_CACHE`
+en memoria + `selecciones_squad_v1`). Si el rival IA pertenece a una
+liga que este dispositivo no ha abierto todavía en la sesión (aquí,
+Suiza — el usuario entró directo al Torneo de Verano sin pasar antes
+por "Resto de Ligas · Suiza"), la búsqueda local no encuentra nada y:
+
+1. **El picker de eventos** (`_gmGetSquad`/`_gmRenderPlayerPick`) cae al
+   roster genérico `_fallbackSq11()` (`Jugador A`.."Jugador K"). Desde
+   2026-07-12 #7 existe una búsqueda DIFERIDA en servidor que re-pinta
+   el picker si sigue abierto — pero si el usuario toca un nombre ANTES
+   de que esa búsqueda resuelva (razonable: el partido real de eFootball
+   sigue corriendo en tiempo real), el placeholder queda grabado en el
+   acta PARA SIEMPRE. Coincide con `Jugador F` (posición M, entrada nº6
+   de `_fallbackSq11`).
+2. **El auto-pick del portero IA en la portería imbatida** (`_getTopGk`,
+   invocado desde `_ensureImbatEvents`) NO tiene NINGÚN reintento ni
+   búsqueda en servidor — es una única llamada SÍNCRONA a
+   `sqFromRegistryFull` en el instante de FINALIZAR; si falla, cae
+   DIRECTAMENTE y para siempre a `{num:'1', name:'Portero'}` (línea
+   108-112 y 322 de `index.bundle.js`), sin ninguna corrección
+   posterior. Explica el `90' 🧤 Portero (YB)`.
+
+Ninguno de los 2 puntos es exclusivo de Torneos de Verano: `_gmGetSquad`/
+`_getTopGk` son el motor de TODO partido humano vs IA — Liga EA Sports,
+Copa del Rey, Supercopa de España, Champions/Europa/Conference,
+Recopa, Supercopa de Europa, Intercontinental, Previa Champions,
+Selecciones, Mundialito de Clubes, Superliga y amistosos. El bug se
+manifiesta más en Torneos de Verano/competiciones europeas porque sus
+rivales IA suelen salir de "Resto de Ligas" (53 ligas externas que el
+dispositivo rara vez tiene TODAS cacheadas), pero el motor es el mismo
+para las 5 canónicas de Liga EA Sports si su rival fuera de fuera.
+
+### Fix — prefetch de plantilla en el chokepoint único `showPrePartidoOverlay`
+
+Mismo principio que `_tourPrefetchMatchAlias` (2026-07-06, el fix
+equivalente para el ❓ de alias eFootball): en vez de esperar a que el
+picker o el auto-pick de portero necesiten la plantilla, se dispara la
+búsqueda en servidor **en el instante en que se abre la previa** — da a
+la búsqueda TODO el margen del partido (varios minutos) para resolver
+antes de que se necesite.
+
+`window._matchSquadPrefetch(name)` (nuevo, `part2/misc_body_2.html`,
+junto al resto de parches post-bundle de `showPrePartidoOverlay`):
+si `sqFromRegistry(name)` ya resuelve LOCALMENTE, no hace nada; si no,
+llama a `window._eurRetryServerSearch(window._eurTeamSquadServerSearch,
+name, ...)` (los mismos 6 intentos/backoff que ya protegen escudo/alias/
+plantilla del picker manual, 2026-07-13). Al encontrarlo, el equipo
+queda cacheado en `LIGA_CACHE.__server_squad_search__` — la MISMA vía
+que ya consume `sqFromRegistry` en su escaneo de `LIGA_CACHE`
+(2026-07-06 #6) — así que tanto el picker como `_getTopGk` lo ven sin
+ningún camino nuevo que mantener. Cooldown de 15s por nombre para no
+repetir un intento fallido reciente (mismo patrón que
+`_tourPrefetchMatchAlias`, corrige el bug de "un fallo bloquea el
+equipo para siempre" de 2026-07-06 #7: solo un ÉXITO se marca
+permanente).
+
+Se cablea envolviendo `window.showPrePartidoOverlay` UNA VEZ (mismo
+patrón de parche no-destructivo ya usado en ese archivo para duración/
+balón/estadio, guardado con el flag `._sqPrefetchPatched`) — como esa
+función es el chokepoint ÚNICO por el que pasa TODO partido humano de
+CUALQUIER competición, un solo wrap cubre las 14+ competiciones sin
+tocar cada call site. Los nombres de equipo se leen con la MISMA
+prioridad que ya usa `_renderPreviaMeta` para pintar la previa:
+`window._ppPreviaTeams.home/.away` si están puestos (el caso normal —
+Liga, Copa, Torneos, Recopa… TODOS los callers los fijan antes de
+llamar a `showPrePartidoOverlay`), si no, lectura del DOM
+`mlw-<matchKey> .ml-team-name`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un fix de resolución de plantilla/escudo/alias
+   nuevo se limite al picker de eventos (`_gmGetSquad`) sin cubrir
+   también el auto-pick de portero (`_getTopGk`/`_ensureImbatEvents`).
+   Este último NUNCA reintenta ni busca en servidor por diseño (regla
+   2026-07-12 "onDone() SÍNCRONO" — no se puede volver a hacerlo async
+   sin reabrir el bug del partido que se congela para siempre) — la
+   ÚNICA forma segura de protegerlo es que la plantilla YA esté
+   resuelta ANTES de que se invoque, vía el prefetch de esta sección.
+2. **PROHIBIDO** que un prefetch nuevo de este tipo (identidad de
+   equipo: plantilla, escudo, alias) se cablee call-site por call-site
+   en cada competición. `showPrePartidoOverlay` es el chokepoint único
+   — todo prefetch de previa nuevo se envuelve ahí (siguiendo el patrón
+   `._xxxPatched` ya usado por duración/balón/estadio/alias), nunca
+   duplicado en `_tourOpenHumanMatch`/`copaAbrirPrevia`/`abrirEurKo`/etc.
+   por separado.
+3. **PROHIBIDO** que `_matchSquadPrefetch` marque un fallo del servidor
+   como resuelto permanente (mismo bug que ya se corrigió para el alias,
+   2026-07-06 #7): solo un ÉXITO se marca `true`; un fallo guarda el
+   timestamp y permite reintentar tras el cooldown.
+4. Toda competición NUEVA que abra un partido humano vía
+   `showPrePartidoOverlay` (siguiendo el patrón `_ppPreviaTeams.home/
+   .away` antes de llamarla) hereda el prefetch automáticamente — no
+   hace falta cablearlo aparte.
+5. Este fix es PREVENTIVO — no corrige retroactivamente actas ya
+   grabadas con "Jugador A/B/C…"/"Portero" (como la de este bug
+   report). Esas ya cuentan con su propia red de recuperación al abrir
+   la pantalla de Estadísticas del torneo (`_tourBackfillActasFromResults`
+   + `_bfIsRealName`, que ya reconoce el patrón "Jugador [a-k]"/
+   "Portero" — sección "La caja `s-tour-stats` MERGEA SOLA", 2026-06-29 /
+   "El backfill RE-HIDRATA el roster GENÉRICO…", 2026-06-30).
+
 ## `fetchData` recupera el snapshot `_protected` del servidor cuando el `main` viene VACÍO — regresión que dejó el 90% de "Resto de Ligas" sin equipos (obligatorio, 2026-07-18)
 
 **Bug (foto usuario 2026-07-18, «Israeli Premier League» + «el 90% de

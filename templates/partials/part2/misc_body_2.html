@@ -11340,10 +11340,12 @@
         actaEl.innerHTML = shown.map(function(e){
           var tName = e.team==='a' ? st.home : st.away;
           var short = tName.length>13 ? tName.substring(0,11)+'\u2026' : tName;
+          var _rawNm = e.name || e.label || '';
+          var pName = window._acFixPlaceholder(_rawNm, e.team, st.home, st.away, e.type === 'porteria');
           return '<div class="ml-post-acta-row">'
             +'<span class="ml-post-acta-min">'+e.min+'\'</span>'
             +'<span class="ml-post-acta-ico">'+(e.ico||'')+'</span>'
-            +'<span class="ml-post-acta-info"><b>'+escapeHtml(e.name||e.label||'')+'</b>'
+            +'<span class="ml-post-acta-info"><b>'+escapeHtml(pName)+'</b>'
             +' <span class="ml-post-acta-team">'+escapeHtml(short)+'</span></span>'
             +'</div>';
         }).join('');
@@ -11355,7 +11357,8 @@
     if (mvpEl) {
       if (mvpEvt) {
         var mvpTN = mvpEvt.team==='a' ? st.home : st.away;
-        mvpEl.innerHTML = '⭐ <b>MVP:</b> '+escapeHtml(mvpEvt.name)+' <span style="opacity:.6;font-size:10px;">('+escapeHtml(mvpTN)+')</span>';
+        var mvpNm = window._acFixPlaceholder(mvpEvt.player || mvpEvt.name, mvpEvt.team, st.home, st.away, false);
+        mvpEl.innerHTML = '⭐ <b>MVP:</b> '+escapeHtml(mvpNm)+' <span style="opacity:.6;font-size:10px;">('+escapeHtml(mvpTN)+')</span>';
         mvpEl.style.display = '';
       } else {
         mvpEl.style.display = 'none';
@@ -12200,6 +12203,60 @@
   } catch(_){}
 
   /* ════════════════════════════════════════════════════════════════
+     REPARACIÓN EN VIVO de nombres placeholder ("Jugador A".."Jugador K",
+     "Portero", "Jugador N") en CUALQUIER acta/resumen que muestre
+     nombres de jugador — generalizado del detector que `_iaEventsHtml`
+     (pantalla "Liga · IA vs IA jornada") ya usaba SOLO para sí misma.
+     CLAUDE.md 2026-07-21 (Torino/Young Boys, equipos IA con plantilla
+     100% real mostrando "Jugador G/J"/"Portero" en el acta Y en el
+     mensaje de WhatsApp de descanso/prórroga/FINAL de un partido de
+     CUALQUIER competición — el prefetch de plantilla en la previa ya
+     evita que un evento NUEVO se grabe con placeholder, pero un evento
+     que YA se grabó así (picker abierto antes de que el prefetch
+     resolviera) se quedaba placeholder PARA SIEMPRE en el acta/WA
+     porque NINGÚN builder de acta fuera de `_iaEventsHtml` reparaba el
+     nombre al vuelo). Mismo regex que `_bfIsRealName` (backfill
+     persistente de `_tourBackfillActasFromResults`, misc_body_1.html)
+     para que la detección sea consistente en todo el proyecto — SOLO
+     repara el DISPLAY (nunca reescribe `cfg.results`/`_gm.events`), así
+     que en cuanto la plantilla real esté resuelta (aunque sea minutos
+     después de registrar el evento) el humano ya ve el nombre correcto
+     en el acta visible y en el texto que comparte, sin esperar a la
+     pantalla de Estadísticas del torneo. */
+  function _acIsPlaceholderName(raw){
+    var s = String(raw || '').trim();
+    if (!s || s === '?') return true;
+    return /^(?:\d+\.?\s*)?(?:jugador|portero)\s*(?:[a-k]|ia|\d+)?$/i.test(s);
+  }
+  function _acRealFallbackName(teamSide, home, away, preferGk){
+    try {
+      var tName = teamSide === 'a' ? home : away;
+      if (!tName || typeof window.sqFromRegistry !== 'function') return null;
+      var sq = window.sqFromRegistry(tName) || [];
+      var out = preferGk ? sq.filter(function(p){ return p && p[2] === 'P'; }) : [];
+      if (!out.length) out = sq.filter(function(p){ return p && p[2] && p[2] !== 'P'; });
+      if (!out.length) out = sq;
+      if (!out.length) return null;
+      var p = out[Math.floor(Math.random() * out.length)];
+      return p && p[1] ? String(p[1]) : null;
+    } catch(_){}
+    return null;
+  }
+  /* rawName = e.player||e.name tal cual quedó grabado. teamSide = 'a'/'b'
+     (el lado del EVENTO, no necesariamente el que marca — para un
+     autogol 'propia' el jugador pertenece al lado que lo comete, que es
+     `e.team`). `preferGk` = true para eventos 'imbat' (prioriza porteros
+     al elegir el reemplazo). Devuelve SIEMPRE un string usable. */
+  window._acFixPlaceholder = function(rawName, teamSide, home, away, preferGk){
+    var raw = String(rawName || '').trim();
+    if (_acIsPlaceholderName(raw)) {
+      var real = _acRealFallbackName(teamSide, home, away, preferGk);
+      if (real) return real;
+    }
+    return raw || 'Jugador';
+  };
+
+  /* ════════════════════════════════════════════════════════════════
      PUERTA DE COMPARTIR WHATSAPP — hitos de prórroga / penaltis
      ════════════════════════════════════════════════════════════════
      Petición usuario 2026-05-22: en los partidos con prórroga y
@@ -12226,7 +12283,8 @@
       if (!icoMap[e.type]) return;
       if (maxMin != null && Number(e.min) > maxMin) return;
       var tn = e.team === 'a' ? home : away;
-      out.push(e.min + "' " + icoMap[e.type] + ' ' + (e.player || e.name || 'Jugador') + ' (' + abbr(tn) + ')');
+      var pName = window._acFixPlaceholder(e.player || e.name, e.team, home, away, e.type === 'imbat');
+      out.push(e.min + "' " + icoMap[e.type] + ' ' + pName + ' (' + abbr(tn) + ')');
     });
     return out;
   }
@@ -12401,7 +12459,8 @@
       actaEvts.forEach(function(e){
         var ico = allIco[e.type] || '';
         var teamFull = e.team==='a' ? st.home : st.away;
-        lines.push(e.min + '\' ' + ico + ' ' + (e.name||'') + ' (' + _abbr(teamFull) + ')');
+        var pName = window._acFixPlaceholder(e.player || e.name, e.team, st.home, st.away, e.type === 'imbat' || e.type === 'porteria');
+        lines.push(e.min + '\' ' + ico + ' ' + pName + ' (' + _abbr(teamFull) + ')');
       });
     }
     /* Estadísticas confirmadas en el overlay post-MVP. Formato
@@ -12436,7 +12495,8 @@
         var _abbrMV = (typeof window.getTeamAbbr === 'function')
           ? window.getTeamAbbr(_mvpTm2)
           : String(_mvpTm2 || '').substring(0,3).toUpperCase();
-        lines.push('\u2b50 MVP: ' + mvpEvt.name + (_mvpTm2 ? ' (' + _abbrMV + ')' : ''));
+        var _mvpNmMl = window._acFixPlaceholder(mvpEvt.player || mvpEvt.name, mvpEvt.team, st.home, st.away, false);
+        lines.push('\u2b50 MVP: ' + _mvpNmMl + (_mvpTm2 ? ' (' + _abbrMV + ')' : ''));
       }
     }
     /* Bloque de estadísticas del partido — se rellena manualmente en
@@ -12780,7 +12840,8 @@
     htEvts.forEach(function(e){
       var ico = icoMap[e.type] || '📋';
       var tName = e.team === 'a' ? _gm.home : _gm.away;
-      lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr1(tName) + ')');
+      var pName = window._acFixPlaceholder(e.player || e.name, e.team, _gm.home, _gm.away, e.type === 'imbat');
+      lines.push(e.min + "\' " + ico + ' ' + pName + ' (' + _abbr1(tName) + ')');
     });
     /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
     _waShareToGroup(lines.join('\n'));
@@ -12830,10 +12891,11 @@
                   'pen-prov':'🤦🥅','pen-parado':'🖐🥅',amarilla:'🟨',damarilla:'🟨🟥',roja:'🟥',lesion:'🩹',mvp:'⭐',imbat:'🧤',sust:'🔁'};
     var ico = icoMap[e.type] || '📋';
     var tName = e.team === 'a' ? homeTeam : awayTeam;
+    var pName = window._acFixPlaceholder(e.player || e.name, e.team, homeTeam, awayTeam, e.type === 'imbat');
     return '<div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid rgba(255,255,255,.05);font-family:Rajdhani,sans-serif;font-size:13px;">'
       + '<span style="color:rgba(255,255,255,.4);min-width:28px;">' + e.min + '\'</span>'
       + '<span>' + ico + '</span>'
-      + '<span style="flex:1;color:rgba(255,255,255,.85);">' + (e.player || e.name || 'Jugador') + '</span>'
+      + '<span style="flex:1;color:rgba(255,255,255,.85);">' + pName + '</span>'
       + '<span style="color:rgba(255,255,255,.4);font-size:11px;">' + tName + '</span>'
       + '</div>';
   }
@@ -13008,7 +13070,7 @@
       var mvpEl = document.getElementById('gm-fin-mvp');
       if (mvpEl) {
         if (mvpEvt) {
-          var _mvpName = mvpEvt.player || mvpEvt.name || '';
+          var _mvpName = window._acFixPlaceholder(mvpEvt.player || mvpEvt.name, mvpEvt.team, _gm.home, _gm.away, false);
           var _mvpTeam = (mvpEvt.team === 'a') ? (_gm.home || '') : (_gm.away || '');
           mvpEl.textContent = '⭐ MVP: ' + _mvpName + (_mvpTeam ? ' (' + _mvpTeam + ')' : '');
         } else {
@@ -13101,7 +13163,8 @@
     evts.forEach(function(e){
       var ico = icoMap[e.type] || '📋';
       var tName = e.team === 'a' ? _gm.home : _gm.away;
-      lines.push(e.min + "\' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr2(tName) + ')');
+      var pName = window._acFixPlaceholder(e.player || e.name, e.team, _gm.home, _gm.away, e.type === 'imbat');
+      lines.push(e.min + "\' " + ico + ' ' + pName + ' (' + _abbr2(tName) + ')');
     });
     /* Stats del partido confirmadas en el overlay post-MVP. Se añaden
        debajo del acta cuando existen (no aplican a IAIA). Formato
@@ -13132,7 +13195,7 @@
     var mvpEvt = (_gm.events||[]).find(function(e){ return e && e.type === 'mvp'; });
     if (mvpEvt) {
       lines.push('');
-      lines.push('⭐ MVP: ' + (mvpEvt.player || mvpEvt.name || ''));
+      lines.push('⭐ MVP: ' + window._acFixPlaceholder(mvpEvt.player || mvpEvt.name, mvpEvt.team, _gm.home, _gm.away, false));
     }
     /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09).
        El helper compartido `_waShareToGroup` copia al portapapeles
@@ -14032,7 +14095,8 @@
     htpEvts.forEach(function(e){
       var ico = icoMap[e.type] || '📋';
       var tName = e.team === 'a' ? _gm.home : _gm.away;
-      lines.push(e.min + "' " + ico + ' ' + (e.player||e.name||'Jugador') + ' (' + _abbr(tName) + ')');
+      var pName = window._acFixPlaceholder(e.player || e.name, e.team, _gm.home, _gm.away, e.type === 'imbat');
+      lines.push(e.min + "' " + ico + ' ' + pName + ' (' + _abbr(tName) + ')');
     });
     /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
     _waShareToGroup(lines.join('\n'));

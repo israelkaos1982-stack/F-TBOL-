@@ -47614,6 +47614,23 @@ https://api.sofascore.app/api/v1/team/44/image
     if (typeof window._eurInvalidateLogoIndex === 'function') {
       try { window._eurInvalidateLogoIndex(); } catch(_){}
     }
+    /* Cache de `getLogoEquipo` (`TEAM_LOGO_CACHE`, part2/misc_body_2.html)
+       — DISTINTA de `_eurInvalidateLogoIndex` de arriba (esa es solo la
+       del resolutor cross-liga `_eurResolveTeamLogo` de la Previa).
+       `getLogoEquipo` memoiza su resultado POR NOMBRE para siempre —
+       si se consultó ANTES de que el admin subiera/cambiara el escudo
+       (p.ej. quedó con el escudo-default de Estepona), ningún guardado
+       posterior lo corregía: solo se invalidaba desde
+       `_eurHydrateMissingLeagues` (hidratación DEL SERVIDOR), nunca
+       desde un guardado LOCAL del propio admin. Regla obligatoria del
+       usuario 2026-07-21: "cualquier club o selección editada (escudo,
+       valor, plantilla) tiene que funcionar EN EL MOMENTO para el
+       siguiente partido" — sin esto, el escudo recién editado no se
+       veía hasta recargar la página o hasta que una hidratación de
+       servidor no relacionada lo invalidara de rebote. */
+    if (typeof window._invalidateAllTeamLogos === 'function') {
+      try { window._invalidateAllTeamLogos(); } catch(_){}
+    }
     /* Si se guardó una de las 3 ligas españolas upper-tier, los
        rosters cambiaron → invalidar el cache de
        `_spanishUpperTierTeamNames` para que el filtro universal
@@ -51357,6 +51374,16 @@ https://api.sofascore.app/api/v1/team/44/image
         }
       }
       saveData(CURRENT_KEY,data);
+      /* Purgar el equipo borrado de SQUAD_REGISTRY (si algo lo había
+         resuelto ya esta sesión) — sin esto quedaba huérfano/stale ahí
+         para siempre, ya que `applyEngineOverrides` solo AÑADE/actualiza
+         equipos presentes en `ligaExt_*`, nunca borra los que ya no
+         están. `saveData` ya invalida `__importLeaguesHash`; forzamos
+         aquí el re-scan inmediato en vez de esperar al próximo boot. */
+      try { if (t && t.name && window.SQUAD_REGISTRY) delete window.SQUAD_REGISTRY[t.name]; } catch(_){}
+      if (typeof window.applyEngineOverrides === 'function') {
+        try { window.applyEngineOverrides(); } catch(_){}
+      }
       renderTeamsList();
       renderTable();
     };

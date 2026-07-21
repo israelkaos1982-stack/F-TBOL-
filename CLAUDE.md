@@ -1,5 +1,110 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## PRINCIPIO ABSOLUTO: editar un club o selección (escudo/valor/plantilla) tiene que verse EN EL PRÓXIMO PARTIDO de ese equipo, sin recargar la página (obligatorio, 2026-07-21)
+
+**Petición usuario 2026-07-21** ("es obligatorio que cualquier club o
+selección que es editada tanto su escudo, valor, plantilla etc etc esto
+funcione en el momento que se cambie esa plantilla... que si ese club o
+selección actualizada es la que tiene que salir en el siguiente partido
+que juegue ese club o selección con sus jugadores nuevos. no es tan
+dificil"). Esto es un PRINCIPIO GENERAL, no un bug puntual — se auditó
+la cadena completa de `saveData` (chokepoint único de todo guardado de
+`ligaExt_<slug>`, incluida Liga EA Sports) y de `_save`/`_hydrate` de
+`selecciones_squad_v1` para verificar qué caches quedan REALMENTE
+invalidadas al instante de guardar, y cuáles no.
+
+### Lo que YA funcionaba (verificado, no tocar)
+
+- **Plantilla (roster)**: `sqFromRegistry`/`sqFromRegistryFull` leen de
+  `window.SQUAD_REGISTRY[name]`, que `_importOtherLeaguesIntoEngine`
+  (misc_body_1.html) **sobreescribe SIN condición** para cualquier
+  equipo con `players.length>0` cada vez que corre. `saveData` invalida
+  `window.__importLeaguesHash=''` (fuerza el re-scan), y CADA handler
+  de guardado real de plantilla (`lextSaveTeam`, `lextSavePlayer`,
+  `lextEditPlayer`, `lextDeletePlayer`, `lextTogglePlayerFlag`,
+  `lextApplySquadPaste`) llama a `window.applyEngineOverrides()`
+  INMEDIATAMENTE después de `saveData(...)` — el roster editado se ve
+  en el siguiente partido sin recargar. Selecciones: `_seedSelectionsToRegistry`
+  (llamada desde `_hydrate()`, que el editor invoca tras cada `_save`)
+  también sobreescribe sin condición.
+- **Valor (GLOBAL/ATQ/MED/DEF)**: `computeLineStats` (Resto de Ligas)
+  lee siempre los 4 valores manuales frescos de `data.config`/`t.*`
+  directamente — sin cache intermedia (regla ya obligatoria desde
+  2026-05-02, sección "Nivel + valor del equipo" más abajo). Para el
+  MOTOR de simulación, `_teamStats`/`_teamOffense`/`_teamDefense` leen
+  `window._LIGA_EA_TEAM_STATS[name]`, que `ligaEaBuildEngineOverrides()`
+  **resetea a `{}` por completo** en cada `applyEngineOverrides()` — así
+  que cuando `_importOtherLeaguesIntoEngine` corre a continuación (en la
+  MISMA llamada) y comprueba `!window._LIGA_EA_TEAM_STATS[name]` antes
+  de escribir, ese "si no existe" es sobre un sidecar RECIÉN vaciado, no
+  sobre datos viejos — el equipo recién editado SIEMPRE se re-escribe.
+  **PRECAUCIÓN** (no tocar sin entender esto primero): esta guarda
+  ("solo si no existe") existe para que Liga EA Sports GANE si un equipo
+  de Resto de Ligas comparte nombre con uno de los 20 de Liga EA — es
+  intencional, no un descuido.
+
+### El hueco REAL encontrado — el escudo (`getLogoEquipo`) no se invalidaba en el guardado LOCAL
+
+`getLogoEquipo` (`part2/misc_body_2.html`) memoiza su resultado por
+nombre PARA SIEMPRE en `TEAM_LOGO_CACHE` — es una cache DISTINTA de
+`_eurResolveTeamLogo`/`_eurLogoIdxCache` (la del resolutor cross-liga de
+la Previa, que `saveData` SÍ invalida desde 2026-07-12 #6 vía
+`_eurInvalidateLogoIndex()`). Hasta este fix, `TEAM_LOGO_CACHE` solo se
+vaciaba (`_invalidateAllTeamLogos()`) desde `_eurHydrateMissingLeagues`
+(hidratación DEL SERVIDOR) — nunca desde un guardado LOCAL del propio
+admin. Si un equipo se había consultado ANTES de subirle/cambiarle el
+escudo (quedando memoizado con el escudo-default de Estepona, o con el
+escudo VIEJO), el admin podía editar y guardar el escudo nuevo y
+seguiría viendo el viejo en cards del hub / gm-modal / ml-cards hasta
+recargar la página o hasta que una hidratación de servidor NO
+relacionada lo invalidara de rebote.
+
+**Fix**: `saveData(k,d)` (misc_body_1.html, el chokepoint único de todo
+guardado de `ligaExt_<slug>`) ahora también llama a
+`window._invalidateAllTeamLogos()` justo al lado de
+`_eurInvalidateLogoIndex()` — mismo patrón, misma ubicación. El
+siguiente render de CUALQUIER pantalla (no solo la Previa) ve el
+escudo recién guardado al instante.
+
+**Fix menor (consistencia)**: `lextDeleteTeam` guardaba con `saveData`
+pero nunca llamaba a `applyEngineOverrides()` después (a diferencia de
+TODOS los demás handlers de mutación de la plantilla) — el equipo
+borrado quedaba huérfano en `SQUAD_REGISTRY` hasta el próximo boot.
+Ahora purga la entrada y re-aplica el motor igual que el resto.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un cache nuevo de identidad por equipo (escudo,
+   alias, plantilla, estadio, valor, o cualquier campo que el admin
+   pueda editar desde CUALQUIER pantalla) se invalide SOLO desde una
+   ruta de hidratación DEL SERVIDOR. El guardado LOCAL del propio admin
+   es la ruta MÁS COMÚN de cambio — todo cache de este tipo se invalida
+   también desde `saveData` (clubes/Liga EA) o desde `_save`/`_hydrate`
+   (selecciones), igual que ya hacen `_invalidateAliasCache`,
+   `_eurInvalidateLogoIndex` y ahora `_invalidateAllTeamLogos`.
+2. **PROHIBIDO** añadir un cache de escudo/plantilla/valor NUEVO sin
+   registrar su invalidador en el chokepoint (`saveData`) — auditar
+   TODOS los consumidores de identidad de equipo (no asumir que
+   invalidar uno solo cubre a los demás; escudo por sí solo YA tiene 2
+   caches independientes: `_eurLogoIdxCache` y `TEAM_LOGO_CACHE`).
+3. **PROHIBIDO** que un handler de guardado NUEVO del editor de
+   plantilla (equipo, jugador, escudo, alias, valor) omita la llamada a
+   `window.applyEngineOverrides()` inmediatamente después de
+   `saveData(...)`. Todo handler de mutación (crear/editar/borrar
+   equipo o jugador, toggle de flags, pegado masivo) lo hereda copiando
+   el mismo patrón que `lextSaveTeam`/`lextSavePlayer`/etc.
+4. Antes de "arreglar" la guarda `if (!window._LIGA_EA_TEAM_STATS[name])`
+   de `_importOtherLeaguesIntoEngine` pensando que bloquea la
+   actualización de valores: leer primero que `ligaEaBuildEngineOverrides()`
+   resetea ESE MISMO sidecar a `{}` en cada llamada — la guarda opera
+   sobre datos recién vaciados, no viejos. Sí existe un margen teórico
+   de estar vacío un instante si `applyEngineOverrides()` corre por un
+   motivo AJENO al equipo en cuestión (no supone pérdida de datos, solo
+   una degradación transitoria de ATK/MID/DEF a un único valor "power"
+   hasta el siguiente ciclo) — no se ha tocado por el riesgo de romper
+   la protección "Liga EA gana en colisión de nombre" sin entenderla a
+   fondo primero.
+
 ## La plantilla del rival IA se PREFETCHEA al abrir la previa de CUALQUIER partido humano — ya no depende de ganar la carrera contra el picker (obligatorio, 2026-07-21)
 
 **Bug (5 fotos usuario 2026-07-21, «Young Boys» — Liga Suiza, Torneo de

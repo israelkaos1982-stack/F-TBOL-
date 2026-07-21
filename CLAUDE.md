@@ -119,6 +119,34 @@ llamar a `showPrePartidoOverlay`), si no, lectura del DOM
    "Portero" — sección "La caja `s-tour-stats` MERGEA SOLA", 2026-06-29 /
    "El backfill RE-HIDRATA el roster GENÉRICO…", 2026-06-30).
 
+### ¿Afecta también a las SELECCIONES nacionales? Sí, mismo motor — pero MENOS expuestas
+
+Un partido humano de Mundial 2032 / Rondas Previas / Rondas Finales
+(`spv*`/`sfn*`, `format:'mundial-48'`) usa el MISMO `_tourOpenHumanMatch`
+→ `showPrePartidoOverlay` que un Torneo de Verano (confirmado: TODOS los
+openers de partido humano —card del hub, calendario, pantalla del
+torneo, "PARTIDOS POSPUESTOS"— llaman a `_tourOpenHumanMatch`), así que
+el prefetch de esta sección lo cubre igual, SIN cambios de código
+adicionales. Pero las selecciones están MENOS expuestas al bug original
+porque `selecciones_squad_v1` (a diferencia de las ~53 `ligaExt_<slug>`
+fragmentadas de Resto de Ligas, que solo cargan al abrir ESA liga
+concreta) se **hidrata/fusiona con el servidor en CADA carga de
+página**, incondicionalmente, vía el `_boot()` de la IIFE
+`KEY='selecciones_squad_v1'` (`misc_body_1.html` ~58061:
+`document.readyState==='loading' ? addEventListener(DOMContentLoaded,
+_boot) : _boot()` — corre siempre, sin depender de qué pantalla esté
+abierta). Con esto, el escenario "este dispositivo nunca vio esta
+plantilla" es mucho más raro para una selección que para una liga
+externa — pero NO imposible (arranque en frío/red lenta antes de que
+termine ese fetch, o una selección editada en OTRO dispositivo que aún
+no ha propagado). Para esos casos, `_matchSquadPrefetch` funciona igual:
+el endpoint `/api/team-squad/<nombre>` que consume ya cae a
+`selecciones_squad_v1` como ÚLTIMO recurso tras escanear `liga_ext_*`
+(`app.py::api_team_squad`), así que una selección sin resolver local
+también se repara por la misma vía. **PROHIBIDO** asumir que las
+selecciones necesitan su propio prefetch dedicado — comparten el mismo
+`showPrePartidoOverlay` y el mismo endpoint server-side.
+
 ## `fetchData` recupera el snapshot `_protected` del servidor cuando el `main` viene VACÍO — regresión que dejó el 90% de "Resto de Ligas" sin equipos (obligatorio, 2026-07-18)
 
 **Bug (foto usuario 2026-07-18, «Israeli Premier League» + «el 90% de

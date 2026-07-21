@@ -1,5 +1,83 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El acta EN VIVO y el mensaje de WhatsApp (descanso/prórroga/FINAL) reparan nombres placeholder al vuelo — no solo la pantalla de IA-vs-IA de Liga (obligatorio, 2026-07-21 #2)
+
+**Bug (4 fotos usuario 2026-07-21, «Torino (IA) 1-3 Arsenal (Álvaro)»,
+Trofeo Joan Gamper Jornada 5)**: con Torino confirmado como equipo IA
+de "Resto de Ligas · Italia" con plantilla 100% real y años de
+estadísticas acumuladas (Franco Israel portero titular, Cristiano
+Biraghi, Giovanni Simeone 27 goles…), el mensaje de WhatsApp del FINAL
+mostró `72' 🚫⚽ Jugador G (TOR)` y `76' ⚽ Jugador J (TOR)` en vez de los
+nombres reales — el mismo síntoma que Young Boys (sección anterior),
+pese al prefetch de plantilla ya desplegado.
+
+### Causa raíz — el prefetch reduce el problema, pero un evento YA grabado con placeholder nunca se corregía en el DISPLAY
+
+El prefetch de la sección anterior (`_matchSquadPrefetch`) evita que
+LA MAYORÍA de eventos nuevos se graben con placeholder, pero no es
+infalible al 100% (cold-start de servidor más lento que el margen de
+la previa, o el usuario tocando el picker antes de que resuelva). El
+proyecto YA tenía una defensa para exactamente este residuo — pero
+**escondida en un solo sitio**: `_iaEventsHtml` (pantalla "Liga · IA vs
+IA jornada", `part2/misc_body_2.html`) repara en vivo "Jugador A".."Jugador K"/
+"Portero"/"Jugador N" sustituyéndolos por un nombre real de la
+plantilla ACTUAL (`sqFromRegistry`) cada vez que se RENDERIZA el acta —
+sin tocar `cfg.results` persistido. Ese reparador **nunca se generalizó**
+a los otros ~8 sitios del proyecto que también imprimen `e.player`/
+`e.name`/`mvpEvt.name` tal cual: el acta EN VIVO del gm-modal
+(`_gmEvtRow`, usado en el overlay de DESCANSO y en el de FINAL), el
+mensaje de WhatsApp de descanso/prórroga/FINAL (`_gmShareHalfTime`,
+`_gmShareHtp`, `_gmShareFinal`, `_waGateActaLines`), su equivalente en
+ml-cards (`_mlBuildAndShareWA`, acta + MVP) y el acta/MVP del overlay
+post-partido de ml-card (`ml-post-acta`/`ml-post-mvp`). Así, aunque el
+prefetch resolviera la plantilla real ANTES del minuto 90 (como pasó
+aquí — el editor mostraba la plantilla perfecta al momento), el evento
+YA grabado con "Jugador G" se quedaba así PARA SIEMPRE en la vista que
+el humano realmente mira y comparte.
+
+### Fix — `window._acFixPlaceholder`, el reparador de `_iaEventsHtml` generalizado
+
+Nuevo helper (`part2/misc_body_2.html`, junto a `_waGateActaLines`):
+`window._acFixPlaceholder(rawName, teamSide, home, away, preferGk)`
+extrae el MISMO detector/regex que ya usaba `_iaEventsHtml`
+(`_isPlaceholderName`, idéntico al de `_bfIsRealName` del backfill
+persistente) y el mismo reemplazo (`sqFromRegistry(teamSide==='a'?home:away)`,
+priorizando porteros si `preferGk`). Cableado en LOS 8 SITIOS de arriba
+— cada uno pasa su propio `e.team`/`home`/`away` en vez de asumir
+`m.home`/`m.away` como hacía el original. Es **SOLO DISPLAY**: nunca
+reescribe `_gm.events`/`st.events`/`cfg.results` — si la plantilla real
+se resuelve DESPUÉS de grabar el evento (el caso normal con el
+prefetch ya activo), el humano ve el nombre correcto en el acta visible
+y en el texto que comparte por WhatsApp, sin depender de abrir la
+pantalla de Estadísticas del torneo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un reparador de placeholder nuevo (o una extensión
+   del existente) se quede limitado a una sola pantalla cuando el
+   mismo dato (`e.player`/`e.name`/`mvpEvt.name`) se imprime en varios
+   sitios del proyecto. Todo builder de acta/resumen/WhatsApp NUEVO que
+   imprima un nombre de jugador de un evento debe pasar por
+   `window._acFixPlaceholder` en vez de `e.player || e.name || 'Jugador'`
+   a pelo.
+2. **PROHIBIDO** que `_acFixPlaceholder` reescriba datos persistidos
+   (`_gm.events`, `st.events`, `cfg.results`). Es un parche de DISPLAY —
+   la corrección persistente para el histórico de estadísticas la sigue
+   haciendo `_tourBackfillActasFromResults` (`misc_body_1.html`) al
+   abrir la pantalla de Estadísticas del torneo, un mecanismo
+   DISTINTO y complementario (uno corrige lo que se ve AHORA, el otro
+   lo que queda GUARDADO).
+3. Este fix no sustituye al prefetch de la sección anterior — lo
+   COMPLEMENTA: el prefetch reduce cuántos eventos se graban con
+   placeholder en primer lugar; este repara los que, pese al prefetch,
+   se graben así igualmente (picker más rápido que la respuesta del
+   servidor, offline momentáneo, etc.).
+4. Si un bug futuro reporta "sigue saliendo Jugador X" en un builder de
+   acta/WhatsApp que NO esté en la lista de los 8 sitios ya cableados
+   (por ejemplo, uno de una competición añadida después de 2026-07-21),
+   añadir ahí la misma llamada a `window._acFixPlaceholder` — no crear
+   un reparador nuevo ni duplicar el regex.
+
 ## PRINCIPIO ABSOLUTO: editar un club o selección (escudo/valor/plantilla) tiene que verse EN EL PRÓXIMO PARTIDO de ese equipo, sin recargar la página (obligatorio, 2026-07-21)
 
 **Petición usuario 2026-07-21** ("es obligatorio que cualquier club o

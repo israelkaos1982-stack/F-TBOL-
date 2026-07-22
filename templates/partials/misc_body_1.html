@@ -48404,11 +48404,30 @@ https://api.sofascore.app/api/v1/team/44/image
          main→protected EN EL SERVIDOR en UNA sola petición. Solo actúa
          cuando NO hay nada local que proteger — el resto de casos los
          cubre el anti-wipe de más abajo. */
-      function _lxAnyFallback(){
+      function _lxAnyFallback(triesLeft){
+        /* REINTENTOS + TIMEOUT (2026-07-18): un dispositivo recién
+           borrado que tiene que traer las ~50 ligas de un Railway en
+           cold-start pierde muchas peticiones en silencio (una sola
+           `fetch` sin timeout se cuelga o falla, y `cb(empty,false)`
+           deja la liga vacía PARA SIEMPRE hasta que el usuario la
+           reabre). Reintentamos hasta 4 veces con backoff y un timeout
+           duro por intento — la mayoría de "no se ven las ligas" en un
+           dispositivo nuevo es exactamente esto: la red/servidor falla
+           el primer intento y nada lo reintenta. */
+        if (triesLeft == null) triesLeft = 4;
+        var ctrl = null, to = null;
+        try { ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){ ctrl = null; }
+        if (ctrl) { try { to = setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 10000); } catch(_){ to = null; } }
+        function _retryOrGiveUp(){
+          if (to) { try { clearTimeout(to); } catch(_){} }
+          if (triesLeft > 1) { setTimeout(function(){ _lxAnyFallback(triesLeft - 1); }, 900 * (5 - triesLeft)); return; }
+          cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false);
+        }
         try {
-          fetch('/api/liga-ext-any/'+encodeURIComponent(k)).then(function(r2){
+          fetch('/api/liga-ext-any/'+encodeURIComponent(k), ctrl ? {signal:ctrl.signal} : undefined).then(function(r2){
             return r2.ok ? r2.json() : null;
           }).then(function(j2){
+            if (to) { try { clearTimeout(to); } catch(_){} }
             var d2 = j2 && j2.data;
             if (d2 && Array.isArray(d2.teams) && d2.teams.length){
               d2.teams = d2.teams || []; d2.results = d2.results || [];
@@ -48421,12 +48440,17 @@ https://api.sofascore.app/api/v1/team/44/image
               try { _lextBackfillResults(d2, _loc); } catch(_){}
               LIGA_CACHE[k] = d2;
               try { localStorage.setItem(storeKey(k), JSON.stringify(d2)); } catch(_){}
-              try { console.warn('[ligaExt] '+k+': main del servidor VACÍO — restaurado desde snapshot _protected del servidor ('+d2.teams.length+' equipos).'); } catch(_){}
+              try { console.warn('[ligaExt] '+k+': restaurado desde /api/liga-ext-any del servidor ('+d2.teams.length+' equipos).'); } catch(_){}
               cb && cb(d2, true);
-            } else {
+            } else if (j2 && j2.ok) {
+              /* El servidor respondió OK pero de verdad no tiene equipos
+                 (ni main ni _protected) — no reintentamos, es un vacío
+                 real. */
               cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false);
+            } else {
+              _retryOrGiveUp();
             }
-          }).catch(function(){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); });
+          }).catch(function(){ _retryOrGiveUp(); });
         } catch(_){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); }
       }
       fetch(url).then(function(r){
@@ -48735,8 +48759,17 @@ https://api.sofascore.app/api/v1/team/44/image
         LIGA_UPDATED[k] = j.updated_at || '';
         try{ localStorage.setItem(storeKey(k), JSON.stringify(data)); }catch(_){}
         cb && cb(data, true);
-      }).catch(function(){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); });
-    }catch(_){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); }
+      }).catch(function(){
+        /* La petición al `main` falló (red caída, cold-start de Railway,
+           timeout del navegador). Si NO hay nada local que mostrar,
+           reintentamos vía `/api/liga-ext-any` (con reintentos) en vez de
+           rendirnos a una pantalla vacía — es la causa nº1 de "no se ven
+           las ligas" en un dispositivo recién borrado que tiene que traer
+           las ~50 ligas de un servidor frío. */
+        if (_lxCacheEmpty()) { _lxAnyFallback(); return; }
+        cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false);
+      });
+    }catch(_){ if (_lxCacheEmpty()) { _lxAnyFallback(); return; } cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); }
   }
 
   /* ══════════════════════════════════════════════════════════════════

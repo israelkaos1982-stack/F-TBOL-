@@ -48,6 +48,34 @@ self.addEventListener('activate', function (e) {
         keys.filter(function (k) { return keep.indexOf(k) === -1; })
             .map(function (k) { return caches.delete(k); })
       );
+    }).then(function () {
+      /* PURGAR versiones VIEJAS dentro de CACHE_STATIC (2026-07-22).
+         Bug: cache-first guarda cada ?v=X.X que se haya pedido ALGUNA VEZ,
+         y nada las borraba — solo se eliminaban cachés completos que ya no
+         se usan (arriba), nunca las entradas individuales. Si el HTML
+         network-first cae a su fallback de caché (Railway lento/caído en
+         un cold-start, red móvil intermitente — ambos muy documentados en
+         este proyecto), esa copia HTML puede ser de hace semanas y seguir
+         referenciando `index.bundle.js?v=9.10` en vez de la versión
+         actual. Sin esta purga, esa URL vieja SEGUÍA en CACHE_STATIC desde
+         la sesión en que se vio por última vez → cache-first la servía al
+         INSTANTE, sin tocar la red — la web "cargaba" pero con código de
+         hace meses, sin ningún error visible. Con la purga, esa URL vieja
+         ya no está en caché → el fetch va a la red → el servidor Flask
+         devuelve el archivo ACTUAL (el `?v=` es solo cache-busting del
+         cliente, el servidor ignora la query string y sirve siempre el
+         contenido vigente) → la app corre con código actual aunque el
+         HTML stale siga pidiendo una URL con número de versión viejo. */
+      return caches.open(CACHE_STATIC).then(function (cache) {
+        return cache.keys().then(function (reqs) {
+          return Promise.all(
+            reqs.filter(function (req) {
+              var path = new URL(req.url).pathname + new URL(req.url).search;
+              return PRECACHE.indexOf(path) === -1;
+            }).map(function (req) { return cache.delete(req); })
+          );
+        });
+      });
     }).then(function () { return self.clients.claim(); })
   );
 });

@@ -49223,7 +49223,52 @@ https://api.sofascore.app/api/v1/team/44/image
     var body = document.getElementById('lext-body');
     if(!body) return;
     if(!data.teams.length){
-      body.innerHTML = '<div class="lext-empty">No hay equipos. Usa 🖍 Editar para añadir clubes.</div>';
+      /* DIAGNÓSTICO + RECUPERACIÓN MANUAL (2026-07-18): en vez de un
+         mensaje mudo, si la liga sale vacía preguntamos DIRECTAMENTE al
+         servidor (address-bar-style, sin depender de la cadena
+         fetchData) y contamos qué devuelve. Así el fallo deja de ser
+         invisible: se ve "servidor: 31 equipos → pantalla: 0" (bug de
+         cliente) vs "servidor: 0" (dato ausente) vs "error/red". Y el
+         botón fuerza la adopción de esa copia y re-pinta. */
+      var _slugNow = CURRENT_KEY;
+      body.innerHTML = '<div class="lext-empty" id="lext-empty-diag">'
+        + '<div>No hay equipos en esta pantalla.</div>'
+        + '<button id="lext-recover-btn" style="margin-top:12px;padding:10px 16px;border-radius:8px;border:1px solid rgba(94,182,228,.6);background:rgba(94,182,228,.12);color:#aee2ff;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;font-weight:700;cursor:pointer;">🔄 RECUPERAR DEL SERVIDOR</button>'
+        + '<div id="lext-recover-status" style="margin-top:10px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.6);"></div>'
+        + '</div>';
+      (function(){
+        var btn = document.getElementById('lext-recover-btn');
+        var st  = document.getElementById('lext-recover-status');
+        function _run(){
+          if (st) st.textContent = '⏳ Preguntando al servidor por «' + _slugNow + '»…';
+          var ctrl = null, to = null;
+          try { ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){}
+          if (ctrl) { try { to = setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 12000); } catch(_){} }
+          fetch('/api/liga-ext-any/' + encodeURIComponent(_slugNow), ctrl ? {signal:ctrl.signal, credentials:'same-origin'} : {credentials:'same-origin'})
+            .then(function(r){ return r.ok ? r.json() : {__http:r.status}; })
+            .then(function(j){
+              if (to) { try { clearTimeout(to); } catch(_){} }
+              if (j && j.__http){ if (st) st.textContent = '⚠️ El servidor respondió con error HTTP ' + j.__http + '. Reintenta en unos segundos.'; return; }
+              var d = j && j.data;
+              var n = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
+              if (n > 0){
+                d.teams = d.teams || []; d.results = d.results || [];
+                try { _sanitizeLigaTeamNames(d); } catch(_){}
+                try { LIGA_CACHE[_slugNow] = d; } catch(_){}
+                try { localStorage.setItem(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
+                if (st) st.textContent = '✅ El servidor tiene ' + n + ' equipos. Pintando…';
+                if (CURRENT_KEY === _slugNow) { try { applyLeagueHeaderFromData(d); } catch(_){} renderTable(); }
+              } else {
+                if (st) st.textContent = '❌ El servidor NO tiene equipos guardados para «' + _slugNow + '» (0 equipos). Esta liga hay que volver a rellenarla, no es un fallo de carga.';
+              }
+            })
+            .catch(function(){ if (to) { try { clearTimeout(to); } catch(_){} } if (st) st.textContent = '⚠️ No se pudo contactar con el servidor (red/timeout). Reintenta.'; });
+        }
+        if (btn) btn.addEventListener('click', _run);
+        /* Sondeo automático inmediato: el usuario ve el resultado sin
+           tener que pulsar nada (el botón queda para reintentar). */
+        _run();
+      })();
       return;
     }
     /* El filtro de equipos españoles upper-tier ahora se aplica en

@@ -44160,12 +44160,24 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){ _eurAutoHydrateRunning = false; }
   }
   window._eurAutoHydrateAndRender = _eurAutoHydrateAndRender;
-  setTimeout(_eurAutoHydrateAndRender, 4000);
-  document.addEventListener('visibilitychange', function(){
-    if (document.visibilityState === 'visible') _eurAutoHydrateAndRender();
-  });
-  window.addEventListener('pageshow', _eurAutoHydrateAndRender);
-  window.addEventListener('focus', _eurAutoHydrateAndRender);
+  /* ⚠️ AUTO-HIDRATACIÓN MASIVA DESACTIVADA (2026-07-18): esta función
+     descargaba las ~50 ligas del servidor de golpe en CADA arranque,
+     foco, pageshow y visibilitychange. Con el volumen de datos actual
+     (ligas de 20-37 equipos × 30 jugadores) eso genera una TORMENTA de
+     peticiones que satura el servidor (2 workers gunicorn) y hace que
+     TODAS las peticiones —incluida la de la liga que el usuario abre—
+     se queden colgadas sin respuesta. Síntoma exacto del usuario: "cada
+     vez que abro la web se ven unas ligas u otras" (carrera: solo las
+     que ganan la carrera antes de saturar el servidor aparecen) y el
+     sondeo directo a `/api/liga-ext-any/<slug>` se queda "Preguntando…"
+     >2 min sin resolver. La hidratación del reparto europeo sigue
+     disponible BAJO DEMANDA (botón "🔄 Cargar del servidor" del overlay
+     de competiciones, y el sondeo por-liga de la pantalla vacía). Cada
+     liga se hidrata sola al ABRIRLA (`openLigaExt`→`fetchData`, UNA
+     petición), que es lo que el usuario necesita. NO re-activar los
+     disparos automáticos sin resolver antes la capacidad del servidor. */
+  /* setTimeout(_eurAutoHydrateAndRender, 4000);  ← desactivado */
+  /* visibilitychange / pageshow / focus  ← desactivados (tormenta) */
 
   window._restoLigasRecuadrarEurope = function(){
     if(typeof window.LEAGUE_DEFAULT_ZONES !== 'object'

@@ -59534,7 +59534,7 @@ https://api.sofascore.app/api/v1/team/44/image
   <button class="hub-card hub-card-objetivos" onclick="go('s-munich-objetivos')">
     <span class="hub-objetivos-emoji">🎯</span>
     <span class="hub-objetivos-title">OBJETIVOS DEL CLUB</span>
-    <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 23</span></div>
+    <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 27</span></div>
   </button>
   <button class="hub-card hub-card-plantilla" onclick="go('s-bayern-plantilla');if(window.renderBayernPlantillaScreen){[0,120,400,900].forEach(function(t){setTimeout(window.renderBayernPlantillaScreen,t);});}">
     <span class="hub-plantilla-emoji">👕</span>
@@ -65221,7 +65221,7 @@ https://api.sofascore.app/api/v1/team/44/image
 <div class="sec-hdr"><span class="sec-emoji">🎯</span><h2>Objetivos del Club</h2></div>
 <div style="padding:4px 14px 40px;">
 <div style="padding:8px 4px 12px;display:flex;align-items:center;justify-content:space-between;">
-<span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#f0c040;" id="ath-obj-count">0 / 23</span>
+<span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#f0c040;" id="ath-obj-count">0 / 27</span>
 <button type="button" id="ath-obj-edit-btn" onclick="window.athObjToggleEdit&&window.athObjToggleEdit()"
   style="background:rgba(95,200,200,.16);border:1px solid rgba(95,200,200,.5);color:#bfeff0;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;-webkit-tap-highlight-color:transparent;">🖍 Editar</button>
 </div>
@@ -65351,7 +65351,15 @@ https://api.sofascore.app/api/v1/team/44/image
       { t:'Gana el Mundialito de Clubes', sino:true, r:180, ico:'🏆' },
       { t:'Goleador del Mundialito entre los {N} máximos', c:8, sino:true, r:70, ico:'⚽' }
     ]},
-    { id:'individual', chip:'PREMIOS', icon:'🏅', title:'PREMIOS INDIVIDUALES', color:'#ff4444', items:[
+    { id:'superliga', chip:'SUPERLIGA', icon:'⚡', title:'SUPERLIGA · TU EQUIPO VS EL MUNDO', color:'#b060f0', items:[
+      { t:'Quedar entre los {N} primeros de la Superliga', c:3, sino:true, r:120, ico:'🏆' },
+      { t:'Goleador de la Superliga entre los {N} máximos', c:5, sino:true, r:50, ico:'⚽' }
+    ]},
+    { id:'global', chip:'GLOBAL', icon:'🏅', title:'GLOBALES DEL CLUB · HITOS DE ÉLITE', color:'#ff4444', items:[
+      { t:'Gana {N} títulos oficiales en la temporada', c:2, sino:true, r:150, ico:'🏆' },
+      { t:'Marca más de {N} goles en total (todas las competiciones)', c:100, sino:true, r:60, ico:'⚽' }
+    ]},
+    { id:'individual', chip:'PREMIOS', icon:'🎖️', title:'PREMIOS INDIVIDUALES', color:'#ff9d2e', items:[
       { t:'Bota de Oro: 1 jugador nominado', sino:true, r:80, ico:'🥇' },
       { t:'Balón de Oro: 1 jugador nominado', sino:true, r:80, ico:'🎖️' },
       { t:'Ranking UEFA de Clubs: entre los {N} primeros', c:20, sino:true, r:50, ico:'📊' }
@@ -65432,25 +65440,57 @@ https://api.sofascore.app/api/v1/team/44/image
      gana sobre el texto por defecto. Conserva el token {N} para que la
      cantidad editable se siga sustituyendo. */
   function effTemplate(it){ var o = OVR[it.oid]; return (o && typeof o.t === 'string' && o.t.length) ? o.t : it.t; }
-  function effLabel(it){ return String(effTemplate(it)).replace(/\{N\}/g, String(effTarget(it))); }
-  window._munichEffTarget = function(oid){ var it = BY_OID[oid]; return it ? effTarget(it) : null; };
+  function effLabel(it){ var t = effTarget(it); return String(effTemplate(it)).replace(/\{N\}/g, (t == null ? '' : String(t))); }
+  /* (window._munichEffTarget se define más abajo, con soporte de items
+     personalizados vía _resolveItem.) */
 
   /* ── Recompensa 🪙 EFECTIVA por objetivo (override `r` gana sobre el
-     valor por defecto). El array plano en orden de render (= orden del
-     índice de checkbox que usa `saveObjState`) lo consume
-     `liverpoolObjEarnings` para acreditar la suma de las 🪙 de los
-     objetivos MARCADOS al monedero del HUB (modelo por objetivo, ya no
-     +25 fijo). */
-  function effReward(it){ var o = OVR[it.oid]; return (o && o.r != null && !isNaN(o.r)) ? Number(o.r) : (Number(it.r) || 0); }
-  window._munichObjRewards = function(){
-    var arr = [];
-    for (var s = 0; s < SECTIONS.length; s++){
-      var its = SECTIONS[s].items;
-      for (var i = 0; i < its.length; i++) arr.push(effReward(its[i]));
+     valor por defecto). La consume `liverpoolObjEarnings` para acreditar
+     la suma de las 🪙 de los objetivos MARCADOS al monedero del HUB
+     (modelo por objetivo, ya no +25 fijo). */
+  function effReward(it){ if (!it) return 0; var o = OVR[it.oid]; return (o && o.r != null && !isNaN(o.r)) ? Number(o.r) : (Number(it.r) || 0); }
+
+  /* ── Objetivos PERSONALIZADOS por competición (usuario 2026-07-23) ──
+     Además de los 2 por defecto, el admin puede AÑADIR más objetivos a
+     cualquier sección desde 🖍 EDITAR (mismo formato tarjeta). Se guardan
+     en el MISMO blob de overrides (munich-obj-overrides-v1, sincronizado
+     con el server y por hub) bajo la clave 'xtra-<secId>' = array de
+     { id, t, c, r, ico }. Cada uno lleva un `id` estable (uid) → su oid
+     `<secId>__x<id>` NO cambia al añadir/eliminar hermanos, así el
+     progreso (✅, ahora indexado por oid) no se descuadra. */
+  function _customItems(secId){ var a = OVR['xtra-' + secId]; return (Array.isArray(a) ? a : []); }
+  function _custOid(secId, id){ return secId + '__x' + id; }
+  function _newCustId(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+  /* Lista EFECTIVA de items de una sección = 2 por defecto + personalizados. */
+  function _sectionItems(sec){
+    var out = sec.items.slice();
+    var cust = _customItems(sec.id);
+    for (var i = 0; i < cust.length; i++){
+      var c = cust[i] || {};
+      if (!c.id) c.id = _newCustId();
+      out.push({ t: c.t || 'Nuevo objetivo', c: (c.c != null ? c.c : null), r: (Number(c.r) || 0),
+                 ico: c.ico || '🏆', sino: true, custom: true, cid: c.id, oid: _custOid(sec.id, c.id) });
     }
-    return arr;
-  };
-  window._munichObjRewardFor = function(oid){ var it = BY_OID[oid]; return it ? effReward(it) : 0; };
+    return out;
+  }
+  /* Resuelve un item (por defecto o personalizado) por su oid. */
+  function _resolveItem(oid){
+    if (BY_OID[oid]) return BY_OID[oid];
+    var m = /^(.+)__x(.+)$/.exec(String(oid || ''));
+    if (m){
+      var arr = _customItems(m[1]);
+      for (var i = 0; i < arr.length; i++){
+        if (arr[i] && arr[i].id === m[2]){
+          var c = arr[i];
+          return { t: c.t || 'Nuevo objetivo', c: (c.c != null ? c.c : null), r: (Number(c.r) || 0),
+                   ico: c.ico || '🏆', sino: true, custom: true, cid: c.id, oid: oid };
+        }
+      }
+    }
+    return null;
+  }
+  window._munichObjRewardFor = function(oid){ return effReward(_resolveItem(oid)); };
+  window._munichEffTarget = function(oid){ var it = _resolveItem(oid); return it ? effTarget(it) : null; };
 
   /* ── Overrides A NIVEL DE SECCIÓN (título editable + competición que
      tiñe la cabecera). Se persisten en el MISMO blob OVR bajo la clave
@@ -65502,7 +65542,7 @@ https://api.sofascore.app/api/v1/team/44/image
     var reward = effReward(item);
     var rewardHtml = '<span class="obj-card-reward"><span class="ocr-lbl">RECOMPENSA</span>'
       + '<span class="ocr-val">🪙 ' + reward + '</span></span>';
-    return '<label class="obj-item obj-card' + autoCls + sinoCls + '" style="--accent:' + accent + ';">'
+    return '<label class="obj-item obj-card' + autoCls + sinoCls + '" data-oid="' + esc(item.oid || '') + '" style="--accent:' + accent + ';">'
       + '<input onchange="athObjCount()" type="checkbox"' + autoAttr + '/>'
       + '<span class="obj-card-chip">' + chip + '</span>'
       + '<span class="obj-card-ico">' + ico + '</span>'
@@ -65519,14 +65559,21 @@ https://api.sofascore.app/api/v1/team/44/image
      El texto editado se persiste en el override `t`; la cantidad en `c`.
      La automatización NO depende del texto (usa data-auto/data-target),
      así que renombrar un objetivo nunca la rompe. */
-  function renderEditRow(item) {
+  function renderEditRow(item, sec) {
     var tgt = effTarget(item);
-    var hasNum = item.c != null;
+    var isCustom = !!item.custom;
+    /* Los personalizados SIEMPRE ofrecen input de cantidad (opcional: si se
+       deja vacío, el objetivo no lleva {N}); los por defecto según `c`. */
+    var hasNum = isCustom || (item.c != null);
+    var custAttr = isCustom ? (' data-custom="' + esc(sec.id) + ':' + esc(item.cid) + '"') : '';
+    var icoInput = isCustom
+      ? '<input class="obj-edit-ico" type="text" maxlength="4" value="' + esc(item.ico || '🏆') + '" title="Icono del trofeo"/>'
+      : '';
     var ctrl;
     if (item.rival) {
       ctrl = '<span class="obj-edit-na">rival: clic en la lista</span>';
     } else if (hasNum) {
-      ctrl = '<input class="obj-edit-num" type="number" inputmode="numeric" data-oid="' + item.oid + '" value="' + tgt + '" min="0" max="9999"/>';
+      ctrl = '<input class="obj-edit-num" type="number" inputmode="numeric" data-oid="' + item.oid + '" value="' + (tgt != null ? tgt : '') + '" min="0" max="9999" placeholder="—"/>';
     } else {
       ctrl = '<span class="obj-edit-na">sin cantidad</span>';
     }
@@ -65534,7 +65581,10 @@ https://api.sofascore.app/api/v1/team/44/image
       + '" value="' + esc(effTemplate(item)) + '" placeholder="Texto del objetivo (usa {N} para la cantidad)"/>';
     var rewardInput = '<input class="obj-edit-reward" type="number" inputmode="numeric" data-oid="' + item.oid
       + '" value="' + effReward(item) + '" min="0" max="99999" title="Recompensa 🪙"/>';
-    return '<div class="obj-edit-row">' + txtInput + ctrl + rewardInput + '</div>';
+    var delBtn = isCustom
+      ? '<button type="button" class="obj-edit-del" title="Eliminar objetivo" onclick="window._munichObjDelItem(\'' + esc(sec.id) + '\',\'' + esc(item.cid) + '\')">✕</button>'
+      : '';
+    return '<div class="obj-edit-row"' + custAttr + '>' + icoInput + txtInput + ctrl + rewardInput + delBtn + '</div>';
   }
 
   /* Cabecera de sección en modo EDICIÓN: input de título + (si la sección
@@ -65590,7 +65640,10 @@ https://api.sofascore.app/api/v1/team/44/image
         h += '</button>';
         h += '<div class="obj-sub-body open" id="obj-' + sec.id + '">';
     if (edit) h += renderSectionEditHead(sec);
-    for (var i = 0; i < sec.items.length; i++) h += edit ? renderEditRow(sec.items[i]) : renderItemLabel(sec.items[i], sec);
+    var _items = _sectionItems(sec);
+    for (var i = 0; i < _items.length; i++) h += edit ? renderEditRow(_items[i], sec) : renderItemLabel(_items[i], sec);
+    /* Modo edición: botón para AÑADIR un objetivo personalizado a la comp. */
+    if (edit) h += '<button type="button" class="obj-add-btn" onclick="window._munichObjAddItem(\'' + sec.id + '\')">➕ Añadir objetivo a esta competición</button>';
         h += '</div></div>';
     return h;
   }
@@ -65666,6 +65719,90 @@ https://api.sofascore.app/api/v1/team/44/image
     }
   };
 
+  /* ── Volcado del editor (por defecto + personalizados + cabeceras) al
+     blob OVR. Reutilizado por Guardar, Añadir y Eliminar objetivo, para
+     no perder ediciones en curso al re-renderizar el editor. ── */
+  function _munichObjReadEdits(host){
+    if (!host) return;
+    /* Filas de objetivo (por defecto vs personalizado por `data-custom`). */
+    host.querySelectorAll('.obj-edit-row').forEach(function(row){
+      var cust = row.getAttribute('data-custom');
+      var txt  = row.querySelector('.obj-edit-txt-input');
+      var num  = row.querySelector('.obj-edit-num');
+      var rew  = row.querySelector('.obj-edit-reward');
+      var ico  = row.querySelector('.obj-edit-ico');
+      if (cust){
+        /* Personalizado → escribe en el array OVR['xtra-<secId>'][porId]. */
+        var sep = cust.indexOf(':'); if (sep < 0) return;
+        var sid = cust.slice(0, sep), cid = cust.slice(sep + 1);
+        var arr = OVR['xtra-' + sid]; if (!Array.isArray(arr)) return;
+        var obj = null; for (var k = 0; k < arr.length; k++){ if (arr[k] && arr[k].id === cid){ obj = arr[k]; break; } }
+        if (!obj) return;
+        obj.t = txt ? (txt.value || '').trim() : (obj.t || '');
+        if (!obj.t) obj.t = 'Nuevo objetivo';
+        if (ico){ var iv = (ico.value || '').trim(); obj.ico = iv || '🏆'; }
+        if (num){ var nv = parseInt(num.value, 10); if (isNaN(nv) || nv < 0) delete obj.c; else obj.c = nv; }
+        if (rew){ var rv = parseInt(rew.value, 10); obj.r = (isNaN(rv) || rv < 0) ? 0 : rv; }
+      } else {
+        /* Por defecto → override sólo si difiere del valor de fábrica. */
+        var oid = txt ? txt.getAttribute('data-oid') : (num ? num.getAttribute('data-oid') : null);
+        var it  = oid && BY_OID[oid]; if (!it) return;
+        if (txt){
+          var tv = (txt.value || '').trim();
+          if (!tv || tv === String(it.t)){ if (OVR[oid]){ delete OVR[oid].t; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
+          else { OVR[oid] = OVR[oid] || {}; OVR[oid].t = tv; }
+        }
+        if (num){
+          var v = parseInt(num.value, 10);
+          if (isNaN(v) || v < 0) v = it.c;
+          if (v === it.c){ if (OVR[oid]){ delete OVR[oid].c; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
+          else { OVR[oid] = OVR[oid] || {}; OVR[oid].c = v; }
+        }
+        if (rew){
+          var def = Number(it.r) || 0;
+          var rv2 = parseInt(rew.value, 10);
+          if (isNaN(rv2) || rv2 < 0) rv2 = def;
+          if (rv2 === def){ if (OVR[oid]){ delete OVR[oid].r; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
+          else { OVR[oid] = OVR[oid] || {}; OVR[oid].r = rv2; }
+        }
+      }
+    });
+    /* Cabeceras de SECCIÓN: título / icono editable + competición elegida. */
+    SECTIONS.forEach(function(sec){
+      var key = _secKey(sec);
+      var o = OVR[key] || {};
+      var tInp = host.querySelector('.obj-sec-edit-title[data-secid="' + sec.id + '"]');
+      if (tInp){ var tv = (tInp.value || '').trim(); if (!tv || tv === String(sec.title)) delete o.t; else o.t = tv; }
+      var iInp = host.querySelector('.obj-sec-edit-icon[data-secid="' + sec.id + '"]');
+      if (iInp){ var iv = (iInp.value || '').trim(); if (!iv || iv === String(sec.icon)) delete o.icon; else o.icon = iv; }
+      var box = host.querySelector('.obj-sec-comps[data-secid="' + sec.id + '"]');
+      if (box){ var ab = box.querySelector('.obj-sec-comp-btn.active'); if (ab) o.comp = ab.getAttribute('data-comp'); else delete o.comp; }
+      if (Object.keys(o).length) OVR[key] = o; else delete OVR[key];
+    });
+  }
+
+  /* ── Añadir / eliminar objetivos personalizados de una competición ──
+     Ambos vuelcan primero las ediciones en curso (para no perderlas al
+     re-renderizar), mutan el array 'xtra-<secId>', persisten y re-pintan
+     el editor. Sólo disponibles en modo edición. */
+  window._munichObjAddItem = function(secId){
+    var host = document.getElementById('ath-obj-club'); if (!host) return;
+    if (window.__munichObjEditing) _munichObjReadEdits(host);
+    if (!Array.isArray(OVR['xtra-' + secId])) OVR['xtra-' + secId] = [];
+    OVR['xtra-' + secId].push({ id: _newCustId(), t: 'Nuevo objetivo', r: 20, ico: '🏆' });
+    saveOverrides();
+    renderAll('ath-obj-club', _objHubName(), true);
+  };
+  window._munichObjDelItem = function(secId, cid){
+    var host = document.getElementById('ath-obj-club'); if (!host) return;
+    if (window.__munichObjEditing) _munichObjReadEdits(host);
+    var arr = OVR['xtra-' + secId]; if (!Array.isArray(arr)) return;
+    for (var i = 0; i < arr.length; i++){ if (arr[i] && arr[i].id === cid){ arr.splice(i, 1); break; } }
+    if (!arr.length) delete OVR['xtra-' + secId];
+    saveOverrides();
+    renderAll('ath-obj-club', _objHubName(), true);
+  };
+
   /* ── Toggle del modo edición de cantidades ── */
   window.athObjToggleEdit = function(){
     var editing = !window.__munichObjEditing;
@@ -65681,61 +65818,10 @@ https://api.sofascore.app/api/v1/team/44/image
       window.__munichObjEditing = true;
       renderAll('ath-obj-club', 'Liverpool', true);
     } else {
-      /* Guardar: lee los inputs de TEXTO y de CANTIDAD, persiste sólo lo
-         que difiera del valor por defecto. */
+      /* Guardar: vuelca los inputs del editor (por defecto + personalizados
+         + cabeceras de sección) al blob OVR y persiste. */
       var host = document.getElementById('ath-obj-club');
-      if (host) {
-        host.querySelectorAll('.obj-edit-num').forEach(function(inp){
-          var oid = inp.getAttribute('data-oid');
-          var it  = BY_OID[oid];
-          if (!it) return;
-          var v = parseInt(inp.value, 10);
-          if (isNaN(v) || v < 0) v = it.c;
-          if (v === it.c) { if (OVR[oid]) { delete OVR[oid].c; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
-          else { OVR[oid] = OVR[oid] || {}; OVR[oid].c = v; }
-        });
-        host.querySelectorAll('.obj-edit-txt-input').forEach(function(inp){
-          var oid = inp.getAttribute('data-oid');
-          var it  = BY_OID[oid];
-          if (!it) return;
-          var v = (inp.value || '').trim();
-          /* Vacío o igual al texto por defecto → no se guarda override. */
-          if (!v || v === String(it.t)) { if (OVR[oid]) { delete OVR[oid].t; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
-          else { OVR[oid] = OVR[oid] || {}; OVR[oid].t = v; }
-        });
-        host.querySelectorAll('.obj-edit-reward').forEach(function(inp){
-          var oid = inp.getAttribute('data-oid');
-          var it  = BY_OID[oid];
-          if (!it) return;
-          var v = parseInt(inp.value, 10);
-          var def = Number(it.r) || 0;
-          if (isNaN(v) || v < 0) v = def;
-          if (v === def) { if (OVR[oid]) { delete OVR[oid].r; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
-          else { OVR[oid] = OVR[oid] || {}; OVR[oid].r = v; }
-        });
-        /* Overrides de SECCIÓN: título editable + competición elegida. */
-        SECTIONS.forEach(function(sec){
-          var key = _secKey(sec);
-          var o = OVR[key] || {};
-          var tInp = host.querySelector('.obj-sec-edit-title[data-secid="' + sec.id + '"]');
-          if (tInp){
-            var tv = (tInp.value || '').trim();
-            if (!tv || tv === String(sec.title)) delete o.t; else o.t = tv;
-          }
-          var iInp = host.querySelector('.obj-sec-edit-icon[data-secid="' + sec.id + '"]');
-          if (iInp){
-            var iv = (iInp.value || '').trim();
-            if (!iv || iv === String(sec.icon)) delete o.icon; else o.icon = iv;
-          }
-          var box = host.querySelector('.obj-sec-comps[data-secid="' + sec.id + '"]');
-          if (box){
-            var ab = box.querySelector('.obj-sec-comp-btn.active');
-            if (ab) o.comp = ab.getAttribute('data-comp'); else delete o.comp;
-          }
-          if (Object.keys(o).length) OVR[key] = o; else delete OVR[key];
-        });
-        saveOverrides();
-      }
+      if (host) { _munichObjReadEdits(host); saveOverrides(); }
       window.__munichObjEditing = false;
       renderAll('ath-obj-club', 'Liverpool', false);
       try { if (typeof window._munichObjAfterRender === 'function') window._munichObjAfterRender(); } catch(_){}
@@ -65891,6 +65977,26 @@ https://api.sofascore.app/api/v1/team/44/image
   color:#f5c542;border-radius:6px;padding:4px 6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;
 }
 #s-munich-objetivos .obj-edit-reward:focus{outline:none;border-color:rgba(245,197,66,.9);background:rgba(0,0,0,.5);}
+/* Icono editable de un objetivo personalizado. */
+#s-munich-objetivos .obj-edit-ico{
+  width:40px;flex-shrink:0;background:rgba(0,0,0,.35);border:1px solid rgba(95,200,200,.4);
+  color:#eafdfd;border-radius:6px;padding:4px 2px;font-size:16px;text-align:center;cursor:text;
+}
+#s-munich-objetivos .obj-edit-ico:focus{outline:none;border-color:rgba(95,200,200,.85);background:rgba(0,0,0,.5);}
+/* Botón eliminar objetivo personalizado. */
+#s-munich-objetivos .obj-edit-del{
+  flex-shrink:0;width:30px;height:30px;background:rgba(220,60,60,.18);border:1px solid rgba(220,60,60,.5);
+  color:#ff8a8a;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  display:flex;align-items:center;justify-content:center;
+}
+#s-munich-objetivos .obj-edit-del:active{background:rgba(220,60,60,.34);}
+/* Botón "➕ Añadir objetivo" al pie de cada competición (modo edición). */
+#s-munich-objetivos .obj-add-btn{
+  display:block;width:100%;margin:4px 0 16px;padding:10px;background:rgba(95,200,200,.14);
+  border:1px dashed rgba(95,200,200,.55);color:#bfeff0;border-radius:9px;
+  font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;-webkit-tap-highlight-color:transparent;
+}
+#s-munich-objetivos .obj-add-btn:active{background:rgba(95,200,200,.26);}
 /* Modo edición de cantidades: filas con input numérico. */
 #s-munich-objetivos #ath-obj-edit-btn:active{filter:brightness(1.2);}
 #s-munich-objetivos #ath-obj-club.obj-editing{outline:1px dashed rgba(95,200,200,.4);border-radius:8px;padding:4px;}
@@ -66125,9 +66231,13 @@ https://api.sofascore.app/api/v1/team/44/image
     if (window.__munichObjEditing) return;   /* el DOM no tiene checkbox en modo edición */
     try {
       var data = { checks: {}, counters: {} };
+      /* Progreso indexado por OID (no por índice de fila): así añadir/quitar
+         objetivos personalizados no descuadra los ✅ ya marcados. */
       document.querySelectorAll('#ath-obj-club .obj-item').forEach(function(lbl, i){
         var cb = lbl.querySelector('input[type=checkbox]');
-        if (cb) data.checks[i] = cb.checked;
+        if (!cb) return;
+        var oid = lbl.getAttribute('data-oid') || String(i);
+        data.checks[oid] = cb.checked;
       });
       document.querySelectorAll('#ath-obj-club .obj-counter[id]').forEach(function(el){
         if (el.childNodes[0]) data.counters[el.id] = el.childNodes[0].textContent.trim();
@@ -66201,9 +66311,13 @@ https://api.sofascore.app/api/v1/team/44/image
       if (data.checks){
         document.querySelectorAll('#ath-obj-club .obj-item').forEach(function(lbl, i){
           var cb = lbl.querySelector('input[type=checkbox]');
-          if (cb && data.checks[i] !== undefined){
-            cb.checked = !!data.checks[i];
-            lbl.classList.toggle('done', !!data.checks[i]);
+          if (!cb) return;
+          var oid = lbl.getAttribute('data-oid') || String(i);
+          /* Compat con progreso viejo indexado por número (v5 temprano). */
+          var val = (data.checks[oid] !== undefined) ? data.checks[oid] : data.checks[i];
+          if (val !== undefined){
+            cb.checked = !!val;
+            lbl.classList.toggle('done', !!val);
           }
         });
       }
@@ -66301,24 +66415,21 @@ https://api.sofascore.app/api/v1/team/44/image
        de ahí. Sólo caemos al DOM si no hay progreso persistido (sesión
        fresca real). Edit 2 garantiza que ese persistido NUNCA es un blanco
        espurio. */
-    /* Array de recompensas 🪙 por objetivo, en el MISMO orden que el índice
-       de checkbox de `saveObjState` (orden de render de SECTIONS). Vacío →
-       fallback al modelo antiguo (25 fijos). */
-    var _objRewards = [];
-    try { if (typeof window._munichObjRewards === 'function') _objRewards = window._munichObjRewards() || []; } catch(_){ _objRewards = []; }
-    var _useRewards = _objRewards.length > 0;
+    /* Recompensa 🪙 por objetivo resuelta por OID (por defecto + custom). */
+    var _rewardFor = (typeof window._munichObjRewardFor === 'function') ? window._munichObjRewardFor : null;
+    var _useRewards = !!_rewardFor;
     var done = 0, sumReward = 0;
     var _persObj = null;
     try { _persObj = JSON.parse(localStorage.getItem(LS_OBJ) || 'null'); } catch(_){ _persObj = null; }
     if (_persObj && _persObj.checks && typeof _persObj.checks === 'object'){
       var _pch = _persObj.checks;
-      for (var _pk in _pch){ if (_pch.hasOwnProperty(_pk) && _pch[_pk]){ done++; sumReward += Number(_objRewards[+_pk]) || 0; } }
+      for (var _pk in _pch){ if (_pch.hasOwnProperty(_pk) && _pch[_pk]){ done++; if (_rewardFor) sumReward += Number(_rewardFor(_pk)) || 0; } }
     } else {
       var items = document.querySelectorAll('#ath-obj-club .obj-item');
       if (!items.length) return;   /* objetivos no renderizados todavía y sin persistido */
-      items.forEach(function(lbl, _di){
+      items.forEach(function(lbl){
         var cb = lbl.querySelector('input[type=checkbox]');
-        if (cb && cb.checked){ done++; sumReward += Number(_objRewards[_di]) || 0; }
+        if (cb && cb.checked){ done++; var _oid = lbl.getAttribute('data-oid'); if (_rewardFor && _oid) sumReward += Number(_rewardFor(_oid)) || 0; }
       });
     }
     /* Si el persistido cuenta ✅ pero el DOM está sin restaurar, re-pintarlo

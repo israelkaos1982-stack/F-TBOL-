@@ -500,6 +500,10 @@ _KV_HUB_BASE_KEYS = (
     "bayern_trofeos_v1",
     "munich-obj-overrides-v1",
     "munich-obj-state-v4",
+    # v5 = rediseño de objetivos 2026-07-23 (2 por competición). El progreso
+    # viejo (índices de los 68 objetivos) queda huérfano en v4; el cliente
+    # ahora lee/escribe v5, así todos arrancan limpio en 0/23.
+    "munich-obj-state-v5",
     "mu_messages_v1",
 )
 
@@ -4035,6 +4039,7 @@ _KV_ALLOWED_EXACT = {
     # stale no pisa una copia más nueva. Es el PROGRESO (separado de
     # munich-obj-overrides-v1, que son las CANTIDADES/textos de cada misión).
     "munich-obj-state-v4",
+    "munich-obj-state-v5",   # rediseño 2026-07-23 (2 objetivos por competición)
     # Lesiones / sanciones del CLUB del hub y de las SELECCIONES. Vivían
     # SOLO en localStorage → al borrar datos de navegación / cambiar de
     # móvil se perdía TODO lo editado a mano (foto usuario 2026-06-04:
@@ -4109,6 +4114,7 @@ _KV_RECENCY_BLOB_KEYS = {
     # con `updatedAt` mayor gana entero (avance/reset no se revierte; POST
     # stale no pisa lo más nuevo).
     "munich-obj-state-v4",
+    "munich-obj-state-v5",   # rediseño 2026-07-23 (2 objetivos por competición)
     # Tabla EDITABLE de premios CASH: la última edición del admin gana entera.
     "cash_rewards_v1",
     # Modo manual por zona del reparto europeo: la última edición del
@@ -4796,7 +4802,7 @@ def api_kv_set(key):
                 value, payload = merged, json.dumps(merged, ensure_ascii=False)
             else:
                 value, payload = old, row.valor_json
-        elif _kv_hub_base(key) == "munich-obj-state-v4" and isinstance(old, dict) and isinstance(value, dict):
+        elif _kv_hub_base(key) in ("munich-obj-state-v4", "munich-obj-state-v5") and isinstance(old, dict) and isinstance(value, dict):
             # PROGRESO de objetivos del club: defensa a prueba de balas
             # (2026-06-11). Un cliente que arranca / auto-evalúa ANTES de
             # hidratar puede mandar un blob VACÍO (sin ✅ ni contadores)

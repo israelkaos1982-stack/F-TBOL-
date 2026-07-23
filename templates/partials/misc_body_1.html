@@ -14697,7 +14697,7 @@ window._showSimProgress = function(opts, onDone){
              → la importación lo restauraba en local pero NO lo re-subía, así
              que al recargar el pull por recencia lo pisaba con la copia stale
              de Railway (la importación "no llegaba" a los objetivos). */
-          'munich-obj-state-v4':1,
+          'munich-obj-state-v4':1,'munich-obj-state-v5':1,
           'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
           'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
           'cash_rewards_v1':1,'cash_ledger_v1':1,'bayern_hud_overrides_v1':1
@@ -14708,7 +14708,7 @@ window._showSimProgress = function(opts, onDone){
           'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
           /* Recencia en el server (_KV_RECENCY_BLOB_KEYS): estampamos
              updatedAt=ahora para que el progreso importado gane entero. */
-          'munich-obj-state-v4':1,
+          'munich-obj-state-v4':1,'munich-obj-state-v5':1,
           'cash_rewards_v1':1,'bayern_hud_overrides_v1':1
         };
         /* competition_state: el cursor del día + pospuestos. El valor que
@@ -59343,7 +59343,7 @@ https://api.sofascore.app/api/v1/team/44/image
   <button class="hub-card hub-card-objetivos" onclick="go('s-munich-objetivos')">
     <span class="hub-objetivos-emoji">🎯</span>
     <span class="hub-objetivos-title">OBJETIVOS DEL CLUB</span>
-    <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 68</span></div>
+    <div class="hub-objetivos-progress" id="munich-obj-count-wrap"><span id="munich-obj-count">0 / 23</span></div>
   </button>
   <button class="hub-card hub-card-plantilla" onclick="go('s-bayern-plantilla');if(window.renderBayernPlantillaScreen){[0,120,400,900].forEach(function(t){setTimeout(window.renderBayernPlantillaScreen,t);});}">
     <span class="hub-plantilla-emoji">👕</span>
@@ -65030,7 +65030,7 @@ https://api.sofascore.app/api/v1/team/44/image
 <div class="sec-hdr"><span class="sec-emoji">🎯</span><h2>Objetivos del Club</h2></div>
 <div style="padding:4px 14px 40px;">
 <div style="padding:8px 4px 12px;display:flex;align-items:center;justify-content:space-between;">
-<span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#f0c040;" id="ath-obj-count">0 / 68</span>
+<span style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:#f0c040;" id="ath-obj-count">0 / 23</span>
 <button type="button" id="ath-obj-edit-btn" onclick="window.athObjToggleEdit&&window.athObjToggleEdit()"
   style="background:rgba(95,200,200,.16);border:1px solid rgba(95,200,200,.5);color:#bfeff0;border-radius:8px;padding:7px 14px;font-family:Oswald,sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;cursor:pointer;-webkit-tap-highlight-color:transparent;">🖍 Editar</button>
 </div>
@@ -65042,22 +65042,22 @@ https://api.sofascore.app/api/v1/team/44/image
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   MOTOR DE OBJETIVOS DEL CLUB — ESCALADO POR NIVEL DE EQUIPO
+   MOTOR DE OBJETIVOS DEL CLUB — 2 OBJETIVOS POR COMPETICIÓN
    ═══════════════════════════════════════════════════════════════
-   Los 33 objetivos están definidos aquí en forma de spec tipificada
-   (acumulativo / ranking / binario). Cada equipo humano tiene un
-   winPct asociado; el baseline es 50% (factor 1.0). El target final
-   se calcula con:
-
-     factor(team)       = winPct / 50
-     acumulativo: tgt   = round(base × factor)
-     ranking:     tgt   = round(base × (1 / factor))
-     binario:     no escala — mismo enunciado para todos
-
-   Todo queda clampeado a [min, max] por objetivo para no quedar
-   absurdo en los extremos. Cada render genera los 33 <label class
-   ="obj-item"> que athObjCount() espera, preservando los counter-id
-   usados por el autoEvalObjetivos del bundle.
+   REDISEÑO 2026-07-23 (petición usuario): de 68 objetivos a SÓLO 2
+   por competición (club + selección) para los 7 misters. Formato
+   TARJETA estilo "Patrocinadores" (fotos): chip de competición +
+   icono de trofeo + texto grande + panel "RECOMPENSA X🪙".
+   · Todos los objetivos son MANUALES (se aprueban con el ✅ que va
+     oculto — toda la tarjeta es tappable). El patrón es
+     posición/título (1º) + goleador top-N (2º).
+   · Cada objetivo tiene su recompensa 🪙 (`r`) que se ACREDITA al
+     monedero del HUB al marcarlo (liverpoolObjEarnings suma la `r`
+     de los ✅). Reemplaza el antiguo +25 🪙 fijo por objetivo.
+   · Cantidades {N} y recompensas 🪙 editables con 🖍 EDITAR (PIN),
+     persistidas en munich-obj-overrides-v1 (sobrevive al reset).
+   Cada render genera los <label class="obj-item obj-card"> que
+   athObjCount()/saveObjState() esperan (checkbox por índice).
    ──────────────────────────────────────────────────────────────── */
 (function(){
   if (window.__MUNICH_OBJ_SPEC_READY) return;
@@ -65103,91 +65103,75 @@ https://api.sofascore.app/api/v1/team/44/image
        rival  duelo de Superliga con rival editable.
      Recompensa (💼 0,275 cap 10 · 🪙 25 sin cap) según los ✅. El reset
      (Reiniciar Temporada) desmarca; las cantidades editadas NO se borran. */
+  /* ═══════════════════════════════════════════════════════════════
+     REDISEÑO 2026-07-23 (petición usuario): de 68 objetivos a SÓLO
+     2 POR COMPETICIÓN (club + selección) de los 7 misters humanos.
+     Formato TARJETA estilo "Patrocinadores" de las fotos: chip de
+     competición (esquina), icono de trofeo, texto grande centrado y
+     panel oscuro "RECOMPENSA X🪙" a la derecha.
+     ─────────────────────────────────────────────────────────────
+     Cada item:
+       t     texto; `{N}` = CANTIDAD editable (ej. "entre los {N} máximos").
+       c     cantidad por defecto (editable con 🖍 EDITAR → override `c`).
+       r     RECOMPENSA en 🪙 que se ACREDITA al monedero del HUB al
+             marcar el objetivo (editable → override `r`). Reemplaza el
+             antiguo modelo de +25 🪙 fijos por ✅ (ahora cada objetivo
+             vale lo suyo, como el juego de referencia).
+       sino  true → objetivo MANUAL: se aprueba con el ✅ (sin barra ni
+             steppers ni auto-marcado). TODO objetivo de este set es
+             manual (posición/título/goleador = aprobación del usuario).
+       ico   icono de trofeo de la tarjeta (por defecto el de la sección).
+     Sección: `chip` = etiqueta corta de la esquina de cada tarjeta. */
   var SECTIONS = [
-    { id:'liga', icon:'🇪🇸', title:'LIGA EA SPORTS', color:'#ff8c42', items:[
-      { t:'Finalizar entre los {N} primeros (Si/No)', c:6, auto:'liga-pos' },
-      { t:'Ganar {N} partidos en casa', c:10, track:true, auto:'liga-wins-casa' },
-      { t:'Ganar {N} partidos seguidos en Liga', c:4, track:true, auto:'liga-wins-streak' },
-      { t:'1 jugador entre los {N} máx goleadores Liga', c:10, auto:'liga-top-scorer' },
-      { t:'1 jugador entre los {N} máxi MVP Liga', c:15, auto:'liga-top-mvp' },
-      { t:'Lograr {N} partidos imbatido Liga', c:7, track:true, auto:'liga-unbeaten' },
-      { t:'Marcar {N} goles en la liga', c:68, track:true, auto:'liga-gf' },
-      { t:'Diferencia goles positiva (+{N} o +) (Si/No)', c:15, dg:true, track:true, auto:'liga-dg' },
-      { t:'Quedar delante del Arsenal en Liga (Si/No)' },
-      { t:'Rating del {N}% o + de victorias Liga', c:53, u:'%', track:true },
-      { t:'Lograr {N} Hattricks en Liga', c:2, track:true },
-      { t:'1 jugador marca en {N} partidos seguidos', c:3, track:true },
-      { t:'1 jugador marca 2 o más goles {N} veces', c:5, track:true }
+    { id:'verano', chip:'VERANO', icon:'🌞', title:'TORNEO DE VERANO', color:'#5fc6c8', items:[
+      { t:'Quedar entre los {N} primeros del torneo', c:8, sino:true, r:80, ico:'🏆' },
+      { t:'Goleador del torneo entre los {N} máximos', c:8, sino:true, r:30, ico:'⚽' }
     ]},
-    { id:'copa', icon:'🏆', title:'COPA DEL REY', color:'#f0c040', items:[
-      { t:'Alcanzar Cuartos de Final (Si/No)' },
-      { t:'Marcar {N} o más goles en 1 eliminatoria', c:4, track:true },
-      { t:'Ganar 1 partido por {N} o + goles diferencia', c:3 },
-      { t:'Ganar 1 eliminatoria a doble partido (Si/No)' },
-      { t:'{N} partido de copa sin encajar gol', c:1, track:true },
-      { t:'1 jugador marca en {N} rondas distintas', c:2, track:true },
-      { t:'1 jugador marca 2 o + goles en {N} partidos', c:2, track:true }
+    { id:'liga', chip:'LIGA', icon:'🇪🇸', title:'LIGA EA SPORTS', color:'#ff8c42', items:[
+      { t:'Gana la Liga', sino:true, r:100, ico:'🏆' },
+      { t:'Termina la Liga entre los {N} máximos goleadores', c:5, sino:true, r:60, ico:'⚽' }
     ]},
-    { id:'europa', icon:'🇪🇺', title:'EUROPA · CHAMPIONS / EUROPA / CONFERENCE', color:'#00c875',
+    { id:'copa', chip:'COPA', icon:'🏆', title:'COPA DEL REY', color:'#f0c040', items:[
+      { t:'Gana la Copa del Rey', sino:true, r:90, ico:'🏆' },
+      { t:'Goleador de la Copa entre los {N} máximos', c:5, sino:true, r:40, ico:'⚽' }
+    ]},
+    { id:'sc', chip:'SUPERCOPA', icon:'🥇', title:'SUPERCOPA DE ESPAÑA (SOLO SI SE CLASIFICA)', color:'#f0c820', items:[
+      { t:'Gana la Supercopa de España', sino:true, r:70, ico:'🏆' },
+      { t:'Marca en la final de la Supercopa de España', sino:true, r:30, ico:'⚽' }
+    ]},
+    { id:'europa', icon:'🇪🇺', chip:'EUROPA', title:'EUROPA · CHAMPIONS / EUROPA / CONFERENCE', color:'#00c875',
       comps:[
         { key:'ucl',  label:'Champions League', color:'#88aaff' },
         { key:'uel',  label:'Europa League',    color:'#ffaa55' },
         { key:'uecl', label:'Conference',       color:'#5fe08a' }
       ], items:[
-      { t:'Clasificar entre los {N} primeros de grupo (Si/No)', c:14 },
-      { t:'Llegar a Cuartos de Final UCL (Si/No)' },
-      { t:'1 jugador marca Hattrick en UCL (Contador 0/1)' },
-      { t:'1 jugador bigoleador en {N} partidos UCL', c:2, track:true },
-      { t:'1 jugador marca en {N} partidos en UCL', c:3, track:true },
-      { t:'1 jugador entre los {N} máximos goleadores (Si/No)', c:15 },
-      { t:'1 jugador entre los {N} máxi MVP (Si/No)', c:20 },
-      { t:'Marcar 3 o más ⚽ en {N} partidos UCL', c:2, track:true },
-      { t:'{N} partidos imbatido en Champions', c:2, track:true },
-      { t:'No perder ningún partido europeo en casa (Si/No)' }
+      { t:'Gana la competición europea', sino:true, r:150, ico:'🏆' },
+      { t:'Goleador europeo entre los {N} máximos', c:5, sino:true, r:60, ico:'⚽' }
     ]},
-    { id:'superliga', icon:'⚡', title:'SUPERLIGA · TOÑÍN VS EL MUNDO', color:'#b060f0', items:[
-      { t:'Ganar {N} de 20 derbys', c:5, track:true, auto:'sl-wins' },
-      { t:'{N} partidos imbatido contra rival real', c:3, track:true, auto:'sl-unbeaten' },
-      { t:'Marcar {N} o + goles en 1 derby', c:4, track:true, auto:'sl-max-goals' },
-      { t:'No ser el equipo más goleado del grupo (Si/No)', auto:'sl-not-most-conceded' },
-      { t:'No perder por + de {N} goles contra rival (Si/No)', c:3, auto:'sl-no-loss-by' },
-      { t:'Conseguir {N} puntos de 60 posibles', c:18, track:true, auto:'sl-pts' },
-      { t:'Quedar por delante de RIVAL (Si/No)', rival:true, auto:'sl-ahead-rival' },
-      { t:'1 jugador en el Top {N} goleadores (Si/No)', c:5 },
-      { t:'Equipo entre los {N} máximos goleadores (Si/No)', c:4, auto:'sl-top-scorer' },
-      { t:'1 jugador marca {N} Hattrick', c:1, track:true },
-      { t:'1 jugador marca 2 o + goles en {N} partidos', c:4, track:true },
-      { t:'1 jugador entre los {N} máximos MVP (Si/No)', c:5 },
-      { t:'Equipo entre los {N} máximos MVP (Si/No)', c:4 },
-      { t:'Portero {N} veces imbatido', c:3, track:true },
-      { t:'Equipo con {N}% o más de posesión', c:46, u:'%', track:true },
-      { t:'Equipo entre los {N} que más tiran a puerta (Si/No)', c:4 },
-      { t:'Equipo con menos tarjetas (Si/No)', auto:'sl-least-cards' },
-      { t:'Equipo entre los {N} con más córners (Si/No)', c:4 }
+    { id:'recopa', chip:'RECOPA', icon:'🛡️', title:'RECOPA DE EUROPA', color:'#ff8060', items:[
+      { t:'Gana la Recopa de Europa', sino:true, r:120, ico:'🏆' },
+      { t:'Goleador de la Recopa entre los {N} máximos', c:5, sino:true, r:50, ico:'⚽' }
     ]},
-    { id:'global', icon:'🏅', title:'GLOBALES DEL CLUB · HITOS DE ÉLITE', color:'#ff4444', items:[
-      { t:'Ganar {N} título oficial con el equipo', c:1, track:true },
-      { t:'Ganar {N} título individual con un jugador', c:1, track:true },
-      { t:'Equipo entre los {N} máximos goleadores (Si/No)', c:40 },
-      { t:'Equipo entre los {N} máximos MVP (Si/No)', c:50 },
-      { t:'Marcar más de {N} goles', c:100, track:true },
-      { t:'Balón de Oro: 1 jugador nominado (Si/No)' },
-      { t:'Bota de Oro: 1 jugador nominado (Si/No)' },
-      { t:'Marcar {N} goles de Penalti o Falta', c:2, track:true },
-      { t:'Parar {N} penaltis', c:2, track:true },
-      { t:'Ganar {N} partidos en casa', c:16, track:true },
-      { t:'Marcar 5 goles en {N} partidos', c:3, track:true },
-      { t:'Marcar goles en {N} partido', c:1, track:true },
-      { t:'Lograr {N} Hattricks', c:3, track:true },
-      { t:'Ganar {N} partidos seguidos', c:5, track:true }
+    { id:'usc', chip:'SUPERCOPA', icon:'🏆', title:'SUPERCOPA DE EUROPA (SOLO SI SE CLASIFICA)', color:'#f0a040', items:[
+      { t:'Gana la Supercopa de Europa', sino:true, r:100, ico:'🏆' },
+      { t:'Marca en la Supercopa de Europa', sino:true, r:40, ico:'⚽' }
     ]},
-    { id:'sel', icon:'🇫🇷', title:'SELECCIONES · DOMINIO NACIONAL', color:'#4090f0', items:[
-      { t:'Clasificar a Francia para la Copa Asia (Si/No)' },
-      { t:'Marcar {N} goles en un partido', c:5, track:true },
-      { t:'Marcar {N} Hattrick internacional', c:1, track:true },
-      { t:'1 jugador entre el Top {N} del torneo (Si/No)', c:10 },
-      { t:'{N} partidos internacionales sin encajar', c:2, track:true },
-      { t:'Equipo marca en {N} partidos consecutivos', c:4, track:true }
+    { id:'mundialito', chip:'MUNDIALITO', icon:'🌐', title:'MUNDIALITO DE CLUBES', color:'#ffd633', items:[
+      { t:'Gana el Mundialito de Clubes', sino:true, r:180, ico:'🏆' },
+      { t:'Goleador del Mundialito entre los {N} máximos', c:8, sino:true, r:70, ico:'⚽' }
+    ]},
+    { id:'individual', chip:'PREMIOS', icon:'🏅', title:'PREMIOS INDIVIDUALES', color:'#ff4444', items:[
+      { t:'Bota de Oro: 1 jugador nominado', sino:true, r:80, ico:'🥇' },
+      { t:'Balón de Oro: 1 jugador nominado', sino:true, r:80, ico:'🎖️' },
+      { t:'Ranking UEFA de Clubs: entre los {N} primeros', c:20, sino:true, r:50, ico:'📊' }
+    ]},
+    { id:'sel-mundial', chip:'SELECCIÓN', icon:'🏆', title:'SELECCIÓN · MUNDIAL 2032', color:'#4090f0', items:[
+      { t:'Gana el Mundial 2032', sino:true, r:200, ico:'🏆' },
+      { t:'Goleador del Mundial entre los {N} máximos', c:8, sino:true, r:80, ico:'⚽' }
+    ]},
+    { id:'sel-cont', chip:'SELECCIÓN', icon:'🌍', title:'SELECCIÓN · TORNEO CONTINENTAL', color:'#4090f0', items:[
+      { t:'Gana el torneo de tu selección', sino:true, r:150, ico:'🏆' },
+      { t:'Goleador del torneo entre los {N} máximos', c:8, sino:true, r:60, ico:'⚽' }
     ]}
   ];
   /* ids estables (oid) + cid del contador + índice global de checkbox. */
@@ -65260,6 +65244,23 @@ https://api.sofascore.app/api/v1/team/44/image
   function effLabel(it){ return String(effTemplate(it)).replace(/\{N\}/g, String(effTarget(it))); }
   window._munichEffTarget = function(oid){ var it = BY_OID[oid]; return it ? effTarget(it) : null; };
 
+  /* ── Recompensa 🪙 EFECTIVA por objetivo (override `r` gana sobre el
+     valor por defecto). El array plano en orden de render (= orden del
+     índice de checkbox que usa `saveObjState`) lo consume
+     `liverpoolObjEarnings` para acreditar la suma de las 🪙 de los
+     objetivos MARCADOS al monedero del HUB (modelo por objetivo, ya no
+     +25 fijo). */
+  function effReward(it){ var o = OVR[it.oid]; return (o && o.r != null && !isNaN(o.r)) ? Number(o.r) : (Number(it.r) || 0); }
+  window._munichObjRewards = function(){
+    var arr = [];
+    for (var s = 0; s < SECTIONS.length; s++){
+      var its = SECTIONS[s].items;
+      for (var i = 0; i < its.length; i++) arr.push(effReward(its[i]));
+    }
+    return arr;
+  };
+  window._munichObjRewardFor = function(oid){ var it = BY_OID[oid]; return it ? effReward(it) : 0; };
+
   /* ── Overrides A NIVEL DE SECCIÓN (título editable + competición que
      tiñe la cabecera). Se persisten en el MISMO blob OVR bajo la clave
      'sec-<id>' = { t:'título custom', comp:'ucl'|'uel'|'uecl' }, así que
@@ -65290,45 +65291,33 @@ https://api.sofascore.app/api/v1/team/44/image
   function isSiNo(label){ return /\(\s*s[ií]\s*\/\s*no\s*\)/i.test(String(label == null ? '' : label)); }
   window._munichObjIsSiNo = isSiNo;
 
-  function renderItemLabel(item) {
+  /* Tarjeta de objetivo (formato "Patrocinadores" de las fotos):
+       [chip esquina] [icono trofeo] [texto grande] [RECOMPENSA X🪙]
+     Mantiene el <label class="obj-item"><input type=checkbox> que espera
+     toda la maquinaria (saveObjState / athObjCount / _munichAutoEval):
+     el checkbox va oculto y toda la tarjeta es tappable (manual). */
+  function renderItemLabel(item, sec) {
     var label = effLabel(item);
-    var sino  = isSiNo(label);
-    var tgt = effTarget(item);
-    var counter = '';
-    if (item.track && tgt != null && !sino) {
-      var isPct = item.u === '%';
-      var startTxt = isPct ? '0%' : (item.dg ? '+0' : '0');
-      var maxTxt   = (item.dg ? '+' + tgt : tgt) + (isPct ? '%' : '');
-      counter = ' <span class="obj-counter" id="' + item.cid + '">' + startTxt
-              + '<span class="obj-counter-max">/' + maxTxt + '</span></span>';
-      /* Steppers ➖/➕ — guard para que el botón dentro del <label> NO
-         togglee el checkbox. Usan la cantidad EFECTIVA como tope. */
-      var mn = item.dg ? -20 : 0;
-      var call = isPct
-        ? "athObjStepPct('" + item.cid + "',D,0," + tgt + "," + tgt + ")"
-        : "athObjStep('" + item.cid + "',D,"  + mn + "," + tgt + "," + (item.dg ? 'true' : 'false') + ")";
-      var guard = "event.preventDefault();event.stopPropagation();";
-      counter += ' <span class="oc-btns">'
-        + '<button type="button" class="oc-btn" onclick="' + guard + call.replace('D','-1') + '">−</button>'
-        + '<button type="button" class="oc-btn" onclick="' + guard + call.replace('D','1')  + '">+</button>'
-        + '</span>';
-    }
-    var inner;
-    if (item.rival) {
-      var parts = label.split('RIVAL');
-      inner = esc(parts[0])
-        + '<span class="oc-rival" id="oc-superliga-rival" onclick="athObjSetRival(event)">[definir rival]</span>'
-        + esc(parts[1] || '');
-    } else {
-      inner = esc(label);
-    }
-    /* Si/No → objetivo MANUAL: no se emite data-auto (no se auto-marca). */
+    var tgt   = effTarget(item);
+    var sino  = (item.sino === true) || isSiNo(label);
+    /* Si/No / manual → no se emite data-auto (no se auto-marca). */
     var useAuto  = item.auto && !sino;
     var autoAttr = useAuto ? (' data-auto="' + item.auto + '" data-target="' + tgt + '"') : '';
     var autoCls  = useAuto ? ' is-auto' : '';
-    var autoTag  = useAuto ? '<span class="oc-auto" title="Se marca automáticamente">🤖</span>' : '';
     var sinoCls  = sino ? ' is-sino' : '';
-    return '<label class="obj-item' + autoCls + sinoCls + '"><input onchange="athObjCount()" type="checkbox"' + autoAttr + '/> <span class="obj-txt">' + autoTag + inner + '</span>' + counter + '</label>';
+    var accent = sec ? effSecColor(sec) : '#f0c040';
+    var chip   = esc(sec ? (sec.chip || sec.title || '') : '');
+    var ico    = esc(item.ico || (sec ? effSecIcon(sec) : '🏆'));
+    var reward = effReward(item);
+    var rewardHtml = '<span class="obj-card-reward"><span class="ocr-lbl">RECOMPENSA</span>'
+      + '<span class="ocr-val">🪙 ' + reward + '</span></span>';
+    return '<label class="obj-item obj-card' + autoCls + sinoCls + '" style="--accent:' + accent + ';">'
+      + '<input onchange="athObjCount()" type="checkbox"' + autoAttr + '/>'
+      + '<span class="obj-card-chip">' + chip + '</span>'
+      + '<span class="obj-card-ico">' + ico + '</span>'
+      + '<span class="obj-txt obj-card-txt">' + esc(label) + '</span>'
+      + rewardHtml
+      + '</label>';
   }
 
   /* Fila de EDICIÓN (modo ✏️). Ahora editable EN DOS partes:
@@ -65352,7 +65341,9 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     var txtInput = '<input class="obj-edit-txt-input" type="text" data-oid="' + item.oid
       + '" value="' + esc(effTemplate(item)) + '" placeholder="Texto del objetivo (usa {N} para la cantidad)"/>';
-    return '<div class="obj-edit-row">' + txtInput + ctrl + '</div>';
+    var rewardInput = '<input class="obj-edit-reward" type="number" inputmode="numeric" data-oid="' + item.oid
+      + '" value="' + effReward(item) + '" min="0" max="99999" title="Recompensa 🪙"/>';
+    return '<div class="obj-edit-row">' + txtInput + ctrl + rewardInput + '</div>';
   }
 
   /* Cabecera de sección en modo EDICIÓN: input de título + (si la sección
@@ -65387,7 +65378,7 @@ https://api.sofascore.app/api/v1/team/44/image
       if (!sel){ var m = window._mhFindMister && window._mhFindMister(window._mkHubTeamName && window._mkHubTeamName()); if (m) sel = m.seleccion || ''; }
       if (sel){
         var nn = sel.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
-        var F = { francia:'🇫🇷', brasil:'🇧🇷', inglaterra:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', noruega:'🇳🇴', argentina:'🇦🇷', espana:'🇪🇸' };
+        var F = { francia:'🇫🇷', brasil:'🇧🇷', inglaterra:'🏴󠁧󠁢󠁥󠁮󠁧󠁿', noruega:'🇳🇴', argentina:'🇦🇷', espana:'🇪🇸', portugal:'🇵🇹' };
         return F[nn] || '🌍';
       }
     } catch(_){}
@@ -65396,7 +65387,11 @@ https://api.sofascore.app/api/v1/team/44/image
 
   function renderSection(sec, edit) {
     var color = effSecColor(sec);
-    var icon  = (sec.id === 'sel') ? (effSecIcon(sec) !== sec.icon ? effSecIcon(sec) : _objSelIcon()) : effSecIcon(sec);
+    /* Secciones de SELECCIÓN (`sel-*`): el icono por defecto es la bandera
+       de la selección del mister del hub activo (dinámico); un override
+       manual del icono gana. */
+    var isSel = (String(sec.id).indexOf('sel') === 0);
+    var icon  = isSel ? (effSecIcon(sec) !== sec.icon ? effSecIcon(sec) : _objSelIcon()) : effSecIcon(sec);
     var h  = '<div class="obj-sub-section">';
         h += '<button class="obj-sub-hdr" onclick="subTog(\'obj-' + sec.id + '\')" data-defcolor="' + sec.color + '" style="color:' + color + ';">';
         h += icon + ' <span class="obj-sec-title">' + esc(effSecTitle(sec)) + '</span> ';
@@ -65404,7 +65399,7 @@ https://api.sofascore.app/api/v1/team/44/image
         h += '</button>';
         h += '<div class="obj-sub-body open" id="obj-' + sec.id + '">';
     if (edit) h += renderSectionEditHead(sec);
-    for (var i = 0; i < sec.items.length; i++) h += edit ? renderEditRow(sec.items[i]) : renderItemLabel(sec.items[i]);
+    for (var i = 0; i < sec.items.length; i++) h += edit ? renderEditRow(sec.items[i]) : renderItemLabel(sec.items[i], sec);
         h += '</div></div>';
     return h;
   }
@@ -65516,6 +65511,16 @@ https://api.sofascore.app/api/v1/team/44/image
           /* Vacío o igual al texto por defecto → no se guarda override. */
           if (!v || v === String(it.t)) { if (OVR[oid]) { delete OVR[oid].t; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
           else { OVR[oid] = OVR[oid] || {}; OVR[oid].t = v; }
+        });
+        host.querySelectorAll('.obj-edit-reward').forEach(function(inp){
+          var oid = inp.getAttribute('data-oid');
+          var it  = BY_OID[oid];
+          if (!it) return;
+          var v = parseInt(inp.value, 10);
+          var def = Number(it.r) || 0;
+          if (isNaN(v) || v < 0) v = def;
+          if (v === def) { if (OVR[oid]) { delete OVR[oid].r; if (!Object.keys(OVR[oid]).length) delete OVR[oid]; } }
+          else { OVR[oid] = OVR[oid] || {}; OVR[oid].r = v; }
         });
         /* Overrides de SECCIÓN: título editable + competición elegida. */
         SECTIONS.forEach(function(sec){
@@ -65643,6 +65648,58 @@ https://api.sofascore.app/api/v1/team/44/image
 /* Objetivo Si/No → aprobación manual (sin contador). Marca lateral ámbar
    para distinguirlo del automático (turquesa). */
 #s-munich-objetivos .obj-item.is-sino{border-left:2px solid rgba(240,192,64,.55);padding-left:4px;}
+/* ═══ Objetivos v2 · tarjeta estilo "Patrocinadores" (2026-07-23) ═══════
+   Reemplaza la fila compacta por una tarjeta: chip de competición en la
+   esquina, icono de trofeo, texto grande centrado y panel oscuro
+   "RECOMPENSA X🪙" a la derecha. El checkbox va oculto (toda la tarjeta
+   es tappable → marca/desmarca manual). */
+#s-munich-objetivos .obj-item.obj-card{
+  position:relative; display:flex; align-items:stretch; gap:0;
+  min-height:74px; margin:12px 0; padding:0; border-radius:12px; overflow:hidden;
+  border:2px solid #7a4a1e; background:linear-gradient(180deg,#c9782f,#a5591f);
+  box-shadow:0 3px 10px rgba(0,0,0,.35); cursor:pointer; border-left-width:2px;
+  -webkit-tap-highlight-color:transparent; font-size:13px; line-height:1.2;
+}
+#s-munich-objetivos .obj-item.obj-card input[type=checkbox]{
+  position:absolute; opacity:0; width:0; height:0; margin:0; pointer-events:none;
+}
+#s-munich-objetivos .obj-card-chip{
+  position:absolute; top:0; left:0; z-index:3;
+  background:#111; color:var(--accent,#f0c040);
+  font-family:Oswald,sans-serif; font-weight:700; font-size:9.5px; letter-spacing:1px;
+  padding:3px 11px 5px 9px; border-bottom-right-radius:9px;
+}
+#s-munich-objetivos .obj-card-ico{
+  width:60px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+  font-size:29px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));
+}
+#s-munich-objetivos .obj-card-txt{
+  flex:1; min-width:0; display:flex; align-items:center; justify-content:center; text-align:center;
+  background:#f3ddc6; color:#241a10; border-radius:6px; margin:8px 0;
+  font-family:Oswald,sans-serif; font-weight:700; font-size:13px; line-height:1.2; letter-spacing:.2px;
+  padding:10px 12px;
+}
+#s-munich-objetivos .obj-card-reward{
+  width:100px; flex-shrink:0; background:#0b0b0b;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:6px 4px;
+}
+#s-munich-objetivos .ocr-lbl{font-family:Oswald,sans-serif;font-weight:700;font-size:8px;letter-spacing:1px;color:#caa14a;}
+#s-munich-objetivos .ocr-val{font-family:'Bebas Neue',sans-serif;font-size:19px;color:#f5c542;line-height:1;white-space:nowrap;}
+/* Estado CUMPLIDO: marco verde + tick + texto en verde claro. */
+#s-munich-objetivos .obj-item.obj-card.done{border-color:#4fc86a;box-shadow:0 0 0 2px rgba(79,200,106,.55),0 3px 10px rgba(0,0,0,.35);}
+#s-munich-objetivos .obj-item.obj-card.done .obj-card-txt{background:#dcf5e0;}
+#s-munich-objetivos .obj-item.obj-card.done::after{
+  content:'✓'; position:absolute; top:6px; right:108px; z-index:3;
+  width:20px; height:20px; border-radius:50%; background:#4fc86a; color:#08210f;
+  font-family:Arial,sans-serif; font-size:13px; font-weight:900;
+  display:flex; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(0,0,0,.45);
+}
+/* Input de recompensa 🪙 del editor. */
+#s-munich-objetivos .obj-edit-reward{
+  width:66px;flex-shrink:0;background:rgba(0,0,0,.35);border:1px solid rgba(245,197,66,.55);
+  color:#f5c542;border-radius:6px;padding:4px 6px;font-family:'Bebas Neue',sans-serif;font-size:15px;text-align:center;
+}
+#s-munich-objetivos .obj-edit-reward:focus{outline:none;border-color:rgba(245,197,66,.9);background:rgba(0,0,0,.5);}
 /* Modo edición de cantidades: filas con input numérico. */
 #s-munich-objetivos #ath-obj-edit-btn:active{filter:brightness(1.2);}
 #s-munich-objetivos #ath-obj-club.obj-editing{outline:1px dashed rgba(95,200,200,.4);border-radius:8px;padding:4px;}
@@ -65673,12 +65730,18 @@ https://api.sofascore.app/api/v1/team/44/image
 (function(){
   /* v4: el set de objetivos cambió a 68 (boceto usuario 2026-06-01),
      así que el índice de checkbox y los ids de contador difieren del
-     v3 — clave nueva para arrancar limpio. */
+     v3 — clave nueva para arrancar limpio.
+     v5 (rediseño 2026-07-23): se reduce a 2 objetivos POR COMPETICIÓN
+     (23 en total). Los índices de checkbox de los 68 objetivos v4 NO
+     corresponden a los nuevos 23 (marcarían objetivos y acreditarían
+     recompensas por error) → clave NUEVA para arrancar limpio en 0/23.
+     El progreso v4 queda huérfano (no se borra: sigue en el server por
+     si algún día se necesita, pero el cliente ya no lo lee). */
   /* HUB ACTIVO (multi-hub 2026-06-13): PROGRESO de objetivos POR HUB.
-     Liverpool/Toñín = 'munich-obj-state-v4' (intacta, con su _kvBlobSync
-     + gate de hidratación); Arsenal/etc. → '..._<id>'. Reasignable +
-     re-init de _objStateSync en 'hubchange'. */
-  var LS_OBJ = (window._hubKey ? window._hubKey('munich-obj-state-v4') : 'munich-obj-state-v4');
+     Liverpool/Toñín = 'munich-obj-state-v5' (con su _kvBlobSync + gate de
+     hidratación); Arsenal/etc. → '..._<id>'. Reasignable + re-init de
+     _objStateSync en 'hubchange'. */
+  var LS_OBJ = (window._hubKey ? window._hubKey('munich-obj-state-v5') : 'munich-obj-state-v5');
   var LS_MVP = 'munich-mvp-tracker-v2';
   var LS_RIVAL = 'munich-obj-rival';
   var TEAM_NAME = 'Bayern Munich';
@@ -66047,18 +66110,24 @@ https://api.sofascore.app/api/v1/team/44/image
        de ahí. Sólo caemos al DOM si no hay progreso persistido (sesión
        fresca real). Edit 2 garantiza que ese persistido NUNCA es un blanco
        espurio. */
-    var done = 0;
+    /* Array de recompensas 🪙 por objetivo, en el MISMO orden que el índice
+       de checkbox de `saveObjState` (orden de render de SECTIONS). Vacío →
+       fallback al modelo antiguo (25 fijos). */
+    var _objRewards = [];
+    try { if (typeof window._munichObjRewards === 'function') _objRewards = window._munichObjRewards() || []; } catch(_){ _objRewards = []; }
+    var _useRewards = _objRewards.length > 0;
+    var done = 0, sumReward = 0;
     var _persObj = null;
     try { _persObj = JSON.parse(localStorage.getItem(LS_OBJ) || 'null'); } catch(_){ _persObj = null; }
     if (_persObj && _persObj.checks && typeof _persObj.checks === 'object'){
       var _pch = _persObj.checks;
-      for (var _pk in _pch){ if (_pch.hasOwnProperty(_pk) && _pch[_pk]) done++; }
+      for (var _pk in _pch){ if (_pch.hasOwnProperty(_pk) && _pch[_pk]){ done++; sumReward += Number(_objRewards[+_pk]) || 0; } }
     } else {
       var items = document.querySelectorAll('#ath-obj-club .obj-item');
       if (!items.length) return;   /* objetivos no renderizados todavía y sin persistido */
-      items.forEach(function(lbl){
+      items.forEach(function(lbl, _di){
         var cb = lbl.querySelector('input[type=checkbox]');
-        if (cb && cb.checked) done++;
+        if (cb && cb.checked){ done++; sumReward += Number(_objRewards[_di]) || 0; }
       });
     }
     /* Si el persistido cuenta ✅ pero el DOM está sin restaurar, re-pintarlo
@@ -66075,7 +66144,10 @@ https://api.sofascore.app/api/v1/team/44/image
     var o = window._bayernHudGet() || {};
     var prevObjMoney  = parseFloat(o.objMoney)  || 0;
     var prevObjRating = parseFloat(o.objRating) || 0;
-    var newObjMoney  = done * OBJ_MONEY_PER;
+    /* 🪙 PRESUPUESTO — modelo NUEVO por objetivo (2026-07-23): cada objetivo
+       marcado acredita SU recompensa `r` (la suma de los ✅). Fallback al
+       modelo antiguo (25 fijos) sólo si el array de recompensas no cargó. */
+    var newObjMoney  = _useRewards ? sumReward : (done * OBJ_MONEY_PER);
     var newObjRating = Math.min(OBJ_RATING_CAP, Math.round(done * OBJ_RATING_PER * 1000) / 1000);
     /* 💼 VALORACIÓN — modelo ABSOLUTO (base del admin + aporte de
        objetivos), NUNCA por delta. El delta dejaba `rating` y `objRating`
@@ -66220,7 +66292,9 @@ https://api.sofascore.app/api/v1/team/44/image
     var host = document.getElementById('ath-obj-club');
     if (!host) return;
     var autoInputs = host.querySelectorAll('input[data-auto]');
-    if (!autoInputs.length) return;
+    /* NOTA: aunque no haya objetivos AUTO (el set 2026-07-23 es 100% manual),
+       NO se sale aquí: el guard «temporada no empezada» de más abajo debe
+       correr igual para limpiar ✅ falsos antes de arrancar (regla 19). */
     var tnorm = _norm(_hubTeamName());
 
     /* ── ¿el equipo/jugador `t` (clave `team::player`) es del HUB? ──
@@ -66627,7 +66701,7 @@ https://api.sofascore.app/api/v1/team/44/image
            cancela su timer ANTES de reasignar LS_OBJ (evita corrupción
            cross-hub por un timer debounced stale). */
         try { if (_objStateSync && _objStateSync.flush) _objStateSync.flush(); } catch(_){}
-        try { LS_OBJ = window._hubKey('munich-obj-state-v4'); } catch(_){}
+        try { LS_OBJ = window._hubKey('munich-obj-state-v5'); } catch(_){}
         _objStateSync = null; _objLastSer = null; _objStateUpdatedAt = 0;
         try { _objStateSyncInit(); } catch(_){}
         try { _objStateRefresh(); } catch(_){}

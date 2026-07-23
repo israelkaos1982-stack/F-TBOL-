@@ -48980,6 +48980,34 @@ https://api.sofascore.app/api/v1/team/44/image
       .catch(function(){ if (watchdog) { try { clearTimeout(watchdog); } catch(_){} } done({error:'red'}); });
   };
 
+  /* Handler del botón «🔄 RECUPERAR TODAS LAS LIGAS» de la pantalla-menú
+     de "Resto de Ligas" (s-ligas.html). Una sola acción, un solo
+     resultado visible — sin que el usuario tenga que abrir liga por
+     liga. */
+  window._lextRestoreAllUI = function(){
+    var s = document.getElementById('lext-restore-all-st');
+    var b = document.getElementById('lext-restore-all-btn');
+    if (s) s.textContent = '⏳ Recuperando todas las ligas del servidor (una sola petición)…';
+    if (b) { try { b.disabled = true; b.style.opacity = '.6'; } catch(_){} }
+    function reEnable(){ if (b) { try { b.disabled = false; b.style.opacity = '1'; } catch(_){} } }
+    if (typeof window._lextRestoreAllFromServer !== 'function') {
+      if (s) s.textContent = 'Recarga la página e inténtalo de nuevo.';
+      reEnable(); return;
+    }
+    window._lextRestoreAllFromServer({ force:true, cb:function(res){
+      reEnable();
+      if (!s) return;
+      if (res && (res.error || res.timeout)) {
+        s.textContent = '⚠️ No se pudo contactar con el servidor. Reinténtalo en unos segundos.';
+        return;
+      }
+      var n = (res && res.adopted) || 0;
+      s.textContent = n > 0
+        ? ('✅ Recuperadas ' + n + ' ligas. Ábrelas y ya deberían salir sus equipos.')
+        : '✔️ Este dispositivo ya tenía todas las ligas guardadas.';
+    }});
+  };
+
   var _lextReconcileInFlight = false;
   var _lextReconcileLastAt = 0;
   window._lextReconcileResultsToServer = function(opts){

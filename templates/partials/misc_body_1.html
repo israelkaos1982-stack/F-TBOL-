@@ -65924,9 +65924,19 @@ https://api.sofascore.app/api/v1/team/44/image
 }
 #s-munich-objetivos .ocr-lbl{font-family:Oswald,sans-serif;font-weight:700;font-size:8px;letter-spacing:1px;color:#caa14a;}
 #s-munich-objetivos .ocr-val{font-family:'Bebas Neue',sans-serif;font-size:19px;color:#f5c542;line-height:1;white-space:nowrap;}
-/* Estado CUMPLIDO: marco verde + tick + texto en verde claro. */
-#s-munich-objetivos .obj-item.obj-card.done{border-color:#4fc86a;box-shadow:0 0 0 2px rgba(79,200,106,.55),0 3px 10px rgba(0,0,0,.35);}
-#s-munich-objetivos .obj-item.obj-card.done .obj-card-txt{background:#dcf5e0;}
+/* Estado CUMPLIDO: la CAJA ENTERA se vuelve VERDE (petición usuario
+   2026-07-23: "cuando se marque como completado que se vuelva esa caja
+   de color verde") — no sólo el marco: fondo de la tarjeta en gradiente
+   verde, marco verde, panel de texto en verde claro y tick ✓. */
+#s-munich-objetivos .obj-item.obj-card.done{
+  border-color:#4fc86a;
+  background:linear-gradient(180deg,#3fbf62,#238a44);
+  box-shadow:0 0 0 2px rgba(79,200,106,.55),0 3px 10px rgba(0,0,0,.35);
+}
+#s-munich-objetivos .obj-item.obj-card.done .obj-card-txt{background:#dcf5e0;color:#0d2b16;}
+#s-munich-objetivos .obj-item.obj-card.done .obj-card-reward{background:#08210f;}
+#s-munich-objetivos .obj-item.obj-card.done .ocr-lbl{color:#8fe0a5;}
+#s-munich-objetivos .obj-item.obj-card.done .ocr-val{color:#c6f5d4;}
 #s-munich-objetivos .obj-item.obj-card.done::after{
   content:'✓'; position:absolute; top:6px; right:108px; z-index:3;
   width:20px; height:20px; border-radius:50%; background:#4fc86a; color:#08210f;

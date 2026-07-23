@@ -49118,47 +49118,16 @@ https://api.sofascore.app/api/v1/team/44/image
     document.addEventListener('visibilitychange', _lextReconcileOnWake);
   } catch(_){}
 
-  /* AUTO-RESTAURACIÓN MASIVA AL ARRANCAR (2026-07-23): si en este
-     dispositivo faltan casi todas las ligas de "Resto de Ligas" (típico
-     tras un borrado de datos de navegación / móvil nuevo), las traemos
-     TODAS del servidor con UNA sola petición (`/api/liga-ext-bulk`),
-     sin que el usuario tenga que abrir cada liga ni pulsar nada. Es una
-     ÚNICA petición (no la tormenta de ~50 que se desactivó), y solo
-     adopta las ligas que están VACÍAS en local — nunca pisa una copia
-     local rica. Se dispara una sola vez por sesión, diferido, para no
-     competir con el primer render. */
-  try {
-    setTimeout(function(){
-      try {
-        if (window._lextBulkBootDone) return;
-        window._lextBulkBootDone = true;
-        /* ¿Cuántas ligas con equipos tengo ya en local? */
-        var present = 0, expected = 0;
-        try {
-          if (window.LEAGUE_DEFAULT_ZONES) expected = Object.keys(window.LEAGUE_DEFAULT_ZONES).length;
-        } catch(_){}
-        try {
-          for (var i = 0; i < localStorage.length; i++){
-            var kk = localStorage.key(i);
-            if (kk && kk.indexOf('ligaExt_') === 0 && !/_(protected|backup|snap_\d+)$/.test(kk)) {
-              try {
-                var d = JSON.parse(localStorage.getItem(kk) || '{}');
-                if (d && Array.isArray(d.teams) && d.teams.length) present++;
-              } catch(_){}
-            }
-          }
-        } catch(_){}
-        /* Umbral: si tengo menos de la mitad de las ligas esperadas
-           (o expected desconocido y <10 presentes), restauro todo. */
-        var threshold = expected > 0 ? Math.floor(expected / 2) : 10;
-        if (present < threshold && typeof window._lextRestoreAllFromServer === 'function') {
-          window._lextRestoreAllFromServer({ force:true, cb:function(res){
-            try { if (res && res.adopted > 0) console.warn('[ligaExt] auto-restore boot: ' + res.adopted + ' ligas recuperadas del servidor.'); } catch(_){}
-          }});
-        }
-      } catch(_){}
-    }, 5000);
-  } catch(_){}
+  /* ⚠️ AUTO-RESTAURACIÓN MASIVA AL ARRANCAR DESACTIVADA (2026-07-23 #2):
+     el bulk `/api/liga-ext-bulk` carga las ~54 ligas COMPLETAS (rosters +
+     escudos) de golpe — es una petición PESADA en el servidor (2 workers
+     gunicorn). Dispararla en CADA arranque hacía que, tras varias
+     recargas, el servidor quedara saturado y NINGUNA petición —ni la de
+     la liga que el usuario abre— respondiera (síntoma: "incluso
+     República Checa ya no merge", el sondeo se queda «Comprobando…» sin
+     resolver). La restauración masiva sigue disponible SOLO BAJO DEMANDA
+     (botón «🔄 RECUPERAR TODAS LAS LIGAS» del menú), nunca en automático.
+     Cada liga se hidrata sola al ABRIRLA con UNA petición ligera. */
 
   function avg(arr){
     if(!arr.length) return 0;
@@ -49434,19 +49403,26 @@ https://api.sofascore.app/api/v1/team/44/image
            Si tras restaurar esta liga sigue vacía, es que el servidor de
            verdad no tiene equipos para ella (o falló la red) — ahí sí
            caemos al sondeo por-liga para dar un mensaje claro. */
-        function _perLeagueProbe(){
-          if (st) st.textContent = '⏳ Comprobando «' + _slugNow + '» en el servidor…';
+        function _perLeagueProbe(triesLeft){
+          if (triesLeft == null) triesLeft = 3;
+          var attemptN = 4 - triesLeft;
+          if (st) st.textContent = '⏳ Comprobando «' + _slugNow + '» en el servidor…' + (attemptN > 1 ? (' (intento ' + attemptN + ')') : '');
           var ctrl = null, to = null, fired = false;
-          function fail(msg){ if (fired) return; fired = true; if (to){ try{clearTimeout(to);}catch(_){} } if (st) st.textContent = msg; }
+          function retryOrFail(msg){
+            if (fired) return; fired = true; if (to){ try{clearTimeout(to);}catch(_){} }
+            if (triesLeft > 1) { setTimeout(function(){ _perLeagueProbe(triesLeft - 1); }, 1200 * attemptN); return; }
+            if (st) st.textContent = msg;
+          }
           try { ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){}
           if (ctrl) { try { setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 12000); } catch(_){} }
           /* Watchdog independiente de AbortController (WebViews viejos). */
-          try { to = setTimeout(function(){ fail('⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.'); }, 14000); } catch(_){}
+          try { to = setTimeout(function(){ retryOrFail('⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.'); }, 13000); } catch(_){}
           fetch('/api/liga-ext-any/' + encodeURIComponent(_slugNow), ctrl ? {signal:ctrl.signal, credentials:'same-origin'} : {credentials:'same-origin'})
             .then(function(r){ return r.ok ? r.json() : {__http:r.status}; })
             .then(function(j){
-              if (fired) return; fired = true; if (to){ try{clearTimeout(to);}catch(_){} }
-              if (j && j.__http){ if (st) st.textContent = '⚠️ El servidor respondió con error HTTP ' + j.__http + '. Reintenta en unos segundos.'; return; }
+              if (fired) return;
+              if (j && j.__http){ retryOrFail('⚠️ El servidor respondió con error HTTP ' + j.__http + '. Reintenta en unos segundos.'); return; }
+              fired = true; if (to){ try{clearTimeout(to);}catch(_){} }
               var d = j && j.data;
               var n = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
               if (n > 0){
@@ -49461,29 +49437,15 @@ https://api.sofascore.app/api/v1/team/44/image
                 if (st) st.textContent = '❌ El servidor NO tiene equipos guardados para «' + _slugNow + '» (0 equipos). Esta liga hay que volver a rellenarla, no es un fallo de carga.';
               }
             })
-            .catch(function(){ fail('⚠️ No se pudo contactar con el servidor (red/timeout). Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.'); });
+            .catch(function(){ retryOrFail('⚠️ No se pudo contactar con el servidor (red/timeout). Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.'); });
         }
-        function _run(){
-          if (st) st.textContent = '⏳ Recuperando TODAS las ligas del servidor (una sola petición)…';
-          if (typeof window._lextRestoreAllFromServer !== 'function') { _perLeagueProbe(); return; }
-          window._lextRestoreAllFromServer({ force:true, cb:function(res){
-            /* Si la liga actual ya se pintó (adoptada), renderTable ya
-               reemplazó esta pantalla vacía y no hay nada más que hacer. */
-            var nowTeams = 0;
-            try { nowTeams = _lextTeamsLen(LIGA_CACHE[_slugNow]); } catch(_){}
-            if (nowTeams > 0) { return; }
-            if (res && (res.error || res.timeout)) {
-              if (st) st.textContent = '⚠️ No se pudo contactar con el servidor. Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.';
-              return;
-            }
-            if (res && res.adopted > 0 && st) {
-              st.textContent = '✅ Recuperadas ' + res.adopted + ' ligas. Comprobando «' + _slugNow + '»…';
-            }
-            /* La bulk restauró otras ligas pero no ésta → sondeo por-liga
-               (resuelve main→protected para dar el veredicto exacto). */
-            _perLeagueProbe();
-          }});
-        }
+        /* UNA sola petición LIGERA para ESTA liga (2026-07-23 #2): NO
+           disparamos la bulk automáticamente — es pesada y, encadenada
+           en cada apertura, saturaba el servidor y colgaba hasta la
+           petición de esta misma liga. El sondeo por-liga es exactamente
+           lo que funciona al escribir la URL en la barra del navegador.
+           La restauración masiva sigue disponible en el botón del menú. */
+        function _run(){ _perLeagueProbe(); }
         if (btn) btn.addEventListener('click', _run);
         /* Sondeo automático inmediato: el usuario ve el resultado sin
            tener que pulsar nada (el botón queda para reintentar). */

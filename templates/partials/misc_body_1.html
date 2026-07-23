@@ -48891,6 +48891,95 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     go();
   }
+  /* ── RESTAURACIÓN MASIVA EN UNA SOLA PETICIÓN (2026-07-23) ──────────
+     Tras un borrado de datos de navegación el `localStorage` queda
+     VACÍO y CADA liga de "Resto de Ligas" tiene que bajarse del
+     servidor al abrirla. Bajarlas de una en una (o las ~50 de golpe en
+     el boot) es frágil: la tormenta de peticiones satura los 2 workers
+     de gunicorn y solo las primeras que ganan la carrera aparecen — el
+     resto se quedan "sin equipos" para siempre en ese arranque (síntoma
+     exacto del usuario: "cada vez que abro la web se ven unas ligas u
+     otras" / "incluso República Checa ya no merge").
+
+     `/api/liga-ext-bulk` resuelve el main→`_protected` de TODAS las
+     ligas EN EL SERVIDOR (una sola query a la BD) y devuelve el roster
+     completo de cada una en UNA respuesta. Aquí lo consumimos con UNA
+     sola petición y escribimos el 100% de las ligas de golpe —
+     localStorage (a prueba de cuota) + IndexedDB (durable) + LIGA_CACHE
+     — sin ninguna carrera. Solo ADOPTA una liga si su copia local está
+     VACÍA de equipos (no pisa una copia local más rica: eso lo sigue
+     resolviendo `fetchData`/el merge del servidor). Timeout que NO
+     depende de `AbortController` (WebViews viejos sin él dejaban el
+     sondeo colgado para siempre en "Preguntando…"). */
+  var _lextRestoreAllInFlight = false;
+  var _lextRestoreAllLastAt = 0;
+  window._lextRestoreAllFromServer = function(opts){
+    opts = opts || {};
+    var cb = (typeof opts.cb === 'function') ? opts.cb : null;
+    if (_lextRestoreAllInFlight) { if (cb) cb({busy:true}); return; }
+    var nowT = Date.now();
+    if (!opts.force && (nowT - _lextRestoreAllLastAt) < 8000) { if (cb) cb({throttled:true}); return; }
+    _lextRestoreAllInFlight = true;
+    _lextRestoreAllLastAt = nowT;
+    var settled = false;
+    function done(res){
+      if (settled) return; settled = true;
+      _lextRestoreAllInFlight = false;
+      if (cb) { try { cb(res || {}); } catch(_){} }
+    }
+    /* Red de seguridad: si la petición nunca resuelve (red muerta,
+       WebView sin AbortController), avisamos igualmente a los ~25 s. */
+    var watchdog = null;
+    try { watchdog = setTimeout(function(){ done({timeout:true}); }, 25000); } catch(_){}
+    var ctrl = null;
+    try { ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){}
+    if (ctrl) { try { setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 24000); } catch(_){} }
+    fetch('/api/liga-ext-bulk', ctrl ? {signal:ctrl.signal, credentials:'same-origin'} : {credentials:'same-origin'})
+      .then(function(r){ return (r && r.ok) ? r.json() : null; })
+      .then(function(j){
+        if (watchdog) { try { clearTimeout(watchdog); } catch(_){} }
+        var leagues = j && j.leagues;
+        if (!leagues || typeof leagues !== 'object') { done({adopted:0, error:'sin datos del servidor'}); return; }
+        var adopted = 0, skipped = 0;
+        Object.keys(leagues).forEach(function(slug){
+          try {
+            var d = leagues[slug];
+            if (!d || !Array.isArray(d.teams) || d.teams.length < 1) return;
+            /* NO pisar una copia local ya rica: solo adoptamos si local
+               está vacío de equipos (caso post-borrado-de-datos). */
+            var localTeams = 0;
+            try { localTeams = _lextTeamsLen(LIGA_CACHE[slug]); } catch(_){}
+            if (localTeams === 0) {
+              try { var lr = localStorage.getItem(storeKey(slug)); if (lr) localTeams = _lextTeamsLen(JSON.parse(lr)); } catch(_){}
+            }
+            if (localTeams > 0) { skipped++; return; }
+            d.teams = d.teams || []; d.results = d.results || [];
+            try { _sanitizeLigaTeamNames(d); } catch(_){}
+            try { LIGA_CACHE[slug] = d; } catch(_){}
+            var ser = null;
+            try { ser = JSON.stringify(d); } catch(_){}
+            if (ser) {
+              try {
+                if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(slug), ser);
+                else localStorage.setItem(storeKey(slug), ser);
+              } catch(_){}
+              try { if (window._idbKV) window._idbKV.set(storeKey(slug), ser); } catch(_){}
+            }
+            adopted++;
+          } catch(_){}
+        });
+        /* Re-pintar la pantalla de liga si sigue abierta. */
+        try {
+          if (CURRENT_KEY && LIGA_CACHE[CURRENT_KEY]) {
+            try { applyLeagueHeaderFromData(LIGA_CACHE[CURRENT_KEY]); } catch(_){}
+            renderTable();
+          }
+        } catch(_){}
+        done({adopted:adopted, skipped:skipped, total:(j.count|0)});
+      })
+      .catch(function(){ if (watchdog) { try { clearTimeout(watchdog); } catch(_){} } done({error:'red'}); });
+  };
+
   var _lextReconcileInFlight = false;
   var _lextReconcileLastAt = 0;
   window._lextReconcileResultsToServer = function(opts){
@@ -48999,6 +49088,48 @@ https://api.sofascore.app/api/v1/team/44/image
     window.addEventListener('pageshow', _lextReconcileOnWake);
     window.addEventListener('focus', _lextReconcileOnWake);
     document.addEventListener('visibilitychange', _lextReconcileOnWake);
+  } catch(_){}
+
+  /* AUTO-RESTAURACIÓN MASIVA AL ARRANCAR (2026-07-23): si en este
+     dispositivo faltan casi todas las ligas de "Resto de Ligas" (típico
+     tras un borrado de datos de navegación / móvil nuevo), las traemos
+     TODAS del servidor con UNA sola petición (`/api/liga-ext-bulk`),
+     sin que el usuario tenga que abrir cada liga ni pulsar nada. Es una
+     ÚNICA petición (no la tormenta de ~50 que se desactivó), y solo
+     adopta las ligas que están VACÍAS en local — nunca pisa una copia
+     local rica. Se dispara una sola vez por sesión, diferido, para no
+     competir con el primer render. */
+  try {
+    setTimeout(function(){
+      try {
+        if (window._lextBulkBootDone) return;
+        window._lextBulkBootDone = true;
+        /* ¿Cuántas ligas con equipos tengo ya en local? */
+        var present = 0, expected = 0;
+        try {
+          if (window.LEAGUE_DEFAULT_ZONES) expected = Object.keys(window.LEAGUE_DEFAULT_ZONES).length;
+        } catch(_){}
+        try {
+          for (var i = 0; i < localStorage.length; i++){
+            var kk = localStorage.key(i);
+            if (kk && kk.indexOf('ligaExt_') === 0 && !/_(protected|backup|snap_\d+)$/.test(kk)) {
+              try {
+                var d = JSON.parse(localStorage.getItem(kk) || '{}');
+                if (d && Array.isArray(d.teams) && d.teams.length) present++;
+              } catch(_){}
+            }
+          }
+        } catch(_){}
+        /* Umbral: si tengo menos de la mitad de las ligas esperadas
+           (o expected desconocido y <10 presentes), restauro todo. */
+        var threshold = expected > 0 ? Math.floor(expected / 2) : 10;
+        if (present < threshold && typeof window._lextRestoreAllFromServer === 'function') {
+          window._lextRestoreAllFromServer({ force:true, cb:function(res){
+            try { if (res && res.adopted > 0) console.warn('[ligaExt] auto-restore boot: ' + res.adopted + ' ligas recuperadas del servidor.'); } catch(_){}
+          }});
+        }
+      } catch(_){}
+    }, 5000);
   } catch(_){}
 
   function avg(arr){
@@ -49268,15 +49399,25 @@ https://api.sofascore.app/api/v1/team/44/image
       (function(){
         var btn = document.getElementById('lext-recover-btn');
         var st  = document.getElementById('lext-recover-status');
-        function _run(){
-          if (st) st.textContent = '⏳ Preguntando al servidor por «' + _slugNow + '»…';
-          var ctrl = null, to = null;
+        /* Restauración MASIVA en UNA petición: `/api/liga-ext-bulk` trae
+           TODAS las ligas de golpe (resuelto en el servidor), así que
+           esta liga Y todas las demás se recuperan a la vez, sin la
+           tormenta de peticiones por-liga que dejaba unas sí y otras no.
+           Si tras restaurar esta liga sigue vacía, es que el servidor de
+           verdad no tiene equipos para ella (o falló la red) — ahí sí
+           caemos al sondeo por-liga para dar un mensaje claro. */
+        function _perLeagueProbe(){
+          if (st) st.textContent = '⏳ Comprobando «' + _slugNow + '» en el servidor…';
+          var ctrl = null, to = null, fired = false;
+          function fail(msg){ if (fired) return; fired = true; if (to){ try{clearTimeout(to);}catch(_){} } if (st) st.textContent = msg; }
           try { ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){}
-          if (ctrl) { try { to = setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 12000); } catch(_){} }
+          if (ctrl) { try { setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 12000); } catch(_){} }
+          /* Watchdog independiente de AbortController (WebViews viejos). */
+          try { to = setTimeout(function(){ fail('⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.'); }, 14000); } catch(_){}
           fetch('/api/liga-ext-any/' + encodeURIComponent(_slugNow), ctrl ? {signal:ctrl.signal, credentials:'same-origin'} : {credentials:'same-origin'})
             .then(function(r){ return r.ok ? r.json() : {__http:r.status}; })
             .then(function(j){
-              if (to) { try { clearTimeout(to); } catch(_){} }
+              if (fired) return; fired = true; if (to){ try{clearTimeout(to);}catch(_){} }
               if (j && j.__http){ if (st) st.textContent = '⚠️ El servidor respondió con error HTTP ' + j.__http + '. Reintenta en unos segundos.'; return; }
               var d = j && j.data;
               var n = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
@@ -49284,14 +49425,36 @@ https://api.sofascore.app/api/v1/team/44/image
                 d.teams = d.teams || []; d.results = d.results || [];
                 try { _sanitizeLigaTeamNames(d); } catch(_){}
                 try { LIGA_CACHE[_slugNow] = d; } catch(_){}
-                try { localStorage.setItem(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
+                try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(_slugNow), JSON.stringify(d)); else localStorage.setItem(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
+                try { if (window._idbKV) window._idbKV.set(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
                 if (st) st.textContent = '✅ El servidor tiene ' + n + ' equipos. Pintando…';
                 if (CURRENT_KEY === _slugNow) { try { applyLeagueHeaderFromData(d); } catch(_){} renderTable(); }
               } else {
                 if (st) st.textContent = '❌ El servidor NO tiene equipos guardados para «' + _slugNow + '» (0 equipos). Esta liga hay que volver a rellenarla, no es un fallo de carga.';
               }
             })
-            .catch(function(){ if (to) { try { clearTimeout(to); } catch(_){} } if (st) st.textContent = '⚠️ No se pudo contactar con el servidor (red/timeout). Reintenta.'; });
+            .catch(function(){ fail('⚠️ No se pudo contactar con el servidor (red/timeout). Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.'); });
+        }
+        function _run(){
+          if (st) st.textContent = '⏳ Recuperando TODAS las ligas del servidor (una sola petición)…';
+          if (typeof window._lextRestoreAllFromServer !== 'function') { _perLeagueProbe(); return; }
+          window._lextRestoreAllFromServer({ force:true, cb:function(res){
+            /* Si la liga actual ya se pintó (adoptada), renderTable ya
+               reemplazó esta pantalla vacía y no hay nada más que hacer. */
+            var nowTeams = 0;
+            try { nowTeams = _lextTeamsLen(LIGA_CACHE[_slugNow]); } catch(_){}
+            if (nowTeams > 0) { return; }
+            if (res && (res.error || res.timeout)) {
+              if (st) st.textContent = '⚠️ No se pudo contactar con el servidor. Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.';
+              return;
+            }
+            if (res && res.adopted > 0 && st) {
+              st.textContent = '✅ Recuperadas ' + res.adopted + ' ligas. Comprobando «' + _slugNow + '»…';
+            }
+            /* La bulk restauró otras ligas pero no ésta → sondeo por-liga
+               (resuelve main→protected para dar el veredicto exacto). */
+            _perLeagueProbe();
+          }});
         }
         if (btn) btn.addEventListener('click', _run);
         /* Sondeo automático inmediato: el usuario ve el resultado sin

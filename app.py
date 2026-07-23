@@ -3525,6 +3525,77 @@ def api_liga_ext_any_get(slug):
         "source": source,
     })
 
+@app.route("/api/liga-ext-bulk", methods=["GET"])
+def api_liga_ext_bulk_get():
+    """Restaura TODAS las ligas externas en UNA sola petición.
+
+    Motivo (2026-07-23, «el 90% de las ligas sale sin equipos… incluso
+    República Checa ya no merge»): tras un borrado de datos de
+    navegación el `localStorage` del dispositivo queda VACÍO, así que
+    CADA liga de "Resto de Ligas" tiene que descargarse del servidor al
+    abrirla. Descargarlas de una en una (o peor, las ~50 de golpe en el
+    boot) es frágil — la tormenta de peticiones satura los 2 workers de
+    gunicorn y solo las primeras que ganan la carrera aparecen; el resto
+    se quedan "sin equipos" para siempre en ese arranque. Este endpoint
+    resuelve el main→`_protected` de TODAS las ligas EN EL SERVIDOR con
+    UNA sola query a la BD y devuelve el roster completo de cada una en
+    UNA sola respuesta, para que el cliente restaure el 100% de las
+    ligas de golpe sin ninguna carrera ni tormenta de red.
+
+    Cada liga se resuelve igual que `/api/liga-ext-any/<slug>`: si el
+    `main` viene VACÍO (<2 equipos) se cae a su snapshot `_protected`
+    (monotónico, nunca encoge). Solo se incluyen ligas con ≥2 equipos
+    reales — las verdaderamente vacías no se envían (no hay nada que
+    restaurar y no hay que confundirlas con un fallo de carga)."""
+    try:
+        rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
+    except Exception:
+        rows = []
+    mains = {}
+    prots = {}
+    for row in rows or []:
+        clave = row.clave or ""
+        if not clave.startswith("liga_ext_"):
+            continue
+        rest = clave[len("liga_ext_"):]
+        if not rest:
+            continue
+        try:
+            data = json.loads(row.valor_json or "{}")
+        except Exception:
+            continue
+        if not isinstance(data, dict):
+            continue
+        if rest.endswith("_protected"):
+            prots[rest[:-len("_protected")]] = data
+        else:
+            mains[rest] = data
+
+    def _team_count(d):
+        t = (d or {}).get("teams")
+        if not isinstance(t, list):
+            return 0
+        return sum(1 for x in t if isinstance(x, dict) and x.get("name"))
+
+    leagues = {}
+    slugs = set(mains.keys()) | set(prots.keys())
+    for slug in slugs:
+        main = mains.get(slug) or {}
+        chosen = main
+        if _team_count(main) < 2:
+            prot = prots.get(slug)
+            if prot and _team_count(prot) >= 2:
+                chosen = prot
+        if _team_count(chosen) < 2:
+            continue
+        if not isinstance(chosen, dict):
+            continue
+        chosen.setdefault("teams", [])
+        chosen.setdefault("results", [])
+        leagues[slug] = chosen
+
+    return jsonify({"ok": True, "count": len(leagues), "leagues": leagues})
+
 @app.route("/api/liga-ext/<slug>", methods=["POST"])
 def api_liga_ext_post(slug):
     payload = request.get_json(silent=True) or {}

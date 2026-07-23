@@ -330,6 +330,63 @@ también se repara por la misma vía. **PROHIBIDO** asumir que las
 selecciones necesitan su propio prefetch dedicado — comparten el mismo
 `showPrePartidoOverlay` y el mismo endpoint server-side.
 
+## Restauración MASIVA de "Resto de Ligas" en UNA sola petición — `/api/liga-ext-bulk` mata la tormenta de ~50 fetches por-liga (obligatorio, 2026-07-23)
+
+**Bug (usuario 2026-07-23, «el 90% de las ligas me sale sin equipos… incluso
+República Checa ya no merge / tienes alguna solución en lugar de decirme
+cosas que no funcionan?»)**: tras BORRAR los datos de navegación (el
+usuario lo hizo muchas veces), el `localStorage` del dispositivo queda
+VACÍO, así que CADA liga de "Resto de Ligas" tiene que descargarse del
+servidor al abrirla. El patrón observado —"cada vez que abro la web se ven
+unas ligas u otras", solo las PRIMERAS ~9 del orden de fetch + las 4
+auto-sembradas aparecen— es el síntoma clásico de una TORMENTA de
+peticiones: descargar las ~50 ligas de golpe (el auto-hidratador de boot)
+satura los 2 workers de gunicorn; solo las que ganan la carrera antes de
+que el servidor se sature aparecen, el resto se quedan "sin equipos" para
+siempre en ese arranque. El sondeo directo se quedaba «Preguntando…» >2 min
+(request encolado tras la tormenta / cold-start de Railway).
+
+### Fix — resolver TODAS las ligas en el SERVIDOR, UNA petición, UNA respuesta
+
+- **Servidor** (`app.py`, `GET /api/liga-ext-bulk`): UNA query
+  (`clave LIKE 'liga_ext_%'`) trae todas las filas; resuelve el
+  main→`_protected` de CADA liga EN EL SERVIDOR (mismo criterio que
+  `/api/liga-ext-any/<slug>`: si el `main` viene con <2 equipos cae al
+  snapshot `_protected` monotónico) y devuelve `{ok, count, leagues:{slug:data}}`
+  con el roster completo de cada liga con ≥2 equipos. Una sola respuesta,
+  cero carreras, cero tormenta.
+- **Cliente** (`misc_body_1.html`, `window._lextRestoreAllFromServer`):
+  UNA petición a `/api/liga-ext-bulk`; por cada liga cuyo local esté
+  VACÍO de equipos, adopta (sanea + `LIGA_CACHE` + `_lsSetSafe` +
+  IndexedDB) — NUNCA pisa una copia local ya rica (eso lo sigue
+  resolviendo `fetchData`/el merge del servidor). Timeout que NO depende
+  de `AbortController` (WebViews viejos sin él dejaban el sondeo colgado
+  para siempre en «Preguntando…»): watchdog `setTimeout` + flag `settled`.
+- **Disparos**: (1) auto al ARRANCAR una sola vez si faltan ≥ la mitad de
+  las ligas esperadas en local (post-borrado-de-datos / móvil nuevo) —
+  UNA petición, no la tormenta desactivada; (2) el botón «🔄 RECUPERAR
+  DEL SERVIDOR» de la pantalla vacía llama a la bulk primero (recupera
+  ESTA liga y todas), y solo si la liga sigue vacía cae al sondeo
+  por-liga `/api/liga-ext-any/<slug>` para dar el veredicto exacto
+  (servidor con 0 equipos vs fallo de red).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reactivar el auto-hidratador MASIVO por-liga
+   (`_eurAutoHydrateAndRender` en boot/focus/pageshow/visibilitychange —
+   desactivado 2026-07-18) sin resolver antes la capacidad del servidor.
+   Para restaurar muchas ligas se usa la bulk (UNA petición), nunca ~50
+   fetches simultáneos.
+2. **PROHIBIDO** que un sondeo/recuperación de la que dependa un
+   resultado visible dependa ÚNICAMENTE de `AbortController` para su
+   timeout: un WebView sin él deja el spinner colgado para siempre.
+   Watchdog `setTimeout` + `settled` independiente SIEMPRE.
+3. **PROHIBIDO** que `_lextRestoreAllFromServer` pise una copia local con
+   equipos: solo adopta ligas VACÍAS en local. El merge de copias ricas
+   sigue siendo de `fetchData`/`_lx_merge_teams`.
+4. Toda liga NUEVA aparece en la bulk automáticamente (la query es
+   `liga_ext_%`); no hay lista hardcodeada.
+
 ## `fetchData` recupera el snapshot `_protected` del servidor cuando el `main` viene VACÍO — regresión que dejó el 90% de "Resto de Ligas" sin equipos (obligatorio, 2026-07-18)
 
 **Bug (foto usuario 2026-07-18, «Israeli Premier League» + «el 90% de

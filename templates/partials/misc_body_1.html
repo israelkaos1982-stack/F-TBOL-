@@ -49416,41 +49416,70 @@ https://api.sofascore.app/api/v1/team/44/image
            Si tras restaurar esta liga sigue vacía, es que el servidor de
            verdad no tiene equipos para ella (o falló la red) — ahí sí
            caemos al sondeo por-liga para dar un mensaje claro. */
+        /* Sondeo por-liga con XHR ASÍNCRONO (2026-07-23 #4). Cambios:
+           (1) XMLHttpRequest async (NO síncrono — permitido) en vez de
+               `fetch`: algunos WebViews de Android tienen `fetch`
+               defectuoso/colgado aunque XHR funcione (el MISMO GET que
+               en la barra del navegador SÍ devuelve datos). Es una vía
+               de red independiente.
+           (2) HEARTBEAT visible: un contador de segundos que sube cada
+               500 ms. Si el contador AVANZA pero no llega respuesta, es
+               un cuelgue de RED; si el contador se QUEDA CLAVADO, el
+               hilo está bloqueado por otra cosa. Diagnóstico definitivo
+               en una sola foto. */
         function _perLeagueProbe(triesLeft){
           if (triesLeft == null) triesLeft = 3;
           var attemptN = 4 - triesLeft;
-          if (st) st.textContent = '⏳ Comprobando «' + _slugNow + '» en el servidor…' + (attemptN > 1 ? (' (intento ' + attemptN + ')') : '');
-          var ctrl = null, to = null, fired = false;
+          var startTs = Date.now();
+          var fired = false, hb = null;
+          function paintWaiting(){
+            if (!st || fired) return;
+            var secs = Math.round((Date.now() - startTs) / 500) / 2; /* 0.5 s de resolución */
+            st.textContent = '⏳ Cargando «' + _slugNow + '»… ' + secs + 's' + (attemptN > 1 ? (' · intento ' + attemptN) : '');
+          }
+          paintWaiting();
+          try { hb = setInterval(paintWaiting, 500); } catch(_){}
+          function stopHb(){ if (hb){ try { clearInterval(hb); } catch(_){} hb = null; } }
           function retryOrFail(msg){
-            if (fired) return; fired = true; if (to){ try{clearTimeout(to);}catch(_){} }
-            if (triesLeft > 1) { setTimeout(function(){ _perLeagueProbe(triesLeft - 1); }, 1200 * attemptN); return; }
+            if (fired) return; fired = true; stopHb();
+            if (triesLeft > 1) { setTimeout(function(){ _perLeagueProbe(triesLeft - 1); }, 1000 * attemptN); return; }
             if (st) st.textContent = msg;
           }
-          try { ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){}
-          if (ctrl) { try { setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 12000); } catch(_){} }
-          /* Watchdog independiente de AbortController (WebViews viejos). */
-          try { to = setTimeout(function(){ retryOrFail('⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.'); }, 13000); } catch(_){}
-          fetch('/api/liga-ext-any/' + encodeURIComponent(_slugNow), ctrl ? {signal:ctrl.signal, credentials:'same-origin'} : {credentials:'same-origin'})
-            .then(function(r){ return r.ok ? r.json() : {__http:r.status}; })
-            .then(function(j){
+          function onData(j){
+            if (fired) return;
+            var d = j && j.data;
+            var n = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
+            if (n > 0){
+              fired = true; stopHb();
+              d.teams = d.teams || []; d.results = d.results || [];
+              try { _sanitizeLigaTeamNames(d); } catch(_){}
+              try { LIGA_CACHE[_slugNow] = d; } catch(_){}
+              try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(_slugNow), JSON.stringify(d)); else localStorage.setItem(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
+              try { if (window._idbKV) window._idbKV.set(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
+              if (st) st.textContent = '✅ ' + n + ' equipos recibidos. Pintando…';
+              if (CURRENT_KEY === _slugNow) { try { applyLeagueHeaderFromData(d); } catch(_){} renderTable(); }
+            } else {
+              fired = true; stopHb();
+              if (st) st.textContent = '❌ El servidor NO tiene equipos para «' + _slugNow + '» (0). Hay que volver a rellenarla — no es un fallo de carga.';
+            }
+          }
+          var xhr = null;
+          try { xhr = new XMLHttpRequest(); } catch(_){ xhr = null; }
+          if (!xhr) { retryOrFail('⚠️ Este navegador no soporta la petición de red.'); return; }
+          try {
+            xhr.open('GET', '/api/liga-ext-any/' + encodeURIComponent(_slugNow), true);
+            try { xhr.timeout = 13000; } catch(_){}
+            xhr.onload = function(){
               if (fired) return;
-              if (j && j.__http){ retryOrFail('⚠️ El servidor respondió con error HTTP ' + j.__http + '. Reintenta en unos segundos.'); return; }
-              fired = true; if (to){ try{clearTimeout(to);}catch(_){} }
-              var d = j && j.data;
-              var n = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
-              if (n > 0){
-                d.teams = d.teams || []; d.results = d.results || [];
-                try { _sanitizeLigaTeamNames(d); } catch(_){}
-                try { LIGA_CACHE[_slugNow] = d; } catch(_){}
-                try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(_slugNow), JSON.stringify(d)); else localStorage.setItem(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
-                try { if (window._idbKV) window._idbKV.set(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
-                if (st) st.textContent = '✅ El servidor tiene ' + n + ' equipos. Pintando…';
-                if (CURRENT_KEY === _slugNow) { try { applyLeagueHeaderFromData(d); } catch(_){} renderTable(); }
-              } else {
-                if (st) st.textContent = '❌ El servidor NO tiene equipos guardados para «' + _slugNow + '» (0 equipos). Esta liga hay que volver a rellenarla, no es un fallo de carga.';
-              }
-            })
-            .catch(function(){ retryOrFail('⚠️ No se pudo contactar con el servidor (red/timeout). Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.'); });
+              if (xhr.status >= 200 && xhr.status < 300) {
+                var j = null; try { j = JSON.parse(xhr.responseText); } catch(_){ j = null; }
+                if (j) onData(j); else retryOrFail('⚠️ Respuesta ilegible del servidor. Reintenta.');
+              } else { retryOrFail('⚠️ El servidor respondió HTTP ' + xhr.status + '. Reintenta.'); }
+            };
+            xhr.onerror   = function(){ retryOrFail('⚠️ No se pudo contactar con el servidor (red). Pulsa 🔄 RECUPERAR DEL SERVIDOR.'); };
+            xhr.ontimeout = function(){ retryOrFail('⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR.'); };
+            xhr.send();
+          } catch(_){ retryOrFail('⚠️ No se pudo lanzar la petición. Reintenta.'); }
         }
         /* UNA sola petición LIGERA para ESTA liga (2026-07-23 #2): NO
            disparamos la bulk automáticamente — es pesada y, encadenada

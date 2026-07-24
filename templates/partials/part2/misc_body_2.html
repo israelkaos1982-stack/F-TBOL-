@@ -11288,6 +11288,8 @@
     var st = _mlSt(mk);
     var ov = document.getElementById('ml-post-ov');
     if (!ov) return;
+    /* Contexto del PREMIO DEL PARTIDO (se recoge al pulsar "Cerrar"). */
+    try { window._mlPostRewardCtx = (typeof window._matchRewardBuildCtx === 'function') ? window._matchRewardBuildCtx('ml', st) : null; } catch(_){ window._mlPostRewardCtx = null; }
     var evts = st.events;
     var mvpEvt = evts.find(function(e){ return e.type==='mvp'; });
 
@@ -13264,6 +13266,239 @@
       }
     } catch(_){}
     try { if (window.gmShowPost) window.gmShowPost(); } catch(_){}
+  };
+
+  /* ══════════════════════════════════════════════════════════════════
+     💰 PREMIO DEL PARTIDO — pantalla de dinero ganado tras finalizar
+     (petición usuario 2026-07-24). Se muestra como ÚLTIMO paso al salir
+     de la pantalla FINAL, SOLO cuando juega un equipo humano (club o
+     selección). El total se suma al 🪙 presupuesto del equipo (el mismo
+     monedero del hub y de los objetivos) vía `_bayernHudCreditMoney`.
+     IDEMPOTENTE por partido (ledger local) → reabrir no paga dos veces.
+     Cubre AMBOS flujos: gm-modal (previa → gmEndMatch) y ml-card.
+     ── CIFRAS EDITABLES (escala coherente con los objetivos 50–180) ── */
+  var _MATCH_REWARD_CFG = {
+    base: 40,            /* taquilla + TV, fijo por partido */
+    win: 60, draw: 25, loss: 10,   /* premio por resultado */
+    cleanSheet: 35,      /* portería a cero (0 encajados) */
+    paliza: 30,          /* ganar por ≥3 goles */
+    perGoal: 8, perGoalCap: 40,    /* +8 por gol marcado, tope +40 */
+    mvp: 20              /* tu jugador es el MVP */
+  };
+  /* Nombre + multiplicador por competición. Acepta tanto las claves de
+     tema de `_gmCompFromState` como las `comp` crudas de las ml-cards. */
+  var _MATCH_REWARD_COMP = {
+    'copa':['Copa del Rey',1.2],'copa-fin':['Copa del Rey',1.2],
+    'sc':['Supercopa de España',1.2],'sc-final':['Supercopa de España',1.2],'super':['Supercopa de España',1.2],
+    'usc':['Supercopa de Europa',1.8],'usc-fin':['Supercopa de Europa',1.8],
+    'recopa':['Recopa de Europa',1.8],
+    'ucl':['Champions League',1.8],
+    'uel':['Europa League',1.4],
+    'uecl':['Conference League',1.4],
+    'inter':['Copa Intercontinental',2.0],
+    'mundialito':['Mundialito de Clubes',2.0],
+    'mundial':['Selección',1.8],'mundial-48':['Selección',1.8],'torneo':['Selección',1.8],
+    'sel':['Selección',1.8],'sel-fin':['Selección',1.8],'selecciones':['Selección',1.8],
+    'amistoso':['Amistoso',0.5],'wprev':['Previa Champions',1.0],
+    'verano':['Torneo de Verano',0.5],'sct':['Torneo de Verano',0.5],'jg':['Torneo de Verano',0.5],
+    'pss':['Torneo de Verano',0.5],'asia':['Torneo de Verano',0.5],
+    'superliga':['Superliga',1.0],'liga':['Liga EA Sports',1.0],'ea-sports':['Liga EA Sports',1.0]
+  };
+  function _mrEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  window._matchRewardCat = function(comp){
+    var hit = _MATCH_REWARD_COMP[String(comp||'').toLowerCase()];
+    return hit ? { name:hit[0], mult:hit[1] } : { name:'Liga EA Sports', mult:1.0 };
+  };
+  /* Competición del gm-modal resuelta desde los flags de `_gm` (sin
+     depender del scope de `_gmCompFromState`). */
+  window._matchRewardGmComp = function(g){
+    g = g || {};
+    if (g._tourId === 'mundial') return 'mundialito';
+    if (g._isCopa || g.comp === 'copa' || g.comp === 'copa-fin') return 'copa';
+    if (g._isSc   || g.comp === 'sc'   || g.comp === 'sc-final') return 'sc';
+    if (g._isUsc  || g.comp === 'usc'  || g.comp === 'usc-fin') return 'usc';
+    if (g._isRecopa   || g.comp === 'recopa') return 'recopa';
+    if (g._isSuperliga || g.comp === 'superliga') return 'superliga';
+    return g.comp || 'liga';
+  };
+  /* Lado humano ('a'/'b') o null. Reconoce club y selección canónicos. */
+  window._matchRewardHumanSide = function(home, away, comp){
+    function isHum(name){
+      if (!name) return false;
+      try { if (typeof window.isHumanInComp === 'function' && window.isHumanInComp(name, comp)) return true; } catch(_){}
+      try { if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)) return true; } catch(_){}
+      try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true; } catch(_){}
+      try { if (typeof window._isHumanSeleccionCanonica === 'function' && window._isHumanSeleccionCanonica(name)) return true; } catch(_){}
+      try { if (typeof window.esHumano === 'function' && window.esHumano(name)) return true; } catch(_){}
+      return false;
+    }
+    var hA = isHum(home), hB = isHum(away);
+    if (hA && !hB) return 'a';
+    if (hB && !hA) return 'b';
+    if (hA && hB) return 'a';   /* HvH: se acredita al hub activo, lado local */
+    return null;
+  };
+  /* Contexto normalizado desde un estado tipo `st` de ml-card. */
+  window._matchRewardBuildCtx = function(prefix, s){
+    if (!s) return null;
+    var comp = s.comp || s.compKey || s._comp || 'liga';
+    if (s._tourId === 'mundial' || s.tourId === 'mundial') comp = 'mundialito';
+    var side;
+    if (s.isFriendly) side = s.homeIsHuman ? 'a' : (s.awayIsHuman ? 'b' : null);
+    else side = window._matchRewardHumanSide(s.home, s.away, comp);
+    var sc = s.sc || { a:0, b:0 };
+    var mvpMine = false;
+    try { var mv = (s.events||[]).find(function(e){ return e && e.type==='mvp'; }); if (mv && mv.team === side) mvpMine = true; } catch(_){}
+    return { home:s.home, away:s.away, gh:(sc.a|0), ga:(sc.b|0), comp:comp, side:side, mvpMine:mvpMine,
+             id: prefix+'|'+comp+'|'+(s.home||'')+'|'+(s.away||'')+'|'+(s.j!=null?s.j:'')+'|'+(s._tourId||s.tourId||'')+'|'+(s._tourKey||'') };
+  };
+  window._matchRewardCompute = function(ctx){
+    if (!ctx || (ctx.side !== 'a' && ctx.side !== 'b')) return null;
+    var cfg = _MATCH_REWARD_CFG;
+    var myG  = ctx.side === 'a' ? ctx.gh : ctx.ga;
+    var oppG = ctx.side === 'a' ? ctx.ga : ctx.gh;
+    var items = [];
+    items.push({ label:'TAQUILLA + TV', amount:cfg.base, star:false });
+    if (myG > oppG)       items.push({ label:'VICTORIA', amount:cfg.win,  star:true });
+    else if (myG === oppG) items.push({ label:'EMPATE',   amount:cfg.draw, star:true });
+    else                   items.push({ label:'DERROTA',  amount:cfg.loss, star:true });
+    if (oppG === 0)        items.push({ label:'PORTERÍA A CERO', amount:cfg.cleanSheet, star:true });
+    if (myG - oppG >= 3)   items.push({ label:'PALIZA', amount:cfg.paliza, star:true });
+    if (myG > 0 && cfg.perGoal > 0) items.push({ label:'GOLES ('+myG+')', amount:Math.min(myG*cfg.perGoal, cfg.perGoalCap), star:false });
+    if (ctx.mvpMine && cfg.mvp > 0) items.push({ label:'TU MVP', amount:cfg.mvp, star:true });
+    var cat = window._matchRewardCat(ctx.comp);
+    var subtotal = items.reduce(function(s,i){ return s + (i.amount||0); }, 0);
+    var total = Math.max(0, Math.round(subtotal * cat.mult / 5) * 5);
+    return { items:items, subtotal:subtotal, mult:cat.mult, compName:cat.name, total:total };
+  };
+  var _MREWARD_LEDGER_KEY = 'match_reward_paid_v1';
+  function _mrewardPaid(){ try { return JSON.parse(localStorage.getItem(_MREWARD_LEDGER_KEY) || '{}') || {}; } catch(_){ return {}; } }
+  function _mrewardMarkPaid(id){ try { var m = _mrewardPaid(); m[id] = 1; localStorage.setItem(_MREWARD_LEDGER_KEY, JSON.stringify(m)); } catch(_){} }
+  window._matchRewardEligible = function(ctx){ return !!(ctx && (ctx.side === 'a' || ctx.side === 'b')); };
+  var _mrewardPending = null;   /* { ctx, calc, onDone } */
+  function _matchRewardRender(ctx, calc){
+    var ov = document.getElementById('match-reward-ov');
+    if (!ov){
+      ov = document.createElement('div');
+      ov.id = 'match-reward-ov';
+      ov.style.cssText = 'display:none;position:fixed;inset:0;z-index:10060;background:linear-gradient(160deg,#0a2f7a 0%,#081633 100%);overflow-y:auto;-webkit-tap-highlight-color:transparent;';
+      document.body.appendChild(ov);
+    }
+    var logoOf = function(name){
+      try { var u = (typeof window.getTeamLogoUrl === 'function') ? window.getTeamLogoUrl(name) : ''; if (u) return u; } catch(_){}
+      try { var e = (typeof window._eurResolveTeamLogo === 'function') ? window._eurResolveTeamLogo(name) : ''; if (e) return e; } catch(_){}
+      try { var g = (typeof window.getLogoEquipo === 'function') ? window.getLogoEquipo(name) : ''; if (g && String(g).indexOf('estepona') === -1) return g; } catch(_){}
+      return '';
+    };
+    var starsHtml = calc.items.filter(function(i){ return i.star; }).map(function(i){
+      return '<div style="min-width:84px;max-width:130px;">'
+        + '<div style="font-size:42px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));">⭐</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-weight:700;font-style:italic;color:#ffd24a;font-size:13px;letter-spacing:.5px;margin-top:6px;">'+_mrEsc(i.label)+'</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-weight:700;color:#fff;font-size:15px;margin-top:2px;">+'+i.amount+'</div>'
+        + '</div>';
+    }).join('');
+    var linesHtml = calc.items.filter(function(i){ return !i.star; }).map(function(i){
+      return '<div style="display:inline-block;background:rgba(6,12,28,.72);border-radius:9px;padding:8px 20px;margin:5px;">'
+        + '<div style="font-family:Oswald,sans-serif;font-weight:700;color:#ffd24a;font-size:11px;letter-spacing:1px;">'+_mrEsc(i.label)+'</div>'
+        + '<div style="font-family:Oswald,sans-serif;font-weight:700;color:#fff;font-size:15px;">+'+i.amount+'</div>'
+        + '</div>';
+    }).join('');
+    var multHtml = (calc.mult && calc.mult !== 1)
+      ? '<div style="font-family:Oswald,sans-serif;color:rgba(255,255,255,.6);font-size:11px;letter-spacing:1.5px;margin-top:12px;">'+_mrEsc((calc.compName||'').toUpperCase())+' · x'+calc.mult+'</div>' : '';
+    var hiA = (typeof window.humanIcon === 'function') ? (window.humanIcon(ctx.home)||'') : '';
+    var hiB = (typeof window.humanIcon === 'function') ? (window.humanIcon(ctx.away)||'') : '';
+    ov.innerHTML = '<div style="max-width:480px;margin:0 auto;padding:26px 16px 44px;text-align:center;">'
+      + '<div style="display:inline-block;background:#e8a915;color:#3a2600;font-family:Oswald,sans-serif;font-weight:900;font-size:12px;letter-spacing:3px;padding:4px 22px;border-radius:6px;margin-bottom:16px;">FINAL</div>'
+      + '<div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:6px;">'
+        + '<div style="flex:1;text-align:center;min-width:0;"><img src="'+_mrEsc(logoOf(ctx.home)||'')+'" style="width:48px;height:48px;object-fit:contain;" onerror="this.style.display=\'none\'"><div style="font-family:Oswald,sans-serif;color:#fff;font-size:12px;margin-top:3px;word-break:break-word;">'+_mrEsc(hiA+ctx.home)+'</div></div>'
+        + '<div style="font-family:Oswald,sans-serif;font-weight:900;color:#fff;font-size:40px;white-space:nowrap;padding:0 6px;">'+ctx.gh+' - '+ctx.ga+'</div>'
+        + '<div style="flex:1;text-align:center;min-width:0;"><img src="'+_mrEsc(logoOf(ctx.away)||'')+'" style="width:48px;height:48px;object-fit:contain;" onerror="this.style.display=\'none\'"><div style="font-family:Oswald,sans-serif;color:#fff;font-size:12px;margin-top:3px;word-break:break-word;">'+_mrEsc(hiB+ctx.away)+'</div></div>'
+      + '</div>'
+      + '<div style="display:flex;align-items:flex-start;justify-content:center;gap:16px;flex-wrap:wrap;margin:32px 0 16px;">'+starsHtml+'</div>'
+      + (linesHtml ? '<div style="margin-bottom:6px;">'+linesHtml+'</div>' : '')
+      + multHtml
+      + '<div style="margin-top:28px;display:flex;justify-content:center;">'
+        + '<div style="display:inline-flex;align-items:center;gap:12px;background:#0b0f16;border:2px solid #f4c020;border-radius:14px;padding:12px 30px;box-shadow:0 3px 12px rgba(0,0,0,.4);">'
+          + '<span style="font-size:26px;">🪙</span>'
+          + '<span style="font-family:Oswald,sans-serif;font-weight:900;color:#fff;font-size:34px;">'+calc.total+'</span>'
+        + '</div>'
+      + '</div>'
+      + '<button id="match-reward-collect-btn" onclick="window._matchRewardCollect()" style="margin-top:24px;width:100%;max-width:320px;padding:15px;background:#f4c81e;border:none;border-radius:12px;color:#1a1a1a;font-family:Oswald,sans-serif;font-weight:900;font-size:18px;letter-spacing:3px;cursor:pointer;box-shadow:0 4px 0 #b8940f;">RECOGER</button>'
+      + '</div>';
+    ov.style.display = 'block';
+  }
+  window._matchRewardShow = function(ctx, onDone){
+    try {
+      if (!window._matchRewardEligible(ctx)) { if (onDone) onDone(); return; }
+      if (_mrewardPaid()[ctx.id]) { if (onDone) onDone(); return; }   /* ya recogido */
+      var calc = window._matchRewardCompute(ctx);
+      if (!calc || calc.total <= 0) { if (onDone) onDone(); return; }
+      _mrewardPending = { ctx:ctx, calc:calc, onDone:onDone };
+      _matchRewardRender(ctx, calc);
+    } catch(e){
+      try { console.error('[matchReward] show fallo:', e); } catch(_){}
+      if (onDone) onDone();
+    }
+  };
+  window._matchRewardCollect = function(){
+    var p = _mrewardPending;
+    _mrewardPending = null;
+    try {
+      if (p && p.ctx && !_mrewardPaid()[p.ctx.id]){
+        _mrewardMarkPaid(p.ctx.id);
+        try { if (typeof window._bayernHudCreditMoney === 'function') window._bayernHudCreditMoney(p.calc.total); } catch(_){}
+      }
+    } catch(_){}
+    try { var ov = document.getElementById('match-reward-ov'); if (ov) ov.style.display = 'none'; } catch(_){}
+    try { if (p && typeof p.onDone === 'function') p.onDone(); } catch(_){}
+  };
+  /* Respaldo TÁCTIL (regla CLAUDE.md 8: un botón dentro de un overlay
+     scrollable no puede depender SOLO del click sintético). El botón
+     RECOGER dispara en touchstart; `_matchRewardCollect` es idempotente. */
+  if (!window._matchRewardTapWired){
+    window._matchRewardTapWired = true;
+    document.addEventListener('touchstart', function(ev){
+      try {
+        var t = ev.target; if (!t || !t.closest) return;
+        if (t.closest('#match-reward-collect-btn') && _mrewardPending) window._matchRewardCollect();
+      } catch(_){}
+    }, { passive:true });
+  }
+
+  /* Salida de la pantalla FINAL del gm-modal: muestra el PREMIO como
+     último paso (si hay humano) y, al RECOGER, ejecuta la salida real. */
+  var _gmExitFinalReal = window.gmExitFinal;
+  window.gmExitFinal = function(){
+    try {
+      var g = window._gm || {};
+      var comp = window._matchRewardGmComp(g);
+      var side = window._matchRewardHumanSide(g.home, g.away, comp);
+      var sc = g.sc || { a:0, b:0 };
+      var mvpMine = false;
+      try { var mv = (g.events||[]).find(function(e){ return e && e.type==='mvp'; }); if (mv && mv.team === side) mvpMine = true; } catch(_){}
+      var ctx = { home:g.home, away:g.away, gh:(sc.a|0), ga:(sc.b|0), comp:comp, side:side, mvpMine:mvpMine,
+                  id:'gm|'+comp+'|'+(g.home||'')+'|'+(g.away||'')+'|'+(g.j!=null?g.j:'')+'|'+(g._tourId||'')+'|'+(g._tourKey||'') };
+      if (typeof window._matchRewardShow === 'function' && window._matchRewardEligible(ctx)){
+        window._matchRewardShow(ctx, function(){ try { _gmExitFinalReal(); } catch(_){} });
+        return;
+      }
+    } catch(_){}
+    try { _gmExitFinalReal(); } catch(_){}
+  };
+
+  /* Cierre de la pantalla post-partido de las ml-cards: mismo premio. */
+  window._mlPostCloseWithReward = function(){
+    var ov = document.getElementById('ml-post-ov');
+    var closeReal = function(){ try { if (ov) ov.classList.remove('show'); } catch(_){} };
+    try {
+      var ctx = window._mlPostRewardCtx;
+      if (ctx && typeof window._matchRewardShow === 'function' && window._matchRewardEligible(ctx)){
+        closeReal();
+        window._matchRewardShow(ctx, function(){});
+        return;
+      }
+    } catch(_){}
+    closeReal();
   };
 
   /* ── SELECCIÓN DE EVENTOS GENÉRICA (overlays globales) ── */
@@ -21025,7 +21260,7 @@
       Compartir Resultado en WhatsApp
     </button>
     <!-- Cerrar -->
-    <button id="ml-post-close-btn" class="ml-post-close" onclick="document.getElementById('ml-post-ov').classList.remove('show')">Cerrar</button>
+    <button id="ml-post-close-btn" class="ml-post-close" onclick="window._mlPostCloseWithReward ? window._mlPostCloseWithReward() : document.getElementById('ml-post-ov').classList.remove('show')">Cerrar</button>
   </div>
 </div>
 

@@ -1,5 +1,59 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## 💰 PREMIO DEL PARTIDO — pantalla de dinero ganado tras finalizar un partido humano (obligatorio, 2026-07-24)
+
+**Petición usuario 2026-07-24 (11 fotos de referencia de otro juego)**:
+tras finalizar el partido de CUALQUIER equipo humano (club O selección),
+la ÚLTIMA pantalla debe mostrar el dinero ganado por ese partido, con un
+desglose (estrellas de bonus + ingreso base) y un botón RECOGER que suma
+el total al 🪙 presupuesto del equipo.
+
+### Implementación (`part2/misc_body_2.html`, junto a `gmForceExitMatch`)
+
+Módulo compartido por los DOS flujos de fin de partido:
+- **gm-modal** (previa → `gmEndMatch` → pantalla FINAL): `window.gmExitFinal`
+  está ENVUELTO — al pulsar «SALIR AL MENÚ» muestra primero el premio y,
+  al RECOGER, ejecuta la salida real (`_gmExitFinalReal`).
+- **ml-card** (calendario → `_mlOpenPostMatch` → `ml-post-ov`): el botón
+  «Cerrar» llama a `window._mlPostCloseWithReward()`, que lee el contexto
+  stasheado en `window._mlPostRewardCtx` (fijado en `_mlOpenPostMatch`).
+
+Funciones clave (todas en `window.*`): `_matchRewardCompute(ctx)` (calcula
+items + total), `_matchRewardShow(ctx, onDone)` (pinta el overlay
+`#match-reward-ov`), `_matchRewardCollect()` (acredita + cierra + `onDone`),
+`_matchRewardHumanSide`/`_matchRewardGmComp`/`_matchRewardBuildCtx`
+(resuelven lado humano y competición sin depender de `_gmCompFromState`).
+
+### Cifras (editables en `_MATCH_REWARD_CFG` + `_MATCH_REWARD_COMP`)
+
+Escala coherente con los objetivos del club (50–180): base taquilla+TV 40,
+victoria 60 / empate 25 / derrota 10, portería a cero 35, paliza (≥3) 30,
++8 por gol (tope 40), tu MVP 20. **Multiplicador por competición**
+(`_MATCH_REWARD_COMP`): amistoso/verano ×0.5, Liga/Superliga ×1.0,
+Copa/Supercopa España ×1.2, Europa/Conference ×1.4, Champions/Recopa/
+Supercopa Europa ×1.8, Mundialito/Intercontinental ×2.0, Selección ×1.8.
+Total = `round(subtotal × mult / 5) × 5`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el premio se acredite MÁS DE UNA VEZ por partido:
+   `_matchRewardCollect` es idempotente vía el ledger local
+   `match_reward_paid_v1` (clave por `ctx.id` = flujo+comp+home+away+jornada+
+   tourId). Reabrir la pantalla FINAL NO vuelve a pagar.
+2. **PROHIBIDO** que el premio se muestre para un partido SIN humano:
+   `_matchRewardEligible`/`_matchRewardHumanSide` exigen un lado humano
+   (club O selección canónicos). IA-vs-IA → salida directa sin premio.
+3. **PROHIBIDO** acreditar a otra hucha que no sea la del hub activo
+   (`_bayernHudCreditMoney`, el mismo monedero del hub y de los objetivos).
+   Club y selección del MISMO mister comparten hucha (decisión usuario).
+4. **PROHIBIDO** que un fix futuro del `gmExitFinal` wrap o del botón
+   «Cerrar» de `ml-post-ov` deje sin llamar a `onDone`/la salida real: el
+   premio es un paso INTERMEDIO, nunca puede dejar al usuario atascado
+   (todas las ramas de `_matchRewardShow` llaman a `onDone`).
+5. Todo botón nuevo de esta pantalla dentro del overlay scrollable
+   (`#match-reward-ov`, `overflow-y:auto`) hereda el respaldo táctil
+   `touchstart` (regla 8 de la portería imbatida) — RECOGER ya lo tiene.
+
 ## El acta EN VIVO y el mensaje de WhatsApp (descanso/prórroga/FINAL) reparan nombres placeholder al vuelo — no solo la pantalla de IA-vs-IA de Liga (obligatorio, 2026-07-21 #2)
 
 **Bug (4 fotos usuario 2026-07-21, «Torino (IA) 1-3 Arsenal (Álvaro)»,

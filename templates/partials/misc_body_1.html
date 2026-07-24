@@ -48465,11 +48465,24 @@ https://api.sofascore.app/api/v1/team/44/image
           }).catch(function(){ _retryOrGiveUp(); });
         } catch(_){ cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); }
       }
-      fetch(url).then(function(r){
+      /* TIMEOUT DURO en el fetch del `main` (2026-07-23 #2): sin él, un
+         request que el servidor acepta pero nunca responde (worker
+         atascado / conexión colgada) deja `fetchData` esperando el
+         timeout por defecto del navegador (~2 min) — o para siempre en
+         algunos WebViews — sin caer nunca al fallback. Con AbortController
+         + watchdog, a los 12 s abortamos y caemos a `_lxAnyFallback`
+         (que ya tiene sus propios reintentos), en vez de colgar la carga
+         de la liga. */
+      var _fdCtrl = null, _fdTo = null;
+      try { _fdCtrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){ _fdCtrl = null; }
+      if (_fdCtrl) { try { _fdTo = setTimeout(function(){ try { _fdCtrl.abort(); } catch(_){} }, 12000); } catch(_){ _fdTo = null; } }
+      fetch(url, _fdCtrl ? {signal:_fdCtrl.signal, credentials:'same-origin'} : {credentials:'same-origin'}).then(function(r){
+        if(_fdTo){ try{ clearTimeout(_fdTo); }catch(_){} }
         if(r.status===304){ if(_lxCacheEmpty()){ _lxAnyFallback(); return; } cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); return; }
         if(!r.ok){ if(_lxCacheEmpty()){ _lxAnyFallback(); return; } cb && cb(LIGA_CACHE[k]||{teams:[],results:[]}, false); return; }
         return r.json();
       }).then(function(j){
+        if(_fdTo){ try{ clearTimeout(_fdTo); }catch(_){} }
         if(!j) return;
         var data = (j && j.data) || {teams:[],results:[]};
         data.teams = data.teams || [];

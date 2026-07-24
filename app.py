@@ -4186,6 +4186,15 @@ _KV_RECENCY_BLOB_KEYS = {
     # stale no pisa lo más nuevo).
     "munich-obj-state-v4",
     "munich-obj-state-v5",   # rediseño 2026-07-23 (2 objetivos por competición)
+    # CONFIG editable de los Objetivos del Club (textos/cantidades/recompensas
+    # + objetivos personalizados por competición). Antes era last-write-wins en
+    # el server + POST fire-and-forget sin reintentos en el cliente → en red
+    # móvil floja el POST de una edición se perdía y, tras una evicción de
+    # localStorage, el pull re-adoptaba la copia stale del server: la edición
+    # "no se quedaba guardada" y revertía al default (foto usuario 2026-07-24).
+    # Ahora RECENCIA + authoritative (edición explícita del admin sella el reloj
+    # del server y gana pese al clock-skew), igual que menu_home_v1.
+    "munich-obj-overrides-v1",
     # Tabla EDITABLE de premios CASH: la última edición del admin gana entera.
     "cash_rewards_v1",
     # Modo manual por zona del reparto europeo: la última edición del

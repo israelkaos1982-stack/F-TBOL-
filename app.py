@@ -171,6 +171,14 @@ app.secret_key = os.environ.get("SECRET_KEY") or uuid.uuid4().hex
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
     "pool_recycle": 300,
+    # Resiliencia del pool (2026-07-23): sin `pool_timeout` una consulta
+    # que tarde puede dejar a las demás esperando indefinidamente; con un
+    # timeout corto, una petición atascada falla rápido en vez de colgar
+    # la pestaña del usuario para siempre ("Comprobando…" eterno). Pool un
+    # poco mayor para absorber los 8 hilos de gunicorn (2 workers × 4).
+    "pool_size": 10,
+    "max_overflow": 20,
+    "pool_timeout": 10,
 }
 
 db = SQLAlchemy(app)
@@ -3581,22 +3589,46 @@ def api_liga_ext_bulk_get():
             return 0
         return sum(1 for x in t if isinstance(x, dict) and x.get("name"))
 
+    def _light_team(t):
+        """Copia LIGERA de un equipo para la tabla de clasificación: sin
+        `players[]` (el 90% del peso — rosters con stats/escudos por
+        jugador). La pantalla de clasificación NO necesita la plantilla;
+        al ABRIR la liga, `fetchData` trae el documento COMPLETO por-liga.
+        Así el bulk no carga decenas de MB en memoria ni satura la BD."""
+        if not isinstance(t, dict):
+            return t
+        out = {}
+        for kk, vv in t.items():
+            if kk == "players":
+                continue
+            out[kk] = vv
+        return out
+
     leagues = {}
     slugs = set(mains.keys()) | set(prots.keys())
     for slug in slugs:
-        main = mains.get(slug) or {}
-        chosen = main
-        if _team_count(main) < 2:
-            prot = prots.get(slug)
-            if prot and _team_count(prot) >= 2:
-                chosen = prot
-        if _team_count(chosen) < 2:
+        try:
+            main = mains.get(slug) or {}
+            chosen = main
+            if _team_count(main) < 2:
+                prot = prots.get(slug)
+                if prot and _team_count(prot) >= 2:
+                    chosen = prot
+            if _team_count(chosen) < 2:
+                continue
+            if not isinstance(chosen, dict):
+                continue
+            light = {}
+            for kk, vv in chosen.items():
+                if kk == "teams":
+                    continue
+                light[kk] = vv
+            light["teams"] = [_light_team(t) for t in (chosen.get("teams") or [])]
+            light.setdefault("results", [])
+            light["_lightBulk"] = True  # marca: rosters incompletos, re-fetch al abrir
+            leagues[slug] = light
+        except Exception:
             continue
-        if not isinstance(chosen, dict):
-            continue
-        chosen.setdefault("teams", [])
-        chosen.setdefault("results", [])
-        leagues[slug] = chosen
 
     return jsonify({"ok": True, "count": len(leagues), "leagues": leagues})
 

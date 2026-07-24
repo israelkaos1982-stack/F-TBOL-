@@ -65365,17 +65365,43 @@ https://api.sofascore.app/api/v1/team/44/image
          LOCALES GANAN; sólo se añaden los oids que el server tenga y el
          local no. Nunca pisa una edición local. Si la fusión añade algo,
          re-sube para converger. */
-  function _saveOverridesServer(){
-    try {
-      window.fetch('/api/kv/' + OVR_KEY, {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        credentials: 'same-origin',
-        body: JSON.stringify({value: OVR || {}})
-      }).catch(function(){});
-    } catch(_){}
+  /* Sello de recencia del blob de config de objetivos. */
+  function _ovrTs(){ var t = OVR && parseFloat(OVR.updatedAt); return isNaN(t) ? 0 : t; }
+  /* POST del OVR COMPLETO CON REINTENTOS (hasta 3, backoff). El fire-and-
+     forget anterior perdía el guardado en red móvil floja (foto usuario
+     2026-07-24: "los objetivos que edito no se quedan guardados"): el POST
+     se perdía en silencio, el server conservaba la versión vieja y, tras
+     una evicción de localStorage, el pull re-adoptaba esa copia stale →
+     la edición revertía al default "Nuevo objetivo"/20. `authoritative`
+     (edición EXPLÍCITA del admin) sella el reloj del server y gana pese al
+     clock-skew de otros dispositivos — mismo patrón que menu_home_v1/HUD. */
+  function _saveOverridesServer(authoritative){
+    var tries = 0;
+    function go(){
+      try {
+        window.fetch('/api/kv/' + OVR_KEY, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          credentials: 'same-origin',
+          body: JSON.stringify({value: OVR || {}, authoritative: !!authoritative})
+        }).then(function(r){
+          if (!(r && r.ok) && tries < 3){ tries++; setTimeout(go, 1000 * tries); }
+        }).catch(function(){ if (tries < 3){ tries++; setTimeout(go, 1000 * tries); } });
+      } catch(_){}
+    }
+    go();
   }
-  function saveOverrides(){ try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){} _saveOverridesServer(); }
+  function saveOverrides(){
+    try { OVR.updatedAt = Date.now(); } catch(_){}
+    try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){}
+    _saveOverridesServer(true);   /* edición del admin → AUTORITATIVA */
+  }
+  /* Hidratación por RECENCIA (ya no aditiva-sin-sello): si el server es MÁS
+     NUEVO (otra edición, o este dispositivo perdió su copia por evicción),
+     se adopta ENTERO; si el local es MÁS NUEVO (su POST se perdió), se
+     RE-EMPUJA para converger — la edición se auto-cura en vez de revertir.
+     Anti-wipe: un server sin sello (updatedAt=0) o vacío NUNCA pisa una
+     edición local sellada. */
   function _hydrateOverridesFromServer(cb){
     try {
       window.fetch('/api/kv/' + OVR_KEY, {credentials:'same-origin', headers:{'Cache-Control':'no-store'}})
@@ -65383,16 +65409,19 @@ https://api.sofascore.app/api/v1/team/44/image
         .then(function(j){
           var remote = (j && j.ok && j.value && typeof j.value === 'object') ? j.value : null;
           if (!remote){ if (typeof cb === 'function') cb(false); return; }
-          var added = false;
-          for (var oid in remote){
-            if (!remote.hasOwnProperty(oid)) continue;
-            if (OVR[oid] == null && remote[oid] != null){ OVR[oid] = remote[oid]; added = true; }
-          }
-          if (added){
+          var localTs  = _ovrTs();
+          var remoteTs = parseFloat(remote.updatedAt); if (isNaN(remoteTs)) remoteTs = 0;
+          if (remoteTs > localTs){
+            OVR = remote;
             try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){}
-            _saveOverridesServer();
+            if (typeof cb === 'function') cb(true);
+            return;
           }
-          if (typeof cb === 'function') cb(added);
+          /* Local igual o más nuevo: si el server está por detrás, re-subir
+             (no-autoritativo) para curar un POST perdido / un dispositivo
+             nuevo. No re-renderiza (el DOM ya refleja el local). */
+          if (localTs > remoteTs) _saveOverridesServer(false);
+          if (typeof cb === 'function') cb(false);
         }).catch(function(){ if (typeof cb === 'function') cb(false); });
     } catch(_){ if (typeof cb === 'function') cb(false); }
   }

@@ -66434,33 +66434,43 @@ https://api.sofascore.app/api/v1/team/44/image
       }
       return;
     }
-    /* ── `done` desde la FUENTE DE VERDAD PERSISTIDA, no del DOM ────────
-       El DOM (`#ath-obj-club` checkboxes) puede estar TRANSITORIAMENTE en
-       blanco (reload / re-render por overrides antes de `loadObjState`),
-       y contar done=0 ahí DEFLACTA 💼/🪙 a 0 aunque el objetivo SÍ esté
-       guardado (bug usuario 2026-06-13: "el objetivo se guarda pero la
-       puntuación 0,28 💼 vuelve a cero"). El progreso PERSISTIDO
-       (`munich-obj-state-v4`, ya reconciliado por la hidratación gateada
-       arriba con `isHttpHydrated`) es la fuente correcta: contamos los ✅
-       de ahí. Sólo caemos al DOM si no hay progreso persistido (sesión
-       fresca real). Edit 2 garantiza que ese persistido NUNCA es un blanco
-       espurio. */
+    /* ── `done`/recompensa = UNIÓN de (progreso PERSISTIDO) ∪ (✅ VISIBLES en
+       el DOM) ────────────────────────────────────────────────────────────
+       Antes se contaba SÓLO el progreso persistido (munich-obj-state-v5) y,
+       si estaba vacío, se caía al DOM. Pero v5 es una clave RECIÉN creada
+       (2026-07-23): su copia en el server arranca VACÍA, así que la
+       reconciliación adopta un blob vacío (`checks:{}`) y `done`=0 aunque el
+       usuario SÍ tenga objetivos cumplidos y VERDES en pantalla → ni el 🪙 ni
+       el 💼 se sumaban (foto usuario 2026-07-24: "2 objetivos = 80🪙 y no se
+       suman al total"). La UNIÓN lo arregla: un objetivo VISIBLEMENTE cumplido
+       acredita su recompensa aunque el persistido esté vacío/atrasado. Es un
+       SUPERSET del persistido → NUNCA deflaciona (un DOM transitoriamente en
+       blanco durante un re-render no baja el conteo, respetando las reglas
+       14-17); sólo un ✅ realmente marcado (persistido O en pantalla) suma. */
     /* Recompensa 🪙 por objetivo resuelta por OID (por defecto + custom). */
     var _rewardFor = (typeof window._munichObjRewardFor === 'function') ? window._munichObjRewardFor : null;
     var _useRewards = !!_rewardFor;
-    var done = 0, sumReward = 0;
+    var _doneSet = {};
     var _persObj = null;
     try { _persObj = JSON.parse(localStorage.getItem(LS_OBJ) || 'null'); } catch(_){ _persObj = null; }
-    if (_persObj && _persObj.checks && typeof _persObj.checks === 'object'){
+    var _hasPers = !!(_persObj && _persObj.checks && typeof _persObj.checks === 'object');
+    if (_hasPers){
       var _pch = _persObj.checks;
-      for (var _pk in _pch){ if (_pch.hasOwnProperty(_pk) && _pch[_pk]){ done++; if (_rewardFor) sumReward += Number(_rewardFor(_pk)) || 0; } }
-    } else {
-      var items = document.querySelectorAll('#ath-obj-club .obj-item');
-      if (!items.length) return;   /* objetivos no renderizados todavía y sin persistido */
-      items.forEach(function(lbl){
-        var cb = lbl.querySelector('input[type=checkbox]');
-        if (cb && cb.checked){ done++; var _oid = lbl.getAttribute('data-oid'); if (_rewardFor && _oid) sumReward += Number(_rewardFor(_oid)) || 0; }
-      });
+      for (var _pk in _pch){ if (_pch.hasOwnProperty(_pk) && _pch[_pk]) _doneSet[_pk] = true; }
+    }
+    var _domItems = document.querySelectorAll('#ath-obj-club .obj-item');
+    _domItems.forEach(function(lbl){
+      var cb = lbl.querySelector('input[type=checkbox]');
+      var _oid = lbl.getAttribute('data-oid');
+      if (cb && cb.checked && _oid) _doneSet[_oid] = true;
+    });
+    /* Nada que computar aún: ni progreso persistido ni pantalla renderizada. */
+    if (!_hasPers && !_domItems.length) return;
+    var done = 0, sumReward = 0;
+    for (var _dk in _doneSet){
+      if (!_doneSet.hasOwnProperty(_dk)) continue;
+      done++;
+      if (_rewardFor) sumReward += Number(_rewardFor(_dk)) || 0;
     }
     /* Si el persistido cuenta ✅ pero el DOM está sin restaurar, re-pintarlo
        (cosmético: que la pantalla de objetivos muestre los ✅). No bloquea
@@ -66476,6 +66486,16 @@ https://api.sofascore.app/api/v1/team/44/image
     var o = window._bayernHudGet() || {};
     var prevObjMoney  = parseFloat(o.objMoney)  || 0;
     var prevObjRating = parseFloat(o.objRating) || 0;
+    /* ── ANTI-DEFLACIÓN del crédito ya acreditado ──────────────────────────
+       Con munich-obj-state-v5 recién creado (server vacío), un recálculo
+       posterior con la pantalla de objetivos CERRADA (`_domItems` vacío) y el
+       progreso persistido adoptado-vacío daría done=0 y REVERTIRÍA el 🪙/💼
+       que ya se acreditó al cumplir los objetivos. Si no podemos CONFIRMAR el
+       vaciado (pantalla no renderizada) pero YA habíamos acreditado, NO
+       recalculamos a 0 — mantenemos el crédito. Un vaciado LEGÍTIMO (el
+       usuario desmarca todo) ocurre SIEMPRE con la pantalla ABIERTA
+       (`_domItems` presentes), así que ese caso SÍ deflaciona correctamente. */
+    if (done === 0 && !_domItems.length && (prevObjMoney > 0 || prevObjRating > 0)) return;
     /* 🪙 PRESUPUESTO — modelo NUEVO por objetivo (2026-07-23): cada objetivo
        marcado acredita SU recompensa `r` (la suma de los ✅). Fallback al
        modelo antiguo (25 fijos) sólo si el array de recompensas no cargó. */

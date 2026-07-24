@@ -9842,11 +9842,70 @@
     try {
       if (st.matchStats) pi += athComputeStatsPI(st.matchStats[hubSide], st.matchStats[rivalSide]);
     } catch(e){}
-    if (pi > 0) {
-      athAddMedicalPI(pi);
-      try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(e){}
+    pi = Math.round(pi * 10) / 10;
+
+    /* ── 🪙 DINERO + 💼 VALORACIÓN POR PARTIDO (petición usuario 2026-07-24) ─
+       Además del 💊 (ya existente arriba), cada partido humano acredita al
+       HUD del hub: 🪙 8/3/1 por Victoria/Empate/Derrota + 1 por gol marcado
+       + 2 si deja la portería a cero; 💼 0,03/0,01/0 por V/E/D (se acumula
+       hacia el ratingTarget del equipo). El desglose se deja en
+       st._matchEarnings para el bloque "GANANCIAS DEL PARTIDO" del resumen.
+       El 🪙 es el "sueldo" que financia las apuestas de derbys (mismo
+       monedero), por eso el target de dinero no se toca. */
+    var gf, ga;
+    if (st.sc && typeof st.sc.a === 'number' && typeof st.sc.b === 'number') {
+      gf = hubSide === 'a' ? st.sc.a : st.sc.b;
+      ga = hubSide === 'a' ? st.sc.b : st.sc.a;
+    } else {
+      gf = 0; ga = 0;
+      var _GOALT = { 'gol':1, 'falta-gol':1, 'pen-gol':1 };
+      evs.forEach(function(e){
+        if (!e) return;
+        if (_GOALT[e.type]) { if (e.team === hubSide) gf++; else if (e.team === rivalSide) ga++; }
+        else if (e.type === 'propia' || e.type === 'autogol') { if (e.team === hubSide) ga++; else if (e.team === rivalSide) gf++; }
+      });
+    }
+    var coins, drating;
+    if (gf > ga)      { coins = 8; drating = 0.03; }
+    else if (gf === ga){ coins = 3; drating = 0.01; }
+    else              { coins = 1; drating = 0; }
+    coins += gf;                 /* +1 🪙 por gol marcado */
+    if (ga === 0) coins += 2;    /* +2 🪙 portería a cero */
+    drating = Math.round(drating * 1000) / 1000;
+
+    /* Idempotencia: una reentrada de gmEndMatch / watchdog / re-render no
+       debe volver a acreditar. El desglose ya queda en st._matchEarnings
+       para el resumen aunque el crédito ya se aplicara. */
+    if (!st._matchEarningsApplied) {
+      st._matchEarningsApplied = true;
+      st._matchEarnings = { coins: coins, pi: pi, rating: drating, gf: gf, ga: ga };
+      if (pi > 0) {
+        athAddMedicalPI(pi);
+        try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(e){}
+      }
+      try { if (coins > 0 && window._bayernHudCreditMoney) window._bayernHudCreditMoney(coins); } catch(e){}
+      try { if (drating > 0 && window._bayernHudCreditMatchRating) window._bayernHudCreditMatchRating(drating); } catch(e){}
     }
   }
+  /* Bloque "GANANCIAS DEL PARTIDO" (🪙 + 💊 + 💼 de ESTE partido) para el
+     resumen post-partido. Lee st._matchEarnings (lo rellena
+     athApplyMedicalFromActa). Devuelve '' si el hub no jugó este partido. */
+  window._mlMatchEarningsHtml = function(st){
+    try {
+      var e = st && st._matchEarnings;
+      if (!e) return '';
+      var parts = [];
+      parts.push('<span style="white-space:nowrap;">🪙 <b>+' + (Number(e.coins) || 0) + '</b></span>');
+      if ((Number(e.pi) || 0) > 0)
+        parts.push('<span style="white-space:nowrap;">💊 <b>+' + (Math.round((Number(e.pi) || 0) * 10) / 10) + '</b></span>');
+      if ((Number(e.rating) || 0) > 0)
+        parts.push('<span style="white-space:nowrap;">💼 <b>+' + (Number(e.rating) || 0).toFixed(2) + '</b></span>');
+      return '<div style="margin:0 0 16px;padding:10px 12px;border:1px solid rgba(255,215,0,.35);border-radius:10px;background:rgba(255,215,0,.06);text-align:center;">'
+        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,215,0,.75);margin-bottom:6px;">💰 GANANCIAS DEL PARTIDO</div>'
+        + '<div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-family:Oswald,sans-serif;font-size:17px;color:#fff;">'
+        + parts.join('') + '</div></div>';
+    } catch(_) { return ''; }
+  };
   /* Equipo del hub Toñín (s-munich). El icono 💊 y el menú médico se
      refieren SIEMPRE a las lesiones de ESE equipo. */
   function _athHubTeam() {
@@ -11363,6 +11422,13 @@
       } else {
         mvpEl.style.display = 'none';
       }
+    }
+
+    // Ganancias del partido (🪙 + 💊 + 💼)
+    var earnEl = document.getElementById('ml-post-earnings');
+    if (earnEl) {
+      try { earnEl.innerHTML = (typeof window._mlMatchEarningsHtml === 'function') ? window._mlMatchEarningsHtml(st) : ''; }
+      catch(_) { earnEl.innerHTML = ''; }
     }
 
     // WhatsApp button — rich message
@@ -13032,6 +13098,7 @@
           +'<div style="text-align:center;flex:1;"><img id="gm-fin-logo-b" src="" style="width:52px;height:52px;object-fit:contain;" onerror="this.style.display=\'none\'"><div id="gm-fin-name-b" style="font-family:Oswald,sans-serif;font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;word-break:break-word;"></div></div>'
         +'</div>'
         +'<div id="gm-fin-mvp" style="text-align:center;font-family:Oswald,sans-serif;font-size:16px;color:#ffd700;margin-bottom:20px;letter-spacing:1px;"></div>'
+        +'<div id="gm-fin-earnings"></div>'
         +'<div style="margin-bottom:24px;">'
           +'<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,255,255,.3);margin-bottom:8px;">ACTA COMPLETA</div>'
           +'<div id="gm-fin-events" style="border:1px solid rgba(255,255,255,.08);border-radius:8px;overflow:hidden;"></div>'
@@ -13078,6 +13145,10 @@
         }
       }
     } catch(errMvp) { try { console.error('_gmShowFinalOv fallo en MVP:', errMvp); } catch(_){} }
+    try {
+      var earnEl = document.getElementById('gm-fin-earnings');
+      if (earnEl) earnEl.innerHTML = (typeof window._mlMatchEarningsHtml === 'function') ? window._mlMatchEarningsHtml(_gm) : '';
+    } catch(errEarn) { try { console.error('_gmShowFinalOv fallo en ganancias:', errEarn); } catch(_){} }
     try {
       var allEvts = (_gm.events||[]).filter(function(e){ return e && e.type !== 'mvp'; });
       var evList = document.getElementById('gm-fin-events');
@@ -21019,6 +21090,8 @@
     <div class="ml-post-acta" id="ml-post-acta"></div>
     <!-- MVP -->
     <div id="ml-post-mvp" class="ml-post-mvp-row" style="display:none;"></div>
+    <!-- Ganancias del partido (🪙 + 💊 + 💼) -->
+    <div id="ml-post-earnings"></div>
     <!-- Botón WhatsApp elegante -->
     <button id="ml-post-wa-btn" class="ml-post-wa-btn">
       <svg class="ml-post-wa-ico" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.124.554 4.122 1.528 5.855L0 24l6.336-1.508A11.948 11.948 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.818 9.818 0 01-5.014-1.374l-.36-.214-3.727.977.995-3.634-.235-.374A9.818 9.818 0 1112 21.818z"/></svg>

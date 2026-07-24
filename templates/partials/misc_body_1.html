@@ -62145,6 +62145,7 @@ https://api.sofascore.app/api/v1/team/44/image
        en cola (seguro) hasta un pull con éxito, en vez de clobberear. */
   var _hudHydrated = false;
   var _pendingMoneyDelta = 0;
+  var _pendingRatingDelta = 0;   /* 💼 por partido acumulado antes de hidratar */
   var _hydrateCbs = [];
   window._BAYERN_HUD_HYDRATED = false;
   function _markHydrated(){
@@ -62156,6 +62157,10 @@ https://api.sofascore.app/api/v1/team/44/image
     if (_pendingMoneyDelta){
       var d = _pendingMoneyDelta; _pendingMoneyDelta = 0;
       try { _creditMoneyNow(d); } catch(_){}
+    }
+    if (_pendingRatingDelta){
+      var dr = _pendingRatingDelta; _pendingRatingDelta = 0;
+      try { _creditRatingNow(dr); } catch(_){}
     }
     /* Rearma a los suscriptores (objetivos del club, etc.). */
     var cbs = _hydrateCbs.slice(); _hydrateCbs.length = 0;
@@ -63680,6 +63685,37 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!delta) return;
     if (!_hudHydrated){ _pendingMoneyDelta += delta; return; }
     _creditMoneyNow(delta);
+  };
+
+  /* ── 💼 VALORACIÓN POR PARTIDO (petición usuario 2026-07-24) ──────────
+     Cada partido humano acredita una pequeña valoración (Victoria +0,03 ·
+     Empate +0,01 · Derrota 0) que se acumula hacia el `ratingTarget` de
+     cada equipo. Se suma DENTRO de `ratingBase` (la "base" del HUD), NO
+     como una 4ª fuente independiente: así respeta el modelo ABSOLUTO
+     `rating = ratingBase + objRating` sin tocar `liverpoolObjEarnings`,
+     el reset (que ya pone `ratingBase:0`) ni el guardado autoritativo del
+     editor (que preserva `ratingBase = rating − objRating`, conservando lo
+     acumulado por partido). Mismo patrón gateado por hidratación que el
+     dinero: un crédito que caiga antes de reconciliar se ACUMULA en
+     `_pendingRatingDelta` y se aplica en `_markHydrated` sobre el base
+     correcto (ni se pierde ni clobberea el valor del admin). */
+  function _creditRatingNow(delta){
+    delta = Number(delta) || 0;
+    if (!delta) return;
+    var o = load() || {};
+    var objR = parseFloat(o.objRating) || 0;
+    var base = (o.ratingBase != null) ? (parseFloat(o.ratingBase) || 0)
+               : Math.max(0, (parseFloat(o.rating) || 0) - objR);
+    var nb = Math.round((base + delta) * 1000) / 1000;
+    if (nb < 0) nb = 0;
+    var rating = Math.round((nb + objR) * 1000) / 1000;
+    window._bayernHudMerge({ ratingBase: nb, rating: rating });
+  }
+  window._bayernHudCreditMatchRating = function(delta){
+    delta = Number(delta) || 0;
+    if (!delta) return;
+    if (!_hudHydrated){ _pendingRatingDelta += delta; return; }
+    _creditRatingNow(delta);
   };
 
   /* ── REFUERZO 2026-05-09 ──────────────────────────────────────

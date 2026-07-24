@@ -62078,16 +62078,23 @@ https://api.sofascore.app/api/v1/team/44/image
   var IDB_DB = 'bayernHudV1';
   var IDB_STORE = 'overrides';
   var IDB_ROW_ID = 'singleton' + _hudSuffix();
-  var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 1300, pi: null };
-  /* Defaults POR HUB — se usan cuando un hub aún no tiene datos guardados */
+  var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 2400, pi: null };
+  /* Defaults POR HUB — se usan cuando un hub aún no tiene datos guardados.
+     `moneyTarget` reescalado 2026-07-24 (~1.85×): el modelo de premios
+     (CASH por posición + recompensas de objetivos, hasta ~2.355 🪙 en una
+     temporada FUERTE de club+selección) rebasaba ~2× el target viejo (1300),
+     así que el objetivo no tenía mordida. Ahora el target representa una
+     temporada EXCELENTE (ganar casi todos los títulos + cumplir casi todos
+     los objetivos). Se conserva la jerarquía relativa por mister
+     (Ruben/Inter el más bajo, Isra el más alto). */
   var _HUB_DEF = {
-    tonin:  { ratingTarget: 8.70, moneyTarget: 1300, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
-    alvaro: { ratingTarget: 8.85, moneyTarget: 1370, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
-    acsa:   { ratingTarget: 9,    moneyTarget: 1400, money: 200, pi: 2, nivel: 'CRACK',   formRival: '🎲' },
-    isra:   { ratingTarget: 9,    moneyTarget: 1410, money: 200, pi: 2, nivel: 'LEYENDA', formRival: '🎲' },
-    angel:  { ratingTarget: 9,    moneyTarget: 1400, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
-    izan:   { ratingTarget: 8.75, moneyTarget: 1330, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
-    ruben:  { rating: 8, ratingBase: 8, ratingTarget: 10, moneyTarget: 1000, money: 200, pi: 2, nivel: 'ESTRELLA', formRival: '🎲' }
+    tonin:  { ratingTarget: 8.70, moneyTarget: 2400, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
+    alvaro: { ratingTarget: 8.85, moneyTarget: 2530, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
+    acsa:   { ratingTarget: 9,    moneyTarget: 2580, money: 200, pi: 2, nivel: 'CRACK',   formRival: '🎲' },
+    isra:   { ratingTarget: 9,    moneyTarget: 2600, money: 200, pi: 2, nivel: 'LEYENDA', formRival: '🎲' },
+    angel:  { ratingTarget: 9,    moneyTarget: 2580, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
+    izan:   { ratingTarget: 8.75, moneyTarget: 2450, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
+    ruben:  { rating: 8, ratingBase: 8, ratingTarget: 10, moneyTarget: 1850, money: 200, pi: 2, nivel: 'ESTRELLA', formRival: '🎲' }
   };
   function _hubDef(){
     try { var h=window._activeHub&&window._activeHub(); if(h&&h.id&&_HUB_DEF[h.id]) return _HUB_DEF[h.id]; } catch(_){}

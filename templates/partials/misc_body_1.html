@@ -54512,15 +54512,31 @@ https://api.sofascore.app/api/v1/team/44/image
     applyLeagueHeaderFromData(cached);
     renderTable();
     if(typeof window.go === 'function') window.go('s-liga-ext');
-    // Sincroniza con servidor y re-renderiza cuando llega
-    fetchData(CURRENT_KEY, function(data, fromServer){
-      if(fromServer && CURRENT_KEY){
-        applyLeagueHeaderFromData(data);
-        renderTable();
-        var ov = document.getElementById('lext-ov-teams');
-        if(ov && ov.classList.contains('show')) renderTeamsList();
-      }
-    });
+    /* HIDRATACIÓN (2026-07-23 #3): si el local está VACÍO de equipos, NO
+       lanzamos la cadena PESADA de `fetchData` (anti-wipe + backfills +
+       sanitize sobre 20 equipos × 30 jugadores). Esa cadena, al llegar
+       la respuesta del servidor, corría SÍNCRONA y podía bloquear el
+       hilo — dejando la pantalla congelada en «Comprobando…» pese a que
+       el servidor SÍ respondió con todos los equipos (diagnóstico
+       confirmado: el mismo `/api/liga-ext-any/<slug>` en la barra del
+       navegador devuelve el roster completo al instante). Para el caso
+       VACÍO deja que el sondeo LIGERO del branch vacío de `renderTable`
+       (`_perLeagueProbe`: fetch `-any` → escribir → re-pintar, sin
+       anti-wipe ni backfills) haga la hidratación. `fetchData` (cadena
+       completa, necesaria para el MERGE cross-dispositivo) solo se
+       dispara cuando YA hay una copia local con equipos que fusionar. */
+    var _cachedTeamsN = (cached && Array.isArray(cached.teams)) ? cached.teams.length : 0;
+    if (_cachedTeamsN > 0) {
+      // Sincroniza con servidor y re-renderiza cuando llega
+      fetchData(CURRENT_KEY, function(data, fromServer){
+        if(fromServer && CURRENT_KEY){
+          applyLeagueHeaderFromData(data);
+          renderTable();
+          var ov = document.getElementById('lext-ov-teams');
+          if(ov && ov.classList.contains('show')) renderTeamsList();
+        }
+      });
+    }
   };
 
   function wireLigasExt(){

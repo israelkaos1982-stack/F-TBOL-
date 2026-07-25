@@ -49445,6 +49445,52 @@ https://api.sofascore.app/api/v1/team/44/image
             if (triesLeft > 1) { setTimeout(function(){ _perLeagueProbe(triesLeft - 1); }, 1000 * attemptN); return; }
             if (st) st.textContent = msg;
           }
+          /* Render DIRECTO y freeze-proof (2026-07-23 #5): el diagnóstico
+             (heartbeat clavado en 0s) probó que el hilo se BLOQUEA justo
+             al llegar los datos — en algún punto de la cadena pesada
+             `renderTable`/`loadData`/`applyLeagueHeaderFromData`/writes.
+             Pintamos la tabla AQUÍ MISMO usando SOLO `standings` +
+             `zoneClass` (verificadas O(n), sin bucles), y DIFERIMOS todo
+             lo demás (sanitize, localStorage, IndexedDB) a un `setTimeout`
+             — así los equipos SE PINTAN sí o sí (el navegador repinta al
+             acabar este tick), y aunque una escritura pesada se cuelgue
+             DESPUÉS, la tabla ya está a la vista. */
+          function _paintStandingsDirect(d){
+            var body = document.getElementById('lext-body');
+            if (!body) return false;
+            var rows;
+            try { rows = standings(d); } catch(_){ rows = null; }
+            if (!rows || !rows.length) return false;
+            var zones = (d && d.config && d.config.zones) ? d.config.zones : null;
+            var total = rows.length;
+            body.innerHTML = rows.map(function(r,i){
+              var pos = i+1;
+              var z = '';
+              try { z = zones ? zoneClass(pos,total,zones) : ''; } catch(_){ z = ''; }
+              var dgSign = r.dg>0?'+'+r.dg:(r.dg<0?r.dg:'0');
+              var dgCls = r.dg>0?'pos':(r.dg<0?'neg':'');
+              var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
+              var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
+              var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
+              var humanSfx = (r.isHuman && r.humanEmoji) ? '<span class="clas-team-human-suffix">'+r.humanEmoji+'</span>' : '';
+              return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
+                +'<span class="lext-pos">'+pos+'</span>'
+                +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span>'+humanSfx+'</span>'
+                +'<span class="lext-pts">'+r.pts+'</span>'
+                +'<span class="lext-cell">'+r.pj+'</span>'
+                +'<span class="lext-cell">'+r.v+'</span>'
+                +'<span class="lext-cell">'+r.e+'</span>'
+                +'<span class="lext-cell">'+r.p+'</span>'
+                +'<span class="lext-cell gf">'+r.gf+'</span>'
+                +'<span class="lext-cell gc">'+r.gc+'</span>'
+                +'<span class="lext-cell dg '+dgCls+'">'+dgSign+'</span>'
+                +'<span class="lext-cell ta">'+r.ta+'</span>'
+                +'<span class="lext-cell tr">'+r.tr+'</span>'
+                +'<span class="lext-cell pct '+pctCls+'">'+pct+'%</span>'
+              +'</div>';
+            }).join('');
+            return true;
+          }
           function onData(j){
             if (fired) return;
             var d = j && j.data;
@@ -49452,12 +49498,26 @@ https://api.sofascore.app/api/v1/team/44/image
             if (n > 0){
               fired = true; stopHb();
               d.teams = d.teams || []; d.results = d.results || [];
-              try { _sanitizeLigaTeamNames(d); } catch(_){}
+              /* 1) PINTAR YA (mínimo y seguro). */
+              var painted = false;
+              try { painted = _paintStandingsDirect(d); } catch(_){}
+              try {
+                var ttlEl = document.getElementById('liga-ext-title');
+                if (ttlEl && d.config && d.config.name) ttlEl.textContent = d.config.name;
+              } catch(_){}
               try { LIGA_CACHE[_slugNow] = d; } catch(_){}
-              try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(_slugNow), JSON.stringify(d)); else localStorage.setItem(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
-              try { if (window._idbKV) window._idbKV.set(storeKey(_slugNow), JSON.stringify(d)); } catch(_){}
-              if (st) st.textContent = '✅ ' + n + ' equipos recibidos. Pintando…';
-              if (CURRENT_KEY === _slugNow) { try { applyLeagueHeaderFromData(d); } catch(_){} renderTable(); }
+              if (!painted && st) st.textContent = '✅ ' + n + ' equipos recibidos.';
+              /* 2) TODO lo pesado, DIFERIDO fuera del tick de pintado
+                    (sanitize + persistencia). Si algo aquí se cuelga, la
+                    tabla ya está a la vista. */
+              setTimeout(function(){
+                try { _sanitizeLigaTeamNames(d); } catch(_){}
+                var ser = null; try { ser = JSON.stringify(d); } catch(_){}
+                if (ser) {
+                  try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(_slugNow), ser); else localStorage.setItem(storeKey(_slugNow), ser); } catch(_){}
+                  try { if (window._idbKV) window._idbKV.set(storeKey(_slugNow), ser); } catch(_){}
+                }
+              }, 60);
             } else {
               fired = true; stopHb();
               if (st) st.textContent = '❌ El servidor NO tiene equipos para «' + _slugNow + '» (0). Hay que volver a rellenarla — no es un fallo de carga.';

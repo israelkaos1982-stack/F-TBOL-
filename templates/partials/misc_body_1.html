@@ -46860,6 +46860,37 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){ cb && cb(null, false); }
   };
 
+  /* Dispara `_lextLightFetch` en segundo plano para `k` si no hay ya
+     una hidratación en curso, y re-pinta si la pantalla de esa liga
+     sigue abierta al terminar. Único punto usado por `loadData()` —
+     se llama desde TODOS los puntos donde la función va a devolver un
+     documento con 0 equipos, no solo cuando no hay NADA en local (ver
+     regla 2026-07-24: una liga con un `main` VACÍO ya persistido en
+     localStorage —residuo de un fetch antiguo que devolvió 0 equipos—
+     retornaba antes de llegar a este disparo, dejándola sin ninguna
+     hidratación automática para siempre). */
+  function _lextTriggerBgHydrate(k){
+    if (window._restoSimBulkInProgress || window._ligaExtSimInProgress) return;
+    if (LIGA_CACHE['__bgHydrating_'+k]) return;
+    LIGA_CACHE['__bgHydrating_'+k] = true;
+    try {
+      window._lextLightFetch(k, function(d, ok){
+        try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){}
+        if (!ok || !d) return;
+        try {
+          if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
+            try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(d); } catch(_){}
+            try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
+            try {
+              var ov = document.getElementById('lext-ov-teams');
+              if (ov && ov.classList.contains('show') && typeof renderTeamsList === 'function') renderTeamsList();
+            } catch(_){}
+          }
+        } catch(_){}
+      });
+    } catch(_){ try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){} }
+  }
+
   function loadData(k){
     if(LIGA_CACHE[k]) {
       /* Sanitize en cada cache-hit: barato cuando ya está limpio (la
@@ -46893,6 +46924,16 @@ https://api.sofascore.app/api/v1/team/44/image
           try { localStorage.setItem(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
         }
       } catch(_){}
+      /* Si la cache YA está poblada pero VACÍA (un intento de
+         hidratación anterior falló — red, timeout, servidor sin
+         datos EN ESE momento — y dejó `{teams:[],results:[]}` puesto),
+         reintentamos aquí. Sin esto, un solo fallo deja la liga
+         atascada en vacío PARA SIEMPRE en esta sesión: cualquier
+         llamada posterior a `loadData` entra por ESTA rama primera y
+         nunca vuelve a intentar nada (2026-07-24 #7). */
+      if (!Array.isArray(LIGA_CACHE[k].teams) || !LIGA_CACHE[k].teams.length) {
+        try { _lextTriggerBgHydrate(k); } catch(_){}
+      }
       return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     }
     /* Lectura del main, pero CON DETECCIÓN DE WIPE: si el main
@@ -46949,6 +46990,14 @@ https://api.sofascore.app/api/v1/team/44/image
           }
         } catch(_){}
         LIGA_CACHE[k] = parsed;
+        /* Un `main` persistido VACÍO (0 equipos, residuo de un fetch
+           antiguo) NO debe cerrar la puerta a la hidratación — solo
+           `_lextTriggerBgHydrate` decide (guard `__bgHydrating_`), así
+           que llamarlo aquí es seguro y no repite trabajo si otro
+           punto ya la disparó. */
+        if (!Array.isArray(parsed.teams) || !parsed.teams.length) {
+          try { _lextTriggerBgHydrate(k); } catch(_){}
+        }
         return _applyForcedBlacklist(k, LIGA_CACHE[k]);
       }
     }catch(_){}
@@ -47021,43 +47070,14 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     } catch(_){}
     /* Cache + protected + backup + snapshots vacíos → hidratación en
-       SEGUNDO PLANO desde el servidor (2026-07-13, ver CLAUDE.md regla
-       "El click en una fila de clasificación NUNCA hace XHR SÍNCRONO").
-       ANTES esto era un XHR SÍNCRONO (`async=false`) que congelaba la
-       PESTAÑA ENTERA hasta que el servidor respondía — con Railway/
-       Render en cold-start eso podía durar muchos segundos, y
-       reproducía el mismo bug de congelación al abrir/pulsar CUALQUIER
-       equipo de Resto de Ligas sin plantilla cacheada todavía (temporada
-       recién empezada, dispositivo nuevo). `loadData` SIGUE devolviendo
-       de forma SÍNCRONA (su contrato no cambia — 76 callers en este
-       archivo esperan el valor inmediato), pero ahora, si no hay NADA
-       en local, devuelve el objeto VACÍO al instante y dispara la
-       hidratación real de fondo — igual que ya hace `fetchData()` (la
-       misma función que `openLigaExt` ya llama justo después de
-       `loadData`, y que ESTA hidratación reutiliza en vez de duplicar
-       lógica). Si la pantalla de esa liga sigue abierta cuando el
+       SEGUNDO PLANO desde el servidor. `loadData` SIGUE devolviendo de
+       forma SÍNCRONA (su contrato no cambia — 76 callers en este
+       archivo esperan el valor inmediato); el objeto vacío se devuelve
+       al instante y `_lextTriggerBgHydrate` hace el resto en segundo
+       plano. Si la pantalla de esa liga sigue abierta cuando el
        servidor responde, se re-pinta sola. */
-    if (!window._restoSimBulkInProgress && !window._ligaExtSimInProgress
-        && !LIGA_CACHE['__bgHydrating_'+k]) {
-      LIGA_CACHE['__bgHydrating_'+k] = true;
-      try {
-        window._lextLightFetch(k, function(d, ok){
-          try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){}
-          if (!ok || !d) return;
-          try {
-            if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
-              try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(d); } catch(_){}
-              try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
-              try {
-                var ov = document.getElementById('lext-ov-teams');
-                if (ov && ov.classList.contains('show') && typeof renderTeamsList === 'function') renderTeamsList();
-              } catch(_){}
-            }
-          } catch(_){}
-        });
-      } catch(_){ try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){} }
-    }
     LIGA_CACHE[k] = {teams:[], results:[]};
+    try { _lextTriggerBgHydrate(k); } catch(_){}
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }
   /* Exponer en window para que IIFEs hermanos (p.ej. el host de
@@ -49542,8 +49562,11 @@ https://api.sofascore.app/api/v1/team/44/image
         if (btn) btn.addEventListener('click', _run);
         /* Al abrir: NO relanzamos otra petición — `loadData()` (llamada
            al entrar a esta función) ya puso una en marcha. Solo
-           observamos su resultado con el poll. */
-        poll = setInterval(checkArrived, 500);
+           observamos su resultado con el poll (1er chequeo INMEDIATO
+           para que el texto "Cargando…" aparezca al instante, no tras
+           500ms). */
+        checkArrived();
+        if (!settled) poll = setInterval(checkArrived, 500);
       })();
       return;
     }

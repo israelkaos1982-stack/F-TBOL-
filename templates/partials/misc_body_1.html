@@ -66515,6 +66515,34 @@ https://api.sofascore.app/api/v1/team/44/image
       done++;
       if (_rewardFor) sumReward += Number(_rewardFor(_dk)) || 0;
     }
+    /* ── Badge "X / total" (pantalla de objetivos + card del hub) ────────
+       Usa el `done` de la UNIÓN (nunca el crudo del DOM). Bug 2026-07-25
+       (fotos usuario, «0/29 parpadea a 2/29 y vuelve a 0/29»): el copiado
+       ingenuo `dst.textContent = src.textContent` de `patchAthObjCount`
+       (más abajo) tomaba el texto de `#ath-obj-count`, que la función BASE
+       (`athObjCount` del bundle) escribe contando SOLO checkboxes marcados
+       en el DOM EN ESE INSTANTE — si `renderAll` acaba de reconstruir la
+       lista (checkboxes en blanco) y `loadObjState` aún no restauró los ✅
+       guardados, esa cuenta es "0" aunque el progreso persistido/unión
+       tenga 2. El dinero/valoración YA estaban protegidos (usan `done` de
+       la unión), pero el BADGE visible mentía. Total = nº de `.obj-item`
+       renderizados (estable, no depende de qué esté marcado); si la
+       pantalla nunca se renderizó esta sesión, se conserva el total que ya
+       hubiera en el badge en vez de escribir "/0". */
+    try {
+      var _badgeTotal = _domItems.length;
+      if (!_badgeTotal){
+        var _curBadge = document.getElementById('munich-obj-count');
+        var _mTot = _curBadge && /\/\s*(\d+)/.exec(_curBadge.textContent || '');
+        _badgeTotal = _mTot ? (parseInt(_mTot[1], 10) || 0) : 0;
+      }
+      if (_badgeTotal){
+        var _acEl = document.getElementById('ath-obj-count');
+        if (_acEl) _acEl.textContent = done + ' / ' + _badgeTotal;
+        var _mcEl = document.getElementById('munich-obj-count');
+        if (_mcEl) _mcEl.textContent = done + ' / ' + _badgeTotal;
+      }
+    } catch(_){}
     /* Si el persistido cuenta ✅ pero el DOM está sin restaurar, re-pintarlo
        (cosmético: que la pantalla de objetivos muestre los ✅). No bloquea
        el crédito — `done` ya es correcto desde el persistido. loadObjState
@@ -66593,14 +66621,15 @@ https://api.sofascore.app/api/v1/team/44/image
       if (window.__munichObjEditing) return;
       if (orig) orig.apply(this, arguments);
       saveObjState();
+      /* El badge del hub (#munich-obj-count) y el propio contador de la
+         pantalla (#ath-obj-count) los escribe `liverpoolObjEarnings` con el
+         `done` de la UNIÓN (persistido ∪ DOM) — NUNCA copiar aquí el texto
+         crudo de `#ath-obj-count` que acaba de escribir `orig.apply()`
+         arriba: ese conteo es SOLO del DOM en este instante, y si la lista
+         se acaba de re-renderizar (checkboxes en blanco) antes de que
+         `loadObjState` restaure los ✅ guardados, muestra "0/29" pisando el
+         "2/29" real (bug 2026-07-25, el badge del hub parpadeaba a 0). */
       try { liverpoolObjEarnings(); } catch(_){}
-      /* Sincroniza el badge de la caja del HUB (s-munich) con el
-         contador de la pantalla de objetivos. */
-      try {
-        var src = document.getElementById('ath-obj-count');
-        var dst = document.getElementById('munich-obj-count');
-        if (src && dst) dst.textContent = src.textContent;
-      } catch(_){}
       if (typeof window._bayernHudReapply === 'function') {
         try { window._bayernHudReapply(); } catch(_){}
       }

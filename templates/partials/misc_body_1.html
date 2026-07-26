@@ -66904,18 +66904,35 @@ https://api.sofascore.app/api/v1/team/44/image
       if (lbl) lbl.classList.toggle('done', cb.checked);
     });
 
-    /* ── GUARD «temporada NO empezada» (petición usuario 2026-06-29) ──────
+    /* ── GUARD «temporada NO empezada» (petición usuario 2026-06-29,
+       ACOTADO a AUTOMÁTICOS 2026-07-25) ────────────────────────────────
        Si el equipo del hub no ha jugado NI UN partido competitivo esta
-       temporada, NINGÚN objetivo puede estar cumplido. Limpia TODO ✅ falso
-       (incluidos los MANUALES que un estado viejo / sync stale dejó marcado:
-       «máx goleadores de Liga» sin acabar la liga, «marca en 3 partidos de
-       Champions» sin haber empezado, etc.). Solo DESMARCA (nunca marca), y
-       SOLO cuando no hay arranque → en una temporada en curso no toca nada,
-       así no se pierde progreso real. Generaliza a las 6 cajas humanas
-       (resuelve el equipo del hub dinámicamente). */
+       temporada, ningún objetivo AUTOMÁTICO (`data-auto`, calculado desde
+       la clasificación de Liga/Superliga) puede estar cumplido de verdad.
+       SOLO se desmarcan esos — nunca los MANUALES (sino/count, marcados a
+       mano por el usuario: "Quedar entre los 8 primeros del torneo",
+       "Gana la Copa del Rey"…). `_hubSeasonStarted()` lee ÚNICAMENTE
+       caches LOCALES (ligaExt_liga-ea-sports, los 11 stores
+       `ef_player_stats_*`, Superliga) — tras un «Borrar datos de
+       navegación» esos caches están VACÍOS un instante hasta que
+       re-hidratan del servidor, así que da un FALSO NEGATIVO ("temporada
+       no empezada") aunque el usuario SÍ tenga progreso real. Con el
+       guard aplicado a TODOS los `.obj-item` (versión anterior), ese falso
+       negativo desmarcaba en el DOM objetivos manuales YA CONFIRMADOS por
+       el usuario (bug 2026-07-25, fotos: "Quedar entre los 8 primeros del
+       torneo de verano" volvía a naranja/sin marcar tras borrar datos) —
+       y, a diferencia de los automáticos (que se re-evalúan solos en cada
+       pasada desde datos reales), un manual NUNCA se vuelve a marcar solo:
+       este desmarcado era irreversible en la práctica. Acotar a
+       `.obj-item.is-auto` (los que SÍ se re-derivan de datos verificables)
+       hace que el guard siga cumpliendo su propósito original (limpiar
+       "máx goleadores de Liga"/"marca en Champions" stale) sin tocar
+       jamás un ✅ que el usuario puso con su propia mano. Solo DESMARCA
+       (nunca marca), y SOLO cuando no hay arranque → en una temporada en
+       curso no toca nada. Generaliza a las 6 cajas humanas. */
     try {
       if (!_hubSeasonStarted()){
-        host.querySelectorAll('.obj-item').forEach(function(lbl){
+        host.querySelectorAll('.obj-item.is-auto').forEach(function(lbl){
           var cb = lbl.querySelector('input[type=checkbox]');
           if (cb && cb.checked){ cb.checked = false; lbl.classList.remove('done'); }
         });

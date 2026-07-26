@@ -46789,6 +46789,77 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){ _kick(); }
   })();
 
+  /* ── HIDRATACIÓN LIGERA COMPARTIDA (2026-07-23 #6) ───────────────────
+     Diagnóstico DEFINITIVO (heartbeat de la pantalla de liga vacía
+     nunca avanza de "0s" en NINGUNA sesión, pese a que
+     `/api/liga-ext-any/<slug>` responde al instante en la barra del
+     navegador): `renderTable()` empieza SIEMPRE llamando a `loadData()`,
+     y `loadData()` — cuando el local está TOTALMENTE vacío — dispara por
+     su cuenta la cadena PESADA `fetchData()` (anti-wipe + backfills +
+     sanitize sobre el roster completo) en segundo plano,
+     INDEPENDIENTEMENTE de lo que haga el caller. El fix anterior que
+     hacía que `openLigaExt` NO llamara a `fetchData()` para ligas vacías
+     no evitaba este disparo oculto — `loadData()` lo hacía de todos
+     modos, en CADA render. Además `fetchData()` pide `/api/liga-ext/`
+     (solo `main`, sin fallback a `_protected`) — si el `main` de esta
+     liga está vacío, cae a SU PROPIO reintentador (`_lxAnyFallback`),
+     que vuelve a pedir `/api/liga-ext-any/` — la MISMA URL que ya pide
+     el sondeo ligero de la pantalla vacía. Resultado: 2-3 peticiones
+     paralelas a por lo menos 2 endpoints distintos, cada una con su
+     propia cadena de reintentos, y la pesada corriendo su sanitize/
+     anti-wipe SÍNCRONO nada más recibir 20 equipos × ~30 jugadores.
+
+     Cuando el LOCAL está vacío no hay NADA que proteger (anti-wipe),
+     NADA que fusionar (merge) y NADA de que hacer backfill — toda esa
+     maquinaria de `fetchData()` es pura sobrecarga innecesaria. Este
+     helper es la ÚNICA vía de hidratación para el caso "local vacío":
+     UNA petición (XHR async) a `/api/liga-ext-any/<slug>` (resuelve
+     main→_protected EN EL SERVIDOR), escritura mínima, sanitize
+     DIFERIDO (nunca bloquea el pintado). Lo usan `loadData()` (disparo
+     automático) y el branch vacío de `renderTable()` (comparten el
+     MISMO resultado vía `LIGA_CACHE`, cero peticiones duplicadas). */
+  window._lextLightFetch = function(slug, cb){
+    var xhr = null;
+    try { xhr = new XMLHttpRequest(); } catch(_){ xhr = null; }
+    if (!xhr) { cb && cb(null, false); return; }
+    try {
+      xhr.open('GET', '/api/liga-ext-any/' + encodeURIComponent(slug), true);
+      try { xhr.timeout = 13000; } catch(_){}
+      var settled = false;
+      function done(d, ok){ if (settled) return; settled = true; cb && cb(d, ok); }
+      xhr.onload = function(){
+        if (settled) return;
+        if (xhr.status < 200 || xhr.status >= 300) { done(null, false); return; }
+        var j = null; try { j = JSON.parse(xhr.responseText); } catch(_){ j = null; }
+        var d = j && j.data;
+        var n = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
+        if (!d || n <= 0) { done(null, false); return; }
+        d.teams = d.teams || []; d.results = d.results || [];
+        try { LIGA_CACHE[slug] = d; } catch(_){}
+        var ser = null; try { ser = JSON.stringify(d); } catch(_){}
+        if (ser) {
+          try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(slug), ser); else localStorage.setItem(storeKey(slug), ser); } catch(_){}
+          try { if (window._idbKV) window._idbKV.set(storeKey(slug), ser); } catch(_){}
+        }
+        /* Sanitize DIFERIDO (nunca en el mismo tick que la respuesta —
+           es la operación que sospechamos puede ser costosa para
+           rosters reales grandes). Se re-persiste tras limpiar. */
+        setTimeout(function(){
+          try {
+            if (_sanitizeLigaTeamNames(d)) {
+              var ser2 = null; try { ser2 = JSON.stringify(d); } catch(_){}
+              if (ser2) { try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(slug), ser2); else localStorage.setItem(storeKey(slug), ser2); } catch(_){} }
+            }
+          } catch(_){}
+        }, 80);
+        done(d, true);
+      };
+      xhr.onerror   = function(){ done(null, false); };
+      xhr.ontimeout = function(){ done(null, false); };
+      xhr.send();
+    } catch(_){ cb && cb(null, false); }
+  };
+
   function loadData(k){
     if(LIGA_CACHE[k]) {
       /* Sanitize en cada cache-hit: barato cuando ya está limpio (la
@@ -46967,12 +47038,12 @@ https://api.sofascore.app/api/v1/team/44/image
        lógica). Si la pantalla de esa liga sigue abierta cuando el
        servidor responde, se re-pinta sola. */
     if (!window._restoSimBulkInProgress && !window._ligaExtSimInProgress
-        && typeof fetchData === 'function' && !LIGA_CACHE['__bgHydrating_'+k]) {
+        && !LIGA_CACHE['__bgHydrating_'+k]) {
       LIGA_CACHE['__bgHydrating_'+k] = true;
       try {
-        fetchData(k, function(d, fromServer){
+        window._lextLightFetch(k, function(d, ok){
           try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){}
-          if (!fromServer || !d) return;
+          if (!ok || !d) return;
           try {
             if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
               try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(d); } catch(_){}
@@ -49393,13 +49464,22 @@ https://api.sofascore.app/api/v1/team/44/image
     var body = document.getElementById('lext-body');
     if(!body) return;
     if(!data.teams.length){
-      /* DIAGNÓSTICO + RECUPERACIÓN MANUAL (2026-07-18): en vez de un
-         mensaje mudo, si la liga sale vacía preguntamos DIRECTAMENTE al
-         servidor (address-bar-style, sin depender de la cadena
-         fetchData) y contamos qué devuelve. Así el fallo deja de ser
-         invisible: se ve "servidor: 31 equipos → pantalla: 0" (bug de
-         cliente) vs "servidor: 0" (dato ausente) vs "error/red". Y el
-         botón fuerza la adopción de esa copia y re-pinta. */
+      /* HIDRATACIÓN ÚNICA + POLL PASIVO (2026-07-23 #6) ────────────────
+         Causa raíz encontrada: `loadData()` (llamada arriba, primera
+         línea de esta función) YA dispara en segundo plano
+         `window._lextLightFetch(k, ...)` cuando el local está vacío
+         (ver esa función). Antes, este branch ADEMÁS lanzaba su PROPIA
+         petición independiente (XHR/fetch a la misma URL) — dos
+         peticiones concurrentes a por lo menos 2 endpoints distintos
+         (la vieja `fetchData()` pedía `/api/liga-ext/`, sin fallback;
+         este branch pedía `/api/liga-ext-any/`), cada una con su propia
+         cadena de reintentos. Ahora este branch NO hace red por su
+         cuenta — solo OBSERVA (poll ligero de `LIGA_CACHE`, sin tocar
+         la red) el resultado de la ÚNICA hidratación que `loadData()`
+         ya puso en marcha, y al confirmar equipos, se re-pinta llamando
+         a `renderTable()` de nuevo (ya no vacío → cae al camino normal
+         de abajo). Sin duplicar peticiones no hay carreras que puedan
+         competir por el mismo hilo. */
       var _slugNow = CURRENT_KEY;
       body.innerHTML = '<div class="lext-empty" id="lext-empty-diag">'
         + '<div>No hay equipos en esta pantalla.</div>'
@@ -49409,149 +49489,61 @@ https://api.sofascore.app/api/v1/team/44/image
       (function(){
         var btn = document.getElementById('lext-recover-btn');
         var st  = document.getElementById('lext-recover-status');
-        /* Restauración MASIVA en UNA petición: `/api/liga-ext-bulk` trae
-           TODAS las ligas de golpe (resuelto en el servidor), así que
-           esta liga Y todas las demás se recuperan a la vez, sin la
-           tormenta de peticiones por-liga que dejaba unas sí y otras no.
-           Si tras restaurar esta liga sigue vacía, es que el servidor de
-           verdad no tiene equipos para ella (o falló la red) — ahí sí
-           caemos al sondeo por-liga para dar un mensaje claro. */
-        /* Sondeo por-liga con XHR ASÍNCRONO (2026-07-23 #4). Cambios:
-           (1) XMLHttpRequest async (NO síncrono — permitido) en vez de
-               `fetch`: algunos WebViews de Android tienen `fetch`
-               defectuoso/colgado aunque XHR funcione (el MISMO GET que
-               en la barra del navegador SÍ devuelve datos). Es una vía
-               de red independiente.
-           (2) HEARTBEAT visible: un contador de segundos que sube cada
-               500 ms. Si el contador AVANZA pero no llega respuesta, es
-               un cuelgue de RED; si el contador se QUEDA CLAVADO, el
-               hilo está bloqueado por otra cosa. Diagnóstico definitivo
-               en una sola foto. */
-        function _perLeagueProbe(triesLeft){
-          if (triesLeft == null) triesLeft = 3;
-          var attemptN = 4 - triesLeft;
-          var startTs = Date.now();
-          var fired = false, hb = null;
-          function paintWaiting(){
-            if (!st || fired) return;
-            var secs = Math.round((Date.now() - startTs) / 500) / 2; /* 0.5 s de resolución */
-            st.textContent = '⏳ Cargando «' + _slugNow + '»… ' + secs + 's' + (attemptN > 1 ? (' · intento ' + attemptN) : '');
+        var startTs = Date.now();
+        var poll = null, settled = false;
+        function stopPoll(){ if (poll){ try { clearInterval(poll); } catch(_){} poll = null; } }
+        function paintWaiting(){
+          if (!st || settled) return;
+          var secs = Math.round((Date.now() - startTs) / 500) / 2;
+          st.textContent = '⏳ Cargando «' + _slugNow + '»… ' + secs + 's';
+        }
+        function checkArrived(){
+          if (settled) return;
+          var n = 0;
+          try { n = (LIGA_CACHE[_slugNow] && LIGA_CACHE[_slugNow].teams && LIGA_CACHE[_slugNow].teams.length) || 0; } catch(_){}
+          if (n > 0) {
+            settled = true; stopPoll();
+            if (st) st.textContent = '✅ ' + n + ' equipos recibidos. Pintando…';
+            if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(_){} }
+            return;
           }
           paintWaiting();
-          try { hb = setInterval(paintWaiting, 500); } catch(_){}
-          function stopHb(){ if (hb){ try { clearInterval(hb); } catch(_){} hb = null; } }
-          function retryOrFail(msg){
-            if (fired) return; fired = true; stopHb();
-            if (triesLeft > 1) { setTimeout(function(){ _perLeagueProbe(triesLeft - 1); }, 1000 * attemptN); return; }
-            if (st) st.textContent = msg;
+          /* A los ~14 s sin resultado, forzamos UNA petición manual
+             propia (fuera del flujo automático de `loadData`, por si su
+             disparo se perdió/no llegó a ejecutarse) antes de rendirnos
+             al mensaje con botón. */
+          if (Date.now() - startTs > 14000) {
+            settled = true; stopPoll();
+            if (st) st.textContent = '⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR.';
           }
-          /* Render DIRECTO y freeze-proof (2026-07-23 #5): el diagnóstico
-             (heartbeat clavado en 0s) probó que el hilo se BLOQUEA justo
-             al llegar los datos — en algún punto de la cadena pesada
-             `renderTable`/`loadData`/`applyLeagueHeaderFromData`/writes.
-             Pintamos la tabla AQUÍ MISMO usando SOLO `standings` +
-             `zoneClass` (verificadas O(n), sin bucles), y DIFERIMOS todo
-             lo demás (sanitize, localStorage, IndexedDB) a un `setTimeout`
-             — así los equipos SE PINTAN sí o sí (el navegador repinta al
-             acabar este tick), y aunque una escritura pesada se cuelgue
-             DESPUÉS, la tabla ya está a la vista. */
-          function _paintStandingsDirect(d){
-            var body = document.getElementById('lext-body');
-            if (!body) return false;
-            var rows;
-            try { rows = standings(d); } catch(_){ rows = null; }
-            if (!rows || !rows.length) return false;
-            var zones = (d && d.config && d.config.zones) ? d.config.zones : null;
-            var total = rows.length;
-            body.innerHTML = rows.map(function(r,i){
-              var pos = i+1;
-              var z = '';
-              try { z = zones ? zoneClass(pos,total,zones) : ''; } catch(_){ z = ''; }
-              var dgSign = r.dg>0?'+'+r.dg:(r.dg<0?r.dg:'0');
-              var dgCls = r.dg>0?'pos':(r.dg<0?'neg':'');
-              var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
-              var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
-              var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
-              var humanSfx = (r.isHuman && r.humanEmoji) ? '<span class="clas-team-human-suffix">'+r.humanEmoji+'</span>' : '';
-              return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
-                +'<span class="lext-pos">'+pos+'</span>'
-                +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span>'+humanSfx+'</span>'
-                +'<span class="lext-pts">'+r.pts+'</span>'
-                +'<span class="lext-cell">'+r.pj+'</span>'
-                +'<span class="lext-cell">'+r.v+'</span>'
-                +'<span class="lext-cell">'+r.e+'</span>'
-                +'<span class="lext-cell">'+r.p+'</span>'
-                +'<span class="lext-cell gf">'+r.gf+'</span>'
-                +'<span class="lext-cell gc">'+r.gc+'</span>'
-                +'<span class="lext-cell dg '+dgCls+'">'+dgSign+'</span>'
-                +'<span class="lext-cell ta">'+r.ta+'</span>'
-                +'<span class="lext-cell tr">'+r.tr+'</span>'
-                +'<span class="lext-cell pct '+pctCls+'">'+pct+'%</span>'
-              +'</div>';
-            }).join('');
-            return true;
-          }
-          function onData(j){
-            if (fired) return;
-            var d = j && j.data;
-            var n = (d && Array.isArray(d.teams)) ? d.teams.length : 0;
-            if (n > 0){
-              fired = true; stopHb();
-              d.teams = d.teams || []; d.results = d.results || [];
-              /* 1) PINTAR YA (mínimo y seguro). */
-              var painted = false;
-              try { painted = _paintStandingsDirect(d); } catch(_){}
-              try {
-                var ttlEl = document.getElementById('liga-ext-title');
-                if (ttlEl && d.config && d.config.name) ttlEl.textContent = d.config.name;
-              } catch(_){}
-              try { LIGA_CACHE[_slugNow] = d; } catch(_){}
-              if (!painted && st) st.textContent = '✅ ' + n + ' equipos recibidos.';
-              /* 2) TODO lo pesado, DIFERIDO fuera del tick de pintado
-                    (sanitize + persistencia). Si algo aquí se cuelga, la
-                    tabla ya está a la vista. */
-              setTimeout(function(){
-                try { _sanitizeLigaTeamNames(d); } catch(_){}
-                var ser = null; try { ser = JSON.stringify(d); } catch(_){}
-                if (ser) {
-                  try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(_slugNow), ser); else localStorage.setItem(storeKey(_slugNow), ser); } catch(_){}
-                  try { if (window._idbKV) window._idbKV.set(storeKey(_slugNow), ser); } catch(_){}
-                }
-              }, 60);
-            } else {
-              fired = true; stopHb();
-              if (st) st.textContent = '❌ El servidor NO tiene equipos para «' + _slugNow + '» (0). Hay que volver a rellenarla — no es un fallo de carga.';
-            }
-          }
-          var xhr = null;
-          try { xhr = new XMLHttpRequest(); } catch(_){ xhr = null; }
-          if (!xhr) { retryOrFail('⚠️ Este navegador no soporta la petición de red.'); return; }
-          try {
-            xhr.open('GET', '/api/liga-ext-any/' + encodeURIComponent(_slugNow), true);
-            try { xhr.timeout = 13000; } catch(_){}
-            xhr.onload = function(){
-              if (fired) return;
-              if (xhr.status >= 200 && xhr.status < 300) {
-                var j = null; try { j = JSON.parse(xhr.responseText); } catch(_){ j = null; }
-                if (j) onData(j); else retryOrFail('⚠️ Respuesta ilegible del servidor. Reintenta.');
-              } else { retryOrFail('⚠️ El servidor respondió HTTP ' + xhr.status + '. Reintenta.'); }
-            };
-            xhr.onerror   = function(){ retryOrFail('⚠️ No se pudo contactar con el servidor (red). Pulsa 🔄 RECUPERAR DEL SERVIDOR.'); };
-            xhr.ontimeout = function(){ retryOrFail('⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR.'); };
-            xhr.send();
-          } catch(_){ retryOrFail('⚠️ No se pudo lanzar la petición. Reintenta.'); }
         }
-        /* UNA sola petición LIGERA para ESTA liga (2026-07-23 #2): NO
-           disparamos la bulk automáticamente — es pesada y, encadenada
-           en cada apertura, saturaba el servidor y colgaba hasta la
-           petición de esta misma liga. El sondeo por-liga es exactamente
-           lo que funciona al escribir la URL en la barra del navegador.
-           La restauración masiva sigue disponible en el botón del menú. */
-        function _run(){ _perLeagueProbe(); }
+        /* Disparo MANUAL: fuerza una hidratación ligera directa (botón /
+           auto al abrir), independiente del flag `__bgHydrating_` de
+           `loadData()` — así el botón SIEMPRE reintenta, nunca se queda
+           mudo porque un intento previo dejara el flag puesto. */
+        function _run(){
+          settled = false; startTs = Date.now(); stopPoll();
+          paintWaiting();
+          try {
+            window._lextLightFetch(_slugNow, function(d, ok){
+              if (settled) return;
+              if (ok && d && Array.isArray(d.teams) && d.teams.length) {
+                settled = true; stopPoll();
+                if (st) st.textContent = '✅ ' + d.teams.length + ' equipos recibidos. Pintando…';
+                if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(_){} }
+              } else {
+                settled = true; stopPoll();
+                if (st) st.textContent = '❌ El servidor NO tiene equipos para «' + _slugNow + '» (o falló la red). Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.';
+              }
+            });
+          } catch(_){ settled = true; if (st) st.textContent = '⚠️ No se pudo lanzar la petición. Reintenta.'; }
+          poll = setInterval(checkArrived, 500);
+        }
         if (btn) btn.addEventListener('click', _run);
-        /* Sondeo automático inmediato: el usuario ve el resultado sin
-           tener que pulsar nada (el botón queda para reintentar). */
-        _run();
+        /* Al abrir: NO relanzamos otra petición — `loadData()` (llamada
+           al entrar a esta función) ya puso una en marcha. Solo
+           observamos su resultado con el poll. */
+        poll = setInterval(checkArrived, 500);
       })();
       return;
     }
@@ -54601,19 +54593,17 @@ https://api.sofascore.app/api/v1/team/44/image
     applyLeagueHeaderFromData(cached);
     renderTable();
     if(typeof window.go === 'function') window.go('s-liga-ext');
-    /* HIDRATACIÓN (2026-07-23 #3): si el local está VACÍO de equipos, NO
+    /* HIDRATACIÓN (2026-07-23 #6): si el local está VACÍO de equipos, NO
        lanzamos la cadena PESADA de `fetchData` (anti-wipe + backfills +
-       sanitize sobre 20 equipos × 30 jugadores). Esa cadena, al llegar
-       la respuesta del servidor, corría SÍNCRONA y podía bloquear el
-       hilo — dejando la pantalla congelada en «Comprobando…» pese a que
-       el servidor SÍ respondió con todos los equipos (diagnóstico
-       confirmado: el mismo `/api/liga-ext-any/<slug>` en la barra del
-       navegador devuelve el roster completo al instante). Para el caso
-       VACÍO deja que el sondeo LIGERO del branch vacío de `renderTable`
-       (`_perLeagueProbe`: fetch `-any` → escribir → re-pintar, sin
-       anti-wipe ni backfills) haga la hidratación. `fetchData` (cadena
-       completa, necesaria para el MERGE cross-dispositivo) solo se
-       dispara cuando YA hay una copia local con equipos que fusionar. */
+       sanitize sobre 20 equipos × 30 jugadores) — para un local vacío no
+       hay nada que proteger/fusionar, así que esa cadena es puro coste.
+       `loadData()` (ya llamado arriba) YA dispara por su cuenta
+       `window._lextLightFetch` en este caso — es la ÚNICA hidratación
+       automática para local vacío; el branch vacío de `renderTable` solo
+       OBSERVA su resultado (poll de `LIGA_CACHE`), sin lanzar una
+       petición propia. `fetchData` (cadena completa, necesaria para el
+       MERGE cross-dispositivo) solo se dispara aquí cuando YA hay una
+       copia local con equipos que fusionar. */
     var _cachedTeamsN = (cached && Array.isArray(cached.teams)) ? cached.teams.length : 0;
     if (_cachedTeamsN > 0) {
       // Sincroniza con servidor y re-renderiza cuando llega

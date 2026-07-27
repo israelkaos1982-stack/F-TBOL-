@@ -46883,22 +46883,57 @@ https://api.sofascore.app/api/v1/team/44/image
     var _prev = LIGA_CACHE['__bgHydrating_'+k];
     if (_prev && (Date.now() - _prev) < 35000) return;
     LIGA_CACHE['__bgHydrating_'+k] = Date.now();
-    try {
-      window._lextLightFetch(k, function(d, ok){
-        try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){}
-        if (!ok || !d) return;
-        try {
-          if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
-            try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(d); } catch(_){}
-            try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
-            try {
-              var ov = document.getElementById('lext-ov-teams');
-              if (ov && ov.classList.contains('show') && typeof renderTeamsList === 'function') renderTeamsList();
-            } catch(_){}
+    function _reRenderIfOpen(d){
+      try {
+        if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
+          try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(d); } catch(_){}
+          try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
+          try {
+            var ov = document.getElementById('lext-ov-teams');
+            if (ov && ov.classList.contains('show') && typeof renderTeamsList === 'function') renderTeamsList();
+          } catch(_){}
+        }
+      } catch(_){}
+    }
+    function _fallbackLight(){
+      try {
+        window._lextLightFetch(k, function(d, ok){
+          try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){}
+          if (!ok || !d) return;
+          _reRenderIfOpen(d);
+        });
+      } catch(_){ try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){} }
+    }
+    /* PRIMER intento: la restauración MASIVA en una sola petición
+       (`/api/liga-ext-bulk`) — ya probada como la vía fiable para "esta
+       liga concreta nunca se ha abierto en este dispositivo" (2026-07-23,
+       evita la tormenta de peticiones por-liga que saturaba los 2
+       workers de gunicorn y dejaba fuera a las ligas 'de segunda fila').
+       Trae las ~54 ligas de golpe, así que una sola llamada aquí
+       satisface TAMBIÉN cualquier otra liga que el usuario abra a
+       continuación en la misma sesión — su propio throttle de 8s hace
+       que varias aperturas rápidas seguidas compartan la MISMA
+       petición en vez de disparar una nueva por cada una. Si por lo
+       que sea la bulk no trae ESTA liga en concreto (o falla/no está
+       cargada esta función todavía), caemos al sondeo ligero
+       POR-LIGA como red de seguridad — nunca al revés, para no volver
+       a depender de 50 peticiones sueltas como único camino. */
+    if (typeof window._lextRestoreAllFromServer === 'function') {
+      try {
+        window._lextRestoreAllFromServer({ cb:function(){
+          var got = 0;
+          try { got = (LIGA_CACHE[k] && Array.isArray(LIGA_CACHE[k].teams)) ? LIGA_CACHE[k].teams.length : 0; } catch(_){}
+          if (got > 0) {
+            try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){}
+            _reRenderIfOpen(LIGA_CACHE[k]);
+            return;
           }
-        } catch(_){}
-      });
-    } catch(_){ try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){} }
+          _fallbackLight();
+        }});
+      } catch(_){ _fallbackLight(); }
+    } else {
+      _fallbackLight();
+    }
   }
 
   function loadData(k){
@@ -49560,13 +49595,16 @@ https://api.sofascore.app/api/v1/team/44/image
             if (st) st.textContent = '⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR.';
           }
         }
-        /* Disparo MANUAL: fuerza una hidratación ligera directa (botón /
-           auto al abrir), independiente del flag `__bgHydrating_` de
-           `loadData()` — así el botón SIEMPRE reintenta, nunca se queda
-           mudo porque un intento previo dejara el flag puesto. */
-        function _run(){
-          settled = false; startTs = Date.now(); stopPoll();
-          paintWaiting();
+        /* Disparo MANUAL: PRIMERO intenta la restauración MASIVA de UNA
+           sola petición (`/api/liga-ext-bulk`, ya probada como la vía
+           fiable para ligas 'de segunda fila' que nunca se abrieron en
+           este dispositivo — 2026-07-23). Si esa vía no trae ESTA liga
+           en concreto (o falla / no cargó), cae al sondeo ligero
+           POR-LIGA como red de seguridad. Independiente del flag
+           `__bgHydrating_` de `loadData()` — así el botón SIEMPRE
+           reintenta, nunca se queda mudo porque un intento previo
+           dejara el flag puesto. */
+        function _runLight(){
           try {
             window._lextLightFetch(_slugNow, function(d, ok){
               if (settled) return;
@@ -49580,6 +49618,28 @@ https://api.sofascore.app/api/v1/team/44/image
               }
             });
           } catch(_){ settled = true; if (st) st.textContent = '⚠️ No se pudo lanzar la petición. Reintenta.'; }
+        }
+        function _run(){
+          settled = false; startTs = Date.now(); stopPoll(); ticks = 0;
+          paintWaiting();
+          if (typeof window._lextRestoreAllFromServer === 'function') {
+            try {
+              window._lextRestoreAllFromServer({ force:true, cb:function(){
+                if (settled) return;
+                var n = 0;
+                try { n = (LIGA_CACHE[_slugNow] && LIGA_CACHE[_slugNow].teams && LIGA_CACHE[_slugNow].teams.length) || 0; } catch(_){}
+                if (n > 0) {
+                  settled = true; stopPoll();
+                  if (st) st.textContent = '✅ ' + n + ' equipos recibidos. Pintando…';
+                  if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(_){} }
+                  return;
+                }
+                _runLight();
+              }});
+            } catch(_){ _runLight(); }
+          } else {
+            _runLight();
+          }
           poll = setInterval(checkArrived, 500);
         }
         if (btn) btn.addEventListener('click', _run);

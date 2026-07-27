@@ -66533,6 +66533,63 @@ https://api.sofascore.app/api/v1/team/44/image
   var OBJ_RATING_PER = 0.275; /* 💼 por objetivo */
   var OBJ_RATING_CAP = 10;    /* tope de la aportación 💼 */
   var _objEarnRearm = null;   /* poll de rearme tras hidratar el progreso */
+
+  /* ── UNIÓN (persistido ∪ DOM) reutilizable, SIN gates ────────────────
+     Extraído del cuerpo de `liverpoolObjEarnings` (que sigue calculando
+     su propia unión para el crédito de dinero, gateada por hidratación —
+     no se toca esa lógica). Este helper es para el BADGE, que necesita
+     un valor SIEMPRE disponible, nunca bloqueado. */
+  function _objUnionDoneSet(){
+    var doneSet = {};
+    var persObj = null;
+    try { persObj = JSON.parse(localStorage.getItem(LS_OBJ) || 'null'); } catch(_){ persObj = null; }
+    if (persObj && persObj.checks && typeof persObj.checks === 'object'){
+      var pch = persObj.checks;
+      for (var pk in pch){ if (pch.hasOwnProperty(pk) && pch[pk]) doneSet[pk] = true; }
+    }
+    var domItems = document.querySelectorAll('#ath-obj-club .obj-item');
+    domItems.forEach(function(lbl){
+      var cb = lbl.querySelector('input[type=checkbox]');
+      var oid = lbl.getAttribute('data-oid');
+      if (cb && cb.checked && oid) doneSet[oid] = true;
+    });
+    return { doneSet: doneSet, domItems: domItems };
+  }
+
+  /* ── Sincroniza el badge "X / total" (pantalla + card del hub) ───────
+     Bug 2026-07-26 (fotos usuario: hub "0/27" fijo mientras la pantalla de
+     Objetivos, abierta al lado, mostraba "4/29" correctamente): el fix
+     anterior (2026-07-25) movió la escritura del badge DENTRO de
+     `liverpoolObjEarnings`, detrás de sus 2 gates de hidratación (HUD +
+     progreso). Si esos gates no resuelven dentro de la sesión (servidor
+     lento, red floja — nada anormal, solo tarda), `liverpoolObjEarnings`
+     nunca llega a esa línea y el badge se queda CONGELADO en el "0 / 27"
+     de fábrica del HTML para siempre — mientras 💼/🪙 sí se ven bien
+     porque esos números salen de la caché YA persistida del HUD (no
+     dependen de que `liverpoolObjEarnings` corra en ESTA sesión). Este
+     sync es INDEPENDIENTE de esos gates — usa la MISMA unión (protegida
+     contra el "0" del DOM sin restaurar) pero corre SIEMPRE, sin esperar
+     a que el dinero/valoración reconcilien con el servidor. */
+  function _objSyncBadge(){
+    try {
+      var u = _objUnionDoneSet();
+      var done = 0;
+      for (var k in u.doneSet){ if (u.doneSet.hasOwnProperty(k)) done++; }
+      var badgeTotal = u.domItems.length;
+      if (!badgeTotal){
+        var curBadge = document.getElementById('munich-obj-count');
+        var mTot = curBadge && /\/\s*(\d+)/.exec(curBadge.textContent || '');
+        badgeTotal = mTot ? (parseInt(mTot[1], 10) || 0) : 0;
+      }
+      if (badgeTotal){
+        var acEl = document.getElementById('ath-obj-count');
+        if (acEl) acEl.textContent = done + ' / ' + badgeTotal;
+        var mcEl = document.getElementById('munich-obj-count');
+        if (mcEl) mcEl.textContent = done + ' / ' + badgeTotal;
+      }
+    } catch(_){}
+  }
+
   function liverpoolObjEarnings(){
     if (typeof window._bayernHudGet !== 'function'
         || typeof window._bayernHudMerge !== 'function') return;
@@ -66726,15 +66783,22 @@ https://api.sofascore.app/api/v1/team/44/image
          checkbox); no recalcular/persistir o se perdería el progreso. */
       if (window.__munichObjEditing) return;
       if (orig) orig.apply(this, arguments);
+      /* Badge del hub (#munich-obj-count) + contador de la pantalla
+         (#ath-obj-count): SIEMPRE con la UNIÓN (persistido ∪ DOM), SIN
+         depender de los gates de hidratación de `liverpoolObjEarnings`
+         (bug 2026-07-26: con esos gates sin resolver en la sesión, el
+         badge se quedaba congelado en "0/27" para siempre mientras
+         💼/🪙 sí se veían bien por venir de otra caché). NUNCA copiar
+         aquí el texto crudo de `#ath-obj-count` recién escrito por
+         `orig.apply()`: ese conteo es SOLO del DOM en este instante, y
+         si la lista se acaba de re-renderizar (checkboxes en blanco)
+         antes de que `loadObjState` restaure los ✅ guardados, muestra
+         "0/29" pisando el "2/29" real (bug 2026-07-25). */
+      try { _objSyncBadge(); } catch(_){}
       saveObjState();
-      /* El badge del hub (#munich-obj-count) y el propio contador de la
-         pantalla (#ath-obj-count) los escribe `liverpoolObjEarnings` con el
-         `done` de la UNIÓN (persistido ∪ DOM) — NUNCA copiar aquí el texto
-         crudo de `#ath-obj-count` que acaba de escribir `orig.apply()`
-         arriba: ese conteo es SOLO del DOM en este instante, y si la lista
-         se acaba de re-renderizar (checkboxes en blanco) antes de que
-         `loadObjState` restaure los ✅ guardados, muestra "0/29" pisando el
-         "2/29" real (bug 2026-07-25, el badge del hub parpadeaba a 0). */
+      /* El crédito de 🪙/💼 SÍ sigue gateado por hidratación dentro de
+         `liverpoolObjEarnings` (evita deflactar sobre un base sin
+         reconciliar) — sólo el badge de arriba es incondicional. */
       try { liverpoolObjEarnings(); } catch(_){}
       if (typeof window._bayernHudReapply === 'function') {
         try { window._bayernHudReapply(); } catch(_){}

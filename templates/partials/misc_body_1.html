@@ -46824,7 +46824,7 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!xhr) { cb && cb(null, false); return; }
     try {
       xhr.open('GET', '/api/liga-ext-any/' + encodeURIComponent(slug), true);
-      try { xhr.timeout = 13000; } catch(_){}
+      try { xhr.timeout = 28000; } catch(_){}
       var settled = false;
       function done(d, ok){ if (settled) return; settled = true; cb && cb(d, ok); }
       xhr.onload = function(){
@@ -49528,11 +49528,15 @@ https://api.sofascore.app/api/v1/team/44/image
             return;
           }
           paintWaiting();
-          /* A los ~14 s sin resultado, forzamos UNA petición manual
-             propia (fuera del flujo automático de `loadData`, por si su
-             disparo se perdió/no llegó a ejecutarse) antes de rendirnos
-             al mensaje con botón. */
-          if (Date.now() - startTs > 14000) {
+          /* A los ~30 s sin resultado, nos rendimos al mensaje con botón.
+             Ligas grandes (muchos equipos + historial de partidos) pueden
+             tardar más de los ~13 s antiguos en descargar con el servidor
+             recién arrancado (cold-start Railway) + red móvil floja — el
+             XHR de _lextLightFetch ya espera hasta 28 s antes de darse por
+             vencido, así que este umbral debe ser MAYOR para no declarar
+             "tardó demasiado" antes de que el propio fetch haya tenido
+             ocasión de completarse. */
+          if (Date.now() - startTs > 30000) {
             settled = true; stopPoll();
             if (st) st.textContent = '⚠️ El servidor tardó demasiado. Pulsa 🔄 RECUPERAR DEL SERVIDOR.';
           }

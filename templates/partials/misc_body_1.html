@@ -67183,6 +67183,29 @@ https://api.sofascore.app/api/v1/team/44/image
         }
         return;
       }
+      /* ── Sella el timestamp local YA, ANTES del debounce ──────────────
+         Bug 2026-07-26 (usuario: "desmarco un objetivo (manual, ej. 'Gana
+         el Mundial 2032') y no se resta el dinero; al reabrir la web sigue
+         marcado"). `_objFlushAuthPush` (más abajo, a los 500ms) es el ÚNICO
+         punto que llamaba `_objStateSync.touch(...)` — hasta que dispara,
+         `st.updatedAt` sigue con el sello ANTERIOR a esta edición. Si en
+         esa ventana de 500ms llega CUALQUIER hydrate() (cambio de foco,
+         `visibilitychange`, el intervalo de re-pull, o simplemente otra
+         pestaña/dispositivo empujando su copia), `_kvBlobSync.hydrate`
+         compara ese `updatedAt` VIEJO contra el del servidor — si el
+         servidor aún tiene la copia "marcada" (con SU sello, quizás más
+         reciente que el updatedAt viejo de este dispositivo), la ADOPTA:
+         restaura el checkbox a marcado en el DOM y lo re-persiste en
+         localStorage, deshaciendo el desmarcado del usuario ANTES de que
+         el push autoritativo de ESTA edición llegue a salir. Cuando por
+         fin dispara a los 500ms, `_blob()` ya lee el DOM REVERTIDO (marcado
+         otra vez) y re-confirma ese estado — el desmarcado se pierde por
+         completo, sin ningún error visible. Sellar `touch(Date.now())`
+         SÍNCRONAMENTE aquí (nada más detectar la edición real, no esperar
+         al debounce) cierra la ventana: cualquier hydrate() que llegue
+         DESPUÉS ve el timestamp local ya actualizado y no puede pisar la
+         edición con una copia vieja del servidor. */
+      try { _objStateSync.touch(Date.now()); } catch(_){}
       if (_objUserPushT) return;
       _objUserPushT = setTimeout(function(){
         _objUserPushT = null;

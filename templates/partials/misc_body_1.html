@@ -46871,8 +46871,18 @@ https://api.sofascore.app/api/v1/team/44/image
      hidratación automática para siempre). */
   function _lextTriggerBgHydrate(k){
     if (window._restoSimBulkInProgress || window._ligaExtSimInProgress) return;
-    if (LIGA_CACHE['__bgHydrating_'+k]) return;
-    LIGA_CACHE['__bgHydrating_'+k] = true;
+    /* El guard guarda un TIMESTAMP, no un booleano puro. Un XHR que se
+       quede colgado sin invocar NUNCA ni onload/onerror/ontimeout (bug
+       raro pero real de algunos WebView de Android bajo ciertas
+       condiciones de red) dejaría este flag en `true` para SIEMPRE en
+       el resto de la sesión — ninguna apertura posterior de esa liga
+       volvería a intentar hidratar sola (solo el botón manual, que
+       bypassa este guard, seguiría funcionando). Tratamos cualquier
+       marca de más de 35s (más que el propio timeout de 28s del XHR)
+       como STALE y la ignoramos, permitiendo un reintento automático. */
+    var _prev = LIGA_CACHE['__bgHydrating_'+k];
+    if (_prev && (Date.now() - _prev) < 35000) return;
+    LIGA_CACHE['__bgHydrating_'+k] = Date.now();
     try {
       window._lextLightFetch(k, function(d, ok){
         try { delete LIGA_CACHE['__bgHydrating_'+k]; } catch(_){}
@@ -49511,13 +49521,22 @@ https://api.sofascore.app/api/v1/team/44/image
         var st  = document.getElementById('lext-recover-status');
         var startTs = Date.now();
         var poll = null, settled = false;
+        /* Contador de ticks INDEPENDIENTE del reloj (Date.now()). Si el
+           poll deja de avanzar (main thread bloqueado por otra cosa en
+           esta pantalla tan grande, o el propio setInterval nunca llegó
+           a registrarse por una excepción previa), el texto se queda
+           clavado en "intentos: 0" para siempre — visible en pantalla,
+           así el próximo reporte del usuario prueba si el poll TICKEA de
+           verdad en vez de tener que asumirlo por los segundos. */
+        var ticks = 0;
         function stopPoll(){ if (poll){ try { clearInterval(poll); } catch(_){} poll = null; } }
         function paintWaiting(){
           if (!st || settled) return;
           var secs = Math.round((Date.now() - startTs) / 500) / 2;
-          st.textContent = '⏳ Cargando «' + _slugNow + '»… ' + secs + 's';
+          st.textContent = '⏳ Cargando «' + _slugNow + '»… ' + secs + 's (intentos: ' + ticks + ')';
         }
         function checkArrived(){
+          ticks++;
           if (settled) return;
           var n = 0;
           try { n = (LIGA_CACHE[_slugNow] && LIGA_CACHE[_slugNow].teams && LIGA_CACHE[_slugNow].teams.length) || 0; } catch(_){}
@@ -49569,7 +49588,13 @@ https://api.sofascore.app/api/v1/team/44/image
            observamos su resultado con el poll (1er chequeo INMEDIATO
            para que el texto "Cargando…" aparezca al instante, no tras
            500ms). */
-        checkArrived();
+        /* `checkArrived()` va en su propio try/catch: si algo dentro
+           lanzara una excepción no prevista, la línea de abajo que
+           registra el setInterval SIGUE ejecutándose igual — antes una
+           excepción aquí podía dejar el poll sin arrancar NUNCA (el
+           usuario vería el contador clavado en "0s" para siempre, sin
+           ninguna pista de que la causa fue esta, no una red lenta). */
+        try { checkArrived(); } catch(_){}
         if (!settled) poll = setInterval(checkArrived, 500);
       })();
       return;

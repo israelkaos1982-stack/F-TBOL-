@@ -401,6 +401,21 @@
          así que aquí SÍ se sale de inmediato (sin esperar el remate). */
       setTimeout(hideNow, HARD_MS);
 
+      /* Backstop de RECUPERACIÓN AL VOLVER (2026-07-28): si el móvil
+         apaga pantalla / cambia de app mientras carga, Android/Chrome
+         puede CONGELAR los timers de una pestaña en segundo plano — el
+         `setTimeout` de arriba queda en cola pero no se ejecuta hasta
+         que la pestaña vuelve a primer plano (y a veces ni entonces si
+         el navegador la descartó y la recarga desde cero, en cuyo caso
+         esto ni aplica). Al recuperar visibilidad, comprobamos el
+         tiempo real transcurrido y forzamos la salida si ya se agotó
+         el backstop — sin esperar a que el timer perdido "se acuerde". */
+      document.addEventListener('visibilitychange', function(){
+        if (document.visibilityState === 'visible' && !hidden && (Date.now() - startedAt) >= HARD_MS) {
+          hideNow();
+        }
+      });
+
       /* BFCache: al restaurar desde el historial el DOM ya está listo. */
       window.addEventListener('pageshow', function(e){ if (e.persisted) doHide(); });
     })();

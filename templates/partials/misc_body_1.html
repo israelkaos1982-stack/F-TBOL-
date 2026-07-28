@@ -46860,6 +46860,21 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){ cb && cb(null, false); }
   };
 
+  /* Si `renderTable()` (u otro paso del repintado tras hidratar) lanza
+     una excepción, antes quedaba TRAGADA en silencio por el try/catch
+     mudo del caller — el usuario veía la pantalla clavada en "Cargando…"
+     para siempre sin ninguna pista de qué falló de verdad (¿la red? ¿el
+     propio render?). Este helper muestra el mensaje REAL del error en el
+     mismo sitio donde se pinta "Cargando…" (si ese nodo sigue en el DOM),
+     para poder diagnosticar con datos en vez de adivinar. */
+  function _lextSurfaceRenderError(err, ctx){
+    try {
+      var msg = (err && err.message) ? err.message : String(err);
+      try { console.error('[ligaExt] error en ' + (ctx||'render') + ':', err); } catch(_){}
+      var st = document.getElementById('lext-recover-status');
+      if (st) st.textContent = '⚠️ Error al pintar (' + (ctx||'render') + '): ' + msg;
+    } catch(_){}
+  }
   /* Dispara `_lextLightFetch` en segundo plano para `k` si no hay ya
      una hidratación en curso, y re-pinta si la pantalla de esa liga
      sigue abierta al terminar. Único punto usado por `loadData()` —
@@ -46887,7 +46902,7 @@ https://api.sofascore.app/api/v1/team/44/image
       try {
         if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
           try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(d); } catch(_){}
-          try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
+          try { if (typeof renderTable === 'function') renderTable(); } catch(e){ _lextSurfaceRenderError(e, 'bgHydrate:'+k); }
           try {
             var ov = document.getElementById('lext-ov-teams');
             if (ov && ov.classList.contains('show') && typeof renderTeamsList === 'function') renderTeamsList();
@@ -49071,10 +49086,20 @@ https://api.sofascore.app/api/v1/team/44/image
     _lextRestoreAllInFlight = true;
     _lextRestoreAllLastAt = nowT;
     var settled = false;
+    var cbFired = false;
+    /* `cb` puede dispararse ANTES de que termine todo el proceso (la
+       liga prioritaria queda lista mientras el resto se procesa en
+       background) — pero solo se llama UNA vez. `done()` sigue
+       gobernando `_lextRestoreAllInFlight`/`settled` (evita bulk
+       fetches solapados) independientemente de si `cb` ya disparó. */
+    function fireCb(res){
+      if (cbFired) return; cbFired = true;
+      if (cb) { try { cb(res || {}); } catch(_){} }
+    }
     function done(res){
       if (settled) return; settled = true;
       _lextRestoreAllInFlight = false;
-      if (cb) { try { cb(res || {}); } catch(_){} }
+      fireCb(res);
     }
     /* Red de seguridad: si la petición nunca resuelve (red muerta,
        WebView sin AbortController), avisamos igualmente a los ~25 s. */
@@ -49090,7 +49115,7 @@ https://api.sofascore.app/api/v1/team/44/image
         var leagues = j && j.leagues;
         if (!leagues || typeof leagues !== 'object') { done({adopted:0, error:'sin datos del servidor'}); return; }
         var adopted = 0, skipped = 0;
-        Object.keys(leagues).forEach(function(slug){
+        function _adoptOne(slug){
           try {
             var d = leagues[slug];
             if (!d || !Array.isArray(d.teams) || d.teams.length < 1) return;
@@ -49116,15 +49141,63 @@ https://api.sofascore.app/api/v1/team/44/image
             }
             adopted++;
           } catch(_){}
-        });
-        /* Re-pintar la pantalla de liga si sigue abierta. */
-        try {
-          if (CURRENT_KEY && LIGA_CACHE[CURRENT_KEY]) {
-            try { applyLeagueHeaderFromData(LIGA_CACHE[CURRENT_KEY]); } catch(_){}
-            renderTable();
-          }
-        } catch(_){}
-        done({adopted:adopted, skipped:skipped, total:(j.count|0)});
+        }
+        /* PRIORIDAD: la liga que el usuario tiene abierta AHORA MISMO se
+           adopta la PRIMERA, de forma síncrona e inmediata — antes este
+           bucle procesaba las ~54 ligas EN ORDEN ARBITRARIO en un solo
+           `forEach` síncrono (sanitize + JSON.stringify + 2 escrituras de
+           storage por liga) y solo al terminar TODAS repintaba la
+           pantalla. Con varias ligas de historial pesado (cientos de
+           resultados cada una) ese bucle podía tardar mucho — y aunque
+           NO se congelase, la liga que el usuario está mirando quedaba
+           en cola detrás de otras 50 sin ningún motivo. Ahora se repinta
+           en cuanto la liga activa está lista; el resto se procesa DESPUÉS,
+           en background. */
+        var _curKey = null;
+        try { _curKey = (typeof CURRENT_KEY !== 'undefined') ? CURRENT_KEY : null; } catch(_){}
+        if (_curKey && Object.prototype.hasOwnProperty.call(leagues, _curKey)) {
+          _adoptOne(_curKey);
+          try {
+            if (LIGA_CACHE[_curKey]) {
+              try { applyLeagueHeaderFromData(LIGA_CACHE[_curKey]); } catch(_){}
+              try { renderTable(); } catch(e){ _lextSurfaceRenderError(e, 'bulkPriority:'+_curKey); }
+            }
+          } catch(_){}
+        }
+        /* El resto de las ligas (incluida la actual si no estaba en la
+           bulk) se procesan en LOTES CHUNKEADOS vía `setTimeout(...,0)`
+           entre lotes, para que el hilo principal ceda periódicamente —
+           nunca un único bucle síncrono largo que pueda bloquear el
+           setInterval del poll de la pantalla vacía (el usuario vería el
+           contador "intentos" clavado mientras dura el bucle entero). */
+        var _rest = Object.keys(leagues).filter(function(s){ return s !== _curKey; });
+        var _idx = 0;
+        var CHUNK = 4;
+        function _stepChunk(){
+          var end = Math.min(_idx + CHUNK, _rest.length);
+          for (; _idx < end; _idx++) { _adoptOne(_rest[_idx]); }
+          if (_idx < _rest.length) { setTimeout(_stepChunk, 0); return; }
+          /* Repinta de nuevo por si la pantalla activa cambió mientras
+             el resto se procesaba en background, o si la liga activa
+             no estaba en la primera pasada prioritaria. */
+          try {
+            if (CURRENT_KEY && LIGA_CACHE[CURRENT_KEY]) {
+              try { applyLeagueHeaderFromData(LIGA_CACHE[CURRENT_KEY]); } catch(_){}
+              try { renderTable(); } catch(e){ _lextSurfaceRenderError(e, 'bulkChunkDone:'+CURRENT_KEY); }
+            }
+          } catch(_){}
+          done({adopted:adopted, skipped:skipped, total:(j.count|0)});
+        }
+        /* `cb` se dispara YA (con el resultado parcial de la liga
+           prioritaria) para que quien esperaba por ESTA liga concreta
+           (loadData/el botón manual) no tenga que esperar al resto — el
+           resto sigue en segundo plano y no bloquea a nadie. `done()`
+           (que gobierna el flag in-flight) solo se llama al final real,
+           para no permitir un 2º bulk fetch solapado mientras el resto
+           sigue procesándose. */
+        if (_curKey) { fireCb({adopted:adopted, skipped:skipped, total:(j.count|0), partial:true}); }
+        if (_rest.length) { setTimeout(_stepChunk, 0); }
+        else { done({adopted:adopted, skipped:skipped, total:(j.count|0)}); }
       })
       .catch(function(){ if (watchdog) { try { clearTimeout(watchdog); } catch(_){} } done({error:'red'}); });
   };
@@ -49578,7 +49651,7 @@ https://api.sofascore.app/api/v1/team/44/image
           if (n > 0) {
             settled = true; stopPoll();
             if (st) st.textContent = '✅ ' + n + ' equipos recibidos. Pintando…';
-            if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(_){} }
+            if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(e){ _lextSurfaceRenderError(e, 'emptyBranch:'+_slugNow); } }
             return;
           }
           paintWaiting();
@@ -49611,7 +49684,7 @@ https://api.sofascore.app/api/v1/team/44/image
               if (ok && d && Array.isArray(d.teams) && d.teams.length) {
                 settled = true; stopPoll();
                 if (st) st.textContent = '✅ ' + d.teams.length + ' equipos recibidos. Pintando…';
-                if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(_){} }
+                if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(e){ _lextSurfaceRenderError(e, 'emptyBranch:'+_slugNow); } }
               } else {
                 settled = true; stopPoll();
                 if (st) st.textContent = '❌ El servidor NO tiene equipos para «' + _slugNow + '» (o falló la red). Pulsa 🔄 RECUPERAR DEL SERVIDOR para reintentar.';
@@ -49631,7 +49704,7 @@ https://api.sofascore.app/api/v1/team/44/image
                 if (n > 0) {
                   settled = true; stopPoll();
                   if (st) st.textContent = '✅ ' + n + ' equipos recibidos. Pintando…';
-                  if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(_){} }
+                  if (CURRENT_KEY === _slugNow) { try { renderTable(); } catch(e){ _lextSurfaceRenderError(e, 'emptyBranch:'+_slugNow); } }
                   return;
                 }
                 _runLight();

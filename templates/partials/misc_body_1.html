@@ -15634,13 +15634,28 @@ window._showSimProgress = function(opts, onDone){
       banner.style.border = '1px solid rgba(240,192,64,.4)';
       banner.style.color = '#f0c040';
       if(icon) icon.textContent = '🛠';
-      if(text) text.innerHTML = 'Motor: <b>hardcodeado</b>. Has creado <b>'+n+'/20</b> equipos. Faltan <b>'+(20-n)+'</b> para activar el motor nuevo.';
-    } else {
+      if(text) text.innerHTML = 'Motor: <b>hardcodeado</b>. Tienes <b>'+n+'/20</b> equipos. Faltan <b>'+(20-n)+'</b> para regenerar el calendario — si acabas de <b>mover/borrar un equipo</b>, añade un reemplazo (🔀 Mover equipos, u otro equipo nuevo) para volver a 20; hasta entonces la Liga EA Sports sigue jugando el calendario ANTERIOR (incluidos los equipos que ya borraste del listado).';
+    } else if(n === 20){
       banner.style.background = 'rgba(60,200,120,.08)';
       banner.style.border = '1px solid rgba(60,200,120,.45)';
       banner.style.color = '#5fe08a';
       if(icon) icon.textContent = '✅';
       if(text) text.innerHTML = '<b>20/20 equipos · Motor ACTIVO.</b> La simulación usa tus equipos, valoraciones y plantillas.';
+    } else {
+      /* n > 20 — el calendario de 38 jornadas SOLO puede regenerarse
+         con EXACTAMENTE 20 equipos (regla obligatoria, ver CLAUDE.md);
+         con más, `generarCalendario` no produce un calendario válido y
+         la regeneración se descarta en silencio — el calendario
+         ANTERIOR (20 equipos) se sigue jugando y cualquier equipo de
+         más queda solo como fila cosmética con 0 partidos. Avisar
+         explícitamente evita que un admin con, p.ej., 21 equipos crea
+         que "ya se aplicó" un movimiento que en realidad no ha entrado
+         en vigor. */
+      banner.style.background = 'rgba(255,80,80,.10)';
+      banner.style.border = '1px solid rgba(255,80,80,.5)';
+      banner.style.color = '#ff9a9a';
+      if(icon) icon.textContent = '⚠️';
+      if(text) text.innerHTML = '<b>'+n+'/20 equipos — SOBRAN '+(n-20)+'.</b> El calendario de Liga EA Sports necesita EXACTAMENTE 20: con '+n+' no se puede regenerar y sigue jugándose el calendario ANTERIOR. Borra o mueve '+(n-20)+' equipo(s) a otra liga (🔀 Mover equipos) para que el cambio se aplique de verdad.';
     }
   }
   // Refresca al entrar al screen y tras buildLigaClas
@@ -52266,6 +52281,38 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     }
 
+    /* Si la ORIGEN es Liga EA Sports, el calendario de 38 jornadas solo
+       se regenera con EXACTAMENTE 20 equipos (regla obligatoria). Mover
+       equipos fuera sin reponerlos deja la Liga EA Sports por debajo de
+       20 — el equipo movido desaparece del listado del editor pero
+       SIGUE jugando en `window.LIGA_SCHEDULE` (el calendario NO puede
+       regenerarse con menos de 20) hasta que el admin añada un
+       reemplazo. Avisar aquí evita el bug "lo muevo y sigue saliendo en
+       Liga EA Sports": no es que no se guarde — se guarda en el
+       editor — es que el calendario/clasificación de Liga EA Sports
+       necesita 20 en firme para reflejarlo. */
+    if (CURRENT_KEY === 'liga-ea-sports') {
+      var _srcData0 = loadData(CURRENT_KEY) || {teams:[]};
+      var _srcTeams0 = Array.isArray(_srcData0.teams) ? _srcData0.teams : [];
+      var _remaining = 0;
+      _srcTeams0.forEach(function(t){ if (!(t && t.id && selectedIds[t.id])) _remaining++; });
+      if (_remaining !== 20) {
+        var _warnMsg = '⚠️ Liga EA Sports necesita EXACTAMENTE 20 equipos para que el '
+          + 'calendario se actualice.\n\nTras mover ' + pickedCount + ', te quedarían '
+          + _remaining + '.\n\n';
+        if (_remaining < 20) {
+          _warnMsg += 'El/los equipo(s) movido(s) saldrá(n) del EDITOR ahora mismo, pero '
+            + 'la CLASIFICACIÓN y el calendario de Liga EA Sports seguirán jugando el '
+            + 'cuadro ANTERIOR (con el equipo que acabas de mover) hasta que añadas '
+            + (20 - _remaining) + ' equipo(s) más para volver a 20.';
+        } else {
+          _warnMsg += 'Con más de 20 tampoco se puede regenerar el calendario — mueve '
+            + (_remaining - 20) + ' equipo(s) más para volver a 20.';
+        }
+        if (!confirm(_warnMsg + '\n\n¿Mover de todas formas?')) return;
+      }
+    }
+
     var doMove = function(){
       if (!confirm('Vas a mover ' + pickedCount + ' equipo(s) desde "' + _lextSlugLabel(CURRENT_KEY) + '" a "' + _lextSlugLabel(destSlug) + '".\n\n¿Continuar?')) return;
 
@@ -57048,6 +57095,15 @@ https://api.sofascore.app/api/v1/team/44/image
       return r && currentIds[r.h] && currentIds[r.a];
     });
     saveData(CURRENT_KEY, data);
+    /* Regla obligatoria (CLAUDE.md, "editar un club... tiene que verse
+       EN EL PRÓXIMO PARTIDO"): todo handler de guardado del editor de
+       plantilla llama a applyEngineOverrides() inmediatamente después
+       de saveData(...). Este editor de cards (2026-05-26) se había
+       quedado fuera — borrar/añadir un equipo de Liga EA Sports aquí
+       nunca re-sincronizaba `window.LIGA_SCHEDULE` con el roster hasta
+       que otra acción cualquiera disparase applyEngineOverrides por
+       casualidad. */
+    try { if (typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides(); } catch(_){}
     if(!silent){
       var title = document.getElementById('lext-cards-title');
       var baseTitle = '🎴 Editar equipos · '+(CURRENT_NAME||CURRENT_KEY);

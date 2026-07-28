@@ -1,5 +1,104 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `setLigaSchedule` arma un lock anti-reversión GENÉRICO — mover un equipo fuera de Liga EA Sports ya no "vuelve solo" (obligatorio, 2026-07-28)
+
+**Bug (2 fotos usuario 2026-07-28, «Girona FC»)**: el admin abre "🔀 Mover
+equipos" desde Liga EA Sports (mostraba **21 equipos** — un Inter 🐲 de
+más, colado como fila "extra" con 0 partidos vía `appendLigaEaExtras`),
+tilda **Girona FC** y lo mueve a **Liga Hypermotion**. El editor confirma
+el movimiento, pero **al volver a abrir la web, Girona sigue apareciendo
+en la Liga EA Sports** — como si el movimiento nunca se hubiera guardado.
+
+### Causa raíz — el mismo bug ya arreglado para el botón 🎲, nunca generalizado
+
+La clasificación y el calendario de Liga EA Sports son **100% derivados
+de `window.LIGA_SCHEDULE`** (`ef_liga38_schedule_v2`), NO del roster
+`ligaExt_liga-ea-sports.teams[]` directamente — el roster solo alimenta
+la regeneración del calendario cuando `applyEngineOverrides()` detecta
+que el conjunto de nombres del editor difiere del calendario vigente
+(bloque "Motor por PLANTILLA EDITABLE", `misc_body_1.html`). "Mover
+equipos" (`lextExecuteMoveTeams`) SÍ persiste el roster (local + POST) Y
+llama a `applyEngineOverrides()` después — y con el roster resultante en
+EXACTAMENTE 20 (como en este caso: 21 − 1 Girona = 20), el bloque de
+sincronización SÍ regenera un `LIGA_SCHEDULE` nuevo sin Girona.
+
+El problema es lo que pasa DESPUÉS de esa regeneración: `setLigaSchedule`
+(`part2/misc_body_2.html`) persiste el calendario nuevo con un **POST
+suelto, sin reintentos, sin ningún lock** — mientras que el botón
+**🎲 Sortear calendario** (`_sortearCalendarioLigaRun`) SÍ arma un lock de
+30 s (`window._ligaSorteoLock` + `LS_SORTEO_LOCK_KEY`) y pausa el poll de
+5 s (`_pauseLigaStatePoll`) precisamente para que `hydrateLigaStateFromBackend`
+—que adopta SIN condiciones cualquier `liga_schedule` del servidor
+estructuralmente válido— no revierta el calendario recién guardado con
+una respuesta stale. Ese lock **nunca se generalizó** a los demás
+callers de `setLigaSchedule` (el propio "Mover equipos" vía
+`applyEngineOverrides`, y "🔼 Aplicar EA Sports ↔ Hypermotion"). Si el
+POST de estos otros callers se pierde (red móvil, cold-start de
+Railway — el escenario más documentado de este proyecto) o si el poll de
+5 s gana la carrera antes de que el POST aterrice, el siguiente
+poll/hydrate ve el servidor TODAVÍA con el calendario viejo (con Girona)
+y lo re-impone — el equipo movido "vuelve a aparecer", exactamente el
+mismo bug ya diagnosticado y arreglado para el 🎲, reproducido en los
+demás puntos de escritura del calendario.
+
+### Fix
+
+- **`persistSharedLigaState(patch, tries)`** (`part2/misc_body_2.html`):
+  ahora reintenta hasta 3 veces con backoff (1.5 s) si el POST falla —
+  mismo patrón que el resto del proyecto (`_postClearRetry` y
+  equivalentes). Antes era un `fetch` suelto con `.catch(()=>false)`.
+- **`saveSchedule(schedule)`**: arma el lock (`window._ligaSorteoLock` +
+  `LS_SORTEO_LOCK_KEY`) y pausa el poll (`_pauseLigaStatePoll(20000)`)
+  **ANTES** de persistir — **generalizado a TODOS los callers** de
+  `setLigaSchedule(..., persist!==false)`, no solo al botón 🎲. Como
+  `saveSchedule` es el ÚNICO punto por el que pasa cualquier persistencia
+  de calendario "intencional" (el 🎲, el motor editable de
+  `applyEngineOverrides`, "Aplicar EA Sports ↔ Hypermotion", y cualquier
+  caller futuro), un solo fix en el chokepoint protege a todos sin tener
+  que tocar cada call site.
+- **`_lcCommit`** (editor de equipos en vista CARDS, `misc_body_1.html`
+  — el editor real detrás de "🎴 Editar equipos", usado también por
+  "🔀 Mover equipos" al recargar `_LC_STATE`): ahora llama a
+  `window.applyEngineOverrides()` inmediatamente después de
+  `saveData(...)`, igual que exige la regla ya existente de este
+  archivo ("editar un club... tiene que verse EN EL PRÓXIMO PARTIDO").
+  Este editor (2026-05-26) se había quedado FUERA de esa regla — antes
+  dependía de que otra acción cualquiera disparase `applyEngineOverrides`
+  por casualidad para que un alta/baja de equipo se reflejara.
+- **`refreshEngineBanner`** (banner de estado del motor, actualmente sin
+  nodo DOM que lo muestre — dead code) y **`lextExecuteMoveTeams`**: se
+  añade un aviso explícito (`confirm()`) cuando la ORIGEN del movimiento
+  es Liga EA Sports y el resultado no deja el roster en EXACTAMENTE 20
+  — el calendario de 38 jornadas SOLO se regenera con 20 exactos
+  (`generarCalendario` produce `2×(N-1)` jornadas, que solo da 38 con
+  N=20); con cualquier otro N la regeneración se descarta en silencio
+  (`isValidLigaSchedule` exige `length===38`) y el admin no tenía forma
+  de saber que su movimiento no había "entrado en vigor" del todo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un caller nuevo de `setLigaSchedule(...)` persista
+   sin pasar por `saveSchedule` (el único punto con lock + reintentos).
+   Si se necesita un POST adicional específico (como el
+   `/api/state/reset-liga` del botón 🎲, que además limpia resultados),
+   es ADEMÁS de `setLigaSchedule`, nunca en sustitución.
+2. **PROHIBIDO** que un handler de guardado NUEVO del editor de
+   plantilla (equipo, jugador, escudo, alias, valor — cualquier vista,
+   incluida la de cards) omita la llamada a `window.applyEngineOverrides()`
+   inmediatamente después de `saveData(...)`. Ver regla ya existente
+   más abajo ("PRINCIPIO ABSOLUTO: editar un club...") — este fix es la
+   generalización de esa regla al editor de cards.
+3. **PROHIBIDO** que la regeneración del calendario de Liga EA Sports se
+   intente con un roster que no tenga EXACTAMENTE 20 equipos sin avisar
+   al admin de por qué "no se aplicó". Un roster de 19 o 21 no es un
+   error silencioso más — el admin necesita saber cuántos equipos le
+   faltan/sobran para que el cambio tenga efecto real.
+4. Si se reintroduce alguna vez una interfaz nueva que module directamente
+   `ligaExt_liga-ea-sports.teams[]` (altas, bajas, movimientos entre
+   ligas), debe heredar automáticamente esta protección en cuanto llame
+   a `saveData(...)` + `applyEngineOverrides()` — no duplicar el lock ni
+   los reintentos en el nuevo call site.
+
 ## El acta EN VIVO y el mensaje de WhatsApp (descanso/prórroga/FINAL) reparan nombres placeholder al vuelo — no solo la pantalla de IA-vs-IA de Liga (obligatorio, 2026-07-21 #2)
 
 **Bug (4 fotos usuario 2026-07-21, «Torino (IA) 1-3 Arsenal (Álvaro)»,

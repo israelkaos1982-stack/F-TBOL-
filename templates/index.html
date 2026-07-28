@@ -333,33 +333,54 @@
         if (elapsed < MIN_MS) { setTimeout(hide, MIN_MS - elapsed); return; }
         doHide();
       }
+      /* Salida INMEDIATA (tap del usuario): no espera al remate del
+         contador, corta ya. */
+      function hideNow(){ bump(100); hide(); }
 
-      /* Contador visible 0→1→2→3…→100: cada tick (45 ms) sube 1 punto
-         hacia `target`. El relleno por tiempo transcurrido (tope 92%) es
-         lo que garantiza que NUNCA se queda clavado en 0%, pase lo que
-         pase con los hitos reales. */
+      /* Contador visible 0→1→2→3…→100 — SIN saltos. Antes, cuando la
+         señal real llegaba pronto (red rápida / server caliente), el
+         contador se quedaba corto (p.ej. "28%", limitado por el paso fijo
+         de 1 punto/tick) y `doHide()` lo forzaba a 100 de un salto — se
+         veía como si la web "abriera de repente a medio contar". Ahora el
+         PASO se adapta al hueco pendiente (`target - shown`): hueco
+         pequeño → sube de 1 en 1 (0,1,2,3…) como antes; hueco grande
+         (un hito real que adelantó mucho el techo, o el remate final al
+         100) → sube más rápido para alcanzar el techo en pocos ticks, en
+         vez de saltar instantáneo o arrastrarse durante segundos. El
+         propio contador es quien dispara `hide()` al llegar a 100 — nunca
+         se fuerza desde fuera, así el número SIEMPRE se ve subiendo hasta
+         el final. */
       tickTimer = setInterval(function(){
-        var trickle = Math.min(92, (Date.now() - startedAt) / 70);
+        var trickle = Math.min(90, (Date.now() - startedAt) / 35);
         if (trickle > target) target = trickle;
-        if (shown < target) { shown = Math.min(Math.ceil(target), shown + 1); render(); }
-      }, 45);
+        if (shown < target) {
+          var gap = target - shown;
+          var step = Math.max(1, Math.ceil(gap / 6));
+          shown = Math.min(Math.ceil(target), shown + step);
+          render();
+        }
+        if (shown >= 100 && !hidden) hide();
+      }, 30);
 
       /* `_bootBump` real: sustituye el placeholder definido en <head>
          (que solo acumulaba en `_bootProgressPre`) y absorbe ya mismo lo
-         que se hubiera acumulado antes de que este bloque montara. */
+         que se hubiera acumulado antes de que este bloque montara. Solo
+         AJUSTA EL TECHO — el contador de arriba es quien decide cuándo
+         revelar la web de verdad, así nunca hay un salto brusco. */
       window._bootBump = function(pct){ if (!hidden) bump(pct); };
       if (typeof window._bootProgressPre === 'number') bump(window._bootProgressPre);
 
       /* `_bootSplashHide` = la señal de "ya está todo pintado con los
          datos correctos" (misc_body_1.html la llama tras
-         `_hydrateMenuFromServer`+`_applyTriple`). Es la única vía
-         "normal" al 100 %. */
-      window._bootSplashHide = function(){ bump(100); hide(); };
+         `_hydrateMenuFromServer`+`_applyTriple`). Sube el techo a 100 —
+         el contador hace el remate visible y dispara el cierre él solo. */
+      window._bootSplashHide = function(){ bump(100); };
 
       /* Escape manual SILENCIOSO (sin texto visible — petición usuario
-         2026-07-28): tocar la pantalla sigue permitiendo salir antes. */
-      el.addEventListener('click', hide, { once:true });
-      el.addEventListener('touchend', hide, { once:true });
+         2026-07-28): tocar la pantalla sigue permitiendo salir YA, sin
+         esperar al remate del contador. */
+      el.addEventListener('click', hideNow, { once:true });
+      el.addEventListener('touchend', hideNow, { once:true });
 
       /* DOMContentLoaded: TODO el HTML (misc_body_1/2 + el bundle) ya se
          parseó y ejecutó — es un hito GARANTIZADO por el navegador, no
@@ -376,8 +397,9 @@
 
       /* Backstop: si la señal real nunca llega (fallo de red, endpoint
          caído, lo que sea), la web se revela igual — nunca se queda
-         atascada en CARGANDO para siempre. */
-      setTimeout(function(){ bump(100); hide(); }, HARD_MS);
+         atascada en CARGANDO para siempre. Ya se esperó lo suficiente,
+         así que aquí SÍ se sale de inmediato (sin esperar el remate). */
+      setTimeout(hideNow, HARD_MS);
 
       /* BFCache: al restaurar desde el historial el DOM ya está listo. */
       window.addEventListener('pageshow', function(e){ if (e.persisted) doHide(); });

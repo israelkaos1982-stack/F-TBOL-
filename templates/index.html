@@ -203,7 +203,6 @@
       </div>
       <div class="boot-splash-pct" id="boot-splash-pct">0%</div>
     </div>
-    <div class="boot-splash-tap">▶ Toca para continuar</div>
   </div>
   <style>
     #boot-splash{
@@ -223,11 +222,11 @@
          hilo JS esté atascado.  `pointer-events:none` al final deja pasar los
          toques a la app de debajo aunque el elemento siga en el DOM.  En una carga
          sana el JS oculta+elimina el splash en cuanto el progreso real llega al
-         100 % y esta animación nunca llega a importar (arranca a los 12 s — justo
-         después del backstop JS de 11 s, que es el que debería disparar primero
+         100 % y esta animación nunca llega a importar (arranca a los 16 s — justo
+         después del backstop JS de 15 s, que es el que debería disparar primero
          en el 99 % de los casos; esta es la ÚLTIMA red, solo para cuando el hilo
          JS está completamente atascado y ni siquiera ese setTimeout dispara). */
-      animation:bootSplashAutoFade .6s ease 12s forwards;
+      animation:bootSplashAutoFade .6s ease 16s forwards;
     }
     #boot-splash.hide{opacity:0;pointer-events:none;}
     @keyframes bootSplashAutoFade{to{opacity:0;visibility:hidden;pointer-events:none;}}
@@ -272,63 +271,57 @@
       color:#f0c040;min-width:36px;text-align:right;
       font-variant-numeric:tabular-nums;
     }
-    /* Pista "Toca para continuar": emerge a los 3.5 s via animación CSS
-       que corre en el compositor — funciona aunque el hilo JS esté ocupado
-       parseando los 100 k líneas de scripts inline. */
-    .boot-splash-tap{
-      font-family:Oswald,sans-serif;font-size:13px;letter-spacing:2px;
-      color:rgba(240,192,64,.85);text-transform:uppercase;
-      opacity:0;
-      /* OPACITY (no color) → compositor-thread, aparece aunque el hilo JS esté
-         bloqueado parseando los scripts inline (color NO se compone y no se veía). */
-      animation:bootSplashTapIn .7s ease 3.5s forwards;
-    }
-    @keyframes bootSplashTapIn{to{opacity:1;}}
   </style>
   <script>
-    /* Splash con PROGRESO REAL (2026-07-28). Sustituye el modelo de
-       "cerrar a ciegas tras N ms" que abría la web ANTES de que
+    /* Splash con PROGRESO REAL (2026-07-28, refuerzo). Sustituye el modelo
+       de "cerrar a ciegas tras N ms" que abría la web ANTES de que
        `_hydrateMenuFromServer` + `_applyTriple()` (misc_body_1.html)
-       terminaran de traer y pintar los overrides del menú del hub —
-       eso producía el bug reportado: unos segundos con las cards SIN
-       personalizar (parece "la web antigua") seguidos, EN VIVO, de las
-       cards YA personalizadas ("la web actual"). El único hide previo
-       (línea justo tras `{% include 'partials/misc_body_1.html' %}`
-       más abajo) disparaba SIEMPRE antes que ese callback async, así
-       que la señal "correcta" que ya existía (`window._bootSplashHide()`,
-       invocada por misc_body_1.html tras la hidratación) nunca llegaba
-       a tiempo — quedaba como no-op.
+       terminaran de traer y pintar los overrides del menú del hub — eso
+       producía el bug original (flash de "web antigua" → "web actual").
 
-       Ahora el splash SOLO se cierra cuando el progreso llega a 100, y
-       a 100 solo se llega por:
-       - la señal REAL de arriba (`window._bootSplashHide()`), o
+       REFUERZO (mismo día, usuario reportó «se queda en 0%»): la primera
+       versión solo pintaba el % en saltos grandes (20/55/75/90/96/100)
+       disparados por unos pocos `<script>` de hito repartidos por el
+       documento. Si CUALQUIERA de esos hitos no llega a tiempo (red
+       lenta a Railway, fuente que tarda, etc.) el número se queda
+       CLAVADO en el último salto — el usuario ve "0%" fijo y parece
+       roto. Ahora el % en pantalla es un CONTADOR que SIEMPRE sube de 1
+       en 1 (vía `setInterval`), alimentado por dos fuentes que se
+       combinan con el máximo:
+       1) Relleno por TIEMPO transcurrido (tope 92%) — garantiza que la
+          barra avanza sola aunque ningún hito real haya llegado aún.
+       2) Los hitos reales de carga (fuentes, misc_body_1/2, bundle,
+          DOMContentLoaded, window.load) — adelantan el contador cuando
+          llegan antes que el relleno por tiempo.
+       El cierre real (100 %) SOLO ocurre por:
+       - la señal REAL de hidratación del menú (`window._bootSplashHide()`,
+         invocada por misc_body_1.html tras `_hydrateMenuFromServer`), o
        - el backstop de seguridad (red muerta / fallo inesperado), o
-       - el usuario tocando la pantalla (escape manual, no espera).
-       Los hitos intermedios (fuentes, misc_body_1, misc_body_2, bundle,
-       window.load) SOLO alimentan la barra visible — nunca revelan la
-       web por sí solos, así nunca se ve un estado a medio pintar. */
+       - el usuario tocando la pantalla (escape silencioso, sin texto). */
     (function(){
       var el = document.getElementById('boot-splash');
       if (!el) return;
       var barEl = document.getElementById('boot-splash-bar');
       var pctEl = document.getElementById('boot-splash-pct');
-      var MIN_MS  = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  :  700;
-      var HARD_MS = (typeof window._BOOT_SPLASH_HARD_MS === 'number') ? window._BOOT_SPLASH_HARD_MS : 11000;
+      var MIN_MS  = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  :   700;
+      var HARD_MS = (typeof window._BOOT_SPLASH_HARD_MS === 'number') ? window._BOOT_SPLASH_HARD_MS : 15000;
       var startedAt = Date.now();
       var hidden = false;
-      var shown  = 0; /* % ya pintado — nunca retrocede */
+      var target = 0;   /* techo real (hitos + relleno por tiempo) — nunca retrocede */
+      var shown  = 0;   /* % PINTADO — sube de 1 en 1 hasta alcanzar `target` */
+      var tickTimer = null;
 
-      function paint(pct){
-        if (pct <= shown) return;
-        shown = pct;
+      function render(){
         if (barEl) barEl.style.width = shown + '%';
         if (pctEl) pctEl.textContent = shown + '%';
       }
+      function bump(pct){ if (typeof pct === 'number' && pct > target) target = pct; }
 
       function doHide(){
         if (hidden) return;
         hidden = true;
-        paint(100);
+        if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+        target = 100; shown = 100; render();
         el.classList.add('hide');
         setTimeout(function(){ if (el && el.parentNode) el.parentNode.removeChild(el); }, 380);
       }
@@ -341,35 +334,50 @@
         doHide();
       }
 
+      /* Contador visible 0→1→2→3…→100: cada tick (45 ms) sube 1 punto
+         hacia `target`. El relleno por tiempo transcurrido (tope 92%) es
+         lo que garantiza que NUNCA se queda clavado en 0%, pase lo que
+         pase con los hitos reales. */
+      tickTimer = setInterval(function(){
+        var trickle = Math.min(92, (Date.now() - startedAt) / 70);
+        if (trickle > target) target = trickle;
+        if (shown < target) { shown = Math.min(Math.ceil(target), shown + 1); render(); }
+      }, 45);
+
       /* `_bootBump` real: sustituye el placeholder definido en <head>
          (que solo acumulaba en `_bootProgressPre`) y absorbe ya mismo lo
          que se hubiera acumulado antes de que este bloque montara. */
-      window._bootBump = function(pct){
-        if (typeof pct !== 'number' || hidden) return;
-        paint(pct);
-      };
-      if (typeof window._bootProgressPre === 'number') paint(window._bootProgressPre);
+      window._bootBump = function(pct){ if (!hidden) bump(pct); };
+      if (typeof window._bootProgressPre === 'number') bump(window._bootProgressPre);
 
       /* `_bootSplashHide` = la señal de "ya está todo pintado con los
          datos correctos" (misc_body_1.html la llama tras
          `_hydrateMenuFromServer`+`_applyTriple`). Es la única vía
          "normal" al 100 %. */
-      window._bootSplashHide = hide;
+      window._bootSplashHide = function(){ bump(100); hide(); };
 
-      /* Escape manual: el usuario puede tocar para continuar sin esperar
-         a que termine la hidratación. */
+      /* Escape manual SILENCIOSO (sin texto visible — petición usuario
+         2026-07-28): tocar la pantalla sigue permitiendo salir antes. */
       el.addEventListener('click', hide, { once:true });
       el.addEventListener('touchend', hide, { once:true });
 
-      /* Hito: todo terminó de cargar (imágenes, hojas de estilo…). NO
-         llega a 100 — se reserva el 100 real para la señal de arriba o
-         el backstop, así la barra nunca "miente" antes de tiempo. */
-      window.addEventListener('load', function(){ paint(96); });
+      /* DOMContentLoaded: TODO el HTML (misc_body_1/2 + el bundle) ya se
+         parseó y ejecutó — es un hito GARANTIZADO por el navegador, no
+         depende de en qué punto exacto del documento coloquemos un
+         `<script>` de progreso suelto. */
+      function onDom(){ bump(92); }
+      if (document.readyState === 'interactive' || document.readyState === 'complete') onDom();
+      else document.addEventListener('DOMContentLoaded', onDom, { once:true });
+
+      /* window.load: imágenes/hojas de estilo también listas. NO llega a
+         100 — se reserva el 100 real para la señal de hidratación o el
+         backstop, así el contador nunca "miente" antes de tiempo. */
+      window.addEventListener('load', function(){ bump(96); });
 
       /* Backstop: si la señal real nunca llega (fallo de red, endpoint
          caído, lo que sea), la web se revela igual — nunca se queda
          atascada en CARGANDO para siempre. */
-      setTimeout(doHide, HARD_MS);
+      setTimeout(function(){ bump(100); hide(); }, HARD_MS);
 
       /* BFCache: al restaurar desde el historial el DOM ya está listo. */
       window.addEventListener('pageshow', function(e){ if (e.persisted) doHide(); });

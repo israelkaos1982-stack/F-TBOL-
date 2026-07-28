@@ -4,6 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>eFootball ✓</title>
+  <script>
+    /* ── PROGRESO REAL DEL SPLASH (2026-07-28) ────────────────────────────
+       Placeholder definido aquí, ANTES de cualquier <link>/<script> que
+       pueda completarse primero, para que ningún hito de carga se pierda
+       por orden de ejecución (la hoja de fuentes, más abajo, puede cargar
+       antes de que #boot-splash llegue a montar su barra). `#boot-splash`
+       (en <body>) lo SUSTITUYE por la versión real en cuanto monta —
+       hasta entonces esto solo acumula el máximo conocido. */
+    window._bootBump = function(pct){
+      if (typeof pct !== 'number') return;
+      if (!(typeof window._bootProgressPre === 'number') || pct > window._bootProgressPre) {
+        window._bootProgressPre = pct;
+      }
+    };
+  </script>
   <!-- preconnect elimina la latencia de DNS+TCP antes de que el parser
        llegue al <link> de fuentes; crossorigin es necesario para gstatic -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,7 +27,7 @@
        descarga en segundo plano y se aplica al terminar. Sin esto el
        navegador detiene todo el render hasta recibir la respuesta de
        Google (latencia típica 200-800 ms en móvil). -->
-  <link rel="stylesheet" media="print" onload="this.media='all'"
+  <link rel="stylesheet" media="print" onload="this.media='all';window._bootBump&&window._bootBump(20);"
         href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;600;700&family=Rajdhani:wght@400;600;700&display=swap">
   <noscript>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;600;700&family=Rajdhani:wght@400;600;700&display=swap">
@@ -182,6 +197,12 @@
     </div>
     <div class="boot-splash-spinner"></div>
     <div class="boot-splash-hint">Cargando…</div>
+    <div class="boot-splash-progress-wrap">
+      <div class="boot-splash-bar-track">
+        <div class="boot-splash-bar-fill" id="boot-splash-bar"></div>
+      </div>
+      <div class="boot-splash-pct" id="boot-splash-pct">0%</div>
+    </div>
     <div class="boot-splash-tap">▶ Toca para continuar</div>
   </div>
   <style>
@@ -201,9 +222,12 @@
          por eso sí gira durante el bloqueo), así que levanta la cortina aunque el
          hilo JS esté atascado.  `pointer-events:none` al final deja pasar los
          toques a la app de debajo aunque el elemento siga en el DOM.  En una carga
-         sana el JS oculta+elimina el splash a ~1.5 s y esta animación nunca llega
-         a importar (arranca a los 5 s). */
-      animation:bootSplashAutoFade .6s ease 5s forwards;
+         sana el JS oculta+elimina el splash en cuanto el progreso real llega al
+         100 % y esta animación nunca llega a importar (arranca a los 12 s — justo
+         después del backstop JS de 11 s, que es el que debería disparar primero
+         en el 99 % de los casos; esta es la ÚLTIMA red, solo para cuando el hilo
+         JS está completamente atascado y ni siquiera ese setTimeout dispara). */
+      animation:bootSplashAutoFade .6s ease 12s forwards;
     }
     #boot-splash.hide{opacity:0;pointer-events:none;}
     @keyframes bootSplashAutoFade{to{opacity:0;visibility:hidden;pointer-events:none;}}
@@ -228,7 +252,27 @@
       font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;
       color:rgba(255,255,255,.45);text-transform:uppercase;
     }
-    /* Pista "Toca para continuar": emerge a los 2.8 s via animación CSS
+    /* Barra de progreso REAL (2026-07-28): sustituye la espera "a ciegas"
+       por hitos de carga genuinos (fuentes, misc_body_1/2, bundle, y la
+       hidratación del menú del hub) — nunca un contador falso animado. */
+    .boot-splash-progress-wrap{
+      display:flex;align-items:center;gap:12px;width:230px;max-width:64vw;
+    }
+    .boot-splash-bar-track{
+      flex:1;height:7px;border-radius:5px;overflow:hidden;
+      background:rgba(255,255,255,.08);border:1px solid rgba(240,192,64,.25);
+    }
+    .boot-splash-bar-fill{
+      height:100%;width:0%;border-radius:5px;
+      background:linear-gradient(90deg,#ff4444,#f0c040);
+      transition:width .3s ease;
+    }
+    .boot-splash-pct{
+      font-family:Oswald,sans-serif;font-size:14px;font-weight:700;
+      color:#f0c040;min-width:36px;text-align:right;
+      font-variant-numeric:tabular-nums;
+    }
+    /* Pista "Toca para continuar": emerge a los 3.5 s via animación CSS
        que corre en el compositor — funciona aunque el hilo JS esté ocupado
        parseando los 100 k líneas de scripts inline. */
     .boot-splash-tap{
@@ -237,92 +281,126 @@
       opacity:0;
       /* OPACITY (no color) → compositor-thread, aparece aunque el hilo JS esté
          bloqueado parseando los scripts inline (color NO se compone y no se veía). */
-      animation:bootSplashTapIn .7s ease 2.8s forwards;
+      animation:bootSplashTapIn .7s ease 3.5s forwards;
     }
     @keyframes bootSplashTapIn{to{opacity:1;}}
   </style>
   <script>
-    /* Splash auto-hide RÁPIDO y A PRUEBA DE BLOQUEO.  2026-06-14 — el
-       usuario reportó «no se abre la web» (foto: clavada en CARGANDO…).
+    /* Splash con PROGRESO REAL (2026-07-28). Sustituye el modelo de
+       "cerrar a ciegas tras N ms" que abría la web ANTES de que
+       `_hydrateMenuFromServer` + `_applyTriple()` (misc_body_1.html)
+       terminaran de traer y pintar los overrides del menú del hub —
+       eso producía el bug reportado: unos segundos con las cards SIN
+       personalizar (parece "la web antigua") seguidos, EN VIVO, de las
+       cards YA personalizadas ("la web actual"). El único hide previo
+       (línea justo tras `{% include 'partials/misc_body_1.html' %}`
+       más abajo) disparaba SIEMPRE antes que ese callback async, así
+       que la señal "correcta" que ya existía (`window._bootSplashHide()`,
+       invocada por misc_body_1.html tras la hidratación) nunca llegaba
+       a tiempo — quedaba como no-op.
 
-       Causa raíz de la regresión: el commit abfcd57 ató el ocultado del
-       splash a que TODA la hidratación del servidor «se asentara»
-       (/api/kv/*, /api/liga-ext/* de decenas de ligas, /api/state…),
-       con un tope de 8 s.  En un móvil contra un server frío de Railway
-       esas peticiones se solapan continuamente, así que la cortina se
-       quedaba los 8 s ENTEROS en cada arranque → se percibe como «la web
-       no abre».  Además envolvía `window.fetch` globalmente en el
-       arranque, un riesgo innecesario.
-
-       Fix: volvemos al modelo simple y robusto (probado desde
-       2026-05-21).  La app es USABLE en DOMContentLoaded (el HTML está
-       parseado y el bundle ya ejecutó: render inicial + arranque de la
-       hidratación).  Ocultamos poco después de DOM listo:
-       - MIN 1000 ms  → no flashear ultra rápido; da a la hidratación
-         cache-hit / server caliente un margen para repintar BAJO la
-         cortina (reduce el flash de datos viejos) sin bloquear.
-       - GRACE 500 ms → margen tras DOM listo.
-       - MAX 2500 ms  → tope DURO. La web SIEMPRE abre en ≤2.5 s, pase
-         lo que pase con la red o el polling.
-       - Tap/click cierra antes. */
+       Ahora el splash SOLO se cierra cuando el progreso llega a 100, y
+       a 100 solo se llega por:
+       - la señal REAL de arriba (`window._bootSplashHide()`), o
+       - el backstop de seguridad (red muerta / fallo inesperado), o
+       - el usuario tocando la pantalla (escape manual, no espera).
+       Los hitos intermedios (fuentes, misc_body_1, misc_body_2, bundle,
+       window.load) SOLO alimentan la barra visible — nunca revelan la
+       web por sí solos, así nunca se ve un estado a medio pintar. */
     (function(){
-      var MIN_MS   = (typeof window._BOOT_SPLASH_MIN_MS   === 'number') ? window._BOOT_SPLASH_MIN_MS   : 1000;
-      var GRACE_MS = (typeof window._BOOT_SPLASH_GRACE_MS === 'number') ? window._BOOT_SPLASH_GRACE_MS :  500;
-      var MAX_MS   = (typeof window._BOOT_SPLASH_MAX_MS   === 'number') ? window._BOOT_SPLASH_MAX_MS   : 2500;
       var el = document.getElementById('boot-splash');
       if (!el) return;
-      var hidden = false;
+      var barEl = document.getElementById('boot-splash-bar');
+      var pctEl = document.getElementById('boot-splash-pct');
+      var MIN_MS  = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  :  700;
+      var HARD_MS = (typeof window._BOOT_SPLASH_HARD_MS === 'number') ? window._BOOT_SPLASH_HARD_MS : 11000;
       var startedAt = Date.now();
+      var hidden = false;
+      var shown  = 0; /* % ya pintado — nunca retrocede */
+
+      function paint(pct){
+        if (pct <= shown) return;
+        shown = pct;
+        if (barEl) barEl.style.width = shown + '%';
+        if (pctEl) pctEl.textContent = shown + '%';
+      }
+
       function doHide(){
         if (hidden) return;
         hidden = true;
+        paint(100);
         el.classList.add('hide');
         setTimeout(function(){ if (el && el.parentNode) el.parentNode.removeChild(el); }, 380);
       }
-      /* hide() público / tap-to-close: fuerza ocultar respetando MIN. */
+      /* hide() = la vía "normal": respeta un mínimo de visibilidad (no
+         parpadea si todo ya estaba cacheado y carga en <700ms). */
       function hide(){
         if (hidden) return;
         var elapsed = Date.now() - startedAt;
         if (elapsed < MIN_MS) { setTimeout(hide, MIN_MS - elapsed); return; }
         doHide();
       }
+
+      /* `_bootBump` real: sustituye el placeholder definido en <head>
+         (que solo acumulaba en `_bootProgressPre`) y absorbe ya mismo lo
+         que se hubiera acumulado antes de que este bloque montara. */
+      window._bootBump = function(pct){
+        if (typeof pct !== 'number' || hidden) return;
+        paint(pct);
+      };
+      if (typeof window._bootProgressPre === 'number') paint(window._bootProgressPre);
+
+      /* `_bootSplashHide` = la señal de "ya está todo pintado con los
+         datos correctos" (misc_body_1.html la llama tras
+         `_hydrateMenuFromServer`+`_applyTriple`). Es la única vía
+         "normal" al 100 %. */
+      window._bootSplashHide = hide;
+
+      /* Escape manual: el usuario puede tocar para continuar sin esperar
+         a que termine la hidratación. */
       el.addEventListener('click', hide, { once:true });
       el.addEventListener('touchend', hide, { once:true });
 
-      /* Trigger principal: DOMContentLoaded + GRACE (app usable, el
-         bundle ya ejecutó). NO window.load — eso espera a TODOS los
-         escudos y dispara decenas de segundos en móvil. */
-      function _afterReady(){ setTimeout(hide, GRACE_MS); }
-      if (document.readyState === 'interactive' || document.readyState === 'complete') { _afterReady(); }
-      else { document.addEventListener('DOMContentLoaded', _afterReady, { once:true }); }
+      /* Hito: todo terminó de cargar (imágenes, hojas de estilo…). NO
+         llega a 100 — se reserva el 100 real para la señal de arriba o
+         el backstop, así la barra nunca "miente" antes de tiempo. */
+      window.addEventListener('load', function(){ paint(96); });
 
-      /* Backstop absoluto: la web abre en ≤MAX_MS pase lo que pase. */
-      setTimeout(doHide, MAX_MS);
-      /* Hook por si un flujo crítico (ej. partido live restaurándose
-         del wprev_state_v1) quiere ocultarlo antes via _bootSplashHide(). */
-      window._bootSplashHide = hide;
+      /* Backstop: si la señal real nunca llega (fallo de red, endpoint
+         caído, lo que sea), la web se revela igual — nunca se queda
+         atascada en CARGANDO para siempre. */
+      setTimeout(doHide, HARD_MS);
 
-      /* BFCache: si el navegador restaura la página desde la caché de
-         historial (pageshow.persisted=true) mientras el splash aún está
-         visible, lo cerramos de inmediato — el DOM ya está listo. */
-      window.addEventListener('pageshow', function(e){ if(e.persisted) doHide(); });
+      /* BFCache: al restaurar desde el historial el DOM ya está listo. */
+      window.addEventListener('pageshow', function(e){ if (e.persisted) doHide(); });
     })();
   </script>
 
   {% include 'partials/misc_body_1.html' %}
   <script>
-    /* Cierre anticipado del splash: misc_body_1.html ya ejecutó (los IIFEs
-       mayores: pretemporada, torneos, etc.).  En un Android lento esto ocurre
-       ~3-4 s después del inicio — el MIN_MS (1 s) ya se superó, así que
-       hide() cierra el splash de inmediato sin esperar a misc_body_2.html
-       ni al bundle.  El usuario ve la pantalla antes aunque misc_body_2
-       y el bundle aún se estén cargando. */
-    if (typeof window._bootSplashHide === 'function') window._bootSplashHide();
+    /* Hito de progreso REAL (2026-07-28): misc_body_1.html ya ejecutó (los
+       IIFEs mayores: pretemporada, torneos, etc.) — pero el splash YA NO
+       se cierra aquí. Cerrarlo en este punto es justo lo que producía el
+       "flash de web antigua": `_hydrateMenuFromServer`/`_applyTriple`
+       (definidas en este mismo archivo, más arriba) todavía no habían
+       corrido su callback async — llega después, en DOMContentLoaded.
+       Ahora solo sumamos progreso; el cierre real llega con
+       `window._bootSplashHide()` (invocada por ese callback) o con el
+       backstop de seguridad. */
+    if (typeof window._bootBump === 'function') window._bootBump(55);
   </script>
   {% include 'partials/part2/misc_body_2.html' %}
+  <script>
+    if (typeof window._bootBump === 'function') window._bootBump(75);
+  </script>
   <script src="{{ url_for('static', filename='js/goal-notification-improved.js') }}?v=2.0"></script>
   <script src="{{ url_for('static', filename='js/var-system.js') }}?v=1.0"></script>
   <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=9.34"></script>
+  <script>
+    /* Hito de progreso: el bundle principal ya se descargó y ejecutó —
+       junto con misc_body_1/2 es la parte más pesada del arranque. */
+    if (typeof window._bootBump === 'function') window._bootBump(90);
+  </script>
   <script>
   /* ── PARCHE INLINE: bloquea el overlay central de gol ──────────────────
      Corre inmediatamente después del bundle, sin depender de archivos

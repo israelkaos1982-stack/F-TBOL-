@@ -4569,7 +4569,7 @@ window._showSimProgress = function(opts, onDone){
         }
       });
     } catch(_){}
-    window.renderBayernPlantillaScreen = function(){
+    window.renderBayernPlantillaScreen = function(skipSync){
       var host = document.getElementById('bayern-plantilla-host');
       if (!host) return;
       try {
@@ -4579,8 +4579,21 @@ window._showSimProgress = function(opts, onDone){
            las comps) y bloqueaba el hilo ~10 s al abrir la plantilla
            (bug 2026-06-05). Pintamos YA desde el cache actual y, si toca
            refrescar, lanzamos el rebuild en setTimeout(0) y re-pintamos al
-           terminar — la caja aparece al instante y se actualiza sola. */
-        if ((now - _LAST_SYNC_TS) > 2000){
+           terminar — la caja aparece al instante y se actualiza sola.
+
+           `skipSync` (2026-07-28): el PRE-RENDER de arranque (`_bootPlant`,
+           más abajo) pinta esta pantalla OCULTA para que se vea al
+           instante si el usuario la abre — pero como `_LAST_SYNC_TS`
+           arranca en 0, su PRIMERA llamada disparaba SIEMPRE el rebuild
+           completo (O(todas las competiciones), documentado arriba como
+           capaz de bloquear ~10 s — y crece con el historial de partidos,
+           pudiendo llegar a bloquear MINUTOS con muchos datos acumulados)
+           en pleno arranque de la app, ANTES de que el usuario viera nada.
+           `_bootPlant` pasa `skipSync=true` para pintar solo desde cache;
+           el rebuild sigue disparándose con normalidad la PRIMERA vez que
+           el usuario realmente abre esta pantalla (vía `_scheduleRender`,
+           que llama sin este flag). */
+        if (!skipSync && (now - _LAST_SYNC_TS) > 2000){
           _LAST_SYNC_TS = now;   /* marca ANTES para que el re-pintado no reentre */
           setTimeout(function(){
             try { if (typeof window.syncLigaEaPlayerStats === 'function') window.syncLigaEaPlayerStats(); } catch(_){}
@@ -4690,8 +4703,13 @@ window._showSimProgress = function(opts, onDone){
        (oculto) ANTES de que el humano pulse PLANTILLA, así al
        entrar se ve al instante. Reintentos espaciados porque los
        datos del editor (ligaExt) cargan async; renderBayernPlantillaScreen
-       es idempotente y pinta "— Sin jugadores —" si aún no hay. */
-    function _bootPlant(){ try { window.renderBayernPlantillaScreen(); } catch(_){} }
+       es idempotente y pinta "— Sin jugadores —" si aún no hay.
+       `skipSync=true` (2026-07-28): este pre-render es solo un adelanto
+       visual de una pantalla OCULTA — nunca debe disparar el rebuild
+       pesado de stats (ver comentario en `renderBayernPlantillaScreen`).
+       El rebuild sigue ocurriendo con normalidad la primera vez que el
+       usuario abre esta pantalla de verdad. */
+    function _bootPlant(){ try { window.renderBayernPlantillaScreen(true); } catch(_){} }
     function _bootPlantAll(){ [0,400,1200,2600,4500,7000].forEach(function(t){ setTimeout(_bootPlant,t); }); }
     if (document.readyState === 'loading'){
       document.addEventListener('DOMContentLoaded', _bootPlantAll);

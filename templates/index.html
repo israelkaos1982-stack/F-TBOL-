@@ -18,6 +18,21 @@
         window._bootProgressPre = pct;
       }
     };
+    /* ── DIAGNÓSTICO DE FASE (2026-07-29) ──────────────────────────────
+       El % por sí solo no dice QUÉ fase concreta se está ejecutando
+       cuando se queda clavado (puede ser puro relleno por tiempo
+       transcurrido, sin ningún hito real todavía). `_bootMark(label)`
+       deja constancia de la ÚLTIMA fase alcanzada — placeholder aquí
+       (antes de que `#boot-splash` monte su texto real), igual que
+       `_bootBump`. Si el arranque se congela entre la fase N y la
+       N+1, el texto de la fase N queda pintado en pantalla para
+       siempre — un screenshot del usuario dice exactamente dónde se
+       atascó, sin tener que adivinar a partir del %. Puramente
+       informativo: no cambia ni el cálculo ni el cierre del splash. */
+    window._bootTimelinePre = [];
+    window._bootMark = function(label){
+      try { window._bootTimelinePre.push({ label: label, t: Date.now() }); } catch(_){}
+    };
   </script>
   <!-- preconnect elimina la latencia de DNS+TCP antes de que el parser
        llegue al <link> de fuentes; crossorigin es necesario para gstatic -->
@@ -27,7 +42,7 @@
        descarga en segundo plano y se aplica al terminar. Sin esto el
        navegador detiene todo el render hasta recibir la respuesta de
        Google (latencia típica 200-800 ms en móvil). -->
-  <link rel="stylesheet" media="print" onload="this.media='all';window._bootBump&&window._bootBump(20);"
+  <link rel="stylesheet" media="print" onload="this.media='all';window._bootBump&&window._bootBump(20);window._bootMark&&window._bootMark('fonts');"
         href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;600;700&family=Rajdhani:wght@400;600;700&display=swap">
   <noscript>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Oswald:wght@300;400;600;700&family=Rajdhani:wght@400;600;700&display=swap">
@@ -203,6 +218,7 @@
       </div>
       <div class="boot-splash-pct" id="boot-splash-pct">0%</div>
     </div>
+    <div class="boot-splash-phase" id="boot-splash-phase"></div>
   </div>
   <style>
     #boot-splash{
@@ -271,6 +287,16 @@
       color:#f0c040;min-width:36px;text-align:right;
       font-variant-numeric:tabular-nums;
     }
+    /* Texto diagnóstico de fase (2026-07-29) — deliberadamente discreto
+       (gris tenue, minúsculo): en una carga normal apenas es visible
+       un instante antes de que el splash desaparezca. Solo se vuelve
+       relevante si la carga se congela — entonces es la última fase
+       pintada la que queda fija en pantalla. */
+    .boot-splash-phase{
+      font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;
+      color:rgba(255,255,255,.25);text-transform:lowercase;
+      min-height:11px;
+    }
   </style>
   <script>
     /* Splash con PROGRESO REAL (2026-07-28, refuerzo). Sustituye el modelo
@@ -303,6 +329,7 @@
       if (!el) return;
       var barEl = document.getElementById('boot-splash-bar');
       var pctEl = document.getElementById('boot-splash-pct');
+      var phaseEl = document.getElementById('boot-splash-phase');
       var MIN_MS  = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  :   700;
       var HARD_MS = (typeof window._BOOT_SPLASH_HARD_MS === 'number') ? window._BOOT_SPLASH_HARD_MS : 6000;
       var startedAt = Date.now();
@@ -310,6 +337,25 @@
       var target = 0;   /* techo real (hitos + relleno por tiempo) — nunca retrocede */
       var shown  = 0;   /* % PINTADO — sube de 1 en 1 hasta alcanzar `target` */
       var tickTimer = null;
+
+      /* Diagnóstico de fase — ver comentario junto al placeholder de
+         `_bootMark` en <head>. `window._bootTimeline` queda expuesto
+         para poder inspeccionarlo (remote debugging) además del texto
+         visible en pantalla. */
+      window._bootTimeline = [];
+      function mark(label){
+        try {
+          window._bootTimeline.push({ label: label, t: Date.now() - startedAt });
+          if (phaseEl) phaseEl.textContent = label + ' · ' + (Date.now() - startedAt) + 'ms';
+        } catch(_){}
+      }
+      window._bootMark = function(label){ mark(label); };
+      /* Absorbe lo que se haya acumulado antes de que este bloque montara
+         (p.ej. la fuente, si cargó antes de que el splash real existiera). */
+      try {
+        (window._bootTimelinePre || []).forEach(function(e){ mark(e.label); });
+      } catch(_){}
+      mark('splash-mounted');
 
       function render(){
         if (barEl) barEl.style.width = shown + '%';
@@ -386,14 +432,14 @@
          parseó y ejecutó — es un hito GARANTIZADO por el navegador, no
          depende de en qué punto exacto del documento coloquemos un
          `<script>` de progreso suelto. */
-      function onDom(){ bump(92); }
+      function onDom(){ bump(92); mark('dom'); }
       if (document.readyState === 'interactive' || document.readyState === 'complete') onDom();
       else document.addEventListener('DOMContentLoaded', onDom, { once:true });
 
       /* window.load: imágenes/hojas de estilo también listas. NO llega a
          100 — se reserva el 100 real para la señal de hidratación o el
          backstop, así el contador nunca "miente" antes de tiempo. */
-      window.addEventListener('load', function(){ bump(96); });
+      window.addEventListener('load', function(){ bump(96); mark('load'); });
 
       /* Backstop: si la señal real nunca llega (fallo de red, endpoint
          caído, lo que sea), la web se revela igual — nunca se queda
@@ -421,6 +467,16 @@
     })();
   </script>
 
+  <script>
+    /* Marca de fase (2026-07-29): "a punto de ejecutar misc_body_1.html".
+       Este include es UN SOLO <script> inline enorme — el parser lo
+       ejecuta de forma SÍNCRONA e ININTERRUMPIBLE antes de seguir. Si el
+       arranque se congela DENTRO de él (no solo en sus listeners de
+       DOMContentLoaded, sino en código que corre al vuelo mientras se
+       define/parsea), este mark queda como el ÚLTIMO visible — distingue
+       "nunca llegó a entrar" de "entró pero no salió". */
+    if (typeof window._bootMark === 'function') window._bootMark('misc1-start');
+  </script>
   {% include 'partials/misc_body_1.html' %}
   <script>
     /* Hito de progreso REAL (2026-07-28): misc_body_1.html ya ejecutó (los
@@ -433,18 +489,30 @@
        `window._bootSplashHide()` (invocada por ese callback) o con el
        backstop de seguridad. */
     if (typeof window._bootBump === 'function') window._bootBump(55);
+    if (typeof window._bootMark === 'function') window._bootMark('misc1-done');
+  </script>
+  <script>
+    if (typeof window._bootMark === 'function') window._bootMark('misc2-start');
   </script>
   {% include 'partials/part2/misc_body_2.html' %}
   <script>
     if (typeof window._bootBump === 'function') window._bootBump(75);
+    if (typeof window._bootMark === 'function') window._bootMark('misc2-done');
   </script>
   <script src="{{ url_for('static', filename='js/goal-notification-improved.js') }}?v=2.0"></script>
+  <script>
+    if (typeof window._bootMark === 'function') window._bootMark('goal-notif-js-done');
+  </script>
   <script src="{{ url_for('static', filename='js/var-system.js') }}?v=1.0"></script>
+  <script>
+    if (typeof window._bootMark === 'function') window._bootMark('var-system-js-done');
+  </script>
   <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=9.34"></script>
   <script>
     /* Hito de progreso: el bundle principal ya se descargó y ejecutó —
        junto con misc_body_1/2 es la parte más pesada del arranque. */
     if (typeof window._bootBump === 'function') window._bootBump(90);
+    if (typeof window._bootMark === 'function') window._bootMark('bundle-done');
   </script>
   <script>
   /* ── PARCHE INLINE: bloquea el overlay central de gol ──────────────────

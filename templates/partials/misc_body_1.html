@@ -2644,7 +2644,8 @@ window._showSimProgress = function(opts, onDone){
     /* Si localStorage está vacío (primer arranque o tras borrar datos
        de navegación) hidrata desde el server y luego aplica; si ya hay
        datos locales, _hydrateMenuFromServer no pisa nada y aplica. */
-    _hydrateMenuFromServer(function(){ _applyTriple(); try{ if(window._bootSplashHide) window._bootSplashHide(); }catch(_){} });
+    try{ if(window._bootMark) window._bootMark('hydrate-start'); }catch(_){}
+    _hydrateMenuFromServer(function(){ _applyTriple(); try{ if(window._bootMark) window._bootMark('hydrate-done'); }catch(_){} try{ if(window._bootSplashHide) window._bootSplashHide(); }catch(_){} });
     _applyTriple();
     if(!window.__mkGoWrapped && typeof window.go==='function'){
       window.__mkGoWrapped=true;

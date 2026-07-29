@@ -95,6 +95,80 @@ así que nunca disparaba el backfill.
    la próxima vez que ese dispositivo sincronice — es la única vía de
    recuperación posible sin acceso directo a la base de datos.
 
+## El clic en una fila de clasificación (EA Sports/Hypermotion/Primera Federación) y las 2 herramientas de "recuperación de emergencia" pedían SOLO el `main` del servidor — nunca miraban el snapshot `_protected` (obligatorio, 2026-07-29 #2)
+
+**Bug (usuario 2026-07-29, fotos «Liga EA Sports · Clasificación»)**:
+Liga EA Sports, Liga Hypermotion y el 80% de Primera Federación tenían
+la plantilla COMPLETA (jugador a jugador) desde hacía meses, y de
+repente la clasificación mostró TODOS los equipos a 0 PJ/0 PTS y, al
+pulsar cualquier equipo (Arsenal), un alert: **«⚠️ No encuentro
+«Arsenal» en ligaExt_liga-ea-sports. Equipos guardados (0)»**.
+
+### Causa raíz — 3 puntos que solo consultaban `main`, nunca `_protected`
+
+Este proyecto tiene, desde 2026-07-07, un snapshot `_protected` por
+liga en el servidor (`liga_ext_<slug>_protected`) que es **monotónico**
+(nunca encoge por debajo de su nº de jugadores más alto) precisamente
+para sobrevivir a un `main` que se vacía por un guardado concurrente,
+cuota agotada, o cualquier otra carrera. El endpoint
+`/api/liga-ext-any/<slug>` resuelve ese fallback EN EL SERVIDOR (si
+`main.teams` tiene <2 equipos, cae a `_protected`). El bug: **3 puntos
+del cliente pedían el endpoint pelado `/api/liga-ext/<slug>` (solo
+`main`, SIN fallback)**, así que si el `main` de estas 3 ligas se
+vació (guardado concurrente entre varios dispositivos, cuota de
+localStorage agotada en algún momento…), la plantilla parecía
+"desaparecida" aunque siguiera intacta en `_protected`:
+
+1. **El delegado de clic en `.clas-row`** (`document.addEventListener
+   ('click', …)`, `misc_body_1.html`) — el que abre la plantilla al
+   pulsar un equipo en `s-liga-clas`/`s-segunda-clas`/`s-primf-clas`
+   (EXACTAMENTE las 3 competiciones del reporte) — pedía
+   `/api/liga-ext/<slug>` cuando el localStorage local venía vacío.
+   También su "Fuente B" (busca el mismo nombre en otras ligas
+   conocidas, incluidas estas 3) usaba el mismo endpoint pelado.
+2. **`window.emergencyRestore(slug)`** (herramienta de consola,
+   "RECUPERACIÓN DE EMERGENCIA") — su paso 2 ("Intentar desde
+   servidor") pedía el endpoint pelado.
+3. **`_lextFetchServerSync` / `window.lextDeepRecoverSlug` /
+   `lextDeepRecoverAll`** ("DEEP RECOVERY", la herramienta de consola
+   más exhaustiva, con 6 fuentes) — su fuente Nº1 ("Servidor") pedía
+   el endpoint pelado.
+
+Las 3 son, literalmente, las herramientas que existen para este
+escenario exacto — y las 3 se rendían justo antes de mirar la única
+copia que probablemente seguía teniendo el dato.
+
+### Fix
+
+Los 4 fetches se cambian de `/api/liga-ext/<slug>` a
+`/api/liga-ext-any/<slug>` (mismo formato de respuesta, `resp.data`),
+para que el primer clic en un equipo — o cualquiera de las 2
+herramientas de consola — recupere automáticamente desde `_protected`
+si el `main` viene vacío, sin que el admin tenga que hacer nada
+especial.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un fetch nuevo de lectura de `ligaExt_<slug>`
+   (handler de clic, herramienta de recuperación, o cualquier ruta
+   futura) use `/api/liga-ext/<slug>` pelado cuando el propósito es
+   "recuperar/mostrar la plantilla real". Usar SIEMPRE
+   `/api/liga-ext-any/<slug>` (o `window._lextFetchJsonTimeout`/
+   `_lextClickFetchJson` apuntando a ese endpoint) — es el único que
+   resuelve el fallback a `_protected` en el servidor.
+2. **PROHIBIDO** que una herramienta con el nombre "recuperación de
+   emergencia" / "deep recovery" tenga MENOS cobertura de fuentes que
+   el flujo normal de apertura de pantalla (`loadData`/`fetchData`,
+   que ya usa `_lxAnyFallback` desde 2026-07-18). Si `loadData` mira
+   `_protected`, toda herramienta de recuperación manual también debe
+   mirarlo — si no, el admin puede acabar "confirmando" una pérdida de
+   datos que en realidad no existe.
+3. `/api/liga-ext/<slug>` (pelado) sigue siendo válido para las
+   escrituras (`POST`) y para cualquier lectura donde "main vacío" es
+   una respuesta legítima y no hay nada que recuperar (p.ej. comprobar
+   si el admin ya guardó algo en una liga nueva). El problema es
+   usarlo como ÚNICA fuente en un flujo de recuperación/visualización.
+
 ## Un club IA con el MISMO NOMBRE que un club humano le robaba el escudo y la plantilla — desempate por `isHuman`, nunca solo por "riqueza" (obligatorio, 2026-07-29)
 
 **Bug (usuario 2026-07-29): «el Arsenal en la caja principal

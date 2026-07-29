@@ -5,6 +5,128 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>eFootball ✓</title>
   <script>
+    /* ── DETECTOR DE TAREA LENTA (2026-07-29 #3) ──────────────────────────
+       Tres capturas del usuario con el arranque congelado señalan TRES
+       listeners DISTINTOS (`_hydrateAll`, `_bootStage`, `initOverrides`),
+       todos alrededor de los 3-4 s. Que cambie cada intento demuestra
+       que el bloqueo NO está en un listener concreto: la marca visible
+       solo dice "por dónde iba la cola cuando el hilo se paró", no QUÉ
+       lo paró. El culpable puede ser perfectamente algo lanzado desde
+       fuera de la cola — un `setTimeout` de arranque, o el manejador de
+       la RESPUESTA de un fetch (esos corren como microtarea al final de
+       una tarea interna del navegador, así que ninguna marca de la cola
+       los nombra).
+
+       Este bloque instrumenta las TRES vías de forma genérica, antes de
+       que exista ningún otro script:
+       1) `PerformanceObserver('longtask')` — la API del navegador
+          diseñada exactamente para esto: reporta cada tarea que bloquea
+          el hilo >50 ms, con su instante de inicio y duración. Nos
+          quedamos con la MÁS LARGA y la correlacionamos con la marca
+          que estaba activa en ese instante — así el dato que se muestra
+          es "la tarea que de verdad bloqueó", no "la última que llegó a
+          anunciarse".
+       2) `setTimeout` envuelto — cada callback diferido deja su nombre
+          como marca antes de correr, igual que ya hacen los listeners
+          de la cola.
+       3) `fetch` envuelto — deja una marca en cuanto la RESPUESTA
+          resuelve, que es justo el punto donde arranca el manejador
+          `.then` del que sospechamos. Si el bloqueo es "procesar lo que
+          devolvió el servidor", la marca dirá qué URL.
+       Todo se apaga solo cuando el splash se cierra (`_bootDiagOff`) —
+       no deja sobrecarga en la app ya arrancada. */
+    (function(){
+      var on = true;
+      window._bootMarks = [];   /* {label, t} con t en la escala de performance.now() */
+      window._bootSlowest = null;
+      function _now(){ try { return performance.now(); } catch(_){ return Date.now(); } }
+      function _label(fn){
+        try {
+          if (fn && fn.name) return fn.name;
+          return String(fn).replace(/\s+/g, ' ').trim().slice(0, 40);
+        } catch(_){ return 'anon'; }
+      }
+      window._bootDiagLabel = _label;
+      window._bootDiagNote = function(label){
+        if (!on) return;
+        try {
+          window._bootMarks.push({ label: label, t: _now() });
+          if (window._bootMarks.length > 400) window._bootMarks.shift();
+        } catch(_){}
+      };
+      window._bootDiagOff = function(){
+        on = false;
+        try { window.setTimeout = _st; } catch(_){}
+        try { if (_po) _po.disconnect(); } catch(_){}
+      };
+
+      /* (1) longtask observer — el que de verdad identifica al culpable. */
+      var _po = null;
+      try {
+        _po = new PerformanceObserver(function(list){
+          if (!on) return;
+          var es = list.getEntries();
+          for (var i = 0; i < es.length; i++) {
+            var e = es[i];
+            if (e.duration < 900) continue;
+            /* Marca vigente cuando ESA tarea empezó. Se admite un margen
+               de +120 ms porque las marcas se escriben DENTRO de la
+               tarea, un instante DESPUÉS de su `startTime` — sin margen
+               se elegiría siempre la marca de la tarea ANTERIOR (un
+               desfase de uno que apuntaría al inocente). Como una tarea
+               que dura >900 ms no deja que se escriba ninguna otra marca
+               mientras corre, quedarse con la ÚLTIMA dentro del margen
+               da justo la etiqueta más específica de esa tarea. */
+            var lbl = '?';
+            try {
+              for (var j = window._bootMarks.length - 1; j >= 0; j--) {
+                if (window._bootMarks[j].t <= e.startTime + 120) { lbl = window._bootMarks[j].label; break; }
+              }
+            } catch(_){}
+            if (!window._bootSlowest || e.duration > window._bootSlowest.ms) {
+              window._bootSlowest = { label: lbl, ms: Math.round(e.duration) };
+              try { if (window._bootRenderSlow) window._bootRenderSlow(); } catch(_){}
+              try { console.warn('[boot] tarea lenta ' + Math.round(e.duration) + 'ms tras: ' + lbl); } catch(_){}
+            }
+          }
+        });
+        _po.observe({ entryTypes: ['longtask'] });
+      } catch(_){}
+
+      /* (2) setTimeout envuelto. */
+      var _st = window.setTimeout;
+      try {
+        window.setTimeout = function(fn, delay){
+          if (!on || typeof fn !== 'function') return _st.apply(window, arguments);
+          var extra = Array.prototype.slice.call(arguments, 2);
+          var lbl = _label(fn);
+          return _st(function(){
+            window._bootDiagNote('timer ' + lbl);
+            fn.apply(null, extra);
+          }, delay);
+        };
+      } catch(_){}
+
+      /* (3) fetch envuelto — marca el instante en que llega la respuesta,
+         que es donde arranca el `.then` del consumidor. */
+      try {
+        var _fetch = window.fetch;
+        if (typeof _fetch === 'function') {
+          window.fetch = function(input){
+            var p = _fetch.apply(window, arguments);
+            if (!on) return p;
+            var url = '';
+            try { url = String((input && input.url) ? input.url : input).replace(/^https?:\/\/[^/]+/, ''); } catch(_){}
+            try {
+              return p.then(function(r){ window._bootDiagNote('resp ' + url); return r; },
+                            function(e){ window._bootDiagNote('resp-err ' + url); throw e; });
+            } catch(_){ return p; }
+          };
+        }
+      } catch(_){}
+    })();
+  </script>
+  <script>
     /* ── COLA de DOMContentLoaded (2026-07-29) ────────────────────────────
        Diagnóstico confirmado con datos reales del usuario: el splash se
        queda clavado en "hydrate-start" (la última marca ANTES de esperar
@@ -113,6 +235,11 @@
     window._bootTimelinePre = [];
     window._bootMark = function(label){
       try { window._bootTimelinePre.push({ label: label, t: Date.now() }); } catch(_){}
+      /* Alimenta ya la línea de tiempo del detector de tareas lentas
+         (definido justo arriba) con el instante REAL, no el del replay
+         que hace el splash al montar — así una tarea lenta muy temprana
+         se correlaciona con la fase correcta. */
+      try { if (window._bootDiagNote) window._bootDiagNote(label); } catch(_){}
     };
   </script>
   <!-- preconnect elimina la latencia de DNS+TCP antes de que el parser
@@ -322,11 +449,31 @@
          100 % y esta animación nunca llega a importar (arranca a los 7 s — justo
          después del backstop JS de 6 s, que es el que debería disparar primero
          en el 99 % de los casos; esta es la ÚLTIMA red, solo para cuando el hilo
-         JS está completamente atascado y ni siquiera ese setTimeout dispara). */
-      animation:bootSplashAutoFade .6s ease 7s forwards;
+         JS está completamente atascado y ni siquiera ese setTimeout dispara).
+
+         ⚠️ ESTA RED NUNCA LLEGÓ A FUNCIONAR (arreglado 2026-07-29):
+         el keyframe animaba `opacity` **junto con** `visibility` y
+         `pointer-events`. Basta que UNA propiedad no sea componible
+         para que el navegador degrade la animación ENTERA al hilo
+         principal — es decir, justo al hilo que está bloqueado, que es
+         el único caso para el que existía esta red. Por eso el usuario
+         seguía viendo CARGANDO… pasados varios MINUTOS pese a este
+         backstop (2026-07-29, 6 capturas). Prueba de que el compositor
+         sí sigue vivo durante el bloqueo: el spinner (que anima
+         `transform`, componible) SÍ gira en esas mismas capturas.
+         Fix: se parte en DOS animaciones. `bootSplashAutoFade` anima
+         SOLO `opacity` → componible, corre aunque el hilo esté
+         atascado. `bootSplashAutoOff` (discreta, al terminar el
+         desvanecido) se encarga de `visibility`/`pointer-events`; esa
+         sí depende del hilo principal, pero solo afecta a poder tocar
+         la pantalla — algo que de todos modos no funciona mientras el
+         hilo siga bloqueado, así que no puede empeorar nada. */
+      animation:bootSplashAutoFade .6s ease 7s forwards,
+                bootSplashAutoOff 1ms linear 7.6s forwards;
     }
     #boot-splash.hide{opacity:0;pointer-events:none;}
-    @keyframes bootSplashAutoFade{to{opacity:0;visibility:hidden;pointer-events:none;}}
+    @keyframes bootSplashAutoFade{to{opacity:0;}}
+    @keyframes bootSplashAutoOff{to{visibility:hidden;pointer-events:none;}}
     .boot-splash-logo{display:flex;align-items:baseline;gap:10px;}
     .boot-splash-11{
       font-family:'Bebas Neue',Oswald,sans-serif;font-size:48px;font-weight:900;
@@ -377,7 +524,7 @@
       font-family:'Courier New',monospace;font-size:9px;letter-spacing:.3px;
       color:rgba(255,255,255,.25);text-transform:none;
       min-height:11px;max-width:88vw;text-align:center;
-      word-break:break-word;padding:0 10px;
+      word-break:break-word;padding:0 10px;line-height:1.5;
     }
   </style>
   <script>
@@ -425,10 +572,32 @@
          para poder inspeccionarlo (remote debugging) además del texto
          visible en pantalla. */
       window._bootTimeline = [];
+      /* Línea 1 = por dónde va el arranque. Línea 2 = la tarea MÁS LARGA
+         detectada por el observador de <head> (el dato accionable: quién
+         bloquea de verdad). La 2 gana en importancia visual — se pinta en
+         ámbar y NO se borra al llegar marcas nuevas. */
+      var lastPhase = '';
+      function esc(s){ return String(s == null ? '' : s).replace(/[<>&]/g, ' '); }
+      function paintPhase(){
+        if (!phaseEl) return;
+        var slow = window._bootSlowest;
+        var html = lastPhase;
+        if (slow) {
+          html += '<br><span style="color:#f0a020">&#9888; ' + slow.ms + 'ms tras: ' + esc(slow.label) + '</span>';
+        }
+        phaseEl.innerHTML = html;
+      }
+      window._bootRenderSlow = paintPhase;
       function mark(label){
         try {
-          window._bootTimeline.push({ label: label, t: Date.now() - startedAt });
-          if (phaseEl) phaseEl.textContent = label + ' · ' + (Date.now() - startedAt) + 'ms';
+          var dt = Date.now() - startedAt;
+          window._bootTimeline.push({ label: label, t: dt });
+          /* Alimenta también la línea de tiempo del detector de <head>,
+             para que pueda correlacionar una tarea lenta con la fase que
+             estaba activa en ese instante. */
+          try { if (window._bootDiagNote) window._bootDiagNote(label); } catch(_){}
+          lastPhase = esc(label) + ' &middot; ' + dt + 'ms';
+          paintPhase();
         } catch(_){}
       }
       window._bootMark = function(label){ mark(label); };
@@ -449,6 +618,10 @@
         if (hidden) return;
         hidden = true;
         if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
+        /* Apaga la instrumentación de <head> (longtask + wrappers de
+           setTimeout/fetch): su único cometido es diagnosticar el
+           ARRANQUE — no debe seguir midiendo durante la partida. */
+        try { if (window._bootDiagOff) window._bootDiagOff(); } catch(_){}
         target = 100; shown = 100; render();
         el.classList.add('hide');
         setTimeout(function(){ if (el && el.parentNode) el.parentNode.removeChild(el); }, 380);

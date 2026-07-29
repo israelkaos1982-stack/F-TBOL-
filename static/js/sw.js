@@ -12,7 +12,7 @@
    actúa si Railway no responde (offline / error). */
 
 var CACHE_STATIC = 'ftbol-static-v1';
-/* v1 → v2 (2026-07-28): un usuario reportó código JS de una versión
+/* v1 → v2 (2026-07-28/29): un usuario reportó código JS de una versión
    MUY antigua (un boot-splash con barra de progreso — `boot-splash-bar`/
    `_bootBump`/`_bootProgressPre` — que ya NO existe en ningún archivo del
    proyecto actual) apareciendo como TEXTO VISIBLE en pantalla, en

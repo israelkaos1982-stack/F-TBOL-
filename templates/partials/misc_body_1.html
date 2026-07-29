@@ -37412,8 +37412,35 @@ window._showSimProgress = function(opts, onDone){
      % de carga"). `setTimeout(fn,0)` no cambia qué se calcula ni cuándo
      el usuario lo ve — solo le da a cada uno su propio turno del bucle
      de eventos, para que el navegador pueda pintar/responder entre uno
-     y el siguiente. */
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(buildUclGruposClas, 0); });
+     y el siguiente.
+
+     REFUERZO (2026-07-29, mismo bug — el diferido a macrotask NO basta
+     si la función en sí tarda mucho): `window._bootScreenActiveFor(id)`
+     (definida aquí, la usan también los builders de misc_body_2.html
+     que cargan después) sube desde el contenedor de contenido hasta su
+     `.screen` ancestro y dice si está `.active`. El arranque SIEMPRE
+     entra por el hub/home — NUNCA por "Champions · Grupos"/"Open
+     Qualifier"/etc — así que en la inmensa mayoría de aperturas esta
+     comprobación evita CALCULAR del todo (no solo diferir) un scan
+     O(ligas×equipos) que el usuario ni va a ver esta sesión. Cada una
+     de estas pantallas YA tiene su propio hook en `go()` que la
+     re-renderiza al entrar — saltarse el cálculo de arranque no le
+     quita ningún dato fresco, solo evita adelantarlo cuando nadie mira
+     el resultado todavía. */
+  window._bootScreenActiveFor = window._bootScreenActiveFor || function(elId){
+    try {
+      var el = document.getElementById(elId);
+      var n = el;
+      while (n && n.nodeType === 1) {
+        if (n.classList && n.classList.contains('screen')) return n.classList.contains('active');
+        n = n.parentNode;
+      }
+    } catch(_){}
+    return false;
+  };
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){
+    if (window._bootScreenActiveFor('clas-ucl-grupos-content')) buildUclGruposClas();
+  }, 0); });
 })();
 </script>
 </div>
@@ -38457,7 +38484,9 @@ window._showSimProgress = function(opts, onDone){
   /* Diferido a un macrotask separado (2026-07-29, mismo motivo que
      buildUclGruposClas más arriba): evita sumarse al bloqueo único de
      DOMContentLoaded. */
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(buildOpenQualifierClas, 0); });
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){
+    if (window._bootScreenActiveFor && window._bootScreenActiveFor('open-qual-groups-container')) buildOpenQualifierClas();
+  }, 0); });
 })();
 </script>
 </div>
@@ -39167,8 +39196,11 @@ window._showSimProgress = function(opts, onDone){
   }
   window.buildUelGruposClas = build;
   /* Diferido a un macrotask separado (2026-07-29, mismo motivo que
-     buildUclGruposClas más arriba). */
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(build, 0); });
+     buildUclGruposClas más arriba) + gate de pantalla activa (mismo
+     refuerzo, ver comentario extenso junto a `_bootScreenActiveFor`). */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){
+    if (window._bootScreenActiveFor && window._bootScreenActiveFor('clas-uel-grupos-content')) build();
+  }, 0); });
 })();
 </script>
 </div>
@@ -39417,8 +39449,11 @@ window._showSimProgress = function(opts, onDone){
   }
   window.buildUeclGruposClas = build;
   /* Diferido a un macrotask separado (2026-07-29, mismo motivo que
-     buildUclGruposClas más arriba). */
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(build, 0); });
+     buildUclGruposClas más arriba) + gate de pantalla activa (mismo
+     refuerzo, ver comentario extenso junto a `_bootScreenActiveFor`). */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){
+    if (window._bootScreenActiveFor && window._bootScreenActiveFor('clas-uecl-grupos-content')) build();
+  }, 0); });
 })();
 </script>
 </div>

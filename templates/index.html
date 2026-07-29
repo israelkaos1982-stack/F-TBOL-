@@ -48,6 +48,19 @@
         }
         return nativeAdd(type, listener, opts);
       };
+      /* Etiqueta legible de un listener (2026-07-29, refuerzo): el número
+         de orden por sí solo obliga a contar registros a mano por todo
+         el código — frágil (algunos solo se registran bajo condición).
+         Si la función tiene nombre (`function _bootPlantAll(){}` o
+         similar) se usa tal cual; si es anónima, un trozo de su propio
+         código sirve para localizarla con un grep directo. */
+      function _labelFor(fn){
+        try {
+          if (fn && fn.name) return fn.name;
+          var src = String(fn).replace(/\s+/g, ' ').trim();
+          return src.slice(0, 46);
+        } catch(_){ return 'anon'; }
+      }
       function runStep(i){
         if (i >= queue.length) {
           try { if (window._bootMark) window._bootMark('dcl-queue-done'); } catch(_){}
@@ -56,9 +69,9 @@
         /* Marca de posición (2026-07-29): si UN listener concreto es
            tan lento que ni siquiera el diferido por macrotask evita
            que se note, esta marca queda clavada con SU número de
-           orden — dice exactamente cuál de los ~90 es, sin tener que
-           adivinar por el %. */
-        try { if (window._bootMark) window._bootMark('dcl#' + (i+1) + '/' + queue.length); } catch(_){}
+           orden Y su nombre/snippet — dice exactamente cuál de los
+           ~130 es, sin tener que adivinar por el %. */
+        try { if (window._bootMark) window._bootMark('dcl#' + (i+1) + '/' + queue.length + ' ' + _labelFor(queue[i])); } catch(_){}
         var fn = queue[i];
         try {
           if (typeof fn === 'function') fn();
@@ -361,9 +374,10 @@
        relevante si la carga se congela — entonces es la última fase
        pintada la que queda fija en pantalla. */
     .boot-splash-phase{
-      font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1px;
-      color:rgba(255,255,255,.25);text-transform:lowercase;
-      min-height:11px;
+      font-family:'Courier New',monospace;font-size:9px;letter-spacing:.3px;
+      color:rgba(255,255,255,.25);text-transform:none;
+      min-height:11px;max-width:88vw;text-align:center;
+      word-break:break-word;padding:0 10px;
     }
   </style>
   <script>

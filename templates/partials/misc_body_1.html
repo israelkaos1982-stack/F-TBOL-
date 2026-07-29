@@ -15812,7 +15812,51 @@ window._showSimProgress = function(opts, onDone){
     window._namesForAlias = _namesForAlias;
   } catch(_){}
 
+  /* ⚠️ GUARDA DE REENTRADA (obligatoria, 2026-07-29) — sin ella la web
+     se cuelga PARA SIEMPRE, sin recuperación posible.
+
+     Ciclo reproducido en un navegador real (Chromium + CDP, pila de
+     llamadas capturada pausando el hilo bloqueado):
+
+       applyEngineOverrides()                       (aquí)
+         → _lextRefreshJ1Pickers()                  (paso 6, más abajo)
+           → sqFromRegistryFull(equipo)             (×20: los 2 equipos
+                                                     de los 10 partidos
+                                                     de LIGA_SCHEDULE[0])
+             → si el equipo NO está en SQUAD_REGISTRY, el bundle
+               (`index.bundle.js`, en `sqFromRegistryFull`) llama a
+               window.applyEngineOverrides() para intentar poblarlo
+                 → applyEngineOverrides()  … y vuelta a empezar.
+
+     No es solo recursión: RAMIFICA ×20 en cada vuelta, así que crece
+     de forma explosiva y ni siquiera llega a desbordar la pila
+     rápidamente — cada nivel hace trabajo pesado de verdad
+     (`refreshLigaEaShields` escanea todas las ligas, etc.). Basta UN
+     equipo del calendario sin plantilla resoluble para dejar el hilo
+     principal bloqueado indefinidamente: la web parece abrir (la
+     cortina CSS del splash la destapa desde el compositor) pero no
+     responde a NINGÚN toque, ni siquiera a un listener de
+     `pointerdown` en fase de captura sobre `document`.
+
+     La reentrada es SIEMPRE redundante: para cuando el paso 6 corre,
+     el paso 4 (`_importOtherLeaguesIntoEngine`) ya pobló el registro,
+     así que volver a entrar no puede aportar nada nuevo. Se corta aquí,
+     en el chokepoint, y así queda protegida CUALQUIER otra ruta que
+     re-entre en el futuro — no solo esta.
+
+     PROHIBIDO quitar esta guarda o moverla dentro del cuerpo: tiene
+     que ser lo PRIMERO, y el flag debe liberarse en un `finally` para
+     que una excepción no lo deje bloqueado para el resto de la sesión. */
   function applyEngineOverrides(){
+    if (window._engineOverridesRunning) return;
+    window._engineOverridesRunning = true;
+    try {
+      return _applyEngineOverridesBody();
+    } finally {
+      window._engineOverridesRunning = false;
+    }
+  }
+  function _applyEngineOverridesBody(){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
     var bridge = window.ligaEaBuildEngineOverrides();
 

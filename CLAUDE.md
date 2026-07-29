@@ -1,5 +1,69 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `applyEngineOverrides` ⇄ `sqFromRegistryFull`: recursión mutua que colgaba la web PARA SIEMPRE — guarda de reentrada obligatoria (obligatorio, 2026-07-29)
+
+**Bug (docenas de capturas usuario 2026-07-29: «no abre la web» →
+«se congela al pulsar cualquier caja», también en incógnito y tras
+borrar todos los datos de navegación)**: el hilo principal quedaba
+bloqueado indefinidamente. La web *parecía* abrir —la cortina CSS del
+splash la destapa desde el compositor— pero no respondía a NINGÚN
+toque, ni siquiera a un listener de `pointerdown` en fase de captura
+sobre `document` (por eso ni el rastro del toque llegaba a escribirse).
+
+### Causa raíz — reproducida en navegador real, pila capturada
+
+Reproducido en Chromium headless vía CDP sirviendo el HTML renderizado
++ un backend stub con volumen de datos realista, y **pausando el hilo
+bloqueado** (`Debugger.pause`) para leer la pila:
+
+```
+applyEngineOverrides()                    (misc_body_1.html)
+  → _lextRefreshJ1Pickers()               (paso 6 de applyEngineOverrides)
+    → sqFromRegistryFull(equipo)          ×20 (los 2 equipos de los 10
+                                           partidos de LIGA_SCHEDULE[0])
+      → si el equipo NO está en SQUAD_REGISTRY, el BUNDLE
+        (`index.bundle.js`, dentro de `sqFromRegistryFull`) llama a
+        `window.applyEngineOverrides()` para intentar poblarlo
+          → applyEngineOverrides()  … y vuelta a empezar
+```
+
+No es solo recursión: **RAMIFICA ×20 en cada vuelta**, así que crece de
+forma explosiva y ni siquiera desborda la pila rápido — cada nivel hace
+trabajo pesado real (`refreshLigaEaShields` escanea todas las ligas,
+`_importOtherLeaguesIntoEngine`, etc.). **Basta UN equipo del calendario
+sin plantilla resoluble** para dejar el hilo bloqueado para siempre.
+
+### Fix
+
+Guarda de reentrada en `applyEngineOverrides` (el chokepoint): si ya
+está corriendo, la llamada anidada es un no-op inmediato. La reentrada
+es SIEMPRE redundante — para cuando corre el paso 6, el paso 4
+(`_importOtherLeaguesIntoEngine`) ya pobló el registro, así que volver a
+entrar no puede aportar nada. El cuerpo se movió a
+`_applyEngineOverridesBody()` y el flag se libera en un `finally`.
+
+Verificado con el mismo arnés: antes, hilo bloqueado desde t≈2 s y sin
+recuperación en 2,5 min; después, arranque completo, splash cerrado a
+t≈3,7 s y app respondiendo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** quitar la guarda `window._engineOverridesRunning` o
+   moverla dentro del cuerpo: tiene que ser lo PRIMERO de
+   `applyEngineOverrides`, y el flag debe liberarse en un `finally`
+   (una excepción no puede dejarlo bloqueado el resto de la sesión).
+2. **PROHIBIDO** que `sqFromRegistryFull`/`sqFromRegistry` (o cualquier
+   resolutor de plantilla nuevo) llame a `applyEngineOverrides` sin que
+   exista esa guarda. El fallback del bundle («si no está en el
+   registro, dispara applyEngineOverrides») es legítimo, pero SOLO es
+   seguro con la guarda puesta.
+3. Cuando la web «no responde al tocar» y ni un listener de captura
+   sobre `document` deja rastro, el hilo ya estaba bloqueado ANTES del
+   toque: buscar un bucle/recursión en el ARRANQUE, no en el handler de
+   la pantalla que se intentaba abrir. La vía más rápida para
+   identificarlo es reproducir en Chromium vía CDP y hacer
+   `Debugger.pause` sobre el hilo bloqueado para leer la pila.
+
 ## `_lsSetSafe` con la cuota AGOTADA no puede costar O(claves × tamaño) por llamada — congelaba el hilo durante MINUTOS (obligatorio, 2026-07-29)
 
 **Bug (muchas capturas usuario 2026-07-29, «no abre la web» → luego «se

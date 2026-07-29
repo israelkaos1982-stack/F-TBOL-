@@ -6073,8 +6073,9 @@
     });
   }
 
-  function persistSharedLigaState(patch) {
+  function persistSharedLigaState(patch, tries) {
     if (!patch || typeof patch !== 'object') return Promise.resolve(false);
+    tries = (tries == null) ? 3 : tries;
     return fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -6083,6 +6084,18 @@
       return res.ok;
     }).catch(function() {
       return false;
+    }).then(function(ok){
+      /* Reintento con backoff: un POST perdido (red móvil, cold-start
+         del server) dejaba el `liga_schedule` del servidor desfasado
+         para SIEMPRE — el siguiente poll/hydrate de CUALQUIER
+         dispositivo (cada 5s) revertía el calendario recién regenerado
+         (tras mover un equipo, un ascenso/descenso, o un sorteo) al
+         viejo. Mismo patrón de reintentos que el resto del proyecto
+         (`_postClearRetry` y similares). */
+      if (ok || tries <= 1) return ok;
+      return new Promise(function(resolve){
+        setTimeout(function(){ resolve(persistSharedLigaState(patch, tries - 1)); }, 1500);
+      });
     });
   }
 
@@ -6275,6 +6288,24 @@
     if (!isValidLigaSchedule(schedule)) return;
     sharedLigaScheduleCache = schedule;
     try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(schedule)); } catch (e) {}
+    /* Arma el MISMO lock anti-reversión que ya protegía solo al botón
+       🎲 Sortear (`_sortearCalendarioLigaRun`) — generalizado aquí para
+       que CUALQUIER caller de `setLigaSchedule(...)` (el motor
+       editable de `applyEngineOverrides` tras "Mover equipos"/editar
+       equipos, "Aplicar EA Sports ↔ Hypermotion", etc.) quede
+       protegido. Sin esto, un calendario recién regenerado (p.ej. al
+       mover el Girona fuera de Liga EA Sports) podía revertirse solo
+       al reabrir la web: el poll de 5s (`hydrateLigaStateFromBackend`)
+       adopta SIN condiciones cualquier `liga_schedule` del servidor que
+       sea estructuralmente válido — si el POST de abajo se pierde (red
+       móvil, cold-start) o llega tarde, el próximo poll/hydrate veía el
+       servidor todavía con el calendario VIEJO y lo re-imponía, y el
+       equipo movido "volvía a aparecer". */
+    try {
+      window._ligaSorteoLock = Date.now();
+      localStorage.setItem(LS_SORTEO_LOCK_KEY, String(window._ligaSorteoLock));
+    } catch (e) {}
+    try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch (e) {}
     persistSharedLigaState({ liga_schedule: schedule });
   }
 

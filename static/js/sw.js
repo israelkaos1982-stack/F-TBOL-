@@ -12,18 +12,31 @@
    actúa si Railway no responde (offline / error). */
 
 var CACHE_STATIC = 'ftbol-static-v1';
-/* Bump v1→v2 (2026-07-29): el fallback de HTML (línea ~126, solo se usa
-   si el fetch de red falla) no tiene caducidad — puede servir una copia
-   de HACE DÍAS si el dispositivo tuvo una sola petición fallida en
-   cualquier momento. Con el cold-start de Railway (documentado en todo
-   este proyecto) eso es frecuente, así que un dispositivo podía quedarse
-   sirviendo la SPLASH VIEJA (sin el contador real, o con una versión con
-   bugs ya corregidos) indefinidamente, sin que ningún cambio en
-   index.html/misc_body_*.html le llegara nunca — el `activate` de abajo
-   solo purga cachés cuyo NOMBRE ya no está en `keep`, así que renombrar
-   la caché es lo que fuerza a CADA dispositivo a descartar cualquier
-   copia vieja y pedir HTML fresco en su próxima navegación. */
+/* v1 → v2 (2026-07-28/29): un usuario reportó código JS de una versión
+   MUY antigua (un boot-splash con barra de progreso — `boot-splash-bar`/
+   `_bootBump`/`_bootProgressPre` — que ya NO existe en ningún archivo del
+   proyecto actual) apareciendo como TEXTO VISIBLE en pantalla, en
+   CUALQUIER pantalla de la app. Causa: el fallback de abajo (`.catch()`
+   del fetch de navegación) servía la copia de `ftbol-html-v1` sin
+   NINGÚN límite de antigüedad — si la red fallaba/tardaba (Railway en
+   cold-start, muy documentado en este proyecto) aunque fuera SOLO UNA
+   VEZ en semanas, esa caché quedaba servida indefinidamente hasta el
+   próximo fallo de red que la refrescara, sin que nada la invalidara
+   por edad. El bump de nombre aquí purga esa copia (posiblemente
+   corrupta/rota — el HTML viejo tenía un <script> mal cerrado que
+   dejaba código JS como texto plano) para TODOS los usuarios en el
+   próximo `activate` (el handler ya borra cualquier caché fuera de
+   `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
+   más abajo — el bump por sí solo no evita que vuelva a pasar. */
 var CACHE_HTML   = 'ftbol-html-v2';
+/* Antigüedad máxima que se acepta servir de la caché HTML de
+   emergencia. Sin este límite, un solo fallo de red puede dejar
+   servida una copia de hace SEMANAS indefinidamente (hasta el próximo
+   fallo de red que la refresque) — exactamente el bug de arriba. Con
+   el límite, una copia más vieja que esto se descarta y se deja que el
+   error de red se propague (el navegador muestra su propio aviso de
+   sin-conexión) en vez de mostrar una app con código obsoleto/roto. */
+var HTML_CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutos
 
 /* Activos a pre-cachear en el install.  Actualizar ?v= aquí cuando cambien. */
 var PRECACHE = [
@@ -119,11 +132,10 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  /* HTML de navegación: network-first; caché solo si la red falla.
-     La caché lleva un sello de fecha (2026-07-29) para que, si algún día
-     vuelve a acumularse una copia vieja, NUNCA se sirva indefinidamente
-     — pasadas 6h se trata como un miss (el navegador ve el error de red
-     real en vez de una página desactualizada disfrazada de actual). */
+  /* HTML de navegación: network-first; caché solo si la red falla, y
+     SOLO si esa copia cacheada no supera `HTML_CACHE_MAX_AGE_MS` — sin
+     este límite un único fallo de red puede dejar servida una copia de
+     hace semanas indefinidamente (ver comentario de arriba). */
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).then(function (res) {
@@ -134,22 +146,34 @@ self.addEventListener('fetch', function (e) {
            already used". Clonar aquí evita la carrera. */
         var resClone = (res && res.ok) ? res.clone() : null;
         if (resClone) {
-          resClone.blob().then(function (body) {
-            var headers = new Headers(resClone.headers);
-            headers.set('x-sw-cached-at', String(Date.now()));
-            var stamped = new Response(body, { status: resClone.status, statusText: resClone.statusText, headers: headers });
-            return caches.open(CACHE_HTML).then(function (c) { return c.put('/', stamped); });
+          caches.open(CACHE_HTML).then(function (c) {
+            c.put('/', resClone);
+            /* Sello de "cuándo se guardó esta copia" — Response de texto
+               plano con el timestamp, guardado junto a '/' bajo una key
+               propia para no tocar el body del HTML real. */
+            try {
+              c.put('/__ftbol_html_cached_at__', new Response(String(Date.now())));
+            } catch (_e) {}
           }).catch(function () {});
         }
         return res;
       }).catch(function () {
         return caches.open(CACHE_HTML).then(function (c) {
-          return c.match('/').then(function (hit) {
-            if (!hit) return undefined;
-            var cachedAt = parseInt(hit.headers.get('x-sw-cached-at') || '0', 10);
-            var MAX_AGE_MS = 6 * 60 * 60 * 1000; /* 6 h */
-            if (cachedAt && (Date.now() - cachedAt) > MAX_AGE_MS) return undefined;
-            return hit;
+          return c.match('/__ftbol_html_cached_at__').then(function (tsRes) {
+            return (tsRes ? tsRes.text() : Promise.resolve(null)).then(function (tsText) {
+              var ts = tsText ? parseInt(tsText, 10) : NaN;
+              var fresh = !isNaN(ts) && (Date.now() - ts) <= HTML_CACHE_MAX_AGE_MS;
+              if (!fresh) {
+                /* Demasiado vieja (o sin sello — copia de un SW anterior
+                   al que no le dio tiempo a escribir el sello) — NO la
+                   servimos. Dejamos que el error de red se propague: el
+                   navegador muestra su propio aviso de sin-conexión, en
+                   vez de una app con código potencialmente obsoleto o
+                   roto. */
+                return Promise.reject(new Error('stale html cache'));
+              }
+              return c.match('/');
+            });
           });
         });
       })

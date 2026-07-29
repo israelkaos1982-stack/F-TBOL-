@@ -63111,10 +63111,26 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     return serverP;
   }
+  /* ⚠️ CACHEADO (obligatorio, 2026-07-29). Cada llamada hacía un
+     `document.querySelector` sobre el documento ENTERO (~7 MB, decenas
+     de miles de nodos) y `apply()` la invoca dos veces por pasada. Con
+     los observers del HUD reencadenando `apply` en cada escritura, eso
+     son miles de barridos completos: medido con perfil de CPU real
+     (Chromium + CDP), **10,2 s de los 70 s perfilados — el 18 % del
+     tiempo**, el segundo mayor consumidor de la app tras `purgeGooool`.
+     Estos nodos del HUD son ESTÁTICOS (viven en el HTML del hub), así
+     que se resuelven una vez y se reutilizan. `isConnected` revalida
+     por si un re-render los sustituyera: si el cacheado ya no está en
+     el documento, se vuelve a buscar. */
+  var _smallCache = {};
   function _smallTarget(parentSel){
+    var hit = _smallCache[parentSel];
+    if (hit && hit.isConnected) return hit;
     var p = document.querySelector(parentSel);
     if (!p) return null;
-    return p.querySelector('.munich-hud-num small');
+    var s = p.querySelector('.munich-hud-num small');
+    _smallCache[parentSel] = s;
+    return s;
   }
   function apply(){
     var o = load();

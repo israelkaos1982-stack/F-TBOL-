@@ -1108,13 +1108,45 @@
   })();
   </script>
   <script>
-  /* ── NUCLEAR: elimina físicamente cualquier .ml-goal-flash-inner del DOM ── */
+  /* ── NUCLEAR: elimina físicamente cualquier .ml-goal-flash-inner del DOM ──
+     ⚠️ MIRA SOLO LOS NODOS AÑADIDOS, NUNCA TODO EL DOCUMENTO
+     (obligatorio, 2026-07-29). La versión original hacía
+     `document.querySelectorAll('.ml-goal-flash-inner')` —un barrido del
+     documento ENTERO, ~7 MB y decenas de miles de nodos— en CADA
+     mutación, con un observer `subtree:true` sobre `document.body`.
+     Durante el arranque la app muta el DOM miles de veces (pinta
+     clasificaciones, calendarios, plantillas…), así que el coste es
+     O(mutaciones × tamaño del DOM). Medido con perfil de CPU real
+     (Chromium + CDP): **13,2 s de los 70 s perfilados — el 24 % del
+     tiempo total**, y el mayor consumidor de `querySelectorAll` de toda
+     la app. Es exactamente el anti-patrón que este mismo archivo ya
+     prohíbe en la sección "Cronómetro del partido — BASE INMUTABLE"
+     ("MutationObserver global sobre document.body con subtree:true que
+     dispara funciones costosas en CADA mutación").
+     El observer ya recibe QUÉ nodos se añadieron: basta comprobar esos.
+     Mismo efecto (ningún `.ml-goal-flash-inner` sobrevive en el DOM),
+     coste proporcional a lo que cambia en vez de a lo que existe.
+     PROHIBIDO volver a barrer el documento entero aquí. */
   (function(){
-    function purgeGooool(){
-      document.querySelectorAll('.ml-goal-flash-inner').forEach(function(el){el.remove();});
+    var SEL = '.ml-goal-flash-inner';
+    function purgeIn(node){
+      if (!node || node.nodeType !== 1) return;
+      try {
+        if (node.matches && node.matches(SEL)) { node.remove(); return; }
+        if (node.querySelectorAll) {
+          var hits = node.querySelectorAll(SEL);
+          for (var i = 0; i < hits.length; i++) hits[i].remove();
+        }
+      } catch(_){}
     }
-    purgeGooool();
-    new MutationObserver(purgeGooool).observe(document.body,{childList:true,subtree:true});
+    /* Barrido completo UNA sola vez, al arrancar. */
+    try { document.querySelectorAll(SEL).forEach(function(el){ el.remove(); }); } catch(_){}
+    new MutationObserver(function(records){
+      for (var r = 0; r < records.length; r++) {
+        var added = records[r].addedNodes;
+        for (var n = 0; n < added.length; n++) purgeIn(added[n]);
+      }
+    }).observe(document.body, { childList:true, subtree:true });
   })();
   </script>
   <script src="{{ url_for('static', filename='js/goal-notification-patch.js') }}?v=2.1"></script>

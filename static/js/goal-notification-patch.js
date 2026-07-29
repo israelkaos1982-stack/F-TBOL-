@@ -80,12 +80,31 @@
       obs.observe(listEl, { childList: true });
     }
 
-    // Attach to any existing lists
+    // Attach to any existing lists (barrido completo UNA sola vez)
     document.querySelectorAll('[id^="ml-acta-list-"]').forEach(attachObserver);
 
-    // Watch for dynamically added lists
-    const bodyObs = new MutationObserver(function() {
-      document.querySelectorAll('[id^="ml-acta-list-"]').forEach(attachObserver);
+    /* Watch for dynamically added lists.
+       ⚠️ MIRA SOLO LOS NODOS AÑADIDOS (2026-07-29). Antes hacía
+       `document.querySelectorAll('[id^="ml-acta-list-"]')` —sobre el
+       documento ENTERO (~7 MB)— en CADA mutación, con `subtree:true`.
+       Y encima con un selector de PREFIJO DE ATRIBUTO, de los más
+       lentos que hay: el navegador no puede usar ningún índice, tiene
+       que recorrer todos los nodos y comparar la cadena. Medido con
+       perfil de CPU real: el mayor consumidor durante la NAVEGACIÓN
+       entre pantallas (~52 ms por cada cambio de pantalla en un equipo
+       de escritorio; en un móvil se multiplica).
+       El observer ya recibe qué nodos se añadieron — basta mirar esos.
+       PROHIBIDO volver a barrer el documento entero aquí. */
+    const bodyObs = new MutationObserver(function(records) {
+      for (const r of records) {
+        for (const node of r.addedNodes) {
+          if (!node || node.nodeType !== 1) continue;
+          if (node.id && node.id.indexOf('ml-acta-list-') === 0) { attachObserver(node); continue; }
+          if (node.querySelectorAll) {
+            node.querySelectorAll('[id^="ml-acta-list-"]').forEach(attachObserver);
+          }
+        }
+      }
     });
     bodyObs.observe(document.body, { childList: true, subtree: true });
   }

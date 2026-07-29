@@ -1,5 +1,69 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Lentitud entre pantallas: escritura de `textContent` NO idempotente + `MutationObserver` que barre TODO el documento (obligatorio, 2026-07-29)
+
+**Bug (usuario 2026-07-29, tras arreglar el cuelgue de arranque): «se
+abre, pero entre pantalla y pantalla va lento»**. Diagnosticado con
+perfil de CPU real (Chromium + CDP) navegando 10 veces entre pantallas.
+
+### 1. `apply()` del HUD se re-disparaba a sí mismo en BUCLE INFINITO
+
+Asignar `textContent` **sustituye el nodo de texto SIEMPRE**, aunque la
+cadena sea idéntica → el navegador emite una mutación igualmente. Los
+observers del HUD (`setupObservers`) vigilan exactamente los nodos que
+`apply()` escribe y reprograman `setTimeout(apply, 0)` en cada mutación.
+El guard `applying` NO protege: cuando ese timeout corre, `applying` ya
+volvió a `false`. Resultado: `apply → muta → apply → muta…` sin parar,
+con el hilo principal ocupado de fondo TODA la sesión.
+Medido: **3,2 s de 9,8 s (33 %)** — el mayor consumidor tras arreglar el
+arranque. **Fix**: helper `_setTxt(el, val)` que escribe solo si el
+valor CAMBIA; la 2ª pasada no muta nada y el ciclo se corta solo.
+Tras el fix la CPU queda **79 % OCIOSA** al navegar (antes ~8 %).
+
+### 2. Dos `MutationObserver` con `subtree:true` barrían el documento ENTERO
+
+- `purgeGooool` (`templates/index.html`): `document.querySelectorAll(
+  '.ml-goal-flash-inner')` sobre ~7 MB de DOM en CADA mutación.
+  Medido en el arranque: **13,2 s (24 %)**.
+- `attachObserver` (`static/js/goal-notification-patch.js`):
+  `document.querySelectorAll('[id^="ml-acta-list-"]')` en CADA mutación
+  — y con un selector de PREFIJO DE ATRIBUTO, de los más lentos que hay
+  (sin índice posible, recorre todos los nodos comparando cadenas).
+  Medido al navegar: el mayor consumidor (~52 ms por cambio de pantalla
+  en escritorio; en móvil se multiplica).
+
+**Fix (ambos)**: el observer YA recibe QUÉ nodos se añadieron — basta
+comprobar esos (`records[].addedNodes`, con `matches()` + un
+`querySelectorAll` acotado al subárbol añadido). Mismo efecto, coste
+proporcional a lo que CAMBIA en vez de a lo que EXISTE.
+
+### 3. `_smallTarget` (HUD) hacía `document.querySelector` en cada llamada
+
+Dos barridos del documento entero por cada `apply()`. Los nodos del HUD
+son estáticos → se cachean con revalidación por `isConnected`.
+Medido: de **10,2 s (18 %)** en el arranque a **14 ms**.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un `MutationObserver` con `subtree:true` sobre
+   `document.body` (o cualquier raíz grande) responda haciendo un
+   `querySelector*` sobre TODO el documento. Se inspeccionan los
+   `addedNodes` del propio registro de mutaciones. Si de verdad hace
+   falta un barrido global, va DEBOUNCED (patrón `if(pend) return;
+   setTimeout(...)`, ya usado en varios sitios del proyecto), nunca por
+   mutación.
+2. **PROHIBIDO** escribir `textContent`/`innerHTML` sin comprobar antes
+   si el valor CAMBIA, cuando ese mismo nodo está vigilado por un
+   `MutationObserver` que puede volver a disparar al escritor. Un guard
+   tipo `applying` NO basta si la re-entrada es diferida
+   (`setTimeout`), porque el flag ya se liberó.
+3. **PROHIBIDO** resolver por `document.querySelector` en cada llamada
+   un nodo ESTÁTICO que se consulta muchas veces por segundo. Cachear
+   con revalidación (`isConnected`).
+4. El coste de estos patrones es proporcional al tamaño del DOM, y el
+   de este proyecto ronda los **7 MB**: lo que en un escritorio son
+   decenas de ms, en el móvil del usuario son segundos.
+
 ## `applyEngineOverrides` ⇄ `sqFromRegistryFull`: recursión mutua que colgaba la web PARA SIEMPRE — guarda de reentrada obligatoria (obligatorio, 2026-07-29)
 
 **Bug (docenas de capturas usuario 2026-07-29: «no abre la web» →

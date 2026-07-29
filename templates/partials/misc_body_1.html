@@ -63132,6 +63132,30 @@ https://api.sofascore.app/api/v1/team/44/image
     _smallCache[parentSel] = s;
     return s;
   }
+  /* ⚠️ ESCRITURA IDEMPOTENTE (obligatorio, 2026-07-29) — sin esto la app
+     se queda con la CPU al 100 % en bucle, para siempre.
+
+     Asignar `textContent` SUSTITUYE el nodo de texto SIEMPRE, aunque la
+     cadena sea idéntica → el navegador emite una mutación igualmente.
+     Los observers de este HUD (`setupObservers`, justo debajo) vigilan
+     precisamente los nodos que `apply()` escribe, y reprograman
+     `setTimeout(apply, 0)` en cada mutación. El guard `applying` NO
+     protege de esto: cuando ese timeout corre, `applying` ya volvió a
+     `false`. Resultado: apply → muta → apply → muta… un bucle que no
+     para nunca y deja el hilo principal ocupado de fondo durante toda
+     la sesión. Medido con perfil de CPU real durante la navegación
+     entre pantallas: **3,2 s de 9,8 s — el 33 % del tiempo**, el mayor
+     consumidor una vez arreglado el arranque; es la causa del "entre
+     pantalla y pantalla va lento".
+
+     Escribiendo solo cuando el valor CAMBIA de verdad, la primera
+     pasada pinta y la segunda no muta nada → el ciclo se corta solo.
+     PROHIBIDO volver a asignar `textContent` a pelo aquí. */
+  function _setTxt(el, val){
+    if (!el) return;
+    if (el.textContent === val) return;
+    el.textContent = val;
+  }
   function apply(){
     var o = load();
     if (!o || !Object.keys(o).length) return;
@@ -63146,38 +63170,38 @@ https://api.sofascore.app/api/v1/team/44/image
         var rEl = document.getElementById('ath-pts-val');
         if (rEl){
           var nv = Number(o.rating);
-          if (!isNaN(nv)) rEl.textContent = nv.toFixed(2);
+          if (!isNaN(nv)) _setTxt(rEl, nv.toFixed(2));
         }
       } else if (_hasAnchor) {
         var rEl = document.getElementById('ath-pts-val');
-        if (rEl) rEl.textContent = '0.00';
+        _setTxt(rEl, '0.00');
       }
       if (o.money != null){
         var mEl = document.getElementById('ath-money-val');
         if (mEl){
           var mv = parseInt(o.money, 10);
-          if (!isNaN(mv)) mEl.textContent = String(mv);
+          if (!isNaN(mv)) _setTxt(mEl, String(mv));
         }
       } else if (_hasAnchor) {
         var mEl = document.getElementById('ath-money-val');
-        if (mEl) mEl.textContent = '0';
+        _setTxt(mEl, '0');
       }
       if (o.pi != null){
         var pEl = document.getElementById('ath-med-val');
         if (pEl){
           var pv = parseInt(o.pi, 10);
-          if (!isNaN(pv)) pEl.textContent = String(pv);
+          if (!isNaN(pv)) _setTxt(pEl, String(pv));
         }
       }
       if (o.ratingTarget != null){
         var rT = _smallTarget('.munich-hud-val');
         var tv = Number(o.ratingTarget);
-        if (rT && !isNaN(tv)) rT.textContent = '/ ' + tv.toFixed(2);
+        if (!isNaN(tv)) _setTxt(rT, '/ ' + tv.toFixed(2));
       }
       if (o.moneyTarget != null){
         var mT = _smallTarget('.munich-hud-money');
         var mtv = parseInt(o.moneyTarget, 10);
-        if (mT && !isNaN(mtv)) mT.textContent = '/ ' + mtv + '€';
+        if (!isNaN(mtv)) _setTxt(mT, '/ ' + mtv + '€');
       }
       /* Sincroniza el state legacy del IIFE Bayern (line ~27205) si
          está expuesto. Así un updateHud() posterior no pinta los

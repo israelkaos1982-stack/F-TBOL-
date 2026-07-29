@@ -94,15 +94,13 @@
         });
       } catch(_){}
 
-      /* Aviso flotante con el peor bloqueo detectado. Se pinta solo si
-         hay algo grave que contar (≥2.5 s) y se puede cerrar tocándolo.
-         Es TEMPORAL: solo mientras dure la caza de este bloqueo. */
-      function _banner(){
+      /* Aviso flotante. Se puede cerrar tocándolo. TEMPORAL: solo
+         mientras dure la caza de este bloqueo. */
+      function _showBanner(txt){
         try {
-          if (!watching) return;
           var b = document.getElementById('boot-slow-banner');
           if (!b) {
-            if (!document.body) return;
+            if (!document.body) { _st(function(){ _showBanner(txt); }, 400); return; }
             b = document.createElement('div');
             b.id = 'boot-slow-banner';
             b.style.cssText = 'position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));'
@@ -112,11 +110,60 @@
             b.addEventListener('click', function(){ try { b.parentNode.removeChild(b); } catch(_){} });
             document.body.appendChild(b);
           }
-          var s = window._bootSlowest || {};
-          b.textContent = '⚠ bloqueo ' + s.ms + 'ms tras: ' + String(s.label || '?')
-            + '  (toca para cerrar)';
+          b.textContent = txt + '  (toca para cerrar)';
         } catch(_){}
       }
+      function _banner(){
+        if (!watching) return;
+        var s = window._bootSlowest || {};
+        _showBanner('⚠ bloqueo ' + s.ms + 'ms tras: ' + String(s.label || '?'));
+      }
+
+      /* ── RASTRO QUE SOBREVIVE AL REINICIO (2026-07-29 #5) ──────────────
+         El aviso de arriba NUNCA llegó a aparecer en la sesión del
+         usuario, y eso es en sí mismo el dato clave: el observador de
+         longtask solo puede REPORTAR cuando el hilo vuelve a estar
+         libre. Si no reporta nada, es que el hilo NO se recupera —
+         cuelgue duro (bucle infinito), no una tarea pesada que acaba.
+         Y como el usuario tiene que reiniciar la pestaña, cualquier
+         diagnóstico que viva solo en memoria se pierde.
+         Solución: un rastro mínimo en `localStorage` que se escribe
+         ANTES de cada navegación y se limpia al completarla. Si al
+         arrancar encontramos un rastro sin cerrar, sabemos exactamente
+         en qué pantalla se colgó la sesión anterior — y, sobre todo, si
+         se colgó DENTRO de `go()` o DESPUÉS de que volviera (dos causas
+         completamente distintas). */
+      var DIAG_KEY = '_ftbolBootDiag_v1';
+      var diagState = {};
+      function _diagSave(){
+        try { localStorage.setItem(DIAG_KEY, JSON.stringify(diagState)); } catch(_){}
+      }
+      window._bootDiagGo = function(phase, id, extra){
+        try {
+          diagState.go = { phase: phase, id: String(id || ''), t: Math.round(_now()) };
+          if (extra != null) diagState.go.ms = extra;
+          _diagSave();
+        } catch(_){}
+      };
+      /* Lee y LIMPIA el rastro de la sesión anterior antes de que nada
+         más pueda pisarlo. */
+      try {
+        var _prevRaw = localStorage.getItem(DIAG_KEY);
+        if (_prevRaw) {
+          window._prevBootDiag = JSON.parse(_prevRaw);
+          localStorage.removeItem(DIAG_KEY);
+        }
+      } catch(_){}
+      try {
+        var pd = window._prevBootDiag;
+        if (pd && pd.go && pd.go.phase === 'start') {
+          _showBanner('⛔ la sesión anterior se colgó DENTRO de abrir «' + pd.go.id + '»');
+        } else if (pd && pd.go && pd.go.phase === 'returned') {
+          _showBanner('⛔ la sesión anterior se colgó JUSTO DESPUÉS de abrir «' + pd.go.id + '» (' + pd.go.ms + 'ms)');
+        } else if (pd && pd.slow) {
+          _showBanner('⚠ sesión anterior: bloqueo ' + pd.slow.ms + 'ms tras: ' + pd.slow.label);
+        }
+      } catch(_){}
 
       /* (1) longtask observer — el que de verdad identifica al culpable. */
       var _po = null;
@@ -143,6 +190,7 @@
             } catch(_){}
             if (!window._bootSlowest || e.duration > window._bootSlowest.ms) {
               window._bootSlowest = { label: lbl, ms: Math.round(e.duration) };
+              try { diagState.slow = window._bootSlowest; _diagSave(); } catch(_){}
               try { if (window._bootRenderSlow) window._bootRenderSlow(); } catch(_){}
               try { console.warn('[boot] tarea lenta ' + Math.round(e.duration) + 'ms tras: ' + lbl); } catch(_){}
               /* El texto del splash deja de servir en cuanto la CORTINA
@@ -250,6 +298,9 @@
       function runStep(i){
         if (i >= queue.length) {
           try { if (window._bootMark) window._bootMark('dcl-queue-done'); } catch(_){}
+          /* Re-instala el rastreador de navegación por FUERA de los
+             envoltorios de `go()` que se hayan añadido durante la cola. */
+          try { if (window._bootInstallGoDiag) window._bootInstallGoDiag(); } catch(_){}
           return;
         }
         /* Marca de posición (2026-07-29): si UN listener concreto es
@@ -832,6 +883,73 @@
        junto con misc_body_1/2 es la parte más pesada del arranque. */
     if (typeof window._bootBump === 'function') window._bootBump(90);
     if (typeof window._bootMark === 'function') window._bootMark('bundle-done');
+  </script>
+  <script>
+    /* ── RASTREO DE NAVEGACIÓN (2026-07-29 #5, TEMPORAL) ─────────────────
+       Deja constancia en `localStorage` de la navegación EN CURSO, para
+       que un cuelgue duro (del que el usuario solo puede salir
+       reiniciando la pestaña) no se lleve el diagnóstico por delante.
+       Distingue los dos escenarios que exigen arreglos distintos:
+         · 'start'    → se colgó DENTRO de la cadena de `go()`.
+         · 'returned' → `go()` terminó bien; se colgó DESPUÉS, en algo
+                        que quedó programado (timer, respuesta de red…).
+       El contador de profundidad evita que una navegación anidada borre
+       el rastro de la exterior antes de tiempo. Se instala aquí, justo
+       tras el bundle (que es quien define `window.go`), y se reinstala
+       al final de la cola de arranque para quedar por FUERA de los
+       envoltorios que se añaden más tarde. */
+    (function(){
+      function install(){
+        try {
+          if (typeof window.go !== 'function' || window.go._goDiagWrapped) return false;
+          var prev = window.go;
+          /* Profundidad COMPARTIDA entre todas las instalaciones: al
+             reinstalar para quedar por fuera de envoltorios añadidos
+             después, quedan DOS de estos en la cadena. Con un contador
+             por-cierre, el interior escribiría 'returned' antes de que
+             el exterior terminara, y un cuelgue en el exterior se
+             leería como "go() completó" — justo al revés de la
+             realidad. Con el contador compartido solo el más EXTERNO
+             abre y cierra el rastro. */
+          if (typeof window._goDiagDepth !== 'number') window._goDiagDepth = 0;
+          var w = function(id){
+            var outer = (window._goDiagDepth === 0);
+            window._goDiagDepth++;
+            if (outer) { try { window._bootDiagGo && window._bootDiagGo('start', id); } catch(_){} }
+            var t0 = Date.now();
+            var threw = false;
+            try {
+              return prev.apply(this, arguments);
+            } catch(err) {
+              /* Una EXCEPCIÓN no es un cuelgue, pero el `finally` corre
+                 igual y escribiría 'returned' — leyéndose como "la
+                 navegación fue bien". Se marca aparte para no confundir
+                 los dos escenarios. */
+              threw = true;
+              try { window._bootDiagGo && window._bootDiagGo('threw:' + (err && err.message ? String(err.message).slice(0,60) : '?'), id); } catch(_){}
+              throw err;
+            } finally {
+              window._goDiagDepth--;
+              if (outer && !threw) {
+                try { window._bootDiagGo && window._bootDiagGo('returned', id, Date.now() - t0); } catch(_){}
+                /* Si el hilo sigue vivo tras la navegación, este timer
+                   corre y borra el rastro: la sesión NO se colgó. Si se
+                   cuelga, nunca corre y el rastro queda para la próxima
+                   carga. */
+                try { setTimeout(function(){
+                  try { window._bootDiagGo && window._bootDiagGo('settled', id); } catch(_){}
+                }, 0); } catch(_){}
+              }
+            }
+          };
+          w._goDiagWrapped = true;
+          window.go = w;
+          return true;
+        } catch(_){ return false; }
+      }
+      install();
+      window._bootInstallGoDiag = install;
+    })();
   </script>
   <script>
   /* ── PARCHE INLINE: bloquea el overlay central de gol ──────────────────

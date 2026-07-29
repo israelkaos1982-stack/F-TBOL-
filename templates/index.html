@@ -96,11 +96,19 @@
 
       /* Aviso flotante. Se puede cerrar tocándolo. TEMPORAL: solo
          mientras dure la caza de este bloqueo. */
+      var _bannerTries = 0;
       function _showBanner(txt){
         try {
           var b = document.getElementById('boot-slow-banner');
           if (!b) {
-            if (!document.body) { _st(function(){ _showBanner(txt); }, 400); return; }
+            /* `document.body` no existe todavía cuando esto se llama
+               desde <head>. Se reintenta varias veces (no una sola):
+               un único reintento puede caer justo en un momento en que
+               el hilo sigue ocupado y perderse para siempre. */
+            if (!document.body) {
+              if (_bannerTries++ < 20) _st(function(){ _showBanner(txt); }, 500);
+              return;
+            }
             b = document.createElement('div');
             b.id = 'boot-slow-banner';
             /* z-index MÁXIMO: el splash usa 2147483646 y lo taparía. */
@@ -197,7 +205,18 @@
           else parts.push(pd.go.phase + ' «' + pd.go.id + '»');
         }
         if (pd && pd.slow) parts.push('bloqueo ' + pd.slow.ms + 'ms tras: ' + pd.slow.label);
-        if (parts.length) _showBanner('SESIÓN ANTERIOR → ' + parts.join(' · '));
+        if (parts.length) {
+          /* DOS superficies, a propósito. El aviso flotante depende de
+             `document.body` (que en <head> aún no existe) y de que nada
+             lo tape ni lo quite — en la sesión del usuario NO llegó a
+             verse ni una vez. La línea de fase del splash, en cambio,
+             está DEMOSTRADO que se ve (sus capturas la leen sin
+             problema), así que el dato se publica también ahí, que es
+             la superficie fiable. */
+          window._prevBootDiagText = 'ANTERIOR → ' + parts.join(' · ');
+          try { console.warn('[boot] ' + window._prevBootDiagText); } catch(_){}
+          _showBanner('SESIÓN ' + window._prevBootDiagText);
+        }
       } catch(_){}
 
       /* Rastro del TOQUE, en fase de captura sobre `document`: corre
@@ -729,6 +748,12 @@
       var pctEl = document.getElementById('boot-splash-pct');
       var phaseEl = document.getElementById('boot-splash-phase');
       var MIN_MS  = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  :   700;
+      /* Si la sesión anterior se colgó, el splash aguanta abierto un
+         poco más: su línea de fase lleva el rastro de POR QUÉ se colgó,
+         y sin este margen desaparece antes de que dé tiempo a leerlo o
+         fotografiarlo. Solo ocurre DESPUÉS de un cuelgue — en un
+         arranque normal no hay rastro y el mínimo sigue siendo 700 ms. */
+      try { if (window._prevBootDiagText) MIN_MS = Math.max(MIN_MS, 5000); } catch(_){}
       var HARD_MS = (typeof window._BOOT_SPLASH_HARD_MS === 'number') ? window._BOOT_SPLASH_HARD_MS : 6000;
       var startedAt = Date.now();
       var hidden = false;
@@ -749,8 +774,17 @@
       function esc(s){ return String(s == null ? '' : s).replace(/[<>&]/g, ' '); }
       function paintPhase(){
         if (!phaseEl) return;
+        var html = '';
+        /* Rastro de la sesión ANTERIOR (si se colgó): lo primero y en
+           rojo — es el dato que hemos venido a leer. Se publica aquí,
+           en la línea del splash, porque es la superficie que está
+           DEMOSTRADO que se ve; el aviso flotante no llegó a aparecer
+           ni una vez en las pruebas del usuario. */
+        if (window._prevBootDiagText) {
+          html += '<span style="color:#ff7060">' + esc(window._prevBootDiagText) + '</span><br>';
+        }
+        html += lastPhase;
         var slow = window._bootSlowest;
-        var html = lastPhase;
         if (slow) {
           html += '<br><span style="color:#f0a020">&#9888; ' + slow.ms + 'ms tras: ' + esc(slow.label) + '</span>';
         }
@@ -1074,13 +1108,45 @@
   })();
   </script>
   <script>
-  /* ── NUCLEAR: elimina físicamente cualquier .ml-goal-flash-inner del DOM ── */
+  /* ── NUCLEAR: elimina físicamente cualquier .ml-goal-flash-inner del DOM ──
+     ⚠️ MIRA SOLO LOS NODOS AÑADIDOS, NUNCA TODO EL DOCUMENTO
+     (obligatorio, 2026-07-29). La versión original hacía
+     `document.querySelectorAll('.ml-goal-flash-inner')` —un barrido del
+     documento ENTERO, ~7 MB y decenas de miles de nodos— en CADA
+     mutación, con un observer `subtree:true` sobre `document.body`.
+     Durante el arranque la app muta el DOM miles de veces (pinta
+     clasificaciones, calendarios, plantillas…), así que el coste es
+     O(mutaciones × tamaño del DOM). Medido con perfil de CPU real
+     (Chromium + CDP): **13,2 s de los 70 s perfilados — el 24 % del
+     tiempo total**, y el mayor consumidor de `querySelectorAll` de toda
+     la app. Es exactamente el anti-patrón que este mismo archivo ya
+     prohíbe en la sección "Cronómetro del partido — BASE INMUTABLE"
+     ("MutationObserver global sobre document.body con subtree:true que
+     dispara funciones costosas en CADA mutación").
+     El observer ya recibe QUÉ nodos se añadieron: basta comprobar esos.
+     Mismo efecto (ningún `.ml-goal-flash-inner` sobrevive en el DOM),
+     coste proporcional a lo que cambia en vez de a lo que existe.
+     PROHIBIDO volver a barrer el documento entero aquí. */
   (function(){
-    function purgeGooool(){
-      document.querySelectorAll('.ml-goal-flash-inner').forEach(function(el){el.remove();});
+    var SEL = '.ml-goal-flash-inner';
+    function purgeIn(node){
+      if (!node || node.nodeType !== 1) return;
+      try {
+        if (node.matches && node.matches(SEL)) { node.remove(); return; }
+        if (node.querySelectorAll) {
+          var hits = node.querySelectorAll(SEL);
+          for (var i = 0; i < hits.length; i++) hits[i].remove();
+        }
+      } catch(_){}
     }
-    purgeGooool();
-    new MutationObserver(purgeGooool).observe(document.body,{childList:true,subtree:true});
+    /* Barrido completo UNA sola vez, al arrancar. */
+    try { document.querySelectorAll(SEL).forEach(function(el){ el.remove(); }); } catch(_){}
+    new MutationObserver(function(records){
+      for (var r = 0; r < records.length; r++) {
+        var added = records[r].addedNodes;
+        for (var n = 0; n < added.length; n++) purgeIn(added[n]);
+      }
+    }).observe(document.body, { childList:true, subtree:true });
   })();
   </script>
   <script src="{{ url_for('static', filename='js/goal-notification-patch.js') }}?v=2.1"></script>

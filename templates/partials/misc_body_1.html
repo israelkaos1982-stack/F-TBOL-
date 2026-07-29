@@ -54,10 +54,44 @@ window.pG = function(fn) {
       err.name === 'NS_ERROR_DOM_QUOTA_REACHED'));
   }
   /* Libera espacio por orden de MENOR a MAYOR importancia, reintentando
-     el setItem tras cada borrado. Nunca borra la clave que se escribe. */
+     el setItem tras cada LOTE de borrados. Nunca borra la clave que se
+     escribe.
+
+     ⚠️ COSTE — POR QUÉ SE REINTENTA POR LOTES Y NO TRAS CADA BORRADO
+     (2026-07-29). La versión original reintentaba el `setItem` DESPUÉS
+     DE CADA `removeItem` individual. Con el almacén lleno y ~50 claves
+     `_protected` que expulsar, eso son ~100 intentos de escribir de
+     nuevo el MISMO valor — y estos valores son plantillas de liga
+     completas, de varios MEGAS. Cada intento fallido de un valor así no
+     es gratis: el navegador tiene que serializarlo y comprobar cuota
+     entero antes de rechazarlo.
+     El multiplicador real: la restauración masiva (`_lextRestoreAllFromServer`)
+     llama aquí para las ~54 ligas seguidas → del orden de MILES de
+     escrituras multi-MB fallidas encadenadas, bloqueando el hilo
+     principal durante minutos. Es la causa del "se congela al pulsar
+     cualquier caja": el hilo ya estaba bloqueado ANTES del toque (por
+     eso ni el registro del toque llegaba a ejecutarse).
+     Reintentar por LOTE mantiene exactamente el mismo orden y el mismo
+     resultado de expulsión, pero baja los reintentos de ~100 a 5. */
   function _freeAndRetry(key, value){
     function _retry(){
       try { localStorage.setItem(key, value); return true; } catch(_){ return false; }
+    }
+    /* `batch` = cada cuántos borrados se reintenta. Las categorías
+       100% reconstruibles (snapshots, backups, stats) se tiran enteras
+       de una vez: son baratas de recuperar y no merece la pena pagar un
+       reintento multi-MB por cada una. Los `_protected` de otras ligas
+       son más valiosos (aunque también se re-descargan del servidor),
+       así que ahí se reintenta cada pocos borrados para no expulsar más
+       de lo estrictamente necesario. */
+    function _dropAll(list, batch){
+      if (!list.length) return false;
+      var step = batch || list.length;
+      for (var i=0; i<list.length; i++){
+        try { localStorage.removeItem(list[i]); } catch(_){}
+        if (((i + 1) % step) === 0 && _retry()) return true;
+      }
+      return ((list.length % step) === 0) ? false : _retry();
     }
     try {
       var snaps=[], backups=[], protibs=[], stats=[];
@@ -71,15 +105,17 @@ window.pG = function(fn) {
       }
       /* 1. Snapshots datados (históricos) — los más viejos primero. */
       snaps.sort();
-      while (snaps.length){ try { localStorage.removeItem(snaps.shift()); } catch(_){} if(_retry()) return true; }
+      if (_dropAll(snaps)) return true;
       /* 2. _backup legacy (redundante con _protected). */
-      for (var b=0; b<backups.length; b++){ try { localStorage.removeItem(backups[b]); } catch(_){} if(_retry()) return true; }
+      if (_dropAll(backups)) return true;
       /* 3. Stores de estadísticas (los reconstruye rebuildPlayerStatsStore
             desde cfg.results/liga_results — se pueden tirar sin perder nada). */
-      for (var s=0; s<stats.length; s++){ try { localStorage.removeItem(stats[s]); } catch(_){} if(_retry()) return true; }
+      if (_dropAll(stats)) return true;
       /* 4. _protected de OTRAS ligas (su copia vive en el servidor; se
-            re-descarga al abrir esa liga). NO tocamos la clave actual. */
-      for (var p=0; p<protibs.length; p++){ try { localStorage.removeItem(protibs[p]); } catch(_){} if(_retry()) return true; }
+            re-descarga al abrir esa liga). NO tocamos la clave actual.
+            En lotes de 10 para no expulsar las ~50 de golpe cuando con
+            unas pocas ya habría bastado. */
+      if (_dropAll(protibs, 10)) return true;
       /* 5. Iconos custom de competiciones (re-subibles por el admin). */
       try {
         if (localStorage.getItem('comp_icons_v1')){
@@ -108,16 +144,39 @@ window.pG = function(fn) {
       setTimeout(function(){ try { t.parentNode.removeChild(t); } catch(_){} }, 8000);
     } catch(_){}
   }
+  /* Umbral de "valor grande": por encima de esto, un intento fallido
+     de `setItem` ya cuesta lo suyo (serializar + comprobar cuota), así
+     que una vez sabemos que el almacén está agotado NO se vuelve a
+     intentar — su copia durable vive en IndexedDB (`_idbKV`, cientos de
+     MB) y en `LIGA_CACHE`. Los valores PEQUEÑOS (cursores, banderas,
+     preferencias) se siguen intentando siempre: son los que de verdad
+     necesitan localStorage y casi siempre caben tras la expulsión. */
+  var LARGE_VALUE = 64 * 1024;
   /* true = guardado (con o sin limpieza); false = imposible incluso tras
      liberar espacio. NUNCA lanza. */
   window._lsSetSafe = function(key, value){
+    /* PESTILLO DE SESIÓN (2026-07-29). Sin él, CADA una de las ~54
+       ligas de la restauración masiva repetía el ciclo completo de
+       expulsión —escaneo íntegro del almacén incluido— aunque la
+       anterior ya hubiera demostrado que no cabe nada más. El coste se
+       multiplicaba por 54 y bloqueaba el hilo principal durante
+       minutos. Una vez agotado, se sabe: los bloques grandes se
+       descartan al instante (van a IndexedDB igualmente) y solo se
+       siguen intentando los pequeños. */
+    if (window._lsQuotaExhausted && typeof value === 'string' && value.length > LARGE_VALUE) {
+      return false;
+    }
     try { localStorage.setItem(key, value); return true; }
     catch(err){
       if (!_isQuotaErr(err)){
         try { console.warn('[ftbol] setItem falló (no-cuota):', key, err && err.name); } catch(_){}
         return false;
       }
+      /* Ya sabíamos que estaba agotado: no repetir el ciclo de
+         expulsión (es justo lo que multiplicaba el bloqueo). */
+      if (window._lsQuotaExhausted) return false;
       if (_freeAndRetry(key, value)) return true;
+      window._lsQuotaExhausted = true;
       _warnOnce();
       return false;
     }
@@ -15753,7 +15812,51 @@ window._showSimProgress = function(opts, onDone){
     window._namesForAlias = _namesForAlias;
   } catch(_){}
 
+  /* ⚠️ GUARDA DE REENTRADA (obligatoria, 2026-07-29) — sin ella la web
+     se cuelga PARA SIEMPRE, sin recuperación posible.
+
+     Ciclo reproducido en un navegador real (Chromium + CDP, pila de
+     llamadas capturada pausando el hilo bloqueado):
+
+       applyEngineOverrides()                       (aquí)
+         → _lextRefreshJ1Pickers()                  (paso 6, más abajo)
+           → sqFromRegistryFull(equipo)             (×20: los 2 equipos
+                                                     de los 10 partidos
+                                                     de LIGA_SCHEDULE[0])
+             → si el equipo NO está en SQUAD_REGISTRY, el bundle
+               (`index.bundle.js`, en `sqFromRegistryFull`) llama a
+               window.applyEngineOverrides() para intentar poblarlo
+                 → applyEngineOverrides()  … y vuelta a empezar.
+
+     No es solo recursión: RAMIFICA ×20 en cada vuelta, así que crece
+     de forma explosiva y ni siquiera llega a desbordar la pila
+     rápidamente — cada nivel hace trabajo pesado de verdad
+     (`refreshLigaEaShields` escanea todas las ligas, etc.). Basta UN
+     equipo del calendario sin plantilla resoluble para dejar el hilo
+     principal bloqueado indefinidamente: la web parece abrir (la
+     cortina CSS del splash la destapa desde el compositor) pero no
+     responde a NINGÚN toque, ni siquiera a un listener de
+     `pointerdown` en fase de captura sobre `document`.
+
+     La reentrada es SIEMPRE redundante: para cuando el paso 6 corre,
+     el paso 4 (`_importOtherLeaguesIntoEngine`) ya pobló el registro,
+     así que volver a entrar no puede aportar nada nuevo. Se corta aquí,
+     en el chokepoint, y así queda protegida CUALQUIER otra ruta que
+     re-entre en el futuro — no solo esta.
+
+     PROHIBIDO quitar esta guarda o moverla dentro del cuerpo: tiene
+     que ser lo PRIMERO, y el flag debe liberarse en un `finally` para
+     que una excepción no lo deje bloqueado para el resto de la sesión. */
   function applyEngineOverrides(){
+    if (window._engineOverridesRunning) return;
+    window._engineOverridesRunning = true;
+    try {
+      return _applyEngineOverridesBody();
+    } finally {
+      window._engineOverridesRunning = false;
+    }
+  }
+  function _applyEngineOverridesBody(){
     if(typeof window.ligaEaBuildEngineOverrides !== 'function') return;
     var bridge = window.ligaEaBuildEngineOverrides();
 
@@ -63008,10 +63111,26 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     return serverP;
   }
+  /* ⚠️ CACHEADO (obligatorio, 2026-07-29). Cada llamada hacía un
+     `document.querySelector` sobre el documento ENTERO (~7 MB, decenas
+     de miles de nodos) y `apply()` la invoca dos veces por pasada. Con
+     los observers del HUD reencadenando `apply` en cada escritura, eso
+     son miles de barridos completos: medido con perfil de CPU real
+     (Chromium + CDP), **10,2 s de los 70 s perfilados — el 18 % del
+     tiempo**, el segundo mayor consumidor de la app tras `purgeGooool`.
+     Estos nodos del HUD son ESTÁTICOS (viven en el HTML del hub), así
+     que se resuelven una vez y se reutilizan. `isConnected` revalida
+     por si un re-render los sustituyera: si el cacheado ya no está en
+     el documento, se vuelve a buscar. */
+  var _smallCache = {};
   function _smallTarget(parentSel){
+    var hit = _smallCache[parentSel];
+    if (hit && hit.isConnected) return hit;
     var p = document.querySelector(parentSel);
     if (!p) return null;
-    return p.querySelector('.munich-hud-num small');
+    var s = p.querySelector('.munich-hud-num small');
+    _smallCache[parentSel] = s;
+    return s;
   }
   function apply(){
     var o = load();

@@ -15942,6 +15942,51 @@ window._showSimProgress = function(opts, onDone){
   function _lextNormForLookup(s){
     return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
   }
+  /* ════════════════════════════════════════════════════════════════
+     CACHE del escaneo de `ligaExt_*` (2026-07-29) — antes,
+     `_lextFindTeamInAnyLigaExt` releía Y RE-PARSEABA (JSON.parse) las
+     ~50 ligas externas (varios MB) EN CADA LLAMADA. Como esta función
+     es el wrapper de `sqFromRegistry`/`sqFromRegistryFull` — el
+     resolutor de plantilla que usa TODO el motor (picker de eventos,
+     MVP, portero de portería a cero, y los builders de clasificación
+     europea/Superliga que se acaban de diferir más arriba) — cada
+     equipo que necesitara su plantilla durante el arranque disparaba
+     un rescan COMPLETO. Con muchas competiciones resolviendo muchos
+     equipos en la misma ráfaga de arranque, esto amplificaba segundos
+     de trabajo real a MINUTOS de bloqueo (bug "a veces no abre la
+     web"). El cache de abajo solo evita RE-LEER+RE-PARSEAR lo mismo
+     una y otra vez — la lógica de prioridad/match de
+     `_lextFindTeamInAnyLigaExt` NO cambia ni una línea, solo lee sus
+     `{key, teams}` de una lista ya parseada en vez de releer
+     localStorage. Invalidado desde `saveData` (mismo chokepoint que
+     `_invalidateAliasCache`/`_eurInvalidateLogoIndex`), así una edición
+     del admin se ve en el siguiente lookup, no hay que esperar al TTL. */
+  var _LEXT_TEAM_SCAN_CACHE = null;
+  var _LEXT_TEAM_SCAN_AT = 0;
+  var _LEXT_TEAM_SCAN_TTL_MS = 4000;
+  function _lextInvalidateTeamScanCache(){ _LEXT_TEAM_SCAN_CACHE = null; }
+  window._lextInvalidateTeamScanCache = _lextInvalidateTeamScanCache;
+  function _lextGetTeamScanEntries(){
+    var now = Date.now();
+    if (_LEXT_TEAM_SCAN_CACHE && (now - _LEXT_TEAM_SCAN_AT) < _LEXT_TEAM_SCAN_TTL_MS) return _LEXT_TEAM_SCAN_CACHE;
+    var out = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (k.indexOf('_backup') !== -1) continue;
+        if (k.indexOf('_snap_') !== -1) continue;
+        if (k.indexOf('_protected') !== -1) continue;
+        var rawData = localStorage.getItem(k); if (!rawData) continue;
+        var data; try { data = JSON.parse(rawData); } catch(_) { continue; }
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        out.push({ key: k, teams: teams });
+      }
+    } catch(_){}
+    _LEXT_TEAM_SCAN_CACHE = out;
+    _LEXT_TEAM_SCAN_AT = now;
+    return out;
+  }
   function _lextFindTeamInAnyLigaExt(teamName){
     if (!teamName) return null;
     var aliases = window.TEAM_ALIASES || {};
@@ -15956,16 +16001,11 @@ window._showSimProgress = function(opts, onDone){
        ahí, usamos cualquier ligaExt_<slug> como fallback. */
     var preferred = null, fallback = null;
     try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (!k || k.indexOf('ligaExt_') !== 0) continue;
-        if (k.indexOf('_backup') !== -1) continue;
-        if (k.indexOf('_snap_') !== -1) continue;
-        if (k.indexOf('_protected') !== -1) continue;
-        var rawData = localStorage.getItem(k); if (!rawData) continue;
-        var data; try { data = JSON.parse(rawData); } catch(_) { continue; }
-        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
-        for (var j = 0; j < teams.length; j++) {
+      var _scanEntries = _lextGetTeamScanEntries();
+      for (var i = 0; i < _scanEntries.length; i++) {
+        var k = _scanEntries[i].key;
+        var teams = _scanEntries[i].teams;
+        for (var j = 0; j < teams.length; j++){
           var t = teams[j];
           if (!t || !t.name) continue;
           var nm = _lextNormForLookup(t.name);
@@ -47844,6 +47884,14 @@ https://api.sofascore.app/api/v1/team/44/image
        siguiente applyEngineOverrides para que renames/edits se
        propaguen al motor sin esperar al checksum. */
     try { window.__importLeaguesHash = ''; } catch(_){}
+    /* Cache del escaneo de ligaExt_* que usa `_lextFindTeamInAnyLigaExt`
+       (wrapper de sqFromRegistry/sqFromRegistryFull, 2026-07-29) — mismo
+       patrón que el resto de invalidaciones de arriba: sin esto, un
+       equipo recién editado seguiría resolviendo con datos de hasta
+       4s de antigüedad (el TTL del cache) en el siguiente partido. */
+    if (typeof window._lextInvalidateTeamScanCache === 'function') {
+      try { window._lextInvalidateTeamScanCache(); } catch(_){}
+    }
     /* Limpiar entradas de SQUAD_REGISTRY con dorsales vacíos del
        fallback antiguo de sqFromRegistry. La próxima lookup rebuilda
        con dorsales auto-numerados. Reportado 2026-05-07. */

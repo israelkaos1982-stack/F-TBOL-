@@ -12,7 +12,18 @@
    actúa si Railway no responde (offline / error). */
 
 var CACHE_STATIC = 'ftbol-static-v1';
-var CACHE_HTML   = 'ftbol-html-v1';
+/* Bump v1→v2 (2026-07-29): el fallback de HTML (línea ~126, solo se usa
+   si el fetch de red falla) no tiene caducidad — puede servir una copia
+   de HACE DÍAS si el dispositivo tuvo una sola petición fallida en
+   cualquier momento. Con el cold-start de Railway (documentado en todo
+   este proyecto) eso es frecuente, así que un dispositivo podía quedarse
+   sirviendo la SPLASH VIEJA (sin el contador real, o con una versión con
+   bugs ya corregidos) indefinidamente, sin que ningún cambio en
+   index.html/misc_body_*.html le llegara nunca — el `activate` de abajo
+   solo purga cachés cuyo NOMBRE ya no está en `keep`, así que renombrar
+   la caché es lo que fuerza a CADA dispositivo a descartar cualquier
+   copia vieja y pedir HTML fresco en su próxima navegación. */
+var CACHE_HTML   = 'ftbol-html-v2';
 
 /* Activos a pre-cachear en el install.  Actualizar ?v= aquí cuando cambien. */
 var PRECACHE = [
@@ -108,7 +119,11 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  /* HTML de navegación: network-first; caché solo si la red falla */
+  /* HTML de navegación: network-first; caché solo si la red falla.
+     La caché lleva un sello de fecha (2026-07-29) para que, si algún día
+     vuelve a acumularse una copia vieja, NUNCA se sirva indefinidamente
+     — pasadas 6h se trata como un miss (el navegador ve el error de red
+     real en vez de una página desactualizada disfrazada de actual). */
   if (e.request.mode === 'navigate') {
     e.respondWith(
       fetch(e.request).then(function (res) {
@@ -119,11 +134,24 @@ self.addEventListener('fetch', function (e) {
            already used". Clonar aquí evita la carrera. */
         var resClone = (res && res.ok) ? res.clone() : null;
         if (resClone) {
-          caches.open(CACHE_HTML).then(function (c) { c.put('/', resClone); }).catch(function () {});
+          resClone.blob().then(function (body) {
+            var headers = new Headers(resClone.headers);
+            headers.set('x-sw-cached-at', String(Date.now()));
+            var stamped = new Response(body, { status: resClone.status, statusText: resClone.statusText, headers: headers });
+            return caches.open(CACHE_HTML).then(function (c) { return c.put('/', stamped); });
+          }).catch(function () {});
         }
         return res;
       }).catch(function () {
-        return caches.open(CACHE_HTML).then(function (c) { return c.match('/'); });
+        return caches.open(CACHE_HTML).then(function (c) {
+          return c.match('/').then(function (hit) {
+            if (!hit) return undefined;
+            var cachedAt = parseInt(hit.headers.get('x-sw-cached-at') || '0', 10);
+            var MAX_AGE_MS = 6 * 60 * 60 * 1000; /* 6 h */
+            if (cachedAt && (Date.now() - cachedAt) > MAX_AGE_MS) return undefined;
+            return hit;
+          });
+        });
       })
     );
   }

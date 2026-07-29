@@ -222,11 +222,11 @@
          hilo JS esté atascado.  `pointer-events:none` al final deja pasar los
          toques a la app de debajo aunque el elemento siga en el DOM.  En una carga
          sana el JS oculta+elimina el splash en cuanto el progreso real llega al
-         100 % y esta animación nunca llega a importar (arranca a los 16 s — justo
-         después del backstop JS de 15 s, que es el que debería disparar primero
+         100 % y esta animación nunca llega a importar (arranca a los 7 s — justo
+         después del backstop JS de 6 s, que es el que debería disparar primero
          en el 99 % de los casos; esta es la ÚLTIMA red, solo para cuando el hilo
          JS está completamente atascado y ni siquiera ese setTimeout dispara). */
-      animation:bootSplashAutoFade .6s ease 16s forwards;
+      animation:bootSplashAutoFade .6s ease 7s forwards;
     }
     #boot-splash.hide{opacity:0;pointer-events:none;}
     @keyframes bootSplashAutoFade{to{opacity:0;visibility:hidden;pointer-events:none;}}
@@ -304,7 +304,7 @@
       var barEl = document.getElementById('boot-splash-bar');
       var pctEl = document.getElementById('boot-splash-pct');
       var MIN_MS  = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  :   700;
-      var HARD_MS = (typeof window._BOOT_SPLASH_HARD_MS === 'number') ? window._BOOT_SPLASH_HARD_MS : 15000;
+      var HARD_MS = (typeof window._BOOT_SPLASH_HARD_MS === 'number') ? window._BOOT_SPLASH_HARD_MS : 6000;
       var startedAt = Date.now();
       var hidden = false;
       var target = 0;   /* techo real (hitos + relleno por tiempo) — nunca retrocede */

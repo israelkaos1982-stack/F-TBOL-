@@ -5,313 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>eFootball ✓</title>
   <script>
-    /* ── DETECTOR DE TAREA LENTA (2026-07-29 #3) ──────────────────────────
-       Tres capturas del usuario con el arranque congelado señalan TRES
-       listeners DISTINTOS (`_hydrateAll`, `_bootStage`, `initOverrides`),
-       todos alrededor de los 3-4 s. Que cambie cada intento demuestra
-       que el bloqueo NO está en un listener concreto: la marca visible
-       solo dice "por dónde iba la cola cuando el hilo se paró", no QUÉ
-       lo paró. El culpable puede ser perfectamente algo lanzado desde
-       fuera de la cola — un `setTimeout` de arranque, o el manejador de
-       la RESPUESTA de un fetch (esos corren como microtarea al final de
-       una tarea interna del navegador, así que ninguna marca de la cola
-       los nombra).
-
-       Este bloque instrumenta las TRES vías de forma genérica, antes de
-       que exista ningún otro script:
-       1) `PerformanceObserver('longtask')` — la API del navegador
-          diseñada exactamente para esto: reporta cada tarea que bloquea
-          el hilo >50 ms, con su instante de inicio y duración. Nos
-          quedamos con la MÁS LARGA y la correlacionamos con la marca
-          que estaba activa en ese instante — así el dato que se muestra
-          es "la tarea que de verdad bloqueó", no "la última que llegó a
-          anunciarse".
-       2) `setTimeout` envuelto — cada callback diferido deja su nombre
-          como marca antes de correr, igual que ya hacen los listeners
-          de la cola.
-       3) `fetch` envuelto — deja una marca en cuanto la RESPUESTA
-          resuelve, que es justo el punto donde arranca el manejador
-          `.then` del que sospechamos. Si el bloqueo es "procesar lo que
-          devolvió el servidor", la marca dirá qué URL.
-       Todo se apaga solo cuando el splash se cierra (`_bootDiagOff`) —
-       no deja sobrecarga en la app ya arrancada. */
-    (function(){
-      /* `_st` se captura ANTES de envolver nada: es el `setTimeout`
-         nativo, imprescindible para poder programar el auto-apagado sin
-         pasar por nuestra propia envoltura. */
-      var _st = window.setTimeout;
-      var on = true;            /* mide y envuelve (solo durante el arranque) */
-      var watching = true;      /* observa longtask (más tiempo, coste ~0) */
-      window._bootMarks = [];   /* {label, t} con t en la escala de performance.now() */
-      window._bootSlowest = null;
-      function _now(){ try { return performance.now(); } catch(_){ return Date.now(); } }
-      function _label(fn){
-        try {
-          if (fn && fn.name) return fn.name;
-          return String(fn).replace(/\s+/g, ' ').trim().slice(0, 40);
-        } catch(_){ return 'anon'; }
-      }
-      window._bootDiagLabel = _label;
-      window._bootDiagNote = function(label){
-        if (!on) return;
-        try {
-          window._bootMarks.push({ label: label, t: _now() });
-          if (window._bootMarks.length > 400) window._bootMarks.shift();
-        } catch(_){}
-      };
-      /* Quita las envolturas CARAS (setTimeout/fetch). El observador de
-         longtask sigue un rato más: no cuesta nada (lo hace el navegador)
-         y es lo único que puede nombrar un bloqueo posterior. */
-      function _offWrappers(){
-        if (!on) return;
-        on = false;
-        try { window.setTimeout = _st; } catch(_){}
-        try { if (_fetchNative) window.fetch = _fetchNative; } catch(_){}
-      }
-      window._bootDiagOff = function(){
-        _offWrappers();
-        watching = false;
-        try { if (_po) _po.disconnect(); } catch(_){}
-      };
-      /* ⚠️ APAGADO GARANTIZADO (2026-07-29 #4). Antes esto SOLO se
-         desactivaba desde `doHide()` del splash — es decir, solo si lo
-         cerraba el JS. Cuando lo levanta la CORTINA CSS (el caso del
-         arranque bloqueado, justo el que estamos depurando), `doHide()`
-         NUNCA corre y las envolturas se quedaban puestas TODA la sesión:
-         cada `setTimeout` de la app pasaba por `_label()`, que para un
-         callback anónimo hace `String(fn)` — serializar el código de la
-         función ENTERA en cada llamada. En una app que programa timers
-         constantemente (cronómetro de partido, polls, animaciones) eso
-         es un lastre permanente capaz de congelar la interfaz al tocar
-         cualquier pantalla. Con el timer NATIVO de abajo, la
-         instrumentación se apaga sola pase lo que pase. */
-      try { _st(_offWrappers, 20000); } catch(_){}
-      try { _st(function(){ window._bootDiagOff(); }, 90000); } catch(_){}
-      /* Primera interacción real del usuario = el arranque ya terminó. */
-      try {
-        ['pointerdown','touchstart','keydown'].forEach(function(evt){
-          document.addEventListener(evt, _offWrappers, { once:true, capture:true, passive:true });
-        });
-      } catch(_){}
-
-      /* Aviso flotante. Se puede cerrar tocándolo. TEMPORAL: solo
-         mientras dure la caza de este bloqueo. */
-      var _bannerTries = 0;
-      function _showBanner(txt){
-        try {
-          var b = document.getElementById('boot-slow-banner');
-          if (!b) {
-            /* `document.body` no existe todavía cuando esto se llama
-               desde <head>. Se reintenta varias veces (no una sola):
-               un único reintento puede caer justo en un momento en que
-               el hilo sigue ocupado y perderse para siempre. */
-            if (!document.body) {
-              if (_bannerTries++ < 20) _st(function(){ _showBanner(txt); }, 500);
-              return;
-            }
-            b = document.createElement('div');
-            b.id = 'boot-slow-banner';
-            /* z-index MÁXIMO: el splash usa 2147483646 y lo taparía. */
-            b.style.cssText = 'position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));'
-              + 'z-index:2147483647;background:rgba(30,16,0,.97);border:1px solid rgba(240,160,32,.8);'
-              + 'border-radius:9px;padding:9px 11px;font-family:\'Courier New\',monospace;font-size:10px;'
-              + 'line-height:1.45;color:#ffd9a0;box-shadow:0 4px 18px rgba(0,0,0,.6);word-break:break-word;';
-            b.addEventListener('click', function(){ try { b.parentNode.removeChild(b); } catch(_){} });
-            document.body.appendChild(b);
-          }
-          b.textContent = txt + '  (toca para cerrar)';
-        } catch(_){}
-      }
-      function _banner(){
-        if (!watching) return;
-        var s = window._bootSlowest || {};
-        _showBanner('⚠ bloqueo ' + s.ms + 'ms tras: ' + String(s.label || '?'));
-      }
-
-      /* ── RASTRO QUE SOBREVIVE AL REINICIO (2026-07-29 #5) ──────────────
-         El aviso de arriba NUNCA llegó a aparecer en la sesión del
-         usuario, y eso es en sí mismo el dato clave: el observador de
-         longtask solo puede REPORTAR cuando el hilo vuelve a estar
-         libre. Si no reporta nada, es que el hilo NO se recupera —
-         cuelgue duro (bucle infinito), no una tarea pesada que acaba.
-         Y como el usuario tiene que reiniciar la pestaña, cualquier
-         diagnóstico que viva solo en memoria se pierde.
-         Solución: un rastro mínimo en `localStorage` que se escribe
-         ANTES de cada navegación y se limpia al completarla. Si al
-         arrancar encontramos un rastro sin cerrar, sabemos exactamente
-         en qué pantalla se colgó la sesión anterior — y, sobre todo, si
-         se colgó DENTRO de `go()` o DESPUÉS de que volviera (dos causas
-         completamente distintas). */
-      /* ⚠️ EL RASTRO VA EN UNA **COOKIE**, NO EN localStorage
-         (2026-07-29 #6). El intento anterior escribía en `localStorage`
-         y NO llegó a aparecer ningún aviso tras el cuelgue. La causa más
-         probable no es que el rastro no se generase, sino que no se
-         pudiera GUARDAR: este proyecto tiene documentado que el
-         `localStorage` del usuario se llena (existe hasta un aviso
-         «⚠️ Navegador sin espacio» y un `_lsSetSafe` con expulsión de
-         claves). Con la cuota agotada, `setItem` lanza y el `catch`
-         se lo traga — el diagnóstico desaparece justo en el caso que
-         intenta diagnosticar. Una cookie usa un almacén DISTINTO, son
-         ~100 bytes, y sobrevive tanto a recargar como a cerrar y
-         reabrir la pestaña. `localStorage` se mantiene como secundario
-         por si las cookies estuvieran restringidas. */
-      var DIAG_KEY = '_ftbolBootDiag_v1';
-      var diagState = {};
-      function _ckSet(v){
-        try { document.cookie = DIAG_KEY + '=' + encodeURIComponent(v) + ';path=/;max-age=7200;SameSite=Lax'; } catch(_){}
-      }
-      function _ckGet(){
-        try {
-          var m = (' ' + document.cookie).match(new RegExp('[; ]' + DIAG_KEY + '=([^;]*)'));
-          return m ? decodeURIComponent(m[1]) : null;
-        } catch(_){ return null; }
-      }
-      function _ckDel(){
-        try { document.cookie = DIAG_KEY + '=;path=/;max-age=0;SameSite=Lax'; } catch(_){}
-      }
-      function _diagSave(){
-        var s = '';
-        try { s = JSON.stringify(diagState); } catch(_){}
-        _ckSet(s);
-        try { localStorage.setItem(DIAG_KEY, s); } catch(_){}
-      }
-      window._bootDiagGo = function(phase, id, extra){
-        try {
-          diagState.go = { phase: phase, id: String(id || ''), t: Math.round(_now()) };
-          if (extra != null) diagState.go.ms = extra;
-          _diagSave();
-        } catch(_){}
-      };
-      /* Lee y LIMPIA el rastro de la sesión anterior antes de que nada
-         más pueda pisarlo. Cookie primero (siempre cabe), localStorage
-         como respaldo. */
-      try {
-        var _prevRaw = _ckGet();
-        if (!_prevRaw) { try { _prevRaw = localStorage.getItem(DIAG_KEY); } catch(_){} }
-        if (_prevRaw) {
-          window._prevBootDiag = JSON.parse(_prevRaw);
-          _ckDel();
-          try { localStorage.removeItem(DIAG_KEY); } catch(_){}
-        }
-      } catch(_){}
-      try {
-        var pd = window._prevBootDiag;
-        var parts = [];
-        if (pd && pd.tap) parts.push('toque en «' + pd.tap + '»');
-        if (pd && pd.go) {
-          if (pd.go.phase === 'start') parts.push('⛔ se colgó DENTRO de abrir «' + pd.go.id + '»');
-          else if (pd.go.phase === 'returned') parts.push('⛔ se colgó DESPUÉS de abrir «' + pd.go.id + '» (' + pd.go.ms + 'ms)');
-          else if (pd.go.phase === 'settled') parts.push('abrió «' + pd.go.id + '» OK');
-          else parts.push(pd.go.phase + ' «' + pd.go.id + '»');
-        }
-        if (pd && pd.slow) parts.push('bloqueo ' + pd.slow.ms + 'ms tras: ' + pd.slow.label);
-        if (parts.length) {
-          /* DOS superficies, a propósito. El aviso flotante depende de
-             `document.body` (que en <head> aún no existe) y de que nada
-             lo tape ni lo quite — en la sesión del usuario NO llegó a
-             verse ni una vez. La línea de fase del splash, en cambio,
-             está DEMOSTRADO que se ve (sus capturas la leen sin
-             problema), así que el dato se publica también ahí, que es
-             la superficie fiable. */
-          window._prevBootDiagText = 'ANTERIOR → ' + parts.join(' · ');
-          try { console.warn('[boot] ' + window._prevBootDiagText); } catch(_){}
-          _showBanner('SESIÓN ' + window._prevBootDiagText);
-        }
-      } catch(_){}
-
-      /* Rastro del TOQUE, en fase de captura sobre `document`: corre
-         ANTES que cualquier `onclick` de la tarjeta, así que queda
-         registrado aunque el cuelgue ocurra antes de llegar a `go()`.
-         Sin esto no se puede distinguir «el toque ni se recibió» de
-         «el toque se recibió y algo se colgó después». */
-      try {
-        document.addEventListener('pointerdown', function(ev){
-          try {
-            var t = ev && ev.target;
-            var card = (t && t.closest) ? (t.closest('.menu-card') || t.closest('button') || t) : t;
-            var txt = '';
-            try { txt = String((card && (card.textContent || card.id)) || '').replace(/\s+/g, ' ').trim().slice(0, 40); } catch(_){}
-            diagState.tap = txt || '?';
-            delete diagState.go;
-            _diagSave();
-          } catch(_){}
-        }, true);
-      } catch(_){}
-
-      /* (1) longtask observer — el que de verdad identifica al culpable. */
-      var _po = null;
-      try {
-        _po = new PerformanceObserver(function(list){
-          if (!on) return;
-          var es = list.getEntries();
-          for (var i = 0; i < es.length; i++) {
-            var e = es[i];
-            if (e.duration < 900) continue;
-            /* Marca vigente cuando ESA tarea empezó. Se admite un margen
-               de +120 ms porque las marcas se escriben DENTRO de la
-               tarea, un instante DESPUÉS de su `startTime` — sin margen
-               se elegiría siempre la marca de la tarea ANTERIOR (un
-               desfase de uno que apuntaría al inocente). Como una tarea
-               que dura >900 ms no deja que se escriba ninguna otra marca
-               mientras corre, quedarse con la ÚLTIMA dentro del margen
-               da justo la etiqueta más específica de esa tarea. */
-            var lbl = '?';
-            try {
-              for (var j = window._bootMarks.length - 1; j >= 0; j--) {
-                if (window._bootMarks[j].t <= e.startTime + 120) { lbl = window._bootMarks[j].label; break; }
-              }
-            } catch(_){}
-            if (!window._bootSlowest || e.duration > window._bootSlowest.ms) {
-              window._bootSlowest = { label: lbl, ms: Math.round(e.duration) };
-              try { diagState.slow = window._bootSlowest; _diagSave(); } catch(_){}
-              try { if (window._bootRenderSlow) window._bootRenderSlow(); } catch(_){}
-              try { console.warn('[boot] tarea lenta ' + Math.round(e.duration) + 'ms tras: ' + lbl); } catch(_){}
-              /* El texto del splash deja de servir en cuanto la CORTINA
-                 CSS lo hace invisible (opacity 0) sin quitarlo del DOM —
-                 justo el escenario que estamos depurando. Para no perder
-                 el dato, un aviso propio, independiente del splash. */
-              if (e.duration >= 2500) { try { _banner(); } catch(_){} }
-            }
-          }
-        });
-        _po.observe({ entryTypes: ['longtask'] });
-      } catch(_){}
-
-      /* (2) setTimeout envuelto (solo mientras `on`). */
-      try {
-        window.setTimeout = function(fn, delay){
-          if (!on || typeof fn !== 'function') return _st.apply(window, arguments);
-          var extra = Array.prototype.slice.call(arguments, 2);
-          var lbl = _label(fn);
-          return _st(function(){
-            window._bootDiagNote('timer ' + lbl);
-            fn.apply(null, extra);
-          }, delay);
-        };
-      } catch(_){}
-
-      /* (3) fetch envuelto — marca el instante en que llega la respuesta,
-         que es donde arranca el `.then` del consumidor. */
-      var _fetchNative = null;
-      try {
-        var _fetch = window.fetch;
-        if (typeof _fetch === 'function') {
-          _fetchNative = _fetch;
-          window.fetch = function(input){
-            var p = _fetch.apply(window, arguments);
-            if (!on) return p;
-            var url = '';
-            try { url = String((input && input.url) ? input.url : input).replace(/^https?:\/\/[^/]+/, ''); } catch(_){}
-            try {
-              return p.then(function(r){ window._bootDiagNote('resp ' + url); return r; },
-                            function(e){ window._bootDiagNote('resp-err ' + url); throw e; });
-            } catch(_){ return p; }
-          };
-        }
-      } catch(_){}
-    })();
-  </script>
-  <script>
     /* ── COLA de DOMContentLoaded (2026-07-29) ────────────────────────────
        Diagnóstico confirmado con datos reales del usuario: el splash se
        queda clavado en "hydrate-start" (la última marca ANTES de esperar
@@ -371,9 +64,6 @@
       function runStep(i){
         if (i >= queue.length) {
           try { if (window._bootMark) window._bootMark('dcl-queue-done'); } catch(_){}
-          /* Re-instala el rastreador de navegación por FUERA de los
-             envoltorios de `go()` que se hayan añadido durante la cola. */
-          try { if (window._bootInstallGoDiag) window._bootInstallGoDiag(); } catch(_){}
           return;
         }
         /* Marca de posición (2026-07-29): si UN listener concreto es
@@ -423,11 +113,6 @@
     window._bootTimelinePre = [];
     window._bootMark = function(label){
       try { window._bootTimelinePre.push({ label: label, t: Date.now() }); } catch(_){}
-      /* Alimenta ya la línea de tiempo del detector de tareas lentas
-         (definido justo arriba) con el instante REAL, no el del replay
-         que hace el splash al montar — así una tarea lenta muy temprana
-         se correlaciona con la fase correcta. */
-      try { if (window._bootDiagNote) window._bootDiagNote(label); } catch(_){}
     };
   </script>
   <!-- preconnect elimina la latencia de DNS+TCP antes de que el parser
@@ -703,12 +388,14 @@
       color:#f0c040;min-width:36px;text-align:right;
       font-variant-numeric:tabular-nums;
     }
-    /* Texto diagnóstico de fase (2026-07-29) — deliberadamente discreto
-       (gris tenue, minúsculo): en una carga normal apenas es visible
-       un instante antes de que el splash desaparezca. Solo se vuelve
-       relevante si la carga se congela — entonces es la última fase
-       pintada la que queda fija en pantalla. */
+    /* Línea de fase del arranque (2026-07-29) — OCULTA en condiciones
+       normales: sirvió para localizar el cuelgue de arranque y se deja
+       montada porque su coste es nulo y `window._bootTimeline` sigue
+       registrando los hitos para poder depurar en el futuro sin volver
+       a instrumentar nada. Para verla en pantalla durante una
+       investigación basta con quitar el `display:none`. */
     .boot-splash-phase{
+      display:none;
       font-family:'Courier New',monospace;font-size:9px;letter-spacing:.3px;
       color:rgba(255,255,255,.25);text-transform:none;
       min-height:11px;max-width:88vw;text-align:center;
@@ -748,12 +435,6 @@
       var pctEl = document.getElementById('boot-splash-pct');
       var phaseEl = document.getElementById('boot-splash-phase');
       var MIN_MS  = (typeof window._BOOT_SPLASH_MIN_MS  === 'number') ? window._BOOT_SPLASH_MIN_MS  :   700;
-      /* Si la sesión anterior se colgó, el splash aguanta abierto un
-         poco más: su línea de fase lleva el rastro de POR QUÉ se colgó,
-         y sin este margen desaparece antes de que dé tiempo a leerlo o
-         fotografiarlo. Solo ocurre DESPUÉS de un cuelgue — en un
-         arranque normal no hay rastro y el mínimo sigue siendo 700 ms. */
-      try { if (window._prevBootDiagText) MIN_MS = Math.max(MIN_MS, 5000); } catch(_){}
       var HARD_MS = (typeof window._BOOT_SPLASH_HARD_MS === 'number') ? window._BOOT_SPLASH_HARD_MS : 6000;
       var startedAt = Date.now();
       var hidden = false;
@@ -774,31 +455,12 @@
       function esc(s){ return String(s == null ? '' : s).replace(/[<>&]/g, ' '); }
       function paintPhase(){
         if (!phaseEl) return;
-        var html = '';
-        /* Rastro de la sesión ANTERIOR (si se colgó): lo primero y en
-           rojo — es el dato que hemos venido a leer. Se publica aquí,
-           en la línea del splash, porque es la superficie que está
-           DEMOSTRADO que se ve; el aviso flotante no llegó a aparecer
-           ni una vez en las pruebas del usuario. */
-        if (window._prevBootDiagText) {
-          html += '<span style="color:#ff7060">' + esc(window._prevBootDiagText) + '</span><br>';
-        }
-        html += lastPhase;
-        var slow = window._bootSlowest;
-        if (slow) {
-          html += '<br><span style="color:#f0a020">&#9888; ' + slow.ms + 'ms tras: ' + esc(slow.label) + '</span>';
-        }
-        phaseEl.innerHTML = html;
+        phaseEl.innerHTML = lastPhase;
       }
-      window._bootRenderSlow = paintPhase;
       function mark(label){
         try {
           var dt = Date.now() - startedAt;
           window._bootTimeline.push({ label: label, t: dt });
-          /* Alimenta también la línea de tiempo del detector de <head>,
-             para que pueda correlacionar una tarea lenta con la fase que
-             estaba activa en ese instante. */
-          try { if (window._bootDiagNote) window._bootDiagNote(label); } catch(_){}
           lastPhase = esc(label) + ' &middot; ' + dt + 'ms';
           paintPhase();
         } catch(_){}
@@ -821,10 +483,6 @@
         if (hidden) return;
         hidden = true;
         if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
-        /* Apaga la instrumentación de <head> (longtask + wrappers de
-           setTimeout/fetch): su único cometido es diagnosticar el
-           ARRANQUE — no debe seguir midiendo durante la partida. */
-        try { if (window._bootDiagOff) window._bootDiagOff(); } catch(_){}
         target = 100; shown = 100; render();
         el.classList.add('hide');
         setTimeout(function(){ if (el && el.parentNode) el.parentNode.removeChild(el); }, 380);
@@ -973,73 +631,6 @@
     if (typeof window._bootMark === 'function') window._bootMark('bundle-done');
   </script>
   <script>
-    /* ── RASTREO DE NAVEGACIÓN (2026-07-29 #5, TEMPORAL) ─────────────────
-       Deja constancia en `localStorage` de la navegación EN CURSO, para
-       que un cuelgue duro (del que el usuario solo puede salir
-       reiniciando la pestaña) no se lleve el diagnóstico por delante.
-       Distingue los dos escenarios que exigen arreglos distintos:
-         · 'start'    → se colgó DENTRO de la cadena de `go()`.
-         · 'returned' → `go()` terminó bien; se colgó DESPUÉS, en algo
-                        que quedó programado (timer, respuesta de red…).
-       El contador de profundidad evita que una navegación anidada borre
-       el rastro de la exterior antes de tiempo. Se instala aquí, justo
-       tras el bundle (que es quien define `window.go`), y se reinstala
-       al final de la cola de arranque para quedar por FUERA de los
-       envoltorios que se añaden más tarde. */
-    (function(){
-      function install(){
-        try {
-          if (typeof window.go !== 'function' || window.go._goDiagWrapped) return false;
-          var prev = window.go;
-          /* Profundidad COMPARTIDA entre todas las instalaciones: al
-             reinstalar para quedar por fuera de envoltorios añadidos
-             después, quedan DOS de estos en la cadena. Con un contador
-             por-cierre, el interior escribiría 'returned' antes de que
-             el exterior terminara, y un cuelgue en el exterior se
-             leería como "go() completó" — justo al revés de la
-             realidad. Con el contador compartido solo el más EXTERNO
-             abre y cierra el rastro. */
-          if (typeof window._goDiagDepth !== 'number') window._goDiagDepth = 0;
-          var w = function(id){
-            var outer = (window._goDiagDepth === 0);
-            window._goDiagDepth++;
-            if (outer) { try { window._bootDiagGo && window._bootDiagGo('start', id); } catch(_){} }
-            var t0 = Date.now();
-            var threw = false;
-            try {
-              return prev.apply(this, arguments);
-            } catch(err) {
-              /* Una EXCEPCIÓN no es un cuelgue, pero el `finally` corre
-                 igual y escribiría 'returned' — leyéndose como "la
-                 navegación fue bien". Se marca aparte para no confundir
-                 los dos escenarios. */
-              threw = true;
-              try { window._bootDiagGo && window._bootDiagGo('threw:' + (err && err.message ? String(err.message).slice(0,60) : '?'), id); } catch(_){}
-              throw err;
-            } finally {
-              window._goDiagDepth--;
-              if (outer && !threw) {
-                try { window._bootDiagGo && window._bootDiagGo('returned', id, Date.now() - t0); } catch(_){}
-                /* Si el hilo sigue vivo tras la navegación, este timer
-                   corre y borra el rastro: la sesión NO se colgó. Si se
-                   cuelga, nunca corre y el rastro queda para la próxima
-                   carga. */
-                try { setTimeout(function(){
-                  try { window._bootDiagGo && window._bootDiagGo('settled', id); } catch(_){}
-                }, 0); } catch(_){}
-              }
-            }
-          };
-          w._goDiagWrapped = true;
-          window.go = w;
-          return true;
-        } catch(_){ return false; }
-      }
-      install();
-      window._bootInstallGoDiag = install;
-    })();
-  </script>
-  <script>
   /* ── PARCHE INLINE: bloquea el overlay central de gol ──────────────────
      Corre inmediatamente después del bundle, sin depender de archivos
      externos cacheados. Es la última línea de defensa. */
@@ -1149,7 +740,7 @@
     }).observe(document.body, { childList:true, subtree:true });
   })();
   </script>
-  <script src="{{ url_for('static', filename='js/goal-notification-patch.js') }}?v=2.1"></script>
+  <script src="{{ url_for('static', filename='js/goal-notification-patch.js') }}?v=2.2"></script>
   <script src="{{ url_for('static', filename='js/copa-engine.js') }}?v=1.7"></script>
   <script src="{{ url_for('static', filename='js/primera-rfef-data.js') }}?v=1.1"></script>
   <script>

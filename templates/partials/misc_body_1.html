@@ -13645,7 +13645,15 @@ window._showSimProgress = function(opts, onDone){
       if (!teams.length) {
         var _clickToast1 = _lextClickToast('⏳ Cargando equipos…');
         try {
-          var respSq = await _lextClickFetchJson('/api/liga-ext/'+encodeURIComponent(slug));
+          /* `/api/liga-ext-any/<slug>` (NO `/api/liga-ext/<slug>`): si el
+             `main` del servidor viene vacío, resuelve el fallback al
+             snapshot `_protected` (monotónico, nunca encoge) EN EL
+             SERVIDOR. Antes este handler pedía solo el `main` — un
+             `main` vacío (guardado concurrente de otro dispositivo,
+             cuota agotada, etc.) mostraba "Equipos guardados (0)" pese a
+             que la plantilla seguía intacta en `_protected`. Bug
+             2026-07-29: Liga EA Sports/Hypermotion/Primera Federación. */
+          var respSq = await _lextClickFetchJson('/api/liga-ext-any/'+encodeURIComponent(slug));
           _lextClickToastDismiss(_clickToast1);
           {
             if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
@@ -13907,7 +13915,7 @@ window._showSimProgress = function(opts, onDone){
           for (var ks = 0; ks < knownSlugs.length && rebuilt.length === 0; ks++) {
             if (knownSlugs[ks] === slug) continue;
             try {
-              var rr = await _lextClickFetchJson('/api/liga-ext/'+encodeURIComponent(knownSlugs[ks]));
+              var rr = await _lextClickFetchJson('/api/liga-ext-any/'+encodeURIComponent(knownSlugs[ks]));
               if (!rr) continue;
               var ds = rr && rr.data; if (!ds || !Array.isArray(ds.teams)) continue;
               for (var tz = 0; tz < ds.teams.length; tz++) {
@@ -14565,7 +14573,9 @@ window._showSimProgress = function(opts, onDone){
   // ══ RECUPERACIÓN DE EMERGENCIA ══
   // Si los datos se pierden, intenta restaurar desde:
   //  1) Backup local (ligaExt_XXX_backup)
-  //  2) Servidor (/api/liga-ext/XXX)
+  //  2) Servidor (/api/liga-ext-any/XXX — main con fallback a _protected
+  //     resuelto en el servidor; el endpoint /api/liga-ext/XXX pelado
+  //     NUNCA mira el snapshot _protected)
   // Accesible desde consola: window.emergencyRestore('liga-ea-sports')
   /* Async desde 2026-07-13 (usaba XHR síncrono — ver CLAUDE.md regla
      2026-07-13 #3, "PROHIBIDO usar XMLHttpRequest con async=false").
@@ -14587,13 +14597,13 @@ window._showSimProgress = function(opts, onDone){
         }
       }
     } catch(_){}
-    // 2. Intentar desde servidor
+    // 2. Intentar desde servidor (main + fallback a _protected)
     try {
-      var resp = await (window._lextFetchJsonTimeout ? window._lextFetchJsonTimeout('/api/liga-ext/'+encodeURIComponent(slug)) : null);
+      var resp = await (window._lextFetchJsonTimeout ? window._lextFetchJsonTimeout('/api/liga-ext-any/'+encodeURIComponent(slug)) : null);
       if(resp && resp.data && resp.data.teams && resp.data.teams.length > 0){
         localStorage.setItem('ligaExt_'+slug, JSON.stringify(resp.data));
         if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
-        alert('✅ Restaurados '+resp.data.teams.length+' equipos de '+slug+' desde el servidor.');
+        alert('✅ Restaurados '+resp.data.teams.length+' equipos de '+slug+' desde el servidor'+(resp.source==='protected'?' (snapshot protegido)':'')+'.');
         return;
       }
     } catch(_){}
@@ -15303,7 +15313,8 @@ window._showSimProgress = function(opts, onDone){
   /* ══ DEEP RECOVERY ══════════════════════════════════════════════
      Reconstruye `ligaExt_<slug>` de cualquier liga usando TODAS las
      fuentes disponibles:
-       1. Servidor  `/api/liga-ext/<slug>`
+       1. Servidor  `/api/liga-ext-any/<slug>` (main + fallback a
+          `_protected` resuelto en el servidor)
        2. Backup local `ligaExt_<slug>_backup`
        3. Contenido actual de `ligaExt_<slug>` (si no está vacío)
        4. SQUAD_REGISTRY (en memoria de la sesión actual)
@@ -15325,7 +15336,7 @@ window._showSimProgress = function(opts, onDone){
      con Railway lento, no cambia cómo se usa desde devtools. */
   async function _lextFetchServerSync(slug){
     try{
-      var resp = await (window._lextFetchJsonTimeout ? window._lextFetchJsonTimeout('/api/liga-ext/'+encodeURIComponent(slug)) : null);
+      var resp = await (window._lextFetchJsonTimeout ? window._lextFetchJsonTimeout('/api/liga-ext-any/'+encodeURIComponent(slug)) : null);
       return (resp && resp.data) || null;
     }catch(_){}
     return null;

@@ -36,7 +36,12 @@
        Todo se apaga solo cuando el splash se cierra (`_bootDiagOff`) —
        no deja sobrecarga en la app ya arrancada. */
     (function(){
-      var on = true;
+      /* `_st` se captura ANTES de envolver nada: es el `setTimeout`
+         nativo, imprescindible para poder programar el auto-apagado sin
+         pasar por nuestra propia envoltura. */
+      var _st = window.setTimeout;
+      var on = true;            /* mide y envuelve (solo durante el arranque) */
+      var watching = true;      /* observa longtask (más tiempo, coste ~0) */
       window._bootMarks = [];   /* {label, t} con t en la escala de performance.now() */
       window._bootSlowest = null;
       function _now(){ try { return performance.now(); } catch(_){ return Date.now(); } }
@@ -54,11 +59,64 @@
           if (window._bootMarks.length > 400) window._bootMarks.shift();
         } catch(_){}
       };
-      window._bootDiagOff = function(){
+      /* Quita las envolturas CARAS (setTimeout/fetch). El observador de
+         longtask sigue un rato más: no cuesta nada (lo hace el navegador)
+         y es lo único que puede nombrar un bloqueo posterior. */
+      function _offWrappers(){
+        if (!on) return;
         on = false;
         try { window.setTimeout = _st; } catch(_){}
+        try { if (_fetchNative) window.fetch = _fetchNative; } catch(_){}
+      }
+      window._bootDiagOff = function(){
+        _offWrappers();
+        watching = false;
         try { if (_po) _po.disconnect(); } catch(_){}
       };
+      /* ⚠️ APAGADO GARANTIZADO (2026-07-29 #4). Antes esto SOLO se
+         desactivaba desde `doHide()` del splash — es decir, solo si lo
+         cerraba el JS. Cuando lo levanta la CORTINA CSS (el caso del
+         arranque bloqueado, justo el que estamos depurando), `doHide()`
+         NUNCA corre y las envolturas se quedaban puestas TODA la sesión:
+         cada `setTimeout` de la app pasaba por `_label()`, que para un
+         callback anónimo hace `String(fn)` — serializar el código de la
+         función ENTERA en cada llamada. En una app que programa timers
+         constantemente (cronómetro de partido, polls, animaciones) eso
+         es un lastre permanente capaz de congelar la interfaz al tocar
+         cualquier pantalla. Con el timer NATIVO de abajo, la
+         instrumentación se apaga sola pase lo que pase. */
+      try { _st(_offWrappers, 20000); } catch(_){}
+      try { _st(function(){ window._bootDiagOff(); }, 90000); } catch(_){}
+      /* Primera interacción real del usuario = el arranque ya terminó. */
+      try {
+        ['pointerdown','touchstart','keydown'].forEach(function(evt){
+          document.addEventListener(evt, _offWrappers, { once:true, capture:true, passive:true });
+        });
+      } catch(_){}
+
+      /* Aviso flotante con el peor bloqueo detectado. Se pinta solo si
+         hay algo grave que contar (≥2.5 s) y se puede cerrar tocándolo.
+         Es TEMPORAL: solo mientras dure la caza de este bloqueo. */
+      function _banner(){
+        try {
+          if (!watching) return;
+          var b = document.getElementById('boot-slow-banner');
+          if (!b) {
+            if (!document.body) return;
+            b = document.createElement('div');
+            b.id = 'boot-slow-banner';
+            b.style.cssText = 'position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));'
+              + 'z-index:2147483000;background:rgba(30,16,0,.94);border:1px solid rgba(240,160,32,.7);'
+              + 'border-radius:9px;padding:9px 11px;font-family:\'Courier New\',monospace;font-size:10px;'
+              + 'line-height:1.45;color:#ffd9a0;box-shadow:0 4px 18px rgba(0,0,0,.6);word-break:break-word;';
+            b.addEventListener('click', function(){ try { b.parentNode.removeChild(b); } catch(_){} });
+            document.body.appendChild(b);
+          }
+          var s = window._bootSlowest || {};
+          b.textContent = '⚠ bloqueo ' + s.ms + 'ms tras: ' + String(s.label || '?')
+            + '  (toca para cerrar)';
+        } catch(_){}
+      }
 
       /* (1) longtask observer — el que de verdad identifica al culpable. */
       var _po = null;
@@ -87,14 +145,18 @@
               window._bootSlowest = { label: lbl, ms: Math.round(e.duration) };
               try { if (window._bootRenderSlow) window._bootRenderSlow(); } catch(_){}
               try { console.warn('[boot] tarea lenta ' + Math.round(e.duration) + 'ms tras: ' + lbl); } catch(_){}
+              /* El texto del splash deja de servir en cuanto la CORTINA
+                 CSS lo hace invisible (opacity 0) sin quitarlo del DOM —
+                 justo el escenario que estamos depurando. Para no perder
+                 el dato, un aviso propio, independiente del splash. */
+              if (e.duration >= 2500) { try { _banner(); } catch(_){} }
             }
           }
         });
         _po.observe({ entryTypes: ['longtask'] });
       } catch(_){}
 
-      /* (2) setTimeout envuelto. */
-      var _st = window.setTimeout;
+      /* (2) setTimeout envuelto (solo mientras `on`). */
       try {
         window.setTimeout = function(fn, delay){
           if (!on || typeof fn !== 'function') return _st.apply(window, arguments);
@@ -109,9 +171,11 @@
 
       /* (3) fetch envuelto — marca el instante en que llega la respuesta,
          que es donde arranca el `.then` del consumidor. */
+      var _fetchNative = null;
       try {
         var _fetch = window.fetch;
         if (typeof _fetch === 'function') {
+          _fetchNative = _fetch;
           window.fetch = function(input){
             var p = _fetch.apply(window, arguments);
             if (!on) return p;

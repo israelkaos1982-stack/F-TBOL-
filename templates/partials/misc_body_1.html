@@ -739,7 +739,7 @@ window._showSimProgress = function(opts, onDone){
     v = String(v).trim();
     if (!v || v === cur) return;
     var o = { label: v, updatedAt: Date.now() };
-    try { localStorage.setItem(KEY, JSON.stringify(o)); } catch(_){}
+    try { window._lsSetSafe(KEY, JSON.stringify(o)); } catch(_){}
     _render();
     /* Acción EXPLÍCITA del admin → authoritative: el server sella
        `updatedAt` con SU reloj y gana a cualquier copia stale /
@@ -767,7 +767,7 @@ window._showSimProgress = function(opts, onDone){
           var srvTs = srv ? (+srv.updatedAt || 0) : 0;
           var locTs = loc ? (+loc.updatedAt || 0) : 0;
           if (srv && srvTs > locTs){
-            try { localStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+            try { window._lsSetSafe(KEY, JSON.stringify(srv)); } catch(_){}
             _render();
           } else if (loc && locTs > srvTs){
             _postRetry({ value: loc }, 1);
@@ -1480,7 +1480,7 @@ window._showSimProgress = function(opts, onDone){
       var _sr=(typeof s.rev==='number')?s.rev:0;
       s.rev = Math.max(_pr,_sr) + 1;
     } }catch(_){}
-    try{ localStorage.setItem(KEY, JSON.stringify(s)); }
+    try{ window._lsSetSafe(KEY, JSON.stringify(s)); }
     catch(e){ ok=false; }
     _saveMenuServer(s, true);
     return ok;
@@ -1523,7 +1523,7 @@ window._showSimProgress = function(opts, onDone){
                  (srvRev === localRev && (srvTs > localTs || (srvTs===0 && localTs===0)))
                );
             if(adopt){
-              try{ localStorage.setItem(KEY, JSON.stringify(srv)); }catch(_){}
+              try{ window._lsSetSafe(KEY, JSON.stringify(srv)); }catch(_){}
               if(typeof cb==='function') cb(true);
               return;
             }
@@ -3536,7 +3536,7 @@ window._showSimProgress = function(opts, onDone){
         var o = _bedOvAll(), blob = {};
         for (var k in o) blob[k] = o[k];
         blob.updatedAt = _bedOvUpdatedAt || 0;
-        localStorage.setItem(_BED_OV_KEY, JSON.stringify(blob));
+        window._lsSetSafe(_BED_OV_KEY, JSON.stringify(blob));
       } catch(_){}
     }
     function _bedOvSaveAll(o){
@@ -4513,7 +4513,7 @@ window._showSimProgress = function(opts, onDone){
     function _btMsPersist(){
       try {
         window._BPLANT_MS.updatedAt = Date.now();
-        localStorage.setItem(_BT_MS_KEY, JSON.stringify(window._BPLANT_MS));
+        window._lsSetSafe(_BT_MS_KEY, JSON.stringify(window._BPLANT_MS));
         if (_btMsSync) _btMsSync.touch(window._BPLANT_MS.updatedAt);
       } catch(_){}
     }
@@ -4535,7 +4535,7 @@ window._showSimProgress = function(opts, onDone){
         _btMsSync = window._kvBlobSync(_BT_MS_KEY);
         _btMsSync.config(function(){ return window._BPLANT_MS; }, function(sv){
           window._BPLANT_MS = { entries:(sv&&sv.entries)||{}, updatedAt:Number(sv&&sv.updatedAt)||Date.now() };
-          try { localStorage.setItem(_BT_MS_KEY, JSON.stringify(window._BPLANT_MS)); } catch(_){}
+          try { window._lsSetSafe(_BT_MS_KEY, JSON.stringify(window._BPLANT_MS)); } catch(_){}
           try { window.renderBayernPlantillaScreen && window.renderBayernPlantillaScreen(); } catch(_){}
         }, _btMsIsEmpty);
         _btMsSync.seed(window._BPLANT_MS.updatedAt);
@@ -5079,7 +5079,7 @@ window._showSimProgress = function(opts, onDone){
         }
       } catch(_){}
       if (!saved){
-        try { localStorage.setItem('ligaExt_'+hub.slug, JSON.stringify(hub.data)); saved = true; } catch(_){}
+        try { window._lsSetSafe('ligaExt_'+hub.slug, JSON.stringify(hub.data)); saved = true; } catch(_){}
       }
       if (!saved){
         alert('⚠ No se pudo guardar (almacenamiento lleno?). Cierra y vuelve a intentarlo.');
@@ -5727,7 +5727,7 @@ window._showSimProgress = function(opts, onDone){
     try { window.__psDayIdx = _MEM.dayIdx; } catch(_){}
     var _json = JSON.stringify(_MEM);
     var _lsOk = false;
-    try { localStorage.setItem(KEY, _json); _lsOk = true; } catch(_){}
+    try { window._lsSetSafe(KEY, _json); _lsOk = true; } catch(_){}
     /* Respaldo en sessionStorage: incluso si localStorage falla por
        cuota, el cursor sobrevive a navegaciones internas. */
     try { sessionStorage.setItem(KEY, _json); } catch(_){}
@@ -7003,7 +7003,7 @@ window._showSimProgress = function(opts, onDone){
       if (e.tombstone && e.removedAt && (now - e.removedAt) > 120 * 864e5) return false;
       return true;
     });
-    try { localStorage.setItem(PEND_HVH_KEY, JSON.stringify(out)); } catch(_){}
+    try { window._lsSetSafe(PEND_HVH_KEY, JSON.stringify(out)); } catch(_){}
   }
   function _pendHvHUid(tourId, matchKey){
     return String(tourId == null ? '' : tourId) + '::' + String(matchKey == null ? '' : matchKey);
@@ -10736,7 +10736,7 @@ window._showSimProgress = function(opts, onDone){
     var d = { tour: null, dayIdx: 0, rivals: {}, done: {}, previaOpenedIdx: -1, ts: _now, resetAt: _now };
     _MEM = d;
     var _resetJson = JSON.stringify(d);
-    try { localStorage.setItem(KEY, _resetJson); } catch(_){}
+    try { window._lsSetSafe(KEY, _resetJson); } catch(_){}
     try { sessionStorage.setItem(KEY, _resetJson); } catch(_){}
     /* Limpiar también el namespace legacy (rebrand 2026-05-24): sin
        esto, tras un reset desde PIN 747, _load resucitaría la temporada
@@ -10819,7 +10819,7 @@ window._showSimProgress = function(opts, onDone){
     };
     _MEM = d;
     var _json = JSON.stringify(d);
-    try { localStorage.setItem(KEY, _json); } catch(_){}
+    try { window._lsSetSafe(KEY, _json); } catch(_){}
     try { sessionStorage.setItem(KEY, _json); } catch(_){}
     /* Push con resetAt al server: _cursor_winner lo acepta porque
        _cursor_is_reset devuelve true, ganando por recencia (ts). */
@@ -12393,7 +12393,7 @@ window._showSimProgress = function(opts, onDone){
     if(!s.ligaManual)s.ligaManual={}; Object.keys(d.ligaManual).forEach(function(ok){ if(s.ligaManual[ok]==null)s.ligaManual[ok]=d.ligaManual[ok]; });
     return s; }
   function _load(){ if(_state) return _state; try{ var raw=localStorage.getItem(CFG_KEY); if(raw){ _state=_merge(JSON.parse(raw)); return _state; } }catch(_){} _state=_defaults(); return _state; }
-  function _persist(){ try{ _state.updatedAt=Date.now(); localStorage.setItem(CFG_KEY, JSON.stringify(_state)); }catch(_){} }
+  function _persist(){ try{ _state.updatedAt=Date.now(); window._lsSetSafe(CFG_KEY, JSON.stringify(_state)); }catch(_){} }
   function _post(key,val,tries){ try{ fetch('/api/kv/'+key,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({value:val})})
     .then(function(r){return r.ok?r.json():null;}).then(function(j){ if(!(j&&j.ok)&&tries>1) setTimeout(function(){_post(key,val,tries-1);},1500); })
     .catch(function(){ if(tries>1) setTimeout(function(){_post(key,val,tries-1);},1500); }); }catch(_){} }
@@ -12407,11 +12407,11 @@ window._showSimProgress = function(opts, onDone){
 
   /* ── Ledger (cash_ledger_v1) ──────────────────────────────────────── */
   function _ledgerLoad(){ try{ var raw=localStorage.getItem(LEDGER_KEY); if(raw){ var s=JSON.parse(raw); if(s&&s.paid) return s; } }catch(_){} return {paid:{},updatedAt:0}; }
-  function _ledgerSave(lg){ try{ lg.updatedAt=Date.now(); localStorage.setItem(LEDGER_KEY,JSON.stringify(lg)); }catch(_){} _post(LEDGER_KEY,lg,3); }
+  function _ledgerSave(lg){ try{ lg.updatedAt=Date.now(); window._lsSetSafe(LEDGER_KEY,JSON.stringify(lg)); }catch(_){} _post(LEDGER_KEY,lg,3); }
   function _ledgerHydrate(cb){ try{ fetch('/api/kv/'+LEDGER_KEY,{credentials:'same-origin',headers:{'Cache-Control':'no-store'}})
     .then(function(r){return r.ok?r.json():null;}).then(function(j){ if(j&&j.ok&&j.value&&j.value.paid){ var loc=_ledgerLoad(); var merged={paid:{},updatedAt:Date.now()};
       Object.keys(j.value.paid).forEach(function(k){ merged.paid[k]=j.value.paid[k]; }); Object.keys(loc.paid).forEach(function(k){ merged.paid[k]=loc.paid[k]; });
-      try{localStorage.setItem(LEDGER_KEY,JSON.stringify(merged));}catch(_){} } if(cb)cb(); }).catch(function(){ if(cb)cb(); }); }catch(_){ if(cb)cb(); } }
+      try{window._lsSetSafe(LEDGER_KEY,JSON.stringify(merged));}catch(_){} } if(cb)cb(); }).catch(function(){ if(cb)cb(); }); }catch(_){ if(cb)cb(); } }
 
   /* ── Crédito + detección de humanos ───────────────────────────────── */
   function _credit(name,coins){ coins=Math.round(num(coins)); if(!name||coins<=0)return false;
@@ -13662,7 +13662,7 @@ window._showSimProgress = function(opts, onDone){
                 }
               });
               /* Persistir en local para los próximos clicks */
-              try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+              try { window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
               try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
               /* Refrescar LIGA_CACHE si el editor usa ese cache */
               try { if (typeof window.LIGA_CACHE !== 'undefined') window.LIGA_CACHE[slug] = data; } catch(_){}
@@ -13838,7 +13838,7 @@ window._showSimProgress = function(opts, onDone){
           if (!found.shield && altBest.shield) found.shield = altBest.shield;
           /* Persistir el equipo enriquecido en el slug actual (data
              ya apunta al objeto que venía del localStorage / server). */
-          try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+          try { window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
           /* Re-subir al server para que el equipo quede completo en
              el slug canónico y otros dispositivos no vuelvan a ver
@@ -13929,7 +13929,7 @@ window._showSimProgress = function(opts, onDone){
                   });
                   /* Guardar también en localStorage bajo ese otro slug
                      por si el user vuelve allí */
-                  try { localStorage.setItem('ligaExt_'+knownSlugs[ks], JSON.stringify(ds)); } catch(_){}
+                  try { window._lsSetSafe('ligaExt_'+knownSlugs[ks], JSON.stringify(ds)); } catch(_){}
                   break;
                 }
               }
@@ -14209,7 +14209,7 @@ window._showSimProgress = function(opts, onDone){
             if (typeof window._cleanSquadPlayers === 'function') rebuilt = window._cleanSquadPlayers(rebuilt);
           } catch(_){}
           found.players = rebuilt;
-          try { localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+          try { window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
           try {
             fetch('/api/liga-ext/'+encodeURIComponent(slug), {
@@ -14282,7 +14282,7 @@ window._showSimProgress = function(opts, onDone){
                         break;
                       }
                     }
-                    localStorage.setItem('ligaExt_'+slug, JSON.stringify(data));
+                    window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data));
                     if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
                   }
                 } catch(_){}
@@ -14580,7 +14580,7 @@ window._showSimProgress = function(opts, onDone){
       if(backup){
         var check = JSON.parse(backup);
         if(check && check.teams && check.teams.length > 0){
-          localStorage.setItem('ligaExt_'+slug, backup);
+          window._lsSetSafe('ligaExt_'+slug, backup);
           if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
           alert('✅ Restaurados '+check.teams.length+' equipos de '+slug+' desde backup local.');
           return;
@@ -14591,7 +14591,7 @@ window._showSimProgress = function(opts, onDone){
     try {
       var resp = await (window._lextFetchJsonTimeout ? window._lextFetchJsonTimeout('/api/liga-ext/'+encodeURIComponent(slug)) : null);
       if(resp && resp.data && resp.data.teams && resp.data.teams.length > 0){
-        localStorage.setItem('ligaExt_'+slug, JSON.stringify(resp.data));
+        window._lsSetSafe('ligaExt_'+slug, JSON.stringify(resp.data));
         if(typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
         alert('✅ Restaurados '+resp.data.teams.length+' equipos de '+slug+' desde el servidor.');
         return;
@@ -14785,7 +14785,7 @@ window._showSimProgress = function(opts, onDone){
       if (isV2 && payload.storage) {
         Object.keys(payload.storage).forEach(function(k){
           try {
-            localStorage.setItem(k, payload.storage[k]);
+            window._lsSetSafe(k, payload.storage[k]);
             restoredKeys++;
             if (k.indexOf('ligaExt_') === 0
                 && k.indexOf('_snap_') === -1
@@ -14819,7 +14819,7 @@ window._showSimProgress = function(opts, onDone){
           try {
             var d = payload.ligas[lk];
             if (!d || !Array.isArray(d.teams)) return;
-            localStorage.setItem(lk, JSON.stringify(d));
+            window._lsSetSafe(lk, JSON.stringify(d));
             restoredKeys++;
             restoredLigas++;
             restoredTeams += d.teams.length;
@@ -14921,7 +14921,7 @@ window._showSimProgress = function(opts, onDone){
                 val.updatedAt = _now;
                 /* Reflejar el sello en localStorage para que el pull de
                    arranque (que adopta por recencia) converja al mismo blob. */
-                try { localStorage.setItem(k, JSON.stringify(val)); } catch(_){}
+                try { window._lsSetSafe(k, JSON.stringify(val)); } catch(_){}
               }
               var _kvBody = { value: val };
               /* HUD: lleva un reloj LÓGICO `rev`; el server RECHAZA un push
@@ -15060,7 +15060,7 @@ window._showSimProgress = function(opts, onDone){
     var keysPushed = { compState: 0, ligaExt: 0, generic: 0 };
 
     /* === 0. Activar lock + mirror local — comportamiento antiguo === */
-    try { localStorage.setItem(_LOCK_KEY, '1'); } catch(_){}
+    try { window._lsSetSafe(_LOCK_KEY, '1'); } catch(_){}
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
@@ -15073,7 +15073,7 @@ window._showSimProgress = function(opts, onDone){
           if (p && Array.isArray(p.teams)) p.teams.forEach(function(t){
             if (t && Array.isArray(t.players)) n += t.players.length;
           });
-          if (n > 0) localStorage.setItem(k+'_protected', raw);
+          if (n > 0) window._lsSetSafe(k+'_protected', raw);
         } catch(_){}
       }
     } catch(_){}
@@ -15293,7 +15293,7 @@ window._showSimProgress = function(opts, onDone){
             return t && Array.isArray(t.players) && t.players.length > 0;
           });
           if (hasPlayers) {
-            localStorage.setItem(k+'_backup', raw);
+            window._lsSetSafe(k+'_backup', raw);
           }
         } catch(_){}
       }
@@ -15464,7 +15464,7 @@ window._showSimProgress = function(opts, onDone){
       else if (_lextMergePlayersFromStats(t)) filledFromStats++;
     });
 
-    try{ localStorage.setItem('ligaExt_'+slug, JSON.stringify(data)); }catch(_){}
+    try{ window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data)); }catch(_){}
     try{ if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); }catch(_){}
     /* Re-subir al servidor si local quedó con más teams/players que
        el servidor original (anti-wipe en reverso). */
@@ -15599,7 +15599,7 @@ window._showSimProgress = function(opts, onDone){
               var d2 = j.data;
               if (!d2.teams || !d2.teams.length) return;
               try {
-                localStorage.setItem('ligaExt_'+slug, JSON.stringify(d2));
+                window._lsSetSafe('ligaExt_'+slug, JSON.stringify(d2));
                 if (typeof window.invalidateLigaCache === 'function') {
                   window.invalidateLigaCache(slug);
                 }
@@ -15610,7 +15610,7 @@ window._showSimProgress = function(opts, onDone){
             .catch(function(){});
         } catch(_){}
       });
-      try { localStorage.setItem(FLAG, String(now)); } catch(_){}
+      try { window._lsSetSafe(FLAG, String(now)); } catch(_){}
     } catch(_){}
   }
   /* Ejecutar diferido para no bloquear el primer paint. */
@@ -17973,7 +17973,7 @@ window._showSimProgress = function(opts, onDone){
         rec.pj = pjBucket[teamN] || 0;
         out[k] = rec;
       });
-      try { localStorage.setItem(key, JSON.stringify(out)); } catch(_){}
+      try { window._lsSetSafe(key, JSON.stringify(out)); } catch(_){}
     }
     _persistBucket(buckets.superliga, teamPJByComp.superliga, COMP_CACHE_KEYS.superliga);
     _persistBucket(buckets.uel,       teamPJByComp.uel,       COMP_CACHE_KEYS.uel);
@@ -18046,7 +18046,7 @@ window._showSimProgress = function(opts, onDone){
     _persistBucket(_ligaOnlySnap,     _ligaOnlyPJ,            'ef_player_stats_liga_only_v1');
 
     // Save to SEPARATE storage (Liga + Copa unidas → ef_player_stats_v1)
-    try { localStorage.setItem(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}
+    try { window._lsSetSafe(PLAYER_STATS_KEY, JSON.stringify(stats)); } catch(_){}
     return stats;
   }
 
@@ -18682,7 +18682,7 @@ window._showSimProgress = function(opts, onDone){
         window.saveData('liga-hypermotion', data);
         saved = true;
       } else {
-        localStorage.setItem(HYPERMOTION_KEY, JSON.stringify(data));
+        window._lsSetSafe(HYPERMOTION_KEY, JSON.stringify(data));
         saved = true;
       }
     } catch(e) {
@@ -18784,7 +18784,7 @@ window._showSimProgress = function(opts, onDone){
     catch(_){ return {}; }
   }
   function saveAll(data){
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data || {})); } catch(_){}
+    try { window._lsSetSafe(STORAGE_KEY, JSON.stringify(data || {})); } catch(_){}
   }
   // Lectura pública para que rowZoneClassSegunda / Primera lean los
   // valores saved (con fallback a los defaults sensatos).
@@ -20206,7 +20206,7 @@ window._showSimProgress = function(opts, onDone){
     return s;
   }
   function _save(s){
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){}
+    try { window._lsSetSafe(STORE_KEY, JSON.stringify(s)); } catch(_){}
   }
   function _shuffle(a){
     a = a.slice();
@@ -21077,7 +21077,7 @@ window._showSimProgress = function(opts, onDone){
     catch(_){ return null; }
   }
   function _save(s){
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){}
+    try { window._lsSetSafe(STORE_KEY, JSON.stringify(s)); } catch(_){}
   }
   function _logoFor(name){
     if(typeof window.getTeamLogoUrl === 'function'){
@@ -21803,7 +21803,7 @@ window._showSimProgress = function(opts, onDone){
   var STORE_KEY = 'usc_state_v1';
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function _load(){ try { var raw = localStorage.getItem(STORE_KEY); if(!raw) return null; return JSON.parse(raw); } catch(_){ return null; } }
-  function _save(s){ try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){} }
+  function _save(s){ try { window._lsSetSafe(STORE_KEY, JSON.stringify(s)); } catch(_){} }
   function _logoFor(name){
     if(typeof window.getTeamLogoUrl === 'function'){ try { var l = window.getTeamLogoUrl(name); if(l) return l; } catch(_){} }
     return '';
@@ -22869,7 +22869,7 @@ window._showSimProgress = function(opts, onDone){
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
           if(!j || !j.ok || !j.value) { if(typeof cb === 'function') cb(false); return; }
-          try { localStorage.setItem(KEY, JSON.stringify(j.value)); } catch(_){}
+          try { window._lsSetSafe(KEY, JSON.stringify(j.value)); } catch(_){}
           if(typeof cb === 'function') cb(true);
         }).catch(function(){ if(typeof cb === 'function') cb(false); });
     } catch(_) { if(typeof cb === 'function') cb(false); }
@@ -22883,7 +22883,7 @@ window._showSimProgress = function(opts, onDone){
     var payload;
     try { payload = JSON.stringify(icons || {}); } catch(_){ return false; }
     var localOk = true;
-    try { localStorage.setItem(KEY, payload); }
+    try { window._lsSetSafe(KEY, payload); }
     catch(err){
       localOk = false;
       var isQuota = err && (
@@ -23008,7 +23008,7 @@ window._showSimProgress = function(opts, onDone){
   function saveCards(state){
     var payload;
     try { payload = JSON.stringify(state || {}); } catch(_){ return false; }
-    try { localStorage.setItem(KEY_CARDS, payload); }
+    try { window._lsSetSafe(KEY_CARDS, payload); }
     catch(err){ _saveCardsServer(state); return false; }
     _saveCardsServer(state);
     return true;
@@ -23022,7 +23022,7 @@ window._showSimProgress = function(opts, onDone){
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
           if(j && j.ok && j.value && typeof j.value === 'object'){
-            try { localStorage.setItem(KEY_CARDS, JSON.stringify(j.value)); } catch(_){}
+            try { window._lsSetSafe(KEY_CARDS, JSON.stringify(j.value)); } catch(_){}
           }
           if(typeof cb === 'function') cb(true);
         }).catch(function(){ if(typeof cb === 'function') cb(false); });
@@ -25327,7 +25327,7 @@ window._showSimProgress = function(opts, onDone){
   window._selFinStadiumsSave = function(arr){
     arr = (arr || []).slice(0, 4);
     while (arr.length < 4) arr.push('');
-    try { localStorage.setItem(_SELFIN_KEY, JSON.stringify({stadiums:arr})); } catch(_){}
+    try { window._lsSetSafe(_SELFIN_KEY, JSON.stringify({stadiums:arr})); } catch(_){}
     /* Sync a servidor en 2º plano (mismo patrón que ball_by_comp_v1). */
     try {
       if (typeof fetch === 'function') {
@@ -25506,7 +25506,7 @@ window._showSimProgress = function(opts, onDone){
               var local = window._selFinStadiumsLoad();
               var hasLocal = local.some(function(s){ return !!s; });
               if (!hasLocal) {
-                try { localStorage.setItem(_SELFIN_KEY, JSON.stringify({stadiums:j.value.stadiums})); } catch(_){}
+                try { window._lsSetSafe(_SELFIN_KEY, JSON.stringify({stadiums:j.value.stadiums})); } catch(_){}
                 try { window._selFinHydrateCalendar && window._selFinHydrateCalendar(); } catch(_){}
               }
             }
@@ -26128,7 +26128,7 @@ window._showSimProgress = function(opts, onDone){
               window._tourEnsureGroupFixtures(cfg);
             }
           } catch(_){}
-          try { localStorage.setItem(_key(id), JSON.stringify(cfg)); } catch(_){}
+          try { window._lsSetSafe(_key(id), JSON.stringify(cfg)); } catch(_){}
           try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
           if (_recoveredMissing > 0) {
             try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg); } catch(_){}
@@ -26244,7 +26244,7 @@ window._showSimProgress = function(opts, onDone){
     try {
       var _cfgJson = JSON.stringify(cfg);
       if (window._lsSetSafe) window._lsSetSafe(_key(id), _cfgJson);
-      else localStorage.setItem(_key(id), _cfgJson);
+      else window._lsSetSafe(_key(id), _cfgJson);
     } catch(_){}
     /* Refresca cache sincrónico para `_tourMuInfoData` / `muTourInfo`. */
     window._TOUR_CACHE = window._TOUR_CACHE || {};
@@ -26422,7 +26422,7 @@ window._showSimProgress = function(opts, onDone){
           .then(function(r){ return (r && r.ok) ? r.json() : null; })
           .then(function(j){
             if (j && j.data && Array.isArray(j.data.teams) && j.data.teams.length){
-              try { localStorage.setItem('ligaExt_' + this.slug, JSON.stringify(j.data)); } catch(_){}
+              try { window._lsSetSafe('ligaExt_' + this.slug, JSON.stringify(j.data)); } catch(_){}
               if (typeof onEach === 'function') { try { onEach(); } catch(_){} }
             }
           }.bind({ slug: slug }))
@@ -33096,7 +33096,7 @@ window._showSimProgress = function(opts, onDone){
     });
     try {
       window._TOUR_CACHE[tourId] = cfg;
-      localStorage.setItem(_key(tourId), JSON.stringify(cfg));
+      window._lsSetSafe(_key(tourId), JSON.stringify(cfg));
     } catch(_){}
     if (typeof window._tourSave === 'function') {
       try { window._tourSave(tourId, cfg); } catch(_){}
@@ -33253,7 +33253,7 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _walletSetAll(o) {
-    try { localStorage.setItem(WALLET_KEY, JSON.stringify(o||{})); } catch(_){}
+    try { window._lsSetSafe(WALLET_KEY, JSON.stringify(o||{})); } catch(_){}
   }
 
   function _walletIsBayern(nm) {
@@ -33307,7 +33307,7 @@ window._showSimProgress = function(opts, onDone){
         var o = raw ? (JSON.parse(raw) || {}) : {};
         var prev = (o.money != null) ? (parseInt(o.money,10) || 0) : 0;
         o.money = prev + coins;
-        localStorage.setItem(_hk, JSON.stringify(o));
+        window._lsSetSafe(_hk, JSON.stringify(o));
         if (window._BAYERN_HUD_CACHE) window._BAYERN_HUD_CACHE = o;
       } catch(_){}
       return;
@@ -34328,7 +34328,7 @@ window._showSimProgress = function(opts, onDone){
     try {
       window._TOUR_CACHE = window._TOUR_CACHE || {};
       window._TOUR_CACHE[id] = cfg;
-      localStorage.setItem(_key(id), JSON.stringify(cfg));
+      window._lsSetSafe(_key(id), JSON.stringify(cfg));
     } catch(_){}
     try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg); } catch(_){}
     try { if (typeof window._tourRender === 'function') window._tourRender(id); } catch(_){}
@@ -35371,7 +35371,7 @@ window._showSimProgress = function(opts, onDone){
     return reg;
   }
   function _tvRegSave(reg){
-    try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(reg)); } catch(_){}
+    try { window._lsSetSafe(_TV_REG_KEY, JSON.stringify(reg)); } catch(_){}
     try {
       if (typeof window.fetch === 'function') {
         window.fetch('/api/kv/' + _TV_REG_KEY, {
@@ -35923,7 +35923,7 @@ window._showSimProgress = function(opts, onDone){
         if (!j || !j.value || !Array.isArray(j.value.visible)) return;
         var localReg = _tvRegLoad();
         var res = _tvRegMerge(localReg, j.value.visible, j.value.hidden, j.value.hiddenAt, j.value.shownAt);
-        try { localStorage.setItem(_TV_REG_KEY, JSON.stringify(res.merged)); } catch(_){}
+        try { window._lsSetSafe(_TV_REG_KEY, JSON.stringify(res.merged)); } catch(_){}
         /* Si la unión tiene slots que el server no traía, re-subir
            (aditivo, nunca borra del server) para propagarlos al otro
            dispositivo. Converge: el otro lado fusiona y deja de diferir. */
@@ -36861,7 +36861,7 @@ window._showSimProgress = function(opts, onDone){
   function _eurManualExtraSave(d){
     d = d || {};
     d.updatedAt = Date.now();
-    try { localStorage.setItem(EUR_MANUAL_EXTRA_KEY, JSON.stringify(d)); } catch(_){}
+    try { window._lsSetSafe(EUR_MANUAL_EXTRA_KEY, JSON.stringify(d)); } catch(_){}
     try {
       fetch('/api/kv/' + EUR_MANUAL_EXTRA_KEY, {
         method: 'POST',
@@ -36997,7 +36997,7 @@ window._showSimProgress = function(opts, onDone){
   function _eurManualOverrideSave(d){
     d = d || {};
     d.updatedAt = Date.now();
-    try { localStorage.setItem(EUR_MANUAL_OVERRIDE_KEY, JSON.stringify(d)); } catch(_){}
+    try { window._lsSetSafe(EUR_MANUAL_OVERRIDE_KEY, JSON.stringify(d)); } catch(_){}
     try {
       fetch('/api/kv/' + EUR_MANUAL_OVERRIDE_KEY, {
         method: 'POST',
@@ -37045,7 +37045,7 @@ window._showSimProgress = function(opts, onDone){
     if(local) return;
     _eurBootFetchRetry('/api/kv/' + EUR_MANUAL_OVERRIDE_KEY, 3).then(function(j){
       if(j && j.ok && j.value){
-        try { localStorage.setItem(EUR_MANUAL_OVERRIDE_KEY, JSON.stringify(j.value)); } catch(_){}
+        try { window._lsSetSafe(EUR_MANUAL_OVERRIDE_KEY, JSON.stringify(j.value)); } catch(_){}
       }
     });
   })();
@@ -37097,7 +37097,7 @@ window._showSimProgress = function(opts, onDone){
     if(local) return;
     _eurBootFetchRetry('/api/kv/' + EUR_MANUAL_EXTRA_KEY, 3).then(function(j){
       if(j && j.ok && j.value){
-        try { localStorage.setItem(EUR_MANUAL_EXTRA_KEY, JSON.stringify(j.value)); } catch(_){}
+        try { window._lsSetSafe(EUR_MANUAL_EXTRA_KEY, JSON.stringify(j.value)); } catch(_){}
       }
     });
   })();
@@ -37142,7 +37142,7 @@ window._showSimProgress = function(opts, onDone){
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
           if(j && j.ok && j.value){
-            try { localStorage.setItem('europe_committed_v1', JSON.stringify(j.value)); } catch(_){}
+            try { window._lsSetSafe('europe_committed_v1', JSON.stringify(j.value)); } catch(_){}
           }
         }).catch(function(){});
     } catch(_){}
@@ -38310,7 +38310,7 @@ window._showSimProgress = function(opts, onDone){
     var json = JSON.stringify(sim);
     var ok = (typeof window._lsSetSafe === 'function')
       ? window._lsSetSafe(STORE_KEY, json)
-      : (function(){ try { localStorage.setItem(STORE_KEY, json); return true; } catch(_){ return false; } })();
+      : (function(){ try { window._lsSetSafe(STORE_KEY, json); return true; } catch(_){ return false; } })();
     if(!ok){
       try { console.error('[oq-saveSim] setItem falló incluso tras liberar espacio'); } catch(_){}
       (window._gmCriticalNotice || alert)('⚠️ No se pudo guardar la simulación del Open Qualifier: el navegador se quedó sin espacio incluso después de liberar caché.\n\nBorra alguna liga de "Resto de Ligas" y vuelve a intentarlo.');
@@ -38493,7 +38493,7 @@ window._showSimProgress = function(opts, onDone){
           }
         }
       }
-      localStorage.setItem('oq_to_previa_v1', JSON.stringify({teams:previaArr, ts:Date.now()}));
+      window._lsSetSafe('oq_to_previa_v1', JSON.stringify({teams:previaArr, ts:Date.now()}));
       /* Los registra TAMBIÉN como extras manuales de la zona 'uclPrev' —
          garantiza que lleguen a la Previa aunque esa zona esté en modo
          🔒 Manual (mismo motivo que la Wild Card → Open Qualifier, ver
@@ -38658,7 +38658,7 @@ window._showSimProgress = function(opts, onDone){
           var blob = JSON.parse(craw);
           if(blob && typeof blob === 'object'){
             blob.uclQual = live;
-            localStorage.setItem('europe_committed_v1', JSON.stringify(blob));
+            window._lsSetSafe('europe_committed_v1', JSON.stringify(blob));
             fetch('/api/kv/europe_committed_v1', {
               method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
               body: JSON.stringify({value: blob})
@@ -39018,7 +39018,7 @@ window._showSimProgress = function(opts, onDone){
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
           if(j && j.ok && j.value){
-            try { localStorage.setItem(_key(slug), JSON.stringify(j.value)); } catch(_){}
+            try { window._lsSetSafe(_key(slug), JSON.stringify(j.value)); } catch(_){}
             if(typeof cb === 'function') cb(true);
           } else { if(typeof cb === 'function') cb(false); }
         }).catch(function(){ if(typeof cb === 'function') cb(false); });
@@ -39035,7 +39035,7 @@ window._showSimProgress = function(opts, onDone){
     var payload;
     try { payload = JSON.stringify({teams:list, ts:Date.now()}); } catch(_){ return false; }
     try {
-      localStorage.setItem(_key(slug), payload);
+      window._lsSetSafe(_key(slug), payload);
       _saveServer(slug, list);
       return true;
     }
@@ -39985,7 +39985,7 @@ window._showSimProgress = function(opts, onDone){
     var m = (id && typeof id === 'object') ? id : (_mhById(id) || _mhByScreen(id));
     if (!m) m = MISTERS_HUMANOS[0];
     window._ACTIVE_HUB = m;
-    try { localStorage.setItem(_ACTIVE_HUB_LS, m.id); } catch(_){ }
+    try { window._lsSetSafe(_ACTIVE_HUB_LS, m.id); } catch(_){ }
     /* Re-resolver cabecera del hub (nombre/escudo) + refrescar cajas que
        cachean su clave/estado al boot (HUD, trofeos, derbys, objetivos,
        plantilla, calendario). */
@@ -40332,7 +40332,7 @@ window._showSimProgress = function(opts, onDone){
     var c = COMPS[comp]; if(!c) return false;
     var payload;
     try { payload = JSON.stringify(state || {}); } catch(_){ return false; }
-    try { localStorage.setItem(c.key, payload); } catch(_){ _saveServer(comp, state); return false; }
+    try { window._lsSetSafe(c.key, payload); } catch(_){ _saveServer(comp, state); return false; }
     _saveServer(comp, state);
     return true;
   }
@@ -40346,7 +40346,7 @@ window._showSimProgress = function(opts, onDone){
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
           if(j && j.ok && j.value && typeof j.value === 'object'){
-            try { localStorage.setItem(c.key, JSON.stringify(j.value)); } catch(_){}
+            try { window._lsSetSafe(c.key, JSON.stringify(j.value)); } catch(_){}
           }
           if(cb) cb(true);
         }).catch(function(){ if(cb) cb(false); });
@@ -41221,7 +41221,7 @@ window._showSimProgress = function(opts, onDone){
     /* Persistir ANTES de gmOpen — si gmOpen lanza o el tab muere
        justo después, la clave ya está escrita y el boot la recupera. */
     try {
-      localStorage.setItem(_EURFASE_PENDING_KEY, JSON.stringify({
+      window._lsSetSafe(_EURFASE_PENDING_KEY, JSON.stringify({
         comp: comp, jor: jor, idx: idx, home: home, away: away,
         ts: Date.now()
       }));
@@ -41652,7 +41652,7 @@ window._showSimProgress = function(opts, onDone){
 
   function _koLoad(comp){ try { return JSON.parse(localStorage.getItem(_KO_KEY[comp]) || 'null'); } catch(_){ return null; } }
   function _koSave(comp, st){
-    try { localStorage.setItem(_KO_KEY[comp], JSON.stringify(st)); } catch(_){}
+    try { window._lsSetSafe(_KO_KEY[comp], JSON.stringify(st)); } catch(_){}
     try {
       fetch('/api/kv/' + _KO_KEY[comp], { method:'POST', headers:{'Content-Type':'application/json'},
         credentials:'same-origin', body: JSON.stringify({ value: st || {} }) }).catch(function(){});
@@ -42317,7 +42317,7 @@ window._showSimProgress = function(opts, onDone){
   var PHASE_LABEL = { q:'Cuartos', s:'Semifinales', f:'Final' };
 
   function _load(){ try { return JSON.parse(localStorage.getItem(STORE_KEY)||'null'); } catch(_){ return null; } }
-  function _save(s){ try { localStorage.setItem(STORE_KEY, JSON.stringify(s)); } catch(_){} }
+  function _save(s){ try { window._lsSetSafe(STORE_KEY, JSON.stringify(s)); } catch(_){} }
   function _shuffle(a){ a=a.slice(); for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=a[i]; a[i]=a[j]; a[j]=t; } return a; }
   function _esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
   function _q(s){ return String(s||'').replace(/'/g,"\\'"); }
@@ -42906,7 +42906,7 @@ window._showSimProgress = function(opts, onDone){
       window._lextFetchJsonTimeout('/api/liga-ext/' + encodeURIComponent(slug)).then(function(resp){
         delete _readLigaData._bg[slug];
         if(resp && resp.data && Array.isArray(resp.data.teams) && resp.data.teams.length){
-          try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(resp.data)); } catch(_){}
+          try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(resp.data)); } catch(_){}
         }
       });
     }
@@ -43192,7 +43192,7 @@ window._showSimProgress = function(opts, onDone){
             intercontinental: (prev.intercontinental != null ? prev.intercontinental : (canon.intercontinental||0)),
             mundialClubes:    (prev.mundialClubes != null ? prev.mundialClubes : (canon.mundialClubes||0))
           });
-          localStorage.setItem(key, JSON.stringify(d));
+          window._lsSetSafe(key, JSON.stringify(d));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         } catch(_){}
@@ -43261,7 +43261,7 @@ window._showSimProgress = function(opts, onDone){
     try {
       _localSaved = window._lsSetSafe
         ? window._lsSetSafe(EUROPE_COMMIT_KEY, JSON.stringify(blob))
-        : (function(){ try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); return true; } catch(_){ return false; } })();
+        : (function(){ try { window._lsSetSafe(EUROPE_COMMIT_KEY, JSON.stringify(blob)); return true; } catch(_){ return false; } })();
     } catch(_){ _localSaved = false; }
     _saveEuropeCommitServer(blob, function(serverOk){
       if(serverOk){ window._eurCommitConfirmedAt = Date.now(); }
@@ -44244,7 +44244,7 @@ window._showSimProgress = function(opts, onDone){
     if(best && bestN >= 2){
       try {
         best.results = best.results || [];
-        localStorage.setItem(key, JSON.stringify(best));
+        window._lsSetSafe(key, JSON.stringify(best));
         if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug);
         return bestN;
       } catch(_){}
@@ -44375,7 +44375,7 @@ window._showSimProgress = function(opts, onDone){
                      jugadores) tenía algún escudo que el server no trae
                      todavía, no lo perdemos. 2026-07-12. */
                   try { if (ld && typeof window._lextBackfillShields === 'function') window._lextBackfillShields(data, ld); } catch(_){}
-                  localStorage.setItem(key, JSON.stringify(data));
+                  window._lsSetSafe(key, JSON.stringify(data));
                   try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
                 } else {
                   /* Conservamos la plantilla local (más rica) PERO traemos la
@@ -44406,7 +44406,7 @@ window._showSimProgress = function(opts, onDone){
                     if (ld && typeof window._lextBackfillShields === 'function' && window._lextBackfillShields(ld, data)) _ldChanged = true;
                   } catch(_){}
                   if(_ldChanged){
-                    localStorage.setItem(key, JSON.stringify(ld));
+                    window._lsSetSafe(key, JSON.stringify(ld));
                     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
                   }
                 }
@@ -44557,7 +44557,7 @@ window._showSimProgress = function(opts, onDone){
           intercontinental: (prev.intercontinental != null ? prev.intercontinental : (canon.intercontinental||0)),
           mundialClubes:    (prev.mundialClubes != null ? prev.mundialClubes : (canon.mundialClubes||0))
         });
-        localStorage.setItem(key, JSON.stringify(d));
+        window._lsSetSafe(key, JSON.stringify(d));
         try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
         try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         fixed++;
@@ -44590,7 +44590,7 @@ window._showSimProgress = function(opts, onDone){
     } finally {
       window._europeIgnoreFrozen = _prevIgnore;
     }
-    try { localStorage.setItem(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
+    try { window._lsSetSafe(EUROPE_COMMIT_KEY, JSON.stringify(blob)); } catch(_){}
     _saveEuropeCommitServer(blob);
 
     /* Conteo de plazas manuales España (EA→Europa) para que el admin
@@ -45097,7 +45097,7 @@ window._showSimProgress = function(opts, onDone){
           if (nrm && data.deletedTeamNames.indexOf(nrm) === -1) data.deletedTeamNames.push(nrm);
         });
         /* Persistir local + invalidar caches + POST async al server. */
-        localStorage.setItem(key, JSON.stringify(data));
+        window._lsSetSafe(key, JSON.stringify(data));
         try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         try { if (typeof window.LIGA_CACHE !== 'undefined') window.LIGA_CACHE[slug] = data; } catch(_){}
         try {
@@ -47094,7 +47094,7 @@ https://api.sofascore.app/api/v1/team/44/image
             var d = JSON.parse(raw);
             if (d && Array.isArray(d.teams) && d._sanV !== _SAN_VER) {
               if (_sanitizeLigaTeamNames(d)) {
-                try { localStorage.setItem(sk, JSON.stringify(d)); } catch(_){}
+                try { window._lsSetSafe(sk, JSON.stringify(d)); } catch(_){}
                 /* Invalida cache + _protected para que el próximo
                    loadData devuelva la versión saneada y no rebrote
                    desde una copia legacy corrupta. */
@@ -47102,7 +47102,7 @@ https://api.sofascore.app/api/v1/team/44/image
                   var slug = sk.substring('ligaExt_'.length);
                   if (LIGA_CACHE && LIGA_CACHE[slug]) delete LIGA_CACHE[slug];
                   if (localStorage.getItem(sk + '_protected')) {
-                    localStorage.setItem(sk + '_protected', JSON.stringify(d));
+                    window._lsSetSafe(sk + '_protected', JSON.stringify(d));
                   }
                 } catch(_){}
               }
@@ -47170,7 +47170,7 @@ https://api.sofascore.app/api/v1/team/44/image
         try { LIGA_CACHE[slug] = d; } catch(_){}
         var ser = null; try { ser = JSON.stringify(d); } catch(_){}
         if (ser) {
-          try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(slug), ser); else localStorage.setItem(storeKey(slug), ser); } catch(_){}
+          try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(slug), ser); else window._lsSetSafe(storeKey(slug), ser); } catch(_){}
           try { if (window._idbKV) window._idbKV.set(storeKey(slug), ser); } catch(_){}
         }
         /* Sanitize DIFERIDO (nunca en el mismo tick que la respuesta —
@@ -47180,7 +47180,7 @@ https://api.sofascore.app/api/v1/team/44/image
           try {
             if (_sanitizeLigaTeamNames(d)) {
               var ser2 = null; try { ser2 = JSON.stringify(d); } catch(_){}
-              if (ser2) { try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(slug), ser2); else localStorage.setItem(storeKey(slug), ser2); } catch(_){} }
+              if (ser2) { try { if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(slug), ser2); else window._lsSetSafe(storeKey(slug), ser2); } catch(_){} }
             }
           } catch(_){}
         }, 80);
@@ -47293,7 +47293,7 @@ https://api.sofascore.app/api/v1/team/44/image
       if (_sanitizeLigaTeamNames(LIGA_CACHE[k])) {
         try {
           var _csj = JSON.stringify(LIGA_CACHE[k]);
-          localStorage.setItem(storeKey(k), _csj);
+          window._lsSetSafe(storeKey(k), _csj);
           /* Purga TAMBIÉN el _protected: si solo limpiamos main, una
              copia _protected legacy triplicada resucitaba en el
              siguiente restore/lock. 2026-05-17.
@@ -47303,7 +47303,7 @@ https://api.sofascore.app/api/v1/team/44/image
              blobs multi-MB → la barra "se quedaba en 99%". */
           if (!window._restoSimBulkInProgress &&
               localStorage.getItem(storeKey(k)+'_protected')) {
-            localStorage.setItem(storeKey(k)+'_protected', _csj);
+            window._lsSetSafe(storeKey(k)+'_protected', _csj);
           }
         } catch(_){}
       }
@@ -47313,7 +47313,7 @@ https://api.sofascore.app/api/v1/team/44/image
          2026-06-28). Barato: no-op si el cache ya trae resultados. */
       try {
         if (_lextRecoverResultsFromBackups(k, LIGA_CACHE[k])) {
-          try { localStorage.setItem(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
+          try { window._lsSetSafe(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
         }
       } catch(_){}
       /* Si la cache YA está poblada pero VACÍA (un intento de
@@ -47350,7 +47350,7 @@ https://api.sofascore.app/api/v1/team/44/image
             if (protPX && Array.isArray(protPX.teams) && protPX.teams.length > 0) {
               _sanitizeLigaTeamNames(protPX);
               LIGA_CACHE[k] = protPX;
-              try { localStorage.setItem(storeKey(k), JSON.stringify(protPX)); } catch(_){}
+              try { window._lsSetSafe(storeKey(k), JSON.stringify(protPX)); } catch(_){}
               try { console.warn('[ligaExt] '+k+' main vacío pero _protected tenía '+protPX.teams.length+' equipos — restaurado.'); } catch(_){}
               return _applyForcedBlacklist(k, protPX);
             }
@@ -47361,13 +47361,13 @@ https://api.sofascore.app/api/v1/team/44/image
         if (_sanitizeLigaTeamNames(parsed)) {
           try {
             var _psj = JSON.stringify(parsed);
-            localStorage.setItem(storeKey(k), _psj);
+            window._lsSetSafe(storeKey(k), _psj);
             /* _protected NO durante la sim masiva (saveData ya lo
                persiste limpio por liga). Evita 51× stringify+setItem
                multi-MB que clavaba la barra en 99%. */
             if (!window._restoSimBulkInProgress &&
                 localStorage.getItem(storeKey(k)+'_protected')) {
-              localStorage.setItem(storeKey(k)+'_protected', _psj);
+              window._lsSetSafe(storeKey(k)+'_protected', _psj);
             }
           } catch(_){}
         }
@@ -47378,7 +47378,7 @@ https://api.sofascore.app/api/v1/team/44/image
            restauramos (bug Albania/Montenegro/N.Irlanda 2026-06-28). */
         try {
           if (_lextRecoverResultsFromBackups(k, parsed)) {
-            try { localStorage.setItem(storeKey(k), JSON.stringify(parsed)); } catch(_){}
+            try { window._lsSetSafe(storeKey(k), JSON.stringify(parsed)); } catch(_){}
           }
         } catch(_){}
         LIGA_CACHE[k] = parsed;
@@ -47413,7 +47413,7 @@ https://api.sofascore.app/api/v1/team/44/image
              antiguas, los unificamos. */
           _sanitizeLigaTeamNames(pdata);
           LIGA_CACHE[k] = pdata;
-          try { localStorage.setItem(storeKey(k), JSON.stringify(pdata)); } catch(_){}
+          try { window._lsSetSafe(storeKey(k), JSON.stringify(pdata)); } catch(_){}
           try { console.warn('[ligaExt] restaurado '+k+' desde _protected ('+pdata.teams.length+' equipos).'); } catch(_){}
           return _applyForcedBlacklist(k, pdata);
         }
@@ -47432,7 +47432,7 @@ https://api.sofascore.app/api/v1/team/44/image
         if (bData && Array.isArray(bData.teams) && bData.teams.length) {
           _sanitizeLigaTeamNames(bData);
           LIGA_CACHE[k] = bData;
-          try { localStorage.setItem(storeKey(k), JSON.stringify(bData)); } catch(_){}
+          try { window._lsSetSafe(storeKey(k), JSON.stringify(bData)); } catch(_){}
           try { console.warn('[ligaExt] restaurado '+k+' desde _backup ('+bData.teams.length+' equipos).'); } catch(_){}
           return _applyForcedBlacklist(k, bData);
         }
@@ -47454,7 +47454,7 @@ https://api.sofascore.app/api/v1/team/44/image
           if (sData && Array.isArray(sData.teams) && sData.teams.length) {
             _sanitizeLigaTeamNames(sData);
             LIGA_CACHE[k] = sData;
-            try { localStorage.setItem(storeKey(k), JSON.stringify(sData)); } catch(_){}
+            try { window._lsSetSafe(storeKey(k), JSON.stringify(sData)); } catch(_){}
             try { console.warn('[ligaExt] restaurado '+k+' desde '+snapKeys[sj]+' ('+sData.teams.length+' equipos).'); } catch(_){}
             return _applyForcedBlacklist(k, sData);
           }
@@ -47619,7 +47619,7 @@ https://api.sofascore.app/api/v1/team/44/image
     if (mutated && !window._restoSimBulkInProgress) {
       try {
         LIGA_CACHE[k] = data;
-        localStorage.setItem(storeKey(k), JSON.stringify(data));
+        window._lsSetSafe(storeKey(k), JSON.stringify(data));
         /* Push async al server (sin await); si falla no rompe nada
            porque la blacklist se volverá a aplicar al siguiente load. */
         fetch('/api/liga-ext/'+encodeURIComponent(k), {
@@ -48180,7 +48180,7 @@ https://api.sofascore.app/api/v1/team/44/image
        cadena hacían que el guardado fallase en silencio y el admin
        pensase "no se ha guardado nada". */
     function _setItemSafe(key, value){
-      try { localStorage.setItem(key, value); return true; }
+      try { window._lsSetSafe(key, value); return true; }
       catch(err){
         var isQuota = err && (
           err.code === 22 || err.code === 1014 ||
@@ -48202,7 +48202,7 @@ https://api.sofascore.app/api/v1/team/44/image
            Tras cada paso reintentamos el setItem. Devolvemos true en
            cuanto cabe; false si tras todo no hay forma. */
         function _retry(){
-          try { localStorage.setItem(key, value); return true; }
+          try { window._lsSetSafe(key, value); return true; }
           catch(_) { return false; }
         }
         try {
@@ -48519,13 +48519,13 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!slug) return;
     try {
       var s = _ligaExtPendingSet();
-      if (s.indexOf(slug) === -1) { s.push(slug); localStorage.setItem(_LIGAEXT_PENDING_KEY, JSON.stringify(s)); }
+      if (s.indexOf(slug) === -1) { s.push(slug); window._lsSetSafe(_LIGAEXT_PENDING_KEY, JSON.stringify(s)); }
     } catch(_){}
   };
   window._ligaExtClearPending = function(slug){
     try {
       var s = _ligaExtPendingSet().filter(function(x){ return x !== slug; });
-      if (s.length) localStorage.setItem(_LIGAEXT_PENDING_KEY, JSON.stringify(s));
+      if (s.length) window._lsSetSafe(_LIGAEXT_PENDING_KEY, JSON.stringify(s));
       else localStorage.removeItem(_LIGAEXT_PENDING_KEY);
     } catch(_){}
   };
@@ -48942,7 +48942,7 @@ https://api.sofascore.app/api/v1/team/44/image
               try { _lextBackfillAlias(d2, _loc); } catch(_){}
               try { _lextBackfillResults(d2, _loc); } catch(_){}
               LIGA_CACHE[k] = d2;
-              try { localStorage.setItem(storeKey(k), JSON.stringify(d2)); } catch(_){}
+              try { window._lsSetSafe(storeKey(k), JSON.stringify(d2)); } catch(_){}
               try { console.warn('[ligaExt] '+k+': restaurado desde /api/liga-ext-any del servidor ('+d2.teams.length+' equipos).'); } catch(_){}
               cb && cb(d2, true);
             } else if (j2 && j2.ok) {
@@ -49025,7 +49025,7 @@ https://api.sofascore.app/api/v1/team/44/image
               try { _lextBackfillResults(data, _locForCmp); } catch(_){}
               try { _sanitizeLigaTeamNames(data); } catch(_){}
               LIGA_CACHE[k] = data;
-              try { localStorage.setItem(storeKey(k), JSON.stringify(data)); } catch(_){}
+              try { window._lsSetSafe(storeKey(k), JSON.stringify(data)); } catch(_){}
               try { if (j && j.updated_at) LIGA_UPDATED[k] = j.updated_at; } catch(_){}
               cb && cb(data, true);
               return;
@@ -49227,7 +49227,7 @@ https://api.sofascore.app/api/v1/team/44/image
           try { _lextBackfillResults(localCache, data); } catch(_){}
           // Conservamos la versión local en memoria y disco.
           LIGA_CACHE[k] = localCache;
-          try{ localStorage.setItem(storeKey(k), JSON.stringify(localCache)); }catch(_){}
+          try{ window._lsSetSafe(storeKey(k), JSON.stringify(localCache)); }catch(_){}
           // Re-subida best-effort (sin tocar updated_at hasta que
           // el servidor confirme).
           try{
@@ -49273,7 +49273,7 @@ https://api.sofascore.app/api/v1/team/44/image
         }
         LIGA_CACHE[k] = data;
         LIGA_UPDATED[k] = j.updated_at || '';
-        try{ localStorage.setItem(storeKey(k), JSON.stringify(data)); }catch(_){}
+        try{ window._lsSetSafe(storeKey(k), JSON.stringify(data)); }catch(_){}
         cb && cb(data, true);
       }).catch(function(){
         /* La petición al `main` falló (red caída, cold-start de Railway,
@@ -49475,7 +49475,7 @@ https://api.sofascore.app/api/v1/team/44/image
             if (ser) {
               try {
                 if (typeof window._lsSetSafe === 'function') window._lsSetSafe(storeKey(slug), ser);
-                else localStorage.setItem(storeKey(slug), ser);
+                else window._lsSetSafe(storeKey(slug), ser);
               } catch(_){}
               try { if (window._idbKV) window._idbKV.set(storeKey(slug), ser); } catch(_){}
             }
@@ -52392,7 +52392,7 @@ https://api.sofascore.app/api/v1/team/44/image
               /* Paso 3: actualizar local con el data del backup, invalidar
                  cache y re-renderizar. */
               try { LIGA_CACHE[CURRENT_KEY] = j.data; } catch(_){}
-              try { localStorage.setItem('ligaExt_'+CURRENT_KEY, JSON.stringify(j.data)); } catch(_){}
+              try { window._lsSetSafe('ligaExt_'+CURRENT_KEY, JSON.stringify(j.data)); } catch(_){}
               try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
               try { renderTeamsList(); } catch(_){}
               try { renderTable(); } catch(_){}
@@ -54127,7 +54127,7 @@ https://api.sofascore.app/api/v1/team/44/image
               var _pref = _np2(t.name) + '::';
               var _chg = false;
               Object.keys(_ps).forEach(function(kk){ if(kk.indexOf(_pref)===0){ delete _ps[kk]; _chg=true; } });
-              if(_chg) localStorage.setItem('ef_player_stats_v1', JSON.stringify(_ps));
+              if(_chg) window._lsSetSafe('ef_player_stats_v1', JSON.stringify(_ps));
             }
           } catch(_){}
         }
@@ -55315,7 +55315,7 @@ https://api.sofascore.app/api/v1/team/44/image
       if (z.recopa != null) { delete z.recopa; changed = true; }
       if (!(Number(z.mundialClubes) > 0)) { z.mundialClubes = 16; changed = true; }
       if (changed) {
-        localStorage.setItem('ligaExt_' + slug, JSON.stringify(d));
+        window._lsSetSafe('ligaExt_' + slug, JSON.stringify(d));
         try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
         try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
       }
@@ -55345,12 +55345,12 @@ https://api.sofascore.app/api/v1/team/44/image
           /* def manda en los campos europeos; desc + intercontinental +
              mundialClubes conservan lo previo (o caen al DEFAULT_ZONES). */
           d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), LEAGUE_DEFAULT_ZONES[slug]);
-          localStorage.setItem(key, JSON.stringify(d));
+          window._lsSetSafe(key, JSON.stringify(d));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         } catch(_){}
       });
-      localStorage.setItem(FLAG, '1');
+      window._lsSetSafe(FLAG, '1');
     } catch(_){}
   }
   /* Fixup v2 (2026-05-30): el primer cuadro de `LEAGUE_DEFAULT_ZONES`
@@ -55399,12 +55399,12 @@ https://api.sofascore.app/api/v1/team/44/image
              en ambos casos no es edición manual del admin. */
           if(!(eqEuro(z, OLD[slug]) || eqEuro(z, GEN) || !z)) return;
           d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), nw);
-          localStorage.setItem(key, JSON.stringify(d));
+          window._lsSetSafe(key, JSON.stringify(d));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         } catch(_){}
       });
-      localStorage.setItem(FLAG, '1');
+      window._lsSetSafe(FLAG, '1');
     } catch(_){}
   }
   window._fixupLeagueZonesV2 = _fixupLeagueZonesV2;
@@ -55441,13 +55441,13 @@ https://api.sofascore.app/api/v1/team/44/image
              en ambos casos no es edición manual del admin. */
           if(eqEuro(z, OLD) || eqEuro(z, GEN) || !z){
             d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), nw);
-            localStorage.setItem(key, JSON.stringify(d));
+            window._lsSetSafe(key, JSON.stringify(d));
             try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
             try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
           }
         }
       }
-      localStorage.setItem(FLAG, '1');
+      window._lsSetSafe(FLAG, '1');
     } catch(_){}
   }
   window._fixupSanMarinoWcV1 = _fixupSanMarinoWcV1;
@@ -55489,7 +55489,7 @@ https://api.sofascore.app/api/v1/team/44/image
           if(!nw) return;
           if(!(eqEuro(z, OLD_EURO[slug]) || eqEuro(z, GEN) || !z)) return;
           d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), nw);
-          localStorage.setItem(key, JSON.stringify(d));
+          window._lsSetSafe(key, JSON.stringify(d));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         } catch(_){}
@@ -55507,12 +55507,12 @@ https://api.sofascore.app/api/v1/team/44/image
           if(!nw2 || typeof nw2.desc !== 'number') return;
           if(Number(d2.config.zones.desc) !== 3) return;
           d2.config.zones.desc = nw2.desc;
-          localStorage.setItem(key2, JSON.stringify(d2));
+          window._lsSetSafe(key2, JSON.stringify(d2));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d2; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         } catch(_){}
       });
-      localStorage.setItem(FLAG, '1');
+      window._lsSetSafe(FLAG, '1');
     } catch(_){}
   }
   window._fixupLeagueZonesV3 = _fixupLeagueZonesV3;
@@ -55586,7 +55586,7 @@ https://api.sofascore.app/api/v1/team/44/image
      como main local + LIGA_CACHE, en vez de sembrar vacío. */
   function _lextAdoptServerSeedRecovery(slug, d){
     try { _sanitizeLigaTeamNames(d); } catch(_){}
-    try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(d)); } catch(_){}
+    try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(d)); } catch(_){}
     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
     try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
     try { console.warn('[ligaExt] seed '+slug+': sin copia local — restaurado desde el SERVIDOR ('+d.teams.length+' equipos, '+((d.results&&d.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
@@ -55656,7 +55656,7 @@ https://api.sofascore.app/api/v1/team/44/image
           } else if (merged === curNow && !_hasResults(curNow) && idbHasResults) {
             merged.results = idbData.results;
           }
-          localStorage.setItem(key, JSON.stringify(merged));
+          window._lsSetSafe(key, JSON.stringify(merged));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = merged; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
           try { console.warn('[ligaExt] '+slug+': localStorage sin clasificación y/o plantilla/escudos — recuperado desde IndexedDB.'); } catch(_){}
@@ -55729,7 +55729,7 @@ https://api.sofascore.app/api/v1/team/44/image
           try { if (_lextBackfillAlias(curData, _recovRM)) _chRM = true; } catch(_){}
           try { if (_lextBackfillResults(curData, _recovRM)) _chRM = true; } catch(_){}
           if (_chRM) {
-            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
+            try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
             try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
             try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = curData; } catch(_){}
             try { console.warn('[ligaExt] seed '+slug+': plantilla/escudos en blanco — rellenados desde copia durable local.'); } catch(_){}
@@ -55737,7 +55737,7 @@ https://api.sofascore.app/api/v1/team/44/image
           _lextIdbTopupIfEmpty(slug);
           return;
         }
-        try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(_recovRM)); } catch(_){}
+        try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(_recovRM)); } catch(_){}
         try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = _recovRM; } catch(_){}
         try { console.warn('[ligaExt] seed '+slug+': main perdido — restaurado desde copia durable ('+_recovRM.teams.length+' equipos, '+((_recovRM.results&&_recovRM.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
@@ -55759,7 +55759,7 @@ https://api.sofascore.app/api/v1/team/44/image
           try { if (_lextBackfillAlias(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
           try { if (_lextBackfillResults(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
           if (_chRM2) {
-            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
+            try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
             try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
             try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = curData; } catch(_){}
             try { console.warn('[ligaExt] seed '+slug+': plantilla/escudos en blanco — rellenados desde el SERVIDOR.'); } catch(_){}
@@ -55801,7 +55801,7 @@ https://api.sofascore.app/api/v1/team/44/image
         logo: '', cupName: '', cupLogo: ''
       }
     };
-    try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
+    try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
     /* También poblamos LIGA_CACHE (defensa 2026-05-25): si la cache se
        hubiera quedado con un objeto vacío por una ruta async (p.ej.
@@ -55866,13 +55866,13 @@ https://api.sofascore.app/api/v1/team/44/image
             }
           });
           if (changed){
-            localStorage.setItem('ligaExt_' + slug, JSON.stringify(d));
+            window._lsSetSafe('ligaExt_' + slug, JSON.stringify(d));
             try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
             try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
           }
         }
       }
-      localStorage.setItem(FLAG, '1');
+      window._lsSetSafe(FLAG, '1');
     } catch(_){}
   }
   /* Seed eager (al cargar) para que Sim All y aperturas directas vean
@@ -56043,7 +56043,7 @@ https://api.sofascore.app/api/v1/team/44/image
           try { if (_lextBackfillAlias(curData, _recov)) _ch = true; } catch(_){}
           try { if (_lextBackfillResults(curData, _recov)) _ch = true; } catch(_){}
           if (_ch) {
-            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
+            try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
             try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
             try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = curData; } catch(_){}
             try { console.warn('[ligaExt] seed '+slug+': plantilla/escudos en blanco — rellenados desde copia durable local.'); } catch(_){}
@@ -56051,7 +56051,7 @@ https://api.sofascore.app/api/v1/team/44/image
           _lextIdbTopupIfEmpty(slug);
           return;
         }
-        try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(_recov)); } catch(_){}
+        try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(_recov)); } catch(_){}
         try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = _recov; } catch(_){}
         try { console.warn('[ligaExt] seed '+slug+': main perdido — restaurado desde copia durable ('+_recov.teams.length+' equipos, '+((_recov.results&&_recov.results.length)||0)+' resultados) en vez de sembrar vacío.'); } catch(_){}
@@ -56073,7 +56073,7 @@ https://api.sofascore.app/api/v1/team/44/image
           try { if (_lextBackfillAlias(curData, _recovSrv)) _ch2 = true; } catch(_){}
           try { if (_lextBackfillResults(curData, _recovSrv)) _ch2 = true; } catch(_){}
           if (_ch2) {
-            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
+            try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(curData)); } catch(_){}
             try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
             try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = curData; } catch(_){}
             try { console.warn('[ligaExt] seed '+slug+': plantilla/escudos en blanco — rellenados desde el SERVIDOR.'); } catch(_){}
@@ -56117,7 +56117,7 @@ https://api.sofascore.app/api/v1/team/44/image
         logo: '', cupName: '', cupLogo: ''
       }
     };
-    try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
+    try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(data)); } catch(_){}
     try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
     try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = data; } catch(_){}
     /* Ni localStorage ni sus copias durables tenían nada — última red:
@@ -56165,12 +56165,12 @@ https://api.sofascore.app/api/v1/team/44/image
              manual del admin). */
           if(!(eqEuro(z, BAD) || _zonesIsGeneric(z) || !z)) return;
           d.config.zones = _zonesDefaultFor(slug);
-          localStorage.setItem(key, JSON.stringify(d));
+          window._lsSetSafe(key, JSON.stringify(d));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
         } catch(_){}
       });
-      localStorage.setItem(FLAG, '1');
+      window._lsSetSafe(FLAG, '1');
     } catch(_){}
   }
   window._fixupExtraLeagueZonesV1 = _fixupExtraLeagueZonesV1;
@@ -56652,7 +56652,7 @@ https://api.sofascore.app/api/v1/team/44/image
         };
       });
     });
-    try { localStorage.setItem('ef_player_stats_v1', JSON.stringify(stats)); } catch(_){}
+    try { window._lsSetSafe('ef_player_stats_v1', JSON.stringify(stats)); } catch(_){}
   }
   /* Hook llamado desde iaSimLive cuando termina la final. Aplica
      stats al equipo y proclama campeón/subcampeón. */
@@ -57961,7 +57961,7 @@ https://api.sofascore.app/api/v1/team/44/image
     }catch(_){ if(tries<3) setTimeout(function(){ _post(d,tries+1); }, 1500*(tries+1)); }
   }
   function _save(d){
-    try{ localStorage.setItem(KEY, JSON.stringify(d)); }catch(_){}
+    try{ window._lsSetSafe(KEY, JSON.stringify(d)); }catch(_){}
     try{ if(typeof window._invalidateAliasCache==='function') window._invalidateAliasCache(); }catch(_){}
     _post(d, 0);
   }
@@ -58026,7 +58026,7 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     if(changed){
       d.teams=clean;
-      try{ localStorage.setItem(KEY,JSON.stringify(d)); }catch(_){}
+      try{ window._lsSetSafe(KEY,JSON.stringify(d)); }catch(_){}
       try{
         if(typeof window.fetch==='function')
           window.fetch('/api/kv/'+KEY,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -59011,7 +59011,7 @@ https://api.sofascore.app/api/v1/team/44/image
           var localTeams=(_load().teams)||[];
           var serverTeams=j.value.teams||[];
           var merged={v:1, teams:_mergeTeamsForSync(localTeams, serverTeams)};
-          try{ localStorage.setItem(KEY,JSON.stringify(merged)); }catch(_){}
+          try{ window._lsSetSafe(KEY,JSON.stringify(merged)); }catch(_){}
           /* Si la fusión difiere del servidor (este dispositivo tenía
              selecciones que faltaban allí), súbela. Es una unión: nunca
              borra del servidor, solo añade lo que falta. */
@@ -63000,7 +63000,7 @@ https://api.sofascore.app/api/v1/team/44/image
       return;
     }
     window._BAYERN_HUD_CACHE = srv;
-    try { localStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
+    try { window._lsSetSafe(KEY, JSON.stringify(srv)); } catch(_){}
     try { sessionStorage.setItem(KEY, JSON.stringify(srv)); } catch(_){}
     _cookieWrite(srv);
     _idbWrite(srv);
@@ -63125,7 +63125,7 @@ https://api.sofascore.app/api/v1/team/44/image
         if (sp && typeof sp === 'object') {
           window._BAYERN_HUD_CACHE = sp;
           /* Promociona a localStorage para próximas cargas. */
-          try { localStorage.setItem(KEY, s); } catch(_){}
+          try { window._lsSetSafe(KEY, s); } catch(_){}
           return sp;
         }
       }
@@ -63135,7 +63135,7 @@ https://api.sofascore.app/api/v1/team/44/image
     if (ck && Object.keys(ck).length){
       window._BAYERN_HUD_CACHE = ck;
       /* Promociona a localStorage + sessionStorage. */
-      try { localStorage.setItem(KEY, JSON.stringify(ck)); } catch(_){}
+      try { window._lsSetSafe(KEY, JSON.stringify(ck)); } catch(_){}
       try { sessionStorage.setItem(KEY, JSON.stringify(ck)); } catch(_){}
       return ck;
     }
@@ -63144,7 +63144,7 @@ https://api.sofascore.app/api/v1/team/44/image
     _idbRead().then(function(idb){
       if (idb && typeof idb === 'object' && Object.keys(idb).length){
         window._BAYERN_HUD_CACHE = idb;
-        try { localStorage.setItem(KEY, JSON.stringify(idb)); } catch(_){}
+        try { window._lsSetSafe(KEY, JSON.stringify(idb)); } catch(_){}
         try { sessionStorage.setItem(KEY, JSON.stringify(idb)); } catch(_){}
         _cookieWrite(idb);
         try { apply(); } catch(_){}
@@ -63188,7 +63188,7 @@ https://api.sofascore.app/api/v1/team/44/image
     /* Capa 2: localStorage. */
     var lsOk = false;
     try {
-      localStorage.setItem(KEY, JSON.stringify(data));
+      window._lsSetSafe(KEY, JSON.stringify(data));
       lsOk = true;
     } catch(e) {
       /* Aún no avisamos: cookie + IDB + server pueden cubrir. */
@@ -63726,7 +63726,7 @@ https://api.sofascore.app/api/v1/team/44/image
         if (pickYo  !== null) ovMH.formState = pickYo;
         if (pickRiv !== null) ovMH.formRival = pickRiv;
         dMH.ov['go:'+_scrMH] = ovMH;
-        try { localStorage.setItem('menu_home_v1', JSON.stringify(dMH)); } catch(__){}
+        try { window._lsSetSafe('menu_home_v1', JSON.stringify(dMH)); } catch(__){}
         /* Best-effort server push (mismo endpoint que el editor del menú). */
         try {
           fetch('/api/kv/menu_home_v1', {
@@ -64038,7 +64038,7 @@ https://api.sofascore.app/api/v1/team/44/image
          lo ponemos ahora (el reinicio SIEMPRE debe tombstone-ar). */
       if (!cfg.resetAt) cfg.resetAt = Date.now();
       var lsKey = 'tour_' + sid + '_v1';
-      try { localStorage.setItem(lsKey, JSON.stringify(cfg)); } catch(_){}
+      try { window._lsSetSafe(lsKey, JSON.stringify(cfg)); } catch(_){}
       try { if (window._TOUR_CACHE) window._TOUR_CACHE[sid] = cfg; } catch(_){}
       try {
         if (typeof window._tourSave === 'function') {
@@ -64153,7 +64153,7 @@ https://api.sofascore.app/api/v1/team/44/image
              el mismo cuadro. */
           try {
             var srvSched = j && (j.liga_schedule || (j.state && j.state.liga_schedule));
-            if (srvSched && srvSched.length) localStorage.setItem('ef_liga38_schedule_v2', JSON.stringify(srvSched));
+            if (srvSched && srvSched.length) window._lsSetSafe('ef_liga38_schedule_v2', JSON.stringify(srvSched));
           } catch(_){}
           try { if (typeof window.buildLigaClas === 'function') window.buildLigaClas(); } catch(_){}
         }).catch(function(){
@@ -64221,7 +64221,7 @@ https://api.sofascore.app/api/v1/team/44/image
         return (e && e.uid) ? { uid: e.uid, tombstone: true, removedAt: _pdNow } : null;
       }).filter(Boolean);
       var _pdStr = JSON.stringify(_pdTomb);
-      localStorage.setItem('pend_hvh_deferred_v1', _pdStr);
+      window._lsSetSafe('pend_hvh_deferred_v1', _pdStr);
       try {
         var _body = JSON.stringify({ competition_state: { 'pend_hvh_deferred_v1': _pdStr } });
         if (typeof navigator !== 'undefined' && navigator.sendBeacon){
@@ -64244,7 +64244,7 @@ https://api.sofascore.app/api/v1/team/44/image
         var cur = null;
         try { cur = localStorage.getItem(k); } catch(_){}
         if (cur !== _preserveSnap[k]){
-          try { localStorage.setItem(k, _preserveSnap[k]); } catch(_){}
+          try { window._lsSetSafe(k, _preserveSnap[k]); } catch(_){}
         }
       });
     } catch(_){}
@@ -64846,7 +64846,7 @@ https://api.sofascore.app/api/v1/team/44/image
          pueda eliminar los defaults sin que vuelvan a aparecer. Otros
          hubs (no-Liverpool) arrancan con vitrina vacía. */
       arr = _defaults().map(function(t){ var c = {}; for (var k in t) c[k]=t[k]; return c; });
-      try { localStorage.setItem(STORE_KEY, JSON.stringify(arr)); } catch(_){}
+      try { window._lsSetSafe(STORE_KEY, JSON.stringify(arr)); } catch(_){}
     }
     /* Backfill de `count` para entradas guardadas con la versión antigua
        (antes solo había 1 fila por trofeo, sin contador explícito).
@@ -64907,7 +64907,7 @@ https://api.sofascore.app/api/v1/team/44/image
     catch(_){ return 0; }
   }
   function _trofSetLocalTs(ts){
-    try { localStorage.setItem(_trofTsKey(), String(ts|0)); } catch(_){}
+    try { window._lsSetSafe(_trofTsKey(), String(ts|0)); } catch(_){}
   }
   /* Desempaqueta el valor del server: acepta el formato NUEVO sellado
      (`{updatedAt, items}`) y el LEGACY (array crudo, sin sello). */
@@ -64991,7 +64991,7 @@ https://api.sofascore.app/api/v1/team/44/image
           var srv = _trofUnwrap(j && j.ok ? j.value : null);
           var hasServer = srv.items && srv.items.length;
           if (hasServer && (srv.ts > localTs || !localMeaningful)){
-            try { localStorage.setItem(key, JSON.stringify(srv.items)); } catch(_){}
+            try { window._lsSetSafe(key, JSON.stringify(srv.items)); } catch(_){}
             _trofSetLocalTs(srv.ts);
             if (typeof cb === 'function') cb(true);
             return;
@@ -65017,7 +65017,7 @@ https://api.sofascore.app/api/v1/team/44/image
     var payload;
     try { payload = JSON.stringify(arr || []); } catch(_){ payload = '[]'; }
     var localOk = true;
-    try { localStorage.setItem(STORE_KEY, payload); }
+    try { window._lsSetSafe(STORE_KEY, payload); }
     catch(err){
       localOk = false;
       var isQuota = err && (
@@ -66150,7 +66150,7 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   function saveOverrides(){
     try { OVR.updatedAt = Date.now(); } catch(_){}
-    try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){}
+    try { window._lsSetSafe(OVR_KEY, JSON.stringify(OVR)); } catch(_){}
     _saveOverridesServer(true);   /* edición del admin → AUTORITATIVA */
   }
   /* Hidratación por RECENCIA (ya no aditiva-sin-sello): si el server es MÁS
@@ -66170,7 +66170,7 @@ https://api.sofascore.app/api/v1/team/44/image
           var remoteTs = parseFloat(remote.updatedAt); if (isNaN(remoteTs)) remoteTs = 0;
           if (remoteTs > localTs){
             OVR = remote;
-            try { localStorage.setItem(OVR_KEY, JSON.stringify(OVR)); } catch(_){}
+            try { window._lsSetSafe(OVR_KEY, JSON.stringify(OVR)); } catch(_){}
             if (typeof cb === 'function') cb(true);
             return;
           }
@@ -66850,7 +66850,7 @@ https://api.sofascore.app/api/v1/team/44/image
     _objStateUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
     var data = { checks:(sv && sv.checks) || {}, counters:(sv && sv.counters) || {}, updatedAt:_objStateUpdatedAt };
     _objLastSer = JSON.stringify({ checks:data.checks, counters:data.counters });
-    try { localStorage.setItem(LS_OBJ, JSON.stringify(data)); } catch(_){}
+    try { window._lsSetSafe(LS_OBJ, JSON.stringify(data)); } catch(_){}
     try { loadObjState(); } catch(_){}   /* repinta el DOM si la pantalla existe */
     try { if (typeof window.athObjCount === 'function') window.athObjCount(); } catch(_){}
   }
@@ -66875,7 +66875,7 @@ https://api.sofascore.app/api/v1/team/44/image
     var v = prompt('Nombre de la selección / equipo rival de la Superliga:', cur);
     if (v == null) return;
     v = v.trim();
-    try { localStorage.setItem(LS_RIVAL, v); } catch(_){}
+    try { window._lsSetSafe(LS_RIVAL, v); } catch(_){}
     var el = document.getElementById('oc-superliga-rival');
     if (el) el.textContent = v ? v : '[definir rival]';
   };
@@ -66915,7 +66915,7 @@ https://api.sofascore.app/api/v1/team/44/image
 
   /* ── MVP tracker localStorage helpers ── */
   function getMVPTracker(){ try { return JSON.parse(localStorage.getItem(LS_MVP) || '{}'); } catch(e){ return {}; } }
-  function setMVPTracker(data){ try { localStorage.setItem(LS_MVP, JSON.stringify(data)); } catch(e){} }
+  function setMVPTracker(data){ try { window._lsSetSafe(LS_MVP, JSON.stringify(data)); } catch(e){} }
 
   function getTopMVPCount(){
     var t = getMVPTracker(); var max = 0;
@@ -67048,14 +67048,14 @@ https://api.sofascore.app/api/v1/team/44/image
       if (_objHyd){
         _objStateUpdatedAt = Date.now();
         data.updatedAt = _objStateUpdatedAt;
-        localStorage.setItem(LS_OBJ, JSON.stringify(data));
+        window._lsSetSafe(LS_OBJ, JSON.stringify(data));
         /* Sync al servidor (gateado por hidratación dentro de _kvBlobSync:
            no sube nada antes de reconciliar, así un autosave temprano no
            pisa el server con un progreso vacío). */
         if (_objStateSync) _objStateSync.touch(_objStateUpdatedAt);
       } else {
         data.updatedAt = _objStateUpdatedAt || 0;
-        localStorage.setItem(LS_OBJ, JSON.stringify(data));
+        window._lsSetSafe(LS_OBJ, JSON.stringify(data));
       }
     } catch(e){}
   }
@@ -67725,7 +67725,7 @@ https://api.sofascore.app/api/v1/team/44/image
          el reset gana por recencia en el server, así no resucita el
          progreso viejo al rehidratar / en otro móvil. */
       _objStateUpdatedAt = Date.now();
-      try { localStorage.setItem(LS_OBJ, JSON.stringify({ checks:{}, counters:{}, updatedAt:_objStateUpdatedAt })); } catch(_){}
+      try { window._lsSetSafe(LS_OBJ, JSON.stringify({ checks:{}, counters:{}, updatedAt:_objStateUpdatedAt })); } catch(_){}
       /* Reset AUTORITATIVO: un borrado intencional (Reiniciar Temporada /
          ♻) debe GANAR en el server (lo sella con su reloj) y pasar la
          defensa "rechazo de POST vacío" del server (que solo bloquea los
@@ -68025,7 +68025,7 @@ https://api.sofascore.app/api/v1/team/44/image
       }
     } catch(_){}
     var seed = DEFAULTS.map(function(t){ var c={}; for (var k in t) c[k]=t[k]; return c; });
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(seed)); } catch(_){}
+    try { window._lsSetSafe(STORE_KEY, JSON.stringify(seed)); } catch(_){}
     return seed;
   }
 
@@ -68056,7 +68056,7 @@ https://api.sofascore.app/api/v1/team/44/image
           if(!d || !d.state) return;
           var srv = d.state[STORE_KEY];
           if (Array.isArray(srv) && srv.length){
-            try { localStorage.setItem(STORE_KEY, JSON.stringify(srv)); } catch(_){}
+            try { window._lsSetSafe(STORE_KEY, JSON.stringify(srv)); } catch(_){}
             if (typeof cb === 'function') cb(srv);
           }
         })
@@ -68065,7 +68065,7 @@ https://api.sofascore.app/api/v1/team/44/image
   }
 
   function save(arr){
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(arr || [])); } catch(_){}
+    try { window._lsSetSafe(STORE_KEY, JSON.stringify(arr || [])); } catch(_){}
     _serverPush(arr);
   }
 
@@ -68570,7 +68570,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     return {};
   }
   function _saveAll(obj){
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(obj || {})); } catch(_){}
+    try { window._lsSetSafe(STORE_KEY, JSON.stringify(obj || {})); } catch(_){}
     try {
       var _body = {}; _body[STORE_KEY] = obj || {};
       fetch('/api/state', {
@@ -68630,7 +68630,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           if (srv && typeof srv === 'object'){
             var local = _loadAll();
             var merged = _mergeMatchMaps(local, srv);
-            try { localStorage.setItem(STORE_KEY, JSON.stringify(merged)); } catch(_){}
+            try { window._lsSetSafe(STORE_KEY, JSON.stringify(merged)); } catch(_){}
             /* Si la unión tiene MÁS partidos que el server (el local
                tenía extras), re-subimos para CONVERGER (que el otro
                dispositivo los reciba). Sin re-sellar nada — es aditivo. */
@@ -69193,7 +69193,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       mySide: (mySide === 'local' || mySide === 'visit') ? mySide : ''
     });
     /* Guardar en localStorage del hub destino. */
-    try { localStorage.setItem(matchKey, JSON.stringify(all)); } catch(_){}
+    try { window._lsSetSafe(matchKey, JSON.stringify(all)); } catch(_){}
     /* Subir al servidor: usa /api/state con merge_dict genérico. */
     try {
       var payload = {};
@@ -69586,7 +69586,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     } catch(_){ return []; }
   }
   function savePickedTours(arr) {
-    try { localStorage.setItem(TOURS_STORAGE_KEY, JSON.stringify(arr||[])); } catch(_){}
+    try { window._lsSetSafe(TOURS_STORAGE_KEY, JSON.stringify(arr||[])); } catch(_){}
   }
 
   var state = {
@@ -69835,7 +69835,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     all.rev = (parseInt(all.rev, 10) || 0) + 1;
     /* Marca el instante del save para que _tourInfoHydrate no lo pise. */
     _tourInfoLastSaveTs = all.updatedAt;
-    try { localStorage.setItem(_TOUR_INFO_KEY, JSON.stringify(all)); } catch(_){}
+    try { window._lsSetSafe(_TOUR_INFO_KEY, JSON.stringify(all)); } catch(_){}
     try {
       if (typeof window.fetch === 'function'){
         /* `authoritative:true`: el ✅ Guardar del admin es una acción
@@ -69967,7 +69967,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           var serverNewer = (svRev > locRev) || (svRev === locRev && svTs > locTs);
           var localNewer  = (locRev > svRev) || (locRev === svRev && locTs > svTs);
           if (serverNewer){
-            try { localStorage.setItem(_TOUR_INFO_KEY, JSON.stringify(sv)); } catch(_){}
+            try { window._lsSetSafe(_TOUR_INFO_KEY, JSON.stringify(sv)); } catch(_){}
             var ov = document.getElementById('munich-tour-ov');
             if (ov && ov.classList.contains('show') && _tourInfoEdit.id && !_tourInfoEdit.on){
               window.muTourInfo(_tourInfoEdit.id, false);
@@ -71538,7 +71538,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   }
   function _save(d){
     _MEM = (d && typeof d === 'object') ? d : (_MEM || { yo:'🎲', rival:'🎲', nivel:'Crack' });
-    try { localStorage.setItem(KEY, JSON.stringify(_MEM)); } catch(_){}
+    try { window._lsSetSafe(KEY, JSON.stringify(_MEM)); } catch(_){}
   }
   window._teamSeasonForm = function(){ return _load(); };
   /* Exponer save + render para que el ✅ Guardar del editor 🖍 (que
@@ -72169,7 +72169,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
           var msgs    = Array.isArray(sv && sv.msgs) ? sv.msgs : [];
           var cursors = (sv && sv.cursors) || {};
           _muUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
-          localStorage.setItem(_thisKey, JSON.stringify({ msgs:msgs, cursors:cursors, updatedAt:_muUpdatedAt }));
+          window._lsSetSafe(_thisKey, JSON.stringify({ msgs:msgs, cursors:cursors, updatedAt:_muUpdatedAt }));
         } catch(_){}
         try { _refresh(); } catch(_){}
       },
@@ -72277,7 +72277,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
         }
       });
       _muUpdatedAt = Date.now();
-      localStorage.setItem(KEY, JSON.stringify({ msgs:d.msgs, cursors:d.cursors || {}, updatedAt:_muUpdatedAt }));
+      window._lsSetSafe(KEY, JSON.stringify({ msgs:d.msgs, cursors:d.cursors || {}, updatedAt:_muUpdatedAt }));
       /* Sube al servidor (debounced + reintentos). No hace nada hasta
          que el sync ha hidratado (anti-wipe). */
       if (_muSync){ try { _muSync.touch(_muUpdatedAt); } catch(_){} }
@@ -74399,7 +74399,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     return false;
   }
   function _markSeeded(){
-    try { localStorage.setItem(_SEED_FLAG, '1'); } catch(_){}
+    try { window._lsSetSafe(_SEED_FLAG, '1'); } catch(_){}
     try { _setCursor('seeded', '1'); } catch(_){}
   }
   /* ¿El sistema de mensajes ya ha procesado eventos del juego alguna vez?

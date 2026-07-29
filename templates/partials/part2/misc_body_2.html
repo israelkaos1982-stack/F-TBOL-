@@ -2497,7 +2497,16 @@
 
   window._superligaStatsRebuild = build;
 
-  document.addEventListener('DOMContentLoaded', build);
+  /* Diferido a un macrotask separado (2026-07-29): este rebuild de
+     estadísticas de Superliga se registraba como listener DIRECTO de
+     DOMContentLoaded — junto con el resto de "build*"/"_render*Stats"
+     de competición, se ejecutaban TODOS seguidos en un único bloque
+     síncrono ininterrumpible en cada arranque, aunque el usuario nunca
+     hubiera abierto esta pantalla. Con mucho historial acumulado la
+     suma podía bloquear el hilo principal durante MINUTOS ("a veces no
+     abre la web"). `setTimeout(fn,0)` le da su propio turno del bucle
+     de eventos, sin cambiar qué se calcula ni cuándo lo ve el usuario. */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(build, 0); });
   /* Refresca al entrar a la pantalla. Hook ligero sobre go(). El
      bundle.js (que define `window.go`) carga DESPUÉS de este partial,
      así que diferimos hasta DOMContentLoaded — antes el patch se
@@ -2569,7 +2578,10 @@
     }
   }
   window._renderUclStats = _renderUclStats;
-  document.addEventListener('DOMContentLoaded', _renderUclStats);
+  /* Diferido a un macrotask separado (2026-07-29, mismo motivo que el
+     rebuild de Superliga más arriba): evita sumarse al bloqueo único de
+     DOMContentLoaded. */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(_renderUclStats, 0); });
   try {
     var el = document.getElementById('s-ucl-stats');
     if (el && typeof MutationObserver !== 'undefined') {
@@ -2625,7 +2637,8 @@
     }
   }
   window._renderUelStats = _renderUelStats;
-  document.addEventListener('DOMContentLoaded', _renderUelStats);
+  /* Diferido a un macrotask separado (2026-07-29, mismo motivo). */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(_renderUelStats, 0); });
   try {
     var el = document.getElementById('s-uel-stats');
     if (el && typeof MutationObserver !== 'undefined') {
@@ -2681,7 +2694,8 @@
     }
   }
   window._renderUeclStats = _renderUeclStats;
-  document.addEventListener('DOMContentLoaded', _renderUeclStats);
+  /* Diferido a un macrotask separado (2026-07-29, mismo motivo). */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(_renderUeclStats, 0); });
   try {
     var el = document.getElementById('s-uecl-stats');
     if (el && typeof MutationObserver !== 'undefined') {
@@ -34304,7 +34318,12 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function(){ try { buildUclPrevClas(); } catch(_){} }, 150);
   };
 
-  document.addEventListener('DOMContentLoaded', buildUclPrevClas);
+  /* Diferido a un macrotask separado (2026-07-29, mismo motivo que el
+     resto de "build*Clas"/"_render*Stats" de competición: evita que
+     TODOS se ejecuten seguidos en un único bloque síncrono
+     ininterrumpible en cada arranque, que con mucho historial acumulado
+     podía bloquear el hilo principal durante minutos). */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(buildUclPrevClas, 0); });
   /* Wire del botón colapsable del panel diagnóstico. */
   document.addEventListener('DOMContentLoaded', function(){
     setTimeout(function(){

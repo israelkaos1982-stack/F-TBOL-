@@ -37347,7 +37347,18 @@ window._showSimProgress = function(opts, onDone){
       + '</div>';
   }
   window.buildUclGruposClas = buildUclGruposClas;
-  document.addEventListener('DOMContentLoaded', buildUclGruposClas);
+  /* Diferido a un macrotask separado (2026-07-29): estos "build*Clas" de
+     competición son O(ligas×equipos) y, al registrarse todos como
+     listeners directos de DOMContentLoaded, se ejecutaban TODOS seguidos
+     dentro de UN SOLO bloque síncrono ininterrumpible en cada arranque
+     (aunque el usuario nunca haya abierto esta pantalla) — con mucho
+     historial acumulado, la suma podía bloquear el hilo principal
+     durante MINUTOS (bug "a veces no abre la web / se queda clavado el
+     % de carga"). `setTimeout(fn,0)` no cambia qué se calcula ni cuándo
+     el usuario lo ve — solo le da a cada uno su propio turno del bucle
+     de eventos, para que el navegador pueda pintar/responder entre uno
+     y el siguiente. */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(buildUclGruposClas, 0); });
 })();
 </script>
 </div>
@@ -38388,7 +38399,10 @@ window._showSimProgress = function(opts, onDone){
   window.simulateOpenQualifier    = simulateOpenQualifier;
   window.resetOpenQualifier       = resetOpenQualifier;
   window._oqPullWildCardWinners   = pullWildCardWinners;
-  document.addEventListener('DOMContentLoaded', buildOpenQualifierClas);
+  /* Diferido a un macrotask separado (2026-07-29, mismo motivo que
+     buildUclGruposClas más arriba): evita sumarse al bloqueo único de
+     DOMContentLoaded. */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(buildOpenQualifierClas, 0); });
 })();
 </script>
 </div>
@@ -39097,7 +39111,9 @@ window._showSimProgress = function(opts, onDone){
     container.innerHTML = html;
   }
   window.buildUelGruposClas = build;
-  document.addEventListener('DOMContentLoaded', build);
+  /* Diferido a un macrotask separado (2026-07-29, mismo motivo que
+     buildUclGruposClas más arriba). */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(build, 0); });
 })();
 </script>
 </div>
@@ -39345,7 +39361,9 @@ window._showSimProgress = function(opts, onDone){
     container.innerHTML = html;
   }
   window.buildUeclGruposClas = build;
-  document.addEventListener('DOMContentLoaded', build);
+  /* Diferido a un macrotask separado (2026-07-29, mismo motivo que
+     buildUclGruposClas más arriba). */
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(build, 0); });
 })();
 </script>
 </div>

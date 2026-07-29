@@ -103,8 +103,9 @@
             if (!document.body) { _st(function(){ _showBanner(txt); }, 400); return; }
             b = document.createElement('div');
             b.id = 'boot-slow-banner';
+            /* z-index MÁXIMO: el splash usa 2147483646 y lo taparía. */
             b.style.cssText = 'position:fixed;left:8px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom,0px));'
-              + 'z-index:2147483000;background:rgba(30,16,0,.94);border:1px solid rgba(240,160,32,.7);'
+              + 'z-index:2147483647;background:rgba(30,16,0,.97);border:1px solid rgba(240,160,32,.8);'
               + 'border-radius:9px;padding:9px 11px;font-family:\'Courier New\',monospace;font-size:10px;'
               + 'line-height:1.45;color:#ffd9a0;box-shadow:0 4px 18px rgba(0,0,0,.6);word-break:break-word;';
             b.addEventListener('click', function(){ try { b.parentNode.removeChild(b); } catch(_){} });
@@ -133,10 +134,38 @@
          en qué pantalla se colgó la sesión anterior — y, sobre todo, si
          se colgó DENTRO de `go()` o DESPUÉS de que volviera (dos causas
          completamente distintas). */
+      /* ⚠️ EL RASTRO VA EN UNA **COOKIE**, NO EN localStorage
+         (2026-07-29 #6). El intento anterior escribía en `localStorage`
+         y NO llegó a aparecer ningún aviso tras el cuelgue. La causa más
+         probable no es que el rastro no se generase, sino que no se
+         pudiera GUARDAR: este proyecto tiene documentado que el
+         `localStorage` del usuario se llena (existe hasta un aviso
+         «⚠️ Navegador sin espacio» y un `_lsSetSafe` con expulsión de
+         claves). Con la cuota agotada, `setItem` lanza y el `catch`
+         se lo traga — el diagnóstico desaparece justo en el caso que
+         intenta diagnosticar. Una cookie usa un almacén DISTINTO, son
+         ~100 bytes, y sobrevive tanto a recargar como a cerrar y
+         reabrir la pestaña. `localStorage` se mantiene como secundario
+         por si las cookies estuvieran restringidas. */
       var DIAG_KEY = '_ftbolBootDiag_v1';
       var diagState = {};
+      function _ckSet(v){
+        try { document.cookie = DIAG_KEY + '=' + encodeURIComponent(v) + ';path=/;max-age=7200;SameSite=Lax'; } catch(_){}
+      }
+      function _ckGet(){
+        try {
+          var m = (' ' + document.cookie).match(new RegExp('[; ]' + DIAG_KEY + '=([^;]*)'));
+          return m ? decodeURIComponent(m[1]) : null;
+        } catch(_){ return null; }
+      }
+      function _ckDel(){
+        try { document.cookie = DIAG_KEY + '=;path=/;max-age=0;SameSite=Lax'; } catch(_){}
+      }
       function _diagSave(){
-        try { localStorage.setItem(DIAG_KEY, JSON.stringify(diagState)); } catch(_){}
+        var s = '';
+        try { s = JSON.stringify(diagState); } catch(_){}
+        _ckSet(s);
+        try { localStorage.setItem(DIAG_KEY, s); } catch(_){}
       }
       window._bootDiagGo = function(phase, id, extra){
         try {
@@ -146,23 +175,48 @@
         } catch(_){}
       };
       /* Lee y LIMPIA el rastro de la sesión anterior antes de que nada
-         más pueda pisarlo. */
+         más pueda pisarlo. Cookie primero (siempre cabe), localStorage
+         como respaldo. */
       try {
-        var _prevRaw = localStorage.getItem(DIAG_KEY);
+        var _prevRaw = _ckGet();
+        if (!_prevRaw) { try { _prevRaw = localStorage.getItem(DIAG_KEY); } catch(_){} }
         if (_prevRaw) {
           window._prevBootDiag = JSON.parse(_prevRaw);
-          localStorage.removeItem(DIAG_KEY);
+          _ckDel();
+          try { localStorage.removeItem(DIAG_KEY); } catch(_){}
         }
       } catch(_){}
       try {
         var pd = window._prevBootDiag;
-        if (pd && pd.go && pd.go.phase === 'start') {
-          _showBanner('⛔ la sesión anterior se colgó DENTRO de abrir «' + pd.go.id + '»');
-        } else if (pd && pd.go && pd.go.phase === 'returned') {
-          _showBanner('⛔ la sesión anterior se colgó JUSTO DESPUÉS de abrir «' + pd.go.id + '» (' + pd.go.ms + 'ms)');
-        } else if (pd && pd.slow) {
-          _showBanner('⚠ sesión anterior: bloqueo ' + pd.slow.ms + 'ms tras: ' + pd.slow.label);
+        var parts = [];
+        if (pd && pd.tap) parts.push('toque en «' + pd.tap + '»');
+        if (pd && pd.go) {
+          if (pd.go.phase === 'start') parts.push('⛔ se colgó DENTRO de abrir «' + pd.go.id + '»');
+          else if (pd.go.phase === 'returned') parts.push('⛔ se colgó DESPUÉS de abrir «' + pd.go.id + '» (' + pd.go.ms + 'ms)');
+          else if (pd.go.phase === 'settled') parts.push('abrió «' + pd.go.id + '» OK');
+          else parts.push(pd.go.phase + ' «' + pd.go.id + '»');
         }
+        if (pd && pd.slow) parts.push('bloqueo ' + pd.slow.ms + 'ms tras: ' + pd.slow.label);
+        if (parts.length) _showBanner('SESIÓN ANTERIOR → ' + parts.join(' · '));
+      } catch(_){}
+
+      /* Rastro del TOQUE, en fase de captura sobre `document`: corre
+         ANTES que cualquier `onclick` de la tarjeta, así que queda
+         registrado aunque el cuelgue ocurra antes de llegar a `go()`.
+         Sin esto no se puede distinguir «el toque ni se recibió» de
+         «el toque se recibió y algo se colgó después». */
+      try {
+        document.addEventListener('pointerdown', function(ev){
+          try {
+            var t = ev && ev.target;
+            var card = (t && t.closest) ? (t.closest('.menu-card') || t.closest('button') || t) : t;
+            var txt = '';
+            try { txt = String((card && (card.textContent || card.id)) || '').replace(/\s+/g, ' ').trim().slice(0, 40); } catch(_){}
+            diagState.tap = txt || '?';
+            delete diagState.go;
+            _diagSave();
+          } catch(_){}
+        }, true);
       } catch(_){}
 
       /* (1) longtask observer — el que de verdad identifica al culpable. */

@@ -1,5 +1,73 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `_lsSetSafe` con la cuota AGOTADA no puede costar O(claves × tamaño) por llamada — congelaba el hilo durante MINUTOS (obligatorio, 2026-07-29)
+
+**Bug (muchas capturas usuario 2026-07-29, «no abre la web» → luego «se
+congela al pulsar cualquier caja»)**: la web tardaba minutos en abrir o
+no abría; una vez abierta, tocar CUALQUIER caja del menú la dejaba
+congelada sin recuperación. Pasaba también en incógnito.
+
+### Causa raíz — el limpiador de cuota reintentaba un valor multi-MB tras CADA borrado
+
+`_freeAndRetry` (dentro de `_lsSetSafe`, `misc_body_1.html`) reintentaba
+el `setItem` **después de cada `removeItem` individual**. Con el almacén
+lleno y ~50 claves `_protected` que expulsar, eso son ~100 intentos de
+escribir de nuevo el MISMO valor — y esos valores son plantillas de liga
+completas, de VARIOS MEGAS. Un `setItem` fallido de ese tamaño no es
+gratis: el navegador serializa y comprueba cuota antes de rechazarlo.
+
+El multiplicador: `_lextRestoreAllFromServer` llama a `_lsSetSafe` para
+las ~54 ligas seguidas, y **no había ningún pestillo** — cada liga
+repetía el ciclo COMPLETO (escaneo íntegro del almacén incluido) aunque
+la anterior ya hubiera demostrado que no cabe nada más. Medido en
+aislado con el escenario del usuario (almacén lleno + 54 ligas de 2 MB):
+**127 intentos de escritura y 254 MB serializados**. En un móvil eso son
+minutos de hilo principal bloqueado.
+
+Por eso «se congela al pulsar cualquier caja»: el hilo YA estaba
+bloqueado antes del toque — ni siquiera llegaba a ejecutarse un listener
+de `pointerdown` registrado en fase de captura sobre `document`. La web
+"abría" solo porque la cortina CSS del splash la destapa desde el
+compositor (ver sección del splash), no porque estuviera lista.
+
+Agravante en bucle: la expulsión borra `_protected` de OTRAS ligas → en
+el siguiente arranque esas ligas faltan → se dispara otra vez la
+restauración masiva → vuelve a expulsar. Se repite en cada sesión.
+
+### Fix
+
+- **Reintento por LOTES, no por borrado**: mismo orden y mismo resultado
+  de expulsión, pero los reintentos bajan de ~100 a ~5. Las categorías
+  100% reconstruibles (snapshots, `_backup`, stats) se tiran enteras;
+  los `_protected` van en lotes de 10 para no expulsar de más.
+- **Pestillo de sesión `window._lsQuotaExhausted`**: una vez agotada la
+  cuota, los valores GRANDES (>64 KB) se descartan al instante sin
+  volver a intentar nada — su copia durable vive en IndexedDB
+  (`_idbKV`, cientos de MB) y en `LIGA_CACHE`. Los valores PEQUEÑOS
+  (cursores, banderas, preferencias) se siguen intentando SIEMPRE.
+- Medido tras el fix, mismo escenario: **9 intentos y 18 MB** (25× menos
+  trabajo). Verificado además que, cuando SÍ hay espacio recuperable, el
+  guardado sigue teniendo éxito y el pestillo NO se activa.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_freeAndRetry` vuelva a reintentar el `setItem`
+   tras CADA `removeItem` individual. El valor que se reintenta puede
+   ser multi-MB y el coste se multiplica por el nº de claves a expulsar
+   Y por el nº de llamadas (las ~54 ligas de la restauración masiva).
+2. **PROHIBIDO** quitar el pestillo `window._lsQuotaExhausted` o hacer
+   que los valores grandes lo ignoren. Sin él, cada liga repite el ciclo
+   completo de expulsión aunque ya se sepa que no cabe nada.
+3. **PROHIBIDO** extender el pestillo a los valores PEQUEÑOS: cursores,
+   banderas y preferencias son justo los que necesitan `localStorage` y
+   casi siempre caben tras la expulsión. El umbral vive en
+   `LARGE_VALUE` (64 KB).
+4. Un bloqueo del hilo principal de este tipo es indistinguible de "la
+   web no responde al tocar": si un toque no deja ni rastro en un
+   listener de captura sobre `document`, el hilo ya estaba bloqueado
+   ANTES del toque — buscar la causa en el arranque, no en el handler
+   de la pantalla que se intentaba abrir.
+
 ## `setLigaSchedule` arma un lock anti-reversión GENÉRICO — mover un equipo fuera de Liga EA Sports ya no "vuelve solo" (obligatorio, 2026-07-28)
 
 **Bug (2 fotos usuario 2026-07-28, «Girona FC»)**: el admin abre "🔀 Mover

@@ -54,10 +54,44 @@ window.pG = function(fn) {
       err.name === 'NS_ERROR_DOM_QUOTA_REACHED'));
   }
   /* Libera espacio por orden de MENOR a MAYOR importancia, reintentando
-     el setItem tras cada borrado. Nunca borra la clave que se escribe. */
+     el setItem tras cada LOTE de borrados. Nunca borra la clave que se
+     escribe.
+
+     ⚠️ COSTE — POR QUÉ SE REINTENTA POR LOTES Y NO TRAS CADA BORRADO
+     (2026-07-29). La versión original reintentaba el `setItem` DESPUÉS
+     DE CADA `removeItem` individual. Con el almacén lleno y ~50 claves
+     `_protected` que expulsar, eso son ~100 intentos de escribir de
+     nuevo el MISMO valor — y estos valores son plantillas de liga
+     completas, de varios MEGAS. Cada intento fallido de un valor así no
+     es gratis: el navegador tiene que serializarlo y comprobar cuota
+     entero antes de rechazarlo.
+     El multiplicador real: la restauración masiva (`_lextRestoreAllFromServer`)
+     llama aquí para las ~54 ligas seguidas → del orden de MILES de
+     escrituras multi-MB fallidas encadenadas, bloqueando el hilo
+     principal durante minutos. Es la causa del "se congela al pulsar
+     cualquier caja": el hilo ya estaba bloqueado ANTES del toque (por
+     eso ni el registro del toque llegaba a ejecutarse).
+     Reintentar por LOTE mantiene exactamente el mismo orden y el mismo
+     resultado de expulsión, pero baja los reintentos de ~100 a 5. */
   function _freeAndRetry(key, value){
     function _retry(){
       try { localStorage.setItem(key, value); return true; } catch(_){ return false; }
+    }
+    /* `batch` = cada cuántos borrados se reintenta. Las categorías
+       100% reconstruibles (snapshots, backups, stats) se tiran enteras
+       de una vez: son baratas de recuperar y no merece la pena pagar un
+       reintento multi-MB por cada una. Los `_protected` de otras ligas
+       son más valiosos (aunque también se re-descargan del servidor),
+       así que ahí se reintenta cada pocos borrados para no expulsar más
+       de lo estrictamente necesario. */
+    function _dropAll(list, batch){
+      if (!list.length) return false;
+      var step = batch || list.length;
+      for (var i=0; i<list.length; i++){
+        try { localStorage.removeItem(list[i]); } catch(_){}
+        if (((i + 1) % step) === 0 && _retry()) return true;
+      }
+      return ((list.length % step) === 0) ? false : _retry();
     }
     try {
       var snaps=[], backups=[], protibs=[], stats=[];
@@ -71,15 +105,17 @@ window.pG = function(fn) {
       }
       /* 1. Snapshots datados (históricos) — los más viejos primero. */
       snaps.sort();
-      while (snaps.length){ try { localStorage.removeItem(snaps.shift()); } catch(_){} if(_retry()) return true; }
+      if (_dropAll(snaps)) return true;
       /* 2. _backup legacy (redundante con _protected). */
-      for (var b=0; b<backups.length; b++){ try { localStorage.removeItem(backups[b]); } catch(_){} if(_retry()) return true; }
+      if (_dropAll(backups)) return true;
       /* 3. Stores de estadísticas (los reconstruye rebuildPlayerStatsStore
             desde cfg.results/liga_results — se pueden tirar sin perder nada). */
-      for (var s=0; s<stats.length; s++){ try { localStorage.removeItem(stats[s]); } catch(_){} if(_retry()) return true; }
+      if (_dropAll(stats)) return true;
       /* 4. _protected de OTRAS ligas (su copia vive en el servidor; se
-            re-descarga al abrir esa liga). NO tocamos la clave actual. */
-      for (var p=0; p<protibs.length; p++){ try { localStorage.removeItem(protibs[p]); } catch(_){} if(_retry()) return true; }
+            re-descarga al abrir esa liga). NO tocamos la clave actual.
+            En lotes de 10 para no expulsar las ~50 de golpe cuando con
+            unas pocas ya habría bastado. */
+      if (_dropAll(protibs, 10)) return true;
       /* 5. Iconos custom de competiciones (re-subibles por el admin). */
       try {
         if (localStorage.getItem('comp_icons_v1')){
@@ -108,16 +144,39 @@ window.pG = function(fn) {
       setTimeout(function(){ try { t.parentNode.removeChild(t); } catch(_){} }, 8000);
     } catch(_){}
   }
+  /* Umbral de "valor grande": por encima de esto, un intento fallido
+     de `setItem` ya cuesta lo suyo (serializar + comprobar cuota), así
+     que una vez sabemos que el almacén está agotado NO se vuelve a
+     intentar — su copia durable vive en IndexedDB (`_idbKV`, cientos de
+     MB) y en `LIGA_CACHE`. Los valores PEQUEÑOS (cursores, banderas,
+     preferencias) se siguen intentando siempre: son los que de verdad
+     necesitan localStorage y casi siempre caben tras la expulsión. */
+  var LARGE_VALUE = 64 * 1024;
   /* true = guardado (con o sin limpieza); false = imposible incluso tras
      liberar espacio. NUNCA lanza. */
   window._lsSetSafe = function(key, value){
+    /* PESTILLO DE SESIÓN (2026-07-29). Sin él, CADA una de las ~54
+       ligas de la restauración masiva repetía el ciclo completo de
+       expulsión —escaneo íntegro del almacén incluido— aunque la
+       anterior ya hubiera demostrado que no cabe nada más. El coste se
+       multiplicaba por 54 y bloqueaba el hilo principal durante
+       minutos. Una vez agotado, se sabe: los bloques grandes se
+       descartan al instante (van a IndexedDB igualmente) y solo se
+       siguen intentando los pequeños. */
+    if (window._lsQuotaExhausted && typeof value === 'string' && value.length > LARGE_VALUE) {
+      return false;
+    }
     try { localStorage.setItem(key, value); return true; }
     catch(err){
       if (!_isQuotaErr(err)){
         try { console.warn('[ftbol] setItem falló (no-cuota):', key, err && err.name); } catch(_){}
         return false;
       }
+      /* Ya sabíamos que estaba agotado: no repetir el ciclo de
+         expulsión (es justo lo que multiplicaba el bloqueo). */
+      if (window._lsQuotaExhausted) return false;
       if (_freeAndRetry(key, value)) return true;
+      window._lsQuotaExhausted = true;
       _warnOnce();
       return false;
     }

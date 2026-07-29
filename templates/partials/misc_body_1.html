@@ -1770,9 +1770,19 @@ window._showSimProgress = function(opts, onDone){
     if(o.escudo || o.label){
       /* Escudo REAL: resolvemos por el nombre con el resolutor
          canónico (mismo que la lista de equipos) y solo si no hay
-         caemos al escudo guardado — autosana cajas con escudo viejo. */
-      var _e=o.escudo||'';
-      try{ if(o.label && window.getTeamLogoUrl){ var _u=window.getTeamLogoUrl(o.label); if(_u) _e=_u; } }catch(_){ }
+         caemos al escudo guardado — autosana cajas con escudo viejo.
+         ⚠️ El MAPA CANÓNICO manda (2026-07-29): `getTeamLogoUrl` resuelve
+         por NOMBRE y hay clubes IA homónimos de un club humano (Arsenal
+         Tivat, Arsenal Dzerzhinsk, Inter Turku…) que podían quedarse con
+         el nombre en `_ligaEaShields` y pintar SU escudo encima del
+         correcto de la caja (bug usuario 2026-07-29,
+         Arsenal-Brasil-Álvaro). PROHIBIDO consultar `getTeamLogoUrl`
+         antes que `_canonClubCrestFor` para un club humano canónico. */
+      var _e=o.escudo||'', _canonHit=false;
+      try{ if(o.label && window._canonClubCrestFor){ var _c=window._canonClubCrestFor(o.label); if(_c){ _e=_c; _canonHit=true; } } }catch(_){ }
+      if(!_canonHit){
+        try{ if(o.label && window.getTeamLogoUrl){ var _u=window.getTeamLogoUrl(o.label); if(_u) _e=_u; } }catch(_){ }
+      }
       if(_e) card.querySelectorAll('img.mc-img,img.mc-equipo-badge-bg').forEach(function(im){ im.src=_e; });
     }
     if(o.emoji!=null){
@@ -1812,7 +1822,10 @@ window._showSimProgress = function(opts, onDone){
       var sl=String(s||'').toLowerCase();
       if(s && sl!=='bayern munich' && sl!=='bayern múnich') nm=String(s); } }catch(_){ }
     var esc='';
-    try{ if(window.getTeamLogoUrl) esc=String(window.getTeamLogoUrl(nm)||''); }catch(_){ }
+    /* Mapa canónico primero (ver nota en applyOverride): `getTeamLogoUrl`
+       puede devolver el escudo de un club IA homónimo. */
+    try{ if(window._canonClubCrestFor) esc=String(window._canonClubCrestFor(nm)||''); }catch(_){ }
+    if(!esc){ try{ if(window.getTeamLogoUrl) esc=String(window.getTeamLogoUrl(nm)||''); }catch(_){ } }
     if(!esc) esc='/static/img/escudos-1/england_liverpool.football-logos.cc.svg';
     var sig=nm+'|'+esc;
     if(card._mkHubSig===sig) return;
@@ -1832,7 +1845,9 @@ window._showSimProgress = function(opts, onDone){
     if(entry.type==='team'){
       card.className='menu-card equipo-card';
       var esc='';
-      try{ if(entry.label && window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(entry.label)||''; } }catch(_){ }
+      /* Mapa canónico primero (ver nota en applyOverride). */
+      try{ if(entry.label && window._canonClubCrestFor){ esc=window._canonClubCrestFor(entry.label)||''; } }catch(_){ }
+      if(!esc){ try{ if(entry.label && window.getTeamLogoUrl){ esc=window.getTeamLogoUrl(entry.label)||''; } }catch(_){ } }
       if(!esc) esc=entry.escudo||'';
       card.setAttribute('style', common);
       card.innerHTML=
@@ -2880,7 +2895,46 @@ window._showSimProgress = function(opts, onDone){
         } catch(_){}
         return false;
       }
-      var best = null, bestScore = -1, bestEa = false, bestGeneric = true;
+      /* ⚠️ ORDEN DE DESEMPATE (obligatorio, 2026-07-29). `_rowMatchesClub`
+         casa por NOMBRE normalizado, y hay clubes IA de "Resto de Ligas"
+         que se llaman EXACTAMENTE igual que un club humano: «Arsenal»
+         existe como Arsenal Tivat (Montenegro) y Arsenal Dzerzhinsk
+         (Bielorrusia), «Inter» en varias ligas, etc. Esas filas IA
+         acumulan MUCHÍSIMAS estadísticas (juegan su liga simulada
+         entera), mientras que la plantilla REAL de un club humano NO
+         guarda `pj`/`gol` dentro de `t.players[]` (esas stats se calculan
+         aparte, vía `_statsFor`/`ef_player_stats_*`) → su "riqueza" es 0
+         y PERDÍA siempre. Resultado (bug usuario 2026-07-29, caja
+         Arsenal-Brasil-Álvaro): la pantalla PLANTILLA salía con el roster
+         equivocado o vacío.
+         El orden es, de mayor a menor peso:
+           1) TIENE JUGADORES — una fila vacía nunca sirve para pintar la
+              plantilla, aunque sea la "oficial" del club.
+           2) `isHuman` — discriminador semántico exacto: solo las filas
+              de los clubes de los 7 misters lo llevan, así que mata la
+              colisión con el homónimo IA.
+           3) fila REAL vs genérica (`_hubRowLooksGeneric`, 2026-07-07).
+           4) riqueza de stats · 5) preferencia liga-ea-sports (legacy).
+         PROHIBIDO volver a decidir esto solo por `_hubRowRichness`, y
+         PROHIBIDO subir `isHuman` por encima de "tiene jugadores" (una
+         fila humana vacía dejaría la plantilla en blanco para siempre). */
+      function _hasPlayers(t){
+        if (!t || !Array.isArray(t.players)) return false;
+        for (var i=0;i<t.players.length;i++){ if (t.players[i] && t.players[i].name) return true; }
+        return false;
+      }
+      function _rank(t, isEa){
+        return [ _hasPlayers(t) ? 1 : 0,
+                 (t && t.isHuman) ? 1 : 0,
+                 _hubRowLooksGeneric(t) ? 0 : 1,
+                 _hubRowRichness(t),
+                 isEa ? 1 : 0 ];
+      }
+      function _better(a, b){          /* ¿a mejor que b? */
+        for (var i=0;i<a.length;i++){ if (a[i] !== b[i]) return a[i] > b[i]; }
+        return false;
+      }
+      var best = null, bestRank = null;
       try {
         for (var ii=0; ii<localStorage.length; ii++){
           var k = localStorage.key(ii);
@@ -2892,22 +2946,8 @@ window._showSimProgress = function(opts, onDone){
           for (var i=0;i<teams.length;i++){
             var t = teams[i];
             if (!_rowMatchesClub(t)) continue;
-            var isEa = (k === 'ligaExt_liga-ea-sports');
-            var generic = _hubRowLooksGeneric(t);
-            /* Una fila REAL (posiciones/medias editadas) SIEMPRE gana a
-               una genérica, sin importar cuánta "riqueza" de stats haya
-               acumulado esta última — ver `_hubRowLooksGeneric`. Entre
-               dos filas del mismo tipo (ambas reales o ambas genéricas)
-               se sigue desempatando por riqueza + preferencia EA. */
-            if (best === null || (bestGeneric && !generic)){
-              best = t; bestScore = _hubRowRichness(t); bestEa = isEa; bestGeneric = generic;
-              continue;
-            }
-            if (generic && !bestGeneric) continue;
-            var sc = _hubRowRichness(t);
-            if (sc > bestScore || (sc === bestScore && isEa && !bestEa)){
-              best = t; bestScore = sc; bestEa = isEa; bestGeneric = generic;
-            }
+            var rank = _rank(t, k === 'ligaExt_liga-ea-sports');
+            if (best === null || _better(rank, bestRank)){ best = t; bestRank = rank; }
           }
         }
       } catch(_){}
@@ -5363,6 +5403,15 @@ window._showSimProgress = function(opts, onDone){
     try{ if(typeof _psHumanLogicName==='function'){ c=_PS_CANON_CREST[_psCanonNorm(_psHumanLogicName())]; if(c) return c; } }catch(_){}
     return '';
   }
+  /* Resolutor canónico POR NOMBRE, expuesto para que CUALQUIER pantalla
+     que pinte el escudo de un club humano (las cajas del menú EQUIPOS,
+     las cards añadidas, etc.) tenga la misma fuente autoritativa que el
+     hub y la plantilla — y NO dependa de `getTeamLogoUrl`, que resuelve
+     por nombre sobre `_ligaEaShields` y puede colisionar con un club IA
+     homónimo (Arsenal Tivat, Inter Turku…). */
+  window._canonClubCrestFor = function(name){
+    try{ return _PS_CANON_CREST[_psCanonNorm(name)] || ''; }catch(_){ return ''; }
+  };
   function _psHumanShield(){
     /* Si el hub es un club humano canónico, su escudo es el archivo
        bundleado — autoritativo sobre cualquier dato stale (bug 2026-06-04). */
@@ -14406,9 +14455,27 @@ window._showSimProgress = function(opts, onDone){
   function refreshLigaEaShields(){
     var shields = {};
     var humanFlags = {};
+    /* ⚠️ COLISIÓN DE NOMBRE IA↔HUMANO (obligatorio, 2026-07-29).
+       El índice es por NOMBRE, y hay clubes IA de "Resto de Ligas" cuyo
+       nombre coincide EXACTAMENTE con el de un club humano: «Arsenal»
+       existe como Arsenal Tivat (Montenegro) y Арсенал/Arsenal
+       Dzerzhinsk (Bielorrusia) — a veces guardados literalmente como
+       "Arsenal" —, «Inter» en varias ligas, etc. Con el criterio
+       "primero en llegar gana", el escudo del IA se quedaba con el
+       nombre y `getTeamLogoUrl('Arsenal')` devolvía el del Arsenal
+       Tivat — que es lo que la caja Arsenal-Brasil-Álvaro acababa
+       pintando ENCIMA del escudo correcto (bug usuario 2026-07-29).
+       Regla: si ALGUNA fila con ese MISMO nombre está marcada `isHuman`,
+       solo las filas humanas pueden poner el escudo de ese nombre.
+       Se resuelve con una PRE-PASADA que recoge esos nombres — NO con
+       `_isHumanClubCanonico`, que hace match LAXO por substring y
+       bloquearía el escudo propio del "FK Arsenal Tivat".
+       PROHIBIDO volver al "primero en llegar gana" a secas. */
+    var humanNames = {};        /* nombre → normalizado, para toda fila humana */
+    var humanShieldNames = {};  /* nombre/normalizado con fila humana CON escudo */
     /* Slugs prioritarios (se procesan primero, no se sobreescriben luego). */
     var prioritySlugs = ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion'];
-    function _scan(slug){
+    function _eachTeam(slug, fn){
       try {
         var raw = localStorage.getItem('ligaExt_'+slug);
         if(!raw) return;
@@ -14418,26 +14485,41 @@ window._showSimProgress = function(opts, onDone){
           if(!t || !t.name) return;
           var nm = String(t.name).trim();
           if(!nm) return;
-          if(t.shield){
-            if(!shields[nm]) shields[nm] = t.shield;
-            var norm = _normName(nm);
-            if(norm && !shields[norm]) shields[norm] = t.shield;
-          }
-          if(t.isHuman){
-            if(!humanFlags[nm]){
-              humanFlags[nm] = {isHuman:true, humanEmoji:t.humanEmoji||'👤'};
-              var nrm = _normName(nm);
-              if(nrm && !humanFlags[nrm]) humanFlags[nrm] = humanFlags[nm];
-            }
-          }
+          fn(t, nm, _normName(nm));
         });
       } catch(_){}
     }
-    /* 1) Spanish tiers primero (prioridad) */
-    prioritySlugs.forEach(_scan);
-    /* 2) Resto de ligaExt_* en orden alfabético — incluye las 51
-          extranjeras (francia, inglaterra, alemania, …) y las ligas
-          custom que el admin haya creado (superliga, etc.). */
+    function _markHuman(t, nm, norm){
+      if(!t.isHuman) return;
+      if(!(nm in humanNames)) humanNames[nm] = norm || '';
+      if(!t.shield) return;
+      humanShieldNames[nm] = 1;
+      if(norm) humanShieldNames[norm] = 1;
+    }
+    function _scan(slug){
+      _eachTeam(slug, function(t, nm, norm){
+        if(t.shield){
+          /* Un nombre "reclamado" por una fila humana solo lo puede
+             escribir otra fila humana (la 1ª por orden de prioridad). */
+          if(!humanShieldNames[nm] || t.isHuman){
+            if(!shields[nm]) shields[nm] = t.shield;
+          }
+          if(norm && (!humanShieldNames[norm] || t.isHuman)){
+            if(!shields[norm]) shields[norm] = t.shield;
+          }
+        }
+        if(t.isHuman){
+          if(!humanFlags[nm]){
+            humanFlags[nm] = {isHuman:true, humanEmoji:t.humanEmoji||'👤'};
+            if(norm && !humanFlags[norm]) humanFlags[norm] = humanFlags[nm];
+          }
+        }
+      });
+    }
+    /* Orden: 1) tiers españoles (prioridad) · 2) resto de ligaExt_* en
+       orden alfabético — incluye las 51 extranjeras (francia, inglaterra,
+       alemania, …) y las ligas custom del admin (superliga, etc.). */
+    var orderedSlugs = prioritySlugs.slice();
     try {
       var allSlugs = [];
       for(var i=0;i<localStorage.length;i++){
@@ -14448,8 +14530,28 @@ window._showSimProgress = function(opts, onDone){
         if(prioritySlugs.indexOf(slug)!==-1) continue;
         allSlugs.push(slug);
       }
-      allSlugs.sort().forEach(_scan);
+      allSlugs.sort();
+      orderedSlugs = orderedSlugs.concat(allSlugs);
     } catch(_){}
+    /* PRE-PASADA: qué nombres tienen fila humana (y cuáles con escudo). */
+    orderedSlugs.forEach(function(s){ _eachTeam(s, _markHuman); });
+    /* Un club humano SIN escudo guardado en NINGUNA de sus filas (caso
+       normal: su escudo va hardcoded en la caja / en `_CANON_CLUB_CREST`)
+       es justo el que se dejaba robar el nombre por el IA homónimo.
+       Se siembra con el escudo CANÓNICO y el nombre queda "reclamado".
+       Si el admin SÍ guardó un escudo en alguna fila humana, ese gana
+       (no entramos aquí) — la edición del admin manda. */
+    try {
+      Object.keys(humanNames).forEach(function(nm){
+        if(humanShieldNames[nm]) return;
+        var canon = window._canonClubCrestFor ? window._canonClubCrestFor(nm) : '';
+        if(!canon) return;
+        var norm = humanNames[nm];
+        shields[nm] = canon; humanShieldNames[nm] = 1;
+        if(norm){ shields[norm] = canon; humanShieldNames[norm] = 1; }
+      });
+    } catch(_){}
+    orderedSlugs.forEach(_scan);
     window._ligaEaShields = shields;
     window._LIGA_HUMAN_FLAGS = humanFlags;
   }

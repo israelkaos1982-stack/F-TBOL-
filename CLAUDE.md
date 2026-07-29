@@ -1,5 +1,88 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Un club IA con el MISMO NOMBRE que un club humano le robaba el escudo y la plantilla — desempate por `isHuman`, nunca solo por "riqueza" (obligatorio, 2026-07-29)
+
+**Bug (usuario 2026-07-29): «el Arsenal en la caja principal
+Arsenal-Brasil-Álvaro no tiene su escudo verdadero / y la plantilla
+dentro de la caja Arsenal no aparece y tiene que aparecer»**. La caja
+del menú EQUIPOS mostraba un escudo ajeno y la pantalla 👕 PLANTILLA
+del hub salía con el roster equivocado.
+
+### Causa raíz — DOS índices por NOMBRE, y hay homónimos IA
+
+En «Resto de Ligas» existen clubes IA cuyo nombre coincide
+EXACTAMENTE con el de un club humano: **Arsenal** (FK Arsenal Tivat,
+Montenegro · Арсенал/Arsenal Dzerzhinsk, Bielorrusia), **Inter**, etc.
+Los dos sitios que resuelven identidad por nombre se los tragaban:
+
+1. **Escudo — `refreshLigaEaShields`** (`misc_body_1.html`) construye
+   `window._ligaEaShields[nombre] → escudo` con «primero en llegar
+   gana», escaneando `liga-ea-sports` primero y luego TODAS las
+   `ligaExt_*` en orden alfabético. La fila humana del Arsenal **no
+   tiene `shield` guardado** (su escudo va hardcoded en el HTML de la
+   caja y en `_CANON_CLUB_CREST`), así que el nombre quedaba libre y
+   se lo llevaba el primer IA homónimo. Luego `applyOverride` (la
+   función que aplica el override de `menu_home_v1` a cada caja del
+   menú) hacía `getTeamLogoUrl(o.label)` y **pintaba ese escudo ENCIMA
+   del correcto** que ya traía el HTML.
+2. **Plantilla — `_findRichestHubRow`**: casa por nombre normalizado y
+   elegía por `_hubRowRichness` (Σ `pj+gol+pen+fk` de `t.players[]`).
+   Un IA homónimo juega su liga entera y acumula cientos de partidos;
+   la plantilla REAL de un club humano **no guarda `pj`/`gol` dentro
+   de `t.players[]`** (esas stats viven aparte, en
+   `ef_player_stats_*`) → su riqueza es **0** y PERDÍA SIEMPRE.
+
+Reproducido en Chromium real (CDP) con la colisión sembrada:
+antes → `getTeamLogoUrl('Arsenal') = /dzerzhinsk.png` y la plantilla
+con 22 filas del Tivat; después → escudo real del Arsenal y las 24
+filas del roster humano.
+
+### Fix
+
+- **`refreshLigaEaShields`**: PRE-PASADA que anota qué nombres tienen
+  fila `isHuman` (y cuáles de ellas traen `shield`). Un nombre
+  «reclamado» por una fila humana solo lo puede escribir otra fila
+  humana. Si NINGUNA fila humana de ese nombre trae escudo, se siembra
+  con `window._canonClubCrestFor(nombre)` y el nombre queda reclamado
+  igualmente. Si el admin SÍ guardó un escudo en una fila humana, ese
+  gana (la edición del admin manda sobre el canónico).
+- **`window._canonClubCrestFor(name)`** (nuevo): expone el mapa
+  canónico `_PS_CANON_CREST` (el mismo que ya usaban el hub y la
+  plantilla) para que cualquier pantalla que pinte el escudo de un
+  club humano tenga la fuente autoritativa. Lo consultan ANTES que
+  `getTeamLogoUrl`: `applyOverride`, `syncHubCard` y `buildAdded`
+  (cajas añadidas a mano).
+- **`_findRichestHubRow`**: el desempate pasa a ser una tupla
+  lexicográfica `[tiene jugadores, isHuman, fila real (no genérica),
+  riqueza, es liga-ea-sports]`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `refreshLigaEaShields` (o cualquier índice
+   nombre→identidad nuevo) vuelva al «primero en llegar gana» a secas.
+   Si un nombre tiene fila `isHuman`, solo las filas humanas (o el
+   escudo canónico) pueden escribirlo.
+2. **PROHIBIDO** usar `window._isHumanClubCanonico` como filtro en ese
+   índice: hace match **LAXO por substring**, así que
+   `_isHumanClubCanonico('FK Arsenal Tivat')` da `true` y bloquearía
+   el escudo PROPIO del Tivat. La comprobación tiene que ser por
+   nombre EXACTO (la pre-pasada).
+3. **PROHIBIDO** que un pintor de escudo de la caja de un club humano
+   (`applyOverride`, `syncHubCard`, `buildAdded`, o cualquiera nuevo)
+   consulte `getTeamLogoUrl` **antes** que `_canonClubCrestFor`: esa
+   función resuelve por nombre y puede devolver el escudo de un
+   homónimo IA.
+4. **PROHIBIDO** que `_findRichestHubRow` decida solo por
+   `_hubRowRichness`, y **PROHIBIDO** subir `isHuman` por encima de
+   «tiene jugadores» (una fila humana vacía —duplicado en
+   `liga-ea-sports` de un club que juega en su liga doméstica, caso
+   PSG/Izan 2026-06-29— dejaría la plantilla en blanco para siempre).
+5. Toda caja de mister NUEVA hereda los 3 arreglos automáticamente
+   (son genéricos vía `isHuman` + el registro `MISTERS_HUMANOS`; no
+   hardcodean Arsenal). Si se añade un 8º mister, basta con meter su
+   club en `_PS_CANON_CREST`/`_CANON_CLUB_CREST` para que su caja
+   tenga escudo canónico.
+
 ## Lentitud entre pantallas: escritura de `textContent` NO idempotente + `MutationObserver` que barre TODO el documento (obligatorio, 2026-07-29)
 
 **Bug (usuario 2026-07-29, tras arreglar el cuelgue de arranque): «se

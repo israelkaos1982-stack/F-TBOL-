@@ -1,5 +1,100 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## "Simular todas las ligas" fabricaba y GUARDABA plantillas genéricas "Jugador N" cuando el registro no resolvía a tiempo — el servidor las dejaba GANAR sobre la plantilla real (obligatorio, 2026-07-29)
+
+**Bug (fotos usuario 2026-07-29, «Resto de Ligas» — Inglaterra, Alemania,
+Italia, Francia, Países Bajos, Portugal y la mayoría de clasificados a
+Champions)**: la caja "Resto de Ligas · Estadísticas" salía con
+TODAS las categorías (Goleadores, MVP, Goles de penalti, Goles de
+falta, Portería imbatida, Penaltis parados, Tarjetas amarillas) en
+«Sin datos todavía». Al abrir Manchester City / Chelsea, los datos de
+EQUIPO seguían intactos (PJ 38, G/E/P/G+, GLOBAL/ATQ/MED/DEF con
+valores reales), pero la PLANTILLA mostraba jugadores genéricos
+(«Jugador 18», «Jugador 10», «Jugador 22»…, PJ=41 en todos, 0 goles/
+asistencias) en vez de los nombres y estadísticas reales que el
+usuario ya tenía cargados.
+
+### Causa raíz — `_lecSimCupOn` fabricaba placeholder sin el guard de bulk sim que SÍ tenía `ligaExtSimular`
+
+`window._restoLigasSimAll` ("Simular todas las ligas") activa
+`window._restoSimBulkInProgress` y, dentro de ese modo, el propio bucle
+de `ligaExtSimular` (`misc_body_1.html`) YA evitaba fabricar un roster
+genérico si `SQUAD_REGISTRY` no resolvía la plantilla real a tiempo —
+dejaba `t.players` VACÍO en vez de inventar datos. Pero **`_finishSim`
+llama SIEMPRE, sin mirar ese flag, a `_lecSimCupOn(data, {force:true})`**
+(el motor de copa, "🎮 Sim = liga + copa" desde 2026-06-12), y
+`_lecSimCupOn` tenía su PROPIA copia del mismo bloque de sembrado —
+**sin el guard `_bulkSim`**. Si `SQUAD_REGISTRY` no tenía la plantilla
+de ese equipo en ESE instante (muy probable en una pasada rápida por
+~54 ligas), `_lecSimCupOn` caía a `_lextEnsureDefaultRoster(t)` —
+fabricaba 30 "Jugador N" (los índices 10/11/22/6/7 con flags
+natGoalPro/elite/penalty/natGoal/freeKick, exactamente los badges
+P/⭐/🏀/⚾ vistos en las capturas) — y ese roster genérico quedaba en
+`t.players`, que `saveData(slug, data)` persiste inmediatamente después.
+
+Ni el roster genérico recién fabricado NI la plantilla real anterior
+llevan `updatedAt` sellado (`_lextHydrateFromSquadRegistry` y
+`_lextBuildDefaultRoster` nunca sellan). En `_lx_merge_teams` (`app.py`),
+la regla "ninguno sellado → gana el entrante" dejaba que la plantilla
+genérica recién guardada **sustituyera para siempre** la real en el
+servidor — para TODOS los dispositivos. El backfill de identidad de
+roster ya existente (`best_roster_by_name`) no lo evitaba porque solo
+mira "vacío vs no-vacío": un roster de 30 "Jugador N" SÍ es no-vacío,
+así que nunca disparaba el backfill.
+
+### Fix — dos capas, mismo patrón que escudo/estadio/alias
+
+- **Cliente** (`misc_body_1.html`, `_lecSimCupOn`): el sembrado de
+  plantilla por defecto ahora respeta `window._restoSimBulkInProgress`,
+  idéntico al guard que ya tenía `ligaExtSimular`. En bulk sim, si
+  `SQUAD_REGISTRY` no resuelve, `t.players` se queda VACÍO (sin stats
+  de copa para ese equipo en esa pasada) en vez de fabricar y guardar
+  un roster falso.
+- **Servidor** (`app.py`, `_lx_merge_teams`): el backfill de roster
+  (`best_roster_by_name`) ahora detecta la firma exacta del roster
+  placeholder (≥80% de nombres que matchean `^Jugador\s*\d+$`) y, si
+  existe una versión REAL del mismo equipo (por nombre canónico) en
+  cualquiera de las dos copias (old o new), esa real gana SIEMPRE —
+  sin importar cuál ganó la fusión por-equipo ni qué `updatedAt` traiga
+  cada una. Es la MISMA red de seguridad ya establecida para escudo/
+  estadio/alias, extendida a "genérico vs real" en vez de solo "vacío
+  vs no-vacío". Tests en `tests/test_api.py::TestLigaExtMerge`
+  (`test_roster_generico_nunca_gana_a_real`,
+  `test_roster_generico_se_reemplaza_por_real_de_otra_grafia`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un motor de simulación nuevo (copa, competición
+   europea, o cualquier otro que toque `team.players[]` de una liga
+   externa) tenga su PROPIA copia del bloque "hidratar desde
+   SQUAD_REGISTRY → sembrar default si no hay nada" sin el MISMO guard
+   `window._restoSimBulkInProgress` que usa `ligaExtSimular`. Si se
+   necesita sembrar plantilla, se reutiliza el guard existente — no se
+   duplica el bloque sin él.
+2. **PROHIBIDO** que `_lextEnsureDefaultRoster`/`_lextBuildDefaultRoster`
+   se llamen dentro de un bucle que itere TODAS las ligas de golpe (Sim
+   masiva, migración, seed). Son seguros SOLO en flujos de una liga a
+   la vez, donde el registro ya tuvo tiempo de resolver.
+3. **PROHIBIDO** que el backfill de identidad de roster
+   (`best_roster_by_name`) trate CUALQUIER roster no-vacío como
+   "ganado, no tocar". Debe seguir distinguiendo genérico (firma
+   "Jugador N") de real — un roster genérico NUNCA puede sobrevivir a
+   la fusión si existe una versión real del mismo equipo en cualquiera
+   de las dos copias.
+4. Este bug es DISTINTO del ya documentado "Resto del Mundo — la
+   PLANTILLA de jugadores es IDENTIDAD" (2026-07-02, backfill vacío→real):
+   aquel cubre "no hay roster en absoluto"; este cubre "hay un roster,
+   pero es un placeholder que nunca debió persistirse ni ganar".
+5. **Recuperación de datos ya perdidos**: este fix es preventivo — NO
+   reconstruye retroactivamente los nombres/estadísticas reales que ya
+   se sobrescribieron en el servidor de producción (ninguna copia de
+   este repo tiene acceso a esa base de datos en vivo). Si algún
+   dispositivo del usuario todavía conserva localmente la plantilla
+   real de una de estas ligas (no llegó a sincronizarse tras el
+   incidente), el nuevo merge la restaurará automáticamente al servidor
+   la próxima vez que ese dispositivo sincronice — es la única vía de
+   recuperación posible sin acceso directo a la base de datos.
+
 ## Un club IA con el MISMO NOMBRE que un club humano le robaba el escudo y la plantilla — desempate por `isHuman`, nunca solo por "riqueza" (obligatorio, 2026-07-29)
 
 **Bug (usuario 2026-07-29): «el Arsenal en la caja principal

@@ -1562,6 +1562,54 @@ class TestLigaExtMerge:
         assert len(res["teams"]) == 1
         assert res["teams"][0].get("efootballAlias") == "Rosario Central", res["teams"][0]
 
+    def test_roster_no_se_pierde_si_ganador_no_lo_trae(self):
+        # Espejo de escudo/estadio/alias: un ganador por updatedAt sin
+        # plantilla no debe borrar la plantilla real de una copia más vieja.
+        old = {"teams": [{"id": "z", "name": "Villarreal",
+                           "players": [{"name": "Yeremy Pino"}], "updatedAt": 100}]}
+        new = {"teams": [{"id": "z", "name": "Villarreal", "updatedAt": 200}]}
+        res = self._merge(old, new)
+        assert res["teams"][0].get("players") == [{"name": "Yeremy Pino"}], res["teams"][0]
+
+    def test_roster_generico_nunca_gana_a_real(self):
+        # Bug 2026-07-29: "Simular todas las ligas" (bulk) fabricaba un
+        # roster placeholder de 30 "Jugador N" para equipos cuyo
+        # SQUAD_REGISTRY no resolvió a tiempo, y lo guardaba SIN sello.
+        # Si el servidor ya tenía la plantilla REAL (también sin sello, o
+        # con un sello MENOR), la genérica NO puede ganar solo por venir
+        # en el documento entrante / tener updatedAt mayor.
+        real_roster = [{"name": "Kevin De Bruyne"}, {"name": "Erling Haaland"}]
+        generic_roster = [{"name": "Jugador " + str(i)} for i in range(1, 31)]
+        old = {"teams": [{"id": "1", "name": "Manchester City",
+                           "players": real_roster, "updatedAt": 100}]}
+        new = {"teams": [{"id": "1", "name": "Manchester City",
+                           "players": generic_roster, "updatedAt": 999}]}
+        res = self._merge(old, new)
+        assert res["teams"][0]["players"] == real_roster, res["teams"][0]["players"]
+
+    def test_roster_generico_se_reemplaza_por_real_de_otra_grafia(self):
+        # La plantilla real puede vivir en OTRA versión del mismo club
+        # (afijo distinto) presente en el propio POST entrante.
+        real_roster = [{"name": "N'Golo Kanté"}]
+        generic_roster = [{"name": "Jugador " + str(i)} for i in range(1, 31)]
+        old = {"teams": [{"id": "1", "name": "Chelsea",
+                           "players": generic_roster, "updatedAt": 500}]}
+        new = {"teams": [{"id": "2", "name": "Chelsea FC",
+                           "players": real_roster, "updatedAt": 10}]}
+        res = self._merge(old, new)
+        assert len(res["teams"]) == 1
+        assert res["teams"][0]["players"] == real_roster, res["teams"][0]["players"]
+
+    def test_roster_real_no_se_toca_si_ya_gano_la_fusion(self):
+        # Caso normal (sin genéricos de por medio): no reintroducir ningún
+        # comportamiento nuevo cuando ambas plantillas son reales.
+        r1 = [{"name": "Jugador Real Uno"}]
+        r2 = [{"name": "Jugador Real Dos"}]
+        old = {"teams": [{"id": "1", "name": "Ajax", "players": r1, "updatedAt": 1}]}
+        new = {"teams": [{"id": "1", "name": "Ajax", "players": r2, "updatedAt": 2}]}
+        res = self._merge(old, new)
+        assert res["teams"][0]["players"] == r2
+
     def test_logo_liga_no_se_borra_por_post_vacio(self):
         # Un dispositivo que nunca puso el logo POSTea config.logo='' →
         # el servidor debe CONSERVAR el logo almacenado (identidad).

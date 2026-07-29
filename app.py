@@ -3246,7 +3246,33 @@ def _lx_merge_teams(old_data, new_data):
     # completa — sin este backfill esa plantilla se perdía en cuanto la
     # copia sin jugadores ganaba la fusión por ser más reciente. NUNCA
     # pisa un roster ya presente en el ganador (gana la edición real).
-    best_roster_by_name = {}   # nombre canónico -> (ts, players)
+    #
+    # GENÉRICO NUNCA GANA A REAL (2026-07-29): bug usuario — "Simular
+    # todas las ligas" (bulk sim) fabricaba, para equipos cuyo SQUAD_REGISTRY
+    # no resolvía a tiempo, una plantilla placeholder de 30 "Jugador N"
+    # (`_lextEnsureDefaultRoster`) y la guardaba. Como ni esa plantilla
+    # genérica NI la real anterior llevan `updatedAt` sellado, la entrante
+    # (genérica) ganaba la fusión por-equipo de arriba y BORRABA para
+    # siempre la plantilla real de TODOS los dispositivos (Inglaterra,
+    # Alemania, Italia, Francia, Países Bajos, Portugal y la mayoría de
+    # clasificados a Champions, reportado 2026-07-29). El backfill de
+    # arriba NO lo cubría porque solo mira "vacío vs no-vacío" — un roster
+    # genérico SÍ tiene 30 entradas, así que nunca disparaba. Aquí
+    # detectamos el roster placeholder por su firma exacta (nombres
+    # "Jugador N") y, si existe una copia REAL del mismo equipo en
+    # cualquiera de las dos versiones (old o new), esa real SIEMPRE gana,
+    # sin importar antigüedad ni cuál ganó la fusión por-equipo de arriba.
+    def _lx_roster_is_generic(players):
+        if not isinstance(players, list) or not players:
+            return False
+        names = [p.get("name") for p in players if isinstance(p, dict)]
+        if not names:
+            return False
+        generic_re = re.compile(r"^jugador\s*\d+$", re.IGNORECASE)
+        generic_n = sum(1 for n in names if isinstance(n, str) and generic_re.match(n.strip()))
+        return generic_n >= max(1, int(len(names) * 0.8))
+
+    best_roster_by_name = {}   # nombre canónico -> (ts, players, is_generic)
     for t in (old_teams + new_teams):
         if not isinstance(t, dict):
             continue
@@ -3255,20 +3281,35 @@ def _lx_merge_teams(old_data, new_data):
         if not nm or not isinstance(players, list) or not players:
             continue
         ts = _lx_updated_at(t) or 0
+        is_gen = _lx_roster_is_generic(players)
         cur = best_roster_by_name.get(nm)
-        if cur is None or ts >= cur[0]:
-            best_roster_by_name[nm] = (ts, players)
+        if cur is None:
+            best_roster_by_name[nm] = (ts, players, is_gen)
+            continue
+        cur_ts, cur_players, cur_gen = cur
+        if cur_gen and not is_gen:
+            # Lo real SIEMPRE desplaza a lo genérico, sin mirar el sello.
+            best_roster_by_name[nm] = (ts, players, is_gen)
+        elif is_gen and not cur_gen:
+            pass  # ya tenemos una versión real guardada; se conserva
+        elif ts >= cur_ts:
+            best_roster_by_name[nm] = (ts, players, is_gen)
     if best_roster_by_name:
         for t in out_teams:
             if not isinstance(t, dict):
                 continue
             players = t.get("players")
-            if isinstance(players, list) and players:
-                continue
             nm = _lx_canon_name(t.get("name"))
             best = best_roster_by_name.get(nm) if nm else None
-            if best:
-                t["players"] = best[1]
+            if not best:
+                continue
+            best_ts, best_players, best_gen = best
+            has_players = isinstance(players, list) and bool(players)
+            if not has_players:
+                t["players"] = best_players
+                continue
+            if _lx_roster_is_generic(players) and not best_gen:
+                t["players"] = best_players
 
     result = dict(new_data)
     result["teams"] = out_teams

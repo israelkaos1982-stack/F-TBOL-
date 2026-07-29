@@ -5,6 +5,74 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>eFootball ✓</title>
   <script>
+    /* ── COLA de DOMContentLoaded (2026-07-29) ────────────────────────────
+       Diagnóstico confirmado con datos reales del usuario: el splash se
+       queda clavado en "hydrate-start" (la última marca ANTES de esperar
+       la respuesta de `/api/kv/menu_home_v1`) durante MINUTOS. Esa función
+       es async (fetch) y NO bloquea nada — el hilo principal queda LIBRE
+       en cuanto se llama. La explicación real: TODOS los listeners de
+       `DOMContentLoaded` de este documento (~90, repartidos entre
+       misc_body_1.html y misc_body_2.html) se disparan SEGUIDOS, dentro
+       de UNA SOLA tarea síncrona ininterrumpible del navegador — es el
+       comportamiento NATIVO del evento, no algo que este proyecto pueda
+       evitar registrando cada listener por separado. El de la hidratación
+       del menú (que deja la marca "hydrate-start") es de los PRIMEROS en
+       registrarse — así que aunque él mismo termine al instante, el
+       navegador NO puede pintar la pantalla, ni disparar el backstop de
+       seguridad (`setTimeout`), ni procesar la respuesta del `fetch`,
+       hasta que TODOS los ~90 listeners posteriores terminen de correr —
+       si CUALQUIERA de ellos tarda mucho (o cuelga), el splash entero
+       queda clavado, por más marcas de diagnóstico que tenga.
+
+       Fix genérico, en el chokepoint único: se sustituye
+       `document.addEventListener` (SOLO para el tipo 'DOMContentLoaded',
+       y SOLO en el objeto `document` — el resto de eventos/objetos
+       quedan intactos) para que, en vez de registrar el listener de
+       forma nativa, lo ENCOLE. Cuando el evento real dispara, se
+       recorre la cola invocando un listener por macrotask
+       (`setTimeout(fn,0)` encadenado) — MISMO orden que antes (cada
+       script sigue registrando su listener en el mismo punto de
+       siempre), pero AHORA cada uno corre en su PROPIA tarea. Entre
+       uno y el siguiente el navegador puede pintar, procesar el
+       backstop de 6s en cuanto se cumpla, y resolver el `fetch` de la
+       hidratación — así un listener lento ya NO bloquea a los demás
+       ni le impide al splash cerrarse cuando corresponda. */
+    (function(){
+      var queue = [];
+      var fired = false;
+      var nativeAdd = document.addEventListener.bind(document);
+      document.addEventListener = function(type, listener, opts){
+        if (type === 'DOMContentLoaded' && !fired) {
+          queue.push(listener);
+          return;
+        }
+        return nativeAdd(type, listener, opts);
+      };
+      function runStep(i){
+        if (i >= queue.length) {
+          try { if (window._bootMark) window._bootMark('dcl-queue-done'); } catch(_){}
+          return;
+        }
+        /* Marca de posición (2026-07-29): si UN listener concreto es
+           tan lento que ni siquiera el diferido por macrotask evita
+           que se note, esta marca queda clavada con SU número de
+           orden — dice exactamente cuál de los ~90 es, sin tener que
+           adivinar por el %. */
+        try { if (window._bootMark) window._bootMark('dcl#' + (i+1) + '/' + queue.length); } catch(_){}
+        var fn = queue[i];
+        try {
+          if (typeof fn === 'function') fn();
+          else if (fn && typeof fn.handleEvent === 'function') fn.handleEvent();
+        } catch(e){ try{ console.error('[boot] DOMContentLoaded listener error', e); }catch(_){} }
+        setTimeout(function(){ runStep(i + 1); }, 0);
+      }
+      nativeAdd('DOMContentLoaded', function(){
+        fired = true;
+        runStep(0);
+      }, { once: true });
+    })();
+  </script>
+  <script>
     /* ── PROGRESO REAL DEL SPLASH (2026-07-28) ────────────────────────────
        Placeholder definido aquí, ANTES de cualquier <link>/<script> que
        pueda completarse primero, para que ningún hito de carga se pierda

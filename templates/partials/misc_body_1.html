@@ -47336,6 +47336,15 @@ https://api.sofascore.app/api/v1/team/44/image
          nunca vuelve a intentar nada (2026-07-24 #7). */
       if (!Array.isArray(LIGA_CACHE[k].teams) || !LIGA_CACHE[k].teams.length) {
         try { _lextTriggerBgHydrate(k); } catch(_){}
+        /* IndexedDB es un espejo DURABLE de TODA `ligaExt_*` (saveData
+           lo escribe siempre, no solo para las 4 ligas auto-sembradas —
+           bug 2026-07-29 "se han perdido todas las plantillas de Resto
+           de Ligas"). Antes solo se consultaba para esas 4; se
+           generaliza a CUALQUIER liga externa como red de recuperación
+           adicional a la del servidor, para un dispositivo cuyo
+           localStorage se vació pero cuyo IndexedDB (~cientos de MB,
+           evicción mucho menos agresiva) todavía tiene la copia. */
+        try { _lextIdbTopupIfEmpty(k); } catch(_){}
       }
       return _applyForcedBlacklist(k, LIGA_CACHE[k]);
     }
@@ -47400,6 +47409,7 @@ https://api.sofascore.app/api/v1/team/44/image
            punto ya la disparó. */
         if (!Array.isArray(parsed.teams) || !parsed.teams.length) {
           try { _lextTriggerBgHydrate(k); } catch(_){}
+          try { _lextIdbTopupIfEmpty(k); } catch(_){}
         }
         return _applyForcedBlacklist(k, LIGA_CACHE[k]);
       }
@@ -47478,9 +47488,15 @@ https://api.sofascore.app/api/v1/team/44/image
        archivo esperan el valor inmediato); el objeto vacío se devuelve
        al instante y `_lextTriggerBgHydrate` hace el resto en segundo
        plano. Si la pantalla de esa liga sigue abierta cuando el
-       servidor responde, se re-pinta sola. */
+       servidor responde, se re-pinta sola.
+       `_lextIdbTopupIfEmpty` corre EN PARALELO como 2ª fuente
+       independiente del propio dispositivo (IndexedDB, ~cientos de MB,
+       espejo de CUALQUIER `ligaExt_*` desde saveData) — si el servidor
+       también viene vacío (main Y `_protected` perdidos), es la última
+       red antes de mostrar "Sin equipos". */
     LIGA_CACHE[k] = {teams:[], results:[]};
     try { _lextTriggerBgHydrate(k); } catch(_){}
+    try { _lextIdbTopupIfEmpty(k); } catch(_){}
     return _applyForcedBlacklist(k, LIGA_CACHE[k]);
   }
   /* Exponer en window para que IIFEs hermanos (p.ej. el host de

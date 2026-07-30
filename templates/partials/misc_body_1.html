@@ -126,10 +126,28 @@ window.pG = function(fn) {
     } catch(_){}
     return false;
   }
+  /* Cooldown PERSISTENTE (2026-07-30, queja usuario "pone todo el rato
+     ese mensaje... vuelvo a abrir y vuelve a salir"): `window._lsQuotaWarned`
+     es una variable en MEMORIA — se resetea a `false` en cada recarga de
+     página, así que con la cuota YA agotada (crónico, no puntual) el
+     aviso reaparecía en TODAS las aperturas de la web, no solo una vez
+     por sesión. Un timestamp de 4h en localStorage (~20 bytes, cabe
+     siempre — el umbral `LARGE_VALUE` de _lsSetSafe es 64 KB) throttlea
+     el toast VISUAL entre aperturas sin tocar el resto de la lógica
+     anti-cuota (que sigue actuando en cada sesión, tenga o no toast). */
+  var _QUOTA_WARN_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 horas
+  function _quotaWarnOnCooldown(){
+    try {
+      var last = Number(localStorage.getItem('ftbol_quota_warn_last_ts') || 0);
+      return last && (Date.now() - last) < _QUOTA_WARN_COOLDOWN_MS;
+    } catch(_){ return false; }
+  }
   function _warnOnce(){
     if (window._lsQuotaWarned) return;
     window._lsQuotaWarned = true;
     try { console.warn('[ftbol] localStorage lleno tras limpieza — los datos siguen subiendo al servidor, guardado LOCAL degradado esta sesión.'); } catch(_){}
+    if (_quotaWarnOnCooldown()) return; // ya se avisó hace <4h, no repetir el toast
+    try { localStorage.setItem('ftbol_quota_warn_last_ts', String(Date.now())); } catch(_){}
     try {
       var t = document.createElement('div');
       t.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'

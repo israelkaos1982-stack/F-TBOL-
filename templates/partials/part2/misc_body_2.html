@@ -1023,7 +1023,7 @@
     } catch(_){ return {}; }
   }
   function saveResults(r){
-    try { localStorage.setItem(STORAGE_KEY_RESULTS, JSON.stringify(r||{})); } catch(_){}
+    try { window._lsSetSafe(STORAGE_KEY_RESULTS, JSON.stringify(r||{})); } catch(_){}
   }
 
   /* Round-robin simple por circle method. Soporta nº IMPAR de equipos con
@@ -1066,7 +1066,7 @@
     } catch(_){ return null; }
   }
   function saveCalendar(cal){
-    try { localStorage.setItem(STORAGE_KEY_CALENDAR, JSON.stringify(cal)); } catch(_){}
+    try { window._lsSetSafe(STORAGE_KEY_CALENDAR, JSON.stringify(cal)); } catch(_){}
   }
   /* Si la lista de equipos cambió respecto al guardado (orden o composición),
      regenera y resetea resultados — la temporada parte de cero. */
@@ -4032,7 +4032,7 @@
         if (localStorage.getItem('ligaExt_' + slug)) return; /* ya cubierto por _scanLocalLigaExt */
         window._lextFetchJsonTimeout('/api/liga-ext/' + encodeURIComponent(slug)).then(function(respSq){
           if (respSq && respSq.data && Array.isArray(respSq.data.teams) && respSq.data.teams.length) {
-            try { localStorage.setItem('ligaExt_' + slug, JSON.stringify(respSq.data)); } catch(_){}
+            try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(respSq.data)); } catch(_){}
           }
         });
       });
@@ -4690,7 +4690,7 @@
   function choice(arr){return arr[Math.floor(Math.random()*arr.length)];}
   function clamp(n,min,max){return Math.max(min,Math.min(max,n));}
   function loadJSON(key,fallback){try{var raw=localStorage.getItem(key); return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}}
-  function saveJSON(key,val){localStorage.setItem(key,JSON.stringify(val));}
+  function saveJSON(key,val){window._lsSetSafe(key,JSON.stringify(val));}
 
   function getSegundaTeams(){
     // Si el admin ha creado equipos en el editor (🖍 Edit de Hypermotion),
@@ -5382,7 +5382,7 @@
         imbat:    Number(p.imbat||0)
       };
     });
-    try { localStorage.setItem(KEY, JSON.stringify(store)); } catch(_){}
+    try { window._lsSetSafe(KEY, JSON.stringify(store)); } catch(_){}
   }
 
   function rowZoneClassSegunda(pos, total){
@@ -5731,7 +5731,7 @@
       var tn = k.split('::')[0];
       if(teamsNorm[tn]){ delete store[k]; changed = true; }
     });
-    if(changed){ try { localStorage.setItem(KEY, JSON.stringify(store)); } catch(_){} }
+    if(changed){ try { window._lsSetSafe(KEY, JSON.stringify(store)); } catch(_){} }
   }
   window.renderSegunda = renderSegunda;
   window.renderPrimera = renderPrimera;
@@ -6157,7 +6157,7 @@
           try {
             var _lrPoll = JSON.stringify(sharedLigaResultsCache);
             if (window._lsSetSafe) window._lsSetSafe(LS_KEY, _lrPoll);
-            else localStorage.setItem(LS_KEY, _lrPoll);
+            else window._lsSetSafe(LS_KEY, _lrPoll);
           } catch (e) {}
         }
 
@@ -6173,7 +6173,7 @@
           try {
             var _copaJson = JSON.stringify(state.copa_state);
             if (window._lsSetSafe) window._lsSetSafe('copa_state_v1', _copaJson);
-            else localStorage.setItem('copa_state_v1', _copaJson);
+            else window._lsSetSafe('copa_state_v1', _copaJson);
           } catch (e) {}
         }
 
@@ -6186,7 +6186,7 @@
                            (Date.now() - window._ligaSorteoLock < 30000);
         if (!_sorteoFresh && isValidLigaSchedule(state.liga_schedule)) {
           sharedLigaScheduleCache = state.liga_schedule;
-          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(sharedLigaScheduleCache)); } catch (e) {}
+          try { window._lsSetSafe(LS_SCHEDULE_KEY, JSON.stringify(sharedLigaScheduleCache)); } catch (e) {}
           if (typeof window.setLigaSchedule === 'function') window.setLigaSchedule(sharedLigaScheduleCache, false);
         }
 
@@ -6303,7 +6303,7 @@
   function saveSchedule(schedule) {
     if (!isValidLigaSchedule(schedule)) return;
     sharedLigaScheduleCache = schedule;
-    try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(schedule)); } catch (e) {}
+    try { window._lsSetSafe(LS_SCHEDULE_KEY, JSON.stringify(schedule)); } catch (e) {}
     /* Arma el MISMO lock anti-reversión que ya protegía solo al botón
        🎲 Sortear (`_sortearCalendarioLigaRun`) — generalizado aquí para
        que CUALQUIER caller de `setLigaSchedule(...)` (el motor
@@ -6319,7 +6319,7 @@
        equipo movido "volvía a aparecer". */
     try {
       window._ligaSorteoLock = Date.now();
-      localStorage.setItem(LS_SORTEO_LOCK_KEY, String(window._ligaSorteoLock));
+      window._lsSetSafe(LS_SORTEO_LOCK_KEY, String(window._ligaSorteoLock));
     } catch (e) {}
     try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch (e) {}
     persistSharedLigaState({ liga_schedule: schedule });
@@ -6419,7 +6419,7 @@
         // Reconstruir stats con matches vacíos → el rebuild posterior
         // los recalcula desde cero a partir de LIGA_PLAYER_MATCH_STORE
         // (que acabamos de vaciar arriba) y ef_liga38_v4 (que también).
-        localStorage.setItem('ef_player_stats_v1', '{}');
+        window._lsSetSafe('ef_player_stats_v1', '{}');
       }
     } catch(_) {}
 
@@ -6442,7 +6442,7 @@
               p.mvp = 0; p.ta = 0; p.tr = 0; p.imbat = 0; p.penSaved = 0;
             });
           });
-          localStorage.setItem('ligaExt_liga-ea-sports', JSON.stringify(_lea));
+          window._lsSetSafe('ligaExt_liga-ea-sports', JSON.stringify(_lea));
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports'); } catch(_){}
         }
       }
@@ -6513,7 +6513,7 @@
       /* Escribir el calendario nuevo en TODOS los puntos de verdad
          ANTES de repintar la UI — si cualquier paso posterior falla,
          al menos el schedule guardado ya es el nuevo. */
-      try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(newSchedule)); } catch(_){}
+      try { window._lsSetSafe(LS_SCHEDULE_KEY, JSON.stringify(newSchedule)); } catch(_){}
       setLigaSchedule(newSchedule);
       try { window.LIGA_SCHEDULE = newSchedule; } catch(_){}
     } catch(_) {
@@ -6564,7 +6564,7 @@
         var srvSched = j && j.state && j.state.liga_schedule;
         if (isValidLigaSchedule(srvSched)) {
           newSchedule = srvSched;
-          try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(srvSched)); } catch(_){}
+          try { window._lsSetSafe(LS_SCHEDULE_KEY, JSON.stringify(srvSched)); } catch(_){}
           try { setLigaSchedule(srvSched, false); } catch(_){}
         }
         // Verificación adicional con GET por si hay cache o latencia.
@@ -6702,16 +6702,16 @@
        un GET a /api/state que devuelva el calendario stale revertía
        el sorteo recién hecho ("se actualiza sola la web"). */
     window._ligaSorteoLock = Date.now();
-    try { localStorage.setItem(LS_SORTEO_LOCK_KEY, String(window._ligaSorteoLock)); } catch (_) {}
+    try { window._lsSetSafe(LS_SORTEO_LOCK_KEY, String(window._ligaSorteoLock)); } catch (_) {}
     try { if (typeof window._pauseLigaStatePoll === 'function') window._pauseLigaStatePoll(20000); } catch (_) {}
 
     /* Borrar resultados / clasificación / stats locales + escribir el
        calendario nuevo en localStorage (para que la recarga lo lea). */
-    try { localStorage.setItem(LS_SCHEDULE_KEY, JSON.stringify(nuevo)); } catch (_) {}
+    try { window._lsSetSafe(LS_SCHEDULE_KEY, JSON.stringify(nuevo)); } catch (_) {}
     try { localStorage.removeItem(LS_KEY); } catch (_) {}
     try { sharedLigaScheduleCache = nuevo; sharedLigaResultsCache = {}; } catch (_) {}
     try { if (window.LIGA_J1_RESULTS) window.LIGA_J1_RESULTS.length = 0; } catch (_) {}
-    try { localStorage.setItem('ef_player_stats_v1', '{}'); } catch (_) {}
+    try { window._lsSetSafe('ef_player_stats_v1', '{}'); } catch (_) {}
     try {
       var _leaRaw = localStorage.getItem('ligaExt_liga-ea-sports');
       if (_leaRaw) {
@@ -6725,7 +6725,7 @@
               p.mvp = 0; p.ta = 0; p.tr = 0; p.imbat = 0; p.penSaved = 0;
             });
           });
-          localStorage.setItem('ligaExt_liga-ea-sports', JSON.stringify(_lea));
+          window._lsSetSafe('ligaExt_liga-ea-sports', JSON.stringify(_lea));
         }
       }
     } catch (_) {}
@@ -6861,7 +6861,7 @@
     try {
       var _lrJson = JSON.stringify(sharedLigaResultsCache);
       if (window._lsSetSafe) window._lsSetSafe(LS_KEY, _lrJson);
-      else localStorage.setItem(LS_KEY, _lrJson);
+      else window._lsSetSafe(LS_KEY, _lrJson);
     } catch (e) {}
     /* 2026-05-20: durante un batch (simularTodasJornadasIAAsync) NO
        persistimos al server por jornada — eran 38 POSTs con un payload
@@ -9826,7 +9826,7 @@
     } catch(e){}
     /* Copia legacy de localStorage por compatibilidad — si el HUD
        API aún no se ha cargado en boot, el read cae aquí. */
-    try { localStorage.setItem(ATH_MED_KEY, String(n)); } catch(e){}
+    try { window._lsSetSafe(ATH_MED_KEY, String(n)); } catch(e){}
   }
   function _athFmtPI(n) {
     n = Math.round((parseFloat(n) || 0) * 10) / 10;
@@ -10792,7 +10792,7 @@
           })
         });
         if (hist.length > 50) hist = hist.slice(0, 50);
-        localStorage.setItem('friendlyMatchHistory', JSON.stringify(hist));
+        window._lsSetSafe('friendlyMatchHistory', JSON.stringify(hist));
       } catch(_e){}
       if (typeof window._amsRenderHistory === 'function') window._amsRenderHistory();
       _mlShowFinalThenPost(mk);
@@ -12976,7 +12976,7 @@
     var continueBtn = document.getElementById('gm-ht-continue-btn');
     if (continueBtn) { continueBtn.style.display = ''; _gmGlowContinueBtn(continueBtn); }
     if (_gm.isHvH) {
-      try { localStorage.setItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
+      try { window._lsSetSafe('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
     }
   };
   /* Resalta el botón "INICIAR SEGUNDA PARTE" con un brillo ROJO
@@ -13343,7 +13343,7 @@
     var exitBtn = document.getElementById('gm-fin-exit-btn');
     if (exitBtn) exitBtn.style.display = '';
     if (_gm.isHvH) {
-      try { localStorage.setItem('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
+      try { window._lsSetSafe('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
     }
   };
 
@@ -14843,7 +14843,7 @@
           var dup = t.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
           if (dup) return { ok:false, reason:'duplicate', key:lk, teamName:t.name };
           t.players.push(playerEntry);
-          try { localStorage.setItem(lk, JSON.stringify(data)); }
+          try { window._lsSetSafe(lk, JSON.stringify(data)); }
           catch(e) { return { ok:false, reason:'storage', key:lk }; }
           /* Invalidar cache para que el próximo picker refleje el alta. */
           try {
@@ -14892,7 +14892,7 @@
             var sdup = st.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
             if (sdup) return { ok:false, reason:'duplicate', key:'selecciones_squad_v1', teamName:st.name };
             st.players.push(playerEntry);
-            try { localStorage.setItem('selecciones_squad_v1', JSON.stringify(sr)); }
+            try { window._lsSetSafe('selecciones_squad_v1', JSON.stringify(sr)); }
             catch(e) { return { ok:false, reason:'storage', key:'selecciones_squad_v1' }; }
             try { if (window.SQUAD_REGISTRY) { delete window.SQUAD_REGISTRY[teamName]; delete window.SQUAD_REGISTRY[st.name]; } } catch(_){}
             return { ok:true, key:'selecciones_squad_v1', teamName:st.name };
@@ -16704,7 +16704,7 @@
           })
         });
         if (_hist.length > 50) _hist = _hist.slice(0, 50);
-        localStorage.setItem('friendlyMatchHistory', JSON.stringify(_hist));
+        window._lsSetSafe('friendlyMatchHistory', JSON.stringify(_hist));
         if (typeof window._amsRenderHistory === 'function') window._amsRenderHistory();
       } catch(_e){}
     }
@@ -16982,7 +16982,7 @@
         htDone: st.htDone || false, stDone: st.stDone || false, etDone: st.etDone || false,
         isHvH: st.isHvH || false, savedAt: Date.now()
       });
-      localStorage.setItem('partidos_aplazados', JSON.stringify(ap));
+      window._lsSetSafe('partidos_aplazados', JSON.stringify(ap));
       _mlSetLiveState(mk, 'none');
       var _aplRow = document.querySelector('#mlw-' + mk + ' .ml-apl-row');
       if (_aplRow) _aplRow.style.display = 'none';
@@ -17001,7 +17001,7 @@
         htDone: _gm.htDone, stDone: _gm.stDone, etDone: _gm.etDone,
         isHvH: _gm.isHvH, savedAt: Date.now()
       });
-      localStorage.setItem('partidos_aplazados', JSON.stringify(ap2));
+      window._lsSetSafe('partidos_aplazados', JSON.stringify(ap2));
       var gmModalEl = document.getElementById('gm-modal');
       if (gmModalEl) gmModalEl.style.display = 'none';
       /* Partido aplazado: ya no es live en segundo plano */
@@ -17016,7 +17016,7 @@
     var saved = aplazados[idx];
     if (!saved) return;
     aplazados.splice(idx, 1);
-    localStorage.setItem('partidos_aplazados', JSON.stringify(aplazados));
+    window._lsSetSafe('partidos_aplazados', JSON.stringify(aplazados));
     gmOpen(saved.j, saved.home, saved.away, saved.isHvH || false);
     _gm.sc = saved.sc || { a: 0, b: 0 };
     _gm.timerSec = saved.timerSec || 0;
@@ -17248,7 +17248,7 @@
       var payload = { key: _gmPersistKey(), snap: _gmSnapshotCurrent(), ts: Date.now() };
       var json = JSON.stringify(payload);
       if (typeof window._lsSetSafe === 'function') window._lsSetSafe(_GM_LS_KEY, json);
-      else localStorage.setItem(_GM_LS_KEY, json);
+      else window._lsSetSafe(_GM_LS_KEY, json);
     } catch(_){}
   }
   function _gmClearPersisted() {
@@ -22627,7 +22627,7 @@
     _MEM_COMPS = (o && typeof o === 'object')
       ? _fillCompsDefaults(o)
       : _defaultsComps();
-    try { localStorage.setItem(KEY_COMPS, JSON.stringify(_MEM_COMPS||{})); } catch(_){}
+    try { window._lsSetSafe(KEY_COMPS, JSON.stringify(_MEM_COMPS||{})); } catch(_){}
   }
   /* Invalidador expuesto: el sync server→local en `hydrateFromServer`
      puede sobrescribir KEY_COMPS o KEY_TITLE en disco sin que el cache
@@ -22713,7 +22713,7 @@
        nombre del hub a "BAYERN MUNICH" para siempre. */
     var v = String(s || '').trim();
     try {
-      if (v) localStorage.setItem(KEY_TITLE, v);
+      if (v) window._lsSetSafe(KEY_TITLE, v);
       else localStorage.removeItem(KEY_TITLE);
     } catch(_){}
   }
@@ -22736,7 +22736,7 @@
   }
   function _saveOverrides(d){
     _MEM_OVR = (d && typeof d === 'object') ? d : (_MEM_OVR || {});
-    try { localStorage.setItem(KEY_CAL, JSON.stringify(_MEM_OVR)); } catch(_){}
+    try { window._lsSetSafe(KEY_CAL, JSON.stringify(_MEM_OVR)); } catch(_){}
   }
   function _esc(s){
     return String(s==null?'':s)
@@ -24034,7 +24034,7 @@ if (!document.getElementById('live-hub-css')) {
     catch(_) { return {}; }
   }
   function _save(s) {
-    try { localStorage.setItem(KEY, JSON.stringify(s || {})); } catch(_){}
+    try { window._lsSetSafe(KEY, JSON.stringify(s || {})); } catch(_){}
   }
   window._mlMarkTrashed = function(k) {
     if (!k) return;
@@ -24940,7 +24940,7 @@ function _refreshLiveCount() {
   var total = liveWrapCount + gmActive;
   window.__LIVE_MATCH_COUNT = total;
   try {
-    localStorage.setItem('liveMatchCount', String(total));
+    window._lsSetSafe('liveMatchCount', String(total));
   } catch(_){}
   /* Si existe el contador en la pantalla home, actualízalo */
   var homeIcon = document.getElementById('home-live-icon');
@@ -25749,7 +25749,7 @@ window.goLiveMatches = function() {
     return { users: {}, bets: [] };
   }
   function _isramaxSave(d){
-    try { localStorage.setItem(ISRAMAX_KEY, JSON.stringify(d || {users:{},bets:[]})); } catch(_){}
+    try { window._lsSetSafe(ISRAMAX_KEY, JSON.stringify(d || {users:{},bets:[]})); } catch(_){}
     /* Sync al servidor para que las apuestas sobrevivan al cambio
        de dispositivo. Fire-and-forget. */
     try {
@@ -25825,7 +25825,7 @@ window.goLiveMatches = function() {
       /* rev monotónico: servidor gana si tiene uno mayor, luego +1. */
       var localRev = Number((_isramaxReadHudBlob(userId)).rev) || 0;
       o.rev = Math.max(Number(o.rev) || 0, localRev) + 1;
-      try { localStorage.setItem(key, JSON.stringify(o)); } catch(_){}
+      try { window._lsSetSafe(key, JSON.stringify(o)); } catch(_){}
       try {
         fetch('/api/kv/' + key, {
           method:'POST', headers:{'Content-Type':'application/json'},
@@ -27864,7 +27864,7 @@ window.goLiveMatches = function() {
         localStorage.removeItem(LS_KEY);
         return;
       }
-      localStorage.setItem(LS_KEY, JSON.stringify(data));
+      window._lsSetSafe(LS_KEY, JSON.stringify(data));
     } catch(_){}
   }
 
@@ -29457,7 +29457,7 @@ document.addEventListener('DOMContentLoaded', function() {
             /* Si el usuario ha escrito esta clave hace poco, NO pisar
                su cache local con la respuesta (que puede ser stale). */
             if (j && j.ok && j.value != null && !_ballRecentLocalWrite(key)) {
-              try { localStorage.setItem(key, JSON.stringify(j.value)); } catch(_){}
+              try { window._lsSetSafe(key, JSON.stringify(j.value)); } catch(_){}
             }
             done();
           }).catch(function(){ done(); });
@@ -29477,7 +29477,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (arr.indexOf(id) === -1) { arr.push(id); changed = true; }
     });
     if (changed) {
-      try { localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr)); } catch(_){}
+      try { window._lsSetSafe(_BALL_INV_KEY, JSON.stringify(arr)); } catch(_){}
       _ballMarkLocalWrite(_BALL_INV_KEY);
       _ballKvPost(_BALL_INV_KEY, arr);
     }
@@ -29498,7 +29498,7 @@ document.addEventListener('DOMContentLoaded', function() {
     (window.BALL_DB || []).forEach(function(b){
       if (b && b.id && !seen[b.id]) { seen[b.id] = 1; seed.push(b.id); }
     });
-    try { localStorage.setItem(_BALL_INV_KEY, JSON.stringify(seed)); } catch(_){}
+    try { window._lsSetSafe(_BALL_INV_KEY, JSON.stringify(seed)); } catch(_){}
     /* Sube la semilla al server SOLO si el server aún no tiene nada
        (no pisar un inventario real ya guardado en otro dispositivo). */
     try {
@@ -29517,7 +29517,7 @@ document.addEventListener('DOMContentLoaded', function() {
        setItem rebote por quota, el POST al server garantiza que el
        inventario sobreviva (bug histórico "se borraba"). */
     try {
-      localStorage.setItem(_BALL_INV_KEY, JSON.stringify(arr));
+      window._lsSetSafe(_BALL_INV_KEY, JSON.stringify(arr));
     } catch(e) {
       try { _ballToast('⚠ Caché llena — guardado en servidor.'); } catch(_){}
     }
@@ -29529,7 +29529,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return {};
   }
   function _saveBallOverride(map){
-    try { localStorage.setItem(_BALL_OVERRIDE_KEY, JSON.stringify(map||{})); } catch(_){}
+    try { window._lsSetSafe(_BALL_OVERRIDE_KEY, JSON.stringify(map||{})); } catch(_){}
     _ballMarkLocalWrite(_BALL_OVERRIDE_KEY);
     return _ballKvPost(_BALL_OVERRIDE_KEY, map || {});
   }
@@ -29540,7 +29540,7 @@ document.addEventListener('DOMContentLoaded', function() {
     return [];
   }
   function _saveBallCompDb(arr){
-    try { localStorage.setItem(_BALL_COMPDB_KEY, JSON.stringify(arr||[])); } catch(_){}
+    try { window._lsSetSafe(_BALL_COMPDB_KEY, JSON.stringify(arr||[])); } catch(_){}
     _ballMarkLocalWrite(_BALL_COMPDB_KEY);
     return _ballKvPost(_BALL_COMPDB_KEY, arr || []);
   }
@@ -30760,7 +30760,7 @@ document.addEventListener('DOMContentLoaded', function() {
       var hist = JSON.parse(localStorage.getItem('friendlyMatchHistory') || '[]');
       if (idx >= 0 && idx < hist.length) {
         hist.splice(idx, 1);
-        localStorage.setItem('friendlyMatchHistory', JSON.stringify(hist));
+        window._lsSetSafe('friendlyMatchHistory', JSON.stringify(hist));
         window._amsRenderHistory();
       }
     } catch(e){}
@@ -32185,7 +32185,7 @@ document.addEventListener('DOMContentLoaded', function() {
       ts:        s.ts
     };
     try {
-      localStorage.setItem(WC_KEY, JSON.stringify(slim));
+      window._lsSetSafe(WC_KEY, JSON.stringify(slim));
       return true;
     } catch(e){
       var name = (e && (e.name || e.code)) || '';
@@ -32194,7 +32194,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if(isQuota){
         var freed = _wcFreeStorageSpace();
         try {
-          localStorage.setItem(WC_KEY, JSON.stringify(slim));
+          window._lsSetSafe(WC_KEY, JSON.stringify(slim));
           try { console.warn('[wc-saveState] retry OK tras liberar', freed, 'keys'); } catch(_){}
           return true;
         } catch(e2){
@@ -32483,7 +32483,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     state.winners = winners;
     try {
-      localStorage.setItem(WC_TO_OQ_KEY, JSON.stringify({
+      window._lsSetSafe(WC_TO_OQ_KEY, JSON.stringify({
         teams: winners,
         ts: Date.now()
       }));
@@ -33373,7 +33373,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var json = JSON.stringify(s);
     var ok = (typeof window._lsSetSafe === 'function')
       ? window._lsSetSafe(WPREV_KEY, json)
-      : (function(){ try { localStorage.setItem(WPREV_KEY, json); return true; } catch(_){ return false; } })();
+      : (function(){ try { window._lsSetSafe(WPREV_KEY, json); return true; } catch(_){ return false; } })();
     if(!ok){
       try { console.error('[wprev-saveState] setItem falló incluso tras liberar espacio'); } catch(_){}
       (window._gmCriticalNotice || alert)('⚠️ No se pudo guardar la Previa: el navegador se quedó sin espacio incluso después de liberar caché.\n\nBorra alguna liga de "Resto de Ligas" y vuelve a intentarlo.');
@@ -33598,9 +33598,9 @@ document.addEventListener('DOMContentLoaded', function() {
       .filter(real)
       .map(pack);
     var uecl = ueclFromGroups.concat(prelimLosers);
-    try { localStorage.setItem(WPREV_FG_KEY,  JSON.stringify({teams:ucl,  ts:Date.now()})); } catch(_){}
-    try { localStorage.setItem(WPREV_EUR_KEY, JSON.stringify({teams:uel,  ts:Date.now()})); } catch(_){}
-    try { localStorage.setItem(WPREV_CONF_KEY,JSON.stringify({teams:uecl, ts:Date.now()})); } catch(_){}
+    try { window._lsSetSafe(WPREV_FG_KEY,  JSON.stringify({teams:ucl,  ts:Date.now()})); } catch(_){}
+    try { window._lsSetSafe(WPREV_EUR_KEY, JSON.stringify({teams:uel,  ts:Date.now()})); } catch(_){}
+    try { window._lsSetSafe(WPREV_CONF_KEY,JSON.stringify({teams:uecl, ts:Date.now()})); } catch(_){}
     /* Los registra TAMBIÉN como extras manuales de sus 3 zonas destino
        — garantiza que lleguen a Champions/Europa/Conference aunque esas
        zonas estén en modo 🔒 Manual (mismo motivo que WC→OQ y OQ→Previa,
@@ -34177,7 +34177,7 @@ document.addEventListener('DOMContentLoaded', function() {
           var blob = JSON.parse(craw);
           if(blob && typeof blob === 'object'){
             blob.uclPrev = live;
-            localStorage.setItem('europe_committed_v1', JSON.stringify(blob));
+            window._lsSetSafe('europe_committed_v1', JSON.stringify(blob));
             fetch('/api/kv/europe_committed_v1', {
               method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
               body: JSON.stringify({value: blob})
@@ -34381,7 +34381,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if(!tgl||!root||tgl.__wired) return;
       tgl.__wired=true;
       try { if(localStorage.getItem('wprev_diag_collapsed')==='0') root.classList.remove('collapsed'); } catch(_){}
-      tgl.addEventListener('click', function(){ var isCol=root.classList.toggle('collapsed'); try{ localStorage.setItem('wprev_diag_collapsed', isCol?'1':'0'); }catch(_){} });
+      tgl.addEventListener('click', function(){ var isCol=root.classList.toggle('collapsed'); try{ window._lsSetSafe('wprev_diag_collapsed', isCol?'1':'0'); }catch(_){} });
     }, 300);
   });
 })();
@@ -34622,7 +34622,7 @@ document.addEventListener('DOMContentLoaded', function() {
     try { return localStorage.getItem(k); } catch(_){ return null; }
   }
   function _writeLs(k, v){
-    try { localStorage.setItem(k, v); return true; } catch(_){ return false; }
+    try { window._lsSetSafe(k, v); return true; } catch(_){ return false; }
   }
   function _ts(jsonStr){
     if(!jsonStr) return 0;

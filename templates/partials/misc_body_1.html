@@ -15494,14 +15494,16 @@ window._showSimProgress = function(opts, onDone){
      Si añades una nueva card al menú, añade su slug aquí. */
   var KNOWN_COUNTRY_SLUGS = [
     'inglaterra','italia','alemania','francia','portugal','p-bajos',
-    'belgica','turquia','rep-checa','grecia','polonia','dinamarca',
-    'noruega','chipre','suiza','austria','escocia','suecia',
+    'belgica','turquia','dinamarca',
+    'chipre','suiza','austria','escocia','suecia',
     'croacia','israel','hungria','ucrania','serbia','rumania',
     'eslovenia','azerbayan','rusia','eslovaquia','bulgaria','irlanda',
     'islandia','armenia','moldavia','finlandia','kosovo','kazajst',
     'bosnia','letonia','is-feroe','malta','estonia',
     'albania','n-maced','lituania','n-irlanda','gibraltar','andorra',
-    'bielorrsa','luxembgo','montenegro','georgia','gales','san-marino',
+    /* 2026-07-30: rep-checa/grecia/polonia/noruega/montenegro/georgia/
+       gales/san-marino/bielorrsa/luxembgo fusionadas en liga-mixta-1/2. */
+    'liga-mixta-1','liga-mixta-2',
     'resto-mundo'
   ];
 
@@ -42733,6 +42735,13 @@ window._showSimProgress = function(opts, onDone){
   </div>
 </div>
 
+<!-- Orden 2026-07-30 (petición usuario): Inglaterra/Italia/Alemania/
+     Francia/Portugal/P.Bajos/Bélgica/Turquía/Dinamarca/Suiza/Escocia
+     van PRIMERO. Rep.Checa/Grecia/San Marino/Gales/Georgia y
+     Polonia/Noruega/Montenegro/Luxemburgo/Bielorrusia se ELIMINARON como
+     ligas propias — están fusionadas en liga-mixta-1/liga-mixta-2 (al
+     final de la rejilla), cada una con 20 equipos reales tomados de la
+     clasificación vigente de sus 5 ligas de origen. -->
 <div class="menu-grid">
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#7a0010,#cf142b,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇧</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Inglaterra</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006630,#fff,#ce2b37);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Italia</span></div>
@@ -42742,15 +42751,11 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ae1c28,#fff,#21468b);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇳🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">P. Bajos</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a0a0a,#ef3340,#f5d220);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bélgica</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#8a0a22,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇹🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Turquía</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0d57a8,#d7141a,#0d57a8);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Rep. Checa</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0d5eaf,#fff,#0d5eaf);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Grecia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#dc143c,#fff,#dc143c);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇵🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Polonia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c60c30,#8a0a22,#c60c30);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Dinamarca</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#002868,#ef2b2d);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇳🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Noruega</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c87020,#fff,#c87020);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇾</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Chipre</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c01020,#8a0010,#c01020);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇭</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Suiza</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ee1c25,#fff,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Austria</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003399,#0044aa,#003399);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🏴󠁧󠁢󠁳󠁣󠁴󠁿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Escocia</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c87020,#fff,#c87020);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇾</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Chipre</span></div>
+<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ee1c25,#fff,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Austria</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006aa7,#fecc02,#006aa7);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Suecia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#fff,#171796);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇭🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Croacia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003ea5,#fff,#003ea5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Israel</span></div>
@@ -42781,13 +42786,14 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#fff,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇬</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">N. Irlanda</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ce1126,#fff,#ce1126);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Gibraltar</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0032a0,#fedf00,#c7232a);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇩</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Andorra</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#cf101a,#007040,#cf101a);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇾</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bielorrsa</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef3340,#fff,#00a3e0);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇺</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Luxembgo</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c40308,#d4af37,#c40308);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇲🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Montenegro</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#dc143c,#fff,#dc143c);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Georgia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c8102e,#fff,#c8102e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🏴󠁧󠁢󠁷󠁬󠁳󠁿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Gales</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#5eb6e4,#fff,#5eb6e4);border-color:rgba(94,182,228,.5);"><span class="mc-emoji">🇸🇲</span><span class="mc-label" style="color:#003d80;text-shadow:0 0 3px rgba(255,255,255,.8);">San Marino</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
+<!-- Ligas fusionadas 2026-07-30 (petición usuario): nombre = SOLO las
+     banderas de los países que la componen. `data-slug` fija el slug
+     interno (bypasa el slugify() del label, que con emoji daría
+     cadena vacía) — lo lee `wireLigasExt` y lo pasa como 3er arg a
+     `openLigaExt`. -->
+<div class="menu-card" data-slug="liga-mixta-1" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🌐</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">🇨🇿🇬🇷🇸🇲🏴󠁧󠁢󠁷󠁬󠁳󠁿🇬🇪</span></div>
+<div class="menu-card" data-slug="liga-mixta-2" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🌐</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">🇵🇱🇳🇴🇲🇪🇱🇺🇧🇾</span></div>
 </div>
 <!-- Botón "👁 Ver / Añadir equipos por competición" (PIN admin 747).
      Petición usuario 2026-07-03 ("quiero un botón que me muestre los
@@ -49834,12 +49840,11 @@ https://api.sofascore.app/api/v1/team/44/image
     set(['portugal','p-bajos'],               {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
     // 🔵1 🟣1 🟠1 🟢1 ⚫2 — Bélgica / Turquía
     set(['belgica','turquia'],                {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2});
-    // 🔵1 🟣1 🟠1 🟢1 ⚫1 — Chequia / Grecia
-    set(['rep-checa','grecia'],                {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:1});
     // 🟣1 🟡2 ⚪2 ⚫2 — Dinamarca / Suiza
     set(['dinamarca','suiza'], {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:2});
-    // 🟣1 🟡2 ⚪2 ⚫1 — bloque medio (17 ligas, incluye Bulgaria)
-    set(['polonia','noruega','chipre','austria','escocia','suecia','croacia',
+    // 🟣1 🟡2 ⚪2 ⚫1 — bloque medio (15 ligas, incluye Bulgaria; Polonia/Noruega
+    // fusionadas en liga-mixta-2, 2026-07-30)
+    set(['chipre','austria','escocia','suecia','croacia',
          'israel','hungria','ucrania','serbia','rumania','eslovenia','azerbayan',
          'rusia','eslovaquia','bulgaria'],
         {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:1});
@@ -49849,14 +49854,24 @@ https://api.sofascore.app/api/v1/team/44/image
         {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
     // 🟡3 ⚪1 ⚫1 — Islas Feroe / Malta
     set(['is-feroe','malta'], {ucl:0, uclPrev:0, uclQual:3, uel:0, uecl:0, wildcard:1, desc:1});
-    // 🟡2 ⚪2 ⚫1 — bloque menor (10 ligas, incluye Montenegro / Georgia)
-    set(['estonia','n-maced','lituania','n-irlanda','gibraltar','andorra',
-         'bielorrsa','luxembgo','montenegro','georgia'],
+    // 🟡2 ⚪2 ⚫1 — bloque menor (6 ligas; Bielorrusia/Luxemburgo/Montenegro/
+    // Georgia fusionadas en liga-mixta-2, 2026-07-30)
+    set(['estonia','n-maced','lituania','n-irlanda','gibraltar','andorra'],
         {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2, desc:1});
     // 🟣1 🟡2 ⚪1 ⚫1 — Albania
     set(['albania'], {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
-    // 🟡2 ⚪1 ⚫1 — Gales / San Marino
-    set(['gales','san-marino'], {ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
+    /* 2026-07-30 (petición usuario): Rep. Checa+Grecia+San Marino+Gales+
+       Georgia y Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia se
+       fusionan en 2 ligas de 20 equipos cada una (liga-mixta-1/2). Las
+       zonas europeas de cada mixta son la SUMA EXACTA de las 5 ligas que
+       la componen — el total agregado por zona (UCL/Previa/OQ/UEL/UECL/
+       WildCard) no cambia, solo el nº de ligas que las reparten. */
+    // liga-mixta-1 = rep-checa(1/1/0/1/1/0) + grecia(1/1/0/1/1/0) +
+    // san-marino(0/0/2/0/0/1) + gales(0/0/2/0/0/1) + georgia(0/0/2/0/0/2)
+    Z['liga-mixta-1'] = {ucl:2, uclPrev:2, uclQual:6, uel:2, uecl:2, wildcard:4, desc:2};
+    // liga-mixta-2 = polonia(0/1/2/0/0/2) + noruega(0/1/2/0/0/2) +
+    // montenegro(0/0/2/0/0/2) + luxembgo(0/0/2/0/0/2) + bielorrsa(0/0/2/0/0/2)
+    Z['liga-mixta-2'] = {ucl:0, uclPrev:2, uclQual:10, uel:0, uecl:0, wildcard:10, desc:2};
     return Z;
   })();
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
@@ -55007,25 +55022,30 @@ https://api.sofascore.app/api/v1/team/44/image
      Mantener este listado sincronizado con las menu-cards de
      s-ligas. */
   var WILDCARD_LIGA_SLUGS = {
-    /* 19 menores históricas */
-    'andorra':1, 'albania':1, 'san-marino':1, 'gibraltar':1,
+    /* 14 menores históricas — san-marino/bielorrsa/georgia/luxembgo/
+       montenegro fusionadas en liga-mixta-1/2 (2026-07-30): esas 2
+       ligas ya llevan `zones.wildcard` EXPLÍCITO en LEAGUE_DEFAULT_ZONES
+       (4 y 10), así que NO entran aquí (el auto-cupo de este mapa es
+       solo para slugs SIN cupo explícito). */
+    'andorra':1, 'albania':1, 'gibraltar':1,
     'hungria':1,
     'estonia':1, 'finlandia':1, 'letonia':1, 'lituania':1,
-    'islandia':1, 'armenia':1, 'bielorrsa':1, 'is-feroe':1,
-    'georgia':1, 'luxembgo':1, 'moldavia':1, 'n-maced':1,
-    'n-irlanda':1, 'montenegro':1,
+    'islandia':1, 'armenia':1, 'is-feroe':1,
+    'moldavia':1, 'n-maced':1,
+    'n-irlanda':1,
     'malta':1, 'kosovo':1,
-    /* 19 medias añadidas — Chequia y Grecia EXCLUIDAS del auto-cupo
+    /* 16 medias añadidas — Chequia y Grecia EXCLUIDAS del auto-cupo
        (2026-06-01): son 🔵1 🟣1 🟠1 🟢1 sin ⚪️ en la tabla del usuario.
        Estaban en la lista y el auto-cupo les forzaba 1 ⚪️ fantasma a
        cada una → la Wild Card calculaba 74 en vez de 72. PROHIBIDO
        reintroducir 'rep-checa' / 'grecia' aquí: descuadra el contador
-       (72 → 74). */
-    'austria':1, 'noruega':1,
-    'israel':1, 'ucrania':1, 'polonia':1, 'serbia':1,
+       (72 → 74). Noruega/Polonia/Gales fusionadas en liga-mixta-1/2
+       (2026-07-30) por el mismo motivo que arriba. */
+    'austria':1,
+    'israel':1, 'ucrania':1, 'serbia':1,
     'croacia':1, 'rusia':1, 'rumania':1, 'suecia':1,
     'chipre':1, 'irlanda':1, 'kazajst':1, 'bosnia':1,
-    'azerbayan':1, 'bulgaria':1, 'gales':1, 'eslovaquia':1,
+    'azerbayan':1, 'bulgaria':1, 'eslovaquia':1,
     'eslovenia':1
   };
   window.WILDCARD_LIGA_SLUGS = WILDCARD_LIGA_SLUGS;
@@ -55046,11 +55066,7 @@ https://api.sofascore.app/api/v1/team/44/image
     'p-bajos':'Eredivisie',
     'belgica':'Pro League',
     'turquia':'Süper Lig',
-    'rep-checa':'Czech First League',
-    'grecia':'Super League',
-    'polonia':'Ekstraklasa',
     'dinamarca':'Superliga',
-    'noruega':'Eliteserien',
     'chipre':'Cyprus League',
     'suiza':'Super League',
     'austria':'Bundesliga',
@@ -55085,12 +55101,13 @@ https://api.sofascore.app/api/v1/team/44/image
     'n-irlanda':'NIFL Premiership',
     'gibraltar':'Gibraltar Football League',
     'andorra':'Primera Divisió',
-    'bielorrsa':'Vysshaya Liga',
-    'luxembgo':'Division Nationale',
-    'montenegro':'First League',
-    'georgia':'Erovnuli Liga',
-    'gales':'Cymru Premier',
-    'san-marino':'Campionato Sammarinese'
+    /* 2026-07-30 (petición usuario): Rep. Checa+Grecia+San Marino+Gales+
+       Georgia (liga-mixta-1) y Polonia+Noruega+Montenegro+Luxemburgo+
+       Bielorrusia (liga-mixta-2) se fusionan en 2 ligas de 20 equipos.
+       Las 10 entradas individuales de arriba se eliminan — sus slugs ya
+       no existen como ligas propias. */
+    'liga-mixta-1':'Liga Mixta 1 — Chequia+Grecia+San Marino+Gales+Georgia',
+    'liga-mixta-2':'Liga Mixta 2 — Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia'
   };
   window.LEAGUE_DEFAULT_NAMES = LEAGUE_DEFAULT_NAMES;
   /* Nombre a mostrar en la cabecera: custom del admin (cfg.name) →
@@ -55103,10 +55120,14 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   window.lextLeagueDisplayName = lextLeagueDisplayName;
 
-  window.openLigaExt = function(name, emoji){
+  window.openLigaExt = function(name, emoji, slugOverride){
     CURRENT_NAME = name || 'Liga';
     CURRENT_EMOJI = emoji || '🌍';
-    CURRENT_KEY = slugify(name||'liga');
+    /* `slugOverride` (2026-07-30): para cards cuyo label visible son
+       banderas/emoji sin texto alfanumérico (ligas fusionadas), slugify()
+       devolvería cadena vacía. `wireLigasExt` lo lee de `data-slug` y lo
+       pasa aquí; si no viene, se deriva del nombre como siempre. */
+    CURRENT_KEY = slugOverride || slugify(name||'liga');
     var t = document.getElementById('liga-ext-title');
     var e = document.getElementById('liga-ext-emoji');
     if(t) t.textContent = CURRENT_NAME;
@@ -55186,7 +55207,8 @@ https://api.sofascore.app/api/v1/team/44/image
       var emo = card.querySelector('.mc-emoji');
       window.openLigaExt(
         lbl ? (lbl.textContent || '').trim() : 'Liga',
-        emo ? (emo.textContent || '').trim() : '🌍'
+        emo ? (emo.textContent || '').trim() : '🌍',
+        card.getAttribute('data-slug') || null
       );
     });
   }
@@ -55885,6 +55907,43 @@ https://api.sofascore.app/api/v1/team/44/image
   try { _fixupLeagueZonesV2(); } catch(_){}
   try { _fixupSanMarinoWcV1(); } catch(_){}
   try { _fixupLeagueZonesV3(); } catch(_){}
+  /* Purga LOCAL de las 10 ligas fusionadas en liga-mixta-1/liga-mixta-2
+     (2026-07-30, petición explícita del usuario: "elimina por completo
+     esas ligas ya pasadas a las nuevas"). Ya no tienen card, seed, zona
+     ni nombre en ningún sitio del código — sus `ligaExt_<slug>` (main +
+     `_protected` + snapshots + backup) quedarían huérfanos en
+     localStorage para siempre si no se borran, contribuyendo al mismo
+     problema de cuota agotada documentado en este archivo. SOLO borra
+     LOCAL: el snapshot `_protected` del SERVIDOR es monotónico por
+     diseño (nunca se le hace shrink/delete desde el cliente — pelearía
+     contra el guard anti-wipe de `localStorage.setItem` de más arriba);
+     el servidor puede limpiarse aparte si hiciera falta, sin riesgo para
+     el usuario porque ya no hay ningún código que vuelva a leerlo. */
+  (function _purgeMergedLeaguesV1(){
+    var FLAG = 'ftbol_merged_leagues_purge_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var OLD_SLUGS = ['rep-checa','grecia','san-marino','gales','georgia',
+                      'polonia','noruega','montenegro','luxembgo','bielorrsa'];
+    try {
+      var toRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        var rest = k.substring('ligaExt_'.length);
+        for (var j = 0; j < OLD_SLUGS.length; j++) {
+          var s = OLD_SLUGS[j];
+          if (rest === s || rest.indexOf(s + '_') === 0) { toRemove.push(k); break; }
+        }
+      }
+      toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      OLD_SLUGS.forEach(function(s){
+        try { if (typeof LIGA_CACHE !== 'undefined') delete LIGA_CACHE[s]; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(s); } catch(_){}
+      });
+      try { console.warn('[ligaExt] purgadas '+toRemove.length+' claves locales de las 10 ligas fusionadas.'); } catch(_){}
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  })();
   /* Defensa adicional: si en algún momento el storage queda vacío
      (reset / sync server que devuelve {teams:[]}), re-sembramos al
      abrir la pantalla. */
@@ -55935,31 +55994,6 @@ https://api.sofascore.app/api/v1/team/44/image
         {name:'Ards FC',             power:57, atk:57, mid:57, def:57}
       ]
     },
-    'montenegro': {
-      /* Prva CFL + Druga (poderes ~57-70). */
-      teams: [
-        {name:'FK Budućnost Podgorica', power:70, atk:70, mid:70, def:70},
-        {name:'FK Sutjeska Nikšić',     power:69, atk:69, mid:69, def:69},
-        {name:'FK Dečić',               power:67, atk:67, mid:67, def:67},
-        {name:'OFK Petrovac',           power:66, atk:66, mid:66, def:66},
-        {name:'FK Mornar',              power:66, atk:66, mid:66, def:66},
-        {name:'FK Rudar Pljevlja',      power:65, atk:65, mid:65, def:65},
-        {name:'FK Arsenal Tivat',       power:64, atk:64, mid:64, def:64},
-        {name:'OFK Titograd',           power:64, atk:64, mid:64, def:64},
-        {name:'FK Jezero',              power:63, atk:63, mid:63, def:63},
-        {name:'FK Bokelj',              power:62, atk:62, mid:62, def:62},
-        {name:'FK Zeta',                power:62, atk:62, mid:62, def:62},
-        {name:'FK Iskra',               power:61, atk:61, mid:61, def:61},
-        {name:'FK Mladost DG',          power:61, atk:61, mid:61, def:61},
-        {name:'FK Otrant Ulcinj',       power:60, atk:60, mid:60, def:60},
-        {name:'FK Lovćen',              power:60, atk:60, mid:60, def:60},
-        {name:'FK Berane',              power:59, atk:59, mid:59, def:59},
-        {name:'FK Kom',                 power:59, atk:59, mid:59, def:59},
-        {name:'FK Grbalj',              power:58, atk:58, mid:58, def:58},
-        {name:'FK Internacional Podgorica', power:58, atk:58, mid:58, def:58},
-        {name:'FK Cetinje',             power:57, atk:57, mid:57, def:57}
-      ]
-    },
     'albania': {
       teams: [
         {name:'FK Tirana',              power:70, atk:70, mid:70, def:70},
@@ -55982,6 +56016,61 @@ https://api.sofascore.app/api/v1/team/44/image
         {name:'FK Sopoti',              power:58, atk:58, mid:58, def:58},
         {name:'FK Kastrioti',           power:58, atk:58, mid:58, def:58},
         {name:'FK Tomori',              power:57, atk:57, mid:57, def:57}
+      ]
+    },
+    /* 2026-07-30 (petición usuario, datos reales de la clasificación
+       vigente de cada liga de origen — Rep. Checa/Grecia/San Marino/
+       Gales/Georgia fusionadas en UNA liga de 20 equipos). Sin escudo
+       por ahora (el admin los añade luego desde el editor; cae al
+       placeholder de iniciales mientras tanto). */
+    'liga-mixta-1': {
+      teams: [
+        {name:'AEK Athens',             power:74, atk:74, mid:74, def:74},
+        {name:'Sparta Praha',           power:73, atk:73, mid:73, def:73},
+        {name:'Panathinaikos',          power:72, atk:72, mid:72, def:72},
+        {name:'Aris Thessaloniki',      power:71, atk:71, mid:71, def:71},
+        {name:'AE Kifisias',            power:70, atk:70, mid:70, def:70},
+        {name:'Anagennisi Karditsa',    power:69, atk:69, mid:69, def:69},
+        {name:'Jablonec',               power:68, atk:68, mid:68, def:68},
+        {name:'Slovan Liberec',         power:67, atk:67, mid:67, def:67},
+        {name:'Viktoria Plzeň',         power:66, atk:66, mid:66, def:66},
+        {name:'Mladá Boleslav',         power:65, atk:65, mid:65, def:65},
+        {name:'Dinamo Tbilisi',         power:64, atk:64, mid:64, def:64},
+        {name:'Colwyn Bay',             power:63, atk:63, mid:63, def:63},
+        {name:'Caernarfon',             power:62, atk:62, mid:62, def:62},
+        {name:'Dinamo Batumi',          power:61, atk:61, mid:61, def:61},
+        {name:'The New Saints',         power:60, atk:60, mid:60, def:60},
+        {name:'FC Telavi',              power:59, atk:59, mid:59, def:59},
+        {name:'Rhyl FC',                power:58, atk:58, mid:58, def:58},
+        {name:'Folgore/Falciano',       power:57, atk:57, mid:57, def:57},
+        {name:'San Giovanni',           power:56, atk:56, mid:56, def:56},
+        {name:'Cailungo',               power:55, atk:55, mid:55, def:55}
+      ]
+    },
+    /* Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia fusionadas en
+       UNA liga de 20 equipos (2026-07-30, datos reales vigentes). */
+    'liga-mixta-2': {
+      teams: [
+        {name:'FK Bodø/Glimt',              power:76, atk:76, mid:76, def:76},
+        {name:'SK Brann',                   power:74, atk:74, mid:74, def:74},
+        {name:'Korona Kielce',              power:72, atk:72, mid:72, def:72},
+        {name:'Molde FK',                   power:70, atk:70, mid:70, def:70},
+        {name:'GKS Katowice',               power:69, atk:69, mid:69, def:69},
+        {name:'Viking Stavanger',           power:68, atk:68, mid:68, def:68},
+        {name:'Jagiellonia Białystok',      power:67, atk:67, mid:67, def:67},
+        {name:'Legia Warszawa',             power:66, atk:66, mid:66, def:66},
+        {name:'Lech Poznań',                power:65, atk:65, mid:65, def:65},
+        {name:'Dinamo Minsk',               power:64, atk:64, mid:64, def:64},
+        {name:'FK Lovćen',                  power:63, atk:63, mid:63, def:63},
+        {name:'Maxline Vitebsk',            power:62, atk:62, mid:62, def:62},
+        {name:'FK Budućnost Podgorica',     power:61, atk:61, mid:61, def:61},
+        {name:'Isloch',                     power:60, atk:60, mid:60, def:60},
+        {name:'Progrès Niederkorn',         power:59, atk:59, mid:59, def:59},
+        {name:'FK Dečić',                   power:58, atk:58, mid:58, def:58},
+        {name:'Gomel',                      power:57, atk:57, mid:57, def:57},
+        {name:'Mamer',                      power:56, atk:56, mid:56, def:56},
+        {name:'FK Sutjeska Nikšić',         power:55, atk:55, mid:55, def:55},
+        {name:'Swift Hesperange',           power:54, atk:54, mid:54, def:54}
       ]
     }
   };
@@ -56179,9 +56268,12 @@ https://api.sofascore.app/api/v1/team/44/image
   (function(){
     var _origOpenX = window.openLigaExt;
     if (typeof _origOpenX !== 'function') return;
-    window.openLigaExt = function(name, emoji){
+    window.openLigaExt = function(name, emoji, slugOverride){
       try {
-        var slg = (typeof slugify === 'function') ? slugify(name || '') : '';
+        /* slugOverride (2026-07-30): cards con label de solo-emoji
+           (ligas fusionadas) dan slugify('')==='' — usar el slug
+           explícito que ya resuelve `wireLigasExt` vía data-slug. */
+        var slg = slugOverride || ((typeof slugify === 'function') ? slugify(name || '') : '');
         if (_EXTRA_LEAGUE_SEEDS[slg]) _ensureExtraLeagueSeed(slg);
       } catch(_){}
       return _origOpenX.apply(this, arguments);

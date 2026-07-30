@@ -55646,6 +55646,57 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   window._fixupLeagueZonesV3 = _fixupLeagueZonesV3;
+  /* Fixup Grecia en Liga Mixta 1 (2026-07-31, corrección usuario: "no
+     pueden faltar el Olympiacos y el PAOK"). El seed original de
+     liga-mixta-1 metió Aris Thessaloniki/AE Kifisias/Anagennisi Karditsa
+     como representantes de Grecia — muy por debajo en la clasificación
+     real (Olympiacos 2º, PAOK 3º, ambos detrás solo de AEK) de los 2
+     grandes que faltaban. Sustituye esos 3 por Olympiacos/PAOK/Levadiakos
+     (2º/3º/5º real) renombrando el objeto EQUIPO en sitio — los
+     `results[]` referencian por `id` (`ts[i].id`), NO por nombre
+     (`ligaExtSimular`), así que renombrar NO desincroniza la
+     clasificación de un equipo ya simulado. Reajusta el power de
+     AEK/Sparta Praha/Panathinaikos para reflejar el orden real. SOLO
+     actúa si el roster local sigue siendo EXACTAMENTE el del seed viejo
+     (nunca pisa una edición manual del admin: equipo renombrado,
+     añadido, borrado, o ya corregido a mano). Idempotente vía flag
+     propio. */
+  function _fixupLigaMixta1GreciaV1(){
+    var FLAG = 'ftbol_liga_mixta1_grecia_fix_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var key = 'ligaExt_liga-mixta-1';
+      var raw = localStorage.getItem(key);
+      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
+      var d = JSON.parse(raw);
+      if (!d || !Array.isArray(d.teams)) { window._lsSetSafe(FLAG, '1'); return; }
+      function norm(s){ return String(s||'').toLowerCase().trim(); }
+      var OLD3 = ['aris thessaloniki', 'ae kifisias', 'anagennisi karditsa'];
+      var foundOld = OLD3.every(function(n){
+        return d.teams.some(function(t){ return norm(t.name) === n; });
+      });
+      var hasNew = d.teams.some(function(t){
+        var nm = norm(t.name);
+        return nm === 'olympiacos' || nm === 'paok';
+      });
+      if (!foundOld || hasNew) { window._lsSetSafe(FLAG, '1'); return; }
+      d.teams.forEach(function(t){
+        var nm = norm(t.name);
+        if (nm === 'aris thessaloniki') { t.name = 'Olympiacos'; t.power = t.atk = t.mid = t.def = 73; }
+        else if (nm === 'ae kifisias') { t.name = 'PAOK'; t.power = t.atk = t.mid = t.def = 72; }
+        else if (nm === 'anagennisi karditsa') { t.name = 'Levadiakos'; t.power = t.atk = t.mid = t.def = 69; }
+        else if (nm === 'aek athens') { t.power = t.atk = t.mid = t.def = 74; }
+        else if (nm === 'sparta praha') { t.power = t.atk = t.mid = t.def = 70; }
+        else if (nm === 'panathinaikos') { t.power = t.atk = t.mid = t.def = 71; }
+      });
+      window._lsSetSafe(key, JSON.stringify(d));
+      try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-mixta-1'] = d; } catch(_){}
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-mixta-1'); } catch(_){}
+      try { console.warn('[ligaExt] Liga Mixta 1: Grecia corregida — Olympiacos/PAOK/Levadiakos sustituyen a Aris Thessaloniki/AE Kifisias/Anagennisi Karditsa.'); } catch(_){}
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  }
+  window._fixupLigaMixta1GreciaV1 = _fixupLigaMixta1GreciaV1;
   /* Top-up ASÍNCRONO desde IndexedDB (2026-07-01) — red de seguridad
      compartida por los "ensure seed" de Resto Mundo / N.Irlanda /
      Montenegro / Albania (las ÚNICAS ligas con seed automático — el
@@ -56025,6 +56076,7 @@ https://api.sofascore.app/api/v1/team/44/image
   try { _fixupLeagueZonesV2(); } catch(_){}
   try { _fixupSanMarinoWcV1(); } catch(_){}
   try { _fixupLeagueZonesV3(); } catch(_){}
+  try { _fixupLigaMixta1GreciaV1(); } catch(_){}
   /* Purga LOCAL de las 10 ligas fusionadas en liga-mixta-1/liga-mixta-2
      (2026-07-30, petición explícita del usuario: "elimina por completo
      esas ligas ya pasadas a las nuevas"). Ya no tienen card, seed, zona
@@ -56264,15 +56316,20 @@ https://api.sofascore.app/api/v1/team/44/image
        vigente de cada liga de origen — Rep. Checa/Grecia/San Marino/
        Gales/Georgia fusionadas en UNA liga de 20 equipos). Sin escudo
        por ahora (el admin los añade luego desde el editor; cae al
-       placeholder de iniciales mientras tanto). */
+       placeholder de iniciales mientras tanto).
+       2026-07-31 (corrección usuario, "no pueden faltar el Olympiacos y
+       el PAOk"): Grecia pasa de Aris Thessaloniki/AE Kifisias/Anagennisi
+       Karditsa a Olympiacos/PAOK/Levadiakos (2º/3º/5º real, detrás solo
+       de AEK) — ver `_fixupLigaMixta1GreciaV1` para la migración de
+       dispositivos que ya tenían la liga sembrada con el roster viejo. */
     'liga-mixta-1': {
       teams: [
         {name:'AEK Athens',             power:74, atk:74, mid:74, def:74},
-        {name:'Sparta Praha',           power:73, atk:73, mid:73, def:73},
-        {name:'Panathinaikos',          power:72, atk:72, mid:72, def:72},
-        {name:'Aris Thessaloniki',      power:71, atk:71, mid:71, def:71},
-        {name:'AE Kifisias',            power:70, atk:70, mid:70, def:70},
-        {name:'Anagennisi Karditsa',    power:69, atk:69, mid:69, def:69},
+        {name:'Olympiacos',             power:73, atk:73, mid:73, def:73},
+        {name:'PAOK',                   power:72, atk:72, mid:72, def:72},
+        {name:'Panathinaikos',          power:71, atk:71, mid:71, def:71},
+        {name:'Sparta Praha',           power:70, atk:70, mid:70, def:70},
+        {name:'Levadiakos',             power:69, atk:69, mid:69, def:69},
         {name:'Jablonec',               power:68, atk:68, mid:68, def:68},
         {name:'Slovan Liberec',         power:67, atk:67, mid:67, def:67},
         {name:'Viktoria Plzeň',         power:66, atk:66, mid:66, def:66},

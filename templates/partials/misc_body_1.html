@@ -15511,19 +15511,20 @@ window._showSimProgress = function(opts, onDone){
        - El auto-recovery en DOM ready que rellena ligas vacías.
      Si añades una nueva card al menú, añade su slug aquí. */
   var KNOWN_COUNTRY_SLUGS = [
-    'inglaterra','italia','alemania','francia','portugal','p-bajos',
+    'inglaterra','italia','francia','portugal','p-bajos',
     'belgica','turquia','dinamarca',
     'suiza','escocia',
-    'serbia','rumania',
     'eslovenia','azerbayan','rusia','eslovaquia','bulgaria','irlanda',
     'islandia','armenia','moldavia','finlandia','kosovo','kazajst',
-    'bosnia','letonia','is-feroe',
+    'bosnia',
     /* 2026-07-30: rep-checa/grecia/polonia/noruega/montenegro/georgia/
        gales/san-marino/bielorrsa/luxembgo fusionadas en liga-mixta-1/2;
        chipre/austria/andorra/gibraltar/n-irlanda fusionadas en liga-mixta-3;
        suecia/croacia/lituania/n-maced/albania fusionadas en liga-mixta-4;
-       israel/hungria/ucrania/estonia/malta fusionadas en liga-mixta-5. */
-    'liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4','liga-mixta-5',
+       israel/hungria/ucrania/estonia/malta fusionadas en liga-mixta-5;
+       alemania/serbia/rumania/is-feroe/letonia fusionadas en liga-mixta-6
+       (Alemania eliminada como liga propia). */
+    'liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4','liga-mixta-5','liga-mixta-6',
     'resto-mundo'
   ];
 
@@ -42755,20 +42756,23 @@ window._showSimProgress = function(opts, onDone){
   </div>
 </div>
 
-<!-- Orden 2026-07-30 (petición usuario): Inglaterra/Italia/Alemania/
-     Francia/Portugal/P.Bajos/Bélgica/Turquía/Dinamarca/Suiza/Escocia
-     van PRIMERO. Rep.Checa/Grecia/San Marino/Gales/Georgia,
+<!-- Orden 2026-07-30 (petición usuario): Inglaterra/Italia/Francia/
+     Portugal/P.Bajos/Bélgica/Turquía/Dinamarca/Suiza/Escocia van
+     PRIMERO (10 ligas — Alemania SALIÓ de este grupo, ver abajo).
+     Rep.Checa/Grecia/San Marino/Gales/Georgia,
      Polonia/Noruega/Montenegro/Luxemburgo/Bielorrusia,
      Chipre/Austria/Andorra/Gibraltar/N.Irlanda,
-     Suecia/Croacia/Lituania/Macedonia del Norte/Albania e
-     Israel/Hungría/Ucrania/Estonia/Malta se ELIMINARON como ligas
-     propias — están fusionadas en liga-mixta-1/2/3/4/5 (al final de la
-     rejilla), cada una con 20 equipos reales tomados de la
-     clasificación vigente de sus 5 ligas de origen. -->
+     Suecia/Croacia/Lituania/Macedonia del Norte/Albania,
+     Israel/Hungría/Ucrania/Estonia/Malta y Alemania+Serbia+Rumanía+
+     Islas Feroe+Letonia se ELIMINARON como ligas propias — están
+     fusionadas en liga-mixta-1/2/3/4/5/6 (al final de la rejilla), cada
+     una con 20 equipos reales tomados de la clasificación vigente de
+     sus ligas de origen. En liga-mixta-6, Alemania solo aporta sus 6
+     mejores equipos (petición explícita del usuario) — el resto de la
+     Bundesliga no migra a ningún sitio. -->
 <div class="menu-grid">
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#7a0010,#cf142b,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇧</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Inglaterra</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006630,#fff,#ce2b37);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Italia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#111,#dd0000,#ffcc00);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Alemania</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002395,#fff,#ed2939);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇫🇷</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Francia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006600,#fff,#c60c30);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇵🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Portugal</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ae1c28,#fff,#21468b);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇳🇱</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">P. Bajos</span></div>
@@ -42777,8 +42781,6 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c60c30,#8a0a22,#c60c30);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Dinamarca</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c01020,#8a0010,#c01020);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇭</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Suiza</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003399,#0044aa,#003399);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🏴󠁧󠁢󠁳󠁣󠁴󠁿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Escocia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#ef2b2d,#0032a0,#c6aa76);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇸</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Serbia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002b7f,#fcd116,#ce1126);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Rumanía</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003da5,#fff,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇮</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eslovenia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0092bc,#ed2939,#00b140);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇦🇿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Azerbayán</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#0038a8,#ef2b2d);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇷🇺</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Rusia</span></div>
@@ -42792,8 +42794,6 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#244aa5,#e4aa3c,#244aa5);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇽🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kosovo</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#00afca,#ffd700,#00afca);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇰🇿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Kazajst.</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002395,#fedf00,#002395);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇧🇦</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Bosnia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#9e3039,#fff,#9e3039);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇱🇻</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Letonia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#002070,#003897,#ef2b2d,#003897,#002070);border-color:rgba(0,56,151,.5);"><span class="mc-emoji">🇫🇴</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 3px rgba(0,0,0,.9);">Is. Feroe</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
 <!-- Ligas fusionadas 2026-07-30 (petición usuario): nombre = SOLO las
      banderas de los países que la componen. `data-slug` fija el slug
@@ -42805,6 +42805,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" data-slug="liga-mixta-3" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇨🇾🇦🇹🇦🇩🇬🇮🇬🇬</span><span class="mc-label" style="display:none;">🇨🇾🇦🇹🇦🇩🇬🇮🇬🇬</span></div>
 <div class="menu-card" data-slug="liga-mixta-4" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇸🇪🇭🇷🇱🇹🇲🇰🇦🇱</span><span class="mc-label" style="display:none;">🇸🇪🇭🇷🇱🇹🇲🇰🇦🇱</span></div>
 <div class="menu-card" data-slug="liga-mixta-5" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇮🇱🇭🇺🇺🇦🇪🇪🇲🇹</span><span class="mc-label" style="display:none;">🇮🇱🇭🇺🇺🇦🇪🇪🇲🇹</span></div>
+<div class="menu-card" data-slug="liga-mixta-6" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇩🇪🇷🇸🇷🇴🇫🇴🇱🇻</span><span class="mc-label" style="display:none;">🇩🇪🇷🇸🇷🇴🇫🇴🇱🇻</span></div>
 </div>
 <!-- Botón "👁 Ver / Añadir equipos por competición" (PIN admin 747).
      Petición usuario 2026-07-03 ("quiero un botón que me muestre los
@@ -49845,29 +49846,27 @@ https://api.sofascore.app/api/v1/team/44/image
     Z['liga-ea-sports'] = {ucl:4, uclPrev:1, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2};
     // 🔵4 🟠2 🟢2 ⚫2 — Inglaterra
     Z['inglaterra']     = {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:2, wildcard:0, desc:2};
-    // 🔵4 🟠2 🟢1 ⚫2 — Italia / Alemania / Francia
-    set(['italia','alemania','francia'],      {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
+    // 🔵4 🟠2 🟢1 ⚫2 — Italia / Francia (Alemania fusionada en liga-mixta-6, 2026-07-30)
+    set(['italia','francia'],      {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
     // 🔵2 🟠2 🟢1 ⚫2 — Portugal / Países Bajos
     set(['portugal','p-bajos'],               {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
     // 🔵1 🟣1 🟠1 🟢1 ⚫2 — Bélgica / Turquía
     set(['belgica','turquia'],                {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2});
     // 🟣1 🟡2 ⚪2 ⚫2 — Dinamarca / Suiza
     set(['dinamarca','suiza'], {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:2});
-    // 🟣1 🟡2 ⚪2 ⚫1 — bloque medio (8 ligas; Polonia/Noruega fusionadas en
+    // 🟣1 🟡2 ⚪2 ⚫1 — bloque medio (6 ligas; Polonia/Noruega fusionadas en
     // liga-mixta-2, Chipre/Austria fusionadas en liga-mixta-3, Suecia/Croacia
     // fusionadas en liga-mixta-4, Israel/Hungría/Ucrania fusionadas en
-    // liga-mixta-5, 2026-07-30)
+    // liga-mixta-5, Serbia/Rumanía fusionadas en liga-mixta-6, 2026-07-30)
     set(['escocia',
-         'serbia','rumania','eslovenia','azerbayan',
+         'eslovenia','azerbayan',
          'rusia','eslovaquia','bulgaria'],
         {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:1});
-    // 🟣1 🟡2 ⚪1 ⚫1 — bloque medio-bajo (9 ligas)
+    // 🟣1 🟡2 ⚪1 ⚫1 — bloque medio-bajo (8 ligas; Letonia fusionada en
+    // liga-mixta-6, 2026-07-30)
     set(['irlanda','islandia','armenia','moldavia','finlandia',
-         'kosovo','kazajst','bosnia','letonia'],
+         'kosovo','kazajst','bosnia'],
         {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
-    // 🟡3 ⚪1 ⚫1 — Malta fusionada en liga-mixta-5 (2026-07-30); Islas Feroe
-    // queda sola en este bloque.
-    set(['is-feroe'], {ucl:0, uclPrev:0, uclQual:3, uel:0, uecl:0, wildcard:1, desc:1});
     /* 2026-07-30 (petición usuario): Rep. Checa+Grecia+San Marino+Gales+
        Georgia y Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia se
        fusionan en 2 ligas de 20 equipos cada una (liga-mixta-1/2). Las
@@ -49889,6 +49888,11 @@ https://api.sofascore.app/api/v1/team/44/image
     // liga-mixta-5 (2026-07-30) = israel(0/1/2/0/0/2) + hungria(0/1/2/0/0/2) +
     // ucrania(0/1/2/0/0/2) + estonia(0/0/2/0/0/2) + malta(0/0/3/0/0/1)
     Z['liga-mixta-5'] = {ucl:0, uclPrev:3, uclQual:11, uel:0, uecl:0, wildcard:9, desc:2};
+    // liga-mixta-6 (2026-07-30, petición usuario: Alemania se elimina como
+    // liga propia, sus 6 mejores equipos pasan aquí) = alemania(4/0/0/2/1/0) +
+    // serbia(0/1/2/0/0/2) + rumania(0/1/2/0/0/2) + is-feroe(0/0/3/0/0/1) +
+    // letonia(0/1/2/0/0/1)
+    Z['liga-mixta-6'] = {ucl:4, uclPrev:3, uclQual:9, uel:2, uecl:1, wildcard:6, desc:2};
     return Z;
   })();
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
@@ -55039,15 +55043,15 @@ https://api.sofascore.app/api/v1/team/44/image
      Mantener este listado sincronizado con las menu-cards de
      s-ligas. */
   var WILDCARD_LIGA_SLUGS = {
-    /* 21 menores históricas — san-marino/bielorrsa/georgia/luxembgo/
+    /* 25 menores históricas — san-marino/bielorrsa/georgia/luxembgo/
        montenegro/gibraltar/andorra/n-irlanda/suecia/croacia/lituania/
-       n-maced/albania/israel/hungria/ucrania/estonia/malta fusionadas
-       en liga-mixta-1/2/3/4/5 (2026-07-30): esas ligas ya llevan
-       `zones.wildcard` EXPLÍCITO en LEAGUE_DEFAULT_ZONES, así que NO
-       entran aquí (el auto-cupo de este mapa es solo para slugs SIN
-       cupo explícito). */
-    'finlandia':1, 'letonia':1,
-    'islandia':1, 'armenia':1, 'is-feroe':1,
+       n-maced/albania/israel/hungria/ucrania/estonia/malta/serbia/
+       rumania/letonia/is-feroe fusionadas en liga-mixta-1/2/3/4/5/6
+       (2026-07-30): esas ligas ya llevan `zones.wildcard` EXPLÍCITO en
+       LEAGUE_DEFAULT_ZONES, así que NO entran aquí (el auto-cupo de este
+       mapa es solo para slugs SIN cupo explícito). */
+    'finlandia':1,
+    'islandia':1, 'armenia':1,
     'moldavia':1,
     'kosovo':1,
     /* 15 medias añadidas — Chequia y Grecia EXCLUIDAS del auto-cupo
@@ -55058,8 +55062,7 @@ https://api.sofascore.app/api/v1/team/44/image
        (72 → 74). Noruega/Polonia/Gales fusionadas en liga-mixta-1/2,
        Austria/Chipre fusionadas en liga-mixta-3 (2026-07-30) por el
        mismo motivo que arriba. */
-    'serbia':1,
-    'rusia':1, 'rumania':1,
+    'rusia':1,
     'irlanda':1, 'kazajst':1, 'bosnia':1,
     'azerbayan':1, 'bulgaria':1, 'eslovaquia':1,
     'eslovenia':1
@@ -55076,7 +55079,6 @@ https://api.sofascore.app/api/v1/team/44/image
   var LEAGUE_DEFAULT_NAMES = {
     'inglaterra':'Premier League',
     'italia':'Serie A',
-    'alemania':'Bundesliga',
     'francia':'Ligue 1',
     'portugal':'Liga Portugal Betclic',
     'p-bajos':'Eredivisie',
@@ -55085,8 +55087,6 @@ https://api.sofascore.app/api/v1/team/44/image
     'dinamarca':'Superliga',
     'suiza':'Super League',
     'escocia':'Premiership',
-    'serbia':'Superliga',
-    'rumania':'SuperLiga',
     'eslovenia':'PrvaLiga',
     'azerbayan':'Premier League',
     'rusia':'Premier League',
@@ -55100,21 +55100,22 @@ https://api.sofascore.app/api/v1/team/44/image
     'kosovo':'Superliga',
     'kazajst':'Premier League',
     'bosnia':'WWIN Liga BiH',
-    'letonia':'Virsliga',
-    'is-feroe':'Premier League',
     /* 2026-07-30 (petición usuario): Rep. Checa+Grecia+San Marino+Gales+
        Georgia (liga-mixta-1), Polonia+Noruega+Montenegro+Luxemburgo+
        Bielorrusia (liga-mixta-2), Chipre+Austria+Andorra+Gibraltar+
        N.Irlanda (liga-mixta-3), Suecia+Croacia+Lituania+Macedonia del
-       Norte+Albania (liga-mixta-4) e Israel+Hungría+Ucrania+Estonia+
-       Malta (liga-mixta-5) se fusionan en ligas de 20 equipos. Las
-       entradas individuales de arriba se eliminan — sus slugs ya no
-       existen como ligas propias. */
+       Norte+Albania (liga-mixta-4), Israel+Hungría+Ucrania+Estonia+
+       Malta (liga-mixta-5) y los 6 mejores de Alemania+Serbia+Rumanía+
+       Islas Feroe+Letonia (liga-mixta-6 — Alemania se ELIMINA como liga
+       propia, sus otros 12 equipos no migran a ningún sitio) se
+       fusionan en ligas de 20 equipos. Las entradas individuales de
+       arriba se eliminan — sus slugs ya no existen como ligas propias. */
     'liga-mixta-1':'Liga Mixta 1 — Chequia+Grecia+San Marino+Gales+Georgia',
     'liga-mixta-2':'Liga Mixta 2 — Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia',
     'liga-mixta-3':'Liga Mixta 3 — Chipre+Austria+Andorra+Gibraltar+N.Irlanda',
     'liga-mixta-4':'Liga Mixta 4 — Suecia+Croacia+Lituania+Macedonia del Norte+Albania',
-    'liga-mixta-5':'Liga Mixta 5 — Israel+Hungría+Ucrania+Estonia+Malta'
+    'liga-mixta-5':'Liga Mixta 5 — Israel+Hungría+Ucrania+Estonia+Malta',
+    'liga-mixta-6':'Liga Mixta 6 — Alemania+Serbia+Rumanía+Islas Feroe+Letonia'
   };
   window.LEAGUE_DEFAULT_NAMES = LEAGUE_DEFAULT_NAMES;
   /* Nombre a mostrar en la cabecera: custom del admin (cfg.name) →
@@ -56048,6 +56049,38 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
     try { window._lsSetSafe(FLAG, '1'); } catch(_){}
   })();
+  /* Purga LOCAL v5 (2026-07-30): Alemania+Serbia+Rumanía+Islas Feroe+
+     Letonia fusionadas en liga-mixta-6 (Alemania se elimina COMPLETA como
+     liga propia — solo sus 6 mejores equipos migran, el resto de la
+     Bundesliga no se preserva en ningún sitio, petición explícita del
+     usuario). Flag NUEVO (mismo motivo que v2/v3/v4). Mismo patrón: solo
+     local, nunca toca el servidor — la copia server de `ligaExt_alemania`
+     (escudos/plantillas reales curadas por el admin) queda intacta pero
+     inalcanzable desde la UI, igual que las fusiones anteriores. */
+  (function _purgeMergedLeaguesV5(){
+    var FLAG = 'ftbol_merged_leagues_purge_v5';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var OLD_SLUGS = ['alemania','serbia','rumania','is-feroe','letonia'];
+    try {
+      var toRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        var rest = k.substring('ligaExt_'.length);
+        for (var j = 0; j < OLD_SLUGS.length; j++) {
+          var s = OLD_SLUGS[j];
+          if (rest === s || rest.indexOf(s + '_') === 0) { toRemove.push(k); break; }
+        }
+      }
+      toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      OLD_SLUGS.forEach(function(s){
+        try { if (typeof LIGA_CACHE !== 'undefined') delete LIGA_CACHE[s]; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(s); } catch(_){}
+      });
+      try { console.warn('[ligaExt] purgadas '+toRemove.length+' claves locales de las 5 ligas fusionadas en liga-mixta-6.'); } catch(_){}
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  })();
   /* Defensa adicional: si en algún momento el storage queda vacío
      (reset / sync server que devuelve {teams:[]}), re-sembramos al
      abrir la pantalla. */
@@ -56213,6 +56246,37 @@ https://api.sofascore.app/api/v1/team/44/image
         {name:'Sliema Wanderers FC',    power:61, atk:61, mid:61, def:61},
         {name:'Paide Linnameeskond',    power:60, atk:60, mid:60, def:60},
         {name:'Birkirkara FC',          power:59, atk:59, mid:59, def:59}
+      ]
+    },
+    /* Alemania (6 mejores, Alemania ELIMINADA como liga propia — el
+       resto de la Bundesliga no migra a ningún sitio, petición explícita
+       del usuario 2026-07-30) + Serbia+Rumanía+Islas Feroe+Letonia
+       fusionadas en UNA liga de 20 equipos. Equipos = media de posición
+       entre la clasificación de esta web y la clasificación real vigente
+       de cada liga de origen (datos aportados por el usuario),
+       quedándonos con los mejores 6/4/4/3/3 de cada una. */
+    'liga-mixta-6': {
+      teams: [
+        {name:'Bayern München',         power:88, atk:88, mid:88, def:88},
+        {name:'Borussia Dortmund',      power:83, atk:83, mid:83, def:83},
+        {name:'RB Leipzig',             power:80, atk:80, mid:80, def:80},
+        {name:'Bayer Leverkusen',       power:78, atk:78, mid:78, def:78},
+        {name:'VfB Stuttgart',          power:75, atk:75, mid:75, def:75},
+        {name:'Eintracht Frankfurt',    power:73, atk:73, mid:73, def:73},
+        {name:'Crvena Zvezda',          power:70, atk:70, mid:70, def:70},
+        {name:'Fotbal Club FCSB',       power:68, atk:68, mid:68, def:68},
+        {name:'Vojvodina Novi Sad',     power:65, atk:65, mid:65, def:65},
+        {name:'Partizan Belgrade',      power:64, atk:64, mid:64, def:64},
+        {name:'Farul Constanța',        power:62, atk:62, mid:62, def:62},
+        {name:'Hermannstadt',           power:60, atk:60, mid:60, def:60},
+        {name:'Radnik Surdulica',       power:59, atk:59, mid:59, def:59},
+        {name:'UTA Arad',               power:58, atk:58, mid:58, def:58},
+        {name:'Víkingur',               power:57, atk:57, mid:57, def:57},
+        {name:'FK Valmiera',            power:56, atk:56, mid:56, def:56},
+        {name:'KÍ Klaksvík',            power:55, atk:55, mid:55, def:55},
+        {name:'Rigas Futbola Skola',    power:54, atk:54, mid:54, def:54},
+        {name:'EB/Streymur',            power:53, atk:53, mid:53, def:53},
+        {name:'Saldus SS/Leevon',       power:52, atk:52, mid:52, def:52}
       ]
     }
   };

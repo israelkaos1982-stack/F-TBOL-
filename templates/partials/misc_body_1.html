@@ -56546,13 +56546,31 @@ https://api.sofascore.app/api/v1/team/44/image
     /* Asegurar stats en CADA jugador de TODAS las plantillas (idéntico a
        la antigua rama de `_lecRunAllAuto`): si el admin nunca pulsó Sim
        Liga, los players llegan sin campos y applyMatchStats no inicializa. */
+    /* PROHIBIDO fabricar plantilla genérica durante la Sim MASIVA
+       (`window._restoSimBulkInProgress`, 2026-07-29): si SQUAD_REGISTRY
+       no resuelve el roster real de este equipo EN ESTE INSTANTE (muy
+       posible en una pasada rápida por ~54 ligas), `_lextEnsureDefaultRoster`
+       fabricaba 30 "Jugador N" y los dejaba en `t.players` — que el
+       `saveData` de `_finishSim` persiste YA MISMO. Como ni la copia
+       genérica recién creada ni la real anterior llevan `updatedAt`
+       sellado, la fusión del servidor (`_lx_merge_teams`) declaraba
+       ganadora a la ENTRANTE (la genérica) y borraba PARA SIEMPRE la
+       plantilla real de TODOS los dispositivos — bug reportado por el
+       usuario en Inglaterra/Alemania/Italia/Francia/Países Bajos/
+       Portugal y la mayoría de clasificados a Champions tras pulsar
+       "Simular todas las ligas". Mismo guard `_bulkSim` que YA usa el
+       bucle de `ligaExtSimular` unas líneas más arriba — aquí NUNCA se
+       había aplicado. En bulk, si no hay roster real disponible, se deja
+       `t.players` VACÍO (sin stats de copa para ese equipo en esta
+       pasada) en vez de inventar y guardar un roster falso. */
+    var _bulkSimCup = !!window._restoSimBulkInProgress;
     (data.teams||[]).forEach(function(t){
       if (t && (!t.players || !t.players.length)) {
         try {
           var _hyC = _lextHydrateFromSquadRegistry(t.name);
           if (_hyC && _hyC.length) t.players = _hyC;
         } catch(_){}
-        try { _lextEnsureDefaultRoster(t); } catch(_){}
+        if (!_bulkSimCup) { try { _lextEnsureDefaultRoster(t); } catch(_){} }
       }
       (t && t.players ? t.players : []).forEach(ensurePlayerStats);
     });

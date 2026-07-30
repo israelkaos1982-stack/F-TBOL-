@@ -55759,6 +55759,16 @@ https://api.sofascore.app/api/v1/team/44/image
          disparaba el top-up de IndexedDB aunque IDB tuviera la copia
          rica guardada por el admin antes de la eviction. */
       function _needsTopup(d){ return !_hasResults(d) || !_lextHasRosterOrShield(d); }
+      /* LIGA_CACHE primero (2026-07-30): igual que en `_ensureExtraLeagueSeed`,
+         con la cuota agotada el `setItem` del main puede saltarse en
+         silencio mientras `LIGA_CACHE` SÍ queda al día. Si la caché en
+         memoria ya está completa, no hay nada que curar — evita que el
+         merge de más abajo (que solo rellena escudo/alias/resultados,
+         NUNCA plantilla de jugadores) sustituya una copia en memoria ya
+         buena por una reconstrucción peor con `players` vacío. */
+      try {
+        if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE[slug] && !_needsTopup(LIGA_CACHE[slug])) return;
+      } catch(_){}
       var cur = null;
       try { var raw = localStorage.getItem(key); cur = raw ? JSON.parse(raw) : null; } catch(_){}
       if (!_needsTopup(cur)) return; // ya hay clasificación Y plantilla/escudos — nada que curar
@@ -56319,13 +56329,36 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!spec) return;
     var hasTeams = false;
     var curData = null;
+    /* LIGA_CACHE PRIMERO (2026-07-30, bug usuario: "por más que simulo
+       las Ligas Mixtas 3/4/5 no funcionan" — 380 partidos "simulados"
+       pero la tabla vuelve a 0 al reabrir). Con `window._lsQuotaExhausted`
+       ya activo (el mismo "navegador sin espacio" que el usuario lleva
+       reportando), `_lsSetSafe` descarta EN SILENCIO el `setItem` del
+       main para un payload grande (>64 KB — la clasificación de 380
+       partidos lo es) sin lanzar excepción: `saveData` cree que guardó
+       bien porque `_setItemSafe` no comprueba el `false` de retorno.
+       `LIGA_CACHE[slug]` SÍ queda actualizado siempre (primera línea de
+       `saveData`), así que es la fuente de verdad real EN MEMORIA. Leer
+       solo `localStorage` (como antes) veía la copia VIEJA en blanco de
+       la liga recién simulada y la trataba como `isBlank` — el flujo de
+       abajo entonces podía sobrescribir/pisar la sim ya calculada con
+       una recuperación pobre en vez de dejarla tal cual. */
     try {
-      var raw = localStorage.getItem('ligaExt_' + slug);
-      if (raw) {
-        curData = JSON.parse(raw);
-        if (curData && Array.isArray(curData.teams) && curData.teams.length > 0) hasTeams = true;
+      if (typeof LIGA_CACHE !== 'undefined' && LIGA_CACHE[slug] &&
+          Array.isArray(LIGA_CACHE[slug].teams) && LIGA_CACHE[slug].teams.length > 0) {
+        curData = LIGA_CACHE[slug];
+        hasTeams = true;
       }
     } catch(_){}
+    if (!hasTeams) {
+      try {
+        var raw = localStorage.getItem('ligaExt_' + slug);
+        if (raw) {
+          curData = JSON.parse(raw);
+          if (curData && Array.isArray(curData.teams) && curData.teams.length > 0) hasTeams = true;
+        }
+      } catch(_){}
+    }
     /* «hasTeams» por sí solo NO basta (mismo bug que Resto Mundo,
        2026-07-02): el seed en blanco escribe equipos con NOMBRE pero
        `players:[]`/`shield:''`. Si ese blanco queda plantado, `hasTeams`

@@ -1,5 +1,70 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `loadData` solo consultaba IndexedDB para 4 ligas auto-sembradas — se generaliza a TODA `ligaExt_*` como red final de recuperación (obligatorio, 2026-07-29 #3)
+
+**Bug (usuario 2026-07-29, tras el fix #2 de arriba): «se han perdido
+todas las plantillas de todos los equipos de Resto de Ligas también»**.
+No solo Liga EA Sports/Hypermotion/Primera Federación — las ~50 ligas
+externas normales de "Resto de Ligas" también aparecían sin plantilla.
+
+### Causa raíz — IndexedDB (el espejo con más margen) solo se consultaba para 4 ligas
+
+`saveData(k,d)` (el chokepoint único de todo guardado de `ligaExt_*`)
+espeja SIEMPRE la liga completa en IndexedDB (`window._idbKV.set`,
+~cientos de MB de cuota frente a los ~5 MB de `localStorage`, con
+evicción mucho menos agresiva) — esto es genérico, corre para
+CUALQUIER liga. Pero el ÚNICO lector de ese espejo,
+`_lextIdbTopupIfEmpty(slug)`, solo se llamaba desde
+`_ensureRestoMundoSeed`/`_ensureExtraLeagueSeed` — es decir, SOLO para
+las 4 ligas con seed automático (Resto Mundo, Montenegro, N. Irlanda,
+Albania). `loadData` (el chokepoint de lectura de TODAS las ligas,
+usado por las ~50 externas "normales") agotaba local main →
+`_protected` → `_backup` → `_snap_*` → hidratación del servidor, pero
+JAMÁS miraba IndexedDB — la fuente local con más margen de todas se
+quedaba sin usar para el 90% de las ligas del juego.
+
+Si, además, el servidor también viene vacío para estas ligas (ver
+sección de arriba: main y `_protected` pueden perderse juntos si la
+base de datos del servidor es efímera — ver diagnóstico
+`_persistence_diagnostic()` en `app.py`, expuesto en `/api/debug`: si
+`DATABASE_URL` no está configurada o se desvincula en un redeploy de
+Railway, el server cae a SQLite en disco efímero y TODAS las filas
+`liga_ext_*` —main y `_protected`— desaparecen de golpe en el próximo
+deploy/restart), la ÚNICA copia que puede sobrevivir es la que ya
+tenía este dispositivo en su propio IndexedDB de antes del incidente.
+
+### Fix
+
+`loadData` llama a `_lextIdbTopupIfEmpty(k)` en los 3 puntos donde ya
+llamaba a `_lextTriggerBgHydrate(k)` (cache poblada pero vacía / main
+persistido vacío / agotadas todas las fuentes locales) — para
+CUALQUIER slug, no solo los 4 auto-sembrados. `_lextIdbTopupIfEmpty`
+ya era seguro por diseño (nunca pisa datos ya presentes, re-comprueba
+justo antes de escribir, hace merge por nombre) — solo hacía falta
+invocarlo desde el punto de lectura genérico.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una red de recuperación local nueva (IndexedDB,
+   o cualquier espejo durable futuro) se cablee SOLO a las 4 ligas
+   auto-sembradas cuando el escritor (`saveData`) ya la alimenta para
+   TODAS las ligas por igual. Si el escritor es genérico, el lector
+   también debe serlo — auditar `loadData` (el chokepoint de lectura)
+   además de los `_ensure*Seed` de las 4 ligas especiales.
+2. **PROHIBIDO** asumir que "el servidor tiene `_protected`" basta como
+   red de seguridad única. Si el servidor pierde AMBAS copias (main y
+   `_protected`) a la vez — el patrón exacto de una base de datos
+   efímera reiniciándose — la única copia que puede quedar es la de
+   un dispositivo que todavía no ha sincronizado ese vacío. IndexedDB
+   (evicción más laxa que `localStorage`) es esa última red.
+3. Si un incidente futuro vuelve a mostrar "0 equipos" en MUCHAS ligas
+   a la vez (no 1 o 2 sueltas), sospechar primero de una pérdida a
+   nivel de servidor (comprobar `/api/debug` → `database_url_env_set`
+   / el diagnóstico de persistencia en los logs de arranque) antes que
+   de un bug de un flujo de cliente concreto — el patrón "todo a la
+   vez" es la firma de un reinicio de base de datos efímera, no de un
+   fallo de sincronización aislado.
+
 ## El clic en una fila de clasificación (EA Sports/Hypermotion/Primera Federación) y las 2 herramientas de "recuperación de emergencia" pedían SOLO el `main` del servidor — nunca miraban el snapshot `_protected` (obligatorio, 2026-07-29 #2)
 
 **Bug (usuario 2026-07-29, fotos «Liga EA Sports · Clasificación»)**:

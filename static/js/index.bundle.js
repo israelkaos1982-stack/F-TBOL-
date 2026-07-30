@@ -4842,9 +4842,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     };
     targetTeam.players.push(newPlayer);
     if (foundTeam) {
-      try { localStorage.setItem('ligaExt_' + foundSlug, JSON.stringify(foundData)); } catch(_){}
+      try { window._lsSetSafe('ligaExt_' + foundSlug, JSON.stringify(foundData)); } catch(_){}
       if (foundData.teams && foundData.teams.length > 0) {
-        try { localStorage.setItem('ligaExt_' + foundSlug + '_protected', JSON.stringify(foundData)); } catch(_){}
+        try { window._lsSetSafe('ligaExt_' + foundSlug + '_protected', JSON.stringify(foundData)); } catch(_){}
       }
       try {
         if (typeof fetch === 'function') {
@@ -4856,7 +4856,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         }
       } catch(_){}
     } else if (selTeam && selData) {
-      try { localStorage.setItem('selecciones_squad_v1', JSON.stringify(selData)); } catch(_){}
+      try { window._lsSetSafe('selecciones_squad_v1', JSON.stringify(selData)); } catch(_){}
       try {
         if (typeof fetch === 'function') {
           fetch('/api/kv/selecciones_squad_v1', {
@@ -9182,7 +9182,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       if (payload === _lesionLastSer) return;
       _lesionLastSer = payload;
       _lesionUpdatedAt = Date.now();
-      localStorage.setItem(_LESION_LS_KEY, JSON.stringify({ baja:data.baja, lesion:data.lesion, updatedAt:_lesionUpdatedAt }));
+      window._lsSetSafe(_LESION_LS_KEY, JSON.stringify({ baja:data.baja, lesion:data.lesion, updatedAt:_lesionUpdatedAt }));
       _lesionSync.touch(_lesionUpdatedAt);
     } catch (_) {}
   }
@@ -9208,7 +9208,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     window.LESION_STORE = (sv && sv.lesion) || {};
     _lesionUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
     _lesionLastSer = JSON.stringify(_lesionDataObj());
-    try { localStorage.setItem(_LESION_LS_KEY, JSON.stringify({ baja:window.BAJA_STORE, lesion:window.LESION_STORE, updatedAt:_lesionUpdatedAt })); } catch(_){}
+    try { window._lsSetSafe(_LESION_LS_KEY, JSON.stringify({ baja:window.BAJA_STORE, lesion:window.LESION_STORE, updatedAt:_lesionUpdatedAt })); } catch(_){}
   }, _lesionIsEmpty);
   _lesionSync.seed(_lesionUpdatedAt);
   try {
@@ -9243,7 +9243,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       if (payload === _sancLastSer) return;
       _sancLastSer = payload;
       _sancUpdatedAt = Date.now();
-      localStorage.setItem(_SANC_LS_KEY, JSON.stringify({ g:data.g, updatedAt:_sancUpdatedAt }));
+      window._lsSetSafe(_SANC_LS_KEY, JSON.stringify({ g:data.g, updatedAt:_sancUpdatedAt }));
       _sancSync.touch(_sancUpdatedAt);
     } catch (_) {}
   }
@@ -9267,7 +9267,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     window.SANCION_STORE.__global = (sv && Array.isArray(sv.g)) ? sv.g.slice() : [];
     _sancUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
     _sancLastSer = JSON.stringify(_sancDataObj());
-    try { localStorage.setItem(_SANC_LS_KEY, JSON.stringify({ g:window.SANCION_STORE.__global, updatedAt:_sancUpdatedAt })); } catch(_){}
+    try { window._lsSetSafe(_SANC_LS_KEY, JSON.stringify({ g:window.SANCION_STORE.__global, updatedAt:_sancUpdatedAt })); } catch(_){}
   }, _sancIsEmpty);
   _sancSync.seed(_sancUpdatedAt);
   try {
@@ -11022,7 +11022,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         try {
           var _cfgJ = JSON.stringify(cfg);
           if (window._lsSetSafe) window._lsSetSafe(storeKey, _cfgJ);
-          else localStorage.setItem(storeKey, _cfgJ);
+          else window._lsSetSafe(storeKey, _cfgJ);
         } catch(_){}
         try {
           window._TOUR_CACHE = window._TOUR_CACHE || {};
@@ -11112,7 +11112,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         dirty = true;
       });
       if (dirty) {
-        try { localStorage.setItem(statsKey, JSON.stringify(store)); } catch(_){}
+        try { window._lsSetSafe(statsKey, JSON.stringify(store)); } catch(_){}
       }
     });
   }
@@ -11184,7 +11184,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       try {
         var _migJ = JSON.stringify(results);
         if (window._lsSetSafe) window._lsSetSafe('ef_liga38_v4', _migJ);
-        else localStorage.setItem('ef_liga38_v4', _migJ);
+        else window._lsSetSafe('ef_liga38_v4', _migJ);
       } catch(_){}
     }
   }
@@ -13422,7 +13422,7 @@ window._fallbackSq11 = function(){
       if (payload === _lastSer) return;
       _lastSer = payload;
       _selUpdatedAt = Date.now();
-      localStorage.setItem(LS_KEY, JSON.stringify({ yellow:data.yellow, sancion:data.sancion, lesion:data.lesion, updatedAt:_selUpdatedAt }));
+      window._lsSetSafe(LS_KEY, JSON.stringify({ yellow:data.yellow, sancion:data.sancion, lesion:data.lesion, updatedAt:_selUpdatedAt }));
       if (_selSync) _selSync.touch(_selUpdatedAt);
     } catch(_){}
   }
@@ -13509,7 +13509,7 @@ window._fallbackSq11 = function(){
       window.LESION_STORE_SEL  = (sv && sv.lesion)  || {};
       _selUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
       _lastSer = JSON.stringify(_selDataObj());
-      try { localStorage.setItem(LS_KEY, JSON.stringify({ yellow:window.YELLOW_STORE_SEL, sancion:window.SANCION_STORE_SEL, lesion:window.LESION_STORE_SEL, updatedAt:_selUpdatedAt })); } catch(_){}
+      try { window._lsSetSafe(LS_KEY, JSON.stringify({ yellow:window.YELLOW_STORE_SEL, sancion:window.SANCION_STORE_SEL, lesion:window.LESION_STORE_SEL, updatedAt:_selUpdatedAt })); } catch(_){}
       try { _migrateLegacyTorneoKeys(); } catch(_){}
     }, _selIsEmpty);
     _selSync.seed(_selUpdatedAt);

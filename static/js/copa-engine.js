@@ -1726,7 +1726,7 @@
     return saveResult(payload).then(function (d) {
       if (d.ok) {
         applyHumanResultMeta(payload, match.local, match.visitante);
-        if (d.copa) { _copa = d.copa; try { localStorage.setItem('copa_state_v1', JSON.stringify(_copa)); } catch (_) {} }
+        if (d.copa) { _copa = d.copa; try { window._lsSetSafe('copa_state_v1', JSON.stringify(_copa)); } catch (_) {} }
         copaRender(d.copa);
       }
       return d;
@@ -1744,7 +1744,7 @@
            (Source 5) reconstruya las estadísticas de la Copa tras un
            borrado de datos / cambio de móvil. El acta vive en
            copa_state.resultados[].events. 2026-06-06. */
-        try { localStorage.setItem('copa_state_v1', JSON.stringify(_copa)); } catch (_) {}
+        try { window._lsSetSafe('copa_state_v1', JSON.stringify(_copa)); } catch (_) {}
         applyStoredResultMeta(_copa);
         copaRender(_copa);
       })

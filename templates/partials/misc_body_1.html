@@ -52477,12 +52477,25 @@ https://api.sofascore.app/api/v1/team/44/image
     if (slug === 'liga-ea-sports')          return '🏆 Liga EA Sports';
     if (slug === 'liga-hypermotion')        return '⚡ Liga Hypermotion';
     if (slug === 'liga-primera-federacion') return '🟩 Primera Federación';
-    return '🌍 ' + slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    if (slug === 'resto-mundo')             return '🌎 Resto Mundo';
+    var base = slug.replace(/-/g, ' ').replace(/\b\w/g, function(c){ return c.toUpperCase(); });
+    var real = '';
+    try { real = (window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[slug]) || ''; } catch(_){}
+    return '🌍 ' + base + (real ? ' (' + real + ')' : '');
   }
 
   function _lextListAllSlugs(){
-    /* Devuelve array de slugs únicos de localStorage (sin _backup,
-       _protected, _snap_). */
+    /* Devuelve TODOS los slugs posibles como destino de "Mover equipos"
+       — no solo los que ESTE dispositivo tiene cacheados en localStorage.
+       Bug 2026-07-30 (foto usuario, «no me salen muchas ligas... no sale
+       la Liga Italia»): antes solo listaba lo que había en
+       `localStorage['ligaExt_*']` de ESTE móvil — el mismo patrón "esta
+       liga no se ve porque nunca se abrió en este dispositivo" ya
+       documentado para el resto de "Resto de Ligas" (ver reglas de
+       recuperación/hidratación más arriba). Se une con el catálogo
+       CANÓNICO (`LEAGUE_DEFAULT_ZONES`, las ~54 ligas de Resto de Ligas)
+       + las ligas especiales, así el destino nunca depende de qué haya
+       cacheado localmente el dispositivo que abre el picker. */
     var seen = {}; var out = [];
     try {
       for (var i = 0; i < localStorage.length; i++) {
@@ -52497,8 +52510,74 @@ https://api.sofascore.app/api/v1/team/44/image
         out.push(slug);
       }
     } catch(_){}
+    try {
+      Object.keys(window.LEAGUE_DEFAULT_ZONES || {}).forEach(function(s){
+        if (!seen[s]) { seen[s] = true; out.push(s); }
+      });
+    } catch(_){}
+    ['liga-hypermotion', 'liga-primera-federacion', 'resto-mundo'].forEach(function(s){
+      if (!seen[s]) { seen[s] = true; out.push(s); }
+    });
     out.sort();
     return out;
+  }
+
+  /* Trae del SERVIDOR (una sola petición, con timeout — nunca cuelga el
+     picker) la liga destino elegida si ESTE dispositivo no la tiene
+     cacheada localmente con datos reales. Sin esto, mover un equipo a
+     una liga nunca abierta en este móvil (p.ej. Italia) fusionaría con
+     un documento CASI VACÍO en vez del roster real — el servidor lo
+     arregla de todas formas (fusión por equipo, `_lx_merge_teams` NUNCA
+     encoge), pero este dispositivo se quedaría con una copia local
+     pobre hasta la siguiente sincronización. Best-effort: si falla o
+     tarda, se sigue adelante igualmente (nunca bloquea "Mover" para
+     siempre). */
+  function _lextMvEnsureDestHydrated(slug, cb){
+    var local = null;
+    try {
+      var raw = localStorage.getItem('ligaExt_' + slug);
+      local = raw ? JSON.parse(raw) : null;
+    } catch(_){}
+    if (local && Array.isArray(local.teams) && local.teams.length >= 2) { cb(); return; }
+    var done = false;
+    /* Toast propio (auto-contenido): `_lextClickToast` vive en OTRA IIFE
+       de este mismo archivo y no es accesible desde aquí — mismo bug de
+       scope ya documentado (EUR_MANUAL_ZONES, 2026-07-13 #5). */
+    var toastEl = null;
+    try {
+      toastEl = document.createElement('div');
+      toastEl.textContent = '⏳ Cargando "' + _lextSlugLabel(slug) + '" del servidor…';
+      toastEl.style.cssText = 'position:fixed;left:50%;bottom:90px;transform:translateX(-50%);'
+        + 'max-width:90vw;z-index:1000000;padding:10px 16px;border-radius:10px;'
+        + 'font-family:Rajdhani,sans-serif;font-size:13px;font-weight:600;letter-spacing:.4px;'
+        + 'color:#fff;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.55);'
+        + 'background:linear-gradient(135deg,#1a3a6b,#2b6cb0);'
+        + 'border:1px solid rgba(255,255,255,.25);';
+      document.body.appendChild(toastEl);
+    } catch(_){}
+    var settle = function(){
+      if (done) return;
+      done = true;
+      try { if (toastEl && toastEl.parentNode) toastEl.remove(); } catch(_){}
+      cb();
+    };
+    var timer = setTimeout(settle, 7000);
+    try {
+      fetch('/api/liga-ext-any/' + encodeURIComponent(slug), { credentials: 'same-origin' })
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          clearTimeout(timer);
+          try {
+            var data = j && j.data;
+            if (data && Array.isArray(data.teams) && data.teams.length) {
+              localStorage.setItem('ligaExt_' + slug, JSON.stringify(data));
+              if (window.LIGA_CACHE) window.LIGA_CACHE[slug] = data;
+            }
+          } catch(_){}
+          settle();
+        })
+        .catch(function(){ clearTimeout(timer); settle(); });
+    } catch(_){ clearTimeout(timer); settle(); }
   }
 
   window.lextOpenMoveTeams = function(){
@@ -52765,8 +52844,10 @@ https://api.sofascore.app/api/v1/team/44/image
       alert(msg);
     };
 
-    if (typeof window.pG === 'function') window.pG(doMove);
-    else doMove();
+    _lextMvEnsureDestHydrated(destSlug, function(){
+      if (typeof window.pG === 'function') window.pG(doMove);
+      else doMove();
+    });
   };
 
   /* Banner ROJO persistente cuando el guardado NO llegó al server

@@ -37306,6 +37306,79 @@ window._showSimProgress = function(opts, onDone){
   }
   window.computeUclPrevDirectTeams = computeUclPrevDirectTeams;
 
+  /* ══ Previa Champions — NUEVO FORMATO 2026-07-31 (Ronda1 + Ronda2) ══
+     De los 24 directos-vía-liga a la Previa (zona uclPrev), 12 son
+     FIJOS para la RONDA 2 (esperan a los 12 ganadores de la Ronda 1) y
+     12 juegan la RONDA 1 desde el principio (junto a los 12 clasificados
+     del Open Qualifier). Los 8 países con 🟣1 (Portugal/P.Bajos/Bélgica/
+     Turquía/Dinamarca/Suiza/Escocia + España manual) son SIEMPRE fijos;
+     de las liga-mixta-1..4 (🟣2 cada una) la MEJOR de sus 2 plazas es
+     fija y la otra juega la Ronda 1; liga-mixta-5..8 (🟣2 cada una)
+     juegan la Ronda 1 completas. liga-mixta-9 no tiene 🟣. */
+  function _uclPrevLeagueRanking(slug){
+    try {
+      var raw = localStorage.getItem('ligaExt_' + slug);
+      if(!raw) return [];
+      var data = JSON.parse(raw);
+      if(!data || !Array.isArray(data.teams)) return [];
+      var results = Array.isArray(data.results) ? data.results : [];
+      return results.length ? _standingsFromResults(data.teams, results) : _rankByPower(data.teams);
+    } catch(_){ return []; }
+  }
+  function _uclPrevTeamAtRank(slug, rank1){
+    var ranking = _uclPrevLeagueRanking(slug);
+    var r = ranking[rank1-1];
+    if(!r || !r.name) return null;
+    return { name:String(r.name).replace(/^\s*\*+\s*/,''), logo:r.logo||'', league:slug };
+  }
+  function computeUclPrevFixedR2Teams(){
+    if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return [];
+    var out = [], seen = {};
+    function push(t){ if(!t || !t.name || seen[t.name]) return; seen[t.name]=true; out.push(t); }
+    (window._UCL_PREV_FIXED_SINGLE_SLUGS||[]).forEach(function(slug){
+      var z = _zonesDefaultFor(slug);
+      push(_uclPrevTeamAtRank(slug, (Number(z.ucl)||0)+1));
+    });
+    /* España — único 🟣1 manual (Liga EA blacklisted del cómputo
+       automático). Lo asigna el admin en "EA Sports → Europa". */
+    if(typeof window._meaTeamsFor === 'function'){
+      (window._meaTeamsFor('uclPrev')||[]).forEach(function(t){
+        if(t && t.name) push({ name:t.name, logo:t.logo||'', league:t.league||'liga-ea-sports' });
+      });
+    }
+    (window._UCL_PREV_FIXED_MIXTA_SLUGS||[]).forEach(function(slug){
+      var z = _zonesDefaultFor(slug);
+      push(_uclPrevTeamAtRank(slug, (Number(z.ucl)||0)+1)); /* la MEJOR de sus 2 plazas */
+    });
+    _eurFixupLeagues(out);
+    return out;
+  }
+  window.computeUclPrevFixedR2Teams = computeUclPrevFixedR2Teams;
+  function computeUclPrevDirectR1Teams(){
+    if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return _appendManualExtra([], 'uclPrev');
+    var out = [], seen = {};
+    function push(t){ if(!t || !t.name || seen[t.name]) return; seen[t.name]=true; out.push(t); }
+    (window._UCL_PREV_FIXED_MIXTA_SLUGS||[]).forEach(function(slug){
+      var z = _zonesDefaultFor(slug);
+      push(_uclPrevTeamAtRank(slug, (Number(z.ucl)||0)+2)); /* la 2ª de sus 2 plazas */
+    });
+    ['liga-mixta-5','liga-mixta-6','liga-mixta-7','liga-mixta-8'].forEach(function(slug){
+      var z = _zonesDefaultFor(slug);
+      var skip = Number(z.ucl)||0, slots = Number(z.uclPrev)||0;
+      for(var i=1;i<=slots;i++) push(_uclPrevTeamAtRank(slug, skip+i));
+    });
+    /* Extras manuales genéricos de 'uclPrev' SIN feederTag 'open-qualifier'
+       (esos juegan la Previa vía computeUclPrevOqPoolTeams, no aquí). */
+    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
+    manual.forEach(function(t){
+      if(!t || !t.name || t.feederTag === 'open-qualifier') return;
+      push({ name:t.name, logo:t.logo||'', league:t.league||'manual' });
+    });
+    _eurFixupLeagues(out);
+    return out;
+  }
+  window.computeUclPrevDirectR1Teams = computeUclPrevDirectR1Teams;
+
   /* Pool del Open Qualifier para la Previa (los 28 que deben jugar la
      ronda preliminar). El 1º de cada grupo del Open Qualifier (28
      grupos × 1, formato 28×4 desde 2026-05-30) lo persiste
@@ -38664,7 +38737,7 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
     var teams = (wc && Array.isArray(wc.teams)) ? wc.teams : [];
     if(!teams.length){
-      alert('La Wild Card todavía no tiene ganadores guardados.\n\nTermina de simular sus 24 grupos primero (🎮 Sim en la pantalla de la Wild Card).');
+      alert('La Wild Card todavía no tiene ganadores guardados.\n\nTermina de simular sus 12 eliminatorias primero (🎮 Sim en la pantalla de la Wild Card).');
       return;
     }
     try {
@@ -43479,7 +43552,13 @@ window._showSimProgress = function(opts, onDone){
      sobrasen equipos!) cuando en realidad estaba a 2 de completar los
      40 reales — confundía al admin haciéndole creer que algo estaba
      "sobrecargado" cuando esas 3 zonas eran las que MEJOR estaban. */
-  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:34, uel:40, uecl:40, uclQual:88, wildcard:72, recopa:64, inter:8 };
+  /* 2026-07-31 (nuevo formato Wild Card/Open Qualifier/Previa): uclPrev
+     ahora es el total de directos-vía-liga a la Previa (24, antes de
+     sumar los 12 del Open Qualifier); uclQual es el total DIRECTO del
+     Open Qualifier (28, antes de sumar los 12 ganadores de la Wild
+     Card); wildcard es el pool de la Wild Card (24). ucl/uel/uecl se
+     mantienen en 40 — el reparto interno cambia pero el total no. */
+  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:24, uel:40, uecl:40, uclQual:28, wildcard:24, recopa:64, inter:8 };
   /* Resuelve la "liga" de un nombre de equipo del pool de Recopa/
      Intercontinental para poder agruparlo en el informe igual que los
      equipos de las 6 zonas originales (que ya vienen con `.league`).
@@ -44201,12 +44280,12 @@ window._showSimProgress = function(opts, onDone){
      obsoletos + la snapshot congelada, y (c) re-congela el cuadre
      LIMPIO. Idempotente: re-pulsarlo siempre deja el mismo cuadre. */
   var _EURO_FEEDER_KEYS = [
-    'wprev_to_fase_grupos_v1',   // → +12 UCL
-    'wprev_to_europa_v1',        // → +22 UEL
-    'wprev_r1_to_conference_v1', // → +28 UECL
-    'oq_to_previa_v1',           // → +28 Previa
-    'oq_to_conference_v1',       // legacy feeder
-    'wc_to_open_qualifier_v1',   // → +24 OQ
+    'wprev_to_fase_grupos_v1',   // → +12 UCL (Previa Ronda 2 ganadores)
+    'wprev_to_europa_v1',        // → +24 UEL (Previa Ronda1+Ronda2 perdedores)
+    'wprev_r1_to_conference_v1', // sin uso (formato 2026-07-31: Previa ya no alimenta Conference)
+    'oq_to_previa_v1',           // → +12 Previa Ronda 1 (10 primeros + 2 mejores segundos)
+    'oq_to_conference_v1',       // → +28 UECL (no clasificados del Open Qualifier)
+    'wc_to_open_qualifier_v1',   // → +12 OQ (ganadores de las eliminatorias WC)
     'wc_champion_v1'             // legacy campeón único WC
   ];
   function _clearKvKey(k){
@@ -49868,71 +49947,56 @@ https://api.sofascore.app/api/v1/team/44/image
   var LEAGUE_DEFAULT_ZONES = (function(){
     var Z = {};
     function set(slugs, z){ slugs.forEach(function(s){ Z[s] = z; }); }
+    /* 2026-07-31 — NUEVO FORMATO (Wild Card 24 KO / Open Qualifier 40
+       grupos / Previa Champions Ronda1+Ronda2 KO, ver el motor nuevo en
+       part2/misc_body_2.html y misc_body_1.html). Tabla ENTREGADA por
+       el usuario, un cupo por liga:
+         🔵28 · 🟣24 · 🟠16 · 🟢12 · 🟡28 · ⚪23 (⚠️ el usuario dio 24 de
+         cabecera para ⚪ pero la suma liga-a-liga de su propia tabla da
+         23 — implementado LITERAL por liga; si falta 1 hueco de Wild
+         Card avisar al usuario para que diga qué liga sube +1). */
     // 🔵4 🟣1 🟠2 🟢1 ⚫2 — España (Liga EA Sports; manual/blacklist europeo)
     Z['liga-ea-sports'] = {ucl:4, uclPrev:1, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2};
-    // 🔵4 🟠2 🟢2 ⚫2 — Inglaterra
+    // 🔵4 🟠2 🟢2 ⚫2 — Inglaterra (sin 🟣)
     Z['inglaterra']     = {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:2, wildcard:0, desc:2};
-    // 🔵4 🟠2 🟢1 ⚫2 — Italia / Francia (Alemania fusionada en liga-mixta-6, 2026-07-30)
-    set(['italia','francia'],      {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
-    // 🔵2 🟠2 🟢1 ⚫2 — Portugal / Países Bajos
-    set(['portugal','p-bajos'],               {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
-    // 🔵1 🟣1 🟠1 🟢1 ⚫2 — Bélgica / Turquía
-    set(['belgica','turquia'],                {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2});
-    // 🟣1 🟡2 ⚪2 ⚫2 — Dinamarca / Suiza
-    set(['dinamarca','suiza'], {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:2});
-    // 🟣1 🟡2 ⚪2 ⚫1 — bloque medio (1 liga; Polonia/Noruega fusionadas en
-    // liga-mixta-2, Chipre/Austria fusionadas en liga-mixta-3, Suecia/Croacia
-    // fusionadas en liga-mixta-4, Israel/Hungría/Ucrania fusionadas en
-    // liga-mixta-5, Serbia/Rumanía fusionadas en liga-mixta-6,
-    // Eslovenia/Bulgaria fusionadas en liga-mixta-7, Rusia/Azerbaiyán
-    // fusionadas en liga-mixta-8, Eslovaquia fusionada en liga-mixta-9,
-    // 2026-07-30)
-    set(['escocia'],
-        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:1});
-    // 🟣1 🟡2 ⚪1 ⚫1 — bloque medio-bajo (vacío; Letonia fusionada en
-    // liga-mixta-6, Kosovo/Kazajistán/Bosnia fusionadas en liga-mixta-7,
-    // Armenia/Moldavia/Finlandia fusionadas en liga-mixta-8, Irlanda/
-    // Islandia fusionadas en liga-mixta-9, 2026-07-30)
-    set([],
-        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
-    /* 2026-07-30 (petición usuario): Rep. Checa+Grecia+San Marino+Gales+
-       Georgia y Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia se
-       fusionan en 2 ligas de 20 equipos cada una (liga-mixta-1/2). Las
-       zonas europeas de cada mixta son la SUMA EXACTA de las 5 ligas que
-       la componen — el total agregado por zona (UCL/Previa/OQ/UEL/UECL/
-       WildCard) no cambia, solo el nº de ligas que las reparten. */
-    // liga-mixta-1 = rep-checa(1/1/0/1/1/0) + grecia(1/1/0/1/1/0) +
-    // san-marino(0/0/2/0/0/1) + gales(0/0/2/0/0/1) + georgia(0/0/2/0/0/2)
-    Z['liga-mixta-1'] = {ucl:2, uclPrev:2, uclQual:6, uel:2, uecl:2, wildcard:4, desc:2};
-    // liga-mixta-2 = polonia(0/1/2/0/0/2) + noruega(0/1/2/0/0/2) +
-    // montenegro(0/0/2/0/0/2) + luxembgo(0/0/2/0/0/2) + bielorrsa(0/0/2/0/0/2)
-    Z['liga-mixta-2'] = {ucl:0, uclPrev:2, uclQual:10, uel:0, uecl:0, wildcard:10, desc:2};
-    // liga-mixta-3 (2026-07-30) = chipre(0/1/2/0/0/2) + austria(0/1/2/0/0/2) +
-    // andorra(0/0/2/0/0/2) + gibraltar(0/0/2/0/0/2) + n-irlanda(0/0/2/0/0/2)
-    Z['liga-mixta-3'] = {ucl:0, uclPrev:2, uclQual:10, uel:0, uecl:0, wildcard:10, desc:2};
-    // liga-mixta-4 (2026-07-30) = suecia(0/1/2/0/0/2) + croacia(0/1/2/0/0/2) +
-    // lituania(0/0/2/0/0/2) + n-maced(0/0/2/0/0/2) + albania(0/1/2/0/0/1)
-    Z['liga-mixta-4'] = {ucl:0, uclPrev:3, uclQual:10, uel:0, uecl:0, wildcard:9, desc:2};
-    // liga-mixta-5 (2026-07-30) = israel(0/1/2/0/0/2) + hungria(0/1/2/0/0/2) +
-    // ucrania(0/1/2/0/0/2) + estonia(0/0/2/0/0/2) + malta(0/0/3/0/0/1)
-    Z['liga-mixta-5'] = {ucl:0, uclPrev:3, uclQual:11, uel:0, uecl:0, wildcard:9, desc:2};
-    // liga-mixta-6 (2026-07-30, petición usuario: Alemania se elimina como
-    // liga propia, sus 6 mejores equipos pasan aquí) = alemania(4/0/0/2/1/0) +
-    // serbia(0/1/2/0/0/2) + rumania(0/1/2/0/0/2) + is-feroe(0/0/3/0/0/1) +
-    // letonia(0/1/2/0/0/1)
-    Z['liga-mixta-6'] = {ucl:4, uclPrev:3, uclQual:9, uel:2, uecl:1, wildcard:6, desc:2};
-    // liga-mixta-7 (2026-07-30) = eslovenia(0/1/2/0/0/2) + bulgaria(0/1/2/0/0/2) +
-    // bosnia(0/1/2/0/0/1) + kazajst(0/1/2/0/0/1) + kosovo(0/1/2/0/0/1)
-    Z['liga-mixta-7'] = {ucl:0, uclPrev:5, uclQual:10, uel:0, uecl:0, wildcard:7, desc:2};
-    // liga-mixta-8 (2026-07-30) = rusia(0/1/2/0/0/2) + azerbayan(0/1/2/0/0/2) +
-    // armenia(0/1/2/0/0/1) + moldavia(0/1/2/0/0/1) + finlandia(0/1/2/0/0/1)
-    Z['liga-mixta-8'] = {ucl:0, uclPrev:5, uclQual:10, uel:0, uecl:0, wildcard:7, desc:2};
-    // liga-mixta-9 (2026-07-31, última liga menor sin fusionar — solo
-    // quedaban 3 países) = eslovaquia(0/1/2/0/0/2) + irlanda(0/1/2/0/0/1) +
-    // islandia(0/1/2/0/0/1)
-    Z['liga-mixta-9'] = {ucl:0, uclPrev:3, uclQual:6, uel:0, uecl:0, wildcard:4, desc:2};
+    // 🔵4 🟠2 🟢1 ⚫2 — Italia / Francia (sin 🟣; Alemania fusionada en liga-mixta-6)
+    set(['italia','francia'], {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
+    // 🔵2 🟣1 🟠2 🟢1 ⚫2 — Portugal
+    Z['portugal'] = {ucl:2, uclPrev:1, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2};
+    // 🔵2 🟣1 🟠1 🟢1 ⚫2 — Países Bajos
+    Z['p-bajos']  = {ucl:2, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2};
+    // 🔵1 🟣1 🟠1 🟢1 ⚫2 — Bélgica / Turquía / Dinamarca / Suiza
+    set(['belgica','turquia','dinamarca','suiza'], {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2});
+    // 🔵1 🟣1 🟠1 🟢1 ⚫1 — Escocia
+    Z['escocia'] = {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:1};
+    /* Ligas Mixtas 1-9 (fusiones de 2026-07-30/31, mismo orden que la
+       tabla del usuario: "Liga 1".."Liga 9" = liga-mixta-1..9). Ninguna
+       tiene 🟠/🟢 (esas plazas solo las tienen las 11 ligas individuales
+       de arriba) — 🔵 solo en liga-mixta-1 (3, incluye el 4º fijo de la
+       Previa Ronda 2). El ⚫ descenso propio de cada liga se CONSERVA tal
+       cual estaba (el usuario no lo tocó en su tabla nueva). */
+    Z['liga-mixta-1'] = {ucl:3, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
+    Z['liga-mixta-2'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
+    Z['liga-mixta-3'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
+    Z['liga-mixta-4'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
+    Z['liga-mixta-5'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:2, desc:2};
+    Z['liga-mixta-6'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
+    Z['liga-mixta-7'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:2, desc:2};
+    Z['liga-mixta-8'] = {ucl:0, uclPrev:2, uclQual:4, uel:0, uecl:0, wildcard:2, desc:2};
+    Z['liga-mixta-9'] = {ucl:0, uclPrev:0, uclQual:3, uel:0, uecl:0, wildcard:2, desc:2};
     return Z;
   })();
+  /* De los 24 🟣 (Previa Ronda 1 directos), 12 son FIJOS a la Ronda 2
+     (esperan a los ganadores de la Ronda 1) y 12 juegan la Ronda 1 desde
+     el principio. Los 8 países individuales con 🟣1 (más España, manual)
+     son SIEMPRE fijos; de las liga-mixta-1..4 (🟣2 cada una) la MEJOR de
+     sus 2 plazas es fija y la otra juega la Ronda 1; liga-mixta-5..8
+     (🟣2 cada una) juegan la Ronda 1 completas. Ver
+     `computeUclPrevFixedR2Teams`/`computeUclPrevDirectR1Teams` más abajo. */
+  var UCL_PREV_FIXED_SINGLE_SLUGS = ['portugal','p-bajos','belgica','turquia','dinamarca','suiza','escocia'];
+  var UCL_PREV_FIXED_MIXTA_SLUGS  = ['liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4'];
+  window._UCL_PREV_FIXED_SINGLE_SLUGS = UCL_PREV_FIXED_SINGLE_SLUGS;
+  window._UCL_PREV_FIXED_MIXTA_SLUGS  = UCL_PREV_FIXED_MIXTA_SLUGS;
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
 
   /* Default de zonas para un slug: genérico + override europeo por liga. */
@@ -55664,6 +55728,65 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   window._fixupLeagueZonesV3 = _fixupLeagueZonesV3;
+  /* Fixup v4 (2026-07-31, NUEVO FORMATO Champions/Previa/Europa/
+     Conference/Open Qualifier/Wild Card — petición usuario, tabla
+     completa por liga): reasigna Dinamarca/Suiza/Escocia (pasan de
+     "liga media con 🟣🟡⚪" a liga individual con 🔵🟣🟠🟢 propios),
+     Portugal/Países Bajos (ganan 🟣1 y su 🟠 se separa) y las 9 Ligas
+     Mixtas (nuevos cupos 🔵/🟣/🟡/⚪ del formato: Wild Card 24 KO,
+     Open Qualifier 40, Previa Ronda1+Ronda2). SOLO re-aplica si la liga
+     sigue EXACTAMENTE en su valor VIEJO (el que dejó el fixup v3/el seed
+     de fusión) o en el genérico — nunca pisa una edición manual del
+     admin. Idempotente vía flag propio. */
+  function _fixupLeagueZonesV4(){
+    var FLAG = 'ftbol_league_zones_fix_v4';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var OLD = {
+      'dinamarca':      {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2},
+      'suiza':          {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2},
+      'escocia':        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2},
+      'portugal':       {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0},
+      'p-bajos':        {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0},
+      'liga-mixta-1':   {ucl:2, uclPrev:2, uclQual:6,  uel:2, uecl:2, wildcard:4},
+      'liga-mixta-2':   {ucl:0, uclPrev:2, uclQual:10, uel:0, uecl:0, wildcard:10},
+      'liga-mixta-3':   {ucl:0, uclPrev:2, uclQual:10, uel:0, uecl:0, wildcard:10},
+      'liga-mixta-4':   {ucl:0, uclPrev:3, uclQual:10, uel:0, uecl:0, wildcard:9},
+      'liga-mixta-5':   {ucl:0, uclPrev:3, uclQual:11, uel:0, uecl:0, wildcard:9},
+      'liga-mixta-6':   {ucl:4, uclPrev:3, uclQual:9,  uel:2, uecl:1, wildcard:6},
+      'liga-mixta-7':   {ucl:0, uclPrev:5, uclQual:10, uel:0, uecl:0, wildcard:7},
+      'liga-mixta-8':   {ucl:0, uclPrev:5, uclQual:10, uel:0, uecl:0, wildcard:7},
+      'liga-mixta-9':   {ucl:0, uclPrev:3, uclQual:6,  uel:0, uecl:0, wildcard:4}
+    };
+    var GEN = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0};
+    function eqEuro(z, r){
+      if(!z) return false;
+      return Number(z.ucl||0)===r.ucl && Number(z.uclPrev||0)===r.uclPrev
+          && Number(z.uclQual||0)===r.uclQual && Number(z.uel||0)===r.uel
+          && Number(z.uecl||0)===r.uecl && Number(z.wildcard||0)===r.wildcard;
+    }
+    try {
+      Object.keys(OLD).forEach(function(slug){
+        try {
+          var key = 'ligaExt_' + slug;
+          var raw = localStorage.getItem(key);
+          if(!raw) return;                 // no sembrada → la cubre ensureConfig
+          var d = JSON.parse(raw);
+          if(!d) return;
+          if(!d.config) d.config = {};
+          var z = d.config.zones;
+          var nw = LEAGUE_DEFAULT_ZONES[slug];
+          if(!nw) return;
+          if(!(eqEuro(z, OLD[slug]) || eqEuro(z, GEN) || !z)) return;
+          d.config.zones = Object.assign({}, DEFAULT_ZONES, (z||{}), nw);
+          window._lsSetSafe(key, JSON.stringify(d));
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+        } catch(_){}
+      });
+      window._lsSetSafe(FLAG, '1');
+    } catch(_){}
+  }
+  window._fixupLeagueZonesV4 = _fixupLeagueZonesV4;
   /* Fixup Grecia en Liga Mixta 1 (2026-07-31, corrección usuario: "no
      pueden faltar el Olympiacos y el PAOK"). El seed original de
      liga-mixta-1 metió Aris Thessaloniki/AE Kifisias/Anagennisi Karditsa
@@ -56211,6 +56334,7 @@ https://api.sofascore.app/api/v1/team/44/image
   try { _fixupLeagueZonesV2(); } catch(_){}
   try { _fixupSanMarinoWcV1(); } catch(_){}
   try { _fixupLeagueZonesV3(); } catch(_){}
+  try { _fixupLeagueZonesV4(); } catch(_){}
   try { _fixupLigaMixta1GreciaV1(); } catch(_){}
   try { _fixupLigaMixta1RealDataV2(); } catch(_){}
   try { _fixupLigaMixta2RealDataV1(); } catch(_){}
@@ -71342,10 +71466,11 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      ha cumplido su función dentro de la temporada, su caja en
      s-champions queda con filter:grayscale + opacity reducida
      para que el admin vea de un vistazo en qué fase está.
-       · Wild Card → done si wc_to_open_qualifier_v1 trae ≥20 teams
-         (24 grupos de 3 → 24 ganadores; tolerante a algún TBD).
-       · Open Qualifier → done si oq_to_previa_v1 trae ≥24 teams
-         (28 grupos de 4 → 28 ganadores; tolerante a algún TBD).
+       · Wild Card → done si wc_to_open_qualifier_v1 trae ≥10 teams
+         (12 eliminatorias ida/vuelta → 12 ganadores; tolerante a algún BYE).
+       · Open Qualifier → done si oq_to_previa_v1 trae ≥8 teams
+         (10 grupos de 4 → 10 primeros + 2 mejores segundos = 12;
+         tolerante a algún TBD).
        · Previa Champions → done si wprev_state_v1.phase === 'done'.
      Fase de Grupos y Playoffs/Final aún no tienen state propio
      (motor pendiente), así que se quedan SIN apagar de momento.
@@ -71359,7 +71484,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var raw = localStorage.getItem('wc_to_open_qualifier_v1');
       if(!raw) return false;
       var d = JSON.parse(raw);
-      return !!(d && Array.isArray(d.teams) && d.teams.length >= 20);
+      return !!(d && Array.isArray(d.teams) && d.teams.length >= 10);
     } catch(_){ return false; }
   }
   function _oqDone(){
@@ -71367,7 +71492,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var raw = localStorage.getItem('oq_to_previa_v1');
       if(!raw) return false;
       var d = JSON.parse(raw);
-      return !!(d && Array.isArray(d.teams) && d.teams.length >= 24);
+      return !!(d && Array.isArray(d.teams) && d.teams.length >= 8);
     } catch(_){ return false; }
   }
   function _wprevDone(){
@@ -71415,12 +71540,12 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      huecos para los equipos que entran vía Previa de Champions
      (11 UCL, 22 UEL, 30 UECL). Esos equipos viven en feeder keys
      de localStorage:
-       · `wprev_to_fase_grupos_v1`     → 11 a UCL
-       · `wprev_to_europa_v1`          → 22 a UEL
-       · `wprev_r1_to_conference_v1`   → 30 a UECL
-       · `oq_to_previa_v1`             → 28 a Previa
-       · `oq_to_conference_v1`         → legacy fallback UECL
-       · `wc_to_open_qualifier_v1`     → 24 a OQ
+       · `wprev_to_fase_grupos_v1`     → 12 a UCL (Previa Ronda 2 ganadores)
+       · `wprev_to_europa_v1`          → 24 a UEL (Previa Ronda1+Ronda2 perdedores)
+       · `wprev_r1_to_conference_v1`   → sin uso (Previa ya no alimenta Conference)
+       · `oq_to_previa_v1`             → 12 a Previa Ronda 1
+       · `oq_to_conference_v1`         → 28 a UECL (no clasificados del OQ)
+       · `wc_to_open_qualifier_v1`     → 12 a OQ
      Antes los resets (WC, OQ, Previa, 51 ligas) limpiaban claves
      parciales y NO repintaban las pantallas hijas, así que los
      equipos del Previa quedaban "pegados" en UCL/UEL/UECL aunque

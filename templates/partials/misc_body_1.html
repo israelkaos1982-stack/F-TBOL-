@@ -15525,9 +15525,7 @@ window._showSimProgress = function(opts, onDone){
     'inglaterra','italia','francia','portugal','p-bajos',
     'belgica','turquia','dinamarca',
     'suiza','escocia',
-    'eslovaquia','irlanda',
-    'islandia',
-    /* 2026-07-30: rep-checa/grecia/polonia/noruega/montenegro/georgia/
+    /* 2026-07-30/31: rep-checa/grecia/polonia/noruega/montenegro/georgia/
        gales/san-marino/bielorrsa/luxembgo fusionadas en liga-mixta-1/2;
        chipre/austria/andorra/gibraltar/n-irlanda fusionadas en liga-mixta-3;
        suecia/croacia/lituania/n-maced/albania fusionadas en liga-mixta-4;
@@ -15535,8 +15533,11 @@ window._showSimProgress = function(opts, onDone){
        alemania/serbia/rumania/is-feroe/letonia fusionadas en liga-mixta-6
        (Alemania eliminada como liga propia);
        eslovenia/bulgaria/bosnia/kazajst/kosovo fusionadas en liga-mixta-7;
-       rusia/armenia/finlandia/moldavia/azerbayan fusionadas en liga-mixta-8. */
-    'liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4','liga-mixta-5','liga-mixta-6','liga-mixta-7','liga-mixta-8',
+       rusia/armenia/finlandia/moldavia/azerbayan fusionadas en liga-mixta-8;
+       eslovaquia/irlanda/islandia fusionadas en liga-mixta-9 (última
+       liga menor sin fusionar). Con esto NINGÚN país queda ya suelto —
+       solo las 10 ligas grandes + Resto Mundo + las 9 Ligas Mixtas. */
+    'liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4','liga-mixta-5','liga-mixta-6','liga-mixta-7','liga-mixta-8','liga-mixta-9',
     'resto-mundo'
   ];
 
@@ -42793,9 +42794,6 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c60c30,#8a0a22,#c60c30);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇩🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Dinamarca</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#c01020,#8a0010,#c01020);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇨🇭</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Suiza</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003399,#0044aa,#003399);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🏴󠁧󠁢󠁳󠁣󠁴󠁿</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Escocia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#fff,#0b4ea2,#ee1c25);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇸🇰</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eslovaquia</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#169b62,#fff,#ff883e);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇪</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Irlanda</span></div>
-<div class="menu-card" onclick="" style="background:linear-gradient(135deg,#003897,#fff,#dc143c);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇸</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Islandia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
 <!-- Ligas fusionadas 2026-07-30 (petición usuario): nombre = SOLO las
      banderas de los países que la componen. `data-slug` fija el slug
@@ -42810,6 +42808,7 @@ window._showSimProgress = function(opts, onDone){
 <div class="menu-card" data-slug="liga-mixta-6" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇩🇪🇷🇸🇷🇴🇫🇴🇱🇻</span><span class="mc-label" style="display:none;">🇩🇪🇷🇸🇷🇴🇫🇴🇱🇻</span></div>
 <div class="menu-card" data-slug="liga-mixta-7" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇸🇮🇧🇬🇧🇦🇰🇿🇽🇰</span><span class="mc-label" style="display:none;">🇸🇮🇧🇬🇧🇦🇰🇿🇽🇰</span></div>
 <div class="menu-card" data-slug="liga-mixta-8" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇷🇺🇦🇲🇫🇮🇲🇩🇦🇿</span><span class="mc-label" style="display:none;">🇷🇺🇦🇲🇫🇮🇲🇩🇦🇿</span></div>
+<div class="menu-card" data-slug="liga-mixta-9" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇸🇰🇮🇪🇮🇸</span><span class="mc-label" style="display:none;">🇸🇰🇮🇪🇮🇸</span></div>
 </div>
 <!-- Botón "👁 Ver / Añadir equipos por competición" (PIN admin 747).
      Petición usuario 2026-07-03 ("quiero un botón que me muestre los
@@ -49874,19 +49873,20 @@ https://api.sofascore.app/api/v1/team/44/image
     set(['belgica','turquia'],                {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2});
     // 🟣1 🟡2 ⚪2 ⚫2 — Dinamarca / Suiza
     set(['dinamarca','suiza'], {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:2});
-    // 🟣1 🟡2 ⚪2 ⚫1 — bloque medio (4 ligas; Polonia/Noruega fusionadas en
+    // 🟣1 🟡2 ⚪2 ⚫1 — bloque medio (1 liga; Polonia/Noruega fusionadas en
     // liga-mixta-2, Chipre/Austria fusionadas en liga-mixta-3, Suecia/Croacia
     // fusionadas en liga-mixta-4, Israel/Hungría/Ucrania fusionadas en
     // liga-mixta-5, Serbia/Rumanía fusionadas en liga-mixta-6,
     // Eslovenia/Bulgaria fusionadas en liga-mixta-7, Rusia/Azerbaiyán
-    // fusionadas en liga-mixta-8, 2026-07-30)
-    set(['escocia',
-         'eslovaquia'],
+    // fusionadas en liga-mixta-8, Eslovaquia fusionada en liga-mixta-9,
+    // 2026-07-30)
+    set(['escocia'],
         {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2, desc:1});
-    // 🟣1 🟡2 ⚪1 ⚫1 — bloque medio-bajo (2 ligas; Letonia fusionada en
+    // 🟣1 🟡2 ⚪1 ⚫1 — bloque medio-bajo (vacío; Letonia fusionada en
     // liga-mixta-6, Kosovo/Kazajistán/Bosnia fusionadas en liga-mixta-7,
-    // Armenia/Moldavia/Finlandia fusionadas en liga-mixta-8, 2026-07-30)
-    set(['irlanda','islandia'],
+    // Armenia/Moldavia/Finlandia fusionadas en liga-mixta-8, Irlanda/
+    // Islandia fusionadas en liga-mixta-9, 2026-07-30)
+    set([],
         {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:1, desc:1});
     /* 2026-07-30 (petición usuario): Rep. Checa+Grecia+San Marino+Gales+
        Georgia y Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia se
@@ -49920,6 +49920,10 @@ https://api.sofascore.app/api/v1/team/44/image
     // liga-mixta-8 (2026-07-30) = rusia(0/1/2/0/0/2) + azerbayan(0/1/2/0/0/2) +
     // armenia(0/1/2/0/0/1) + moldavia(0/1/2/0/0/1) + finlandia(0/1/2/0/0/1)
     Z['liga-mixta-8'] = {ucl:0, uclPrev:5, uclQual:10, uel:0, uecl:0, wildcard:7, desc:2};
+    // liga-mixta-9 (2026-07-31, última liga menor sin fusionar — solo
+    // quedaban 3 países) = eslovaquia(0/1/2/0/0/2) + irlanda(0/1/2/0/0/1) +
+    // islandia(0/1/2/0/0/1)
+    Z['liga-mixta-9'] = {ucl:0, uclPrev:3, uclQual:6, uel:0, uecl:0, wildcard:4, desc:2};
     return Z;
   })();
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
@@ -55170,19 +55174,13 @@ https://api.sofascore.app/api/v1/team/44/image
        LEAGUE_DEFAULT_ZONES, así que NO entran aquí (el auto-cupo de este
        mapa es solo para slugs SIN cupo explícito). Kosovo/Kazajistán/
        Bosnia/Bulgaria/Eslovenia fusionadas en liga-mixta-7, Rusia/
-       Azerbaiyán/Armenia/Moldavia/Finlandia fusionadas en liga-mixta-8
-       (mismo motivo). */
-    'islandia':1,
-    /* 15 medias añadidas — Chequia y Grecia EXCLUIDAS del auto-cupo
-       (2026-06-01): son 🔵1 🟣1 🟠1 🟢1 sin ⚪️ en la tabla del usuario.
-       Estaban en la lista y el auto-cupo les forzaba 1 ⚪️ fantasma a
-       cada una → la Wild Card calculaba 74 en vez de 72. PROHIBIDO
-       reintroducir 'rep-checa' / 'grecia' aquí: descuadra el contador
-       (72 → 74). Noruega/Polonia/Gales fusionadas en liga-mixta-1/2,
-       Austria/Chipre fusionadas en liga-mixta-3 (2026-07-30) por el
-       mismo motivo que arriba. */
-    'irlanda':1,
-    'eslovaquia':1
+       Azerbaiyán/Armenia/Moldavia/Finlandia fusionadas en liga-mixta-8,
+       Eslovaquia/Irlanda/Islandia fusionadas en liga-mixta-9 — la
+       ÚLTIMA liga menor sin fusionar (mismo motivo). Este mapa queda
+       VACÍO: ya no hay ningún slug de país sin cupo europeo explícito
+       en LEAGUE_DEFAULT_ZONES. Se conserva la estructura (en vez de
+       borrar el objeto) para que una liga menor NUEVA futura tenga
+       dónde engancharse sin tener que recrear el patrón. */
   };
   window.WILDCARD_LIGA_SLUGS = WILDCARD_LIGA_SLUGS;
 
@@ -55204,21 +55202,22 @@ https://api.sofascore.app/api/v1/team/44/image
     'dinamarca':'Superliga',
     'suiza':'Super League',
     'escocia':'Premiership',
-    'eslovaquia':'Niké Liga',
-    'irlanda':'Premier Division',
-    'islandia':'Besta deild karla',
-    /* 2026-07-30 (petición usuario): Rep. Checa+Grecia+San Marino+Gales+
-       Georgia (liga-mixta-1), Polonia+Noruega+Montenegro+Luxemburgo+
-       Bielorrusia (liga-mixta-2), Chipre+Austria+Andorra+Gibraltar+
-       N.Irlanda (liga-mixta-3), Suecia+Croacia+Lituania+Macedonia del
-       Norte+Albania (liga-mixta-4), Israel+Hungría+Ucrania+Estonia+
-       Malta (liga-mixta-5), los 6 mejores de Alemania+Serbia+Rumanía+
-       Islas Feroe+Letonia (liga-mixta-6 — Alemania se ELIMINA como liga
-       propia, sus otros 12 equipos no migran a ningún sitio),
-       Eslovenia+Bulgaria+Bosnia+Kazajistán+Kosovo (liga-mixta-7) y
-       Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán (liga-mixta-8) se
-       fusionan en ligas de 20 equipos. Las entradas individuales de
-       arriba se eliminan — sus slugs ya no existen como ligas propias. */
+    /* 2026-07-30/31 (petición usuario): Rep. Checa+Grecia+San Marino+
+       Gales+Georgia (liga-mixta-1), Polonia+Noruega+Montenegro+
+       Luxemburgo+Bielorrusia (liga-mixta-2), Chipre+Austria+Andorra+
+       Gibraltar+N.Irlanda (liga-mixta-3), Suecia+Croacia+Lituania+
+       Macedonia del Norte+Albania (liga-mixta-4), Israel+Hungría+
+       Ucrania+Estonia+Malta (liga-mixta-5), los 6 mejores de Alemania+
+       Serbia+Rumanía+Islas Feroe+Letonia (liga-mixta-6 — Alemania se
+       ELIMINA como liga propia, sus otros 12 equipos no migran a
+       ningún sitio), Eslovenia+Bulgaria+Bosnia+Kazajistán+Kosovo
+       (liga-mixta-7), Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán
+       (liga-mixta-8) y Eslovaquia+Irlanda+Islandia (liga-mixta-9 — las
+       ÚLTIMAS 3 ligas menores sin fusionar, repartidas 7/7/6 en vez de
+       las 4-5 habituales por no haber una 4ª/5ª liga con la que
+       completar el grupo) se fusionan en ligas de 20 equipos. Las
+       entradas individuales de arriba se eliminan — sus slugs ya no
+       existen como ligas propias. */
     'liga-mixta-1':'Liga Mixta 1 — Chequia+Grecia+San Marino+Gales+Georgia',
     'liga-mixta-2':'Liga Mixta 2 — Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia',
     'liga-mixta-3':'Liga Mixta 3 — Chipre+Austria+Andorra+Gibraltar+N.Irlanda',
@@ -55226,7 +55225,8 @@ https://api.sofascore.app/api/v1/team/44/image
     'liga-mixta-5':'Liga Mixta 5 — Israel+Hungría+Ucrania+Estonia+Malta',
     'liga-mixta-6':'Liga Mixta 6 — Alemania+Serbia+Rumanía+Islas Feroe+Letonia',
     'liga-mixta-7':'Liga Mixta 7 — Eslovenia+Bulgaria+Bosnia+Kazajistán+Kosovo',
-    'liga-mixta-8':'Liga Mixta 8 — Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán'
+    'liga-mixta-8':'Liga Mixta 8 — Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán',
+    'liga-mixta-9':'Liga Mixta 9 — Eslovaquia+Irlanda+Islandia'
   };
   window.LEAGUE_DEFAULT_NAMES = LEAGUE_DEFAULT_NAMES;
   /* Nombre a mostrar en la cabecera: custom del admin (cfg.name) →
@@ -56417,6 +56417,33 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
     try { window._lsSetSafe(FLAG, '1'); } catch(_){}
   })();
+  /* Purga LOCAL v8 (2026-07-31): Eslovaquia+Irlanda+Islandia fusionadas
+     en liga-mixta-9 — la ÚLTIMA liga menor sin fusionar. Flag NUEVO
+     (mismo motivo que v2-v7). Solo local, nunca toca el servidor. */
+  (function _purgeMergedLeaguesV8(){
+    var FLAG = 'ftbol_merged_leagues_purge_v8';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var OLD_SLUGS = ['eslovaquia','irlanda','islandia'];
+    try {
+      var toRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        var rest = k.substring('ligaExt_'.length);
+        for (var j = 0; j < OLD_SLUGS.length; j++) {
+          var s = OLD_SLUGS[j];
+          if (rest === s || rest.indexOf(s + '_') === 0) { toRemove.push(k); break; }
+        }
+      }
+      toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      OLD_SLUGS.forEach(function(s){
+        try { if (typeof LIGA_CACHE !== 'undefined') delete LIGA_CACHE[s]; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(s); } catch(_){}
+      });
+      try { console.warn('[ligaExt] purgadas '+toRemove.length+' claves locales de las 3 ligas fusionadas en liga-mixta-9.'); } catch(_){}
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  })();
   /* Defensa adicional: si en algún momento el storage queda vacío
      (reset / sync server que devuelve {teams:[]}), re-sembramos al
      abrir la pantalla. */
@@ -56700,6 +56727,37 @@ https://api.sofascore.app/api/v1/team/44/image
         {name:'FC Pyunik',              power:55, atk:55, mid:55, def:55},
         {name:'CF Univer Comrat',       power:54, atk:54, mid:54, def:54},
         {name:'FC Noah',                power:53, atk:53, mid:53, def:53}
+      ]
+    },
+    /* Eslovaquia+Irlanda+Islandia fusionadas en UNA liga de 20 equipos
+       (2026-07-31) — la ÚLTIMA liga menor sin fusionar; solo quedaban
+       estos 3 países, sin una 4ª/5ª liga con la que completar el grupo
+       habitual, así que se reparte 7/7/6 en vez de 4-5 por país.
+       Equipos = media de posición entre la clasificación de esta web y
+       la clasificación real vigente de cada liga de origen (datos
+       aportados por el usuario). */
+    'liga-mixta-9': {
+      teams: [
+        {name:'Dunajska Streda',        power:78, atk:78, mid:78, def:78},
+        {name:'MSK Zilina',             power:76, atk:76, mid:76, def:76},
+        {name:'Sport Podbrezova',       power:74, atk:74, mid:74, def:74},
+        {name:'Michalovce',             power:72, atk:72, mid:72, def:72},
+        {name:'MFK Ruzomberok',         power:70, atk:70, mid:70, def:70},
+        {name:'Trencin',                power:68, atk:68, mid:68, def:68},
+        {name:'KFC Komarno',            power:66, atk:66, mid:66, def:66},
+        {name:'Shamrock Rovers',        power:65, atk:65, mid:65, def:65},
+        {name:'Derry City',             power:64, atk:64, mid:64, def:64},
+        {name:'Shelbourne',             power:63, atk:63, mid:63, def:63},
+        {name:'Bohemians',              power:62, atk:62, mid:62, def:62},
+        {name:'St. Patricks Athletic',  power:61, atk:61, mid:61, def:61},
+        {name:'Galway United',          power:60, atk:60, mid:60, def:60},
+        {name:'Waterford United',       power:59, atk:59, mid:59, def:59},
+        {name:'Vikingur Reykjavik',     power:58, atk:58, mid:58, def:58},
+        {name:'Valur Reykjavik',        power:57, atk:57, mid:57, def:57},
+        {name:'Breidablik',             power:56, atk:56, mid:56, def:56},
+        {name:'FC Hafnarfordur',        power:55, atk:55, mid:55, def:55},
+        {name:'Fram',                   power:54, atk:54, mid:54, def:54},
+        {name:'FC KR Reykyavik',        power:53, atk:53, mid:53, def:53}
       ]
     }
   };

@@ -52758,6 +52758,7 @@ https://api.sofascore.app/api/v1/team/44/image
        Liga EA Sports": no es que no se guarde — se guarda en el
        editor — es que el calendario/clasificación de Liga EA Sports
        necesita 20 en firme para reflejarlo. */
+    var _preConfirmed = false;
     if (CURRENT_KEY === 'liga-ea-sports') {
       var _srcData0 = loadData(CURRENT_KEY) || {teams:[]};
       var _srcTeams0 = Array.isArray(_srcData0.teams) ? _srcData0.teams : [];
@@ -52776,12 +52777,22 @@ https://api.sofascore.app/api/v1/team/44/image
           _warnMsg += 'Con más de 20 tampoco se puede regenerar el calendario — mueve '
             + (_remaining - 20) + ' equipo(s) más para volver a 20.';
         }
+        /* Este confirm() YA sirve como "¿continuar?" — `_preConfirmed`
+           evita que `doMove` dispare un SEGUNDO `confirm()` justo
+           después. Dos confirm()/alert() encadenados en el mismo flujo
+           son el mismo patrón que el navegador puede SUPRIMIR en
+           silencio (regla 2026-07-06 "Los avisos CRÍTICOS... NUNCA
+           alert() a secas" — aquí el 2º confirm() se perdía sin que el
+           admin llegara a verlo, y `doMove` hacía `return` como si
+           hubiera pulsado Cancelar: el Inter nunca llegaba a moverse
+           pese a haber pulsado Aceptar en el único aviso que sí vio). */
         if (!confirm(_warnMsg + '\n\n¿Mover de todas formas?')) return;
+        _preConfirmed = true;
       }
     }
 
     var doMove = function(){
-      if (!confirm('Vas a mover ' + pickedCount + ' equipo(s) desde "' + _lextSlugLabel(CURRENT_KEY) + '" a "' + _lextSlugLabel(destSlug) + '".\n\n¿Continuar?')) return;
+      if (!_preConfirmed && !confirm('Vas a mover ' + pickedCount + ' equipo(s) desde "' + _lextSlugLabel(CURRENT_KEY) + '" a "' + _lextSlugLabel(destSlug) + '".\n\n¿Continuar?')) return;
 
       var srcKey = CURRENT_KEY;
       var srcData = loadData(srcKey) || {teams:[],results:[]};

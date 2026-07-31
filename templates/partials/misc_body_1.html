@@ -55646,6 +55646,174 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   window._fixupLeagueZonesV3 = _fixupLeagueZonesV3;
+  /* Fixup Grecia en Liga Mixta 1 (2026-07-31, corrección usuario: "no
+     pueden faltar el Olympiacos y el PAOK"). El seed original de
+     liga-mixta-1 metió Aris Thessaloniki/AE Kifisias/Anagennisi Karditsa
+     como representantes de Grecia — muy por debajo en la clasificación
+     real (Olympiacos 2º, PAOK 3º, ambos detrás solo de AEK) de los 2
+     grandes que faltaban. Sustituye esos 3 por Olympiacos/PAOK/Levadiakos
+     (2º/3º/5º real) renombrando el objeto EQUIPO en sitio — los
+     `results[]` referencian por `id` (`ts[i].id`), NO por nombre
+     (`ligaExtSimular`), así que renombrar NO desincroniza la
+     clasificación de un equipo ya simulado. Reajusta el power de
+     AEK/Sparta Praha/Panathinaikos para reflejar el orden real. SOLO
+     actúa si el roster local sigue siendo EXACTAMENTE el del seed viejo
+     (nunca pisa una edición manual del admin: equipo renombrado,
+     añadido, borrado, o ya corregido a mano). Idempotente vía flag
+     propio. */
+  function _fixupLigaMixta1GreciaV1(){
+    var FLAG = 'ftbol_liga_mixta1_grecia_fix_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var key = 'ligaExt_liga-mixta-1';
+      var raw = localStorage.getItem(key);
+      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
+      var d = JSON.parse(raw);
+      if (!d || !Array.isArray(d.teams)) { window._lsSetSafe(FLAG, '1'); return; }
+      function norm(s){ return String(s||'').toLowerCase().trim(); }
+      var OLD3 = ['aris thessaloniki', 'ae kifisias', 'anagennisi karditsa'];
+      var foundOld = OLD3.every(function(n){
+        return d.teams.some(function(t){ return norm(t.name) === n; });
+      });
+      var hasNew = d.teams.some(function(t){
+        var nm = norm(t.name);
+        return nm === 'olympiacos' || nm === 'paok';
+      });
+      if (!foundOld || hasNew) { window._lsSetSafe(FLAG, '1'); return; }
+      d.teams.forEach(function(t){
+        var nm = norm(t.name);
+        if (nm === 'aris thessaloniki') { t.name = 'Olympiacos'; t.power = t.atk = t.mid = t.def = 73; }
+        else if (nm === 'ae kifisias') { t.name = 'PAOK'; t.power = t.atk = t.mid = t.def = 72; }
+        else if (nm === 'anagennisi karditsa') { t.name = 'Levadiakos'; t.power = t.atk = t.mid = t.def = 69; }
+        else if (nm === 'aek athens') { t.power = t.atk = t.mid = t.def = 74; }
+        else if (nm === 'sparta praha') { t.power = t.atk = t.mid = t.def = 70; }
+        else if (nm === 'panathinaikos') { t.power = t.atk = t.mid = t.def = 71; }
+      });
+      window._lsSetSafe(key, JSON.stringify(d));
+      try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-mixta-1'] = d; } catch(_){}
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-mixta-1'); } catch(_){}
+      try { console.warn('[ligaExt] Liga Mixta 1: Grecia corregida — Olympiacos/PAOK/Levadiakos sustituyen a Aris Thessaloniki/AE Kifisias/Anagennisi Karditsa.'); } catch(_){}
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  }
+  window._fixupLigaMixta1GreciaV1 = _fixupLigaMixta1GreciaV1;
+  /* Helper genérico de renombrado+repotenciado para las migraciones de
+     Liga Mixta 1/2 (2026-07-31): recibe un mapa {nombreViejoNorm:
+     {name, power}} y, para cada equipo local cuyo nombre normalizado
+     esté en el mapa, lo renombra/repotencia EN SITIO — nunca toca
+     `results[]` (referencian por `id`, no por nombre, ver
+     `ligaExtSimular`), así que un equipo ya simulado no pierde su
+     clasificación. Salta cualquier regla cuyo nombre DESTINO ya exista
+     en el roster (evita duplicar si el admin ya lo añadió a mano, o si
+     una migración anterior ya corrió). Devuelve cuántos cambios hizo. */
+  function _lextApplyRenameMap(teams, map){
+    function norm(s){
+      return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+    }
+    var existing = {};
+    teams.forEach(function(t){ existing[norm(t.name)] = true; });
+    var changed = 0;
+    teams.forEach(function(t){
+      var rule = map[norm(t.name)];
+      if (!rule) return;
+      var targetNorm = norm(rule.name);
+      if (targetNorm !== norm(t.name) && existing[targetNorm]) return;
+      delete existing[norm(t.name)];
+      t.name = rule.name;
+      if (typeof rule.power === 'number') { t.power = t.atk = t.mid = t.def = rule.power; }
+      existing[targetNorm] = true;
+      changed++;
+    });
+    return changed;
+  }
+  /* Fixup Rep.Checa/Georgia/Gales/San Marino en Liga Mixta 1 (2026-07-31,
+     corrección usuario con las 5 clasificaciones SofaScore reales — ver
+     comentario junto a `_EXTRA_LEAGUE_SEEDS['liga-mixta-1']`). Corre
+     DESPUÉS de `_fixupLigaMixta1GreciaV1` (Grecia ya queda resuelta por
+     esa migración). Idempotente vía flag propio; nunca pisa un roster
+     que el admin ya haya editado (el rename solo actúa sobre el nombre
+     VIEJO exacto y salta si el nombre DESTINO ya existe). */
+  function _fixupLigaMixta1RealDataV2(){
+    var FLAG = 'ftbol_liga_mixta1_realdata_fix_v2';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var key = 'ligaExt_liga-mixta-1';
+      var raw = localStorage.getItem(key);
+      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
+      var d = JSON.parse(raw);
+      if (!d || !Array.isArray(d.teams)) { window._lsSetSafe(FLAG, '1'); return; }
+      var MAP = {
+        'sparta praha':          {name:'Sparta Praha',    power:68},
+        'jablonec':              {name:'Jablonec',        power:66},
+        'slovan liberec':        {name:'Hradec Králové',  power:65},
+        'viktoria plzen':        {name:'Viktoria Plzeň',  power:67},
+        'mlada boleslav':        {name:'Slavia Praha',    power:70},
+        'dinamo tbilisi':        {name:'Iberia',          power:64},
+        'dinamo batumi':         {name:'Dila',            power:61},
+        'fc telavi':             {name:'Torpedo Kutaisi', power:59},
+        'colwyn bay':            {name:"Connah's Quay",   power:63},
+        'caernarfon':            {name:'Caernarfon',      power:58},
+        'the new saints':        {name:'The New Saints',  power:62},
+        'rhyl fc':               {name:'Penybont',        power:60},
+        'folgore/falciano':      {name:'Tre Fiori',       power:57},
+        'san giovanni':          {name:'Virtus',          power:56},
+        'cailungo':              {name:'Tre Penne',       power:55}
+      };
+      var changed = _lextApplyRenameMap(d.teams, MAP);
+      if (changed > 0) {
+        window._lsSetSafe(key, JSON.stringify(d));
+        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-mixta-1'] = d; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-mixta-1'); } catch(_){}
+        try { console.warn('[ligaExt] Liga Mixta 1: '+changed+' equipos corregidos (Rep.Checa/Georgia/Gales/San Marino) según la clasificación real.'); } catch(_){}
+      }
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  }
+  window._fixupLigaMixta1RealDataV2 = _fixupLigaMixta1RealDataV2;
+  /* Fixup Noruega/Polonia/Bielorrusia/Montenegro/Luxemburgo en Liga
+     Mixta 2 (2026-07-31, mismo motivo que Liga Mixta 1 arriba). */
+  function _fixupLigaMixta2RealDataV1(){
+    var FLAG = 'ftbol_liga_mixta2_realdata_fix_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var key = 'ligaExt_liga-mixta-2';
+      var raw = localStorage.getItem(key);
+      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
+      var d = JSON.parse(raw);
+      if (!d || !Array.isArray(d.teams)) { window._lsSetSafe(FLAG, '1'); return; }
+      var MAP = {
+        'fk bodo/glimt':          {name:'FK Bodø/Glimt',        power:74},
+        'sk brann':               {name:'SK Brann',             power:68},
+        'molde fk':               {name:'Tromsø',               power:70},
+        'viking stavanger':       {name:'Viking',                power:76},
+        'korona kielce':          {name:'Górnik',                power:69},
+        'gks katowice':           {name:'GKS Katowice',         power:65},
+        'jagiellonia bialystok':  {name:'Jagiellonia Białystok', power:67},
+        'legia warszawa':         {name:'Legia Warszawa',       power:66},
+        'lech poznan':            {name:'Lech Poznań',          power:72},
+        'dinamo minsk':           {name:'Dinamo Minsk',         power:62},
+        'fk lovcen':              {name:'FK Mornar',            power:63},
+        'maxline vitebsk':        {name:'Maxline Vitebsk',      power:64},
+        'fk buducnost podgorica': {name:'Petrovac',             power:61},
+        'isloch':                 {name:'Slavia',               power:60},
+        'progres niederkorn':     {name:'Bissen',               power:59},
+        'fk decic':               {name:'FK Dečić',             power:58},
+        'gomel':                  {name:'Dynamo Brest',         power:57},
+        'mamer':                  {name:'Differdange 03',       power:56},
+        'fk sutjeska niksic':     {name:'FK Sutjeska Nikšić',   power:55},
+        'swift hesperange':       {name:'Mondorf',              power:54}
+      };
+      var changed = _lextApplyRenameMap(d.teams, MAP);
+      if (changed > 0) {
+        window._lsSetSafe(key, JSON.stringify(d));
+        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-mixta-2'] = d; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-mixta-2'); } catch(_){}
+        try { console.warn('[ligaExt] Liga Mixta 2: '+changed+' equipos corregidos (Noruega/Polonia/Bielorrusia/Montenegro/Luxemburgo) según la clasificación real.'); } catch(_){}
+      }
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  }
+  window._fixupLigaMixta2RealDataV1 = _fixupLigaMixta2RealDataV1;
   /* Top-up ASÍNCRONO desde IndexedDB (2026-07-01) — red de seguridad
      compartida por los "ensure seed" de Resto Mundo / N.Irlanda /
      Montenegro / Albania (las ÚNICAS ligas con seed automático — el
@@ -56025,6 +56193,9 @@ https://api.sofascore.app/api/v1/team/44/image
   try { _fixupLeagueZonesV2(); } catch(_){}
   try { _fixupSanMarinoWcV1(); } catch(_){}
   try { _fixupLeagueZonesV3(); } catch(_){}
+  try { _fixupLigaMixta1GreciaV1(); } catch(_){}
+  try { _fixupLigaMixta1RealDataV2(); } catch(_){}
+  try { _fixupLigaMixta2RealDataV1(); } catch(_){}
   /* Purga LOCAL de las 10 ligas fusionadas en liga-mixta-1/liga-mixta-2
      (2026-07-30, petición explícita del usuario: "elimina por completo
      esas ligas ya pasadas a las nuevas"). Ya no tienen card, seed, zona
@@ -56264,55 +56435,84 @@ https://api.sofascore.app/api/v1/team/44/image
        vigente de cada liga de origen — Rep. Checa/Grecia/San Marino/
        Gales/Georgia fusionadas en UNA liga de 20 equipos). Sin escudo
        por ahora (el admin los añade luego desde el editor; cae al
-       placeholder de iniciales mientras tanto). */
+       placeholder de iniciales mientras tanto).
+       2026-07-31 (corrección usuario — este país NUNCA se contrastó con
+       la clasificación del juego, solo "datos reales de memoria", y el
+       usuario mandó las 5 clasificaciones SofaScore reales completas
+       para verificar): Grecia ya se había corregido (AEK/Olympiacos/
+       PAOK/Panathinaikos/Levadiakos, 1º-5º real). Con las 5 capturas se
+       encontraron errores EN LAS OTRAS 4: Rep. Checa traía Mladá
+       Boleslav (fuera del top 10 real) y Slovan Liberec (6º) en vez de
+       Slavia Praha (1º real, el mejor checo) y Hradec Králové (5º);
+       Georgia traía Dinamo Tbilisi/Batumi/Telavi (4º/6º/8º real) en vez
+       de Iberia/Dila/Torpedo Kutaisi (1º/2º/3º real); Gales traía
+       Colwyn Bay/Rhyl FC (6º/fuera del top11) en vez de Connah's Quay/
+       Penybont (2º/3º real); San Marino traía Folgore/San Giovanni/
+       Cailungo (5º/fuera del top10) en vez de Tre Fiori/Virtus/Tre
+       Penne (1º/2º/3º real). Ver `_fixupLigaMixta1GreciaV1` +
+       `_fixupLigaMixta1RealDataV2` para las migraciones de dispositivos
+       que ya tenían la liga sembrada con el roster viejo. */
     'liga-mixta-1': {
       teams: [
         {name:'AEK Athens',             power:74, atk:74, mid:74, def:74},
-        {name:'Sparta Praha',           power:73, atk:73, mid:73, def:73},
-        {name:'Panathinaikos',          power:72, atk:72, mid:72, def:72},
-        {name:'Aris Thessaloniki',      power:71, atk:71, mid:71, def:71},
-        {name:'AE Kifisias',            power:70, atk:70, mid:70, def:70},
-        {name:'Anagennisi Karditsa',    power:69, atk:69, mid:69, def:69},
-        {name:'Jablonec',               power:68, atk:68, mid:68, def:68},
-        {name:'Slovan Liberec',         power:67, atk:67, mid:67, def:67},
-        {name:'Viktoria Plzeň',         power:66, atk:66, mid:66, def:66},
-        {name:'Mladá Boleslav',         power:65, atk:65, mid:65, def:65},
-        {name:'Dinamo Tbilisi',         power:64, atk:64, mid:64, def:64},
-        {name:'Colwyn Bay',             power:63, atk:63, mid:63, def:63},
-        {name:'Caernarfon',             power:62, atk:62, mid:62, def:62},
-        {name:'Dinamo Batumi',          power:61, atk:61, mid:61, def:61},
-        {name:'The New Saints',         power:60, atk:60, mid:60, def:60},
-        {name:'FC Telavi',              power:59, atk:59, mid:59, def:59},
-        {name:'Rhyl FC',                power:58, atk:58, mid:58, def:58},
-        {name:'Folgore/Falciano',       power:57, atk:57, mid:57, def:57},
-        {name:'San Giovanni',           power:56, atk:56, mid:56, def:56},
-        {name:'Cailungo',               power:55, atk:55, mid:55, def:55}
+        {name:'Olympiacos',             power:73, atk:73, mid:73, def:73},
+        {name:'PAOK',                   power:72, atk:72, mid:72, def:72},
+        {name:'Panathinaikos',          power:71, atk:71, mid:71, def:71},
+        {name:'Slavia Praha',           power:70, atk:70, mid:70, def:70},
+        {name:'Levadiakos',             power:69, atk:69, mid:69, def:69},
+        {name:'Sparta Praha',           power:68, atk:68, mid:68, def:68},
+        {name:'Viktoria Plzeň',         power:67, atk:67, mid:67, def:67},
+        {name:'Jablonec',               power:66, atk:66, mid:66, def:66},
+        {name:'Hradec Králové',         power:65, atk:65, mid:65, def:65},
+        {name:'Iberia',                 power:64, atk:64, mid:64, def:64},
+        {name:"Connah's Quay",          power:63, atk:63, mid:63, def:63},
+        {name:'The New Saints',         power:62, atk:62, mid:62, def:62},
+        {name:'Dila',                   power:61, atk:61, mid:61, def:61},
+        {name:'Penybont',               power:60, atk:60, mid:60, def:60},
+        {name:'Torpedo Kutaisi',        power:59, atk:59, mid:59, def:59},
+        {name:'Caernarfon',             power:58, atk:58, mid:58, def:58},
+        {name:'Tre Fiori',              power:57, atk:57, mid:57, def:57},
+        {name:'Virtus',                 power:56, atk:56, mid:56, def:56},
+        {name:'Tre Penne',              power:55, atk:55, mid:55, def:55}
       ]
     },
     /* Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia fusionadas en
-       UNA liga de 20 equipos (2026-07-30, datos reales vigentes). */
+       UNA liga de 20 equipos (2026-07-30, datos reales vigentes).
+       2026-07-31 (corrección usuario, mismo motivo que Liga Mixta 1 —
+       nunca se contrastó con la clasificación del juego): Noruega
+       traía Molde FK (10º real) en vez de Tromsø (3º); Polonia traía
+       Korona Kielce (fuera del top10) en vez de Górnik (2º) —
+       Legia Warszawa (petición explícita del usuario, "también dentro
+       por favor") se mantiene pese a ser 6º real; Bielorrusia traía
+       Isloch/Gomel (7º/9º) en vez de Slavia/Dynamo Brest (3º/4º);
+       Montenegro traía FK Lovćen (fuera del top9) y Budućnost (5º) en
+       vez de FK Mornar (2º) y Petrovac (3º); Luxemburgo traía Progrès/
+       Mamer/Swift Hesperange (11º/fuera del top11/fuera del top11) en
+       vez de Bissen/Differdange 03/Mondorf (1º/2º/3º). Ver
+       `_fixupLigaMixta2RealDataV1` para la migración de dispositivos
+       ya sembrados con el roster viejo. */
     'liga-mixta-2': {
       teams: [
-        {name:'FK Bodø/Glimt',              power:76, atk:76, mid:76, def:76},
-        {name:'SK Brann',                   power:74, atk:74, mid:74, def:74},
-        {name:'Korona Kielce',              power:72, atk:72, mid:72, def:72},
-        {name:'Molde FK',                   power:70, atk:70, mid:70, def:70},
-        {name:'GKS Katowice',               power:69, atk:69, mid:69, def:69},
-        {name:'Viking Stavanger',           power:68, atk:68, mid:68, def:68},
+        {name:'Viking',                     power:76, atk:76, mid:76, def:76},
+        {name:'FK Bodø/Glimt',              power:74, atk:74, mid:74, def:74},
+        {name:'Lech Poznań',                power:72, atk:72, mid:72, def:72},
+        {name:'Tromsø',                     power:70, atk:70, mid:70, def:70},
+        {name:'Górnik',                     power:69, atk:69, mid:69, def:69},
+        {name:'SK Brann',                   power:68, atk:68, mid:68, def:68},
         {name:'Jagiellonia Białystok',      power:67, atk:67, mid:67, def:67},
         {name:'Legia Warszawa',             power:66, atk:66, mid:66, def:66},
-        {name:'Lech Poznań',                power:65, atk:65, mid:65, def:65},
-        {name:'Dinamo Minsk',               power:64, atk:64, mid:64, def:64},
-        {name:'FK Lovćen',                  power:63, atk:63, mid:63, def:63},
-        {name:'Maxline Vitebsk',            power:62, atk:62, mid:62, def:62},
-        {name:'FK Budućnost Podgorica',     power:61, atk:61, mid:61, def:61},
-        {name:'Isloch',                     power:60, atk:60, mid:60, def:60},
-        {name:'Progrès Niederkorn',         power:59, atk:59, mid:59, def:59},
+        {name:'GKS Katowice',               power:65, atk:65, mid:65, def:65},
+        {name:'Maxline Vitebsk',            power:64, atk:64, mid:64, def:64},
+        {name:'FK Mornar',                  power:63, atk:63, mid:63, def:63},
+        {name:'Dinamo Minsk',               power:62, atk:62, mid:62, def:62},
+        {name:'Petrovac',                   power:61, atk:61, mid:61, def:61},
+        {name:'Slavia',                     power:60, atk:60, mid:60, def:60},
+        {name:'Bissen',                     power:59, atk:59, mid:59, def:59},
         {name:'FK Dečić',                   power:58, atk:58, mid:58, def:58},
-        {name:'Gomel',                      power:57, atk:57, mid:57, def:57},
-        {name:'Mamer',                      power:56, atk:56, mid:56, def:56},
+        {name:'Dynamo Brest',               power:57, atk:57, mid:57, def:57},
+        {name:'Differdange 03',             power:56, atk:56, mid:56, def:56},
         {name:'FK Sutjeska Nikšić',         power:55, atk:55, mid:55, def:55},
-        {name:'Swift Hesperange',           power:54, atk:54, mid:54, def:54}
+        {name:'Mondorf',                    power:54, atk:54, mid:54, def:54}
       ]
     },
     /* Chipre+Austria+Andorra+Gibraltar+N.Irlanda fusionadas en UNA liga

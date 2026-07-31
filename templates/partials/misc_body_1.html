@@ -37510,15 +37510,15 @@ window._showSimProgress = function(opts, onDone){
     if(window._eurManualOnly && window._eurManualOnly('uclQual')) return _appendManualExtra([], 'uclQual');
     var frozen = _europeFrozenFor('uclQual');
     if(frozen) return frozen.slice();
-    /* Pool del Open Qualifier (cap a 112 = 28 grupos × 4). Composición
-       objetivo: 88 plazas de zonas `uclQual` de ligas + 24 ganadores
+    /* Pool del Open Qualifier (cap a 40 = 10 grupos × 4). Composición
+       objetivo: 28 plazas de zonas `uclQual` de ligas + 12 ganadores
        Wild Card. Reserva dinámica:
          · `wc_to_open_qualifier_v1` presente → reservamos ese número
-           (típicamente 24) restando plazas de ligas.
+           (típicamente 12) restando plazas de ligas.
          · Sin estado WC → dejamos 1 slot reservado por compat con la
            versión antigua (`wc_champion_v1`).
-       En cualquier caso el total final está capado a 112 por
-       seguridad. Snake-draft del OQ cuadra en 28×4. */
+       En cualquier caso el total final está capado a 40 por seguridad.
+       Snake-draft del OQ cuadra en 10×4. */
     var arr = _computeQualifiedFromLeagues('uclQual');
 
     var wcWinners = [];
@@ -37543,7 +37543,7 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
 
     var reserved = Math.max(1, wcWinners.length);
-    var maxLeagues = 112 - reserved;
+    var maxLeagues = 40 - reserved;
     if(maxLeagues < 0) maxLeagues = 0;
     if(arr.length > maxLeagues) arr = arr.slice(0, maxLeagues);
 
@@ -37564,7 +37564,7 @@ window._showSimProgress = function(opts, onDone){
        España (Liga EA Sports) tiene cupo 0 en Open Qualifier según la
        tabla oficial de coeficientes (`LEAGUE_DEFAULT_ZONES['liga-ea-sports'].uclQual`
        = 0) — el cómputo automático de arriba YA cubre el 100% de las
-       88 plazas. Bug 2026-07-03 (foto usuario "Wild Card 75/72"): si
+       28 plazas. Bug 2026-07-03 (foto usuario "Wild Card 75/72"): si
        el admin dejaba equipos manuales en esta zona (rastro del workaround
        usado mientras el cómputo automático estaba roto), se sumaban a
        los computados sin garantía de dedupe (nombres/grafías distintas
@@ -37577,7 +37577,7 @@ window._showSimProgress = function(opts, onDone){
     arr = _appendManualExtra(arr, 'uclQual');
 
     /* Cap final por seguridad. */
-    if(arr.length > 112) arr = arr.slice(0, 112);
+    if(arr.length > 40) arr = arr.slice(0, 40);
     return arr;
   }
   function computeWildCardClassified(){
@@ -38143,7 +38143,7 @@ window._showSimProgress = function(opts, onDone){
        propagación automática (invalidación en cascada al terminar la
        Wild Card) no llegó a este dispositivo, o hay una snapshot
        congelada de "Enviar realidad..." de antes de que la Wild Card
-       terminara — el admin fuerza el recálculo del pool con los 24
+       terminara — el admin fuerza el recálculo del pool con los 12
        ganadores reales sin tener que ir a Reset/Draw a ciegas. -->
   <button onclick="pG(function(){window._oqPullWildCardWinners&&window._oqPullWildCardWinners()})"
           style="background:linear-gradient(135deg,#3a2a00,#5a4400);border:1px solid rgba(253,200,48,.55);border-radius:8px;padding:9px 18px;color:#ffe680;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
@@ -38151,10 +38151,10 @@ window._showSimProgress = function(opts, onDone){
   </button>
 </div>
 
-<!-- Leyenda compacta visible (formato 28×4 · solo 2 zonas) -->
+<!-- Leyenda compacta visible (formato 2026-07-31: 3 zonas) -->
 <div style="display:flex;gap:10px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:11px;color:#fff;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;">
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>Previa UCL (1º)</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#e03c3c;margin-right:4px;vertical-align:middle;"></span>Eliminados (2º-4º)</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>Previa UCL (1º + 2 mejores 2º)</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#5eb6e4;margin-right:4px;vertical-align:middle;"></span>Conference League (resto)</span>
 </div>
 
 <!-- Detalle de zonas — presente pero oculto -->
@@ -38166,10 +38166,10 @@ window._showSimProgress = function(opts, onDone){
 </div>
 <div class="jmatches" id="oq-zones-details" style="margin:0 8px 4px;padding:0;">
   <div style="padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.03);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.78);line-height:1.7;">
-    <div><b>28 grupos × 4 equipos = 112 plazas</b> · 88 ligas + 24 ganadores Wild Card</div>
+    <div><b>10 grupos × 4 equipos = 40 plazas</b> · 28 ligas + 12 ganadores Wild Card</div>
     <div>Cada equipo juega <b>6 partidos</b> (3 local + 3 visitante, ida + vuelta)</div>
-    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:6px;"></span><b>1º</b> · Previa de Champions (28 plazas) — esta misma temporada</div>
-    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#e03c3c;margin-right:6px;"></span><b>2º-4º</b> · Eliminados de cualquier competición europea</div>
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:6px;"></span><b>1º de cada grupo (10) + 2 MEJORES 2º</b> · Previa de Champions Ronda 1 (12 plazas) — esta misma temporada</div>
+    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#5eb6e4;margin-right:6px;"></span><b>Resto</b> (2º no clasificados + 3º + 4º, 28) · Conference League — fase de grupos directa, esta misma temporada</div>
   </div>
 </div>
 
@@ -38198,36 +38198,42 @@ window._showSimProgress = function(opts, onDone){
 </style>
 <script>
 (function(){
-  /* Open Qualifier — 28 grupos de 4 equipos, round-robin IDA+VUELTA
+  /* Open Qualifier — 10 grupos de 4 equipos, round-robin IDA+VUELTA
      (6 partidos por equipo: 3 local + 3 visitante; 12 por grupo). Las
-     112 plazas se alimentan con: 88 plazas de zonas `uclQual` + 24
-     ganadores del torneo Wild Card (fase de grupos). El reparto es
-     snake-draft con un post-pass que intenta no repetir equipos del
-     mismo país en un mismo grupo.
+     40 plazas se alimentan con: 28 plazas de zonas `uclQual` + 12
+     ganadores del torneo Wild Card. El reparto es snake-draft con un
+     post-pass que intenta no repetir equipos de la misma Liga Mixta
+     en un mismo grupo.
 
      Promoción tras simular:
-     - Pos 1 de cada grupo → Previa de Champions (28 × 1 = 28 plazas)
-     - Pos 2-4             → Eliminados de cualquier competición
-                             europea (no hay Conference / Playoff
-                             desde OQ).
+     - 1º de cada grupo (10)         → Previa de Champions Ronda 1
+     - Los 2 MEJORES 2º de grupo     → Previa de Champions Ronda 1
+       (desempate: PTS → DG → GF → GF-visitante → GC → sorteo)
+     - Resto (2º no clasificados +
+       3º + 4º de cada grupo, 28)    → Conference League (fase de
+                                        grupos, directo)
 
-     Cambio (2026-05-30): formato anterior era 7 × 14 con top-5 (35
-     plazas) a Previa. El nuevo cuadra con el Wild Card a 24 grupos:
-     112 = 88 directos + 24 WC, 28 grupos de 4, solo el 1º clasifica.
-     Se preserva STORE_KEY y oq_to_previa_v1. La UI muestra SOLO las
-     tablas de clasificación (sin jornadas). */
+     Total a Previa: 12. Total a Conference: 28.
+
+     Cambio (2026-07-31): formato anterior era 28 grupos de 4 con solo
+     el 1º clasificando a la Previa (28 plazas) y sin salida a
+     Conference. Se preserva STORE_KEY, `oq_to_previa_v1` y
+     `oq_to_conference_v1` (esta última pasa de "legacy fallback" a
+     feed PRIMARIO — antes la Conference nunca recibía nada del OQ). La
+     UI muestra SOLO las tablas de clasificación (sin jornadas). */
   var STORE_KEY = 'oq_simulation_v1';
-  /* 28 etiquetas: A..Z, luego AA, AB. */
+  /* 10 etiquetas: A..J. */
   var GROUP_LABELS = (function(){
     var a = [];
-    for(var i=0; i<28; i++){
+    for(var i=0; i<10; i++){
       a.push(i < 26 ? String.fromCharCode(65+i) : 'A' + String.fromCharCode(65 + (i-26)));
     }
     return a;
   })();
   var TEAMS_PER_GROUP = 4;
-  var N_GROUPS = 28;
-  var QUALIFY_TOP = 1;            /* Top 1 → Previa Champions (28 plazas) */
+  var N_GROUPS = 10;
+  var QUALIFY_BEST_SECONDS = 2; /* de los 10 segundos, los 2 mejores → Previa */
+  var QUALIFY_TOP = 1;            /* 1º de cada grupo (10) → Previa Champions */
 
   function _esc(s){
     return String(s==null?'':s)
@@ -38376,13 +38382,14 @@ window._showSimProgress = function(opts, onDone){
   /* Calcula clasificación de un grupo a partir de sus matches. */
   function _standingsFor(grp, matches){
     var arr = grp.map(function(t,i){
-      return {idx:i, name:t.name||'', logo:t.logo||'', pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
+      return {idx:i, name:t.name||'', logo:t.logo||'', pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, gfAway:0};
     });
     matches.forEach(function(m){
       var H = arr[m.hi], A = arr[m.ai];
       if(!H||!A) return;
       H.pj++; A.pj++;
       H.gf += m.gh; H.gc += m.ga; A.gf += m.ga; A.gc += m.gh;
+      A.gfAway += m.ga; /* goles del EQUIPO VISITANTE — para el desempate de "mejores segundos" */
       if(m.gh>m.ga){ H.v++; A.p++; H.pts+=3; }
       else if(m.gh<m.ga){ A.v++; H.p++; A.pts+=3; }
       else { H.e++; A.e++; H.pts++; A.pts++; }
@@ -38399,7 +38406,11 @@ window._showSimProgress = function(opts, onDone){
       var raw = localStorage.getItem(STORE_KEY);
       if(!raw) return null;
       var s = JSON.parse(raw);
-      if(s && Array.isArray(s.groups) && Array.isArray(s.matchesByGroup)) return s;
+      /* `s.groups.length !== N_GROUPS` ⇒ save del formato ANTERIOR
+         (28 grupos) — estructuralmente incompatible con el nuevo (10
+         grupos). Se descarta como si no existiera: el admin vuelve a
+         sortear/simular con el pool y formato actuales. */
+      if(s && Array.isArray(s.groups) && s.groups.length === N_GROUPS && Array.isArray(s.matchesByGroup)) return s;
     } catch(_){}
     return null;
   }
@@ -38452,14 +38463,37 @@ window._showSimProgress = function(opts, onDone){
     return classified;
   }
 
+  /* De los 10 segundos de grupo (uno por grupo), los 2 MEJORES
+     también clasifican a la Previa (junto a los 10 primeros). Criterio
+     de desempate EXACTO del formato: PTS → DG → GF → GF-visitante →
+     GC (menor) → sorteo. Devuelve el set de índices de grupo (`gi`)
+     cuyo 2º clasifica. Placeholders (TBD-OQ-N) nunca cuentan. */
+  function _computeBestSeconds(groups, standingsByGroup){
+    var cands = [];
+    (standingsByGroup||[]).forEach(function(st, gi){
+      var second = st && st[1];
+      if(!second || !second.name) return;
+      if(/^TBD/i.test(second.name) || /^__placeholder_/.test((groups[gi] && groups[gi][second.idx] && groups[gi][second.idx].league) || '')) return;
+      cands.push({ gi:gi, pts:second.pts||0, dg:second.dg||0, gf:second.gf||0, gfAway:second.gfAway||0, gc:second.gc||0, rnd:Math.random() });
+    });
+    cands.sort(function(a,b){
+      return (b.pts-a.pts) || (b.dg-a.dg) || (b.gf-a.gf) || (b.gfAway-a.gfAway) || (a.gc-b.gc) || (b.rnd-a.rnd);
+    });
+    var out = {};
+    cands.slice(0, QUALIFY_BEST_SECONDS).forEach(function(c){ out[c.gi] = true; });
+    return out;
+  }
+
   function buildOpenQualifierClas(){
     var container = document.getElementById('open-qual-groups-container');
     if(!container) return;
     var sim = _loadSim();
     var groups, totalTeams = 0;
+    var standingsByGroup = [];
     if(sim){
       groups = sim.groups;
       totalTeams = groups.reduce(function(s,g){ return s + g.length; }, 0);
+      standingsByGroup = groups.map(function(grp,g){ return sim.matchesByGroup[g] ? _standingsFor(grp, sim.matchesByGroup[g]) : []; });
     } else {
       /* Render "fresco" (sin sim previa) — también padea a 98 para
          que los grupos se vean siempre con 14 huecos en la UI. */
@@ -38467,6 +38501,7 @@ window._showSimProgress = function(opts, onDone){
       groups = _distributeSnake(classified, N_GROUPS);
       totalTeams = classified.length;
     }
+    var qualSeconds = sim ? _computeBestSeconds(groups, standingsByGroup) : {};
     /* Cabecera "6 GRUPOS · 11 EQUIPOS · 10 PARTIDOS POR EQUIPO ·
        N/66 plazas cubiertas · SIMULADO" eliminada por petición del
        usuario — la información ya queda implícita al ver los grupos. */
@@ -38475,11 +38510,11 @@ window._showSimProgress = function(opts, onDone){
       var grp = groups[g] || [];
       var standings;
       if(sim && sim.matchesByGroup[g]){
-        standings = _standingsFor(grp, sim.matchesByGroup[g]);
+        standings = standingsByGroup[g];
       } else {
         /* Sin simular: orden de inserción + stats a 0 */
         standings = grp.map(function(t,i){
-          return {idx:i, name:t.name||'', logo:t.logo||'', pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0};
+          return {idx:i, name:t.name||'', logo:t.logo||'', pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, gfAway:0};
         });
       }
       html += '<div style="margin:14px 4px 0;border:1px solid #FDC830;border-radius:8px;background:linear-gradient(135deg,rgba(243,115,53,.06),rgba(0,0,0,0));">'
@@ -38496,12 +38531,14 @@ window._showSimProgress = function(opts, onDone){
         +     '</div>';
       for(var i=0; i<TEAMS_PER_GROUP; i++){
         var team = standings[i];
-        /* Zona visual (formato 28×4, 2026-05-30):
-           1º púrpura → Previa Champions (top 1 = QUALIFY_TOP)
-           2º-4º default → Eliminados de cualquier competición europea. */
+        /* Zona visual (formato 2026-07-31):
+           1º SIEMPRE púrpura → Previa Champions.
+           2º púrpura SOLO si es uno de los 2 mejores segundos (sim ya
+           corrida); si no, igual que 3º/4º → Conference League. */
         var rowZone = '', borderColor = 'transparent';
-        if(i < QUALIFY_TOP){ rowZone = 'background:rgba(168,85,247,.10);'; borderColor = '#a855f7'; }
-        else { rowZone = ''; borderColor = 'rgba(255,255,255,.05)'; }
+        var qualifiesToPrevia = (i < QUALIFY_TOP) || (i === 1 && qualSeconds[g]);
+        if(qualifiesToPrevia){ rowZone = 'background:rgba(168,85,247,.10);'; borderColor = '#a855f7'; }
+        else { rowZone = 'background:rgba(94,182,228,.06);'; borderColor = '#5eb6e4'; }
         var nameHtml, logoHtml = '', suffixHtml = '';
         if(team && team.name){
           if(team.logo){
@@ -38571,50 +38608,49 @@ window._showSimProgress = function(opts, onDone){
       alert('⚠️ Error en simulateOpenQualifier: '+(e && e.message ? e.message : e)+'\n\nF12 → Consola para detalles.');
     }
   }
-  /* Persiste el 1º de cada grupo en `oq_to_previa_v1` (28 plazas).
-     Lo lee `computeUclPrevTeams` (Previa de Champions) para añadirlos
-     al pool de la Previa en el mismo ciclo.
-     Cambio (2026-05-30): el formato pasa a 28 grupos × 4 y solo el 1º
-     (28 equipos) avanza; del 2º al 4º quedan eliminados. La Conference
-     no recibe equipos vía OQ. */
+  /* Persiste el reparto del OQ: 1º de cada grupo (10) + los 2 MEJORES
+     2º de grupo → `oq_to_previa_v1` (12 plazas, Previa Ronda 1). El
+     resto (2º no clasificados + todos los 3º/4º, 28) →
+     `oq_to_conference_v1` (Conference League, fase de grupos directa).
+     Lo leen `computeUclPrevOqPoolTeams` (Previa) y
+     `computeUeclClassified` (Conference) para sumarlos a sus pools en
+     el mismo ciclo. Cambio (2026-07-31): antes solo el 1º (28 equipos)
+     avanzaba y la Conference no recibía nada del OQ. */
   function _persistPreviaFlag(sim){
     try {
-      var previaArr = [];
+      var previaArr = [], conferenceArr = [];
       if(sim && sim.groups && sim.matchesByGroup){
+        var standingsByGroup = sim.groups.map(function(grp,g){ return _standingsFor(grp||[], sim.matchesByGroup[g]||[]); });
+        var qualSeconds = _computeBestSeconds(sim.groups, standingsByGroup);
+        function real(t){ return t && t.name && !/^TBD/i.test(t.name) && !/^__placeholder_/.test(t.league||''); }
+        function pack(t, source){ return {name:t.name, logo:t.logo||'', league:t.league||'', source:source}; }
         for(var g=0; g<sim.groups.length; g++){
-          var st = _standingsFor(sim.groups[g]||[], sim.matchesByGroup[g]||[]);
-          for(var idx=0; idx<QUALIFY_TOP; idx++){
+          var st = standingsByGroup[g];
+          for(var idx=0; idx<TEAMS_PER_GROUP; idx++){
             if(!st[idx]) continue;
             var t = sim.groups[g][st[idx].idx];
-            if(!t || !t.name) continue;
-            /* No propagamos huecos: si el ganador del grupo es un
-               placeholder (`TBD-OQ-N`, league `__placeholder_*`) porque
-               el pool real no llegaba a 112, NO entra a la Previa. Esto
-               hace que la Previa reciba exactamente los ganadores REALES
-               (p.ej. 24) en lugar de 28 con huecos TBD. */
-            if(/^TBD/i.test(t.name) || /^__placeholder_/.test(t.league||'')) continue;
-            /* Persistimos el `league` REAL del equipo (slug-país que el
-               OQ ya conoce, vía `computeOpenQualifierTeams`) para que el
-               sorteo de la Previa pueda evitar repetir país en un mismo
-               grupo. Antes se perdía y todos caían a 'open-qualifier' →
-               el anti-mismo-país los trataba como un único país. */
-            previaArr.push({name:t.name, logo:t.logo||'', league:t.league||'', source:'oq-top1'});
+            /* No propagamos huecos: si la posición es un placeholder
+               (`TBD-OQ-N`, league `__placeholder_*`) porque el pool
+               real no llegaba a 40, NO entra a ninguna competición. */
+            if(!real(t)) continue;
+            var toPrevia = (idx < QUALIFY_TOP) || (idx === 1 && qualSeconds[g]);
+            if(toPrevia) previaArr.push(pack(t, idx===0 ? 'oq-top1' : 'oq-best-second'));
+            else conferenceArr.push(pack(t, 'oq-rest'));
           }
         }
       }
       window._lsSetSafe('oq_to_previa_v1', JSON.stringify({teams:previaArr, ts:Date.now()}));
-      /* Los registra TAMBIÉN como extras manuales de la zona 'uclPrev' —
-         garantiza que lleguen a la Previa aunque esa zona esté en modo
-         🔒 Manual (mismo motivo que la Wild Card → Open Qualifier, ver
+      window._lsSetSafe('oq_to_conference_v1', JSON.stringify({teams:conferenceArr, ts:Date.now()}));
+      /* Los registra TAMBIÉN como extras manuales de sus zonas destino —
+         garantiza que lleguen aunque esas zonas estén en modo 🔒 Manual
+         (mismo motivo que la Wild Card → Open Qualifier, ver
          `_eurSyncManualExtraFromFeeder`). */
       try {
         if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
           window._eurSyncManualExtraFromFeeder('uclPrev', previaArr, 'open-qualifier');
+          window._eurSyncManualExtraFromFeeder('uecl', conferenceArr, 'open-qualifier');
         }
       } catch(_){}
-      /* La Conference ya NO se alimenta del OQ — limpiamos el flag por
-         si quedaba estado de la versión antigua. */
-      localStorage.removeItem('oq_to_conference_v1');
     } catch(_){}
   }
 
@@ -38631,13 +38667,13 @@ window._showSimProgress = function(opts, onDone){
       return false;
     }
     _persistPreviaFlag(sim);
-    /* Los 28 ganadores recién calculados cambian el pool de la Previa
-       de Champions (34 directos + 28 OQ = 62) — si la Previa ya
-       estaba sorteada (con un pool más pequeño/con placeholders,
-       típico de sortear antes de que el OQ terminara), su sorteo
-       cacheado (`wprev_state_v1`) queda obsoleto. Lo invalidamos en
-       cascada para que se redibuje con el pool real "en el momento",
-       sin esperar a que el admin lo note y pulse Reset a mano. */
+    /* Los 12 clasificados a la Previa (10 primeros + 2 mejores segundos)
+       y los 28 a Conference recién calculados cambian sus pools — si
+       esas fases ya estaban sorteadas (con un pool más pequeño/con
+       placeholders, típico de sortear antes de que el OQ terminara),
+       su sorteo cacheado queda obsoleto. Lo invalidamos en cascada para
+       que se redibujen con el pool real "en el momento", sin esperar a
+       que el admin lo note y pulse Reset a mano. */
     if (typeof window._eurInvalidateDownstream === 'function' && window._EUR_DOWNSTREAM_OF_OQ) {
       window._eurInvalidateDownstream(window._EUR_DOWNSTREAM_OF_OQ);
     }
@@ -38647,33 +38683,29 @@ window._showSimProgress = function(opts, onDone){
   }
 
   function _doSimulate(classified){
-    /* Cap+pad a `N_GROUPS × TEAMS_PER_GROUP` (112). Misma helper que
+    /* Cap+pad a `N_GROUPS × TEAMS_PER_GROUP` (40). Misma helper que
        usa el render "fresco" — así sim y fresco siempre cuadran a
-       28 × 4. */
+       10 × 4. */
     classified = _padToFull(classified);
     var groups = _distributeSnake(classified, N_GROUPS);
     var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
     try { console.log('[oq-sim] _doSimulate · groups='+groups.length+' · matches/g='+(matchesByGroup[0]||[]).length); } catch(_){}
-    /* Sin playoff — formato 28×4 solo promueve el 1º de cada grupo y
-       elimina al resto. */
+    /* Sin playoff — 1º de cada grupo + 2 mejores segundos → Previa;
+       el resto → Conference (ver _persistPreviaFlag). */
     _finishOqSim(groups, matchesByGroup);
   }
 
   /* Simulación SÍNCRONA en UN solo pase (2026-07-11, mismo fix que Wild
      Card 2026-06-03: "En el MÓVIL, al atenuarse o apagarse la pantalla el
-     navegador PAUSA los timers de fondo"). ANTES esta función troceaba
-     los 28 grupos en 28 `setTimeout(step,0)` — uno por grupo — para que
-     el chip flotante subiera de 0% a 100% poco a poco. Con la pestaña en
-     background (pantalla apagada/bloqueada), Chrome aplica "intensive
-     throttling" a partir de los 5 min y esos `setTimeout` pasan a
-     dispararse 1 vez por minuto o menos — la cadena se queda colgada
-     durante DECENAS DE MINUTOS a mitad de sorteo (foto usuario: reloj
-     saltando 13:55→14:04→14:13 mientras el % subía 0%→7%→11%, ~1 grupo
-     cada 9 min). Los 336 partidos (28×12) son aritmética Poisson ligera
-     — bien por debajo de 1s de CPU — así que se juegan TODOS de golpe en
-     un único pase síncrono: imposible que quede a medias por throttling
-     de timers. Cedemos un tick antes de bloquear para que el chip pinte
-     "0%" y el usuario vea que arrancó. */
+     navegador PAUSA los timers de fondo"). Con la pestaña en background
+     (pantalla apagada/bloqueada), Chrome aplica "intensive throttling" a
+     partir de los 5 min sobre cualquier cadena de `setTimeout` trocedada
+     grupo a grupo, dejándola colgada DECENAS DE MINUTOS a mitad de
+     sorteo. Los 120 partidos (10 grupos × 12) son aritmética Poisson
+     ligera — bien por debajo de 1s de CPU — así que se juegan TODOS de
+     golpe en un único pase síncrono: imposible que quede a medias por
+     throttling de timers. Cedemos un tick antes de bloquear para que el
+     chip pinte "0%" y el usuario vea que arrancó. */
   function _doSimulateChunked(classified){
     classified = _padToFull(classified);
     var groups = _distributeSnake(classified, N_GROUPS);
@@ -38710,7 +38742,7 @@ window._showSimProgress = function(opts, onDone){
   }
 
   /* Botón "⬇️ Traer Wild Card" (2026-07-10, reforzado #3): trae A MANO
-     los 24 ganadores de la Wild Card al pool del Open Qualifier. Cubre
+     los 12 ganadores de la Wild Card al pool del Open Qualifier. Cubre
      3 causas distintas por las que "no se lanzan":
        1) Este dispositivo no recibió todavía la invalidación en
           cascada (llegó por otro dispositivo, o el POST aún está
@@ -38785,7 +38817,7 @@ window._showSimProgress = function(opts, onDone){
       var gotSet = {};
       live.forEach(function(t){ if(t && t.name) gotSet[t.name] = true; });
       var got = teams.filter(function(t){ return t && t.name && gotSet[t.name]; }).length;
-      alert('✅ Pool del Open Qualifier actualizado: '+real+' / 112 equipos reales · '+got+' / '+teams.length+' ganadores de la Wild Card confirmados dentro del pool.');
+      alert('✅ Pool del Open Qualifier actualizado: '+real+' / 40 equipos reales · '+got+' / '+teams.length+' ganadores de la Wild Card confirmados dentro del pool.');
     } catch(e){
       try { console.error('[oq-pull-wc]', e); } catch(_){}
       alert('⚠️ Error trayendo los ganadores de la Wild Card: '+(e && e.message ? e.message : e));

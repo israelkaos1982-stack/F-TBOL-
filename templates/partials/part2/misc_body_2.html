@@ -32160,7 +32160,17 @@ document.addEventListener('DOMContentLoaded', function() {
     return (_wcTs(b) > _wcTs(a)) ? b : a;
   }
 
-  function loadState(){ try { return JSON.parse(localStorage.getItem(WC_KEY)||'null'); } catch(_){ return null; } }
+  function loadState(){
+    try {
+      var s = JSON.parse(localStorage.getItem(WC_KEY)||'null');
+      /* Save del formato ANTERIOR (fase de grupos, `s.groups`) —
+         estructuralmente incompatible con el nuevo (`s.ties`, KO).
+         Se descarta como si no existiera: el admin vuelve a
+         sortear con el pool y formato actuales (2026-07-31). */
+      if(s && !Array.isArray(s.ties)) return null;
+      return s;
+    } catch(_){ return null; }
+  }
   function saveState(s){
     /* SIEMPRE actualizamos el espejo en memoria PRIMERO — render() ya
        puede pintar el estado simulado aunque el setItem falle por cuota.

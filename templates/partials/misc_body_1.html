@@ -53168,11 +53168,27 @@ https://api.sofascore.app/api/v1/team/44/image
          duplicados-descartados) — usado por la verificación post-save
          de más abajo. */
       var movedNormNames = {};
+      /* CAUSA RAÍZ del bug "muevo el Inter y vuelve solo" (2026-07-30):
+         el merge POR EQUIPO del servidor (`_lx_merge_teams`, app.py)
+         NUNCA encoge el documento — un equipo presente en la copia
+         VIEJA del servidor pero AUSENTE del payload entrante se
+         CONSERVA (se trata como "este dispositivo no mandó info sobre
+         él", no como "lo borraron"), SALVO que su nombre esté en
+         `deletedTeamNames`. `lextDeleteTeam` ya lo hace así (ver esa
+         función); "Mover equipos" quitaba el equipo del array local
+         pero NUNCA lo apuntaba en `deletedTeamNames` → el POST llegaba
+         al servidor, el merge por-equipo RESUCITABA el equipo movido
+         en el documento fusionado (servidor sigue con 21), y la
+         siguiente hidratación traía esa copia resucitada de vuelta al
+         dispositivo — el movimiento "se deshacía solo" sin ningún
+         error visible. */
+      if (!Array.isArray(srcData.deletedTeamNames)) srcData.deletedTeamNames = [];
       srcData.teams.forEach(function(t){
         if (!t) return;
         var keep = true;
         if (t.id && selectedIds[t.id]) {
           var nrm = _lextNormName(t.name||'');
+          if (nrm && srcData.deletedTeamNames.indexOf(nrm) < 0) srcData.deletedTeamNames.push(nrm);
           if (dstByName[nrm]) {
             skippedDup++;
             /* aún así lo quitamos del origen — el admin lo eligió */

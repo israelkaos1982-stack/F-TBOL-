@@ -44224,6 +44224,12 @@ window._showSimProgress = function(opts, onDone){
       window._eurManualExtraAdd(_eurNameSearchZone, name, 'manual');
       _eurManualOverlayRender();
     };
+    /* Respaldo táctil (ver `_eurWireTapFallback`): este `box` se
+       re-renderiza SOLO en cada tecla (sin pasar por
+       `_eurManualOverlayRender`), así que sus botones necesitan su
+       propio cableado aquí — el pase completo del overlay entero solo
+       cubre el primer render. */
+    if(typeof _eurWireTapFallbackAll === 'function') _eurWireTapFallbackAll(box);
   }
   function _eurRenderNameSearchResults(){
     var box = document.getElementById('eur-name-search-results');
@@ -44290,6 +44296,52 @@ window._showSimProgress = function(opts, onDone){
       _doCommitEurope(recovered);
       _eurManualOverlayRender();
     });
+  }
+
+  /* Respaldo táctil (2026-08-01, "cuando añado los equipos a la
+     competición correspondiente esto no funciona"): TODO este overlay
+     ("Ver / Añadir equipos por competición") vive dentro de un
+     contenedor `overflow-y:auto` (el propio `#eur-manual-ov`, y además
+     cada mini-lista interna — picker de liga, resultados de búsqueda,
+     lista de manuales por zona) — el admin tiene que scrollear para
+     llegar a "AÑADIR POR LIGA"/"+ Añadir" en una pantalla con decenas
+     de equipos. Mismo patrón ya documentado varias veces en este
+     proyecto (picker de portero, MVP, botón FINALIZAR…): un botón
+     dentro de un contenedor scrollable que depende SOLO del `click`
+     sintético puede no dispararse si el navegador interpreta el toque
+     como intento de scroll, aunque el dedo apenas se mueva. A
+     diferencia de esos casos (listas cortas, fijas), aquí SÍ hay que
+     poder scrollear sobre los propios botones — por eso el respaldo
+     usa un umbral de movimiento (12px) en vez de disparar en
+     `touchstart` puro: si el dedo se movió más de eso, se trata como
+     scroll y NO se dispara nada (igual que el comportamiento nativo).
+     Si no se movió, se dispara `el.click()` (re-usa el `.onclick` ya
+     cableado, sin duplicar lógica) y se suprime el click sintético
+     posterior del navegador para no disparar dos veces. */
+  function _eurWireTapFallback(el){
+    if(!el || el.__eurTapWired) return;
+    el.__eurTapWired = true;
+    var sx = 0, sy = 0, tracking = false;
+    el.addEventListener('touchstart', function(e){
+      tracking = true;
+      var t = e.touches && e.touches[0];
+      sx = t ? t.clientX : 0; sy = t ? t.clientY : 0;
+    }, { passive:true });
+    el.addEventListener('touchend', function(e){
+      if(!tracking) return;
+      tracking = false;
+      var t = (e.changedTouches && e.changedTouches[0]) || null;
+      var dx = t ? Math.abs(t.clientX - sx) : 0, dy = t ? Math.abs(t.clientY - sy) : 0;
+      if(dx > 12 || dy > 12) return; /* el dedo se movió — fue scroll, no tap */
+      try { e.preventDefault(); } catch(_){}
+      try { el.click(); } catch(_){}
+    }, { passive:false });
+  }
+  function _eurWireTapFallbackAll(container){
+    if(!container) return;
+    try {
+      container.querySelectorAll('button, [data-eur-pick-league]').forEach(function(el){ _eurWireTapFallback(el); });
+    } catch(_){}
   }
 
   function _eurManualOverlayRender(){
@@ -44455,6 +44507,11 @@ window._showSimProgress = function(opts, onDone){
       _eurManualOverlayRender();
       if(!added) alert('Todos los equipos sugeridos de esta liga ya estaban añadidos.');
     };
+    /* Respaldo táctil en TODOS los botones del overlay — ver comentario
+       de `_eurWireTapFallback` más arriba. Se re-cablea en cada render
+       (los nodos son nuevos cada vez), la guarda `__eurTapWired` evita
+       doble-wiring dentro del mismo pase. */
+    _eurWireTapFallbackAll(ov);
   }
   window._eurManualOverlayOpen = function(){
     var ov = document.getElementById('eur-manual-ov');

@@ -52885,15 +52885,38 @@ https://api.sofascore.app/api/v1/team/44/image
         if (!stillInSrc) movedIds[id] = true;
       });
 
-      /* Persistir ambos: localStorage + invalidate cache + POST (con
-         reintentos — `saveData` expone `window._ligaExtSavePromise[k]`,
-         que resuelve `true` SOLO cuando el servidor confirmó). */
+      /* Persistir ambos: localStorage + POST (con reintentos — `saveData`
+         expone `window._ligaExtSavePromise[k]`, que resuelve `true` SOLO
+         cuando el servidor confirmó).
+
+         CAUSA RAÍZ #2 del bug "muevo el Inter y vuelve solo" (2026-07-30
+         #3): `saveData(k,d)` YA deja `LIGA_CACHE[k] = d` correcto en
+         memoria de forma INCONDICIONAL (primera línea de la función,
+         antes de tocar localStorage/server). Llamar aquí a
+         `invalidateLigaCache(srcKey/destSlug)` justo después BORRABA esa
+         copia correcta — si el `localStorage.setItem` de `saveData`
+         fallaba o iba con retraso (cuota casi llena, un problema
+         documentado y recurrente en este proyecto), el siguiente
+         `loadData()` (disparado por `renderTable`/`applyEngineOverrides`
+         unas líneas más abajo, o por la propia verificación de más
+         abajo) releía el `localStorage` TODAVÍA VIEJO — resucitando el
+         equipo que se acababa de mover, en AMBOS lados (origen y
+         destino), exactamente el síntoma reportado. No hace falta
+         invalidar nada: `saveData` ya deja `LIGA_CACHE` consistente. */
       try { saveData(srcKey, srcData); } catch(_){}
       try { saveData(destSlug, dstData); } catch(_){}
-      try { if (typeof window.invalidateLigaCache === 'function') {
-        window.invalidateLigaCache(srcKey);
-        window.invalidateLigaCache(destSlug);
-      } } catch(_){}
+      /* Fuerza el recálculo del set de equipos "españoles upper-tier"
+         (`_applyForcedBlacklist`, filtro anti-colisión que veta un club
+         de Liga EA/Hypermotion/1ª RFEF en cualquier otra liga) ANTES de
+         que `applyEngineOverrides` (abajo) dispare el primer `loadData`
+         del destino — si no, ese primer load podía usar su cache de 30s
+         SIN el equipo recién movido excluido de Liga EA Sports todavía,
+         y el filtro lo desterraba de la liga a la que lo acabamos de
+         mover. `saveData(srcKey,...)` ya invalida esta cache si `srcKey`
+         es una de las 3 ligas españolas, pero forzarlo aquí también
+         cubre el caso `destSlug` sea una de esas 3 (o cualquier futuro
+         caller que edite ambos lados fuera de ese guard). */
+      try { if (typeof window._invalidateSpanishUpperTierCache === 'function') window._invalidateSpanishUpperTierCache(); } catch(_){}
 
       try { if (typeof renderTeamsList === 'function') renderTeamsList(); } catch(_){}
       try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
@@ -52924,10 +52947,22 @@ https://api.sofascore.app/api/v1/team/44/image
       var _srcPromise = (window._ligaExtSavePromise && window._ligaExtSavePromise[srcKey]) || Promise.resolve(true);
       var _dstPromise = (window._ligaExtSavePromise && window._ligaExtSavePromise[destSlug]) || Promise.resolve(true);
       Promise.all([_srcPromise, _dstPromise]).then(function(results){
+        /* Fuerza el recálculo del set "equipos españoles de upper-tier"
+           (`_applyForcedBlacklist`, el filtro que impide que un club de
+           Liga EA/Hypermotion/1ª RFEF se cuele en otra liga) justo antes
+           de releer — si por cualquier motivo su cache de 30s seguía con
+           el equipo recién movido, aquí se descarta y se recalcula desde
+           el `ligaExt_liga-ea-sports` YA actualizado, para que un equipo
+           que el admin ACABA de mover a propósito no se destierre de su
+           liga destino por este filtro anti-colisión. */
+        try { if (typeof window._invalidateSpanishUpperTierCache === 'function') window._invalidateSpanishUpperTierCache(); } catch(_){}
         var srcConfirmed = !!results[0];
         var dstConfirmed = !!results[1];
         var freshSrc = loadData(srcKey) || {teams:[]};
         var freshDst = loadData(destSlug) || {teams:[]};
+        var stillInSrcNames = (freshSrc.teams || []).filter(function(t){
+          return t && movedIds[t.id];
+        }).map(function(t){ return t.name; });
         var idsStillInSrc = Object.keys(movedIds).filter(function(id){
           return (freshSrc.teams || []).some(function(t){ return t && t.id === id; });
         });
@@ -52937,8 +52972,8 @@ https://api.sofascore.app/api/v1/team/44/image
         var msg = '';
         if (idsStillInSrc.length || namesMissingInDst.length) {
           msg = '⚠️ El movimiento NO se completó del todo: ';
-          if (idsStillInSrc.length) msg += idsStillInSrc.length + ' equipo(s) siguen apareciendo en "' + _lextSlugLabel(srcKey) + '". ';
-          if (namesMissingInDst.length) msg += namesMissingInDst.length + ' equipo(s) NO aparecen en "' + _lextSlugLabel(destSlug) + '". ';
+          if (idsStillInSrc.length) msg += idsStillInSrc.length + ' equipo(s) siguen apareciendo en "' + _lextSlugLabel(srcKey) + '" (' + stillInSrcNames.join(', ') + '). ';
+          if (namesMissingInDst.length) msg += namesMissingInDst.length + ' equipo(s) NO aparecen en "' + _lextSlugLabel(destSlug) + '" (' + namesMissingInDst.join(', ') + '). ';
           msg += '\n\nVuelve a intentarlo — si se repite, dilo tal cual (con este mensaje) para localizar el fallo.';
         } else {
           msg = '✅ ' + moved + ' equipo(s) movido(s) a "' + _lextSlugLabel(destSlug) + '".';

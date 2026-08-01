@@ -46224,6 +46224,7 @@ Tottenham
     <div class="lext-sub" id="lext-mv-source-info" style="margin-bottom:8px;"></div>
 
     <label class="lext-label" style="margin-top:6px;">Liga destino — toca ✅ la liga a la que mover</label>
+    <input type="text" id="lext-mv-dest-filter" placeholder="🔍 buscar liga destino (p.ej. «italia»)…" oninput="lextMoveTeamsFilterDest()" style="width:100%;box-sizing:border-box;background:rgba(255,255,255,.05);border:1px solid rgba(120,200,255,.35);color:#fff;padding:6px 9px;border-radius:5px;font-family:Rajdhani,sans-serif;font-size:12px;margin-bottom:6px;">
     <div id="lext-mv-dest-picker" style="max-height:30vh;overflow-y:auto;border:1px solid rgba(120,200,255,.35);border-radius:8px;background:rgba(120,200,255,.04);padding:4px;"></div>
 
     <div style="display:flex;gap:8px;margin-top:10px;align-items:center;">
@@ -52829,6 +52830,22 @@ https://api.sofascore.app/api/v1/team/44/image
        + las ligas especiales, así el destino nunca depende de qué haya
        cacheado localmente el dispositivo que abre el picker. */
     var seen = {}; var out = [];
+    /* Slugs CANÓNICOS (las ~54 ligas reales) — un slug local que NO esté
+       aquí solo se acepta como destino si además "parece" una liga real
+       (tiene `teams[]` array). Filtra basura acumulada en este
+       dispositivo (`ligaExt_<algo>-backup`, `ligaExt_AutoRecoveryDone_v1`,
+       flags de diagnóstico guardados por error bajo el prefijo
+       `ligaExt_` en alguna sesión anterior…) — bug 2026-07-30 #2, foto
+       usuario «al intentar moverlos a otras ligas salen ligas que no
+       existen» (picker mostrando "Dinamarca Backup", "Escocia Backup"…,
+       restos de copias manuales que NUNCA fueron ligas reales del
+       juego). */
+    var _canonSlugs = {};
+    try { Object.keys(window.LEAGUE_DEFAULT_ZONES || {}).forEach(function(s){ _canonSlugs[s] = true; }); } catch(_){}
+    ['liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion', 'resto-mundo'].forEach(function(s){ _canonSlugs[s] = true; });
+    function _looksLikeJunkSlug(slug){
+      return /backup|recover|debug|test|tmp|temp|_v\d+$/i.test(slug);
+    }
     try {
       for (var i = 0; i < localStorage.length; i++) {
         var k = localStorage.key(i);
@@ -52838,6 +52855,18 @@ https://api.sofascore.app/api/v1/team/44/image
         if (k.indexOf('_snap_') !== -1) continue;
         var slug = k.slice('ligaExt_'.length);
         if (!slug || seen[slug]) continue;
+        if (!_canonSlugs[slug]) {
+          if (_looksLikeJunkSlug(slug)) continue;
+          /* Slug local NO canónico y sin pinta de basura por nombre —
+             solo se acepta si su contenido es realmente un roster
+             (`teams[]`), para no listar flags/diagnósticos guardados
+             por error bajo `ligaExt_*`. */
+          try {
+            var _raw = localStorage.getItem(k);
+            var _parsed = _raw ? JSON.parse(_raw) : null;
+            if (!_parsed || !Array.isArray(_parsed.teams)) continue;
+          } catch(_){ continue; }
+        }
         seen[slug] = true;
         out.push(slug);
       }
@@ -52940,7 +52969,8 @@ https://api.sofascore.app/api/v1/team/44/image
       slugs.forEach(function(s){
         if (s === CURRENT_KEY) return;
         var lbl = _lextSlugLabel(s).replace(/[<>&]/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});
-        phtml += '<div class="lext-mv-dest-opt" data-slug="'+s+'" role="button" tabindex="0" '
+        var lblLower = (lbl + ' ' + s).toLowerCase().replace(/"/g, '');
+        phtml += '<div class="lext-mv-dest-opt" data-slug="'+s+'" data-name-lower="'+lblLower+'" role="button" tabindex="0" '
           + 'onclick="lextMoveTeamsPickDest(\''+s+'\')" '
           + 'style="display:flex;align-items:center;gap:8px;padding:9px 8px;border-radius:6px;cursor:pointer;font-size:13.5px;color:#fff;">'
           + '<span class="lext-mv-dest-tick" style="flex:0 0 20px;font-size:15px;text-align:center;color:#a8d8ff;"></span>'
@@ -52950,6 +52980,8 @@ https://api.sofascore.app/api/v1/team/44/image
       picker.innerHTML = phtml || '<div class="lext-sub" style="padding:10px;">No hay otras ligas disponibles.</div>';
       if (pref) lextMoveTeamsPickDest(pref);
     }
+    var destFilterInput = document.getElementById('lext-mv-dest-filter');
+    if (destFilterInput) destFilterInput.value = '';
 
     var list = document.getElementById('lext-mv-list');
     if (list) {
@@ -52985,6 +53017,16 @@ https://api.sofascore.app/api/v1/team/44/image
       if (tick) tick.textContent = on ? '✅' : '';
       opts[i].style.background = on ? 'rgba(120,200,255,.22)' : '';
       opts[i].style.border = on ? '1px solid rgba(120,200,255,.6)' : '1px solid transparent';
+    }
+  };
+
+  window.lextMoveTeamsFilterDest = function(){
+    var f = document.getElementById('lext-mv-dest-filter');
+    var q = f ? (f.value||'').toLowerCase().trim() : '';
+    var opts = document.querySelectorAll('#lext-mv-dest-picker .lext-mv-dest-opt');
+    for (var i = 0; i < opts.length; i++) {
+      var nm = opts[i].getAttribute('data-name-lower') || '';
+      opts[i].style.display = (!q || nm.indexOf(q) !== -1) ? '' : 'none';
     }
   };
 

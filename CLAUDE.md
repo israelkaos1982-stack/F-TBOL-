@@ -1,5 +1,89 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Los toggles de Recopa (Subcampeón/Semifinalistas) volvían a 0 solos — store dedicado fuera de `ligaExt_<slug>` (obligatorio, 2026-08-01 #2)
+
+**Bug (fotos usuario 2026-08-01, «FA Cup» — 15:59 con Subcampeón=1 y
+Semifinalistas=2 recién activados, 16:00 ambos vueltos a 0 sin que el
+usuario tocara nada)**: los 2 toggles nuevos de la sección anterior
+(«Recopa — SEMIFINALISTAS…») se ACTIVABAN visualmente al pulsarlos,
+pero minutos después volvían solos a 0/0 — "no se guardan los cambios
+de qué equipos van a la Recopa".
+
+### Causa raíz
+
+`toggleSubcampeon`/`toggleSemis` guardaban el flag en
+`data.config.recopaSubcampeon`/`recopaSemis`, DENTRO del documento
+COMPLETO de la liga (`ligaExt_<slug>`, con equipos/plantillas/copa/etc,
+hasta varios MB). Ese documento tiene una máquina de sync/anti-wipe
+MUY elaborada (`fetchData`, `misc_body_1.html`) que decide si "adoptar
+la copia del servidor" comparando SOLO nº de equipos/jugadores/
+resultados — **nunca compara `config`** (el único backfill que existe
+ahí es para `logo`/`cupLogo`, sección "El logo de la liga...").
+
+Si un `fetchData` (disparado por CUALQUIER navegación/hidratación en
+segundo plano de la app, no solo por el propio guardado) resolvía con
+la copia del servidor ANTERIOR al POST del toggle — típico si el POST
+tarda unos segundos en confirmar (red floja, Railway en cold-start) —,
+esa respuesta se ADOPTABA completa (`LIGA_CACHE[k] = data;` +
+`localStorage`) sin que ningún anti-wipe lo detectara, PISANDO
+`data.config` entero con la copia vieja (sin el toggle). El admin veía
+el cambio al pulsar (JS lo aplica al instante) pero, en cuanto CUALQUIER
+hidratación de fondo de esa liga resolvía tarde, el toggle volvía a 0
+sin que nadie lo tocara — exactamente el patrón ya documentado para el
+HUD del hub (🪙💊💼, 2026-06-06/07): *"un store PEQUEÑO de banderas del
+admin nunca debe viajar dentro de un blob COMPARTIDO gigante sujeto a
+sync/anti-wipe de otra cosa"*.
+
+### Fix — store dedicado `recopa_copa_flags_v1`, fuera del documento de la liga
+
+Los 2 flags salen de `ligaExt_<slug>.config` y pasan a su PROPIA fila
+KV: `recopa_copa_flags_v1`, objeto `{<slug>: {sub, semis}}`, gestionada
+por un IIFE nuevo en `misc_body_1.html` (justo antes del motor de
+Recopa) que reutiliza `window._kvBlobSync` (el mismo helper genérico
+del HUD/lesiones/sanciones/trofeos — cache local + servidor como
+fuente de verdad, merge por RECENCIA, hidrata al cargar, push
+debounced tras cada cambio). Al vivir en su propia fila, es INMUNE a
+la sync (mucho más pesada y frágil) del documento de equipos/
+plantillas/resultados de la liga.
+
+- `window._recopaFlagGet(slug, field)` / `window._recopaFlagToggle(slug,
+  field, currentValue)` — API del store nuevo.
+- `_lecCopa.toggleSubcampeon`/`toggleSemis`, `_lecRenderReglas` (UI) y
+  `_buildPool` (motor de Recopa) leen de ahí PRIMERO, con **fallback a
+  `data.config.recopaSubcampeon`/`recopaSemis`** (legacy) SOLO si ese
+  slug+campo nunca se tocó en el store nuevo — así una copa que el
+  admin ya había activado en la sesión anterior (bug de esta misma
+  sección) no "pierde" su preferencia visible, pero toda escritura
+  nueva va SIEMPRE al store dedicado.
+- Servidor (`app.py`): `recopa_copa_flags_v1` añadida a
+  `_KV_ALLOWED_EXACT` y `_KV_RECENCY_BLOB_KEYS` — mismo merge genérico
+  por recencia que ya usan `bplant_stat_adjust_v1`/`mu_messages_v1`, sin
+  necesidad de un caso especial (el blob entero es pequeño y viaja
+  siempre completo en cada `touch`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a guardar un flag/preferencia del admin (toggle,
+   config editable) DENTRO de un documento grande sujeto a su propia
+   sync/anti-wipe (`ligaExt_<slug>`, cfg de torneo, etc.) si esa
+   maquinaria no está diseñada para preservar el campo nuevo. Todo flag
+   de este tipo va a su PROPIA fila `/api/kv/<key>` (vía
+   `window._kvBlobSync`), igual que el HUD/lesiones/sanciones/trofeos.
+2. **PROHIBIDO** que un fetch/hidratación en segundo plano de un
+   documento grande (`fetchData`, o cualquier equivalente futuro)
+   "adopte" la copia del servidor sin preservar campos que otra
+   feature guarda ahí — si de verdad hace falta guardar algo dentro de
+   ese documento, hay que añadir su backfill explícito (como ya existe
+   para `logo`/`cupLogo`); si no, mejor sacarlo a su propia fila KV
+   desde el principio (más simple y más robusto).
+3. **PROHIBIDO** quitar el fallback a `data.config.recopaSubcampeon`/
+   `recopaSemis` en `_buildPool`/`_lecRenderReglas`/los toggles: es lo
+   que evita perder visualmente la preferencia de una copa activada
+   antes de este fix, mientras el store nuevo no se haya tocado para
+   ese slug+campo.
+4. Toda copa NUEVA hereda el store dedicado automáticamente (es
+   genérico por slug, sin lista hardcodeada).
+
 ## Recopa de Europa — SEMIFINALISTAS (los 2 eliminados en semis) ahora también son elegibles, y el SUBCAMPEÓN deja de estar limitado a 9 copas (obligatorio, 2026-08-01)
 
 **Petición usuario 2026-08-01**: "en todas las Copas las 11 Ligas

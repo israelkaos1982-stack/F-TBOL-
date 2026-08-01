@@ -20407,7 +20407,7 @@ window._showSimProgress = function(opts, onDone){
       if (d && typeof d === 'object'){ FLAGS = d; updatedAt = Number(d.updatedAt) || 0; }
     } catch(_){}
   }
-  var sync = (typeof window._kvBlobSync === 'function') ? window._kvBlobSync(KEY) : null;
+  var sync = null;
   function _persist(){
     try {
       FLAGS.updatedAt = updatedAt;
@@ -20416,18 +20416,39 @@ window._showSimProgress = function(opts, onDone){
     if (sync) sync.touch(updatedAt);
   }
   _loadLocal();
-  if (sync){
-    sync.config(function(){ return FLAGS; }, function(sv){
-      FLAGS = (sv && typeof sv === 'object') ? sv : {};
-      updatedAt = Number(FLAGS.updatedAt) || Date.now();
-      try { window._lsSetSafe(KEY, JSON.stringify(FLAGS)); } catch(_){}
-      try { if (typeof window._lecRenderReglas === 'function') window._lecRenderReglas(); } catch(_){}
-    }, _isEmpty);
-    sync.seed(updatedAt);
-    sync.hydrate(function(){
-      try { if (typeof window._lecRenderReglas === 'function') window._lecRenderReglas(); } catch(_){}
-    });
+  /* `_kvBlobSync` vive en index.bundle.js, que este partial evalúa
+     ANTES de que cargue (`<script src=index.bundle.js>` va al final de
+     `templates/index.html`, después de `{% include misc_body_1.html %}`)
+     — bug real 2026-08-01 #3: `sync` se quedaba `null` PARA SIEMPRE
+     (el chequeo `typeof window._kvBlobSync` se hacía UNA sola vez, a
+     tiempo de parseo, cuando `index.bundle.js` aún no ha corrido), así
+     que el toggle NUNCA llegaba a sincronizarse con el servidor — solo
+     sobrevivía mientras el propio `localStorage` del dispositivo no se
+     tocara. Mismo patrón YA usado en este archivo para este problema
+     exacto (`_bedOvInitSync`/`_btMsInitSync`/`_objStateSyncInit`, etc.):
+     reintentar con backoff hasta que `_kvBlobSync` exista de verdad. */
+  function _initSync(tries){
+    tries = tries || 0;
+    if (sync) return;
+    if (typeof window._kvBlobSync !== 'function'){
+      if (tries < 60) setTimeout(function(){ _initSync(tries + 1); }, 150);
+      return;
+    }
+    try {
+      sync = window._kvBlobSync(KEY);
+      sync.config(function(){ return FLAGS; }, function(sv){
+        FLAGS = (sv && typeof sv === 'object') ? sv : {};
+        updatedAt = Number(FLAGS.updatedAt) || Date.now();
+        try { window._lsSetSafe(KEY, JSON.stringify(FLAGS)); } catch(_){}
+        try { if (typeof window._lecRenderReglas === 'function') window._lecRenderReglas(); } catch(_){}
+      }, _isEmpty);
+      sync.seed(updatedAt);
+      sync.hydrate(function(){
+        try { if (typeof window._lecRenderReglas === 'function') window._lecRenderReglas(); } catch(_){}
+      });
+    } catch(_){}
   }
+  try { _initSync(0); } catch(_){}
   /* `undefined` = este slug+campo NUNCA se tocó en el store nuevo —
      el caller decide si cae al legacy `data.config.*`. `true`/`false`
      = valor explícito ya persistido aquí (gana siempre). */

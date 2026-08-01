@@ -84,6 +84,58 @@ plantillas/resultados de la liga.
 4. Toda copa NUEVA hereda el store dedicado automáticamente (es
    genérico por slug, sin lista hardcodeada).
 
+### Refuerzo (mismo día, #3) — `_kvBlobSync` se inicializaba DEMASIADO PRONTO, `sync` se quedaba `null` para siempre
+
+**Bug (fotos usuario 2026-08-01, «FA Cup» — sigue en 0/0 tras el fix
+anterior, "se sigue sin guardar los clubes ingleses que van a la
+Recopa, quiero que vayan 4")**: el store dedicado de la sección de
+arriba SÍ escribía el toggle en `localStorage`, pero JAMÁS llegaba al
+servidor — la sincronización cross-device del store nuevo estaba rota
+desde el primer commit.
+
+**Causa raíz**: el IIFE del store nuevo hacía
+`var sync = (typeof window._kvBlobSync === 'function') ?
+window._kvBlobSync(KEY) : null;` de forma SÍNCRONA, a tiempo de
+PARSEO. Pero `window._kvBlobSync` vive en `index.bundle.js`, que
+`templates/index.html` carga con un `<script src>` AL FINAL del body —
+DESPUÉS de `{% include 'partials/misc_body_1.html' %}` (donde vive
+este store nuevo). En el instante en que el IIFE se evalúa,
+`window._kvBlobSync` todavía NO EXISTE → `sync` quedaba `null` PARA
+SIEMPRE (el chequeo era una comprobación única, nunca se repetía) →
+ni `hydrate()` ni `touch()`/`push` se llamaban jamás → el toggle nunca
+salía de ese dispositivo, así que cualquier otra pestaña/recarga que
+dependiera del servidor (o cualquier merge cross-device) nunca lo veía.
+
+Este es el MISMO problema que ya tiene solución establecida en este
+archivo: `_bedOvInitSync`/`_btMsInitSync`/`_muInitSync` (búsqueda
+`"diferimos el alta hasta que esté disponible"`) — un `setTimeout` con
+reintentos hasta que `window._kvBlobSync` exista de verdad. El IIFE
+nuevo del store de Recopa se escribió SIN copiar ese patrón.
+
+**Fix**: `_initSync(tries)` reintenta cada 150 ms hasta 60 veces (9 s)
+hasta que `window._kvBlobSync` esté disponible; solo entonces crea el
+`sync`, llama `.config()`/`.seed()`/`.hydrate()`. Si un toggle ocurre
+ANTES de que `_initSync` termine, `_persist()` ya dejó `updatedAt`
+sellado y `FLAGS` actualizado — en cuanto `_initSync` conecta, su
+`hydrate()` detecta que el local no está vacío y lo empuja al servidor
+(`_push(0)` dentro de `_kvBlobSync.hydrate`), así que ningún toggle
+hecho durante la ventana de espera se pierde.
+
+**Reglas a respetar (además de las 4 de arriba)**:
+5. **PROHIBIDO** que un IIFE de `misc_body_1.html`/`part2/misc_body_2.html`
+   capture `window._kvBlobSync` con un chequeo ÚNICO y síncrono al
+   parsear el script. Estos partials se evalúan ANTES que
+   `index.bundle.js` (que se carga al final del `<body>`) — TODO store
+   `_kvBlobSync` nuevo que se defina en un partial debe usar el patrón
+   de reintento con `setTimeout` (ver `_bedOvInitSync` como referencia),
+   nunca una comprobación `typeof window._kvBlobSync === 'function'`
+   de una sola vez.
+6. Antes de dar por buena la sincronización de un store `_kvBlobSync`
+   NUEVO, verificar explícitamente (no solo por inspección) que
+   `sync` deja de ser `null` tras la carga completa de la página — un
+   `console.log`/breakpoint tras `_initSync` es más fiable que asumir
+   que "el mismo patrón que lesiones/sanciones" se copió correctamente.
+
 ## Recopa de Europa — SEMIFINALISTAS (los 2 eliminados en semis) ahora también son elegibles, y el SUBCAMPEÓN deja de estar limitado a 9 copas (obligatorio, 2026-08-01)
 
 **Petición usuario 2026-08-01**: "en todas las Copas las 11 Ligas

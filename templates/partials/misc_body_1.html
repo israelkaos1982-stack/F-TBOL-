@@ -20418,7 +20418,7 @@ window._showSimProgress = function(opts, onDone){
   _loadLocal();
   /* `_kvBlobSync` vive en index.bundle.js, que este partial evalúa
      ANTES de que cargue (`<script src=index.bundle.js>` va al final de
-     `templates/index.html`, después de `{% include misc_body_1.html %}`)
+     `templates/index.html`, después del include de este partial)
      — bug real 2026-08-01 #3: `sync` se quedaba `null` PARA SIEMPRE
      (el chequeo `typeof window._kvBlobSync` se hacía UNA sola vez, a
      tiempo de parseo, cuando `index.bundle.js` aún no ha corrido), así

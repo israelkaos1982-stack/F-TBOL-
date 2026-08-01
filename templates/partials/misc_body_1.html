@@ -20489,25 +20489,35 @@ window._showSimProgress = function(opts, onDone){
         window._eurManualExtraTeamNames('recopa').forEach(_push);
       }
     } catch(_){}
-    /* (2) Campeones (y subcampeones si procede) de las copas europeas.
-       Recorremos todas las claves `ligaExt_<slug>` reales (igual que
-       _computeQualifiedFromLeagues: sin _backup/_snap/_protected/_vN).
-       Primero TODOS los campeones, luego TODOS los subcampeones, para
-       que al capar a 64 los campeones siempre entren antes. */
+    /* (2) Campeones + subcampeones + semifinalistas de las copas
+       europeas. Recorremos todas las claves `ligaExt_<slug>` reales
+       (igual que _computeQualifiedFromLeagues: sin
+       _backup/_snap/_protected/_vN). Primero TODOS los campeones,
+       luego TODOS los subcampeones, luego TODOS los semifinalistas,
+       para que al capar a 64 los de más peso siempre entren antes. */
     var EUROPE_BLACKLIST = { 'liga-hypermotion':1, 'liga-primera-federacion':1, 'liga-ea-sports':1, 'resto-mundo':1 };
-    /* SUBCAMPEONES a Recopa (petición usuario 2026-06-12): de las ligas
-       externas SOLO estas 9 copas mandan también su subcampeón; el resto
-       solo el campeón. EA Sports (la 10ª copa con subcampeón) entra por
-       los manuales de «EA Sports → Europa» (campeón + subcampeón de la
-       Copa del Rey), ya que Liga EA está en EUROPE_BLACKLIST. Total
-       objetivo: 54 campeones (53 ligas externas + EA) + 10 subcampeones
-       (9 de aquí + EA manual) = 64. El toggle per-cup `recopaSubcampeon`
-       puede DESACTIVAR una de estas 9, nunca AÑADIR una fuera de la lista. */
-    var RECOPA_SUBCAMPEON_SLUGS = {
-      'inglaterra':1, 'italia':1, 'alemania':1, 'francia':1, 'portugal':1,
-      'p-bajos':1, 'belgica':1, 'turquia':1, 'dinamarca':1
-    };
-    var champs = [], runners = [];
+    /* Petición usuario 2026-08-01: la whitelist de 9 copas para el
+       subcampeón queda ELIMINADA — el toggle `recopaSubcampeon`
+       (default FALSE) es válido en CUALQUIER copa externa (todas
+       excepto Resto del Mundo, que no clasifica a Recopa — ya
+       excluida arriba vía EUROPE_BLACKLIST y sin bloque de Reglas en
+       `_lecRenderReglas`). Se añade además `recopaSemis` (default
+       FALSE): si el admin lo activa, los 2 EQUIPOS ELIMINADOS EN
+       SEMIFINALES de esa copa ("3 SEMIS" / "4 SEMIS") también entran
+       al pool. Solo aporta algo en copas con fase de semis real
+       (formato 20 con cuartos+semis, o formato 18 con semis estilo
+       Andorra sin cuartos) — los formatos 14/12 van directos a la
+       final y no tienen semifinalistas. EA Sports sigue entrando SOLO
+       por los manuales de «EA Sports → Europa» (Liga EA está en
+       EUROPE_BLACKLIST). */
+    var champs = [], runners = [], semiLosers = [];
+    function _semiLoser(s){
+      if(!s || !s.winner) return null;
+      /* Formato 20 (ida+vuelta, `_lecSim2Leg`): tieHome/tieAway.
+         Formato 18 (partido único, `_lecSim1Leg`): home/away. */
+      if(s.tieHome !== undefined) return (s.winner === s.tieHome) ? s.tieAway : s.tieHome;
+      return (s.winner === s.home) ? s.away : s.home;
+    }
     try {
       if(typeof localStorage !== 'undefined'){
         var keys = [];
@@ -20527,21 +20537,30 @@ window._showSimProgress = function(opts, onDone){
           var cp = data && data.copa;
           if(!cp) return;
           if(cp.champion) champs.push(cp.champion);
-          /* Subcampeón: SOLO las 9 copas de la whitelist (petición usuario
-             2026-06-12). El toggle per-cup puede desactivar una de ellas,
-             pero ninguna fuera de la lista aporta subcampeón. */
-          var subWhitelisted = !!RECOPA_SUBCAMPEON_SLUGS[slug];
-          /* Default = FALSE (petición usuario 2026-07-03: "por defecto
-             que siempre ponga el campeón 1 y el subcampeón 0, pudiendo
-             editarlo manualmente"). Solo cuenta si el admin lo activó
-             explícitamente (=== true) desde el toggle de Reglas. */
+          /* Subcampeón: cualquier copa externa (whitelist eliminada
+             2026-08-01). Default = FALSE (petición usuario 2026-07-03:
+             "por defecto que siempre ponga el campeón 1 y el
+             subcampeón 0, pudiendo editarlo manualmente"). Solo cuenta
+             si el admin lo activó explícitamente (=== true) desde el
+             toggle de Reglas. */
           var subOn = (data.config && data.config.recopaSubcampeon === true);
-          if(subWhitelisted && subOn && cp.runnerUp) runners.push(cp.runnerUp);
+          if(subOn && cp.runnerUp) runners.push(cp.runnerUp);
+          /* Semifinalistas (petición usuario 2026-08-01): default
+             FALSE. Solo aporta si la copa tiene fase de semis
+             (`cp.semis`, formatos 20/18) Y el admin lo activó. */
+          var semisOn = (data.config && data.config.recopaSemis === true);
+          if(semisOn && cp.semis && cp.semis.length){
+            cp.semis.forEach(function(s){
+              var loser = _semiLoser(s);
+              if(loser) semiLosers.push(loser);
+            });
+          }
         });
       }
     } catch(_){}
     champs.forEach(_push);
     runners.forEach(_push);
+    semiLosers.forEach(_push);
     /* Cap a POOL_TARGET (64). */
     if (pool.length > POOL_TARGET) pool = pool.slice(0, POOL_TARGET);
     return pool;
@@ -58179,6 +58198,22 @@ https://api.sofascore.app/api/v1/team/44/image
       saveData(CURRENT_KEY, data);
       _lecRenderReglas();
     },
+    /* Alterna 0/2 plazas de los semifinalistas (los 2 equipos
+       eliminados en semifinales) a Recopa de Europa (petición usuario
+       2026-08-01). Default = FALSE, igual que el subcampeón. Solo
+       tiene efecto real en copas con fase de semis (formato 20/18) —
+       `_buildPool` ya lo comprueba antes de usarlo, este toggle solo
+       persiste la preferencia del admin. */
+    toggleSemis: function(){
+      if(!CURRENT_KEY) return;
+      var data = loadData(CURRENT_KEY);
+      if(!data) return;
+      if(!data.config) data.config = {};
+      var current = (data.config.recopaSemis === true);
+      data.config.recopaSemis = !current;
+      saveData(CURRENT_KEY, data);
+      _lecRenderReglas();
+    },
     toggleReglas: function(){
       var rb = document.getElementById('lec-reglas-body');
       if(!rb) return;
@@ -58197,8 +58232,13 @@ https://api.sofascore.app/api/v1/team/44/image
           editable). Subcampeón = 0 por defecto (petición usuario
           2026-07-03), editable a 1 por el admin via toggle
           (persistido en data.config.recopaSubcampeon — booleano).
-     El toggle alterna entre "0" y "1" al pulsar el chip; saveData
-     guarda el cambio inmediatamente en el ligaExt_<slug>. */
+          Semifinalistas = 0 por defecto (petición usuario 2026-08-01),
+          editable a 2 por el admin (persistido en
+          data.config.recopaSemis — booleano). Solo se muestra en
+          copas con fase de semis real (formato 20 o 18); los formatos
+          14/12 van directos a la final y no tienen semifinalistas.
+     Cada toggle alterna al pulsar el chip; saveData guarda el cambio
+     inmediatamente en el ligaExt_<slug>. */
   function _lecRenderReglas(){
     var rb = document.getElementById('lec-reglas-body');
     if(!rb) return;
@@ -58207,7 +58247,8 @@ https://api.sofascore.app/api/v1/team/44/image
     /* Resto del Mundo: NINGÚN equipo de esta copa va a Recopa
        (petición usuario 2026-05-27). Solo se reconoce al campeón.
        Para el resto de copas, se mantiene el bloque clásico de
-       Plazas a Recopa (Campeón=1 fijo + Subcampeón toggle 0/1). */
+       Plazas a Recopa (Campeón=1 fijo + Subcampeón toggle 0/1 +
+       Semifinalistas toggle 0/2 si el formato tiene fase de semis). */
     var isRM = (CURRENT_KEY === 'resto-mundo');
     var html = '<div class="lec-rules">'
       + '<h4>📜 Formato</h4>'
@@ -58221,6 +58262,10 @@ https://api.sofascore.app/api/v1/team/44/image
          explícitamente desde este toggle. Mantiene coherencia con
          `_buildPool` (Recopa). Petición usuario 2026-07-03. */
       var sub = !!(data && data.config && data.config.recopaSubcampeon === true);
+      /* Fase de semis real: formato 20 (cuartos+semis) o 18 (semis
+         Andorra sin cuartos). 14/12 van directos a la final. */
+      var hasSemis = (fmt === 20 || fmt === 18);
+      var semisOn = !!(data && data.config && data.config.recopaSemis === true);
       html += '<h4>🛡 Recopa de Europa · Plazas</h4>'
         + '<div class="lec-recopa-row">'
         +   '<span class="lec-recopa-lbl">🏆 Campeón</span>'
@@ -58229,8 +58274,16 @@ https://api.sofascore.app/api/v1/team/44/image
         + '<div class="lec-recopa-row" onclick="window._lecCopa&&window._lecCopa.toggleSubcampeon&&window._lecCopa.toggleSubcampeon()" style="cursor:pointer;" title="Pulsa para alternar 0 / 1">'
         +   '<span class="lec-recopa-lbl">🥈 Subcampeón</span>'
         +   '<span class="lec-recopa-val toggle ' + (sub ? 'on' : 'off') + '" id="lec-recopa-sub-val">' + (sub ? '1' : '0') + '</span>'
-        + '</div>'
-        + '<p style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">Pulsa el "0/1" del subcampeón para alternar si va a Recopa.</p>';
+        + '</div>';
+      if(hasSemis){
+        html += '<div class="lec-recopa-row" onclick="window._lecCopa&&window._lecCopa.toggleSemis&&window._lecCopa.toggleSemis()" style="cursor:pointer;" title="Pulsa para alternar 0 / 2">'
+          +   '<span class="lec-recopa-lbl">⚔️ Semifinalistas (3º/4º)</span>'
+          +   '<span class="lec-recopa-val toggle ' + (semisOn ? 'on' : 'off') + '" id="lec-recopa-semis-val">' + (semisOn ? '2' : '0') + '</span>'
+          + '</div>'
+          + '<p style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">Pulsa el "0/1"/"0/2" de cada fila para alternar si esos equipos van a Recopa.</p>';
+      } else {
+        html += '<p style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">Pulsa el "0/1" del subcampeón para alternar si va a Recopa. Este formato no tiene fase de semis (va directo a la final), así que no hay semifinalistas que ofrecer.</p>';
+      }
     }
     html += '</div>';
     rb.innerHTML = html;

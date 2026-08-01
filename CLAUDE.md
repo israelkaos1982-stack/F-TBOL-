@@ -1,5 +1,68 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Recopa de Europa — SEMIFINALISTAS (los 2 eliminados en semis) ahora también son elegibles, y el SUBCAMPEÓN deja de estar limitado a 9 copas (obligatorio, 2026-08-01)
+
+**Petición usuario 2026-08-01**: "en todas las Copas las 11 Ligas
+normales y las 9 mixtas me tienes que dejar añadir a la Recopa
+Campeón, Subcampeón, Semifinales (que son los equipos eliminados en
+semifinales)… para añadir a Recopa me tiene que salir CAMPEON,
+SUBCAMPEÓN, 3 SEMIS, 4 SEMIS, en todas las Copas excepto Resto del
+Mundo".
+
+### Qué cambia
+
+1. **La whitelist `RECOPA_SUBCAMPEON_SLUGS` (9 copas) queda
+   ELIMINADA.** El toggle "🥈 Subcampeón" del modal 📜 Reglas de cada
+   copa (`_lecRenderReglas`/`_lecCopa.toggleSubcampeon`) ya funcionaba
+   igual (default `false`, editable por el admin) — el único cambio es
+   que ahora está disponible en **cualquier copa externa**, no solo en
+   las 9 de la whitelist.
+2. **Nuevo toggle "⚔️ Semifinalistas (3º/4º)"** (`data.config.recopaSemis`,
+   default `false`, `window._lecCopa.toggleSemis`): si el admin lo
+   activa, los **2 equipos eliminados en semifinales** de esa copa
+   (`copa.semis[].winner` → el perdedor de cada eliminatoria) entran
+   también al pool de la Recopa. Solo se MUESTRA (y solo tiene efecto)
+   en copas con fase de semis real — formato 20 (con cuartos, 2 legs
+   por semi vía `_lecSim2Leg`, `s.tieHome`/`s.tieAway`) o formato 18
+   (semis estilo Andorra a partido único vía `_lecSim1Leg`,
+   `s.home`/`s.away`). Los formatos 14 y 12 van directos a la final
+   (sin fase de semis) y no tienen semifinalistas que ofrecer — el
+   toggle ni se pinta en esos casos.
+3. **Orden de prioridad al capar el pool a 64** (`_buildPool`, sin
+   cambios de criterio, solo generalizado): primero TODOS los
+   campeones, luego TODOS los subcampeones (de cualquier copa con el
+   toggle activo), luego TODOS los semifinalistas (de cualquier copa
+   con `recopaSemis` activo). Así los de más peso siempre entran antes
+   si el pool supera las 64 plazas.
+4. **Resto del Mundo sigue sin aportar nada a Recopa** (regla ya
+   existente 2026-05-27): su bloque de Reglas ni siquiera muestra el
+   apartado "Plazas a Recopa" (`isRM` en `_lecRenderReglas`), y su
+   slug está en `EUROPE_BLACKLIST` de `_buildPool` — ninguno de los 2
+   toggles nuevos le afecta.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir `RECOPA_SUBCAMPEON_SLUGS` (o cualquier
+   whitelist de copas concretas) para el subcampeón. El toggle
+   `recopaSubcampeon` es válido en CUALQUIER copa externa excepto
+   Resto del Mundo.
+2. **PROHIBIDO** que `recopaSemis` aporte equipos de una copa sin fase
+   de semis (formato 14/12, `cp.semis` inexistente/vacío) — `_buildPool`
+   ya lo comprueba (`cp.semis && cp.semis.length`), y la UI no debe
+   pintar el toggle para esos formatos (`hasSemis = fmt===20||fmt===18`).
+3. **PROHIBIDO** que el helper `_semiLoser(s)` asuma un único shape de
+   partido: formato 20 usa `tieHome`/`tieAway` (`_lecSim2Leg`, ida+
+   vuelta), formato 18 usa `home`/`away` (`_lecSim1Leg`, partido
+   único). Debe distinguir por la presencia de `s.tieHome !== undefined`,
+   no por el formato — si se añade un formato nuevo con fase de semis,
+   reutilizar uno de los 2 shapes existentes o extender el helper.
+4. **PROHIBIDO** que los toggles nuevos tengan default distinto de
+   `false`. Igual que el subcampeón (regla 2026-07-03): el admin activa
+   explícitamente qué añade a Recopa, copa por copa.
+5. Toda copa NUEVA (liga externa nueva) hereda ambos toggles
+   automáticamente en cuanto tenga `data.copa` — no hay lista
+   hardcodeada de slugs que mantener.
+
 ## El banner "El navegador se quedó sin espacio" reaparecía SIEMPRE sin que el usuario pudiera saber qué liberar — diagnóstico de espacio en el Panel Admin (obligatorio, 2026-08-01)
 
 **Petición usuario 2026-08-01 (foto, banner marrón sobre «👁 Ver / Añadir

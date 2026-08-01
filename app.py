@@ -4246,6 +4246,17 @@ _KV_ALLOWED_EXACT = {
     # caché; el server es la fuente de verdad para que la edición viaje a
     # los 6 móviles + PC y sobreviva al borrado de datos (2026-07-10).
     "season_label_v1",
+    # Flags de Subcampeón/Semifinalistas por copa nacional, para el pool
+    # de la Recopa de Europa (2026-08-01, bug "no se guardan los cambios
+    # de qué equipos van a la Recopa"). ANTES vivían en
+    # `ligaExt_<slug>.config.recopaSubcampeon/recopaSemis` — dentro del
+    # documento GIGANTE de la liga, cuya sync/anti-wipe (fetchData) nunca
+    # protege `config` (solo hace backfill de logo/cupLogo): un GET que
+    # resolvía con la copia del servidor anterior al POST del toggle
+    # pisaba `data.config` entero en silencio, y el toggle "volvía a 0
+    # solo" sin que el admin tocara nada. Ahora viven en su PROPIA fila
+    # KV, objeto `{<slug>: {sub, semis}}`, inmune a esa maquinaria.
+    "recopa_copa_flags_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -4288,6 +4299,10 @@ _KV_RECENCY_BLOB_KEYS = {
     # Etiqueta de temporada de la cabecera del home: la última edición del
     # admin gana entera (va `authoritative` → sella reloj del server).
     "season_label_v1",
+    # Flags de Subcampeón/Semifinalistas por copa (Recopa de Europa): el
+    # blob con `updatedAt` mayor gana ENTERO — un toggle recién pulsado
+    # nunca lo pisa un POST stale de otro dispositivo/pestaña.
+    "recopa_copa_flags_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

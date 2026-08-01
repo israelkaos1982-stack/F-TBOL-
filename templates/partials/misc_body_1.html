@@ -20358,6 +20358,103 @@ window._showSimProgress = function(opts, onDone){
 <script>
 (function(){
   /* ═══════════════════════════════════════════════════════════════
+     RECOPA · Flags de Subcampeón / Semifinalistas por copa — store
+     PROPIO, separado del documento `ligaExt_<slug>` (obligatorio,
+     2026-08-01, bug «no se guardan los cambios de qué equipos van a
+     la Recopa»)
+     ═══════════════════════════════════════════════════════════════
+     Hasta ahora `_lecCopa.toggleSubcampeon`/`toggleSemis` guardaban
+     el toggle dentro de `ligaExt_<slug>.config` — el documento GIGANTE
+     de cada liga, sujeto a toda la maquinaria de sync/anti-wipe de
+     `fetchData` (misc_body_1.html, ~línea 49220). Esa maquinaria
+     decide si "adoptar la copia del servidor" comparando SOLO
+     equipos/jugadores/resultados — nunca mira `config` (el único
+     backfill que tiene es para `logo`/`cupLogo`). Si un GET en vuelo
+     resolvía con la copia del servidor ANTERIOR al POST del toggle
+     (red lenta, servidor en cold-start, POST aún reintentando), ese
+     GET pisaba `data.config` ENTERO en memoria + localStorage sin que
+     ningún anti-wipe lo detectara — el admin veía el toggle activado
+     un instante y, sin tocar nada, volvía a 0 solo unos segundos/
+     minutos después.
+
+     Fix: los 2 flags salen de `ligaExt_<slug>.config` y viven en su
+     PROPIA fila KV (`recopa_copa_flags_v1`, objeto `{<slug>:
+     {sub,semis}}`), con merge por RECENCIA en el servidor (mismo
+     patrón que el HUD del hub — CLAUDE.md 2026-06-06/07: "un store
+     PEQUEÑO de banderas del admin nunca debe viajar dentro del blob
+     COMPARTIDO gigante"). Al no depender del documento de la liga,
+     es inmune a la sync (mucho más pesada y frágil) de equipos/
+     resultados/plantillas.
+
+     Fallback de LECTURA a `data.config.recopaSubcampeon`/`recopaSemis`
+     (legacy) SOLO mientras este store nunca se haya tocado para ese
+     slug+campo — así una copa que el admin ya había activado antes de
+     este fix no "pierde" su preferencia visible, aunque a partir de
+     aquí toda escritura nueva va SIEMPRE al store nuevo. */
+  var KEY = 'recopa_copa_flags_v1';
+  var FLAGS = {};
+  var updatedAt = 0;
+  function _isEmpty(d){
+    if (!d || typeof d !== 'object') return true;
+    for (var k in d) { if (k !== 'updatedAt') return false; }
+    return true;
+  }
+  function _loadLocal(){
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (d && typeof d === 'object'){ FLAGS = d; updatedAt = Number(d.updatedAt) || 0; }
+    } catch(_){}
+  }
+  var sync = (typeof window._kvBlobSync === 'function') ? window._kvBlobSync(KEY) : null;
+  function _persist(){
+    try {
+      FLAGS.updatedAt = updatedAt;
+      window._lsSetSafe(KEY, JSON.stringify(FLAGS));
+    } catch(_){}
+    if (sync) sync.touch(updatedAt);
+  }
+  _loadLocal();
+  if (sync){
+    sync.config(function(){ return FLAGS; }, function(sv){
+      FLAGS = (sv && typeof sv === 'object') ? sv : {};
+      updatedAt = Number(FLAGS.updatedAt) || Date.now();
+      try { window._lsSetSafe(KEY, JSON.stringify(FLAGS)); } catch(_){}
+      try { if (typeof window._lecRenderReglas === 'function') window._lecRenderReglas(); } catch(_){}
+    }, _isEmpty);
+    sync.seed(updatedAt);
+    sync.hydrate(function(){
+      try { if (typeof window._lecRenderReglas === 'function') window._lecRenderReglas(); } catch(_){}
+    });
+  }
+  /* `undefined` = este slug+campo NUNCA se tocó en el store nuevo —
+     el caller decide si cae al legacy `data.config.*`. `true`/`false`
+     = valor explícito ya persistido aquí (gana siempre). */
+  window._recopaFlagGet = function(slug, field){
+    var f = slug && FLAGS[slug];
+    if (f && Object.prototype.hasOwnProperty.call(f, field)) return f[field] === true;
+    return undefined;
+  };
+  /* `currentValue` = lo que el caller tiene MOSTRADO ahora mismo
+     (incluyendo su propio fallback legacy si aplica) — así el primer
+     toggle de una copa migrada desde `data.config` invierte el valor
+     REAL visto por el admin, no un `false` implícito del store vacío. */
+  window._recopaFlagToggle = function(slug, field, currentValue){
+    if (!slug) return false;
+    if (!FLAGS[slug] || typeof FLAGS[slug] !== 'object') FLAGS[slug] = {};
+    var next = !currentValue;
+    FLAGS[slug][field] = next;
+    updatedAt = Date.now();
+    _persist();
+    return next;
+  };
+})();
+</script>
+
+<script>
+(function(){
+  /* ═══════════════════════════════════════════════════════════════
      RECOPA DE EUROPA · Motor + UI
      ═══════════════════════════════════════════════════════════════
      Rediseño 2026-05-26: la Recopa arranca DIRECTAMENTE EN CUARTOS
@@ -20541,14 +20638,22 @@ window._showSimProgress = function(opts, onDone){
              2026-08-01). Default = FALSE (petición usuario 2026-07-03:
              "por defecto que siempre ponga el campeón 1 y el
              subcampeón 0, pudiendo editarlo manualmente"). Solo cuenta
-             si el admin lo activó explícitamente (=== true) desde el
-             toggle de Reglas. */
-          var subOn = (data.config && data.config.recopaSubcampeon === true);
+             si el admin lo activó explícitamente desde el toggle de
+             Reglas. Fuente = store dedicado `recopa_copa_flags_v1`
+             (2026-08-01, "no se guardan los cambios de qué equipos van
+             a la Recopa" — el toggle vivía en `data.config`, pisado en
+             silencio por la sync del documento de la liga); fallback
+             a `data.config.recopaSubcampeon` SOLO si ese slug nunca se
+             tocó en el store nuevo (copas ya activadas antes del fix). */
+          var _subStored = (typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(slug, 'sub') : undefined;
+          var subOn = (_subStored !== undefined) ? _subStored : (data.config && data.config.recopaSubcampeon === true);
           if(subOn && cp.runnerUp) runners.push(cp.runnerUp);
           /* Semifinalistas (petición usuario 2026-08-01): default
              FALSE. Solo aporta si la copa tiene fase de semis
-             (`cp.semis`, formatos 20/18) Y el admin lo activó. */
-          var semisOn = (data.config && data.config.recopaSemis === true);
+             (`cp.semis`, formatos 20/18) Y el admin lo activó. Mismo
+             store dedicado + fallback legacy que el subcampeón. */
+          var _semisStored = (typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(slug, 'semis') : undefined;
+          var semisOn = (_semisStored !== undefined) ? _semisStored : (data.config && data.config.recopaSemis === true);
           if(semisOn && cp.semis && cp.semis.length){
             cp.semis.forEach(function(s){
               var loser = _semiLoser(s);
@@ -58185,17 +58290,21 @@ https://api.sofascore.app/api/v1/team/44/image
     /* Alterna 0/1 plazas del subcampeón a Recopa de Europa. Default =
        FALSE (petición usuario 2026-07-03: el campeón siempre cuenta
        como 1 fijo; el subcampeón arranca en 0 y el admin lo activa a
-       mano copa por copa). Si está sin definir (undefined) lo
-       tratamos como FALSE → primer click enciende (true). Persiste en
-       data.config.recopaSubcampeon y re-renderiza el bloque de Reglas. */
+       mano copa por copa).
+       Persiste en el store DEDICADO `recopa_copa_flags_v1` (2026-08-01,
+       bug "no se guardan los cambios de qué equipos van a la Recopa"):
+       antes vivía en `data.config.recopaSubcampeon`, dentro del
+       documento COMPLETO de la liga — la sync/anti-wipe de ese
+       documento (fetchData) podía pisarlo en silencio con una copia
+       del servidor anterior al guardado (nunca comprueba `config`).
+       El store nuevo es independiente de esa maquinaria. */
     toggleSubcampeon: function(){
       if(!CURRENT_KEY) return;
+      if (typeof window._recopaFlagToggle !== 'function') return;
       var data = loadData(CURRENT_KEY);
-      if(!data) return;
-      if(!data.config) data.config = {};
-      var current = (data.config.recopaSubcampeon === true);
-      data.config.recopaSubcampeon = !current;
-      saveData(CURRENT_KEY, data);
+      var stored = (typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(CURRENT_KEY, 'sub') : undefined;
+      var current = (stored !== undefined) ? stored : !!(data && data.config && data.config.recopaSubcampeon === true);
+      window._recopaFlagToggle(CURRENT_KEY, 'sub', current);
       _lecRenderReglas();
     },
     /* Alterna 0/2 plazas de los semifinalistas (los 2 equipos
@@ -58203,15 +58312,15 @@ https://api.sofascore.app/api/v1/team/44/image
        2026-08-01). Default = FALSE, igual que el subcampeón. Solo
        tiene efecto real en copas con fase de semis (formato 20/18) —
        `_buildPool` ya lo comprueba antes de usarlo, este toggle solo
-       persiste la preferencia del admin. */
+       persiste la preferencia del admin. Mismo store dedicado que el
+       subcampeón, mismo motivo (ver comentario de `toggleSubcampeon`). */
     toggleSemis: function(){
       if(!CURRENT_KEY) return;
+      if (typeof window._recopaFlagToggle !== 'function') return;
       var data = loadData(CURRENT_KEY);
-      if(!data) return;
-      if(!data.config) data.config = {};
-      var current = (data.config.recopaSemis === true);
-      data.config.recopaSemis = !current;
-      saveData(CURRENT_KEY, data);
+      var stored = (typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(CURRENT_KEY, 'semis') : undefined;
+      var current = (stored !== undefined) ? stored : !!(data && data.config && data.config.recopaSemis === true);
+      window._recopaFlagToggle(CURRENT_KEY, 'semis', current);
       _lecRenderReglas();
     },
     toggleReglas: function(){
@@ -58230,15 +58339,15 @@ https://api.sofascore.app/api/v1/team/44/image
        1. Una línea con el formato detectado por nº de equipos.
        2. Plazas a Recopa de Europa: Campeón = 1 (fijo, siempre, NO
           editable). Subcampeón = 0 por defecto (petición usuario
-          2026-07-03), editable a 1 por el admin via toggle
-          (persistido en data.config.recopaSubcampeon — booleano).
+          2026-07-03), editable a 1 por el admin via toggle.
           Semifinalistas = 0 por defecto (petición usuario 2026-08-01),
-          editable a 2 por el admin (persistido en
-          data.config.recopaSemis — booleano). Solo se muestra en
-          copas con fase de semis real (formato 20 o 18); los formatos
-          14/12 van directos a la final y no tienen semifinalistas.
-     Cada toggle alterna al pulsar el chip; saveData guarda el cambio
-     inmediatamente en el ligaExt_<slug>. */
+          editable a 2 por el admin. Solo se muestra en copas con fase
+          de semis real (formato 20 o 18); los formatos 14/12 van
+          directos a la final y no tienen semifinalistas.
+     Ambos toggles persisten en el store dedicado `recopa_copa_flags_v1`
+     (ver el IIFE justo antes del motor de Recopa, 2026-08-01) — NUNCA
+     en `data.config`, que quedaba a merced de la sync del documento
+     completo de la liga. Cada toggle alterna al pulsar el chip. */
   function _lecRenderReglas(){
     var rb = document.getElementById('lec-reglas-body');
     if(!rb) return;
@@ -58260,12 +58369,17 @@ https://api.sofascore.app/api/v1/team/44/image
     } else {
       /* Default = FALSE (excluido). Solo es TRUE si el admin lo activó
          explícitamente desde este toggle. Mantiene coherencia con
-         `_buildPool` (Recopa). Petición usuario 2026-07-03. */
-      var sub = !!(data && data.config && data.config.recopaSubcampeon === true);
+         `_buildPool` (Recopa). Store dedicado con fallback legacy a
+         `data.config.recopaSubcampeon` (copas activadas antes del fix
+         2026-08-01, mientras nunca se vuelvan a tocar en el store
+         nuevo). */
+      var _subStored = (CURRENT_KEY && typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(CURRENT_KEY, 'sub') : undefined;
+      var sub = (_subStored !== undefined) ? _subStored : !!(data && data.config && data.config.recopaSubcampeon === true);
       /* Fase de semis real: formato 20 (cuartos+semis) o 18 (semis
          Andorra sin cuartos). 14/12 van directos a la final. */
       var hasSemis = (fmt === 20 || fmt === 18);
-      var semisOn = !!(data && data.config && data.config.recopaSemis === true);
+      var _semisStored = (CURRENT_KEY && typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(CURRENT_KEY, 'semis') : undefined;
+      var semisOn = (_semisStored !== undefined) ? _semisStored : !!(data && data.config && data.config.recopaSemis === true);
       html += '<h4>🛡 Recopa de Europa · Plazas</h4>'
         + '<div class="lec-recopa-row">'
         +   '<span class="lec-recopa-lbl">🏆 Campeón</span>'
@@ -58288,6 +58402,12 @@ https://api.sofascore.app/api/v1/team/44/image
     html += '</div>';
     rb.innerHTML = html;
   }
+  /* Expuesta para que el store `recopa_copa_flags_v1` (IIFE justo antes
+     del motor de Recopa) pueda refrescar este panel cuando adopta un
+     valor más reciente del servidor (otro dispositivo tocó el mismo
+     toggle) — sin esto, el panel se quedaría mostrando el valor local
+     hasta el próximo toggle/apertura manual. */
+  window._lecRenderReglas = _lecRenderReglas;
   window.lextCopaOpen = function(){
     /* 2026-05-06 flash-fix: el patrón previo `go(); setTimeout(render,30)`
        dejaba ver durante ~30 ms (y a veces mucho más en móvil

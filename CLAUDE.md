@@ -1,5 +1,95 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El banner "El navegador se quedó sin espacio" reaparecía SIEMPRE sin que el usuario pudiera saber qué liberar — diagnóstico de espacio en el Panel Admin (obligatorio, 2026-08-01)
+
+**Petición usuario 2026-08-01 (foto, banner marrón sobre «👁 Ver / Añadir
+equipos por competición»)**: "siempre que abro la web sale ese mensaje...
+he eliminado un montón de ligas y problemas pero sigue saliendo".
+
+### Investigación — el banner es un síntoma REAL, no un falso positivo
+
+El mensaje sale ÚNICAMENTE desde `_warnOnce()` (dentro de la IIFE
+`window._lsSetSafe`, principio de `misc_body_1.html`), y solo se
+dispara cuando: (1) un `localStorage.setItem` real revienta con
+`QuotaExceededError`, **y** (2) `_freeAndRetry` ya agotó TODA su
+cascada de limpieza automática (snapshots datados → `_backup` legacy →
+caches de stats `ef_player_stats_*` → `_protected` de TODAS las demás
+ligas, en lotes de 10 → `comp_icons_v1`) **y sigue sin caber**. Es
+decir: para cuando el usuario VE el banner, el navegador ya intentó
+liberar todo lo reconstruible por su cuenta y no fue suficiente — el
+mensaje es preciso, no un bug de detección.
+
+**Por qué "eliminar ligas" no lo arreglaba**: no existe ninguna función
+de "eliminar liga entera" en el proyecto — solo se pueden borrar
+equipos/jugadores DENTRO de una liga (`lextDeleteTeam`/
+`lextDeletePlayer`, vía `saveData`). Eso SÍ reduce el tamaño de esa
+liga en concreto (`main` + `_protected`, que `saveData` reescribe con
+el estado actual en cada guardado — no es un histórico que crezca sin
+límite). Pero con **~54 ligas externas** cada una con su propio
+`main`+`_protected`+1 snapshot, reducir manualmente unas pocas no
+compite con el total acumulado de las ~50 restantes sin tocar — el
+usuario no tenía forma de saber CUÁLES eran las que más pesaban, así
+que estaba adivinando a ciegas qué borrar.
+
+Un segundo factor agravante: `window._lsQuotaExhausted` es un pestillo
+de SESIÓN (2026-07-29) que, una vez activado, hace que CUALQUIER
+guardado >64 KB se descarte sin ni siquiera reintentar durante el
+resto de esa sesión — aunque el usuario libere espacio manualmente a
+mitad de sesión (borrando equipos), los guardados grandes seguirían
+saltándose hasta la próxima recarga completa de la página.
+
+### Fix — pantalla de diagnóstico real en el Panel Admin (⚙️ → 📊 Espacio del navegador)
+
+Nueva pantalla `s-admin-storage` (`misc_body_1.html`, junto a CASH):
+
+- **Desglose real** por familia de clave, de mayor a menor: cada liga
+  (`ligaExt_<slug>` + su `_protected`/`_snap_*`/`_backup` SUMADOS en
+  una sola fila, así el usuario ve DE UN VISTAZO cuáles pesan más),
+  torneos, selecciones, caches de estadísticas, iconos de competición,
+  progreso/hub. Marca qué categorías son "reconstruibles" (se
+  recuperan solas del servidor) frente a las que son datos reales.
+- **`window._lsFreeReconstructibleNow()`** — ejecuta AHORA MISMO,
+  bajo demanda del usuario, la MISMA cascada de categorías
+  reconstruibles que `_freeAndRetry` ya sacrifica de forma reactiva
+  (snapshots + `_backup` + stats caches + **TODOS** los `_protected` +
+  `comp_icons_v1`), pero de golpe en vez de parar en el primer
+  reintento con éxito — es una limpieza deliberada, no una emergencia
+  a mitad de un guardado. **NUNCA toca ningún `ligaExt_<slug>`
+  principal** (los datos reales de plantilla/resultados).
+- Tras liberar, **resetea `_lsQuotaExhausted`/`_lsQuotaWarned`** para
+  que el resto de la sesión vuelva a intentar guardados grandes en vez
+  de descartarlos a ciegas.
+- Hereda el patrón "RENDER FIABLE" (`part2/misc_body_2.html`, MAP de
+  observer+go-wrap ya usado por Stadium Hub/Ball Storage/CASH) — la
+  pantalla se repinta sola venga la navegación de donde venga (router,
+  atrás, recarga), no solo del `onclick` de la card del menú.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que la única respuesta a "sigue saliendo el aviso de
+   espacio" sea pedir al usuario que borre cosas a ciegas. El Panel
+   Admin (⚙️ → 📊 Espacio del navegador) DEBE mostrar el desglose real
+   por liga/categoría para que la limpieza sea DIRIGIDA.
+2. **PROHIBIDO** que `_lsFreeReconstructibleNow` borre un
+   `ligaExt_<slug>` principal (main). Solo toca las categorías 100%
+   reconstruibles ya identificadas por `_freeAndRetry` — misma lista,
+   sin desincronizarlas si una cambia.
+3. **PROHIBIDO** que una limpieza manual de espacio deje
+   `_lsQuotaExhausted`/`_lsQuotaWarned` en `true` tras liberar: sin el
+   reset, los guardados grandes seguirían descartándose sin reintentar
+   el resto de la sesión aunque ya quepan.
+4. Toda categoría NUEVA que se añada a `_freeAndRetry` (cascada
+   reactiva de `saveData`/`_lsSetSafe`) debe reflejarse también en el
+   desglose y en `_lsFreeReconstructibleNow` de esta pantalla — son la
+   misma lista de "qué es seguro tirar", no puede haber una versión
+   reactiva y otra manual desincronizadas.
+5. Si tras liberar TODO lo reconstruible el total sigue por encima de
+   lo que el móvil da de sí, el hueco es de VOLUMEN real de datos
+   (~54 ligas con plantillas completas) y la única vía adicional es
+   reducir equipos/jugadores en las ligas más pesadas (visibles ahora
+   en el desglose) — el banner seguirá siendo honesto en ese caso: el
+   servidor sigue teniendo todo, solo se degrada la copia local.
+
 ## "Simular todas las ligas" fabricaba y GUARDABA plantillas genéricas "Jugador N" cuando el registro no resolvía a tiempo — el servidor las dejaba GANAR sobre la plantilla real (obligatorio, 2026-07-29)
 
 **Bug (fotos usuario 2026-07-29, «Resto de Ligas» — Inglaterra, Alemania,

@@ -12224,6 +12224,11 @@ window._showSimProgress = function(opts, onDone){
       <div class="admin-mod-label">CASH</div>
       <div class="admin-mod-desc">Premios 🪙 por objetivo · auto-suma a cada equipo humano</div>
     </div>
+    <div class="admin-module-card" style="border-color:rgba(240,160,80,.4);" onclick="go('s-admin-storage');setTimeout(window.adminRenderStorage,30)">
+      <span class="admin-mod-icon">📊</span>
+      <div class="admin-mod-label" style="color:#ffb060;">Espacio del navegador</div>
+      <div class="admin-mod-desc">Qué ocupa el localStorage · liberar espacio reconstruible</div>
+    </div>
     <!-- ── Plantillas: Restaurar / Descargar / Importar ────────────
          Antes vivían en la pantalla "Liga EA Sports · Clasificación"
          como una fila secundaria de botones. Cualquier toque accidental
@@ -12320,6 +12325,168 @@ window._showSimProgress = function(opts, onDone){
   <div class="sec-hdr"><span class="sec-emoji">🪙</span><h2>CASH · Premios</h2></div>
   <div id="cash-host" style="padding:6px 0 28px;"></div>
 </div>
+<div class="screen" id="s-admin-storage">
+  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
+  <div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Espacio del navegador</h2></div>
+  <div id="storage-host" style="padding:6px 0 28px;"></div>
+</div>
+<script>
+/* ══════════════════════════════════════════════════════════════════
+   DIAGNÓSTICO DE ESPACIO — Panel Admin · 📊 (2026-08-01)
+
+   Petición usuario: el banner «⚠️ El navegador se quedó sin espacio»
+   (window._lsQuotaWarned / _lsSetSafe, principio de este archivo) sigue
+   saliendo pese a haber borrado "un montón de ligas" — sin visibilidad
+   de QUÉ ocupa realmente el localStorage, el usuario solo puede
+   adivinar qué borrar. Esta pantalla hace visible el desglose real
+   (por liga: main+_protected+_snap sumados, torneos, selecciones,
+   caches de stats…) y añade un botón que ejecuta AHORA MISMO — sin
+   esperar a que un guardado falle — la MISMA cascada de limpieza
+   reconstruible que `_lsSetSafe`/`saveData` ya ejecutan de forma
+   reactiva (snapshots → backups legacy → caches de stats → TODOS los
+   `_protected` de liga → iconos de competición). Ninguna de estas
+   categorías contiene datos que no se puedan volver a descargar del
+   servidor (o reconstruir) — son exactamente las mismas que
+   `_freeAndRetry` ya sacrifica cuando salta QuotaExceededError.
+
+   NO borra ningún `ligaExt_<slug>` PRINCIPAL (main) ni ningún dato de
+   partida real — eso es lo único que el usuario controla borrando
+   equipos/plantillas desde el propio editor de cada liga. ══════════ */
+(function(){
+  'use strict';
+  function _kb(chars){ return chars / 1024; }
+  function _fmtKb(chars){
+    var kb = _kb(chars);
+    return kb >= 1024 ? (kb/1024).toFixed(2) + ' MB' : kb.toFixed(1) + ' KB';
+  }
+  function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  /* Recorre TODO localStorage y agrupa por "familia" de clave. Cada
+     `ligaExt_<slug>` + su `_protected`/`_snap_<ts>`/`_backup` cuentan
+     como UNA fila (es lo que el usuario reconoce como "una liga"). */
+  function _scan(){
+    var groups = {}; // label -> {chars, reconstructible, keys:[]}
+    var totalChars = 0;
+    function add(label, chars, reconstructible, key){
+      totalChars += chars;
+      var g = groups[label] || (groups[label] = {chars:0, reconstructible:reconstructible, keys:[]});
+      g.chars += chars;
+      g.keys.push(key);
+      if (!reconstructible) g.reconstructible = false;
+    }
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (!k) continue;
+        var v = localStorage.getItem(k) || '';
+        var chars = k.length + v.length;
+        var m = /^ligaExt_(.+?)(?:_(?:protected|backup|snap_\d+))?$/.exec(k);
+        if (m && k.indexOf('ligaExt_') === 0){
+          var isDerived = /_(protected|backup|snap_\d+)$/.test(k);
+          add('🏆 Liga: ' + m[1], chars, isDerived, k);
+          continue;
+        }
+        if (k.indexOf('tour_') === 0){ add('🌐 Torneos (tour_*)', chars, false, k); continue; }
+        if (k.indexOf('ef_player_stats_') === 0){ add('📈 Caches de estadísticas', chars, true, k); continue; }
+        if (k === 'selecciones_squad_v1'){ add('🌍 Selecciones nacionales', chars, false, k); continue; }
+        if (k === 'comp_icons_v1'){ add('🖼 Iconos de competición', chars, true, k); continue; }
+        if (k.indexOf('ftbol_') === 0 || k.indexOf('bayern_') === 0 || k.indexOf('munich') !== -1){ add('⚙️ Progreso / hub / bajas·sanciones', chars, false, k); continue; }
+        add('🗂 Otros', chars, false, k);
+      }
+    } catch(_){}
+    var rows = Object.keys(groups).map(function(label){
+      var g = groups[label];
+      return {label:label, chars:g.chars, reconstructible:g.reconstructible, n:g.keys.length};
+    }).sort(function(a,b){ return b.chars - a.chars; });
+    return {rows:rows, totalChars:totalChars};
+  }
+
+  /* Ejecuta AHORA MISMO — sin esperar a un fallo de guardado — la MISMA
+     cascada de categorías reconstruibles que `_freeAndRetry` (arriba de
+     este archivo) libera de forma reactiva. Aquí se tiran TODAS de golpe
+     (no solo hasta el primer reintento con éxito) porque es una limpieza
+     deliberada del usuario, no una emergencia a mitad de un guardado. */
+  window._lsFreeReconstructibleNow = function(){
+    var freedChars = 0, freedKeys = 0;
+    try {
+      var toDrop = [];
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (!k) continue;
+        if (/^ligaExt_.+_snap_\d+$/.test(k) ||
+            /^ligaExt_.+_backup$/.test(k) ||
+            /^ligaExt_.+_protected$/.test(k) ||
+            /^ef_player_stats_.*v1$/.test(k) ||
+            k === 'comp_icons_v1'){
+          toDrop.push(k);
+        }
+      }
+      toDrop.forEach(function(k){
+        try {
+          var v = localStorage.getItem(k);
+          if (v != null){ freedChars += k.length + v.length; freedKeys++; }
+          localStorage.removeItem(k);
+        } catch(_){}
+      });
+    } catch(_){}
+    /* Con espacio recién liberado, el pestillo de sesión (2026-07-29)
+       ya no debe seguir descartando guardados grandes sin reintentar —
+       si no se resetea aquí, el resto de ESTA sesión seguiría tratando
+       cualquier valor >64 KB como "sin esperanza" aunque ahora sí quepa. */
+    try { window._lsQuotaExhausted = false; } catch(_){}
+    try { window._lsQuotaWarned = false; } catch(_){}
+    try { window._lextQuotaWarned = false; } catch(_){}
+    return {freedChars:freedChars, freedKeys:freedKeys};
+  };
+
+  window.adminRenderStorage = function(){
+    var host = document.getElementById('storage-host');
+    if (!host) return;
+    var s = _scan();
+    var html = '';
+    html += '<div style="padding:12px;border:1px solid rgba(240,160,80,.35);border-radius:10px;margin-bottom:14px;">';
+    html += '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.2px;color:#ffb060;margin-bottom:6px;">TOTAL EN ESTE NAVEGADOR</div>';
+    html += '<div style="font-family:Rajdhani,sans-serif;font-size:22px;font-weight:700;color:#fff;">' + _fmtKb(s.totalChars) + '</div>';
+    html += '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin-top:4px;line-height:1.4;">'
+      + 'Cifra aproximada (caracteres × 2). Los móviles suelen dar entre 2 y 10 MB por sitio — cuando se agota, este mismo dato SIGUE subiendo al servidor, solo se degrada la copia local.'
+      + '</div>';
+    if (window._lsQuotaExhausted){
+      html += '<div style="margin-top:8px;padding:8px 10px;background:rgba(255,90,50,.12);border:1px solid rgba(255,90,50,.4);border-radius:8px;color:#ffb0a0;font-family:Rajdhani,sans-serif;font-size:12px;">⚠️ Esta sesión ya detectó el navegador lleno — los guardados grandes se están descartando sin reintentar hasta que liberes espacio o recargues la página.</div>';
+    }
+    html += '</div>';
+    html += '<button onclick="window._adminStorageClean()" style="width:100%;background:rgba(60,200,120,.16);border:1px solid rgba(60,200,120,.55);color:#7df0a0;border-radius:10px;padding:12px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1.3px;cursor:pointer;margin-bottom:16px;">🧹 LIBERAR ESPACIO RECONSTRUIBLE AHORA</button>';
+    html += '<div id="storage-clean-msg" style="font-family:Rajdhani,sans-serif;font-size:12px;color:#7df0a0;margin:-8px 0 14px;text-align:center;"></div>';
+    html += '<div style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.45);margin-bottom:10px;line-height:1.4;">'
+      + 'Libera snapshots, copias «_protected», caches de estadísticas e iconos custom — TODO se reconstruye solo desde el servidor. '
+      + 'NUNCA borra la plantilla actual (equipos/jugadores) de ninguna liga — eso solo se reduce editando esa liga en concreto.'
+      + '</div>';
+    html += '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.6);margin:14px 0 8px;">DESGLOSE (mayor a menor)</div>';
+    html += '<div style="display:flex;flex-direction:column;gap:4px;">';
+    s.rows.forEach(function(r){
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px;">'
+        + '<div style="flex:1;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);">' + _esc(r.label)
+        +   (r.n > 1 ? ' <span style="color:rgba(255,255,255,.4);">(' + r.n + ')</span>' : '')
+        +   (r.reconstructible ? ' <span style="color:#7df0a0;font-size:10px;">· reconstruible</span>' : '')
+        + '</div>'
+        + '<div style="font-family:\'Courier New\',monospace;font-size:12px;color:#ffb060;white-space:nowrap;">' + _fmtKb(r.chars) + '</div>'
+        + '</div>';
+    });
+    html += '</div>';
+    host.innerHTML = html;
+  };
+
+  window._adminStorageClean = function(){
+    var res = window._lsFreeReconstructibleNow();
+    window.adminRenderStorage();
+    var msg = document.getElementById('storage-clean-msg');
+    if (msg){
+      msg.textContent = res.freedKeys > 0
+        ? ('✅ Liberadas ' + res.freedKeys + ' claves (' + _fmtKb(res.freedChars) + ').')
+        : '✔️ No había nada reconstruible que liberar — ya estaba limpio.';
+    }
+  };
+})();
+</script>
 <script>
 /* ══ CASH ENGINE (Panel Admin · 🪙) ════════════════════════════════════
    Premios 🪙 por objetivo/posición de cada competición, EDITABLES por el

@@ -44305,21 +44305,51 @@ window._showSimProgress = function(opts, onDone){
       btn.onclick = function(){
         var zone = btn.getAttribute('data-zone');
         var name = btn.getAttribute('data-name');
-        window._eurManualExtraAdd(zone, name, _eurSlugLabel(_eurPickerSlug));
+        try {
+          if(!window._eurManualExtraAdd(zone, name, _eurSlugLabel(_eurPickerSlug))){
+            (window._gmCriticalNotice || alert)('⚠️ No se pudo añadir «'+name+'» a la zona «'+zone+'». Puede que ya estuviera añadido, o que la zona no sea válida.');
+          }
+        } catch(e){
+          try { console.error('[eur-pick-add]', zone, name, e); } catch(_){}
+          (window._gmCriticalNotice || alert)('⚠️ Error al añadir «'+name+'»: '+(e && e.message ? e.message : e));
+        }
         _eurManualOverlayRender();
       };
     });
+    /* Bug 2026-08-01 (fotos usuario, "solo añade los de champions"): el
+       lote "AÑADIR TODOS" iteraba TODAS las filas con zona sugerida en
+       un solo `forEach`. Si `_eurManualExtraAdd` lanzaba una excepción
+       para CUALQUIER fila (motivo que sea — nombre inesperado, zona con
+       un dato corrupto, lo que sea), `Array.prototype.forEach` ABORTA
+       el resto de iteraciones en silencio (no hay try/catch por
+       elemento) — las filas de zonas que se procesan DESPUÉS de la que
+       falló (aquí, Europa League/Conference League vienen siempre
+       después de Champions League en `ORDER`) se quedaban sin añadir,
+       sin ningún aviso de que algo había fallado a medio camino. Ahora
+       cada fila va en su propio try/catch — un fallo puntual NUNCA
+       corta el resto del lote — y el resumen final es HONESTO: cuenta
+       éxitos y fallos reales por zona en vez de "0 o no-0". */
     var addAllBtn = document.getElementById('eur-pick-add-all');
     if(addAllBtn) addAllBtn.onclick = function(){
       var rows = _eurPickerRows();
       var label = _eurSlugLabel(_eurPickerSlug);
-      var added = 0;
+      var added = 0, alreadyThere = 0, failed = [];
       rows.forEach(function(r){
         if(!r.zone) return;
-        if(window._eurManualExtraAdd(r.zone, r.name, label)) added++;
+        try {
+          if(window._eurManualExtraAdd(r.zone, r.name, label)) added++;
+          else alreadyThere++;
+        } catch(e){
+          try { console.error('[eur-pick-add-all]', r.zone, r.name, e); } catch(_){}
+          failed.push(r.name + ' (' + r.zone + ')');
+        }
       });
       _eurManualOverlayRender();
-      if(!added) alert('Todos los equipos sugeridos de esta liga ya estaban añadidos.');
+      if(failed.length){
+        (window._gmCriticalNotice || alert)('⚠️ '+added+' añadidos, pero '+failed.length+' fallaron: '+failed.join(', ')+'.\n\nRevisa la consola o vuelve a intentarlo — el resto del lote SÍ se procesó.');
+      } else if(!added){
+        alert(alreadyThere ? 'Todos los equipos sugeridos de esta liga ya estaban añadidos.' : 'Esta liga no tiene equipos con zona sugerida.');
+      }
     };
     /* Respaldo táctil en TODOS los botones del overlay — ver comentario
        de `_eurWireTapFallback` más arriba. Se re-cablea en cada render

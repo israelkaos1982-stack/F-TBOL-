@@ -53080,6 +53080,11 @@ https://api.sofascore.app/api/v1/team/44/image
 
       var moved = 0, skippedDup = 0;
       var newSrcTeams = [];
+      /* Nombres normalizados que de verdad deben APARECER en destino
+         tras el guardado (solo los movidos de verdad, no los
+         duplicados-descartados) — usado por la verificación post-save
+         de más abajo. */
+      var movedNormNames = {};
       srcData.teams.forEach(function(t){
         if (!t) return;
         var keep = true;
@@ -53096,6 +53101,7 @@ https://api.sofascore.app/api/v1/team/44/image
             clone.id = 't_' + (_lextNormName(t.name||'x').replace(/\s+/g,'_')) + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
             dstData.teams.push(clone);
             dstByName[nrm] = true;
+            movedNormNames[nrm] = true;
             moved++;
             keep = false;
           }
@@ -53103,26 +53109,24 @@ https://api.sofascore.app/api/v1/team/44/image
         if (keep) newSrcTeams.push(t);
       });
       srcData.teams = newSrcTeams;
+      /* IDs realmente movidos (para la verificación post-guardado de
+         abajo) — `selectedIds` puede incluir ids que se descartaron por
+         duplicado (`skippedDup`), esos NO deben exigirse en destino. */
+      var movedIds = {};
+      Object.keys(selectedIds).forEach(function(id){
+        var stillInSrc = newSrcTeams.some(function(t){ return t && t.id === id; });
+        if (!stillInSrc) movedIds[id] = true;
+      });
 
-      /* Persistir ambos: localStorage + invalidate cache + POST async. */
+      /* Persistir ambos: localStorage + invalidate cache + POST (con
+         reintentos — `saveData` expone `window._ligaExtSavePromise[k]`,
+         que resuelve `true` SOLO cuando el servidor confirmó). */
       try { saveData(srcKey, srcData); } catch(_){}
       try { saveData(destSlug, dstData); } catch(_){}
       try { if (typeof window.invalidateLigaCache === 'function') {
         window.invalidateLigaCache(srcKey);
         window.invalidateLigaCache(destSlug);
       } } catch(_){}
-      try {
-        fetch('/api/liga-ext/' + encodeURIComponent(srcKey), {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({data: srcData})
-        }).catch(function(){});
-      } catch(_){}
-      try {
-        fetch('/api/liga-ext/' + encodeURIComponent(destSlug), {
-          method: 'POST', headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({data: dstData})
-        }).catch(function(){});
-      } catch(_){}
 
       try { if (typeof renderTeamsList === 'function') renderTeamsList(); } catch(_){}
       try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
@@ -53140,10 +53144,49 @@ https://api.sofascore.app/api/v1/team/44/image
       } catch(_){}
       if (typeof lextCloseOv === 'function') lextCloseOv('lext-ov-move-teams');
 
-      var msg = '✅ ' + moved + ' equipo(s) movido(s) a "' + _lextSlugLabel(destSlug) + '".';
-      if (skippedDup) msg += '\n⚠️ ' + skippedDup + ' duplicados (ya existían en destino) — borrados del origen sin duplicar.';
-      msg += '\n\nRecarga la página para refrescar todas las pantallas.';
-      alert(msg);
+      /* VERIFICACIÓN — no basta con "hemos llamado a saveData()": este
+         mismo flujo llevaba semanas pareciendo "no hacer nada" (bug
+         reportado varias veces por el usuario) sin que el admin tuviera
+         ninguna pista de si el problema era el guardado, la confirmación
+         del servidor, o algo más. En vez de un alert() optimista fijo,
+         esperamos a que AMBOS `saveData` confirmen contra el servidor
+         (o agoten sus 5 reintentos) y releemos los datos para comprobar
+         que el equipo YA NO está en origen y SÍ está en destino — si
+         algo no cuadra, se dice EXACTAMENTE qué, en vez de un "✅"
+         genérico que puede estar mintiendo. */
+      var _srcPromise = (window._ligaExtSavePromise && window._ligaExtSavePromise[srcKey]) || Promise.resolve(true);
+      var _dstPromise = (window._ligaExtSavePromise && window._ligaExtSavePromise[destSlug]) || Promise.resolve(true);
+      Promise.all([_srcPromise, _dstPromise]).then(function(results){
+        var srcConfirmed = !!results[0];
+        var dstConfirmed = !!results[1];
+        var freshSrc = loadData(srcKey) || {teams:[]};
+        var freshDst = loadData(destSlug) || {teams:[]};
+        var idsStillInSrc = Object.keys(movedIds).filter(function(id){
+          return (freshSrc.teams || []).some(function(t){ return t && t.id === id; });
+        });
+        var namesMissingInDst = Object.keys(movedNormNames).filter(function(nrm){
+          return !(freshDst.teams || []).some(function(t){ return t && t.name && _lextNormName(t.name) === nrm; });
+        });
+        var msg = '';
+        if (idsStillInSrc.length || namesMissingInDst.length) {
+          msg = '⚠️ El movimiento NO se completó del todo: ';
+          if (idsStillInSrc.length) msg += idsStillInSrc.length + ' equipo(s) siguen apareciendo en "' + _lextSlugLabel(srcKey) + '". ';
+          if (namesMissingInDst.length) msg += namesMissingInDst.length + ' equipo(s) NO aparecen en "' + _lextSlugLabel(destSlug) + '". ';
+          msg += '\n\nVuelve a intentarlo — si se repite, dilo tal cual (con este mensaje) para localizar el fallo.';
+        } else {
+          msg = '✅ ' + moved + ' equipo(s) movido(s) a "' + _lextSlugLabel(destSlug) + '".';
+          if (skippedDup) msg += '\n⚠️ ' + skippedDup + ' duplicados (ya existían en destino) — borrados del origen sin duplicar.';
+          if (!srcConfirmed || !dstConfirmed) {
+            msg += '\n\n⏳ Guardado LOCAL confirmado, pero el servidor todavía no ha confirmado el guardado remoto '
+              + '(red lenta) — sigue reintentando en segundo plano. No borres los datos de navegación de este '
+              + 'dispositivo hasta que confirme, o el movimiento podría no llegar a los demás dispositivos.';
+          }
+          msg += '\n\nRecarga la página para refrescar todas las pantallas.';
+        }
+        alert(msg);
+      }).catch(function(){
+        alert('✅ ' + moved + ' equipo(s) movido(s) a "' + _lextSlugLabel(destSlug) + '" (guardado local hecho; no se pudo verificar la confirmación del servidor).\n\nRecarga la página para refrescar todas las pantallas.');
+      });
     };
 
     _lextMvEnsureDestHydrated(destSlug, function(){

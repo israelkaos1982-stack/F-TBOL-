@@ -1,5 +1,90 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El picker "AÑADIR POR LIGA" (equipos por competición) no dejaba seleccionar Liga — tap-vs-scroll + re-render de fondo interrumpiendo el gesto (obligatorio, 2026-08-01 #4)
+
+**Bug (fotos usuario 2026-08-01, overlay «👁 Equipos por competición» →
+«📋 AÑADIR POR LIGA», lista desplegada con Bélgica/Dinamarca/Escocia/
+Francia/Inglaterra/…)**: "no deja seleccionar Ligas, el selector se
+cierra muy rápido" — el admin abría la lista de ~54 ligas para elegir
+Inglaterra y no conseguía que el tap "cuajara": la lista se cerraba
+antes de poder seleccionar la liga deseada.
+
+### Causa raíz (dos bugs combinados en el mismo picker)
+
+1. **Ambigüedad tap-vs-scroll**: `#eur-pick-league-list`
+   (`_eurPickerButtonHtml`) es un contenedor `overflow-y:auto` con
+   ~54 filas, cada una dependiendo ÚNICAMENTE del `click` sintético
+   (`row.onclick`). Es el MISMO patrón ya documentado muchas veces en
+   este proyecto (portería imbatida, FINALIZAR, etc.): un tap real con
+   el mínimo movimiento del dedo dentro de un contenedor scrollable
+   puede hacer que el navegador lo interprete como intento de scroll y
+   cancele el `click` — el admin "tocaba" Inglaterra pero el evento
+   nunca llegaba a disparar la selección.
+2. **Re-render de fondo destruye el picker a mitad de gesto**: la
+   auto-hidratación al abrir el overlay (`_eurManualTriggerHydrate`,
+   throttle 2 min, puede tardar **1-2 minutos** con ~50 ligas) llama a
+   `_eurManualOverlayRender()` en cuanto termina — y esa función hace
+   SIEMPRE `ov.innerHTML = ...`, destruyendo y reconstruyendo TODO el
+   overlay de golpe. Si esa hidratación de fondo termina justo mientras
+   el admin tiene la lista `#eur-pick-league-list` desplegada y está
+   scrolleando/tocando una fila, el nodo que su dedo está tocando
+   desaparece del DOM a mitad de gesto — el picker "se cierra solo",
+   sin que el admin lo pidiera, indistinguible de un fallo del tap.
+
+### Fix
+
+- **`_eurWireTapFallback(el)` / `_eurWireTapFallbackAll(container)`**
+  (junto a `_eurManualOverlayRender`): respaldo táctil en `touchstart`
+  PURO (+ `pointerdown` + `mousedown` de respaldo, guarda `fired`
+  compartida) sobre TODOS los botones y filas `[data-eur-pick-league]`
+  del overlay — mismo patrón, tras la misma escalada, que el picker de
+  portero/MVP (`_imbatWireTapFallback`). Una 1ª iteración con umbral de
+  movimiento de 12px en `touchend` (menos agresiva, para no romper el
+  scroll de la lista) se probó insuficiente en dispositivo real —
+  algunas filas de la misma zona sí registraban el tap y otras no, sin
+  patrón — así que se escaló a disparo inmediato en `touchstart`, igual
+  que ya tuvo que hacer el picker de portero/MVP. El riesgo de un falso
+  positivo al apoyar el dedo para empezar a scrollear es aceptable y
+  recuperable (✕ Quitar) frente al coste de dejar el overlay entero sin
+  responder. Cableado en `_eurWireNameSearchResultButtons` (resultados
+  de búsqueda) y al final de `_eurManualOverlayRender` (pase completo
+  del overlay).
+- **`_eurManualRenderOrDefer()`** (nuevo): sustituye la llamada directa
+  a `_eurManualOverlayRender()` en el callback de
+  `_eurHydrateMissingLeagues` dentro de `_eurManualTriggerHydrate`. Si
+  `_eurPickerListOpen` es `true` (el admin tiene la lista abierta),
+  DIFIERE el re-render (`_eurRenderPendingAfterPicker = true` y
+  `return`) en vez de aplicarlo al instante — el estado más fresco
+  (`_eurManualHydrating`/`_eurManualLastHydrateAt`) ya quedó
+  actualizado y se pinta solo en el PRÓXIMO render natural (elegir una
+  liga, cerrar el desplegable, tocar cualquier otro control), nunca a
+  mitad de una interacción con la lista.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un botón o fila de este overlay (o de una lista
+   larga SCROLLABLE nueva, `overflow-y:auto` con más de ~10-15 filas)
+   dependa ÚNICAMENTE del `click` sintético. Todo elemento de este tipo
+   hereda `_eurWireTapFallback`/`_eurWireTapFallbackAll` — el disparo es
+   en `touchstart` PURO (no un umbral de movimiento): la 1ª iteración
+   con umbral de 12px en `touchend` ya se probó insuficiente en
+   dispositivo real. El riesgo de falso positivo al apoyar el dedo para
+   scrollear es aceptable; el coste de un overlay que no responde no lo
+   es.
+2. **PROHIBIDO** que una auto-hidratación/refresco de FONDO (disparado
+   por un timer, un fetch asíncrono, o cualquier callback no iniciado
+   directamente por el toque actual del admin) llame a
+   `_eurManualOverlayRender()` sin pasar por `_eurManualRenderOrDefer()`
+   — o el equivalente que compruebe si hay un picker/desplegable
+   abierto. Un re-render que destruye y reconstruye TODO el overlay
+   (`innerHTML`) mientras el admin tiene el dedo sobre un elemento
+   scrollable es indistinguible de "el selector se cierra solo".
+3. Toda lista/picker NUEVO que se añada a este overlay («Equipos por
+   competición») hereda ambos fixes automáticamente en cuanto reutilice
+   `_eurWireTapFallbackAll`/`_eurManualRenderOrDefer` — no reinventar el
+   patrón con un `onclick` suelto ni con una llamada directa a
+   `_eurManualOverlayRender()` desde un callback asíncrono.
+
 ## Los toggles de Recopa (Subcampeón/Semifinalistas) volvían a 0 solos — store dedicado fuera de `ligaExt_<slug>` (obligatorio, 2026-08-01 #2)
 
 **Bug (fotos usuario 2026-08-01, «FA Cup» — 15:59 con Subcampeón=1 y

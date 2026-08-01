@@ -44425,43 +44425,42 @@ window._showSimProgress = function(opts, onDone){
   }
 
   /* Respaldo táctil (2026-08-01, "cuando añado los equipos a la
-     competición correspondiente esto no funciona"): TODO este overlay
-     ("Ver / Añadir equipos por competición") vive dentro de un
-     contenedor `overflow-y:auto` (el propio `#eur-manual-ov`, y además
-     cada mini-lista interna — picker de liga, resultados de búsqueda,
-     lista de manuales por zona) — el admin tiene que scrollear para
-     llegar a "AÑADIR POR LIGA"/"+ Añadir" en una pantalla con decenas
-     de equipos. Mismo patrón ya documentado varias veces en este
-     proyecto (picker de portero, MVP, botón FINALIZAR…): un botón
-     dentro de un contenedor scrollable que depende SOLO del `click`
-     sintético puede no dispararse si el navegador interpreta el toque
-     como intento de scroll, aunque el dedo apenas se mueva. A
-     diferencia de esos casos (listas cortas, fijas), aquí SÍ hay que
-     poder scrollear sobre los propios botones — por eso el respaldo
-     usa un umbral de movimiento (12px) en vez de disparar en
-     `touchstart` puro: si el dedo se movió más de eso, se trata como
-     scroll y NO se dispara nada (igual que el comportamiento nativo).
-     Si no se movió, se dispara `el.click()` (re-usa el `.onclick` ya
-     cableado, sin duplicar lógica) y se suprime el click sintético
-     posterior del navegador para no disparar dos veces. */
+     competición correspondiente esto no funciona" / "sigue sin
+     funcionar"). TODO este overlay ("Ver / Añadir equipos por
+     competición") vive dentro de contenedores `overflow-y:auto` (el
+     propio `#eur-manual-ov` y cada mini-lista interna) — el admin tiene
+     que scrollear para llegar a "AÑADIR POR LIGA"/"+ Añadir" en una
+     pantalla con decenas de equipos.
+
+     1ª iteración (umbral de movimiento de 12px en `touchend`, mismo
+     patrón que otros pickers de este proyecto): el usuario reportó que
+     seguía sin funcionar de forma intermitente — algunos toques SÍ
+     registraban (ver capturas: 1 de 3 filas de una misma zona se añadía,
+     las otras no), otros no, sin patrón por zona. Es la MISMA
+     progresión ya documentada para el picker de portero/MVP: un umbral
+     de movimiento no basta en un dispositivo real, porque el dedo se
+     mueve más de lo esperado incluso en un tap intencionado.
+
+     2ª iteración (ésta): se dispara en `touchstart` PURO — igual que el
+     picker de portero/MVP tras su misma escalada — más `pointerdown` y
+     `mousedown` como respaldos adicionales, todos compartiendo la misma
+     guarda `fired` (el primero que dispare gana, el resto es no-op). El
+     riesgo de un falso positivo (empezar a scrollear apoyando el dedo
+     justo encima de un botón) es aceptable y recuperable (✕ Quitar) —
+     el coste de dejar el overlay entero sin responder no lo es. */
   function _eurWireTapFallback(el){
     if(!el || el.__eurTapWired) return;
     el.__eurTapWired = true;
-    var sx = 0, sy = 0, tracking = false;
-    el.addEventListener('touchstart', function(e){
-      tracking = true;
-      var t = e.touches && e.touches[0];
-      sx = t ? t.clientX : 0; sy = t ? t.clientY : 0;
-    }, { passive:true });
-    el.addEventListener('touchend', function(e){
-      if(!tracking) return;
-      tracking = false;
-      var t = (e.changedTouches && e.changedTouches[0]) || null;
-      var dx = t ? Math.abs(t.clientX - sx) : 0, dy = t ? Math.abs(t.clientY - sy) : 0;
-      if(dx > 12 || dy > 12) return; /* el dedo se movió — fue scroll, no tap */
-      try { e.preventDefault(); } catch(_){}
+    var fired = false;
+    function _fire(e){
+      if(fired) return;
+      fired = true;
+      try { e && e.preventDefault && e.preventDefault(); } catch(_){}
       try { el.click(); } catch(_){}
-    }, { passive:false });
+    }
+    el.addEventListener('touchstart', _fire, { passive:false });
+    el.addEventListener('pointerdown', _fire, { passive:false });
+    el.addEventListener('mousedown', _fire);
   }
   function _eurWireTapFallbackAll(container){
     if(!container) return;

@@ -37442,10 +37442,10 @@ window._showSimProgress = function(opts, onDone){
     var frozen = _europeFrozenFor('uel');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uel');
-    /* Los 22 finalistas (2º + 3º × 11 grupos) de la Ronda Final de la
-       Previa de Champions entran como plazas extra a la Europa League
-       en la MISMA temporada. Los persiste el módulo de la Previa en
-       `wprev_to_europa_v1`. Dedupe por nombre. */
+    /* Los 24 perdedores de la Previa de Champions (12 de la Ronda 1 +
+       12 de la Ronda 2, formato 2026-07-31) entran como plazas extra a
+       la Europa League en la MISMA temporada. Los persiste el módulo
+       de la Previa en `wprev_to_europa_v1`. Dedupe por nombre. */
     try {
       var raw = localStorage.getItem('wprev_to_europa_v1');
       if(raw){
@@ -37469,28 +37469,19 @@ window._showSimProgress = function(opts, onDone){
     var frozen = _europeFrozenFor('uecl');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uecl');
-    /* Los 30 perdedores de la Ronda 1 de la Previa de Champions entran
-       como plazas extra a la Conference League en la MISMA temporada.
-       Los persiste el módulo de la Previa en `wprev_r1_to_conference_v1`.
-       Dedupe por nombre.
-       Nota: el Open Qualifier (formato 28×4) ya NO alimenta a la
-       Conference. Mantenemos lectura del flag legacy
-       `oq_to_conference_v1` solo como fallback por si quedaran datos
-       antiguos en algún navegador. */
+    /* Los 28 NO clasificados del Open Qualifier (los que no llegan al
+       1º de grupo ni a los 2 mejores 2º) entran DIRECTOS a la
+       Conference League en la MISMA temporada — los persiste
+       `_persistPreviaFlag` (Open Qualifier) en `oq_to_conference_v1`
+       (formato 2026-07-31, `_doDrawR1`/`_doSimR1`/`_doDrawR2`/`_doSimR2`
+       en part2/misc_body_2.html). Dedupe por nombre.
+       Nota: la Previa de Champions (2 rondas KO) YA NO alimenta a la
+       Conference — sus perdedores (R1+R2) van a Europa League. La
+       clave legacy `wprev_r1_to_conference_v1` ya no se lee aquí
+       (nadie la escribe desde el formato 2026-07-31). */
     var seen = {};
     arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
     try {
-      var rawW = localStorage.getItem('wprev_r1_to_conference_v1');
-      if(rawW){
-        var dataW = JSON.parse(rawW);
-        var teamsW = (dataW && Array.isArray(dataW.teams)) ? dataW.teams : [];
-        teamsW.forEach(function(t){
-          if(!t || !t.name || seen[t.name]) return;
-          seen[t.name] = true;
-          arr.push({name:t.name, logo:t.logo||'', league:t.league||'previa-champions'});
-        });
-      }
-      /* Fallback legacy. */
       var raw = localStorage.getItem('oq_to_conference_v1');
       if(raw){
         var data = JSON.parse(raw);
@@ -37909,12 +37900,16 @@ window._showSimProgress = function(opts, onDone){
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🇪🇺</span><h2>UCL · Previa de Champions</h2></div>
 
-<!-- Sim / Draw contextuales (PIN 747), 2 etapas:
-     Etapa 1 (Ronda Preliminar, 28 del Open Qualifier → 14 cruces ida+
-     vuelta): 🎲 Draw sortea los cruces, 🎮 Sim los juega (prórroga+
-     penaltis si hay empate global).
-     Etapa 2 (12 grupos de 4, 34 directos + 14 ganadores preliminar):
-     🎲 Draw sortea los grupos, 🎮 Sim juega las liguillas.
+<!-- Sim / Draw contextuales (PIN 747), formato 2 RONDAS KO (2026-07-31):
+     Ronda 1 (12 del Open Qualifier vs 12 directos-no-fijos → 12
+     eliminatorias ida+vuelta, gol de visitante→prórroga→penaltis si el
+     global empata): 🎲 Draw sortea los cruces, 🎮 Sim los juega TODOS
+     de golpe (salvo el/los cruce(s) con humano, que se juegan con su
+     card).
+     Ronda 2 (12 ganadores de R1 vs 12 fijos por liga → 12 eliminatorias
+     igual formato): 🎲 Draw sortea los cruces, 🎮 Sim los juega TODOS
+     de golpe. Los 12 ganadores → fase de grupos de Champions; los 24
+     perdedores (R1+R2) → Europa League.
      Los labels de AMBOS botones cambian según la fase — los actualiza
      window._wprevNextLabel()/el propio buildUclPrevClas() en cada
      render, vía los ids wprev-btn-sim/wprev-btn-draw. -->
@@ -37944,11 +37939,10 @@ window._showSimProgress = function(opts, onDone){
   </button>
 </div>
 
-<!-- Leyenda morada compacta (formato 2026-07-12: Ronda Preliminar + 12 grupos) -->
+<!-- Leyenda morada compacta (formato 2026-07-31: Ronda 1 + Ronda 2, ambas KO) -->
 <div style="display:flex;gap:10px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:11px;color:#fff;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;">
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4aa3ff;margin-right:4px;vertical-align:middle;"></span>1º grupo → Champions</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>2º + 10 mejores 3º → Europa</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3cc878;margin-right:4px;vertical-align:middle;"></span>4º + 2 peores 3º + perdedor preliminar → Conference</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#4aa3ff;margin-right:4px;vertical-align:middle;"></span>Ganador Ronda 2 → fase de grupos de Champions</span>
+  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#F37335;margin-right:4px;vertical-align:middle;"></span>Perdedor Ronda 1 o Ronda 2 → Europa League</span>
 </div>
 
 <style>
@@ -38060,6 +38054,32 @@ window._showSimProgress = function(opts, onDone){
 #s-ucl-previa-clas .wprev-dr-human-tag{font-family:Oswald,sans-serif;font-size:9.5px;letter-spacing:1.5px;color:#ffd700;text-align:center;padding:0 0 6px;}
 #s-ucl-previa-clas .wprev-dr-play-btn{display:block;width:calc(100% - 4px);margin:8px 2px 2px;padding:10px 12px;border:1px solid #ffd700;border-radius:8px;background:linear-gradient(135deg,#3a2a00,#7a5a00);color:#ffe480;font-family:Oswald,sans-serif;font-size:12.5px;font-weight:700;letter-spacing:1.5px;cursor:pointer;}
 #s-ucl-previa-clas .wprev-dr-play-btn:active{filter:brightness(.9);}
+/* Ronda 2 con humano — "la MÁS llamativa de la pantalla" (2026-07-31,
+   petición usuario): eclipsa al resto de cruces (ganadores IA de la
+   R1, huecos fijos por liga) con un borde animado dorado-rojo, escudos
+   aún más grandes y el botón JUGAR pulsante. Va POR ENCIMA de `.human`
+   (mismo selector base, especificidad mayor por `.r2human`). */
+#s-ucl-previa-clas .wprev-dr-tie.r2human{
+  border:3px solid #ffcc33;
+  background:linear-gradient(135deg,rgba(255,204,51,.22),rgba(255,90,60,.10),rgba(0,0,0,.3));
+  box-shadow:0 0 26px rgba(255,204,51,.55),0 0 12px rgba(255,90,60,.35),inset 0 0 0 1px rgba(255,255,255,.25);
+  animation:wprevR2Pulse 1.6s ease-in-out infinite;
+  transform:scale(1.02);
+}
+#s-ucl-previa-clas .wprev-dr-tie.r2human .wprev-dr-leg .crest{width:46px;height:46px;}
+#s-ucl-previa-clas .wprev-dr-human-tag.r2{
+  font-size:12px;font-weight:900;color:#ffe480;
+  text-shadow:0 0 8px rgba(255,204,51,.85);
+  padding:2px 0 8px;
+}
+#s-ucl-previa-clas .wprev-dr-play-btn.r2{
+  border:2px solid #ffcc33;background:linear-gradient(135deg,#5a1a00,#a85a00,#5a1a00);
+  color:#fff2c0;font-size:14px;padding:12px 12px;box-shadow:0 0 14px rgba(255,153,0,.5);
+}
+@keyframes wprevR2Pulse{
+  0%,100%{box-shadow:0 0 26px rgba(255,204,51,.55),0 0 12px rgba(255,90,60,.35),inset 0 0 0 1px rgba(255,255,255,.25);}
+  50%{box-shadow:0 0 40px rgba(255,204,51,.9),0 0 22px rgba(255,90,60,.6),inset 0 0 0 1px rgba(255,255,255,.4);}
+}
 /* Grupo del humano en la fase de grupos: bloque de jornadas (reusa
    `.wprev-jbtn`/`.wprev-jmatches`, ya definidas para el calendario de
    la Previa). 2026-07-12 (petición usuario): la etiqueta "Previa" vive
@@ -38109,12 +38129,14 @@ window._showSimProgress = function(opts, onDone){
     </div>
     <div class="wprev-diag-body" id="wprev-diag-body"></div>
   </div>
-  <!-- Ronda Preliminar (14 cruces del Open Qualifier a doble partido)
-       ARRIBA — reutiliza el id `wprev-deathround-container` del
-       formato antiguo (Ronda 1 + exentos) para no romper el JS; el
+  <!-- Ronda 1 (12 eliminatorias, Open Qualifier vs directos) ARRIBA —
+       reutiliza el id `wprev-deathround-container` heredado de formatos
+       anteriores para no tener que retocar el resto de la pantalla; el
        módulo de la Previa Champions lo localiza por id. -->
   <div id="wprev-deathround-container"></div>
-  <!-- Fase de grupos (12 grupos de 4) ABAJO. -->
+  <!-- Ronda 2 (12 eliminatorias, ganadores R1 vs fijos por liga) ABAJO
+       — reutiliza el id `wprev-groups-container` (antes fase de grupos,
+       ahora también eliminatorias). -->
   <div id="wprev-groups-container" style="margin-top:14px;"></div>
 </div>
 </div>

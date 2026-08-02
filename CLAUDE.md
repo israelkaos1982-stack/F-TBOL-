@@ -1,5 +1,71 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Una liga elegible para Recopa sin campeón simplemente DESAPARECÍA del informe — diagnóstico "sin campeón" en vez de un hueco mudo (obligatorio, 2026-08-02)
+
+**Petición/bug usuario 2026-08-02 (fotos, informe «Equipos por
+competición» → 🥈 Recopa de Europa)**: el informe mostraba 7 de las 9
+"Liga mixta" con su campeón/subcampeón/semifinalistas listados, pero
+**Liga Mixta 2** y **Liga Mixta 3** no aparecían en absoluto — "faltan
+2 ligas mixtas, solo hay 7 asignadas a la recopa y 2 que no salen".
+
+### Causa raíz — no es un bug de cómputo, es un hueco de DIAGNÓSTICO
+
+`_eurZoneSectionHtml(zone, teams)` (el render compartido por el informe
+post-«Enviar» y por el overlay «Equipos por competición») agrupa los
+equipos del pool por liga (`_eurLeagueLabel`) y **solo pinta una
+sección para las ligas que SÍ tienen ≥1 equipo** en `teams`. Una liga
+elegible (no está en `EUROPE_BLACKLIST`) cuyo `ligaExt_<slug>.copa.champion`
+está vacío en ESTE dispositivo —porque nunca se pulsó "🎮 SIM Copa"
+para ella, o porque sus datos ni siquiera están cacheados localmente—
+aporta **0 equipos** al pool de `_buildPool()` (Recopa) y por tanto
+**no genera ninguna sección**, ni siquiera una vacía. El resultado es
+indistinguible, a simple vista, de un fallo real del cómputo — el
+admin no tiene forma de saber si "no sale" porque hay un bug o porque
+sencillamente esa Copa no se ha jugado todavía en su móvil.
+
+### Fix — `window._recopaMissingChampionLeagues()`, diagnóstico explícito
+
+Nuevo helper (`misc_body_1.html`, junto a `_recopaLivePool`): recorre
+TODAS las ligas elegibles para Recopa (mismo `EUROPE_BLACKLIST` que
+`_buildPool` — excluye Resto del Mundo/EA Sports/Hypermotion/1ª RFEF) y
+devuelve las que NO tienen `data.copa.champion`, con el motivo exacto:
+**"sin datos en este dispositivo"** (la liga nunca se abrió/cacheó
+aquí) o **"sin Copa simulada todavía"** (los equipos están, pero nadie
+ha pulsado Sim Copa). `_eurZoneSectionHtml` lo consulta SOLO para la
+zona `recopa` y, si hay ligas sin campeón, añade un bloque ámbar
+explícito bajo la lista normal con el nombre de cada liga + su motivo —
+en vez de dejarlas desaparecer en silencio. Como esta función es
+compartida por el informe post-«Enviar» (`_eurShowCommitReport`) y por
+el overlay de consulta+edición «Equipos por competición», el aviso
+aparece en ambos sitios sin duplicar código.
+
+**Relación con la sección siguiente** ("Resto de Ligas · Estadísticas"
+salía vacío... las 9 Ligas Mixtas quedaban fuera por slug vacío"): esa
+es probablemente la causa de FONDO de por qué Liga Mixta 2/3 nunca
+llegaron a tener campeón en este dispositivo — el botón global "🎮 Sim"
+las saltaba en silencio (slug vacío). Con ese fix, el próximo "🎮 Sim"
+masivo debería simularlas también; este diagnóstico queda como red de
+seguridad para cualquier otra liga que, por el motivo que sea, se quede
+sin Copa simulada en un dispositivo concreto.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_eurZoneSectionHtml` (o cualquier render de
+   informe agrupado por liga que se añada en el futuro) trate "0
+   equipos de esta liga" como "esta liga no existe/no aplica" sin
+   distinguirlo de "esta liga SÍ es elegible pero aún no tiene datos".
+   Toda zona cuyo pool dependa de una condición previa por-liga
+   (campeón de copa, clasificación completa, etc.) debe poder listar
+   EXPLÍCITAMENTE qué ligas elegibles se están quedando fuera y por qué
+   — no basta con que la sección "no aparezca".
+2. **PROHIBIDO** que `_recopaMissingChampionLeagues` use un
+   `EUROPE_BLACKLIST` distinto al de `_buildPool` — deben ir siempre
+   sincronizados (misma liga blacklisted en el pool ⇒ blacklisted
+   también en el diagnóstico), o el diagnóstico podría "avisar" de una
+   liga que en realidad nunca debió aportar nada (Resto del Mundo, Liga
+   EA Sports, Hypermotion, 1ª RFEF).
+3. Toda liga NUEVA hereda el diagnóstico automáticamente (recorre
+   `LEAGUE_DEFAULT_ZONES`, sin lista hardcodeada de slugs).
 ## "Resto de Ligas · Estadísticas" salía vacío tras "Sim" masivo — el agregador solo miraba `localStorage`, nunca la cache en memoria; y las 9 Ligas Mixtas quedaban fuera por slug vacío (obligatorio, 2026-08-02)
 
 **Bug (usuario 2026-08-02, «todas las ligas y copas del resto de ligas

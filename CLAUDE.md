@@ -26,6 +26,156 @@ El caso MASIVO (`ligaExtReiniciarSlug`, botón global "Res", y `_finishSim` con 
 4. El reset MASIVO (`ligaExtReiniciarSlug`, botón "Res") sigue llamando a `resetPlayerStats` de todos los jugadores ANTES de re-simular — no necesita el snapshot (parte de 0), y no se ha tocado.
 5. Si se persiste el `statsSnapshot` en `data.copa`, tener en cuenta que viaja dentro de `ligaExt_<slug>` (cap 2 MB por carpeta, regla ya existente) — es proporcional al nº de jugadores de la liga, mismo orden de magnitud que `team.players[]` ya persistido, no debería acercarse al límite.
 
+## Una liga SOLO aporta equipos a Europa cuando termina TODOS sus partidos — ni ranking por poder, ni standings a medias (obligatorio, 2026-08-02 #3) ⚠️ SUPERSEDE la sección "Una liga RECIÉN RESETEADA..." (#2) y MATIZA aún más la regla "Clasificación a competiciones europeas" (2026-05-02), ambas más abajo
+
+**Petición usuario 2026-08-02** (tras el fix #2 de abajo — "puedes
+distinguirlo / el Open Qualifier hasta que no se jueguen los 38
+partidos de cada Liga / en la Copa de cada pais hasta que no haya un
+campeón"): el fix #2 (flag `data.neverPlayed`) solo evitaba el ranking
+por poder para ligas RECIÉN RESETEADAS — una liga VIRGEN (nunca
+tocada) o A MEDIO SIMULAR seguía aportando equipos a Open Qualifier/
+Wild Card/UCL/UEL/UECL/Previa por ranking por poder o por standings
+parciales. El usuario pidió una regla más simple y más estricta:
+ninguna liga aporta NADA hasta que termine TODOS sus partidos — el
+mismo criterio "todo o nada" que la Recopa ya aplicaba al campeón de
+Copa (`cp.champion` debe existir; una Copa a medias no aporta nada).
+
+### Fix — `_computeQualifiedFromLeagues(zoneKey)`: gate único por completitud
+
+`rN < needed` (`needed = N*(N-1)`, el total de partidos de una liga a
+doble vuelta — "38 partidos por equipo" para una liga de 20) → esa
+liga aporta **0 equipos** a la zona, punto. Se ELIMINAN por completo:
+
+- El ranking por poder (`_rankByPower`) para `rN === 0` — cualquier
+  liga sin terminar, virgen o no, ya no cae aquí.
+- El filtro per-team `pj === 0` sobre standings parciales
+  (`0 < rN < needed`) — ya no hay standings parciales: o la liga está
+  COMPLETA (`rN >= needed`) y se usa `_standingsFromResults` entero, o
+  no aporta nada.
+- El trato permisivo especial de las zonas feeder (`uclQual`/
+  `wildcard`, incluido el auto-cupo `isWcAuto` de las 40 ligas de Wild
+  Card): antes aceptaban cualquier estado de simulación; ahora
+  requieren la misma completitud que las zonas directas.
+
+El flag `data.neverPlayed` del fix #2 (sección de abajo) queda
+**REDUNDANTE y se ha ELIMINADO** del código: con el gate de
+completitud, una liga recién reseteada (`rN=0 < needed`) ya queda
+excluida sin necesidad de ningún flag adicional — igual que una liga
+virgen. `ligaExtReiniciar`/`ligaExtReiniciarSlug`/`ligaExtSimular` ya
+NO tocan ningún flag de este tipo.
+
+**`_uclPrevLeagueRanking(slug)`** (Previa Champions, usado por
+`computeUclPrevFixedR2Teams` para elegir "la mejor de las 2 plazas 🟣
+de una liga-mixta"): mismo gate — antes caía a `_rankByPower` si
+`results.length` era 0; ahora devuelve `[]` (sin ranking) si
+`results.length < needed`.
+
+**Recopa/Intercontinental NO necesitaban este fix** — ya exigían
+`cp.champion` (Copa terminada) desde siempre; el usuario lo confirmó
+("en la Copa de cada país hasta que no haya un campeón" ya era el
+comportamiento existente).
+
+### Precio conocido y ACEPTADO a propósito
+
+El propio historial de la regla 2026-05-02 documenta que un gate de
+completitud estricto "dejaba el pool de Previa Champions con muchos
+TBD-50..63 cuando las ligas estaban parcialmente simuladas" — es
+EXACTAMENTE lo que motivó relajar la regla en su momento. El usuario,
+con este pedido, decide explícitamente que ese hueco TBD es preferible
+a mostrar un equipo cuya clasificación aún no está demostrada. Esta
+decisión SUPERSEDE la de 2026-05-02 — no es un descuido, es la
+prioridad actual del usuario.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_computeQualifiedFromLeagues` (o cualquier
+   cómputo nuevo de zona europea) vuelva a aceptar una liga con
+   `rN < needed` (partidos incompletos), sea por ranking por poder, por
+   standings parciales, o por cualquier trato especial de zona feeder/
+   auto-cupo. El gate es único y se aplica ANTES de calcular cualquier
+   ranking — `if (rN < needed) return;` (con su nota de diagnóstico).
+2. **PROHIBIDO** reintroducir el flag `data.neverPlayed` (fix #2,
+   ahora eliminado) o cualquier equivalente — el gate de completitud ya
+   cubre TODOS los casos (virgen, recién reseteada, a medio simular)
+   sin necesidad de distinguir el motivo de por qué `rN` está por
+   debajo de `needed`.
+3. **PROHIBIDO** que `_uclPrevLeagueRanking` (o cualquier helper que
+   resuelva "el equipo en el rank N de esta liga concreta", usado por
+   Previa Champions u otra competición) caiga a `_rankByPower` cuando
+   la liga no ha terminado. Debe devolver `[]`/vacío, igual que el
+   cómputo de zona.
+4. **PROHIBIDO** volver a dar trato permisivo especial a `uclQual`/
+   `wildcard` frente a las zonas directas (`ucl`/`uclPrev`/`uel`/
+   `uecl`) en cuanto a completitud — todas exigen `rN >= needed` por
+   igual. El auto-cupo (`isWcAuto`) sigue existiendo SOLO para la
+   configuración de la zona (bypass de `slots > 0`), nunca para saltar
+   la exigencia de completitud.
+5. `window._eurRankByPower`/`_rankByPower` NO se elimina del código —
+   sigue expuesto para el picker manual "Añadir por liga" del overlay
+   de admin (`_eurManualOverlayOpen`), una herramienta de PREVIEW/
+   asistencia manual, no del cómputo automático de zonas. Esa
+   herramienta puede seguir mostrando el ranking de una liga incompleta
+   porque es el admin quien decide a mano qué añadir, con conocimiento
+   de causa — el gate de completitud es solo para el cómputo
+   AUTOMÁTICO.
+6. Toda liga con un nº de equipos distinto de 20 sigue funcionando
+   igual (`needed = N*(N-1)` generaliza a cualquier N — "38 partidos"
+   es solo el caso concreto de una liga de 20 a doble vuelta).
+
+## Una liga RECIÉN RESETEADA ya no aporta equipos fantasma a Open Qualifier/Wild Card/UCL/UEL/UECL/Previa por "ranking por poder" (obligatorio, 2026-08-02 #2, ⚠️ SUPERSEDED por la sección de arriba, #3 — se documenta como histórico) ⚠️ MATIZA la regla "Clasificación a competiciones europeas" (2026-05-02) más abajo
+
+**Bug/petición usuario 2026-08-02** ("he reiniciado todas las ligas /
+todos los contadores de liga, copa y estadísticas están a cero / porque
+el Open Qualifier y la Recopa en el Reparto Europeo salen si no se ha
+jugado nada / Investigar y arreglar", con fotos): tras pulsar el botón
+global "♻️ Res" (`_restoLigasResAll`, resetea las ~54 ligas de golpe),
+con TODOS los contadores de liga/copa/estadísticas confirmados a cero,
+el overlay "Equipos por competición" seguía mostrando **Open Qualifier
+con 28 equipos reales** y **Recopa con 50 equipos reales**, agrupados
+por liga (Liga Mixta 1-9, Inglaterra, Italia, Liga EA Sports…).
+
+### Causa raíz — DOS mecanismos distintos, cada uno con su propio motivo
+
+1. **Recopa YA estaba arreglada** (ver sección de arriba, "diagnóstico
+   sin campeón" + el fix paralelo de `ligaExtReiniciarSlug` que ya pone
+   `data.copa = null` en el reset global): `_buildPool()` solo aporta
+   equipos si `data.copa.champion`/`runnerUp`/`semis` existen — con
+   `data.copa = null` tras el reset, el cómputo automático YA da 0. Los
+   50 equipos que el usuario vio venían de una sesión/dispositivo que
+   aún no tenía ese fix, o de los manuales explícitos (`_meaTeamsFor`/
+   `eur_manual_extra_v1`, que NUNCA se tocan por un reset — son
+   adiciones a mano del admin, correcto que sobrevivan).
+2. **Open Qualifier (y, por el mismo camino, Wild Card/UCL/Previa/UEL/
+   UECL) SÍ tenía un bug real**: `_computeQualifiedFromLeagues(zoneKey)`
+   tiene la regla obligatoria 2026-05-02 "si la liga tiene `rN === 0`
+   (cero partidos) → ranking por PODER (`_rankByPower`), aceptando TODOS
+   los equipos aunque no hayan jugado nada — es la única señal
+   disponible". Esa regla se diseñó para una liga **VIRGEN** (nunca
+   tocada, en medio de una configuración progresiva del admin) — pero
+   el código no distinguía "liga virgen" de "liga RECIÉN RESETEADA a
+   propósito": ambas tienen `results.length === 0` de forma idéntica.
+   Tras un reset masivo, las ~54 ligas volvían a poblar Open Qualifier/
+   Wild Card/UCL/UEL/UECL/Previa con equipos ordenados por su atributo
+   `power` (estático, nunca se resetea) — exactamente como si el admin
+   nunca hubiera tocado nada, contradiciendo la expectativa de "todo a
+   cero" tras un reset deliberado.
+
+### Fix (HISTÓRICO — SUPERSEDED, ver sección #3 de arriba)
+
+Este fix introducía un flag `data.neverPlayed` (sellado `true` por
+`ligaExtReiniciar`/`ligaExtReiniciarSlug`, `false` por
+`ligaExtSimular`) para que el ranking por poder de
+`_computeQualifiedFromLeagues` distinguiera "liga virgen" de "liga
+recién reseteada". **El fix #3 de arriba (2026-08-02, mismo día)
+ELIMINÓ POR COMPLETO el ranking por poder** (para virgen Y para
+reseteada) sustituyéndolo por un gate único de completitud
+(`rN >= needed`) — por eso `data.neverPlayed` quedó redundante y
+**SE ELIMINÓ del código** (ya no existe en `ligaExtReiniciar`/
+`ligaExtReiniciarSlug`/`ligaExtSimular`/`_computeQualifiedFromLeagues`).
+Esta sección se conserva solo como registro histórico de la
+investigación — **el código y las reglas vigentes son las de la
+sección #3, más arriba**. No reintroducir `data.neverPlayed`.
+
 ## Una liga elegible para Recopa sin campeón simplemente DESAPARECÍA del informe — diagnóstico "sin campeón" en vez de un hueco mudo (obligatorio, 2026-08-02)
 
 **Petición/bug usuario 2026-08-02 (fotos, informe «Equipos por
@@ -11552,7 +11702,14 @@ solo `elite`/`natGoal`.
 - No borres flags al serializar/deserializar plantillas.
 
 
-## Clasificación a competiciones europeas (obligatorio, 2026-05-02)
+## Clasificación a competiciones europeas (obligatorio, 2026-05-02) ⚠️ MATIZADA por la sección "Una liga RECIÉN RESETEADA..." (2026-08-02 #2) más arriba
+
+**Matiz 2026-08-02**: el ranking por poder para `rN === 0` de esta
+sección (más abajo, "Si `rN === 0` → ranking por power") solo aplica a
+una liga **VIRGEN** (`data.neverPlayed` ausente). Una liga con
+`data.neverPlayed === true` (recién reseteada por
+`ligaExtReiniciar`/`ligaExtReiniciarSlug`) aporta 0 equipos hasta que se
+vuelva a simular — ver esa sección para el porqué.
 
 Para que un equipo de Resto de Ligas vaya a una competición europea
 **directa** (UCL fase de liga, Previa Champions, UEL, UECL) basta con

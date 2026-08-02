@@ -37022,25 +37022,16 @@ window._showSimProgress = function(opts, onDone){
         var needed = N*(N-1);
         if(N < 2){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'menos de 2 equipos'}); return; }
         /* Auto-cupo Wild Card: para los 40 slugs de WILDCARD_LIGA_SLUGS
-           tratamos `zones.wildcard` como ≥1 implícito y aceptamos
-           CUALQUIER estado de simulación — incluso ligas con rN=0 (sin
-           ningún partido jugado) aportan equipo, ranking sintético por
-           poder. El usuario configura la lista de 40 ligas, no debería
-           tener que tocar zones.wildcard ni simular nada para que el
-           pool se complete (antes quedaba a 9/40 → 10/40). */
+           tratamos `zones.wildcard` como ≥1 implícito (bypass del
+           `slots > 0` de abajo) — el usuario configura la lista de 40
+           ligas, no debería tener que abrir Reglas y tocar
+           `zones.wildcard` a mano. Esto es SOLO sobre la CONFIGURACIÓN
+           de la zona; la liga sigue necesitando terminar sus partidos
+           para aportar equipos (ver regla de completitud más abajo,
+           2026-08-02 #3) — el auto-cupo nunca sustituyó esa exigencia. */
         var isWcAuto = (zoneKey === 'wildcard')
                     && window.WILDCARD_LIGA_SLUGS
                     && window.WILDCARD_LIGA_SLUGS[slug];
-        /* Para el resto de zonas (ucl/uclPrev/uclQual/uel/uecl)
-           extendemos el mismo principio: nunca rechazamos por
-           `incompleta`. Si la liga tiene rN=0 caemos al ranking por
-           poder; si tiene resultados parciales (0<rN<needed) usamos
-           lo que haya. Esto evita que el pool del Open Qualifier (98
-           plazas) se llene de TBD-OQ-XX cuando hay ligas sin simular,
-           y replica el comportamiento que ya tenía Wild Card. La
-           condición de `slots > 0` SÍ se mantiene fuera de auto-cupo
-           wildcard, porque indica que el usuario ha configurado el
-           cupo en Reglas. */
         var zones = (data.config && data.config.zones) || {};
         /* Zonas efectivas: LEAGUE_DEFAULT_ZONES es autoritativo para los
            6 campos euro (ucl/uclPrev/uclQual/uel/uecl/wildcard). Esto
@@ -37106,49 +37097,36 @@ window._showSimProgress = function(opts, onDone){
            por encima del wildcard. Sin esto el ranking sintético por
            poder pondría al campeón de la liga como wildcard. */
         if(isWcAuto && skip === 0) skip = 3;
-        /* ── REGLA ESTRICTA (usuario, 2026-05-02, refinada 3× por
-           feedback del propio usuario):
-           Para que un equipo vaya a una competición europea DIRECTA
-           (UCL fase de liga, Previa Champions, UEL, UECL):
-             - Si la liga tiene rN === 0 → ranking por power
-               (`_rankByPower`), todos los teams aceptados (es la única
-               señal). Igual que siempre se hizo para Wild Card.
-             - Si la liga tiene rN > 0 → ranking por resultados
-               (`_standingsFromResults`); descartamos SOLO los teams
-               con `pj === 0` (race condition tras Sim batched: estos
-               equipos ordenan al top por desempate alfabético sobre
-               pts=0 sin haber jugado nada).
-           Excepciones absolutas:
-             - Liga EA Sports / Hypermotion / 1ª RFEF → bloqueadas
-               por EUROPE_BLACKLIST (manual-only via "EA Sports →
-               Europa").
-             - Wild Card auto-cupo y Open Qualifier (uclQual) →
-               feeders permisivos: aceptan rN=0 (rank-by-power) y
-               teams con pj=0. NO clasifican directo a Europa,
-               alimentan al OQ.
+        /* ── REGLA ESTRICTA (usuario, 2026-08-02 #3, SUPERSEDE la
+           regla 2026-05-02 de arriba — "el Open Qualifier hasta que
+           no se jueguen los 38 partidos de cada Liga / en la Copa de
+           cada país hasta que no haya un campeón"):
+           Una liga SOLO aporta equipos a Champions/Previa/Europa/
+           Conference/Open Qualifier/Wild Card cuando ha completado
+           TODOS sus partidos de liga (`rN >= needed`, doble vuelta =
+           `N*(N-1)` partidos totales = `2*(N-1)` por equipo — "los 38
+           partidos" de una liga de 20). Antes de eso — virgen, recién
+           reseteada, o a medio simular — la liga aporta CERO equipos:
+           ni ranking por poder (regla 2026-05-02, `rN===0`), ni
+           standings parciales con filtro `pj===0` (regla 2026-05-02,
+           `0<rN<needed`). Misma exigencia de "resultado FINAL, no a
+           medias" que la Recopa ya aplica al campeón de Copa
+           (`cp.champion` debe existir, `_buildPool` más abajo en el
+           archivo) — ahora la Liga se trata igual.
 
-           Bug histórico que motivó la regla: tras pulsar Sim en una
-           liga, la escritura de resultados era batched/asíncrona.
-           Durante esa ventana algunos teams tenían pj=0 en
-           _standingsFromResults pero sortaban al top por desempate
-           alfabético sobre pts=0 → el código los enviaba a Europa con
-           0 partidos jugados.
-
-           Por qué se descartó el gate de liga (`rN < needed → skip`)
-           y por qué se relajó el per-team de `pj < expectedPj` a
-           `pj === 0`: ambas reglas más estrictas dejaban el pool de
-           Previa Champions con muchos TBD-50..63 cuando las ligas
-           estaban parcialmente simuladas (caso típico). El filtro
-           pj===0 captura el race-condition exacto sin descartar
-           teams legítimos que han jugado al menos 1 partido. */
-        var isFeederZone = (zoneKey === 'uclQual') || (zoneKey === 'wildcard');
-        /* Ranking sintético por poder cuando rN=0 (solo zonas feeder:
-           Wild Card auto-cupo y Open Qualifier). Para zonas directas
-           (ucl/uclPrev/uel/uecl), llegado aquí rN === needed por la
-           regla estricta de arriba; usamos _standingsFromResults. */
-        var ranking = (rN === 0)
-          ? _rankByPower(teams)
-          : _standingsFromResults(teams, data.results);
+           Precio conocido y ACEPTADO a propósito (documentado
+           2026-05-02: "dejaba el pool de Previa Champions con muchos
+           TBD-50..63 cuando las ligas estaban parcialmente
+           simuladas"): el usuario prefiere un hueco TBD explícito a
+           un equipo que aún no ha demostrado su clasificación real.
+           Aplica IGUAL a las zonas feeder (uclQual/wildcard, incluido
+           el auto-cupo `isWcAuto`) que a las directas — ninguna zona
+           tiene ya un trato permisivo especial. */
+        if(rN < needed){
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'incompleta', note:'liga sin terminar ('+rN+'/'+needed+') — 0 equipos hasta completar todos los partidos'});
+          return;
+        }
+        var ranking = _standingsFromResults(teams, data.results);
         var added = 0;
         /* Si el slot wildcard/uclQual cae sobre un equipo español de
            Primera/Segunda/1ª RFEF, lo SALTAMOS y avanzamos en el
@@ -37164,23 +37142,12 @@ window._showSimProgress = function(opts, onDone){
           if(spanishTeamBanned && _isSpanishTeamBanned(teamName, spanishTeamBanned)){
             continue; /* equipo español colado — saltar y avanzar */
           }
-          /* DEFENSA per-team: el bug original (race tras Sim) era que
-             equipos con pj=0 sorteaban al top por desempate alfabético
-             sobre pts=0 y se enviaban a Europa con 0 partidos jugados.
-             Solo descartamos teams con `pj === 0` cuando hay results
-             parciales (rN > 0). Antes (commit `3fb9247`) usábamos
-             `pj < expectedPj` que era demasiado estricto: descartaba
-             equipos que SÍ habían jugado pero la liga estaba a medias,
-             dejando el pool de Previa Champions con TBD-50..63
-             (reportado 2026-05-02 con fotos). Casos:
-               - rN === 0 (rank-by-power): todos los teams tienen pj=0;
-                 NO los descartamos (es la única señal disponible).
-               - rN > 0 (standings reales): solo skip si pj === 0
-                 (race / data stale). Teams con pj > 0 son "reales"
-                 aunque no hayan completado todos sus partidos.
-             Las zonas feeder (uclQual / wildcard) no aplican el filtro
-             y siempre admiten pj=0. */
-          if(!isFeederZone && rN > 0 && Number(rj.pj || 0) === 0){
+          /* Defensa residual: con la liga COMPLETA (rN>=needed) todo
+             equipo real ya tiene pj>0 — un `pj===0` aquí solo puede
+             ser un dato anómalo (partido no contabilizado). Se salta
+             igual, sin distinguir zona feeder/directa (regla nueva de
+             arriba ya no las trata distinto). */
+          if(Number(rj.pj || 0) === 0){
             continue;
           }
           out.push({
@@ -37190,9 +37157,7 @@ window._showSimProgress = function(opts, onDone){
           });
           added++;
         }
-        var okNote = '+'+added+' equipos';
-        if(rN === 0)              okNote += ' · ranking por poder (sin partidos)';
-        else if(rN < needed)      okNote += ' · standings parcial ('+rN+'/'+needed+')';
+        var okNote = '+'+added+' equipos (liga completa '+rN+'/'+needed+')';
         if(isWcAuto && !(Number((data.config&&data.config.zones&&data.config.zones[zoneKey])||0) > 0)) okNote += ' · auto-cupo ⚪';
         diag.push({slug:slug, n:N, results:rN, needed:needed, status:'ok', note:okNote});
       });
@@ -37711,8 +37676,16 @@ window._showSimProgress = function(opts, onDone){
       if(!raw) return [];
       var data = JSON.parse(raw);
       if(!data || !Array.isArray(data.teams)) return [];
+      var teams = data.teams;
+      var needed = teams.length * (teams.length - 1);
       var results = Array.isArray(data.results) ? data.results : [];
-      return results.length ? _standingsFromResults(data.teams, results) : _rankByPower(data.teams);
+      /* Regla 2026-08-02 #3 (misma que `_computeQualifiedFromLeagues`):
+         solo aporta ranking si la liga terminó TODOS sus partidos — ni
+         ranking por poder ni standings a medias. Una liga incompleta
+         devuelve [] (el caller la trata como "sin equipo en ese rank",
+         TBD explícito en vez de un equipo aún no demostrado). */
+      if(results.length < needed) return [];
+      return _standingsFromResults(teams, results);
     } catch(_){ return []; }
   }
   function _uclPrevTeamAtRank(slug, rank1){

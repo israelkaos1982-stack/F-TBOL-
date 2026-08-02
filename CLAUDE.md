@@ -1,5 +1,107 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El calendario (global + individual de los 7 humanos) de la Previa de Champions pasa de 6 Jornadas a solo Ida/Vuelta de la Ronda 2 (obligatorio, 2026-08-02)
+
+**Petición usuario 2026-08-02** (fotos calendario individual + global,
+«31 Jul · Previa Champions — J1» … «14 Ago · Previa Champions — J6»):
+sustituir las 6 jornadas de fase de grupos por SOLO 2 partidos —
+**"Ida Previa Champions — R2"** (01 Ago, 🌧) y **"Vuelta Previa
+Champions — R2"** (09 Ago) — dejando el resto de días como Descanso/
+Entrenamiento/Liga tal cual especificó el usuario.
+
+### Por qué esto encaja con el motor actual (no es solo un cambio visual)
+
+El motor de la Previa lleva desde 2026-07-31 en formato **Ronda 1 +
+Ronda 2, ambas KO a doble partido** (`part2/misc_body_2.html`,
+`_doDrawR1/_doSimR1/_doDrawR2/_doSimR2`), que **YA SUPERSEDE** el
+formato de "16 grupos de 4 con 6 jornadas" documentado más abajo en
+este archivo. La ÚNICA vía por la que un club HUMANO llega a la Previa
+es el 5º de España (Liga EA Sports, manual vía "EA Sports → Europa" →
+`computeUclPrevFixedR2Teams`), que **SIEMPRE** entra FIJO a la Ronda 2
+— el club humano **NUNCA** juega la Ronda 1 (esa la juegan 24 equipos
+IA: 12 del Open Qualifier + 12 directos-no-fijos). Por eso el
+calendario de CUALQUIERA de los 7 humanos solo necesita 2 días: Ida y
+Vuelta de SU eliminatoria de Ronda 2. La etiqueta "Previa Champions —
+J1..J6" (fase de grupos con 12 grupos de 4) era **texto muerto**: el
+resolver que la leía (`_wprevHubResolve`, leía
+`wprev_state_v1.groups`/`.fixtures`, un shape que el motor actual ni
+siquiera escribe) tenía su callback `open()` apuntando a
+`window._wprevPlayHumanMatch`, una función que **nunca llegó a
+definirse** en ningún archivo — la card era 100% inalcanzable incluso
+si el calendario la hubiera mostrado bien.
+
+### Fix
+
+- **`calendario.json`** (`version` 8→9 para forzar la migración
+  server-side sobre cualquier fila `calendario_global_v1` ya cacheada
+  en BD — ver `load_calendario()`, `app.py`: sin el bump de versión el
+  fichero git-baked se ignora en cualquier deploy ya arrancado): los 6
+  eventos "Previa Champions — J1".."J6" (ev-092/094/096/100/102/106)
+  se sustituyen por 2 ("Ida"/"Vuelta" ... — R2", ev-093/ev-101) y los 4
+  días que quedan libres pasan a Descanso/Entrenamiento según el
+  calendario exacto que dio el usuario. Mismas fechas totales (28
+  Jul–18 Ago), mismos ids de evento, mismo icono 🔵 (🟣 no está en
+  `CALENDARIO_VALID_ICONS`; el color morado en la UI lo sigue dando
+  el detector de nombre `_detectComp`/`_applyIconColors`,
+  `part2/misc_body_2.html`, que ya reconoce "previa"+"champ" → 🟣 sin
+  tocar nada).
+- **`_wprevHubResolve`** (`misc_body_1.html`) reescrito para leer
+  `wprev_state_v1.r2.ties[idx]` (formato real del motor 2026-07-31) en
+  vez del `groups`/`fixtures` muerto, y para parsear "Ida/Vuelta Previa
+  Champions — R2" en vez de "Previa Champions — J<N>". El `open()`
+  ahora sí llama a una función real: `window._wprevKoOpenMatch('r2',
+  idx)` (auto-deriva la ida o la vuelta según `tie.legs.length`, igual
+  que ya hace `_eurKoHubResolve` con Champions/Europa/Conference KO).
+- **`_cardWprevPending`** (nueva): si `s.r2.ties` todavía no tiene la
+  eliminatoria del club humano (Ronda 1 IA-vs-IA sin terminar), la card
+  del hub muestra "⚠️ RIVAL PENDIENTE" + botón "🤖 Simular Ronda 1"
+  (llama a `window.simulateUclPrev()`, hasta 2 veces seguidas si la
+  1ª pasada deja `phase==='r1-done'`, para sortear Y revelar la Ronda 2
+  en el mismo toque). **Sin 📌 Posponer** en este estado — a diferencia
+  del bracket europeo (que reserva de antemano un índice por ronda),
+  `s.r2.ties` no existe hasta que `_doDrawR2` sortea la Ronda 2, así
+  que no hay ningún matchKey estable que posponer todavía.
+- **`_playDeferredHvH`** (`misc_body_1.html`, pantalla 📌 PARTIDOS
+  POSPUESTOS): nueva rama para matchKey `wprevko_<r1|r2>_<idx>_<i|v>`
+  (mismo patrón que la rama `eurko_` ya existente) — sin ella, posponer
+  el partido de Ronda 2 (sí soportado, con `defer:{tourId:'ucl',
+  matchKey:'wprevko_r2_'+idx+'_'+leg}` en el objeto que devuelve
+  `_wprevHubResolve`) habría caído al fallback genérico
+  `_tourOpenHumanMatch('ucl', ...)`, que no sabe nada de `wprev_state_v1`
+  — el partido pospuesto habría quedado en un callejón sin salida,
+  visible en la lista pero imposible de reabrir.
+- **`_mmCalLabel`** (`static/js/index.bundle.js`, resolutor de fecha de
+  la PANTALLA DE PREVIA a pantalla completa): la rama muerta
+  `wprevfg_<gi>_<j>` (fase de grupos) y el regex viejo
+  `wprevko_\d+_[iv]` (sin segmento de ronda, nunca coincidía con el
+  matchKey real `wprevko_<r1|r2>_<idx>_<leg>`) se sustituyen por un
+  único match `^wprevko_(r1|r2)_\d+_([iv])$` → "Ida/Vuelta Previa
+  Champions — R1/R2". Bump `index.bundle.js` 9.34→9.35 en
+  `templates/index.html` y `static/js/sw.js` (regla obligatoria de
+  versión de assets estáticos, sección "Todo cambio en
+  `index.bundle.js`/`.css`..." más abajo).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir "Previa Champions — J1".."J6" (fase de
+   grupos, 6 jornadas) en `calendario.json` ni en ningún resolver. El
+   motor de la Previa es Ronda 1 + Ronda 2 KO desde 2026-07-31; el club
+   humano SOLO juega la Ronda 2 (2 días: Ida/Vuelta — R2).
+2. **PROHIBIDO** que `_wprevHubResolve` vuelva a leer
+   `wprev_state_v1.groups`/`.fixtures` (shape del formato viejo, ya no
+   lo escribe nada) o a delegar en `window._wprevPlayHumanMatch`/
+   `window._wprevSaveHumanResult` (nunca definidas). La fuente única es
+   `wprev_state_v1.r2.ties[idx]` vía `window._wprevKoOpenMatch`/
+   `window._wprevKoSaveHumanResult`.
+3. **PROHIBIDO** añadir 📌 Posponer a la card "RIVAL PENDIENTE"
+   (`_cardWprevPending`) sin resolver antes cómo reabrir un matchKey
+   sin índice de tie todavía asignado. El botón "🤖 Simular Ronda 1" es
+   la única vía de desbloqueo mientras `s.r2.ties` no exista.
+4. Si se toca `_mmCalLabel` o `_wprevHubResolve` en el futuro
+   (competición nueva, ronda nueva), mantener el bump de versión de
+   `calendario.json` (server-side) Y de `index.bundle.js` (cliente) —
+   sin ambos, el fix no llega a un deploy ya arrancado con datos en BD.
+
 ## "🎮 Admin - Europa" no dejaba añadir NINGÚN equipo a NINGUNA competición — `_lsSetSafe` nunca lanza, el try/catch que comprobaba su resultado quedó MUERTO (obligatorio, 2026-08-02)
 
 **Bug (foto usuario 2026-08-02, «🎮 Admin - Europa» → sección SUPERLIGA,

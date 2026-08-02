@@ -9676,53 +9676,100 @@ window._showSimProgress = function(opts, onDone){
       } catch(_){ _markDoneAndAdvance(); }
     };
   }
-  /* PREVIA DE CHAMPIONS · fase de grupos (jornada JN del grupo con
-     club humano). Label "Previa Champions — J<N>". Estado en
-     `wprev_state_v1.fixtures[gi]` (SOLO existe para el grupo con
-     humano — el resto de los 12 grupos se simulan de golpe, sin
-     fixture). 2026-07-12: antes esta etiqueta caía siempre al flujo
-     genérico ("La jornada se juega desde la pantalla de la
-     competición") porque no había ningún resolver para ella — la card
-     del hub se quedaba pequeña en vez de mostrar los escudos grandes
-     como el resto de competiciones. */
+  /* PREVIA DE CHAMPIONS · Ronda 2 (única ronda que juega el club humano
+     — obligatorio, 2026-08-02, reescrito para el motor Ronda1+Ronda2 KO
+     de 2026-07-31). La ÚNICA vía de un club humano a la Previa es el
+     5º de España, manual vía "EA Sports → Europa"
+     (`computeUclPrevFixedR2Teams`), que SIEMPRE entra FIJO a la Ronda 2
+     — el club humano NUNCA juega la Ronda 1. Por eso el calendario
+     (global e individual) solo tiene 2 días: "Ida Previa Champions —
+     R2" / "Vuelta Previa Champions — R2". Estado en
+     `wprev_state_v1.r2.ties[idx]` ({a,b,legs:[ida,vuelta],winner,...}).
+     Si la Ronda 2 todavía no se ha sorteado (la Ronda 1 IA-vs-IA sigue
+     pendiente), el rival del humano aún no existe → `{pending:true}`
+     para la card "RIVAL PENDIENTE" (`_cardWprevPending`). */
   function _wprevHubResolve(lbl){
     var s = String(lbl || '');
-    var mj = /Previa\s*Champions\s*[—\-]\s*J\s*(\d+)/i.exec(s);
-    if (!mj) return null;
-    var jor = parseInt(mj[1], 10);
-    if (!(jor > 0)) return null;
+    var mLeg = /^\s*(Ida|Vuelta)\s+Previa\s*Champions\s*[—\-]\s*R\s*2\b/i.exec(s);
+    if (!mLeg) return null;
+    var leg = /vuelta/i.test(mLeg[1]) ? 'v' : 'i';
     var st = null;
     try { st = JSON.parse(localStorage.getItem('wprev_state_v1') || 'null'); } catch(_){}
-    if (!st || !Array.isArray(st.groups) || !Array.isArray(st.fixtures)) return null;
-    var gi = -1;
-    for (var g = 0; g < st.groups.length; g++){
-      var grp = st.groups[g] || [];
-      if (grp.some(function(t){ return t && t.name && _psHubClubMatches(t.name); })){ gi = g; break; }
+    var ties = (st && st.r2 && Array.isArray(st.r2.ties)) ? st.r2.ties : [];
+    var idx = -1, tie = null;
+    for (var i = 0; i < ties.length; i++){
+      var t = ties[i];
+      if (t && ((t.a && _psHubClubMatches(t.a.name)) || (t.b && _psHubClubMatches(t.b.name)))){ idx = i; tie = t; break; }
     }
-    if (gi < 0 || !st.fixtures[gi]) return null;
-    var fx = st.fixtures[gi];
-    var m = null;
-    for (var i = 0; i < fx.length; i++){
-      var mm = fx[i];
-      if ((mm.jornada|0) !== (jor - 1)) continue;
-      if (_psHubClubMatches(mm.home) || _psHubClubMatches(mm.away)){ m = mm; break; }
+    if (!tie){
+      /* Ronda 2 sin sortear (esperando a que termine la Ronda 1
+         IA-vs-IA) — RIVAL PENDIENTE. */
+      return { pending:true, emoji:'🟣' };
     }
-    if (!m) return null;
-    var _wpRival = String(_psHubClubMatches(m.home) ? m.away : m.home);
-    /* Escudos (2026-07-12, "el rival tiene escudo pero en la card del
-       partido no sale"): `grp[hi]`/`grp[ai]` ya traen `.logo` resuelto
-       DIRECTO de la liga origen (Resto de Ligas) al construir el pool
-       de la Previa — `getTeamLogoUrl` (que usa `_cardCupCard._sh`) NO
-       conoce Resto de Ligas, así que hay que pasarlo explícito. */
+    function _isTbdSide(side){ return !side || !side.name || /^TBD/i.test(side.name) || /^__placeholder_/.test(side.league || ''); }
+    if (_isTbdSide(tie.a) || _isTbdSide(tie.b)) return null; /* hueco BYE del pool: nada que jugar */
+    var isIda = (leg === 'i');
+    var home = isIda ? tie.a.name : tie.b.name;
+    var away = isIda ? tie.b.name : tie.a.name;
+    var homeLogo = (isIda ? tie.a.logo : tie.b.logo) || '';
+    var awayLogo = (isIda ? tie.b.logo : tie.a.logo) || '';
+    /* La ida vive en `tie.legs[0]`, la vuelta en `tie.legs[1]` —
+       ambos ya en formato {home,away,gh,ga} correcto por leg (ver
+       `_wprevKoSaveHumanResult`/`_simulateTie`, part2/misc_body_2.html). */
+    var legObj = (tie.legs && tie.legs[isIda ? 0 : 1]) || null;
+    var _wpRival = String(_psHubClubMatches(home) ? away : home);
     return {
-      home:String(m.home), away:String(m.away),
-      homeLogo:(grp[m.hi]&&grp[m.hi].logo)||'', awayLogo:(grp[m.ai]&&grp[m.ai].logo)||'',
+      home:String(home), away:String(away), homeLogo:homeLogo, awayLogo:awayLogo,
       rival:_wpRival,
       rivalHuman:_psNameIsHuman(_wpRival),
-      played:!!m.played, gh:(m.gh|0), ga:(m.ga|0),
-      events:m.events||[], mvp:m.mvp||'', mvpTeam:m.mvpTeam||'',
-      uid:'ps-wprevfg-'+gi+'-'+(jor-1), emoji:'🔵',
-      open:(function(_gi,_j){ return function(){ try { if (typeof window._wprevPlayHumanMatch === 'function') window._wprevPlayHumanMatch(_gi,_j); } catch(_){} }; })(gi, jor-1)
+      played:!!legObj, gh:(legObj ? (legObj.gh|0) : 0), ga:(legObj ? (legObj.ga|0) : 0),
+      events:[], mvp:'', mvpTeam:'',
+      uid:'ps-wprevko-r2-'+idx+'-'+leg, emoji:'🟣',
+      defer:{ tourId:'ucl', matchKey:'wprevko_r2_'+idx+'_'+leg },
+      /* `_wprevKoOpenMatch` NO recibe el leg — lo auto-deriva del propio
+         estado de la eliminatoria (ida si `tie.legs` está vacío, vuelta
+         si ya hay 1 leg jugado; mismo criterio que `_eurKoHubResolve`). */
+      open:(function(_idx){ return function(){ try { if (typeof window._wprevKoOpenMatch === 'function') window._wprevKoOpenMatch('r2', _idx); } catch(_){} }; })(idx)
+    };
+  }
+  /* Card "RIVAL PENDIENTE" de la Previa de Champions — Ronda 2: el club
+     humano está fijo a la Ronda 2 pero su rival (ganador de la Ronda 1
+     IA-vs-IA) todavía no existe. Mismo patrón que `_cardEurKoPending`
+     (arriba), pero SIN 📌 Posponer: a diferencia del bracket europeo
+     (que reserva de antemano un índice por ronda, reabrible por
+     `_playDeferredHvH`), `s.r2.ties` NO EXISTE hasta que `_doDrawR2`
+     sortea la Ronda 2 — no hay ningún matchKey estable que posponer
+     todavía. El único botón es auto-simular la Ronda 1, que resuelve
+     el bloqueo al instante. */
+  function _cardWprevPending(day, wp){
+    var st = _stage(); if (!st) return;
+    var lbl = day.label || 'Previa Champions';
+    var msg = '⚠️ RIVAL PENDIENTE<br><span style="font-size:11px;opacity:.75;">La Ronda 1 de la Previa de Champions (IA-vs-IA) aún no se ha jugado. Simúlala para conocer a tu rival de la Ronda 2.</span>';
+    st.innerHTML =
+      '<div class="ps-card">'
+      + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
+      + '<div class="ps-sub">' + (wp.emoji || '🟣') + ' ' + _esc(lbl) + '</div>'
+      + '<div class="ps-meta" style="margin:16px 0;color:rgba(255,255,255,.85);line-height:1.5;">' + msg + '</div>'
+      + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
+      +   '<button type="button" class="ps-btn" id="ps-wprev-sim">🤖 Simular Ronda 1</button>'
+      + '</div>'
+      + '</div>';
+    var bs = document.getElementById('ps-wprev-sim');
+    if (bs) bs.onclick = function(){
+      bs.disabled = true;
+      try {
+        if (typeof window.simulateUclPrev === 'function'){
+          window.simulateUclPrev();
+          /* Si con esa pasada la Ronda 1 quedó completa, un 2º pase
+             sortea de una vez la Ronda 2 — el humano no debería tener
+             que pulsar 2 veces seguidas para ver a su rival. */
+          var st2 = null;
+          try { st2 = JSON.parse(localStorage.getItem('wprev_state_v1') || 'null'); } catch(_){}
+          if (st2 && st2.phase === 'r1-done') window.simulateUclPrev();
+        }
+      } catch(_){}
+      try { var stg = _stage(); if (stg) stg._psSig = null; } catch(_){}
+      _render();
     };
   }
 
@@ -9873,9 +9920,10 @@ window._showSimProgress = function(opts, onDone){
       if (_eko && _cardCupCard(day, _eko.emoji, lbl, _eko)) return;
       var _eur = _eurHubResolve(lbl);
       if (_eur && _cardCupCard(day, _eur.emoji, lbl, _eur)) return;
-      /* PREVIA DE CHAMPIONS · fase de grupos ("Previa Champions —
-         J<N>"), SOLO para el grupo con club humano. 2026-07-12. */
+      /* PREVIA DE CHAMPIONS · Ronda 2 ("Ida/Vuelta Previa Champions —
+         R2"), la única ronda que juega el club humano. 2026-08-02. */
       var _wpg = _wprevHubResolve(lbl);
+      if (_wpg && _wpg.pending){ _cardWprevPending(day, _wpg); return; }
       if (_wpg && _cardCupCard(day, _wpg.emoji, lbl, _wpg)) return;
     } catch(_){}
     /* Liga EA Sports: parseamos la jornada del label para (a) abrir la
@@ -63274,6 +63322,24 @@ https://api.sofascore.app/api/v1/team/44/image
       } else {
         /* Rival aún sin definir: hay que simular antes la eliminatoria previa. */
         try { if (typeof window._psFlashToast === 'function') window._psFlashToast('Tu rival aún no está definido — simula antes la eliminatoria previa.', false); } catch(_){}
+      }
+      return;
+    }
+    /* Previa de Champions — Ronda 2: matchKey `wprevko_r2_<idx>_<i|v>`
+       (ver `_wprevHubResolve`, más arriba en este archivo). 2026-08-02. */
+    var _wp = /^wprevko_(r1|r2)_(\d+)_([iv])$/.exec(String(entry.matchKey || ''));
+    if (_wp){
+      var _wpOpened = false;
+      try { if (typeof window._wprevKoOpenMatch === 'function') _wpOpened = !!window._wprevKoOpenMatch(_wp[1], parseInt(_wp[2],10)); } catch(_){}
+      if (_wpOpened){
+        var _prevCbWp = window._ppCustomCallback;
+        window._ppCustomCallback = function(){
+          try { if (typeof _prevCbWp === 'function') _prevCbWp(); } catch(_){}
+          try { if (typeof window._pendHvHRemove === 'function') window._pendHvHRemove(uid); } catch(_){}
+          try { if (typeof window.muFixRefresh === 'function') window.muFixRefresh(); } catch(_){}
+        };
+      } else {
+        try { if (typeof window._psFlashToast === 'function') window._psFlashToast('Ese cruce de la Previa de Champions ya no está pendiente de jugar.', false); } catch(_){}
       }
       return;
     }

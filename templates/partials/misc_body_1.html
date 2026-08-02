@@ -37145,9 +37145,21 @@ window._showSimProgress = function(opts, onDone){
         /* Ranking sintético por poder cuando rN=0 (solo zonas feeder:
            Wild Card auto-cupo y Open Qualifier). Para zonas directas
            (ucl/uclPrev/uel/uecl), llegado aquí rN === needed por la
-           regla estricta de arriba; usamos _standingsFromResults. */
+           regla estricta de arriba; usamos _standingsFromResults.
+
+           EXCEPCIÓN (obligatorio, 2026-08-02, "he reiniciado todas las
+           ligas... el Open Qualifier y la Recopa... salen si no se ha
+           jugado nada"): una liga recién RESETEADA (`data.neverPlayed
+           === true`, sellado por `ligaExtReiniciar`/`ligaExtReiniciarSlug`)
+           NO cae al ranking por poder — aporta 0 equipos hasta que se
+           vuelva a simular. El ranking por poder solo es la señal
+           correcta para una liga VIRGEN (nunca tocada, `neverPlayed`
+           ausente) — ver `_rankByPower` más abajo. `ligaExtSimular`
+           limpia el flag (`neverPlayed = false`) en cuanto produce
+           resultados reales, así la liga vuelve a contribuir con
+           normalidad en su siguiente Sim. */
         var ranking = (rN === 0)
-          ? _rankByPower(teams)
+          ? (data.neverPlayed === true ? [] : _rankByPower(teams))
           : _standingsFromResults(teams, data.results);
         var added = 0;
         /* Si el slot wildcard/uclQual cae sobre un equipo español de
@@ -51391,6 +51403,10 @@ https://api.sofascore.app/api/v1/team/44/image
       (t.players||[]).forEach(resetPlayerStats);
     });
     data.results = [];
+    /* Esta liga va a producir resultados reales YA MISMO — deja de
+       ser "recién reseteada" para el ranking por poder de Europa
+       (ver `_computeQualifiedFromLeagues`, obligatorio 2026-08-02). */
+    data.neverPlayed = false;
     var ts = _capRoundRobin(data.teams.slice());
     /* Lista plana de cruces. Por defecto doble round-robin (i,j) con
        i≠j. Resto del Mundo es la única liga que se juega a UNA sola
@@ -51981,6 +51997,11 @@ https://api.sofascore.app/api/v1/team/44/image
         }
       });
     }
+    /* `neverPlayed:true` — un reset DELIBERADO saca a esta liga del
+       ranking por poder de Europa (Open Qualifier/Wild Card/UCL/UEL/
+       UECL/Previa) hasta que se vuelva a simular. Ver
+       `_computeQualifiedFromLeagues` (obligatorio, 2026-08-02). */
+    data.neverPlayed = true;
     saveData(CURRENT_KEY, data);
     renderTable();
     /* Si la overlay de plantilla está abierta, repintar también para
@@ -52021,6 +52042,10 @@ https://api.sofascore.app/api/v1/team/44/image
       data.teams.forEach(function(t){ (t.players||[]).forEach(resetPlayerStats); });
     }
     data.copa = null;   /* reset de la Copa de esta liga — reglas intactas */
+    /* `neverPlayed:true` — mismo fix que `ligaExtReiniciar` (obligatorio,
+       2026-08-02): saca a esta liga del ranking por poder de Open
+       Qualifier/Wild Card/UCL/UEL/UECL/Previa hasta que se re-simule. */
+    data.neverPlayed = true;
     saveData(slug, data);
     if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
     return true;

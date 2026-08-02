@@ -12350,18 +12350,21 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       };
       if (INTER_RD[im[1].toLowerCase()]) return INTER_RD[im[1].toLowerCase()];
     }
-    /* Previa de Champions — fase de grupos (matchKey `wprevfg_<gi>_<j>`,
-       compKey 'ucl', lo abre `_wprevPlayHumanMatch`) y Ronda Preliminar
-       (matchKey `wprevko_<idx>_<i|v>`, compKey 'ucl', lo abre
-       `_wprevKoAbrirPrevia`). Sin esta rama caían a `MAP['ucl']`
-       (inexistente) → null → fallback a HOY + comp genérica — bug
-       2026-07-12, foto usuario: la previa de "Atlético Madrid vs
-       Dunajska Streda" (calendario: "04 Ago · Previa Champions — J3")
-       mostraba "12 de Julio" (=hoy) + "Champions League" genérico. */
-    var wfgM = String(matchKey || '').match(/^wprevfg_\d+_(\d+)$/);
-    if (wfgM) return 'Previa Champions — J' + (parseInt(wfgM[1], 10) + 1);
-    var wkoM = String(matchKey || '').match(/^wprevko_\d+_[iv]$/i);
-    if (wkoM) return 'Previa Champions — Ronda Preliminar';
+    /* Previa de Champions — Ronda 2 (motor Ronda1+Ronda2 KO, 2026-07-31;
+       calendario reescrito a solo 2 días, 2026-08-02): matchKey
+       `wprevko_<r1|r2>_<idx>_<i|v>`, compKey 'ucl', lo abre
+       `_wprevKoAbrirPrevia`/`abrirWprevKo`. Sin esta rama caían a
+       `MAP['ucl']` (inexistente) → null → fallback a HOY + comp
+       genérica — mismo bug ya documentado en 2026-07-12 para el
+       formato anterior (fase de grupos), reproducido aquí para el
+       formato de 2 rondas KO porque el regex viejo (`wprevko_\d+_[iv]`,
+       sin segmento de ronda) nunca coincidía con el matchKey real. */
+    var wkoM = String(matchKey || '').match(/^wprevko_(r1|r2)_\d+_([iv])$/i);
+    if (wkoM) {
+      var _wkRound = (wkoM[1].toLowerCase() === 'r1') ? '1' : '2';
+      var _wkLeg = (wkoM[2].toLowerCase() === 'v') ? 'Vuelta' : 'Ida';
+      return _wkLeg + ' Previa Champions — R' + _wkRound;
+    }
     var MAP = {
       'copa':'Copa del Rey — 1/128','copa-fin':'FINAL COPA DEL REY',
       'inter':'Intercontinental — Cuartos','inter-fin':'Intercontinental — FINAL 🏆',

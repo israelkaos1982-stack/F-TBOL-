@@ -40355,12 +40355,15 @@ window._showSimProgress = function(opts, onDone){
     { id:'acsa',   emoji:'🔨', mister:'Acsa',   club:'Real Madrid',    seleccion:'Inglaterra', screen:'s-madrid'   },
     { id:'isra',   emoji:'✏️', mister:'Isra',   club:'Atlético Madrid', seleccion:'Noruega',    screen:'s-atletico' },
     { id:'angel',  emoji:'😈', mister:'Ángel',  club:'FC Barcelona',   seleccion:'Argentina',  screen:'s-barca'    },
-    { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',            seleccion:'España',     screen:'s-psg'      },
-    /* 7º mister (2026-06-26): Inter🐲 = Rubén (club Inter + selección Portugal).
-       Hereda reconocimiento humano (_isHumanClubCanonico → derbys + Superliga),
-       claves de hub namespaced `_ruben`, e ISRAMAX. La TARJETA del menú es la
-       que añade el usuario a mano (escudo real); aquí solo vive el hub. */
-    { id:'ruben',  emoji:'🐲', mister:'Rubén',  club:'Inter',          seleccion:'Portugal',   screen:'s-internazionale' }
+    { id:'izan',   emoji:'🦆', mister:'Izan',   club:'PSG',            seleccion:'España',     screen:'s-psg'      }
+    /* 7º mister Inter🐲/Rubén (club Inter + selección Portugal, alta
+       2026-06-26) fue RETIRADO como humano (petición usuario 2026-08-02):
+       "eliminamos a Portugal e Inter como equipos humanos". Inter vuelve
+       a ser IA normal en Resto de Ligas/Mundialito/Torneos de Verano;
+       Portugal vuelve a ser IA normal en Mundial 2032/Rondas Previas y
+       Finales. NO reintroducir esta entrada sin acuerdo explícito del
+       usuario — ver los fixups `_fixupUnhumanizeRubenV1*` más abajo que
+       limpian el `isHuman`/icono ya persistido de ambos equipos. */
   ];
   function _mhNorm(s){
     return String(s||'')
@@ -40415,43 +40418,18 @@ window._showSimProgress = function(opts, onDone){
     for (var pa = 0; pa < psgAlias.length; pa++){
       if (_mhNorm(name) === _mhNorm(psgAlias[pa])) return true;
     }
-    /* Inter (2026-06-26): nombre corto. El match laxo `_mhMatchName`
-       atraparía "Inter Miami" / "Internacional" (otros clubes reales)
-       como substring. Igual que Liverpool/PSG → alias EXACTO. */
-    if (_mhIsInterName(name)) return true;
     for (var i = 1; i < MISTERS_HUMANOS.length; i++){
-      if (MISTERS_HUMANOS[i].id === 'ruben') continue; /* club Inter manejado exacto arriba */
       if (_mhMatchName(name, MISTERS_HUMANOS[i].club)) return true;
     }
     return false;
   };
-  /* Alias EXACTO del Inter de Milán (nerazzurro). Distingue del resto de
-     "Inter*" reales (Inter Miami, Internacional de Porto Alegre…). */
-  var _INTER_ALIASES = ['Inter','Internazionale','FC Internazionale','FC Internazionale Milano',
-                        'Inter Milan','Inter Milán','Inter de Milan','Inter de Milán'];
-  function _mhIsInterName(name){
-    if (!name) return false;
-    var nn = _mhNorm(name);
-    for (var k = 0; k < _INTER_ALIASES.length; k++){
-      if (nn === _mhNorm(_INTER_ALIASES[k])) return true;
-    }
-    return false;
-  }
   /* Devuelve el mister que dirige a este team (club o selección), o
      null si no es humano. Util para emparejar Liverpool ↔ Francia
      ("el mismo Toñín dirige ambos"). */
   window._mhFindMister = function(name){
     if (!name) return null;
-    /* Inter → alias EXACTO (evita atrapar "Inter Miami"/"Internacional"). */
-    if (_mhIsInterName(name)) return _mhById('ruben');
     for (var i = 0; i < MISTERS_HUMANOS.length; i++){
       var m = MISTERS_HUMANOS[i];
-      if (m.id === 'ruben'){
-        /* club Inter manejado exacto arriba; la selección (Portugal) sí
-           se resuelve por el loop normal. */
-        if (m.seleccion && _mhMatchName(name, m.seleccion)) return m;
-        continue;
-      }
       if (_mhMatchName(name, m.club) || _mhMatchName(name, m.seleccion)) return m;
     }
     /* Liverpool alias legacy — EXACTO (ver _isHumanClubCanonico): la
@@ -40484,11 +40462,14 @@ window._showSimProgress = function(opts, onDone){
 
          Toñín → Liverpool · Álvaro → Arsenal · Acsa → Real Madrid
          Isra  → Atlético  · Ángel  → FC Barcelona · Izan → PSG
-         Rubén → Inter
+
+     (el 7º mister, Rubén/Inter, se retiró del registro el 2026-08-02 —
+     ver los fixups `_fixupUnhumanizeRubenTournamentsV1`/
+     `_fixupUnhumanizePortugalIconV1` más abajo)
 
      `_humanClubSlotName(teamName)` resuelve, para un CLUB humano canónico,
      el NOMBRE del slot de `ligaExt_liga-ea-sports` que pertenece a SU
-     MISTER (alias-safe Bayern↔Liverpool, Paris↔PSG, Inter*), de modo que
+     MISTER (alias-safe Bayern↔Liverpool, Paris↔PSG), de modo que
      el picker (gm-modal `_gmGetSquad` y ml-card) lea la plantilla del
      equipo correcto:
        · Si existe un slot con nombre EXACTO = club pedido → ése (caso
@@ -40497,7 +40478,7 @@ window._showSimProgress = function(opts, onDone){
          MISMO mister (`_mhSameMister`), gateado a clubes humanos
          (`_isHumanClubCanonico`) para NUNCA cruzar a otro mister.
      Si el nombre NO es un club humano canónico (IA, selección, etc.) lo
-     devuelve TAL CUAL → cero efecto fuera de las 7 cajas humanas. */
+     devuelve TAL CUAL → cero efecto fuera de las 6 cajas humanas. */
   window._humanClubSlotName = function(teamName){
     try {
       if (typeof window._isHumanClubCanonico !== 'function'
@@ -57183,11 +57164,107 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   window._fixupInterHumanoItaliaV1 = _fixupInterHumanoItaliaV1;
+  /* Fixup DE-HUMANIZAR Inter/Portugal en TODOS los torneos (2026-08-02,
+     petición usuario "eliminamos a Portugal e Inter como equipos
+     humanos"): el mister Rubén (7º, MISTERS_HUMANOS) se retiró del
+     registro, pero cualquier torneo YA SORTEADO con el Inter o Portugal
+     (Mundial 2032 `mundial-48`, Rondas Previas/Finales `spv*`/`sfn*`
+     como "Road Copa Asia", Mundialito de Clubes `tour_mundial_v1`,
+     Torneos de Verano incluido el Trofeo Joan Gamper `tour_jg_v1`) sigue
+     con `cfg.teams[].isHuman=true` estampado en el momento del sorteo —
+     el registro por sí solo NO corrige retroactivamente ese flag ya
+     persistido (Pase 1 de `_selPair`/`_realPair`/`_gmHumanInvolved` lee
+     `t.isHuman` ANTES que el registro). GENÉRICO: recorre TODAS las
+     claves `tour_<id>_v1` de localStorage (no una lista hardcodeada de
+     torneos), así que cualquier otro torneo que tuviera al Inter o a
+     Portugal marcados humanos también se corrige, presente o futuro.
+     Con `isHuman` limpio, esos partidos dejan de mostrar la Pantalla de
+     Previa y el próximo Sim los resuelve como IA-vs-IA normal. */
+  function _fixupUnhumanizeRubenTournamentsV1(){
+    var FLAG = 'ftbol_unhumanize_ruben_tours_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    /* Todo literal ya sin acentos: `_lextNormName` (NFD strip) le quita
+       los acentos a `t.name` antes de comparar, así que una variante
+       acentuada aquí nunca haría match — solo hacen falta las formas
+       normalizadas. */
+    var NAMES = ['inter','internazionale','fc internazionale','fc internazionale milano',
+                 'inter milan','inter de milan','portugal'];
+    try {
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (!k || !/^tour_.+_v1$/.test(k)) continue;
+        var raw = localStorage.getItem(k);
+        if (!raw) continue;
+        var cfg;
+        try { cfg = JSON.parse(raw); } catch(_){ continue; }
+        if (!cfg || !Array.isArray(cfg.teams)) continue;
+        var changed = false;
+        cfg.teams.forEach(function(t){
+          if (!t || !t.name) return;
+          if (NAMES.indexOf(_lextNormName(t.name)) === -1) return;
+          if (t.isHuman){ t.isHuman = false; changed = true; }
+          if (t.humanEmoji){ delete t.humanEmoji; changed = true; }
+        });
+        if (changed){
+          cfg.updatedAt = new Date().toISOString();
+          try { window._lsSetSafe(k, JSON.stringify(cfg)); } catch(_){}
+          try {
+            window._TOUR_CACHE = window._TOUR_CACHE || {};
+            window._TOUR_CACHE[cfg.id || k.replace(/^tour_/,'').replace(/_v1$/,'')] = cfg;
+          } catch(_){}
+          try { if (typeof window._tourSave === 'function' && cfg.id) window._tourSave(cfg.id, cfg); } catch(_){}
+          try { console.warn('[torneos] Inter/Portugal des-humanizados en ' + k); } catch(_){}
+        }
+      }
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  }
+  window._fixupUnhumanizeRubenTournamentsV1 = _fixupUnhumanizeRubenTournamentsV1;
+  /* Fixup del icono humano de Portugal en el editor "🌐 Plantilla de
+     selecciones" (2026-08-02, mismo motivo de arriba): si el admin le
+     puso un icono (🐲) al dar de alta a Rubén, ese campo sigue vivo en
+     `selecciones_squad_v1` y `_esSelHumana`/`humanIcon` lo siguen
+     leyendo vía `_SEL_HUMAN_ICONS` aunque Portugal ya no esté en
+     MISTERS_HUMANOS ni en el `SEL_HUMANAS` del bundle. Se limpia UNA
+     vez (idempotente vía flag) y se re-hidrata para que `_SEL_HUMAN_ICONS`
+     quede al día sin esperar a que el admin abra el editor. */
+  function _fixupUnhumanizePortugalIconV1(){
+    var FLAG = 'ftbol_unhumanize_portugal_icon_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var raw = localStorage.getItem('selecciones_squad_v1');
+      if (raw){
+        var d = JSON.parse(raw);
+        if (d && Array.isArray(d.teams)){
+          var changed = false;
+          d.teams.forEach(function(t){
+            if (!t || !t.name) return;
+            if (_lextNormName(t.name) !== 'portugal') return;
+            if (t.icon){ delete t.icon; changed = true; }
+          });
+          if (changed){
+            try { window._lsSetSafe('selecciones_squad_v1', JSON.stringify(d)); } catch(_){}
+            try {
+              if (typeof window.fetch === 'function')
+                window.fetch('/api/kv/selecciones_squad_v1', { method:'POST',
+                  headers:{'Content-Type':'application/json'}, body: JSON.stringify({ value:d }) }).catch(function(){});
+            } catch(_){}
+            try { if (typeof window._selSquadHydrate === 'function') window._selSquadHydrate(); } catch(_){}
+            try { console.warn('[selecciones] Icono humano retirado de Portugal.'); } catch(_){}
+          }
+        }
+      }
+      window._lsSetSafe(FLAG, '1');
+    } catch(_){}
+  }
+  window._fixupUnhumanizePortugalIconV1 = _fixupUnhumanizePortugalIconV1;
   /* Seed eager (al cargar) para que Sim All y aperturas directas vean
      los 44 equipos sin abrir antes la pantalla. */
   try { _ensureRestoMundoSeed(); } catch(_){}
   try { _fixupRestoMundoAliasesV2(); } catch(_){}
   try { _fixupInterHumanoItaliaV1(); } catch(_){}
+  try { _fixupUnhumanizeRubenTournamentsV1(); } catch(_){}
+  try { _fixupUnhumanizePortugalIconV1(); } catch(_){}
   /* Precarga del reparto europeo por liga (LEAGUE_DEFAULT_ZONES);
      corre una sola vez vía flag en localStorage. */
   try { _seedLeagueDefaultZonesV1(); } catch(_){}

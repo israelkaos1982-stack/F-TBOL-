@@ -13297,7 +13297,10 @@ window._fallbackSq11 = function(){
    (misma selección, mismos jugadores). Petición usuario 2026-06-02.
 
    Selecciones humanas (6): Francia💡, Brasil🐭, Inglaterra🔨, Noruega✏️,
-   Argentina😈, España🦆.
+   Argentina😈, España🦆. Portugal (7ª, mister Rubén/Inter) fue RETIRADA
+   como humana el 2026-08-02 — vuelve a ser IA normal en Mundial 2032 y
+   en Rondas Previas/Finales (petición usuario "eliminamos a Portugal e
+   Inter como equipos humanos").
 
    Reglas (distintas a clubes):
    1. Lesión "natural" del motor → 1 partido (el siguiente).
@@ -13314,7 +13317,7 @@ window._fallbackSq11 = function(){
 (function(){
 
   // ── Lista canónica de selecciones humanas ────────────────────────
-  var SEL_HUMANAS = ['Francia','Brasil','Inglaterra','Noruega','Argentina','España','Portugal'];
+  var SEL_HUMANAS = ['Francia','Brasil','Inglaterra','Noruega','Argentina','España'];
 
   function _normSel(s){
     return String(s||'').trim().toLowerCase()

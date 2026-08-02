@@ -56942,10 +56942,60 @@ https://api.sofascore.app/api/v1/team/44/image
       window._lsSetSafe(FLAG, '1');
     } catch(_){}
   }
+  /* Fixup Inter · Italia (2026-08-02, foto usuario: el Inter de "Resto
+     de Ligas · Italia" salía con el icono 🐲 puesto en la clasificación).
+     Causa: el Inter es el club del mister Rubén (registro MISTERS_HUMANOS)
+     y en algún momento se movió/copió a esta liga con `isHuman`/
+     `humanEmoji` todavía puestos — exactamente el bug ya descrito en la
+     sección "Mover equipos" de arriba ("el flag se limpia SIEMPRE al
+     mover"), pero esta liga concreta quedó con datos de ANTES de ese fix.
+     En Resto de Ligas el Inter es IA — limpia el flag UNA vez (idempotente
+     vía flag) y sella `updatedAt` fresco para que la fusión por-equipo del
+     servidor (`_lx_merge_teams`, gana por `updatedAt`) adopte la copia
+     corregida en vez de resucitar el dragón desde una copia vieja. */
+  function _fixupInterHumanoItaliaV1(){
+    var FLAG = 'ftbol_inter_italia_human_fix_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var slug = 'italia';
+      var raw = localStorage.getItem('ligaExt_' + slug);
+      /* Si esta liga aún no está cacheada en ESTE dispositivo, NO
+         marcamos el flag — reintentamos en el próximo boot (barato: un
+         solo getItem) hasta que el admin la abra alguna vez aquí. Sin
+         esto, un dispositivo que arranca antes de tener la liga en local
+         se quedaría con el fixup "gastado" sin haber corregido nada. */
+      if (!raw) return;
+      var d = JSON.parse(raw);
+      if (d && Array.isArray(d.teams)){
+        var found = false, changed = false;
+        d.teams.forEach(function(t){
+          if (!t || !t.name) return;
+          if (_lextNormName(t.name) !== 'inter') return;
+          found = true;
+          if (t.isHuman || t.humanEmoji){
+            t.isHuman = false;
+            delete t.humanEmoji;
+            t.updatedAt = Date.now();
+            changed = true;
+          }
+        });
+        if (changed){
+          try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(d)); } catch(_){}
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+          try { if (typeof saveData === 'function') saveData(slug, d); } catch(_){}
+          try { console.warn('[ligaExt] Italia: icono de humano (🐲) retirado del Inter — es IA en Resto de Ligas.'); } catch(_){}
+        }
+        if (found) window._lsSetSafe(FLAG, '1');
+      }
+    } catch(_){}
+  }
+  window._fixupInterHumanoItaliaV1 = _fixupInterHumanoItaliaV1;
   /* Seed eager (al cargar) para que Sim All y aperturas directas vean
      los 44 equipos sin abrir antes la pantalla. */
   try { _ensureRestoMundoSeed(); } catch(_){}
   try { _fixupRestoMundoAliasesV2(); } catch(_){}
+  try { _fixupInterHumanoItaliaV1(); } catch(_){}
   /* Precarga del reparto europeo por liga (LEAGUE_DEFAULT_ZONES);
      corre una sola vez vía flag en localStorage. */
   try { _seedLeagueDefaultZonesV1(); } catch(_){}

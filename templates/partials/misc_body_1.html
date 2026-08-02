@@ -23223,30 +23223,24 @@ window._showSimProgress = function(opts, onDone){
     } catch(_) { if(typeof cb === 'function') cb(false); }
   }
   function saveIcons(icons){
-    /* Detección de quota: el setItem se hace dentro de try/catch y, si
-       falla, devolvemos false para que el caller pueda revertir/avisar.
+    /* Detección de quota: `window._lsSetSafe` NUNCA lanza (devuelve
+       true/false) — desde la migración 2026-07-29 de
+       `localStorage.setItem` a `_lsSetSafe`, comprobar el resultado vía
+       try/catch ya no funciona (el catch queda muerto). Si falla,
+       devolvemos 'quota'/false para que el caller pueda revertir/avisar.
        Antes el catch era vacío y el usuario veía "guardado" pero al
        recargar el icono había desaparecido (foto reportada
        2026-05-02). */
     var payload;
     try { payload = JSON.stringify(icons || {}); } catch(_){ return false; }
-    var localOk = true;
-    try { window._lsSetSafe(KEY, payload); }
-    catch(err){
-      localOk = false;
-      var isQuota = err && (
-        err.code === 22 || err.code === 1014 ||
-        err.name === 'QuotaExceededError' ||
-        err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
-      /* Aunque localStorage falle, intentamos persistir en server
-         para que el dato no se pierda (la próxima recarga lo bajará
-         del server al localStorage). */
-      _saveIconsServer(icons);
-      return isQuota ? 'quota' : false;
-    }
-    /* localStorage OK → también al server, async best-effort. */
-    if(localOk) _saveIconsServer(icons);
-    return true;
+    var localOk = false;
+    try { localOk = !!window._lsSetSafe(KEY, payload); } catch(_){ localOk = false; }
+    /* Aunque localStorage falle, intentamos persistir en server para
+       que el dato no se pierda (la próxima recarga lo bajará del
+       server al localStorage). */
+    _saveIconsServer(icons);
+    if(localOk) return true;
+    return window._lsQuotaExhausted ? 'quota' : false;
   }
   function cardLabel(card){
     var lbl = card.querySelector('.sc-label');
@@ -39482,20 +39476,33 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
   }
   function _hydrateFromServer(slug, cb){
-    /* Solo GET si localStorage está vacío para esa clave: si ya
-       tenemos contenido local, no queremos sobrescribir cambios
-       no sincronizados. */
-    var localRaw;
+    /* GET SIEMPRE (no solo si local está vacío): si local está vacío
+       adoptamos sin condición; si local tiene contenido, adoptamos el
+       del servidor SOLO si es más reciente (`ts` mayor) — así un
+       guardado que falló en LOCAL (localStorage lleno, ver `_save`)
+       pero sí llegó al servidor no se pierde para siempre en el
+       siguiente arranque. Antes, con local no-vacío pero STALE (sin el
+       último equipo añadido), este guard saltaba el GET entero y esa
+       adición vivía solo en el servidor, invisible para este
+       dispositivo hasta que otra escritura local la sobreescribiera. */
+    var localRaw, localTs = 0;
     try { localRaw = localStorage.getItem(_key(slug)); } catch(_){}
-    if(localRaw){ if(typeof cb === 'function') cb(false); return; }
+    if(localRaw){
+      try { localTs = Number(JSON.parse(localRaw).ts) || 0; } catch(_){ localTs = 0; }
+    }
     try {
       fetch('/api/kv/'+_key(slug), {credentials:'same-origin'})
         .then(function(r){ return r.ok ? r.json() : null; })
         .then(function(j){
-          if(j && j.ok && j.value){
-            try { window._lsSetSafe(_key(slug), JSON.stringify(j.value)); } catch(_){}
-            if(typeof cb === 'function') cb(true);
-          } else { if(typeof cb === 'function') cb(false); }
+          if(j && j.ok && j.value && Array.isArray(j.value.teams)){
+            var srvTs = Number(j.value.ts) || 0;
+            if(!localRaw || srvTs > localTs){
+              try { window._lsSetSafe(_key(slug), JSON.stringify(j.value)); } catch(_){}
+              if(typeof cb === 'function') cb(true);
+              return;
+            }
+          }
+          if(typeof cb === 'function') cb(false);
         }).catch(function(){ if(typeof cb === 'function') cb(false); });
     } catch(_) { if(typeof cb === 'function') cb(false); }
   }
@@ -39506,24 +39513,33 @@ window._showSimProgress = function(opts, onDone){
        había desaparecido — porque el setItem había chocado con el cap
        de localStorage y fallado en silencio. Reportado 2026-05-02:
        "por más que añado manualmente los equipos españoles, no se
-       guardan al recargar". */
+       guardan al recargar".
+
+       REGRESIÓN 2026-07-29 (migración masiva `localStorage.setItem` →
+       `window._lsSetSafe`, commit "Migra localStorage.setItem a
+       _lsSetSafe en todo el proyecto"): `_lsSetSafe` NUNCA lanza (a
+       diferencia de `localStorage.setItem`) — devuelve `true`/`false`.
+       La migración mecánica sustituyó la llamada pero dejó el
+       try/catch de ARRIBA intacto, sin comprobar el valor de retorno.
+       Como `_lsSetSafe` nunca lanza, ese catch quedó MUERTO — cuando
+       el guardado local fallaba de verdad (localStorage lleno, el caso
+       más común de este proyecto), `_save` seguía devolviendo `true`
+       a ciegas: el admin pulsaba "Añadir" y no pasaba NADA (ni el
+       equipo se veía añadido tras el render, ni ningún aviso — el
+       catch de `_doAdd` nunca se disparaba). Reportado 2026-08-02:
+       "no me deja añadir manualmente los equipos... a ninguna
+       competición". Fix: comprobar el booleano real de `_lsSetSafe`. */
     var payload;
     try { payload = JSON.stringify({teams:list, ts:Date.now()}); } catch(_){ return false; }
-    try {
-      window._lsSetSafe(_key(slug), payload);
-      _saveServer(slug, list);
-      return true;
-    }
-    catch(err){
-      var isQuota = err && (
-        err.code === 22 || err.code === 1014 ||
-        err.name === 'QuotaExceededError' ||
-        err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
-      /* Aunque localStorage falle, persistimos al server — la próxima
-         recarga lo bajará al localStorage y el dato no se pierde. */
-      _saveServer(slug, list);
-      return isQuota ? 'quota' : false;
-    }
+    var localOk = false;
+    try { localOk = !!window._lsSetSafe(_key(slug), payload); } catch(_){ localOk = false; }
+    /* Aunque localStorage falle, persistimos al server — la próxima
+       recarga lo bajará al localStorage y el dato no se pierde (ver
+       `_hydrateFromServer`, que adopta la copia del servidor si es
+       más reciente que la local, no solo si la local está vacía). */
+    _saveServer(slug, list);
+    if(localOk) return true;
+    return window._lsQuotaExhausted ? 'quota' : false;
   }
 
   /* API que consumen los compute*Classified() en este mismo archivo. */
@@ -39689,10 +39705,16 @@ window._showSimProgress = function(opts, onDone){
     /* Save falló — revertimos el push para que la UI no engañe al
        admin mostrando el equipo que en realidad no se persistió. */
     list.pop();
+    /* alert() a secas puede quedar SUPRIMIDO por el navegador en una
+       sesión con muchos diálogos previos (regla 2026-07-06,
+       `_gmCriticalNotice`) — con este bug el usuario ya llevaba rato
+       reintentando "Añadir" sin ver ningún aviso. Se usa el banner
+       propio si está disponible; si no, cae a alert(). */
+    var _notice = (window._gmCriticalNotice || alert);
     if(saveResult === 'quota'){
-      alert('⚠️ El navegador está sin espacio (localStorage lleno) y no he podido guardar "'+name+'".\n\nLibera espacio (entra a Resto de Ligas para que se auto-limpien backups antiguos, o reduce iconos personalizados en Competiciones) y vuelve a intentarlo.');
+      _notice('⚠️ El navegador está sin espacio (localStorage lleno) y no he podido guardar "'+name+'" en este dispositivo.\n\nEl intento también se envió al servidor — si llegó, aparecerá solo al volver a abrir esta pantalla. Para asegurarlo, entra a ⚙️ → 📊 Espacio del navegador y pulsa "Liberar reconstruibles ahora", luego reintenta.');
     } else {
-      alert('No se pudo guardar "'+name+'" (error desconocido). Reintenta.');
+      _notice('No se pudo guardar "'+name+'" en este dispositivo (error desconocido). El intento también se envió al servidor — reintenta o vuelve a abrir esta pantalla en unos segundos.');
     }
     render();
   }
@@ -66684,30 +66706,26 @@ https://api.sofascore.app/api/v1/team/44/image
   function save(arr){
     var payload;
     try { payload = JSON.stringify(arr || []); } catch(_){ payload = '[]'; }
-    var localOk = true;
-    try { window._lsSetSafe(STORE_KEY, payload); }
-    catch(err){
-      localOk = false;
-      var isQuota = err && (
-        err.code === 22 || err.code === 1014 ||
-        err.name === 'QuotaExceededError' ||
-        err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
-      if (isQuota && !window._trofQuotaWarned){
-        window._trofQuotaWarned = true;
-        try {
-          var tEl = document.createElement('div');
-          tEl.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
-            + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);'
-            + 'border-radius:10px;padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;'
-            + 'font-size:13px;letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
-            + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
-          tEl.innerHTML = '⚠️ Navegador sin espacio. El trofeo se '
-            + '<b>guardó en el servidor</b> pero no en local. '
-            + 'Limpia caché del navegador para reactivar el guardado local.';
-          document.body.appendChild(tEl);
-          setTimeout(function(){ try { document.body.removeChild(tEl); } catch(_){} }, 8000);
-        } catch(_){}
-      }
+    /* `window._lsSetSafe` NUNCA lanza (devuelve true/false) — comprobar
+       su resultado vía try/catch no funciona (regresión 2026-07-29,
+       misma migración que rompió "EA Sports → Europa"). Hay que mirar
+       el booleano que devuelve. */
+    var localOk = !!window._lsSetSafe(STORE_KEY, payload);
+    if (!localOk && !window._trofQuotaWarned){
+      window._trofQuotaWarned = true;
+      try {
+        var tEl = document.createElement('div');
+        tEl.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
+          + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);'
+          + 'border-radius:10px;padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;'
+          + 'font-size:13px;letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
+          + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+        tEl.innerHTML = '⚠️ Navegador sin espacio. El trofeo se '
+          + '<b>guardó en el servidor</b> pero no en local. '
+          + 'Limpia caché del navegador para reactivar el guardado local.';
+        document.body.appendChild(tEl);
+        setTimeout(function(){ try { document.body.removeChild(tEl); } catch(_){} }, 8000);
+      } catch(_){}
     }
     /* Server-side: siempre, aunque local haya fallado. Todo `save()` es
        una acción EXPLÍCITA del admin (añadir / editar / eliminar título

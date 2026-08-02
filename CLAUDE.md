@@ -1,5 +1,100 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## "🎮 Admin - Europa" no dejaba añadir NINGÚN equipo a NINGUNA competición — `_lsSetSafe` nunca lanza, el try/catch que comprobaba su resultado quedó MUERTO (obligatorio, 2026-08-02)
+
+**Bug (foto usuario 2026-08-02, «🎮 Admin - Europa» → sección SUPERLIGA,
+buscador con "Atle" mostrando sugerencias «Atlético Madrid»)**: "no me
+deja añadir manualmente los equipos cuando antes siempre me dejaba...
+no me deja añadir ningún equipo a ninguna competición" — el buscador
+por nombre (typeahead) funcionaba y mostraba sugerencias, pero pulsar
+"➕ Añadir" (o una sugerencia) no añadía nada a NINGUNA de las 11
+secciones de la pantalla (Champions/Previa/Open Qualifier/Wild Card/
+Europa League/Conference/Recopa/Supercopa Europa/Intercontinental/
+Superliga/Torneos de Verano), sin ningún error visible.
+
+### Causa raíz — regresión de la migración masiva a `_lsSetSafe` (2026-07-29)
+
+El commit "Migra localStorage.setItem a _lsSetSafe en todo el proyecto"
+sustituyó mecánicamente `localStorage.setItem(...)` por
+`window._lsSetSafe(...)` en ~250 puntos, incluida `_save(slug, list)`
+de este módulo (`s-ea-manual`, `misc_body_1.html`). El problema: **`_lsSetSafe`
+NUNCA lanza** (su propio contrato, "Devuelve true/false; NUNCA lanza")
+— libera espacio y reintenta INTERNAMENTE, y si tras todo no cabe,
+simplemente **devuelve `false`**. El `try{ window._lsSetSafe(...); ...
+return true; } catch(err){ ...comprobar err.code...; return isQuota ?
+'quota' : false; }` de `_save` quedó con el **catch MUERTO** — como
+`_lsSetSafe` nunca lanza, ese bloque nunca se ejecuta, y `_save`
+devolvía `true` SIEMPRE, aunque el guardado local hubiera fallado de
+verdad. Con el `localStorage` de este usuario crónicamente cerca del
+límite (documentado en muchas secciones de este archivo), el guardado
+de `manual_ea_<slug>_v1` fallaba en TODAS las competiciones y `_doAdd`
+nunca se enteraba: ni revertía el push, ni mostraba ningún aviso — el
+usuario pulsaba "Añadir" y, en cuanto `render()` releía el
+`localStorage` (que seguía con el valor VIEJO), el equipo simplemente
+no aparecía, sin ningún error. Antes de la migración,
+`localStorage.setItem` SÍ lanzaba de verdad y el catch original
+funcionaba (de ahí "antes siempre me dejaba").
+
+Se encontraron y arreglaron **2 instancias más del MISMO patrón** en el
+mismo archivo, migradas por el mismo commit: `saveIcons` (iconos custom
+de competiciones, `comp_icons_v1`) y `save(arr)` de la vitrina de
+Trofeos (`bayern_trofeos_v1`). Ambas también reportaban éxito a ciegas
+sin comprobar el resultado real de `_lsSetSafe`.
+
+**NO se tocó** `_setItemSafe` dentro de `saveData` (el chokepoint de
+`ligaExt_<slug>`, línea ~48802): tiene el MISMO catch muerto, pero su
+cascada de limpieza interna es en gran parte redundante con la que
+`_lsSetSafe` ya hace, y sus reintentos (`_retry()`) vuelven a llamar a
+`_lsSetSafe` — que, una vez `window._lsQuotaExhausted` queda a `true`
+(pestillo de sesión), corta en seco cualquier valor >64 KB SIN
+reintentar aunque `_setItemSafe` acabe de liberar más espacio. Arreglar
+el booleano ahí sin resolver esa interacción con el pestillo es
+arriesgado en la función más crítica del proyecto — queda pendiente
+para una sesión dedicada solo a `saveData`.
+
+### Fix
+
+- `_save(slug, list)` (`s-ea-manual`): usa el booleano real de
+  `window._lsSetSafe(...)`; si es `false`, revierte y reporta
+  `'quota'`/`false` según `window._lsQuotaExhausted` — igual que se
+  pretendía desde el principio.
+- `_hydrateFromServer(slug, cb)`: antes solo hacía GET si el
+  `localStorage` de esa clave estaba VACÍO — si el guardado local
+  fallaba pero el POST al servidor llegaba, la próxima vez el
+  `localStorage` ya NO estaba vacío (tenía el valor viejo) y el GET se
+  saltaba para siempre, perdiendo el equipo. Ahora compara `ts` (GET
+  SIEMPRE, adopta el del servidor si es más reciente que el local) —
+  cumple lo que el propio comentario del código ya prometía.
+- `saveIcons` y `save(arr)` (Trofeos): mismo fix del booleano.
+- Los avisos de fallo de `_doAdd` usan `window._gmCriticalNotice ||
+  alert` (regla ya existente 2026-07-06): un `alert()` a secas puede
+  quedar suprimido por el navegador tras muchos diálogos en la misma
+  sesión, indistinguible de "no pasa nada".
+
+### Reglas a respetar
+
+1. **PROHIBIDO** envolver una llamada a `window._lsSetSafe(...)` en un
+   `try{...} catch(err){ ...comprobar err.code...}` para detectar fallo
+   de cuota. `_lsSetSafe` NUNCA lanza — su contrato es devolver
+   `true`/`false`. Todo caller nuevo o migrado debe comprobar
+   `if (window._lsSetSafe(key, value)) {...} else {...}` (o guardar el
+   booleano en una variable), nunca depender de una excepción.
+2. **PROHIBIDO** asumir que una función de guardado con un
+   `try{ window._lsSetSafe(...); return true; } catch(...)` está
+   protegida contra cuota solo porque "tiene su propio catch" — auditar
+   si ese catch puede llegar a ejecutarse de verdad.
+3. **PROHIBIDO** que una hidratación desde servidor (`_hydrateFromServer`
+   o equivalente) se salte el GET solo porque el `localStorage` local
+   NO está vacío. Si el guardado local puede fallar en silencio (cuota),
+   un local "no vacío pero viejo" bloquea para siempre la recuperación
+   desde el servidor — comparar por `ts`/recencia, no por presencia.
+4. Si aparece un bug nuevo de "no me deja guardar/añadir X" en
+   CUALQUIER pantalla de este proyecto, buscar primero este mismo
+   patrón (`try { window._lsSetSafe(...); return true; } catch(err){...}`)
+   antes de investigar otra causa — es una regresión sistémica de la
+   migración 2026-07-29, no necesariamente aislada a la pantalla
+   reportada.
+
 ## El picker "AÑADIR POR LIGA" (equipos por competición) no dejaba seleccionar Liga — tap-vs-scroll + re-render de fondo interrumpiendo el gesto (obligatorio, 2026-08-01 #4)
 
 **Bug (fotos usuario 2026-08-01, overlay «👁 Equipos por competición» →

@@ -43390,6 +43390,21 @@ window._showSimProgress = function(opts, onDone){
      del equipo → emoji de la menu-card de su liga).
    ═══════════════════════════════════════════════════════════════ */
 (function(){
+  /* `cb(name, emoji, slug)` — el 3er argumento (2026-08-02) es el slug
+     REAL de la carpeta `ligaExt_<slug>`. Para las cards normales sale
+     de slugificar el label; para las 9 "Ligas Mixtas" (label oculto
+     con solo banderas emoji, ver `data-slug="liga-mixta-N"` en el
+     HTML) slugificar el label da CADENA VACÍA — `wireLigasExt`/
+     `openLigaExt` ya usan `data-slug` para esas cards (comentario
+     "bypasa el slugify() del label, que con emoji daría cadena
+     vacía"), pero `_restoLigasSimAll`/`_restoLigasResAll`/
+     `_collectAggregateStats` (definidos más abajo, en este mismo
+     IIFE) seguían derivando el slug SOLO del label — con slug='',
+     `ligaExtSimularSlug('')`/`ligaExtReiniciarSlug('')` devuelven
+     false al instante (`if(!slug) return...`) y esas 9 ligas quedaban
+     fuera de "Sim todas"/"Reset todas"/"Estadísticas" sin ningún
+     aviso. Ahora se respeta `data-slug` igual que el resto del
+     proyecto. */
   function _eachLeagueCard(cb){
     var cards = document.querySelectorAll('#s-ligas .menu-card');
     cards.forEach(function(card){
@@ -43398,8 +43413,9 @@ window._showSimProgress = function(opts, onDone){
       if(!lbl) return;
       var name = (lbl.textContent || '').trim();
       var emoji = emo ? (emo.textContent || '').trim() : '🌍';
+      var dataSlug = (card.getAttribute('data-slug') || '').trim();
       if(!name) return;
-      cb(name, emoji);
+      cb(name, emoji, dataSlug || _slugify(name));
     });
   }
   /* slugify igual que el del editor (líneas ~5805) — copia local
@@ -43412,12 +43428,25 @@ window._showSimProgress = function(opts, onDone){
   }
 
   /* Lee la data de una liga buscando en VARIAS fuentes en orden:
+     0. window.LIGA_CACHE[slug]                          (memoria, ver abajo)
      1. localStorage.ligaExt_<slug>                      (cache normal)
      2. localStorage.ligaExt_<slug>_protected            (refuerzo del lock)
-     3. hidratación en SEGUNDO PLANO desde /api/liga-ext/<slug>
+     3. hidratación en SEGUNDO PLANO desde /api/liga-ext-any/<slug>
      Sin esto, ligas como Escocia/Grecia/Israel/Ucrania/Polonia
      que el usuario completó en otro dispositivo no aparecían en
      el agregado porque la cache local del móvil estaba vacía.
+
+     2026-08-02: fuente 0 añadida ("todas las ligas y copas simuladas,
+     pero ni una sola estadística" — la sim SÍ corrió y guardó
+     `LIGA_CACHE[slug]` en memoria en `saveData`, pero con localStorage
+     lleno (banner "Navegador sin espacio", frecuente al simular ~60
+     ligas de golpe) el `_lsSetSafe` de `saveData` puede fallar en
+     silencio para varias ligas — la clasificación se sigue viendo en
+     otras pantallas porque leen la cache en memoria, pero este
+     agregador, que SOLO miraba `localStorage`, las daba por "sin
+     datos". `saveData` ahora espeja cada guardado en
+     `window.LIGA_CACHE[k]` (ver CLAUDE.md) — mirar aquí PRIMERO evita
+     depender de que el `setItem` haya cabido.
 
      2026-07-13: la fuente 3 YA NO es un XHR SÍNCRONO. Este helper lo
      llama `_collectAggregateStats()` en un bucle sobre las ~51 ligas
@@ -43429,9 +43458,21 @@ window._showSimProgress = function(opts, onDone){
      que ya pasaba durante la sim masiva) y dispara una hidratación
      asíncrona de fondo para que la PRÓXIMA vez que se abra esta
      pantalla (o cualquier otra que lea `ligaExt_<slug>`) ya la
-     encuentre en local. Nunca bloquea. */
+     encuentre en local. Nunca bloquea.
+
+     2026-08-02: la fuente 3 pasa de `/api/liga-ext/<slug>` (SOLO
+     `main`) a `/api/liga-ext-any/<slug>` (resuelve el fallback a
+     `_protected` EN EL SERVIDOR) — regla obligatoria 2026-07-29 #2:
+     "PROHIBIDO que un fetch nuevo de lectura de ligaExt_<slug> ...
+     use /api/liga-ext/<slug> pelado cuando el propósito es
+     recuperar/mostrar la plantilla real". Este helper se había
+     quedado fuera de esa migración. */
   function _readLigaData(slug){
     if(!slug) return null;
+    try {
+      var cached = window.LIGA_CACHE && window.LIGA_CACHE[slug];
+      if(cached && Array.isArray(cached.teams) && cached.teams.length) return cached;
+    } catch(_){}
     var raw;
     try { raw = localStorage.getItem('ligaExt_' + slug); } catch(_){}
     if(!raw){
@@ -43440,7 +43481,7 @@ window._showSimProgress = function(opts, onDone){
     if(!raw && !window._restoSimBulkInProgress && !window._ligaExtSimInProgress
         && typeof window._lextFetchJsonTimeout === 'function' && !_readLigaData._bg[slug]){
       _readLigaData._bg[slug] = true;
-      window._lextFetchJsonTimeout('/api/liga-ext/' + encodeURIComponent(slug)).then(function(resp){
+      window._lextFetchJsonTimeout('/api/liga-ext-any/' + encodeURIComponent(slug)).then(function(resp){
         delete _readLigaData._bg[slug];
         if(resp && resp.data && Array.isArray(resp.data.teams) && resp.data.teams.length){
           try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(resp.data)); } catch(_){}
@@ -43458,7 +43499,7 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     var leagues = [];
-    _eachLeagueCard(function(name){ leagues.push(name); });
+    _eachLeagueCard(function(name, emoji, slug){ leagues.push({name:name, slug:slug}); });
     var total = leagues.length;
     if(!total){ alert('No hay ligas para simular.'); return; }
     if(!confirm('¿Simular las ' + total + ' ligas (liga + copa)? Reseteará los resultados y stats actuales antes de simular.')) return;
@@ -43516,8 +43557,8 @@ window._showSimProgress = function(opts, onDone){
 
     function step(){
       if(idx >= total){ _onDone(); return; }
-      var name = leagues[idx];
-      var slug = _slugify(name);
+      var name = leagues[idx].name;
+      var slug = leagues[idx].slug;
       /* Pre-hidratar desde server si la cache local está vacía o
          tiene menos de 2 equipos (ligas completadas en otro
          dispositivo). */
@@ -43582,8 +43623,7 @@ window._showSimProgress = function(opts, onDone){
     var _totalCnt = 0; try { _eachLeagueCard(function(){ _totalCnt++; }); } catch(_){}
     if(!confirm('¿Resetear las ' + (_totalCnt || '') + ' ligas?\n\nLas plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.\n\nTambién se reinician la Copa de cada liga (se rehace el sorteo; las reglas —Campeón/Subcampeón/Semifinalistas y demás config— NO se tocan), y Wild Card, Open Qualifier y Previa de Champions (sus pools dependen de las ligas) y los huecos en UCL/UEL/UECL fase de grupos vuelven a "Por definir".')) return;
     var ok = 0;
-    _eachLeagueCard(function(name){
-      var slug = _slugify(name);
+    _eachLeagueCard(function(name, emoji, slug){
       try { if(window.ligaExtReiniciarSlug(slug)) ok++; } catch(_){ }
     });
     /* Cascada centralizada: limpia WC + OQ + Previa, invalida la
@@ -45350,8 +45390,7 @@ window._showSimProgress = function(opts, onDone){
        y la clave real en localStorage (`ligaExt_<slug>`). Loguear lo
        inspeccionado nos permite ver desde consola qué pasó exactamente. */
     var _diag = [];
-    _eachLeagueCard(function(name, flag){
-      var slug = _slugify(name);
+    _eachLeagueCard(function(name, flag, slug){
       var data = _readLigaData(slug);
       if(!data || !Array.isArray(data.teams)){
         _diag.push({slug:slug, name:name, status:'sin-data'});
@@ -48752,6 +48791,21 @@ https://api.sofascore.app/api/v1/team/44/image
        _protected, _backup ni al server. */
     try { _sanitizeLigaTeamNames(d); } catch(_){}
     LIGA_CACHE[k] = d;
+    /* Espejo en `window.LIGA_CACHE` (2026-08-02): la `LIGA_CACHE` de
+       arriba es una `var` LOCAL a este IIFE — otros módulos del
+       proyecto (p.ej. el agregador de "Resto de Ligas · Estadísticas",
+       IIFE aparte) NO pueden verla y dependían ÚNICAMENTE de leer
+       `localStorage` tras cada sim. Con localStorage lleno (banner
+       "Navegador sin espacio", muy frecuente en este proyecto con
+       ~60 ligas simuladas de golpe), el `_lsSetSafe` de más abajo
+       puede fallar en silencio para varias/todas las ligas mientras
+       la sim en sí "termina bien" — dejando la clasificación visible
+       (leída de la cache en memoria de cada pantalla) pero CUALQUIER
+       lector que solo mire `localStorage` (como ese agregador) ve
+       "sin datos" para TODO. Espejar aquí, SIEMPRE, deja la copia
+       recién simulada disponible en memoria para cualquier módulo,
+       inmune a la cuota del navegador. */
+    try { window.LIGA_CACHE = window.LIGA_CACHE || {}; window.LIGA_CACHE[k] = d; } catch(_){}
     /* Invalidar cache de computeLineStats / roster — si admin editó
        una plantilla y mutó power de jugadores, los stats cacheados
        son obsoletos. La invalidación es barata (recrear WeakMap) y

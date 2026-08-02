@@ -53410,6 +53410,17 @@ https://api.sofascore.app/api/v1/team/44/image
             var clone = {};
             Object.keys(t).forEach(function(k){ clone[k] = t[k]; });
             clone.id = 't_' + (_lextNormName(t.name||'x').replace(/\s+/g,'_')) + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+            /* "Mover equipos" es una herramienta de reorganización de
+               datos, NUNCA de asignación de humanidad — el flag
+               `isHuman`/`humanEmoji` solo debe venir de una acción
+               EXPLÍCITA del editor (toggle "es humano"), no colarse de
+               rebote al mover un equipo de una liga a otra. Petición
+               usuario 2026-07-30 #4: el Inter (marcado humano en Liga EA
+               Sports para el mister Rubén 🐲) se movió a Italia con el
+               icono de dragón puesto — en Resto de Ligas ese equipo es
+               IA, así que el flag se limpia SIEMPRE al mover. */
+            clone.isHuman = false;
+            delete clone.humanEmoji;
             dstData.teams.push(clone);
             dstByName[nrm] = true;
             movedNormNames[nrm] = true;

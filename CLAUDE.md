@@ -1,5 +1,83 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## "Resto de Ligas · Estadísticas" salía vacío tras "Sim" masivo — el agregador solo miraba `localStorage`, nunca la cache en memoria; y las 9 Ligas Mixtas quedaban fuera por slug vacío (obligatorio, 2026-08-02)
+
+**Bug (usuario 2026-08-02, «todas las ligas y copas del resto de ligas
+simuladas pero no hay ni una sola estadística subida a la caja
+estadísticas»)**: tras pulsar 🎮 Sim (las ~60 ligas de golpe), la
+clasificación de cada liga se veía bien, pero el overlay 📈
+Estadísticas mostraba «Sin datos todavía» en las 8 categorías
+(Goleadores, MVP, penaltis, faltas, porterías imbatidas, penaltis
+parados, amarillas, rojas).
+
+### Causa raíz 1 — el agregador solo leía `localStorage`, nunca la cache en memoria
+
+`_readLigaData(slug)` (`misc_body_1.html`, IIFE de "Resto de Ligas")
+leía ÚNICAMENTE `localStorage.getItem('ligaExt_'+slug)` (+ `_protected`).
+`saveData(k,d)` — el chokepoint de CADA guardado tras simular — SÍ deja
+la copia fresca en `LIGA_CACHE[k]` (memoria), pero esa `LIGA_CACHE` es
+una `var` LOCAL al IIFE del editor de plantilla — un IIFE DISTINTO del
+que contiene `_readLigaData`, así que era invisible para el agregador.
+Con `localStorage` lleno (banner «Navegador sin espacio», documentado
+muchas veces en este archivo, aquí agravado por simular ~60 ligas con
+plantilla+copa de golpe), el `_lsSetSafe` de `saveData` puede fallar en
+silencio para varias/todas las ligas — la clasificación se sigue viendo
+en otras pantallas (que leen `LIGA_CACHE` vía `loadData`), pero
+`_readLigaData` veía `raw` vacío para TODAS y las marcaba `sin-data`.
+
+### Causa raíz 2 — las 9 "Ligas Mixtas" quedaban fuera de Sim/Reset/Estadísticas por slug vacío
+
+Las 9 cards de "Ligas Mixtas" (fusión de ligas menores, 2026-07-30/31)
+tienen el `.mc-label` oculto (`display:none`) con el texto = las
+mismas banderas emoji que `.mc-emoji`, y dependen de `data-slug="liga-
+mixta-N"` para resolver su slug real (ya usado por `wireLigasExt`/
+`openLigaExt`, con el comentario explícito "bypasa el slugify() del
+label, que con emoji daría cadena vacía"). Pero `_eachLeagueCard` (el
+iterador que usan `_restoLigasSimAll`/`_restoLigasResAll`/
+`_collectAggregateStats`) NUNCA leía `data-slug` — derivaba el slug
+SIEMPRE de `_slugify(mc-label.textContent)`, que para esas 9 cards da
+`''`. Con slug vacío, `ligaExtSimularSlug('')`/`ligaExtReiniciarSlug('')`
+devuelven `false` al instante — esas 9 ligas nunca se simulaban ni
+reseteaban desde los botones globales, sin ningún aviso.
+
+### Fix
+
+- **`saveData(k,d)`**: además de `LIGA_CACHE[k] = d` (local), espeja
+  SIEMPRE en `window.LIGA_CACHE[k] = d` — accesible desde cualquier
+  IIFE del proyecto, inmune a que el `setItem` de `localStorage` quepa
+  o no.
+- **`_readLigaData(slug)`**: consulta `window.LIGA_CACHE[slug]` como
+  fuente 0, ANTES de `localStorage`. Su hidratación de fondo (fuente 3)
+  pasa además de `/api/liga-ext/<slug>` (solo `main`) a
+  `/api/liga-ext-any/<slug>` (resuelve el fallback a `_protected` EN EL
+  SERVIDOR) — se había quedado fuera de la migración obligatoria
+  2026-07-29 #2.
+- **`_eachLeagueCard(cb)`**: el callback recibe un 3er argumento
+  `slug` = `data-slug` de la card si existe, si no
+  `_slugify(mc-label)` (mismo criterio que `wireLigasExt`). Los 3
+  consumidores (`_restoLigasSimAll`, `_restoLigasResAll`,
+  `_collectAggregateStats`) usan ese slug en vez de re-derivarlo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un agregador/lector nuevo de `ligaExt_<slug>`
+   (estadísticas, auditoría, diagnóstico, o cualquier pantalla que
+   recorra "todas las ligas") mire SOLO `localStorage` sin consultar
+   antes `window.LIGA_CACHE[slug]`. `saveData` es el chokepoint único
+   de guardado y SIEMPRE deja la copia fresca ahí, sea cual sea el
+   estado de la cuota del navegador.
+2. **PROHIBIDO** que un iterador de `#s-ligas .menu-card` (o cualquier
+   grid de cards con `data-slug` para labels-solo-emoji, patrón ya
+   usado por las Ligas Mixtas) derive el slug SOLO de
+   `_slugify(mc-label.textContent)` sin comprobar `data-slug` primero.
+   Toda card nueva de este tipo (label oculto/solo-emoji) hereda el
+   `data-slug` automáticamente en cuanto pase por `_eachLeagueCard`.
+3. **PROHIBIDO** que una lectura nueva de `ligaExt_<slug>` con
+   propósito de "recuperar/mostrar la plantilla real" use
+   `/api/liga-ext/<slug>` pelado — usar siempre `/api/liga-ext-any/<slug>`
+   (regla ya existente 2026-07-29 #2, este helper se había quedado
+   fuera).
+
 ## "🎮 Admin - Europa" no dejaba añadir NINGÚN equipo a NINGUNA competición — `_lsSetSafe` nunca lanza, el try/catch que comprobaba su resultado quedó MUERTO (obligatorio, 2026-08-02)
 
 **Bug (foto usuario 2026-08-02, «🎮 Admin - Europa» → sección SUPERLIGA,

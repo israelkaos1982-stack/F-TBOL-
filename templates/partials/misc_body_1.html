@@ -20626,20 +20626,11 @@ window._showSimProgress = function(opts, onDone){
   function _buildPool(){
     var pool = [];
     var seen = {};
-    /* EXCLUSIÓN individual (obligatorio 2026-08-02, "no puedo eliminar
-       equipos... de la Recopa"): esta zona NO tiene modo manual-only
-       (es siempre aditiva sobre campeones/subcampeones automáticos), así
-       que hasta ahora un campeón de copa auto-computado no tenía NINGUNA
-       forma de quitarse desde el overlay "Equipos por competición" — el
-       ✕ de "manuales" solo tocaba `eur_manual_extra_v1.recopa`, nunca lo
-       que sale de `data.copa.champion`/`runnerUp`/semis. */
-    var _excluded = (typeof window._eurManualExtraExcludedSet === 'function') ? window._eurManualExtraExcludedSet('recopa') : {};
     function _push(name){
       var nm = String(name||'').trim();
       if(!nm) return;
       if(nm === BYE) return;
       if(/^@[a-z0-9]+#\d+$/i.test(nm)) return; /* TBD pendiente */
-      if(_excluded[nm]) return;
       var key = nm.toLowerCase();
       if(seen[key]) return;
       seen[key] = true;
@@ -37235,8 +37226,8 @@ window._showSimProgress = function(opts, onDone){
      del Mundialito) — ver bloque "AÑADIR MANUAL — 10 competiciones". */
   var EUR_MANUAL_ZONES = ['ucl','uclPrev','uel','uecl','uclQual','wildcard','recopa','usc','inter','mundial'];
   function _eurManualExtraLoad(){
-    var out = { clearedAt: {}, excludedAt: {}, unexcludedAt: {} };
-    EUR_MANUAL_ZONES.forEach(function(z){ out[z] = []; out.excludedAt[z] = {}; out.unexcludedAt[z] = {}; });
+    var out = { clearedAt: {} };
+    EUR_MANUAL_ZONES.forEach(function(z){ out[z] = []; });
     try {
       var raw = localStorage.getItem(EUR_MANUAL_EXTRA_KEY);
       var d = raw ? JSON.parse(raw) : null;
@@ -37253,34 +37244,6 @@ window._showSimProgress = function(opts, onDone){
             if(typeof d.clearedAt[z] === 'number') out.clearedAt[z] = d.clearedAt[z];
           });
         }
-        /* `excludedAt`/`unexcludedAt` (por zona+nombre, obligatorio
-           2026-08-02 — "no puedo eliminar equipos ni del Open Qualifier
-           ni de la Recopa"): un equipo AUTO-COMPUTADO (ligas, campeones
-           de copa…) nunca vive en `d[zone]`, así que el ✕ de la lista
-           "manuales" no podía tocarlo — la inmensa mayoría de Open
-           Qualifier en modo 🔓 Auto, y TODOS los de Recopa/
-           Intercontinental (sin modo manual-only). Cada nombre lleva DOS
-           sellos — "excluido en" / "restaurado en" — y GANA el mayor
-           (mismo patrón `hiddenAt`/`shownAt` ya usado por
-           `tour_registry_v1`): una lista con UNIÓN simple (como
-           `d[zone]`) SOLO PUEDE CRECER, nunca encoger de vuelta — sin
-           el sello de "restaurar", el botón ↩ nunca sobreviviría al
-           siguiente merge del servidor (verificado con test: la unión
-           resucitaba la exclusión). */
-        ['excludedAt','unexcludedAt'].forEach(function(key){
-          if(d[key] && typeof d[key] === 'object'){
-            EUR_MANUAL_ZONES.forEach(function(z){
-              var src = d[key][z];
-              if(!src || typeof src !== 'object') return;
-              var map = {};
-              Object.keys(src).forEach(function(n){
-                var ts = Number(src[n]);
-                if(n && isFinite(ts) && ts > 0) map[n] = ts;
-              });
-              out[key][z] = map;
-            });
-          }
-        });
       }
     } catch(_){}
     return out;
@@ -37314,50 +37277,6 @@ window._showSimProgress = function(opts, onDone){
     if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
     var d = _eurManualExtraLoad();
     d[zone] = d[zone].filter(function(t){ return t.name !== name; });
-    _eurManualExtraSave(d);
-  };
-  /* EXCLUIR un equipo concreto de una zona, sin importar de dónde salga
-     (cómputo automático de ligas/copas, o extra manual) — obligatorio
-     2026-08-02, ver comentario de `_eurManualExtraLoad`. Se aplica en
-     `_appendManualExtra` (las 6 zonas ucl/uclPrev/uel/uecl/uclQual/
-     wildcard) y en `_buildPool` de Recopa/Intercontinental. Resuelto por
-     RECENCIA (`excludedAt` vs `unexcludedAt`, mayor gana) — NUNCA una
-     unión simple, que no puede encoger de vuelta al restaurar. */
-  window._eurManualExtraExcludedSet = function(zone){
-    var set = {};
-    try {
-      var d = _eurManualExtraLoad();
-      var exAt = d.excludedAt[zone] || {};
-      var unAt = d.unexcludedAt[zone] || {};
-      var names = {};
-      Object.keys(exAt).forEach(function(n){ names[n] = true; });
-      Object.keys(unAt).forEach(function(n){ names[n] = true; });
-      Object.keys(names).forEach(function(n){
-        if((exAt[n] || 0) > (unAt[n] || 0)) set[n] = true;
-      });
-    } catch(_){}
-    return set;
-  };
-  window._eurManualExtraExclude = function(zone, name){
-    if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
-    name = String(name || '').trim();
-    if(!name) return;
-    var d = _eurManualExtraLoad();
-    if(!d.excludedAt[zone]) d.excludedAt[zone] = {};
-    d.excludedAt[zone][name] = Date.now();
-    /* Si el equipo estaba en la lista de manuales de esta MISMA zona,
-       lo quitamos también — excluirlo y dejarlo en "manuales" a la vez
-       sería contradictorio (y el manual volvería a aparecer). */
-    d[zone] = (d[zone] || []).filter(function(t){ return t.name !== name; });
-    _eurManualExtraSave(d);
-  };
-  window._eurManualExtraUnexclude = function(zone, name){
-    if(EUR_MANUAL_ZONES.indexOf(zone) < 0) return;
-    name = String(name || '').trim();
-    if(!name) return;
-    var d = _eurManualExtraLoad();
-    if(!d.unexcludedAt[zone]) d.unexcludedAt[zone] = {};
-    d.unexcludedAt[zone][name] = Date.now();
     _eurManualExtraSave(d);
   };
   /* Sincroniza los ganadores de una fase (Wild Card→OQ, OQ→Previa,
@@ -37526,27 +37445,16 @@ window._showSimProgress = function(opts, onDone){
      `_prependManualEa`, así que un extra manual con el mismo nombre que
      una plaza EA ya inyectada no se duplica. */
   function _appendManualExtra(arr, zone){
-    arr = arr || [];
     var list = _eurManualExtraLoad()[zone] || [];
-    if(list.length){
-      var seen = {};
-      arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
-      list.forEach(function(t){
-        if(!t || !t.name || seen[t.name]) return;
-        seen[t.name] = true;
-        arr.push({ name: t.name, logo: t.logo || '', league: t.league || 'manual' });
-      });
-    }
-    /* EXCLUSIÓN individual (obligatorio 2026-08-02) — se filtra al FINAL
-       para cubrir tanto equipos auto-computados (arr) como manuales
-       (recién apendados arriba) de una sola vez. Ver
-       `window._eurManualExtraExclude`. */
-    try {
-      var excluded = window._eurManualExtraExcludedSet ? window._eurManualExtraExcludedSet(zone) : null;
-      if(excluded && Object.keys(excluded).length){
-        arr = arr.filter(function(t){ return !(t && t.name && excluded[t.name]); });
-      }
-    } catch(_){}
+    if(!list.length) return arr;
+    arr = arr || [];
+    var seen = {};
+    arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
+    list.forEach(function(t){
+      if(!t || !t.name || seen[t.name]) return;
+      seen[t.name] = true;
+      arr.push({ name: t.name, logo: t.logo || '', league: t.league || 'manual' });
+    });
     return arr;
   }
   /* Lista de nombres planos (sin objeto {name,logo,league}) para que
@@ -43014,12 +42922,7 @@ window._showSimProgress = function(opts, onDone){
     var restoComplete=!!(rs && rs.complete);
     var restoTop6=(rs && restoComplete) ? rs.ranking.slice(0,6).map(function(t){ return t.name; }) : [];
     var seen={}, pool=[];
-    /* EXCLUSIÓN individual (obligatorio 2026-08-02) — misma razón que
-       Recopa (`_buildPool` de arriba): esta zona tampoco tiene modo
-       manual-only, así que un equipo de Resto del Mundo/manual solo se
-       puede quitar del pool vía exclusión explícita. */
-    var _excluded = (typeof window._eurManualExtraExcludedSet === 'function') ? window._eurManualExtraExcludedSet('inter') : {};
-    function push(n){ n=String(n||'').trim(); if(!n) return; if(_excluded[n]) return; var k=n.toLowerCase(); if(seen[k]) return; seen[k]=true; pool.push(n); }
+    function push(n){ n=String(n||'').trim(); if(!n) return; var k=n.toLowerCase(); if(seen[k]) return; seen[k]=true; pool.push(n); }
     /* TODOS los manuales entran (no solo los 2 primeros) — si el admin
        añadió 8 a mano, el pool queda completo sin depender de Resto del
        Mundo. Si añadió menos de 8, Resto del Mundo rellena el resto. */
@@ -43992,7 +43895,7 @@ window._showSimProgress = function(opts, onDone){
     return lg.charAt(0).toUpperCase()+lg.slice(1).replace(/-/g,' ');
   }
   function _eurEsc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-  function _eurZoneSectionHtml(zone, teams, editable){
+  function _eurZoneSectionHtml(zone, teams){
     teams = teams || [];
     var byLeague = {}, order = [];
     teams.forEach(function(t){
@@ -44003,27 +43906,11 @@ window._showSimProgress = function(opts, onDone){
     order.sort(function(a,b){ return byLeague[b].length - byLeague[a].length || a.localeCompare(b,'es'); });
     var body = order.map(function(lbl){
       var names = byLeague[lbl].slice().sort(function(a,b){ return a.localeCompare(b,'es'); });
-      /* Modo EDITABLE (obligatorio 2026-08-02, overlay "Equipos por
-         competición"): cada nombre lleva un ✕ que EXCLUYE ese equipo
-         concreto de la zona — sin importar si viene del cómputo
-         automático (ligas, campeones de copa…) o de un extra manual.
-         Es la única forma de quitar un equipo de Recopa/Intercontinental
-         (nunca tienen modo manual-only) y de Open Qualifier/Wild Card
-         cuando están en 🔓 Auto. El modo no-editable (informe de "Enviar
-         realidad") se queda igual que siempre — texto plano, sin ✕. */
-      var namesHtml = editable
-        ? names.map(function(n){
-            return '<span style="display:inline-flex;align-items:center;gap:3px;margin:0 6px 5px 0;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:2px 3px 2px 7px;">'
-              +   _eurEsc(n)
-              +   '<button data-eur-excl-zone="'+zone.key+'" data-eur-excl-name="'+_eurEsc(n)+'" title="Quitar '+_eurEsc(n)+' de '+_eurEsc(zone.label)+'" style="background:rgba(255,80,80,.14);border:1px solid rgba(255,80,80,.5);color:#ff8080;border-radius:3px;padding:0 5px;line-height:1.5;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;">✕</button>'
-              + '</span>';
-          }).join('')
-        : names.map(_eurEsc).join(' · ');
       return '<div style="margin:4px 0 2px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:.5px;color:'+zone.color+';">'
            +   _eurEsc(lbl) + ' <span style="color:rgba(255,255,255,.5);">(' + names.length + ')</span>'
            + '</div>'
-           + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.85);padding-left:10px;line-height:1.6;'+(editable?'display:flex;flex-wrap:wrap;align-items:center;':'')+'">'
-           +   namesHtml
+           + '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.85);padding-left:10px;line-height:1.6;">'
+           +   names.map(_eurEsc).join(' · ')
            + '</div>';
     }).join('');
     var isCandidates = (zone.kind === 'candidates');
@@ -44179,51 +44066,6 @@ window._showSimProgress = function(opts, onDone){
     try { blob.inter  = _eurPoolToTeams('inter'); } catch(_){ blob.inter = []; }
     return blob;
   }
-  /* Función de cómputo EN VIVO de cada una de las 6 zonas con snapshot
-     congelable — usada para parchear `europe_committed_v1` tras excluir
-     un equipo (ver `_eurExcludeTeam`). Recopa/Intercontinental no están
-     aquí porque nunca se congelan. */
-  var _EUR_ZONE_COMPUTE_FN = {
-    ucl:      function(){ return window.computeUclClassified && window.computeUclClassified(); },
-    uclPrev:  function(){ return window.computeUclPrevTeams && window.computeUclPrevTeams(); },
-    uel:      function(){ return window.computeUelClassified && window.computeUelClassified(); },
-    uecl:     function(){ return window.computeUeclClassified && window.computeUeclClassified(); },
-    uclQual:  function(){ return window.computeOpenQualifierTeams && window.computeOpenQualifierTeams(); },
-    wildcard: function(){ return window.computeWildCardClassified && window.computeWildCardClassified(); }
-  };
-  /* EXCLUIR un equipo desde el overlay (obligatorio 2026-08-02): además
-     de guardar la exclusión (`_eurManualExtraExclude`, que ya filtra el
-     PRÓXIMO cómputo en vivo), si existe una snapshot congelada
-     (`europe_committed_v1`) para esa zona, la PARCHEA en el momento —
-     mismo patrón que `_oqPullWildCardWinners` ("⬇️ Traer Wild Card") —
-     para que el equipo desaparezca YA, sin obligar al admin a volver a
-     pulsar "📤 ENVIAR TODOS LOS EQUIPOS" para que la exclusión "cuaje".
-     Recopa/Intercontinental nunca se congelan, así que no necesitan
-     parche — su exclusión ya es instantánea vía `_eurPoolToTeams`. */
-  function _eurExcludeTeam(zone, name){
-    if(typeof window._eurManualExtraExclude !== 'function') return;
-    window._eurManualExtraExclude(zone, name);
-    var computeFn = _EUR_ZONE_COMPUTE_FN[zone];
-    if(!computeFn) return; // Recopa / Intercontinental: sin snapshot que parchear
-    try {
-      var craw = localStorage.getItem('europe_committed_v1');
-      if(!craw) return;
-      var blob = JSON.parse(craw);
-      if(!blob || typeof blob !== 'object' || !Array.isArray(blob[zone]) || !blob[zone].length) return;
-      var _prevIgnore = window._europeIgnoreFrozen;
-      window._europeIgnoreFrozen = true;
-      var live = [];
-      try { live = computeFn() || []; }
-      finally { window._europeIgnoreFrozen = _prevIgnore; }
-      blob[zone] = live;
-      window._lsSetSafe('europe_committed_v1', JSON.stringify(blob));
-      fetch('/api/kv/europe_committed_v1', {
-        method: 'POST', headers: {'Content-Type':'application/json'}, credentials: 'same-origin',
-        body: JSON.stringify({value: blob})
-      }).catch(function(){});
-    } catch(_){}
-  }
-  window._eurExcludeTeam = _eurExcludeTeam;
   /* `_eurEuropeCommitSaved()` — ¿existe ya una snapshot guardada
      (`europe_committed_v1`)? Gobierna el icono de guardado del header
      del overlay (sustituye al antiguo texto "(en vivo)"). */
@@ -44767,24 +44609,6 @@ window._showSimProgress = function(opts, onDone){
           }).join('')
         + '</div>';
     }).join('');
-    /* 🚫 Excluidos (obligatorio 2026-08-02) — lista, por zona, de los
-       equipos que el admin quitó a mano con el ✕ del listado completo
-       de abajo (`_eurZoneSectionHtml(...,true)`). Es la única forma de
-       ver/deshacer una exclusión de un equipo AUTO-COMPUTADO (no vive
-       en `manual[z.key]`, así que no aparece en la lista "manuales"). */
-    var excludedListHtml = _EUR_REPORT_ZONES.map(function(z){
-      var names = Object.keys((window._eurManualExtraExcludedSet && window._eurManualExtraExcludedSet(z.key)) || {}).sort(function(a,b){ return a.localeCompare(b,'es'); });
-      if(!names.length) return '';
-      return '<div style="margin:6px 0;">'
-        + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:'+z.color+';">'+z.emoji+' '+_eurEsc(z.label)+' — excluidos a mano ('+names.length+')</div>'
-        + names.map(function(n){
-            return '<div style="display:flex;align-items:center;gap:8px;padding:4px 6px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;">'
-              + '<span style="flex:1;text-decoration:line-through;color:rgba(255,255,255,.6);">'+_eurEsc(n)+'</span>'
-              + '<button data-eur-excl-restore-zone="'+z.key+'" data-eur-excl-restore-name="'+_eurEsc(n)+'" style="background:rgba(60,200,120,.12);border:1px solid rgba(60,200,120,.5);color:#8af0b0;border-radius:4px;padding:2px 8px;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;white-space:nowrap;">↩ Restaurar</button>'
-              + '</div>';
-          }).join('')
-        + '</div>';
-    }).join('');
     var statusHtml;
     if(_eurManualHydrating){
       statusHtml = '⏳ Cargando ligas del servidor (puede tardar hasta 1-2 min con ~50 ligas)…';
@@ -44813,15 +44637,13 @@ window._showSimProgress = function(opts, onDone){
       +   _eurNameSearchSectionHtml()
       +   _eurPickerSectionHtml()
       +   (manualListHtml ? ('<div style="margin-bottom:14px;">' + manualListHtml + '</div>') : '')
-      +   (excludedListHtml ? ('<div style="margin-bottom:14px;">' + excludedListHtml + '</div>') : '')
       +   (missing.length ? (
             '<div style="margin:0 0 14px;border:1px solid rgba(255,150,80,.4);border-radius:10px;padding:8px 12px;background:rgba(255,150,80,.06);">'
           +   '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#ffb060;margin-bottom:6px;">⚠️ LIGAS SIN DATOS EN ESTE DISPOSITIVO (' + missing.length + ') — abre cada una en "Resto de Ligas" para que hidrate, o añade sus equipos a mano arriba:</div>'
           +   '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.75);line-height:1.6;">' + missing.map(_eurEsc).join(' · ') + '</div>'
           + '</div>'
           ) : '')
-      +   '<div style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);margin:0 2px 6px;">Pulsa el ✕ junto a cualquier equipo de las listas de abajo para quitarlo de esa competición (funciona tanto con equipos automáticos como añadidos a mano).</div>'
-      +   poolZones.map(function(z){ return _eurZoneSectionHtml(z, blob[z.key], true); }).join('')
+      +   poolZones.map(function(z){ return _eurZoneSectionHtml(z, blob[z.key]); }).join('')
       + '</div>';
     ov.innerHTML = html;
     var closeBtn = document.getElementById('eur-manual-close');
@@ -44865,21 +44687,6 @@ window._showSimProgress = function(opts, onDone){
         var label = z ? (z.emoji + ' ' + z.label) : zone;
         if(!confirm('🗑 Vaciar lista — ' + label + '\n\nSe borran TODOS los equipos añadidos a mano de esta competición. El borrado se guarda — no volverán a aparecer hasta que los añadas de nuevo.\n\n¿Continuar?')) return;
         window._eurManualExtraClearZone(zone);
-        _eurManualOverlayRender();
-      };
-    });
-    /* ✕ Excluir un equipo concreto (listado completo de abajo) — cubre
-       tanto automáticos como manuales, ver `_eurExcludeTeam`. */
-    ov.querySelectorAll('[data-eur-excl-zone]').forEach(function(btn){
-      btn.onclick = function(){
-        _eurExcludeTeam(btn.getAttribute('data-eur-excl-zone'), btn.getAttribute('data-eur-excl-name'));
-        _eurManualOverlayRender();
-      };
-    });
-    /* ↩ Restaurar un equipo previamente excluido. */
-    ov.querySelectorAll('[data-eur-excl-restore-zone]').forEach(function(btn){
-      btn.onclick = function(){
-        window._eurManualExtraUnexclude(btn.getAttribute('data-eur-excl-restore-zone'), btn.getAttribute('data-eur-excl-restore-name'));
         _eurManualOverlayRender();
       };
     });

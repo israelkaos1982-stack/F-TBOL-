@@ -43532,7 +43532,7 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     var _totalCnt = 0; try { _eachLeagueCard(function(){ _totalCnt++; }); } catch(_){}
-    if(!confirm('¿Resetear las ' + (_totalCnt || '') + ' ligas?\n\nLas plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.\n\nTambién se reinician Wild Card, Open Qualifier y Previa de Champions (sus pools dependen de las ligas) y los huecos en UCL/UEL/UECL fase de grupos vuelven a "Por definir".')) return;
+    if(!confirm('¿Resetear las ' + (_totalCnt || '') + ' ligas?\n\nLas plantillas (jugadores y escudos) se mantienen, pero las estadísticas vuelven a 0.\n\nTambién se reinician la Copa de cada liga (se rehace el sorteo; las reglas —Campeón/Subcampeón/Semifinalistas y demás config— NO se tocan), y Wild Card, Open Qualifier y Previa de Champions (sus pools dependen de las ligas) y los huecos en UCL/UEL/UECL fase de grupos vuelven a "Por definir".')) return;
     var ok = 0;
     _eachLeagueCard(function(name){
       var slug = _slugify(name);
@@ -51840,7 +51840,19 @@ https://api.sofascore.app/api/v1/team/44/image
   /* Variante slug-aware. La usa el botón global "Res" del menú
      "Resto de Ligas" para resetear las 51 ligas a 0. Resetea
      resultados y stats individuales de los jugadores (gol, mvp,
-     amarillas, etc.) — la "0 estadísticas" que pide el usuario.
+     amarillas, etc.) — la "0 estadísticas" que pide el usuario —
+     y TAMBIÉN la Copa de cada liga (petición usuario 2026-08-02:
+     "cuando pulse reset... también todas las Copas de cada Liga se
+     resetean, pero no las reglas"). `data.copa = null` es el MISMO
+     reset que hace el botón individual `_lecCopa.reset()` de cada
+     copa — se rehace solo el sorteo y los partidos de esa copa; las
+     estadísticas YA sumadas a las plantillas (goles/MVP/tarjetas) NO
+     se tocan aquí (las borra el reset de jugadores de arriba, no este
+     campo). Las REGLAS de la copa (Campeón fijo, toggle Subcampeón/
+     Semifinalistas) NO viven en `data.copa` — el subcampeón/semis
+     viven en el store dedicado `recopa_copa_flags_v1` (2026-08-01) y
+     el resto de config en `data.config` — ninguno de los dos se toca
+     aquí, así que las reglas sobreviven al reset.
      No toca la plantilla ni el código valor-nivel-escudo. */
   window.ligaExtReiniciarSlug = function(slug){
     if(!slug) return false;
@@ -51851,6 +51863,7 @@ https://api.sofascore.app/api/v1/team/44/image
     if(Array.isArray(data.teams)){
       data.teams.forEach(function(t){ (t.players||[]).forEach(resetPlayerStats); });
     }
+    data.copa = null;   /* reset de la Copa de esta liga — reglas intactas */
     saveData(slug, data);
     if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
     return true;

@@ -44027,7 +44027,7 @@ window._showSimProgress = function(opts, onDone){
       _eurHydrateMissingLeagues(function(recovered, total){
         _eurManualHydrating = false;
         _eurManualLastHydrateAt = Date.now();
-        _eurManualOverlayRender();
+        _eurManualRenderOrDefer();
       });
     } catch(_){
       _eurManualHydrating = false;
@@ -44216,6 +44216,24 @@ window._showSimProgress = function(opts, onDone){
   var _EUR_ZONE_BY_KEY = {};
   _EUR_REPORT_ZONES.forEach(function(z){ _EUR_ZONE_BY_KEY[z.key] = z; });
   var _eurPickerListOpen = false;
+  /* Si un re-render de FONDO (fin de la auto-hidratación, que puede
+     tardar 1-2 min) llega mientras el admin tiene la lista desplegable
+     abierta, NO se aplica al instante — `_eurManualOverlayRender()`
+     hace SIEMPRE `ov.innerHTML = ...`, destruyendo y reconstruyendo
+     TODO el overlay; si eso ocurre a mitad de un scroll/tap dentro de
+     `#eur-pick-league-list`, el gesto se corta en seco y el picker
+     "se cierra solo" sin que el admin lo pidiera (bug 2026-08-01, "no
+     deja seleccionar Ligas, el selector se cierra muy rápido"). El
+     estado más fresco (`_eurManualHydrating`/`_eurManualLastHydrateAt`)
+     ya queda actualizado igualmente — se pinta en el PRÓXIMO render
+     natural (cerrar el picker, elegir una liga, tocar cualquier otro
+     control), nunca a mitad de una interacción con la lista. */
+  var _eurRenderPendingAfterPicker = false;
+  function _eurManualRenderOrDefer(){
+    if (_eurPickerListOpen){ _eurRenderPendingAfterPicker = true; return; }
+    _eurRenderPendingAfterPicker = false;
+    _eurManualOverlayRender();
+  }
   /* Picker de liga CUSTOM (no `<select>` nativo) — petición usuario
      2026-07-03 ("mejor para seleccionar liga que sea marcar ✅"): el
      `<select>` nativo se abre como un picker del SISTEMA (Android),
@@ -44607,6 +44625,10 @@ window._showSimProgress = function(opts, onDone){
     var pickBtn = document.getElementById('eur-pick-league-btn');
     if(pickBtn) pickBtn.onclick = function(){ _eurPickerListOpen = !_eurPickerListOpen; _eurManualOverlayRender(); };
     ov.querySelectorAll('[data-eur-pick-league]').forEach(function(row){
+      /* Respaldo táctil: `_eurWireTapFallbackAll(ov)` (más abajo, tras
+         este render completo) ya cablea `touchstart` puro sobre TODAS
+         las filas `[data-eur-pick-league]` de este contenedor — no
+         duplicar el respaldo aquí, solo el `onclick` base. */
       row.onclick = function(){
         _eurPickerListOpen = false;
         _eurPickerLoadLeague(row.getAttribute('data-eur-pick-league'));

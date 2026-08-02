@@ -9893,13 +9893,24 @@
      pantalla de estadísticas obligatorias). */
   function athApplyMedicalFromActa(st) {
     if (!st) return;
+    /* El hub del mister es CLUB + SELECCIÓN (Toñín = Liverpool + Francia).
+       Antes solo se comparaba el CLUB: un partido de la selección (Mundial,
+       Rondas Previas/Finales) nunca hacía `hubSide` porque "francia" no es
+       igual a "liverpool" → la función salía en el `if (!hubSide) return`
+       de abajo y el 💊/🪙/💼 de TODOS los partidos de selección se perdían
+       en silencio (petición usuario 2026-07-27: "el 💊 también va a la
+       caja de ese club O SELECCIÓN humana"). Se comprueba contra AMBOS
+       nombres del mismo mister. */
     var hub = (typeof _athHubTeam === 'function') ? _athHubTeam() : '';
-    if (!hub) return;
+    var hubSel = (typeof _athHubSeleccion === 'function') ? _athHubSeleccion() : '';
+    if (!hub && !hubSel) return;
     var hubL = hub.trim().toLowerCase();
+    var hubSelL = hubSel.trim().toLowerCase();
     var homeL = String(st.home || '').trim().toLowerCase();
     var awayL = String(st.away || '').trim().toLowerCase();
-    var hubSide = homeL === hubL ? 'a' : awayL === hubL ? 'b' : null;
-    if (!hubSide) return;                /* el hub no juega este partido */
+    function _isHubName(n){ return (!!hubL && n === hubL) || (!!hubSelL && n === hubSelL); }
+    var hubSide = _isHubName(homeL) ? 'a' : _isHubName(awayL) ? 'b' : null;
+    if (!hubSide) return;                /* ni el club ni la selección del hub juegan este partido */
     var rivalSide = hubSide === 'a' ? 'b' : 'a';
     var rivalName = rivalSide === 'a' ? st.home : st.away;
     var comp = st.comp || st.compKey || st._comp || 'liga';

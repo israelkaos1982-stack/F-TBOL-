@@ -23,6 +23,91 @@
 4. Toda Liga Mixta NUEVA (una 10ª futura, si se añade) hereda esto en cuanto se añada su entrada a `LIGA_MIXTA_COUNTRIES` con el mismo slug `liga-mixta-N` — `_isLigaMixtaSlug` ya es genérico (regex `^liga-mixta-\d+$`), no hace falta tocar el agregador.
 5. El campo `t.country` sigue siendo libre/opcional para TODAS las ligas (no solo las Mixtas) — el datalist de sugerencias solo aparece cuando `LIGA_MIXTA_COUNTRIES[slug]` existe; en el resto de ligas el campo sigue aceptando cualquier texto sin validarlo contra nada.
 
+## El reset masivo (♻️ Rest) de las Ligas Mixtas/Resto Mundo se deshacía solo al reabrir la liga — resurrección SIN sello en `_lextIdbTopupIfEmpty` + cache de "Máximo goleador" nunca se limpiaba (obligatorio, 2026-08-02)
+
+**Bug (usuario 2026-08-02, «cuando pulso Rest global las ligas mixtas y
+copas mixtas no vuelven a cero»)**: tras pulsar ♻️ Rest en "Resto de
+Ligas" (resetea las ~60 ligas + sus copas, ver sección de arriba), las
+9 "Ligas Mixtas" (Liga Mixta 1-9, fusión de países menores) y Resto del
+Mundo seguían mostrando la clasificación Y la cabecera "Máximo
+goleador" de la copa con los valores de ANTES del reset — a veces
+incluso sin necesidad de recargar la página, solo con volver a abrir
+la card.
+
+### Causa raíz 1 — `_lextIdbTopupIfEmpty` resucitaba `results` SIN comprobar el sello, y se dispara EN CADA APERTURA
+
+Las Ligas Mixtas y Resto del Mundo son las únicas en `_EXTRA_LEAGUE_SEEDS`,
+y `openLigaExt` (parcheado) llama a `_ensureExtraLeagueSeed(slug)` **cada
+vez que se abre esa card** (no solo al arrancar la web) — el resto de
+ligas normales NO tiene este re-seed-on-open. Con la liga ya con equipos
+(roster intacto tras el reset, solo `results`/stats a 0),
+`_ensureExtraLeagueSeed` delega en `_lextIdbTopupIfEmpty(slug)`, que
+compara la copia de `localStorage` con la de IndexedDB (espejo durable,
+escrito por `saveData` en CADA guardado, incluido cada simulación
+ANTERIOR al reset). Su primer intento de recuperación
+(`_lextBackfillResults`) SÍ respeta `resultsStamp` (un reset con sello
+fresco correctamente no se pisa) — pero justo después había una 2ª rama,
+`else if (merged === curNow && !_hasResults(curNow) && idbHasResults) {
+merged.results = idbData.results; }`, que volvía a copiar los resultados
+de IndexedDB **sin mirar el sello en absoluto** — deshaciendo el reset
+en cuanto `results` estaba vacío (que es EXACTAMENTE el estado normal
+justo después de resetear). Escrita para el caso legítimo "eviction se
+llevó todo, restaurar desde IDB", nunca distinguía ese caso de "el admin
+acaba de vaciar esto a propósito".
+
+### Causa raíz 2 — la cabecera "Máximo goleador" lee una cache aparte que el reset nunca limpiaba
+
+`ef_player_stats_v1` (localStorage) es una cache separada de
+`t.players[].gol` que alimenta la cabecera "Máximo goleador" (liga+copa)
+de la pantalla de cada liga. La sincroniza `_lecSyncPlayerStatsCache(data)`
+— pero el reset global (`ligaExtReiniciarSlug`, y el individual
+`ligaExtReiniciar`) nunca la llamaba, así que aunque `t.players[].gol`
+quedara en 0 correctamente, la cabecera seguía leyendo el valor viejo de
+esta cache hasta el próximo Sim. Agravante: la propia
+`_lecSyncPlayerStatsCache`, cuando un equipo tenía `totalPj===0` (recién
+reseteado), hacía `return` sin tocar `stats[k]` — dejaba la entrada VIEJA
+intacta en vez de borrarla, así que aunque se la hubiera llamado tras el
+reset tampoco habría servido de nada.
+
+### Fix
+
+- **`_lextIdbTopupIfEmpty`**: se elimina la rama `else if` que copiaba
+  `results` sin sello. `_lextBackfillResults` (llamada justo antes, con
+  EMPTY-GUARD + comparación de `resultsStamp`) ya cubre el caso legítimo
+  de recuperación tras un vaciado de `localStorage` — no hace falta (ni
+  es seguro) un segundo intento sin sello.
+- **`_lecSyncPlayerStatsCache`**: cuando `totalPj===0` para un equipo,
+  BORRA (`delete stats[k]`) la entrada de cada jugador de ese equipo en
+  vez de saltarse la escritura — antes dejaba el valor viejo intacto
+  para siempre.
+- **`ligaExtReiniciar`/`ligaExtReiniciarSlug`**: ambas llaman a
+  `_lecSyncPlayerStatsCache(data)` tras `saveData` (mismo patrón que
+  `_finishSim`/`_lecCopa.reset()`), y a `_lecRender()` si la pantalla de
+  Copa de esa liga está abierta, para que la cabecera se repinte al
+  instante sin esperar a la siguiente navegación.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_lextIdbTopupIfEmpty` (o cualquier recuperación
+   nueva desde IndexedDB/`_protected`/snapshots) copie `results`/
+   cualquier campo protegido por `resultsStamp` sin pasar por
+   `_lextBackfillResults` (o el arbitraje de sello equivalente). Un
+   `results` vacío es un estado LEGÍTIMO justo después de un reset — no
+   se puede asumir que "vacío = hay que recuperar de IndexedDB".
+2. **PROHIBIDO** que `_lecSyncPlayerStatsCache` (o cualquier sync de
+   cache de stats similar) deje una entrada VIEJA intacta cuando el
+   jugador/equipo ya no tiene nada que aportar (`totalPj===0`). Debe
+   BORRAR la entrada, no saltarse la escritura.
+3. **PROHIBIDO** que un reset nuevo (global, individual, o de cualquier
+   competición futura que tenga su propia cache de "líder/máximo
+   goleador") toque `t.players[]`/`data.results` sin refrescar TAMBIÉN
+   cualquier cache derivada (`ef_player_stats_v1` u otra) que la UI lea
+   por separado — de lo contrario el dato "ya está a 0" pero la pantalla
+   sigue mostrando el valor viejo hasta el próximo Sim.
+4. Toda liga NUEVA que se añada a `_EXTRA_LEAGUE_SEEDS` (con
+   re-seed-on-open vía `openLigaExt`) hereda automáticamente el fix 1;
+   no hay lista de slugs que mantener aparte.
+
 ## El reset INDIVIDUAL de una Copa duplicaba las estadísticas al re-simular — snapshot pre-copa que se restaura al resetear (obligatorio, 2026-08-02)
 
 **Bug (usuario 2026-08-02, "sobre las estadísticas duplicadas cuando reseteo individualmente una copa se duplican")**: pulsar **♻️ Reset** en el modal de una Copa individual (botón `_lecCopa.reset()`, distinto del reset MASIVO "Res" de las ~54 ligas) rehacía el sorteo y volvía a simular la copa desde cero, pero los goles/MVP/tarjetas que la copa VIEJA ya había sumado a `team.players[]` se quedaban ahí — y la copa NUEVA sumaba los suyos ENCIMA. Cada ciclo reset+resim inflaba/duplicaba las stats de copa de cada jugador.

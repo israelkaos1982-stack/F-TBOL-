@@ -20742,6 +20742,42 @@ window._showSimProgress = function(opts, onDone){
   /* Público — el overlay "Equipos por competición" lo usa para mostrar
      el pool EN VIVO (nombre + conteo) sin duplicar esta lógica. */
   window._recopaLivePool = function(){ return _buildPool(); };
+  /* Diagnóstico (obligatorio, 2026-08-02, "faltan 2 ligas mixtas, solo
+     hay 7 asignadas a la recopa y 2 que no salen"): una liga elegible
+     para Recopa (no está en `EUROPE_BLACKLIST`) que en ESTE dispositivo
+     no tiene `data.copa.champion` sencillamente NO APORTA NINGÚN equipo
+     al pool — `_eurZoneSectionHtml` solo pinta una sección por liga que
+     SÍ tenga al menos 1 equipo, así que una liga sin campeón desaparece
+     del informe por completo (sin ni un aviso de "0"), indistinguible
+     de un bug real de cómputo. Este helper lista, para CUALQUIER liga
+     externa (excepto Resto del Mundo/EA/Hyp/1ªRFEF, igual que
+     `_buildPool`), si le falta el campeón — y por qué: sin equipos
+     cacheados en este dispositivo, o con equipos pero sin la Copa
+     simulada todavía. El overlay lo usa para avisar explícitamente en
+     vez de dejar la liga "desaparecida" sin explicación. */
+  window._recopaMissingChampionLeagues = function(){
+    var EUROPE_BLACKLIST = { 'liga-hypermotion':1, 'liga-primera-federacion':1, 'liga-ea-sports':1, 'resto-mundo':1 };
+    var out = [];
+    try {
+      var slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {});
+      slugs.forEach(function(slug){
+        if(EUROPE_BLACKLIST[slug]) return;
+        var d = null;
+        try { var raw = localStorage.getItem('ligaExt_' + slug); d = raw ? JSON.parse(raw) : null; } catch(_){}
+        var hasChamp = !!(d && d.copa && d.copa.champion);
+        if(hasChamp) return;
+        var hasTeams = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
+        var nm = (window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[slug]) || slug;
+        out.push({
+          slug: slug,
+          label: slug.charAt(0).toUpperCase() + slug.slice(1).replace(/-/g,' ') + ' (' + nm + ')',
+          reason: hasTeams ? 'sin Copa simulada todavía' : 'sin datos en este dispositivo'
+        });
+      });
+      out.sort(function(a,b){ return a.label.localeCompare(b.label,'es'); });
+    } catch(_){}
+    return out;
+  };
 
   function _mkMatch(home, away){
     return { home: home, away: away, played:false, gh:null, ga:null, etGh:0, etGa:0, penWinner:null };
@@ -43958,11 +43994,30 @@ window._showSimProgress = function(opts, onDone){
       ? '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.5);padding:4px 0;">Sin candidatos manuales añadidos todavía — esta competición se configura en su propia pantalla (equipo a equipo).</div>'
       : '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,150,150,.85);padding:4px 0;">⚠️ Sin equipos — revisa esta competición.</div>';
     var countLbl = isCandidates ? ' candidatos' : ' equipos';
+    /* Diagnóstico "ligas sin campeón" — SOLO en la zona Recopa (bug
+       2026-08-02, "faltan 2 ligas mixtas, solo hay 7 asignadas a la
+       recopa y 2 que no salen"): una liga elegible SIN `data.copa.champion`
+       no aporta ningún equipo, así que su sección desaparece del informe
+       sin ningún aviso — indistinguible de un bug de cómputo. Se lista
+       aquí explícitamente para que el admin sepa exactamente qué liga
+       falta y por qué (sin datos en este dispositivo / sin Copa
+       simulada), en vez de tener que adivinarlo. */
+    var missingHtml = '';
+    if(zone.key === 'recopa' && typeof window._recopaMissingChampionLeagues === 'function'){
+      var missing = window._recopaMissingChampionLeagues();
+      if(missing.length){
+        missingHtml = '<div style="margin-top:8px;padding:6px 10px;border:1px solid rgba(255,180,60,.4);border-radius:8px;background:rgba(255,180,60,.06);">'
+          + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:#ffb060;margin-bottom:4px;">⚠️ '+missing.length+' liga(s) SIN campeón todavía (no aportan nada a Recopa aún):</div>'
+          + '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.75);line-height:1.6;">'
+          +   missing.map(function(m){ return _eurEsc(m.label) + ' <span style="color:rgba(255,255,255,.45);">('+_eurEsc(m.reason)+')</span>'; }).join('<br>')
+          + '</div></div>';
+      }
+    }
     return '<div style="margin:0 0 18px;border:1px solid '+zone.color+'55;border-radius:10px;overflow:hidden;">'
          +   '<div style="padding:8px 12px;background:linear-gradient(90deg,rgba(0,0,0,.6),'+zone.color+'33,rgba(0,0,0,.6));font-family:Bebas Neue,Oswald,sans-serif;letter-spacing:1px;font-size:15px;color:#fff;">'
          +     zone.emoji + ' ' + _eurEsc(zone.label) + ' <span style="color:rgba(255,255,255,.6);font-size:12px;">— ' + teams.length + countLbl + '</span>'
          +   '</div>'
-         +   '<div style="padding:8px 12px;">' + body + '</div>'
+         +   '<div style="padding:8px 12px;">' + body + missingHtml + '</div>'
          + '</div>';
   }
   window._eurShowCommitReport = function(blob, recovered){

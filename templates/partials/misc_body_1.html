@@ -51936,7 +51936,17 @@ https://api.sofascore.app/api/v1/team/44/image
       });
     }
     saveData(CURRENT_KEY, data);
+    /* Refresca `ef_player_stats_v1` (2026-08-02, mismo fix que ya tiene
+       `_lecCopa.reset()`/`_finishSim`): sin esto, la cabecera "Máximo
+       goleador" (liga+copa) seguía mostrando el valor STALE de antes
+       del reset hasta el próximo Sim — los contadores en `t.players[]`
+       ya estaban a 0, pero esta cache aparte no se enteraba. */
+    try { if (typeof _lecSyncPlayerStatsCache === 'function') _lecSyncPlayerStatsCache(data); } catch(_){}
     renderTable();
+    /* Si la pantalla de Copa de esta liga está abierta, repintarla —
+       sus stats (cabecera "Máximo goleador") ya se acaban de limpiar
+       arriba, pero el DOM ya pintado no se entera solo. */
+    try { if (typeof _lecRender === 'function') _lecRender(); } catch(_){}
     /* Si la overlay de plantilla está abierta, repintar también para
        que los jugadores se actualicen al instante. */
     try {
@@ -51976,7 +51986,14 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     data.copa = null;   /* reset de la Copa de esta liga — reglas intactas */
     saveData(slug, data);
-    if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
+    /* Mismo fix que `ligaExtReiniciar` (single-liga): refresca la cache
+       `ef_player_stats_v1` para que "Máximo goleador" (liga+copa) no
+       siga mostrando el valor de antes del reset. */
+    try { if (typeof _lecSyncPlayerStatsCache === 'function') _lecSyncPlayerStatsCache(data); } catch(_){}
+    if(slug === CURRENT_KEY){
+      try { renderTable(); } catch(_){}
+      try { if (typeof _lecRender === 'function') _lecRender(); } catch(_){}
+    }
     return true;
   };
 
@@ -56864,11 +56881,23 @@ https://api.sofascore.app/api/v1/team/44/image
             try { _lextBackfillAlias(merged, idbData); } catch(_){}
             try { _lextBackfillResults(merged, idbData); } catch(_){}
           }
-          if (!_needsTopup(merged)) {
-            /* el merge por nombre ya cubrió lo que faltaba */
-          } else if (merged === curNow && !_hasResults(curNow) && idbHasResults) {
-            merged.results = idbData.results;
-          }
+          /* PROHIBIDO reintroducir un `merged.results = idbData.results`
+             SIN pasar por `_lextBackfillResults` (bug 2026-08-02, "las
+             Ligas Mixtas no vuelven a cero al pulsar Rest global"): un
+             reset deliberado dejaba `curNow.results=[]` con
+             `resultsStamp` FRESCO, pero como esta liga usa
+             `_EXTRA_LEAGUE_SEEDS` (Ligas Mixtas / Resto Mundo),
+             `openLigaExt` dispara `_ensureExtraLeagueSeed` → esta misma
+             función EN CADA APERTURA de la card — no solo al arrancar.
+             Había una rama `else if` AQUÍ MISMO que, tras el
+             `_lextBackfillResults` de arriba (que SÍ respeta
+             `resultsStamp` y correctamente NO resucitaba nada), volvía
+             a copiar `idbData.results` a pelo SIN comprobar el sello —
+             deshaciendo el reset en cuanto el admin reabría la liga.
+             `_lextBackfillResults` YA cubre el caso legítimo (local
+             vacío por eviction, IDB con clasificación más reciente o
+             igual de sello) vía su EMPTY-GUARD — no hace falta (ni es
+             seguro) un segundo intento sin sello. */
           window._lsSetSafe(key, JSON.stringify(merged));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = merged; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
@@ -58551,8 +58580,25 @@ https://api.sofascore.app/api/v1/team/44/image
         }
       }
       var totalPj = ligaPj + cupPj;
-      if(totalPj === 0) return;  /* no escribir si el equipo no jugó nada */
       var teamN = _normPS(t.name);
+      if(totalPj === 0){
+        /* BORRA la entrada stale en vez de dejarla intacta (2026-08-02,
+           bug "las Ligas Mixtas y sus Copas no vuelven a cero"): antes
+           esta rama hacía un `return` que SALTABA por completo la
+           escritura para este equipo — pero `stats[k]` es un objeto
+           persistente que se reutiliza entre llamadas; si el equipo
+           TENÍA una entrada de una sim/copa ANTERIOR (antes de un
+           Reset), saltarse la escritura la dejaba INTACTA con los
+           valores viejos para siempre, hasta el próximo Sim. Un
+           `totalPj===0` significa "este equipo no jugó nada" — la
+           cabecera "Máximo goleador" debe verlo como si nunca hubiera
+           tenido stats, no como su último valor conocido. */
+        t.players.forEach(function(p){
+          if(!p || !p.name) return;
+          delete stats[teamN + '::' + _normPS(p.name)];
+        });
+        return;
+      }
       t.players.forEach(function(p){
         if(!p || !p.name) return;
         var k = teamN + '::' + _normPS(p.name);

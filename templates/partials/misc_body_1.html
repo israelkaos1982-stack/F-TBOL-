@@ -66781,6 +66781,35 @@ https://api.sofascore.app/api/v1/team/44/image
      re-pull del KV del nuevo hub. Se trata como un cold-start: ningún
      writer automático escribe antes de que _serverPull responda (la
      regla del gate sigue intacta). */
+
+  /* ── Migración ÚNICA: forzar el moneyTarget rebalanceado (2026-07-27) ──
+     Petición usuario (fotos: Liverpool mostraba /1400€, Arsenal /1370€ —
+     ninguno de los dos coincide ni con el default viejo ni con el
+     reequilibrio nuevo). `_seedHubDefaults` SOLO siembra en una caja SIN
+     NINGÚN dato — una caja con historial (derbys/trofeos/HUD ya usado)
+     nunca lo recibe, así que un target editado a mano hace tiempo (o
+     nunca actualizado) se queda desfasado para siempre. Esta migración
+     corre UNA SOLA VEZ por hub (flag `bayern_hud_target_migrated_v1`,
+     hub-scoped vía `_hubKey`) y fuerza SOLO `moneyTarget` desde
+     `_HUB_DEF` — NUNCA toca `money`/`rating` (progreso real). Tras
+     correr una vez, un admin que edite el target a mano desde el HUD lo
+     conserva para siempre (la migración no vuelve a ejecutarse). */
+  function _bayernHudMigrateTarget(){
+    try {
+      var _flagKey = window._hubKey ? window._hubKey('bayern_hud_target_migrated_v1') : 'bayern_hud_target_migrated_v1';
+      if (localStorage.getItem(_flagKey) === '1') return;
+      var _hd = _hubDef();
+      if (!_hd || _hd.moneyTarget == null) return;
+      var _cur = (typeof window._bayernHudGet === 'function') ? (window._bayernHudGet() || {}) : {};
+      var _curTarget = (_cur.moneyTarget != null) ? parseFloat(_cur.moneyTarget) : null;
+      if (_curTarget !== _hd.moneyTarget && typeof window._bayernHudMerge === 'function') {
+        window._bayernHudMerge({ moneyTarget: _hd.moneyTarget }, true, true);
+      }
+      try { localStorage.setItem(_flagKey, '1'); } catch(_){}
+    } catch(_){}
+  }
+  try { window._bayernHudOnHydrate(_bayernHudMigrateTarget); } catch(_){}
+
   try {
     window.addEventListener('hubchange', function(){
       try { KEY = window._hubKey('bayern_hud_overrides_v1'); } catch(_){}
@@ -66819,6 +66848,7 @@ https://api.sofascore.app/api/v1/team/44/image
       try { var _pE2 = document.getElementById('ath-med-val');    if (_pE2) _pE2.textContent = '—'; } catch(_){}
       try { var _pI2 = document.getElementById('ath-med-injury'); if (_pI2) _pI2.textContent = '—'; } catch(_){}
       try { apply(); } catch(_){}
+      try { window._bayernHudOnHydrate(_bayernHudMigrateTarget); } catch(_){}
       try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
     });
   } catch(_){}

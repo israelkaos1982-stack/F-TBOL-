@@ -4467,9 +4467,53 @@ def _eur_manual_extra_merge(old_json, new_value):
     new = new_value if isinstance(new_value, dict) else {}
     old_cleared = old.get("clearedAt") if isinstance(old.get("clearedAt"), dict) else {}
     new_cleared = new.get("clearedAt") if isinstance(new.get("clearedAt"), dict) else {}
+
+    def _ts_map(container, zone):
+        src = container.get(zone) if isinstance(container, dict) else None
+        if not isinstance(src, dict):
+            return {}
+        out_map = {}
+        for n, ts in src.items():
+            n = str(n or "").strip()
+            if not n:
+                continue
+            try:
+                ts = float(ts or 0)
+            except (TypeError, ValueError):
+                continue
+            if ts > 0:
+                out_map[n] = ts
+        return out_map
+
+    # `excludedAt`/`unexcludedAt` (obligatorio 2026-08-02, "no puedo
+    # eliminar equipos ni del Open Qualifier ni de la Recopa"): un equipo
+    # AUTO-COMPUTADO (ligas, campeones de copa…) nunca vive en la lista
+    # `zone` de arriba, así que el ✕ de "manuales" no podía tocarlo.
+    # Resuelto por RECENCIA por (zona, nombre) — el sello MAYOR entre
+    # "excluido en" y "restaurado en" gana — mismo patrón `hiddenAt`/
+    # `shownAt` que ya usa `_tour_registry_merge` más abajo. Una UNIÓN
+    # simple (como se probó en un primer intento) SOLO PUEDE CRECER: sin
+    # esta recencia, restaurar un equipo excluido nunca sobreviviría al
+    # siguiente merge (el nombre seguiría presente en `old`).
+    old_ex_at = old.get("excludedAt") if isinstance(old.get("excludedAt"), dict) else {}
+    new_ex_at = new.get("excludedAt") if isinstance(new.get("excludedAt"), dict) else {}
+    old_un_at = old.get("unexcludedAt") if isinstance(old.get("unexcludedAt"), dict) else {}
+    new_un_at = new.get("unexcludedAt") if isinstance(new.get("unexcludedAt"), dict) else {}
     out = {}
     out_cleared = {}
+    out_ex_at = {}
+    out_un_at = {}
     for zone in _EUR_MANUAL_EXTRA_ZONES:
+        ex_map = _ts_map(old_ex_at, zone)
+        for n, ts in _ts_map(new_ex_at, zone).items():
+            ex_map[n] = max(ex_map.get(n, 0.0), ts)
+        un_map = _ts_map(old_un_at, zone)
+        for n, ts in _ts_map(new_un_at, zone).items():
+            un_map[n] = max(un_map.get(n, 0.0), ts)
+        if ex_map:
+            out_ex_at[zone] = ex_map
+        if un_map:
+            out_un_at[zone] = un_map
         try:
             cleared_at = max(float(old_cleared.get(zone) or 0), float(new_cleared.get(zone) or 0))
         except (TypeError, ValueError):
@@ -4498,6 +4542,10 @@ def _eur_manual_extra_merge(old_json, new_value):
         out[zone] = list(by_name.values())
     if out_cleared:
         out["clearedAt"] = out_cleared
+    if out_ex_at:
+        out["excludedAt"] = out_ex_at
+    if out_un_at:
+        out["unexcludedAt"] = out_un_at
     try:
         old_ts = float(old.get("updatedAt") or 0)
     except (TypeError, ValueError):

@@ -1480,6 +1480,81 @@ class TestEurManualExtraMerge:
         assert self._zone(client, "wildcard") == []
         assert len(self._zone(client, "uclQual")) == 1
 
+    def _excluded_names(self, client, zone):
+        """Reconstruye el set EFECTIVO de excluidos, igual que hace el
+        cliente (`window._eurManualExtraExcludedSet`): por cada nombre,
+        gana el sello mayor entre `excludedAt` y `unexcludedAt`."""
+        v = _json(client.get(self.URL)).get("value") or {}
+        ex = (v.get("excludedAt") or {}).get(zone) or {}
+        un = (v.get("unexcludedAt") or {}).get(zone) or {}
+        names = set(ex.keys()) | set(un.keys())
+        return sorted(n for n in names if float(ex.get(n) or 0) > float(un.get(n) or 0))
+
+    # ── excludedAt/unexcludedAt (obligatorio 2026-08-02) — "no puedo
+    # eliminar equipos ni del Open Qualifier ni de la Recopa": el admin
+    # excluye un equipo AUTO-COMPUTADO (nunca vive en la lista `zone`)
+    # desde el overlay. Resuelto por RECENCIA por nombre — una unión
+    # simple no puede "encoger" al restaurar (verificado con un primer
+    # intento que fallaba exactamente en eso). Si estos campos no se
+    # preservan aquí, la exclusión/restauración desaparecería en
+    # silencio en el siguiente POST de cualquier dispositivo. ──
+    def test_excluded_persists_on_first_save(self, client):
+        client.post(self.URL, json={"value": {
+            "uclQual": [], "excludedAt": {"uclQual": {"HJK Helsinki": 1000}},
+            "updatedAt": 1000}})
+        assert self._excluded_names(client, "uclQual") == ["HJK Helsinki"]
+
+    def test_excluded_not_dropped_by_unrelated_field_post(self, client):
+        # Móvil A excluye un equipo del Open Qualifier.
+        client.post(self.URL, json={"value": {
+            "uclQual": [], "excludedAt": {"uclQual": {"HJK Helsinki": 1000}},
+            "updatedAt": 1000}})
+        # Móvil B añade un equipo manual a OTRA zona, sin conocer la
+        # exclusión de A (su copia local no la trae) — el merge NO debe
+        # descartarla en silencio.
+        client.post(self.URL, json={"value": {
+            "wildcard": [{"name": "Equipo A", "league": "Bulgaria", "addedAt": 2000}],
+            "updatedAt": 2000}})
+        assert self._excluded_names(client, "uclQual") == ["HJK Helsinki"]
+
+    def test_excluded_union_across_devices(self, client):
+        client.post(self.URL, json={"value": {
+            "recopa": [], "excludedAt": {"recopa": {"Olympiacos": 1000}},
+            "updatedAt": 1000}})
+        client.post(self.URL, json={"value": {
+            "recopa": [], "excludedAt": {"recopa": {"Sparta Praha": 2000}},
+            "updatedAt": 2000}})
+        assert self._excluded_names(client, "recopa") == ["Olympiacos", "Sparta Praha"]
+
+    def test_excluded_restore_survives_merge(self, client):
+        # El admin excluye "Olympiacos" de la Recopa.
+        client.post(self.URL, json={"value": {
+            "recopa": [], "excludedAt": {"recopa": {"Olympiacos": 1000}},
+            "updatedAt": 1000}})
+        assert self._excluded_names(client, "recopa") == ["Olympiacos"]
+        # Pulsa ↩ Restaurar (sello POSTERIOR) — a diferencia de una unión
+        # simple, aquí el sello de restauración GANA aunque el servidor
+        # siga guardando el `excludedAt` viejo.
+        client.post(self.URL, json={"value": {
+            "recopa": [], "unexcludedAt": {"recopa": {"Olympiacos": 2000}},
+            "updatedAt": 2000}})
+        assert self._excluded_names(client, "recopa") == []
+
+    def test_excluded_restore_then_re_exclude_wins_by_recency(self, client):
+        # Volver a excluir DESPUÉS de restaurar debe ganar (sello más
+        # nuevo), aunque un dispositivo stale reenvíe el `unexcludedAt`
+        # viejo por error.
+        client.post(self.URL, json={"value": {
+            "recopa": [], "excludedAt": {"recopa": {"Olympiacos": 1000}},
+            "updatedAt": 1000}})
+        client.post(self.URL, json={"value": {
+            "recopa": [], "unexcludedAt": {"recopa": {"Olympiacos": 2000}},
+            "updatedAt": 2000}})
+        client.post(self.URL, json={"value": {
+            "recopa": [], "excludedAt": {"recopa": {"Olympiacos": 3000}},
+            "updatedAt": 3000}})
+        assert self._excluded_names(client, "recopa") == ["Olympiacos"]
+
 
 # ---------------------------------------------------------------------------
 # Fusión cross-device de Resto de Ligas (_lx_merge_teams) — bugs 2026-06-11:

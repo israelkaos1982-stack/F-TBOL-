@@ -1,5 +1,28 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## "Resto de Ligas · Estadísticas" mostraba TODAS las banderas de una Liga Mixta apiladas en vez de la bandera REAL del equipo (obligatorio, 2026-08-02)
+
+**Petición/bug usuario 2026-08-02** (foto, caja "GOLEADORES"): «Jugador 10 · Lokomotiv Moscow» (equipo ruso de `liga-mixta-8`, fusión de Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán) salía con las **5 banderas apiladas** de toda la Liga Mixta en vez de solo la rusa. Igual para cualquier jugador de una de las 9 Ligas Mixtas (fusión de 3-5 ligas menores en una sola, sección "Ligas Mixtas" 2026-07-30/31 más abajo). Petición: mostrar SOLO la bandera real del equipo; si no se conoce, una bandera negra.
+
+### Causa raíz
+
+`_collectAggregateStats()` (`misc_body_1.html`, agregador de la caja "📈 Resto de Ligas · Estadísticas") asignaba a CADA jugador la bandera de la **card de la liga** (`_eachLeagueCard(function(name, flag, slug){...})`). Para las ~40 ligas de un solo país eso es correcto (una card = un país = una bandera). Pero para las 9 Ligas Mixtas, `flag` es la CONCATENACIÓN de las 3-5 banderas de los países fusionados (el icono de la card, correcto como icono de LA LIGA) — nunca se resolvía a qué país concreto pertenece CADA equipo dentro de esa liga.
+
+### Fix — bandera por `t.country`, negra si no se conoce
+
+- **`LIGA_MIXTA_COUNTRIES`** (nuevo, `misc_body_1.html`, junto a `_collectAggregateStats`): mapa `slug → [{name, alias[], flag}]` con los 3-5 países de cada una de las 9 Ligas Mixtas, en el mismo orden y con las MISMAS banderas que ya usa la card (`mc-emoji`) — no se inventan banderas nuevas. Expuesto en `window.LIGA_MIXTA_COUNTRIES`.
+- **`_mixtaTeamFlag(slug, countryRaw)`**: resuelve la bandera del país escrito en `t.country` (campo opcional YA EXISTENTE del editor de plantilla, "🌐 País", normalizado sin acentos/mayúsculas + una lista corta de alias por país) dentro de esa Liga Mixta. Si `t.country` está vacío o no coincide con ninguno de los países de esa liga, devuelve **🏴 (bandera negra)** — petición explícita del usuario: *"si no sabes de donde es cada equipo pon una bandera de color negro"*.
+- `_collectAggregateStats`: para slugs `liga-mixta-N` (detectados vía `_isLigaMixtaSlug`), cada equipo resuelve su propia bandera con `_mixtaTeamFlag(slug, t.country)` en vez de heredar la de la card. El resto de ligas (un solo país) no cambia.
+- **Datalist de ayuda** en el editor de plantilla (vista cards, `_lcRenderCard`/`_lcRender`): el campo "🌐 País" de un equipo de Liga Mixta gana un `<datalist id="lc-country-datalist">` (repoblado en cada render vía `_lcRefreshCountryDatalist`) con SOLO los 3-5 países válidos de esa liga concreta — evita que el admin escriba un país con una grafía que `_mixtaTeamFlag` no reconozca y el equipo se quede con bandera negra por un simple typo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un agregador de estadísticas nuevo (o cualquier pantalla que muestre la bandera de un equipo de Resto de Ligas) use la bandera de la CARD de la liga sin comprobar antes si esa liga es una Liga Mixta (`_isLigaMixtaSlug`). Una Liga Mixta no tiene una bandera única — cada equipo tiene la suya.
+2. **PROHIBIDO** que `_mixtaTeamFlag` devuelva la bandera de OTRO país de la misma Liga Mixta como fallback cuando `t.country` no coincide — el fallback es SIEMPRE la bandera negra (🏴), nunca una bandera real "aproximada".
+3. **PROHIBIDO** inventar banderas nuevas en `LIGA_MIXTA_COUNTRIES` que no coincidan con las ya usadas en el `mc-emoji` de la card de esa Liga Mixta (`s-ligas`, grid de `menu-card[data-slug="liga-mixta-N"]`) — deben ser las MISMAS, carácter a carácter, para que la bandera de un equipo sea siempre un subconjunto reconocible de la bandera de su liga.
+4. Toda Liga Mixta NUEVA (una 10ª futura, si se añade) hereda esto en cuanto se añada su entrada a `LIGA_MIXTA_COUNTRIES` con el mismo slug `liga-mixta-N` — `_isLigaMixtaSlug` ya es genérico (regex `^liga-mixta-\d+$`), no hace falta tocar el agregador.
+5. El campo `t.country` sigue siendo libre/opcional para TODAS las ligas (no solo las Mixtas) — el datalist de sugerencias solo aparece cuando `LIGA_MIXTA_COUNTRIES[slug]` existe; en el resto de ligas el campo sigue aceptando cualquier texto sin validarlo contra nada.
+
 ## El reset INDIVIDUAL de una Copa duplicaba las estadísticas al re-simular — snapshot pre-copa que se restaura al resetear (obligatorio, 2026-08-02)
 
 **Bug (usuario 2026-08-02, "sobre las estadísticas duplicadas cuando reseteo individualmente una copa se duplican")**: pulsar **♻️ Reset** en el modal de una Copa individual (botón `_lecCopa.reset()`, distinto del reset MASIVO "Res" de las ~54 ligas) rehacía el sorteo y volvía a simular la copa desde cero, pero los goles/MVP/tarjetas que la copa VIEJA ya había sumado a `team.players[]` se quedaban ahí — y la copa NUEVA sumaba los suyos ENCIMA. Cada ciclo reset+resim inflaba/duplicaba las stats de copa de cada jugador.

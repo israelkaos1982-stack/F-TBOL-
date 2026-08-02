@@ -1,5 +1,79 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Open Qualifier/Wild Card/Recopa se quedaban corto de Ligas Mixtas 5-9 y de copas "sin campeón" — los lectores de `ligaExt_<slug>` del reparto europeo solo miraban `localStorage`, nunca `window.LIGA_CACHE` (obligatorio, 2026-08-02 #5)
+
+**Bug (5 fotos usuario 2026-08-02)**: el Open Qualifier solo mostraba
+equipos de Liga Mixta 1-4 (12 equipos), sin rastro de Liga Mixta 5-9.
+Wild Card salía a 0 equipos. El diagnóstico de la Recopa
+("13 liga(s) SIN campeón todavía") marcaba Dinamarca, Escocia, Suiza,
+Turquía y las 9 Ligas Mixtas como "sin Copa simulada todavía" — pero
+el usuario confirmó (y la propia app lo demuestra: la pantalla de la
+Copa de Dinamarca muestra la FINAL jugada con **København** campeón)
+que esas copas SÍ estaban simuladas.
+
+### Causa raíz
+
+`_computeQualifiedFromLeagues` (Open Qualifier/Wild Card/UCL/UEL/UECL),
+`_buildPool` (Recopa), `_recopaMissingChampionLeagues` (diagnóstico),
+`_uclPrevLeagueRanking` (Previa Champions) y `_eurPickerLoadLeague`
+(picker "AÑADIR POR LIGA") leían **ÚNICAMENTE** `localStorage.getItem
+('ligaExt_'+slug)` — nunca consultaban `window.LIGA_CACHE[slug]`
+primero. Es EXACTAMENTE el mismo bug ya documentado y arreglado para
+`_readLigaData`/`loadData` (sección "'Resto de Ligas · Estadísticas'
+salía vacío..." más abajo): `saveData` SIEMPRE deja la copia fresca en
+`window.LIGA_CACHE[slug]` (memoria), pase lo que pase con la cuota del
+navegador — pero si `localStorage.setItem` falla en silencio (banner
+"Navegador sin espacio", frecuente al simular ~60 ligas de golpe, o
+las 9 Ligas Mixtas al ser de las últimas en un bucle de simulación
+masiva), la copia persistida en disco se queda ATRASADA o vacía
+mientras la copia en memoria (y el servidor) SÍ tienen la simulación
+completa/el campeón. La propia pantalla de cada liga (`loadData`) SÍ
+mira `LIGA_CACHE` primero y por eso mostraba los datos correctos — los
+5 lectores de arriba, al saltarse ese paso, veían una copia distinta
+(más pobre) de la MISMA liga y la daban por "sin terminar"/"sin
+campeón".
+
+### Fix — `window._eurBestLeagueData(slug, localParsed)`, fuente única
+
+Nuevo helper compartido (`misc_body_1.html`, junto al primer
+`_buildPool`): dado el JSON ya parseado de `localStorage` para un
+slug, lo compara con `window.LIGA_CACHE[slug]` y devuelve la copia con
+MÁS resultados de liga jugados, o con campeón de copa si la otra
+copia no lo tiene — nunca menos que lo que ya había en `localStorage`.
+`window._eurAllKnownLeagueSlugs(fromLocalStorageKeys)` complementa el
+helper: une los slugs que solo existen en `LIGA_CACHE` esta sesión
+(nunca llegaron a persistir en `localStorage`) con los que sí están
+en disco, para que ninguna liga hidratada solo en memoria quede fuera
+del bucle.
+
+Aplicado en los 5 puntos: `_computeQualifiedFromLeagues` (con unión de
+slugs vía `_eurAllKnownLeagueSlugs`), `_buildPool` (Recopa, misma
+unión), `_recopaMissingChampionLeagues` (ya iteraba TODOS los slugs de
+`LEAGUE_DEFAULT_ZONES`, solo necesitaba el read mejorado),
+`_uclPrevLeagueRanking` y `_eurPickerLoadLeague`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un lector nuevo de `ligaExt_<slug>` para el
+   reparto europeo (Open Qualifier, Wild Card, UCL/UEL/UECL, Previa,
+   Recopa, Intercontinental, o cualquier diagnóstico/picker de esa
+   familia) lea `localStorage.getItem('ligaExt_'+slug)` sin pasar el
+   resultado por `window._eurBestLeagueData(slug, parsed)`. Es el
+   mismo chokepoint que ya exige la regla de `_readLigaData` —
+   generalizado aquí a los 5 lectores del reparto europeo.
+2. **PROHIBIDO** que un bucle que enumera "todas las ligas" para el
+   reparto europeo derive la lista de slugs SOLO de
+   `localStorage.length`/`localStorage.key(i)`. Debe unir con
+   `window._eurAllKnownLeagueSlugs(...)` para no perderse una liga
+   hidratada solo en `LIGA_CACHE` esta sesión (nunca escrita a disco).
+3. **PROHIBIDO** que `_eurBestLeagueData` pise la copia de
+   `localStorage` con una de `LIGA_CACHE` más pobre (menos resultados,
+   sin campeón cuando la local sí lo tiene) — solo gana si aporta
+   estrictamente más.
+4. Toda liga NUEVA (una 10ª Liga Mixta, o cualquier liga futura)
+   hereda el fix automáticamente — el helper es genérico por slug, sin
+   lista hardcodeada.
+
 ## El desplegable "AÑADIR POR LIGA" (equipos por competición) se cerraba solo al primer segundo — `preventDefault()` en touchstart bloqueaba el scroll de la lista de 54 ligas (obligatorio, 2026-08-02 #4)
 
 **Bug (foto usuario 2026-08-02, overlay «👁 Ver / Añadir equipos por

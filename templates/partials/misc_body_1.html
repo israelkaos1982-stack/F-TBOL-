@@ -20610,6 +20610,60 @@ window._showSimProgress = function(opts, onDone){
     return H.indexOf(name) !== -1;
   }
 
+  /* Lee la copia MÁS COMPLETA de una liga para el reparto europeo
+     (Open Qualifier/Wild Card/Recopa/diagnóstico) — `window.LIGA_CACHE[slug]`
+     (memoria, la escribe SIEMPRE `saveData` en cada guardado, sea cual
+     sea el estado de la cuota del navegador) vs la copia cruda de
+     `localStorage`. Sin esto, una liga simulada con éxito (guardada en
+     memoria + servidor) pero cuyo `setItem` de `localStorage` falló en
+     silencio (banner "Navegador sin espacio", frecuente al simular
+     ~60 ligas de golpe) aparecía como "liga sin terminar" en el Open
+     Qualifier/Wild Card o "sin Copa simulada todavía" en la Recopa,
+     aunque la propia pantalla de esa liga (que SÍ mira `LIGA_CACHE`
+     primero, ver `loadData`) mostrara la clasificación/campeón
+     correctos — bug 2026-08-02: "faltan poder añadir Liga Mixta 5-9
+     al Open Qualifier / Wild Card" + "la Recopa dice que hay Copas sin
+     terminar pero todas están simuladas" (confirmado con capturas: la
+     pantalla de la Copa de Dinamarca SÍ mostraba campeón København,
+     pero el diagnóstico de Recopa la marcaba "sin Copa simulada").
+     Devuelve la copia con MÁS resultados de liga jugados (o con
+     campeón de copa si la otra no lo tiene) entre las dos fuentes —
+     nunca menos que lo que ya había en `localStorage`. */
+  window._eurBestLeagueData = function(slug, localParsed){
+    var cached = null;
+    try { cached = window.LIGA_CACHE && window.LIGA_CACHE[slug]; } catch(_){}
+    var cachedOk = !!(cached && Array.isArray(cached.teams) && cached.teams.length);
+    if(!cachedOk) return localParsed;
+    var localOk = !!(localParsed && Array.isArray(localParsed.teams) && localParsed.teams.length);
+    if(!localOk) return cached;
+    var cachedR = Array.isArray(cached.results) ? cached.results.length : 0;
+    var localR  = Array.isArray(localParsed.results) ? localParsed.results.length : 0;
+    var cachedC = !!(cached.copa && cached.copa.champion);
+    var localC  = !!(localParsed.copa && localParsed.copa.champion);
+    if(cachedR > localR || (cachedC && !localC)) return cached;
+    return localParsed;
+  };
+  /* Todos los slugs válidos de liga (unión de `LEAGUE_DEFAULT_ZONES` +
+     lo que ya haya cacheado localStorage/`LIGA_CACHE`) — usado para no
+     perder una liga que SOLO vive en `LIGA_CACHE` en esta sesión
+     (nunca llegó a escribirse en `localStorage`, p.ej. hidratada desde
+     el servidor en segundo plano) al construir el pool europeo. */
+  window._eurAllKnownLeagueSlugs = function(fromLocalStorageKeys){
+    var out = {};
+    (fromLocalStorageKeys||[]).forEach(function(s){ out[s] = 1; });
+    try {
+      Object.keys(window.LEAGUE_DEFAULT_ZONES || {}).forEach(function(s){ out[s] = 1; });
+    } catch(_){}
+    try {
+      Object.keys(window.LIGA_CACHE || {}).forEach(function(s){
+        if(s.indexOf('__') === 0) return; /* claves internas tipo __bgHydrating_ */
+        var c = window.LIGA_CACHE[s];
+        if(c && Array.isArray(c.teams) && c.teams.length) out[s] = 1;
+      });
+    } catch(_){}
+    return Object.keys(out);
+  };
+
   /* Construye el pool de Recopa (rediseño 2026-06-02):
      Modelo histórico Recopa / Cup Winners' Cup. El pool son los
      CAMPEONES de las copas nacionales europeas (`ligaExt_<slug>.copa`,
@@ -20692,14 +20746,22 @@ window._showSimProgress = function(opts, onDone){
           if(!k || k.indexOf('ligaExt_')!==0) continue;
           if(k.indexOf('_backup')>=0 || k.indexOf('_snap_')>=0 || k.indexOf('_snapshot')>=0 || k.indexOf('_protected')>=0) continue;
           if(/_v\d+$/.test(k)) continue;
-          keys.push(k);
+          keys.push(k.substring('ligaExt_'.length));
         }
-        keys.sort();
-        keys.forEach(function(key){
-          var slug = key.substring('ligaExt_'.length);
+        /* Une los slugs de localStorage con los que SOLO viven en
+           `LIGA_CACHE` esta sesión (nunca llegaron a persistir en
+           local) — ver `_eurBestLeagueData`. */
+        var slugsAll = (typeof window._eurAllKnownLeagueSlugs === 'function')
+          ? window._eurAllKnownLeagueSlugs(keys)
+          : keys;
+        slugsAll.sort();
+        slugsAll.forEach(function(slug){
           if(EUROPE_BLACKLIST[slug]) return;
           var data;
-          try { data = JSON.parse(localStorage.getItem(key)||'null'); } catch(_){ return; }
+          try { data = JSON.parse(localStorage.getItem('ligaExt_' + slug)||'null'); } catch(_){ data = null; }
+          try {
+            if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
+          } catch(_){}
           var cp = data && data.copa;
           if(!cp) return;
           if(cp.champion) champs.push(cp.champion);
@@ -20764,6 +20826,9 @@ window._showSimProgress = function(opts, onDone){
         if(EUROPE_BLACKLIST[slug]) return;
         var d = null;
         try { var raw = localStorage.getItem('ligaExt_' + slug); d = raw ? JSON.parse(raw) : null; } catch(_){}
+        try {
+          if(typeof window._eurBestLeagueData === 'function') d = window._eurBestLeagueData(slug, d);
+        } catch(_){}
         var hasChamp = !!(d && d.copa && d.copa.champion);
         if(hasChamp) return;
         var hasTeams = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
@@ -36974,13 +37039,22 @@ window._showSimProgress = function(opts, onDone){
            ~50 reales). */
         if(k.indexOf('_protected')>=0) continue;
         if(/_v\d+$/.test(k)) continue;
-        keys.push(k);
+        keys.push(k.substring('ligaExt_'.length));
       }
-      /* Orden estable entre ligas para que el tablero no baile
-         al recalcular. */
-      keys.sort();
-      keys.forEach(function(key){
-        var slug = key.substring('ligaExt_'.length);
+      /* Une los slugs de localStorage con los que SOLO viven en
+         `window.LIGA_CACHE` esta sesión (nunca llegaron a persistir en
+         local — hidratación de servidor en segundo plano, cuota
+         llena, etc.) — sin esto una liga simulada con éxito pero cuya
+         escritura a `localStorage` falló en silencio quedaba invisible
+         para el reparto europeo aunque su pantalla la mostrara bien
+         (ver `_eurBestLeagueData`, bug 2026-08-02 "faltan Liga Mixta
+         5-9 en Open Qualifier/Wild Card"). Orden estable entre ligas
+         para que el tablero no baile al recalcular. */
+      var slugsAll = (typeof window._eurAllKnownLeagueSlugs === 'function')
+        ? window._eurAllKnownLeagueSlugs(keys)
+        : keys;
+      slugsAll.sort();
+      slugsAll.forEach(function(slug){
         /* BLACKLIST europeo por liga × zona. Reglas grabadas a fuego
            por el usuario:
            - liga-hypermotion (Segunda) → JAMÁS a ninguna competición
@@ -37009,11 +37083,16 @@ window._showSimProgress = function(opts, onDone){
           diag.push({slug:slug, status:'blacklist', note:'fuera de '+zoneKey+' por reglamento (manual-only)'});
           return;
         }
-        var raw = localStorage.getItem(key);
-        if(!raw){ diag.push({slug:slug, status:'skip', note:'sin datos'}); return; }
-        var data;
-        try { data = JSON.parse(raw); } catch(_){ diag.push({slug:slug, status:'skip', note:'JSON inválido'}); return; }
-        if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)){
+        var raw = localStorage.getItem('ligaExt_' + slug);
+        var data = null;
+        if(raw){
+          try { data = JSON.parse(raw); } catch(_){ data = null; }
+        }
+        try {
+          if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
+        } catch(_){}
+        if(!data){ diag.push({slug:slug, status:'skip', note:'sin datos'}); return; }
+        if(!Array.isArray(data.teams) || !Array.isArray(data.results)){
           diag.push({slug:slug, status:'skip', note:'estructura no reconocida'}); return;
         }
         var teams = data.teams;
@@ -37673,8 +37752,11 @@ window._showSimProgress = function(opts, onDone){
   function _uclPrevLeagueRanking(slug){
     try {
       var raw = localStorage.getItem('ligaExt_' + slug);
-      if(!raw) return [];
-      var data = JSON.parse(raw);
+      var data = null;
+      if(raw){ try { data = JSON.parse(raw); } catch(_){ data = null; } }
+      try {
+        if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
+      } catch(_){}
       if(!data || !Array.isArray(data.teams)) return [];
       var teams = data.teams;
       var needed = teams.length * (teams.length - 1);
@@ -44165,6 +44247,9 @@ window._showSimProgress = function(opts, onDone){
         if(slug === 'liga-ea-sports') return;
         var d = null;
         try { var raw = localStorage.getItem('ligaExt_' + slug); d = raw ? JSON.parse(raw) : null; } catch(_){}
+        try {
+          if(typeof window._eurBestLeagueData === 'function') d = window._eurBestLeagueData(slug, d);
+        } catch(_){}
         var hasTeams = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
         if(!hasTeams){
           var nm = (window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[slug]) || slug;
@@ -44273,6 +44358,12 @@ window._showSimProgress = function(opts, onDone){
     try {
       var raw = localStorage.getItem('ligaExt_' + slug);
       local = raw ? JSON.parse(raw) : null;
+    } catch(_){}
+    try {
+      /* `window.LIGA_CACHE` (memoria) puede tener una copia más
+         completa que la de `localStorage` — ver `_eurBestLeagueData`,
+         bug 2026-08-02 ("faltan poder añadir Liga Mixta 5-9"). */
+      if(typeof window._eurBestLeagueData === 'function') local = window._eurBestLeagueData(slug, local);
     } catch(_){}
     if(local && Array.isArray(local.teams) && local.teams.length >= 2){ _finish(local); return; }
     _eurEnsureLeagueIndex(function(){

@@ -1,5 +1,31 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El reset INDIVIDUAL de una Copa duplicaba las estadísticas al re-simular — snapshot pre-copa que se restaura al resetear (obligatorio, 2026-08-02)
+
+**Bug (usuario 2026-08-02, "sobre las estadísticas duplicadas cuando reseteo individualmente una copa se duplican")**: pulsar **♻️ Reset** en el modal de una Copa individual (botón `_lecCopa.reset()`, distinto del reset MASIVO "Res" de las ~54 ligas) rehacía el sorteo y volvía a simular la copa desde cero, pero los goles/MVP/tarjetas que la copa VIEJA ya había sumado a `team.players[]` se quedaban ahí — y la copa NUEVA sumaba los suyos ENCIMA. Cada ciclo reset+resim inflaba/duplicaba las stats de copa de cada jugador.
+
+### Causa raíz
+
+`applyMatchStats(team, gf, ga, yellows, reds)` (`misc_body_1.html`) **SUMA** sobre los campos del jugador (`p.pj++`, `p.gol++`, `p.ta++`…) — nunca sobreescribe. Es el motor compartido por Liga y Copa: en Resto de Ligas, `team.players[]` guarda un TOTAL único Liga+Copa (regla ya existente, "Resto de Ligas — las stats de COPA + LIGA se SUMAN por jugador"). `_lecCopa.reset()` hacía únicamente `data.copa = null` — el propio confirm() lo decía explícitamente: *"Las estadísticas que ya se sumaron a las plantillas... NO se borran — quedan tal como están"*. Eso era intencional para no perder historial, pero es incompatible con que la copa se vaya a **re-simular**: sin restar la contribución de la copa borrada, la siguiente simulación parte de un total que YA incluía esa copa, y la duplica.
+
+El caso MASIVO (`ligaExtReiniciarSlug`, botón global "Res", y `_finishSim` con `_lecSimCupOn(data,{force:true})`) no tenía este bug porque SIEMPRE llama a `resetPlayerStats` (pone todo a 0) justo antes de re-simular Liga+Copa — la copa nueva parte de una base limpia. El reset individual de copa no tiene ese lujo: solo debe tocar lo que la COPA aportó, sin tocar la Liga.
+
+### Fix — `statsSnapshot` tomado al crear `data.copa`, restaurado al resetear
+
+- **`_lecSnapshotStats(data)`** (nuevo, junto a `_lecEnsureCopa`): captura `{pj,gol,pen,fk,mvp,ta,tr,imbat,penSaved}` de CADA jugador de CADA equipo, indexado por `team.name` + `player.id` (fallback `player.name`).
+- Se toma **en el instante exacto en que `data.copa` se crea** — en los 2 únicos puntos donde eso ocurre: `_lecEnsureCopa` (botón "🎮 SIM Copa" individual, primera vez) y `_lecSimCupOn` (motor reutilizable de `_lecRunAllAuto` y de la Sim masiva `force:true`) — y se guarda como `data.copa.statsSnapshot`. En ese instante los jugadores YA tienen su total de Liga (y, si hubo `force`, acaban de pasar por `resetPlayerStats`), así que el snapshot representa exactamente "todo lo que NO es de esta copa".
+- **`_lecRestoreStatsSnapshot(data, snap)`** (nuevo): restaura cada jugador a los valores del snapshot — deshace SOLO lo que la copa (a punto de borrarse) había sumado encima.
+- **`_lecCopa.reset()`**: si `data.copa.statsSnapshot` existe, restaura ANTES de poner `data.copa = null`, y llama a `_lecSyncPlayerStatsCache(data)` para que el cache `ef_player_stats_v1` (cabeceras "Máximo goleador", dashboards) refleje el valor corregido al instante, sin esperar al próximo Sim. El texto del `confirm()` se actualizó para reflejar el comportamiento real.
+- Un `data.copa` **legacy** (creado antes de este fix, sin `statsSnapshot`) no tiene nada que restaurar — se conserva el comportamiento previo para esos saves ya existentes; el fix protege TODA copa que se cree/resetee desde ahora en adelante.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_lecCopa.reset()` (o cualquier reset INDIVIDUAL de una copa que se vaya a re-simular) vuelva a dejar `team.players[]` "tal como está" sin restar la contribución de la copa que se borra. `applyMatchStats` es aditivo — un reset que no resta y luego resimula SIEMPRE duplica.
+2. **PROHIBIDO** que un punto NUEVO de creación de `data.copa` (si se añade un 3er sitio en el futuro) omita `statsSnapshot: _lecSnapshotStats(data)`. Es lo único que permite deshacer la copa individualmente sin tocar la Liga.
+3. **PROHIBIDO** que `_lecRestoreStatsSnapshot` toque jugadores que no estaban en el snapshot (altas posteriores a la creación de la copa) — se dejan intactos, no había nada suyo que deshacer.
+4. El reset MASIVO (`ligaExtReiniciarSlug`, botón "Res") sigue llamando a `resetPlayerStats` de todos los jugadores ANTES de re-simular — no necesita el snapshot (parte de 0), y no se ha tocado.
+5. Si se persiste el `statsSnapshot` en `data.copa`, tener en cuenta que viaja dentro de `ligaExt_<slug>` (cap 2 MB por carpeta, regla ya existente) — es proporcional al nº de jugadores de la liga, mismo orden de magnitud que `team.players[]` ya persistido, no debería acercarse al límite.
+
 ## Una liga elegible para Recopa sin campeón simplemente DESAPARECÍA del informe — diagnóstico "sin campeón" en vez de un hueco mudo (obligatorio, 2026-08-02)
 
 **Petición/bug usuario 2026-08-02 (fotos, informe «Equipos por

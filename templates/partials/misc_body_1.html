@@ -58295,6 +58295,60 @@ https://api.sofascore.app/api/v1/team/44/image
     if(n >= 12) return 12;
     return n;
   }
+  /* Snapshot de stats de plantilla tomado EN EL INSTANTE en que se crea
+     `data.copa` (antes de que la copa aporte ni un solo gol) — permite
+     deshacer EXACTAMENTE lo que ESTA copa sumó cuando se resetea a mano
+     (bug 2026-08-02, "las estadísticas se duplican al resetear una
+     copa individualmente"): `_lecCopa.reset()` solo hacía
+     `data.copa = null` sin tocar `team.players[]`. Como
+     `applyMatchStats` SUMA (nunca sobreescribe: `p.gol++`, `p.pj++`…),
+     al re-simular la copa con un sorteo nuevo, los goles/tarjetas/MVP
+     del sorteo VIEJO (nunca restados) se quedaban tal cual y los del
+     NUEVO se sumaban ENCIMA → cada ciclo reset+resim duplicaba/inflaba
+     las stats de la copa (las de Liga, ya separadas por este mismo
+     snapshot, nunca se tocan). */
+  function _lecSnapshotStats(data){
+    var snap = {};
+    (data.teams||[]).forEach(function(t){
+      if(!t || !t.name) return;
+      var byPlayer = {};
+      (t.players||[]).forEach(function(p){
+        if(!p) return;
+        var key = p.id || p.name;
+        if(!key) return;
+        byPlayer[key] = {
+          pj: p.pj||0, gol: p.gol||0, pen: p.pen||0, fk: p.fk||0,
+          mvp: p.mvp||0, ta: p.ta||0, tr: p.tr||0,
+          imbat: p.imbat||0, penSaved: p.penSaved||0
+        };
+      });
+      snap[t.name] = byPlayer;
+    });
+    return snap;
+  }
+  /* Restaura la plantilla al snapshot pre-copa (deshace SOLO lo que
+     esa copa aportó). Un jugador nuevo desde el snapshot (añadido
+     mientras la copa estaba en curso) no tiene entrada → se deja
+     intacto, no había nada suyo que deshacer. Un `data.copa` legacy
+     sin `statsSnapshot` (creado antes de este fix) no tiene nada que
+     restaurar — se conserva el comportamiento previo para esos saves. */
+  function _lecRestoreStatsSnapshot(data, snap){
+    if(!snap) return;
+    (data.teams||[]).forEach(function(t){
+      if(!t || !t.name) return;
+      var byPlayer = snap[t.name];
+      if(!byPlayer) return;
+      (t.players||[]).forEach(function(p){
+        if(!p) return;
+        var key = p.id || p.name;
+        var s = key && byPlayer[key];
+        if(!s) return;
+        p.pj = s.pj; p.gol = s.gol; p.pen = s.pen; p.fk = s.fk;
+        p.mvp = s.mvp; p.ta = s.ta; p.tr = s.tr;
+        p.imbat = s.imbat; p.penSaved = s.penSaved;
+      });
+    });
+  }
   function _lecEnsureCopa(data){
     if(!data.copa){
       var fmt = _lecDetectFormat(data);
@@ -58307,7 +58361,8 @@ https://api.sofascore.app/api/v1/team/44/image
         semis: null,
         final: null,
         champion: null,
-        runnerUp: null
+        runnerUp: null,
+        statsSnapshot: _lecSnapshotStats(data)
       };
       saveData(CURRENT_KEY, data);
     }
@@ -58354,7 +58409,8 @@ https://api.sofascore.app/api/v1/team/44/image
       data.copa = {
         format: fmt, status:'pending',
         groups: _lecBuildGroups(fmt, data.teams),
-        cuartos:null, semis:null, final:null, champion:null, runnerUp:null
+        cuartos:null, semis:null, final:null, champion:null, runnerUp:null,
+        statsSnapshot: _lecSnapshotStats(data)
       };
     }
     var copa = data.copa;
@@ -58827,11 +58883,23 @@ https://api.sofascore.app/api/v1/team/44/image
     simAll: _lecRunAllAuto,
     reset: function(){
       if(!CURRENT_KEY) return;
-      if(!confirm('¿Reset SOLO de esta copa?\n\nLas estadísticas que ya se sumaron a las plantillas (goles, MVP, tarjetas…) NO se borran — quedan tal como están.\n\nSe rehace solo el sorteo y los partidos.')) return;
+      if(!confirm('¿Reset SOLO de esta copa?\n\nLas estadísticas que ESTA copa sumó a las plantillas (goles, MVP, tarjetas…) se deshacen para que el próximo sorteo no las duplique. Las de Liga NO se tocan.\n\nSe rehace solo el sorteo y los partidos.')) return;
       var data = loadData(CURRENT_KEY);
       if(!data) return;
+      /* Deshace SOLO la contribución de esta copa (bug 2026-08-02: sin
+         esto, `applyMatchStats` — que SUMA, nunca sobreescribe — dejaba
+         los goles/tarjetas/MVP del sorteo viejo intactos y el nuevo
+         sorteo los duplicaba encima). Un `data.copa` legacy sin
+         `statsSnapshot` no tiene nada que restaurar. */
+      if(data.copa && data.copa.statsSnapshot){
+        _lecRestoreStatsSnapshot(data, data.copa.statsSnapshot);
+      }
       data.copa = null;
       saveData(CURRENT_KEY, data);
+      /* Refresca el cache `ef_player_stats_v1` con las stats YA
+         corregidas — si no, la cabecera "Máximo goleador"/dashboards
+         seguirían mostrando el valor inflado hasta el próximo Sim. */
+      _lecSyncPlayerStatsCache(data);
       _lecRender();
     },
     /* Alterna 0/1 plazas del subcampeón a Recopa de Europa. Default =

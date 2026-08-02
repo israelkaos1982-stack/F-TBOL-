@@ -44599,10 +44599,59 @@ window._showSimProgress = function(opts, onDone){
     el.addEventListener('pointerdown', _fire, { passive:false });
     el.addEventListener('mousedown', _fire);
   }
+  /* Filas de `#eur-pick-league-list` (2026-08-02, "ese desplegable solo
+     dura 1 segundo y se cierra"): hasta 54 ligas en un contenedor
+     `overflow-y:auto` — el admin necesita DESLIZAR el dedo por la lista
+     para encontrar la suya (Inglaterra, Italia…) antes de soltar sobre
+     la fila correcta. `_eurWireTapFallback` (arriba) llama SIEMPRE
+     `preventDefault()` en `touchstart` — eso bloquea el scroll nativo
+     para ESE toque: en cuanto el dedo tocaba CUALQUIER fila para
+     empezar a scrollear, se seleccionaba esa fila y el desplegable se
+     cerraba al instante ("solo dura 1 segundo"), sin darle tiempo al
+     admin a deslizar hasta su liga. Aquí se distingue tap de scroll con
+     `touchmove` (SIN `preventDefault` en touchstart/touchmove, para no
+     tocar el scroll nativo): solo se dispara el select si el dedo se
+     movió menos de `MOVE_PX` entre touchstart y touchend — un scroll
+     real (movimiento > umbral) no selecciona nada y el desplegable se
+     queda fijo, exactamente lo pedido ("que se quede fija hasta que
+     marque alguna liga"). `preventDefault()` en `touchend` SOLO cuando
+     se decide que es un tap (evita el doble disparo del click sintético
+     que el navegador añade tras un touchend sin scroll). */
+  function _eurWireLeagueRowTap(row){
+    if(!row || row.__eurRowTapWired) return;
+    row.__eurRowTapWired = true;
+    var MOVE_PX = 10;
+    var startY = 0, startX = 0, moved = false, active = false;
+    function _pt(e){ return (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e; }
+    function onStart(e){
+      active = true; moved = false;
+      var t = _pt(e);
+      startY = t.clientY; startX = t.clientX;
+    }
+    function onMove(e){
+      if(!active) return;
+      var t = _pt(e);
+      if (Math.abs(t.clientY - startY) > MOVE_PX || Math.abs(t.clientX - startX) > MOVE_PX) moved = true;
+    }
+    function onEnd(e){
+      if(!active) return;
+      active = false;
+      if(!moved){
+        try { e && e.preventDefault && e.preventDefault(); } catch(_){}
+        try { row.click(); } catch(_){}
+      }
+    }
+    function onCancel(){ active = false; moved = false; }
+    row.addEventListener('touchstart', onStart, { passive:true });
+    row.addEventListener('touchmove', onMove, { passive:true });
+    row.addEventListener('touchend', onEnd, { passive:false });
+    row.addEventListener('touchcancel', onCancel, { passive:true });
+  }
   function _eurWireTapFallbackAll(container){
     if(!container) return;
     try {
-      container.querySelectorAll('button, [data-eur-pick-league]').forEach(function(el){ _eurWireTapFallback(el); });
+      container.querySelectorAll('button').forEach(function(el){ _eurWireTapFallback(el); });
+      container.querySelectorAll('[data-eur-pick-league]').forEach(function(el){ _eurWireLeagueRowTap(el); });
     } catch(_){}
   }
 

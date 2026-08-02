@@ -1,5 +1,70 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El desplegable "AÑADIR POR LIGA" (equipos por competición) se cerraba solo al primer segundo — `preventDefault()` en touchstart bloqueaba el scroll de la lista de 54 ligas (obligatorio, 2026-08-02 #4)
+
+**Bug (foto usuario 2026-08-02, overlay «👁 Ver / Añadir equipos por
+competición» → «📋 AÑADIR POR LIGA», lista desplegada hasta «Liga mixta
+1» con Dinamarca ✅ ya elegida)**: "ese desplegable solo dura 1 segundo
+y se cierra" — el admin necesitaba DESLIZAR el dedo por la lista de 54
+ligas para llegar a la que quería, pero el desplegable se cerraba
+prácticamente al instante de tocarlo, sin darle tiempo a scrollear.
+
+### Causa raíz
+
+El fix 2026-08-01 #4 ("El picker 'AÑADIR POR LIGA'… no dejaba
+seleccionar Liga") unificó el disparo de TODOS los elementos del
+overlay —botones Y filas `[data-eur-pick-league]`— en
+`_eurWireTapFallback`: `touchstart` PURO con `e.preventDefault()`
+SIEMPRE, para que el tap nunca se perdiera. Ese `preventDefault()` en
+`touchstart` es correcto para un BOTÓN suelto (no necesita scroll
+propio), pero para una FILA dentro de `#eur-pick-league-list`
+(`overflow-y:auto`, hasta 54 entradas) tiene un efecto colateral grave:
+**bloquea el scroll nativo del contenedor para ESE toque** — en cuanto
+el dedo tocaba CUALQUIER fila para empezar a deslizar, el navegador no
+podía interpretar el gesto como scroll (el `preventDefault` ya lo había
+cancelado), así que `_fire()` disparaba el `click()` de esa fila al
+instante → seleccionaba esa liga y **cerraba el desplegable** — el
+admin no llegaba nunca a deslizar hasta la liga que quería.
+
+### Fix — filas de la lista con detección tap-vs-scroll POR TOUCHMOVE, sin `preventDefault` en touchstart
+
+`_eurWireLeagueRowTap(row)` (nueva, junto a `_eurWireTapFallback`),
+cableada SOLO a `[data-eur-pick-league]` (los botones del overlay
+siguen con `_eurWireTapFallback`, touchstart inmediato — no son listas
+scrollables, no tienen este problema):
+
+- `touchstart`/`touchmove` van con `passive:true` y **NUNCA** llaman
+  `preventDefault()` — el scroll nativo del contenedor funciona con
+  total normalidad.
+- Se mide el movimiento del dedo entre `touchstart` y `touchend`
+  (`MOVE_PX=10`). Si superó el umbral (scroll real), **no se
+  selecciona nada** — el desplegable se queda fijo.
+- Solo si el movimiento fue mínimo (tap real, no scroll) se llama
+  `row.click()` en `touchend`, con `preventDefault()` justo AHÍ (no en
+  touchstart) para que el click sintético que el navegador añadiría
+  después no dispare la selección DOS veces.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una fila dentro de una lista LARGA scrollable
+   (`overflow-y:auto`, `#eur-pick-league-list` o cualquier lista nueva
+   de este tipo con más de ~15 filas que el admin necesite recorrer
+   deslizando) use `_eurWireTapFallback` (touchstart inmediato +
+   `preventDefault` en touchstart). Ese patrón es SOLO para botones
+   sueltos que no requieren scroll sobre sí mismos — usar
+   `_eurWireLeagueRowTap` (o el mismo patrón: sin `preventDefault` en
+   touchstart/touchmove, decisión tap-vs-scroll por `touchmove`,
+   `preventDefault` solo en el `touchend` que decide disparar).
+2. **PROHIBIDO** volver a unificar el selector de `_eurWireTapFallbackAll`
+   en un único `container.querySelectorAll('button, [data-eur-pick-league]')`
+   con la MISMA función para ambos. Botones y filas de lista larga
+   necesitan gestos táctiles distintos — la regla 2026-08-01 #4 ("no
+   dependa ÚNICAMENTE del click sintético") sigue vigente para AMBOS,
+   pero el mecanismo de disparo no es el mismo.
+3. Toda lista NUEVA de este overlay con ≥15 filas scrollables (o
+   cualquier lista larga de otra pantalla con el mismo problema) hereda
+   `_eurWireLeagueRowTap` en vez de reinventar el patrón.
+
 ## "Resto de Ligas · Estadísticas" mostraba TODAS las banderas de una Liga Mixta apiladas en vez de la bandera REAL del equipo (obligatorio, 2026-08-02)
 
 **Petición/bug usuario 2026-08-02** (foto, caja "GOLEADORES"): «Jugador 10 · Lokomotiv Moscow» (equipo ruso de `liga-mixta-8`, fusión de Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán) salía con las **5 banderas apiladas** de toda la Liga Mixta en vez de solo la rusa. Igual para cualquier jugador de una de las 9 Ligas Mixtas (fusión de 3-5 ligas menores en una sola, sección "Ligas Mixtas" 2026-07-30/31 más abajo). Petición: mostrar SOLO la bandera real del equipo; si no se conoce, una bandera negra.

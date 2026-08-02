@@ -1223,6 +1223,100 @@ class TestTourInfoCardsRevGuard:
         assert v["sfn1"]["informacion"] == "sfn1-data"
 
 
+class TestMunichObjStateMerge:
+    """Progreso de Objetivos del Club (munich-obj-state-v5). Bug 2026-08-02
+    (foto usuario: "he creado varios y los marco en verde, cuando salgo y
+    vuelvo a abrirlos desaparecen el verde de la mayoría"): un push (con o
+    sin `authoritative`) reemplazaba el `checks`/`counters` ENTERO por lo que
+    el cliente traía en ESE instante. Si ese push no incluía TODOS los oids
+    conocidos (p.ej. un render puntual sin todos los objetivos personalizados
+    todavía cargados), los oids AUSENTES perdían su ✅ para siempre. Ahora se
+    fusiona por CLAVE (oid): el entrante gana en lo que trae, se conserva lo
+    que solo estaba en el server. `reset:true` (Reiniciar Temporada) sigue
+    ganando entero, sin fusión."""
+
+    KEY = "/api/kv/munich-obj-state-v5"
+
+    def _get(self, client):
+        return _json(client.get(self.KEY)).get("value")
+
+    def test_partial_authoritative_push_preserves_other_oids(self, client):
+        # El usuario marca 2 objetivos por defecto + custom en una pasada.
+        client.post(self.KEY, json={"value": {
+            "checks": {"liga-0": True, "copa-1": True, "verano__xabc": True},
+            "counters": {}, "updatedAt": 1000}, "authoritative": True})
+        # Un render posterior solo tenía "europa-0" en el DOM (p.ej. el resto
+        # de secciones estaba colapsado/no se pintó en esa pasada concreta) y
+        # el usuario marca ESE — el push autoritativo solo trae ese oid.
+        client.post(self.KEY, json={"value": {
+            "checks": {"europa-0": True},
+            "counters": {}, "updatedAt": 2000}, "authoritative": True})
+        v = self._get(client)
+        # El nuevo oid entra...
+        assert v["checks"]["europa-0"] is True
+        # ...pero los 3 ✅ anteriores NO desaparecen.
+        assert v["checks"]["liga-0"] is True
+        assert v["checks"]["copa-1"] is True
+        assert v["checks"]["verano__xabc"] is True
+
+    def test_explicit_uncheck_still_works(self, client):
+        client.post(self.KEY, json={"value": {
+            "checks": {"liga-0": True, "copa-1": True},
+            "counters": {}, "updatedAt": 1000}, "authoritative": True})
+        # El usuario desmarca liga-0 explícitamente (el oid SIGUE presente en
+        # el push, solo que ahora en `false` — un uncheck real).
+        client.post(self.KEY, json={"value": {
+            "checks": {"liga-0": False, "copa-1": True},
+            "counters": {}, "updatedAt": 2000}, "authoritative": True})
+        v = self._get(client)
+        assert v["checks"]["liga-0"] is False
+        assert v["checks"]["copa-1"] is True
+
+    def test_non_authoritative_repush_also_merges(self, client):
+        client.post(self.KEY, json={"value": {
+            "checks": {"liga-0": True}, "counters": {},
+            "updatedAt": 1000}, "authoritative": True})
+        # El push autoritativo anterior sella `updatedAt` con el reloj REAL
+        # del server (`srv_now`), así que el siguiente `updatedAt` debe ser
+        # posterior a ese sello (no a los 1000 ms "de mentira" que mandó el
+        # cliente) para tomar la rama de recencia normal en vez de "stale".
+        cur_ts = self._get(client)["updatedAt"]
+        # Re-push self-heal (timer interno de _kvBlobSync.touch, SIN el flag
+        # authoritative) con un subconjunto distinto de oids.
+        client.post(self.KEY, json={"value": {
+            "checks": {"copa-1": True}, "counters": {},
+            "updatedAt": cur_ts + 1000}})
+        v = self._get(client)
+        assert v["checks"]["liga-0"] is True
+        assert v["checks"]["copa-1"] is True
+
+    def test_reset_wins_whole_and_clears_everything(self, client):
+        client.post(self.KEY, json={"value": {
+            "checks": {"liga-0": True, "copa-1": True},
+            "counters": {}, "updatedAt": 1000}, "authoritative": True})
+        # Reiniciar Temporada: blob vacío marcado como reset intencional.
+        client.post(self.KEY, json={"value": {
+            "checks": {}, "counters": {}, "updatedAt": 2000, "reset": True},
+            "authoritative": True})
+        v = self._get(client)
+        assert v["checks"] == {}
+
+    def test_reset_via_non_authoritative_repush_also_wins(self, client):
+        """El re-push que agenda `touch()` tras `pushNow(true)` (1200 ms
+        después, SIN `authoritative`) también lleva `reset:true` y debe
+        seguir ganando entero, no resucitar lo borrado."""
+        client.post(self.KEY, json={"value": {
+            "checks": {"liga-0": True}, "counters": {},
+            "updatedAt": 1000}, "authoritative": True})
+        client.post(self.KEY, json={"value": {
+            "checks": {}, "counters": {}, "updatedAt": 2000, "reset": True},
+            "authoritative": True})
+        client.post(self.KEY, json={"value": {
+            "checks": {}, "counters": {}, "updatedAt": 2000, "reset": True}})
+        v = self._get(client)
+        assert v["checks"] == {}
+
+
 class TestMultiHubKeys:
     """Multi-hub (2026-06-13): cada caja de mister humano (Arsenal-Brasil,
     etc.) tiene datos INDEPENDIENTES en variantes POR HUB de las claves base

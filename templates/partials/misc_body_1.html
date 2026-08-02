@@ -68825,7 +68825,13 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   function _objStateSnapshot(){
     var d = _objStateRaw() || {};
-    return { checks: d.checks || {}, counters: d.counters || {} };
+    var out = { checks: d.checks || {}, counters: d.counters || {} };
+    /* Propaga el marcador de RESET INTENCIONAL (ver `_munichObjReset`): el
+       server usa este flag para saber que un `checks:{}` vacío es un
+       borrado A PROPÓSITO (Reiniciar Temporada) y debe ganar entero, en vez
+       de aplicarle la unión-por-oid que protege contra un render parcial. */
+    if (d.reset) out.reset = true;
+    return out;
   }
   function _objStateIsEmpty(d){
     if (!d) return true;
@@ -68980,7 +68986,30 @@ https://api.sofascore.app/api/v1/team/44/image
   function saveObjState(){
     if (window.__munichObjEditing) return;   /* el DOM no tiene checkbox en modo edición */
     try {
+      /* Semilla = lo YA PERSISTIDO (checks/counters), el DOM SOLO
+         SOBRESCRIBE los oids que están REALMENTE renderizados ahora mismo
+         — NUNCA un reemplazo total desde cero. Antes `data` se construía
+         ÚNICAMENTE desde el DOM actual: si por CUALQUIER motivo un render
+         puntual no tenía TODOS los objetivos (carrera con la hidratación de
+         `munich-obj-overrides-v1`, un re-render parcial, etc.), el oid
+         AUSENTE de esa pasada simplemente no entraba en `data.checks` — y
+         como este blob se persiste ENTERO (local + el push AUTORITATIVO de
+         cada marca de usuario, que también gana entero en el servidor), el
+         ✅ ya marcado de ese objetivo desaparecía PARA SIEMPRE la próxima
+         vez que se restaurara (bug usuario 2026-08-02: "creo varios
+         objetivos, los marco en verde, salgo y vuelvo a abrir y desaparece
+         el verde de la mayoría"). Semillar con lo persistido hace que un
+         objetivo YA marcado NUNCA se pierda por un render incompleto — solo
+         se pone a false si el checkbox REALMENTE presente en el DOM está
+         desmarcado (un vaciado legítimo sigue funcionando igual). */
+      var _objPrevRaw = _objStateRaw();
       var data = { checks: {}, counters: {} };
+      if (_objPrevRaw && _objPrevRaw.checks && typeof _objPrevRaw.checks === 'object'){
+        for (var _opk in _objPrevRaw.checks){ if (_objPrevRaw.checks.hasOwnProperty(_opk)) data.checks[_opk] = _objPrevRaw.checks[_opk]; }
+      }
+      if (_objPrevRaw && _objPrevRaw.counters && typeof _objPrevRaw.counters === 'object'){
+        for (var _ock in _objPrevRaw.counters){ if (_objPrevRaw.counters.hasOwnProperty(_ock)) data.counters[_ock] = _objPrevRaw.counters[_ock]; }
+      }
       /* Progreso indexado por OID (no por índice de fila): así añadir/quitar
          objetivos personalizados no descuadra los ✅ ya marcados. */
       document.querySelectorAll('#ath-obj-club .obj-item').forEach(function(lbl, i){
@@ -69715,9 +69744,15 @@ https://api.sofascore.app/api/v1/team/44/image
       });
       /* Sella un blob VACÍO con updatedAt FRESCO y lo sube YA (pushNow):
          el reset gana por recencia en el server, así no resucita el
-         progreso viejo al rehidratar / en otro móvil. */
+         progreso viejo al rehidratar / en otro móvil. `reset:true` marca
+         este vaciado como INTENCIONAL: el server (y la unión-por-oid que
+         protege un guardado normal contra un render parcial, ver
+         `saveObjState`/app.py) deben dejarlo GANAR ENTERO en vez de
+         rellenar los oids ausentes con lo que había antes — si no, un
+         "Reiniciar Temporada" no borraría nada de verdad. */
       _objStateUpdatedAt = Date.now();
-      try { window._lsSetSafe(LS_OBJ, JSON.stringify({ checks:{}, counters:{}, updatedAt:_objStateUpdatedAt })); } catch(_){}
+      _objLastSer = JSON.stringify({ checks:{}, counters:{} });
+      try { window._lsSetSafe(LS_OBJ, JSON.stringify({ checks:{}, counters:{}, updatedAt:_objStateUpdatedAt, reset:true })); } catch(_){}
       /* Reset AUTORITATIVO: un borrado intencional (Reiniciar Temporada /
          ♻) debe GANAR en el server (lo sella con su reloj) y pasar la
          defensa "rechazo de POST vacío" del server (que solo bloquea los

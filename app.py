@@ -4918,6 +4918,31 @@ def api_kv_set(key):
                 _merged["rev"] = value["rev"]
                 _merged["updatedAt"] = value["updatedAt"]
                 value = _merged
+            # MERGE POR OID (munich-obj-state-v4/v5): un push AUTORITATIVO
+            # (cada ✅/➕/➖ del usuario) reemplazaba el `checks`/`counters`
+            # ENTERO por lo que el cliente traía en ESE instante. Si el DOM
+            # que generó ese push no tenía TODOS los objetivos renderizados
+            # (carrera con la hidratación de `munich-obj-overrides-v1`, o
+            # cualquier re-render parcial), los oids AUSENTES de ese push
+            # perdían su ✅ PARA SIEMPRE — un objetivo ya marcado desaparecía
+            # sin que el usuario lo tocara (bug 2026-08-02: "marco varios en
+            # verde, salgo y vuelvo a abrir y desaparece el verde de la
+            # mayoría"). Se une por CLAVE (oid): el entrante gana en las
+            # claves que trae, se CONSERVAN las que solo estaban en lo
+            # almacenado. El cliente ya hace el mismo merge al guardar
+            # localmente (defensa en profundidad, doble capa).
+            # `reset:true` (ver cliente, `_munichObjReset`) marca un vaciado
+            # INTENCIONAL (Reiniciar Temporada): debe ganar ENTERO, nunca
+            # rellenarse con los oids del `old` o el reset no borraría nada.
+            if (_kv_hub_base(key) in ("munich-obj-state-v4", "munich-obj-state-v5")
+                    and isinstance(old, dict) and not value.get("reset")):
+                for _sub in ("checks", "counters"):
+                    _old_sub = old.get(_sub)
+                    _new_sub = value.get(_sub)
+                    if isinstance(_old_sub, dict) and isinstance(_new_sub, dict):
+                        _merged_sub = dict(_old_sub)
+                        _merged_sub.update(_new_sub)
+                        value[_sub] = _merged_sub
             payload = json.dumps(value, ensure_ascii=False)
         elif _kv_hub_base(key) == "bayern_hud_overrides_v1" and isinstance(old, dict) and isinstance(value, dict):
             # HUD no-authoritative: defensa a prueba de balas.
@@ -4981,10 +5006,33 @@ def api_kv_set(key):
             # almacenado ENTERO. Un borrado LEGÍTIMO (Reiniciar Temporada /
             # ♻) va por authoritative=true → rama de arriba (gana + sella
             # reloj del server). Si no, recencia normal.
-            if _obj_state_is_empty(value) and not _obj_state_is_empty(old):
+            if value.get("reset"):
+                # Reset intencional (Reiniciar Temporada) re-llegando por el
+                # timer NO-autoritativo de `_kvBlobSync.touch` tras el push
+                # autoritativo inicial: debe ganar entero, ANTES incluso del
+                # guard anti-vacío de abajo (que si no, lo rechazaría por
+                # "vacío sospechoso" y resucitaría el progreso ya borrado).
+                payload = json.dumps(value, ensure_ascii=False)
+            elif _obj_state_is_empty(value) and not _obj_state_is_empty(old):
                 value, payload = old, row.valor_json
             elif old_ts > new_ts:
                 value, payload = old, row.valor_json
+            else:
+                # UNIÓN por oid (checks/counters), mismo principio que el
+                # bloque AUTORITATIVO de arriba: el entrante gana en las
+                # claves que trae, se CONSERVAN las que solo tenía lo
+                # almacenado. Sin esto, un push de auto-sanado (SIN el flag
+                # `authoritative` — p.ej. el timer interno de
+                # `_kvBlobSync.touch`, o el re-push de `hydrate()`) también
+                # podía borrar objetivos ausentes de esa pasada del DOM.
+                for _sub in ("checks", "counters"):
+                    _old_sub = old.get(_sub)
+                    _new_sub = value.get(_sub)
+                    if isinstance(_old_sub, dict) and isinstance(_new_sub, dict):
+                        _merged_sub = dict(_old_sub)
+                        _merged_sub.update(_new_sub)
+                        value[_sub] = _merged_sub
+                payload = json.dumps(value, ensure_ascii=False)
         elif _kv_hub_base(key) == "tour_info_cards_v1" and isinstance(old, dict) and isinstance(value, dict):
             # Info card editable por torneo, NO-authoritative (re-push
             # self-heal del cliente): REV MONOTÓNICO igual que el HUD. Un push

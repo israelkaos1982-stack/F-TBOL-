@@ -45382,6 +45382,114 @@ window._showSimProgress = function(opts, onDone){
   function _normNm(s){
     return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
   }
+
+  /* Bandera REAL por equipo dentro de una "Liga Mixta" (bug 2026-08-02,
+     foto usuario "GOLEADORES" — Jugador 10 de Lokomotiv Moscow salía con
+     las 5 banderas APILADAS de toda liga-mixta-8 (Rusia+Armenia+
+     Finlandia+Moldavia+Azerbaiyán) en vez de solo la rusa). Cada Liga
+     Mixta fusiona 3-5 ligas menores en una sola (`mc-emoji` de la card
+     es la concatenación de esas banderas — correcto como icono de LA
+     LIGA, pero incorrecto como icono de UN jugador/equipo concreto).
+     La única fuente de "país real de este equipo" es el campo opcional
+     `t.country` del editor de plantilla (🌐 País, en "⚙ Más opciones"
+     de cada card) — si el admin no lo ha rellenado, no hay forma de
+     saberlo, así que se usa una bandera NEGRA de marcador (petición
+     usuario: "si no sabes de donde es cada equipo pon una bandera de
+     color negro"). Las banderas de cada país son las MISMAS que ya usan
+     las menu-cards de `s-ligas` (ver arriba, `data-slug="liga-mixta-N"`)
+     — no se inventan banderas nuevas. */
+  var _MIXTA_UNKNOWN_FLAG = '🏴';
+  var LIGA_MIXTA_COUNTRIES = {
+    'liga-mixta-1': [
+      {name:'Chequia', alias:['republica checa','rep checa','rep. checa','czechia'], flag:'🇨🇿'},
+      {name:'Grecia', flag:'🇬🇷'},
+      {name:'San Marino', flag:'🇸🇲'},
+      {name:'Gales', alias:['wales'], flag:'🏴󠁧󠁢󠁷󠁬󠁳󠁿'},
+      {name:'Georgia', flag:'🇬🇪'}
+    ],
+    'liga-mixta-2': [
+      {name:'Polonia', flag:'🇵🇱'},
+      {name:'Noruega', flag:'🇳🇴'},
+      {name:'Montenegro', flag:'🇲🇪'},
+      {name:'Luxemburgo', flag:'🇱🇺'},
+      {name:'Bielorrusia', alias:['belarus'], flag:'🇧🇾'}
+    ],
+    'liga-mixta-3': [
+      {name:'Chipre', alias:['cyprus'], flag:'🇨🇾'},
+      {name:'Austria', flag:'🇦🇹'},
+      {name:'Andorra', flag:'🇦🇩'},
+      {name:'Gibraltar', flag:'🇬🇮'},
+      {name:'N. Irlanda', alias:['norirlanda','n irlanda','irlanda del norte','northern ireland'], flag:'🇬🇬'}
+    ],
+    'liga-mixta-4': [
+      {name:'Suecia', flag:'🇸🇪'},
+      {name:'Croacia', flag:'🇭🇷'},
+      {name:'Lituania', flag:'🇱🇹'},
+      {name:'Macedonia del Norte', alias:['macedonia','n macedonia','macedonia del norte'], flag:'🇲🇰'},
+      {name:'Albania', flag:'🇦🇱'}
+    ],
+    'liga-mixta-5': [
+      {name:'Israel', flag:'🇮🇱'},
+      {name:'Hungría', alias:['hungria'], flag:'🇭🇺'},
+      {name:'Ucrania', flag:'🇺🇦'},
+      {name:'Estonia', flag:'🇪🇪'},
+      {name:'Malta', flag:'🇲🇹'}
+    ],
+    'liga-mixta-6': [
+      {name:'Alemania', flag:'🇩🇪'},
+      {name:'Serbia', flag:'🇷🇸'},
+      {name:'Rumanía', alias:['rumania'], flag:'🇷🇴'},
+      {name:'Islas Feroe', alias:['feroe','islas feroe'], flag:'🇫🇴'},
+      {name:'Letonia', flag:'🇱🇻'}
+    ],
+    'liga-mixta-7': [
+      {name:'Eslovenia', flag:'🇸🇮'},
+      {name:'Bulgaria', flag:'🇧🇬'},
+      {name:'Bosnia', alias:['bosnia y herzegovina','bosnia herzegovina'], flag:'🇧🇦'},
+      {name:'Kazajistán', alias:['kazajistan','kazakhstan'], flag:'🇰🇿'},
+      {name:'Kosovo', flag:'🇽🇰'}
+    ],
+    'liga-mixta-8': [
+      {name:'Rusia', alias:['russia'], flag:'🇷🇺'},
+      {name:'Armenia', flag:'🇦🇲'},
+      {name:'Finlandia', flag:'🇫🇮'},
+      {name:'Moldavia', alias:['moldova'], flag:'🇲🇩'},
+      {name:'Azerbaiyán', alias:['azerbaiyan','azerbaijan'], flag:'🇦🇿'}
+    ],
+    'liga-mixta-9': [
+      {name:'Eslovaquia', flag:'🇸🇰'},
+      {name:'Irlanda', flag:'🇮🇪'},
+      {name:'Islandia', alias:['iceland'], flag:'🇮🇸'}
+    ]
+  };
+  window.LIGA_MIXTA_COUNTRIES = LIGA_MIXTA_COUNTRIES;
+  function _mixtaNorm(s){
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  /* Bandera del país REAL de `t` (campo `t.country`) dentro de la Liga
+     Mixta `slug`. Bandera negra si no hay país asignado o no se
+     reconoce el texto escrito por el admin. */
+  function _mixtaTeamFlag(slug, countryRaw){
+    var list = LIGA_MIXTA_COUNTRIES[slug];
+    var raw = String(countryRaw||'').trim();
+    if(!list || !raw) return _MIXTA_UNKNOWN_FLAG;
+    var norm = _mixtaNorm(raw);
+    for(var i=0;i<list.length;i++){
+      var c = list[i];
+      if(_mixtaNorm(c.name) === norm) return c.flag;
+      if(Array.isArray(c.alias)){
+        for(var j=0;j<c.alias.length;j++){
+          if(_mixtaNorm(c.alias[j]) === norm) return c.flag;
+        }
+      }
+    }
+    return _MIXTA_UNKNOWN_FLAG;
+  }
+  window._mixtaTeamFlag = _mixtaTeamFlag;
+  function _isLigaMixtaSlug(slug){
+    return /^liga-mixta-\d+$/.test(String(slug||''));
+  }
+
   function _collectAggregateStats(){
     /* Recorremos las 51 ligas de la lista, leemos su ligaExt_<slug>
        de localStorage y construimos un mapa por jugador con sus
@@ -45419,15 +45527,22 @@ window._showSimProgress = function(opts, onDone){
       });
       _diag.push({slug:slug, name:name, status:'ok', teams:nTeams,
                   players:nPlayers, gol:sumGol, pj:sumPj});
+      var isMixta = _isLigaMixtaSlug(slug);
       data.teams.forEach(function(t){
         if(!t || !t.name) return;
-        teamFlag[_normNm(t.name)] = flag;
+        /* Liga Mixta: la bandera de LA LIGA (mc-emoji, varias banderas
+           apiladas) NO es la bandera de ESTE equipo — se resuelve por
+           país real (t.country) o bandera negra si no se conoce. Resto
+           de ligas (un solo país): la bandera de la card ya es correcta
+           para todos sus equipos, sin cambios. */
+        var teamFl = isMixta ? _mixtaTeamFlag(slug, t.country) : flag;
+        teamFlag[_normNm(t.name)] = teamFl;
         var players = Array.isArray(t.players) ? t.players : [];
         players.forEach(function(p){
           if(!p || !p.name) return;
           var key = _normNm(t.name) + '::' + _normNm(p.name);
           if(!byPlayer[key]){
-            byPlayer[key] = { name:p.name, team:t.name, flag:flag,
+            byPlayer[key] = { name:p.name, team:t.name, flag:teamFl,
               gol:0, pen:0, fk:0, mvp:0, imbat:0, penSaved:0, ta:0, tr:0 };
           }
           var ent = byPlayer[key];
@@ -46702,6 +46817,7 @@ Tottenham
       <button type="button" class="lc-x" onclick="lextCardsClose()">✕</button>
     </div>
     <div class="lc-body" id="lext-cards-body"></div>
+    <datalist id="lc-country-datalist"></datalist>
     <div class="lc-bulk-panel">
       <div class="lc-bulk-tip">
         <b>Dos formatos:</b><br>
@@ -59167,8 +59283,8 @@ https://api.sofascore.app/api/v1/team/44/image
       +     '<input data-f="aggressiveness" type="number" min="1" max="99" value="'+_lcClamp(t.aggressiveness,50,1,99)+'"/>'
       +     '<div class="lc-mr-lbl">🏟 Estadio local · Stadium Hub</div>'
       +     '<input data-f="stadium" list="lext-stadium-datalist" value="'+_lcEsc(t.stadium||'')+'" placeholder="— Elegir o escribir estadio —" autocomplete="off"/>'
-      +     '<div class="lc-mr-lbl">🌐 País (opcional)</div>'
-      +     '<input data-f="country" value="'+_lcEsc(t.country||'')+'" placeholder="País"/>'
+      +     '<div class="lc-mr-lbl">🌐 País' + (window.LIGA_MIXTA_COUNTRIES && window.LIGA_MIXTA_COUNTRIES[_LC_STATE && _LC_STATE.slug] ? ' — elige uno de la lista para que salga SU bandera en Estadísticas (si se deja vacío, sale bandera negra)' : ' (opcional)') + '</div>'
+      +     '<input data-f="country" list="lc-country-datalist" autocomplete="off" value="'+_lcEsc(t.country||'')+'" placeholder="País"/>'
       +     '<div class="lc-mr-lbl">💶 Presupuesto del club (€)</div>'
       +     '<input data-f="budget" type="text" inputmode="numeric" value="'+_lcEsc(t.budget?String(t.budget):'')+'" placeholder="Ej. 1200000000"/>'
       +   '</div>'
@@ -59204,9 +59320,22 @@ https://api.sofascore.app/api/v1/team/44/image
     };
     _lcRender();
   }
+  /* Sugerencias del campo 🌐 País: si esta liga es una "Liga Mixta"
+     (fusión de 3-5 ligas menores), solo tiene sentido que un equipo
+     pertenezca a UNO de esos países — listarlos evita errores de
+     tecleo que dejarían al equipo con la bandera negra por no
+     reconocerse el texto. En cualquier otra liga (un solo país) el
+     datalist queda vacío — el campo sigue siendo texto libre. */
+  function _lcRefreshCountryDatalist(){
+    var dl = document.getElementById('lc-country-datalist');
+    if(!dl) return;
+    var list = (window.LIGA_MIXTA_COUNTRIES && _LC_STATE) ? window.LIGA_MIXTA_COUNTRIES[_LC_STATE.slug] : null;
+    dl.innerHTML = list ? list.map(function(c){ return '<option value="'+_lcEsc(c.name)+'"></option>'; }).join('') : '';
+  }
   function _lcRender(){
     var body = document.getElementById('lext-cards-body');
     if(!body) return;
+    _lcRefreshCountryDatalist();
     if(!_LC_STATE || !_LC_STATE.teams.length){
       body.innerHTML = '<div class="lc-empty">— Sin equipos en esta liga. Pulsa <b>＋ Añadir</b> o <b>📋 Lista</b> para crear los primeros. —</div>';
       return;

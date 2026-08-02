@@ -1,5 +1,94 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Objetivos del Club — Copa Intercontinental + seed inicial "mismos objetivos que Liverpool" para los 7 humanos (obligatorio, 2026-08-02)
+
+**Petición usuario 2026-08-02** ("quiero que los 7 equipos humanos tengan
+los mismos objetivos que el Liverpool-Francia-Toñín / Luego yo voy
+editando una a una individualmente según la capacidad y jugabilidad de
+cada humano / recuerda que los objetivos que consiga el Liverpool-
+Francia-Toñín solo se suman en su caja global / cada humano es
+individualmente / hay que añadir los objetivos de Intercontinental en
+todos los humanos, esos objetivos debajo de supercopa de europa").
+
+### Lo que YA era compartido (no hacía falta tocar)
+
+La DEFINICIÓN de objetivos (`SECTIONS` en `misc_body_1.html`, IIFE
+`window.__MUNICH_OBJ_SPEC_READY`) es un ÚNICO array JS compartido por
+las 7 cajas de mister — NO hay una copia por hub. Las 12 secciones por
+defecto (Verano/Liga/Copa/Supercopa España/Europa/Recopa/Supercopa
+Europa/Mundialito/Superliga/Global/Individual/Selección×2) ya salían
+IDÉNTICAS en cualquier hub. Solo el **PROGRESO** (`munich-obj-state-v5`,
+los ✅ marcados) y la **CONFIG** (`munich-obj-overrides-v1`, cantidades/
+textos/recompensas editados + objetivos PERSONALIZADOS añadidos con
+➕) son POR HUB (`window._hubKey`, regla ya existente 2026-06-13).
+
+### Nueva sección — Copa Intercontinental
+
+`SECTIONS` gana una entrada `id:'intercontinental'` (`misc_body_1.html`,
+justo después de `usc`/Supercopa de Europa y antes de `mundialito`, tal
+como pidió el usuario): 2 objetivos ("Gana la Copa Intercontinental" 🏆
+110🪙 · "Marca en la final de la Copa Intercontinental" ⚽ 35🪙), mismo
+formato tarjeta "SOLO SI SE CLASIFICA" que Supercopa España/Europa. Al
+ser una entrada más del array COMPARTIDO, aparece automáticamente en
+las 7 cajas sin tocar nada por-hub. El `oid` de cada item
+(`sec.id + '-' + i` = `intercontinental-0`/`intercontinental-1`) es
+nuevo y no colisiona con ningún oid existente — insertarlo en medio del
+array NO renumera ni descuadra los ✅ ya marcados de otras secciones
+(los oids son por-sección, no por posición global).
+
+### Seed inicial — "mismos objetivos que Liverpool", una vez, por hub
+
+El usuario ya tenía en Liverpool ~26 objetivos PERSONALIZADOS (añadidos
+con ➕ Añadir objetivo) + cantidades/recompensas editadas — eso vive en
+`munich-obj-overrides-v1` (SIN sufijo = Liverpool). Los otros 6 humanos
+arrancan con su propia clave `munich-obj-overrides-v1_<id>` VACÍA (sin
+los personalizados de Liverpool). Nuevo `_ovrSeedFromLiverpoolIfNeeded()`
+(`misc_body_1.html`, junto a `loadOverrides`): si el hub activo NO es
+Liverpool y su config está VACÍA (nunca editada ni sembrada antes),
+copia el `munich-obj-overrides-v1` de Liverpool ENTERO (vía
+`GET /api/kv/munich-obj-overrides-v1`, la fuente de verdad server-side)
+como punto de partida de ESE hub, y lo persiste con su propia clave —
+a partir de ahí cada hub se edita de forma 100% INDEPENDIENTE. Se
+dispara al arrancar (para el hub ya activo al cargar la página) y en
+cada `hubchange` (al entrar por primera vez a la caja de otro mister).
+
+- Marca `OVR.seededFromLiverpool = true` dentro del propio blob
+  sembrado: sobrevive a cualquier edición posterior del admin en ese
+  hub, así que el seed **NUNCA se repite** — ni aunque el admin borre
+  luego todos los objetivos de esa caja a propósito (se respeta el
+  vaciado intencional, no se re-siembra).
+- **NUNCA toca el PROGRESO** (`munich-obj-state-v5_<id>`, los ✅): solo
+  copia qué objetivos EXISTEN y sus cantidades/recompensas — el
+  progreso de cada humano (y el 🪙/💼 que acredita en su HUD, vía
+  `liverpoolObjEarnings`, ya hub-aware) sigue siendo estrictamente
+  individual, como ya garantizaba la arquitectura por-hub existente.
+  Un objetivo cumplido en Liverpool JAMÁS marca ni acredita nada en
+  las otras 6 cajas.
+- Re-verifica justo antes de escribir (por si el admin editó ese hub, o
+  otro disparo concurrente ya sembró, mientras volaba el `fetch`) — no
+  pisa una edición real del admin.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** duplicar `SECTIONS` por hub. Toda sección/objetivo
+   nuevo que se añada al catálogo por defecto se añade UNA VEZ al array
+   compartido — se hereda automáticamente en las 7 cajas.
+2. **PROHIBIDO** que `_ovrSeedFromLiverpoolIfNeeded` toque
+   `munich-obj-state-v5`/`_<id>` (el progreso). El seed es SOLO de
+   definición/config (`munich-obj-overrides-v1`), nunca de qué ✅ están
+   marcados.
+3. **PROHIBIDO** que el seed se repita una vez marcado
+   `seededFromLiverpool` en el blob de ese hub, ni que un vaciado
+   intencional del admin (todo a cantidades/textos por defecto, sin
+   personalizados) dispare un re-sembrado — el flag es la única señal,
+   no "¿está vacío ahora mismo?".
+4. **PROHIBIDO** que el seed pise una config que el admin YA haya
+   editado en ese hub (se comprueba `_ovrIsEmpty(OVR)` tanto ANTES como
+   DESPUÉS del `fetch`, justo antes de escribir).
+5. Un 8º mister futuro hereda automáticamente el seed (mismo mecanismo,
+   genérico por `_hubKey`) y la sección Intercontinental (mismo array
+   compartido) — no hay lista hardcodeada de hubs que mantener.
+
 ## El reset INDIVIDUAL de una Copa duplicaba las estadísticas al re-simular — snapshot pre-copa que se restaura al resetear (obligatorio, 2026-08-02)
 
 **Bug (usuario 2026-08-02, "sobre las estadísticas duplicadas cuando reseteo individualmente una copa se duplican")**: pulsar **♻️ Reset** en el modal de una Copa individual (botón `_lecCopa.reset()`, distinto del reset MASIVO "Res" de las ~54 ligas) rehacía el sorteo y volvía a simular la copa desde cero, pero los goles/MVP/tarjetas que la copa VIEJA ya había sumado a `team.players[]` se quedaban ahí — y la copa NUEVA sumaba los suyos ENCIMA. Cada ciclo reset+resim inflaba/duplicaba las stats de copa de cada jugador.

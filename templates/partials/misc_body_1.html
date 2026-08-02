@@ -68058,6 +68058,10 @@ https://api.sofascore.app/api/v1/team/44/image
       { t:'Gana la Supercopa de Europa', sino:true, r:100, ico:'🏆' },
       { t:'Marca en la Supercopa de Europa', sino:true, r:40, ico:'⚽' }
     ]},
+    { id:'intercontinental', chip:'INTERCONT.', icon:'🌍', title:'COPA INTERCONTINENTAL (SOLO SI SE CLASIFICA)', color:'#f0a040', items:[
+      { t:'Gana la Copa Intercontinental', sino:true, r:110, ico:'🏆' },
+      { t:'Marca en la final de la Copa Intercontinental', sino:true, r:35, ico:'⚽' }
+    ]},
     { id:'mundialito', chip:'MUNDIALITO', icon:'🌐', title:'MUNDIALITO DE CLUBES', color:'#ffd633', items:[
       { t:'Gana el Mundialito de Clubes', sino:true, r:180, ico:'🏆' },
       { t:'Goleador del Mundialito entre los {N} máximos', c:8, sino:true, r:70, ico:'⚽' }
@@ -68174,7 +68178,53 @@ https://api.sofascore.app/api/v1/team/44/image
         }).catch(function(){ if (typeof cb === 'function') cb(false); });
     } catch(_){ if (typeof cb === 'function') cb(false); }
   }
+  /* ── Seed inicial "mismos objetivos que Liverpool" (petición usuario
+     2026-08-02): los 7 misters humanos parten con la MISMA config de
+     objetivos (cantidades/textos/recompensas editados + los objetivos
+     PERSONALIZADOS que el usuario haya creado en Liverpool) — luego cada
+     hub se edita de forma INDEPENDIENTE ("yo voy editando una a una según
+     la capacidad de cada humano"). Solo copia la CONFIG (`munich-obj-
+     overrides-v1`, qué objetivos existen y sus cantidades/recompensas) —
+     JAMÁS el PROGRESO (`munich-obj-state-v5_<id>`, los ✅ ya marcados):
+     lo que consiga el Liverpool solo suma en su propia caja/HUD, cada
+     humano acredita 🪙/💼 por SU PROPIO progreso.
+     Se dispara UNA SOLA VEZ por hub: si el OVR de este hub YA tiene algo
+     (propio o ya sembrado antes) no vuelve a tocarlo — `seededFromLiverpool`
+     queda marcado en el propio blob y sobrevive a cualquier edición
+     posterior del admin, así un hub que el usuario vació a propósito
+     nunca se re-siembra. */
+  function _ovrIsEmpty(o){
+    if (!o) return true;
+    for (var k in o){ if (o.hasOwnProperty(k) && k !== 'updatedAt' && k !== 'seededFromLiverpool') return false; }
+    return true;
+  }
+  function _ovrSeedFromLiverpoolIfNeeded(){
+    try {
+      if (OVR_KEY === 'munich-obj-overrides-v1') return;   /* este hub YA es Liverpool */
+      if (OVR && OVR.seededFromLiverpool) return;           /* ya sembrado antes */
+      if (!_ovrIsEmpty(OVR)) return;                         /* este hub ya tiene su propia config */
+      window.fetch('/api/kv/munich-obj-overrides-v1', {credentials:'same-origin', headers:{'Cache-Control':'no-store'}})
+        .then(function(r){ return (r && r.ok) ? r.json() : null; })
+        .then(function(j){
+          var liv = (j && j.ok && j.value && typeof j.value === 'object') ? j.value : null;
+          /* Re-comprobar justo antes de escribir: si mientras volaba el fetch
+             el admin ya editó algo en ESTE hub (u otro disparo concurrente ya
+             sembró), no lo pisamos. */
+          if (!_ovrIsEmpty(OVR) || (OVR && OVR.seededFromLiverpool)) return;
+          var seeded = {};
+          if (liv){ for (var k in liv){ if (liv.hasOwnProperty(k) && k !== 'updatedAt') seeded[k] = liv[k]; } }
+          seeded.seededFromLiverpool = true;
+          OVR = seeded;
+          saveOverrides();
+          if (!window.__munichObjEditing){
+            try { renderAll('ath-obj-club', _objHubName(), false); } catch(_){}
+            try { if (typeof window._munichObjAfterRender === 'function') window._munichObjAfterRender(); } catch(_){}
+          }
+        }).catch(function(){});
+    } catch(_){}
+  }
   loadOverrides();
+  _ovrSeedFromLiverpoolIfNeeded();
   function effTarget(it){ var o = OVR[it.oid]; return (o && o.c != null && !isNaN(o.c)) ? Number(o.c) : it.c; }
   /* Plantilla de texto EFECTIVA: el override `t` (editado por el usuario)
      gana sobre el texto por defecto. Conserva el token {N} para que la
@@ -68624,6 +68674,7 @@ https://api.sofascore.app/api/v1/team/44/image
       Promise.resolve().then(function(){
         try { OVR_KEY = window._hubKey('munich-obj-overrides-v1'); } catch(_){}
         OVR = {}; try { loadOverrides(); } catch(_){}
+        try { _ovrSeedFromLiverpoolIfNeeded(); } catch(_){}
         try { renderAll('ath-obj-club', _objHubName(), false); } catch(_){}
         try { if (typeof window._munichObjAfterRender === 'function') window._munichObjAfterRender(); } catch(_){}
         try {

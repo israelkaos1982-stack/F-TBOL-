@@ -14085,20 +14085,15 @@
         var _globalB = _idaB + (Number(_gm.sc.a) || 0);
         _amsDobleTied = (_globalA === _globalB);
       }
-      /* Previa de Champions · Ronda Preliminar (14 cruces OQ, ida+vuelta,
-         2026-07-12): en la VUELTA, si el GLOBAL (ida+vuelta) queda
-         empatado, se fuerza prórroga + penaltis — mismo criterio que el
-         motor IA `_simulatePrelimTie`. La ida se persiste en
-         `_gm._wprevIda` (mismo patrón que `_gm.dobleIda`). */
-      var _isWprevKoVuelta = !!_gm._isWprevKo && _gm._wprevLeg === 'v';
-      var _wprevKoTied = false;
-      if (_isWprevKoVuelta && _gm._wprevIda) {
-        var _wpIdaA = Number(_gm._wprevIda.gh) || 0;
-        var _wpIdaB = Number(_gm._wprevIda.ga) || 0;
-        var _wpGlobalA = _wpIdaA + (Number(_gm.sc.b) || 0);
-        var _wpGlobalB = _wpIdaB + (Number(_gm.sc.a) || 0);
-        _wprevKoTied = (_wpGlobalA === _wpGlobalB);
-      }
+      /* Previa de Champions · Ronda 1/2 (cruces ida+vuelta, 2026-07-12):
+         la VUELTA nunca fuerza prórroga — si el global (ida+vuelta)
+         empata Y el gol de visitante también empata, la eliminatoria se
+         decide con un TERCER PARTIDO en campo neutral (2026-08-03,
+         petición usuario), no con prórroga sobre la propia vuelta. La
+         prórroga+penaltis SOLO aplica al DESEMPATE (`leg==='d'`, el
+         propio tercer partido), si ESE partido también termina
+         empatado — mismo criterio que el motor IA `_simulateTie`. */
+      var _isWprevKoDecider = !!_gm._isWprevKo && _gm._wprevLeg === 'd';
       var _scoreTied = (Number(_gm.sc && _gm.sc.a) || 0) === (Number(_gm.sc && _gm.sc.b) || 0);
       /* Torneo KO single-leg con ET+penaltis (Mundial 2032 fase
          final: Dieciseisavos..Final). El gm-modal se abrió vía
@@ -14122,7 +14117,7 @@
         || (_isAmsElim && _scoreTied)
         || (_isAmsDobleVuelta && _amsDobleTied)
         || (_isEurKoSL && _scoreTied)
-        || (_isWprevKoVuelta && _wprevKoTied)
+        || (_isWprevKoDecider && _scoreTied)
         || (_isTourKoETP && _scoreTied);
 
       if (_shouldForceET && !_gm.penDone) {
@@ -16199,18 +16194,12 @@
       var globalB = idaB + (Number(_gm.sc.a) || 0);
       _amsDobleTied = (globalA === globalB);
     }
-    /* Previa de Champions · Ronda Preliminar VUELTA: mismo criterio que
-       el amistoso doble-vuelta, con la ida persistida en
-       `_gm._wprevIda`. 2026-07-12. */
-    var _isWprevKoVuelta = !!_gm._isWprevKo && _gm._wprevLeg === 'v';
-    var _wprevKoTied = false;
-    if (_isWprevKoVuelta && _gm._wprevIda) {
-      var wpIdaA = Number(_gm._wprevIda.gh) || 0;
-      var wpIdaB = Number(_gm._wprevIda.ga) || 0;
-      var wpGlobalA = wpIdaA + (Number(_gm.sc.b) || 0);
-      var wpGlobalB = wpIdaB + (Number(_gm.sc.a) || 0);
-      _wprevKoTied = (wpGlobalA === wpGlobalB);
-    }
+    /* Previa de Champions · Ronda 1/2: la VUELTA NUNCA fuerza prórroga
+       — si el global + gol de visitante empatan, la eliminatoria se
+       decide con un TERCER PARTIDO (`leg==='d'`), no con ET sobre la
+       propia vuelta (2026-08-03). Solo el DESEMPATE fuerza ET+pens si
+       él mismo termina empatado. */
+    var _isWprevKoDecider = !!_gm._isWprevKo && _gm._wprevLeg === 'd';
     /* Torneo KO single-leg con ET+penaltis (Mundial 2032 fase
        final). Mismo gate que en _gmRefreshFinishLabel. 2026-05-24. */
     var _isTourKoETP = false;
@@ -16228,14 +16217,14 @@
                        || (_isAmsElim && _gm.sc.a === _gm.sc.b)
                        || (_isAmsDobleVuelta && _amsDobleTied)
                        || (_isEurKoSL && _gm.sc.a === _gm.sc.b)
-                       || (_isWprevKoVuelta && _wprevKoTied)
+                       || (_isWprevKoDecider && _gm.sc.a === _gm.sc.b)
                        || (_isTourKoETP && _gm.sc.a === _gm.sc.b);
     if (_shouldForceET && !_gm.penDone) {
       if (!_gm.etDone) {
         var minNow = Math.floor((_gm.timerSec || 0) / 60);
         var _etReason = _isCopaSL ? 'la Copa exige'
                        : _isAmsDobleVuelta ? 'el global está empate, exige'
-                       : _isWprevKoVuelta ? 'el global está empate, exige'
+                       : _isWprevKoDecider ? 'el tercer partido está empate, exige'
                        : 'la eliminatoria exige';
         alert('⏱ EMPATE al ' + minNow + '\' — ' + _etReason + ' PRÓRROGA.\n\n'
             + 'Se han añadido 30 minutos extra (15 cada parte).\n'
@@ -16586,17 +16575,18 @@
         }
       } catch(_e){}
     } else if (_gm._isWprevKo) {
-      /* Previa de Champions · Ronda Preliminar (14 cruces del Open
-         Qualifier, ida+vuelta; prórroga+penaltis si el global queda
-         empatado en la vuelta) — 2026-07-12. Persiste en
-         wprev_state_v1 vía _wprevKoSaveHumanResult (misma IIFE de esta
-         pantalla, arriba en este mismo archivo). */
+      /* Previa de Champions · Ronda 1/2 (cruces ida+vuelta; si el global
+         Y el gol de visitante empatan, se juega un TERCER PARTIDO
+         `leg==='d'` — prórroga+penaltis SOLO se aplican a ESE partido si
+         él mismo empata) — 2026-07-12, 3er partido 2026-08-03. Persiste
+         en wprev_state_v1 vía _wprevKoSaveHumanResult (misma IIFE de
+         esta pantalla, arriba en este mismo archivo). */
       try {
         var _wkLeg = _gm._wprevLeg;
-        var _wkVuelta = (_wkLeg === 'v');
+        var _wkDecider = (_wkLeg === 'd');
         var _wkEt = _gm.etScores || {};
         var _wkPen = _gm.penWinner || null;
-        if (_wkVuelta) {
+        if (_wkDecider) {
           if (!_wkPen) {
             var _wkPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
             if (_wkPenEv) _wkPen = _wkPenEv.team === 'a' ? 'a' : 'b';
@@ -16607,7 +16597,7 @@
         if (typeof window._wprevKoSaveHumanResult === 'function') {
           window._wprevKoSaveHumanResult(
             _wkRound, _gm._wprevTieIdx, _wkLeg, _gm.sc.a, _gm.sc.b,
-            _wkVuelta ? (_wkEt.a || 0) : 0, _wkVuelta ? (_wkEt.b || 0) : 0, _wkPen
+            _wkDecider ? (_wkEt.a || 0) : 0, _wkDecider ? (_wkEt.b || 0) : 0, _wkPen
           );
         }
         if (typeof window.registrarLigaPlayerStats === 'function') {
@@ -17841,13 +17831,15 @@
          ida/vuelta = 90' sin prórroga. 2026-06-09. */
       var _isEurKoSL = !!_gm._isEurKo && (_gm._eurKoRound === 'fin' || _gm._eurKoLeg === 'd');
       var _isEurKoTwoLeg = !!_gm._isEurKo && !_isEurKoSL;
-      /* Previa de Champions (2026-07-12): la fase de GRUPOS (`_isWprev`)
-         admite empate como resultado válido (igual que la Fase de Liga
-         UCL/UEL/UECL) — nunca ET. La Ronda PRELIMINAR (`_isWprevKo`,
-         ida+vuelta) fuerza ET AUTOMÁTICAMENTE al finalizar si el global
-         empata (rama `_shouldForceET`/`_isWprevKoVuelta` de gmEndMatch);
-         el botón manual queda oculto en AMBOS legs, igual que
-         `_isEurKoTwoLeg`. */
+      /* Previa de Champions (2026-07-12, 3er partido 2026-08-03): la fase
+         de GRUPOS (`_isWprev`) admite empate como resultado válido
+         (igual que la Fase de Liga UCL/UEL/UECL) — nunca ET. Las Rondas
+         1/2 (`_isWprevKo`, ida+vuelta) NUNCA fuerzan ET en la vuelta —
+         si el global + gol de visitante empatan, se juega un TERCER
+         PARTIDO (`leg==='d'`); ESE partido sí fuerza ET automáticamente
+         si termina empatado (rama `_shouldForceET`/`_isWprevKoDecider`
+         de gmEndMatch). El botón manual queda oculto en LOS 3 legs
+         (i/v/d), igual que `_isEurKoTwoLeg`. */
       var _isWprevGroupCfg = !!_gm._isWprev;
       var _isWprevKoLeg = !!_gm._isWprevKo;
       var _showET = ((_gm.isHvH && !_gm.noET && !_isLiga && !_isScSL && !_isRecopaCfg && !_isEurFaseCfg && !_isEurKoTwoLeg && !_isWprevGroupCfg && !_isWprevKoLeg) || _isCopaSingleLeg || _isEurKoSL);
@@ -20846,6 +20838,23 @@
   });
 
   window.refreshMainCalendarCards = refreshMainCalendarCards;
+  /* Bug 2026-08-03 (foto usuario: "después de la card y después de
+     compartir por WhatsApp no me sale la pantalla del cronómetro...
+     me saca... al menú principal"): `gmOpen` NUNCA se exponía en
+     `window` — todas las demás competiciones (Copa, Recopa, Inter,
+     Superliga, SC, USC, Amistoso, Previa Champions -fase de grupos
+     legacy-, Torneo) la llaman en BARE (`gmOpen(...)`) porque sus
+     wrappers `window.abrirXxx` viven en este MISMO <script>. El motor
+     de la Previa (Ronda Preliminar antes, Ronda 1/Ronda 2 KO ahora)
+     vive en un <script> POSTERIOR y llamaba a `window.gmOpen(...)` —
+     que al no existir NUNCA, hacía que `abrirWprevKo` devolviera en
+     silencio sin abrir NADA. El overlay "BAJAS PARA EL PARTIDO"
+     invoca ese callback dentro de un `try{_cb();}catch(_){}` (para no
+     bloquear el share de WhatsApp que va justo después) — así que el
+     fallo era 100% silencioso: ni alert, ni consola, solo "no pasa
+     nada" y el usuario se quedaba en la pantalla de fondo (o acababa
+     en el menú si algún otro cleanup detectaba "sin partido activo"). */
+  window.gmOpen = gmOpen;
 
 })();
 </script>
@@ -33636,7 +33645,7 @@ document.addEventListener('DOMContentLoaded', function() {
     ];
     var aggA = leg1.gh + leg2.ga, aggB = leg1.ga + leg2.gh;
     tie.aggA = aggA; tie.aggB = aggB;
-    tie.et = null; tie.penWinner = null; tie.awayGoalsDecided = false;
+    tie.et = null; tie.penWinner = null; tie.awayGoalsDecided = false; tie.thirdMatch = null;
     if(aggA !== aggB){
       tie.winner = aggA > aggB ? tie.a : tie.b;
     } else {
@@ -33648,15 +33657,25 @@ document.addEventListener('DOMContentLoaded', function() {
         tie.winner = awayA > awayB ? tie.a : tie.b;
         tie.awayGoalsDecided = true;
       } else {
-        var et = _simEt(aName, bName);
-        tie.et = et;
-        var etA = aggA + et.gh, etB = aggB + et.ga;
-        if(etA !== etB){
-          tie.winner = etA > etB ? tie.a : tie.b;
+        /* Empate en agregado Y en gol de visitante (2026-08-03, petición
+           usuario): se juega un TERCER PARTIDO en campo neutral — NO se
+           añade la prórroga directamente sobre el agregado. El tercer
+           partido es un partido REGULAR completo; si sigue empatado,
+           ESE partido tiene su propia prórroga + penaltis. */
+        var third = _simMatch(aName, bName);
+        tie.thirdMatch = { home:aName, away:bName, gh:third.gh, ga:third.ga };
+        if(third.gh !== third.ga){
+          tie.winner = third.gh > third.ga ? tie.a : tie.b;
         } else {
-          var pw = _penWinner(aName, bName);
-          tie.penWinner = pw;
-          tie.winner = (pw === 'a') ? tie.a : tie.b;
+          var et = _simEt(aName, bName);
+          tie.et = et;
+          if(et.gh !== et.ga){
+            tie.winner = et.gh > et.ga ? tie.a : tie.b;
+          } else {
+            var pw = _penWinner(aName, bName);
+            tie.penWinner = pw;
+            tie.winner = (pw === 'a') ? tie.a : tie.b;
+          }
         }
       }
     }
@@ -33865,6 +33884,12 @@ document.addEventListener('DOMContentLoaded', function() {
     var isBye = _isPlaceholder(tie.a) || _isPlaceholder(tie.b);
     var isHuman = !isBye && _tieHasHuman(tie);
     var isR2Human = isHuman && roundKey === 'r2';
+    /* Empatados en agregado Y en gol de visitante tras la vuelta, sin
+       tercer partido todavía (2026-08-03, "se juega un tercer partido
+       con prórroga y penaltis"): ida+vuelta ya están jugadas pero
+       `tie.winner` sigue sin definir — `_wprevKoSaveHumanResult` (leg
+       'v') deja la eliminatoria en este estado a propósito. */
+    var needsDecider = !tie.winner && tie.legs && tie.legs.length === 2 && !tie.thirdMatch;
     var body;
     if(tie.bye){
       body = '<div class="wprev-dr-leg"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">BYE</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>';
@@ -33872,12 +33897,21 @@ document.addEventListener('DOMContentLoaded', function() {
       body = '<div class="wprev-dr-leg"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">'+tie.legs[0].gh+'-'+tie.legs[0].ga+'</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>'
         +'<div class="wprev-dr-leg" style="margin-top:6px;"><span class="h"><span class="nm">'+bLogo+_esc(bName)+'</span></span><span class="sc">'+tie.legs[1].gh+'-'+tie.legs[1].ga+'</span><span class="a"><span class="nm">'+aLogo+_esc(aName)+'</span></span></div>';
       var aWon = tie.winner === tie.a;
-      body += '<div class="wprev-dr-agg"><span class="'+(aWon?'winner-mark':'loser-mark')+'">'+_esc(aName)+'</span><span class="sc">'+tie.aggA+'-'+tie.aggB+'</span><span class="'+(!aWon?'winner-mark':'loser-mark')+'">'+_esc(bName)+'</span></div>';
+      var aggClass = needsDecider ? '' : (aWon?'winner-mark':'loser-mark');
+      var bggClass = needsDecider ? '' : (!aWon?'winner-mark':'loser-mark');
+      body += '<div class="wprev-dr-agg"><span class="'+aggClass+'">'+_esc(aName)+'</span><span class="sc">'+tie.aggA+'-'+tie.aggB+'</span><span class="'+bggClass+'">'+_esc(bName)+'</span></div>';
+      if(tie.thirdMatch){
+        body += '<div class="wprev-dr-leg" style="margin-top:6px;"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">'+tie.thirdMatch.gh+'-'+tie.thirdMatch.ga+'</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>'
+          +'<div style="padding:2px 0 0;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;color:#e0bfff;text-align:center;">🥊 TERCER PARTIDO (campo neutral)</div>';
+      }
       var extra = '';
       if(tie.awayGoalsDecided) extra += 'Gol de visitante · ';
       if(tie.et) extra += 'Prórroga '+tie.et.gh+'-'+tie.et.ga+' · ';
       if(tie.penWinner) extra += 'Penaltis: '+(tie.penWinner==='a'?_esc(aName):_esc(bName));
       if(extra) body += '<div style="padding:4px 0 0;font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.55);text-align:center;">'+extra+'</div>';
+      if(needsDecider){
+        body += '<div style="padding:4px 0 0;font-family:Rajdhani,sans-serif;font-size:10px;color:#ffcc66;text-align:center;">⚖️ Empate en el agregado y en gol de visitante — se decide con un TERCER PARTIDO</div>';
+      }
     } else if(tie.legs && tie.legs.length===1){
       /* Humano: ida jugada, vuelta pendiente. */
       body = '<div class="wprev-dr-leg"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">'+tie.legs[0].gh+'-'+tie.legs[0].ga+'</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>'
@@ -33889,10 +33923,11 @@ document.addEventListener('DOMContentLoaded', function() {
       var destTxt = roundKey === 'r2' ? '🏆 '+_esc(winnerName)+' avanza a la FASE DE GRUPOS DE CHAMPIONS' : '➡️ '+_esc(winnerName)+' avanza a la Ronda 2';
       body += '<div style="padding:6px 0 0;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.6px;color:#ffd700;text-align:center;">'+destTxt+'</div>';
     } else if(isHuman){
-      var nextLeg = (tie.legs && tie.legs.length>=1) ? 'v' : 'i';
+      var nextLeg = needsDecider ? 'd' : ((tie.legs && tie.legs.length>=1) ? 'v' : 'i');
+      var nextLegTxt = nextLeg==='i' ? 'IDA' : (nextLeg==='v' ? 'VUELTA' : 'DESEMPATE');
       var tagTxt = isR2Human ? '🌟 ¡TU CRUCE POR LA CHAMPIONS! 🌟' : '⭐ TU CRUCE';
       body += '<div class="wprev-dr-human-tag'+(isR2Human?' r2':'')+'">'+tagTxt+'</div>'
-        + '<button type="button" class="wprev-dr-play-btn'+(isR2Human?' r2':'')+'" data-round="'+roundKey+'" data-idx="'+idx+'">▶ JUGAR '+(nextLeg==='i'?'IDA':'VUELTA')+'</button>';
+        + '<button type="button" class="wprev-dr-play-btn'+(isR2Human?' r2':'')+'" data-round="'+roundKey+'" data-idx="'+idx+'">▶ JUGAR '+nextLegTxt+'</button>';
     }
     return '<div class="wprev-dr-tie'+(isHuman&&!winnerName?' human':'')+(isR2Human&&!winnerName?' r2human':'')+'">'+body+'</div>';
   }
@@ -34207,9 +34242,14 @@ document.addEventListener('DOMContentLoaded', function() {
   window._wprevKoOpenMatch = function(round, idx){
     var s = loadState(); if(!s || !s[round] || !s[round].ties) return false;
     var tie = s[round].ties[idx]; if(!tie || tie.winner || !_tieBothReal(tie)) return false;
-    var leg = (tie.legs && tie.legs.length >= 1) ? 'v' : 'i';
-    var home = leg === 'i' ? tie.a.name : tie.b.name;
-    var away = leg === 'i' ? tie.b.name : tie.a.name;
+    var legsN = (tie.legs && tie.legs.length) || 0;
+    /* Ida+vuelta jugadas y todavía empatadas en agregado+gol de
+       visitante (sin `thirdMatch` aún) → toca el TERCER PARTIDO
+       ('d', desempate). 2026-08-03. */
+    var needsDecider = legsN === 2 && !tie.winner && !tie.thirdMatch;
+    var leg = needsDecider ? 'd' : (legsN >= 1 ? 'v' : 'i');
+    var home = leg === 'v' ? tie.b.name : tie.a.name;
+    var away = leg === 'v' ? tie.a.name : tie.b.name;
     _wprevKoAbrirPrevia(round, idx, leg, home, away);
     return true;
   };
@@ -34274,26 +34314,35 @@ document.addEventListener('DOMContentLoaded', function() {
       window.scrollTo(0,0);
     } catch(_){}
   };
-  /* Persiste el resultado de una ida/vuelta jugada por un humano, en
-     `s.r1.ties[idx]` o `s.r2.ties[idx]` según `round`. `etGh`/`etGa`/
-     `penWinner` solo se usan en la VUELTA cuando el global (ida+vuelta)
-     queda empatado en goles Y en gol de visitante — mismo criterio (ET
-     reducida + penaltis ponderados por poder) que el motor IA
-     `_simulateTie`. Al completarse la Ronda 2, dispara `_persistFinal`
-     (mismo camino que la sim automática). */
+  /* Persiste el resultado de una ida/vuelta/desempate jugada por un
+     humano, en `s.r1.ties[idx]` o `s.r2.ties[idx]` según `round`
+     (2026-07-12, tercer partido 2026-08-03):
+     - `leg==='i'`: solo registra la IDA. Nunca decide nada.
+     - `leg==='v'`: registra la VUELTA + agregado + gol de visitante. Si
+       CUALQUIERA de los dos decide, se fija `tie.winner`. Si AMBOS
+       siguen empatados, `tie.winner` se deja SIN DEFINIR (ni ET ni
+       penaltis aquí) — la eliminatoria necesita un TERCER PARTIDO, que
+       `_wprevKoOpenMatch` detectará en el siguiente intento
+       (`legsN===2 && !tie.winner && !tie.thirdMatch`).
+     - `leg==='d'` (desempate/tercer partido, campo neutral): registra
+       `tie.thirdMatch`. `etGh`/`etGa`/`penWinner` SOLO se usan si ESE
+       partido termina empatado (mismo criterio — ET reducida +
+       penaltis ponderados por poder — que el motor IA `_simulateTie`).
+     Al completarse la Ronda 2, dispara `_persistFinal` (mismo camino
+     que la sim automática). */
   window._wprevKoSaveHumanResult = function(round, idx, leg, gh, ga, etGh, etGa, penWinner){
     var s = loadState(); if(!s || !s[round] || !s[round].ties) return;
     var tie = s[round].ties[idx]; if(!tie) return;
     var aName = tie.a.name, bName = tie.b.name;
     if(leg === 'i'){
       tie.legs = [{ home:aName, away:bName, gh:gh|0, ga:ga|0 }];
-    } else {
+    } else if(leg === 'v'){
       if(!tie.legs || !tie.legs.length) tie.legs = [{ home:aName, away:bName, gh:0, ga:0 }];
       tie.legs[1] = { home:bName, away:aName, gh:gh|0, ga:ga|0 };
       var aggA = tie.legs[0].gh + tie.legs[1].ga;
       var aggB = tie.legs[0].ga + tie.legs[1].gh;
       tie.aggA = aggA; tie.aggB = aggB;
-      tie.et = null; tie.penWinner = null; tie.awayGoalsDecided = false;
+      tie.et = null; tie.penWinner = null; tie.awayGoalsDecided = false; tie.thirdMatch = null;
       if(aggA !== aggB){
         tie.winner = aggA > aggB ? tie.a : tie.b;
       } else {
@@ -34301,11 +34350,24 @@ document.addEventListener('DOMContentLoaded', function() {
         if(awayA !== awayB){
           tie.winner = awayA > awayB ? tie.a : tie.b;
           tie.awayGoalsDecided = true;
+        }
+        /* Si sigue empatado (agregado Y gol de visitante), NO se
+           decide aquí: `tie.winner` queda sin definir y el siguiente
+           intento de abrir el cruce llevará al TERCER PARTIDO. */
+      }
+      if(tie.winner) tie.loser = (tie.winner === tie.a) ? tie.b : tie.a;
+    } else if(leg === 'd'){
+      tie.thirdMatch = { home:aName, away:bName, gh:gh|0, ga:ga|0 };
+      tie.et = null; tie.penWinner = null;
+      if((gh|0) !== (ga|0)){
+        tie.winner = (gh|0) > (ga|0) ? tie.a : tie.b;
+      } else {
+        tie.et = { gh: etGh|0, ga: etGa|0 };
+        if((etGh|0) !== (etGa|0)){
+          tie.winner = (etGh|0) > (etGa|0) ? tie.a : tie.b;
         } else {
-          tie.et = { gh: etGh|0, ga: etGa|0 };
-          var etA = aggA + (etGh|0), etB = aggB + (etGa|0);
-          if(etA !== etB){ tie.winner = etA > etB ? tie.a : tie.b; }
-          else { tie.penWinner = penWinner || null; tie.winner = (penWinner === 'b') ? tie.b : tie.a; }
+          tie.penWinner = penWinner || null;
+          tie.winner = (penWinner === 'b') ? tie.b : tie.a;
         }
       }
       tie.loser = (tie.winner === tie.a) ? tie.b : tie.a;

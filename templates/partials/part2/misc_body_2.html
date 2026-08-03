@@ -5946,13 +5946,37 @@
   // Fallback a la lista clásica si no hay equipos en el editor.
   var _HUMANOS_DEFAULT = ['Real Madrid','FC Barcelona','Liverpool','Arsenal','Atlético Madrid'];
   var HUMANOS = _HUMANOS_DEFAULT.slice();
+  /* Clubes/selecciones RETIRADOS de MISTERS_HUMANOS (Inter, 2026-08-03):
+     esta lista es OTRA copia independiente de "quién es humano",
+     construida escaneando `ligaExt_liga-ea-sports` DIRECTO — es la
+     fuente de `esHumano()`, que decide entre otras cosas la duración
+     10 MIN (HvH) de un partido. Ninguno de los fixes previos de
+     `index.bundle.js`/`misc_body_1.html` la cubre porque vive en OTRO
+     archivo. Fallback local (self-contained) porque esta función corre
+     en boot SÍNCRONO, ANTES de que `index.bundle.js` (cargado al final
+     del body) haya podido definir `window._isRetiredHumanTeamName`. */
+  var _RETIRED_HUMANOS_P2 = ['inter','internazionale','fc internazionale',
+    'fc internazionale milano','inter milan','inter de milan',
+    'inter milán','inter de milán','portugal'];
+  function _isRetiredHumanoP2(name){
+    try {
+      if (typeof window._isRetiredHumanTeamName === 'function') {
+        return window._isRetiredHumanTeamName(name);
+      }
+    } catch(_){}
+    var n = String(name||'').trim().toLowerCase();
+    try { n = n.normalize('NFD').replace(/[̀-ͯ]/g,''); } catch(_){}
+    return _RETIRED_HUMANOS_P2.indexOf(n) !== -1;
+  }
   function _refreshHumanosFromStorage(){
     try {
       var raw = localStorage.getItem('ligaExt_liga-ea-sports');
       if(!raw) return;
       var data = JSON.parse(raw);
       if(!data || !Array.isArray(data.teams) || !data.teams.length) return;
-      var humans = data.teams.filter(function(t){ return t.isHuman; }).map(function(t){ return t.name; });
+      var humans = data.teams.filter(function(t){
+        return t.isHuman && !_isRetiredHumanoP2(t.name);
+      }).map(function(t){ return t.name; });
       if(humans.length > 0){
         HUMANOS = humans;
       }
@@ -14988,15 +15012,35 @@
       power: Math.max(1, Math.min(99, Number(player.power) || 70))
     };
 
-    /* 1ª pasada: ligaExt_*. */
+    /* 1ª pasada: ligaExt_*. Recorre TODAS las ligas y se queda con la
+       MEJOR coincidencia — ya NO se detiene en el primer hit.
+       Un nombre de equipo puede existir DUPLICADO en más de una liga
+       (p.ej. Inter: fila residual en `liga-ea-sports` + la fila real
+       en `italia`, ver CLAUDE.md "_fixupInterHumanoSlug" 2026-08-03).
+       Detenerse en el primer hit podía persistir el jugador nuevo en
+       la fila EQUIVOCADA (una duplicada/vacía) mientras la pantalla
+       de plantilla sigue mostrando la otra — el alta "desaparecía"
+       para el admin sin que nada fallara visiblemente. La mejor
+       coincidencia es la de MÁS jugadores (la duplicada residual
+       suele estar vacía o casi vacía). Además, lee `window.LIGA_CACHE`
+       (memoria) ANTES que `localStorage` — mismo chokepoint que
+       `loadData`/`_readLigaData` (regla 2026-07-29): localStorage
+       puede ir por detrás si un guardado reciente no llegó a
+       persistirse en disco (cuota llena) pero sí quedó en memoria. */
     try {
+      var _bestHit = null; // {lk, data, t, richness}
       for (var li = 0; li < localStorage.length; li++) {
         var lk = localStorage.key(li);
         if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
         if (lk.indexOf('_backup') !== -1 || lk.indexOf('_snap_') !== -1 || lk.indexOf('_protected') !== -1) continue;
-        var raw = localStorage.getItem(lk);
-        if (!raw) continue;
-        var data; try { data = JSON.parse(raw); } catch(_) { continue; }
+        var _slugP = lk.slice('ligaExt_'.length);
+        var data = null;
+        try { if (window.LIGA_CACHE && window.LIGA_CACHE[_slugP]) data = window.LIGA_CACHE[_slugP]; } catch(_){}
+        if (!data) {
+          var raw = localStorage.getItem(lk);
+          if (!raw) continue;
+          try { data = JSON.parse(raw); } catch(_) { continue; }
+        }
         if (!data || !Array.isArray(data.teams)) continue;
 
         for (var ti = 0; ti < data.teams.length; ti++) {
@@ -15006,24 +15050,31 @@
           var tnA = _normA(t.name);
           var hit = (tn === target) || (tn === resolved) || (tnA === targetA) || (tnA === resolvedA);
           if (!hit) continue;
-          if (!Array.isArray(t.players)) t.players = [];
-          var dup = t.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
-          if (dup) return { ok:false, reason:'duplicate', key:lk, teamName:t.name };
-          t.players.push(playerEntry);
-          try { window._lsSetSafe(lk, JSON.stringify(data)); }
-          catch(e) { return { ok:false, reason:'storage', key:lk }; }
-          /* Invalidar cache para que el próximo picker refleje el alta. */
-          try {
-            if (window.SQUAD_REGISTRY) {
-              delete window.SQUAD_REGISTRY[teamName];
-              delete window.SQUAD_REGISTRY[t.name];
-              if (aliases[target]) delete window.SQUAD_REGISTRY[aliases[target]];
-            }
-          } catch(_){}
-          /* Promover al motor si applyEngineOverrides está cargado. */
-          try { if (typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides(); } catch(_){}
-          return { ok:true, key:lk, teamName:t.name };
+          var richness = Array.isArray(t.players) ? t.players.length : 0;
+          if (!_bestHit || richness > _bestHit.richness) {
+            _bestHit = { lk: lk, data: data, t: t, richness: richness };
+          }
         }
+      }
+      if (_bestHit) {
+        var lk = _bestHit.lk, data = _bestHit.data, t = _bestHit.t;
+        if (!Array.isArray(t.players)) t.players = [];
+        var dup = t.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
+        if (dup) return { ok:false, reason:'duplicate', key:lk, teamName:t.name };
+        t.players.push(playerEntry);
+        try { window._lsSetSafe(lk, JSON.stringify(data)); }
+        catch(e) { return { ok:false, reason:'storage', key:lk }; }
+        /* Invalidar cache para que el próximo picker refleje el alta. */
+        try {
+          if (window.SQUAD_REGISTRY) {
+            delete window.SQUAD_REGISTRY[teamName];
+            delete window.SQUAD_REGISTRY[t.name];
+            if (aliases[target]) delete window.SQUAD_REGISTRY[aliases[target]];
+          }
+        } catch(_){}
+        /* Promover al motor si applyEngineOverrides está cargado. */
+        try { if (typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides(); } catch(_){}
+        return { ok:true, key:lk, teamName:t.name };
       }
     } catch(_){}
 

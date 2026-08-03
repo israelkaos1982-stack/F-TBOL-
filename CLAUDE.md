@@ -273,6 +273,133 @@ arbitrar porque estas rutas ni los consultan.
    cuanto copie el patrón `.filter(t=>t.isHuman && !window._isRetiredHumanTeamName(t.name))`
    — no reinventar el filtro con una lista local nueva.
 
+### Refuerzo (mismo día, 2026-08-03 #3) — `standings()` seguía priorizando la fila STALE, `part2/misc_body_2.html` tiene SU PROPIA `HUMANOS`/`esHumano()`, y el alta de jugador EN VIVO podía escribir en la fila DUPLICADA equivocada
+
+**Bug (4 fotos usuario, mismo día, "El inter es equipo IA no puede
+tener el icono del dragon" + "Añadí a L.Enrique como nuevo jugador
+del Inter en el partido de la foto 1 pero cuando voy a la plantilla
+del Inter este nuevo jugador no sale en la misma")**: pese a los dos
+refuerzos anteriores, la tabla de clasificación de **Italia/Serie A**
+(«Resto de Ligas») seguía mostrando el icono 🐲 junto a «Inter». Y un
+jugador nuevo (L. Enrique) añadido DURANTE un partido vía el overlay
+"+ AÑADIR JUGADOR" del gm-modal — que anotó gol y fue MVP, así que
+sí quedó registrado en el ACTA — no aparecía después en la pantalla
+🖍 PLANTILLA del Inter.
+
+### Causa raíz 1 — `standings()` prioriza la fila PROPIA (`t.isHuman`) sobre `_LIGA_HUMAN_FLAGS`, sin filtrar retirados
+
+`standings(data)` (`misc_body_1.html`, la función que alimenta
+`renderTable()` de CUALQUIER pantalla de Resto de Ligas, incluida
+Italia) construye `hf` así: si la fila `t` trae su PROPIO
+`isHuman`/`humanEmoji`, ese gana SIEMPRE sobre el mapa global
+`_LIGA_HUMAN_FLAGS` (por diseño — un PSG añadido manualmente a
+Superliga debe heredar su bandera humana de Liga Francesa incluso si
+`_LIGA_HUMAN_FLAGS` aún no lo indexa). El problema: ese mismo
+"gana la fila propia" hacía que un `t.isHuman:true` STALE en el
+disco del Inter (que los 2 refuerzos anteriores limpian en
+`_sanitizeLigaTeamNames`/`refreshLigaEaShields`, pero solo se aplican
+en el momento de LEER/reconstruir el índice — una copia ya cacheada
+en `map`/render antes de esa limpieza, o una liga que el saneador
+aún no ha vuelto a tocar) siguiera ganando en `standings()`, sin que
+ningún fix anterior lo interceptara aquí. Fix: nuevo guard
+`_retiredClub` (vía `window._isRetiredHumanClubName`) que fuerza
+`hf = {isHuman:false, humanEmoji:''}` ANTES de mirar `t.isHuman`,
+para cualquier nombre retirado — gana sobre TODO lo demás.
+
+### Causa raíz 1b — `buildExtraRowHtml` (filas "extra" de Liga EA Sports) tenía el MISMO hueco
+
+`buildExtraRowHtml(team, pos)` (`misc_body_1.html`, usada por
+`appendLigaEaExtras` para pintar equipos añadidos a mano a la
+clasificación de Liga EA Sports que no viven en `LIGA_SCHEDULE`) leía
+`team.isHuman && team.humanEmoji` DIRECTO, sin ningún filtro de
+retirados — es EXACTAMENTE el punto que el historial de este mismo
+archivo ya documentó como origen de "un Inter 🐲 de más, colado como
+fila extra" (sección "`setLigaSchedule` arma un lock..." más abajo).
+Mismo fix: guard `_isRetiredHumanClubName` antes de pintar el sufijo.
+
+### Causa raíz 2 — `part2/misc_body_2.html` tiene SU PROPIA lista `HUMANOS`/`esHumano()`, una CUARTA copia independiente
+
+El refuerzo #2 (arriba) cubrió las 4 listas `HUMANOS*` de
+`index.bundle.js` y el índice `_LIGA_HUMAN_FLAGS` de
+`misc_body_1.html` — pero **`part2/misc_body_2.html` tiene su PROPIA
+variable `HUMANOS`**, poblada por `_refreshHumanosFromStorage()`
+(`data.teams.filter(function(t){ return t.isHuman; })` escaneando
+`ligaExt_liga-ea-sports` DIRECTO, sin ningún filtro), y **`esHumano(t)`
+—la función que decide humanidad en TODO ese archivo, incluida la
+duración HvH/HvIA (8 vs 10 min) de un partido— la consulta
+directamente**. Es una CUARTA lista independiente de "quién es
+humano", en un TERCER archivo, que ninguno de los 2 refuerzos
+anteriores tocó — el bug "partido vs Inter sigue a 10 MIN" del turno 2
+podía seguir reproduciéndose por ESTA vía aunque las otras 3 ya
+estuvieran limpias.
+
+**Fix**: `_refreshHumanosFromStorage` filtra con
+`_isRetiredHumanoP2(t.name)` — un helper SELF-CONTAINED (lista local
+`_RETIRED_HUMANOS_P2` + fallback a `window._isRetiredHumanTeamName` si
+ya está disponible) porque esta función corre en BOOT SÍNCRONO,
+**antes** de que `index.bundle.js` (cargado al final del `<body>`)
+haya podido definir `window._isRetiredHumanTeamName` — no puede
+depender ÚNICAMENTE de esa función global como haría un código que
+corre más tarde.
+
+### Causa raíz 3 — `_gmFindAndPersistPlayer` (alta de jugador EN VIVO) se detenía en el PRIMER hit, sin desambiguar duplicados
+
+`window._gmFindAndPersistPlayer(teamName, player)` (`part2/misc_body_2.html`,
+el motor tras "+ AÑADIR JUGADOR" del gm-modal — permite dar de alta un
+jugador que NO está en la plantilla, DURANTE el partido) recorría
+`localStorage` buscando el equipo por nombre y, en cuanto encontraba
+la PRIMERA fila que coincidía, empujaba el jugador ahí y paraba. El
+historial de este mismo archivo (sección "Refuerzo #2" de arriba)
+confirma que el Inter tuvo una **fila DUPLICADA** — la real en
+`ligaExt_italia` y una residual en `ligaExt_liga-ea-sports` (origen:
+el club vivió en el slot de Liga EA Sports antes de moverse a Italia).
+Si el orden de enumeración de `localStorage` (no determinista,
+depende del navegador) entregaba antes la fila residual, L. Enrique
+se persistía ahí — un documento que la pantalla 🖍 PLANTILLA (que lee
+específicamente `ligaExt_italia`) nunca muestra. El alta "desaparecía"
+sin ningún error, porque SÍ tuvo éxito — solo que en el sitio
+equivocado. Además, el lector solo miraba `localStorage`, nunca
+`window.LIGA_CACHE` (chokepoint obligatorio desde 2026-07-29).
+
+**Fix**: la 1ª pasada ya NO para en el primer hit — recorre TODAS las
+`ligaExt_*` (leyendo `window.LIGA_CACHE[slug]` PRIMERO, con fallback a
+`localStorage`, mismo chokepoint que `loadData`/`_readLigaData`) y
+elige la fila con MÁS jugadores (`t.players.length`) entre todas las
+coincidencias por nombre — la fila residual/duplicada, casi siempre
+vacía o casi vacía, pierde frente a la plantilla real.
+
+### Reglas a respetar (refuerzo #3)
+
+9. **PROHIBIDO** que `standings()` (o cualquier constructor de fila de
+   clasificación nuevo) calcule `isHuman`/`humanEmoji` sin comprobar
+   PRIMERO `window._isRetiredHumanClubName` — ni siquiera cuando el
+   diseño exige que "la fila propia gane sobre el índice global" (regla
+   PSG→Superliga, 2026-05-04): el guard de retirados va ANTES de esa
+   prioridad, nunca después.
+10. **PROHIBIDO** que un pintor de "fila extra" (`buildExtraRowHtml` o
+    cualquier futuro que añada equipos fuera del `LIGA_SCHEDULE` normal
+    a una clasificación) lea `team.isHuman`/`team.humanEmoji` sin el
+    mismo guard.
+11. **PROHIBIDO** que un archivo NUEVO (o ya existente) mantenga su
+    PROPIA copia de "lista de humanos" (`HUMANOS`, `esHumano`, o
+    equivalente) escaneando `ligaExt_*`/`ligaExt_liga-ea-sports` sin
+    filtrar retirados. `part2/misc_body_2.html` es la CUARTA copia
+    encontrada — antes de dar por cerrado este bug, auditar si existe
+    una QUINTA en cualquier otro `.html`/`.js` del proyecto.
+12. **PROHIBIDO** que una función que escanee TODAS las `ligaExt_*` en
+    busca de un equipo por nombre (alta de jugador, recuperación,
+    diagnóstico) se detenga en el PRIMER hit cuando el mismo nombre
+    puede existir DUPLICADO en más de una liga. Recorrer TODAS las
+    coincidencias y elegir la de MÁS jugadores (mismo criterio que
+    `_findRichestHubRow`/`_hubRowLooksGeneric`) — nunca "la primera que
+    aparezca por orden de enumeración de `localStorage`" (no
+    determinista entre navegadores).
+13. **PROHIBIDO** que un lector nuevo de `ligaExt_<slug>` (incluido
+    dentro de `part2/misc_body_2.html`) mire SOLO `localStorage` sin
+    consultar `window.LIGA_CACHE[slug]` primero — regla ya obligatoria
+    desde 2026-07-29, aquí extendida explícitamente a
+    `_gmFindAndPersistPlayer`.
+
 ## Open Qualifier/Wild Card/Recopa se quedaban corto de Ligas Mixtas 5-9 y de copas "sin campeón" — los lectores de `ligaExt_<slug>` del reparto europeo solo miraban `localStorage`, nunca `window.LIGA_CACHE` (obligatorio, 2026-08-02 #5)
 
 **Bug (5 fotos usuario 2026-08-02)**: el Open Qualifier solo mostraba

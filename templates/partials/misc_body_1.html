@@ -14717,6 +14717,13 @@ window._showSimProgress = function(opts, onDone){
       return _RETIRED_HUMAN_CLUB_NAMES.indexOf(String(nm||'').trim().toLowerCase()) !== -1;
     }
   }
+  /* Expuesto a window: `standings()` (clasificación de Resto de Ligas,
+     otro script block más abajo) también necesita este filtro — lee
+     `t.isHuman`/`t.humanEmoji` DIRECTO de la fila de la liga (prioridad
+     sobre `_LIGA_HUMAN_FLAGS`) para heredar escudo/bandera de un PSG en
+     Superliga, pero eso mismo hace que un flag stale en el propio Inter
+     de 'italia' gane sin pasar por `refreshLigaEaShields`. 2026-08-03. */
+  window._isRetiredHumanClubName = _isRetiredHumanClubName;
   function refreshLigaEaShields(){
     var shields = {};
     var humanFlags = {};
@@ -15939,8 +15946,14 @@ window._showSimProgress = function(opts, onDone){
       badgeHtml = window.getTeamBadgeHtml(team.name);
     }
     // Emoji humano después del nombre (si el equipo es humano).
+    // Club RETIRADO de MISTERS_HUMANOS (Inter, 2026-08-03): nunca
+    // humano aquí aunque la fila cacheada traiga el flag stale — esta
+    // fila "extra" de Liga EA Sports es exactamente donde el usuario
+    // reportó una fila Inter 🐲 colada vía appendLigaEaExtras.
     var suffixHtml = '';
-    if(team.isHuman && team.humanEmoji){
+    var _canonKeyRetired = (typeof window._isRetiredHumanClubName === 'function')
+      && (window._isRetiredHumanClubName(team.name) || window._isRetiredHumanClubName(canonKey));
+    if(team.isHuman && team.humanEmoji && !_canonKeyRetired){
       suffixHtml = '<span class="clas-team-human-suffix">'+team.humanEmoji+'</span>';
     }
     var zoneClass = (typeof window._ligaEaZoneClass === 'function') ? window._ligaEaZoneClass(pos, 20) : '';
@@ -50855,7 +50868,17 @@ https://api.sofascore.app/api/v1/team/44/image
       var nm = t.name || '';
       var nrm = (typeof _normName === 'function') ? _normName(nm) : nm.toLowerCase();
       var sh = t.shield || gShields[nm] || gShields[nrm] || '';
-      var hf = (t.isHuman || t.humanEmoji)
+      /* Club RETIRADO de MISTERS_HUMANOS (Inter, 2026-08-03): NUNCA
+         humano aquí, aunque su propia fila (`t.isHuman`/`t.humanEmoji`)
+         siga con el flag stale — este bloque prioriza la fila PROPIA
+         sobre `_LIGA_HUMAN_FLAGS`, así que sin este guard el escudo del
+         dragón podía seguir saliendo en la clasificación pese al fix de
+         `refreshLigaEaShields`/`_sanitizeLigaTeamNames`. */
+      var _retiredClub = (typeof window._isRetiredHumanClubName === 'function')
+        && (window._isRetiredHumanClubName(nm) || window._isRetiredHumanClubName(nrm));
+      var hf = _retiredClub
+                 ? {isHuman:false, humanEmoji:''}
+                 : (t.isHuman || t.humanEmoji)
                  ? {isHuman:!!t.isHuman, humanEmoji:t.humanEmoji||''}
                  : (gHuman[nm] || gHuman[nrm] || {isHuman:false, humanEmoji:''});
       map[t.id] = {id:t.id,name:nm,shield:sh,power:Number(t.power)||50,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0,isHuman:!!hf.isHuman,humanEmoji:hf.humanEmoji||''};

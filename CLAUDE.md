@@ -107,6 +107,83 @@ que limpiarlo".
    sanitizadores universales + purga de stores + desactivar su pantalla
    `s-<hub>`) es el checklist completo — no un fixup de boot aislado.
 
+### Refuerzo (mismo día, 2026-08-03 #2) — `index.bundle.js` tiene SUS PROPIAS listas de "humanos", ajenas al chokepoint de `misc_body_1.html`
+
+**Bug (2 fotos usuario, mismo día, "REPITO INTER Y PORTUGAL SON EQUIPOS
+IA")**: pese al fix de arriba, un partido NUEVO (Real Madrid vs Inter,
+Trofeo Joan Gamper Jornada 7) seguía mostrando **«DURACIÓN 10 MIN»**
+(HvH) Y el overlay pre-partido de lesiones seguía dejando marcar
+lesionado a **CUALQUIER** jugador del roster completo del Inter (25
+jug.) igual que al del Real Madrid — como si ambos fueran humanos.
+
+**Causa raíz — el fix anterior solo tocó `misc_body_1.html`; `index.bundle.js`
+construye sus PROPIAS copias de "quién es humano" escaneando
+`ligaExt_liga-ea-sports` DIRECTO, sin pasar por `_sanitizeLigaTeamNames`
+ni por `MISTERS_HUMANOS`**: `refreshLigaEaShields` (`misc_body_1.html`,
+alimenta `window._LIGA_HUMAN_FLAGS`, que `_hasHumanIcon`/`esHumano`
+consultan) lee `localStorage.getItem('ligaExt_'+slug)` con un
+`_eachTeam` que **nunca pasa por `loadData`** — inmune a la Phase 1b
+añadida en el fix de arriba. Y, por separado, `index.bundle.js` tiene
+**4 listas `HUMANOS`/`_EQUIPOS_HUMANOS`/`_mmHUMANOS`/`HUMANOS_FORM`**
+(usadas por `_formaHumanTeamsInMatch` —la que pinta el overlay
+"AÑADIR LESIONADOS DEL EQUIPO HUMANO" con AMBOS rosters—, `esHumano`,
+y el generador de lesiones automáticas) que hacen, cada una por su
+cuenta, `d.teams.filter(t=>t.isHuman)` sobre `ligaExt_liga-ea-sports`
+— si una fila "Inter" quedó ahí con `isHuman:true` (posible residuo de
+antes de que se moviera a Italia — sección "Mover equipos" — o
+resucitada por la fusión de un dispositivo desactualizado), TODAS
+estas listas seguían devolviendo "Inter" como humano, y `MISTERS_HUMANOS`/
+`_isHumanClubCanonico` (que sí excluyen a Inter) nunca llegaban a
+arbitrar porque estas rutas ni los consultan.
+
+**Fix — filtro único `window._isRetiredHumanTeamName(name)`, aplicado en el PROPIO `index.bundle.js`**:
+
+- `window._isRetiredHumanTeamName(name)` (nuevo, junto a
+  `window.YELLOW_STORE`/`SANCION_STORE`, principio de `index.bundle.js`):
+  lista hardcoded de clubes/selecciones retirados (Inter + grafías,
+  Portugal). Se aplica dentro del `.filter(...)` de las 4 listas
+  `HUMANOS`/`_EQUIPOS_HUMANOS`/`_mmHUMANOS`/`HUMANOS_FORM` — un
+  `isHuman:true` stale en disco YA NO basta para que ninguna de ellas
+  devuelva a Inter/Portugal.
+- `refreshLigaEaShields` (`misc_body_1.html`): `_markHuman`/`_scan`
+  (los dos puntos que pueblan `humanNames`/`humanShieldNames`/
+  `window._LIGA_HUMAN_FLAGS`) ahora comprueban
+  `_isRetiredHumanClubName(nm)` ANTES de tratar `t.isHuman` como
+  válido — mismo principio, aplicado al escaneo que vive fuera de
+  `loadData`.
+- `_fixupInterHumanoItaliaV1` (`misc_body_1.html`) se generaliza a
+  `_fixupInterHumanoSlug(slug, flagSuffix)` y ahora limpia **DOS**
+  slugs — `'italia'` (ya cubierto) y **`'liga-ea-sports'`** (el
+  origen real de una fila "Inter" residual) — cada uno con su propio
+  flag de idempotencia, y llama a `refreshLigaEaShields()` tras
+  corregir para que `_LIGA_HUMAN_FLAGS` se reconstruya al instante.
+
+### Reglas a respetar (refuerzo)
+
+5. **PROHIBIDO** asumir que arreglar la detección de humanidad en
+   `misc_body_1.html` (chokepoints `loadData`/`_tourLoadCachedSync`/
+   `_hydrate`) cubre TODO el proyecto. `index.bundle.js` tiene sus
+   PROPIAS copias de "lista de humanos" (`HUMANOS`, `_EQUIPOS_HUMANOS`,
+   `_mmHUMANOS`, `HUMANOS_FORM`, y cualquier otra que se añada) que
+   escanean `ligaExt_liga-ea-sports` de forma independiente — toda
+   nueva de este tipo DEBE filtrar con `window._isRetiredHumanTeamName`
+   dentro de su propio `.filter(...)`, no basta con sanear la fuente
+   en `misc_body_1.html`.
+6. **PROHIBIDO** que `refreshLigaEaShields` (`_markHuman`/`_scan`)
+   trate `t.isHuman` como autoritativo sin comprobar antes si ese
+   nombre es un club retirado (`_isRetiredHumanClubName`). Es el ÚNICO
+   punto que alimenta `window._LIGA_HUMAN_FLAGS`, consultado por
+   `_hasHumanIcon`/`esHumano` en TODO el proyecto.
+7. **PROHIBIDO** que un fixup de "limpiar isHuman de un club retirado"
+   se limite a la liga donde el club vive HOY (`'italia'`). Debe cubrir
+   TAMBIÉN la liga de ORIGEN de donde se movió (`'liga-ea-sports'` en
+   este caso) — un movimiento de equipo no siempre deja esa liga
+   origen limpia en TODOS los dispositivos/backups.
+8. Toda lista `HUMANOS*` nueva que se añada a `index.bundle.js` en el
+   futuro hereda `window._isRetiredHumanTeamName` automáticamente en
+   cuanto copie el patrón `.filter(t=>t.isHuman && !window._isRetiredHumanTeamName(t.name))`
+   — no reinventar el filtro con una lista local nueva.
+
 ## Open Qualifier/Wild Card/Recopa se quedaban corto de Ligas Mixtas 5-9 y de copas "sin campeón" — los lectores de `ligaExt_<slug>` del reparto europeo solo miraban `localStorage`, nunca `window.LIGA_CACHE` (obligatorio, 2026-08-02 #5)
 
 **Bug (5 fotos usuario 2026-08-02)**: el Open Qualifier solo mostraba

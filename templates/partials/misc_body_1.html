@@ -14693,6 +14693,30 @@ window._showSimProgress = function(opts, onDone){
   // Las ligas con prioridad más baja NO pisan a las más altas:
   // Liga EA Sports primero, luego Hypermotion / Primera Fed, luego
   // las 51 extranjeras en el orden que las devuelva localStorage.
+  /* Clubes RETIRADOS de MISTERS_HUMANOS (Inter/Rubén, 2026-08-03).
+     `refreshLigaEaShields` lee `localStorage` DIRECTO (`_eachTeam`,
+     justo debajo) — NUNCA pasa por `loadData`/`_sanitizeLigaTeamNames`,
+     así que la limpieza de `isHuman`/`humanEmoji` de esa función NO
+     alcanza esta. Mientras el `isHuman:true` stale siga en el disco de
+     ALGÚN dispositivo (no se corrige aquí hasta que ese dispositivo
+     abra esa liga concreta al menos una vez), este escaneo lo seguía
+     resucitando en `window._LIGA_HUMAN_FLAGS['Inter']` en CADA boot —
+     de ahí que la previa de un torneo contra el Inter siguiera saliendo
+     a 10 MIN (HvH) y el picker de bajas lo siguiera tratando como
+     equipo humano, pese a que Inter ya no está en `MISTERS_HUMANOS`.
+     Se filtra por NOMBRE, ANTES de que `_markHuman`/`_scan` puedan
+     marcarlo humano — así el flag stale en disco deja de importar. */
+  var _RETIRED_HUMAN_CLUB_NAMES = ['inter', 'internazionale', 'fc internazionale',
+    'fc internazionale milano', 'inter milan', 'inter de milan',
+    'inter milán', 'inter de milán'];
+  function _isRetiredHumanClubName(nm){
+    try {
+      var n = String(nm||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+      return _RETIRED_HUMAN_CLUB_NAMES.indexOf(n) !== -1;
+    } catch(_){
+      return _RETIRED_HUMAN_CLUB_NAMES.indexOf(String(nm||'').trim().toLowerCase()) !== -1;
+    }
+  }
   function refreshLigaEaShields(){
     var shields = {};
     var humanFlags = {};
@@ -14732,6 +14756,7 @@ window._showSimProgress = function(opts, onDone){
     }
     function _markHuman(t, nm, norm){
       if(!t.isHuman) return;
+      if(_isRetiredHumanClubName(nm) || (norm && _isRetiredHumanClubName(norm))) return;
       if(!(nm in humanNames)) humanNames[nm] = norm || '';
       if(!t.shield) return;
       humanShieldNames[nm] = 1;
@@ -14739,17 +14764,23 @@ window._showSimProgress = function(opts, onDone){
     }
     function _scan(slug){
       _eachTeam(slug, function(t, nm, norm){
+        /* Inter/Rubén retirado: nunca "reclama" prioridad de humano
+           sobre el escudo ni entra en humanFlags, aunque su fila aún
+           traiga `isHuman:true` en disco (ver `_RETIRED_HUMAN_CLUB_NAMES`
+           más arriba). Se trata como IA normal de aquí en adelante. */
+        var _retired = _isRetiredHumanClubName(nm) || (norm && _isRetiredHumanClubName(norm));
+        var _tHuman = t.isHuman && !_retired;
         if(t.shield){
           /* Un nombre "reclamado" por una fila humana solo lo puede
              escribir otra fila humana (la 1ª por orden de prioridad). */
-          if(!humanShieldNames[nm] || t.isHuman){
+          if(!humanShieldNames[nm] || _tHuman){
             if(!shields[nm]) shields[nm] = t.shield;
           }
-          if(norm && (!humanShieldNames[norm] || t.isHuman)){
+          if(norm && (!humanShieldNames[norm] || _tHuman)){
             if(!shields[norm]) shields[norm] = t.shield;
           }
         }
-        if(t.isHuman){
+        if(_tHuman){
           if(!humanFlags[nm]){
             humanFlags[nm] = {isHuman:true, humanEmoji:t.humanEmoji||'👤'};
             if(norm && !humanFlags[norm]) humanFlags[norm] = humanFlags[nm];
@@ -57441,22 +57472,29 @@ https://api.sofascore.app/api/v1/team/44/image
       window._lsSetSafe(FLAG, '1');
     } catch(_){}
   }
-  /* Fixup Inter · Italia (2026-08-02, foto usuario: el Inter de "Resto
-     de Ligas · Italia" salía con el icono 🐲 puesto en la clasificación).
-     Causa: el Inter es el club del mister Rubén (registro MISTERS_HUMANOS)
-     y en algún momento se movió/copió a esta liga con `isHuman`/
-     `humanEmoji` todavía puestos — exactamente el bug ya descrito en la
-     sección "Mover equipos" de arriba ("el flag se limpia SIEMPRE al
-     mover"), pero esta liga concreta quedó con datos de ANTES de ese fix.
-     En Resto de Ligas el Inter es IA — limpia el flag UNA vez (idempotente
-     vía flag) y sella `updatedAt` fresco para que la fusión por-equipo del
-     servidor (`_lx_merge_teams`, gana por `updatedAt`) adopte la copia
-     corregida en vez de resucitar el dragón desde una copia vieja. */
-  function _fixupInterHumanoItaliaV1(){
-    var FLAG = 'ftbol_inter_italia_human_fix_v1';
+  /* Fixup Inter · Italia + liga-ea-sports (2026-08-02/03, fotos usuario:
+     el Inter de "Resto de Ligas · Italia" salía con el icono 🐲 puesto en
+     la clasificación, Y CADA PARTIDO contra un humano se seguía mostrando
+     a 10 MIN/HvH con AMBOS rosters abiertos para marcar lesión).
+     Causa: el Inter es el club del ex-mister Rubén (registro
+     MISTERS_HUMANOS) y en algún momento se movió/copió a Italia — y, en
+     ALGÚN dispositivo, puede haber quedado TAMBIÉN una fila "Inter" con
+     `isHuman:true` dentro de `ligaExt_liga-ea-sports` (el slug de donde
+     salió originalmente, antes de "Mover equipos" a Italia — sección de
+     arriba). Varias listas de humanos del bundle (`HUMANOS`,
+     `_EQUIPOS_HUMANOS`, `_mmHUMANOS`, `HUMANOS_FORM`,
+     `_formaHumanTeamsInMatch`) escanean EXACTAMENTE ese slug con
+     `.filter(t=>t.isHuman)` — una fila stale ahí bastaba para que el
+     Inter siguiera apareciendo como humano en CUALQUIER partido, aunque
+     ya no esté en MISTERS_HUMANOS ni en 'italia'. Limpia el flag en
+     AMBOS slugs, UNA vez cada uno (idempotente vía flag por slug), y
+     sella `updatedAt` fresco para que la fusión por-equipo del servidor
+     (`_lx_merge_teams`, gana por `updatedAt`) adopte la copia corregida
+     en vez de resucitar el dragón desde una copia vieja. */
+  function _fixupInterHumanoSlug(slug, flagSuffix){
+    var FLAG = 'ftbol_inter_human_fix_' + flagSuffix + '_v1';
     try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
     try {
-      var slug = 'italia';
       var raw = localStorage.getItem('ligaExt_' + slug);
       /* Si esta liga aún no está cacheada en ESTE dispositivo, NO
          marcamos el flag — reintentamos en el próximo boot (barato: un
@@ -57483,11 +57521,16 @@ https://api.sofascore.app/api/v1/team/44/image
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = d; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
           try { if (typeof saveData === 'function') saveData(slug, d); } catch(_){}
-          try { console.warn('[ligaExt] Italia: icono de humano (🐲) retirado del Inter — es IA en Resto de Ligas.'); } catch(_){}
+          try { if (typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields(); } catch(_){}
+          try { console.warn('[ligaExt] ' + slug + ': icono de humano (🐲) retirado del Inter — es IA en Resto de Ligas.'); } catch(_){}
         }
         if (found) window._lsSetSafe(FLAG, '1');
       }
     } catch(_){}
+  }
+  function _fixupInterHumanoItaliaV1(){
+    _fixupInterHumanoSlug('italia', 'italia');
+    _fixupInterHumanoSlug('liga-ea-sports', 'ea');
   }
   window._fixupInterHumanoItaliaV1 = _fixupInterHumanoItaliaV1;
   /* Fixup DE-HUMANIZAR Inter/Portugal en TODOS los torneos (2026-08-02,

@@ -9875,19 +9875,111 @@
     if ((Number(hub.corners) || 0) > (Number(rival.corners) || 0)) pi += 0.3;
     return pi;
   }
+  /* ── 🪙 GANANCIAS POR PARTIDO — TABLA POR COMPETICIÓN (2026-07-27) ────
+     Petición usuario: cada competición paga distinto por partido según
+     su prestigio/dificultad, escalado desde Liga EA Sports (base) usando
+     como referencia la jerarquía ya existente de premios CASH por
+     posición final (Champions > Europa > Conference, Playoffs > Fase de
+     Grupos, Mundial > Road-to…). Derrota = 0 en TODAS (no se paga por
+     perder, igual que Liga). 💼 se deriva de v/e con la MISMA proporción
+     que Liga (0,03/8 · 0,01/3) — no hace falta una tabla aparte. */
+  var _MATCH_REWARD_TABLE = {
+    /* v/e/g/i = tabla EXACTA dada por el usuario 2026-07-28 (sustituye la
+       auto-estimada de 2026-07-27; solo 4 valores de `i` cambiaron: sc
+       5→4, uelGroup 4→3, uelKo 5→4, selFinal 8→6 — el resto ya coincidía).
+       `mvp` = bonus fijo si el MVP del partido es del hub (2026-07-28,
+       tabla completa del usuario salvo wprev/selQual/selFinal, que el
+       usuario no listó — rellenados por escala con el tier más parecido:
+       wprev≈ueclGroup(+2), selQual≈liga/copa(+2), selFinal>uclKo(+5) —
+       marcados abajo, pendientes de confirmación explícita del usuario. */
+    liga:       { v:8,  e:3, g:1, i:3, mvp:2 },
+    copa:       { v:10, e:4, g:1, i:4, mvp:2 },
+    sc:         { v:14, e:5, g:2, i:4, mvp:3 },
+    wprev:      { v:9,  e:3, g:1, i:2, mvp:2 },   /* Previa Champions (grupos Y ronda preliminar) — mvp SIN confirmar, ver nota arriba */
+    uclGroup:   { v:12, e:4, g:2, i:3, mvp:3 },
+    uclKo:      { v:18, e:7, g:2, i:6, mvp:4 },
+    uelGroup:   { v:10, e:4, g:1, i:3, mvp:2 },
+    uelKo:      { v:14, e:5, g:2, i:4, mvp:3 },
+    ueclGroup:  { v:9,  e:3, g:1, i:2, mvp:2 },
+    ueclKo:     { v:12, e:4, g:2, i:3, mvp:3 },
+    usc:        { v:13, e:5, g:2, i:4, mvp:4 },
+    recopa:     { v:11, e:4, g:1, i:3, mvp:3 },
+    inter:      { v:14, e:5, g:2, i:4, mvp:4 },
+    mundialito: { v:13, e:5, g:2, i:5, mvp:4 },
+    superliga:  { v:8,  e:3, g:1, i:3, mvp:2 },
+    verano:     { v:5,  e:2, g:1, i:2, mvp:1 },
+    selQual:    { v:9,  e:3, g:1, i:3, mvp:2 },   /* Road to (Copa Asia/Eurocopa/África/América) — mvp SIN confirmar, ver nota arriba */
+    selFinal:   { v:20, e:8, g:3, i:6, mvp:5 }    /* Mundial / Rondas Finales — mvp SIN confirmar, ver nota arriba */
+  };
+  var _VERANO_TOUR_IDS = { sct:1, jg:1, pss:1, asia:1 };
+  /* Resuelve la fila de `_MATCH_REWARD_TABLE` para el partido `o` (puede
+     ser `_gm` del gm-modal o `st` de una ml-card). Prioridad:
+     1) tourId (Mundialito/Verano/Selecciones — viven bajo compKey
+        genérico 'torneo'/'sel'/'sel-fin', hay que mirar el id concreto).
+     2) flags ricas del gm-modal (_isWprev/_isWprevKo ANTES que comp==='ucl'
+        — la Previa usa el MISMO comp='ucl' que Champions real, sólo se
+        distingue por la flag; _isEurFase/_isEurKo para grupos/playoffs).
+     3) `comp`/`compKey`/`_comp` plano (copa/sc/recopa/usc/inter/superliga,
+        y ucl/uel/uecl cuando no hay flag de fase — asume grupos, el caso
+        más común en ml-cards que no llevan esas flags).
+     4) Fallback → Liga (red de seguridad para torneos/tipos no reconocidos,
+        petición usuario 2026-07-27). */
+  function _matchRewardTier(o) {
+    if (!o) return 'liga';
+    try {
+      var tourId = o._tourId || o.tourId || '';
+      if (tourId) {
+        if (tourId === 'mundial') return 'mundialito';
+        if (/^spv/i.test(tourId)) return 'selQual';
+        if (/^sfn/i.test(tourId)) return 'selFinal';
+        if (_VERANO_TOUR_IDS[tourId] || /^tx\d+$/i.test(tourId)) return 'verano';
+      }
+      if (o._isWprevKo || o._isWprev || o.isWprev) return 'wprev';
+      var comp = o.comp || o.compKey || o._comp || 'liga';
+      if (comp === 'ucl') return (o._isEurKo && !o._isEurFase) ? 'uclKo' : 'uclGroup';
+      if (comp === 'uel') return (o._isEurKo && !o._isEurFase) ? 'uelKo' : 'uelGroup';
+      if (comp === 'uecl') return (o._isEurKo && !o._isEurFase) ? 'ueclKo' : 'ueclGroup';
+      if (comp === 'copa' || comp === 'copa-fin') return 'copa';
+      if (comp === 'sc' || comp === 'sc-final') return 'sc';
+      if (comp === 'usc' || comp === 'usc-fin') return 'usc';
+      if (comp === 'recopa') return 'recopa';
+      if (comp === 'inter') return 'inter';
+      if (comp === 'superliga') return 'superliga';
+      if (comp === 'sel') return 'selQual';
+      if (comp === 'sel-fin') return 'selFinal';
+      /* format mundial-48 (Mundial 2032) puede llegar sin tourId conocido
+         si el objeto no lo trae; cfg.format es la última verificación. */
+      if (tourId && typeof window._tourLoadCachedSync === 'function') {
+        var cfg = window._tourLoadCachedSync(tourId);
+        if (cfg && cfg.format === 'mundial-48') return 'selFinal';
+      }
+    } catch(_){}
+    return 'liga';
+  }
   /* Otorga PI al equipo del hub (Liverpool) por las tarjetas y faltas
      que le hizo el rival en este partido. Tarjetas: del acta. Faltas:
      del campo `faltas` de matchStats (lo teclea el humano en la
      pantalla de estadísticas obligatorias). */
   function athApplyMedicalFromActa(st) {
     if (!st) return;
+    /* El hub del mister es CLUB + SELECCIÓN (Toñín = Liverpool + Francia).
+       Antes solo se comparaba el CLUB: un partido de la selección (Mundial,
+       Rondas Previas/Finales) nunca hacía `hubSide` porque "francia" no es
+       igual a "liverpool" → la función salía en el `if (!hubSide) return`
+       de abajo y el 💊/🪙/💼 de TODOS los partidos de selección se perdían
+       en silencio (petición usuario 2026-07-27: "el 💊 también va a la
+       caja de ese club O SELECCIÓN humana"). Se comprueba contra AMBOS
+       nombres del mismo mister. */
     var hub = (typeof _athHubTeam === 'function') ? _athHubTeam() : '';
-    if (!hub) return;
+    var hubSel = (typeof _athHubSeleccion === 'function') ? _athHubSeleccion() : '';
+    if (!hub && !hubSel) return;
     var hubL = hub.trim().toLowerCase();
+    var hubSelL = hubSel.trim().toLowerCase();
     var homeL = String(st.home || '').trim().toLowerCase();
     var awayL = String(st.away || '').trim().toLowerCase();
-    var hubSide = homeL === hubL ? 'a' : awayL === hubL ? 'b' : null;
-    if (!hubSide) return;                /* el hub no juega este partido */
+    function _isHubName(n){ return (!!hubL && n === hubL) || (!!hubSelL && n === hubSelL); }
+    var hubSide = _isHubName(homeL) ? 'a' : _isHubName(awayL) ? 'b' : null;
+    if (!hubSide) return;                /* ni el club ni la selección del hub juegan este partido */
     var rivalSide = hubSide === 'a' ? 'b' : 'a';
     var rivalName = rivalSide === 'a' ? st.home : st.away;
     var comp = st.comp || st.compKey || st._comp || 'liga';
@@ -9905,33 +9997,64 @@
     } catch(e){}
     pi = Math.round(pi * 10) / 10;
 
-    /* ── 🪙 DINERO + 💼 VALORACIÓN POR PARTIDO (petición usuario 2026-07-24) ─
+    /* ── 🪙 DINERO + 💼 VALORACIÓN POR PARTIDO, POR COMPETICIÓN
+       (petición usuario 2026-07-24, tabla por competición 2026-07-27) ────
        Además del 💊 (ya existente arriba), cada partido humano acredita al
-       HUD del hub: 🪙 8/3/1 por Victoria/Empate/Derrota + 1 por gol marcado
-       + 2 si deja la portería a cero; 💼 0,03/0,01/0 por V/E/D (se acumula
-       hacia el ratingTarget del equipo). El desglose se deja en
-       st._matchEarnings para el bloque "GANANCIAS DEL PARTIDO" del resumen.
-       El 🪙 es el "sueldo" que financia las apuestas de derbys (mismo
-       monedero), por eso el target de dinero no se toca. */
+       HUD del hub según la fila de `_MATCH_REWARD_TABLE` que le corresponda
+       (`_matchRewardTier`): 🪙 v/e por Victoria/Empate (Derrota siempre 0,
+       ninguna competición paga por perder) + `g` por cada gol marcado +
+       `i` si deja la portería a cero; 💼 se deriva de v/e con la MISMA
+       proporción que Liga (0,03/8 · 0,01/3), así toda competición más
+       prestigiosa aporta más 💼 sin necesitar una segunda tabla. El
+       desglose se deja en st._matchEarnings para el bloque "GANANCIAS DEL
+       PARTIDO" del resumen. El 🪙 es el "sueldo" que financia las apuestas
+       de derbys (mismo monedero), por eso el target de dinero no se toca. */
+    var _GOALT = { 'gol':1, 'falta-gol':1, 'pen-gol':1 };
     var gf, ga;
     if (st.sc && typeof st.sc.a === 'number' && typeof st.sc.b === 'number') {
       gf = hubSide === 'a' ? st.sc.a : st.sc.b;
       ga = hubSide === 'a' ? st.sc.b : st.sc.a;
     } else {
       gf = 0; ga = 0;
-      var _GOALT = { 'gol':1, 'falta-gol':1, 'pen-gol':1 };
       evs.forEach(function(e){
         if (!e) return;
         if (_GOALT[e.type]) { if (e.team === hubSide) gf++; else if (e.team === rivalSide) ga++; }
         else if (e.type === 'propia' || e.type === 'autogol') { if (e.team === hubSide) ga++; else if (e.team === rivalSide) gf++; }
       });
     }
+    var _tier = _MATCH_REWARD_TABLE[_matchRewardTier(st)] || _MATCH_REWARD_TABLE.liga;
     var coins, drating;
-    if (gf > ga)      { coins = 8; drating = 0.03; }
-    else if (gf === ga){ coins = 3; drating = 0.01; }
-    else              { coins = 1; drating = 0; }
-    coins += gf;                 /* +1 🪙 por gol marcado */
-    if (ga === 0) coins += 2;    /* +2 🪙 portería a cero */
+    if (gf > ga)       { coins = _tier.v; drating = _tier.v * (0.03 / 8); }
+    else if (gf === ga){ coins = _tier.e; drating = _tier.e * (0.01 / 3); }
+    else               { coins = 0; drating = 0; }
+    coins += gf * _tier.g;           /* `g` 🪙 por gol marcado */
+    if (ga === 0) coins += _tier.i;  /* `i` 🪙 portería a cero */
+
+    /* ⭐ MVP del hub (petición usuario 2026-07-28): bonus fijo por tier
+       si el evento 'mvp' del acta cae del lado del hub. */
+    try {
+      var _mvpEvt = null;
+      for (var _mi = evs.length - 1; _mi >= 0; _mi--) { if (evs[_mi] && evs[_mi].type === 'mvp') { _mvpEvt = evs[_mi]; break; } }
+      if (_mvpEvt && _mvpEvt.team === hubSide) coins += (_tier.mvp || 0);
+    } catch(e){}
+
+    /* 🎩 Doblete/Hat-trick del MISMO jugador del hub — bonus = 2×g (2
+       goles) / 6×g (3+ goles), anclado a Liga (g=1 → +2/+6, petición
+       usuario 2026-07-28). Ignora nombres placeholder ('—', vacío). */
+    try {
+      var _goalsByPlayer = {};
+      evs.forEach(function(e){
+        if (!e || e.team !== hubSide || !_GOALT[e.type]) return;
+        var pn = String(e.player || e.name || '').trim();
+        if (!pn || pn === '—') return;
+        _goalsByPlayer[pn] = (_goalsByPlayer[pn] || 0) + 1;
+      });
+      var _maxByOne = 0;
+      Object.keys(_goalsByPlayer).forEach(function(n){ if (_goalsByPlayer[n] > _maxByOne) _maxByOne = _goalsByPlayer[n]; });
+      if (_maxByOne >= 3) coins += _tier.g * 6;
+      else if (_maxByOne === 2) coins += _tier.g * 2;
+    } catch(e){}
+
     drating = Math.round(drating * 1000) / 1000;
 
     /* Idempotencia: una reentrada de gmEndMatch / watchdog / re-render no

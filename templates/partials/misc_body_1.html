@@ -20610,6 +20610,60 @@ window._showSimProgress = function(opts, onDone){
     return H.indexOf(name) !== -1;
   }
 
+  /* Lee la copia MÁS COMPLETA de una liga para el reparto europeo
+     (Open Qualifier/Wild Card/Recopa/diagnóstico) — `window.LIGA_CACHE[slug]`
+     (memoria, la escribe SIEMPRE `saveData` en cada guardado, sea cual
+     sea el estado de la cuota del navegador) vs la copia cruda de
+     `localStorage`. Sin esto, una liga simulada con éxito (guardada en
+     memoria + servidor) pero cuyo `setItem` de `localStorage` falló en
+     silencio (banner "Navegador sin espacio", frecuente al simular
+     ~60 ligas de golpe) aparecía como "liga sin terminar" en el Open
+     Qualifier/Wild Card o "sin Copa simulada todavía" en la Recopa,
+     aunque la propia pantalla de esa liga (que SÍ mira `LIGA_CACHE`
+     primero, ver `loadData`) mostrara la clasificación/campeón
+     correctos — bug 2026-08-02: "faltan poder añadir Liga Mixta 5-9
+     al Open Qualifier / Wild Card" + "la Recopa dice que hay Copas sin
+     terminar pero todas están simuladas" (confirmado con capturas: la
+     pantalla de la Copa de Dinamarca SÍ mostraba campeón København,
+     pero el diagnóstico de Recopa la marcaba "sin Copa simulada").
+     Devuelve la copia con MÁS resultados de liga jugados (o con
+     campeón de copa si la otra no lo tiene) entre las dos fuentes —
+     nunca menos que lo que ya había en `localStorage`. */
+  window._eurBestLeagueData = function(slug, localParsed){
+    var cached = null;
+    try { cached = window.LIGA_CACHE && window.LIGA_CACHE[slug]; } catch(_){}
+    var cachedOk = !!(cached && Array.isArray(cached.teams) && cached.teams.length);
+    if(!cachedOk) return localParsed;
+    var localOk = !!(localParsed && Array.isArray(localParsed.teams) && localParsed.teams.length);
+    if(!localOk) return cached;
+    var cachedR = Array.isArray(cached.results) ? cached.results.length : 0;
+    var localR  = Array.isArray(localParsed.results) ? localParsed.results.length : 0;
+    var cachedC = !!(cached.copa && cached.copa.champion);
+    var localC  = !!(localParsed.copa && localParsed.copa.champion);
+    if(cachedR > localR || (cachedC && !localC)) return cached;
+    return localParsed;
+  };
+  /* Todos los slugs válidos de liga (unión de `LEAGUE_DEFAULT_ZONES` +
+     lo que ya haya cacheado localStorage/`LIGA_CACHE`) — usado para no
+     perder una liga que SOLO vive en `LIGA_CACHE` en esta sesión
+     (nunca llegó a escribirse en `localStorage`, p.ej. hidratada desde
+     el servidor en segundo plano) al construir el pool europeo. */
+  window._eurAllKnownLeagueSlugs = function(fromLocalStorageKeys){
+    var out = {};
+    (fromLocalStorageKeys||[]).forEach(function(s){ out[s] = 1; });
+    try {
+      Object.keys(window.LEAGUE_DEFAULT_ZONES || {}).forEach(function(s){ out[s] = 1; });
+    } catch(_){}
+    try {
+      Object.keys(window.LIGA_CACHE || {}).forEach(function(s){
+        if(s.indexOf('__') === 0) return; /* claves internas tipo __bgHydrating_ */
+        var c = window.LIGA_CACHE[s];
+        if(c && Array.isArray(c.teams) && c.teams.length) out[s] = 1;
+      });
+    } catch(_){}
+    return Object.keys(out);
+  };
+
   /* Construye el pool de Recopa (rediseño 2026-06-02):
      Modelo histórico Recopa / Cup Winners' Cup. El pool son los
      CAMPEONES de las copas nacionales europeas (`ligaExt_<slug>.copa`,
@@ -20692,14 +20746,22 @@ window._showSimProgress = function(opts, onDone){
           if(!k || k.indexOf('ligaExt_')!==0) continue;
           if(k.indexOf('_backup')>=0 || k.indexOf('_snap_')>=0 || k.indexOf('_snapshot')>=0 || k.indexOf('_protected')>=0) continue;
           if(/_v\d+$/.test(k)) continue;
-          keys.push(k);
+          keys.push(k.substring('ligaExt_'.length));
         }
-        keys.sort();
-        keys.forEach(function(key){
-          var slug = key.substring('ligaExt_'.length);
+        /* Une los slugs de localStorage con los que SOLO viven en
+           `LIGA_CACHE` esta sesión (nunca llegaron a persistir en
+           local) — ver `_eurBestLeagueData`. */
+        var slugsAll = (typeof window._eurAllKnownLeagueSlugs === 'function')
+          ? window._eurAllKnownLeagueSlugs(keys)
+          : keys;
+        slugsAll.sort();
+        slugsAll.forEach(function(slug){
           if(EUROPE_BLACKLIST[slug]) return;
           var data;
-          try { data = JSON.parse(localStorage.getItem(key)||'null'); } catch(_){ return; }
+          try { data = JSON.parse(localStorage.getItem('ligaExt_' + slug)||'null'); } catch(_){ data = null; }
+          try {
+            if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
+          } catch(_){}
           var cp = data && data.copa;
           if(!cp) return;
           if(cp.champion) champs.push(cp.champion);
@@ -20764,6 +20826,9 @@ window._showSimProgress = function(opts, onDone){
         if(EUROPE_BLACKLIST[slug]) return;
         var d = null;
         try { var raw = localStorage.getItem('ligaExt_' + slug); d = raw ? JSON.parse(raw) : null; } catch(_){}
+        try {
+          if(typeof window._eurBestLeagueData === 'function') d = window._eurBestLeagueData(slug, d);
+        } catch(_){}
         var hasChamp = !!(d && d.copa && d.copa.champion);
         if(hasChamp) return;
         var hasTeams = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
@@ -36974,13 +37039,22 @@ window._showSimProgress = function(opts, onDone){
            ~50 reales). */
         if(k.indexOf('_protected')>=0) continue;
         if(/_v\d+$/.test(k)) continue;
-        keys.push(k);
+        keys.push(k.substring('ligaExt_'.length));
       }
-      /* Orden estable entre ligas para que el tablero no baile
-         al recalcular. */
-      keys.sort();
-      keys.forEach(function(key){
-        var slug = key.substring('ligaExt_'.length);
+      /* Une los slugs de localStorage con los que SOLO viven en
+         `window.LIGA_CACHE` esta sesión (nunca llegaron a persistir en
+         local — hidratación de servidor en segundo plano, cuota
+         llena, etc.) — sin esto una liga simulada con éxito pero cuya
+         escritura a `localStorage` falló en silencio quedaba invisible
+         para el reparto europeo aunque su pantalla la mostrara bien
+         (ver `_eurBestLeagueData`, bug 2026-08-02 "faltan Liga Mixta
+         5-9 en Open Qualifier/Wild Card"). Orden estable entre ligas
+         para que el tablero no baile al recalcular. */
+      var slugsAll = (typeof window._eurAllKnownLeagueSlugs === 'function')
+        ? window._eurAllKnownLeagueSlugs(keys)
+        : keys;
+      slugsAll.sort();
+      slugsAll.forEach(function(slug){
         /* BLACKLIST europeo por liga × zona. Reglas grabadas a fuego
            por el usuario:
            - liga-hypermotion (Segunda) → JAMÁS a ninguna competición
@@ -37009,11 +37083,16 @@ window._showSimProgress = function(opts, onDone){
           diag.push({slug:slug, status:'blacklist', note:'fuera de '+zoneKey+' por reglamento (manual-only)'});
           return;
         }
-        var raw = localStorage.getItem(key);
-        if(!raw){ diag.push({slug:slug, status:'skip', note:'sin datos'}); return; }
-        var data;
-        try { data = JSON.parse(raw); } catch(_){ diag.push({slug:slug, status:'skip', note:'JSON inválido'}); return; }
-        if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)){
+        var raw = localStorage.getItem('ligaExt_' + slug);
+        var data = null;
+        if(raw){
+          try { data = JSON.parse(raw); } catch(_){ data = null; }
+        }
+        try {
+          if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
+        } catch(_){}
+        if(!data){ diag.push({slug:slug, status:'skip', note:'sin datos'}); return; }
+        if(!Array.isArray(data.teams) || !Array.isArray(data.results)){
           diag.push({slug:slug, status:'skip', note:'estructura no reconocida'}); return;
         }
         var teams = data.teams;
@@ -37673,8 +37752,11 @@ window._showSimProgress = function(opts, onDone){
   function _uclPrevLeagueRanking(slug){
     try {
       var raw = localStorage.getItem('ligaExt_' + slug);
-      if(!raw) return [];
-      var data = JSON.parse(raw);
+      var data = null;
+      if(raw){ try { data = JSON.parse(raw); } catch(_){ data = null; } }
+      try {
+        if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
+      } catch(_){}
       if(!data || !Array.isArray(data.teams)) return [];
       var teams = data.teams;
       var needed = teams.length * (teams.length - 1);
@@ -44165,6 +44247,9 @@ window._showSimProgress = function(opts, onDone){
         if(slug === 'liga-ea-sports') return;
         var d = null;
         try { var raw = localStorage.getItem('ligaExt_' + slug); d = raw ? JSON.parse(raw) : null; } catch(_){}
+        try {
+          if(typeof window._eurBestLeagueData === 'function') d = window._eurBestLeagueData(slug, d);
+        } catch(_){}
         var hasTeams = !!(d && Array.isArray(d.teams) && d.teams.length >= 2);
         if(!hasTeams){
           var nm = (window.LEAGUE_DEFAULT_NAMES && window.LEAGUE_DEFAULT_NAMES[slug]) || slug;
@@ -44273,6 +44358,12 @@ window._showSimProgress = function(opts, onDone){
     try {
       var raw = localStorage.getItem('ligaExt_' + slug);
       local = raw ? JSON.parse(raw) : null;
+    } catch(_){}
+    try {
+      /* `window.LIGA_CACHE` (memoria) puede tener una copia más
+         completa que la de `localStorage` — ver `_eurBestLeagueData`,
+         bug 2026-08-02 ("faltan poder añadir Liga Mixta 5-9"). */
+      if(typeof window._eurBestLeagueData === 'function') local = window._eurBestLeagueData(slug, local);
     } catch(_){}
     if(local && Array.isArray(local.teams) && local.teams.length >= 2){ _finish(local); return; }
     _eurEnsureLeagueIndex(function(){
@@ -44599,10 +44690,59 @@ window._showSimProgress = function(opts, onDone){
     el.addEventListener('pointerdown', _fire, { passive:false });
     el.addEventListener('mousedown', _fire);
   }
+  /* Filas de `#eur-pick-league-list` (2026-08-02, "ese desplegable solo
+     dura 1 segundo y se cierra"): hasta 54 ligas en un contenedor
+     `overflow-y:auto` — el admin necesita DESLIZAR el dedo por la lista
+     para encontrar la suya (Inglaterra, Italia…) antes de soltar sobre
+     la fila correcta. `_eurWireTapFallback` (arriba) llama SIEMPRE
+     `preventDefault()` en `touchstart` — eso bloquea el scroll nativo
+     para ESE toque: en cuanto el dedo tocaba CUALQUIER fila para
+     empezar a scrollear, se seleccionaba esa fila y el desplegable se
+     cerraba al instante ("solo dura 1 segundo"), sin darle tiempo al
+     admin a deslizar hasta su liga. Aquí se distingue tap de scroll con
+     `touchmove` (SIN `preventDefault` en touchstart/touchmove, para no
+     tocar el scroll nativo): solo se dispara el select si el dedo se
+     movió menos de `MOVE_PX` entre touchstart y touchend — un scroll
+     real (movimiento > umbral) no selecciona nada y el desplegable se
+     queda fijo, exactamente lo pedido ("que se quede fija hasta que
+     marque alguna liga"). `preventDefault()` en `touchend` SOLO cuando
+     se decide que es un tap (evita el doble disparo del click sintético
+     que el navegador añade tras un touchend sin scroll). */
+  function _eurWireLeagueRowTap(row){
+    if(!row || row.__eurRowTapWired) return;
+    row.__eurRowTapWired = true;
+    var MOVE_PX = 10;
+    var startY = 0, startX = 0, moved = false, active = false;
+    function _pt(e){ return (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e; }
+    function onStart(e){
+      active = true; moved = false;
+      var t = _pt(e);
+      startY = t.clientY; startX = t.clientX;
+    }
+    function onMove(e){
+      if(!active) return;
+      var t = _pt(e);
+      if (Math.abs(t.clientY - startY) > MOVE_PX || Math.abs(t.clientX - startX) > MOVE_PX) moved = true;
+    }
+    function onEnd(e){
+      if(!active) return;
+      active = false;
+      if(!moved){
+        try { e && e.preventDefault && e.preventDefault(); } catch(_){}
+        try { row.click(); } catch(_){}
+      }
+    }
+    function onCancel(){ active = false; moved = false; }
+    row.addEventListener('touchstart', onStart, { passive:true });
+    row.addEventListener('touchmove', onMove, { passive:true });
+    row.addEventListener('touchend', onEnd, { passive:false });
+    row.addEventListener('touchcancel', onCancel, { passive:true });
+  }
   function _eurWireTapFallbackAll(container){
     if(!container) return;
     try {
-      container.querySelectorAll('button, [data-eur-pick-league]').forEach(function(el){ _eurWireTapFallback(el); });
+      container.querySelectorAll('button').forEach(function(el){ _eurWireTapFallback(el); });
+      container.querySelectorAll('[data-eur-pick-league]').forEach(function(el){ _eurWireLeagueRowTap(el); });
     } catch(_){}
   }
 
@@ -45382,6 +45522,114 @@ window._showSimProgress = function(opts, onDone){
   function _normNm(s){
     return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
   }
+
+  /* Bandera REAL por equipo dentro de una "Liga Mixta" (bug 2026-08-02,
+     foto usuario "GOLEADORES" — Jugador 10 de Lokomotiv Moscow salía con
+     las 5 banderas APILADAS de toda liga-mixta-8 (Rusia+Armenia+
+     Finlandia+Moldavia+Azerbaiyán) en vez de solo la rusa). Cada Liga
+     Mixta fusiona 3-5 ligas menores en una sola (`mc-emoji` de la card
+     es la concatenación de esas banderas — correcto como icono de LA
+     LIGA, pero incorrecto como icono de UN jugador/equipo concreto).
+     La única fuente de "país real de este equipo" es el campo opcional
+     `t.country` del editor de plantilla (🌐 País, en "⚙ Más opciones"
+     de cada card) — si el admin no lo ha rellenado, no hay forma de
+     saberlo, así que se usa una bandera NEGRA de marcador (petición
+     usuario: "si no sabes de donde es cada equipo pon una bandera de
+     color negro"). Las banderas de cada país son las MISMAS que ya usan
+     las menu-cards de `s-ligas` (ver arriba, `data-slug="liga-mixta-N"`)
+     — no se inventan banderas nuevas. */
+  var _MIXTA_UNKNOWN_FLAG = '🏴';
+  var LIGA_MIXTA_COUNTRIES = {
+    'liga-mixta-1': [
+      {name:'Chequia', alias:['republica checa','rep checa','rep. checa','czechia'], flag:'🇨🇿'},
+      {name:'Grecia', flag:'🇬🇷'},
+      {name:'San Marino', flag:'🇸🇲'},
+      {name:'Gales', alias:['wales'], flag:'🏴󠁧󠁢󠁷󠁬󠁳󠁿'},
+      {name:'Georgia', flag:'🇬🇪'}
+    ],
+    'liga-mixta-2': [
+      {name:'Polonia', flag:'🇵🇱'},
+      {name:'Noruega', flag:'🇳🇴'},
+      {name:'Montenegro', flag:'🇲🇪'},
+      {name:'Luxemburgo', flag:'🇱🇺'},
+      {name:'Bielorrusia', alias:['belarus'], flag:'🇧🇾'}
+    ],
+    'liga-mixta-3': [
+      {name:'Chipre', alias:['cyprus'], flag:'🇨🇾'},
+      {name:'Austria', flag:'🇦🇹'},
+      {name:'Andorra', flag:'🇦🇩'},
+      {name:'Gibraltar', flag:'🇬🇮'},
+      {name:'N. Irlanda', alias:['norirlanda','n irlanda','irlanda del norte','northern ireland'], flag:'🇬🇬'}
+    ],
+    'liga-mixta-4': [
+      {name:'Suecia', flag:'🇸🇪'},
+      {name:'Croacia', flag:'🇭🇷'},
+      {name:'Lituania', flag:'🇱🇹'},
+      {name:'Macedonia del Norte', alias:['macedonia','n macedonia','macedonia del norte'], flag:'🇲🇰'},
+      {name:'Albania', flag:'🇦🇱'}
+    ],
+    'liga-mixta-5': [
+      {name:'Israel', flag:'🇮🇱'},
+      {name:'Hungría', alias:['hungria'], flag:'🇭🇺'},
+      {name:'Ucrania', flag:'🇺🇦'},
+      {name:'Estonia', flag:'🇪🇪'},
+      {name:'Malta', flag:'🇲🇹'}
+    ],
+    'liga-mixta-6': [
+      {name:'Alemania', flag:'🇩🇪'},
+      {name:'Serbia', flag:'🇷🇸'},
+      {name:'Rumanía', alias:['rumania'], flag:'🇷🇴'},
+      {name:'Islas Feroe', alias:['feroe','islas feroe'], flag:'🇫🇴'},
+      {name:'Letonia', flag:'🇱🇻'}
+    ],
+    'liga-mixta-7': [
+      {name:'Eslovenia', flag:'🇸🇮'},
+      {name:'Bulgaria', flag:'🇧🇬'},
+      {name:'Bosnia', alias:['bosnia y herzegovina','bosnia herzegovina'], flag:'🇧🇦'},
+      {name:'Kazajistán', alias:['kazajistan','kazakhstan'], flag:'🇰🇿'},
+      {name:'Kosovo', flag:'🇽🇰'}
+    ],
+    'liga-mixta-8': [
+      {name:'Rusia', alias:['russia'], flag:'🇷🇺'},
+      {name:'Armenia', flag:'🇦🇲'},
+      {name:'Finlandia', flag:'🇫🇮'},
+      {name:'Moldavia', alias:['moldova'], flag:'🇲🇩'},
+      {name:'Azerbaiyán', alias:['azerbaiyan','azerbaijan'], flag:'🇦🇿'}
+    ],
+    'liga-mixta-9': [
+      {name:'Eslovaquia', flag:'🇸🇰'},
+      {name:'Irlanda', flag:'🇮🇪'},
+      {name:'Islandia', alias:['iceland'], flag:'🇮🇸'}
+    ]
+  };
+  window.LIGA_MIXTA_COUNTRIES = LIGA_MIXTA_COUNTRIES;
+  function _mixtaNorm(s){
+    return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  /* Bandera del país REAL de `t` (campo `t.country`) dentro de la Liga
+     Mixta `slug`. Bandera negra si no hay país asignado o no se
+     reconoce el texto escrito por el admin. */
+  function _mixtaTeamFlag(slug, countryRaw){
+    var list = LIGA_MIXTA_COUNTRIES[slug];
+    var raw = String(countryRaw||'').trim();
+    if(!list || !raw) return _MIXTA_UNKNOWN_FLAG;
+    var norm = _mixtaNorm(raw);
+    for(var i=0;i<list.length;i++){
+      var c = list[i];
+      if(_mixtaNorm(c.name) === norm) return c.flag;
+      if(Array.isArray(c.alias)){
+        for(var j=0;j<c.alias.length;j++){
+          if(_mixtaNorm(c.alias[j]) === norm) return c.flag;
+        }
+      }
+    }
+    return _MIXTA_UNKNOWN_FLAG;
+  }
+  window._mixtaTeamFlag = _mixtaTeamFlag;
+  function _isLigaMixtaSlug(slug){
+    return /^liga-mixta-\d+$/.test(String(slug||''));
+  }
+
   function _collectAggregateStats(){
     /* Recorremos las 51 ligas de la lista, leemos su ligaExt_<slug>
        de localStorage y construimos un mapa por jugador con sus
@@ -45419,15 +45667,22 @@ window._showSimProgress = function(opts, onDone){
       });
       _diag.push({slug:slug, name:name, status:'ok', teams:nTeams,
                   players:nPlayers, gol:sumGol, pj:sumPj});
+      var isMixta = _isLigaMixtaSlug(slug);
       data.teams.forEach(function(t){
         if(!t || !t.name) return;
-        teamFlag[_normNm(t.name)] = flag;
+        /* Liga Mixta: la bandera de LA LIGA (mc-emoji, varias banderas
+           apiladas) NO es la bandera de ESTE equipo — se resuelve por
+           país real (t.country) o bandera negra si no se conoce. Resto
+           de ligas (un solo país): la bandera de la card ya es correcta
+           para todos sus equipos, sin cambios. */
+        var teamFl = isMixta ? _mixtaTeamFlag(slug, t.country) : flag;
+        teamFlag[_normNm(t.name)] = teamFl;
         var players = Array.isArray(t.players) ? t.players : [];
         players.forEach(function(p){
           if(!p || !p.name) return;
           var key = _normNm(t.name) + '::' + _normNm(p.name);
           if(!byPlayer[key]){
-            byPlayer[key] = { name:p.name, team:t.name, flag:flag,
+            byPlayer[key] = { name:p.name, team:t.name, flag:teamFl,
               gol:0, pen:0, fk:0, mvp:0, imbat:0, penSaved:0, ta:0, tr:0 };
           }
           var ent = byPlayer[key];
@@ -46702,6 +46957,7 @@ Tottenham
       <button type="button" class="lc-x" onclick="lextCardsClose()">✕</button>
     </div>
     <div class="lc-body" id="lext-cards-body"></div>
+    <datalist id="lc-country-datalist"></datalist>
     <div class="lc-bulk-panel">
       <div class="lc-bulk-tip">
         <b>Dos formatos:</b><br>
@@ -51936,7 +52192,17 @@ https://api.sofascore.app/api/v1/team/44/image
       });
     }
     saveData(CURRENT_KEY, data);
+    /* Refresca `ef_player_stats_v1` (2026-08-02, mismo fix que ya tiene
+       `_lecCopa.reset()`/`_finishSim`): sin esto, la cabecera "Máximo
+       goleador" (liga+copa) seguía mostrando el valor STALE de antes
+       del reset hasta el próximo Sim — los contadores en `t.players[]`
+       ya estaban a 0, pero esta cache aparte no se enteraba. */
+    try { if (typeof _lecSyncPlayerStatsCache === 'function') _lecSyncPlayerStatsCache(data); } catch(_){}
     renderTable();
+    /* Si la pantalla de Copa de esta liga está abierta, repintarla —
+       sus stats (cabecera "Máximo goleador") ya se acaban de limpiar
+       arriba, pero el DOM ya pintado no se entera solo. */
+    try { if (typeof _lecRender === 'function') _lecRender(); } catch(_){}
     /* Si la overlay de plantilla está abierta, repintar también para
        que los jugadores se actualicen al instante. */
     try {
@@ -51976,7 +52242,14 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     data.copa = null;   /* reset de la Copa de esta liga — reglas intactas */
     saveData(slug, data);
-    if(slug === CURRENT_KEY){ try { renderTable(); } catch(_){} }
+    /* Mismo fix que `ligaExtReiniciar` (single-liga): refresca la cache
+       `ef_player_stats_v1` para que "Máximo goleador" (liga+copa) no
+       siga mostrando el valor de antes del reset. */
+    try { if (typeof _lecSyncPlayerStatsCache === 'function') _lecSyncPlayerStatsCache(data); } catch(_){}
+    if(slug === CURRENT_KEY){
+      try { renderTable(); } catch(_){}
+      try { if (typeof _lecRender === 'function') _lecRender(); } catch(_){}
+    }
     return true;
   };
 
@@ -56864,11 +57137,23 @@ https://api.sofascore.app/api/v1/team/44/image
             try { _lextBackfillAlias(merged, idbData); } catch(_){}
             try { _lextBackfillResults(merged, idbData); } catch(_){}
           }
-          if (!_needsTopup(merged)) {
-            /* el merge por nombre ya cubrió lo que faltaba */
-          } else if (merged === curNow && !_hasResults(curNow) && idbHasResults) {
-            merged.results = idbData.results;
-          }
+          /* PROHIBIDO reintroducir un `merged.results = idbData.results`
+             SIN pasar por `_lextBackfillResults` (bug 2026-08-02, "las
+             Ligas Mixtas no vuelven a cero al pulsar Rest global"): un
+             reset deliberado dejaba `curNow.results=[]` con
+             `resultsStamp` FRESCO, pero como esta liga usa
+             `_EXTRA_LEAGUE_SEEDS` (Ligas Mixtas / Resto Mundo),
+             `openLigaExt` dispara `_ensureExtraLeagueSeed` → esta misma
+             función EN CADA APERTURA de la card — no solo al arrancar.
+             Había una rama `else if` AQUÍ MISMO que, tras el
+             `_lextBackfillResults` de arriba (que SÍ respeta
+             `resultsStamp` y correctamente NO resucitaba nada), volvía
+             a copiar `idbData.results` a pelo SIN comprobar el sello —
+             deshaciendo el reset en cuanto el admin reabría la liga.
+             `_lextBackfillResults` YA cubre el caso legítimo (local
+             vacío por eviction, IDB con clasificación más reciente o
+             igual de sello) vía su EMPTY-GUARD — no hace falta (ni es
+             seguro) un segundo intento sin sello. */
           window._lsSetSafe(key, JSON.stringify(merged));
           try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = merged; } catch(_){}
           try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
@@ -58551,8 +58836,25 @@ https://api.sofascore.app/api/v1/team/44/image
         }
       }
       var totalPj = ligaPj + cupPj;
-      if(totalPj === 0) return;  /* no escribir si el equipo no jugó nada */
       var teamN = _normPS(t.name);
+      if(totalPj === 0){
+        /* BORRA la entrada stale en vez de dejarla intacta (2026-08-02,
+           bug "las Ligas Mixtas y sus Copas no vuelven a cero"): antes
+           esta rama hacía un `return` que SALTABA por completo la
+           escritura para este equipo — pero `stats[k]` es un objeto
+           persistente que se reutiliza entre llamadas; si el equipo
+           TENÍA una entrada de una sim/copa ANTERIOR (antes de un
+           Reset), saltarse la escritura la dejaba INTACTA con los
+           valores viejos para siempre, hasta el próximo Sim. Un
+           `totalPj===0` significa "este equipo no jugó nada" — la
+           cabecera "Máximo goleador" debe verlo como si nunca hubiera
+           tenido stats, no como su último valor conocido. */
+        t.players.forEach(function(p){
+          if(!p || !p.name) return;
+          delete stats[teamN + '::' + _normPS(p.name)];
+        });
+        return;
+      }
       t.players.forEach(function(p){
         if(!p || !p.name) return;
         var k = teamN + '::' + _normPS(p.name);
@@ -59121,8 +59423,8 @@ https://api.sofascore.app/api/v1/team/44/image
       +     '<input data-f="aggressiveness" type="number" min="1" max="99" value="'+_lcClamp(t.aggressiveness,50,1,99)+'"/>'
       +     '<div class="lc-mr-lbl">🏟 Estadio local · Stadium Hub</div>'
       +     '<input data-f="stadium" list="lext-stadium-datalist" value="'+_lcEsc(t.stadium||'')+'" placeholder="— Elegir o escribir estadio —" autocomplete="off"/>'
-      +     '<div class="lc-mr-lbl">🌐 País (opcional)</div>'
-      +     '<input data-f="country" value="'+_lcEsc(t.country||'')+'" placeholder="País"/>'
+      +     '<div class="lc-mr-lbl">🌐 País' + (window.LIGA_MIXTA_COUNTRIES && window.LIGA_MIXTA_COUNTRIES[_LC_STATE && _LC_STATE.slug] ? ' — elige uno de la lista para que salga SU bandera en Estadísticas (si se deja vacío, sale bandera negra)' : ' (opcional)') + '</div>'
+      +     '<input data-f="country" list="lc-country-datalist" autocomplete="off" value="'+_lcEsc(t.country||'')+'" placeholder="País"/>'
       +     '<div class="lc-mr-lbl">💶 Presupuesto del club (€)</div>'
       +     '<input data-f="budget" type="text" inputmode="numeric" value="'+_lcEsc(t.budget?String(t.budget):'')+'" placeholder="Ej. 1200000000"/>'
       +   '</div>'
@@ -59158,9 +59460,22 @@ https://api.sofascore.app/api/v1/team/44/image
     };
     _lcRender();
   }
+  /* Sugerencias del campo 🌐 País: si esta liga es una "Liga Mixta"
+     (fusión de 3-5 ligas menores), solo tiene sentido que un equipo
+     pertenezca a UNO de esos países — listarlos evita errores de
+     tecleo que dejarían al equipo con la bandera negra por no
+     reconocerse el texto. En cualquier otra liga (un solo país) el
+     datalist queda vacío — el campo sigue siendo texto libre. */
+  function _lcRefreshCountryDatalist(){
+    var dl = document.getElementById('lc-country-datalist');
+    if(!dl) return;
+    var list = (window.LIGA_MIXTA_COUNTRIES && _LC_STATE) ? window.LIGA_MIXTA_COUNTRIES[_LC_STATE.slug] : null;
+    dl.innerHTML = list ? list.map(function(c){ return '<option value="'+_lcEsc(c.name)+'"></option>'; }).join('') : '';
+  }
   function _lcRender(){
     var body = document.getElementById('lext-cards-body');
     if(!body) return;
+    _lcRefreshCountryDatalist();
     if(!_LC_STATE || !_LC_STATE.teams.length){
       body.innerHTML = '<div class="lc-empty">— Sin equipos en esta liga. Pulsa <b>＋ Añadir</b> o <b>📋 Lista</b> para crear los primeros. —</div>';
       return;
@@ -66606,6 +66921,35 @@ https://api.sofascore.app/api/v1/team/44/image
      re-pull del KV del nuevo hub. Se trata como un cold-start: ningún
      writer automático escribe antes de que _serverPull responda (la
      regla del gate sigue intacta). */
+
+  /* ── Migración ÚNICA: forzar el moneyTarget rebalanceado (2026-07-27) ──
+     Petición usuario (fotos: Liverpool mostraba /1400€, Arsenal /1370€ —
+     ninguno de los dos coincide ni con el default viejo ni con el
+     reequilibrio nuevo). `_seedHubDefaults` SOLO siembra en una caja SIN
+     NINGÚN dato — una caja con historial (derbys/trofeos/HUD ya usado)
+     nunca lo recibe, así que un target editado a mano hace tiempo (o
+     nunca actualizado) se queda desfasado para siempre. Esta migración
+     corre UNA SOLA VEZ por hub (flag `bayern_hud_target_migrated_v1`,
+     hub-scoped vía `_hubKey`) y fuerza SOLO `moneyTarget` desde
+     `_HUB_DEF` — NUNCA toca `money`/`rating` (progreso real). Tras
+     correr una vez, un admin que edite el target a mano desde el HUD lo
+     conserva para siempre (la migración no vuelve a ejecutarse). */
+  function _bayernHudMigrateTarget(){
+    try {
+      var _flagKey = window._hubKey ? window._hubKey('bayern_hud_target_migrated_v1') : 'bayern_hud_target_migrated_v1';
+      if (localStorage.getItem(_flagKey) === '1') return;
+      var _hd = _hubDef();
+      if (!_hd || _hd.moneyTarget == null) return;
+      var _cur = (typeof window._bayernHudGet === 'function') ? (window._bayernHudGet() || {}) : {};
+      var _curTarget = (_cur.moneyTarget != null) ? parseFloat(_cur.moneyTarget) : null;
+      if (_curTarget !== _hd.moneyTarget && typeof window._bayernHudMerge === 'function') {
+        window._bayernHudMerge({ moneyTarget: _hd.moneyTarget }, true, true);
+      }
+      try { localStorage.setItem(_flagKey, '1'); } catch(_){}
+    } catch(_){}
+  }
+  try { window._bayernHudOnHydrate(_bayernHudMigrateTarget); } catch(_){}
+
   try {
     window.addEventListener('hubchange', function(){
       try { KEY = window._hubKey('bayern_hud_overrides_v1'); } catch(_){}
@@ -66644,6 +66988,7 @@ https://api.sofascore.app/api/v1/team/44/image
       try { var _pE2 = document.getElementById('ath-med-val');    if (_pE2) _pE2.textContent = '—'; } catch(_){}
       try { var _pI2 = document.getElementById('ath-med-injury'); if (_pI2) _pI2.textContent = '—'; } catch(_){}
       try { apply(); } catch(_){}
+      try { window._bayernHudOnHydrate(_bayernHudMigrateTarget); } catch(_){}
       try { _serverPull(function(){ try { apply(); } catch(_){} }); } catch(_){}
     });
   } catch(_){}

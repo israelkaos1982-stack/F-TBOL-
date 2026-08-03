@@ -89,6 +89,253 @@ cada `hubchange` (al entrar por primera vez a la caja de otro mister).
    genérico por `_hubKey`) y la sección Intercontinental (mismo array
    compartido) — no hay lista hardcodeada de hubs que mantener.
 
+## Open Qualifier/Wild Card/Recopa se quedaban corto de Ligas Mixtas 5-9 y de copas "sin campeón" — los lectores de `ligaExt_<slug>` del reparto europeo solo miraban `localStorage`, nunca `window.LIGA_CACHE` (obligatorio, 2026-08-02 #5)
+
+**Bug (5 fotos usuario 2026-08-02)**: el Open Qualifier solo mostraba
+equipos de Liga Mixta 1-4 (12 equipos), sin rastro de Liga Mixta 5-9.
+Wild Card salía a 0 equipos. El diagnóstico de la Recopa
+("13 liga(s) SIN campeón todavía") marcaba Dinamarca, Escocia, Suiza,
+Turquía y las 9 Ligas Mixtas como "sin Copa simulada todavía" — pero
+el usuario confirmó (y la propia app lo demuestra: la pantalla de la
+Copa de Dinamarca muestra la FINAL jugada con **København** campeón)
+que esas copas SÍ estaban simuladas.
+
+### Causa raíz
+
+`_computeQualifiedFromLeagues` (Open Qualifier/Wild Card/UCL/UEL/UECL),
+`_buildPool` (Recopa), `_recopaMissingChampionLeagues` (diagnóstico),
+`_uclPrevLeagueRanking` (Previa Champions) y `_eurPickerLoadLeague`
+(picker "AÑADIR POR LIGA") leían **ÚNICAMENTE** `localStorage.getItem
+('ligaExt_'+slug)` — nunca consultaban `window.LIGA_CACHE[slug]`
+primero. Es EXACTAMENTE el mismo bug ya documentado y arreglado para
+`_readLigaData`/`loadData` (sección "'Resto de Ligas · Estadísticas'
+salía vacío..." más abajo): `saveData` SIEMPRE deja la copia fresca en
+`window.LIGA_CACHE[slug]` (memoria), pase lo que pase con la cuota del
+navegador — pero si `localStorage.setItem` falla en silencio (banner
+"Navegador sin espacio", frecuente al simular ~60 ligas de golpe, o
+las 9 Ligas Mixtas al ser de las últimas en un bucle de simulación
+masiva), la copia persistida en disco se queda ATRASADA o vacía
+mientras la copia en memoria (y el servidor) SÍ tienen la simulación
+completa/el campeón. La propia pantalla de cada liga (`loadData`) SÍ
+mira `LIGA_CACHE` primero y por eso mostraba los datos correctos — los
+5 lectores de arriba, al saltarse ese paso, veían una copia distinta
+(más pobre) de la MISMA liga y la daban por "sin terminar"/"sin
+campeón".
+
+### Fix — `window._eurBestLeagueData(slug, localParsed)`, fuente única
+
+Nuevo helper compartido (`misc_body_1.html`, junto al primer
+`_buildPool`): dado el JSON ya parseado de `localStorage` para un
+slug, lo compara con `window.LIGA_CACHE[slug]` y devuelve la copia con
+MÁS resultados de liga jugados, o con campeón de copa si la otra
+copia no lo tiene — nunca menos que lo que ya había en `localStorage`.
+`window._eurAllKnownLeagueSlugs(fromLocalStorageKeys)` complementa el
+helper: une los slugs que solo existen en `LIGA_CACHE` esta sesión
+(nunca llegaron a persistir en `localStorage`) con los que sí están
+en disco, para que ninguna liga hidratada solo en memoria quede fuera
+del bucle.
+
+Aplicado en los 5 puntos: `_computeQualifiedFromLeagues` (con unión de
+slugs vía `_eurAllKnownLeagueSlugs`), `_buildPool` (Recopa, misma
+unión), `_recopaMissingChampionLeagues` (ya iteraba TODOS los slugs de
+`LEAGUE_DEFAULT_ZONES`, solo necesitaba el read mejorado),
+`_uclPrevLeagueRanking` y `_eurPickerLoadLeague`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un lector nuevo de `ligaExt_<slug>` para el
+   reparto europeo (Open Qualifier, Wild Card, UCL/UEL/UECL, Previa,
+   Recopa, Intercontinental, o cualquier diagnóstico/picker de esa
+   familia) lea `localStorage.getItem('ligaExt_'+slug)` sin pasar el
+   resultado por `window._eurBestLeagueData(slug, parsed)`. Es el
+   mismo chokepoint que ya exige la regla de `_readLigaData` —
+   generalizado aquí a los 5 lectores del reparto europeo.
+2. **PROHIBIDO** que un bucle que enumera "todas las ligas" para el
+   reparto europeo derive la lista de slugs SOLO de
+   `localStorage.length`/`localStorage.key(i)`. Debe unir con
+   `window._eurAllKnownLeagueSlugs(...)` para no perderse una liga
+   hidratada solo en `LIGA_CACHE` esta sesión (nunca escrita a disco).
+3. **PROHIBIDO** que `_eurBestLeagueData` pise la copia de
+   `localStorage` con una de `LIGA_CACHE` más pobre (menos resultados,
+   sin campeón cuando la local sí lo tiene) — solo gana si aporta
+   estrictamente más.
+4. Toda liga NUEVA (una 10ª Liga Mixta, o cualquier liga futura)
+   hereda el fix automáticamente — el helper es genérico por slug, sin
+   lista hardcodeada.
+
+## El desplegable "AÑADIR POR LIGA" (equipos por competición) se cerraba solo al primer segundo — `preventDefault()` en touchstart bloqueaba el scroll de la lista de 54 ligas (obligatorio, 2026-08-02 #4)
+
+**Bug (foto usuario 2026-08-02, overlay «👁 Ver / Añadir equipos por
+competición» → «📋 AÑADIR POR LIGA», lista desplegada hasta «Liga mixta
+1» con Dinamarca ✅ ya elegida)**: "ese desplegable solo dura 1 segundo
+y se cierra" — el admin necesitaba DESLIZAR el dedo por la lista de 54
+ligas para llegar a la que quería, pero el desplegable se cerraba
+prácticamente al instante de tocarlo, sin darle tiempo a scrollear.
+
+### Causa raíz
+
+El fix 2026-08-01 #4 ("El picker 'AÑADIR POR LIGA'… no dejaba
+seleccionar Liga") unificó el disparo de TODOS los elementos del
+overlay —botones Y filas `[data-eur-pick-league]`— en
+`_eurWireTapFallback`: `touchstart` PURO con `e.preventDefault()`
+SIEMPRE, para que el tap nunca se perdiera. Ese `preventDefault()` en
+`touchstart` es correcto para un BOTÓN suelto (no necesita scroll
+propio), pero para una FILA dentro de `#eur-pick-league-list`
+(`overflow-y:auto`, hasta 54 entradas) tiene un efecto colateral grave:
+**bloquea el scroll nativo del contenedor para ESE toque** — en cuanto
+el dedo tocaba CUALQUIER fila para empezar a deslizar, el navegador no
+podía interpretar el gesto como scroll (el `preventDefault` ya lo había
+cancelado), así que `_fire()` disparaba el `click()` de esa fila al
+instante → seleccionaba esa liga y **cerraba el desplegable** — el
+admin no llegaba nunca a deslizar hasta la liga que quería.
+
+### Fix — filas de la lista con detección tap-vs-scroll POR TOUCHMOVE, sin `preventDefault` en touchstart
+
+`_eurWireLeagueRowTap(row)` (nueva, junto a `_eurWireTapFallback`),
+cableada SOLO a `[data-eur-pick-league]` (los botones del overlay
+siguen con `_eurWireTapFallback`, touchstart inmediato — no son listas
+scrollables, no tienen este problema):
+
+- `touchstart`/`touchmove` van con `passive:true` y **NUNCA** llaman
+  `preventDefault()` — el scroll nativo del contenedor funciona con
+  total normalidad.
+- Se mide el movimiento del dedo entre `touchstart` y `touchend`
+  (`MOVE_PX=10`). Si superó el umbral (scroll real), **no se
+  selecciona nada** — el desplegable se queda fijo.
+- Solo si el movimiento fue mínimo (tap real, no scroll) se llama
+  `row.click()` en `touchend`, con `preventDefault()` justo AHÍ (no en
+  touchstart) para que el click sintético que el navegador añadiría
+  después no dispare la selección DOS veces.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una fila dentro de una lista LARGA scrollable
+   (`overflow-y:auto`, `#eur-pick-league-list` o cualquier lista nueva
+   de este tipo con más de ~15 filas que el admin necesite recorrer
+   deslizando) use `_eurWireTapFallback` (touchstart inmediato +
+   `preventDefault` en touchstart). Ese patrón es SOLO para botones
+   sueltos que no requieren scroll sobre sí mismos — usar
+   `_eurWireLeagueRowTap` (o el mismo patrón: sin `preventDefault` en
+   touchstart/touchmove, decisión tap-vs-scroll por `touchmove`,
+   `preventDefault` solo en el `touchend` que decide disparar).
+2. **PROHIBIDO** volver a unificar el selector de `_eurWireTapFallbackAll`
+   en un único `container.querySelectorAll('button, [data-eur-pick-league]')`
+   con la MISMA función para ambos. Botones y filas de lista larga
+   necesitan gestos táctiles distintos — la regla 2026-08-01 #4 ("no
+   dependa ÚNICAMENTE del click sintético") sigue vigente para AMBOS,
+   pero el mecanismo de disparo no es el mismo.
+3. Toda lista NUEVA de este overlay con ≥15 filas scrollables (o
+   cualquier lista larga de otra pantalla con el mismo problema) hereda
+   `_eurWireLeagueRowTap` en vez de reinventar el patrón.
+
+## "Resto de Ligas · Estadísticas" mostraba TODAS las banderas de una Liga Mixta apiladas en vez de la bandera REAL del equipo (obligatorio, 2026-08-02)
+
+**Petición/bug usuario 2026-08-02** (foto, caja "GOLEADORES"): «Jugador 10 · Lokomotiv Moscow» (equipo ruso de `liga-mixta-8`, fusión de Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán) salía con las **5 banderas apiladas** de toda la Liga Mixta en vez de solo la rusa. Igual para cualquier jugador de una de las 9 Ligas Mixtas (fusión de 3-5 ligas menores en una sola, sección "Ligas Mixtas" 2026-07-30/31 más abajo). Petición: mostrar SOLO la bandera real del equipo; si no se conoce, una bandera negra.
+
+### Causa raíz
+
+`_collectAggregateStats()` (`misc_body_1.html`, agregador de la caja "📈 Resto de Ligas · Estadísticas") asignaba a CADA jugador la bandera de la **card de la liga** (`_eachLeagueCard(function(name, flag, slug){...})`). Para las ~40 ligas de un solo país eso es correcto (una card = un país = una bandera). Pero para las 9 Ligas Mixtas, `flag` es la CONCATENACIÓN de las 3-5 banderas de los países fusionados (el icono de la card, correcto como icono de LA LIGA) — nunca se resolvía a qué país concreto pertenece CADA equipo dentro de esa liga.
+
+### Fix — bandera por `t.country`, negra si no se conoce
+
+- **`LIGA_MIXTA_COUNTRIES`** (nuevo, `misc_body_1.html`, junto a `_collectAggregateStats`): mapa `slug → [{name, alias[], flag}]` con los 3-5 países de cada una de las 9 Ligas Mixtas, en el mismo orden y con las MISMAS banderas que ya usa la card (`mc-emoji`) — no se inventan banderas nuevas. Expuesto en `window.LIGA_MIXTA_COUNTRIES`.
+- **`_mixtaTeamFlag(slug, countryRaw)`**: resuelve la bandera del país escrito en `t.country` (campo opcional YA EXISTENTE del editor de plantilla, "🌐 País", normalizado sin acentos/mayúsculas + una lista corta de alias por país) dentro de esa Liga Mixta. Si `t.country` está vacío o no coincide con ninguno de los países de esa liga, devuelve **🏴 (bandera negra)** — petición explícita del usuario: *"si no sabes de donde es cada equipo pon una bandera de color negro"*.
+- `_collectAggregateStats`: para slugs `liga-mixta-N` (detectados vía `_isLigaMixtaSlug`), cada equipo resuelve su propia bandera con `_mixtaTeamFlag(slug, t.country)` en vez de heredar la de la card. El resto de ligas (un solo país) no cambia.
+- **Datalist de ayuda** en el editor de plantilla (vista cards, `_lcRenderCard`/`_lcRender`): el campo "🌐 País" de un equipo de Liga Mixta gana un `<datalist id="lc-country-datalist">` (repoblado en cada render vía `_lcRefreshCountryDatalist`) con SOLO los 3-5 países válidos de esa liga concreta — evita que el admin escriba un país con una grafía que `_mixtaTeamFlag` no reconozca y el equipo se quede con bandera negra por un simple typo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un agregador de estadísticas nuevo (o cualquier pantalla que muestre la bandera de un equipo de Resto de Ligas) use la bandera de la CARD de la liga sin comprobar antes si esa liga es una Liga Mixta (`_isLigaMixtaSlug`). Una Liga Mixta no tiene una bandera única — cada equipo tiene la suya.
+2. **PROHIBIDO** que `_mixtaTeamFlag` devuelva la bandera de OTRO país de la misma Liga Mixta como fallback cuando `t.country` no coincide — el fallback es SIEMPRE la bandera negra (🏴), nunca una bandera real "aproximada".
+3. **PROHIBIDO** inventar banderas nuevas en `LIGA_MIXTA_COUNTRIES` que no coincidan con las ya usadas en el `mc-emoji` de la card de esa Liga Mixta (`s-ligas`, grid de `menu-card[data-slug="liga-mixta-N"]`) — deben ser las MISMAS, carácter a carácter, para que la bandera de un equipo sea siempre un subconjunto reconocible de la bandera de su liga.
+4. Toda Liga Mixta NUEVA (una 10ª futura, si se añade) hereda esto en cuanto se añada su entrada a `LIGA_MIXTA_COUNTRIES` con el mismo slug `liga-mixta-N` — `_isLigaMixtaSlug` ya es genérico (regex `^liga-mixta-\d+$`), no hace falta tocar el agregador.
+5. El campo `t.country` sigue siendo libre/opcional para TODAS las ligas (no solo las Mixtas) — el datalist de sugerencias solo aparece cuando `LIGA_MIXTA_COUNTRIES[slug]` existe; en el resto de ligas el campo sigue aceptando cualquier texto sin validarlo contra nada.
+
+## El reset masivo (♻️ Rest) de las Ligas Mixtas/Resto Mundo se deshacía solo al reabrir la liga — resurrección SIN sello en `_lextIdbTopupIfEmpty` + cache de "Máximo goleador" nunca se limpiaba (obligatorio, 2026-08-02)
+
+**Bug (usuario 2026-08-02, «cuando pulso Rest global las ligas mixtas y
+copas mixtas no vuelven a cero»)**: tras pulsar ♻️ Rest en "Resto de
+Ligas" (resetea las ~60 ligas + sus copas, ver sección de arriba), las
+9 "Ligas Mixtas" (Liga Mixta 1-9, fusión de países menores) y Resto del
+Mundo seguían mostrando la clasificación Y la cabecera "Máximo
+goleador" de la copa con los valores de ANTES del reset — a veces
+incluso sin necesidad de recargar la página, solo con volver a abrir
+la card.
+
+### Causa raíz 1 — `_lextIdbTopupIfEmpty` resucitaba `results` SIN comprobar el sello, y se dispara EN CADA APERTURA
+
+Las Ligas Mixtas y Resto del Mundo son las únicas en `_EXTRA_LEAGUE_SEEDS`,
+y `openLigaExt` (parcheado) llama a `_ensureExtraLeagueSeed(slug)` **cada
+vez que se abre esa card** (no solo al arrancar la web) — el resto de
+ligas normales NO tiene este re-seed-on-open. Con la liga ya con equipos
+(roster intacto tras el reset, solo `results`/stats a 0),
+`_ensureExtraLeagueSeed` delega en `_lextIdbTopupIfEmpty(slug)`, que
+compara la copia de `localStorage` con la de IndexedDB (espejo durable,
+escrito por `saveData` en CADA guardado, incluido cada simulación
+ANTERIOR al reset). Su primer intento de recuperación
+(`_lextBackfillResults`) SÍ respeta `resultsStamp` (un reset con sello
+fresco correctamente no se pisa) — pero justo después había una 2ª rama,
+`else if (merged === curNow && !_hasResults(curNow) && idbHasResults) {
+merged.results = idbData.results; }`, que volvía a copiar los resultados
+de IndexedDB **sin mirar el sello en absoluto** — deshaciendo el reset
+en cuanto `results` estaba vacío (que es EXACTAMENTE el estado normal
+justo después de resetear). Escrita para el caso legítimo "eviction se
+llevó todo, restaurar desde IDB", nunca distinguía ese caso de "el admin
+acaba de vaciar esto a propósito".
+
+### Causa raíz 2 — la cabecera "Máximo goleador" lee una cache aparte que el reset nunca limpiaba
+
+`ef_player_stats_v1` (localStorage) es una cache separada de
+`t.players[].gol` que alimenta la cabecera "Máximo goleador" (liga+copa)
+de la pantalla de cada liga. La sincroniza `_lecSyncPlayerStatsCache(data)`
+— pero el reset global (`ligaExtReiniciarSlug`, y el individual
+`ligaExtReiniciar`) nunca la llamaba, así que aunque `t.players[].gol`
+quedara en 0 correctamente, la cabecera seguía leyendo el valor viejo de
+esta cache hasta el próximo Sim. Agravante: la propia
+`_lecSyncPlayerStatsCache`, cuando un equipo tenía `totalPj===0` (recién
+reseteado), hacía `return` sin tocar `stats[k]` — dejaba la entrada VIEJA
+intacta en vez de borrarla, así que aunque se la hubiera llamado tras el
+reset tampoco habría servido de nada.
+
+### Fix
+
+- **`_lextIdbTopupIfEmpty`**: se elimina la rama `else if` que copiaba
+  `results` sin sello. `_lextBackfillResults` (llamada justo antes, con
+  EMPTY-GUARD + comparación de `resultsStamp`) ya cubre el caso legítimo
+  de recuperación tras un vaciado de `localStorage` — no hace falta (ni
+  es seguro) un segundo intento sin sello.
+- **`_lecSyncPlayerStatsCache`**: cuando `totalPj===0` para un equipo,
+  BORRA (`delete stats[k]`) la entrada de cada jugador de ese equipo en
+  vez de saltarse la escritura — antes dejaba el valor viejo intacto
+  para siempre.
+- **`ligaExtReiniciar`/`ligaExtReiniciarSlug`**: ambas llaman a
+  `_lecSyncPlayerStatsCache(data)` tras `saveData` (mismo patrón que
+  `_finishSim`/`_lecCopa.reset()`), y a `_lecRender()` si la pantalla de
+  Copa de esa liga está abierta, para que la cabecera se repinte al
+  instante sin esperar a la siguiente navegación.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_lextIdbTopupIfEmpty` (o cualquier recuperación
+   nueva desde IndexedDB/`_protected`/snapshots) copie `results`/
+   cualquier campo protegido por `resultsStamp` sin pasar por
+   `_lextBackfillResults` (o el arbitraje de sello equivalente). Un
+   `results` vacío es un estado LEGÍTIMO justo después de un reset — no
+   se puede asumir que "vacío = hay que recuperar de IndexedDB".
+2. **PROHIBIDO** que `_lecSyncPlayerStatsCache` (o cualquier sync de
+   cache de stats similar) deje una entrada VIEJA intacta cuando el
+   jugador/equipo ya no tiene nada que aportar (`totalPj===0`). Debe
+   BORRAR la entrada, no saltarse la escritura.
+3. **PROHIBIDO** que un reset nuevo (global, individual, o de cualquier
+   competición futura que tenga su propia cache de "líder/máximo
+   goleador") toque `t.players[]`/`data.results` sin refrescar TAMBIÉN
+   cualquier cache derivada (`ef_player_stats_v1` u otra) que la UI lea
+   por separado — de lo contrario el dato "ya está a 0" pero la pantalla
+   sigue mostrando el valor viejo hasta el próximo Sim.
+4. Toda liga NUEVA que se añada a `_EXTRA_LEAGUE_SEEDS` (con
+   re-seed-on-open vía `openLigaExt`) hereda automáticamente el fix 1;
+   no hay lista de slugs que mantener aparte.
+
 ## El reset INDIVIDUAL de una Copa duplicaba las estadísticas al re-simular — snapshot pre-copa que se restaura al resetear (obligatorio, 2026-08-02)
 
 **Bug (usuario 2026-08-02, "sobre las estadísticas duplicadas cuando reseteo individualmente una copa se duplican")**: pulsar **♻️ Reset** en el modal de una Copa individual (botón `_lecCopa.reset()`, distinto del reset MASIVO "Res" de las ~54 ligas) rehacía el sorteo y volvía a simular la copa desde cero, pero los goles/MVP/tarjetas que la copa VIEJA ya había sumado a `team.players[]` se quedaban ahí — y la copa NUEVA sumaba los suyos ENCIMA. Cada ciclo reset+resim inflaba/duplicaba las stats de copa de cada jugador.

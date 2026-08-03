@@ -37354,10 +37354,29 @@ window._showSimProgress = function(opts, onDone){
     return out;
   }
   window.computeUclPrevFixedR2Teams = computeUclPrevFixedR2Teams;
+  /* Bug 2026-08-03 (foto usuario: "el Atlético Madrid (Humano) Liga EA
+     Sports juega la primera Ronda de la Previa... cuando dijimos que
+     había 12 clubes exentos"): España es uno de los 12 FIJOS de la
+     Ronda 2 (su plaza — "5º España" — la resuelve
+     `computeUclPrevFixedR2Teams` vía la pantalla manual "EA Sports →
+     Europa", `_meaTeamsFor('uclPrev')`, porque Liga EA Sports está
+     BLACKLISTED del cómputo automático por tener humanos). El bug: si
+     el admin añade ADEMÁS ese mismo club a la zona 'uclPrev' desde el
+     overlay GENÉRICO "Ver/Añadir equipos por competición"
+     (`eur_manual_extra_v1`, independiente de "EA Sports → Europa"),
+     `computeUclPrevDirectR1Teams` lo trataba como un directo MÁS de
+     Ronda 1 — sin comprobar que ese mismo nombre ya ocupa una plaza
+     FIJA de Ronda 2. Un club exento acababa jugando AMBAS rondas. */
   function computeUclPrevDirectR1Teams(){
     if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return _appendManualExtra([], 'uclPrev');
     var out = [], seen = {};
-    function push(t){ if(!t || !t.name || seen[t.name]) return; seen[t.name]=true; out.push(t); }
+    /* Cross-dedup por NOMBRE contra el pool fijo de Ronda 2 — cubre
+       CUALQUIER vía por la que un club exento pudiera colarse aquí
+       (España vía overlay genérico, o cualquier otro de los 11 fijos
+       automáticos si el admin lo añadió también a mano por error). */
+    var fixedNames = {};
+    (computeUclPrevFixedR2Teams()||[]).forEach(function(t){ if(t && t.name) fixedNames[t.name] = true; });
+    function push(t){ if(!t || !t.name || seen[t.name] || fixedNames[t.name]) return; seen[t.name]=true; out.push(t); }
     (window._UCL_PREV_FIXED_MIXTA_SLUGS||[]).forEach(function(slug){
       var z = _zonesDefaultFor(slug);
       push(_uclPrevTeamAtRank(slug, (Number(z.ucl)||0)+2)); /* la 2ª de sus 2 plazas */
@@ -37368,10 +37387,14 @@ window._showSimProgress = function(opts, onDone){
       for(var i=1;i<=slots;i++) push(_uclPrevTeamAtRank(slug, skip+i));
     });
     /* Extras manuales genéricos de 'uclPrev' SIN feederTag 'open-qualifier'
-       (esos juegan la Previa vía computeUclPrevOqPoolTeams, no aquí). */
+       (esos juegan la Previa vía computeUclPrevOqPoolTeams, no aquí).
+       España/Liga EA Sports SOLO entra a la Previa por su plaza fija
+       (arriba, vía "EA Sports → Europa") — nunca por este overlay
+       genérico, aunque el admin lo haya añadido ahí por error. */
     var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
     manual.forEach(function(t){
       if(!t || !t.name || t.feederTag === 'open-qualifier') return;
+      if(t.league === 'liga-ea-sports' || (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(t.name))) return;
       push({ name:t.name, logo:t.logo||'', league:t.league||'manual' });
     });
     _eurFixupLeagues(out);

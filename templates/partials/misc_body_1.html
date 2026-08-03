@@ -20616,6 +20616,17 @@ window._showSimProgress = function(opts, onDone){
     if(s && s.sorteo && s.sorteo.r64 && s.sorteo.r64.length && s.sorteo.r64.length !== PHASE_SIZE.r64){
       return null;
     }
+    /* Auto-resuelve cualquier "RIVAL PENDIENTE" cuyo partido de origen
+       ya se haya jugado (petición usuario 2026-08-03: "se puede seguir
+       avanzando de rondas aunque haya equipos humanos que no hayan
+       jugado, siempre que haya equipos IAs clasificados" — ver
+       `_drawNext`/`_resolvePendingRefs` más abajo). Corre en CADA
+       lectura (barato e idempotente) para que el bracket se autocomplete
+       sin que el admin tenga que hacer nada al terminar el partido
+       pendiente. */
+    if(s && s.sorteo){
+      try { if(_resolvePendingRefs(s)) _save(s); } catch(_){}
+    }
     return s;
   }
   function _save(s){
@@ -20652,6 +20663,77 @@ window._showSimProgress = function(opts, onDone){
     }
     var H = window.HUMAN_TEAMS || [];
     return H.indexOf(name) !== -1;
+  }
+
+  /* ── RIVAL PENDIENTE (obligatorio, 2026-08-03) ────────────────────
+     Petición usuario: "se puede seguir avanzando de rondas aunque haya
+     equipos humanos que no hayan jugado, siempre que haya equipos IAs
+     clasificados". Antes, sortear la ronda N+1 exigía que TODOS los
+     partidos de la ronda N estuvieran jugados (`_phaseDone`) — con
+     hasta 7 misters humanos repartidos por el bracket, UN solo humano
+     lento bloqueaba el avance de las 31 eliminatorias restantes.
+     Ahora: la ronda N+1 se puede sortear en cuanto haya AL MENOS un
+     resultado conocido en la ronda N (`_phaseHasAnyDecided`). Los
+     cruces cuyo rival todavía depende de un partido sin jugar de la
+     ronda N se guardan con un placeholder `@rc-pending#<fase>:<idx>`
+     en vez de un nombre de equipo — se pintan como "⚠️ RIVAL
+     PENDIENTE" (`_renderMatchCard`) y NO son jugables hasta que el
+     partido de origen se resuelva. `_resolvePendingRefs` (llamado
+     desde `_load()` en cada lectura) sustituye el placeholder por el
+     equipo real en cuanto ese partido de origen queda `played`, y
+     re-aplica la regla "humano siempre visitante" si hace falta. */
+  function _pendingRef(phase, idx){ return '@rc-pending#' + phase + ':' + idx; }
+  function _isPendingRef(name){ return typeof name === 'string' && name.indexOf('@rc-pending#') === 0; }
+  function _pendingRefParse(name){
+    var m = /^@rc-pending#([a-z0-9]+):(\d+)$/i.exec(String(name||''));
+    return m ? { phase: m[1], idx: parseInt(m[2], 10) } : null;
+  }
+  /* Un placeholder "puede ser humano" si CUALQUIERA de los 2 lados del
+     partido de origen (aún sin jugar) lo es — no sabemos todavía quién
+     ganará, así que el anti-cruce-humano (1/64 · 1/32 · Octavos) debe
+     tratarlo como potencialmente humano para no arriesgarse a emparejar
+     a un humano YA conocido contra un hueco que podría resolverse en
+     otro humano antes de Cuartos. Mismo principio que `_tbdMayBeEa` de
+     la Copa del Rey (`copa-engine.js`). */
+  function _pendingMayBeHuman(s, ref){
+    var srcMs = s && s.sorteo && s.sorteo[ref.phase];
+    var srcM = srcMs && srcMs[ref.idx];
+    if(!srcM) return false;
+    return _isHuman(srcM.home) || _isHuman(srcM.away);
+  }
+  /* Sustituye cada placeholder cuyo partido de origen ya esté jugado
+     por el ganador real. Devuelve true si cambió algo (para persistir).
+     Tras resolver, si un lado queda con un equipo humano concreto y el
+     otro con un IA concreto (ninguno BYE ni pending), reaplica "humano
+     siempre visitante" — el sorteo inicial no pudo aplicarlo porque el
+     lado pendiente aún era una incógnita. */
+  function _resolvePendingRefs(s){
+    var changed = false;
+    PHASES.forEach(function(phase){
+      var ms = s.sorteo && s.sorteo[phase];
+      if(!ms) return;
+      ms.forEach(function(m){
+        if(!m) return;
+        ['home', 'away'].forEach(function(side){
+          var ref = _pendingRefParse(m[side]);
+          if(!ref) return;
+          var srcMs = s.sorteo[ref.phase];
+          var srcM = srcMs && srcMs[ref.idx];
+          if(srcM && srcM.played){
+            var w = _winnerOf(srcM);
+            if(w){ m[side] = w; changed = true; }
+          }
+        });
+        if(!_isPendingRef(m.home) && !_isPendingRef(m.away) && m.home !== BYE && m.away !== BYE){
+          var hH = _isHuman(m.home), hA = _isHuman(m.away);
+          if(hH && !hA){
+            var t = m.home; m.home = m.away; m.away = t;
+            changed = true;
+          }
+        }
+      });
+    });
+    return changed;
   }
 
   /* Lee la copia MÁS COMPLETA de una liga para el reparto europeo
@@ -20909,8 +20991,12 @@ window._showSimProgress = function(opts, onDone){
      adelante NO hay restricción: dos humanos clasificados sí pueden
      tocarse. `_pairTeams` es el emparejador único que usan tanto
      `_drawFirstRound` (1/64) como `_drawNext` (resto de rondas).
-     `BYE` cuenta como "no-humano" — puede emparejar con cualquiera. */
-  function _pairTeams(list, avoidHumanClash){
+     `BYE` cuenta como "no-humano" — puede emparejar con cualquiera.
+     `isHumanFn` (opcional, default `_isHuman`) permite a `_drawNext`
+     tratar un placeholder RIVAL PENDIENTE como "potencialmente humano"
+     (`_pendingMayBeHuman`) sin tener que duplicar este emparejador. */
+  function _pairTeams(list, avoidHumanClash, isHumanFn){
+    isHumanFn = isHumanFn || _isHuman;
     var shuffled = _shuffle(list);
     if(!avoidHumanClash){
       var pairs0 = [];
@@ -20918,8 +21004,8 @@ window._showSimProgress = function(opts, onDone){
       var stray0 = (shuffled.length % 2 === 1) ? [shuffled[shuffled.length-1]] : [];
       return { pairs: pairs0, strays: stray0 };
     }
-    var humans = shuffled.filter(function(t){ return _isHuman(t); });
-    var others = shuffled.filter(function(t){ return !_isHuman(t); });
+    var humans = shuffled.filter(function(t){ return isHumanFn(t); });
+    var others = shuffled.filter(function(t){ return !isHumanFn(t); });
     var pairs = [];
     var hi = 0, oi = others.length - 1;
     /* Cada humano se empareja con un no-humano primero — mientras haya
@@ -20940,9 +21026,21 @@ window._showSimProgress = function(opts, onDone){
     if(strays.length === 2){ pairs.push([strays[0], strays[1]]); strays = []; }
     return { pairs: pairs, strays: strays };
   }
+  /* Los equipos humanos SIEMPRE juegan como visitantes en la Recopa
+     (petición usuario 2026-08-03) frente a un rival IA concreto. Si
+     ambos son humanos (permitido desde Cuartos) o alguno es BYE
+     (walkover, sin partido real) no se toca el orden — y si un lado es
+     un placeholder RIVAL PENDIENTE tampoco (no sabemos aún si acabará
+     siendo humano; `_resolvePendingRefs` reaplica la regla en cuanto
+     se resuelve). */
   function _matchFromPair(p){
-    var m = _mkMatch(p[0], p[1]);
-    if(p[0] === BYE || p[1] === BYE) m = _resolveBye(m);
+    var a = p[0], b = p[1];
+    if(a !== BYE && b !== BYE && !_isPendingRef(a) && !_isPendingRef(b)){
+      var aH = _isHuman(a), bH = _isHuman(b);
+      if(aH && !bH){ var t = a; a = b; b = t; }
+    }
+    var m = _mkMatch(a, b);
+    if(a === BYE || b === BYE) m = _resolveBye(m);
     return m;
   }
   /* Sortea la PRIMERA ronda (1/64) en 32 partidos. Si el pool < 64 se
@@ -20966,17 +21064,33 @@ window._showSimProgress = function(opts, onDone){
   }
   /* Sortea la siguiente ronda con los ganadores de la previa. Anti-
      cruce-humano en 1/32 y Octavos (`phase` = ronda que se está
-     sorteando); desde Cuartos (r8) en adelante, sin restricción. */
-  function _drawNext(prevMatches, phase){
+     sorteando); desde Cuartos (r8) en adelante, sin restricción.
+
+     Petición usuario 2026-08-03 ("se puede seguir avanzando de rondas
+     aunque haya equipos humanos que no hayan jugado, siempre que haya
+     equipos IAs clasificados"): un partido de `prevMatches` SIN jugar
+     ya NO se descarta en silencio — se convierte en un placeholder
+     `@rc-pending#<prevPhase>:<idx>` (RIVAL PENDIENTE) que ocupa su
+     slot en el sorteo de esta ronda. `_resolvePendingRefs` lo sustituye
+     por el equipo real en cuanto ese partido de origen se juegue. */
+  function _drawNext(prevMatches, prevPhase, phase, s){
     var winners = [];
-    prevMatches.forEach(function(m){
-      if(m && m.played){
+    prevMatches.forEach(function(m, i){
+      if(!m) return;
+      if(m.played){
         var w = _winnerOf(m);
         winners.push(w || BYE);   /* slot vacío → BYE para mantener el tamaño */
+      } else {
+        winners.push(_pendingRef(prevPhase, i));
       }
     });
     var avoidClash = (phase === 'r32' || phase === 'r16');
-    var res = _pairTeams(winners, avoidClash);
+    function humanLike(name){
+      if(_isHuman(name)) return true;
+      var ref = _pendingRefParse(name);
+      return ref ? _pendingMayBeHuman(s, ref) : false;
+    }
+    var res = _pairTeams(winners, avoidClash, humanLike);
     var matches = res.pairs.map(_matchFromPair);
     /* Sobrante suelto (nº de ganadores impar, caso raro) → BYE en vez
        de perder al equipo (antes se descartaba en silencio). */
@@ -21003,6 +21117,16 @@ window._showSimProgress = function(opts, onDone){
     if(!ms.length) return false;
     for(var i=0;i<ms.length;i++) if(!ms[i].played) return false;
     return true;
+  }
+  /* ¿Hay al menos UN resultado conocido en esta fase? A diferencia de
+     `_phaseDone` (exige el 100%), esto basta para poder sortear la
+     ronda siguiente con placeholders RIVAL PENDIENTE en los cruces
+     que aún dependan de un partido sin jugar (petición usuario
+     2026-08-03, "aunque haya equipos humanos que no hayan jugado"). */
+  function _phaseHasAnyDecided(s, phase){
+    var ms = (s.sorteo && s.sorteo[phase]) || [];
+    for(var i=0;i<ms.length;i++) if(ms[i] && ms[i].played) return true;
+    return false;
   }
   function _firstPendingPhase(s){
     if(!s || !s.sorteo) return null;
@@ -21054,12 +21178,21 @@ window._showSimProgress = function(opts, onDone){
       }
       return;
     }
-    /* La ronda previa está sorteada pero faltan partidos por jugar. */
-    if(!_phaseDone(s, prev)){
-      alert('⚠️ Tienes que terminar todos los partidos de ' + (PHASE_LABEL[prev]||prev) + ' antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
+    /* La ronda previa necesita AL MENOS un resultado conocido — ya NO
+       exige el 100% (petición usuario 2026-08-03: "se puede seguir
+       avanzando de rondas aunque haya equipos humanos que no hayan
+       jugado, siempre que haya equipos IAs clasificados"). Los cruces
+       que dependan de un partido sin jugar se sortean como RIVAL
+       PENDIENTE (`_drawNext`) y se autocompletan solos en cuanto ese
+       partido se juegue. */
+    if(!_phaseHasAnyDecided(s, prev)){
+      alert('⚠️ Todavía no hay NINGÚN resultado en ' + (PHASE_LABEL[prev]||prev) + '.\n\nJuega o simula (los IA-vs-IA se resuelven al instante con ▶ Simular) al menos un partido antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
       return;
     }
-    s.sorteo[phase] = _drawNext(s.sorteo[prev], phase);
+    if(!_phaseDone(s, prev)){
+      if(!confirm('⚠️ Todavía quedan partidos sin jugar en ' + (PHASE_LABEL[prev]||prev) + ' (probablemente humanos que aún no han jugado).\n\nPuedes sortear ' + (PHASE_LABEL[phase]||phase) + ' igualmente: los cruces que dependan de un partido sin jugar quedarán como "⚠️ RIVAL PENDIENTE" y se completarán solos en cuanto ese partido se juegue.\n\n¿Sortear ' + (PHASE_LABEL[phase]||phase) + ' ahora?')) return;
+    }
+    s.sorteo[phase] = _drawNext(s.sorteo[prev], prev, phase, s);
     _save(s);
     _recopaInit();
     try { go('s-recopa-rd-' + phase); } catch(_){}
@@ -21073,6 +21206,50 @@ window._showSimProgress = function(opts, onDone){
     }
     return null;
   }
+  /* ¿Cambió el pool de equipos desde el último sorteo de 1/64? (bug
+     reportado 2026-08-03: el admin añadió 64 equipos manuales en "EA
+     Sports → Europa" DESPUÉS de que la Recopa ya tuviera un 1/64
+     sorteado con un pool viejo mucho más pequeño — el motor solo
+     vuelve a leer `_buildPool()` cuando se sortea, así que esos 64
+     nunca entraban en juego y la ronda seguía mostrando el bracket
+     viejo, casi todo "Plaza libre (BYE)"). `s.pool` guarda el pool
+     EXACTO usado al sortear 1/64 — comparar por igualdad de conjunto
+     basta para detectar el desajuste sin necesitar un campo nuevo. */
+  function _poolChangedSinceDraw(s){
+    if(!s || !Array.isArray(s.pool) || !s.sorteo || !s.sorteo.r64 || !s.sorteo.r64.length) return false;
+    var current = _buildPool();
+    if(current.length !== s.pool.length) return true;
+    var a = s.pool.slice().sort(), b = current.slice().sort();
+    for(var i=0;i<a.length;i++) if(a[i] !== b[i]) return true;
+    return false;
+  }
+  /* Re-sortea el 1/64 con el pool ACTUAL sin pasar por `_firstPhaseToDraw`
+     (que saltaría r64 por no estar vacío). Es la acción del botón del
+     aviso "el pool ha cambiado" — mismo comportamiento que ya ofrecía
+     `_recopaSortear` al re-sortear a mano, pero disparable directamente
+     desde el banner en cuanto se detecta el desajuste. */
+  window._recopaResortearR64 = function(){
+    var s = _load() || {};
+    var pool = _buildPool();
+    if(pool.length < 2){
+      alert('⚠️ Necesitas al menos 2 equipos para sortear la Recopa.\n\nPool actual: ' + pool.length);
+      return;
+    }
+    var conf = pool.length >= POOL_TARGET ? String(POOL_TARGET) : (pool.length + ' (se rellena con BYE hasta ' + POOL_TARGET + ')');
+    var hasPlayed = false;
+    PHASES.forEach(function(p){
+      ((s.sorteo && s.sorteo[p]) || []).forEach(function(m){ if(m && m.played && !m.bye) hasPlayed = true; });
+    });
+    var oldN = (s.pool && s.pool.length) || 0;
+    var msg = '🔄 El pool ha cambiado desde el último sorteo (antes ' + oldN + ' equipos, ahora ' + pool.length + ').\n\n¿Re-sortear 1/64 con los ' + conf + ' equipos ACTUALES?';
+    if(hasPlayed) msg += '\n\n⚠️ Se perderán TODOS los resultados ya jugados de esta edición.';
+    if(!confirm(msg)) return;
+    var newSorteo = { r64:_drawFirstRound(pool), r32:[], r16:[], r8:[], sf:[], fin:[] };
+    s = { pool: pool.slice(0, POOL_TARGET), sorteo: newSorteo, champion:null, runnerUp:null };
+    _save(s);
+    _recopaInit();
+    try { go('s-recopa-rd-r64'); } catch(_){}
+  };
 
   window._recopaReiniciar = function(){
     if(!confirm('¿Reiniciar Recopa de Europa?\n\nSe pierden el sorteo y todos los resultados de esta edición. El pool se reconstruye al pulsar Sortear 1/64.')) return;
@@ -21113,8 +21290,13 @@ window._showSimProgress = function(opts, onDone){
       if(phase === 'fin' && s.champion && typeof window._lecShowChampion === 'function'){
         try { window._lecShowChampion(s.champion); } catch(_){}
       }
-      _recopaInit();
-      _recopaRenderRound(phase);
+      /* `window._recopaRender()` (no solo la fase actual) — resolver
+         este resultado puede completar un placeholder RIVAL PENDIENTE
+         de OTRA ronda ya sorteada (`_resolvePendingRefs`, en `_load()`);
+         re-renderiza todas las pantallas de ronda ya montadas para que
+         se vea al instante, sin esperar a que el admin navegue. */
+      if(typeof window._recopaRender === 'function') window._recopaRender();
+      else { _recopaInit(); _recopaRenderRound(phase); }
     }, 600);
   };
   /* Persist hook llamado desde gmEndMatch cuando _gm._isRecopa.
@@ -21144,8 +21326,10 @@ window._showSimProgress = function(opts, onDone){
         try { window._lecShowChampion(s.champion); } catch(_){}
       }
     }, 500);
-    _recopaInit();
-    _recopaRenderRound(phase);
+    /* Ver comentario equivalente en `_recopaPersistAfterIa` — resolver
+       este resultado puede completar un RIVAL PENDIENTE de otra ronda. */
+    if(typeof window._recopaRender === 'function') window._recopaRender();
+    else { _recopaInit(); _recopaRenderRound(phase); }
   };
 
   /* ── RENDER ────────────────────────────────────────────────────── */
@@ -21158,16 +21342,30 @@ window._showSimProgress = function(opts, onDone){
       var pool = _buildPool();
       html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + pool.length + ' equipos)</button>';
     } else {
+      /* Bug reportado 2026-08-03: el admin añade equipos manuales a la
+         Recopa DESPUÉS de que el 1/64 ya estuviera sorteado con un pool
+         viejo — sin este aviso, esos equipos nunca entran en juego (el
+         motor solo relee `_buildPool()` al sortear) y la ronda sigue
+         mostrando el bracket viejo sin ningún indicio de qué pasó. */
+      if(_poolChangedSinceDraw(s)){
+        var poolNow = _buildPool();
+        html += '<div class="recopa-banner-info" style="border:1px solid rgba(255,180,60,.5);border-radius:8px;background:rgba(255,180,60,.08);color:#ffcf7a;padding:8px 10px;margin-bottom:8px;">'
+              + '⚠️ El pool de equipos cambió desde el último sorteo de 1/64 (antes ' + ((s.pool && s.pool.length) || 0) + ', ahora ' + poolNow.length + ') — los equipos nuevos no entran hasta que vuelvas a sortear.<br>'
+              + '<button class="recopa-btn-sortear" style="margin-top:6px;" onclick="window._recopaResortearR64&&window._recopaResortearR64()">🔄 Re-sortear 1/64 con el pool actual</button>'
+              + '</div>';
+      }
       var phase = _firstPhaseToDraw(s);
-      var done = _phaseDone(s, _prevPhase(phase));
+      var prevForPhase = phase ? _prevPhase(phase) : null;
+      var anyDecided = prevForPhase ? _phaseHasAnyDecided(s, prevForPhase) : false;
+      var done = prevForPhase ? _phaseDone(s, prevForPhase) : false;
       if(s.champion){
         html += '<div class="recopa-banner-info">🏆 Campeón: <b>' + _esc(s.champion) + '</b> · Subcampeón: <b>' + _esc(s.runnerUp||'') + '</b></div>';
       } else if(phase && phase !== 'r64'){
-        var prev = _prevPhase(phase);
-        if(done){
-          html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</button>';
+        var prev = prevForPhase;
+        if(anyDecided){
+          html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + (done ? '' : ' (con RIVAL PENDIENTE)') + '</button>';
         } else {
-          html += '<div class="recopa-banner-info">⏳ Termina los partidos de <b>' + (PHASE_LABEL[prev]||prev) + '</b> para sortear la siguiente ronda.</div>';
+          html += '<div class="recopa-banner-info">⏳ Necesitas al menos un resultado en <b>' + (PHASE_LABEL[prev]||prev) + '</b> para poder sortear la siguiente ronda.</div>';
         }
       }
       html += '<button class="recopa-btn-reset" onclick="window._recopaReiniciar&&window._recopaReiniciar()">♻️ Reiniciar Recopa</button>';
@@ -21243,10 +21441,23 @@ window._showSimProgress = function(opts, onDone){
       return;
     }
     var html = '';
-    /* Botón "Simular IA" si hay partidos IA-vs-IA pendientes */
+    /* Mismo aviso de "pool cambiado" que el banner principal, pero
+       visible también si el admin navega directo a la ronda 1/64 sin
+       pasar por la pantalla de Recopa. */
+    if(phase === 'r64' && _poolChangedSinceDraw(s)){
+      var poolNow2 = _buildPool();
+      html += '<div class="recopa-empty" style="border:1px solid rgba(255,180,60,.5);border-radius:8px;background:rgba(255,180,60,.08);color:#ffcf7a;margin:8px;padding:14px;">'
+            + '⚠️ El pool de equipos cambió desde este sorteo (antes ' + ((s.pool && s.pool.length) || 0) + ', ahora ' + poolNow2.length + ').<br>'
+            + '<button class="recopa-btn-sortear" style="margin:6px auto 0;display:block;" onclick="window._recopaResortearR64&&window._recopaResortearR64()">🔄 Re-sortear 1/64 con el pool actual</button>'
+            + '</div>';
+    }
+    /* Botón "Simular IA" si hay partidos IA-vs-IA pendientes. Los
+       cruces con RIVAL PENDIENTE (`_isPendingRef`) NUNCA cuentan aquí
+       — no son jugables hasta que se resuelva su partido de origen. */
     var pendingIA = false;
     ms.forEach(function(m){
       if(!m || m.played) return;
+      if(_isPendingRef(m.home) || _isPendingRef(m.away)) return;
       if(!_isHuman(m.home) && !_isHuman(m.away)) pendingIA = true;
     });
     if(pendingIA){
@@ -21308,6 +21519,33 @@ window._showSimProgress = function(opts, onDone){
            + '<div class="recopa-card-side">' + (lR ? '<img src="' + _esc(lR) + '"/>' : '<span style="font-size:36px;">🛡</span>') + '<div class="recopa-card-name win">' + hiR + _esc(real) + '</div></div>'
            + '<div class="recopa-card-mid"><div class="recopa-card-pen" style="color:#5fe08a;">PASA DIRECTO</div></div>'
            + '<div class="recopa-card-side"><span style="font-size:30px;opacity:.4;">—</span><div class="recopa-card-name" style="color:rgba(255,255,255,.35);">BYE</div></div>'
+           + '</div></div>';
+    }
+    /* RIVAL PENDIENTE (obligatorio 2026-08-03): uno (o los dos) lados
+       depende de un partido de una ronda anterior sin jugar todavía
+       (típicamente un humano que aún no ha jugado el suyo). El cruce
+       NO es jugable hasta que se resuelva — `_resolvePendingRefs`
+       (llamado desde `_load()`) lo completa solo, sin que el admin
+       tenga que hacer nada, en cuanto ese partido de origen se juegue. */
+    var pendHome = _isPendingRef(m.home), pendAway = _isPendingRef(m.away);
+    if(pendHome || pendAway){
+      var _pendSide = function(name, isPend){
+        if(isPend){
+          return '<div class="recopa-card-side"><span style="font-size:30px;opacity:.6;">⚠️</span>'
+               + '<div class="recopa-card-name" style="color:#ffb060;">RIVAL PENDIENTE</div></div>';
+        }
+        var l = _logo(name);
+        var hi = (typeof window.humanIcon === 'function') ? (window.humanIcon(name)||'') : '';
+        return '<div class="recopa-card-side">'
+             + (l ? '<img src="' + _esc(l) + '"/>' : '<span style="font-size:36px;">🛡</span>')
+             + '<div class="recopa-card-name">' + hi + _esc(name) + '</div></div>';
+      };
+      return '<div class="recopa-card" style="opacity:.75;border-color:rgba(255,180,60,.4);">'
+           + tag
+           + '<div class="recopa-card-row">'
+           + _pendSide(m.home, pendHome)
+           + '<div class="recopa-card-mid"><div class="recopa-card-pen" style="color:#ffb060;">⏳ ESPERANDO</div></div>'
+           + _pendSide(m.away, pendAway)
            + '</div></div>';
     }
     var totA = (m.gh||0) + (m.etGh||0);

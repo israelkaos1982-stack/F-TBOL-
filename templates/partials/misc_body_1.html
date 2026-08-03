@@ -673,6 +673,7 @@ window._showSimProgress = function(opts, onDone){
 <p id="hdr-season-label" style="cursor:pointer;" title="Toca para editar la temporada" onclick="window._seasonLabelEdit&amp;&amp;window._seasonLabelEdit()">Temporada 32-33</p>
 </div>
 <div class="hdr-btns">
+<button id="clean-cache-hdr-btn" onclick="window._hdrCleanCache&&window._hdrCleanCache()" title="🧹 Limpiar caché (libera espacio reconstruible del navegador al instante)" aria-label="Limpiar caché">🧹</button>
 <button id="guardar-all-btn" onclick="window.guardarTodoProtegido&&window.guardarTodoProtegido()" title="💾 Guardar partida (sube TODA la web al servidor)" aria-label="Guardar partida">
 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
 </button>
@@ -681,8 +682,8 @@ window._showSimProgress = function(opts, onDone){
 </div>
 
 <style>
-#ajustes-hdr-btn,#buscar-enfr-btn,#guardar-all-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;color:#e5e7ea;line-height:1;display:inline-flex;align-items:center;justify-content:center;}
-#ajustes-hdr-btn:hover,#buscar-enfr-btn:hover,#guardar-all-btn:hover{opacity:1;}
+#clean-cache-hdr-btn,#ajustes-hdr-btn,#buscar-enfr-btn,#guardar-all-btn{background:none;border:none;font-size:18px;cursor:pointer;padding:2px 4px;opacity:.75;transition:opacity .2s;color:#e5e7ea;line-height:1;display:inline-flex;align-items:center;justify-content:center;}
+#clean-cache-hdr-btn:hover,#ajustes-hdr-btn:hover,#buscar-enfr-btn:hover,#guardar-all-btn:hover{opacity:1;}
 #guardar-all-btn svg{display:block;}
 #guardar-all-btn.locked{opacity:1;color:#3cc878;filter:drop-shadow(0 0 6px rgba(60,200,120,.9));}
 .pin-key{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:8px;color:#fff;font-size:18px;font-family:Rajdhani,sans-serif;font-weight:700;padding:14px 0;cursor:pointer;transition:background .15s;}
@@ -709,6 +710,49 @@ window._showSimProgress = function(opts, onDone){
 .admin-ball-id{font-family:'Courier New',monospace;font-size:11px;color:rgba(100,200,255,.8);}
 .admin-ball-active{background:rgba(40,180,100,.12);border:1px solid rgba(60,220,120,.25);border-radius:8px;}
 </style>
+<script>
+/* ── 🧹 LIMPIAR CACHÉ — botón de cabecera, sin PIN (2026-08-03) ────────
+   Petición usuario (foto con el botón marcado en un círculo verde, junto
+   a 💾/🔍/⚙️): un acceso DIRECTO desde la portada, a la vista de
+   CUALQUIER humano, sin pedir contraseña, que limpie el caché del
+   navegador con un solo toque — sin tener que entrar en
+   ⚙️ Panel Admin → 📊 Espacio del navegador (esa pantalla sigue existiendo
+   igual, esto es un atajo).
+   Reutiliza `window._lsFreeReconstructibleNow` (definido más abajo, en la
+   IIFE de `s-admin-storage`): libera snapshots/`_protected`/caches de
+   stats/iconos (100% reconstruibles del servidor, NUNCA toca ninguna
+   plantilla/equipo real) y resetea el pestillo de sesión
+   `_lsQuotaExhausted`/`_lsQuotaWarned` para que los guardados grandes
+   vuelvan a intentar caber al instante, sin necesitar recargar la
+   página. Como los `<script>` se ejecutan en orden de documento pero el
+   click siempre llega DESPUÉS de que toda la página haya cargado, la
+   función ya está disponible pase lo que pase — el guard
+   `typeof === 'function'` es solo por si algún día se reordena el
+   archivo. */
+window._hdrCleanCache = function(){
+  try {
+    var res = (typeof window._lsFreeReconstructibleNow === 'function')
+      ? window._lsFreeReconstructibleNow()
+      : {freedChars:0, freedKeys:0};
+    var kb = (res.freedChars || 0) / 1024;
+    var sizeTxt = kb >= 1024 ? (kb/1024).toFixed(2) + ' MB' : kb.toFixed(1) + ' KB';
+    var msg = res.freedKeys > 0
+      ? ('✅ Caché limpiada — ' + res.freedKeys + ' archivo(s) reconstruible(s) liberado(s) (' + sizeTxt + ').')
+      : '✔️ Ya estaba limpio — no había nada reconstruible que liberar.';
+    var t = document.createElement('div');
+    t.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
+      + 'background:rgba(10,32,18,.96);border:1px solid rgba(60,200,120,.5);border-radius:10px;'
+      + 'padding:12px 18px;color:#8ff0b0;font-family:Rajdhani,sans-serif;font-size:13px;'
+      + 'letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
+      + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+    t.textContent = msg;
+    (document.body || document.documentElement).appendChild(t);
+    setTimeout(function(){ try { t.parentNode.removeChild(t); } catch(_){} }, 5000);
+  } catch(e){
+    try { console.error('[hdrCleanCache]', e); } catch(_){}
+  }
+};
+</script>
 <script>
 /* ── TEMPORADA EDITABLE (cabecera del home) · 2026-07-10 ──────────────
    Petición usuario (foto): "La temporada que sea editable los números".

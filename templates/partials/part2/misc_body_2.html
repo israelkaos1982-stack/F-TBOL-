@@ -9956,6 +9956,45 @@
     } catch(_){}
     return 'liga';
   }
+  /* Núcleo PURO del cálculo de 🪙/💼 de un partido — extraído de
+     `athApplyMedicalFromActa` (2026-07-29) para que el recálculo
+     RETROACTIVO (`_retroEarningsScanHub`, misc_body_1.html) use
+     EXACTAMENTE la misma fórmula que el crédito en vivo, sin duplicar
+     la lógica de MVP/doblete/hat-trick. `evs` = eventos del acta del
+     partido (pueden venir vacíos — partidos antiguos sin acta solo
+     pagan v/e/g/i por marcador, sin MVP ni doblete/hat-trick). */
+  window._computeMatchEarningsCore = function(hubSide, gf, ga, evs, tierKey) {
+    var rivalSide = hubSide === 'a' ? 'b' : 'a';
+    evs = evs || [];
+    var _GOALT = { 'gol':1, 'falta-gol':1, 'pen-gol':1 };
+    var _tier = _MATCH_REWARD_TABLE[tierKey] || _MATCH_REWARD_TABLE.liga;
+    var coins, drating;
+    if (gf > ga)        { coins = _tier.v; drating = _tier.v * (0.03 / 8); }
+    else if (gf === ga) { coins = _tier.e; drating = _tier.e * (0.01 / 3); }
+    else                { coins = 0; drating = 0; }
+    coins += gf * _tier.g;           /* `g` 🪙 por gol marcado */
+    if (ga === 0) coins += _tier.i;  /* `i` 🪙 portería a cero */
+    try {
+      var _mvpEvt = null;
+      for (var _mi = evs.length - 1; _mi >= 0; _mi--) { if (evs[_mi] && evs[_mi].type === 'mvp') { _mvpEvt = evs[_mi]; break; } }
+      if (_mvpEvt && _mvpEvt.team === hubSide) coins += (_tier.mvp || 0);
+    } catch(e){}
+    try {
+      var _goalsByPlayer = {};
+      evs.forEach(function(e){
+        if (!e || e.team !== hubSide || !_GOALT[e.type]) return;
+        var pn = String(e.player || e.name || '').trim();
+        if (!pn || pn === '—') return;
+        _goalsByPlayer[pn] = (_goalsByPlayer[pn] || 0) + 1;
+      });
+      var _maxByOne = 0;
+      Object.keys(_goalsByPlayer).forEach(function(n){ if (_goalsByPlayer[n] > _maxByOne) _maxByOne = _goalsByPlayer[n]; });
+      if (_maxByOne >= 3) coins += _tier.g * 6;
+      else if (_maxByOne === 2) coins += _tier.g * 2;
+    } catch(e){}
+    drating = Math.round(drating * 1000) / 1000;
+    return { coins: coins, drating: drating };
+  };
   /* Otorga PI al equipo del hub (Liverpool) por las tarjetas y faltas
      que le hizo el rival en este partido. Tarjetas: del acta. Faltas:
      del campo `faltas` de matchStats (lo teclea el humano en la
@@ -10022,40 +10061,8 @@
         else if (e.type === 'propia' || e.type === 'autogol') { if (e.team === hubSide) ga++; else if (e.team === rivalSide) gf++; }
       });
     }
-    var _tier = _MATCH_REWARD_TABLE[_matchRewardTier(st)] || _MATCH_REWARD_TABLE.liga;
-    var coins, drating;
-    if (gf > ga)       { coins = _tier.v; drating = _tier.v * (0.03 / 8); }
-    else if (gf === ga){ coins = _tier.e; drating = _tier.e * (0.01 / 3); }
-    else               { coins = 0; drating = 0; }
-    coins += gf * _tier.g;           /* `g` 🪙 por gol marcado */
-    if (ga === 0) coins += _tier.i;  /* `i` 🪙 portería a cero */
-
-    /* ⭐ MVP del hub (petición usuario 2026-07-28): bonus fijo por tier
-       si el evento 'mvp' del acta cae del lado del hub. */
-    try {
-      var _mvpEvt = null;
-      for (var _mi = evs.length - 1; _mi >= 0; _mi--) { if (evs[_mi] && evs[_mi].type === 'mvp') { _mvpEvt = evs[_mi]; break; } }
-      if (_mvpEvt && _mvpEvt.team === hubSide) coins += (_tier.mvp || 0);
-    } catch(e){}
-
-    /* 🎩 Doblete/Hat-trick del MISMO jugador del hub — bonus = 2×g (2
-       goles) / 6×g (3+ goles), anclado a Liga (g=1 → +2/+6, petición
-       usuario 2026-07-28). Ignora nombres placeholder ('—', vacío). */
-    try {
-      var _goalsByPlayer = {};
-      evs.forEach(function(e){
-        if (!e || e.team !== hubSide || !_GOALT[e.type]) return;
-        var pn = String(e.player || e.name || '').trim();
-        if (!pn || pn === '—') return;
-        _goalsByPlayer[pn] = (_goalsByPlayer[pn] || 0) + 1;
-      });
-      var _maxByOne = 0;
-      Object.keys(_goalsByPlayer).forEach(function(n){ if (_goalsByPlayer[n] > _maxByOne) _maxByOne = _goalsByPlayer[n]; });
-      if (_maxByOne >= 3) coins += _tier.g * 6;
-      else if (_maxByOne === 2) coins += _tier.g * 2;
-    } catch(e){}
-
-    drating = Math.round(drating * 1000) / 1000;
+    var _earn = window._computeMatchEarningsCore(hubSide, gf, ga, evs, _matchRewardTier(st));
+    var coins = _earn.coins, drating = _earn.drating;
 
     /* Idempotencia: una reentrada de gmEndMatch / watchdog / re-render no
        debe volver a acreditar. El desglose ya queda en st._matchEarnings

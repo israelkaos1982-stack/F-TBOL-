@@ -38136,6 +38136,34 @@ window._hdrCleanCache = function(){
     if(!r || !r.name) return null;
     return { name:String(r.name).replace(/^\s*\*+\s*/,''), logo:r.logo||'', league:slug };
   }
+  /* Sustituto automático de la plaza fija de España en Ronda 2
+     (2026-08-03, petición usuario: "el 5to de España liga ea sport le
+     has quitado de cabeza serie y tienes que buscar a su sustituto que
+     esta libre de otra liga en su lugar para que sean 12 cabezas de
+     serie"). Si el admin nunca asignó esa plaza en "EA Sports → Europa"
+     (`_meaTeamsFor('uclPrev')` vacío), busca el PRIMER equipo de OTRA
+     liga que quede rankeado JUSTO DEBAJO de la suma de TODAS sus plazas
+     europeas (🔵+🟣+🟠+🟢+🟡+⚪) — por construcción, ese equipo no lo usa
+     NINGÚN cómputo automático de ninguna zona (es el primer NO
+     clasificado de esa liga), así que es un sustituto "libre" de verdad.
+     Determinista (mismo orden de `LEAGUE_DEFAULT_ZONES`) para que el
+     cross-dedup de `computeUclPrevDirectR1Teams` siempre vea el MISMO
+     sustituto. */
+  function _uclPrevEspanaSubstitute(){
+    try {
+      var slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {});
+      for (var i = 0; i < slugs.length; i++){
+        var slug = slugs[i];
+        if (slug === 'liga-ea-sports') continue;
+        var z = _zonesDefaultFor(slug);
+        var total = (Number(z.ucl)||0) + (Number(z.uclPrev)||0) + (Number(z.uel)||0)
+                  + (Number(z.uecl)||0) + (Number(z.uclQual)||0) + (Number(z.wildcard)||0);
+        var t = _uclPrevTeamAtRank(slug, total + 1);
+        if (t && t.name) return t;
+      }
+    } catch(_){}
+    return null;
+  }
   function computeUclPrevFixedR2Teams(){
     if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return [];
     var out = [], seen = {};
@@ -38145,11 +38173,18 @@ window._hdrCleanCache = function(){
       push(_uclPrevTeamAtRank(slug, (Number(z.ucl)||0)+1));
     });
     /* España — único 🟣1 manual (Liga EA blacklisted del cómputo
-       automático). Lo asigna el admin en "EA Sports → Europa". */
+       automático). Lo asigna el admin en "EA Sports → Europa". Si NO
+       lo ha asignado, se rellena con el sustituto libre de arriba para
+       que Ronda 2 SIEMPRE tenga 12 cabezas de serie reales. */
+    var espanaPushedBefore = out.length;
     if(typeof window._meaTeamsFor === 'function'){
       (window._meaTeamsFor('uclPrev')||[]).forEach(function(t){
         if(t && t.name) push({ name:t.name, logo:t.logo||'', league:t.league||'liga-ea-sports' });
       });
+    }
+    if(out.length === espanaPushedBefore){
+      var sub = _uclPrevEspanaSubstitute();
+      if(sub) push(sub);
     }
     (window._UCL_PREV_FIXED_MIXTA_SLUGS||[]).forEach(function(slug){
       var z = _zonesDefaultFor(slug);

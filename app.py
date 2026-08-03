@@ -4257,6 +4257,11 @@ _KV_ALLOWED_EXACT = {
     # solo" sin que el admin tocara nada. Ahora viven en su PROPIA fila
     # KV, objeto `{<slug>: {sub, semis}}`, inmune a esa maquinaria.
     "recopa_copa_flags_v1",
+    # Marca de qué cajas de mister ya recibieron el recálculo RETROACTIVO
+    # de ganancias por partido (2026-07-29, botón admin "💰 Ganancias
+    # históricas", acción ÚNICA por hub). localStorage es solo caché; el
+    # server evita que se re-acredite dos veces desde otro dispositivo.
+    "retro_earnings_applied_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -4303,6 +4308,9 @@ _KV_RECENCY_BLOB_KEYS = {
     # blob con `updatedAt` mayor gana ENTERO — un toggle recién pulsado
     # nunca lo pisa un POST stale de otro dispositivo/pestaña.
     "recopa_copa_flags_v1",
+    # Marca de qué cajas de mister ya recibieron el recálculo retroactivo
+    # de ganancias por partido: el blob con `updatedAt` mayor gana entero.
+    "retro_earnings_applied_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

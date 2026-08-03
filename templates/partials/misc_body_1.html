@@ -57916,7 +57916,12 @@ https://api.sofascore.app/api/v1/team/44/image
      cacheada en este dispositivo (si no, reintenta en el próximo boot,
      mismo patrón que `_fixupInterHumanoSlug`). */
   function _fixupRemoveInterFromEaSportsV1(){
-    var FLAG = 'ftbol_inter_remove_ea_v1';
+    /* _v2 (2026-08-03, mismo día): el usuario reportó "sigue igual" tras
+       el deploy de _v1. Bump de versión por si el flag se marcó "hecho"
+       en algún dispositivo sin haber encontrado la liga cacheada todavía
+       en ESE momento exacto del boot — fuerza un reintento limpio en
+       todos los dispositivos, sin depender de si _v1 llegó a actuar. */
+    var FLAG = 'ftbol_inter_remove_ea_v2';
     try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
     try {
       var raw = localStorage.getItem('ligaExt_liga-ea-sports');
@@ -57949,13 +57954,19 @@ https://api.sofascore.app/api/v1/team/44/image
      petición explícita del usuario con foto: la fila «Alavés» salía
      con el escudo blaugrana del FC Barcelona, y viceversa). El campo
      `shield` de cada equipo es un dato editado a mano por el admin —
-     aquí quedó cruzado entre estas 2 filas concretas. Se corrige SOLO
-     si se detecta el cruce exacto (el shield de Alavés contiene
-     "barcelona", o el de Barcelona contiene "alaves"/"alavés"); nunca
-     pisa un escudo que no encaje con ese patrón — no queremos
-     "corregir" un escudo custom legítimo que el admin haya subido. */
+     aquí quedó cruzado entre estas 2 filas concretas.
+     _v2 (mismo día): la v1 solo corregía si el shield actual contenía
+     literalmente la palabra "barcelona"/"alavés" en la URL — si el
+     admin lo tenía guardado con otra URL (CDN externa, data-URI, etc.)
+     el patrón nunca casaba, el fixup se marcaba "hecho" sin corregir
+     NADA, y ya no reintentaba nunca más en ese dispositivo (usuario:
+     "sigue igual, no ha servido de nada"). v2 deja de adivinar por
+     substring: en cuanto localiza las 2 filas por NOMBRE, fuerza sus
+     escudos a los canónicos SIEMPRE (salvo que ya sean exactamente
+     los correctos) — no hay escudo custom legítimo posible para 2
+     clubes con nombre estándar reconocido en TEAM_LOGOS. */
   function _fixupAlavesBarcelonaShieldSwapV1(){
-    var FLAG = 'ftbol_alaves_barca_shield_fix_v1';
+    var FLAG = 'ftbol_alaves_barca_shield_fix_v2';
     try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
     var ALAVES_CREST = '/static/img/escudos-1/spain_deportivo-alaves.svg';
     var BARCELONA_CREST = '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg';
@@ -57972,10 +57983,10 @@ https://api.sofascore.app/api/v1/team/44/image
           else if (n === 'fc barcelona' || n === 'barcelona') barca = t;
         });
         var changed = false;
-        if (alaves && /barcelona/i.test(String(alaves.shield||''))){
+        if (alaves && String(alaves.shield||'') !== ALAVES_CREST){
           alaves.shield = ALAVES_CREST; alaves.updatedAt = Date.now(); changed = true;
         }
-        if (barca && /alav[eé]s/i.test(String(barca.shield||''))){
+        if (barca && String(barca.shield||'') !== BARCELONA_CREST){
           barca.shield = BARCELONA_CREST; barca.updatedAt = Date.now(); changed = true;
         }
         if (changed){

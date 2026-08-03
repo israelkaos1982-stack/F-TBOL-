@@ -8846,6 +8846,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
     /* Limpia cualquier baja de SELECCIÓN colada en el store de CLUB antes
        de leer (defensa en profundidad para la caja de mister humano). */
     try { if (window._purgeSeleccionFromClubStores) window._purgeSeleccionFromClubStores(); } catch(_){}
+    try { if (window._purgeRetiredHumanStores) window._purgeRetiredHumanStores(); } catch(_){}
     var belongs = window._ppPlayerBelongsToMatch || function(){ return true; };
     var lesiones = Object.keys(window.LESION_STORE).filter(belongs);
     if (!lesiones.length) {
@@ -9218,6 +9219,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   try {
     _lesionSync.hydrate(function(){
       try { if (window._purgeSeleccionFromClubStores) window._purgeSeleccionFromClubStores(); } catch(_){}
+      try { if (window._purgeRetiredHumanStores) window._purgeRetiredHumanStores(); } catch(_){}
       try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(_){}
       try { if (window.renderBayernPlantillaScreen) window.renderBayernPlantillaScreen(); } catch(_){}
     });
@@ -9277,6 +9279,7 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   try {
     _sancSync.hydrate(function(){
       try { if (window._purgeSeleccionFromClubStores) window._purgeSeleccionFromClubStores(); } catch(_){}
+      try { if (window._purgeRetiredHumanStores) window._purgeRetiredHumanStores(); } catch(_){}
       try { if (window.renderBayernPlantillaScreen) window.renderBayernPlantillaScreen(); } catch(_){}
     });
   } catch (_) {}
@@ -9315,6 +9318,87 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   };
   /* Barrido diferido al arranque (deja que `_selSquadLoad` hidrate). */
   try { setTimeout(function(){ try { window._purgeSeleccionFromClubStores(); } catch(_){} }, 1800); } catch(_){}
+
+  /* PURGA de lesiones/sanciones ya registradas para clubes/selecciones
+     RETIRADOS de MISTERS_HUMANOS (Inter/Portugal, ex-mister Rubén,
+     2026-08-02/03: "Inter y Portugal han dejado de ser equipos humanos,
+     son IA, no puede tener lesionados"). Antes de este fix, cualquier
+     lesión/sanción/amarilla añadida MIENTRAS Rubén era humano se quedaba
+     PARA SIEMPRE en el store (nada la borraba solo por retirar el
+     mister del registro) — la caja "AÑADIR LESIONADOS · EQUIPO HUMANO"
+     seguía mostrando a Nicolò Barella·Inter con 5 partidos de baja
+     aunque Inter ya fuera IA. Idempotente y SEGURA: solo toca entradas
+     cuyo equipo/selección matchea EXACTO (nombre normalizado) contra la
+     lista de retirados — nunca borra un club/selección humano vigente.
+     Purga AMBOS lados (club → Inter, selección → Portugal) en una sola
+     pasada. */
+  window._purgeRetiredHumanStores = function(){
+    function _normRH(s){
+      try { return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,''); }
+      catch(_){ return String(s||'').trim().toLowerCase(); }
+    }
+    var RETIRED_CLUBS = ['inter','internazionale','fc internazionale',
+      'fc internazionale milano','inter milan','inter de milan'];
+    var RETIRED_SEL = ['portugal'];
+    var clubChanged = false, selChanged = false;
+    /* ── Lado CLUB: LESION_STORE / BAJA_STORE / SANCION_STORE.__global /
+       YELLOW_STORE.__global (Inter) ── */
+    try {
+      var ls = window.LESION_STORE || {};
+      Object.keys(ls).forEach(function(name){
+        var eq = ls[name] && ls[name].equipo;
+        if (eq && RETIRED_CLUBS.indexOf(_normRH(eq)) !== -1) {
+          delete ls[name];
+          if (window.BAJA_STORE && window.BAJA_STORE[name]) delete window.BAJA_STORE[name];
+          clubChanged = true;
+        }
+      });
+      var g = window.SANCION_STORE && window.SANCION_STORE.__global;
+      if (Array.isArray(g)) {
+        var keptG = g.filter(function(s){ return !(s && s.team && RETIRED_CLUBS.indexOf(_normRH(s.team)) !== -1); });
+        if (keptG.length !== g.length) { window.SANCION_STORE.__global = keptG; clubChanged = true; }
+      }
+      var ys = window.YELLOW_STORE && window.YELLOW_STORE.__global;
+      if (ys) {
+        Object.keys(ys).forEach(function(k){
+          var t = ys[k] && ys[k].team;
+          if (t && RETIRED_CLUBS.indexOf(_normRH(t)) !== -1) { delete ys[k]; clubChanged = true; }
+        });
+      }
+    } catch(_){}
+    if (clubChanged) {
+      try { _persistInjuries(); } catch(_){}
+      try { _persistSancionesClub(); } catch(_){}
+    }
+    /* ── Lado SELECCIÓN: LESION_STORE_SEL / SANCION_STORE_SEL['sel'] /
+       YELLOW_STORE_SEL['sel'] (Portugal) ── */
+    try {
+      var lsel = window.LESION_STORE_SEL || {};
+      Object.keys(lsel).forEach(function(selName){
+        if (RETIRED_SEL.indexOf(_normRH(selName)) !== -1) { delete lsel[selName]; selChanged = true; }
+      });
+      var ssel = window.SANCION_STORE_SEL && window.SANCION_STORE_SEL['sel'];
+      if (ssel) {
+        Object.keys(ssel).forEach(function(selName){
+          if (RETIRED_SEL.indexOf(_normRH(selName)) !== -1) { delete ssel[selName]; selChanged = true; }
+        });
+      }
+      var ysel = window.YELLOW_STORE_SEL && window.YELLOW_STORE_SEL['sel'];
+      if (ysel) {
+        Object.keys(ysel).forEach(function(selName){
+          if (RETIRED_SEL.indexOf(_normRH(selName)) !== -1) { delete ysel[selName]; selChanged = true; }
+        });
+      }
+    } catch(_){}
+    if (selChanged) {
+      try { if (typeof window._selPersistSanciones === 'function') window._selPersistSanciones(); } catch(_){}
+      try { if (typeof window._bajaFlushSelNow === 'function') window._bajaFlushSelNow(); } catch(_){}
+    }
+    return clubChanged || selChanged;
+  };
+  /* Barrido diferido al arranque — igual que `_purgeSeleccionFromClubStores`,
+     tras dejar hidratar los stores de selección. */
+  try { setTimeout(function(){ try { window._purgeRetiredHumanStores(); } catch(_){} }, 1800); } catch(_){}
 
   /* FLUSH INMEDIATO al servidor de las bajas/sanciones de CLUB tras una
      edición MANUAL (editor azul de la plantilla: añadir / QUITAR baja).
@@ -13541,6 +13625,7 @@ window._fallbackSq11 = function(){
      selección (plantilla del hub, lista de bajas, HUD). */
   try {
     if (_selSync) _selSync.hydrate(function(){
+      try { if (window._purgeRetiredHumanStores) window._purgeRetiredHumanStores(); } catch(_){}
       try { if (window.renderBayernPlantillaScreen) window.renderBayernPlantillaScreen(); } catch(_){}
       try { if (window._refreshSancionInjList) window._refreshSancionInjList(); } catch(_){}
       try { if (window.athRefreshInjuryHud) window.athRefreshInjuryHud(); } catch(_){}

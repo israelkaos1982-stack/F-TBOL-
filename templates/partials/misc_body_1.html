@@ -26432,11 +26432,40 @@ window._showSimProgress = function(opts, onDone){
     } catch(_){}
   };
 
+  /* DE-HUMANIZAR Inter/Portugal en CADA lectura de un torneo (2026-08-03,
+     espejo del Phase 1b de `_sanitizeLigaTeamNames` para `ligaExt_*`).
+     `_fixupUnhumanizeRubenTournamentsV1` (boot, una sola vez) solo
+     limpiaba los torneos que YA estuvieran en localStorage en el
+     instante exacto del arranque — un torneo cargado DESPUÉS (async,
+     otra pestaña, servidor con datos más recientes) se quedaba con
+     `isHuman:true` colado. Vivir aquí, en el chokepoint que TODA
+     lectura de `tour_<id>_v1` atraviesa, lo corrige siempre, sin
+     depender de timing. Persiste (best-effort) si cambia algo. */
+  function _tourDehumanizeRetired(cfg){
+    if (!cfg || !Array.isArray(cfg.teams)) return false;
+    var NAMES = ['inter', 'internazionale', 'fc internazionale',
+      'fc internazionale milano', 'inter milan', 'inter de milan',
+      'inter milán', 'inter de milán', 'portugal'];
+    var changed = false;
+    cfg.teams.forEach(function(t){
+      if (!t || !t.name) return;
+      if (NAMES.indexOf(_lextNormName(t.name)) === -1) return;
+      if (t.isHuman) { t.isHuman = false; changed = true; }
+      if (t.humanEmoji) { delete t.humanEmoji; changed = true; }
+    });
+    if (changed) {
+      try { cfg.updatedAt = new Date().toISOString(); } catch(_){}
+      try { window._lsSetSafe(_key(cfg.id || ''), JSON.stringify(cfg)); } catch(_){}
+      try { if (typeof window._tourSave === 'function' && cfg.id) window._tourSave(cfg.id, cfg); } catch(_){}
+    }
+    return changed;
+  }
   function _tourLoadCachedSync(id){
     if (TOUR_IDS.indexOf(id) === -1) return null;
     try {
       window._TOUR_CACHE = window._TOUR_CACHE || {};
       if (window._TOUR_CACHE[id]) {
+        try { _tourDehumanizeRetired(window._TOUR_CACHE[id]); } catch(_){}
         try { _tourBackfillEfootballAlias(window._TOUR_CACHE[id]); } catch(_){}
         return window._TOUR_CACHE[id];
       }
@@ -26446,6 +26475,7 @@ window._showSimProgress = function(opts, onDone){
       if (raw) {
         var cfg = _migrateCfg(JSON.parse(raw));
         try { window._TOUR_CACHE[id] = cfg; } catch(_){}
+        try { _tourDehumanizeRetired(cfg); } catch(_){}
         try { _tourBackfillEfootballAlias(cfg); } catch(_){}
         return cfg;
       }
@@ -26631,6 +26661,10 @@ window._showSimProgress = function(opts, onDone){
              SÍNCRONO (❓ instantáneo). Si algo cambió, re-sincroniza para
              propagarlo. */
           try { _tourBackfillEfootballAlias(cfg); } catch(_){}
+          /* De-humanizar Inter/Portugal en la copia recién adoptada del
+             servidor — puede traer `isHuman:true` stale de un dispositivo
+             más viejo que aún no corrió el fixup. */
+          try { _tourDehumanizeRetired(cfg); } catch(_){}
           return cfg;
         }
       }
@@ -47873,8 +47907,28 @@ https://api.sofascore.app/api/v1/team/44/image
      afijo/alias del mismo club coexistían). El servidor ahora colapsa
      por nombre canónico afijo-aware (_lx_canon_name), y este bump fuerza
      a cada dispositivo a re-correr el dedup fuerte (_teamCanonKey) UNA
-     vez, sanando dups EXISTENTES sin esperar a la próxima edición. */
-  var _SAN_VER = 2;
+     vez, sanando dups EXISTENTES sin esperar a la próxima edición.
+     3: (2026-08-03) añade la de-humanización de clubes RETIRADOS
+     (Inter/Rubén) dentro del sanitizador universal — ver más abajo. */
+  var _SAN_VER = 3;
+  /* Clubes que fueron humanos y se RETIRARON del registro
+     `MISTERS_HUMANOS` (petición usuario 2026-08-03: "Inter y Portugal
+     han dejado de ser equipos humanos, son IA, no puede tener
+     lesionados / los partidos vs IA se tratan como si fueran HvH").
+     Los fixups previos (`_fixupInterHumanoItaliaV1`,
+     `_fixupUnhumanizeRubenTournamentsV1`) solo limpiaban `isHuman`/
+     `humanEmoji` en la liga 'italia' y en los torneos YA cacheados en
+     ESTE dispositivo en el instante del boot — si esa liga/torneo no
+     estaba en localStorage todavía (`if(!raw) return`), el fixup no
+     hacía nada esa sesión y el dato stale seguía "colándose" por el
+     Pase 1 (`if (t.isHuman) return true;`) de todos los detectores de
+     humanidad, ANTES de llegar a MISTERS_HUMANOS. Vivir DENTRO del
+     sanitizador universal de `loadData` (cache-hit Y fresh-parse) lo
+     corrige en CADA lectura de CUALQUIER liga, sin depender de qué
+     esté cacheado ni de en qué orden arrancó la sesión. */
+  var _RETIRED_HUMAN_CLUBS = ['inter', 'internazionale', 'fc internazionale',
+    'fc internazionale milano', 'inter milan', 'inter de milan',
+    'inter milán', 'inter de milán'];
   function _sanitizeLigaTeamNames(d){
     if (!d || !Array.isArray(d.teams)) return false;
     if (d._sanV === _SAN_VER) return false;   /* ya saneada → O(1) */
@@ -47949,6 +48003,20 @@ https://api.sofascore.app/api/v1/team/44/image
       var clean = t.name.replace(/^[\*\s]+/, '').trim();
       if (clean !== t.name) {
         t.name = clean;
+        dirty = true;
+      }
+    });
+    /* Phase 1b: DE-HUMANIZAR clubes retirados de MISTERS_HUMANOS
+       (Inter/Rubén, 2026-08-03) — ver comentario junto a
+       `_RETIRED_HUMAN_CLUBS` más arriba. Nunca toca `shield`/`img`/
+       `stadium`/`efootballAlias` (identidad del club, la pone el
+       admin) — SOLO los campos que hacen que se trate como humano. */
+    d.teams.forEach(function(t){
+      if (!t || !t.name) return;
+      if (_RETIRED_HUMAN_CLUBS.indexOf(_lextNormName(t.name)) === -1) return;
+      if (t.isHuman || t.humanEmoji) {
+        t.isHuman = false;
+        delete t.humanEmoji;
         dirty = true;
       }
     });
@@ -60489,6 +60557,16 @@ https://api.sofascore.app/api/v1/team/44/image
       } catch(_){}
     }, 250);
   }
+  /* Selecciones RETIRADAS de MISTERS_HUMANOS (Portugal/Rubén, 2026-08-02
+     — "eliminamos a Portugal e Inter como equipos humanos"). El
+     fixup de boot `_fixupUnhumanizePortugalIconV1` limpia el campo
+     `icon` UNA vez, pero solo si `selecciones_squad_v1` ya estaba
+     cacheado en ESTE dispositivo en ese instante. Excluirla aquí,
+     dentro de `_hydrate` (que corre en CADA hidratación, no solo al
+     boot), garantiza que Portugal NUNCA vuelva a entrar en
+     `_SEL_HUMAN_ICONS` aunque el campo `icon` stale resucite por sync
+     desde otro dispositivo más viejo. */
+  var _RETIRED_HUMAN_SELECCIONES = ['portugal'];
   function _hydrate(){
     var d=_dedupeStored(_load());
     window.TEAM_RATINGS = window.TEAM_RATINGS || {};
@@ -60503,8 +60581,10 @@ https://api.sofascore.app/api/v1/team/44/image
         atk:_clamp(t.atk,pw), mid:_clamp(t.mid,pw), def:_clamp(t.def,pw),
         aggressiveness:50
       };
+      var nameKey=String(t.name).trim().toLowerCase();
+      if(_RETIRED_HUMAN_SELECCIONES.indexOf(nameKey)!==-1) return;
       var ic=String(t.icon||'').trim();
-      if(ic) icons[String(t.name).trim().toLowerCase()]=ic;
+      if(ic) icons[nameKey]=ic;
     });
     window._SEL_HUMAN_ICONS=icons;
     _patchHumanIcon();
@@ -73599,40 +73679,29 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
 <div class="screen" id="s-internazionale">
 <script>
-/* La caja Inter-Portugal (Rubén 🐲🇵🇹) REUTILIZA el hub genérico
-   `s-munich` parametrizado por HUB ACTIVO (multi-hub 2026-06-13): al
-   activarse esta pantalla fija el hub activo = Rubén y abre s-munich,
-   que muestra plantilla / histórico derbys / calendario / trofeos /
-   objetivos / HUD CORRESPONDIENTES al Inter. El callback del
-   MutationObserver corre como microtask ANTES del paint, así que no
-   hay parpadeo del placeholder. También cubre cualquier
-   go('s-internazionale') directo de otro código. (Mismo patrón que
-   s-arsenal.) */
-(function(){
-  if(window.__interHubRedirectReady) return; window.__interHubRedirectReady=true;
-  function _redir(){
-    try{ if(window.setActiveHub) window.setActiveHub('ruben'); }catch(_){}
-    try{ if(window.go) window.go('s-munich'); }catch(_){}
-  }
-  function _wire(){
-    var scr=document.getElementById('s-internazionale');
-    if(!scr) return;
-    if(scr.classList.contains('active')) _redir();
-    try{
-      var obs=new MutationObserver(function(muts){
-        for(var i=0;i<muts.length;i++){
-          if(muts[i].attributeName==='class' && scr.classList.contains('active')){ _redir(); return; }
-        }
-      });
-      obs.observe(scr, { attributes:true, attributeFilter:['class'] });
-    }catch(_){}
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', _wire);
-  else _wire();
-})();
+/* La caja Inter-Portugal (ex-mister Rubén 🐲🇵🇹) REDIRIGÍA al hub
+   humano genérico `s-munich` (multi-hub 2026-06-13) fijando el hub
+   activo = 'ruben'. Rubén se RETIRÓ de `MISTERS_HUMANOS` el 2026-08-02
+   ("eliminamos a Portugal e Inter como equipos humanos") — `setActiveHub
+   ('ruben')` ya no encuentra ese id en el registro y CAE AL DEFAULT
+   (Toñín/Liverpool, `MISTERS_HUMANOS[0]`), así que este redirect
+   mostraba el hub de OTRO mister bajo la etiqueta "Inter" — confuso Y,
+   peor, seguía activando TODA la maquinaria de "hub humano" (duración
+   HvH de 10 min en la previa, lesiones en "AÑADIR LESIONADOS · EQUIPO
+   HUMANO", resolución de escudo vía `_psHumanShield`/`_PS_CANON_CREST`)
+   para un club que ya es IA (bug 2026-08-03, fotos usuario: Inter con
+   lesionado, previa a 10 MIN, escudo del Inter desapareciendo).
+   Fix: esta pantalla YA NO redirige a ningún hub humano. Inter/Portugal
+   se ven y editan como cualquier otro club/selección IA — Resto de
+   Ligas · Italia (Inter) y el editor de Selecciones (Portugal). Si una
+   caja del menú vieja (`menu_home_v1`, admin-added) todavía apunta
+   aquí, el usuario ve un aviso claro en vez de un hub mal etiquetado. */
 </script>
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
-<div style="padding:60px 20px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.6);">Cargando hub del Inter…</div>
+<div style="padding:60px 20px;text-align:center;font-family:Oswald,sans-serif;letter-spacing:2px;color:rgba(255,255,255,.75);">
+  <div style="font-size:15px;line-height:1.7;">Inter y Portugal ya no tienen un mister humano —<br>ahora son equipos IA normales.</div>
+  <div style="margin-top:14px;font-size:12px;opacity:.65;">Edítalos desde «Resto de Ligas · Italia» (Inter)<br>o el editor de «🌐 Selecciones» (Portugal).</div>
+</div>
 </div>
 
 <div class="screen" id="s-arsenal">

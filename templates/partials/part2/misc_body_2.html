@@ -33491,7 +33491,27 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     return false;
   }
+  /* Caché EN MEMORIA de la sesión (2026-08-03, "no deja simular y el
+     Atlético Madrid sigue en la primera Ronda"): con `localStorage`
+     lleno, `saveState` podía fallar — y antes, `_doDrawR1`/`_doSimR1`/
+     `_doDrawR2`/`_doSimR2` trataban ese fallo como "la acción no
+     ocurrió" (`if(!saveState(s)) return {ok:false};`), descartando el
+     sorteo/simulación RECIÉN CALCULADO EN MEMORIA (ya con el fix de
+     "España nunca juega Ronda 1" aplicado) sin llegar siquiera a
+     pintarlo. El admin veía el aviso de cuota Y la Ronda 1 vieja
+     (con Atlético incluido) sin ningún cambio — parecía que el fix de
+     exclusión no funcionaba, cuando en realidad nunca llegó a
+     aplicarse: se calculó bien, pero se tiró a la basura al no poder
+     guardarse.
+     `_memState` hace que la sesión ACTUAL siga operando sobre el
+     estado recién calculado aunque la escritura a `localStorage`
+     falle — el admin puede seguir jugando esa Previa ya corregida sin
+     recargar la página. La persistencia (sobrevivir a un recargo /
+     llegar a otro dispositivo) sigue dependiendo de liberar espacio,
+     pero la sesión en curso deja de bloquearse por eso. */
+  var _memState = null;
   function loadState(){
+    if(_memState) return _memState;
     try {
       var s = JSON.parse(localStorage.getItem(WPREV_KEY)||'null');
       /* Save del formato ANTERIOR (`s.prelim`/`s.groups`, Ronda
@@ -33500,25 +33520,29 @@ document.addEventListener('DOMContentLoaded', function() {
          existiera: el admin vuelve a sortear con el pool y formato
          actuales (2026-07-31). */
       if(s && (!s.r1 || !Array.isArray(s.r1.ties))) return null;
+      if(s) _memState = s;
       return s;
     } catch(_){ return null; }
   }
   /* 2026-07-11: usa el limpiador de cuota GENÉRICO del proyecto
      (`window._lsSetSafe`) y avisa con `_gmCriticalNotice` (banner
      propio, inmune a que Chrome suprima `alert()` tras muchos diálogos
-     en la misma sesión) si aun así falla. */
+     en la misma sesión) si aun así falla. `_memState` se actualiza
+     SIEMPRE, incluso si la persistencia falla — ver comentario de
+     `_memState` arriba. */
   function saveState(s){
+    _memState = s;
     var json = JSON.stringify(s);
     var ok = (typeof window._lsSetSafe === 'function')
       ? window._lsSetSafe(WPREV_KEY, json)
       : (function(){ try { window._lsSetSafe(WPREV_KEY, json); return true; } catch(_){ return false; } })();
     if(!ok){
       try { console.error('[wprev-saveState] setItem falló incluso tras liberar espacio'); } catch(_){}
-      (window._gmCriticalNotice || alert)('⚠️ No se pudo guardar la Previa: el navegador se quedó sin espacio incluso después de liberar caché.\n\nBorra alguna liga de "Resto de Ligas" y vuelve a intentarlo.');
+      (window._gmCriticalNotice || alert)('⚠️ La Previa se guardó SOLO para esta sesión — el navegador se quedó sin espacio para guardarla de forma permanente incluso después de liberar caché.\n\nPuedes seguir jugando ahora mismo, pero borra alguna liga de "Resto de Ligas" cuanto antes o este progreso se perderá al recargar la página.');
     }
     return ok;
   }
-  function clearState(){ try { localStorage.removeItem(WPREV_KEY); } catch(_){} }
+  function clearState(){ _memState = null; try { localStorage.removeItem(WPREV_KEY); } catch(_){} }
 
   /* Los TRES pools de ENTRADA se leen POR SEPARADO (misc_body_1.html):
      `computeUclPrevOqPoolTeams` (12, juegan Ronda 1) /
@@ -33694,13 +33718,16 @@ document.addEventListener('DOMContentLoaded', function() {
       r2: { ties:[] },
       ts: Date.now()
     };
-    if(!saveState(ns)) return { ok:false };
+    /* `saveState` deja el sorteo operativo EN MEMORIA aunque falle la
+       persistencia (ver `_memState` arriba) — no se descarta el
+       resultado recién calculado por un fallo de cuota, solo se avisa. */
+    saveState(ns);
     return { ok:true, state:ns };
   }
   function _doSimR1(s){
     _simTies(s.r1.ties);
     s.phase = _allTiesDecided(s.r1.ties) ? 'r1-done' : 'r1-drawn';
-    if(!saveState(s)) return { ok:false };
+    saveState(s);
     return { ok:true, state:s };
   }
   function _doDrawR2(s){
@@ -33710,7 +33737,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var poolFixed = _normalizePoolTo(fixedRaw, POOL_FIXED_R2_TARGET);
     s.r2 = { ties:_drawTies(poolWinners, poolFixed) };
     s.phase = 'r2-drawn';
-    if(!saveState(s)) return { ok:false };
+    saveState(s);
     return { ok:true, state:s };
   }
   /* Persiste el reparto final: los 12 ganadores de Ronda 2 →
@@ -33743,7 +33770,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var allDone = _allTiesDecided(s.r2.ties);
     s.phase = allDone ? 'done' : 'r2-drawn';
     if(allDone) _persistFinal(s);
-    if(!saveState(s)) return { ok:false };
+    saveState(s);
     return { ok:true, state:s };
   }
 

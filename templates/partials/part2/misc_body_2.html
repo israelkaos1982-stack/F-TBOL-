@@ -16376,14 +16376,20 @@
           else if (_wkPen === _gm.away) _wkPen = 'b';
         } else { _wkPen = null; }
         var _wkRound = _gm._wprevRound || 'r1';
+        /* Acta del leg (2026-08-03, "en los equipos humanos que salga
+           el acta del partido con desplegable"): se persiste EN EL
+           PROPIO leg de wprev_state_v1 para que `_wkActaPanelHtml`
+           (part2, arriba en este mismo archivo) la muestre con un
+           desplegable — misma limpieza de eventos que ya se usaba para
+           `registrarLigaPlayerStats`. */
+        var _wkStatsEv = (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result' && !e._varAnulado; });
         if (typeof window._wprevKoSaveHumanResult === 'function') {
           window._wprevKoSaveHumanResult(
             _wkRound, _gm._wprevTieIdx, _wkLeg, _gm.sc.a, _gm.sc.b,
-            _wkDecider ? (_wkEt.a || 0) : 0, _wkDecider ? (_wkEt.b || 0) : 0, _wkPen
+            _wkDecider ? (_wkEt.a || 0) : 0, _wkDecider ? (_wkEt.b || 0) : 0, _wkPen, _wkStatsEv
           );
         }
         if (typeof window.registrarLigaPlayerStats === 'function') {
-          var _wkStatsEv = (_gm.events || []).filter(function(e){ return e && e.type !== 'pen-result' && !e._varAnulado; });
           var _wkMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
           var _wkMvpName = _wkMvpEv ? (_wkMvpEv.player || _wkMvpEv.name || '') : '';
           var _wkMvpTeam = _wkMvpEv ? (_wkMvpEv.team === 'a' ? _gm.home : (_wkMvpEv.team === 'b' ? _gm.away : '')) : '';
@@ -33658,6 +33664,52 @@ document.addEventListener('DOMContentLoaded', function() {
      la card previa para poder jugarlo") vía la clase `.r2human` — es
      la ÚLTIMA eliminatoria antes de la Champions, así que debe eclipsar
      al resto de cruces de la pantalla. */
+  /* Fila de un leg concreto: escudo GRANDE arriba, nombre COMPLETO
+     debajo (2026-08-03, petición usuario — "escudos arriba nombre
+     equipo abajo, que se vean los nombres de los equipos enteros").
+     Sustituye la fila horizontal anterior (nombre truncado con "...",
+     escudo pequeño en línea). */
+  function _legRow(hLogo, hName, score, aLogoEl, aName2, extraStyle){
+    return '<div class="wprev-dr-leg"'+(extraStyle?' style="'+extraStyle+'"':'')+'>'
+      + '<span class="h">'+hLogo+'<span class="nm">'+_esc(hName)+'</span></span>'
+      + '<span class="sc">'+score+'</span>'
+      + '<span class="a">'+aLogoEl+'<span class="nm">'+_esc(aName2)+'</span></span>'
+      + '</div>';
+  }
+  /* Acta (📋) desplegable de un leg concreto — SOLO si tiene eventos
+     reales (2026-08-03, "en los equipos humanos que salga el acta del
+     partido con desplegable"). Un leg IA-vs-IA nunca lleva `events`
+     (el motor `_simMatch` de este motor no los genera), así que el
+     filtro `!legObj.events.length` ya basta para que el botón NUNCA
+     aparezca en cruces sin humano — reutiliza `window._tourActaBodyHtml`
+     (mismo renderer que el resto del proyecto, `misc_body_1.html`). */
+  function _wkActaPanelHtml(round, idx, legKey, legObj){
+    if(!legObj || !legObj.events || !legObj.events.length) return '';
+    var res = { home: legObj.home, away: legObj.away, a: legObj.gh, b: legObj.ga, events: legObj.events, mvp:'', mvpTeam:'' };
+    var bodyHtml = (typeof window._tourActaBodyHtml === 'function') ? (window._tourActaBodyHtml(res) || '') : '';
+    if(!bodyHtml) return '';
+    var actaId = 'wkacta-'+round+'-'+idx+'-'+legKey;
+    return '<div style="display:flex;justify-content:center;margin:4px 0 2px;">'
+      + '<button type="button" class="wk-acta-toggle" data-target="'+actaId+'" '
+      + 'style="background:rgba(95,224,138,.10);border:1px solid rgba(95,224,138,.40);color:#9ee5a9;border-radius:6px;padding:3px 10px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;">'
+      + '📋 ACTA</button></div>'
+      + '<div id="'+actaId+'" class="wk-acta-body" style="display:none;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06);border-radius:8px;margin:0 4px 6px;overflow:hidden;">'
+      + bodyHtml
+      + '</div>';
+  }
+  if(!window.__wkActaToggleWired){
+    window.__wkActaToggleWired = true;
+    document.addEventListener('click', function(ev){
+      var btn = ev.target && ev.target.closest && ev.target.closest('.wk-acta-toggle');
+      if(!btn) return;
+      var box = document.getElementById(btn.getAttribute('data-target'));
+      if(!box) return;
+      var visible = box.style.display !== 'none';
+      box.style.display = visible ? 'none' : 'block';
+      btn.textContent = visible ? '📋 ACTA' : '📋 OCULTAR';
+      ev.stopPropagation();
+    });
+  }
   function _tieHtml(tie, idx, roundKey){
     var aName=(tie.a&&tie.a.name)||'?', bName=(tie.b&&tie.b.name)||'?';
     var aLogo=_badgeBig(aName, tie.a&&tie.a.logo), bLogo=_badgeBig(bName, tie.b&&tie.b.logo);
@@ -33673,17 +33725,20 @@ document.addEventListener('DOMContentLoaded', function() {
     var needsDecider = !tie.winner && tie.legs && tie.legs.length === 2 && !tie.thirdMatch;
     var body;
     if(tie.bye){
-      body = '<div class="wprev-dr-leg"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">BYE</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>';
+      body = _legRow(aLogo, aName, 'BYE', bLogo, bName);
     } else if(tie.legs && tie.legs.length===2){
-      body = '<div class="wprev-dr-leg"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">'+tie.legs[0].gh+'-'+tie.legs[0].ga+'</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>'
-        +'<div class="wprev-dr-leg" style="margin-top:6px;"><span class="h"><span class="nm">'+bLogo+_esc(bName)+'</span></span><span class="sc">'+tie.legs[1].gh+'-'+tie.legs[1].ga+'</span><span class="a"><span class="nm">'+aLogo+_esc(aName)+'</span></span></div>';
+      body = _legRow(aLogo, aName, tie.legs[0].gh+'-'+tie.legs[0].ga, bLogo, bName)
+        + (isHuman ? _wkActaPanelHtml(roundKey, idx, 'i', tie.legs[0]) : '')
+        + _legRow(bLogo, bName, tie.legs[1].gh+'-'+tie.legs[1].ga, aLogo, aName, 'margin-top:6px;')
+        + (isHuman ? _wkActaPanelHtml(roundKey, idx, 'v', tie.legs[1]) : '');
       var aWon = tie.winner === tie.a;
       var aggClass = needsDecider ? '' : (aWon?'winner-mark':'loser-mark');
       var bggClass = needsDecider ? '' : (!aWon?'winner-mark':'loser-mark');
       body += '<div class="wprev-dr-agg"><span class="'+aggClass+'">'+_esc(aName)+'</span><span class="sc">'+tie.aggA+'-'+tie.aggB+'</span><span class="'+bggClass+'">'+_esc(bName)+'</span></div>';
       if(tie.thirdMatch){
-        body += '<div class="wprev-dr-leg" style="margin-top:6px;"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">'+tie.thirdMatch.gh+'-'+tie.thirdMatch.ga+'</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>'
-          +'<div style="padding:2px 0 0;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;color:#e0bfff;text-align:center;">🥊 TERCER PARTIDO (campo neutral)</div>';
+        body += _legRow(aLogo, aName, tie.thirdMatch.gh+'-'+tie.thirdMatch.ga, bLogo, bName, 'margin-top:6px;')
+          + (isHuman ? _wkActaPanelHtml(roundKey, idx, 'd', tie.thirdMatch) : '')
+          + '<div style="padding:2px 0 0;font-family:Oswald,sans-serif;font-size:9px;letter-spacing:.5px;color:#e0bfff;text-align:center;">🥊 TERCER PARTIDO (campo neutral)</div>';
       }
       var extra = '';
       if(tie.awayGoalsDecided) extra += 'Gol de visitante · ';
@@ -33695,10 +33750,11 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } else if(tie.legs && tie.legs.length===1){
       /* Humano: ida jugada, vuelta pendiente. */
-      body = '<div class="wprev-dr-leg"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc">'+tie.legs[0].gh+'-'+tie.legs[0].ga+'</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>'
-        +'<div class="wprev-dr-leg" style="margin-top:6px;opacity:.5;"><span class="h"><span class="nm">'+bLogo+_esc(bName)+'</span></span><span class="sc" style="opacity:.7;">vs</span><span class="a"><span class="nm">'+aLogo+_esc(aName)+'</span></span></div>';
+      body = _legRow(aLogo, aName, tie.legs[0].gh+'-'+tie.legs[0].ga, bLogo, bName)
+        + (isHuman ? _wkActaPanelHtml(roundKey, idx, 'i', tie.legs[0]) : '')
+        + _legRow(bLogo, bName, '<span style="opacity:.7;">vs</span>', aLogo, aName, 'margin-top:6px;opacity:.5;');
     } else {
-      body = '<div class="wprev-dr-leg"><span class="h"><span class="nm">'+aLogo+_esc(aName)+'</span></span><span class="sc" style="opacity:.5;">vs</span><span class="a"><span class="nm">'+bLogo+_esc(bName)+'</span></span></div>';
+      body = _legRow(aLogo, aName, '<span style="opacity:.5;">vs</span>', bLogo, bName);
     }
     if(winnerName){
       var destTxt = roundKey === 'r2' ? '🏆 '+_esc(winnerName)+' avanza a la FASE DE GRUPOS DE CHAMPIONS' : '➡️ '+_esc(winnerName)+' avanza a la Ronda 2';
@@ -34110,16 +34166,21 @@ document.addEventListener('DOMContentLoaded', function() {
        partido termina empatado (mismo criterio — ET reducida +
        penaltis ponderados por poder — que el motor IA `_simulateTie`).
      Al completarse la Ronda 2, dispara `_persistFinal` (mismo camino
-     que la sim automática). */
-  window._wprevKoSaveHumanResult = function(round, idx, leg, gh, ga, etGh, etGa, penWinner){
+     que la sim automática). `events` (2026-08-03, "en los equipos
+     humanos que salga el acta del partido con desplegable"): acta del
+     partido jugado por el humano, se guarda EN EL PROPIO leg para que
+     `_wkActaPanelHtml` la muestre con un desplegable — nunca se genera
+     para legs IA-vs-IA (ese motor no produce eventos). */
+  window._wprevKoSaveHumanResult = function(round, idx, leg, gh, ga, etGh, etGa, penWinner, events){
     var s = loadState(); if(!s || !s[round] || !s[round].ties) return;
     var tie = s[round].ties[idx]; if(!tie) return;
     var aName = tie.a.name, bName = tie.b.name;
+    var evs = Array.isArray(events) ? events : [];
     if(leg === 'i'){
-      tie.legs = [{ home:aName, away:bName, gh:gh|0, ga:ga|0 }];
+      tie.legs = [{ home:aName, away:bName, gh:gh|0, ga:ga|0, events:evs }];
     } else if(leg === 'v'){
-      if(!tie.legs || !tie.legs.length) tie.legs = [{ home:aName, away:bName, gh:0, ga:0 }];
-      tie.legs[1] = { home:bName, away:aName, gh:gh|0, ga:ga|0 };
+      if(!tie.legs || !tie.legs.length) tie.legs = [{ home:aName, away:bName, gh:0, ga:0, events:[] }];
+      tie.legs[1] = { home:bName, away:aName, gh:gh|0, ga:ga|0, events:evs };
       var aggA = tie.legs[0].gh + tie.legs[1].ga;
       var aggB = tie.legs[0].ga + tie.legs[1].gh;
       tie.aggA = aggA; tie.aggB = aggB;
@@ -34138,7 +34199,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if(tie.winner) tie.loser = (tie.winner === tie.a) ? tie.b : tie.a;
     } else if(leg === 'd'){
-      tie.thirdMatch = { home:aName, away:bName, gh:gh|0, ga:ga|0 };
+      tie.thirdMatch = { home:aName, away:bName, gh:gh|0, ga:ga|0, events:evs };
       tie.et = null; tie.penWinner = null;
       if((gh|0) !== (ga|0)){
         tie.winner = (gh|0) > (ga|0) ? tie.a : tie.b;

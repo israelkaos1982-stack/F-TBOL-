@@ -1,5 +1,112 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Inter/Portugal (ex-mister Rubén, retirado 2026-08-02) seguían tratándose como humanos — lesiones colgadas, previa a 10 MIN (HvH), escudo pisado por el hub humano (obligatorio, 2026-08-03)
+
+**Bug (3 fotos usuario 2026-08-03, «Atlético Madrid vs Inter», Trofeo
+Joan Gamper Jornada 4)**: pese a que el 2026-08-02 se retiró a Rubén
+(7º mister, club Inter + selección Portugal) de `MISTERS_HUMANOS`, el
+usuario seguía viendo: (1) la PANTALLA DE PREVIA mostraba
+**«DURACIÓN 10 MIN»** — la etiqueta de partido **HvH** (Humano vs
+Humano), como si Inter siguiera siendo humano; (2) el overlay
+**«AÑADIR LESIONADOS · EQUIPO HUMANO»** seguía listando a
+**Nicolò Barella · Inter** con 5 partidos de baja; (3) el escudo real
+del Inter (visible correctamente en la propia previa) "desaparece
+para siempre" en otros puntos de la app. Petición explícita: "Inter y
+Portugal han dejado de ser equipos humanos, son IA, no puede tener
+lesionados, los partidos vs IA son a 8min... por favor todo esto hay
+que limpiarlo".
+
+### Causa raíz — el fix de 2026-08-02 quitó a Rubén del REGISTRO pero no de los DATOS ni de la maquinaria de hub
+
+1. **`t.isHuman`/`t.humanEmoji` siguen ganando sobre el registro.**
+   Docenas de detectores de humanidad del proyecto (`_psTeamIsHumanGeneric`,
+   el escaneo de candidatos del Mundial, `_realPair`/`_slotIsH`, etc.)
+   hacen "Pase 1: `if (t.isHuman) return true;`" **ANTES** de consultar
+   `MISTERS_HUMANOS`/`_isHumanClubCanonico`. Quitar a Rubén del array no
+   borra el flag ya persistido en los datos del equipo. Los fixups de
+   2026-08-02 (`_fixupInterHumanoItaliaV1`, que solo miraba el slug
+   `'italia'`; `_fixupUnhumanizeRubenTournamentsV1`, que solo limpiaba
+   los `tour_<id>_v1` que YA estuvieran en `localStorage` en el instante
+   exacto del boot — `if (!raw) return;`) corrían **UNA sola vez** y
+   dependían de qué estuviera cacheado en ESE dispositivo en ESE
+   instante. Un torneo/liga que se cargó DESPUÉS (async, otra pestaña,
+   una copia del servidor más reciente con el flag stale) se quedaba con
+   `isHuman:true` colado indefinidamente — de ahí que la Previa del
+   Trofeo Joan Gamper (un torneo, no la liga 'italia') siguiera saliendo
+   como HvH un día entero después del fix.
+2. **La caja "Inter-Portugal-Rubén" seguía siendo un hub HUMANO
+   completo.** La pantalla `s-internazionale` hacía
+   `setActiveHub('ruben')` + `go('s-munich')` (reutilizando el hub
+   genérico humano — plantilla, calendario, HUD, lesiones). Con Rubén
+   fuera de `MISTERS_HUMANOS`, `setActiveHub('ruben')` no encontraba el
+   id y **caía en silencio al hub por defecto** (Toñín/Liverpool) —
+   la pantalla seguía existiendo y disparando TODA la maquinaria de "hub
+   humano" bajo la etiqueta "Inter", en vez de simplemente no existir.
+3. **Las lesiones/sanciones ya registradas mientras Rubén era humano
+   nunca se purgaban.** Quitar a Rubén del registro no borra las
+   entradas ya guardadas en `LESION_STORE`/`BAJA_STORE`/
+   `SANCION_STORE.__global` (club, Inter) ni en `LESION_STORE_SEL`/
+   `SANCION_STORE_SEL`/`YELLOW_STORE_SEL` (selección, Portugal) — esos
+   stores se sincronizan con el servidor y sobreviven indefinidamente
+   hasta que algo las borra explícitamente.
+
+### Fix — sanitización EN CADA LECTURA (no un fixup de una sola vez) + purga de stores + hub desactivado
+
+- **`_sanitizeLigaTeamNames`** (`misc_body_1.html`, el sanitizador
+  universal que `loadData` ejecuta en CADA lectura de `ligaExt_<slug>`,
+  cache-hit y fresh-parse): nueva Phase 1b que limpia `isHuman`/
+  `humanEmoji` de cualquier equipo cuyo nombre normalizado matchee Inter
+  (todas las grafías). `_SAN_VER` 2→3 para forzar que TODA liga ya
+  sellada con la versión anterior vuelva a pasar por el sanitizador una
+  vez más.
+- **`_tourDehumanizeRetired(cfg)`** (nuevo, junto a `_tourLoadCachedSync`):
+  mismo principio para `cfg.teams[]` de CUALQUIER torneo (Inter Y
+  Portugal), llamado en los 3 puntos donde `_tourLoadCachedSync`/
+  `_tourLoad` cachean/adoptan un cfg — cache-hit, fresh-parse local, y
+  tras adoptar la copia del servidor.
+- **`_hydrate()`** (IIFE de `selecciones_squad_v1`): Portugal se excluye
+  explícitamente de `_SEL_HUMAN_ICONS` en cada hidratación, aunque el
+  campo `icon` stale resucite por sync desde otro dispositivo.
+- **`window._purgeRetiredHumanStores()`** (nuevo, `index.bundle.js`,
+  junto a `_purgeSeleccionFromClubStores`): purga Inter de los 4 stores
+  de club y Portugal de los 3 de selección, y re-persiste (local +
+  servidor) si algo cambió. Se llama en el barrido diferido de boot, en
+  los callbacks `.hydrate()` de lesiones/sanciones (club Y selección), y
+  justo antes de `_refreshSancionInjList` (la función que pinta el
+  overlay "AÑADIR LESIONADOS").
+- **`s-internazionale`** ya NO redirige a ningún hub humano. Muestra un
+  aviso explicando que Inter/Portugal son ahora IA normales, con
+  indicación de dónde editarlos (Resto de Ligas · Italia / editor de
+  Selecciones). Elimina de raíz la duración HvH y cualquier resolución
+  de escudo vía la maquinaria de hub humano para este club.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un fixup de "retirar humano" nuevo (o cualquier
+   corrección de datos futura) se limite a un `localStorage.getItem`
+   condicionado (`if(!raw) return`) que solo corrige lo YA cacheado en
+   ESE dispositivo en el instante del boot. La corrección DEBE vivir
+   dentro del CHOKEPOINT de lectura universal (`_sanitizeLigaTeamNames`
+   para ligas, `_tourLoadCachedSync`/`_tourLoad` para torneos, `_hydrate`
+   para selecciones) para que se aplique en CADA lectura, sin depender
+   de timing ni de qué dispositivo/sesión corrió el fixup primero.
+2. **PROHIBIDO** retirar un mister de `MISTERS_HUMANOS` sin auditar
+   TAMBIÉN: (a) los stores de lesión/sanción de club Y selección
+   (purgar las entradas de ese club/selección), (b) cualquier pantalla
+   `s-<hub>` que reutilice el hub humano genérico vía `setActiveHub`
+   (debe dejar de redirigir ahí), (c) el flag `isHuman`/`humanEmoji` en
+   TODAS las fuentes donde ese equipo pueda aparecer (ligas, torneos,
+   selecciones) — no solo la liga/torneo que motivó el reporte original.
+3. **PROHIBIDO** que `setActiveHub(id)` caiga en silencio al hub por
+   defecto (Toñín) cuando `id` ya no existe en `MISTERS_HUMANOS` SIN que
+   el caller que disparó ese `id` (una pantalla `s-<hub>` obsoleta) deje
+   de intentarlo. Un fallback silencioso + una pantalla que insiste en
+   pedir un hub retirado = el usuario ve datos de OTRO mister bajo una
+   etiqueta equivocada.
+4. Si en el futuro se retira OTRO mister humano, este mismo patrón (3
+   sanitizadores universales + purga de stores + desactivar su pantalla
+   `s-<hub>`) es el checklist completo — no un fixup de boot aislado.
+
 ## Open Qualifier/Wild Card/Recopa se quedaban corto de Ligas Mixtas 5-9 y de copas "sin campeón" — los lectores de `ligaExt_<slug>` del reparto europeo solo miraban `localStorage`, nunca `window.LIGA_CACHE` (obligatorio, 2026-08-02 #5)
 
 **Bug (5 fotos usuario 2026-08-02)**: el Open Qualifier solo mostraba

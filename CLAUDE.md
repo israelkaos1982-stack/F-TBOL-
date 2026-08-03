@@ -1,5 +1,78 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La pantalla "GANANCIAS DEL PARTIDO" (🪙+💊+💼) del gm-modal nunca aparecía — markup DUPLICADO y STALE creado en `DOMContentLoaded` (obligatorio, 2026-08-03)
+
+**Bug reportado (usuario 2026-08-03, acta completa de «Inter 0-1 Real
+Madrid», Trofeo Joan Gamper Jornada 7, caja Real Madrid-Inglaterra-Acsa)**:
+el partido se jugó y finalizó con normalidad — acta, estadísticas
+(posesión/tiros/faltas/córners), MVP (Thibaut Courtois) y el mensaje de
+WhatsApp compartido salieron perfectos — pero **la pantalla obligatoria
+"💰 GANANCIAS DEL PARTIDO"** (🪙 monedas + 💊 PI + 💼 valoración, que debe
+aparecer justo tras las Estadísticas y acreditar esas ganancias al
+monedero/HUD del hub, `_gmShowFinalOv`/`_mlMatchEarningsHtml`,
+`part2/misc_body_2.html`) **nunca llegó a mostrarse — "no ha salido
+absolutamente nada"**. El usuario confirmó que es un problema recurrente
+("llevamos tiempo con esto").
+
+### Causa raíz — DOS copias del markup de `#gm-fin-ov`, solo UNA actualizada
+
+`_gmShowFinalOv()` (~línea 13331) tiene un fallback
+`if (!ov) { ov = document.createElement('div'); ov.id='gm-fin-ov'; ...
+ov.innerHTML = '...' + '<div id="gm-fin-earnings"></div>' + ...; }` que
+SÍ incluye el contenedor de ganancias — pero ese fallback **solo se
+ejecuta si `#gm-fin-ov` todavía no existe en el DOM**. El problema: un
+listener `DOMContentLoaded` COMPLETAMENTE APARTE (~línea 29115, al final
+del archivo) crea y añade `#gm-fin-ov` a `document.body` **en CADA carga
+de página, incondicionalmente, mucho antes de que se juegue ningún
+partido** — con el MISMO markup (marcador, escudos, MVP, acta, botones)
+pero **sin el `<div id="gm-fin-earnings"></div>`**, porque esa copia
+nunca se actualizó cuando se añadió la función de ganancias (2026-07-27/
+07-29). Como esta segunda copia SIEMPRE existe ya cuando `_gmShowFinalOv`
+se invoca al finalizar un partido, el fallback con el contenedor correcto
+**nunca se ejecuta** — `document.getElementById('gm-fin-earnings')`
+devuelve `null` para siempre, el `if (earnEl)` de la línea ~13401 no
+hace nada, y el bloque de ganancias jamás se pinta, sin ningún error
+visible (exactamente "no ha salido absolutamente nada").
+
+El mecanismo de cálculo/crédito en sí (`athApplyMedicalFromActa` →
+`window._computeMatchEarningsCore` → `_creditMisterHub`) es correcto y
+sí acredita 🪙/💊/💼 al mister correspondiente (resuelto por nombre vía
+`window._mhFindMister`, no por "hub activo") — el fallo es puramente de
+DISPLAY: el contenedor donde pintar el resumen no existe en la copia de
+`#gm-fin-ov` que de verdad está en el DOM.
+
+### Fix
+
+Se añade `<div id="gm-fin-earnings"></div>` (idéntico al de la copia de
+`_gmShowFinalOv`, misma posición justo tras `gm-fin-mvp`) al markup que
+crea el listener `DOMContentLoaded` de `part2/misc_body_2.html`
+(~línea 29146). Las dos copias del markup de `#gm-fin-ov` quedan ahora
+byte-a-byte idénticas.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un overlay del gm-modal tenga DOS puntos de creación
+   de markup (un fallback "recreate-if-missing" dentro de la función que
+   lo usa, y un listener `DOMContentLoaded` aparte que lo crea de
+   antemano) que puedan divergir. Si de verdad hacen falta ambos (uno
+   como red de seguridad, otro como creación normal de arranque), **cada
+   edición del markup de uno DEBE replicarse en el otro en el mismo
+   commit** — auditar con `grep` todos los `id="gm-fin-…"`/`id="gm-ht-…"`
+   antes de dar por cerrado un cambio de estos overlays.
+2. **PROHIBIDO** asumir que el fallback `if (!ov) { ...crear... }` de
+   `_gmShowFinalOv` (o de cualquier función equivalente `_gmShow*Ov`)
+   se ejecuta alguna vez en producción si existe un `DOMContentLoaded`
+   que crea ese mismo `id` de antemano — en la práctica NUNCA se
+   ejecuta, así que cualquier campo nuevo añadido SOLO ahí es invisible
+   para siempre. Todo campo/contenedor nuevo de un overlay con esta
+   doble definición debe añadirse a AMBAS copias.
+3. Antes de dar por bueno un fix "el elemento ya está en el HTML, el
+   código que lo rellena está bien" para una pantalla que "nunca
+   aparece" sin ningún error, comprobar con `grep` si existe MÁS DE UNA
+   definición del mismo `id` en el archivo — un duplicado stale (creado
+   antes que el que de verdad se usa) produce exactamente este síntoma:
+   sin excepción, sin log, simplemente "no pasa nada".
+
 ## Recopa de Europa — RIVAL PENDIENTE (avance de ronda sin bloquear por humanos), humano SIEMPRE visitante, y aviso de "pool cambiado tras sortear" (obligatorio, 2026-08-03)
 
 **Bug reportado (usuario 2026-08-03, foto «64 añadidos» en la sección

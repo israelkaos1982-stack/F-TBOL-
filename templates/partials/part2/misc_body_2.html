@@ -9884,24 +9884,32 @@
      perder, igual que Liga). 💼 se deriva de v/e con la MISMA proporción
      que Liga (0,03/8 · 0,01/3) — no hace falta una tabla aparte. */
   var _MATCH_REWARD_TABLE = {
-    liga:       { v:8,  e:3, g:1, i:3 },
-    copa:       { v:10, e:4, g:1, i:4 },
-    sc:         { v:14, e:5, g:2, i:5 },
-    wprev:      { v:9,  e:3, g:1, i:3 },   /* Previa Champions (grupos Y ronda preliminar) */
-    uclGroup:   { v:12, e:4, g:2, i:4 },
-    uclKo:      { v:18, e:7, g:2, i:7 },
-    uelGroup:   { v:10, e:4, g:1, i:4 },
-    uelKo:      { v:14, e:5, g:2, i:5 },
-    ueclGroup:  { v:9,  e:3, g:1, i:3 },
-    ueclKo:     { v:12, e:4, g:2, i:4 },
-    usc:        { v:13, e:5, g:2, i:5 },
-    recopa:     { v:11, e:4, g:1, i:4 },
-    inter:      { v:14, e:5, g:2, i:5 },
-    mundialito: { v:13, e:5, g:2, i:5 },
-    superliga:  { v:8,  e:3, g:1, i:3 },
-    verano:     { v:5,  e:2, g:1, i:2 },
-    selQual:    { v:9,  e:3, g:1, i:3 },   /* Road to (Copa Asia/Eurocopa/África/América) */
-    selFinal:   { v:20, e:8, g:3, i:8 }    /* Mundial / Rondas Finales */
+    /* v/e/g/i = tabla EXACTA dada por el usuario 2026-07-28 (sustituye la
+       auto-estimada de 2026-07-27; solo 4 valores de `i` cambiaron: sc
+       5→4, uelGroup 4→3, uelKo 5→4, selFinal 8→6 — el resto ya coincidía).
+       `mvp` = bonus fijo si el MVP del partido es del hub (2026-07-28,
+       tabla completa del usuario salvo wprev/selQual/selFinal, que el
+       usuario no listó — rellenados por escala con el tier más parecido:
+       wprev≈ueclGroup(+2), selQual≈liga/copa(+2), selFinal>uclKo(+5) —
+       marcados abajo, pendientes de confirmación explícita del usuario. */
+    liga:       { v:8,  e:3, g:1, i:3, mvp:2 },
+    copa:       { v:10, e:4, g:1, i:4, mvp:2 },
+    sc:         { v:14, e:5, g:2, i:4, mvp:3 },
+    wprev:      { v:9,  e:3, g:1, i:2, mvp:2 },   /* Previa Champions (grupos Y ronda preliminar) — mvp SIN confirmar, ver nota arriba */
+    uclGroup:   { v:12, e:4, g:2, i:3, mvp:3 },
+    uclKo:      { v:18, e:7, g:2, i:6, mvp:4 },
+    uelGroup:   { v:10, e:4, g:1, i:3, mvp:2 },
+    uelKo:      { v:14, e:5, g:2, i:4, mvp:3 },
+    ueclGroup:  { v:9,  e:3, g:1, i:2, mvp:2 },
+    ueclKo:     { v:12, e:4, g:2, i:3, mvp:3 },
+    usc:        { v:13, e:5, g:2, i:4, mvp:4 },
+    recopa:     { v:11, e:4, g:1, i:3, mvp:3 },
+    inter:      { v:14, e:5, g:2, i:4, mvp:4 },
+    mundialito: { v:13, e:5, g:2, i:5, mvp:4 },
+    superliga:  { v:8,  e:3, g:1, i:3, mvp:2 },
+    verano:     { v:5,  e:2, g:1, i:2, mvp:1 },
+    selQual:    { v:9,  e:3, g:1, i:3, mvp:2 },   /* Road to (Copa Asia/Eurocopa/África/América) — mvp SIN confirmar, ver nota arriba */
+    selFinal:   { v:20, e:8, g:3, i:6, mvp:5 }    /* Mundial / Rondas Finales — mvp SIN confirmar, ver nota arriba */
   };
   var _VERANO_TOUR_IDS = { sct:1, jg:1, pss:1, asia:1 };
   /* Resuelve la fila de `_MATCH_REWARD_TABLE` para el partido `o` (puede
@@ -10001,13 +10009,13 @@
        desglose se deja en st._matchEarnings para el bloque "GANANCIAS DEL
        PARTIDO" del resumen. El 🪙 es el "sueldo" que financia las apuestas
        de derbys (mismo monedero), por eso el target de dinero no se toca. */
+    var _GOALT = { 'gol':1, 'falta-gol':1, 'pen-gol':1 };
     var gf, ga;
     if (st.sc && typeof st.sc.a === 'number' && typeof st.sc.b === 'number') {
       gf = hubSide === 'a' ? st.sc.a : st.sc.b;
       ga = hubSide === 'a' ? st.sc.b : st.sc.a;
     } else {
       gf = 0; ga = 0;
-      var _GOALT = { 'gol':1, 'falta-gol':1, 'pen-gol':1 };
       evs.forEach(function(e){
         if (!e) return;
         if (_GOALT[e.type]) { if (e.team === hubSide) gf++; else if (e.team === rivalSide) ga++; }
@@ -10021,6 +10029,32 @@
     else               { coins = 0; drating = 0; }
     coins += gf * _tier.g;           /* `g` 🪙 por gol marcado */
     if (ga === 0) coins += _tier.i;  /* `i` 🪙 portería a cero */
+
+    /* ⭐ MVP del hub (petición usuario 2026-07-28): bonus fijo por tier
+       si el evento 'mvp' del acta cae del lado del hub. */
+    try {
+      var _mvpEvt = null;
+      for (var _mi = evs.length - 1; _mi >= 0; _mi--) { if (evs[_mi] && evs[_mi].type === 'mvp') { _mvpEvt = evs[_mi]; break; } }
+      if (_mvpEvt && _mvpEvt.team === hubSide) coins += (_tier.mvp || 0);
+    } catch(e){}
+
+    /* 🎩 Doblete/Hat-trick del MISMO jugador del hub — bonus = 2×g (2
+       goles) / 6×g (3+ goles), anclado a Liga (g=1 → +2/+6, petición
+       usuario 2026-07-28). Ignora nombres placeholder ('—', vacío). */
+    try {
+      var _goalsByPlayer = {};
+      evs.forEach(function(e){
+        if (!e || e.team !== hubSide || !_GOALT[e.type]) return;
+        var pn = String(e.player || e.name || '').trim();
+        if (!pn || pn === '—') return;
+        _goalsByPlayer[pn] = (_goalsByPlayer[pn] || 0) + 1;
+      });
+      var _maxByOne = 0;
+      Object.keys(_goalsByPlayer).forEach(function(n){ if (_goalsByPlayer[n] > _maxByOne) _maxByOne = _goalsByPlayer[n]; });
+      if (_maxByOne >= 3) coins += _tier.g * 6;
+      else if (_maxByOne === 2) coins += _tier.g * 2;
+    } catch(e){}
+
     drating = Math.round(drating * 1000) / 1000;
 
     /* Idempotencia: una reentrada de gmEndMatch / watchdog / re-render no

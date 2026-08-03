@@ -57861,6 +57861,94 @@ https://api.sofascore.app/api/v1/team/44/image
     _fixupInterHumanoSlug('liga-ea-sports', 'ea');
   }
   window._fixupInterHumanoItaliaV1 = _fixupInterHumanoItaliaV1;
+  /* Fixup ELIMINAR Inter de Liga EA Sports POR COMPLETO (2026-08-03,
+     petición explícita del usuario, foto de la clasificación mostrando
+     «9 Inter» con escudo del Inter mezclado entre los 20 equipos reales
+     de Liga EA Sports): "el Inter es de la Liga Italia, elimínalo por
+     completo de EA Sports". `_fixupInterHumanoSlug`/`_fixupInterHumanoItaliaV1`
+     de arriba solo limpiaban el flag `isHuman`/`humanEmoji` de esa fila
+     — la dejaban VIVA como equipo IA dentro de `ligaExt_liga-ea-sports`.
+     El Inter NO pertenece a esta liga en absoluto (vive en 'italia'):
+     esta fixup BORRA la fila entera de `teams[]`, no solo el flag.
+     Idempotente vía flag; solo se marca "hecho" si esta liga estaba
+     cacheada en este dispositivo (si no, reintenta en el próximo boot,
+     mismo patrón que `_fixupInterHumanoSlug`). */
+  function _fixupRemoveInterFromEaSportsV1(){
+    var FLAG = 'ftbol_inter_remove_ea_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (!raw) return; /* liga aún no cacheada aquí, reintenta en el próximo boot */
+      var d = JSON.parse(raw);
+      if (d && Array.isArray(d.teams)){
+        var isRetired = (typeof window._isRetiredHumanClubName === 'function')
+          ? window._isRetiredHumanClubName : function(){ return false; };
+        var before = d.teams.length;
+        d.teams = d.teams.filter(function(t){
+          if (!t || !t.name) return true;
+          return !isRetired(t.name);
+        });
+        if (d.teams.length !== before){
+          d.updatedAt = Date.now();
+          try { window._lsSetSafe('ligaExt_liga-ea-sports', JSON.stringify(d)); } catch(_){}
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-ea-sports'] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports'); } catch(_){}
+          try { if (typeof saveData === 'function') saveData('liga-ea-sports', d); } catch(_){}
+          try { if (typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields(); } catch(_){}
+          try { if (typeof window.applyEngineOverrides === 'function') window.applyEngineOverrides(); } catch(_){}
+          try { console.warn('[ligaExt] liga-ea-sports: fila del Inter ELIMINADA (pertenece a Italia).'); } catch(_){}
+        }
+        window._lsSetSafe(FLAG, '1');
+      }
+    } catch(_){}
+  }
+  window._fixupRemoveInterFromEaSportsV1 = _fixupRemoveInterFromEaSportsV1;
+  /* Fixup ESCUDOS INTERCAMBIADOS Alavés ↔ FC Barcelona (2026-08-03,
+     petición explícita del usuario con foto: la fila «Alavés» salía
+     con el escudo blaugrana del FC Barcelona, y viceversa). El campo
+     `shield` de cada equipo es un dato editado a mano por el admin —
+     aquí quedó cruzado entre estas 2 filas concretas. Se corrige SOLO
+     si se detecta el cruce exacto (el shield de Alavés contiene
+     "barcelona", o el de Barcelona contiene "alaves"/"alavés"); nunca
+     pisa un escudo que no encaje con ese patrón — no queremos
+     "corregir" un escudo custom legítimo que el admin haya subido. */
+  function _fixupAlavesBarcelonaShieldSwapV1(){
+    var FLAG = 'ftbol_alaves_barca_shield_fix_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var ALAVES_CREST = '/static/img/escudos-1/spain_deportivo-alaves.svg';
+    var BARCELONA_CREST = '/static/img/escudos-1/spain_barcelona.football-logos.cc.svg';
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (!raw) return; /* liga aún no cacheada aquí, reintenta en el próximo boot */
+      var d = JSON.parse(raw);
+      if (d && Array.isArray(d.teams)){
+        var alaves = null, barca = null;
+        d.teams.forEach(function(t){
+          if (!t || !t.name) return;
+          var n = _lextNormName(t.name);
+          if (n === 'alaves' || n === 'deportivo alaves') alaves = t;
+          else if (n === 'fc barcelona' || n === 'barcelona') barca = t;
+        });
+        var changed = false;
+        if (alaves && /barcelona/i.test(String(alaves.shield||''))){
+          alaves.shield = ALAVES_CREST; alaves.updatedAt = Date.now(); changed = true;
+        }
+        if (barca && /alav[eé]s/i.test(String(barca.shield||''))){
+          barca.shield = BARCELONA_CREST; barca.updatedAt = Date.now(); changed = true;
+        }
+        if (changed){
+          try { window._lsSetSafe('ligaExt_liga-ea-sports', JSON.stringify(d)); } catch(_){}
+          try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-ea-sports'] = d; } catch(_){}
+          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-ea-sports'); } catch(_){}
+          try { if (typeof saveData === 'function') saveData('liga-ea-sports', d); } catch(_){}
+          try { if (typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields(); } catch(_){}
+          try { console.warn('[ligaExt] liga-ea-sports: escudos de Alavés/FC Barcelona corregidos (estaban intercambiados).'); } catch(_){}
+        }
+        if (alaves && barca) window._lsSetSafe(FLAG, '1');
+      }
+    } catch(_){}
+  }
+  window._fixupAlavesBarcelonaShieldSwapV1 = _fixupAlavesBarcelonaShieldSwapV1;
   /* Fixup DE-HUMANIZAR Inter/Portugal en TODOS los torneos (2026-08-02,
      petición usuario "eliminamos a Portugal e Inter como equipos
      humanos"): el mister Rubén (7º, MISTERS_HUMANOS) se retiró del
@@ -57960,6 +58048,8 @@ https://api.sofascore.app/api/v1/team/44/image
   try { _ensureRestoMundoSeed(); } catch(_){}
   try { _fixupRestoMundoAliasesV2(); } catch(_){}
   try { _fixupInterHumanoItaliaV1(); } catch(_){}
+  try { _fixupRemoveInterFromEaSportsV1(); } catch(_){}
+  try { _fixupAlavesBarcelonaShieldSwapV1(); } catch(_){}
   try { _fixupUnhumanizeRubenTournamentsV1(); } catch(_){}
   try { _fixupUnhumanizePortugalIconV1(); } catch(_){}
   /* Precarga del reparto europeo por liga (LEAGUE_DEFAULT_ZONES);

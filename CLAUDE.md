@@ -1,5 +1,142 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Recopa de Europa — RIVAL PENDIENTE (avance de ronda sin bloquear por humanos), humano SIEMPRE visitante, y aviso de "pool cambiado tras sortear" (obligatorio, 2026-08-03)
+
+**Bug reportado (usuario 2026-08-03, foto «64 añadidos» en la sección
+Recopa de «EA Sports → Europa»)**: el admin añadió a mano 64 equipos
+(Atlético Madrid, Liverpool, Real Madrid, Arsenal, PSG, Bayern, Inter,
+Milan…) en `s-ea-manual` (pantalla "🎮 EA Sports → Europa", sección 🟤
+Recopa de Europa, store `manual_ea_recopa_v1`) — pero al entrar a la
+Recopa **no salía ninguno**.
+
+### Causa raíz
+
+`_buildPool()` (fuente única del pool de la Recopa, consumida tanto por
+`_recopaSortear` como por el overlay "👁 Ver/Añadir equipos por
+competición") sí incluía los 64 vía `window._meaTeamsFor('recopa')` —
+el pool en sí NUNCA estuvo vacío. El problema es que la Recopa **ya
+tenía un 1/64 sorteado** de una vez anterior, con un pool mucho más
+pequeño (quizá 0-2 equipos reales, el resto relleno con BYE/"Plaza
+libre"). El motor **solo vuelve a leer `_buildPool()` en el instante de
+sortear** — con `s.sorteo.r64` ya poblado (32 partidos, una longitud
+VÁLIDA), la migración existente de 2026-07-11 (que descarta un
+`sorteo.r64` de longitud ≠ 32) no detectaba nada raro, así que los 64
+equipos añadidos después nunca entraban en juego: la ronda seguía
+mostrando el bracket viejo, casi todo "Plaza libre (BYE)".
+
+### Fix — detección de pool cambiado + re-sorteo de un click
+
+- **`s.pool`** (ya existía, guarda el pool EXACTO usado al sortear
+  1/64) es la fuente de comparación: `_poolChangedSinceDraw(s)` compara
+  ese array contra un `_buildPool()` fresco (por conjunto, no por
+  orden). Si difiere, `_renderBanner` (pantalla principal `s-recopa`) Y
+  `_renderRoundInner('r64')` (por si el admin navega directo a la
+  ronda) muestran un aviso ámbar con el conteo antes/después.
+- **`window._recopaResortearR64()`** (nuevo): re-sortea el 1/64 con el
+  pool ACTUAL en un solo click desde ese aviso, sin pasar por
+  `_firstPhaseToDraw` (que saltaría r64 por no estar vacío). Avisa si
+  hay resultados ya jugados que se perderían.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** asumir que un `s.sorteo.r64` de longitud válida (32)
+   significa que refleja el pool ACTUAL. Cualquier pantalla que lea el
+   pool de una competición con bracket ya sorteado (Recopa,
+   Intercontinental, Supercopa de Europa…) debe comparar el pool
+   guardado en el momento del sorteo contra el pool en vivo y avisar si
+   difieren — nunca fallar en silencio mostrando el bracket viejo.
+2. Toda competición nueva de este tipo (pool que se puede ampliar
+   DESPUÉS de sortear) hereda el patrón `s.pool` + `_poolChangedSinceDraw`
+   + botón de re-sorteo de un click.
+
+## RIVAL PENDIENTE — la Recopa avanza de ronda aunque un humano no haya jugado, siempre que haya IA clasificada (obligatorio, 2026-08-03)
+
+**Petición usuario 2026-08-03**: "se puede seguir avanzando de rondas
+aunque haya equipos humanos que no hayan jugado, siempre que haya
+equipos IAs clasificados". Con hasta 7 misters humanos repartidos por
+las 32 eliminatorias del 1/64, exigir que **TODOS** los partidos de una
+ronda estuvieran jugados (`_phaseDone`) antes de poder sortear la
+siguiente bloqueaba las 31 eliminatorias restantes esperando a un solo
+humano lento.
+
+### Fix — placeholders `@rc-pending#<fase>:<idx>`
+
+- **`_recopaSortear`** ya NO exige `_phaseDone(s, prev)` al 100% —
+  basta con `_phaseHasAnyDecided(s, prev)` (al menos 1 resultado
+  conocido en la ronda anterior). Si la ronda anterior no está
+  COMPLETA, pide confirmación explicando que los cruces pendientes
+  quedarán como "RIVAL PENDIENTE".
+- **`_drawNext(prevMatches, prevPhase, phase, s)`**: un partido de la
+  ronda anterior sin jugar ya NO se descarta en silencio — ocupa su
+  slot con un placeholder `_pendingRef(prevPhase, idx)` en vez de un
+  nombre de equipo. `_renderMatchCard` lo pinta como "⚠️ RIVAL
+  PENDIENTE" (sin botón de Previa/Simular — no es jugable todavía).
+- **`_resolvePendingRefs(s)`** (llamado desde `_load()` en CADA
+  lectura, barato e idempotente): sustituye cada placeholder por el
+  equipo real en cuanto su partido de origen queda `played`, y
+  re-aplica "humano siempre visitante" (sección de abajo) si al
+  resolverse un lado queda humano y el otro IA. Cascada: al resolver un
+  nivel puede completar un placeholder de OTRA ronda ya sorteada; una
+  sola pasada de `PHASES.forEach` (orden r64→fin) resuelve todos los
+  niveles disponibles en ese momento.
+- **`_pendingMayBeHuman(s, ref)`**: al sortear una ronda con
+  anti-cruce-humano activo (1/64/1/32/Octavos), un placeholder cuyo
+  partido de origen tiene CUALQUIER lado humano se trata como
+  "potencialmente humano" para el emparejador — igual que
+  `_tbdMayBeEa` en la Copa del Rey — para no arriesgarse a que se
+  resuelva en un cruce humano-vs-humano antes de Cuartos.
+- Los persist hooks (`_recopaPersistAfterIa`/`_recopaSaveHumanResult`)
+  llaman a `window._recopaRender()` (todas las rondas montadas, no solo
+  la actual) tras guardar, para que un RIVAL PENDIENTE de otra ronda se
+  vea resuelto al instante sin depender de que el admin navegue.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a exigir `_phaseDone` al 100% para poder
+   sortear la siguiente ronda de la Recopa. El gate es
+   `_phaseHasAnyDecided` (al menos 1 resultado) + confirmación si no
+   está completa.
+2. **PROHIBIDO** que un placeholder RIVAL PENDIENTE sea jugable
+   (Previa/Simular) antes de resolverse — `_renderMatchCard` debe
+   seguir devolviendo la card de espera sin esos botones mientras
+   `_isPendingRef` sea true en cualquiera de los 2 lados.
+3. **PROHIBIDO** que `_resolvePendingRefs` marque un partido como
+   `played` al resolver el placeholder — solo sustituye el NOMBRE; el
+   partido en sí sigue necesitando jugarse/simularse normalmente.
+4. Toda competición de bracket NUEVA con el mismo problema (múltiples
+   humanos repartidos, avance bloqueado por un humano lento) hereda
+   este patrón (`@rc-pending#` es específico de Recopa; una comp nueva
+   define su propio prefijo para no colisionar).
+
+## Recopa de Europa — el humano SIEMPRE juega como visitante frente a un rival IA (obligatorio, 2026-08-03)
+
+**Petición usuario 2026-08-03**: "los equipos humanos juegan siempre
+como visitantes" en la Recopa. `_matchFromPair(p)` (el único punto que
+construye un match a partir de un par `[a,b]`, usado tanto por
+`_drawFirstRound` como por `_drawNext`) fuerza `home=IA, away=humano`
+cuando exactamente un lado del par es un humano concreto (ni BYE ni un
+placeholder RIVAL PENDIENTE — en esos casos no se sabe todavía qué
+ocupará el hueco, así que no se toca el orden hasta que se resuelva).
+Si AMBOS son humanos (permitido desde Cuartos en adelante, ver regla ya
+existente "Los equipos humanos NUNCA se cruzan entre sí antes de
+Cuartos", 2026-07-11) el usuario pidió sorteo aleatorio — no se aplica
+ningún criterio de localía especial entre dos humanos.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_matchFromPair` deje a un humano como local
+   cuando el rival es un IA concreto conocido.
+2. **PROHIBIDO** aplicar la regla "humano siempre visitante" quando uno
+   de los 2 lados es un placeholder RIVAL PENDIENTE — se re-aplica
+   DESPUÉS, en `_resolvePendingRefs`, una vez se conoce el equipo real.
+3. **PROHIBIDO** introducir un criterio de localía (p.ej. "el de mayor
+   nivel juega en casa") para el cruce humano-vs-humano — el usuario
+   pidió explícitamente sorteo aleatorio ahí, igual que cualquier otro
+   cruce.
+4. La regla "humano-vs-humano bloqueado hasta Cuartos" (2026-07-11) NO
+   cambia — el usuario confirmó que el corte actual (bloqueado en
+   1/64·1/32·Octavos, permitido desde Cuartos) es el que quiere.
+
 ## Objetivos del Club — Copa Intercontinental + seed inicial "mismos objetivos que Liverpool" para los 7 humanos (obligatorio, 2026-08-02)
 
 **Petición usuario 2026-08-02** ("quiero que los 7 equipos humanos tengan

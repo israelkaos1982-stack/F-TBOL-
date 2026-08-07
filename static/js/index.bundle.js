@@ -11288,12 +11288,24 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
         mvpTeam: canonicalTeamName(data.mvpTeam || '')
       };
     });
-    /* Persistir la migración para que no haya que rehacerla cada carga. */
+    /* Persistir la migración para que no haya que rehacerla cada carga.
+       Getter/setter único de `ef_liga38_v4` (rama test-localforage,
+       PASO 2, definido en misc_body_2.html — ya cargado para cuando
+       esta función se invoca en runtime): `window._ef38SetResults`
+       actualiza TAMBIÉN la cache en memoria (`sharedLigaResultsCache`)
+       y sincroniza el arreglo al servidor. Un `_lsSetSafe` suelto (el
+       comportamiento anterior) dejaba la cache en memoria con los
+       nombres placeholder viejos hasta la próxima recarga completa —
+       la reparación "no se veía" aunque sí se hubiera guardado en
+       disco. Fallback al `_lsSetSafe` crudo si el setter no está
+       disponible por cualquier motivo. */
     if (_dirtyMigration) {
       try {
-        var _migJ = JSON.stringify(results);
-        if (window._lsSetSafe) window._lsSetSafe('ef_liga38_v4', _migJ);
-        else window._lsSetSafe('ef_liga38_v4', _migJ);
+        if (typeof window._ef38SetResults === 'function') {
+          window._ef38SetResults(results);
+        } else {
+          window._lsSetSafe('ef_liga38_v4', JSON.stringify(results));
+        }
       } catch(_){}
     }
   }

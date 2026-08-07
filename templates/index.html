@@ -272,6 +272,141 @@
       }).catch(function(){});
     }
   </script>
+
+  <!-- ═══ localForage (rama test-localforage — FASE 2, migración quirúrgica) ═══
+       Auditoría previa (Fase 1) en esta misma rama: de las claves pedidas
+       (LIGA_PLAYER_MATCH_STORE / ef_player_stats_v1 / ef_player_stats_copa_v1),
+       `LIGA_PLAYER_MATCH_STORE` NUNCA vive en localStorage — es
+       `window.LIGA_PLAYER_MATCH_STORE`, una variable EN MEMORIA que
+       `rebuildPlayerStatsStore()` usa como fuente y nunca persiste
+       (misc_body_1.html, comentario explícito "no se persiste a
+       localStorage"). No hay nada que migrar ahí. Las 2 claves reales,
+       pesadas y de BAJO riesgo (derivadas/reconstruibles, escritas por
+       un único punto — `_persistBucket` — con reemplazo total, nunca
+       append) son `ef_player_stats_v1` y `ef_player_stats_copa_v1`.
+       `ligaExt_*` y `ef_liga38_v4` (las otras 2 claves "gigantes" del
+       informe) quedan EXCLUIDAS de esta fase a propósito: tienen
+       cientos de lectores SÍNCRONOS (`loadData`/`saveData`, el motor
+       de Liga/Copa) — migrarlas de verdad exigiría convertir esa
+       cadena a async, que es precisamente el riesgo alto que la Fase 1
+       desaconsejó para una migración "quirúrgica". `ef_liga38_v4` SÍ se
+       tocó en esta fase, pero SOLO para centralizar sus lecturas/
+       escrituras en un getter/setter único (ver misc_body_2.html,
+       `window._ef38GetResults`/`_ef38SetResults`/`_ef38ClearResults`)
+       — sigue siendo 100% localStorage, sin localForage de por medio. -->
+  <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+  <script>
+    /* ══════════════════════════════════════════════════════════════
+       `window._lfStatsGet(key)` / `window._lfStatsSet(key, value)`
+
+       Accessor async ÚNICO para las 2 claves migradas, implementando
+       LITERALMENTE el patrón de retrocompatibilidad pedido:
+         1. Intentar leer primero desde localForage (IndexedDB).
+         2. Si no existe en localForage pero SÍ en localStorage:
+            leer el valor de localStorage, copiarlo a localForage y
+            loguear `[MIGRATION] <clave> -> IndexedDB OK`.
+         3. Nunca se borra la copia de localStorage — ambas conviven.
+
+       Por qué esto NO sustituye a localStorage como fuente de los
+       ~40 dashboards de estadísticas que hoy hacen
+       `localStorage.getItem('ef_player_stats_v1')` de forma SÍNCRONA
+       para renderizar al instante: localForage/IndexedDB no tiene API
+       síncrona — no existe forma de "leer primero de IndexedDB" dentro
+       de esas llamadas sin convertirlas a async, que es el mismo
+       cambio de gran superficie que la Fase 1 desaconsejó para
+       `ligaExt_*`. La solución de compromiso, fiel al espíritu de la
+       migración sin ese riesgo:
+         · `_lfStatsSet` (la escritura, con UN solo punto de origen —
+           `_persistBucket`) escribe primero a localForage y LUEGO a
+           localStorage — la copia de IndexedDB es la autoritativa,
+           localStorage es el reflejo que los motores siguen leyendo
+           sync.
+         · En el arranque (más abajo), se ejecuta `_lfStatsGet` para
+           las 2 claves — resuelve la prioridad real (localForage
+           gana si existe) ANTES de que ningún dashboard se abra, y
+           deja el resultado también en localStorage. Así el "leer
+           primero de localForage" ocurre de verdad, una vez, en el
+           único punto donde es seguro hacerlo sin tocar los ~40
+           call-sites de lectura existentes. */
+    window._LF_MIGRATED_KEYS = ['ef_player_stats_v1', 'ef_player_stats_copa_v1'];
+    window._lfReady = false;
+    try {
+      if (typeof localforage !== 'undefined') {
+        localforage.config({
+          name: 'ftbol_localforage',
+          storeName: 'stats_cache_v1',
+          description: 'Copia durable (IndexedDB) de claves pesadas de estadísticas — ver test-localforage'
+        });
+        window._lfReady = true;
+      }
+    } catch (_lfErr) {
+      try { console.warn('[localForage] no disponible, se sigue solo con localStorage:', _lfErr); } catch (_) {}
+    }
+
+    window._lfStatsGet = function (key) {
+      if (!window._lfReady) return Promise.resolve(null);
+      return localforage.getItem(key).then(function (fromLf) {
+        /* 1. localForage gana si ya tiene el dato. */
+        if (fromLf != null) return fromLf;
+        /* 2. Fallback: localStorage → migrar a localForage → log. */
+        var legacy = null;
+        try { legacy = localStorage.getItem(key); } catch (_) {}
+        if (legacy == null) return null;
+        return localforage.setItem(key, legacy).then(function () {
+          try { console.log('[MIGRATION] ' + key + ' -> IndexedDB OK'); } catch (_) {}
+          return legacy;
+        }).catch(function (err) {
+          try { console.warn('[MIGRATION] ' + key + ' -> IndexedDB FAILED (se sigue usando localStorage)', err); } catch (_) {}
+          return legacy;
+        });
+      }).catch(function (err) {
+        try { console.warn('[MIGRATION] lectura de ' + key + ' en IndexedDB falló, cae a localStorage', err); } catch (_) {}
+        try { return localStorage.getItem(key); } catch (_) { return null; }
+      });
+    };
+
+    window._lfStatsSet = function (key, value) {
+      if (window._LF_MIGRATED_KEYS.indexOf(key) === -1) return;
+      /* localForage primero (fuente autoritativa de esta migración). */
+      if (window._lfReady) {
+        try {
+          localforage.setItem(key, value).catch(function (err) {
+            try { console.warn('[localForage] setItem falló para ' + key, err); } catch (_) {}
+          });
+        } catch (_lfWriteErr) {
+          try { console.warn('[localForage] setItem lanzó para ' + key, _lfWriteErr); } catch (_) {}
+        }
+      }
+      /* localStorage después — sigue siendo lo que leen los ~40
+         dashboards síncronos ("mantener intactas las copias" +
+         "sin romper los motores"). */
+      try {
+        if (window._lsSetSafe) window._lsSetSafe(key, value);
+        else localStorage.setItem(key, value);
+      } catch (_lsErr) {
+        try { console.warn('[localForage] fallback localStorage.setItem también falló para ' + key, _lsErr); } catch (_) {}
+      }
+    };
+
+    /* Boot: resolver la prioridad real (localForage > localStorage)
+       para las 2 claves migradas, UNA vez, antes de que ningún
+       dashboard las lea. Async — no bloquea el arranque del resto de
+       la página (splash/hidratación siguen su curso normal). */
+    (function () {
+      if (!window._lfReady) return;
+      window._LF_MIGRATED_KEYS.forEach(function (k) {
+        try {
+          window._lfStatsGet(k).then(function (val) {
+            if (val == null) return;
+            try {
+              if (window._lsSetSafe) window._lsSetSafe(k, val);
+              else localStorage.setItem(k, val);
+            } catch (_) {}
+          }).catch(function () {});
+        } catch (_) {}
+      });
+    })();
+  </script>
 </head>
 <body>
 

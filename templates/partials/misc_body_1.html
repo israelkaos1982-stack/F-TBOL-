@@ -14342,12 +14342,22 @@ window._hdrCleanCache = function(){
         }
         sourceCounts.E_matchStore = rebuilt.length - sourceCounts.D_sqFrom;
 
-        /* Fuente F: ef_liga38_v4 (resultados con scorers). */
+        /* Fuente F: ef_liga38_v4 (resultados con scorers). Lee vía el
+           getter único `window._ef38GetResults` (misc_body_2.html —
+           rama test-localforage, PASO 2: centraliza lecturas/escrituras
+           de esta clave) — prefiere la cache en MEMORIA
+           (`sharedLigaResultsCache`) antes que el disco, igual que ya
+           hacía `parseSavedResults` en index.bundle.js. Fallback al
+           `localStorage.getItem` crudo si el getter aún no está
+           definido (script load order) o no existe. */
         if (rebuilt.length === 0) {
           try {
-            var resR = localStorage.getItem('ef_liga38_v4');
-            if (resR) {
-              var results = JSON.parse(resR) || {};
+            var results = (typeof window._ef38GetResults === 'function') ? window._ef38GetResults() : null;
+            if (!results) {
+              var resR = localStorage.getItem('ef_liga38_v4');
+              results = resR ? (JSON.parse(resR) || {}) : null;
+            }
+            if (results) {
               Object.keys(results).forEach(function(rk){
                 var parts = rk.split('|'); if (parts.length < 3) return;
                 var nh = _normForClick(parts[1]||''), na = _normForClick(parts[2]||'');
@@ -14474,8 +14484,14 @@ window._hdrCleanCache = function(){
             diag += '• LIGA_PLAYER_MATCH_STORE (memoria): ' + Object.keys(mpsC).length + ' partidos\n';
           } catch(_){}
           try {
-            var r8 = localStorage.getItem('ef_liga38_v4');
-            var r8o = r8 ? JSON.parse(r8) : {};
+            /* Getter único `window._ef38GetResults` (rama
+               test-localforage, PASO 2) — cae al raw localStorage
+               solo si el getter aún no está definido. */
+            var r8o = (typeof window._ef38GetResults === 'function') ? window._ef38GetResults() : null;
+            if (!r8o) {
+              var r8 = localStorage.getItem('ef_liga38_v4');
+              r8o = r8 ? JSON.parse(r8) : {};
+            }
             diag += '• ef_liga38_v4 (resultados): ' + Object.keys(r8o||{}).length + ' partidos\n';
           } catch(_){}
           alert(
@@ -17716,11 +17732,18 @@ window._hdrCleanCache = function(){
 
     /* PJ por equipo desde la fuente AUTORITATIVA (ef_liga38_v4 =
        Liga EA Sports, una entrada por jornada+home+away). Cada
-       clave la contamos una vez por cada equipo en bucket 'liga'. */
+       clave la contamos una vez por cada equipo en bucket 'liga'.
+       Getter único `window._ef38GetResults` (rama test-localforage,
+       PASO 2) — prefiere la cache en memoria de misc_body_2.html
+       (más fresca durante una sim batched que aún no confirmó en
+       disco) antes que el `localStorage.getItem` crudo. */
     try {
-      var _pjRaw = localStorage.getItem('ef_liga38_v4');
-      if(_pjRaw){
-        var _pjResults = JSON.parse(_pjRaw);
+      var _pjResults = (typeof window._ef38GetResults === 'function') ? window._ef38GetResults() : null;
+      if (!_pjResults) {
+        var _pjRaw = localStorage.getItem('ef_liga38_v4');
+        _pjResults = _pjRaw ? JSON.parse(_pjRaw) : null;
+      }
+      if(_pjResults){
         var ligaPJ = teamPJByComp.liga;
         Object.keys(_pjResults||{}).forEach(function(k){
           var parts = k.split('|');
@@ -17836,11 +17859,16 @@ window._hdrCleanCache = function(){
       });
     }
 
-    // Source 2: ef_liga38_v4 (Liga EA IA-sims) — siempre bucket 'liga'
+    // Source 2: ef_liga38_v4 (Liga EA IA-sims) — siempre bucket 'liga'.
+    // Getter único `window._ef38GetResults` (rama test-localforage,
+    // PASO 2) — mismo motivo que la Fuente F / conteo de PJ de arriba.
     try {
-      var resRaw = localStorage.getItem('ef_liga38_v4');
-      if(resRaw){
-        var results = JSON.parse(resRaw);
+      var results = (typeof window._ef38GetResults === 'function') ? window._ef38GetResults() : null;
+      if (!results) {
+        var resRaw = localStorage.getItem('ef_liga38_v4');
+        results = resRaw ? JSON.parse(resRaw) : null;
+      }
+      if(results){
         var ligaBucket = buckets.liga;
         Object.keys(results||{}).forEach(function(key){
           var r = results[key]; if(!r||!r.events) return;
@@ -18312,7 +18340,31 @@ window._hdrCleanCache = function(){
         rec.pj = pjBucket[teamN] || 0;
         out[k] = rec;
       });
-      try { window._lsSetSafe(key, JSON.stringify(out)); } catch(_){}
+      var _serialized = JSON.stringify(out);
+      /* Migración quirúrgica a localForage (rama test-localforage,
+         `window._LF_MIGRATED_KEYS` = ef_player_stats_v1 +
+         ef_player_stats_copa_v1, definidas en templates/index.html):
+         `_lfStatsSet` escribe primero a IndexedDB (fuente autoritativa
+         de esta migración) y LUEGO a localStorage (lo que siguen
+         leyendo los ~40 dashboards síncronos existentes — nada se
+         rompe). El resto de claves de `_persistBucket` (las otras
+         ~16 de este mismo helper: Superliga, UCL/UEL/UECL, Recopa,
+         USC, Inter, Mundial, Sel, Torneos, Copa…) NO están en la
+         lista migrada, así que siguen exactamente igual que siempre
+         — solo `_lsSetSafe`, sin tocar localForage. Todo bajo
+         try/catch: si el CDN de localForage no cargó o IndexedDB
+         falla, `_lfStatsSet` ya cae sola a `_lsSetSafe` por dentro. */
+      try {
+        if (typeof window._lfStatsSet === 'function' &&
+            typeof window._LF_MIGRATED_KEYS !== 'undefined' &&
+            window._LF_MIGRATED_KEYS.indexOf(key) !== -1) {
+          window._lfStatsSet(key, _serialized);
+        } else {
+          window._lsSetSafe(key, _serialized);
+        }
+      } catch(_){
+        try { window._lsSetSafe(key, _serialized); } catch(__){}
+      }
     }
     _persistBucket(buckets.superliga, teamPJByComp.superliga, COMP_CACHE_KEYS.superliga);
     _persistBucket(buckets.uel,       teamPJByComp.uel,       COMP_CACHE_KEYS.uel);
@@ -67423,8 +67475,20 @@ https://api.sofascore.app/api/v1/team/44/image
        'ef_player_stats_segunda_v1'
       ].forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
       /* 2) Fuentes de RESULTADOS de Liga EA (la tabla de Liga se calcula
-            de aquí; sin borrarlas, el rebuild las resucita). */
-      try { localStorage.removeItem('ef_liga38_v4'); } catch(_){}
+            de aquí; sin borrarlas, el rebuild las resucita).
+            `ef_liga38_v4` pasa por el getter/setter/clear único
+            (`window._ef38ClearResults`, misc_body_2.html — rama
+            test-localforage, PASO 2). Un `removeItem` suelto aquí
+            dejaba `sharedLigaResultsCache` (la cache en MEMORIA de
+            misc_body_2.html) con los resultados VIEJOS después del
+            reset — `loadResults()`/`window.loadResults()` seguían
+            devolviendo la liga anterior hasta la próxima recarga
+            completa de la página. `_ef38ClearResults` resetea disco Y
+            cache a la vez. */
+      try {
+        if (typeof window._ef38ClearResults === 'function') window._ef38ClearResults();
+        else localStorage.removeItem('ef_liga38_v4');
+      } catch(_){}
       try { localStorage.removeItem('ef_liga38_schedule_v2'); } catch(_){}
       try {
         if (window.LIGA_PLAYER_MATCH_STORE && typeof window.LIGA_PLAYER_MATCH_STORE === 'object') {

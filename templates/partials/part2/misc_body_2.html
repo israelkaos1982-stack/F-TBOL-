@@ -5830,8 +5830,15 @@
     // 3) Regenerar calendario EA con los nuevos 20 + resetear su clasificación.
     var newSchedule = generarCalendario(mezclarEquipos(newEaNames.slice()));
     setLigaSchedule(newSchedule); // persiste local+server y refresca TEAMS
-    try { localStorage.removeItem(LS_KEY); } catch(_){}      // ef_liga38_v4 (resultados viejos)
-    try { sharedLigaResultsCache = {}; } catch(_){}
+    /* Getter/setter/clear único de ef_liga38_v4 (rama test-localforage,
+       PASO 2): antes esto vaciaba localStorage y la cache en memoria
+       por separado, a mano, aquí y en el reset de "Reiniciar Temporada"
+       (misc_body_1.html) — que se olvidaba de tocar la cache. Ahora los
+       dos pasan por el mismo `_ef38ClearResults()`. */
+    try {
+      if (typeof window._ef38ClearResults === 'function') window._ef38ClearResults();
+      else { localStorage.removeItem(LS_KEY); sharedLigaResultsCache = {}; }
+    } catch(_){}
 
     // 4) Resetear estado de Hypermotion (su roster cambió) y su cache de equipos.
     saveSegundaState({table:[],players:[]});
@@ -6905,6 +6912,49 @@
      clasificación se quedaba con solo media liga aunque la cache
      en memoria sí tuviera los 38 jornadas. */
   try { window.loadResults = loadResults; } catch(_){}
+
+  /* ══════════════════════════════════════════════════════════════
+     GETTER/SETTER/CLEAR ÚNICO para `ef_liga38_v4` (rama
+     test-localforage, PASO 2 de la Fase 2 — NO se migra a
+     localForage en este paso, solo se centraliza).
+
+     Auditoría previa: además de este `loadResults`/`saveResults`
+     (que ya cachean en memoria vía `sharedLigaResultsCache`), había
+     AL MENOS 6 puntos más leyendo/escribiendo `ef_liga38_v4`
+     directamente con `localStorage.getItem/removeItem('ef_liga38_v4')`,
+     saltándose esta cache:
+       · misc_body_1.html (Fuente F del panel de diagnóstico, x2
+         lecturas) — leía el disco aunque la cache en memoria tuviera
+         un valor más fresco (mismo bug que ya se documentó para
+         `parseSavedResults` en index.bundle.js, comentario arriba).
+       · misc_body_1.html (`rebuildPlayerStatsStore`, x2 lecturas:
+         conteo de PJ y Source 2 de goles) — idem.
+       · misc_body_1.html (reset "Reiniciar Temporada"): hacía
+         `localStorage.removeItem('ef_liga38_v4')` SIN tocar
+         `sharedLigaResultsCache` — la cache en memoria de ESTE
+         cierre (`misc_body_2.html`) se quedaba con los resultados
+         VIEJOS después del reset, así que `loadResults()`/
+         `window.loadResults()` seguían devolviendo la liga anterior
+         hasta la próxima recarga completa de la página. Bug real,
+         no solo redundancia de código.
+       · Un 3er IIFE independiente en misc_body_2.html (picker de
+         MVP genérico, `RESULTS_KEY='ef_liga38_v4'`) con su propio
+         `loadResults()` local que tampoco pasaba por la cache
+         compartida.
+
+     `window._ef38GetResults`/`window._ef38SetResults` son alias
+     directos de las funciones de arriba (mismo comportamiento, cero
+     cambio funcional) — el nombre explícito deja claro que ES el
+     punto único. `window._ef38ClearResults` es NUEVO: centraliza el
+     "vaciar ef_liga38_v4" para que SIEMPRE se resetee la cache en
+     memoria a la vez que el disco, cerrando el bug de arriba. */
+  function clearResults(){
+    sharedLigaResultsCache = {};
+    try { localStorage.removeItem(LS_KEY); } catch(_){}
+  }
+  try { window._ef38GetResults = loadResults; } catch(_){}
+  try { window._ef38SetResults = saveResults; } catch(_){}
+  try { window._ef38ClearResults = clearResults; } catch(_){}
 
   /* ── HELPERS ─────────────────────────────────────── */
   var TEAM_NAME_CACHE = {};
@@ -22074,7 +22124,21 @@
   var cursor = 0;
 
   function esc(s){ return String(s||'').replace(/[&<>\"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]); }); }
-  function loadResults(){ try { return JSON.parse(localStorage.getItem(RESULTS_KEY) || '{}'); } catch(e){ return {}; } }
+  /* Getter único `window._ef38GetResults` (rama test-localforage, PASO 2):
+     este IIFE tenía su PROPIA lectura directa de `ef_liga38_v4`, sin
+     pasar por la cache en memoria (`sharedLigaResultsCache`) que usa el
+     resto del proyecto — podía ver una liga desactualizada durante una
+     sim batched (que difiere la persistencia a disco hasta el final).
+     Fallback al raw localStorage si el getter aún no está definido. */
+  function loadResults(){
+    try {
+      if (typeof window._ef38GetResults === 'function') {
+        var r = window._ef38GetResults();
+        if (r && typeof r === 'object') return r;
+      }
+    } catch(_){}
+    try { return JSON.parse(localStorage.getItem(RESULTS_KEY) || '{}'); } catch(e){ return {}; }
+  }
   function rKey(j,h,a){ return j + '|' + h + '|' + a; }
 
   function buildLigaPending(){

@@ -293,55 +293,38 @@
        tocó en esta fase, pero SOLO para centralizar sus lecturas/
        escrituras en un getter/setter único (ver misc_body_2.html,
        `window._ef38GetResults`/`_ef38SetResults`/`_ef38ClearResults`)
-       — sigue siendo 100% localStorage, sin localForage de por medio. -->
-  <script src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"></script>
+       — sigue siendo 100% localStorage, sin localForage de por medio.
+
+       ── FIX 2026-08-07 (rama "no funciona") ──────────────────────
+       El `<script src="…jsdelivr…">` original NO llevaba `defer`/
+       `async`: es un script de un CDN de terceros colocado ANTES del
+       `<div id="boot-splash">`, así que BLOQUEABA el parseo de
+       `<head>` (y por tanto la aparición del propio splash y todo lo
+       que viene después en `<body>`) hasta que el navegador consiguiera
+       descargarlo — o hasta agotar el timeout de red si jsdelivr está
+       bloqueado/inalcanzable (red móvil restrictiva, firewall
+       corporativo, el usuario sin conexión). Es EXACTAMENTE la clase
+       de fallo que este proyecto lleva evitando desde siempre (ver
+       las docenas de reglas de este archivo sobre XHR síncrono /
+       thundering herd / splash que se queda colgado) — solo que aquí
+       el bloqueo no es un XHR, es un `<script>` sin `defer`, así que
+       el guardián `tools/check_js_blocks.py` (que solo vigila XHR
+       síncrono) no lo detecta.
+
+       Fix: el CDN se carga con `defer` (no bloquea el parseo) y el
+       cableado de la API (`_lfStatsGet`/`_lfStatsSet`/config) se separa
+       en 2 pasos — (1) definir la API SIEMPRE, de forma síncrona y sin
+       red, para que cualquier caller (`_persistBucket`) la encuentre
+       ya definida aunque el CDN tarde o nunca llegue a cargar; (2) el
+       `onload`/`onerror` del script diferido activa `localforage.config`
+       + `_lfReady=true` + la resolución de arranque SOLO si/cuando el
+       CDN responde — nunca bloqueando nada. Con `_lfReady=false` (CDN
+       lento/caído/offline), `_lfStatsSet` sigue escribiendo en
+       localStorage igual que siempre — el comportamiento de fallback
+       ya existía, ahora también se alcanza sin esperar a la red. -->
   <script>
-    /* ══════════════════════════════════════════════════════════════
-       `window._lfStatsGet(key)` / `window._lfStatsSet(key, value)`
-
-       Accessor async ÚNICO para las 2 claves migradas, implementando
-       LITERALMENTE el patrón de retrocompatibilidad pedido:
-         1. Intentar leer primero desde localForage (IndexedDB).
-         2. Si no existe en localForage pero SÍ en localStorage:
-            leer el valor de localStorage, copiarlo a localForage y
-            loguear `[MIGRATION] <clave> -> IndexedDB OK`.
-         3. Nunca se borra la copia de localStorage — ambas conviven.
-
-       Por qué esto NO sustituye a localStorage como fuente de los
-       ~40 dashboards de estadísticas que hoy hacen
-       `localStorage.getItem('ef_player_stats_v1')` de forma SÍNCRONA
-       para renderizar al instante: localForage/IndexedDB no tiene API
-       síncrona — no existe forma de "leer primero de IndexedDB" dentro
-       de esas llamadas sin convertirlas a async, que es el mismo
-       cambio de gran superficie que la Fase 1 desaconsejó para
-       `ligaExt_*`. La solución de compromiso, fiel al espíritu de la
-       migración sin ese riesgo:
-         · `_lfStatsSet` (la escritura, con UN solo punto de origen —
-           `_persistBucket`) escribe primero a localForage y LUEGO a
-           localStorage — la copia de IndexedDB es la autoritativa,
-           localStorage es el reflejo que los motores siguen leyendo
-           sync.
-         · En el arranque (más abajo), se ejecuta `_lfStatsGet` para
-           las 2 claves — resuelve la prioridad real (localForage
-           gana si existe) ANTES de que ningún dashboard se abra, y
-           deja el resultado también en localStorage. Así el "leer
-           primero de localForage" ocurre de verdad, una vez, en el
-           único punto donde es seguro hacerlo sin tocar los ~40
-           call-sites de lectura existentes. */
     window._LF_MIGRATED_KEYS = ['ef_player_stats_v1', 'ef_player_stats_copa_v1'];
     window._lfReady = false;
-    try {
-      if (typeof localforage !== 'undefined') {
-        localforage.config({
-          name: 'ftbol_localforage',
-          storeName: 'stats_cache_v1',
-          description: 'Copia durable (IndexedDB) de claves pesadas de estadísticas — ver test-localforage'
-        });
-        window._lfReady = true;
-      }
-    } catch (_lfErr) {
-      try { console.warn('[localForage] no disponible, se sigue solo con localStorage:', _lfErr); } catch (_) {}
-    }
 
     window._lfStatsGet = function (key) {
       if (!window._lfReady) return Promise.resolve(null);
@@ -367,7 +350,8 @@
 
     window._lfStatsSet = function (key, value) {
       if (window._LF_MIGRATED_KEYS.indexOf(key) === -1) return;
-      /* localForage primero (fuente autoritativa de esta migración). */
+      /* localForage primero (fuente autoritativa de esta migración),
+         solo si el CDN llegó a cargar. */
       if (window._lfReady) {
         try {
           localforage.setItem(key, value).catch(function (err) {
@@ -379,7 +363,8 @@
       }
       /* localStorage después — sigue siendo lo que leen los ~40
          dashboards síncronos ("mantener intactas las copias" +
-         "sin romper los motores"). */
+         "sin romper los motores"), y el ÚNICO destino si el CDN
+         nunca llegó a cargar. */
       try {
         if (window._lsSetSafe) window._lsSetSafe(key, value);
         else localStorage.setItem(key, value);
@@ -388,12 +373,28 @@
       }
     };
 
-    /* Boot: resolver la prioridad real (localForage > localStorage)
-       para las 2 claves migradas, UNA vez, antes de que ningún
-       dashboard las lea. Async — no bloquea el arranque del resto de
-       la página (splash/hidratación siguen su curso normal). */
-    (function () {
-      if (!window._lfReady) return;
+    /* Llamado por el `onload`/`onerror` del script diferido de abajo —
+       nunca desde el parseo síncrono de `<head>`. Si `localforage` no
+       llegó a definirse (CDN inalcanzable/timeout), `_lfReady` se
+       queda en `false` y la API de arriba sigue funcionando en modo
+       solo-localStorage sin que nadie tenga que esperar nada. */
+    window._lfBootInit = function () {
+      try {
+        if (typeof localforage === 'undefined') return;
+        localforage.config({
+          name: 'ftbol_localforage',
+          storeName: 'stats_cache_v1',
+          description: 'Copia durable (IndexedDB) de claves pesadas de estadísticas — ver test-localforage'
+        });
+        window._lfReady = true;
+      } catch (_lfErr) {
+        try { console.warn('[localForage] no disponible, se sigue solo con localStorage:', _lfErr); } catch (_) {}
+        return;
+      }
+      /* Resolver la prioridad real (localForage > localStorage) para
+         las 2 claves migradas, UNA vez, antes de que ningún dashboard
+         las lea. Async — no bloquea el arranque del resto de la
+         página (splash/hidratación siguen su curso normal). */
       window._LF_MIGRATED_KEYS.forEach(function (k) {
         try {
           window._lfStatsGet(k).then(function (val) {
@@ -405,8 +406,10 @@
           }).catch(function () {});
         } catch (_) {}
       });
-    })();
+    };
   </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/localforage@1.10.0/dist/localforage.min.js"
+          onload="window._lfBootInit()" onerror="window._lfBootInit()"></script>
 </head>
 <body>
 

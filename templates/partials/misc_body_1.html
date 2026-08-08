@@ -26969,6 +26969,30 @@ window._hdrCleanCache = function(){
           /* Server más viejo que el local → no pisar (preserva los
              cambios del usuario que aún no han subido al server). */
           if (srvUpd && localUpd && srvUpd <= localUpd) {
+            /* RE-EMPUJE (2026-08-08, refuerzo): si llegamos aquí es que
+               el guardado anterior de este torneo NUNCA llegó a
+               confirmarse en el servidor (los 3 intentos de `_tourSave`
+               se agotaron — payload grande + red lenta, caso real
+               reportado por el usuario con el aviso en pantalla). Sin
+               re-empuje, esta rama SOLO conservaba el local en la
+               sesión actual — la próxima vez que se abriera la pantalla
+               del torneo (`_tourRender`'s `_tourLoad` de fondo) volvía a
+               pasar por aquí, volvía a "no pisar", y así indefinidamente
+               sin que NADA reintentara subir al servidor. Reintentamos
+               aquí (con throttle de 20 s por sello local, para no
+               martillear el servidor en cada refresco de fondo) para
+               que el partido se autocure solo con reabrir la pantalla,
+               hasta que la conexión lo permita — tal como promete el
+               aviso de `_tourSave`. */
+            try {
+              window._tourRepushThrottle = window._tourRepushThrottle || {};
+              var _rpKey = id + '|' + localUpd;
+              var _rpNow = Date.now();
+              if (!window._tourRepushThrottle[_rpKey] || (_rpNow - window._tourRepushThrottle[_rpKey]) > 20000) {
+                window._tourRepushThrottle[_rpKey] = _rpNow;
+                if (typeof window._tourSave === 'function') window._tourSave(id, localCfg || cfg);
+              }
+            } catch(_){}
             return localCfg || cfg;
           }
           /* ANTI-CLOBBER DE RE-SORTEO (bug 2026-06-25, «Mundial 2032: el 80%

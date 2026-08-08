@@ -15638,6 +15638,115 @@
     document.getElementById('gm-team-pick').style.display = 'flex';
   };
 
+  /* ═══════ AUTO-SELECCIÓN DE JUGADOR — EQUIPOS ❓ (SÍMIL eFootball) ═══════
+     "ficticio = tiene alias" es la regla ya establecida del proyecto
+     (`getTeamEfootballAlias`): un equipo con alias asignado es el que
+     muestra el botón ❓ en la previa porque no existe con licencia real
+     en eFootball 26 y juega con un equipo símil. Para ESE equipo, al
+     registrar un evento del acta, el picker manual de plantilla se
+     salta — se asigna automáticamente al jugador más idóneo según el
+     tipo de evento y sus flags (C/P/F/⭐/⚾/🏀) + posición + power. */
+  window._gmIsFicticioTeam = function (teamName) {
+    try {
+      return !!(typeof window.getTeamEfootballAlias === 'function'
+        && window.getTeamEfootballAlias(teamName));
+    } catch (_) { return false; }
+  };
+
+  /* Normaliza CUALQUIER shape de squad que devuelva `_gmGetSquad`
+     (array plano de sqFromRegistryFull, o con headers {h:'...'} del
+     roster pegado en el editor) a una lista uniforme de candidatos. */
+  window._gmFlattenSquad = function (sq) {
+    var posMap = {
+      '🧤 PORTEROS': 'P', '🛡 DEFENSAS': 'D', '⚙️ MEDIOS': 'M', '⚡ DELANTEROS': 'F',
+      '⚙️CENTROCAMPISTAS': 'M', '⚙️ CENTROCAMPISTAS': 'M'
+    };
+    var out = []; var curPos = 'M';
+    (sq || []).forEach(function (p) {
+      if (!p) return;
+      if (p.h) { curPos = posMap[p.h] || curPos; return; }
+      var rawPos = String((p && p[2]) || '').toUpperCase();
+      var pos = (rawPos === 'P' || rawPos === 'D' || rawPos === 'M' || rawPos === 'F')
+        ? rawPos : (posMap[p[2]] || curPos);
+      out.push({
+        num: String((p && p[0]) || '').trim(),
+        name: String((p && p[1]) || '').trim() || 'Jugador',
+        pos: pos,
+        power: Number(p && p[3]) || 0,
+        captain: !!(p && p.captain),
+        freeKick: !!(p && p.freeKick),
+        penalty: !!(p && p.penalty),
+        elite: !!(p && p.elite),
+        natGoal: !!(p && p.natGoal),
+        natGoalPro: !!(p && p.natGoalPro)
+      });
+    });
+    return out;
+  };
+
+  /* Selector inteligente: devuelve {num,name} del jugador elegido para
+     `evtType`, o null si la plantilla vino totalmente vacía (nunca pasa
+     con `_gmGetSquad`, que siempre cae al roster genérico de 30). */
+  window._gmAutoPickPlayer = function (teamName, evtType) {
+    var raw = (typeof window._gmGetSquad === 'function') ? window._gmGetSquad(teamName) : [];
+    var cand = window._gmFlattenSquad(raw);
+    if (!cand.length) return null;
+
+    function byPower(list) {
+      if (!list || !list.length) return null;
+      return list.slice().sort(function (a, b) { return b.power - a.power; })[0];
+    }
+    function byPowerAsc(list) {
+      if (!list || !list.length) return null;
+      return list.slice().sort(function (a, b) { return a.power - b.power; })[0];
+    }
+    function bestWithFlag(flag) {
+      return byPower(cand.filter(function (p) { return p[flag]; }));
+    }
+    function bestOfPos(pos) {
+      return byPower(cand.filter(function (p) { return p.pos === pos; }));
+    }
+
+    var pick = null;
+    switch (evtType) {
+      case 'falta-gol':                       /* Gol de Falta */
+        pick = bestWithFlag('freeKick') || bestWithFlag('natGoalPro')
+          || bestWithFlag('natGoal') || bestOfPos('F') || byPower(cand);
+        break;
+      case 'pen-gol':                         /* Penalti anotado (wizard) */
+      case 'pen-fallo':                       /* Penalti fallado (wizard) */
+        pick = bestWithFlag('penalty') || bestWithFlag('natGoalPro')
+          || bestWithFlag('natGoal') || bestOfPos('F') || byPower(cand);
+        break;
+      case 'gol':                             /* Gol de campo */
+        pick = bestWithFlag('natGoalPro') || bestWithFlag('natGoal')
+          || bestOfPos('F') || byPower(cand);
+        break;
+      case 'mvp':                             /* MVP del Partido */
+        pick = bestWithFlag('elite') || bestWithFlag('natGoalPro')
+          || bestWithFlag('natGoal') || byPower(cand);
+        break;
+      case 'porteria':                        /* P. Imbatida */
+      case 'pen-parado':                      /* Penalti parado (wizard) */
+        pick = bestOfPos('P') || byPower(cand);
+        break;
+      case 'propia':                          /* Autogol → defensa de menos power */
+        pick = byPowerAsc(cand.filter(function (p) { return p.pos === 'D'; })) || byPowerAsc(cand);
+        break;
+      case 'amarilla':                        /* Tarjeta Amarilla */
+      case 'damarilla':                       /* Doble Amarilla */
+      case 'd-amarilla':
+      case 'roja':                            /* Roja Directa */
+        pick = byPower(cand.filter(function (p) { return p.pos === 'D' || p.pos === 'M'; }))
+          || byPower(cand.filter(function (p) { return p.pos !== 'P'; })) || byPower(cand);
+        break;
+      default:
+        pick = byPower(cand);
+    }
+    if (!pick) return null;
+    return { num: pick.num, name: pick.name };
+  };
+
   function _gmGetSquad(teamName) {
     /* CLUB humano → resolver el slot de SU mister (Toñín=Liverpool,
        Rubén=Inter, …) para que el picker SIEMPRE muestre la plantilla
@@ -15778,6 +15887,19 @@
     if (!_gm.pendingEvt) return;
     _gm.pendingTeam = team;
     document.getElementById('gm-team-pick').style.display = 'none';
+
+    /* Equipo ❓ (símil eFootball) → asignación AUTOMÁTICA del jugador,
+       sin pasar por el picker manual de plantilla. */
+    var teamName = team === 'a' ? _gm.home : _gm.away;
+    if (window._gmIsFicticioTeam && window._gmIsFicticioTeam(teamName)) {
+      var auto = window._gmAutoPickPlayer(teamName, _gm.pendingEvt.type);
+      if (auto) {
+        window.gmPickPlayer(team, auto.num, auto.name);
+        return;
+      }
+      /* Sin ningún candidato resoluble (plantilla vacía de verdad) →
+         cae al picker manual normal como red de seguridad. */
+    }
     _gmRenderPlayerPick(team);
   };
 

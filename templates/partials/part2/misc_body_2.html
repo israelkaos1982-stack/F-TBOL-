@@ -10859,6 +10859,64 @@
     document.addEventListener('pointerdown', _onTouch, { passive:true, capture:true });
   })();
 
+  /* ── Respaldo táctil de la PANTALLA DE PREVIA — checklist + confirmar
+     (obligatorio, 2026-08-08) ────────────────────────────────────────
+     Bug reportado (usuario, foto «PANTALLA DE PREVIA», Real Madrid vs
+     Liverpool, Trofeo Joan Gamper Jornada 1, partido HvH): el partido se
+     quedaba atascado en "PREVIA" — marcador "-" — sin poder avanzar por
+     más veces que se intentara. Causa: el checklist previo (`.pp-item`,
+     p.ej. "⚽️ Balón", cableado en `_renderList` de index.bundle.js) y el
+     botón "🎮 CONFIRMAR CONFIGURACIÓN" (`pp-confirm-btn`, que da paso a
+     "▶ COMENZAR PARTIDO" y solo entonces habilita jugar/registrar el
+     acta) dependían ÚNICAMENTE del evento `click` sintético — la MISMA
+     ambigüedad tap-vs-scroll ya documentada y arreglada para el picker
+     de portería imbatida y para 🏁 FINALIZAR (bloque justo arriba). La
+     Previa es una pantalla larga con scroll (escudo, nivel, duración,
+     balón, alertas…), así que un toque real sobre una fila del
+     checklist puede interpretarse como intento de scroll y cancelar el
+     `click`: el check se queda sin marcar, el botón sigue bloqueado
+     ("🔒 MARCA TODAS LAS CASILLAS") para siempre sin ningún error
+     visible — el usuario nunca llega a poder jugar el partido, así que
+     NUNCA hay resultado que guardar (no es un bug de persistencia en
+     backend: el partido jamás se inicia).
+
+     Fix: mismo patrón de delegación en `document` que ya protege a
+     FINALIZAR. `_ppToggle`/`_ppConfirm` (definidas en index.bundle.js,
+     cargado DESPUÉS de este archivo) se resuelven en `window.*` en el
+     instante del toque, no al registrar el listener — igual que ya
+     hace el bloque de FINALIZAR con `_mlConfirmEnd`/`gmEndMatch`. Ambas
+     son idempotentes (alternan/leen estado, no acumulan), así que el
+     cooldown compartido evita un doble disparo si el `click` normal SÍ
+     llega después del touchstart. */
+  (function(){
+    var _lastTap2 = { el: null, ts: 0 };
+    function _fireTap(el, action){
+      if (!el || el.disabled) return;
+      var now = Date.now();
+      if (_lastTap2.el === el && (now - _lastTap2.ts) < 500) return;
+      _lastTap2.el = el; _lastTap2.ts = now;
+      try { action(); } catch(err) { try { console.error('[Previa respaldo táctil] falló:', err); } catch(_){} }
+    }
+    function _onTouchPrevia(e){
+      var target = e.target;
+      if (!target || !target.closest) return;
+      var confirmBtn = target.closest('#pp-confirm-btn');
+      if (confirmBtn) {
+        _fireTap(confirmBtn, function(){ if (typeof window._ppConfirm === 'function') window._ppConfirm(); });
+        return;
+      }
+      var item = target.closest('.pp-item');
+      if (item) {
+        /* Tocar el lápiz de editar duración no debe marcar/desmarcar el check. */
+        if (target.closest('[data-edit]')) return;
+        var id = item.getAttribute('data-ppid');
+        if (id) _fireTap(item, function(){ if (typeof window._ppToggle === 'function') window._ppToggle(id); });
+      }
+    }
+    document.addEventListener('touchstart', _onTouchPrevia, { passive:true, capture:true });
+    document.addEventListener('pointerdown', _onTouchPrevia, { passive:true, capture:true });
+  })();
+
   window.mlEndMatchGen = function(mk, winner) {
     var st=_mlSt(mk);
     if (st.finished) return;
@@ -16570,7 +16628,7 @@
     if (addBtn) { addBtn.disabled = true; }
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
-    if (_gm._isTour) {
+    if (_gm._isTour || _gm.comp === 'torneo') {
       /* Torneos de verano (SCT, PSS, JG, Asia): persistimos en
          TOUR_CACHE[_tourId].results[_tourKey]. Si esa key es de KO
          single-leg y el partido acabó empatado, el penWinner viene
@@ -16578,7 +16636,23 @@
          se encarga de re-renderizar y, si el torneo termina, de
          acreditar premios a las cajas humanas. Pasamos también el
          acta (events + MVP) para que el visor 📋 ACTA del torneo
-         pueda mostrar el desglose minuto-a-minuto del partido. */
+         pueda mostrar el desglose minuto-a-minuto del partido.
+
+         Condición ampliada con `|| _gm.comp === 'torneo'` (obligatorio,
+         2026-08-08): esta era la ÚNICA rama de esta cadena SIN el
+         respaldo `comp === '<x>'` que ya tienen sus hermanas (Copa,
+         Superliga, Recopa, Inter, unas líneas más abajo) — asimetría
+         estructural real en el código. `_gm.comp` lo fija `gmOpen`
+         directamente del argumento literal `'torneo'` que pasa
+         `abrirTorneo`, así que es una señal más estable que el trío
+         `_isTour`/`_tourId`/`_tourKey` (depende de que
+         `window._gmPendingTour` se consuma en el instante exacto de
+         `gmOpen`). Bug reportado (usuario, Trofeo Joan Gamper J1, Real
+         Madrid-Acsa vs Liverpool-Toñín HvH): partido jugado y
+         finalizado por completo — acta, estadísticas y el mensaje de
+         WhatsApp salieron perfectos — pero el resultado nunca llegó a
+         `cfg.results`, así que la ficha del partido seguía mostrando
+         "PREVIA"/"-" por más veces que se repitiera. */
       try {
         var _tourPenWin = _gm.penWinner || null;
         if (!_tourPenWin) {
@@ -16600,10 +16674,31 @@
           home: _gm.home,
           away: _gm.away
         };
-        if (typeof window._tourSaveHumanResult === 'function') {
+        if (!_gm._tourId || !_gm._tourKey) {
+          /* Contexto de torneo PERDIDO (obligatorio, 2026-08-08): antes
+             esto caía en silencio a `if (!tourId || !key...) return;`
+             dentro de `_tourSaveHumanResult` — el partido "finalizaba"
+             perfectamente (acta, WhatsApp) pero nunca llegaba a
+             `cfg.results`, sin ningún aviso. Ahora se avisa de forma
+             VISIBLE para poder diagnosticar la causa exacta con
+             certeza si vuelve a pasar, en vez de adivinar. */
+          _gmCriticalNotice('⚠️ El resultado NO se ha podido guardar en el torneo — '
+              + 'se perdió el contexto (tourId=' + (_gm._tourId || '∅') + ', tourKey=' + (_gm._tourKey || '∅') + ').\n\n'
+              + 'El acta/WhatsApp de este partido son correctos, pero la ficha del '
+              + 'torneo seguirá en PREVIA. Avisa para que se investigue con este dato.');
+        } else if (typeof window._tourSaveHumanResult === 'function') {
           window._tourSaveHumanResult(_gm._tourId, _gm._tourKey, _gm.sc.a, _gm.sc.b, _tourPenWin, _tourExtra);
+        } else {
+          _gmCriticalNotice('⚠️ El resultado NO se ha podido guardar en el torneo — '
+              + 'falta window._tourSaveHumanResult. Avisa para que se investigue.');
         }
-      } catch(_e){}
+      } catch(_e){
+        try {
+          _gmCriticalNotice('⚠️ El resultado NO se ha podido guardar en el torneo (error interno): '
+              + (_e && _e.message || _e) + '.\n\nEl acta/WhatsApp de este partido son correctos, pero '
+              + 'la ficha del torneo seguirá en PREVIA. Avisa para que se investigue con este dato.');
+        } catch(__){}
+      }
     } else if (_gm._isWprev) {
       /* Previa Champions · fase de grupos (jornada del grupo con
          humano): persistimos en wprev_state_v1 (no en la tabla de

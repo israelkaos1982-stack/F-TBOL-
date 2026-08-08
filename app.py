@@ -17,14 +17,49 @@ import urllib.error
 from datetime import datetime, timezone
 from functools import wraps
 
+from jinja2 import FileSystemLoader
+
 from jugadores_data import jugadores_por_equipo
 from logica_liga import calcular_tabla, obtener_resultados_ia
 from sync_merge import (
     tour_cfg_merge, sel_squad_merge, copa_state_merge, bracket_state_merge,
     _count_played as _tour_count_played,
 )
+from strip_js_comments import strip_html_js_comments
 
 app = Flask(__name__)
+
+# ── PLANTILLAS SIN COMENTARIOS JS EN EL HTML SERVIDO ───────────────────────
+# `misc_body_1.html`/`misc_body_2.html` llevan ~1/3 de su JS en comentarios
+# de documentación (el mismo historial que vive en CLAUDE.md, duplicado en
+# el propio código y descargado por CADA usuario en CADA carga). Este loader
+# quita esos comentarios /* */ del texto fuente de esos DOS partials ANTES
+# de que Jinja los compile — nunca toca los archivos en disco, nunca corre
+# por request (Jinja cachea la plantilla ya compilada tras la 1ª vez que se
+# usa; solo se re-ejecuta si el archivo cambia con auto-reload activo).
+# Es 100% seguro: ninguna de las 2 plantillas tiene una etiqueta Jinja
+# ({{ }} / {% %}) DENTRO de un <script> — verificado 2026-08-08 — así que
+# quitar comentarios del texto fuente jamás puede alterar lo que Jinja
+# renderiza. `strip_html_js_comments` además tiene su propio fail-safe: ante
+# cualquier duda dentro de UN bloque <script>, deja ESE bloque intacto.
+_STRIP_JS_COMMENTS_TEMPLATES = {
+    "partials/misc_body_1.html",
+    "partials/part2/misc_body_2.html",
+}
+
+
+class _CommentStrippingLoader(FileSystemLoader):
+    def get_source(self, environment, template):
+        source, filename, uptodate = super().get_source(environment, template)
+        if template in _STRIP_JS_COMMENTS_TEMPLATES:
+            try:
+                source, _stats = strip_html_js_comments(source)
+            except Exception:
+                pass
+        return source, filename, uptodate
+
+
+app.jinja_env.loader = _CommentStrippingLoader(app.template_folder)
 
 # ── COMPRESIÓN GZIP ────────────────────────────────────────────────────────
 # El HTML renderizado (~6.5 MB inline) y los bundles JS/CSS (~900 KB) se

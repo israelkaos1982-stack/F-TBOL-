@@ -131,23 +131,59 @@ window.pG = function(fn) {
      es una variable en MEMORIA — se resetea a `false` en cada recarga de
      página, así que con la cuota YA agotada (crónico, no puntual) el
      aviso reaparecía en TODAS las aperturas de la web, no solo una vez
-     por sesión. Un timestamp de 4h en localStorage (~20 bytes, cabe
-     siempre — el umbral `LARGE_VALUE` de _lsSetSafe es 64 KB) throttlea
-     el toast VISUAL entre aperturas sin tocar el resto de la lógica
-     anti-cuota (que sigue actuando en cada sesión, tenga o no toast). */
+     por sesión. Un timestamp de 4h en localStorage throttlea el toast
+     VISUAL entre aperturas sin tocar el resto de la lógica anti-cuota
+     (que sigue actuando en cada sesión, tenga o no toast).
+
+     REFUERZO (2026-08-08, bug "el aviso sigue saliendo en CADA carga,
+     incluso tras borrar la caché"): el cooldown de arriba asumía que
+     escribir ~20 bytes nuevos "cabe siempre" — falso EXACTAMENTE en el
+     instante en que hace falta (`_freeAndRetry` ya evacuó TODO lo
+     reconstruible y aun así no cupo el guardado original: el almacén
+     puede estar a 0 bytes libres de verdad). Crear una clave NUEVA ahí
+     también lanza QuotaExceededError, el `try/catch` mudo se lo traga,
+     `ftbol_quota_warn_last_ts` nunca llega a escribirse, y la próxima
+     carga vuelve a ver `last=0` → cooldown siempre falso → el toast
+     reaparece en TODAS las cargas, borre caché o no (al recargar tras
+     borrar, la rehidratación desde el servidor vuelve a saturar el
+     almacén casi al instante).
+     Fix: la clave se RESERVA aquí mismo, en el PRIMER `<script>` de la
+     página — antes de que cualquier liga/torneo pese nada todavía —
+     con un valor de ANCHO FIJO (13 dígitos, ms desde epoch, válido
+     hasta el año 2286). Reescribir una clave YA EXISTENTE con un valor
+     de la MISMA longitud es un reemplazo in-place: no aumenta el uso
+     total del origen, así que los navegadores lo permiten aunque el
+     resto del almacén esté saturado al 100% — a diferencia de crearla
+     por primera vez. */
   var _QUOTA_WARN_COOLDOWN_MS = 4 * 60 * 60 * 1000; // 4 horas
+  var _QUOTA_TS_KEY = 'ftbol_quota_warn_last_ts';
+  function _padTs(n){
+    /* NUNCA usar operadores bitwise aquí (`n|0`/`~~n`) — truncan a 32
+       bits con signo y un timestamp real (ms desde epoch) ya supera ese
+       rango, corrompiéndolo en un valor sin sentido. */
+    var s = String(Math.max(0, Number(n) || 0));
+    while (s.length < 13) s = '0' + s;
+    return s;
+  }
+  try {
+    if (localStorage.getItem(_QUOTA_TS_KEY) == null) {
+      localStorage.setItem(_QUOTA_TS_KEY, _padTs(0));
+    }
+  } catch(_){}
   function _quotaWarnOnCooldown(){
     try {
-      var last = Number(localStorage.getItem('ftbol_quota_warn_last_ts') || 0);
+      var last = Number(localStorage.getItem(_QUOTA_TS_KEY) || 0);
       return last && (Date.now() - last) < _QUOTA_WARN_COOLDOWN_MS;
     } catch(_){ return false; }
   }
-  function _warnOnce(){
-    if (window._lsQuotaWarned) return;
-    window._lsQuotaWarned = true;
-    try { console.warn('[ftbol] localStorage lleno tras limpieza — los datos siguen subiendo al servidor, guardado LOCAL degradado esta sesión.'); } catch(_){}
-    if (_quotaWarnOnCooldown()) return; // ya se avisó hace <4h, no repetir el toast
-    try { localStorage.setItem('ftbol_quota_warn_last_ts', String(Date.now())); } catch(_){}
+  /* Toast genérico reutilizable — compartido con cualquier otro punto
+     del proyecto que detecte el mismo agotamiento de cuota (p.ej. el
+     guardado de `ligaExt_<slug>` en `saveData`, más abajo) para que
+     nunca puedan aparecer DOS avisos casi idénticos sin coordinarse
+     entre sí: ambos pasan por el MISMO cooldown persistido. */
+  window._lsQuotaToastMaybeShow = function(html){
+    if (_quotaWarnOnCooldown()) return false; // ya se avisó hace <4h
+    try { localStorage.setItem(_QUOTA_TS_KEY, _padTs(Date.now())); } catch(_){}
     try {
       var t = document.createElement('div');
       t.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
@@ -155,12 +191,19 @@ window.pG = function(fn) {
         + 'padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;font-size:13px;'
         + 'letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
         + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
-      t.innerHTML = '⚠️ El navegador se quedó sin espacio. Los partidos se '
-        + '<b>siguen subiendo al servidor</b>, pero conviene limpiar la '
-        + 'caché del navegador para reactivar el guardado local.';
+      t.innerHTML = html;
       (document.body || document.documentElement).appendChild(t);
       setTimeout(function(){ try { t.parentNode.removeChild(t); } catch(_){} }, 8000);
     } catch(_){}
+    return true;
+  };
+  function _warnOnce(){
+    if (window._lsQuotaWarned) return;
+    window._lsQuotaWarned = true;
+    try { console.warn('[ftbol] localStorage lleno tras limpieza — los datos siguen subiendo al servidor, guardado LOCAL degradado esta sesión.'); } catch(_){}
+    window._lsQuotaToastMaybeShow('⚠️ El navegador se quedó sin espacio. Los partidos se '
+      + '<b>siguen subiendo al servidor</b>, pero conviene limpiar la '
+      + 'caché del navegador para reactivar el guardado local.');
   }
   /* Umbral de "valor grande": por encima de esto, un intento fallido
      de `setItem` ya cuesta lo suyo (serializar + comprobar cuota), así
@@ -49676,87 +49719,100 @@ https://api.sofascore.app/api/v1/team/44/image
        vez. Si tras la limpieza sigue fallando, devuelve false para que
        el caller pueda avisar al usuario — antes los `catch(_){}` en
        cadena hacían que el guardado fallase en silencio y el admin
-       pensase "no se ha guardado nada". */
+       pensase "no se ha guardado nada".
+
+       BUG CORREGIDO (2026-08-08): este helper envolvía
+       `window._lsSetSafe(...)` en un `try{...}catch(err){...}` para
+       detectar el fallo de cuota — pero `_lsSetSafe` NUNCA lanza (su
+       contrato, ver cabecera del archivo: "Devuelve true/false; NUNCA
+       lanza"). El `catch` de aquí abajo, y con él TODA la limpieza
+       escalonada (snapshots → backups → `_protected` de otras ligas →
+       iconos) y el aviso de cuota del caller (`_saveOk`), llevaban
+       siendo código MUERTO desde que `_lsSetSafe` sustituyó al
+       `localStorage.setItem` crudo: `_setItemSafe` devolvía `true`
+       SIEMPRE, aunque el guardado real hubiera fallado por cuota — un
+       guardado de `ligaExt_<slug>` podía perderse en silencio sin que
+       `_saveOk` bajara nunca a `false` ni se avisara al usuario. Mismo
+       patrón ya prohibido en este archivo para otras 3 funciones
+       (sección "El botón 'EA Sports → Europa' no dejaba añadir ningún
+       equipo…", 2026-08-02) — quedaba pendiente arreglarlo aquí por ser
+       el chokepoint más crítico del proyecto. Fix: comprobar el
+       BOOLEANO real que devuelve `_lsSetSafe`, nunca una excepción. */
     function _setItemSafe(key, value){
-      try { window._lsSetSafe(key, value); return true; }
-      catch(err){
-        var isQuota = err && (
-          err.code === 22 || err.code === 1014 ||
-          err.name === 'QuotaExceededError' ||
-          err.name === 'NS_ERROR_DOM_QUOTA_REACHED');
-        if(!isQuota) return false;
-        /* Limpieza progresiva cuando el navegador se queda sin espacio.
-           Reportado 2026-05-02 (alert visible en pantalla del usuario:
-           "localStorage lleno"). Causa: cada saveData escribía hasta 8
-           copias del mismo JSON por liga (main + _protected + _backup
-           + 5 snaps × 51 ligas = ~33 MB en el peor caso vs ~5–10 MB
-           que da el navegador). Estrategia escalonada:
-             1. Borrar snapshots datados (_snap_<ts>) — los 5 más viejos
-                primero. Son históricos, los menos críticos.
-             2. Borrar TODOS los _backup legacy — su contenido lo cubre
-                _protected (que se actualiza en cada saveData con
-                teams.length > 0).
-             3. Borrar snapshots restantes hasta agotar.
-           Tras cada paso reintentamos el setItem. Devolvemos true en
-           cuanto cabe; false si tras todo no hay forma. */
-        function _retry(){
-          try { window._lsSetSafe(key, value); return true; }
-          catch(_) { return false; }
-        }
-        try {
-          var snaps = [], backups = [], protectedKeys = [];
-          /* Slug actual extraído del key — para EVITAR borrar el
-             _protected de la liga que estamos guardando ahora mismo
-             (sería pegarse un tiro en el pie). */
-          var currentSlug = '';
-          var _ksm = /^ligaExt_([^_]+(?:_[^_]+)*)$/.exec(key);
-          if(_ksm) currentSlug = _ksm[1].replace(/(_protected|_backup|_snap_\d+)$/, '');
-          for(var i=0; i<localStorage.length; i++){
-            var kk = localStorage.key(i);
-            if(!kk) continue;
-            if(/^ligaExt_.+_snap_\d+$/.test(kk)) snaps.push(kk);
-            else if(/^ligaExt_.+_backup$/.test(kk)) backups.push(kk);
-            else {
-              var pmatch = /^ligaExt_(.+)_protected$/.exec(kk);
-              if(pmatch && pmatch[1] !== currentSlug) protectedKeys.push(kk);
-            }
-          }
-          /* Paso 1: snapshots ordenados ascendentemente (más antiguo
-             primero). */
-          snaps.sort();
-          while(snaps.length){
-            try { localStorage.removeItem(snaps.shift()); } catch(_){}
-            if(_retry()) return true;
-          }
-          /* Paso 2: _backup legacy (cualquier liga) — los datos viven
-             ya en _protected, son redundantes. */
-          for(var b=0; b<backups.length; b++){
-            try { localStorage.removeItem(backups[b]); } catch(_){}
-            if(_retry()) return true;
-          }
-          /* Paso 3 (último recurso, 2026-05-05): _protected de OTRAS
-             ligas. Sus datos viven en el servidor (loadData hace XHR
-             a /api/liga-ext/<slug> cuando local está vacío), así que
-             borrarlos no pierde info — solo fuerza una re-descarga
-             la próxima vez que se abra esa liga. NO tocamos el
-             _protected de la liga actual: es la copia de seguridad
-             que está guardando _saveData. */
-          for(var p=0; p<protectedKeys.length; p++){
-            try { localStorage.removeItem(protectedKeys[p]); } catch(_){}
-            if(_retry()) return true;
-          }
-          /* Paso 4: comp_icons_v1 (iconos custom de competiciones)
-             pueden pesar 100-500 KB cada uno. Si seguimos sin espacio,
-             los liberamos — el admin tendrá que volver a subirlos. */
-          try {
-            if(localStorage.getItem('comp_icons_v1')){
-              localStorage.removeItem('comp_icons_v1');
-              if(_retry()) return true;
-            }
-          } catch(_){}
-        } catch(_){}
-        return false;
+      if (window._lsSetSafe(key, value)) return true;
+      /* `_lsSetSafe` ya intentó su propia cascada de limpieza
+         (`_freeAndRetry`, principio del archivo) y aun así no cupo.
+         Repetimos aquí una pasada MÁS, específica de esta liga:
+         preserva el `_protected` de LA MISMA que se está guardando
+         ahora (`_freeAndRetry` no distingue por slug al liberar
+         `_protected` de otras ligas — podría llevarse el de ésta).
+         Limpieza progresiva reportada 2026-05-02. Estrategia
+         escalonada:
+           1. Borrar snapshots datados (_snap_<ts>) — los más viejos
+              primero. Son históricos, los menos críticos.
+           2. Borrar TODOS los _backup legacy — su contenido lo cubre
+              _protected (que se actualiza en cada saveData con
+              teams.length > 0).
+           3. _protected de OTRAS ligas (nunca la de ESTA).
+           4. comp_icons_v1.
+         Tras cada paso reintentamos el setItem. Devolvemos true en
+         cuanto cabe; false si tras todo no hay forma. */
+      function _retry(){
+        return window._lsSetSafe(key, value);
       }
+      try {
+        var snaps = [], backups = [], protectedKeys = [];
+        /* Slug actual extraído del key — para EVITAR borrar el
+           _protected de la liga que estamos guardando ahora mismo
+           (sería pegarse un tiro en el pie). */
+        var currentSlug = '';
+        var _ksm = /^ligaExt_([^_]+(?:_[^_]+)*)$/.exec(key);
+        if(_ksm) currentSlug = _ksm[1].replace(/(_protected|_backup|_snap_\d+)$/, '');
+        for(var i=0; i<localStorage.length; i++){
+          var kk = localStorage.key(i);
+          if(!kk) continue;
+          if(/^ligaExt_.+_snap_\d+$/.test(kk)) snaps.push(kk);
+          else if(/^ligaExt_.+_backup$/.test(kk)) backups.push(kk);
+          else {
+            var pmatch = /^ligaExt_(.+)_protected$/.exec(kk);
+            if(pmatch && pmatch[1] !== currentSlug) protectedKeys.push(kk);
+          }
+        }
+        /* Paso 1: snapshots ordenados ascendentemente (más antiguo
+           primero). */
+        snaps.sort();
+        while(snaps.length){
+          try { localStorage.removeItem(snaps.shift()); } catch(_){}
+          if(_retry()) return true;
+        }
+        /* Paso 2: _backup legacy (cualquier liga) — los datos viven
+           ya en _protected, son redundantes. */
+        for(var b=0; b<backups.length; b++){
+          try { localStorage.removeItem(backups[b]); } catch(_){}
+          if(_retry()) return true;
+        }
+        /* Paso 3 (último recurso, 2026-05-05): _protected de OTRAS
+           ligas. Sus datos viven en el servidor (loadData hace XHR
+           a /api/liga-ext/<slug> cuando local está vacío), así que
+           borrarlos no pierde info — solo fuerza una re-descarga
+           la próxima vez que se abra esa liga. NO tocamos el
+           _protected de la liga actual: es la copia de seguridad
+           que está guardando _saveData. */
+        for(var p=0; p<protectedKeys.length; p++){
+          try { localStorage.removeItem(protectedKeys[p]); } catch(_){}
+          if(_retry()) return true;
+        }
+        /* Paso 4: comp_icons_v1 (iconos custom de competiciones)
+           pueden pesar 100-500 KB cada uno. Si seguimos sin espacio,
+           los liberamos — el admin tendrá que volver a subirlos. */
+        try {
+          if(localStorage.getItem('comp_icons_v1')){
+            localStorage.removeItem('comp_icons_v1');
+            if(_retry()) return true;
+          }
+        } catch(_){}
+      } catch(_){}
+      return false;
     }
     var _saveOk = true;
     if (serialized != null) {
@@ -49803,28 +49859,45 @@ https://api.sofascore.app/api/v1/team/44/image
        quedaban sin simular hasta que el usuario clicaba Aceptar).
        La data viva sigue en LIGA_CACHE y se sube al servidor (POST
        de abajo), así que el partido en curso sigue funcionando.
-       Reportado por usuario 2026-05-05. */
+       Reportado por usuario 2026-05-05.
+
+       COORDINADO con el aviso de `_lsSetSafe` (2026-08-08): hasta
+       ahora este toast tenía su PROPIO gate de sesión
+       (`_lextQuotaWarned`, en memoria, sin cooldown persistido) — y,
+       al ser `_setItemSafe` código muerto (ver arriba), NUNCA llegaba
+       a dispararse en la práctica. Con `_setItemSafe` ya reparado,
+       ambos avisos ("el navegador se quedó sin espacio") pasan por el
+       MISMO `window._lsQuotaToastMaybeShow` (cooldown de 4h persistido
+       en `ftbol_quota_warn_last_ts`, robusto incluso con el almacén
+       saturado al 100% — ver esa función) para que nunca puedan salir
+       DOS avisos casi idénticos sin coordinarse entre sí. */
     if (!_saveOk && !window._lextQuotaWarned) {
       window._lextQuotaWarned = true;
       try { console.warn('[saveData] localStorage lleno tras limpieza — datos en servidor, local desactivado para esta sesión.'); } catch(_){}
-      try {
-        /* Toast simple con auto-dismiss a los 8 s. Se inserta en
-           document.body con z-index alto para que quede visible sobre
-           el overlay de progreso del balón. */
-        var tEl = document.createElement('div');
-        tEl.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
-          + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);'
-          + 'border-radius:10px;padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;'
-          + 'font-size:13px;letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
-          + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
-        tEl.innerHTML = '⚠️ Navegador sin espacio. Los cambios se '
+      if (typeof window._lsQuotaToastMaybeShow === 'function') {
+        window._lsQuotaToastMaybeShow('⚠️ Navegador sin espacio. Los cambios se '
           + '<b>siguen subiendo al servidor</b>, pero conviene limpiar '
-          + 'caché para reactivar el guardado local.';
-        document.body.appendChild(tEl);
-        setTimeout(function(){
-          try { document.body.removeChild(tEl); } catch(_){}
-        }, 8000);
-      } catch(_){}
+          + 'caché para reactivar el guardado local.');
+      } else {
+        try {
+          /* Fallback si por algún motivo el helper compartido no cargó
+             todavía (no debería pasar — vive en el primer <script> del
+             documento, antes que este archivo). */
+          var tEl = document.createElement('div');
+          tEl.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
+            + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);'
+            + 'border-radius:10px;padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;'
+            + 'font-size:13px;letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
+            + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+          tEl.innerHTML = '⚠️ Navegador sin espacio. Los cambios se '
+            + '<b>siguen subiendo al servidor</b>, pero conviene limpiar '
+            + 'caché para reactivar el guardado local.';
+          document.body.appendChild(tEl);
+          setTimeout(function(){
+            try { document.body.removeChild(tEl); } catch(_){}
+          }, 8000);
+        } catch(_){}
+      }
     }
     /* ── BACKUPS AUTOMÁTICOS ──
        Snapshot datado (_snap_<ts>) — solo el más reciente (recortado de

@@ -45934,17 +45934,23 @@ window._hdrCleanCache = function(){
       +'ocupan espacio sin que nada pueda volver a mostrarlos. Esta\n'
       +'acción NO se puede deshacer.\n\n'
       +'¿Continuar?')) return;
-    _eurToast('⏳ Borrando ligas fusionadas del servidor…');
     /* Reintenta con backoff (mismo patrón que _postClearRetry /
        _eurBootFetchRetry): la operación es IDEMPOTENTE (borrar una fila
        ya borrada devuelve deleted_count:0 sin error), así que un
        reintento tras un fallo de red/cold-start de Railway es siempre
-       seguro — nunca duplica el borrado. Sin esto, un solo intento sin
-       reintentos (el bug original) fallaba con "Failed to fetch" en
-       cuanto la petición tardaba más de lo que Railway tarda en salir
-       del cold-start, dejando al admin sin ninguna forma de saber si
-       el borrado llegó a completarse o no. */
+       seguro — nunca duplica el borrado. MAX_TRIES=6 con backoff
+       2s/4s/8s/16s/32s/64s (~2 min de paciencia total): un solo intento
+       (el bug original) o solo 3 reintentos (~14s, insuficiente) fallaban
+       con "Failed to fetch" en cuanto el cold-start de Railway tardaba
+       más que eso — este mismo proyecto ya documenta que operaciones de
+       este tamaño "pueden tardar hasta 1-2 min" en frío. `_eurToast` se
+       re-dispara en cada intento (se auto-oculta a los 6s) para que el
+       admin vea que sigue en marcha, no una pantalla congelada. */
+    var MAX_TRIES = 6;
     function attempt(tries){
+      _eurToast(tries === 0
+        ? '⏳ Borrando ligas fusionadas del servidor… (puede tardar hasta 1-2 min si Railway está arrancando)'
+        : '⏳ Reintentando ('+tries+'/'+MAX_TRIES+')…');
       fetch('/api/admin/purge-dead-leagues', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -45957,17 +45963,17 @@ window._hdrCleanCache = function(){
             alert(n > 0
               ? ('✅ Borradas '+n+' filas del servidor (main + protected + snapshots de las 43 ligas fusionadas).\n\nYa no ocupan espacio en la base de datos.')
               : '✅ No había nada que borrar — ya estaban limpias (o esta es la 2ª vez que lo pulsas, es normal).');
-          } else if(tries < 3){
+          } else if(tries < MAX_TRIES){
             setTimeout(function(){ attempt(tries+1); }, Math.pow(2, tries+1) * 1000);
           } else {
-            (window._gmCriticalNotice || alert)('⚠️ El servidor no confirmó el borrado tras varios intentos. Verifica que tienes sesión admin activa y vuelve a intentarlo.');
+            (window._gmCriticalNotice || alert)('⚠️ El servidor no confirmó el borrado tras '+MAX_TRIES+' intentos (~2 min). Puede que Railway esté caído o reiniciando — espera un par de minutos y vuelve a pulsar el botón (es seguro repetirlo, nunca duplica el borrado).');
           }
         })
         .catch(function(e){
-          if(tries < 3){
+          if(tries < MAX_TRIES){
             setTimeout(function(){ attempt(tries+1); }, Math.pow(2, tries+1) * 1000);
           } else {
-            (window._gmCriticalNotice || alert)('⚠️ No se pudo contactar con el servidor tras varios intentos: ' + (e && e.message ? e.message : e));
+            (window._gmCriticalNotice || alert)('⚠️ No se pudo contactar con el servidor tras '+MAX_TRIES+' intentos (~2 min): ' + (e && e.message ? e.message : e) + '\n\nEspera un par de minutos y vuelve a pulsar el botón (es seguro repetirlo).');
           }
         });
     }

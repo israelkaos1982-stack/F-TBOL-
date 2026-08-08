@@ -10859,6 +10859,64 @@
     document.addEventListener('pointerdown', _onTouch, { passive:true, capture:true });
   })();
 
+  /* ── Respaldo táctil de la PANTALLA DE PREVIA — checklist + confirmar
+     (obligatorio, 2026-08-08) ────────────────────────────────────────
+     Bug reportado (usuario, foto «PANTALLA DE PREVIA», Real Madrid vs
+     Liverpool, Trofeo Joan Gamper Jornada 1, partido HvH): el partido se
+     quedaba atascado en "PREVIA" — marcador "-" — sin poder avanzar por
+     más veces que se intentara. Causa: el checklist previo (`.pp-item`,
+     p.ej. "⚽️ Balón", cableado en `_renderList` de index.bundle.js) y el
+     botón "🎮 CONFIRMAR CONFIGURACIÓN" (`pp-confirm-btn`, que da paso a
+     "▶ COMENZAR PARTIDO" y solo entonces habilita jugar/registrar el
+     acta) dependían ÚNICAMENTE del evento `click` sintético — la MISMA
+     ambigüedad tap-vs-scroll ya documentada y arreglada para el picker
+     de portería imbatida y para 🏁 FINALIZAR (bloque justo arriba). La
+     Previa es una pantalla larga con scroll (escudo, nivel, duración,
+     balón, alertas…), así que un toque real sobre una fila del
+     checklist puede interpretarse como intento de scroll y cancelar el
+     `click`: el check se queda sin marcar, el botón sigue bloqueado
+     ("🔒 MARCA TODAS LAS CASILLAS") para siempre sin ningún error
+     visible — el usuario nunca llega a poder jugar el partido, así que
+     NUNCA hay resultado que guardar (no es un bug de persistencia en
+     backend: el partido jamás se inicia).
+
+     Fix: mismo patrón de delegación en `document` que ya protege a
+     FINALIZAR. `_ppToggle`/`_ppConfirm` (definidas en index.bundle.js,
+     cargado DESPUÉS de este archivo) se resuelven en `window.*` en el
+     instante del toque, no al registrar el listener — igual que ya
+     hace el bloque de FINALIZAR con `_mlConfirmEnd`/`gmEndMatch`. Ambas
+     son idempotentes (alternan/leen estado, no acumulan), así que el
+     cooldown compartido evita un doble disparo si el `click` normal SÍ
+     llega después del touchstart. */
+  (function(){
+    var _lastTap2 = { el: null, ts: 0 };
+    function _fireTap(el, action){
+      if (!el || el.disabled) return;
+      var now = Date.now();
+      if (_lastTap2.el === el && (now - _lastTap2.ts) < 500) return;
+      _lastTap2.el = el; _lastTap2.ts = now;
+      try { action(); } catch(err) { try { console.error('[Previa respaldo táctil] falló:', err); } catch(_){} }
+    }
+    function _onTouchPrevia(e){
+      var target = e.target;
+      if (!target || !target.closest) return;
+      var confirmBtn = target.closest('#pp-confirm-btn');
+      if (confirmBtn) {
+        _fireTap(confirmBtn, function(){ if (typeof window._ppConfirm === 'function') window._ppConfirm(); });
+        return;
+      }
+      var item = target.closest('.pp-item');
+      if (item) {
+        /* Tocar el lápiz de editar duración no debe marcar/desmarcar el check. */
+        if (target.closest('[data-edit]')) return;
+        var id = item.getAttribute('data-ppid');
+        if (id) _fireTap(item, function(){ if (typeof window._ppToggle === 'function') window._ppToggle(id); });
+      }
+    }
+    document.addEventListener('touchstart', _onTouchPrevia, { passive:true, capture:true });
+    document.addEventListener('pointerdown', _onTouchPrevia, { passive:true, capture:true });
+  })();
+
   window.mlEndMatchGen = function(mk, winner) {
     var st=_mlSt(mk);
     if (st.finished) return;

@@ -43101,9 +43101,26 @@ window._hdrCleanCache = function(){
     /* Estadio: el desempate y la final usan el del LOCAL (en el desempate
        `home`=tie.a = local de la vuelta → mismo estadio que la vuelta). */
     var _stad = (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(home) || '') : '';
+    /* IDA de la eliminatoria (solo en la VUELTA) — para que el share de
+       WhatsApp del INICIO (antes de que exista gm-modal) ya pueda
+       mostrar "IDA: X-Y" + el GLOBAL una vez arranque el marcador
+       (tarea WhatsApp ida-vuelta, 2026-08-08). `ensureLegs` (motor
+       eurko) SIEMPRE invierte local/visitante entre ida y vuelta —
+       `_waIdaOrient` reordena por NOMBRE en vez de asumirlo, para no
+       depender de ese detalle interno. */
+    var _waIdaEk = null;
+    try {
+      if (leg === 'v') {
+        var _stKoEk = _koLoad(comp);
+        var _tieKoEk = _stKoEk && _stKoEk.rounds && (_stKoEk.rounds[roundKey] || [])[idx];
+        if (_tieKoEk && _tieKoEk.ida && _tieKoEk.ida.played && typeof window._waIdaOrient === 'function') {
+          _waIdaEk = window._waIdaOrient(_tieKoEk.ida, home, away);
+        }
+      }
+    } catch(_){}
     window._ppPreviaTeams = { home:home, away:away, j:0, comp:comp,
       eurKoComp:comp, eurKoRound:roundKey, eurKoIdx:idx, eurKoLeg:leg,
-      stadium: _stad };
+      stadium: _stad, _waIdaScore: _waIdaEk };
     /* TERCER PARTIDO (desempate): 5 min · ambos ↘️ (forma Mala) · ET+pen.
        FINAL: 10 min · ambos ⬆️ (forma Excelente) · ET+pen. 2026-06-09. */
     if(leg === 'd')      { try { window._ppSetMatchCtx({ durMin:5,  formHome:'↘️', formAway:'↘️' }); } catch(_){} }
@@ -43126,6 +43143,20 @@ window._hdrCleanCache = function(){
         var G = window.__GM_LIVE;
         G._isEurKo = true; G._eurKoComp = comp; G._eurKoRound = roundKey;
         G._eurKoIdx = idx; G._eurKoLeg = leg; G.comp = comp;
+        /* Mismo IDA que ya vio la previa — DESCANSO/FINAL (compartidos
+           tras abrirse el gm-modal) siguen mostrando "IDA: X-Y" +
+           GLOBAL de forma consistente con el INICIO (tarea WhatsApp
+           ida-vuelta, 2026-08-08). */
+        G._waIdaScore = null;
+        if (leg === 'v') {
+          try {
+            var _stKoEk2 = _koLoad(comp);
+            var _tieKoEk2 = _stKoEk2 && _stKoEk2.rounds && (_stKoEk2.rounds[roundKey] || [])[idx];
+            if (_tieKoEk2 && _tieKoEk2.ida && _tieKoEk2.ida.played && typeof window._waIdaOrient === 'function') {
+              G._waIdaScore = window._waIdaOrient(_tieKoEk2.ida, home, away);
+            }
+          } catch(_){}
+        }
       }
     } catch(_){}
     try {

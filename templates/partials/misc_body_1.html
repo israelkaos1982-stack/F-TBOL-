@@ -27143,11 +27143,31 @@ window._hdrCleanCache = function(){
        el sorteo no se pierde aunque la red falle o el server tarde.
        A prueba de cuota: si localStorage está lleno, `_lsSetSafe` libera
        datos reconstruibles y reintenta en vez de fallar callado (causa
-       raíz de "los partidos no se guardan", 2026-06-25). */
+       raíz de "los partidos no se guardan", 2026-06-25).
+       REFUERZO (2026-08-08): `_lsSetSafe` tiene un PESTILLO DE SESIÓN
+       (`window._lsQuotaExhausted`, obligatorio, ver su propia
+       documentación) que, una vez activado por CUALQUIER otro guardado
+       de la sesión (ligas, HUD, lo que sea), rechaza AL INSTANTE —sin
+       intentar `_freeAndRetry`— cualquier valor >64 KB. Un torneo de
+       Mundial 2032 avanzado supera esos 64 KB con facilidad (cada
+       partido de grupo simulado añade ~50-60 eventos "played" de
+       relleno, ver comentario del timeout escalado más abajo), así que
+       el guardado LOCAL de este torneo puede quedar descartado en
+       silencio para el resto de la sesión aunque el guardado en
+       SERVIDOR (más abajo) sí funcione. Registramos si falló para que
+       quede constancia — el guardado en servidor es quien de verdad
+       tiene que llegar en este caso (por eso el timeout escalado): si
+       llega, el próximo `_tourLoad` adopta esa copia del servidor
+       (más reciente que la local, que se quedó desactualizada) y el
+       partido se recupera solo, sin que el usuario tenga que hacer
+       nada. */
+    var _localSaveOk = false;
     try {
       var _cfgJson = JSON.stringify(cfg);
-      if (window._lsSetSafe) window._lsSetSafe(_key(id), _cfgJson);
-      else window._lsSetSafe(_key(id), _cfgJson);
+      _localSaveOk = !!window._lsSetSafe(_key(id), _cfgJson);
+      if (!_localSaveOk) {
+        try { console.warn('[_tourSave] guardado LOCAL descartado (posible pestillo de cuota) para ' + id + ' — depende del guardado en servidor.'); } catch(_){}
+      }
     } catch(_){}
     /* Refresca cache sincrónico para `_tourMuInfoData` / `muTourInfo`. */
     window._TOUR_CACHE = window._TOUR_CACHE || {};
@@ -27170,11 +27190,32 @@ window._hdrCleanCache = function(){
        "cuando borro datos y vuelvo a la web... el partido de Argentina
        borrado"). Mismo patrón de reintentos ya usado en otros guardados
        críticos de este proyecto (`_postClearRetry`, `persistSharedLigaState`). */
+    /* Timeout ESCALADO por tamaño del payload (2026-08-08, refuerzo):
+       un torneo de 48 selecciones (Mundial 2032) acumula, por CADA
+       partido de grupo simulado, ~50-60 eventos "played" de relleno
+       (uno por titular/suplente de AMBOS equipos — `genMatchEventsEnhanced`
+       en misc_body_2.html, necesarios para que el dashboard de stats
+       cuente PJ de jugadores sin evento explícito). Con 12 grupos × 6
+       partidos (72 solo en fase de grupos, más las rondas KO después),
+       el JSON completo del torneo puede llegar a varios cientos de KB
+       — y como CADA guardado sube la cfg COMPLETA (no solo el partido
+       nuevo), un timeout fijo de 8 s podía agotarse en una red móvil
+       floja subiendo un payload grande, aunque el partido en sí se
+       hubiera jugado y guardado bien en local. El síntoma: partidos
+       recientes de un torneo YA AVANZADO se "pierden" al recargar
+       mientras los partidos antiguos (guardados cuando el JSON aún era
+       pequeño) siguen bien — exactamente lo reportado (Mundial 2032,
+       Grupo J, Jornada 2). Escala ~1s por cada 20 KB (mínimo 8s, tope
+       30s) para dar margen real a payloads grandes sin alargar
+       innecesariamente el caso común (partidas sueltas, pocos KB). */
+    var _payloadLen = 0;
+    try { _payloadLen = _cfgJson ? _cfgJson.length : JSON.stringify(cfg).length; } catch(_){}
+    var _timeoutMs = Math.max(8000, Math.min(30000, 8000 + Math.floor(_payloadLen / 20000) * 1000));
     var _lastErr = null;
     for (var _try = 0; _try < 3; _try++) {
       try {
         var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
-        var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, 8000) : null;
+        var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, _timeoutMs) : null;
         var res = await fetch('/api/kv/' + _key(id), {
           method:'POST',
           headers:{'Content-Type':'application/json'},
@@ -27190,7 +27231,15 @@ window._hdrCleanCache = function(){
         await new Promise(function(resolve){ setTimeout(resolve, 1500 * (_try + 1)); });
       }
     }
-    try { console.warn('[_tourSave] POST agotó 3 intentos para ' + id, _lastErr); } catch(_){}
+    try { console.warn('[_tourSave] POST agotó 3 intentos para ' + id + ' (payload ' + _payloadLen + ' bytes, timeout ' + _timeoutMs + 'ms)', _lastErr); } catch(_){}
+    /* Aviso VISIBLE (no solo consola) si el guardado se agota del todo:
+       el usuario en móvil no tiene devtools — sin esto, "se pierde en
+       silencio" es indistinguible de "se ha guardado bien". */
+    try {
+      if (typeof window._gmCriticalNotice === 'function') {
+        window._gmCriticalNotice('⚠️ No se pudo confirmar el guardado de "' + id + '" en el servidor (red lenta o payload grande). El resultado SIGUE guardado en este dispositivo — no cierres/borres datos de este navegador hasta volver a tener buena conexión, para que el reintento automático pueda subirlo.');
+      }
+    } catch(_){}
     return false;
   };
 

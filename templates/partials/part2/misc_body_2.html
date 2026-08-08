@@ -11966,9 +11966,21 @@
        + "home vs away" + 🟢 INICIO. Reusa _waBuildHeaderLines para
        cuadrar con descanso/final/prórroga/penaltis. */
     var _ppCompKey = window._ppCompKey || 'liga';
+    /* `window._ppCopaRonda`/`_ppCopaVuelta` nunca se escriben en ningún
+       sitio del proyecto (comprobado 2026-08-08, tarea WhatsApp
+       ida-vuelta) — quedaban SIEMPRE `undefined`, así que el share de
+       INICIO de una Copa del Rey a doble partido (Octavos/Cuartos/
+       Semis) nunca mostraba "Vuelta Octavos"/"Ida Octavos", solo
+       "🏆 COPA" a secas. El dato SÍ existe — `copa-engine.js` lo deja en
+       `window._ppPreviaTeams.ronda`/`.esVuelta` (la MISMA previa que ya
+       usamos para `home`/`away` unas líneas arriba) — solo había que
+       leerlo del sitio correcto. Se conserva el fallback a los globales
+       viejos por si algún caller aún los setea en el futuro. */
+    var _ppCopa = window._ppPreviaTeams || {};
     _waBuildHeaderLines({
       comp: _ppCompKey, j: jornada,
-      copaRonda: window._ppCopaRonda, copaVuelta: window._ppCopaVuelta,
+      copaRonda: (_ppCopa.ronda != null ? _ppCopa.ronda : window._ppCopaRonda),
+      copaVuelta: (_ppCopa.esVuelta != null ? _ppCopa.esVuelta : window._ppCopaVuelta),
       home: home, away: away,
       scA: null, scB: null, /* sin marcador → se renderiza "vs" */
       eventType: 'kickoff'
@@ -12149,13 +12161,59 @@
     r1: '1ª Ronda', r2: '2ª Ronda', r16: 'Dieciseisavos',
     oct: 'Octavos', cua: 'Cuartos', sf: 'Semis', fin: 'Final'
   };
+  /* Previa de Champions (Ronda 1/2, ida+vuelta+desempate) — ver
+     `_waAutoKoOpts` más abajo, que rellena `opts.wprevRound`/
+     `opts.wprevLeg` SOLO leyendo el partido en vivo, nunca al tuntún. */
+  var _WPREV_LEG_PREFIX = { i: 'Ida', v: 'Vuelta', d: 'Desempate' };
+  /* Champions/Europa/Conference — fase ELIMINATORIA (Repesca 1/32,
+     Octavos, Cuartos, Semis, Final). Rondas/leg-codes idénticos a los
+     que usa el motor `_eurKo*` de `misc_body_1.html` (`_KO_ROUND_LBL`/
+     `_KO_TAG`/`_KO_DOT`) — se duplica aquí en vez de exponerlo por
+     `window.*` porque es el MISMO patrón que ya usa `_COPA_ROUND_LBL`
+     en este archivo (dict estático de 4-5 entradas, sin lógica). */
+  var _EURKO_LABEL = { ucl: 'Champions League', uel: 'Europa League', uecl: 'Conference League' };
+  var _EURKO_ICON  = { ucl: '🔵', uel: '🟠', uecl: '🟢' };
+  var _EURKO_ROUND_LBL = { rep: 'Repesca 1/32', oct: 'Octavos', qf: 'Cuartos', sf: 'Semis' };
+  var _EURKO_LEG_PREFIX = { i: 'Ida ', v: 'Vuelta ', d: 'Desempate ' };
   function _waCompMeta(opts) {
-    /* opts: {comp, copaRonda, copaVuelta, j} → {icon, label, round}.
+    /* opts: {comp, copaRonda, copaVuelta, j, wprevRound, wprevLeg,
+       eurKoComp, eurKoRound, eurKoLeg} → {icon, label, round}.
        `comp` es la cadena que el motor guardó en st.comp / _gm.comp.
        Si viene VACÍO, asumimos LIGA EA Sports — es lo más común y el
        fallback genérico "⚽ PARTIDO" sale feo en el mensaje (reportado
        2026-05-09). */
     opts = opts || {};
+
+    /* Previa de Champions — PRIMERO: `opts.comp` llega genérico ('ucl',
+       el MISMO valor que usa la Champions real) porque el gm-modal de
+       la Previa reutiliza `comp='ucl'` para heredar el tema azul — sin
+       esta rama el mensaje decía "Champions League" para un partido
+       que en realidad es la Previa (tarea WhatsApp ida-vuelta,
+       2026-08-08: "no debe poner solo la competición general"). Mismo
+       formato que ya usa el calendario (`_mmCalLabel`,
+       `static/js/index.bundle.js`): "Ida/Vuelta Previa Champions — R2". */
+    if (opts.wprevRound && opts.wprevLeg && _WPREV_LEG_PREFIX[opts.wprevLeg]) {
+      var _wRN = (String(opts.wprevRound).toLowerCase() === 'r1') ? '1' : '2';
+      return {
+        icon: '🔵',
+        label: _WPREV_LEG_PREFIX[opts.wprevLeg] + ' Previa Champions — R' + _wRN,
+        round: ''
+      };
+    }
+    /* Champions/Europa/Conference — fase ELIMINATORIA. Mismo motivo que
+       arriba: `opts.comp` es genérico ('ucl'/'uel'/'uecl') y por sí solo
+       no distingue "fase de grupos Jornada N" de "Octavos VUELTA". */
+    if (opts.eurKoComp && opts.eurKoRound && _EURKO_LABEL[opts.eurKoComp]) {
+      var _erk = String(opts.eurKoRound).toLowerCase();
+      var _erRoundLbl = (_erk === 'fin') ? 'Final' : (_EURKO_ROUND_LBL[_erk] || opts.eurKoRound);
+      var _erPrefix = _EURKO_LEG_PREFIX[opts.eurKoLeg] || '';
+      return {
+        icon: _EURKO_ICON[opts.eurKoComp] || '🇪🇺',
+        label: _EURKO_LABEL[opts.eurKoComp],
+        round: _erPrefix + _erRoundLbl
+      };
+    }
+
     var c = String(opts.comp || '').toLowerCase().trim();
     if (!c) c = 'liga'; /* default sensato — sin esto sale "⚽ PARTIDO" */
     var ronda = '';
@@ -12475,18 +12533,138 @@
   }
   try { window._waShortName = _waShortName; } catch(_){}
 
+  /* Abrevia el nombre del equipo SOLO cuando es largo (más de
+     `_WA_HEADER_ABBR_LEN` caracteres tras limpiar emojis/banderas) —
+     evita que "Atlético Madrid" desborde la línea horizontal del
+     marcador en WhatsApp móvil, sin tocar nombres que ya caben de
+     sobra ("Real Madrid", "AEK Athens"…). Reusa `getTeamAbbr` (mismo
+     diccionario — Atlético Madrid→ATM — que YA usan el acta y el
+     bloque de bajas de este mismo mensaje, `_waGateActaLines`/
+     `_waBajasForTeam`), así el nombre de un equipo es CONSISTENTE en
+     TODO el texto compartido en vez de tener 2 estilos distintos.
+     Tarea WhatsApp ida-vuelta (2026-08-08): "Atlético Madrid" → "ATM"
+     (mientras que "AEK Athens" se queda tal cual, como en el ejemplo
+     del usuario). */
+  var _WA_HEADER_ABBR_LEN = 14;
+  function _waHeaderTeamName(raw) {
+    var clean = String(raw || '')
+      .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
+      .replace(/\s+/g,' ').trim();
+    if (clean.length > _WA_HEADER_ABBR_LEN && typeof window.getTeamAbbr === 'function') {
+      try {
+        var abbr = window.getTeamAbbr(clean);
+        if (abbr) return String(abbr).toUpperCase();
+      } catch(_){}
+    }
+    return clean.toUpperCase();
+  }
+  try { window._waHeaderTeamName = _waHeaderTeamName; } catch(_){}
+
+  /* ════════════════════════════════════════════════════════════════
+     ELIMINATORIAS IDA/VUELTA — IDA + GLOBAL en el mensaje de WhatsApp
+     ════════════════════════════════════════════════════════════════
+     Tarea WhatsApp ida-vuelta (2026-08-08): en la VUELTA de un cruce a
+     doble partido (Previa de Champions R1/R2, Champions/Europa/
+     Conference League fase eliminatoria, Copa del Rey Octavos/Cuartos/
+     Semis) el mensaje debe incluir SIEMPRE el resultado de la IDA y el
+     GLOBAL acumulado — consistente en INICIO, DESCANSO y FINAL.
+
+     El marcador de la ida se resuelve por NOMBRE (`_waIdaOrient`),
+     nunca asumiendo qué lado jugó de local en cada pierna — cada
+     competición desempata el "quién es local" de forma distinta entre
+     ida y vuelta (Copa/Previa/EurKo invierten local↔visitante; una
+     futura competición podría no hacerlo). El caller (los `abrirXxx`/
+     `_xxxAbrirPrevia` de `misc_body_1.html`, `abrirCopa` más abajo y el
+     `_ppPreviaTeams` de `copa-engine.js`) PRE-CALCULA el resultado de
+     la ida en el instante en que carga el estado del cruce (ya lo
+     necesitan para el escudo/estadio) y lo deja en `_waIdaScore`
+     — esta sección solo lo LEE, nunca recorre el estado de ninguna
+     competición por su cuenta. */
+  function _waIdaOrient(idaLeg, curHome, curAway) {
+    /* idaLeg: {home, away, gh, ga} en SU PROPIA orientación (ida no
+       tiene por qué compartir local/visitante con la vuelta actual).
+       Empareja por NOMBRE — nunca inventa un marcador si los nombres
+       no casan con `curHome`/`curAway`. */
+    if (!idaLeg) return null;
+    var gh = Number(idaLeg.gh) || 0, ga = Number(idaLeg.ga) || 0;
+    var home = null, away = null;
+    if (idaLeg.home === curHome) home = gh; else if (idaLeg.away === curHome) home = ga;
+    if (idaLeg.home === curAway) away = gh; else if (idaLeg.away === curAway) away = ga;
+    if (home == null || away == null) return null;
+    return { home: home, away: away };
+  }
+  try { window._waIdaOrient = _waIdaOrient; } catch(_){}
+
+  /* Localiza el partido "vivo" que corresponde a `curHome`/`curAway`:
+     primero el gm-modal abierto (`window.__GM_LIVE`, DESCANSO/FINAL/
+     prórroga/penaltis), si no casa por nombre cae a la previa
+     (`window._ppPreviaTeams`, el share de INICIO — antes de que el
+     gm-modal exista). Emparejar por NOMBRE evita arrastrar datos de un
+     partido ANTERIOR ya cerrado (p.ej. `__GM_LIVE` stale de la
+     eliminatoria previa) al mensaje del partido ACTUAL. */
+  function _waPickKoSource(curHome, curAway) {
+    try {
+      var g = window.__GM_LIVE;
+      if (g && g.home === curHome && g.away === curAway) return g;
+    } catch(_){}
+    try {
+      var pt = window._ppPreviaTeams;
+      if (pt && pt.home === curHome && pt.away === curAway) return pt;
+    } catch(_){}
+    return null;
+  }
+  /* Resuelve SOLO los campos de fase/eliminatoria que el caller no trae
+     ya explícitos — así ningún call site existente de
+     `_waBuildHeaderLines`/`_waShareGate` tiene que aprender a pasarlos
+     a mano. Previa de Champions y Champions/Europa/Conference KO caen
+     aquí (llegan con `comp='ucl'/'uel'/'uecl'` genérico); Copa del Rey
+     ya trae `copaRonda`/`copaVuelta` desde el caller — esta función
+     solo le completa el `idaScore` si falta. */
+  function _waAutoKoOpts(curHome, curAway) {
+    var out = {};
+    try {
+      var o = _waPickKoSource(curHome, curAway);
+      if (!o) return out;
+      if (o._waIdaScore) out.idaScore = o._waIdaScore;
+      var wprevRound = o._wprevRound || o.wprevKoRound;
+      var wprevLeg   = o._wprevLeg   || o.wprevKoLeg;
+      if (wprevRound && wprevLeg) { out.wprevRound = wprevRound; out.wprevLeg = wprevLeg; return out; }
+      var eurKoComp  = o._eurKoComp  || o.eurKoComp;
+      var eurKoRound = o._eurKoRound || o.eurKoRound;
+      var eurKoLeg   = o._eurKoLeg   || o.eurKoLeg;
+      if (eurKoComp && eurKoRound && eurKoLeg) { out.eurKoComp = eurKoComp; out.eurKoRound = eurKoRound; out.eurKoLeg = eurKoLeg; return out; }
+    } catch(_){}
+    return out;
+  }
+
   /* Construye el bloque de cabecera (líneas pre-acta) según las nuevas
      reglas. Devuelve un array de líneas; el caller añade lo demás.
 
-     FORMATO FINAL (2026-05-09, petición usuario):
+     FORMATO FINAL (2026-05-09, petición usuario; ida/vuelta 2026-08-08):
        📅 06 Nov                                  (si hay fecha)
        🇪🇸 Liga EA Sports Jornada 1                (sin "-" para liga)
-       Atl Madrid 0-0 Valencia                     (nombres cortos)
+       ATM 0-0 VALENCIA                            (nombres largos abreviados)
+       IDA: 2-1                                    (solo en la VUELTA)
+       GLOBAL: 2-1                                 (solo si ya hay marcador)
        🔚 FINAL                                    (si hay evento)            */
   function _waBuildHeaderLines(opts) {
-    /* opts: {comp, j, copaRonda, copaVuelta, home, away, scA, scB, eventType}
-       Si scA y scB son null/undefined → línea de marcador queda como
-       "[home] vs [away]" (caso INICIO de partido, no hay score aún). */
+    /* opts: {comp, j, copaRonda, copaVuelta, home, away, scA, scB,
+       eventType, wprevRound, wprevLeg, eurKoComp, eurKoRound, eurKoLeg,
+       idaScore}. Si scA y scB son null/undefined → línea de marcador
+       queda como "[home] vs [away]" (caso INICIO de partido, no hay
+       score aún). Los campos de eliminatoria (wprevRound/eurKoComp/
+       idaScore) se auto-completan desde el partido vivo cuando el
+       caller no los trae ya explícitos. */
+    opts = opts || {};
+    try {
+      var _auto = _waAutoKoOpts(opts.home, opts.away);
+      if (_auto.wprevRound && opts.wprevRound == null) opts.wprevRound = _auto.wprevRound;
+      if (_auto.wprevLeg && opts.wprevLeg == null) opts.wprevLeg = _auto.wprevLeg;
+      if (_auto.eurKoComp && opts.eurKoComp == null) {
+        opts.eurKoComp = _auto.eurKoComp; opts.eurKoRound = _auto.eurKoRound; opts.eurKoLeg = _auto.eurKoLeg;
+      }
+      if (_auto.idaScore && opts.idaScore == null) opts.idaScore = _auto.idaScore;
+    } catch(_){}
     var meta = _waCompMeta(opts);
     var lines = [];
     /* 📅 FECHA ELIMINADA del texto compartido por WhatsApp (petición
@@ -12508,22 +12686,33 @@
     /* Marcador / vs sin línea en blanco intermedia — el usuario quiere
        el bloque compacto. El ACTA del caller va a ir separada con su
        propio salto.
-       Nombre del equipo: MAYÚSCULAS + nombre completo, en TODOS los
-       partidos (petición usuario 2026-05-26). Strip de emojis 🎲/🖊️ /
-       banderas para que la previa de WhatsApp no parta la línea. */
-    var _waUpper = function(x){
-      var s = String(x || '')
-        .replace(/[\u{1F000}-\u{1FAFF}\u{2190}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]/gu,'')
-        .replace(/\s+/g,' ').trim();
-      return s.toUpperCase();
-    };
-    var sH = _waUpper(opts.home);
-    var sA = _waUpper(opts.away);
+       Nombre del equipo: MAYÚSCULAS SIEMPRE (petición usuario
+       2026-05-26); ABREVIADO además cuando es largo (tarea WhatsApp
+       ida-vuelta 2026-08-08, `_waHeaderTeamName`) para que quepa en
+       una sola línea horizontal. */
+    var sH = _waHeaderTeamName(opts.home);
+    var sA = _waHeaderTeamName(opts.away);
     var hasScore = (opts.scA != null) || (opts.scB != null);
     if (hasScore) {
       lines.push(sH + ' ' + (opts.scA != null ? opts.scA : 0) + '-' + (opts.scB != null ? opts.scB : 0) + ' ' + sA);
     } else {
       lines.push(sH + ' vs ' + sA);
+    }
+    /* IDA / GLOBAL — solo en partidos de VUELTA de una eliminatoria a
+       doble partido (`opts.idaScore` viene poblado). El GLOBAL solo se
+       muestra cuando YA hay marcador de la vuelta (`hasScore`) — a la
+       hora de compartir el INICIO (antes de que se juegue nada de la
+       vuelta) mostrar un "global" sería prematuro/engañoso; el
+       resultado de la IDA sí se muestra siempre, en las 3 notificaciones
+       (INICIO/DESCANSO/FINAL), para que el usuario tenga SIEMPRE el
+       contexto completo de la eliminatoria. */
+    if (opts.idaScore) {
+      lines.push('IDA: ' + ((opts.idaScore.home|0)) + '-' + ((opts.idaScore.away|0)));
+      if (hasScore) {
+        var _globalH = (opts.idaScore.home|0) + (opts.scA != null ? opts.scA : 0);
+        var _globalA = (opts.idaScore.away|0) + (opts.scB != null ? opts.scB : 0);
+        lines.push('GLOBAL: ' + _globalH + '-' + _globalA);
+      }
     }
     var evLine = _waEventLine(opts.eventType);
     if (evLine) lines.push(evLine);
@@ -12535,6 +12724,7 @@
     window._waEventLine       = _waEventLine;
     window._waCalDate         = _waCalDate;
     window._waBuildHeaderLines = _waBuildHeaderLines;
+    window._waAutoKoOpts      = _waAutoKoOpts;
   } catch(_){}
 
   /* ════════════════════════════════════════════════════════════════
@@ -17574,7 +17764,13 @@
       _eurKoComp: _gm._eurKoComp,
       _eurKoRound: _gm._eurKoRound,
       _eurKoIdx: _gm._eurKoIdx,
-      _eurKoLeg: _gm._eurKoLeg
+      _eurKoLeg: _gm._eurKoLeg,
+      /* IDA de la eliminatoria (Copa/Previa/EurKo VUELTA) — para que un
+         partido backgrounded/recargado siga mostrando "IDA: X-Y" +
+         GLOBAL en el share de WhatsApp al resumir (tarea WhatsApp
+         ida-vuelta, 2026-08-08). Reset/restaurado en gmOpen igual que
+         el resto de flags de competición de arriba. */
+      _waIdaScore: _gm._waIdaScore || null
     };
   }
 
@@ -17844,6 +18040,13 @@
     _gm._eurKoRound = saved ? saved._eurKoRound : null;
     _gm._eurKoIdx = saved ? saved._eurKoIdx : null;
     _gm._eurKoLeg = saved ? saved._eurKoLeg : null;
+    /* Reset explícito — sin esto un partido NUEVO (Liga, u otra comp
+       sin doble partido) heredaría el "IDA: X-Y" de la última VUELTA de
+       Copa/Previa/EurKo jugada en esta pestaña. `abrirCopa`/
+       `abrirWprevKo`/`abrirEurKo` lo vuelven a poner justo después de
+       `gmOpen` cuando el partido fresco SÍ es una vuelta real (tarea
+       WhatsApp ida-vuelta, 2026-08-08). */
+    _gm._waIdaScore = saved ? (saved._waIdaScore || null) : null;
     /* Registro global para el hub PARTIDOS LIVE: expone el estado del
        partido abierto en gm-modal para que buildLiveScreen pueda
        mostrarlo como tarjeta live aunque el usuario navegue a otra
@@ -18473,6 +18676,19 @@
         window.__GM_LIVE._copaVuelta = _isDes ? false : !!esVuelta;
         window.__GM_LIVE._copaDesempate = _isDes;
         window.__GM_LIVE.comp = compKey;
+        /* IDA de la eliminatoria (Octavos/Cuartos/Semis, doble partido)
+           — para que el share de WhatsApp de la VUELTA (DESCANSO/FINAL)
+           pueda mostrar "IDA: X-Y" + el GLOBAL acumulado (tarea WhatsApp
+           ida-vuelta, 2026-08-08). `_copaGetIdaLeg` (copa-engine.js) da
+           el resultado en SU propia orientación; `_waIdaOrient` lo
+           reordena por nombre a la orientación de ESTA vuelta. */
+        window.__GM_LIVE._waIdaScore = null;
+        if (!_isDes && esVuelta === true) {
+          try {
+            var _cpIda = (typeof window._copaGetIdaLeg === 'function') ? window._copaGetIdaLeg(ronda, idx) : null;
+            if (_cpIda && typeof window._waIdaOrient === 'function') window.__GM_LIVE._waIdaScore = window._waIdaOrient(_cpIda, home, away);
+          } catch(_){}
+        }
       }
     } catch(_){}
     finally { window._gmPendingCopa = null; }
@@ -34495,7 +34711,19 @@ document.addEventListener('DOMContentLoaded', function() {
        hidratada al sortear), re-resuelve por nombre en caliente. */
     if (!_hLogo) _hLogo = _logoOf(home);
     if (!_aLogo) _aLogo = _logoOf(away);
-    window._ppPreviaTeams = { home:home, away:away, j:0, comp:'ucl', wprevKoRound:round, wprevKoIdx:idx, wprevKoLeg:leg, stadium:_stad, homeLogo:_hLogo, awayLogo:_aLogo };
+    /* IDA de la eliminatoria (solo en la VUELTA) — para que el share de
+       WhatsApp del INICIO (antes de que exista gm-modal) ya pueda
+       mostrar "IDA: X-Y" (tarea WhatsApp ida-vuelta, 2026-08-08).
+       `tie0.legs[0]` ya trae home/away/gh/ga de la ida (ver
+       `_wprevKoSaveHumanResult`); `_waIdaOrient` lo reordena por
+       nombre a la orientación de ESTA vuelta. */
+    var _waIda = null;
+    try {
+      if (leg === 'v' && tie0 && tie0.legs && tie0.legs[0] && typeof window._waIdaOrient === 'function') {
+        _waIda = window._waIdaOrient(tie0.legs[0], home, away);
+      }
+    } catch(_){}
+    window._ppPreviaTeams = { home:home, away:away, j:0, comp:'ucl', wprevKoRound:round, wprevKoIdx:idx, wprevKoLeg:leg, stadium:_stad, homeLogo:_hLogo, awayLogo:_aLogo, _waIdaScore:_waIda };
     window._ppCustomCallback = function(){
       window._ppPreviaTeams = null;
       try { ['prepartido-overlay','sancion-overlay','_copaAliasOv'].forEach(function(id){ var el=document.getElementById(id); if(el) el.classList.remove('show'); }); } catch(_){}
@@ -34514,10 +34742,18 @@ document.addEventListener('DOMContentLoaded', function() {
         var G = window.__GM_LIVE;
         G._isWprevKo = true; G._wprevRound = round; G._wprevTieIdx = idx; G._wprevLeg = leg; G.comp = 'ucl';
         G._wprevIda = null;
+        G._waIdaScore = null;
         if(leg === 'v'){
           var s0 = loadState();
           var tie0 = s0 && s0[round] && s0[round].ties && s0[round].ties[idx];
-          if(tie0 && tie0.legs && tie0.legs[0]) G._wprevIda = { gh:tie0.legs[0].gh, ga:tie0.legs[0].ga };
+          if(tie0 && tie0.legs && tie0.legs[0]){
+            G._wprevIda = { gh:tie0.legs[0].gh, ga:tie0.legs[0].ga };
+            /* Mismo IDA que ya vio la previa — para que DESCANSO/FINAL
+               (compartidos DESPUÉS de que el gm-modal exista) sigan
+               mostrando "IDA: X-Y" + GLOBAL de forma consistente con
+               el INICIO (tarea WhatsApp ida-vuelta, 2026-08-08). */
+            if (typeof window._waIdaOrient === 'function') G._waIdaScore = window._waIdaOrient(tie0.legs[0], home, away);
+          }
         }
       }
     } catch(_){}

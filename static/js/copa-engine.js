@@ -501,6 +501,23 @@
   window._copaBuildR1 = _buildR1Participants;
   window._copaPairTeams = _pairTeams;
 
+  /* Getter de solo lectura del resultado de la IDA de un cruce a doble
+     partido (Octavos/Cuartos/Semis) — usado por el generador de
+     mensajes de WhatsApp (misc_body_2.html, tarea "ida-vuelta"
+     2026-08-08) para poder mostrar "IDA: X-Y" + el GLOBAL acumulado en
+     el share de la VUELTA, sin que ese módulo tenga que conocer la
+     forma interna de `_copa`. Devuelve `{home, away, gh, ga}` en la
+     orientación de LA IDA (home=m.l/local, away=m.v/visitante de esa
+     ronda/idx) o `null` si la ida aún no se ha jugado. */
+  window._copaGetIdaLeg = function (ronda, idx) {
+    try {
+      var pair = ((_copa.sorteo || {})[ronda] || [])[idx];
+      var ida = (((_copa.resultados || {})[ronda + '_ida'] || [])[idx]) || null;
+      if (!pair || !ida || !ida.jugado) return null;
+      return { home: pair.l, away: pair.v, gh: Number(ida.gl) || 0, ga: Number(ida.gv) || 0 };
+    } catch (_) { return null; }
+  };
+
   /* ════════════════════════════════════════════════════════════════
      PRE-POBLACIÓN DE PLANTILLAS PARA FILIALES Y EQUIPOS SIN ROSTER
      Sin esto, sqFromRegistry busca en localStorage y, si no encuentra
@@ -3443,7 +3460,21 @@
     /* Desempate: mismo ESTADIO que la vuelta (la vuelta la juega m.v en
        su campo). 5 min · ambos ↘️ (forma Mala) · prórroga+penaltis. */
     var _desStad = _isDes && (typeof window.getTeamStadium === 'function') ? (window.getTeamStadium(m.v) || '') : '';
-    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !_isDes && !!esVuelta, esDesempate: _isDes, stadium: _desStad, homeLogo: _shieldUrl(local), awayLogo: _shieldUrl(visit) };
+    /* IDA de la eliminatoria (solo en la VUELTA) — para que el share de
+       WhatsApp del INICIO (antes de que exista gm-modal) ya pueda
+       mostrar "IDA: X-Y" (tarea WhatsApp ida-vuelta, 2026-08-08).
+       `_waIdaOrient` (misc_body_2.html, ya cargado a esta altura —
+       copa-engine.js se sirve al final del <body>) reordena el
+       resultado de `_copaGetIdaLeg` por NOMBRE a la orientación de
+       ESTA vuelta (local↔visitante se invierten entre ida y vuelta). */
+    var _waIdaCp = null;
+    try {
+      if (!_isDes && esVuelta) {
+        var _cpIdaLeg = window._copaGetIdaLeg(ronda, idx);
+        if (_cpIdaLeg && typeof window._waIdaOrient === 'function') _waIdaCp = window._waIdaOrient(_cpIdaLeg, local, visit);
+      }
+    } catch (_) {}
+    window._ppPreviaTeams = { home: local, away: visit, j: 0, comp: compKey, ronda: ronda, idx: idx, esVuelta: !_isDes && !!esVuelta, esDesempate: _isDes, stadium: _desStad, homeLogo: _shieldUrl(local), awayLogo: _shieldUrl(visit), _waIdaScore: _waIdaCp };
     if (_isDes) { try { window._ppSetMatchCtx && window._ppSetMatchCtx({ durMin: 5, formHome: '↘️', formAway: '↘️' }); } catch (_) {} }
     window._ppCustomCallback = function () {
       window._ppPreviaTeams = null;

@@ -324,6 +324,33 @@ window._idbKV = window._idbKV || (function(){
   return { set:set, get:get, keys:keys, del:del };
 })();
 
+/* Las 43 ligas menores fusionadas en liga-mixta-1..9 (2026-07-30/31).
+   Fuente ÚNICA — definida aquí, ANTES que cualquier otro <script>, para
+   que los 3 consumidores (purga local v9, botón admin de borrado en
+   servidor, y el filtro de `_lextReconcileResultsToServer` que evita
+   que un dispositivo con IndexedDB stale las resucite en el servidor)
+   lean SIEMPRE la MISMA lista — nunca 3 copias que puedan desincronizarse. */
+window._DEAD_MERGED_LEAGUE_SLUGS = [
+  'rep-checa','grecia','san-marino','gales','georgia',
+  'polonia','noruega','montenegro','luxembgo','bielorrsa',
+  'chipre','austria','andorra','gibraltar','n-irlanda',
+  'suecia','croacia','lituania','n-maced','albania',
+  'israel','hungria','ucrania','estonia','malta',
+  'alemania','serbia','rumania','is-feroe','letonia',
+  'eslovenia','bulgaria','bosnia','kazajst','kosovo',
+  'rusia','armenia','finlandia','moldavia','azerbayan',
+  'eslovaquia','irlanda','islandia'
+];
+window._isDeadMergedLeagueSlug = function(slug){
+  if (!slug) return false;
+  var list = window._DEAD_MERGED_LEAGUE_SLUGS || [];
+  for (var i = 0; i < list.length; i++) {
+    var s = list[i];
+    if (slug === s || slug.indexOf(s + '_') === 0) return true;
+  }
+  return false;
+};
+
 /* ══════════════════════════════════════════════════════════════════
    _normPS bootstrap GLOBAL — se define aquí ANTES que cualquier otro
    <script>, por lo que los IIFEs posteriores siempre encuentran
@@ -45922,23 +45949,13 @@ window._hdrCleanCache = function(){
   /* setTimeout(_eurAutoHydrateAndRender, 4000);  ← desactivado */
   /* visibilitychange / pageshow / focus  ← desactivados (tormenta) */
 
-  /* Las 43 ligas menores fusionadas en liga-mixta-1..9 (2026-07-30/31) —
-     mismo listado que los flags `ftbol_merged_leagues_purge_v1..v8` de
-     más abajo, que ya purgan la copia LOCAL de estos slugs pero
-     "nunca tocan el servidor" a propósito. Este array es la versión
-     PLANA de esos 8 `OLD_SLUGS`, para pedir al servidor que borre sus
-     filas para siempre. */
-  var DEAD_MERGED_LEAGUE_SLUGS = [
-    'rep-checa','grecia','san-marino','gales','georgia',
-    'polonia','noruega','montenegro','luxembgo','bielorrsa',
-    'chipre','austria','andorra','gibraltar','n-irlanda',
-    'suecia','croacia','lituania','n-maced','albania',
-    'israel','hungria','ucrania','estonia','malta',
-    'alemania','serbia','rumania','is-feroe','letonia',
-    'eslovenia','bulgaria','bosnia','kazajst','kosovo',
-    'rusia','armenia','finlandia','moldavia','azerbayan',
-    'eslovaquia','irlanda','islandia'
-  ];
+  /* Lista canónica: window._DEAD_MERGED_LEAGUE_SLUGS (definida en el
+     primer <script> del archivo, junto a window._idbKV). NUNCA
+     duplicar este array aquí — las 43 ligas fusionadas en
+     liga-mixta-1..9 tienen que ser EXACTAMENTE las mismas para el
+     botón admin, la purga local v9 y el filtro de
+     `_lextReconcileResultsToServer`. */
+  var DEAD_MERGED_LEAGUE_SLUGS = window._DEAD_MERGED_LEAGUE_SLUGS || [];
   window._restoLigasPurgeDeadServer = function(){
     if(!confirm('🗑 Eliminar del servidor las 43 ligas fusionadas\n\n'
       +'Borra PARA SIEMPRE, de la base de datos, los datos (plantillas,\n'
@@ -51277,7 +51294,18 @@ https://api.sofascore.app/api/v1/team/44/image
           }
         });
       } catch(_){}
-      var list = Object.keys(slugs);
+      /* PROHIBIDO curar/empujar al servidor una liga fusionada y ya
+         eliminada (2026-08-08): sin este filtro, un dispositivo con
+         una copia stale en IndexedDB (v9 de arriba solo se dispara si
+         ya recorrió ese `<script>` — hay una ventana entre boot y ese
+         punto, y un dispositivo que nunca abrió esta versión del
+         bundle sigue teniendo la copia intacta) puede RE-CREAR en el
+         servidor exactamente lo que el admin acaba de borrar con
+         "🗑 Eliminar del servidor las 43 ligas fusionadas". Filtro
+         SIEMPRE, independientemente de si la purga local ya corrió. */
+      var list = Object.keys(slugs).filter(function(s){
+        return !(window._isDeadMergedLeagueSlug && window._isDeadMergedLeagueSlug(s));
+      });
       var idx = 0, healed = 0;
       function step(){
         if (idx >= list.length) { _fin(); if (opts.cb) try { opts.cb(healed); } catch(_){} return; }
@@ -58572,6 +58600,58 @@ https://api.sofascore.app/api/v1/team/44/image
         try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(s); } catch(_){}
       });
       try { console.warn('[ligaExt] purgadas '+toRemove.length+' claves locales de las 3 ligas fusionadas en liga-mixta-9.'); } catch(_){}
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  })();
+  /* Purga LOCAL v9 (2026-08-08, petición usuario "¿y con borrarlo una
+     vez vale para siempre en todos los móviles y PC?"): las purgas
+     v1..v8 de arriba SOLO tocan `localStorage` — nunca tocaron el
+     espejo durable de IndexedDB (`window._idbKV`, el mismo que
+     `saveData` alimenta en CADA guardado para sobrevivir a la eviction
+     de `localStorage`). Un dispositivo que abrió cualquiera de estas
+     43 ligas ANTES de la fusión (2026-07-30/31) puede seguir teniendo
+     su copia intacta en IndexedDB — invisible para v1..v8, pero
+     visible para `_lextReconcileResultsToServer` (que enumera slugs de
+     LIGA_CACHE + localStorage + IndexedDB por igual, SIN filtrar por
+     si la liga sigue vigente) — que la volvería a EMPUJAR AL SERVIDOR
+     en el siguiente boot/foco, resucitando justo lo que el admin acaba
+     de borrar con el botón "🗑 Eliminar del servidor las 43 ligas
+     fusionadas". Lista canónica: `window._DEAD_MERGED_LEAGUE_SLUGS`
+     (definida en el primer <script>, junto a `window._idbKV`) — NUNCA
+     duplicar el array aquí. Limpia localStorage + LIGA_CACHE
+     (defensivo, no-op si v1..v8 ya lo hicieron) + IndexedDB (el hueco
+     real). Sigue siendo "solo local, nunca toca el servidor" — el
+     borrado del servidor lo hace el botón admin aparte. */
+  (function _purgeMergedLeaguesV9(){
+    var FLAG = 'ftbol_merged_leagues_purge_v9';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var _matches = window._isDeadMergedLeagueSlug || function(){ return false; };
+    try {
+      var toRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (_matches(k.substring('ligaExt_'.length))) toRemove.push(k);
+      }
+      toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      (window._DEAD_MERGED_LEAGUE_SLUGS || []).forEach(function(s){
+        try { if (typeof LIGA_CACHE !== 'undefined') delete LIGA_CACHE[s]; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(s); } catch(_){}
+      });
+      /* El hueco real: IndexedDB. `_idbKV` solo guarda el `main` bajo
+         `ligaExt_<slug>` (sin sufijo — ver `storeKey`), así que basta
+         con enumerar sus claves y borrar las que casen. */
+      if (window._idbKV && typeof window._idbKV.keys === 'function') {
+        window._idbKV.keys().then(function(idbKeys){
+          (idbKeys || []).forEach(function(k){
+            if (typeof k !== 'string' || k.indexOf('ligaExt_') !== 0) return;
+            if (_matches(k.substring('ligaExt_'.length))) {
+              try { window._idbKV.del(k); } catch(_){}
+            }
+          });
+        }).catch(function(){});
+      }
+      try { console.warn('[ligaExt] purga v9: '+toRemove.length+' claves locales + limpieza de IndexedDB de las 43 ligas fusionadas.'); } catch(_){}
     } catch(_){}
     try { window._lsSetSafe(FLAG, '1'); } catch(_){}
   })();

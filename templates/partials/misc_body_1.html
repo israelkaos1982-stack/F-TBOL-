@@ -41430,15 +41430,25 @@ window._hdrCleanCache = function(){
     } catch(_){}
     return null;
   }
-  function _saveServer(comp, state){
+  /* Reintentos (obligatorio, 2026-08-08): un único POST sin reintentar
+     dejaba el resultado de un partido humano de fase de liga (UCL/UEL/
+     UECL) SOLO en local si fallaba — mismo patrón ya corregido en
+     _tourSave (torneos), pushPendingChanges (Recopa/Supercopa/Previa
+     Champions/etc) y _copaFetchGuardarResultado (Copa del Rey). */
+  function _saveServer(comp, state, tries){
     var c = COMPS[comp]; if(!c) return;
+    tries = (tries == null) ? 3 : tries;
     try {
       fetch('/api/kv/' + c.key, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({ value: state || {} })
-      }).catch(function(){});
+      }).then(function(r){ if (!r.ok) throw new Error('http ' + r.status); })
+        .catch(function(){
+          if (tries <= 1) return;
+          setTimeout(function(){ _saveServer(comp, state, tries - 1); }, 1500);
+        });
     } catch(_){}
   }
   function saveState(comp, state){

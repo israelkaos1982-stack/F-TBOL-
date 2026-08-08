@@ -18478,6 +18478,28 @@
     finally { window._gmPendingCopa = null; }
   };
 
+  /* POST a /api/copa/guardar_resultado con reintentos (obligatorio,
+     2026-08-08) — helper compartido para no duplicar el bucle de
+     backoff en cada caller. Devuelve la Response tal cual `fetch`
+     (el caller sigue leyendo `.json()` igual que antes) del intento
+     que finalmente tuvo éxito, o RECHAZA tras agotar los intentos. */
+  window._copaFetchGuardarResultado = function(payload, tries){
+    tries = (tries == null) ? 3 : tries;
+    return fetch('/api/copa/guardar_resultado', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).then(function(r){
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r;
+    }).catch(function(err){
+      if (tries <= 1) throw err;
+      return new Promise(function(resolve){
+        setTimeout(function(){ resolve(window._copaFetchGuardarResultado(payload, tries - 1)); }, 1500);
+      });
+    });
+  };
+
   /* Persiste un resultado humano de Copa del Rey. Llamado desde
      gmEndMatch cuando _gm._isCopa === true. Posta a
      /api/copa/guardar_resultado con los datos del partido (incluido
@@ -18503,11 +18525,16 @@
     else if (gh > ga) _copaWinName = home;
     else if (ga > gh) _copaWinName = away;
     try {
-      fetch('/api/copa/guardar_resultado', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).then(function(r){ return r.json(); })
+      /* Reintentos (obligatorio, 2026-08-08): un único intento sin
+         reintentar dejaba el resultado de un partido humano de Copa
+         SOLO en local si el POST fallaba (red móvil floja, blip del
+         servidor) — el usuario veía el partido perfectamente jugado,
+         pero desaparecía al borrar datos / en cualquier otro
+         dispositivo, porque nunca llegó al servidor. Mismo patrón de
+         3 reintentos con backoff ya aplicado a _tourSave (torneos) y
+         a pushPendingChanges (Recopa/Supercopa/Previa Champions/etc). */
+      window._copaFetchGuardarResultado(payload, 3)
+        .then(function(r){ return r.json(); })
         .then(function(d){
           try {
             /* IMPORTANTE (fix race condition 2026-05-06): actualizamos
@@ -34852,7 +34879,20 @@ document.addEventListener('DOMContentLoaded', function() {
     'partidos_aplazados',            /* Partidos aplazados (array) */
     'pend_hvh_deferred_v1',          /* Partidos pospuestos (📌 POSPONER) */
     'wc_champ_v1',                   /* Wild Card · campeón (alias corto) */
-    'wc_champion_v1'                 /* Wild Card · campeón */
+    'wc_champion_v1',                /* Wild Card · campeón */
+    /* Copa Intercontinental (obligatorio, 2026-08-08): `_load()`/`_save()`
+       de este motor (misc_body_1.html, STORE_KEY='inter_state_v1') SOLO
+       leían/escribían localStorage — a diferencia de sus hermanas Recopa/
+       Supercopa España/Supercopa Europa/Previa Champions (que sí viajan
+       por esta misma lista desde 2026-05-23), Intercontinental NUNCA
+       tuvo NINGÚN camino de sincronización cross-device: un partido
+       humano jugado en un móvil vivía SOLO en ese dispositivo, sin
+       posibilidad de verse en otro ni de sobrevivir a un borrado de
+       datos. Añadida aquí para heredar el mismo push/pull cada 3s que
+       ya protege al resto — y `inter_state_v1` se añade también a
+       `_STATE_BRACKET_KEYS` en app.py para la fusión por partido
+       (no sobrescritura ciega si dos misters juegan a la vez). */
+    'inter_state_v1'                 /* Copa Intercontinental */
   ];
 
   function _readLs(k){
@@ -35018,14 +35058,32 @@ document.addEventListener('DOMContentLoaded', function() {
       if(v === null) return;
       if(_lastSnapshot[k] === v) return; /* sin cambios */
       changes[k] = v;
-      _lastSnapshot[k] = v;
+      /* `_lastSnapshot[k]` YA NO se marca aquí, ANTES de saber si el
+         POST tuvo éxito (obligatorio, 2026-08-08). Bug real: si el
+         fetch fallaba (red móvil floja, blip del servidor), el cambio
+         ya se había marcado como "sincronizado" — el siguiente tick de
+         polling (3s) comparaba contra ESE snapshot optimista, veía
+         "sin cambios" y NUNCA reintentaba. Un partido de Recopa/
+         Supercopa España/Supercopa Europa/Previa Champions/
+         Intercontinental (todas viajan por SYNC_KEYS → competition_state)
+         podía quedar guardado en local para siempre pero NUNCA llegar
+         al servidor — indistinguible, para el usuario, de "el partido
+         no se guarda" (mismo síntoma ya reportado para torneos:
+         se ve bien en el móvil, desaparece al borrar datos / en otro
+         dispositivo). Ahora `_lastSnapshot[k]` solo se actualiza TRAS
+         confirmar el POST — un fallo deja el cambio "pendiente" y el
+         siguiente tick de polling (3s) lo reintenta solo, sin backoff
+         adicional necesario (el propio intervalo ya hace de reintento). */
     });
     if(!Object.keys(changes).length) return;
     fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ competition_state: changes })
-    }).catch(function(){});
+    }).then(function(res){
+      if (!res || !res.ok) return;
+      Object.keys(changes).forEach(function(k){ _lastSnapshot[k] = changes[k]; });
+    }).catch(function(){ /* no marcar — el próximo tick reintenta */ });
   }
 
   function startPolling(){

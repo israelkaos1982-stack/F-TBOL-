@@ -56408,8 +56408,21 @@ https://api.sofascore.app/api/v1/team/44/image
     if(btn) btn.innerHTML = '💾 Guardar cambios';
     var cancel = document.getElementById('lext-pl-cancel-btn');
     if(cancel) cancel.style.display = '';
+    /* El formulario de edición vive dentro del panel "➕ Añadir jugador
+       individual", que `lextOpenSquad` OCULTA (display:none) cuando la
+       plantilla se abre en modo LECTURA (p.ej. desde una fila de la
+       clasificación — `lextOpenSquad(id)` sin `{editable:true}`). El
+       botón 🖍 de cada jugador (`rowFor`) SÍ se pinta siempre, en
+       cualquier modo — así que sin esto, pulsar 🖍 desde la
+       clasificación no hacía NADA visible: el formulario se rellenaba
+       pero quedaba invisible tras el panel oculto (bug usuario
+       2026-08-08, "no me deja editar a Julián Álvarez" en Atlético
+       Madrid). Editar un jugador YA CREADO es una acción explícita del
+       admin (gateada por PIN 747 vía `pG(...)` en el propio botón 🖍),
+       así que el panel se hace visible aquí sin importar el modo en el
+       que se abrió la plantilla. */
     var det = document.getElementById('lext-pl-details');
-    if(det) det.open = true;
+    if(det){ det.style.display = ''; det.open = true; }
     // Scroll al form por comodidad
     if(det && typeof det.scrollIntoView === 'function'){
       try { det.scrollIntoView({behavior:'smooth', block:'start'}); } catch(_){}

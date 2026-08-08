@@ -1,5 +1,73 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El 🖍 de un jugador YA CREADO en la plantilla de un club no hacía NADA visible — el panel de edición quedaba oculto por el modo de apertura (obligatorio, 2026-08-08)
+
+**Bug reportado (usuario 2026-08-08, fotos: editor de plantilla de
+selección «Bélgica» con filas editables in-line vs. plantilla del
+Atlético Madrid con columnas de stats)**: en el editor de plantilla de
+**selecciones** (`selecciones_squad_v1`), cada jugador se edita
+directamente en su propia fila (inputs de dorsal/nombre/posición/valor
++ botones de flags, todo visible siempre). En el editor de plantilla de
+**clubes** (Resto de Ligas / Liga EA Sports, `renderSquadList`), pulsar
+**🖍** sobre un jugador YA CREADO (p.ej. Julián Álvarez en el Atlético
+Madrid) **no hacía nada** — ni error, ni cambio visible.
+
+### Causa raíz
+
+`lextOpenSquad(idOrTeam, opts)` es el único punto que abre el overlay
+`#lext-ov-squad`. Tiene 2 modos: **editable** (`opts.editable===true`,
+solo alcanzable desde "Editar equipos" → 🛡, `renderTeamsList`) y
+**lectura** (sin `opts.editable`, el modo con el que abre CUALQUIER
+click en una fila de clasificación — `.clas-row`, `.lext-row`, el
+delegado global de EA Sports/Hypermotion/1ª RFEF). En modo lectura,
+`lextOpenSquad` pone `display:none` al `<details id="lext-pl-details">`
+("➕ Añadir jugador individual") — el contenedor que alberga TODOS los
+campos del formulario de edición (nombre, dorsal, posición, valor,
+roles, corrección de stats).
+
+El problema: `rowFor` (dentro de `renderSquadList`) pinta el botón 🖍
+de CADA jugador **en los 2 modos**, sin condicionar a `editable`. Al
+pulsarlo, `lextEditPlayer(pid)` rellena los campos del formulario y
+hace `det.open = true` + `scrollIntoView(...)` — pero `det` (el mismo
+`<details>`) seguía con `display:none` puesto por `lextOpenSquad` en
+modo lectura, así que el formulario relleno era **invisible**. Como el
+95% de los clubes se abren desde la clasificación (no desde "Editar
+equipos"), el 🖍 de cualquier jugador ya creado era, en la práctica,
+un botón muerto para casi todos los flujos del juego.
+
+### Fix
+
+`lextEditPlayer` fuerza `det.style.display = ''` (además de
+`det.open = true`) al preparar el formulario — el panel se hace
+visible SIEMPRE que el admin pulse 🖍 sobre un jugador, sin importar
+si la plantilla se abrió en modo lectura o edición. La acción sigue
+gateada por PIN 747 (`pG(...)` en el propio botón 🖍 de `rowFor`), así
+que no se abre ningún acceso nuevo — solo se hace visible el
+formulario que ya se estaba rellenando en silencio.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `lextOpenSquad` (o cualquier apertura de overlay
+   equivalente) oculte con `display:none` un contenedor que a la vez
+   alberga la ÚNICA vía de editar un elemento cuyo botón de disparo
+   (🖍, o cualquier acción similar) se sigue pintando en TODOS los
+   modos. Si el botón de disparo es visible en un modo, su destino
+   también debe poder hacerse visible en ese modo.
+2. **PROHIBIDO** volver a quitar el `det.style.display = ''` de
+   `lextEditPlayer`. Es lo único que garantiza que 🖍 funcione desde
+   CUALQUIER punto de entrada a la plantilla de un club (clasificación
+   de Liga EA Sports/Hypermotion/1ª RFEF/Resto de Ligas, o "Editar
+   equipos"), no solo desde el flujo "Editar equipos".
+3. El editor de plantilla de **selecciones** (`selecciones_squad_v1`,
+   filas in-line siempre editables, sin PIN por fila) y el de
+   **clubes** (`renderSquadList`, columnas de stats reales + edición
+   vía panel-formulario gateado por PIN) son intencionalmente DISTINTOS
+   — el de club muestra estadísticas reales de partido (PJ/goles/
+   tarjetas/rating) que el de selección no tiene. **PROHIBIDO**
+   fusionar ambos diseños sin acuerdo explícito del usuario; el fix de
+   esta sección solo corrige que el 🖍 del club sea FUNCIONAL, no
+   cambia su apariencia.
+
 ## El aviso "El navegador se quedó sin espacio" reaparecía en TODAS las cargas — el cooldown persistido podía fallar exactamente en el instante que lo necesitaba, y una 2ª copia del aviso llevaba código MUERTO desde siempre (obligatorio, 2026-08-08)
 
 **Bug reportado (usuario 2026-08-08, captura de la portada «EFOOTBALL

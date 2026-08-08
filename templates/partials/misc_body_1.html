@@ -43995,6 +43995,26 @@ window._hdrCleanCache = function(){
     <span>Re-cuadrar reparto europeo (canónico) (admin)</span>
   </button>
 </div>
+<!-- Botón "🗑 Eliminar ligas fusionadas del servidor" (PIN admin 747).
+     Petición usuario 2026-08-08 ("antes tenía 53-54 ligas, las reduje a
+     20, ¿se eliminaron por completo? si no, quiero que las elimines para
+     siempre y liberes espacio"). Las 43 ligas menores fusionadas en
+     liga-mixta-1..9 (2026-07-30/31) ya no tienen card ni slug vigente,
+     y el cliente ya purga su copia LOCAL (`ftbol_merged_leagues_purge_v1
+     ..v8`) — pero esa purga es "solo local, nunca toca el servidor" por
+     diseño. Este botón borra PERMANENTEMENTE las filas
+     `liga_ext_<slug>` (+ `_protected`/`_snap_*`/`_backup`) de esas 43
+     ligas en la base de datos — sin esto, `/api/liga-ext-bulk` (y el
+     resto de endpoints que barren `liga_ext_%`) las sigue devolviendo y
+     puede resucitar la purga local en cualquier dispositivo. -->
+<div class="restoligas-actions" style="margin-top:10px;">
+  <button class="restoligas-btn restoligas-btn-commit"
+          onclick="window.pG(function(){window._restoLigasPurgeDeadServer&&window._restoLigasPurgeDeadServer();})"
+          style="flex:1 1 auto;background:linear-gradient(90deg,#2e0a0a,#4a1e1e,#7a2e2e,#4a1e1e,#2e0a0a);border-color:rgba(255,90,90,.5);color:#ffb3b3;">
+    <span class="restoligas-ico">🗑</span>
+    <span>Eliminar del servidor las 43 ligas fusionadas (admin)</span>
+  </button>
+</div>
 </div>
 
 <script>
@@ -45902,6 +45922,53 @@ window._hdrCleanCache = function(){
   /* setTimeout(_eurAutoHydrateAndRender, 4000);  ← desactivado */
   /* visibilitychange / pageshow / focus  ← desactivados (tormenta) */
 
+  /* Las 43 ligas menores fusionadas en liga-mixta-1..9 (2026-07-30/31) —
+     mismo listado que los flags `ftbol_merged_leagues_purge_v1..v8` de
+     más abajo, que ya purgan la copia LOCAL de estos slugs pero
+     "nunca tocan el servidor" a propósito. Este array es la versión
+     PLANA de esos 8 `OLD_SLUGS`, para pedir al servidor que borre sus
+     filas para siempre. */
+  var DEAD_MERGED_LEAGUE_SLUGS = [
+    'rep-checa','grecia','san-marino','gales','georgia',
+    'polonia','noruega','montenegro','luxembgo','bielorrsa',
+    'chipre','austria','andorra','gibraltar','n-irlanda',
+    'suecia','croacia','lituania','n-maced','albania',
+    'israel','hungria','ucrania','estonia','malta',
+    'alemania','serbia','rumania','is-feroe','letonia',
+    'eslovenia','bulgaria','bosnia','kazajst','kosovo',
+    'rusia','armenia','finlandia','moldavia','azerbayan',
+    'eslovaquia','irlanda','islandia'
+  ];
+  window._restoLigasPurgeDeadServer = function(){
+    if(!confirm('🗑 Eliminar del servidor las 43 ligas fusionadas\n\n'
+      +'Borra PARA SIEMPRE, de la base de datos, los datos (plantillas,\n'
+      +'resultados, escudos) de las 43 ligas menores que ya se\n'
+      +'fusionaron en Liga Mixta 1-9: '+DEAD_MERGED_LEAGUE_SLUGS.join(', ')+'.\n\n'
+      +'Estas ligas ya NO tienen card ni slug vigente — sus datos solo\n'
+      +'ocupan espacio sin que nada pueda volver a mostrarlos. Esta\n'
+      +'acción NO se puede deshacer.\n\n'
+      +'¿Continuar?')) return;
+    _eurToast('⏳ Borrando ligas fusionadas del servidor…');
+    fetch('/api/admin/purge-dead-leagues', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      credentials:'same-origin',
+      body: '{}'
+    }).then(function(r){ return r && r.json ? r.json() : null; })
+      .then(function(j){
+        if(j && j.ok){
+          var n = j.deleted_count || 0;
+          alert(n > 0
+            ? ('✅ Borradas '+n+' filas del servidor (main + protected + snapshots de las 43 ligas fusionadas).\n\nYa no ocupan espacio en la base de datos.')
+            : '✅ No había nada que borrar — ya estaban limpias (o esta es la 2ª vez que lo pulsas, es normal).');
+        } else {
+          (window._gmCriticalNotice || alert)('⚠️ El servidor no confirmó el borrado. Verifica que tienes sesión admin activa y vuelve a intentarlo.');
+        }
+      })
+      .catch(function(e){
+        (window._gmCriticalNotice || alert)('⚠️ No se pudo contactar con el servidor: ' + (e && e.message ? e.message : e));
+      });
+  };
   window._restoLigasRecuadrarEurope = function(){
     if(typeof window.LEAGUE_DEFAULT_ZONES !== 'object'
        || typeof window._zonesDefaultFor !== 'function'){

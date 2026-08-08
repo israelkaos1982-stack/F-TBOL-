@@ -4713,17 +4713,29 @@ def api_kv_get(key):
         return jsonify({"ok": False, "error": "key no permitida"}), 400
     row = GlobalState.query.filter_by(clave=key).first()
     if not row or not row.valor_json:
-        return jsonify({"ok": True, "key": key, "value": None, "updated_at": ""})
+        resp = jsonify({"ok": True, "key": key, "value": None, "updated_at": ""})
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return resp
     try:
         value = json.loads(row.valor_json)
     except Exception:
         value = None
-    return jsonify({
+    resp = jsonify({
         "ok": True,
         "key": key,
         "value": value,
         "updated_at": row.updated_at or "",
     })
+    # Sin cabecera anti-caché explícita, un navegador puede servir una
+    # copia guardada de esta respuesta al reabrir la MISMA URL (visto en
+    # depuración 2026-08-08: dos peticiones separadas, minutos aparte,
+    # devolvieron un "updated_at" IDÉNTICO al microsegundo — imposible
+    # salvo que la segunda fuera una copia cacheada de la primera, no una
+    # lectura fresca del servidor). Este endpoint se usa para diagnóstico
+    # en vivo (pegar la URL en el navegador) — DEBE devolver siempre el
+    # estado real, nunca una copia vieja.
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
 
 
 def _tour_reset_ms(data):

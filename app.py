@@ -530,6 +530,9 @@ _STATE_BRACKET_KEYS = {
     "ucl_ko_state_v1",    # Champions — fase eliminatoria
     "uel_ko_state_v1",    # Europa League — fase eliminatoria
     "uecl_ko_state_v1",   # Conference League — fase eliminatoria
+    "inter_state_v1",     # Copa Intercontinental (obligatorio, 2026-08-08:
+                           # esta clave nunca viajaba al servidor en absoluto
+                           # hasta ahora — ver SYNC_KEYS en misc_body_2.html)
 }
 
 

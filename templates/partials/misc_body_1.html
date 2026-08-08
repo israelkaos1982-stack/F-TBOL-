@@ -27226,23 +27226,42 @@ window._hdrCleanCache = function(){
        diferido) para que cada partido jugado suba sus eventos a las cajas
        sin esperar a que termine la fase. */
     try { _tourScheduleStatsSync(); } catch(_){}
-    /* Sync al servidor con HARD TIMEOUT de 8 s. Sin esto, en redes
-       lentas el `await fetch(...)` se quedaba colgado para siempre y
-       el editor mostraba "Sorteando y guardando…" sin avanzar (caso
-       reportado por el usuario 2026-05-09). */
-    try {
-      var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
-      var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, 8000) : null;
-      var res = await fetch('/api/kv/' + _key(id), {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ value: cfg }),
-        signal: ctl ? ctl.signal : undefined
-      });
-      if (to) clearTimeout(to);
-      var j = await res.json();
-      return !!(j && j.ok);
-    } catch(_) { return false; }
+    /* Sync al servidor con HARD TIMEOUT de 8 s + 3 REINTENTOS con backoff
+       (obligatorio, 2026-08-08). Antes era UN solo intento: si el POST
+       fallaba (red móvil floja, cold-start de Railway, cualquier blip),
+       el resultado quedaba guardado SOLO en local — el usuario veía el
+       partido perfectamente jugado, pero al borrar los datos de
+       navegación (o en cualquier otro dispositivo) el resultado
+       desaparecía para siempre, porque nunca llegó al servidor y nadie
+       lo reintentaba (`_tourSaveAndRender`/`_tourSaveHumanResult` llaman
+       a `_tourSave` en modo "fire and forget", sin comprobar el
+       resultado). Bug reportado (usuario, Mundial 2032 Grupo J,
+       Argentina 3-0 Jordania: el partido se veía bien tras jugarlo, pero
+       "cuando borro datos y vuelvo a la web... el partido de Argentina
+       borrado"). Mismo patrón de reintentos ya usado en otros guardados
+       críticos de este proyecto (`_postClearRetry`, `persistSharedLigaState`). */
+    var _lastErr = null;
+    for (var _try = 0; _try < 3; _try++) {
+      try {
+        var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+        var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, 8000) : null;
+        var res = await fetch('/api/kv/' + _key(id), {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ value: cfg }),
+          signal: ctl ? ctl.signal : undefined
+        });
+        if (to) clearTimeout(to);
+        var j = await res.json();
+        if (j && j.ok) return true;
+        _lastErr = j;
+      } catch(_e) { _lastErr = _e; }
+      if (_try < 2) {
+        await new Promise(function(resolve){ setTimeout(resolve, 1500 * (_try + 1)); });
+      }
+    }
+    try { console.warn('[_tourSave] POST agotó 3 intentos para ' + id, _lastErr); } catch(_){}
+    return false;
   };
 
   /* ── Pool de equipos (lee ligaExt_* + SQUAD_REGISTRY) ───

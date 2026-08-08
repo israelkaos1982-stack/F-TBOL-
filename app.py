@@ -3673,6 +3673,85 @@ def api_liga_ext_bulk_get():
 
     return jsonify({"ok": True, "count": len(leagues), "leagues": leagues})
 
+
+# Las 43 ligas menores que se fusionaron en liga-mixta-1..9 (2026-07-30/31,
+# ver templates/partials/misc_body_1.html LEAGUE_DEFAULT_NAMES). Sus slugs
+# ya NO existen en LEAGUE_DEFAULT_ZONES/NAMES ni en ninguna menu-card de
+# "Resto de Ligas" — el cliente ya purga su copia LOCAL (localStorage) con
+# los flags `ftbol_merged_leagues_purge_v1..v8`, pero esa purga nunca tocó
+# el servidor a propósito ("solo local, nunca toca el servidor"). Las filas
+# `liga_ext_<slug>` (+ `_protected`/`_snap_*`/`_backup`) de estas 43 ligas
+# siguen en la base de datos para siempre, y `/api/liga-ext-bulk` (y otros
+# endpoints que hacen `clave LIKE 'liga_ext_%'`) las sigue devolviendo sin
+# filtrar — un dispositivo que purgó su copia local puede volver a
+# adoptarlas del servidor en el siguiente bulk-restore, resucitando la
+# purga. Petición usuario 2026-08-08: "quiero que las elimines para
+# siempre y liberes espacio".
+DEAD_MERGED_LEAGUE_SLUGS = [
+    # liga-mixta-1
+    "rep-checa", "grecia", "san-marino", "gales", "georgia",
+    # liga-mixta-2
+    "polonia", "noruega", "montenegro", "luxembgo", "bielorrsa",
+    # liga-mixta-3
+    "chipre", "austria", "andorra", "gibraltar", "n-irlanda",
+    # liga-mixta-4
+    "suecia", "croacia", "lituania", "n-maced", "albania",
+    # liga-mixta-5
+    "israel", "hungria", "ucrania", "estonia", "malta",
+    # liga-mixta-6 (Alemania se elimina como liga propia; solo 6 de sus
+    # equipos migraron a mano a liga-mixta-6, el resto no migra a ningún
+    # sitio)
+    "alemania", "serbia", "rumania", "is-feroe", "letonia",
+    # liga-mixta-7
+    "eslovenia", "bulgaria", "bosnia", "kazajst", "kosovo",
+    # liga-mixta-8
+    "rusia", "armenia", "finlandia", "moldavia", "azerbayan",
+    # liga-mixta-9
+    "eslovaquia", "irlanda", "islandia",
+]
+
+
+@app.route("/api/admin/purge-dead-leagues", methods=["POST"])
+@admin_required
+def api_admin_purge_dead_leagues():
+    """Borra PERMANENTEMENTE de la base de datos las filas de las 43
+    ligas menores que se fusionaron en liga-mixta-1..9. Incluye el
+    `main` de cada una (`liga_ext_<slug>`) y todos sus derivados
+    (`_protected`, `_snap_<ts>`, `_backup`, cualquier sufijo futuro).
+
+    Idempotente: si ya se borraron (o nunca existieron), no hace nada
+    y devuelve deleted_count=0 — se puede pulsar más de una vez sin
+    riesgo. Requiere sesión admin (PIN 747, igual que el resto de
+    acciones destructivas de "Resto de Ligas")."""
+    try:
+        rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
+    except Exception:
+        rows = []
+    prefixes = tuple(f"liga_ext_{slug}" for slug in DEAD_MERGED_LEAGUE_SLUGS)
+    deleted_keys = []
+    for row in rows or []:
+        clave = row.clave or ""
+        # Match exacto (el "main") o con sufijo "_algo" (protected/snap/backup).
+        # No basta con `startswith`: "liga_ext_alemania" no debe borrar
+        # "liga_ext_alemania-otra-cosa" si algún día existiera un slug así.
+        hit = False
+        for prefix in prefixes:
+            if clave == prefix or clave.startswith(prefix + "_"):
+                hit = True
+                break
+        if not hit:
+            continue
+        deleted_keys.append(clave)
+        db.session.delete(row)
+    if deleted_keys:
+        db.session.commit()
+    return jsonify({
+        "ok": True,
+        "deleted_count": len(deleted_keys),
+        "deleted_keys": sorted(deleted_keys),
+    })
+
+
 @app.route("/api/liga-ext/<slug>", methods=["POST"])
 def api_liga_ext_post(slug):
     payload = request.get_json(silent=True) or {}

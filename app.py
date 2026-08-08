@@ -26,6 +26,7 @@ from sync_merge import (
     _count_played as _tour_count_played,
 )
 from strip_js_comments import strip_html_js_comments
+import champions_previa
 
 app = Flask(__name__)
 
@@ -3710,6 +3711,120 @@ def api_liga_ext_bulk_get():
             continue
 
     return jsonify({"ok": True, "count": len(leagues), "leagues": leagues})
+
+
+# ──────────────────────────────────────────────────────────────────────
+# PREVIA DE CHAMPIONS — Ronda 1 / Ronda 2 (champions_previa.py)
+#
+# Reglamento (36 equipos):
+#   Ronda 1 (24): 12 Open Qualifier vs. 12 clasificados directos vía liga.
+#     Ganadores (12) → Ronda 2. Perdedores (12) → Europa League (grupos).
+#   Ronda 2 (24): 12 ganadores Ronda 1 vs. 12 equipos FIJOS (ver
+#     champions_previa.RONDA2_FIXED_SLOTS). Ganadores (12) → Champions
+#     League (grupos, junto a los 28 directos). Perdedores (12) →
+#     Europa League (grupos, junto a los 12 perdedores de Ronda 1 = 24).
+#
+# El sorteo/emparejamiento en sí (`build_ronda1`/`build_ronda2`) es
+# stdlib pura en `champions_previa.py` — estos endpoints solo la
+# conectan con los datos reales de las ~54 ligas ya persistidas en
+# `GlobalState` (mismo fallback main→`_protected` que
+# `/api/liga-ext-any/<slug>`), para que el CLIENTE (que sí construye
+# los pools de Open Qualifier / clasificados directos con su propio
+# motor) pueda pedir la validación y el cuadro sin tener que resolver
+# él mismo las 12 posiciones fijas de Ronda 2.
+# ──────────────────────────────────────────────────────────────────────
+
+def _champions_previa_league_provider(slug):
+    """`league_data_provider` para `champions_previa.py`: resuelve
+    `main` → `_protected` en el servidor, igual que
+    `/api/liga-ext-any/<slug>` — una liga cuyo `main` se vació por una
+    escritura concurrente no debe reportarse como "sin datos" si su
+    snapshot `_protected` sigue teniendo el roster/clasificación real."""
+    try:
+        data = _liga_ext_load(slug)
+    except Exception:
+        data = None
+    teams = (data or {}).get("teams") if isinstance(data, dict) else None
+    if isinstance(teams, list) and len(teams) >= 2:
+        return data
+    try:
+        prow = GlobalState.query.filter_by(clave=_protected_key(slug)).first()
+    except Exception:
+        prow = None
+    if prow and prow.valor_json:
+        try:
+            pdata = json.loads(prow.valor_json)
+        except Exception:
+            pdata = None
+        if isinstance(pdata, dict) and isinstance(pdata.get("teams"), list) and len(pdata["teams"]) >= 2:
+            return pdata
+    return data
+
+
+@app.route("/api/champions-previa/ronda2-fixed-status", methods=["GET"])
+def api_champions_previa_ronda2_fixed_status():
+    """Diagnóstico de las 12 ligas FIJAS de la Ronda 2 (sin ejecutar
+    ningún emparejamiento) — equivalente al aviso ámbar "N liga(s) SIN
+    datos todavía" ya usado en el resto del proyecto. El admin puede
+    consultarlo en cualquier momento, incluso antes de tener listos los
+    pools de Open Qualifier / clasificados directos de la Ronda 1."""
+    ok, resolved, missing = champions_previa.validate_ronda2_fixed_slots(
+        _champions_previa_league_provider)
+    return jsonify({"ok": ok, "resueltos": resolved, "faltan": missing})
+
+
+@app.route("/api/champions-previa/validar-envio", methods=["POST"])
+def api_champions_previa_validar_envio():
+    """Réplica backend de "Enviar realidad de cada equipo a su Europa"
+    para la Previa de Champions: valida los 3 requisitos (pool de 12 del
+    Open Qualifier, pool de 12 de clasificados directos, y las 12 ligas
+    fijas de Ronda 2) ANTES de que el cliente ejecute ningún
+    emparejamiento automático. Body JSON:
+      {"open_qualifier": [ {"name": ...}, ... ],  // 12
+       "directos":       [ {"name": ...}, ... ]}  // 12
+    Si `ok` es False, el cliente NO debe generar los cruces — debe
+    mostrar `errores_pools` / `ligas_sin_datos` al admin."""
+    body = request.get_json(silent=True) or {}
+    oq_pool = body.get("open_qualifier") or []
+    direct_pool = body.get("directos") or []
+    if not isinstance(oq_pool, list):
+        oq_pool = []
+    if not isinstance(direct_pool, list):
+        direct_pool = []
+    ok, informe = champions_previa.validar_antes_de_enviar(
+        oq_pool, direct_pool, _champions_previa_league_provider)
+    return jsonify(dict(informe, ok=ok))
+
+
+@app.route("/api/champions-previa/ronda1", methods=["POST"])
+def api_champions_previa_ronda1():
+    """Genera el cuadro de la Ronda 1 (12 eliminatorias, Open Qualifier
+    vs. clasificados directos) a partir de los 2 pools de 12 que envía
+    el cliente. Rechaza (`ok:false`) si algún pool viene incompleto —
+    NUNCA genera un cuadro con menos de 12 eliminatorias en silencio."""
+    body = request.get_json(silent=True) or {}
+    oq_pool = body.get("open_qualifier") or []
+    direct_pool = body.get("directos") or []
+    ties, errores = champions_previa.build_ronda1(oq_pool, direct_pool)
+    if errores:
+        return jsonify({"ok": False, "errores": errores, "ties": ties}), 400
+    return jsonify({"ok": True, "ties": ties})
+
+
+@app.route("/api/champions-previa/ronda2", methods=["POST"])
+def api_champions_previa_ronda2():
+    """Genera el cuadro de la Ronda 2 (12 eliminatorias, ganadores de la
+    Ronda 1 vs. los 12 equipos FIJOS del reglamento) — los equipos fijos
+    se resuelven contra los datos REALES de las ligas en el servidor
+    (nunca hay que pasarlos a mano). Body JSON:
+      {"ganadores_ronda1": [ {"name": ...}, ... ]}  // 12
+    Rechaza (`ok:false`) si falta algún ganador o alguna liga fija."""
+    body = request.get_json(silent=True) or {}
+    winners = body.get("ganadores_ronda1") or []
+    ties, errores = champions_previa.build_ronda2(winners, _champions_previa_league_provider)
+    if errores:
+        return jsonify({"ok": False, "errores": errores, "ties": ties}), 400
+    return jsonify({"ok": True, "ties": ties})
 
 
 # Las 43 ligas menores que se fusionaron en liga-mixta-1..9 (2026-07-30/31,

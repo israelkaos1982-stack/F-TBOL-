@@ -16628,7 +16628,7 @@
     if (addBtn) { addBtn.disabled = true; }
     document.getElementById('gm-event-panel').style.display = 'none';
     document.getElementById('gm-team-pick').style.display = 'none';
-    if (_gm._isTour) {
+    if (_gm._isTour || _gm.comp === 'torneo') {
       /* Torneos de verano (SCT, PSS, JG, Asia): persistimos en
          TOUR_CACHE[_tourId].results[_tourKey]. Si esa key es de KO
          single-leg y el partido acabó empatado, el penWinner viene
@@ -16636,7 +16636,23 @@
          se encarga de re-renderizar y, si el torneo termina, de
          acreditar premios a las cajas humanas. Pasamos también el
          acta (events + MVP) para que el visor 📋 ACTA del torneo
-         pueda mostrar el desglose minuto-a-minuto del partido. */
+         pueda mostrar el desglose minuto-a-minuto del partido.
+
+         Condición ampliada con `|| _gm.comp === 'torneo'` (obligatorio,
+         2026-08-08): esta era la ÚNICA rama de esta cadena SIN el
+         respaldo `comp === '<x>'` que ya tienen sus hermanas (Copa,
+         Superliga, Recopa, Inter, unas líneas más abajo) — asimetría
+         estructural real en el código. `_gm.comp` lo fija `gmOpen`
+         directamente del argumento literal `'torneo'` que pasa
+         `abrirTorneo`, así que es una señal más estable que el trío
+         `_isTour`/`_tourId`/`_tourKey` (depende de que
+         `window._gmPendingTour` se consuma en el instante exacto de
+         `gmOpen`). Bug reportado (usuario, Trofeo Joan Gamper J1, Real
+         Madrid-Acsa vs Liverpool-Toñín HvH): partido jugado y
+         finalizado por completo — acta, estadísticas y el mensaje de
+         WhatsApp salieron perfectos — pero el resultado nunca llegó a
+         `cfg.results`, así que la ficha del partido seguía mostrando
+         "PREVIA"/"-" por más veces que se repitiera. */
       try {
         var _tourPenWin = _gm.penWinner || null;
         if (!_tourPenWin) {
@@ -16658,10 +16674,31 @@
           home: _gm.home,
           away: _gm.away
         };
-        if (typeof window._tourSaveHumanResult === 'function') {
+        if (!_gm._tourId || !_gm._tourKey) {
+          /* Contexto de torneo PERDIDO (obligatorio, 2026-08-08): antes
+             esto caía en silencio a `if (!tourId || !key...) return;`
+             dentro de `_tourSaveHumanResult` — el partido "finalizaba"
+             perfectamente (acta, WhatsApp) pero nunca llegaba a
+             `cfg.results`, sin ningún aviso. Ahora se avisa de forma
+             VISIBLE para poder diagnosticar la causa exacta con
+             certeza si vuelve a pasar, en vez de adivinar. */
+          _gmCriticalNotice('⚠️ El resultado NO se ha podido guardar en el torneo — '
+              + 'se perdió el contexto (tourId=' + (_gm._tourId || '∅') + ', tourKey=' + (_gm._tourKey || '∅') + ').\n\n'
+              + 'El acta/WhatsApp de este partido son correctos, pero la ficha del '
+              + 'torneo seguirá en PREVIA. Avisa para que se investigue con este dato.');
+        } else if (typeof window._tourSaveHumanResult === 'function') {
           window._tourSaveHumanResult(_gm._tourId, _gm._tourKey, _gm.sc.a, _gm.sc.b, _tourPenWin, _tourExtra);
+        } else {
+          _gmCriticalNotice('⚠️ El resultado NO se ha podido guardar en el torneo — '
+              + 'falta window._tourSaveHumanResult. Avisa para que se investigue.');
         }
-      } catch(_e){}
+      } catch(_e){
+        try {
+          _gmCriticalNotice('⚠️ El resultado NO se ha podido guardar en el torneo (error interno): '
+              + (_e && _e.message || _e) + '.\n\nEl acta/WhatsApp de este partido son correctos, pero '
+              + 'la ficha del torneo seguirá en PREVIA. Avisa para que se investigue con este dato.');
+        } catch(__){}
+      }
     } else if (_gm._isWprev) {
       /* Previa Champions · fase de grupos (jornada del grupo con
          humano): persistimos en wprev_state_v1 (no en la tabla de

@@ -1,5 +1,121 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El aviso "El navegador se quedó sin espacio" reaparecía en TODAS las cargas — el cooldown persistido podía fallar exactamente en el instante que lo necesitaba, y una 2ª copia del aviso llevaba código MUERTO desde siempre (obligatorio, 2026-08-08)
+
+**Bug reportado (usuario 2026-08-08, captura de la portada «EFOOTBALL
+Temporada 32»)**: el aviso flotante **"⚠️ El navegador se quedó sin
+espacio. Los partidos se siguen subiendo al servidor, pero conviene
+limpiar la caché del navegador para reactivar el guardado local."**
+salía en **CADA** apertura/recarga de la web — "independientemente del
+borrado de caché del usuario" (lo probó varias veces y seguía
+saliendo).
+
+### Causa raíz 1 — el cooldown persistido de 4h podía no persistirse NUNCA
+
+El aviso viene de `window._lsSetSafe`'s `_warnOnce()` (principio de
+`misc_body_1.html`), que ya tenía —desde 2026-07-30— un cooldown de 4h
+guardado en `localStorage['ftbol_quota_warn_last_ts']` precisamente
+para no repetir el toast en cada carga. El fallo: ese cooldown solo
+puede funcionar si el propio `setItem` de la marca de tiempo **tiene
+éxito** — y `_warnOnce()` se llama EXACTAMENTE cuando
+`_freeAndRetry` (la cascada que libera snapshots/`_backup`/caches de
+stats/`_protected` de otras ligas/iconos) **ya evacuó TODO lo
+reconstruible y aun así no cupo el guardado**. En ese instante el
+almacén puede estar genuinamente a **0 bytes libres** — y crear una
+clave NUEVA (`ftbol_quota_warn_last_ts` no existía todavía) exige
+espacio adicional, así que el propio `localStorage.setItem(...)` de la
+marca de cooldown **también lanzaba QuotaExceededError**, capturado
+por un `try/catch` mudo que se lo tragaba. Resultado: la marca nunca
+llegaba a escribirse, la siguiente carga volvía a ver `last=0` →
+cooldown siempre `false` → el aviso reaparecía en **TODAS** las
+cargas. Borrar la caché del navegador no arreglaba nada porque, al
+recargar, la rehidratación desde el servidor (decenas de ligas con
+plantillas/escudos) vuelve a saturar el almacén casi al instante —
+reproduciendo la misma condición de cero bytes libres desde el primer
+segundo de la sesión nueva.
+
+### Causa raíz 2 — una SEGUNDA copia del aviso llevaba código MUERTO
+
+`saveData` (el chokepoint de guardado de `ligaExt_<slug>`, Resto de
+Ligas) tiene su PROPIO `_setItemSafe(key, value)` que envolvía
+`window._lsSetSafe(...)` en un `try{...}catch(err){...}` para detectar
+el fallo de cuota — pero **`_lsSetSafe` NUNCA lanza** (su contrato,
+documentado en la cabecera del propio archivo: "Devuelve true/false;
+NUNCA lanza"). Ese `catch` —y con él TODA la limpieza escalonada
+específica de la liga (snapshots → `_backup` → `_protected` de OTRAS
+ligas preservando el de ÉSTA → iconos) y el aviso `_lextQuotaWarned`
+que dependía de `_saveOk`— llevaba siendo **código muerto** desde que
+`_lsSetSafe` sustituyó al `setItem` crudo: `_setItemSafe` devolvía
+`true` SIEMPRE, aunque el guardado real hubiera fallado por cuota. Es
+el MISMO patrón que este archivo ya prohíbe y ya arregló en otras 3
+funciones (sección "El botón 'EA Sports → Europa' no dejaba añadir
+ningún equipo…", 2026-08-02) — aquí quedó pendiente explícitamente
+("una sesión dedicada solo a `saveData`") por ser el chokepoint más
+crítico del proyecto. Efecto colateral: un guardado de `ligaExt_<slug>`
+podía perderse en silencio SIN avisar nunca al usuario (el aviso de
+esta 2ª copia jamás llegaba a dispararse en la práctica).
+
+### Fix
+
+- **`_QUOTA_TS_KEY` se RESERVA al arrancar**, en el PRIMER `<script>`
+  de la página, con un valor de **ANCHO FIJO** (13 dígitos, ms desde
+  epoch vía `_padTs`, válido hasta el año 2286) — antes de que
+  cualquier liga/torneo tenga ocasión de pesar nada todavía. Sobrescribir
+  una clave YA EXISTENTE con un valor de la MISMA longitud es un
+  reemplazo IN-PLACE (delta de uso = 0), así que los navegadores lo
+  permiten aunque el resto del almacén esté saturado al 100% — a
+  diferencia de crearla por primera vez, que si el almacén ya estaba a
+  cero bytes libres en ESE instante fallaba en silencio. Verificado con
+  una simulación aislada de un `localStorage` mock forzado a 0 bytes
+  libres tras cada "carga": con el fix, la marca se escribe en la
+  primera carga (cuando el almacén aún está vacío) y sobrevive intacta
+  a cargas posteriores por más que el resto del almacén se sature —
+  sin el fix, el aviso reaparecía en TODAS las cargas simuladas.
+- **`window._lsQuotaToastMaybeShow(html)`** (nuevo, junto a `_warnOnce`):
+  extrae la parte de "pintar el toast respetando el cooldown" a un
+  helper reutilizable. `_warnOnce()` lo consume; `saveData` (2ª copia)
+  también, para que **ambos avisos compartan el MISMO cooldown
+  persistido** y nunca puedan aparecer dos toasts casi idénticos sin
+  coordinarse entre sí.
+- **`_setItemSafe`** (dentro de `saveData`): el `try/catch` sobre
+  `_lsSetSafe` se sustituye por la comprobación del **booleano real**
+  que devuelve (`if (window._lsSetSafe(key, value)) return true;`).
+  Toda la limpieza escalonada específica de la liga (antes muerta)
+  queda alcanzable de verdad como una pasada extra tras la de
+  `_lsSetSafe`; el aviso `_lextQuotaWarned` puede dispararse cuando de
+  verdad corresponde, y lo hace ahora a través de
+  `window._lsQuotaToastMaybeShow`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un cooldown persistido en `localStorage` (para
+   throttlear cualquier aviso repetitivo) asuma que "escribir unos
+   pocos bytes cabe siempre". Si el cooldown se escribe EXACTAMENTE en
+   el momento en que se detecta que el almacén está agotado, esa
+   escritura puede fallar también — reservar la clave con ANCHO FIJO
+   lo antes posible en el ciclo de vida de la página (antes de que
+   nada más reclame espacio) y actualizarla siempre in-place.
+2. **PROHIBIDO** reintroducir un `try{...}catch(err){...}` alrededor
+   de `window._lsSetSafe(...)` para detectar fallo de cuota en NINGÚN
+   punto del proyecto — `_lsSetSafe` NUNCA lanza (regla ya existente,
+   2026-08-02). Todo caller nuevo o encontrado debe comprobar el
+   booleano de retorno. Antes de dar por bueno un "ya tiene su propio
+   catch" para código que envuelve `_lsSetSafe`, comprobar si ese catch
+   puede llegar a ejecutarse de verdad — el de `saveData` llevaba
+   siendo código muerto desde 2026-06-25 sin que nadie lo detectara
+   hasta ahora.
+3. **PROHIBIDO** que dos subsistemas distintos (aquí, `_lsSetSafe` y
+   `saveData`) mantengan avisos de "sin espacio" independientes con
+   cooldowns/flags de sesión NO coordinados entre sí — reutilizar
+   SIEMPRE `window._lsQuotaToastMaybeShow` para cualquier aviso nuevo
+   de este tipo, para que compartan el mismo throttle persistido.
+4. Si un bug futuro reporta "este aviso/toast persiste tras limpiar
+   caché", sospechar primero de un cooldown persistido cuya propia
+   escritura de marca pueda fallar bajo la MISMA condición que dispara
+   el aviso (cuota agotada, red caída, etc.) — no asumir que "ya tiene
+   cooldown" basta sin verificar que la escritura de ESE cooldown es
+   robusta frente al escenario que intenta throttlear.
+
 ## La pantalla "GANANCIAS DEL PARTIDO" (🪙+💊+💼) del gm-modal nunca aparecía — markup DUPLICADO y STALE creado en `DOMContentLoaded` (obligatorio, 2026-08-03)
 
 **Bug reportado (usuario 2026-08-03, acta completa de «Inter 0-1 Real

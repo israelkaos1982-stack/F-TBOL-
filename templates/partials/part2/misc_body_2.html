@@ -10020,7 +10020,7 @@
                 : (resA || resB);
     if (display) st._matchEarnings = display;
   }
-  /* Bloque "GANANCIAS DEL PARTIDO" (🪙 + 💊 + 💼 de ESTE partido) para el
+  /* Bloque "GANANCIAS DEL PARTIDO" (🪙 + 💊 de ESTE partido) para el
      resumen post-partido. Lee st._matchEarnings (lo rellena
      athApplyMedicalFromActa). Devuelve '' si el hub no jugó este partido. */
   window._mlMatchEarningsHtml = function(st){
@@ -10031,8 +10031,6 @@
       parts.push('<span style="white-space:nowrap;">🪙 <b>+' + (Number(e.coins) || 0) + '</b></span>');
       if ((Number(e.pi) || 0) > 0)
         parts.push('<span style="white-space:nowrap;">💊 <b>+' + (Math.round((Number(e.pi) || 0) * 10) / 10) + '</b></span>');
-      if ((Number(e.rating) || 0) > 0)
-        parts.push('<span style="white-space:nowrap;">💼 <b>+' + (Number(e.rating) || 0).toFixed(2) + '</b></span>');
       return '<div style="margin:0 0 16px;padding:10px 12px;border:1px solid rgba(255,215,0,.35);border-radius:10px;background:rgba(255,215,0,.06);text-align:center;">'
         + '<div style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:rgba(255,215,0,.75);margin-bottom:6px;">💰 GANANCIAS DEL PARTIDO</div>'
         + '<div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;font-family:Oswald,sans-serif;font-size:17px;color:#fff;">'
@@ -11615,7 +11613,7 @@
       }
     }
 
-    // Ganancias del partido (🪙 + 💊 + 💼)
+    // Ganancias del partido (🪙 + 💊)
     var earnEl = document.getElementById('ml-post-earnings');
     if (earnEl) {
       try { earnEl.innerHTML = (typeof window._mlMatchEarningsHtml === 'function') ? window._mlMatchEarningsHtml(st) : ''; }
@@ -21740,7 +21738,7 @@
     <div class="ml-post-acta" id="ml-post-acta"></div>
     <!-- MVP -->
     <div id="ml-post-mvp" class="ml-post-mvp-row" style="display:none;"></div>
-    <!-- Ganancias del partido (🪙 + 💊 + 💼) -->
+    <!-- Ganancias del partido (🪙 + 💊) -->
     <div id="ml-post-earnings"></div>
     <!-- Botón WhatsApp elegante -->
     <button id="ml-post-wa-btn" class="ml-post-wa-btn">

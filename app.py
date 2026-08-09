@@ -551,7 +551,6 @@ _KV_HUB_BASE_KEYS = (
     # viejo (índices de los 68 objetivos) queda huérfano en v4; el cliente
     # ahora lee/escribe v5, así todos arrancan limpio en 0/23.
     "munich-obj-state-v5",
-    "mu_messages_v1",
 )
 
 
@@ -4435,14 +4434,6 @@ _KV_ALLOWED_EXACT = {
     # al recargar). localStorage es solo caché; el server es la fuente de
     # verdad. Merge por RECENCIA, igual que las bajas/sanciones.
     "bplant_stat_adjust_v1",
-    # Bandeja de MENSAJES del hub (Liverpool + Selección Francia). Vivía
-    # SOLO en localStorage → al borrar datos de navegación / cambiar de
-    # móvil se perdía todo, incluidos los mensajes que el admin compone a
-    # mano (🖍 + PIN), que pueden llevar una FOTO adjunta (data-URI JPEG
-    # reescalado). localStorage es solo caché; el server es la fuente de
-    # verdad. Merge por RECENCIA (updatedAt): el blob más nuevo gana
-    # entero, igual que las bajas/sanciones (2026-06-05).
-    "mu_messages_v1",
     # Acumulador de 🚪 tiros / ⚠️ faltas / ⛳️ córners por partido del hub
     # (Liverpool + selección), para la BANDA DE TOTALES de la plantilla.
     # Estos 3 datos NO se persisten en ninguna competición oficial (solo
@@ -4492,7 +4483,7 @@ _KV_ALLOWED_EXACT = {
 # nuevo y un consumo (decremento) tampoco se revierte.
 _KV_RECENCY_BLOB_KEYS = {
     "ftbol_sel_sanciones_v1", "ftbol_lesiones_v1", "ftbol_sanciones_v1",
-    "bplant_stat_adjust_v1", "mu_messages_v1", "bplant_match_stats_v1",
+    "bplant_stat_adjust_v1", "bplant_match_stats_v1",
     # Progreso de los Objetivos del Club (✅ + contadores manuales): el blob
     # con `updatedAt` mayor gana entero (avance/reset no se revierte; POST
     # stale no pisa lo más nuevo).

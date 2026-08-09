@@ -87,6 +87,77 @@ disparando con normalidad.
    distintos: uno evita reabrir cuenta atrás de histórico ya jugado,
    el otro evita el doble disparo del mismo evento nuevo).
 
+## Toda mutación de `t.players` que se persista con `saveData` DEBE sellar `t.updatedAt` — 3 rutas de auto-reparación de `renderSquadList` no lo hacían y el cambio podía "deshacerse solo" en el siguiente sync (obligatorio, 2026-08-09)
+
+**Bug (usuario 2026-08-09, «Atlético Madrid» — Julián Álvarez / Sørloth)**:
+tras el rediseño in-line de la plantilla de club (sección de abajo), el
+usuario reportó que las ediciones "no se guardan" — el campo nombre de
+Julián Álvarez volvía a mostrar texto corrupto ("Julián Alvarez F P") y
+sus flags P/F recién marcados ON aparecían de nuevo OFF; el flag ⚾ de
+Sørloth pasó de OFF a ON sin que el usuario lo tocara.
+
+### Causa raíz
+
+`renderSquadList()` (`misc_body_1.html`) tiene 3 rutas de
+AUTO-REPARACIÓN que mutan `t.players` y llaman a `saveData(CURRENT_KEY,
+data)` cada vez que la pantalla se renderiza (no solo al pulsar 💾
+Guardar): (1) hidratar desde `SQUAD_REGISTRY` cuando la plantilla local
+está vacía, (2) sembrar el roster genérico de 30 "Jugador N" si el
+registro tampoco aportó nada, y (3) el "GUARD DURABLE anti-rebrote"
+(`_cleanSquadPlayers`/`_dedupeSquadPlayers`), que filtra basura y
+**fusiona flags booleanos** (`captain/freeKick/penalty/elite/natGoal/
+natGoalPro`) de filas duplicadas por nombre en cada apertura de la
+pantalla — exactamente el mecanismo que puede encender un flag (⚾ de
+Sørloth) sin acción del usuario si existe una fila duplicada con ese
+flag activo en los datos ya guardados.
+
+Ninguna de las 3 rutas sellaba `t.updatedAt` tras mutar `t.players`.
+`_lx_merge_teams` (servidor, `app.py`) fusiona `teams[]` **por equipo**
+comparando `updatedAt`: un guardado con `updatedAt` SIN CAMBIAR
+(idéntico al que ya tenía el equipo desde una edición anterior) puede
+perder la comparación de recencia frente a la copia que el servidor
+tenga de OTRO dispositivo — el cambio se aplica y se ve bien EN LOCAL,
+pero al sincronizar, el servidor puede descartarlo y, en el siguiente
+`fetchData`, devolver la copia SIN limpiar/reparar, deshaciendo en
+apariencia la reparación (o la edición explícita del usuario, si ese
+mismo ciclo de render corrió justo después de su 💾 Guardar). Esto
+coincide exactamente con el síntoma "edito, guardo, y al momento
+siguiente vuelve a lo de antes".
+
+### Fix
+
+Las 3 rutas de auto-reparación de `renderSquadList` ahora sellan
+`t.updatedAt = Date.now()` inmediatamente antes de cada
+`saveData(CURRENT_KEY, data)` que mutó `t.players` — mismo patrón que
+ya usaban `lextSaveTeam`/`lextDeletePlayer`/`lextApplySquadPaste`/
+`_lextSq2Persist` (el guardado explícito del editor in-line, que ya lo
+hacía correctamente desde su introducción).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una ruta de auto-reparación/hidratación/limpieza de
+   `t.players` (actual o futura) llame a `saveData` sin sellar
+   `t.updatedAt = Date.now()` justo antes. Cualquier mutación de
+   plantilla que no selle su equipo pierde la carrera de recencia del
+   servidor frente a una copia vieja de otro dispositivo.
+2. **PROHIBIDO** asumir que "se ve bien en la pantalla tras guardar"
+   demuestra que el guardado sobrevivió al sync con el servidor — el
+   guardado LOCAL (síncrono, mismo objeto en memoria) siempre se ve
+   bien de inmediato; el problema aparece en el siguiente `fetchData`/
+   hidratación si el sello de recencia no ganó la fusión.
+3. Antes de dar por bueno un `saveData(CURRENT_KEY, data)` nuevo que
+   mute `t.players`/flags/nombre de un jugador, comprobar con `grep` que
+   el mismo bloque sella `t.updatedAt` — es el único mecanismo que
+   garantiza que el cambio "gana" en la fusión por equipo del servidor.
+4. Esto NO descarta que además existan datos de plantilla ya
+   corruptos de origen (p.ej. un nombre con texto de flags pegado desde
+   un pegado masivo histórico, ahora visible por primera vez con el
+   editor in-line) — ese tipo de dato se corrige simplemente
+   retecleando el campo y pulsando 💾 Guardar; con el sello de
+   `updatedAt` ya aplicado en las 3 rutas de arriba, esa corrección
+   explícita del admin ya no puede perderse frente a una auto-reparación
+   sin sellar.
+
 ## La plantilla de CLUB se edita IN-LINE fila a fila — igual que Selecciones (obligatorio, 2026-08-09) ⚠️ SUPERSEDE la sección "El 🖍 de un jugador YA CREADO..." (2026-08-08, más abajo) — el panel-formulario que esa sección arreglaba YA NO EXISTE
 
 **Petición usuario 2026-08-09** (tras el fix del 2026-08-08, fotos:

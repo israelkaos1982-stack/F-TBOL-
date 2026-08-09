@@ -27209,8 +27209,9 @@ window._hdrCleanCache = function(){
   }
   window._tourScheduleStatsSync = _tourScheduleStatsSync;
 
-  window._tourSave = async function(id, cfg){
+  window._tourSave = async function(id, cfg, saveOpts){
     if (TOUR_IDS.indexOf(id) === -1) return false;
+    saveOpts = saveOpts || {};
     cfg = cfg || {};
     cfg.id = id;
     cfg.updatedAt = new Date().toISOString();
@@ -27318,24 +27319,127 @@ window._hdrCleanCache = function(){
         });
         if (to) clearTimeout(to);
         var j = await res.json();
-        if (j && j.ok) return true;
+        if (j && j.ok) { _tourPendingSyncRemove(id); return true; }
         _lastErr = j;
       } catch(_e) { _lastErr = _e; }
       if (_try < 2) {
         await new Promise(function(resolve){ setTimeout(resolve, 1500 * (_try + 1)); });
       }
     }
-    try { console.warn('[_tourSave] POST agotó 3 intentos para ' + id + ' (payload ' + _payloadLen + ' bytes, timeout ' + _timeoutMs + 'ms)', _lastErr); } catch(_){}
+    try { console.warn('[_tourSave] POST agotó 3 intentos para ' + id + ' (payload ' + _payloadLen + ' bytes, timeout ' + _timeoutMs + 'ms, silent=' + !!saveOpts.silent + ')', _lastErr); } catch(_){}
     /* Aviso VISIBLE (no solo consola) si el guardado se agota del todo:
        el usuario en móvil no tiene devtools — sin esto, "se pierde en
-       silencio" es indistinguible de "se ha guardado bien". */
-    try {
-      if (typeof window._gmCriticalNotice === 'function') {
-        window._gmCriticalNotice('⚠️ No se pudo confirmar el guardado de "' + id + '" en el servidor (red lenta o payload grande). El resultado SIGUE guardado en este dispositivo — no cierres/borres datos de este navegador hasta volver a tener buena conexión, para que el reintento automático pueda subirlo.');
-      }
-    } catch(_){}
+       silencio" es indistinguible de "se ha guardado bien". El propio
+       aviso PROMETE un "reintento automático" — `_tourPendingSyncAdd`
+       es lo que hace esa promesa REAL (2026-08-09, antes era solo
+       texto: ningún caller de `_tourSave` reintentaba después de que
+       este bucle de 3 intentos se agotara, así que un torneo grande
+       —"sct", Soccer Champions Tour, con cientos de eventos de
+       relleno por partido igual que el Mundial 2032— que perdiera los
+       3 intentos se quedaba SOLO en local para siempre, hasta que el
+       usuario volviera a jugar/tocar ESE torneo y disparara otro
+       `_tourSave` de casualidad).
+       `saveOpts.silent` (usado SOLO por `_tourReconcileToServer`, el
+       reintento de FONDO): sin este guard, cada pasada del reconciler
+       (cada 20s+ mientras la red siga mal) volvería a disparar este
+       aviso — el usuario jugando tranquilamente vería el mismo modal
+       intrusivo aparecer una y otra vez. El aviso YA se mostró la
+       primera vez (el intento INTERACTIVO, disparado por la propia
+       acción del usuario); los reintentos de fondo son silenciosos —
+       si al final confirman el guardado, mejor; si siguen fallando, el
+       dato sigue a salvo en local y se reintentará en la próxima
+       pasada, sin necesidad de seguir avisando. */
+    if (!saveOpts.silent) {
+      try {
+        if (typeof window._gmCriticalNotice === 'function') {
+          window._gmCriticalNotice('⚠️ No se pudo confirmar el guardado de "' + id + '" en el servidor (red lenta o payload grande). El resultado SIGUE guardado en este dispositivo — no cierres/borres datos de este navegador hasta volver a tener buena conexión, para que el reintento automático pueda subirlo.');
+        }
+      } catch(_){}
+    }
+    _tourPendingSyncAdd(id);
     return false;
   };
+
+  /* ── COLA DE REINTENTO PENDIENTE (2026-08-09) ──────────────
+     El aviso de arriba promete un "reintento automático" — antes esa
+     promesa era falsa (ningún caller de `_tourSave` volvía a intentar
+     el mismo guardado; el resultado se quedaba SOLO en local hasta que
+     el usuario, por casualidad, volviera a tocar ese mismo torneo).
+     Esta cola persiste QUÉ torneos se quedaron sin confirmar en el
+     servidor y `_tourReconcileToServer` los reintenta de fondo, mismo
+     patrón (secuencial + pausado + throttle + disparo en boot/foco)
+     que `_lextReconcileResultsToServer` ya usa para las ligas. */
+  var _TOUR_PENDING_KEY = 'tour_pending_sync_v1';
+  function _tourPendingSyncGet(){
+    try {
+      var raw = localStorage.getItem(_TOUR_PENDING_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch(_){ return []; }
+  }
+  function _tourPendingSyncSet(arr){
+    try { window._lsSetSafe(_TOUR_PENDING_KEY, JSON.stringify(arr || [])); } catch(_){}
+  }
+  function _tourPendingSyncAdd(id){
+    var arr = _tourPendingSyncGet();
+    if (arr.indexOf(id) === -1) { arr.push(id); _tourPendingSyncSet(arr); }
+  }
+  function _tourPendingSyncRemove(id){
+    var arr = _tourPendingSyncGet();
+    var idx = arr.indexOf(id);
+    if (idx !== -1) { arr.splice(idx, 1); _tourPendingSyncSet(arr); }
+  }
+  var _tourReconcileInFlight = false;
+  var _tourReconcileLastAt = 0;
+  window._tourReconcileToServer = function(opts){
+    opts = opts || {};
+    if (_tourReconcileInFlight) return;
+    var nowT = Date.now();
+    if (!opts.force && (nowT - _tourReconcileLastAt) < 20000) return;
+    var list = _tourPendingSyncGet();
+    if (!list.length) return;
+    _tourReconcileInFlight = true;
+    _tourReconcileLastAt = nowT;
+    var idx = 0;
+    function step(){
+      if (idx >= list.length) { _tourReconcileInFlight = false; return; }
+      var id = list[idx++];
+      /* Preferimos la copia EN MEMORIA (`_TOUR_CACHE`, ya se actualiza
+         ANTES del intento de red en `_tourSave` — siempre la más
+         fresca); si no está (recarga de página de por medio), caemos
+         al `localStorage` local que SÍ se guardó bien aunque el POST
+         fallara. Si no hay ninguna, no hay nada que reintentar — se
+         quita de la cola para no reintentar un id fantasma para
+         siempre. */
+      var cfg = (window._TOUR_CACHE && window._TOUR_CACHE[id]) || null;
+      if (!cfg) {
+        try {
+          var raw = localStorage.getItem(_key(id));
+          cfg = raw ? JSON.parse(raw) : null;
+        } catch(_){ cfg = null; }
+      }
+      if (!cfg) { _tourPendingSyncRemove(id); setTimeout(step, 0); return; }
+      Promise.resolve(window._tourSave(id, cfg, { silent: true })).catch(function(){ return false; }).then(function(){
+        setTimeout(step, 250);
+      });
+    }
+    step();
+  };
+  /* Mismo disparo que `_lextReconcileResultsToServer`: diferido al
+     arrancar + al volver el foco/mostrarse la pestaña. Barato si la
+     cola está vacía (caso normal — devuelve al instante). */
+  try {
+    setTimeout(function(){ try { window._tourReconcileToServer(); } catch(_){} }, 9000);
+    var _tourReconcileOnWake = function(){
+      try {
+        if (document.visibilityState && document.visibilityState !== 'visible') return;
+        window._tourReconcileToServer();
+      } catch(_){}
+    };
+    window.addEventListener('pageshow', _tourReconcileOnWake);
+    window.addEventListener('focus', _tourReconcileOnWake);
+    document.addEventListener('visibilitychange', _tourReconcileOnWake);
+  } catch(_){}
 
   /* ── Pool de equipos (lee ligaExt_* + SQUAD_REGISTRY) ───
      Devuelve cada equipo con su `power` (GLOBAL del editor) para

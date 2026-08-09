@@ -201,6 +201,108 @@ por `console.warn`, invisible para un usuario en móvil sin devtools).
    código que corre ANTES del `fetch` (serialización, validaciones
    síncronas) en vez de asumir que es la conexión.
 
+### Refuerzo (mismo día) — el aviso de guardado fallido llevaba COOLDOWN, el re-empuje de fondo NO se detenía
+
+Tras el fix de arriba, el usuario reportó que el banner seguía
+apareciendo — pero esta vez con el detalle real ya visible:
+`[AbortError: signal is aborted without reason]` (timeout agotado a los
+30 s) y `[TypeError: Failed to fetch]` (fallo de red genuino), ambos
+para el torneo **`"mundial"`** (el slot BUILT-IN de "Mundialito de
+Clubes", 32 equipos — un torneo DISTINTO al que motivó el fix de
+arriba). El aviso salía en CUALQUIER pantalla, sin parar ("no para de
+salirme ese mensaje").
+
+**Causa raíz**: `_tourLoad(id)` (misma familia de función) tiene un
+RE-EMPUJE de auto-sanado: si detecta que el servidor sigue "por detrás"
+del guardado local (el guardado anterior nunca llegó a confirmarse),
+reintenta `_tourSave(id, ...)` con un throttle de solo 20 s por sello.
+`_hydrateCache()` llama a `_tourLoad` para TODOS los `TOUR_IDS` en
+CADA `DOMContentLoaded` — así que cada recarga/navegación completa
+volvía a intentar (y, si el problema de fondo persistía — payload
+grande + servidor lento en ese torneo concreto —, a fallar), mostrando
+el banner de nuevo. El reintento en sí es CORRECTO (es lo que permite
+que el guardado se cure solo en cuanto la conexión mejore) — el
+problema era que el AVISO VISIBLE se repetía en cada intento fallido,
+sin ningún throttle propio.
+
+**Fix**: `_tourSaveWarnShouldShow(id)` (nuevo, junto a
+`_tourSafeStringify`) — cooldown persistido en `localStorage`
+(`tour_save_warn_cd_v1`, mismo patrón que `_lsQuotaToastMaybeShow` para
+el aviso de cuota): el banner VISIBLE se muestra como mucho **una vez
+cada 3 minutos por torneo**. El reintento de fondo (`_tourLoad`'s
+re-empuje) sigue ocurriendo exactamente igual, sin ningún cambio —
+solo se limita cuántas veces se lo hace saber al usuario.
+
+**Reglas a respetar (refuerzo)**:
+6. **PROHIBIDO** que un reintento de fondo automático (no iniciado por
+   una acción explícita del usuario) muestre un aviso VISIBLE sin
+   cooldown. `_hydrateCache`/`_tourLoad` pueden reintentar tan a menudo
+   como haga falta — el aviso que ve el usuario debe estar throttleado
+   (`_tourSaveWarnShouldShow` o equivalente), igual que ya exige la
+   regla del aviso de cuota (`_lsQuotaToastMaybeShow`, 2026-08-08).
+7. **PROHIBIDO** confundir el torneo que originó el aviso: el id va
+   SIEMPRE en el propio mensaje (`"mundial"`, `"sfn1"`, `"sct"`…) — antes
+   de investigar, comprobar contra `TOUR_BUILTINS`/`TOUR_SLOTS` a qué
+   torneo real corresponde ese id (`'mundial'` = Mundialito de Clubes,
+   `spv*`/`sfn*` = Selecciones) — pueden ser fallos DISTINTOS e
+   independientes ocurriendo en paralelo, no siempre el mismo bug.
+
+## La PANTALLA DE PREVIA mostraba la duración de IA-vs-IA (45 s/parte) en un partido con SELECCIÓN humana — `esHumano()` no reconoce selecciones (obligatorio, 2026-08-09)
+
+**Bug reportado (usuario 2026-08-09, foto «Argentina vs Jordania»,
+Mundial 2032 · Grupo J2, caja FC Barcelona-Argentina-Ángel)**: la
+PANTALLA DE PREVIA mostraba **"DURACIÓN: 45 S/PARTE"** — la duración de
+un partido 100% IA-vs-IA — pese a que Argentina es la selección humana
+de Ángel (uno de los 7 misters). Debía mostrar la duración HvIA ("8
+MIN", regla ya obligatoria de este archivo).
+
+### Causa raíz
+
+El bloque que calcula `_humHome`/`_humAway` para decidir
+`isHvHCenter`/`_humanInvolved` (justo antes de renderizar "DURACIÓN")
+usaba `window.esHumano(home)`/`window.esHumano(away)` **DIRECTO, sin
+ningún fallback** — un resto de un fix anterior (2026-05-?) que solo
+pretendía arreglar la detección de HvH por clase del wrap, sin darse
+cuenta de que `esHumano()` **SOLO reconoce los 5 clubes canónicos de
+Liga EA Sports** (regla "Detección de SELECCIONES humanas", ya
+obligatoria en este archivo desde 2026-05-27) — nunca una selección
+nacional. Con Argentina y Jordania, ambos `esHumano(...)` devolvían
+`false` → `_humanInvolved=false` → la previa trataba el partido como
+IA-vs-IA puro y mostraba la duración de 45 s/parte en vez de la HvIA.
+
+### Fix
+
+`_isHumanTeamAny(name)` (nuevo, junto al bloque de "Duración central",
+`static/js/index.bundle.js`): añade las 2 capas de fallback que el
+resto del proyecto YA usa en decenas de sitios de este mismo archivo
+(`_isHumanClubCanonico` — alias-safe, cubre los 7 clubes humanos — y
+`_esSelHumana` — las 7 selecciones humanas) ANTES de rendirse a "no
+humano". `_humHome`/`_humAway` pasan a usar este helper. Bump
+`index.bundle.js` 9.38 → 9.39 en `templates/index.html` y el
+`PRECACHE` de `static/js/sw.js` (regla obligatoria de versión de
+assets estáticos, sin esto el fix no llega a un móvil con caché).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el cálculo de `_humHome`/`_humAway` de la
+   PANTALLA DE PREVIA (o cualquier detector de humanidad nuevo en
+   `index.bundle.js`) use `esHumano(name)` a pelo sin las capas
+   `_isHumanClubCanonico`/`_esSelHumana`. Es exactamente la regla
+   "MISTERS_REGISTRY — fuente única canónica de humanos" y "Detección
+   de SELECCIONES humanas" ya obligatorias en este archivo — este
+   bloque se había quedado fuera de esa auditoría.
+2. **PROHIBIDO** dar por bueno un fix de "detectar HvH" que solo mire
+   `esHumano()`: cualquier fix futuro sobre esta MISMA franja de código
+   (comentario "Detectamos HvH comprobando esHumano(home) &&
+   esHumano(away) directamente") debe pasar por `_isHumanTeamAny` (o
+   añadir sus capas si se reescribe), nunca volver al check plano.
+3. Antes de dar por cerrado un bug de "la previa/card muestra mal la
+   duración/nivel/HUD de un partido con SELECCIÓN humana", auditar
+   PRIMERO si el punto que falla usa `esHumano()` en vez de
+   `_isHumanClubCanonico`/`_esSelHumana` — es el MISMO patrón de bug
+   que ya se ha repetido varias veces en este proyecto (cronómetro,
+   sanciones, plantilla del hub, y ahora la duración de la previa).
+
 ## El 🖍 de un jugador YA CREADO en la plantilla de un club no hacía NADA visible — el panel de edición quedaba oculto por el modo de apertura (histórico, 2026-08-08 — ⚠️ SUPERSEDED por la sección "La plantilla de CLUB se edita IN-LINE..." más arriba)
 
 **Bug reportado (usuario 2026-08-08, fotos: editor de plantilla de

@@ -26756,6 +26756,32 @@ window._hdrCleanCache = function(){
     return { json: json, sanitized: sanitized };
   }
 
+  /* Cooldown del aviso VISIBLE por torneo (obligatorio, 2026-08-09): el
+     re-empuje de `_tourLoad` (throttle 20 s por sello) reintenta el
+     guardado en CADA recarga/hidratación mientras el servidor siga por
+     detrás — si la causa real (payload grande, servidor lento, red
+     floja) tarda en resolverse, el banner podía reaparecer en TODAS
+     las pantallas cada pocos segundos ("no para de salirme el
+     mensaje", torneo "mundial" — Mundialito de Clubes, 32 equipos, cfg
+     grande). El reintento SIGUE ocurriendo igual de fondo (silencioso)
+     — solo se limita cuántas veces se MUESTRA el aviso: como mucho una
+     vez cada 3 min por torneo, mismo patrón de cooldown persistido que
+     `_lsQuotaToastMaybeShow` ya usa para el aviso de cuota. */
+  var _TOUR_WARN_CD_KEY = 'tour_save_warn_cd_v1';
+  function _tourSaveWarnShouldShow(id){
+    try {
+      var raw = localStorage.getItem(_TOUR_WARN_CD_KEY);
+      var map = raw ? JSON.parse(raw) : {};
+      if (!map || typeof map !== 'object') map = {};
+      var now = Date.now();
+      var last = map[id] || 0;
+      if (now - last < 180000) return false; /* 3 min */
+      map[id] = now;
+      try { localStorage.setItem(_TOUR_WARN_CD_KEY, JSON.stringify(map)); } catch(_){}
+      return true;
+    } catch(_e) { return true; }
+  }
+
   window._tourSave = async function(id, cfg){
     if (TOUR_IDS.indexOf(id) === -1) return false;
     cfg = cfg || {};
@@ -26910,7 +26936,7 @@ window._hdrCleanCache = function(){
       }
     } catch(_){}
     try {
-      if (typeof window._gmCriticalNotice === 'function') {
+      if (typeof window._gmCriticalNotice === 'function' && _tourSaveWarnShouldShow(id)) {
         window._gmCriticalNotice('⚠️ No se pudo confirmar el guardado de "' + id + '" en el servidor (red lenta o payload grande)' + _detail + '. El resultado SIGUE guardado en este dispositivo — no cierres/borres datos de este navegador hasta volver a tener buena conexión, para que el reintento automático pueda subirlo.');
       }
     } catch(_){}

@@ -1,5 +1,109 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La plantilla de CLUB se edita IN-LINE fila a fila — igual que Selecciones (obligatorio, 2026-08-09) ⚠️ SUPERSEDE la sección "El 🖍 de un jugador YA CREADO..." (2026-08-08, más abajo) — el panel-formulario que esa sección arreglaba YA NO EXISTE
+
+**Petición usuario 2026-08-09** (tras el fix del 2026-08-08, fotos:
+editor de selecciones «Bélgica» con filas in-line vs. plantilla del
+Atlético Madrid sin cambios visibles): "la edición de plantillas de
+Clubes sigue igual que antes, quiero que sea igual que la edición de
+selecciones". El fix del 2026-08-08 (mostrar el panel `#lext-pl-details`
+oculto) arreglaba el bug pero mantenía el flujo "pulsa 🖍 → se abre un
+formulario aparte, debajo de la lista, con nombre/dorsal/posición/
+valor/roles" — el usuario quería la edición DIRECTAMENTE en la fila,
+como en Selecciones (`selecciones_squad_v1`, `_plRowHtml`/`_plCollect`).
+
+### Rediseño — cada fila de `renderSquadList` es un `_plRowHtml`-style row
+
+`renderSquadList`/`_lextPl2RowHtml` (`misc_body_1.html`, junto a
+`fmtCell`) sustituye el viejo `rowFor` (nombre de solo lectura + botón
+🖍 que abría un panel aparte) por una fila **directamente editable**,
+mismo espíritu visual que `#sel-pl-ov .pl-row` de Selecciones:
+
+- **Dorsal** (`<input type=number>`), **nombre** (`<input type=text>`),
+  **posición** (`<select>` POR/DEF/MED/DEL) y **valor** (`<input
+  type=number>`) — los 4 campos, editables SIEMPRE, en cualquier modo
+  de apertura (lectura desde clasificación, o edición desde "Editar
+  equipos" → 🛡). Sin panel aparte, sin PIN por campo.
+- **Flags** (C/P/F/⭐/⚾/🏀) como botones `is-on` (igual estilo que
+  `.pl-flag` de Selecciones), y **🗑 Quitar** — ambos solo tocan el DOM,
+  no persisten nada por sí solos.
+- **Nada se persiste hasta pulsar 💾 Guardar cambios** (`window
+  .lextSq2SaveAll`, siempre visible bajo la lista, PIN-gated) — que
+  recolecta TODAS las filas visibles (`_lextSq2Collect`, mismo
+  principio que `_plCollect` de Selecciones: una fila con el nombre
+  vacío se descarta) y persiste el array `players[]` completo de una
+  vez. **Esto es deliberado y no es solo estético**: si cada campo
+  persistiera al instante (como hacía el viejo flujo con cada flag/
+  pencil), guardar UN campo dispara `renderSquadList()` → reconstruye
+  TODAS las filas desde `t.players` → **pierde cualquier edición a
+  medio escribir en OTRA fila**. El modelo "todo en el DOM hasta un
+  único Guardar" es lo que hace SEGURO editar varias filas seguidas sin
+  perder nada, y es exactamente lo que ya hacía Selecciones.
+- **➕ Añadir jugador** (`window.lextSq2AddRow`, gated a modo `editable`
+  igual que antes) inserta una fila en blanco en `#lext-pl2-new-body`
+  — no persiste nada hasta Guardar, igual que Selecciones.
+- **🔒 Corrección de estadísticas** (`window.lextEditPlayerStats`,
+  botón por fila, solo si el jugador ya existe) es el ÚNICO resto del
+  panel-formulario viejo — Selecciones NO tiene equivalente (no
+  muestra stats de partido reales), así que esta pieza SÍ sigue siendo
+  un panel aparte (`#lext-pl-stats-ov-details`), pero ahora solo cubre
+  PJ/goles/penaltis/faltas/MVP/tarjetas/imbatidas/paradas — nunca
+  nombre/dorsal/posición/valor/flags, que viven en la fila. Su guardado
+  (`window.lextSavePlayerStatsOverride`) pasa por el MISMO
+  `_lextSq2Persist` (recolecta primero todas las filas del DOM, luego
+  aplica la corrección) para no pisar ediciones a medio escribir en
+  otras filas al abrir/guardar esta corrección.
+- **PJ/goles/tarjetas/MVP/rating reales** (la columna de stats que
+  Selecciones no tiene, porque un club de Resto de Ligas SÍ juega
+  partidos reales con acta) se mantienen como texto de solo lectura
+  bajo la fila (`.lext-pl2-stats`), reutilizando `_DISP`/`fmtCell`/
+  `computePlayerRating` tal cual — el rediseño NO toca el cálculo de
+  estadísticas, solo cómo se editan los 4 campos + flags.
+
+### Qué desapareció
+
+`window.lextEditPlayer`/`lextSavePlayer`/`lextCancelEditPlayer`/
+`_exitEditPlayerMode`/`lextSetPos` (el viejo picker de posición por
+botones) y el `<details id="lext-pl-details">` ("➕ Añadir jugador
+individual") quedan **eliminados** — no tenían más llamadores tras el
+rediseño (verificado con grep en todo el repo). `window
+.lextTogglePlayerFlag`/`window.lextDeletePlayer` se CONSERVAN
+definidos (por si algo externo los invocara alguna vez) pero ya no los
+llama ninguna fila — el toggle de flag y el borrado son ahora
+DOM-only hasta Guardar (`_lextPl2WireDelegated`, delegado único
+cableado una vez sobre `#lext-ov-squad`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir un panel-formulario separado (fuera de la
+   fila) para editar nombre/dorsal/posición/valor de un jugador de
+   club. Esos 4 campos son SIEMPRE inputs/select directamente en
+   `.lext-pl2-row`, en cualquier modo de apertura de la plantilla — es
+   precisamente lo que el usuario pidió igualar con Selecciones.
+2. **PROHIBIDO** que un flag (`lext-pl2-flag`) o el borrado
+   (`lext-pl2-del`) de una fila persista/renderice AL INSTANTE. Deben
+   quedar como cambio de DOM puro (`_lextPl2WireDelegated`) hasta que
+   `_lextSq2Persist` los recolecte — cualquier persistencia+rerender
+   intermedia vuelve a arriesgar perder ediciones a medio escribir en
+   otras filas.
+3. **PROHIBIDO** que `_lextSq2Collect` lea de una fuente que no sea el
+   DOM VIVO de `#lext-squad-list` para nombre/dorsal/posición/valor/
+   flags. Los campos que esta vista NO edita (pj/gol/.../
+   statsOverride) se conservan del jugador original por `id` — nunca
+   se recalculan aquí.
+4. **PROHIBIDO** que `lextEditPlayerStats`/`lextSavePlayerStatsOverride`
+   (el único panel-aparte que sobrevive, exclusivo de la corrección
+   manual de estadísticas) toquen nombre/dorsal/posición/valor/flags.
+   Su guardado pasa SIEMPRE por `_lextSq2Persist` para no pisar
+   ediciones a medio escribir en otras filas.
+5. Toda liga NUEVA de Resto de Ligas / Liga EA Sports hereda el
+   editor in-line automáticamente (es el único `renderSquadList` del
+   proyecto, no hay una copia por liga).
+6. La regla 3 de la sección de abajo (2026-08-08) sobre "el editor de
+   club muestra estadísticas reales que el de selección no tiene" SIGUE
+   VIGENTE — el rediseño iguala la EDICIÓN de los 4 campos + flags,
+   no elimina la columna de stats reales (`.lext-pl2-stats`).
+
 ## `_tourSave` fallaba IDÉNTICO con WiFi y con datos móviles — `JSON.stringify(cfg)` se llamaba HASTA 5 VECES y podía reventar SÍNCRONO antes de tocar la red (obligatorio, 2026-08-09)
 
 **Bug reportado (usuario 2026-08-09, «Mundial 2032 · Grupo J», torneos
@@ -97,7 +201,7 @@ por `console.warn`, invisible para un usuario en móvil sin devtools).
    código que corre ANTES del `fetch` (serialización, validaciones
    síncronas) en vez de asumir que es la conexión.
 
-## El 🖍 de un jugador YA CREADO en la plantilla de un club no hacía NADA visible — el panel de edición quedaba oculto por el modo de apertura (obligatorio, 2026-08-08)
+## El 🖍 de un jugador YA CREADO en la plantilla de un club no hacía NADA visible — el panel de edición quedaba oculto por el modo de apertura (histórico, 2026-08-08 — ⚠️ SUPERSEDED por la sección "La plantilla de CLUB se edita IN-LINE..." más arriba)
 
 **Bug reportado (usuario 2026-08-08, fotos: editor de plantilla de
 selección «Bélgica» con filas editables in-line vs. plantilla del

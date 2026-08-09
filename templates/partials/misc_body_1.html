@@ -55910,6 +55910,13 @@ https://api.sofascore.app/api/v1/team/44/image
         var _hydrated = _lextHydrateFromSquadRegistry(t.name);
         if (_hydrated && _hydrated.length) {
           t.players = _hydrated;
+          /* Sellar `updatedAt` en CUALQUIER mutación de `t.players` que
+             se persista — sin esto, `_lx_merge_teams` (servidor) puede
+             tratar este auto-relleno como "sin sellar" y descartarlo
+             frente a una copia más vieja de OTRO dispositivo que sí
+             lleve sello, resucitando el estado viejo en el siguiente
+             sync (bug 2026-08-09, "no se guarda lo que edito"). */
+          t.updatedAt = Date.now();
           try { saveData(CURRENT_KEY, data); } catch(_){}
         }
       } catch(_){}
@@ -55918,7 +55925,12 @@ https://api.sofascore.app/api/v1/team/44/image
          salga «Sin jugadores». Sus stats se rellenan al simular liga/copa
          (la sim también siembra antes de jugar). 2026-06-04. */
       if (t && (!t.players || !t.players.length)) {
-        try { if (_lextEnsureDefaultRoster(t)) saveData(CURRENT_KEY, data); } catch(_){}
+        try {
+          if (_lextEnsureDefaultRoster(t)) {
+            t.updatedAt = Date.now();
+            saveData(CURRENT_KEY, data);
+          }
+        } catch(_){}
       }
     }
     /* ── GUARD DURABLE anti-rebrote (2026-05-17) ──────────────────
@@ -55940,6 +55952,14 @@ https://api.sofascore.app/api/v1/team/44/image
         var _pclean = _cleanSquadPlayers(t.players);
         if (_pclean !== t.players && _pclean.length !== _pn0) {
           t.players = _pclean;
+          /* Sellar `updatedAt` (mismo motivo que el hidratado de arriba,
+             bug 2026-08-09): sin sello, esta limpieza automática (dedup +
+             filtro de basura) puede perder la carrera de recencia del
+             servidor frente a una copia SIN limpiar de otro dispositivo,
+             y el siguiente sync la resucita — el admin ve "se deshace
+             solo" un cambio que en realidad nunca llegó a persistirse de
+             verdad en el servidor. */
+          t.updatedAt = Date.now();
           try { saveData(CURRENT_KEY, data); } catch(_){}
         }
       } catch(_){}

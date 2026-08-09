@@ -1,6 +1,396 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
-## El 🖍 de un jugador YA CREADO en la plantilla de un club no hacía NADA visible — el panel de edición quedaba oculto por el modo de apertura (obligatorio, 2026-08-08)
+## La cuenta atrás post-evento del gm-modal ("REGISTRA EL EVENTO EN eFootball") se DUPLICABA — dos mecanismos independientes reaccionaban a la MISMA mutación del DOM (obligatorio, 2026-08-09)
+
+**Bug reportado (usuario 2026-08-09, foto «Robert Lewandowski · GOL ·
+FC Barcelona», Ibiza 0-1 FC Barcelona)**: al registrar un evento (gol,
+tarjeta, autogol, gol de falta…) desde el picker de jugador del
+gm-modal, la pantalla de cuenta atrás de 15/20/25 s ("REGISTRA EL
+EVENTO EN EFOOTBALL" + botón ▶ REANUDAR PARTIDO) se abría **dos veces
+seguidas/superpuestas** por cada evento, cuando debía abrirse solo una.
+
+### Causa raíz — DOS productores de countdown escuchando el mismo `#gm-acta-list`
+
+1. **Mecanismo A (inline, síncrono)** — `_showGmEventCountdown`
+   (`part2/misc_body_2.html`, dentro de `window.gmPickPlayer`): se
+   invoca INMEDIATAMENTE tras `list.appendChild(li)` al añadir el
+   `<li class="ml-evt-item">` del evento. Overlay propio
+   `#gm-evt-countdown-ov`. Añadida 2026-05-12 para garantizar al 100%
+   que el overlay aparece (el mecanismo B, más abajo, fallaba a
+   veces).
+2. **Mecanismo B (`MutationObserver`, asíncrono)** —
+   `_gmWireActaWatcher` (mismo archivo, IIFE separada al final):
+   observa `#gm-acta-list` con `{childList:true}` y, al detectar un
+   `.ml-evt-item` nuevo, dispara `_gmShowCd(type)` tras 50 ms. Overlay
+   compartido `#ml-evt-cd-overlay` (el mismo que usan las cards de
+   calendario legacy).
+
+Ambos reaccionan a la MISMA mutación del DOM (`list.appendChild(li)`)
+cuando el evento se añade vía `gmPickPlayer` — de ahí el doble overlay
+en cada gol/tarjeta/autogol/lesión. **El mecanismo B no era pura
+redundancia**: `window.mlPenWizardCommit_gm` (wizard de penaltis)
+también añade `.ml-evt-item` a `#gm-acta-list` con su propio `_push`
+local, SIN pasar por `gmPickPlayer` ni por el mecanismo A — para esos
+eventos (`pen-prov`, tarjeta del provocador, `pen-gol`, `pen-fallo`,
+`pen-parado`), el mecanismo B es el ÚNICO que muestra la cuenta atrás.
+Por eso **no se puede eliminar sin más** — hay que evitar que dispare
+para los eventos que el mecanismo A YA gestionó, sin dejar de
+disparar para los que llegan por otra vía.
+
+### Fix — marcador por-nodo `data-cd-shown`, no una bandera global
+
+Una bandera global tipo `isCountdownActive` habría bloqueado
+legítimamente eventos consecutivos rápidos (dos goles seguidos deben
+mostrar CADA UNO su propia cuenta atrás — el propio mecanismo A ya
+reinicia sus timers al recibir un evento nuevo mientras el anterior
+sigue visible, comportamiento intencional). En su lugar:
+
+- `_showGmEventCountdown` marca el `<li>` que acaba de crear con
+  `li.setAttribute('data-cd-shown', '1')` justo antes de mostrar su
+  overlay (solo si el tipo de evento SÍ tiene countdown).
+- El callback del `MutationObserver` de `_gmWireActaWatcher` comprueba
+  `n.getAttribute('data-cd-shown') === '1'` (junto al check ya
+  existente de `data-restored`) y hace `continue` si está presente.
+
+El orden de ejecución de JS de un solo hilo GARANTIZA la corrección:
+el mecanismo A corre síncronamente dentro de `gmPickPlayer`, ANTES de
+que `gmPickPlayer` termine; el callback del `MutationObserver` de B
+solo puede ejecutarse como microtask DESPUÉS de que el script
+síncrono actual termine — y encima B añade su propio `setTimeout` de
+50 ms. Así que, para un evento de `gmPickPlayer`, el marcador ya
+existe cuando B lo comprueba. Para un evento de
+`mlPenWizardCommit_gm` (que nunca pone el marcador), B sigue
+disparando con normalidad.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un productor nuevo de eventos del acta del
+   gm-modal (cualquier función que haga
+   `document.getElementById('gm-acta-list').appendChild(...)` con un
+   nodo `.ml-evt-item`) muestre su propia cuenta atrás SIN marcar el
+   nodo con `data-cd-shown` — o el `MutationObserver` de
+   `_gmWireActaWatcher` volverá a abrir un segundo overlay para el
+   mismo evento.
+2. **PROHIBIDO** eliminar `_gmWireActaWatcher`/`_gmShowCd` pensando
+   que son "redundantes" del mecanismo inline: son la ÚNICA vía de
+   countdown para los eventos que añade `mlPenWizardCommit_gm` (wizard
+   de penaltis). Sin el observer, esos eventos dejarían de mostrar
+   NINGUNA cuenta atrás.
+3. **PROHIBIDO** sustituir el marcador por-nodo por una bandera global
+   `isCountdownActive`/`modalOpen`: bloquearía la cuenta atrás de un
+   segundo evento legítimo añadido mientras la del primero sigue
+   visible (comportamiento ya soportado por `_showGmEventCountdown`,
+   que reinicia sus propios timers al recibir un evento nuevo).
+4. Los eventos RESTAURADOS (`gmReanudar`, `gmOpen` en background) ya
+   llevan `data-restored="1"` y quedan excluidos por ese check
+   existente — no confundir ese marcador con `data-cd-shown` (motivos
+   distintos: uno evita reabrir cuenta atrás de histórico ya jugado,
+   el otro evita el doble disparo del mismo evento nuevo).
+
+## La plantilla de CLUB se edita IN-LINE fila a fila — igual que Selecciones (obligatorio, 2026-08-09) ⚠️ SUPERSEDE la sección "El 🖍 de un jugador YA CREADO..." (2026-08-08, más abajo) — el panel-formulario que esa sección arreglaba YA NO EXISTE
+
+**Petición usuario 2026-08-09** (tras el fix del 2026-08-08, fotos:
+editor de selecciones «Bélgica» con filas in-line vs. plantilla del
+Atlético Madrid sin cambios visibles): "la edición de plantillas de
+Clubes sigue igual que antes, quiero que sea igual que la edición de
+selecciones". El fix del 2026-08-08 (mostrar el panel `#lext-pl-details`
+oculto) arreglaba el bug pero mantenía el flujo "pulsa 🖍 → se abre un
+formulario aparte, debajo de la lista, con nombre/dorsal/posición/
+valor/roles" — el usuario quería la edición DIRECTAMENTE en la fila,
+como en Selecciones (`selecciones_squad_v1`, `_plRowHtml`/`_plCollect`).
+
+### Rediseño — cada fila de `renderSquadList` es un `_plRowHtml`-style row
+
+`renderSquadList`/`_lextPl2RowHtml` (`misc_body_1.html`, junto a
+`fmtCell`) sustituye el viejo `rowFor` (nombre de solo lectura + botón
+🖍 que abría un panel aparte) por una fila **directamente editable**,
+mismo espíritu visual que `#sel-pl-ov .pl-row` de Selecciones:
+
+- **Dorsal** (`<input type=number>`), **nombre** (`<input type=text>`),
+  **posición** (`<select>` POR/DEF/MED/DEL) y **valor** (`<input
+  type=number>`) — los 4 campos, editables SIEMPRE, en cualquier modo
+  de apertura (lectura desde clasificación, o edición desde "Editar
+  equipos" → 🛡). Sin panel aparte, sin PIN por campo.
+- **Flags** (C/P/F/⭐/⚾/🏀) como botones `is-on` (igual estilo que
+  `.pl-flag` de Selecciones), y **🗑 Quitar** — ambos solo tocan el DOM,
+  no persisten nada por sí solos.
+- **Nada se persiste hasta pulsar 💾 Guardar cambios** (`window
+  .lextSq2SaveAll`, siempre visible bajo la lista, PIN-gated) — que
+  recolecta TODAS las filas visibles (`_lextSq2Collect`, mismo
+  principio que `_plCollect` de Selecciones: una fila con el nombre
+  vacío se descarta) y persiste el array `players[]` completo de una
+  vez. **Esto es deliberado y no es solo estético**: si cada campo
+  persistiera al instante (como hacía el viejo flujo con cada flag/
+  pencil), guardar UN campo dispara `renderSquadList()` → reconstruye
+  TODAS las filas desde `t.players` → **pierde cualquier edición a
+  medio escribir en OTRA fila**. El modelo "todo en el DOM hasta un
+  único Guardar" es lo que hace SEGURO editar varias filas seguidas sin
+  perder nada, y es exactamente lo que ya hacía Selecciones.
+- **➕ Añadir jugador** (`window.lextSq2AddRow`, gated a modo `editable`
+  igual que antes) inserta una fila en blanco en `#lext-pl2-new-body`
+  — no persiste nada hasta Guardar, igual que Selecciones.
+- **🔒 Corrección de estadísticas** (`window.lextEditPlayerStats`,
+  botón por fila, solo si el jugador ya existe) es el ÚNICO resto del
+  panel-formulario viejo — Selecciones NO tiene equivalente (no
+  muestra stats de partido reales), así que esta pieza SÍ sigue siendo
+  un panel aparte (`#lext-pl-stats-ov-details`), pero ahora solo cubre
+  PJ/goles/penaltis/faltas/MVP/tarjetas/imbatidas/paradas — nunca
+  nombre/dorsal/posición/valor/flags, que viven en la fila. Su guardado
+  (`window.lextSavePlayerStatsOverride`) pasa por el MISMO
+  `_lextSq2Persist` (recolecta primero todas las filas del DOM, luego
+  aplica la corrección) para no pisar ediciones a medio escribir en
+  otras filas al abrir/guardar esta corrección.
+- **PJ/goles/tarjetas/MVP/rating reales** (la columna de stats que
+  Selecciones no tiene, porque un club de Resto de Ligas SÍ juega
+  partidos reales con acta) se mantienen como texto de solo lectura
+  bajo la fila (`.lext-pl2-stats`), reutilizando `_DISP`/`fmtCell`/
+  `computePlayerRating` tal cual — el rediseño NO toca el cálculo de
+  estadísticas, solo cómo se editan los 4 campos + flags.
+
+### Qué desapareció
+
+`window.lextEditPlayer`/`lextSavePlayer`/`lextCancelEditPlayer`/
+`_exitEditPlayerMode`/`lextSetPos` (el viejo picker de posición por
+botones) y el `<details id="lext-pl-details">` ("➕ Añadir jugador
+individual") quedan **eliminados** — no tenían más llamadores tras el
+rediseño (verificado con grep en todo el repo). `window
+.lextTogglePlayerFlag`/`window.lextDeletePlayer` se CONSERVAN
+definidos (por si algo externo los invocara alguna vez) pero ya no los
+llama ninguna fila — el toggle de flag y el borrado son ahora
+DOM-only hasta Guardar (`_lextPl2WireDelegated`, delegado único
+cableado una vez sobre `#lext-ov-squad`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir un panel-formulario separado (fuera de la
+   fila) para editar nombre/dorsal/posición/valor de un jugador de
+   club. Esos 4 campos son SIEMPRE inputs/select directamente en
+   `.lext-pl2-row`, en cualquier modo de apertura de la plantilla — es
+   precisamente lo que el usuario pidió igualar con Selecciones.
+2. **PROHIBIDO** que un flag (`lext-pl2-flag`) o el borrado
+   (`lext-pl2-del`) de una fila persista/renderice AL INSTANTE. Deben
+   quedar como cambio de DOM puro (`_lextPl2WireDelegated`) hasta que
+   `_lextSq2Persist` los recolecte — cualquier persistencia+rerender
+   intermedia vuelve a arriesgar perder ediciones a medio escribir en
+   otras filas.
+3. **PROHIBIDO** que `_lextSq2Collect` lea de una fuente que no sea el
+   DOM VIVO de `#lext-squad-list` para nombre/dorsal/posición/valor/
+   flags. Los campos que esta vista NO edita (pj/gol/.../
+   statsOverride) se conservan del jugador original por `id` — nunca
+   se recalculan aquí.
+4. **PROHIBIDO** que `lextEditPlayerStats`/`lextSavePlayerStatsOverride`
+   (el único panel-aparte que sobrevive, exclusivo de la corrección
+   manual de estadísticas) toquen nombre/dorsal/posición/valor/flags.
+   Su guardado pasa SIEMPRE por `_lextSq2Persist` para no pisar
+   ediciones a medio escribir en otras filas.
+5. Toda liga NUEVA de Resto de Ligas / Liga EA Sports hereda el
+   editor in-line automáticamente (es el único `renderSquadList` del
+   proyecto, no hay una copia por liga).
+6. La regla 3 de la sección de abajo (2026-08-08) sobre "el editor de
+   club muestra estadísticas reales que el de selección no tiene" SIGUE
+   VIGENTE — el rediseño iguala la EDICIÓN de los 4 campos + flags,
+   no elimina la columna de stats reales (`.lext-pl2-stats`).
+
+## `_tourSave` fallaba IDÉNTICO con WiFi y con datos móviles — `JSON.stringify(cfg)` se llamaba HASTA 5 VECES y podía reventar SÍNCRONO antes de tocar la red (obligatorio, 2026-08-09)
+
+**Bug reportado (usuario 2026-08-09, «Mundial 2032 · Grupo J», torneos
+`sfn1`/`sfn2`/`sct`)**: tras jugar Argentina 3-0 Jordania (acta completa,
+MVP, 3 goleadores registrados), la pantalla mostraba de forma repetida el
+banner `⚠️ No se pudo confirmar el guardado de "sfn1"/"sfn2"/"sct" en el
+servidor (red lenta o payload grande)…` en TRES torneos distintos, en
+momentos distintos. El usuario confirmó explícitamente: **"lo he probado
+con WiFi y con datos y sale el mismo mensaje"** — un fallo de red genuino
+casi nunca se reproduce idéntico en dos tipos de conexión distintos
+seguidos; esa señal apuntaba a un fallo DETERMINISTA, no de ancho de
+banda.
+
+### Causa raíz — hasta 5 `JSON.stringify(cfg)` por guardado, sin blindaje
+
+`window._tourSave` (fix previo del 2026-08-08, retry con backoff — nunca
+llegó a documentarse aquí) serializaba la cfg del torneo con
+`JSON.stringify` crudo en **5 puntos distintos de la MISMA llamada**: (1)
+para el guardado local (`_lsSetSafe`), (2) para estimar el tamaño del
+payload (escala el timeout), y (3) una vez por CADA uno de los 3
+reintentos de red (`JSON.stringify({value: cfg})` dentro del `fetch`).
+Si `cfg` contenía en ese momento una referencia **no serializable**
+(circular, una función, o un nodo DOM colado por error en cualquier
+punto del motor de simulación/render), `JSON.stringify` **revienta de
+forma SÍNCRONA** con un `TypeError` — **antes de que la petición llegue
+a tocar la red**. Como `cfg` no cambia entre los 3 reintentos, la
+excepción se repite EXACTAMENTE IGUAL en cada intento, y el resultado es
+indistinguible desde fuera de un fallo de red: el usuario ve el mismo
+aviso genérico, tanto con WiFi como con datos, porque en ningún caso se
+llegó a hacer una petición HTTP real.
+
+El aviso visible (`_gmCriticalNotice`) tampoco ayudaba a diagnosticar:
+mostraba siempre el mismo texto genérico "red lenta o payload grande"
+sin exponer el motivo real capturado en `_lastErr` (que sólo se logueaba
+por `console.warn`, invisible para un usuario en móvil sin devtools).
+
+### Fix
+
+- **`window._tourSafeStringify(obj)`** (nuevo, `misc_body_1.html`, justo
+  antes de `_tourSave`): serializa con un *replacer* que detecta ciclos
+  (`WeakSet`) y sustituye cualquier referencia circular, función o nodo
+  DOM por un marcador de texto (`'[circular]'`/`'[dom-node]'`) **en vez
+  de reventar**. **NUNCA lanza** — ni siquiera si el propio `try` con
+  replacer falla (caso límite, p. ej. `BigInt`), devuelve `'{}'` como
+  último recurso. El guardado del usuario ya NO puede perderse por un
+  dato no serializable colado en la cfg.
+- **UNA sola serialización por llamada**: `_tourSave` calcula
+  `_cfgJson` UNA vez con `_tourSafeStringify` y lo reutiliza para el
+  guardado local Y los 3 intentos de red (`_body = '{"value":' +
+  _cfgJson + '}'`) — antes se re-serializaba la cfg completa (puede
+  pesar varios cientos de KB) hasta 5 veces por guardado.
+- **Tamaño en BYTES reales** (`new Blob([_cfgJson]).size`, con fallback
+  a `.length`) en vez de `.length` de la cadena JS (cuenta unidades
+  UTF-16, no bytes — diverge con acentos/emoji del mismo modo que el
+  cómputo `len(payload.encode("utf-8"))` del servidor).
+- **Corte temprano si el payload ya supera 2 MB** (`_KV_MAX_BYTES` en
+  `app.py`): el servidor rechaza esto con `413` al instante — reintentar
+  3 veces con timeout escalado hasta 30 s cada una es tiempo y batería
+  tirados para un fallo que ya se sabe de antemano. Se muestra un aviso
+  ESPECÍFICO ("el torneo pesa X MB, no es un problema de conexión") en
+  vez del genérico, y no se llega a intentar la red.
+- **Diagnóstico real en el aviso**: `_lastStatus` (código HTTP de la
+  última respuesta) y el motivo (`_lastErr.error` del servidor, o
+  `_lastErr.name`/`.message` de la excepción JS — `AbortError` de
+  timeout, `TypeError` de stringify, `SyntaxError` de una respuesta no-
+  JSON de un proxy, etc.) se añaden al final del mensaje visible, para
+  que un pantallazo del banner baste para diagnosticar sin acceso a
+  consola.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_tourSave` (o cualquier guardado nuevo que suba
+   una cfg de torneo/liga grande) llame a `JSON.stringify` crudo más de
+   una vez por guardado, o sin pasar por un serializador que NUNCA
+   lance (`_tourSafeStringify` o equivalente). Una cfg con una
+   referencia no serializable debe seguir pudiéndose guardar (con el
+   dato problemático marcado), nunca bloquear el guardado entero.
+2. **PROHIBIDO** que un aviso de "no se pudo guardar" muestre SOLO el
+   texto genérico "red lenta o payload grande" sin el motivo real
+   (`_lastErr`/`_lastStatus`) cuando esté disponible. Un usuario en
+   móvil no tiene devtools — el detalle tiene que viajar en el propio
+   banner visible.
+3. **PROHIBIDO** reintentar contra el servidor cuando el payload YA se
+   sabe que supera el límite (`_KV_MAX_BYTES`, 2 MB): es un fallo
+   determinista, no transitorio — reintentar solo malgasta batería/datos
+   y mete red donde no la hay.
+4. Medir el tamaño de un payload que se compara contra un límite en
+   BYTES del servidor (`_KV_MAX_BYTES`) se hace con `Blob([...]).size`
+   (bytes UTF-8 reales), nunca con `.length` de la cadena JS (unidades
+   UTF-16 — diverge con acentos/emoji).
+5. Si un fallo de guardado se reproduce IDÉNTICO en dos tipos de
+   conexión distintos (WiFi y datos móviles) probados por el usuario,
+   esa es una señal fuerte de que el fallo es DETERMINISTA (nunca llega
+   a tocar la red) y no de ancho de banda — investigar primero el
+   código que corre ANTES del `fetch` (serialización, validaciones
+   síncronas) en vez de asumir que es la conexión.
+
+### Refuerzo (mismo día) — el aviso de guardado fallido llevaba COOLDOWN, el re-empuje de fondo NO se detenía
+
+Tras el fix de arriba, el usuario reportó que el banner seguía
+apareciendo — pero esta vez con el detalle real ya visible:
+`[AbortError: signal is aborted without reason]` (timeout agotado a los
+30 s) y `[TypeError: Failed to fetch]` (fallo de red genuino), ambos
+para el torneo **`"mundial"`** (el slot BUILT-IN de "Mundialito de
+Clubes", 32 equipos — un torneo DISTINTO al que motivó el fix de
+arriba). El aviso salía en CUALQUIER pantalla, sin parar ("no para de
+salirme ese mensaje").
+
+**Causa raíz**: `_tourLoad(id)` (misma familia de función) tiene un
+RE-EMPUJE de auto-sanado: si detecta que el servidor sigue "por detrás"
+del guardado local (el guardado anterior nunca llegó a confirmarse),
+reintenta `_tourSave(id, ...)` con un throttle de solo 20 s por sello.
+`_hydrateCache()` llama a `_tourLoad` para TODOS los `TOUR_IDS` en
+CADA `DOMContentLoaded` — así que cada recarga/navegación completa
+volvía a intentar (y, si el problema de fondo persistía — payload
+grande + servidor lento en ese torneo concreto —, a fallar), mostrando
+el banner de nuevo. El reintento en sí es CORRECTO (es lo que permite
+que el guardado se cure solo en cuanto la conexión mejore) — el
+problema era que el AVISO VISIBLE se repetía en cada intento fallido,
+sin ningún throttle propio.
+
+**Fix**: `_tourSaveWarnShouldShow(id)` (nuevo, junto a
+`_tourSafeStringify`) — cooldown persistido en `localStorage`
+(`tour_save_warn_cd_v1`, mismo patrón que `_lsQuotaToastMaybeShow` para
+el aviso de cuota): el banner VISIBLE se muestra como mucho **una vez
+cada 3 minutos por torneo**. El reintento de fondo (`_tourLoad`'s
+re-empuje) sigue ocurriendo exactamente igual, sin ningún cambio —
+solo se limita cuántas veces se lo hace saber al usuario.
+
+**Reglas a respetar (refuerzo)**:
+6. **PROHIBIDO** que un reintento de fondo automático (no iniciado por
+   una acción explícita del usuario) muestre un aviso VISIBLE sin
+   cooldown. `_hydrateCache`/`_tourLoad` pueden reintentar tan a menudo
+   como haga falta — el aviso que ve el usuario debe estar throttleado
+   (`_tourSaveWarnShouldShow` o equivalente), igual que ya exige la
+   regla del aviso de cuota (`_lsQuotaToastMaybeShow`, 2026-08-08).
+7. **PROHIBIDO** confundir el torneo que originó el aviso: el id va
+   SIEMPRE en el propio mensaje (`"mundial"`, `"sfn1"`, `"sct"`…) — antes
+   de investigar, comprobar contra `TOUR_BUILTINS`/`TOUR_SLOTS` a qué
+   torneo real corresponde ese id (`'mundial'` = Mundialito de Clubes,
+   `spv*`/`sfn*` = Selecciones) — pueden ser fallos DISTINTOS e
+   independientes ocurriendo en paralelo, no siempre el mismo bug.
+
+## La PANTALLA DE PREVIA mostraba la duración de IA-vs-IA (45 s/parte) en un partido con SELECCIÓN humana — `esHumano()` no reconoce selecciones (obligatorio, 2026-08-09)
+
+**Bug reportado (usuario 2026-08-09, foto «Argentina vs Jordania»,
+Mundial 2032 · Grupo J2, caja FC Barcelona-Argentina-Ángel)**: la
+PANTALLA DE PREVIA mostraba **"DURACIÓN: 45 S/PARTE"** — la duración de
+un partido 100% IA-vs-IA — pese a que Argentina es la selección humana
+de Ángel (uno de los 7 misters). Debía mostrar la duración HvIA ("8
+MIN", regla ya obligatoria de este archivo).
+
+### Causa raíz
+
+El bloque que calcula `_humHome`/`_humAway` para decidir
+`isHvHCenter`/`_humanInvolved` (justo antes de renderizar "DURACIÓN")
+usaba `window.esHumano(home)`/`window.esHumano(away)` **DIRECTO, sin
+ningún fallback** — un resto de un fix anterior (2026-05-?) que solo
+pretendía arreglar la detección de HvH por clase del wrap, sin darse
+cuenta de que `esHumano()` **SOLO reconoce los 5 clubes canónicos de
+Liga EA Sports** (regla "Detección de SELECCIONES humanas", ya
+obligatoria en este archivo desde 2026-05-27) — nunca una selección
+nacional. Con Argentina y Jordania, ambos `esHumano(...)` devolvían
+`false` → `_humanInvolved=false` → la previa trataba el partido como
+IA-vs-IA puro y mostraba la duración de 45 s/parte en vez de la HvIA.
+
+### Fix
+
+`_isHumanTeamAny(name)` (nuevo, junto al bloque de "Duración central",
+`static/js/index.bundle.js`): añade las 2 capas de fallback que el
+resto del proyecto YA usa en decenas de sitios de este mismo archivo
+(`_isHumanClubCanonico` — alias-safe, cubre los 7 clubes humanos — y
+`_esSelHumana` — las 7 selecciones humanas) ANTES de rendirse a "no
+humano". `_humHome`/`_humAway` pasan a usar este helper. Bump
+`index.bundle.js` 9.38 → 9.39 en `templates/index.html` y el
+`PRECACHE` de `static/js/sw.js` (regla obligatoria de versión de
+assets estáticos, sin esto el fix no llega a un móvil con caché).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el cálculo de `_humHome`/`_humAway` de la
+   PANTALLA DE PREVIA (o cualquier detector de humanidad nuevo en
+   `index.bundle.js`) use `esHumano(name)` a pelo sin las capas
+   `_isHumanClubCanonico`/`_esSelHumana`. Es exactamente la regla
+   "MISTERS_REGISTRY — fuente única canónica de humanos" y "Detección
+   de SELECCIONES humanas" ya obligatorias en este archivo — este
+   bloque se había quedado fuera de esa auditoría.
+2. **PROHIBIDO** dar por bueno un fix de "detectar HvH" que solo mire
+   `esHumano()`: cualquier fix futuro sobre esta MISMA franja de código
+   (comentario "Detectamos HvH comprobando esHumano(home) &&
+   esHumano(away) directamente") debe pasar por `_isHumanTeamAny` (o
+   añadir sus capas si se reescribe), nunca volver al check plano.
+3. Antes de dar por cerrado un bug de "la previa/card muestra mal la
+   duración/nivel/HUD de un partido con SELECCIÓN humana", auditar
+   PRIMERO si el punto que falla usa `esHumano()` en vez de
+   `_isHumanClubCanonico`/`_esSelHumana` — es el MISMO patrón de bug
+   que ya se ha repetido varias veces en este proyecto (cronómetro,
+   sanciones, plantilla del hub, y ahora la duración de la previa).
+
+## El 🖍 de un jugador YA CREADO en la plantilla de un club no hacía NADA visible — el panel de edición quedaba oculto por el modo de apertura (histórico, 2026-08-08 — ⚠️ SUPERSEDED por la sección "La plantilla de CLUB se edita IN-LINE..." más arriba)
 
 **Bug reportado (usuario 2026-08-08, fotos: editor de plantilla de
 selección «Bélgica» con filas editables in-line vs. plantilla del

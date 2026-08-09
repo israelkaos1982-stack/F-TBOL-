@@ -7022,9 +7022,26 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
          directamente, NO por la clase del wrap. Cuando se abre la
          previa desde el calendario (via _ppPreviaTeams), el wrap
          puede no tener la clase 'hvh' correcta y el usuario veía
-         "8 MIN" en partidos HvH que deberían mostrar "10 MIN". */
-      var _humHome = (typeof window.esHumano === 'function') ? !!window.esHumano(home) : false;
-      var _humAway = (typeof window.esHumano === 'function') ? !!window.esHumano(away) : false;
+         "8 MIN" en partidos HvH que deberían mostrar "10 MIN".
+         REFUERZO (obligatorio, 2026-08-09): `esHumano()` SOLO reconoce
+         los 5 clubes canónicos de Liga EA Sports — NUNCA una selección
+         (Argentina, Francia, Brasil…). Un partido de Mundial 2032 con
+         una selección humana (p.ej. Argentina de Ángel) daba
+         `_humHome=_humAway=false` → se trataba como IA-vs-IA puro y la
+         previa mostraba "45 S/PARTE" en vez de la duración HvIA (bug
+         reportado, «Argentina vs Jordania»). `_isHumanTeamAny` añade
+         las mismas 2 capas que ya usa el resto del proyecto
+         (`_isHumanClubCanonico` — alias-safe, cubre los 6 clubes
+         humanos — y `_esSelHumana` — las selecciones humanas) ANTES de
+         rendirse a "no humano". */
+      function _isHumanTeamAny(name){
+        try { if (typeof window.esHumano === 'function' && window.esHumano(name)) return true; } catch(_){}
+        try { if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)) return true; } catch(_){}
+        try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true; } catch(_){}
+        return false;
+      }
+      var _humHome = _isHumanTeamAny(home);
+      var _humAway = _isHumanTeamAny(away);
       var isHvHCenter = _humHome && _humAway;
       var _humanInvolved = _humHome || _humAway;
       /* Alias en eFootball: bajo el nombre del equipo IA cuando el rival

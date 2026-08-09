@@ -131,11 +131,13 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/index.bundle.css') }}?v=5.6">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/goal-notification-improved.css') }}?v=2.1">
   <style>
-    /* ── HOME: todas las cards exactamente 80px, gap 15px ── */
-    #s-home .menu-grid{gap:15px!important;}
+    /* ── HOME: todas las cards exactamente 64px, gap 12px ──
+       Reducidas desde 80px/15px (petición usuario: compactar el menú
+       principal para ver más secciones sin desplazar, sin encoger
+       iconos/escudos — solo la altura/padding de la caja). */
+    #s-home .menu-grid{gap:12px!important;}
     #s-home .menu-card,
     #s-home .menu-card.full,
-    #s-home #home-live-card,
     #s-home .mc-derbys,
     #s-home .mc-espana,
     #s-home .mc-comp,
@@ -147,9 +149,9 @@
     #s-home .mc-sociedad,
     #s-home .mc-madrid,
     #s-home .mc-barca{
-      height:80px!important;
-      min-height:80px!important;
-      max-height:80px!important;
+      height:64px!important;
+      min-height:64px!important;
+      max-height:64px!important;
       overflow:hidden!important;
       position:relative!important;
       box-sizing:border-box!important;
@@ -761,7 +763,7 @@
   <script>
     if (typeof window._bootMark === 'function') window._bootMark('var-system-js-done');
   </script>
-  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=9.38"></script>
+  <script src="{{ url_for('static', filename='js/index.bundle.js') }}?v=9.39"></script>
   <script>
     /* Hito de progreso: el bundle principal ya se descargó y ejecutó —
        junto con misc_body_1/2 es la parte más pesada del arranque. */

@@ -1,5 +1,88 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La plantilla de CLUB in-line NUNCA guardaba desde móvil — flags/Guardar dependían SOLO del `click` sintético dentro de filas/pantalla con scroll (obligatorio, 2026-08-09)
+
+**Bug (usuario 2026-08-09, «Atlético Madrid» — Julián Álvarez / Sørloth,
+2 capturas 3 min de diferencia mostrando el MISMO estado)**: pese al
+sello de `updatedAt` de la sección de abajo (que arregló la pérdida por
+recencia del servidor, pero NO resolvió el reporte), el usuario seguía
+viendo "no se guarda" — el nombre corrupto de Julián Álvarez
+("Julián Alvarez F P") persistía sin cambios y los flags P/F/⚾ no
+reflejaban lo que el usuario tocaba.
+
+### Causa raíz — ambigüedad TAP-VS-SCROLL, el mismo patrón ya repetido varias veces en este proyecto
+
+`_lextPl2WireDelegated` (delegado de flags/borrar) y los botones
+"💾 Guardar cambios"/"➕ Añadir jugador" dependían ÚNICAMENTE del evento
+`click` SINTÉTICO — el navegador solo lo dispara si `touchstart`/
+`touchend` ocurren en el MISMO punto sin movimiento detectable. Un dedo
+real con el mínimo movimiento dentro de un contenedor con scroll hace
+que el navegador interprete el toque como intento de scroll y CANCELE
+el `click` — sin excepción, sin alert, sin log, indistinguible de "no
+ha pasado nada". Este editor tiene DOS superficies con scroll donde
+esto podía ocurrir: la pantalla entera (scroll vertical, con
+"💾 Guardar cambios" al fondo) y, tras el fix de la sección de abajo,
+CADA FILA individual (`.lext-pl2-row`, ahora con scroll horizontal
+propio para caber en una sola línea — ver más abajo). Es EXACTAMENTE el
+mismo bug ya diagnosticado y arreglado varias veces en este proyecto
+(picker de portero de la portería imbatida, picker "AÑADIR POR LIGA",
+botón FINALIZAR) — nunca se le había aplicado a este editor.
+
+### Fix
+
+`_lextPl2WireDelegated` mide el movimiento entre `touchstart` y
+`touchend` sobre CUALQUIER elemento accionable (`.lext-pl2-flag`,
+`.lext-pl2-del`, `#lext-pl2-save-btn`, `.lext-pl2-add-btn`): si es
+mínimo (tap real), ejecuta la acción en el propio `touchend`
+(`preventDefault` + guardia de 800 ms por elemento para no disparar dos
+veces si el `click` sintético llega igualmente); si es grande (scroll
+real), no hace nada — el scroll sigue funcionando con normalidad. Los
+`onclick="..."` inline de "💾 Guardar cambios"/"➕ Añadir jugador" se
+quitaron del HTML (ahora los gestiona el MISMO delegado, para no
+disparar la acción dos veces en desktop/ratón).
+
+## La fila del jugador (plantilla de club) va en UNA SOLA LÍNEA — scroll horizontal propio en vez de partir las stats a una 2ª línea (obligatorio, 2026-08-09)
+
+**Petición usuario 2026-08-09**: la valoración/stats de cada jugador
+(PJ/goles/tarjetas/📈) se desplazaba visualmente a una línea NUEVA
+debajo del jugador en vez de quedar en la misma fila que dorsal/nombre/
+posición/valor/flags. `.lext-pl2-stats` llevaba `flex-basis:100%`
+dentro de un `.lext-pl2-row{flex-wrap:wrap}` — eso la fuerza SIEMPRE a
+su propia línea si no cabe en el ancho restante.
+
+### Fix
+
+`.lext-pl2-row` pasa a `flex-wrap:nowrap` + `overflow-x:auto` (scroll
+horizontal propio, con scrollbar fina). Todos sus hijos
+(`.lext-pl2-fields`/`.lext-pl2-flags`/`.lext-pl2-actions`/
+`.lext-pl2-stats`) van `flex:0 0 auto` (nunca se encogen ni envuelven
+internamente) — dorsal/nombre/posición/valor/flags/🔒/🗑/stats quedan
+SIEMPRE en la MISMA línea; si no caben en el ancho de pantalla, el
+usuario desliza el dedo horizontalmente dentro de esa fila para ver el
+resto. Hereda el respaldo táctil de la sección de arriba, así que el
+propio gesto de deslizar dentro de la fila no interfiere con tocar un
+flag/🔒/🗑.
+
+### Reglas a respetar (ambas secciones)
+
+1. **PROHIBIDO** que un botón/flag NUEVO de este editor (o de cualquier
+   pantalla nueva con scroll, vertical u horizontal) dependa ÚNICAMENTE
+   del `click` sintético. Todo elemento accionable dentro de
+   `#lext-ov-squad` se registra en `_closestActionable`/`_run` del
+   delegado — no cablear un `onclick` suelto nuevo.
+2. **PROHIBIDO** volver a `.lext-pl2-stats{flex-basis:100%}` (o
+   cualquier regla que fuerce la 2ª línea). Las stats van en la MISMA
+   línea que el resto de la fila, con scroll horizontal si hace falta.
+3. **PROHIBIDO** que el `onclick` inline de "💾 Guardar cambios"/
+   "➕ Añadir jugador" vuelva a añadirse en el HTML A LA VEZ que el
+   delegado los gestiona — dispararía la acción dos veces por click en
+   desktop/ratón (doble fila añadida, doble guardado).
+4. Antes de dar por bueno un "no se guarda" en un editor con listas/filas
+   scrollables de este proyecto, comprobar PRIMERO si el botón/flag en
+   cuestión depende solo de `click` — es el mismo patrón que ya ha
+   costado varias rondas de fixes en otras pantallas (portero imbatida,
+   picker de liga, FINALIZAR) antes de que se documentara aquí.
+
 ## La cuenta atrás post-evento del gm-modal ("REGISTRA EL EVENTO EN eFootball") se DUPLICABA — dos mecanismos independientes reaccionaban a la MISMA mutación del DOM (obligatorio, 2026-08-09)
 
 **Bug reportado (usuario 2026-08-09, foto «Robert Lewandowski · GOL ·

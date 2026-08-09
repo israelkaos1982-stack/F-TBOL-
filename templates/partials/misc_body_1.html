@@ -46999,35 +46999,45 @@ window._hdrCleanCache = function(){
    (`lext-pl2-*`) para no colisionar con `.lext-sq-*` (usado también por
    `#s-bayern-plantilla`, la plantilla de solo-lectura del hub humano). */
 #lext-ov-squad .lext-pl2-new-sec:empty{display:none;}
-#lext-ov-squad .lext-pl2-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+/* Fila en UNA SOLA LÍNEA (petición usuario 2026-08-09): antes
+   `.lext-pl2-stats` llevaba `flex-basis:100%`, que dentro de un
+   contenedor `flex-wrap:wrap` la forzaba SIEMPRE a su propia línea
+   debajo del jugador. Ahora la fila entera NO envuelve
+   (`flex-wrap:nowrap`) y hace scroll HORIZONTAL propio
+   (`overflow-x:auto`) si el contenido no cabe en el ancho de
+   pantalla — dorsal/nombre/posición/valor/flags/candado/borrar/stats
+   quedan siempre en la MISMA línea, deslizando el dedo si hace falta. */
+#lext-ov-squad .lext-pl2-row{display:flex;align-items:center;gap:4px;flex-wrap:nowrap;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;
   margin-bottom:7px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
   border-radius:9px;padding:6px;}
-#lext-ov-squad .lext-pl2-fields{display:flex;align-items:center;gap:4px;flex:1 1 auto;
-  min-width:190px;flex-wrap:wrap;}
+#lext-ov-squad .lext-pl2-row::-webkit-scrollbar{height:4px;}
+#lext-ov-squad .lext-pl2-row::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:4px;}
+#lext-ov-squad .lext-pl2-fields{display:flex;align-items:center;gap:4px;flex:0 0 auto;flex-wrap:nowrap;}
 #lext-ov-squad .lext-pl2-row input,#lext-ov-squad .lext-pl2-row select{background:rgba(255,255,255,.06);
   border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;
   padding:6px 5px;font-family:Rajdhani,sans-serif;font-size:13px;box-sizing:border-box;}
 #lext-ov-squad .lext-pl2-row input:focus,#lext-ov-squad .lext-pl2-row select:focus{outline:none;border-color:rgba(110,200,255,.6);}
 #lext-ov-squad .lext-pl2-num{width:38px;flex:0 0 38px;text-align:center;}
-#lext-ov-squad .lext-pl2-name{flex:1;min-width:100px;}
+#lext-ov-squad .lext-pl2-name{width:150px;flex:0 0 150px;}
 #lext-ov-squad .lext-pl2-pos{width:62px;flex:0 0 62px;}
 #lext-ov-squad .lext-pl2-pw{width:46px;flex:0 0 46px;text-align:center;}
 #lext-ov-squad .lext-pl2-flags{display:flex;gap:3px;flex:0 0 auto;}
 #lext-ov-squad .lext-pl2-flag{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);
   color:rgba(255,255,255,.5);border-radius:6px;width:27px;height:26px;cursor:pointer;
-  font-size:12px;padding:0;}
+  font-size:12px;padding:0;flex:0 0 auto;}
 #lext-ov-squad .lext-pl2-flag.is-on{background:rgba(110,200,255,.28);border-color:rgba(110,200,255,.7);
   color:#fff;font-weight:700;}
 #lext-ov-squad .lext-pl2-actions{display:flex;gap:3px;flex:0 0 auto;}
 #lext-ov-squad .lext-pl2-lock{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);
-  color:rgba(255,255,255,.5);border-radius:6px;width:27px;height:26px;cursor:pointer;font-size:12px;padding:0;}
+  color:rgba(255,255,255,.5);border-radius:6px;width:27px;height:26px;cursor:pointer;font-size:12px;padding:0;flex:0 0 auto;}
 #lext-ov-squad .lext-pl2-lock.is-on{background:rgba(120,180,255,.24);border-color:rgba(120,180,255,.6);color:#78b4ff;}
 #lext-ov-squad .lext-pl2-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
-  color:#ff9a9a;border-radius:6px;width:27px;height:26px;cursor:pointer;font-size:12px;padding:0;}
-#lext-ov-squad .lext-pl2-stats{flex-basis:100%;font-family:Rajdhani,sans-serif;font-size:11px;
-  color:rgba(255,255,255,.55);display:flex;align-items:center;flex-wrap:wrap;gap:3px 6px;
-  margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,255,255,.08);}
-#lext-ov-squad .lext-pl2-stats .lext-sq-cell{font-size:12px;display:inline;}
+  color:#ff9a9a;border-radius:6px;width:27px;height:26px;cursor:pointer;font-size:12px;padding:0;flex:0 0 auto;}
+#lext-ov-squad .lext-pl2-stats{flex:0 0 auto;font-family:Rajdhani,sans-serif;font-size:11px;
+  color:rgba(255,255,255,.55);display:flex;align-items:center;flex-wrap:nowrap;white-space:nowrap;gap:3px 6px;
+  margin-left:8px;padding-left:8px;border-left:1px dashed rgba(255,255,255,.14);}
+#lext-ov-squad .lext-pl2-stats .lext-sq-cell{font-size:12px;display:inline;white-space:nowrap;}
 #lext-ov-squad .lext-pl2-stats .lext-sq-cell.rating{padding:1px 5px;}
 #lext-ov-squad .lext-pl2-injury{font-size:10px;font-family:Oswald,sans-serif;font-weight:700;
   background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;
@@ -47577,10 +47587,12 @@ https://api.sofascore.app/api/v1/team/44/image
     <div class="lext-sub" style="margin-bottom:4px;">Edita dorsal · nombre · posición · valor directamente en cada fila (igual que el editor de Selecciones). Pulsa 💾 Guardar cambios para aplicarlos.</div>
     <div class="lext-list" id="lext-squad-list"></div>
     <div class="lext-pl2-foot" id="lext-pl2-add-wrap" style="display:none;">
-      <button type="button" class="lext-pl2-add-btn" onclick="window.lextSq2AddRow()">➕ Añadir jugador</button>
+      <!-- onclick gestionado por el delegado _lextPl2WireDelegated (click + respaldo táctil) -->
+      <button type="button" class="lext-pl2-add-btn">➕ Añadir jugador</button>
     </div>
     <div class="lext-pl2-foot">
-      <button type="button" class="lext-pl2-save-btn" id="lext-pl2-save-btn" onclick="pG(window.lextSq2SaveAll)">💾 Guardar cambios</button>
+      <!-- onclick gestionado por el delegado _lextPl2WireDelegated (click + respaldo táctil) -->
+      <button type="button" class="lext-pl2-save-btn" id="lext-pl2-save-btn">💾 Guardar cambios</button>
     </div>
   </div>
 </div>
@@ -55609,41 +55621,112 @@ https://api.sofascore.app/api/v1/team/44/image
      `lextDeletePlayer`), que persistía Y RE-PINTABA la lista entera en
      cada click, perdiendo cualquier campo que el admin tuviera a medio
      escribir en otra fila. */
+  function _lextPl2ToggleFlag(fl){
+    var on = !fl.classList.contains('is-on');
+    fl.classList.toggle('is-on', on);
+    if (on) {
+      var fk = fl.getAttribute('data-flag');
+      /* ⚾ y 🏀 no se acumulan (regla CLAUDE.md). */
+      if (fk === 'natGoal' || fk === 'natGoalPro') {
+        var other = (fk === 'natGoal') ? 'natGoalPro' : 'natGoal';
+        var row = fl.closest('.lext-pl2-row');
+        var ob = row && row.querySelector('.lext-pl2-flag[data-flag="'+other+'"]');
+        if (ob) ob.classList.remove('is-on');
+      }
+      /* El capitán es único por equipo. */
+      if (fk === 'captain') {
+        var list = document.querySelectorAll('#lext-squad-list .lext-pl2-flag[data-flag="captain"]');
+        list.forEach(function(b){ if (b !== fl) b.classList.remove('is-on'); });
+      }
+    }
+  }
+  function _lextPl2RemoveRow(del){
+    var row2 = del.closest('.lext-pl2-row');
+    if (row2 && row2.parentNode) row2.parentNode.removeChild(row2);
+  }
+
+  /* Delegado ÚNICO (se cablea una sola vez) para los flags/borrar de
+     las filas — nunca persiste nada por sí solo, solo cambia el DOM;
+     el guardado real lo hace 💾 Guardar cambios / 🔒 Guardar corrección
+     (ver `_lextSq2Persist`). Así ninguna fila a medio editar en OTRA
+     posición de la lista se pierde por marcar un flag o borrar otra
+     fila — al contrario que el flujo viejo (`lextTogglePlayerFlag`/
+     `lextDeletePlayer`), que persistía Y RE-PINTABA la lista entera en
+     cada click, perdiendo cualquier campo que el admin tuviera a medio
+     escribir en otra fila.
+
+     RESPALDO TÁCTIL (2026-08-09, bug "los flags/Guardar no se guardan"):
+     cada fila ahora hace scroll HORIZONTAL propio (`.lext-pl2-row`,
+     `overflow-x:auto`, ver CSS) para caber todo en una sola línea, y el
+     botón 💾 Guardar cambios vive al fondo de una pantalla que también
+     hace scroll VERTICAL. Un tap real con el mínimo movimiento del dedo
+     dentro de CUALQUIERA de esos 2 contenedores puede hacer que el
+     navegador lo interprete como el inicio/fin de un gesto de scroll y
+     CANCELE el `click` sintético — sin excepción, sin alert, sin log,
+     indistinguible de "no ha pasado nada" (mismo patrón ya documentado
+     y arreglado varias veces en este proyecto: portero de la imbatida,
+     picker "AÑADIR POR LIGA", botón FINALIZAR…). Medimos el movimiento
+     entre `touchstart` y `touchend`: si es mínimo (tap real), ejecutamos
+     la acción ahí mismo y suprimimos el `click` sintético que vendría
+     después (con `preventDefault` + una guardia corta por elemento) para
+     no disparar la acción DOS veces por el mismo toque físico. Si el
+     movimiento es grande (scroll real), no hacemos nada — el scroll
+     sigue funcionando con normalidad. */
   function _lextPl2WireDelegated(){
     if (window._lextPl2Wired) return;
     window._lextPl2Wired = true;
     var ov = document.getElementById('lext-ov-squad');
     if (!ov) return;
-    ov.addEventListener('click', function(e){
-      var t0 = e.target;
-      if (!t0 || !t0.closest) return;
+    var MOVE_PX = 12;
+    var _tsX = 0, _tsY = 0, _tsTarget = null, _tsKind = '';
+    var _suppressUntil = (typeof WeakMap === 'function') ? new WeakMap() : null;
+    function _closestActionable(t0){
+      if (!t0 || !t0.closest) return null;
       var fl = t0.closest('.lext-pl2-flag');
-      if (fl) {
-        var on = !fl.classList.contains('is-on');
-        fl.classList.toggle('is-on', on);
-        if (on) {
-          var fk = fl.getAttribute('data-flag');
-          /* ⚾ y 🏀 no se acumulan (regla CLAUDE.md). */
-          if (fk === 'natGoal' || fk === 'natGoalPro') {
-            var other = (fk === 'natGoal') ? 'natGoalPro' : 'natGoal';
-            var row = fl.closest('.lext-pl2-row');
-            var ob = row && row.querySelector('.lext-pl2-flag[data-flag="'+other+'"]');
-            if (ob) ob.classList.remove('is-on');
-          }
-          /* El capitán es único por equipo. */
-          if (fk === 'captain') {
-            var list = document.querySelectorAll('#lext-squad-list .lext-pl2-flag[data-flag="captain"]');
-            list.forEach(function(b){ if (b !== fl) b.classList.remove('is-on'); });
-          }
-        }
-        return;
-      }
+      if (fl) return { el: fl, kind: 'flag' };
       var del = t0.closest('.lext-pl2-del');
-      if (del) {
-        var row2 = del.closest('.lext-pl2-row');
-        if (row2 && row2.parentNode) row2.parentNode.removeChild(row2);
-        return;
+      if (del) return { el: del, kind: 'del' };
+      var save = t0.closest('#lext-pl2-save-btn');
+      if (save) return { el: save, kind: 'save' };
+      var add = t0.closest('.lext-pl2-add-btn');
+      if (add) return { el: add, kind: 'add' };
+      return null;
+    }
+    function _run(hit){
+      if (hit.kind === 'flag') _lextPl2ToggleFlag(hit.el);
+      else if (hit.kind === 'del') _lextPl2RemoveRow(hit.el);
+      else if (hit.kind === 'save') { if (typeof window.pG === 'function') window.pG(window.lextSq2SaveAll); }
+      else if (hit.kind === 'add') { if (typeof window.lextSq2AddRow === 'function') window.lextSq2AddRow(); }
+    }
+    ov.addEventListener('touchstart', function(e){
+      var hit = _closestActionable(e.target);
+      _tsTarget = hit ? hit.el : null;
+      _tsKind = hit ? hit.kind : '';
+      if (!hit) return;
+      var tt = e.touches && e.touches[0];
+      _tsX = tt ? tt.clientX : 0;
+      _tsY = tt ? tt.clientY : 0;
+    }, { passive:true });
+    ov.addEventListener('touchend', function(e){
+      if (!_tsTarget) return;
+      var el = _tsTarget, kind = _tsKind;
+      _tsTarget = null; _tsKind = '';
+      var tt = (e.changedTouches && e.changedTouches[0]) || null;
+      var dx = tt ? Math.abs(tt.clientX - _tsX) : 0;
+      var dy = tt ? Math.abs(tt.clientY - _tsY) : 0;
+      if (dx > MOVE_PX || dy > MOVE_PX) return;   /* scroll real, no tap */
+      try { e.preventDefault(); } catch(_){}
+      if (_suppressUntil) _suppressUntil.set(el, Date.now() + 800);
+      _run({ el: el, kind: kind });
+    }, { passive:false });
+    ov.addEventListener('click', function(e){
+      var hit = _closestActionable(e.target);
+      if (!hit) return;
+      if (_suppressUntil) {
+        var until = _suppressUntil.get(hit.el);
+        if (until && Date.now() < until) return;   /* ya gestionado por touchend */
       }
+      _run(hit);
     });
   }
 

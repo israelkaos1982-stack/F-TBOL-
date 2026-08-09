@@ -29909,6 +29909,19 @@ document.addEventListener('DOMContentLoaded', function() {
     if (modal) modal.style.display = 'flex';
   };
 
+  /* Ejecuta (o encola-por-defecto a s-admin) la acción que estaba
+     esperando el desbloqueo de PIN. Extraído de `pinOk` para poder
+     llamarlo tanto si `/api/admin/login` confirmó como si, tras varios
+     reintentos, seguimos sin confirmación (degradado). */
+  function _runQueuedAdminCb(cb){
+    if (cb) {
+      setTimeout(cb, 0);
+    } else {
+      if (typeof go === 'function') go('s-admin');
+      _adminRefreshEnvStatus();
+    }
+  }
+
   window.pinOk = function () {
     if (_pinBuffer === _PIN_KEY) {
       _adminUnlocked = true;
@@ -29917,31 +29930,56 @@ document.addEventListener('DOMContentLoaded', function() {
          (botón ✏️ del calendario, "Añadir evento" por sección,
          etc.) sin necesidad de recargar la página. */
       try { document.body.classList.add('adm-on'); } catch(_){}
-      /* Además de desbloquear el UI (client-side), registramos la
-         sesión admin en el servidor. Así las rutas protegidas
-         (`/api/calendario/add|edit|delete`) aceptan las peticiones
-         de este navegador. Fire-and-forget: si falla el user sigue
-         viendo el UI desbloqueado, solo no podrá editar calendario. */
-      try {
-        fetch('/api/admin/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
-          body: JSON.stringify({ pin: _PIN_KEY })
-        }).catch(function(){});
-      } catch(_){}
       var modal = document.getElementById('pin-modal');
       if (modal) modal.style.display = 'none';
       _pinBuffer = '';
       var cb = window._admQ || _adminPendingAction;
       window._admQ = null;
       _adminPendingAction = null;
-      if (cb) {
-        setTimeout(cb, 80);
-      } else {
-        if (typeof go === 'function') go('s-admin');
-        _adminRefreshEnvStatus();
+      /* Registramos la sesión admin en el servidor (para que las rutas
+         protegidas — /api/calendario/*, /api/admin/purge-dead-leagues,
+         etc. — acepten las peticiones de este navegador) ANTES de
+         lanzar la acción que estaba esperando el PIN. Antes esto era
+         fire-and-forget (`.catch(function(){})`) y `cb` se disparaba a
+         los 80ms SIN esperar respuesta — una carrera: si el POST de
+         login tardaba más que eso (cold-start de Railway, red móvil),
+         la acción encolada llegaba al servidor SIN sesión admin todavía
+         y el servidor la rechazaba con 403 SIEMPRE, no solo a veces —
+         reproducido con el botón "Eliminar del servidor las 43 ligas
+         fusionadas" fallando de forma IDÉNTICA en cada intento durante
+         horas (2026-08-09): los reintentos del propio botón no podían
+         arreglar nada porque el problema era que la sesión nunca llegó
+         a existir, no que la petición fallara al azar.
+         Ahora esperamos la confirmación del login (con reintentos, el
+         mismo cold-start de Railway que afecta al resto de la web
+         también puede afectar a ESTA petición) antes de correr `cb`.
+         Si tras varios intentos el login sigue sin confirmarse, `cb`
+         se ejecuta igualmente (degradado, como antes) — así una acción
+         puramente de UI local no se queda bloqueada para siempre, pero
+         cualquier acción que sí necesite el servidor (como el borrado)
+         ahora tiene sesión real cuando la dispara, en vez de una
+         carrera perdida de antemano. */
+      function _loginAttempt(tries){
+        fetch('/api/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ pin: _PIN_KEY })
+        }).then(function(r){
+          if (!r || !r.ok) throw new Error('bad status');
+          return r.json ? r.json() : null;
+        }).then(function(j){
+          _runQueuedAdminCb(cb);
+        }).catch(function(){
+          if (tries < 4) {
+            setTimeout(function(){ _loginAttempt(tries + 1); }, Math.pow(2, tries + 1) * 1000);
+          } else {
+            _runQueuedAdminCb(cb);
+          }
+        });
       }
+      try { _loginAttempt(0); }
+      catch(_){ _runQueuedAdminCb(cb); }
     } else {
       var err = document.getElementById('pin-err');
       if (err) { err.style.display = 'block'; }

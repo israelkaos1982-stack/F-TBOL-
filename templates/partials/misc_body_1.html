@@ -941,8 +941,16 @@ window._hdrCleanCache = function(){
 .premios-row label{font-family:Oswald,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.4px;color:#ffe7a6;text-shadow:0 0 8px rgba(240,192,64,.35);}
 .premios-row select{width:100%;background:#1a0814;color:#fff;border:1px solid rgba(220,80,140,.45);border-radius:6px;padding:9px 8px;font-size:13px;font-family:inherit;}
 .premios-row select:focus{outline:none;border-color:rgba(255,200,80,.7);box-shadow:0 0 8px rgba(255,200,80,.35);}
-#s-home .menu-grid{gap:12px;}
+#s-home .menu-grid{gap:12px!important;}
 #s-home .menu-card.full,#s-home .equipo-card,#s-home .home-section-title{margin:0;}
+/* Guarda de especificidad: static/css/index.bundle.css trae su PROPIA
+   #s-home .menu-card{height:80px!important;...} (misma especificidad
+   que esta regla). Repetimos el MISMO selector aquí — este <style>
+   vive en <body>, después del <link> del bundle en <head>, así que en
+   empate de especificidad gana por orden de aparición. Las reglas más
+   específicas de abajo (.full/.equipo-card/.mc-derbys/.mc-sel) quedan
+   como refuerzo, no como única defensa. */
+#s-home .menu-card{height:64px!important;min-height:64px!important;max-height:64px!important;overflow:hidden!important;box-sizing:border-box!important;}
 #s-home .menu-card.full{height:64px!important;min-height:64px!important;max-height:64px!important;overflow:hidden!important;box-sizing:border-box!important;}
 .mc-derbys{height:64px!important;min-height:64px!important;max-height:64px!important;overflow:hidden!important;}
 .mc-sel{height:64px!important;min-height:64px!important;max-height:64px!important;overflow:hidden!important;}

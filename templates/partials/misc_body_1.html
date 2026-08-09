@@ -832,7 +832,7 @@ window._hdrCleanCache = function(){
    (`/api/kv/season_label_v1`, merge por RECENCIA + escritura
    `authoritative` en la edición explícita) es la fuente de verdad, para
    que la edición viaje a los 6 móviles + PC y sobreviva al borrado de
-   datos de navegación (mismo patrón que menu_home_v1 / cash_rewards_v1). */
+   datos de navegación (mismo patrón que menu_home_v1). */
 (function(){
   var KEY = 'season_label_v1';
   var DEFAULT_LABEL = '32-33';
@@ -12337,11 +12337,6 @@ window._hdrCleanCache = function(){
       <div class="admin-mod-label">Ball Storage</div>
       <div class="admin-mod-desc">Balón activo por competición</div>
     </div>
-    <div class="admin-module-card" onclick="go('s-admin-cash');setTimeout(window.adminRenderCash,30)">
-      <span class="admin-mod-icon">🪙</span>
-      <div class="admin-mod-label">CASH</div>
-      <div class="admin-mod-desc">Premios 🪙 por objetivo · auto-suma a cada equipo humano</div>
-    </div>
     <div class="admin-module-card" style="border-color:rgba(240,160,80,.4);" onclick="go('s-admin-storage');setTimeout(window.adminRenderStorage,30)">
       <span class="admin-mod-icon">📊</span>
       <div class="admin-mod-label" style="color:#ffb060;">Espacio del navegador</div>
@@ -12407,42 +12402,6 @@ window._hdrCleanCache = function(){
   <div id="balls-list" style="padding:8px 0 24px;"></div>
 </div>
 
-<!-- ══ PANTALLA CASH 🪙 (Panel Admin) ════════════════════════════════
-     Tabla EDITABLE de premios por objetivo/posición de cada competición.
-     Los premios se acreditan AUTOMÁTICAMENTE al 🪙 Presupuesto del equipo
-     humano cuando una competición termina (motor _cashEngine, ledger
-     idempotente cash_ledger_v1). Petición usuario 2026-06-06. -->
-<style>
-#s-admin-cash .cash-top{display:flex;flex-direction:column;gap:8px;padding:4px 0 12px;}
-#s-admin-cash .cash-intro{font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.5;color:rgba(255,255,255,.62);letter-spacing:.3px;}
-#s-admin-cash .cash-intro b{color:#ffd75e;}
-#s-admin-cash .cash-btn{align-self:flex-start;background:linear-gradient(135deg,#1a2e1a,#2a4a2a);border:1px solid rgba(95,224,138,.5);color:#bff0c8;border-radius:9px;padding:9px 14px;font-family:Oswald,sans-serif;font-weight:700;font-size:12px;letter-spacing:1.4px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-#s-admin-cash .cash-btn:active{transform:scale(.97);}
-#s-admin-cash .cash-sec{border:1px solid rgba(255,255,255,.14);border-radius:11px;padding:10px 12px 4px;margin:0 0 12px;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.12));}
-#s-admin-cash .cash-sec-hd{font-family:Oswald,sans-serif;font-weight:800;letter-spacing:1.8px;font-size:14px;text-shadow:0 0 10px rgba(0,0,0,.5);padding:0 0 8px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:6px;}
-#s-admin-cash .cash-note{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);padding:0 0 6px;letter-spacing:.3px;}
-#s-admin-cash .cash-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 2px;border-bottom:1px solid rgba(255,255,255,.05);}
-#s-admin-cash .cash-row:last-child{border-bottom:none;}
-#s-admin-cash .cash-lbl{font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.86);letter-spacing:.3px;flex:1;}
-#s-admin-cash .cash-val{display:flex;align-items:center;gap:5px;flex-shrink:0;}
-#s-admin-cash .cash-in{width:62px;background:#10131a;border:1px solid rgba(255,255,255,.18);border-radius:7px;color:#fff;padding:7px 8px;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;text-align:center;outline:none;}
-#s-admin-cash .cash-in:focus{border-color:rgba(255,215,94,.7);box-shadow:0 0 7px rgba(255,215,94,.3);}
-#s-admin-cash .cash-coin{font-size:14px;}
-#s-admin-cash .cash-award{background:rgba(255,215,94,.16);border:1px solid rgba(255,215,94,.5);color:#ffe7a6;border-radius:7px;width:32px;height:32px;font-size:14px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.cash-award-ov{display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,6,.86);align-items:center;justify-content:center;padding:18px;}
-.cash-award-ov.show{display:flex;}
-.cash-award-box{max-width:380px;width:100%;background:linear-gradient(135deg,#16131a,#241a2e);border:1px solid rgba(255,215,94,.4);border-radius:13px;padding:16px;display:flex;flex-direction:column;gap:9px;box-shadow:0 0 28px rgba(255,200,80,.25);}
-.cash-award-t{font-family:Oswald,sans-serif;font-weight:800;letter-spacing:1.6px;color:#ffd75e;font-size:16px;}
-.cash-award-s{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.6);margin-bottom:4px;}
-.cash-award-club{background:linear-gradient(135deg,#1a1f2a,#2a3242);border:1px solid rgba(255,255,255,.16);color:#fff;border-radius:9px;padding:11px 12px;font-family:Oswald,sans-serif;font-weight:700;font-size:13px;letter-spacing:1.2px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.cash-award-club:active{transform:scale(.98);}
-.cash-award-x{background:rgba(255,80,80,.14);border:1px solid rgba(255,80,80,.4);color:#ffb0b0;border-radius:9px;padding:9px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.4px;cursor:pointer;margin-top:4px;}
-</style>
-<div class="screen" id="s-admin-cash">
-  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">🪙</span><h2>CASH · Premios</h2></div>
-  <div id="cash-host" style="padding:6px 0 28px;"></div>
-</div>
 <div class="screen" id="s-admin-storage">
   <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
   <div class="sec-hdr"><span class="sec-emoji">📊</span><h2>Espacio del navegador</h2></div>
@@ -12603,415 +12562,6 @@ window._hdrCleanCache = function(){
         : '✔️ No había nada reconstruible que liberar — ya estaba limpio.';
     }
   };
-})();
-</script>
-<script>
-/* ══ CASH ENGINE (Panel Admin · 🪙) ════════════════════════════════════
-   Premios 🪙 por objetivo/posición de cada competición, EDITABLES por el
-   admin (sync server `cash_rewards_v1`, merge por recencia) y acreditados
-   AUTOMÁTICAMENTE al 🪙 Presupuesto del equipo humano cuando la
-   competición TERMINA. Idempotente vía ledger `cash_ledger_v1` (clave de
-   instancia `<comp>|<sig>` donde sig = resultado final → re-escanear NO
-   re-paga; reset+rejugar SÍ vuelve a pagar al cambiar el resultado).
-   CASH es la ÚNICA autoridad de premios (window._CASH_OWNS_PRIZES) → el
-   camino legacy `_tourMaybeCreditPrizes` queda gateado para no doblar.
-   ─────────────────────────────────────────────────────────────────── */
-(function(){
-  'use strict';
-  var CFG_KEY='cash_rewards_v1', LEDGER_KEY='cash_ledger_v1';
-  function num(x){ var n=Number(x); return isFinite(n)?n:0; }
-  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function _norm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,' '); }
-
-  /* ── Esquema (competición → objetivos + premio por defecto) ───────── */
-  var SCHEMA = [
-    { key:'sel-fin', name:'Rondas Finales Selección', emoji:'🌍', color:'#a875e8', objs:[
-      ['grupos','Eliminado en Fase de Grupos',5],['r32','Eliminado en Dieciseisavos',15],
-      ['oct','Eliminado en Octavos',30],['qf','Eliminado en Cuartos',45],
-      ['p4','Quedar cuarto',60],['p3','Quedar tercero',75],
-      ['sub','Subcampeón',90],['champ','Campeón',105] ]},
-    { key:'sel-prev', name:'Rondas Previas Selección', emoji:'🛉', color:'#7da7c8', objs:[
-      ['g1','Quedar primero de Grupo',10],['g2','Quedar segundo de Grupo',5] ]},
-    { key:'verano', name:'Torneos de Verano', emoji:'🏖️', color:'#5fc6c8', objs:[
-      ['p1','Quedar primero o campeón',30],['p2','Quedar segundo o Subcampeón',24],
-      ['p3','Quedar tercero o Eliminado semis',18],['p4','Quedar cuarto o Eliminado cuartos',12],
-      ['p5','Quedar quinto o Eliminado Octavos',9],['p6','Quedar sexto en liga',6] ]},
-    { key:'superliga', name:'Superliga', emoji:'⭐', color:'#9b59b6', objs:[
-      ['p1','Quedar primero',65],['p2','Quedar segundo',50],['p3','Quedar tercero',40],
-      ['p4','Quedar cuarto',30],['p5','Quedar quinto',20],['p6','Quedar sexto',10] ]},
-    { key:'mundialito', name:'Mundialito Clubes', emoji:'🌐', color:'#ffd633', objs:[
-      ['grupos','Eliminado en Fase de Grupos',10],['oct','Eliminado en Octavos',35],
-      ['qf','Eliminado en Cuartos',50],['sf','Eliminado en Semis',70],
-      ['sub','Subcampeón',90],['champ','Campeón',105] ]},
-    { key:'inter', name:'Intercontinental', emoji:'🌐', color:'#f0a040', objs:[
-      ['qf','Eliminado en Cuartos',50],['sf','Eliminado en Semis',70],
-      ['sub','Subcampeón',90],['champ','Campeón',105] ]},
-    { key:'usc', name:'Supercopa Europa', emoji:'🏆', color:'#f0c820', objs:[
-      ['sf','Eliminado en Semis',30],['sub','Subcampeón',50],['champ','Campeón',70] ]},
-    { key:'recopa', name:'Recopa Europa', emoji:'🛡️', color:'#ff8060', objs:[
-      ['r64','Eliminado en 1/64',5],['r32','Eliminado en Dieciseisavos',10],
-      ['oct','Eliminado en Octavos',25],['qf','Eliminado en Cuartos',40],
-      ['sf','Eliminado en Semis',55],['sub','Subcampeón',70],['champ','Campeón',85] ]},
-    { key:'uecl', name:'Conference League', emoji:'🟢', color:'#5fe08a', objs:[
-      ['grupos','Eliminado en Fase de Grupos',0],['top8','Clasificar entre los 8 primeros',5],
-      ['repesca','Eliminado en Repesca Dieciseisavos',10],['oct','Eliminado en Octavos',20],
-      ['qf','Eliminado en Cuartos',30],['sf','Eliminado en Semis',40],
-      ['sub','Subcampeón',50],['champ','Campeón',60] ]},
-    { key:'uel', name:'Europa League', emoji:'🟠', color:'#ffaa55', objs:[
-      ['grupos','Eliminado en Fase de Grupos',0],['top8','Clasificar entre los 8 primeros',15],
-      ['repesca','Eliminado en Repesca Dieciseisavos',15],['oct','Eliminado en Octavos',30],
-      ['qf','Eliminado en Cuartos',45],['sf','Eliminado en Semis',60],
-      ['sub','Subcampeón',75],['champ','Campeón',90] ]},
-    { key:'ucl', name:'Champions League', emoji:'🏆', color:'#88aaff', objs:[
-      ['grupos','Eliminado en Fase de Grupos',0],['top8','Clasificar entre los 8 primeros',20],
-      ['repesca','Eliminado en Repesca Dieciseisavos',20],['oct','Eliminado en Octavos',40],
-      ['qf','Eliminado en Cuartos',60],['sf','Eliminado en Semis',80],
-      ['sub','Subcampeón',100],['champ','Campeón',125] ]},
-    { key:'sc', name:'Supercopa España', emoji:'🏆', color:'#f0c820', objs:[
-      ['sf','Eliminado en Semis',15],['sub','Subcampeón',30],['champ','Campeón',45] ]},
-    { key:'copa', name:'Copa del Rey', emoji:'🏆', color:'#ffb050', objs:[
-      ['r1','Eliminado en 1ª Ronda',0],['r2','Eliminado en 2ª Ronda',5],
-      ['r16','Eliminado en Dieciseisavos',15],['oct','Eliminado en Octavos',25],
-      ['qf','Eliminado en Cuartos',40],['sf','Eliminado en Semis',55],
-      ['sub','Subcampeón',70],['champ','Campeón',85] ]},
-    { key:'liga', name:'Liga', emoji:'🏅', color:'#ff5060', objs:[
-      ['p1','Quedar primero',80],['p2','Quedar segundo',70],['p3','Quedar tercero',60],
-      ['p4','Quedar cuarto',50],['p5','Quedar quinto',40],['p6','Quedar sexto',30],
-      ['p7','Quedar séptimo',20],['p8','Quedar octavo',10] ]}
-  ];
-  var LIGA_MANUAL = { name:'Liga · Estadísticas (manual · SOLO CLUBES)', emoji:'📊', color:'#88a0c0', objs:[
-    ['masGanados','Equipo con más partidos ganados',20],['menosPerdidos','Equipo con menos partidos perdidos',20],
-    ['masDG','Equipo con más diferencia de goles',20],['mayorGoleada','Equipo con mayor goleada',20],
-    ['masGoles','Equipo con más goles marcados',20],['menosEncajados','Equipo con menos goles encajados',20],
-    ['menosTarjetas','Equipo con menos tarjetas recibidas',20],['mejorPctVic','Equipo con mejor % victorias',20],
-    ['masTiros','Equipo con más tiros a puerta',20],['menosFaltas','Equipo con menos faltas hechas',20],
-    ['masCorners','Equipo con más córners a favor',20] ]};
-
-  /* ── Config (cash_rewards_v1) ─────────────────────────────────────── */
-  var _state=null, _saveT=null, _hydrated=false, _localWriteAt=0;
-  function _defaults(){ var v={}; SCHEMA.forEach(function(c){ v[c.key]={}; c.objs.forEach(function(o){ v[c.key][o[0]]=o[2]; }); });
-    var lm={}; LIGA_MANUAL.objs.forEach(function(o){ lm[o[0]]=o[2]; }); return { vals:v, ligaManual:lm, updatedAt:0 }; }
-  function _merge(s){ var d=_defaults(); if(!s||!s.vals) return d;
-    Object.keys(d.vals).forEach(function(ck){ if(!s.vals[ck])s.vals[ck]={}; Object.keys(d.vals[ck]).forEach(function(ok){ if(s.vals[ck][ok]==null)s.vals[ck][ok]=d.vals[ck][ok]; }); });
-    if(!s.ligaManual)s.ligaManual={}; Object.keys(d.ligaManual).forEach(function(ok){ if(s.ligaManual[ok]==null)s.ligaManual[ok]=d.ligaManual[ok]; });
-    return s; }
-  function _load(){ if(_state) return _state; try{ var raw=localStorage.getItem(CFG_KEY); if(raw){ _state=_merge(JSON.parse(raw)); return _state; } }catch(_){} _state=_defaults(); return _state; }
-  function _persist(){ try{ _state.updatedAt=Date.now(); window._lsSetSafe(CFG_KEY, JSON.stringify(_state)); }catch(_){} }
-  function _post(key,val,tries){ try{ fetch('/api/kv/'+key,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({value:val})})
-    .then(function(r){return r.ok?r.json():null;}).then(function(j){ if(!(j&&j.ok)&&tries>1) setTimeout(function(){_post(key,val,tries-1);},1500); })
-    .catch(function(){ if(tries>1) setTimeout(function(){_post(key,val,tries-1);},1500); }); }catch(_){} }
-  function _saveDebounced(){ _persist(); if(_saveT)clearTimeout(_saveT); _saveT=setTimeout(function(){ _post(CFG_KEY,_state,3); },700); }
-  function _hydrate(cb){ try{ fetch('/api/kv/'+CFG_KEY,{credentials:'same-origin',headers:{'Cache-Control':'no-store'}})
-    .then(function(r){return r.ok?r.json():null;}).then(function(j){
-      try{ if(j&&j.ok&&j.value&&j.value.vals){ var loc=_load(); var locTs=loc.updatedAt||0; var remTs=j.value.updatedAt||0;
-        if(remTs>=locTs && (Date.now()-_localWriteAt>4000)){ _state=_merge(j.value); _persist(); } } }catch(_){}
-      _hydrated=true; if(cb)cb();
-    }).catch(function(){ _hydrated=true; if(cb)cb(); }); }catch(_){ _hydrated=true; if(cb)cb(); } }
-
-  /* ── Ledger (cash_ledger_v1) ──────────────────────────────────────── */
-  function _ledgerLoad(){ try{ var raw=localStorage.getItem(LEDGER_KEY); if(raw){ var s=JSON.parse(raw); if(s&&s.paid) return s; } }catch(_){} return {paid:{},updatedAt:0}; }
-  function _ledgerSave(lg){ try{ lg.updatedAt=Date.now(); window._lsSetSafe(LEDGER_KEY,JSON.stringify(lg)); }catch(_){} _post(LEDGER_KEY,lg,3); }
-  function _ledgerHydrate(cb){ try{ fetch('/api/kv/'+LEDGER_KEY,{credentials:'same-origin',headers:{'Cache-Control':'no-store'}})
-    .then(function(r){return r.ok?r.json():null;}).then(function(j){ if(j&&j.ok&&j.value&&j.value.paid){ var loc=_ledgerLoad(); var merged={paid:{},updatedAt:Date.now()};
-      Object.keys(j.value.paid).forEach(function(k){ merged.paid[k]=j.value.paid[k]; }); Object.keys(loc.paid).forEach(function(k){ merged.paid[k]=loc.paid[k]; });
-      try{window._lsSetSafe(LEDGER_KEY,JSON.stringify(merged));}catch(_){} } if(cb)cb(); }).catch(function(){ if(cb)cb(); }); }catch(_){ if(cb)cb(); } }
-
-  /* ── Crédito + detección de humanos ───────────────────────────────── */
-  function _credit(name,coins){ coins=Math.round(num(coins)); if(!name||coins<=0)return false;
-    try{ if(typeof window._tourWalletCredit==='function'){ window._tourWalletCredit(name,coins); return true; } }catch(_){} return false; }
-  function _humClub(n){ if(!n)return false;
-    try{ if(typeof window._isHumanClubCanonico==='function' && window._isHumanClubCanonico(n)) return true; }catch(_){}
-    try{ if(typeof window.esHumano==='function' && window.esHumano(n)) return true; }catch(_){}
-    return false; }
-  function _humSel(n){ if(!n)return false;
-    try{ if(typeof window._esSelHumana==='function' && window._esSelHumana(n)) return true; }catch(_){}
-    try{ if(typeof window._isHumanSeleccionCanonica==='function' && window._isHumanSeleccionCanonica(n)) return true; }catch(_){}
-    return false; }
-  /* Ganador de un partido KO único (mismo criterio que los motores:
-     penWinner → total (gh+etGh) → BYE walkover). */
-  var BYE='__BYE__';
-  function _win(m){ if(!m||!m.played)return null; if(m.home===BYE&&m.away===BYE)return null;
-    if(m.away===BYE)return m.home; if(m.home===BYE)return m.away;
-    if(m.penWinner==='a')return m.home; if(m.penWinner==='b')return m.away;
-    var ta=num(m.gh)+num(m.etGh), tb=num(m.ga)+num(m.etGa);
-    if(ta>tb)return m.home; if(tb>ta)return m.away; return null; }
-  function _loadJSON(k){ try{ return JSON.parse(localStorage.getItem(k)||'null'); }catch(_){ return null; } }
-  function _loadTour(id){ try{ if(typeof window._tourLoadCachedSync==='function'){ var c=window._tourLoadCachedSync(id); if(c)return c; } }catch(_){}
-    return _loadJSON('tour_'+id+'_v1'); }
-
-  /* ── Detectores (devuelven {complete, sig, payouts:[{name,coins,tier}]}) ── */
-  /* Bracket por fases con sorteo.{...} + champion/runnerUp (recopa, inter). */
-  function _detBracket(storeKey, phases, phaseToTier, vals, human){
-    var st=_loadJSON(storeKey); if(!st) return null;
-    var sorteo=st.sorteo||st.bracket||{};
-    var finArr=sorteo[phases[phases.length-1]]; var finM=(finArr&&finArr[0])||null;
-    if(!finM||!finM.played) return {complete:false};
-    var champ=st.champion||_win(finM); var sub=st.runnerUp||(champ===finM.home?finM.away:finM.home);
-    var elimTier={}, seen={};
-    phases.forEach(function(ph){ var arr=sorteo[ph]; if(!Array.isArray(arr))return; arr.forEach(function(m){ if(!m)return;
-      [m.home,m.away].forEach(function(nm){ if(nm&&nm!==BYE)seen[nm]=1; });
-      if(!m.played)return; var w=_win(m); [m.home,m.away].forEach(function(nm){ if(nm&&nm!==BYE&&w&&w!==nm) elimTier[nm]=phaseToTier[ph]; }); }); });
-    var payouts=[];
-    Object.keys(seen).forEach(function(nm){ if(!human(nm))return; var tier=null;
-      if(nm===champ)tier='champ'; else if(nm===sub)tier='sub'; else if(elimTier[nm])tier=elimTier[nm];
-      if(tier){ var c=num(vals[tier]); if(c>0)payouts.push({name:nm,coins:c,tier:tier}); } });
-    return {complete:true, sig:String(champ)+'/'+String(sub), payouts:payouts};
-  }
-  /* Semis (2) + Final + champion/runnerUp (usc, sc). */
-  function _detSemisFinal(storeKey, vals, human){
-    var st=_loadJSON(storeKey); if(!st||!st.final||!st.final.played) return {complete:false};
-    var champ=st.champion||_win(st.final); var sub=st.runnerUp||(champ===st.final.home?st.final.away:st.final.home);
-    var seen={}; (st.semis||[]).forEach(function(m){ if(!m)return; [m.home,m.away].forEach(function(nm){ if(nm)seen[nm]=1; }); });
-    [st.final.home,st.final.away].forEach(function(nm){ if(nm)seen[nm]=1; });
-    var payouts=[];
-    Object.keys(seen).forEach(function(nm){ if(!human(nm))return; var tier=(nm===champ)?'champ':(nm===sub)?'sub':'sf';
-      var c=num(vals[tier]); if(c>0)payouts.push({name:nm,coins:c,tier:tier}); });
-    return {complete:true, sig:String(champ)+'/'+String(sub), payouts:payouts};
-  }
-  /* Top-8 de la fase de liga europea (swiss) desde *_phase_v1.pairs. */
-  function _euroTop8(phaseKey){ try{ var st=_loadJSON(phaseKey); if(!st||!Array.isArray(st.pairs))return null;
-    var T={}, any=false; function g(n){ if(!T[n])T[n]={n:n,pts:0,dg:0,gf:0}; return T[n]; }
-    st.pairs.forEach(function(p){ if(!p||!p.played||typeof p.gh!=='number'||typeof p.ga!=='number')return; any=true;
-      var h=g(p.home),a=g(p.away); h.gf+=p.gh;a.gf+=p.ga;h.dg+=(p.gh-p.ga);a.dg+=(p.ga-p.gh);
-      if(p.gh>p.ga)h.pts+=3; else if(p.ga>p.gh)a.pts+=3; else{h.pts++;a.pts++;} });
-    if(!any)return null;
-    var arr=Object.keys(T).map(function(k){return T[k];}); arr.sort(function(a,b){ return b.pts-a.pts||b.dg-a.dg||b.gf-a.gf||(a.n<b.n?-1:1); });
-    var top={}; arr.slice(0,8).forEach(function(r){ top[_norm(r.n)]=1; }); return top; }catch(_){ return null; } }
-  /* Champions/Europa/Conference: KO (rounds[].pairs[]) + champion + top8. */
-  function _detEuro(koKey, phaseKey, vals, human){
-    var st=_loadJSON(koKey); if(!st||!Array.isArray(st.rounds)||!st.rounds.length) return {complete:false};
-    var rounds=st.rounds, lastIdx=rounds.length-1;
-    var finRd=rounds[lastIdx]; var finM=(finRd&&Array.isArray(finRd.pairs)&&finRd.pairs[0])||null;
-    if(!finM||!finM.played) return {complete:false};
-    var champ=st.champion||st.campeon||_win(finM); var sub=st.runnerUp||(champ===finM.home?finM.away:finM.home);
-    function rtier(name){ var s=String(name||'').toLowerCase();
-      if(/repesca|diecis|1\s*\/\s*32|playoff/.test(s))return 'repesca';
-      if(/octavos|1\s*\/\s*16/.test(s))return 'oct';
-      if(/cuartos|1\s*\/\s*8/.test(s))return 'qf';
-      if(/semi/.test(s))return 'sf'; return null; }
-    var elimTier={}, seen={};
-    rounds.forEach(function(rd){ var name=(rd&&(rd.name||rd.label))||''; var pairs=(rd&&Array.isArray(rd.pairs))?rd.pairs:[];
-      pairs.forEach(function(p){ if(!p)return; var h=p.home||p.l||p.a, a=p.away||p.v||p.b; if(!h||!a)return;
-        [h,a].forEach(function(nm){ if(nm&&nm!==BYE)seen[nm]=1; });
-        if(typeof p.gh!=='number'&&!p.penWinner)return;
-        var w=_win({home:h,away:a,gh:p.gh,ga:p.ga,etGh:p.etGh,etGa:p.etGa,penWinner:p.penWinner,played:true});
-        [h,a].forEach(function(nm){ if(nm&&nm!==BYE&&w&&w!==nm){ var t=rtier(name); if(t)elimTier[nm]=t; } }); }); });
-    var top8=_euroTop8(phaseKey);
-    var payouts=[];
-    Object.keys(seen).forEach(function(nm){ if(!human(nm))return; var coins=0,tiers=[];
-      if(nm===champ){ coins+=num(vals.champ); tiers.push('champ'); }
-      else if(nm===sub){ coins+=num(vals.sub); tiers.push('sub'); }
-      else if(elimTier[nm]){ coins+=num(vals[elimTier[nm]]); tiers.push(elimTier[nm]); }
-      if(top8 && top8[_norm(nm)]){ coins+=num(vals.top8); tiers.push('top8'); }
-      if(coins>0)payouts.push({name:nm,coins:coins,tier:tiers.join('+')}); });
-    return {complete:true, sig:String(champ)+'/'+String(sub), payouts:payouts};
-  }
-  /* Liga EA (posiciones 1-8) vía window.collectStandings(). */
-  function _detLiga(vals, human){
-    var rows=null; try{ if(typeof window.collectStandings==='function') rows=window.collectStandings(); }catch(_){}
-    if(!rows||!rows.length) return {complete:false};
-    var n=rows.length, exp=(n-1)*2;
-    var allDone = exp>0 && rows.every(function(r){ return typeof r.pj==='number' && r.pj>=exp; });
-    if(!allDone) return {complete:false};
-    var posKeys=['p1','p2','p3','p4','p5','p6','p7','p8'], payouts=[];
-    rows.forEach(function(r,idx){ if(idx<8 && human(r.name)){ var c=num(vals[posKeys[idx]]); if(c>0)payouts.push({name:r.name,coins:c,tier:posKeys[idx]}); } });
-    return {complete:true, sig:'L'+n+':'+rows.slice(0,8).map(function(r){return r.name;}).join(','), payouts:payouts};
-  }
-  /* Superliga (posiciones 1-6) — reutiliza la clasificación + bandera de
-     completado del propio motor (window._cashSuperligaStandings). */
-  function _detSuperliga(vals, human){
-    var st=null; try{ if(typeof window._cashSuperligaStandings==='function') st=window._cashSuperligaStandings(); }catch(_){}
-    if(!st||!st.complete||!Array.isArray(st.rows)||st.rows.length<2) return {complete:false};
-    var rows=st.rows, posKeys=['p1','p2','p3','p4','p5','p6'], payouts=[];
-    rows.forEach(function(r,idx){ if(idx<6&&human(r.name)){ var c=num(vals[posKeys[idx]]); if(c>0)payouts.push({name:r.name,coins:c,tier:posKeys[idx]}); } });
-    return {complete:true, sig:'sl:'+rows.slice(0,3).map(function(r){return r.name;}).join(','), payouts:payouts};
-  }
-  /* ── Helpers de torneos (_tour*) ──────────────────────────────────── */
-  function _fixAllDone(fix, res, prefix){ if(!fix||typeof fix.forEach!=='function')return false; var d=0,t=0;
-    fix.forEach(function(jor,j){ if(!jor||typeof jor.forEach!=='function')return; jor.forEach(function(m,mi){ t++; var r=res[(prefix||'')+j+'_'+mi]; if(r&&r.played)d++; }); });
-    return t>0&&d===t; }
-  function _allGroupsDone(cfg){ var fx=cfg.groupFixtures; if(!fx)return false; var keys=Object.keys(fx); if(!keys.length)return false;
-    for(var i=0;i<keys.length;i++){ if(!_fixAllDone(fx[keys[i]], cfg.results||{}, 'g'+keys[i]+'_'))return false; } return true; }
-  function _standings(teams, fixture, results, prefix){ try{ if(typeof window._tourComputeStandings==='function') return window._tourComputeStandings(teams, fixture, results||{}, prefix||''); }catch(_){} return null; }
-  /* KO de torneo (ko / groups-ko): devuelve {complete,lastIdx,maxR,champ,sub}. */
-  function _koPlacement(cfg){ var koB=cfg.koBracket||cfg.bracket; if(!Array.isArray(koB)||!koB.length)return null;
-    var prefix=cfg.koBracket?'ko_':''; var lastIdx=koB.length-1;
-    var lastRes=(cfg.results||{})[prefix+lastIdx+'_0']; if(!lastRes||!lastRes.played)return {complete:false};
-    var maxR={}; koB.forEach(function(rt,ri){ if(!Array.isArray(rt))return; rt.forEach(function(t){ if(t&&t.name){ if(maxR[t.name]==null||maxR[t.name]<ri)maxR[t.name]=ri; } }); });
-    var finalT=koB[lastIdx]||[]; var champ=(lastRes.winner==='a')?finalT[0]:finalT[1]; var sub=(lastRes.winner==='a')?finalT[1]:finalT[0];
-    return {complete:true, lastIdx:lastIdx, maxR:maxR, champ:champ&&champ.name, sub:sub&&sub.name}; }
-  /* Torneo de Verano: liga (posiciones) o KO (fases). */
-  function _detVerano(cfg, vals, human){
-    if(!cfg||!Array.isArray(cfg.teams)||cfg.teams.length<2)return null;
-    if(cfg.format==='league'){
-      if(!_fixAllDone(cfg.fixture, cfg.results||{}, ''))return {complete:false};
-      var rows=_standings(cfg.teams, cfg.fixture, cfg.results); if(!rows)return {complete:false};
-      var posKeys=['p1','p2','p3','p4','p5','p6'], payouts=[];
-      rows.forEach(function(r,idx){ if(idx<6&&human(r.name)){ var c=num(vals[posKeys[idx]]); if(c>0)payouts.push({name:r.name,coins:c,tier:posKeys[idx]}); } });
-      return {complete:true, sig:'lg:'+rows.slice(0,3).map(function(r){return r.name;}).join(','), payouts:payouts};
-    }
-    var pl=_koPlacement(cfg); if(!pl)return null; if(!pl.complete)return {complete:false};
-    var li=pl.lastIdx, payouts2=[], seen={}; cfg.teams.forEach(function(t){ if(t&&t.name)seen[t.name]=1; });
-    Object.keys(seen).forEach(function(nm){ if(!human(nm))return; var tier;
-      if(nm===pl.champ)tier='p1'; else if(nm===pl.sub)tier='p2';
-      else{ var rr=pl.maxR[nm]; if(rr==null)tier='p6'; else if(rr===li-1)tier='p3'; else if(rr===li-2)tier='p4'; else if(rr===li-3)tier='p5'; else tier='p6'; }
-      var c=num(vals[tier]); if(c>0)payouts2.push({name:nm,coins:c,tier:tier}); });
-    return {complete:true, sig:String(pl.champ)+'/'+String(pl.sub), payouts:payouts2};
-  }
-  /* Mundialito Clubes (groups-ko). */
-  function _detMundialito(cfg, vals, human){
-    if(!cfg||!Array.isArray(cfg.teams)||cfg.teams.length<2)return null;
-    var pl=_koPlacement(cfg); if(!pl)return null; if(!pl.complete)return {complete:false};
-    var li=pl.lastIdx, payouts=[], seen={}; cfg.teams.forEach(function(t){ if(t&&t.name)seen[t.name]=1; });
-    Object.keys(seen).forEach(function(nm){ if(!human(nm))return; var tier;
-      if(nm===pl.champ)tier='champ'; else if(nm===pl.sub)tier='sub';
-      else{ var rr=pl.maxR[nm]; if(rr==null)tier='grupos'; else if(rr===li-1)tier='sf'; else if(rr===li-2)tier='qf'; else if(rr===li-3)tier='oct'; else tier='grupos'; }
-      var c=num(vals[tier]); if(c>0)payouts.push({name:nm,coins:c,tier:tier}); });
-    return {complete:true, sig:String(pl.champ)+'/'+String(pl.sub), payouts:payouts};
-  }
-  /* Selección · Rondas Finales (mundial-48, con 3er/4º puesto). */
-  function _detSelFin(cfg, vals, human){
-    if(!cfg||cfg.format!=='mundial-48'||!Array.isArray(cfg.teams)||!cfg.teams.length)return null;
-    var koB=cfg.koBracket; if(!Array.isArray(koB)||!koB.length)return {complete:false};
-    var koRounds=(cfg.formatConfig&&cfg.formatConfig.koRounds)||[]; var lastIdx=koB.length-1;
-    var finRes=(cfg.results||{})['ko_'+lastIdx+'_0']; if(!finRes||!finRes.played)return {complete:false};
-    var finalT=koB[lastIdx]||[]; var champ=(finRes.winner==='a')?finalT[0]:finalT[1]; champ=champ&&champ.name;
-    var sub=(finRes.winner==='a')?finalT[1]:finalT[0]; sub=sub&&sub.name;
-    var thirdIdx=-1; for(var i=0;i<koRounds.length;i++){ if(/tercer/i.test(koRounds[i]))thirdIdx=i; }
-    var p3=null,p4=null;
-    if(thirdIdx>=0){ var tRes=(cfg.results||{})['ko_'+thirdIdx+'_0']; var tT=koB[thirdIdx]||[];
-      if(!tRes||!tRes.played) return {complete:false}; /* esperar al 3er puesto */
-      p3=(tRes.winner==='a')?tT[0]:tT[1]; p4=(tRes.winner==='a')?tT[1]:tT[0]; p3=p3&&p3.name; p4=p4&&p4.name; }
-    var maxR={}; koB.forEach(function(rt,ri){ if(ri===thirdIdx||!Array.isArray(rt))return; rt.forEach(function(t){ if(t&&t.name){ if(maxR[t.name]==null||maxR[t.name]<ri)maxR[t.name]=ri; } }); });
-    function tierForRound(ri){ var nm=String(koRounds[ri]||'').toLowerCase();
-      if(/cuartos/.test(nm))return 'qf'; if(/octavos/.test(nm))return 'oct'; if(/diecis/.test(nm))return 'r32'; return null; }
-    var payouts=[], seen={}; cfg.teams.forEach(function(t){ if(t&&t.name)seen[t.name]=1; });
-    Object.keys(seen).forEach(function(nm){ if(!human(nm))return; var tier;
-      if(nm===champ)tier='champ'; else if(nm===sub)tier='sub'; else if(nm===p3)tier='p3'; else if(nm===p4)tier='p4';
-      else{ var rr=maxR[nm]; if(rr==null)tier='grupos'; else tier=tierForRound(rr)||'grupos'; }
-      var c=num(vals[tier]); if(c>0)payouts.push({name:nm,coins:c,tier:tier}); });
-    return {complete:true, sig:String(champ)+'/'+String(sub)+'/'+String(p3), payouts:payouts};
-  }
-  /* Selección · Rondas Previas (grupos → 1º/2º · o liga). */
-  function _detSelPrev(cfg, vals, human){
-    if(!cfg||!Array.isArray(cfg.teams)||cfg.teams.length<2)return null;
-    var payouts=[], sigParts=[];
-    if(cfg.groupFixtures && Object.keys(cfg.groupFixtures).length){
-      if(!_allGroupsDone(cfg))return {complete:false};
-      var fc=cfg.formatConfig||{}; var pg=fc.perGroup||Math.ceil(cfg.teams.length/(fc.groups||1));
-      Object.keys(cfg.groupFixtures).forEach(function(gk){ var gi=parseInt(gk,10); var slice=cfg.teams.slice(gi*pg,(gi+1)*pg); if(!slice.length)return;
-        var rows=_standings(slice, cfg.groupFixtures[gk], cfg.results, 'g'+gk+'_'); if(!rows)return;
-        if(rows[0]&&human(rows[0].name)){ var c1=num(vals.g1); if(c1>0)payouts.push({name:rows[0].name,coins:c1,tier:'g1'}); }
-        if(rows[1]&&human(rows[1].name)){ var c2=num(vals.g2); if(c2>0)payouts.push({name:rows[1].name,coins:c2,tier:'g2'}); }
-        if(rows[0])sigParts.push(rows[0].name); });
-      return {complete:true, sig:'gp:'+sigParts.join(','), payouts:payouts};
-    }
-    if(cfg.format==='league'){
-      if(!_fixAllDone(cfg.fixture, cfg.results||{}, ''))return {complete:false};
-      var r2=_standings(cfg.teams, cfg.fixture, cfg.results); if(!r2)return {complete:false};
-      if(r2[0]&&human(r2[0].name)){ var a1=num(vals.g1); if(a1>0)payouts.push({name:r2[0].name,coins:a1,tier:'g1'}); }
-      if(r2[1]&&human(r2[1].name)){ var a2=num(vals.g2); if(a2>0)payouts.push({name:r2[1].name,coins:a2,tier:'g2'}); }
-      return {complete:true, sig:'lg:'+(r2[0]?r2[0].name:''), payouts:payouts};
-    }
-    return null;
-  }
-
-  /* ── Scan + crédito idempotente ───────────────────────────────────── */
-  var _scanning=false, _copaAt=0;
-  function scan(){ if(_scanning||!_hydrated)return; _scanning=true; try{ _scanInner(); }catch(e){ try{console.warn('[cash] scan',e);}catch(_){} } _scanning=false; }
-  function _scanInner(){
-    var cfg=_load(), V=cfg.vals||{}, ledger=_ledgerLoad(), changed=false;
-    function run(instKey, res){ if(!res||!res.complete)return; var k=instKey+'|'+res.sig; if(ledger.paid[k]!=null)return;
-      var ok=true, total=0; (res.payouts||[]).forEach(function(p){ if(p.coins>0){ if(_credit(p.name,p.coins))total+=p.coins; else ok=false; } });
-      if(!ok)return; /* crédito no disponible → reintenta en el próximo scan, sin marcar pagado */
-      ledger.paid[k]=total; changed=true; }
-    run('recopa', _detBracket('recopa_state_v1', ['r64','r32','r16','r8','sf','fin'], {r64:'r64',r32:'r32',r16:'oct',r8:'qf',sf:'sf'}, V.recopa||{}, _humClub));
-    run('inter',  _detBracket('inter_state_v1', ['q','s','f'], {q:'qf',s:'sf'}, V.inter||{}, _humClub));
-    run('usc', _detSemisFinal('usc_state_v1', V.usc||{}, _humClub));
-    run('sc',  _detSemisFinal('sc_state_v1', V.sc||{}, _humClub));
-    run('ucl',  _detEuro('ucl_ko_state_v1','ucl_phase_v1', V.ucl||{}, _humClub));
-    run('uel',  _detEuro('uel_ko_state_v1','uel_phase_v1', V.uel||{}, _humClub));
-    run('uecl', _detEuro('uecl_ko_state_v1','uecl_phase_v1', V.uecl||{}, _humClub));
-    run('liga', _detLiga(V.liga||{}, _humClub));
-    run('superliga', _detSuperliga(V.superliga||{}, _humClub));
-    ['sct','pss','jg','asia','tx1','tx2','tx3','tx4','tx5','tx6','tx7','tx8'].forEach(function(id){ var c=_loadTour(id); if(c) run('verano:'+id, _detVerano(c, V.verano||{}, _humClub)); });
-    run('mundialito:mundial', _detMundialito(_loadTour('mundial'), V.mundialito||{}, _humClub));
-    var i; for(i=1;i<=10;i++){ var cf=_loadTour('sfn'+i); if(cf) run('selfin:sfn'+i, _detSelFin(cf, V['sel-fin']||{}, _humSel)); }
-    for(i=1;i<=10;i++){ var cp=_loadTour('spv'+i); if(cp) run('selprev:spv'+i, _detSelPrev(cp, V['sel-prev']||{}, _humSel)); }
-    if(changed) _ledgerSave(ledger);
-    _scanCopa(V.copa||{});
-  }
-  /* Copa del Rey — estado vía /api/copa/state (async). */
-  function _scanCopa(vals){ if(Date.now()-_copaAt<8000)return; _copaAt=Date.now();
-    try{ fetch('/api/copa/state',{credentials:'same-origin'}).then(function(r){return r.ok?r.json():null;}).then(function(d){ try{
-      var copa=d&&d.copa; if(!copa||!copa.clasificados||!copa.clasificados.campeon)return;
-      var clas=copa.clasificados, sorteo=copa.sorteo||{};
-      var sig=String(clas.campeon)+'/'+String(clas.subcampeon||''); var key='copa|'+sig;
-      var lg=_ledgerLoad(); if(lg.paid[key]!=null)return;
-      var ROUNDS=['r1','r2','r16','oct','cua','sf','fin']; var tmap={r1:'r1',r2:'r2',r16:'r16',oct:'oct',cua:'qf',sf:'sf'};
-      function names(m){ return [m.l,m.v,m.home,m.away]; }
-      var seen={}; ROUNDS.forEach(function(rd){ (sorteo[rd]||[]).forEach(function(m){ if(!m)return; names(m).forEach(function(nm){ if(nm)seen[nm]=1; }); }); });
-      var payouts=[];
-      Object.keys(seen).forEach(function(nm){ if(!_humClub(nm))return; var tier=null;
-        if(nm===clas.campeon)tier='champ'; else if(nm===clas.subcampeon)tier='sub';
-        else{ for(var ri=0;ri<ROUNDS.length-1;ri++){ var rd=ROUNDS[ri]; var winners=clas[rd]||[];
-          var inR=(sorteo[rd]||[]).some(function(m){ return m&&names(m).indexOf(nm)>=0; });
-          if(inR && winners.indexOf(nm)===-1){ tier=tmap[rd]; break; } } }
-        if(tier){ var c=num(vals[tier]); if(c>0)payouts.push({name:nm,coins:c,tier:tier}); } });
-      var ok=true, total=0; payouts.forEach(function(p){ if(p.coins>0){ if(_credit(p.name,p.coins))total+=p.coins; else ok=false; } });
-      if(!ok)return; /* reintenta en el próximo scan */
-      lg.paid[key]=total; _ledgerSave(lg);
-    }catch(_){} }).catch(function(){}); }catch(_){} }
-
-  /* ── UI editable (pantalla s-admin-cash) ──────────────────────────── */
-  function _renderInto(host){ var st=_load(), h='';
-    h+='<div class="cash-top"><div class="cash-intro">Premios 🪙 por objetivo. Se suman <b>automáticamente</b> al Presupuesto del equipo humano cuando termina cada competición. Edita cualquier cifra (se guarda solo).</div>';
-    h+='<button class="cash-btn" onclick="window._cashScan&&window._cashScan()">🔄 Recalcular premios ahora</button></div>';
-    SCHEMA.forEach(function(c){ h+='<div class="cash-sec" style="border-color:'+c.color+'66;"><div class="cash-sec-hd" style="color:'+c.color+';">'+c.emoji+' '+esc(c.name)+'</div>';
-      c.objs.forEach(function(o){ var v=(st.vals[c.key]&&st.vals[c.key][o[0]]); if(v==null)v=o[2];
-        h+='<div class="cash-row"><span class="cash-lbl">'+esc(o[1])+'</span><span class="cash-val"><input class="cash-in" type="number" min="0" max="9999" data-comp="'+c.key+'" data-obj="'+o[0]+'" value="'+num(v)+'"><span class="cash-coin">🪙</span></span></div>'; });
-      h+='</div>'; });
-    h+='<div class="cash-sec" style="border-color:'+LIGA_MANUAL.color+'66;"><div class="cash-sec-hd" style="color:'+LIGA_MANUAL.color+';">'+LIGA_MANUAL.emoji+' '+esc(LIGA_MANUAL.name)+'</div>';
-    h+='<div class="cash-note">Se otorgan A MANO: pulsa 🎖 y elige el club humano ganador del dato.</div>';
-    LIGA_MANUAL.objs.forEach(function(o){ var v=(st.ligaManual&&st.ligaManual[o[0]]); if(v==null)v=o[2];
-      h+='<div class="cash-row"><span class="cash-lbl">'+esc(o[1])+'</span><span class="cash-val"><input class="cash-in" type="number" min="0" max="9999" data-lm="'+o[0]+'" value="'+num(v)+'"><span class="cash-coin">🪙</span><button class="cash-award" data-award="'+o[0]+'">🎖</button></span></div>'; });
-    h+='</div>';
-    host.innerHTML=h;
-    if(!host._cashWired){ host._cashWired=1;
-      host.addEventListener('input', function(e){ var t=e.target; if(!t||!t.classList||!t.classList.contains('cash-in'))return; var v=Math.max(0,parseInt(t.value,10)||0); var s=_load();
-        var lm=t.getAttribute('data-lm'); if(lm){ if(!s.ligaManual)s.ligaManual={}; s.ligaManual[lm]=v; }
-        else{ var cc=t.getAttribute('data-comp'), oo=t.getAttribute('data-obj'); if(cc&&oo){ if(!s.vals[cc])s.vals[cc]={}; s.vals[cc][oo]=v; } }
-        _localWriteAt=Date.now(); _saveDebounced(); });
-      host.addEventListener('click', function(e){ var b=e.target; if(b&&b.classList&&b.classList.contains('cash-award')) _openAward(b.getAttribute('data-award')); });
-    }
-  }
-  function _humanClubs(){ var out=[]; try{ var M=window._MISTERS_HUMANOS||[]; M.forEach(function(m){ if(m&&m.club)out.push(m.club); }); }catch(_){}
-    if(!out.length)out=['Liverpool','Arsenal','Real Madrid','Atlético Madrid','FC Barcelona','PSG']; return out; }
-  function _lmLabel(stat){ var f=null; LIGA_MANUAL.objs.forEach(function(o){ if(o[0]===stat)f=o[1]; }); return f||stat; }
-  function _toast(msg){ try{ if(typeof window._psFlashToast==='function'){ window._psFlashToast(msg,true); return; } }catch(_){} try{ alert(msg); }catch(_){} }
-  function _openAward(stat){ var st=_load(); var coins=num(st.ligaManual&&st.ligaManual[stat]); var clubs=_humanClubs();
-    var ov=document.getElementById('cash-award-ov'); if(!ov){ ov=document.createElement('div'); ov.id='cash-award-ov'; ov.className='cash-award-ov';
-      ov.onclick=function(e){ if(e.target===ov)ov.classList.remove('show'); }; document.body.appendChild(ov); }
-    var inner='<div class="cash-award-box"><div class="cash-award-t">🎖 Otorgar '+coins+' 🪙</div><div class="cash-award-s">'+esc(_lmLabel(stat))+'</div>';
-    clubs.forEach(function(c){ inner+='<button class="cash-award-club" data-club="'+esc(c)+'">'+esc(c)+'</button>'; });
-    inner+='<button class="cash-award-x">Cancelar</button></div>'; ov.innerHTML=inner;
-    var btns=ov.querySelectorAll('.cash-award-club'); for(var i=0;i<btns.length;i++){ (function(btn){ btn.onclick=function(){ var club=btn.getAttribute('data-club'); _credit(club,coins); ov.classList.remove('show'); _toast('+'+coins+' 🪙 → '+club); }; })(btns[i]); }
-    var x=ov.querySelector('.cash-award-x'); if(x)x.onclick=function(){ ov.classList.remove('show'); };
-    ov.classList.add('show');
-  }
-  window.adminRenderCash = function(){ var host=document.getElementById('cash-host'); if(!host)return; _renderInto(host); _hydrate(function(){ _renderInto(host); }); };
-
-  /* ── Boot + disparadores ──────────────────────────────────────────── */
-  window._CASH_OWNS_PRIZES = true;   /* gatea el pago legacy de torneos */
-  window._cashScan = scan;
-  function _boot(){
-    /* Hidrata SIEMPRE el ledger (server = fuente de verdad) ANTES del primer
-       scan: si en otro dispositivo ya se pagó una competición, ese pago no
-       debe repetirse aquí. Solo tras tener el ledger se permite acreditar. */
-    _ledgerHydrate(function(){ _hydrate(function(){ setTimeout(scan, 1400); }); });
-    setInterval(scan, 30000);
-    try{ document.addEventListener('visibilitychange', function(){ if(!document.hidden) setTimeout(scan,600); }); }catch(_){} }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_boot); else _boot();
 })();
 </script>
 
@@ -15247,7 +14797,7 @@ window._hdrCleanCache = function(){
           'munich-obj-state-v4':1,'munich-obj-state-v5':1,
           'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
           'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
-          'cash_rewards_v1':1,'cash_ledger_v1':1,'bayern_hud_overrides_v1':1
+          'bayern_hud_overrides_v1':1
         };
         var _KV_REGEX = /^(manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)|tour_(sct|pss|jg|asia|mundial|tx[1-8]|spv(10|[1-9])|sfn(10|[1-9])))_v1$/;
         var _KV_RECENCY = {
@@ -15256,7 +14806,7 @@ window._hdrCleanCache = function(){
           /* Recencia en el server (_KV_RECENCY_BLOB_KEYS): estampamos
              updatedAt=ahora para que el progreso importado gane entero. */
           'munich-obj-state-v4':1,'munich-obj-state-v5':1,
-          'cash_rewards_v1':1,'bayern_hud_overrides_v1':1
+          'bayern_hud_overrides_v1':1
         };
         /* competition_state: el cursor del día + pospuestos. El valor que
            viaja en competition_state es un JSON-STRING opaco (igual que lo
@@ -34171,16 +33721,10 @@ window._hdrCleanCache = function(){
   };
 
   /* Detecta si el torneo está completo (campeón decidido) y, si
-     procede, distribuye monedas a las cajas humanas. Usa una
-     guardia (`cfg._prizesPaid`) para evitar pagar dos veces. */
+     procede, distribuye monedas a las cajas humanas según el campo
+     `cfg.prizes` (editable por el admin en el editor del torneo). Usa
+     una guardia (`cfg._prizesPaid`) para evitar pagar dos veces. */
   function _tourMaybeCreditPrizes(tourId) {
-    /* El motor CASH (Panel Admin · 🪙) es la ÚNICA autoridad de premios
-       cuando está activo: acredita TODAS las competiciones (incluidos los
-       torneos de Verano / Mundialito / Selecciones) con su tabla editable
-       y su ledger idempotente. Sin este gate, los torneos se pagarían DOS
-       veces (legacy cfg.prizes + CASH). Se conserva el camino legacy para
-       compatibilidad si CASH no estuviera cargado. */
-    if (window._CASH_OWNS_PRIZES) return;
     var cfg = _tourLoadCachedSync(tourId);
     if (!cfg || cfg._prizesPaid) return;
     var humanPayouts = _tourComputeHumanPayouts(cfg);
@@ -34416,11 +33960,6 @@ window._hdrCleanCache = function(){
   /* Expuesto por si el HUD del Bayern (u otras cajas) quiere leer. */
   window._tourWalletGetAll = _walletGetAll;
   window._tourWalletCredit = _walletCredit;
-  /* Expuesto para el motor CASH (Panel Admin · 🪙): reutiliza el MISMO
-     cálculo de clasificación de torneos (liga / grupos) para resolver la
-     posición final de cada equipo humano sin duplicar la lógica. */
-  window._tourComputeStandings = _tourComputeStandings;
-  window._tourHubTeamName = _hubTeamName;
 
   /* Wrapper público: pinta INMEDIATAMENTE con cache + lanza fetch
      async para refrescar si el server tiene algo más nuevo. */

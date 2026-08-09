@@ -1121,22 +1121,6 @@
     return arr;
   }
 
-  /* Expuesto para el motor CASH (Panel Admin · 🪙): clasificación final +
-     bandera `complete` (todos los partidos del calendario jugados) para
-     acreditar los premios por posición 1-6 de la Superliga. */
-  window._cashSuperligaStandings = function(){
-    try{
-      var cal = ensureCalendar(); if(!cal) return null;
-      var results = loadResults();
-      var any = false, complete = true;
-      cal.schedule.forEach(function(round, idx){
-        var j = idx + 1;
-        round.forEach(function(m){ any = true; if(!results[_rKey(j, m[0], m[1])]) complete = false; });
-      });
-      return { rows: collectStandings(cal, results), complete: any && complete };
-    }catch(_){ return null; }
-  };
-
   function formHtml(form){
     var last = (form || []).slice(-5);
     if(!last.length) return '<span class="clas-dot pending" title="Sin resultados"></span>';
@@ -30772,11 +30756,12 @@ document.addEventListener('DOMContentLoaded', function() {
 }());
 </script>
 
-<!-- ══ RENDER FIABLE de las 3 cajas dinámicas del Panel Admin ══════════════
-     Stadium Hub (#stadium-list) · Ball Storage (#balls-list) · CASH (#cash-host).
+<!-- ══ RENDER FIABLE de las cajas dinámicas del Panel Admin ══════════════
+     Stadium Hub (#stadium-list) · Ball Storage (#balls-list) · Espacio del
+     navegador (#storage-host).
 
-     Bug (fotos usuario 2026-06-29, «pin 747 → Estadios / Balones / CASH»): al
-     abrir cualquiera de las tres pantallas la CABECERA salía pero la CAJA
+     Bug (fotos usuario 2026-06-29, «pin 747 → Estadios / Balones»): al
+     abrir cualquiera de las pantallas la CABECERA salía pero la CAJA
      quedaba VACÍA / oculta.
 
      Causa: el render de cada caja solo se disparaba por el `setTimeout(...,30)`
@@ -30784,11 +30769,10 @@ document.addEventListener('DOMContentLoaded', function() {
      stadiums/balls, por un go-wrap en el IIFE de arriba. Al llegar a la
      pantalla por el ROUTER SPA del bundle (recarga de la web, botón ATRÁS,
      restauración de la URL en `bootRouter`/`popstate` — que llaman a
-     `navigateWithRetry` SIN pasar por el onclick), ese setTimeout NUNCA corre,
-     y CASH ni siquiera tenía go-wrap. Las funciones `adminRenderStadiums` /
-     `adminRenderBalls` / `adminRenderCash` YA funcionan (renderizan ~21-29 KB
-     verificado); lo que faltaba era un DISPARO FIABLE en CADA activación de la
-     pantalla, venga de donde venga.
+     `navigateWithRetry` SIN pasar por el onclick), ese setTimeout NUNCA corre.
+     Las funciones `adminRenderStadiums` / `adminRenderBalls` YA funcionan
+     (renderizan ~21-29 KB verificado); lo que faltaba era un DISPARO FIABLE
+     en CADA activación de la pantalla, venga de donde venga.
 
      Fix — DOBLE DISPARO (observer + go-wrap), mismo patrón que las cajas de
      estadísticas (regla CLAUDE.md): (1) un MutationObserver por pantalla que
@@ -30802,7 +30786,6 @@ document.addEventListener('DOMContentLoaded', function() {
   var MAP = {
     's-admin-stadiums': 'adminRenderStadiums',
     's-admin-balls':    'adminRenderBalls',
-    's-admin-cash':     'adminRenderCash',
     's-admin-storage':  'adminRenderStorage'
   };
   /* Llama a la función de render con un breve reintento por si aún no se

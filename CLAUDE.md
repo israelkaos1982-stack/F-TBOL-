@@ -104,7 +104,104 @@ cableado una vez sobre `#lext-ov-squad`).
    VIGENTE — el rediseño iguala la EDICIÓN de los 4 campos + flags,
    no elimina la columna de stats reales (`.lext-pl2-stats`).
 
-## El 🖍 de un jugador YA CREADO en la plantilla de un club no hacía NADA visible — el panel de edición quedaba oculto por el modo de apertura (histórico, 2026-08-08 — ⚠️ SUPERSEDED por la sección de arriba)
+## `_tourSave` fallaba IDÉNTICO con WiFi y con datos móviles — `JSON.stringify(cfg)` se llamaba HASTA 5 VECES y podía reventar SÍNCRONO antes de tocar la red (obligatorio, 2026-08-09)
+
+**Bug reportado (usuario 2026-08-09, «Mundial 2032 · Grupo J», torneos
+`sfn1`/`sfn2`/`sct`)**: tras jugar Argentina 3-0 Jordania (acta completa,
+MVP, 3 goleadores registrados), la pantalla mostraba de forma repetida el
+banner `⚠️ No se pudo confirmar el guardado de "sfn1"/"sfn2"/"sct" en el
+servidor (red lenta o payload grande)…` en TRES torneos distintos, en
+momentos distintos. El usuario confirmó explícitamente: **"lo he probado
+con WiFi y con datos y sale el mismo mensaje"** — un fallo de red genuino
+casi nunca se reproduce idéntico en dos tipos de conexión distintos
+seguidos; esa señal apuntaba a un fallo DETERMINISTA, no de ancho de
+banda.
+
+### Causa raíz — hasta 5 `JSON.stringify(cfg)` por guardado, sin blindaje
+
+`window._tourSave` (fix previo del 2026-08-08, retry con backoff — nunca
+llegó a documentarse aquí) serializaba la cfg del torneo con
+`JSON.stringify` crudo en **5 puntos distintos de la MISMA llamada**: (1)
+para el guardado local (`_lsSetSafe`), (2) para estimar el tamaño del
+payload (escala el timeout), y (3) una vez por CADA uno de los 3
+reintentos de red (`JSON.stringify({value: cfg})` dentro del `fetch`).
+Si `cfg` contenía en ese momento una referencia **no serializable**
+(circular, una función, o un nodo DOM colado por error en cualquier
+punto del motor de simulación/render), `JSON.stringify` **revienta de
+forma SÍNCRONA** con un `TypeError` — **antes de que la petición llegue
+a tocar la red**. Como `cfg` no cambia entre los 3 reintentos, la
+excepción se repite EXACTAMENTE IGUAL en cada intento, y el resultado es
+indistinguible desde fuera de un fallo de red: el usuario ve el mismo
+aviso genérico, tanto con WiFi como con datos, porque en ningún caso se
+llegó a hacer una petición HTTP real.
+
+El aviso visible (`_gmCriticalNotice`) tampoco ayudaba a diagnosticar:
+mostraba siempre el mismo texto genérico "red lenta o payload grande"
+sin exponer el motivo real capturado en `_lastErr` (que sólo se logueaba
+por `console.warn`, invisible para un usuario en móvil sin devtools).
+
+### Fix
+
+- **`window._tourSafeStringify(obj)`** (nuevo, `misc_body_1.html`, justo
+  antes de `_tourSave`): serializa con un *replacer* que detecta ciclos
+  (`WeakSet`) y sustituye cualquier referencia circular, función o nodo
+  DOM por un marcador de texto (`'[circular]'`/`'[dom-node]'`) **en vez
+  de reventar**. **NUNCA lanza** — ni siquiera si el propio `try` con
+  replacer falla (caso límite, p. ej. `BigInt`), devuelve `'{}'` como
+  último recurso. El guardado del usuario ya NO puede perderse por un
+  dato no serializable colado en la cfg.
+- **UNA sola serialización por llamada**: `_tourSave` calcula
+  `_cfgJson` UNA vez con `_tourSafeStringify` y lo reutiliza para el
+  guardado local Y los 3 intentos de red (`_body = '{"value":' +
+  _cfgJson + '}'`) — antes se re-serializaba la cfg completa (puede
+  pesar varios cientos de KB) hasta 5 veces por guardado.
+- **Tamaño en BYTES reales** (`new Blob([_cfgJson]).size`, con fallback
+  a `.length`) en vez de `.length` de la cadena JS (cuenta unidades
+  UTF-16, no bytes — diverge con acentos/emoji del mismo modo que el
+  cómputo `len(payload.encode("utf-8"))` del servidor).
+- **Corte temprano si el payload ya supera 2 MB** (`_KV_MAX_BYTES` en
+  `app.py`): el servidor rechaza esto con `413` al instante — reintentar
+  3 veces con timeout escalado hasta 30 s cada una es tiempo y batería
+  tirados para un fallo que ya se sabe de antemano. Se muestra un aviso
+  ESPECÍFICO ("el torneo pesa X MB, no es un problema de conexión") en
+  vez del genérico, y no se llega a intentar la red.
+- **Diagnóstico real en el aviso**: `_lastStatus` (código HTTP de la
+  última respuesta) y el motivo (`_lastErr.error` del servidor, o
+  `_lastErr.name`/`.message` de la excepción JS — `AbortError` de
+  timeout, `TypeError` de stringify, `SyntaxError` de una respuesta no-
+  JSON de un proxy, etc.) se añaden al final del mensaje visible, para
+  que un pantallazo del banner baste para diagnosticar sin acceso a
+  consola.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_tourSave` (o cualquier guardado nuevo que suba
+   una cfg de torneo/liga grande) llame a `JSON.stringify` crudo más de
+   una vez por guardado, o sin pasar por un serializador que NUNCA
+   lance (`_tourSafeStringify` o equivalente). Una cfg con una
+   referencia no serializable debe seguir pudiéndose guardar (con el
+   dato problemático marcado), nunca bloquear el guardado entero.
+2. **PROHIBIDO** que un aviso de "no se pudo guardar" muestre SOLO el
+   texto genérico "red lenta o payload grande" sin el motivo real
+   (`_lastErr`/`_lastStatus`) cuando esté disponible. Un usuario en
+   móvil no tiene devtools — el detalle tiene que viajar en el propio
+   banner visible.
+3. **PROHIBIDO** reintentar contra el servidor cuando el payload YA se
+   sabe que supera el límite (`_KV_MAX_BYTES`, 2 MB): es un fallo
+   determinista, no transitorio — reintentar solo malgasta batería/datos
+   y mete red donde no la hay.
+4. Medir el tamaño de un payload que se compara contra un límite en
+   BYTES del servidor (`_KV_MAX_BYTES`) se hace con `Blob([...]).size`
+   (bytes UTF-8 reales), nunca con `.length` de la cadena JS (unidades
+   UTF-16 — diverge con acentos/emoji).
+5. Si un fallo de guardado se reproduce IDÉNTICO en dos tipos de
+   conexión distintos (WiFi y datos móviles) probados por el usuario,
+   esa es una señal fuerte de que el fallo es DETERMINISTA (nunca llega
+   a tocar la red) y no de ancho de banda — investigar primero el
+   código que corre ANTES del `fetch` (serialización, validaciones
+   síncronas) en vez de asumir que es la conexión.
+
+## El 🖍 de un jugador YA CREADO en la plantilla de un club no hacía NADA visible — el panel de edición quedaba oculto por el modo de apertura (histórico, 2026-08-08 — ⚠️ SUPERSEDED por la sección "La plantilla de CLUB se edita IN-LINE..." más arriba)
 
 **Bug reportado (usuario 2026-08-08, fotos: editor de plantilla de
 selección «Bélgica» con filas editables in-line vs. plantilla del

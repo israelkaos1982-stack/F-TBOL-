@@ -27039,6 +27039,30 @@ window._hdrCleanCache = function(){
           /* Server más viejo que el local → no pisar (preserva los
              cambios del usuario que aún no han subido al server). */
           if (srvUpd && localUpd && srvUpd <= localUpd) {
+            /* RE-EMPUJE (2026-08-08, refuerzo): si llegamos aquí es que
+               el guardado anterior de este torneo NUNCA llegó a
+               confirmarse en el servidor (los 3 intentos de `_tourSave`
+               se agotaron — payload grande + red lenta, caso real
+               reportado por el usuario con el aviso en pantalla). Sin
+               re-empuje, esta rama SOLO conservaba el local en la
+               sesión actual — la próxima vez que se abriera la pantalla
+               del torneo (`_tourRender`'s `_tourLoad` de fondo) volvía a
+               pasar por aquí, volvía a "no pisar", y así indefinidamente
+               sin que NADA reintentara subir al servidor. Reintentamos
+               aquí (con throttle de 20 s por sello local, para no
+               martillear el servidor en cada refresco de fondo) para
+               que el partido se autocure solo con reabrir la pantalla,
+               hasta que la conexión lo permita — tal como promete el
+               aviso de `_tourSave`. */
+            try {
+              window._tourRepushThrottle = window._tourRepushThrottle || {};
+              var _rpKey = id + '|' + localUpd;
+              var _rpNow = Date.now();
+              if (!window._tourRepushThrottle[_rpKey] || (_rpNow - window._tourRepushThrottle[_rpKey]) > 20000) {
+                window._tourRepushThrottle[_rpKey] = _rpNow;
+                if (typeof window._tourSave === 'function') window._tourSave(id, localCfg || cfg);
+              }
+            } catch(_){}
             return localCfg || cfg;
           }
           /* ANTI-CLOBBER DE RE-SORTEO (bug 2026-06-25, «Mundial 2032: el 80%
@@ -27185,6 +27209,47 @@ window._hdrCleanCache = function(){
   }
   window._tourScheduleStatsSync = _tourScheduleStatsSync;
 
+  /* Serialización ÚNICA y BLINDADA de la cfg de un torneo (obligatorio,
+     2026-08-09). NUNCA lanza — si `cfg` contiene una referencia circular,
+     una función, o un nodo DOM colado por error en algún punto del motor,
+     `JSON.stringify` normal REVIENTA de forma SÍNCRONA (TypeError), y como
+     antes se llamaba HASTA 5 VECES por guardado (estimación de tamaño +
+     guardado local + una vez por CADA uno de los 3 reintentos de red), la
+     excepción se repetía IDÉNTICA en cada intento — el guardado fallaba
+     exactamente igual con WiFi o con datos móviles, porque nunca llegaba a
+     tocar la red (bug reportado: "lo he probado con WiFi y con datos y sale
+     el mismo mensaje", en 3 torneos distintos — sfn1/sfn2/sct — el mismo
+     día). El replacer sustituye cualquier ciclo/función/nodo DOM por un
+     marcador de texto en vez de reventar, así el guardado SIEMPRE puede
+     completarse (con el dato problemático marcado, nunca perdido en
+     silencio). */
+  function _tourSafeStringify(obj){
+    var seen = (typeof WeakSet === 'function') ? new WeakSet() : null;
+    var sanitized = false;
+    var json;
+    try {
+      json = JSON.stringify(obj, function(k, v){
+        if (v && typeof v === 'object') {
+          if (seen) {
+            if (seen.has(v)) { sanitized = true; return '[circular]'; }
+            seen.add(v);
+          }
+          if (typeof Node === 'function' && v instanceof Node) { sanitized = true; return '[dom-node]'; }
+        }
+        if (typeof v === 'function') { sanitized = true; return undefined; }
+        return v;
+      });
+    } catch(_e) {
+      // Última red: si incluso con el replacer revienta (p.ej. BigInt),
+      // nunca dejamos que _tourSave lance por esto — el partido del
+      // usuario no puede perderse por un dato no serializable.
+      sanitized = true;
+      json = null;
+    }
+    if (typeof json !== 'string') { json = '{}'; sanitized = true; }
+    return { json: json, sanitized: sanitized };
+  }
+
   window._tourSave = async function(id, cfg){
     if (TOUR_IDS.indexOf(id) === -1) return false;
     cfg = cfg || {};
@@ -27213,11 +27278,35 @@ window._hdrCleanCache = function(){
        el sorteo no se pierde aunque la red falle o el server tarde.
        A prueba de cuota: si localStorage está lleno, `_lsSetSafe` libera
        datos reconstruibles y reintenta en vez de fallar callado (causa
-       raíz de "los partidos no se guardan", 2026-06-25). */
+       raíz de "los partidos no se guardan", 2026-06-25).
+       REFUERZO (2026-08-08): `_lsSetSafe` tiene un PESTILLO DE SESIÓN
+       (`window._lsQuotaExhausted`, obligatorio, ver su propia
+       documentación) que, una vez activado por CUALQUIER otro guardado
+       de la sesión (ligas, HUD, lo que sea), rechaza AL INSTANTE —sin
+       intentar `_freeAndRetry`— cualquier valor >64 KB. Un torneo de
+       Mundial 2032 avanzado supera esos 64 KB con facilidad (cada
+       partido de grupo simulado añade ~50-60 eventos "played" de
+       relleno, ver comentario del timeout escalado más abajo), así que
+       el guardado LOCAL de este torneo puede quedar descartado en
+       silencio para el resto de la sesión aunque el guardado en
+       SERVIDOR (más abajo) sí funcione. Registramos si falló para que
+       quede constancia — el guardado en servidor es quien de verdad
+       tiene que llegar en este caso (por eso el timeout escalado): si
+       llega, el próximo `_tourLoad` adopta esa copia del servidor
+       (más reciente que la local, que se quedó desactualizada) y el
+       partido se recupera solo, sin que el usuario tenga que hacer
+       nada. */
+    var _cfgSer = _tourSafeStringify(cfg);
+    var _cfgJson = _cfgSer.json;
+    if (_cfgSer.sanitized) {
+      try { console.warn('[_tourSave] cfg de "' + id + '" tenía una referencia no serializable (circular/función/nodo DOM) — sustituida para poder guardar.', cfg); } catch(_){}
+    }
+    var _localSaveOk = false;
     try {
-      var _cfgJson = JSON.stringify(cfg);
-      if (window._lsSetSafe) window._lsSetSafe(_key(id), _cfgJson);
-      else window._lsSetSafe(_key(id), _cfgJson);
+      _localSaveOk = !!window._lsSetSafe(_key(id), _cfgJson);
+      if (!_localSaveOk) {
+        try { console.warn('[_tourSave] guardado LOCAL descartado (posible pestillo de cuota) para ' + id + ' — depende del guardado en servidor.'); } catch(_){}
+      }
     } catch(_){}
     /* Refresca cache sincrónico para `_tourMuInfoData` / `muTourInfo`. */
     window._TOUR_CACHE = window._TOUR_CACHE || {};
@@ -27240,18 +27329,58 @@ window._hdrCleanCache = function(){
        "cuando borro datos y vuelvo a la web... el partido de Argentina
        borrado"). Mismo patrón de reintentos ya usado en otros guardados
        críticos de este proyecto (`_postClearRetry`, `persistSharedLigaState`). */
+    /* Timeout ESCALADO por tamaño del payload (2026-08-08, refuerzo):
+       un torneo de 48 selecciones (Mundial 2032) acumula, por CADA
+       partido de grupo simulado, ~50-60 eventos "played" de relleno
+       (uno por titular/suplente de AMBOS equipos — `genMatchEventsEnhanced`
+       en misc_body_2.html, necesarios para que el dashboard de stats
+       cuente PJ de jugadores sin evento explícito). Con 12 grupos × 6
+       partidos (72 solo en fase de grupos, más las rondas KO después),
+       el JSON completo del torneo puede llegar a varios cientos de KB
+       — y como CADA guardado sube la cfg COMPLETA (no solo el partido
+       nuevo), un timeout fijo de 8 s podía agotarse en una red móvil
+       floja subiendo un payload grande, aunque el partido en sí se
+       hubiera jugado y guardado bien en local. El síntoma: partidos
+       recientes de un torneo YA AVANZADO se "pierden" al recargar
+       mientras los partidos antiguos (guardados cuando el JSON aún era
+       pequeño) siguen bien — exactamente lo reportado (Mundial 2032,
+       Grupo J, Jornada 2). Escala ~1s por cada 20 KB (mínimo 8s, tope
+       30s) para dar margen real a payloads grandes sin alargar
+       innecesariamente el caso común (partidas sueltas, pocos KB). */
+    var _payloadLen = 0;
+    try { _payloadLen = (typeof Blob === 'function') ? new Blob([_cfgJson]).size : _cfgJson.length; } catch(_){ _payloadLen = _cfgJson.length; }
+    var _timeoutMs = Math.max(8000, Math.min(30000, 8000 + Math.floor(_payloadLen / 20000) * 1000));
+    /* CORTE TEMPRANO (2026-08-09): si el payload YA supera el límite de
+       2 MB del servidor (`_KV_MAX_BYTES`, app.py), éste lo rechaza con
+       413 al INSTANTE — reintentar 3 veces (hasta 30 s de timeout cada
+       una) es tiempo/batería tirados, y el aviso genérico de "red lenta"
+       es directamente FALSO en este caso (no es la red, es el tamaño).
+       Se avisa de forma específica y NO se intenta la red. */
+    if (_payloadLen > 2 * 1024 * 1024) {
+      var _mb = (_payloadLen / 1048576).toFixed(2);
+      try { console.warn('[_tourSave] cfg de "' + id + '" pesa ' + _mb + ' MB — supera el límite de 2 MB del servidor, no se envía.'); } catch(_){}
+      try {
+        if (typeof window._gmCriticalNotice === 'function') {
+          window._gmCriticalNotice('⚠️ El torneo "' + id + '" pesa ' + _mb + ' MB y supera el límite de 2 MB del servidor. Esto NO es un problema de conexión (con WiFi o datos daría el mismo resultado) — el guardado sigue en este dispositivo, pero hace falta recortar el histórico de ese torneo para poder subirlo.');
+        }
+      } catch(_){}
+      return false;
+    }
+    var _body = '{"value":' + _cfgJson + '}';
     var _lastErr = null;
+    var _lastStatus = null;
     for (var _try = 0; _try < 3; _try++) {
       try {
         var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
-        var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, 8000) : null;
+        var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, _timeoutMs) : null;
         var res = await fetch('/api/kv/' + _key(id), {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ value: cfg }),
+          body: _body,
           signal: ctl ? ctl.signal : undefined
         });
         if (to) clearTimeout(to);
+        _lastStatus = res.status;
         var j = await res.json();
         if (j && j.ok) return true;
         _lastErr = j;
@@ -27260,7 +27389,25 @@ window._hdrCleanCache = function(){
         await new Promise(function(resolve){ setTimeout(resolve, 1500 * (_try + 1)); });
       }
     }
-    try { console.warn('[_tourSave] POST agotó 3 intentos para ' + id, _lastErr); } catch(_){}
+    try { console.warn('[_tourSave] POST agotó 3 intentos para ' + id + ' (payload ' + _payloadLen + ' bytes, timeout ' + _timeoutMs + 'ms, último status ' + _lastStatus + ')', _lastErr); } catch(_){}
+    /* Aviso VISIBLE con el MOTIVO REAL (2026-08-09) — no solo "red lenta
+       o payload grande" a ciegas. Un usuario en móvil sin devtools no
+       tenía forma de saber SI de verdad era la red o un bug del propio
+       guardado; con el detalle en el propio banner, un pantallazo basta
+       para diagnosticar sin acceso a consola. */
+    var _detail = '';
+    try {
+      if (_lastErr && typeof _lastErr === 'object' && _lastErr.error) {
+        _detail = ' [servidor dice: "' + _lastErr.error + '"' + (_lastStatus ? (', HTTP ' + _lastStatus) : '') + ']';
+      } else if (_lastErr && _lastErr.name) {
+        _detail = ' [' + _lastErr.name + (_lastErr.message ? (': ' + _lastErr.message) : '') + ']';
+      }
+    } catch(_){}
+    try {
+      if (typeof window._gmCriticalNotice === 'function') {
+        window._gmCriticalNotice('⚠️ No se pudo confirmar el guardado de "' + id + '" en el servidor (red lenta o payload grande)' + _detail + '. El resultado SIGUE guardado en este dispositivo — no cierres/borres datos de este navegador hasta volver a tener buena conexión, para que el reintento automático pueda subirlo.');
+      }
+    } catch(_){}
     return false;
   };
 
@@ -45994,17 +46141,23 @@ window._hdrCleanCache = function(){
       +'ocupan espacio sin que nada pueda volver a mostrarlos. Esta\n'
       +'acción NO se puede deshacer.\n\n'
       +'¿Continuar?')) return;
-    _eurToast('⏳ Borrando ligas fusionadas del servidor…');
     /* Reintenta con backoff (mismo patrón que _postClearRetry /
        _eurBootFetchRetry): la operación es IDEMPOTENTE (borrar una fila
        ya borrada devuelve deleted_count:0 sin error), así que un
        reintento tras un fallo de red/cold-start de Railway es siempre
-       seguro — nunca duplica el borrado. Sin esto, un solo intento sin
-       reintentos (el bug original) fallaba con "Failed to fetch" en
-       cuanto la petición tardaba más de lo que Railway tarda en salir
-       del cold-start, dejando al admin sin ninguna forma de saber si
-       el borrado llegó a completarse o no. */
+       seguro — nunca duplica el borrado. MAX_TRIES=6 con backoff
+       2s/4s/8s/16s/32s/64s (~2 min de paciencia total): un solo intento
+       (el bug original) o solo 3 reintentos (~14s, insuficiente) fallaban
+       con "Failed to fetch" en cuanto el cold-start de Railway tardaba
+       más que eso — este mismo proyecto ya documenta que operaciones de
+       este tamaño "pueden tardar hasta 1-2 min" en frío. `_eurToast` se
+       re-dispara en cada intento (se auto-oculta a los 6s) para que el
+       admin vea que sigue en marcha, no una pantalla congelada. */
+    var MAX_TRIES = 6;
     function attempt(tries){
+      _eurToast(tries === 0
+        ? '⏳ Borrando ligas fusionadas del servidor… (puede tardar hasta 1-2 min si Railway está arrancando)'
+        : '⏳ Reintentando ('+tries+'/'+MAX_TRIES+')…');
       fetch('/api/admin/purge-dead-leagues', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -46017,17 +46170,17 @@ window._hdrCleanCache = function(){
             alert(n > 0
               ? ('✅ Borradas '+n+' filas del servidor (main + protected + snapshots de las 43 ligas fusionadas).\n\nYa no ocupan espacio en la base de datos.')
               : '✅ No había nada que borrar — ya estaban limpias (o esta es la 2ª vez que lo pulsas, es normal).');
-          } else if(tries < 3){
+          } else if(tries < MAX_TRIES){
             setTimeout(function(){ attempt(tries+1); }, Math.pow(2, tries+1) * 1000);
           } else {
-            (window._gmCriticalNotice || alert)('⚠️ El servidor no confirmó el borrado tras varios intentos. Verifica que tienes sesión admin activa y vuelve a intentarlo.');
+            (window._gmCriticalNotice || alert)('⚠️ El servidor no confirmó el borrado tras '+MAX_TRIES+' intentos (~2 min). Puede que Railway esté caído o reiniciando — espera un par de minutos y vuelve a pulsar el botón (es seguro repetirlo, nunca duplica el borrado).');
           }
         })
         .catch(function(e){
-          if(tries < 3){
+          if(tries < MAX_TRIES){
             setTimeout(function(){ attempt(tries+1); }, Math.pow(2, tries+1) * 1000);
           } else {
-            (window._gmCriticalNotice || alert)('⚠️ No se pudo contactar con el servidor tras varios intentos: ' + (e && e.message ? e.message : e));
+            (window._gmCriticalNotice || alert)('⚠️ No se pudo contactar con el servidor tras '+MAX_TRIES+' intentos (~2 min): ' + (e && e.message ? e.message : e) + '\n\nEspera un par de minutos y vuelve a pulsar el botón (es seguro repetirlo).');
           }
         });
     }

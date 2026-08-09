@@ -47203,6 +47203,52 @@ window._hdrCleanCache = function(){
 .lext-pl-role input{margin:0;accent-color:#f0c040;cursor:pointer;}
 .lext-pl-role:has(input:checked){background:rgba(240,192,64,.16);border-color:#f0c040;color:#f0c040;box-shadow:inset 0 0 10px rgba(240,192,64,.2);}
 .lext-pl-role-ico{font-size:14px;line-height:1;}
+/* Plantilla de CLUB — fila editable IN-LINE (dorsal · nombre · posición
+   · valor · flags · candado stats · borrar), mismo espíritu visual que
+   el editor de Selecciones (`#sel-pl-ov .pl-row`) — CLASES PROPIAS
+   (`lext-pl2-*`) para no colisionar con `.lext-sq-*` (usado también por
+   `#s-bayern-plantilla`, la plantilla de solo-lectura del hub humano). */
+#lext-ov-squad .lext-pl2-new-sec:empty{display:none;}
+#lext-ov-squad .lext-pl2-row{display:flex;align-items:center;gap:4px;flex-wrap:wrap;
+  margin-bottom:7px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);
+  border-radius:9px;padding:6px;}
+#lext-ov-squad .lext-pl2-fields{display:flex;align-items:center;gap:4px;flex:1 1 auto;
+  min-width:190px;flex-wrap:wrap;}
+#lext-ov-squad .lext-pl2-row input,#lext-ov-squad .lext-pl2-row select{background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:6px;
+  padding:6px 5px;font-family:Rajdhani,sans-serif;font-size:13px;box-sizing:border-box;}
+#lext-ov-squad .lext-pl2-row input:focus,#lext-ov-squad .lext-pl2-row select:focus{outline:none;border-color:rgba(110,200,255,.6);}
+#lext-ov-squad .lext-pl2-num{width:38px;flex:0 0 38px;text-align:center;}
+#lext-ov-squad .lext-pl2-name{flex:1;min-width:100px;}
+#lext-ov-squad .lext-pl2-pos{width:62px;flex:0 0 62px;}
+#lext-ov-squad .lext-pl2-pw{width:46px;flex:0 0 46px;text-align:center;}
+#lext-ov-squad .lext-pl2-flags{display:flex;gap:3px;flex:0 0 auto;}
+#lext-ov-squad .lext-pl2-flag{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);
+  color:rgba(255,255,255,.5);border-radius:6px;width:27px;height:26px;cursor:pointer;
+  font-size:12px;padding:0;}
+#lext-ov-squad .lext-pl2-flag.is-on{background:rgba(110,200,255,.28);border-color:rgba(110,200,255,.7);
+  color:#fff;font-weight:700;}
+#lext-ov-squad .lext-pl2-actions{display:flex;gap:3px;flex:0 0 auto;}
+#lext-ov-squad .lext-pl2-lock{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.18);
+  color:rgba(255,255,255,.5);border-radius:6px;width:27px;height:26px;cursor:pointer;font-size:12px;padding:0;}
+#lext-ov-squad .lext-pl2-lock.is-on{background:rgba(120,180,255,.24);border-color:rgba(120,180,255,.6);color:#78b4ff;}
+#lext-ov-squad .lext-pl2-del{background:rgba(255,80,80,.16);border:1px solid rgba(255,80,80,.4);
+  color:#ff9a9a;border-radius:6px;width:27px;height:26px;cursor:pointer;font-size:12px;padding:0;}
+#lext-ov-squad .lext-pl2-stats{flex-basis:100%;font-family:Rajdhani,sans-serif;font-size:11px;
+  color:rgba(255,255,255,.55);display:flex;align-items:center;flex-wrap:wrap;gap:3px 6px;
+  margin-top:4px;padding-top:4px;border-top:1px dashed rgba(255,255,255,.08);}
+#lext-ov-squad .lext-pl2-stats .lext-sq-cell{font-size:12px;display:inline;}
+#lext-ov-squad .lext-pl2-stats .lext-sq-cell.rating{padding:1px 5px;}
+#lext-ov-squad .lext-pl2-injury{font-size:10px;font-family:Oswald,sans-serif;font-weight:700;
+  background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;
+  border-radius:4px;padding:2px 5px;white-space:nowrap;flex:0 0 auto;}
+#lext-ov-squad .lext-pl2-foot{display:flex;gap:8px;margin-top:8px;}
+#lext-ov-squad .lext-pl2-add-btn{flex:1;background:rgba(110,200,255,.16);border:1px solid rgba(110,200,255,.45);
+  color:#bfe4ff;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1px;
+  font-size:12px;cursor:pointer;width:100%;}
+#lext-ov-squad .lext-pl2-save-btn{flex:1;background:linear-gradient(90deg,#1ea14a,#16863c);color:#fff;
+  border:none;border-radius:8px;padding:10px;font-family:Oswald,sans-serif;letter-spacing:1px;
+  font-size:12px;font-weight:700;cursor:pointer;width:100%;}
 </style>
 
 <div class="lext-wrap">
@@ -47700,48 +47746,16 @@ https://api.sofascore.app/api/v1/team/44/image
       </div>
     </details>
 
-    <details class="lext-details" id="lext-pl-details" style="display:none;">
-      <summary id="lext-pl-summary">➕ Añadir jugador individual</summary>
-      <label class="lext-label">Nombre del jugador</label>
-      <input class="lext-input" id="lext-pl-name" placeholder="Ej. Vinicius Jr." />
-      <label class="lext-label">Dorsal · opcional, autocalculado si lo dejas vacío</label>
-      <input class="lext-input" id="lext-pl-num" type="number" min="1" max="99" placeholder="Ej. 9" />
-      <label class="lext-label">Posición</label>
-      <!-- Botones en vez de <select> nativo: en móvil el select se
-           quedaba clavado en "Portero" y no dejaba elegir (foto
-           usuario 2026-05-17). El valor vive en el hidden #lext-pl-pos
-           para no tocar lextSavePlayer/lextEditPlayer (siguen leyendo
-           .value). Default MED (lo más común al añadir). -->
-      <input type="hidden" id="lext-pl-pos" value="MED" />
-      <div class="lext-posseg" id="lext-pl-posseg">
-        <button type="button" data-pos="POR" onclick="window.lextSetPos('POR')">Portero</button>
-        <button type="button" data-pos="DEF" onclick="window.lextSetPos('DEF')">Defensa</button>
-        <button type="button" data-pos="MED" onclick="window.lextSetPos('MED')">Medio</button>
-        <button type="button" data-pos="DEL" onclick="window.lextSetPos('DEL')">Delantero</button>
-      </div>
-      <label class="lext-label">🛡 Nivel / Poder (1-99)</label>
-      <input class="lext-input" id="lext-pl-power" type="number" min="1" max="99" value="75" />
-      <label class="lext-label">Roles especiales</label>
-      <div class="lext-pl-roles">
-        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-cap"/><span class="lext-pl-role-ico">©</span><span>Capitán</span></label>
-        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-fk"/><span class="lext-pl-role-ico">🎯</span><span>Lanza faltas</span></label>
-        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-pk"/><span class="lext-pl-role-ico">🥅</span><span>Lanza penaltis</span></label>
-        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-star"/><span class="lext-pl-role-ico">⭐</span><span>Estrella</span></label>
-        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-scorer"/><span class="lext-pl-role-ico">⚾</span><span>Goleador nato</span></label>
-        <label class="lext-pl-role"><input type="checkbox" id="lext-pl-scorer-pro"/><span class="lext-pl-role-ico">🏀</span><span>Goleador estrella</span></label>
-      </div>
-      <div class="lext-sub">
-        Solo <b>el capitán</b> es único por equipo. <b>F</b>, <b>P</b>, <b>⭐</b>, <b>⚾</b> y <b>🏀</b> pueden activarse en varios jugadores a la vez.
-        <br>Efecto de cada rol en la simulación:
-        <br>· <b>🏀 Goleador estrella</b> — prioridad MÁXIMA, ×3.0 en probabilidad de gol (marca ≈48% de los goles del equipo).
-        <br>· <b>⚾ Goleador nato</b> — ×1.8 en probabilidad de gol (marca ≈30% de los goles del equipo).
-        <br><span style="opacity:.75;">⚠️ 🏀 y ⚾ NO se acumulan: si marcas 🏀, el ⚾ se ignora.</span>
-        <br>· <b>P</b> / <b>F</b> — prioridad ALTA, el jugador marcado tira TODOS los penaltis / faltas (suma fija).
-        <br>· <b>⭐ Estrella</b> — prioridad MEDIA, solo empuja la elección de MVP del partido, no cambia el resultado.
-        <br>· <b>C Capitán</b> — soporte invisible, +5% al poder del equipo en la sim (mejor resultado global).
-      </div>
-
-      <label class="lext-pl-role" style="width:100%;margin-top:10px;">
+    <!-- Corrección de estadísticas de UN jugador (🔒 por fila). El
+         nombre/dorsal/posición/valor/roles se editan DIRECTAMENTE en
+         cada fila de la lista (igual que el editor de Selecciones,
+         `#sel-pl-ov .pl-row`) — este panel solo cubre la corrección
+         manual de estadísticas reales, que no tiene equivalente en
+         Selecciones. -->
+    <details class="lext-details" id="lext-pl-stats-ov-details" style="display:none;">
+      <summary id="lext-pl-stats-ov-summary">🔒 Corregir estadísticas de un jugador</summary>
+      <div class="lext-sub" id="lext-pl-stats-ov-who" style="margin:2px 0 8px;"></div>
+      <label class="lext-pl-role" style="width:100%;">
         <input type="checkbox" id="lext-pl-stats-ov-toggle" onchange="window._lextToggleStatsOvUI()"/>
         <span class="lext-pl-role-ico">🔒</span><span>Corregir estadísticas a mano</span>
       </label>
@@ -47763,15 +47777,21 @@ https://api.sofascore.app/api/v1/team/44/image
         </div>
         <div class="lext-sub">Estos números SUSTITUYEN al cálculo automático (suma de los eventos reales de todas las competiciones oficiales) SOLO para este jugador, hasta que desmarques la casilla de arriba.</div>
       </div>
-
       <div class="lext-btn-row">
-        <button class="lext-btn green" id="lext-pl-save-btn" onclick="lextSavePlayer()">💾 Añadir jugador</button>
-        <button class="lext-btn" id="lext-pl-cancel-btn" onclick="lextCancelEditPlayer()" style="display:none;">✕ Cancelar</button>
+        <button class="lext-btn green" id="lext-pl-stats-ov-save-btn" onclick="pG(window.lextSavePlayerStatsOverride)">💾 Guardar corrección</button>
+        <button class="lext-btn" onclick="window.lextCancelEditPlayerStats()">✕ Cancelar</button>
       </div>
     </details>
 
     <div class="lext-sub" style="margin-top:14px;">PLANTILLA</div>
+    <div class="lext-sub" style="margin-bottom:4px;">Edita dorsal · nombre · posición · valor directamente en cada fila (igual que el editor de Selecciones). Pulsa 💾 Guardar cambios para aplicarlos.</div>
     <div class="lext-list" id="lext-squad-list"></div>
+    <div class="lext-pl2-foot" id="lext-pl2-add-wrap" style="display:none;">
+      <button type="button" class="lext-pl2-add-btn" onclick="window.lextSq2AddRow()">➕ Añadir jugador</button>
+    </div>
+    <div class="lext-pl2-foot">
+      <button type="button" class="lext-pl2-save-btn" id="lext-pl2-save-btn" onclick="pG(window.lextSq2SaveAll)">💾 Guardar cambios</button>
+    </div>
   </div>
 </div>
 
@@ -55223,26 +55243,31 @@ https://api.sofascore.app/api/v1/team/44/image
     if(title){
       title.innerHTML = '🛡 <span data-team-power="'+tp+'" data-team-power-tone="'+tTone+'">'+t.name+'</span>';
     }
-    var plNameEl = document.getElementById('lext-pl-name');
-    if (plNameEl) plNameEl.value = '';
-    var plPowerEl = document.getElementById('lext-pl-power');
-    if (plPowerEl) plPowerEl.value = '75';
-    /* Reset del selector de posición (botones) + flag 🏀 al abrir. */
-    try { if (typeof window.lextSetPos === 'function') window.lextSetPos('MED'); } catch(_){}
-    var _plPro = document.getElementById('lext-pl-scorer-pro');
-    if (_plPro) _plPro.checked = false;
+    /* Cierra cualquier corrección de estadísticas que hubiera quedado
+       abierta de una visita anterior — nunca debe sobrevivir a un
+       cambio de equipo (editaría al jugador equivocado). */
+    _statsOvEditingId = null;
+    var _statsOvDet = document.getElementById('lext-pl-stats-ov-details');
+    if (_statsOvDet) { _statsOvDet.open = false; _statsOvDet.style.display = 'none'; }
+    /* Limpia cualquier fila "nueva, sin guardar" que hubiera quedado de
+       la plantilla anterior — cada apertura empieza en limpio. */
+    var _newBody = document.getElementById('lext-pl2-new-body');
+    if (_newBody) _newBody.innerHTML = '';
 
     /* Cabecera de stats del equipo en la competición actual + niveles
        4-ejes auto-derivados. */
     try { _lextRenderSquadStatsHeader(t); } catch(_){}
 
     /* Modo editable (🖍 Edit → 🛡): mostrar Pegar plantilla y Añadir
-       jugador individual. Modo lectura (clasificación): mantenerlos
-       ocultos. Al volver a abrir desde el otro flujo se vuelve a
-       sobrescribir, así que no quedan restos. */
+       jugador NUEVO. Modo lectura (clasificación): mantenerlos ocultos
+       — pero editar dorsal/nombre/posición/valor/flags de un jugador
+       YA CREADO, directamente en su fila, funciona SIEMPRE (en
+       cualquier modo), igual que 💾 Guardar cambios. Al volver a abrir
+       desde el otro flujo se vuelve a sobrescribir, así que no quedan
+       restos. */
     var _editable = !!opts.editable;
     var _pasteEl = document.getElementById('lext-squad-paste-details');
-    var _addEl   = document.getElementById('lext-pl-details');
+    var _addEl   = document.getElementById('lext-pl2-add-wrap');
     if (_pasteEl) _pasteEl.style.display = _editable ? '' : 'none';
     if (_addEl)   _addEl.style.display   = _editable ? '' : 'none';
 
@@ -55682,6 +55707,346 @@ https://api.sofascore.app/api/v1/team/44/image
     return '<span class="lext-sq-cell '+(cls||'')+z+'">'+n+'</span>';
   }
 
+  /* ════════════════════════════════════════════════════════════════
+     Plantilla de CLUB — edición IN-LINE por fila (obligatorio, 2026-08-09)
+     ════════════════════════════════════════════════════════════════
+     Petición usuario: la edición de la plantilla de un CLUB (Resto de
+     Ligas / Liga EA Sports) debe funcionar IGUAL que la de Selecciones
+     (`selecciones_squad_v1`, `_plRowHtml`/`_plCollect` más abajo en
+     este mismo archivo): dorsal/nombre/posición/valor editables
+     DIRECTAMENTE en la fila, sin pasar por un panel-formulario aparte.
+     Nada se persiste hasta pulsar 💾 Guardar cambios (igual que el
+     ✓ Hecho de Selecciones) — así ninguna acción intermedia (marcar un
+     flag, borrar otra fila) puede perder lo que el admin ya escribió
+     en otro campo de OTRA fila.
+     ════════════════════════════════════════════════════════════════ */
+  var _lextPl2Flags = [
+    {k:'captain',   e:'C', t:'Capitán (×1.05 al valor del equipo)'},
+    {k:'penalty',   e:'P', t:'Lanzador de penaltis'},
+    {k:'freeKick',  e:'F', t:'Lanzador de faltas'},
+    {k:'elite',     e:'⭐',t:'Elite / estrella — solo premios (MVP)'},
+    {k:'natGoal',   e:'⚾',t:'Goleador nato (~30% de los goles)'},
+    {k:'natGoalPro',e:'🏀',t:'Goleador estrella (~48% de los goles)'}
+  ];
+  function _lextPl2Esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  /* Fila editable de un jugador de club. `disp` = stats de DISPLAY (ver
+     `_DISP` en `renderSquadList`; se pasa `p`/`null` para una fila
+     NUEVA sin guardar todavía). `team` = equipo (para el badge de
+     lesión; se omite en una fila nueva). */
+  function _lextPl2RowHtml(p, isGK, disp, team){
+    p = p || {};
+    var pid = p.id || '';
+    var d = disp || p;
+    var flagsHtml = _lextPl2Flags.map(function(f){
+      return '<button type="button" class="lext-pl2-flag'+(p[f.k]?' is-on':'')+'" data-flag="'+f.k+'" title="'+_lextPl2Esc(f.t)+'">'+f.e+'</button>';
+    }).join('');
+    var pos = p.pos || 'MED';
+    var posOpts = ['POR','DEF','MED','DEL'].map(function(o){
+      return '<option value="'+o+'"'+(pos===o?' selected':'')+'>'+o+'</option>';
+    }).join('');
+    function v(x){ return (x!=null && x!=='') ? _lextPl2Esc(x) : ''; }
+
+    /* Badge de lesión: SOLO para clubes HUMANOS canónicos (mismo gate
+       que ya tenía la fila anterior — CLAUDE.md 2026-07-06, «EC
+       Bahía»: los rosters genéricos IA repiten nombre entre decenas de
+       equipos y no deben heredar lesiones ajenas). */
+    var injuryBadge = '';
+    if (team && window._isHumanClubCanonico && window._isHumanClubCanonico(team.name)) {
+      var _les = (window.LESION_STORE || {})[p.name];
+      if (_les && _les.partidos > 0) {
+        var _lesIco = _les.gradoEmoji || '🩹';
+        var _lesPart = Math.max(0, parseInt(_les.partidos) || 0);
+        var _lesDesc = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _lesPart + ' partido(s) restante(s)';
+        injuryBadge = '<span class="lext-pl2-injury" title="'+_lesDesc.replace(/"/g,'&quot;')+'">'+_lesIco+' '+_lesPart+'P</span>';
+      }
+    }
+
+    /* Línea de stats de solo-lectura (PJ/goles/tarjetas/valoración),
+       mismo cálculo que la fila anterior — reusa `_DISP`/`fmtCell`/
+       `computePlayerRating`. Una fila NUEVA sin guardar (todo a 0) se
+       muestra igual, sin más drama. */
+    var _pRate = (d === p) ? p : Object.assign({}, p, d);
+    var rating = computePlayerRating(_pRate);
+    var rStr = rating>0 ? rating.toFixed(2) : '0.00';
+    var rCls = 'rating '+ratingClass(rating);
+    var statsHtml;
+    if (isGK) {
+      statsHtml = 'PJ '+fmtCell(d.pj,'')
+        + ' · 🧤 '+fmtCell(d.imbat,'imbat')
+        + ' · 🖐 '+fmtCell(d.penSaved,'psave')
+        + ' · ⭐ '+fmtCell(d.mvp,'mvp')
+        + ' · 🟨 '+fmtCell(d.ta,'ta')
+        + ' · 🟥 '+fmtCell(d.tr,'tr')
+        + ' · 📈 <span class="lext-sq-cell '+rCls+'">'+rStr+'</span>';
+    } else {
+      statsHtml = 'PJ '+fmtCell(d.pj,'')
+        + ' · ⚽ '+fmtCell(d.gol,'gol')
+        + ' · 🥅 '+fmtCell(d.pen,'pen')
+        + ' · 🎯 '+fmtCell(d.fk,'fk')
+        + ' · ⭐ '+fmtCell(d.mvp,'mvp')
+        + ' · 🟨 '+fmtCell(d.ta,'ta')
+        + ' · 🟥 '+fmtCell(d.tr,'tr')
+        + ' · 📈 <span class="lext-sq-cell '+rCls+'">'+rStr+'</span>';
+    }
+
+    var lockBtn = pid
+      ? '<button type="button" class="lext-pl2-lock'+(p.statsOverride?' is-on':'')+'" title="🔒 Corregir estadísticas a mano · requiere PIN 747" onclick="pG(function(){window.lextEditPlayerStats(\''+_lextPl2Esc(pid)+'\')})">🔒</button>'
+      : '';
+
+    return '<div class="lext-pl2-row" data-id="'+_lextPl2Esc(pid)+'">'
+      + '<div class="lext-pl2-fields">'
+      +   '<input class="lext-pl2-num" type="number" min="0" max="99" placeholder="#" value="'+v(p.num)+'">'
+      +   '<input class="lext-pl2-name" type="text" placeholder="Nombre del jugador" value="'+_lextPl2Esc(p.name||'')+'">'
+      +   injuryBadge
+      +   '<select class="lext-pl2-pos">'+posOpts+'</select>'
+      +   '<input class="lext-pl2-pw" type="number" min="1" max="99" placeholder="VAL" title="Valor del jugador" value="'+v(p.power)+'">'
+      + '</div>'
+      + '<div class="lext-pl2-flags">'+flagsHtml+'</div>'
+      + '<div class="lext-pl2-actions">'+lockBtn
+      +   '<button type="button" class="lext-pl2-del" title="Quitar de la lista (no se borra hasta 💾 Guardar cambios)">🗑</button>'
+      + '</div>'
+      + '<div class="lext-pl2-stats">'+statsHtml+'</div>'
+      + '</div>';
+  }
+
+  /* Delegado ÚNICO (se cablea una sola vez) para los flags/borrar de
+     las filas — nunca persiste nada por sí solo, solo cambia el DOM;
+     el guardado real lo hace 💾 Guardar cambios / 🔒 Guardar corrección
+     (ver `_lextSq2Persist`). Así ninguna fila a medio editar en OTRA
+     posición de la lista se pierde por marcar un flag o borrar otra
+     fila — al contrario que el flujo viejo (`lextTogglePlayerFlag`/
+     `lextDeletePlayer`), que persistía Y RE-PINTABA la lista entera en
+     cada click, perdiendo cualquier campo que el admin tuviera a medio
+     escribir en otra fila. */
+  function _lextPl2WireDelegated(){
+    if (window._lextPl2Wired) return;
+    window._lextPl2Wired = true;
+    var ov = document.getElementById('lext-ov-squad');
+    if (!ov) return;
+    ov.addEventListener('click', function(e){
+      var t0 = e.target;
+      if (!t0 || !t0.closest) return;
+      var fl = t0.closest('.lext-pl2-flag');
+      if (fl) {
+        var on = !fl.classList.contains('is-on');
+        fl.classList.toggle('is-on', on);
+        if (on) {
+          var fk = fl.getAttribute('data-flag');
+          /* ⚾ y 🏀 no se acumulan (regla CLAUDE.md). */
+          if (fk === 'natGoal' || fk === 'natGoalPro') {
+            var other = (fk === 'natGoal') ? 'natGoalPro' : 'natGoal';
+            var row = fl.closest('.lext-pl2-row');
+            var ob = row && row.querySelector('.lext-pl2-flag[data-flag="'+other+'"]');
+            if (ob) ob.classList.remove('is-on');
+          }
+          /* El capitán es único por equipo. */
+          if (fk === 'captain') {
+            var list = document.querySelectorAll('#lext-squad-list .lext-pl2-flag[data-flag="captain"]');
+            list.forEach(function(b){ if (b !== fl) b.classList.remove('is-on'); });
+          }
+        }
+        return;
+      }
+      var del = t0.closest('.lext-pl2-del');
+      if (del) {
+        var row2 = del.closest('.lext-pl2-row');
+        if (row2 && row2.parentNode) row2.parentNode.removeChild(row2);
+        return;
+      }
+    });
+  }
+
+  /* Lee TODAS las filas visibles de `#lext-squad-list` (posiciones +
+     las nuevas sin guardar) y construye el array `players[]` final —
+     mismo espíritu que `_plCollect` de Selecciones. Una fila sin
+     nombre se descarta (permite "vaciar" el nombre para quitar a un
+     jugador sin pasar por 🗑, igual que Selecciones). Los campos que
+     esta vista NO edita (pj/gol/.../statsOverride) se conservan del
+     jugador original por id. */
+  function _lextSq2Collect(t){
+    var body = document.getElementById('lext-squad-list');
+    var origById = {};
+    (t.players||[]).forEach(function(p){ if (p && p.id) origById[p.id] = p; });
+    var out = [];
+    if (!body) return t.players || [];
+    body.querySelectorAll('.lext-pl2-row').forEach(function(row){
+      var pid = row.getAttribute('data-id') || '';
+      var orig = origById[pid] || {};
+      var nm = String(((row.querySelector('.lext-pl2-name')||{}).value)||'').trim();
+      if (!nm) return;
+      var numRaw = (row.querySelector('.lext-pl2-num')||{}).value;
+      var num = numRaw ? Math.max(0, Math.min(99, parseInt(numRaw,10)||0)) : 0;
+      var pw = parseInt((row.querySelector('.lext-pl2-pw')||{}).value, 10);
+      if (!isFinite(pw)) pw = Number(orig.power) || 75;
+      pw = Math.max(1, Math.min(99, pw));
+      var pos = ((row.querySelector('.lext-pl2-pos')||{}).value) || orig.pos || 'MED';
+      var p = {
+        id: pid || ('p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
+        name: nm, num: num, pos: pos, power: pw,
+        pj: orig.pj||0, gol: orig.gol||0, pen: orig.pen||0, fk: orig.fk||0, mvp: orig.mvp||0,
+        ta: orig.ta||0, tr: orig.tr||0, imbat: orig.imbat||0, penSaved: orig.penSaved||0
+      };
+      if (orig.statsOverride) p.statsOverride = orig.statsOverride;
+      row.querySelectorAll('.lext-pl2-flag').forEach(function(b){
+        p[b.getAttribute('data-flag')] = b.classList.contains('is-on');
+      });
+      if (p.natGoalPro) p.natGoal = false;
+      out.push(p);
+    });
+    // Capitán único por equipo (defensivo, por si el DOM llegara con 2).
+    var capSeen = false;
+    out.forEach(function(p){ if (p.captain) { if (capSeen) p.captain = false; else capSeen = true; } });
+    return out;
+  }
+
+  /* Persistencia ÚNICA de la plantilla de club: recolecta TODAS las
+     filas del DOM (`_lextSq2Collect`), aplica `mutateFn` (usado por la
+     corrección de estadísticas para tocar SOLO ese jugador tras
+     recolectar el resto) y guarda. Devuelve `false` sin tocar nada si
+     no hay equipo activo. */
+  function _lextSq2Persist(mutateFn){
+    if (!CURRENT_SQUAD_TEAM) {
+      alert('⚠️ No hay equipo activo. Cierra y vuelve a abrir la plantilla.');
+      return false;
+    }
+    var data = loadData(CURRENT_KEY);
+    var fb = '';
+    try { var e0 = document.getElementById('lext-ov-squad-title'); if (e0) fb = (e0.textContent||'').replace(/🛡/g,'').trim(); } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, fb);
+    if (!t) {
+      alert('⚠️ No encuentro este equipo en la liga actual. Abre 🖍 Edit y guárdalo antes de editar jugadores.');
+      return false;
+    }
+    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
+    t.players = _lextSq2Collect(t);
+    if (typeof mutateFn === 'function') { try { mutateFn(t); } catch(_){} }
+    t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
+    saveData(CURRENT_KEY, data);
+    renderSquadList();
+    renderTeamsList();
+    renderTable();
+    if (typeof window.applyEngineOverrides === 'function') {
+      try { window.applyEngineOverrides(); } catch(_){}
+    }
+    return true;
+  }
+
+  /* 💾 Guardar cambios — persiste TODAS las filas (dorsal/nombre/
+     posición/valor/flags) tal como están en el DOM ahora mismo.
+     Funciona en CUALQUIER modo de apertura de la plantilla (lectura o
+     edición) — editar un jugador ya creado nunca debe depender de
+     cómo se llegó hasta él (regla CLAUDE.md, bug «no me deja editar a
+     Julián Álvarez»). */
+  window.lextSq2SaveAll = function(){
+    var ok = _lextSq2Persist(null);
+    if (ok) {
+      var btn = document.getElementById('lext-pl2-save-btn');
+      if (btn) {
+        var orig = btn.textContent;
+        btn.textContent = '✓ Guardado';
+        setTimeout(function(){ btn.textContent = orig; }, 1200);
+      }
+    }
+  };
+
+  /* ➕ Añadir jugador — inserta una fila en blanco editable, igual que
+     el ➕ Añadir de Selecciones. No persiste nada por sí sola: hace
+     falta 💾 Guardar cambios. */
+  window.lextSq2AddRow = function(){
+    var host = document.getElementById('lext-pl2-new-body');
+    if (!host) return;
+    host.insertAdjacentHTML('beforeend', _lextPl2RowHtml({id:'', pos:'MED', power:75, pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0}, false, null, null));
+    var rows = host.querySelectorAll('.lext-pl2-row');
+    var last = rows[rows.length-1];
+    if (last) { var ni = last.querySelector('.lext-pl2-name'); if (ni) ni.focus(); }
+  };
+
+  /* ── 🔒 Corrección manual de estadísticas de UN jugador ──
+     Único remanente del antiguo panel-formulario: el resto de campos
+     (nombre/dorsal/posición/valor/flags) se edita en la propia fila.
+     Guarda con el MISMO `_lextSq2Persist` (recolecta primero todas las
+     filas, así no pisa una edición a medio escribir en otra fila). */
+  var _statsOvEditingId = null;
+
+  window.lextEditPlayerStats = function(pid){
+    if (!pid) return;
+    var data = loadData(CURRENT_KEY);
+    var fb = '';
+    try { var e0 = document.getElementById('lext-ov-squad-title'); if (e0) fb = (e0.textContent||'').replace(/🛡/g,'').trim(); } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, fb);
+    if (!t) return;
+    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
+    var target = (t.players||[]).filter(function(p){ return p.id === pid; })[0];
+    if (!target) return;
+    _statsOvEditingId = pid;
+    var who = document.getElementById('lext-pl-stats-ov-who');
+    if (who) who.textContent = '🖍 Editando: ' + (target.name || '?');
+    var _ovBase = target.statsOverride || null;
+    if (!_ovBase) {
+      try {
+        var _comps = (typeof window.CURRENT_SQUAD_COMPETITIONS !== 'undefined' && window.CURRENT_SQUAD_COMPETITIONS)
+          ? window.CURRENT_SQUAD_COMPETITIONS : ['liga','copa'];
+        if (typeof window._lextDomesticAllComps === 'function') _comps = window._lextDomesticAllComps(_comps);
+        var _real = (typeof window._lextComputeRealStats === 'function')
+          ? window._lextComputeRealStats(t, data, { competitions: _comps })
+          : { teamPJ: 0, liveStats: {} };
+        _ovBase = (typeof window._lextHydratePlayerStats === 'function')
+          ? window._lextHydratePlayerStats(t, target, _real) : null;
+      } catch(_){}
+    }
+    var _ovToggle = document.getElementById('lext-pl-stats-ov-toggle');
+    if (_ovToggle) _ovToggle.checked = !!target.statsOverride;
+    var _ovIds = {pj:'lext-pl-ov-pj', gol:'lext-pl-ov-gol', pen:'lext-pl-ov-pen', fk:'lext-pl-ov-fk',
+      mvp:'lext-pl-ov-mvp', ta:'lext-pl-ov-ta', tr:'lext-pl-ov-tr', imbat:'lext-pl-ov-imbat', penSaved:'lext-pl-ov-psave'};
+    Object.keys(_ovIds).forEach(function(k){
+      var el = document.getElementById(_ovIds[k]);
+      if (el) el.value = String((_ovBase && Number(_ovBase[k])) || 0);
+    });
+    try { window._lextToggleStatsOvUI(); } catch(_){}
+    var det = document.getElementById('lext-pl-stats-ov-details');
+    if (det) {
+      det.style.display = '';
+      det.open = true;
+      if (typeof det.scrollIntoView === 'function') {
+        try { det.scrollIntoView({behavior:'smooth', block:'start'}); } catch(_){}
+      }
+    }
+  };
+
+  window.lextCancelEditPlayerStats = function(){
+    _statsOvEditingId = null;
+    var det = document.getElementById('lext-pl-stats-ov-details');
+    if (det) det.open = false;
+  };
+
+  window.lextSavePlayerStatsOverride = function(){
+    if (!_statsOvEditingId) { window.lextCancelEditPlayerStats(); return; }
+    var pid = _statsOvEditingId;
+    var toggle = document.getElementById('lext-pl-stats-ov-toggle');
+    var ovNum = function(id){ var el = document.getElementById(id); var n = parseInt(el && el.value, 10); return isFinite(n) && n >= 0 ? n : 0; };
+    var statsOv = null;
+    if (toggle && toggle.checked) {
+      statsOv = {
+        pj:       ovNum('lext-pl-ov-pj'),
+        gol:      ovNum('lext-pl-ov-gol'),
+        pen:      ovNum('lext-pl-ov-pen'),
+        fk:       ovNum('lext-pl-ov-fk'),
+        mvp:      ovNum('lext-pl-ov-mvp'),
+        ta:       ovNum('lext-pl-ov-ta'),
+        tr:       ovNum('lext-pl-ov-tr'),
+        imbat:    ovNum('lext-pl-ov-imbat'),
+        penSaved: ovNum('lext-pl-ov-psave')
+      };
+    }
+    var ok = _lextSq2Persist(function(t){
+      var target = (t.players||[]).filter(function(p){ return p.id === pid; })[0];
+      if (!target) return;
+      if (statsOv) target.statsOverride = statsOv; else delete target.statsOverride;
+    });
+    if (ok) window.lextCancelEditPlayerStats();
+  };
+
   function renderSquadList(){
     /* Envolvemos TODO el cuerpo en try/catch con un diagnóstico
        visible en `lext-squad-list`. Antes un throw silencioso (p.ej.
@@ -55888,122 +56253,10 @@ https://api.sofascore.app/api/v1/team/44/image
       (byPos[p.pos]||byPos.MED).push(p);
     });
 
-    function rowFor(p, isGK){
-      /* `d` = stats de DISPLAY (suma de todas las comps oficiales del
-         equipo; ver `_DISP`). Si no hay override, es el propio `p`. */
-      var d = _DISP.get(p) || p;
-      /* Badges C/F/P/⭐/⚾ visibles cuando el rol está asignado + botones
-         para alternarlos. Cada botón va envuelto en pG(...) para que
-         exija el PIN admin 747 antes de modificar nada, incluso si el
-         usuario ya está dentro del editor (p. ej. después de cerrar
-         sesión admin). Solo `captain` es exclusivo — el resto permite
-         varios jugadores del mismo equipo a la vez. */
-      var badges = '';
-      if(p.captain)    badges += '<span class="lext-badge cap"    title="Capitán">C</span>';
-      if(p.freeKick)   badges += '<span class="lext-badge fk"     title="Lanzador de faltas">F</span>';
-      if(p.penalty)    badges += '<span class="lext-badge pk"     title="Lanzador de penaltis">P</span>';
-      if(p.elite)      badges += '<span class="lext-badge star"   title="Estrella del equipo">⭐</span>';
-      if(p.natGoal)    badges += '<span class="lext-badge scorer" title="Goleador nato (~30% goles)">⚾</span>';
-      if(p.natGoalPro) badges += '<span class="lext-badge scorer" title="Goleador estrella (~45% goles)">🏀</span>';
-      if(p.statsOverride) badges += '<span class="lext-badge" style="background:rgba(120,180,255,.2);border:1px solid rgba(120,180,255,.5);color:#78b4ff;" title="Estadísticas corregidas a mano por el admin — pulsa 🖍 para editarlas o quitar la corrección">🔒</span>';
-      /* Badge de lesión: SOLO para clubes HUMANOS canónicos. LESION_STORE
-         está indexado por NOMBRE de jugador (no por equipo), y los
-         rosters genéricos ("Jugador 8", "Jugador 20"...) se REPITEN en
-         decenas de equipos IA de Resto de Ligas — sin este gate, la
-         lesión de un jugador del hub humano "contaminaba" por nombre la
-         plantilla de CUALQUIER equipo IA con un jugador del mismo nombre
-         genérico (bug usuario 2026-07-06, «EC Bahia» con jugadores
-         genéricos marcados como lesionados). Los equipos IA JAMÁS tienen
-         jugadores lesionados — es un dato que solo existe para las 6
-         cajas de mister humano. */
-      if (t && window._isHumanClubCanonico && window._isHumanClubCanonico(t.name)) {
-        var _les = (window.LESION_STORE || {})[p.name];
-        if (_les && _les.partidos > 0) {
-          var _lesIco = _les.gradoEmoji || '🩹';
-          var _lesPart = Math.max(0, parseInt(_les.partidos) || 0);
-          var _lesDesc = (_les.gradoNombre||'Lesión') + (_les.descripcion ? ' · ' + _les.descripcion : '') + ' · ' + _lesPart + ' partido(s) restante(s)';
-          badges += '<span class="lext-badge injury" title="' + _lesDesc.replace(/"/g,'&quot;') + '" style="background:rgba(255,60,60,.2);border:1px solid rgba(255,80,80,.45);color:#ff8a8a;">' + _lesIco + ' ' + _lesPart + 'P</span>';
-        }
-      }
-      /* La valoración usa las stats de DISPLAY (suma de comps). Cuando
-         `d` es un override, fusionamos sobre `p` para conservar
-         pos/power/flags que `computePlayerRating` también lee. */
-      var _pRate = (d === p) ? p : Object.assign({}, p, d);
-      var rating = computePlayerRating(_pRate);
-      var rStr = rating>0 ? rating.toFixed(2) : '0.00';
-      var rCls = 'rating '+ratingClass(rating);
-      var pTier = poderToneLocal(p.power||0);
-      var power = '<span class="lext-sq-cell pw tier-'+pTier+'" title="Poder '+(p.power||0)+'/99 · '+pTier.toUpperCase()+'">'+(p.power||0)+'</span>';
-      var pj = fmtCell(d.pj,'');
-      var mvp = fmtCell(d.mvp,'mvp');
-      var ta = fmtCell(d.ta,'ta');
-      var tr = fmtCell(d.tr,'tr');
-      var rCell = '<span class="lext-sq-cell '+rCls+'">'+rStr+'</span>';
-      var cls = isGK ? 'gk' : 'ot';
-      var cells;
-      if(isGK){
-        cells = power + pj + fmtCell(d.imbat,'imbat') + fmtCell(d.penSaved,'psave') + mvp + ta + tr + rCell;
-      } else {
-        cells = power + pj + fmtCell(d.gol,'gol') + fmtCell(d.pen,'pen') + fmtCell(d.fk,'fk') + mvp + ta + tr + rCell;
-      }
-      function togBtn(flag, ico, on, title){
-        /* pG(...) exige el PIN 747 si la sesión admin está cerrada.
-           Si ya está abierta (window._adm===true) corre al instante. */
-        return '<button class="lext-sq-mini lext-sq-tog'+(on?' on':'')+'" '
-          + 'onclick="pG(function(){lextTogglePlayerFlag(\''+p.id+'\',\''+flag+'\')})" '
-          + 'title="'+title+' · requiere PIN 747">'+ico+'</button>';
-      }
-      var tog = togBtn('captain','C',!!p.captain,'Capitán')
-              + togBtn('freeKick','F',!!p.freeKick,'Lanzador de faltas')
-              + togBtn('penalty','P',!!p.penalty,'Lanzador de penaltis')
-              + togBtn('elite','⭐',!!p.elite,'Estrella del equipo')
-              + togBtn('natGoal','⚾',!!p.natGoal,'Goleador nato (~30% goles)')
-              + togBtn('natGoalPro','🏀',!!p.natGoalPro,'Goleador estrella (~45% goles)');
-      return '<div class="lext-sq-row '+cls+'">'
-        + '<span class="lext-sq-name tier-'+pTier+'">'+p.name+badges+'</span>'
-        + cells
-        + '<span class="lext-sq-actions">'
-        + tog
-        + '<button class="lext-sq-mini" onclick="pG(function(){lextEditPlayer(\''+p.id+'\')})" title="Editar jugador · requiere PIN 747">🖍</button>'
-        + '<button class="lext-sq-mini" onclick="pG(function(){lextDeletePlayer(\''+p.id+'\')})" title="Eliminar · requiere PIN 747">🗑</button>'
-        + '</span>'
-        + '</div>';
-    }
-
     function sectionFor(k){
       var list = byPos[k];
       if(!list.length) return '';
       var isGK = k==='POR';
-      var cls = isGK ? 'gk' : 'ot';
-      var header;
-      if(isGK){
-        header = '<div class="lext-sq-hdr '+cls+'">'
-          + '<span>'+LABEL[k]+'</span>'
-          + '<span title="Poder">🛡</span>'
-          + '<span title="Partidos">👤</span>'
-          + '<span title="Imbatido">🧤</span>'
-          + '<span title="Pen parados">🖐</span>'
-          + '<span title="MVP">⭐</span>'
-          + '<span title="Tar. amarillas">🟨</span>'
-          + '<span title="Tar. rojas">🟥</span>'
-          + '<span title="Valoración">📈</span>'
-          + '<span></span>'
-          + '</div>';
-      } else {
-        header = '<div class="lext-sq-hdr '+cls+'">'
-          + '<span>'+LABEL[k]+'</span>'
-          + '<span title="Poder">🛡</span>'
-          + '<span title="Partidos">👤</span>'
-          + '<span title="Goles">⚽</span>'
-          + '<span title="Pen marcados">🥅</span>'
-          + '<span title="Goles de falta">🎯</span>'
-          + '<span title="MVP">⭐</span>'
-          + '<span title="Tar. amarillas">🟨</span>'
-          + '<span title="Tar. rojas">🟥</span>'
-          + '<span title="Valoración">📈</span>'
-          + '<span></span>'
-          + '</div>';
-      }
       list.sort(function(a,b){
         /* Ordena por la valoración de DISPLAY (suma de comps), igual
            que la celda 📈 de cada fila. */
@@ -56013,13 +56266,18 @@ https://api.sofascore.app/api/v1/team/44/image
         if(rb !== ra) return rb-ra;
         return (Number(b.power)||0)-(Number(a.power)||0);
       });
-      return '<div class="lext-sq-sec">'+header+list.map(function(p){return rowFor(p,isGK);}).join('')+'</div>';
+      var header = '<div class="lext-sq-title">'+LABEL[k]+'</div>';
+      return '<div class="lext-sq-sec">'+header+list.map(function(p){
+        return _lextPl2RowHtml(p, isGK, _DISP.get(p) || p, t);
+      }).join('')+'</div>';
     }
 
-    var html = '<div class="lext-sq-wrap">';
+    var html = '<div class="lext-sq-wrap">'
+      + '<div class="lext-pl2-new-sec" id="lext-pl2-new-body"></div>';
     ORDER.forEach(function(k){ html += sectionFor(k); });
     html += '</div>';
     host.innerHTML = html;
+    _lextPl2WireDelegated();
     } catch (_renderErr) {
       /* Error silencioso al renderizar la plantilla: antes el try/catch
          en lextOpenSquad se lo comía y al admin le aparecía "vacío
@@ -56209,265 +56467,19 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   };
 
-  /* Si _editingPlayerId está puesto, lextSavePlayer MODIFICA ese jugador
-     en lugar de crear uno nuevo (flujo "editar individualmente" solicitado
-     por el admin para no tener que borrar y recrear). */
-  var _editingPlayerId = null;
-
-  window.lextSavePlayer = function(){
-    if(!CURRENT_SQUAD_TEAM){
-      alert('⚠️ No hay equipo activo. Cierra y vuelve a abrir la plantilla.');
-      return;
-    }
-    var name = document.getElementById('lext-pl-name').value.trim();
-    if(!name){ alert('Falta el nombre del jugador.'); return; }
-    var pos = document.getElementById('lext-pl-pos').value;
-    var power = parseInt(document.getElementById('lext-pl-power').value,10)||50;
-    var numRaw = (document.getElementById('lext-pl-num').value||'').trim();
-    var num = numRaw ? Math.max(1, Math.min(99, parseInt(numRaw,10)||0)) : 0;
-    var capChk    = document.getElementById('lext-pl-cap');
-    var fkChk     = document.getElementById('lext-pl-fk');
-    var pkChk     = document.getElementById('lext-pl-pk');
-    var starChk   = document.getElementById('lext-pl-star');
-    var scorerChk = document.getElementById('lext-pl-scorer');
-    var scorerProChk = document.getElementById('lext-pl-scorer-pro');
-    var isCap    = !!(capChk    && capChk.checked);
-    var isFk     = !!(fkChk     && fkChk.checked);
-    var isPk     = !!(pkChk     && pkChk.checked);
-    var isStar   = !!(starChk   && starChk.checked);
-    var isScorer    = !!(scorerChk    && scorerChk.checked);
-    var isScorerPro = !!(scorerProChk && scorerProChk.checked);
-    /* CLAUDE.md: 🏀 y ⚾ NO se acumulan — si lleva 🏀 (estrella),
-       ⚾ (nato) se ignora. La estrella manda. */
-    if (isScorerPro) isScorer = false;
-    var data = loadData(CURRENT_KEY);
-    /* Fallback por nombre del título del overlay por si el id quedó
-       desincronizado (ver helper _lextFindTeamRow). */
-    var _fallbackNamePl = '';
-    try {
-      var _tEl = document.getElementById('lext-ov-squad-title');
-      if (_tEl) _fallbackNamePl = (_tEl.textContent||'').replace(/🛡/g,'').trim();
-    } catch(_){}
-    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fallbackNamePl);
-    if(!t){
-      alert('⚠️ No encuentro este equipo en la liga actual. Abre 🖍 Edit y guárdalo antes de añadir jugadores.');
-      return;
-    }
-    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
-    t.players = t.players || [];
-
-    /* Corrección manual de estadísticas — lee el toggle + la rejilla
-       del form. Si el toggle está desmarcado, `null`: se borra
-       cualquier corrección previa y el jugador vuelve al cálculo
-       automático (suma de eventos reales de todas las comps). */
-    var _ovToggleEl = document.getElementById('lext-pl-stats-ov-toggle');
-    var _statsOv = null;
-    var _ovNum = function(id){ var el = document.getElementById(id); var n = parseInt(el && el.value, 10); return isFinite(n) && n >= 0 ? n : 0; };
-    if (_ovToggleEl && _ovToggleEl.checked) {
-      _statsOv = {
-        pj:       _ovNum('lext-pl-ov-pj'),
-        gol:      _ovNum('lext-pl-ov-gol'),
-        pen:      _ovNum('lext-pl-ov-pen'),
-        fk:       _ovNum('lext-pl-ov-fk'),
-        mvp:      _ovNum('lext-pl-ov-mvp'),
-        ta:       _ovNum('lext-pl-ov-ta'),
-        tr:       _ovNum('lext-pl-ov-tr'),
-        imbat:    _ovNum('lext-pl-ov-imbat'),
-        penSaved: _ovNum('lext-pl-ov-psave')
-      };
-    }
-
-    if(_editingPlayerId){
-      var target = t.players.filter(function(p){ return p.id === _editingPlayerId; })[0];
-      if(!target){ _editingPlayerId = null; return; }
-      // Exclusividad: solo el capitán es único por equipo.
-      if(isCap) t.players.forEach(function(p){ if(p !== target) p.captain = false; });
-      target.name = name;
-      target.num = num;
-      target.pos = pos;
-      target.power = power;
-      target.captain  = isCap;
-      target.freeKick = isFk;
-      target.penalty  = isPk;
-      target.elite    = isStar;
-      target.natGoal  = isScorer;
-      target.natGoalPro = isScorerPro;
-      if (_statsOv) { target.statsOverride = _statsOv; }
-      else { delete target.statsOverride; }
-    } else {
-      if(isCap) t.players.forEach(function(p){ if(p.captain) p.captain = false; });
-      var newP = {
-        id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
-        name:name, num:num, pos:pos, power:power,
-        captain: isCap,
-        freeKick: isFk,
-        penalty:  isPk,
-        elite:    isStar,
-        natGoal:  isScorer,
-        natGoalPro: isScorerPro,
-        pj:0, gol:0, pen:0, fk:0, mvp:0, ta:0, tr:0, imbat:0, penSaved:0
-      };
-      if (_statsOv) newP.statsOverride = _statsOv;
-      t.players.push(newP);
-    }
-    // El poder del equipo NO se recalcula — es fijo.
-    t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
-    saveData(CURRENT_KEY,data);
-
-    // Limpiar form + salir de modo edición
-    document.getElementById('lext-pl-name').value='';
-    document.getElementById('lext-pl-num').value='';
-    if(capChk)    capChk.checked    = false;
-    if(fkChk)     fkChk.checked     = false;
-    if(pkChk)     pkChk.checked     = false;
-    if(starChk)   starChk.checked   = false;
-    if(scorerChk) scorerChk.checked = false;
-    if(scorerProChk) scorerProChk.checked = false;
-    try { window.lextSetPos('MED'); } catch(_){}
-    _exitEditPlayerMode();
-
-    renderSquadList();
-    renderTeamsList();
-    renderTable();
-    // Fase 2: re-aplicar overrides del motor para que los flags lleguen
-    // al sidecar _LIGA_EA_PLAYER_FLAGS inmediatamente.
-    if(typeof window.applyEngineOverrides === 'function'){
-      try { window.applyEngineOverrides(); } catch(_){}
-    }
-  };
-
-  /* ── Edición inline de jugador ya creado ──
-     Carga los datos del jugador en el form "Añadir jugador individual",
-     conmuta el botón a "Guardar cambios" y activa el modo edición.
-     Antes sólo se podía borrar y recrear; ahora se edita en sitio. */
-  window.lextEditPlayer = function(pid){
-    var data = loadData(CURRENT_KEY);
-    var _fbEP = '';
-    try { var _eEP = document.getElementById('lext-ov-squad-title'); if (_eEP) _fbEP = (_eEP.textContent||'').replace(/🛡/g,'').trim(); } catch(_){}
-    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fbEP);
-    if(!t) return;
-    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
-    var target = (t.players||[]).filter(function(p){ return p.id === pid; })[0];
-    if(!target) return;
-    _editingPlayerId = pid;
-    document.getElementById('lext-pl-name').value  = target.name || '';
-    document.getElementById('lext-pl-num').value   = target.num  || '';
-    try { window.lextSetPos(target.pos || 'MED'); }
-    catch(_){ document.getElementById('lext-pl-pos').value = target.pos || 'MED'; }
-    document.getElementById('lext-pl-power').value = target.power|| 75;
-    var capChk    = document.getElementById('lext-pl-cap');
-    var fkChk     = document.getElementById('lext-pl-fk');
-    var pkChk     = document.getElementById('lext-pl-pk');
-    var starChk   = document.getElementById('lext-pl-star');
-    var scorerChk = document.getElementById('lext-pl-scorer');
-    var scorerProChk = document.getElementById('lext-pl-scorer-pro');
-    if(scorerProChk) scorerProChk.checked = !!target.natGoalPro;
-    if(capChk)    capChk.checked    = !!target.captain;
-    if(fkChk)     fkChk.checked     = !!target.freeKick;
-    if(pkChk)     pkChk.checked     = !!target.penalty;
-    if(starChk)   starChk.checked   = !!target.elite;
-    if(scorerChk) scorerChk.checked = !!target.natGoal;
-
-    /* Corrección manual de estadísticas (petición usuario 2026-07-10:
-       «un jugador con 89 goles cuando el equipo solo ha marcado 71 —
-       edita las estadísticas o déjame editarlas a mi»). Si el jugador
-       ya tiene una corrección guardada (`target.statsOverride`), la
-       precargamos y activamos el toggle. Si no, precargamos con los
-       números que la plantilla está mostrando AHORA MISMO (el mismo
-       cálculo — real/DISP — de `renderSquadList`) para que el admin
-       parta de un valor con sentido en vez de 0, con el toggle
-       apagado (el cálculo automático sigue mandando hasta que lo
-       active). */
-    var _ovBase = target.statsOverride || null;
-    if (!_ovBase) {
-      try {
-        var _compsEP = (typeof window.CURRENT_SQUAD_COMPETITIONS !== 'undefined' && window.CURRENT_SQUAD_COMPETITIONS)
-          ? window.CURRENT_SQUAD_COMPETITIONS : ['liga','copa'];
-        if (typeof window._lextDomesticAllComps === 'function') _compsEP = window._lextDomesticAllComps(_compsEP);
-        var _realEP = (typeof window._lextComputeRealStats === 'function')
-          ? window._lextComputeRealStats(t, data, { competitions: _compsEP })
-          : { teamPJ: 0, liveStats: {} };
-        _ovBase = (typeof window._lextHydratePlayerStats === 'function')
-          ? window._lextHydratePlayerStats(t, target, _realEP)
-          : null;
-      } catch(_){}
-    }
-    var _ovToggle = document.getElementById('lext-pl-stats-ov-toggle');
-    if (_ovToggle) _ovToggle.checked = !!target.statsOverride;
-    var _ovIds = {pj:'lext-pl-ov-pj', gol:'lext-pl-ov-gol', pen:'lext-pl-ov-pen', fk:'lext-pl-ov-fk',
-      mvp:'lext-pl-ov-mvp', ta:'lext-pl-ov-ta', tr:'lext-pl-ov-tr', imbat:'lext-pl-ov-imbat', penSaved:'lext-pl-ov-psave'};
-    Object.keys(_ovIds).forEach(function(k){
-      var el = document.getElementById(_ovIds[k]);
-      if (el) el.value = String((_ovBase && Number(_ovBase[k])) || 0);
-    });
-    try { window._lextToggleStatsOvUI(); } catch(_){}
-
-    var sum = document.getElementById('lext-pl-summary');
-    if(sum) sum.textContent = '🖍 Editando: ' + (target.name || '?');
-    var btn = document.getElementById('lext-pl-save-btn');
-    if(btn) btn.innerHTML = '💾 Guardar cambios';
-    var cancel = document.getElementById('lext-pl-cancel-btn');
-    if(cancel) cancel.style.display = '';
-    /* El formulario de edición vive dentro del panel "➕ Añadir jugador
-       individual", que `lextOpenSquad` OCULTA (display:none) cuando la
-       plantilla se abre en modo LECTURA (p.ej. desde una fila de la
-       clasificación — `lextOpenSquad(id)` sin `{editable:true}`). El
-       botón 🖍 de cada jugador (`rowFor`) SÍ se pinta siempre, en
-       cualquier modo — así que sin esto, pulsar 🖍 desde la
-       clasificación no hacía NADA visible: el formulario se rellenaba
-       pero quedaba invisible tras el panel oculto (bug usuario
-       2026-08-08, "no me deja editar a Julián Álvarez" en Atlético
-       Madrid). Editar un jugador YA CREADO es una acción explícita del
-       admin (gateada por PIN 747 vía `pG(...)` en el propio botón 🖍),
-       así que el panel se hace visible aquí sin importar el modo en el
-       que se abrió la plantilla. */
-    var det = document.getElementById('lext-pl-details');
-    if(det){ det.style.display = ''; det.open = true; }
-    // Scroll al form por comodidad
-    if(det && typeof det.scrollIntoView === 'function'){
-      try { det.scrollIntoView({behavior:'smooth', block:'start'}); } catch(_){}
-    }
-  };
-
-  /* Muestra/oculta la rejilla de corrección manual según el toggle. */
+  /* Muestra/oculta la rejilla de corrección manual según el toggle
+     (panel 🔒 Corregir estadísticas — ver `window.lextEditPlayerStats`
+     más arriba, junto a `renderSquadList`). */
   window._lextToggleStatsOvUI = function(){
     var t = document.getElementById('lext-pl-stats-ov-toggle');
     var g = document.getElementById('lext-pl-stats-ov-grid');
     if (g) g.style.display = (t && t.checked) ? '' : 'none';
   };
 
-  window.lextCancelEditPlayer = function(){ _exitEditPlayerMode(); };
-
-  function _exitEditPlayerMode(){
-    _editingPlayerId = null;
-    var sum = document.getElementById('lext-pl-summary');
-    if(sum) sum.textContent = '➕ Añadir jugador individual';
-    var btn = document.getElementById('lext-pl-save-btn');
-    if(btn) btn.innerHTML = '💾 Añadir jugador';
-    var cancel = document.getElementById('lext-pl-cancel-btn');
-    if(cancel) cancel.style.display = 'none';
-    var _ovToggle = document.getElementById('lext-pl-stats-ov-toggle');
-    if (_ovToggle) _ovToggle.checked = false;
-    try { window._lextToggleStatsOvUI(); } catch(_){}
-  }
-
-  /* Selector de posición por botones (reemplaza al <select> nativo
-     que se quedaba bloqueado en "Portero" en móvil — foto usuario
-     2026-05-17). Mantiene el valor en el hidden #lext-pl-pos para no
-     tocar la lógica de guardado/edición. Idempotente. */
-  window.lextSetPos = function(v){
-    v = (v === 'POR' || v === 'DEF' || v === 'MED' || v === 'DEL') ? v : 'MED';
-    var h = document.getElementById('lext-pl-pos');
-    if (h) h.value = v;
-    var seg = document.getElementById('lext-pl-posseg');
-    if (seg) {
-      var btns = seg.querySelectorAll('button');
-      for (var i = 0; i < btns.length; i++) {
-        btns[i].classList.toggle('active', btns[i].getAttribute('data-pos') === v);
-      }
-    }
-  };
-
+  /* Sigue disponible para código externo que la invoque directamente
+     (no la usa ya la fila editable — el 🗑 de cada fila solo quita la
+     fila del DOM hasta 💾 Guardar cambios, ver `_lextPl2WireDelegated`).
+     Borra y persiste AL INSTANTE. */
   window.lextDeletePlayer = function(pid){
     var data = loadData(CURRENT_KEY);
     var _fbDP = '';
@@ -56479,8 +56491,6 @@ https://api.sofascore.app/api/v1/team/44/image
     // El poder del equipo NO se recalcula — es fijo.
     t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
     saveData(CURRENT_KEY,data);
-    // Si estábamos editando al que se borra, salir del modo edición.
-    if(_editingPlayerId === pid) _exitEditPlayerMode();
     renderSquadList();
     renderTeamsList();
     renderTable();

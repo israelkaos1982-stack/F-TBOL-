@@ -4288,7 +4288,6 @@ window._hdrCleanCache = function(){
           else _bedAddClubSancion(name, 'amarilla', 'Acumulación de amarillas (manual)', n);
         }
       } catch(_){}
-      _bedPushMsg(name, _bedType, n);
       _bedFlushSync();
       window._bedBajaClose();
       try { window.renderBayernPlantillaScreen(); } catch(_){}
@@ -4353,21 +4352,6 @@ window._hdrCleanCache = function(){
       try { if (window._selPersistSanciones) window._selPersistSanciones(); } catch(_){}
     }
 
-    /* Mensaje a la bandeja del hub (foto 2). */
-    function _bedPushMsg(name, kind, n){
-      try {
-        if (!(window._muMsg && window._muMsg.push)) return;
-        var isSel = (window._bplantView === 'sel');
-        var side = isSel ? 'fra' : 'liv';
-        var team = _bedTeamLabel();
-        var pl = n + ' partido' + (n === 1 ? '' : 's');
-        var icon, title, body;
-        if (kind === 'red'){ icon = '🟥'; title = 'Expulsión — ' + name; body = name + ' (' + team + ') ha sido EXPULSADO y se perderá ' + pl + '.'; }
-        else if (kind === 'yellow'){ icon = '🟨'; title = 'Sanción por acumulación — ' + name; body = name + ' (' + team + ') llega a la acumulación de amarillas y se perderá ' + pl + '.'; }
-        else { icon = '🩹'; title = 'Lesión — ' + name; body = name + ' (' + team + ') ha caído lesionado y estará de baja ' + pl + '.'; }
-        window._muMsg.push({ side:side, type:'sancion', icon:icon, sender:(isSel ? ('Servicios médicos · ' + team) : team), title:title, body:body });
-      } catch(_){}
-    }
     /* Stats de la selección — AUTO-DETECTA las competiciones ACTIVAS
        (petición usuario 2026-06-03: "cada año juega 2 competiciones
        distintas", p.ej. Mundial 2032 + Road Copa Asia). Agrega los stats
@@ -6125,10 +6109,8 @@ window._hdrCleanCache = function(){
     window.__psPreviaOpenedIdx = -1;
     _syncMarker();
     _render();
-    /* Notifica al resto del hub (bandeja ✉️, etc.) que el día
-       cambió: el observer de #s-munich SOLO dispara en navegación
-       y aquí no navegamos, así que sin este evento el badge de
-       mensajes no se actualizaba hasta recargar la web. */
+    /* Notifica al resto del hub que el día cambió: el observer de
+       #s-munich SOLO dispara en navegación y aquí no navegamos. */
     try {
       document.dispatchEvent(new CustomEvent('hub:day-changed', {
         detail:{ dayIdx:d.dayIdx, date:(rows[d.dayIdx]||{}).date }
@@ -14630,13 +14612,13 @@ window._hdrCleanCache = function(){
              de Railway (la importación "no llegaba" a los objetivos). */
           'munich-obj-state-v4':1,'munich-obj-state-v5':1,
           'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
-          'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
+          'bplant_stat_adjust_v1':1,'bplant_match_stats_v1':1,
           'bayern_hud_overrides_v1':1
         };
         var _KV_REGEX = /^(manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)|tour_(sct|pss|jg|asia|mundial|tx[1-8]|spv(10|[1-9])|sfn(10|[1-9])))_v1$/;
         var _KV_RECENCY = {
           'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
-          'bplant_stat_adjust_v1':1,'mu_messages_v1':1,'bplant_match_stats_v1':1,
+          'bplant_stat_adjust_v1':1,'bplant_match_stats_v1':1,
           /* Recencia en el server (_KV_RECENCY_BLOB_KEYS): estampamos
              updatedAt=ahora para que el progreso importado gane entero. */
           'munich-obj-state-v4':1,'munich-obj-state-v5':1,
@@ -62056,8 +62038,7 @@ https://api.sofascore.app/api/v1/team/44/image
      trama de diamantes bávaros como marca de agua (SVG tileable).
      HUD superior compacto "pop-on-tap": en reposo solo icono +
      números; al tocar un item desliza un texto flotante arriba
-     durante 3 s. Si la valoración cae por debajo del 20% del
-     objetivo el maletín 💼 parpadea en rojo neón.
+     durante 3 s.
      ═════════════════════════════════════════════════════════════ */
   #s-munich .munich-arena-wrap{
     position:relative;padding:8px 14px 90px;display:flex;flex-direction:column;gap:14px;
@@ -62075,7 +62056,7 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   #s-munich .munich-hud{
     position:sticky;top:4px;z-index:10;
-    display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;
+    display:grid;grid-template-columns:1fr 1fr;gap:6px;
     padding:6px;border-radius:12px;
     background:rgba(10,4,12,0.36);
     backdrop-filter: blur(6px);
@@ -62101,7 +62082,6 @@ https://api.sofascore.app/api/v1/team/44/image
     font-size:11px;opacity:.55;margin-left:4px;letter-spacing:.5px;font-family:Rajdhani,sans-serif;
   }
   /* Colorines por item */
-  #s-munich .munich-hud-val .munich-hud-num{color:#f8fbff;}        /* Blanco nieve */
   #s-munich .munich-hud-money .munich-hud-num{color:#f0c040;}       /* Dorado */
   #s-munich .munich-hud-med .munich-hud-num{color:#49f3df;}         /* Turquesa */
   #s-munich #ath-med-injury.has-injury{color:#ff6b6b;text-shadow:0 0 10px rgba(255,107,107,.55);}
@@ -62120,31 +62100,17 @@ https://api.sofascore.app/api/v1/team/44/image
     transition:opacity .22s ease, transform .22s ease;
   }
   #s-munich .munich-hud-money .munich-hud-label{color:#f0c040;border-color:rgba(240,192,64,.35);}
-  #s-munich .munich-hud-val   .munich-hud-label{color:#f8fbff;}
   #s-munich .munich-hud-med   .munich-hud-label{color:#49f3df;border-color:rgba(73,243,223,.35);}
   #s-munich .munich-hud-item.show-label .munich-hud-label{
     opacity:1;transform:translate(-50%, 0);
-  }
-
-  /* Aviso de despido: valoración < 20% del objetivo (< 1.82 / 9.10)
-     → maletín parpadea rojo neón. La clase la pone/quita el JS
-     observando cambios en #ath-pts-val. */
-  @keyframes munichWarnPulse{
-    0%,100%{text-shadow:0 0 6px rgba(255,40,70,.6), 0 0 14px rgba(255,40,70,.4);transform:scale(1);}
-    50%    {text-shadow:0 0 12px rgba(255,80,110,.95), 0 0 22px rgba(255,40,70,.8);transform:scale(1.08);}
-  }
-  #s-munich .munich-warn-pulse{
-    animation:munichWarnPulse 1.1s ease-in-out infinite;
-    filter:drop-shadow(0 0 6px rgba(255,40,70,.7));
   }
 
   /* Barras de progreso (finas y discretas) */
   #s-munich .munich-bars{display:flex;gap:10px;padding:2px 6px;}
   #s-munich .munich-bar-wrap{flex:1;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden;}
   #s-munich .munich-bar{height:100%;width:0;background:linear-gradient(90deg,#f0c040,#ffe489);transition:width .6s ease;}
-  #s-munich #ath-bar-pts{background:linear-gradient(90deg,#f8fbff,#dde6ff);}
   #s-munich #ath-bar-money{background:linear-gradient(90deg,#f0c040,#ffe489);}
-  #s-munich #ath-bar-pts.superado, #s-munich #ath-bar-money.superado{
+  #s-munich #ath-bar-money.superado{
     background:linear-gradient(90deg,#67ff8a,#35c060);box-shadow:0 0 10px rgba(103,255,138,.6);
   }
 
@@ -63097,11 +63063,6 @@ https://api.sofascore.app/api/v1/team/44/image
 <div class="munich-arena-bg" id="mk-hub-bg" aria-hidden="true"></div>
 <!-- HUD SUPERIOR · pop-on-tap ──────────────────────────────────── -->
 <div class="munich-hud">
-  <div class="munich-hud-item munich-hud-val" onclick="muHudTap(this)">
-    <span class="munich-hud-label">Valoración Actual / Valoración Club</span>
-    <span class="munich-hud-icon" id="ath-rank-icon">💼</span>
-    <span class="munich-hud-num"><span id="ath-pts-val">0.00</span><small>/ 9.10</small></span>
-  </div>
   <div class="munich-hud-item munich-hud-money" onclick="muHudTap(this)">
     <span class="munich-hud-label">Presupuesto ganado / Presupuesto necesario</span>
     <span class="munich-hud-icon" id="ath-money-icon">🪙</span>
@@ -63124,9 +63085,8 @@ https://api.sofascore.app/api/v1/team/44/image
 <span id="ath-money-target" style="display:none;">OBJETIVO: 1300 €</span>
 <span id="ath-med-target" style="display:none;">1 PI = 1 partido de lesión</span>
 
-<!-- Barras finas bajo el HUD (PTS / M€) -->
+<!-- Barra fina bajo el HUD (M€) -->
 <div class="munich-bars">
-  <div class="munich-bar-wrap"><div class="munich-bar" id="ath-bar-pts"></div></div>
   <div class="munich-bar-wrap"><div class="munich-bar" id="ath-bar-money"></div></div>
 </div>
 <!-- #ath-med-ov se monta fuera de cualquier .screen (ver bloque al inicio del archivo). -->
@@ -65700,13 +65660,12 @@ https://api.sofascore.app/api/v1/team/44/image
        - en bg refresca de IndexedDB y server (ambos pueden tardar)
        - reaplica al recibir cualquier capa más reciente
 
-   Permite al admin editar los 5 valores del HUD superior:
-     · 💼 Valoración actual + objetivo (default 0.00 / 9.10)
+   Permite al admin editar los 3 valores del HUD superior:
      · 🪙 Presupuesto actual + objetivo (default 0 / 1300€)
      · 💊 Puntos de Fisio (default 8)
 */
 (function(){
-  /* HUB ACTIVO (multi-hub 2026-06-13): el HUD (💼🪙💊) es POR HUB.
+  /* HUB ACTIVO (multi-hub 2026-06-13): el HUD (🪙💊) es POR HUB.
      Liverpool/Toñín usa las claves BASE (intactas, con TODAS sus reglas
      de sync: KV propio, recencia, authoritative, rev monotónico,
      anchor-guard, gate-on-hydrate); Arsenal/etc. → sufijo `_<id>` en KEY,
@@ -65719,7 +65678,7 @@ https://api.sofascore.app/api/v1/team/44/image
   var IDB_DB = 'bayernHudV1';
   var IDB_STORE = 'overrides';
   var IDB_ROW_ID = 'singleton' + _hudSuffix();
-  var DEF = { rating: null, ratingTarget: 9.10, money: null, moneyTarget: 2400, pi: null };
+  var DEF = { money: null, moneyTarget: 2400, pi: null };
   /* Defaults POR HUB — se usan cuando un hub aún no tiene datos guardados.
      `moneyTarget` reescalado 2026-07-24 (~1.85×): el modelo de premios
      (CASH por posición + recompensas de objetivos, hasta ~2.355 🪙 en una
@@ -65729,13 +65688,13 @@ https://api.sofascore.app/api/v1/team/44/image
      los objetivos). Se conserva la jerarquía relativa por mister
      (Ruben/Inter el más bajo, Isra el más alto). */
   var _HUB_DEF = {
-    tonin:  { ratingTarget: 8.70, moneyTarget: 2400, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
-    alvaro: { ratingTarget: 8.85, moneyTarget: 2530, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
-    acsa:   { ratingTarget: 9,    moneyTarget: 2580, money: 200, pi: 2, nivel: 'CRACK',   formRival: '🎲' },
-    isra:   { ratingTarget: 9,    moneyTarget: 2600, money: 200, pi: 2, nivel: 'LEYENDA', formRival: '🎲' },
-    angel:  { ratingTarget: 9,    moneyTarget: 2580, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
-    izan:   { ratingTarget: 8.75, moneyTarget: 2450, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
-    ruben:  { rating: 8, ratingBase: 8, ratingTarget: 10, moneyTarget: 1850, money: 200, pi: 2, nivel: 'ESTRELLA', formRival: '🎲' }
+    tonin:  { moneyTarget: 2400, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
+    alvaro: { moneyTarget: 2530, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
+    acsa:   { moneyTarget: 2580, money: 200, pi: 2, nivel: 'CRACK',   formRival: '🎲' },
+    isra:   { moneyTarget: 2600, money: 200, pi: 2, nivel: 'LEYENDA', formRival: '🎲' },
+    angel:  { moneyTarget: 2580, money: 200, pi: 2, nivel: 'CRACK',   formRival: '↘️' },
+    izan:   { moneyTarget: 2450, money: 200, pi: 2, nivel: 'CRACK',   formRival: '⬇️' },
+    ruben:  { moneyTarget: 1850, money: 200, pi: 2, nivel: 'ESTRELLA', formRival: '🎲' }
   };
   function _hubDef(){
     try { var h=window._activeHub&&window._activeHub(); if(h&&h.id&&_HUB_DEF[h.id]) return _HUB_DEF[h.id]; } catch(_){}
@@ -65786,7 +65745,6 @@ https://api.sofascore.app/api/v1/team/44/image
        en cola (seguro) hasta un pull con éxito, en vez de clobberear. */
   var _hudHydrated = false;
   var _pendingMoneyDelta = 0;
-  var _pendingRatingDelta = 0;   /* 💼 por partido acumulado antes de hidratar */
   var _hydrateCbs = [];
   window._BAYERN_HUD_HYDRATED = false;
   function _markHydrated(){
@@ -65798,10 +65756,6 @@ https://api.sofascore.app/api/v1/team/44/image
     if (_pendingMoneyDelta){
       var d = _pendingMoneyDelta; _pendingMoneyDelta = 0;
       try { _creditMoneyNow(d); } catch(_){}
-    }
-    if (_pendingRatingDelta){
-      var dr = _pendingRatingDelta; _pendingRatingDelta = 0;
-      try { _creditRatingNow(dr); } catch(_){}
     }
     /* Rearma a los suscriptores (objetivos del club, etc.). */
     var cbs = _hydrateCbs.slice(); _hydrateCbs.length = 0;
@@ -66019,18 +65973,11 @@ https://api.sofascore.app/api/v1/team/44/image
       var _c = window._BAYERN_HUD_CACHE;
       if (_c && typeof _c === 'object' && Object.keys(_c).length) return; /* ya hay datos */
       var _hd = _hubDef();
-      if (!_hd || (_hd.ratingTarget == null && _hd.moneyTarget == null)) return;
+      if (!_hd || _hd.moneyTarget == null) return;
       var _seed = {};
-      if (_hd.ratingTarget != null) _seed.ratingTarget = _hd.ratingTarget;
       if (_hd.moneyTarget  != null) _seed.moneyTarget  = _hd.moneyTarget;
       if (_hd.money        != null) _seed.money        = _hd.money;
       if (_hd.pi           != null) _seed.pi           = _hd.pi;
-      /* Valoración base del admin (💼 actual = ratingBase + objetivos):
-         un hub puede arrancar con una valoración > 0 (ej. Rubén/Inter
-         8,00). Los hubs sin `ratingBase` en su default arrancan en 0
-         (valoración = solo objetivos), EXACTAMENTE como antes. */
-      if (_hd.ratingBase   != null) _seed.ratingBase   = _hd.ratingBase;
-      if (_hd.rating       != null) _seed.rating       = _hd.rating;
       /* Autoritativo: gana sobre cualquier dato stale del servidor */
       save(_seed, true, true);
       try { apply(); } catch(_){}
@@ -66259,21 +66206,11 @@ https://api.sofascore.app/api/v1/team/44/image
     if (!o || !Object.keys(o).length) return;
     applying = true;
     try {
-      /* Un blob con campos ancla (moneyTarget/ratingTarget) pero sin
-         valores actuales (rating/money null) significa que el hub NO tiene
-         todavía un valor guardado. Mostramos 0 para no heredar el valor
-         del hub anterior al cambiar de mister. */
-      var _hasAnchor = (o.moneyTarget != null || o.ratingTarget != null);
-      if (o.rating != null){
-        var rEl = document.getElementById('ath-pts-val');
-        if (rEl){
-          var nv = Number(o.rating);
-          if (!isNaN(nv)) _setTxt(rEl, nv.toFixed(2));
-        }
-      } else if (_hasAnchor) {
-        var rEl = document.getElementById('ath-pts-val');
-        _setTxt(rEl, '0.00');
-      }
+      /* Un blob con campo ancla (moneyTarget) pero sin valor actual
+         (money null) significa que el hub NO tiene todavía un valor
+         guardado. Mostramos 0 para no heredar el valor del hub anterior
+         al cambiar de mister. */
+      var _hasAnchor = (o.moneyTarget != null);
       if (o.money != null){
         var mEl = document.getElementById('ath-money-val');
         if (mEl){
@@ -66291,11 +66228,6 @@ https://api.sofascore.app/api/v1/team/44/image
           if (!isNaN(pv)) _setTxt(pEl, String(pv));
         }
       }
-      if (o.ratingTarget != null){
-        var rT = _smallTarget('.munich-hud-val');
-        var tv = Number(o.ratingTarget);
-        if (!isNaN(tv)) _setTxt(rT, '/ ' + tv.toFixed(2));
-      }
       if (o.moneyTarget != null){
         var mT = _smallTarget('.munich-hud-money');
         var mtv = parseInt(o.moneyTarget, 10);
@@ -66309,7 +66241,6 @@ https://api.sofascore.app/api/v1/team/44/image
         if (st) {
           if (o.pi     != null) st.pi          = parseInt(o.pi, 10) || 0;
           if (o.money  != null) st.budgetSpent = parseInt(o.money, 10) || 0;
-          if (o.rating != null) st.rating      = parseFloat(o.rating) || 0;
         }
       } catch(_){}
     } finally {
@@ -66318,7 +66249,7 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   function setupObservers(){
     if (observers.length) return; /* idempotente */
-    var ids = ['ath-pts-val','ath-money-val','ath-med-val'];
+    var ids = ['ath-money-val','ath-med-val'];
     ids.forEach(function(id){
       var el = document.getElementById(id);
       if (!el) return;
@@ -66331,18 +66262,17 @@ https://api.sofascore.app/api/v1/team/44/image
       ob.observe(el, {childList:true, characterData:true, subtree:true});
       observers.push(ob);
     });
-    /* Observa también las <small> de los targets para reaplicar
-       en caso de que algún re-render las restablezca. */
-    [['.munich-hud-val', 'rating'], ['.munich-hud-money', 'money']].forEach(function(pair){
-      var s = _smallTarget(pair[0]);
-      if (!s) return;
+    /* Observa también la <small> del target para reaplicar en caso de
+       que algún re-render la restablezca. */
+    var s = _smallTarget('.munich-hud-money');
+    if (s) {
       var ob = new MutationObserver(function(){
         if (applying) return;
         setTimeout(apply, 0);
       });
       ob.observe(s, {childList:true, characterData:true, subtree:true});
       observers.push(ob);
-    });
+    }
   }
   function ensureOverlay(){
     if (document.getElementById('munich-edit-ov')) return;
@@ -66351,8 +66281,6 @@ https://api.sofascore.app/api/v1/team/44/image
     ov.innerHTML = ''
       + '<div class="me-box">'
       +   '<div class="me-title" id="me-hub-title">🖍 EDITAR HUD · LIVERPOOL</div>'
-      +   '<div class="me-row"><label class="me-lbl">💼 Valoración actual</label><input class="me-input" id="me-rating" type="number" step="0.01" min="0" max="20"/></div>'
-      +   '<div class="me-row"><label class="me-lbl">💼 Valoración objetivo</label><input class="me-input" id="me-rating-target" type="number" step="0.01" min="0.01" max="20"/></div>'
       +   '<div class="me-row"><label class="me-lbl">🪙 Presupuesto actual (€)</label><input class="me-input" id="me-money" type="number" step="1" min="0"/></div>'
       +   '<div class="me-row"><label class="me-lbl">🪙 Presupuesto objetivo (€)</label><input class="me-input" id="me-money-target" type="number" step="1" min="1"/></div>'
       +   '<div class="me-row"><label class="me-lbl">💊 Puntos de Fisio</label><input class="me-input" id="me-pi" type="number" step="1" min="0"/></div>'
@@ -66748,7 +66676,7 @@ https://api.sofascore.app/api/v1/team/44/image
         html += '<div style="border:1px solid rgba(255,255,255,.14);border-radius:10px;padding:10px 12px;margin-bottom:10px;' + (ap ? 'opacity:.55;' : '') + '">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:14px;font-weight:700;">';
         html += '<span>' + r.mister.emoji + ' ' + _esc(r.mister.club) + ' · ' + _esc(r.mister.seleccion) + ' (' + _esc(r.mister.mister) + ')</span>';
-        html += '<span style="color:#ffd700;">🪙 +' + r.totalCoins + ' · 💼 +' + r.totalRating.toFixed(3) + '</span>';
+        html += '<span style="color:#ffd700;">🪙 +' + r.totalCoins + '</span>';
         html += '</div>';
         html += '<div style="font-size:11px;color:rgba(255,255,255,.5);margin:4px 0 6px;">' + r.matchCount + ' partido(s) detectado(s)' + (ap ? ' — ✅ ya acreditado el ' + new Date(ap.appliedAt).toLocaleString() : '') + '</div>';
         var comps = Object.keys(r.byComp);
@@ -66789,18 +66717,14 @@ https://api.sofascore.app/api/v1/team/44/image
       try { originalHub = window._activeHub && window._activeHub().id; } catch(_){}
       results.forEach(function(r){
         if (appliedCache[r.mister.id]) return;
-        if (r.matchCount === 0 && r.totalCoins === 0) { appliedCache[r.mister.id] = { appliedAt:Date.now(), coins:0, rating:0 }; return; }
+        if (r.matchCount === 0 && r.totalCoins === 0) { appliedCache[r.mister.id] = { appliedAt:Date.now(), coins:0 }; return; }
         try {
           if (typeof window.setActiveHub === 'function') window.setActiveHub(r.mister.id);
           var o = window._bayernHudGet() || {};
           var curMoney = parseFloat(o.money) || 0;
-          var objR = parseFloat(o.objRating) || 0;
-          var curBase = (o.ratingBase != null) ? (parseFloat(o.ratingBase) || 0) : Math.max(0, (parseFloat(o.rating) || 0) - objR);
           var nextMoney = Math.max(0, curMoney + r.totalCoins);
-          var nextBase = Math.max(0, Math.round((curBase + r.totalRating) * 1000) / 1000);
-          var nextRating = Math.round((nextBase + objR) * 1000) / 1000;
-          window._bayernHudMerge({ money:nextMoney, ratingBase:nextBase, rating:nextRating }, true, true);
-          appliedCache[r.mister.id] = { appliedAt:Date.now(), coins:r.totalCoins, rating:r.totalRating };
+          window._bayernHudMerge({ money:nextMoney }, true, true);
+          appliedCache[r.mister.id] = { appliedAt:Date.now(), coins:r.totalCoins };
         } catch(err){ try { console.warn('[retro-earnings] fallo en hub', r.mister.id, err); } catch(_){} }
       });
       appliedUpdatedAt = Date.now();
@@ -66809,7 +66733,7 @@ https://api.sofascore.app/api/v1/team/44/image
       try { if (originalHub && typeof window.setActiveHub === 'function') window.setActiveHub(originalHub); } catch(_){}
       try { window._bayernHudReapply && window._bayernHudReapply(); } catch(_){}
       window._retroEarningsRender();
-      alert('✅ Ganancias históricas acreditadas. Revisa el 🪙/💼 de cada caja.');
+      alert('✅ Ganancias históricas acreditadas. Revisa el 🪙 de cada caja.');
     };
   })();
   /* ── 🧹 LIMPIAR CACHÉ LOCAL (admin, PIN 747) ──────────────────────
@@ -67027,13 +66951,9 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
     var hd = _hubDef();
     var o = load();
-    var curR = parseFloat((document.getElementById('ath-pts-val')||{}).textContent) || 0;
     var curM = parseInt(((document.getElementById('ath-money-val')||{}).textContent||'').replace(/[^\d-]/g,''), 10) || 0;
     var curP = parseInt((document.getElementById('ath-med-val')||{}).textContent, 10) || 0;
-    var rTgt = (o.ratingTarget != null) ? o.ratingTarget : hd.ratingTarget;
     var mTgt = (o.moneyTarget  != null) ? o.moneyTarget  : hd.moneyTarget;
-    document.getElementById('me-rating').value = (o.rating != null) ? o.rating : curR.toFixed(2);
-    document.getElementById('me-rating-target').value = rTgt;
     document.getElementById('me-money').value = (o.money != null) ? o.money : curM;
     document.getElementById('me-money-target').value = mTgt;
     document.getElementById('me-pi').value = (o.pi != null) ? o.pi : (hd.pi != null ? hd.pi : curP);
@@ -67104,8 +67024,6 @@ https://api.sofascore.app/api/v1/team/44/image
       return isNaN(v) ? null : v;
     }
     var o = {
-      rating:       num('me-rating'),
-      ratingTarget: num('me-rating-target'),
       money:        intg('me-money'),
       moneyTarget:  intg('me-money-target'),
       pi:           intg('me-pi')
@@ -67180,29 +67098,15 @@ https://api.sofascore.app/api/v1/team/44/image
       return;
     }
     /* PRESERVAR el modelo de objetivos a través del guardado AUTORITATIVO
-       (replace total). Sin esto el replace BORRA `objRating`/`objMoney` y
-       el siguiente `liverpoolObjEarnings` re-sumaba el aporte de objetivos
-       → doble conteo del 💼 (0,55 con 1 objetivo). Además fijamos
-       `ratingBase` = (rating tecleado − aporte de objetivos) para que el
-       💼 mostrado sea EXACTAMENTE lo que el admin escribió, conservando el
-       modelo absoluto base+objetivos. */
+       (replace total). Sin esto el replace BORRA `objMoney` y el siguiente
+       `liverpoolObjEarnings` re-sumaba el aporte de objetivos al 🪙. */
     try {
       var _oPrev = (typeof window._bayernHudGet === 'function') ? (window._bayernHudGet() || {}) : {};
-      var _objR = parseFloat(_oPrev.objRating) || 0;
-      var _objM = parseFloat(_oPrev.objMoney)  || 0;
-      o.objRating = _objR;
+      var _objM = parseFloat(_oPrev.objMoney) || 0;
       o.objMoney  = _objM;
       /* Si el usuario dejó el campo "actual" en blanco, preservar el valor
          del caché (o del DOM como último recurso). Así el admin puede tocar
-         solo los TARGETS sin borrar el 💼/🪙 ya guardado. */
-      if (o.rating == null) {
-        if (_oPrev.rating != null) {
-          o.rating = _oPrev.rating;
-        } else {
-          var _domR = parseFloat((document.getElementById('ath-pts-val')||{}).textContent) || 0;
-          if (_domR) o.rating = _domR;
-        }
-      }
+         solo el TARGET sin borrar el 🪙 ya guardado. */
       if (o.money == null) {
         if (_oPrev.money != null) {
           o.money = _oPrev.money;
@@ -67210,10 +67114,6 @@ https://api.sofascore.app/api/v1/team/44/image
           var _domM = parseInt(((document.getElementById('ath-money-val')||{}).textContent||'').replace(/[^\d-]/g,''), 10) || 0;
           if (_domM) o.money = _domM;
         }
-      }
-      if (o.rating != null) {
-        var _base = (parseFloat(o.rating) || 0) - _objR;
-        o.ratingBase = (_base < 0) ? 0 : Math.round(_base * 1000) / 1000;
       }
     } catch(_){}
     /* Sin toast intermedio: el usuario pidió ocultar el mensaje
@@ -67239,10 +67139,6 @@ https://api.sofascore.app/api/v1/team/44/image
        loop o un athObjCount async que se cuele. */
     applying = true;
     try {
-      if (o.rating != null) {
-        var rEl = document.getElementById('ath-pts-val');
-        if (rEl) rEl.textContent = Number(o.rating).toFixed(2);
-      }
       if (o.money != null) {
         var mEl = document.getElementById('ath-money-val');
         if (mEl) mEl.textContent = String(parseInt(o.money,10)|0);
@@ -67250,10 +67146,6 @@ https://api.sofascore.app/api/v1/team/44/image
       if (o.pi != null) {
         var pEl = document.getElementById('ath-med-val');
         if (pEl) pEl.textContent = String(parseInt(o.pi,10)|0);
-      }
-      if (o.ratingTarget != null) {
-        var rT = _smallTarget('.munich-hud-val');
-        if (rT) rT.textContent = '/ ' + Number(o.ratingTarget).toFixed(2);
       }
       if (o.moneyTarget != null) {
         var mT = _smallTarget('.munich-hud-money');
@@ -67299,8 +67191,6 @@ https://api.sofascore.app/api/v1/team/44/image
     applying = true;
     try {
       var _hd = _hubDef();
-      var rT = _smallTarget('.munich-hud-val');
-      if (rT) rT.textContent = '/ ' + _hd.ratingTarget.toFixed(2);
       var mT = _smallTarget('.munich-hud-money');
       if (mT) mT.textContent = '/ ' + _hd.moneyTarget + '€';
     } finally { applying = false; }
@@ -67310,16 +67200,15 @@ https://api.sofascore.app/api/v1/team/44/image
   /* Reinicia el cursor del calendario al 1 de Mayo (inicio de
      temporada). Borra el cursor (dayIdx=0), los partidos resueltos
      (done) y los rivales asignados (rivals). 2026-05-24: además
-     pone a 0 la valoración 💼 y el presupuesto 🪙 del HUD, limpia
-     los memos `objRating`/`objMoney` y borra los resultados ya
-     simulados de torneos de Selecciones (Mundial Grupo, etc.) —
-     sin esto, las ganancias de la temporada anterior (0,33💼 + 50€
-     por objetivo) quedaban grabadas en el override, y los partidos
-     del Mundial Grupo aparecían como FIN aunque el calendario
-     estuviera en el día 1. `ratingTarget` / `moneyTarget` / `pi`
-     son config del admin → se conservan. */
+     pone a 0 el presupuesto 🪙 del HUD, limpia el memo `objMoney` y
+     borra los resultados ya simulados de torneos de Selecciones
+     (Mundial Grupo, etc.) — sin esto, las ganancias de la temporada
+     anterior (50€ por objetivo) quedaban grabadas en el override, y
+     los partidos del Mundial Grupo aparecían como FIN aunque el
+     calendario estuviera en el día 1. `moneyTarget` / `pi` son
+     config del admin → se conservan. */
   window._bayernEditValuesResetCal = function(){
-    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados y se pondrán a 0 la valoración 💼 y el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nSe ponen a 0 TODAS las estadísticas de jugador y la clasificación de Liga, Copa, Supercopas, Champions/Europa/Conference, Recopa, Intercontinental, Mundialito de Clubes, Superliga, torneos de verano y Selecciones.\n\nNo quedan lesionados, expulsados ni amonestados (club y selección).\n\nLos Objetivos del Club se DESMARCAN (✅ a cero) y sus ganancias 💼/🪙 vuelven a 0.\n\nSE CONSERVAN: las plantillas (club y selección), los escudos, el histórico de Derbys, la Vitrina de Trofeos, los Puntos de Fisio 💊 y la configuración de los torneos.')) return;
+    if (!confirm('¿Reiniciar la temporada al 1 de Mayo?\n\nSe borrará el cursor del día, los partidos pospuestos, pendientes y jugados y se pondrá a 0 el presupuesto 🪙. Las 3 cajas debajo de la card quedarán a cero partidos.\n\nSe ponen a 0 TODAS las estadísticas de jugador y la clasificación de Liga, Copa, Supercopas, Champions/Europa/Conference, Recopa, Intercontinental, Mundialito de Clubes, Superliga, torneos de verano y Selecciones.\n\nNo quedan lesionados, expulsados ni amonestados (club y selección).\n\nLos Objetivos del Club se DESMARCAN (✅ a cero) y sus ganancias 🪙 vuelven a 0.\n\nSE CONSERVAN: las plantillas (club y selección), los escudos, el histórico de Derbys, la Vitrina de Trofeos, los Puntos de Fisio 💊 y la configuración de los torneos.')) return;
     /* GARANTÍA (regla usuario 2026-06-04): «Reiniciar Temporada» JAMÁS
        debe borrar el HISTÓRICO DE DERBYS, la VITRINA DE TROFEOS ni las
        PLANTILLAS (club + selección). Son datos persistentes que el admin
@@ -67378,23 +67267,19 @@ https://api.sofascore.app/api/v1/team/44/image
     try {
       if (typeof window._bayernHudMerge === 'function') {
         /* force + authoritative — «Reiniciar Temporada» es acción
-           explícita del admin: el 0/0 debe GANAR en el server (sello del
+           explícita del admin: el 0 debe GANAR en el server (sello del
            reloj del server) y propagarse a todos los móviles, no quedar
            gateado ni ser rechazado por un ts futuro de otro dispositivo. */
-        window._bayernHudMerge({ rating: 0, money: 0, ratingBase: 0, objRating: 0, objMoney: 0 }, true, true);
+        window._bayernHudMerge({ money: 0, objMoney: 0 }, true, true);
       }
     } catch(_){}
     try {
       var _legSt = window._bayernLegacyState;
-      if (_legSt) { _legSt.rating = 0; _legSt.budgetSpent = 0; }
+      if (_legSt) { _legSt.budgetSpent = 0; }
     } catch(_){}
     try {
-      var _rEl = document.getElementById('ath-pts-val');
-      if (_rEl) _rEl.textContent = '0.00';
       var _mEl = document.getElementById('ath-money-val');
       if (_mEl) _mEl.textContent = '0';
-      var _barP = document.getElementById('ath-bar-pts');
-      if (_barP) _barP.style.width = '0%';
       var _barM = document.getElementById('ath-bar-money');
       if (_barM) _barM.style.width = '0%';
     } catch(_){}
@@ -67791,37 +67676,6 @@ https://api.sofascore.app/api/v1/team/44/image
     _creditMoneyNow(delta);
   };
 
-  /* ── 💼 VALORACIÓN POR PARTIDO (petición usuario 2026-07-24) ──────────
-     Cada partido humano acredita una pequeña valoración (Victoria +0,03 ·
-     Empate +0,01 · Derrota 0) que se acumula hacia el `ratingTarget` de
-     cada equipo. Se suma DENTRO de `ratingBase` (la "base" del HUD), NO
-     como una 4ª fuente independiente: así respeta el modelo ABSOLUTO
-     `rating = ratingBase + objRating` sin tocar `liverpoolObjEarnings`,
-     el reset (que ya pone `ratingBase:0`) ni el guardado autoritativo del
-     editor (que preserva `ratingBase = rating − objRating`, conservando lo
-     acumulado por partido). Mismo patrón gateado por hidratación que el
-     dinero: un crédito que caiga antes de reconciliar se ACUMULA en
-     `_pendingRatingDelta` y se aplica en `_markHydrated` sobre el base
-     correcto (ni se pierde ni clobberea el valor del admin). */
-  function _creditRatingNow(delta){
-    delta = Number(delta) || 0;
-    if (!delta) return;
-    var o = load() || {};
-    var objR = parseFloat(o.objRating) || 0;
-    var base = (o.ratingBase != null) ? (parseFloat(o.ratingBase) || 0)
-               : Math.max(0, (parseFloat(o.rating) || 0) - objR);
-    var nb = Math.round((base + delta) * 1000) / 1000;
-    if (nb < 0) nb = 0;
-    var rating = Math.round((nb + objR) * 1000) / 1000;
-    window._bayernHudMerge({ ratingBase: nb, rating: rating });
-  }
-  window._bayernHudCreditMatchRating = function(delta){
-    delta = Number(delta) || 0;
-    if (!delta) return;
-    if (!_hudHydrated){ _pendingRatingDelta += delta; return; }
-    _creditRatingNow(delta);
-  };
-
   /* ── REFUERZO 2026-05-09 ──────────────────────────────────────
      El usuario reportó (con foto) que tras pulsar "Guardar" en el
      editor del HUD, los valores volvían a los defaults. Hay un
@@ -68084,9 +67938,7 @@ https://api.sofascore.app/api/v1/team/44/image
          valores del hub anterior NO se queden visibles mientras el
          nuevo hub carga. apply() retorna temprano si la cache está
          vacía, así que sin esta limpieza el DOM muestra datos viejos. */
-      try { var _rT2 = _smallTarget('.munich-hud-val');   if (_rT2) _rT2.textContent = '/---'; } catch(_){}
       try { var _mT2 = _smallTarget('.munich-hud-money'); if (_mT2) _mT2.textContent = '/---€'; } catch(_){}
-      try { var _vE2 = document.getElementById('ath-pts-val');   if (_vE2) _vE2.textContent = '0.00'; } catch(_){}
       try { var _wE2 = document.getElementById('ath-money-val'); if (_wE2) _wE2.textContent = '0'; } catch(_){}
       /* También el 💊 PI (ath-med-val) — antes NO se limpiaba, así que al
          cambiar de caja el PI del hub anterior se quedaba visible hasta que
@@ -68108,37 +67960,6 @@ https://api.sofascore.app/api/v1/team/44/image
   }
 })();
 
-/* Observa el valor de Valoración y activa el parpadeo rojo del
-   maletín 💼 cuando la cifra cae entre 0.01 y 1.81 (0 < v < 20% del
-   objetivo 9.10). En 0.00 exacto no parpadea (estado inicial, aún
-   sin progreso). Al subir de 1.82 o llegar al objetivo se apaga. */
-(function(){
-  var MAX = 9.10;
-  var THRESHOLD = MAX * 0.20; /* = 1.82 */
-  function check(){
-    var valEl = document.getElementById('ath-pts-val');
-    var iconEl = document.getElementById('ath-rank-icon');
-    if (!valEl || !iconEl) return;
-    var v = parseFloat(valEl.textContent) || 0;
-    var danger = v > 0 && v < THRESHOLD;
-    iconEl.classList.toggle('munich-warn-pulse', danger);
-  }
-  function wire(){
-    var valEl = document.getElementById('ath-pts-val');
-    if (!valEl) { setTimeout(wire, 200); return; }
-    try {
-      new MutationObserver(check).observe(valEl, {
-        childList: true, characterData: true, subtree: true
-      });
-    } catch(_) {}
-    check();
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', wire);
-  } else {
-    wire();
-  }
-})();
 </script>
 </div>
 
@@ -70624,18 +70445,14 @@ https://api.sofascore.app/api/v1/team/44/image
      `_bayernHudReapply()` (apply de los overrides) directamente
      después de athObjCount aseguramos que el override siempre gana. */
   /* ── Ganancias por objetivos del club (spec usuario 2026-06-01) ───
-     Cada objetivo del club cumplido ✅ suma:
-       · 🪙 Presupuesto : +25 (millones) por objetivo, SIN tope (el
-         contador sigue sumando aunque supere el presupuesto objetivo).
-       · 💼 Valoración  : +0,275 por objetivo, con TOPE en 10 (una vez
-         alcanzado 10 se queda en 10 aunque se marquen más objetivos).
-     Idempotente: memoiza la aportación de objetivos en
-     `objMoney`/`objRating` del override del HUD, así que al recalcular
-     sólo aplica el DELTA — cubre marcar Y desmarcar, y sobrevive a
-     recargas sin doble-contar. */
+     Cada objetivo del club cumplido ✅ suma 🪙 Presupuesto : +25
+     (millones) por objetivo, SIN tope (el contador sigue sumando
+     aunque supere el presupuesto objetivo).
+     Idempotente: memoiza la aportación de objetivos en `objMoney`
+     del override del HUD, así que al recalcular sólo aplica el
+     DELTA — cubre marcar Y desmarcar, y sobrevive a recargas sin
+     doble-contar. */
   var OBJ_MONEY_PER = 25;     /* 🪙 por objetivo, sin cap */
-  var OBJ_RATING_PER = 0.275; /* 💼 por objetivo */
-  var OBJ_RATING_CAP = 10;    /* tope de la aportación 💼 */
   var _objEarnRearm = null;   /* poll de rearme tras hidratar el progreso */
 
   /* ── UNIÓN (persistido ∪ DOM) reutilizable, SIN gates ────────────────
@@ -70823,59 +70640,35 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     var o = window._bayernHudGet() || {};
     var prevObjMoney  = parseFloat(o.objMoney)  || 0;
-    var prevObjRating = parseFloat(o.objRating) || 0;
     /* ── ANTI-DEFLACIÓN del crédito ya acreditado ──────────────────────────
        Con munich-obj-state-v5 recién creado (server vacío), un recálculo
        posterior con la pantalla de objetivos CERRADA (`_domItems` vacío) y el
-       progreso persistido adoptado-vacío daría done=0 y REVERTIRÍA el 🪙/💼
+       progreso persistido adoptado-vacío daría done=0 y REVERTIRÍA el 🪙
        que ya se acreditó al cumplir los objetivos. Si no podemos CONFIRMAR el
        vaciado (pantalla no renderizada) pero YA habíamos acreditado, NO
        recalculamos a 0 — mantenemos el crédito. Un vaciado LEGÍTIMO (el
        usuario desmarca todo) ocurre SIEMPRE con la pantalla ABIERTA
        (`_domItems` presentes), así que ese caso SÍ deflaciona correctamente. */
-    if (done === 0 && !_domItems.length && (prevObjMoney > 0 || prevObjRating > 0)) return;
+    if (done === 0 && !_domItems.length && prevObjMoney > 0) return;
     /* 🪙 PRESUPUESTO — modelo NUEVO por objetivo (2026-07-23): cada objetivo
        marcado acredita SU recompensa `r` (la suma de los ✅). Fallback al
-       modelo antiguo (25 fijos) sólo si el array de recompensas no cargó. */
+       modelo antiguo (25 fijos) sólo si el array de recompensas no cargó.
+       Se mantiene por DELTA porque coexiste con otros writers que suman a
+       `money` sin pasar por aquí (premios de torneo `_bayernHudCreditMoney`,
+       apuestas…). Su anti-drift es que el guardado autoritativo del editor
+       PRESERVA `objMoney`. */
     var newObjMoney  = _useRewards ? sumReward : (done * OBJ_MONEY_PER);
-    var newObjRating = Math.min(OBJ_RATING_CAP, Math.round(done * OBJ_RATING_PER * 1000) / 1000);
-    /* 💼 VALORACIÓN — modelo ABSOLUTO (base del admin + aporte de
-       objetivos), NUNCA por delta. El delta dejaba `rating` y `objRating`
-       desincronizados: un guardado AUTORITATIVO del editor del HUD hace
-       replace total y BORRABA `objRating`; el siguiente recálculo leía
-       prevObjRating=0 y SUMABA otra vez el aporte de objetivos sobre un
-       `rating` que YA lo incluía → 0,55 💼 con 1 solo objetivo (=2×0,275)
-       y el offset se quedaba clavado para siempre. Como las ÚNICAS
-       fuentes de `rating` son el admin (base, vía `ratingBase`) y los
-       objetivos, recalcular el ABSOLUTO `ratingBase + aporte` es completo
-       y no puede driftear. `ratingBase` ausente (datos viejos / drift
-       previo) ⇒ base 0 ⇒ AUTOCORRIGE el valor doblado en el próximo
-       recálculo. */
-    var ratingBase = (o.ratingBase != null) ? (parseFloat(o.ratingBase) || 0) : 0;
-    if (ratingBase < 0) ratingBase = 0;
-    var rating = Math.round((ratingBase + newObjRating) * 1000) / 1000;
-    /* 🪙 PRESUPUESTO — se mantiene por DELTA porque coexiste con otros
-       writers que suman a `money` sin pasar por aquí (premios de torneo
-       `_bayernHudCreditMoney`, apuestas…). Su anti-drift es que el
-       guardado autoritativo del editor PRESERVA `objMoney`. */
     var money = ((o.money != null) ? (parseFloat(o.money) || 0) : 0) + (newObjMoney - prevObjMoney);
     if (money < 0) money = 0;
-    var curRating = (o.rating != null) ? (Math.round((parseFloat(o.rating) || 0) * 1000) / 1000) : null;
-    /* Salir solo si NADA cambia Y `ratingBase` ya está sellado (la 1ª
-       pasada tras el deploy debe sellarlo para autocorregir el drift). */
-    if (o.ratingBase != null && newObjMoney === prevObjMoney
-        && newObjRating === prevObjRating && curRating === rating) return;
-    window._bayernHudMerge({ money: money, rating: rating, ratingBase: ratingBase,
-                             objMoney: newObjMoney, objRating: newObjRating });
-    /* Barras de progreso del HUD coherentes con los nuevos valores
-       (athObjCount las pinta con su escala vieja; aquí las corregimos
-       contra los targets visibles 💼 /9.10 y 🪙 /1300€). */
+    /* Salir solo si NADA cambia. */
+    if (newObjMoney === prevObjMoney) return;
+    window._bayernHudMerge({ money: money, objMoney: newObjMoney });
+    /* Barra de progreso del HUD coherente con el nuevo valor (athObjCount la
+       pinta con su escala vieja; aquí la corregimos contra el target visible
+       🪙 /1300€). */
     try {
-      var barP = document.getElementById('ath-bar-pts');
       var barM = document.getElementById('ath-bar-money');
-      var tgtR = parseFloat((o.ratingTarget != null) ? o.ratingTarget : 9.10) || 9.10;
       var tgtM = parseFloat((o.moneyTarget  != null) ? o.moneyTarget  : 1300) || 1300;
-      if (barP) barP.style.width = Math.min(100, (rating / tgtR) * 100) + '%';
       if (barM) barM.style.width = Math.min(100, (money  / tgtM) * 100) + '%';
     } catch(_){}
   }
@@ -75325,2839 +75118,6 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   if (document.readyState === 'loading')
     document.addEventListener('DOMContentLoaded', _wire);
   else _wire();
-})();
-</script>
-
-<!-- ═══════════════════════════════════════════════════════════════
-     MÓDULO DE MENSAJES DEL HUB (Liverpool + Francia · 2026-05-23)
-     ──────────────────────────────────────────────────────────────
-     Bandeja de entrada estilo videojuego. Botón ✉ azul/negro
-     apilado bajo el ℹ rojo/negro en la cabecera del hub
-     (#s-munich .sec-hdr). Al pulsarlo emerge un modal con 2
-     pestañas (Liverpool / Francia — Toñín dirige ambas) y dentro
-     de cada una: sub-pestañas 📩 Nuevos / 📭 Leídos. Cada mensaje
-     se puede marcar como leído (✓) o borrar (🗑). Botón "Limpiar
-     leídos" en la pestaña 📭.
-
-     Storage: localStorage 'mu_messages_v1' — cap 500 msgs por lado
-     (FIFO) → bien dentro del límite de 2 MB por carpeta del
-     CLAUDE.md (500 msgs × ~200 bytes ≈ 100 KB por lado).
-
-     Generadores (todos hookean código existente sin modificarlo):
-       • Resultado del partido  → wrap window.registrarResultadoLiga
-       • Lesiones / rojas / dobles → wrap window.registrarLigaPlayerStats
-       • Ciclo de amarillas       → cursor sobre window.YELLOW_STORE
-       • Sorteos Copa del Rey     → scan localStorage 'copa_state_v1'
-       • Posición en LaLiga       → window.collectStandings('liga')
-       • Selección Francia        → ambiental (no hay sim real)
-     ═══════════════════════════════════════════════════════════ -->
-<style>
-  /* Botón ✉ debajo del ℹ. Paleta azul Liverpool (away kit) → negro,
-     para diferenciarlo del rojo del ℹ. */
-  #mu-msg-btn{ position:absolute; top:40px; right:9px; z-index:4;
-    width:24px; height:24px; padding:0; line-height:1;
-    border-radius:50%;
-    background:linear-gradient(135deg,#1e6dc1 0%,#143f6d 55%,#0a0a0a 100%);
-    border:1px solid #0a0a0a;
-    color:#fff;
-    font-family:'Oswald',sans-serif; font-size:15px; font-weight:700;
-    cursor:pointer; -webkit-tap-highlight-color:transparent;
-    box-shadow:0 1px 3px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.08);
-    display:flex; align-items:center; justify-content:center; }
-  #mu-msg-btn:active{ transform:scale(.94); }
-  #mu-msg-btn .mmb-ico{ display:block; line-height:1; }
-  #mu-msg-btn .mmb-count{ position:absolute; top:-4px; right:-4px;
-    min-width:14px; height:14px; padding:0 3px; box-sizing:border-box;
-    border-radius:7px; background:#F6EB61; color:#1a0a0d;
-    font-family:'Oswald',sans-serif; font-size:9px; font-weight:700;
-    line-height:14px; text-align:center;
-    box-shadow:0 1px 2px rgba(0,0,0,.5); pointer-events:none; }
-  #mu-msg-btn .mmb-count[hidden]{ display:none; }
-
-  /* Overlay modal */
-  #mu-msg-ov{ position:fixed; inset:0; z-index:10010;
-    display:flex; align-items:center; justify-content:center; }
-  #mu-msg-ov[hidden]{ display:none; }
-  #mu-msg-ov .mmo-bd{ position:absolute; inset:0;
-    background:rgba(0,0,0,.66); backdrop-filter:blur(2px); }
-  #mu-msg-ov .mmo-modal{ position:relative; z-index:2;
-    width:min(94vw, 460px); max-height:88vh;
-    display:flex; flex-direction:column;
-    background:linear-gradient(180deg,#160a0e 0%,#0a0507 100%);
-    border:1px solid rgba(200,16,46,.45);
-    border-radius:14px;
-    box-shadow:0 18px 48px rgba(0,0,0,.7), inset 0 0 0 1px rgba(255,255,255,.04);
-    color:#fff; font-family:'Oswald',sans-serif;
-    overflow:hidden; }
-  #mu-msg-ov .mmo-hdr{ display:flex; align-items:center; justify-content:space-between;
-    padding:10px 14px;
-    background:linear-gradient(180deg, rgba(200,16,46,.32), rgba(200,16,46,.12));
-    border-bottom:1px solid rgba(200,16,46,.30); }
-  #mu-msg-ov .mmo-title{ font-size:14px; letter-spacing:2px; color:#F6EB61; }
-  #mu-msg-ov .mmo-x{ background:transparent; border:0; color:#fff;
-    font-size:18px; line-height:1; cursor:pointer; padding:4px 8px;
-    -webkit-tap-highlight-color:transparent; }
-  #mu-msg-ov .mmo-x:active{ transform:scale(.94); }
-
-  /* Pestañas Liverpool / Francia */
-  #mu-msg-ov .mmo-tabs{ display:flex; gap:0;
-    border-bottom:1px solid rgba(255,255,255,.08); }
-  #mu-msg-ov .mmo-tab{ flex:1 1 50%; padding:9px 6px;
-    background:transparent; border:0; border-bottom:2px solid transparent;
-    color:rgba(255,255,255,.55); font-family:'Oswald',sans-serif;
-    font-size:11px; letter-spacing:1.5px; cursor:pointer;
-    -webkit-tap-highlight-color:transparent; position:relative; }
-  #mu-msg-ov .mmo-tab.on{ color:#fff; border-bottom-color:#F6EB61; }
-  #mu-msg-ov .mmo-tab[data-side="liv"].on{ border-bottom-color:#c8102e;
-    background:linear-gradient(180deg, rgba(200,16,46,.12), transparent); }
-  #mu-msg-ov .mmo-tab[data-side="fra"].on{ border-bottom-color:#1e6dc1;
-    background:linear-gradient(180deg, rgba(30,109,193,.16), transparent); }
-  #mu-msg-ov .mmo-tab-bdg{ display:inline-block; min-width:16px; height:16px;
-    padding:0 4px; margin-left:6px; box-sizing:border-box;
-    border-radius:8px; background:#F6EB61; color:#1a0a0d;
-    font-style:normal; font-size:10px; line-height:16px; font-weight:700;
-    vertical-align:middle; }
-  #mu-msg-ov .mmo-tab-bdg[hidden]{ display:none; }
-
-  /* Sub-pestañas Nuevos / Leídos */
-  #mu-msg-ov .mmo-subtabs{ display:flex; gap:0; align-items:center;
-    padding:6px 10px;
-    border-bottom:1px solid rgba(255,255,255,.06);
-    background:rgba(0,0,0,.18); }
-  #mu-msg-ov .mmo-sub{ padding:5px 10px; margin-right:4px;
-    background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
-    border-radius:6px;
-    color:rgba(255,255,255,.7); font-family:'Oswald',sans-serif;
-    font-size:10.5px; letter-spacing:1px; cursor:pointer;
-    -webkit-tap-highlight-color:transparent; }
-  #mu-msg-ov .mmo-sub.on{ color:#fff; border-color:#F6EB61;
-    background:linear-gradient(135deg,rgba(200,16,46,.55),rgba(246,235,97,.16)); }
-  #mu-msg-ov .mmo-actions{ margin-left:auto;
-    padding:6px 12px;
-    background:linear-gradient(135deg, rgba(220,40,50,.78), rgba(140,15,25,.85));
-    border:1px solid rgba(255,140,140,.65);
-    border-radius:6px;
-    color:#fff; font-family:'Oswald',sans-serif;
-    font-size:11px; letter-spacing:1.2px; font-weight:700;
-    cursor:pointer; -webkit-tap-highlight-color:transparent;
-    box-shadow:0 0 8px rgba(220,40,50,.35), inset 0 1px 0 rgba(255,255,255,.10);
-    text-shadow:0 1px 1px rgba(0,0,0,.5);
-    text-transform:uppercase; line-height:1;
-  }
-  #mu-msg-ov .mmo-actions:active{ transform:scale(.96); }
-  #mu-msg-ov .mmo-actions[hidden]{ display:none; }
-
-  /* Lista de mensajes */
-  #mu-msg-ov .mmo-body{ flex:1 1 auto; overflow-y:auto;
-    padding:8px 10px 12px; -webkit-overflow-scrolling:touch; }
-  #mu-msg-ov .mmo-empty{ padding:32px 10px; text-align:center;
-    color:rgba(255,255,255,.45); font-size:12px; letter-spacing:1px; }
-  #mu-msg-ov .mmo-msg{ display:flex; gap:10px; align-items:flex-start;
-    padding:9px 10px; margin:6px 0;
-    background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,.10));
-    border:1px solid rgba(255,255,255,.07); border-radius:9px;
-    cursor:pointer; -webkit-tap-highlight-color:transparent; }
-  #mu-msg-ov .mmo-msg.is-unread{ border-color:rgba(246,235,97,.32);
-    background:linear-gradient(180deg, rgba(246,235,97,.08), rgba(0,0,0,.10)); }
-  /* Mensaje ya leído: fondo VERDE claro + borde verde sólido +
-     sello "✓ LEÍDO" para confirmar visualmente que el mensaje
-     se ha procesado. Sin esto, el usuario no distinguía claramente
-     un mensaje recién leído del resto (petición 2026-05-23). */
-  #mu-msg-ov .mmo-msg.is-read{
-    border:1px solid rgba(74,220,120,.65);
-    background:linear-gradient(180deg, rgba(74,220,120,.20), rgba(20,60,40,.32));
-    box-shadow:0 0 10px rgba(74,220,120,.20), inset 0 0 0 1px rgba(74,220,120,.10);
-  }
-  #mu-msg-ov .mmo-msg.is-read .mmo-msg-title{ color:#e8ffec; }
-  #mu-msg-ov .mmo-msg.is-read .mmo-msg-body { color:rgba(220,255,225,.82); }
-  #mu-msg-ov .mmo-msg.is-read .mmo-msg-ico  {
-    background:rgba(74,220,120,.18);
-    box-shadow:inset 0 0 0 1px rgba(74,220,120,.40);
-  }
-  #mu-msg-ov .mmo-read-stamp{
-    display:inline-flex; align-items:center; gap:3px;
-    padding:2px 7px 2px 5px; margin-right:7px;
-    border:1px solid rgba(74,220,120,.85);
-    background:linear-gradient(135deg, rgba(74,220,120,.45), rgba(40,160,80,.55));
-    color:#ffffff;
-    font-size:9.5px; letter-spacing:1.3px; font-weight:700;
-    border-radius:4px; text-transform:uppercase;
-    font-family:'Oswald',sans-serif; line-height:1;
-    box-shadow:0 0 6px rgba(74,220,120,.45);
-    text-shadow:0 1px 1px rgba(0,0,0,.45);
-  }
-  #mu-msg-ov .mmo-read-stamp::before{ content:'✓'; font-size:11px; font-weight:900; }
-  /* Chip 🇫🇷 SELECCIÓN — identifica mensajes de la selección de Francia
-     dentro de la bandeja unificada del Liverpool. Va antes del sender. */
-  #mu-msg-ov .mmo-fra-chip{
-    display:inline-flex; align-items:center; gap:3px;
-    padding:2px 6px 2px 4px; margin-right:6px;
-    border:1px solid rgba(30,109,193,.85);
-    background:linear-gradient(135deg, rgba(30,109,193,.45), rgba(220,30,40,.30));
-    color:#ffffff;
-    font-size:9px; letter-spacing:1.1px; font-weight:700;
-    border-radius:4px; text-transform:uppercase;
-    font-family:'Oswald',sans-serif; line-height:1;
-    box-shadow:0 0 5px rgba(30,109,193,.35);
-    text-shadow:0 1px 1px rgba(0,0,0,.5);
-    vertical-align:baseline;
-  }
-  /* Subtítulo "LIVERPOOL" del header del modal, junto al ✉️ MENSAJES. */
-  #mu-msg-ov .mmo-title-sub{
-    margin-left:8px; padding:2px 8px;
-    border-radius:4px;
-    background:linear-gradient(135deg, rgba(200,16,46,.45), rgba(246,235,97,.18));
-    border:1px solid rgba(200,16,46,.65);
-    font-size:10.5px; letter-spacing:1.5px; font-weight:700;
-    color:#fff; vertical-align:middle;
-  }
-  /* Animación al pulsar ✅: el row se desvanece + colapsa antes de
-     que `markRead` persista y rerenderice → el usuario VE el mensaje
-     salir de NUEVOS (y aparecerá en LEÍDOS al pulsar esa sub-pestaña). */
-  @keyframes mmoMsgFadeOut{
-    0%   { opacity:1; transform:translateX(0);   max-height:200px; margin-top:6px; margin-bottom:6px; padding-top:9px; padding-bottom:9px; }
-    60%  { opacity:0; transform:translateX(40px); max-height:200px; }
-    100% { opacity:0; transform:translateX(40px); max-height:0;   margin-top:0;     margin-bottom:0;     padding-top:0;     padding-bottom:0;     border-width:0; }
-  }
-  #mu-msg-ov .mmo-msg.is-fading-out{
-    animation:mmoMsgFadeOut .22s ease forwards;
-    pointer-events:none; overflow:hidden;
-  }
-  #mu-msg-ov .mmo-msg-ico{ flex:0 0 28px; width:28px; height:28px;
-    display:flex; align-items:center; justify-content:center;
-    font-size:18px; line-height:1;
-    background:rgba(0,0,0,.30); border-radius:7px; }
-  #mu-msg-ov .mmo-msg-main{ flex:1 1 auto; min-width:0; }
-  #mu-msg-ov .mmo-msg-hdr{ display:flex; gap:8px; align-items:baseline;
-    justify-content:space-between; }
-  #mu-msg-ov .mmo-msg-sender{ font-size:10.5px; letter-spacing:1px;
-    color:#F6EB61; text-transform:uppercase;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:65%; }
-  #mu-msg-ov .mmo-msg-ts{ font-size:9.5px; letter-spacing:.5px;
-    color:rgba(255,255,255,.45); white-space:nowrap; }
-  #mu-msg-ov .mmo-msg-title{ font-size:12.5px; line-height:1.25;
-    color:#fff; font-weight:600; margin-top:2px; }
-  #mu-msg-ov .mmo-msg-body{ font-size:11.5px; line-height:1.35;
-    color:rgba(255,255,255,.78); margin-top:3px;
-    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  /* Foto adjunta a un mensaje (compositor admin). Miniatura clicable
-     que abre el visor a pantalla completa. */
-  #mu-msg-ov .mmo-msg-photo-wrap{ margin-top:7px; }
-  #mu-msg-ov .mmo-msg-photo{ display:block; max-width:100%; max-height:210px;
-    border-radius:8px; border:1px solid rgba(255,255,255,.16);
-    object-fit:contain; cursor:zoom-in; background:rgba(0,0,0,.3); }
-  /* Compositor admin: botón 📷 + miniatura de previsualización. */
-  #mu-msg-ov #mu-cmp-photo-btn{ padding:6px 12px; border-radius:7px;
-    background:#1f3a5a; color:#fff; border:1px solid rgba(255,255,255,.2);
-    font-size:13px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
-  #mu-msg-ov #mu-cmp-photo-btn:active{ transform:scale(.96); }
-  #mu-msg-ov #mu-cmp-photo-prev{ max-height:46px; max-width:90px;
-    border-radius:6px; border:1px solid rgba(255,255,255,.2); object-fit:cover; }
-  #mu-msg-ov #mu-cmp-photo-clear{ padding:5px 9px; border-radius:7px;
-    background:#3a2030; color:#ffb3b3; border:1px solid rgba(220,90,90,.45);
-    font-size:13px; cursor:pointer; -webkit-tap-highlight-color:transparent; }
-  /* Visor a pantalla completa de la foto. */
-  .mu-lightbox{ position:fixed; inset:0; z-index:1000120;
-    background:rgba(0,0,0,.93); display:flex; align-items:center;
-    justify-content:center; cursor:zoom-out; padding:14px; }
-  .mu-lightbox img{ max-width:96vw; max-height:96vh; border-radius:8px;
-    box-shadow:0 10px 40px rgba(0,0,0,.7); }
-  #mu-msg-ov .mmo-msg-acts{ flex:0 0 auto; display:flex; flex-direction:column;
-    gap:4px; align-items:flex-end; }
-  #mu-msg-ov .mmo-btn{ background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.12); color:#fff;
-    border-radius:6px; padding:3px 7px;
-    font-size:11px; cursor:pointer; line-height:1;
-    -webkit-tap-highlight-color:transparent; }
-  #mu-msg-ov .mmo-btn.del{
-    color:#ffb3b3; border-color:rgba(220,90,90,.45);
-    background:linear-gradient(135deg, rgba(180,40,40,.22), rgba(110,20,25,.30));
-    padding:7px 10px; font-size:18px; line-height:1;
-    min-width:38px; min-height:38px;
-    display:flex; align-items:center; justify-content:center;
-  }
-  #mu-msg-ov .mmo-btn:active{ transform:scale(.94); }
-
-  /* Toast emergente cuando llega un mensaje importante con la
-     bandeja cerrada — desaparece solo en ~3.5 s. */
-  .mu-toast{ position:fixed; left:50%; bottom:18px;
-    transform:translate(-50%, 28px); z-index:10005;
-    max-width:88vw;
-    display:flex; align-items:center; gap:9px;
-    padding:9px 14px;
-    background:linear-gradient(180deg,#160a0e 0%,#0a0507 100%);
-    border:1px solid rgba(246,235,97,.42);
-    border-left:4px solid #F6EB61;
-    border-radius:9px;
-    color:#fff; font-family:'Oswald',sans-serif;
-    font-size:12px; letter-spacing:.5px;
-    box-shadow:0 6px 22px rgba(0,0,0,.55);
-    opacity:0; transition:opacity .28s, transform .28s;
-    pointer-events:none; }
-  .mu-toast.on{ opacity:1; transform:translate(-50%, 0); }
-  .mu-toast-ico{ font-size:16px; line-height:1; }
-  .mu-toast-txt{ flex:1 1 auto; min-width:0;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-    font-size:12.5px; }
-  /* Pulso de aviso en el botón ✉ cuando llega algo importante */
-  #mu-msg-btn.is-alert{ animation:mu-msg-pulse 1.4s ease-out 2; }
-  @keyframes mu-msg-pulse{
-    0%   { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 0 rgba(246,235,97,.7), inset 0 0 0 1px rgba(255,255,255,.08); }
-    70%  { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 12px rgba(246,235,97,0), inset 0 0 0 1px rgba(255,255,255,.08); }
-    100% { box-shadow:0 1px 3px rgba(0,0,0,.5), 0 0 0 0 rgba(246,235,97,0), inset 0 0 0 1px rgba(255,255,255,.08); }
-  }
-</style>
-<script>
-/* ── Módulo de Mensajes del hub (Liverpool + Francia) ────────────
-   API pública: window._muMsg
-     .push(opts)            añade mensaje { side, type, icon, sender, title, body, ts? }
-     .markRead(id)
-     .markAllReadInSide(side)
-     .delete(id)
-     .clearReadInSide(side)
-     .list(side, kind)      kind = 'new' | 'read'
-     .unreadCount(side?)
-     .refresh()
-     .open(side?, kind?)
-*/
-(function(){
-  if (window.__MU_MSG_READY) return;
-  window.__MU_MSG_READY = true;
-
-  /* HUB ACTIVO (multi-hub 2026-06-13): la bandeja es POR HUB. Liverpool/
-     Toñín = 'mu_messages_v1' (intacta); Arsenal/etc. → '..._<id>'.
-     Reasignable + re-creación del _kvBlobSync en 'hubchange'. */
-  var KEY  = (window._hubKey ? window._hubKey('mu_messages_v1') : 'mu_messages_v1');
-  var CAP  = 500;     /* mensajes máx. por lado (FIFO) */
-  /* Nombre VISIBLE del club del hub para los textos de los mensajes (NO el
-     lógico, que para Liverpool es 'Bayern Munich'). Para Arsenal = 'Arsenal'. */
-  function _hubDisp(){
-    try { if (typeof window._psHumanName === 'function'){ var n = window._psHumanName(); if (n) return String(n); } } catch(_){}
-    try { var a = _userTeamAlias(); if (a) return a; } catch(_){}
-    return 'Liverpool';
-  }
-  /* Selección VISIBLE del hub (Francia para Toñín, Brasil para Álvaro…).
-     El HUB ACTIVO manda PRIMERO: se fija SÍNCRONO al pulsar la caja
-     (`setActiveHub`), mientras `_userTeamAlias()` (=_mkHubTeamName) lo
-     actualiza `_sync()` de forma ASÍNCRONA y puede ir STALE tras un
-     hubchange → la convocatoria salía "Francia" en la bandeja del Arsenal
-     (el mister sí era Álvaro porque venía del hub activo). */
-  function _hubSelDisp(){
-    try { var h = window._activeHub && window._activeHub(); if (h && h.seleccion) return String(h.seleccion); } catch(_){}
-    try { var m = window._mhFindMister && window._mhFindMister(_userTeamAlias()); if (m && m.seleccion) return String(m.seleccion); } catch(_){}
-    return '';
-  }
-  /* Bandera + acrónimo de la selección del hub para los senders de la
-     bandeja (antes hardcodeados a 🇫🇷 / "FFF · Selección Francia"). */
-  function _hubSelFlag(){
-    var nn = String(_hubSelDisp()||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
-    var F = { francia:'🇫🇷', brasil:'🇧🇷', inglaterra:'🏴', noruega:'🇳🇴', argentina:'🇦🇷', espana:'🇪🇸', portugal:'🇵🇹' };
-    return F[nn] || '🌍';
-  }
-  function _fraSender(){ return 'Selección ' + _hubSelDisp(); }
-
-  /* ── Sync localStorage ⇄ servidor (2026-06-05) ───────────────────
-     La bandeja vivía SOLO en localStorage → se perdía al borrar datos
-     de navegación / cambiar de móvil (incluidos los mensajes que el
-     admin compone a mano con FOTO adjunta). localStorage = caché ·
-     servidor = fuente de verdad. Merge por RECENCIA: el blob con
-     `updatedAt` mayor gana entero (mismo patrón que bajas/sanciones,
-     ver `_kvBlobSync` en index.bundle.js). */
-  var _muUpdatedAt = 0;
-  var _muSync = null, _muSyncReady = false;
-  var _muRunScans = null; /* ref al `run` de _bootStage2; se asigna ahí para re-lanzar scans en hubchange */
-  function _muSetupSync(){
-    if (_muSyncReady) return;
-    if (typeof window._kvBlobSync !== 'function'){
-      /* index.bundle.js aún no ha definido el helper — reintenta. */
-      if ((_muSetupSync._t = (_muSetupSync._t || 0) + 1) <= 40)
-        setTimeout(_muSetupSync, 250);
-      return;
-    }
-    _muSyncReady = true;
-    /* CRÍTICO: capturar KEY por VALOR en este momento. Si el usuario cambia
-       de hub antes de que llegue la respuesta HTTP, el adopt callback NO debe
-       escribir los mensajes del hub anterior en el localStorage del hub nuevo.
-       La guard `KEY !== _thisKey` descarta respuestas tardías/stale. */
-    var _thisKey = KEY;
-    _muSync = window._kvBlobSync(_thisKey);
-    _muSync.config(
-      function(){ var d = _read(); return { msgs:d.msgs, cursors:d.cursors }; },
-      function(sv){
-        if (KEY !== _thisKey) return; /* hub cambió antes de que llegara la respuesta — ignorar */
-        try {
-          var msgs    = Array.isArray(sv && sv.msgs) ? sv.msgs : [];
-          var cursors = (sv && sv.cursors) || {};
-          _muUpdatedAt = Number(sv && sv.updatedAt) || Date.now();
-          window._lsSetSafe(_thisKey, JSON.stringify({ msgs:msgs, cursors:cursors, updatedAt:_muUpdatedAt }));
-        } catch(_){}
-        try { _refresh(); } catch(_){}
-      },
-      function(d){ return !(d && Array.isArray(d.msgs) && d.msgs.length); }
-    );
-    _muSync.seed(_muUpdatedAt);
-    try { _muSync.hydrate(function(){ try { _refresh(); } catch(_){} }); } catch(_){}
-  }
-  /* HUB ACTIVO (multi-hub 2026-06-13): al cambiar de mister, re-resolver la
-     clave de la bandeja, re-crear el _kvBlobSync ligado a ella y refrescar
-     (badge + overlay + subtítulo del nuevo hub). Sin esto la caja de Arsenal
-     mostraría los mensajes del Liverpool (foto usuario 2026-06-13). */
-  try {
-    window.addEventListener('hubchange', function(){
-      /* Vacía el push pendiente del hub ANTERIOR a SU fila (clave aún actual)
-         y cancela su timer ANTES de reasignar KEY — evita que un timer stale
-         suba los mensajes del hub nuevo a la fila del anterior (corrupción
-         cross-hub). */
-      try { if (_muSync && _muSync.flush) _muSync.flush(); } catch(_){}
-      try { KEY = window._hubKey('mu_messages_v1'); } catch(_){}
-      _muUpdatedAt = 0; _muSync = null; _muSyncReady = false;
-      _muSetupSync._t = 0; /* resetea contador de reintentos para el nuevo hub */
-      try { _muSetupSync(); } catch(_){}
-      /* Actualiza el subtítulo del header del overlay si está montado. */
-      try { var sub = document.querySelector('#mu-msg-ov .mmo-title-sub'); if (sub) sub.textContent = String(_hubDisp()).toUpperCase(); } catch(_){}
-      try { _refresh(); } catch(_){}
-      /* Relanza los scans para el nuevo hub (Copa, selección, Liga, etc.)
-         con un tick de delay para que _mkHubTeamName/_hubSelDisp hayan
-         resuelto el nuevo mister antes de que los helpers _isLiv/_isFra lean. */
-      if (_muRunScans) setTimeout(_muRunScans, 80);
-    });
-  } catch(_){}
-
-  /* Valida que una cadena sea un data-URI de imagen seguro (lo usamos
-     para renderizar sin escapar — base64 no contiene comillas, así que
-     no puede romper el atributo src ni inyectar HTML). */
-  function _isImgData(s){
-    return typeof s === 'string'
-      && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/.test(s)
-      && s.length < 2200000;   /* tope defensivo ~2.2 MB de data-URI */
-  }
-  /* Reescala una imagen elegida por el admin a JPEG pequeño (máx. 980 px,
-     calidad 0.68) para que quepa cómodamente en localStorage y bajo el
-     cap de 2 MB por clave del servidor. cb(dataURI|null). */
-  function _muDownscale(file, cb){
-    try {
-      var fr = new FileReader();
-      fr.onload = function(){
-        var img = new Image();
-        img.onload = function(){
-          try {
-            var MAX = 980;
-            var w = img.naturalWidth || img.width;
-            var h = img.naturalHeight || img.height;
-            if (!w || !h){ cb(null); return; }
-            var scale = Math.min(1, MAX / Math.max(w, h));
-            var cw = Math.max(1, Math.round(w * scale));
-            var ch = Math.max(1, Math.round(h * scale));
-            var cv = document.createElement('canvas');
-            cv.width = cw; cv.height = ch;
-            var ctx = cv.getContext('2d');
-            ctx.drawImage(img, 0, 0, cw, ch);
-            var out = null;
-            try { out = cv.toDataURL('image/jpeg', 0.68); } catch(_){ out = null; }
-            cb(out && _isImgData(out) ? out : null);
-          } catch(_){ cb(null); }
-        };
-        img.onerror = function(){ cb(null); };
-        img.src = fr.result;
-      };
-      fr.onerror = function(){ cb(null); };
-      fr.readAsDataURL(file);
-    } catch(_){ cb(null); }
-  }
-  /* El equipo del usuario es canónicamente "Bayern Munich" en todo el
-     motor (LIGA_SCHEDULE, LIGA_PLAYER_MATCH_STORE, registrar*, etc).
-     El editor de plantillas permite renombrarlo (en este save: Liverpool)
-     vía window._ligaEaSubName('Bayern Munich'). Para que los hooks
-     enganchen sin importar el alias, aceptamos AMBOS nombres. */
-
-  /* ── Storage ─────────────────────────────────────────────── */
-  function _read(){
-    try {
-      var r = localStorage.getItem(KEY);
-      if (!r) return { msgs:[], cursors:{} };
-      var d = JSON.parse(r);
-      if (d && d.updatedAt){
-        var ts = Number(d.updatedAt) || 0;
-        if (ts > _muUpdatedAt) _muUpdatedAt = ts;
-      }
-      return (d && typeof d === 'object' && Array.isArray(d.msgs))
-        ? { msgs:d.msgs, cursors:d.cursors || {} }
-        : { msgs:[], cursors:{} };
-    } catch(_){ return { msgs:[], cursors:{} }; }
-  }
-  function _write(d){
-    try {
-      ['liv','fra'].forEach(function(side){
-        var arr = d.msgs.filter(function(m){ return m.side === side; });
-        if (arr.length > CAP){
-          var keepIds = arr.slice(arr.length - CAP).map(function(m){ return m.id; });
-          d.msgs = d.msgs.filter(function(m){
-            return m.side !== side || keepIds.indexOf(m.id) >= 0;
-          });
-        }
-      });
-      _muUpdatedAt = Date.now();
-      window._lsSetSafe(KEY, JSON.stringify({ msgs:d.msgs, cursors:d.cursors || {}, updatedAt:_muUpdatedAt }));
-      /* Sube al servidor (debounced + reintentos). No hace nada hasta
-         que el sync ha hidratado (anti-wipe). */
-      if (_muSync){ try { _muSync.touch(_muUpdatedAt); } catch(_){} }
-    } catch(_){}
-  }
-  function _uuid(){ return 'm_'+Math.random().toString(36).slice(2,9)+Date.now().toString(36); }
-  function _now(){ return Date.now(); }
-  function _dateLabel(ts){
-    try {
-      var d = new Date(ts);
-      var p = function(n){ return (n < 10 ? '0' : '') + n; };
-      var M = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-      return p(d.getDate())+' '+M[d.getMonth()]+' · '+p(d.getHours())+':'+p(d.getMinutes());
-    } catch(_){ return ''; }
-  }
-  function _esc(s){
-    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
-      return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[c];
-    });
-  }
-  function _userTeamAlias(){
-    /* Nombre LÓGICO del club del hub humano. SIEMPRE dinámico — el slot
-       histórico "Bayern Munich" fue renombrado por el usuario (a Liverpool
-       actualmente). Resolver vía los helpers canónicos, NUNCA hardcodear el
-       club (regla CLAUDE.md "Hub del usuario: Liverpool, no Bayern"). */
-    try {
-      if (window._mkHubTeamName) return String(window._mkHubTeamName);
-    } catch(_){}
-    try {
-      if (typeof window._psHumanLogicName === 'function'){
-        var h = window._psHumanLogicName();
-        if (h) return String(h);
-      }
-    } catch(_){}
-    try {
-      if (typeof window._ligaEaSubName === 'function'){
-        var s = window._ligaEaSubName('Bayern Munich');
-        if (s) return String(s);
-      }
-    } catch(_){}
-    return '';
-  }
-  function _isLiv(name){
-    if (!name) return false;
-    var n = String(name).toLowerCase();
-    /* PROHIBIDO reconocer 'bayern' aquí: el Bayern es ahora un equipo IA de
-       la liga alemana, NO el equipo del hub. Reconocer 'bayern' metía sus
-       noticias (p.ej. "Harry Kane anota en 3 partidos seguidos") en la
-       bandeja del Liverpool. El club del hub se resuelve dinámicamente. */
-    var alias = _userTeamAlias().toLowerCase();
-    if (alias && n.indexOf(alias) >= 0) return true;
-    /* Fallback solo si el alias no resolvió: el hub actual es el Liverpool. */
-    if (!alias && n.indexOf('liverpool') >= 0) return true;
-    return false;
-  }
-  function _compLabel(c){
-    var m = {
-      liga:'la Liga EA Sports', copa:'la Copa del Rey', sc:'la Supercopa de España',
-      ucl:'la Champions League', uel:'la Europa League', uecl:'la Conference League',
-      superliga:'la Superliga', recopa:'la Recopa', usc:'la Supercopa de Europa',
-      inter:'la Intercontinental', mundial:'el Mundialito de Clubes',
-      amistoso:'el amistoso', torneo:'el torneo de pretemporada',
-      /* Variantes con plural y comps de verano (evita gramática rara
-         como "en la torneos" del fallback). 2026-05-25. */
-      torneos:'el torneo de pretemporada', verano:'el torneo de pretemporada',
-      sct:'el Soccer Champions Tour', jg:'el Trofeo Joan Gamper',
-      pss:'la Premier Summer Series', asia:'el Asian Tournament',
-      sel:'la fase de clasificación', 'sel-fin':'el Mundial',
-      wprev:'la Previa de Champions',
-      /* Alias devueltos por _gmCompFromState (gm-modal). 2026-06-02. */
-      super:'la Supercopa de España', mundialito:'el Mundialito de Clubes',
-      neutral:'la competición'
-    };
-    return m[c] || (c ? 'la '+c : 'la competición');
-  }
-  function _ronLabel(r){
-    var m = { r1:'1ª Ronda', r2:'2ª Ronda', r16:'Dieciseisavos',
-      oct:'Octavos', cua:'Cuartos', sf:'Semifinales', fin:'la Final' };
-    return m[r] || r;
-  }
-
-  /* ── Frases dinámicas (variedad "como la vida real", 2026-06-02) ──
-     El usuario reportó que la bandeja siempre mostraba los mismos
-     textos. Estas plantillas se eligen al azar para que cada partido
-     genere un mensaje distinto: positivo al ganar, negativo al perder
-     y neutro al empatar. `team` = nombre del equipo del usuario,
-     `g`/`r` = goles propios/rival, `where` = "en casa"/"a domicilio". */
-  function _pick(arr){ return arr[(Math.random()*arr.length)|0]; }
-  function _winPhrases(team, riv, g, r, where){
-    return [
-      '¡Victoria! '+team+' se impone '+g+'-'+r+' a '+riv+'. El vestuario lo celebra. 🎉',
-      '¡A por todas! Triunfo por '+g+'-'+r+' frente a '+riv+' '+where+'. Gran partido. 💪',
-      'Tres puntos en el bolsillo: '+g+'-'+r+' ante '+riv+'. La afición se va feliz. 🔥',
-      '¡Qué alegría! Ganamos '+g+'-'+r+' a '+riv+'. Seguimos sumando, mister. 🏆',
-      'Sólido '+g+'-'+r+' contra '+riv+'. El equipo responde cuando hace falta. 👏',
-      '¡Triunfazo! '+g+'-'+r+' ante '+riv+'. Así da gusto. 😄'
-    ];
-  }
-  function _lossPhrases(team, riv, g, r, where){
-    return [
-      'Derrota '+g+'-'+r+' frente a '+riv+'. Duele, pero hay que levantarse ya. 😞',
-      'Mal día: caemos '+g+'-'+r+' ante '+riv+' '+where+'. A corregir errores. 😔',
-      'No pudo ser. Perdemos '+g+'-'+r+' contra '+riv+'. A apretar los dientes. 💔',
-      'Tropiezo '+g+'-'+r+' frente a '+riv+'. El equipo debe reaccionar ya. ⚠️',
-      'Pinchazo doloroso: '+g+'-'+r+' ante '+riv+'. La próxima será nuestra. 🙏',
-      'Jarro de agua fría: '+g+'-'+r+' contra '+riv+'. Cabeza alta y a seguir. 😣'
-    ];
-  }
-  function _drawPhrases(team, riv, g, r, where){
-    return [
-      'Empate '+g+'-'+r+' con '+riv+'. Sabe a poco, faltó pegada. 🤝',
-      'Reparto de puntos: '+g+'-'+r+' ante '+riv+'. Hay que mejorar arriba. 😐',
-      'Igualada '+g+'-'+r+' frente a '+riv+'. Un punto que puede valer. ⚖️',
-      'Tablas '+g+'-'+r+' contra '+riv+'. Ni para unos ni para otros. 🤝'
-    ];
-  }
-  function _previewPhrases(riv, where, when, comp){
-    var c = comp ? ' — '+comp : '';
-    return [
-      'Toca preparar el partido contra '+riv+' ('+where+(when?', '+when:'')+')'+c+'. Revisa lesionados, sancionados y alineación. ¡A por ello! 💪',
-      'Se acerca el duelo ante '+riv+' ('+where+(when?', '+when:'')+')'+c+'. Mira las bajas y prepara el once. 📋',
-      'Próximo reto: '+riv+' ('+where+(when?', '+when:'')+')'+c+'. Comprueba sancionados y lesionados antes de elegir la alineación. ⚽',
-      'A concentrarse: jugamos contra '+riv+' ('+where+(when?', '+when:'')+')'+c+'. Revisa la convocatoria con cuidado. 🎯'
-    ];
-  }
-  /* Nombre legible del grado de lesión (acepta número 1/2/3 o texto). */
-  function _gradeLabel(g){
-    if (g === 1 || g === '1') return 'leve';
-    if (g === 2 || g === '2') return 'moderada';
-    if (g === 3 || g === '3') return 'grave';
-    var s = String(g || '').toLowerCase();
-    if (s) return s;
-    return 'leve';
-  }
-  /* Extracción robusta del nombre del jugador desde un evento del acta
-     (cubre ev.name string, ev.player [num,name] y ev.player string). */
-  function _evPlayerName(ev){
-    if (!ev) return '';
-    if (typeof ev.name === 'string' && ev.name.trim()) return ev.name.trim();
-    if (Array.isArray(ev.player)) return String(ev.player[1] || ev.player[0] || '').trim();
-    if (typeof ev.player === 'string') return ev.player.trim();
-    return '';
-  }
-  /* ¿Es el equipo la selección del usuario (Francia)? El hub de
-     selecciones del usuario es Francia; las otras 5 selecciones
-     humanas pertenecen a otros misters y NO van a esta bandeja. */
-  function _isFra(name){
-    if (!name) return false;
-    var n = String(name).toLowerCase().trim();
-    /* HUB ACTIVO (multi-hub 2026-06-13): la selección del hub no siempre es
-       Francia (Arsenal → Brasil). Detecta la del mister activo. */
-    try {
-      var sel = _hubSelDisp();
-      if (sel){ var s = String(sel).toLowerCase().trim(); if (s && (n === s || n.indexOf(s) >= 0)) return true; }
-    } catch(_){}
-    return n === 'francia' || n === 'france' || n.indexOf('francia') >= 0;
-  }
-  function _fraCompLabel(c){
-    c = String(c || '');
-    if (/mundial|sel-fin/.test(c)) return 'el Mundial';
-    if (c === 'sel') return 'la fase de clasificación';
-    if (c === 'amistoso') return 'el amistoso';
-    return 'la selección';
-  }
-  /* Nota de scouting del rival para la previa: su posición y forma
-     reciente en la clasificación, si está disponible (Liga EA). Para
-     rivales de los que no tenemos datos (p.ej. selecciones del Mundial)
-     devuelve '' y la previa simplemente no la incluye. Robusto: nunca
-     lanza, nunca inventa. */
-  function _rivalScoutNote(rival){
-    if (!rival) return '';
-    try {
-      if (typeof window.collectStandings !== 'function') return '';
-      var arr = window.collectStandings('liga') || [];
-      var rl = String(rival).toLowerCase().trim();
-      for (var i = 0; i < arr.length; i++){
-        var r = arr[i];
-        if (!r || !r.name) continue;
-        if (String(r.name).toLowerCase().trim() !== rl) continue;
-        var pj = r.pj || 0;
-        if (pj < 1) return '';
-        var note = 'El rival llega ' + (i + 1) + 'º en LaLiga con ' + (r.pts || 0) + ' pts';
-        /* "Últimos resultados": forma reciente si el row la trae
-           (cadena tipo "WWDLW" o array). */
-        var form = r.form || r.racha || r.last5 || null;
-        if (typeof form === 'string' && form){
-          var f = form.replace(/[^WDLVEP]/gi, '').slice(-5).toUpperCase()
-                       .replace(/V/g, 'W').replace(/E/g, 'D').replace(/P/g, 'L');
-          if (f) note += '. Últimos partidos: ' + f.split('').join(' ');
-        }
-        return note + '.';
-      }
-    } catch(_){}
-    return '';
-  }
-
-  /* ── Estado UI ──────────────────────────────────────────── */
-  var _ui = { sideTab:'liv', readTab:'new' };
-  var _cmpImg = '';   /* foto adjunta pendiente en el compositor admin */
-
-  /* ── API pública ────────────────────────────────────────── */
-  function push(opts){
-    if (!opts || !opts.title) return;
-    var d = _read();
-    var msg = {
-      id:     opts.id || _uuid(),
-      side:   opts.side || 'liv',
-      type:   opts.type || 'info',
-      icon:   opts.icon || '📰',
-      sender: opts.sender || (opts.side === 'fra' ? ('Selección '+_hubSelDisp()) : (_hubDisp()+' FC')),
-      title:  String(opts.title),
-      body:   String(opts.body || ''),
-      ts:     opts.ts || _now(),
-      read:   false
-    };
-    /* Foto adjunta opcional (solo el compositor admin la setea). Se
-       guarda como data-URI JPEG reescalado; se valida para no inyectar
-       nada raro venido del servidor/otra sesión. */
-    if (_isImgData(opts.img)) msg.img = opts.img;
-    if (d.msgs.some(function(m){ return m.id === msg.id; })) return null;
-    d.msgs.push(msg);
-    _write(d);
-    _scheduleRefresh();
-    /* Toast + pulso del botón cuando llega algo importante con la
-       bandeja cerrada. Se omiten tipos rutinarios (welcome, chatter)
-       y los avisos `preview` (Próximo partido) — por petición del
-       usuario 2026-05-24: ese aviso vive SOLO dentro de la bandeja
-       Liverpool/Francia, no salta como toast en ninguna pantalla. */
-    if (msg.type !== 'welcome' && msg.type !== 'callup'
-        && msg.type !== 'preview'){
-      var ov = document.getElementById('mu-msg-ov');
-      var open = ov && !ov.hasAttribute('hidden');
-      if (!open) _toast(msg);
-    }
-    return msg;
-  }
-  function _toast(msg){
-    try {
-      var el = document.createElement('div');
-      el.className = 'mu-toast';
-      el.innerHTML = '<span class="mu-toast-ico">'+_esc(msg.icon||'✉')+'</span>'+
-                     '<span class="mu-toast-txt">'+_esc(msg.title||'Nuevo mensaje')+'</span>';
-      el.onclick = function(){ _openPop(); };
-      el.style.pointerEvents = 'auto';
-      document.body.appendChild(el);
-      setTimeout(function(){ el.classList.add('on'); }, 10);
-      setTimeout(function(){
-        el.classList.remove('on');
-        setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 350);
-      }, 3500);
-      var btn = document.getElementById('mu-msg-btn');
-      if (btn){
-        btn.classList.remove('is-alert');
-        /* reflow para reiniciar la animación */
-        void btn.offsetWidth;
-        btn.classList.add('is-alert');
-      }
-    } catch(_){}
-  }
-  function markRead(id){
-    var d = _read();
-    var m = d.msgs.find(function(x){ return x.id === id; });
-    if (m && !m.read){ m.read = true; _write(d); _scheduleRefresh(); }
-  }
-  function markAllReadInSide(side){
-    var d = _read(); var ch = false;
-    d.msgs.forEach(function(m){
-      if (m.side === side && !m.read){ m.read = true; ch = true; }
-    });
-    if (ch){ _write(d); _scheduleRefresh(); }
-  }
-  function del(id){
-    var d = _read();
-    d.msgs = d.msgs.filter(function(m){ return m.id !== id; });
-    _write(d);
-    /* Refresh inmediato (no scheduled) — el usuario reportó 2026-05-24
-       que tras pulsar 🗑 tenía que cerrar y reabrir el modal para ver
-       el mensaje borrado. El setTimeout de 60 ms de _scheduleRefresh
-       no era suficientemente fiable cuando el confirm() recién había
-       liberado el thread. Refresh directo + el remove() del row en el
-       onclick → desaparición instantánea. */
-    try { _refresh(); } catch(_){}
-  }
-  function clearReadInSide(side){
-    var d = _read();
-    d.msgs = d.msgs.filter(function(m){ return !(m.side === side && m.read); });
-    _write(d); _scheduleRefresh();
-  }
-  /* 2026-05-24: una única bandeja unificada Liverpool + Selección Francia
-     (petición usuario "vamos a dejar solo Liverpool, pero también saldrán
-     mensajes de la selección de Francia"). El parámetro `side` de `list`
-     y `unreadCount` queda ignorado en la UI — todos los mensajes salen
-     en la misma lista, con un chip 🇫🇷 SELECCIÓN cuando `m.side === 'fra'`.
-     Las funciones legacy `clearReadInSide` / `markAllReadInSide` se
-     conservan por compatibilidad con código que aún las llama. */
-  function clearReadAll(){
-    var d = _read();
-    d.msgs = d.msgs.filter(function(m){ return !m.read; });
-    _write(d); _scheduleRefresh();
-  }
-  function clearAllMessages(){
-    var d = _read();
-    d.msgs = [];
-    _write(d);
-    try { _refresh(); } catch(_){}
-  }
-  /* ¿El mensaje pertenece a ESTE hub? El store ya es por-hub, pero un
-     generador con bug pudo dejar en la bandeja del Inter un mensaje de la
-     selección de OTRO mister (Francia). Filtro de display: un mensaje de
-     SELECCIÓN (side 'fra') que nombra a una selección humana canónica
-     DISTINTA a la del hub activo —y NO nombra la del hub— NO se muestra
-     (individualización por caja humana, petición usuario 2026-06-27). Los
-     mensajes de club ya van por-hub (sender = club del hub). Un mensaje sin
-     selección reconocible (admin/custom) NUNCA se oculta. */
-  var _CANON_SELS = ['francia','brasil','inglaterra','noruega','argentina','espana','portugal'];
-  function _msgBelongsToHub(m){
-    if (!m || m.side !== 'fra') return true;
-    var _n = function(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); };
-    var sel = _n(typeof _hubSelDisp === 'function' ? _hubSelDisp() : '');
-    var hay = _n(m.sender) + ' ' + _n(m.title) + ' ' + _n(m.body);
-    if (sel && hay.indexOf(sel) >= 0) return true;        /* nombra la selección del hub → sí */
-    for (var i = 0; i < _CANON_SELS.length; i++){
-      if (_CANON_SELS[i] === sel) continue;
-      if (hay.indexOf(_CANON_SELS[i]) >= 0) return false;  /* nombra OTRA selección humana → no */
-    }
-    return true;
-  }
-  function list(side, kind){
-    var d = _read();
-    return d.msgs
-      .filter(function(m){ return kind === 'read' ? !!m.read : !m.read; })
-      .filter(_msgBelongsToHub)
-      .sort(function(a,b){ return (b.ts||0) - (a.ts||0); });
-  }
-  function unreadCount(side){
-    var d = _read();
-    return d.msgs.filter(function(m){ return !m.read && _msgBelongsToHub(m); }).length;
-  }
-  function _setCursor(name, val){
-    var d = _read();
-    d.cursors = d.cursors || {};
-    d.cursors[name] = val;
-    _write(d);
-  }
-  function _getCursor(name){
-    var c = _read().cursors || {};
-    return c[name];
-  }
-
-  /* ── UI: botón + modal ──────────────────────────────────── */
-  function _ensureUI(){
-    var hdr = document.querySelector('#s-munich .sec-hdr');
-    if (!hdr) return false;
-    var btn = document.getElementById('mu-msg-btn');
-    if (!btn){
-      btn = document.createElement('button');
-      btn.type = 'button';
-      btn.id = 'mu-msg-btn';
-      btn.setAttribute('aria-label', 'Mensajes');
-      btn.innerHTML =
-        '<span class="mmb-ico">✉</span>'
-      + '<span class="mmb-count" id="mu-msg-count" hidden>0</span>';
-      btn.onclick = function(ev){ ev.stopPropagation(); _openPop(); };
-      hdr.appendChild(btn);
-    }
-    if (!document.getElementById('mu-msg-ov')) _buildPop();
-    return true;
-  }
-  function _buildPop(){
-    var ov = document.createElement('div');
-    ov.id = 'mu-msg-ov';
-    ov.setAttribute('hidden','');
-    ov.innerHTML =
-      '<div class="mmo-bd"></div>'
-    + '<div class="mmo-modal" role="dialog" aria-label="Mensajes">'
-    +   '<div class="mmo-hdr">'
-    +     '<span class="mmo-title">✉️ MENSAJES <span class="mmo-title-sub">'+_esc(String(_hubDisp()).toUpperCase())+'</span>'
-    +       ' <i class="mmo-tab-bdg" id="mu-msg-bdg-all" hidden></i></span>'
-    +     '<button type="button" class="mmo-pen" id="mu-msg-pen" aria-label=" " title=""'
-    +       ' style="background:none;border:none;color:#fff;opacity:.18;font-size:12px;line-height:1;cursor:pointer;padding:2px 5px;margin-right:2px;">🖍</button>'
-    +     '<button type="button" class="mmo-x" aria-label="Cerrar">✕</button>'
-    +   '</div>'
-    +   '<div class="mmo-subtabs">'
-    +     '<button type="button" class="mmo-sub" data-kind="new">📩 NUEVOS</button>'
-    +     '<button type="button" class="mmo-sub" data-kind="read">📭 LEÍDOS</button>'
-    +     '<button type="button" class="mmo-actions" id="mu-msg-clear" hidden>🗑 LIMPIAR LEÍDOS</button>'
-    +   '</div>'
-    +   '<div class="mmo-compose" id="mu-msg-compose" hidden'
-    +     ' style="padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.25);display:none;flex-direction:column;gap:7px;">'
-    +     '<div style="display:flex;gap:7px;align-items:center;">'
-    +       '<select id="mu-cmp-side" style="flex:1;min-width:0;padding:6px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
-    +         '<option value="liv">🔴 '+_esc(_hubDisp())+'</option>'
-    +         '<option value="fra">🇫🇷 Selección '+_esc(_hubSelDisp())+'</option>'
-    +       '</select>'
-    +       '<input id="mu-cmp-icon" maxlength="3" placeholder="🖍" value="🖍" style="width:52px;text-align:center;padding:6px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:15px;">'
-    +     '</div>'
-    +     '<input id="mu-cmp-sender" placeholder="Remitente (ej. Dirección)" value="Dirección" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
-    +     '<input id="mu-cmp-title" placeholder="Título del mensaje" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;">'
-    +     '<textarea id="mu-cmp-body" placeholder="Texto del mensaje…" rows="3" style="padding:6px 8px;border-radius:7px;background:#1a1d22;color:#fff;border:1px solid rgba(255,255,255,.2);font-size:13px;resize:vertical;"></textarea>'
-    +     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">'
-    +       '<button type="button" id="mu-cmp-photo-btn">📷 Adjuntar foto</button>'
-    +       '<input type="file" id="mu-cmp-photo" accept="image/*" style="display:none;">'
-    +       '<img id="mu-cmp-photo-prev" alt="" style="display:none;">'
-    +       '<button type="button" id="mu-cmp-photo-clear" style="display:none;">✕ Quitar</button>'
-    +     '</div>'
-    +     '<div style="display:flex;gap:8px;justify-content:flex-end;">'
-    +       '<button type="button" id="mu-cmp-cancel" style="padding:6px 12px;border-radius:7px;background:#3a2030;color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px;cursor:pointer;">Cancelar</button>'
-    +       '<button type="button" id="mu-cmp-send" style="padding:6px 14px;border-radius:7px;background:#1f7a3a;color:#fff;border:1px solid rgba(255,255,255,.18);font-size:13px;font-weight:bold;cursor:pointer;">📨 Enviar</button>'
-    +     '</div>'
-    +   '</div>'
-    +   '<div class="mmo-body" id="mu-msg-body"></div>'
-    + '</div>';
-    document.body.appendChild(ov);
-    ov.querySelector('.mmo-x').onclick = _closePop;
-    ov.querySelector('.mmo-bd').onclick = _closePop;
-    ov.querySelectorAll('.mmo-sub').forEach(function(t){
-      t.onclick = function(){
-        _ui.readTab = t.getAttribute('data-kind');
-        _refresh();
-      };
-    });
-    document.getElementById('mu-msg-clear').onclick = function(){
-      var n = 0;
-      try {
-        var dd = _read();
-        n = (dd && dd.msgs) ? dd.msgs.length : 0;
-      } catch(_){}
-      if (!n) return;
-      var q = (n === 1)
-        ? '¿Borrar el mensaje?'
-        : '¿Borrar los ' + n + ' mensajes?';
-      if (confirm(q)) clearAllMessages();
-    };
-    /* 🖍 Compositor manual — protegido por PIN 7477. */
-    var penBtn = document.getElementById('mu-msg-pen');
-    var compEl = document.getElementById('mu-msg-compose');
-    if (penBtn && compEl){
-      penBtn.onclick = function(ev){
-        ev.stopPropagation();
-        /* Si ya está abierto, un toque lo oculta (sin pedir PIN). */
-        if (_composeVisible()){ _hideCompose(); return; }
-        /* Prompt NEUTRO + fallo SILENCIOSO: un humano que toque por
-           curiosidad solo ve "PIN" y, si falla o cancela, no ocurre
-           NADA — no se entera de que existe el compositor del admin. */
-        var pin = prompt('PIN');
-        if (pin == null) return;                       /* cancelado: silencio */
-        if (String(pin).trim() !== '7477') return;     /* incorrecto: silencio */
-        _showCompose(true);
-        var ti = document.getElementById('mu-cmp-title');
-        if (ti) ti.focus();
-      };
-      /* 📷 Adjuntar foto: file picker → reescalado → previsualización. */
-      var photoBtn  = document.getElementById('mu-cmp-photo-btn');
-      var photoInp  = document.getElementById('mu-cmp-photo');
-      var photoPrev = document.getElementById('mu-cmp-photo-prev');
-      var photoClr  = document.getElementById('mu-cmp-photo-clear');
-      if (photoBtn && photoInp){
-        photoBtn.onclick = function(){ photoInp.click(); };
-        photoInp.onchange = function(){
-          var f = photoInp.files && photoInp.files[0];
-          if (!f) return;
-          photoBtn.textContent = '⏳ Procesando…';
-          _muDownscale(f, function(data){
-            photoBtn.textContent = '📷 Adjuntar foto';
-            if (!data){ alert('No se pudo procesar la imagen.'); return; }
-            _cmpImg = data;
-            if (photoPrev){ photoPrev.src = data; photoPrev.style.display = 'inline-block'; }
-            if (photoClr) photoClr.style.display = 'inline-block';
-          });
-        };
-        if (photoClr) photoClr.onclick = function(){ _muClearComposePhoto(); };
-      }
-      var sendBtn = document.getElementById('mu-cmp-send');
-      var cancelBtn = document.getElementById('mu-cmp-cancel');
-      if (cancelBtn) cancelBtn.onclick = function(){ _hideCompose(); };
-      if (sendBtn) sendBtn.onclick = function(){
-        var side   = (document.getElementById('mu-cmp-side')   || {}).value || 'liv';
-        var sender = ((document.getElementById('mu-cmp-sender')|| {}).value || '').trim() || 'Dirección';
-        var title  = ((document.getElementById('mu-cmp-title') || {}).value || '').trim();
-        var bodyT  = ((document.getElementById('mu-cmp-body')  || {}).value || '').trim();
-        var icon   = ((document.getElementById('mu-cmp-icon')  || {}).value || '').trim() || '🖍';
-        /* Permite enviar SOLO foto (sin título) — usa un título por
-           defecto para que `push` no descarte el mensaje. */
-        if (!title && !_isImgData(_cmpImg)){ alert('Escribe un título o adjunta una foto.'); return; }
-        push({ side: side, type:'manual', icon: icon, sender: sender,
-               title: title || '📷 Foto', body: bodyT,
-               img: _isImgData(_cmpImg) ? _cmpImg : '' });
-        var tEl = document.getElementById('mu-cmp-title'); if (tEl) tEl.value = '';
-        var bEl = document.getElementById('mu-cmp-body');  if (bEl) bEl.value = '';
-        _muClearComposePhoto();
-        _hideCompose();
-        _ui.readTab = 'new';
-        if (side) _ui.sideTab = side;
-        try { _refresh(); } catch(_){}
-      };
-    }
-  }
-  function _muClearComposePhoto(){
-    _cmpImg = '';
-    var inp  = document.getElementById('mu-cmp-photo');
-    var prev = document.getElementById('mu-cmp-photo-prev');
-    var clr  = document.getElementById('mu-cmp-photo-clear');
-    if (inp)  inp.value = '';
-    if (prev){ prev.removeAttribute('src'); prev.style.display = 'none'; }
-    if (clr)  clr.style.display = 'none';
-  }
-  /* Visor a pantalla completa de una foto de la bandeja. */
-  function _muLightbox(src){
-    if (!_isImgData(src)) return;
-    var ov = document.createElement('div');
-    ov.className = 'mu-lightbox';
-    var im = document.createElement('img');
-    im.src = src;
-    ov.appendChild(im);
-    ov.onclick = function(){ try { ov.parentNode && ov.parentNode.removeChild(ov); } catch(_){} };
-    document.body.appendChild(ov);
-  }
-  function _composeVisible(){
-    var c = document.getElementById('mu-msg-compose');
-    return !!(c && c.style.display !== 'none');
-  }
-  function _showCompose(v){
-    var c = document.getElementById('mu-msg-compose');
-    if (!c) return;
-    /* OJO: el div lleva style="display:flex/none" en línea, que GANA al
-       atributo `hidden`. Por eso hay que tocar style.display, no solo
-       `hidden` (bug 2026-06-02: el formulario se veía siempre). */
-    c.style.display = v ? 'flex' : 'none';
-    c.hidden = !v;
-  }
-  function _hideCompose(){ _showCompose(false); try { _muClearComposePhoto(); } catch(_){} }
-  function _openPop(){
-    _ensureUI();
-    var ov = document.getElementById('mu-msg-ov');
-    if (!ov) return;
-    _hideCompose();   /* el compositor SIEMPRE arranca oculto al abrir */
-    ov.removeAttribute('hidden');
-    _refresh();
-  }
-  function _closePop(){
-    _hideCompose();   /* y queda oculto al cerrar (nadie lo ve al reabrir) */
-    var ov = document.getElementById('mu-msg-ov');
-    if (ov) ov.setAttribute('hidden','');
-  }
-  function _scheduleRefresh(){
-    if (_scheduleRefresh._t) return;
-    _scheduleRefresh._t = setTimeout(function(){
-      _scheduleRefresh._t = null;
-      try { _refresh(); } catch(_){}
-    }, 60);
-  }
-  /* Marca leído con transición visual: aplica `.is-fading-out` al row
-     y espera el fade-out (220 ms) antes de persistir + rerender. Así
-     el usuario VE el mensaje desaparecer de NUEVOS y al rerender ya
-     aparece en LEÍDOS si esa sub-pestaña está activa. */
-  function _markReadAnimated(row, id){
-    if (!row || row.__fading) { markRead(id); return; }
-    row.__fading = true;
-    row.classList.add('is-fading-out');
-    setTimeout(function(){ try { markRead(id); } catch(_){} }, 220);
-  }
-  function _refresh(){
-    if (!_ensureUI()) return;
-    /* Badge en botón cabecera */
-    var total = unreadCount();
-    var cEl = document.getElementById('mu-msg-count');
-    if (cEl){
-      if (total > 0){
-        cEl.textContent = total > 99 ? '99+' : String(total);
-        cEl.removeAttribute('hidden');
-      } else {
-        cEl.setAttribute('hidden','');
-      }
-    }
-    var ov = document.getElementById('mu-msg-ov');
-    if (!ov || ov.hasAttribute('hidden')) return;
-    /* Badge unificado en el título */
-    var bdgAll = document.getElementById('mu-msg-bdg-all');
-    if (bdgAll){
-      if (total > 0){
-        bdgAll.textContent = total > 99 ? '99+' : String(total);
-        bdgAll.removeAttribute('hidden');
-      } else bdgAll.setAttribute('hidden','');
-    }
-    ov.querySelectorAll('.mmo-sub').forEach(function(t){
-      t.classList.toggle('on', t.getAttribute('data-kind') === _ui.readTab);
-    });
-    /* Botón "🗑 BORRAR TODO" — SIEMPRE visible si hay al menos un
-       mensaje en bandeja (sea nuevo o leído, sea Liverpool o
-       Selección). Petición usuario 2026-05-25: que pueda vaciar la
-       bandeja entera de un solo gesto, no solo los leídos. Texto con
-       contador para que sepa cuántos se borrarán antes del confirm. */
-    var clr = document.getElementById('mu-msg-clear');
-    if (clr){
-      var totalN = 0;
-      try {
-        var allD = _read();
-        /* Cuenta SOLO los mensajes que pertenecen a este hub (mismo filtro
-           que el listado), para que el contador cuadre con lo visible. */
-        totalN = (allD && allD.msgs) ? allD.msgs.filter(_msgBelongsToHub).length : 0;
-      } catch(_){}
-      if (totalN > 0){
-        clr.textContent = '🗑 BORRAR TODO (' + totalN + ')';
-        clr.removeAttribute('hidden');
-      } else {
-        clr.setAttribute('hidden','');
-      }
-    }
-    /* Lista (unificada Liverpool + Selección Francia) */
-    var body = document.getElementById('mu-msg-body');
-    if (!body) return;
-    var arr = list(null, _ui.readTab);
-    if (!arr.length){
-      body.innerHTML = '<div class="mmo-empty">' +
-        (_ui.readTab === 'new'
-          ? 'No tienes mensajes nuevos.'
-          : 'No hay mensajes leídos.') +
-        '</div>';
-      return;
-    }
-    body.innerHTML = arr.map(function(m){
-      var stateCls = m.read ? ' is-read' : ' is-unread';
-      var stamp = m.read ? '<span class="mmo-read-stamp">leído</span>' : '';
-      var fraChip = (m.side === 'fra')
-        ? '<span class="mmo-fra-chip" title="Selección '+_esc(_hubSelDisp())+'">'+_hubSelFlag()+' SELECCIÓN</span>'
-        : '';
-      return '<div class="mmo-msg'+stateCls+'" data-id="'+_esc(m.id)+'">'
-        + '<div class="mmo-msg-ico">'+_esc(m.icon)+'</div>'
-        + '<div class="mmo-msg-main">'
-        +   '<div class="mmo-msg-hdr">'
-        +     '<span class="mmo-msg-sender">'+stamp+fraChip+_esc(m.sender)+'</span>'
-        +     '<span class="mmo-msg-ts">'+_esc(_dateLabel(m.ts))+'</span>'
-        +   '</div>'
-        +   '<div class="mmo-msg-title">'+_esc(m.title)+'</div>'
-        +   (m.body ? '<div class="mmo-msg-body">'+_esc(m.body)+'</div>' : '')
-        +   (_isImgData(m.img) ? '<div class="mmo-msg-photo-wrap"><img class="mmo-msg-photo" src="'+m.img+'" alt="foto" loading="lazy"></div>' : '')
-        + '</div>'
-        + '<div class="mmo-msg-acts">'
-        +   '<button type="button" class="mmo-btn del" data-act="del" title="Borrar">🗑</button>'
-        + '</div>'
-        + '</div>';
-    }).join('');
-    body.querySelectorAll('.mmo-msg').forEach(function(row){
-      var id = row.getAttribute('data-id');
-      var dl = row.querySelector('.mmo-btn.del');
-      if (dl) dl.onclick = function(ev){
-        ev.stopPropagation();
-        if (!confirm('¿Borrar este mensaje?')) return;
-        /* Quitamos el row del DOM antes de persistir para que el
-           usuario vea el mensaje desaparecer al instante, sin
-           depender del rerender que en algunos navegadores tardaba
-           y obligaba a cerrar/reabrir el modal. */
-        try { row.parentNode && row.parentNode.removeChild(row); } catch(_){}
-        try { del(id); } catch(_){}
-      };
-      var ph = row.querySelector('.mmo-msg-photo');
-      if (ph) ph.onclick = function(ev){ ev.stopPropagation(); _muLightbox(ph.getAttribute('src')); };
-      row.onclick = function(){
-        if (!row.classList.contains('is-unread')) return;
-        _markReadAnimated(row, id);
-      };
-    });
-  }
-
-  /* ── HOOK 1: resultado del partido ──────────────────────── */
-  function _hookResultado(){
-    if (window.__MU_MSG_HOOKED_RES) return true;
-    if (typeof window.registrarResultadoLiga !== 'function') return false;
-    var orig = window.registrarResultadoLiga;
-    window.registrarResultadoLiga = function(mk, tA, tB, gA, gB, ta_a, tr_a, ta_b, tr_b, mvp_a, mvp_b, penWinner){
-      try {
-        if (_isLiv(tA) || _isLiv(tB)){
-          /* dedup por firma del partido */
-          var sig = 'res:'+mk+':'+tA+'-'+tB+':'+gA+'-'+gB;
-          if (!_getCursor(sig)){
-            _setCursor(sig, _now());
-            var livHome = _isLiv(tA);
-            var lg = livHome ? gA : gB;
-            var rg = livHome ? gB : gA;
-            var riv = livHome ? tB : tA;
-            var diff = lg - rg;
-            var ic, title, body;
-            var whereW = livHome ? 'en casa' : 'a domicilio';
-            var _hd = 'el '+_hubDisp();
-            if (diff > 0){
-              ic = '🏆';
-              title = 'Victoria '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = _pick(_winPhrases(_hd, riv, lg, rg, whereW));
-            } else if (diff < 0){
-              ic = '❌';
-              title = 'Derrota '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = _pick(_lossPhrases(_hd, riv, lg, rg, whereW));
-            } else {
-              ic = '🤝';
-              title = 'Empate '+lg+'-'+rg+(livHome?' vs ':' @ ')+riv;
-              body  = _pick(_drawPhrases(_hd, riv, lg, rg, whereW));
-            }
-            var mvp = livHome ? mvp_a : mvp_b;
-            if (mvp) body += ' ⭐ MVP: '+mvp+'.';
-            push({ side:'liv', type:'result', icon:ic,
-                   sender:_hubDisp()+' FC', title:title, body:body });
-            /* Portería imbatida — comp: registrarResultadoLiga es de Liga. */
-            _checkCleanSheet(rg, 'liga');
-            /* Racha de resultados (V/D/E ≥3) en Liga */
-            _checkResultStreak(diff);
-          }
-        }
-      } catch(_){}
-      return orig.apply(this, arguments);
-    };
-    window.__MU_MSG_HOOKED_RES = true;
-    return true;
-  }
-
-  /* ── HOOK 2: stats / acta del partido (lesiones, rojas) ── */
-  function _hookStats(){
-    if (window.__MU_MSG_HOOKED_STATS) return true;
-    if (typeof window.registrarLigaPlayerStats !== 'function') return false;
-    var orig = window.registrarLigaPlayerStats;
-    window.registrarLigaPlayerStats = function(mk, tA, tB, events, mvpName, mvpTeam, compKey){
-      try { _processActa(tA, tB, events, compKey || 'liga'); } catch(_){}
-      return orig.apply(this, arguments);
-    };
-    window.__MU_MSG_HOOKED_STATS = true;
-    return true;
-  }
-  /* Roster de Liverpool desde SQUAD_REGISTRY — para validar que el
-     jugador del evento es realmente del Liverpool antes de publicar
-     un mensaje a su nombre. Sin esto, eventos con `name`/`player`
-     erróneos (p.ej. un id numérico o un nombre placeholder que se
-     filtra desde otra ruta) llegaban a la bandeja como "A. Tape" o
-     similares (bug 2026-05-25 reportado por usuario). */
-  function _livRosterNames(){
-    var out = {};
-    try {
-      var reg = window.SQUAD_REGISTRY || {};
-      Object.keys(reg).forEach(function(tn){
-        if (!_isLiv(tn)) return;
-        (reg[tn] || []).forEach(function(p){
-          var nm = '';
-          if (Array.isArray(p)) nm = p[1] || '';
-          else if (p && typeof p === 'object') nm = p.nombre || p.name || '';
-          if (nm) out[String(nm).trim()] = true;
-        });
-      });
-    } catch(_){}
-    return out;
-  }
-  function _processActa(tA, tB, events, compKey){
-    var livIsA = _isLiv(tA), livIsB = _isLiv(tB);
-    if (!livIsA && !livIsB) return;
-    var livSide = livIsA ? 'a' : 'b';
-    var compName = _compLabel(compKey);
-    if (!Array.isArray(events)) return;
-    var rosterLiv = _livRosterNames();
-    var rosterHasAny = false;
-    for (var _k in rosterLiv) { if (rosterLiv.hasOwnProperty(_k)) { rosterHasAny = true; break; } }
-    events.forEach(function(ev){
-      if (!ev || ev.team !== livSide) return;
-      /* Extracción robusta del nombre del jugador (cubre los 3 shapes:
-         ev.name string, ev.player array [num,name], ev.player string). */
-      var pl = '';
-      if (typeof ev.name === 'string' && ev.name.trim()) pl = ev.name.trim();
-      else if (Array.isArray(ev.player)) pl = String(ev.player[1] || ev.player[0] || '').trim();
-      else if (typeof ev.player === 'string') pl = ev.player.trim();
-      if (!pl || pl === '?') pl = '';
-      /* Validar contra roster del Liverpool. Si tenemos roster pero el
-         nombre no aparece, descartamos el mensaje en vez de publicar uno
-         con el nombre erróneo. Si NO tenemos roster aún cargado, dejamos
-         pasar el mensaje con el nombre tal cual (no romper en arranque). */
-      if (rosterHasAny && pl && !rosterLiv[pl]) return;
-      if (!pl) pl = 'Un jugador del '+_hubDisp();
-      if (ev.type === 'lesion'){
-        var grade  = ev.lesGrado || 'leve';
-        var ng = Array.isArray(ev.lesPartidos) ? ev.lesPartidos[0] : (ev.lesPartidos || 2);
-        push({
-          side:'liv', type:'injury', icon:'🏥',
-          sender:'Servicios Médicos',
-          title:'Lesión '+grade+': '+pl,
-          body: pl+' se pierde aprox. '+ng+' partido'+(ng===1?'':'s')+
-                ' por una lesión '+grade+' sufrida en '+compName+'.'
-        });
-      } else if (ev.type === 'roja'){
-        push({
-          side:'liv', type:'red', icon:'🟥',
-          sender:'Comité de Competición',
-          title:'Expulsión: '+pl,
-          body: pl+' ha visto la roja directa en '+compName+'. '+
-                'La sanción (2–15 partidos) se confirmará en breve.'
-        });
-      } else if (ev.type === 'd-amarilla'){
-        push({
-          side:'liv', type:'red', icon:'🟨🟥',
-          sender:'Comité de Competición',
-          title:'Doble amarilla: '+pl,
-          body: pl+' se va expulsado por doble amarilla en '+compName+
-                '. Se perderá los 2 próximos partidos.'
-        });
-      }
-    });
-    /* Ciclo de 3 amarillas: lo procesa procesarSancionesPostPartido,
-       leemos YELLOW_STORE un tick más tarde. */
-    setTimeout(function(){ _checkYellowCycle(compKey); }, 80);
-    /* Hat-trick / pókerazo y racha goleadora del jugador */
-    _checkHatTrick(events, livSide);
-    _checkScoreStreak(events, livSide);
-    /* Agregados de liga (pichichi + MVP líder) — el store ya se
-       actualizó con esta acta por el `orig.apply` previo. */
-    if (compKey === 'liga'){
-      setTimeout(function(){ _checkPichichi(); _checkMvpLeader(); }, 120);
-    }
-  }
-  function _checkYellowCycle(compKey){
-    try {
-      /* 2026-05-23: YELLOW_STORE pasó a tener un único bucket __global
-         cross-comp. El compKey se ignora a efectos de lectura, pero lo
-         seguimos usando para mostrar el nombre de la comp en el aviso
-         (el cursor por (comp, jugador) sigue funcionando bien aunque el
-         contador sea único — solo dispara el push una vez por incremento). */
-      var ys = (window.YELLOW_STORE && (window.YELLOW_STORE.__global || window.YELLOW_STORE[compKey])) || {};
-      var compName = _compLabel(compKey);
-      Object.keys(ys).forEach(function(k){
-        var rec = ys[k];
-        if (!rec) return;
-        var teamName = rec.team || rec.equipo || '';
-        if (!_isLiv(teamName)) return;
-        var count = rec.count || rec.amarillas || 0;
-        var name  = rec.name || rec.jugador || k;
-        var curK  = 'yel:'+compKey+':'+k;
-        var seen  = _getCursor(curK) || 0;
-        if (count <= seen) return;
-        _setCursor(curK, count);
-        if (count === 2){
-          push({
-            side:'liv', type:'card-warn', icon:'🟨',
-            sender:'Comité de Competición',
-            title:'Aviso amarillas: '+name,
-            body: name+' acumula 2 amarillas en '+compName+
-                  '. Una tercera supondría 1 partido de sanción.'
-          });
-        } else if (count >= 3 && (count % 3 === 0)){
-          push({
-            side:'liv', type:'card-susp', icon:'⛔',
-            sender:'Comité de Competición',
-            title:'Sanción amarillas: '+name,
-            body: name+' completa el ciclo de 3 amarillas en '+compName+
-                  '. Se pierde el próximo partido por acumulación.'
-          });
-        }
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 3: sorteos de Copa del Rey ────────────────────── */
-  function _scanCopaSorteo(){
-    try {
-      var raw = localStorage.getItem('copa_state_v1');
-      if (!raw) return;
-      var d = JSON.parse(raw);
-      var s = (d && d.copa && d.copa.sorteo) || (d && d.sorteo) || {};
-      Object.keys(s).forEach(function(ronda){
-        var mts = s[ronda];
-        if (!Array.isArray(mts)) return;
-        mts.forEach(function(m, i){
-          if (!m) return;
-          var l = m.l, v = m.v;
-          var rival = _isLiv(l) ? v : _isLiv(v) ? l : null;
-          if (!rival) return;
-          var curK = 'copa:srt:'+ronda+':'+i;
-          if (_getCursor(curK) === rival) return;
-          _setCursor(curK, rival);
-          var local = _isLiv(l);
-          push({
-            side:'liv', type:'draw', icon:'🏆',
-            sender:'RFEF · Sorteo Copa',
-            title:'Copa del Rey · '+_ronLabel(ronda),
-            body:'El '+_hubDisp()+' se enfrenta a '+rival+' en '+_ronLabel(ronda)+
-                 ' de la Copa del Rey. '+(local?'Juega en casa.':'Juega como visitante.')
-          });
-        });
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 4: posición en LaLiga ─────────────────────────── */
-  function _scanStandings(){
-    try {
-      if (typeof window.collectStandings !== 'function') return;
-      var arr = window.collectStandings('liga') || [];
-      if (!arr.length) return;
-      var idx = -1;
-      for (var i = 0; i < arr.length; i++){
-        if (_isLiv(arr[i].name)){ idx = i; break; }
-      }
-      if (idx < 0) return;
-      var row = arr[idx];
-      var pos = idx + 1;
-      var pj = row.pj || 0;
-      if (pj < 3) return;
-      /* Notifica cuando cambia la "ventana" (cada 5 jornadas) y la posición
-         es estable a esa altura. */
-      var milestone = Math.floor(pj / 5) * 5;
-      if (milestone < 5) return;
-      var sig = pos+'@'+milestone;
-      if (_getCursor('liga:rank') === sig) return;
-      _setCursor('liga:rank', sig);
-      var ordin = pos+'º';
-      push({
-        side:'liv', type:'rank', icon:'📊',
-        sender:'LaLiga · Clasificación',
-        title:'Vamos '+ordin+' tras la jornada '+milestone,
-        body:'El '+_hubDisp()+' ocupa la '+ordin+' plaza con '+(row.pts||0)+
-             ' puntos (PJ '+pj+', GF '+(row.gf||0)+', GC '+(row.gc||0)+').'
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 5: Francia (procedural, la selección está skeleton) ── */
-  /* Detecta si el bloque de Selecciones / Mundial está "activo"
-     ahora mismo. Señales (cualquiera basta):
-       · El día actual del cursor de pretemporada está marcado como
-         día de selección (clase `ag-sel`) o su label contiene
-         "Mundial" / "Selecciones".
-       · Hay un estado guardado de Mundial/Selecciones con equipos.
-     Si NO está activo, no se pushean convocatorias / amistosos —
-     la pestaña 🇫🇷 se queda en silencio para no spamear cuando
-     Francia no juega nada. */
-  function _isMundialActive(){
-    try {
-      var lbl = (typeof window._psCurrentLabel === 'function') ? window._psCurrentLabel() : '';
-      if (lbl && /mundial|selecci/i.test(lbl)) return true;
-    } catch(_){}
-    try {
-      /* `_psCurrentDay` no está expuesto pero podemos mirar la card
-         de Descanso renderizada — si pone "Selecciones · jugadores
-         fuera" es señal directa de ag-sel. */
-      var ps = document.querySelector('#ps-stage .ps-sub');
-      if (ps && /selecci|mundial/i.test(ps.textContent || '')) return true;
-    } catch(_){}
-    try {
-      var keys = ['mundial_state_v1','mundialito_state_v1','seleccion_state_v1','selecciones_state_v1'];
-      for (var i = 0; i < keys.length; i++){
-        var raw = localStorage.getItem(keys[i]);
-        if (!raw) continue;
-        var s = JSON.parse(raw);
-        var teams = s && (s.teams || s.pool || s.equipos);
-        if (Array.isArray(teams) && teams.length) return true;
-      }
-    } catch(_){}
-    return false;
-  }
-  /* Localiza el próximo partido NO jugado de Francia en el Mundial 2032
-     leyendo el config del torneo (`_TOUR_CACHE` o sfn* en localStorage).
-     Devuelve { jor, rival, isHome, franceName } o null si no hay
-     Mundial cargado / no hay equipo humano / todas las jornadas ya
-     jugadas. Es la fuente de verdad para los mensajes de la selección
-     — no se inventan rivales aleatorios (petición usuario 2026-05-24
-     "los mensajes tienen que tener coherencia y ser la realidad del
-     calendario del Liverpool-Francia"). */
-  /* Etiqueta humana de cada ronda KO del Mundial — ronda 0 = Octavos,
-     1 = Cuartos, 2 = Semis, 3 = Final. Si el bracket tiene más
-     rondas (futuros formatos), genérico "Eliminatoria r{N}". */
-  function _koRoundLabel(roundIdx){
-    var L = ['Octavos','Cuartos','Semis','Final'];
-    return L[roundIdx] || ('Eliminatoria r' + (roundIdx + 1));
-  }
-  function _findMundialCfg(){
-    var cache = window._TOUR_CACHE || {};
-    for (var k in cache){
-      var c = cache[k];
-      if (c && c.format === 'mundial-48' && Array.isArray(c.teams) && c.teams.length){
-        return c;
-      }
-    }
-    if (typeof window._tourLoadCachedSync === 'function'){
-      var SFN = ['sfn1','sfn2','sfn3','sfn4','sfn5','sfn6','sfn7','sfn8','sfn9','sfn10'];
-      for (var s = 0; s < SFN.length; s++){
-        try {
-          var sc = window._tourLoadCachedSync(SFN[s]);
-          if (sc && sc.format === 'mundial-48' && Array.isArray(sc.teams) && sc.teams.length){
-            return sc;
-          }
-        } catch(_){}
-      }
-    }
-    return null;
-  }
-  /* Devuelve el "team object" del equipo humano (Francia) del cfg, o
-     null si no se localiza. Mismo doble-pase que `_selPair`: flag
-     `isHuman` explícito primero, después `isHumanInComp(name,
-     'mundial')` como fallback canónico (CLAUDE.md). */
-  function _findHumanTeam(mundialCfg){
-    if (!mundialCfg) return null;
-    var teams = mundialCfg.teams || [];
-    /* HUB ACTIVO (multi-hub): los mensajes de selección son INDIVIDUALES por
-       caja humana → SOLO la selección del mister ABIERTO (Inter → Portugal,
-       Arsenal → Brasil…). Si esa selección NO juega este Mundial, se devuelve
-       null y el generador CALLA: NUNCA se cae a la PRIMERA humana del cfg
-       (sería la de OTRO hub, p.ej. Francia/Toñín en la bandeja del Inter →
-       mensajes cruzados). Petición usuario 2026-06-27 («los mensajes tienen
-       que ser solo del Inter o Portugal; cada equipo y selección corresponde
-       a cada humano individualmente»). */
-    var _selH = '';
-    try { _selH = _hubSelDisp(); } catch(_){}
-    if (_selH){
-      var _norm = function(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim(); };
-      var _sN = _norm(_selH);
-      for (var ts = 0; ts < teams.length; ts++){
-        var ts2 = teams[ts];
-        if (!ts2 || !ts2.name || ts2.name === 'PENDIENTE') continue;
-        var _tn = _norm(ts2.name);
-        if (_tn.indexOf(_sN) >= 0 || _sN.indexOf(_tn) >= 0) return { team:ts2, idx:ts };
-      }
-      return null;  /* la selección del hub no está en este Mundial → sin mensaje */
-    }
-    /* Fallback LEGACY: solo si NO se pudo resolver la selección del hub (no
-       debería ocurrir con los misters registrados). Nunca cruza hubs porque
-       arriba ya se filtra estrictamente cuando hay selección de hub. */
-    for (var ti = 0; ti < teams.length; ti++){
-      var t = teams[ti];
-      if (t && t.isHuman && t.name && t.name !== 'PENDIENTE') return { team:t, idx:ti };
-    }
-    if (typeof window.isHumanInComp === 'function'){
-      for (var ti2 = 0; ti2 < teams.length; ti2++){
-        var t2 = teams[ti2];
-        if (!t2 || !t2.name || t2.name === 'PENDIENTE') continue;
-        try { if (window.isHumanInComp(t2.name, 'mundial')) return { team:t2, idx:ti2 }; } catch(_){}
-      }
-    }
-    /* Pase 3 (fallback canónico, 2026-05-27): `_esSelHumana` lista
-       hardcoded SEL_HUMANAS del bundle — no depende de hidratación de
-       selecciones_squad_v1 ni de `isHuman:true` en el cfg. Mismo fix
-       que `_selPair`. */
-    if (typeof window._esSelHumana === 'function'){
-      for (var ti3 = 0; ti3 < teams.length; ti3++){
-        var t3 = teams[ti3];
-        if (!t3 || !t3.name || t3.name === 'PENDIENTE') continue;
-        try { if (window._esSelHumana(t3.name)) return { team:t3, idx:ti3 }; } catch(_){}
-      }
-    }
-    return null;
-  }
-  /* Próximo partido NO jugado de Francia en el Mundial. Cubre la fase
-     de grupos (`groupFixtures` + `groupResults`) Y la fase KO
-     (`koBracket[round]` + `results['ko_'+round+'_'+i/2]`). Si la fase
-     KO está activa pero el partido aún no se ha generado (equipo
-     "PENDIENTE"), devuelve null y el caller debe degradar al texto
-     sin rival. Estructura KO confirmada: round 0 = Octavos, 1 =
-     Cuartos, 2 = Semis, 3 = Final. */
-  function _franciaNextMatch(){
-    try {
-      var mundialCfg = _findMundialCfg();
-      if (!mundialCfg) return null;
-      var hu = _findHumanTeam(mundialCfg);
-      if (!hu) return null;
-      var huIdx = hu.idx;
-      var teams = mundialCfg.teams || [];
-      var huName = hu.team.name;
-      /* Fase de grupos */
-      var pg = (mundialCfg.formatConfig && mundialCfg.formatConfig.perGroup) || 4;
-      var gIdx  = Math.floor(huIdx / pg);
-      var gStart = gIdx * pg;
-      var slice = teams.slice(gStart, gStart + pg);
-      var huInSlice = huIdx - gStart;
-      var fixs = (mundialCfg.groupFixtures && mundialCfg.groupFixtures[gIdx]) || null;
-      /* Fase de grupos.
-         Bug fix 2026-05-25 (merge desde main): los resultados de
-         grupo viven en `cfg.results['g<g>_<j>_<m>']`. La key legacy
-         `cfg.groupResults` nunca se llega a poblar, así que se
-         daban como "no jugados" partidos ya disputados. Mismo
-         patrón que _collectMundial48 / _humanMatchAt. */
-      var resAll = mundialCfg.results || {};
-      if (Array.isArray(fixs)){
-        for (var j = 0; j < fixs.length; j++){
-          var matchups = fixs[j];
-          if (!Array.isArray(matchups)) continue;
-          for (var mi = 0; mi < matchups.length; mi++){
-            var mm = matchups[mi];
-            if (!mm) continue;
-            if (mm.home !== huInSlice && mm.away !== huInSlice) continue;
-            var r = resAll['g' + gIdx + '_' + j + '_' + mi];
-            if (r && (r.played || r.done)) continue;
-            var hT = slice[mm.home], aT = slice[mm.away];
-            if (!hT || !aT || !hT.name || hT.name === 'PENDIENTE'
-                || !aT.name || aT.name === 'PENDIENTE') continue;
-            return {
-              phase: 'group',
-              phaseLabel: 'J' + (j + 1),
-              jor: j + 1,
-              isHome: (mm.home === huInSlice),
-              rival: (mm.home === huInSlice ? aT.name : hT.name),
-              franceName: (mm.home === huInSlice ? hT.name : aT.name)
-            };
-          }
-        }
-      }
-      /* Fase KO — `koBracket[round]` es un array plano de equipos
-         (pares consecutivos forman cada match), `results['ko_'+R+'_'+i/2]`
-         marca jugados. Si el equipo humano está en la ronda actual y
-         su match NO está jugado, devolvemos el rival. */
-      var koBracket = mundialCfg.koBracket;
-      if (Array.isArray(koBracket)){
-        var curR = (typeof mundialCfg.koCurrentRound === 'number') ? mundialCfg.koCurrentRound : 0;
-        for (var rIdx = curR; rIdx < koBracket.length; rIdx++){
-          var arr = koBracket[rIdx];
-          if (!Array.isArray(arr) || arr.length < 2) continue;
-          for (var i = 0; i + 1 < arr.length; i += 2){
-            var a = arr[i], b = arr[i+1];
-            if (!a || !b) continue;
-            var aN = a.name || (typeof a === 'string' ? a : '');
-            var bN = b.name || (typeof b === 'string' ? b : '');
-            if (!aN || !bN || aN === 'PENDIENTE' || bN === 'PENDIENTE') continue;
-            var matchIdx = i / 2;
-            var kRes = resAll['ko_' + rIdx + '_' + matchIdx];
-            if (kRes && kRes.played) continue;
-            var aIsHum = (aN === huName) || (a.isHuman === true);
-            var bIsHum = (bN === huName) || (b.isHuman === true);
-            if (!aIsHum && !bIsHum) continue;
-            return {
-              phase: 'ko',
-              phaseLabel: _koRoundLabel(rIdx),
-              jor: rIdx + 1,
-              isHome: aIsHum,
-              rival: aIsHum ? bN : aN,
-              franceName: aIsHum ? aN : bN
-            };
-          }
-        }
-      }
-    } catch(_){}
-    return null;
-  }
-  function _scanFrancia(){
-    try {
-      if (!_isMundialActive()) return;  /* gate: solo durante Mundial/Selecciones */
-      var nxt = _franciaNextMatch();
-      if (!nxt) return;  /* sin partido conocido → silencio (no inventar) */
-      var sig = 'fra:mundial:j' + nxt.jor + ':' + nxt.rival;
-      if (_getCursor(sig)) return;  /* ya avisamos este partido concreto */
-      _setCursor(sig, _now());
-      _setCursor('fra:last', _now());
-      var rival = nxt.rival;
-      var jor   = nxt.jor;
-      /* HUB ACTIVO (multi-hub 2026-06-13): selección + míster del hub
-         abierto (Arsenal → Brasil / Álvaro), no Francia/Toñín fijos. */
-      var franceName = nxt.franceName || _hubSelDisp();
-      var _mister = 'Toñín';
-      try { var _ah = window._activeHub && window._activeHub(); if (_ah && _ah.mister) _mister = String(_ah.mister); } catch(_){}
-      var hostTxt = nxt.isHome ? 'en casa' : 'fuera de casa';
-      var tipos = [
-        { ic:'🌍', tit:'Mundial · J'+jor+' · '+franceName+' vs '+rival,
-          body:'Próxima jornada del Mundial: '+franceName+' se medirá a '+rival+' ('+hostTxt+').' },
-        { ic:'📋', tit:'Convocatoria · '+franceName+' · J'+jor,
-          body:_mister+' cita a 23 jugadores para la jornada '+jor+' del Mundial frente a '+rival+'.' },
-        { ic:'📋', tit:'Lista provisional · '+franceName,
-          body:_mister+' prepara la lista provisional de '+franceName+' para la jornada '+jor+' del Mundial frente a '+rival+'.' }
-      ];
-      var t = tipos[Math.floor(Math.random() * tipos.length)];
-      push({
-        side:'fra', type:'callup', icon:t.ic,
-        sender:'Selección '+_hubSelDisp(),
-        title:t.tit, body:t.body
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 5b: eliminación del Liverpool / Francia en un torneo ──
-     Detecta el final de un torneo (campeón decidido en su state) y,
-     si NO es el equipo humano, push mensaje decepcionante/sorpresa.
-     Dedup por (compId, champion) → un mensaje por torneo terminado.
-     Petición usuario 2026-05-24 "cuando un club o selección humana
-     es eliminada de un torneo un mensaje decepcionante o de sorpresa". */
-  function _scanEliminations(){
-    try {
-      var aliases = _userTeamAlias ? [String(_userTeamAlias()).toLowerCase()].filter(Boolean) : [];
-      /* Para el hub de Toñín/Liverpool añadimos los alias legacy Bayern↔Liverpool
-         (el slot fue renombrado; datos de torneos viejos pueden traer cualquiera).
-         Solo cuando el hub activo ES Liverpool (Toñín): no contaminar otros hubs. */
-      try {
-        var _ahSe = window._activeHub && window._activeHub();
-        var _hubClub = _ahSe && String(_ahSe.club||'').toLowerCase();
-        if (_hubClub === 'liverpool'){
-          ['bayern','liverpool','bayern munich','bayern múnich','lfc'].forEach(function(a){
-            if (aliases.indexOf(a) < 0) aliases.push(a);
-          });
-        }
-      } catch(_){}
-      function _ch(key){
-        try {
-          var raw = localStorage.getItem(key);
-          if (!raw) return null;
-          var s = JSON.parse(raw);
-          return s && (s.champion || s.campeon) || null;
-        } catch(_){ return null; }
-      }
-      var COMPS = [
-        { id:'copa',    label:'Copa del Rey',         keys:['copa_data_v1','copa_state_v1'],   side:'liv' },
-        { id:'sup-esp', label:'Supercopa de España',  keys:['sc_state_v1'],                    side:'liv' },
-        { id:'champ',   label:'Champions League',     keys:['ucl_ko_state_v1'],                side:'liv' },
-        { id:'uel',     label:'Europa League',        keys:['uel_ko_state_v1'],                side:'liv' },
-        { id:'uecl',    label:'Conference League',    keys:['uecl_ko_state_v1'],               side:'liv' },
-        { id:'recopa',  label:'Recopa de Europa',     keys:['recopa_state_v1'],                side:'liv' },
-        { id:'sup-eur', label:'Supercopa de Europa',  keys:['usc_state_v1'],                   side:'liv' },
-        { id:'inter',   label:'Intercontinental',     keys:['inter_state_v1','intercontinental_state_v1'], side:'liv' },
-        { id:'mundialc',label:'Mundial de Clubes',    keys:['mundial_state_v1','mundialito_state_v1'],     side:'liv' },
-        { id:'mundialn',label:'Mundial de Selecciones', keys:['selecciones_state_v1','seleccion_state_v1'], side:'fra' }
-      ];
-      var bodiesElim = [
-        '%CAMP% se proclama campeón. Toca asimilar la decepción y centrarse en lo que viene.',
-        '%CAMP% levanta el trofeo. Nos quedamos sin opciones — habrá revancha la temporada que viene.',
-        'El %CAMP% gana el título. Ahora a recuperar moral en el resto de competiciones.'
-      ];
-      var bodiesSurp = [
-        '¡Sorpresa! %CAMP% se lleva el trofeo. Nadie lo esperaba — toca asimilarlo.',
-        'Final con sorpresa: %CAMP% campeón. Habrá que analizarlo en el vestuario.'
-      ];
-      COMPS.forEach(function(c){
-        var ch = null;
-        for (var i = 0; i < c.keys.length && !ch; i++) ch = _ch(c.keys[i]);
-        if (!ch) return; /* torneo aún sin campeón */
-        var sig = 'elim:' + c.id + ':' + ch;
-        if (_getCursor(sig)) return;
-        _setCursor(sig, _now());
-        var chLower = String(ch).toLowerCase();
-        var selLower = String(_hubSelDisp()||'').toLowerCase();
-        var ours = aliases.some(function(a){ return chLower.indexOf(a) !== -1; })
-                || (c.side === 'fra' && selLower && chLower.indexOf(selLower) !== -1);
-        if (ours) return; /* somos campeones — lo cubre otro hook */
-        var pool = (Math.random() < 0.25) ? bodiesSurp : bodiesElim;
-        var body = pool[Math.floor(Math.random() * pool.length)].replace('%CAMP%', ch);
-        var icon = (pool === bodiesSurp) ? '😮' : '😞';
-        push({
-          side: c.side,
-          type: 'eliminacion',
-          icon: icon,
-          sender: (c.side === 'fra') ? _fraSender() : (_hubDisp()+' FC'),
-          title: 'Fuera de la ' + c.label,
-          body : body
-        });
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 6: hat-trick / pókerazo en un partido ───────── */
-  function _checkHatTrick(events, livSide){
-    if (!Array.isArray(events)) return;
-    var goalsP = {};
-    events.forEach(function(ev){
-      if (!ev || ev.team !== livSide) return;
-      if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
-      if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
-        var nm = ev.name || ev.player;
-        if (nm) goalsP[nm] = (goalsP[nm] || 0) + 1;
-      }
-    });
-    Object.keys(goalsP).forEach(function(pl){
-      var n = goalsP[pl];
-      if (n < 3) return;
-      var lbl = (n === 3) ? 'Hat-trick' : (n === 4) ? '¡Cuádruple!' : '¡Pókerazo!';
-      var ic  = (n === 3) ? '🎩' : (n === 4) ? '🎩🎩' : '👑';
-      push({ side:'liv', type:'hat-trick', icon:ic,
-        sender:'LaLiga · Goleadores',
-        title: lbl+' de '+pl,
-        body : pl+' ha marcado '+n+' goles en un solo partido. ¡Noche histórica en el '+_hubDisp()+'!'
-      });
-    });
-  }
-
-  /* ── HOOK 7: racha goleadora multi-partido ────────────── */
-  function _checkScoreStreak(events, livSide){
-    if (!Array.isArray(events)) return;
-    var scored = {};
-    events.forEach(function(ev){
-      if (!ev || ev.team !== livSide) return;
-      if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
-      if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
-        var nm = ev.name || ev.player;
-        if (nm) scored[nm] = true;
-      }
-    });
-    Object.keys(scored).forEach(function(pl){
-      var k = 'strk:'+pl;
-      var n = (_getCursor(k) || 0) + 1;
-      _setCursor(k, n);
-      if (n === 3 || n === 5 || n === 7 || n === 10){
-        push({ side:'liv', type:'streak', icon:'🔥',
-          sender:'LaLiga · Goleadores',
-          title: pl+' anota en '+n+' partidos seguidos',
-          body : pl+' encadena '+n+' partidos consecutivos viendo puerta. ¡Está en racha!'
-        });
-      }
-    });
-  }
-
-  /* ── HOOK 8: portería imbatida (clean sheet streak) ───── */
-  function _checkCleanSheet(rivalGoals, compKey){
-    var k = 'cs:'+(compKey || 'liga');
-    var n = _getCursor(k) || 0;
-    if (rivalGoals === 0){
-      n++;
-      _setCursor(k, n);
-      var compName = _compLabel(compKey);
-      if (n === 2){
-        push({ side:'liv', type:'cs', icon:'🧤',
-          sender:'Servicios Técnicos',
-          title:'Portería imbatida (2 partidos)',
-          body :'Nuestro portero encadena 2 partidos sin encajar en '+compName+'. Pared.'
-        });
-      } else if (n === 3 || n === 5 || n === 7 || n === 10){
-        push({ side:'liv', type:'cs', icon:'🧤',
-          sender:'Servicios Técnicos',
-          title:'¡'+n+' partidos imbatido!',
-          body :'Nuestro portero lleva '+n+' partidos consecutivos sin encajar en '+compName+'.'
-        });
-      }
-    } else if (n > 0){
-      _setCursor(k, 0);
-    }
-  }
-
-  /* ── HOOK 9: agregado de la liga (pichichi + MVP líder) ─ */
-  function _aggregateLiga(){
-    var store = window.LIGA_PLAYER_MATCH_STORE || {};
-    var goals = {}, mvps = {};
-    Object.keys(store).forEach(function(k){
-      var m = store[k];
-      if (!m) return;
-      var tA = m.teamA || '', tB = m.teamB || '';
-      if (Array.isArray(m.evts)){
-        m.evts.forEach(function(ev){
-          if (!ev || !ev.player) return;
-          if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
-            var team = ev.realTeam || (ev.team === 'a' ? tA : tB);
-            var key = ev.player+'|'+team;
-            goals[key] = (goals[key] || 0) + 1;
-          }
-        });
-      }
-      if (m.mvpName){
-        var team = (m.mvpTeam === 'a') ? tA : (m.mvpTeam === 'b') ? tB : (m.mvpTeam || '');
-        var mk = m.mvpName+'|'+team;
-        mvps[mk] = (mvps[mk] || 0) + 1;
-      }
-    });
-    return { goals: goals, mvps: mvps };
-  }
-  function _topOf(map){
-    var best = null, bn = 0;
-    Object.keys(map).forEach(function(k){
-      if (map[k] > bn){ best = k; bn = map[k]; }
-    });
-    return best ? { key:best, n:bn } : null;
-  }
-  function _checkPichichi(){
-    try {
-      var ag = _aggregateLiga();
-      var top = _topOf(ag.goals);
-      if (!top || top.n < 5) return;
-      var parts = top.key.split('|');
-      var pl = parts[0], team = parts[1] || '';
-      if (!_isLiv(team)) return;
-      var sig = pl+'@'+top.n;
-      if (_getCursor('liga:pichi') === sig) return;
-      _setCursor('liga:pichi', sig);
-      push({ side:'liv', type:'pichichi', icon:'🥇',
-        sender:'LaLiga · Trofeo Zarra',
-        title:'¡Pichichi! '+pl+' lidera con '+top.n+' goles',
-        body : pl+' es el máximo goleador de LaLiga con '+top.n+' goles. Una temporada de récord en el '+_hubDisp()+'.'
-      });
-    } catch(_){}
-  }
-  function _checkMvpLeader(){
-    try {
-      var ag = _aggregateLiga();
-      var top = _topOf(ag.mvps);
-      if (!top || top.n < 3) return;
-      var parts = top.key.split('|');
-      var pl = parts[0], team = parts[1] || '';
-      if (!_isLiv(team)) return;
-      var sig = pl+'@'+top.n;
-      if (_getCursor('liga:mvpLead') === sig) return;
-      _setCursor('liga:mvpLead', sig);
-      push({ side:'liv', type:'mvp', icon:'⭐',
-        sender:'LaLiga · MVPs',
-        title:pl+' lidera el ranking de MVPs ('+top.n+')',
-        body : pl+' es el jugador con más MVPs de LaLiga ('+top.n+' galardones). Imparable.'
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 10: apuestas ISRAMAX ──────────────────────────
-     localStorage 'isramax_v1' → { bets:[{id, status:'open'|'won'|'lost',
-     stake, cuota, home, away, comp, label, market, createdAt}], users:{} }
-  */
-  function _scanBets(){
-    try {
-      var raw = localStorage.getItem('isramax_v1');
-      if (!raw) return;
-      var d = JSON.parse(raw);
-      var bets = (d && d.bets) || [];
-      bets.forEach(function(b){
-        if (!b || !b.id) return;
-        var seen  = _getCursor('bet:'+b.id);
-        var label = b.label || b.market || 'Apuesta';
-        var match = (b.home && b.away) ? (b.home+' vs '+b.away) : '';
-        if (b.status === 'open'){
-          if (seen !== 'open'){
-            _setCursor('bet:'+b.id, 'open');
-            var pot = Math.round((b.stake || 0) * (b.cuota || 1));
-            push({ side:'liv', type:'bet', icon:'🎲',
-              sender:'ISRAMAX · Apuestas',
-              title:'Tu apuesta acaba de empezar',
-              body :'Has apostado '+(b.stake||0)+'€ a "'+label+'"'+(match?' en '+match:'')+
-                    ' (cuota '+(b.cuota||1)+'). Ganancia potencial: '+pot+'€.'
-            });
-          }
-        } else if (b.status === 'won' && seen !== 'won'){
-          _setCursor('bet:'+b.id, 'won');
-          var win = Math.round((b.stake || 0) * (b.cuota || 1));
-          push({ side:'liv', type:'bet-won', icon:'🏆',
-            sender:'ISRAMAX · Apuestas',
-            title:'¡Apuesta ganada! +'+win+'€',
-            body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
-                  ' ha entrado. Ganancia neta: +'+win+'€.'
-          });
-        } else if (b.status === 'lost' && seen !== 'lost'){
-          _setCursor('bet:'+b.id, 'lost');
-          push({ side:'liv', type:'bet-lost', icon:'💸',
-            sender:'ISRAMAX · Apuestas',
-            title:'Apuesta perdida −'+(b.stake||0)+'€',
-            body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
-                  ' no ha entrado. Pérdida: '+(b.stake||0)+'€.'
-          });
-        } else if (b.status === 'void' && seen !== 'void'){
-          _setCursor('bet:'+b.id, 'void');
-          push({ side:'liv', type:'bet-void', icon:'↩️',
-            sender:'ISRAMAX · Apuestas',
-            title:'Apuesta anulada · stake devuelto',
-            body :'Tu apuesta a "'+label+'"'+(match?' en '+match:'')+
-                  ' no se ha podido verificar con el acta del partido. Te devolvemos los '+(b.stake||0)+'€ al cash.'
-          });
-        }
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 11: objetivos del club (checkboxes DOM) ───────
-     0,40 puntos + 60 € por objetivo cumplido (constantes del juego).
-  */
-  function _scanObjectives(){
-    try {
-      var nodes = document.querySelectorAll(
-        'input[type=checkbox][id*="-obj"], input[type=checkbox][id^="obj-"]'
-      );
-      nodes.forEach(function(cb){
-        var id = cb.id || '';
-        if (!id) return;
-        if (!cb.checked){
-          _setCursor('obj:'+id, '0');
-          return;
-        }
-        if (_getCursor('obj:'+id) === '1') return;
-        _setCursor('obj:'+id, '1');
-        var lbl = '';
-        try {
-          var p = cb.closest('label');
-          if (p) lbl = (p.textContent || '').trim();
-          if (!lbl && cb.parentElement) lbl = (cb.parentElement.textContent || '').trim();
-        } catch(_){}
-        lbl = lbl.replace(/\s+/g,' ').slice(0, 80);
-        push({ side:'liv', type:'obj', icon:'🎯',
-          sender:'Dirección Deportiva',
-          title:'¡Objetivo cumplido!' + (lbl ? ' — '+lbl : ''),
-          body :'Has cumplido un objetivo del club. Recompensa: +0,40 puntos de prestigio y +60 € al presupuesto.'
-        });
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 12: eliminación de la Copa del Rey ───────────
-     Si Liverpool jugó en sorteo[r] pero NO aparece en clasificados[r]
-     (cuando esa ronda ya tiene ganadores), avisamos.
-  */
-  function _checkCupElim(){
-    try {
-      var raw = localStorage.getItem('copa_state_v1');
-      if (!raw) return;
-      var d = JSON.parse(raw);
-      var copa = (d && d.copa) || d;
-      if (!copa) return;
-      var sort = copa.sorteo || {};
-      var clas = copa.clasificados || {};
-      var rondas = ['r1','r2','r16','oct','cua','sf','fin'];
-      rondas.forEach(function(r){
-        var mts = sort[r] || [];
-        var played = mts.some(function(m){ return m && (_isLiv(m.l) || _isLiv(m.v)); });
-        if (!played) return;
-        var cl = clas[r] || [];
-        if (!cl.length) return;             /* ronda aún sin completar */
-        var advanced = cl.some(function(t){
-          var n = (t && (t.name || t)) || '';
-          return _isLiv(n);
-        });
-        if (advanced) return;
-        var sig = 'copa:elim:'+r;
-        if (_getCursor(sig)) return;
-        _setCursor(sig, '1');
-        push({ side:'liv', type:'elim', icon:'💀',
-          sender:'RFEF · Copa del Rey',
-          title:'Eliminados de la Copa del Rey',
-          body :'El '+_hubDisp()+' queda eliminado en '+_ronLabel(r)+' de la Copa del Rey. Toca pensar en la Liga y Europa.'
-        });
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 15: cerca de cumplir un objetivo ─────────────
-     Cuando los checkboxes [id*="-obj"] están al ≥75 % marcados
-     (pero no al 100 %), avisamos del último empujón. */
-  function _checkObjectiveNear(){
-    try {
-      var nodes = document.querySelectorAll(
-        'input[type=checkbox][id*="-obj"], input[type=checkbox][id^="obj-"]'
-      );
-      var total = nodes.length;
-      if (total < 4) return;
-      var done = 0;
-      nodes.forEach(function(cb){ if (cb.checked) done++; });
-      var pct = done / total;
-      if (pct < 0.75 || pct >= 1.0) return;
-      var sig = done+'/'+total;
-      if (_getCursor('obj-near') === sig) return;
-      _setCursor('obj-near', sig);
-      var rem = total - done;
-      var eu  = rem * 60;
-      var pts = (rem * 0.40).toFixed(2);
-      push({ side:'liv', type:'obj-near', icon:'⏳',
-        sender:'Dirección Deportiva',
-        title:'Cerca de cumplir los objetivos ('+done+'/'+total+')',
-        body :'Solo te falta'+(rem===1?'':'n')+' '+rem+' objetivo'+(rem===1?'':'s')+
-              ' por cumplir. Un último esfuerzo y desbloqueas '+eu+' € y '+pts+
-              ' puntos de prestigio extra.'
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 16: líder/no-líder de LaLiga (transición) ───
-     Mensaje cuando el Liverpool ENTRA al primer puesto y otro
-     cuando lo PIERDE. Sólo en cambios de estado (no repetir
-     cada jornada). */
-  function _checkLeagueLeader(){
-    try {
-      if (typeof window.collectStandings !== 'function') return;
-      var arr = window.collectStandings('liga') || [];
-      if (!arr.length || !arr[0] || !(arr[0].pj > 0)) return;
-      var firstIsLiv = _isLiv(arr[0].name);
-      var prev = _getCursor('liga:leader-state') || '0';
-      if (firstIsLiv && prev !== '1'){
-        _setCursor('liga:leader-state', '1');
-        push({ side:'liv', type:'leader', icon:'👑',
-          sender:'LaLiga · Líder',
-          title:'¡Liderato de LaLiga!',
-          body :'El '+_hubDisp()+' ocupa la primera posición de LaLiga con '+(arr[0].pts||0)+
-                ' puntos. '+_hubDisp()+' sueña con el título.'
-        });
-      } else if (!firstIsLiv && prev === '1'){
-        _setCursor('liga:leader-state', '0');
-        var idx = -1;
-        for (var i = 0; i < arr.length; i++){ if (_isLiv(arr[i].name)){ idx = i; break; } }
-        var pos = (idx >= 0) ? (idx + 1)+'º' : '';
-        push({ side:'liv', type:'leader-lost', icon:'📉',
-          sender:'LaLiga · Líder',
-          title:'Adiós al liderato',
-          body :'El '+_hubDisp()+' deja la primera posición'+(pos ? ' (ahora '+pos+')' : '')+
-                '. Toca pelearlo en la próxima jornada.'
-        });
-      }
-    } catch(_){}
-  }
-
-  /* ── HOOK 17: alta médica (recuperación de lesionado) ─
-     Comparamos LESION_STORE con la foto anterior. Si un jugador
-     del Liverpool estaba lesionado y ya no aparece → push. */
-  function _checkRecovery(){
-    try {
-      var store = window.LESION_STORE || {};
-      var cur = [];
-      Object.keys(store).forEach(function(pl){
-        var v = store[pl];
-        if (!v) return;
-        var equipo = v.equipo || v.team || '';
-        if (!_isLiv(equipo)) return;
-        if (v.partidos != null && v.partidos <= 0) return;
-        cur.push(pl);
-      });
-      cur.sort();
-      var prevStr = _getCursor('lesion:cur');
-      if (prevStr != null){
-        var prev = String(prevStr).split('|').filter(Boolean);
-        prev.forEach(function(pl){
-          if (cur.indexOf(pl) < 0){
-            push({ side:'liv', type:'recovery', icon:'🩹',
-              sender:'Servicios Médicos',
-              title: pl+' recibe el alta médica',
-              body : pl+' está recuperado de su lesión y vuelve a estar disponible para la convocatoria. ¡Bienvenido de vuelta!'
-            });
-          }
-        });
-      }
-      _setCursor('lesion:cur', cur.join('|'));
-    } catch(_){}
-    _showRecoveryModalIfPending();
-  }
-
-  /* ── HOOK 17b: modal de ALTA MÉDICA — pantalla emergente
-     (petición usuario 2026-05-27, Foto 1).
-     Cuando el usuario abre el hub Liverpool y hay 1+ mensajes de
-     tipo `recovery` sin leer, emerge un overlay obligatorio con la
-     lista. Cerrar con ✅ marca los mensajes como leídos.
-     Idempotente por sesión: una vez mostrado / cerrado en este
-     boot, no se vuelve a emerger hasta que llegue una nueva alta. */
-  var _recoveryShownIds = {};
-  function _pendingRecoveryMsgs(){
-    var d = _read();
-    return d.msgs.filter(function(m){
-      return m && !m.read
-        && m.type === 'recovery'
-        && (!m.side || m.side === 'liv')
-        && !_recoveryShownIds[m.id];
-    });
-  }
-  function _showRecoveryModalIfPending(){
-    /* Solo emerger si el usuario está en s-munich (hub humano).
-       En otras pantallas, los mensajes esperan a que vuelva. */
-    var scr = document.getElementById('s-munich');
-    if (!scr || !scr.classList.contains('active')) return;
-    var pending = _pendingRecoveryMsgs();
-    if (!pending.length) return;
-    /* No re-pintar si ya está abierto. */
-    if (document.getElementById('mu-recov-ov')) return;
-    pending.forEach(function(m){ _recoveryShownIds[m.id] = true; });
-
-    var ov = document.createElement('div');
-    ov.id = 'mu-recov-ov';
-    ov.setAttribute('role','dialog');
-    ov.setAttribute('aria-label','Alta médica');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:1000099;'
-      + 'background:rgba(0,0,0,.86);display:flex;align-items:center;'
-      + 'justify-content:center;padding:18px;'
-      + 'animation:muRecovFade .18s ease-out;';
-    var rows = pending.map(function(m){
-      var safeTitle = _esc(m.title || '');
-      var safeBody  = _esc(m.body  || '');
-      return '<div class="mu-recov-row">'
-        +   '<div class="mu-recov-row-ico">🩹</div>'
-        +   '<div class="mu-recov-row-info">'
-        +     '<div class="mu-recov-row-title">' + safeTitle + '</div>'
-        +     '<div class="mu-recov-row-body">'  + safeBody  + '</div>'
-        +   '</div>'
-        + '</div>';
-    }).join('');
-    var plural = pending.length > 1;
-    ov.innerHTML = ''
-      + '<style>@keyframes muRecovFade{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}'
-      + '#mu-recov-ov .mu-recov-card{background:linear-gradient(160deg,#0a1a14,#0e2a1c 50%,#0a1a14);'
-      + ' border:2px solid #4dd86a;border-radius:14px;padding:22px 20px 16px;max-width:420px;width:100%;'
-      + ' box-shadow:0 0 50px rgba(80,220,130,.35),0 10px 30px rgba(0,0,0,.7);text-align:center;}'
-      + '#mu-recov-ov .mu-recov-title{font-family:"Bebas Neue",sans-serif;font-size:24px;letter-spacing:3px;'
-      + ' color:#bdf5c8;margin-bottom:4px;text-shadow:0 0 12px rgba(80,220,130,.55);}'
-      + '#mu-recov-ov .mu-recov-sub{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;'
-      + ' color:rgba(189,245,200,.7);margin-bottom:14px;}'
-      + '#mu-recov-ov .mu-recov-list{max-height:54vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:14px;text-align:left;}'
-      + '#mu-recov-ov .mu-recov-row{display:flex;gap:10px;background:rgba(80,220,130,.08);'
-      + ' border:1px solid rgba(80,220,130,.32);border-radius:9px;padding:10px 12px;align-items:flex-start;}'
-      + '#mu-recov-ov .mu-recov-row-ico{font-size:24px;flex-shrink:0;}'
-      + '#mu-recov-ov .mu-recov-row-info{flex:1;min-width:0;}'
-      + '#mu-recov-ov .mu-recov-row-title{font-family:Oswald,sans-serif;font-weight:700;font-size:13px;'
-      + ' color:#bdf5c8;letter-spacing:.5px;margin-bottom:3px;}'
-      + '#mu-recov-ov .mu-recov-row-body{font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.4;'
-      + ' color:rgba(255,255,255,.78);}'
-      + '#mu-recov-ov .mu-recov-ok{background:linear-gradient(135deg,#1a3a18,#2b6228 50%,#1a3a18);'
-      + ' border:1px solid #4dd86a;color:#bdf5c8;font-family:"Bebas Neue",sans-serif;font-size:18px;'
-      + ' letter-spacing:3px;padding:12px 26px;border-radius:8px;cursor:pointer;width:100%;'
-      + ' box-shadow:0 0 16px rgba(80,220,130,.3);-webkit-tap-highlight-color:transparent;}'
-      + '#mu-recov-ov .mu-recov-ok:active{filter:brightness(1.25);}</style>'
-      + '<div class="mu-recov-card">'
-      +   '<div class="mu-recov-title">🩹 ALTA MÉDICA</div>'
-      +   '<div class="mu-recov-sub">' + (plural ? pending.length + ' JUGADORES RECUPERADOS' : '1 JUGADOR RECUPERADO') + '</div>'
-      +   '<div class="mu-recov-list">' + rows + '</div>'
-      +   '<button type="button" class="mu-recov-ok" id="mu-recov-ok">✅ ENTENDIDO</button>'
-      + '</div>';
-    document.body.appendChild(ov);
-    document.getElementById('mu-recov-ok').onclick = function(){
-      /* Marcar todos los mostrados como leídos y cerrar. */
-      pending.forEach(function(m){ try { markRead(m.id); } catch(_){} });
-      try { ov.remove(); } catch(_){}
-    };
-  }
-  /* Exponemos para que otras rutas (p. ej. tras una recuperación
-     manual desde la pantalla médica) puedan re-disparar el chequeo. */
-  window._muShowRecoveryModalIfPending = _showRecoveryModalIfPending;
-
-  /* ── HOOK 13: previa del próximo partido ──────────────
-     Observa #munich-next-match. Cuando el texto cambia y describe
-     un partido (no "Entrenamiento" ni "Descanso"), dispara una
-     previa con el rival y la fecha. */
-  /* Convierte "03 May" → día absoluto del año (1..366) para poder
-     restar contra el día actual. Acepta español ("ene/feb/.../dic").
-     Devuelve null si el formato no se reconoce. */
-  var _MES_NUM = { ene:1, feb:2, mar:3, abr:4, may:5, jun:6, jul:7, ago:8, sep:9, oct:10, nov:11, dic:12 };
-  function _absDayOfYear(dateStr){
-    var m = String(dateStr||'').match(/(\d{1,2})\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{3,})/);
-    if (!m) return null;
-    var dy = parseInt(m[1], 10);
-    var mo = _MES_NUM[m[2].toLowerCase().slice(0,3)];
-    if (!dy || !mo) return null;
-    var ds = [31,28,31,30,31,30,31,31,30,31,30,31];
-    var n = 0;
-    for (var k = 0; k < mo - 1; k++) n += ds[k];
-    return n + dy;
-  }
-  function _daysFromTodayTo(dateStr){
-    var aT = _absDayOfYear((typeof window._psCurrentDate === 'function') ? window._psCurrentDate() : '');
-    var aM = _absDayOfYear(dateStr);
-    if (aT == null || aM == null) return null;
-    return aM - aT;
-  }
-  /* HOOK 13: previa del próximo partido (con anticipación 2-3 días).
-     Observa #munich-next-match y, además, push manualmente cada vez
-     que el cursor de día cambia ('hub:day-changed'). El mensaje
-     ahora indica los días restantes ("en 2 días — vs Real Madrid")
-     para que el aviso tenga sentido cuando se ve durante el
-     descanso/entrenamiento previo. Dedup por (rival, fecha) en
-     vez de por texto completo — evita perder el mensaje si el
-     formato del texto cambia y evita duplicarlo si solo cambia un
-     espacio en blanco. */
-  function _pushPreviewFromText(t){
-    if (!t) return;
-    var head = String(t).replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+/, '');
-    if (/^(entrenamiento|descanso|pretemporada|libre|amistoso\s+internac|d[íi]a\s+de\s+selec|d[íi]a\s+libre|elige)/i.test(head))
-      return;
-    /* "Selecci" / "Mundial" en solitario solían filtrarse aquí, pero
-       precisamente esos son los días que queremos cubrir con el rival
-       extraído de `_franciaNextMatch()`. Aceptamos el texto y luego
-       intentamos enriquecer. Si no logramos rival, push genérico. */
-    var rivalMatch = t.match(/(?:\bvs\b|\bcontra\b|\@)\s*([^·•\-—\|]+?)(?:\s*[·•\-—\|]|$)/i);
-    var rival = rivalMatch ? rivalMatch[1].trim() : '';
-    var dateMatch = t.match(/(\d{1,2})\s+([A-Za-zÁÉÍÓÚáéíóúñÑ]{3,})/);
-    var dateStr = dateMatch ? dateMatch[0] : '';
-    /* Si el texto pinta selección o Mundial pero NO hay rival en el
-       texto, intentamos resolverlo con `_franciaNextMatch()` (cubre
-       fase de grupos y KO: Octavos / Cuartos / Semis / Final). */
-    var isMundial = /mundial|selecci/i.test(t);
-    var franceCtx = null;
-    var sideMsg = 'liv', sender = 'Cuerpo Técnico', icon = '📋';
-    if (isMundial && !rival){
-      try { franceCtx = (typeof _franciaNextMatch === 'function') ? _franciaNextMatch() : null; } catch(_){}
-      if (franceCtx && franceCtx.rival){
-        rival   = franceCtx.rival;
-        sideMsg = 'fra';
-        sender  = _fraSender();
-        icon    = _hubSelFlag();
-      }
-    }
-    var sig = 'pre:' + (rival || head.slice(0,30)) + ':' + dateStr;
-    if (_getCursor(sig)) return;
-    _setCursor(sig, '1');
-    var days = dateStr ? _daysFromTodayTo(dateStr) : null;
-    var when = '';
-    if (days === 0) when = 'hoy';
-    else if (days === 1) when = 'mañana';
-    else if (days != null && days >= 2 && days <= 7) when = 'en ' + days + ' días';
-    var venue;
-    if (sideMsg === 'fra' && franceCtx) venue = franceCtx.isHome ? 'en casa' : 'fuera de casa';
-    else                                venue = /\@\s/.test(t) ? 'fuera de casa' : 'en casa';
-    var phaseTxt = (franceCtx && franceCtx.phaseLabel) ? franceCtx.phaseLabel : '';
-    var title;
-    if (rival){
-      title = 'Próximo partido' + (when ? ' ' + when : '') + ' — vs ' + rival
-            + (phaseTxt ? ' (' + phaseTxt + ')' : '');
-    } else {
-      title = 'Próximo partido — ' + t;
-    }
-    var body;
-    if (rival){
-      body = _pick(_previewPhrases(rival, venue, when, phaseTxt));
-      var scout = _rivalScoutNote(rival);
-      if (scout) body += ' 🔎 ' + scout;
-    } else {
-      body = 'Toca preparar el próximo partido: ' + t + '. Revisa la convocatoria y la alineación.';
-    }
-    push({ side: sideMsg, type:'preview', icon: icon,
-      sender: sender, title:title, body:body });
-  }
-  function _observeNextMatch(){
-    if (window.__MU_MSG_OBS_NM) return;
-    var el = document.getElementById('munich-next-match');
-    if (!el) return;
-    window.__MU_MSG_OBS_NM = true;
-    var lastText = '';
-    var check = function(){
-      var t = (el.textContent || '').replace(/\s+/g,' ').trim();
-      if (!t || t === lastText) return;
-      lastText = t;
-      _pushPreviewFromText(t);
-    };
-    check();
-    try {
-      new MutationObserver(check).observe(el,
-        { childList:true, characterData:true, subtree:true });
-    } catch(_){}
-    /* Cada cambio de día en el hub recheck inmediato — el observer
-       no dispara si el texto no muta entre días, pero al cambiar
-       el cursor del calendario los "días restantes" varían y queremos
-       que se evalúe el push. Como el sig incluye la fecha del rival
-       (no los días restantes), no genera duplicados. */
-    try {
-      window.addEventListener('hub:day-changed', function(){
-        try {
-          var t = (el.textContent || '').replace(/\s+/g,' ').trim();
-          _pushPreviewFromText(t);
-        } catch(_){}
-      });
-    } catch(_){}
-  }
-
-  /* ── HOOK 14: racha de resultados (post-partido) ──────
-     Añade un segundo mensaje con la racha actual de Liga si llega
-     a 3+ partidos del mismo signo (V/D/E). */
-  function _checkResultStreak(diff){
-    var key = 'liga:streak';
-    var prev = _getCursor(key) || 'X:0';
-    var pType = String(prev).split(':')[0];
-    var pN = parseInt(String(prev).split(':')[1] || '0', 10) || 0;
-    var t = (diff > 0) ? 'W' : (diff < 0) ? 'L' : 'D';
-    var n = (t === pType) ? pN + 1 : 1;
-    _setCursor(key, t + ':' + n);
-    if (n < 3) return;
-    var ic, title, body;
-    if (t === 'W'){
-      ic = '🚀';
-      title = n + ' victorias consecutivas en Liga';
-      body  = 'El '+_hubDisp()+' encadena ' + n + ' triunfos seguidos en LaLiga. ¡El estadio está en llamas!';
-    } else if (t === 'L'){
-      ic = '🚨';
-      title = n + ' derrotas seguidas en Liga';
-      body  = 'Mala racha: ' + n + ' partidos seguidos perdiendo en LaLiga. Hay que reaccionar.';
-    } else {
-      ic = '😐';
-      title = n + ' empates consecutivos en Liga';
-      body  = n + ' empates seguidos en LaLiga. Falta algo de pegada.';
-    }
-    push({ side:'liv', type:'res-streak', icon:ic,
-      sender:'LaLiga · Tendencias', title:title, body:body });
-  }
-
-  /* ── HOOK 15: resultado UNIVERSAL (cualquier competición) ──────
-     2026-06-02 — petición usuario: "cuando se pierda un partido un
-     mensaje negativo, cuando se gane uno positivo, e indicar lesiones
-     y amonestaciones de jugadores que se pierden partidos. Algo más
-     como la vida real."
-
-     `registrarResultadoLiga` solo se llama en Liga, así que hasta
-     ahora SOLO la Liga generaba mensaje de victoria/derrota/empate.
-     El usuario juega sobre todo el Mundial (Francia) y los torneos,
-     donde no salía ningún mensaje de resultado → la bandeja solo
-     mostraba previas repetidas.
-
-     Esta función la invoca `gmEndMatch` (gm-modal) al finalizar
-     CUALQUIER partido humano (Copa, Champions, Europa, Conference,
-     Recopa, Supercopa, Mundialito, Mundial selecciones, torneos de
-     verano, amistosos, Superliga…). Publica:
-       · Un mensaje de resultado VARIADO (positivo/negativo/neutro).
-       · Para la selección del usuario (Francia): lesiones + rojas +
-         dobles amarillas (los del Liverpool ya los publica
-         `_processActa` vía `registrarLigaPlayerStats`).
-
-     Dedup:
-       · Resultado: cursor `res:<mk>` (mismo esquema que el hook de
-         Liga; se SALTA `liga` para liv para no duplicar con el hook 1).
-       · Acta (lesión/roja): cursor `acta:<mk>:<idx>:<tipo>`.
-
-     NO toca el Liverpool en `liga` (lo cubre el hook 1). NO publica
-     para equipos que no sean del usuario (Liverpool o Francia). */
-  function _broadcastHumanMatchResult(info){
-    try {
-      if (!info) return;
-      var home = info.home || '', away = info.away || '';
-      if (!home || !away) return;
-      var comp = info.comp || 'liga';
-      var ga = +info.scoreA || 0, gb = +info.scoreB || 0;
-      if (info.etScores){ ga += (+info.etScores.a || 0); gb += (+info.etScores.b || 0); }
-      var events = Array.isArray(info.events) ? info.events : [];
-
-      /* Lado de la bandeja + qué equipo es el del usuario. */
-      var side = null, humanIsHome = false;
-      if (_isLiv(home) || _isLiv(away)){ side = 'liv'; humanIsHome = _isLiv(home); }
-      else if (_isFra(home) || _isFra(away)){ side = 'fra'; humanIsHome = _isFra(home); }
-      else return;  /* no es un equipo del usuario → silencio */
-
-      var humanTeam = humanIsHome ? home : away;
-      var rival     = humanIsHome ? away : home;
-      var hg = humanIsHome ? ga : gb;   /* goles del usuario */
-      var rg = humanIsHome ? gb : ga;   /* goles del rival   */
-
-      /* V/E/D — con desempate por penaltis en eliminatorias. El
-         `penWinner` puede venir como 'a'/'b' o como nombre de equipo. */
-      var diff = hg - rg, penUser = null;
-      var pen = info.penWinner;
-      if (diff === 0 && pen){
-        var penSideHome = (pen === 'a' || pen === home);
-        var penSideAway = (pen === 'b' || pen === away);
-        if (penSideHome || penSideAway){
-          penUser = (penSideHome === humanIsHome);
-          diff = penUser ? 1 : -1;
-        }
-      }
-
-      var mk = info.mk || (comp + ':' + home + '-' + away + ':' + ga + '-' + gb);
-      var compName = (side === 'fra') ? _fraCompLabel(comp) : _compLabel(comp);
-      var sender   = (side === 'fra') ? _fraSender() : (_hubDisp()+' FC');
-
-      /* ── Mensaje de resultado (salta liga-liv: ya lo hace el hook 1) ── */
-      if (!(side === 'liv' && comp === 'liga')){
-        var sigR = 'res:' + mk;
-        if (!_getCursor(sigR)){
-          _setCursor(sigR, _now());
-          var whereW = humanIsHome ? 'en casa' : 'a domicilio';
-          var teamW  = (side === 'fra') ? _hubSelDisp() : 'el '+_hubDisp();
-          var ic, title, body;
-          if (diff > 0){
-            ic = '🏆';
-            title = 'Victoria ' + hg + '-' + rg + (humanIsHome ? ' vs ' : ' @ ') + rival;
-            body  = _pick(_winPhrases(teamW, rival, hg, rg, whereW));
-          } else if (diff < 0){
-            ic = '😞';
-            title = 'Derrota ' + hg + '-' + rg + (humanIsHome ? ' vs ' : ' @ ') + rival;
-            body  = _pick(_lossPhrases(teamW, rival, hg, rg, whereW));
-          } else {
-            ic = '🤝';
-            title = 'Empate ' + hg + '-' + rg + (humanIsHome ? ' vs ' : ' @ ') + rival;
-            body  = _pick(_drawPhrases(teamW, rival, hg, rg, whereW));
-          }
-          if (penUser != null){
-            title += ' (pen.)';
-            body += penUser ? ' Y nos llevamos la tanda de penaltis. 🎯'
-                            : ' Caímos en la tanda de penaltis. 😣';
-          }
-          body += ' En ' + compName + '.';
-          /* MVP del lado del usuario, si lo hay en el acta. */
-          var letter = humanIsHome ? 'a' : 'b';
-          var mvpEv = null;
-          for (var mi = 0; mi < events.length; mi++){
-            var e = events[mi];
-            if (e && e.type === 'mvp' && (e.team === letter || e.team === '' || e.team == null)){ mvpEv = e; break; }
-          }
-          var mvpNm = mvpEv ? _evPlayerName(mvpEv) : '';
-          if (mvpNm) body += ' ⭐ MVP: ' + mvpNm + '.';
-          push({ side: side, type:'result', icon: ic, sender: sender, title: title, body: body });
-        }
-      }
-
-      /* ── Lesiones / sanciones de la SELECCIÓN (Francia) ──
-         El Liverpool ya las publica `_processActa`. Aquí cubrimos el
-         hueco de la selección, que nunca pasaba por ningún hook. */
-      if (side === 'fra'){
-        var hLetter = humanIsHome ? 'a' : 'b';
-        events.forEach(function(ev, idx){
-          if (!ev || ev.team !== hLetter) return;
-          var ty = ev.type;
-          if (ty !== 'lesion' && ty !== 'roja' && ty !== 'd-amarilla') return;
-          var sig = 'acta:' + mk + ':' + idx + ':' + ty;
-          if (_getCursor(sig)) return;
-          var pl = _evPlayerName(ev) || 'Un jugador';
-          if (ty === 'lesion'){
-            var grade = _gradeLabel(ev.lesGrado);
-            var n = Array.isArray(ev.lesPartidos) ? ev.lesPartidos[0] : (ev.lesPartidos || 1);
-            _setCursor(sig, '1');
-            push({ side:'fra', type:'injury', icon:'🏥',
-              sender:'Servicios Médicos · '+_hubSelDisp(),
-              title:'Lesión ' + grade + ': ' + pl,
-              body: pl + ' cae lesionado (' + grade + ') y se perderá aprox. ' + n +
-                    ' partido' + (n === 1 ? '' : 's') + ' con la selección.' });
-          } else if (ty === 'roja'){
-            _setCursor(sig, '1');
-            push({ side:'fra', type:'red', icon:'🟥',
-              sender:'Comité de Competición',
-              title:'Expulsión: ' + pl,
-              body: pl + ' ve la roja directa y se perderá el próximo partido de la selección.' });
-          } else { /* d-amarilla */
-            _setCursor(sig, '1');
-            push({ side:'fra', type:'red', icon:'🟨🟥',
-              sender:'Comité de Competición',
-              title:'Doble amarilla: ' + pl,
-              body: pl + ' es expulsado por doble amarilla y se perderá el próximo partido de la selección.' });
-          }
-        });
-      }
-
-      /* ── Goleadores de la SELECCIÓN: doblete/hat-trick + racha ──
-         (el Liverpool ya lo cubre _checkHatTrick / _checkScoreStreak
-         vía _processActa). Una sola pasada por partido. */
-      if (side === 'fra' && !_getCursor('fragoals:' + mk)){
-        _setCursor('fragoals:' + mk, '1');
-        var fLetter = humanIsHome ? 'a' : 'b';
-        var fgoals = {};
-        events.forEach(function(ev){
-          if (!ev || ev.team !== fLetter) return;
-          if (ev._varAnulado) return;   /* gol anulado por VAR → no cuenta */
-          if (ev.type === 'gol' || ev.type === 'pen-gol' || ev.type === 'falta-gol'){
-            var nm = _evPlayerName(ev);
-            if (nm) fgoals[nm] = (fgoals[nm] || 0) + 1;
-          }
-        });
-        Object.keys(fgoals).forEach(function(pl){
-          var gN = fgoals[pl];
-          if (gN >= 2){
-            var lbl = (gN === 2) ? 'Doblete' : (gN === 3) ? 'Hat-trick' : (gN === 4) ? '¡Cuádruple!' : '¡Manita!';
-            var icg = (gN === 2) ? '⚽⚽' : (gN === 3) ? '🎩' : '👑';
-            push({ side:'fra', type:'hat-trick', icon:icg,
-              sender:_fraSender()+' · Goleadores',
-              title: lbl + ' de ' + pl,
-              body : pl + ' firma ' + gN + ' goles con '+_hubSelDisp()+' en un solo partido. ¡Está imparable! ' + (gN >= 3 ? '🎉' : '🔥') });
-          }
-          /* Racha multi-partido viendo puerta. */
-          var ks = 'strkfra:' + pl;
-          var sn = (_getCursor(ks) || 0) + 1;
-          _setCursor(ks, sn);
-          if (sn === 3 || sn === 5 || sn === 7 || sn === 10){
-            push({ side:'fra', type:'streak', icon:'🔥',
-              sender:_fraSender()+' · Goleadores',
-              title: pl + ' marca en ' + sn + ' partidos seguidos',
-              body : pl + ' encadena ' + sn + ' partidos consecutivos viendo puerta con la selección. ¡En racha! ⚡' });
-          }
-        });
-      }
-
-      /* ── Amarillas de la SELECCIÓN: aviso "a una de la sanción" y
-         sanción cumplida (ciclo de 2 en selección). Best-effort: lee
-         YELLOW_STORE_SEL un tick más tarde (las sanciones se procesan
-         async). Si la estructura no existe, no hace nada. */
-      if (side === 'fra'){
-        /* Reconciliar el ciclo de amarillas/rojas de la selección desde el
-           acta (registra la suspensión en SANCION_STORE_SEL + sincroniza
-           el contador monótono que lee _checkFraYellowBrink). */
-        try { if (window._selReconcileSuspensions) window._selReconcileSuspensions(humanTeam); } catch(_){}
-        setTimeout(function(){ _checkFraYellowBrink(humanTeam); }, 140);
-      }
-    } catch(_){}
-  }
-  function _checkFraYellowBrink(selName){
-    try {
-      /* Gate hub: solo genera mensajes si selName ES la selección del hub
-         activo (_isFra es hub-aware: devuelve true para Noruega en Atlético,
-         true para Francia en Liverpool, etc.). Evita mensajes de la selección
-         de OTRO mister en la bandeja de este hub. */
-      if (selName && typeof _isFra === 'function' && !_isFra(selName)) return;
-      var store = window.YELLOW_STORE_SEL || {};
-      Object.keys(store).forEach(function(tk){
-        var bySel = store[tk] || {};
-        var players = selName ? (bySel[selName] || null) : null;
-        if (!players) return;
-        Object.keys(players).forEach(function(pn){
-          var rec = players[pn] || {};
-          var cnt = rec.count || rec.amarillas || 0;
-          if (!cnt) return;
-          var name = rec.name || rec.jugador || pn;
-          var curK = 'yelfra:' + tk + ':' + pn;
-          var seen = _getCursor(curK) || 0;
-          if (cnt <= seen) return;
-          _setCursor(curK, cnt);
-          if (cnt % 2 === 1){
-            push({ side:'fra', type:'card-warn', icon:'🟨',
-              sender:'Comité de Competición',
-              title:'Aviso amarillas: ' + name,
-              body: name + ' suma una amarilla con '+_hubSelDisp()+'. Otra más y se perderá el próximo partido por acumulación.' });
-          } else {
-            push({ side:'fra', type:'card-susp', icon:'⛔',
-              sender:'Comité de Competición',
-              title:'Sanción amarillas: ' + name,
-              body: name + ' cumple ciclo de amarillas con '+_hubSelDisp()+': se pierde el próximo partido por acumulación.' });
-          }
-        });
-      });
-    } catch(_){}
-  }
-  window._broadcastHumanMatchResult = _broadcastHumanMatchResult;
-  /* Expuesto para que la plantilla del hub (vista selección) pueda
-     disparar el aviso/suspensión de amarillas tras reconciliar, sin
-     esperar al fin del próximo partido (mensaje retroactivo). */
-  window._checkFraYellowBrink = _checkFraYellowBrink;
-
-  /* ── Semilla inicial ────────────────────────────────────
-     Los 3 mensajes de bienvenida (Bienvenido a Anfield, Plantilla,
-     Doble compromiso de Francia) se inyectan UNA SOLA VEZ en la
-     vida del navegador. Flag persistente `mu_seeded_v1` en
-     localStorage (separado de `mu_messages_v1` para sobrevivir a
-     resets de la bandeja o al cap 2 MB). Si el usuario borra los
-     3 con 🗑, no vuelven al siguiente boot — petición usuario
-     2026-05-25 "los 3 últimos mensajes siempre los pone, da igual
-     la fecha".
-     Migración silenciosa: si el usuario ya tiene welcomes en la
-     bandeja desde antes del fix, sembramos el flag sin tocar nada.
-     Si tiene el cursor legacy `seeded='1'` dentro de
-     `mu_messages_v1.cursors`, también lo respetamos. */
-  var _SEED_FLAG = 'mu_seeded_v1';
-  /* El flag de "ya sembrado" se guarda en DOS sitios:
-       1. La clave aparte `mu_seeded_v1` (rápida).
-       2. Un cursor `seeded` DENTRO de `mu_messages_v1`.
-     Motivo (bug bucle 2026-06-02): si el `setItem` de la clave aparte
-     falla (cuota llena, modo privado, etc.) el flag se perdía y los 3
-     mensajes de bienvenida se RESEMBRABAN en cada carga de la web. El
-     cursor viaja con los mensajes (un único setItem) y `clearAllMessages`
-     lo conserva, así que es mucho más resistente. Basta con que CUALQUIERA
-     de los dos esté puesto para no volver a sembrar. */
-  function _seedFlagOn(){
-    try { if (localStorage.getItem(_SEED_FLAG) === '1') return true; } catch(_){}
-    try { if (_getCursor('seeded') === '1') return true; } catch(_){}
-    return false;
-  }
-  function _markSeeded(){
-    try { window._lsSetSafe(_SEED_FLAG, '1'); } catch(_){}
-    try { _setCursor('seeded', '1'); } catch(_){}
-  }
-  /* ¿El sistema de mensajes ya ha procesado eventos del juego alguna vez?
-     Si hay cursores de actividad (resultados, previas, avisos de Francia,
-     tarjetas, rachas, clasificación…) el usuario NO es un jugador nuevo:
-     aunque haya pulsado "BORRAR TODO" no debemos re-sembrar las
-     bienvenidas. Los cursores sobreviven a `clearAllMessages`. */
-  function _hasActivityCursors(){
-    try {
-      var c = _read().cursors || {};
-      return Object.keys(c).some(function(k){
-        return /^(res:|acta:|pre:|fra:|yel:|strk|strkfra|cs:|liga:|bet:|obj)/.test(k);
-      });
-    } catch(_){ return false; }
-  }
-  function _migrateSeedFlag(){
-    if (_seedFlagOn()) return;
-    try {
-      var d = _read();
-      var hadWelcome = (d && d.msgs || []).some(function(m){ return m && m.type === 'welcome'; });
-      var hadCursor  = _getCursor('seeded') === '1';
-      if (hadWelcome || hadCursor || _hasActivityCursors()) _markSeeded();
-    } catch(_){}
-  }
-  /* 2026-06-03 — Los 3 mensajes de bienvenida (Anfield / Plantilla /
-     Doble compromiso) se ELIMINAN por completo. El usuario los veía
-     reaparecer en CADA carga porque el flag `mu_seeded_v1` y los cursores
-     no persistían (la cuota de localStorage del juego está llena → los
-     writes fallan en silencio). Como NO se puede confiar en ningún flag
-     para suprimirlos, la única solución robusta es NO crearlos nunca y,
-     además, purgar los que ya estén en la bandeja. */
-  function _seed(){
-    _markSeeded();   /* deja sellado el flag por si acaso; NO siembra nada */
-  }
-  /* Borra de la bandeja CUALQUIER mensaje de bienvenida (los 3 clásicos
-     por id o por type:'welcome'). Idempotente y barato: se llama en cada
-     boot, así que aunque se hayan re-creado en una sesión vieja, al
-     siguiente arranque desaparecen para siempre. */
-  function _purgeWelcomes(){
-    try {
-      var d = _read();
-      if (!d || !d.msgs || !d.msgs.length) return;
-      var before = d.msgs.length;
-      d.msgs = d.msgs.filter(function(m){
-        if (!m) return false;
-        if (m.type === 'welcome') return false;
-        if (m.id === 'seed-liv-anfield' || m.id === 'seed-liv-plantilla'
-            || m.id === 'seed-fra-bleus') return false;
-        return true;
-      });
-      if (d.msgs.length !== before) _write(d);
-    } catch(_){}
-  }
-
-  /* ── Limpieza one-shot: avisos "Próximo partido — Descanso/
-     Pretemporada/Entrenamiento/Día libre" generados antes de
-     reforzar el filtro de `_observeNextMatch`. No aportan nada y
-     ensucian la bandeja. Se borran TODOS (leídos o no) y queda un
-     cursor para no volver a barrer cada arranque. */
-  function _purgeStaleRest(){
-    if (_getCursor('purged:rest_preview') === '1') return;
-    var d = _read();
-    if (!d.msgs || !d.msgs.length){
-      _setCursor('purged:rest_preview', '1');
-      return;
-    }
-    var rx = /(descanso|entrenamiento|pretemporada|d[íi]a\s+libre|d[íi]a\s+de\s+selec|elige(?:\s+1)?\s+torneo)/i;
-    var before = d.msgs.length;
-    d.msgs = d.msgs.filter(function(m){
-      if (!m || m.type !== 'preview') return true;
-      var blob = (m.title || '') + ' ' + (m.body || '');
-      return !rx.test(blob);
-    });
-    if (d.msgs.length !== before){
-      /* También limpiamos los cursores `pre:…` para que, si el texto
-         vuelve a aparecer mañana, no se quede en silencio por la
-         dedup. */
-      if (d.cursors){
-        Object.keys(d.cursors).forEach(function(k){
-          if (k.indexOf('pre:') === 0 && rx.test(k)) delete d.cursors[k];
-        });
-      }
-      _write(d);
-    }
-    _setCursor('purged:rest_preview', '1');
-  }
-
-  /* Limpieza one-shot 2026-05-24: el seed antiguo de Francia y los
-     "amistosos vs rival aleatorio" generados por `_scanFrancia` antes
-     de migrar a la fuente real del Mundial. Borramos:
-       · seed `seed-fra-bleus` legacy (texto con "amistosos") — el
-         nuevo se reinjecta justo después con el cuerpo del Mundial.
-       · mensajes `type:'callup'` con texto "amistoso" (el callup nuevo
-         habla de "Mundial · J{N}" y nunca de amistosos).
-       · cursor `fra:last` para que el siguiente scan pueda pushear
-         el aviso real de la próxima jornada del Mundial. */
-  function _purgeStaleFrancia(){
-    if (_getCursor('purged:fra_legacy') === '1') return;
-    var d = _read();
-    if (!d || !d.msgs){
-      _setCursor('purged:fra_legacy', '1');
-      return;
-    }
-    var rxAmist = /amistoso/i;
-    var before = d.msgs.length;
-    var hadLegacySeed = false;
-    d.msgs = d.msgs.filter(function(m){
-      if (!m) return true;
-      if (m.id === 'seed-fra-bleus'){
-        var bodyOld = String(m.body || '');
-        if (rxAmist.test(bodyOld) || /mundial 2032/i.test(bodyOld)){
-          hadLegacySeed = true;
-          return false;
-        }
-        return true; /* ya está con el body nuevo, no tocar */
-      }
-      if (m.side === 'fra' && m.type === 'callup'){
-        var blob = (m.title || '') + ' ' + (m.body || '');
-        if (rxAmist.test(blob)) return false;
-      }
-      return true;
-    });
-    if (d.msgs.length !== before){
-      if (d.cursors){
-        delete d.cursors['fra:last'];
-        Object.keys(d.cursors).forEach(function(k){
-          if (k.indexOf('fra:mundial:') === 0) delete d.cursors[k];
-        });
-      }
-      _write(d);
-    }
-    /* (2026-06-03) Ya NO re-inyectamos el welcome de Francia: las
-       bienvenidas están eliminadas por completo. */
-    _setCursor('purged:fra_legacy', '1');
-  }
-
-  /* ── Boot ─────────────────────────────────────────────── */
-  function _boot(){
-    if (!_ensureUI()){
-      /* Reintenta hasta que la cabecera #s-munich .sec-hdr exista. */
-      var t = 0;
-      var iv0 = setInterval(function(){
-        if (_ensureUI() || ++t > 50){ clearInterval(iv0); _bootStage2(); }
-      }, 200);
-      return;
-    }
-    _bootStage2();
-  }
-  function _bootStage2(){
-    _muSetupSync();       /* localStorage ⇄ servidor (mensajes + fotos sobreviven a wipe/cambio de móvil) */
-    _migrateSeedFlag();   /* sella flag mu_seeded_v1 si ya hay welcomes en bandeja */
-    _purgeStaleFrancia(); /* borra seed legacy + callups con "amistoso" */
-    _seed();              /* no-op: las bienvenidas están eliminadas */
-    _purgeWelcomes();     /* borra CUALQUIER bienvenida que siga en la bandeja */
-    _purgeStaleRest();
-    _refresh();
-    /* Engancha hooks tan pronto como las funciones existan. */
-    var tries = 0;
-    var iv = setInterval(function(){
-      var a = _hookResultado();
-      var b = _hookStats();
-      if ((a && b) || ++tries > 120) clearInterval(iv);
-    }, 500);
-    /* Escaneos pasivos (idempotentes con cursors) cuando el hub se
-       activa y cada 30 s como respaldo. Sin observers globales. */
-    var run = function(){
-      _scanCopaSorteo();
-      _scanStandings();
-      _scanFrancia();
-      _scanEliminations();
-      _scanBets();
-      _scanObjectives();
-      _checkObjectiveNear();
-      _checkLeagueLeader();
-      _checkRecovery();
-      _checkCupElim();
-      _checkPichichi();
-      _checkMvpLeader();
-      _observeNextMatch();
-      _refresh();
-    };
-    _muRunScans = run; /* expone run al hubchange listener para relanzar scans al cambiar hub */
-    run();
-    setInterval(run, 30000);
-    /* Disparador inmediato cuando el usuario marca un objetivo o
-       aparece una apuesta nueva (en otra pestaña). */
-    document.addEventListener('change', function(ev){
-      var t = ev.target;
-      if (!t || t.type !== 'checkbox' || !t.id) return;
-      if (/-obj|^obj-/.test(t.id))
-        setTimeout(function(){ _scanObjectives(); _checkObjectiveNear(); _refresh(); }, 30);
-    }, true);
-    window.addEventListener('storage', function(ev){
-      if (ev && ev.key === 'isramax_v1')
-        setTimeout(function(){ _scanBets(); _refresh(); }, 30);
-      if (ev && ev.key === 'copa_state_v1')
-        setTimeout(function(){ _scanCopaSorteo(); _checkCupElim(); _refresh(); }, 30);
-    });
-    var scr = document.getElementById('s-munich');
-    if (scr){
-      try {
-        new MutationObserver(function(){
-          if (scr.classList.contains('active')) run();
-        }).observe(scr, { attributes:true, attributeFilter:['class'] });
-      } catch(_){}
-    }
-    /* Cambio de día emitido por `_advance()` de la pretemporada.
-       El observer de clase no dispara aquí porque el usuario sigue
-       en s-munich, así que sin este listener el badge ✉️ no se
-       actualizaba hasta recargar la página (petición 2026-05-23). */
-    document.addEventListener('hub:day-changed', function(){
-      setTimeout(run, 60);
-      setTimeout(run, 400);
-    });
-  }
-
-  /* ── Expone API ────────────────────────────────────────── */
-  window._muMsg = {
-    push: push,
-    markRead: markRead,
-    markAllReadInSide: markAllReadInSide,
-    'delete': del,
-    clearReadInSide: clearReadInSide,
-    list: list,
-    unreadCount: unreadCount,
-    refresh: function(){ _refresh(); },
-    open: function(side, kind){
-      if (side) _ui.sideTab = side;
-      if (kind) _ui.readTab = kind;
-      _openPop();
-    },
-    close: _closePop
-  };
-
-  if (document.readyState === 'loading')
-    document.addEventListener('DOMContentLoaded', _boot);
-  else _boot();
 })();
 </script>
 

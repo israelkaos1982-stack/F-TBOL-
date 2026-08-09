@@ -969,10 +969,6 @@ window._hdrCleanCache = function(){
 </div>
 <script>
 (function(){
-  window.goAmistosos = window.goAmistosos || function(){
-    if (typeof go === 'function') go('s-amistosos');
-    setTimeout(function(){ if (typeof window._initAmistososScreen === 'function') window._initAmistososScreen(); }, 30);
-  };
   window.goDerbys = window.goDerbys || function(){
     alert('Derbys — espacio reservado para próximas mejoras.');
   };
@@ -12571,175 +12567,6 @@ window._hdrCleanCache = function(){
   };
 })();
 </script>
-
-<!-- ══ PANTALLA AMISTOSOS ══ -->
-<div class="screen" id="s-amistosos">
-  <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
-  <div class="sec-hdr"><img class="sec-ico comp-logo" src="/static/img/comp/amistosos.png" alt="Amistosos"/><h2>Buscar Enfrentamientos</h2></div>
-
-  <!-- Selector de equipos -->
-  <div id="ams-setup" style="padding:8px 12px 0;">
-    <div class="ams-team-pick" id="ams-pick-a">
-      <label class="ams-label">EQUIPO LOCAL</label>
-      <div class="ams-search-wrap">
-        <input type="text" id="ams-search-a" class="ams-search" placeholder="Buscar equipo..." autocomplete="off"/>
-      </div>
-      <div class="ams-selected" id="ams-sel-a" style="display:none;">
-        <div class="ams-sel-row">
-          <img class="ams-sel-shield" id="ams-shield-a" alt=""/>
-          <span class="ams-sel-name" id="ams-name-a"></span>
-          <button class="ams-sel-clear" onclick="window._amsClear('a')">✕</button>
-        </div>
-        <div class="ams-sel-controls">
-          <div class="ams-mode-toggle" id="ams-mode-a" data-side="a">
-            <button type="button" class="ams-mode-btn" data-mode="human" onclick="window._amsSetMode('a','human')">👤 HUMANO</button>
-            <button type="button" class="ams-mode-btn" data-mode="ia"    onclick="window._amsSetMode('a','ia')">🤖 IA</button>
-          </div>
-          <button type="button" class="ams-form-btn" id="ams-form-a" title="Estado de forma" onclick="window._amsOpenFormDropdown('a')">🎲</button>
-        </div>
-      </div>
-      <div class="ams-results" id="ams-results-a"></div>
-    </div>
-
-    <div class="ams-vs">VS</div>
-
-    <div class="ams-team-pick" id="ams-pick-b">
-      <label class="ams-label">EQUIPO VISITANTE</label>
-      <div class="ams-search-wrap">
-        <input type="text" id="ams-search-b" class="ams-search" placeholder="Buscar equipo..." autocomplete="off"/>
-      </div>
-      <div class="ams-selected" id="ams-sel-b" style="display:none;">
-        <div class="ams-sel-row">
-          <img class="ams-sel-shield" id="ams-shield-b" alt=""/>
-          <span class="ams-sel-name" id="ams-name-b"></span>
-          <button class="ams-sel-clear" onclick="window._amsClear('b')">✕</button>
-        </div>
-        <div class="ams-sel-controls">
-          <div class="ams-mode-toggle" id="ams-mode-b" data-side="b">
-            <button type="button" class="ams-mode-btn" data-mode="human" onclick="window._amsSetMode('b','human')">👤 HUMANO</button>
-            <button type="button" class="ams-mode-btn" data-mode="ia"    onclick="window._amsSetMode('b','ia')">🤖 IA</button>
-          </div>
-          <button type="button" class="ams-form-btn" id="ams-form-b" title="Estado de forma" onclick="window._amsOpenFormDropdown('b')">🎲</button>
-        </div>
-      </div>
-      <div class="ams-results" id="ams-results-b"></div>
-    </div>
-
-    <div class="ams-duration-row">
-      <label class="ams-label">DURACIÓN</label>
-      <div class="ams-dur-toggle" id="ams-dur-toggle">
-        <button type="button" class="ams-dur-btn active" data-dur="auto" onclick="window._amsSetDuration('auto')">🎲 AUTO</button>
-        <button type="button" class="ams-dur-btn" data-dur="8"    onclick="window._amsSetDuration(8)">8 MIN</button>
-        <button type="button" class="ams-dur-btn" data-dur="10"   onclick="window._amsSetDuration(10)">10 MIN</button>
-      </div>
-    </div>
-
-    <!-- TIPO DE PARTIDO (2026-05-05): el usuario elige si el amistoso
-         se juega como partido único (puede acabar empate), eliminatoria
-         (forzar prórroga + penaltis si empate al 90' / 120') o doble
-         partido (ida + vuelta con resultado global; si global empate
-         tras vuelta → prórroga + penaltis en la vuelta). -->
-    <div class="ams-mtype-row">
-      <label class="ams-label">TIPO DE PARTIDO</label>
-      <div class="ams-mtype-toggle" id="ams-mtype-toggle">
-        <button type="button" class="ams-mtype-btn active" data-mt="unico" onclick="window._amsSetMatchType('unico')">📅 ÚNICO</button>
-        <button type="button" class="ams-mtype-btn" data-mt="elim" onclick="window._amsSetMatchType('elim')">🔥 ELIMINATORIA</button>
-        <button type="button" class="ams-mtype-btn" data-mt="doble" onclick="window._amsSetMatchType('doble')">🔄 IDA + VUELTA</button>
-      </div>
-      <div class="ams-mtype-hint" id="ams-mtype-hint">90 min · puede acabar en empate.</div>
-    </div>
-
-    <button class="ams-play-btn" id="ams-play-btn" disabled onclick="window._amsCreateMatch()">⚽ CREAR PARTIDO AMISTOSO</button>
-  </div>
-
-  <!-- Contenedor del partido amistoso creado -->
-  <div id="ams-match-container" style="padding:8px 0 12px;"></div>
-
-  <!-- Historial de amistosos -->
-  <div id="ams-history-section" style="padding:0 12px 24px;">
-    <div class="ams-history-hdr" id="ams-history-hdr" style="display:none;">
-      <span>📋 HISTORIAL DE AMISTOSOS</span>
-    </div>
-    <div id="ams-history-list"></div>
-  </div>
-</div>
-
-<style>
-  #s-amistosos .sec-hdr{margin-bottom:4px;}
-  .ams-team-pick{margin-bottom:12px;}
-  .ams-label{display:block;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2.5px;color:rgba(255,255,255,.55);margin-bottom:6px;}
-  .ams-search-wrap{position:relative;}
-  .ams-search{width:100%;box-sizing:border-box;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 14px;color:#fff;font-family:Rajdhani,sans-serif;font-size:14px;letter-spacing:.5px;outline:none;transition:border-color .2s;}
-  .ams-search:focus{border-color:rgba(100,180,255,.6);}
-  .ams-search::placeholder{color:rgba(255,255,255,.3);}
-  .ams-results{max-height:200px;overflow-y:auto;border-radius:0 0 10px 10px;}
-  .ams-result-item{display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;transition:background .15s;border-bottom:1px solid rgba(255,255,255,.05);}
-  .ams-result-item:hover,.ams-result-item:active{background:rgba(255,255,255,.1);}
-  .ams-result-shield{width:28px;height:28px;object-fit:contain;flex-shrink:0;}
-  .ams-result-name{font-family:Rajdhani,sans-serif;font-size:14px;color:#fff;letter-spacing:.5px;}
-  .ams-result-tag{font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:1px;padding:2px 6px;border-radius:4px;margin-left:auto;flex-shrink:0;}
-  .ams-result-tag.human{background:rgba(255,80,160,.2);color:#ff80b0;border:1px solid rgba(255,80,160,.3);}
-  .ams-result-tag.ia{background:rgba(100,180,255,.15);color:rgba(100,180,255,.8);border:1px solid rgba(100,180,255,.2);}
-  .ams-selected{display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,.07);border:1px solid rgba(100,220,120,.35);border-radius:10px;padding:8px 12px;}
-  .ams-sel-row{display:flex;align-items:center;gap:10px;}
-  .ams-sel-shield{width:32px;height:32px;object-fit:contain;}
-  .ams-sel-name{font-family:Oswald,sans-serif;font-size:14px;letter-spacing:1.5px;color:#fff;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .ams-sel-clear{background:none;border:none;color:rgba(255,100,100,.8);font-size:16px;cursor:pointer;padding:0 4px;}
-  .ams-sel-controls{display:flex;align-items:center;gap:8px;}
-  .ams-mode-toggle{display:flex;flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:8px;overflow:hidden;}
-  .ams-mode-btn{flex:1;background:transparent;border:none;color:rgba(255,255,255,.55);font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.2px;padding:7px 4px;cursor:pointer;transition:background .15s,color .15s;}
-  .ams-mode-btn:active{transform:scale(.97);}
-  .ams-mode-btn.active[data-mode="human"]{background:rgba(255,80,160,.22);color:#ff80b0;}
-  .ams-mode-btn.active[data-mode="ia"]{background:rgba(100,180,255,.18);color:#9ed0ff;}
-  .ams-form-btn{flex-shrink:0;background:rgba(10,10,24,.6);border:2px solid rgba(255,255,255,.85);border-radius:8px;padding:4px 10px;cursor:pointer;font-size:18px;line-height:1;transition:border-color .2s,box-shadow .2s;color:#fff;}
-  .ams-form-btn:active{transform:scale(.96);}
-  .ams-duration-row{margin:14px 0 4px;}
-  .ams-dur-toggle{display:flex;gap:6px;}
-  .ams-dur-btn{flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.55);font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;padding:9px 4px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;}
-  .ams-dur-btn.active{background:rgba(240,192,64,.18);color:#f0c040;border-color:rgba(240,192,64,.45);}
-  .ams-dur-btn:active{transform:scale(.97);}
-  /* TIPO DE PARTIDO toggle (2026-05-05) */
-  .ams-mtype-row{margin:10px 0 4px;}
-  .ams-mtype-toggle{display:flex;gap:6px;}
-  .ams-mtype-btn{flex:1;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:8px;color:rgba(255,255,255,.55);font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;padding:9px 4px;cursor:pointer;transition:background .15s,color .15s,border-color .15s;}
-  .ams-mtype-btn.active[data-mt="unico"]{background:rgba(120,180,255,.18);color:#9ed0ff;border-color:rgba(120,180,255,.45);}
-  .ams-mtype-btn.active[data-mt="elim"]{background:rgba(255,90,90,.18);color:#ff8080;border-color:rgba(255,90,90,.45);}
-  .ams-mtype-btn.active[data-mt="doble"]{background:rgba(155,90,255,.18);color:#c8a0ff;border-color:rgba(155,90,255,.45);}
-  .ams-mtype-btn:active{transform:scale(.97);}
-  .ams-mtype-hint{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.45);letter-spacing:.3px;margin-top:6px;font-style:italic;}
-  /* Tarjeta de amistoso: nombres más pequeños y centrados (la card usa
-     el mismo layout que Liga EA Sports pero con teams con texto largo
-     se descuadraba; petición usuario 2026-05-05). */
-  #ams-match-container .ml-team-name{
-    font-size:13px !important;
-    letter-spacing:.6px !important;
-    line-height:1.15 !important;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    max-width:100%;
-    text-align:center;
-  }
-  #ams-match-container .ml-team{flex:1;min-width:0;align-items:center;}
-  .ams-form-dropdown{position:fixed;z-index:9999;background:rgba(10,10,24,.98);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:6px;box-shadow:0 8px 32px rgba(0,0,0,.7);min-width:180px;}
-  .ams-form-opt{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;border-radius:6px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;}
-  .ams-form-opt:hover{background:rgba(255,255,255,.08);}
-  .ams-form-opt-ico{font-size:20px;}
-  .ams-vs{text-align:center;font-family:Oswald,sans-serif;font-size:20px;letter-spacing:4px;color:rgba(255,255,255,.35);padding:4px 0 8px;}
-  .ams-play-btn{width:100%;padding:14px;margin-top:8px;border:none;border-radius:12px;font-family:Oswald,sans-serif;font-size:15px;letter-spacing:2px;cursor:pointer;transition:all .2s;background:linear-gradient(135deg,#1a5c2e,#2d8a4e);color:#fff;box-shadow:0 0 12px rgba(40,180,90,.3);}
-  .ams-play-btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;}
-  .ams-play-btn:not(:disabled):active{transform:scale(.97);}
-  .ams-history-hdr{font-family:Oswald,sans-serif;font-size:12px;letter-spacing:2.5px;color:rgba(255,255,255,.45);padding:16px 0 8px;border-top:1px solid rgba(255,255,255,.08);margin-top:12px;}
-  .ams-hist-card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;margin-bottom:8px;position:relative;}
-  .ams-hist-top{display:flex;align-items:center;gap:8px;}
-  .ams-hist-del{background:none;border:none;font-size:14px;cursor:pointer;padding:2px 4px;opacity:.45;transition:opacity .2s;margin-left:auto;flex-shrink:0;}
-  .ams-hist-del:active{opacity:1;}
-  .ams-hist-teams{font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;font-weight:600;letter-spacing:.5px;}
-  .ams-hist-score{font-family:Oswald,sans-serif;font-size:15px;color:#ffe7a6;letter-spacing:1px;}
-  .ams-hist-date{font-family:Rajdhani,sans-serif;font-size:10px;color:rgba(255,255,255,.35);letter-spacing:.5px;margin-top:2px;}
-  .ams-hist-acta{font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);margin-top:4px;line-height:1.5;}
-</style>
-
 <div class="screen" id="s-espana">
 <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🇪🇸</span><h2>España</h2></div>
@@ -65590,8 +65417,7 @@ https://api.sofascore.app/api/v1/team/44/image
     { id:'torneo',  label:'Torneo Verano',   emoji:'🌞', screen:'s-torneos-verano',
       statusFn:function(a){
         return _chipScanTours(_VERANO_TOUR_IDS) || 'in';
-      }},
-    { id:'amist',   label:'Amistosos',       emoji:'🤝', screen:'s-amistosos' }
+      }}
   ];
 
   function _collect(){
@@ -65704,8 +65530,7 @@ https://api.sofascore.app/api/v1/team/44/image
     mundial:'mundialito.png',
     sel:'selecciones.png',
     superliga:'superliga.png',
-    torneo:'amistosos.png',
-    amist:'amistosos.png'
+    torneo:'amistosos.png'
   };
   function _chipLogoSrc(id, label){
     /* 1) override del admin por label (comp_icons_v1, dataURI o URL). */

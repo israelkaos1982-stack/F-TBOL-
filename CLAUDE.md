@@ -1,5 +1,92 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La cuenta atrás post-evento del gm-modal ("REGISTRA EL EVENTO EN eFootball") se DUPLICABA — dos mecanismos independientes reaccionaban a la MISMA mutación del DOM (obligatorio, 2026-08-09)
+
+**Bug reportado (usuario 2026-08-09, foto «Robert Lewandowski · GOL ·
+FC Barcelona», Ibiza 0-1 FC Barcelona)**: al registrar un evento (gol,
+tarjeta, autogol, gol de falta…) desde el picker de jugador del
+gm-modal, la pantalla de cuenta atrás de 15/20/25 s ("REGISTRA EL
+EVENTO EN EFOOTBALL" + botón ▶ REANUDAR PARTIDO) se abría **dos veces
+seguidas/superpuestas** por cada evento, cuando debía abrirse solo una.
+
+### Causa raíz — DOS productores de countdown escuchando el mismo `#gm-acta-list`
+
+1. **Mecanismo A (inline, síncrono)** — `_showGmEventCountdown`
+   (`part2/misc_body_2.html`, dentro de `window.gmPickPlayer`): se
+   invoca INMEDIATAMENTE tras `list.appendChild(li)` al añadir el
+   `<li class="ml-evt-item">` del evento. Overlay propio
+   `#gm-evt-countdown-ov`. Añadida 2026-05-12 para garantizar al 100%
+   que el overlay aparece (el mecanismo B, más abajo, fallaba a
+   veces).
+2. **Mecanismo B (`MutationObserver`, asíncrono)** —
+   `_gmWireActaWatcher` (mismo archivo, IIFE separada al final):
+   observa `#gm-acta-list` con `{childList:true}` y, al detectar un
+   `.ml-evt-item` nuevo, dispara `_gmShowCd(type)` tras 50 ms. Overlay
+   compartido `#ml-evt-cd-overlay` (el mismo que usan las cards de
+   calendario legacy).
+
+Ambos reaccionan a la MISMA mutación del DOM (`list.appendChild(li)`)
+cuando el evento se añade vía `gmPickPlayer` — de ahí el doble overlay
+en cada gol/tarjeta/autogol/lesión. **El mecanismo B no era pura
+redundancia**: `window.mlPenWizardCommit_gm` (wizard de penaltis)
+también añade `.ml-evt-item` a `#gm-acta-list` con su propio `_push`
+local, SIN pasar por `gmPickPlayer` ni por el mecanismo A — para esos
+eventos (`pen-prov`, tarjeta del provocador, `pen-gol`, `pen-fallo`,
+`pen-parado`), el mecanismo B es el ÚNICO que muestra la cuenta atrás.
+Por eso **no se puede eliminar sin más** — hay que evitar que dispare
+para los eventos que el mecanismo A YA gestionó, sin dejar de
+disparar para los que llegan por otra vía.
+
+### Fix — marcador por-nodo `data-cd-shown`, no una bandera global
+
+Una bandera global tipo `isCountdownActive` habría bloqueado
+legítimamente eventos consecutivos rápidos (dos goles seguidos deben
+mostrar CADA UNO su propia cuenta atrás — el propio mecanismo A ya
+reinicia sus timers al recibir un evento nuevo mientras el anterior
+sigue visible, comportamiento intencional). En su lugar:
+
+- `_showGmEventCountdown` marca el `<li>` que acaba de crear con
+  `li.setAttribute('data-cd-shown', '1')` justo antes de mostrar su
+  overlay (solo si el tipo de evento SÍ tiene countdown).
+- El callback del `MutationObserver` de `_gmWireActaWatcher` comprueba
+  `n.getAttribute('data-cd-shown') === '1'` (junto al check ya
+  existente de `data-restored`) y hace `continue` si está presente.
+
+El orden de ejecución de JS de un solo hilo GARANTIZA la corrección:
+el mecanismo A corre síncronamente dentro de `gmPickPlayer`, ANTES de
+que `gmPickPlayer` termine; el callback del `MutationObserver` de B
+solo puede ejecutarse como microtask DESPUÉS de que el script
+síncrono actual termine — y encima B añade su propio `setTimeout` de
+50 ms. Así que, para un evento de `gmPickPlayer`, el marcador ya
+existe cuando B lo comprueba. Para un evento de
+`mlPenWizardCommit_gm` (que nunca pone el marcador), B sigue
+disparando con normalidad.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un productor nuevo de eventos del acta del
+   gm-modal (cualquier función que haga
+   `document.getElementById('gm-acta-list').appendChild(...)` con un
+   nodo `.ml-evt-item`) muestre su propia cuenta atrás SIN marcar el
+   nodo con `data-cd-shown` — o el `MutationObserver` de
+   `_gmWireActaWatcher` volverá a abrir un segundo overlay para el
+   mismo evento.
+2. **PROHIBIDO** eliminar `_gmWireActaWatcher`/`_gmShowCd` pensando
+   que son "redundantes" del mecanismo inline: son la ÚNICA vía de
+   countdown para los eventos que añade `mlPenWizardCommit_gm` (wizard
+   de penaltis). Sin el observer, esos eventos dejarían de mostrar
+   NINGUNA cuenta atrás.
+3. **PROHIBIDO** sustituir el marcador por-nodo por una bandera global
+   `isCountdownActive`/`modalOpen`: bloquearía la cuenta atrás de un
+   segundo evento legítimo añadido mientras la del primero sigue
+   visible (comportamiento ya soportado por `_showGmEventCountdown`,
+   que reinicia sus propios timers al recibir un evento nuevo).
+4. Los eventos RESTAURADOS (`gmReanudar`, `gmOpen` en background) ya
+   llevan `data-restored="1"` y quedan excluidos por ese check
+   existente — no confundir ese marcador con `data-cd-shown` (motivos
+   distintos: uno evita reabrir cuenta atrás de histórico ya jugado,
+   el otro evita el doble disparo del mismo evento nuevo).
+
 ## `_tourSave` fallaba IDÉNTICO con WiFi y con datos móviles — `JSON.stringify(cfg)` se llamaba HASTA 5 VECES y podía reventar SÍNCRONO antes de tocar la red (obligatorio, 2026-08-09)
 
 **Bug reportado (usuario 2026-08-09, «Mundial 2032 · Grupo J», torneos

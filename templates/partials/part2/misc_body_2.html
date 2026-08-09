@@ -16022,6 +16022,18 @@
       };
       var totalSec = _cdSec[evt.type];
       if (!totalSec) return; /* tipo de evento sin countdown (mvp, sust...) */
+      /* Marca el <li> recién añadido como "cuenta atrás YA disparada".
+         `_gmWireActaWatcher` (MutationObserver sobre este mismo
+         #gm-acta-list, más abajo en el archivo) reacciona a la MISMA
+         mutación del DOM que acabamos de producir (list.appendChild(li)
+         un poco más arriba) y, sin este marcador, abría un SEGUNDO
+         overlay independiente para el mismo evento — la cuenta atrás
+         salía duplicada en cada gol/tarjeta añadidos desde el picker de
+         jugador (bug reportado 2026-08-09). El observer sigue siendo
+         necesario: `mlPenWizardCommit_gm` (wizard de penaltis) añade
+         eventos a esta misma lista SIN pasar por aquí, así que sigue
+         dependiendo del observer para mostrar su cuenta atrás. */
+      try { li.setAttribute('data-cd-shown', '1'); } catch(_){}
       /* Crear / obtener overlay. */
       var ov = document.getElementById('gm-evt-countdown-ov');
       if (!ov) {
@@ -37310,6 +37322,17 @@ document.addEventListener('DOMContentLoaded', function() {
              para equipos sin plantilla, p.ej. CA River Plate). Bug
              reportado con foto 2026-05-27. */
           if (n.getAttribute('data-restored') === '1') continue;
+          /* Saltar nodos cuya cuenta atrás YA disparó `gmPickPlayer` de
+             forma inline y síncrona (ver `_showGmEventCountdown`, más
+             arriba en el archivo — pone este marcador justo antes de
+             mostrar su overlay). Sin este check, este observer volvía a
+             abrir un SEGUNDO overlay para el MISMO evento (bug: la
+             cuenta atrás salía duplicada en cada gol/tarjeta añadidos
+             desde el picker de jugador, 2026-08-09). Los eventos que
+             SÍ deben seguir pasando por aquí son los que añade
+             `mlPenWizardCommit_gm` (wizard de penaltis), que nunca pone
+             este marcador porque no pasa por `gmPickPlayer`. */
+          if (n.getAttribute('data-cd-shown') === '1') continue;
           var g = window._gm || {};
           /* Saltar replays del localStorage al ABRIR el modal (kickoff
              aún no se ha pulsado): si el reloj no ha arrancado nunca,

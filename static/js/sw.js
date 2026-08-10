@@ -46,7 +46,7 @@ var PRECACHE = [
   '/static/js/var-system.js?v=1.0',
   '/static/js/index.bundle.js?v=9.39',
   '/static/js/goal-notification-patch.js?v=2.2',
-  '/static/js/copa-engine.js?v=1.8',
+  '/static/js/copa-engine.js?v=1.9',
 ];
 
 /* ── INSTALL: pre-cachear activos estáticos ─────────────────────────────── */

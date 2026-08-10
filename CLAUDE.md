@@ -13395,6 +13395,68 @@ Esta regla es **bloqueante absoluta** — ninguna PR puede dejar el
 cronómetro clavado en 0' en ninguna competición ni modo. Si un
 cambio rompe el avance del cronómetro, ese cambio se REVIERTE.
 
+### Excepción explícita — modo INSTANTÁNEO de `iaSimLive` para IA vs IA (obligatorio, 2026-08-10)
+
+**Petición usuario 2026-08-10**: la animación en vivo (0→90, ~90 s
+reales) de **IA vs IA** en Liga EA Sports y Copa del Rey "ocupa mucho
+espacio" cuando se simulan muchos partidos seguidos de una jornada/
+ronda. El usuario pidió EXPLÍCITAMENTE que, en esos partidos, pulsar
+▶ Simular resuelva el resultado + acta **al instante**, igual que ya
+hacían el resto de competiciones basadas en el motor `_tour*`
+(Selecciones, Torneos de Verano, Mundialito, Mundial 2032).
+
+Investigando el resto de competiciones que también usan `iaSimLive`
+(Recopa, Supercopa de España, Supercopa de Europa, Copa
+Intercontinental, Copas de "Resto de Ligas") se encontró que Supercopa
+de España/Europa además metían un rodeo **PREVIA → BAJAS** (pantallas
+pensadas para humanos: Twitch/balón/duración/sancionados) ANTES de
+`iaSimLive` incluso para partidos 100% IA — eso encajaba con el reporte
+del usuario de que un partido IA vs IA "se cierra y me devuelve a la
+pantalla anterior". El usuario confirmó (con las 5 competiciones
+listadas) que quería el MISMO tratamiento instantáneo ahí también.
+
+**Fix — `window.iaSimLive(mk, home, away, j, j1fn, instant)`** (7º arg
+nuevo, `part2/misc_body_2.html`): con `instant=true`, la MISMA lógica de
+eventos/VAR/ET/penaltis/persistencia que el modo en vivo se ejecuta de
+un tirón — `_tickFn(forceCurMin)` acepta un curMin forzado (en vez de
+derivarlo del wall-clock) y devuelve `true` solo cuando alcanza el
+cierre real (persistencia incluida); el caller recorre como mucho 2
+pasadas (90' → si activa prórroga, 120' resuelve ET+penaltis+cierre).
+Sin `setInterval`/rAF — nada que animar.
+
+- **Liga EA Sports** (`_iaPendingCard`, botón "▶ SIMULAR" de la jornada)
+  y **Copa del Rey** (`copaSimLive`, `copa-engine.js`) llaman
+  `iaSimLive(..., true)` directo — ya no había PREVIA de por medio.
+- **Recopa, Copa Intercontinental, Copas de "Resto de Ligas"**
+  (`_recopaCardHtml`/`_interCardHtml`/`_lecRenderFinal`): mismos botones
+  directos, solo se añadió `,null,true`.
+- **Supercopa de España/Europa** (`_scAbrirPrevia`/`_uscAbrirPrevia`):
+  ahora comprueban `!anyHuman` ANTES de tocar `showPrePartidoOverlay` —
+  si es IA vs IA puro, saltan PREVIA+BAJAS por completo y llaman
+  `iaSimLive(mk, m.home, m.away, 0, null, true)` directo sobre la card.
+
+**Reglas a respetar**:
+1. **PROHIBIDO** interpretar la regla "BASE INMUTABLE" de arriba como
+   una prohibición de este modo instantáneo — es una EXCEPCIÓN
+   explícita, acordada con el usuario, y acotada a `instant===true`. El
+   modo EN VIVO (por defecto, `instant` ausente/false) sigue intacto
+   para el resto de competiciones (Champions/Europa/Conference fase de
+   liga y KO, amistosos, y cualquier `iaSimLive` sin el 6º arg).
+2. **PROHIBIDO** activar `instant=true` en una competición NUEVA sin
+   acuerdo explícito del usuario — la lista de competiciones
+   instantáneas es la de arriba (Liga, Copa, Recopa, Intercontinental,
+   Copas de Resto de Ligas, Supercopa España, Supercopa Europa), no se
+   extiende sola.
+3. **PROHIBIDO** que `_tickFn` deje de devolver `true`/`false`
+   correctamente en cada rama (abort por card ausente, activación de
+   ET, cierre real) — el bucle del modo instantáneo depende de ese
+   valor de retorno para saber cuántas pasadas hacen falta (máx. 2,
+   guard de 4 solo por margen).
+4. Verificado con un harness Node aislado (mock de DOM + dependencias):
+   marcador y acta se pintan de forma síncrona, la persistencia recibe
+   el resultado correcto, y el caso Copa empatado a 90' resuelve
+   ET/penaltis correctamente en 2 pasadas sin colgarse.
+
 ### Anti-patrones prohibidos (que rompieron el cronómetro en 2026-05-10)
 
 1. **MutationObserver global sobre `document.body` con

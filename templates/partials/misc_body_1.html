@@ -36229,9 +36229,24 @@ window._hdrCleanCache = function(){
     if (hiddenB.length){
       h += '<div class="tv-mg-sec">Restaurar built-in (datos conservados)</div>';
       hiddenB.forEach(function(id){
-        h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
+        /* A diferencia de los slots numerados (que solo se listan aquí SI
+           tienen datos, `if (saved)` más abajo), un built-in SIEMPRE se
+           ofrece como "restaurable" — es un slot canónico y permanente
+           de la app, no algo que pueda dejar de existir. Por eso, tras un
+           "🗑 Borrar para siempre", la fila NUNCA desaparecía — parecía
+           que el botón no hacía nada (bug reportado por el usuario,
+           2026-08-10: "aunque los borro no se eliminan, se quedan
+           fijos"). Fix: la fila SÍ refleja el estado (vacío tras borrar,
+           sin el botón de borrar redundante) aunque el nombre se siga
+           listando — eso es la única confirmación visual posible dado
+           que "Restaurar" debe seguir disponible para siempre. */
+        var _hasData = false;
+        try { _hasData = !!localStorage.getItem(_key(id)); } catch(_){}
+        h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id))
+          + (_hasData ? '' : ' <span style="opacity:.55;font-size:.85em;">(vacío)</span>') + '</span>'
           + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button>'
-          + '<button class="tv-mg-btn tv-mg-del" data-act="wipe" data-id="' + id + '">🗑 Borrar para siempre</button></div>';
+          + (_hasData ? '<button class="tv-mg-btn tv-mg-del" data-act="wipe" data-id="' + id + '">🗑 Borrar para siempre</button>' : '')
+          + '</div>';
       });
     }
     var freeSlots = slots.filter(function(id){ return !visSet[id]; });

@@ -252,6 +252,22 @@
             if (btn) btn.onclick = function(){ try { window.location.reload(); } catch(_){} };
           } catch(_){}
         }
+        /* ── AVISO por HTML revalidado en segundo plano (2026-08-10) ──
+           El propio SW ahora sirve `/` en modo stale-while-revalidate
+           (ver static/js/sw.js) — la pestaña puede estar corriendo una
+           copia de `misc_body_1.html`/`misc_body_2.html` de hasta 30 min
+           que ya cambió en el servidor SIN que el script `sw.js` en sí
+           se haya modificado (ese archivo no cambia solo porque cambie
+           el HTML inline), así que el `updatefound`/`reg.update()` de
+           abajo NO se entera de esto — necesita su propia señal. El SW
+           avisa por `postMessage` en cuanto detecta, en segundo plano,
+           que la versión fresca difiere de la servida; reutiliza el
+           MISMO banner (nunca recarga solo). */
+        if (navigator.serviceWorker.addEventListener) {
+          navigator.serviceWorker.addEventListener('message', function(ev){
+            try { if (ev.data && ev.data.type === 'ftbol-html-updated') _showSwUpdateBanner(); } catch(_){}
+          });
+        }
         /* Ya había una versión nueva instalada esperando (deploy previo a
            esta carga). */
         if (reg.waiting && navigator.serviceWorker.controller) _showSwUpdateBanner();

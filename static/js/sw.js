@@ -1,15 +1,39 @@
 'use strict';
-/* Service Worker — F-TBOL  (2026-06-22)
+/* Service Worker — F-TBOL  (2026-08-10)
    ─────────────────────────────────────────────────────────────────────────
    Estrategia por tipo de recurso:
    • /static/ (CSS/JS con ?v=)  → cache-first  (URL cambia al actualizar)
-   • /        (HTML principal)  → network-first, caché como red de seguridad
+   • /        (HTML principal)  → STALE-WHILE-REVALIDATE (ver abajo)
    • /api/    (datos dinámicos) → siempre red, nunca cachear
    ─────────────────────────────────────────────────────────────────────────
    Beneficio: en la 2ª visita (o tras un cold-start de Railway) los 1.4 MB
    de JS/CSS se sirven INSTANTÁNEAMENTE desde caché sin tocar la red.
-   El HTML sigue siendo siempre fresco (network-first); la caché solo
-   actúa si Railway no responde (offline / error). */
+
+   ── HTML principal: de network-first a STALE-WHILE-REVALIDATE ──────────
+   Investigación de rendimiento en móvil (2026-08-10, Chromium real vía
+   CDP con CPU×6 + red 1.6 Mbps/150 ms — condiciones típicas de un móvil
+   gama media con datos): `misc_body_1.html`+`misc_body_2.html` van
+   INLINE en el propio `/` (no son `/static/`, así que nunca entraban en
+   la rama cache-first de arriba) — ~1.3 MB YA comprimidos con gzip. Con
+   el network-first de siempre, CADA apertura de la app pagaba esa
+   descarga completa antes de poder pintar nada, aunque el usuario
+   hubiera abierto la web hace 2 minutos. En PC (CPU/red rápidas) apenas
+   se nota; en móvil son varios segundos SOLO de descarga, cada vez.
+
+   Con SWR: si hay una copia en caché de menos de `HTML_SWR_MAX_AGE_MS`,
+   se sirve AL INSTANTE (cero espera de red) y, en paralelo
+   (`e.waitUntil`, no bloquea la respuesta ya entregada), se pide la
+   versión fresca — si difiere de la servida, se avisa a las pestañas
+   abiertas vía `postMessage` para que muestren el MISMO banner
+   "🔄 Hay una versión más nueva" que ya usa el propio Service Worker
+   (nunca recarga sola — un partido en curso vive en memoria). Pasada esa
+   ventana de frescura, se vuelve al network-first clásico (1ª visita del
+   día, por ejemplo) — el objetivo es que REABRIR la app varias veces en
+   la misma sesión sea instantáneo, no eliminar la comprobación de red
+   por completo. El límite de antigüedad de la caché de EMERGENCIA
+   (`HTML_CACHE_MAX_AGE_MS`, para cuando la red falla del todo) no
+   cambia — sigue siendo la última red de seguridad, más laxa que la de
+   SWR a propósito. */
 
 var CACHE_STATIC = 'ftbol-static-v1';
 /* v1 → v2 (2026-07-28/29): un usuario reportó código JS de una versión
@@ -28,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v2';
+var CACHE_HTML   = 'ftbol-html-v3';
 /* Antigüedad máxima que se acepta servir de la caché HTML de
    emergencia. Sin este límite, un solo fallo de red puede dejar
    servida una copia de hace SEMANAS indefinidamente (hasta el próximo
@@ -37,6 +61,15 @@ var CACHE_HTML   = 'ftbol-html-v2';
    error de red se propague (el navegador muestra su propio aviso de
    sin-conexión) en vez de mostrar una app con código obsoleto/roto. */
 var HTML_CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutos
+
+/* Ventana de frescura para SERVIR AL INSTANTE (stale-while-revalidate) sin
+   esperar red. Deliberadamente MÁS CORTA que el "todo vale con tal de no
+   mostrar el error offline del navegador" de arriba — aquí SÍ hay red
+   disponible, así que en cuanto pase esta ventana se vuelve a pedir la
+   página al servidor antes de responder (network-first clásico), no se
+   sirve una copia vieja sin comprobar. 30 min cubre sobradamente reabrir
+   la app varias veces en la misma sesión de uso. */
+var HTML_SWR_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutos
 
 /* Activos a pre-cachear en el install.  Actualizar ?v= aquí cuando cambien. */
 var PRECACHE = [
@@ -132,51 +165,108 @@ self.addEventListener('fetch', function (e) {
     return;
   }
 
-  /* HTML de navegación: network-first; caché solo si la red falla, y
-     SOLO si esa copia cacheada no supera `HTML_CACHE_MAX_AGE_MS` — sin
-     este límite un único fallo de red puede dejar servida una copia de
-     hace semanas indefinidamente (ver comentario de arriba). */
+  /* HTML de navegación: STALE-WHILE-REVALIDATE (ver cabecera del archivo).
+     Copia en caché de menos de `HTML_SWR_MAX_AGE_MS` → se sirve AL
+     INSTANTE y se revalida en segundo plano. Sin copia utilizable →
+     network-first clásico (con la caché de emergencia, más laxa, como
+     último recurso si la red falla del todo). */
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request).then(function (res) {
-        /* clonar YA, síncrono: si se difiere dentro del .then() de
-           caches.open() (async, IndexedDB), el navegador puede empezar
-           a consumir el body de `res` (para pintar la página) antes de
-           que el clone() llegue a ejecutarse → "Response body is
-           already used". Clonar aquí evita la carrera. */
-        var resClone = (res && res.ok) ? res.clone() : null;
-        if (resClone) {
-          caches.open(CACHE_HTML).then(function (c) {
-            c.put('/', resClone);
-            /* Sello de "cuándo se guardó esta copia" — Response de texto
-               plano con el timestamp, guardado junto a '/' bajo una key
-               propia para no tocar el body del HTML real. */
-            try {
-              c.put('/__ftbol_html_cached_at__', new Response(String(Date.now())));
-            } catch (_e) {}
-          }).catch(function () {});
-        }
-        return res;
-      }).catch(function () {
-        return caches.open(CACHE_HTML).then(function (c) {
-          return c.match('/__ftbol_html_cached_at__').then(function (tsRes) {
-            return (tsRes ? tsRes.text() : Promise.resolve(null)).then(function (tsText) {
-              var ts = tsText ? parseInt(tsText, 10) : NaN;
-              var fresh = !isNaN(ts) && (Date.now() - ts) <= HTML_CACHE_MAX_AGE_MS;
-              if (!fresh) {
-                /* Demasiado vieja (o sin sello — copia de un SW anterior
-                   al que no le dio tiempo a escribir el sello) — NO la
-                   servimos. Dejamos que el error de red se propague: el
-                   navegador muestra su propio aviso de sin-conexión, en
-                   vez de una app con código potencialmente obsoleto o
-                   roto. */
-                return Promise.reject(new Error('stale html cache'));
-              }
-              return c.match('/');
-            });
+      caches.open(CACHE_HTML).then(function (cache) {
+        return Promise.all([
+          cache.match('/'),
+          cache.match('/__ftbol_html_cached_at__').then(function (tsRes) {
+            return tsRes ? tsRes.text() : null;
+          })
+        ]).then(function (r) {
+          var cachedRes = r[0];
+          var tsText = r[1];
+          var ts = tsText ? parseInt(tsText, 10) : NaN;
+          var age = isNaN(ts) ? Infinity : (Date.now() - ts);
+
+          if (cachedRes && age <= HTML_SWR_MAX_AGE_MS) {
+            /* Clonar YA, síncrono, ANTES de entregar la respuesta: si se
+               clona más tarde (dentro de `_revalidateHtmlAndNotify`), hay
+               una carrera real con el navegador empezando a CONSUMIR el
+               body de `cachedRes` para pintar la página — quien llegue
+               2º se encuentra "Response body is already used" y ese
+               error queda tragado por el catch genérico de abajo, sin
+               ningún síntoma visible (la revalidación simplemente nunca
+               avisa de nada, para siempre). Con dos objetos Response
+               INDEPENDIENTES desde el principio, cada consumidor lee el
+               suyo sin pisarse. `waitUntil` mantiene el SW vivo para
+               terminar la revalidación aunque la respuesta ya se haya
+               entregado. */
+            var cloneForResponse = cachedRes.clone();
+            e.waitUntil(_revalidateHtmlAndNotify(cache, cachedRes));
+            return cloneForResponse;
+          }
+
+          /* Sin copia "fresca" para SWR (1ª visita, o llevas > 30 min sin
+             abrir la app) → network-first: se pide la red, y solo si
+             falla se recurre a la caché de emergencia (límite más laxo,
+             `HTML_CACHE_MAX_AGE_MS`). */
+          return fetch(e.request).then(function (res) {
+            var resClone = (res && res.ok) ? res.clone() : null;
+            if (resClone) _storeHtmlInCache(cache, resClone);
+            return res;
+          }).catch(function () {
+            var fresh = cachedRes && age <= HTML_CACHE_MAX_AGE_MS;
+            if (!fresh) {
+              /* Demasiado vieja (o sin sello, o no había copia) — NO la
+                 servimos. Dejamos que el error de red se propague: el
+                 navegador muestra su propio aviso de sin-conexión, en
+                 vez de una app con código potencialmente obsoleto o
+                 roto. */
+              return Promise.reject(new Error('stale html cache'));
+            }
+            return cachedRes;
           });
         });
       })
     );
   }
 });
+
+/* Guarda `res` (ya clonado por el caller) como la copia vigente de '/' +
+   su sello de "cuándo se guardó" — el ÚNICO punto que escribe en
+   CACHE_HTML, usado tanto por el camino network-first como por la
+   revalidación en segundo plano de SWR. */
+function _storeHtmlInCache(cache, resClone) {
+  try {
+    cache.put('/', resClone);
+    cache.put('/__ftbol_html_cached_at__', new Response(String(Date.now())));
+  } catch (_e) {}
+}
+
+/* Pide la versión fresca de '/' en segundo plano (nunca bloquea la
+   respuesta ya servida desde caché), actualiza la caché, y — SOLO si el
+   contenido cambió de verdad respecto a lo que se acaba de servir — avisa
+   a las pestañas abiertas para que muestren el banner de "hay una
+   versión nueva" ya existente (`_showSwUpdateBanner` en index.html).
+   Comparar por longitud del texto decomprimido (no por Content-Length:
+   con gzip/chunked ese header puede faltar) es una heurística barata —
+   un falso negativo ocasional (cambio real con la MISMA longitud) se
+   autocorrige solo en la siguiente navegación, no es una garantía de
+   integridad, solo un aviso de cortesía. */
+function _revalidateHtmlAndNotify(cache, oldRes) {
+  return fetch('/', { cache: 'no-store' }).then(function (res) {
+    if (!res || !res.ok) return;
+    var freshForCache = res.clone();
+    var freshForCompare = res.clone();
+    return Promise.all([
+      oldRes.text().catch(function () { return null; }),
+      freshForCompare.text().catch(function () { return null; })
+    ]).then(function (t) {
+      _storeHtmlInCache(cache, freshForCache);
+      var oldText = t[0], newText = t[1];
+      var changed = (oldText == null || newText == null) ? false : (oldText.length !== newText.length);
+      if (!changed) return;
+      return self.clients.matchAll({ type: 'window' }).then(function (list) {
+        list.forEach(function (c) {
+          try { c.postMessage({ type: 'ftbol-html-updated' }); } catch (_e) {}
+        });
+      });
+    });
+  }).catch(function () { /* revalidación fallida: sin problema, se reintenta en la próxima navegación */ });
+}

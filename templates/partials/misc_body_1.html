@@ -73692,14 +73692,28 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
       var hasInjury = false;
       try {
         var lesionStore = window.LESION_STORE || {};
-        /* Liga la lista de nombres de jugadores del Bayern para
-           filtrar el LESION_STORE (que es global a toda la liga). */
+        /* Liga la lista de nombres de jugadores del hub (Liverpool) para
+           filtrar el LESION_STORE (que es global a toda la liga).
+
+           FIX 2026-08-10 (auditoría de rendimiento): esto llamaba a
+           `window.sqFromRegistry('Bayern Munich')` con el nombre legacy
+           HARDCODEADO — justo lo que la regla "Hub del usuario: Liverpool
+           (no Bayern)" de este archivo prohíbe. `hubRow` (arriba, misma
+           función) YA es la plantilla real del hub vía `_findBayernRow()`
+           — reutilizarla evita una 2ª resolución y, sobre todo, evita
+           reventar el fallback "equipo no encontrado" de `sqFromRegistry`/
+           `sqFromRegistryFull` (que dispara `applyEngineOverrides()` —
+           re-escaneo COMPLETO de todas las ligas) en CADA llamada a
+           `updateHud()` cuando "Bayern Munich" ya no resuelve tras el
+           rename del slot a Liverpool. `updateHud()` se llama en decenas
+           de puntos (cada interacción del hub, boot, hidratación del
+           servidor) — pagar un re-escaneo completo del motor en cada una
+           de esas llamadas es el origen confirmado (Chromium/CDP,
+           profiling real) de que "cualquier caja tarda 30+ segundos". */
         var bayernNames = {};
-        if (typeof window.sqFromRegistry === 'function') {
-          var sq = window.sqFromRegistry('Bayern Munich') || [];
-          sq.forEach(function(p){
-            var nm = (p && (p.name || (Array.isArray(p)?p[1]:''))) || '';
-            if (nm) bayernNames[nm] = true;
+        if (hubRow && Array.isArray(hubRow.players)) {
+          hubRow.players.forEach(function(p){
+            if (p && p.name) bayernNames[p.name] = true;
           });
         }
         Object.keys(lesionStore).forEach(function(playerName){

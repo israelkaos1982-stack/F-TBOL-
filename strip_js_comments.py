@@ -1,5 +1,6 @@
-"""Quita los comentarios de bloque /* ... */ del JS embebido en los
-<script> de una plantilla HTML, SIN tocar los archivos fuente.
+"""Quita los comentarios de bloque /* ... */ y la indentación de línea
+del JS embebido en los <script> de una plantilla HTML, SIN tocar los
+archivos fuente.
 
 Por qué existe (2026-08-08, investigación de peso de página): un
 tercio del JS de `misc_body_1.html`/`misc_body_2.html` son comentarios
@@ -10,6 +11,30 @@ gzip un ~34% y lo que el navegador tiene que parsear un ~23%, sin
 ningún riesgo funcional (un comentario nunca se ejecuta) — verificado
 haciendo pasar los 105 bloques <script> resultantes por `node --check`
 (cero errores) usando un parser real (`acorn`) como referencia.
+
+REFUERZO 2026-08-10 (petición usuario, "empieza con cuidado bajando el
+peso de la web"): además de los comentarios, se quita la INDENTACIÓN
+de cada línea (espacios/tabs al PRINCIPIO de línea) — nunca el propio
+salto de línea. Esto es 100% seguro por un motivo simple: en JS la
+indentación NUNCA es significativa fuera de un string/template
+literal/regex — solo importa si hay o no un `\\n` (para ASI), nunca
+cuántos espacios lo preceden. Como este tokenizer YA distingue
+strings/template literals/regex del código real (para los
+comentarios), la misma pasada puede quitar la indentación del código
+real SIN TOCAR JAMÁS el interior de un string/template — evita el
+error clásico de "minificar JS con regex" que rompería un string
+multilínea o un template literal que construye HTML con espacios
+significativos. Con esto, además del ~34% de ahorro de red (gzip ya
+comprime casi toda la indentación repetida — el margen extra sobre la
+red es de solo ~4-5%), se reduce ~7-10% el nº de caracteres CRUDOS que
+el motor JS del móvil tiene que tokenizar en CADA carga/navegación —
+un coste de CPU que el cacheo (Service Worker, gzip) no puede evitar,
+porque ocurre DESPUÉS de descomprimir/leer de caché, cada vez que el
+documento se parsea. Mismo contrato de seguridad de arriba: el
+resultado pasa por la MISMA red `_is_pure_deletion` (esta
+transformación también es pura eliminación de caracteres, nunca
+inserta/reordena nada) — si algo no cuadra, se sirve el bloque
+original sin tocar.
 
 Por qué NO se usa un parser JS real en producción: el servidor
 (Railway/Render) es un contenedor Python/gunicorn sin Node.js, y no
@@ -45,10 +70,11 @@ import re
 _SCRIPT_RE = re.compile(r'(<script\b[^>]*>)(.*?)(</script>)', re.S | re.I)
 
 
-def _strip_block_comments_js(src):
-    """Devuelve `src` sin comentarios /* */ de código real. Tokenizer
-    de una sola pasada, sin dependencias. Ver contrato de seguridad
-    en el docstring del módulo."""
+def _strip_block_comments_js(src, strip_leading_ws=False):
+    """Devuelve `src` sin comentarios /* */ de código real (y, si
+    `strip_leading_ws=True`, sin la indentación de cada línea de código
+    real). Tokenizer de una sola pasada, sin dependencias. Ver contrato
+    de seguridad en el docstring del módulo."""
     out = []
     i = 0
     n = len(src)
@@ -202,6 +228,22 @@ def _strip_block_comments_js(src):
                 continue
             # No era un regex válido: tratar '/' como división normal.
 
+        # --- indentación de línea: quitar espacios/tabs TRAS un '\n' ---
+        # Solo llega aquí código real (fuera de strings/templates/regex/
+        # comentarios, que ya se copiaron enteros arriba). Un '\n' JAMÁS
+        # es significativo por su indentación en JS — solo importa que
+        # exista (ASI) — así que quitar los espacios/tabs que lo siguen
+        # es una eliminación pura, nunca cambia el significado del
+        # programa. El propio '\n' SIEMPRE se conserva.
+        if strip_leading_ws and c == '\n':
+            out.append(c)
+            j = i + 1
+            while j < n and (src[j] == ' ' or src[j] == '\t'):
+                j += 1
+            removed_any = removed_any or (j > i + 1)
+            i = j
+            continue
+
         out.append(c)
         if not c.isspace():
             prev_kind = 'value' if c in ')]' else 'other'
@@ -273,11 +315,12 @@ def _is_pure_deletion(original, stripped):
     return True
 
 
-def strip_html_js_comments(html):
-    """Quita los comentarios /* */ del JS de TODOS los <script> de
-    `html`. Nunca lanza: ante cualquier duda, deja ese bloque tal cual.
-    Devuelve (resultado, stats) donde stats trae cuántos bloques se
-    tocaron y si hubo algún fallback."""
+def strip_html_js_comments(html, strip_leading_ws=True):
+    """Quita los comentarios /* */ (y, por defecto, la indentación de
+    línea) del JS de TODOS los <script> de `html`. Nunca lanza: ante
+    cualquier duda, deja ese bloque tal cual. Devuelve (resultado,
+    stats) donde stats trae cuántos bloques se tocaron y si hubo algún
+    fallback."""
     stats = {'blocks_total': 0, 'blocks_stripped': 0, 'blocks_fallback': 0}
 
     def repl(m):
@@ -286,7 +329,7 @@ def strip_html_js_comments(html):
         if not inner.strip():
             return m.group(0)
         try:
-            stripped, removed_any = _strip_block_comments_js(inner)
+            stripped, removed_any = _strip_block_comments_js(inner, strip_leading_ws=strip_leading_ws)
             if not removed_any:
                 return m.group(0)
             # Red de seguridad: `stripped` DEBE ser `inner` con trozos

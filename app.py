@@ -4515,6 +4515,16 @@ _KV_ALLOWED_EXACT = {
     # históricas", acción ÚNICA por hub). localStorage es solo caché; el
     # server evita que se re-acredite dos veces desde otro dispositivo.
     "retro_earnings_applied_v1",
+    # Nº de clubes humanos configurado para la Superliga (botón admin
+    # "⚙️ Nº de clubes" en Superliga · Clasificación, 2026-08-10). Antes
+    # el nº de equipos estaba hardcodeado a 7 — con solo 6 clubes humanos
+    # añadidos en "EA Sports → Europa" la Superliga nunca arrancaba. El
+    # admin ahora elige cuántos de los ya añadidos entran a jugar (p.ej.
+    # 6 → 20 partidos/equipo, 4 veces cada rival, mismas reglas de
+    # siempre). localStorage es solo caché; el server es la fuente de
+    # verdad para que la elección sobreviva al borrado de datos / cambio
+    # de móvil.
+    "superliga_num_teams_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -4562,6 +4572,10 @@ _KV_RECENCY_BLOB_KEYS = {
     # Marca de qué cajas de mister ya recibieron el recálculo retroactivo
     # de ganancias por partido: el blob con `updatedAt` mayor gana entero.
     "retro_earnings_applied_v1",
+    # Nº de clubes humanos de la Superliga: el blob con `updatedAt` mayor
+    # gana ENTERO — la elección explícita del admin (authoritative) nunca
+    # la pisa un POST stale de otro dispositivo/pestaña.
+    "superliga_num_teams_v1",
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("

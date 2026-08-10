@@ -970,12 +970,25 @@
 #s-superliga-clas .sl-stats-cta:hover{filter:brightness(1.18);transform:translateY(-1px);}
 #s-superliga-clas .sl-stats-cta .sl-stats-ico{font-size:18px;line-height:1;}
 #s-superliga-clas .sl-stats-cta .sl-stats-arr{margin-left:auto;color:rgba(255,255,255,.55);font-size:14px;}
+/* Botón "⚙️ Nº de clubes" — configura cuántos de los equipos ya
+   añadidos en "EA Sports → Europa" (slug superliga) juegan la
+   temporada. Mismo layout que .sl-stats-cta, acento dorado para
+   distinguirlo como acción de AJUSTE (no de navegación). */
+#s-superliga-clas .sl-numteams-cta{display:flex;align-items:center;gap:10px;margin:6px 12px 0;padding:11px 14px;background:linear-gradient(135deg,#241a00,#4a3600 50%,#7e5e00 100%);border:1px solid rgba(240,192,64,.5);border-radius:10px;cursor:pointer;font-family:Oswald,sans-serif;color:#fff;letter-spacing:1.2px;font-weight:700;font-size:12px;box-shadow:0 0 14px rgba(240,192,64,.14);transition:filter .16s,transform .16s;}
+#s-superliga-clas .sl-numteams-cta:hover{filter:brightness(1.18);transform:translateY(-1px);}
+#s-superliga-clas .sl-numteams-cta .sl-numteams-ico{font-size:16px;line-height:1;}
+#s-superliga-clas .sl-numteams-cta .sl-numteams-arr{margin-left:auto;color:rgba(255,255,255,.55);font-size:13px;}
 </style>
 <div class="clas-wrap">
 <div class="sl-stats-cta" onclick="go('s-superliga-stats')">
   <span class="sl-stats-ico">📈</span>
   <span>SUPERLIGA · ESTADÍSTICAS</span>
   <span class="sl-stats-arr">▶</span>
+</div>
+<div class="sl-numteams-cta" onclick="if(typeof window._slNumTeamsEdit==='function')window._slNumTeamsEdit();">
+  <span class="sl-numteams-ico">⚙️</span>
+  <span id="sl-numteams-label">SUPERLIGA · Nº DE CLUBES: 7</span>
+  <span class="sl-numteams-arr">✏️</span>
 </div>
 <div id="sl-clas-content">
 <div class="clas-empty">Cargando clasificación…</div>
@@ -989,10 +1002,19 @@
 (function(){
   'use strict';
 
-  var STORAGE_KEY_TEAMS    = 'manual_ea_superliga_v1';
-  var STORAGE_KEY_CALENDAR = 'superliga_calendar_v1';
-  var STORAGE_KEY_RESULTS  = 'superliga_results_v1';
-  var TOTAL_TEAMS = 7;
+  var STORAGE_KEY_TEAMS     = 'manual_ea_superliga_v1';
+  var STORAGE_KEY_CALENDAR  = 'superliga_calendar_v1';
+  var STORAGE_KEY_RESULTS   = 'superliga_results_v1';
+  var STORAGE_KEY_NUMTEAMS  = 'superliga_num_teams_v1';
+  var NUM_TEAMS_DEFAULT = 7;
+  var NUM_TEAMS_MIN = 2, NUM_TEAMS_MAX = 20;
+  /* Nº de clubes humanos que juegan la Superliga — configurable por el
+     admin (botón "⚙️ Nº de clubes"). Antes era una constante fija a 7:
+     con solo 6 clubes humanos añadidos en "EA Sports → Europa" la
+     Superliga nunca arrancaba (petición usuario 2026-08-10). Se
+     recalcula al principio de cada `buildClas()` para reflejar el
+     último valor guardado (local o server). */
+  var TOTAL_TEAMS = NUM_TEAMS_DEFAULT;
   var _BYE = '__sl_bye__'; // descanso ficticio para circle method con nº IMPAR
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -1025,6 +1047,99 @@
   function saveResults(r){
     try { window._lsSetSafe(STORAGE_KEY_RESULTS, JSON.stringify(r||{})); } catch(_){}
   }
+
+  /* ── Nº de clubes humanos de la Superliga (editable, 2026-08-10) ──
+     localStorage es solo caché — el server (`/api/kv/superliga_num_teams_v1`,
+     merge por RECENCIA + escritura `authoritative` en la edición
+     explícita del admin) es la fuente de verdad, mismo patrón que
+     `season_label_v1` (para que la elección viaje a los 6 móviles + PC
+     y sobreviva al borrado de datos de navegación). */
+  function _loadNumTeamsBlob(){
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY_NUMTEAMS);
+      if(raw){ var o = JSON.parse(raw); if(o && typeof o === 'object') return o; }
+    } catch(_){}
+    return null;
+  }
+  function _numTeamsOf(o){
+    var n = o ? (+o.n) : NaN;
+    return (isFinite(n) && n >= NUM_TEAMS_MIN && n <= NUM_TEAMS_MAX) ? Math.round(n) : NUM_TEAMS_DEFAULT;
+  }
+  function _renderNumTeamsLabel(){
+    var el = document.getElementById('sl-numteams-label');
+    if(el) el.textContent = 'SUPERLIGA · Nº DE CLUBES: ' + TOTAL_TEAMS;
+  }
+  /* POST con reintentos — un save fire-and-forget sin reintentos deja el
+     server con datos viejos para siempre en red móvil floja. */
+  function _postNumTeamsRetry(body, n){
+    n = n || 1;
+    try {
+      fetch('/api/kv/' + STORAGE_KEY_NUMTEAMS, {
+        method:'POST', credentials:'same-origin',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      }).then(function(r){ if(!r.ok) throw new Error('http ' + r.status); })
+        .catch(function(){ if(n < 3) setTimeout(function(){ _postNumTeamsRetry(body, n + 1); }, 2000 * n); });
+    } catch(_){}
+  }
+  window._slNumTeamsEdit = function(){
+    var cur = _numTeamsOf(_loadNumTeamsBlob());
+    var addedN = loadTeams().length;
+    var v = window.prompt(
+      '⚙️ ¿Cuántos clubes humanos quieres que jueguen la Superliga?\n' +
+      '(equipos ya añadidos en 🎮 EA Sports → Europa: ' + addedN + ')\n\n' +
+      'Con N clubes: (N-1)×4 partidos por equipo, 4 veces cada rival.',
+      String(cur)
+    );
+    if(v === null) return;
+    var n = parseInt(String(v).trim(), 10);
+    if(!isFinite(n) || n < NUM_TEAMS_MIN || n > NUM_TEAMS_MAX){
+      alert('⚠️ Introduce un número entre ' + NUM_TEAMS_MIN + ' y ' + NUM_TEAMS_MAX + '.');
+      return;
+    }
+    if(n === cur) return;
+    var hasPlayed = false;
+    try { hasPlayed = !!loadCalendar() && Object.keys(loadResults()).length > 0; } catch(_){}
+    if(hasPlayed && !window.confirm(
+      '⚠️ Cambiar el número de clubes reinicia el calendario y la clasificación ' +
+      'de la Superliga (los resultados ya jugados se perderán).\n\n¿Continuar?'
+    )) return;
+    var o = { n: n, updatedAt: Date.now() };
+    try { window._lsSetSafe(STORAGE_KEY_NUMTEAMS, JSON.stringify(o)); } catch(_){}
+    _postNumTeamsRetry({ value: o, authoritative: true }, 1);
+    buildClas();
+  };
+  /* Hidratación de arranque CON reintentos — SIEMPRE hace GET y resuelve
+     por RECENCIA: adopta el server si es más nuevo; si el local es más
+     nuevo (edición hecha con el server caído), lo RE-SUBE para curar el
+     server (mismo principio que season_label_v1 / la vitrina de trofeos). */
+  function _hydrateNumTeams(n){
+    n = n || 1;
+    try {
+      fetch('/api/kv/' + STORAGE_KEY_NUMTEAMS, {credentials:'same-origin'})
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(j){
+          if(!j || !j.ok){
+            if(j === null && n < 3) setTimeout(function(){ _hydrateNumTeams(n + 1); }, 1000 * n);
+            return;
+          }
+          var srv = (j.value && typeof j.value === 'object') ? j.value : null;
+          var loc = _loadNumTeamsBlob();
+          var srvTs = srv ? (+srv.updatedAt || 0) : 0;
+          var locTs = loc ? (+loc.updatedAt || 0) : 0;
+          if(srv && srvTs > locTs){
+            try { window._lsSetSafe(STORAGE_KEY_NUMTEAMS, JSON.stringify(srv)); } catch(_){}
+            buildClas();
+          } else if(loc && locTs > srvTs){
+            _postNumTeamsRetry({ value: loc }, 1);
+          }
+        })
+        .catch(function(){ if(n < 3) setTimeout(function(){ _hydrateNumTeams(n + 1); }, 1000 * n); });
+    } catch(_){}
+  }
+  TOTAL_TEAMS = _numTeamsOf(_loadNumTeamsBlob());
+  _renderNumTeamsLabel();
+  _hydrateNumTeams(1);
 
   /* Round-robin simple por circle method. Soporta nº IMPAR de equipos con
      un descanso (BYE) ficticio: la pareja contra el BYE no genera partido.
@@ -1141,6 +1256,8 @@
   function buildClas(){
     var host = document.getElementById('sl-clas-content');
     if(!host) return;
+    TOTAL_TEAMS = _numTeamsOf(_loadNumTeamsBlob());
+    _renderNumTeamsLabel();
     var cal = ensureCalendar();
     if(!cal){
       var n = loadTeams().length;
@@ -2138,7 +2255,8 @@
   document.addEventListener('DOMContentLoaded', function(){ buildClas(); });
   window.addEventListener('storage', function(ev){
     if(!ev || !ev.key) return;
-    if(ev.key === STORAGE_KEY_TEAMS || ev.key === STORAGE_KEY_RESULTS || ev.key === STORAGE_KEY_CALENDAR){
+    if(ev.key === STORAGE_KEY_TEAMS || ev.key === STORAGE_KEY_RESULTS ||
+       ev.key === STORAGE_KEY_CALENDAR || ev.key === STORAGE_KEY_NUMTEAMS){
       buildClas();
     }
   });

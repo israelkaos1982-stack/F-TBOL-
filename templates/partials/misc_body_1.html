@@ -14799,6 +14799,13 @@ window._hdrCleanCache = function(){
         var k = localStorage.key(i);
         if (!k || k.indexOf('ligaExt_') !== 0) continue;
         if (k.indexOf('_snap_') !== -1 || k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1) continue;
+        /* PROHIBIDO re-proteger (ni re-subir, ver paso 2 más abajo) una
+           liga ya fusionada (2026-08-10) — si su `main` sigue vivo en
+           este dispositivo por cualquier motivo, "💾 Guardar todo" NO
+           debe re-mirrorearla a `_protected` ni re-empujarla al
+           servidor: sería resucitar de un plumazo lo que la purga
+           local/servidor acaba de limpiar. */
+        if (window._isDeadMergedLeagueSlug && window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) continue;
         var raw = localStorage.getItem(k); if (!raw) continue;
         try {
           var p = JSON.parse(raw);
@@ -14846,6 +14853,11 @@ window._hdrCleanCache = function(){
         var lk = localStorage.key(j);
         if (!lk || lk.indexOf('ligaExt_') !== 0) continue;
         if (lk.indexOf('_snap_') !== -1 || lk.indexOf('_backup') !== -1 || lk.indexOf('_protected') !== -1) continue;
+        /* Nunca re-subir una liga ya fusionada al servidor (2026-08-10)
+           — es el vector MÁS peligroso de resurrección: resucitaría la
+           liga en la base de datos aunque el admin ya la hubiera borrado
+           a mano con "🗑 Eliminar del servidor las 43 ligas fusionadas". */
+        if (window._isDeadMergedLeagueSlug && window._isDeadMergedLeagueSlug(lk.substring('ligaExt_'.length))) continue;
         ligaExtKeys.push(lk);
       }
     } catch(_){}
@@ -15019,6 +15031,16 @@ window._hdrCleanCache = function(){
         var k = localStorage.key(i);
         if (!k || k.indexOf('ligaExt_') !== 0) continue;
         if (k.indexOf('_snap_') !== -1 || k.indexOf('_backup') !== -1 || k.indexOf('_protected') !== -1) continue;
+        /* PROHIBIDO crear un `_backup` de una liga ya fusionada
+           (2026-08-10): si por cualquier motivo el `main` de una de las
+           43 ligas muertas sigue vivo en este dispositivo (device que
+           aún no ha corrido la purga v9/v10, o quedó re-sembrado por el
+           bug de resurrección del bulk-restore, ya corregido en
+           `/api/liga-ext-bulk`), este handler la reescribiría en CADA
+           cierre de pestaña — justo el patrón "-backup"/"-snap" que
+           aparecía en el diagnóstico de Espacio del navegador para
+           países ya inexistentes como liga propia. */
+        if (window._isDeadMergedLeagueSlug && window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) continue;
         var raw = localStorage.getItem(k); if (!raw) continue;
         try {
           var p = JSON.parse(raw);
@@ -50850,6 +50872,20 @@ https://api.sofascore.app/api/v1/team/44/image
         var adopted = 0, skipped = 0;
         function _adoptOne(slug){
           try {
+            /* PROHIBIDO resucitar una liga ya fusionada (2026-08-10):
+               el servidor ya filtra estos slugs en `/api/liga-ext-bulk`
+               (mismo día, ver app.py `_is_dead_merged_league_slug`),
+               pero esta comprobación se mantiene aquí TAMBIÉN como
+               defensa en profundidad — si algún endpoint futuro (o una
+               respuesta de un servidor desactualizado durante el
+               despliegue) llegara a incluir uno de estos slugs, el
+               cliente lo rechaza igualmente en vez de volver a escribir
+               `ligaExt_<slug>` en localStorage/IndexedDB. Es EXACTAMENTE
+               la resurrección que las purgas v1-v9 (más arriba) intentan
+               evitar — sin este guard, cualquier bulk-restore (que se
+               dispara solo, con solo abrir cualquier liga real que esté
+               vacía en local) deshacía la purga local en silencio. */
+            if (window._isDeadMergedLeagueSlug && window._isDeadMergedLeagueSlug(slug)) { skipped++; return; }
             var d = leagues[slug];
             if (!d || !Array.isArray(d.teams) || d.teams.length < 1) return;
             /* NO pisar una copia local ya rica: solo adoptamos si local
@@ -58453,6 +58489,66 @@ https://api.sofascore.app/api/v1/team/44/image
         }).catch(function(){});
       }
       try { console.warn('[ligaExt] purga v9: '+toRemove.length+' claves locales + limpieza de IndexedDB de las 43 ligas fusionadas.'); } catch(_){}
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  })();
+  /* Purga LOCAL v10 (2026-08-10, screenshots usuario "📊 Espacio del
+     navegador" con `-backup`/`-snap-<ts>`/`-protected` de decenas de
+     países ya fusionados — Alemania, Chipre, Estonia, Bielorrusia,
+     Gales, Eslovaquia, Bulgaria, Georgia, Austria, Croacia, Eslovenia,
+     Azerbaiyán, Bosnia, Finlandia, Armenia, Andorra, Gibraltar…): v9
+     purgaba correctamente en el momento en que corrió, PERO
+     `/api/liga-ext-bulk` (y `/api/liga-ext`) devolvían estas 43 ligas
+     SIN FILTRAR mientras el admin no pulsara el botón de borrado
+     permanente en el servidor — así que CUALQUIER bulk-restore
+     posterior a v9 (se dispara SOLO, con solo abrir cualquier liga real
+     que esté vacía en local, o el botón "🔄 RECUPERAR TODAS LAS LIGAS")
+     las traía de vuelta a `localStorage` + IndexedDB, deshaciendo la
+     purga v9 en silencio — de ahí los `_snap_<ts>` con varias marcas de
+     tiempo distintas por país que muestran las capturas (cada
+     resurrección + recuperación producía una nueva).
+
+     El fix real vive en el servidor (`app.py`,
+     `_is_dead_merged_league_slug`, filtra `/api/liga-ext-bulk` y
+     `/api/liga-ext` en el ORIGEN — desde ahora estas ligas nunca vuelven
+     a un cliente, se haya pulsado el botón de borrado o no) más un guard
+     gemelo en `_adoptOne` de `_lextRestoreAllFromServer` y en los
+     puntos que re-crean `_backup`/`_protected` (auto-backup al cerrar
+     pestaña, "💾 Guardar todo"). Pero esos guards solo EVITAN
+     resurrecciones NUEVAS — no limpian lo que YA se resucitó en un
+     dispositivo entre que corrió v9 y que este fix llegó. v10 es
+     IDÉNTICA a v9 (mismo `_isDeadMergedLeagueSlug`, misma limpieza de
+     localStorage + LIGA_CACHE + IndexedDB) pero con un flag NUEVO, para
+     forzar una repasada limpia en todos los dispositivos sin depender
+     de si v9 ya se marcó "hecho". Sigue siendo "solo local, nunca toca
+     el servidor". */
+  (function _purgeMergedLeaguesV10(){
+    var FLAG = 'ftbol_merged_leagues_purge_v10';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var _matches = window._isDeadMergedLeagueSlug || function(){ return false; };
+    try {
+      var toRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (_matches(k.substring('ligaExt_'.length))) toRemove.push(k);
+      }
+      toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      (window._DEAD_MERGED_LEAGUE_SLUGS || []).forEach(function(s){
+        try { if (typeof LIGA_CACHE !== 'undefined') delete LIGA_CACHE[s]; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(s); } catch(_){}
+      });
+      if (window._idbKV && typeof window._idbKV.keys === 'function') {
+        window._idbKV.keys().then(function(idbKeys){
+          (idbKeys || []).forEach(function(k){
+            if (typeof k !== 'string' || k.indexOf('ligaExt_') !== 0) return;
+            if (_matches(k.substring('ligaExt_'.length))) {
+              try { window._idbKV.del(k); } catch(_){}
+            }
+          });
+        }).catch(function(){});
+      }
+      try { console.warn('[ligaExt] purga v10: '+toRemove.length+' claves locales + limpieza de IndexedDB de las 43 ligas fusionadas (repasada tras el fix de resurrección del bulk-restore).'); } catch(_){}
     } catch(_){}
     try { window._lsSetSafe(FLAG, '1'); } catch(_){}
   })();

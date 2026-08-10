@@ -2894,6 +2894,91 @@ window._hdrCleanCache = function(){
     if (window.__BAYERN_PLANT_HOST_READY) return;
     window.__BAYERN_PLANT_HOST_READY = true;
 
+    /* Fuente ÚNICA de "todas las ligaExt_* conocidas por este dispositivo"
+       (obligatorio, 2026-08-10 — "abro las plantillas de Clubes y
+       Selecciones y salen vacías" pese a que el editor de Liga EA Sports
+       las muestra completas EN LA MISMA sesión). Une `window.LIGA_CACHE`
+       (memoria — la deja SIEMPRE fresca `saveData` en cada guardado,
+       inmune a que `localStorage` esté lleno/evicted) con `localStorage`
+       (persistida). Si un slug existe en AMBAS gana `LIGA_CACHE` (es el
+       espejo más reciente). `_findTeamRowByName`/`_findRichestHubRow`/
+       `_findBayernRow` SOLO miraban `localStorage` crudo — con
+       localStorage lleno (banner "Navegador sin espacio", frecuentísimo
+       en este proyecto) el equipo podía seguir en memoria (visible en el
+       editor, que SÍ pasa por `LIGA_CACHE`) pero invisible aquí. Incluye
+       la clave sintética `__server_squad_search__` (donde
+       `_eurTeamSquadServerSearch` inyecta un hallazgo del servidor) para
+       que el fallback de red de más abajo también entre por este único
+       camino. Ver CLAUDE.md: "PROHIBIDO que un lector nuevo de
+       ligaExt_<slug> ... mire SOLO localStorage sin consultar antes
+       window.LIGA_CACHE[slug]". */
+    function _hubAllLigaDocs(){
+      var out = [];
+      var seen = {};
+      try {
+        var cache = window.LIGA_CACHE || {};
+        for (var slug in cache){
+          if (!Object.prototype.hasOwnProperty.call(cache, slug)) continue;
+          if (slug.indexOf('__bgHydrating_') === 0) continue;
+          var d = cache[slug];
+          if (!d || !Array.isArray(d.teams) || !d.teams.length) continue;
+          out.push({ slug: slug, data: d });
+          seen[slug] = true;
+        }
+      } catch(_){}
+      try {
+        for (var ii=0; ii<localStorage.length; ii++){
+          var k = localStorage.key(ii);
+          if (!k || k.indexOf('ligaExt_') !== 0) continue;
+          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
+          var slug2 = k.slice('ligaExt_'.length);
+          if (seen[slug2]) continue;   /* LIGA_CACHE ya ganó para este slug */
+          var raw = localStorage.getItem(k); if (!raw) continue;
+          var data2; try { data2 = JSON.parse(raw); } catch(_){ continue; }
+          if (!data2 || !Array.isArray(data2.teams) || !data2.teams.length) continue;
+          out.push({ slug: slug2, data: data2 });
+          seen[slug2] = true;
+        }
+      } catch(_){}
+      return out;
+    }
+
+    /* Último recurso: preguntar al SERVIDOR por la plantilla de un
+       equipo por NOMBRE (obligatorio, 2026-08-10 — "abro las plantillas
+       de Clubes y Selecciones y salen vacías... refuerza que salgan
+       siempre"). Cubre el caso en que NI localStorage NI `LIGA_CACHE`
+       de ESTE dispositivo tienen el equipo (dispositivo nuevo, o el
+       guardado original nunca llegó a sincronizar aquí). Reutiliza
+       `window._eurTeamSquadServerSearch` + `window._eurRetryServerSearch`
+       (6 intentos con backoff — YA usados por el picker de eventos y por
+       la Pantalla de Previa para este MISMO problema, CLAUDE.md
+       2026-07-12 #7 / 2026-07-13 #2). Un hallazgo se inyecta en
+       `window.LIGA_CACHE.__server_squad_search__` — `_hubAllLigaDocs()`
+       (arriba) ya lo escanea, así que la PRÓXIMA llamada a
+       `_findBayernRow`/`_findTeamRowByName`/`_findRichestHubRow` lo ve
+       sin ningún camino nuevo que mantener; `_selTeamObj` (más abajo)
+       también lo consulta como último recurso para selecciones.
+       Cooldown por nombre para no relanzar la cascada de 6 intentos en
+       cada re-render mientras la búsqueda sigue fallando. */
+    var _hubServerSquadAttempt = {};
+    function _hubServerSquadRetry(teamName, onFound){
+      try {
+        var key = _normForStats(teamName || '');
+        if (!key) return;
+        if (typeof window._eurTeamSquadServerSearch !== 'function') return;
+        var now = Date.now();
+        if (_hubServerSquadAttempt[key] && (now - _hubServerSquadAttempt[key]) < 20000) return;
+        _hubServerSquadAttempt[key] = now;
+        var searchFn = window._eurTeamSquadServerSearch;
+        var run = (typeof window._eurRetryServerSearch === 'function')
+          ? function(cb){ window._eurRetryServerSearch(searchFn, teamName, cb); }
+          : function(cb){ searchFn(teamName, cb); };
+        run(function(found){
+          if (found && typeof onFound === 'function'){ try { onFound(); } catch(_){} }
+        });
+      } catch(_){}
+    }
+
     /* Busca el team object (con players/shield) por NOMBRE de club, en
        TODAS las ligaExt_* (priorizando liga-ea-sports). Insensible a
        mayúsculas/acentos vía `_normForStats`. Lo usa el branch hub-aware
@@ -2902,31 +2987,27 @@ window._hdrCleanCache = function(){
     function _findTeamRowByName(name){
       var want = _normForStats(name || '');
       if (!want) return null;
-      function _scan(key){
-        try {
-          var raw = localStorage.getItem(key);
-          if (!raw) return null;
-          var data = JSON.parse(raw);
-          var teams = (data && data.teams) || [];
-          for (var i=0;i<teams.length;i++){
-            var t = teams[i];
-            if (t && t.name && _normForStats(t.name) === want) return t;
-          }
-        } catch(_){}
+      function _scanTeams(teams){
+        for (var i=0;i<teams.length;i++){
+          var t = teams[i];
+          if (t && t.name && _normForStats(t.name) === want) return t;
+        }
         return null;
       }
-      var hit = _scan('ligaExt_liga-ea-sports');
-      if (hit) return hit;
-      try {
-        for (var ii=0; ii<localStorage.length; ii++){
-          var k = localStorage.key(ii);
-          if (!k || k.indexOf('ligaExt_') !== 0) continue;
-          if (k === 'ligaExt_liga-ea-sports') continue;
-          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
-          hit = _scan(k);
+      var docs = _hubAllLigaDocs();
+      var i0, hit;
+      for (i0=0; i0<docs.length; i0++){
+        if (docs[i0].slug === 'liga-ea-sports'){
+          hit = _scanTeams(docs[i0].data.teams);
           if (hit) return hit;
+          break;
         }
-      } catch(_){}
+      }
+      for (i0=0; i0<docs.length; i0++){
+        if (docs[i0].slug === 'liga-ea-sports') continue;
+        hit = _scanTeams(docs[i0].data.teams);
+        if (hit) return hit;
+      }
       return null;
     }
     /* «Riqueza» de una fila de equipo = Σ (pj + goles) de sus jugadores.
@@ -3037,17 +3118,20 @@ window._hdrCleanCache = function(){
       }
       var best = null, bestRank = null;
       try {
-        for (var ii=0; ii<localStorage.length; ii++){
-          var k = localStorage.key(ii);
-          if (!k || k.indexOf('ligaExt_') !== 0) continue;
-          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
-          var raw = localStorage.getItem(k); if (!raw) continue;
-          var data; try { data = JSON.parse(raw); } catch(_){ continue; }
-          var teams = (data && data.teams) || [];
+        /* 2026-08-10: `_hubAllLigaDocs()` une `window.LIGA_CACHE`
+           (memoria, siempre fresca) con `localStorage` — antes este
+           bucle miraba SOLO localStorage crudo y perdía cualquier liga
+           que solo estuviera hidratada en memoria en esta sesión (p.ej.
+           tras abrir la clasificación de Liga EA Sports, que sí puebla
+           LIGA_CACHE aunque el `setItem` de localStorage haya fallado
+           por cuota). */
+        var docs = _hubAllLigaDocs();
+        for (var di=0; di<docs.length; di++){
+          var teams = docs[di].data.teams || [];
           for (var i=0;i<teams.length;i++){
             var t = teams[i];
             if (!_rowMatchesClub(t)) continue;
-            var rank = _rank(t, k === 'ligaExt_liga-ea-sports');
+            var rank = _rank(t, docs[di].slug === 'liga-ea-sports');
             if (best === null || _better(rank, bestRank)){ best = t; bestRank = rank; }
           }
         }
@@ -3091,13 +3175,21 @@ window._hdrCleanCache = function(){
       function _stripEmoji(s){ return String(s||'').replace(/[\s️]/g,'').trim(); }
       var TONIN_EMOJI = '💡';
       try {
+        /* 2026-08-10: ambas pasadas usan `_hubAllLigaDocs()` (memoria +
+           localStorage) en vez de `localStorage.getItem` crudo — mismo
+           fix que arriba, para que el hub del propio Toñín/Liverpool no
+           quede vacío si `ligaExt_liga-ea-sports` está evicted en disco
+           pero sigue vivo en `window.LIGA_CACHE`. */
+        var docs = _hubAllLigaDocs();
+        var eaDoc = null, di0;
+        for (di0=0; di0<docs.length; di0++){
+          if (docs[di0].slug === 'liga-ea-sports'){ eaDoc = docs[di0]; break; }
+        }
         /* 1) Liga EA: sustitución sancionada del slot de Toñín
               (_ligaEaSubName) → fallback name~=bayern → fallback "5º
               slot humano" (el que no es Real/Barça/Atlético/Arsenal). */
-        var raw = localStorage.getItem('ligaExt_liga-ea-sports');
-        if (raw) {
-          var data = JSON.parse(raw);
-          var teams = (data && data.teams) || [];
+        if (eaDoc) {
+          var teams = eaDoc.data.teams || [];
           var i, t;
           /* Nombre EFECTIVO del slot de Toñín: si el admin reemplazó
              Bayern por otro equipo en el editor de Liga EA (mecanismo
@@ -3120,17 +3212,11 @@ window._hdrCleanCache = function(){
         }
         /* 2) Cross-liga por emoji 💡: si Toñín se cambió a un equipo
               que NO vive en Liga EA (Liverpool en ligaExt_inglaterra-*,
-              etc.), barremos todas las claves ligaExt_* y devolvemos el
-              primer team con isHuman=true + humanEmoji=💡. */
-        for (var ii=0; ii<localStorage.length; ii++){
-          var k = localStorage.key(ii);
-          if (!k || k.indexOf('ligaExt_') !== 0) continue;
-          if (k === 'ligaExt_liga-ea-sports') continue; /* ya intentado */
-          if (k.indexOf('_backup')!==-1 || k.indexOf('_protected')!==-1 || k.indexOf('_snap_')!==-1) continue;
-          var raw2 = localStorage.getItem(k);
-          if (!raw2) continue;
-          var data2; try { data2 = JSON.parse(raw2); } catch(_){ continue; }
-          var teams2 = (data2 && data2.teams) || [];
+              etc.), barremos todas las ligaExt_* conocidas y devolvemos
+              el primer team con isHuman=true + humanEmoji=💡. */
+        for (var dj=0; dj<docs.length; dj++){
+          if (docs[dj].slug === 'liga-ea-sports') continue; /* ya intentado */
+          var teams2 = docs[dj].data.teams || [];
           for (var j=0; j<teams2.length; j++){
             var t2 = teams2[j];
             if (!t2 || !t2.name || !t2.isHuman) continue;
@@ -3960,9 +4046,19 @@ window._hdrCleanCache = function(){
     }
 
     function _renderEmpty(host){
+      /* El mensaje usa el CLUB REAL del hub abierto (2026-08-10) —
+         antes decía SIEMPRE "Bayern" con independencia de la caja
+         (Arsenal/Real Madrid/Atlético/Barça/PSG/Liverpool), lo que
+         confundía al usuario incluso cuando el problema real era que
+         `_findBayernRow` no encontraba la fila (ver `_hubAllLigaDocs`/
+         `_hubServerSquadRetry` arriba — este mensaje solo debería verse
+         ya si NI la memoria NI el servidor tienen la plantilla). */
+      var clubName = '';
+      try { clubName = String((typeof _hubTeamName === 'function' && _hubTeamName()) || '').trim(); } catch(_){}
+      var safeClub = (clubName || 'este club').replace(/[<>&]/g, function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];});
       host.innerHTML = '<div style="padding:28px 14px;text-align:center;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;line-height:1.55;">'
         + '— Sin jugadores —<br>'
-        + '<span style="font-size:11px;color:rgba(255,255,255,.4);">Edita la plantilla del Bayern desde <b>Liga EA Sports → Bayern Munich → 🛡 Plantilla</b>.</span>'
+        + '<span style="font-size:11px;color:rgba(255,255,255,.4);">Edita la plantilla de <b>' + safeClub + '</b> desde <b>Resto de Ligas / Liga EA Sports → 🛡 Plantilla</b>.</span>'
         + '</div>';
     }
 
@@ -4056,6 +4152,19 @@ window._hdrCleanCache = function(){
         var nn = _normForStats(selName), i, t;
         for (i=0;i<teams.length;i++){ t=teams[i]; if (t && t.name && _normForStats(t.name) === nn) return t; }
         for (i=0;i<teams.length;i++){ t=teams[i]; if (t && t.name && _normForStats(t.name).indexOf(nn) !== -1) return t; }
+      } catch(_){}
+      /* Último recurso (2026-08-10): hallazgo server-side inyectado por
+         `_hubServerSquadRetry` → `_eurTeamSquadServerSearch` cuando la
+         selección no está (todavía) en `selecciones_squad_v1` de este
+         dispositivo. Ver comentario de `_hubServerSquadRetry` arriba. */
+      try {
+        var bucket = window.LIGA_CACHE && window.LIGA_CACHE.__server_squad_search__;
+        var bteams = (bucket && bucket.teams) || [];
+        var nn2 = _normForStats(selName);
+        for (var j=0;j<bteams.length;j++){
+          var bt = bteams[j];
+          if (bt && bt.name && _normForStats(bt.name) === nn2) return bt;
+        }
       } catch(_){}
       return null;
     }
@@ -4486,6 +4595,22 @@ window._hdrCleanCache = function(){
         host.innerHTML = '<div style="padding:28px 14px;text-align:center;color:rgba(255,255,255,.6);font-family:Rajdhani,sans-serif;line-height:1.6;">'
           + '— Sin jugadores en «' + String(selName).replace(/[<>&]/g,'') + '» —<br>'
           + '<span style="font-size:11px;color:rgba(255,255,255,.45);">Crea su plantilla en <b>🌐 Plantilla de selecciones</b>.</span></div>';
+        /* Último recurso (2026-08-10): puede que la selección SÍ tenga
+           plantilla, solo que este dispositivo aún no la sincronizó
+           (ver `_hubServerSquadRetry`). Reintentamos en servidor y, si
+           aparece, re-pintamos — pero SOLO si el usuario sigue mirando
+           ESTA MISMA selección en esta pantalla. */
+        try {
+          _hubServerSquadRetry(selName, function(){
+            try {
+              var scr = document.getElementById('s-bayern-plantilla');
+              if (scr && scr.classList.contains('active') && window._bplantView === 'sel'
+                  && _normForStats(_hubSelName()) === _normForStats(selName)){
+                window.renderBayernPlantillaScreen();
+              }
+            } catch(_){}
+          });
+        } catch(_){}
         return;
       }
       var ctx = _selCtxFor(selName);
@@ -4799,6 +4924,22 @@ window._hdrCleanCache = function(){
         var t = _findBayernRow();
         if (!t || !Array.isArray(t.players) || !t.players.length){
           _renderEmpty(host);
+          /* Último recurso (2026-08-10): puede que el club SÍ tenga
+             plantilla, solo que este dispositivo aún no la sincronizó
+             (ver `_hubServerSquadRetry`). Reintentamos en servidor y, si
+             aparece, re-pintamos — pero SOLO si el usuario sigue en esta
+             pantalla, en la vista de CLUB (evita pisar una navegación
+             posterior o un cambio a la vista de selección). */
+          try {
+            _hubServerSquadRetry(_hubTeamName(), function(){
+              try {
+                var scr = document.getElementById('s-bayern-plantilla');
+                if (scr && scr.classList.contains('active') && window._bplantView !== 'sel'){
+                  window.renderBayernPlantillaScreen();
+                }
+              } catch(_){}
+            });
+          } catch(_){}
           return;
         }
         var by = {POR:[], DEF:[], MED:[], DEL:[]};

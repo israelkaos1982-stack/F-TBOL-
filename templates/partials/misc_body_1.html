@@ -36230,7 +36230,8 @@ window._hdrCleanCache = function(){
       h += '<div class="tv-mg-sec">Restaurar built-in (datos conservados)</div>';
       hiddenB.forEach(function(id){
         h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
-          + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
+          + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button>'
+          + '<button class="tv-mg-btn tv-mg-del" data-act="wipe" data-id="' + id + '">🗑 Borrar para siempre</button></div>';
       });
     }
     var freeSlots = slots.filter(function(id){ return !visSet[id]; });
@@ -36243,7 +36244,8 @@ window._hdrCleanCache = function(){
       freeSlots.forEach(function(id){
         var saved = null; try { saved = localStorage.getItem(_key(id)); } catch(_){}
         if (saved) h += '<div class="tv-mg-row"><span class="tv-mg-nm" style="opacity:.7;">↳ ' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + ' (guardado)</span>'
-          + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button></div>';
+          + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button>'
+          + '<button class="tv-mg-btn tv-mg-del" data-act="wipe" data-id="' + id + '">🗑 Borrar para siempre</button></div>';
       });
     }
     return h;
@@ -36290,6 +36292,35 @@ window._hdrCleanCache = function(){
           reg.hidden = (reg.hidden || []).filter(function(x){ return x !== id; });
           reg.shownAt = reg.shownAt || {}; reg.shownAt[id] = _tvNow();
           _tvRegSave(reg); _tvRenderCards(); _tvRefreshManage();
+        } else if (act === 'wipe'){
+          /* Borrado PERMANENTE (2026-08-10, petición usuario "eliminar
+             por completo" para liberar espacio de verdad — a diferencia
+             de "del", que solo oculta y CONSERVA tour_<id>_v1 entero).
+             Reutiliza el mecanismo de reset YA existente: `_tourSave`
+             con un `resetAt` fresco hace que tanto la fusión del server
+             (`tour_cfg_merge`) como el snapshot `_protected`
+             (`_tour_protected_guard`) traten esto como un reinicio
+             DELIBERADO y conviertan el main Y el protected a la cfg en
+             blanco — sin necesitar un endpoint nuevo en el servidor. */
+          if (TOUR_IDS.indexOf(id) === -1) return;
+          var wipeName = _tvName(id);
+          if (!confirm('🗑 BORRAR "' + wipeName + '" PARA SIEMPRE\n\n'
+            + 'Esto es IRREVERSIBLE: se pierden TODOS sus datos (plantillas, '
+            + 'resultados, actas) tanto en este dispositivo como en el '
+            + 'servidor. A diferencia de "Eliminar", esto NO se puede '
+            + 'restaurar después — el hueco queda como si nunca se hubiera '
+            + 'usado.\n\n¿Continuar?')) return;
+          (async function(){
+            var freshCfg = _cloneDefault(id);
+            freshCfg.resetAt = Date.now();
+            try { if (typeof window._tourSave === 'function') await window._tourSave(id, freshCfg); } catch(_){}
+            try { localStorage.removeItem(_key(id)); } catch(_){}
+            try { if (window._TOUR_CACHE) delete window._TOUR_CACHE[id]; } catch(_){}
+            reg.visible = reg.visible.filter(function(x){ return x !== id; });
+            _tvRegSave(reg);
+            _tvRenderCards(); _tvRefreshManage();
+            try { alert('✅ "' + wipeName + '" borrado para siempre.'); } catch(_){}
+          })();
         } else if (act === 'new'){
           var free = _tvSlotsOf(_tvMgBoard).filter(function(s){ return reg.visible.indexOf(s) === -1; });
           if (!free.length){ alert('Sin huecos libres. Elimina algún torneo para liberar uno.'); return; }

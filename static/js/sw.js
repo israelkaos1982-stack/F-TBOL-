@@ -52,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v7';
+var CACHE_HTML   = 'ftbol-html-v8';
 /* v3 → v4 → v5 → v6 (2026-08-10): la nueva estrategia SWR de arriba (ver cabecera
    del archivo) sirve el HTML principal desde caché hasta 30 min sin
    comprobar red — así que cualquier fix a `misc_body_1.html`/

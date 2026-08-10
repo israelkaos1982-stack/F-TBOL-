@@ -1,5 +1,91 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## "Plantilla de selecciones" salía VACÍA con ~100 selecciones creadas — `_load()` solo leía disco, nunca una copia en memoria (obligatorio, 2026-08-10)
+
+**Bug (usuario 2026-08-10)**: con más de 100 selecciones creadas y con
+plantilla completa, la pantalla **"🌐 Plantilla de selecciones"**
+(editor admin, `window._selSquadOpenEditor`) mostraba **"Sin
+selecciones todavía. Pulsa «➕ Añadir» o «📋 Lista»."** — como si todo
+se hubiera perdido. Pero al jugar un partido y pulsar "+ AÑADIR
+EVENTO", el picker de jugadores **SÍ** mostraba correctamente la
+plantilla de cada selección.
+
+### Causa raíz
+
+`_load()` (IIFE `KEY='selecciones_squad_v1'`, `misc_body_1.html`) leía
+**exclusivamente** `localStorage.getItem(KEY)`. Con ~100 selecciones y
+plantillas completas, ese JSON pesa varios cientos de KB —
+tranquilamente por encima del umbral `LARGE_VALUE` (64 KB) de
+`window._lsSetSafe`: si la cuota del navegador ya está agotada
+(`window._lsQuotaExhausted`, un estado crónico y muy documentado en
+este proyecto para este usuario concreto — decenas de ligas +
+torneos + escudos llenan los ~5 MB de localStorage), `_lsSetSafe`
+**descarta el `setItem` al instante, sin reintentar**, para cualquier
+valor grande.
+
+`_boot()` (la hidratación de arranque) hace un GET al servidor,
+**FUSIONA** con lo local (regla ya obligatoria: "nunca pierde una
+selección local") y escribe el resultado fusionado — pero si ESA
+escritura se descarta en silencio por el motivo de arriba,
+`_hydrate()`/`_renderBody()` (invocadas justo después, en la MISMA
+función) vuelven a leer el disco **viejo/vacío** vía `_load()`, como
+si la fusión nunca hubiera ocurrido — la copia correcta se calculó en
+memoria (`merged`) pero nunca llegó a ningún sitio que el render
+pudiera ver.
+
+El picker de eventos del partido **sí** encontraba los jugadores
+porque `sqFromRegistry` (`static/js/index.bundle.js`) tiene sus
+PROPIOS fallbacks — escaneo de `window.LIGA_CACHE` y, en varios
+flujos, búsqueda en servidor — que no dependen únicamente de este
+`localStorage.getItem`. La discrepancia entre "el editor está vacío"
+y "el partido encuentra los jugadores" es la firma de este patrón:
+**dos lectores del MISMO dato con robustez muy distinta**.
+
+### Fix — `window._SEL_SQUAD_MEM`, espejo en memoria (mismo principio que `window.LIGA_CACHE`)
+
+- `_load()` prefiere `window._SEL_SQUAD_MEM` en cuanto existe en la
+  sesión (nunca antes de la primera escritura, momento en que sigue
+  cayendo al disco tal cual).
+- Los 3 puntos que escriben datos "de verdad" —`_save(d)` (guardado
+  explícito del admin), `_dedupeStored` (auto-reparación silenciosa de
+  nombres/continentes) y la fusión de `_boot()`— sellan
+  `window._SEL_SQUAD_MEM` **SÍNCRONAMENTE, ANTES** de intentar
+  `_lsSetSafe`. Así la copia en memoria queda correcta pase lo que
+  pase con el `setItem` a disco.
+- Al preferir SIEMPRE la copia en memoria una vez existe (no solo
+  cuando es "más rica" que el disco), un borrado deliberado del
+  usuario también se refleja correctamente — no solo el caso de
+  recuperación tras un `setItem` fallido.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_load()` (o cualquier lector nuevo de
+   `selecciones_squad_v1`) dependa ÚNICAMENTE de
+   `localStorage.getItem`. Con datasets grandes (muchas selecciones,
+   plantillas completas), un guardado puede fallar en silencio por
+   cuota — la fuente de verdad DURANTE la sesión es
+   `window._SEL_SQUAD_MEM`, actualizada síncronamente en cada
+   escritor.
+2. **PROHIBIDO** que un escritor nuevo de esta clave (`_save`,
+   `_dedupeStored`, la fusión de `_boot`, o cualquier otro futuro)
+   omita sellar `window._SEL_SQUAD_MEM` ANTES de intentar
+   `_lsSetSafe`/`fetch`. Si el intento de persistir a disco/servidor
+   falla, la copia en memoria es la única que sobrevive para el resto
+   de la sesión.
+3. **PROHIBIDO** volver a un criterio de "usar memoria SOLO si tiene
+   más elementos que el disco": eso rompe el caso de un borrado
+   deliberado del usuario (memoria con MENOS elementos que un disco
+   desactualizado seguiría perdiendo). El criterio es "usar memoria
+   siempre que exista en la sesión", igual que `window.LIGA_CACHE`.
+4. Si aparece el mismo síntoma ("una pantalla de listado sale vacía
+   pero el juego SÍ encuentra el dato en otro flujo") en cualquier
+   OTRA clave de `localStorage` con datasets potencialmente grandes,
+   sospechar primero de este patrón: el escritor calcula bien el dato
+   pero el `setItem` se descarta en silencio por cuota, y el lector de
+   esa pantalla no tiene ningún respaldo en memoria — aplicar el mismo
+   patrón `window.LIGA_CACHE`/`window._SEL_SQUAD_MEM` (copia en
+   memoria sellada en cada escritor, preferida por el lector).
+
 ## El acta de Liga EA Sports con "Jugador A/B/Portero A" placeholder se REPARA Y SE PERSISTE, no solo se repinta al vuelo (obligatorio, 2026-08-10)
 
 **Bug (usuario 2026-08-10, «Liga EA Sports»)**: en la primera jornada

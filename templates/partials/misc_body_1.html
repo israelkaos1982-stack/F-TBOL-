@@ -61474,7 +61474,42 @@ https://api.sofascore.app/api/v1/team/44/image
 <script>
 (function(){
   var KEY = 'selecciones_squad_v1';
+  /* ── CACHE EN MEMORIA — espejo de window.LIGA_CACHE (obligatorio,
+     2026-08-10) ──────────────────────────────────────────────────────
+     Bug (usuario, "tenía más de 100 selecciones creadas con sus
+     plantillas... la pantalla 'Plantilla de selecciones' sale vacía,
+     pero al añadir un evento sí salen los jugadores de cada
+     selección"): `_load()` leía SOLO `localStorage.getItem(KEY)`. Con
+     ~100 selecciones y plantillas completas, ese JSON puede pesar
+     varios cientos de KB — muy por encima del umbral `LARGE_VALUE`
+     (64 KB) de `window._lsSetSafe` que, con la cuota del navegador ya
+     agotada (`window._lsQuotaExhausted`, crónico en este proyecto —
+     ver cabecera de `misc_body_1.html`), DESCARTA el `setItem` al
+     instante SIN reintentar. El `_boot()` de abajo hace un GET al
+     servidor, FUSIONA con lo local (nunca pierde selecciones) y
+     escribe el resultado — pero si ESA escritura se descarta en
+     silencio, `_hydrate()`/`_renderBody()` (que llaman a `_load()`
+     justo después) vuelven a leer el disco VIEJO/VACÍO, como si la
+     fusión nunca hubiera ocurrido. El picker de eventos del partido
+     SÍ encontraba los jugadores porque `sqFromRegistry`
+     (`static/js/index.bundle.js`) tiene su PROPIO fallback a
+     `window.LIGA_CACHE` / búsqueda en servidor — nunca depende solo
+     de este `localStorage.getItem`.
+
+     Fix: `window._SEL_SQUAD_MEM` guarda SIEMPRE el ÚLTIMO estado
+     conocido de verdad (se actualiza en `_boot()`/`_save()`/
+     `_dedupeStored()` SÍNCRONAMENTE, ANTES de intentar `_lsSetSafe` —
+     así queda sellada aunque el `setItem` falle). Una vez existe en
+     esta sesión, `_load()` la usa SIEMPRE — es, por construcción, tan
+     fresca o más que el disco (todo camino que escribe también sella
+     la memoria en el mismo tick), así que también refleja
+     correctamente un borrado deliberado del usuario, no solo una
+     fusión más rica. Antes de la PRIMERA escritura de la sesión
+     (`_SEL_SQUAD_MEM` aún `null`), cae al disco tal cual, igual que
+     siempre. */
   function _load(){
+    var mem=window._SEL_SQUAD_MEM;
+    if(mem && Array.isArray(mem.teams)) return mem;
     var d=null;
     try{ var raw=localStorage.getItem(KEY); if(raw) d=JSON.parse(raw); }catch(_){}
     if(!d || !Array.isArray(d.teams)) d={v:1,teams:[]};
@@ -61495,6 +61530,7 @@ https://api.sofascore.app/api/v1/team/44/image
     }catch(_){ if(tries<3) setTimeout(function(){ _post(d,tries+1); }, 1500*(tries+1)); }
   }
   function _save(d){
+    window._SEL_SQUAD_MEM=d;
     try{ window._lsSetSafe(KEY, JSON.stringify(d)); }catch(_){}
     try{ if(typeof window._invalidateAliasCache==='function') window._invalidateAliasCache(); }catch(_){}
     _post(d, 0);
@@ -61560,6 +61596,7 @@ https://api.sofascore.app/api/v1/team/44/image
     }
     if(changed){
       d.teams=clean;
+      window._SEL_SQUAD_MEM=d;
       try{ window._lsSetSafe(KEY,JSON.stringify(d)); }catch(_){}
       try{
         if(typeof window.fetch==='function')
@@ -62557,6 +62594,15 @@ https://api.sofascore.app/api/v1/team/44/image
           var localTeams=(_load().teams)||[];
           var serverTeams=j.value.teams||[];
           var merged={v:1, teams:_mergeTeamsForSync(localTeams, serverTeams)};
+          /* Sella la copia en memoria ANTES de intentar persistir en disco
+             — con ~100 selecciones y plantillas completas, este JSON puede
+             superar el umbral de `_lsSetSafe` y descartarse en silencio si
+             la cuota ya está agotada. `_hydrate()`/`_renderBody()` (justo
+             debajo) leen vía `_load()`, que ahora prefiere esta copia
+             cuando el disco se quedó corto — así la pantalla NUNCA vuelve
+             a mostrar "Sin selecciones todavía" solo porque el `setItem`
+             de la fusión falló. */
+          window._SEL_SQUAD_MEM=merged;
           try{ window._lsSetSafe(KEY,JSON.stringify(merged)); }catch(_){}
           /* Si la fusión difiere del servidor (este dispositivo tenía
              selecciones que faltaban allí), súbela. Es una unión: nunca

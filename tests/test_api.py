@@ -2094,3 +2094,58 @@ class TestTeamIdentityProtectedFallback:
         j = r.get_json()
         assert j["ok"] is True
         assert j["shield"] is None
+
+
+class TestTourWipe:
+    """`/api/tour-wipe/<id>` borra PERMANENTEMENTE (DELETE de verdad, no un
+    reset a vacío) las filas `tour_<id>_v1` y `tour_<id>_v1_protected` de
+    la BD. Petición usuario 2026-08-10 ("quiero que los elimines para
+    siempre, aniquílalo") tras confirmar que el mecanismo anterior (reset
+    con `resetAt` fresco vía `_tourSave`) dejaba el torneo vacío pero la
+    fila seguía existiendo en el servidor — no era un borrado real."""
+
+    def test_borra_main_y_protected(self, client):
+        c = client
+        c.post("/api/kv/tour_sct_v1", json={"value": {"id": "sct", "teams": [{"name": "A"}]}})
+        # `_protected` no tiene un POST directo del cliente (lo escribe
+        # `_tour_protected_guard` como efecto colateral) — se siembra
+        # directo como fila cruda para simular ese estado.
+        with app_module.app.app_context():
+            row = app_module.GlobalState(
+                clave="tour_sct_v1_protected",
+                valor_json='{"id":"sct","teams":[{"name":"A"}]}',
+                updated_at=app_module.utc_now_iso(),
+            )
+            app_module.db.session.add(row)
+            app_module.db.session.commit()
+
+        r = c.post("/api/tour-wipe/sct")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert "tour_sct_v1" in j["deleted"]
+        assert "tour_sct_v1_protected" in j["deleted"]
+
+        with app_module.app.app_context():
+            assert app_module.GlobalState.query.filter_by(clave="tour_sct_v1").first() is None
+            assert app_module.GlobalState.query.filter_by(clave="tour_sct_v1_protected").first() is None
+
+    def test_idempotente_sobre_id_ya_borrado(self, client):
+        c = client
+        r = c.post("/api/tour-wipe/pss")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["deleted"] == []
+
+    def test_rechaza_id_no_reconocido(self, client):
+        c = client
+        r = c.post("/api/tour-wipe/no-existe-este-id")
+        assert r.status_code == 400
+        assert r.get_json()["ok"] is False
+
+    def test_no_es_delete_generico_de_cualquier_clave(self, client):
+        """El id debe casar con `_KV_ALLOWED_REGEX` para `tour_<id>_v1` —
+        no se puede usar para borrar una clave arbitraria del proyecto
+        (p.ej. `europe_committed_v1`, `menu_home_v1`)."""
+        c = client
+        r = c.post("/api/tour-wipe/registry")  # -> tour_registry_v1, no es un torneo
+        assert r.status_code == 400

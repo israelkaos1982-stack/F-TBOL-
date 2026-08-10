@@ -5118,6 +5118,34 @@ def api_tour_protected_get(tid):
     })
 
 
+@app.route("/api/tour-wipe/<tid>", methods=["POST"])
+def api_tour_wipe(tid):
+    """Borra PERMANENTEMENTE (DELETE de verdad, no un reset a vacío) las
+    filas `tour_<tid>_v1` y `tour_<tid>_v1_protected` de la base de
+    datos. Un guardado con `resetAt` fresco (el mecanismo que ya usaba
+    "🗑 Borrar para siempre" en el cliente) deja el torneo vacío pero
+    la fila SIGUE existiendo en la BD — petición explícita del usuario
+    ("aniquilalo", 2026-08-10) de que el borrado sea TOTAL, sin ningún
+    residuo server-side, para los torneos que ya ha decidido no volver
+    a usar nunca.
+
+    Solo acepta ids que casen con `_KV_ALLOWED_REGEX` (los mismos
+    `tour_<id>_v1` que el resto del proyecto reconoce) — no es un
+    DELETE genérico de cualquier clave arbitraria."""
+    base_key = "tour_" + tid + "_v1"
+    if not _KV_ALLOWED_REGEX.match(base_key):
+        return jsonify({"ok": False, "error": "id de torneo no reconocido"}), 400
+    deleted = []
+    for clave in (base_key, base_key + "_protected"):
+        row = GlobalState.query.filter_by(clave=clave).first()
+        if row:
+            db.session.delete(row)
+            deleted.append(clave)
+    if deleted:
+        db.session.commit()
+    return jsonify({"ok": True, "tid": tid, "deleted": deleted})
+
+
 @app.route("/api/kv/<key>", methods=["POST"])
 def api_kv_set(key):
     if not _kv_is_allowed(key):

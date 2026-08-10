@@ -58660,6 +58660,58 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
     try { window._lsSetSafe(FLAG, '1'); } catch(_){}
   })();
+  /* Purga LOCAL v11 (2026-08-10, petición usuario "soluciona lo de la
+     liga Alemania" tras confirmar con capturas que `-backup`/
+     `-protected`/`-snap-<ts>` de Alemania/Albania SEGUÍAN en su
+     localStorage pese a v9/v10): v10 ya limpiaba correctamente en el
+     momento en que corrió, pero el hueco que la resucitaba
+     — `/api/liga-ext/<slug>`, `/api/liga-ext-any/<slug>` y
+     `/api/liga-ext-protected/<slug>` (GET per-slug, sin filtrar) — no
+     se cerró hasta DESPUÉS de que v10 ya se hubiera marcado "hecho" en
+     el dispositivo del usuario. Cualquier apertura de pantalla/
+     recuperación posterior a v10 que pidiera el slug UNO A UNO
+     (`loadData`, `lextDeepRecoverSlug`/`emergencyRestoreAll`) lo volvía
+     a traer con datos reales, y como v10 ya no vuelve a correr (flag
+     puesto), esos leftovers se quedaban ahí para siempre.
+
+     El fix real esta vez SÍ está completo en el servidor (`app.py`,
+     los 6 endpoints per-slug de `ligaExt_<slug>` ahora tratan cualquier
+     slug muerto como si nunca hubiera existido, tanto en GET como en
+     POST) — así que v11 es la ÚLTIMA pasada que hace falta: limpia lo
+     que quedó pegado entre v10 y este fix, y a partir de aquí ya no hay
+     ningún camino, viejo o nuevo, que pueda volver a traer estas 43
+     ligas del servidor. Misma lógica exacta que v9/v10, solo cambia el
+     flag para forzar la repasada. */
+  (function _purgeMergedLeaguesV11(){
+    var FLAG = 'ftbol_merged_leagues_purge_v11';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var _matches = window._isDeadMergedLeagueSlug || function(){ return false; };
+    try {
+      var toRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf('ligaExt_') !== 0) continue;
+        if (_matches(k.substring('ligaExt_'.length))) toRemove.push(k);
+      }
+      toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+      (window._DEAD_MERGED_LEAGUE_SLUGS || []).forEach(function(s){
+        try { if (typeof LIGA_CACHE !== 'undefined') delete LIGA_CACHE[s]; } catch(_){}
+        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(s); } catch(_){}
+      });
+      if (window._idbKV && typeof window._idbKV.keys === 'function') {
+        window._idbKV.keys().then(function(idbKeys){
+          (idbKeys || []).forEach(function(k){
+            if (typeof k !== 'string' || k.indexOf('ligaExt_') !== 0) return;
+            if (_matches(k.substring('ligaExt_'.length))) {
+              try { window._idbKV.del(k); } catch(_){}
+            }
+          });
+        }).catch(function(){});
+      }
+      try { console.warn('[ligaExt] purga v11: '+toRemove.length+' claves locales + limpieza de IndexedDB de las 43 ligas fusionadas (repasada final tras cerrar los endpoints per-slug del servidor).'); } catch(_){}
+    } catch(_){}
+    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
+  })();
   /* Defensa adicional: si en algún momento el storage queda vacío
      (reset / sync server que devuelve {teams:[]}), re-sembramos al
      abrir la pantalla. */

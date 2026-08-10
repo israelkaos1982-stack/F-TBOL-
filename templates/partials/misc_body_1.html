@@ -15865,6 +15865,27 @@ window._hdrCleanCache = function(){
     try {
       return _applyEngineOverridesBody();
     } finally {
+      /* La plantilla de Liga EA Sports (SQUAD_REGISTRY) puede ACABAR de
+         quedar disponible justo aquí — es el punto exacto donde un
+         partido de Liga simulado/fusionado ANTES de que la plantilla
+         llegara (grabado con placeholders "Jugador A/B/Portero A" en
+         vez de nombres reales — bug 2026-08-10, "en la primera jornada
+         salen bien los jugadores, en la segunda ya sale Jugador A/B/C")
+         puede repararse de forma PERMANENTE, no solo al vuelo en
+         pantalla. `_ligaBackfillActasFromResults` vive en
+         part2/misc_body_2.html, que ya está cargado para cuando este
+         `finally` corre de verdad — `applyEngineOverrides` solo se
+         invoca vía `setTimeout`/hooks posteriores al parseo síncrono
+         completo de la página, nunca durante el parseo en sí.
+         OBLIGATORIO llamarla ANTES de liberar `_engineOverridesRunning`:
+         el backfill llama a `sqFromRegistry`, que si no encuentra un
+         equipo intenta re-entrar en `applyEngineOverrides()` como lazy
+         fallback — con el guard TODAVÍA activo esa re-entrada es un
+         no-op seguro (mismo patrón ya documentado para
+         `sqFromRegistryFull`); liberarlo ANTES dejaría esa re-entrada
+         correr DE VERDAD y podría re-disparar este mismo `finally` en
+         bucle (la recursión ×20 que ya colgó la web una vez). */
+      try { if (typeof window._ligaBackfillActasFromResults === 'function') window._ligaBackfillActasFromResults(); } catch(_){}
       window._engineOverridesRunning = false;
     }
   }

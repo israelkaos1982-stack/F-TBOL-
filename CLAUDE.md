@@ -1,5 +1,109 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El acta de Liga EA Sports con "Jugador A/B/Portero A" placeholder se REPARA Y SE PERSISTE, no solo se repinta al vuelo (obligatorio, 2026-08-10)
+
+**Bug (usuario 2026-08-10, «Liga EA Sports»)**: en la primera jornada
+mostrada, el acta de cada partido IA-vs-IA salía con los nombres reales
+de los jugadores de las plantillas (Joselillo Gaitán, A. Forés, Javi
+Muñoz, Isco…). Al navegar a otra jornada (con ALGUNOS de los MISMOS
+equipos — Celta, Real Sociedad, Getafe, Mallorca, Osasuna), el acta
+mostraba "Jugador A", "Jugador B", "Portero A" — pese a que el admin
+confirmó que esas plantillas SÍ tienen jugadores reales configurados.
+
+### Causa raíz
+
+`genMatchEventsEnhanced` (`part2/misc_body_2.html`), al simular un
+partido IA-vs-IA (`simularJornadaIA`/`iaSimLive`), resuelve la
+plantilla de cada equipo con `window.sqFromRegistry(team)`. Si en el
+INSTANTE EXACTO de esa simulación la plantilla de Liga EA Sports
+(`ligaExt_liga-ea-sports`, fuente de `window.SQUAD_REGISTRY` vía el
+"puente" `ligaEaBuildEngineOverrides`/`applyEngineOverrides`) todavía
+no estaba disponible en este dispositivo —hidratación del servidor en
+curso, típicamente un cold-start de Railway, que puede tardar bastante
+más que los 2 únicos reintentos automáticos de `applyEngineOverrides`
+en el arranque (200 ms y 1500 ms — **nunca se repiten después** salvo
+que el admin guarde algo en el editor)—, `sqFromRegistry` devuelve
+`[]` y `genMatchEventsEnhanced` cae al roster de emergencia
+`[['','Jugador A','F',76]]`/`[['1','Portero A','P',76]]`. Ese
+placeholder queda **grabado para siempre** en `results[key].events`
+(`ef_liga38_v4`) porque `simularJornadaIA` nunca re-simula un partido
+ya resuelto (`if (results[key]) return;`). Lo mismo puede ocurrir si el
+partido llegó **fusionado desde OTRO dispositivo** (poll de
+`/api/state` cada 5 s) que tuvo el mismo problema de hidratación.
+
+`_iaEventsHtml` (la función que pinta el acta en la pantalla "Jornada N
+de Liga EA Sports") YA reparaba estos nombres **al vuelo, solo en
+pantalla**, re-resolviendo `sqFromRegistry` en cada render — pero
+`showMatchActaModal` (el OTRO visor de acta, el que se abre al pulsar
+el marcador desde la clasificación/calendario de Liga) pintaba
+`ev.player`/`res.mvp` **crudos, sin ninguna reparación**. Y ninguno de
+los dos **persistía** la corrección: si el render en el que
+`_iaEventsHtml` reparaba con éxito no volvía a dispararse (el usuario
+no re-navega a esa jornada, o la vuelve a ver en un instante en que
+`sqFromRegistry` fallara por cualquier motivo transitorio), el
+placeholder seguía viéndose indefinidamente pese a que la plantilla
+real llevara rato disponible.
+
+### Fix — `window._ligaBackfillActasFromResults()`, reparación PERMANENTE
+
+Nueva función (`part2/misc_body_2.html`, junto a `_iaEventsHtml`):
+recorre TODO `loadResults()` (`ef_liga38_v4`) y, para cada evento/MVP
+cuyo nombre coincida con el mismo regex de placeholder que ya usaba
+`_iaEventsHtml` (`^(?:\d+\.?\s*)?(?:jugador|portero)\s*(?:[a-k]|ia|\d+)?$`),
+intenta resolver un nombre real vía `sqFromRegistry` y, si lo
+encuentra, **sustituye el valor DENTRO del propio `results`** y
+persiste con `saveResults` (local + POST al servidor, curando también
+a otros dispositivos). Nunca pisa un nombre ya real; barata cuando no
+hay nada que reparar (un test de regex por evento). Se dispara en:
+
+- `openIAJornada(j)` — antes de leer los resultados de esa jornada.
+- `showMatchActaModal(j,home,away)` — antes de pintar (que además
+  ganó la misma cobertura que `_iaEventsHtml`, no tenía ninguna).
+- El `finally` de `applyEngineOverrides` (`misc_body_1.html`) — el
+  instante exacto en que la plantilla de Liga EA Sports puede ACABAR
+  de estar disponible. **Llamada ANTES de liberar el guard
+  `_engineOverridesRunning`** (nunca después): el backfill invoca
+  `sqFromRegistry`, que si no encuentra un equipo intenta re-entrar en
+  `applyEngineOverrides()` como lazy fallback — con el guard todavía
+  activo esa re-entrada es un no-op seguro (mismo patrón que protege
+  `sqFromRegistryFull`, sección "`applyEngineOverrides` ⇄
+  `sqFromRegistryFull`" más abajo); liberar el guard ANTES de llamar al
+  backfill reabriría el mismo bucle de recursión que ya colgó la web
+  una vez.
+- El poll de `hydrateLigaStateFromBackend` cuando llega `liga_results`
+  nuevo del servidor (cura lo fusionado desde otro dispositivo).
+- 3 reintentos diferidos al arrancar (3 s / 8 s / 20 s) — cubren una
+  hidratación lenta aunque el usuario no llegue a abrir ninguna
+  pantalla de Liga todavía.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un visor de acta nuevo (o ya existente) de Liga EA
+   Sports pinte `ev.player`/`res.mvp` sin pasar por
+   `_iaEventsHtml` (reparación en vivo) O sin haber llamado antes a
+   `window._ligaBackfillActasFromResults()` (reparación persistente).
+   `showMatchActaModal` se quedó fuera de la cobertura de
+   `_iaEventsHtml` durante mucho tiempo — auditar con `grep` cualquier
+   sitio que lea `res.events`/`ev.player` de `ef_liga38_v4` directo.
+2. **PROHIBIDO** asumir que una reparación SOLO EN PANTALLA (sin
+   persistir) es suficiente para este tipo de dato. Si el render que la
+   aplica con éxito no vuelve a ejecutarse, el placeholder se queda
+   visible indefinidamente aunque la plantilla real lleve minutos
+   disponible — la reparación tiene que escribir de vuelta en
+   `results`/`ef_liga38_v4` y persistir con `saveResults`.
+3. **PROHIBIDO** llamar a `window._ligaBackfillActasFromResults()`
+   DESPUÉS de liberar `window._engineOverridesRunning` dentro de
+   `applyEngineOverrides`. Debe ir SIEMPRE antes del
+   `window._engineOverridesRunning = false;` final, para que cualquier
+   re-entrada que dispare (vía `sqFromRegistry`) sea un no-op protegido
+   por el guard.
+4. Este backfill es específico de Liga EA Sports (`ef_liga38_v4`,
+   `rKey(j,home,away)`). Otras competiciones con el MISMO síntoma
+   (Superliga, Copa del Rey, torneos…) tienen sus propios mecanismos
+   —`_tourBackfillActasFromResults` para torneos— o pueden necesitar
+   uno equivalente si se detecta el mismo patrón: reparación en vivo
+   sin persistencia.
+
 ## La plantilla de CLUB in-line NUNCA guardaba desde móvil — flags/Guardar dependían SOLO del `click` sintético dentro de filas/pantalla con scroll (obligatorio, 2026-08-09)
 
 **Bug (usuario 2026-08-09, «Atlético Madrid» — Julián Álvarez / Sørloth,

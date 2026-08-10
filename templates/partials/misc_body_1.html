@@ -26919,6 +26919,74 @@ window._hdrCleanCache = function(){
     document.addEventListener('visibilitychange', _tourReconcileOnWake);
   } catch(_){}
 
+  /* ── COLA DE REINTENTO DE BORRADO PERMANENTE (2026-08-10) ──────────
+     "🗑 Borrar para siempre" ya limpia LOCAL al instante (no depende de
+     la red), pero el DELETE real de `tour_<id>_v1`/`_protected` en el
+     servidor (`/api/tour-wipe/<id>`) sí depende de ella. Si los 3
+     reintentos inmediatos del propio botón fallan, la fila YA
+     desapareció de la UI — sin esta cola, el usuario no tendría CÓMO
+     reintentarlo (el botón que lo dispararía ya no existe). Mismo
+     patrón exacto que `_tourPendingSyncAdd`/`_tourReconcileToServer`
+     de arriba, pero para DELETE en vez de para guardar: secuencial +
+     pausado + throttle + disparo en boot/foco. Idempotente — reintentar
+     el borrado de un id ya borrado simplemente no encuentra nada que
+     borrar y responde ok igualmente. */
+  var _TOUR_WIPE_PENDING_KEY = 'tour_wipe_pending_v1';
+  function _tourWipePendingGet(){
+    try {
+      var raw = localStorage.getItem(_TOUR_WIPE_PENDING_KEY);
+      var arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch(_){ return []; }
+  }
+  function _tourWipePendingSet(arr){
+    try { window._lsSetSafe(_TOUR_WIPE_PENDING_KEY, JSON.stringify(arr || [])); } catch(_){}
+  }
+  function _tourWipePendingAdd(id){
+    var arr = _tourWipePendingGet();
+    if (arr.indexOf(id) === -1) { arr.push(id); _tourWipePendingSet(arr); }
+  }
+  function _tourWipePendingRemove(id){
+    var arr = _tourWipePendingGet();
+    var idx = arr.indexOf(id);
+    if (idx !== -1) { arr.splice(idx, 1); _tourWipePendingSet(arr); }
+  }
+  var _tourWipeReconcileInFlight = false;
+  var _tourWipeReconcileLastAt = 0;
+  window._tourWipeReconcile = function(opts){
+    opts = opts || {};
+    if (_tourWipeReconcileInFlight) return;
+    var nowT = Date.now();
+    if (!opts.force && (nowT - _tourWipeReconcileLastAt) < 20000) return;
+    var list = _tourWipePendingGet();
+    if (!list.length) return;
+    _tourWipeReconcileInFlight = true;
+    _tourWipeReconcileLastAt = nowT;
+    var idx = 0;
+    function step(){
+      if (idx >= list.length) { _tourWipeReconcileInFlight = false; return; }
+      var id = list[idx++];
+      fetch('/api/tour-wipe/' + encodeURIComponent(id), { method:'POST' })
+        .then(function(r){ return r.json(); })
+        .then(function(j){ if (j && j.ok) _tourWipePendingRemove(id); })
+        .catch(function(){})
+        .then(function(){ setTimeout(step, 250); });
+    }
+    step();
+  };
+  try {
+    setTimeout(function(){ try { window._tourWipeReconcile(); } catch(_){} }, 9500);
+    var _tourWipeReconcileOnWake = function(){
+      try {
+        if (document.visibilityState && document.visibilityState !== 'visible') return;
+        window._tourWipeReconcile();
+      } catch(_){}
+    };
+    window.addEventListener('pageshow', _tourWipeReconcileOnWake);
+    window.addEventListener('focus', _tourWipeReconcileOnWake);
+    document.addEventListener('visibilitychange', _tourWipeReconcileOnWake);
+  } catch(_){}
+
   /* ── Pool de equipos (lee ligaExt_* + SQUAD_REGISTRY) ───
      Devuelve cada equipo con su `power` (GLOBAL del editor) para
      poder filtrar por rango de nivel IA al sortear. Si un equipo no
@@ -36315,30 +36383,49 @@ window._hdrCleanCache = function(){
           /* Borrado PERMANENTE (2026-08-10, petición usuario "eliminar
              por completo" para liberar espacio de verdad — a diferencia
              de "del", que solo oculta y CONSERVA tour_<id>_v1 entero).
-             Reutiliza el mecanismo de reset YA existente: `_tourSave`
-             con un `resetAt` fresco hace que tanto la fusión del server
-             (`tour_cfg_merge`) como el snapshot `_protected`
-             (`_tour_protected_guard`) traten esto como un reinicio
-             DELIBERADO y conviertan el main Y el protected a la cfg en
-             blanco — sin necesitar un endpoint nuevo en el servidor. */
+             REFUERZO (2026-08-10, petición usuario "quiero que los
+             elimines para siempre, aniquílalo"): la 1ª versión solo
+             reseteaba la cfg a un blanco fresco (`_tourSave` con
+             `resetAt`), lo que deja el torneo vacío pero la fila
+             SIGUE existiendo en la BD del servidor — no era un
+             borrado real, solo "vaciado". Ahora llama a
+             `/api/tour-wipe/<id>` (nuevo endpoint, `app.py`), que hace
+             un DELETE de verdad de `tour_<id>_v1` Y
+             `tour_<id>_v1_protected` — no queda ningún residuo
+             server-side. Con reintentos (mismo patrón que el resto de
+             guardados críticos del proyecto) porque, a diferencia del
+             borrado LOCAL (instantáneo), este SÍ depende de la red. */
           if (TOUR_IDS.indexOf(id) === -1) return;
           var wipeName = _tvName(id);
           if (!confirm('🗑 BORRAR "' + wipeName + '" PARA SIEMPRE\n\n'
             + 'Esto es IRREVERSIBLE: se pierden TODOS sus datos (plantillas, '
             + 'resultados, actas) tanto en este dispositivo como en el '
-            + 'servidor. A diferencia de "Eliminar", esto NO se puede '
+            + 'servidor — la fila se BORRA de la base de datos, no solo se '
+            + 'vacía. A diferencia de "Eliminar", esto NO se puede '
             + 'restaurar después — el hueco queda como si nunca se hubiera '
             + 'usado.\n\n¿Continuar?')) return;
+          /* Local INMEDIATO — no depende de la red. */
+          try { localStorage.removeItem(_key(id)); } catch(_){}
+          try { if (window._TOUR_CACHE) delete window._TOUR_CACHE[id]; } catch(_){}
+          reg.visible = reg.visible.filter(function(x){ return x !== id; });
+          _tvRegSave(reg);
+          _tvRenderCards(); _tvRefreshManage();
           (async function(){
-            var freshCfg = _cloneDefault(id);
-            freshCfg.resetAt = Date.now();
-            try { if (typeof window._tourSave === 'function') await window._tourSave(id, freshCfg); } catch(_){}
-            try { localStorage.removeItem(_key(id)); } catch(_){}
-            try { if (window._TOUR_CACHE) delete window._TOUR_CACHE[id]; } catch(_){}
-            reg.visible = reg.visible.filter(function(x){ return x !== id; });
-            _tvRegSave(reg);
-            _tvRenderCards(); _tvRefreshManage();
-            try { alert('✅ "' + wipeName + '" borrado para siempre.'); } catch(_){}
+            var ok = false;
+            for (var _try = 0; _try < 3 && !ok; _try++){
+              try {
+                var res = await fetch('/api/tour-wipe/' + encodeURIComponent(id), { method:'POST' });
+                var j = await res.json();
+                ok = !!(j && j.ok);
+              } catch(_){}
+              if (!ok && _try < 2) await new Promise(function(r){ setTimeout(r, 1200 * (_try + 1)); });
+            }
+            if (!ok) { try { _tourWipePendingAdd(id); } catch(_){} }
+            try {
+              alert(ok
+                ? '✅ "' + wipeName + '" borrado PARA SIEMPRE — sin residuo en el servidor.'
+                : '⚠️ "' + wipeName + '" ya no aparece en este dispositivo, pero el servidor no confirmó el borrado (red lenta). Se reintentará SOLO en segundo plano — no hace falta que hagas nada más.');
+            } catch(_){}
           })();
         } else if (act === 'new'){
           var free = _tvSlotsOf(_tvMgBoard).filter(function(s){ return reg.visible.indexOf(s) === -1; });

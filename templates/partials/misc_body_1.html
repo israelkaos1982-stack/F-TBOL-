@@ -37450,7 +37450,22 @@ window._hdrCleanCache = function(){
      `_availableTeams` de Supercopa de Europa, `doSearch` del roster
      del Mundialito) — ver bloque "AÑADIR MANUAL — 10 competiciones". */
   var EUR_MANUAL_ZONES = ['ucl','uclPrev','uel','uecl','uclQual','wildcard','recopa','usc','inter','mundial'];
+  /* CACHE EN MEMORIA — SIEMPRE la copia más fresca, independiente de si
+     el guardado en `localStorage` tuvo éxito (bug 2026-08-10, "no me
+     deja añadir ningún equipo a ninguna competición, ni por liga ni por
+     club"). `_lsSetSafe` puede devolver `false` en silencio cuando el
+     navegador va sin espacio (patrón recurrente y ya documentado de
+     este proyecto) — `_eurManualExtraAdd` seguía devolviendo `true`
+     (sin excepción), pero el `_eurManualOverlayRender()` posterior
+     releía `localStorage` (que se había quedado con la copia VIEJA) y
+     el equipo recién añadido "desaparecía" al instante, en CUALQUIER
+     vía de añadir (búsqueda por nombre, por liga uno a uno, o "AÑADIR
+     TODOS"). Este cache mantiene SIEMPRE el último estado tras un
+     add/remove/clear EN MEMORIA, ganando sobre una lectura de
+     `localStorage` que puede haberse quedado atrás. */
+  var _eurManualExtraMemCache = null;
   function _eurManualExtraLoad(){
+    if (_eurManualExtraMemCache) return _eurManualExtraMemCache;
     var out = { clearedAt: {} };
     EUR_MANUAL_ZONES.forEach(function(z){ out[z] = []; });
     try {
@@ -37476,7 +37491,16 @@ window._hdrCleanCache = function(){
   function _eurManualExtraSave(d){
     d = d || {};
     d.updatedAt = Date.now();
-    try { window._lsSetSafe(EUR_MANUAL_EXTRA_KEY, JSON.stringify(d)); } catch(_){}
+    /* SIEMPRE se actualiza el cache en memoria PRIMERO — pase lo que
+       pase con el guardado local/servidor, el add que el admin acaba de
+       hacer sigue siendo visible en el siguiente render de este mismo
+       dispositivo/sesión. */
+    _eurManualExtraMemCache = d;
+    var savedLocal = false;
+    try { savedLocal = !!window._lsSetSafe(EUR_MANUAL_EXTRA_KEY, JSON.stringify(d)); } catch(_){}
+    if (!savedLocal){
+      try { console.warn('[eur-manual-extra] guardado local falló (navegador sin espacio) — el cambio sigue en memoria y se reintenta subir al servidor.'); } catch(_){}
+    }
     try {
       fetch('/api/kv/' + EUR_MANUAL_EXTRA_KEY, {
         method: 'POST',
@@ -37485,6 +37509,7 @@ window._hdrCleanCache = function(){
         body: JSON.stringify({value: d})
       }).catch(function(){});
     } catch(_){}
+    return savedLocal;
   }
   window._eurManualExtraLoad = _eurManualExtraLoad;
   window._eurManualExtraZones = EUR_MANUAL_ZONES;

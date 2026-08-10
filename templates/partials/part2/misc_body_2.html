@@ -19369,8 +19369,16 @@
     setInterval(_drive, 50);
   })();
 
-  /* ── iaSimLive: cronómetro 30s en vivo por partido IA vs IA ── */
-  window.iaSimLive = function(mk, home, away, j, j1fn) {
+  /* ── iaSimLive: cronómetro 30s en vivo por partido IA vs IA ──
+     `instant` (7º arg, petición usuario 2026-08-10): en vez de animar el
+     marcador/acta minuto a minuto en tiempo real (~90 s por partido, ver
+     CLAUDE.md "BASE INMUTABLE" del cronómetro), resuelve TODO de un tirón
+     y deja el resultado + acta completos pintados al instante. Usa
+     EXACTAMENTE la misma lógica de eventos/VAR/ET/penaltis/persistencia
+     que el modo en vivo — solo cambia CÓMO se recorre el tiempo (ver
+     `_tickFn(forceCurMin)` más abajo). Solo Liga EA Sports y Copa del Rey
+     lo piden por ahora; el resto de competiciones sigue en vivo. */
+  window.iaSimLive = function(mk, home, away, j, j1fn, instant) {
     var btn   = document.getElementById('ia-sim-btn-' + mk);
     var scAEl = document.getElementById('ia-sc-' + mk + '-a');
     var scBEl = document.getElementById('ia-sc-' + mk + '-b');
@@ -19558,7 +19566,16 @@
        Chrome). El cuerpo es idempotente (guards `evtIdx`,
        `lastCurMin`) así que llamarlo más de lo necesario es seguro. */
     var interval = null;
-    var _tickFn = function() {
+    /* `forceCurMin` (modo instantáneo): si se pasa, se usa TAL CUAL en vez
+       de derivarlo del wall-clock — permite recorrer sincrónicamente los
+       mismos puntos de decisión (90' / activación de ET / 120') sin
+       esperar tiempo real. Devuelve `true` cuando llega al cierre real
+       del partido (persistencia incluida) y `false`/`undefined` en
+       cualquier otro caso (incluida la activación de ET, que necesita
+       una 2ª pasada con curMin=120 para resolverse). En modo en vivo
+       (forceCurMin===undefined) el valor de retorno se ignora, igual que
+       siempre. */
+    var _tickFn = function(forceCurMin) {
       /* Re-acquire DOM refs each tick. Si openIAJornada o cualquier
          otro rebuilder ha regenerado los nodos, los refs `btn`,
          `scAEl`, `scBEl`, `actaEl` capturados al inicio están
@@ -19577,12 +19594,14 @@
         /* La card ya no existe — aborta el setInterval sin tocar nada. */
         clearInterval(interval);
         try { delete window._iaSimLiveActive[mk]; } catch(_){}
-        return;
+        return true;
       }
       /* curMin derivado del wall-clock REAL. Inmune al throttling de
-         setInterval cuando hay muchos partidos en paralelo. */
+         setInterval cuando hay muchos partidos en paralelo. En modo
+         instantáneo, `forceCurMin` manda (sin depender del reloj). */
       var _elapsedMs = Date.now() - _wallStart;
-      curMin = Math.min(Math.floor(_elapsedMs * _gameMinPerMs), _etTopMin);
+      curMin = (typeof forceCurMin === 'number') ? forceCurMin
+        : Math.min(Math.floor(_elapsedMs * _gameMinPerMs), _etTopMin);
       if (curMin < 0) curMin = 0;
       /* Actualizar PRIMERO el label visible. Antes esto estaba al final
          del tick — si una excepción saltaba dentro del while (procesado
@@ -19783,8 +19802,10 @@
              2026-05-16: el marcador SIEMPRE visible en live). El paso a
              prórroga ya se comunica con la cabecera "⏱ PRÓRROGA" del
              acta y con el botón-reloj "⏱ N' ET". */
-          /* No clearInterval: el tick sigue hasta 120. */
-          return;
+          /* No clearInterval: el tick sigue hasta 120. Devolvemos false —
+             en modo instantáneo hace falta una 2ª pasada (curMin=120)
+             para resolver ET + penaltis + el cierre. */
+          return false;
         }
         /* Imbatida tras la prórroga (120'): si fue Copa single-leg con
            ET, la imbatida se decide AHORA según el marcador final
@@ -19993,8 +20014,26 @@
             }
           }
         }, 600);
+        return true;
       }
     };
+    /* ── Modo INSTANTÁNEO ────────────────────────────────────────────
+       En vez de registrar el driver en vivo, forzamos `_tickFn` con
+       curMin ya en el tope — la MISMA lógica de eventos/ET/penaltis/
+       persistencia se ejecuta de un tirón, sin ningún setInterval/rAF.
+       Como mucho hacen falta 2 pasadas (90' → activa ET → 120' cierra);
+       el guard de 4 es margen de sobra. */
+    if (instant) {
+      try { delete window._iaSimLiveActive[mk]; } catch(_){}
+      var _forcedMin = _etTopMin;
+      var _guard = 0;
+      while (_guard++ < 4) {
+        var _done = _tickFn(_forcedMin);
+        if (_done) break;
+        _forcedMin = 120;
+      }
+      return;
+    }
     /* Per-card setInterval — driver primario. Si Chrome lo throttea
        (timer alignment con batería baja), el driver rAF global
        (definido arriba) sigue invocando _tickFn. */
@@ -21121,9 +21160,13 @@
     var cardStyle = isManual
       ? 'margin-bottom:10px;background:linear-gradient(180deg,rgba(60,8,16,.28),rgba(20,4,8,.85));'
       : 'margin-bottom:10px;';
+    /* Liga EA Sports · IA vs IA: simulación INSTANTÁNEA (petición usuario
+       2026-08-10) — el 6º arg `true` hace que iaSimLive resuelva el
+       partido de un tirón (resultado + acta completos al pulsar) en vez
+       de animar 0→90 en tiempo real. */
     var clickFn = m.fn
-      ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\')'
-      : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ')';
+      ? 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',\'' + m.fn + '\',true)'
+      : 'window.iaSimLive(\'' + emk + '\',\'' + hEsc + '\',\'' + aEsc + '\',' + j + ',null,true)';
     var actionButton = isManual
       ? '<button class="ml-previa-btn" onclick="window._openMatchWithPrevia(' + j + ',\'' + hEsc + '\',\'' + aEsc + '\')" style="font-size:12px;padding:4px 10px;">📋 PREVIA</button>'
       : '<button id="ia-sim-btn-' + mk + '" class="ml-timer" onclick="' + clickFn + '" style="font-size:12px;padding:4px 10px;">&#9654; SIMULAR</button>';

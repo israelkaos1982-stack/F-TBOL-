@@ -21069,7 +21069,7 @@ window._hdrCleanCache = function(){
              +   '<span style="color:rgba(255,255,255,.5);">–</span>'
              +   '<div id="ia-sc-' + mk + '-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd700;min-width:18px;text-align:center;">0</div>'
              + '</div>'
-             + '<button class="recopa-card-act simular" id="ia-sim-btn-' + mk + '" onclick="window.iaSimLive(\'' + mk + '\',\'' + _esc(m.home).replace(/\x27/g,"\\\x27") + '\',\'' + _esc(m.away).replace(/\x27/g,"\\\x27") + '\',0)">▶ Simular</button>'
+             + '<button class="recopa-card-act simular" id="ia-sim-btn-' + mk + '" onclick="window.iaSimLive(\'' + mk + '\',\'' + _esc(m.home).replace(/\x27/g,"\\\x27") + '\',\'' + _esc(m.away).replace(/\x27/g,"\\\x27") + '\',0,null,true)">▶ Simular</button>'
              + '</div>';
     } else {
       /* Al menos un humano → previa + gm-modal */
@@ -21709,6 +21709,22 @@ window._hdrCleanCache = function(){
     var anyHuman = hHum || aHum;
     var mk = 'sc_' + key + '_' + idx;
     var compKey = (key === 'fin') ? 'sc-final' : 'sc';
+    /* IA vs IA (petición usuario 2026-08-10): SIN humano de por medio no
+       hay nada que confirmar (Twitch/balón/duración/bajas son cosas del
+       jugador) — el rodeo PREVIA→BAJAS solo añadía pasos y daba la
+       sensación de "se cierra y me devuelve a la pantalla anterior".
+       Simulamos al instante, directo sobre la card, igual que ahora
+       Liga EA Sports / Copa del Rey. */
+    if (!anyHuman) {
+      var actaElIA = document.getElementById('ia-acta-' + mk);
+      if (actaElIA) actaElIA.style.display = 'block';
+      if (typeof window.iaSimLive === 'function') {
+        try { window.iaSimLive(mk, m.home, m.away, 0, null, true); return; }
+        catch(e){ try { console.warn('[sc] iaSimLive instant falló', e); } catch(_){} }
+      }
+      if (typeof window._scSyncFallback === 'function') window._scSyncFallback(key, idx);
+      return;
+    }
     var duracion = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
       : (isHvH ? '15 min 45 s' : '9 min 45 s');
@@ -22452,6 +22468,19 @@ window._hdrCleanCache = function(){
     var anyHuman = hHum || aHum;
     var mk = 'usc_' + key + '_' + idx;
     var compKey = (key === 'fin') ? 'usc-fin' : 'usc';
+    /* IA vs IA (petición usuario 2026-08-10): mismo motivo que Supercopa
+       de España — sin humano de por medio, PREVIA/BAJAS no aportan nada.
+       Simulamos al instante, directo sobre la card. */
+    if (!anyHuman) {
+      var actaElIA = document.getElementById('ia-acta-' + mk);
+      if (actaElIA) actaElIA.style.display = 'block';
+      if (typeof window.iaSimLive === 'function') {
+        try { window.iaSimLive(mk, m.home, m.away, 0, null, true); return; }
+        catch(e){ try { console.warn('[usc] iaSimLive instant falló', e); } catch(_){} }
+      }
+      if (typeof window._uscSyncFallback === 'function') window._uscSyncFallback(key, idx);
+      return;
+    }
     var duracion = (typeof window._mlRealDurationLabel === 'function')
       ? window._mlRealDurationLabel({ isHvH: isHvH, humanInvolved: !isHvH })
       : (isHvH ? '16.5 min' : '9 min 45 s');
@@ -43438,7 +43467,7 @@ window._hdrCleanCache = function(){
         +   '<span style="color:rgba(255,255,255,.5);">–</span>'
         +   '<div id="ia-sc-'+mk+'-b" class="ml-score-num" style="font-family:Bebas Neue,sans-serif;font-size:22px;color:#ffd54a;min-width:18px;text-align:center;">0</div>'
         + '</div>'
-        +'<button class="inter-card-act simular" id="ia-sim-btn-'+mk+'" onclick="window.iaSimLive(\''+mk+'\',\''+_q(m.home)+'\',\''+_q(m.away)+'\',0)">▶ Simular</button>'
+        +'<button class="inter-card-act simular" id="ia-sim-btn-'+mk+'" onclick="window.iaSimLive(\''+mk+'\',\''+_q(m.home)+'\',\''+_q(m.away)+'\',0,null,true)">▶ Simular</button>'
         +'</div>';
     } else {
       center='<div class="inter-card-mid"><div class="inter-card-vs">VS</div><button class="inter-card-act previa" onclick="window._interAbrirPrevia&&window._interAbrirPrevia(\''+phase+'\','+idx+')">📋 Previa</button></div>';
@@ -59794,7 +59823,7 @@ https://api.sofascore.app/api/v1/team/44/image
       +   _lecRenderFinalSide(f.home)
       +   '<div class="lec-final-vs">'
       +     '<div class="ml-score" id="ia-sim-score-' + mk + '"><div id="ia-sc-' + mk + '-a" class="ml-score-num">0</div><span>–</span><div id="ia-sc-' + mk + '-b" class="ml-score-num">0</div></div>'
-      +     '<button class="lec-final-sim" id="ia-sim-btn-' + mk + '" onclick="window.iaSimLive(\'' + mk + '\',\'' + hEsc + '\',\'' + aEsc + '\',0)">▶ Simular</button>'
+      +     '<button class="lec-final-sim" id="ia-sim-btn-' + mk + '" onclick="window.iaSimLive(\'' + mk + '\',\'' + hEsc + '\',\'' + aEsc + '\',0,null,true)">▶ Simular</button>'
       +   '</div>'
       +   _lecRenderFinalSide(f.away)
       + '</div>'

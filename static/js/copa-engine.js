@@ -4195,9 +4195,11 @@
      llamarlo tras `_copaSaveHumanResult`. */
   window._copaResolveTbdExternal = _copaResolveTbd;
 
-  /* IA-vs-IA → live tick + acta usando el mismo motor de Liga EA
-     (iaSimLive). El hook `window._copaSimLivePersist` (registrado más
-     abajo) se dispara dentro de iaSimLive cuando el mk empieza por
+  /* IA-vs-IA → resolución INSTANTÁNEA (petición usuario 2026-08-10)
+     usando el mismo motor de Liga EA (iaSimLive), con el 6º arg
+     `instant=true` — resultado + acta completos al pulsar, sin animar
+     0→90 en tiempo real. El hook `window._copaSimLivePersist` (registrado
+     más abajo) se dispara dentro de iaSimLive cuando el mk empieza por
      `copa_` y redirige el guardado al backend de Copa. */
   window.copaSimLive = function (ronda, idx, esVuelta) {
     var sorteo = (_copa && _copa.sorteo) || {};
@@ -4208,7 +4210,7 @@
     var visit = esVuelta ? m.l : m.v;
     var mk = _copaSimMk(ronda, idx, !!esVuelta);
     if (typeof window.iaSimLive === 'function') {
-      window.iaSimLive(mk, local, visit, 0);
+      window.iaSimLive(mk, local, visit, 0, null, true);
     } else {
       /* Sin motor live disponible: caemos al backend instantáneo. */
       window.copaSimIA(ronda, idx, esVuelta ? 1 : 0);

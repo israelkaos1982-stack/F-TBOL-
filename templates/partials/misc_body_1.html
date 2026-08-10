@@ -36225,28 +36225,32 @@ window._hdrCleanCache = function(){
         + '<button class="tv-mg-btn tv-mg-color" data-act="color" data-id="' + id + '">🎨 Color</button>'
         + '<button class="tv-mg-btn tv-mg-del" data-act="del" data-id="' + id + '">🗑 Eliminar</button></div>';
     });
-    var hiddenB = builtins.filter(function(id){ return !visSet[id]; });
+    /* Un built-in SOLO se lista en "Restaurar" si TIENE datos —
+       exactamente la misma regla que ya usan los slots numerados más
+       abajo (`if (saved)`). Antes se listaban SIEMPRE los 4
+       (sct/pss/jg/asia son un array fijo en el código), así que tras
+       un "🗑 Borrar para siempre" la fila persistía para siempre
+       —primero mostrando datos viejos como si nada hubiera pasado
+       (bug 2026-08-10 #1, "se quedan fijos"), y tras el primer fix,
+       mostrando "(vacío)" en vez de desaparecer del todo (bug
+       2026-08-10 #2, petición usuario "elimínalos tú, como los que
+       has eliminado de selecciones" — esperaba la MISMA paridad
+       visual que los slots numerados: una vez vacío, la fila
+       desaparece por completo). Esto significa que, una vez borrado
+       para siempre, ya NO hay forma de traer ESE built-in concreto de
+       vuelta desde este menú (ni siquiera "Restaurar") — es la
+       consecuencia deliberada de pedir paridad total con Selecciones,
+       donde un slot vacío tampoco ofrece nada que restaurar. */
+    var hiddenB = builtins.filter(function(id){
+      if (visSet[id]) return false;
+      try { return !!localStorage.getItem(_key(id)); } catch(_){ return false; }
+    });
     if (hiddenB.length){
       h += '<div class="tv-mg-sec">Restaurar built-in (datos conservados)</div>';
       hiddenB.forEach(function(id){
-        /* A diferencia de los slots numerados (que solo se listan aquí SI
-           tienen datos, `if (saved)` más abajo), un built-in SIEMPRE se
-           ofrece como "restaurable" — es un slot canónico y permanente
-           de la app, no algo que pueda dejar de existir. Por eso, tras un
-           "🗑 Borrar para siempre", la fila NUNCA desaparecía — parecía
-           que el botón no hacía nada (bug reportado por el usuario,
-           2026-08-10: "aunque los borro no se eliminan, se quedan
-           fijos"). Fix: la fila SÍ refleja el estado (vacío tras borrar,
-           sin el botón de borrar redundante) aunque el nombre se siga
-           listando — eso es la única confirmación visual posible dado
-           que "Restaurar" debe seguir disponible para siempre. */
-        var _hasData = false;
-        try { _hasData = !!localStorage.getItem(_key(id)); } catch(_){}
-        h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id))
-          + (_hasData ? '' : ' <span style="opacity:.55;font-size:.85em;">(vacío)</span>') + '</span>'
+        h += '<div class="tv-mg-row"><span class="tv-mg-nm">' + _tourFlagHtml(_tvFlag(id),'tv-flag-img') + ' ' + _tvEsc(_tvName(id)) + '</span>'
           + '<button class="tv-mg-btn tv-mg-add" data-act="restore" data-id="' + id + '">↩ Restaurar</button>'
-          + (_hasData ? '<button class="tv-mg-btn tv-mg-del" data-act="wipe" data-id="' + id + '">🗑 Borrar para siempre</button>' : '')
-          + '</div>';
+          + '<button class="tv-mg-btn tv-mg-del" data-act="wipe" data-id="' + id + '">🗑 Borrar para siempre</button></div>';
       });
     }
     var freeSlots = slots.filter(function(id){ return !visSet[id]; });

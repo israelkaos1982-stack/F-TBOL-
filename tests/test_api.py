@@ -1854,6 +1854,74 @@ class TestLigaExtAnyEndpoint:
         assert j["source"] == "main"
 
 
+class TestDeadMergedLeagueFiltering:
+    """Las 43 ligas menores ya fusionadas en liga-mixta-1..9 (Alemania,
+    Chipre, Estonia, Bielorrusia, Gales, Albania, ...) NUNCA deben volver
+    a aparecer en `/api/liga-ext` (índice) ni en `/api/liga-ext-bulk`
+    (restauración masiva) — aunque sus filas SIGAN en la base de datos
+    porque el admin nunca pulsó el botón de borrado permanente.
+
+    Bug (2026-08-10, screenshots usuario "📊 Espacio del navegador" con
+    `-backup`/`-snap-<ts>`/`-protected` de decenas de países fusionados):
+    la purga local (v1-v9) borraba `localStorage`, pero cualquier
+    bulk-restore posterior (se dispara solo, con solo abrir cualquier
+    liga real vacía en local) las traía de vuelta desde el servidor
+    porque ninguno de los 2 endpoints las filtraba."""
+
+    def test_bulk_no_incluye_liga_muerta(self, client):
+        c = client
+        c.post("/api/liga-ext/alemania", json={"data": {
+            "teams": [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}],
+            "results": [],
+        }})
+        r = c.get("/api/liga-ext-bulk")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert "alemania" not in j["leagues"]
+
+    def test_bulk_no_incluye_protected_de_liga_muerta(self, client):
+        c = client
+        c.post("/api/liga-ext-protected/albania", json={"data": {
+            "teams": [{"id": "1", "name": "X"}, {"id": "2", "name": "Y"}],
+            "results": [],
+        }})
+        r = c.get("/api/liga-ext-bulk")
+        j = r.get_json()
+        assert "albania" not in j["leagues"]
+
+    def test_bulk_sigue_incluyendo_liga_viva(self, client):
+        c = client
+        c.post("/api/liga-ext/italia", json={"data": {
+            "teams": [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}],
+            "results": [],
+        }})
+        r = c.get("/api/liga-ext-bulk")
+        j = r.get_json()
+        assert "italia" in j["leagues"]
+
+    def test_indice_no_incluye_liga_muerta(self, client):
+        c = client
+        c.post("/api/liga-ext/gales", json={"data": {
+            "teams": [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}],
+            "results": [],
+        }})
+        r = c.get("/api/liga-ext")
+        j = r.get_json()
+        slugs = [x["slug"] for x in j["leagues"]]
+        assert "gales" not in slugs
+
+    def test_indice_sigue_incluyendo_liga_viva(self, client):
+        c = client
+        c.post("/api/liga-ext/francia", json={"data": {
+            "teams": [{"id": "1", "name": "A"}, {"id": "2", "name": "B"}],
+            "results": [],
+        }})
+        r = c.get("/api/liga-ext")
+        j = r.get_json()
+        slugs = [x["slug"] for x in j["leagues"]]
+        assert "francia" in slugs
+
+
 class TestTeamIdentityProtectedFallback:
     """/api/team-shield, /api/team-alias y /api/team-squad también miran
     el snapshot `_protected` de cada liga cuando el `main` no trae el

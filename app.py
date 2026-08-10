@@ -3550,6 +3550,12 @@ def api_liga_ext_index():
         # exactamente `liga_ext_<slug>`.
         if not rest or rest.endswith("_protected"):
             continue
+        # 2026-08-10: las 43 ligas ya fusionadas en liga-mixta-1..9 nunca
+        # deben aparecer aquí — este índice alimenta el picker "AÑADIR
+        # POR LIGA" del editor de torneos; mostrarlas confundiría al
+        # admin con países que ya no existen como liga independiente.
+        if _is_dead_merged_league_slug(rest):
+            continue
         try:
             data = json.loads(row.valor_json or "{}")
         except Exception:
@@ -3650,6 +3656,8 @@ def api_liga_ext_bulk_get():
             continue
         rest = clave[len("liga_ext_"):]
         if not rest:
+            continue
+        if _is_dead_merged_league_slug(rest):
             continue
         try:
             data = json.loads(row.valor_json or "{}")
@@ -3861,6 +3869,37 @@ DEAD_MERGED_LEAGUE_SLUGS = [
     # liga-mixta-9
     "eslovaquia", "irlanda", "islandia",
 ]
+
+
+def _is_dead_merged_league_slug(rest):
+    """¿`rest` (la parte de la clave tras `liga_ext_`) pertenece a una de
+    las 43 ligas menores ya fusionadas en liga-mixta-1..9? Match exacto o
+    con sufijo `_algo` (cubre `_protected`/`_snap_<ts>`/`_backup`), mismo
+    criterio que ya usaba (duplicado inline) el purgado admin de abajo.
+
+    FIX 2026-08-10 (screenshots usuario, "📊 Espacio del navegador" con
+    decenas de KB de `-backup`/`-snap-<ts>`/`-protected` de países ya
+    fusionados — Alemania, Chipre, Estonia, Bielorrusia, Gales, etc.):
+    el comentario de arriba YA avisaba de este riesgo exacto ("un
+    dispositivo que purgó su copia local puede volver a adoptarlas del
+    servidor en el siguiente bulk-restore") pero NUNCA se implementó el
+    filtro — `/api/liga-ext-bulk` y `/api/liga-ext` seguían devolviendo
+    las 43 ligas muertas sin filtrar mientras el admin no pulsara
+    `/api/admin/purge-dead-leagues` a mano. Cualquier bulk-restore normal
+    (se dispara solo al abrir CUALQUIER liga real que esté vacía en
+    local, o con el botón "🔄 RECUPERAR TODAS LAS LIGAS") las traía de
+    vuelta a `localStorage` + IndexedDB, deshaciendo la purga local v9
+    silenciosamente. Filtrar aquí, en el ORIGEN, hace que esto ya no
+    dependa de que el admin recuerde pulsar el botón de borrado
+    permanente — las 43 ligas quedan invisibles para cualquier cliente
+    desde YA, aunque sus filas sigan físicamente en la base de datos
+    hasta que se borren de verdad."""
+    if not rest:
+        return False
+    for slug in DEAD_MERGED_LEAGUE_SLUGS:
+        if rest == slug or rest.startswith(slug + "_"):
+            return True
+    return False
 
 
 @app.route("/api/admin/purge-dead-leagues", methods=["POST"])

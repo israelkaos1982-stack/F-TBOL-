@@ -6292,6 +6292,14 @@
             if (window._lsSetSafe) window._lsSetSafe(LS_KEY, _lrPoll);
             else window._lsSetSafe(LS_KEY, _lrPoll);
           } catch (e) {}
+          /* Un `liga_results` recién llegado del servidor puede traer
+             partidos simulados/fusionados en OTRO dispositivo cuya
+             plantilla de Liga EA Sports no estaba disponible en ESE
+             momento — mismos placeholders "Jugador A/B" que si hubiera
+             pasado aquí. En cuanto este dispositivo tenga la plantilla
+             real, la reparación persistente los corrige y los vuelve a
+             subir. Ver `_ligaBackfillActasFromResults`. */
+          try { if (typeof window._ligaBackfillActasFromResults === 'function') window._ligaBackfillActasFromResults(); } catch (e) {}
         }
 
         /* Copa del Rey: mirror del estado (con los `events` de cada cruce)
@@ -6974,6 +6982,28 @@
   window.LIGA_SCHEDULE = SCHEDULE;
   try { window._ligaEaRefreshTeams(SCHEDULE); } catch(_){}
   hydrateLigaStateFromBackend();
+
+  /* Reintentos DIFERIDOS de la reparación persistente de actas (ver
+     `_ligaBackfillActasFromResults`, definida más abajo en este mismo
+     archivo). `applyEngineOverrides` (misc_body_1.html) solo reintenta
+     poblar la plantilla de Liga EA Sports a los 200 ms/1500 ms del
+     arranque y NUNCA MÁS por su cuenta — si la hidratación de
+     `ligaExt_liga-ea-sports` desde el servidor tarda más que eso (muy
+     posible con Railway en cold-start), un partido simulado/fusionado
+     en esa ventana se queda con placeholders sin que NADA vuelva a
+     intentar repararlo hasta que el usuario abra la pantalla de una
+     jornada. Estos reintentos autocorrigen en segundo plano aunque el
+     usuario no llegue a visitarla — barato (early-exit si no hay nada
+     que reparar), y usa `window._ligaBackfillActasFromResults` con
+     guarda `typeof` porque esta función se define más abajo en el
+     mismo script (ya estará lista para cuando estos timeouts disparen,
+     el script entero corre síncrono antes de que corra ningún
+     setTimeout). */
+  [3000, 8000, 20000].forEach(function(_delay){
+    setTimeout(function(){
+      try { if (typeof window._ligaBackfillActasFromResults === 'function') window._ligaBackfillActasFromResults(); } catch(_){}
+    }, _delay);
+  });
 
   /* ── PERSISTENCIA ────────────────────────────────── */
   function loadResults() {
@@ -7768,6 +7798,13 @@
 
   /* ── ACTA MODAL: ver eventos de un partido IA completado ──────────── */
   window.showMatchActaModal = function(j, home, away) {
+    /* Misma reparación persistente que `openIAJornada` (ver
+       `_ligaBackfillActasFromResults`) — este visor pinta `ev.player`/
+       `res.mvp` CRUDOS, sin el repintado en vivo de `_iaEventsHtml`, así
+       que si no se repara y persiste AQUÍ TAMBIÉN un "Jugador A" se
+       queda para siempre en este modal aunque la plantilla real ya
+       exista. */
+    try { if (typeof window._ligaBackfillActasFromResults === 'function') window._ligaBackfillActasFromResults(); } catch(_){}
     var results = loadResults();
     var res = results[rKey(j, home, away)];
     if (!res || !res.events) return;
@@ -21054,6 +21091,16 @@
     if (!titleEl || !bodyEl) return;
     titleEl.textContent = 'Jornada ' + j + ' de Liga EA Sports';
 
+    /* Reparación persistente ANTES de leer los resultados: si esta
+       jornada quedó grabada con placeholders "Jugador A/B" (roster de
+       Liga EA Sports aún hidratando cuando se simuló, o fusionada desde
+       otro dispositivo en las mismas condiciones), y la plantilla real
+       YA está disponible ahora, la corrige y la persiste de una vez —
+       no vuelve a depender de que la reparación en vivo de
+       `_iaEventsHtml` acierte en CADA render futuro. Ver
+       `_ligaBackfillActasFromResults` más arriba. */
+    try { if (typeof window._ligaBackfillActasFromResults === 'function') window._ligaBackfillActasFromResults(); } catch(_){}
+
     /* Build matches/pending for this jornada */
     var results = loadResults();
     var allMatches = [], allPending = [];
@@ -21261,6 +21308,98 @@
      así que los eventos 'gol' generados por genMatchEvents (que NO
      traen `ico`, ver línea ~16173) salían SIN el ⚽ en el acta. */
   try { window._iaEventsHtml = _iaEventsHtml; } catch(_){}
+
+  /* ── REPARACIÓN PERSISTENTE de actas de Liga EA Sports con nombres
+     placeholder ("Jugador A"/"Portero B"/...) ──────────────────────────
+     Bug 2026-08-10 (usuario, "en la primera jornada los eventos salen
+     bien, en la segunda ya sale Jugador A/B/C aunque esos jugadores
+     están en las plantillas"): `_iaEventsHtml` (arriba) YA repara estos
+     nombres al vuelo usando `sqFromRegistry`, pero es SOLO DISPLAY — si
+     el render que la invoca ocurre en un instante en que la plantilla
+     de Liga EA Sports (`ligaExt_liga-ea-sports`) todavía no ha llegado a
+     este dispositivo (hidratación del servidor en curso — Railway en
+     cold-start puede tardar varios segundos, muy por encima de los 2
+     reintentos de `applyEngineOverrides` en el arranque, 200 ms/1500 ms,
+     que nunca se repiten después salvo un guardado del editor), la
+     reparación falla EN ESE RENDER CONCRETO y el placeholder queda
+     grabado en pantalla — la próxima vez que se navegue a ESA jornada
+     puede volver a fallar si nada dispara un rebuild. Mismo problema si
+     el resultado llegó fusionado desde OTRO dispositivo (poll de
+     `/api/state` cada 5 s) que sí generó el partido con placeholder por
+     el mismo motivo.
+
+     Esta función hace la reparación PERMANENTE: en cuanto la plantilla
+     real esté disponible (aquí o en cualquier dispositivo que abra Liga
+     EA Sports después), sustituye los nombres placeholder DENTRO de
+     `results[key].events`/`.mvp` y persiste con `saveResults` — así deja
+     de depender de que la reparación en vivo tenga éxito en TODOS los
+     renders futuros. Es aditiva y NUNCA pisa un nombre ya real (mismo
+     regex que `_isPlaceholderName` de `_iaEventsHtml`, para que ambas
+     coincidan siempre en qué es o no un placeholder). Barata cuando no
+     hay nada que reparar: solo un test de regex por evento. */
+  window._ligaBackfillActasFromResults = function(){
+    try {
+      if (typeof window.sqFromRegistry !== 'function') return 0;
+      var results = (typeof loadResults === 'function') ? loadResults()
+        : (typeof window.loadResults === 'function' ? window.loadResults() : null);
+      if (!results || typeof results !== 'object') return 0;
+      function _isPh(raw){
+        var s = String(raw || '').trim();
+        if (!s || s === '?') return true;
+        return /^(?:\d+\.?\s*)?(?:jugador|portero)\s*(?:[a-k]|ia|\d+)?$/i.test(s);
+      }
+      var _sqCache = {};
+      function _sqFor(team){
+        if (!team) return [];
+        if (Object.prototype.hasOwnProperty.call(_sqCache, team)) return _sqCache[team];
+        var sq = [];
+        try { sq = window.sqFromRegistry(team) || []; } catch(_){}
+        _sqCache[team] = sq;
+        return sq;
+      }
+      function _realFor(team, preferGk){
+        var sq = _sqFor(team);
+        if (!sq.length) return null;
+        var out = preferGk ? sq.filter(function(p){ return p && p[2] === 'P'; }) : [];
+        if (!out.length) out = sq.filter(function(p){ return p && p[2] && p[2] !== 'P'; });
+        if (!out.length) out = sq;
+        if (!out.length) return null;
+        var p = out[Math.floor(Math.random() * out.length)];
+        return p && p[1] ? String(p[1]) : null;
+      }
+      var fixedMatches = 0;
+      Object.keys(results).forEach(function(key){
+        var res = results[key];
+        if (!res || !Array.isArray(res.events) || !res.events.length) return;
+        /* rKey(j,home,away) = 'j|home|away' — el nombre de equipo de
+           cada lado sale de la propia clave, no del evento (los eventos
+           solo llevan 'a'/'b'). */
+        var parts = String(key).split('|');
+        var home = parts[1], away = parts[2];
+        if (!home || !away) return;
+        var rowDirty = false;
+        res.events.forEach(function(ev){
+          if (!ev || ev.player == null) return;
+          if (!_isPh(ev.player)) return;
+          var real = _realFor(ev.team === 'a' ? home : away, ev.type === 'imbat');
+          if (real) { ev.player = real; rowDirty = true; }
+        });
+        if (res.mvp && _isPh(res.mvp)) {
+          var mvpSide = (res.mvpTeam && res.mvpTeam === away) ? 'b' : 'a';
+          var mvpReal = _realFor(mvpSide === 'a' ? home : away, false);
+          if (mvpReal) { res.mvp = mvpReal; rowDirty = true; }
+        }
+        if (rowDirty) fixedMatches++;
+      });
+      if (fixedMatches > 0) {
+        if (typeof saveResults === 'function') saveResults(results);
+        else if (typeof window.saveResults === 'function') window.saveResults(results);
+        try { if (typeof window.rebuildLigaPlayerStatsFixed === 'function') window.rebuildLigaPlayerStatsFixed(); } catch(_){}
+      }
+      return fixedMatches;
+    } catch(_) { return 0; }
+  };
+
   function _iaCompletedCard(m, cid, evHtml) {
     var cHomeHuman = esHumano(m.home), cAwayHuman = esHumano(m.away);
     var tcH2 = (window.getTeamColors && window.getTeamColors(m.home)) || {bg:'#1a2a4a'};

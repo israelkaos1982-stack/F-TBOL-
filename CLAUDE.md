@@ -1,5 +1,195 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## "Plantilla de selecciones" salía VACÍA con ~100 selecciones creadas — `_load()` solo leía disco, nunca una copia en memoria (obligatorio, 2026-08-10)
+
+**Bug (usuario 2026-08-10)**: con más de 100 selecciones creadas y con
+plantilla completa, la pantalla **"🌐 Plantilla de selecciones"**
+(editor admin, `window._selSquadOpenEditor`) mostraba **"Sin
+selecciones todavía. Pulsa «➕ Añadir» o «📋 Lista»."** — como si todo
+se hubiera perdido. Pero al jugar un partido y pulsar "+ AÑADIR
+EVENTO", el picker de jugadores **SÍ** mostraba correctamente la
+plantilla de cada selección.
+
+### Causa raíz
+
+`_load()` (IIFE `KEY='selecciones_squad_v1'`, `misc_body_1.html`) leía
+**exclusivamente** `localStorage.getItem(KEY)`. Con ~100 selecciones y
+plantillas completas, ese JSON pesa varios cientos de KB —
+tranquilamente por encima del umbral `LARGE_VALUE` (64 KB) de
+`window._lsSetSafe`: si la cuota del navegador ya está agotada
+(`window._lsQuotaExhausted`, un estado crónico y muy documentado en
+este proyecto para este usuario concreto — decenas de ligas +
+torneos + escudos llenan los ~5 MB de localStorage), `_lsSetSafe`
+**descarta el `setItem` al instante, sin reintentar**, para cualquier
+valor grande.
+
+`_boot()` (la hidratación de arranque) hace un GET al servidor,
+**FUSIONA** con lo local (regla ya obligatoria: "nunca pierde una
+selección local") y escribe el resultado fusionado — pero si ESA
+escritura se descarta en silencio por el motivo de arriba,
+`_hydrate()`/`_renderBody()` (invocadas justo después, en la MISMA
+función) vuelven a leer el disco **viejo/vacío** vía `_load()`, como
+si la fusión nunca hubiera ocurrido — la copia correcta se calculó en
+memoria (`merged`) pero nunca llegó a ningún sitio que el render
+pudiera ver.
+
+El picker de eventos del partido **sí** encontraba los jugadores
+porque `sqFromRegistry` (`static/js/index.bundle.js`) tiene sus
+PROPIOS fallbacks — escaneo de `window.LIGA_CACHE` y, en varios
+flujos, búsqueda en servidor — que no dependen únicamente de este
+`localStorage.getItem`. La discrepancia entre "el editor está vacío"
+y "el partido encuentra los jugadores" es la firma de este patrón:
+**dos lectores del MISMO dato con robustez muy distinta**.
+
+### Fix — `window._SEL_SQUAD_MEM`, espejo en memoria (mismo principio que `window.LIGA_CACHE`)
+
+- `_load()` prefiere `window._SEL_SQUAD_MEM` en cuanto existe en la
+  sesión (nunca antes de la primera escritura, momento en que sigue
+  cayendo al disco tal cual).
+- Los 3 puntos que escriben datos "de verdad" —`_save(d)` (guardado
+  explícito del admin), `_dedupeStored` (auto-reparación silenciosa de
+  nombres/continentes) y la fusión de `_boot()`— sellan
+  `window._SEL_SQUAD_MEM` **SÍNCRONAMENTE, ANTES** de intentar
+  `_lsSetSafe`. Así la copia en memoria queda correcta pase lo que
+  pase con el `setItem` a disco.
+- Al preferir SIEMPRE la copia en memoria una vez existe (no solo
+  cuando es "más rica" que el disco), un borrado deliberado del
+  usuario también se refleja correctamente — no solo el caso de
+  recuperación tras un `setItem` fallido.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_load()` (o cualquier lector nuevo de
+   `selecciones_squad_v1`) dependa ÚNICAMENTE de
+   `localStorage.getItem`. Con datasets grandes (muchas selecciones,
+   plantillas completas), un guardado puede fallar en silencio por
+   cuota — la fuente de verdad DURANTE la sesión es
+   `window._SEL_SQUAD_MEM`, actualizada síncronamente en cada
+   escritor.
+2. **PROHIBIDO** que un escritor nuevo de esta clave (`_save`,
+   `_dedupeStored`, la fusión de `_boot`, o cualquier otro futuro)
+   omita sellar `window._SEL_SQUAD_MEM` ANTES de intentar
+   `_lsSetSafe`/`fetch`. Si el intento de persistir a disco/servidor
+   falla, la copia en memoria es la única que sobrevive para el resto
+   de la sesión.
+3. **PROHIBIDO** volver a un criterio de "usar memoria SOLO si tiene
+   más elementos que el disco": eso rompe el caso de un borrado
+   deliberado del usuario (memoria con MENOS elementos que un disco
+   desactualizado seguiría perdiendo). El criterio es "usar memoria
+   siempre que exista en la sesión", igual que `window.LIGA_CACHE`.
+4. Si aparece el mismo síntoma ("una pantalla de listado sale vacía
+   pero el juego SÍ encuentra el dato en otro flujo") en cualquier
+   OTRA clave de `localStorage` con datasets potencialmente grandes,
+   sospechar primero de este patrón: el escritor calcula bien el dato
+   pero el `setItem` se descarta en silencio por cuota, y el lector de
+   esa pantalla no tiene ningún respaldo en memoria — aplicar el mismo
+   patrón `window.LIGA_CACHE`/`window._SEL_SQUAD_MEM` (copia en
+   memoria sellada en cada escritor, preferida por el lector).
+
+## El acta de Liga EA Sports con "Jugador A/B/Portero A" placeholder se REPARA Y SE PERSISTE, no solo se repinta al vuelo (obligatorio, 2026-08-10)
+
+**Bug (usuario 2026-08-10, «Liga EA Sports»)**: en la primera jornada
+mostrada, el acta de cada partido IA-vs-IA salía con los nombres reales
+de los jugadores de las plantillas (Joselillo Gaitán, A. Forés, Javi
+Muñoz, Isco…). Al navegar a otra jornada (con ALGUNOS de los MISMOS
+equipos — Celta, Real Sociedad, Getafe, Mallorca, Osasuna), el acta
+mostraba "Jugador A", "Jugador B", "Portero A" — pese a que el admin
+confirmó que esas plantillas SÍ tienen jugadores reales configurados.
+
+### Causa raíz
+
+`genMatchEventsEnhanced` (`part2/misc_body_2.html`), al simular un
+partido IA-vs-IA (`simularJornadaIA`/`iaSimLive`), resuelve la
+plantilla de cada equipo con `window.sqFromRegistry(team)`. Si en el
+INSTANTE EXACTO de esa simulación la plantilla de Liga EA Sports
+(`ligaExt_liga-ea-sports`, fuente de `window.SQUAD_REGISTRY` vía el
+"puente" `ligaEaBuildEngineOverrides`/`applyEngineOverrides`) todavía
+no estaba disponible en este dispositivo —hidratación del servidor en
+curso, típicamente un cold-start de Railway, que puede tardar bastante
+más que los 2 únicos reintentos automáticos de `applyEngineOverrides`
+en el arranque (200 ms y 1500 ms — **nunca se repiten después** salvo
+que el admin guarde algo en el editor)—, `sqFromRegistry` devuelve
+`[]` y `genMatchEventsEnhanced` cae al roster de emergencia
+`[['','Jugador A','F',76]]`/`[['1','Portero A','P',76]]`. Ese
+placeholder queda **grabado para siempre** en `results[key].events`
+(`ef_liga38_v4`) porque `simularJornadaIA` nunca re-simula un partido
+ya resuelto (`if (results[key]) return;`). Lo mismo puede ocurrir si el
+partido llegó **fusionado desde OTRO dispositivo** (poll de
+`/api/state` cada 5 s) que tuvo el mismo problema de hidratación.
+
+`_iaEventsHtml` (la función que pinta el acta en la pantalla "Jornada N
+de Liga EA Sports") YA reparaba estos nombres **al vuelo, solo en
+pantalla**, re-resolviendo `sqFromRegistry` en cada render — pero
+`showMatchActaModal` (el OTRO visor de acta, el que se abre al pulsar
+el marcador desde la clasificación/calendario de Liga) pintaba
+`ev.player`/`res.mvp` **crudos, sin ninguna reparación**. Y ninguno de
+los dos **persistía** la corrección: si el render en el que
+`_iaEventsHtml` reparaba con éxito no volvía a dispararse (el usuario
+no re-navega a esa jornada, o la vuelve a ver en un instante en que
+`sqFromRegistry` fallara por cualquier motivo transitorio), el
+placeholder seguía viéndose indefinidamente pese a que la plantilla
+real llevara rato disponible.
+
+### Fix — `window._ligaBackfillActasFromResults()`, reparación PERMANENTE
+
+Nueva función (`part2/misc_body_2.html`, junto a `_iaEventsHtml`):
+recorre TODO `loadResults()` (`ef_liga38_v4`) y, para cada evento/MVP
+cuyo nombre coincida con el mismo regex de placeholder que ya usaba
+`_iaEventsHtml` (`^(?:\d+\.?\s*)?(?:jugador|portero)\s*(?:[a-k]|ia|\d+)?$`),
+intenta resolver un nombre real vía `sqFromRegistry` y, si lo
+encuentra, **sustituye el valor DENTRO del propio `results`** y
+persiste con `saveResults` (local + POST al servidor, curando también
+a otros dispositivos). Nunca pisa un nombre ya real; barata cuando no
+hay nada que reparar (un test de regex por evento). Se dispara en:
+
+- `openIAJornada(j)` — antes de leer los resultados de esa jornada.
+- `showMatchActaModal(j,home,away)` — antes de pintar (que además
+  ganó la misma cobertura que `_iaEventsHtml`, no tenía ninguna).
+- El `finally` de `applyEngineOverrides` (`misc_body_1.html`) — el
+  instante exacto en que la plantilla de Liga EA Sports puede ACABAR
+  de estar disponible. **Llamada ANTES de liberar el guard
+  `_engineOverridesRunning`** (nunca después): el backfill invoca
+  `sqFromRegistry`, que si no encuentra un equipo intenta re-entrar en
+  `applyEngineOverrides()` como lazy fallback — con el guard todavía
+  activo esa re-entrada es un no-op seguro (mismo patrón que protege
+  `sqFromRegistryFull`, sección "`applyEngineOverrides` ⇄
+  `sqFromRegistryFull`" más abajo); liberar el guard ANTES de llamar al
+  backfill reabriría el mismo bucle de recursión que ya colgó la web
+  una vez.
+- El poll de `hydrateLigaStateFromBackend` cuando llega `liga_results`
+  nuevo del servidor (cura lo fusionado desde otro dispositivo).
+- 3 reintentos diferidos al arrancar (3 s / 8 s / 20 s) — cubren una
+  hidratación lenta aunque el usuario no llegue a abrir ninguna
+  pantalla de Liga todavía.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un visor de acta nuevo (o ya existente) de Liga EA
+   Sports pinte `ev.player`/`res.mvp` sin pasar por
+   `_iaEventsHtml` (reparación en vivo) O sin haber llamado antes a
+   `window._ligaBackfillActasFromResults()` (reparación persistente).
+   `showMatchActaModal` se quedó fuera de la cobertura de
+   `_iaEventsHtml` durante mucho tiempo — auditar con `grep` cualquier
+   sitio que lea `res.events`/`ev.player` de `ef_liga38_v4` directo.
+2. **PROHIBIDO** asumir que una reparación SOLO EN PANTALLA (sin
+   persistir) es suficiente para este tipo de dato. Si el render que la
+   aplica con éxito no vuelve a ejecutarse, el placeholder se queda
+   visible indefinidamente aunque la plantilla real lleve minutos
+   disponible — la reparación tiene que escribir de vuelta en
+   `results`/`ef_liga38_v4` y persistir con `saveResults`.
+3. **PROHIBIDO** llamar a `window._ligaBackfillActasFromResults()`
+   DESPUÉS de liberar `window._engineOverridesRunning` dentro de
+   `applyEngineOverrides`. Debe ir SIEMPRE antes del
+   `window._engineOverridesRunning = false;` final, para que cualquier
+   re-entrada que dispare (vía `sqFromRegistry`) sea un no-op protegido
+   por el guard.
+4. Este backfill es específico de Liga EA Sports (`ef_liga38_v4`,
+   `rKey(j,home,away)`). Otras competiciones con el MISMO síntoma
+   (Superliga, Copa del Rey, torneos…) tienen sus propios mecanismos
+   —`_tourBackfillActasFromResults` para torneos— o pueden necesitar
+   uno equivalente si se detecta el mismo patrón: reparación en vivo
+   sin persistencia.
+
 ## La plantilla de CLUB in-line NUNCA guardaba desde móvil — flags/Guardar dependían SOLO del `click` sintético dentro de filas/pantalla con scroll (obligatorio, 2026-08-09)
 
 **Bug (usuario 2026-08-09, «Atlético Madrid» — Julián Álvarez / Sørloth,

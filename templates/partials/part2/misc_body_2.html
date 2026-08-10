@@ -13503,8 +13503,16 @@
     if (_gm.isHvH) {
       var htPoll = setInterval(function() {
         try {
-          if (localStorage.getItem('gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
+          var _htKey = 'gm_ht_' + _gm.j + '_' + _gm.home + '_' + _gm.away;
+          if (localStorage.getItem(_htKey) === '1') {
             clearInterval(htPoll);
+            /* Borrar la señal en cuanto se consume (2026-08-10, limpieza
+               de peso): es una bandera de un solo uso — una vez este
+               sondeo la detecta, nadie más la va a leer nunca (el
+               siguiente partido usa una clave con otra jornada/rival).
+               Sin este borrado se acumula 1 clave huérfana por cada
+               partido HvH jugado, para siempre. */
+            try { localStorage.removeItem(_htKey); } catch(_){}
             var cb = document.getElementById('gm-ht-continue-btn');
             if (cb) { cb.style.display = ''; if (typeof _gmGlowContinueBtn === 'function') _gmGlowContinueBtn(cb); }
           }
@@ -13676,8 +13684,12 @@
       if (_gm.isHvH && !_alreadyShared) {
         var finPoll = setInterval(function() {
           try {
-            if (localStorage.getItem('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away) === '1') {
+            var _finKey = 'gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away;
+            if (localStorage.getItem(_finKey) === '1') {
               clearInterval(finPoll);
+              /* Borrar la señal en cuanto se consume — misma lógica que
+                 gm_ht_ arriba: es de un solo uso, nadie vuelve a leerla. */
+              try { localStorage.removeItem(_finKey); } catch(_){}
               var eb = document.getElementById('gm-fin-exit-btn');
               if (eb) eb.style.display = '';
             }
@@ -13782,6 +13794,35 @@
       try { window._lsSetSafe('gm_fin_' + _gm.j + '_' + _gm.home + '_' + _gm.away, '1'); } catch(e) {}
     }
   };
+
+  /* Barrido de las señales `gm_ht_*`/`gm_fin_*` ya acumuladas ANTES de
+     este fix (2026-08-10, "qué más podemos limpiar para reducir la
+     web" — screenshot de "📊 Espacio del navegador"). Cada partido HvH
+     jugado ANTES de hoy dejó hasta 2 claves huérfanas (descanso +
+     final) que ningún código borraba nunca — el fix de arriba evita que
+     se sigan acumulando, pero no limpia las que YA existen en el
+     dispositivo del usuario.
+
+     Seguro ejecutarlo SIEMPRE al arrancar (no hace falta gate de
+     versión, a diferencia de las purgas de ligas fusionadas): en el
+     instante en que este script se evalúa, NINGÚN sondeo (`htPoll`/
+     `finPoll`) puede estar todavía activo — esos sondeos solo se crean
+     DESPUÉS de que el usuario abra la pantalla de descanso/final de UN
+     partido concreto, lo cual no ha podido ocurrir todavía en este
+     arranque. Coste de la pasada: barata (un solo recorrido de
+     `localStorage`, comparación de prefijo), y tras la primera vez que
+     corra en cada dispositivo no debería encontrar nada (el fix de
+     arriba ya limpia sobre la marcha). */
+  try {
+    var _gmSignalsToRemove = [];
+    for (var _gsi = 0; _gsi < localStorage.length; _gsi++) {
+      var _gsk = localStorage.key(_gsi);
+      if (_gsk && (_gsk.indexOf('gm_ht_') === 0 || _gsk.indexOf('gm_fin_') === 0)) {
+        _gmSignalsToRemove.push(_gsk);
+      }
+    }
+    _gmSignalsToRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+  } catch(_){}
 
   /* La puerta OBLIGATORIA de compartir por WhatsApp tras elegir MVP
      (petición usuario 2026-05-26) tenía aquí su propia implementación

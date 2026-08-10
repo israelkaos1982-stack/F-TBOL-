@@ -38250,10 +38250,28 @@ window._hdrCleanCache = function(){
     if(frozen) return frozen.slice();
     /* Sin `_prependManualEa`: España tiene cupo 0 en Wild Card
        (`LEAGUE_DEFAULT_ZONES['liga-ea-sports'].wildcard` = 0), así que
-       el cómputo automático ya es el 100% del pool oficial de 72. Ver
-       nota extendida en `computeOpenQualifierTeams` (mismo bug). Los
-       EXTRAS MANUALES GENÉRICOS (`eur_manual_extra_v1`) sí se añaden —
-       ver comentario en `computeOpenQualifierTeams`. */
+       el cómputo automático ya cubre el 100% del pool de coeficientes
+       por liga (que sigue sumando ~72, del formato ANTERIOR a
+       2026-07-31 — la tabla por liga nunca se recortó al rediseñar
+       Wild Card a 24 equipos / 12 eliminatorias). Ver nota extendida en
+       `computeOpenQualifierTeams` (mismo bug de fondo). Los EXTRAS
+       MANUALES GENÉRICOS (`eur_manual_extra_v1`) sí se añaden — ver
+       comentario en `computeOpenQualifierTeams`.
+
+       PROHIBIDO capar este array a 24 aquí (se evaluó y se descartó,
+       2026-08-10): la pantalla REAL de Wild Card
+       (`part2/misc_body_2.html`, `buildPool`/`_normalizePool`) reordena
+       el pool ENTERO por poder DESCENDENTE antes de recortarlo a
+       `POOL_TARGET`=24 — esta función devuelve los candidatos en orden
+       "por liga alfabética" (`_computeQualifiedFromLeagues`), NO por
+       poder. Truncar aquí a 24 seleccionaría equipos de las primeras
+       ligas por orden alfabético en vez de los 24 de mayor poder,
+       cambiando qué equipos juegan de verdad la Wild Card — un bug
+       mucho más grave que el puramente visual que se intentaba
+       arreglar. El objetivo (24) en el overlay "Equipos por
+       competición" se interpreta como "mínimo de candidatos reales
+       para un cuadro sin ningún TBD" — tener MÁS de 24 es una señal
+       BUENA (sobran candidatos, cero placeholders), no un error. */
     return _appendManualExtra(_computeQualifiedFromLeagues('wildcard'), 'wildcard');
   }
   window.computeUclClassified = computeUclClassified;
@@ -44415,13 +44433,28 @@ window._hdrCleanCache = function(){
      sobrasen equipos!) cuando en realidad estaba a 2 de completar los
      40 reales — confundía al admin haciéndole creer que algo estaba
      "sobrecargado" cuando esas 3 zonas eran las que MEJOR estaban. */
-  /* 2026-07-31 (nuevo formato Wild Card/Open Qualifier/Previa): uclPrev
-     ahora es el total de directos-vía-liga a la Previa (24, antes de
-     sumar los 12 del Open Qualifier); uclQual es el total DIRECTO del
-     Open Qualifier (28, antes de sumar los 12 ganadores de la Wild
-     Card); wildcard es el pool de la Wild Card (24). ucl/uel/uecl se
-     mantienen en 40 — el reparto interno cambia pero el total no. */
-  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:24, uel:40, uecl:40, uclQual:28, wildcard:24, recopa:64, inter:8 };
+  /* 2026-07-31 (nuevo formato Wild Card/Open Qualifier/Previa): wildcard
+     es el pool de la Wild Card (24 — `computeWildCardClassified` lo
+     capa explícitamente a este número, igual que hace la pantalla real
+     de Wild Card con `POOL_TARGET`). ucl/uel/uecl se mantienen en 40 —
+     el reparto interno cambia pero el total no. uclPrev se deja en 24
+     (target del direct-only del nuevo formato) — el compute real de
+     esa zona (`computeUclPrevTeams`, unión direct+OQ) todavía no está
+     capado a un número fijo en este redesign, así que el objetivo aquí
+     es orientativo, no un tope estricto como uclQual/wildcard.
+
+     uclQual — bug 2026-08-10 (foto usuario "Open Qualifier 37/28",
+     superando el objetivo en VERDE): `computeOpenQualifierTeams()`
+     compone 28 plazas directas + hasta 12 ganadores de la Wild Card, y
+     el propio código lo capa explícitamente a **40**
+     (`if(arr.length > 40) arr = arr.slice(0, 40);`, unas líneas más
+     abajo en este mismo archivo) — 28 es solo la porción DIRECTA, no el
+     objetivo final. El overlay comparaba el conteo TOTAL (directos +
+     ganadores WC) contra 28, así que en cuanto la Wild Card aportaba
+     algún ganador el número "se pasaba" del objetivo sin que nada
+     estuviera mal — mismo patrón ya documentado arriba para
+     ucl/uel/uecl (28/18/12 → 40/40/40, 2026-07-03). */
+  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:24, uel:40, uecl:40, uclQual:40, wildcard:24, recopa:64, inter:8 };
   /* Resuelve la "liga" de un nombre de equipo del pool de Recopa/
      Intercontinental para poder agruparlo en el informe igual que los
      equipos de las 6 zonas originales (que ya vienen con `.league`).
@@ -44508,6 +44541,17 @@ window._hdrCleanCache = function(){
   }
   var _eurManualHydrating = false;
   var _eurManualLastHydrateAt = 0;
+  /* Nº real de ligas pendientes de hidratar, calculado JUSTO ANTES de
+     arrancar (bug 2026-08-10, foto usuario "pone cargando lista de más
+     de 50 ligas, eso está mal son apenas 23 ligas"): el mensaje de
+     "Cargando…" llevaba un "~50 ligas" HARDCODED sin relación con la
+     partida real del usuario (que puede tener muchas menos ligas con
+     datos reales) — asustaba/confundía sin aportar ninguna estimación
+     útil. `_eurMissingLeaguesList()` (ya existente, usada más abajo
+     para el aviso "LIGAS SIN DATOS") es una cuenta barata y honesta de
+     cuántas ligas canónicas siguen sin plantilla en ESTE dispositivo —
+     se reutiliza aquí como estimación del trabajo pendiente. */
+  var _eurManualHydratePendingCount = 0;
   /* Dispara `_eurHydrateMissingLeagues` (trae del servidor las ligas que
      falten EN ESTE DISPOSITIVO) y re-renderiza el overlay al terminar.
      Petición usuario 2026-07-03 (fotos "no me cuadra nada", pool 9/72
@@ -44518,6 +44562,7 @@ window._hdrCleanCache = function(){
      de esos 2 botones. */
   function _eurManualTriggerHydrate(){
     if(_eurManualHydrating) return;
+    try { _eurManualHydratePendingCount = _eurMissingLeaguesList().length; } catch(_){ _eurManualHydratePendingCount = 0; }
     _eurManualHydrating = true;
     _eurManualOverlayRender();
     try {
@@ -45096,7 +45141,11 @@ window._hdrCleanCache = function(){
     }).join('');
     var statusHtml;
     if(_eurManualHydrating){
-      statusHtml = '⏳ Cargando ligas del servidor (puede tardar hasta 1-2 min con ~50 ligas)…';
+      /* Nº real de ligas pendientes (nunca "~50" fijo) — ver
+         `_eurManualHydratePendingCount`, bug 2026-08-10. */
+      statusHtml = _eurManualHydratePendingCount > 0
+        ? ('⏳ Cargando ' + _eurManualHydratePendingCount + ' liga(s) sin datos en este dispositivo (puede tardar unos segundos)…')
+        : '⏳ Comprobando clasificaciones/escudos con el servidor (puede tardar unos segundos)…';
     } else if(_eurManualLastHydrateAt){
       statusHtml = '✅ Actualizado desde el servidor — ' + new Date(_eurManualLastHydrateAt).toLocaleTimeString();
     } else {
@@ -45117,6 +45166,17 @@ window._hdrCleanCache = function(){
       +     '<button id="eur-manual-refresh" '+(_eurManualHydrating?'disabled':'')+' style="background:linear-gradient(135deg,#0e2e4a,#1a5a7a);border:1px solid #3ca0cc;color:#bfe8ff;border-radius:6px;padding:6px 12px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;cursor:pointer;white-space:nowrap;'+(_eurManualHydrating?'opacity:.5;':'')+'">🔄 Cargar del servidor</button>'
       +   '</div>'
       +   '<button id="eur-manual-send-all" style="width:100%;margin-bottom:14px;background:linear-gradient(135deg,#1a3a14,#2a6a24);border:1px solid #3cc878;color:#d8ffd8;border-radius:8px;padding:10px 14px;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer;font-weight:700;">📤 ENVIAR TODOS LOS EQUIPOS A SU COMPETICIÓN</button>'
+      /* Aclaración (bug 2026-08-10, "no sé por qué vienen clubes ya en
+         competiciones si no le he dado a enviar"): una zona en 🔓 Auto
+         SIEMPRE muestra una vista EN VIVO calculada desde las ligas ya
+         terminadas — no espera a que pulses ENVIAR. ENVIAR solo
+         CONGELA ese número para que deje de moverse cuando re-simules
+         ligas. Una zona en 🔒 Manual muestra SOLO lo que hayas añadido
+         a mano. Sin esta nota el comportamiento (intencional, documentado
+         en CLAUDE.md) parece un error. */
+      +   '<div style="margin:0 0 12px;font-family:Rajdhani,sans-serif;font-size:11px;line-height:1.5;color:rgba(255,255,255,.55);">'
+      +     'ℹ️ Una zona en <b style="color:rgba(255,255,255,.8);">🔓 Auto</b> muestra siempre una vista EN VIVO (ligas ya terminadas) aunque no hayas pulsado ENVIAR — ENVIAR solo la congela para que deje de moverse. Una zona en <b style="color:rgba(255,255,255,.8);">🔒 Manual</b> muestra SOLO lo que hayas añadido a mano.'
+      +   '</div>'
       +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;">' + countsHtml + '</div>'
       +   '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">' + candidatesHtml + '</div>'
       +   _eurNameSearchSectionHtml()
@@ -45387,7 +45447,23 @@ window._hdrCleanCache = function(){
     }
     return 0;
   }
+  /* Bug 2026-08-10 (foto usuario "pone cargando lista de más de 50
+     ligas, eso está mal son apenas 23 ligas"): esta función recorría
+     TODOS los slugs de `LEAGUE_DEFAULT_ZONES` (~54 ligas canónicas) y
+     lanzaba un fetch con reintentos por cada una que no tuviera datos
+     locales — incluidas las ligas que este usuario en concreto NUNCA
+     ha usado (ninguna partida real las toca), cada una pagando el
+     coste completo de red antes de descubrir que el servidor tampoco
+     tiene nada. `_eurEnsureLeagueIndex` (ya usado por el picker "AÑADIR
+     POR LIGA" con el mismo razonamiento) trae en UNA sola petición qué
+     ligas SÍ tienen datos reales en el servidor — se reutiliza aquí
+     para saltar por completo el fetch de las que el índice confirma
+     vacías, recortando la duración real del proceso al tamaño de la
+     partida del usuario en vez de al tamaño del catálogo completo. */
   function _eurHydrateMissingLeagues(done){
+    _eurEnsureLeagueIndex(function(){ _eurHydrateMissingLeaguesRun(done); });
+  }
+  function _eurHydrateMissingLeaguesRun(done){
     var slugs;
     try { slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {}); }
     catch(_){ slugs = []; }
@@ -45410,6 +45486,13 @@ window._hdrCleanCache = function(){
           localRecovered++;
           try { d = JSON.parse(localStorage.getItem('ligaExt_' + slug) || 'null'); } catch(_){ d = null; }
         } else {
+          /* El índice YA confirma que NINGÚN dispositivo tiene datos
+             para esta liga — pedirla al servidor solo repetiría el
+             mismo "sin datos" que ya sabemos, gastando una petición
+             completa (con reintentos) por nada. Si el índice no llegó
+             a cargar (`_eurLeagueIndexSlugs` sigue null), no se salta
+             nada — se intenta igual, como antes. */
+          if(_eurLeagueIndexSlugs && !_eurLeagueIndexSlugs[slug]) return false;
           return true;                              // sin equipos → al server (plantilla)
         }
       }

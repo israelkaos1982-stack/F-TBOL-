@@ -7701,9 +7701,82 @@ caché que tenga, a descargar el bundle actual en su próxima carga.
 3. Todo asset NUEVO que se añada al array `PRECACHE` de `sw.js` hereda
    esta regla: su URL debe llevar `?v=` y esa versión debe bumpearse en
    ambos sitios cada vez que su contenido cambie.
-4. Los partials `misc_body_1.html`/`misc_body_2.html` (inline en el HTML
-   de navegación, `network-first`) NO necesitan este bump — solo los
-   archivos servidos como `<script src>`/`<link href>` bajo `/static/`.
+4. ⚠️ **SUPERSEDIDA por la sección siguiente (2026-08-10)**: esta regla
+   decía que los partials `misc_body_1.html`/`misc_body_2.html` NO
+   necesitan bump porque el SW los servía `network-first`. Ya NO es
+   cierto — el SW pasó a `stale-while-revalidate` para el HTML
+   principal. Ver "El HTML principal (misc_body_1/2 inline) TAMBIÉN
+   necesita bumpear `CACHE_HTML`" más abajo.
+
+## El HTML principal (misc_body_1/2 inline) TAMBIÉN necesita bumpear `CACHE_HTML` en `sw.js` — desde que dejó de ser `network-first` (obligatorio, 2026-08-10)
+
+**Bug (usuario 2026-08-10, «Torneos de Verano · Gestionar torneos»)**:
+tras mergear un fix del botón "🗑 Borrar para siempre" (y su corrección
+inmediata para que la fila de un built-in reflejara el borrado), el
+usuario probó de nuevo y reportó "siguen sin eliminarse" — el fix YA
+estaba en `main`/producción, pero su navegador seguía ejecutando el
+JS de ANTES del fix.
+
+### Causa raíz — la regla de arriba (2026-07-04, punto 4) quedó falsa
+
+Ese mismo día (2026-08-10, sección "Service Worker stale-while-
+revalidate" de este mismo archivo/sesión) el SW cambió la estrategia
+del HTML principal (`/`, que incluye `misc_body_1.html`/
+`misc_body_2.html` **INLINE**, no como `<script src>`) de
+`network-first` a **stale-while-revalidate con ventana de 30
+minutos** (`HTML_SWR_MAX_AGE_MS`), por rendimiento en móvil. Efecto
+colateral no anticipado: con SWR, el navegador sirve la copia YA
+CACHEADA al instante, **sin comprobar la red**, mientras haya pasado
+menos de 30 min desde el último `fetch` — y esa ventana se
+**auto-renueva** cada vez que la revalidación de fondo tiene éxito
+(`_storeHtmlInCache` re-sella el timestamp). Con navegaciones
+frecuentes (exactamente lo que hace un usuario probando un fix recién
+avisado — recargar varias veces seguidas), la caché nunca llega a
+expirar por edad, así que cualquier edición de `misc_body_1.html`/
+`misc_body_2.html`/`templates/index.html` puede quedar invisible
+para ese navegador durante un tiempo indefinido — el aviso "🔄 Hay
+una versión más nueva" existe (`postMessage` desde
+`_revalidateHtmlAndNotify`), pero depende de que el usuario lo vea Y
+pulse recargar; no hay garantía de que llegue a tiempo antes de que
+el usuario, frustrado, reporte "no funciona".
+
+### Fix — mismo mecanismo que `index.bundle.js`, aplicado a `CACHE_HTML`
+
+`CACHE_HTML` (`static/js/sw.js`, `'ftbol-html-v3'` → `'ftbol-html-v4'`)
+es el nombre de la caché completa donde vive `/` + su sello de
+antigüedad. Bumpear el nombre hace que `activate` (que borra
+cualquier caché fuera de `keep = [CACHE_STATIC, CACHE_HTML]`) purgue
+la copia vieja ENTERA para todos los usuarios en su próxima carga —
+sin copia en la caché nueva, `cachedRes` es `undefined`, así que el
+fetch handler cae directo al camino `network-first` (pide `/` fresco
+de inmediato, sin esperar los 30 min). Mismo patrón EXACTO que ya usa
+`index.bundle.js?v=X.X` — solo que aquí el "número de versión" es el
+nombre de la caché completa, no un query param por archivo.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** modificar `misc_body_1.html`, `misc_body_2.html`, o
+   cualquier `<script>` inline de `templates/index.html`, sin
+   **bumpear `CACHE_HTML`** en `static/js/sw.js` (ej. `v4` → `v5`).
+   Ya NO es cierto que estos partials "no necesiten bump" — esa regla
+   solo valía mientras el SW usaba `network-first` para el HTML.
+2. **PROHIBIDO** asumir que un fix en estos archivos "ya está
+   arreglado" solo porque está en `main`: sin el bump, un navegador
+   con la app abierta/reciente puede seguir sirviendo JS de ANTES del
+   fix durante minutos, con navegaciones repetidas incluso indefinido
+   (la ventana SWR se auto-renueva con cada revalidación exitosa). Todo
+   reporte de "sigue sin funcionar" tras un merge reciente debe hacer
+   sospechar PRIMERO de esto — pedir recarga forzada (Ctrl+Shift+R /
+   borrar caché del navegador) como diagnóstico antes de re-investigar
+   el propio fix.
+3. Si en el futuro `HTML_SWR_MAX_AGE_MS` cambia de estrategia otra vez
+   (p.ej. se vuelve a `network-first`, o se quita el auto-renovado de
+   la ventana en `_storeHtmlInCache`), esta regla puede quedar
+   obsoleta — actualizarla entonces, no antes.
+4. El bump de `CACHE_HTML` es **independiente** del bump de
+   `?v=X.X`/`PRECACHE` de `index.bundle.js`/`.css` (regla de la
+   sección de arriba): un cambio puede necesitar uno, el otro, o
+   ambos, según qué archivo(s) se hayan tocado.
 
 ### Refuerzo — el propio picker se blinda además del bump de versión (obligatorio, 2026-07-04)
 

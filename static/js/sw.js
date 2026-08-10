@@ -52,7 +52,20 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v3';
+var CACHE_HTML   = 'ftbol-html-v4';
+/* v3 → v4 (2026-08-10): la nueva estrategia SWR de arriba (ver cabecera
+   del archivo) sirve el HTML principal desde caché hasta 30 min sin
+   comprobar red — así que cualquier fix a `misc_body_1.html`/
+   `misc_body_2.html` (van INLINE en `/`, nunca en `/static/`) quedaba
+   invisible para un usuario que ya tuviera la app abierta/reciente,
+   aunque el fix ya estuviera en producción (bug real: el usuario
+   probó un botón nuevo y "seguía sin funcionar" porque su navegador
+   servía la copia de HACE UNOS MINUTOS, de antes del fix). El bump
+   purga esa caché para TODOS en el próximo `activate` — mismo
+   mecanismo que el v1→v2 de arriba. Toda edición de
+   `misc_body_1.html`/`misc_body_2.html`/`templates/index.html` DEBE
+   bumpear esta versión (regla obligatoria, ver CLAUDE.md — espejo de
+   la que ya exige bumpear `?v=X.X` para `index.bundle.js`/`.css`). */
 /* Antigüedad máxima que se acepta servir de la caché HTML de
    emergencia. Sin este límite, un solo fallo de red puede dejar
    servida una copia de hace SEMANAS indefinidamente (hasta el próximo

@@ -1921,6 +1921,103 @@ class TestDeadMergedLeagueFiltering:
         slugs = [x["slug"] for x in j["leagues"]]
         assert "francia" in slugs
 
+    def _seed_dead_league_row(self, clave, teams):
+        """Escribe una fila `GlobalState` DIRECTA (sin pasar por el POST,
+        que ya rechaza ligas muertas tras el fix 2026-08-10). Simula el
+        escenario real: la fila lleva meses en la BD, escrita ANTES de
+        que existiera ningún filtro — el fix debe esconderla igual."""
+        with app_module.app.app_context():
+            row = app_module.GlobalState(
+                clave=clave,
+                valor_json=json.dumps({"teams": teams, "results": []}),
+                updated_at=app_module.utc_now_iso(),
+            )
+            app_module.db.session.add(row)
+            app_module.db.session.commit()
+
+    def test_get_single_liga_muerta_no_resucita_datos_viejos(self, client):
+        """GET /api/liga-ext/<slug> — bug real 2026-08-10: aunque la fila
+        siga físicamente en la BD (nunca se pulsó el purgado permanente),
+        pedir el slug UNO A UNO (loadData, lextDeepRecoverSlug, o
+        cualquier cliente viejo/nuevo) ya NO debe traer sus equipos."""
+        c = client
+        self._seed_dead_league_row("liga_ext_alemania", [
+            {"id": "1", "name": "Bayern Munich"}, {"id": "2", "name": "Dortmund"},
+        ])
+        r = c.get("/api/liga-ext/alemania")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["data"]["teams"] == []
+
+    def test_get_any_liga_muerta_no_resucita_datos_viejos(self, client):
+        c = client
+        self._seed_dead_league_row("liga_ext_albania", [
+            {"id": "1", "name": "Tirana"},
+        ])
+        r = c.get("/api/liga-ext-any/albania")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["data"]["teams"] == []
+
+    def test_get_protected_liga_muerta_no_resucita_datos_viejos(self, client):
+        c = client
+        self._seed_dead_league_row("liga_ext_gales_protected", [
+            {"id": "1", "name": "Cardiff"}, {"id": "2", "name": "Swansea"},
+        ])
+        r = c.get("/api/liga-ext-protected/gales")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["data"] is None
+
+    def test_post_single_liga_muerta_no_persiste(self, client):
+        """El POST a una liga muerta es un no-op silencioso (ok:true, sin
+        tocar la BD) — nunca debe RE-CREAR la fila que el usuario purgó."""
+        c = client
+        r = c.post("/api/liga-ext/alemania", json={"data": {
+            "teams": [{"id": "1", "name": "Nuevo Equipo"}],
+            "results": [],
+        }})
+        assert r.get_json()["ok"] is True
+        with app_module.app.app_context():
+            row = app_module.GlobalState.query.filter_by(clave="liga_ext_alemania").first()
+            assert row is None
+
+    def test_post_protected_liga_muerta_no_persiste(self, client):
+        c = client
+        r = c.post("/api/liga-ext-protected/albania", json={"data": {
+            "teams": [{"id": "1", "name": "Nuevo Equipo"}, {"id": "2", "name": "Otro"}],
+            "results": [],
+        }})
+        assert r.get_json()["ok"] is True
+        with app_module.app.app_context():
+            row = app_module.GlobalState.query.filter_by(clave="liga_ext_albania_protected").first()
+            assert row is None
+
+    def test_post_single_liga_muerta_no_pisa_fila_ya_existente(self, client):
+        """Si la fila YA existía (escenario real: nunca se purgó), un POST
+        posterior (por ejemplo el re-push de `lextDeepRecoverSlug` tras
+        leer un GET vacío) tampoco debe tocarla — sigue intacta."""
+        c = client
+        self._seed_dead_league_row("liga_ext_alemania", [
+            {"id": "1", "name": "Bayern Munich"},
+        ])
+        c.post("/api/liga-ext/alemania", json={"data": {
+            "teams": [], "results": [],
+        }})
+        with app_module.app.app_context():
+            row = app_module.GlobalState.query.filter_by(clave="liga_ext_alemania").first()
+            assert row is not None
+            data = json.loads(row.valor_json)
+            assert data["teams"][0]["name"] == "Bayern Munich"
+
+    def test_restore_liga_muerta_devuelve_404(self, client):
+        c = client
+        self._seed_dead_league_row("liga_ext_gales_protected", [
+            {"id": "1", "name": "Cardiff"}, {"id": "2", "name": "Swansea"},
+        ])
+        r = c.post("/api/liga-ext-restore/gales")
+        assert r.status_code == 404
+
 
 class TestTeamIdentityProtectedFallback:
     """/api/team-shield, /api/team-alias y /api/team-squad también miran

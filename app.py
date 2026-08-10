@@ -3579,6 +3579,8 @@ def api_liga_ext_index():
 
 @app.route("/api/liga-ext/<slug>", methods=["GET"])
 def api_liga_ext_get(slug):
+    if _is_dead_merged_league_slug(_liga_ext_slug(slug)):
+        return jsonify(_dead_league_empty_get(slug))
     data = _liga_ext_load(slug)
     row = GlobalState.query.filter_by(clave=_liga_ext_key(slug)).first()
     updated_at = row.updated_at if row else ""
@@ -3603,6 +3605,8 @@ def api_liga_ext_any_get(slug):
     en este dispositivo. Mismo principio que `/api/team-alias/<nombre>`
     (2026-07-05): la búsqueda con fallback vive en el servidor, el
     cliente hace UNA sola petición."""
+    if _is_dead_merged_league_slug(_liga_ext_slug(slug)):
+        return jsonify(_dead_league_empty_get(slug, {"source": "main"}))
     data = _liga_ext_load(slug)
     source = "main"
     if not (isinstance(data.get("teams"), list) and len(data["teams"]) >= 2):
@@ -3902,6 +3906,24 @@ def _is_dead_merged_league_slug(rest):
     return False
 
 
+def _dead_league_empty_get(slug, extra=None):
+    """Respuesta GET para un slug de liga MUERTA: se comporta EXACTAMENTE
+    como si esa liga nunca hubiera existido — mismo shape que devuelven
+    `_liga_ext_load`/`/api/liga-ext-protected` para un slug realmente
+    inexistente. Cierra el hueco que `/api/liga-ext/<slug>`,
+    `/api/liga-ext-any/<slug>` y `/api/liga-ext-protected/<slug>`
+    dejaban abierto: el filtro de `_is_dead_merged_league_slug` ya
+    protegía `/api/liga-ext` (index) y `/api/liga-ext-bulk`, pero
+    CUALQUIER cliente (viejo, nuevo, o una herramienta de recuperación
+    como `lextDeepRecoverSlug`) que pidiera el slug UNO A UNO seguía
+    recibiendo los datos reales — resucitando en local lo que el
+    usuario ya había purgado."""
+    out = {"ok": True, "slug": _liga_ext_slug(slug), "data": {"teams": [], "results": []}, "updated_at": ""}
+    if extra:
+        out.update(extra)
+    return out
+
+
 @app.route("/api/admin/purge-dead-leagues", methods=["POST"])
 @admin_required
 def api_admin_purge_dead_leagues():
@@ -3945,6 +3967,13 @@ def api_admin_purge_dead_leagues():
 
 @app.route("/api/liga-ext/<slug>", methods=["POST"])
 def api_liga_ext_post(slug):
+    norm_slug = _liga_ext_slug(slug)
+    if _is_dead_merged_league_slug(norm_slug):
+        # Liga fusionada en liga-mixta-*: no-op silencioso (nunca 4xx/5xx,
+        # para no disparar reintentos en los callers fire-and-forget). El
+        # write NUNCA toca la BD — si se persistiera, resucitaría la fila
+        # que el usuario ya purgó localmente.
+        return jsonify({"ok": True, "slug": norm_slug, "updated_at": ""})
     payload = request.get_json(silent=True) or {}
     incoming = payload.get("data", payload)
     if not isinstance(incoming, dict):
@@ -4241,6 +4270,9 @@ def _count_players_payload(data):
 
 @app.route("/api/liga-ext-protected/<slug>", methods=["GET"])
 def api_liga_ext_protected_get(slug):
+    if _is_dead_merged_league_slug(_liga_ext_slug(slug)):
+        return jsonify({"ok": True, "slug": _liga_ext_slug(slug),
+                        "data": None, "players": 0, "updated_at": ""})
     key = _protected_key(slug)
     row = GlobalState.query.filter_by(clave=key).first()
     if not row or not row.valor_json:
@@ -4261,6 +4293,11 @@ def api_liga_ext_protected_get(slug):
 
 @app.route("/api/liga-ext-protected/<slug>", methods=["POST"])
 def api_liga_ext_protected_post(slug):
+    norm_slug = _liga_ext_slug(slug)
+    if _is_dead_merged_league_slug(norm_slug):
+        # Mismo no-op silencioso que el POST de /api/liga-ext/<slug>:
+        # una liga fusionada nunca vuelve a tener snapshot protected.
+        return jsonify({"ok": True, "slug": norm_slug, "players": 0, "updated_at": ""})
     payload = request.get_json(silent=True) or {}
     incoming = payload.get("data", payload)
     force = bool(payload.get("force"))
@@ -4322,6 +4359,12 @@ def api_liga_ext_restore(slug):
     Devuelve {restored, players_in_protected, current_main_players}.
     Si no hay protected → 404.
     """
+    if _is_dead_merged_league_slug(_liga_ext_slug(slug)):
+        return jsonify({
+            "ok": False,
+            "error": "no hay snapshot protected para este slug",
+            "slug": _liga_ext_slug(slug),
+        }), 404
     pkey = _protected_key(slug)
     prow = GlobalState.query.filter_by(clave=pkey).first()
     if not prow or not prow.valor_json:

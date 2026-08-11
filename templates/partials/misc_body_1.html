@@ -216,6 +216,21 @@ window.pG = function(fn) {
   /* true = guardado (con o sin limpieza); false = imposible incluso tras
      liberar espacio. NUNCA lanza. */
   window._lsSetSafe = function(key, value){
+    /* GUARDIÁN de ligas muertas (2026-08-10): `_lsSetSafe` es el
+       CHOKEPOINT único por el que pasa CUALQUIER guardado local de
+       este proyecto (`saveData`, `_tourSave`, backups, snapshots…).
+       Ponerlo aquí, en vez de auditar cada caller uno a uno (v9-v12
+       de arriba solo cubren los que ya se conocían), cierra de raíz
+       CUALQUIER escritura futura o no descubierta de una liga ya
+       fusionada en liga-mixta-1..9 — conocida o no. No-op silencioso
+       (`return true`, nunca lanza ni avisa): el caller cree que
+       "guardó bien" y sigue su flujo normal, pero la clave nunca
+       llega a `localStorage`. */
+    if (typeof key === 'string' && key.indexOf('ligaExt_') === 0
+        && window._isDeadMergedLeagueSlug
+        && window._isDeadMergedLeagueSlug(key.substring('ligaExt_'.length))) {
+      return true;
+    }
     /* PESTILLO DE SESIÓN (2026-07-29). Sin él, CADA una de las ~54
        ligas de la restauración masiva repetía el ciclo completo de
        expulsión —escaneo íntegro del almacén incluido— aunque la
@@ -350,6 +365,39 @@ window._isDeadMergedLeagueSlug = function(slug){
   }
   return false;
 };
+
+/* Purga v12 — INMEDIATA, SÍNCRONA, en el PRIMER <script> del documento
+   (2026-08-10, capturas usuario: tras v9/v10/v11 seguían apareciendo
+   docenas de `alemania_backup`/`grecia_backup`/`albania_backup`/etc. en
+   "📊 Espacio del navegador"). v9/v10/v11 vivían dentro de una IIFE muy
+   por debajo en `misc_body_1.html`, diferida sin querer detrás de otro
+   código — si ese código tocaba `localStorage` ANTES de llegar a la
+   purga (poco probable pero no descartable), o si el navegador del
+   usuario no llegó a ejecutar ese punto del archivo por CUALQUIER
+   motivo (una excepción anterior en el mismo `<script>`, caché de un
+   Service Worker que aún no había recibido el bump de `CACHE_HTML`),
+   la purga nunca corría. Poniéndola aquí — la primerísima línea de
+   `<script>` que toca `localStorage`, con la lista y el matcher ya
+   definidos DOS líneas más arriba — no depende de que ningún otro
+   bloque del documento llegue a ejecutarse antes. Mismo criterio de
+   coincidencia que v9/v10/v11 (`_isDeadMergedLeagueSlug`), flag NUEVO
+   para forzar la repasada aunque v9/v10/v11 ya se hubieran marcado
+   "hecho" en este dispositivo. */
+(function(){
+  try {
+    var FLAG = 'ftbol_merged_leagues_purge_v12';
+    if (localStorage.getItem(FLAG)) return;
+    var toRemove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf('ligaExt_') !== 0) continue;
+      if (window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) toRemove.push(k);
+    }
+    toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+    try { console.warn('[ligaExt] purga v12 (inmediata): ' + toRemove.length + ' claves locales de ligas fusionadas.'); } catch(_){}
+    try { localStorage.setItem(FLAG, '1'); } catch(_){}
+  } catch(_){}
+})();
 
 /* ══════════════════════════════════════════════════════════════════
    _normPS bootstrap GLOBAL — se define aquí ANTES que cualquier otro
@@ -54454,7 +54502,14 @@ https://api.sofascore.app/api/v1/team/44/image
           try {
             var data = j && j.data;
             if (data && Array.isArray(data.teams) && data.teams.length) {
-              localStorage.setItem('ligaExt_' + slug, JSON.stringify(data));
+              /* `_lsSetSafe` (no `setItem` crudo) — chokepoint único que
+                 lleva el guardián de ligas muertas (2026-08-10). El
+                 servidor ya devuelve `teams:[]` para un slug fusionado
+                 (así que este `if` nunca sería true para uno), pero
+                 pasar por el mismo punto que TODO el resto del proyecto
+                 es defensa en profundidad, no un caso que se espere
+                 disparar de verdad. */
+              window._lsSetSafe('ligaExt_' + slug, JSON.stringify(data));
               if (window.LIGA_CACHE) window.LIGA_CACHE[slug] = data;
             }
           } catch(_){}

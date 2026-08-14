@@ -1,5 +1,216 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## ANIQUILACIÓN TOTAL de Wild Card + Open Qualifier · Previa Champions de 4 RONDAS · 6 ligas nuevas (obligatorio, 2026-08-14) ⚠️ SUPERSEDE POR COMPLETO "Wild Card + Open Qualifier — FASE DE GRUPOS" (2026-05-30) y "Previa de Champions — Ronda Preliminar (28→14, Open Qualifier)..." (2026-07-12), más abajo — ambas secciones quedan como HISTÓRICO, no reintroducir nada de lo que describen
+
+**Petición usuario 2026-08-14** ("NUEVA ESTRUCTURACION PARA AGILIZAR EL
+PESO DE LA WEB"): restructuración completa del reparto europeo, con
+mandato explícito de **eliminación irreversible** de 2 competiciones:
+*"SE ELIMINA POR COMPLETO LAS CAJAS DE WILD CARD Y OPEN QUALIFIER Y
+TODOS LOS DATOS Y SIMULACIONES DE ESAS 2 COMPETICIONES, QUIERO LA
+ANIQUILACION TOTAL DE AMBAS SIN QUE SEA RECUPERABLE (CON ESTO BAJAMOS
+EL PESO DE LA WEB)"*.
+
+### Wild Card y Open Qualifier — ANIQUILADOS, sin recuperación posible
+
+Se eliminaron por completo (código + datos + claves de sync):
+- Las pantallas `s-wild-card` y `s-open-qualifier-clas`/`-res`/`-jornada`
+  (HTML + `<script>` del motor de cada una).
+- Las funciones `computeWildCardClassified`/`computeOpenQualifierTeams`/
+  `window._wcRender`/`window._wcSimulate`/`window._wcDraw`/
+  `buildOpenQualifierClas` y el objeto `WILDCARD_LIGA_SLUGS`.
+- Las claves de sync/localStorage `wc_state_v1`, `wc_champ_v1`,
+  `wc_champion_v1`, `wc_to_open_qualifier_v1`, `oq_simulation_v1`,
+  `oq_to_previa_v1`, `oq_to_conference_v1`, `wc_to_conference_v1` — ya
+  NO están en `SYNC_KEYS` (`part2/misc_body_2.html`) ni en
+  `_KV_ALLOWED_*`/`_STATE_BRACKET_KEYS` (`app.py`): un dispositivo viejo
+  que aún las tenga en local simplemente deja de sincronizarlas.
+- Los submenu-cards `sc-open-qual`/`sc-wild-card` del menú Champions.
+- El mecanismo de propagación `_EUR_DOWNSTREAM_OF_WC`/
+  `_EUR_DOWNSTREAM_OF_OQ`/`window._eurInvalidateDownstream` (ya no tiene
+  sentido sin esas 2 fases intermedias).
+- El módulo server-side `champions_previa.py` (réplica Python del
+  formato VIEJO de 2 rondas, con endpoints `/api/champions-previa/*`)
+  — **nunca lo llamaba ningún cliente** (verificado con grep en todo el
+  repo), así que quedaba como peso muerto sin propósito una vez el
+  formato que replicaba deja de existir. Eliminado junto con
+  `tests/test_champions_previa.py` y el `import champions_previa` de
+  `app.py`.
+
+**PROHIBIDO** reintroducir cualquiera de estos nombres/claves/pantallas.
+Si un bug futuro menciona "Wild Card" u "Open Qualifier", la respuesta
+correcta es "esas competiciones ya no existen", nunca intentar
+recuperarlas.
+
+### Previa de Champions — 4 RONDAS (R1🟤 → R2⚪ → R3🟡 → R4🟣)
+
+Sustituye TANTO al formato de 2 rondas (KO, 2026-07-31/08-02) COMO al de
+Ronda Preliminar + 12 grupos (2026-07-12). Motor completo en
+`templates/partials/part2/misc_body_2.html`, IIFE única sobre
+`WPREV_KEY='wprev_state_v1'` — estado `{r1:{ties:[]}, r2:{ties:[]},
+r3:{ties:[]}, r4:{ties:[]}, phase}`.
+
+- **Cada ronda**: 24 equipos, 12 eliminatorias a **ida y vuelta**.
+  `ROUND_META` (`r1..r4`) define label/emoji/container/poolFn/prev/next
+  por ronda — el código NO está duplicado por ronda, es un motor
+  genérico (`_doDrawRound`/`_doSimRound`) parametrizado por `key`.
+- **R1** (`directAlone:true`): pool de 24 propio (`computeUclPrevR1Teams`,
+  zona `prevR1`), partido entre los 12 mejores y los 12 peores por poder
+  (`_drawTies(top, bottom, {avoidSameLeague:true})`).
+- **R2/R3/R4**: pool A = los 12 GANADORES de la ronda anterior; pool B =
+  12 equipos DIRECTOS de esa ronda (`computeUclPrevR2/R3/R4DirectTeams`,
+  zonas `prevR2`/`prevR3`/`uclPrev` respectivamente). `_drawTies(poolA,
+  poolB, ...)` — poolA siempre es el lado "local en la ida" (`a`), poolB
+  siempre "visitante en la ida" (`b`).
+- **Ganadores/perdedores**:
+  - R1 ganadores → R2. R1 perdedores → 🟢 Conference (`wprev_to_conference_v1`).
+  - R2 ganadores → R3. R2 perdedores → 🟢 Conference (`wprev_to_conference_v1`).
+  - R3 ganadores → R4. R3 perdedores → 🟠 Europa (`wprev_to_europa_v1`).
+  - R4 ganadores → 🔵 Champions (`wprev_to_fase_grupos_v1`). R4 perdedores → 🟠 Europa.
+  - `_persistProgress(s)` recalcula y sobreescribe SIEMPRE los 3 blobs
+    de salida desde `s.r1..r4` (nunca incremental) — nunca puede
+    duplicar ni perder un equipo aunque se llame varias veces. También
+    registra los 3 grupos como extras manuales de su zona destino
+    (`_eurSyncManualExtraFromFeeder`) para que lleguen a Champions/
+    Europa/Conference aunque esas zonas estén en modo 🔒 Manual.
+- **Regla del gol de visitante (doble)**: si el global (ida+vuelta)
+  empata en goles, gana el equipo con MÁS goles marcados FUERA de casa.
+- **Repesca (3er partido)**: SOLO si el global empata EXACTO en el MISMO
+  marcador en ambos lados (ni siquiera por gol de visitante hay
+  desempate). Partido ÚNICO en campo neutral, **SIN** regla de gol de
+  visitante, con prórroga + penaltis si sigue empatado.
+  `_simulateTie(tie)` (`part2/misc_body_2.html`) ya implementaba EXACTO
+  esta cadena de reglas (heredada del motor de 2 rondas anterior) — se
+  reutiliza VERBATIM para las 4 rondas, sin ningún cambio de lógica.
+- **R4 — los 12 directos SIEMPRE juegan la ida como visitantes, SIN
+  EXCEPCIÓN**: no se implementa con un caso especial — se garantiza por
+  CONVENCIÓN de orden de argumentos: en R4, `poolDirect` (marcado
+  `awayFirstLeg:true` por `computeUclPrevR4DirectTeams`) siempre se pasa
+  como el 2º argumento (`b`, visitante en la ida) de `_drawTies`. Para
+  R2/R3 esta misma convención NO tiene significado especial (solo es
+  estable para el sorteo), únicamente en R4 encarna la regla obligatoria.
+- **R1/R2/R3 — evitar mismos clubes de la misma liga (prioridad
+  máxima, con excepción si es estrictamente necesario)**: nuevo
+  `_avoidSameLeaguePairs(ties)` — pasada de intercambio best-effort tras
+  el sorteo inicial que reordena para minimizar cruces same-league. Para
+  R4 se aplica igual (`avoidSameLeague:true` en todas las llamadas a
+  `_drawTies`) pero NO es absoluto — la regla del usuario para R4 dice
+  "si es posible", igual que R1-R3, así que no hay tratamiento distinto
+  por ronda en el código, solo en la exigencia declarada al usuario.
+- **Card del hub** (`_wprevHubResolve(lbl)`, `misc_body_1.html`):
+  generalizada para CUALQUIER ronda 1-4 — parsea "Ida/Vuelta Previa
+  Champions — R<N>" del calendario, resuelve contra
+  `wprev_state_v1['r'+N].ties`. Si la ronda aún no se ha sorteado
+  (ronda anterior IA-vs-IA pendiente), `_cardWprevPending` muestra
+  "⚠️ RIVAL PENDIENTE" con un botón que re-llama `simulateUclPrev()`
+  hasta 4 veces (una por ronda posible) para desbloquear.
+
+### Zonas — 7 campos por liga, cascada de posiciones
+
+`LEAGUE_DEFAULT_ZONES[slug]` (`misc_body_1.html`) usa 7 campos (antes 6:
+`ucl,uclPrev,uclQual,uel,uecl,wildcard` + `desc`; ahora:
+`ucl,uclPrev,prevR3,prevR2,prevR1,uel,uecl` + `desc`). `uclPrev` pasa a
+significar **Previa R4** (antes era la ÚNICA previa). La cascada de
+posiciones en `_computeQualifiedFromLeagues(zoneKey)` es un array
+genérico `_CASCADE = ['ucl','uclPrev','prevR3','prevR2','prevR1','uel','uecl']`
+— cada zona salta las plazas acumuladas de TODAS las anteriores del
+array, en ese orden exacto. **PROHIBIDO** reordenar `_CASCADE` sin
+recalcular todas las plazas por liga (rompe el cuadre 28/12/12/12/24/
+16/16/40/40/40 verificado equipo a equipo por el usuario).
+
+Tabla verificada (11 ligas grandes + 6 nuevas + las 9 Ligas Mixtas
+neutralizadas a 0 europeo):
+
+| Liga | 🔵ucl | 🟣R4 | 🟡R3 | ⚪R2 | 🟤R1 | 🟠uel | 🟢uecl |
+|---|---|---|---|---|---|---|---|
+| España (Liga EA Sports, manual/blacklist) | 4 | 1 | 1 | 0 | 0 | 2 | 2 |
+| Inglaterra / Italia / Francia | 4 | 1 | 0 | 0 | 0 | 2 | 2 |
+| Portugal | 2 | 1 | 0 | 0 | 0 | 2 | 2 |
+| Países Bajos | 2 | 1 | 0 | 0 | 0 | 1 | 1 |
+| Bélgica / Turquía / Dinamarca / Suiza / Escocia | 1 | 1 | 0 | 0 | 0 | 1 | 1 |
+| Germanika | 3 | 1 | 2 | 2 | 2 | 0 | 0 |
+| Hellas Slavia | 0 | 0 | 2 | 2 | 5 | 0 | 0 |
+| Danubio Nórdica | 0 | 0 | 2 | 2 | 4 | 0 | 0 |
+| Adriático Oriental | 0 | 0 | 2 | 2 | 5 | 0 | 0 |
+| Balkanica | 0 | 0 | 2 | 2 | 4 | 0 | 0 |
+| Eurasia | 0 | 0 | 1 | 2 | 4 | 0 | 0 |
+| Liga Mixta 1-9 (heredan roster, pierden cupo europeo automático) | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+Totales: 🔵28+12(Previa)=40 · 🟣R4=12 · 🟡R3=12 · ⚪R2=12 · 🟤R1=24 ·
+🟠16+24(Previa)=40 · 🟢16+24(Previa)=40. España es la ÚNICA de las "11
+grandes" con 🟣R4 **Y** 🟡R3 a la vez, de ahí que su 🟠/🟢 caigan una
+posición más abajo que Inglaterra/Italia/Francia en la tabla que dio el
+usuario — no es una discrepancia, es la cascada aplicándose
+correctamente sobre un cupo europeo total distinto.
+
+Las 9 Ligas Mixtas 1-9 (fusiones de 2026-07-30/31) **se conservan
+intactas como ligas jugables** (roster, copa, clasificación) pero
+pierden TODO cupo europeo automático — sus antiguos campos
+`uclQual`/`wildcard` ya no existen en el modelo nuevo. El admin puede
+seguir dándoles cupo MANUAL desde 📜 Reglas si quiere.
+
+### 6 ligas NUEVAS de "Resto de Ligas" — feeder de la Previa
+
+Germanika (20 equipos, 🇩🇪🇷🇸🇷🇴🇱🇻🇫🇴🇲🇪🇱🇺🇧🇾🇸🇲🏴󠁧󠁢󠁷󠁬󠁳󠁿🇦🇩), Hellas Slavia (20,
+🇬🇷🇨🇿🇬🇪🇳🇴🇵🇱), Danubio Nórdica (18, 🇦🇹🇨🇾🇬🇮🇬🇧🇸🇪🇦🇱), Adriático Oriental (18,
+🇭🇷🇲🇰🇮🇱🇺🇦🇭🇺🇪🇪), Balkanica (18, 🇧🇬🇧🇦🇸🇮🇰🇿🇽🇰🇲🇹🇱🇹🇮🇪🇦🇱), Eurasia (18,
+🇷🇺🇦🇿🇲🇩🇦🇲🇫🇮🇸🇰🇮🇸🇮🇪). Rosters completos (nombre + país, tal como los dio
+el usuario) sembrados en `_EXTRA_LEAGUE_SEEDS` (`misc_body_1.html`,
+mismo patrón que las Ligas Mixtas — power/atk/mid/def descendente por
+posición dada). Menu-cards nuevas en `#s-ligas` (slug via `data-slug`,
+emoji 🏆 + label visible con el nombre real de la liga, gradiente CSS
+propio por liga — SIN imágenes de escudo/logo embebidas, a propósito,
+para no añadir peso; el admin puede subir un logo real desde el editor
+si quiere). `LEAGUE_DEFAULT_NAMES` tiene su entrada de display. Heredan
+automáticamente TODA la maquinaria de `_EXTRA_LEAGUE_SEEDS` (seed eager
+al boot, recuperación desde `_protected`/snapshots/IndexedDB/servidor)
+sin código nuevo — el mecanismo ya era genérico por slug.
+
+### Calendario — Previa R3 (01/04 Ago) + R4 (07/09 Ago)
+
+`calendario.json` (version 9→10, fuerza migración server-side de
+cualquier fila ya persistida en BD — regla ya obligatoria, ver
+`load_calendario()` en `app.py`): los 2 días "Previa Champions — R2"
+pasan a **4 días**: Ida/Vuelta R3 (01 Ago / 04 Ago, reutilizando 2 días
+que antes eran Descanso) e Ida/Vuelta R4 (07 Ago / 09 Ago, ídem), con
+Liga J1 intacta el 06 Ago entre medias. Elegido R3+R4 (no las 4 rondas)
+porque Liga EA Sports (única fuente de humanos) solo tiene cupo
+automático en `prevR3`/`uclPrev`(R4) — el humano NUNCA entra
+automáticamente en R1/R2. Si el admin asigna un humano a R1/R2 a mano
+(inyector "EA Sports → Europa"), el CÓDIGO ya soporta cualquier ronda
+(`_wprevHubResolve`/`_mmCalLabel` generalizados a `r[1-4]`) — solo
+faltarían sus fechas en el calendario, que no se añadieron por no ser
+el camino automático real.
+`index.bundle.js` (`_mmCalLabel`, bump `9.39`→`9.40` en
+`templates/index.html` + `static/js/sw.js`): regex
+`wprevko_r([1-4])_\d+_([iv])` — generalizado de `(r1|r2)` a `r([1-4])`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir Wild Card, Open Qualifier, o el formato de
+   2 rondas / Ronda Preliminar+grupos de la Previa. El formato vigente
+   es SIEMPRE 4 rondas ida+vuelta (R1🟤→R2⚪→R3🟡→R4🟣).
+2. **PROHIBIDO** que un futuro cambio de `ROUND_META`/`_CASCADE` deje de
+   ser genérico por ronda — el motor entero (`_doDrawRound`/
+   `_doSimRound`/`_tieHtml`/`_wprevHubResolve`) está parametrizado por
+   `key`/ronda; NO reintroducir código duplicado por ronda (`if(key===
+   'r2'){...} else if(key==='r3'){...}`).
+3. **PROHIBIDO** que la regla "R4 directos = ida siempre visitante" se
+   implemente como caso especial en el motor de simulación
+   (`_simulateTie`) — se garantiza SOLO por el orden de argumentos en
+   `_drawTies(poolWinners, poolDirect)` dentro de `_doDrawRound`.
+4. **PROHIBIDO** que la repesca (3er partido) aplique la regla de gol de
+   visitante — es explícitamente la ÚNICA fase del formato sin ese
+   desempate (`_simulateTie`, rama de repesca).
+5. Toda liga NUEVA (una 7ª de "Resto de Ligas", si se añade en el
+   futuro) hereda el modelo de 7 campos automáticamente añadiéndose a
+   `LEAGUE_DEFAULT_ZONES` — nunca reintroducir `uclQual`/`wildcard`
+   como nombre de campo.
+6. Si aparece un bug futuro sobre `champions_previa.py` o
+   `/api/champions-previa/*`: esos endpoints YA NO EXISTEN (eliminados
+   junto con Wild Card/Open Qualifier, nunca los llamó ningún cliente).
+   No reintroducirlos — si hace falta un espejo server-side del motor
+   de 4 rondas, sería un módulo NUEVO, no una resurrección del viejo.
+
 ## "Plantilla de selecciones" salía VACÍA con ~100 selecciones creadas — `_load()` solo leía disco, nunca una copia en memoria (obligatorio, 2026-08-10)
 
 **Bug (usuario 2026-08-10)**: con más de 100 selecciones creadas y con
@@ -5490,7 +5701,7 @@ rivales del grupo humano (no dependen del club humano); los OTROS 6
    independientemente, y cualquier cruce con `_tieHasHuman` se juega
    con card (incluido un HvH si 2 humanos caen en el mismo cruce/grupo).
 
-## Previa de Champions — Ronda Preliminar (28→14, Open Qualifier) + 12 grupos de 4 (obligatorio, 2026-07-12) ⚠️ SUPERSEDE el formato "16 grupos + corte global 12/22/28" de la sección "Wild Card + Open Qualifier — FASE DE GRUPOS" más abajo
+## Previa de Champions — Ronda Preliminar (28→14, Open Qualifier) + 12 grupos de 4 (HISTÓRICO — ⚠️ SUPERSEDIDO 2026-08-14 por "ANIQUILACIÓN TOTAL de Wild Card + Open Qualifier · Previa Champions de 4 RONDAS" al principio de este archivo — Open Qualifier ya NO EXISTE, la Previa es 4 rondas ida+vuelta, NUNCA reintroducir este formato)
 
 **Petición usuario 2026-07-12** ("LA FASE PREVIA CHAMPIONS TENIA UN
 ERROR DE FORMATO, LOS VAMOS A HACER ASÍ"): el formato v3 (62 = 34
@@ -5706,7 +5917,7 @@ importar** si la zona está en 🔒 Manual o en 🔓 Auto.
    extra manual es la red que cubre el caso (mucho más común) de que la
    zona esté en Manual.
 
-## Botón "⬇️ Traer Wild Card" en Open Qualifier — recuperación manual si la propagación automática no llegó (obligatorio, 2026-07-10 #2)
+## Botón "⬇️ Traer Wild Card" en Open Qualifier — recuperación manual si la propagación automática no llegó (HISTÓRICO — ⚠️ ANIQUILADO 2026-08-14 junto con Wild Card/Open Qualifier, ver sección al principio de este archivo)
 
 **Petición usuario 2026-07-10** (2 fotos, tras el fix de propagación en
 cascada de arriba): "no se lanzan al Open Qualifier, pon un botón en
@@ -5850,7 +6061,7 @@ descartada por ese guard y no caiga de vuelta a los valores viejos.
    `_lextHydratePlayerStats` hereda la corrección manual automáticamente
    — no hace falta cablearla aparte.
 
-## Wild Card → Open Qualifier → Previa de Champions: los ganadores se propagan EN EL MOMENTO, con invalidación en cascada al servidor (obligatorio, 2026-07-10)
+## Wild Card → Open Qualifier → Previa de Champions: los ganadores se propagan EN EL MOMENTO, con invalidación en cascada al servidor (HISTÓRICO — ⚠️ ANIQUILADO 2026-08-14 junto con Wild Card/Open Qualifier, ver sección al principio de este archivo. La propagación entre rondas de la Previa de 4 rondas usa ahora `_persistProgress`, sin `_eurInvalidateDownstream`)
 
 **Petición usuario 2026-07-10** (12 fotos: Wild Card "24 GANADORES →
 OPEN QUALIFIER" con nombres reales · Open Qualifier con `TBD-OQ-56/
@@ -10908,7 +11119,7 @@ o 🌏 Asia a mano. Se borró `_SEL_CONT_LEGACY` y la rama `pacifico` de
 4. Toda selección recolectada debe llevar `updatedAt` para que la
    fusión resuelva conflictos por recencia.
 
-## Wild Card + Open Qualifier — FASE DE GRUPOS (obligatorio, 2026-05-30)
+## Wild Card + Open Qualifier — FASE DE GRUPOS (HISTÓRICO — ⚠️ ANIQUILADO 2026-08-14, ver "ANIQUILACIÓN TOTAL de Wild Card + Open Qualifier..." al principio de este archivo — AMBAS competiciones fueron eliminadas sin posibilidad de recuperación, petición explícita del usuario; esta sección se conserva solo como registro histórico, NUNCA reintroducir nada de lo que describe)
 
 Petición usuario 2026-05-30: la **Wild Card** (`s-wild-card`,
 "UCL · Wild Card") y el **Open Qualifier** (`s-open-qualifier-clas`)

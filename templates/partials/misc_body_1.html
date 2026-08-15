@@ -12632,9 +12632,16 @@ window._hdrCleanCache = function(){
         if (!k) continue;
         var v = localStorage.getItem(k) || '';
         var chars = k.length + v.length;
-        var m = /^ligaExt_(.+?)(?:_(?:protected|backup|snap_\d+))?$/.exec(k);
+        /* Los derivados de una liga (backup/protected/snapshot) pueden
+           llevar el sufijo separado por "_" (convención actual del
+           escritor, `slug+'_backup'`) O por "-" (restos de una
+           convención anterior — ej. `grecia-backup`, `alemania-snap-
+           1777655702685` — verificados en dispositivos reales). Ambos
+           deben reconocerse como derivados del MISMO slug, o quedan
+           huérfanos contando como "liga" aparte y nunca se liberan. */
+        var m = /^ligaExt_(.+?)(?:[_-](?:protected|backup|snap[_-]\d+))?$/.exec(k);
         if (m && k.indexOf('ligaExt_') === 0){
-          var isDerived = /_(protected|backup|snap_\d+)$/.test(k);
+          var isDerived = /[_-](?:protected|backup|snap[_-]\d+)$/.test(k);
           var g = add('🏆 Liga: ' + m[1], chars, isDerived, k);
           /* Identidad real de la liga (slug=fuente de verdad de todo el
              motor; el nombre visible puede haber sido renombrado a mano
@@ -12684,9 +12691,14 @@ window._hdrCleanCache = function(){
       for (var i = 0; i < localStorage.length; i++){
         var k = localStorage.key(i);
         if (!k) continue;
-        if (/^ligaExt_.+_snap_\d+$/.test(k) ||
-            /^ligaExt_.+_backup$/.test(k) ||
-            /^ligaExt_.+_protected$/.test(k) ||
+        /* Mismo fix que `_scan()`: reconoce el sufijo derivado tanto con
+           "_" (convención actual) como con "-" (restos de una convención
+           anterior, confirmados en dispositivos reales — ej.
+           `ligaExt_grecia-backup`, `ligaExt_alemania-snap-1777655702685`).
+           Sin esto, esas copias NUNCA se liberaban con este botón. */
+        if (/^ligaExt_.+[_-]snap[_-]\d+$/.test(k) ||
+            /^ligaExt_.+[_-]backup$/.test(k) ||
+            /^ligaExt_.+[_-]protected$/.test(k) ||
             /^ef_player_stats_.*v1$/.test(k) ||
             k === 'comp_icons_v1'){
           toDrop.push(k);

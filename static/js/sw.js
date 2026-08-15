@@ -52,7 +52,12 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v9';
+var CACHE_HTML   = 'ftbol-html-v10';
+/* v9 → v10 (2026-08-15): fix de los 6 toasts sin `pointer-events:none`
+   que bloqueaban los toques a las cards del menú de debajo (misma
+   regla de abajo — toda edición de `misc_body_1.html` exige este
+   bump, o el fix no llega a un usuario con la app ya abierta/reciente
+   pese a estar ya fusionado en `main`). */
 /* v3 → v4 → v5 → v6 → v7 → v8 → v9 (2026-08-10): la nueva estrategia SWR de arriba (ver cabecera
    del archivo) sirve el HTML principal desde caché hasta 30 min sin
    comprobar red — así que cualquier fix a `misc_body_1.html`/

@@ -12705,6 +12705,7 @@ window._hdrCleanCache = function(){
       g.chars += chars;
       g.keys.push(key);
       if (!reconstructible) g.reconstructible = false;
+      return g;
     }
     try {
       for (var i = 0; i < localStorage.length; i++){
@@ -12712,10 +12713,33 @@ window._hdrCleanCache = function(){
         if (!k) continue;
         var v = localStorage.getItem(k) || '';
         var chars = k.length + v.length;
-        var m = /^ligaExt_(.+?)(?:_(?:protected|backup|snap_\d+))?$/.exec(k);
+        /* Los derivados de una liga (backup/protected/snapshot) pueden
+           llevar el sufijo separado por "_" (convención actual del
+           escritor, `slug+'_backup'`) O por "-" (restos de una
+           convención anterior — ej. `grecia-backup`, `alemania-snap-
+           1777655702685` — verificados en dispositivos reales). Ambos
+           deben reconocerse como derivados del MISMO slug, o quedan
+           huérfanos contando como "liga" aparte y nunca se liberan. */
+        var m = /^ligaExt_(.+?)(?:[_-](?:protected|backup|snap[_-]\d+))?$/.exec(k);
         if (m && k.indexOf('ligaExt_') === 0){
-          var isDerived = /_(protected|backup|snap_\d+)$/.test(k);
-          add('🏆 Liga: ' + m[1], chars, isDerived, k);
+          var isDerived = /[_-](?:protected|backup|snap[_-]\d+)$/.test(k);
+          var g = add('🏆 Liga: ' + m[1], chars, isDerived, k);
+          /* Identidad real de la liga (slug=fuente de verdad de todo el
+             motor; el nombre visible puede haber sido renombrado a mano
+             por el admin vía cfg.name) — SOLO se lee de la clave MAIN,
+             nunca de _protected/_backup/_snap, para no confundir un
+             derivado stale con el estado actual. Puramente de lectura:
+             nunca se usa para decidir qué borrar, solo para mostrarlo. */
+          if (!isDerived && !g.identityRead){
+            g.identityRead = true;
+            g.slug = m[1];
+            try {
+              var parsed = JSON.parse(v);
+              var custom = parsed && parsed.config && typeof parsed.config.name === 'string' ? parsed.config.name.trim() : '';
+              g.displayName = custom || '';
+              g.teamCount = (parsed && Array.isArray(parsed.teams)) ? parsed.teams.length : null;
+            } catch(_){}
+          }
           continue;
         }
         if (k.indexOf('tour_') === 0){ add('🌐 Torneos (tour_*)', chars, false, k); continue; }
@@ -12728,7 +12752,10 @@ window._hdrCleanCache = function(){
     } catch(_){}
     var rows = Object.keys(groups).map(function(label){
       var g = groups[label];
-      return {label:label, chars:g.chars, reconstructible:g.reconstructible, n:g.keys.length};
+      return {
+        label:label, chars:g.chars, reconstructible:g.reconstructible, n:g.keys.length,
+        slug:g.slug || null, displayName:g.displayName || '', teamCount:(g.teamCount == null ? null : g.teamCount)
+      };
     }).sort(function(a,b){ return b.chars - a.chars; });
     return {rows:rows, totalChars:totalChars};
   }
@@ -12745,9 +12772,14 @@ window._hdrCleanCache = function(){
       for (var i = 0; i < localStorage.length; i++){
         var k = localStorage.key(i);
         if (!k) continue;
-        if (/^ligaExt_.+_snap_\d+$/.test(k) ||
-            /^ligaExt_.+_backup$/.test(k) ||
-            /^ligaExt_.+_protected$/.test(k) ||
+        /* Mismo fix que `_scan()`: reconoce el sufijo derivado tanto con
+           "_" (convención actual) como con "-" (restos de una convención
+           anterior, confirmados en dispositivos reales — ej.
+           `ligaExt_grecia-backup`, `ligaExt_alemania-snap-1777655702685`).
+           Sin esto, esas copias NUNCA se liberaban con este botón. */
+        if (/^ligaExt_.+[_-]snap[_-]\d+$/.test(k) ||
+            /^ligaExt_.+[_-]backup$/.test(k) ||
+            /^ligaExt_.+[_-]protected$/.test(k) ||
             /^ef_player_stats_.*v1$/.test(k) ||
             k === 'comp_icons_v1'){
           toDrop.push(k);
@@ -12795,10 +12827,22 @@ window._hdrCleanCache = function(){
     html += '<div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.6);margin:14px 0 8px;">DESGLOSE (mayor a menor)</div>';
     html += '<div style="display:flex;flex-direction:column;gap:4px;">';
     s.rows.forEach(function(r){
+      /* Identidad real (slug → nombre custom del admin + nº equipos),
+         solo para ligas — permite verificar qué slug corresponde a qué
+         liga renombrada SIN adivinar. Puramente informativo. */
+      var identity = '';
+      if (r.slug){
+        identity = '<div style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.5);margin-top:2px;">'
+          + 'slug: <span style="font-family:\'Courier New\',monospace;color:rgba(255,255,255,.7);">' + _esc(r.slug) + '</span>'
+          + (r.displayName ? ' → <span style="color:#ffd633;">"' + _esc(r.displayName) + '"</span>' : ' <span style="color:rgba(255,255,255,.35);">(sin nombre custom)</span>')
+          + (r.teamCount != null ? ' · ' + r.teamCount + ' equipo' + (r.teamCount === 1 ? '' : 's') : '')
+          + '</div>';
+      }
       html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px;">'
         + '<div style="flex:1;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);">' + _esc(r.label)
         +   (r.n > 1 ? ' <span style="color:rgba(255,255,255,.4);">(' + r.n + ')</span>' : '')
         +   (r.reconstructible ? ' <span style="color:#7df0a0;font-size:10px;">· reconstruible</span>' : '')
+        +   identity
         + '</div>'
         + '<div style="font-family:\'Courier New\',monospace;font-size:12px;color:#ffb060;white-space:nowrap;">' + _fmtKb(r.chars) + '</div>'
         + '</div>';

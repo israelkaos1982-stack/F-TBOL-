@@ -58328,6 +58328,118 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   window._fixupExtraLeagueZonesV1 = _fixupExtraLeagueZonesV1;
   try { _fixupExtraLeagueZonesV1(); } catch(_){}
+
+  /* ── FIXUP ONE-SHOT: restaura la plantilla OFICIAL del Atlético
+     Madrid tras el bug "añadir jugador en vivo borra la plantilla"
+     (2026-08-15) — el usuario proporcionó la lista oficial completa
+     de la temporada 2026-27 (23 jugadores de plantilla activa; los 3
+     cedidos — Moldovan, Lenglet — quedan fuera, no juegan con el
+     primer equipo). Corre UNA vez por dispositivo (flag), preservando
+     las estadísticas YA acumuladas (pj/gol/mvp/...) de Morten Hjulmand
+     y Lee Kang-In — los 2 únicos jugadores que sí llegaron a jugar
+     partidos reales en el estado corrupto — y creando el resto desde
+     cero (0 estadísticas, ya que ese roster desapareció del picker
+     mientras estuvo corrupto y no pudo acumular nada). */
+  function _fixupAtletiRosterRestoreV1(){
+    var FLAG = 'ftbol_fixup_atleti_roster_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
+      var data = JSON.parse(raw);
+      var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+      var t = null;
+      for (var i = 0; i < teams.length; i++) {
+        if (teams[i] && String(teams[i].name || '').trim().toLowerCase() === 'atlético madrid') { t = teams[i]; break; }
+      }
+      if (!t) {
+        for (var j = 0; j < teams.length; j++) {
+          var nmChk = String(teams[j] && teams[j].name || '').trim().toLowerCase();
+          if (nmChk.indexOf('atl') === 0 && nmChk.indexOf('madrid') !== -1) { t = teams[j]; break; }
+        }
+      }
+      if (!t) { window._lsSetSafe(FLAG, '1'); return; }
+      /* [dorsal, nombre, posición, poder, flags] — dado por el usuario. */
+      var OFFICIAL = [
+        ['13', 'Jan Oblak',       'POR', 86, {elite:true}],
+        ['1',  'J. Musso',        'POR', 78, {}],
+        ['22', 'A. Grimaldo',     'DEF', 85, {elite:true}],
+        ['17', 'Dávid Hancko',    'DEF', 84, {elite:true}],
+        ['14', 'M. Llorente',     'DEF', 84, {elite:true, natGoal:true}],
+        ['24', 'R. Le Normand',   'DEF', 83, {}],
+        ['2',  'J. Giménez',      'DEF', 83, {elite:true}],
+        ['18', 'Marc Pubill',     'DEF', 79, {}],
+        ['3',  'Matteo Ruggeri',  'DEF', 78, {}],
+        ['6',  'Koke',            'MED', 83, {captain:true, elite:true, natGoal:true}],
+        ['23', 'M. Hjulmand',     'MED', 83, {elite:true}],
+        ['7',  'Kang-In Lee',     'MED', 82, {elite:true, natGoalPro:true}],
+        ['8',  'Pablo Barrios',   'MED', 81, {}],
+        ['5',  'Johnny Cardoso',  'MED', 80, {}],
+        ['21', 'Obed Vargas',     'MED', 77, {}],
+        ['4',  'Rodrigo Mendoza', 'MED', 76, {}],
+        ['15', 'Thomas Lemar',    'MED', 75, {}],
+        ['19', 'Julián Alvarez',  'DEL', 88, {freeKick:true, penalty:true, elite:true, natGoalPro:true}],
+        ['11', 'A. Lookman',      'DEL', 84, {elite:true, natGoal:true}],
+        ['10', 'Álex Baena',      'DEL', 83, {elite:true}],
+        ['9',  'A. Sørloth',      'DEL', 82, {}],
+        ['20', 'Giuliano',        'DEL', 80, {}],
+        ['12', 'Carlos Martín',   'DEL', 77, {}]
+      ];
+      /* Alias explícitos para conservar el `id`/estadísticas de
+         jugadores que existían en el roster corrupto con una grafía o
+         un orden nombre-apellido distinto ("Lee Kang-In" del picker en
+         vivo ↔ "Kang-In Lee" de la lista oficial; "Morten Hjulmand" ↔
+         "M. Hjulmand"). */
+      var ALIASES = { 'm hjulmand': 'morten hjulmand', 'kang in lee': 'lee kang in' };
+      function _norm(s) {
+        var x = String(s || '').trim().toLowerCase();
+        try { x = x.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (_) {}
+        return x.replace(/[^a-z0-9]+/g, ' ').trim();
+      }
+      var existingByName = {};
+      (Array.isArray(t.players) ? t.players : []).forEach(function(p) {
+        if (p && p.name) existingByName[_norm(p.name)] = p;
+      });
+      var newPlayers = OFFICIAL.map(function(row) {
+        var num = row[0], name = row[1], pos = row[2], power = row[3], flags = row[4] || {};
+        var key = _norm(name);
+        var existing = existingByName[key] || existingByName[ALIASES[key]];
+        var out = {
+          id: existing ? existing.id : ('p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+          name: existing ? existing.name : name,
+          num: num,
+          pos: pos,
+          power: power,
+          captain: !!flags.captain,
+          freeKick: !!flags.freeKick,
+          penalty: !!flags.penalty,
+          elite: !!flags.elite,
+          natGoal: !!flags.natGoal,
+          natGoalPro: !!flags.natGoalPro,
+          pj: existing ? (existing.pj || 0) : 0,
+          gol: existing ? (existing.gol || 0) : 0,
+          pen: existing ? (existing.pen || 0) : 0,
+          fk: existing ? (existing.fk || 0) : 0,
+          mvp: existing ? (existing.mvp || 0) : 0,
+          ta: existing ? (existing.ta || 0) : 0,
+          tr: existing ? (existing.tr || 0) : 0,
+          imbat: existing ? (existing.imbat || 0) : 0,
+          penSaved: existing ? (existing.penSaved || 0) : 0
+        };
+        return out;
+      });
+      t.players = newPlayers;
+      t.updatedAt = Date.now();
+      if (typeof window.saveData === 'function') window.saveData('liga-ea-sports', data);
+      else window._lsSetSafe('ligaExt_liga-ea-sports', JSON.stringify(data));
+      try { console.warn('[fixup] Plantilla oficial del Atlético Madrid restaurada (' + newPlayers.length + ' jugadores).'); } catch (_) {}
+    } catch (e) {
+      try { console.warn('[fixup] atleti roster restore falló', e); } catch (_) {}
+    }
+    try { window._lsSetSafe(FLAG, '1'); } catch (_) {}
+  }
+  window._fixupAtletiRosterRestoreV1 = _fixupAtletiRosterRestoreV1;
+  try { _fixupAtletiRosterRestoreV1(); } catch (_) {}
   /* Defensa adicional: re-sembrar al abrir si el storage quedó vacío. */
   (function(){
     var _origOpenX = window.openLigaExt;

@@ -1,5 +1,130 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `_psHubClubMatches`/`_slotIsH` GATEAN el alias Bayern↔Liverpool por el HUB ACTUAL — antes cualquier caja mostraba el partido de Liverpool (obligatorio, 2026-08-15)
+
+**Bug (usuario 2026-08-15, «Atlético Madrid»)**: en la caja del Atlético
+Madrid (Isra/Noruega) la card "Próximo partido" mostraba **"Borussia
+Dortmund vs Liverpool 💡"** (Europa League — Grupo J1) — el partido del
+Liverpool (Toñín), no el del Atlético Madrid. El usuario: "estoy en la
+caja del Atlético Madrid y me sale un partido del Liverpool, ese error
+es muy grave".
+
+### Causa raíz
+
+`_psHubClubMatches(name)` (`misc_body_1.html`, la función que resuelve
+"¿este equipo es el del hub ACTIVO?" para Copa del Rey, Recopa,
+Supercopa de España/Europa, Champions/Europa/Conference —fase de
+grupos y KO— y Previa Champions) tenía una línea de alias legacy
+**incondicional**:
+```js
+if (k === _psNameKey('Bayern Munich') || k === _psNameKey('Bayern') || k === _psNameKey('Liverpool')) return true;
+```
+Esta línea existe para cubrir el slot renombrado Bayern Munich →
+Liverpool (2026-05-23): si el hub ACTIVO es Liverpool/Toñín pero algún
+dato antiguo todavía guarda el equipo como "Bayern Munich", debe seguir
+reconociéndose como el club del hub. El bug: la comprobación NO miraba
+en absoluto cuál era el hub activo (`hub`) — devolvía `true` para
+CUALQUIER partido con "Liverpool"/"Bayern Munich" sin importar si la
+caja abierta era la de Atlético Madrid, Arsenal, Real Madrid, FC
+Barcelona o PSG. `_slotIsH` (dentro de `_realPair`, usada por Torneos
+de Verano/Mundialito) tenía el MISMO patrón con los alias "Bayern
+Munich"/"Bayern Múnich"/"Bayern".
+
+### Fix
+
+Nuevo helper `_psIsBayernLiverpoolAliasKey(k)` (junto a `_psNameKey`):
+solo indica "es uno de los alias Bayern/Liverpool", sin decidir nada
+por sí solo. `_psHubClubMatches` y `_slotIsH` ahora exigen que el
+**hub ACTUAL** (`hub`/`hubName`) sea TAMBIÉN uno de esos alias antes de
+aceptar el nombre del partido como "del hub" — `_psIsBayernLiverpoolAliasKey(hubK)
+&& _psIsBayernLiverpoolAliasKey(k)`. Con el hub en Atlético Madrid,
+`hubK` no es un alias de Bayern/Liverpool, así que un partido con
+"Liverpool" ya NO se reclama como propio.
+
+Como `_psHubClubMatches` es la función compartida por Copa del Rey,
+Recopa, Supercopa de España, Supercopa de Europa, Champions/Europa/
+Conference (fase de grupos y eliminatoria) y Previa Champions (4
+rondas), este único fix corrige el mismo bug en las 7 competiciones a
+la vez.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un alias legacy de nombre de equipo (Bayern↔
+   Liverpool, o cualquier otro renombrado futuro de un slot humano) se
+   compruebe SOLO contra el nombre del partido. Debe comprobarse
+   TAMBIÉN contra el hub ACTUAL (`_psHumanLogicName()`) — un alias solo
+   es válido cuando el hub abierto es precisamente ese slot.
+2. **PROHIBIDO** añadir un alias nuevo de este tipo directamente dentro
+   de `_psHubClubMatches`/`_slotIsH` sin pasar por
+   `_psIsBayernLiverpoolAliasKey` (o un helper equivalente gateado por
+   hub). Cualquier función nueva de resolución de "¿es el club del
+   hub?" hereda este patrón.
+3. Toda caja de mister NUEVA está protegida automáticamente — el gate
+   es genérico por hub, no hardcodea Atlético Madrid ni ningún club
+   concreto.
+
+## El picker "AÑADIR POR LIGA" ya NO tiene desplegable — lista plana de TODAS las ligas, cada una con su propio ✅/⬜ (obligatorio, 2026-08-15)
+
+**Petición usuario 2026-08-15** (overlay "👁 Equipos por competición" →
+"📋 AÑADIR POR LIGA"): pese a varias rondas previas de fixes de la
+ambigüedad tap-vs-scroll del desplegable de 54 ligas
+(`#eur-pick-league-list`, `overflow-y:auto` anidado dentro del propio
+overlay), el usuario seguía sin poder usarlo: "cuando intento meterlos
+añadir manualmente el desplegable no funciona". Pidió explícitamente:
+"quita el desplegable, que salgan todas las ligas y yo con pulsar ✅️
+en cada liga que emergan los equipos para luego enviar a cada
+competición".
+
+### Fix — sin desplegable, sin ningún contenedor con scroll anidado
+
+`_eurPickerButtonHtml`/`_eurWireLeagueRowTap` (el botón + lista
+desplegable con `#eur-pick-league-list`) se ELIMINARON por completo.
+En su lugar, `_eurPickerSectionHtml` pinta las **54 ligas** de
+`_eurAllLeagueSlugsSorted()` como una lista PLANA, cada una con su
+propio botón toggle **✅ (expandida) / ⬜ (colapsada)**
+(`_eurPickerLeagueRowHtml`, `data-eur-pick-toggle="<slug>"`). Pulsar el
+toggle de una liga expande su clasificación completa (con la zona
+sugerida por posición, botón ➕ Añadir por equipo y "✅ AÑADIR TODOS
+LOS SUGERIDOS") **debajo de esa misma fila, en la propia página** —
+sin ningún `max-height`/`overflow-y:auto` anidado, ni para la lista de
+ligas ni para la lista de equipos de cada liga expandida. El único
+scroll que existe es el nativo del overlay (`#eur-manual-ov`,
+`overflow-y:auto` en el contenedor raíz), así que no hay ninguna
+ambigüedad tap-vs-scroll que resolver — el bug de fondo que motivó los
+3 fixes anteriores del desplegable deja de poder reproducirse porque
+ya no existe el contenedor que lo causaba.
+
+**Multi-liga**: a diferencia del desplegable anterior (una sola liga
+seleccionada a la vez, `_eurPickerSlug`), ahora el estado es POR SLUG
+(`_eurPickerExpanded`/`_eurPickerDataBySlug`/`_eurPickerLoadingBySlug`/
+`_eurPickerErrorBySlug`, todos objetos `slug → valor`) — el admin puede
+tener varias ligas expandidas a la vez, cada una cargando/mostrando su
+propia clasificación de forma independiente.
+
+`_eurWireTapFallbackAll` ya no necesita el caso especial
+`_eurWireLeagueRowTap` (tap-vs-scroll por `touchmove`): los botones
+✅/⬜ de cada liga son botones normales, heredan el mismo respaldo
+táctil (`_eurWireTapFallback`, disparo en `touchstart`) que el resto de
+botones del overlay.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir un `<select>`/desplegable custom con un
+   contenedor `overflow-y:auto` anidado para elegir UNA liga de este
+   picker. El patrón correcto es la lista plana con toggle ✅/⬜ por
+   liga, sin scroll anidado — es la 4ª vez que se intenta arreglar el
+   desplegable (2026-07-03 → 2026-08-01 → 2026-08-02 → 2026-08-15) y
+   las 3 primeras rondas de fixes de la ambigüedad táctil no bastaron
+   para el usuario; eliminar el contenedor scrollable de raíz es lo que
+   lo resuelve de forma definitiva.
+2. **PROHIBIDO** volver al estado "una sola liga seleccionada"
+   (`_eurPickerSlug` global). El estado es SIEMPRE por slug
+   (`_eurPickerExpanded`/`_eurPickerDataBySlug`/etc.) para soportar
+   varias ligas expandidas a la vez.
+3. Toda liga NUEVA que se añada a `LEAGUE_DEFAULT_ZONES` aparece
+   automáticamente en esta lista (vía `_eurAllLeagueSlugsSorted()`) —
+   no hay lista hardcodeada de slugs que mantener aparte.
+
 ## El portero de la PORTERÍA IMBATIDA es SIEMPRE el de mayor nivel-poder de la plantilla — humano e IA, sin picker (obligatorio, 2026-08-15) ⚠️ SUPERSEDE todas las secciones de este archivo que documentan/exigen el picker interactivo `showImbatForce` (buscar "PORTERÍA IMBATIDA OBLIGATORIA", "El picker de portería imbatida...", "confirmImbatForce"/"cancelImbatForce", más abajo)
 
 **Bug (usuario 2026-08-15, «Argentina» — Emiliano Martínez 85 vs Walter

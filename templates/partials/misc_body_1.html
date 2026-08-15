@@ -5848,6 +5848,21 @@ window._hdrCleanCache = function(){
     return String(s||'').toLowerCase().normalize('NFD')
       .replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
   }
+  /* ¿`k` (ya normalizado por `_psNameKey`) es uno de los alias legacy
+     del slot renombrado Bayern Munich → Liverpool ("Bayern
+     Munich"/"Bayern Múnich"/"Bayern"/"Liverpool")? SOLO sirve para
+     decidir si el HUB ACTUAL es ese slot — nunca como match absoluto
+     de "este nombre es del hub" sin comprobar también el hub. Bug
+     2026-08-15 (foto usuario: en la caja del Atlético Madrid emergía
+     un partido "Borussia Dortmund vs Liverpool" de Europa League):
+     `_psHubClubMatches`/`_slotIsH` trataban CUALQUIER partido con
+     "Liverpool"/"Bayern Munich" como del hub ACTIVO, sin importar qué
+     caja de mister estuviera abierta — el alias solo es válido cuando
+     el propio hub (`_psHumanLogicName()`) es Liverpool/Bayern. */
+  function _psIsBayernLiverpoolAliasKey(k){
+    return k === _psNameKey('Bayern Munich') || k === _psNameKey('Bayern Múnich')
+        || k === _psNameKey('Bayern') || k === _psNameKey('Liverpool');
+  }
 
   /* Pools de rivales por torneo (pretemporada). El cuadro/bracket
      completo no existe aún → al elegir torneo asignamos un rival a
@@ -9025,12 +9040,16 @@ window._hdrCleanCache = function(){
         if (!nm || nm === 'PENDIENTE') return false;
         var k = _psNameKey(nm);
         var hubName = _psHumanLogicName();
+        var hubK = _psNameKey(hubName);
         /* Match directo por nombre del club del hub (+ aliases legacy
-           del slot renombrado Bayern → Liverpool). */
-        if (k === _psNameKey(hubName))             return true;
-        if (k === _psNameKey('Bayern Munich'))     return true;
-        if (k === _psNameKey('Bayern Múnich'))     return true;
-        if (k === _psNameKey('Bayern'))            return true;
+           del slot renombrado Bayern → Liverpool) — el alias SOLO
+           cuenta cuando el hub ACTUAL es ese mismo slot (Liverpool/
+           Toñín). Bug 2026-08-15: sin el gate `_psIsBayernLiverpoolAliasKey(hubK)`,
+           CUALQUIER caja de mister (Atlético Madrid, Arsenal…) trataba
+           un equipo "Liverpool"/"Bayern Munich" del torneo como si
+           fuera SU propio club y le robaba el partido a la card. */
+        if (k === hubK) return true;
+        if (_psIsBayernLiverpoolAliasKey(hubK) && _psIsBayernLiverpoolAliasKey(k)) return true;
         /* `isHuman` solo cuenta si lo dirige el MISMO mister que el
            club del hub (excluye Real Madrid/Arsenal/… que también son
            humanos en el mismo torneo). Si el hub no es un humano
@@ -9434,8 +9453,20 @@ window._hdrCleanCache = function(){
     try {
       var k = _psNameKey(name);
       var hub = (typeof _psHumanLogicName === 'function') ? String(_psHumanLogicName()||'') : '';
-      if (hub && k === _psNameKey(hub)) return true;
-      if (k === _psNameKey('Bayern Munich') || k === _psNameKey('Bayern') || k === _psNameKey('Liverpool')) return true;
+      var hubK = hub ? _psNameKey(hub) : '';
+      if (hub && k === hubK) return true;
+      /* Alias legacy Bayern↔Liverpool — SOLO si el hub ACTUAL es ese
+         mismo slot. Bug 2026-08-15 (foto usuario: caja del Atlético
+         Madrid mostrando "Borussia Dortmund vs Liverpool" de Europa
+         League): esta comprobación era incondicional (`k ===
+         _psNameKey('Liverpool')` sin mirar `hub`), así que CUALQUIER
+         caja de mister — no solo la de Liverpool/Toñín — reclamaba
+         como suyo cualquier partido donde apareciera "Liverpool"/
+         "Bayern Munich". Es la función que alimentan Copa del Rey,
+         Recopa, Supercopa España/Europa, Champions/Europa/Conference
+         (fase de grupos y KO) y Previa Champions — el gate aquí
+         corrige las 7 competiciones de una vez. */
+      if (hub && _psIsBayernLiverpoolAliasKey(hubK) && _psIsBayernLiverpoolAliasKey(k)) return true;
       if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)
           && typeof window._mhSameMister === 'function' && hub && window._mhSameMister(hub, name)) return true;
     } catch(_){}
@@ -43932,14 +43963,26 @@ window._hdrCleanCache = function(){
     return slugs.map(function(s){ return {slug:s, label:_eurSlugLabel(s)}; })
       .sort(function(a,b){ return a.label.localeCompare(b.label,'es'); });
   }
-  var _eurPickerSlug = '';
-  var _eurPickerData = null;
-  var _eurPickerLoading = false;
-  var _eurPickerError = '';
+  /* Estado del picker "AÑADIR POR LIGA" — POR SLUG (2026-08-15,
+     petición usuario "quita el desplegable, que salgan todas las
+     ligas y yo con pulsar ✅️ en cada liga que emergan los equipos"):
+     el desplegable único con un contenedor `overflow-y:auto` anidado
+     (`#eur-pick-league-list`, hasta 54 ligas) seguía sin funcionar de
+     forma fiable para el usuario pese a varias rondas de fixes de la
+     ambigüedad tap-vs-scroll (ver histórico más abajo, conservado como
+     referencia). En vez de UNA liga seleccionada a la vez, CADA liga es
+     ahora una fila con su propio toggle ✅/⬜ — pulsarla expande su
+     clasificación completa EN LA PROPIA PÁGINA (sin ningún contenedor
+     con scroll anidado), así el único scroll que existe es el nativo
+     del overlay entero, sin ninguna ambigüedad táctil que resolver. */
+  var _eurPickerExpanded = {};      // slug -> true/false (expandida)
+  var _eurPickerDataBySlug = {};    // slug -> clasificación cargada
+  var _eurPickerLoadingBySlug = {}; // slug -> true/false
+  var _eurPickerErrorBySlug = {};   // slug -> mensaje de error
   /* Fetch con TIMEOUT + reintentos — sin esto, un fetch colgado (Railway
      frío / red móvil intermitente) deja el picker congelado para siempre
      en "⏳ Cargando clasificación…" (bug 2026-07-04: un solo intento sin
-     timeout nunca liberaba `_eurPickerLoading`, así que ni el error ni
+     timeout nunca liberaba el flag de carga, así que ni el error ni
      los datos llegaban a pintarse). Mismo patrón "secuencial + pausado +
      reintentos" que `_eurHydrateMissingLeagues`. */
   function _eurFetchWithRetry(url, tries, timeoutMs){
@@ -43985,24 +44028,24 @@ window._hdrCleanCache = function(){
       cb();
     });
   }
-  function _eurPickerLoadLeague(slug){
-    _eurPickerSlug = slug;
-    _eurPickerData = null;
-    _eurPickerError = '';
-    if(!slug){ _eurManualOverlayRender(); return; }
-    _eurPickerLoading = true;
+  /* Trae la clasificación de UNA liga (local → índice servidor →
+     fetch con reintentos) y la guarda en `_eurPickerDataBySlug[slug]`.
+     Solo se dispara cuando el admin EXPANDE esa liga (`_eurPickerToggleLeague`). */
+  function _eurPickerFetchLeague(slug){
+    _eurPickerLoadingBySlug[slug] = true;
+    _eurPickerErrorBySlug[slug] = '';
     _eurManualOverlayRender();
     function _finish(d){
-      _eurPickerLoading = false;
-      _eurPickerData = d;
-      if(!d) _eurPickerError = 'No se ha podido cargar esta liga (ni local ni servidor tras varios intentos). Pulsa la liga otra vez para reintentar.';
+      _eurPickerLoadingBySlug[slug] = false;
+      _eurPickerDataBySlug[slug] = d;
+      if(!d) _eurPickerErrorBySlug[slug] = 'No se ha podido cargar esta liga (ni local ni servidor tras varios intentos). Vuelve a pulsar ✅ para reintentar.';
       try { _eurManualOverlayRender(); }
       catch(_e){
         /* Si el render de la fila lanza (dato corrupto de esta liga
            concreta), no dejar el overlay congelado en "Cargando…": se
            muestra el error en vez de la clasificación. */
-        _eurPickerData = null;
-        _eurPickerError = 'No se pudo mostrar la clasificación de esta liga (dato corrupto).';
+        _eurPickerDataBySlug[slug] = null;
+        _eurPickerErrorBySlug[slug] = 'No se pudo mostrar la clasificación de esta liga (dato corrupto).';
         try { _eurManualOverlayRender(); } catch(_e2){}
       }
     }
@@ -44025,9 +44068,9 @@ window._hdrCleanCache = function(){
          va a ser vacío igualmente. (Si el índice no cargó, `_eurLeagueIndexSlugs`
          sigue null → no se salta nada, se intenta el fetch normal.) */
       if(_eurLeagueIndexSlugs && !_eurLeagueIndexSlugs[slug]){
-        _eurPickerLoading = false;
-        _eurPickerData = null;
-        _eurPickerError = 'Esta liga aún no tiene equipos guardados en NINGÚN dispositivo (0 equipos en el servidor). Simúlala o pega su plantilla primero en "Resto de Ligas".';
+        _eurPickerLoadingBySlug[slug] = false;
+        _eurPickerDataBySlug[slug] = null;
+        _eurPickerErrorBySlug[slug] = 'Esta liga aún no tiene equipos guardados en NINGÚN dispositivo (0 equipos en el servidor). Simúlala o pega su plantilla primero en "Resto de Ligas".';
         _eurManualOverlayRender();
         return;
       }
@@ -44046,14 +44089,24 @@ window._hdrCleanCache = function(){
       });
     });
   }
-  /* Devuelve las filas {pos, name, pj, zone} de la liga cargada en el
-     picker, con la ZONA SUGERIDA por posición (mismo orden/"skip" que
-     `_computeQualifiedFromLeagues`: ucl → uclPrev(R4) → prevR3 → prevR2
-     → prevR1 → uel → uecl). */
-  function _eurPickerRows(){
-    var d = _eurPickerData;
+  /* Expande/colapsa la clasificación de UNA liga. Al expandir por
+     primera vez (sin datos cacheados todavía) dispara la carga. */
+  function _eurPickerToggleLeague(slug){
+    if(!slug) return;
+    var willExpand = !_eurPickerExpanded[slug];
+    _eurPickerExpanded[slug] = willExpand;
+    _eurManualOverlayRender();
+    if(willExpand && !_eurPickerDataBySlug[slug] && !_eurPickerLoadingBySlug[slug]){
+      _eurPickerFetchLeague(slug);
+    }
+  }
+  /* Devuelve las filas {pos, name, pj, zone} de la liga `slug` (ya
+     cargada en `_eurPickerDataBySlug`), con la ZONA SUGERIDA por
+     posición (mismo orden/"skip" que `_computeQualifiedFromLeagues`:
+     ucl → uclPrev(R4) → prevR3 → prevR2 → prevR1 → uel → uecl). */
+  function _eurPickerRows(slug){
+    var d = _eurPickerDataBySlug[slug];
     if(!d || !Array.isArray(d.teams)) return [];
-    var slug = _eurPickerSlug;
     var zonesDefault = (window.LEAGUE_DEFAULT_ZONES && window.LEAGUE_DEFAULT_ZONES[slug]) || {};
     var zones = Object.assign({}, zonesDefault, (d.config && d.config.zones) || {});
     var rN = Array.isArray(d.results) ? d.results.length : 0;
@@ -44077,59 +44130,40 @@ window._hdrCleanCache = function(){
   }
   var _EUR_ZONE_BY_KEY = {};
   _EUR_REPORT_ZONES.forEach(function(z){ _EUR_ZONE_BY_KEY[z.key] = z; });
-  var _eurPickerListOpen = false;
-  /* Si un re-render de FONDO (fin de la auto-hidratación, que puede
-     tardar 1-2 min) llega mientras el admin tiene la lista desplegable
-     abierta, NO se aplica al instante — `_eurManualOverlayRender()`
-     hace SIEMPRE `ov.innerHTML = ...`, destruyendo y reconstruyendo
-     TODO el overlay; si eso ocurre a mitad de un scroll/tap dentro de
-     `#eur-pick-league-list`, el gesto se corta en seco y el picker
-     "se cierra solo" sin que el admin lo pidiera (bug 2026-08-01, "no
-     deja seleccionar Ligas, el selector se cierra muy rápido"). El
-     estado más fresco (`_eurManualHydrating`/`_eurManualLastHydrateAt`)
-     ya queda actualizado igualmente — se pinta en el PRÓXIMO render
-     natural (cerrar el picker, elegir una liga, tocar cualquier otro
-     control), nunca a mitad de una interacción con la lista. */
-  var _eurRenderPendingAfterPicker = false;
+  /* Un re-render de FONDO (fin de la auto-hidratación, que puede tardar
+     1-2 min) simplemente re-pinta — ya no hay ningún desplegable/lista
+     anidada con scroll propio que un `ov.innerHTML = ...` de en medio
+     pueda "cerrar solo" (bug 2026-08-01, resuelto de raíz al eliminar
+     esa lista anidada 2026-08-15). Se mantiene el nombre de la función
+     porque `_eurManualTriggerHydrate` ya la llama. */
   function _eurManualRenderOrDefer(){
-    if (_eurPickerListOpen){ _eurRenderPendingAfterPicker = true; return; }
-    _eurRenderPendingAfterPicker = false;
     _eurManualOverlayRender();
   }
-  /* Picker de liga CUSTOM (no `<select>` nativo) — petición usuario
-     2026-07-03 ("mejor para seleccionar liga que sea marcar ✅"): el
-     `<select>` nativo se abre como un picker del SISTEMA (Android),
-     rompiendo el look de la app y mostrando radios ⭕ genéricos en vez
-     de un check ✅ acorde al resto de la UI. Botón que despliega una
-     lista propia, estilizada, con ✅ en la liga elegida. */
-  function _eurPickerButtonHtml(){
-    var current = _eurPickerSlug ? _eurSlugLabel(_eurPickerSlug) : '— Elige una liga —';
-    var rows = _eurAllLeagueSlugsSorted().map(function(o){
-      var sel = (o.slug === _eurPickerSlug);
-      return '<div data-eur-pick-league="'+_eurEsc(o.slug)+'" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 12px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer;'
-        + (sel ? 'background:rgba(60,200,120,.12);' : '') + '">'
-        + '<span>'+_eurEsc(o.label)+'</span>'
-        + '<span style="color:#3cc878;font-size:14px;">'+(sel ? '✅' : '')+'</span>'
-        + '</div>';
-    }).join('');
-    return '<div style="position:relative;">'
-      +   '<button id="eur-pick-league-btn" style="width:100%;text-align:left;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:9px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:8px;">'
-      +     '<span>'+_eurEsc(current)+'</span><span style="color:rgba(255,255,255,.5);">'+(_eurPickerListOpen?'▴':'▾')+'</span>'
-      +   '</button>'
-      +   (_eurPickerListOpen
-            ? ('<div id="eur-pick-league-list" style="position:absolute;top:100%;left:0;right:0;margin-top:4px;background:#12161c;border:1px solid rgba(60,200,120,.5);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.6);max-height:280px;overflow-y:auto;z-index:200003;">' + rows + '</div>')
-            : '')
-      + '</div>';
-  }
-  function _eurPickerSectionHtml(){
-    var body = '';
-    if(_eurPickerLoading){
+  /* Fila de UNA liga del picker "AÑADIR POR LIGA": un botón ✅/⬜ que
+     expande/colapsa su clasificación completa DEBAJO, en la propia
+     página — sin ningún contenedor con scroll anidado (ni el
+     desplegable de liga que había antes, ni un `max-height` para la
+     lista de equipos), así el único scroll es el nativo del overlay y
+     no hay ninguna ambigüedad tap-vs-scroll que resolver. */
+  function _eurPickerLeagueRowHtml(o){
+    var slug = o.slug;
+    var expanded = !!_eurPickerExpanded[slug];
+    var loading = !!_eurPickerLoadingBySlug[slug];
+    var err = _eurPickerErrorBySlug[slug] || '';
+    var data = _eurPickerDataBySlug[slug] || null;
+    var header = '<button data-eur-pick-toggle="'+_eurEsc(slug)+'" style="width:100%;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:9px 10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;background:'+(expanded?'rgba(60,200,120,.12)':'rgba(255,255,255,.04)')+';border:1px solid '+(expanded?'#3cc878':'rgba(255,255,255,.16)')+';border-radius:6px;cursor:pointer;margin-bottom:'+(expanded?'0':'5px')+';">'
+      +   '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_eurEsc(o.label)+'</span>'
+      +   '<span style="font-size:15px;flex:0 0 auto;">'+(expanded?'✅':'⬜')+'</span>'
+      + '</button>';
+    if (!expanded) return header;
+    var body;
+    if (loading){
       body = '<div style="padding:10px;font-family:Rajdhani,sans-serif;font-size:13px;color:rgba(255,255,255,.7);">⏳ Cargando clasificación…</div>';
-    } else if(_eurPickerError){
-      body = '<div style="padding:10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#ff8080;">⚠️ ' + _eurEsc(_eurPickerError) + '</div>';
-    } else if(_eurPickerSlug && _eurPickerData){
+    } else if (err){
+      body = '<div style="padding:10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#ff8080;">⚠️ ' + _eurEsc(err) + '</div>';
+    } else if (data){
       var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()) || {};
-      var rows = _eurPickerRows();
+      var rows = _eurPickerRows(slug);
       var rowsHtml = rows.map(function(r){
         var z = r.zone ? _EUR_ZONE_BY_KEY[r.zone] : null;
         var already = z && (manual[r.zone]||[]).some(function(t){ return t.name === r.name; });
@@ -44137,7 +44171,7 @@ window._hdrCleanCache = function(){
           ? ('<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:'+z.color+';border:1px solid '+z.color+'55;border-radius:4px;padding:2px 6px;white-space:nowrap;">'+z.emoji+' '+_eurEsc(z.label)+'</span>')
           : '<span style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.35);">— sin zona —</span>';
         var actionBtn = z
-          ? ('<button data-eur-pick-add="1" data-zone="'+r.zone+'" data-name="'+_eurEsc(r.name)+'" style="background:'+(already?'rgba(255,255,255,.08)':'rgba(60,200,120,.15)')+';border:1px solid '+(already?'rgba(255,255,255,.25)':'#3cc878')+';color:'+(already?'rgba(255,255,255,.5)':'#bfffbf')+';border-radius:4px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;white-space:nowrap;">'+(already?'✓ Añadido':'➕ Añadir')+'</button>')
+          ? ('<button data-eur-pick-add="1" data-slug="'+_eurEsc(slug)+'" data-zone="'+r.zone+'" data-name="'+_eurEsc(r.name)+'" style="background:'+(already?'rgba(255,255,255,.08)':'rgba(60,200,120,.15)')+';border:1px solid '+(already?'rgba(255,255,255,.25)':'#3cc878')+';color:'+(already?'rgba(255,255,255,.5)':'#bfffbf')+';border-radius:4px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;white-space:nowrap;">'+(already?'✓ Añadido':'➕ Añadir')+'</button>')
           : '';
         return '<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.06);font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;">'
           + '<span style="width:22px;color:rgba(255,255,255,.5);">'+r.pos+'</span>'
@@ -44148,15 +44182,19 @@ window._hdrCleanCache = function(){
           + '</div>';
       }).join('');
       var anyZoned = rows.some(function(r){ return r.zone; });
-      body = '<div style="max-height:280px;overflow-y:auto;margin:6px 0;">' + rowsHtml + '</div>'
-        + (anyZoned ? '<button id="eur-pick-add-all" style="width:100%;margin-top:4px;background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:6px;padding:9px 14px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;font-weight:700;">✅ AÑADIR TODOS LOS SUGERIDOS DE ESTA LIGA</button>' : '');
+      body = (rowsHtml || '<div style="padding:6px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);">Esta liga no tiene equipos todavía.</div>')
+        + (anyZoned ? ('<button data-eur-pick-add-all="'+_eurEsc(slug)+'" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:6px;padding:9px 14px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;font-weight:700;">✅ AÑADIR TODOS LOS SUGERIDOS DE ESTA LIGA</button>') : '');
     } else {
-      body = '<div style="padding:6px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);">Elige una liga arriba para ver su clasificación completa y qué equipo va a cada competición según su posición.</div>';
+      body = '';
     }
+    return header
+      + '<div style="border:1px solid rgba(60,200,120,.35);border-top:none;border-radius:0 0 6px 6px;padding:8px 6px;margin:-4px 0 8px;background:rgba(0,0,0,.18);">' + body + '</div>';
+  }
+  function _eurPickerSectionHtml(){
+    var rowsHtml = _eurAllLeagueSlugsSorted().map(_eurPickerLeagueRowHtml).join('');
     return '<div style="border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 12px;margin-bottom:14px;background:rgba(255,255,255,.03);">'
-      +   '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">📋 AÑADIR POR LIGA (clasificación completa, varios de golpe)</div>'
-      +   _eurPickerButtonHtml()
-      +   body
+      +   '<div style="font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;color:#fff;margin-bottom:8px;">📋 AÑADIR POR LIGA — pulsa ✅ en cada liga para ver su clasificación completa y añadir equipos a cada competición</div>'
+      +   '<div>' + rowsHtml + '</div>'
       + '</div>';
   }
 
@@ -44342,59 +44380,18 @@ window._hdrCleanCache = function(){
     el.addEventListener('pointerdown', _fire, { passive:false });
     el.addEventListener('mousedown', _fire);
   }
-  /* Filas de `#eur-pick-league-list` (2026-08-02, "ese desplegable solo
-     dura 1 segundo y se cierra"): hasta 54 ligas en un contenedor
-     `overflow-y:auto` — el admin necesita DESLIZAR el dedo por la lista
-     para encontrar la suya (Inglaterra, Italia…) antes de soltar sobre
-     la fila correcta. `_eurWireTapFallback` (arriba) llama SIEMPRE
-     `preventDefault()` en `touchstart` — eso bloquea el scroll nativo
-     para ESE toque: en cuanto el dedo tocaba CUALQUIER fila para
-     empezar a scrollear, se seleccionaba esa fila y el desplegable se
-     cerraba al instante ("solo dura 1 segundo"), sin darle tiempo al
-     admin a deslizar hasta su liga. Aquí se distingue tap de scroll con
-     `touchmove` (SIN `preventDefault` en touchstart/touchmove, para no
-     tocar el scroll nativo): solo se dispara el select si el dedo se
-     movió menos de `MOVE_PX` entre touchstart y touchend — un scroll
-     real (movimiento > umbral) no selecciona nada y el desplegable se
-     queda fijo, exactamente lo pedido ("que se quede fija hasta que
-     marque alguna liga"). `preventDefault()` en `touchend` SOLO cuando
-     se decide que es un tap (evita el doble disparo del click sintético
-     que el navegador añade tras un touchend sin scroll). */
-  function _eurWireLeagueRowTap(row){
-    if(!row || row.__eurRowTapWired) return;
-    row.__eurRowTapWired = true;
-    var MOVE_PX = 10;
-    var startY = 0, startX = 0, moved = false, active = false;
-    function _pt(e){ return (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e; }
-    function onStart(e){
-      active = true; moved = false;
-      var t = _pt(e);
-      startY = t.clientY; startX = t.clientX;
-    }
-    function onMove(e){
-      if(!active) return;
-      var t = _pt(e);
-      if (Math.abs(t.clientY - startY) > MOVE_PX || Math.abs(t.clientX - startX) > MOVE_PX) moved = true;
-    }
-    function onEnd(e){
-      if(!active) return;
-      active = false;
-      if(!moved){
-        try { e && e.preventDefault && e.preventDefault(); } catch(_){}
-        try { row.click(); } catch(_){}
-      }
-    }
-    function onCancel(){ active = false; moved = false; }
-    row.addEventListener('touchstart', onStart, { passive:true });
-    row.addEventListener('touchmove', onMove, { passive:true });
-    row.addEventListener('touchend', onEnd, { passive:false });
-    row.addEventListener('touchcancel', onCancel, { passive:true });
-  }
+  /* El picker "AÑADIR POR LIGA" (2026-08-15) ya NO tiene ningún
+     contenedor con `overflow-y:auto` anidado — cada liga es una fila
+     de la propia página, así que sus botones ✅/⬜ son botones normales
+     y heredan `_eurWireTapFallback` como cualquier otro botón del
+     overlay. La antigua `_eurWireLeagueRowTap` (distinguir tap de
+     scroll dentro del desplegable, 2026-08-02) quedó sin uso al
+     eliminar ese desplegable — no reintroducirla sin volver a tener un
+     contenedor scrollable anidado de verdad. */
   function _eurWireTapFallbackAll(container){
     if(!container) return;
     try {
       container.querySelectorAll('button').forEach(function(el){ _eurWireTapFallback(el); });
-      container.querySelectorAll('[data-eur-pick-league]').forEach(function(el){ _eurWireLeagueRowTap(el); });
     } catch(_){}
   }
 
@@ -44546,26 +44543,20 @@ window._hdrCleanCache = function(){
         _eurManualOverlayRender();
       };
     });
-    /* Picker "Añadir por liga" — botón custom + lista con ✅ (no
-       `<select>` nativo, ver `_eurPickerButtonHtml`). */
-    var pickBtn = document.getElementById('eur-pick-league-btn');
-    if(pickBtn) pickBtn.onclick = function(){ _eurPickerListOpen = !_eurPickerListOpen; _eurManualOverlayRender(); };
-    ov.querySelectorAll('[data-eur-pick-league]').forEach(function(row){
-      /* Respaldo táctil: `_eurWireTapFallbackAll(ov)` (más abajo, tras
-         este render completo) ya cablea `touchstart` puro sobre TODAS
-         las filas `[data-eur-pick-league]` de este contenedor — no
-         duplicar el respaldo aquí, solo el `onclick` base. */
-      row.onclick = function(){
-        _eurPickerListOpen = false;
-        _eurPickerLoadLeague(row.getAttribute('data-eur-pick-league'));
-      };
+    /* Picker "Añadir por liga" — todas las ligas en una lista plana,
+       cada una con su botón ✅/⬜ (2026-08-15, sin desplegable ni
+       contenedor scrollable anidado — ver comentario junto a
+       `_eurPickerLeagueRowHtml`). */
+    ov.querySelectorAll('[data-eur-pick-toggle]').forEach(function(btn){
+      btn.onclick = function(){ _eurPickerToggleLeague(btn.getAttribute('data-eur-pick-toggle')); };
     });
     ov.querySelectorAll('[data-eur-pick-add]').forEach(function(btn){
       btn.onclick = function(){
         var zone = btn.getAttribute('data-zone');
         var name = btn.getAttribute('data-name');
+        var slug = btn.getAttribute('data-slug');
         try {
-          if(!window._eurManualExtraAdd(zone, name, _eurSlugLabel(_eurPickerSlug))){
+          if(!window._eurManualExtraAdd(zone, name, _eurSlugLabel(slug))){
             (window._gmCriticalNotice || alert)('⚠️ No se pudo añadir «'+name+'» a la zona «'+zone+'». Puede que ya estuviera añadido, o que la zona no sea válida.');
           }
         } catch(e){
@@ -44588,28 +44579,30 @@ window._hdrCleanCache = function(){
        cada fila va en su propio try/catch — un fallo puntual NUNCA
        corta el resto del lote — y el resumen final es HONESTO: cuenta
        éxitos y fallos reales por zona en vez de "0 o no-0". */
-    var addAllBtn = document.getElementById('eur-pick-add-all');
-    if(addAllBtn) addAllBtn.onclick = function(){
-      var rows = _eurPickerRows();
-      var label = _eurSlugLabel(_eurPickerSlug);
-      var added = 0, alreadyThere = 0, failed = [];
-      rows.forEach(function(r){
-        if(!r.zone) return;
-        try {
-          if(window._eurManualExtraAdd(r.zone, r.name, label)) added++;
-          else alreadyThere++;
-        } catch(e){
-          try { console.error('[eur-pick-add-all]', r.zone, r.name, e); } catch(_){}
-          failed.push(r.name + ' (' + r.zone + ')');
+    ov.querySelectorAll('[data-eur-pick-add-all]').forEach(function(addAllBtn){
+      addAllBtn.onclick = function(){
+        var slug = addAllBtn.getAttribute('data-eur-pick-add-all');
+        var rows = _eurPickerRows(slug);
+        var label = _eurSlugLabel(slug);
+        var added = 0, alreadyThere = 0, failed = [];
+        rows.forEach(function(r){
+          if(!r.zone) return;
+          try {
+            if(window._eurManualExtraAdd(r.zone, r.name, label)) added++;
+            else alreadyThere++;
+          } catch(e){
+            try { console.error('[eur-pick-add-all]', r.zone, r.name, e); } catch(_){}
+            failed.push(r.name + ' (' + r.zone + ')');
+          }
+        });
+        _eurManualOverlayRender();
+        if(failed.length){
+          (window._gmCriticalNotice || alert)('⚠️ '+added+' añadidos, pero '+failed.length+' fallaron: '+failed.join(', ')+'.\n\nRevisa la consola o vuelve a intentarlo — el resto del lote SÍ se procesó.');
+        } else if(!added){
+          alert(alreadyThere ? 'Todos los equipos sugeridos de esta liga ya estaban añadidos.' : 'Esta liga no tiene equipos con zona sugerida.');
         }
-      });
-      _eurManualOverlayRender();
-      if(failed.length){
-        (window._gmCriticalNotice || alert)('⚠️ '+added+' añadidos, pero '+failed.length+' fallaron: '+failed.join(', ')+'.\n\nRevisa la consola o vuelve a intentarlo — el resto del lote SÍ se procesó.');
-      } else if(!added){
-        alert(alreadyThere ? 'Todos los equipos sugeridos de esta liga ya estaban añadidos.' : 'Esta liga no tiene equipos con zona sugerida.');
-      }
-    };
+      };
+    });
     /* Respaldo táctil en TODOS los botones del overlay — ver comentario
        de `_eurWireTapFallback` más arriba. Se re-cablea en cada render
        (los nodos son nuevos cada vez), la guarda `__eurTapWired` evita

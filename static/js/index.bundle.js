@@ -268,17 +268,6 @@ window._ensureImbatEvents = function(opts, onDone){
   var evts = opts.events || [];
   function _has(side){ return evts.some(function(e){ return e && e.type==='imbat' && e.team===side; }); }
   try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('_ensureImbatEvents() llamado. hasA=' + _has('a') + ' hasB=' + _has('b')); } catch(_){}
-  /* Capa 0 + fallback (regla CLAUDE.md "Humanidad por competición" /
-     MISTERS_REGISTRY): esHumano() solo reconoce los 5 humanos legacy de
-     Liga EA Sports. Si un club/selección humano NUEVO llega aquí (PSG,
-     Inter, o cualquier selección canónica) y esHumano() no lo ve, caía
-     al auto-pick silencioso de IA en vez de mostrar el picker. */
-  var esH = function(name){
-    try { if (typeof window.esHumano === 'function' && window.esHumano(name)) return true; } catch(_){}
-    try { if (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(name)) return true; } catch(_){}
-    try { if (typeof window._esSelHumana === 'function' && window._esSelHumana(name)) return true; } catch(_){}
-    return false;
-  };
 
   /* Inserta un evento imbat en el array GARANTIZANDO que quede (pushEv
      pinta el acta y puede lanzar; el array es lo único que decide
@@ -295,82 +284,39 @@ window._ensureImbatEvents = function(opts, onDone){
     }
   }
 
-  /* ── REESCRITURA 2026-07-06 (bug «empate 0-0, 13+ intentos, se congela»):
-     ANTES esto era una cadena de promesas `_step('a').then(_step('b')).then(onDone)`.
-     El diagnóstico en pantalla del usuario demostró que, tras elegir el
-     portero HUMANO (Alisson) y registrarse AMBOS eventos en el acta, la
-     cadena NUNCA llegaba a llamar `onDone()` — se quedaba colgada sin
-     error visible (FINALIZAR bloqueado para siempre). La cadena de
-     promesas era demasiado frágil (el resolve del picker no propagaba al
-     `.then` terminal por algún motivo de timing/re-entrada). Se sustituye
-     por un flujo SIN promesas: (1) registrar TODOS los lados IA de forma
-     SÍNCRONA y garantizada, (2) recorrer los lados HUMANOS uno a uno con
-     el picker, y (3) llamar `onDone()` DIRECTAMENTE desde el callback del
-     último picker (o de inmediato si no hay ninguno). Sin `.then`, no hay
-     cadena que se pueda romper en silencio. */
-  var humanSides = [];
+  /* ── REESCRITURA 2026-08-15 (obligatorio, petición usuario: «el portero
+     que debería salir por defecto siempre que un equipo humano deje su
+     portería imbatida es el portero con más nivel-poder... en la IA
+     también el portero imbatido tiene que ser el que más nivel-poder
+     tenga»): el picker interactivo (`showImbatForce`, que obligaba al
+     humano a elegir portero a mano) generó años de bugs de tap/
+     cancelación documentados en este mismo archivo y, cuando funcionaba,
+     seguía dejando la puerta abierta a marcar por error a un SUPLENTE
+     como si fuera el titular. La regla es ahora SIEMPRE la misma para
+     humano e IA, sin interacción ni picker que pueda fallar: el portero
+     de la portería imbatida es el de MAYOR poder de la plantilla.
+     `_getTopGk` ya hace exactamente ese cálculo (filtra posición 'P',
+     ordena por poder desc, devuelve el primero) — antes solo se usaba
+     para el lado IA; ahora se usa para AMBOS lados por igual. */
   ['a','b'].forEach(function(side){
     var conceded = side==='a' ? (opts.scoreB === 0) : (opts.scoreA === 0);
     if (!conceded || _has(side)) return;
     var teamName = side==='a' ? opts.home : opts.away;
-    if (esH(teamName)) { humanSides.push(side); return; }
-    /* Lado IA: auto-pick del portero de mayor poder; si el roster no está
-       resuelto en este instante, fallback genérico. SIEMPRE queda en el
-       array (via _register) → needsImbat de este lado pasa a false. */
     var gk = null;
     try { gk = window._getTopGk(teamName); } catch(_){}
     if (!gk || !gk.name) gk = { num: '1', name: 'Portero' };
     _register(side, gk.num, gk.name);
-    try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat IA auto-registrado lado ' + side + ' (' + gk.name + ')'); } catch(_){}
+    try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat auto-registrado (mayor poder) lado ' + side + ' (' + gk.name + ')'); } catch(_){}
   });
 
-  function _finish(){
-    if (typeof onDone !== 'function') return;
-    /* REESCRITURA 2026-07-12 (foto usuario, "vez número enésima": tras
-       elegir el portero humano el partido se queda igual de congelado
-       que antes, con el bundle ya incluyendo el diferido rAF+setTimeout
-       de 2026-07-06): ese diferido ("para que el navegador PINTE el
-       cierre del picker antes del trabajo pesado") era una mejora
-       puramente COSMÉTICA, nunca un requisito de corrección — y cada
-       capa de indirección (rAF, setTimeout) es una oportunidad más para
-       que el callback se pierda por CUALQUIER motivo no anticipado
-       (throttling de pestaña en 2º plano, un timer cancelado por otro
-       código, etc.). Se elimina el diferido por completo: `onDone()` se
-       llama YA, de forma SÍNCRONA, en el mismo tick del tap que confirma
-       el portero — el try/catch de abajo sigue garantizando que un fallo
-       real nunca quede en silencio, pero ya NO depende de que ningún
-       timer futuro llegue a disparar. */
-    try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat: todos los lados resueltos → onDone() SÍNCRONO'); } catch(_){}
-    try { onDone(); }
-    catch(doneErr) {
-      try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
-      try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
-      try { (window._gmCriticalNotice || alert)('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
-    }
+  if (typeof onDone !== 'function') return;
+  try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat: todos los lados resueltos → onDone() SÍNCRONO'); } catch(_){}
+  try { onDone(); }
+  catch(doneErr) {
+    try { console.error('_ensureImbatEvents onDone falló:', doneErr); } catch(_){}
+    try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
+    try { (window._gmCriticalNotice || alert)('⚠️ La portería imbatida se registró pero no se pudo continuar el partido (' + (doneErr && doneErr.message || doneErr) + '). Pulsa FINALIZAR de nuevo.'); } catch(_){}
   }
-
-  var _hi = 0;
-  function _nextHuman(){
-    if (_hi >= humanSides.length) { _finish(); return; }
-    var side = humanSides[_hi++];
-    if (_has(side)) { _nextHuman(); return; }
-    var teamName = side==='a' ? opts.home : opts.away;
-    try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat: pidiendo portero humano lado ' + side + ' (' + teamName + ')'); } catch(_){}
-    window.showImbatForce(teamName, function(num, name){
-      /* num === null → el usuario pulsó CANCELAR: abortamos la
-         finalización (el partido queda abierto) y reactivamos FINALIZAR
-         (que _mlConfirmEnd deshabilitó al confirmar "SÍ"). */
-      if (num === null) {
-        try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat: portero CANCELADO lado ' + side); } catch(_){}
-        try { window._gmReenableEndBtn && window._gmReenableEndBtn(); } catch(_){}
-        return;
-      }
-      _register(side, num, name);
-      try { if (typeof window._gmDiagLog === 'function') window._gmDiagLog('imbat: portero humano elegido lado ' + side + ' (' + name + ')'); } catch(_){}
-      _nextHuman();
-    });
-  }
-  _nextHuman();
 };
 // ══════════════════════════════════════════════════════════════
 

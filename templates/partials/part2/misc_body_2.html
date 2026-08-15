@@ -12832,6 +12832,16 @@
       if (!tName || typeof window.sqFromRegistry !== 'function') return null;
       var sq = window.sqFromRegistry(tName) || [];
       var out = preferGk ? sq.filter(function(p){ return p && p[2] === 'P'; }) : [];
+      /* Portero de la imbatida: SIEMPRE el de mayor poder, nunca al azar
+         (obligatorio, mismo criterio que `_getTopGk`/`_ensureImbatEvents`
+         — "el portero imbatido tiene que ser el que más nivel-poder
+         tenga", humano o IA). El resto de posiciones (reparar un
+         goleador placeholder) sí sigue eligiendo al azar entre el
+         pool — no hay regla equivalente para goleadores. */
+      if (preferGk && out.length){
+        out = out.slice().sort(function(a,b){ return (Number(b && b[3])||0) - (Number(a && a[3])||0); });
+        return out[0] && out[0][1] ? String(out[0][1]) : null;
+      }
       if (!out.length) out = sq.filter(function(p){ return p && p[2] && p[2] !== 'P'; });
       if (!out.length) out = sq;
       if (!out.length) return null;
@@ -21217,6 +21227,12 @@
         if (!tName || typeof window.sqFromRegistry !== 'function') return null;
         var sq = window.sqFromRegistry(tName) || [];
         var out = preferGk ? sq.filter(function(p){ return p && p[2] === 'P'; }) : [];
+        /* Portero de la imbatida: SIEMPRE el de mayor poder, nunca al azar
+           (obligatorio, mismo criterio que `_getTopGk`/`_ensureImbatEvents`). */
+        if (preferGk && out.length){
+          out = out.slice().sort(function(a,b){ return (Number(b && b[3])||0) - (Number(a && a[3])||0); });
+          return out[0] && out[0][1] ? String(out[0][1]) : null;
+        }
         if (!out.length) out = sq.filter(function(p){ return p && p[2] && p[2] !== 'P'; });
         if (!out.length) out = sq;
         if (!out.length) return null;
@@ -21359,6 +21375,12 @@
         var sq = _sqFor(team);
         if (!sq.length) return null;
         var out = preferGk ? sq.filter(function(p){ return p && p[2] === 'P'; }) : [];
+        /* Portero de la imbatida: SIEMPRE el de mayor poder, nunca al azar
+           (obligatorio, mismo criterio que `_getTopGk`/`_ensureImbatEvents`). */
+        if (preferGk && out.length){
+          out = out.slice().sort(function(a,b){ return (Number(b && b[3])||0) - (Number(a && a[3])||0); });
+          return out[0] && out[0][1] ? String(out[0][1]) : null;
+        }
         if (!out.length) out = sq.filter(function(p){ return p && p[2] && p[2] !== 'P'; });
         if (!out.length) out = sq;
         if (!out.length) return null;

@@ -1,5 +1,76 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El portero de la PORTERÍA IMBATIDA es SIEMPRE el de mayor nivel-poder de la plantilla — humano e IA, sin picker (obligatorio, 2026-08-15) ⚠️ SUPERSEDE todas las secciones de este archivo que documentan/exigen el picker interactivo `showImbatForce` (buscar "PORTERÍA IMBATIDA OBLIGATORIA", "El picker de portería imbatida...", "confirmImbatForce"/"cancelImbatForce", más abajo)
+
+**Bug (usuario 2026-08-15, «Argentina» — Emiliano Martínez 85 vs Walter
+Benítez 78, 2 partidos con portería a 0)**: en los 2 partidos jugados
+por Argentina (selección humana, sin encajar gol en ninguno) el evento
+🧤 Portería Imbatida se registró con **Walter Benítez** (el portero de
+MENOR nivel-poder de los 4 de la plantilla, 78) en vez de **Emiliano
+Martínez** (85, el de mayor nivel-poder) — en AMBOS partidos. Petición
+explícita: "el portero que debería salir por defecto siempre que un
+equipo humano deje su portería imbatida es el portero con más
+nivel-poder... COMO ESE EJEMPLO PASA EN TODOS LOS EQUIPOS HUMANOS...
+EN LA IA TAMBIÉN el portero imbatido tiene que ser el que más
+nivel-poder tenga".
+
+### Fix — auto-pick determinista por poder, SIN picker, para humano e IA por igual
+
+`window._ensureImbatEvents` (`static/js/index.bundle.js`) dejó de
+distinguir entre lado humano y lado IA: **ambos** se resuelven ahora
+con `window._getTopGk(teamName)` (filtra posición 'P', ordena por
+poder desc, devuelve el primero) de forma síncrona, sin ningún overlay
+que pida al usuario elegir. Se elimina el picker interactivo
+`window.showImbatForce` de la cadena — las funciones
+`showImbatForce`/`confirmImbatForce`/`cancelImbatForce` se dejan
+DEFINIDAS (no se borran, por si algo externo las invocara) pero
+`_ensureImbatEvents` ya no las llama.
+
+Además, los 3 sitios que reparan un nombre PLACEHOLDER de portero
+("Portero"/"Jugador N") en el acta ya guardada
+(`_acRealFallbackName`/`window._acFixPlaceholder` en
+`part2/misc_body_2.html`, `_realFallbackName` dentro de
+`_iaEventsHtml`, y `_realFor` dentro de
+`window._ligaBackfillActasFromResults`) elegían el reemplazo **AL
+AZAR** entre los porteros del equipo cuando `preferGk` era `true`. Los
+3 pasan ahora a elegir SIEMPRE el de mayor poder (mismo criterio que
+`_getTopGk`), nunca `Math.random()`.
+
+También se corrigió `_getRoster` (`templates/partials/misc_body_1.html`,
+motor de Resto de Ligas/Copa Nacional, usado por `applyMatchStats` para
+resolver `roster.por`): ordenaba por poder descendente `DEL`/`MED`/`DEF`
+pero **NUNCA `POR`** — `roster.por = byPos.POR[0]` devolvía el primer
+portero en orden de inserción de la plantilla, no el de mayor poder.
+Ahora `POR` se ordena igual que las demás posiciones.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir un picker interactivo (o cualquier paso
+   que pida al usuario elegir portero) para el evento de portería
+   imbatida. El portero es SIEMPRE el de mayor poder de la plantilla,
+   calculado automáticamente — igual para equipos humanos y para IA.
+2. **PROHIBIDO** que un resolutor nuevo de "portero de la portería
+   imbatida" (auto-pick, reparación de placeholder, backfill
+   persistente, o cualquier otro) elija por orden de inserción,
+   alfabético, o al azar. Filtra posición `'P'`, ordena por poder desc
+   (`Number(p[3])`/`p.power` según el formato del array), toma el
+   primero — mismo contrato que `window._getTopGk`.
+3. **PROHIBIDO** que `_getRoster`/`applyMatchStats` (Resto de Ligas,
+   Copa Nacional) o cualquier motor de simulación equivalente deje una
+   posición del roster (especialmente `POR`) sin ordenar por poder
+   cuando las demás sí lo están — un roster cacheado con "primer
+   elemento no ordenado" es la firma exacta de este bug.
+4. Toda competición NUEVA (club o selección) hereda esto automáticamente
+   en cuanto pase por `_ensureImbatEvents`/`_getTopGk` — no hace falta
+   cablear nada por competición.
+5. Las secciones de este archivo tituladas "PORTERÍA IMBATIDA
+   OBLIGATORIA", "El picker de portería imbatida…", y cualquier otra
+   que documente el flujo `showImbatForce`/`confirmImbatForce`/
+   `cancelImbatForce` como una interacción OBLIGATORIA del humano
+   quedan **SUPERSEDIDAS** por esta regla — se conservan como registro
+   histórico de por qué el picker se intentó tantas veces, no como
+   comportamiento vigente.
+
 ## "Plantilla de selecciones" salía VACÍA con ~100 selecciones creadas — `_load()` solo leía disco, nunca una copia en memoria (obligatorio, 2026-08-10)
 
 **Bug (usuario 2026-08-10)**: con más de 100 selecciones creadas y con

@@ -52,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v9';
+var CACHE_HTML   = 'ftbol-html-v10';
 /* v3 → v4 → v5 → v6 → v7 → v8 → v9 (2026-08-10): la nueva estrategia SWR de arriba (ver cabecera
    del archivo) sirve el HTML principal desde caché hasta 30 min sin
    comprobar red — así que cualquier fix a `misc_body_1.html`/
@@ -90,7 +90,7 @@ var PRECACHE = [
   '/static/css/goal-notification-improved.css?v=2.1',
   '/static/js/goal-notification-improved.js?v=2.0',
   '/static/js/var-system.js?v=1.0',
-  '/static/js/index.bundle.js?v=9.39',
+  '/static/js/index.bundle.js?v=9.40',
   '/static/js/goal-notification-patch.js?v=2.2',
   '/static/js/copa-engine.js?v=1.9',
 ];

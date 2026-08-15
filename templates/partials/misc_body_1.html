@@ -52146,8 +52146,13 @@ https://api.sofascore.app/api/v1/team/44/image
       var pos = p.pos;
       if(pos==='DEL' || pos==='MED' || pos==='DEF' || pos==='POR') byPos[pos].push(p);
     });
-    /* Sort cada posición por power desc — una sola vez por sim. */
-    ['DEL','MED','DEF'].forEach(function(k){
+    /* Sort cada posición por power desc — una sola vez por sim.
+       INCLUYE 'POR' (obligatorio, petición usuario: el portero de la
+       portería imbatida es SIEMPRE el de mayor poder, humano o IA).
+       Antes solo se ordenaban DEL/MED/DEF — `roster.por` quedaba con
+       el PRIMER portero encontrado en `players` (orden de inserción de
+       la plantilla), no el de más poder. */
+    ['DEL','MED','DEF','POR'].forEach(function(k){
       byPos[k].sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
     });
     /* Penalty/freeKick takers — find single-pass una vez por equipo

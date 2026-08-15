@@ -9930,35 +9930,39 @@ window._hdrCleanCache = function(){
       } catch(_){ _markDoneAndAdvance(); }
     };
   }
-  /* PREVIA DE CHAMPIONS · Ronda 2 (única ronda que juega el club humano
-     — obligatorio, 2026-08-02, reescrito para el motor Ronda1+Ronda2 KO
-     de 2026-07-31). La ÚNICA vía de un club humano a la Previa es el
-     5º de España, manual vía "EA Sports → Europa"
-     (`computeUclPrevFixedR2Teams`), que SIEMPRE entra FIJO a la Ronda 2
-     — el club humano NUNCA juega la Ronda 1. Por eso el calendario
-     (global e individual) solo tiene 2 días: "Ida Previa Champions —
-     R2" / "Vuelta Previa Champions — R2". Estado en
-     `wprev_state_v1.r2.ties[idx]` ({a,b,legs:[ida,vuelta],winner,...}).
-     Si la Ronda 2 todavía no se ha sorteado (la Ronda 1 IA-vs-IA sigue
-     pendiente), el rival del humano aún no existe → `{pending:true}`
-     para la card "RIVAL PENDIENTE" (`_cardWprevPending`). */
+  /* PREVIA DE CHAMPIONS · 4 rondas (R1🟤→R2⚪→R3🟡→R4🟣) — obligatorio,
+     2026-08-02, generalizado a 4 rondas 2026-08-14 tras la ANIQUILACIÓN
+     de Wild Card/Open Qualifier. Un club humano de Liga EA Sports puede
+     entrar FIJO a CUALQUIER ronda (según `LEAGUE_DEFAULT_ZONES['liga-
+     ea-sports']`: R4 y R3 automáticos; R1/R2 solo si el admin lo asigna
+     a mano desde "EA Sports → Europa"). El calendario reserva "Ida/
+     Vuelta Previa Champions — R<N>" para la ronda en la que el club
+     humano realmente entra esa temporada — esta función resuelve
+     CUALQUIER ronda N (1-4) a partir de la etiqueta del calendario.
+     Estado en `wprev_state_v1.r<N>.ties[idx]`
+     ({a,b,legs:[ida,vuelta],winner,...}). Si la ronda todavía no se ha
+     sorteado (la ronda anterior sigue pendiente), el rival del humano
+     aún no existe → `{pending:true}` para la card "RIVAL PENDIENTE"
+     (`_cardWprevPending`). */
   function _wprevHubResolve(lbl){
     var s = String(lbl || '');
-    var mLeg = /^\s*(Ida|Vuelta)\s+Previa\s*Champions\s*[—\-]\s*R\s*2\b/i.exec(s);
+    var mLeg = /^\s*(Ida|Vuelta)\s+Previa\s*Champions\s*[—\-]\s*R\s*([1-4])\b/i.exec(s);
     if (!mLeg) return null;
     var leg = /vuelta/i.test(mLeg[1]) ? 'v' : 'i';
+    var rNum = mLeg[2];
+    var rKey = 'r' + rNum;
     var st = null;
     try { st = JSON.parse(localStorage.getItem('wprev_state_v1') || 'null'); } catch(_){}
-    var ties = (st && st.r2 && Array.isArray(st.r2.ties)) ? st.r2.ties : [];
+    var ties = (st && st[rKey] && Array.isArray(st[rKey].ties)) ? st[rKey].ties : [];
     var idx = -1, tie = null;
     for (var i = 0; i < ties.length; i++){
       var t = ties[i];
       if (t && ((t.a && _psHubClubMatches(t.a.name)) || (t.b && _psHubClubMatches(t.b.name)))){ idx = i; tie = t; break; }
     }
     if (!tie){
-      /* Ronda 2 sin sortear (esperando a que termine la Ronda 1
+      /* Ronda sin sortear (esperando a que termine la ronda anterior
          IA-vs-IA) — RIVAL PENDIENTE. */
-      return { pending:true, emoji:'🟣' };
+      return { pending:true, emoji:'🟣', round:rKey };
     }
     function _isTbdSide(side){ return !side || !side.name || /^TBD/i.test(side.name) || /^__placeholder_/.test(side.league || ''); }
     if (_isTbdSide(tie.a) || _isTbdSide(tie.b)) return null; /* hueco BYE del pool: nada que jugar */
@@ -9978,34 +9982,36 @@ window._hdrCleanCache = function(){
       rivalHuman:_psNameIsHuman(_wpRival),
       played:!!legObj, gh:(legObj ? (legObj.gh|0) : 0), ga:(legObj ? (legObj.ga|0) : 0),
       events:[], mvp:'', mvpTeam:'',
-      uid:'ps-wprevko-r2-'+idx+'-'+leg, emoji:'🟣',
-      defer:{ tourId:'ucl', matchKey:'wprevko_r2_'+idx+'_'+leg },
+      uid:'ps-wprevko-'+rKey+'-'+idx+'-'+leg, emoji:'🟣',
+      defer:{ tourId:'ucl', matchKey:'wprevko_'+rKey+'_'+idx+'_'+leg },
       /* `_wprevKoOpenMatch` NO recibe el leg — lo auto-deriva del propio
          estado de la eliminatoria (ida si `tie.legs` está vacío, vuelta
          si ya hay 1 leg jugado; mismo criterio que `_eurKoHubResolve`). */
-      open:(function(_idx){ return function(){ try { if (typeof window._wprevKoOpenMatch === 'function') window._wprevKoOpenMatch('r2', _idx); } catch(_){} }; })(idx)
+      open:(function(_rKey, _idx){ return function(){ try { if (typeof window._wprevKoOpenMatch === 'function') window._wprevKoOpenMatch(_rKey, _idx); } catch(_){} }; })(rKey, idx)
     };
   }
-  /* Card "RIVAL PENDIENTE" de la Previa de Champions — Ronda 2: el club
-     humano está fijo a la Ronda 2 pero su rival (ganador de la Ronda 1
-     IA-vs-IA) todavía no existe. Mismo patrón que `_cardEurKoPending`
-     (arriba), pero SIN 📌 Posponer: a diferencia del bracket europeo
-     (que reserva de antemano un índice por ronda, reabrible por
-     `_playDeferredHvH`), `s.r2.ties` NO EXISTE hasta que `_doDrawR2`
-     sortea la Ronda 2 — no hay ningún matchKey estable que posponer
-     todavía. El único botón es auto-simular la Ronda 1, que resuelve
-     el bloqueo al instante. */
+  /* Card "RIVAL PENDIENTE" de la Previa de Champions: el club humano
+     está fijo a una ronda (R1-R4) pero su rival (ganador de la ronda
+     anterior IA-vs-IA) todavía no existe. Mismo patrón que
+     `_cardEurKoPending` (arriba), pero SIN 📌 Posponer: a diferencia
+     del bracket europeo (que reserva de antemano un índice por ronda,
+     reabrible por `_playDeferredHvH`), `s.r<N>.ties` NO EXISTE hasta
+     que se sortea esa ronda — no hay ningún matchKey estable que
+     posponer todavía. El único botón es auto-simular las rondas
+     anteriores pendientes, que resuelve el bloqueo. */
   function _cardWprevPending(day, wp){
     var st = _stage(); if (!st) return;
     var lbl = day.label || 'Previa Champions';
-    var msg = '⚠️ RIVAL PENDIENTE<br><span style="font-size:11px;opacity:.75;">La Ronda 1 de la Previa de Champions (IA-vs-IA) aún no se ha jugado. Simúlala para conocer a tu rival de la Ronda 2.</span>';
+    var rKey = wp.round || 'r1';
+    var rNum = rKey.replace('r', '');
+    var msg = '⚠️ RIVAL PENDIENTE<br><span style="font-size:11px;opacity:.75;">Las rondas anteriores de la Previa de Champions (IA-vs-IA) aún no se han jugado. Simúlalas para conocer a tu rival de la Ronda ' + _esc(rNum) + '.</span>';
     st.innerHTML =
       '<div class="ps-card">'
       + '<div class="ps-date">' + _esc(_psShowDate(day.date).toUpperCase()) + '</div>'
       + '<div class="ps-sub">' + (wp.emoji || '🟣') + ' ' + _esc(lbl) + '</div>'
       + '<div class="ps-meta" style="margin:16px 0;color:rgba(255,255,255,.85);line-height:1.5;">' + msg + '</div>'
       + '<div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:6px;">'
-      +   '<button type="button" class="ps-btn" id="ps-wprev-sim">🤖 Simular Ronda 1</button>'
+      +   '<button type="button" class="ps-btn" id="ps-wprev-sim">🤖 Simular rondas previas</button>'
       + '</div>'
       + '</div>';
     var bs = document.getElementById('ps-wprev-sim');
@@ -10013,13 +10019,23 @@ window._hdrCleanCache = function(){
       bs.disabled = true;
       try {
         if (typeof window.simulateUclPrev === 'function'){
-          window.simulateUclPrev();
-          /* Si con esa pasada la Ronda 1 quedó completa, un 2º pase
-             sortea de una vez la Ronda 2 — el humano no debería tener
-             que pulsar 2 veces seguidas para ver a su rival. */
-          var st2 = null;
-          try { st2 = JSON.parse(localStorage.getItem('wprev_state_v1') || 'null'); } catch(_){}
-          if (st2 && st2.phase === 'r1-done') window.simulateUclPrev();
+          /* Cada pasada de `simulateUclPrev` resuelve UNA ronda pendiente
+             (sortea+juega si hace falta) y avanza `phase`. Repetimos hasta
+             4 veces (el máximo nº de rondas) para que el humano no tenga
+             que pulsar varias veces seguidas si le faltan 2+ rondas. */
+          for (var _p = 0; _p < 4; _p++){
+            window.simulateUclPrev();
+            var st2 = null;
+            try { st2 = JSON.parse(localStorage.getItem('wprev_state_v1') || 'null'); } catch(_){}
+            if (!st2 || st2.phase === 'done') break;
+            var ties2 = (st2[rKey] && Array.isArray(st2[rKey].ties)) ? st2[rKey].ties : [];
+            var found2 = false;
+            for (var _ti = 0; _ti < ties2.length; _ti++){
+              var _t2 = ties2[_ti];
+              if (_t2 && ((_t2.a && _psHubClubMatches(_t2.a.name)) || (_t2.b && _psHubClubMatches(_t2.b.name)))){ found2 = true; break; }
+            }
+            if (found2) break;
+          }
         }
       } catch(_){}
       try { var stg = _stage(); if (stg) stg._psSig = null; } catch(_){}
@@ -14286,7 +14302,7 @@ window._hdrCleanCache = function(){
   // hueco intermedio). Si total < suma → la zona desc se respeta y se
   // recortan zonas europeas de abajo hacia arriba.
   function loadLigaEaZones(){
-    var defaults = {ucl:4, uclPrev:1, uclQual:0, uel:2, uecl:1, desc:4};
+    var defaults = {ucl:4, uclPrev:1, prevR3:1, prevR2:0, prevR1:0, uel:2, uecl:2, desc:2};
     try {
       var raw = localStorage.getItem('ligaExt_liga-ea-sports');
       if(!raw) return defaults;
@@ -14296,7 +14312,9 @@ window._hdrCleanCache = function(){
       return {
         ucl:     Math.max(0, z.ucl|0),
         uclPrev: Math.max(0, z.uclPrev|0),
-        uclQual: Math.max(0, z.uclQual|0),
+        prevR3:  Math.max(0, z.prevR3|0),
+        prevR2:  Math.max(0, z.prevR2|0),
+        prevR1:  Math.max(0, z.prevR1|0),
         uel:     Math.max(0, z.uel|0),
         uecl:    Math.max(0, z.uecl|0),
         desc:    Math.max(0, z.desc|0)
@@ -14310,7 +14328,9 @@ window._hdrCleanCache = function(){
     var c = 0;
     if(pos <= (c += z.ucl))     return 'zone-ucl';
     if(pos <= (c += z.uclPrev)) return 'zone-ucl-prev';
-    if(pos <= (c += z.uclQual)) return 'zone-ucl-qual';
+    if(pos <= (c += z.prevR3))  return 'zone-ucl-qual';
+    if(pos <= (c += z.prevR2))  return 'zone-ucl-qual';
+    if(pos <= (c += z.prevR1))  return 'zone-ucl-qual';
     if(pos <= (c += z.uel))     return 'zone-uel';
     if(pos <= (c += z.uecl))    return 'zone-conf';
     return '';
@@ -14804,7 +14824,7 @@ window._hdrCleanCache = function(){
           'bplant_stat_adjust_v1':1,'bplant_match_stats_v1':1,
           'bayern_hud_overrides_v1':1
         };
-        var _KV_REGEX = /^(manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)|tour_(sct|pss|jg|asia|mundial|tx[1-8]|spv(10|[1-9])|sfn(10|[1-9])))_v1$/;
+        var _KV_REGEX = /^(manual_ea_(ucl|uclPrev|prevR3|prevR2|prevR1|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)|tour_(sct|pss|jg|asia|mundial|tx[1-8]|spv(10|[1-9])|sfn(10|[1-9])))_v1$/;
         var _KV_RECENCY = {
           'ftbol_sel_sanciones_v1':1,'ftbol_lesiones_v1':1,'ftbol_sanciones_v1':1,
           'bplant_stat_adjust_v1':1,'bplant_match_stats_v1':1,
@@ -15454,6 +15474,9 @@ window._hdrCleanCache = function(){
        liga menor sin fusionar). Con esto NINGÚN país queda ya suelto —
        solo las 10 ligas grandes + Resto Mundo + las 9 Ligas Mixtas. */
     'liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4','liga-mixta-5','liga-mixta-6','liga-mixta-7','liga-mixta-8','liga-mixta-9',
+    /* Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14), feeder de la
+       Previa de Champions de 4 rondas. */
+    'germanika','hellas-slavia','danubio-nordica','adriatico-oriental','balkanica','eurasia',
     'resto-mundo'
   ];
 
@@ -15578,8 +15601,10 @@ window._hdrCleanCache = function(){
     var z = loadLigaEaZones();
     var items = [];
     if(z.ucl > 0)     items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3160ff"></span>🔵 Champions</span>');
-    if(z.uclPrev > 0) items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#a855f7"></span>🟣 Previa Ch.</span>');
-    if(z.uclQual > 0) items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#f0c040"></span>🟡 Open Qualifier</span>');
+    if(z.uclPrev > 0) items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#a855f7"></span>🟣 Previa R4</span>');
+    if(z.prevR3 > 0)  items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#f0c040"></span>🟡 Previa R3</span>');
+    if(z.prevR2 > 0)  items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#f0c040"></span>⚪ Previa R2</span>');
+    if(z.prevR1 > 0)  items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#f0c040"></span>🟤 Previa R1</span>');
     if(z.uel > 0)     items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#ff8214"></span>🟠 E.League</span>');
     if(z.uecl > 0)    items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#3cc878"></span>🟢 Conference</span>');
     if(z.desc > 0)    items.push('<span class="clas-legend-item"><span class="clas-legend-dot" style="background:#e03c3c"></span>🔴 Descenso</span>');
@@ -36964,12 +36989,6 @@ window._hdrCleanCache = function(){
 <div class="submenu-card sc-ucl-prev-clas" style="background:linear-gradient(135deg,#0b2a3a,#1e5e7a,#4CA1AF,#2C3E50,#0b2a3a) !important;border-color:#4CA1AF !important;" onclick="go('s-ucl-previa-clas')">
 <span class="sc-emoji">🇪🇺</span><span class="sc-label">Previa de Champions</span><span class="sc-arr">▶</span>
 </div>
-<div class="submenu-card sc-open-qual" style="background:linear-gradient(135deg,#3a1c00,#a05000,#F37335,#FDC830,#a05000,#3a1c00) !important;border-color:#F37335 !important;" onclick="if(window.buildOpenQualifierClas)window.buildOpenQualifierClas();go('s-open-qualifier-clas')">
-<span class="sc-emoji">🟡</span><span class="sc-label">Open Qualifier</span><span class="sc-arr">▶</span>
-</div>
-<div class="submenu-card sc-wild-card" style="background:linear-gradient(135deg,#1a0e04,#3a2010,#6a3f1c,#8b5520,#3a2010,#1a0e04) !important;border-color:#8b5520 !important;" onclick="go('s-wild-card')">
-<span class="sc-emoji">🎟️</span><span class="sc-label">Wild Card</span><span class="sc-arr">▶</span>
-</div>
 </div>
 </div>
 <div class="screen" id="s-ucl-previa">
@@ -37494,14 +37513,15 @@ window._hdrCleanCache = function(){
     } catch(_){}
   };
   /* Recorre localStorage y devuelve la lista de equipos que se
-     han ganado plaza en su liga terminada. zoneKey ∈ 'ucl' | 'uel'
-     | 'uecl'. Filtra backups (`_backup`), snapshots (`_snap_`) y
-     versionados (`_v\d+`) para no duplicar el mismo equipo desde
-     varias claves del mismo slug. Además deduplica por nombre al
-     final por si dos slugs distintos apuntan al mismo club.
-     Para UEL/UECL salta primero las plazas de zonas superiores
-     (ucl + uclPrev + uclQual [+ uel]) para que un mismo equipo no
-     aparezca en dos competiciones. */
+     han ganado plaza en su liga terminada. zoneKey ∈ 'ucl' | 'uclPrev'
+     (Previa R4) | 'prevR3' | 'prevR2' | 'prevR1' | 'uel' | 'uecl'.
+     Filtra backups (`_backup`), snapshots (`_snap_`) y versionados
+     (`_v\d+`) para no duplicar el mismo equipo desde varias claves del
+     mismo slug. Además deduplica por nombre al final por si dos slugs
+     distintos apuntan al mismo club.
+     Cascada de posiciones (cada zona salta las plazas de las
+     anteriores): ucl → uclPrev(R4) → prevR3 → prevR2 → prevR1 → uel →
+     uecl, para que un mismo equipo no aparezca en dos competiciones. */
   function _computeQualifiedFromLeagues(zoneKey){
     var out = [];
     var diag = []; // [{slug, n, results, needed, status, note}]
@@ -37513,7 +37533,7 @@ window._hdrCleanCache = function(){
        pequeño (ej. "Europa FC"/"CE Europa" mal asignado a Gibraltar).
        UCL/UEL/UECL no usan este filtro porque ahí EA Sports SÍ
        contribuye legítimamente. */
-    var spanishTeamBanned = (zoneKey === 'wildcard' || zoneKey === 'uclQual')
+    var spanishTeamBanned = (zoneKey === 'prevR1' || zoneKey === 'prevR2' || zoneKey === 'prevR3')
       ? _spanishUpperTierTeamNames()
       : null;
     try {
@@ -37592,82 +37612,53 @@ window._hdrCleanCache = function(){
         var rN = data.results.length;
         var needed = N*(N-1);
         if(N < 2){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'menos de 2 equipos'}); return; }
-        /* Auto-cupo Wild Card: para los 40 slugs de WILDCARD_LIGA_SLUGS
-           tratamos `zones.wildcard` como ≥1 implícito (bypass del
-           `slots > 0` de abajo) — el usuario configura la lista de 40
-           ligas, no debería tener que abrir Reglas y tocar
-           `zones.wildcard` a mano. Esto es SOLO sobre la CONFIGURACIÓN
-           de la zona; la liga sigue necesitando terminar sus partidos
-           para aportar equipos (ver regla de completitud más abajo,
-           2026-08-02 #3) — el auto-cupo nunca sustituyó esa exigencia. */
-        var isWcAuto = (zoneKey === 'wildcard')
-                    && window.WILDCARD_LIGA_SLUGS
-                    && window.WILDCARD_LIGA_SLUGS[slug];
+        /* Wild Card / Open Qualifier ANIQUILADOS (2026-08-14): ya no
+           existe ningún auto-cupo — cada liga aporta EXACTAMENTE lo que
+           `LEAGUE_DEFAULT_ZONES`/`zones.<zoneKey>` diga, sin bypass. */
         var zones = (data.config && data.config.zones) || {};
         /* Zonas efectivas: LEAGUE_DEFAULT_ZONES es autoritativo para los
-           6 campos euro (ucl/uclPrev/uclQual/uel/uecl/wildcard). Esto
-           cubre ligas que llevan el DEFAULT_ZONES genérico
-           (ucl:1/uclPrev:1/uclQual:1/uel:1/uecl:1/wildcard:0) porque el
-           seed one-shot de su dispositivo ya se marcó como ejecutado antes
-           de añadir esta liga, o el servidor las devolvió con las zonas
-           que tenía (potencialmente viejas). LEAGUE_DEFAULT_ZONES solo
-           define los 6 campos euro → desc/intercontinental/mundialClubes
-           siguen viniendo de `zones`. */
+           7 campos euro (ucl/uclPrev[=Previa R4]/prevR3/prevR2/prevR1/
+           uel/uecl — formato 4 rondas 2026-08-14, Wild Card/Open
+           Qualifier ANIQUILADOS). Esto cubre ligas que llevan el
+           DEFAULT_ZONES genérico porque el seed one-shot de su
+           dispositivo ya se marcó como ejecutado antes de añadir esta
+           liga, o el servidor las devolvió con las zonas que tenía
+           (potencialmente viejas). LEAGUE_DEFAULT_ZONES solo define los
+           7 campos euro → desc/intercontinental/mundialClubes siguen
+           viniendo de `zones`. */
         var _ldzEntry = window.LEAGUE_DEFAULT_ZONES && window.LEAGUE_DEFAULT_ZONES[slug];
         var effZones = _ldzEntry ? Object.assign({}, zones, _ldzEntry) : zones;
         var slots = Number(effZones[zoneKey] || 0);
         if(!(slots > 0)){
-          if(!isWcAuto){
-            diag.push({slug:slug, n:N, results:rN, needed:needed, status:'sin-plazas', note:'zones.'+zoneKey+'='+slots});
-            return;
-          }
-          slots = 1; /* auto-cupo: 1 plaza ⚪ implícita en las 40 ligas */
+          diag.push({slug:slug, n:N, results:rN, needed:needed, status:'sin-plazas', note:'zones.'+zoneKey+'='+slots});
+          return;
         }
         var hash = teams.map(function(t){ return _normName(_teamName(t)); })
                         .filter(Boolean).sort().join('|');
         if(!hash){ diag.push({slug:slug, n:N, results:rN, needed:needed, status:'skip', note:'plantilla sin nombres'}); return; }
-        if(seenLeagueHash[hash] && !isWcAuto){
+        if(seenLeagueHash[hash]){
           /* Guardamos el slug de la liga "primera" que registró este
-             hash para que el diag muestre claramente la pareja
-             (antes solo decía "misma plantilla que otra liga ya
-             procesada" sin indicar cuál). Para auto-cupo Wild Card
-             saltamos este filtro: cada uno de los 40 slugs aporta su
-             plaza aunque dos compartan plantilla; el dedupe global por
-             nombre al final ya pliega clones reales si los hubiese. */
+             hash para que el diag muestre claramente la pareja (antes
+             solo decía "misma plantilla que otra liga ya procesada"
+             sin indicar cuál). */
           var dupOf = seenLeagueHash[hash];
           diag.push({slug:slug, n:N, results:rN, needed:needed, status:'duplicada', note:'misma plantilla que: '+dupOf, dupOf:dupOf});
           return;
         }
         seenLeagueHash[hash] = slug;
+        /* Cascada de posiciones — formato 4 rondas de Previa (2026-08-14,
+           reemplaza Wild Card + Open Qualifier, ANIQUILADOS): el orden de
+           prioridad de zonas es SIEMPRE
+           ucl → uclPrev(Ronda 4) → prevR3(Ronda 3) → prevR2(Ronda 2) →
+           prevR1(Ronda 1) → uel → uecl. Cada zona consume las posiciones
+           inmediatamente después de las que ya consumieron las zonas de
+           más arriba en esta lista. */
+        var _CASCADE = ['ucl','uclPrev','prevR3','prevR2','prevR1','uel','uecl'];
         var skip = 0;
-        if(zoneKey === 'uclPrev'){
-          skip = (Number(effZones.ucl)||0);
-        } else if(zoneKey === 'uclQual'){
-          skip = (Number(effZones.ucl)||0)
-               + (Number(effZones.uclPrev)||0);
-        } else if(zoneKey === 'uel'){
-          skip = (Number(effZones.ucl)||0)
-               + (Number(effZones.uclPrev)||0)
-               + (Number(effZones.uclQual)||0);
-        } else if(zoneKey === 'uecl'){
-          skip = (Number(effZones.ucl)||0)
-               + (Number(effZones.uclPrev)||0)
-               + (Number(effZones.uclQual)||0)
-               + (Number(effZones.uel)||0);
-        } else if(zoneKey === 'wildcard'){
-          skip = (Number(effZones.ucl)||0)
-               + (Number(effZones.uclPrev)||0)
-               + (Number(effZones.uclQual)||0)
-               + (Number(effZones.uel)||0)
-               + (Number(effZones.uecl)||0);
+        for(var _ci=0; _ci<_CASCADE.length; _ci++){
+          if(_CASCADE[_ci] === zoneKey) break;
+          skip += (Number(effZones[_CASCADE[_ci]]) || 0);
         }
-        /* Auto-cupo: si la liga no tiene zonas europeas configuradas
-           (skip=0 porque el usuario nunca abrió Reglas), por defecto
-           tomamos la 4ª plaza (skip=3). Es la convención más común
-           para las ligas medias/pequeñas con UCL+UEL+UECL=3 europeas
-           por encima del wildcard. Sin esto el ranking sintético por
-           poder pondría al campeón de la liga como wildcard. */
-        if(isWcAuto && skip === 0) skip = 3;
         /* ── REGLA ESTRICTA (usuario, 2026-08-02 #3, SUPERSEDE la
            regla 2026-05-02 de arriba — "el Open Qualifier hasta que
            no se jueguen los 38 partidos de cada Liga / en la Copa de
@@ -37729,7 +37720,6 @@ window._hdrCleanCache = function(){
           added++;
         }
         var okNote = '+'+added+' equipos (liga completa '+rN+'/'+needed+')';
-        if(isWcAuto && !(Number((data.config&&data.config.zones&&data.config.zones[zoneKey])||0) > 0)) okNote += ' · auto-cupo ⚪';
         diag.push({slug:slug, n:N, results:rN, needed:needed, status:'ok', note:okNote});
       });
     } catch(e){ diag.push({slug:'?', status:'error', note:String(e&&e.message||e)}); }
@@ -37796,7 +37786,7 @@ window._hdrCleanCache = function(){
      (`window._recopaLivePool`, `window._interLivePool`,
      `_availableTeams` de Supercopa de Europa, `doSearch` del roster
      del Mundialito) — ver bloque "AÑADIR MANUAL — 10 competiciones". */
-  var EUR_MANUAL_ZONES = ['ucl','uclPrev','uel','uecl','uclQual','wildcard','recopa','usc','inter','mundial'];
+  var EUR_MANUAL_ZONES = ['ucl','uclPrev','prevR3','prevR2','prevR1','uel','uecl','recopa','usc','inter','mundial'];
   /* CACHE EN MEMORIA — SIEMPRE la copia más fresca, independiente de si
      el guardado en `localStorage` tuvo éxito (bug 2026-08-10, "no me
      deja añadir ningún equipo a ninguna competición, ni por liga ni por
@@ -38191,14 +38181,13 @@ window._hdrCleanCache = function(){
     var frozen = _europeFrozenFor('ucl');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('ucl');
-    /* Los 12 mejores del corte global de la Previa de Champions
-       (fase de grupos pura, formato 16 grupos desde 2026-05-30) entran
-       AUTOMÁTICAMENTE como plazas extra a la Fase de Grupos en la MISMA
-       temporada. Total objetivo del pool UCL: 28 directos por liga +
-       12 de Previa = 40 equipos. Los 12 los persiste el módulo de la
-       Previa en `wprev_to_fase_grupos_v1` al simular. Dedupe por
-       nombre — si un equipo ya está clasificado directo por su liga,
-       no se duplica. */
+    /* Los 12 ganadores de la Previa de Champions RONDA 4 (formato 4
+       rondas, 2026-08-14) entran AUTOMÁTICAMENTE como plazas extra a la
+       Fase de Grupos en la MISMA temporada. Total objetivo del pool
+       UCL: 28 directos por liga + 12 de Previa R4 = 40 equipos. Los 12
+       los persiste el módulo de la Previa en `wprev_to_fase_grupos_v1`
+       al resolver la Ronda 4. Dedupe por nombre — si un equipo ya está
+       clasificado directo por su liga, no se duplica. */
     try {
       var raw = localStorage.getItem('wprev_to_fase_grupos_v1');
       if(raw){
@@ -38209,11 +38198,6 @@ window._hdrCleanCache = function(){
         teams.forEach(function(t){
           if(!t || !t.name || seen[t.name]) return;
           seen[t.name] = true;
-          /* Preferimos el `league` real persistido (escrito desde
-             `_persistChampionsAndEuropa` 2026-05-09). Si el dato es
-             legacy (sin `league`), `_eurFixupLeagues` lo busca en
-             ligaExt_*. Si tampoco está, queda como 'previa-champions'
-             (fallback histórico). */
           arr.push({name:t.name, logo:t.logo||'', league:t.league||'previa-champions'});
         });
       }
@@ -38222,250 +38206,78 @@ window._hdrCleanCache = function(){
     _eurFixupLeagues(out);
     return _appendManualExtra(out, 'ucl');
   }
-  /* 2026-07-12 — NUEVO FORMATO DE LA PREVIA (Ronda Preliminar + 12
-     grupos de 4). Petición usuario: los 28 del Open Qualifier YA NO
-     entran directos a la fase de grupos — primero juegan una ronda
-     PRELIMINAR eliminatoria entre ellos (14 cruces a doble partido,
-     con prórroga+penaltis si el global queda empatado) y SOLO los 14
-     ganadores se unen a los 34 directos de liga (34+14=48 → 12 grupos
-     de 4 exactos). Los 14 perdedores caen directos a Conference.
-     Resto del motor (sorteo/simulación de la ronda preliminar y de los
-     12 grupos) vive en part2/misc_body_2.html — aquí solo se separan
-     los DOS pools de entrada, porque ya no se pueden tratar como uno
-     solo (el del OQ pasa por un filtro antes de unirse al otro). */
-  function computeUclPrevDirectTeams(){
-    if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return _appendManualExtra([], 'uclPrev');
-    /* Base = 34 directos (zona uclPrev). Si los pools europeos están
-       CONGELADOS (`europe_committed_v1`) usamos esa snapshot como base. */
-    var frozen = _europeFrozenFor('uclPrev');
-    var arr = frozen ? frozen.slice() : _computeQualifiedFromLeagues('uclPrev');
+
+  /* ══ PREVIA CHAMPIONS — FORMATO 4 RONDAS (obligatorio, 2026-08-14) ══
+     Sustituye por completo Wild Card + Open Qualifier + Previa
+     2-rondas (ANIQUILADOS). 4 rondas de eliminatoria ida+vuelta, 24
+     equipos cada una:
+       R1(🟤 zone `prevR1`) → 12 ganadores → R2; 12 perdedores → Conference
+       R2(⚪ zone `prevR2`, +12 ganadores R1) → 12 ganadores → R3; 12 perdedores → Conference
+       R3(🟡 zone `prevR3`, +12 ganadores R2) → 12 ganadores → R4; 12 perdedores → Europa
+       R4(🟣 zone `uclPrev`, +12 ganadores R3) → 12 ganadores → Champions; 12 perdedores → Europa
+     Cada ronda es una función `_computeQualifiedFromLeagues(zoneKey)`
+     simple — ya no hace falta la maquinaria "fijo vs juega R1" del
+     formato antiguo porque cada liga tiene su ronda de entrada
+     EXPLÍCITA en `LEAGUE_DEFAULT_ZONES` (no hay que derivar nada).
+     `awayFirstLeg:true` marca los 12 directos de Ronda 4 — SIEMPRE
+     juegan la ida como visitantes (regla del usuario), lo consume el
+     motor de sorteo en part2/misc_body_2.html. */
+  function _uclPrevDirectPool(zoneKey, awayFirstLeg){
+    if(window._eurManualOnly && window._eurManualOnly(zoneKey)) return _appendManualExtra([], zoneKey);
+    var frozen = _europeFrozenFor(zoneKey);
+    var arr = frozen ? frozen.slice() : _computeQualifiedFromLeagues(zoneKey);
     _eurFixupLeagues(arr);
-    var out = _prependManualEa(arr, 'uclPrev');
-    /* Extras manuales de 'uclPrev' EXCLUYENDO los que llevan
-       `feederTag:'open-qualifier'` (esos son los ganadores del OQ
-       re-sincronizados como extra manual por `_eurSyncManualExtraFromFeeder`
-       para que lleguen aunque la zona esté en 🔒 Manual — deben pasar
-       por la ronda preliminar, NO colarse directos a los 34). */
-    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
+    var out = _prependManualEa(arr, zoneKey);
+    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()[zoneKey]) || [];
     var seen = {}; out.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
     manual.forEach(function(t){
-      if(!t || !t.name || t.feederTag === 'open-qualifier' || seen[t.name]) return;
+      if(!t || !t.name || seen[t.name]) return;
       seen[t.name] = true;
       out.push({ name:t.name, logo:t.logo||'', league:t.league||'manual' });
     });
+    if(awayFirstLeg) out.forEach(function(t){ t.awayFirstLeg = true; });
     return out;
   }
-  window.computeUclPrevDirectTeams = computeUclPrevDirectTeams;
-
-  /* ══ Previa Champions — NUEVO FORMATO 2026-07-31 (Ronda1 + Ronda2) ══
-     De los 24 directos-vía-liga a la Previa (zona uclPrev), 12 son
-     FIJOS para la RONDA 2 (esperan a los 12 ganadores de la Ronda 1) y
-     12 juegan la RONDA 1 desde el principio (junto a los 12 clasificados
-     del Open Qualifier). Los 8 países con 🟣1 (Portugal/P.Bajos/Bélgica/
-     Turquía/Dinamarca/Suiza/Escocia + España manual) son SIEMPRE fijos;
-     de las liga-mixta-1..4 (🟣2 cada una) la MEJOR de sus 2 plazas es
-     fija y la otra juega la Ronda 1; liga-mixta-5..8 (🟣2 cada una)
-     juegan la Ronda 1 completas. liga-mixta-9 no tiene 🟣. */
-  function _uclPrevLeagueRanking(slug){
-    try {
-      var raw = localStorage.getItem('ligaExt_' + slug);
-      var data = null;
-      if(raw){ try { data = JSON.parse(raw); } catch(_){ data = null; } }
-      try {
-        if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
-      } catch(_){}
-      if(!data || !Array.isArray(data.teams)) return [];
-      var teams = data.teams;
-      var needed = teams.length * (teams.length - 1);
-      var results = Array.isArray(data.results) ? data.results : [];
-      /* Regla 2026-08-02 #3 (misma que `_computeQualifiedFromLeagues`):
-         solo aporta ranking si la liga terminó TODOS sus partidos — ni
-         ranking por poder ni standings a medias. Una liga incompleta
-         devuelve [] (el caller la trata como "sin equipo en ese rank",
-         TBD explícito en vez de un equipo aún no demostrado). */
-      if(results.length < needed) return [];
-      return _standingsFromResults(teams, results);
-    } catch(_){ return []; }
-  }
-  function _uclPrevTeamAtRank(slug, rank1){
-    var ranking = _uclPrevLeagueRanking(slug);
-    var r = ranking[rank1-1];
-    if(!r || !r.name) return null;
-    return { name:String(r.name).replace(/^\s*\*+\s*/,''), logo:r.logo||'', league:slug };
-  }
-  /* Sustituto automático de la plaza fija de España en Ronda 2
-     (2026-08-03, petición usuario: "el 5to de España liga ea sport le
-     has quitado de cabeza serie y tienes que buscar a su sustituto que
-     esta libre de otra liga en su lugar para que sean 12 cabezas de
-     serie"). Si el admin nunca asignó esa plaza en "EA Sports → Europa"
-     (`_meaTeamsFor('uclPrev')` vacío), busca el PRIMER equipo de OTRA
-     liga que quede rankeado JUSTO DEBAJO de la suma de TODAS sus plazas
-     europeas (🔵+🟣+🟠+🟢+🟡+⚪) — por construcción, ese equipo no lo usa
-     NINGÚN cómputo automático de ninguna zona (es el primer NO
-     clasificado de esa liga), así que es un sustituto "libre" de verdad.
-     Determinista (mismo orden de `LEAGUE_DEFAULT_ZONES`) para que el
-     cross-dedup de `computeUclPrevDirectR1Teams` siempre vea el MISMO
-     sustituto. */
-  function _uclPrevEspanaSubstitute(){
-    try {
-      var slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {});
-      for (var i = 0; i < slugs.length; i++){
-        var slug = slugs[i];
-        if (slug === 'liga-ea-sports') continue;
-        var z = _zonesDefaultFor(slug);
-        var total = (Number(z.ucl)||0) + (Number(z.uclPrev)||0) + (Number(z.uel)||0)
-                  + (Number(z.uecl)||0) + (Number(z.uclQual)||0) + (Number(z.wildcard)||0);
-        var t = _uclPrevTeamAtRank(slug, total + 1);
-        if (t && t.name) return t;
-      }
-    } catch(_){}
-    return null;
-  }
-  function computeUclPrevFixedR2Teams(){
-    if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return [];
-    var out = [], seen = {};
-    function push(t){ if(!t || !t.name || seen[t.name]) return; seen[t.name]=true; out.push(t); }
-    (window._UCL_PREV_FIXED_SINGLE_SLUGS||[]).forEach(function(slug){
-      var z = _zonesDefaultFor(slug);
-      push(_uclPrevTeamAtRank(slug, (Number(z.ucl)||0)+1));
-    });
-    /* España — único 🟣1 manual (Liga EA blacklisted del cómputo
-       automático). Lo asigna el admin en "EA Sports → Europa". Si NO
-       lo ha asignado, se rellena con el sustituto libre de arriba para
-       que Ronda 2 SIEMPRE tenga 12 cabezas de serie reales. */
-    var espanaPushedBefore = out.length;
-    if(typeof window._meaTeamsFor === 'function'){
-      (window._meaTeamsFor('uclPrev')||[]).forEach(function(t){
-        if(t && t.name) push({ name:t.name, logo:t.logo||'', league:t.league||'liga-ea-sports' });
-      });
-    }
-    if(out.length === espanaPushedBefore){
-      var sub = _uclPrevEspanaSubstitute();
-      if(sub) push(sub);
-    }
-    (window._UCL_PREV_FIXED_MIXTA_SLUGS||[]).forEach(function(slug){
-      var z = _zonesDefaultFor(slug);
-      push(_uclPrevTeamAtRank(slug, (Number(z.ucl)||0)+1)); /* la MEJOR de sus 2 plazas */
-    });
-    _eurFixupLeagues(out);
-    return out;
-  }
-  window.computeUclPrevFixedR2Teams = computeUclPrevFixedR2Teams;
-  /* Bug 2026-08-03 (foto usuario: "el Atlético Madrid (Humano) Liga EA
-     Sports juega la primera Ronda de la Previa... cuando dijimos que
-     había 12 clubes exentos"): España es uno de los 12 FIJOS de la
-     Ronda 2 (su plaza — "5º España" — la resuelve
-     `computeUclPrevFixedR2Teams` vía la pantalla manual "EA Sports →
-     Europa", `_meaTeamsFor('uclPrev')`, porque Liga EA Sports está
-     BLACKLISTED del cómputo automático por tener humanos). El bug: si
-     el admin añade ADEMÁS ese mismo club a la zona 'uclPrev' desde el
-     overlay GENÉRICO "Ver/Añadir equipos por competición"
-     (`eur_manual_extra_v1`, independiente de "EA Sports → Europa"),
-     `computeUclPrevDirectR1Teams` lo trataba como un directo MÁS de
-     Ronda 1 — sin comprobar que ese mismo nombre ya ocupa una plaza
-     FIJA de Ronda 2. Un club exento acababa jugando AMBAS rondas. */
-  function computeUclPrevDirectR1Teams(){
-    if(window._eurManualOnly && window._eurManualOnly('uclPrev')) return _appendManualExtra([], 'uclPrev');
-    var out = [], seen = {};
-    /* Cross-dedup por NOMBRE contra el pool fijo de Ronda 2 — cubre
-       CUALQUIER vía por la que un club exento pudiera colarse aquí
-       (España vía overlay genérico, o cualquier otro de los 11 fijos
-       automáticos si el admin lo añadió también a mano por error). */
-    var fixedNames = {};
-    (computeUclPrevFixedR2Teams()||[]).forEach(function(t){ if(t && t.name) fixedNames[t.name] = true; });
-    function push(t){ if(!t || !t.name || seen[t.name] || fixedNames[t.name]) return; seen[t.name]=true; out.push(t); }
-    (window._UCL_PREV_FIXED_MIXTA_SLUGS||[]).forEach(function(slug){
-      var z = _zonesDefaultFor(slug);
-      push(_uclPrevTeamAtRank(slug, (Number(z.ucl)||0)+2)); /* la 2ª de sus 2 plazas */
-    });
-    ['liga-mixta-5','liga-mixta-6','liga-mixta-7','liga-mixta-8'].forEach(function(slug){
-      var z = _zonesDefaultFor(slug);
-      var skip = Number(z.ucl)||0, slots = Number(z.uclPrev)||0;
-      for(var i=1;i<=slots;i++) push(_uclPrevTeamAtRank(slug, skip+i));
-    });
-    /* Extras manuales genéricos de 'uclPrev' SIN feederTag 'open-qualifier'
-       (esos juegan la Previa vía computeUclPrevOqPoolTeams, no aquí).
-       España/Liga EA Sports SOLO entra a la Previa por su plaza fija
-       (arriba, vía "EA Sports → Europa") — nunca por este overlay
-       genérico, aunque el admin lo haya añadido ahí por error. */
-    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
-    manual.forEach(function(t){
-      if(!t || !t.name || t.feederTag === 'open-qualifier') return;
-      if(t.league === 'liga-ea-sports' || (typeof window._isHumanClubCanonico === 'function' && window._isHumanClubCanonico(t.name))) return;
-      push({ name:t.name, logo:t.logo||'', league:t.league||'manual' });
-    });
-    _eurFixupLeagues(out);
-    return out;
-  }
-  window.computeUclPrevDirectR1Teams = computeUclPrevDirectR1Teams;
-
-  /* Pool del Open Qualifier para la Previa (los 28 que deben jugar la
-     ronda preliminar). El 1º de cada grupo del Open Qualifier (28
-     grupos × 1, formato 28×4 desde 2026-05-30) lo persiste
-     `simulateOpenQualifier` en `oq_to_previa_v1` con su país real,
-     AL MOMENTO de terminar el Open Qualifier. */
-  function computeUclPrevOqPoolTeams(){
-    var arr = [];
-    try {
-      var raw = localStorage.getItem('oq_to_previa_v1');
-      if(raw){
-        var data = JSON.parse(raw);
-        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
-        teams.forEach(function(t){
-          if(!t || !t.name) return;
-          /* Salta huecos TBD/placeholder (saves antiguos que los
-             persistían). Solo equipos reales entran a la Previa. */
-          if(/^TBD/i.test(t.name) || /^__placeholder_/.test(t.league||'')) return;
-          /* Conservamos el `league` real persistido (slug-país). Solo
-             caemos a 'open-qualifier' si el dato es legacy (sin league);
-             `_eurFixupLeagues` de abajo intentará recuperar el país. */
-          arr.push({name:t.name, logo:t.logo||'', league:(t.league||'open-qualifier')});
-        });
-      }
-    } catch(_){}
-    /* Extras manuales de 'uclPrev' CON `feederTag:'open-qualifier'`
-       (misma vía que arriba, en sentido contrario). Dedupe por nombre. */
-    var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()['uclPrev']) || [];
-    var seen = {}; arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
-    manual.forEach(function(t){
-      if(!t || !t.name || t.feederTag !== 'open-qualifier' || seen[t.name]) return;
-      seen[t.name] = true;
-      arr.push({ name:t.name, logo:t.logo||'', league:t.league||'open-qualifier' });
-    });
-    /* Recupera el slug-país real de los equipos del OQ (o de cualquier
-       directo legacy sin league) para que el sorteo de la Previa
-       (anti-mismo-país) no trate a todos los del OQ como un mismo país. */
-    _eurFixupLeagues(arr);
-    return arr;
-  }
-  window.computeUclPrevOqPoolTeams = computeUclPrevOqPoolTeams;
-
-  /* Unión de los dos pools (34 + 28 = 62), conservada para diagnósticos
-     y para el botón "⬇️ Traer Open Qualifier" (cuenta cuántos equipos
-     reales hay en total). El motor de la Previa YA NO usa esta función
-     para construir su pool de trabajo — usa las dos de arriba por
-     separado, porque el pool del OQ pasa por la ronda preliminar antes
-     de unirse al de liga. */
+  function computeUclPrevR1Teams(){ return _uclPrevDirectPool('prevR1', false); }
+  function computeUclPrevR2DirectTeams(){ return _uclPrevDirectPool('prevR2', false); }
+  function computeUclPrevR3DirectTeams(){ return _uclPrevDirectPool('prevR3', false); }
+  function computeUclPrevR4DirectTeams(){ return _uclPrevDirectPool('uclPrev', true); }
+  window.computeUclPrevR1Teams        = computeUclPrevR1Teams;
+  window.computeUclPrevR2DirectTeams  = computeUclPrevR2DirectTeams;
+  window.computeUclPrevR3DirectTeams  = computeUclPrevR3DirectTeams;
+  window.computeUclPrevR4DirectTeams  = computeUclPrevR4DirectTeams;
+  /* Compat: nombre histórico "computeUclPrevDirectTeams" = directos de
+     Ronda 4 (la ronda "cerca de Champions", equivalente conceptual al
+     viejo uclPrev de una sola ronda). */
+  window.computeUclPrevDirectTeams = computeUclPrevR4DirectTeams;
+  /* Unión de las 4 rondas — solo para diagnósticos/overlay "Equipos por
+     competición" (cuenta cuántos equipos reales hay en el conjunto). El
+     motor de la Previa NUNCA usa esta unión para sortear — cada ronda
+     sortea con su propio pool (directos de esa ronda + ganadores de la
+     ronda anterior). */
   function computeUclPrevTeams(){
-    var arr = computeUclPrevDirectTeams();
-    var seen = {}; arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
-    computeUclPrevOqPoolTeams().forEach(function(t){
-      if(!t || !t.name || seen[t.name]) return;
-      seen[t.name] = true;
-      arr.push(t);
+    var arr = [];
+    var seen = {};
+    [computeUclPrevR1Teams, computeUclPrevR2DirectTeams, computeUclPrevR3DirectTeams, computeUclPrevR4DirectTeams].forEach(function(fn){
+      (fn()||[]).forEach(function(t){
+        if(!t || !t.name || seen[t.name]) return;
+        seen[t.name] = true;
+        arr.push(t);
+      });
     });
     return arr;
   }
   window.computeUclPrevTeams = computeUclPrevTeams;
+
   function computeUelClassified(){
     if(window._eurManualOnly && window._eurManualOnly('uel')) return _appendManualExtra([], 'uel');
     var frozen = _europeFrozenFor('uel');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uel');
-    /* Los 24 perdedores de la Previa de Champions (12 de la Ronda 1 +
-       12 de la Ronda 2, formato 2026-07-31) entran como plazas extra a
-       la Europa League en la MISMA temporada. Los persiste el módulo
-       de la Previa en `wprev_to_europa_v1`. Dedupe por nombre. */
+    /* Los 24 perdedores de la Previa de Champions (12 de R3 + 12 de R4,
+       formato 4 rondas 2026-08-14) entran como plazas extra a la
+       Europa League en la MISMA temporada. Los persiste el módulo de
+       la Previa en `wprev_to_europa_v1`. Dedupe por nombre. */
     try {
       var raw = localStorage.getItem('wprev_to_europa_v1');
       if(raw){
@@ -38489,27 +38301,23 @@ window._hdrCleanCache = function(){
     var frozen = _europeFrozenFor('uecl');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uecl');
-    /* Los 28 NO clasificados del Open Qualifier (los que no llegan al
-       1º de grupo ni a los 2 mejores 2º) entran DIRECTOS a la
-       Conference League en la MISMA temporada — los persiste
-       `_persistPreviaFlag` (Open Qualifier) en `oq_to_conference_v1`
-       (formato 2026-07-31, `_doDrawR1`/`_doSimR1`/`_doDrawR2`/`_doSimR2`
-       en part2/misc_body_2.html). Dedupe por nombre.
-       Nota: la Previa de Champions (2 rondas KO) YA NO alimenta a la
-       Conference — sus perdedores (R1+R2) van a Europa League. La
-       clave legacy `wprev_r1_to_conference_v1` ya no se lee aquí
-       (nadie la escribe desde el formato 2026-07-31). */
+    /* Los 24 perdedores de la Previa de Champions (12 de R1 + 12 de R2,
+       formato 4 rondas 2026-08-14) entran DIRECTOS a la Conference
+       League en la MISMA temporada — los persiste el módulo de la
+       Previa en `wprev_to_conference_v1`. Dedupe por nombre.
+       Wild Card / Open Qualifier ANIQUILADOS — la clave legacy
+       `oq_to_conference_v1` ya no se escribe ni se lee. */
     var seen = {};
     arr.forEach(function(t){ if(t && t.name) seen[t.name] = true; });
     try {
-      var raw = localStorage.getItem('oq_to_conference_v1');
+      var raw = localStorage.getItem('wprev_to_conference_v1');
       if(raw){
         var data = JSON.parse(raw);
         var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
         teams.forEach(function(t){
           if(!t || !t.name || seen[t.name]) return;
           seen[t.name] = true;
-          arr.push({name:t.name, logo:t.logo||'', league:t.league||'open-qualifier'});
+          arr.push({name:t.name, logo:t.logo||'', league:t.league||'previa-champions'});
         });
       }
     } catch(_){}
@@ -38517,115 +38325,9 @@ window._hdrCleanCache = function(){
     _eurFixupLeagues(out);
     return _appendManualExtra(out, 'uecl');
   }
-  function computeOpenQualifierTeams(){
-    if(window._eurManualOnly && window._eurManualOnly('uclQual')) return _appendManualExtra([], 'uclQual');
-    var frozen = _europeFrozenFor('uclQual');
-    if(frozen) return frozen.slice();
-    /* Pool del Open Qualifier (cap a 40 = 10 grupos × 4). Composición
-       objetivo: 28 plazas de zonas `uclQual` de ligas + 12 ganadores
-       Wild Card. Reserva dinámica:
-         · `wc_to_open_qualifier_v1` presente → reservamos ese número
-           (típicamente 12) restando plazas de ligas.
-         · Sin estado WC → dejamos 1 slot reservado por compat con la
-           versión antigua (`wc_champion_v1`).
-       En cualquier caso el total final está capado a 40 por seguridad.
-       Snake-draft del OQ cuadra en 10×4. */
-    var arr = _computeQualifiedFromLeagues('uclQual');
-
-    var wcWinners = [];
-    try {
-      var raw = localStorage.getItem('wc_to_open_qualifier_v1');
-      if(raw){
-        var data = JSON.parse(raw);
-        if(data && Array.isArray(data.teams)){
-          wcWinners = data.teams.filter(function(t){ return t && t.name; });
-        }
-      }
-      if(wcWinners.length === 0){
-        /* Fallback al flag legacy del campeón único. */
-        var rawC = localStorage.getItem('wc_champion_v1');
-        if(rawC){
-          var champ = JSON.parse(rawC);
-          if(champ && champ.name){
-            wcWinners = [{ name: champ.name, league: 'wild-card', logo: '' }];
-          }
-        }
-      }
-    } catch(_){}
-
-    var reserved = Math.max(1, wcWinners.length);
-    var maxLeagues = 40 - reserved;
-    if(maxLeagues < 0) maxLeagues = 0;
-    if(arr.length > maxLeagues) arr = arr.slice(0, maxLeagues);
-
-    /* Apendamos ganadores con dedupe por nombre. Usamos `sourceLeague`
-       como `league` del equipo para que el snake-draft del OQ evite
-       repetir país: si todos llevasen literal 'wild-card' el algoritmo
-       los trataría como del mismo país y los repartiría peor. */
-    var seenN = {};
-    arr.forEach(function(t){ if(t && t.name) seenN[t.name] = true; });
-    wcWinners.forEach(function(w){
-      if(!w.name || seenN[w.name]) return;
-      seenN[w.name] = true;
-      var country = w.sourceLeague || w.league || 'wild-card';
-      arr.push({ name: w.name, league: country, logo: w.logo || '' });
-    });
-
-    /* NO se prependen equipos manuales (EA Sports → Europa) aquí:
-       España (Liga EA Sports) tiene cupo 0 en Open Qualifier según la
-       tabla oficial de coeficientes (`LEAGUE_DEFAULT_ZONES['liga-ea-sports'].uclQual`
-       = 0) — el cómputo automático de arriba YA cubre el 100% de las
-       28 plazas. Bug 2026-07-03 (foto usuario "Wild Card 75/72"): si
-       el admin dejaba equipos manuales en esta zona (rastro del workaround
-       usado mientras el cómputo automático estaba roto), se sumaban a
-       los computados sin garantía de dedupe (nombres/grafías distintas
-       para el mismo hueco de liga) y el pool superaba el total oficial.
-       Mismo fix en `computeWildCardClassified` de abajo. Los EXTRAS
-       MANUALES GENÉRICOS (`eur_manual_extra_v1`, 2026-07-03) SÍ se
-       añaden aquí — a diferencia de `_prependManualEa`/España, son
-       agnósticos de liga y existen precisamente para rellenar huecos de
-       ligas que no consiguieron hidratarse. */
-    arr = _appendManualExtra(arr, 'uclQual');
-
-    /* Cap final por seguridad. */
-    if(arr.length > 40) arr = arr.slice(0, 40);
-    return arr;
-  }
-  function computeWildCardClassified(){
-    if(window._eurManualOnly && window._eurManualOnly('wildcard')) return _appendManualExtra([], 'wildcard');
-    var frozen = _europeFrozenFor('wildcard');
-    if(frozen) return frozen.slice();
-    /* Sin `_prependManualEa`: España tiene cupo 0 en Wild Card
-       (`LEAGUE_DEFAULT_ZONES['liga-ea-sports'].wildcard` = 0), así que
-       el cómputo automático ya cubre el 100% del pool de coeficientes
-       por liga (que sigue sumando ~72, del formato ANTERIOR a
-       2026-07-31 — la tabla por liga nunca se recortó al rediseñar
-       Wild Card a 24 equipos / 12 eliminatorias). Ver nota extendida en
-       `computeOpenQualifierTeams` (mismo bug de fondo). Los EXTRAS
-       MANUALES GENÉRICOS (`eur_manual_extra_v1`) sí se añaden — ver
-       comentario en `computeOpenQualifierTeams`.
-
-       PROHIBIDO capar este array a 24 aquí (se evaluó y se descartó,
-       2026-08-10): la pantalla REAL de Wild Card
-       (`part2/misc_body_2.html`, `buildPool`/`_normalizePool`) reordena
-       el pool ENTERO por poder DESCENDENTE antes de recortarlo a
-       `POOL_TARGET`=24 — esta función devuelve los candidatos en orden
-       "por liga alfabética" (`_computeQualifiedFromLeagues`), NO por
-       poder. Truncar aquí a 24 seleccionaría equipos de las primeras
-       ligas por orden alfabético en vez de los 24 de mayor poder,
-       cambiando qué equipos juegan de verdad la Wild Card — un bug
-       mucho más grave que el puramente visual que se intentaba
-       arreglar. El objetivo (24) en el overlay "Equipos por
-       competición" se interpreta como "mínimo de candidatos reales
-       para un cuadro sin ningún TBD" — tener MÁS de 24 es una señal
-       BUENA (sobran candidatos, cero placeholders), no un error. */
-    return _appendManualExtra(_computeQualifiedFromLeagues('wildcard'), 'wildcard');
-  }
   window.computeUclClassified = computeUclClassified;
   window.computeUelClassified = computeUelClassified;
   window.computeUeclClassified = computeUeclClassified;
-  window.computeOpenQualifierTeams = computeOpenQualifierTeams;
-  window.computeWildCardClassified = computeWildCardClassified;
   /* Expuestos para el picker "Añadir por liga" del overlay de admin
      (`_eurManualOverlayOpen`, otro IIFE): reutiliza EXACTAMENTE el mismo
      ranking (por resultados o por poder) que usa el cómputo automático,
@@ -38938,17 +38640,18 @@ window._hdrCleanCache = function(){
 <button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
 <div class="sec-hdr"><span class="sec-emoji">🇪🇺</span><h2>UCL · Previa de Champions</h2></div>
 
-<!-- Sim / Draw contextuales (PIN 747), formato 2 RONDAS KO (2026-07-31):
-     Ronda 1 (12 del Open Qualifier vs 12 directos-no-fijos → 12
-     eliminatorias ida+vuelta, gol de visitante→prórroga→penaltis si el
-     global empata): 🎲 Draw sortea los cruces, 🎮 Sim los juega TODOS
-     de golpe (salvo el/los cruce(s) con humano, que se juegan con su
-     card).
-     Ronda 2 (12 ganadores de R1 vs 12 fijos por liga → 12 eliminatorias
-     igual formato): 🎲 Draw sortea los cruces, 🎮 Sim los juega TODOS
-     de golpe. Los 12 ganadores → fase de grupos de Champions; los 24
-     perdedores (R1+R2) → Europa League.
-     Los labels de AMBOS botones cambian según la fase — los actualiza
+<!-- Sim / Draw contextuales (PIN 747), formato 4 RONDAS KO (2026-08-14,
+     reemplaza Wild Card + Open Qualifier + Previa 2-rondas ANIQUILADOS):
+     R1(🟤,24 directos) → R2(⚪,12 ganadores R1+12 directos) →
+     R3(🟡,12 ganadores R2+12 directos) → R4(🟣,12 ganadores R3+12
+     directos, que SIEMPRE juegan la ida como visitantes). Cada ronda es
+     una eliminatoria ida+vuelta: gol de visitante → si sigue empatado,
+     TERCER PARTIDO en campo neutral (sin gol de visitante) → prórroga →
+     penaltis. R1/R2 perdedores → Conference League; R3/R4 perdedores →
+     Europa League; R4 ganadores → fase de grupos de Champions.
+     🎲 Draw sortea la ronda actual, 🎮 Sim la juega TODA de golpe (salvo
+     cruces con humano, que se juegan con su card). Los labels de AMBOS
+     botones cambian según la fase — los actualiza
      window._wprevNextLabel()/el propio buildUclPrevClas() en cada
      render, vía los ids wprev-btn-sim/wprev-btn-draw. -->
 <div style="display:flex;gap:8px;justify-content:center;padding:8px 6px 4px;flex-wrap:wrap;">
@@ -39174,874 +38877,18 @@ window._hdrCleanCache = function(){
     </div>
     <div class="wprev-diag-body" id="wprev-diag-body"></div>
   </div>
-  <!-- Ronda 1 (12 eliminatorias, Open Qualifier vs directos) ARRIBA —
-       reutiliza el id `wprev-deathround-container` heredado de formatos
-       anteriores para no tener que retocar el resto de la pantalla; el
-       módulo de la Previa Champions lo localiza por id. -->
+  <!-- Ronda 1 (24 directos, 🟤) ARRIBA — reutiliza el id
+       `wprev-deathround-container` heredado de formatos anteriores para
+       no tener que retocar el resto de la pantalla; el módulo de la
+       Previa Champions lo localiza por id. -->
   <div id="wprev-deathround-container"></div>
-  <!-- Ronda 2 (12 eliminatorias, ganadores R1 vs fijos por liga) ABAJO
-       — reutiliza el id `wprev-groups-container` (antes fase de grupos,
-       ahora también eliminatorias). -->
+  <!-- Ronda 2 (12 ganadores R1 + 12 directos, ⚪) — reutiliza el id
+       `wprev-groups-container` (antes fase de grupos/Ronda 2 KO). -->
   <div id="wprev-groups-container" style="margin-top:14px;"></div>
-</div>
-</div>
-<!-- Pantalla intermedia s-open-qualifier eliminada: ahora la card
-     "Open Qualifier" del menú Champions navega directamente a
-     s-open-qualifier-clas. La pantalla de resultados (s-open-qualifier-res)
-     queda como código pasivo (no alcanzable desde la UI). -->
-<div class="screen" id="s-open-qualifier-clas">
-<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
-<div class="sec-hdr" style="display:flex;align-items:center;gap:8px;flex-wrap:nowrap;white-space:nowrap;">
-  <span class="sec-emoji">🟡</span>
-  <h2 style="margin:0;white-space:nowrap;">Open Qualifier · Clasificación</h2>
-</div>
-
-<!-- Sim / Reset / Traer Wild Card (PIN 747 obligatorio) -->
-<div style="display:flex;gap:10px;justify-content:center;padding:8px 6px 4px;flex-wrap:wrap;">
-  <button onclick="pG(function(){window.simulateOpenQualifier&&window.simulateOpenQualifier()})"
-          style="background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid rgba(80,200,120,.5);border-radius:8px;padding:9px 18px;color:#7fe09a;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
-    🎮 Sim
-  </button>
-  <button onclick="pG(function(){window.resetOpenQualifier&&window.resetOpenQualifier()})"
-          style="background:linear-gradient(135deg,#3a1414,#5a2424);border:1px solid rgba(255,80,80,.5);border-radius:8px;padding:9px 18px;color:#ff8080;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
-    ♻️ Reset
-  </button>
-  <!-- Traer ganadores de la Wild Card a mano (2026-07-10): por si la
-       propagación automática (invalidación en cascada al terminar la
-       Wild Card) no llegó a este dispositivo, o hay una snapshot
-       congelada de "Enviar realidad..." de antes de que la Wild Card
-       terminara — el admin fuerza el recálculo del pool con los 12
-       ganadores reales sin tener que ir a Reset/Draw a ciegas. -->
-  <button onclick="pG(function(){window._oqPullWildCardWinners&&window._oqPullWildCardWinners()})"
-          style="background:linear-gradient(135deg,#3a2a00,#5a4400);border:1px solid rgba(253,200,48,.55);border-radius:8px;padding:9px 18px;color:#ffe680;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
-    ⬇️ Traer Wild Card
-  </button>
-</div>
-
-<!-- Leyenda compacta visible (formato 2026-07-31: 3 zonas) -->
-<div style="display:flex;gap:10px;justify-content:center;padding:6px 6px 2px;font-family:Rajdhani,sans-serif;font-size:11px;color:#fff;flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap;">
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#a855f7;margin-right:4px;vertical-align:middle;"></span>Previa UCL (1º + 2 mejores 2º)</span>
-  <span style="white-space:nowrap;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#5eb6e4;margin-right:4px;vertical-align:middle;"></span>Conference League (resto)</span>
-</div>
-
-<!-- Detalle de zonas — presente pero oculto -->
-<div style="text-align:center;padding:0 4px 4px;">
-  <button onclick="tog('oq-zones-details')"
-          style="background:none;border:none;color:rgba(255,255,255,.45);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;cursor:pointer;padding:4px;">
-    ▼ DETALLE DE ZONAS
-  </button>
-</div>
-<div class="jmatches" id="oq-zones-details" style="margin:0 8px 4px;padding:0;">
-  <div style="padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:6px;background:rgba(255,255,255,.03);font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.78);line-height:1.7;">
-    <div><b>10 grupos × 4 equipos = 40 plazas</b> · 28 ligas + 12 ganadores Wild Card</div>
-    <div>Cada equipo juega <b>6 partidos</b> (3 local + 3 visitante, ida + vuelta)</div>
-    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a855f7;margin-right:6px;"></span><b>1º de cada grupo (10) + 2 MEJORES 2º</b> · Previa de Champions Ronda 1 (12 plazas) — esta misma temporada</div>
-    <div><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#5eb6e4;margin-right:6px;"></span><b>Resto</b> (2º no clasificados + 3º + 4º, 28) · Conference League — fase de grupos directa, esta misma temporada</div>
-  </div>
-</div>
-
-<div class="clas-wrap" style="padding:0 0 24px;">
-<div id="open-qual-groups-container"></div>
-<!-- Playoff container preservado vacío por compat con buildOpenQualifierClas;
-     en el formato 28×4 ya no se renderiza nada aquí. -->
-<div id="open-qual-playoff-container" style="margin-top:14px;"></div>
-</div>
-<style>
-.oq-pl-section{margin:14px 8px 0;border:1px solid rgba(243,115,53,.45);border-radius:10px;background:linear-gradient(180deg,rgba(243,115,53,.06),rgba(0,0,0,0));overflow:hidden;}
-.oq-pl-hdr{padding:10px 14px;background:linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);display:flex;align-items:center;gap:8px;}
-.oq-pl-sub{padding:6px 14px 0;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:rgba(255,255,255,.55);}
-.oq-pl-tie{margin:10px 12px;padding:10px 12px;border:1px solid rgba(255,255,255,.08);border-radius:8px;background:rgba(0,0,0,.2);}
-.oq-pl-tie.played{border-color:rgba(60,200,120,.35);background:rgba(60,200,120,.04);}
-.oq-pl-leg{display:grid;grid-template-columns:1fr 70px 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
-.oq-pl-leg .lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.45);}
-.oq-pl-leg .h{text-align:right;font-weight:600;}
-.oq-pl-leg .a{text-align:left;font-weight:600;}
-.oq-pl-leg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:16px;background:rgba(255,255,255,.06);border-radius:4px;padding:2px 0;}
-.oq-pl-agg{display:grid;grid-template-columns:1fr 70px 1fr;gap:8px;align-items:center;padding-top:6px;margin-top:5px;border-top:1px dashed rgba(255,255,255,.1);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#3cc878;}
-.oq-pl-agg .winner-mark{font-weight:700;color:#3cc878;}
-.oq-pl-agg .loser-mark{color:rgba(255,255,255,.4);}
-.oq-pl-agg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#3cc878;background:rgba(60,200,120,.10);border:1px solid rgba(60,200,120,.35);border-radius:4px;padding:2px 0;}
-.oq-pl-empty{padding:14px;text-align:center;color:rgba(255,255,255,.45);font-family:Rajdhani,sans-serif;font-size:13px;}
-</style>
-<script>
-(function(){
-  /* Open Qualifier — 10 grupos de 4 equipos, round-robin IDA+VUELTA
-     (6 partidos por equipo: 3 local + 3 visitante; 12 por grupo). Las
-     40 plazas se alimentan con: 28 plazas de zonas `uclQual` + 12
-     ganadores del torneo Wild Card. El reparto es snake-draft con un
-     post-pass que intenta no repetir equipos de la misma Liga Mixta
-     en un mismo grupo.
-
-     Promoción tras simular:
-     - 1º de cada grupo (10)         → Previa de Champions Ronda 1
-     - Los 2 MEJORES 2º de grupo     → Previa de Champions Ronda 1
-       (desempate: PTS → DG → GF → GF-visitante → GC → sorteo)
-     - Resto (2º no clasificados +
-       3º + 4º de cada grupo, 28)    → Conference League (fase de
-                                        grupos, directo)
-
-     Total a Previa: 12. Total a Conference: 28.
-
-     Cambio (2026-07-31): formato anterior era 28 grupos de 4 con solo
-     el 1º clasificando a la Previa (28 plazas) y sin salida a
-     Conference. Se preserva STORE_KEY, `oq_to_previa_v1` y
-     `oq_to_conference_v1` (esta última pasa de "legacy fallback" a
-     feed PRIMARIO — antes la Conference nunca recibía nada del OQ). La
-     UI muestra SOLO las tablas de clasificación (sin jornadas). */
-  var STORE_KEY = 'oq_simulation_v1';
-  /* 10 etiquetas: A..J. */
-  var GROUP_LABELS = (function(){
-    var a = [];
-    for(var i=0; i<10; i++){
-      a.push(i < 26 ? String.fromCharCode(65+i) : 'A' + String.fromCharCode(65 + (i-26)));
-    }
-    return a;
-  })();
-  var TEAMS_PER_GROUP = 4;
-  var N_GROUPS = 10;
-  var QUALIFY_BEST_SECONDS = 2; /* de los 10 segundos, los 2 mejores → Previa */
-  var QUALIFY_TOP = 1;            /* 1º de cada grupo (10) → Previa Champions */
-
-  function _esc(s){
-    return String(s==null?'':s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
-  }
-  /* Baraja `arr` DENTRO de cada bombo de tamaño `tierSize` (Fisher-Yates
-     acotado al tramo). Mismo helper que usan Wild Card y Previa de
-     Champions (part2/misc_body_2.html) — ver ahí la explicación
-     completa. 2026-07-11: petición usuario, el sorteo del Open
-     Qualifier tiene que dar grupos distintos en cada pulsación, no
-     siempre el mismo reparto para el mismo pool. */
-  function _shuffleTiered(arr, tierSize){
-    var out = arr.slice();
-    for(var start=0; start<out.length; start+=tierSize){
-      var end = Math.min(out.length, start+tierSize);
-      for(var i=end-1; i>start; i--){
-        var j = start + Math.floor(Math.random()*(i-start+1));
-        var tmp = out[i]; out[i] = out[j]; out[j] = tmp;
-      }
-    }
-    return out;
-  }
-  function _distributeSnake(teams, nGroups){
-    /* Sembramos por poder (bombos de `nGroups` equipos, fuerza similar
-       dentro de cada uno) y barajamos CADA bombo antes del snake — así
-       el reparto sigue equilibrado (1 equipo de cada bombo por grupo)
-       pero cambia de verdad en cada sorteo, en vez de ser siempre el
-       mismo orden de entrada. */
-    var seeded = teams.slice().sort(function(a,b){ return (Number(b&&b.power)||50)-(Number(a&&a.power)||50); });
-    seeded = _shuffleTiered(seeded, nGroups);
-    var groups = [];
-    for(var g=0; g<nGroups; g++) groups.push([]);
-    seeded.forEach(function(t, i){
-      var row = Math.floor(i / nGroups);
-      var col = i % nGroups;
-      var g = (row % 2 === 0) ? col : (nGroups - 1 - col);
-      groups[g].push(t);
-    });
-    /* En lo posible, no repetir país en el mismo grupo. Tras el snake,
-       hacemos pases greedy: si un grupo tiene 2+ equipos del mismo
-       `league`, intentamos intercambiar UNO con un equipo del MISMO
-       índice de fila (mismo "rank") en otro grupo donde no cree un
-       conflicto nuevo. Limitado a 3 pases para garantizar terminación
-       — si no se puede resolver, se acepta el grupo como está. */
-    function _countriesIn(grp){
-      var c = {};
-      grp.forEach(function(t){
-        var k = t && t.league ? t.league : '';
-        if(!k) return;
-        c[k] = (c[k]||0) + 1;
-      });
-      return c;
-    }
-    function _swapWouldImprove(srcG, srcIdx, dstG, dstIdx){
-      var srcTeam = groups[srcG][srcIdx], dstTeam = groups[dstG][dstIdx];
-      if(!srcTeam || !dstTeam) return false;
-      var sl = srcTeam.league || '', dl = dstTeam.league || '';
-      if(!sl || !dl || sl === dl) return false;
-      function countAfterSwap(grp, removeIdx, addTeam){
-        var c = {};
-        for(var i=0;i<grp.length;i++){
-          if(i === removeIdx) continue;
-          var k = grp[i] && grp[i].league ? grp[i].league : '';
-          if(k) c[k] = (c[k]||0) + 1;
-        }
-        var ak = addTeam.league || '';
-        if(ak) c[ak] = (c[ak]||0) + 1;
-        return c;
-      }
-      function maxDup(c){ var m=0; for(var k in c){ if(c[k]>m) m=c[k]; } return m; }
-      var beforeSrc = maxDup(_countriesIn(groups[srcG]));
-      var beforeDst = maxDup(_countriesIn(groups[dstG]));
-      var afterSrc  = maxDup(countAfterSwap(groups[srcG], srcIdx, dstTeam));
-      var afterDst  = maxDup(countAfterSwap(groups[dstG], dstIdx, srcTeam));
-      return (afterSrc + afterDst) < (beforeSrc + beforeDst);
-    }
-    for(var pass=0; pass<3; pass++){
-      var changed = false;
-      for(var g=0; g<nGroups; g++){
-        var counts = _countriesIn(groups[g]);
-        var dupLeague = null;
-        for(var k in counts){ if(counts[k] >= 2){ dupLeague = k; break; } }
-        if(!dupLeague) continue;
-        /* Buscamos un equipo del país duplicado en este grupo y
-           probamos intercambiarlo con cualquier otro grupo a la
-           altura de la "fila" del snake — ese índice es proxy para
-           teams de poder similar. */
-        var srcIdx = -1;
-        for(var i=0;i<groups[g].length;i++){
-          if(groups[g][i].league === dupLeague){ srcIdx = i; break; }
-        }
-        if(srcIdx < 0) continue;
-        var done = false;
-        for(var dg=0; dg<nGroups && !done; dg++){
-          if(dg === g) continue;
-          /* probamos intercambio en TODOS los slots del grupo destino,
-             priorizando los del mismo índice (mismo "rank"). */
-          var dstOrder = [];
-          if(srcIdx < groups[dg].length) dstOrder.push(srcIdx);
-          for(var di=0; di<groups[dg].length; di++){
-            if(di !== srcIdx) dstOrder.push(di);
-          }
-          for(var x=0; x<dstOrder.length && !done; x++){
-            var di2 = dstOrder[x];
-            if(_swapWouldImprove(g, srcIdx, dg, di2)){
-              var tmp = groups[g][srcIdx];
-              groups[g][srcIdx] = groups[dg][di2];
-              groups[dg][di2] = tmp;
-              changed = true; done = true;
-            }
-          }
-        }
-      }
-      if(!changed) break;
-    }
-    return groups;
-  }
-  /* Goles aleatorios estilo Poisson aproximado (rejection method).
-     Lambda típico 0.4 - 2.5. */
-  function _poisson(lambda){
-    var L = Math.exp(-lambda), k = 0, p = 1;
-    do { k++; p *= Math.random(); } while(p > L);
-    return k - 1;
-  }
-  /* Round-robin a IDA + VUELTA: cada par juega dos veces, alternando
-     local. Cada equipo termina con 2·(n-1) partidos = (n-1) como local
-     + (n-1) como visitante. Para 4 equipos → 6 partidos por equipo
-     (3 + 3), 4·3 = 12 partidos por grupo. Lambdas siguen dependiendo
-     de team.power para mantener la lógica de los partidos. */
-  function _simulateGroup(grp){
-    var matches = [];
-    for(var i=0; i<grp.length; i++){
-      for(var j=0; j<grp.length; j++){
-        if(i === j) continue;            /* sin auto-emparejarse */
-        var hp = Number(grp[i].power)||50, ap = Number(grp[j].power)||50;
-        var lh = Math.max(0.4, 1.25 + (hp-ap)/45);
-        var la = Math.max(0.3, 0.95 + (ap-hp)/45);
-        /* hi=local, ai=visitante. Al iterar todos los (i,j) con i!=j
-           cubrimos tanto la ida como la vuelta de forma natural. */
-        matches.push({hi:i, ai:j, gh:_poisson(lh), ga:_poisson(la)});
-      }
-    }
-    return matches;
-  }
-  /* Calcula clasificación de un grupo a partir de sus matches. */
-  function _standingsFor(grp, matches){
-    var arr = grp.map(function(t,i){
-      return {idx:i, name:t.name||'', logo:t.logo||'', pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, gfAway:0};
-    });
-    matches.forEach(function(m){
-      var H = arr[m.hi], A = arr[m.ai];
-      if(!H||!A) return;
-      H.pj++; A.pj++;
-      H.gf += m.gh; H.gc += m.ga; A.gf += m.ga; A.gc += m.gh;
-      A.gfAway += m.ga; /* goles del EQUIPO VISITANTE — para el desempate de "mejores segundos" */
-      if(m.gh>m.ga){ H.v++; A.p++; H.pts+=3; }
-      else if(m.gh<m.ga){ A.v++; H.p++; A.pts+=3; }
-      else { H.e++; A.e++; H.pts++; A.pts++; }
-    });
-    arr.forEach(function(s){ s.dg = s.gf - s.gc; });
-    arr.sort(function(a,b){
-      return (b.pts-a.pts) || (b.dg-a.dg) || (b.gf-a.gf)
-        || String(a.name).localeCompare(String(b.name),'es');
-    });
-    return arr;
-  }
-  function _loadSim(){
-    try {
-      var raw = localStorage.getItem(STORE_KEY);
-      if(!raw) return null;
-      var s = JSON.parse(raw);
-      /* `s.groups.length !== N_GROUPS` ⇒ save del formato ANTERIOR
-         (28 grupos) — estructuralmente incompatible con el nuevo (10
-         grupos). Se descarta como si no existiera: el admin vuelve a
-         sortear/simular con el pool y formato actuales. */
-      if(s && Array.isArray(s.groups) && s.groups.length === N_GROUPS && Array.isArray(s.matchesByGroup)) return s;
-    } catch(_){}
-    return null;
-  }
-  function _saveSim(sim){
-    /* 2026-07-11: antes esto tenía su PROPIO limpiador de cuota ad-hoc
-       (solo _backup/_snap_/_snapshot/_protected) + `alert()` a secas si
-       fallaba. Dos problemas: (1) `window._lsSetSafe` (helper genérico
-       del proyecto, arriba del todo del archivo) libera MÁS categorías
-       de espacio — también stores de stats reconstruibles e iconos de
-       comp — así que tenía más papeletas de fallar que el genérico;
-       (2) el `alert()` puede quedar SUPRIMIDO por Chrome tras muchos
-       diálogos en la misma sesión (patrón ya documentado en este mismo
-       proyecto para la cadena FINALIZAR) — el usuario veía "336/336"
-       con el chip en ámbar pero SIN ningún aviso visible de por qué la
-       tabla se quedaba en 0. Ahora usamos el helper compartido +
-       `_gmCriticalNotice` (banner propio, inmune a esa supresión). */
-    var json = JSON.stringify(sim);
-    var ok = (typeof window._lsSetSafe === 'function')
-      ? window._lsSetSafe(STORE_KEY, json)
-      : (function(){ try { window._lsSetSafe(STORE_KEY, json); return true; } catch(_){ return false; } })();
-    if(!ok){
-      try { console.error('[oq-saveSim] setItem falló incluso tras liberar espacio'); } catch(_){}
-      (window._gmCriticalNotice || alert)('⚠️ No se pudo guardar la simulación del Open Qualifier: el navegador se quedó sin espacio incluso después de liberar caché.\n\nBorra alguna liga de "Resto de Ligas" y vuelve a intentarlo.');
-    }
-    return ok;
-  }
-
-  /* Rellena `classified` hasta `N_GROUPS × TEAMS_PER_GROUP` (112) con
-     placeholders TBD-OQ-N. Llamado tanto al simular como al
-     renderizar la pantalla en modo "fresco" (sin sim previa) — sin
-     esto algunos grupos quedaban incompletos cuando el pool real era
-     menor que 112 (típicamente porque alguna liga no completó
-     jornadas o tiene `uclQual=0`). El nombre TBD-OQ-N distingue del
-     TBD-N que viene propagado del Wild Card. */
-  function _padToFull(classified){
-    var maxTeams = N_GROUPS * TEAMS_PER_GROUP;
-    classified = (classified || []).slice();
-    if(classified.length > maxTeams){
-      classified = classified.slice(0, maxTeams);
-    }
-    while(classified.length < maxTeams){
-      var i = classified.length;
-      classified.push({
-        name: 'TBD-OQ-'+(i+1),
-        logo: '',
-        league: '__placeholder_oq_'+i,
-        power: 50
-      });
-    }
-    return classified;
-  }
-
-  /* De los 10 segundos de grupo (uno por grupo), los 2 MEJORES
-     también clasifican a la Previa (junto a los 10 primeros). Criterio
-     de desempate EXACTO del formato: PTS → DG → GF → GF-visitante →
-     GC (menor) → sorteo. Devuelve el set de índices de grupo (`gi`)
-     cuyo 2º clasifica. Placeholders (TBD-OQ-N) nunca cuentan. */
-  function _computeBestSeconds(groups, standingsByGroup){
-    var cands = [];
-    (standingsByGroup||[]).forEach(function(st, gi){
-      var second = st && st[1];
-      if(!second || !second.name) return;
-      if(/^TBD/i.test(second.name) || /^__placeholder_/.test((groups[gi] && groups[gi][second.idx] && groups[gi][second.idx].league) || '')) return;
-      cands.push({ gi:gi, pts:second.pts||0, dg:second.dg||0, gf:second.gf||0, gfAway:second.gfAway||0, gc:second.gc||0, rnd:Math.random() });
-    });
-    cands.sort(function(a,b){
-      return (b.pts-a.pts) || (b.dg-a.dg) || (b.gf-a.gf) || (b.gfAway-a.gfAway) || (a.gc-b.gc) || (b.rnd-a.rnd);
-    });
-    var out = {};
-    cands.slice(0, QUALIFY_BEST_SECONDS).forEach(function(c){ out[c.gi] = true; });
-    return out;
-  }
-
-  function buildOpenQualifierClas(){
-    var container = document.getElementById('open-qual-groups-container');
-    if(!container) return;
-    var sim = _loadSim();
-    var groups, totalTeams = 0;
-    var standingsByGroup = [];
-    if(sim){
-      groups = sim.groups;
-      totalTeams = groups.reduce(function(s,g){ return s + g.length; }, 0);
-      standingsByGroup = groups.map(function(grp,g){ return sim.matchesByGroup[g] ? _standingsFor(grp, sim.matchesByGroup[g]) : []; });
-    } else {
-      /* Render "fresco" (sin sim previa) — también padea a 98 para
-         que los grupos se vean siempre con 14 huecos en la UI. */
-      var classified = _padToFull((window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || []);
-      groups = _distributeSnake(classified, N_GROUPS);
-      totalTeams = classified.length;
-    }
-    var qualSeconds = sim ? _computeBestSeconds(groups, standingsByGroup) : {};
-    /* Cabecera "6 GRUPOS · 11 EQUIPOS · 10 PARTIDOS POR EQUIPO ·
-       N/66 plazas cubiertas · SIMULADO" eliminada por petición del
-       usuario — la información ya queda implícita al ver los grupos. */
-    var html = '';
-    for(var g=0; g<N_GROUPS; g++){
-      var grp = groups[g] || [];
-      var standings;
-      if(sim && sim.matchesByGroup[g]){
-        standings = standingsByGroup[g];
-      } else {
-        /* Sin simular: orden de inserción + stats a 0 */
-        standings = grp.map(function(t,i){
-          return {idx:i, name:t.name||'', logo:t.logo||'', pts:0, pj:0, v:0, e:0, p:0, gf:0, gc:0, dg:0, gfAway:0};
-        });
-      }
-      html += '<div style="margin:14px 4px 0;border:1px solid #FDC830;border-radius:8px;background:linear-gradient(135deg,rgba(243,115,53,.06),rgba(0,0,0,0));">'
-        + '<div style="padding:10px 14px;border-bottom:2px solid #F37335;background:linear-gradient(90deg,#FDC830,#F37335);border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;">'
-        +   '<span style="font-family:\'Bebas Neue\',\'Oswald\',sans-serif;font-size:24px;color:#000;font-weight:900;letter-spacing:2px;text-shadow:0 1px 0 rgba(255,255,255,.35);">GRUPO ' + GROUP_LABELS[g] + '</span>'
-        +   '<span style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#000;font-weight:700;margin-left:auto;">' + grp.length + ' / ' + TEAMS_PER_GROUP + '</span>'
-        + '</div>'
-        + '<div class="clas-scroll" style="padding:4px 6px 8px;">'
-        +   '<div class="clas-table" style="min-width:420px;">'
-        +     '<div class="clas-hdr" style="grid-template-columns:minmax(150px,1.6fr) 30px 26px 22px 22px 22px 26px 26px 28px;">'
-        +       '<div class="clas-hdr-team">Equipo</div>'
-        +       '<div>PTS</div><div>PJ</div><div>V</div><div>E</div><div>P</div>'
-        +       '<div>GF</div><div>GC</div><div>DG</div>'
-        +     '</div>';
-      for(var i=0; i<TEAMS_PER_GROUP; i++){
-        var team = standings[i];
-        /* Zona visual (formato 2026-07-31):
-           1º SIEMPRE púrpura → Previa Champions.
-           2º púrpura SOLO si es uno de los 2 mejores segundos (sim ya
-           corrida); si no, igual que 3º/4º → Conference League. */
-        var rowZone = '', borderColor = 'transparent';
-        var qualifiesToPrevia = (i < QUALIFY_TOP) || (i === 1 && qualSeconds[g]);
-        if(qualifiesToPrevia){ rowZone = 'background:rgba(168,85,247,.10);'; borderColor = '#a855f7'; }
-        else { rowZone = 'background:rgba(94,182,228,.06);'; borderColor = '#5eb6e4'; }
-        var nameHtml, logoHtml = '', suffixHtml = '';
-        if(team && team.name){
-          if(team.logo){
-            logoHtml = '<img class="clas-team-logo" src="' + _esc(team.logo) + '" alt="" onerror="this.style.display=\'none\'">';
-          }
-          nameHtml = '<span class="clas-team-name-text">' + _esc(team.name) + '</span>';
-          var rawIcon = (typeof window.humanIcon === 'function') ? window.humanIcon(team.name) : '';
-          var humanEmoji = rawIcon ? rawIcon.replace(/ /g, '').trim() : '';
-          if(humanEmoji) suffixHtml = '<span class="clas-team-human-suffix">' + humanEmoji + '</span>';
-        } else {
-          nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
-        }
-        var dgClass = 'clas-val dg zer';
-        if(team){
-          if(team.dg>0) dgClass = 'clas-val dg pos';
-          else if(team.dg<0) dgClass = 'clas-val dg neg';
-        }
-        html += '<div class="clas-row" style="grid-template-columns:minmax(150px,1.6fr) 30px 26px 22px 22px 22px 26px 26px 28px;border-left:3px solid ' + borderColor + ';' + rowZone + '">'
-          + '<div class="clas-team-cell">'
-          +   '<span class="clas-pos-n">' + (i+1) + '</span>'
-          +   '<span class="clas-team-name">' + logoHtml + nameHtml + suffixHtml + '</span>'
-          + '</div>'
-          + '<div class="clas-pts">' + (team?team.pts:0) + '</div>'
-          + '<div class="clas-pj">' + (team?team.pj:0) + '</div>'
-          + '<div class="clas-val">' + (team?team.v:0) + '</div>'
-          + '<div class="clas-val">' + (team?team.e:0) + '</div>'
-          + '<div class="clas-val">' + (team?team.p:0) + '</div>'
-          + '<div class="clas-val gf">' + (team?team.gf:0) + '</div>'
-          + '<div class="clas-val gc">' + (team?team.gc:0) + '</div>'
-          + '<div class="' + dgClass + '">' + (team?(team.dg>0?'+':'')+team.dg:0) + '</div>'
-          + '</div>';
-      }
-      html += '</div></div></div>';
-    }
-    container.innerHTML = html;
-    /* Sin playoff en el formato 28×4 — limpiamos el container por si
-       quedaba HTML de la versión antigua. */
-    var pl = document.getElementById('open-qual-playoff-container');
-    if(pl) pl.innerHTML = '';
-  }
-
-  /* Simular: requiere que las ligas hayan llenado los 65 huecos
-     (cada liga aporta sus zones.uclQual a través de
-     computeOpenQualifierTeams). Si hay menos teams, simulamos los
-     que haya — cada grupo con menos equipos generará menos partidos. */
-  function simulateOpenQualifier(){
-    try { console.log('[oq-sim] simulateOpenQualifier INICIO'); } catch(_){}
-    try {
-      var classified = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || [];
-      try { console.log('[oq-sim] classified →', classified.length, 'equipos'); } catch(_){}
-      if(!classified.length){
-        alert('Primero termina alguna liga con plazas en la zona "Open Qualifier".');
-        return;
-      }
-      /* Evitar doble lanzamiento mientras un sim previo aún corre. */
-      if(window._bgSimIsActive && window._bgSimIsActive('open-qualifier')){
-        try { console.log('[oq-sim] ya en curso — ignorado'); } catch(_){}
-        return;
-      }
-      /* Sorteo + simulación EN SEGUNDO PLANO (chip flotante con %).
-         El sorteo (_distributeSnake) es instantáneo; el peso está en los
-         28×12 = 336 partidos, que se simulan grupo a grupo cediendo el
-         hilo entre cada uno para que el % avance y la UI no se congele. */
-      _doSimulateChunked(classified);
-    } catch(e){
-      try { console.error('[simulateOpenQualifier]', e); } catch(_){}
-      alert('⚠️ Error en simulateOpenQualifier: '+(e && e.message ? e.message : e)+'\n\nF12 → Consola para detalles.');
-    }
-  }
-  /* Persiste el reparto del OQ: 1º de cada grupo (10) + los 2 MEJORES
-     2º de grupo → `oq_to_previa_v1` (12 plazas, Previa Ronda 1). El
-     resto (2º no clasificados + todos los 3º/4º, 28) →
-     `oq_to_conference_v1` (Conference League, fase de grupos directa).
-     Lo leen `computeUclPrevOqPoolTeams` (Previa) y
-     `computeUeclClassified` (Conference) para sumarlos a sus pools en
-     el mismo ciclo. Cambio (2026-07-31): antes solo el 1º (28 equipos)
-     avanzaba y la Conference no recibía nada del OQ. */
-  function _persistPreviaFlag(sim){
-    try {
-      var previaArr = [], conferenceArr = [];
-      if(sim && sim.groups && sim.matchesByGroup){
-        var standingsByGroup = sim.groups.map(function(grp,g){ return _standingsFor(grp||[], sim.matchesByGroup[g]||[]); });
-        var qualSeconds = _computeBestSeconds(sim.groups, standingsByGroup);
-        function real(t){ return t && t.name && !/^TBD/i.test(t.name) && !/^__placeholder_/.test(t.league||''); }
-        function pack(t, source){ return {name:t.name, logo:t.logo||'', league:t.league||'', source:source}; }
-        for(var g=0; g<sim.groups.length; g++){
-          var st = standingsByGroup[g];
-          for(var idx=0; idx<TEAMS_PER_GROUP; idx++){
-            if(!st[idx]) continue;
-            var t = sim.groups[g][st[idx].idx];
-            /* No propagamos huecos: si la posición es un placeholder
-               (`TBD-OQ-N`, league `__placeholder_*`) porque el pool
-               real no llegaba a 40, NO entra a ninguna competición. */
-            if(!real(t)) continue;
-            var toPrevia = (idx < QUALIFY_TOP) || (idx === 1 && qualSeconds[g]);
-            if(toPrevia) previaArr.push(pack(t, idx===0 ? 'oq-top1' : 'oq-best-second'));
-            else conferenceArr.push(pack(t, 'oq-rest'));
-          }
-        }
-      }
-      window._lsSetSafe('oq_to_previa_v1', JSON.stringify({teams:previaArr, ts:Date.now()}));
-      window._lsSetSafe('oq_to_conference_v1', JSON.stringify({teams:conferenceArr, ts:Date.now()}));
-      /* Los registra TAMBIÉN como extras manuales de sus zonas destino —
-         garantiza que lleguen aunque esas zonas estén en modo 🔒 Manual
-         (mismo motivo que la Wild Card → Open Qualifier, ver
-         `_eurSyncManualExtraFromFeeder`). */
-      try {
-        if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
-          window._eurSyncManualExtraFromFeeder('uclPrev', previaArr, 'open-qualifier');
-          window._eurSyncManualExtraFromFeeder('uecl', conferenceArr, 'open-qualifier');
-        }
-      } catch(_){}
-    } catch(_){}
-  }
-
-  /* Persiste + re-pinta tras la simulación. Compartido por la ruta
-     síncrona (_doSimulate) y la chunked (_doSimulateChunked). Devuelve
-     true si guardó OK. */
-  function _finishOqSim(groups, matchesByGroup){
-    var sim = {groups:groups, matchesByGroup:matchesByGroup, playoff:null, ts:Date.now()};
-    var saved = _saveSim(sim);
-    if(!saved){
-      /* `_saveSim` ya alertó al usuario con el motivo. Salimos para
-         no re-pintar con datos que no se persistieron — antes
-         buildOpenQualifierClas leía null y dejaba grupos en 0. */
-      return false;
-    }
-    _persistPreviaFlag(sim);
-    /* Los 12 clasificados a la Previa (10 primeros + 2 mejores segundos)
-       y los 28 a Conference recién calculados cambian sus pools — si
-       esas fases ya estaban sorteadas (con un pool más pequeño/con
-       placeholders, típico de sortear antes de que el OQ terminara),
-       su sorteo cacheado queda obsoleto. Lo invalidamos en cascada para
-       que se redibujen con el pool real "en el momento", sin esperar a
-       que el admin lo note y pulse Reset a mano. */
-    if (typeof window._eurInvalidateDownstream === 'function' && window._EUR_DOWNSTREAM_OF_OQ) {
-      window._eurInvalidateDownstream(window._EUR_DOWNSTREAM_OF_OQ);
-    }
-    try { console.log('[oq-sim] guardado OK · pintando clas'); } catch(_){}
-    buildOpenQualifierClas();
-    return true;
-  }
-
-  function _doSimulate(classified){
-    /* Cap+pad a `N_GROUPS × TEAMS_PER_GROUP` (40). Misma helper que
-       usa el render "fresco" — así sim y fresco siempre cuadran a
-       10 × 4. */
-    classified = _padToFull(classified);
-    var groups = _distributeSnake(classified, N_GROUPS);
-    var matchesByGroup = groups.map(function(grp){ return _simulateGroup(grp); });
-    try { console.log('[oq-sim] _doSimulate · groups='+groups.length+' · matches/g='+(matchesByGroup[0]||[]).length); } catch(_){}
-    /* Sin playoff — 1º de cada grupo + 2 mejores segundos → Previa;
-       el resto → Conference (ver _persistPreviaFlag). */
-    _finishOqSim(groups, matchesByGroup);
-  }
-
-  /* Simulación SÍNCRONA en UN solo pase (2026-07-11, mismo fix que Wild
-     Card 2026-06-03: "En el MÓVIL, al atenuarse o apagarse la pantalla el
-     navegador PAUSA los timers de fondo"). Con la pestaña en background
-     (pantalla apagada/bloqueada), Chrome aplica "intensive throttling" a
-     partir de los 5 min sobre cualquier cadena de `setTimeout` trocedada
-     grupo a grupo, dejándola colgada DECENAS DE MINUTOS a mitad de
-     sorteo. Los 120 partidos (10 grupos × 12) son aritmética Poisson
-     ligera — bien por debajo de 1s de CPU — así que se juegan TODOS de
-     golpe en un único pase síncrono: imposible que quede a medias por
-     throttling de timers. Cedemos un tick antes de bloquear para que el
-     chip pinte "0%" y el usuario vea que arrancó. */
-  function _doSimulateChunked(classified){
-    classified = _padToFull(classified);
-    var groups = _distributeSnake(classified, N_GROUPS);
-    var total = 0;
-    groups.forEach(function(g){ var n=(g||[]).length; total += n*(n-1); });
-    var hasChip = (typeof window._bgSimStart === 'function');
-    if(hasChip){ try { window._bgSimStart('open-qualifier', 'Open Qualifier', total, { verb:'simulado' }); } catch(_){} }
-    setTimeout(function(){
-      var matchesByGroup = groups.map(function(grp, gi){
-        try { return _simulateGroup(grp); }
-        catch(e){ try{console.error('[oq-sim grupo]', gi, e);}catch(_){} return []; }
-      });
-      var ok = false;
-      try { ok = _finishOqSim(groups, matchesByGroup); }
-      catch(e){ try { console.error('[oq-sim] finish', e); } catch(_){} }
-      if(hasChip){ try { window._bgSimFinish('open-qualifier', ok, { done:total, total:total }); } catch(_){} }
-    }, 30);
-  }
-  function resetOpenQualifier(){
-    try { localStorage.removeItem(STORE_KEY); } catch(_){}
-    /* Cascada centralizada: al resetear OQ también se limpia la
-       Previa de Champions (su pool incluye 35 ganadores del OQ),
-       se invalida la snapshot europe_committed_v1, y se re-pinta
-       UCL/UEL/UECL grupos para que los huecos vuelvan a "Por
-       definir". Petición usuario 2026-05-07. */
-    if (typeof window._resetEuropePoolFeeders === 'function') {
-      window._resetEuropePoolFeeders('oq');
-    } else {
-      /* Fallback minimal si el helper aún no está disponible */
-      try { localStorage.removeItem('oq_to_previa_v1'); } catch(_){}
-      try { localStorage.removeItem('oq_to_conference_v1'); } catch(_){}
-    }
-    buildOpenQualifierClas();
-  }
-
-  /* Botón "⬇️ Traer Wild Card" (2026-07-10, reforzado #3): trae A MANO
-     los 12 ganadores de la Wild Card al pool del Open Qualifier. Cubre
-     3 causas distintas por las que "no se lanzan":
-       1) Este dispositivo no recibió todavía la invalidación en
-          cascada (llegó por otro dispositivo, o el POST aún está
-          reintentando en segundo plano) — `oq_simulation_v1` sigue con
-          el sorteo viejo (placeholders) en ESTE dispositivo.
-       2) Existe una snapshot CONGELADA (`europe_committed_v1`,
-          "📤 Enviar realidad de cada equipo a su Europa") que se
-          congeló ANTES de que la Wild Card terminara.
-       3) **La causa MÁS probable**: la zona `uclQual` está en modo
-          🔒 Manual (default de las 6 zonas europeas desde 2026-07-03).
-          En ese modo `computeOpenQualifierTeams()` hace
-          `return _appendManualExtra([], 'uclQual')` en su PRIMERA
-          línea — NUNCA llega a mirar `wc_to_open_qualifier_v1` ni la
-          snapshot congelada, así que recalcular "en vivo" (como hacía
-          la versión anterior de este botón) no servía de nada. El
-          registro como EXTRA MANUAL (`_eurSyncManualExtraFromFeeder`)
-          es la ÚNICA vía que `_appendManualExtra` SIEMPRE aplica, en
-          modo Manual o Automático. */
-  function pullWildCardWinners(){
-    var wc = null;
-    try {
-      var raw = localStorage.getItem('wc_to_open_qualifier_v1');
-      wc = raw ? JSON.parse(raw) : null;
-    } catch(_){}
-    var teams = (wc && Array.isArray(wc.teams)) ? wc.teams : [];
-    if(!teams.length){
-      alert('La Wild Card todavía no tiene ganadores guardados.\n\nTermina de simular sus 12 eliminatorias primero (🎮 Sim en la pantalla de la Wild Card).');
-      return;
-    }
-    try {
-      /* Causa 3 (la más probable): los registra como extra manual de
-         'uclQual' — funciona esté esa zona en Auto o en Manual. */
-      if (typeof window._eurSyncManualExtraFromFeeder === 'function') {
-        window._eurSyncManualExtraFromFeeder('uclQual', teams, 'wild-card');
-      }
-      /* Causa 1: invalida el sorteo cacheado del propio OQ para forzar
-         el recálculo del pool con los ganadores reales. */
-      if (typeof window._eurInvalidateDownstream === 'function') {
-        window._eurInvalidateDownstream(['oq_simulation_v1']);
-      } else {
-        try { localStorage.removeItem(STORE_KEY); } catch(_){}
-      }
-      /* Causa 2: recalcula EN VIVO (bypass de cualquier snapshot
-         congelada) y, si esa snapshot existe, la actualizamos para que
-         no vuelva a tapar a los ganadores en el próximo render. */
-      var _prevIgnore = window._europeIgnoreFrozen;
-      window._europeIgnoreFrozen = true;
-      var live = [];
-      try { live = (window.computeOpenQualifierTeams && window.computeOpenQualifierTeams()) || []; }
-      finally { window._europeIgnoreFrozen = _prevIgnore; }
-      try {
-        var craw = localStorage.getItem('europe_committed_v1');
-        if(craw){
-          var blob = JSON.parse(craw);
-          if(blob && typeof blob === 'object'){
-            blob.uclQual = live;
-            window._lsSetSafe('europe_committed_v1', JSON.stringify(blob));
-            fetch('/api/kv/europe_committed_v1', {
-              method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin',
-              body: JSON.stringify({value: blob})
-            }).catch(function(){});
-          }
-        }
-      } catch(_){}
-      buildOpenQualifierClas();
-      /* Confirmación HONESTA: cuenta cuántos de los ganadores de la
-         Wild Card están de verdad dentro del pool recalculado, en vez
-         de asumirlo (bug del primer intento de este botón: el mensaje
-         decía "incluye los 24 ganadores" aunque el pool devuelto por
-         el modo Manual no llevaba ninguno). */
-      var real = live.filter(function(t){ return t && t.name && !/^TBD|^__placeholder_/.test(t.name); }).length;
-      var gotSet = {};
-      live.forEach(function(t){ if(t && t.name) gotSet[t.name] = true; });
-      var got = teams.filter(function(t){ return t && t.name && gotSet[t.name]; }).length;
-      alert('✅ Pool del Open Qualifier actualizado: '+real+' / 40 equipos reales · '+got+' / '+teams.length+' ganadores de la Wild Card confirmados dentro del pool.');
-    } catch(e){
-      try { console.error('[oq-pull-wc]', e); } catch(_){}
-      alert('⚠️ Error trayendo los ganadores de la Wild Card: '+(e && e.message ? e.message : e));
-    }
-  }
-
-  window.buildOpenQualifierClas   = buildOpenQualifierClas;
-  window.simulateOpenQualifier    = simulateOpenQualifier;
-  window.resetOpenQualifier       = resetOpenQualifier;
-  window._oqPullWildCardWinners   = pullWildCardWinners;
-  /* Diferido a un macrotask separado (2026-07-29, mismo motivo que
-     buildUclGruposClas más arriba): evita sumarse al bloqueo único de
-     DOMContentLoaded. */
-  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){
-    if (window._bootScreenActiveFor && window._bootScreenActiveFor('open-qual-groups-container')) buildOpenQualifierClas();
-  }, 0); });
-})();
-</script>
-</div>
-<div class="screen" id="s-open-qualifier-res">
-<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🟡</span><h2>Open Qualifier · Resultados</h2></div>
-<div id="open-qual-res-section" style="margin-top:8px;padding:0 4px 20px;">
-<div style="display:flex;align-items:center;justify-content:space-between;padding:0 0 8px;">
-  <div style="font-family:Oswald,sans-serif;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,.4);">PARTIDOS</div>
-</div>
-<div class="jlist" id="open-qual-res-list">
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(1)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 1</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(2)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 2</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(3)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 3</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(4)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 4</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(5)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 5</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(6)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 6</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(7)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 7</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(8)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 8</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(9)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 9</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-<div class="jblock"><button class="jbtn" onclick="window.openOpenQualJornada(10)" style="background:repeating-linear-gradient(45deg,rgba(255,255,255,.04) 0px,rgba(255,255,255,.04) 1px,transparent 1px,transparent 8px),linear-gradient(90deg,#3a1c00,#a05000,#F37335,#a05000,#3a1c00);border-left:3px solid #F37335;"><span style="font-size:14px;margin-right:6px;">🟡</span> <b>Jornada 10</b><span style="margin-left:auto;font-size:11px;color:rgba(255,255,255,.3);">○ 0/30</span></button></div>
-</div>
-</div>
-</div>
-<div class="screen" id="s-open-qualifier-jornada">
-<button class="back-btn" onclick="go('s-open-qualifier-res')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🟡</span><h2 id="open-qual-jornada-title">Jornada</h2></div>
-<div id="open-qual-jornada-body" style="padding:0 4px 20px;"></div>
-<script>
-(function(){
-  /* Cada jornada del Open Qualifier: 6 partidos por grupo × 5 grupos =
-     30 partidos. Por ahora se muestran como placeholder; el motor de
-     simulación se añadirá cuando confirmemos esta UI. */
-  window.openOpenQualJornada = function(j){
-    var titleEl = document.getElementById('open-qual-jornada-title');
-    var bodyEl  = document.getElementById('open-qual-jornada-body');
-    if(!titleEl || !bodyEl) return;
-    titleEl.textContent = 'Jornada ' + j + ' · Open Qualifier';
-    var GROUP_LABELS = ['A','B','C','D','E'];
-    var html = '';
-    for(var g=0; g<5; g++){
-      html += '<div style="margin:10px 0 4px;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;color:#FDC830;">GRUPO ' + GROUP_LABELS[g] + '</div>'
-        + '<div class="jlist"><div class="jmatches" style="display:block;">';
-      for(var m=0; m<6; m++){
-        html += '<div class="mrow">'
-          +   '<div class="mn">Por definir</div>'
-          +   '<div class="ms p">vs</div>'
-          +   '<div class="mn r">Por definir</div>'
-          + '</div>';
-      }
-      html += '</div></div>';
-    }
-    bodyEl.innerHTML = html;
-    go('s-open-qualifier-jornada');
-  };
-})();
-</script>
-</div>
-<div class="screen" id="s-wild-card">
-<button class="back-btn" onclick="go('s-champions')">◀ Volver</button>
-<div class="sec-hdr"><span class="sec-emoji">🎟️</span><h2>UCL · Wild Card</h2></div>
-<style>
-#s-wild-card .wc-toolbar{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.08);}
-#s-wild-card .wc-btn{flex:1;min-width:90px;padding:10px 14px;border:1px solid #ffffff;background:#ffffff;color:#000;font-family:Oswald,sans-serif;font-size:12px;font-weight:900;letter-spacing:1.5px;border-radius:6px;cursor:pointer;}
-#s-wild-card .wc-btn:hover{background:#e8e8e8;}
-#s-wild-card .wc-btn.danger{border-color:rgba(255,80,80,.6);background:rgba(255,80,80,.10);color:#ff8080;}
-#s-wild-card .wc-btn.danger:hover{background:rgba(255,80,80,.20);}
-#s-wild-card .wc-btn:disabled{opacity:.4;cursor:not-allowed;}
-#s-wild-card .wc-empty{padding:24px 12px;text-align:center;color:rgba(255,255,255,.5);font-family:Rajdhani,sans-serif;font-size:13px;line-height:1.6;}
-#s-wild-card .wc-sec{padding:14px 8px 6px;border-bottom:1px solid rgba(255,255,255,.06);}
-#s-wild-card .wc-sec-title{font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#000;font-weight:900;text-shadow:0 1px 0 rgba(255,255,255,.35);background:linear-gradient(90deg,#ffffff,#d8d8d8,#ffffff);padding:8px 14px;border-radius:6px;}
-/* ── Grupo: card blanca (color oficial Wild Card) ───────────── */
-#s-wild-card .wc-group{margin:14px 4px 0;border:1px solid #ffffff;border-radius:8px;background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(0,0,0,0));overflow:hidden;}
-#s-wild-card .wc-group-h{
-  padding:10px 14px;border-bottom:2px solid #c8c8c8;
-  background:linear-gradient(90deg,#f0f0f0,#ffffff,#d8d8d8);
-  border-radius:8px 8px 0 0;
-  display:flex;align-items:center;gap:8px;
-  font-family:'Bebas Neue','Oswald',sans-serif;font-size:24px;color:#000;font-weight:900;letter-spacing:2px;text-shadow:0 1px 0 rgba(255,255,255,.35);
-}
-#s-wild-card .wc-group-h .wc-group-count{margin-left:auto;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1px;color:#000;font-weight:700;}
-#s-wild-card .wc-table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0 4px;}
-#s-wild-card .wc-table-scroll::-webkit-scrollbar{height:6px;}
-#s-wild-card .wc-table-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.4);border-radius:3px;}
-/* ── Filas: columnas más juntas (tighter) ───────────────────── */
-#s-wild-card .wc-row{display:grid;grid-template-columns:24px minmax(120px,1.5fr) 28px 24px 22px 22px 22px 26px 26px 30px;gap:2px;align-items:center;padding:5px 8px;font-family:Rajdhani,sans-serif;font-size:12px;color:#fff;border-bottom:1px solid rgba(255,255,255,.04);min-width:420px;}
-#s-wild-card .wc-row.hdr{background:linear-gradient(90deg,#1a1a1a,#000000,#1a1a1a);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.2px;color:#ffffff;font-weight:700;text-transform:uppercase;border-bottom:2px solid #ffffff;position:sticky;top:0;z-index:1;}
-#s-wild-card .wc-row.qual{background:rgba(255,255,255,.05);border-left:3px solid #ffffff;}
-#s-wild-card .wc-row.elim{background:rgba(255,80,80,.06);border-left:3px solid #ff5050;}
-#s-wild-card .wc-pos{color:#ffffff;text-align:center;font-family:Bebas Neue,sans-serif;font-size:14px;}
-#s-wild-card .wc-name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px;color:#fff;}
-#s-wild-card .wc-cell{text-align:center;}
-#s-wild-card .wc-cell.pts{font-family:Bebas Neue,sans-serif;font-size:14px;font-weight:700;color:#ffffff;}
-#s-wild-card .wc-cell.dg.pos{color:#aaffaa;} #s-wild-card .wc-cell.dg.neg{color:#ffaaaa;}
-/* ── Cabecera de sección con botón sim ──────────────────────── */
-#s-wild-card .wc-sec-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 6px 8px;}
-#s-wild-card .wc-sec-head .wc-sec-title{padding:8px 14px;flex:1;}
-#s-wild-card .wc-mini-sim{padding:8px 14px;border:1px solid #ffffff;background:#ffffff;color:#000;font-family:Oswald,sans-serif;font-size:11px;letter-spacing:1.5px;border-radius:6px;cursor:pointer;font-weight:900;flex-shrink:0;}
-#s-wild-card .wc-mini-sim:hover{background:#e0e0e0;}
-#s-wild-card .wc-mini-sim:disabled{opacity:.35;cursor:not-allowed;}
-/* ── Eliminatorias: blanco/negro ────────────────────────────── */
-#s-wild-card .wc-tie{display:flex;flex-direction:column;gap:2px;background:rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.2);border-radius:8px;padding:10px 12px;margin:0 4px 8px;}
-#s-wild-card .wc-tie.played{border-color:#ffffff;background:linear-gradient(135deg,rgba(255,255,255,.06),rgba(0,0,0,.4));}
-#s-wild-card .wc-tie-leg{display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;align-items:center;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
-#s-wild-card .wc-tie-leg .lbl{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:rgba(255,255,255,.55);min-width:34px;}
-#s-wild-card .wc-tie-h{text-align:right;font-weight:600;}
-#s-wild-card .wc-tie-a{text-align:left;font-weight:600;}
-#s-wild-card .wc-tie-sc{text-align:center;font-family:Bebas Neue,Oswald,sans-serif;font-size:15px;letter-spacing:1px;color:#000;background:#ffffff;border-radius:4px;padding:1px 0;font-weight:900;}
-#s-wild-card .wc-tie-label{font-family:Oswald,sans-serif;font-size:10px;letter-spacing:2px;color:#ffffff;text-align:center;margin-top:6px;}
-#s-wild-card .wc-tie-agg{display:grid;grid-template-columns:1fr 60px 1fr;gap:8px;align-items:center;padding-top:6px;margin-top:5px;border-top:1px dashed rgba(255,255,255,.2);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#ffffff;}
-#s-wild-card .wc-tie-agg .agg-sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#000;background:#ffffff;border:1px solid #ffffff;border-radius:4px;padding:1px 0;font-weight:900;}
-#s-wild-card .wc-tie-agg .winner-mark{font-weight:700;color:#ffffff;}
-#s-wild-card .wc-tie-agg .loser-mark{color:rgba(255,255,255,.4);}
-/* ── Final: card blanca con borde negro ─────────────────────── */
-#s-wild-card .wc-final{padding:18px 14px;background:linear-gradient(135deg,#000000,#1a1a1a,#2a2a2a,#1a1a1a,#000000);border:2px solid #ffffff;border-radius:12px;text-align:center;margin:0 4px;}
-#s-wild-card .wc-final-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:3px;color:#ffffff;font-weight:700;margin-bottom:10px;}
-#s-wild-card .wc-final-row{display:grid;grid-template-columns:1fr 80px 1fr;gap:10px;align-items:center;}
-#s-wild-card .wc-final-team{font-family:Bebas Neue,sans-serif;font-size:18px;color:#ffffff;}
-#s-wild-card .wc-final-h{text-align:right;}
-#s-wild-card .wc-final-a{text-align:left;}
-#s-wild-card .wc-final-sc{font-family:Bebas Neue,sans-serif;font-size:32px;color:#000;background:#ffffff;border-radius:6px;padding:4px 0;font-weight:900;}
-#s-wild-card .wc-final-stadium{font-family:Oswald,sans-serif;font-size:9px;letter-spacing:2px;color:rgba(255,255,255,.55);margin-top:8px;}
-/* ── Campeón ────────────────────────────────────────────────── */
-#s-wild-card .wc-champion{padding:24px 14px;text-align:center;background:radial-gradient(ellipse at center,rgba(255,255,255,.12),rgba(0,0,0,.95));border:2px solid #ffffff;border-radius:14px;margin:14px 4px 8px;}
-#s-wild-card .wc-champion-lbl{font-family:Oswald,sans-serif;font-size:11px;letter-spacing:4px;color:#ffffff;font-weight:700;}
-#s-wild-card .wc-champion-name{font-family:Bebas Neue,sans-serif;font-size:34px;color:#fff;letter-spacing:2px;margin:8px 0;text-shadow:0 0 14px rgba(255,255,255,.4);}
-#s-wild-card .wc-champion-note{font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.7);}
-</style>
-<div id="wc-root">
-  <div class="wc-toolbar" id="wc-toolbar">
-    <button class="wc-btn" id="wc-btn-sim" onclick="window._wcSimulate&&window._wcSimulate()">🎮 Simular</button>
-    <!-- 🎲 Draw — solo sortea las eliminatorias (sin jugarlas). Pide PIN admin 747. -->
-    <button class="wc-btn" id="wc-btn-draw" onclick="window._wcDraw&&window._wcDraw()" style="border-color:#ffd700;background:#ffd700;color:#000;">🎲 Draw</button>
-    <button class="wc-btn danger" id="wc-btn-reset" onclick="window._wcReset&&window._wcReset()">♻️ Reset</button>
-    <!-- 🔍 Diag pool — alerta con el listado de qué ligas contribuyen
-         al pool y cuáles se saltan (con motivo). Útil cuando aparecen
-         TBDs entre los ganadores: muestra exactamente cuántos huecos
-         faltan y por qué. Diagnóstico read-only, no exige PIN. -->
-    <button class="wc-btn" id="wc-btn-diag" onclick="window._wcShowDebug&&window._wcShowDebug()" style="border-color:rgba(255,255,255,.4);background:transparent;color:#fff;flex:0 1 auto;min-width:auto;padding:10px 12px;" title="Diagnóstico del pool">🔍</button>
-  </div>
-  <div id="wc-body"></div>
+  <!-- Ronda 3 (12 ganadores R2 + 12 directos, 🟡). -->
+  <div id="wprev-r3-container" style="margin-top:14px;"></div>
+  <!-- Ronda 4 (12 ganadores R3 + 12 directos, 🟣 — SIEMPRE ida fuera). -->
+  <div id="wprev-r4-container" style="margin-top:14px;"></div>
 </div>
 </div>
 
@@ -40112,9 +38959,10 @@ window._hdrCleanCache = function(){
 (function(){
   var EVENTS = [
     { slug:'ucl',           label:'🔵 Champions League',     icon:'🔵', accent:'#42a5f5' },
-    { slug:'uclPrev',       label:'🇪🇺 Previa de Champions', icon:'🇪🇺', accent:'#a855f7' },
-    { slug:'uclQual',       label:'🟡 Open Qualifier',       icon:'🟡', accent:'#FDC830' },
-    { slug:'wildcard',      label:'🎟️ Wild Card',            icon:'🎟️', accent:'#8b5520' },
+    { slug:'uclPrev',       label:'🟣 Previa Champions R4',  icon:'🟣', accent:'#a855f7' },
+    { slug:'prevR3',        label:'🟡 Previa Champions R3',  icon:'🟡', accent:'#FDC830' },
+    { slug:'prevR2',        label:'⚪ Previa Champions R2',  icon:'⚪', accent:'#cfd6e0' },
+    { slug:'prevR1',        label:'🟤 Previa Champions R1',  icon:'🟤', accent:'#8b5520' },
     { slug:'uel',           label:'🟠 Europa League',        icon:'🟠', accent:'#F37335' },
     { slug:'uecl',          label:'🟢 Conference League',    icon:'🟢', accent:'#3cc878' },
     /* Competiciones añadidas a petición del usuario (2026-04-30).
@@ -40321,15 +39169,10 @@ window._hdrCleanCache = function(){
       /* Open Qualifier y Wild Card: la cuota de España (Liga EA
          Sports) en la tabla oficial de coeficientes es 0 en AMBAS
          zonas — el cómputo automático (`_computeQualifiedFromLeagues`)
-         ya cubre el 100% de sus 88/72 plazas. Desde 2026-07-03 estas
-         2 zonas YA NO leen esta lista (bug "Wild Card 75/72": equipos
-         manuales + auto-calculados se sumaban sin dedupe fiable y
-         desbordaban el total oficial). Se avisa aquí para que el
-         admin no crea que sus "Quitar" pendientes siguen influyendo. */
-      var isDeadZone = (ev.slug === 'uclQual' || ev.slug === 'wildcard');
-      var deadNote = isDeadZone
-        ? '<div style="padding:6px 12px;font-family:Rajdhani,sans-serif;font-size:12px;color:#ffb84d;background:rgba(255,150,50,.08);border-bottom:1px solid rgba(255,150,50,.25);">⚠️ España tiene cupo 0 aquí — esta lista ya NO se usa en el cálculo (el reparto automático cubre el 100% de esta competición). Puedes quitar estos equipos, no afectan a nada.</div>'
-        : '';
+         ya cubre el 100% de sus plazas de Champions/Europa/Conference.
+         Wild Card y Open Qualifier ANIQUILADOS (2026-08-14) — la
+         Previa Champions ahora tiene 4 rondas propias (R1-R4, arriba). */
+      var deadNote = '';
       html += '<div class="mea-sec" style="border-color:'+ev.accent+'55;">'
         +    '<div class="mea-hdr" style="background:linear-gradient(90deg,rgba(0,0,0,.6),'+ev.accent+'33,rgba(0,0,0,.6));">'
         +      _esc(ev.label)
@@ -44037,6 +42880,20 @@ window._hdrCleanCache = function(){
 <div class="menu-card" data-slug="liga-mixta-7" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇸🇮🇧🇬🇧🇦🇰🇿🇽🇰</span><span class="mc-label" style="display:none;">🇸🇮🇧🇬🇧🇦🇰🇿🇽🇰</span></div>
 <div class="menu-card" data-slug="liga-mixta-8" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇷🇺🇦🇲🇫🇮🇲🇩🇦🇿</span><span class="mc-label" style="display:none;">🇷🇺🇦🇲🇫🇮🇲🇩🇦🇿</span></div>
 <div class="menu-card" data-slug="liga-mixta-9" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇸🇰🇮🇪🇮🇸</span><span class="mc-label" style="display:none;">🇸🇰🇮🇪🇮🇸</span></div>
+<!-- Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14) — sustituyen a
+     las liga-mixta 1-9 como feeder de la Previa de Champions (esas 9
+     quedan intactas arriba, sin cupo europeo automático). A diferencia
+     de las Mixtas (solo banderas, sin nombre propio), estas SÍ tienen
+     marca/nombre — igual tratamiento visual que "Resto Mundo": emoji
+     🏆 + label visible con el nombre de la liga. `data-slug` fija el
+     slug interno (ver `_EXTRA_LEAGUE_SEEDS`, seed automático de 18-20
+     equipos reales por liga). -->
+<div class="menu-card" data-slug="germanika" onclick="" style="background:linear-gradient(135deg,#1a1a1a,#3a3a3a,#c9a227,#1a1a1a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Germanika</span></div>
+<div class="menu-card" data-slug="hellas-slavia" onclick="" style="background:linear-gradient(135deg,#0d3b66,#1e5a8a,#0d3b66);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Hellas Slavia</span></div>
+<div class="menu-card" data-slug="danubio-nordica" onclick="" style="background:linear-gradient(135deg,#5a0a0a,#8a1a1a,#5a0a0a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Danubio Nórdica</span></div>
+<div class="menu-card" data-slug="adriatico-oriental" onclick="" style="background:linear-gradient(135deg,#7a1010,#10307a,#7a1010);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Adriático Oriental</span></div>
+<div class="menu-card" data-slug="balkanica" onclick="" style="background:linear-gradient(135deg,#0a5a2a,#7a1010,#0a5a2a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Balkanica</span></div>
+<div class="menu-card" data-slug="eurasia" onclick="" style="background:linear-gradient(135deg,#10205a,#7a1010,#10205a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eurasia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
 </div>
 <!-- Botón "👁 Ver / Añadir equipos por competición" (PIN admin 747).
@@ -44524,11 +43381,12 @@ window._hdrCleanCache = function(){
     try {
       blob = {
         ucl:      _safeCompute(window.computeUclClassified),
-        uclPrev:  _safeCompute(window.computeUclPrevTeams),
+        uclPrev:  _safeCompute(window.computeUclPrevR4DirectTeams),
+        prevR3:   _safeCompute(window.computeUclPrevR3DirectTeams),
+        prevR2:   _safeCompute(window.computeUclPrevR2DirectTeams),
+        prevR1:   _safeCompute(window.computeUclPrevR1Teams),
         uel:      _safeCompute(window.computeUelClassified),
         uecl:     _safeCompute(window.computeUeclClassified),
-        uclQual:  _safeCompute(window.computeOpenQualifierTeams),
-        wildcard: _safeCompute(window.computeWildCardClassified),
         ts:       Date.now()
       };
     } finally {
@@ -44536,11 +43394,12 @@ window._hdrCleanCache = function(){
     }
     var totalUcl  = blob.ucl.length;
     var totalPrev = blob.uclPrev.length;
+    var totalR3   = blob.prevR3.length;
+    var totalR2   = blob.prevR2.length;
+    var totalR1   = blob.prevR1.length;
     var totalUel  = blob.uel.length;
     var totalUecl = blob.uecl.length;
-    var totalOq   = blob.uclQual.length;
-    var totalWc   = blob.wildcard.length;
-    var totalSum  = totalUcl + totalPrev + totalUel + totalUecl + totalOq + totalWc;
+    var totalSum  = totalUcl + totalPrev + totalR3 + totalR2 + totalR1 + totalUel + totalUecl;
     if(totalSum === 0){
       alert('⚠️ No se pudo calcular ningún equipo. Verifica que las ligas estén simuladas y vuelve a intentarlo.');
       return;
@@ -44645,11 +43504,12 @@ window._hdrCleanCache = function(){
      "n/objetivo" real que mostrar. */
   var _EUR_REPORT_ZONES = [
     { key:'ucl',      label:'Champions League',     emoji:'🔵', color:'#42a5f5', kind:'pool', toggle:true },
-    { key:'uclPrev',  label:'Previa de Champions',   emoji:'🇪🇺', color:'#a855f7', kind:'pool', toggle:true },
+    { key:'uclPrev',  label:'Previa Champions R4',   emoji:'🟣', color:'#a855f7', kind:'pool', toggle:true },
+    { key:'prevR3',   label:'Previa Champions R3',   emoji:'🟡', color:'#FDC830', kind:'pool', toggle:true },
+    { key:'prevR2',   label:'Previa Champions R2',   emoji:'⚪', color:'#cfd6e0', kind:'pool', toggle:true },
+    { key:'prevR1',   label:'Previa Champions R1',   emoji:'🟤', color:'#8b5520', kind:'pool', toggle:true },
     { key:'uel',      label:'Europa League',         emoji:'🟠', color:'#F37335', kind:'pool', toggle:true },
     { key:'uecl',     label:'Conference League',     emoji:'🟢', color:'#3cc878', kind:'pool', toggle:true },
-    { key:'uclQual',  label:'Open Qualifier',        emoji:'🟡', color:'#FDC830', kind:'pool', toggle:true },
-    { key:'wildcard', label:'Wild Card',             emoji:'⚪', color:'#cccccc', kind:'pool', toggle:true },
     { key:'recopa',   label:'Recopa de Europa',      emoji:'🥈', color:'#ff8060', kind:'pool' },
     { key:'usc',      label:'Supercopa de Europa',   emoji:'⭐', color:'#f0c820', kind:'candidates' },
     { key:'inter',    label:'Intercontinental',      emoji:'🌐', color:'#f0a040', kind:'pool' },
@@ -44771,37 +43631,15 @@ window._hdrCleanCache = function(){
      reflejando la edición al instante). Recopa/Intercontinental
      (kind:'pool' sin toggle) NUNCA se congelan — siguen 100% en vivo,
      regla ya existente más abajo. */
-  /* OJO: ucl/uel/uecl NO son 28/18/12 (esas son solo las plazas
-     DIRECTAS por liga) — `computeUclClassified`/`computeUelClassified`/
-     `computeUeclClassified` YA le suman el corte de la Previa (12/22/28)
-     ANTES de devolver, así que el pool final objetivo es 40/40/40 (ver
-     CLAUDE.md "🔵 UCL 28+12=40 · 🟠 UEL 18+22=40 · 🟢 UECL 12+28=40").
-     Bug 2026-07-03: este overlay mostraba "38/28" en VERDE (¡como si
-     sobrasen equipos!) cuando en realidad estaba a 2 de completar los
-     40 reales — confundía al admin haciéndole creer que algo estaba
-     "sobrecargado" cuando esas 3 zonas eran las que MEJOR estaban. */
-  /* 2026-07-31 (nuevo formato Wild Card/Open Qualifier/Previa): wildcard
-     es el pool de la Wild Card (24 — `computeWildCardClassified` lo
-     capa explícitamente a este número, igual que hace la pantalla real
-     de Wild Card con `POOL_TARGET`). ucl/uel/uecl se mantienen en 40 —
-     el reparto interno cambia pero el total no. uclPrev se deja en 24
-     (target del direct-only del nuevo formato) — el compute real de
-     esa zona (`computeUclPrevTeams`, unión direct+OQ) todavía no está
-     capado a un número fijo en este redesign, así que el objetivo aquí
-     es orientativo, no un tope estricto como uclQual/wildcard.
-
-     uclQual — bug 2026-08-10 (foto usuario "Open Qualifier 37/28",
-     superando el objetivo en VERDE): `computeOpenQualifierTeams()`
-     compone 28 plazas directas + hasta 12 ganadores de la Wild Card, y
-     el propio código lo capa explícitamente a **40**
-     (`if(arr.length > 40) arr = arr.slice(0, 40);`, unas líneas más
-     abajo en este mismo archivo) — 28 es solo la porción DIRECTA, no el
-     objetivo final. El overlay comparaba el conteo TOTAL (directos +
-     ganadores WC) contra 28, así que en cuanto la Wild Card aportaba
-     algún ganador el número "se pasaba" del objetivo sin que nada
-     estuviera mal — mismo patrón ya documentado arriba para
-     ucl/uel/uecl (28/18/12 → 40/40/40, 2026-07-03). */
-  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:24, uel:40, uecl:40, uclQual:40, wildcard:24, recopa:64, inter:8 };
+  /* Formato 4 rondas de Previa Champions (2026-08-14, Wild Card/Open
+     Qualifier ANIQUILADOS). Los objetivos aquí son el tamaño del POOL
+     DIRECTO de cada ronda (equipos que entran vía liga, sin contar los
+     ganadores de la ronda anterior que se le suman al sortear):
+       ucl:40 (28 directos + 12 de R4) · uclPrev(R4 directo):12 ·
+       prevR3(directo):12 · prevR2(directo):12 · prevR1(directo, primera
+       ronda, sin arrastre):24 · uel:40 (16 directos + 24 de R3+R4) ·
+       uecl:40 (16 directos + 24 de R1+R2). */
+  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:12, prevR3:12, prevR2:12, prevR1:24, uel:40, uecl:40, recopa:64, inter:8 };
   /* Resuelve la "liga" de un nombre de equipo del pool de Recopa/
      Intercontinental para poder agruparlo en el informe igual que los
      equipos de las 6 zonas originales (que ya vienen con `.league`).
@@ -44861,11 +43699,12 @@ window._hdrCleanCache = function(){
     }
     var blob = {
       ucl:      _safeCompute(window.computeUclClassified),
-      uclPrev:  _safeCompute(window.computeUclPrevTeams),
+      uclPrev:  _safeCompute(window.computeUclPrevR4DirectTeams),
+      prevR3:   _safeCompute(window.computeUclPrevR3DirectTeams),
+      prevR2:   _safeCompute(window.computeUclPrevR2DirectTeams),
+      prevR1:   _safeCompute(window.computeUclPrevR1Teams),
       uel:      _safeCompute(window.computeUelClassified),
-      uecl:     _safeCompute(window.computeUeclClassified),
-      uclQual:  _safeCompute(window.computeOpenQualifierTeams),
-      wildcard: _safeCompute(window.computeWildCardClassified)
+      uecl:     _safeCompute(window.computeUeclClassified)
     };
     /* Recopa/Intercontinental NUNCA se congelan (regla CLAUDE.md: son
        SIEMPRE aditivos sobre el cómputo automático) — siguen en vivo. */
@@ -45084,8 +43923,8 @@ window._hdrCleanCache = function(){
   }
   /* Devuelve las filas {pos, name, pj, zone} de la liga cargada en el
      picker, con la ZONA SUGERIDA por posición (mismo orden/"skip" que
-     `_computeQualifiedFromLeagues`: ucl → uclPrev → uclQual → uel →
-     uecl → wildcard). */
+     `_computeQualifiedFromLeagues`: ucl → uclPrev(R4) → prevR3 → prevR2
+     → prevR1 → uel → uecl). */
   function _eurPickerRows(){
     var d = _eurPickerData;
     if(!d || !Array.isArray(d.teams)) return [];
@@ -45096,7 +43935,7 @@ window._hdrCleanCache = function(){
     var ranking = (rN === 0 && window._eurRankByPower)
       ? window._eurRankByPower(d.teams)
       : (window._eurStandingsFromResults ? window._eurStandingsFromResults(d.teams, d.results||[]) : []);
-    var ORDER = ['ucl','uclPrev','uclQual','uel','uecl','wildcard'];
+    var ORDER = ['ucl','uclPrev','prevR3','prevR2','prevR1','uel','uecl'];
     var ranges = []; var acc = 0;
     ORDER.forEach(function(z){
       var n = Number(zones[z]||0);
@@ -45716,13 +44555,17 @@ window._hdrCleanCache = function(){
      obsoletos + la snapshot congelada, y (c) re-congela el cuadre
      LIMPIO. Idempotente: re-pulsarlo siempre deja el mismo cuadre. */
   var _EURO_FEEDER_KEYS = [
-    'wprev_to_fase_grupos_v1',   // → +12 UCL (Previa Ronda 2 ganadores)
-    'wprev_to_europa_v1',        // → +24 UEL (Previa Ronda1+Ronda2 perdedores)
-    'wprev_r1_to_conference_v1', // sin uso (formato 2026-07-31: Previa ya no alimenta Conference)
-    'oq_to_previa_v1',           // → +12 Previa Ronda 1 (10 primeros + 2 mejores segundos)
-    'oq_to_conference_v1',       // → +28 UECL (no clasificados del Open Qualifier)
-    'wc_to_open_qualifier_v1',   // → +12 OQ (ganadores de las eliminatorias WC)
-    'wc_champion_v1'             // legacy campeón único WC
+    'wprev_to_fase_grupos_v1',   // → +12 UCL (Previa Ronda 4 ganadores)
+    'wprev_to_europa_v1',        // → +24 UEL (Previa Ronda3+Ronda4 perdedores)
+    'wprev_to_conference_v1',    // → +24 UECL (Previa Ronda1+Ronda2 perdedores)
+    /* Legacy — Wild Card / Open Qualifier ANIQUILADOS (2026-08-14): se
+       siguen limpiando aquí por si un dispositivo viejo aún los tuviera
+       guardados, pero nada del motor actual los escribe ni los lee. */
+    'wprev_r1_to_conference_v1',
+    'oq_to_previa_v1',
+    'oq_to_conference_v1',
+    'wc_to_open_qualifier_v1',
+    'wc_champion_v1'
   ];
   function _clearKvKey(k){
     try { localStorage.removeItem(k); } catch(_){}
@@ -46037,8 +44880,6 @@ window._hdrCleanCache = function(){
            ya congeló una snapshot manual, `_europeFrozenFor` la sigue
            prefiriendo — esto solo alimenta el cálculo EN VIVO para
            cuando no hay snapshot o se resetee. */
-        try { if (typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
-        try { if (typeof window._wcRender === 'function') window._wcRender(); } catch(_){}
         try { if (typeof window.buildUclGruposClas === 'function') window.buildUclGruposClas(); } catch(_){}
         try { if (typeof window.buildUelGruposClas === 'function') window.buildUelGruposClas(); } catch(_){}
         try { if (typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
@@ -46146,9 +44987,9 @@ window._hdrCleanCache = function(){
     }
     if(!confirm('♻️ Re-cuadrar reparto europeo (canónico)\n\n'
       +'Restaura las plazas europeas de CADA liga a la tabla de\n'
-      +'coeficientes oficial (28/34/88/72/18/12) y limpia los datos\n'
-      +'obsoletos de Wild Card / Open Qualifier / Previa que descuadran\n'
-      +'el conteo.\n\n'
+      +'coeficientes oficial (Champions 28+12 · Previa R1-R4 24/12/12/12\n'
+      +'· Europa 16+24 · Conference 16+24) y limpia los feeders\n'
+      +'obsoletos de la Previa que descuadran el conteo.\n\n'
       +'⚠️ Sobrescribe cualquier plaza europea que hubieras editado a\n'
       +'mano en el modal 📜 Reglas de las ligas (NO toca el descenso ni\n'
       +'las plazas de Intercontinental/Mundialito).\n\n'
@@ -46207,11 +45048,12 @@ window._hdrCleanCache = function(){
     try {
       blob = {
         ucl:      _safeCompute(window.computeUclClassified),
-        uclPrev:  _safeCompute(window.computeUclPrevTeams),
+        uclPrev:  _safeCompute(window.computeUclPrevR4DirectTeams),
+        prevR3:   _safeCompute(window.computeUclPrevR3DirectTeams),
+        prevR2:   _safeCompute(window.computeUclPrevR2DirectTeams),
+        prevR1:   _safeCompute(window.computeUclPrevR1Teams),
         uel:      _safeCompute(window.computeUelClassified),
         uecl:     _safeCompute(window.computeUeclClassified),
-        uclQual:  _safeCompute(window.computeOpenQualifierTeams),
-        wildcard: _safeCompute(window.computeWildCardClassified),
         ts:       Date.now()
       };
     } finally {
@@ -46227,19 +45069,18 @@ window._hdrCleanCache = function(){
       try { return ((window._meaTeamsFor && window._meaTeamsFor(s)) || []).length; }
       catch(_){ return 0; }
     }
-    var tUcl=blob.ucl.length, tPrev=blob.uclPrev.length, tUel=blob.uel.length,
-        tUecl=blob.uecl.length, tOq=blob.uclQual.length, tWc=blob.wildcard.length;
+    var tUcl=blob.ucl.length, tPrev=blob.uclPrev.length, tR3=blob.prevR3.length,
+        tR2=blob.prevR2.length, tR1=blob.prevR1.length,
+        tUel=blob.uel.length, tUecl=blob.uecl.length;
     function _mark(n, target){ return (n===target) ? '✅' : ((n>target?'＋':'－')+Math.abs(n-target)); }
-    /* WC tolerante: el pool crudo canónico es 71 ó 72 (1 hueco TBD que
-       el módulo de Wild Card rellena aguas abajo). Ambos son ✅. */
-    function _markWc(n){ return (n===72||n===71) ? '✅' : ((n>72?'＋'+(n-72):'－'+(72-n))); }
     var manualNote = '';
     var mUcl=_meaCount('ucl'), mPrev=_meaCount('uclPrev'), mUel=_meaCount('uel'), mUecl=_meaCount('uecl');
-    /* España objetivo: 🔵4 🟣1 🟠2 🟢1 vía EA Sports → Europa. */
-    if(mUcl<4 || mUel<2 || mUecl<1 || mPrev<1){
+    /* España objetivo: 🔵4 🟣1(R4) 🟠2 🟢2 vía EA Sports → Europa (🟡R3
+       de España viene del cómputo automático, no es manual). */
+    if(mUcl<4 || mUel<2 || mUecl<2 || mPrev<1){
       manualNote = '\n\n⚠️ Revisa "🎮 EA Sports → Europa" (España):\n'
-        + '   🔵 Champions: ' + mUcl + '/4   🟣 Previa: ' + mPrev + '/1\n'
-        + '   🟠 Europa: ' + mUel + '/2   🟢 Conference: ' + mUecl + '/1\n'
+        + '   🔵 Champions: ' + mUcl + '/4   🟣 Previa R4: ' + mPrev + '/1\n'
+        + '   🟠 Europa: ' + mUel + '/2   🟢 Conference: ' + mUecl + '/2\n'
         + '   (esas plazas las eliges a mano; si faltan, añádelas ahí.)';
     }
     /* ── Diagnóstico de las plazas que faltan (2026-06-03) ────────────
@@ -46250,7 +45091,7 @@ window._hdrCleanCache = function(){
        ligas por nombre para que el admin sepa EXACTAMENTE cuáles
        rellenar (abrir la card y pegar sus equipos). Sin esto, el botón
        solo decía "－12" sin pista de la causa → "sigo con problemas". */
-    var anyShort = (tUcl<28)||(tPrev<34)||(tOq<88)||(tWc<71)||(tUel<18)||(tUecl<12);
+    var anyShort = (tUcl<28)||(tPrev<12)||(tR3<12)||(tR2<12)||(tR1<24)||(tUel<16)||(tUecl<16);
     var emptyNote = '';
     if(anyShort){
       var _PRETTY = {
@@ -46270,8 +45111,9 @@ window._hdrCleanCache = function(){
           var z = window.LEAGUE_DEFAULT_ZONES[slug] || {};
           /* Solo nos importan las ligas que DEBERÍAN aportar a alguna
              euro-zona (las que tienen alguna plaza europea > 0). */
-          var aporta = (Number(z.ucl||0)+Number(z.uclPrev||0)+Number(z.uclQual||0)
-                       +Number(z.uel||0)+Number(z.uecl||0)+Number(z.wildcard||0)) > 0;
+          var aporta = (Number(z.ucl||0)+Number(z.uclPrev||0)+Number(z.prevR3||0)
+                       +Number(z.prevR2||0)+Number(z.prevR1||0)
+                       +Number(z.uel||0)+Number(z.uecl||0)) > 0;
           if(!aporta) return;
           var n = 0;
           try {
@@ -46295,13 +45137,14 @@ window._hdrCleanCache = function(){
     alert('♻️ Reparto europeo re-cuadrado.\n\n'
         + (recovered ? ('🌐 Ligas recuperadas (servidor + copia local): ' + recovered + '\n') : '')
         + 'Ligas corregidas: ' + fixed + (missing? '  ·  sin sembrar: '+missing : '') + '\n'
-        + 'Feeders WC/OQ/Previa limpiados + snapshot recongelada.\n\n'
-        + '🔵 Champions League: ' + tUcl + '  ' + _mark(tUcl,28) + '\n'
-        + '🇪🇺 Previa de Champions: ' + tPrev + '  ' + _mark(tPrev,34) + '\n'
-        + '🟡 Open Qualifier: ' + tOq + '  ' + _mark(tOq,88) + '\n'
-        + '🎟️ Wild Card: ' + tWc + '  ' + _markWc(tWc) + '\n'
-        + '🟠 Europa League: ' + tUel + '  ' + _mark(tUel,18) + '\n'
-        + '🟢 Conference League: ' + tUecl + '  ' + _mark(tUecl,12)
+        + 'Feeders Previa limpiados + snapshot recongelada.\n\n'
+        + '🔵 Champions League (directos): ' + tUcl + '  ' + _mark(tUcl,28) + '\n'
+        + '🟣 Previa Champions R4 (directos): ' + tPrev + '  ' + _mark(tPrev,12) + '\n'
+        + '🟡 Previa Champions R3 (directos): ' + tR3 + '  ' + _mark(tR3,12) + '\n'
+        + '⚪ Previa Champions R2 (directos): ' + tR2 + '  ' + _mark(tR2,12) + '\n'
+        + '🟤 Previa Champions R1 (directos): ' + tR1 + '  ' + _mark(tR1,24) + '\n'
+        + '🟠 Europa League (directos): ' + tUel + '  ' + _mark(tUel,16) + '\n'
+        + '🟢 Conference League (directos): ' + tUecl + '  ' + _mark(tUecl,16)
         + manualNote + emptyNote);
   };
 
@@ -47147,9 +45990,10 @@ window._hdrCleanCache = function(){
 .lext-row.z-uclD{background:rgba(49,96,255,.14);border-left-color:#3160ff;}
 .lext-row.z-uclP{background:rgba(160,80,255,.13);border-left-color:#a050ff;}
 .lext-row.z-uclQ{background:rgba(240,192,64,.12);border-left-color:#f0c040;}
+.lext-row.z-wildcard{background:rgba(255,255,255,.10);border-left-color:#ffffff;}
+.lext-row.z-prevR1{background:rgba(139,85,32,.16);border-left-color:#8b5520;}
 .lext-row.z-uel{background:rgba(255,130,20,.13);border-left-color:#ff8214;}
 .lext-row.z-uecl{background:rgba(60,200,120,.12);border-left-color:#3cc878;}
-.lext-row.z-wildcard{background:rgba(255,255,255,.10);border-left-color:#ffffff;}
 .lext-row.z-inter{background:rgba(255,144,32,.16);border-left-color:#ff9020;}
 .lext-row.z-mundial{background:rgba(80,160,220,.13);border-left-color:#50a0dc;}
 .lext-row.z-desc{background:rgba(224,60,60,.13);border-left-color:#e03c3c;}
@@ -47934,11 +46778,21 @@ https://api.sofascore.app/api/v1/team/44/image
       <input class="lext-input" id="lext-reg-ucl" type="number" min="0" max="20" value="1" />
     </div>
     <div id="lext-reg-uclprev-row">
-      <label class="lext-label">🟣 Previa Champions</label>
+      <label class="lext-label">🟣 Previa Champions R4</label>
       <input class="lext-input" id="lext-reg-ucl-prev" type="number" min="0" max="20" value="1" />
     </div>
-    <label class="lext-label">🟡 Open Qualifier</label>
-    <input class="lext-input" id="lext-reg-ucl-qual" type="number" min="0" max="20" value="1" />
+    <div id="lext-reg-prevr3-row">
+      <label class="lext-label" style="color:#FDC830;">🟡 Previa Champions R3</label>
+      <input class="lext-input" id="lext-reg-ucl-qual" type="number" min="0" max="20" value="0" />
+    </div>
+    <div id="lext-reg-prevr2-row">
+      <label class="lext-label" style="color:rgba(255,255,255,.92);">⚪ Previa Champions R2</label>
+      <input class="lext-input" id="lext-reg-wildcard" type="number" min="0" max="20" value="0" style="border-color:rgba(255,255,255,.5);" />
+    </div>
+    <div id="lext-reg-prevr1-row">
+      <label class="lext-label" style="color:#8b5520;">🟤 Previa Champions R1</label>
+      <input class="lext-input" id="lext-reg-prev-r1" type="number" min="0" max="20" value="0" style="border-color:#8b5520;" />
+    </div>
     <div id="lext-reg-uel-row">
       <label class="lext-label">🟠 Europa League</label>
       <input class="lext-input" id="lext-reg-uel" type="number" min="0" max="20" value="1" />
@@ -47946,10 +46800,6 @@ https://api.sofascore.app/api/v1/team/44/image
     <div id="lext-reg-uecl-row">
       <label class="lext-label">🟢 Conference League</label>
       <input class="lext-input" id="lext-reg-uecl" type="number" min="0" max="20" value="1" />
-    </div>
-    <div id="lext-reg-wildcard-row">
-      <label class="lext-label" style="color:rgba(255,255,255,.92);">⚪ WildCard Round</label>
-      <input class="lext-input" id="lext-reg-wildcard" type="number" min="0" max="20" value="0" style="border-color:rgba(255,255,255,.5);" />
     </div>
     <div id="lext-reg-inter-row" style="display:none;">
       <label class="lext-label" style="color:#ff9020;">🟠 Equipos pasan a Copa Intercontinental</label>
@@ -51700,82 +50550,67 @@ https://api.sofascore.app/api/v1/team/44/image
     return arr;
   }
 
-  var DEFAULT_ZONES = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0, intercontinental:0, mundialClubes:0, desc:3};
+  var DEFAULT_ZONES = {ucl:1, uclPrev:1, prevR3:0, prevR2:0, prevR1:0, uel:1, uecl:1, intercontinental:0, mundialClubes:0, desc:3};
 
-  /* ── Reparto europeo POR DEFECTO por liga (petición usuario 2026-05-30;
-     tabla UNIFICADA corregida 2026-07-01) ──
-     Cada liga del "Resto de Ligas" arranca con el cupo europeo que le
-     corresponde según el bracket del usuario, en vez del genérico
-     1/1/1/1/1. Se precargan los campos europeos
-     (🔵ucl 🟣uclPrev 🟠uel 🟢uecl 🟡uclQual ⚪wildcard) **y** el ⚫ descenso
-     propio de cada liga; los campos de Resto del Mundo
-     (intercontinental/mundialClubes) siguen cayendo al DEFAULT_ZONES. TODO
-     sigue siendo EDITABLE desde 📜 Reglas — esto solo ahorra teclear ~54
-     ligas a mano.
-       Sumas de control (con España manual 4/1/2/1):
-       🔵28 · 🟣34 · 🟠18 · 🟢12 · 🟡88 · ⚪72.
-       2026-07-01 (petición usuario, tabla unificada + fotos "Wild Card
-       17/72" · "Open Qualifier 12/62 con TBD" · "Previa 12/62"): la tabla
-       traía a Bulgaria en el bloque ⚪1 (medio-bajo) y a San Marino en ⚪2
-       para compensar — el usuario entregó la lista completa por liga y en
-       ella Bulgaria va en el bloque ⚪2 (medio, 17 ligas) y San Marino
-       vuelve a ⚪1. El total de Wild Card se mantiene en 72 (Bulgaria pasa
-       a ocupar el cupo extra que antes tenía San Marino) — **NO** es un
-       recorte, es la reasignación exacta que pidió el usuario. Ver
-       `_fixupLeagueZonesV3` para la migración de navegadores ya sembrados
-       con el cuadro viejo. Esto SUPERSEDE la prohibición previa
-       "San Marino NUNCA vuelve a ⚪1" (2026-06-13) — con Bulgaria en ⚪2 el
-       total sigue siendo 72, no se reabre el hueco. */
+  /* ── Reparto europeo POR DEFECTO por liga (obligatorio, 2026-08-14 —
+     REEMPLAZA por completo el reparto Wild Card / Open Qualifier /
+     Previa 2-rondas, que quedan ANIQUILADOS sin posibilidad de
+     recuperación, petición usuario) ──
+
+     PREVIA CHAMPIONS pasa a 4 RONDAS de eliminatoria ida+vuelta, 24
+     equipos cada una: R1(🟤) → R2(⚪) → R3(🟡) → R4(🟣). Los 7 campos
+     de zona por liga son, en orden de prioridad (cascada de posiciones
+     en `_computeQualifiedFromLeagues`):
+       ucl(🔵 Champions directo) → uclPrev(🟣 Previa R4) → prevR3(🟡) →
+       prevR2(⚪) → prevR1(🟤) → uel(🟠 Europa directo) →
+       uecl(🟢 Conference directo).
+     R1 ganadores → R2; R1 perdedores → 🟢 Conference (uecl_pending).
+     R2 ganadores → R3; R2 perdedores → 🟢 Conference (uecl_pending).
+     R3 ganadores → R4; R3 perdedores → 🟠 Europa (uel_pending).
+     R4 ganadores → 🔵 Champions (ucl_pending); R4 perdedores → 🟠 Europa.
+     Balance final: 🔵28+12=40 · 🟠16+24=40 · 🟢16+24=40.
+
+     Tabla ENTREGADA por el usuario (2026-08-14), verificada equipo a
+     equipo contra las listas de las 4 rondas de Previa + los 3 pools
+     finales (Champions 28, Europa 16, Conference 16) hasta cuadrar
+     EXACTO: España tiene 🟣R4 Y 🟡R3 (única de las "11 grandes" con
+     ambas), de ahí que su 🟠/🟢 caigan una posición más abajo que
+     Inglaterra/Italia/Francia (que solo tienen 🟣R4). */
   var LEAGUE_DEFAULT_ZONES = (function(){
     var Z = {};
     function set(slugs, z){ slugs.forEach(function(s){ Z[s] = z; }); }
-    /* 2026-07-31 — NUEVO FORMATO (Wild Card 24 KO / Open Qualifier 40
-       grupos / Previa Champions Ronda1+Ronda2 KO, ver el motor nuevo en
-       part2/misc_body_2.html y misc_body_1.html). Tabla ENTREGADA por
-       el usuario, un cupo por liga (corregida — Liga 5 ⚪3, no ⚪2):
-         🔵28 · 🟣24 · 🟠16 · 🟢12 · 🟡28 · ⚪24. */
-    // 🔵4 🟣1 🟠2 🟢1 ⚫2 — España (Liga EA Sports; manual/blacklist europeo)
-    Z['liga-ea-sports'] = {ucl:4, uclPrev:1, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2};
-    // 🔵4 🟠2 🟢2 ⚫2 — Inglaterra (sin 🟣)
-    Z['inglaterra']     = {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:2, wildcard:0, desc:2};
-    // 🔵4 🟠2 🟢1 ⚫2 — Italia / Francia (sin 🟣; Alemania fusionada en liga-mixta-6)
-    set(['italia','francia'], {ucl:4, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2});
-    // 🔵2 🟣1 🟠2 🟢1 ⚫2 — Portugal
-    Z['portugal'] = {ucl:2, uclPrev:1, uclQual:0, uel:2, uecl:1, wildcard:0, desc:2};
-    // 🔵2 🟣1 🟠1 🟢1 ⚫2 — Países Bajos
-    Z['p-bajos']  = {ucl:2, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2};
-    // 🔵1 🟣1 🟠1 🟢1 ⚫2 — Bélgica / Turquía / Dinamarca / Suiza
-    set(['belgica','turquia','dinamarca','suiza'], {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:2});
-    // 🔵1 🟣1 🟠1 🟢1 ⚫1 — Escocia
-    Z['escocia'] = {ucl:1, uclPrev:1, uclQual:0, uel:1, uecl:1, wildcard:0, desc:1};
-    /* Ligas Mixtas 1-9 (fusiones de 2026-07-30/31, mismo orden que la
-       tabla del usuario: "Liga 1".."Liga 9" = liga-mixta-1..9). Ninguna
-       tiene 🟠/🟢 (esas plazas solo las tienen las 11 ligas individuales
-       de arriba) — 🔵 solo en liga-mixta-1 (3, incluye el 4º fijo de la
-       Previa Ronda 2). El ⚫ descenso propio de cada liga se CONSERVA tal
-       cual estaba (el usuario no lo tocó en su tabla nueva). */
-    Z['liga-mixta-1'] = {ucl:3, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
-    Z['liga-mixta-2'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
-    Z['liga-mixta-3'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
-    Z['liga-mixta-4'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
-    Z['liga-mixta-5'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
-    Z['liga-mixta-6'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:3, desc:2};
-    Z['liga-mixta-7'] = {ucl:0, uclPrev:2, uclQual:3, uel:0, uecl:0, wildcard:2, desc:2};
-    Z['liga-mixta-8'] = {ucl:0, uclPrev:2, uclQual:4, uel:0, uecl:0, wildcard:2, desc:2};
-    Z['liga-mixta-9'] = {ucl:0, uclPrev:0, uclQual:3, uel:0, uecl:0, wildcard:2, desc:2};
+    // 🔵4 🟣1 🟡1 🟠2 🟢2 — España (Liga EA Sports; manual/blacklist europeo)
+    Z['liga-ea-sports'] = {ucl:4, uclPrev:1, prevR3:1, prevR2:0, prevR1:0, uel:2, uecl:2, desc:2};
+    // 🔵4 🟣1 🟠2 🟢2 — Inglaterra / Italia / Francia (sin 🟡)
+    set(['inglaterra','italia','francia'], {ucl:4, uclPrev:1, prevR3:0, prevR2:0, prevR1:0, uel:2, uecl:2, desc:2});
+    // 🔵2 🟣1 🟠2 🟢2 — Portugal
+    Z['portugal'] = {ucl:2, uclPrev:1, prevR3:0, prevR2:0, prevR1:0, uel:2, uecl:2, desc:2};
+    // 🔵2 🟣1 🟠1 🟢1 — Países Bajos
+    Z['p-bajos']  = {ucl:2, uclPrev:1, prevR3:0, prevR2:0, prevR1:0, uel:1, uecl:1, desc:2};
+    // 🔵1 🟣1 🟠1 🟢1 — Bélgica / Turquía / Dinamarca / Suiza / Escocia
+    set(['belgica','turquia','dinamarca','suiza'], {ucl:1, uclPrev:1, prevR3:0, prevR2:0, prevR1:0, uel:1, uecl:1, desc:2});
+    Z['escocia'] = {ucl:1, uclPrev:1, prevR3:0, prevR2:0, prevR1:0, uel:1, uecl:1, desc:1};
+    /* Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14, sustituyen a
+       las antiguas liga-mixta 1-9 como feeder de la Previa — esas 9
+       quedan intactas como ligas jugables pero sin cupo europeo
+       automático, ver más abajo). Ninguna tiene 🟠/🟢 directo — solo
+       alimentan Champions/Previa. */
+    Z['germanika']          = {ucl:3, uclPrev:1, prevR3:2, prevR2:2, prevR1:2, uel:0, uecl:0, desc:2};
+    Z['hellas-slavia']      = {ucl:0, uclPrev:0, prevR3:2, prevR2:2, prevR1:5, uel:0, uecl:0, desc:2};
+    Z['danubio-nordica']    = {ucl:0, uclPrev:0, prevR3:2, prevR2:2, prevR1:4, uel:0, uecl:0, desc:2};
+    Z['adriatico-oriental'] = {ucl:0, uclPrev:0, prevR3:2, prevR2:2, prevR1:5, uel:0, uecl:0, desc:2};
+    Z['balkanica']          = {ucl:0, uclPrev:0, prevR3:2, prevR2:2, prevR1:4, uel:0, uecl:0, desc:2};
+    Z['eurasia']            = {ucl:0, uclPrev:0, prevR3:1, prevR2:2, prevR1:4, uel:0, uecl:0, desc:2};
+    /* Ligas Mixtas 1-9 (fusiones de 2026-07-30/31): con Wild Card/Open
+       Qualifier ANIQUILADOS ya no tienen ningún cupo europeo automático
+       (sus antiguos campos uclQual/wildcard no existen en el nuevo
+       modelo). Se conservan como ligas jugables normales — el admin
+       puede darles cupo manual desde 📜 Reglas si quiere. */
+    for(var _mi=1; _mi<=9; _mi++){
+      Z['liga-mixta-'+_mi] = {ucl:0, uclPrev:0, prevR3:0, prevR2:0, prevR1:0, uel:0, uecl:0, desc:2};
+    }
     return Z;
   })();
-  /* De los 24 🟣 (Previa Ronda 1 directos), 12 son FIJOS a la Ronda 2
-     (esperan a los ganadores de la Ronda 1) y 12 juegan la Ronda 1 desde
-     el principio. Los 8 países individuales con 🟣1 (más España, manual)
-     son SIEMPRE fijos; de las liga-mixta-1..4 (🟣2 cada una) la MEJOR de
-     sus 2 plazas es fija y la otra juega la Ronda 1; liga-mixta-5..8
-     (🟣2 cada una) juegan la Ronda 1 completas. Ver
-     `computeUclPrevFixedR2Teams`/`computeUclPrevDirectR1Teams` más abajo. */
-  var UCL_PREV_FIXED_SINGLE_SLUGS = ['portugal','p-bajos','belgica','turquia','dinamarca','suiza','escocia'];
-  var UCL_PREV_FIXED_MIXTA_SLUGS  = ['liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4'];
-  window._UCL_PREV_FIXED_SINGLE_SLUGS = UCL_PREV_FIXED_SINGLE_SLUGS;
-  window._UCL_PREV_FIXED_MIXTA_SLUGS  = UCL_PREV_FIXED_MIXTA_SLUGS;
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
 
   /* Default de zonas para un slug: genérico + override europeo por liga. */
@@ -51791,8 +50626,8 @@ https://api.sofascore.app/api/v1/team/44/image
      precargar el reparto por liga sin pisar nada del admin. */
   function _zonesIsGeneric(z){
     if(!z) return true;
-    return Number(z.ucl)===1 && Number(z.uclPrev)===1 && Number(z.uclQual)===1 &&
-           Number(z.uel)===1 && Number(z.uecl)===1 && Number(z.wildcard||0)===0;
+    return Number(z.ucl)===1 && Number(z.uclPrev)===1 && Number(z.uel)===1 && Number(z.uecl)===1 &&
+           Number(z.prevR3||0)===0 && Number(z.prevR2||0)===0 && Number(z.prevR1||0)===0;
   }
   window._zonesIsGeneric = _zonesIsGeneric;
 
@@ -51817,10 +50652,11 @@ https://api.sofascore.app/api/v1/team/44/image
     zones = zones || DEFAULT_ZONES;
     var ucl = Math.max(0, zones.ucl|0);
     var uclP = Math.max(0, zones.uclPrev|0);
-    var uclQ = Math.max(0, zones.uclQual|0);
+    var prevR3 = Math.max(0, zones.prevR3|0);
+    var prevR2 = Math.max(0, zones.prevR2|0);
+    var prevR1 = Math.max(0, zones.prevR1|0);
     var uel = Math.max(0, zones.uel|0);
     var uecl = Math.max(0, zones.uecl|0);
-    var wildcard = Math.max(0, zones.wildcard|0);
     /* Resto del Mundo: los 6 primeros pasan a COPA INTERCONTINENTAL
        (no a Recopa — petición usuario 2026-05-27). El key legacy
        `zones.recopa` se lee como fallback para saves anteriores a
@@ -51837,17 +50673,17 @@ https://api.sofascore.app/api/v1/team/44/image
     var desc = Math.max(0, zones.desc|0);
     // Zona de descenso (últimas plazas)
     if(desc>0 && pos > total-desc) return 'z-desc';
-    // Zonas europeas de arriba hacia abajo. WildCard se intercala
-    // tras Conference para que en las ligas pequeñas (donde
-    // ucl/uclP/uel/uecl están a 0) la franja blanca caiga justo
-    // después de Open Qualifier, como pidió el usuario.
+    /* Zonas europeas de arriba hacia abajo — cascada 4 rondas de Previa
+       (2026-08-14, Wild Card/Open Qualifier ANIQUILADOS):
+       ucl → uclPrev(R4) → prevR3 → prevR2 → prevR1 → uel → uecl. */
     var cursor = 0;
     if(pos <= (cursor+=ucl)) return 'z-uclD';
     if(pos <= (cursor+=uclP)) return 'z-uclP';
-    if(pos <= (cursor+=uclQ)) return 'z-uclQ';
+    if(pos <= (cursor+=prevR3)) return 'z-uclQ';
+    if(pos <= (cursor+=prevR2)) return 'z-wildcard';
+    if(pos <= (cursor+=prevR1)) return 'z-prevR1';
     if(pos <= (cursor+=uel)) return 'z-uel';
     if(pos <= (cursor+=uecl)) return 'z-uecl';
-    if(pos <= (cursor+=wildcard)) return 'z-wildcard';
     if(pos <= (cursor+=inter)) return 'z-inter';
     if(pos <= (cursor+=mundialDelta)) return 'z-mundial';
     return '';
@@ -52834,22 +51670,22 @@ https://api.sofascore.app/api/v1/team/44/image
      Mundo (petición usuario 2026-05-26): oculta UCL/Previa/Open/
      E.League/Conference/WildCard/Descenso y muestra Recopa+Mundialito.
      Resto de ligas: comportamiento opuesto. */
+  /* Formato 4 rondas de Previa Champions (2026-08-14, reemplaza Wild
+     Card + Open Qualifier — ANIQUILADOS): los antiguos campos
+     `uclQual`/`wildcard` de `cfg.zones` pasan a representar
+     Previa R3 / Previa R2 respectivamente (mismos ids de input, solo
+     re-etiquetados) y se añade `prevR1` (Previa R1) como campo nuevo.
+     `uclPrev` sigue siendo Previa R4 (la ronda más cercana a
+     Champions). Ver `_computeQualifiedFromLeagues` para la cascada de
+     posiciones ucl→uclPrev→prevR3→prevR2→prevR1→uel→uecl. */
   function _lextToggleRegRows(slug){
-    var EURO_ROWS = ['lext-reg-ucl-row','lext-reg-uclprev-row','lext-reg-uel-row','lext-reg-uecl-row','lext-reg-wildcard-row'];
+    var EURO_ROWS = ['lext-reg-ucl-row','lext-reg-uclprev-row','lext-reg-prevr3-row','lext-reg-prevr2-row','lext-reg-prevr1-row','lext-reg-uel-row','lext-reg-uecl-row'];
     var RM_ROWS = ['lext-reg-inter-row','lext-reg-mundial-row'];
     var isRM = (slug === 'resto-mundo');
     EURO_ROWS.forEach(function(id){
       var el = document.getElementById(id);
       if(el) el.style.display = isRM ? 'none' : '';
     });
-    /* Open Qualifier y Descenso son labels sueltos sin wrapper. Los
-       envolvemos lógicamente por sus inputs: nodos hermanos del input. */
-    var oqInput = document.getElementById('lext-reg-ucl-qual');
-    if(oqInput){
-      var oqLabel = oqInput.previousElementSibling;
-      oqInput.style.display = isRM ? 'none' : '';
-      if(oqLabel && oqLabel.classList.contains('lext-label')) oqLabel.style.display = isRM ? 'none' : '';
-    }
     var descInput = document.getElementById('lext-reg-desc');
     if(descInput){
       var descLabel = descInput.previousElementSibling;
@@ -52866,24 +51702,19 @@ https://api.sofascore.app/api/v1/team/44/image
     var data = loadData(CURRENT_KEY);
     var cfg = ensureConfig(data, CURRENT_KEY);
     var z = cfg.zones;
-    /* Liga nunca configurada (sigue en el genérico 1/1/1/1/1): precargamos
-       el reparto europeo POR DEFECTO de esta liga para ahorrar tiempo.
-       Sigue siendo editable; solo persiste si el usuario pulsa Guardar. */
+    /* Liga nunca configurada: precargamos el reparto europeo POR
+       DEFECTO de esta liga para ahorrar tiempo. Sigue siendo editable;
+       solo persiste si el usuario pulsa Guardar. */
     if(_zonesIsGeneric(z)) z = _zonesDefaultFor(CURRENT_KEY);
     document.getElementById('lext-reg-ucl').value = z.ucl;
     document.getElementById('lext-reg-ucl-prev').value = z.uclPrev;
-    document.getElementById('lext-reg-ucl-qual').value = z.uclQual;
+    document.getElementById('lext-reg-ucl-qual').value = Number(z.prevR3||0);
+    document.getElementById('lext-reg-wildcard').value = Number(z.prevR2||0);
+    var r1Inp = document.getElementById('lext-reg-prev-r1');
+    if(r1Inp) r1Inp.value = Number(z.prevR1||0);
     document.getElementById('lext-reg-uel').value = z.uel;
     document.getElementById('lext-reg-uecl').value = z.uecl;
     document.getElementById('lext-reg-desc').value = z.desc;
-    /* WildCard Round disponible en TODAS las ligas. Antes ocultábamos
-       UCL/Previa/Europa/Conference para los slugs en
-       WILDCARD_LIGA_SLUGS, pero el usuario pidió que todas las
-       opciones (las 7) sean editables en cualquier país, incluso
-       en los menores que ahora también pueden mandar a UCL si el
-       admin lo configura. */
-    var wcInp = document.getElementById('lext-reg-wildcard');
-    if(wcInp) wcInp.value = Number(z.wildcard||0);
     /* Resto del Mundo: defaults Intercontinental=6, Mundialito=16 si
        no hay guardado previo. Fallback legacy: si solo existe `z.recopa`
        (saves <2026-05-27), lo leemos como valor inicial. */
@@ -52908,10 +51739,11 @@ https://api.sofascore.app/api/v1/team/44/image
     cfg.zones = {
       ucl:              Math.max(0, parseInt(document.getElementById('lext-reg-ucl').value,10)||0),
       uclPrev:          Math.max(0, parseInt(document.getElementById('lext-reg-ucl-prev').value,10)||0),
-      uclQual:          Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
+      prevR3:           Math.max(0, parseInt(document.getElementById('lext-reg-ucl-qual').value,10)||0),
+      prevR2:           Math.max(0, parseInt(document.getElementById('lext-reg-wildcard').value,10)||0),
+      prevR1:           Math.max(0, parseInt((document.getElementById('lext-reg-prev-r1')||{}).value,10)||0),
       uel:              Math.max(0, parseInt(document.getElementById('lext-reg-uel').value,10)||0),
       uecl:             Math.max(0, parseInt(document.getElementById('lext-reg-uecl').value,10)||0),
-      wildcard:         Math.max(0, parseInt((document.getElementById('lext-reg-wildcard')||{}).value,10)||0),
       intercontinental: Math.max(0, parseInt((document.getElementById('lext-reg-inter')||{}).value,10)||0),
       mundialClubes:    Math.max(0, parseInt((document.getElementById('lext-reg-mundial')||{}).value,10)||0),
       desc:             Math.max(0, parseInt(document.getElementById('lext-reg-desc').value,10)||0)
@@ -52934,28 +51766,17 @@ https://api.sofascore.app/api/v1/team/44/image
     var DEF = _zonesDefaultFor(CURRENT_KEY);
     document.getElementById('lext-reg-ucl').value = DEF.ucl;
     document.getElementById('lext-reg-ucl-prev').value = DEF.uclPrev;
-    document.getElementById('lext-reg-ucl-qual').value = DEF.uclQual;
+    document.getElementById('lext-reg-ucl-qual').value = Number(DEF.prevR3||0);
+    document.getElementById('lext-reg-wildcard').value = Number(DEF.prevR2||0);
+    var r1Inp = document.getElementById('lext-reg-prev-r1');
+    if(r1Inp) r1Inp.value = Number(DEF.prevR1||0);
     document.getElementById('lext-reg-uel').value = DEF.uel;
     document.getElementById('lext-reg-uecl').value = DEF.uecl;
     document.getElementById('lext-reg-desc').value = DEF.desc;
-    var wcInp = document.getElementById('lext-reg-wildcard');
-    if(wcInp) wcInp.value = DEF.wildcard;
     var rmIntInp = document.getElementById('lext-reg-inter');
     var rmMunInp = document.getElementById('lext-reg-mundial');
     if(rmIntInp) rmIntInp.value = isRM ? 6 : (DEFAULT_ZONES.intercontinental||0);
     if(rmMunInp) rmMunInp.value = isRM ? 16 : DEFAULT_ZONES.mundialClubes;
-  };
-
-  // ── Wildcard Round (compat: invocador antiguo) ─────
-  // Mantenido como stub por compatibilidad. La configuración real
-  // ahora vive como cupo de zona en el modal Reglas.
-  window.ligaExtWildcardRound = function(){
-    if(!CURRENT_KEY) return;
-    if(!WILDCARD_LIGA_SLUGS[CURRENT_KEY]){
-      // No debería pasar: el botón está oculto para otros slugs.
-      return;
-    }
-    alert('Wildcard Round (' + (CURRENT_NAME||'') + ') — próximamente.\n\nDescríbeme qué debe contener este apartado y lo monto.');
   };
 
   // ── Copa editable (nombre + logo) ─────────────────
@@ -57278,39 +56099,6 @@ https://api.sofascore.app/api/v1/team/44/image
     });
   };
 
-  /* Slugs de ligas con acceso al cupo "WildCard Round" en su modal
-     de Reglas. Lista de 40 países: las 19 menores históricas + 21
-     ligas medias (Rep. Checa, Austria, Noruega, Grecia, Israel,
-     Ucrania, Polonia, Serbia, Croacia, Rusia, Rumanía, Suecia, Chipre,
-     Irlanda, Kazajistán, Bosnia, Azerbaiyán, Bulgaria, Gales,
-     Eslovaquia, Eslovenia).
-     El motor de Wild Card recoge la zona ⚪ de TODAS y, si suman
-     más de 40, recorta por poder; si suman menos, rellena con TBD.
-     `_computeQualifiedFromLeagues('wildcard')` trata estos 40 slugs
-     como si tuvieran `zones.wildcard=1` automáticamente (auto-cupo)
-     y acepta standings parciales cuando ya hay resultados, evitando
-     que el pool quede a 9/40 cuando faltan jornadas en alguna liga.
-     Mantener este listado sincronizado con las menu-cards de
-     s-ligas. */
-  var WILDCARD_LIGA_SLUGS = {
-    /* 25 menores históricas — san-marino/bielorrsa/georgia/luxembgo/
-       montenegro/gibraltar/andorra/n-irlanda/suecia/croacia/lituania/
-       n-maced/albania/israel/hungria/ucrania/estonia/malta/serbia/
-       rumania/letonia/is-feroe fusionadas en liga-mixta-1/2/3/4/5/6
-       (2026-07-30): esas ligas ya llevan `zones.wildcard` EXPLÍCITO en
-       LEAGUE_DEFAULT_ZONES, así que NO entran aquí (el auto-cupo de este
-       mapa es solo para slugs SIN cupo explícito). Kosovo/Kazajistán/
-       Bosnia/Bulgaria/Eslovenia fusionadas en liga-mixta-7, Rusia/
-       Azerbaiyán/Armenia/Moldavia/Finlandia fusionadas en liga-mixta-8,
-       Eslovaquia/Irlanda/Islandia fusionadas en liga-mixta-9 — la
-       ÚLTIMA liga menor sin fusionar (mismo motivo). Este mapa queda
-       VACÍO: ya no hay ningún slug de país sin cupo europeo explícito
-       en LEAGUE_DEFAULT_ZONES. Se conserva la estructura (en vez de
-       borrar el objeto) para que una liga menor NUEVA futura tenga
-       dónde engancharse sin tener que recrear el patrón. */
-  };
-  window.WILDCARD_LIGA_SLUGS = WILDCARD_LIGA_SLUGS;
-
   /* Nombre real de cada competición por slug. Lo muestra la cabecera
      de la pantalla de la liga (#liga-ext-title) y precarga el editor
      "Nombre de la liga" (🖍 junto al título). Las menu-cards de
@@ -57353,7 +56141,16 @@ https://api.sofascore.app/api/v1/team/44/image
     'liga-mixta-6':'Liga Mixta 6 — Alemania+Serbia+Rumanía+Islas Feroe+Letonia',
     'liga-mixta-7':'Liga Mixta 7 — Eslovenia+Bulgaria+Bosnia+Kazajistán+Kosovo',
     'liga-mixta-8':'Liga Mixta 8 — Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán',
-    'liga-mixta-9':'Liga Mixta 9 — Eslovaquia+Irlanda+Islandia'
+    'liga-mixta-9':'Liga Mixta 9 — Eslovaquia+Irlanda+Islandia',
+    /* Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14), feeder de la
+       Previa de Champions de 4 rondas — ver `LEAGUE_DEFAULT_ZONES` y
+       `_EXTRA_LEAGUE_SEEDS` para su cupo europeo y roster respectivamente. */
+    'germanika':'Germanika League — Alemania+Serbia+Rumanía+Letonia+Feroe+Montenegro+Luxemburgo+Bielorrusia+San Marino+Gales+Andorra',
+    'hellas-slavia':'Hellas Slavia League — Grecia+Chequia+Georgia+Noruega+Polonia',
+    'danubio-nordica':'Danubio Nórdica League — Austria+Chipre+Gibraltar+N.Irlanda+Suecia+Albania',
+    'adriatico-oriental':'Adriático Oriental League — Croacia+Macedonia del Norte+Israel+Ucrania+Hungría+Estonia',
+    'balkanica':'Balkanica League — Bulgaria+Bosnia+Eslovenia+Kazajistán+Kosovo+Malta+Lituania+Irlanda+Albania',
+    'eurasia':'Eurasia League — Rusia+Azerbaiyán+Moldavia+Armenia+Finlandia+Eslovaquia+Islandia+Irlanda'
   };
   window.LEAGUE_DEFAULT_NAMES = LEAGUE_DEFAULT_NAMES;
   /* Nombre a mostrar en la cabecera: custom del admin (cfg.name) →
@@ -58314,7 +57111,7 @@ https://api.sofascore.app/api/v1/team/44/image
       teams: teams,
       results: [],
       config: {
-        zones: { ucl:0, uclPrev:0, uclQual:0, uel:0, uecl:0, wildcard:0, intercontinental:6, mundialClubes:16, desc:0 },
+        zones: { ucl:0, uclPrev:0, prevR3:0, prevR2:0, prevR1:0, uel:0, uecl:0, intercontinental:6, mundialClubes:16, desc:0 },
         logo: '', cupName: '', cupLogo: ''
       }
     };
@@ -59381,6 +58178,149 @@ https://api.sofascore.app/api/v1/team/44/image
         {name:'Fram',                   power:54, atk:54, mid:54, def:54},
         {name:'FC KR Reykyavik',        power:53, atk:53, mid:53, def:53}
       ]
+    },
+    /* ═══ Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14) — sustituyen
+       a las liga-mixta 1-9 como feeder de la Previa de Champions (esas 9
+       quedan intactas como ligas jugables normales, sin cupo europeo
+       automático — ver `LEAGUE_DEFAULT_ZONES`). Rosters + banderas tal
+       como los entregó el usuario, verificados equipo a equipo contra las
+       4 rondas de la Previa. Sin escudo (el admin los añade desde el
+       editor; cae al placeholder de iniciales mientras tanto). */
+    'germanika': {
+      teams: [
+        {name:'Bayern München',       power:86, atk:86, mid:86, def:86},
+        {name:'Borussia Dortmund',    power:83, atk:83, mid:83, def:83},
+        {name:'RB Leipzig',           power:80, atk:80, mid:80, def:80},
+        {name:'Bayer Leverkusen',     power:78, atk:78, mid:78, def:78},
+        {name:'Eintracht Frankfurt',  power:75, atk:75, mid:75, def:75},
+        {name:'VfB Stuttgart',        power:72, atk:72, mid:72, def:72},
+        {name:'Crvena Zvezda',        power:69, atk:69, mid:69, def:69},
+        {name:'Partizan Belgrade',    power:67, atk:67, mid:67, def:67},
+        {name:'Vojvodina Novi Sad',   power:65, atk:65, mid:65, def:65},
+        {name:'FCSB',                 power:63, atk:63, mid:63, def:63},
+        {name:'Farul Constanța',      power:61, atk:61, mid:61, def:61},
+        {name:'FK Valmiera',          power:59, atk:59, mid:59, def:59},
+        {name:'Víkingur',             power:57, atk:57, mid:57, def:57},
+        {name:'FK Mornar',            power:56, atk:56, mid:56, def:56},
+        {name:'Petrovac',             power:55, atk:55, mid:55, def:55},
+        {name:'Mondorf',              power:54, atk:54, mid:54, def:54},
+        {name:'Maxline Vitebsk',      power:53, atk:53, mid:53, def:53},
+        {name:'Tre Fiori',            power:52, atk:52, mid:52, def:52},
+        {name:"Connah's Quay",        power:51, atk:51, mid:51, def:51},
+        {name:'UE Santa Coloma',      power:50, atk:50, mid:50, def:50}
+      ]
+    },
+    'hellas-slavia': {
+      teams: [
+        {name:'PAOK',                   power:80, atk:80, mid:80, def:80},
+        {name:'Olympiacos',             power:78, atk:78, mid:78, def:78},
+        {name:'Panathinaikos',          power:76, atk:76, mid:76, def:76},
+        {name:'AEK Athens',             power:74, atk:74, mid:74, def:74},
+        {name:'Levadiakos',             power:72, atk:72, mid:72, def:72},
+        {name:'Sparta Praha',           power:70, atk:70, mid:70, def:70},
+        {name:'Slavia Praha',           power:69, atk:69, mid:69, def:69},
+        {name:'Jablonec',               power:67, atk:67, mid:67, def:67},
+        {name:'Hradec Králové',         power:65, atk:65, mid:65, def:65},
+        {name:'Iberia',                 power:64, atk:64, mid:64, def:64},
+        {name:'Dila',                   power:62, atk:62, mid:62, def:62},
+        {name:'Viking',                 power:61, atk:61, mid:61, def:61},
+        {name:'FK Bodø/Glimt',          power:60, atk:60, mid:60, def:60},
+        {name:'Tromsø',                 power:58, atk:58, mid:58, def:58},
+        {name:'SK Brann',               power:57, atk:57, mid:57, def:57},
+        {name:'Lech Poznań',            power:56, atk:56, mid:56, def:56},
+        {name:'Górnik',                 power:55, atk:55, mid:55, def:55},
+        {name:'Jagiellonia Białystok',  power:54, atk:54, mid:54, def:54},
+        {name:'Legia Warszawa',         power:53, atk:53, mid:53, def:53},
+        {name:'GKS Katowice',           power:52, atk:52, mid:52, def:52}
+      ]
+    },
+    'danubio-nordica': {
+      teams: [
+        {name:'Sturm Graz',          power:75, atk:75, mid:75, def:75},
+        {name:'Rapid Wien',          power:73, atk:73, mid:73, def:73},
+        {name:'Austria Wien',        power:71, atk:71, mid:71, def:71},
+        {name:'SV Ried',             power:69, atk:69, mid:69, def:69},
+        {name:'TSV Hartberg',        power:67, atk:67, mid:67, def:67},
+        {name:'Omonia Nicosia',      power:66, atk:66, mid:66, def:66},
+        {name:'AEK Larnaca',         power:64, atk:64, mid:64, def:64},
+        {name:'APOEL Nicosia',       power:63, atk:63, mid:63, def:63},
+        {name:'Aris Limassol',       power:61, atk:61, mid:61, def:61},
+        {name:"St. Joseph's",        power:60, atk:60, mid:60, def:60},
+        {name:'Carrick Rangers',     power:58, atk:58, mid:58, def:58},
+        {name:'Portadown FC',        power:57, atk:57, mid:57, def:57},
+        {name:'Hammarby IF',         power:56, atk:56, mid:56, def:56},
+        {name:'Djurgårdens IF',      power:55, atk:55, mid:55, def:55},
+        {name:'GAIS',                power:54, atk:54, mid:54, def:54},
+        {name:'Mjällby AIF',         power:53, atk:53, mid:53, def:53},
+        {name:'KF Vllaznia',         power:52, atk:52, mid:52, def:52},
+        {name:'KF Teuta',            power:51, atk:51, mid:51, def:51}
+      ]
+    },
+    'adriatico-oriental': {
+      teams: [
+        {name:'Dinamo Zagreb',        power:77, atk:77, mid:77, def:77},
+        {name:'Hajduk Split',         power:75, atk:75, mid:75, def:75},
+        {name:'HNK Rijeka',           power:73, atk:73, mid:73, def:73},
+        {name:'NK Varaždin',          power:71, atk:71, mid:71, def:71},
+        {name:'Shkëndija Tetovo',     power:70, atk:70, mid:70, def:70},
+        {name:'FC Vardar Skopje',     power:68, atk:68, mid:68, def:68},
+        {name:'Hapoel Beer Sheva',    power:67, atk:67, mid:67, def:67},
+        {name:'Maccabi Haifa',        power:66, atk:66, mid:66, def:66},
+        {name:'Maccabi Tel Aviv',     power:65, atk:65, mid:65, def:65},
+        {name:'Hapoel Tel Aviv',      power:64, atk:64, mid:64, def:64},
+        {name:'Dynamo Kyiv',          power:63, atk:63, mid:63, def:63},
+        {name:'Shakhtar Donetsk',     power:62, atk:62, mid:62, def:62},
+        {name:'Polissya Zhytomyr',    power:61, atk:61, mid:61, def:61},
+        {name:'Ferencvárosi TC',      power:60, atk:60, mid:60, def:60},
+        {name:'Debreceni VSC',        power:59, atk:59, mid:59, def:59},
+        {name:'Vasas FC',             power:58, atk:58, mid:58, def:58},
+        {name:'FC Flora Tallinn',     power:57, atk:57, mid:57, def:57},
+        {name:'Trans Narva',          power:56, atk:56, mid:56, def:56}
+      ]
+    },
+    'balkanica': {
+      teams: [
+        {name:'CSKA Sofia',            power:74, atk:74, mid:74, def:74},
+        {name:'Ludogorets Razgrad',    power:72, atk:72, mid:72, def:72},
+        {name:'Levski Sofia',          power:70, atk:70, mid:70, def:70},
+        {name:'Cherno More Varna',     power:68, atk:68, mid:68, def:68},
+        {name:'FK Velez Mostar',       power:66, atk:66, mid:66, def:66},
+        {name:'Borac Banja Luka',      power:65, atk:65, mid:65, def:65},
+        {name:'NK Olimpija Ljubljana', power:64, atk:64, mid:64, def:64},
+        {name:'NS Mura',               power:63, atk:63, mid:63, def:63},
+        {name:'NK Maribor',            power:62, atk:62, mid:62, def:62},
+        {name:'Koper',                 power:61, atk:61, mid:61, def:61},
+        {name:'FC Kairat Almaty',      power:60, atk:60, mid:60, def:60},
+        {name:'FC Drita',              power:59, atk:59, mid:59, def:59},
+        {name:'FC Ballkani',           power:58, atk:58, mid:58, def:58},
+        {name:'Floriana FC',           power:57, atk:57, mid:57, def:57},
+        {name:'FK Žalgiris Kaunas',    power:56, atk:56, mid:56, def:56},
+        {name:'Derry City',            power:55, atk:55, mid:55, def:55},
+        {name:'Shamrock Rovers',       power:54, atk:54, mid:54, def:54},
+        {name:'KF Vllaznia',           power:53, atk:53, mid:53, def:53}
+      ]
+    },
+    'eurasia': {
+      teams: [
+        {name:'CSKA Moscow',        power:79, atk:79, mid:79, def:79},
+        {name:'Rubin Kazan',        power:77, atk:77, mid:77, def:77},
+        {name:'Lokomotiv Moscow',   power:75, atk:75, mid:75, def:75},
+        {name:'Spartak Moscow',     power:73, atk:73, mid:73, def:73},
+        {name:'FK Krasnodar',       power:71, atk:71, mid:71, def:71},
+        {name:'Qarabağ',            power:69, atk:69, mid:69, def:69},
+        {name:'Turan Tovuz',        power:67, atk:67, mid:67, def:67},
+        {name:'Sabah Baku',         power:65, atk:65, mid:65, def:65},
+        {name:'Sheriff Tiraspol',   power:64, atk:64, mid:64, def:64},
+        {name:'CS Petrocub',        power:63, atk:63, mid:63, def:63},
+        {name:'Ararat-Armenia FC',  power:62, atk:62, mid:62, def:62},
+        {name:'Ilves Tampere',      power:61, atk:61, mid:61, def:61},
+        {name:'HJK Helsinki',       power:60, atk:60, mid:60, def:60},
+        {name:'MSK Žilina',         power:59, atk:59, mid:59, def:59},
+        {name:'KFC Komarno',        power:58, atk:58, mid:58, def:58},
+        {name:'Vikingur Reykjavik', power:57, atk:57, mid:57, def:57},
+        {name:'FH Hafnarfjörður',   power:56, atk:56, mid:56, def:56},
+        {name:'Shamrock Rovers',    power:55, atk:55, mid:55, def:55}
+      ]
     }
   };
   function _ensureExtraLeagueSeed(slug){
@@ -59534,7 +58474,7 @@ https://api.sofascore.app/api/v1/team/44/image
       config: {
         zones: (typeof _zonesDefaultFor === 'function')
                  ? _zonesDefaultFor(slug)
-                 : { ucl:0, uclPrev:0, uclQual:2, uel:0, uecl:0, wildcard:2, desc:3 },
+                 : { ucl:0, uclPrev:0, prevR3:0, prevR2:0, prevR1:2, uel:0, uecl:0, desc:2 },
         logo: '', cupName: '', cupLogo: ''
       }
     };
@@ -65199,9 +64139,10 @@ https://api.sofascore.app/api/v1/team/44/image
       }
       return;
     }
-    /* Previa de Champions — Ronda 2: matchKey `wprevko_r2_<idx>_<i|v>`
-       (ver `_wprevHubResolve`, más arriba en este archivo). 2026-08-02. */
-    var _wp = /^wprevko_(r1|r2)_(\d+)_([iv])$/.exec(String(entry.matchKey || ''));
+    /* Previa de Champions — 4 rondas: matchKey `wprevko_r<1-4>_<idx>_<i|v>`
+       (ver `_wprevHubResolve`, más arriba en este archivo). 2026-08-02,
+       generalizado a 4 rondas 2026-08-14. */
+    var _wp = /^wprevko_(r1|r2|r3|r4)_(\d+)_([iv])$/.exec(String(entry.matchKey || ''));
     if (_wp){
       var _wpOpened = false;
       try { if (typeof window._wprevKoOpenMatch === 'function') _wpOpened = !!window._wprevKoOpenMatch(_wp[1], parseInt(_wp[2],10)); } catch(_){}
@@ -68111,9 +67052,8 @@ https://api.sofascore.app/api/v1/team/44/image
       ['copa_state_v1','copa_data_v1','sc_state_v1','usc_state_v1',
        'recopa_state_v1','inter_state_v1',
        'ucl_ko_state_v1','uel_ko_state_v1','uecl_ko_state_v1','uel_phase_v1','uecl_phase_v1',
-       'wprev_state_v1','oq_simulation_v1',
-       'wc_to_open_qualifier_v1','oq_to_previa_v1',
-       'wprev_to_fase_grupos_v1','wprev_to_europa_v1','wprev_r1_to_conference_v1',
+       'wprev_state_v1',
+       'wprev_to_fase_grupos_v1','wprev_to_europa_v1','wprev_to_conference_v1',
        'superliga_results_v1','superliga_state_v1'
       ].forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
       /* 4) AJUSTES MANUALES de stats de la plantilla del hub
@@ -74534,16 +73474,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 
 <!-- ══════════════════════════════════════════════════
      Champions League submenu — apagar cajas según fase completada
-     (petición usuario 2026-05-02): cuando una sub-competición ya
-     ha cumplido su función dentro de la temporada, su caja en
-     s-champions queda con filter:grayscale + opacity reducida
-     para que el admin vea de un vistazo en qué fase está.
-       · Wild Card → done si wc_to_open_qualifier_v1 trae ≥10 teams
-         (12 eliminatorias ida/vuelta → 12 ganadores; tolerante a algún BYE).
-       · Open Qualifier → done si oq_to_previa_v1 trae ≥8 teams
-         (10 grupos de 4 → 10 primeros + 2 mejores segundos = 12;
-         tolerante a algún TBD).
-       · Previa Champions → done si wprev_state_v1.phase === 'done'.
+     (petición usuario 2026-05-02, actualizado 2026-08-14 tras la
+     ANIQUILACIÓN de Wild Card / Open Qualifier): cuando una
+     sub-competición ya ha cumplido su función dentro de la
+     temporada, su caja en s-champions queda con filter:grayscale +
+     opacity reducida para que el admin vea de un vistazo en qué
+     fase está.
+       · Previa Champions (4 rondas) → done si
+         wprev_state_v1.phase === 'done'.
      Fase de Grupos y Playoffs/Final aún no tienen state propio
      (motor pendiente), así que se quedan SIN apagar de momento.
      La detección corre al cargar la página y cada vez que el
@@ -74551,22 +73489,6 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
      ══════════════════════════════════════════════════ -->
 <script>
 (function(){
-  function _wcDone(){
-    try {
-      var raw = localStorage.getItem('wc_to_open_qualifier_v1');
-      if(!raw) return false;
-      var d = JSON.parse(raw);
-      return !!(d && Array.isArray(d.teams) && d.teams.length >= 10);
-    } catch(_){ return false; }
-  }
-  function _oqDone(){
-    try {
-      var raw = localStorage.getItem('oq_to_previa_v1');
-      if(!raw) return false;
-      var d = JSON.parse(raw);
-      return !!(d && Array.isArray(d.teams) && d.teams.length >= 8);
-    } catch(_){ return false; }
-  }
   function _wprevDone(){
     try {
       var raw = localStorage.getItem('wprev_state_v1');
@@ -74578,11 +73500,7 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
   function refresh(){
     var screen = document.getElementById('s-champions');
     if(!screen) return;
-    var wc = screen.querySelector('.sc-wild-card');
-    var oq = screen.querySelector('.sc-open-qual');
     var prev = screen.querySelector('.sc-ucl-prev-clas');
-    if(wc) wc.classList.toggle('is-done', _wcDone());
-    if(oq) oq.classList.toggle('is-done', _oqDone());
     if(prev) prev.classList.toggle('is-done', _wprevDone());
   }
   /* Expuesto para que el módulo de Previa Champions (otro IIFE)
@@ -74607,29 +73525,25 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
 </script>
 
 <!-- ══════════════════════════════════════════════════
-     Reset en cascada de los pools europeos (2026-05-07).
+     Reset en cascada de los pools europeos (2026-05-07, reescrito
+     2026-08-14 tras la ANIQUILACIÓN de Wild Card / Open Qualifier).
      Las clasificaciones de UCL/UEL/UECL fase de grupos llevan
      huecos para los equipos que entran vía Previa de Champions
-     (11 UCL, 22 UEL, 30 UECL). Esos equipos viven en feeder keys
-     de localStorage:
-       · `wprev_to_fase_grupos_v1`     → 12 a UCL (Previa Ronda 2 ganadores)
-       · `wprev_to_europa_v1`          → 24 a UEL (Previa Ronda1+Ronda2 perdedores)
-       · `wprev_r1_to_conference_v1`   → sin uso (Previa ya no alimenta Conference)
-       · `oq_to_previa_v1`             → 12 a Previa Ronda 1
-       · `oq_to_conference_v1`         → 28 a UECL (no clasificados del OQ)
-       · `wc_to_open_qualifier_v1`     → 12 a OQ
+     (4 rondas: R1🟤 → R2⚪ → R3🟡 → R4🟣). Esos equipos viven en
+     feeder keys de localStorage:
+       · `wprev_to_fase_grupos_v1`      → 12 a UCL (Previa R4 ganadores)
+       · `wprev_to_europa_v1`           → 24 a UEL (Previa R3+R4 perdedores)
+       · `wprev_to_conference_v1`       → 24 a UECL (Previa R1+R2 perdedores)
      Antes los resets (WC, OQ, Previa, 51 ligas) limpiaban claves
      parciales y NO repintaban las pantallas hijas, así que los
      equipos del Previa quedaban "pegados" en UCL/UEL/UECL aunque
      el origen estuviera vacío. Este helper centraliza el reset
-     en cascada y refresca las 5 pantallas afectadas.
+     en cascada y refresca las pantallas afectadas.
 
      Scopes:
-       · 'all'    → 51 ligas reset (todo abajo desde el origen).
-       · 'wc'     → reset Wild Card (cascada WC → OQ → Previa).
-       · 'oq'     → reset Open Qualifier (cascada OQ → Previa).
+       · 'all'    → 51+6 ligas reset (todo abajo desde el origen).
        · 'previa' → reset Previa Champions (clearState ya limpió
-                    las 4 wprev_* keys; aquí solo invalidamos la
+                    las wprev_* keys; aquí solo invalidamos la
                     snapshot y re-renderizamos).
      Cualquier reset también limpia la snapshot manual
      `europe_committed_v1` (local + server) — es la única forma
@@ -74643,37 +73557,14 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     scope = scope || 'all';
     /* Lista de claves a limpiar tanto en localStorage como en
        el espejo servidor `/api/state.competition_state`. Sin la
-       limpieza servidor el sync (misc_body_2.html línea ~23553)
-       restaura los valores antiguos a los pocos segundos / al
-       siguiente boot, y las cajas WC y OQ vuelven a "✓ COMPLETADA"
-       solas. Reportado usuario 2026-05-07. */
+       limpieza servidor el sync (misc_body_2.html) restaura los
+       valores antiguos a los pocos segundos / al siguiente boot.
+       Reportado usuario 2026-05-07. */
     var keysToClear = [];
-    /* WC keys */
-    if (scope === 'all' || scope === 'wc'){
-      ['wc_state_v1','wc_champ_v1','wc_to_open_qualifier_v1'].forEach(function(k){
+    /* Previa Champions keys (las 3 salidas + el estado del bracket). */
+    if (scope === 'all' || scope === 'previa'){
+      ['wprev_state_v1','wprev_to_fase_grupos_v1','wprev_to_europa_v1','wprev_to_conference_v1'].forEach(function(k){
         try { localStorage.removeItem(k); } catch(_){}
-        keysToClear.push(k);
-      });
-    }
-    /* OQ keys (cascada desde WC también) */
-    if (scope === 'all' || scope === 'wc' || scope === 'oq'){
-      ['oq_simulation_v1','oq_to_previa_v1','oq_to_conference_v1'].forEach(function(k){
-        try { localStorage.removeItem(k); } catch(_){}
-        keysToClear.push(k);
-      });
-    }
-    /* Previa Champions keys (cascada desde WC u OQ también) */
-    if (scope === 'all' || scope === 'wc' || scope === 'oq'){
-      ['wprev_state_v1','wprev_to_fase_grupos_v1','wprev_to_europa_v1','wprev_r1_to_conference_v1'].forEach(function(k){
-        try { localStorage.removeItem(k); } catch(_){}
-        keysToClear.push(k);
-      });
-    }
-    /* También 'previa' debe limpiar el espejo servidor de las
-       wprev_* aunque clearState() ya las haya quitado del local —
-       sin esto el sync server restaura los datos viejos. */
-    if (scope === 'previa'){
-      ['wprev_state_v1','wprev_to_fase_grupos_v1','wprev_to_europa_v1','wprev_r1_to_conference_v1'].forEach(function(k){
         keysToClear.push(k);
       });
     }
@@ -74732,106 +73623,8 @@ body:not(.adm-on) #s-munich-derby-season .mderby-del-btn{display:none;}
     try { if (typeof window.buildUelGruposClas === 'function') window.buildUelGruposClas(); } catch(_){}
     try { if (typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
     try { if (typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); } catch(_){}
-    try { if (typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
-    /* Hub Champions: las 3 cajas (Wild Card, Open Qualifier,
-       Previa de Champions) recuperan color sin ✓ COMPLETADA. */
-    try { if (typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
-  };
-})();
-</script>
-
-<!-- ══════════════════════════════════════════════════
-     Propagación INMEDIATA de ganadores entre fases europeas
-     (Wild Card → Open Qualifier → Previa de Champions), 2026-07-10.
-
-     Petición usuario: al terminar los 24 grupos de la Wild Card (o
-     los 28 del Open Qualifier), esos ganadores deben "lanzarse en el
-     momento" a la fase siguiente — sin que el admin tenga que borrar
-     manualmente el sorteo ya cacheado de esa fase siguiente.
-
-     Causa raíz del bug reportado (fotos usuario: Open Qualifier con
-     TBD-OQ-56/57/... en vez de los 24 ganadores reales de la Wild
-     Card, pese a que la pantalla "24 GANADORES → OPEN QUALIFIER" ya
-     los mostraba con nombre real): `simulateAll`/`simulateAllChunked`
-     (Wild Card, part2/misc_body_2.html) invalidaban el sorteo
-     cacheado del Open Qualifier (`oq_simulation_v1`) con un
-     `localStorage.removeItem` SUELTO, sin avisar al servidor. El
-     sync genérico (`pushPendingChanges`, misc_body_2.html) SALTA los
-     valores `null` (`if(v===null) return;`), así que ese borrado
-     NUNCA se empujaba al servidor — el servidor conservaba la
-     snapshot vieja (con placeholders) para siempre. En el siguiente
-     `hydrateFromServer()` (arranque de CUALQUIER pestaña, incluida
-     la misma), como el local ya no existía,
-     `if(!local){ doRestore = true; }` RESUCITABA esa snapshot vieja
-     del servidor — deshaciendo la invalidación en silencio. Mismo
-     patrón exacto ya documentado para `_resetEuropePoolFeeders`
-     (2026-07-02): un `removeItem` suelto no es un borrado real en un
-     proyecto con sync multi-dispositivo. El mismo hueco existía en
-     el Open Qualifier → Previa (`_finishOqSim` nunca invalidaba el
-     sorteo ya cacheado de la Previa, `wprev_state_v1`).
-     ══════════════════════════════════════════════════ -->
-<script>
-(function(){
-  /* Claves cuyo sorteo/estado cacheado depende de los 24 ganadores de
-     la Wild Card. Se invalidan cuando la Wild Card termina, en
-     CASCADA hasta la Previa (sus ganadores también dependen del pool
-     del Open Qualifier). NUNCA incluye las propias claves de la Wild
-     Card (wc_state_v1/wc_champ_v1/wc_to_open_qualifier_v1) — esas se
-     acaban de escribir con los datos frescos. */
-  window._EUR_DOWNSTREAM_OF_WC = [
-    'oq_simulation_v1', 'oq_to_conference_v1', 'oq_to_previa_v1',
-    'wprev_state_v1', 'wprev_to_fase_grupos_v1', 'wprev_to_europa_v1', 'wprev_r1_to_conference_v1'
-  ];
-  /* Claves cuyo sorteo/estado cacheado depende de los 28 ganadores del
-     Open Qualifier. Se invalidan cuando el Open Qualifier termina. NO
-     incluye las propias claves del Open Qualifier
-     (oq_simulation_v1/oq_to_previa_v1/oq_to_conference_v1): esas se
-     acaban de ESCRIBIR con los datos frescos de esta misma sim —
-     invalidarlas aquí las borraría de inmediato. */
-  window._EUR_DOWNSTREAM_OF_OQ = [
-    'wprev_state_v1', 'wprev_to_fase_grupos_v1', 'wprev_to_europa_v1', 'wprev_r1_to_conference_v1'
-  ];
-
-  /* Invalida una lista de claves: borra local Y avisa al servidor con
-     reintentos (un solo POST fire-and-forget se pierde en red móvil
-     con frecuencia — mismo motivo que `_resetEuropePoolFeeders`,
-     2026-07-02). A diferencia de ese helper (reset EXPLÍCITO del
-     admin, borra también la fase que se resetea), este NUNCA toca la
-     fase que ACABA de terminar — solo invalida el sorteo YA CACHEADO
-     de la(s) fase(s) siguiente(s) para forzar su re-cómputo con el
-     pool real recién producido. */
-  window._eurInvalidateDownstream = function(keys){
-    if(!keys || !keys.length) return;
-    keys.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
-    var patch = {};
-    keys.forEach(function(k){ patch[k] = ''; });
-    function _retry(tries){
-      tries = tries || 0;
-      try {
-        fetch('/api/state', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          credentials:'same-origin',
-          body: JSON.stringify({ competition_state: patch })
-        }).then(function(r){ if(!r || !r.ok) throw new Error('bad status'); })
-          .catch(function(){ if(tries<3) setTimeout(function(){ _retry(tries+1); }, Math.pow(2,tries+1)*1000); });
-      } catch(_){
-        if(tries<3) setTimeout(function(){ _retry(tries+1); }, Math.pow(2,tries+1)*1000);
-      }
-    }
-    _retry(0);
-    try {
-      if (window._compStateSyncSnapshot && typeof window._compStateSyncSnapshot === 'object'){
-        keys.forEach(function(k){ window._compStateSyncSnapshot[k] = null; });
-      }
-    } catch(_){}
-    /* Re-render inmediato de las pantallas afectadas, por si el admin
-       ya las tiene abiertas — sin esperar a la próxima navegación. */
-    try { if (typeof window.buildOpenQualifierClas === 'function') window.buildOpenQualifierClas(); } catch(_){}
-    try { if (typeof window.buildUclPrevClas === 'function') window.buildUclPrevClas(); } catch(_){}
-    try { if (typeof window.buildUclGruposClas === 'function') window.buildUclGruposClas(); } catch(_){}
-    try { if (typeof window.buildUelGruposClas === 'function') window.buildUelGruposClas(); } catch(_){}
-    try { if (typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
+    /* Hub Champions: la caja de Previa de Champions recupera color
+       sin ✓ COMPLETADA. */
     try { if (typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
   };
 })();

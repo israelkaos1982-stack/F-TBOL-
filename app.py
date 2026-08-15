@@ -26,7 +26,6 @@ from sync_merge import (
     _count_played as _tour_count_played,
 )
 from strip_js_comments import strip_html_js_comments
-import champions_previa
 
 app = Flask(__name__)
 
@@ -353,16 +352,11 @@ DEFAULT_GLOBAL_STATE = {
     # competition_state: espejo en servidor de las claves de localStorage
     # que el navegador puede perder (modo incógnito, cache clear, cuota
     # excedida, otro dispositivo). El cliente sincroniza:
-    #   - wprev_state_v1            (Previa Champions)
-    #   - wc_state_v1               (Wild Card)
-    #   - oq_simulation_v1          (Open Qualifier)
-    #   - wc_to_open_qualifier_v1   (18 ganadores WC → OQ)
-    #   - oq_to_previa_v1           (35 → Previa)
-    #   - wprev_to_fase_grupos_v1   (11 → UCL)
-    #   - wprev_to_europa_v1        (22 → UEL)
-    #   - wprev_r1_to_conference_v1 (30 → UECL)
-    #   - oq_to_conference_v1       (legacy fallback)
-    #   - wc_to_conference_v1       (legacy fallback)
+    #   - wprev_state_v1            (Previa Champions, 4 rondas — Wild Card
+    #                                 y Open Qualifier ANIQUILADOS 2026-08-14)
+    #   - wprev_to_fase_grupos_v1   (12 → UCL, Previa R4 ganadores)
+    #   - wprev_to_europa_v1        (24 → UEL, Previa R3+R4 perdedores)
+    #   - wprev_to_conference_v1    (24 → UECL, Previa R1+R2 perdedores)
     #   - bayern_calendar_comps_v1, bayern_calendar_title_v1, bayern_cal_v2
     #                               (preferencias y eventos del calendario humano)
     #   - sc_state_v1, usc_state_v1, recopa_state_v1
@@ -373,7 +367,6 @@ DEFAULT_GLOBAL_STATE = {
     #   - superliga_state_v1, superliga_teams_v1, superliga_calendar_v1,
     #     superliga_results_v1
     #   - partidos_aplazados        (array de aplazamientos)
-    #   - wc_champ_v1, wc_champion_v1
     # Cada valor es el JSON crudo (string) tal como vive en localStorage.
     # La lista canónica vive en `SYNC_KEYS` de
     # `templates/partials/part2/misc_body_2.html` — añadir nuevas
@@ -3724,120 +3717,6 @@ def api_liga_ext_bulk_get():
     return jsonify({"ok": True, "count": len(leagues), "leagues": leagues})
 
 
-# ──────────────────────────────────────────────────────────────────────
-# PREVIA DE CHAMPIONS — Ronda 1 / Ronda 2 (champions_previa.py)
-#
-# Reglamento (36 equipos):
-#   Ronda 1 (24): 12 Open Qualifier vs. 12 clasificados directos vía liga.
-#     Ganadores (12) → Ronda 2. Perdedores (12) → Europa League (grupos).
-#   Ronda 2 (24): 12 ganadores Ronda 1 vs. 12 equipos FIJOS (ver
-#     champions_previa.RONDA2_FIXED_SLOTS). Ganadores (12) → Champions
-#     League (grupos, junto a los 28 directos). Perdedores (12) →
-#     Europa League (grupos, junto a los 12 perdedores de Ronda 1 = 24).
-#
-# El sorteo/emparejamiento en sí (`build_ronda1`/`build_ronda2`) es
-# stdlib pura en `champions_previa.py` — estos endpoints solo la
-# conectan con los datos reales de las ~54 ligas ya persistidas en
-# `GlobalState` (mismo fallback main→`_protected` que
-# `/api/liga-ext-any/<slug>`), para que el CLIENTE (que sí construye
-# los pools de Open Qualifier / clasificados directos con su propio
-# motor) pueda pedir la validación y el cuadro sin tener que resolver
-# él mismo las 12 posiciones fijas de Ronda 2.
-# ──────────────────────────────────────────────────────────────────────
-
-def _champions_previa_league_provider(slug):
-    """`league_data_provider` para `champions_previa.py`: resuelve
-    `main` → `_protected` en el servidor, igual que
-    `/api/liga-ext-any/<slug>` — una liga cuyo `main` se vació por una
-    escritura concurrente no debe reportarse como "sin datos" si su
-    snapshot `_protected` sigue teniendo el roster/clasificación real."""
-    try:
-        data = _liga_ext_load(slug)
-    except Exception:
-        data = None
-    teams = (data or {}).get("teams") if isinstance(data, dict) else None
-    if isinstance(teams, list) and len(teams) >= 2:
-        return data
-    try:
-        prow = GlobalState.query.filter_by(clave=_protected_key(slug)).first()
-    except Exception:
-        prow = None
-    if prow and prow.valor_json:
-        try:
-            pdata = json.loads(prow.valor_json)
-        except Exception:
-            pdata = None
-        if isinstance(pdata, dict) and isinstance(pdata.get("teams"), list) and len(pdata["teams"]) >= 2:
-            return pdata
-    return data
-
-
-@app.route("/api/champions-previa/ronda2-fixed-status", methods=["GET"])
-def api_champions_previa_ronda2_fixed_status():
-    """Diagnóstico de las 12 ligas FIJAS de la Ronda 2 (sin ejecutar
-    ningún emparejamiento) — equivalente al aviso ámbar "N liga(s) SIN
-    datos todavía" ya usado en el resto del proyecto. El admin puede
-    consultarlo en cualquier momento, incluso antes de tener listos los
-    pools de Open Qualifier / clasificados directos de la Ronda 1."""
-    ok, resolved, missing = champions_previa.validate_ronda2_fixed_slots(
-        _champions_previa_league_provider)
-    return jsonify({"ok": ok, "resueltos": resolved, "faltan": missing})
-
-
-@app.route("/api/champions-previa/validar-envio", methods=["POST"])
-def api_champions_previa_validar_envio():
-    """Réplica backend de "Enviar realidad de cada equipo a su Europa"
-    para la Previa de Champions: valida los 3 requisitos (pool de 12 del
-    Open Qualifier, pool de 12 de clasificados directos, y las 12 ligas
-    fijas de Ronda 2) ANTES de que el cliente ejecute ningún
-    emparejamiento automático. Body JSON:
-      {"open_qualifier": [ {"name": ...}, ... ],  // 12
-       "directos":       [ {"name": ...}, ... ]}  // 12
-    Si `ok` es False, el cliente NO debe generar los cruces — debe
-    mostrar `errores_pools` / `ligas_sin_datos` al admin."""
-    body = request.get_json(silent=True) or {}
-    oq_pool = body.get("open_qualifier") or []
-    direct_pool = body.get("directos") or []
-    if not isinstance(oq_pool, list):
-        oq_pool = []
-    if not isinstance(direct_pool, list):
-        direct_pool = []
-    ok, informe = champions_previa.validar_antes_de_enviar(
-        oq_pool, direct_pool, _champions_previa_league_provider)
-    return jsonify(dict(informe, ok=ok))
-
-
-@app.route("/api/champions-previa/ronda1", methods=["POST"])
-def api_champions_previa_ronda1():
-    """Genera el cuadro de la Ronda 1 (12 eliminatorias, Open Qualifier
-    vs. clasificados directos) a partir de los 2 pools de 12 que envía
-    el cliente. Rechaza (`ok:false`) si algún pool viene incompleto —
-    NUNCA genera un cuadro con menos de 12 eliminatorias en silencio."""
-    body = request.get_json(silent=True) or {}
-    oq_pool = body.get("open_qualifier") or []
-    direct_pool = body.get("directos") or []
-    ties, errores = champions_previa.build_ronda1(oq_pool, direct_pool)
-    if errores:
-        return jsonify({"ok": False, "errores": errores, "ties": ties}), 400
-    return jsonify({"ok": True, "ties": ties})
-
-
-@app.route("/api/champions-previa/ronda2", methods=["POST"])
-def api_champions_previa_ronda2():
-    """Genera el cuadro de la Ronda 2 (12 eliminatorias, ganadores de la
-    Ronda 1 vs. los 12 equipos FIJOS del reglamento) — los equipos fijos
-    se resuelven contra los datos REALES de las ligas en el servidor
-    (nunca hay que pasarlos a mano). Body JSON:
-      {"ganadores_ronda1": [ {"name": ...}, ... ]}  // 12
-    Rechaza (`ok:false`) si falta algún ganador o alguna liga fija."""
-    body = request.get_json(silent=True) or {}
-    winners = body.get("ganadores_ronda1") or []
-    ties, errores = champions_previa.build_ronda2(winners, _champions_previa_league_provider)
-    if errores:
-        return jsonify({"ok": False, "errores": errores, "ties": ties}), 400
-    return jsonify({"ok": True, "ties": ties})
-
-
 # Las 43 ligas menores que se fusionaron en liga-mixta-1..9 (2026-07-30/31,
 # ver templates/partials/misc_body_1.html LEAGUE_DEFAULT_NAMES). Sus slugs
 # ya NO existen en LEAGUE_DEFAULT_ZONES/NAMES ni en ninguna menu-card de
@@ -4420,8 +4299,8 @@ def api_liga_ext_restore(slug):
 #   - europe_committed_v1   (snapshot manual de pools europeos —
 #                            usuario pulsa "📤 Enviar a Europa" cuando
 #                            todas las 51 ligas están terminadas)
-#   - manual_ea_<slug>_v1   con slug ∈ {ucl, uclPrev, uclQual,
-#                                       wildcard, uel, uecl,
+#   - manual_ea_<slug>_v1   con slug ∈ {ucl, uclPrev, prevR3, prevR2,
+#                                       prevR1, uel, uecl,
 #                                       recopa, supercopa,
 #                                       intercontinental, superliga,
 #                                       verano}
@@ -4438,14 +4317,15 @@ _KV_ALLOWED_EXACT = {
     "europe_committed_v1", "bayern_trofeos_v1",
     "ucl_phase_v1", "uel_phase_v1", "uecl_phase_v1",
     # Extras manuales del reparto europeo (equipo añadido a mano por el
-    # admin a cualquiera de las 6 zonas — ucl/uclPrev/uel/uecl/uclQual/
-    # wildcard — cuando una liga no consigue hidratarse automáticamente.
-    # Independiente de manual_ea_<slug>_v1 (ese es solo para España).
-    # localStorage es solo cache; el server es la fuente de verdad para
-    # que sobreviva al borrado de datos / cambio de móvil. 2026-07-03.
+    # admin a cualquiera de las 7 zonas — ucl/uclPrev/prevR3/prevR2/
+    # prevR1/uel/uecl — cuando una liga no consigue hidratarse
+    # automáticamente. Independiente de manual_ea_<slug>_v1 (ese es solo
+    # para España). localStorage es solo cache; el server es la fuente de
+    # verdad para que sobreviva al borrado de datos / cambio de móvil.
+    # 2026-07-03.
     "eur_manual_extra_v1",
     # MODO MANUAL por zona del reparto europeo: flags booleanas
-    # {ucl,uclPrev,uel,uecl,uclQual,wildcard} — cuando el admin activa
+    # {ucl,uclPrev,prevR3,prevR2,prevR1,uel,uecl} — cuando el admin activa
     # una, esa zona ignora el cómputo automático y usa SOLO
     # eur_manual_extra_v1. Edición rara/admin, recencia simple basta.
     "eur_manual_override_v1",
@@ -4622,7 +4502,7 @@ _KV_RECENCY_BLOB_KEYS = {
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
-    r"manual_ea_(ucl|uclPrev|uclQual|wildcard|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
+    r"manual_ea_(ucl|uclPrev|prevR3|prevR2|prevR1|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
     # tx1..tx8 = 8 huecos pre-cableados para torneos añadidos por el admin.
     # spv1..spv10 / sfn1..sfn10 = Rondas Previas / Finales de Selecciones
     # (mismo motor de torneos; sync server para que el Mundial creado en
@@ -4731,8 +4611,12 @@ def _safe_json_load(s):
         return None
 
 
+# 2026-08-14: "uclQual" (Open Qualifier) y "wildcard" (Wild Card) quedan
+# ANIQUILADOS junto con esas 2 competiciones — sustituidos por las 3 zonas
+# de la Previa de Champions de 4 rondas que faltaban ("prevR3"/"prevR2"/
+# "prevR1"; "uclPrev" ya existía y ahora es la Ronda 4).
 _EUR_MANUAL_EXTRA_ZONES = (
-    "ucl", "uclPrev", "uel", "uecl", "uclQual", "wildcard",
+    "ucl", "uclPrev", "prevR3", "prevR2", "prevR1", "uel", "uecl",
     # Extendido 2026-07-07: el admin puede añadir equipos a mano también a
     # Recopa, Supercopa de Europa, Intercontinental y Mundialito de Clubes
     # desde el mismo overlay "Equipos por competición". Debe ir SIEMPRE
@@ -5450,7 +5334,7 @@ def api_kv_set(key):
             value, payload = old, row.valor_json
     # EXTRAS MANUALES del reparto europeo (eur_manual_extra_v1): el admin
     # añade equipos a mano desde varios dispositivos (móvil A añade un
-    # equipo a Wild Card, móvil B añade otro a Open Qualifier) para
+    # equipo a la Previa R1, móvil B añade otro a la Previa R2) para
     # rellenar huecos de ligas que no consiguieron hidratarse. Merge por
     # UNIÓN por (zona, nombre) — NUNCA se pierde una adición legítima de
     # otro dispositivo por un POST que aún no la conoce (mismo principio

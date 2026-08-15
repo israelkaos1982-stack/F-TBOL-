@@ -12488,18 +12488,17 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       };
       if (INTER_RD[im[1].toLowerCase()]) return INTER_RD[im[1].toLowerCase()];
     }
-    /* Previa de Champions — Ronda 2 (motor Ronda1+Ronda2 KO, 2026-07-31;
-       calendario reescrito a solo 2 días, 2026-08-02): matchKey
-       `wprevko_<r1|r2>_<idx>_<i|v>`, compKey 'ucl', lo abre
+    /* Previa de Champions — 4 rondas (R1🟤→R2⚪→R3🟡→R4🟣), obligatorio
+       2026-08-14 (ANIQUILACIÓN Wild Card/Open Qualifier): matchKey
+       `wprevko_<r1|r2|r3|r4>_<idx>_<i|v>`, compKey 'ucl', lo abre
        `_wprevKoAbrirPrevia`/`abrirWprevKo`. Sin esta rama caían a
        `MAP['ucl']` (inexistente) → null → fallback a HOY + comp
        genérica — mismo bug ya documentado en 2026-07-12 para el
-       formato anterior (fase de grupos), reproducido aquí para el
-       formato de 2 rondas KO porque el regex viejo (`wprevko_\d+_[iv]`,
-       sin segmento de ronda) nunca coincidía con el matchKey real. */
-    var wkoM = String(matchKey || '').match(/^wprevko_(r1|r2)_\d+_([iv])$/i);
+       formato de fase de grupos, y en 2026-08-02 para el de 2 rondas
+       KO (el regex sin segmento de ronda nunca coincidía). */
+    var wkoM = String(matchKey || '').match(/^wprevko_r([1-4])_\d+_([iv])$/i);
     if (wkoM) {
-      var _wkRound = (wkoM[1].toLowerCase() === 'r1') ? '1' : '2';
+      var _wkRound = wkoM[1];
       var _wkLeg = (wkoM[2].toLowerCase() === 'v') ? 'Vuelta' : 'Ida';
       return _wkLeg + ' Previa Champions — R' + _wkRound;
     }

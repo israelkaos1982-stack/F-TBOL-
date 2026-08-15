@@ -1481,9 +1481,9 @@ class TestTrofeosMerge:
 class TestEurManualExtraMerge:
     """Extras manuales del reparto europeo (eur_manual_extra_v1) — UNIÓN
     por (zona, nombre) (bug usuario 2026-07-03: tras el fix de hidratación
-    secuencial el pool de Wild Card seguía muy por debajo de 72, el admin
-    pidió poder añadir equipos a mano desde varios dispositivos sin que
-    uno se coma la adición del otro)."""
+    secuencial el pool de una zona de la Previa seguía muy por debajo de su
+    objetivo, el admin pidió poder añadir equipos a mano desde varios
+    dispositivos sin que uno se coma la adición del otro)."""
 
     URL = "/api/kv/eur_manual_extra_v1"
 
@@ -1492,39 +1492,39 @@ class TestEurManualExtraMerge:
         return v.get(zone) or []
 
     def test_first_save_persists(self, client):
-        client.post(self.URL, json={"value": {"wildcard": [
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo A", "league": "Bulgaria"}], "updatedAt": 1000}})
-        assert len(self._zone(client, "wildcard")) == 1
+        assert len(self._zone(client, "prevR1")) == 1
 
     def test_additions_from_two_devices_are_unioned(self, client):
-        # Móvil A añade un equipo a Wild Card.
-        client.post(self.URL, json={"value": {"wildcard": [
+        # Móvil A añade un equipo a la zona.
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo A", "league": "Bulgaria"}], "updatedAt": 1000}})
         # Móvil B, que aún no vio la adición de A, añade OTRO equipo distinto
         # (su copia local solo trae el suyo) — un merge por recencia pura
         # perdería "Equipo A" porque el blob de B no lo incluye.
-        client.post(self.URL, json={"value": {"wildcard": [
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo B", "league": "Albania"}], "updatedAt": 2000}})
-        names = sorted(t["name"] for t in self._zone(client, "wildcard"))
+        names = sorted(t["name"] for t in self._zone(client, "prevR1"))
         assert names == ["Equipo A", "Equipo B"]
 
     def test_zones_are_independent(self, client):
         client.post(self.URL, json={"value": {
-            "wildcard": [{"name": "Equipo A", "league": "Bulgaria"}],
-            "uclQual": [{"name": "Equipo C", "league": "Chipre"}],
+            "prevR1": [{"name": "Equipo A", "league": "Bulgaria"}],
+            "prevR2": [{"name": "Equipo C", "league": "Chipre"}],
             "updatedAt": 1000}})
-        assert len(self._zone(client, "wildcard")) == 1
-        assert len(self._zone(client, "uclQual")) == 1
+        assert len(self._zone(client, "prevR1")) == 1
+        assert len(self._zone(client, "prevR2")) == 1
         assert len(self._zone(client, "ucl")) == 0
 
     def test_duplicate_name_not_duplicated(self, client):
-        client.post(self.URL, json={"value": {"wildcard": [
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo A", "league": ""}], "updatedAt": 1000}})
         # Mismo nombre re-enviado con más información (league) — no duplica,
         # y conserva la versión con más datos.
-        client.post(self.URL, json={"value": {"wildcard": [
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo A", "league": "Bulgaria"}], "updatedAt": 2000}})
-        zone = self._zone(client, "wildcard")
+        zone = self._zone(client, "prevR1")
         assert len(zone) == 1
         assert zone[0]["league"] == "Bulgaria"
 
@@ -1534,45 +1534,45 @@ class TestEurManualExtraMerge:
         # `clearedAt`, la unión aditiva resucitaría al instante los equipos
         # borrados en cuanto CUALQUIER dispositivo (incluso el mismo, con
         # una copia local vieja) reenviara la zona con esos nombres.
-        client.post(self.URL, json={"value": {"wildcard": [
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000},
             {"name": "Equipo B", "league": "Albania", "addedAt": 1000},
         ], "updatedAt": 1000}})
-        assert len(self._zone(client, "wildcard")) == 2
+        assert len(self._zone(client, "prevR1")) == 2
         # El admin pulsa "🗑 Vaciar lista" — vacía el array y sella clearedAt.
         client.post(self.URL, json={"value": {
-            "wildcard": [], "clearedAt": {"wildcard": 2000}, "updatedAt": 2000}})
-        assert self._zone(client, "wildcard") == []
+            "prevR1": [], "clearedAt": {"prevR1": 2000}, "updatedAt": 2000}})
+        assert self._zone(client, "prevR1") == []
         # Otro dispositivo (o el mismo, con una copia local stale) reenvía
         # la zona TAL COMO estaba antes de vaciar — el vaciado debe ganar.
-        client.post(self.URL, json={"value": {"wildcard": [
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000},
         ], "updatedAt": 1500}})
-        assert self._zone(client, "wildcard") == []
+        assert self._zone(client, "prevR1") == []
 
     def test_vaciar_lista_no_bloquea_altas_posteriores(self, client):
-        client.post(self.URL, json={"value": {"wildcard": [
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000},
         ], "updatedAt": 1000}})
         client.post(self.URL, json={"value": {
-            "wildcard": [], "clearedAt": {"wildcard": 2000}, "updatedAt": 2000}})
+            "prevR1": [], "clearedAt": {"prevR1": 2000}, "updatedAt": 2000}})
         # Un equipo NUEVO añadido DESPUÉS del vaciado (addedAt > clearedAt)
         # sí debe sobrevivir con normalidad.
-        client.post(self.URL, json={"value": {"wildcard": [
+        client.post(self.URL, json={"value": {"prevR1": [
             {"name": "Equipo C", "league": "Chipre", "addedAt": 3000},
         ], "updatedAt": 3000}})
-        names = [t["name"] for t in self._zone(client, "wildcard")]
+        names = [t["name"] for t in self._zone(client, "prevR1")]
         assert names == ["Equipo C"]
 
     def test_vaciar_lista_no_afecta_otras_zonas(self, client):
         client.post(self.URL, json={"value": {
-            "wildcard": [{"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000}],
-            "uclQual": [{"name": "Equipo C", "league": "Chipre", "addedAt": 1000}],
+            "prevR1": [{"name": "Equipo A", "league": "Bulgaria", "addedAt": 1000}],
+            "prevR2": [{"name": "Equipo C", "league": "Chipre", "addedAt": 1000}],
             "updatedAt": 1000}})
         client.post(self.URL, json={"value": {
-            "wildcard": [], "clearedAt": {"wildcard": 2000}, "updatedAt": 2000}})
-        assert self._zone(client, "wildcard") == []
-        assert len(self._zone(client, "uclQual")) == 1
+            "prevR1": [], "clearedAt": {"prevR1": 2000}, "updatedAt": 2000}})
+        assert self._zone(client, "prevR1") == []
+        assert len(self._zone(client, "prevR2")) == 1
 
 
 # ---------------------------------------------------------------------------

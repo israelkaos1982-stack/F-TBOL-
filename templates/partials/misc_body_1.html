@@ -16385,8 +16385,17 @@ window._hdrCleanCache = function(){
     if (resN && targets.indexOf(resN) === -1) targets.push(resN);
     /* Liga EA Sports tiene preferencia (es el slug "principal" de
        todos los partidos de Liga EA, Champions, etc.). Si no está
-       ahí, usamos cualquier ligaExt_<slug> como fallback. */
-    var preferred = null, fallback = null;
+       ahí, usamos cualquier ligaExt_<slug> como fallback. DENTRO de
+       cada bucket (preferred/fallback), si el nombre aparece
+       DUPLICADO (fila residual/legacy de un movimiento de equipo,
+       ver CLAUDE.md "Un club IA con el mismo nombre... le robaba el
+       escudo y la plantilla" / "_fixupInterHumanoSlug"), nos quedamos
+       SIEMPRE con la de MÁS jugadores — nunca con la primera que
+       aparezca por orden de enumeración (bug 2026-08-15: un duplicado
+       pobre podía "tapar" ante el picker del partido una plantilla
+       real que seguía intacta en disco, indistinguible para el admin
+       de "la plantilla ha desaparecido"). */
+    var preferred = null, preferredRichness = -1, fallback = null, fallbackRichness = -1;
     try {
       var _scanEntries = _lextGetTeamScanEntries();
       for (var i = 0; i < _scanEntries.length; i++) {
@@ -16402,14 +16411,13 @@ window._hdrCleanCache = function(){
           }
           if (!hit) continue;
           if (!Array.isArray(t.players) || !t.players.length) continue;
+          var richness = t.players.length;
           if (k === 'ligaExt_liga-ea-sports') {
-            preferred = t;
-            break; /* Liga EA gana sin más */
-          } else if (!fallback) {
-            fallback = t;
+            if (richness > preferredRichness) { preferred = t; preferredRichness = richness; }
+          } else if (richness > fallbackRichness) {
+            fallback = t; fallbackRichness = richness;
           }
         }
-        if (preferred) break;
       }
     } catch(_){}
     /* LIGA_CACHE en memoria (2026-06-25): ligas bajadas del SERVIDOR que
@@ -43033,12 +43041,12 @@ window._hdrCleanCache = function(){
      el nombre de la liga. `data-slug` fija el slug interno (ver
      `_EXTRA_LEAGUE_SEEDS`, seed automático de 18-20 equipos reales por
      liga). -->
-<div class="menu-card" data-slug="germanika" onclick="" style="background:linear-gradient(135deg,#1a1a1a,#3a3a3a,#c9a227,#1a1a1a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Germanika</span></div>
-<div class="menu-card" data-slug="hellas-slavia" onclick="" style="background:linear-gradient(135deg,#0d3b66,#1e5a8a,#0d3b66);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Hellas Slavia</span></div>
-<div class="menu-card" data-slug="danubio-nordica" onclick="" style="background:linear-gradient(135deg,#5a0a0a,#8a1a1a,#5a0a0a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Danubio Nórdica</span></div>
-<div class="menu-card" data-slug="adriatico-oriental" onclick="" style="background:linear-gradient(135deg,#7a1010,#10307a,#7a1010);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Adriático Oriental</span></div>
-<div class="menu-card" data-slug="balkanica" onclick="" style="background:linear-gradient(135deg,#0a5a2a,#7a1010,#0a5a2a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Balkanica</span></div>
-<div class="menu-card" data-slug="eurasia" onclick="" style="background:linear-gradient(135deg,#10205a,#7a1010,#10205a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eurasia</span></div>
+<div class="menu-card" data-slug="germanika" onclick="" style="background:linear-gradient(135deg,#1a1a1a,#3a3a3a,#c9a227,#1a1a1a);border-color:rgba(255,255,255,.18);"><img class="mc-img" alt="Germanika" src="/static/img/ligas-nuevas/germanika.png" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><span class="mc-emoji" style="display:none;">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Germanika</span></div>
+<div class="menu-card" data-slug="hellas-slavia" onclick="" style="background:linear-gradient(135deg,#0d3b66,#1e5a8a,#0d3b66);border-color:rgba(255,255,255,.18);"><img class="mc-img" alt="Hellas Slavia" src="/static/img/ligas-nuevas/hellas-slavia.png" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><span class="mc-emoji" style="display:none;">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Hellas Slavia</span></div>
+<div class="menu-card" data-slug="danubio-nordica" onclick="" style="background:linear-gradient(135deg,#5a0a0a,#8a1a1a,#5a0a0a);border-color:rgba(255,255,255,.18);"><img class="mc-img" alt="Danubio Nórdica" src="/static/img/ligas-nuevas/danubio-nordica.png" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><span class="mc-emoji" style="display:none;">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Danubio Nórdica</span></div>
+<div class="menu-card" data-slug="adriatico-oriental" onclick="" style="background:linear-gradient(135deg,#7a1010,#10307a,#7a1010);border-color:rgba(255,255,255,.18);"><img class="mc-img" alt="Adriático Oriental" src="/static/img/ligas-nuevas/adriatico-oriental.png" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><span class="mc-emoji" style="display:none;">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Adriático Oriental</span></div>
+<div class="menu-card" data-slug="balkanica" onclick="" style="background:linear-gradient(135deg,#0a5a2a,#7a1010,#0a5a2a);border-color:rgba(255,255,255,.18);"><img class="mc-img" alt="Balkanica" src="/static/img/ligas-nuevas/balkanica.png" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><span class="mc-emoji" style="display:none;">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Balkanica</span></div>
+<div class="menu-card" data-slug="eurasia" onclick="" style="background:linear-gradient(135deg,#10205a,#7a1010,#10205a);border-color:rgba(255,255,255,.18);"><img class="mc-img" alt="Eurasia" src="/static/img/ligas-nuevas/eurasia.png" onerror="this.style.display='none';this.nextElementSibling.style.display='';"><span class="mc-emoji" style="display:none;">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Eurasia</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#0a4f8c,#2da651,#c83737);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🌎</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Resto Mundo</span></div>
 </div>
 <!-- Botón "👁 Ver / Añadir equipos por competición" (PIN admin 747).
@@ -48019,6 +48027,11 @@ https://api.sofascore.app/api/v1/team/44/image
           try { window._lsSetSafe(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
         }
       } catch(_){}
+      /* Si tras la recuperación LOCAL algún equipo sigue con una
+         plantilla sospechosamente pequeña, probamos el SERVIDOR
+         (async, throttle de 1 por slug/sesión) — ver comentario de
+         `_lextServerTeamHeal`. */
+      try { if (_lextAnyTeamSuspiciouslyShrunk(LIGA_CACHE[k])) _lextServerTeamHeal(k); } catch(_){}
       /* Si la cache YA está poblada pero VACÍA (un intento de
          hidratación anterior falló — red, timeout, servidor sin
          datos EN ESE momento — y dejó `{teams:[],results:[]}` puesto),
@@ -48094,6 +48107,11 @@ https://api.sofascore.app/api/v1/team/44/image
           }
         } catch(_){}
         LIGA_CACHE[k] = parsed;
+        /* Si tras la recuperación LOCAL algún equipo sigue con una
+           plantilla sospechosamente pequeña, probamos el SERVIDOR
+           (async, throttle de 1 por slug/sesión) — ver comentario de
+           `_lextServerTeamHeal`. */
+        try { if (_lextAnyTeamSuspiciouslyShrunk(parsed)) _lextServerTeamHeal(k); } catch(_){}
         /* Un `main` persistido VACÍO (0 equipos, residuo de un fetch
            antiguo) NO debe cerrar la puerta a la hidratación — solo
            `_lextTriggerBgHydrate` decide (guard `__bgHydrating_`), así
@@ -49618,6 +49636,186 @@ https://api.sofascore.app/api/v1/team/44/image
      aunque estuvieran ahí. Ahora el hot-path también comprueba
      `_lextHasRosterOrShield` y el bucle rellena roster + escudos además
      de resultados. */
+  /* ── AUTO-REPARACIÓN de plantilla ENCOGIDA por equipo (obligatorio,
+     2026-08-15) ────────────────────────────────────────────────────
+     Bug crítico (usuario, «Atlético Madrid»): al añadir un jugador
+     NUEVO durante el LIVE de un partido (gm-modal, botón "+ AÑADIR
+     EVENTO → 👤 AÑADIR JUGADOR" → `_gmFindAndPersistPlayer`, o el
+     alta desde "editar evento" → `_addManualPlayerToRoster`), ambos
+     escritores persistían con un `_lsSetSafe` DIRECTO — sin pasar por
+     `saveData` (el chokepoint único de `ligaExt_<slug>`) — así que
+     NUNCA actualizaban el snapshot `_protected` ni invalidaban el
+     cache de 4s de `_lextFindTeamInAnyLigaExt` (el escaneo que usa el
+     wrapper de `sqFromRegistry`/`sqFromRegistryFull`, la fuente del
+     picker de eventos del propio partido). Combinado con que ese
+     mismo escaneo (y `ligaEaBuildEngineOverrides`) podían resolver una
+     fila DUPLICADA/residual del mismo nombre por "primera/última que
+     aparezca" en vez de por riqueza (ya corregido arriba y en
+     `ligaEaBuildEngineOverrides`), el resultado visible era: la
+     plantilla ENTERA de un club desaparecía del picker en vivo Y del
+     editor, dejando solo los jugadores añadidos en ese momento —
+     indistinguible, para el usuario, de "se ha perdido la plantilla".
+     El `_protected` (que SÍ sigue actualizándose en cada `saveData`
+     REAL — el editor de plantilla, "Editar equipos", etc.) casi
+     siempre conserva la plantilla completa de ANTES del incidente,
+     porque los 2 escritores del bug nunca llegaban a tocarlo. Estas
+     2 funciones detectan y REPARAN ese patrón exacto en cada lectura:
+     un equipo con una plantilla mucho más pequeña que sus compañeros
+     de la MISMA liga se UNE (nunca se pisa) con la copia protegida —
+     los jugadores nuevos que el bug sí llegó a guardar se conservan,
+     los que "desaparecieron" se restauran. */
+  function _lextAnyTeamSuspiciouslyShrunk(data){
+    if (!data || !Array.isArray(data.teams) || data.teams.length < 2) return false;
+    var lens = [];
+    for (var i = 0; i < data.teams.length; i++){
+      var t = data.teams[i];
+      var n = (t && Array.isArray(t.players)) ? t.players.length : 0;
+      if (n > 0) lens.push(n);
+    }
+    if (lens.length < 2) return false;
+    lens.sort(function(a,b){ return a - b; });
+    var median = lens[Math.floor(lens.length / 2)];
+    /* Liga con plantillas ya pequeñas por diseño (p.ej. solo se
+       cargaron 3-4 jugadores clave) — nada que comparar, no aplica. */
+    if (median < 6) return false;
+    for (var j = 0; j < lens.length; j++){
+      if (lens[j] <= 4 && lens[j] < median * 0.35) return true;
+    }
+    return false;
+  }
+  function _lextTeamCanon(s){
+    var x = String(s||'').trim().toLowerCase();
+    try { x = x.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch(_){}
+    return x;
+  }
+  function _lextRestoreShrunkTeamRosters(data, source){
+    if (!data || !Array.isArray(data.teams)) return false;
+    if (!source || !Array.isArray(source.teams)) return false;
+    var srcByName = {};
+    source.teams.forEach(function(t){
+      if (!t || !t.name || !Array.isArray(t.players) || !t.players.length) return;
+      var key = _lextTeamCanon(t.name);
+      if (!srcByName[key] || t.players.length > srcByName[key].players.length) {
+        srcByName[key] = t;
+      }
+    });
+    var changed = false;
+    data.teams.forEach(function(t){
+      if (!t || !t.name) return;
+      var cur = Array.isArray(t.players) ? t.players : [];
+      var srcTeam = srcByName[_lextTeamCanon(t.name)];
+      if (!srcTeam) return;
+      var srcPlayers = srcTeam.players;
+      if (srcPlayers.length <= cur.length) return;
+      /* Umbral: solo actuamos ante una diferencia GRANDE — una
+         diferencia de 1-2 jugadores puede ser un borrado deliberado
+         reciente del admin, que NUNCA debe "resucitarse". */
+      if (srcPlayers.length - cur.length < 3 && cur.length >= srcPlayers.length * 0.5) return;
+      var curNames = {};
+      cur.forEach(function(p){ if (p && p.name) curNames[_lextTeamCanon(p.name)] = true; });
+      var merged = cur.slice();
+      srcPlayers.forEach(function(p){
+        if (!p || !p.name) return;
+        var nk = _lextTeamCanon(p.name);
+        if (curNames[nk]) return;
+        merged.push(p);
+        curNames[nk] = true;
+      });
+      if (merged.length > cur.length){
+        t.players = merged;
+        changed = true;
+        try { console.warn('[ligaExt] plantilla de "'+t.name+'" restaurada desde copia protegida ('+cur.length+' → '+merged.length+' jugadores) — auto-reparación 2026-08-15.'); } catch(_){}
+      }
+    });
+    return changed;
+  }
+  /* Slugs para los que ya se intentó la reparación de arriba y no
+     quedó nada más que restaurar (ni `_protected` ni los snapshots
+     tenían más jugadores) — evita reabrir/parsear esas copias en
+     CADA `loadData` de una liga sin nada que recuperar. Se limpia
+     solo al recargar la página (no persiste). */
+  var _lextTeamFixGivenUp = {};
+
+  /* ── REPARACIÓN vía SERVIDOR (obligatorio, 2026-08-15 #2) ──────────
+     La reparación de arriba (`_lextRestoreShrunkTeamRosters`) SOLO mira
+     copias LOCALES (`_protected`/snapshots). Si, DESPUÉS del incidente,
+     el usuario siguió jugando/simulando otros partidos de la MISMA
+     liga, cualquier `saveData` normal posterior vuelve a MIRROREAR
+     `main` → `_protected` — y como `main` ya tenía el equipo encogido
+     en memoria (`LIGA_CACHE`), ese mirror posterior propaga la
+     corrupción a `_protected` local TAMBIÉN, dejando sin nada que
+     restaurar en el propio dispositivo.
+     El snapshot `_protected` DEL SERVIDOR es distinto: el endpoint
+     `/api/liga-ext-protected/<slug>` (POST) es MONOTÓNICO por el Nº
+     TOTAL de jugadores de TODA la liga — rechaza (409) cualquier
+     guardado con menos jugadores en total que el ya almacenado. El
+     escritor que causó este bug (`_lsSetSafe` directo, ya corregido
+     arriba) NUNCA llegó a POSTear a este endpoint, así que hay
+     bastantes posibilidades de que la copia del SERVIDOR conserve la
+     plantilla completa aunque la local ya no la tenga. Como último
+     recurso también se prueba el `main` del servidor, por si algún
+     OTRO dispositivo nunca vio la corrupción. Async y con throttle de
+     sesión (una vez por slug) — `loadData` sigue siendo síncrono, esto
+     solo repinta si encuentra y restaura algo. */
+  var _lextServerTeamHealTried = {};
+  function _lextReRenderSquadScreensIfOpen(k){
+    try {
+      if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
+        try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(LIGA_CACHE[k]); } catch(_){}
+        try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
+        try {
+          var ovT = document.getElementById('lext-ov-teams');
+          if (ovT && ovT.classList.contains('show') && typeof renderTeamsList === 'function') renderTeamsList();
+        } catch(_){}
+        try {
+          var ovS = document.getElementById('lext-ov-squad');
+          if (ovS && ovS.classList.contains('show') && typeof renderSquadList === 'function') renderSquadList();
+        } catch(_){}
+      }
+    } catch(_){}
+    try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(_){}
+  }
+  function _lextServerTeamHeal(k){
+    if (_lextServerTeamHealTried[k]) return;
+    _lextServerTeamHealTried[k] = true;
+    function _fetchJson(url, onDone){
+      var ctrl = null, to = null;
+      try { ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){ ctrl = null; }
+      if (ctrl) { try { to = setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 12000); } catch(_){ to = null; } }
+      try {
+        fetch(url, ctrl ? {signal:ctrl.signal} : undefined).then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(j){ if (to) { try { clearTimeout(to); } catch(_){} } onDone(j); })
+          .catch(function(){ if (to) { try { clearTimeout(to); } catch(_){} } onDone(null); });
+      } catch(_){ onDone(null); }
+    }
+    function _applyIfRicher(serverData){
+      if (!serverData || !Array.isArray(serverData.teams)) return false;
+      var d = LIGA_CACHE[k];
+      if (!d || !Array.isArray(d.teams)) return false;
+      var changed = false;
+      try { changed = _lextRestoreShrunkTeamRosters(d, serverData); } catch(_){}
+      return changed;
+    }
+    _fetchJson('/api/liga-ext-protected/'+encodeURIComponent(k), function(pj){
+      var changed = _applyIfRicher(pj && pj.data);
+      function _finish(changed2){
+        if (!changed2) return;
+        try { console.warn('[ligaExt] '+k+': plantilla restaurada desde el SERVIDOR (protected/main) — auto-reparación 2026-08-15.'); } catch(_){}
+        try {
+          if (typeof window.saveData === 'function') window.saveData(k, LIGA_CACHE[k]);
+          else window._lsSetSafe(storeKey(k), JSON.stringify(LIGA_CACHE[k]));
+        } catch(_){}
+        _lextReRenderSquadScreensIfOpen(k);
+      }
+      if (!_lextAnyTeamSuspiciouslyShrunk(LIGA_CACHE[k])) { _finish(changed); return; }
+      /* El protected del servidor no bastó (o no existía) — probamos
+         el `main` del servidor como último recurso. */
+      _fetchJson('/api/liga-ext/'+encodeURIComponent(k), function(mj){
+        var changed2 = _applyIfRicher(mj && mj.data);
+        _finish(changed || changed2);
+      });
+    });
+  }
   function _lextRecoverResultsFromBackups(k, data){
     if (!data) return false;
     /* Hot-path barato: si el main ya trae clasificación Y plantilla/
@@ -49625,8 +49823,10 @@ https://api.sofascore.app/api/v1/team/44/image
        fetchData con el servidor). */
     var needResults = !(Array.isArray(data.results) && data.results.length);
     var needRoster = !_lextHasRosterOrShield(data);
-    if (!needResults && !needRoster) return false;
+    var needTeamFix = !_lextTeamFixGivenUp[k] && _lextAnyTeamSuspiciouslyShrunk(data);
+    if (!needResults && !needRoster && !needTeamFix) return false;
     var restored = false;
+    var teamFixChanged = false;
     try {
       var srcs = [];
       try {
@@ -49649,7 +49849,9 @@ https://api.sofascore.app/api/v1/team/44/image
         try { if (needRoster && _lextBackfillRoster(data, srcs[i])) restored = true; } catch(_){}
         try { if (needRoster && _lextBackfillShields(data, srcs[i])) restored = true; } catch(_){}
         try { if (needRoster && _lextBackfillAlias(data, srcs[i])) restored = true; } catch(_){}
+        try { if (needTeamFix && _lextRestoreShrunkTeamRosters(data, srcs[i])) { restored = true; teamFixChanged = true; } } catch(_){}
       }
+      if (needTeamFix && !teamFixChanged) _lextTeamFixGivenUp[k] = true;
       if (restored) {
         try { console.warn('[ligaExt] '+k+': clasificación del main vacía — restaurada desde copia durable local ('+((data.results&&data.results.length)||0)+' resultados).'); } catch(_){}
       }
@@ -55982,6 +56184,15 @@ https://api.sofascore.app/api/v1/team/44/image
        de todas las ligas, Copa del Rey, HvIA, etc.) puedan leerlo
        sin depender del storage ligaExt_*. */
     window._LIGA_EA_TEAM_STATS = {};
+    /* Richness por nombre de equipo YA volcado a `squads` — si el
+       nombre aparece DUPLICADO dentro de `teams` (fila residual/legacy,
+       ver CLAUDE.md), `squads[t.name] = simSquad` de más abajo pisaba
+       SIEMPRE con la ÚLTIMA fila procesada, aunque tuviera menos
+       jugadores que una anterior con el mismo nombre — indistinguible
+       para el picker del partido de "la plantilla real ha
+       desaparecido" (bug 2026-08-15). Ahora solo se pisa si la nueva
+       fila trae MÁS jugadores que la ya volcada. */
+    var _squadRichnessByName = {};
 
     teams.forEach(function(t){
       if(!t || !t.name) return;
@@ -56058,7 +56269,11 @@ https://api.sofascore.app/api/v1/team/44/image
           simSquad.push(entry);
         });
       });
-      squads[t.name] = simSquad;
+      var _thisRichness = Array.isArray(t.players) ? t.players.length : 0;
+      if (!(t.name in _squadRichnessByName) || _thisRichness >= _squadRichnessByName[t.name]) {
+        _squadRichnessByName[t.name] = _thisRichness;
+        squads[t.name] = simSquad;
+      }
       /* Propagar stats del equipo al sidecar global + aliases.
          Así `_teamOffense('Villarreal')` y `_teamOffense('Villarreal CF')`
          devuelven lo mismo, y el motor de cualquier liga lo encuentra. */
@@ -58106,6 +58321,118 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   window._fixupExtraLeagueZonesV1 = _fixupExtraLeagueZonesV1;
   try { _fixupExtraLeagueZonesV1(); } catch(_){}
+
+  /* ── FIXUP ONE-SHOT: restaura la plantilla OFICIAL del Atlético
+     Madrid tras el bug "añadir jugador en vivo borra la plantilla"
+     (2026-08-15) — el usuario proporcionó la lista oficial completa
+     de la temporada 2026-27 (23 jugadores de plantilla activa; los 3
+     cedidos — Moldovan, Lenglet — quedan fuera, no juegan con el
+     primer equipo). Corre UNA vez por dispositivo (flag), preservando
+     las estadísticas YA acumuladas (pj/gol/mvp/...) de Morten Hjulmand
+     y Lee Kang-In — los 2 únicos jugadores que sí llegaron a jugar
+     partidos reales en el estado corrupto — y creando el resto desde
+     cero (0 estadísticas, ya que ese roster desapareció del picker
+     mientras estuvo corrupto y no pudo acumular nada). */
+  function _fixupAtletiRosterRestoreV1(){
+    var FLAG = 'ftbol_fixup_atleti_roster_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    try {
+      var raw = localStorage.getItem('ligaExt_liga-ea-sports');
+      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
+      var data = JSON.parse(raw);
+      var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+      var t = null;
+      for (var i = 0; i < teams.length; i++) {
+        if (teams[i] && String(teams[i].name || '').trim().toLowerCase() === 'atlético madrid') { t = teams[i]; break; }
+      }
+      if (!t) {
+        for (var j = 0; j < teams.length; j++) {
+          var nmChk = String(teams[j] && teams[j].name || '').trim().toLowerCase();
+          if (nmChk.indexOf('atl') === 0 && nmChk.indexOf('madrid') !== -1) { t = teams[j]; break; }
+        }
+      }
+      if (!t) { window._lsSetSafe(FLAG, '1'); return; }
+      /* [dorsal, nombre, posición, poder, flags] — dado por el usuario. */
+      var OFFICIAL = [
+        ['13', 'Jan Oblak',       'POR', 86, {elite:true}],
+        ['1',  'J. Musso',        'POR', 78, {}],
+        ['22', 'A. Grimaldo',     'DEF', 85, {elite:true}],
+        ['17', 'Dávid Hancko',    'DEF', 84, {elite:true}],
+        ['14', 'M. Llorente',     'DEF', 84, {elite:true, natGoal:true}],
+        ['24', 'R. Le Normand',   'DEF', 83, {}],
+        ['2',  'J. Giménez',      'DEF', 83, {elite:true}],
+        ['18', 'Marc Pubill',     'DEF', 79, {}],
+        ['3',  'Matteo Ruggeri',  'DEF', 78, {}],
+        ['6',  'Koke',            'MED', 83, {captain:true, elite:true, natGoal:true}],
+        ['23', 'M. Hjulmand',     'MED', 83, {elite:true}],
+        ['7',  'Kang-In Lee',     'MED', 82, {elite:true, natGoalPro:true}],
+        ['8',  'Pablo Barrios',   'MED', 81, {}],
+        ['5',  'Johnny Cardoso',  'MED', 80, {}],
+        ['21', 'Obed Vargas',     'MED', 77, {}],
+        ['4',  'Rodrigo Mendoza', 'MED', 76, {}],
+        ['15', 'Thomas Lemar',    'MED', 75, {}],
+        ['19', 'Julián Alvarez',  'DEL', 88, {freeKick:true, penalty:true, elite:true, natGoalPro:true}],
+        ['11', 'A. Lookman',      'DEL', 84, {elite:true, natGoal:true}],
+        ['10', 'Álex Baena',      'DEL', 83, {elite:true}],
+        ['9',  'A. Sørloth',      'DEL', 82, {}],
+        ['20', 'Giuliano',        'DEL', 80, {}],
+        ['12', 'Carlos Martín',   'DEL', 77, {}]
+      ];
+      /* Alias explícitos para conservar el `id`/estadísticas de
+         jugadores que existían en el roster corrupto con una grafía o
+         un orden nombre-apellido distinto ("Lee Kang-In" del picker en
+         vivo ↔ "Kang-In Lee" de la lista oficial; "Morten Hjulmand" ↔
+         "M. Hjulmand"). */
+      var ALIASES = { 'm hjulmand': 'morten hjulmand', 'kang in lee': 'lee kang in' };
+      function _norm(s) {
+        var x = String(s || '').trim().toLowerCase();
+        try { x = x.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (_) {}
+        return x.replace(/[^a-z0-9]+/g, ' ').trim();
+      }
+      var existingByName = {};
+      (Array.isArray(t.players) ? t.players : []).forEach(function(p) {
+        if (p && p.name) existingByName[_norm(p.name)] = p;
+      });
+      var newPlayers = OFFICIAL.map(function(row) {
+        var num = row[0], name = row[1], pos = row[2], power = row[3], flags = row[4] || {};
+        var key = _norm(name);
+        var existing = existingByName[key] || existingByName[ALIASES[key]];
+        var out = {
+          id: existing ? existing.id : ('p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7)),
+          name: existing ? existing.name : name,
+          num: num,
+          pos: pos,
+          power: power,
+          captain: !!flags.captain,
+          freeKick: !!flags.freeKick,
+          penalty: !!flags.penalty,
+          elite: !!flags.elite,
+          natGoal: !!flags.natGoal,
+          natGoalPro: !!flags.natGoalPro,
+          pj: existing ? (existing.pj || 0) : 0,
+          gol: existing ? (existing.gol || 0) : 0,
+          pen: existing ? (existing.pen || 0) : 0,
+          fk: existing ? (existing.fk || 0) : 0,
+          mvp: existing ? (existing.mvp || 0) : 0,
+          ta: existing ? (existing.ta || 0) : 0,
+          tr: existing ? (existing.tr || 0) : 0,
+          imbat: existing ? (existing.imbat || 0) : 0,
+          penSaved: existing ? (existing.penSaved || 0) : 0
+        };
+        return out;
+      });
+      t.players = newPlayers;
+      t.updatedAt = Date.now();
+      if (typeof window.saveData === 'function') window.saveData('liga-ea-sports', data);
+      else window._lsSetSafe('ligaExt_liga-ea-sports', JSON.stringify(data));
+      try { console.warn('[fixup] Plantilla oficial del Atlético Madrid restaurada (' + newPlayers.length + ' jugadores).'); } catch (_) {}
+    } catch (e) {
+      try { console.warn('[fixup] atleti roster restore falló', e); } catch (_) {}
+    }
+    try { window._lsSetSafe(FLAG, '1'); } catch (_) {}
+  }
+  window._fixupAtletiRosterRestoreV1 = _fixupAtletiRosterRestoreV1;
+  try { _fixupAtletiRosterRestoreV1(); } catch (_) {}
   /* Defensa adicional: re-sembrar al abrir si el storage quedó vacío. */
   (function(){
     var _origOpenX = window.openLigaExt;

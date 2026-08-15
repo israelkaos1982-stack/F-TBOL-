@@ -125,6 +125,181 @@ botones del overlay.
    automáticamente en esta lista (vía `_eurAllLeagueSlugsSorted()`) —
    no hay lista hardcodeada de slugs que mantener aparte.
 
+## Añadir un jugador NUEVO en vivo (gm-modal) NUNCA hace desaparecer el resto de la plantilla — persistir SIEMPRE vía `saveData`, nunca `_lsSetSafe` suelto (obligatorio, 2026-08-15)
+
+**Bug crítico (usuario 2026-08-15, «Atlético Madrid»)**: al añadir un
+jugador NUEVO durante el LIVE de un partido (botón "+ AÑADIR EVENTO
+→ 👤 AÑADIR JUGADOR"), a partir de ese momento el picker de eventos —
+Y el editor "Editar equipos" tras el partido — mostraban **SOLO** los
+jugadores recién añadidos (Morten Hjulmand, Lee Kang-In); el resto de
+la plantilla real del Atlético Madrid, con sus estadísticas
+acumuladas (PJ/goles/tarjetas), desapareció por completo "en todos
+los lados". Petición explícita: "recupera la plantilla".
+
+### Causa raíz (3 puntos combinados)
+
+1. **`window._gmFindAndPersistPlayer`** (`part2/misc_body_2.html`, el
+   handler de "+ AÑADIR JUGADOR") y **`window._addManualPlayerToRoster`**
+   (`static/js/index.bundle.js`, el alta desde "editar evento") persistían
+   con un **`window._lsSetSafe(...)` DIRECTO**, saltándose por completo
+   `saveData` — el chokepoint único de `ligaExt_<slug>`
+   (`misc_body_1.html`). Esto significaba que la alta NUNCA:
+   - actualizaba el snapshot `_protected` (el anti-wipe monotónico que
+     SÍ mantiene al día cualquier guardado que pase por `saveData`),
+   - invalidaba `_lextInvalidateTeamScanCache()` (el cache de 4s de
+     `_lextFindTeamInAnyLigaExt`, el escaneo que usa el wrapper de
+     `sqFromRegistry`/`sqFromRegistryFull` — la fuente ÚNICA del picker
+     de eventos del propio partido),
+   - se subía al servidor (el write directo no tocaba la red en
+     absoluto para `ligaExt_*`, a diferencia del camino normal del
+     editor).
+2. **`_lextFindTeamInAnyLigaExt`** (`misc_body_1.html`, el wrapper que
+   envuelve `sqFromRegistry`/`sqFromRegistryFull`) resolvía el equipo
+   "Liga EA gana sin más" con un `break` en el **PRIMER** hit dentro de
+   `ligaExt_liga-ea-sports`, sin comparar riqueza — si el nombre
+   aparecía DUPLICADO dentro de esa misma liga (fila residual/legacy,
+   patrón ya documentado varias veces en este archivo), el picker podía
+   resolver contra la fila EQUIVOCADA sin que la plantilla real hubiera
+   desaparecido de disco.
+3. **`ligaEaBuildEngineOverrides`** (`misc_body_1.html`, el bridge que
+   pobla `SQUAD_REGISTRY` desde `ligaExt_liga-ea-sports`) hacía
+   `squads[t.name] = simSquad` en un `forEach` plano — si el nombre
+   aparecía duplicado, la ÚLTIMA fila procesada ganaba SIEMPRE, aunque
+   tuviera menos jugadores que una anterior con el mismo nombre.
+
+Los 3 puntos son el mismo patrón ya prohibido en este archivo para
+otras funciones ("recorrer TODAS las coincidencias y elegir la de MÁS
+jugadores... nunca la primera/última que aparezca por orden de
+enumeración") — aquí se habían quedado sin ese fix.
+
+### Fix
+
+- `_gmFindAndPersistPlayer` y `_addManualPlayerToRoster` persisten
+  ahora vía `window.saveData(slug, data)` cuando está cargado (siempre,
+  en la práctica — `misc_body_1.html` se incluye ANTES que
+  `part2/misc_body_2.html` e `index.bundle.js`), con fallback al
+  escritor directo (+ mirror manual de `_protected`) solo si `saveData`
+  no estuviera disponible.
+- `_lextFindTeamInAnyLigaExt` y `ligaEaBuildEngineOverrides` ya NO se
+  quedan con la primera/última fila que encuentran por nombre — comparan
+  riqueza (`players.length`) y se quedan SIEMPRE con la más rica, igual
+  que `_gmFindAndPersistPlayer` desde 2026-08-03.
+- **Auto-reparación por equipo** (`_lextAnyTeamSuspiciouslyShrunk` +
+  `_lextRestoreShrunkTeamRosters`, `misc_body_1.html`, enganchadas en
+  `_lextRecoverResultsFromBackups`, que ya corre en CADA `loadData`):
+  si un equipo tiene una plantilla MUCHO más pequeña que sus compañeros
+  de la MISMA liga (mediana de la liga ≥6, el equipo sospechoso ≤4 y
+  <35% de esa mediana), se UNE (nunca se pisa) con la copia protegida
+  (`_protected`/snapshots) — los jugadores nuevos que sí se guardaron se
+  conservan, los que "desaparecieron" se restauran. Solo actúa si la
+  diferencia es GRANDE (≥3 Y por debajo del 50% de la copia protegida)
+  para no resucitar un borrado deliberado reciente del admin. Esto
+  repara automáticamente, en la próxima carga, cualquier plantilla ya
+  afectada por este bug (como la del Atlético Madrid del reporte)
+  siempre que `_protected` conserve la copia previa — que es el caso
+  normal, ya que los 2 escritores del bug nunca la tocaban.
+
+### Refuerzo (mismo día, #2) — la reparación LOCAL no basta si el usuario siguió jugando: reparación vía SERVIDOR
+
+**Bug (usuario, mismo Atlético Madrid, tras desplegar el fix de
+arriba)**: la plantilla seguía sin recuperarse — "no me has recuperado
+todos los jugadores del Atlético Madrid ni sus estadísticas".
+
+**Causa raíz**: el fix de arriba solo mira copias LOCALES
+(`_protected`/snapshots). Si el usuario siguió jugando/simulando OTROS
+partidos de la MISMA liga DESPUÉS del incidente, cualquier `saveData`
+normal posterior vuelve a mirrorear `main` → `_protected` — y como
+`main` ya tenía el equipo encogido en memoria (`LIGA_CACHE`), ese
+mirror posterior **propaga la corrupción a `_protected` LOCAL
+también**, dejando sin nada que restaurar en el propio dispositivo.
+
+**Fix — `_lextServerTeamHeal`**: cuando la reparación local no basta
+(el equipo sigue sospechosamente pequeño), se pregunta AL SERVIDOR,
+async, con throttle de 1 vez por slug/sesión:
+1. **`/api/liga-ext-protected/<slug>`** — el `_protected` DEL
+   SERVIDOR es MONOTÓNICO por el Nº TOTAL de jugadores de TODA la
+   liga (`app.py`, `api_liga_ext_protected_post`, rechaza 409 con
+   menos jugadores en total). El escritor que causó el bug nunca
+   llegó a POSTear aquí, así que esta copia tiene bastantes
+   probabilidades de conservar la plantilla completa aunque la local
+   ya no la tenga.
+2. Si eso no basta, el `main` del servidor — por si OTRO dispositivo
+   nunca vio la corrupción.
+
+Si encuentra algo más rico, lo fusiona (unión, nunca pisa) con
+`_lextRestoreShrunkTeamRosters`, persiste vía `saveData` y repinta
+la pantalla de plantilla/clasificación si sigue abierta
+(`_lextReRenderSquadScreensIfOpen`).
+
+### Refuerzo (mismo día, #3) — ninguna copia (local ni servidor) conservaba ya la plantilla: fixup ONE-SHOT con el roster oficial que dio el usuario
+
+Ni la reparación local ni la del servidor encontraron una copia más
+rica que restaurar — la plantilla reducida ya era, para entonces, "la
+más reciente" en todos los sitios. El usuario pidió explícitamente
+"añade tú la plantilla" y proporcionó el roster oficial completo del
+Atlético Madrid 2026-27 (23 jugadores activos + 3 cedidos que quedan
+fuera del primer equipo).
+
+**Fix — `_fixupAtletiRosterRestoreV1`** (`misc_body_1.html`, junto al
+resto de fixups one-shot de este archivo, mismo patrón que
+`_fixupLeagueZonesV2`/`_fixupExtraLeagueZonesV1`): corre UNA vez por
+dispositivo (flag `ftbol_fixup_atleti_roster_v1`), localiza el equipo
+"Atlético Madrid" en `ligaExt_liga-ea-sports` y reemplaza `t.players`
+por el roster oficial dado por el usuario — PERO preservando el `id`
+y las estadísticas (`pj/gol/pen/fk/mvp/ta/tr/imbat/penSaved`) YA
+acumuladas de Morten Hjulmand y Lee Kang-In (los 2 únicos jugadores
+que sí llegaron a jugar partidos reales en el estado corrupto), vía un
+alias explícito (`'m hjulmand'→'morten hjulmand'`,
+`'kang in lee'→'lee kang in'`, para el cambio de grafía/orden
+nombre-apellido entre el picker en vivo y la lista oficial). El resto
+de jugadores se crean desde cero (0 estadísticas — no las tenían
+mientras el roster estuvo corrupto). Persiste vía `window.saveData`
+(mismo chokepoint, sube al servidor con reintentos).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un escritor nuevo (o existente) de
+   `ligaExt_<slug>` — alta de jugador en vivo, edición de acta, o
+   cualquier flujo futuro — persista con `window._lsSetSafe(...)` a
+   pelo cuando `window.saveData` está disponible. `saveData` es el
+   ÚNICO chokepoint que mantiene `_protected`, la invalidación de
+   caches (`_lextInvalidateTeamScanCache`, `SQUAD_REGISTRY`,
+   `_eurInvalidateLogoIndex`, etc.) y el POST al servidor coordinados.
+2. **PROHIBIDO** que un resolutor de "equipo por nombre" nuevo (picker,
+   bridge del motor, agregador de stats) se quede con el primer o el
+   último match sin comparar riqueza (`players.length`) cuando el mismo
+   nombre puede aparecer duplicado — es el mismo patrón ya prohibido
+   para `_gmFindAndPersistPlayer`/otros escaneos de `ligaExt_*`,
+   generalizado aquí a `_lextFindTeamInAnyLigaExt` y
+   `ligaEaBuildEngineOverrides`.
+3. **PROHIBIDO** quitar `_lextAnyTeamSuspiciouslyShrunk`/
+   `_lextRestoreShrunkTeamRosters` de `_lextRecoverResultsFromBackups`:
+   es la red que auto-repara una plantilla ya encogida por este patrón
+   de bug, sin que el admin tenga que hacer nada. El umbral (diferencia
+   ≥3 y <50% de la copia protegida) es deliberadamente conservador para
+   nunca resucitar un borrado intencional reciente — no bajarlo.
+4. Toda plantilla NUEVA (club o selección) hereda la auto-reparación
+   automáticamente en cuanto pase por `loadData`/`_lextRecoverResultsFromBackups`
+   — no hay lista de slugs que mantener.
+5. **PROHIBIDO** asumir que la reparación LOCAL (`_protected`/snapshots
+   del propio dispositivo) es suficiente: si el usuario siguió jugando
+   tras el incidente, `saveData` normal mirrorea la corrupción a
+   `_protected` local también. `_lextServerTeamHeal` (pregunta al
+   `_protected` y al `main` DEL SERVIDOR) es la red que cubre ese caso
+   — no quitarla ni asumir que es redundante con la reparación local.
+6. **PROHIBIDO** quitar el throttle `_lextServerTeamHealTried[k]` de
+   `_lextServerTeamHeal`: sin él, una liga cuyo equipo siga encogido
+   tras la reparación (nada que restaurar ni local ni en servidor)
+   repetiría las 2 peticiones en CADA `loadData` de esa liga.
+7. **PROHIBIDO** volver a ejecutar `_fixupAtletiRosterRestoreV1` (ni
+   crear un fixup equivalente que reemplace `t.players` de un equipo
+   entero) sin el alias explícito de preservación de `id`/estadísticas
+   para los jugadores que ya existieran con otra grafía — perder el
+   `id`/stats acumulados de un jugador real al "reparar" su plantilla
+   sería repetir el mismo tipo de pérdida de datos que motivó este fix.
+   El flag `ftbol_fixup_atleti_roster_v1` es de UN SOLO USO — no
+   reintroducir su lógica bajo un flag distinto para volver a aplicarla.
+
 ## El portero de la PORTERÍA IMBATIDA es SIEMPRE el de mayor nivel-poder de la plantilla — humano e IA, sin picker (obligatorio, 2026-08-15) ⚠️ SUPERSEDE todas las secciones de este archivo que documentan/exigen el picker interactivo `showImbatForce` (buscar "PORTERÍA IMBATIDA OBLIGATORIA", "El picker de portería imbatida...", "confirmImbatForce"/"cancelImbatForce", más abajo)
 
 **Bug (usuario 2026-08-15, «Argentina» — Emiliano Martínez 85 vs Walter

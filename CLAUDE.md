@@ -1,5 +1,105 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Añadir un jugador NUEVO en vivo (gm-modal) NUNCA hace desaparecer el resto de la plantilla — persistir SIEMPRE vía `saveData`, nunca `_lsSetSafe` suelto (obligatorio, 2026-08-15)
+
+**Bug crítico (usuario 2026-08-15, «Atlético Madrid»)**: al añadir un
+jugador NUEVO durante el LIVE de un partido (botón "+ AÑADIR EVENTO
+→ 👤 AÑADIR JUGADOR"), a partir de ese momento el picker de eventos —
+Y el editor "Editar equipos" tras el partido — mostraban **SOLO** los
+jugadores recién añadidos (Morten Hjulmand, Lee Kang-In); el resto de
+la plantilla real del Atlético Madrid, con sus estadísticas
+acumuladas (PJ/goles/tarjetas), desapareció por completo "en todos
+los lados". Petición explícita: "recupera la plantilla".
+
+### Causa raíz (3 puntos combinados)
+
+1. **`window._gmFindAndPersistPlayer`** (`part2/misc_body_2.html`, el
+   handler de "+ AÑADIR JUGADOR") y **`window._addManualPlayerToRoster`**
+   (`static/js/index.bundle.js`, el alta desde "editar evento") persistían
+   con un **`window._lsSetSafe(...)` DIRECTO**, saltándose por completo
+   `saveData` — el chokepoint único de `ligaExt_<slug>`
+   (`misc_body_1.html`). Esto significaba que la alta NUNCA:
+   - actualizaba el snapshot `_protected` (el anti-wipe monotónico que
+     SÍ mantiene al día cualquier guardado que pase por `saveData`),
+   - invalidaba `_lextInvalidateTeamScanCache()` (el cache de 4s de
+     `_lextFindTeamInAnyLigaExt`, el escaneo que usa el wrapper de
+     `sqFromRegistry`/`sqFromRegistryFull` — la fuente ÚNICA del picker
+     de eventos del propio partido),
+   - se subía al servidor (el write directo no tocaba la red en
+     absoluto para `ligaExt_*`, a diferencia del camino normal del
+     editor).
+2. **`_lextFindTeamInAnyLigaExt`** (`misc_body_1.html`, el wrapper que
+   envuelve `sqFromRegistry`/`sqFromRegistryFull`) resolvía el equipo
+   "Liga EA gana sin más" con un `break` en el **PRIMER** hit dentro de
+   `ligaExt_liga-ea-sports`, sin comparar riqueza — si el nombre
+   aparecía DUPLICADO dentro de esa misma liga (fila residual/legacy,
+   patrón ya documentado varias veces en este archivo), el picker podía
+   resolver contra la fila EQUIVOCADA sin que la plantilla real hubiera
+   desaparecido de disco.
+3. **`ligaEaBuildEngineOverrides`** (`misc_body_1.html`, el bridge que
+   pobla `SQUAD_REGISTRY` desde `ligaExt_liga-ea-sports`) hacía
+   `squads[t.name] = simSquad` en un `forEach` plano — si el nombre
+   aparecía duplicado, la ÚLTIMA fila procesada ganaba SIEMPRE, aunque
+   tuviera menos jugadores que una anterior con el mismo nombre.
+
+Los 3 puntos son el mismo patrón ya prohibido en este archivo para
+otras funciones ("recorrer TODAS las coincidencias y elegir la de MÁS
+jugadores... nunca la primera/última que aparezca por orden de
+enumeración") — aquí se habían quedado sin ese fix.
+
+### Fix
+
+- `_gmFindAndPersistPlayer` y `_addManualPlayerToRoster` persisten
+  ahora vía `window.saveData(slug, data)` cuando está cargado (siempre,
+  en la práctica — `misc_body_1.html` se incluye ANTES que
+  `part2/misc_body_2.html` e `index.bundle.js`), con fallback al
+  escritor directo (+ mirror manual de `_protected`) solo si `saveData`
+  no estuviera disponible.
+- `_lextFindTeamInAnyLigaExt` y `ligaEaBuildEngineOverrides` ya NO se
+  quedan con la primera/última fila que encuentran por nombre — comparan
+  riqueza (`players.length`) y se quedan SIEMPRE con la más rica, igual
+  que `_gmFindAndPersistPlayer` desde 2026-08-03.
+- **Auto-reparación por equipo** (`_lextAnyTeamSuspiciouslyShrunk` +
+  `_lextRestoreShrunkTeamRosters`, `misc_body_1.html`, enganchadas en
+  `_lextRecoverResultsFromBackups`, que ya corre en CADA `loadData`):
+  si un equipo tiene una plantilla MUCHO más pequeña que sus compañeros
+  de la MISMA liga (mediana de la liga ≥6, el equipo sospechoso ≤4 y
+  <35% de esa mediana), se UNE (nunca se pisa) con la copia protegida
+  (`_protected`/snapshots) — los jugadores nuevos que sí se guardaron se
+  conservan, los que "desaparecieron" se restauran. Solo actúa si la
+  diferencia es GRANDE (≥3 Y por debajo del 50% de la copia protegida)
+  para no resucitar un borrado deliberado reciente del admin. Esto
+  repara automáticamente, en la próxima carga, cualquier plantilla ya
+  afectada por este bug (como la del Atlético Madrid del reporte)
+  siempre que `_protected` conserve la copia previa — que es el caso
+  normal, ya que los 2 escritores del bug nunca la tocaban.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un escritor nuevo (o existente) de
+   `ligaExt_<slug>` — alta de jugador en vivo, edición de acta, o
+   cualquier flujo futuro — persista con `window._lsSetSafe(...)` a
+   pelo cuando `window.saveData` está disponible. `saveData` es el
+   ÚNICO chokepoint que mantiene `_protected`, la invalidación de
+   caches (`_lextInvalidateTeamScanCache`, `SQUAD_REGISTRY`,
+   `_eurInvalidateLogoIndex`, etc.) y el POST al servidor coordinados.
+2. **PROHIBIDO** que un resolutor de "equipo por nombre" nuevo (picker,
+   bridge del motor, agregador de stats) se quede con el primer o el
+   último match sin comparar riqueza (`players.length`) cuando el mismo
+   nombre puede aparecer duplicado — es el mismo patrón ya prohibido
+   para `_gmFindAndPersistPlayer`/otros escaneos de `ligaExt_*`,
+   generalizado aquí a `_lextFindTeamInAnyLigaExt` y
+   `ligaEaBuildEngineOverrides`.
+3. **PROHIBIDO** quitar `_lextAnyTeamSuspiciouslyShrunk`/
+   `_lextRestoreShrunkTeamRosters` de `_lextRecoverResultsFromBackups`:
+   es la red que auto-repara una plantilla ya encogida por este patrón
+   de bug, sin que el admin tenga que hacer nada. El umbral (diferencia
+   ≥3 y <50% de la copia protegida) es deliberadamente conservador para
+   nunca resucitar un borrado intencional reciente — no bajarlo.
+4. Toda plantilla NUEVA (club o selección) hereda la auto-reparación
+   automáticamente en cuanto pase por `loadData`/`_lextRecoverResultsFromBackups`
+   — no hay lista de slugs que mantener.
+
 ## El portero de la PORTERÍA IMBATIDA es SIEMPRE el de mayor nivel-poder de la plantilla — humano e IA, sin picker (obligatorio, 2026-08-15) ⚠️ SUPERSEDE todas las secciones de este archivo que documentan/exigen el picker interactivo `showImbatForce` (buscar "PORTERÍA IMBATIDA OBLIGATORIA", "El picker de portería imbatida...", "confirmImbatForce"/"cancelImbatForce", más abajo)
 
 **Bug (usuario 2026-08-15, «Argentina» — Emiliano Martínez 85 vs Walter

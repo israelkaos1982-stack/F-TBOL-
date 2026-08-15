@@ -16354,8 +16354,17 @@ window._hdrCleanCache = function(){
     if (resN && targets.indexOf(resN) === -1) targets.push(resN);
     /* Liga EA Sports tiene preferencia (es el slug "principal" de
        todos los partidos de Liga EA, Champions, etc.). Si no está
-       ahí, usamos cualquier ligaExt_<slug> como fallback. */
-    var preferred = null, fallback = null;
+       ahí, usamos cualquier ligaExt_<slug> como fallback. DENTRO de
+       cada bucket (preferred/fallback), si el nombre aparece
+       DUPLICADO (fila residual/legacy de un movimiento de equipo,
+       ver CLAUDE.md "Un club IA con el mismo nombre... le robaba el
+       escudo y la plantilla" / "_fixupInterHumanoSlug"), nos quedamos
+       SIEMPRE con la de MÁS jugadores — nunca con la primera que
+       aparezca por orden de enumeración (bug 2026-08-15: un duplicado
+       pobre podía "tapar" ante el picker del partido una plantilla
+       real que seguía intacta en disco, indistinguible para el admin
+       de "la plantilla ha desaparecido"). */
+    var preferred = null, preferredRichness = -1, fallback = null, fallbackRichness = -1;
     try {
       var _scanEntries = _lextGetTeamScanEntries();
       for (var i = 0; i < _scanEntries.length; i++) {
@@ -16371,14 +16380,13 @@ window._hdrCleanCache = function(){
           }
           if (!hit) continue;
           if (!Array.isArray(t.players) || !t.players.length) continue;
+          var richness = t.players.length;
           if (k === 'ligaExt_liga-ea-sports') {
-            preferred = t;
-            break; /* Liga EA gana sin más */
-          } else if (!fallback) {
-            fallback = t;
+            if (richness > preferredRichness) { preferred = t; preferredRichness = richness; }
+          } else if (richness > fallbackRichness) {
+            fallback = t; fallbackRichness = richness;
           }
         }
-        if (preferred) break;
       }
     } catch(_){}
     /* LIGA_CACHE en memoria (2026-06-25): ligas bajadas del SERVIDOR que
@@ -49625,6 +49633,105 @@ https://api.sofascore.app/api/v1/team/44/image
      aunque estuvieran ahí. Ahora el hot-path también comprueba
      `_lextHasRosterOrShield` y el bucle rellena roster + escudos además
      de resultados. */
+  /* ── AUTO-REPARACIÓN de plantilla ENCOGIDA por equipo (obligatorio,
+     2026-08-15) ────────────────────────────────────────────────────
+     Bug crítico (usuario, «Atlético Madrid»): al añadir un jugador
+     NUEVO durante el LIVE de un partido (gm-modal, botón "+ AÑADIR
+     EVENTO → 👤 AÑADIR JUGADOR" → `_gmFindAndPersistPlayer`, o el
+     alta desde "editar evento" → `_addManualPlayerToRoster`), ambos
+     escritores persistían con un `_lsSetSafe` DIRECTO — sin pasar por
+     `saveData` (el chokepoint único de `ligaExt_<slug>`) — así que
+     NUNCA actualizaban el snapshot `_protected` ni invalidaban el
+     cache de 4s de `_lextFindTeamInAnyLigaExt` (el escaneo que usa el
+     wrapper de `sqFromRegistry`/`sqFromRegistryFull`, la fuente del
+     picker de eventos del propio partido). Combinado con que ese
+     mismo escaneo (y `ligaEaBuildEngineOverrides`) podían resolver una
+     fila DUPLICADA/residual del mismo nombre por "primera/última que
+     aparezca" en vez de por riqueza (ya corregido arriba y en
+     `ligaEaBuildEngineOverrides`), el resultado visible era: la
+     plantilla ENTERA de un club desaparecía del picker en vivo Y del
+     editor, dejando solo los jugadores añadidos en ese momento —
+     indistinguible, para el usuario, de "se ha perdido la plantilla".
+     El `_protected` (que SÍ sigue actualizándose en cada `saveData`
+     REAL — el editor de plantilla, "Editar equipos", etc.) casi
+     siempre conserva la plantilla completa de ANTES del incidente,
+     porque los 2 escritores del bug nunca llegaban a tocarlo. Estas
+     2 funciones detectan y REPARAN ese patrón exacto en cada lectura:
+     un equipo con una plantilla mucho más pequeña que sus compañeros
+     de la MISMA liga se UNE (nunca se pisa) con la copia protegida —
+     los jugadores nuevos que el bug sí llegó a guardar se conservan,
+     los que "desaparecieron" se restauran. */
+  function _lextAnyTeamSuspiciouslyShrunk(data){
+    if (!data || !Array.isArray(data.teams) || data.teams.length < 2) return false;
+    var lens = [];
+    for (var i = 0; i < data.teams.length; i++){
+      var t = data.teams[i];
+      var n = (t && Array.isArray(t.players)) ? t.players.length : 0;
+      if (n > 0) lens.push(n);
+    }
+    if (lens.length < 2) return false;
+    lens.sort(function(a,b){ return a - b; });
+    var median = lens[Math.floor(lens.length / 2)];
+    /* Liga con plantillas ya pequeñas por diseño (p.ej. solo se
+       cargaron 3-4 jugadores clave) — nada que comparar, no aplica. */
+    if (median < 6) return false;
+    for (var j = 0; j < lens.length; j++){
+      if (lens[j] <= 4 && lens[j] < median * 0.35) return true;
+    }
+    return false;
+  }
+  function _lextTeamCanon(s){
+    var x = String(s||'').trim().toLowerCase();
+    try { x = x.normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch(_){}
+    return x;
+  }
+  function _lextRestoreShrunkTeamRosters(data, source){
+    if (!data || !Array.isArray(data.teams)) return false;
+    if (!source || !Array.isArray(source.teams)) return false;
+    var srcByName = {};
+    source.teams.forEach(function(t){
+      if (!t || !t.name || !Array.isArray(t.players) || !t.players.length) return;
+      var key = _lextTeamCanon(t.name);
+      if (!srcByName[key] || t.players.length > srcByName[key].players.length) {
+        srcByName[key] = t;
+      }
+    });
+    var changed = false;
+    data.teams.forEach(function(t){
+      if (!t || !t.name) return;
+      var cur = Array.isArray(t.players) ? t.players : [];
+      var srcTeam = srcByName[_lextTeamCanon(t.name)];
+      if (!srcTeam) return;
+      var srcPlayers = srcTeam.players;
+      if (srcPlayers.length <= cur.length) return;
+      /* Umbral: solo actuamos ante una diferencia GRANDE — una
+         diferencia de 1-2 jugadores puede ser un borrado deliberado
+         reciente del admin, que NUNCA debe "resucitarse". */
+      if (srcPlayers.length - cur.length < 3 && cur.length >= srcPlayers.length * 0.5) return;
+      var curNames = {};
+      cur.forEach(function(p){ if (p && p.name) curNames[_lextTeamCanon(p.name)] = true; });
+      var merged = cur.slice();
+      srcPlayers.forEach(function(p){
+        if (!p || !p.name) return;
+        var nk = _lextTeamCanon(p.name);
+        if (curNames[nk]) return;
+        merged.push(p);
+        curNames[nk] = true;
+      });
+      if (merged.length > cur.length){
+        t.players = merged;
+        changed = true;
+        try { console.warn('[ligaExt] plantilla de "'+t.name+'" restaurada desde copia protegida ('+cur.length+' → '+merged.length+' jugadores) — auto-reparación 2026-08-15.'); } catch(_){}
+      }
+    });
+    return changed;
+  }
+  /* Slugs para los que ya se intentó la reparación de arriba y no
+     quedó nada más que restaurar (ni `_protected` ni los snapshots
+     tenían más jugadores) — evita reabrir/parsear esas copias en
+     CADA `loadData` de una liga sin nada que recuperar. Se limpia
+     solo al recargar la página (no persiste). */
+  var _lextTeamFixGivenUp = {};
   function _lextRecoverResultsFromBackups(k, data){
     if (!data) return false;
     /* Hot-path barato: si el main ya trae clasificación Y plantilla/
@@ -49632,8 +49739,10 @@ https://api.sofascore.app/api/v1/team/44/image
        fetchData con el servidor). */
     var needResults = !(Array.isArray(data.results) && data.results.length);
     var needRoster = !_lextHasRosterOrShield(data);
-    if (!needResults && !needRoster) return false;
+    var needTeamFix = !_lextTeamFixGivenUp[k] && _lextAnyTeamSuspiciouslyShrunk(data);
+    if (!needResults && !needRoster && !needTeamFix) return false;
     var restored = false;
+    var teamFixChanged = false;
     try {
       var srcs = [];
       try {
@@ -49656,7 +49765,9 @@ https://api.sofascore.app/api/v1/team/44/image
         try { if (needRoster && _lextBackfillRoster(data, srcs[i])) restored = true; } catch(_){}
         try { if (needRoster && _lextBackfillShields(data, srcs[i])) restored = true; } catch(_){}
         try { if (needRoster && _lextBackfillAlias(data, srcs[i])) restored = true; } catch(_){}
+        try { if (needTeamFix && _lextRestoreShrunkTeamRosters(data, srcs[i])) { restored = true; teamFixChanged = true; } } catch(_){}
       }
+      if (needTeamFix && !teamFixChanged) _lextTeamFixGivenUp[k] = true;
       if (restored) {
         try { console.warn('[ligaExt] '+k+': clasificación del main vacía — restaurada desde copia durable local ('+((data.results&&data.results.length)||0)+' resultados).'); } catch(_){}
       }
@@ -55989,6 +56100,15 @@ https://api.sofascore.app/api/v1/team/44/image
        de todas las ligas, Copa del Rey, HvIA, etc.) puedan leerlo
        sin depender del storage ligaExt_*. */
     window._LIGA_EA_TEAM_STATS = {};
+    /* Richness por nombre de equipo YA volcado a `squads` — si el
+       nombre aparece DUPLICADO dentro de `teams` (fila residual/legacy,
+       ver CLAUDE.md), `squads[t.name] = simSquad` de más abajo pisaba
+       SIEMPRE con la ÚLTIMA fila procesada, aunque tuviera menos
+       jugadores que una anterior con el mismo nombre — indistinguible
+       para el picker del partido de "la plantilla real ha
+       desaparecido" (bug 2026-08-15). Ahora solo se pisa si la nueva
+       fila trae MÁS jugadores que la ya volcada. */
+    var _squadRichnessByName = {};
 
     teams.forEach(function(t){
       if(!t || !t.name) return;
@@ -56065,7 +56185,11 @@ https://api.sofascore.app/api/v1/team/44/image
           simSquad.push(entry);
         });
       });
-      squads[t.name] = simSquad;
+      var _thisRichness = Array.isArray(t.players) ? t.players.length : 0;
+      if (!(t.name in _squadRichnessByName) || _thisRichness >= _squadRichnessByName[t.name]) {
+        _squadRichnessByName[t.name] = _thisRichness;
+        squads[t.name] = simSquad;
+      }
       /* Propagar stats del equipo al sidecar global + aliases.
          Así `_teamOffense('Villarreal')` y `_teamOffense('Villarreal CF')`
          devuelven lo mismo, y el motor de cualquier liga lo encuentra. */

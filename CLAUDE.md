@@ -106,6 +106,31 @@ Si encuentra algo más rico, lo fusiona (unión, nunca pisa) con
 la pantalla de plantilla/clasificación si sigue abierta
 (`_lextReRenderSquadScreensIfOpen`).
 
+### Refuerzo (mismo día, #3) — ninguna copia (local ni servidor) conservaba ya la plantilla: fixup ONE-SHOT con el roster oficial que dio el usuario
+
+Ni la reparación local ni la del servidor encontraron una copia más
+rica que restaurar — la plantilla reducida ya era, para entonces, "la
+más reciente" en todos los sitios. El usuario pidió explícitamente
+"añade tú la plantilla" y proporcionó el roster oficial completo del
+Atlético Madrid 2026-27 (23 jugadores activos + 3 cedidos que quedan
+fuera del primer equipo).
+
+**Fix — `_fixupAtletiRosterRestoreV1`** (`misc_body_1.html`, junto al
+resto de fixups one-shot de este archivo, mismo patrón que
+`_fixupLeagueZonesV2`/`_fixupExtraLeagueZonesV1`): corre UNA vez por
+dispositivo (flag `ftbol_fixup_atleti_roster_v1`), localiza el equipo
+"Atlético Madrid" en `ligaExt_liga-ea-sports` y reemplaza `t.players`
+por el roster oficial dado por el usuario — PERO preservando el `id`
+y las estadísticas (`pj/gol/pen/fk/mvp/ta/tr/imbat/penSaved`) YA
+acumuladas de Morten Hjulmand y Lee Kang-In (los 2 únicos jugadores
+que sí llegaron a jugar partidos reales en el estado corrupto), vía un
+alias explícito (`'m hjulmand'→'morten hjulmand'`,
+`'kang in lee'→'lee kang in'`, para el cambio de grafía/orden
+nombre-apellido entre el picker en vivo y la lista oficial). El resto
+de jugadores se crean desde cero (0 estadísticas — no las tenían
+mientras el roster estuvo corrupto). Persiste vía `window.saveData`
+(mismo chokepoint, sube al servidor con reintentos).
+
 ### Reglas a respetar
 
 1. **PROHIBIDO** que un escritor nuevo (o existente) de
@@ -141,6 +166,14 @@ la pantalla de plantilla/clasificación si sigue abierta
    `_lextServerTeamHeal`: sin él, una liga cuyo equipo siga encogido
    tras la reparación (nada que restaurar ni local ni en servidor)
    repetiría las 2 peticiones en CADA `loadData` de esa liga.
+7. **PROHIBIDO** volver a ejecutar `_fixupAtletiRosterRestoreV1` (ni
+   crear un fixup equivalente que reemplace `t.players` de un equipo
+   entero) sin el alias explícito de preservación de `id`/estadísticas
+   para los jugadores que ya existieran con otra grafía — perder el
+   `id`/stats acumulados de un jugador real al "reparar" su plantilla
+   sería repetir el mismo tipo de pérdida de datos que motivó este fix.
+   El flag `ftbol_fixup_atleti_roster_v1` es de UN SOLO USO — no
+   reintroducir su lógica bajo un flag distinto para volver a aplicarla.
 
 ## El portero de la PORTERÍA IMBATIDA es SIEMPRE el de mayor nivel-poder de la plantilla — humano e IA, sin picker (obligatorio, 2026-08-15) ⚠️ SUPERSEDE todas las secciones de este archivo que documentan/exigen el picker interactivo `showImbatForce` (buscar "PORTERÍA IMBATIDA OBLIGATORIA", "El picker de portería imbatida...", "confirmImbatForce"/"cancelImbatForce", más abajo)
 

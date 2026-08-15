@@ -1921,6 +1921,31 @@ class TestDeadMergedLeagueFiltering:
         slugs = [x["slug"] for x in j["leagues"]]
         assert "francia" in slugs
 
+    def test_bulk_no_incluye_liga_mixta_vieja_aniquilada(self, client):
+        """2026-08-15: liga-mixta-1..9 (las 9 "Ligas Mixtas" viejas, que
+        fusionaban las 43 ligas menores de arriba) se ANIQUILARON por
+        completo — sin card, sin seed, sin cupo. Deben filtrarse EXACTO
+        igual que las 43 ligas menores originales."""
+        c = client
+        c.post("/api/liga-ext/liga-mixta-1", json={"data": {
+            "teams": [{"id": "1", "name": "Olympiacos"}, {"id": "2", "name": "PAOK"}],
+            "results": [],
+        }})
+        r = c.get("/api/liga-ext-bulk")
+        j = r.get_json()
+        assert "liga-mixta-1" not in j["leagues"]
+
+    def test_indice_no_incluye_liga_mixta_vieja_aniquilada(self, client):
+        c = client
+        c.post("/api/liga-ext/liga-mixta-9", json={"data": {
+            "teams": [{"id": "1", "name": "Dunajska Streda"}],
+            "results": [],
+        }})
+        r = c.get("/api/liga-ext")
+        j = r.get_json()
+        slugs = [x["slug"] for x in j["leagues"]]
+        assert "liga-mixta-9" not in slugs
+
     def _seed_dead_league_row(self, clave, teams):
         """Escribe una fila `GlobalState` DIRECTA (sin pasar por el POST,
         que ya rechaza ligas muertas tras el fix 2026-08-10). Simula el
@@ -2017,6 +2042,36 @@ class TestDeadMergedLeagueFiltering:
         ])
         r = c.post("/api/liga-ext-restore/gales")
         assert r.status_code == 404
+
+    def test_get_single_liga_mixta_vieja_no_resucita_datos_viejos(self, client):
+        """Una fila `liga_ext_liga-mixta-N` que sigue físicamente en la BD
+        (nunca se pulsó el purgado permanente) no debe resucitar sus
+        equipos al pedirla — mismo comportamiento que las 43 ligas
+        menores originales."""
+        c = client
+        self._seed_dead_league_row("liga_ext_liga-mixta-6", [
+            {"id": "1", "name": "Steaua Bucarest"}, {"id": "2", "name": "FCSB"},
+        ])
+        r = c.get("/api/liga-ext/liga-mixta-6")
+        j = r.get_json()
+        assert j["ok"] is True
+        assert j["data"]["teams"] == []
+
+    def test_admin_purge_borra_liga_mixta_vieja(self, client):
+        """El botón admin "🗑 Eliminar del servidor las ligas fusionadas/
+        aniquiladas" también borra PERMANENTEMENTE las filas de las 9
+        Ligas Mixtas viejas (liga-mixta-1..9), no solo las 43 ligas
+        menores originales."""
+        c = client
+        self._seed_dead_league_row("liga_ext_liga-mixta-2", [
+            {"id": "1", "name": "Legia Warszawa"},
+        ])
+        c.post("/api/admin/login", json={"pin": "747"})
+        r = c.post("/api/admin/purge-dead-leagues", json={})
+        assert r.get_json()["ok"] is True
+        with app_module.app.app_context():
+            row = app_module.GlobalState.query.filter_by(clave="liga_ext_liga-mixta-2").first()
+            assert row is None
 
 
 class TestTeamIdentityProtectedFallback:

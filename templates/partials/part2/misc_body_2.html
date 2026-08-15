@@ -15388,9 +15388,32 @@
         var dup = t.players.some(function(p) { return p && _norm(p.name) === _norm(playerEntry.name); });
         if (dup) return { ok:false, reason:'duplicate', key:lk, teamName:t.name };
         t.players.push(playerEntry);
-        try { window._lsSetSafe(lk, JSON.stringify(data)); }
-        catch(e) { return { ok:false, reason:'storage', key:lk }; }
-        /* Invalidar cache para que el próximo picker refleje el alta. */
+        /* Persistir vía `window.saveData` (chokepoint único de
+           `ligaExt_<slug>`, misc_body_1.html) en vez de un `_lsSetSafe`
+           suelto (bug 2026-08-15, "toda la plantilla desaparece al
+           añadir un jugador nuevo en vivo"): un write directo aquí
+           NUNCA actualizaba el snapshot `_protected` (anti-wipe
+           monotónico) ni invalidaba el cache de 4s de
+           `_lextFindTeamInAnyLigaExt` (el escaneo que usa el wrapper de
+           `sqFromRegistry`/`sqFromRegistryFull` — el picker de eventos
+           del propio partido), así que un segundo alta o el siguiente
+           evento podían resolver el equipo contra una copia obsoleta o
+           una fila duplicada distinta, dejando la plantilla real
+           "invisible" pese a seguir intacta en disco. `saveData` además
+           sube el cambio al servidor con reintentos (el write directo
+           anterior no llegaba a la red en absoluto). Fallback al
+           escritor directo solo si `saveData` no ha cargado todavía. */
+        var _slugForSave = (lk.indexOf('ligaExt_') === 0) ? lk.slice('ligaExt_'.length) : null;
+        if (_slugForSave && typeof window.saveData === 'function') {
+          try { window.saveData(_slugForSave, data); }
+          catch(e) { return { ok:false, reason:'storage', key:lk }; }
+        } else {
+          try { window._lsSetSafe(lk, JSON.stringify(data)); }
+          catch(e) { return { ok:false, reason:'storage', key:lk }; }
+        }
+        /* Invalidar cache para que el próximo picker refleje el alta.
+           `saveData` ya invalida `_lextInvalidateTeamScanCache` — esto
+           es ADEMÁS, para `SQUAD_REGISTRY` (que `saveData` no toca). */
         try {
           if (window.SQUAD_REGISTRY) {
             delete window.SQUAD_REGISTRY[teamName];

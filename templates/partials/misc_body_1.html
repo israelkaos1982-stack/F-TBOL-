@@ -48034,6 +48034,11 @@ https://api.sofascore.app/api/v1/team/44/image
           try { window._lsSetSafe(storeKey(k), JSON.stringify(LIGA_CACHE[k])); } catch(_){}
         }
       } catch(_){}
+      /* Si tras la recuperación LOCAL algún equipo sigue con una
+         plantilla sospechosamente pequeña, probamos el SERVIDOR
+         (async, throttle de 1 por slug/sesión) — ver comentario de
+         `_lextServerTeamHeal`. */
+      try { if (_lextAnyTeamSuspiciouslyShrunk(LIGA_CACHE[k])) _lextServerTeamHeal(k); } catch(_){}
       /* Si la cache YA está poblada pero VACÍA (un intento de
          hidratación anterior falló — red, timeout, servidor sin
          datos EN ESE momento — y dejó `{teams:[],results:[]}` puesto),
@@ -48109,6 +48114,11 @@ https://api.sofascore.app/api/v1/team/44/image
           }
         } catch(_){}
         LIGA_CACHE[k] = parsed;
+        /* Si tras la recuperación LOCAL algún equipo sigue con una
+           plantilla sospechosamente pequeña, probamos el SERVIDOR
+           (async, throttle de 1 por slug/sesión) — ver comentario de
+           `_lextServerTeamHeal`. */
+        try { if (_lextAnyTeamSuspiciouslyShrunk(parsed)) _lextServerTeamHeal(k); } catch(_){}
         /* Un `main` persistido VACÍO (0 equipos, residuo de un fetch
            antiguo) NO debe cerrar la puerta a la hidratación — solo
            `_lextTriggerBgHydrate` decide (guard `__bgHydrating_`), así
@@ -49732,6 +49742,87 @@ https://api.sofascore.app/api/v1/team/44/image
      CADA `loadData` de una liga sin nada que recuperar. Se limpia
      solo al recargar la página (no persiste). */
   var _lextTeamFixGivenUp = {};
+
+  /* ── REPARACIÓN vía SERVIDOR (obligatorio, 2026-08-15 #2) ──────────
+     La reparación de arriba (`_lextRestoreShrunkTeamRosters`) SOLO mira
+     copias LOCALES (`_protected`/snapshots). Si, DESPUÉS del incidente,
+     el usuario siguió jugando/simulando otros partidos de la MISMA
+     liga, cualquier `saveData` normal posterior vuelve a MIRROREAR
+     `main` → `_protected` — y como `main` ya tenía el equipo encogido
+     en memoria (`LIGA_CACHE`), ese mirror posterior propaga la
+     corrupción a `_protected` local TAMBIÉN, dejando sin nada que
+     restaurar en el propio dispositivo.
+     El snapshot `_protected` DEL SERVIDOR es distinto: el endpoint
+     `/api/liga-ext-protected/<slug>` (POST) es MONOTÓNICO por el Nº
+     TOTAL de jugadores de TODA la liga — rechaza (409) cualquier
+     guardado con menos jugadores en total que el ya almacenado. El
+     escritor que causó este bug (`_lsSetSafe` directo, ya corregido
+     arriba) NUNCA llegó a POSTear a este endpoint, así que hay
+     bastantes posibilidades de que la copia del SERVIDOR conserve la
+     plantilla completa aunque la local ya no la tenga. Como último
+     recurso también se prueba el `main` del servidor, por si algún
+     OTRO dispositivo nunca vio la corrupción. Async y con throttle de
+     sesión (una vez por slug) — `loadData` sigue siendo síncrono, esto
+     solo repinta si encuentra y restaura algo. */
+  var _lextServerTeamHealTried = {};
+  function _lextReRenderSquadScreensIfOpen(k){
+    try {
+      if (typeof CURRENT_KEY !== 'undefined' && CURRENT_KEY === k) {
+        try { if (typeof applyLeagueHeaderFromData === 'function') applyLeagueHeaderFromData(LIGA_CACHE[k]); } catch(_){}
+        try { if (typeof renderTable === 'function') renderTable(); } catch(_){}
+        try {
+          var ovT = document.getElementById('lext-ov-teams');
+          if (ovT && ovT.classList.contains('show') && typeof renderTeamsList === 'function') renderTeamsList();
+        } catch(_){}
+        try {
+          var ovS = document.getElementById('lext-ov-squad');
+          if (ovS && ovS.classList.contains('show') && typeof renderSquadList === 'function') renderSquadList();
+        } catch(_){}
+      }
+    } catch(_){}
+    try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(_){}
+  }
+  function _lextServerTeamHeal(k){
+    if (_lextServerTeamHealTried[k]) return;
+    _lextServerTeamHealTried[k] = true;
+    function _fetchJson(url, onDone){
+      var ctrl = null, to = null;
+      try { ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; } catch(_){ ctrl = null; }
+      if (ctrl) { try { to = setTimeout(function(){ try { ctrl.abort(); } catch(_){} }, 12000); } catch(_){ to = null; } }
+      try {
+        fetch(url, ctrl ? {signal:ctrl.signal} : undefined).then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(j){ if (to) { try { clearTimeout(to); } catch(_){} } onDone(j); })
+          .catch(function(){ if (to) { try { clearTimeout(to); } catch(_){} } onDone(null); });
+      } catch(_){ onDone(null); }
+    }
+    function _applyIfRicher(serverData){
+      if (!serverData || !Array.isArray(serverData.teams)) return false;
+      var d = LIGA_CACHE[k];
+      if (!d || !Array.isArray(d.teams)) return false;
+      var changed = false;
+      try { changed = _lextRestoreShrunkTeamRosters(d, serverData); } catch(_){}
+      return changed;
+    }
+    _fetchJson('/api/liga-ext-protected/'+encodeURIComponent(k), function(pj){
+      var changed = _applyIfRicher(pj && pj.data);
+      function _finish(changed2){
+        if (!changed2) return;
+        try { console.warn('[ligaExt] '+k+': plantilla restaurada desde el SERVIDOR (protected/main) — auto-reparación 2026-08-15.'); } catch(_){}
+        try {
+          if (typeof window.saveData === 'function') window.saveData(k, LIGA_CACHE[k]);
+          else window._lsSetSafe(storeKey(k), JSON.stringify(LIGA_CACHE[k]));
+        } catch(_){}
+        _lextReRenderSquadScreensIfOpen(k);
+      }
+      if (!_lextAnyTeamSuspiciouslyShrunk(LIGA_CACHE[k])) { _finish(changed); return; }
+      /* El protected del servidor no bastó (o no existía) — probamos
+         el `main` del servidor como último recurso. */
+      _fetchJson('/api/liga-ext/'+encodeURIComponent(k), function(mj){
+        var changed2 = _applyIfRicher(mj && mj.data);
+        _finish(changed || changed2);
+      });
+    });
+  }
   function _lextRecoverResultsFromBackups(k, data){
     if (!data) return false;
     /* Hot-path barato: si el main ya trae clasificación Y plantilla/

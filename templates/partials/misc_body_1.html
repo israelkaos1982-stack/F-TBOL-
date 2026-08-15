@@ -339,12 +339,17 @@ window._idbKV = window._idbKV || (function(){
   return { set:set, get:get, keys:keys, del:del };
 })();
 
-/* Las 43 ligas menores fusionadas en liga-mixta-1..9 (2026-07-30/31).
-   Fuente ÚNICA — definida aquí, ANTES que cualquier otro <script>, para
-   que los 3 consumidores (purga local v9, botón admin de borrado en
-   servidor, y el filtro de `_lextReconcileResultsToServer` que evita
-   que un dispositivo con IndexedDB stale las resucite en el servidor)
-   lean SIEMPRE la MISMA lista — nunca 3 copias que puedan desincronizarse. */
+/* Las 43 ligas menores fusionadas en liga-mixta-1..9 (2026-07-30/31)
+   MÁS las propias liga-mixta-1..9 (ANIQUILADAS por completo el
+   2026-08-15, petición usuario — ya no son ligas jugables, sustituidas
+   como feeder por germanika/hellas-slavia/danubio-nordica/adriatico-
+   oriental/balkanica/eurasia). Fuente ÚNICA — definida aquí, ANTES que
+   cualquier otro <script>, para que los consumidores (purga local,
+   botón admin de borrado en servidor, el filtro de
+   `_lextReconcileResultsToServer` que evita que un dispositivo con
+   IndexedDB stale las resucite en el servidor, y el GUARDIÁN de
+   `_lsSetSafe`) lean SIEMPRE la MISMA lista — nunca copias que puedan
+   desincronizarse. */
 window._DEAD_MERGED_LEAGUE_SLUGS = [
   'rep-checa','grecia','san-marino','gales','georgia',
   'polonia','noruega','montenegro','luxembgo','bielorrsa',
@@ -354,7 +359,9 @@ window._DEAD_MERGED_LEAGUE_SLUGS = [
   'alemania','serbia','rumania','is-feroe','letonia',
   'eslovenia','bulgaria','bosnia','kazajst','kosovo',
   'rusia','armenia','finlandia','moldavia','azerbayan',
-  'eslovaquia','irlanda','islandia'
+  'eslovaquia','irlanda','islandia',
+  'liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4','liga-mixta-5',
+  'liga-mixta-6','liga-mixta-7','liga-mixta-8','liga-mixta-9'
 ];
 window._isDeadMergedLeagueSlug = function(slug){
   if (!slug) return false;
@@ -395,6 +402,49 @@ window._isDeadMergedLeagueSlug = function(slug){
     }
     toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
     try { console.warn('[ligaExt] purga v12 (inmediata): ' + toRemove.length + ' claves locales de ligas fusionadas.'); } catch(_){}
+    try { localStorage.setItem(FLAG, '1'); } catch(_){}
+  } catch(_){}
+})();
+
+/* Purga v13 — MISMO mecanismo que v12 (inmediata, síncrona, primer
+   <script>), flag NUEVO (2026-08-15, petición usuario: "LIMPIEZA Y
+   ELIMINACIÓN Y ANIQUILACIÓN TOTAL DE LAS LIGAS ANTIGUAS... SIEMPRE
+   SALE RESIDUALMENTE"). `_DEAD_MERGED_LEAGUE_SLUGS` acaba de crecer
+   con `liga-mixta-1..9` (las 9 "Ligas Mixtas" viejas, ANIQUILADAS por
+   completo — ya no son ligas jugables): un dispositivo que ya marcó
+   v12 como "hecho" antes de este cambio JAMÁS habría purgado
+   `ligaExt_liga-mixta-N`, así que se repasa el almacén ENTERO otra
+   vez con la lista ya ampliada. Reutiliza el mismo matcher
+   `_isDeadMergedLeagueSlug` — es un no-op para las 43 ligas menores
+   (ya purgadas por v12) y purga de verdad `liga-mixta-1..9` (main +
+   `_protected`/`_snap_*`/`_backup`, por el mismo matching de prefijo). */
+(function(){
+  try {
+    var FLAG = 'ftbol_merged_leagues_purge_v13';
+    if (localStorage.getItem(FLAG)) return;
+    var toRemove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf('ligaExt_') !== 0) continue;
+      if (window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) toRemove.push(k);
+    }
+    toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+    try { if (typeof LIGA_CACHE !== 'undefined') {
+      window._DEAD_MERGED_LEAGUE_SLUGS.forEach(function(s){ delete LIGA_CACHE[s]; });
+    } } catch(_){}
+    try {
+      if (window._idbKV && typeof window._idbKV.keys === 'function') {
+        window._idbKV.keys().then(function(idbKeys){
+          (idbKeys || []).forEach(function(k){
+            if (typeof k !== 'string' || k.indexOf('ligaExt_') !== 0) return;
+            if (window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) {
+              try { window._idbKV.del(k); } catch(_){}
+            }
+          });
+        }).catch(function(){});
+      }
+    } catch(_){}
+    try { console.warn('[ligaExt] purga v13 (inmediata): ' + toRemove.length + ' claves locales, incluidas las 9 Ligas Mixtas viejas (liga-mixta-1..9) ANIQUILADAS.'); } catch(_){}
     try { localStorage.setItem(FLAG, '1'); } catch(_){}
   } catch(_){}
 })();
@@ -15461,20 +15511,14 @@ window._hdrCleanCache = function(){
     'inglaterra','italia','francia','portugal','p-bajos',
     'belgica','turquia','dinamarca',
     'suiza','escocia',
-    /* 2026-07-30/31: rep-checa/grecia/polonia/noruega/montenegro/georgia/
-       gales/san-marino/bielorrsa/luxembgo fusionadas en liga-mixta-1/2;
-       chipre/austria/andorra/gibraltar/n-irlanda fusionadas en liga-mixta-3;
-       suecia/croacia/lituania/n-maced/albania fusionadas en liga-mixta-4;
-       israel/hungria/ucrania/estonia/malta fusionadas en liga-mixta-5;
-       alemania/serbia/rumania/is-feroe/letonia fusionadas en liga-mixta-6
-       (Alemania eliminada como liga propia);
-       eslovenia/bulgaria/bosnia/kazajst/kosovo fusionadas en liga-mixta-7;
-       rusia/armenia/finlandia/moldavia/azerbayan fusionadas en liga-mixta-8;
-       eslovaquia/irlanda/islandia fusionadas en liga-mixta-9 (última
-       liga menor sin fusionar). Con esto NINGÚN país queda ya suelto —
-       solo las 10 ligas grandes + Resto Mundo + las 9 Ligas Mixtas. */
-    'liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4','liga-mixta-5','liga-mixta-6','liga-mixta-7','liga-mixta-8','liga-mixta-9',
-    /* Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14), feeder de la
+    /* Las 43 ligas menores (rep-checa/grecia/.../islandia) fusionadas en
+       liga-mixta-1..9 (2026-07-30/31), Y las propias liga-mixta-1..9,
+       se ANIQUILARON por completo el 2026-08-15 (petición usuario) —
+       PROHIBIDO volver a listarlas aquí. Un slug muerto en
+       `KNOWN_COUNTRY_SLUGS` es justo lo que haría que
+       `lextDeepRecoverAll`/el auto-recovery de arranque RESUCITEN datos
+       ya purgados desde el servidor — ver `_isDeadMergedLeagueSlug`. */
+    /* Las 6 "Ligas Mixtas" de "Resto de Ligas" (2026-08-14), feeder de la
        Previa de Champions de 4 rondas. */
     'germanika','hellas-slavia','danubio-nordica','adriatico-oriental','balkanica','eurasia',
     'resto-mundo'
@@ -42834,20 +42878,18 @@ window._hdrCleanCache = function(){
   </div>
 </div>
 
-<!-- Orden 2026-07-30 (petición usuario): Inglaterra/Italia/Francia/
-     Portugal/P.Bajos/Bélgica/Turquía/Dinamarca/Suiza/Escocia van
-     PRIMERO (10 ligas — Alemania SALIÓ de este grupo, ver abajo).
-     Rep.Checa/Grecia/San Marino/Gales/Georgia,
-     Polonia/Noruega/Montenegro/Luxemburgo/Bielorrusia,
-     Chipre/Austria/Andorra/Gibraltar/N.Irlanda,
-     Suecia/Croacia/Lituania/Macedonia del Norte/Albania,
-     Israel/Hungría/Ucrania/Estonia/Malta y Alemania+Serbia+Rumanía+
-     Islas Feroe+Letonia se ELIMINARON como ligas propias — están
-     fusionadas en liga-mixta-1/2/3/4/5/6 (al final de la rejilla), cada
-     una con 20 equipos reales tomados de la clasificación vigente de
-     sus ligas de origen. En liga-mixta-6, Alemania solo aporta sus 6
-     mejores equipos (petición explícita del usuario) — el resto de la
-     Bundesliga no migra a ningún sitio. -->
+<!-- Orden 2026-08-15 (petición usuario, "LIMPIEZA Y ELIMINACIÓN Y
+     ANIQUILACIÓN TOTAL DE LAS LIGAS ANTIGUAS"): Inglaterra/Italia/
+     Francia/Portugal/P.Bajos/Bélgica/Turquía/Dinamarca/Suiza/Escocia
+     (10 ligas) + las 6 "Ligas Mixtas" NUEVAS (Germanika/Hellas Slavia/
+     Danubio Nórdica/Adriático Oriental/Balkanica/Eurasia) + Resto
+     Mundo son las ÚNICAS ligas de "Resto de Ligas". Las 9 "Ligas
+     Mixtas" VIEJAS (`liga-mixta-1`..`liga-mixta-9`, fusión 2026-07-30/
+     31 de las 43 ligas menores — Rep.Checa/Grecia/San Marino/Gales/
+     Georgia/Polonia/Noruega/.../Islandia) se ANIQUILARON por completo:
+     sin card, sin seed, sin cupo, y con purga forzada de cualquier
+     resto en local/servidor (ver `_DEAD_MERGED_LEAGUE_SLUGS`, que
+     ahora también las incluye a ellas, no solo a las 43 menores). -->
 <div class="menu-grid">
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#7a0010,#cf142b,#fff);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇬🇧</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Inglaterra</span></div>
 <div class="menu-card" onclick="" style="background:linear-gradient(135deg,#006630,#fff,#ce2b37);border-color:rgba(255,255,255,.15);"><span class="mc-emoji">🇮🇹</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Italia</span></div>
@@ -42864,30 +42906,15 @@ window._hdrCleanCache = function(){
      Resto Mundo (abajo). `grid-column:1/-1` para que ocupe el ancho
      completo del grid de 2 columnas en vez de una sola celda. -->
 <div style="grid-column:1/-1;height:1px;margin:4px 2px 8px;background:rgba(255,255,255,.07);"></div>
-<!-- Ligas fusionadas 2026-07-30/31 (petición usuario): nombre = SOLO las
-     banderas de los países que la componen. `data-slug` fija el slug
-     interno (bypasa el slugify() del label, que con emoji daría
-     cadena vacía) — lo lee `wireLigasExt` y lo pasa como 3er arg a
-     `openLigaExt`. Liga Mixta 6 va PRIMERA de las Mixtas (petición
-     usuario 2026-07-31); Resto Mundo se mueve a la ÚLTIMA card de la
-     rejilla (más abajo, tras liga-mixta-9). -->
-<div class="menu-card" data-slug="liga-mixta-6" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇩🇪🇷🇸🇷🇴🇫🇴🇱🇻</span><span class="mc-label" style="display:none;">🇩🇪🇷🇸🇷🇴🇫🇴🇱🇻</span></div>
-<div class="menu-card" data-slug="liga-mixta-1" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇨🇿🇬🇷🇸🇲🏴󠁧󠁢󠁷󠁬󠁳󠁿🇬🇪</span><span class="mc-label" style="display:none;">🇨🇿🇬🇷🇸🇲🏴󠁧󠁢󠁷󠁬󠁳󠁿🇬🇪</span></div>
-<div class="menu-card" data-slug="liga-mixta-2" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇵🇱🇳🇴🇲🇪🇱🇺🇧🇾</span><span class="mc-label" style="display:none;">🇵🇱🇳🇴🇲🇪🇱🇺🇧🇾</span></div>
-<div class="menu-card" data-slug="liga-mixta-3" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇨🇾🇦🇹🇦🇩🇬🇮🇬🇬</span><span class="mc-label" style="display:none;">🇨🇾🇦🇹🇦🇩🇬🇮🇬🇬</span></div>
-<div class="menu-card" data-slug="liga-mixta-4" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇸🇪🇭🇷🇱🇹🇲🇰🇦🇱</span><span class="mc-label" style="display:none;">🇸🇪🇭🇷🇱🇹🇲🇰🇦🇱</span></div>
-<div class="menu-card" data-slug="liga-mixta-5" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇮🇱🇭🇺🇺🇦🇪🇪🇲🇹</span><span class="mc-label" style="display:none;">🇮🇱🇭🇺🇺🇦🇪🇪🇲🇹</span></div>
-<div class="menu-card" data-slug="liga-mixta-7" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇸🇮🇧🇬🇧🇦🇰🇿🇽🇰</span><span class="mc-label" style="display:none;">🇸🇮🇧🇬🇧🇦🇰🇿🇽🇰</span></div>
-<div class="menu-card" data-slug="liga-mixta-8" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇷🇺🇦🇲🇫🇮🇲🇩🇦🇿</span><span class="mc-label" style="display:none;">🇷🇺🇦🇲🇫🇮🇲🇩🇦🇿</span></div>
-<div class="menu-card" data-slug="liga-mixta-9" onclick="" style="background:linear-gradient(135deg,#2a2a3a,#4a4a6a,#2a2a3a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🇸🇰🇮🇪🇮🇸</span><span class="mc-label" style="display:none;">🇸🇰🇮🇪🇮🇸</span></div>
-<!-- Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14) — sustituyen a
-     las liga-mixta 1-9 como feeder de la Previa de Champions (esas 9
-     quedan intactas arriba, sin cupo europeo automático). A diferencia
-     de las Mixtas (solo banderas, sin nombre propio), estas SÍ tienen
-     marca/nombre — igual tratamiento visual que "Resto Mundo": emoji
-     🏆 + label visible con el nombre de la liga. `data-slug` fija el
-     slug interno (ver `_EXTRA_LEAGUE_SEEDS`, seed automático de 18-20
-     equipos reales por liga). -->
+<!-- Las 6 "Ligas Mixtas" (2026-08-14) — ÚNICAS ligas fusionadas vigentes
+     (feeder de la Previa de Champions de 4 rondas). Las 9 antiguas
+     `liga-mixta-1`..`liga-mixta-9` se aniquilaron el 2026-08-15 — ver
+     comentario de arriba. A diferencia de las viejas (solo banderas,
+     sin nombre propio), estas SÍ tienen marca/nombre — igual
+     tratamiento visual que "Resto Mundo": emoji 🏆 + label visible con
+     el nombre de la liga. `data-slug` fija el slug interno (ver
+     `_EXTRA_LEAGUE_SEEDS`, seed automático de 18-20 equipos reales por
+     liga). -->
 <div class="menu-card" data-slug="germanika" onclick="" style="background:linear-gradient(135deg,#1a1a1a,#3a3a3a,#c9a227,#1a1a1a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Germanika</span></div>
 <div class="menu-card" data-slug="hellas-slavia" onclick="" style="background:linear-gradient(135deg,#0d3b66,#1e5a8a,#0d3b66);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Hellas Slavia</span></div>
 <div class="menu-card" data-slug="danubio-nordica" onclick="" style="background:linear-gradient(135deg,#5a0a0a,#8a1a1a,#5a0a0a);border-color:rgba(255,255,255,.18);"><span class="mc-emoji">🏆</span><span class="mc-label" style="color:#fff;text-shadow:1px 1px 2px #000;">Danubio Nórdica</span></div>
@@ -42945,21 +42972,24 @@ window._hdrCleanCache = function(){
 <!-- Botón "🗑 Eliminar ligas fusionadas del servidor" (PIN admin 747).
      Petición usuario 2026-08-08 ("antes tenía 53-54 ligas, las reduje a
      20, ¿se eliminaron por completo? si no, quiero que las elimines para
-     siempre y liberes espacio"). Las 43 ligas menores fusionadas en
-     liga-mixta-1..9 (2026-07-30/31) ya no tienen card ni slug vigente,
-     y el cliente ya purga su copia LOCAL (`ftbol_merged_leagues_purge_v1
-     ..v8`) — pero esa purga es "solo local, nunca toca el servidor" por
-     diseño. Este botón borra PERMANENTEMENTE las filas
-     `liga_ext_<slug>` (+ `_protected`/`_snap_*`/`_backup`) de esas 43
-     ligas en la base de datos — sin esto, `/api/liga-ext-bulk` (y el
-     resto de endpoints que barren `liga_ext_%`) las sigue devolviendo y
-     puede resucitar la purga local en cualquier dispositivo. -->
+     siempre y liberes espacio"), ampliada 2026-08-15 ("ANIQUILACIÓN
+     TOTAL DE LAS LIGAS ANTIGUAS... SIEMPRE SALE RESIDUALMENTE"). Las 43
+     ligas menores fusionadas en liga-mixta-1..9 (2026-07-30/31) MÁS las
+     propias liga-mixta-1..9 (ANIQUILADAS por completo el 2026-08-15) ya
+     no tienen card ni slug vigente, y el cliente ya purga su copia
+     LOCAL (`ftbol_merged_leagues_purge_v1..v13`) — pero esa purga es
+     "solo local, nunca toca el servidor" por diseño. Este botón borra
+     PERMANENTEMENTE las filas `liga_ext_<slug>` (+ `_protected`/
+     `_snap_*`/`_backup`) de esas 52 ligas en la base de datos — sin
+     esto, `/api/liga-ext-bulk` (y el resto de endpoints que barren
+     `liga_ext_%`) las sigue devolviendo y puede resucitar la purga
+     local en cualquier dispositivo. -->
 <div class="restoligas-actions" style="margin-top:10px;">
   <button class="restoligas-btn restoligas-btn-commit"
           onclick="window.pG(function(){window._restoLigasPurgeDeadServer&&window._restoLigasPurgeDeadServer();})"
           style="flex:1 1 auto;background:linear-gradient(90deg,#2e0a0a,#4a1e1e,#7a2e2e,#4a1e1e,#2e0a0a);border-color:rgba(255,90,90,.5);color:#ffb3b3;">
     <span class="restoligas-ico">🗑</span>
-    <span>Eliminar del servidor las 43 ligas fusionadas (admin)</span>
+    <span>Eliminar del servidor las ligas fusionadas/aniquiladas (admin)</span>
   </button>
 </div>
 </div>
@@ -44921,15 +44951,17 @@ window._hdrCleanCache = function(){
   /* Lista canónica: window._DEAD_MERGED_LEAGUE_SLUGS (definida en el
      primer <script> del archivo, junto a window._idbKV). NUNCA
      duplicar este array aquí — las 43 ligas fusionadas en
-     liga-mixta-1..9 tienen que ser EXACTAMENTE las mismas para el
-     botón admin, la purga local v9 y el filtro de
+     liga-mixta-1..9 MÁS las propias liga-mixta-1..9 (ANIQUILADAS por
+     completo el 2026-08-15) tienen que ser EXACTAMENTE las mismas para
+     el botón admin, la purga local (v9..v13) y el filtro de
      `_lextReconcileResultsToServer`. */
   var DEAD_MERGED_LEAGUE_SLUGS = window._DEAD_MERGED_LEAGUE_SLUGS || [];
   window._restoLigasPurgeDeadServer = function(){
-    if(!confirm('🗑 Eliminar del servidor las 43 ligas fusionadas\n\n'
+    if(!confirm('🗑 Eliminar del servidor las ligas fusionadas/aniquiladas\n\n'
       +'Borra PARA SIEMPRE, de la base de datos, los datos (plantillas,\n'
       +'resultados, escudos) de las 43 ligas menores que ya se\n'
-      +'fusionaron en Liga Mixta 1-9: '+DEAD_MERGED_LEAGUE_SLUGS.join(', ')+'.\n\n'
+      +'fusionaron en Liga Mixta 1-9, MÁS las propias liga-mixta-1..9\n'
+      +'(ANIQUILADAS por completo): '+DEAD_MERGED_LEAGUE_SLUGS.join(', ')+'.\n\n'
       +'Estas ligas ya NO tienen card ni slug vigente — sus datos solo\n'
       +'ocupan espacio sin que nada pueda volver a mostrarlos. Esta\n'
       +'acción NO se puede deshacer.\n\n'
@@ -44961,7 +44993,7 @@ window._hdrCleanCache = function(){
           if(j && j.ok){
             var n = j.deleted_count || 0;
             alert(n > 0
-              ? ('✅ Borradas '+n+' filas del servidor (main + protected + snapshots de las 43 ligas fusionadas).\n\nYa no ocupan espacio en la base de datos.')
+              ? ('✅ Borradas '+n+' filas del servidor (main + protected + snapshots de las ligas fusionadas/aniquiladas).\n\nYa no ocupan espacio en la base de datos.')
               : '✅ No había nada que borrar — ya estaban limpias (o esta es la 2ª vez que lo pulsas, es normal).');
           } else if(tries < MAX_TRIES){
             setTimeout(function(){ attempt(tries+1); }, Math.pow(2, tries+1) * 1000);
@@ -45153,85 +45185,17 @@ window._hdrCleanCache = function(){
     return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w\s]/g,' ').replace(/\s+/g,' ').trim().toLowerCase();
   }
 
-  /* Bandera REAL por equipo dentro de una "Liga Mixta" (bug 2026-08-02,
-     foto usuario "GOLEADORES" — Jugador 10 de Lokomotiv Moscow salía con
-     las 5 banderas APILADAS de toda liga-mixta-8 (Rusia+Armenia+
-     Finlandia+Moldavia+Azerbaiyán) en vez de solo la rusa). Cada Liga
-     Mixta fusiona 3-5 ligas menores en una sola (`mc-emoji` de la card
-     es la concatenación de esas banderas — correcto como icono de LA
-     LIGA, pero incorrecto como icono de UN jugador/equipo concreto).
-     La única fuente de "país real de este equipo" es el campo opcional
-     `t.country` del editor de plantilla (🌐 País, en "⚙ Más opciones"
-     de cada card) — si el admin no lo ha rellenado, no hay forma de
-     saberlo, así que se usa una bandera NEGRA de marcador (petición
-     usuario: "si no sabes de donde es cada equipo pon una bandera de
-     color negro"). Las banderas de cada país son las MISMAS que ya usan
-     las menu-cards de `s-ligas` (ver arriba, `data-slug="liga-mixta-N"`)
-     — no se inventan banderas nuevas. */
+  /* Bandera REAL por equipo dentro de una "Liga Mixta" — infraestructura
+     GENÉRICA (bug histórico 2026-08-02, ya no aplica a ninguna liga
+     viva: `liga-mixta-1..9` se ANIQUILARON por completo el 2026-08-15
+     — ver `_DEAD_MERGED_LEAGUE_SLUGS`). `LIGA_MIXTA_COUNTRIES` se deja
+     VACÍO a propósito: si en el futuro se crea una liga fusionada nueva
+     con slug `liga-mixta-N`, basta con añadir su entrada aquí — los 4
+     consumidores (`_mixtaTeamFlag`, el datalist "🌐 País" del editor de
+     cards) ya son genéricos y degradan con normalidad (bandera negra)
+     mientras el mapa esté vacío. */
   var _MIXTA_UNKNOWN_FLAG = '🏴';
-  var LIGA_MIXTA_COUNTRIES = {
-    'liga-mixta-1': [
-      {name:'Chequia', alias:['republica checa','rep checa','rep. checa','czechia'], flag:'🇨🇿'},
-      {name:'Grecia', flag:'🇬🇷'},
-      {name:'San Marino', flag:'🇸🇲'},
-      {name:'Gales', alias:['wales'], flag:'🏴󠁧󠁢󠁷󠁬󠁳󠁿'},
-      {name:'Georgia', flag:'🇬🇪'}
-    ],
-    'liga-mixta-2': [
-      {name:'Polonia', flag:'🇵🇱'},
-      {name:'Noruega', flag:'🇳🇴'},
-      {name:'Montenegro', flag:'🇲🇪'},
-      {name:'Luxemburgo', flag:'🇱🇺'},
-      {name:'Bielorrusia', alias:['belarus'], flag:'🇧🇾'}
-    ],
-    'liga-mixta-3': [
-      {name:'Chipre', alias:['cyprus'], flag:'🇨🇾'},
-      {name:'Austria', flag:'🇦🇹'},
-      {name:'Andorra', flag:'🇦🇩'},
-      {name:'Gibraltar', flag:'🇬🇮'},
-      {name:'N. Irlanda', alias:['norirlanda','n irlanda','irlanda del norte','northern ireland'], flag:'🇬🇬'}
-    ],
-    'liga-mixta-4': [
-      {name:'Suecia', flag:'🇸🇪'},
-      {name:'Croacia', flag:'🇭🇷'},
-      {name:'Lituania', flag:'🇱🇹'},
-      {name:'Macedonia del Norte', alias:['macedonia','n macedonia','macedonia del norte'], flag:'🇲🇰'},
-      {name:'Albania', flag:'🇦🇱'}
-    ],
-    'liga-mixta-5': [
-      {name:'Israel', flag:'🇮🇱'},
-      {name:'Hungría', alias:['hungria'], flag:'🇭🇺'},
-      {name:'Ucrania', flag:'🇺🇦'},
-      {name:'Estonia', flag:'🇪🇪'},
-      {name:'Malta', flag:'🇲🇹'}
-    ],
-    'liga-mixta-6': [
-      {name:'Alemania', flag:'🇩🇪'},
-      {name:'Serbia', flag:'🇷🇸'},
-      {name:'Rumanía', alias:['rumania'], flag:'🇷🇴'},
-      {name:'Islas Feroe', alias:['feroe','islas feroe'], flag:'🇫🇴'},
-      {name:'Letonia', flag:'🇱🇻'}
-    ],
-    'liga-mixta-7': [
-      {name:'Eslovenia', flag:'🇸🇮'},
-      {name:'Bulgaria', flag:'🇧🇬'},
-      {name:'Bosnia', alias:['bosnia y herzegovina','bosnia herzegovina'], flag:'🇧🇦'},
-      {name:'Kazajistán', alias:['kazajistan','kazakhstan'], flag:'🇰🇿'},
-      {name:'Kosovo', flag:'🇽🇰'}
-    ],
-    'liga-mixta-8': [
-      {name:'Rusia', alias:['russia'], flag:'🇷🇺'},
-      {name:'Armenia', flag:'🇦🇲'},
-      {name:'Finlandia', flag:'🇫🇮'},
-      {name:'Moldavia', alias:['moldova'], flag:'🇲🇩'},
-      {name:'Azerbaiyán', alias:['azerbaiyan','azerbaijan'], flag:'🇦🇿'}
-    ],
-    'liga-mixta-9': [
-      {name:'Eslovaquia', flag:'🇸🇰'},
-      {name:'Irlanda', flag:'🇮🇪'},
-      {name:'Islandia', alias:['iceland'], flag:'🇮🇸'}
-    ]
-  };
+  var LIGA_MIXTA_COUNTRIES = {};
   window.LIGA_MIXTA_COUNTRIES = LIGA_MIXTA_COUNTRIES;
   function _mixtaNorm(s){
     return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,' ').trim();
@@ -50590,25 +50554,17 @@ https://api.sofascore.app/api/v1/team/44/image
     // 🔵1 🟣1 🟠1 🟢1 — Bélgica / Turquía / Dinamarca / Suiza / Escocia
     set(['belgica','turquia','dinamarca','suiza'], {ucl:1, uclPrev:1, prevR3:0, prevR2:0, prevR1:0, uel:1, uecl:1, desc:2});
     Z['escocia'] = {ucl:1, uclPrev:1, prevR3:0, prevR2:0, prevR1:0, uel:1, uecl:1, desc:1};
-    /* Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14, sustituyen a
-       las antiguas liga-mixta 1-9 como feeder de la Previa — esas 9
-       quedan intactas como ligas jugables pero sin cupo europeo
-       automático, ver más abajo). Ninguna tiene 🟠/🟢 directo — solo
-       alimentan Champions/Previa. */
+    /* Las 6 "Ligas Mixtas" de "Resto de Ligas" (2026-08-14) — feeder de
+       la Previa. Ninguna tiene 🟠/🟢 directo — solo alimentan
+       Champions/Previa. Las 9 antiguas `liga-mixta-1`..`liga-mixta-9`
+       (2026-07-30/31) se ANIQUILARON por completo el 2026-08-15 — sin
+       card, sin seed, sin entrada aquí. PROHIBIDO reintroducirlas. */
     Z['germanika']          = {ucl:3, uclPrev:1, prevR3:2, prevR2:2, prevR1:2, uel:0, uecl:0, desc:2};
     Z['hellas-slavia']      = {ucl:0, uclPrev:0, prevR3:2, prevR2:2, prevR1:5, uel:0, uecl:0, desc:2};
     Z['danubio-nordica']    = {ucl:0, uclPrev:0, prevR3:2, prevR2:2, prevR1:4, uel:0, uecl:0, desc:2};
     Z['adriatico-oriental'] = {ucl:0, uclPrev:0, prevR3:2, prevR2:2, prevR1:5, uel:0, uecl:0, desc:2};
     Z['balkanica']          = {ucl:0, uclPrev:0, prevR3:2, prevR2:2, prevR1:4, uel:0, uecl:0, desc:2};
     Z['eurasia']            = {ucl:0, uclPrev:0, prevR3:1, prevR2:2, prevR1:4, uel:0, uecl:0, desc:2};
-    /* Ligas Mixtas 1-9 (fusiones de 2026-07-30/31): con Wild Card/Open
-       Qualifier ANIQUILADOS ya no tienen ningún cupo europeo automático
-       (sus antiguos campos uclQual/wildcard no existen en el nuevo
-       modelo). Se conservan como ligas jugables normales — el admin
-       puede darles cupo manual desde 📜 Reglas si quiere. */
-    for(var _mi=1; _mi<=9; _mi++){
-      Z['liga-mixta-'+_mi] = {ucl:0, uclPrev:0, prevR3:0, prevR2:0, prevR1:0, uel:0, uecl:0, desc:2};
-    }
     return Z;
   })();
   window.LEAGUE_DEFAULT_ZONES = LEAGUE_DEFAULT_ZONES;
@@ -56117,31 +56073,10 @@ https://api.sofascore.app/api/v1/team/44/image
     'dinamarca':'Superliga',
     'suiza':'Super League',
     'escocia':'Premiership',
-    /* 2026-07-30/31 (petición usuario): Rep. Checa+Grecia+San Marino+
-       Gales+Georgia (liga-mixta-1), Polonia+Noruega+Montenegro+
-       Luxemburgo+Bielorrusia (liga-mixta-2), Chipre+Austria+Andorra+
-       Gibraltar+N.Irlanda (liga-mixta-3), Suecia+Croacia+Lituania+
-       Macedonia del Norte+Albania (liga-mixta-4), Israel+Hungría+
-       Ucrania+Estonia+Malta (liga-mixta-5), los 6 mejores de Alemania+
-       Serbia+Rumanía+Islas Feroe+Letonia (liga-mixta-6 — Alemania se
-       ELIMINA como liga propia, sus otros 12 equipos no migran a
-       ningún sitio), Eslovenia+Bulgaria+Bosnia+Kazajistán+Kosovo
-       (liga-mixta-7), Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán
-       (liga-mixta-8) y Eslovaquia+Irlanda+Islandia (liga-mixta-9 — las
-       ÚLTIMAS 3 ligas menores sin fusionar, repartidas 7/7/6 en vez de
-       las 4-5 habituales por no haber una 4ª/5ª liga con la que
-       completar el grupo) se fusionan en ligas de 20 equipos. Las
-       entradas individuales de arriba se eliminan — sus slugs ya no
-       existen como ligas propias. */
-    'liga-mixta-1':'Liga Mixta 1 — Chequia+Grecia+San Marino+Gales+Georgia',
-    'liga-mixta-2':'Liga Mixta 2 — Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia',
-    'liga-mixta-3':'Liga Mixta 3 — Chipre+Austria+Andorra+Gibraltar+N.Irlanda',
-    'liga-mixta-4':'Liga Mixta 4 — Suecia+Croacia+Lituania+Macedonia del Norte+Albania',
-    'liga-mixta-5':'Liga Mixta 5 — Israel+Hungría+Ucrania+Estonia+Malta',
-    'liga-mixta-6':'Liga Mixta 6 — Alemania+Serbia+Rumanía+Islas Feroe+Letonia',
-    'liga-mixta-7':'Liga Mixta 7 — Eslovenia+Bulgaria+Bosnia+Kazajistán+Kosovo',
-    'liga-mixta-8':'Liga Mixta 8 — Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán',
-    'liga-mixta-9':'Liga Mixta 9 — Eslovaquia+Irlanda+Islandia',
+    /* Las 9 "Ligas Mixtas" VIEJAS (`liga-mixta-1`..`liga-mixta-9`,
+       fusión 2026-07-30/31 de 43 ligas menores) se ANIQUILARON por
+       completo el 2026-08-15 (petición usuario). PROHIBIDO
+       reintroducir sus entradas aquí. */
     /* Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14), feeder de la
        Previa de Champions de 4 rondas — ver `LEAGUE_DEFAULT_ZONES` y
        `_EXTRA_LEAGUE_SEEDS` para su cupo europeo y roster respectivamente. */
@@ -56599,16 +56534,7 @@ https://api.sofascore.app/api/v1/team/44/image
       'suiza':          {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2},
       'escocia':        {ucl:0, uclPrev:1, uclQual:2, uel:0, uecl:0, wildcard:2},
       'portugal':       {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0},
-      'p-bajos':        {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0},
-      'liga-mixta-1':   {ucl:2, uclPrev:2, uclQual:6,  uel:2, uecl:2, wildcard:4},
-      'liga-mixta-2':   {ucl:0, uclPrev:2, uclQual:10, uel:0, uecl:0, wildcard:10},
-      'liga-mixta-3':   {ucl:0, uclPrev:2, uclQual:10, uel:0, uecl:0, wildcard:10},
-      'liga-mixta-4':   {ucl:0, uclPrev:3, uclQual:10, uel:0, uecl:0, wildcard:9},
-      'liga-mixta-5':   {ucl:0, uclPrev:3, uclQual:11, uel:0, uecl:0, wildcard:9},
-      'liga-mixta-6':   {ucl:4, uclPrev:3, uclQual:9,  uel:2, uecl:1, wildcard:6},
-      'liga-mixta-7':   {ucl:0, uclPrev:5, uclQual:10, uel:0, uecl:0, wildcard:7},
-      'liga-mixta-8':   {ucl:0, uclPrev:5, uclQual:10, uel:0, uecl:0, wildcard:7},
-      'liga-mixta-9':   {ucl:0, uclPrev:3, uclQual:6,  uel:0, uecl:0, wildcard:4}
+      'p-bajos':        {ucl:2, uclPrev:0, uclQual:0, uel:2, uecl:1, wildcard:0}
     };
     var GEN = {ucl:1, uclPrev:1, uclQual:1, uel:1, uecl:1, wildcard:0};
     function eqEuro(z, r){
@@ -56640,174 +56566,11 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   window._fixupLeagueZonesV4 = _fixupLeagueZonesV4;
-  /* Fixup Grecia en Liga Mixta 1 (2026-07-31, corrección usuario: "no
-     pueden faltar el Olympiacos y el PAOK"). El seed original de
-     liga-mixta-1 metió Aris Thessaloniki/AE Kifisias/Anagennisi Karditsa
-     como representantes de Grecia — muy por debajo en la clasificación
-     real (Olympiacos 2º, PAOK 3º, ambos detrás solo de AEK) de los 2
-     grandes que faltaban. Sustituye esos 3 por Olympiacos/PAOK/Levadiakos
-     (2º/3º/5º real) renombrando el objeto EQUIPO en sitio — los
-     `results[]` referencian por `id` (`ts[i].id`), NO por nombre
-     (`ligaExtSimular`), así que renombrar NO desincroniza la
-     clasificación de un equipo ya simulado. Reajusta el power de
-     AEK/Sparta Praha/Panathinaikos para reflejar el orden real. SOLO
-     actúa si el roster local sigue siendo EXACTAMENTE el del seed viejo
-     (nunca pisa una edición manual del admin: equipo renombrado,
-     añadido, borrado, o ya corregido a mano). Idempotente vía flag
-     propio. */
-  function _fixupLigaMixta1GreciaV1(){
-    var FLAG = 'ftbol_liga_mixta1_grecia_fix_v1';
-    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
-    try {
-      var key = 'ligaExt_liga-mixta-1';
-      var raw = localStorage.getItem(key);
-      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
-      var d = JSON.parse(raw);
-      if (!d || !Array.isArray(d.teams)) { window._lsSetSafe(FLAG, '1'); return; }
-      function norm(s){ return String(s||'').toLowerCase().trim(); }
-      var OLD3 = ['aris thessaloniki', 'ae kifisias', 'anagennisi karditsa'];
-      var foundOld = OLD3.every(function(n){
-        return d.teams.some(function(t){ return norm(t.name) === n; });
-      });
-      var hasNew = d.teams.some(function(t){
-        var nm = norm(t.name);
-        return nm === 'olympiacos' || nm === 'paok';
-      });
-      if (!foundOld || hasNew) { window._lsSetSafe(FLAG, '1'); return; }
-      d.teams.forEach(function(t){
-        var nm = norm(t.name);
-        if (nm === 'aris thessaloniki') { t.name = 'Olympiacos'; t.power = t.atk = t.mid = t.def = 73; }
-        else if (nm === 'ae kifisias') { t.name = 'PAOK'; t.power = t.atk = t.mid = t.def = 72; }
-        else if (nm === 'anagennisi karditsa') { t.name = 'Levadiakos'; t.power = t.atk = t.mid = t.def = 69; }
-        else if (nm === 'aek athens') { t.power = t.atk = t.mid = t.def = 74; }
-        else if (nm === 'sparta praha') { t.power = t.atk = t.mid = t.def = 70; }
-        else if (nm === 'panathinaikos') { t.power = t.atk = t.mid = t.def = 71; }
-      });
-      window._lsSetSafe(key, JSON.stringify(d));
-      try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-mixta-1'] = d; } catch(_){}
-      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-mixta-1'); } catch(_){}
-      try { console.warn('[ligaExt] Liga Mixta 1: Grecia corregida — Olympiacos/PAOK/Levadiakos sustituyen a Aris Thessaloniki/AE Kifisias/Anagennisi Karditsa.'); } catch(_){}
-    } catch(_){}
-    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
-  }
-  window._fixupLigaMixta1GreciaV1 = _fixupLigaMixta1GreciaV1;
-  /* Helper genérico de renombrado+repotenciado para las migraciones de
-     Liga Mixta 1/2 (2026-07-31): recibe un mapa {nombreViejoNorm:
-     {name, power}} y, para cada equipo local cuyo nombre normalizado
-     esté en el mapa, lo renombra/repotencia EN SITIO — nunca toca
-     `results[]` (referencian por `id`, no por nombre, ver
-     `ligaExtSimular`), así que un equipo ya simulado no pierde su
-     clasificación. Salta cualquier regla cuyo nombre DESTINO ya exista
-     en el roster (evita duplicar si el admin ya lo añadió a mano, o si
-     una migración anterior ya corrió). Devuelve cuántos cambios hizo. */
-  function _lextApplyRenameMap(teams, map){
-    function norm(s){
-      return String(s||'').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
-    }
-    var existing = {};
-    teams.forEach(function(t){ existing[norm(t.name)] = true; });
-    var changed = 0;
-    teams.forEach(function(t){
-      var rule = map[norm(t.name)];
-      if (!rule) return;
-      var targetNorm = norm(rule.name);
-      if (targetNorm !== norm(t.name) && existing[targetNorm]) return;
-      delete existing[norm(t.name)];
-      t.name = rule.name;
-      if (typeof rule.power === 'number') { t.power = t.atk = t.mid = t.def = rule.power; }
-      existing[targetNorm] = true;
-      changed++;
-    });
-    return changed;
-  }
-  /* Fixup Rep.Checa/Georgia/Gales/San Marino en Liga Mixta 1 (2026-07-31,
-     corrección usuario con las 5 clasificaciones SofaScore reales — ver
-     comentario junto a `_EXTRA_LEAGUE_SEEDS['liga-mixta-1']`). Corre
-     DESPUÉS de `_fixupLigaMixta1GreciaV1` (Grecia ya queda resuelta por
-     esa migración). Idempotente vía flag propio; nunca pisa un roster
-     que el admin ya haya editado (el rename solo actúa sobre el nombre
-     VIEJO exacto y salta si el nombre DESTINO ya existe). */
-  function _fixupLigaMixta1RealDataV2(){
-    var FLAG = 'ftbol_liga_mixta1_realdata_fix_v2';
-    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
-    try {
-      var key = 'ligaExt_liga-mixta-1';
-      var raw = localStorage.getItem(key);
-      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
-      var d = JSON.parse(raw);
-      if (!d || !Array.isArray(d.teams)) { window._lsSetSafe(FLAG, '1'); return; }
-      var MAP = {
-        'sparta praha':          {name:'Sparta Praha',    power:68},
-        'jablonec':              {name:'Jablonec',        power:66},
-        'slovan liberec':        {name:'Hradec Králové',  power:65},
-        'viktoria plzen':        {name:'Viktoria Plzeň',  power:67},
-        'mlada boleslav':        {name:'Slavia Praha',    power:70},
-        'dinamo tbilisi':        {name:'Iberia',          power:64},
-        'dinamo batumi':         {name:'Dila',            power:61},
-        'fc telavi':             {name:'Torpedo Kutaisi', power:59},
-        'colwyn bay':            {name:"Connah's Quay",   power:63},
-        'caernarfon':            {name:'Caernarfon',      power:58},
-        'the new saints':        {name:'The New Saints',  power:62},
-        'rhyl fc':               {name:'Penybont',        power:60},
-        'folgore/falciano':      {name:'Tre Fiori',       power:57},
-        'san giovanni':          {name:'Virtus',          power:56},
-        'cailungo':              {name:'Tre Penne',       power:55}
-      };
-      var changed = _lextApplyRenameMap(d.teams, MAP);
-      if (changed > 0) {
-        window._lsSetSafe(key, JSON.stringify(d));
-        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-mixta-1'] = d; } catch(_){}
-        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-mixta-1'); } catch(_){}
-        try { console.warn('[ligaExt] Liga Mixta 1: '+changed+' equipos corregidos (Rep.Checa/Georgia/Gales/San Marino) según la clasificación real.'); } catch(_){}
-      }
-    } catch(_){}
-    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
-  }
-  window._fixupLigaMixta1RealDataV2 = _fixupLigaMixta1RealDataV2;
-  /* Fixup Noruega/Polonia/Bielorrusia/Montenegro/Luxemburgo en Liga
-     Mixta 2 (2026-07-31, mismo motivo que Liga Mixta 1 arriba). */
-  function _fixupLigaMixta2RealDataV1(){
-    var FLAG = 'ftbol_liga_mixta2_realdata_fix_v1';
-    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
-    try {
-      var key = 'ligaExt_liga-mixta-2';
-      var raw = localStorage.getItem(key);
-      if (!raw) { window._lsSetSafe(FLAG, '1'); return; }
-      var d = JSON.parse(raw);
-      if (!d || !Array.isArray(d.teams)) { window._lsSetSafe(FLAG, '1'); return; }
-      var MAP = {
-        'fk bodo/glimt':          {name:'FK Bodø/Glimt',        power:74},
-        'sk brann':               {name:'SK Brann',             power:68},
-        'molde fk':               {name:'Tromsø',               power:70},
-        'viking stavanger':       {name:'Viking',                power:76},
-        'korona kielce':          {name:'Górnik',                power:69},
-        'gks katowice':           {name:'GKS Katowice',         power:65},
-        'jagiellonia bialystok':  {name:'Jagiellonia Białystok', power:67},
-        'legia warszawa':         {name:'Legia Warszawa',       power:66},
-        'lech poznan':            {name:'Lech Poznań',          power:72},
-        'dinamo minsk':           {name:'Dinamo Minsk',         power:62},
-        'fk lovcen':              {name:'FK Mornar',            power:63},
-        'maxline vitebsk':        {name:'Maxline Vitebsk',      power:64},
-        'fk buducnost podgorica': {name:'Petrovac',             power:61},
-        'isloch':                 {name:'Slavia',               power:60},
-        'progres niederkorn':     {name:'Bissen',               power:59},
-        'fk decic':               {name:'FK Dečić',             power:58},
-        'gomel':                  {name:'Dynamo Brest',         power:57},
-        'mamer':                  {name:'Differdange 03',       power:56},
-        'fk sutjeska niksic':     {name:'FK Sutjeska Nikšić',   power:55},
-        'swift hesperange':       {name:'Mondorf',              power:54}
-      };
-      var changed = _lextApplyRenameMap(d.teams, MAP);
-      if (changed > 0) {
-        window._lsSetSafe(key, JSON.stringify(d));
-        try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE['liga-mixta-2'] = d; } catch(_){}
-        try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache('liga-mixta-2'); } catch(_){}
-        try { console.warn('[ligaExt] Liga Mixta 2: '+changed+' equipos corregidos (Noruega/Polonia/Bielorrusia/Montenegro/Luxemburgo) según la clasificación real.'); } catch(_){}
-      }
-    } catch(_){}
-    try { window._lsSetSafe(FLAG, '1'); } catch(_){}
-  }
-  window._fixupLigaMixta2RealDataV1 = _fixupLigaMixta2RealDataV1;
+  /* Las migraciones _fixupLigaMixta1GreciaV1 / _fixupLigaMixta1RealDataV2 /
+     _fixupLigaMixta2RealDataV1 (2026-07-31, correcciones de roster de las
+     ligas fusionadas viejas) y su helper _lextApplyRenameMap se
+     ELIMINARON el 2026-08-15 junto con liga-mixta-1..9 — ya no tienen
+     ningún dato sobre el que actuar. PROHIBIDO reintroducirlas. */
   /* Top-up ASÍNCRONO desde IndexedDB (2026-07-01) — red de seguridad
      compartida por los "ensure seed" de Resto Mundo / N.Irlanda /
      Montenegro / Albania (las ÚNICAS ligas con seed automático — el
@@ -57459,9 +57222,6 @@ https://api.sofascore.app/api/v1/team/44/image
   try { _fixupSanMarinoWcV1(); } catch(_){}
   try { _fixupLeagueZonesV3(); } catch(_){}
   try { _fixupLeagueZonesV4(); } catch(_){}
-  try { _fixupLigaMixta1GreciaV1(); } catch(_){}
-  try { _fixupLigaMixta1RealDataV2(); } catch(_){}
-  try { _fixupLigaMixta2RealDataV1(); } catch(_){}
   /* Purga LOCAL de las 10 ligas fusionadas en liga-mixta-1/liga-mixta-2
      (2026-07-30, petición explícita del usuario: "elimina por completo
      esas ligas ya pasadas a las nuevas"). Ya no tienen card, seed, zona
@@ -57888,304 +57648,15 @@ https://api.sofascore.app/api/v1/team/44/image
      lo mismo que estas y el resto".
      ═══════════════════════════════════════════════════════════════ */
   var _EXTRA_LEAGUE_SEEDS = {
-    /* 2026-07-30 (petición usuario, datos reales de la clasificación
-       vigente de cada liga de origen — Rep. Checa/Grecia/San Marino/
-       Gales/Georgia fusionadas en UNA liga de 20 equipos). Sin escudo
-       por ahora (el admin los añade luego desde el editor; cae al
-       placeholder de iniciales mientras tanto).
-       2026-07-31 (corrección usuario — este país NUNCA se contrastó con
-       la clasificación del juego, solo "datos reales de memoria", y el
-       usuario mandó las 5 clasificaciones SofaScore reales completas
-       para verificar): Grecia ya se había corregido (AEK/Olympiacos/
-       PAOK/Panathinaikos/Levadiakos, 1º-5º real). Con las 5 capturas se
-       encontraron errores EN LAS OTRAS 4: Rep. Checa traía Mladá
-       Boleslav (fuera del top 10 real) y Slovan Liberec (6º) en vez de
-       Slavia Praha (1º real, el mejor checo) y Hradec Králové (5º);
-       Georgia traía Dinamo Tbilisi/Batumi/Telavi (4º/6º/8º real) en vez
-       de Iberia/Dila/Torpedo Kutaisi (1º/2º/3º real); Gales traía
-       Colwyn Bay/Rhyl FC (6º/fuera del top11) en vez de Connah's Quay/
-       Penybont (2º/3º real); San Marino traía Folgore/San Giovanni/
-       Cailungo (5º/fuera del top10) en vez de Tre Fiori/Virtus/Tre
-       Penne (1º/2º/3º real). Ver `_fixupLigaMixta1GreciaV1` +
-       `_fixupLigaMixta1RealDataV2` para las migraciones de dispositivos
-       que ya tenían la liga sembrada con el roster viejo. */
-    'liga-mixta-1': {
-      teams: [
-        {name:'AEK Athens',             power:74, atk:74, mid:74, def:74},
-        {name:'Olympiacos',             power:73, atk:73, mid:73, def:73},
-        {name:'PAOK',                   power:72, atk:72, mid:72, def:72},
-        {name:'Panathinaikos',          power:71, atk:71, mid:71, def:71},
-        {name:'Slavia Praha',           power:70, atk:70, mid:70, def:70},
-        {name:'Levadiakos',             power:69, atk:69, mid:69, def:69},
-        {name:'Sparta Praha',           power:68, atk:68, mid:68, def:68},
-        {name:'Viktoria Plzeň',         power:67, atk:67, mid:67, def:67},
-        {name:'Jablonec',               power:66, atk:66, mid:66, def:66},
-        {name:'Hradec Králové',         power:65, atk:65, mid:65, def:65},
-        {name:'Iberia',                 power:64, atk:64, mid:64, def:64},
-        {name:"Connah's Quay",          power:63, atk:63, mid:63, def:63},
-        {name:'The New Saints',         power:62, atk:62, mid:62, def:62},
-        {name:'Dila',                   power:61, atk:61, mid:61, def:61},
-        {name:'Penybont',               power:60, atk:60, mid:60, def:60},
-        {name:'Torpedo Kutaisi',        power:59, atk:59, mid:59, def:59},
-        {name:'Caernarfon',             power:58, atk:58, mid:58, def:58},
-        {name:'Tre Fiori',              power:57, atk:57, mid:57, def:57},
-        {name:'Virtus',                 power:56, atk:56, mid:56, def:56},
-        {name:'Tre Penne',              power:55, atk:55, mid:55, def:55}
-      ]
-    },
-    /* Polonia+Noruega+Montenegro+Luxemburgo+Bielorrusia fusionadas en
-       UNA liga de 20 equipos (2026-07-30, datos reales vigentes).
-       2026-07-31 (corrección usuario, mismo motivo que Liga Mixta 1 —
-       nunca se contrastó con la clasificación del juego): Noruega
-       traía Molde FK (10º real) en vez de Tromsø (3º); Polonia traía
-       Korona Kielce (fuera del top10) en vez de Górnik (2º) —
-       Legia Warszawa (petición explícita del usuario, "también dentro
-       por favor") se mantiene pese a ser 6º real; Bielorrusia traía
-       Isloch/Gomel (7º/9º) en vez de Slavia/Dynamo Brest (3º/4º);
-       Montenegro traía FK Lovćen (fuera del top9) y Budućnost (5º) en
-       vez de FK Mornar (2º) y Petrovac (3º); Luxemburgo traía Progrès/
-       Mamer/Swift Hesperange (11º/fuera del top11/fuera del top11) en
-       vez de Bissen/Differdange 03/Mondorf (1º/2º/3º). Ver
-       `_fixupLigaMixta2RealDataV1` para la migración de dispositivos
-       ya sembrados con el roster viejo. */
-    'liga-mixta-2': {
-      teams: [
-        {name:'Viking',                     power:76, atk:76, mid:76, def:76},
-        {name:'FK Bodø/Glimt',              power:74, atk:74, mid:74, def:74},
-        {name:'Lech Poznań',                power:72, atk:72, mid:72, def:72},
-        {name:'Tromsø',                     power:70, atk:70, mid:70, def:70},
-        {name:'Górnik',                     power:69, atk:69, mid:69, def:69},
-        {name:'SK Brann',                   power:68, atk:68, mid:68, def:68},
-        {name:'Jagiellonia Białystok',      power:67, atk:67, mid:67, def:67},
-        {name:'Legia Warszawa',             power:66, atk:66, mid:66, def:66},
-        {name:'GKS Katowice',               power:65, atk:65, mid:65, def:65},
-        {name:'Maxline Vitebsk',            power:64, atk:64, mid:64, def:64},
-        {name:'FK Mornar',                  power:63, atk:63, mid:63, def:63},
-        {name:'Dinamo Minsk',               power:62, atk:62, mid:62, def:62},
-        {name:'Petrovac',                   power:61, atk:61, mid:61, def:61},
-        {name:'Slavia',                     power:60, atk:60, mid:60, def:60},
-        {name:'Bissen',                     power:59, atk:59, mid:59, def:59},
-        {name:'FK Dečić',                   power:58, atk:58, mid:58, def:58},
-        {name:'Dynamo Brest',               power:57, atk:57, mid:57, def:57},
-        {name:'Differdange 03',             power:56, atk:56, mid:56, def:56},
-        {name:'FK Sutjeska Nikšić',         power:55, atk:55, mid:55, def:55},
-        {name:'Mondorf',                    power:54, atk:54, mid:54, def:54}
-      ]
-    },
-    /* Chipre+Austria+Andorra+Gibraltar+N.Irlanda fusionadas en UNA liga
-       de 20 equipos (2026-07-30). Equipos = media de posición entre la
-       clasificación de esta web y la clasificación real vigente de cada
-       liga de origen (datos aportados por el usuario), quedándonos con
-       los mejores 5/5/3/3/4 de cada una. */
-    'liga-mixta-3': {
-      teams: [
-        {name:'Sturm Graz',             power:76, atk:76, mid:76, def:76},
-        {name:'AEK Larnaca',            power:74, atk:74, mid:74, def:74},
-        {name:'Rapid Wien',             power:73, atk:73, mid:73, def:73},
-        {name:'APOEL Nicosia',          power:72, atk:72, mid:72, def:72},
-        {name:'TSV Hartberg',           power:71, atk:71, mid:71, def:71},
-        {name:'Omonia Nicosia',         power:70, atk:70, mid:70, def:70},
-        {name:'Austria Wien',           power:69, atk:69, mid:69, def:69},
-        {name:'Aris Limassol',          power:68, atk:68, mid:68, def:68},
-        {name:'SV Ried',                power:67, atk:67, mid:67, def:67},
-        {name:'Pafos FC',               power:66, atk:66, mid:66, def:66},
-        {name:'Glentoran FC',           power:65, atk:65, mid:65, def:65},
-        {name:'Portadown FC',           power:64, atk:64, mid:64, def:64},
-        {name:"St. Joseph's",           power:63, atk:63, mid:63, def:63},
-        {name:'Carrick Rangers',        power:62, atk:62, mid:62, def:62},
-        {name:'Lincoln Red Imps',       power:61, atk:61, mid:61, def:61},
-        {name:'Cliftonville FC',        power:60, atk:60, mid:60, def:60},
-        {name:'Inter Club Escaldes',    power:59, atk:59, mid:59, def:59},
-        {name:'Lions Gibraltar',        power:58, atk:58, mid:58, def:58},
-        {name:'UE Santa Coloma',        power:57, atk:57, mid:57, def:57},
-        {name:'FC Santa Coloma',        power:56, atk:56, mid:56, def:56}
-      ]
-    },
-    /* Suecia+Croacia+Lituania+Macedonia del Norte+Albania fusionadas en
-       UNA liga de 20 equipos (2026-07-30). Equipos = media de posición
-       entre la clasificación de esta web y la clasificación real vigente
-       de cada liga de origen (datos aportados por el usuario),
-       quedándonos con los mejores 4/4/4/4/4 de cada una. */
-    'liga-mixta-4': {
-      teams: [
-        {name:'Dinamo Zagreb',          power:78, atk:78, mid:78, def:78},
-        {name:'Hammarby IF',            power:76, atk:76, mid:76, def:76},
-        {name:'Hajduk Split',           power:74, atk:74, mid:74, def:74},
-        {name:'Djurgårdens IF',         power:72, atk:72, mid:72, def:72},
-        {name:'Shkëndija Tetovo',       power:70, atk:70, mid:70, def:70},
-        {name:'KF Vllaznia',            power:69, atk:69, mid:69, def:69},
-        {name:'HNK Rijeka',             power:68, atk:68, mid:68, def:68},
-        {name:'Mjällby AIF',            power:67, atk:67, mid:67, def:67},
-        {name:'FK Tirana',              power:66, atk:66, mid:66, def:66},
-        {name:'NK Varaždin',            power:65, atk:65, mid:65, def:65},
-        {name:'FC Vardar Skopje',       power:64, atk:64, mid:64, def:64},
-        {name:'GAIS',                   power:63, atk:63, mid:63, def:63},
-        {name:'KF Teuta',               power:62, atk:62, mid:62, def:62},
-        {name:'FC Struga',              power:61, atk:61, mid:61, def:61},
-        {name:'KF Egnatia',             power:60, atk:60, mid:60, def:60},
-        {name:'FK Tikveš Kavadarci',    power:59, atk:59, mid:59, def:59},
-        {name:'FK Žalgiris Kaunas',     power:58, atk:58, mid:58, def:58},
-        {name:'FK Džiugas Telšiai',     power:57, atk:57, mid:57, def:57},
-        {name:'FA Hegelmann Litauen',   power:56, atk:56, mid:56, def:56},
-        {name:'FK Transinvest',         power:55, atk:55, mid:55, def:55}
-      ]
-    },
-    /* Israel+Hungría+Ucrania+Estonia+Malta fusionadas en UNA liga de 20
-       equipos (2026-07-30). Equipos = media de posición entre la
-       clasificación de esta web y la clasificación real vigente de cada
-       liga de origen (datos aportados por el usuario), quedándonos con
-       los mejores 4/4/4/4/4 de cada una. */
-    'liga-mixta-5': {
-      teams: [
-        {name:'FC Shakhtar Donetsk',    power:78, atk:78, mid:78, def:78},
-        {name:'Hapoel Beer Sheva',      power:77, atk:77, mid:77, def:77},
-        {name:'Ferencvárosi TC',        power:76, atk:76, mid:76, def:76},
-        {name:'Dynamo Kyiv',            power:75, atk:75, mid:75, def:75},
-        {name:'Maccabi Tel Aviv',       power:74, atk:74, mid:74, def:74},
-        {name:'Debreceni VSC',          power:73, atk:73, mid:73, def:73},
-        {name:'Maccabi Haifa',          power:72, atk:72, mid:72, def:72},
-        {name:'Polissya Zhytomyr',      power:71, atk:71, mid:71, def:71},
-        {name:'FC Flora Tallinn',       power:70, atk:70, mid:70, def:70},
-        {name:'Vasas FC',               power:69, atk:69, mid:69, def:69},
-        {name:'Hapoel Tel Aviv',        power:68, atk:68, mid:68, def:68},
-        {name:'Kolos Kovalivka',        power:67, atk:67, mid:67, def:67},
-        {name:'Floriana FC',            power:66, atk:66, mid:66, def:66},
-        {name:'Budafoki MTE',           power:65, atk:65, mid:65, def:65},
-        {name:'Trans Narva',            power:64, atk:64, mid:64, def:64},
-        {name:'Hibernians FC',          power:63, atk:63, mid:63, def:63},
-        {name:'Nomme JK Kalju',         power:62, atk:62, mid:62, def:62},
-        {name:'Sliema Wanderers FC',    power:61, atk:61, mid:61, def:61},
-        {name:'Paide Linnameeskond',    power:60, atk:60, mid:60, def:60},
-        {name:'Birkirkara FC',          power:59, atk:59, mid:59, def:59}
-      ]
-    },
-    /* Alemania (6 mejores, Alemania ELIMINADA como liga propia — el
-       resto de la Bundesliga no migra a ningún sitio, petición explícita
-       del usuario 2026-07-30) + Serbia+Rumanía+Islas Feroe+Letonia
-       fusionadas en UNA liga de 20 equipos. Equipos = media de posición
-       entre la clasificación de esta web y la clasificación real vigente
-       de cada liga de origen (datos aportados por el usuario),
-       quedándonos con los mejores 6/4/4/3/3 de cada una. */
-    'liga-mixta-6': {
-      teams: [
-        {name:'Bayern München',         power:88, atk:88, mid:88, def:88},
-        {name:'Borussia Dortmund',      power:83, atk:83, mid:83, def:83},
-        {name:'RB Leipzig',             power:80, atk:80, mid:80, def:80},
-        {name:'Bayer Leverkusen',       power:78, atk:78, mid:78, def:78},
-        {name:'VfB Stuttgart',          power:75, atk:75, mid:75, def:75},
-        {name:'Eintracht Frankfurt',    power:73, atk:73, mid:73, def:73},
-        {name:'Crvena Zvezda',          power:70, atk:70, mid:70, def:70},
-        {name:'Fotbal Club FCSB',       power:68, atk:68, mid:68, def:68},
-        {name:'Vojvodina Novi Sad',     power:65, atk:65, mid:65, def:65},
-        {name:'Partizan Belgrade',      power:64, atk:64, mid:64, def:64},
-        {name:'Farul Constanța',        power:62, atk:62, mid:62, def:62},
-        {name:'Hermannstadt',           power:60, atk:60, mid:60, def:60},
-        {name:'Radnik Surdulica',       power:59, atk:59, mid:59, def:59},
-        {name:'UTA Arad',               power:58, atk:58, mid:58, def:58},
-        {name:'Víkingur',               power:57, atk:57, mid:57, def:57},
-        {name:'FK Valmiera',            power:56, atk:56, mid:56, def:56},
-        {name:'KÍ Klaksvík',            power:55, atk:55, mid:55, def:55},
-        {name:'Rigas Futbola Skola',    power:54, atk:54, mid:54, def:54},
-        {name:'EB/Streymur',            power:53, atk:53, mid:53, def:53},
-        {name:'Saldus SS/Leevon',       power:52, atk:52, mid:52, def:52}
-      ]
-    },
-    /* Eslovenia+Bulgaria+Bosnia+Kazajistán+Kosovo fusionadas en UNA liga
-       de 20 equipos (2026-07-30). Equipos = media de posición entre la
-       clasificación de esta web y la clasificación real vigente de cada
-       liga de origen (datos aportados por el usuario), quedándonos con
-       los mejores 4/4/4/4/4 de cada una. */
-    'liga-mixta-7': {
-      teams: [
-        {name:'Ludogorets Razgrad',     power:76, atk:76, mid:76, def:76},
-        {name:'NK Olimpija Ljubljana',  power:74, atk:74, mid:74, def:74},
-        {name:'Levski Sofia',           power:72, atk:72, mid:72, def:72},
-        {name:'NK Maribor',             power:70, atk:70, mid:70, def:70},
-        {name:'FK Velez Mostar',        power:68, atk:68, mid:68, def:68},
-        {name:'NS Mura',                power:66, atk:66, mid:66, def:66},
-        {name:'Cherno More Varna',      power:65, atk:65, mid:65, def:65},
-        {name:'Borac Banja Luka',       power:64, atk:64, mid:64, def:64},
-        {name:'FC Kairat Almaty',       power:63, atk:63, mid:63, def:63},
-        {name:'Koper',                  power:62, atk:62, mid:62, def:62},
-        {name:'CSKA Sofia',             power:61, atk:61, mid:61, def:61},
-        {name:'NK Siroki Brijeg',       power:60, atk:60, mid:60, def:60},
-        {name:'FK Aktobe Lento',        power:59, atk:59, mid:59, def:59},
-        {name:'FC Ballkani',            power:58, atk:58, mid:58, def:58},
-        {name:'FK Zeljeznicar',         power:57, atk:57, mid:57, def:57},
-        {name:'Tobol Kostanai',         power:56, atk:56, mid:56, def:56},
-        {name:'Malisheva',              power:55, atk:55, mid:55, def:55},
-        {name:'Okzhetpes',              power:54, atk:54, mid:54, def:54},
-        {name:'FC Drita',               power:53, atk:53, mid:53, def:53},
-        {name:'Prishtina',              power:52, atk:52, mid:52, def:52}
-      ]
-    },
-    /* Rusia+Armenia+Finlandia+Moldavia+Azerbaiyán fusionadas en UNA liga
-       de 20 equipos (2026-07-30). Equipos = media de posición entre la
-       clasificación de esta web y la clasificación real vigente de cada
-       liga de origen (datos aportados por el usuario), quedándonos con
-       los mejores 5/3/4/4/4 de cada una. */
-    'liga-mixta-8': {
-      teams: [
-        {name:'CSKA Moscow',            power:78, atk:78, mid:78, def:78},
-        {name:'Lokomotiv Moscow',       power:76, atk:76, mid:76, def:76},
-        {name:'Rubin Kazan',            power:74, atk:74, mid:74, def:74},
-        {name:'Spartak Moscow',         power:72, atk:72, mid:72, def:72},
-        {name:'FK Krasnodar',           power:70, atk:70, mid:70, def:70},
-        {name:'Qarabağ',                power:68, atk:68, mid:68, def:68},
-        {name:'HJK Helsinki',           power:66, atk:66, mid:66, def:66},
-        {name:'CS Petrocub',            power:65, atk:65, mid:65, def:65},
-        {name:'Sheriff Tiraspol',       power:64, atk:64, mid:64, def:64},
-        {name:'FC Neftci Baku',         power:63, atk:63, mid:63, def:63},
-        {name:'Turan Tovuz',            power:62, atk:62, mid:62, def:62},
-        {name:'Ilves Tampere',          power:61, atk:61, mid:61, def:61},
-        {name:'Sabah Baku',             power:60, atk:60, mid:60, def:60},
-        {name:'Zimbru Chisinau',        power:59, atk:59, mid:59, def:59},
-        {name:'Inter Turku',            power:58, atk:58, mid:58, def:58},
-        {name:'Ararat-Armenia FC',      power:57, atk:57, mid:57, def:57},
-        {name:'Vaasa VPS',              power:56, atk:56, mid:56, def:56},
-        {name:'FC Pyunik',              power:55, atk:55, mid:55, def:55},
-        {name:'CF Univer Comrat',       power:54, atk:54, mid:54, def:54},
-        {name:'FC Noah',                power:53, atk:53, mid:53, def:53}
-      ]
-    },
-    /* Eslovaquia+Irlanda+Islandia fusionadas en UNA liga de 20 equipos
-       (2026-07-31) — la ÚLTIMA liga menor sin fusionar; solo quedaban
-       estos 3 países, sin una 4ª/5ª liga con la que completar el grupo
-       habitual, así que se reparte 7/7/6 en vez de 4-5 por país.
-       Equipos = media de posición entre la clasificación de esta web y
-       la clasificación real vigente de cada liga de origen (datos
-       aportados por el usuario). */
-    'liga-mixta-9': {
-      teams: [
-        {name:'Dunajska Streda',        power:78, atk:78, mid:78, def:78},
-        {name:'MSK Zilina',             power:76, atk:76, mid:76, def:76},
-        {name:'Sport Podbrezova',       power:74, atk:74, mid:74, def:74},
-        {name:'Michalovce',             power:72, atk:72, mid:72, def:72},
-        {name:'MFK Ruzomberok',         power:70, atk:70, mid:70, def:70},
-        {name:'Trencin',                power:68, atk:68, mid:68, def:68},
-        {name:'KFC Komarno',            power:66, atk:66, mid:66, def:66},
-        {name:'Shamrock Rovers',        power:65, atk:65, mid:65, def:65},
-        {name:'Derry City',             power:64, atk:64, mid:64, def:64},
-        {name:'Shelbourne',             power:63, atk:63, mid:63, def:63},
-        {name:'Bohemians',              power:62, atk:62, mid:62, def:62},
-        {name:'St. Patricks Athletic',  power:61, atk:61, mid:61, def:61},
-        {name:'Galway United',          power:60, atk:60, mid:60, def:60},
-        {name:'Waterford United',       power:59, atk:59, mid:59, def:59},
-        {name:'Vikingur Reykjavik',     power:58, atk:58, mid:58, def:58},
-        {name:'Valur Reykjavik',        power:57, atk:57, mid:57, def:57},
-        {name:'Breidablik',             power:56, atk:56, mid:56, def:56},
-        {name:'FC Hafnarfordur',        power:55, atk:55, mid:55, def:55},
-        {name:'Fram',                   power:54, atk:54, mid:54, def:54},
-        {name:'FC KR Reykyavik',        power:53, atk:53, mid:53, def:53}
-      ]
-    },
-    /* ═══ Las 6 ligas NUEVAS de "Resto de Ligas" (2026-08-14) — sustituyen
-       a las liga-mixta 1-9 como feeder de la Previa de Champions (esas 9
-       quedan intactas como ligas jugables normales, sin cupo europeo
-       automático — ver `LEAGUE_DEFAULT_ZONES`). Rosters + banderas tal
-       como los entregó el usuario, verificados equipo a equipo contra las
-       4 rondas de la Previa. Sin escudo (el admin los añade desde el
-       editor; cae al placeholder de iniciales mientras tanto). */
+    /* ═══ Las 6 "Ligas Mixtas" de "Resto de Ligas" (2026-08-14), feeder de
+       la Previa de Champions. Las 9 antiguas `liga-mixta-1`..`liga-mixta-9`
+       (fusión 2026-07-30/31) se ANIQUILARON por completo el 2026-08-15 —
+       sin seed aquí, sin card, sin cupo (ver `LEAGUE_DEFAULT_ZONES` /
+       `_DEAD_MERGED_LEAGUE_SLUGS`). PROHIBIDO reintroducir sus seeds.
+       Rosters + banderas de las 6 vigentes tal como los entregó el
+       usuario, verificados equipo a equipo contra las 4 rondas de la
+       Previa. Sin escudo (el admin los añade desde el editor; cae al
+       placeholder de iniciales mientras tanto). */
     'germanika': {
       teams: [
         {name:'Bayern München',       power:86, atk:86, mid:86, def:86},

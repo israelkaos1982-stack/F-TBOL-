@@ -3718,18 +3718,23 @@ def api_liga_ext_bulk_get():
 
 
 # Las 43 ligas menores que se fusionaron en liga-mixta-1..9 (2026-07-30/31,
-# ver templates/partials/misc_body_1.html LEAGUE_DEFAULT_NAMES). Sus slugs
-# ya NO existen en LEAGUE_DEFAULT_ZONES/NAMES ni en ninguna menu-card de
-# "Resto de Ligas" — el cliente ya purga su copia LOCAL (localStorage) con
-# los flags `ftbol_merged_leagues_purge_v1..v8`, pero esa purga nunca tocó
-# el servidor a propósito ("solo local, nunca toca el servidor"). Las filas
-# `liga_ext_<slug>` (+ `_protected`/`_snap_*`/`_backup`) de estas 43 ligas
-# siguen en la base de datos para siempre, y `/api/liga-ext-bulk` (y otros
-# endpoints que hacen `clave LIKE 'liga_ext_%'`) las sigue devolviendo sin
-# filtrar — un dispositivo que purgó su copia local puede volver a
+# ver templates/partials/misc_body_1.html LEAGUE_DEFAULT_NAMES) MÁS las
+# propias liga-mixta-1..9 (ANIQUILADAS por completo el 2026-08-15, petición
+# usuario — ya no son ligas jugables; el feeder de la Previa pasó a
+# germanika/hellas-slavia/danubio-nordica/adriatico-oriental/balkanica/
+# eurasia). Sus slugs ya NO existen en LEAGUE_DEFAULT_ZONES/NAMES ni en
+# ninguna menu-card de "Resto de Ligas" — el cliente ya purga su copia
+# LOCAL (localStorage) con los flags `ftbol_merged_leagues_purge_v1..v13`,
+# pero esa purga nunca tocó el servidor a propósito ("solo local, nunca
+# toca el servidor"). Las filas `liga_ext_<slug>` (+ `_protected`/
+# `_snap_*`/`_backup`) de estas ligas seguirían en la base de datos para
+# siempre si no se filtran/borran aquí, y `/api/liga-ext-bulk` (y otros
+# endpoints que hacen `clave LIKE 'liga_ext_%'`) las seguiría devolviendo
+# sin filtrar — un dispositivo que purgó su copia local puede volver a
 # adoptarlas del servidor en el siguiente bulk-restore, resucitando la
-# purga. Petición usuario 2026-08-08: "quiero que las elimines para
-# siempre y liberes espacio".
+# purga. Petición usuario 2026-08-08 (ampliada 2026-08-15): "quiero que
+# las elimines para siempre y liberes espacio" / "aniquila cualquier
+# resto".
 DEAD_MERGED_LEAGUE_SLUGS = [
     # liga-mixta-1
     "rep-checa", "grecia", "san-marino", "gales", "georgia",
@@ -3751,14 +3756,20 @@ DEAD_MERGED_LEAGUE_SLUGS = [
     "rusia", "armenia", "finlandia", "moldavia", "azerbayan",
     # liga-mixta-9
     "eslovaquia", "irlanda", "islandia",
+    # Las 9 "Ligas Mixtas" viejas EN SÍ (2026-08-15, ANIQUILADAS por
+    # completo junto con las 43 de arriba)
+    "liga-mixta-1", "liga-mixta-2", "liga-mixta-3", "liga-mixta-4",
+    "liga-mixta-5", "liga-mixta-6", "liga-mixta-7", "liga-mixta-8",
+    "liga-mixta-9",
 ]
 
 
 def _is_dead_merged_league_slug(rest):
     """¿`rest` (la parte de la clave tras `liga_ext_`) pertenece a una de
-    las 43 ligas menores ya fusionadas en liga-mixta-1..9? Match exacto o
-    con sufijo `_algo` (cubre `_protected`/`_snap_<ts>`/`_backup`), mismo
-    criterio que ya usaba (duplicado inline) el purgado admin de abajo.
+    las 43 ligas menores ya fusionadas en liga-mixta-1..9, o a las propias
+    liga-mixta-1..9 (ANIQUILADAS por completo)? Match exacto o con sufijo
+    `_algo` (cubre `_protected`/`_snap_<ts>`/`_backup`), mismo criterio
+    que ya usaba (duplicado inline) el purgado admin de abajo.
 
     FIX 2026-08-10 (screenshots usuario, "📊 Espacio del navegador" con
     decenas de KB de `-backup`/`-snap-<ts>`/`-protected` de países ya
@@ -3807,8 +3818,9 @@ def _dead_league_empty_get(slug, extra=None):
 @admin_required
 def api_admin_purge_dead_leagues():
     """Borra PERMANENTEMENTE de la base de datos las filas de las 43
-    ligas menores que se fusionaron en liga-mixta-1..9. Incluye el
-    `main` de cada una (`liga_ext_<slug>`) y todos sus derivados
+    ligas menores que se fusionaron en liga-mixta-1..9, MÁS las propias
+    liga-mixta-1..9 (ANIQUILADAS por completo, ver `DEAD_MERGED_LEAGUE_SLUGS`).
+    Incluye el `main` de cada una (`liga_ext_<slug>`) y todos sus derivados
     (`_protected`, `_snap_<ts>`, `_backup`, cualquier sufijo futuro).
 
     Idempotente: si ya se borraron (o nunca existieron), no hace nada

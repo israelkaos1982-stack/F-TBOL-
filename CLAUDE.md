@@ -1,5 +1,123 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## ANIQUILACIÓN TOTAL de las 9 "Ligas Mixtas" viejas (liga-mixta-1..9) — el catálogo de "Resto de Ligas" queda CERRADO a una lista fija (obligatorio, 2026-08-15)
+
+**Petición usuario 2026-08-15** ("LIMPIEZA Y ELIMINACIÓN Y ANIQUILACIÓN
+TOTAL DE LAS LIGAS ANTIGUAS, SIEMPRE SALE RESIDUALMENTE Y HACIENDO QUE
+LA WEB NO FUNCIONE"): tras la reestructuración del 2026-08-14 (sección
+de abajo), las **9 "Ligas Mixtas" viejas** (`liga-mixta-1`..`liga-mixta-9`
+— fusión 2026-07-30/31 de las 43 ligas menores originales, ver sección
+"Ligas Mixtas" más abajo) seguían presentes como cards jugables (sin
+cupo europeo, pero con seed automático + fixups propios reejecutándose
+en cada arranque) pese a estar sustituidas como feeder de la Previa por
+las 6 Ligas Mixtas NUEVAS (`germanika`/`hellas-slavia`/`danubio-nordica`/
+`adriatico-oriental`/`balkanica`/`eurasia`). El usuario pidió su
+**eliminación completa e irreversible** — sin card, sin datos, sin
+residuo local ni de servidor.
+
+### Catálogo CERRADO de "Resto de Ligas" (las ÚNICAS que existen)
+
+1. **Ligas fijas** (fuera de "Resto de Ligas", NUNCA se tocan por este
+   catálogo): Liga EA Sports, Liga Hypermotion, Primera Federación.
+2. **Resto de Ligas — 10 países individuales**: Inglaterra, Italia,
+   Francia, Portugal, Países Bajos, Turquía, Dinamarca, Suiza, Bélgica,
+   Escocia.
+3. **Ligas Mixtas — 6 (las ÚNICAS vigentes)**: Germanika, Hellas Slavia,
+   Danubio Nórdica, Adriático Oriental, Balkanica, Eurasia.
+4. **Resto Mundo** (sistema aparte — Intercontinental/Mundialito, sin
+   cambios por esta sección).
+
+**Cualquier otra "liga"** — las 43 menores ya fusionadas (República
+Checa, Albania, Alemania, Grecia, San Marino, Gales, Georgia, Polonia,
+Noruega, Montenegro, Luxemburgo, Bielorrusia, Chipre, Austria, Andorra,
+Gibraltar, N. Irlanda, Suecia, Croacia, Lituania, Macedonia del Norte,
+Israel, Hungría, Ucrania, Estonia, Malta, Serbia, Rumanía, Islas Feroe,
+Letonia, Eslovenia, Bulgaria, Bosnia, Kazajistán, Kosovo, Rusia,
+Armenia, Finlandia, Moldavia, Azerbaiyán, Eslovaquia, Irlanda, Islandia)
+**Y** las propias 9 Ligas Mixtas viejas (`liga-mixta-1..9`) — **queda
+ANIQUILADA POR COMPLETO**. Ninguna de las 52 debe tener card, seed,
+zona, nombre, ni fila en la base de datos.
+
+### Qué se eliminó (2026-08-15, además de lo ya purgado 2026-08-08/10)
+
+- Los 9 `<div class="menu-card" data-slug="liga-mixta-N">` de `s-ligas`.
+- Las 9 entradas de `LEAGUE_DEFAULT_ZONES` (el `for(_mi=1..9)` que les
+  daba zona cero) y de `LEAGUE_DEFAULT_NAMES`.
+- Los 9 bloques de roster de `_EXTRA_LEAGUE_SEEDS['liga-mixta-N']` — esto
+  era la causa RAÍZ del "sigue apareciendo residualmente": el loop eager
+  de arranque `Object.keys(_EXTRA_LEAGUE_SEEDS).forEach(_ensureExtraLeagueSeed)`
+  las re-sembraba en `localStorage` en CADA carga de página, aunque no
+  hubiera ninguna card que las abriera.
+- Las 3 migraciones fixup específicas (`_fixupLigaMixta1GreciaV1`,
+  `_fixupLigaMixta1RealDataV2`, `_fixupLigaMixta2RealDataV1`) + su helper
+  compartido `_lextApplyRenameMap` (huérfano tras eliminarlas) + sus 3
+  call-sites en el boot. Las entradas de `liga-mixta-1..9` dentro del
+  mapa `OLD` de `_fixupLeagueZonesV4` (migración de zonas, ya inerte
+  sin datos que migrar).
+- El slug `'liga-mixta-1'`..`'liga-mixta-9'` de `KNOWN_COUNTRY_SLUGS`
+  (`misc_body_1.html`, lista que alimenta `lextDeepRecoverAll` y el
+  auto-recovery de arranque) — **crítico**: sin este fix, la
+  herramienta de "recuperación profunda" podía RESUCITAR estas ligas
+  desde el servidor tras purgarlas en local.
+- Las entradas de `LIGA_MIXTA_COUNTRIES` (mapa de banderas por país
+  dentro de cada Liga Mixta) — el mapa se deja vacío `{}`, no se borra
+  la infraestructura genérica (`_mixtaTeamFlag`/`_isLigaMixtaSlug`) por
+  si una Liga Mixta futura la necesita.
+
+### Purga de residuos (local + servidor) — extiende la infraestructura YA EXISTENTE
+
+En vez de inventar un mecanismo nuevo, `liga-mixta-1..9` se añadieron a
+la lista ÚNICA que YA purgaba las 43 ligas menores (sección "🗑
+Eliminar ligas fusionadas del servidor…", 2026-08-08/10):
+
+- **Cliente**: `window._DEAD_MERGED_LEAGUE_SLUGS` (`misc_body_1.html`,
+  primer `<script>`) ahora incluye también `liga-mixta-1..9`. Esto
+  extiende AUTOMÁTICAMENTE 3 consumidores sin tocarlos: el GUARDIÁN de
+  `_lsSetSafe` (bloquea cualquier escritura futura a estos slugs), el
+  filtro de `_lextReconcileResultsToServer` (nunca las re-sube al
+  servidor), y una **purga v13 nueva** (mismo patrón inmediato/síncrono
+  que v12, flag propio `ftbol_merged_leagues_purge_v13`) que repasa
+  TODO el almacén con la lista ya ampliada — necesaria porque un
+  dispositivo que ya tenía el flag de v12 marcado como "hecho" nunca
+  habría purgado `ligaExt_liga-mixta-N` con la lista vieja.
+- **Servidor**: `DEAD_MERGED_LEAGUE_SLUGS` (`app.py`) también incluye
+  `liga-mixta-1..9` — extiende automáticamente el filtro del índice
+  (`/api/liga-ext`), el bulk (`/api/liga-ext-bulk`), el no-op de GET/POST
+  per-slug, y el botón admin "🗑 Eliminar del servidor las ligas
+  fusionadas/aniquiladas" (`/api/admin/purge-dead-leagues`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir cualquier de las 52 ligas (43 menores +
+   las 9 Ligas Mixtas viejas) como card, seed, zona, o entrada de
+   `LEAGUE_DEFAULT_NAMES`/`KNOWN_COUNTRY_SLUGS`/`LIGA_MIXTA_COUNTRIES`.
+   El catálogo de "Resto de Ligas" es el de la lista CERRADA de arriba
+   (10 países + 6 Ligas Mixtas + Resto Mundo) — cualquier liga nueva
+   que se quiera añadir en el futuro requiere ACUERDO EXPLÍCITO del
+   usuario, no una reintroducción silenciosa de lo ya aniquilado.
+2. **PROHIBIDO** que una lista nueva de "todos los slugs conocidos"
+   (recuperación, auto-hidratación, diagnóstico) enumere un slug
+   aniquilado sin pasar por `window._isDeadMergedLeagueSlug` primero —
+   es exactamente el bug que tenía `KNOWN_COUNTRY_SLUGS` (resucitaba
+   datos ya purgados vía "recuperación profunda").
+3. **PROHIBIDO** que un seed automático nuevo (`_EXTRA_LEAGUE_SEEDS` o
+   equivalente) se añada para una liga aniquilada. El loop eager de
+   arranque (`Object.keys(_EXTRA_LEAGUE_SEEDS).forEach(_ensureExtraLeagueSeed)`)
+   re-siembra CUALQUIER key presente en ese objeto en CADA carga de
+   página — es la causa real de "sigue apareciendo residualmente" que
+   motivó esta limpieza; toda liga eliminada DEBE salir también de
+   `_EXTRA_LEAGUE_SEEDS`, no solo perder su card.
+4. **PROHIBIDO** crear un mecanismo de purga nuevo/paralelo para una
+   liga aniquilada futura. Se añade el slug a
+   `window._DEAD_MERGED_LEAGUE_SLUGS` (cliente) y `DEAD_MERGED_LEAGUE_SLUGS`
+   (`app.py`) — la "Fuente ÚNICA" ya alimenta guardián, filtro de
+   reconciliación, purga inmediata (bump de versión, v14 en adelante),
+   índice/bulk del servidor, y el botón admin de borrado permanente.
+5. Ver también la sección "Ligas Mixtas" (2026-07-30/31, más abajo)
+   para el histórico de por qué existieron las 9 viejas — ese histórico
+   se conserva como registro, pero SUPERSEDIDO por esta sección: las 9
+   ya no existen, punto.
+
 ## ANIQUILACIÓN TOTAL de Wild Card + Open Qualifier · Previa Champions de 4 RONDAS · 6 ligas nuevas (obligatorio, 2026-08-14) ⚠️ SUPERSEDE POR COMPLETO "Wild Card + Open Qualifier — FASE DE GRUPOS" (2026-05-30) y "Previa de Champions — Ronda Preliminar (28→14, Open Qualifier)..." (2026-07-12), más abajo — ambas secciones quedan como HISTÓRICO, no reintroducir nada de lo que describen
 
 **Petición usuario 2026-08-14** ("NUEVA ESTRUCTURACION PARA AGILIZAR EL

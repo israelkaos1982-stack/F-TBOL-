@@ -186,11 +186,23 @@ window.pG = function(fn) {
     try { localStorage.setItem(_QUOTA_TS_KEY, _padTs(Date.now())); } catch(_){}
     try {
       var t = document.createElement('div');
+      /* `pointer-events:none` (2026-08-15, bug "se bloquea al pulsar
+         cualquier botón" — captura usuario con este toast tapando
+         justo "RESTO DE LIGAS"/"PREMIOS TEMPORADA"): este panel es
+         puramente informativo (sin botones), pero vive 8 s a
+         z-index MÁXIMO sobre el menú. Sin este atributo, cualquier
+         tap que caiga sobre su área (o su `max-width:340px` centrado,
+         que en móvil puede tapar 1-2 cards enteras) lo consume el
+         toast en vez de la card de debajo — indistinguible de "la web
+         no responde" para el usuario, que ve el menú perfectamente
+         pintado pero ningún botón reacciona. PROHIBIDO quitar esta
+         propiedad de este toast ni de ningún otro de este mismo
+         patrón (ver los 5 `z-index:2147483640` de este archivo). */
       t.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
         + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);border-radius:10px;'
         + 'padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;font-size:13px;'
         + 'letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
-        + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+        + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;pointer-events:none;';
       t.innerHTML = html;
       (document.body || document.documentElement).appendChild(t);
       setTimeout(function(){ try { t.parentNode.removeChild(t); } catch(_){} }, 8000);
@@ -907,11 +919,14 @@ window._hdrCleanCache = function(){
       ? ('✅ Caché limpiada — ' + res.freedKeys + ' archivo(s) reconstruible(s) liberado(s) (' + sizeTxt + ').')
       : '✔️ Ya estaba limpio — no había nada reconstruible que liberar.';
     var t = document.createElement('div');
+    /* pointer-events:none — mismo motivo que `_lsQuotaToastMaybeShow`
+       (2026-08-15): toast puramente informativo, no debe tapar taps
+       sobre las cards del menú que queden debajo. */
     t.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
       + 'background:rgba(10,32,18,.96);border:1px solid rgba(60,200,120,.5);border-radius:10px;'
       + 'padding:12px 18px;color:#8ff0b0;font-family:Rajdhani,sans-serif;font-size:13px;'
       + 'letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
-      + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+      + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;pointer-events:none;';
     t.textContent = msg;
     (document.body || document.documentElement).appendChild(t);
     setTimeout(function(){ try { t.parentNode.removeChild(t); } catch(_){} }, 5000);
@@ -15080,11 +15095,16 @@ window._hdrCleanCache = function(){
 
     /* === Toast inicial === */
     var toast = document.createElement('div');
+    /* pointer-events:none — mismo motivo que `_lsQuotaToastMaybeShow`
+       (2026-08-15): este toast puede quedar visible varios segundos
+       (dura lo que tarde el push completo) tapando los botones de la
+       cabecera (🧹/💾/⚙️) a z-index máximo; no tiene ningún control
+       propio, así que nunca debe robar el tap de lo que hay debajo. */
     toast.style.cssText = 'position:fixed;left:50%;top:60px;transform:translateX(-50%);'
       + 'background:rgba(8,32,16,.96);border:1px solid rgba(60,200,120,.6);'
       + 'border-radius:10px;padding:12px 22px;color:#7df0a0;font-family:Oswald,sans-serif;'
       + 'font-size:14px;letter-spacing:1.5px;font-weight:700;box-shadow:0 8px 32px rgba(0,0,0,.6);'
-      + 'z-index:2147483640;display:flex;align-items:center;gap:10px;';
+      + 'z-index:2147483640;display:flex;align-items:center;gap:10px;pointer-events:none;';
     toast.innerHTML = '<span style="font-size:18px;animation:diskSpin 1s linear infinite;display:inline-block;">💾</span>'
       + '<span>GUARDANDO PARTIDA…</span>';
     /* Spinner CSS inline para que el balón gire mientras dura el save. */
@@ -48997,11 +49017,12 @@ https://api.sofascore.app/api/v1/team/44/image
              todavía (no debería pasar — vive en el primer <script> del
              documento, antes que este archivo). */
           var tEl = document.createElement('div');
+          /* pointer-events:none — mismo motivo que `_lsQuotaToastMaybeShow`. */
           tEl.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
             + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);'
             + 'border-radius:10px;padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;'
             + 'font-size:13px;letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
-            + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+            + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;pointer-events:none;';
           tEl.innerHTML = '⚠️ Navegador sin espacio. Los cambios se '
             + '<b>siguen subiendo al servidor</b>, pero conviene limpiar '
             + 'caché para reactivar el guardado local.';
@@ -67391,11 +67412,12 @@ https://api.sofascore.app/api/v1/team/44/image
       window._trofQuotaWarned = true;
       try {
         var tEl = document.createElement('div');
+        /* pointer-events:none — mismo motivo que `_lsQuotaToastMaybeShow`. */
         tEl.style.cssText = 'position:fixed;left:50%;bottom:80px;transform:translateX(-50%);'
           + 'background:rgba(40,16,4,.96);border:1px solid rgba(240,160,80,.5);'
           + 'border-radius:10px;padding:12px 18px;color:#ffd0a0;font-family:Rajdhani,sans-serif;'
           + 'font-size:13px;letter-spacing:.3px;line-height:1.4;max-width:340px;text-align:center;'
-          + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;';
+          + 'box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:2147483640;pointer-events:none;';
         tEl.innerHTML = '⚠️ Navegador sin espacio. El trofeo se '
           + '<b>guardó en el servidor</b> pero no en local. '
           + 'Limpia caché del navegador para reactivar el guardado local.';

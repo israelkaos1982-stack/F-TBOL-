@@ -74,6 +74,38 @@ enumeración") — aquí se habían quedado sin ese fix.
   siempre que `_protected` conserve la copia previa — que es el caso
   normal, ya que los 2 escritores del bug nunca la tocaban.
 
+### Refuerzo (mismo día, #2) — la reparación LOCAL no basta si el usuario siguió jugando: reparación vía SERVIDOR
+
+**Bug (usuario, mismo Atlético Madrid, tras desplegar el fix de
+arriba)**: la plantilla seguía sin recuperarse — "no me has recuperado
+todos los jugadores del Atlético Madrid ni sus estadísticas".
+
+**Causa raíz**: el fix de arriba solo mira copias LOCALES
+(`_protected`/snapshots). Si el usuario siguió jugando/simulando OTROS
+partidos de la MISMA liga DESPUÉS del incidente, cualquier `saveData`
+normal posterior vuelve a mirrorear `main` → `_protected` — y como
+`main` ya tenía el equipo encogido en memoria (`LIGA_CACHE`), ese
+mirror posterior **propaga la corrupción a `_protected` LOCAL
+también**, dejando sin nada que restaurar en el propio dispositivo.
+
+**Fix — `_lextServerTeamHeal`**: cuando la reparación local no basta
+(el equipo sigue sospechosamente pequeño), se pregunta AL SERVIDOR,
+async, con throttle de 1 vez por slug/sesión:
+1. **`/api/liga-ext-protected/<slug>`** — el `_protected` DEL
+   SERVIDOR es MONOTÓNICO por el Nº TOTAL de jugadores de TODA la
+   liga (`app.py`, `api_liga_ext_protected_post`, rechaza 409 con
+   menos jugadores en total). El escritor que causó el bug nunca
+   llegó a POSTear aquí, así que esta copia tiene bastantes
+   probabilidades de conservar la plantilla completa aunque la local
+   ya no la tenga.
+2. Si eso no basta, el `main` del servidor — por si OTRO dispositivo
+   nunca vio la corrupción.
+
+Si encuentra algo más rico, lo fusiona (unión, nunca pisa) con
+`_lextRestoreShrunkTeamRosters`, persiste vía `saveData` y repinta
+la pantalla de plantilla/clasificación si sigue abierta
+(`_lextReRenderSquadScreensIfOpen`).
+
 ### Reglas a respetar
 
 1. **PROHIBIDO** que un escritor nuevo (o existente) de
@@ -99,6 +131,16 @@ enumeración") — aquí se habían quedado sin ese fix.
 4. Toda plantilla NUEVA (club o selección) hereda la auto-reparación
    automáticamente en cuanto pase por `loadData`/`_lextRecoverResultsFromBackups`
    — no hay lista de slugs que mantener.
+5. **PROHIBIDO** asumir que la reparación LOCAL (`_protected`/snapshots
+   del propio dispositivo) es suficiente: si el usuario siguió jugando
+   tras el incidente, `saveData` normal mirrorea la corrupción a
+   `_protected` local también. `_lextServerTeamHeal` (pregunta al
+   `_protected` y al `main` DEL SERVIDOR) es la red que cubre ese caso
+   — no quitarla ni asumir que es redundante con la reparación local.
+6. **PROHIBIDO** quitar el throttle `_lextServerTeamHealTried[k]` de
+   `_lextServerTeamHeal`: sin él, una liga cuyo equipo siga encogido
+   tras la reparación (nada que restaurar ni local ni en servidor)
+   repetiría las 2 peticiones en CADA `loadData` de esa liga.
 
 ## El portero de la PORTERÍA IMBATIDA es SIEMPRE el de mayor nivel-poder de la plantilla — humano e IA, sin picker (obligatorio, 2026-08-15) ⚠️ SUPERSEDE todas las secciones de este archivo que documentan/exigen el picker interactivo `showImbatForce` (buscar "PORTERÍA IMBATIDA OBLIGATORIA", "El picker de portería imbatida...", "confirmImbatForce"/"cancelImbatForce", más abajo)
 

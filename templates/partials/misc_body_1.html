@@ -12738,6 +12738,15 @@ window._hdrCleanCache = function(){
               var custom = parsed && parsed.config && typeof parsed.config.name === 'string' ? parsed.config.name.trim() : '';
               g.displayName = custom || '';
               g.teamCount = (parsed && Array.isArray(parsed.teams)) ? parsed.teams.length : null;
+              /* Nombres de equipo (hasta 60) para que el admin pueda ver
+                 QUÉ hay dentro de una liga sospechosa (p.ej. `ligaExt_null`,
+                 fruto de un guardado con slug inválido) sin DevTools —
+                 puramente de lectura, nunca se usa para decidir nada. */
+              if (parsed && Array.isArray(parsed.teams)){
+                g.teamNames = parsed.teams.slice(0, 60).map(function(t){
+                  return (t && typeof t.name === 'string' && t.name.trim()) ? t.name.trim() : '(sin nombre)';
+                });
+              }
             } catch(_){}
           }
           continue;
@@ -12754,7 +12763,8 @@ window._hdrCleanCache = function(){
       var g = groups[label];
       return {
         label:label, chars:g.chars, reconstructible:g.reconstructible, n:g.keys.length,
-        slug:g.slug || null, displayName:g.displayName || '', teamCount:(g.teamCount == null ? null : g.teamCount)
+        slug:g.slug || null, displayName:g.displayName || '', teamCount:(g.teamCount == null ? null : g.teamCount),
+        teamNames: g.teamNames || null
       };
     }).sort(function(a,b){ return b.chars - a.chars; });
     return {rows:rows, totalChars:totalChars};
@@ -12838,11 +12848,24 @@ window._hdrCleanCache = function(){
           + (r.teamCount != null ? ' · ' + r.teamCount + ' equipo' + (r.teamCount === 1 ? '' : 's') : '')
           + '</div>';
       }
+      /* Ver equipos (2026-08-15): <details> nativo, sin JS extra — deja
+         al admin comprobar QUÉ hay dentro de una liga sospechosa (p.ej.
+         un slug "null" fruto de un guardado con clave inválida) sin
+         necesitar herramientas de desarrollador. Solo lectura. */
+      var teamsDetail = '';
+      if (r.teamNames && r.teamNames.length){
+        teamsDetail = '<details style="margin-top:4px;">'
+          + '<summary style="cursor:pointer;font-family:Rajdhani,sans-serif;font-size:11px;color:#7dc8f0;">👁 Ver ' + r.teamNames.length + ' equipo' + (r.teamNames.length===1?'':'s') + (r.teamCount != null && r.teamCount > r.teamNames.length ? ' (de ' + r.teamCount + ')' : '') + '</summary>'
+          + '<div style="font-family:Rajdhani,sans-serif;font-size:11px;color:rgba(255,255,255,.65);margin:6px 0 2px 4px;line-height:1.7;">'
+          + r.teamNames.map(_esc).join(' · ')
+          + '</div></details>';
+      }
       html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,255,255,.03);border-radius:8px;">'
         + '<div style="flex:1;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.85);">' + _esc(r.label)
         +   (r.n > 1 ? ' <span style="color:rgba(255,255,255,.4);">(' + r.n + ')</span>' : '')
         +   (r.reconstructible ? ' <span style="color:#7df0a0;font-size:10px;">· reconstruible</span>' : '')
         +   identity
+        +   teamsDetail
         + '</div>'
         + '<div style="font-family:\'Courier New\',monospace;font-size:12px;color:#ffb060;white-space:nowrap;">' + _fmtKb(r.chars) + '</div>'
         + '</div>';
@@ -48780,6 +48803,19 @@ https://api.sofascore.app/api/v1/team/44/image
     return n;
   }
   function saveData(k,d){
+    /* GUARD anti "ligaExt_null" (2026-08-15): `storeKey` construye la
+       clave con `'ligaExt_' + k` SIN comprobar que `k` sea un slug real
+       — un guardado disparado con `CURRENT_KEY` todavía sin fijar
+       (arranca en `null`, línea 46914) persistía bajo la clave LITERAL
+       `ligaExt_null`, una liga fantasma que ninguna pantalla real vuelve
+       a abrir (equipos "atrapados" sin card ni editor que los muestre).
+       Cualquier guardado con slug inválido se descarta aquí, con aviso
+       en consola para poder diagnosticarlo — nunca debe llegar a
+       localStorage/servidor bajo un nombre que no sea una liga real. */
+    if (!k || typeof k !== 'string' || k === 'null' || k === 'undefined') {
+      try { console.warn('[saveData] guardado descartado: slug inválido ('+k+'). No se persiste bajo ligaExt_'+k+'.'); } catch(_){}
+      return;
+    }
     /* Sanitize de entrada (2026-05-08): si el admin acaba de tocar
        el editor con un equipo cuyo nombre tenía `*` o el formulario
        creó accidentalmente un duplicado, lo limpiamos antes de

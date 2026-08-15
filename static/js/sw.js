@@ -52,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v11';
+var CACHE_HTML   = 'ftbol-html-v12';
 /* v9 → v10 (2026-08-15): fix de los 6 toasts sin `pointer-events:none`
    que bloqueaban los toques a las cards del menú de debajo (misma
    regla de abajo — toda edición de `misc_body_1.html` exige este

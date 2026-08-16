@@ -273,6 +273,173 @@ ningún caller — no se han eliminado por si algo externo los invocara.
    `RECOPA_RD`/`_mmCalLabel`) exige bump de `?v=X.X` en
    `templates/index.html` + `PRECACHE` de `static/js/sw.js` (regla ya
    obligatoria) — este cambio ya lo cumple (9.42→9.43).
+## El acta de un partido IA-vs-IA ya completado se RECORTA a una tabla permanente — solo tras completar su jornada/eliminatoria, nunca si hay un humano implicado (obligatorio, 2026-08-16)
+
+**Petición usuario 2026-08-16** (auditoría de peso, "no entiendo porque
+cada vez que abro la web el peso supera los 4 MB"): investigando de
+dónde sale el peso, se confirmó que el acta completa (goles, tarjetas,
+MVP, minuto a minuto) de CADA partido de Torneos de Verano/Selecciones/
+Mundialito de Clubes/Copa del Rey/Intercontinental se guarda para
+SIEMPRE — es la fuente ÚNICA que leen las cajas de Estadísticas de cada
+competición (`rebuildPlayerStatsStore`, que RECALCULA desde cero
+escaneando `events` en cada llamada, a diferencia de Liga EA Sports/
+Resto de Ligas, que acumulan un contador PERMANENTE en
+`team.players[].gol/pj/ta/...` en el momento de simular y por eso nunca
+necesitaron guardar el acta indefinidamente). En un torneo grande
+(formato liga de 60+ equipos, ~1950 partidos a doble vuelta) eso es,
+con diferencia, el mayor contribuyente al peso total.
+
+El usuario preguntó primero si las estadísticas globales sobrevivirían
+si se borraran las actas, y condicionó su aprobación a la respuesta:
+*"de ser asi no me importa que se borren los actas de todos los
+partidos IA vs IA una vez se haya completado al completo esa Jornada o
+eliminatoria. las actas de Humano vs Humano o IA vs Humano de momento
+que se sigan guardando"*. Tras `AskUserQuestion`, confirmó además:
+alcance = **todas** las competiciones con acta, y qué queda tras
+recortar = **solo el marcador** (nada de goleadores/tarjetas/MVP
+individual en el partido ya recortado).
+
+### Garantía de que las estadísticas NO desaparecen
+
+Antes de vaciar `events` de un partido, su aportación (goles/tarjetas/
+MVP por jugador) se suma a una **tabla permanente** — una fila KV por
+familia de competición (`pm_tally_torneos_v1`/`_sel_v1`/`_mundial_v1`/
+`_copa_v1`/`_inter_v1`), con merge ADITIVO en servidor (unión por clave
+de partido, `_pm_tally_merge` en `sync_merge.py` — nunca reemplazo por
+recencia, para que 2 dispositivos recortando jornadas DISTINTAS sin
+haberse sincronizado no se pisen la aportación). `rebuildPlayerStatsStore`
+(`misc_body_1.html`) suma esa tabla ENCIMA de lo que escanea en vivo de
+`cfg.results[...].events` — un partido recortado sigue contando en
+Goleadores/MVP/Tarjetas exactamente igual que antes.
+
+### Formato COMPACTO de la tabla (obligatorio — evita que "el ahorro" sea negativo)
+
+Medido con un torneo sintético de 63 equipos/1953 partidos: un primer
+formato que escribía todos los campos explícitos (incluidos ceros) y
+repetía el nombre de equipo/jugador en CADA partido en el que aparecía
+pesaba **MÁS** que el acta que sustituía (883 KB total vs 540 KB
+original — una regresión). El formato definitivo:
+- `names`: un mapa TOP-LEVEL `normKey -> "Nombre mostrado"`, compartido
+  por TODOS los partidos de la tabla — un jugador que aparece en 60
+  partidos de la misma liga guarda su nombre UNA sola vez.
+- `matches[dedupKey] = { t:[teamNormA, teamNormB], p:{playerKey:{...}} }`:
+  `t` reemplaza un `teamPj` verboso; `p` solo lleva los campos DISTINTOS
+  DE CERO por jugador, con claves cortas (`g`=gol, `p`=pen, `f`=fk,
+  `m`=mvp, `y`=amarilla, `r`=roja, `s`=penSaved, `i`=imbat,
+  `pp`=penProv, `pf`=penFall, `o`=propia).
+
+Con este formato, el mismo torneo de 1953 partidos queda en ~413-441 KB
+totales (cfg + tabla) — una reducción neta real de ~18-23%, no una
+regresión.
+
+### La clave de deduplicación incluye SIEMPRE el pareo de equipos
+
+Un partido se identifica en la tabla por `_pmDedupKey(containerId,
+slotKey, teamA, teamB)` = `containerId + '|' + slotKey + '|' +
+normA + '::' + normB` — **nunca** solo `containerId + '|' + slotKey`.
+Motivo: un ♻️ Reset del torneo reutiliza la MISMA posición estructural
+(mismo matchKey/`phase+idx`) con un emparejamiento de equipos DISTINTO.
+Sin el pareo de equipos en la clave, el partido NUEVO en esa posición
+chocaría con la entrada VIEJA ya presente (`if (!tally.matches[dedupKey])`
+la saltaría en silencio) y sus estadísticas se perderían para siempre —
+el acta ya está vacía cuando se detecta la colisión, no hay forma de
+recuperarla después. La posición estructural sigue siendo necesaria
+ADEMÁS del pareo: en un doble round-robin el MISMO par de equipos juega
+DOS veces (ida y vuelta) — sin `slotKey`, la 2ª vuelta colisionaría con
+la 1ª y se perdería igual.
+
+### Protección contra resurrección cross-device
+
+El merge del servidor (`_pick_result`/`_copa_pick_result`/`_pick_match`
+en `sync_merge.py`) siempre hacía ganar a la copia CON acta sobre la
+que no la tiene (con el mismo marcador) — para proteger contra pérdidas
+ACCIDENTALES. Un recorte DELIBERADO sella `trimmedAt` (ms) en el propio
+resultado; si es posterior o igual al `ua`/`updatedAt` de la copia que
+aún trae el acta, el recorte GANA — no hay nada que perder, esa acta ya
+se sumó a la tabla permanente antes de vaciarla. Sin esto, cualquier
+dispositivo con una copia vieja (que aún no ha recibido el recorte)
+resucitaría el acta que se acaba de vaciar a propósito.
+
+### Dónde está implementado
+
+| Familia | Función | Fuente | Persistencia |
+|---|---|---|---|
+| Torneos de Verano + Selecciones + Mundialito de Clubes | `_pmSweepTourCfg`/`window._pmSweepAllTours` | `tour_<id>_v1.results` | `window._tourSave(id, cfg)` (merge-safe, respeta `trimmedAt`) |
+| Copa Intercontinental | `window._pmSweepInterState` | `inter_state_v1.sorteo.{q,s,f}` | `_lsSetSafe` local — viaja solo por el polling genérico de `SYNC_KEYS` (`part2/misc_body_2.html`) hacia `_STATE_BRACKET_KEYS` en servidor |
+| Copa del Rey | **NO implementado a propósito** — ver más abajo | — | — |
+
+El barrido corre **100% automático, sin botón**: al boot (diferido 9s)
+y cada 3 minutos mientras la app sigue abierta (mismo principio que la
+purga de ligas fantasma).
+
+### Copa del Rey queda DELIBERADAMENTE fuera de esta entrega
+
+`rebuildPlayerStatsStore` Source 5 (el escaneo en vivo de
+`copa_state_v1.resultados[ronda][idx].events` que alimenta la caja de
+Estadísticas de la Copa) deduplica por **`'copa|' + _mkPJ(team_a,
+team_b)`** — una clave que NO incluye la ronda ni el leg (ida/vuelta/
+desempate). Como `_mkPJ` es simétrico (`_mkPJ('L','V') === _mkPJ('V','L')`)
+y una eliminatoria a doble partido tiene el MISMO pareo de equipos en
+`_ida`/`_vta`/`_des` (con `home`/`away` intercambiados en la vuelta),
+esa clave YA cuenta, en la práctica, como MÁXIMO un leg de cada
+eliminatoria a doble partido — el resto se descarta en silencio por el
+guard de dedup, un comportamiento pre-existente e independiente de este
+recorte. Replicar esta tabla permanente con fidelidad (Regla 4 más
+abajo: "los números del partido recortado deben ser IDÉNTICOS a los
+que el escaneo en vivo habría producido") exige primero verificar
+exactamente qué leg "gana" ese dedup y reproducirlo — no se ha hecho
+todavía por prudencia, para no arriesgarse a cambiar una cifra ya
+mostrada sin poder probarlo contra la app real. Queda pendiente para
+una entrega separada.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que se recorte un partido con CUALQUIER lado humano
+   (club o selección). El detector de humanidad (`_pmIsHumanTeam`) es
+   deliberadamente CONSERVADOR — OR de los 3 detectores canónicos del
+   proyecto (`_isHumanClubCanonico`/`_esSelHumana`/`isHumanInComp`); si
+   no puede identificar con certeza los 2 equipos, o si CUALQUIERA de
+   los 3 detectores da `true` para cualquiera de los 2 lados, el
+   partido NO se toca. Esta regla es la más importante del feature — el
+   usuario fue explícito en que HvH/HvIA "de momento que se sigan
+   guardando".
+2. **PROHIBIDO** recortar un partido cuya jornada/ronda NO esté 100%
+   completa (`_pmGroupJornadaDone`/`_pmLeagueJornadaDone`/
+   `_pmKoRoundDone`/el chequeo de fase de `_pmSweepInterState`) —
+   nunca a mitad de jornada/eliminatoria.
+3. **PROHIBIDO** que el recorte escriba en la tabla permanente sin
+   persistir el estado mutado (o viceversa) — ambos pasos van juntos en
+   el mismo barrido, o un fallo a mitad podría dejar un partido sin
+   acta Y sin tabla permanente.
+4. **PROHIBIDO** que un accumulator nuevo (`_pmAccumulateEvents`) sume
+   un tipo de evento distinto a como lo hace `rebuildPlayerStatsStore`
+   (Source 3/4/5) para la MISMA familia — los números del partido
+   recortado deben ser IDÉNTICOS a los que el escaneo en vivo habría
+   producido, o las estadísticas cambiarían al recortar un partido
+   (inaceptable).
+5. **PROHIBIDO** que `_pm_tally_merge` (servidor) una SOLO `matches` sin
+   unir TAMBIÉN `names` — los `playerKey` de un `matches` recién
+   llegado de OTRO dispositivo son indescifrables sin el `names` que
+   ese mismo dispositivo aportó.
+6. **PROHIBIDO** que `_pmDedupKey` deje de incluir el nombre
+   (normalizado) de los 2 equipos — ver explicación completa arriba.
+   Un ♻️ Reset reutiliza la MISMA posición estructural con un
+   emparejamiento distinto; sin el pareo en la clave, el partido nuevo
+   pierde sus estadísticas para siempre.
+7. **PROHIBIDO** implementar el barrido de Copa del Rey sin antes
+   verificar (con datos reales o un test que reproduzca el dedup de
+   Source 5) qué leg de una eliminatoria a doble partido "gana" el
+   dedup `'copa|' + _mkPJ(...)`, y replicar EXACTAMENTE ese mismo
+   criterio en la tabla permanente — de lo contrario recortar cambiaría
+   una cifra ya mostrada al usuario.
+8. Toda competición NUEVA con acta hereda este patrón en cuanto se
+   añada su propio `_pmSweepXxx` (no hay lista hardcodeada de torneos —
+   el barrido de `tour_*_v1` recorre TODAS las claves presentes en
+   localStorage) — solo hace falta identificar dónde vive su estado
+   (`tour_<id>_v1`, un estado tipo `inter_state_v1`, o algo nuevo) y
+   qué prerrequisito de merge server-side necesita (`trimmedAt` en
+   `_pick_result`/`_pick_match`/`bracket_state_merge`, según cuál
+   aplique a esa clave).
 
 ## Catálogo de balones RENOVADO — reset completo del inventario + reasignación por competición (obligatorio, 2026-08-16)
 

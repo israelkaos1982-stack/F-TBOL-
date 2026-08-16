@@ -31373,11 +31373,16 @@ document.addEventListener('DOMContentLoaded', function() {
   var WPREV_CONF_KEY = 'wprev_to_conference_v1';    /* 24 → Conference (R1+R2 perdedores) */
   var ROUND_ORDER = ['r1','r2','r3','r4'];
   var ROUND_META = {
-    r1: { label:'Ronda 1', emoji:'🟤', container:'wprev-deathround-container', poolFn:'computeUclPrevR1Teams', directAlone:true, next:'r2' },
-    r2: { label:'Ronda 2', emoji:'⚪', container:'wprev-groups-container',      poolFn:'computeUclPrevR2DirectTeams', prev:'r1', next:'r3' },
-    r3: { label:'Ronda 3', emoji:'🟡', container:'wprev-r3-container',         poolFn:'computeUclPrevR3DirectTeams', prev:'r2', next:'r4' },
-    r4: { label:'Ronda 4', emoji:'🟣', container:'wprev-r4-container',         poolFn:'computeUclPrevR4DirectTeams', prev:'r3', next:null, isFinal:true }
+    r1: { label:'Ronda 1', short:'R1', emoji:'🟤', container:'wprev-deathround-container', poolFn:'computeUclPrevR1Teams', directAlone:true, next:'r2' },
+    r2: { label:'Ronda 2', short:'R2', emoji:'⚪', container:'wprev-groups-container',      poolFn:'computeUclPrevR2DirectTeams', prev:'r1', next:'r3' },
+    r3: { label:'Ronda 3', short:'R3', emoji:'🟡', container:'wprev-r3-container',         poolFn:'computeUclPrevR3DirectTeams', prev:'r2', next:'r4' },
+    r4: { label:'Ronda 4', short:'R4', emoji:'🟣', container:'wprev-r4-container',         poolFn:'computeUclPrevR4DirectTeams', prev:'r3', next:null, isFinal:true }
   };
+  /* `short` (R1/R2/R3/R4) es SOLO para los botones 🎮 Sim / 🎲 Draw
+     (obligatorio, 2026-08-16, petición usuario: "🎮 Sim Ronda 3 (todas)
+     / 🎲 Draw Ronda 3" → "🎮 Sim R3 / 🎲 Draw R3"). El título de cada
+     caja (`_renderRound`, "🟡 RONDA 3 (12 ELIMINATORIAS)") sigue usando
+     `label` completo — PROHIBIDO fusionar ambos campos en uno solo. */
 
   function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
   function _logoOf(name){
@@ -31819,8 +31824,12 @@ document.addEventListener('DOMContentLoaded', function() {
     defaultCollapsed = allDone && !isLastRendered;
     var manual = _drCollapsedManual[roundKey];
     var collapsed = (manual === null) ? defaultCollapsed : manual;
-    dr.innerHTML = '<div class="wprev-dr'+(allDone?' is-done':'')+(collapsed?' collapsed':'')+'" id="wprev-dr-root-'+roundKey+'">'
-      + '<div class="wprev-dr-hdr" id="wprev-dr-toggle-'+roundKey+'">'+titleTxt+'<span class="wprev-dr-chev">▼</span></div>'
+    /* Clase `roundKey` (r1/r2/r3/r4) — colorea CADA ronda con SU
+       propio color (🟤 R1 marrón · ⚪ R2 blanca · 🟡 R3 amarilla ·
+       🟣 R4 morada), petición usuario 2026-08-16. Ver CSS
+       `#s-ucl-previa-clas .wprev-dr.r1/.r2/.r3/.r4` en misc_body_1.html. */
+    dr.innerHTML = '<div class="wprev-dr '+roundKey+(allDone?' is-done':'')+(collapsed?' collapsed':'')+'" id="wprev-dr-root-'+roundKey+'">'
+      + '<div class="wprev-dr-hdr" id="wprev-dr-toggle-'+roundKey+'">'+titleTxt+(allDone?'<span class="wprev-dr-done-badge">✓</span>':'')+'<span class="wprev-dr-chev">▼</span></div>'
       + '<div class="wprev-dr-body">'
       +   '<div style="padding:8px 10px;font-family:Oswald,sans-serif;font-size:10.5px;letter-spacing:1px;color:#e0bfff;text-align:center;">'+banner+'</div>'
       +   rows
@@ -31909,21 +31918,24 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function _nextLabel(){
+    /* Labels cortos (obligatorio, 2026-08-16, petición usuario: reducir
+       "🎮 Sim Ronda 3 (todas)" a "🎮 Sim R3"). Usa `.short`, nunca
+       `.label` completo — ver nota junto a ROUND_META. */
     var s=loadState();
-    if(!s) return '🎮 Sim (todas)';
+    if(!s) return '🎮 Sim';
     var info=_phaseInfo(s.phase);
-    if(!info) return '🎮 Sim (todas)';
-    if(info.state==='drawn') return '🎮 Sim '+ROUND_META[info.round].label+' (todas)';
-    if(info.state==='done' && ROUND_META[info.round].next) return '🎮 Sim '+ROUND_META[ROUND_META[info.round].next].label+' (todas)';
+    if(!info) return '🎮 Sim';
+    if(info.state==='drawn') return '🎮 Sim '+ROUND_META[info.round].short;
+    if(info.state==='done' && ROUND_META[info.round].next) return '🎮 Sim '+ROUND_META[ROUND_META[info.round].next].short;
     return '🔁 Re-simular';
   }
   function _drawLabel(){
     var s=loadState();
-    if(!s) return '🎲 Draw Ronda 1';
+    if(!s) return '🎲 Draw R1';
     var info=_phaseInfo(s.phase);
     if(!info) return '🎲 Draw';
-    if(info.state==='drawn') return '🎲 Draw '+ROUND_META[info.round].label;
-    if(info.state==='done' && ROUND_META[info.round].next) return '🎲 Draw '+ROUND_META[ROUND_META[info.round].next].label;
+    if(info.state==='drawn') return '🎲 Draw '+ROUND_META[info.round].short;
+    if(info.state==='done' && ROUND_META[info.round].next) return '🎲 Draw '+ROUND_META[ROUND_META[info.round].next].short;
     return '🎲 Draw';
   }
   function _refreshButtons(){

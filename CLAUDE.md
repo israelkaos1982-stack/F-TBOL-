@@ -1,5 +1,217 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Previa Champions — cada Ronda con SU color + no se apaga al simular + botones cortos (obligatorio, 2026-08-16)
+
+**Petición usuario 2026-08-16** (pantalla "UCL · Previa de Champions",
+formato 4 rondas): 3 peticiones sobre la misma pantalla.
+
+1. **Set de botones reducido**: de "🎮 Sim Ronda 3 (todas) / 🎲 Draw
+   Ronda 3 / ♻️ Reset / ⬇️ Traer Open Qualifier" a solo
+   "🎮 Sim R3 / 🎲 Draw R3 / ♻️ Reset". El botón "⬇️ Traer Open
+   Qualifier" era **código muerto** desde el 2026-08-14 (aniquilación
+   de Wild Card/Open Qualifier): llamaba a
+   `window._wprevPullOpenQualifier`, una función que nunca se definió
+   en el motor de 4 rondas — un no-op silencioso heredado del formato
+   viejo de 2 fases. Eliminado el botón y su comentario obsoleto.
+2. **Cada ronda con SU color**: "La caja de la R1 marron / la caja de
+   la R2 blanca / la caja de la R3 amarilla / la caja de la R4
+   Morada" — hasta ahora las 4 rondas (`.wprev-dr`) compartían un único
+   esquema morado hardcoded.
+3. **Ronda simulada NO se apaga**: "cuando una Ronda es simulada se
+   vuelve opaco todo su interior, siendo muy difícil ver resultados y
+   equipos clasificados, que siga teniendo color, hazlo mas como un
+   videojuego que se vea bien" — `.wprev-dr.is-done` aplicaba
+   `filter:grayscale(.7) brightness(.65);opacity:.6` a la caja ENTERA,
+   dejando ilegibles los marcadores/escudos/nombres de una ronda ya
+   jugada.
+
+### Fix
+
+- **Botón "⬇️ Traer Open Qualifier"**: eliminado de
+  `misc_body_1.html` (bloque de botones de `s-ucl-previa-clas`), junto
+  con su comentario explicativo (obsoleto, hablaba de "propagación
+  automática... Open Qualifier"). Solo quedan Sim/Draw/Reset.
+- **Color por ronda — CSS custom properties**: `#s-ucl-previa-clas
+  .wprev-dr` define `--dr-border`/`--dr-g1`/`--dr-g2`/`--dr-g3`/
+  `--dr-accent`/`--dr-accent-rgb` (default = R4 morado, por si algún
+  `.wprev-dr` se pinta sin clase de ronda). `_renderRound`
+  (`part2/misc_body_2.html`) ya añadía el `roundKey` (`r1`/`r2`/`r3`/
+  `r4`) como clase del contenedor raíz — nuevas reglas
+  `.wprev-dr.r1`/`.r2`/`.r3`/`.r4` sobreescriben esas variables:
+  R1 marrón (`#8b5520`/`#c98f3c`), R2 blanca/plata (`#8a94a5`/`#e4e9f2`,
+  colores reutilizados de `_EUR_REPORT_ZONES.prevR1`/`prevR2` para
+  consistencia con el resto de la app), R3 amarillo/dorado (`#FDC830`,
+  = `_EUR_REPORT_ZONES.prevR3`), R4 morado (sin cambios, =
+  `_EUR_REPORT_ZONES.uclPrev`). El resto de reglas de la sección
+  (`.wprev-dr-hdr` gradiente, `.wprev-dr-tie` borde, `.wprev-dr-leg
+  .sc`, `.wprev-dr-agg` + `.winner-mark` + `.sc`) dejan de usar
+  `rgba(168,85,247,...)`/`#a855f7` hardcoded y pasan a
+  `rgba(var(--dr-accent-rgb),...)`/`var(--dr-accent)` — heredan el
+  color de SU ronda sin duplicar ninguna regla por ronda.
+- **Ronda completada — SIN apagar el contenido**: `.wprev-dr.is-done`
+  ya NO lleva `filter`/`opacity`. En su lugar, un glow verde sutil
+  (`box-shadow:0 0 18px rgba(80,255,140,.22)`) en la caja + una línea
+  verde bajo la cabecera (`box-shadow:inset 0 -3px 0
+  rgba(80,255,140,.6)` en `.wprev-dr-hdr`) + el badge
+  `.wprev-dr-done-badge` ("✓", verde, con glow) que `_renderRound`
+  ahora añade al título cuando la ronda está `allDone` (junto al
+  chevron ▼). El contenido (marcadores, escudos, nombres) se queda con
+  el 100% de color de SU ronda, siempre legible.
+- **Botones cortos**: `ROUND_META` (`part2/misc_body_2.html`) gana un
+  campo `short` (`'R1'..'R4'`) SEPARADO de `label` (`'Ronda 1'..'Ronda
+  4'`) — `label` sigue usándose para el título de cada caja ("🟡 RONDA
+  3 (12 ELIMINATORIAS)"), `short` SOLO lo consumen `_nextLabel()`/
+  `_drawLabel()` (que además pierden el sufijo "(todas)"): "🎮 Sim R3"
+  / "🎲 Draw R3" en vez de "🎮 Sim Ronda 3 (todas)" / "🎲 Draw Ronda 3".
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir el botón "⬇️ Traer Open Qualifier" (ni
+   cualquier llamada a `window._wprevPullOpenQualifier`, que no existe
+   en el motor de 4 rondas). Si algún día hace falta un botón de
+   recuperación manual para esta pantalla, debe operar sobre el pool
+   de la ronda ANTERIOR real (`ROUND_META[info.round].prev`), nunca
+   sobre el Open Qualifier aniquilado.
+2. **PROHIBIDO** que `.wprev-dr.is-done` (o cualquier estado
+   "completado" nuevo de esta pantalla) vuelva a usar
+   `filter:grayscale/brightness` u `opacity` reducida sobre el
+   contenido. El estado "completado" se comunica con un
+   glow/badge/borde de color, NUNCA apagando la legibilidad de
+   marcadores/escudos/nombres ya jugados.
+3. **PROHIBIDO** que una ronda NUEVA (si el formato cambia de 4 a más
+   rondas en el futuro) se quede sin su propia entrada en
+   `.wprev-dr.rN` — toda ronda que se añada a `ROUND_META` con un
+   `roundKey` nuevo hereda el patrón de variables CSS por ronda, no un
+   color hardcoded aparte.
+4. **PROHIBIDO** fusionar `label` y `short` en un solo campo de
+   `ROUND_META`. `label` alimenta el título de la caja (formato largo,
+   "Ronda N"); `short` alimenta SOLO los botones Sim/Draw (formato
+   corto, "RN"). Son consumidores distintos con necesidades distintas.
+
+## El picker "AÑADIR POR LIGA" — falso error "no se pudo añadir" en un equipo YA añadido + cooldown anti-doble-tap (obligatorio, 2026-08-16 #2)
+
+**Bug (usuario 2026-08-16, foto «Union Saint-Gilloise» con fila
+mostrando «✓ Añadido» y a la vez un banner rojo «⚠️ La acción no se
+pudo completar: No se pudo añadir «Union Saint-Gilloise» a «ucl». La
+zona no es válida.»)**: en el picker "AÑADIR POR LIGA" del overlay
+"👁 Equipos por competición", pulsar ➕ Añadir sobre un equipo que YA
+estaba en la lista de esa competición (fila ya mostrando "✓ Añadido")
+disparaba un aviso de error falso, aunque el equipo ya estuviera
+correctamente añadido.
+
+### Causa raíz
+
+El mismo patrón de click sintético retrasado documentado en la
+sección de arriba (colapso del toggle de liga): un `touchstart` +
+`click` sintético duplicado sobre el botón "➕ Añadir" — ahora
+re-renderizado como "✓ Añadido" en la MISMA posición de pantalla — volvía
+a disparar el handler. `window._eurManualExtraAdd(zone, name, ...)`
+devuelve `false` tanto para "zona inválida" como para "el equipo ya
+está en esa zona" (no duplica entradas) — el handler trataba CUALQUIER
+`false` como un fallo real y mostraba el banner de error, aunque el
+segundo intento fuera simplemente redundante (el equipo ya estaba
+añadido correctamente desde el primer tap).
+
+### Fix
+
+El handler de `[data-eur-pick-add]` (`misc_body_1.html`, wiring de
+`_eurManualOverlayRender`) ahora:
+1. Aplica el MISMO cooldown de 700 ms que el toggle de liga
+   (`_eurPickerLastAddAt`, clave `zone+'|'+name`) — el click sintético
+   retrasado del mismo gesto físico se ignora antes de llegar a tocar
+   el store.
+2. Comprueba PRIMERO si el equipo ya está en `eur_manual_extra_v1[zone]`
+   (`window._eurManualExtraLoad()`) — si ya está, no hace nada (ni
+   error ni re-añadido), simplemente re-pinta el overlay. Solo si NO
+   estaba y `_eurManualExtraAdd` devuelve `false` se considera un
+   fallo real de zona inválida.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un handler de "añadir a una lista" trate CUALQUIER
+   `false` de retorno como error sin distinguir "ya estaba" de
+   "operación inválida". Si la función de añadido no distingue ambos
+   casos en su valor de retorno, el CALLER debe comprobar la
+   pertenencia ANTES de invocarla.
+2. **PROHIBIDO** que un botón de este picker (o cualquier botón nuevo
+   del overlay "Equipos por competición") dependa solo del `click`
+   sintético sin el cooldown `_eurPickerLastToggleAt`/
+   `_eurPickerLastAddAt` — es el mismo patrón de click retrasado en
+   WebView Android ya documentado para el toggle de liga (sección de
+   arriba) y para `#gm-btn-end` (más abajo en este archivo).
+
+## Zonas de la Previa de Champions en modo 🔒 Manual (default) IGNORABAN el inyector "EA Sports → Europa" — el 5º y 6º de España nunca llegaban a R3/R4 (obligatorio, 2026-08-16)
+
+**Bug (usuario 2026-08-16)**: "El 6 clasificado de España Ea Sport
+(Villarreal) tiene que aparecer en la R3 de previa de Champions, pero
+no aparece" / "El 5 clasificado de Ea Sport el Atlético Madrid en este
+caso, debería aparecer en la R4 de previa de Champions pero no
+aparece". El admin había añadido ambos equipos correctamente desde la
+pantalla dedicada "🎮 EA Sports → Europa" (secciones 🟡 Previa
+Champions R3 / 🟣 Previa Champions R4, que sí existen en esa pantalla),
+pero ninguno de los dos aparecía en el pool real de su ronda.
+
+### Causa raíz
+
+Las 7 zonas europeas (`ucl`/`uclPrev`/`prevR3`/`prevR2`/`prevR1`/`uel`/
+`uecl`) arrancan en 🔒 Manual por DEFAULT (regla ya obligatoria,
+2026-07-03: "el admin pidió DOS VECES que los equipos automáticos
+desaparezcan"). En ese modo, `computeUclClassified()`,
+`_uclPrevDirectPool(zoneKey,...)` (la función compartida que alimenta
+`computeUclPrevR1/R2/R3/R4Teams`), `computeUelClassified()` y
+`computeUeclClassified()` cortaban en su PRIMERA línea:
+```js
+if(window._eurManualOnly && window._eurManualOnly(zone)) return _appendManualExtra([], zone);
+```
+Esto ignora POR COMPLETO `_prependManualEa(...)` — la función que lee
+`manual_ea_<slug>_v1`, el ÚNICO camino por el que un equipo de Liga EA
+Sports (bloqueada del cómputo automático, `EUROPE_BLACKLIST`) puede
+entrar a CUALQUIER zona europea. `_appendManualExtra` solo lee
+`eur_manual_extra_v1` (el inyector GENÉRICO del overlay "Equipos por
+competición", un mecanismo INDEPENDIENTE) — nunca `manual_ea_<slug>_v1`
+(el inyector ESPECÍFICO de "EA Sports → Europa"). Con las 4 zonas
+directas en Manual (el default), Villarreal y Atlético Madrid quedaban
+invisibles para siempre en R3/R4, sin importar cuántas veces el admin
+los añadiera desde la pantalla correcta — exactamente el mismo hueco
+que ya se había corregido para Recopa/Intercontinental/Supercopa
+Europa/Mundialito el 2026-07-07, pero que nunca se aplicó a
+`computeUclClassified`/`_uclPrevDirectPool`/`computeUelClassified`/
+`computeUeclClassified`.
+
+### Fix
+
+Las 4 funciones cambian su rama de retorno temprano en modo Manual
+de `return _appendManualExtra([], zone)` a
+`return _appendManualExtra(_prependManualEa([], zone), zone)` —
+`_prependManualEa` se ejecuta SIEMPRE antes de `_appendManualExtra`,
+en modo Manual igual que en modo Auto (donde ya se llamaba al final
+del cómputo normal). Con esto, los equipos manuales de "EA Sports →
+Europa" para `ucl`/`uclPrev`(R4)/`prevR3`(R3)/`uel`/`uecl` aparecen
+en su zona sin importar si esa zona está en 🔓 Auto o 🔒 Manual.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un retorno temprano de modo 🔒 Manual en
+   CUALQUIER función `compute*Classified`/`_uclPrevDirectPool` (o
+   cualquier función de cómputo de zona europea nueva) omita
+   `_prependManualEa(...)`. El patrón correcto, SIEMPRE, es
+   `_appendManualExtra(_prependManualEa([], zone), zone)` — nunca
+   `_appendManualExtra([], zone)` a secas. Esta es la MISMA regla que
+   ya rige para Recopa/Intercontinental/Supercopa Europa/Mundialito
+   (sección "El overlay 'Equipos por competición' cubre las 10
+   competiciones..." más abajo) — aquí se generaliza explícitamente a
+   las 4 zonas directas (`ucl`/`uclPrev`/`uel`/`uecl`) Y a `prevR3`/
+   `prevR2`/`prevR1` (vía `_uclPrevDirectPool`).
+2. **PROHIBIDO** asumir que "ya funciona en modo Auto" es suficiente
+   para dar un fix por bueno — el modo Manual es el DEFAULT de las 7
+   zonas, así que cualquier fuente de equipos (manual EA, extras
+   genéricos) debe probarse explícitamente en modo Manual antes de
+   cerrar el bug.
+3. Toda zona NUEVA que se añada al reparto europeo con su propia
+   función de cómputo hereda esta regla desde el primer commit: su
+   rama de retorno temprano en Manual SIEMPRE encadena
+   `_prependManualEa` antes de `_appendManualExtra`.
+
 ## El picker "AÑADIR POR LIGA" solo muestra equipos con zona europea + cooldown anti-doble-toggle (obligatorio, 2026-08-16)
 
 **Bug (usuario 2026-08-16, foto «Eurasia» expandida)**: tras el rediseño

@@ -38347,7 +38347,15 @@ window._hdrCleanCache = function(){
   }
 
   function computeUclClassified(){
-    if(window._eurManualOnly && window._eurManualOnly('ucl')) return _appendManualExtra([], 'ucl');
+    /* El inyector "EA Sports → Europa" (`manual_ea_ucl_v1`/
+       `_prependManualEa`) es INDEPENDIENTE del toggle 🔓Auto/🔒Manual de
+       esta zona (bug 2026-08-16: con la zona en Manual —el DEFAULT—
+       este `return` cortaba ANTES de llegar a `_prependManualEa`, así
+       que un equipo de Liga EA Sports añadido a mano en esa pantalla
+       nunca aparecía). Liga EA Sports está en `EUROPE_BLACKLIST` — su
+       ÚNICA vía a esta zona es `_prependManualEa`, así que debe
+       ejecutarse SIEMPRE, sea cual sea el modo de la zona. */
+    if(window._eurManualOnly && window._eurManualOnly('ucl')) return _appendManualExtra(_prependManualEa([], 'ucl'), 'ucl');
     var frozen = _europeFrozenFor('ucl');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('ucl');
@@ -38393,7 +38401,12 @@ window._hdrCleanCache = function(){
      juegan la ida como visitantes (regla del usuario), lo consume el
      motor de sorteo en part2/misc_body_2.html. */
   function _uclPrevDirectPool(zoneKey, awayFirstLeg){
-    if(window._eurManualOnly && window._eurManualOnly(zoneKey)) return _appendManualExtra([], zoneKey);
+    /* Ver comentario equivalente en `computeUclClassified` — el
+       inyector "EA Sports → Europa" (5º/6º/… de Liga EA Sports a
+       R1-R4 de la Previa) DEBE aplicarse aunque la zona esté en
+       🔒 Manual (bug 2026-08-16, "el 5º/6º de EA Sports no aparece en
+       R3/R4 de la Previa"). */
+    if(window._eurManualOnly && window._eurManualOnly(zoneKey)) return _appendManualExtra(_prependManualEa([], zoneKey), zoneKey);
     var frozen = _europeFrozenFor(zoneKey);
     var arr = frozen ? frozen.slice() : _computeQualifiedFromLeagues(zoneKey);
     _eurFixupLeagues(arr);
@@ -38440,7 +38453,8 @@ window._hdrCleanCache = function(){
   window.computeUclPrevTeams = computeUclPrevTeams;
 
   function computeUelClassified(){
-    if(window._eurManualOnly && window._eurManualOnly('uel')) return _appendManualExtra([], 'uel');
+    /* Ver comentario en `computeUclClassified`. */
+    if(window._eurManualOnly && window._eurManualOnly('uel')) return _appendManualExtra(_prependManualEa([], 'uel'), 'uel');
     var frozen = _europeFrozenFor('uel');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uel');
@@ -38467,7 +38481,8 @@ window._hdrCleanCache = function(){
     return _appendManualExtra(out, 'uel');
   }
   function computeUeclClassified(){
-    if(window._eurManualOnly && window._eurManualOnly('uecl')) return _appendManualExtra([], 'uecl');
+    /* Ver comentario en `computeUclClassified`. */
+    if(window._eurManualOnly && window._eurManualOnly('uecl')) return _appendManualExtra(_prependManualEa([], 'uecl'), 'uecl');
     var frozen = _europeFrozenFor('uecl');
     if(frozen) return frozen.slice();
     var arr = _computeQualifiedFromLeagues('uecl');
@@ -38837,17 +38852,13 @@ window._hdrCleanCache = function(){
           style="background:linear-gradient(135deg,#3a1414,#5a2424);border:1px solid rgba(255,80,80,.5);border-radius:8px;padding:9px 16px;color:#ff8080;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
     ♻️ Reset
   </button>
-  <!-- Traer clasificados del Open Qualifier a mano (2026-07-11, mismo
-       patrón que "⬇️ Traer Wild Card" del Open Qualifier): por si la
-       propagación automática (invalidación en cascada al terminar el
-       Open Qualifier) no llegó a este dispositivo, o hay una snapshot
-       congelada de "Enviar realidad..." de antes de que el Open
-       Qualifier terminara — el admin fuerza el recálculo del pool con
-       los 28 clasificados reales sin tener que ir a Reset/Draw a ciegas. -->
-  <button onclick="pG(function(){window._wprevPullOpenQualifier&&window._wprevPullOpenQualifier()})"
-          style="background:linear-gradient(135deg,#3a2a00,#5a4400);border:1px solid rgba(253,200,48,.55);border-radius:8px;padding:9px 16px;color:#ffe680;font-family:Oswald,sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;cursor:pointer;">
-    ⬇️ Traer Open Qualifier
-  </button>
+  <!-- El botón "⬇️ Traer Open Qualifier" se ELIMINÓ (obligatorio,
+       2026-08-16, petición usuario — el set de botones se reduce a
+       Sim/Draw/Reset). Era vestigial del formato Open Qualifier→Previa
+       de 2 fases, ANIQUILADO 2026-08-14 (sección "ANIQUILACIÓN TOTAL de
+       Wild Card + Open Qualifier..." de CLAUDE.md) — `window._wprevPullOpenQualifier`
+       nunca llegó a definirse en el formato de 4 rondas, así que el
+       botón era un no-op silencioso. PROHIBIDO reintroducirlo. -->
 </div>
 
 <!-- Leyenda morada compacta (formato 2026-07-31: Ronda 1 + Ronda 2, ambas KO) -->
@@ -38917,23 +38928,47 @@ window._hdrCleanCache = function(){
 #s-ucl-previa-clas .wprev-mrow .h .nm,
 #s-ucl-previa-clas .wprev-mrow .a .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 #s-ucl-previa-clas .wprev-mrow .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:14px;background:rgba(168,85,247,.18);border:1px solid rgba(168,85,247,.4);border-radius:4px;padding:1px 0;color:#fff;font-weight:900;min-width:54px;}
-/* Death Round */
-#s-ucl-previa-clas .wprev-dr{margin:14px 4px 0;border:2px solid #5b1c8e;border-radius:10px;background:linear-gradient(180deg,rgba(91,28,142,.15),rgba(0,0,0,0));overflow:hidden;}
-#s-ucl-previa-clas .wprev-dr-hdr{padding:10px 14px;background:linear-gradient(90deg,#1a0535,#5b1c8e,#7e22ce,#5b1c8e,#1a0535);font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
+/* Death Round — cada ronda con SU PROPIO color (obligatorio,
+   2026-08-16, petición usuario: "La caja de la R1 marron / la caja de
+   la R2 blanca / la caja de la R3 amarilla / la caja de la R4
+   Morada"). Custom properties por ronda (clase `.r1`/`.r2`/`.r3`/`.r4`,
+   añadida por `_renderRound` en part2/misc_body_2.html) — el resto de
+   reglas de esta sección (`.wprev-dr-tie`, `.wprev-dr-leg .sc`,
+   `.wprev-dr-agg`, etc.) leen `var(--dr-accent-rgb)`/`var(--dr-accent)`
+   en vez de un morado hardcoded, así heredan el color de SU ronda sin
+   necesitar una copia de cada regla por ronda. Default = R4 (morado),
+   por si algún día se pinta un `.wprev-dr` sin clase de ronda. */
+#s-ucl-previa-clas .wprev-dr{
+  --dr-border:#a855f7; --dr-g1:#1a0535; --dr-g2:#5b1c8e; --dr-g3:#7e22ce;
+  --dr-accent:#a855f7; --dr-accent-rgb:168,85,247;
+  margin:14px 4px 0;border:2px solid var(--dr-border);border-radius:10px;background:linear-gradient(180deg,rgba(var(--dr-accent-rgb),.15),rgba(0,0,0,0));overflow:hidden;
+}
+#s-ucl-previa-clas .wprev-dr.r1{--dr-border:#8b5520;--dr-g1:#241505;--dr-g2:#6b4218;--dr-g3:#a06a28;--dr-accent:#c98f3c;--dr-accent-rgb:201,143,60;}
+#s-ucl-previa-clas .wprev-dr.r2{--dr-border:#8a94a5;--dr-g1:#12141a;--dr-g2:#3a4250;--dr-g3:#aab4c4;--dr-accent:#e4e9f2;--dr-accent-rgb:228,233,242;}
+#s-ucl-previa-clas .wprev-dr.r3{--dr-border:#d9a520;--dr-g1:#2a1e00;--dr-g2:#8a6510;--dr-g3:#FDC830;--dr-accent:#FDC830;--dr-accent-rgb:253,200,48;}
+#s-ucl-previa-clas .wprev-dr.r4{--dr-border:#a855f7;--dr-g1:#1a0535;--dr-g2:#5b1c8e;--dr-g3:#7e22ce;--dr-accent:#a855f7;--dr-accent-rgb:168,85,247;}
+#s-ucl-previa-clas .wprev-dr-hdr{padding:10px 14px;background:linear-gradient(90deg,var(--dr-g1),var(--dr-g2),var(--dr-g3),var(--dr-g2),var(--dr-g1));font-family:'Bebas Neue','Oswald',sans-serif;font-size:18px;letter-spacing:2px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;}
 #s-ucl-previa-clas .wprev-dr-hdr .wprev-dr-chev{margin-left:auto;font-size:14px;transition:transform .18s ease;}
 #s-ucl-previa-clas .wprev-dr.collapsed .wprev-dr-chev{transform:rotate(-90deg);}
 #s-ucl-previa-clas .wprev-dr.collapsed .wprev-dr-body{display:none;}
-/* Ronda 1 completada: apaga el bloque entero (tras phase='rf-drawn'
-   o 'done' en wprev_state_v1). El usuario ya no necesita verla
-   destacada porque su función ha terminado. */
-#s-ucl-previa-clas .wprev-dr.is-done{filter:grayscale(.7) brightness(.65);opacity:.6;}
-#s-ucl-previa-clas .wprev-dr.is-done .wprev-dr-hdr{background:linear-gradient(90deg,#0d0420,#241038,#3a1d52,#241038,#0d0420);}
+/* Ronda completada (tras phase='rf-drawn'/'done' en wprev_state_v1):
+   YA NO se apaga con grayscale/opacity (obligatorio, 2026-08-16,
+   petición usuario "cuando una Ronda es simulada se vuelve opaco todo
+   su interior... que siga teniendo color, hazlo mas como un
+   videojuego que se vea bien" — PROHIBIDO reintroducir
+   filter:grayscale/opacity aquí). Se marca con un glow verde sutil +
+   el badge ✓ (`.wprev-dr-done-badge`, pintado por `_renderRound`) en
+   la cabecera — el contenido (resultados, escudos, clasificados)
+   se queda 100% legible y con el color de SU ronda. */
+#s-ucl-previa-clas .wprev-dr.is-done{box-shadow:0 0 18px rgba(80,255,140,.22);}
+#s-ucl-previa-clas .wprev-dr.is-done .wprev-dr-hdr{box-shadow:inset 0 -3px 0 rgba(80,255,140,.6);}
+#s-ucl-previa-clas .wprev-dr-done-badge{margin-left:6px;font-family:Oswald,sans-serif;font-size:12px;font-weight:900;letter-spacing:1px;color:#7dffab;text-shadow:0 0 8px rgba(80,255,140,.7);background:rgba(0,60,20,.45);border:1px solid rgba(80,255,140,.55);border-radius:4px;padding:1px 6px;}
 /* Submenu cards apagados (s-champions): el admin ve de un vistazo
    qué fases están terminadas y cuál es la activa. La detección la
    hace el script al entrar a la pantalla. */
 .submenu-card.is-done{filter:grayscale(.85) brightness(.6);opacity:.55;}
 .submenu-card.is-done::after{content:' ✓ COMPLETADA';font-family:Oswald,sans-serif;font-size:9px;letter-spacing:1.5px;color:#80ff80;margin-left:8px;position:relative;z-index:3;}
-#s-ucl-previa-clas .wprev-dr-tie{margin:10px 12px;padding:10px 12px;border:1px solid rgba(168,85,247,.35);border-radius:8px;background:rgba(0,0,0,.25);}
+#s-ucl-previa-clas .wprev-dr-tie{margin:10px 12px;padding:10px 12px;border:1px solid rgba(var(--dr-accent-rgb),.35);border-radius:8px;background:rgba(0,0,0,.25);}
 /* Fila de leg: escudo GRANDE arriba, nombre COMPLETO debajo (2026-08-03,
    petición usuario — "escudos arriba nombre equipo abajo, que se vean
    los nombres de los equipos enteros"). `align-items:start` porque las
@@ -38942,11 +38977,11 @@ window._hdrCleanCache = function(){
 #s-ucl-previa-clas .wprev-dr-leg{display:grid;grid-template-columns:1fr 58px 1fr;gap:6px;align-items:start;font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;}
 #s-ucl-previa-clas .wprev-dr-leg .h{text-align:center;font-weight:700;}
 #s-ucl-previa-clas .wprev-dr-leg .a{text-align:center;font-weight:700;}
-#s-ucl-previa-clas .wprev-dr-leg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:16px;background:rgba(168,85,247,.18);border-radius:4px;padding:2px 0;color:#fff;font-weight:900;margin-top:18px;}
-#s-ucl-previa-clas .wprev-dr-agg{display:grid;grid-template-columns:1fr 58px 1fr;gap:6px;align-items:center;padding-top:6px;margin-top:5px;border-top:1px dashed rgba(168,85,247,.35);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:#a855f7;}
-#s-ucl-previa-clas .wprev-dr-agg .winner-mark{font-weight:700;color:#a855f7;}
+#s-ucl-previa-clas .wprev-dr-leg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:16px;background:rgba(var(--dr-accent-rgb),.18);border-radius:4px;padding:2px 0;color:#fff;font-weight:900;margin-top:18px;}
+#s-ucl-previa-clas .wprev-dr-agg{display:grid;grid-template-columns:1fr 58px 1fr;gap:6px;align-items:center;padding-top:6px;margin-top:5px;border-top:1px dashed rgba(var(--dr-accent-rgb),.35);font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1.5px;color:var(--dr-accent);}
+#s-ucl-previa-clas .wprev-dr-agg .winner-mark{font-weight:700;color:var(--dr-accent);}
 #s-ucl-previa-clas .wprev-dr-agg .loser-mark{color:rgba(255,255,255,.4);}
-#s-ucl-previa-clas .wprev-dr-agg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#fff;background:rgba(168,85,247,.25);border:1px solid rgba(168,85,247,.55);border-radius:4px;padding:2px 0;font-weight:900;}
+#s-ucl-previa-clas .wprev-dr-agg .sc{text-align:center;font-family:Bebas Neue,sans-serif;font-size:18px;color:#fff;background:rgba(var(--dr-accent-rgb),.25);border:1px solid rgba(var(--dr-accent-rgb),.55);border-radius:4px;padding:2px 0;font-weight:900;}
 /* ─── Ronda Preliminar "videojuego" (2026-07-12, formato foto 2026-08-03):
      crests grandes ARRIBA + nombre COMPLETO debajo, card destacada para
      el cruce del equipo humano + botón JUGAR. Petición usuario: "que
@@ -44103,6 +44138,9 @@ window._hdrCleanCache = function(){
      cooldown de 700 ms por elemento que ya usa este proyecto para
      `#gm-btn-end` (sección "El botón 🏁 FINALIZAR…", CLAUDE.md). */
   var _eurPickerLastToggleAt = {};
+  /* Cooldown por equipo+zona para el botón individual "➕ Añadir" — ver
+     comentario junto a su wiring en `_eurManualOverlayRender`. */
+  var _eurPickerLastAddAt = {};
   /* Expande/colapsa la clasificación de UNA liga. Al expandir por
      primera vez (sin datos cacheados todavía) dispara la carga. */
   function _eurPickerToggleLeague(slug){
@@ -44573,9 +44611,27 @@ window._hdrCleanCache = function(){
         var zone = btn.getAttribute('data-zone');
         var name = btn.getAttribute('data-name');
         var slug = btn.getAttribute('data-slug');
+        /* Cooldown + comprobación PREVIA (2026-08-16, foto usuario:
+           "«Union Saint-Gilloise» no se pudo añadir a «ucl»" con la fila
+           YA mostrando «✓ Añadido»): mismo bug de fondo que el toggle de
+           liga — un click sintético RETRASADO (WebView Android, tras
+           `preventDefault()` en touchstart) puede caer sobre el botón
+           "✓ Añadido" recién re-renderizado en la MISMA posición de
+           pantalla y volver a invocar este handler para un equipo que
+           YA está en la zona. `_eurManualExtraAdd` devuelve `false` en
+           ese caso (duplicado) — un `false` NUNCA debe mostrarse como
+           error si el equipo YA está presente: es el resultado deseado,
+           no un fallo. Se comprueba ANTES de llamar a add() para no
+           depender de que add() distinga sus 2 motivos de `false`. */
+        var now = Date.now();
+        var ck = zone + '|' + name;
+        if(now - (_eurPickerLastAddAt[ck] || 0) < 700) return;
+        _eurPickerLastAddAt[ck] = now;
         try {
-          if(!window._eurManualExtraAdd(zone, name, _eurSlugLabel(slug))){
-            (window._gmCriticalNotice || alert)('⚠️ No se pudo añadir «'+name+'» a la zona «'+zone+'». Puede que ya estuviera añadido, o que la zona no sea válida.');
+          var already = (window._eurManualExtraLoad && window._eurManualExtraLoad()[zone] || [])
+            .some(function(t){ return t.name === name; });
+          if(!already && !window._eurManualExtraAdd(zone, name, _eurSlugLabel(slug))){
+            (window._gmCriticalNotice || alert)('⚠️ No se pudo añadir «'+name+'» a la zona «'+zone+'». La zona no es válida.');
           }
         } catch(e){
           try { console.error('[eur-pick-add]', zone, name, e); } catch(_){}

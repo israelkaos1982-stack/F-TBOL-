@@ -3791,7 +3791,17 @@ def _is_dead_merged_league_slug(rest):
     if not rest:
         return False
     for slug in DEAD_MERGED_LEAGUE_SLUGS:
-        if rest == slug or rest.startswith(slug + "_"):
+        if rest == slug:
+            return True
+        # El sufijo derivado (_protected/_snap_<ts>/_backup) puede llevar
+        # "_" (convención actual del escritor) O "-" (restos de una
+        # convención anterior, confirmados en datos reales de producción:
+        # `liga_ext_grecia-backup`, `liga_ext_alemania-snap-<ts>`). Sin
+        # aceptar ambos, estas filas seguían sirviéndose en cada
+        # bulk-restore y sobrevivían INTACTAS al botón "eliminar del
+        # servidor" (2026-08-16, petición usuario — llevaban regresando
+        # pese a purgarlas "no sé cuántas veces").
+        if rest.startswith(slug + "_") or rest.startswith(slug + "-"):
             return True
     return False
 
@@ -3831,19 +3841,18 @@ def api_admin_purge_dead_leagues():
         rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
     except Exception:
         rows = []
-    prefixes = tuple(f"liga_ext_{slug}" for slug in DEAD_MERGED_LEAGUE_SLUGS)
     deleted_keys = []
     for row in rows or []:
         clave = row.clave or ""
-        # Match exacto (el "main") o con sufijo "_algo" (protected/snap/backup).
-        # No basta con `startswith`: "liga_ext_alemania" no debe borrar
-        # "liga_ext_alemania-otra-cosa" si algún día existiera un slug así.
-        hit = False
-        for prefix in prefixes:
-            if clave == prefix or clave.startswith(prefix + "_"):
-                hit = True
-                break
-        if not hit:
+        if not clave.startswith("liga_ext_"):
+            continue
+        # Reutiliza la MISMA función que ya filtra estas ligas en el resto
+        # del servidor (`_is_dead_merged_league_slug`) en vez de duplicar
+        # el matching aquí — la duplicación anterior tenía su propio bug
+        # (solo reconocía sufijo "_", nunca "-") y las filas con guión
+        # sobrevivían INTACTAS a este botón pese a decir "eliminadas".
+        rest = clave[len("liga_ext_"):]
+        if not _is_dead_merged_league_slug(rest):
             continue
         deleted_keys.append(clave)
         db.session.delete(row)

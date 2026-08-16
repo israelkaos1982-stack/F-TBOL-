@@ -44089,10 +44089,27 @@ window._hdrCleanCache = function(){
       });
     });
   }
+  /* Cooldown por liga (2026-08-16, "cuando marcó 1 liga con ✅ esta
+     solo dura unos segundos y se desvanece"): `_eurWireTapFallback`
+     dispara el toggle en `touchstart` + `pointerdown` + `mousedown`
+     para garantizar que el tap SIEMPRE registra (mismo patrón que el
+     resto del overlay) — pero en algunos WebView Android el `click`
+     sintético que el navegador añade tras el toque real puede llegar
+     IGUALMENTE unos instantes después, aunque `preventDefault()` ya se
+     llamó en `touchstart`. Ese click sintético cae sobre el botón
+     RECIÉN renderizado (ahora ✅, en la misma posición de pantalla) y
+     dispara un SEGUNDO toggle — que colapsa la liga que el admin
+     acababa de abrir, indistinguible de "se desvanece sola". Mismo
+     cooldown de 700 ms por elemento que ya usa este proyecto para
+     `#gm-btn-end` (sección "El botón 🏁 FINALIZAR…", CLAUDE.md). */
+  var _eurPickerLastToggleAt = {};
   /* Expande/colapsa la clasificación de UNA liga. Al expandir por
      primera vez (sin datos cacheados todavía) dispara la carga. */
   function _eurPickerToggleLeague(slug){
     if(!slug) return;
+    var now = Date.now();
+    if(now - (_eurPickerLastToggleAt[slug] || 0) < 700) return;
+    _eurPickerLastToggleAt[slug] = now;
     var willExpand = !_eurPickerExpanded[slug];
     _eurPickerExpanded[slug] = willExpand;
     _eurManualOverlayRender();
@@ -44163,16 +44180,18 @@ window._hdrCleanCache = function(){
       body = '<div style="padding:10px;font-family:Rajdhani,sans-serif;font-size:13px;color:#ff8080;">⚠️ ' + _eurEsc(err) + '</div>';
     } else if (data){
       var manual = (window._eurManualExtraLoad && window._eurManualExtraLoad()) || {};
-      var rows = _eurPickerRows(slug);
+      /* Petición usuario 2026-08-16: "quiero que al pulsar solo salgan
+         los equipos que juegan Competición europea" — se filtran los
+         equipos SIN zona europea sugerida (r.zone vacío, p.ej. un
+         equipo que quedó fuera del cupo de su liga). `r.pos` conserva
+         la posición REAL de la liga (no se renumera al filtrar), para
+         que el admin siga viendo en qué puesto quedó cada equipo. */
+      var rows = _eurPickerRows(slug).filter(function(r){ return !!r.zone; });
       var rowsHtml = rows.map(function(r){
-        var z = r.zone ? _EUR_ZONE_BY_KEY[r.zone] : null;
+        var z = _EUR_ZONE_BY_KEY[r.zone];
         var already = z && (manual[r.zone]||[]).some(function(t){ return t.name === r.name; });
-        var zoneBadge = z
-          ? ('<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:'+z.color+';border:1px solid '+z.color+'55;border-radius:4px;padding:2px 6px;white-space:nowrap;">'+z.emoji+' '+_eurEsc(z.label)+'</span>')
-          : '<span style="font-family:Oswald,sans-serif;font-size:10px;color:rgba(255,255,255,.35);">— sin zona —</span>';
-        var actionBtn = z
-          ? ('<button data-eur-pick-add="1" data-slug="'+_eurEsc(slug)+'" data-zone="'+r.zone+'" data-name="'+_eurEsc(r.name)+'" style="background:'+(already?'rgba(255,255,255,.08)':'rgba(60,200,120,.15)')+';border:1px solid '+(already?'rgba(255,255,255,.25)':'#3cc878')+';color:'+(already?'rgba(255,255,255,.5)':'#bfffbf')+';border-radius:4px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;white-space:nowrap;">'+(already?'✓ Añadido':'➕ Añadir')+'</button>')
-          : '';
+        var zoneBadge = '<span style="font-family:Oswald,sans-serif;font-size:10px;letter-spacing:.5px;color:'+z.color+';border:1px solid '+z.color+'55;border-radius:4px;padding:2px 6px;white-space:nowrap;">'+z.emoji+' '+_eurEsc(z.label)+'</span>';
+        var actionBtn = '<button data-eur-pick-add="1" data-slug="'+_eurEsc(slug)+'" data-zone="'+r.zone+'" data-name="'+_eurEsc(r.name)+'" style="background:'+(already?'rgba(255,255,255,.08)':'rgba(60,200,120,.15)')+';border:1px solid '+(already?'rgba(255,255,255,.25)':'#3cc878')+';color:'+(already?'rgba(255,255,255,.5)':'#bfffbf')+';border-radius:4px;padding:3px 8px;font-family:Oswald,sans-serif;font-size:10px;cursor:pointer;white-space:nowrap;">'+(already?'✓ Añadido':'➕ Añadir')+'</button>';
         return '<div style="display:flex;align-items:center;gap:8px;padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.06);font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;">'
           + '<span style="width:22px;color:rgba(255,255,255,.5);">'+r.pos+'</span>'
           + '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+_eurEsc(r.name)+'</span>'
@@ -44181,9 +44200,8 @@ window._hdrCleanCache = function(){
           + actionBtn
           + '</div>';
       }).join('');
-      var anyZoned = rows.some(function(r){ return r.zone; });
-      body = (rowsHtml || '<div style="padding:6px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);">Esta liga no tiene equipos todavía.</div>')
-        + (anyZoned ? ('<button data-eur-pick-add-all="'+_eurEsc(slug)+'" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:6px;padding:9px 14px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;font-weight:700;">✅ AÑADIR TODOS LOS SUGERIDOS DE ESTA LIGA</button>') : '');
+      body = (rowsHtml || '<div style="padding:6px 2px;font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.5);">Ningún equipo de esta liga juega competición europea (todos quedaron sin zona).</div>')
+        + (rows.length ? ('<button data-eur-pick-add-all="'+_eurEsc(slug)+'" style="width:100%;margin-top:6px;background:linear-gradient(135deg,#1a3a14,#2a5a24);border:1px solid #3cc878;color:#bfffbf;border-radius:6px;padding:9px 14px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1px;cursor:pointer;font-weight:700;">✅ AÑADIR TODOS LOS SUGERIDOS DE ESTA LIGA</button>') : '');
     } else {
       body = '';
     }

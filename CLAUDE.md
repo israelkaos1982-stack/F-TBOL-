@@ -1,5 +1,57 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El picker "AÑADIR POR LIGA" solo muestra equipos con zona europea + cooldown anti-doble-toggle (obligatorio, 2026-08-16)
+
+**Bug (usuario 2026-08-16, foto «Eurasia» expandida)**: tras el rediseño
+de la sección anterior (lista plana con ✅/⬜ por liga, sin desplegable),
+el usuario reportó que al marcar ✅ en una liga "esta solo dura unos
+segundos y se desvanece siendo imposible añadir ningún club". Pidió
+además explícitamente: "quiero que al pulsar solo salgan los equipos
+que juegan Competición europea" — la lista expandida mostraba TODOS
+los equipos de la liga, incluidos los que quedan fuera de cupo europeo
+(`— sin zona —`, p.ej. "Sheriff Tiraspol"/"CS Petrocub" en Eurasia).
+
+### Causa raíz (colapso solo)
+
+`_eurWireTapFallback` dispara el toggle en `touchstart` + `pointerdown`
++ `mousedown` (mismo patrón que el resto del overlay, necesario para
+que el tap real SIEMPRE registre) llamando `preventDefault()` en
+`touchstart` para suprimir el `click` sintético posterior. En algunos
+WebView de Android ese `click` sintético puede llegar IGUALMENTE unos
+instantes después pese al `preventDefault()`. Como el botón recién
+re-renderizado (ahora ✅, expandido) ocupa la MISMA posición de
+pantalla, ese click retrasado cae sobre él y dispara un SEGUNDO
+`_eurPickerToggleLeague(slug)` — que colapsa la liga que el admin
+acababa de abrir, indistinguible de "se desvanece sola".
+
+### Fix
+
+- **Cooldown de 700 ms por liga** (`_eurPickerLastToggleAt[slug]`,
+  mismo patrón ya usado en este proyecto para `#gm-btn-end` —
+  «El botón 🏁 FINALIZAR…», más abajo): un segundo toggle de la MISMA
+  liga dentro de los 700 ms del primero se ignora — el click sintético
+  retrasado ya no puede colapsar lo que el tap real acaba de abrir.
+- **Solo equipos con zona europea**: `_eurPickerLeagueRowHtml` filtra
+  `_eurPickerRows(slug)` a `r.zone` truthy antes de pintar — un equipo
+  que quedó fuera del cupo europeo de su liga (`— sin zona —`) ya no
+  aparece en la lista expandida. `r.pos` conserva la posición REAL de
+  la liga (no se renumera al filtrar).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** quitar el cooldown `_eurPickerLastToggleAt` de
+   `_eurPickerToggleLeague`. Es lo que impide que un click sintético
+   retrasado (WebView Android, tras `preventDefault()` en touchstart)
+   colapse una liga que el admin acaba de expandir.
+2. **PROHIBIDO** que el picker vuelva a mostrar equipos sin zona
+   europea asignada en la lista expandida. Solo se listan los equipos
+   con `r.zone` truthy — el resto de la liga (sin cupo europeo) no
+   aporta nada a este picker.
+3. El botón "✅ AÑADIR TODOS LOS SUGERIDOS DE ESTA LIGA" ya filtraba
+   por `r.zone` en su propio handler — el filtro de display no cambia
+   su comportamiento, solo evita mostrar filas que ese botón iba a
+   ignorar de todos modos.
+
 ## `_psHubClubMatches`/`_slotIsH` GATEAN el alias Bayern↔Liverpool por el HUB ACTUAL — antes cualquier caja mostraba el partido de Liverpool (obligatorio, 2026-08-15)
 
 **Bug (usuario 2026-08-15, «Atlético Madrid»)**: en la caja del Atlético

@@ -12434,13 +12434,13 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
       } catch(_){}
     }
     /* Recopa de Europa: matchKey `recopa_<phase>_<idx>`. Mapeamos cada
-       ronda del bracket de 64 a la fila EXACTA del calendario
-       (calendario.json → SSR). Sin esto la previa de un partido de
-       Recopa caía a HOY + "recopa" sin fecha real. 2026-06-02. */
+       ronda del bracket (32 equipos desde 2026-08-16, arranca en 1/32
+       — sin ronda 1/64) a la fila EXACTA del calendario (calendario.json
+       → SSR). Sin esto la previa de un partido de Recopa caía a HOY +
+       "recopa" sin fecha real. 2026-06-02, reducido 2026-08-16. */
     var rm = String(matchKey || '').match(/^recopa_([a-z0-9]+)_\d+$/i);
     if (rm) {
       var RECOPA_RD = {
-        r64: 'Recopa Europa — 1/64',
         r32: 'Recopa Europa — 1/32',
         r16: 'Recopa Europa — Octavos',
         r8:  'Recopa Europa — Cuartos',

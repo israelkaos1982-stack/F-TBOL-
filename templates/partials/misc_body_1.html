@@ -9762,12 +9762,13 @@ window._hdrCleanCache = function(){
     };
     return true;
   }
-  /* RECOPA DE EUROPA: estado recopa_state_v1.sorteo[phase] (array). */
+  /* RECOPA DE EUROPA: estado recopa_state_v1.sorteo[phase] (array).
+     Bracket de 32 (obligatorio, 2026-08-16) — arranca en 1/32, sin
+     ronda 1/64. */
   function _recopaHubResolve(lbl){
     var s = String(lbl || '');
     if (!/recopa/i.test(s)) return null;
-    var phase = /1\s*\/\s*64/.test(s) ? 'r64'
-      : /1\s*\/\s*32/.test(s) ? 'r32'
+    var phase = /1\s*\/\s*32/.test(s) ? 'r32'
       : /octavos/i.test(s) ? 'r16'
       : /cuartos/i.test(s) ? 'r8'
       : /semis|semifinal/i.test(s) ? 'sf'
@@ -20215,33 +20216,36 @@ window._hdrCleanCache = function(){
 })();
 </script>
 
-<!-- ═══ RECOPA DE EUROPA · Pantalla principal + 3 rondas ═══
+<!-- ═══ RECOPA DE EUROPA · Pantalla principal + 5 rondas ═══
      Histórico de formato:
        - 2026-05-06: 64 equipos, copas nacionales + manuales.
        - 2026-05-26: 8 equipos, top 6 de Resto del Mundo + 2 manuales.
        - 2026-05-27: Resto del Mundo dejó de alimentar Recopa (sus 6
-         primeros pasaron a Copa Intercontinental). Pool actual = solo
-         los 2 manuales (campeón + subcampeón Champions del año pasado)
-         vía "EA Sports → Europa" slug 'recopa'. Bracket de 8 no se
-         puede arrancar sin pool completo — pendiente de un rediseño
-         a 64 equipos exclusivamente europeos.
-     3 rondas K.O. (Cuartos → Semis → Final), partido único con
-     prórroga + penaltis si empate al 90'.
+         primeros pasaron a Copa Intercontinental).
+       - 2026-06-02: bracket de 64 equipos, campeones+subcampeones (con
+         toggle) de las copas nacionales europeas.
+       - 2026-08-16 (ACTUAL): reducida a 32 equipos — España 4 clubes
+         (manual) + resto de ligas 28 (campeón+subcampeón fijo de 12 de
+         las 16 ligas del catálogo "Resto de Ligas", solo campeón de
+         las otras 4 — ver `_buildPool`). Bracket arranca DIRECTAMENTE
+         en 1/32 (16 partidos) — la ronda 1/64 se eliminó del motor Y
+         del calendario (`calendario.json`, día "Recopa Europa — 1/64"
+         → "Descanso"). PROHIBIDO reintroducir la ronda 1/64.
+     Todas las rondas son partido único con prórroga + penaltis si
+     empate al 90'.
 -->
 <div class="screen" id="s-recopa">
 <button class="back-btn" onclick="go('s-competiciones')">◀ Volver</button>
 <div class="sec-hdr"><img class="sec-ico comp-logo" src="/static/img/comp/trophy-recopa.png" alt="Recopa de Europa"/><h2>Recopa de Europa</h2></div>
 <div id="recopa-banner" style="display:flex;flex-direction:column;gap:8px;align-items:center;margin:6px 0 10px;padding:0 8px;"></div>
 <div class="jlist">
-<!-- Recopa rediseñada 2026-06-02: bracket COMPLETO de 64 equipos a
-     partido único (prórroga + penaltis). 6 rondas, mismas fechas que
-     el calendario (calendario.json): 1/64 → 1/32 → Octavos → Cuartos
-     → Semis → FINAL. El pool son los CAMPEONES (+ subcampeones si la
-     copa lo tiene activado) de las copas nacionales europeas
-     (`ligaExt_*.copa`) + los manuales de "EA Sports → Europa" slug
-     recopa, hasta 64. Se rellena con BYE si faltan (el equipo con BYE
+<!-- Recopa reducida a 32 equipos (2026-08-16): bracket de 32 a partido
+     único (prórroga + penaltis). 5 rondas, mismas fechas que el
+     calendario (calendario.json): 1/32 → Octavos → Cuartos → Semis →
+     FINAL. El pool son España (4, manual) + los CAMPEONES+SUBCAMPEONES
+     (fijo por liga, ver `_buildPool`) de las 16 ligas de "Resto de
+     Ligas", hasta 32. Se rellena con BYE si faltan (el equipo con BYE
      pasa directo). -->
-<div class="jblock" id="recopa-rd-r64-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r64')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;"><img class="jbtn-ico" src="/static/img/comp/trophy-recopa.png" alt=""/><b>Recopa</b>&nbsp;&nbsp;1/64</span><span class="recopa-rd-cnt" id="recopa-rd-r64-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-r32-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r32')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;"><img class="jbtn-ico" src="/static/img/comp/trophy-recopa.png" alt=""/><b>Recopa</b>&nbsp;&nbsp;1/32</span><span class="recopa-rd-cnt" id="recopa-rd-r32-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-r16-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r16')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;"><img class="jbtn-ico" src="/static/img/comp/trophy-recopa.png" alt=""/><b>Recopa</b>&nbsp;&nbsp;Octavos</span><span class="recopa-rd-cnt" id="recopa-rd-r16-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
 <div class="jblock" id="recopa-rd-r8-blk"><button class="jbtn c-recopa" onclick="go('s-recopa-rd-r8')" style="display:flex;align-items:center;gap:8px;"><span style="flex:1;display:flex;align-items:center;gap:6px;"><img class="jbtn-ico" src="/static/img/comp/trophy-recopa.png" alt=""/><b>Recopa</b>&nbsp;&nbsp;Cuartos de Final</span><span class="recopa-rd-cnt" id="recopa-rd-r8-cnt" style="font-family:Rajdhani,sans-serif;font-size:12px;letter-spacing:.5px;color:rgba(255,255,255,.55);">○ 0/0</span></button></div>
@@ -20256,7 +20260,6 @@ window._hdrCleanCache = function(){
 </div>
 </div>
 </div>
-<div class="screen" id="s-recopa-rd-r64"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · 1/64</h2></div><div id="recopa-rd-r64-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-r32"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · 1/32</h2></div><div id="recopa-rd-r32-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-r16"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Octavos</h2></div><div id="recopa-rd-r16-body" style="padding:0 4px 20px;"></div></div>
 <div class="screen" id="s-recopa-rd-r8"><button class="back-btn" onclick="go('s-recopa')">◀ Volver</button><div class="sec-hdr"><span class="sec-emoji">🟤</span><h2>Recopa · Cuartos de Final</h2></div><div id="recopa-rd-r8-body" style="padding:0 4px 20px;"></div></div>
@@ -20265,7 +20268,7 @@ window._hdrCleanCache = function(){
 
 <style>
 /* `.jbtn-ico` — icono de trofeo REAL inline dentro de un `.jbtn`
-   (botón de ronda/jornada: Recopa 1/64..FINAL, Mundialito Fase de
+   (botón de ronda/jornada: Recopa 1/32..FINAL, Mundialito Fase de
    Grupos..FINAL, Intercontinental Cuartos/Semis/Final, Superliga
    Jornada N). Petición usuario 2026-07-04 ("el icono tiene que ser
    el trofeo... tanto en la parte de arriba como en las cajas de cada
@@ -20370,6 +20373,14 @@ window._hdrCleanCache = function(){
      2026-08-01, bug «no se guardan los cambios de qué equipos van a
      la Recopa»)
      ═══════════════════════════════════════════════════════════════
+     ⚠️ DEPRECADO (2026-08-16): tras la reducción de la Recopa a 32
+     equipos, qué aporta cada liga (campeón / campeón+subcampeón) pasó
+     a ser una regla FIJA por identidad de liga (ver
+     `RECOPA_CHAMPION_ONLY_SLUGS`, motor de Recopa más abajo) — ya no
+     hay ningún toggle que guardar. Este IIFE + `recopa_copa_flags_v1`
+     se dejan DEFINIDOS (no-op, nadie los escribe ya) por si algo
+     externo aún los invocara; no eliminar sin auditar antes que de
+     verdad no quede ningún caller.
      Hasta ahora `_lecCopa.toggleSubcampeon`/`toggleSemis` guardaban
      el toggle dentro de `ligaExt_<slug>.config` — el documento GIGANTE
      de cada liga, sujeto a toda la maquinaria de sync/anti-wipe de
@@ -20485,50 +20496,55 @@ window._hdrCleanCache = function(){
   /* ═══════════════════════════════════════════════════════════════
      RECOPA DE EUROPA · Motor + UI
      ═══════════════════════════════════════════════════════════════
-     Rediseño 2026-05-26: la Recopa arranca DIRECTAMENTE EN CUARTOS
-     con 8 equipos:
-       - Top 6 de Resto del Mundo (auto, leídos de `ligaExt_resto-mundo`).
-       - 2 equipos manuales (campeón + subcampeón Champions del año
-         pasado) añadidos vía "EA Sports → Europa" slug 'recopa'.
-     Las rondas 1/64, 1/32 y Octavos del motor antiguo se eliminaron
-     — el DOM ya no las tiene y el motor no las gestiona.
+     Formato ACTUAL (2026-08-16): bracket de 32 equipos, 5 rondas
+     (1/32 → Octavos → Cuartos → Semis → FINAL), partido único con
+     prórroga + penaltis si empate al 90'. Pool:
+       - España: 4 clubes, el admin los añade a mano vía "EA Sports →
+         Europa" (slug 'recopa') / el overlay "Equipos por competición".
+       - Resto de ligas: 28 clubes — campeón (SIEMPRE) + subcampeón
+         (salvo Adriático Oriental/Danubio Nórdica/Balkanica/Eurasia,
+         que solo aportan el campeón) de las 16 ligas del catálogo
+         cerrado "Resto de Ligas" (ver `_buildPool`).
      Estado en localStorage `recopa_state_v1`:
-       { pool: ['Team1', ...],         // 8 equipos al sortear r8
-         sorteo: { r8:[m,...], sf:[...], fin:[...] },
+       { pool: ['Team1', ...],         // 32 equipos al sortear r32
+         sorteo: { r32:[m,...], r16:[...], r8:[...], sf:[...], fin:[...] },
          champion: 'Team' | null,
          runnerUp: 'Team' | null }
      Cada match: { home, away, played, gh, ga, etGh, etGa, penWinner }.
-     Todas las rondas son a partido único con prórroga + penaltis si
-     empate al 90'.
      ═══════════════════════════════════════════════════════════════ */
   var STORE_KEY = 'recopa_state_v1';
   var BYE = '__BYE__';
-  var POOL_TARGET = 64;
-  var PHASES = ['r64','r32','r16','r8','sf','fin'];
-  var PHASE_LABEL = { r64:'1/64', r32:'1/32', r16:'Octavos', r8:'Cuartos', sf:'Semifinales', fin:'FINAL' };
-  var PHASE_SIZE  = { r64:32, r32:16, r16:8, r8:4, sf:2, fin:1 }; /* nº de matches */
-  var NEXT_PHASE  = { r64:'r32', r32:'r16', r16:'r8', r8:'sf', sf:'fin', fin:null };
-  var DOM_BODY    = { r64:'recopa-rd-r64-body', r32:'recopa-rd-r32-body', r16:'recopa-rd-r16-body', r8:'recopa-rd-r8-body', sf:'recopa-rd-sf-body', fin:'recopa-rd-fin-body' };
+  /* Recopa reducida a 32 equipos (obligatorio, 2026-08-16, petición
+     usuario: "la recopa de reduce a 32 equipos"). El bracket arranca
+     DIRECTAMENTE en 1/32 (16 partidos) — la ronda 1/64 se elimina por
+     completo, del motor Y del calendario (ver `calendario.json`
+     ev-122, ahora "Descanso"). PROHIBIDO reintroducir 'r64' en
+     PHASES/PHASE_LABEL/PHASE_SIZE/NEXT_PHASE/DOM_BODY. */
+  var POOL_TARGET = 32;
+  var PHASES = ['r32','r16','r8','sf','fin'];
+  var PHASE_LABEL = { r32:'1/32', r16:'Octavos', r8:'Cuartos', sf:'Semifinales', fin:'FINAL' };
+  var PHASE_SIZE  = { r32:16, r16:8, r8:4, sf:2, fin:1 }; /* nº de matches */
+  var NEXT_PHASE  = { r32:'r16', r16:'r8', r8:'sf', sf:'fin', fin:null };
+  var DOM_BODY    = { r32:'recopa-rd-r32-body', r16:'recopa-rd-r16-body', r8:'recopa-rd-r8-body', sf:'recopa-rd-sf-body', fin:'recopa-rd-fin-body' };
 
   function _load(){
     var s;
     try { s = JSON.parse(localStorage.getItem(STORE_KEY)||'null'); } catch(_){ return null; }
-    /* Migración: estados legacy de 3 fases (bracket de 8: r8/sf/fin sin
-       r64) se descartan para no mostrar datos viejos en las cajas
-       nuevas. El usuario re-sortea el bracket de 64 desde 1/64. */
-    if(s && s.sorteo && !s.sorteo.r64 && (s.sorteo.r8 || s.sorteo.sf || s.sorteo.fin)){
+    /* Migración (obligatorio, 2026-08-16, "la recopa se reduce a 32
+       equipos"): cualquier estado guardado ANTES de este cambio con
+       `sorteo.r64` (bracket VIEJO de 64 equipos) se descarta — el
+       bracket nuevo arranca DIRECTAMENTE en 1/32 con un pool de 32
+       (España manual + resto de ligas). El admin re-sortea desde cero. */
+    if(s && s.sorteo && s.sorteo.r64){
       return null;
     }
-    /* Migración 2026-07-11: `_drawFirstRound` SIEMPRE genera exactamente
-       32 partidos en 1/64 (rellena con BYE hasta el bracket completo,
-       ver PHASE_SIZE.r64). Un `sorteo.r64` con otra longitud (p.ej. "0/2",
-       reportado por el usuario tras añadir 64 equipos manualmente al pool
-       y ver la Recopa seguir "esperando" un sorteo viejo de 2 partidos)
-       solo puede venir de un guardado de una versión anterior del motor.
-       Se descarta para que la pantalla ofrezca "🎯 Sortear 1/64" de nuevo
-       con el pool ACTUAL (los equipos añadidos a mano no llegaban nunca a
-       usarse porque el sorteo ya "existía", aunque estuviera roto). */
-    if(s && s.sorteo && s.sorteo.r64 && s.sorteo.r64.length && s.sorteo.r64.length !== PHASE_SIZE.r64){
+    /* Migración legacy (2026-07-11, adaptada): `_drawFirstRound`
+       SIEMPRE genera exactamente 16 partidos en 1/32 (rellena con BYE
+       hasta el bracket completo, ver PHASE_SIZE.r32). Un `sorteo.r32`
+       con otra longitud solo puede venir de un guardado corrupto/de
+       una versión anterior del motor. Se descarta para que la
+       pantalla ofrezca "🎯 Sortear 1/32" de nuevo con el pool ACTUAL. */
+    if(s && s.sorteo && s.sorteo.r32 && s.sorteo.r32.length && s.sorteo.r32.length !== PHASE_SIZE.r32){
       return null;
     }
     /* Auto-resuelve cualquier "RIVAL PENDIENTE" cuyo partido de origen
@@ -20605,7 +20621,7 @@ window._hdrCleanCache = function(){
   }
   /* Un placeholder "puede ser humano" si CUALQUIERA de los 2 lados del
      partido de origen (aún sin jugar) lo es — no sabemos todavía quién
-     ganará, así que el anti-cruce-humano (1/64 · 1/32 · Octavos) debe
+     ganará, así que el anti-cruce-humano (1/32 · Octavos) debe
      tratarlo como potencialmente humano para no arriesgarse a emparejar
      a un humano YA conocido contra un hueco que podría resolverse en
      otro humano antes de Cuartos. Mismo principio que `_tbdMayBeEa` de
@@ -20705,19 +20721,44 @@ window._hdrCleanCache = function(){
     return Object.keys(out);
   };
 
-  /* Construye el pool de Recopa (rediseño 2026-06-02):
-     Modelo histórico Recopa / Cup Winners' Cup. El pool son los
-     CAMPEONES de las copas nacionales europeas (`ligaExt_<slug>.copa`,
-     motor _lecCopa) + los SUBCAMPEONES de las copas que tengan el
-     toggle `recopaSubcampeon` activado a mano (default OFF desde
-     2026-07-03) + los equipos
-     manuales de "EA Sports → Europa" slug 'recopa' (donde entran el
-     campeón/subcampeón de la Copa del Rey española, ya que Liga EA
-     está en EUROPE_BLACKLIST). Tope POOL_TARGET (64). El bracket de
-     64 se rellena con BYE si faltan equipos (el equipo emparejado con
-     BYE pasa directo). Exclusivamente europeo: se saltan las ligas no
-     UEFA (resto-mundo) y las internas españolas (EA/Hyp/1ªRFEF), igual
-     que `_computeQualifiedFromLeagues`. */
+  /* Construye el pool de Recopa (rediseño 2026-08-16, "la recopa se
+     reduce a 32 equipos"): YA NO es abierto a cualquier liga externa
+     con copa — el "resto de ligas" que alimenta la Recopa es la lista
+     CERRADA de 16 Ligas del catálogo "Resto de Ligas" (10 países
+     individuales + 6 Ligas Mixtas — la misma lista cerrada de la
+     sección "ANIQUILACIÓN TOTAL de las 9 Ligas Mixtas viejas" de
+     CLAUDE.md, derivada de `LEAGUE_DEFAULT_ZONES` menos España). De
+     esas 16, por petición EXPLÍCITA del usuario:
+       - Adriático Oriental / Danubio Nórdica / Balkanica / Eurasia
+         aportan SOLO el CAMPEÓN (4×1 = 4 equipos).
+       - Las otras 12 (10 países + Germanika + Hellas Slavia) aportan
+         CAMPEÓN + SUBCAMPEÓN (12×2 = 24 equipos).
+       Total resto de ligas = 28. Ya NO es un toggle editable por el
+       admin copa a copa (`recopaSubcampeon`/`recopaSemis` quedan sin
+       uso aquí) — es una regla FIJA por identidad de liga. Tampoco hay
+       semifinalistas (ya no caben en el cupo de 32).
+     España entra SOLO por los manuales de "EA Sports → Europa" / el
+     overlay "Equipos por competición" (Liga EA sigue fuera del
+     cómputo automático) — el admin añade sus 4 clubes a mano. Tope
+     POOL_TARGET (32). El bracket de 32 se rellena con BYE si faltan
+     equipos (el equipo emparejado con BYE pasa directo). */
+  function _recopaRestoLigasSlugs(){
+    var out = [];
+    try {
+      Object.keys(window.LEAGUE_DEFAULT_ZONES || {}).forEach(function(s){
+        if(s !== 'liga-ea-sports') out.push(s);
+      });
+    } catch(_){}
+    out.sort();
+    return out;
+  }
+  var RECOPA_CHAMPION_ONLY_SLUGS = { 'adriatico-oriental':1, 'danubio-nordica':1, 'balkanica':1, 'eurasia':1 };
+  /* Expuestas para que `_lecRenderReglas` (motor de Copa de "Resto de
+     Ligas", OTRA IIFE — el modal "📜 Reglas de la competición" de cada
+     liga externa) pueda mostrar el estado FIJO real de esta liga sin
+     duplicar la lista de 4 excepciones. Fuente ÚNICA. */
+  window._recopaRestoLigasSlugs = _recopaRestoLigasSlugs;
+  window._recopaChampionOnlySlugs = RECOPA_CHAMPION_ONLY_SLUGS;
   function _buildPool(){
     var pool = [];
     var seen = {};
@@ -20731,114 +20772,39 @@ window._hdrCleanCache = function(){
       seen[key] = true;
       pool.push(nm);
     }
-    /* (1) Manuales primero — tienen prioridad (el usuario los puso a
-       mano: campeón/subcampeón de la Copa del Rey, etc.). */
+    /* (1) España — manuales primero (el admin los añade a mano desde
+       "EA Sports → Europa" o el overlay "Equipos por competición"). */
     try {
       if(typeof window._meaTeamsFor === 'function'){
         var manual = window._meaTeamsFor('recopa') || [];
         manual.forEach(function(t){ if(t && t.name) _push(t.name); });
       }
     } catch(_){}
-    /* (1b) Extras manuales del overlay unificado "Equipos por
-       competición" (2026-07-07, petición usuario "vuelve a añadir el
-       poder añadir manualmente equipo a equipo"). Misma prioridad que
-       los manuales de "EA Sports → Europa" — el admin los puso a mano
-       a propósito. Se leen SIEMPRE (no hay modo "solo manual" para
-       Recopa: es aditivo sobre el cómputo automático de campeones). */
     try {
       if(typeof window._eurManualExtraTeamNames === 'function'){
         window._eurManualExtraTeamNames('recopa').forEach(_push);
       }
     } catch(_){}
-    /* (2) Campeones + subcampeones + semifinalistas de las copas
-       europeas. Recorremos todas las claves `ligaExt_<slug>` reales
-       (igual que _computeQualifiedFromLeagues: sin
-       _backup/_snap/_protected/_vN). Primero TODOS los campeones,
-       luego TODOS los subcampeones, luego TODOS los semifinalistas,
-       para que al capar a 64 los de más peso siempre entren antes. */
-    var EUROPE_BLACKLIST = { 'liga-hypermotion':1, 'liga-primera-federacion':1, 'liga-ea-sports':1, 'resto-mundo':1 };
-    /* Petición usuario 2026-08-01: la whitelist de 9 copas para el
-       subcampeón queda ELIMINADA — el toggle `recopaSubcampeon`
-       (default FALSE) es válido en CUALQUIER copa externa (todas
-       excepto Resto del Mundo, que no clasifica a Recopa — ya
-       excluida arriba vía EUROPE_BLACKLIST y sin bloque de Reglas en
-       `_lecRenderReglas`). Se añade además `recopaSemis` (default
-       FALSE): si el admin lo activa, los 2 EQUIPOS ELIMINADOS EN
-       SEMIFINALES de esa copa ("3 SEMIS" / "4 SEMIS") también entran
-       al pool. Solo aporta algo en copas con fase de semis real
-       (formato 20 con cuartos+semis, o formato 18 con semis estilo
-       Andorra sin cuartos) — los formatos 14/12 van directos a la
-       final y no tienen semifinalistas. EA Sports sigue entrando SOLO
-       por los manuales de «EA Sports → Europa» (Liga EA está en
-       EUROPE_BLACKLIST). */
-    var champs = [], runners = [], semiLosers = [];
-    function _semiLoser(s){
-      if(!s || !s.winner) return null;
-      /* Formato 20 (ida+vuelta, `_lecSim2Leg`): tieHome/tieAway.
-         Formato 18 (partido único, `_lecSim1Leg`): home/away. */
-      if(s.tieHome !== undefined) return (s.winner === s.tieHome) ? s.tieAway : s.tieHome;
-      return (s.winner === s.home) ? s.away : s.home;
-    }
-    try {
-      if(typeof localStorage !== 'undefined'){
-        var keys = [];
-        for(var i=0;i<localStorage.length;i++){
-          var k = localStorage.key(i);
-          if(!k || k.indexOf('ligaExt_')!==0) continue;
-          if(k.indexOf('_backup')>=0 || k.indexOf('_snap_')>=0 || k.indexOf('_snapshot')>=0 || k.indexOf('_protected')>=0) continue;
-          if(/_v\d+$/.test(k)) continue;
-          keys.push(k.substring('ligaExt_'.length));
-        }
-        /* Une los slugs de localStorage con los que SOLO viven en
-           `LIGA_CACHE` esta sesión (nunca llegaron a persistir en
-           local) — ver `_eurBestLeagueData`. */
-        var slugsAll = (typeof window._eurAllKnownLeagueSlugs === 'function')
-          ? window._eurAllKnownLeagueSlugs(keys)
-          : keys;
-        slugsAll.sort();
-        slugsAll.forEach(function(slug){
-          if(EUROPE_BLACKLIST[slug]) return;
-          var data;
-          try { data = JSON.parse(localStorage.getItem('ligaExt_' + slug)||'null'); } catch(_){ data = null; }
-          try {
-            if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
-          } catch(_){}
-          var cp = data && data.copa;
-          if(!cp) return;
-          if(cp.champion) champs.push(cp.champion);
-          /* Subcampeón: cualquier copa externa (whitelist eliminada
-             2026-08-01). Default = FALSE (petición usuario 2026-07-03:
-             "por defecto que siempre ponga el campeón 1 y el
-             subcampeón 0, pudiendo editarlo manualmente"). Solo cuenta
-             si el admin lo activó explícitamente desde el toggle de
-             Reglas. Fuente = store dedicado `recopa_copa_flags_v1`
-             (2026-08-01, "no se guardan los cambios de qué equipos van
-             a la Recopa" — el toggle vivía en `data.config`, pisado en
-             silencio por la sync del documento de la liga); fallback
-             a `data.config.recopaSubcampeon` SOLO si ese slug nunca se
-             tocó en el store nuevo (copas ya activadas antes del fix). */
-          var _subStored = (typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(slug, 'sub') : undefined;
-          var subOn = (_subStored !== undefined) ? _subStored : (data.config && data.config.recopaSubcampeon === true);
-          if(subOn && cp.runnerUp) runners.push(cp.runnerUp);
-          /* Semifinalistas (petición usuario 2026-08-01): default
-             FALSE. Solo aporta si la copa tiene fase de semis
-             (`cp.semis`, formatos 20/18) Y el admin lo activó. Mismo
-             store dedicado + fallback legacy que el subcampeón. */
-          var _semisStored = (typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(slug, 'semis') : undefined;
-          var semisOn = (_semisStored !== undefined) ? _semisStored : (data.config && data.config.recopaSemis === true);
-          if(semisOn && cp.semis && cp.semis.length){
-            cp.semis.forEach(function(s){
-              var loser = _semiLoser(s);
-              if(loser) semiLosers.push(loser);
-            });
-          }
-        });
-      }
-    } catch(_){}
+    /* (2) Resto de ligas — SOLO las 16 del catálogo cerrado. Campeón
+       SIEMPRE; subcampeón salvo las 4 excepciones
+       (RECOPA_CHAMPION_ONLY_SLUGS). Primero TODOS los campeones, luego
+       TODOS los subcampeones, para que al capar a 32 los de más peso
+       siempre entren antes. */
+    var champs = [], runners = [];
+    _recopaRestoLigasSlugs().forEach(function(slug){
+      var data;
+      try { data = JSON.parse(localStorage.getItem('ligaExt_' + slug)||'null'); } catch(_){ data = null; }
+      try {
+        if(typeof window._eurBestLeagueData === 'function') data = window._eurBestLeagueData(slug, data);
+      } catch(_){}
+      var cp = data && data.copa;
+      if(!cp) return;
+      if(cp.champion) champs.push(cp.champion);
+      if(!RECOPA_CHAMPION_ONLY_SLUGS[slug] && cp.runnerUp) runners.push(cp.runnerUp);
+    });
     champs.forEach(_push);
     runners.forEach(_push);
-    semiLosers.forEach(_push);
-    /* Cap a POOL_TARGET (64). */
+    /* Cap a POOL_TARGET (32). */
     if (pool.length > POOL_TARGET) pool = pool.slice(0, POOL_TARGET);
     return pool;
   }
@@ -20847,24 +20813,23 @@ window._hdrCleanCache = function(){
   window._recopaLivePool = function(){ return _buildPool(); };
   /* Diagnóstico (obligatorio, 2026-08-02, "faltan 2 ligas mixtas, solo
      hay 7 asignadas a la recopa y 2 que no salen"): una liga elegible
-     para Recopa (no está en `EUROPE_BLACKLIST`) que en ESTE dispositivo
-     no tiene `data.copa.champion` sencillamente NO APORTA NINGÚN equipo
-     al pool — `_eurZoneSectionHtml` solo pinta una sección por liga que
-     SÍ tenga al menos 1 equipo, así que una liga sin campeón desaparece
-     del informe por completo (sin ni un aviso de "0"), indistinguible
-     de un bug real de cómputo. Este helper lista, para CUALQUIER liga
-     externa (excepto Resto del Mundo/EA/Hyp/1ªRFEF, igual que
-     `_buildPool`), si le falta el campeón — y por qué: sin equipos
-     cacheados en este dispositivo, o con equipos pero sin la Copa
-     simulada todavía. El overlay lo usa para avisar explícitamente en
-     vez de dejar la liga "desaparecida" sin explicación. */
+     para Recopa (una de las 16 de `_recopaRestoLigasSlugs`) que en
+     ESTE dispositivo no tiene `data.copa.champion` sencillamente NO
+     APORTA NINGÚN equipo al pool — `_eurZoneSectionHtml` solo pinta
+     una sección por liga que SÍ tenga al menos 1 equipo, así que una
+     liga sin campeón desaparece del informe por completo (sin ni un
+     aviso de "0"), indistinguible de un bug real de cómputo. Este
+     helper lista, para las 16 ligas del catálogo cerrado (mismas que
+     `_buildPool`, vía `_recopaRestoLigasSlugs`), si le falta el
+     campeón — y por qué: sin equipos cacheados en este dispositivo, o
+     con equipos pero sin la Copa simulada todavía. El overlay lo usa
+     para avisar explícitamente en vez de dejar la liga "desaparecida"
+     sin explicación. */
   window._recopaMissingChampionLeagues = function(){
-    var EUROPE_BLACKLIST = { 'liga-hypermotion':1, 'liga-primera-federacion':1, 'liga-ea-sports':1, 'resto-mundo':1 };
     var out = [];
     try {
-      var slugs = Object.keys(window.LEAGUE_DEFAULT_ZONES || {});
+      var slugs = _recopaRestoLigasSlugs();
       slugs.forEach(function(slug){
-        if(EUROPE_BLACKLIST[slug]) return;
         var d = null;
         try { var raw = localStorage.getItem('ligaExt_' + slug); d = raw ? JSON.parse(raw) : null; } catch(_){}
         try {
@@ -20898,14 +20863,15 @@ window._hdrCleanCache = function(){
     return m;
   }
   /* Los equipos humanos NUNCA se cruzan entre sí antes de Cuartos
-     (petición usuario 2026-07-11): 1/64, 1/32 y Octavos emparejan
-     evitando humano-vs-humano SIEMPRE que el pool tenga suficiente IA
-     para hacerlo (si algún día hay más humanos que rivales IA
-     disponibles en una ronda, el sobrante se empareja entre sí como
-     último recurso — mejor que perder equipos). Desde Cuartos (r8) en
+     (petición usuario 2026-07-11, vigente tras la reducción a 32
+     equipos de 2026-08-16): 1/32 y Octavos emparejan evitando
+     humano-vs-humano SIEMPRE que el pool tenga suficiente IA para
+     hacerlo (si algún día hay más humanos que rivales IA disponibles
+     en una ronda, el sobrante se empareja entre sí como último
+     recurso — mejor que perder equipos). Desde Cuartos (r8) en
      adelante NO hay restricción: dos humanos clasificados sí pueden
      tocarse. `_pairTeams` es el emparejador único que usan tanto
-     `_drawFirstRound` (1/64) como `_drawNext` (resto de rondas).
+     `_drawFirstRound` (1/32) como `_drawNext` (resto de rondas).
      `BYE` cuenta como "no-humano" — puede emparejar con cualquiera.
      `isHumanFn` (opcional, default `_isHuman`) permite a `_drawNext`
      tratar un placeholder RIVAL PENDIENTE como "potencialmente humano"
@@ -20958,12 +20924,13 @@ window._hdrCleanCache = function(){
     if(a === BYE || b === BYE) m = _resolveBye(m);
     return m;
   }
-  /* Sortea la PRIMERA ronda (1/64) en 32 partidos. Si el pool < 64 se
-     rellena con BYE. Anti-cruce-humano SIEMPRE activo aquí (1/64 va
-     mucho antes de Cuartos). Rediseño 2026-06-02 + 2026-07-11. */
+  /* Sortea la PRIMERA ronda (1/32) en 16 partidos. Si el pool < 32 se
+     rellena con BYE. Anti-cruce-humano SIEMPRE activo aquí (1/32 va
+     mucho antes de Cuartos). Rediseño 2026-06-02 + 2026-07-11 + reducción
+     a 32 equipos 2026-08-16. */
   function _drawFirstRound(pool){
-    var nMatches = PHASE_SIZE.r64;          /* 32 */
-    var capacity = nMatches * 2;            /* 64 */
+    var nMatches = PHASE_SIZE.r32;          /* 16 */
+    var capacity = nMatches * 2;            /* 32 */
     var list = _shuffle(pool).slice(0, capacity);
     while(list.length < capacity) list.push(BYE);
     var res = _pairTeams(list, true);
@@ -20978,8 +20945,9 @@ window._hdrCleanCache = function(){
     return _shuffle(matches);
   }
   /* Sortea la siguiente ronda con los ganadores de la previa. Anti-
-     cruce-humano en 1/32 y Octavos (`phase` = ronda que se está
-     sorteando); desde Cuartos (r8) en adelante, sin restricción.
+     cruce-humano en Octavos (`phase` = ronda que se está sorteando;
+     1/32, la primera ronda, ya lo aplica en `_drawFirstRound`); desde
+     Cuartos (r8) en adelante, sin restricción.
 
      Petición usuario 2026-08-03 ("se puede seguir avanzando de rondas
      aunque haya equipos humanos que no hayan jugado, siempre que haya
@@ -20999,7 +20967,7 @@ window._hdrCleanCache = function(){
         winners.push(_pendingRef(prevPhase, i));
       }
     });
-    var avoidClash = (phase === 'r32' || phase === 'r16');
+    var avoidClash = (phase === 'r16');
     function humanLike(name){
       if(_isHuman(name)) return true;
       var ref = _pendingRefParse(name);
@@ -21057,22 +21025,22 @@ window._hdrCleanCache = function(){
   /* ── PUBLIC API ───────────────────────────────────────────────── */
   window._recopaSortear = function(){
     var s = _load() || {};
-    var phase = s.sorteo ? _firstPhaseToDraw(s) : 'r64';
-    if(phase === 'r64'){
+    var phase = s.sorteo ? _firstPhaseToDraw(s) : 'r32';
+    if(phase === 'r32'){
       var pool = _buildPool();
       if(pool.length < 2){
-        alert('⚠️ Necesitas al menos 2 equipos para sortear la Recopa.\n\nPool actual: ' + pool.length + '\n\nEl pool se construye con:\n  · Campeón de cada copa nacional europea (automático tras simular su copa).\n  · Subcampeón de cada copa (si está activado en sus Reglas).\n  · Equipos manuales añadidos vía "EA Sports → Europa" (slug Recopa) — p.ej. campeón/subcampeón de la Copa del Rey.');
+        alert('⚠️ Necesitas al menos 2 equipos para sortear la Recopa.\n\nPool actual: ' + pool.length + '\n\nEl pool se construye con:\n  · España: los equipos que añadas a mano vía "EA Sports → Europa" (slug Recopa) — objetivo 4 clubes.\n  · Campeón (y subcampeón, salvo 4 excepciones) de cada una de las 16 ligas de "Resto de Ligas" — objetivo 28 clubes.');
         return;
       }
       var conf = pool.length >= POOL_TARGET ? String(POOL_TARGET) : (pool.length + ' (se rellena con BYE hasta ' + POOL_TARGET + ')');
-      if(s.sorteo && s.sorteo.r64 && s.sorteo.r64.length){
-        if(!confirm('Ya hay un sorteo de 1/64 hecho. ¿Re-sortear con los ' + conf + ' equipos del pool actual?\n\nSe perderán los resultados ya jugados de esta edición.')) return;
+      if(s.sorteo && s.sorteo.r32 && s.sorteo.r32.length){
+        if(!confirm('Ya hay un sorteo de 1/32 hecho. ¿Re-sortear con los ' + conf + ' equipos del pool actual?\n\nSe perderán los resultados ya jugados de esta edición.')) return;
       }
-      var newSorteo = { r64:_drawFirstRound(pool), r32:[], r16:[], r8:[], sf:[], fin:[] };
+      var newSorteo = { r32:_drawFirstRound(pool), r16:[], r8:[], sf:[], fin:[] };
       s = { pool: pool.slice(0, POOL_TARGET), sorteo: newSorteo, champion:null, runnerUp:null };
       _save(s);
       _recopaInit();
-      try { go('s-recopa-rd-r64'); } catch(_){}
+      try { go('s-recopa-rd-r32'); } catch(_){}
       return;
     }
     if(!phase){
@@ -21083,13 +21051,13 @@ window._hdrCleanCache = function(){
     var prev = PHASES[PHASES.indexOf(phase)-1];
     /* Si la ronda previa NI SIQUIERA está sorteada, el problema real no es
        "termina la ronda anterior" sino que la Recopa está vacía / aún no se
-       ha sorteado el 1/64. Mensaje claro en vez del confuso del 1/32. */
+       ha sorteado el 1/32. Mensaje claro en vez del confuso de la ronda actual. */
     if(!prev || !s.sorteo[prev] || !s.sorteo[prev].length){
       var pool = _buildPool();
       if(pool.length < 2){
-        alert('⚠️ La Recopa aún no tiene equipos (pool actual: ' + pool.length + ').\n\nSe llena con:\n  · Campeón de cada copa nacional europea (automático al simular su copa).\n  · Subcampeón de cada copa (si está activado en sus Reglas).\n  · Equipos manuales en "EA Sports → Europa" (Recopa).\n\nAlimenta el pool y después pulsa 🎯 Sortear 1/64.');
+        alert('⚠️ La Recopa aún no tiene equipos (pool actual: ' + pool.length + ').\n\nSe llena con:\n  · España: los equipos que añadas a mano vía "EA Sports → Europa" (Recopa) — objetivo 4 clubes.\n  · Campeón (y subcampeón, salvo 4 excepciones) de cada una de las 16 ligas de "Resto de Ligas" — objetivo 28 clubes.\n\nAlimenta el pool y después pulsa 🎯 Sortear 1/32.');
       } else {
-        alert('⚠️ Aún no has sorteado el 1/64.\n\nPulsa 🎯 Sortear 1/64 (hay ' + pool.length + ' equipos en el pool) antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
+        alert('⚠️ Aún no has sorteado el 1/32.\n\nPulsa 🎯 Sortear 1/32 (hay ' + pool.length + ' equipos en el pool) antes de sortear ' + (PHASE_LABEL[phase]||phase) + '.');
       }
       return;
     }
@@ -21121,29 +21089,29 @@ window._hdrCleanCache = function(){
     }
     return null;
   }
-  /* ¿Cambió el pool de equipos desde el último sorteo de 1/64? (bug
-     reportado 2026-08-03: el admin añadió 64 equipos manuales en "EA
-     Sports → Europa" DESPUÉS de que la Recopa ya tuviera un 1/64
+  /* ¿Cambió el pool de equipos desde el último sorteo de 1/32? (bug
+     reportado 2026-08-03: el admin añadió equipos manuales en "EA
+     Sports → Europa" DESPUÉS de que la Recopa ya tuviera un 1/32
      sorteado con un pool viejo mucho más pequeño — el motor solo
-     vuelve a leer `_buildPool()` cuando se sortea, así que esos 64
+     vuelve a leer `_buildPool()` cuando se sortea, así que esos equipos
      nunca entraban en juego y la ronda seguía mostrando el bracket
      viejo, casi todo "Plaza libre (BYE)"). `s.pool` guarda el pool
-     EXACTO usado al sortear 1/64 — comparar por igualdad de conjunto
+     EXACTO usado al sortear 1/32 — comparar por igualdad de conjunto
      basta para detectar el desajuste sin necesitar un campo nuevo. */
   function _poolChangedSinceDraw(s){
-    if(!s || !Array.isArray(s.pool) || !s.sorteo || !s.sorteo.r64 || !s.sorteo.r64.length) return false;
+    if(!s || !Array.isArray(s.pool) || !s.sorteo || !s.sorteo.r32 || !s.sorteo.r32.length) return false;
     var current = _buildPool();
     if(current.length !== s.pool.length) return true;
     var a = s.pool.slice().sort(), b = current.slice().sort();
     for(var i=0;i<a.length;i++) if(a[i] !== b[i]) return true;
     return false;
   }
-  /* Re-sortea el 1/64 con el pool ACTUAL sin pasar por `_firstPhaseToDraw`
-     (que saltaría r64 por no estar vacío). Es la acción del botón del
+  /* Re-sortea el 1/32 con el pool ACTUAL sin pasar por `_firstPhaseToDraw`
+     (que saltaría r32 por no estar vacío). Es la acción del botón del
      aviso "el pool ha cambiado" — mismo comportamiento que ya ofrecía
      `_recopaSortear` al re-sortear a mano, pero disparable directamente
      desde el banner en cuanto se detecta el desajuste. */
-  window._recopaResortearR64 = function(){
+  window._recopaResortearR32 = function(){
     var s = _load() || {};
     var pool = _buildPool();
     if(pool.length < 2){
@@ -21156,18 +21124,18 @@ window._hdrCleanCache = function(){
       ((s.sorteo && s.sorteo[p]) || []).forEach(function(m){ if(m && m.played && !m.bye) hasPlayed = true; });
     });
     var oldN = (s.pool && s.pool.length) || 0;
-    var msg = '🔄 El pool ha cambiado desde el último sorteo (antes ' + oldN + ' equipos, ahora ' + pool.length + ').\n\n¿Re-sortear 1/64 con los ' + conf + ' equipos ACTUALES?';
+    var msg = '🔄 El pool ha cambiado desde el último sorteo (antes ' + oldN + ' equipos, ahora ' + pool.length + ').\n\n¿Re-sortear 1/32 con los ' + conf + ' equipos ACTUALES?';
     if(hasPlayed) msg += '\n\n⚠️ Se perderán TODOS los resultados ya jugados de esta edición.';
     if(!confirm(msg)) return;
-    var newSorteo = { r64:_drawFirstRound(pool), r32:[], r16:[], r8:[], sf:[], fin:[] };
+    var newSorteo = { r32:_drawFirstRound(pool), r16:[], r8:[], sf:[], fin:[] };
     s = { pool: pool.slice(0, POOL_TARGET), sorteo: newSorteo, champion:null, runnerUp:null };
     _save(s);
     _recopaInit();
-    try { go('s-recopa-rd-r64'); } catch(_){}
+    try { go('s-recopa-rd-r32'); } catch(_){}
   };
 
   window._recopaReiniciar = function(){
-    if(!confirm('¿Reiniciar Recopa de Europa?\n\nSe pierden el sorteo y todos los resultados de esta edición. El pool se reconstruye al pulsar Sortear 1/64.')) return;
+    if(!confirm('¿Reiniciar Recopa de Europa?\n\nSe pierden el sorteo y todos los resultados de esta edición. El pool se reconstruye al pulsar Sortear 1/32.')) return;
     try { localStorage.removeItem(STORE_KEY); } catch(_){}
     _recopaInit();
   };
@@ -21253,20 +21221,20 @@ window._hdrCleanCache = function(){
     if(!host) return;
     var s = _load();
     var html = '';
-    if(!s || !s.sorteo || !s.sorteo.r64 || !s.sorteo.r64.length){
+    if(!s || !s.sorteo || !s.sorteo.r32 || !s.sorteo.r32.length){
       var pool = _buildPool();
-      html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + pool.length + ' equipos)</button>';
+      html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/32 (' + pool.length + ' equipos)</button>';
     } else {
       /* Bug reportado 2026-08-03: el admin añade equipos manuales a la
-         Recopa DESPUÉS de que el 1/64 ya estuviera sorteado con un pool
+         Recopa DESPUÉS de que el 1/32 ya estuviera sorteado con un pool
          viejo — sin este aviso, esos equipos nunca entran en juego (el
          motor solo relee `_buildPool()` al sortear) y la ronda sigue
          mostrando el bracket viejo sin ningún indicio de qué pasó. */
       if(_poolChangedSinceDraw(s)){
         var poolNow = _buildPool();
         html += '<div class="recopa-banner-info" style="border:1px solid rgba(255,180,60,.5);border-radius:8px;background:rgba(255,180,60,.08);color:#ffcf7a;padding:8px 10px;margin-bottom:8px;">'
-              + '⚠️ El pool de equipos cambió desde el último sorteo de 1/64 (antes ' + ((s.pool && s.pool.length) || 0) + ', ahora ' + poolNow.length + ') — los equipos nuevos no entran hasta que vuelvas a sortear.<br>'
-              + '<button class="recopa-btn-sortear" style="margin-top:6px;" onclick="window._recopaResortearR64&&window._recopaResortearR64()">🔄 Re-sortear 1/64 con el pool actual</button>'
+              + '⚠️ El pool de equipos cambió desde el último sorteo de 1/32 (antes ' + ((s.pool && s.pool.length) || 0) + ', ahora ' + poolNow.length + ') — los equipos nuevos no entran hasta que vuelvas a sortear.<br>'
+              + '<button class="recopa-btn-sortear" style="margin-top:6px;" onclick="window._recopaResortearR32&&window._recopaResortearR32()">🔄 Re-sortear 1/32 con el pool actual</button>'
               + '</div>';
       }
       var phase = _firstPhaseToDraw(s);
@@ -21275,7 +21243,7 @@ window._hdrCleanCache = function(){
       var done = prevForPhase ? _phaseDone(s, prevForPhase) : false;
       if(s.champion){
         html += '<div class="recopa-banner-info">🏆 Campeón: <b>' + _esc(s.champion) + '</b> · Subcampeón: <b>' + _esc(s.runnerUp||'') + '</b></div>';
-      } else if(phase && phase !== 'r64'){
+      } else if(phase && phase !== 'r32'){
         var prev = prevForPhase;
         if(anyDecided){
           html += '<button class="recopa-btn-sortear" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + (done ? '' : ' (con RIVAL PENDIENTE)') + '</button>';
@@ -21343,13 +21311,13 @@ window._hdrCleanCache = function(){
          modelo de copa"): en vez de mandar al usuario de vuelta a la
          pantalla de Recopa para pulsar Sortear, el botón vive AQUÍ
          MISMO — igual que Copa del Rey, donde cada ronda es accionable
-         sin tener que salir de ella. Solo tiene sentido para 1/64 (la
+         sin tener que salir de ella. Solo tiene sentido para 1/32 (la
          única ronda sorteable sin depender de la anterior); el resto
          siguen remitiendo al banner de arriba. */
-      if(phase === 'r64'){
+      if(phase === 'r32'){
         var poolNow = _buildPool();
         host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.</div>'
-          + '<button class="recopa-btn-sortear" style="margin:8px auto;display:block;" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/64 (' + poolNow.length + ' equipos)</button>';
+          + '<button class="recopa-btn-sortear" style="margin:8px auto;display:block;" onclick="window._recopaSortear&&window._recopaSortear()">🎯 Sortear 1/32 (' + poolNow.length + ' equipos)</button>';
       } else {
         host.innerHTML = '<div class="recopa-empty">⚠️ Esta ronda aún no se ha sorteado.<br>Vuelve a la pantalla de Recopa y pulsa <b>🎯 Sortear ' + (PHASE_LABEL[phase]||phase) + '</b>.</div>';
       }
@@ -21357,13 +21325,13 @@ window._hdrCleanCache = function(){
     }
     var html = '';
     /* Mismo aviso de "pool cambiado" que el banner principal, pero
-       visible también si el admin navega directo a la ronda 1/64 sin
+       visible también si el admin navega directo a la ronda 1/32 sin
        pasar por la pantalla de Recopa. */
-    if(phase === 'r64' && _poolChangedSinceDraw(s)){
+    if(phase === 'r32' && _poolChangedSinceDraw(s)){
       var poolNow2 = _buildPool();
       html += '<div class="recopa-empty" style="border:1px solid rgba(255,180,60,.5);border-radius:8px;background:rgba(255,180,60,.08);color:#ffcf7a;margin:8px;padding:14px;">'
             + '⚠️ El pool de equipos cambió desde este sorteo (antes ' + ((s.pool && s.pool.length) || 0) + ', ahora ' + poolNow2.length + ').<br>'
-            + '<button class="recopa-btn-sortear" style="margin:6px auto 0;display:block;" onclick="window._recopaResortearR64&&window._recopaResortearR64()">🔄 Re-sortear 1/64 con el pool actual</button>'
+            + '<button class="recopa-btn-sortear" style="margin:6px auto 0;display:block;" onclick="window._recopaResortearR32&&window._recopaResortearR32()">🔄 Re-sortear 1/32 con el pool actual</button>'
             + '</div>';
     }
     /* Botón "Simular IA" si hay partidos IA-vs-IA pendientes. Los
@@ -59411,42 +59379,18 @@ https://api.sofascore.app/api/v1/team/44/image
       _lecSyncPlayerStatsCache(data);
       _lecRender();
     },
-    /* Alterna 0/1 plazas del subcampeón a Recopa de Europa. Default =
-       FALSE (petición usuario 2026-07-03: el campeón siempre cuenta
-       como 1 fijo; el subcampeón arranca en 0 y el admin lo activa a
-       mano copa por copa).
-       Persiste en el store DEDICADO `recopa_copa_flags_v1` (2026-08-01,
-       bug "no se guardan los cambios de qué equipos van a la Recopa"):
-       antes vivía en `data.config.recopaSubcampeon`, dentro del
-       documento COMPLETO de la liga — la sync/anti-wipe de ese
-       documento (fetchData) podía pisarlo en silencio con una copia
-       del servidor anterior al guardado (nunca comprueba `config`).
-       El store nuevo es independiente de esa maquinaria. */
-    toggleSubcampeon: function(){
-      if(!CURRENT_KEY) return;
-      if (typeof window._recopaFlagToggle !== 'function') return;
-      var data = loadData(CURRENT_KEY);
-      var stored = (typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(CURRENT_KEY, 'sub') : undefined;
-      var current = (stored !== undefined) ? stored : !!(data && data.config && data.config.recopaSubcampeon === true);
-      window._recopaFlagToggle(CURRENT_KEY, 'sub', current);
-      _lecRenderReglas();
-    },
-    /* Alterna 0/2 plazas de los semifinalistas (los 2 equipos
-       eliminados en semifinales) a Recopa de Europa (petición usuario
-       2026-08-01). Default = FALSE, igual que el subcampeón. Solo
-       tiene efecto real en copas con fase de semis (formato 20/18) —
-       `_buildPool` ya lo comprueba antes de usarlo, este toggle solo
-       persiste la preferencia del admin. Mismo store dedicado que el
-       subcampeón, mismo motivo (ver comentario de `toggleSubcampeon`). */
-    toggleSemis: function(){
-      if(!CURRENT_KEY) return;
-      if (typeof window._recopaFlagToggle !== 'function') return;
-      var data = loadData(CURRENT_KEY);
-      var stored = (typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(CURRENT_KEY, 'semis') : undefined;
-      var current = (stored !== undefined) ? stored : !!(data && data.config && data.config.recopaSemis === true);
-      window._recopaFlagToggle(CURRENT_KEY, 'semis', current);
-      _lecRenderReglas();
-    },
+    /* `toggleSubcampeon`/`toggleSemis` quedaron SIN USO (obligatorio,
+       2026-08-16): la Recopa se redujo a 32 equipos y el aporte de cada
+       liga (campeón / campeón+subcampeón) pasó de ser un toggle
+       editable por el admin a una regla FIJA por identidad de liga
+       (ver `RECOPA_CHAMPION_ONLY_SLUGS` en el motor de Recopa,
+       `_lecRenderReglas` más abajo ya no pinta ningún toggle). Se dejan
+       DEFINIDAS (no-op) por si algo externo aún las invocara — el
+       store `recopa_copa_flags_v1`/`_recopaFlagToggle` sigue existiendo
+       pero ya nadie lo escribe. PROHIBIDO volver a cablearlas a un
+       onclick — el aporte de cada liga ya no es editable copa a copa. */
+    toggleSubcampeon: function(){},
+    toggleSemis: function(){},
     toggleReglas: function(){
       var rb = document.getElementById('lec-reglas-body');
       if(!rb) return;
@@ -59461,67 +59405,46 @@ https://api.sofascore.app/api/v1/team/44/image
      automáticas, Recopa de Europa) que el usuario consideró
      "innecesarias de ver". Ahora solo:
        1. Una línea con el formato detectado por nº de equipos.
-       2. Plazas a Recopa de Europa: Campeón = 1 (fijo, siempre, NO
-          editable). Subcampeón = 0 por defecto (petición usuario
-          2026-07-03), editable a 1 por el admin via toggle.
-          Semifinalistas = 0 por defecto (petición usuario 2026-08-01),
-          editable a 2 por el admin. Solo se muestra en copas con fase
-          de semis real (formato 20 o 18); los formatos 14/12 van
-          directos a la final y no tienen semifinalistas.
-     Ambos toggles persisten en el store dedicado `recopa_copa_flags_v1`
-     (ver el IIFE justo antes del motor de Recopa, 2026-08-01) — NUNCA
-     en `data.config`, que quedaba a merced de la sync del documento
-     completo de la liga. Cada toggle alterna al pulsar el chip. */
+       2. Plazas a Recopa de Europa: FIJAS por identidad de liga
+          (obligatorio, 2026-08-16 — "la recopa se reduce a 32
+          equipos"). Ya NO es un toggle editable copa a copa: las 16
+          ligas del catálogo "Resto de Ligas" aportan SIEMPRE el
+          campeón, y el subcampeón TAMBIÉN salvo las 4 excepciones
+          (Adriático Oriental/Danubio Nórdica/Balkanica/Eurasia, que
+          solo aportan el campeón). Cualquier otra liga (España/
+          Hypermotion/1ªRFEF/Resto del Mundo) no aporta nada
+          automáticamente — España entra por los manuales de
+          "EA Sports → Europa". Fuente única:
+          `window._recopaRestoLigasSlugs`/`window._recopaChampionOnlySlugs`
+          (motor de Recopa, arriba en este archivo). */
   function _lecRenderReglas(){
     var rb = document.getElementById('lec-reglas-body');
     if(!rb) return;
     var data = CURRENT_KEY ? loadData(CURRENT_KEY) : null;
     var fmt = data ? _lecDetectFormat(data) : 0;
-    /* Resto del Mundo: NINGÚN equipo de esta copa va a Recopa
-       (petición usuario 2026-05-27). Solo se reconoce al campeón.
-       Para el resto de copas, se mantiene el bloque clásico de
-       Plazas a Recopa (Campeón=1 fijo + Subcampeón toggle 0/1 +
-       Semifinalistas toggle 0/2 si el formato tiene fase de semis). */
-    var isRM = (CURRENT_KEY === 'resto-mundo');
     var html = '<div class="lec-rules">'
       + '<h4>📜 Formato</h4>'
       + '<p>' + _lecFormatBlurb(fmt) + '</p>';
-    if(isRM){
-      html += '<p style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px;">'
-            + 'Esta copa no clasifica a ninguna competición europea — solo se corona al campeón.'
-            + '</p>';
-    } else {
-      /* Default = FALSE (excluido). Solo es TRUE si el admin lo activó
-         explícitamente desde este toggle. Mantiene coherencia con
-         `_buildPool` (Recopa). Store dedicado con fallback legacy a
-         `data.config.recopaSubcampeon` (copas activadas antes del fix
-         2026-08-01, mientras nunca se vuelvan a tocar en el store
-         nuevo). */
-      var _subStored = (CURRENT_KEY && typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(CURRENT_KEY, 'sub') : undefined;
-      var sub = (_subStored !== undefined) ? _subStored : !!(data && data.config && data.config.recopaSubcampeon === true);
-      /* Fase de semis real: formato 20 (cuartos+semis) o 18 (semis
-         Andorra sin cuartos). 14/12 van directos a la final. */
-      var hasSemis = (fmt === 20 || fmt === 18);
-      var _semisStored = (CURRENT_KEY && typeof window._recopaFlagGet === 'function') ? window._recopaFlagGet(CURRENT_KEY, 'semis') : undefined;
-      var semisOn = (_semisStored !== undefined) ? _semisStored : !!(data && data.config && data.config.recopaSemis === true);
+    var restoLigas = (typeof window._recopaRestoLigasSlugs === 'function') ? window._recopaRestoLigasSlugs() : [];
+    var isRecopaLeague = CURRENT_KEY && restoLigas.indexOf(CURRENT_KEY) !== -1;
+    if(isRecopaLeague){
+      var champOnly = !!(window._recopaChampionOnlySlugs && window._recopaChampionOnlySlugs[CURRENT_KEY]);
       html += '<h4>🛡 Recopa de Europa · Plazas</h4>'
         + '<div class="lec-recopa-row">'
         +   '<span class="lec-recopa-lbl">🏆 Campeón</span>'
         +   '<span class="lec-recopa-val fixed">1</span>'
         + '</div>'
-        + '<div class="lec-recopa-row" onclick="window._lecCopa&&window._lecCopa.toggleSubcampeon&&window._lecCopa.toggleSubcampeon()" style="cursor:pointer;" title="Pulsa para alternar 0 / 1">'
+        + '<div class="lec-recopa-row">'
         +   '<span class="lec-recopa-lbl">🥈 Subcampeón</span>'
-        +   '<span class="lec-recopa-val toggle ' + (sub ? 'on' : 'off') + '" id="lec-recopa-sub-val">' + (sub ? '1' : '0') + '</span>'
+        +   '<span class="lec-recopa-val fixed">' + (champOnly ? '0' : '1') + '</span>'
         + '</div>';
-      if(hasSemis){
-        html += '<div class="lec-recopa-row" onclick="window._lecCopa&&window._lecCopa.toggleSemis&&window._lecCopa.toggleSemis()" style="cursor:pointer;" title="Pulsa para alternar 0 / 2">'
-          +   '<span class="lec-recopa-lbl">⚔️ Semifinalistas (3º/4º)</span>'
-          +   '<span class="lec-recopa-val toggle ' + (semisOn ? 'on' : 'off') + '" id="lec-recopa-semis-val">' + (semisOn ? '2' : '0') + '</span>'
-          + '</div>'
-          + '<p style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">Pulsa el "0/1"/"0/2" de cada fila para alternar si esos equipos van a Recopa.</p>';
-      } else {
-        html += '<p style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">Pulsa el "0/1" del subcampeón para alternar si va a Recopa. Este formato no tiene fase de semis (va directo a la final), así que no hay semifinalistas que ofrecer.</p>';
-      }
+      html += champOnly
+        ? '<p style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">Esta liga SOLO aporta el campeón a la Recopa (fijo, no editable).</p>'
+        : '<p style="font-size:11px;color:rgba(255,255,255,.45);margin-top:6px;">Esta liga aporta campeón y subcampeón a la Recopa (fijo, no editable).</p>';
+    } else {
+      html += '<p style="font-size:11px;color:rgba(255,255,255,.55);margin-top:6px;">'
+            + 'Esta copa no clasifica automáticamente a la Recopa de Europa.'
+            + '</p>';
     }
     html += '</div>';
     rb.innerHTML = html;
@@ -63543,7 +63466,7 @@ https://api.sofascore.app/api/v1/team/44/image
      Los KO (recopa/inter/sc/usc) se deciden a partido único con ET+pens:
      el marcador final = gh+etGh / ga+etGa (los penaltis NO suman goles,
      son desempate → en el registro cuentan como EMPATE en el césped). */
-  var _PHASE_LABELS = { r64:'1/64', r32:'1/32', r16:'Octavos', r8:'Cuartos',
+  var _PHASE_LABELS = { r32:'1/32', r16:'Octavos', r8:'Cuartos',
                         sf:'Semis', fin:'FINAL', q:'Cuartos', s:'Semis', f:'FINAL' };
   function _koPushMatch(out, m, comp, emoji, label, uid, aliases){
     if (!m) return;
@@ -63561,7 +63484,7 @@ https://api.sofascore.app/api/v1/team/44/image
       out.pending.push({ comp:comp, emoji:emoji, home:h, away:a, label:label });
     }
   }
-  /* Bracket por fases (recopa: sorteo.r64..fin · inter: sorteo.q/s/f). */
+  /* Bracket por fases (recopa: sorteo.r32..fin · inter: sorteo.q/s/f). */
   function _collectBracketState(lsKey, comp, emoji, phases, aliases){
     var out = { pending:[], played:[] };
     var st = null; try { st = JSON.parse(localStorage.getItem(lsKey)||'null'); } catch(_){}
@@ -63615,7 +63538,7 @@ https://api.sofascore.app/api/v1/team/44/image
   _COMPS.push({ id:'usc',    label:'Supercopa Europa',  emoji:'🏆',
     collect:function(al){ return _collectSemisFinal('usc_state_v1','usc','🏆',al); } });
   _COMPS.push({ id:'recopa', label:'Recopa Europa',     emoji:'🏆',
-    collect:function(al){ return _collectBracketState('recopa_state_v1','recopa','🏆',['r64','r32','r16','r8','sf','fin'],al); } });
+    collect:function(al){ return _collectBracketState('recopa_state_v1','recopa','🏆',['r32','r16','r8','sf','fin'],al); } });
   _COMPS.push({ id:'inter',  label:'Intercontinental',  emoji:'🌐',
     collect:function(al){ return _collectBracketState('inter_state_v1','inter','🌐',['q','s','f'],al); } });
   _COMPS.push({ id:'uclph',  label:'Champions (fase)',  emoji:'🏆',
@@ -66126,7 +66049,7 @@ https://api.sofascore.app/api/v1/team/44/image
         });
       } catch(_){}
     }
-    /* Bracket por fases (Recopa r64..fin / Intercontinental q/s/f):
+    /* Bracket por fases (Recopa r32..fin / Intercontinental q/s/f):
        {sorteo|bracket:{fase:[m,...]}}, mismo shape de match que arriba. */
     function _rScanBracketPhases(lsKey, tierKey, phases, aliases, list){
       try {
@@ -66202,7 +66125,7 @@ https://api.sofascore.app/api/v1/team/44/image
       _rScanEurPhase('uecl_phase_v1', 'ueclGroup', clubAl, list);
       _rScanSemisFinal('sc_state_v1', 'sc', clubAl, list);
       _rScanSemisFinal('usc_state_v1', 'usc', clubAl, list);
-      _rScanBracketPhases('recopa_state_v1', 'recopa', ['r64','r32','r16','r8','sf','fin'], clubAl, list);
+      _rScanBracketPhases('recopa_state_v1', 'recopa', ['r32','r16','r8','sf','fin'], clubAl, list);
       _rScanBracketPhases('inter_state_v1', 'inter', ['q','s','f'], clubAl, list);
       Object.keys(_RA_VERANO_SLOTS).forEach(function(id){ _rScanTourResults(id, 'verano', clubAl, list); });
       _rScanTourResults('mundial', 'mundialito', clubAl, list);

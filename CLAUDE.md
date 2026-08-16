@@ -1,5 +1,112 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Recopa de Europa — REDUCIDA a 32 equipos, sin ronda 1/64, pool FIJO por liga (obligatorio, 2026-08-16 #2)
+
+**Petición usuario 2026-08-16**: "la recopa de reduce a 32 equipos
+quitando del calendario global y los 6 humanos la Ronda 1/64 de recopa
+por dia de descanso / En Recopa participan de España los añado
+manualmente / del resto de ligas el campeón y Subcampeón de cada copa
+de las 16 Ligas, exceptuando Adriático Oriental, Danubio Nórdica,
+Balkanica, Eurasia que solo va el campeón de copa / España 4 clubes /
+resto de ligas 28 clubes".
+
+### Formato nuevo — bracket de 32, 5 rondas
+
+`PHASES = ['r32','r16','r8','sf','fin']` (`part2/misc_body_2.html`,
+motor `recopa_state_v1`) — la ronda **1/64 se ELIMINÓ POR COMPLETO**
+del motor: `POOL_TARGET` 64→32, `PHASE_SIZE`/`PHASE_LABEL`/
+`NEXT_PHASE`/`DOM_BODY` pierden la entrada `r64`, `_drawFirstRound`
+sortea ahora 16 partidos (32 equipos) como PRIMERA ronda. El anti-
+cruce-humano (regla 2026-07-11, "los humanos nunca se cruzan entre sí
+antes de Cuartos") sigue aplicando a 1/32 (en `_drawFirstRound`,
+hardcoded) y Octavos (en `_drawNext`, `avoidClash = phase==='r16'`) —
+ya no hay una 3ª ronda que proteger. El bloque UI (`s-recopa`, caja de
+6 botones) pierde el `recopa-rd-r64-blk` y la sub-pantalla
+`s-recopa-rd-r64`; quedan 5 cajas (1/32→Octavos→Cuartos→Semis→FINAL).
+`window._recopaResortearR64` se renombra a `_recopaResortearR32`.
+
+### Calendario — la fila "Recopa Europa — 1/64" pasa a Descanso
+
+`calendario.json` (`version` 10→11, fuerza migración server-side de
+cualquier fila ya persistida en BD — `load_calendario()`, `app.py`):
+el evento `ev-122` (30 Ago) cambia de `{icon:'🔴', name:'Recopa Europa
+— 1/64'}` a `{icon:'💤', name:'Descanso'}`. Como el calendario GLOBAL y
+el calendario INDIVIDUAL de las 6 cajas de mister humano leen el
+MISMO `calendario.json` (la clasificación por tipo de día —
+`_detectComp`/`ICON_TO_CLASS`, `part2/misc_body_2.html`— deriva de ese
+único origen), este único cambio quita la ronda 1/64 de AMBOS sitios a
+la vez — no hace falta (ni existe) una copia por-hub del calendario que
+tocar aparte. `_recopaHubResolve` (`misc_body_1.html`, resuelve la card
+del hub) pierde la rama regex `/1\s*\/\s*64/` — ya no hay ninguna fila
+de calendario que pueda producirla.
+
+### Pool — 4 España (manual) + 28 resto de ligas (fijo por liga)
+
+`_buildPool()` (`misc_body_1.html`) deja de ser "cualquier liga externa
+con copa simulada, subcampeón/semifinalistas por toggle admin
+(default OFF)" y pasa a ser una regla **FIJA, cerrada, sin toggle**:
+
+- **España (4)**: SOLO por los manuales de "EA Sports → Europa" (slug
+  `recopa`) + el overlay genérico "Equipos por competición" — Liga EA
+  sigue fuera del cómputo automático (`EUROPE_BLACKLIST`). El admin
+  añade sus 4 clubes a mano; el código no impone ese número.
+- **Resto de ligas (28)**: `_recopaRestoLigasSlugs()` (nuevo,
+  `window._recopaRestoLigasSlugs`) deriva las 16 ligas del catálogo
+  cerrado "Resto de Ligas" desde `LEAGUE_DEFAULT_ZONES` menos
+  `liga-ea-sports` (10 países individuales + Germanika + Hellas
+  Slavia + Danubio Nórdica + Adriático Oriental + Balkanica +
+  Eurasia = 16). Cada una aporta SIEMPRE su campeón; el subcampeón se
+  añade también EXCEPTO para las 4 en `RECOPA_CHAMPION_ONLY_SLUGS`
+  (`window._recopaChampionOnlySlugs` — Adriático Oriental, Danubio
+  Nórdica, Balkanica, Eurasia). 12×2 + 4×1 = 28, cuadra exacto con
+  4 (España) + 28 = 32 = `POOL_TARGET`.
+- Se ELIMINÓ por completo la contribución de **semifinalistas**
+  (`recopaSemis`, ya no cabe en el cupo de 32) y el escaneo genérico de
+  TODAS las `ligaExt_*` (antes recorría cualquier liga no-blacklisted;
+  ahora itera SOLO las 16 del catálogo).
+
+### El toggle Subcampeón/Semifinalistas del modal "📜 Reglas" desaparece
+
+`_lecRenderReglas` (`misc_body_1.html`, modal de cada copa de "Resto de
+Ligas") ya NO pinta ningún toggle clicable — muestra el estado FIJO
+real de esa liga: "🏆 Campeón: 1 · 🥈 Subcampeón: 1" (12 ligas) o
+"🏆 Campeón: 1 · 🥈 Subcampeón: 0" (las 4 excepciones), o "Esta copa no
+clasifica automáticamente a la Recopa de Europa" para cualquier liga
+fuera del catálogo de 16 (España/Hypermotion/1ªRFEF/Resto del Mundo —
+generaliza el caso especial que antes solo cubría Resto del Mundo).
+`_lecCopa.toggleSubcampeon`/`toggleSemis` quedan definidas como no-op
+(nadie las llama ya); el store `recopa_copa_flags_v1` +
+`_recopaFlagGet`/`_recopaFlagToggle` se dejan DEFINIDOS pero sin
+ningún caller — no se han eliminado por si algo externo los invocara.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir la ronda 1/64 (ni en `PHASES`/
+   `PHASE_LABEL`/`PHASE_SIZE`/`NEXT_PHASE`/`DOM_BODY`, ni la fila
+   `recopa-rd-r64-blk`/`s-recopa-rd-r64`, ni el evento de calendario
+   "Recopa Europa — 1/64"). El bracket es SIEMPRE de 32, arrancando en
+   1/32.
+2. **PROHIBIDO** que `_buildPool` vuelva a escanear TODAS las
+   `ligaExt_*` no-blacklisted. El resto de ligas que alimenta la
+   Recopa es EXCLUSIVAMENTE `_recopaRestoLigasSlugs()` (las 16 del
+   catálogo cerrado, derivadas de `LEAGUE_DEFAULT_ZONES`).
+3. **PROHIBIDO** reintroducir un toggle admin para el subcampeón/
+   semifinalistas de Recopa. Es una regla FIJA: campeón siempre;
+   subcampeón siempre EXCEPTO las 4 de `RECOPA_CHAMPION_ONLY_SLUGS`.
+   Si el usuario pide cambiar la lista de excepciones en el futuro,
+   se edita esa constante — nunca se reintroduce el toggle por-copa.
+4. **PROHIBIDO** que la contribución de semifinalistas reaparezca en
+   el pool de Recopa — no cabe en el cupo de 32 (4+28 ya lo agota
+   exacto).
+5. Toda liga NUEVA que se añada al catálogo "Resto de Ligas" (una 17ª
+   futura) hereda `_recopaRestoLigasSlugs()` automáticamente (deriva de
+   `LEAGUE_DEFAULT_ZONES`, sin lista hardcodeada aparte) — solo hay que
+   decidir si entra en `RECOPA_CHAMPION_ONLY_SLUGS` o no.
+6. Todo cambio de `index.bundle.js` (el mapeo de fecha
+   `RECOPA_RD`/`_mmCalLabel`) exige bump de `?v=X.X` en
+   `templates/index.html` + `PRECACHE` de `static/js/sw.js` (regla ya
+   obligatoria) — este cambio ya lo cumple (9.42→9.43).
+
 ## Catálogo de balones RENOVADO — reset completo del inventario + reasignación por competición (obligatorio, 2026-08-16)
 
 **Petición usuario 2026-08-16** ("hay una actualización de Balones…

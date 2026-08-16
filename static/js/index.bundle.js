@@ -4712,6 +4712,18 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       ? window.canonicalTeamName(teamName) : String(teamName||'').trim();
     var targets = [_norm(teamName), _norm(canon)];
     var foundSlug = null, foundData = null, foundTeam = null;
+    /* Recorre TODAS las coincidencias (todas las ligaExt_* y todos los
+       equipos dentro de cada una) y se queda con la de MÁS jugadores —
+       nunca la primera que aparezca por orden de enumeración de
+       localStorage (no determinista entre navegadores). Un nombre de
+       equipo puede existir DUPLICADO en más de una liga (o incluso
+       dos veces dentro de la misma), y detenerse en el primer hit podía
+       añadir el jugador nuevo a una fila vacía/residual mientras la
+       plantilla real (con todos sus jugadores) se quedaba intacta pero
+       invisible para el picker — indistinguible, para el admin, de
+       "la plantilla ha desaparecido". Mismo criterio que
+       `_gmFindAndPersistPlayer` (part2/misc_body_2.html). */
+    var _bestRichness = -1;
     for (var i = 0; i < localStorage.length; i++) {
       var k;
       try { k = localStorage.key(i); } catch(_){ continue; }
@@ -4729,14 +4741,15 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         var nt = _norm(t.name);
         var ntCanon = (typeof window.canonicalTeamName === 'function')
           ? _norm(window.canonicalTeamName(t.name)) : nt;
-        if (targets.indexOf(nt) !== -1 || targets.indexOf(ntCanon) !== -1) {
+        if (targets.indexOf(nt) === -1 && targets.indexOf(ntCanon) === -1) continue;
+        var richness = Array.isArray(t.players) ? t.players.length : 0;
+        if (richness > _bestRichness) {
+          _bestRichness = richness;
           foundSlug = k.slice('ligaExt_'.length);
           foundData = data;
           foundTeam = t;
-          break;
         }
       }
-      if (foundTeam) break;
     }
     /* Fallback: buscar en selecciones_squad_v1 (selecciones nacionales).
        2026-05-24. Sin esto, añadir jugador desde el overlay editar evento
@@ -4788,19 +4801,33 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     };
     targetTeam.players.push(newPlayer);
     if (foundTeam) {
-      try { window._lsSetSafe('ligaExt_' + foundSlug, JSON.stringify(foundData)); } catch(_){}
-      if (foundData.teams && foundData.teams.length > 0) {
-        try { window._lsSetSafe('ligaExt_' + foundSlug + '_protected', JSON.stringify(foundData)); } catch(_){}
-      }
-      try {
-        if (typeof fetch === 'function') {
-          fetch('/api/liga-ext/' + encodeURIComponent(foundSlug), {
-            method: 'POST',
-            headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({data: foundData})
-          }).catch(function(){});
+      /* Persistir vía `window.saveData` (chokepoint único de
+         `ligaExt_<slug>`, misc_body_1.html) siempre que esté cargado —
+         además de escribir main, mantiene `_protected` en sincronía
+         (anti-wipe monotónico), invalida el cache de escaneo de
+         `_lextFindTeamInAnyLigaExt` (sin esto el picker del partido
+         podía seguir mostrando el roster viejo hasta 4s después, o —
+         peor — una escritura simultánea del editor podía pisar este
+         alta) y sube al servidor con reintentos. Fallback al escritor
+         directo solo si `saveData` no llegó a cargar todavía (no
+         debería pasar: este bundle se carga DESPUÉS de misc_body_1.html). */
+      if (typeof window.saveData === 'function') {
+        try { window.saveData(foundSlug, foundData); } catch(_){}
+      } else {
+        try { window._lsSetSafe('ligaExt_' + foundSlug, JSON.stringify(foundData)); } catch(_){}
+        if (foundData.teams && foundData.teams.length > 0) {
+          try { window._lsSetSafe('ligaExt_' + foundSlug + '_protected', JSON.stringify(foundData)); } catch(_){}
         }
-      } catch(_){}
+        try {
+          if (typeof fetch === 'function') {
+            fetch('/api/liga-ext/' + encodeURIComponent(foundSlug), {
+              method: 'POST',
+              headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({data: foundData})
+            }).catch(function(){});
+          }
+        } catch(_){}
+      }
     } else if (selTeam && selData) {
       try { window._lsSetSafe('selecciones_squad_v1', JSON.stringify(selData)); } catch(_){}
       try {

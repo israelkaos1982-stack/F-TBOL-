@@ -1,5 +1,172 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Resto del Mundo — REDISEÑO COMPLETO: 30 equipos en 6 grupos de 5, SIN Copa, feeder de Intercontinental (1/grupo) y Mundialito (2/grupo + 4 mejores terceros) (obligatorio, 2026-08-16 #3)
+
+**Petición usuario 2026-08-16**: "vamos a modificar la liga resto del
+mundo / en lugar de una liga de 43 equipos y una copa vamos a eliminar
+por completo la copa / la Liga van a ser esos 30 equipos (los que ya
+tenemos los mantenemos igual y los que no tenemos los creamos de
+nuevo) / formato: ya no va a ser una liga de 43 equipos si no 6 grupos
+de 5 equipos jugando a ida y vuelta (cada equipo 4 partidos de local y
+4 de visitante) 8 partidos cada equipo / una vez acaben todos sus 8
+partidos los 6 primeros de cada 1 de los grupos irán a la
+Intercontinental (esto es cada temporada) / y los 2 primeros de cada
+grupo (12 clubes) mas los 4 mejores terceros de cada grupo (16 en
+total) irán al Mundialito de Clubes que se celebra 1 vez cada 4 años".
+Aclarado por el usuario vía pregunta explícita: "los 6 primeros de
+cada 1 de los grupos" significa **el GANADOR (1º) de cada uno de los 6
+grupos** — 6 equipos en total (no 6 por grupo, imposible con grupos de
+5) — que coincide exactamente con el cupo Intercontinental que ya
+existía (`zones.intercontinental` default 6).
+
+### Formato nuevo — liga SUSTITUIDA por completo
+
+- **`ligaExt_resto-mundo`** deja de ser una liga plana de 43/44 equipos
+  a una sola vuelta + Copa (formato viejo, sección "Resto Mundo — 1
+  vuelta + Intercontinental + Mundialito" más abajo, **SUPERSEDIDA**
+  por esta sección) y pasa a ser **30 equipos en 6 GRUPOS de 5**, cada
+  equipo con un campo nuevo `group` (1-6) en su propio objeto
+  `team.group`. Doble round-robin **dentro del grupo** (ida+vuelta): 4
+  partidos de local + 4 de visitante = **8 partidos por equipo**, 20
+  partidos por grupo, **120 partidos totales** en toda la liga.
+- **`RESTO_MUNDO_TEAMS`** (`misc_body_1.html`, junto a
+  `_ensureRestoMundoSeed`) es la lista MAESTRA de 30 equipos, cada spec
+  con `{name, group, power, atk, mid, def, fict?, alias?}`. Los 13 que
+  YA existían en el roster viejo (River Plate, Boca Juniors, Palmeiras,
+  Flamengo, Inter Miami, Club América, Tigres UANL, Al Hilal, Al
+  Nassr, Al Ittihad, Al Ahli Saudi, Al Sadd, Al Duhail) conservan sus
+  valores EXACTOS (power/atk/mid/def/fict/alias) — "los que ya tenemos
+  los mantenemos igual". Los 17 nuevos (MAS Fez, RS Berkane, América
+  de Cali, Independiente Medellín, Colo-Colo, Universidad de Chile,
+  Nashville SC, Kashiwa Reysol, FC Machida Zelvia, FC Seoul, Ulsan HD,
+  Buriram United, Port FC, Johor Darul Ta'zim, Kuching City, Al-Ahli
+  Club [UAE], Al Wahda [UAE]) se crean con el mismo formato (fict/alias
+  eFootball estilo `"🏴bandera <Ficticio> - <Real> - 1ª 👕 <estrellas>"`
+  para los no licenciados, sin `fict` para los licenciados).
+- **Grupos balanceados y SIN dos equipos del mismo país en el mismo
+  grupo** (snake por poder + reparto manual verificado país a país,
+  14 "países" — 13 parejas + Arabia Saudita×4 — repartidos sin
+  colisión). **PROHIBIDO** que un re-sorteo/edición futura junte dos
+  equipos del mismo país en un grupo sin acuerdo explícito del usuario.
+- **`_rmGroupOf(name)`** (helper global, `window._rmGroupOf`, junto a
+  `_rmRealName`): resuelve el grupo (1-6) de un equipo por nombre desde
+  `RESTO_MUNDO_TEAMS`. **`_rmTeamGroup(t)`** (`window._rmTeamGroup`):
+  resuelve el grupo de un objeto `team` ya persistido — prioriza
+  `t.group` (persistido, sobrevive a renombrados) y cae a
+  `_rmGroupOf(t.name)` como fallback para equipos legacy/añadidos a
+  mano sin el campo.
+
+### Migración — BOOT-TIME, NO flag-de-un-solo-uso
+
+`_ensureRestoMundoSeed()` (`misc_body_1.html`) migra el formato ANTES
+de cualquier otra lógica: si `ligaExt_resto-mundo` tiene equipos pero
+**alguno** no lleva `group` válido (1-6) — el formato viejo, o datos
+resucitados de un `_protected`/snapshot/servidor desactualizado —,
+reemplaza `teams[]` por un roster fresco de los 30 de
+`RESTO_MUNDO_TEAMS` (con `group` sellado), **backfillea** por nombre
+normalizado (`_lextNormName`) `players`/`shield`/`stadium`/
+`efootballAlias`/`budget` de los 13 equipos que coincidan con el
+roster viejo (conserva lo editado por el admin), y **BORRA
+`results`/`copa`** (el formato de competición cambió por completo —
+una clasificación/copa del torneo viejo no tiene sentido en el nuevo).
+**Deliberadamente NO es un fixup de un solo uso con flag**: corre en
+CADA boot (barato — solo comprueba que cada equipo tenga `group`), así
+que si `_protected`/un snapshot/el servidor resucitan datos del
+formato viejo en cualquier dispositivo, el SIGUIENTE boot los vuelve a
+migrar sin depender de que un flag "ya gastado" lo bloquee.
+
+### Copa ELIMINADA por completo para Resto del Mundo
+
+- El botón **"🏆 Copa"** de `s-liga-ext` (`onclick="window.lextCopaOpen()"`)
+  se OCULTA (`display:none`) cuando `CURRENT_KEY === 'resto-mundo'`
+  (mismo sitio que ya ocultaba la leyenda europea/Recopa-Mundialito en
+  `openLigaExt`). **PROHIBIDO** que un usuario pueda navegar a
+  `s-lext-copa` con Resto del Mundo activo.
+- `ligaExtSimular._finishSim` (motor de simulación) **NO llama a
+  `_lecSimCupOn`** cuando `slug === 'resto-mundo'` — el "🎮 Sim" de esta
+  liga simula SOLO los 120 partidos de grupo, nunca genera/simula copa.
+- `_lecEnsureCopa`/`_lecRunAllAuto`/`window.lextCopaOpen` llevan un
+  guard defensivo `if (CURRENT_KEY/slug === 'resto-mundo') return`
+  como red de seguridad adicional (aunque el botón ya esté oculto).
+- Cualquier `data.copa` que sobreviva de una versión anterior se borra
+  en la migración de arriba (`copa: null`).
+
+### Clasificación — 6 mini-tablas de grupo, NO una tabla plana
+
+`renderTable()` (`misc_body_1.html`) bifurca al inicio: si
+`CURRENT_KEY === 'resto-mundo'`, delega en un render DEDICADO
+(`_rmRenderGroupedTable`) que pinta las 6 tablas de grupo (mismas
+columnas #/EQUIPO/PTS/PJ/G/E/P/GF/GC/DG/TA/TR/%VIC que el resto de
+ligas, calculadas con el MISMO criterio de desempate que `standings()`
+— PTS→DG→GF→nombre — pero filtrando resultados a los del propio
+grupo). El 1º de cada grupo se resalta con la clase `z-inter`
+(reutilizada, ya existente) y el 2º + los "mejores 4 terceros"
+(calculados cruzando los 6 tercer-puestos entre grupos) con `z-mundial`
+— sin CSS nuevo, reusa las clases de zona que ya existían. La cabecera
+plana `.lext-hdr` estática del HTML se oculta para esta liga (cada
+mini-tabla pinta su propia cabecera).
+
+### Copa Intercontinental — pool = 1 GANADOR por grupo (6), cada temporada
+
+`_restoStandings()`/`_buildPool()` (IIFE `inter_state_v1`,
+`misc_body_1.html`) dejan de leer la tabla PLANA de 43 equipos
+(`complete = every team pj>=N-1`). Ahora calculan la clasificación DE
+CADA UNO de los 6 grupos (usando `t.group`/`_rmTeamGroup`), consideran
+la liga "completa" cuando **TODOS** los equipos de **TODOS** los grupos
+tienen `pj >= 8` (el doble round-robin de 5 equipos completo), y el
+pool de Resto del Mundo son los **6 GANADORES** (uno por grupo, por
+PTS→DG→GF→nombre) — sustituye al antiguo "top 6 de la tabla plana".
+Los 2 manuales de España ("EA Sports → Europa" + overlay unificado)
+siguen entrando igual que antes; el pool sigue capando a 8.
+
+### Mundialito de Clubes — 16 de Resto del Mundo = 2/grupo (12) + 4 mejores terceros
+
+`autoFillRm()` (editor de roster del Mundialito, `misc_body_1.html`,
+sección "AUTO-FILL… con el TOP 16") deja de tomar el top-16 de la
+tabla PLANA. Ahora, por cada uno de los 6 grupos toma el **1º y 2º**
+(12 equipos) y, de los 6 **3º de grupo**, se rankean entre sí
+(PTS→DG→GF→nombre) y se toman los **4 mejores** — total exacto **16**,
+que sigue llenando los 16 slots RM del editor (`nG:8, pg:4` = 32
+equipos: 16 europeos manuales + estos 16). Esta selección es
+INFORMATIVA/recalculable en cualquier momento (el Mundialito se
+celebra cada 4 temporadas, pero el cálculo de "quién clasificaría si
+fuera ahora" no depende de fecha — el admin lo pulsa cuando toca).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `ligaExtSimular` vuelva a simular Resto del Mundo
+   como liga plana (single-round o round-robin sin restricción de
+   grupo). Las parejas se generan SOLO dentro del mismo `t.group`
+   (`_rmTeamGroup(ts[pi]) === _rmTeamGroup(ts[pj])`), a DOBLE vuelta
+   (ida+vuelta, nunca `_singleRound`).
+2. **PROHIBIDO** reintroducir la Copa de Resto del Mundo (botón,
+   pantalla, `_lecSimCupOn` para este slug). Es la ÚNICA liga externa
+   sin copa — el resto de "Resto de Ligas" la conserva sin cambios.
+3. **PROHIBIDO** que la Intercontinental o el Mundialito vuelvan a leer
+   una clasificación PLANA de Resto del Mundo (`_restoStandings`
+   flat/`autoFillRm` top-N flat). Ambas leen SIEMPRE por grupo.
+4. **PROHIBIDO** que el pool de Intercontinental sea otra cosa que "1
+   ganador por grupo, 6 en total, cada temporada" para Resto del Mundo,
+   ni que el de Mundialito sea otra cosa que "2 por grupo (12) + 4
+   mejores terceros cruzados (4) = 16, cada 4 temporadas". Si el
+   usuario pide cambiar estos números en el futuro, se edita la
+   fórmula — nunca se vuelve al "top N plano" antiguo.
+5. **PROHIBIDO** que la migración de formato (`_ensureRestoMundoSeed`)
+   vuelva a ser un fixup de un solo uso con flag. Debe seguir
+   comprobando el formato en CADA boot (barato) para auto-sanar datos
+   viejos resucitados desde `_protected`/snapshots/servidor.
+6. Toda edición futura del roster de 30 equipos (añadir/quitar un club)
+   debe mantener `group` (1-6) en cada spec de `RESTO_MUNDO_TEAMS` y
+   preservar 5 equipos por grupo sin repetir país dentro del mismo
+   grupo — si no se puede mantener el balance exacto, avisar al
+   usuario en vez de romperlo en silencio.
+7. Esta sección **SUPERSEDE** la sección "Resto Mundo — 1 vuelta +
+   Intercontinental + Mundialito" (más abajo, 2026-05-27 y refuerzos
+   posteriores): esa liga plana a una vuelta con 43/44 equipos ya NO
+   EXISTE. Se conserva como registro histórico de por qué existían los
+   campos `zones.intercontinental`/`zones.mundialClubes`, no como
+   comportamiento vigente.
+
 ## Recopa de Europa — REDUCIDA a 32 equipos, sin ronda 1/64, pool FIJO por liga (obligatorio, 2026-08-16 #2)
 
 **Petición usuario 2026-08-16**: "la recopa de reduce a 32 equipos

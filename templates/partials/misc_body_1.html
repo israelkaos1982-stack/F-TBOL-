@@ -28905,8 +28905,10 @@ window._hdrCleanCache = function(){
 
   /* ── Editor de ROSTER MANUAL (Mundialito · rediseño 2026-05-27) ──
      Petición usuario: 16 EUROPEOS elegidos manualmente por el admin
-     + 16 RESTO DEL MUNDO auto-rellenados desde el top 16 de
-     `ligaExt_resto-mundo` + 4 SEDES (estadios) + 👤 humano por slot.
+     + 16 RESTO DEL MUNDO auto-rellenados (2026-08-16: 2 primeros de
+     CADA uno de los 6 grupos + los 4 mejores terceros cruzados, ver
+     `autoFillRm`) de `ligaExt_resto-mundo` + 4 SEDES (estadios) + 👤
+     humano por slot.
      Al CONFIRMAR el sorteo de grupos distribuye 2 EUR + 2 RM por
      grupo (8 grupos × 4 = 32). Sobre el bracket KO ver
      `_mundialitoBuildBracket` más abajo (1ºs vs 2ºs + mismo grupo
@@ -28958,7 +28960,7 @@ window._hdrCleanCache = function(){
         ov.innerHTML = '<div class="mr-card">'
           + '<div class="mr-hd"><span>🏆 Mundialito · Roster</span>'
           + '<button class="mr-x" onclick="document.getElementById(\'mundial-roster-ov\').style.display=\'none\'">✕</button></div>'
-          + '<div class="mr-sub">16 europeos (manual) + 16 Resto del Mundo (top 16 auto) + 4 sedes. '
+          + '<div class="mr-sub">16 europeos (manual) + 16 Resto del Mundo (2 de cada grupo + 4 mejores terceros, auto) + 4 sedes. '
             + '8 grupos × 4 = 2 EUR + 2 RM por grupo. Toca la fila o el 🤖 para elegir equipo IA · '
             + '👤 para elegir TU equipo humano (eliges el equipo aquí mismo).</div>'
           + '<div class="mr-body" id="mr-body"></div>'
@@ -29029,7 +29031,7 @@ window._hdrCleanCache = function(){
         /* Zona RM — 16 slots + botón AUTO-FILL */
         h += '<div class="mr-grp" style="border-color:rgba(255,143,64,.55);margin-top:14px;">'
           + '<div class="mr-grp-h" style="color:#ff8f40;display:flex;align-items:center;justify-content:space-between;gap:8px;">'
-          + '<span>🌎 16 EQUIPOS RESTO DEL MUNDO · TOP 16 DE LA LIGA</span>'
+          + '<span>🌎 16 EQUIPOS RESTO DEL MUNDO · 2/GRUPO + 4 MEJORES TERCEROS</span>'
           + '<button type="button" id="mr-autofill-rm" style="background:linear-gradient(145deg,#5fc6e8,#2a7a96);border:1px solid rgba(95,198,232,.7);color:#fff;border-radius:6px;padding:4px 9px;font-family:Oswald,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;cursor:pointer;">🌐 AUTO-FILL</button>'
           + '</div>';
         for (var r = eurCount; r < total; r++) h += renderSlotMundialito(r);
@@ -29116,11 +29118,15 @@ window._hdrCleanCache = function(){
       }).join('');
     }
 
-    /* AUTO-FILL: rellena los 16 slots RM con el TOP 16 de
-       `ligaExt_resto-mundo`. Standings inline (mismo criterio que el
-       resto del proyecto: pts → dg → gf → nombre). Si la liga aún
-       no se ha jugado, devuelve los líderes de lo jugado (puede
-       ser 0 pts si nada simulado todavía). 2026-05-27. */
+    /* AUTO-FILL: rellena los 16 slots RM con los clasificados POR GRUPO
+       de `ligaExt_resto-mundo` (2026-08-16, CLAUDE.md "REDISEÑO
+       COMPLETO" — 6 grupos de 5): el 1º y 2º de CADA grupo (12) + los
+       4 MEJORES terceros cruzados entre los 6 grupos (4) = 16 exactos.
+       Standings inline por grupo (mismo criterio que el resto del
+       proyecto: pts → dg → gf → nombre), usando `window._rmTeamGroup`
+       para saber a qué grupo pertenece cada equipo. Si la liga aún no
+       se ha jugado, devuelve los líderes de lo jugado (puede ser 0 pts
+       si nada simulado todavía). */
     function autoFillRm(){
       var rmData = null;
       try { var raw = localStorage.getItem('ligaExt_resto-mundo'); if (raw) rmData = JSON.parse(raw); } catch(_){}
@@ -29128,15 +29134,22 @@ window._hdrCleanCache = function(){
         alert('No encuentro datos suficientes de la liga Resto del Mundo.\nNecesitas al menos 16 equipos en la liga.');
         return;
       }
-      /* Standings inline — mismo cómputo que el resto del proyecto.
-         Los results de Resto del Mundo usan campos {h,a,gh,ga}. */
+      /* Standings inline POR GRUPO — los results de Resto del Mundo
+         usan campos {h,a,gh,ga}; un cruce entre grupos distintos no
+         debería existir nunca (seguridad: se descarta si aparece). */
+      var byGroup = {1:[],2:[],3:[],4:[],5:[],6:[]};
       var byId = {};
       (rmData.teams || []).forEach(function(t){
-        if (t && t.id != null) byId[t.id] = { id:t.id, name:t.name, pts:0, dg:0, gf:0 };
+        if (!t || t.id == null) return;
+        var g = (typeof window._rmTeamGroup === 'function') ? window._rmTeamGroup(t) : 0;
+        if (!(g >= 1 && g <= 6)) return;
+        var row = { id:t.id, name:t.name, group:g, pts:0, dg:0, gf:0 };
+        byId[t.id] = row;
+        byGroup[g].push(row);
       });
       (rmData.results || []).forEach(function(r){
         var H = byId[r.h], A = byId[r.a];
-        if (!H || !A) return;
+        if (!H || !A || H.group !== A.group) return;
         H.gf += (r.gh||0); A.gf += (r.ga||0);
         H.dg += (r.gh||0) - (r.ga||0);
         A.dg += (r.ga||0) - (r.gh||0);
@@ -29144,16 +29157,24 @@ window._hdrCleanCache = function(){
         else if (r.ga > r.gh) { A.pts += 3; }
         else                  { H.pts += 1; A.pts += 1; }
       });
-      var ranking = Object.keys(byId).map(function(k){ return byId[k]; });
-      ranking.sort(function(a,b){
+      function _cmp(a,b){
         if (b.pts !== a.pts) return b.pts - a.pts;
         if (b.dg  !== a.dg)  return b.dg  - a.dg;
         if (b.gf  !== a.gf)  return b.gf  - a.gf;
         return String(a.name||'').localeCompare(String(b.name||''), 'es');
-      });
-      var topNames = ranking.slice(0, 16).map(function(t){ return t.name; });
+      }
+      var topNames = [];
+      var thirds = [];
+      for (var g = 1; g <= 6; g++){
+        var rows = byGroup[g].slice().sort(_cmp);
+        if (rows[0]) topNames.push(rows[0].name);
+        if (rows[1]) topNames.push(rows[1].name);
+        if (rows[2]) thirds.push(rows[2]);
+      }
+      thirds.sort(_cmp);
+      thirds.slice(0, 4).forEach(function(r){ topNames.push(r.name); });
       if (topNames.length < 16){
-        alert('Solo encuentro '+topNames.length+' equipos en la liga Resto del Mundo (necesito 16).');
+        alert('Solo encuentro '+topNames.length+' equipos clasificables (2 por grupo + 4 mejores terceros) en Resto del Mundo — revisa que los 6 grupos tengan 5 equipos.');
         return;
       }
       /* Mapear nombres → datos completos vía _allTeams para escudo+power. */
@@ -29161,8 +29182,7 @@ window._hdrCleanCache = function(){
       var byName = {}; all.forEach(function(t){ byName[t.name] = t; });
       var rmTeams = (rmData.teams || []);
       var byRmName = {}; rmTeams.forEach(function(t){ if (t && t.name) byRmName[t.name] = t; });
-      topNames.forEach(function(nm, k){
-        if (k >= 16) return;
+      topNames.slice(0, 16).forEach(function(nm, k){
         var meta = byName[nm] || byRmName[nm] || { name:nm, power:70, shield:'' };
         rost[eurCount + k] = {
           name: meta.name, shield: meta.shield || '', power: meta.power || 70, zone:'rm'
@@ -37723,9 +37743,10 @@ window._hdrCleanCache = function(){
           'liga-hypermotion':        { all: true },
           'liga-primera-federacion': { all: true },
           'liga-ea-sports':          { all: true },
-          /* "Resto Mundo" agrupa equipos top de América + Asia (44).
-             Petición usuario 2026-05-20: NO van a ninguna competición
-             europea — son extra-UEFA por definición. */
+          /* "Resto Mundo" agrupa equipos top de América + Asia + África
+             (30, en 6 grupos de 5 desde 2026-08-16). Petición usuario
+             2026-05-20: NO van a ninguna competición europea — son
+             extra-UEFA por definición. */
           'resto-mundo':             { all: true }
         };
         var blRule = EUROPE_BLACKLIST[slug];
@@ -42603,31 +42624,60 @@ window._hdrCleanCache = function(){
     return false;
   }
 
-  /* Tabla de la Liga Resto del Mundo + chequeo de "todos los partidos
-     jugados". Resto del Mundo se juega a UNA vuelta (CLAUDE.md), así que
-     "completa" = cada equipo ha disputado sus N-1 partidos. */
+  /* Tabla de la Liga Resto del Mundo — POR GRUPO (2026-08-16, CLAUDE.md
+     "REDISEÑO COMPLETO"): 6 grupos de 5, ida+vuelta DENTRO del grupo
+     (`t.group`/`window._rmTeamGroup`, definido en la OTRA IIFE de
+     "Resto de Ligas" — se lee vía `window` porque esta es una IIFE
+     distinta que solo toca `ligaExt_resto-mundo` por su cuenta desde
+     localStorage). "Completa" = TODOS los equipos de TODOS los grupos
+     con pj>=8 (4 rivales × ida+vuelta). El pool que aporta a la
+     Intercontinental son los 6 GANADORES — el 1º de CADA grupo — no el
+     top-N de una tabla plana (esa tabla ya no existe). */
   function _restoStandings(){
     var data;
     try { var raw=localStorage.getItem('ligaExt_resto-mundo'); data=raw?JSON.parse(raw):null; } catch(_){ return null; }
     if(!data || !Array.isArray(data.teams) || !Array.isArray(data.results)) return null;
-    var map={};
-    data.teams.forEach(function(t){ if(t && t.id!=null) map[t.id]={ name:t.name||'', pj:0, gf:0, gc:0, pts:0 }; });
+    var byGroup = {1:[],2:[],3:[],4:[],5:[],6:[]};
+    var map = {};
+    data.teams.forEach(function(t){
+      if(!t || t.id==null) return;
+      var g = (typeof window._rmTeamGroup === 'function') ? window._rmTeamGroup(t) : 0;
+      if(!(g>=1 && g<=6)) return;
+      var row = { id:t.id, name:t.name||'', group:g, pj:0, gf:0, gc:0, pts:0 };
+      map[t.id] = row;
+      byGroup[g].push(row);
+    });
     data.results.forEach(function(r){
       var H=map[r.h], A=map[r.a]; if(!H||!A) return;
+      if(H.group !== A.group) return; /* nunca debería pasar — seguridad */
       H.pj++; A.pj++; H.gf+=(r.gh||0); H.gc+=(r.ga||0); A.gf+=(r.ga||0); A.gc+=(r.gh||0);
       if(r.gh>r.ga){ H.pts+=3; } else if(r.gh<r.ga){ A.pts+=3; } else { H.pts++; A.pts++; }
     });
-    var N=data.teams.length;
-    var arr=Object.keys(map).map(function(k){ var m=map[k]; m.dg=m.gf-m.gc; return m; });
-    arr.sort(function(a,b){ if(b.pts!==a.pts) return b.pts-a.pts; if(b.dg!==a.dg) return b.dg-a.dg; if(b.gf!==a.gf) return b.gf-a.gf; return String(a.name).localeCompare(String(b.name),'es'); });
-    var complete = N>=8 && arr.length>=6 && arr.every(function(t){ return t.pj>=(N-1); });
-    return { ranking:arr, complete:complete, N:N };
+    function _sortG(arr){
+      arr.forEach(function(m){ m.dg = m.gf - m.gc; });
+      arr.sort(function(a,b){ if(b.pts!==a.pts) return b.pts-a.pts; if(b.dg!==a.dg) return b.dg-a.dg; if(b.gf!==a.gf) return b.gf-a.gf; return String(a.name).localeCompare(String(b.name),'es'); });
+      return arr;
+    }
+    var groups = [];
+    var anyGroupTeams = false;
+    for(var g=1; g<=6; g++){
+      var rows = _sortG(byGroup[g].slice());
+      if(rows.length) anyGroupTeams = true;
+      groups.push({ group:g, ranking:rows, complete: rows.length===5 && rows.every(function(m){ return m.pj>=8; }) });
+    }
+    if(!anyGroupTeams) return null;
+    var complete = groups.every(function(gr){ return gr.complete; });
+    var winners = groups.filter(function(gr){ return gr.ranking.length>0; })
+                         .map(function(gr){ return gr.ranking[0].name; });
+    return { groups:groups, winners:winners, complete:complete };
   }
 
   /* Construye el pool de 8: 2 manuales (Champions, vía "EA Sports →
-     Europa" o el overlay unificado "Equipos por competición") + 6
-     primeros de Resto del Mundo (solo si la liga está TODA simulada).
-     2026-07-07: los extras manuales del overlay unificado
+     Europa" o el overlay unificado "Equipos por competición") + los 6
+     GANADORES de grupo de Resto del Mundo — 1 por grupo, cada
+     temporada — SOLO si los 6 grupos están TODOS completos (petición
+     usuario 2026-08-16, aclarada: "el primero de cada grupo, 6 en
+     total"). 2026-07-07: los extras manuales del overlay unificado
      (`window._eurManualExtraTeamNames('inter')`) se fusionan con los
      de "EA Sports → Europa" — el admin ya no depende SOLO de esa
      pantalla para rellenar los 2 huecos de Europa, y si añade MÁS de
@@ -42649,14 +42699,14 @@ window._hdrCleanCache = function(){
     } catch(_){}
     var rs=_restoStandings();
     var restoComplete=!!(rs && rs.complete);
-    var restoTop6=(rs && restoComplete) ? rs.ranking.slice(0,6).map(function(t){ return t.name; }) : [];
+    var restoWinners=(rs && restoComplete) ? rs.winners.slice(0,6) : [];
     var seen={}, pool=[];
     function push(n){ n=String(n||'').trim(); if(!n) return; var k=n.toLowerCase(); if(seen[k]) return; seen[k]=true; pool.push(n); }
     /* TODOS los manuales entran (no solo los 2 primeros) — si el admin
        añadió 8 a mano, el pool queda completo sin depender de Resto del
        Mundo. Si añadió menos de 8, Resto del Mundo rellena el resto. */
     manual.forEach(push);
-    restoTop6.forEach(push);
+    restoWinners.forEach(push);
     return { pool:pool.slice(0,8), manualCount:manual.length, restoComplete:restoComplete, ready:(pool.length>=8) };
   }
   /* Público — el overlay "Equipos por competición" lo usa para mostrar
@@ -42793,7 +42843,7 @@ window._hdrCleanCache = function(){
       } else {
         var parts=[];
         if(info.manualCount<2) parts.push('Añade el <b>campeón y subcampeón de Champions</b> en «EA Sports → Europa → 🌐 Intercontinental» ('+info.manualCount+'/2).');
-        if(!info.restoComplete) parts.push('Simula <b>TODA</b> la Liga Resto del Mundo — sus 6 primeros entran automáticamente.');
+        if(!info.restoComplete) parts.push('Simula <b>TODA</b> la Liga Resto del Mundo (6 grupos) — el <b>ganador de cada grupo</b> (6 en total) entra automáticamente.');
         /* Texto plegado en un desplegable (petición usuario): por defecto
            solo se ve la cabecera «Faltan equipos…»; al pulsar se expanden
            los pasos pendientes. */
@@ -46053,7 +46103,7 @@ window._hdrCleanCache = function(){
   </div>
   <div style="display:flex;gap:6px;width:100%;justify-content:center;flex-wrap:nowrap;">
     <button class="btn-action lext-btn-compact" onclick="pG(function(){ligaExtReglas()})" style="border-color:rgba(120,80,255,.4);color:#b090ff;background:rgba(120,80,255,.06);"><span class="btn-action-ico">📜</span>Reglas</button>
-    <button class="btn-action lext-btn-compact" onclick="window.lextCopaOpen&&window.lextCopaOpen()" style="border-color:rgba(255,200,80,.4);color:#ffc850;background:rgba(255,200,80,.06);"><span class="btn-action-ico">🏆</span><span id="lext-copa-btn-label">Copa</span></button>
+    <button id="lext-copa-btn" class="btn-action lext-btn-compact" onclick="window.lextCopaOpen&&window.lextCopaOpen()" style="border-color:rgba(255,200,80,.4);color:#ffc850;background:rgba(255,200,80,.06);"><span class="btn-action-ico">🏆</span><span id="lext-copa-btn-label">Copa</span></button>
   </div>
 </div>
 
@@ -46064,8 +46114,8 @@ window._hdrCleanCache = function(){
   <div class="lext-leg-item lext-leg-uel"><span class="lext-leg-dot" style="background:#ff8214;"></span>E.League</div>
   <div class="lext-leg-item lext-leg-uecl"><span class="lext-leg-dot" style="background:#3cc878;"></span>Conference</div>
   <div class="lext-leg-item lext-leg-wildcard"><span class="lext-leg-dot" style="background:#ffffff;"></span>WildCard</div>
-  <div class="lext-leg-item lext-leg-recopa" style="display:none;"><span class="lext-leg-dot" style="background:#b46438;"></span>Recopa</div>
-  <div class="lext-leg-item lext-leg-mundial" style="display:none;"><span class="lext-leg-dot" style="background:#50a0dc;"></span>Mundialito</div>
+  <div class="lext-leg-item lext-leg-recopa" style="display:none;"><span class="lext-leg-dot" style="background:#ff9020;"></span>Interconti. (1º grupo)</div>
+  <div class="lext-leg-item lext-leg-mundial" style="display:none;"><span class="lext-leg-dot" style="background:#50a0dc;"></span>Mundialito (2º + mejores 3os)</div>
   <div class="lext-leg-item lext-leg-desc"><span class="lext-leg-dot" style="background:#e03c3c;"></span>Descenso</div>
 </div>
 
@@ -46073,6 +46123,15 @@ window._hdrCleanCache = function(){
 .lext-legend{display:flex;flex-wrap:wrap;gap:8px 12px;padding:8px 16px 12px;font-family:Oswald,sans-serif;font-size:10px;letter-spacing:1px;color:rgba(255,255,255,.7);}
 .lext-leg-item{display:flex;align-items:center;gap:5px;}
 .lext-leg-dot{width:10px;height:10px;border-radius:50%;display:inline-block;box-shadow:0 0 8px currentColor;}
+/* Resto del Mundo — 6 mini-tablas de grupo (2026-08-16). Reutiliza
+   .lext-hdr/.lext-row/.z-inter/.z-mundial tal cual; solo añade la
+   cabecera de cada grupo + el pie de leyenda de cada mini-tabla. */
+.rm-grp-block{margin-bottom:14px;}
+.rm-grp-block:last-child{margin-bottom:0;}
+.rm-grp-title{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;font-weight:700;color:#ffd700;background:linear-gradient(90deg,rgba(255,144,32,.14),rgba(80,160,220,.10));border:1px solid rgba(255,255,255,.10);border-bottom:none;border-radius:8px 8px 0 0;}
+.rm-grp-title .rm-grp-status{font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:.5px;font-weight:600;color:rgba(255,255,255,.55);text-transform:none;}
+.rm-grp-foot{padding:5px 10px 0;font-family:Rajdhani,sans-serif;font-size:9.5px;line-height:1.4;color:rgba(255,255,255,.45);}
+.rm-grp-foot b{color:rgba(255,255,255,.7);}
 .lext-wrap{padding:0 14px 32px;}
 .lext-table{width:100%;display:flex;flex-direction:column;gap:0;min-width:560px;}
 .lext-hdr,.lext-row{display:grid;grid-template-columns:24px minmax(95px,1.3fr) 32px 26px 22px 22px 22px 26px 26px 28px 26px 26px 38px;gap:2px;align-items:center;padding:7px 4px;}
@@ -46306,7 +46365,7 @@ window._hdrCleanCache = function(){
 
 <div class="lext-wrap">
   <div class="lext-table">
-    <div class="lext-hdr">
+    <div class="lext-hdr" id="lext-hdr-flat">
       <span>#</span><span>EQUIPO</span><span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>%VIC</span>
     </div>
     <div id="lext-body">
@@ -46896,12 +46955,12 @@ https://api.sofascore.app/api/v1/team/44/image
       <input class="lext-input" id="lext-reg-uecl" type="number" min="0" max="20" value="1" />
     </div>
     <div id="lext-reg-inter-row" style="display:none;">
-      <label class="lext-label" style="color:#ff9020;">🟠 Equipos pasan a Copa Intercontinental</label>
-      <input class="lext-input" id="lext-reg-inter" type="number" min="0" max="20" value="6" />
+      <label class="lext-label" style="color:#ff9020;">🟠 Ganador de cada grupo → Copa Intercontinental (fijo, cada temporada)</label>
+      <input class="lext-input" id="lext-reg-inter" type="number" min="0" max="20" value="6" readonly title="Fijo: 1 por grupo × 6 grupos = 6. No editable — el reparto es formulaico." />
     </div>
     <div id="lext-reg-mundial-row" style="display:none;">
-      <label class="lext-label" style="color:#80d0ff;">🏆 Equipos clasifican a Mundialito Clubes (manual c/4 temporadas)</label>
-      <input class="lext-input" id="lext-reg-mundial" type="number" min="0" max="32" value="16" />
+      <label class="lext-label" style="color:#80d0ff;">🏆 2º de cada grupo + 4 mejores terceros → Mundialito Clubes (fijo, cada 4 temporadas)</label>
+      <input class="lext-input" id="lext-reg-mundial" type="number" min="0" max="32" value="16" readonly title="Fijo: 2 por grupo × 6 grupos (12) + 4 mejores terceros = 16. No editable — el reparto es formulaico." />
     </div>
     <label class="lext-label">🔴 Descenso (últimas plazas)</label>
     <input class="lext-input" id="lext-reg-desc" type="number" min="0" max="20" value="3" />
@@ -50983,6 +51042,148 @@ https://api.sofascore.app/api/v1/team/44/image
     return '';
   }
 
+  /* Markup de UNA fila de clasificación — extraído (2026-08-16) para
+     que la tabla PLANA (`renderTable`) y las 6 mini-tablas de grupo de
+     Resto del Mundo (`_rmRenderGroupedTable`) compartan EXACTAMENTE el
+     mismo HTML/columnas sin duplicar el bloque. `z` es la clase de
+     zona (`z-uclD`, `z-inter`, `''`, …) ya resuelta por el caller. */
+  function _lextTeamRowHtml(r, pos, z){
+    var dgSign = r.dg>0?'+'+r.dg:(r.dg<0?r.dg:'0');
+    var dgCls = r.dg>0?'pos':(r.dg<0?'neg':'');
+    var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
+    var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
+    var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
+    var humanSfx = (r.isHuman && r.humanEmoji)
+      ? '<span class="clas-team-human-suffix">'+r.humanEmoji+'</span>'
+      : '';
+    return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
+      +'<span class="lext-pos">'+pos+'</span>'
+      +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span>'+humanSfx+'</span>'
+      +'<span class="lext-pts">'+r.pts+'</span>'
+      +'<span class="lext-cell">'+r.pj+'</span>'
+      +'<span class="lext-cell">'+r.v+'</span>'
+      +'<span class="lext-cell">'+r.e+'</span>'
+      +'<span class="lext-cell">'+r.p+'</span>'
+      +'<span class="lext-cell gf">'+r.gf+'</span>'
+      +'<span class="lext-cell gc">'+r.gc+'</span>'
+      +'<span class="lext-cell dg '+dgCls+'">'+dgSign+'</span>'
+      +'<span class="lext-cell ta">'+r.ta+'</span>'
+      +'<span class="lext-cell tr">'+r.tr+'</span>'
+      +'<span class="lext-cell pct '+pctCls+'">'+pct+'%</span>'
+    +'</div>';
+  }
+
+  /* Resto del Mundo — clasificación POR GRUPO (2026-08-16, CLAUDE.md
+     "REDISEÑO COMPLETO"). Mismo criterio de desempate y misma forma de
+     fila que `standings()` (PTS→DG→GF→nombre), pero calculado SOLO
+     con los resultados entre equipos del MISMO grupo (`t.group` /
+     `_rmTeamGroup`). Devuelve 6 entradas `{group, rows, complete}` —
+     `complete` = todos los equipos de ESE grupo con pj>=8 (el doble
+     round-robin de 5 equipos completo: 4 rivales × ida+vuelta). Un
+     equipo sin grupo resoluble (`_rmTeamGroup` devuelve 0) queda FUERA
+     de las 6 tablas — nunca se agrupa con otro equipo sin grupo. */
+  function _rmGroupStandingsAll(data){
+    var gShields = window._ligaEaShields || {};
+    var gHuman   = window._LIGA_HUMAN_FLAGS || {};
+    var map = {};
+    var byGroup = {1:[],2:[],3:[],4:[],5:[],6:[]};
+    (data.teams||[]).forEach(function(t){
+      var g = window._rmTeamGroup ? window._rmTeamGroup(t) : 0;
+      if(!(g>=1 && g<=6)) return;
+      var nm = t.name || '';
+      var nrm = (typeof _normName === 'function') ? _normName(nm) : nm.toLowerCase();
+      var sh = t.shield || gShields[nm] || gShields[nrm] || '';
+      var _retiredClub = (typeof window._isRetiredHumanClubName === 'function')
+        && (window._isRetiredHumanClubName(nm) || window._isRetiredHumanClubName(nrm));
+      var hf = _retiredClub
+                 ? {isHuman:false, humanEmoji:''}
+                 : (t.isHuman || t.humanEmoji)
+                 ? {isHuman:!!t.isHuman, humanEmoji:t.humanEmoji||''}
+                 : (gHuman[nm] || gHuman[nrm] || {isHuman:false, humanEmoji:''});
+      var row = {id:t.id,name:nm,shield:sh,power:Number(t.power)||50,group:g,pj:0,v:0,e:0,p:0,gf:0,gc:0,dg:0,pts:0,ta:0,tr:0,isHuman:!!hf.isHuman,humanEmoji:hf.humanEmoji||''};
+      map[t.id] = row;
+      byGroup[g].push(row);
+    });
+    (data.results||[]).forEach(function(r){
+      var H = map[r.h], A = map[r.a]; if(!H||!A) return;
+      if(H.group !== A.group) return; /* nunca debería pasar — seguridad */
+      H.pj++; A.pj++;
+      H.gf+=r.gh; H.gc+=r.ga;
+      A.gf+=r.ga; A.gc+=r.gh;
+      H.ta += (r.tah||0); H.tr += (r.trh||0);
+      A.ta += (r.taa||0); A.tr += (r.tra||0);
+      if(r.gh>r.ga){H.v++;A.p++;H.pts+=3;}
+      else if(r.gh<r.ga){A.v++;H.p++;A.pts+=3;}
+      else {H.e++;A.e++;H.pts++;A.pts++;}
+    });
+    function _sortRows(arr){
+      arr.forEach(function(m){ m.dg = m.gf - m.gc; });
+      arr.sort(function(a,b){
+        if(b.pts!==a.pts) return b.pts-a.pts;
+        if(b.dg!==a.dg) return b.dg-a.dg;
+        if(b.gf!==a.gf) return b.gf-a.gf;
+        return a.name.localeCompare(b.name,'es');
+      });
+      return arr;
+    }
+    var out = [];
+    for(var g=1; g<=6; g++){
+      var rows = _sortRows(byGroup[g].slice());
+      var complete = rows.length>0 && rows.every(function(m){ return m.pj>=8; });
+      out.push({group:g, rows:rows, complete:complete});
+    }
+    return out;
+  }
+  window._rmGroupStandingsAll = _rmGroupStandingsAll;
+
+  /* Pinta las 6 mini-tablas de grupo en `#lext-body` (sustituye a la
+     tabla plana para Resto del Mundo). 1º de grupo → `z-inter`
+     (Copa Intercontinental, cada temporada). 2º de grupo + los 4
+     MEJORES terceros cruzados entre los 6 grupos → `z-mundial`
+     (Mundialito de Clubes, 16 en total, cada 4 temporadas). Reutiliza
+     `z-inter`/`z-mundial` — clases YA existentes, sin CSS nuevo. */
+  function _rmRenderGroupedTable(data){
+    var body = document.getElementById('lext-body');
+    if(!body) return;
+    var groups = _rmGroupStandingsAll(data);
+    var anyTeams = groups.some(function(g){ return g.rows.length > 0; });
+    if(!anyTeams){
+      body.innerHTML = '<div class="lext-empty">No hay equipos. Usa 🖍 Editar para añadir clubes.</div>';
+      return;
+    }
+    /* 4 mejores terceros cruzados (Mundialito) — solo grupos con ≥3
+       equipos aportan un 3º puesto real. */
+    var thirds = [];
+    groups.forEach(function(g){ if(g.rows.length >= 3) thirds.push(g.rows[2]); });
+    thirds.sort(function(a,b){
+      if(b.pts!==a.pts) return b.pts-a.pts;
+      if(b.dg!==a.dg) return b.dg-a.dg;
+      if(b.gf!==a.gf) return b.gf-a.gf;
+      return a.name.localeCompare(b.name,'es');
+    });
+    var bestThirdIds = {};
+    thirds.slice(0,4).forEach(function(r){ bestThirdIds[r.id] = true; });
+    body.innerHTML = groups.map(function(g){
+      if(!g.rows.length) return '';
+      var playedMatches = Math.round(g.rows.reduce(function(s,r){ return s + r.pj; }, 0) / 2);
+      var statusTxt = g.complete ? '✅ Completo' : (playedMatches + '/20 partidos');
+      var rowsHtml = g.rows.map(function(r, idx){
+        var pos = idx + 1;
+        var z = '';
+        if(pos === 1) z = 'z-inter';
+        else if(pos === 2 || bestThirdIds[r.id]) z = 'z-mundial';
+        return _lextTeamRowHtml(r, pos, z);
+      }).join('');
+      return '<div class="rm-grp-block">'
+        + '<div class="rm-grp-title"><span>GRUPO ' + g.group + '</span><span class="rm-grp-status">' + statusTxt + '</span></div>'
+        + '<div class="lext-hdr"><span>#</span><span>EQUIPO</span><span>PTS</span><span>PJ</span><span>G</span><span>E</span><span>P</span><span>GF</span><span>GC</span><span>DG</span><span>TA</span><span>TR</span><span>%VIC</span></div>'
+        + rowsHtml
+        + '<div class="rm-grp-foot"><b>🌐 1º</b> → Copa Intercontinental (cada temporada) · <b>🏆 2º + mejores 3os</b> → Mundialito de Clubes (cada 4 temporadas)</div>'
+        + '</div>';
+    }).join('');
+  }
+  window._rmRenderGroupedTable = _rmRenderGroupedTable;
+
   function renderTable(){
     if(!CURRENT_KEY) return;
     var data = loadData(CURRENT_KEY);
@@ -51119,6 +51320,11 @@ https://api.sofascore.app/api/v1/team/44/image
       })();
       return;
     }
+    /* Resto del Mundo (2026-08-16, CLAUDE.md "REDISEÑO COMPLETO"): 6
+       mini-tablas de grupo en vez de la tabla plana — delega y sale,
+       nunca pasa por `standings()`/`zoneClass()` (esas suponen UNA
+       clasificación única para toda la liga). */
+    if(CURRENT_KEY === 'resto-mundo'){ _rmRenderGroupedTable(data); return; }
     /* El filtro de equipos españoles upper-tier ahora se aplica en
        `_applyForcedBlacklist` DENTRO de `loadData(CURRENT_KEY)`
        (línea ~18725), con la clave de slug correcta (sin prefijo
@@ -51132,34 +51338,7 @@ https://api.sofascore.app/api/v1/team/44/image
     body.innerHTML = rows.map(function(r,i){
       var pos = i+1;
       var z = zoneClass(pos,total,cfg.zones);
-      var dgSign = r.dg>0?'+'+r.dg:(r.dg<0?r.dg:'0');
-      var dgCls = r.dg>0?'pos':(r.dg<0?'neg':'');
-      var shield = r.shield ? '<img class="lext-team-shield" src="'+r.shield+'" referrerpolicy="no-referrer" crossorigin="anonymous" onerror="this.style.display=\'none\'"/>' : '<span class="lext-team-shield" style="display:inline-block;background:rgba(255,255,255,.1);border-radius:50%;"></span>';
-      var pct = r.pj>0 ? Math.round((r.v/r.pj)*100) : 0;
-      var pctCls = pct>=60?'pct-hi':(pct>=40?'pct-mid':'pct-lo');
-      /* Emoji humano detrás del nombre — fuente única `t.isHuman` +
-         `t.humanEmoji` del editor de plantilla. Aparece SIEMPRE que el
-         equipo esté marcado como humano en CUALQUIER liga (Francia,
-         Superliga, Inglaterra…), independiente de cómo se llame
-         (PSG / Paris Saint-Germain): no hay name-based lookup. */
-      var humanSfx = (r.isHuman && r.humanEmoji)
-        ? '<span class="clas-team-human-suffix">'+r.humanEmoji+'</span>'
-        : '';
-      return '<div class="lext-row '+z+'" onclick="lextOpenSquad(\''+r.id+'\')">'
-        +'<span class="lext-pos">'+pos+'</span>'
-        +'<span class="lext-team">'+shield+'<span class="lext-team-name">'+r.name+'</span>'+humanSfx+'</span>'
-        +'<span class="lext-pts">'+r.pts+'</span>'
-        +'<span class="lext-cell">'+r.pj+'</span>'
-        +'<span class="lext-cell">'+r.v+'</span>'
-        +'<span class="lext-cell">'+r.e+'</span>'
-        +'<span class="lext-cell">'+r.p+'</span>'
-        +'<span class="lext-cell gf">'+r.gf+'</span>'
-        +'<span class="lext-cell gc">'+r.gc+'</span>'
-        +'<span class="lext-cell dg '+dgCls+'">'+dgSign+'</span>'
-        +'<span class="lext-cell ta">'+r.ta+'</span>'
-        +'<span class="lext-cell tr">'+r.tr+'</span>'
-        +'<span class="lext-cell pct '+pctCls+'">'+pct+'%</span>'
-      +'</div>';
+      return _lextTeamRowHtml(r, pos, z);
     }).join('');
   }
 
@@ -51656,15 +51835,29 @@ https://api.sofascore.app/api/v1/team/44/image
     data.results = [];
     var ts = _capRoundRobin(data.teams.slice());
     /* Lista plana de cruces. Por defecto doble round-robin (i,j) con
-       i≠j. Resto del Mundo es la única liga que se juega a UNA sola
-       vuelta — todos contra todos sin repetir (petición usuario
-       2026-05-26). Para N=43 equipos eso da 42 partidos por equipo. */
+       i≠j — cada equipo juega TODOS los demás de ida y vuelta.
+       Resto del Mundo (2026-08-16, CLAUDE.md "REDISEÑO COMPLETO") es
+       la ÚNICA liga que restringe los cruces a DENTRO DEL MISMO GRUPO
+       (6 grupos de 5, `t.group`/`_rmTeamGroup`): sigue siendo doble
+       round-robin (nunca a una sola vuelta — eso era el formato VIEJO,
+       superseded), pero cada equipo solo se enfrenta a los otros 4 de
+       su grupo, ida+vuelta = 8 partidos por equipo, 20 por grupo, 120
+       en total. Un equipo sin grupo resoluble (`_rmTeamGroup`
+       devuelve 0 — legacy/añadido a mano sin asignar) no genera
+       ningún cruce: PROHIBIDO agrupar dos equipos con grupo 0 entre
+       sí (se tratarían como del "mismo grupo" por error). */
     var pairs = [];
-    var _singleRound = (slug === 'resto-mundo');
+    var _sameGroupOnly = (slug === 'resto-mundo');
     for(var pi=0; pi<ts.length; pi++){
-      var _jStart = _singleRound ? pi + 1 : 0;
-      for(var pj=_jStart; pj<ts.length; pj++){
-        if(pi!==pj) pairs.push([pi,pj]);
+      var _giPi = _sameGroupOnly ? (window._rmTeamGroup ? window._rmTeamGroup(ts[pi]) : 0) : 0;
+      for(var pj=0; pj<ts.length; pj++){
+        if(pi===pj) continue;
+        if(_sameGroupOnly){
+          if(!_giPi) continue;
+          var _giPj = window._rmTeamGroup ? window._rmTeamGroup(ts[pj]) : 0;
+          if(_giPj !== _giPi) continue;
+        }
+        pairs.push([pi,pj]);
       }
     }
     var total = pairs.length;
@@ -51726,8 +51919,12 @@ https://api.sofascore.app/api/v1/team/44/image
            COPA de cero (force) aplicando sus reglas: así cada Sim — global
            o individual — deja la liga Y la copa jugadas, las stats suman
            liga+copa en team.players[], y la Recopa recibe campeón fresco.
-           Cae a no-op en ligas con < 12 equipos. */
-        try { _lecSimCupOn(data, { force:true }); } catch(_){}
+           Cae a no-op en ligas con < 12 equipos.
+           EXCEPCIÓN — Resto del Mundo (2026-08-16): es la ÚNICA liga
+           externa SIN copa (CLAUDE.md "REDISEÑO COMPLETO"). Su "🎮 Sim"
+           simula SOLO los 120 partidos de grupo — jamás crea/simula
+           `data.copa`, aunque tenga ≥12 equipos. */
+        if (slug !== 'resto-mundo') { try { _lecSimCupOn(data, { force:true }); } catch(_){} }
         /* Sello de recencia de la CLASIFICACIÓN (2026-06-12): cada sim
            real estampa `resultsStamp` para que esta clasificación gane
            SIEMPRE a una copia stale (GET en vuelo / POST de otro
@@ -56500,6 +56697,19 @@ https://api.sofascore.app/api/v1/team/44/image
         });
       }
     })();
+    /* Resto del Mundo (2026-08-16, CLAUDE.md "REDISEÑO COMPLETO"): sin
+       Copa (botón 🏆 oculto) y sin tabla plana (cabecera estática
+       oculta — `_rmRenderGroupedTable`, llamada desde `renderTable()`,
+       pinta sus propias 6 cabeceras de grupo). Cualquier otra liga
+       recupera ambos elementos por si el admin viene de haber tenido
+       Resto del Mundo abierto. */
+    (function(){
+      var _isRM = (CURRENT_KEY === 'resto-mundo');
+      var _copaBtn = document.getElementById('lext-copa-btn');
+      if(_copaBtn) _copaBtn.style.display = _isRM ? 'none' : '';
+      var _flatHdr = document.getElementById('lext-hdr-flat');
+      if(_flatHdr) _flatHdr.style.display = _isRM ? 'none' : '';
+    })();
     // Renderiza primero desde cache local (respuesta inmediata)
     var cached = loadData(CURRENT_KEY);
     applyLeagueHeaderFromData(cached);
@@ -56553,67 +56763,62 @@ https://api.sofascore.app/api/v1/team/44/image
   }
 
   /* ═══════════════════════════════════════════════════════════════
-     "Resto Mundo" — 44 equipos top de fuera de Europa (América +
-     Asia), agrupados en una liga simulada a ida y vuelta. NO van
-     a ninguna competición europea (ver EUROPE_BLACKLIST, slug
-     `resto-mundo`). Pre-seed automático en primer load: si la
-     clave `ligaExt_resto-mundo` no existe (o está vacía), se crea
-     con los 44 equipos preconfigurados (nombre / alias eFootball +
-     poder GLOBAL/ATK/MED/DEF). Petición usuario 2026-05-20.
+     "Resto Mundo" — 30 equipos top de fuera de Europa (América +
+     África + Asia), en 6 GRUPOS de 5 a ida y vuelta. NO van a
+     ninguna competición europea (ver EUROPE_BLACKLIST, slug
+     `resto-mundo`). Pre-seed automático en primer load: si la clave
+     `ligaExt_resto-mundo` no existe (o está vacía), se crea con los
+     30 equipos preconfigurados (nombre / alias eFootball / grupo /
+     poder GLOBAL/ATK/MED/DEF). Petición usuario 2026-05-20 (roster
+     original de 44); rediseñado 2026-08-16 (30 equipos, 6 grupos,
+     sin copa — ver comentario justo debajo).
      ═══════════════════════════════════════════════════════════════ */
+  /* Rediseño 2026-08-16 (CLAUDE.md, "Resto del Mundo — REDISEÑO
+     COMPLETO"): 30 equipos en 6 GRUPOS de 5 (campo `group`, 1-6),
+     ida+vuelta dentro del grupo (8 partidos/equipo). Los 13 marcados
+     "(YA existía)" conservan EXACTOS sus valores del roster viejo de
+     43/44 equipos — "los que ya tenemos los mantenemos igual". Los 17
+     restantes son altas nuevas — mismo criterio fict/alias eFootball
+     que el resto del catálogo (sin `fict` = nombre real licenciado).
+     Ningún grupo repite país (verificado 14 "países" — 13 parejas +
+     Arabia Saudita×4 — repartidos sin colisión, snake por poder). */
   var RESTO_MUNDO_TEAMS = [
-    /* ARGENTINA (11) — Boca/River con licencia; el resto, alias eFootball. */
-    {name:'CA River Plate',     power:80, atk:81, mid:80, def:79},
-    {name:'CA Boca Juniors',    power:80, atk:80, mid:80, def:80},
-    {name:'Racing Club de Avellaneda',  fict:'Avellaneda AB',   alias:'🇦🇷 Avellaneda AB - Racing Club de Avellaneda - 1ª 👕 ⭐⭐⭐🌗',      power:77, atk:77, mid:77, def:77},
-    {name:'Vélez Sarsfield',            fict:'Liniers AB',      alias:'🇦🇷 Liniers AB - Vélez Sarsfield - 1ª 👕 ⭐⭐⭐',                   power:75, atk:76, mid:75, def:74},
-    {name:'Talleres de Córdoba',        fict:'Córdoba AB',      alias:'🇦🇷 Córdoba AB - Talleres de Córdoba - 1ª 👕 ⭐⭐⭐',               power:75, atk:75, mid:75, def:75},
-    {name:'Independiente de Avellaneda',fict:'Avellaneda R',    alias:'🇦🇷 Avellaneda R - Independiente de Avellaneda - 1ª 👕 ⭐⭐⭐',      power:75, atk:75, mid:75, def:75},
-    {name:'Rosario Central',            fict:'Rosario AA',      alias:'🇦🇷 Rosario AA - Rosario Central - 1ª 👕 ⭐⭐🌗',                   power:73, atk:74, mid:73, def:72},
-    {name:"Newell's Old Boys",          fict:'Buenos Aires RB', alias:"🇦🇷 Buenos Aires RB - Newell's Old Boys - 1ª 👕 ⭐⭐🌗",            power:73, atk:74, mid:73, def:72},
-    {name:'Argentinos Juniors',         fict:'La Paternal RB',  alias:'🇦🇷 La Paternal RB - Argentinos Juniors - 1ª 👕 ⭐⭐🌗',            power:72, atk:72, mid:72, def:72},
-    {name:'Atlético Lanús',             fict:'Lanús M',         alias:'🇦🇷 Lanús M - Atlético Lanús - 1ª 👕 ⭐⭐🌗',                      power:72, atk:72, mid:72, def:72},
-    {name:'Belgrano de Córdoba',        fict:'Alberdi A',       alias:'🇦🇷 Alberdi A - Belgrano de Córdoba - 1ª 👕 ⭐⭐🌗',                power:71, atk:71, mid:71, def:71},
-    /* BRASIL (13) — licencia oficial. */
-    {name:'CR Flamengo',        power:81, atk:82, mid:81, def:80},
-    {name:'SE Palmeiras',       power:81, atk:81, mid:81, def:81},
-    {name:'Botafogo FR',        power:79, atk:79, mid:79, def:79},
-    {name:'SC Corinthians',     power:78, atk:78, mid:78, def:78},
-    {name:'São Paulo FC',       power:78, atk:78, mid:78, def:78},
-    {name:'Fluminense FC',      power:77, atk:77, mid:77, def:77},
-    {name:'SC Internacional',   power:77, atk:77, mid:77, def:77},
-    {name:'Grêmio FBPA',        power:77, atk:77, mid:77, def:77},
-    {name:'Santos FC',          power:76, atk:76, mid:76, def:76},
-    {name:'Cruzeiro EC',        power:76, atk:76, mid:76, def:76},
-    {name:'CR Vasco da Gama',   power:75, atk:75, mid:75, def:75},
-    {name:'Red Bull Bragantino',power:75, atk:75, mid:75, def:75},
-    {name:'EC Bahia',           power:74, atk:74, mid:74, def:74},
-    /* CHILE (1) */
-    {name:'Unión La Calera',            fict:'La Calera R',     alias:'🇨🇱 La Calera R - Unión La Calera - 1ª 👕 ⭐⭐🌗',                  power:73, atk:73, mid:73, def:73},
-    /* COLOMBIA (2) */
-    {name:'Atlético Nacional',          fict:'Medellín V',      alias:'🇨🇴 Medellín V - Atlético Nacional - 1ª 👕 ⭐⭐🌗',                 power:73, atk:73, mid:73, def:73},
-    {name:'Junior de Barranquilla',     fict:'Barranquilla RB', alias:'🇨🇴 Barranquilla RB - Junior de Barranquilla - 1ª 👕 ⭐⭐🌗',       power:71, atk:71, mid:71, def:71},
-    /* LIGA MX (4) — licencia oficial. */
-    {name:'Club América',       power:77, atk:77, mid:77, def:77},
-    {name:'Tigres UANL',        power:76, atk:76, mid:76, def:76},
-    {name:'CD Guadalajara',     power:73, atk:73, mid:73, def:73},
-    {name:'Pumas',              power:73, atk:73, mid:73, def:73},
-    /* MLS (7) — alias eFootball. */
-    {name:'Inter Miami CF',             fict:'Miami BP',        alias:'🇺🇸 Miami BP - Inter Miami CF - 1ª 👕 ⭐⭐⭐🌗',                    power:78, atk:79, mid:78, def:77},
-    {name:'Los Angeles FC',             fict:'Los Angeles BY',  alias:'🇺🇸 Los Angeles BY - Los Angeles FC - 1ª 👕 ⭐⭐⭐',                power:76, atk:76, mid:76, def:76},
-    {name:'LA Galaxy',                  fict:'Los Angeles WB',  alias:'🇺🇸 Los Angeles WB - LA Galaxy - 1ª 👕 ⭐⭐⭐',                    power:74, atk:74, mid:74, def:74},
-    {name:'Seattle Sounders FC',        fict:'Seattle GB',      alias:'🇺🇸 Seattle GB - Seattle Sounders FC - 1ª 👕 ⭐⭐⭐',               power:74, atk:74, mid:74, def:74},
-    {name:'Orlando City SC',            fict:'Orlando PW',      alias:'🇺🇸 Orlando PW - Orlando City SC - 1ª 👕 ⭐⭐🌗',                   power:72, atk:72, mid:72, def:72},
-    {name:'Houston Dynamo FC',          fict:'Houston O',       alias:'🇺🇸 Houston O - Houston Dynamo FC - 1ª 👕 ⭐⭐🌗',                  power:71, atk:71, mid:71, def:71},
-    {name:'Chicago Fire FC',            fict:'Chicago RW',      alias:'🇺🇸 Chicago RW - Chicago Fire FC - 1ª 👕 ⭐⭐🌗',                   power:71, atk:71, mid:71, def:71},
-    /* SAUDI PRO LEAGUE (4) — licencia oficial. */
-    {name:'Al Hilal SFC',       power:82, atk:83, mid:82, def:81},
-    {name:'Al Nassr FC',        power:81, atk:82, mid:81, def:80},
-    {name:'Al Ittihad Club',    power:80, atk:80, mid:80, def:80},
-    {name:'Al Ahli Saudi FC',   power:79, atk:79, mid:79, def:79},
-    /* QATAR STARS LEAGUE (2) — licencia oficial. */
-    {name:'Al Sadd SC',         power:74, atk:74, mid:74, def:74},
-    {name:'Al Duhail SC',       power:72, atk:72, mid:72, def:72}
+    /* ── GRUPO 1 — Arabia Saudita / EE.UU / Chile / Qatar / Malasia ── */
+    {name:'Al Hilal SFC',       group:1, power:82, atk:83, mid:82, def:81},                                       /* YA existía */
+    {name:'Inter Miami CF',     group:1, fict:'Miami BP', alias:'🇺🇸 Miami BP - Inter Miami CF - 1ª 👕 ⭐⭐⭐🌗', power:78, atk:79, mid:78, def:77}, /* YA existía */
+    {name:'Colo-Colo',          group:1, fict:'Santiago B', alias:'🇨🇱 Santiago B - Colo-Colo - 1ª 👕 ⭐⭐⭐½', power:76, atk:76, mid:76, def:76},
+    {name:'Al Sadd SC',         group:1, power:74, atk:74, mid:74, def:74},                                       /* YA existía */
+    {name:'Johor Darul Ta\'zim',group:1, power:73, atk:73, mid:73, def:73},
+    /* ── GRUPO 2 — Arabia Saudita / EE.UU / Chile / Qatar / Malasia ── */
+    {name:'Al Nassr FC',        group:2, power:81, atk:82, mid:81, def:80},                                       /* YA existía */
+    {name:'Universidad de Chile',group:2, fict:'Concepción AA', alias:'🇨🇱 Concepción AA - Universidad de Chile - 1ª 👕 ⭐⭐⭐', power:75, atk:75, mid:75, def:75},
+    {name:'Nashville SC',       group:2, fict:'Nashville AY', alias:'🇺🇸 Nashville AY - Nashville SC - 1ª 👕 ⭐⭐⭐', power:73, atk:73, mid:73, def:73},
+    {name:'Al Duhail SC',       group:2, power:72, atk:72, mid:72, def:72},                                       /* YA existía */
+    {name:'Kuching City',       group:2, power:68, atk:68, mid:68, def:68},
+    /* ── GRUPO 3 — Arabia Saudita / México / EAU / Tailandia / Marruecos ── */
+    {name:'Al Ittihad Club',    group:3, power:80, atk:80, mid:80, def:80},                                       /* YA existía */
+    {name:'Al-Ahli Club',       group:3, power:78, atk:79, mid:78, def:77},
+    {name:'Club América',       group:3, power:77, atk:77, mid:77, def:77},                                       /* YA existía */
+    {name:'Buriram United',     group:3, power:74, atk:75, mid:74, def:73},
+    {name:'RS Berkane',         group:3, power:73, atk:73, mid:73, def:73},
+    /* ── GRUPO 4 — Arabia Saudita / México / EAU / Tailandia / Marruecos ── */
+    {name:'Al Ahli Saudi FC',   group:4, power:79, atk:79, mid:79, def:79},                                       /* YA existía */
+    {name:'Tigres UANL',        group:4, power:76, atk:76, mid:76, def:76},                                       /* YA existía */
+    {name:'Al Wahda',           group:4, power:73, atk:73, mid:73, def:73},
+    {name:'Port FC',            group:4, power:71, atk:71, mid:71, def:71},
+    {name:'MAS Fez',            group:4, power:70, atk:70, mid:70, def:70},
+    /* ── GRUPO 5 — Brasil / Argentina / Corea / Japón / Colombia ── */
+    {name:'SE Palmeiras',       group:5, power:81, atk:81, mid:81, def:81},                                       /* YA existía */
+    {name:'CA Boca Juniors',    group:5, power:80, atk:80, mid:80, def:80},                                       /* YA existía */
+    {name:'Ulsan HD',           group:5, power:77, atk:78, mid:77, def:76},
+    {name:'FC Machida Zelvia',  group:5, power:74, atk:74, mid:74, def:74},
+    {name:'Independiente Medellín',group:5, fict:'Medellín RA', alias:'🇨🇴 Medellín RA - Independiente Medellín - 1ª 👕 ⭐⭐⭐', power:74, atk:74, mid:74, def:74},
+    /* ── GRUPO 6 — Brasil / Argentina / Corea / Japón / Colombia ── */
+    {name:'CR Flamengo',        group:6, power:81, atk:82, mid:81, def:80},                                       /* YA existía */
+    {name:'CA River Plate',     group:6, power:80, atk:81, mid:80, def:79},                                       /* YA existía */
+    {name:'FC Seoul',           group:6, power:74, atk:74, mid:74, def:74},
+    {name:'Kashiwa Reysol',     group:6, power:73, atk:73, mid:73, def:73},
+    {name:'América de Cali',    group:6, fict:'Cali R', alias:'🇨🇴 Cali R - América de Cali - 1ª 👕 ⭐⭐⭐', power:73, atk:73, mid:73, def:73}
   ];
   /* ── Resolución FICT → NOMBRE REAL (2026-06-03) ─────────────────────
      Petición usuario: en el Mundialito de Clubes algunos equipos
@@ -56644,6 +56849,111 @@ https://api.sofascore.app/api/v1/team/44/image
       return name;                        /* desconocido → sin cambios */
     };
   })();
+  /* ── Grupos de Resto del Mundo (2026-08-16) ──────────────────────────
+     `_rmGroupOf(name)` resuelve el grupo (1-6) de un equipo por nombre
+     desde el catálogo maestro `RESTO_MUNDO_TEAMS` (mismo criterio de
+     normalización que `_rmRealName`, reconoce nombre real O fict).
+     `_rmTeamGroup(t)` resuelve el grupo de un objeto `team` YA
+     PERSISTIDO: prioriza `t.group` (el campo que vive en
+     `ligaExt_resto-mundo`, sobrevive a un renombrado del equipo) y solo
+     cae a `_rmGroupOf(t.name)` si `t.group` no es un 1-6 válido
+     (equipo legacy/añadido a mano sin el campo). Devuelve 0 si no
+     puede resolver ningún grupo — los consumidores (simulación, tabla
+     por grupos, pools de Intercontinental/Mundialito) DEBEN tratar 0
+     como "sin grupo asignado" (excluir, nunca agrupar con el 0 de
+     otro equipo). Expuestos en window: otras IIFEs de este archivo
+     (motor de Intercontinental, editor del Mundialito) leen
+     `ligaExt_resto-mundo` por su cuenta desde localStorage, sin acceso
+     al closure de `RESTO_MUNDO_TEAMS`. */
+  window._rmGroupOf = (function(){
+    function _rmn(s){
+      return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').trim().toLowerCase();
+    }
+    var byName = {};
+    RESTO_MUNDO_TEAMS.forEach(function(spec){
+      if (!spec || !(spec.group >= 1 && spec.group <= 6)) return;
+      if (spec.name) byName[_rmn(spec.name)] = spec.group;
+      if (spec.fict) byName[_rmn(spec.fict)] = spec.group;
+    });
+    return function(name){
+      var g = byName[_rmn(name)];
+      return (g >= 1 && g <= 6) ? g : 0;
+    };
+  })();
+  window._rmTeamGroup = function(t){
+    if (!t) return 0;
+    var g = Number(t.group);
+    if (g >= 1 && g <= 6) return g;
+    return window._rmGroupOf(t.name);
+  };
+  /* ¿Este documento `ligaExt_resto-mundo` ya está en el formato nuevo
+     (6 grupos de 5, cada equipo con `group` 1-6)? El formato viejo
+     (43/44 equipos, liga plana a una vuelta + copa) nunca lleva este
+     campo. No exige longitud exacta (30) — un admin puede añadir/
+     quitar un equipo a mano sin que eso dispare una migración; lo
+     único que importa es que TODOS los equipos presentes tengan grupo
+     válido (lo que solo ocurre tras pasar por el seed/migración
+     nuevos). */
+  function _rmIsNewFormat(d){
+    return !!(d && Array.isArray(d.teams) && d.teams.length > 0 &&
+      d.teams.every(function(t){ var g = Number(t && t.group); return g >= 1 && g <= 6; }));
+  }
+  /* Roster fresco de los 30 de RESTO_MUNDO_TEAMS, con `group` sellado
+     por equipo (fuente única de la migración y del seed en blanco). */
+  function _rmBuildFreshTeams(){
+    return RESTO_MUNDO_TEAMS.map(function(spec, idx){
+      return {
+        id: 'rm-' + (idx + 1),
+        name: spec.name,
+        group: spec.group,
+        power: spec.power, atk: spec.atk, mid: spec.mid, def: spec.def,
+        aggressiveness: 50,
+        shield: '', stadium: '', efootballAlias: spec.alias || '', budget: 0,
+        players: [],
+        isHuman: false, humanEmoji: ''
+      };
+    });
+  }
+  /* Migra un documento VIEJO (43/44 equipos plano + copa, o cualquier
+     `ligaExt_resto-mundo` sin `group` válido en todos sus equipos) al
+     formato nuevo de 6 grupos de 5. Roster fresco de los 30 de
+     RESTO_MUNDO_TEAMS + BACKFILL por nombre normalizado (mismo
+     criterio que `_lextBackfillShields`/`_lextBackfillRoster`) de
+     `players`/`shield`/`stadium`/`efootballAlias`/`budget` desde el
+     equipo del roster viejo con el MISMO nombre — "los que ya
+     tenemos los mantenemos igual" (petición usuario 2026-08-16):
+     conserva plantilla/escudo/alias editados a mano por el admin para
+     los 13 equipos que sobreviven al nuevo catálogo. `results`/`copa`
+     se BORRAN — el formato de competición cambió por completo, una
+     clasificación/copa del torneo viejo no tiene ningún sentido en el
+     nuevo (grupos distintos, sin copa). NUNCA usa `updatedAt`/sellos
+     del documento viejo para el nuevo (es un documento distinto). */
+  function _rmMigrateToGroupsFormat(oldData){
+    var fresh = _rmBuildFreshTeams();
+    var byOldName = {};
+    (oldData && Array.isArray(oldData.teams) ? oldData.teams : []).forEach(function(t){
+      if (t && t.name) byOldName[_lextNormName(t.name)] = t;
+    });
+    fresh.forEach(function(t){
+      var old = byOldName[_lextNormName(t.name)];
+      if (!old) return;
+      if (old.players && old.players.length) t.players = old.players;
+      if (old.shield) t.shield = old.shield;
+      if (old.stadium) t.stadium = old.stadium;
+      if (old.efootballAlias) t.efootballAlias = old.efootballAlias;
+      if (old.budget) t.budget = old.budget;
+    });
+    var cfgOld = (oldData && oldData.config) || {};
+    return {
+      teams: fresh,
+      results: [],
+      copa: null,
+      config: {
+        zones: { ucl:0, uclPrev:0, prevR3:0, prevR2:0, prevR1:0, uel:0, uecl:0, intercontinental:6, mundialClubes:16, desc:0 },
+        logo: cfgOld.logo || '', name: cfgOld.name || '', cupName: '', cupLogo: ''
+      }
+    };
+  }
   function _upgradeRestoMundoZones(){
     /* Migración para usuarios con la liga ya sembrada:
          - Pre 2026-05-26: zones sin recopa/mundialClubes → set 6/16.
@@ -57109,6 +57419,26 @@ https://api.sofascore.app/api/v1/team/44/image
         if (curData && Array.isArray(curData.teams) && curData.teams.length > 0) hasTeams = true;
       }
     } catch(_){}
+    /* MIGRACIÓN al formato de 6 grupos de 5 (2026-08-16, CLAUDE.md
+       "Resto del Mundo — REDISEÑO COMPLETO"): si esta liga YA tiene
+       equipos pero NO están en el formato nuevo (viejo = 43/44 equipos
+       plano sin `group`, o datos resucitados de un `_protected`/
+       snapshot/servidor desactualizado), la migramos AHORA MISMO —
+       roster fresco de los 30 de RESTO_MUNDO_TEAMS con backfill por
+       nombre de plantilla/escudo/estadio/alias/presupuesto de los
+       equipos que coincidan (los 13 que "ya teníamos"), y BORRAMOS
+       resultados/copa (el formato de competición cambió por completo).
+       Corre en CADA boot — NO es un fixup de un solo uso con flag —
+       para auto-sanar si algún dispositivo/backup/servidor resucita
+       datos del formato viejo más adelante. */
+    if (hasTeams && !_rmIsNewFormat(curData)) {
+      var _rmMigrated = _rmMigrateToGroupsFormat(curData);
+      try { window._lsSetSafe('ligaExt_' + slug, JSON.stringify(_rmMigrated)); } catch(_){}
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+      try { if (typeof LIGA_CACHE !== 'undefined') LIGA_CACHE[slug] = _rmMigrated; } catch(_){}
+      try { console.warn('[ligaExt] '+slug+': migrado al formato de 6 grupos de 5 (30 equipos, sin copa).'); } catch(_){}
+      return;
+    }
     /* «hasTeams» por sí solo NO basta (bug usuario 2026-07-02, «Resto del
        Mundo no guarda plantillas ni escudos»): el seed en blanco escribe
        44 equipos con NOMBRE pero `players:[]`/`shield:''`. Si ese blanco
@@ -57151,6 +57481,15 @@ https://api.sofascore.app/api/v1/team/44/image
         } catch(_){}
       }
       if (_recovRM) {
+        /* La copia recuperada puede ser del formato VIEJO (43/44
+           equipos plano, sin `group`) si `_protected`/el snapshot se
+           escribieron ANTES de la migración a 6 grupos de 5
+           (2026-08-16). Normalizarla AQUÍ (por nombre, vía
+           `_rmMigrateToGroupsFormat`) antes de usarla — evita que
+           `_lextBackfillResults` (copia `results` ENTERO, sin validar
+           ids) inyecte partidos que referencian los IDs del roster
+           VIEJO dentro de un documento ya migrado a los 30 nuevos. */
+        if (!_rmIsNewFormat(_recovRM)) _recovRM = _rmMigrateToGroupsFormat(_recovRM);
         if (isBlank && curData) {
           /* El `main` ya tiene los 44 equipos (posiblemente con zonas ya
              editadas por el admin en `config`) pero en blanco — RELLENAMOS
@@ -57185,6 +57524,9 @@ https://api.sofascore.app/api/v1/team/44/image
        responda; si no, no cambia nada. */
     try {
       _lextSeedRecoverFromServer(slug, function(_recovSrvRM){
+        /* Mismo motivo que la normalización de `_recovRM` arriba: la
+           copia del servidor puede seguir en el formato viejo. */
+        if (!_rmIsNewFormat(_recovSrvRM)) _recovSrvRM = _rmMigrateToGroupsFormat(_recovSrvRM);
         if (isBlank && curData) {
           var _chRM2 = false;
           try { if (_lextBackfillRoster(curData, _recovSrvRM)) _chRM2 = true; } catch(_){}
@@ -57209,26 +57551,19 @@ https://api.sofascore.app/api/v1/team/44/image
        comprobación del servidor de arriba sigue en vuelo y corregirá
        esto solo si encuentra algo. */
     if (isBlank) { _lextIdbTopupIfEmpty(slug); return; }
-    var teams = RESTO_MUNDO_TEAMS.map(function(spec, idx){
-      return {
-        id: 'rm-' + (idx + 1),
-        name: spec.name,
-        power: spec.power, atk: spec.atk, mid: spec.mid, def: spec.def,
-        aggressiveness: 50,
-        shield: '', stadium: '', efootballAlias: spec.alias || '', budget: 0,
-        players: [],
-        isHuman: false, humanEmoji: ''
-      };
-    });
     /* zones europeas a 0 → la clasificación no muestra franjas
-       europeas (Resto del Mundo no clasifica a UCL/UEL/UECL).
-       Recopa=6 y Mundialito=16 según petición usuario 2026-05-26:
-       los 6 primeros pasan a Copa Intercontinental (a futuro, cuando
-       cada equipo complete sus 42 partidos de liga) y los 16 primeros
-       clasifican al Mundialito (manual cada 4 temporadas). */
+       europeas (Resto del Mundo no clasifica a UCL/UEL/UECL, sigue en
+       EUROPE_BLACKLIST). intercontinental:6/mundialClubes:16 quedan
+       solo como valores INFORMATIVOS de la leyenda — la selección REAL
+       (2026-08-16) es SIEMPRE por grupo: 1 ganador de cada uno de los
+       6 grupos → Intercontinental (cada temporada); 2 primeros de cada
+       grupo + los 4 mejores terceros cruzados → Mundialito (16, cada
+       4 temporadas). Sin Copa (`copa:null` — la ÚNICA liga externa sin
+       copa nacional). */
     var data = {
-      teams: teams,
+      teams: _rmBuildFreshTeams(),
       results: [],
+      copa: null,
       config: {
         zones: { ucl:0, uclPrev:0, prevR3:0, prevR2:0, prevR1:0, uel:0, uecl:0, intercontinental:6, mundialClubes:16, desc:0 },
         logo: '', cupName: '', cupLogo: ''
@@ -58810,6 +59145,10 @@ https://api.sofascore.app/api/v1/team/44/image
     });
   }
   function _lecEnsureCopa(data){
+    /* Resto del Mundo NUNCA tiene copa (2026-08-16, CLAUDE.md
+       "REDISEÑO COMPLETO") — guard defensivo aunque el botón 🏆 Copa
+       ya esté oculto para esta liga en `s-liga-ext`. */
+    if(CURRENT_KEY === 'resto-mundo') return null;
     if(!data.copa){
       var fmt = _lecDetectFormat(data);
       if(fmt < 12) return null;
@@ -58830,6 +59169,7 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   function _lecRunAllAuto(){
     if(!CURRENT_KEY){ alert('⚠️ No hay liga activa.'); return; }
+    if(CURRENT_KEY === 'resto-mundo'){ alert('⚠️ Resto del Mundo no tiene Copa.'); return; }
     var data = loadData(CURRENT_KEY);
     if(!data){ alert('⚠️ No hay datos de la liga.'); return; }
     var fmt = _lecDetectFormat(data);
@@ -59456,6 +59796,9 @@ https://api.sofascore.app/api/v1/team/44/image
      hasta el próximo toggle/apertura manual. */
   window._lecRenderReglas = _lecRenderReglas;
   window.lextCopaOpen = function(){
+    /* Resto del Mundo no tiene copa (2026-08-16) — el botón 🏆 ya está
+       oculto para esta liga (`openLigaExt`), guard defensivo. */
+    if(CURRENT_KEY === 'resto-mundo') return;
     /* 2026-05-06 flash-fix: el patrón previo `go(); setTimeout(render,30)`
        dejaba ver durante ~30 ms (y a veces mucho más en móvil
        lento) la pantalla con los datos de la COPA ANTERIOR (p.ej.

@@ -3791,7 +3791,17 @@ def _is_dead_merged_league_slug(rest):
     if not rest:
         return False
     for slug in DEAD_MERGED_LEAGUE_SLUGS:
-        if rest == slug or rest.startswith(slug + "_"):
+        if rest == slug:
+            return True
+        # El sufijo derivado (_protected/_snap_<ts>/_backup) puede llevar
+        # "_" (convención actual del escritor) O "-" (restos de una
+        # convención anterior, confirmados en datos reales de producción:
+        # `liga_ext_grecia-backup`, `liga_ext_alemania-snap-<ts>`). Sin
+        # aceptar ambos, estas filas seguían sirviéndose en cada
+        # bulk-restore y sobrevivían INTACTAS al botón "eliminar del
+        # servidor" (2026-08-16, petición usuario — llevaban regresando
+        # pese a purgarlas "no sé cuántas veces").
+        if rest.startswith(slug + "_") or rest.startswith(slug + "-"):
             return True
     return False
 
@@ -3814,41 +3824,52 @@ def _dead_league_empty_get(slug, extra=None):
     return out
 
 
-@app.route("/api/admin/purge-dead-leagues", methods=["POST"])
-@admin_required
-def api_admin_purge_dead_leagues():
+def _purge_dead_merged_leagues():
     """Borra PERMANENTEMENTE de la base de datos las filas de las 43
     ligas menores que se fusionaron en liga-mixta-1..9, MÁS las propias
     liga-mixta-1..9 (ANIQUILADAS por completo, ver `DEAD_MERGED_LEAGUE_SLUGS`).
     Incluye el `main` de cada una (`liga_ext_<slug>`) y todos sus derivados
-    (`_protected`, `_snap_<ts>`, `_backup`, cualquier sufijo futuro).
+    (`_protected`, `_snap_<ts>`, `_backup`, cualquier sufijo futuro, con
+    separador `_` o `-`).
 
-    Idempotente: si ya se borraron (o nunca existieron), no hace nada
-    y devuelve deleted_count=0 — se puede pulsar más de una vez sin
-    riesgo. Requiere sesión admin (PIN 747, igual que el resto de
-    acciones destructivas de "Resto de Ligas")."""
+    Idempotente: si ya se borraron (o nunca existieron), no hace nada y
+    devuelve `[]` — se puede llamar tantas veces como haga falta sin
+    riesgo. Devuelve la lista de claves borradas.
+
+    Extraída (2026-08-16, petición usuario "no quiero tener que eliminar
+    ligas antiguas que ya debías haber eliminado") del endpoint admin
+    para poder llamarla TAMBIÉN automáticamente en cada arranque del
+    servidor, sin depender de que nadie pulse un botón con PIN — las
+    filas quedan borradas de la BD en cuanto el fix se despliega, para
+    los 6 dispositivos, sin acción humana."""
     try:
         rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
     except Exception:
         rows = []
-    prefixes = tuple(f"liga_ext_{slug}" for slug in DEAD_MERGED_LEAGUE_SLUGS)
     deleted_keys = []
     for row in rows or []:
         clave = row.clave or ""
-        # Match exacto (el "main") o con sufijo "_algo" (protected/snap/backup).
-        # No basta con `startswith`: "liga_ext_alemania" no debe borrar
-        # "liga_ext_alemania-otra-cosa" si algún día existiera un slug así.
-        hit = False
-        for prefix in prefixes:
-            if clave == prefix or clave.startswith(prefix + "_"):
-                hit = True
-                break
-        if not hit:
+        if not clave.startswith("liga_ext_"):
+            continue
+        rest = clave[len("liga_ext_"):]
+        if not _is_dead_merged_league_slug(rest):
             continue
         deleted_keys.append(clave)
         db.session.delete(row)
     if deleted_keys:
         db.session.commit()
+    return deleted_keys
+
+
+@app.route("/api/admin/purge-dead-leagues", methods=["POST"])
+@admin_required
+def api_admin_purge_dead_leagues():
+    """Endpoint manual (PIN 747) que envuelve `_purge_dead_merged_leagues`
+    — se conserva para poder disparar el purgado a mano si en el futuro
+    se añaden nuevas ligas a `DEAD_MERGED_LEAGUE_SLUGS` sin esperar al
+    próximo despliegue/reinicio. El purgado AUTOMÁTICO de arranque (ver
+    `with app.app_context()` más abajo) ya cubre el caso normal."""
+    deleted_keys = _purge_dead_merged_leagues()
     return jsonify({
         "ok": True,
         "deleted_count": len(deleted_keys),
@@ -5717,6 +5738,19 @@ with app.app_context():
         _load_player_flags_on_startup()
     except Exception:
         pass
+    # Purga AUTOMÁTICA de ligas fantasma en cada arranque (2026-08-16,
+    # petición usuario: "no quiero tener que eliminar ligas antiguas que
+    # ya debías haber eliminado"). Antes esto exigía que el admin pulsara
+    # un botón con PIN — ahora se ejecuta sola en cuanto el servidor
+    # arranca, sin que ningún humano tenga que hacer nada. Idempotente y
+    # barata (no-op si ya no queda nada que borrar), envuelta en
+    # try/except para que un fallo aquí NUNCA impida arrancar el servidor.
+    try:
+        _deleted = _purge_dead_merged_leagues()
+        if _deleted:
+            print(f"[purga-arranque] {len(_deleted)} filas de ligas fantasma eliminadas: {sorted(_deleted)}")
+    except Exception as _e:
+        print(f"[purga-arranque] fallo no crítico: {_e}")
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

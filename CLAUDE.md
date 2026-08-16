@@ -107,6 +107,107 @@ ningún caller — no se han eliminado por si algo externo los invocara.
    `templates/index.html` + `PRECACHE` de `static/js/sw.js` (regla ya
    obligatoria) — este cambio ya lo cumple (9.42→9.43).
 
+## Catálogo de balones RENOVADO — reset completo del inventario + reasignación por competición (obligatorio, 2026-08-16)
+
+**Petición usuario 2026-08-16** ("hay una actualización de Balones…
+como no me deja eliminar desde el Ball store los Balones espero que
+tú sí puedas hacerlo, elimina todos los Balones y aparte de añadir
+estos nuevos, asigna cada Competición los Balones"): el juego
+eFootball renovó su surtido de balones oficiales (capturas del propio
+juego con el catálogo actual) y el 🗑 del inventario de
+`s-admin-balls` (`adminBallDelete`) es manual, uno a uno — sin forma
+de vaciar todo de golpe desde la UI para reemplazar el catálogo
+entero.
+
+### Tabla definitiva (BALÓN OFICIAL POR COMPETICIÓN)
+
+| Competición | Balón | BALL_DB key |
+|---|---|---|
+| Liga EA Sports | Ligue 1 McDonald's Official Match Ball | `liga` |
+| Copa del Rey | Ligue 2 BKT Official Match Ball | `copa` |
+| Supercopa de España | PUMA STELLAR NITRO Ultimate | `supercopa` |
+| Champions League | PARADISE (Purple Edition) | `champions` |
+| Europa League | Resmi Maç Topudur | `uel` |
+| Conference League | F5N5000-TL | `uecl` |
+| Recopa de Europa | eFootball™ Contact 27 | `recopa` |
+| Supercopa de Europa | Vantaggio 5000 | `usc` |
+| Fase Previa Champions | PARADISE (Blue Edition) | `ucl-previa` |
+| Fase Final Selecciones | TRIONDA PRO | `selecciones` |
+| Selecciones · Clasif. (J1-J8) | Orbita (Africa) | `sel-clasif` |
+| Copa Intercontinental | eFootball™ Origin | `intercontinental` |
+| Clasificatorias / Repesca | NIKE CONTROL CBF | `clasif` |
+| Amistosos Pretemporada | eFootball™ Origin | `amistosos` |
+| Partidos con Nieve | eFootball™ MAX VIS 27 | `snow` |
+| Superliga · extra | VriendenLoterij Eredivisie official match ball season 26/27 | `superliga` |
+| Torneos de Verano · extra | Steller Nitro Ultimate SPFL | `verano` |
+| Mundialito de Clubes · extra | PUMA Orbita MFL 1 | `mundialito` |
+
+"Selecciones · custom" (TRIONDA PRO / Orbita Africa) no es una fila
+nueva de `BALL_DB` — son los 2 balones que ya cubren cualquier
+competición de selecciones que el admin añada a mano desde
+"+ AÑADIR COMPETICIÓN" (ambos ya viven en el inventario vía
+`selecciones`/`sel-clasif`).
+
+**Matiz — "Selecciones J9 en adelante" (`cal-sel9`/`cal-sel10`, fase
+de mayo de la clasificatoria) NO forma parte de esta tabla.** Sigue
+usando NIKE CONTROL CBF (regla "Balón fijo Selecciones por jornada",
+sección de más abajo) porque es conceptualmente la MISMA fase que
+"Clasificatorias / Repesca" — nunca ha sido "Fase Final Selecciones"
+(esa es exclusivamente el bracket de Mundial-48, `_selFromTour`, que
+sí pasa a TRIONDA PRO).
+
+### Fix — 3 puntos que DEBEN mantenerse sincronizados + fixup one-shot
+
+1. **`window.BALL_DB`** (`misc_body_2.html`, catálogo de 14 filas +
+   `_EXTRA_REAL_COMPS` con las 3 extra) — el `id` de cada fila es lo
+   que ve el admin en `s-admin-balls` como balón "por defecto" de esa
+   competición (`ov[b.key] || b.id`).
+2. **`COMP_BALL`** (`index.bundle.js`, dentro de `_buildItems`) — la
+   tabla de strings hardcoded que decide el balón REAL de cada
+   partido cuando el admin NO ha guardado un override explícito en
+   `ball_by_comp_v1`. Es una tabla INDEPENDIENTE de `BALL_DB` (usa
+   texto con espacios, no el id con guiones bajos) — **las dos deben
+   editarse a la vez**, nunca solo una.
+3. **`_fixupBallCatalogV1()`** (`misc_body_2.html`, IIFE one-shot
+   junto a `_EXTRA_REAL_COMPS`, flag `ftbol_fixup_ball_catalog_v1`):
+   REEMPLAZA POR COMPLETO (nunca fusiona) `ball_inventory_v1` y
+   `ball_by_comp_v1` con el catálogo definitivo de `BALL_DB` +
+   `_EXTRA_REAL_COMPS` — es el "elimina todos los Balones y asigna
+   los nuevos" pedido por el usuario, corre UNA vez por dispositivo y
+   empuja el resultado al servidor (`_ballKvPost`) para que se
+   propague al resto. **NO toca** `ball_comp_db_v1` (competiciones
+   custom que el admin haya añadido a mano) — solo el inventario y su
+   asignación por competición.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** editar `BALL_DB`/`_EXTRA_REAL_COMPS` sin editar
+   `COMP_BALL` a la vez (o viceversa): son 2 fuentes de verdad
+   paralelas — una para lo que ve el admin en el picker, otra para el
+   balón real del partido cuando no hay override guardado. Editar solo
+   una dejaría el picker mostrando un balón que el partido no usa (o
+   al revés).
+2. **PROHIBIDO** reintroducir los ids/nombres viejos que este catálogo
+   sustituye (`TSUBASA_J_PRO`, `Puma_Orbita_Portugal_25-26`,
+   `eFootball_Contact_26`, `The_Brillant_Super_USL_v25`,
+   `Derbystar_Globall_25-26`, `eFootball_MAX_VIS_26`, o cualquier
+   balón que ya no aparezca en la tabla de arriba) como default de
+   ninguna competición.
+3. **PROHIBIDO** que un reset de catálogo futuro (si el juego vuelve a
+   renovar el surtido de balones) fusione con `ball_inventory_v1`
+   existente en vez de reemplazarlo: el mismo patrón de
+   `_fixupBallCatalogV1` (flag one-shot + reemplazo completo + push al
+   servidor) es el que hay que reutilizar — no hace falta un mecanismo
+   de borrado por-item cuando lo que se pide es "vaciar todo y volver
+   a poblar".
+4. Toda competición NUEVA que se añada a `BALL_DB`/`_EXTRA_REAL_COMPS`
+   en el futuro hereda automáticamente el picker del admin y el
+   inventario — pero necesita su propia entrada en `COMP_BALL` (con el
+   compKey REAL que usa esa competición en `_buildItems`, no solo la
+   key de `BALL_DB`) para que el balón se aplique de verdad al partido,
+   igual que ya documenta la sección "Balón asignado por competición"
+   más abajo.
+
 ## Previa Champions — cada Ronda con SU color + no se apaga al simular + botones cortos (obligatorio, 2026-08-16)
 
 **Petición usuario 2026-08-16** (pantalla "UCL · Previa de Champions",

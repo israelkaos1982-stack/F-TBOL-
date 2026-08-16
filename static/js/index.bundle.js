@@ -456,8 +456,8 @@ window.TEAM_STADIUMS = {
   'Arsenal':                'EMIRATES STADIUM',
   'Sporting CP':            'STADIO ORIONE',
   // --- LA LIGA ---
-  'Atlético Madrid':        'STADIO ORIONE',
-  'Atletico Madrid':        'STADIO ORIONE',
+  'Atlético Madrid':        'EMIRATES STADIUM',
+  'Atletico Madrid':        'EMIRATES STADIUM',
   'Real Sociedad':          'SAITAMA STADIUM 2002',
   'Real Betis':             'MORUMBIS',
   'Betis':                  'MORUMBIS',
@@ -6449,47 +6449,53 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
     }
     // Ball name por competición
+    /* Catálogo de balones renovado 2026-08-16 (petición usuario,
+       "actualización de Balones" — tabla "BALÓN OFICIAL POR
+       COMPETICIÓN (Definitivo y Completo)"). Debe mantenerse en
+       sincronía con `window.BALL_DB` / `_EXTRA_REAL_COMPS`
+       (misc_body_2.html) — estos son SOLO el fallback cuando el
+       admin no ha guardado ningún override en `ball_by_comp_v1`. */
     var COMP_BALL = {
       'liga':       "Ligue 1 McDonald's Official Match Ball",
-      'copa':       "TSUBASA J PRO",
-      'copa-fin':   "TSUBASA J PRO",
-      'sc':         "Puma Orbita MFL 1",
-      'sc-final':   "Puma Orbita MFL 1",
-      'usc':        "eFootball Contact 26",
-      'usc-fin':    "eFootball Contact 26",
+      'copa':       "Ligue 2 BKT Official Match Ball",
+      'copa-fin':   "Ligue 2 BKT Official Match Ball",
+      'sc':         "PUMA STELLAR NITRO Ultimate",
+      'sc-final':   "PUMA STELLAR NITRO Ultimate",
+      'usc':        "Vantaggio 5000",
+      'usc-fin':    "Vantaggio 5000",
       'ucl':        "PARADISE Morado",
       'ucl-fin':    "PARADISE Morado",
       'uel':        "Resmi Maç Topudur",
       'uel-fin':    "Resmi Maç Topudur",
-      'uecl':       "The Brillant Super USL v25",
-      'uecl-fin':   "The Brillant Super USL v25",
-      'inter':      "Derbystar Globall 2025/26",
-      'inter-fin':  "Derbystar Globall 2025/26",
-      'recopa':     "PARADISE Azul",
-      'recopa-fin': "PARADISE Azul",
+      'uecl':       "F5N5000-TL",
+      'uecl-fin':   "F5N5000-TL",
+      'inter':      "eFootball Origin",
+      'inter-fin':  "eFootball Origin",
+      'recopa':     "eFootball Contact 27",
+      'recopa-fin': "eFootball Contact 27",
       'eur-grupo':  "PARADISE Morado",
       'eur-ko':     "PARADISE Morado",
       'eur-fin':    "PARADISE Morado",
       'sel':        "NIKE CONTROL CBF",
-      'sel-fin':    "NIKE CONTROL CBF",
+      'sel-fin':    "TRIONDA PRO",
       'amistoso':   "eFootball Origin",
-      'superliga':  "PARADISE Morado",
+      'superliga':  "VriendenLoterij Eredivisie official match ball season 26/27",
       /* Torneos de Verano — todas las variantes (Joan Gamper, Asian,
          Pre-Season Super, Soccer Champions Tour, genéricos…)
          comparten balón con la fila "verano" de Ball Storage. Sin
          este default las cards salían con `Ligue 1 McDonald's`
          porque COMP_BALL['torneo'] no estaba definido (bug
          FOTO 2026-05-25). */
-      'torneo':     "eFootball Origin",
-      'torneos':    "eFootball Origin",
-      'sct':        "eFootball Origin",
-      'jg':         "eFootball Origin",
-      'pss':        "eFootball Origin",
-      'asia':       "eFootball Origin",
-      'verano':     "eFootball Origin",
+      'torneo':     "Steller Nitro Ultimate SPFL",
+      'torneos':    "Steller Nitro Ultimate SPFL",
+      'sct':        "Steller Nitro Ultimate SPFL",
+      'jg':         "Steller Nitro Ultimate SPFL",
+      'pss':        "Steller Nitro Ultimate SPFL",
+      'asia':       "Steller Nitro Ultimate SPFL",
+      'verano':     "Steller Nitro Ultimate SPFL",
       /* Mundialito de Clubes — compKey real del partido. */
-      'mundialito': "Vantaggio 5000",
-      'mundial':    "Vantaggio 5000"
+      'mundialito': "PUMA Orbita MFL 1",
+      'mundial':    "PUMA Orbita MFL 1"
     };
     /* Override del admin desde "Ball Storage" (s-admin-balls) — el
        admin puede elegir un balón distinto por competición y se
@@ -6603,9 +6609,9 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         }
       } catch(_){}
       if (_selFromTour) {
-        /* Mundial 2032 fase final → siempre NIKE CONTROL CBF (no hay
+        /* Mundial 2032 fase final → siempre TRIONDA PRO (no hay
            subdivisión J1-J8 dentro del bracket de Mundial-48). */
-        balon = 'NIKE CONTROL CBF';
+        balon = 'TRIONDA PRO';
       } else if (_selJor >= 1 && _selJor <= 8) {
         balon = 'Orbita Africa';
       } else if (_selJor >= 9) {
@@ -6639,7 +6645,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
         }
       }
     } catch(_){}
-    /* Liga/partido en nieve → balón amarillo especial "eFootball MAX VIS 26".
+    /* Liga/partido en nieve → balón amarillo especial "eFootball MAX VIS 27".
        Antes solo se comprobaba `tiempo` (parte 0 del texto del venue-bar),
        pero la UI guarda "Invierno · ❄ Nieve" donde "Invierno" es el
        tiempo/estación y "Nieve" es el clima real. Así que revisamos
@@ -6660,7 +6666,7 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       return false;
     };
     if (_snowDetect()) {
-      balon = 'eFootball MAX VIS 26';
+      balon = 'eFootball MAX VIS 27';
     }
     // Fallback: leer del DOM si existe un balón personalizado
     var bwrap = document.getElementById('ball-wrap-' + matchKey);

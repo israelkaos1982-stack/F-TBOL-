@@ -373,6 +373,55 @@ check("bracket: campos no-partido son last-write del entrante",
       m["champion"] == "A" and m["pool"] == ["A", "B", "C"])
 
 
+# ──────────────────────────────────────────────────────────────────
+# RECORTE DELIBERADO DE ACTA (`trimmedAt`, obligatorio 2026-08-16)
+# ──────────────────────────────────────────────────────────────────
+# Un dispositivo recorta el acta de un IA-vs-IA ya completado (tras sumar
+# sus goles/tarjetas/MVP a la tabla permanente) y sella `trimmedAt`. Otro
+# dispositivo todavía tiene la copia CON acta, con `ua` ANTERIOR al
+# recorte — el recorte debe ganar (ya vio ese acta, no hay nada que
+# perder al no resucitarla).
+old = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2,
+                       "events": [{"type": "gol", "player": "Mbappe", "team": "a"}],
+                       "home": "Espana", "away": "Libano", "ua": 100}})
+new = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2, "ua": 100, "trimmedAt": 500}},
+           "2026-08-16T10:00:00.000Z")
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: recorte deliberado (trimmedAt >= ua del acta) gana — no se resucita",
+      "events" not in m["results"]["g0_0_0"] and m["results"]["g0_0_0"].get("trimmedAt") == 500)
+
+# El mismo recorte, pero el acta que sigue viva es MÁS RECIENTE que el
+# sello del recorte (el recorte se hizo antes de ver esa versión del
+# acta) — el acta debe seguir ganando, protección normal intacta.
+old = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2, "ua": 100, "trimmedAt": 50}})
+new = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2,
+                       "events": [{"type": "gol", "player": "Mbappe", "team": "a"}],
+                       "home": "Espana", "away": "Libano", "ua": 900}},
+           "2026-08-16T11:00:00.000Z")
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: trimmedAt viejo NO resucita — el acta más reciente sigue ganando",
+      len(m["results"]["g0_0_0"].get("events", [])) == 1)
+
+# Copa del Rey — mismo principio con `_copa_pick_result`.
+old = {"resultados": {"r16": [{"jugado": True, "gl": 2, "gv": 0,
+                                "team_a": "A", "team_b": "B",
+                                "ua": 100, "trimmedAt": 700}]}}
+new = {"resultados": {"r16": [{"jugado": True, "gl": 2, "gv": 0,
+                                "events": [{"type": "gol"}], "ua": 100}]}}
+m = copa_state_merge(json.dumps(old), new)
+check("copa: recorte deliberado (trimmedAt >= ua) gana sobre el acta",
+      "events" not in m["resultados"]["r16"][0])
+
+# Bracket genérico (Recopa/SC/USC/KO europeas/Previa/Intercontinental).
+old = {"final": {"home": "A", "away": "B", "played": True, "gh": 2, "ga": 1,
+                  "ua": 100, "trimmedAt": 900}}
+new = {"final": {"home": "A", "away": "B", "played": True, "gh": 2, "ga": 1,
+                  "events": [{"type": "gol"}], "ua": 100}}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: recorte deliberado (trimmedAt >= ua) gana sobre el acta",
+      "events" not in m["final"])
+
+
 print()
 if _fails:
     print("FALLOS:", len(_fails))

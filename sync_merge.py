@@ -148,6 +148,32 @@ def _score_pair(r):
     return None
 
 
+def _acta_trimmed_wins(no_acta, has_acta, ua_field="ua"):
+    """¿Gana el lado SIN acta porque es un RECORTE DELIBERADO de un partido
+    IA-vs-IA ya completado (obligatorio, 2026-08-16), no una pérdida
+    accidental? `trimmedAt` (ms epoch) SOLO lo sella el recorte automático
+    de acta — nunca un guardado normal de partida — y únicamente DESPUÉS
+    de haber sumado esos goles/tarjetas/MVP a la tabla permanente por
+    jugador (`pm_tally_*`). Si `trimmedAt` es posterior (o igual) al sello
+    de la copia que todavía trae el acta, el recorte se hizo CON esa
+    acta ya vista — su aportación ya vive en la tabla permanente, así que
+    resucitar el acta aquí no recupera nada, solo vuelve a inflar el
+    almacenamiento. Sin `trimmedAt` (todo partido guardado hasta ahora),
+    esta función es un no-op y el comportamiento previo (el acta SIEMPRE
+    gana) queda intacto."""
+    if not isinstance(no_acta, dict):
+        return False
+    trimmed_at = _num(no_acta.get("trimmedAt"))
+    if trimmed_at <= 0:
+        return False
+    if not isinstance(has_acta, dict):
+        return True
+    other_ts = _num(has_acta.get(ua_field))
+    if other_ts <= 0:
+        other_ts = _iso_ms(has_acta.get("updatedAt"))
+    return trimmed_at >= other_ts
+
+
 def _pick_result(ex, inc):
     """Elige el resultado ganador para un mismo matchKey presente en ambos
     lados. Jugado gana a no-jugado; entre dos jugados gana el `ua` mayor
@@ -172,11 +198,16 @@ def _pick_result(ex, inc):
         return inc
     if ex_p and not inc_p:
         return ex
-    # Mismo marcador + solo una copia trae acta → conservar el acta.
+    # Mismo marcador + solo una copia trae acta → conservar el acta, SALVO
+    # que la copia sin acta sea un recorte deliberado posterior (ver
+    # `_acta_trimmed_wins`).
     ex_a, inc_a = _acta_len(ex), _acta_len(inc)
     if (ex_a > 0) != (inc_a > 0):
         s_ex, s_inc = _score_pair(ex), _score_pair(inc)
         if s_ex is not None and s_ex == s_inc:
+            no_acta, has_acta = (ex, inc) if ex_a == 0 else (inc, ex)
+            if _acta_trimmed_wins(no_acta, has_acta):
+                return no_acta
             return ex if ex_a > inc_a else inc
     ua_ex, ua_inc = _num(ex.get("ua")), _num(inc.get("ua"))
     if ua_inc >= ua_ex:
@@ -333,6 +364,9 @@ def _copa_pick_result(ex, inc):
         return ex
     ex_a, inc_a = _acta_len(ex), _acta_len(inc)
     if (ex_a > 0) != (inc_a > 0) and _copa_score(ex) == _copa_score(inc):
+        no_acta, has_acta = (ex, inc) if ex_a == 0 else (inc, ex)
+        if _acta_trimmed_wins(no_acta, has_acta):
+            return no_acta
         return ex if ex_a > inc_a else inc
     return inc
 
@@ -485,6 +519,9 @@ def _pick_match(ex, inc):
         return ex
     ex_a, inc_a = _acta_len(ex), _acta_len(inc)
     if (ex_a > 0) != (inc_a > 0):
+        no_acta, has_acta = (ex, inc) if ex_a == 0 else (inc, ex)
+        if _acta_trimmed_wins(no_acta, has_acta):
+            return no_acta
         return ex if ex_a > inc_a else inc
     ua_ex = _num(ex.get("ua") if ex.get("ua") is not None else ex.get("updatedAt"))
     ua_inc = _num(inc.get("ua") if inc.get("ua") is not None else inc.get("updatedAt"))

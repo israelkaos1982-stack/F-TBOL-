@@ -29243,7 +29243,7 @@ document.addEventListener('DOMContentLoaded', function() {
   /* ── ENVIRONMENT ENGINE v3.0 ──────────────────────────── */
   /*
    * Rules (priority order):
-   *  1. Snow date array → SNOW + force ball eFootball_MAX_VIS_26
+   *  1. Snow date array → SNOW + force ball eFootball_MAX_VIS_27
    *  2. Match_Tag = "Final" → SOLEADO
    *  3. Default → NIGHT
    */
@@ -29252,7 +29252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     '2026-01-17','2026-01-18','2026-01-24','2026-01-25',
     '2026-02-07','2026-02-08','2026-02-14'
   ];
-  var _SNOW_BALL = 'eFootball_MAX_VIS_26';
+  var _SNOW_BALL = 'eFootball_MAX_VIS_27';
 
   window.adminGetEnvironment = function (opts) {
     /* opts: { date: 'YYYY-MM-DD', tag: 'Final'|'' } */
@@ -29275,23 +29275,27 @@ document.addEventListener('DOMContentLoaded', function() {
     return d.getFullYear() + '-' + mo + '-' + da;
   }
 
-  /* ── BALL DATABASE (14 entradas exactas del spec) ────── */
+  /* ── BALL DATABASE (14 entradas exactas del spec) ──────
+     Catálogo reescrito 2026-08-16 (petición usuario, "hay una
+     actualización de Balones" — el juego eFootball renovó el
+     surtido de balones oficiales; tabla "BALÓN OFICIAL POR
+     COMPETICIÓN (Definitivo y Completo)" dada por el usuario). */
   window.BALL_DB = [
     { key:'liga',          cat:'Nacional',    comp:'Liga EA Sports',              id:'Ligue_1_McDonalds_Official',    luz:'🌙 Noche' },
-    { key:'copa',          cat:'Nacional',    comp:'Copa del Rey',                id:'TSUBASA_J_PRO',                 luz:'🌙 Noche' },
-    { key:'supercopa',     cat:'Nacional',    comp:'Supercopa de España',         id:'Puma_Orbita_Portugal_25-26',    luz:'☀️ Sol'   },
+    { key:'copa',          cat:'Nacional',    comp:'Copa del Rey',                id:'Ligue_2_BKT_Official',          luz:'🌙 Noche' },
+    { key:'supercopa',     cat:'Nacional',    comp:'Supercopa de España',         id:'PUMA_STELLAR_NITRO_Ultimate',   luz:'☀️ Sol'   },
     { key:'champions',     cat:'Europea 🔵',  comp:'Champions League',            id:'PARADISE_Purple_Edition',       luz:'🌙 Noche' },
     { key:'uel',           cat:'Europea 🟠',  comp:'Europa League',               id:'Resmi_Maç_Topudur',             luz:'🌙 Noche' },
-    { key:'uecl',          cat:'Europea 🟢',  comp:'Conference League',           id:'The_Brillant_Super_USL_v25',    luz:'🌙 Noche' },
-    { key:'recopa',        cat:'Europea 🟤',  comp:'Recopa de Europa',            id:'PARADISE_Blue_Edition',         luz:'🌙 Noche' },
-    { key:'usc',           cat:'Europea 🇪🇺', comp:'Supercopa de Europa',         id:'eFootball_Contact_26',          luz:'☀️ Sol'   },
-    { key:'ucl-previa',    cat:'Europea 🛰',  comp:'Fase Previa Champions',       id:'Derbystar_Globall_25-26',       luz:'🌙 Noche' },
-    { key:'selecciones',   cat:'Internac.',   comp:'Fase Final Selecciones',      id:'NIKE_CONTROL_CBF',              luz:'☀️ Sol'   },
+    { key:'uecl',          cat:'Europea 🟢',  comp:'Conference League',           id:'F5N5000-TL',                    luz:'🌙 Noche' },
+    { key:'recopa',        cat:'Europea 🟤',  comp:'Recopa de Europa',            id:'eFootball_Contact_27',          luz:'🌙 Noche' },
+    { key:'usc',           cat:'Europea 🇪🇺', comp:'Supercopa de Europa',         id:'Vantaggio_5000',                luz:'☀️ Sol'   },
+    { key:'ucl-previa',    cat:'Europea 🛰',  comp:'Fase Previa Champions',       id:'PARADISE_Blue_Edition',         luz:'🌙 Noche' },
+    { key:'selecciones',   cat:'Internac.',   comp:'Fase Final Selecciones',      id:'TRIONDA_PRO',                   luz:'☀️ Sol'   },
     { key:'sel-clasif',    cat:'Internac.',   comp:'Selecciones · Clasif. (J1-J8)', id:'Orbita_Africa',               luz:'☀️ Sol'   },
-    { key:'intercontinental',cat:'Internac. 🟡',comp:'Copa Intercontinental',    id:'Vantaggio_5000',                luz:'☀️ Sol'   },
-    { key:'clasif',        cat:'Internac.',   comp:'Clasificatorias / Repesca',   id:'Ligue_2_BKT_Official',          luz:'🌙 Noche' },
+    { key:'intercontinental',cat:'Internac. 🟡',comp:'Copa Intercontinental',    id:'eFootball_Origin',              luz:'☀️ Sol'   },
+    { key:'clasif',        cat:'Internac.',   comp:'Clasificatorias / Repesca',   id:'NIKE_CONTROL_CBF',              luz:'🌙 Noche' },
     { key:'amistosos',     cat:'Especial 🤝', comp:'Amistosos Pretemporada',      id:'eFootball_Origin',              luz:'🌙 Noche' },
-    { key:'snow',          cat:'Especial ❄️', comp:'Partidos con Nieve',          id:'eFootball_MAX_VIS_26',          luz:'🌙 Noche' }
+    { key:'snow',          cat:'Especial ❄️', comp:'Partidos con Nieve',          id:'eFootball_MAX_VIS_27',          luz:'🌙 Noche' }
   ];
 
   window.adminGetBall = function (compKey, env) {
@@ -29582,10 +29586,45 @@ document.addEventListener('DOMContentLoaded', function() {
      Verano / Mundialito se listan a petición del usuario y se
      enganchan automáticamente si su módulo pasa ese compKey). */
   var _EXTRA_REAL_COMPS = [
-    { key:'superliga',  cat:'Europea 🔵', comp:'Superliga',            id:'PARADISE_Purple_Edition', luz:'🌙 Noche', _extra:true },
-    { key:'verano',     cat:'Especial 🤝', comp:'Torneos de Verano',   id:'eFootball_Origin',        luz:'☀️ Sol',  _extra:true },
-    { key:'mundialito', cat:'Internac. 🟡', comp:'Mundialito de Clubes', id:'Vantaggio_5000',        luz:'☀️ Sol',  _extra:true }
+    { key:'superliga',  cat:'Europea 🔵', comp:'Superliga',            id:'VriendenLoterij_Eredivisie_26-27', luz:'🌙 Noche', _extra:true },
+    { key:'verano',     cat:'Especial 🤝', comp:'Torneos de Verano',   id:'Steller_Nitro_Ultimate_SPFL', luz:'☀️ Sol',  _extra:true },
+    { key:'mundialito', cat:'Internac. 🟡', comp:'Mundialito de Clubes', id:'PUMA_Orbita_MFL_1',      luz:'☀️ Sol',  _extra:true }
   ];
+
+  /* ── FIXUP ONE-SHOT — catálogo de balones renovado (2026-08-16) ──
+     Petición usuario ("hay una actualización de Balones… como no me
+     deja eliminar desde el Ball store los Balones espero que tú sí
+     puedas hacerlo"): el 🗑 del inventario (`adminBallDelete`) es
+     manual, uno a uno — sin forma de vaciar todo de golpe desde la
+     UI. Este fixup REEMPLAZA POR COMPLETO (no fusiona) el inventario
+     (`ball_inventory_v1`) y la asignación por competición
+     (`ball_by_comp_v1`) con el catálogo definitivo de arriba —
+     equivale a "eliminar todos los balones viejos + añadir los
+     nuevos + asignarlos", corre UNA vez por dispositivo (flag
+     `ftbol_fixup_ball_catalog_v1`) y empuja el resultado al servidor
+     para que se propague al resto (mismo patrón que el resto de
+     fixups de este archivo, p.ej. `_fixupLeagueZonesV2`). NO toca
+     `ball_comp_db_v1` (competiciones custom que el admin haya
+     añadido a mano) — solo el inventario de balones y su asignación. */
+  (function _fixupBallCatalogV1(){
+    var FLAG = 'ftbol_fixup_ball_catalog_v1';
+    try { if (localStorage.getItem(FLAG)) return; } catch(_){ return; }
+    var seen = {}, inv = [];
+    function pushId(id){ if (id && !seen[id]) { seen[id] = 1; inv.push(id); } }
+    (window.BALL_DB || []).forEach(function(b){ pushId(b && b.id); });
+    _EXTRA_REAL_COMPS.forEach(function(b){ pushId(b && b.id); });
+    var ov = {};
+    (window.BALL_DB || []).forEach(function(b){ if (b && b.key && b.id) ov[b.key] = b.id; });
+    _EXTRA_REAL_COMPS.forEach(function(b){ if (b && b.key && b.id) ov[b.key] = b.id; });
+    try { window._lsSetSafe(_BALL_INV_KEY, JSON.stringify(inv)); } catch(_){}
+    try { window._lsSetSafe(_BALL_OVERRIDE_KEY, JSON.stringify(ov)); } catch(_){}
+    _ballMarkLocalWrite(_BALL_INV_KEY);
+    _ballMarkLocalWrite(_BALL_OVERRIDE_KEY);
+    _ballKvPost(_BALL_INV_KEY, inv);
+    _ballKvPost(_BALL_OVERRIDE_KEY, ov);
+    try { localStorage.setItem(FLAG, '1'); } catch(_){}
+  }());
+
   /* Lista efectiva = 14 base + reales que faltaban + custom. Dedup
      por key (gana la primera aparición → base manda). */
   function _effectiveCompList(){
@@ -29883,7 +29922,7 @@ document.addEventListener('DOMContentLoaded', function() {
       + '<div class="admin-env-title">ENTORNO HOY · ' + _todayISODate() + '</div>'
       + '<div style="padding:8px 0 0;display:flex;gap:8px;flex-wrap:wrap;">'
       + '<span class="admin-env-badge">' + (env.tod==='SNOW'?'❄️':env.tod==='SOLEADO'?'☀️':'🌙') + ' ' + env.tod + '</span>'
-      + (snowActive ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.3);">Balón Override: eFootball_MAX_VIS_26</span>' : '')
+      + (snowActive ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.3);">Balón Override: eFootball_MAX_VIS_27</span>' : '')
       + '</div></div>';
 
     /* Cabecera con botón "+ Añadir Competición". */
@@ -29951,7 +29990,7 @@ document.addEventListener('DOMContentLoaded', function() {
     var env = window.adminGetEnvironment();
     var tod = env.tod==='SNOW'?'❄️ SNOW':env.tod==='SOLEADO'?'☀️ SOLEADO':'🌙 NIGHT';
     el.innerHTML = '<span class="admin-env-badge">' + tod + '</span>'
-      + (env.snow ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.25);">eFootball_MAX_VIS_26</span>' : '');
+      + (env.snow ? '<span class="admin-env-badge" style="color:#4de;border-color:rgba(40,200,220,.25);">eFootball_MAX_VIS_27</span>' : '');
   }
 
   /* hook into go() to render stadium/ball lists when entering those screens */

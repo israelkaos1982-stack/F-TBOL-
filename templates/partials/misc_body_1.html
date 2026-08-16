@@ -18688,7 +18688,19 @@ window._hdrCleanCache = function(){
 
    El usuario aprobó explícitamente (2026-08-16, AskUserQuestion):
      - Alcance: TODAS las competiciones con acta (Torneos/Selecciones/
-       Mundialito/Copa del Rey/Intercontinental).
+       Mundialito/Copa del Rey/Intercontinental). Implementado en esta
+       entrega: Torneos de Verano + Selecciones + Mundialito de Clubes
+       (`_pmSweepTourCfg`/`_pmSweepAllTours`, sobre `tour_<id>_v1`) y
+       Copa Intercontinental (`_pmSweepInterState`, sobre
+       `inter_state_v1`). Copa del Rey queda DELIBERADAMENTE pendiente:
+       sus rondas a doble partido (Octavos/Cuartos/Semis) tienen un
+       dedup pre-existente en `rebuildPlayerStatsStore` Source 5
+       (`'copa|' + _mkPJ(team_a,team_b)`, SIN componente de ronda/leg)
+       que ya cuenta como máximo UN leg de cada eliminatoria a doble
+       partido tras un recargo — replicar esa tabla permanente con
+       fidelidad exige entender/verificar ese comportamiento primero
+       para no producir una cifra DISTINTA a la que ya se mostraba
+       (Regla 4). Se deja para una entrega separada, ya auditada.
      - Qué queda tras recortar: SOLO el marcador (gh/ga + jugado) — nada
        de goleadores/tarjetas/MVP individual en el partido ya recortado.
      - SOLO partidos IA-vs-IA. Los partidos con CUALQUIER humano implicado
@@ -18754,8 +18766,8 @@ window._hdrCleanCache = function(){
    3. PROHIBIDO que el recorte escriba en la tabla permanente SIN
       persistir el `cfg`/estado mutado (o viceversa) — ambos pasos van
       juntos, en el mismo barrido, o un fallo a mitad podría dejar un
-      partido sin acta Y sin tabla permanente. `_pmSweepTourCfg` hace
-      ambos antes de devolver `true` (algo cambió).
+      partido sin acta Y sin tabla permanente. `_pmSweepTourCfg`/
+      `_pmSweepInterState` hacen ambos antes de devolver `true`.
    4. PROHIBIDO que un accumulator nuevo (`_pmAccumulateEvents`) sume un
       tipo de evento distinto a como lo hace `rebuildPlayerStatsStore`
       (Source 3/4/5, más arriba en este archivo) para la MISMA familia —
@@ -18769,6 +18781,13 @@ window._hdrCleanCache = function(){
    6. Toda competición NUEVA con acta hereda esto en cuanto se añada su
       propio `_pmSweepXxx` — no hay lista hardcodeada de torneos, el
       barrido de `tour_*_v1` recorre TODAS las claves presentes.
+   7. PROHIBIDO que `_pmDedupKey` deje de incluir el nombre (normalizado)
+      de los 2 equipos — solo la posición estructural (`mk`/`phase+idx`)
+      NO es una clave segura: un ♻️ Reset reutiliza la MISMA posición con
+      un emparejamiento DISTINTO, y sin los nombres en la clave el
+      partido nuevo en esa posición chocaría con la entrada vieja
+      (`if (!tally.matches[dedupKey])`) y sus estadísticas se perderían
+      para siempre (el acta ya está vacía cuando se detecta la colisión).
    ════════════════════════════════════════════════════════════════════ */
 (function(){
   var TALLY_KEY = {
@@ -18863,6 +18882,25 @@ window._hdrCleanCache = function(){
   function _pmNorm(s){
     try { return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
     catch(_){ return String(s||'').toLowerCase().trim(); }
+  }
+
+  /* Clave de deduplicación de un partido en la tabla permanente. Incluye
+     SIEMPRE el nombre (normalizado) de los 2 equipos, ADEMÁS de la
+     posición estructural (`mk`/`phase+idx`) — nunca solo la posición.
+     Motivo: un re-sorteo (♻️ Reset) reutiliza la MISMA posición
+     estructural (mismo `mk` / mismo `phase+idx`) con un emparejamiento
+     de equipos DISTINTO. Si la clave fuera solo `id|mk`, el partido
+     NUEVO en esa posición chocaría con la entrada VIEJA ya presente
+     (`if (!tally.matches[dedupKey])` la saltaría) y sus estadísticas se
+     perderían para siempre — nunca se sumarían a la tabla ni se podrían
+     recuperar (el acta ya se habría vaciado). Incluir el pareo real de
+     equipos hace que un re-sorteo con equipos distintos en la misma
+     posición sea SIEMPRE una clave nueva. La posición estructural sigue
+     siendo necesaria además del pareo: en un doble round-robin el MISMO
+     par de equipos juega DOS veces (ida y vuelta) — sin `mk`, la 2ª
+     vuelta colisionaría con la 1ª y se perdería igual. */
+  function _pmDedupKey(containerId, slotKey, teamA, teamB){
+    return containerId + '|' + slotKey + '|' + _pmNorm(teamA) + '::' + _pmNorm(teamB);
   }
 
   /* Campo largo (el que usan los buckets de `rebuildPlayerStatsStore`) →
@@ -19093,7 +19131,7 @@ window._hdrCleanCache = function(){
       var tA = r.home || info.a || '';
       var tB = r.away || info.b || '';
       if (!_pmIsIAvsIA(tA, tB, compKey)) return;
-      var dedupKey = id + '|' + mk;
+      var dedupKey = _pmDedupKey(id, mk, tA, tB);
       if (!tally.matches[dedupKey]) {
         var entry = {};
         _pmAccumulateEvents(entry, tally, tA, tB, r.events, r.mvp, r.mvpTeam, false);
@@ -19138,6 +19176,59 @@ window._hdrCleanCache = function(){
     return changedIds;
   };
 
+  /* ── Barrido de la Copa Intercontinental (`inter_state_v1`) ──
+     8 equipos · Cuartos→Semis→Final · partido ÚNICO por cruce (sin ida/
+     vuelta, a diferencia de la Copa del Rey — nunca hay ambigüedad de
+     qué leg cuenta). `s.sorteo[phase]` es un array de partidos; una FASE
+     completa (todos `played`) es la "eliminatoria" a efectos de esta
+     regla. La persistencia es un simple `_lsSetSafe('inter_state_v1',…)`
+     — `inter_state_v1` viaja por el polling genérico de `SYNC_KEYS`
+     (`part2/misc_body_2.html`, cada 3 s) hacia `_STATE_BRACKET_KEYS` en
+     el servidor, que YA respeta `trimmedAt` (mismo prerrequisito que
+     protege torneos/sel/mundial) — no hace falta un push explícito
+     aquí, escribir localStorage basta. */
+  function _pmSweepInterState(){
+    var raw = null;
+    try { raw = localStorage.getItem('inter_state_v1'); } catch(_){}
+    if (!raw) return false;
+    var s;
+    try { s = JSON.parse(raw); } catch(_){ return false; }
+    if (!s || !s.sorteo || typeof s.sorteo !== 'object') return false;
+    var PHASES = ['q', 's', 'f'];
+    var tally = _pmLoad('inter');
+    var touchedTally = false, touchedCfg = false;
+    PHASES.forEach(function(phase){
+      var ms = s.sorteo[phase];
+      if (!Array.isArray(ms) || !ms.length) return;
+      var done = true;
+      for (var i = 0; i < ms.length; i++){ if (!ms[i] || !ms[i].played) { done = false; break; } }
+      if (!done) return;
+      ms.forEach(function(m, idx){
+        if (!m || !m.played || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
+        var tA = m.home || '', tB = m.away || '';
+        if (!_pmIsIAvsIA(tA, tB, 'inter')) return;
+        var dedupKey = _pmDedupKey('inter', phase + '_' + idx, tA, tB);
+        if (!tally.matches[dedupKey]) {
+          var entry = {};
+          _pmAccumulateEvents(entry, tally, tA, tB, m.events, m.mvp, m.mvpTeam, true);
+          tally.matches[dedupKey] = entry;
+          touchedTally = true;
+        }
+        delete m.events;
+        delete m.mvp;
+        delete m.mvpTeam;
+        m.trimmedAt = Date.now();
+        touchedCfg = true;
+      });
+    });
+    if (touchedTally) _pmSave('inter', tally);
+    if (touchedCfg) {
+      try { window._lsSetSafe('inter_state_v1', JSON.stringify(s)); } catch(_){}
+    }
+    return touchedCfg;
+  }
+  window._pmSweepInterState = _pmSweepInterState;
+
   /* ── Disparo automático, sin botón ──
      Boot (diferido, para no competir con la hidratación inicial) + barrido
      periódico (cubre jornadas que se completan mientras la app sigue
@@ -19146,8 +19237,14 @@ window._hdrCleanCache = function(){
     Object.keys(TALLY_KEY).forEach(function(b){ _pmHydrate(b); });
   } catch(_){}
   try {
-    setTimeout(function(){ try { window._pmSweepAllTours(); } catch(_){} }, 9000);
-    setInterval(function(){ try { window._pmSweepAllTours(); } catch(_){} }, 180000);
+    setTimeout(function(){
+      try { window._pmSweepAllTours(); } catch(_){}
+      try { _pmSweepInterState(); } catch(_){}
+    }, 9000);
+    setInterval(function(){
+      try { window._pmSweepAllTours(); } catch(_){}
+      try { _pmSweepInterState(); } catch(_){}
+    }, 180000);
   } catch(_){}
 })();
 </script>

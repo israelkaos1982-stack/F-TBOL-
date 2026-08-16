@@ -282,12 +282,38 @@ MVP, minuto a minuto) de CADA partido de Torneos de Verano/Selecciones/
 Mundialito de Clubes/Copa del Rey/Intercontinental se guarda para
 SIEMPRE — es la fuente ÚNICA que leen las cajas de Estadísticas de cada
 competición (`rebuildPlayerStatsStore`, que RECALCULA desde cero
-escaneando `events` en cada llamada, a diferencia de Liga EA Sports/
-Resto de Ligas, que acumulan un contador PERMANENTE en
-`team.players[].gol/pj/ta/...` en el momento de simular y por eso nunca
-necesitaron guardar el acta indefinidamente). En un torneo grande
-(formato liga de 60+ equipos, ~1950 partidos a doble vuelta) eso es,
-con diferencia, el mayor contribuyente al peso total.
+escaneando `events` en cada llamada, a diferencia de **Resto de
+Ligas**, que acumula un contador PERMANENTE en
+`team.players[].gol/pj/ta/...` vía `applyMatchStats` en el momento de
+simular y por eso nunca necesitó guardar el acta indefinidamente). En
+un torneo grande (formato liga de 60+ equipos, ~1950 partidos a doble
+vuelta) eso es, con diferencia, el mayor contribuyente al peso total.
+
+⚠️ **Corrección (2026-08-16, misma tarde — aviso del usuario "Liga Ea
+Sports, Copa del Rey y Supercopa de España las estadisticas son
+globales, se suman las 3 competiciones… no quiero que al eliminar los
+actas de IA vs IA en alguna competicion, Liga, Copa, Torneo de verano
+etc esas estadisticas se eliminen… eso es muy importante que se sigan
+sumando")**: el párrafo de arriba, en su primera redacción, agrupaba
+por error a **Liga EA Sports** junto a Resto de Ligas como si también
+acumulara contadores permanentes — es **FALSO**. Verificado en
+`rebuildPlayerStatsStore` (`misc_body_1.html`): Liga EA Sports (Source
+2, escanea `ef_liga38_v4[key].events`) y Copa del Rey (Source 5, escanea
+`copa_state_v1.resultados[ronda][idx].events`) dependen del acta
+EXACTAMENTE IGUAL que Torneos/Selecciones/Mundialito/Intercontinental —
+`simularJornadaIA` (`part2/misc_body_2.html`) persiste
+`results[key] = {gh, ga, events, mvp, mvpTeam}`, un acta completa, NO
+contadores baked. `applyMatchStats` (contadores permanentes,
+`team.players[]`) es EXCLUSIVO de **Resto de Ligas** (`ligaExtSimular`)
+y de las copas INTERNAS de cada liga externa (`_lecSimMatch`) — nunca
+de Liga EA Sports/Copa del Rey/Supercopa de España.
+
+Liga EA Sports + Copa del Rey + Supercopa de España vierten sus 3
+buckets en la MISMA caja combinada `ef_player_stats_v1`
+(`_mergeBucketInto(stats, buckets.copa); _mergeBucketInto(stats,
+buckets.sc);` encima de `buckets.liga` de Source 2 — comentario propio
+del código: *"PJ del equipo en EA Sports = Liga + Copa + Supercopa
+España"*) — es la caja "global, suma las 3" que describe el usuario.
 
 El usuario preguntó primero si las estadísticas globales sobrevivirían
 si se borraran las actas, y condicionó su aprobación a la respuesta:
@@ -367,6 +393,8 @@ resucitaría el acta que se acaba de vaciar a propósito.
 | Torneos de Verano + Selecciones + Mundialito de Clubes | `_pmSweepTourCfg`/`window._pmSweepAllTours` | `tour_<id>_v1.results` | `window._tourSave(id, cfg)` (merge-safe, respeta `trimmedAt`) |
 | Copa Intercontinental | `window._pmSweepInterState` | `inter_state_v1.sorteo.{q,s,f}` | `_lsSetSafe` local — viaja solo por el polling genérico de `SYNC_KEYS` (`part2/misc_body_2.html`) hacia `_STATE_BRACKET_KEYS` en servidor |
 | Copa del Rey | **NO implementado a propósito** — ver más abajo | — | — |
+| Liga EA Sports | **NO implementado, y NO se va a implementar sin permanente-tally propia** | `ef_liga38_v4[key].events` | — |
+| Supercopa de España | **NO implementado** | `sc_state_v1` (sin fuente persistente de rescan siquiera hoy — ver aviso más abajo) | — |
 
 El barrido corre **100% automático, sin botón**: al boot (diferido 9s)
 y cada 3 minutos mientras la app sigue abierta (mismo principio que la
@@ -391,6 +419,41 @@ exactamente qué leg "gana" ese dedup y reproducirlo — no se ha hecho
 todavía por prudencia, para no arriesgarse a cambiar una cifra ya
 mostrada sin poder probarlo contra la app real. Queda pendiente para
 una entrega separada.
+
+### Liga EA Sports / Copa del Rey / Supercopa de España NUNCA se tocan (aviso usuario 2026-08-16)
+
+**Petición usuario 2026-08-16** ("Liga Ea Sports, Copa del Rey y
+Supercopa de España las estadisticas son globales, se suman las 3
+competiciones… no quiero que al eliminar los actas de IA vs IA en
+alguna competicion, Liga, Copa, Torneo de verano etc esas estadisticas
+se eliminen de la caja estadisticas de cada Competición… eso es muy
+importante que se sigan sumando"): el barrido de este feature **NUNCA**
+ha tocado `ef_liga38_v4` (Liga EA Sports) ni `sc_state_v1` (Supercopa de
+España) — solo `tour_<id>_v1` (torneos/sel/mundial) e
+`inter_state_v1`. Copa del Rey (`copa_state_v1`) tampoco (sección de
+arriba). Esto es DELIBERADO: a diferencia de Torneos/Selecciones/
+Mundialito/Intercontinental (donde la tabla permanente se construyó
+**ANTES** de recortar nada), Liga EA Sports/Copa del Rey/Supercopa de
+España NO tienen ninguna tabla permanente equivalente — si su acta se
+recortara HOY, esas estadísticas desaparecerían de la caja combinada
+`ef_player_stats_v1` (Liga+Copa+Supercopa España) PARA SIEMPRE, sin
+ninguna red que las recupere.
+
+**Hallazgo adicional, mismo aviso**: `buckets.sc` (Supercopa de España)
+NO tiene NINGUNA fuente de rescan persistente en
+`rebuildPlayerStatsStore` — a diferencia de Liga (Source 2, escanea
+`ef_liga38_v4`) y Copa (Source 5, escanea `copa_state_v1`), Supercopa
+de España solo se alimenta de `LIGA_PLAYER_MATCH_STORE` (Source 1,
+memoria, NUNCA persistida a `localStorage` — confirmado con `grep`, no
+hay ningún `setItem`/`_lsSetSafe` de esa clave en todo el proyecto).
+Esto significa que la aportación de Supercopa de España a la caja
+combinada de Estadísticas puede perderse en CADA recarga de página
+(rebuild con el store en memoria ya vacío) — un bug PRE-EXISTENTE,
+totalmente independiente de este feature de recorte de acta (nunca se
+tocó su código). Se deja constancia aquí porque es exactamente el tipo
+de pérdida que el usuario pidió evitar, y merece una entrega propia
+(un "Source 6: sc_state_v1", espejo de Source 4/5) si el usuario
+confirma que quiere que se investigue/arregle.
 
 ### Reglas a respetar
 
@@ -440,6 +503,16 @@ una entrega separada.
    qué prerrequisito de merge server-side necesita (`trimmedAt` en
    `_pick_result`/`_pick_match`/`bracket_state_merge`, según cuál
    aplique a esa clave).
+9. **PROHIBIDO ABSOLUTO** que cualquier código (de este feature o de
+   cualquier otro) borre/vacíe `events` de `ef_liga38_v4[key]`
+   (Liga EA Sports) o de `sc_state_v1` (Supercopa de España) — igual
+   que Copa del Rey, sin ninguna excepción, hasta que exista una tabla
+   permanente equivalente a `pm_tally_torneos_v1`/etc. QUE YA SE HAYA
+   VERIFICADO con tests (mismo patrón que exige la Regla 7 para Copa).
+   Las 3 (Liga+Copa+Supercopa España) alimentan la MISMA caja combinada
+   `ef_player_stats_v1` — recortar cualquiera de las 3 sin su propia
+   tabla permanente borraría estadísticas YA MOSTRADAS al usuario, que
+   fue explícito en que esto "es muy importante que se sigan sumando".
 
 ## Catálogo de balones RENOVADO — reset completo del inventario + reasignación por competición (obligatorio, 2026-08-16)
 

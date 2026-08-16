@@ -18231,6 +18231,30 @@ window._hdrCleanCache = function(){
     var _uclAll = _consolidate(['ucl','ucl-prev','ucl-oq','ucl-wc']);
     _persistBucket(_uclAll.merged, _uclAll.pj, COMP_CACHE_KEYS.ucl);
 
+    /* TABLA PERMANENTE (obligatorio, 2026-08-16): el recorte automático de
+       acta de partidos IA-vs-IA ya completados (Torneos/Selecciones/
+       Mundialito/Copa del Rey/Intercontinental) vacía `events` de
+       `cfg.results`/`copa_state.resultados`/`inter_state.sorteo` DESPUÉS de
+       sumar su aportación a una tabla permanente por jugador
+       (`window._pmTally`, ver bloque dedicado más abajo en este archivo).
+       Los 5 buckets que arriba escanean esas mismas fuentes SOLO ven los
+       partidos que TODAVÍA tienen acta (los recortados no aportan nada al
+       escaneo en vivo, por diseño) — aquí se suma la tabla permanente
+       ENCIMA, ANTES de persistir cada caché, para que un partido recortado
+       siga contando en Goleadores/MVP/Tarjetas. Sin doble conteo: un
+       partido recortado ya no tiene `events`, así que el escaneo en vivo de
+       arriba nunca vuelve a sumarlo. `_pmMergeTallyInto` es un no-op seguro
+       si el módulo de recorte aún no ha cargado (feature-detected). */
+    try {
+      if (typeof window._pmMergeTallyInto === 'function') {
+        window._pmMergeTallyInto('torneos', buckets.torneos, teamPJByComp.torneos);
+        window._pmMergeTallyInto('sel',     buckets.sel,     teamPJByComp.sel);
+        window._pmMergeTallyInto('mundial', buckets.mundial, teamPJByComp.mundial);
+        window._pmMergeTallyInto('copa',    buckets.copa,    teamPJByComp.copa);
+        window._pmMergeTallyInto('inter',   buckets.inter,   teamPJByComp.inter);
+      }
+    } catch(_){}
+
     /* Comps nuevas (2026-05-08): Recopa, Supercopa Europa,
        Intercontinental, Mundial Clubes, Selecciones, Amistosos.
        Cada una a su propia clave para que las pantallas

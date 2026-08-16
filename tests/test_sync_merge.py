@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sync_merge import (  # noqa: E402
     tour_cfg_merge, sel_squad_merge, copa_state_merge, bracket_state_merge,
+    _pm_tally_merge,
 )
 
 _fails = []
@@ -420,6 +421,32 @@ new = {"final": {"home": "A", "away": "B", "played": True, "gh": 2, "ga": 1,
 m = bracket_state_merge(json.dumps(old), new)
 check("bracket: recorte deliberado (trimmedAt >= ua) gana sobre el acta",
       "events" not in m["final"])
+
+
+# ──────────────────────────────────────────────────────────────────
+# TABLA PERMANENTE (pm_tally_<familia>_v1, obligatorio 2026-08-16)
+# ──────────────────────────────────────────────────────────────────
+# Dos dispositivos recortan jornadas DISTINTAS sin haberse sincronizado
+# — ninguna de las dos aportaciones se puede perder (unión por clave).
+old_t = {"matches": {"g0_0_0": {"players": {"a::mbappe": {"gol": 2}}}}, "updatedAt": 100}
+new_t = {"matches": {"g0_1_0": {"players": {"b::borre": {"gol": 1}}}}, "updatedAt": 50}
+m = _pm_tally_merge(json.dumps(old_t), new_t)
+check("pm_tally: une aportaciones de 2 dispositivos (ninguna se pierde)",
+      "g0_0_0" in m["matches"] and "g0_1_0" in m["matches"])
+check("pm_tally: updatedAt = el máximo de los dos", m["updatedAt"] == 100)
+
+# La MISMA clave de partido en ambos lados (tras converger) no se
+# duplica ni se pisa — se queda con la que ya había.
+old_t2 = {"matches": {"g0_0_0": {"players": {"a::mbappe": {"gol": 2}}}}, "updatedAt": 100}
+new_t2 = {"matches": {"g0_0_0": {"players": {"a::mbappe": {"gol": 2}}}}, "updatedAt": 200}
+m2 = _pm_tally_merge(json.dumps(old_t2), new_t2)
+check("pm_tally: la misma clave de partido no se duplica",
+      len(m2["matches"]) == 1)
+
+# Entrante sin `matches` (o vacío) no borra lo que ya había.
+m3 = _pm_tally_merge(json.dumps(old_t), {"matches": {}, "updatedAt": 5})
+check("pm_tally: un entrante vacío NO borra lo que ya había",
+      "g0_0_0" in m3["matches"])
 
 
 print()

@@ -23,6 +23,7 @@ from jugadores_data import jugadores_por_equipo
 from logica_liga import calcular_tabla, obtener_resultados_ia
 from sync_merge import (
     tour_cfg_merge, sel_squad_merge, copa_state_merge, bracket_state_merge,
+    _pm_tally_merge,
     _count_played as _tour_count_played,
 )
 from strip_js_comments import strip_html_js_comments
@@ -4481,6 +4482,14 @@ _KV_ALLOWED_EXACT = {
     # verdad para que la elección sobreviva al borrado de datos / cambio
     # de móvil.
     "superliga_num_teams_v1",
+    # Tabla PERMANENTE de estadísticas por jugador (recorte automático de
+    # acta de partidos IA-vs-IA ya completados, obligatorio 2026-08-16):
+    # una por familia de competición (Torneos de Verano/Selecciones/
+    # Mundialito de Clubes/Copa del Rey/Intercontinental). Merge ADITIVO
+    # por clave de partido (nunca por recencia entera) — ver
+    # `_pm_tally_merge` en sync_merge.py, dispatchado más abajo.
+    "pm_tally_torneos_v1", "pm_tally_sel_v1", "pm_tally_mundial_v1",
+    "pm_tally_copa_v1", "pm_tally_inter_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -5405,6 +5414,18 @@ def api_kv_set(key):
     elif key in ("ucl_phase_v1", "uel_phase_v1", "uecl_phase_v1") and row and row.valor_json:
         try:
             merged = bracket_state_merge(row.valor_json, value)
+            cand = json.dumps(merged, ensure_ascii=False)
+            if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
+                value, payload = merged, cand
+        except Exception:
+            pass
+    # Tabla PERMANENTE de estadísticas (pm_tally_<familia>_v1, obligatorio
+    # 2026-08-16): UNIÓN por clave de partido, nunca recencia entera — dos
+    # dispositivos pueden recortar jornadas DISTINTAS sin haberse
+    # sincronizado, y ninguna de las dos aportaciones se puede perder.
+    elif key.startswith("pm_tally_") and row and row.valor_json:
+        try:
+            merged = _pm_tally_merge(row.valor_json, value)
             cand = json.dumps(merged, ensure_ascii=False)
             if len(cand.encode("utf-8")) <= _KV_MAX_BYTES:
                 value, payload = merged, cand

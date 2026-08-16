@@ -575,6 +575,43 @@ def bracket_state_merge(old_json, new_value):
 
 
 # ──────────────────────────────────────────────────────────────────
+# Tabla PERMANENTE de estadísticas (pm_tally_<familia>_v1) — obligatorio,
+# 2026-08-16. Alimenta el recorte automático del acta de partidos IA-vs-IA
+# ya completados (Torneos de Verano/Selecciones/Mundialito/Copa del
+# Rey/Intercontinental): antes de vaciar `events` de un partido, el
+# cliente vuelca su aportación (goles/tarjetas/MVP por jugador) aquí, para
+# que las cajas de Estadísticas de cada competición sigan mostrando esos
+# números aunque el acta detallada ya no exista.
+# ──────────────────────────────────────────────────────────────────
+def _pm_tally_merge(old_json, new_value):
+    """Fusión ADITIVA (unión por clave de partido) de una tabla permanente.
+
+    Cada entrada de `matches` es la aportación YA CALCULADA de un partido
+    concreto, identificada por una clave de deduplicación estable — nunca
+    cambia una vez escrita (el mismo partido no puede recortarse dos
+    veces). Con varios dispositivos recortando jornadas DISTINTAS de forma
+    independiente y sin haber sincronizado entre ellos, un merge por
+    recencia (blob más nuevo gana ENTERO) perdería la aportación del
+    dispositivo más lento — aquí se UNEN por clave de partido, igual que
+    `eur_manual_extra_v1`. Si la MISMA clave aparece en ambos lados (normal
+    tras converger), los valores deben ser idénticos (derivados del mismo
+    acta determinista) — se conserva el que ya estaba."""
+    old = _loads(old_json)
+    if not isinstance(old, dict):
+        old = {}
+    new = new_value if isinstance(new_value, dict) else {}
+    old_m = old.get("matches") if isinstance(old.get("matches"), dict) else {}
+    new_m = new.get("matches") if isinstance(new.get("matches"), dict) else {}
+    merged = dict(old_m)
+    for k, v in new_m.items():
+        if k not in merged:
+            merged[k] = v
+    out = {"matches": merged}
+    out["updatedAt"] = max(_num(old.get("updatedAt")), _num(new.get("updatedAt")))
+    return out
+
+
+# ──────────────────────────────────────────────────────────────────
 # Plantilla de selecciones (selecciones_squad_v1)
 # ──────────────────────────────────────────────────────────────────
 def _team_richness(t):

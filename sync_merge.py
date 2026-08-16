@@ -595,7 +595,15 @@ def _pm_tally_merge(old_json, new_value):
     dispositivo más lento — aquí se UNEN por clave de partido, igual que
     `eur_manual_extra_v1`. Si la MISMA clave aparece en ambos lados (normal
     tras converger), los valores deben ser idénticos (derivados del mismo
-    acta determinista) — se conserva el que ya estaba."""
+    acta determinista) — se conserva el que ya estaba.
+
+    El blob también lleva un `names` TOP-LEVEL (normKey -> nombre mostrado,
+    compartido por TODOS los partidos — formato compacto, ver
+    `pm-module.js`/misc_body_1.html regla 5): DEBE unirse exactamente igual
+    que `matches` (por clave, nunca se pisa una ya presente). Sin esto, los
+    `playerKey` de un `matches` recién llegado de OTRO dispositivo serían
+    indescifrables — ese dispositivo pudo aportar partidos cuyos jugadores
+    nunca aparecieron en el `names` local."""
     old = _loads(old_json)
     if not isinstance(old, dict):
         old = {}
@@ -606,7 +614,13 @@ def _pm_tally_merge(old_json, new_value):
     for k, v in new_m.items():
         if k not in merged:
             merged[k] = v
-    out = {"matches": merged}
+    old_n = old.get("names") if isinstance(old.get("names"), dict) else {}
+    new_n = new.get("names") if isinstance(new.get("names"), dict) else {}
+    merged_n = dict(old_n)
+    for k, v in new_n.items():
+        if k not in merged_n:
+            merged_n[k] = v
+    out = {"matches": merged, "names": merged_n}
     out["updatedAt"] = max(_num(old.get("updatedAt")), _num(new.get("updatedAt")))
     return out
 

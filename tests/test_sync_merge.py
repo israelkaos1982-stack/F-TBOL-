@@ -448,6 +448,33 @@ m3 = _pm_tally_merge(json.dumps(old_t), {"matches": {}, "updatedAt": 5})
 check("pm_tally: un entrante vacío NO borra lo que ya había",
       "g0_0_0" in m3["matches"])
 
+# `names` (top-level, formato compacto) se une IGUAL que `matches` — sin
+# esto, los playerKey de un `matches` que llega de otro dispositivo son
+# indescifrables (regla 5 de pm-module.js).
+old_n = {"names": {"a": "Francia", "a::mbappe": "Mbappe"},
+         "matches": {"g0_0_0": {"t": ["a", "vietnam"], "p": {"a::mbappe": {"g": 2}}}},
+         "updatedAt": 100}
+new_n = {"names": {"b": "Haiti", "b::borre": "Borre"},
+         "matches": {"g0_1_0": {"t": ["b", "ghana"], "p": {"b::borre": {"g": 1}}}},
+         "updatedAt": 50}
+m4 = _pm_tally_merge(json.dumps(old_n), new_n)
+check("pm_tally: names se UNE (no se pierde el del dispositivo local)",
+      m4["names"].get("a") == "Francia" and m4["names"].get("a::mbappe") == "Mbappe")
+check("pm_tally: names se UNE (se incorpora el del dispositivo entrante)",
+      m4["names"].get("b") == "Haiti" and m4["names"].get("b::borre") == "Borre")
+
+# names ya presente en ambos lados con el mismo valor no se pisa ni duplica.
+old_n2 = {"names": {"a": "Francia"}, "matches": {}, "updatedAt": 10}
+new_n2 = {"names": {"a": "Francia"}, "matches": {}, "updatedAt": 20}
+m5 = _pm_tally_merge(json.dumps(old_n2), new_n2)
+check("pm_tally: names con la misma clave en ambos lados no se duplica",
+      m5["names"] == {"a": "Francia"})
+
+# Entrante sin `names` (blob legacy o vacío) no borra el names local.
+m6 = _pm_tally_merge(json.dumps(old_n), {"matches": {}, "updatedAt": 5})
+check("pm_tally: un entrante sin names NO borra el names local",
+      m6["names"].get("a") == "Francia")
+
 
 print()
 if _fails:

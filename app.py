@@ -3824,19 +3824,24 @@ def _dead_league_empty_get(slug, extra=None):
     return out
 
 
-@app.route("/api/admin/purge-dead-leagues", methods=["POST"])
-@admin_required
-def api_admin_purge_dead_leagues():
+def _purge_dead_merged_leagues():
     """Borra PERMANENTEMENTE de la base de datos las filas de las 43
     ligas menores que se fusionaron en liga-mixta-1..9, MÁS las propias
     liga-mixta-1..9 (ANIQUILADAS por completo, ver `DEAD_MERGED_LEAGUE_SLUGS`).
     Incluye el `main` de cada una (`liga_ext_<slug>`) y todos sus derivados
-    (`_protected`, `_snap_<ts>`, `_backup`, cualquier sufijo futuro).
+    (`_protected`, `_snap_<ts>`, `_backup`, cualquier sufijo futuro, con
+    separador `_` o `-`).
 
-    Idempotente: si ya se borraron (o nunca existieron), no hace nada
-    y devuelve deleted_count=0 — se puede pulsar más de una vez sin
-    riesgo. Requiere sesión admin (PIN 747, igual que el resto de
-    acciones destructivas de "Resto de Ligas")."""
+    Idempotente: si ya se borraron (o nunca existieron), no hace nada y
+    devuelve `[]` — se puede llamar tantas veces como haga falta sin
+    riesgo. Devuelve la lista de claves borradas.
+
+    Extraída (2026-08-16, petición usuario "no quiero tener que eliminar
+    ligas antiguas que ya debías haber eliminado") del endpoint admin
+    para poder llamarla TAMBIÉN automáticamente en cada arranque del
+    servidor, sin depender de que nadie pulse un botón con PIN — las
+    filas quedan borradas de la BD en cuanto el fix se despliega, para
+    los 6 dispositivos, sin acción humana."""
     try:
         rows = GlobalState.query.filter(GlobalState.clave.like("liga_ext_%")).all()
     except Exception:
@@ -3846,11 +3851,6 @@ def api_admin_purge_dead_leagues():
         clave = row.clave or ""
         if not clave.startswith("liga_ext_"):
             continue
-        # Reutiliza la MISMA función que ya filtra estas ligas en el resto
-        # del servidor (`_is_dead_merged_league_slug`) en vez de duplicar
-        # el matching aquí — la duplicación anterior tenía su propio bug
-        # (solo reconocía sufijo "_", nunca "-") y las filas con guión
-        # sobrevivían INTACTAS a este botón pese a decir "eliminadas".
         rest = clave[len("liga_ext_"):]
         if not _is_dead_merged_league_slug(rest):
             continue
@@ -3858,6 +3858,18 @@ def api_admin_purge_dead_leagues():
         db.session.delete(row)
     if deleted_keys:
         db.session.commit()
+    return deleted_keys
+
+
+@app.route("/api/admin/purge-dead-leagues", methods=["POST"])
+@admin_required
+def api_admin_purge_dead_leagues():
+    """Endpoint manual (PIN 747) que envuelve `_purge_dead_merged_leagues`
+    — se conserva para poder disparar el purgado a mano si en el futuro
+    se añaden nuevas ligas a `DEAD_MERGED_LEAGUE_SLUGS` sin esperar al
+    próximo despliegue/reinicio. El purgado AUTOMÁTICO de arranque (ver
+    `with app.app_context()` más abajo) ya cubre el caso normal."""
+    deleted_keys = _purge_dead_merged_leagues()
     return jsonify({
         "ok": True,
         "deleted_count": len(deleted_keys),
@@ -5726,6 +5738,19 @@ with app.app_context():
         _load_player_flags_on_startup()
     except Exception:
         pass
+    # Purga AUTOMÁTICA de ligas fantasma en cada arranque (2026-08-16,
+    # petición usuario: "no quiero tener que eliminar ligas antiguas que
+    # ya debías haber eliminado"). Antes esto exigía que el admin pulsara
+    # un botón con PIN — ahora se ejecuta sola en cuanto el servidor
+    # arranca, sin que ningún humano tenga que hacer nada. Idempotente y
+    # barata (no-op si ya no queda nada que borrar), envuelta en
+    # try/except para que un fallo aquí NUNCA impida arrancar el servidor.
+    try:
+        _deleted = _purge_dead_merged_leagues()
+        if _deleted:
+            print(f"[purga-arranque] {len(_deleted)} filas de ligas fantasma eliminadas: {sorted(_deleted)}")
+    except Exception as _e:
+        print(f"[purga-arranque] fallo no crítico: {_e}")
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

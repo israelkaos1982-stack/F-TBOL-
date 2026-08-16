@@ -456,8 +456,8 @@ window.TEAM_STADIUMS = {
   'Arsenal':                'EMIRATES STADIUM',
   'Sporting CP':            'STADIO ORIONE',
   // --- LA LIGA ---
-  'Atlético Madrid':        'STADIO ORIONE',
-  'Atletico Madrid':        'STADIO ORIONE',
+  'Atlético Madrid':        'EMIRATES STADIUM',
+  'Atletico Madrid':        'EMIRATES STADIUM',
   'Real Sociedad':          'SAITAMA STADIUM 2002',
   'Real Betis':             'MORUMBIS',
   'Betis':                  'MORUMBIS',

@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sync_merge import (  # noqa: E402
     tour_cfg_merge, sel_squad_merge, copa_state_merge, bracket_state_merge,
+    _pm_tally_merge,
 )
 
 _fails = []
@@ -371,6 +372,108 @@ new = {"champion": "A", "pool": ["A", "B", "C"]}
 m = bracket_state_merge(json.dumps(old), new)
 check("bracket: campos no-partido son last-write del entrante",
       m["champion"] == "A" and m["pool"] == ["A", "B", "C"])
+
+
+# ──────────────────────────────────────────────────────────────────
+# RECORTE DELIBERADO DE ACTA (`trimmedAt`, obligatorio 2026-08-16)
+# ──────────────────────────────────────────────────────────────────
+# Un dispositivo recorta el acta de un IA-vs-IA ya completado (tras sumar
+# sus goles/tarjetas/MVP a la tabla permanente) y sella `trimmedAt`. Otro
+# dispositivo todavía tiene la copia CON acta, con `ua` ANTERIOR al
+# recorte — el recorte debe ganar (ya vio ese acta, no hay nada que
+# perder al no resucitarla).
+old = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2,
+                       "events": [{"type": "gol", "player": "Mbappe", "team": "a"}],
+                       "home": "Espana", "away": "Libano", "ua": 100}})
+new = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2, "ua": 100, "trimmedAt": 500}},
+           "2026-08-16T10:00:00.000Z")
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: recorte deliberado (trimmedAt >= ua del acta) gana — no se resucita",
+      "events" not in m["results"]["g0_0_0"] and m["results"]["g0_0_0"].get("trimmedAt") == 500)
+
+# El mismo recorte, pero el acta que sigue viva es MÁS RECIENTE que el
+# sello del recorte (el recorte se hizo antes de ver esa versión del
+# acta) — el acta debe seguir ganando, protección normal intacta.
+old = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2, "ua": 100, "trimmedAt": 50}})
+new = _cfg({"g0_0_0": {"played": True, "a": 1, "b": 2,
+                       "events": [{"type": "gol", "player": "Mbappe", "team": "a"}],
+                       "home": "Espana", "away": "Libano", "ua": 900}},
+           "2026-08-16T11:00:00.000Z")
+m = tour_cfg_merge(json.dumps(old), new)
+check("torneo: trimmedAt viejo NO resucita — el acta más reciente sigue ganando",
+      len(m["results"]["g0_0_0"].get("events", [])) == 1)
+
+# Copa del Rey — mismo principio con `_copa_pick_result`.
+old = {"resultados": {"r16": [{"jugado": True, "gl": 2, "gv": 0,
+                                "team_a": "A", "team_b": "B",
+                                "ua": 100, "trimmedAt": 700}]}}
+new = {"resultados": {"r16": [{"jugado": True, "gl": 2, "gv": 0,
+                                "events": [{"type": "gol"}], "ua": 100}]}}
+m = copa_state_merge(json.dumps(old), new)
+check("copa: recorte deliberado (trimmedAt >= ua) gana sobre el acta",
+      "events" not in m["resultados"]["r16"][0])
+
+# Bracket genérico (Recopa/SC/USC/KO europeas/Previa/Intercontinental).
+old = {"final": {"home": "A", "away": "B", "played": True, "gh": 2, "ga": 1,
+                  "ua": 100, "trimmedAt": 900}}
+new = {"final": {"home": "A", "away": "B", "played": True, "gh": 2, "ga": 1,
+                  "events": [{"type": "gol"}], "ua": 100}}
+m = bracket_state_merge(json.dumps(old), new)
+check("bracket: recorte deliberado (trimmedAt >= ua) gana sobre el acta",
+      "events" not in m["final"])
+
+
+# ──────────────────────────────────────────────────────────────────
+# TABLA PERMANENTE (pm_tally_<familia>_v1, obligatorio 2026-08-16)
+# ──────────────────────────────────────────────────────────────────
+# Dos dispositivos recortan jornadas DISTINTAS sin haberse sincronizado
+# — ninguna de las dos aportaciones se puede perder (unión por clave).
+old_t = {"matches": {"g0_0_0": {"players": {"a::mbappe": {"gol": 2}}}}, "updatedAt": 100}
+new_t = {"matches": {"g0_1_0": {"players": {"b::borre": {"gol": 1}}}}, "updatedAt": 50}
+m = _pm_tally_merge(json.dumps(old_t), new_t)
+check("pm_tally: une aportaciones de 2 dispositivos (ninguna se pierde)",
+      "g0_0_0" in m["matches"] and "g0_1_0" in m["matches"])
+check("pm_tally: updatedAt = el máximo de los dos", m["updatedAt"] == 100)
+
+# La MISMA clave de partido en ambos lados (tras converger) no se
+# duplica ni se pisa — se queda con la que ya había.
+old_t2 = {"matches": {"g0_0_0": {"players": {"a::mbappe": {"gol": 2}}}}, "updatedAt": 100}
+new_t2 = {"matches": {"g0_0_0": {"players": {"a::mbappe": {"gol": 2}}}}, "updatedAt": 200}
+m2 = _pm_tally_merge(json.dumps(old_t2), new_t2)
+check("pm_tally: la misma clave de partido no se duplica",
+      len(m2["matches"]) == 1)
+
+# Entrante sin `matches` (o vacío) no borra lo que ya había.
+m3 = _pm_tally_merge(json.dumps(old_t), {"matches": {}, "updatedAt": 5})
+check("pm_tally: un entrante vacío NO borra lo que ya había",
+      "g0_0_0" in m3["matches"])
+
+# `names` (top-level, formato compacto) se une IGUAL que `matches` — sin
+# esto, los playerKey de un `matches` que llega de otro dispositivo son
+# indescifrables (regla 5 de pm-module.js).
+old_n = {"names": {"a": "Francia", "a::mbappe": "Mbappe"},
+         "matches": {"g0_0_0": {"t": ["a", "vietnam"], "p": {"a::mbappe": {"g": 2}}}},
+         "updatedAt": 100}
+new_n = {"names": {"b": "Haiti", "b::borre": "Borre"},
+         "matches": {"g0_1_0": {"t": ["b", "ghana"], "p": {"b::borre": {"g": 1}}}},
+         "updatedAt": 50}
+m4 = _pm_tally_merge(json.dumps(old_n), new_n)
+check("pm_tally: names se UNE (no se pierde el del dispositivo local)",
+      m4["names"].get("a") == "Francia" and m4["names"].get("a::mbappe") == "Mbappe")
+check("pm_tally: names se UNE (se incorpora el del dispositivo entrante)",
+      m4["names"].get("b") == "Haiti" and m4["names"].get("b::borre") == "Borre")
+
+# names ya presente en ambos lados con el mismo valor no se pisa ni duplica.
+old_n2 = {"names": {"a": "Francia"}, "matches": {}, "updatedAt": 10}
+new_n2 = {"names": {"a": "Francia"}, "matches": {}, "updatedAt": 20}
+m5 = _pm_tally_merge(json.dumps(old_n2), new_n2)
+check("pm_tally: names con la misma clave en ambos lados no se duplica",
+      m5["names"] == {"a": "Francia"})
+
+# Entrante sin `names` (blob legacy o vacío) no borra el names local.
+m6 = _pm_tally_merge(json.dumps(old_n), {"matches": {}, "updatedAt": 5})
+check("pm_tally: un entrante sin names NO borra el names local",
+      m6["names"].get("a") == "Francia")
 
 
 print()

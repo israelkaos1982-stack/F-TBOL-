@@ -18231,6 +18231,30 @@ window._hdrCleanCache = function(){
     var _uclAll = _consolidate(['ucl','ucl-prev','ucl-oq','ucl-wc']);
     _persistBucket(_uclAll.merged, _uclAll.pj, COMP_CACHE_KEYS.ucl);
 
+    /* TABLA PERMANENTE (obligatorio, 2026-08-16): el recorte automático de
+       acta de partidos IA-vs-IA ya completados (Torneos/Selecciones/
+       Mundialito/Copa del Rey/Intercontinental) vacía `events` de
+       `cfg.results`/`copa_state.resultados`/`inter_state.sorteo` DESPUÉS de
+       sumar su aportación a una tabla permanente por jugador
+       (`window._pmTally`, ver bloque dedicado más abajo en este archivo).
+       Los 5 buckets que arriba escanean esas mismas fuentes SOLO ven los
+       partidos que TODAVÍA tienen acta (los recortados no aportan nada al
+       escaneo en vivo, por diseño) — aquí se suma la tabla permanente
+       ENCIMA, ANTES de persistir cada caché, para que un partido recortado
+       siga contando en Goleadores/MVP/Tarjetas. Sin doble conteo: un
+       partido recortado ya no tiene `events`, así que el escaneo en vivo de
+       arriba nunca vuelve a sumarlo. `_pmMergeTallyInto` es un no-op seguro
+       si el módulo de recorte aún no ha cargado (feature-detected). */
+    try {
+      if (typeof window._pmMergeTallyInto === 'function') {
+        window._pmMergeTallyInto('torneos', buckets.torneos, teamPJByComp.torneos);
+        window._pmMergeTallyInto('sel',     buckets.sel,     teamPJByComp.sel);
+        window._pmMergeTallyInto('mundial', buckets.mundial, teamPJByComp.mundial);
+        window._pmMergeTallyInto('copa',    buckets.copa,    teamPJByComp.copa);
+        window._pmMergeTallyInto('inter',   buckets.inter,   teamPJByComp.inter);
+      }
+    } catch(_){}
+
     /* Comps nuevas (2026-05-08): Recopa, Supercopa Europa,
        Intercontinental, Mundial Clubes, Selecciones, Amistosos.
        Cada una a su propia clave para que las pantallas
@@ -18642,6 +18666,586 @@ window._hdrCleanCache = function(){
     /* Datos stale en todas las fuentes → 0 limpio (excepto pj=teamPJ). */
     return out;
   };
+})();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   TABLA PERMANENTE + RECORTE AUTOMÁTICO DEL ACTA DE PARTIDOS IA-VS-IA
+   YA COMPLETADOS (obligatorio, 2026-08-16)
+
+   Petición usuario (auditoría de peso en localStorage, "porque cada vez
+   que abro la web el peso supera los 4 MB"): el acta completa (goles,
+   tarjetas, MVP, minuto a minuto) de CADA partido de Torneos de Verano/
+   Selecciones/Mundialito/Copa del Rey/Intercontinental se guarda para
+   siempre — es la fuente ÚNICA que leen las cajas de Estadísticas de
+   cada competición (`rebuildPlayerStatsStore`, que RECALCULA desde cero
+   leyendo `events` cada vez, nunca acumula un contador permanente como sí
+   hace Liga EA Sports/Resto de Ligas sobre `team.players[]`). En un
+   torneo grande (formato liga de 60+ equipos) eso son miles de partidos
+   con varios eventos cada uno — el mayor contribuyente al peso total,
+   confirmado con el propio usuario antes de implementar esto.
+
+   El usuario aprobó explícitamente (2026-08-16, AskUserQuestion):
+     - Alcance: TODAS las competiciones con acta (Torneos/Selecciones/
+       Mundialito/Copa del Rey/Intercontinental). Implementado en esta
+       entrega: Torneos de Verano + Selecciones + Mundialito de Clubes
+       (`_pmSweepTourCfg`/`_pmSweepAllTours`, sobre `tour_<id>_v1`) y
+       Copa Intercontinental (`_pmSweepInterState`, sobre
+       `inter_state_v1`). Copa del Rey queda DELIBERADAMENTE pendiente:
+       sus rondas a doble partido (Octavos/Cuartos/Semis) tienen un
+       dedup pre-existente en `rebuildPlayerStatsStore` Source 5
+       (`'copa|' + _mkPJ(team_a,team_b)`, SIN componente de ronda/leg)
+       que ya cuenta como máximo UN leg de cada eliminatoria a doble
+       partido tras un recargo — replicar esa tabla permanente con
+       fidelidad exige entender/verificar ese comportamiento primero
+       para no producir una cifra DISTINTA a la que ya se mostraba
+       (Regla 4). Se deja para una entrega separada, ya auditada.
+     - Qué queda tras recortar: SOLO el marcador (gh/ga + jugado) — nada
+       de goleadores/tarjetas/MVP individual en el partido ya recortado.
+     - SOLO partidos IA-vs-IA. Los partidos con CUALQUIER humano implicado
+       (club o selección) NUNCA se tocan — conservan su acta completa
+       para siempre, tal y como pidió el usuario explícitamente.
+     - SOLO una vez la jornada (round-robin) o eliminatoria (KO) a la que
+       pertenece el partido está 100% completada — nunca a mitad.
+     - 100% automático — sin botón, sin que ningún admin tenga que hacer
+       nada (mismo principio ya exigido para la purga de ligas fantasma).
+
+   GARANTÍA DE NO PÉRDIDA DE ESTADÍSTICAS (por qué esto es seguro):
+   antes de vaciar `events` de un partido, su aportación (goles/tarjetas/
+   MVP por jugador) se suma a una TABLA PERMANENTE (`pm_tally_<familia>_v1`,
+   una fila KV en servidor con merge ADITIVO por clave de partido — ver
+   `_pm_tally_merge` en `sync_merge.py`). `rebuildPlayerStatsStore` (más
+   arriba en este archivo) suma esa tabla ENCIMA de lo que escanea en vivo
+   de `cfg.results[...].events`, así que un partido recortado sigue
+   contando en Goleadores/MVP/Tarjetas exactamente igual que antes.
+
+   FORMATO COMPACTO DE LA TABLA (obligatorio, evita que la tabla pese MÁS
+   que el acta que sustituye — medido con un torneo sintético de 63
+   equipos/1953 partidos: el formato ingenuo inicial —campos a cero
+   explícitos + nombre de equipo/jugador repetido en CADA partido en el
+   que aparece— pesaba MÁS que el acta original):
+     - `names`: UN mapa top-level `normKey -> "Nombre mostrado"`,
+       compartido por TODOS los partidos de la tabla — un jugador que
+       aparece en 60 partidos de la misma liga guarda su nombre UNA sola
+       vez, no 60. `normKey` es `teamNorm` (equipo) o
+       `teamNorm::playerNorm` (jugador).
+     - `matches[dedupKey] = { t:[teamNormA, teamNormB], p:{playerKey:{...}} }`:
+       `t` reemplaza el antiguo `teamPj` verboso (ambos equipos suman
+       SIEMPRE +1 PJ, un array de 2 basta). `p` solo lleva los campos
+       DISTINTOS DE CERO de cada jugador (`g`=gol, `p`=pen, `f`=fk,
+       `m`=mvp, `y`=amarilla, `r`=roja, `s`=penSaved, `i`=imbat,
+       `pp`=penProv, `pf`=penFall, `o`=propia) — un gol suelto es
+       `{"g":1}` en vez de un objeto con 11 campos explícitos.
+   PROHIBIDO volver al formato verboso/con nombres repetidos por
+   partido — es lo que hacía que el "ahorro" de espacio fuera negativo.
+
+   PROTECCIÓN CONTRA RESURRECCIÓN CROSS-DEVICE: el merge del servidor
+   (`_pick_result`/`_copa_pick_result`/`_pick_match` en `sync_merge.py`)
+   siempre hacía ganar a la copia CON acta sobre la que no la tiene, con
+   el mismo marcador — para proteger contra pérdidas ACCIDENTALES. Un
+   recorte DELIBERADO sella `trimmedAt` (ms) en el propio resultado; si
+   es posterior o igual al `ua`/`updatedAt` de la copia que aún trae el
+   acta, el recorte GANA — no hay nada que perder, esa acta ya se sumó a
+   la tabla permanente antes de vaciarla (ver commit del prerrequisito de
+   servidor). Sin esto, cualquier dispositivo con una copia vieja
+   resucitaría el acta que se acaba de vaciar a propósito.
+
+   REGLAS A RESPETAR:
+   1. PROHIBIDO recortar un partido con CUALQUIER lado humano (club o
+      selección). `_pmIsIAvsIA` es deliberadamente CONSERVADOR: si no
+      puede identificar con certeza los 2 equipos, o si CUALQUIER
+      detector de humanidad (`_isHumanClubCanonico`/`_esSelHumana`/
+      `isHumanInComp`) da `true` para cualquiera de los 2 lados, el
+      partido NO se toca.
+   2. PROHIBIDO recortar un partido cuya jornada/ronda NO esté 100%
+      completa. Los detectores (`_pmGroupJornadaDone`/
+      `_pmLeagueJornadaDone`/`_pmKoRoundDone`) exigen que TODOS los
+      partidos de esa jornada/ronda tengan `played:true` antes de tocar
+      ninguno.
+   3. PROHIBIDO que el recorte escriba en la tabla permanente SIN
+      persistir el `cfg`/estado mutado (o viceversa) — ambos pasos van
+      juntos, en el mismo barrido, o un fallo a mitad podría dejar un
+      partido sin acta Y sin tabla permanente. `_pmSweepTourCfg`/
+      `_pmSweepInterState` hacen ambos antes de devolver `true`.
+   4. PROHIBIDO que un accumulator nuevo (`_pmAccumulateEvents`) sume un
+      tipo de evento distinto a como lo hace `rebuildPlayerStatsStore`
+      (Source 3/4/5, más arriba en este archivo) para la MISMA familia —
+      los números del partido recortado deben ser IDÉNTICOS a los que el
+      escaneo en vivo habría producido, o las estadísticas cambiarían al
+      recortar un partido (inaceptable).
+   5. PROHIBIDO que el merge server-side (`_pm_tally_merge`) una SOLO
+      `matches` sin unir TAMBIÉN `names` — los `playerKey` de un
+      `matches` recién llegado de OTRO dispositivo son indescifrables
+      sin el `names` que ese mismo dispositivo aportó.
+   6. Toda competición NUEVA con acta hereda esto en cuanto se añada su
+      propio `_pmSweepXxx` — no hay lista hardcodeada de torneos, el
+      barrido de `tour_*_v1` recorre TODAS las claves presentes.
+   7. PROHIBIDO que `_pmDedupKey` deje de incluir el nombre (normalizado)
+      de los 2 equipos — solo la posición estructural (`mk`/`phase+idx`)
+      NO es una clave segura: un ♻️ Reset reutiliza la MISMA posición con
+      un emparejamiento DISTINTO, y sin los nombres en la clave el
+      partido nuevo en esa posición chocaría con la entrada vieja
+      (`if (!tally.matches[dedupKey])`) y sus estadísticas se perderían
+      para siempre (el acta ya está vacía cuando se detecta la colisión).
+   ════════════════════════════════════════════════════════════════════ */
+(function(){
+  var TALLY_KEY = {
+    torneos: 'pm_tally_torneos_v1',
+    sel:     'pm_tally_sel_v1',
+    mundial: 'pm_tally_mundial_v1',
+    copa:    'pm_tally_copa_v1',
+    inter:   'pm_tally_inter_v1'
+  };
+  var _cache = {};      // bucketId -> {names:{}, matches:{}, updatedAt}
+  var _hydrated = {};   // bucketId -> bool
+
+  function _emptyTally(){ return { names:{}, matches:{}, updatedAt:0 }; }
+
+  function _pmLoad(bucketId){
+    if (_cache[bucketId]) return _cache[bucketId];
+    var t = _emptyTally();
+    try {
+      var raw = localStorage.getItem(TALLY_KEY[bucketId]);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          t.names   = (parsed.names   && typeof parsed.names   === 'object') ? parsed.names   : {};
+          t.matches = (parsed.matches && typeof parsed.matches === 'object') ? parsed.matches : {};
+          t.updatedAt = Number(parsed.updatedAt) || 0;
+        }
+      }
+    } catch(_){}
+    _cache[bucketId] = t;
+    return t;
+  }
+
+  function _pmPush(bucketId, tries){
+    tries = tries || 0;
+    var tally = _pmLoad(bucketId);
+    if (!tally.matches || !Object.keys(tally.matches).length) return;
+    try {
+      fetch('/api/kv/' + TALLY_KEY[bucketId], {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        credentials: 'same-origin', body: JSON.stringify({ value: tally })
+      }).then(function(r){ return r && r.ok ? r.json() : null; })
+        .then(function(j){ if (!(j && j.ok) && tries < 3) setTimeout(function(){ _pmPush(bucketId, tries+1); }, 1000*(tries+1)); })
+        .catch(function(){ if (tries < 3) setTimeout(function(){ _pmPush(bucketId, tries+1); }, 1000*(tries+1)); });
+    } catch(_){}
+  }
+
+  function _pmSave(bucketId, tally){
+    tally.updatedAt = Date.now();
+    _cache[bucketId] = tally;
+    try { window._lsSetSafe(TALLY_KEY[bucketId], JSON.stringify(tally)); } catch(_){}
+    _pmPush(bucketId, 0);
+  }
+
+  /* Hidratación: UNIÓN manual con lo local (nunca reemplaza el blob
+     entero) — una tabla permanente es aditiva por naturaleza (cada
+     partido se cuenta UNA vez, identificado por su clave, nunca dos), a
+     diferencia de un snapshot reemplazable tipo HUD/lesiones. Se evita
+     `_kvBlobSync` a propósito: su gate "solo adopta si el server es MÁS
+     RECIENTE" puede dejar a un dispositivo con `updatedAt` local alto
+     (por trabajo propio reciente) sin ver JAMÁS las aportaciones de otro
+     dispositivo que sincronizó antes con un `updatedAt` más bajo. */
+  function _pmHydrate(bucketId, cb){
+    try {
+      fetch('/api/kv/' + TALLY_KEY[bucketId], { credentials:'same-origin', headers:{'Cache-Control':'no-store'} })
+        .then(function(r){ return r && r.ok ? r.json() : null; })
+        .then(function(j){
+          var sv = j && j.ok ? j.value : null;
+          if (sv && sv.matches && typeof sv.matches === 'object') {
+            var local = _pmLoad(bucketId);
+            var changed = false;
+            Object.keys(sv.matches).forEach(function(k){
+              if (!local.matches[k]) { local.matches[k] = sv.matches[k]; changed = true; }
+            });
+            if (sv.names && typeof sv.names === 'object') {
+              Object.keys(sv.names).forEach(function(k){
+                if (local.names[k] === undefined) { local.names[k] = sv.names[k]; changed = true; }
+              });
+            }
+            if (changed) {
+              local.updatedAt = Date.now();
+              _cache[bucketId] = local;
+              try { window._lsSetSafe(TALLY_KEY[bucketId], JSON.stringify(local)); } catch(_){}
+            }
+          }
+          _hydrated[bucketId] = true;
+          if (typeof cb === 'function') { try { cb(); } catch(_){} }
+        })
+        .catch(function(){ _hydrated[bucketId] = true; if (typeof cb === 'function') { try { cb(); } catch(_){} } });
+    } catch(_){ _hydrated[bucketId] = true; if (typeof cb === 'function') { try { cb(); } catch(_){} } }
+  }
+
+  function _pmNorm(s){
+    try { return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim(); }
+    catch(_){ return String(s||'').toLowerCase().trim(); }
+  }
+
+  /* Clave de deduplicación de un partido en la tabla permanente. Incluye
+     SIEMPRE el nombre (normalizado) de los 2 equipos, ADEMÁS de la
+     posición estructural (`mk`/`phase+idx`) — nunca solo la posición.
+     Motivo: un re-sorteo (♻️ Reset) reutiliza la MISMA posición
+     estructural (mismo `mk` / mismo `phase+idx`) con un emparejamiento
+     de equipos DISTINTO. Si la clave fuera solo `id|mk`, el partido
+     NUEVO en esa posición chocaría con la entrada VIEJA ya presente
+     (`if (!tally.matches[dedupKey])` la saltaría) y sus estadísticas se
+     perderían para siempre — nunca se sumarían a la tabla ni se podrían
+     recuperar (el acta ya se habría vaciado). Incluir el pareo real de
+     equipos hace que un re-sorteo con equipos distintos en la misma
+     posición sea SIEMPRE una clave nueva. La posición estructural sigue
+     siendo necesaria además del pareo: en un doble round-robin el MISMO
+     par de equipos juega DOS veces (ida y vuelta) — sin `mk`, la 2ª
+     vuelta colisionaría con la 1ª y se perdería igual. */
+  function _pmDedupKey(containerId, slotKey, teamA, teamB){
+    return containerId + '|' + slotKey + '|' + _pmNorm(teamA) + '::' + _pmNorm(teamB);
+  }
+
+  /* Campo largo (el que usan los buckets de `rebuildPlayerStatsStore`) →
+     clave corta (la que se persiste en la tabla). Un campo a CERO nunca
+     se escribe — es la mitad del ahorro de espacio de este módulo. */
+  var STAT_SHORT = {gol:'g',pen:'p',fk:'f',mvp:'m',ta:'y',tr:'r',penSaved:'s',imbat:'i',penProv:'pp',penFall:'pf',propia:'o'};
+  var STAT_LONG  = {g:'gol',p:'pen',f:'fk',m:'mvp',y:'ta',r:'tr',s:'penSaved',i:'imbat',pp:'penProv',pf:'penFall',o:'propia'};
+  function _pmCompactStat(full){
+    var out = {};
+    for (var longKey in STAT_SHORT) { if (full[longKey]) out[STAT_SHORT[longKey]] = full[longKey]; }
+    return out;
+  }
+  function _pmExpandStat(compact){
+    var out = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+    for (var shortKey in STAT_LONG) { if (compact[shortKey]) out[STAT_LONG[shortKey]] = compact[shortKey]; }
+    return out;
+  }
+
+  /* Acumula los eventos de UN partido en `entry` ({t:[nA,nB], p:{}}),
+     registrando nombres en `tally.names` (compartido, deduplicado), con
+     el MISMO criterio, tipo a tipo, que usa `rebuildPlayerStatsStore`
+     (Source 3 para torneos/sel/mundial, Source 4/5 para inter/copa —
+     estos 2 últimos incluyen además la línea `sust`+playerOut, de ahí el
+     parámetro `includeSust`). Los números deben ser IDÉNTICOS a los que
+     el escaneo en vivo habría producido — es la garantía de que recortar
+     un partido no cambia ninguna estadística ya mostrada. */
+  function _pmAccumulateEvents(entry, tally, teamA, teamB, events, mvp, mvpTeam, includeSust){
+    var nA = _pmNorm(teamA), nB = _pmNorm(teamB);
+    entry.t = [nA, nB];
+    if (nA && teamA && tally.names[nA] === undefined) tally.names[nA] = teamA;
+    if (nB && teamB && tally.names[nB] === undefined) tally.names[nB] = teamB;
+    var full = {};
+    function _fullEntry(team, player){
+      var tn = _pmNorm(team), pn = _pmNorm(player);
+      var key = tn + '::' + pn;
+      if (!full[key]) full[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+      if (tally.names[key] === undefined) tally.names[key] = player;
+      return full[key];
+    }
+    (events||[]).forEach(function(ev){
+      if (!ev || ev._varAnulado) return;
+      var side = ev.team || ev.side;
+      var team = ev.realTeam
+        || ((side === 'a' || side === 'home') ? teamA
+          : (side === 'b' || side === 'away') ? teamB
+          : ((side && side !== 'a' && side !== 'b') ? side : ''));
+      var player = '';
+      if (Array.isArray(ev.player)) player = ev.player[1] || ev.player[0] || '';
+      else if (typeof ev.player === 'string') player = ev.player;
+      else player = ev.name || ev.playerName || '';
+      if (!team || !player) return;
+      var p = _fullEntry(team, player);
+      var type = ev.type || '';
+      var ico = String(ev.ico||'').replace(/️/g,'').trim();
+      if (type==='amarilla') p.ta++;
+      else if (type==='roja'||type==='d-amarilla') p.tr++;
+      else if (type==='card'){ if(ico==='🟨')p.ta++; else if(ico==='🟥')p.tr++; else if(ico==='🟨🟥'){p.ta++;p.tr++;} }
+      else if (type==='gol') p.gol++;
+      else if (type==='falta-gol') p.fk++;
+      else if (type==='pen-gol') p.pen++;
+      else if (type==='pen-prov') p.penProv++;
+      else if (type==='pen-fallo'||type==='pen-fallado') p.penFall++;
+      else if (type==='propia') p.propia++;
+      else if (type==='pen-parado') p.penSaved++;
+      else if (type==='mvp') p.mvp++;
+      else if (type==='imbat') p.imbat++;
+      if (includeSust && type==='sust' && ev.playerOut) _fullEntry(team, ev.playerOut);
+    });
+    if (mvp && mvpTeam) {
+      var hasMvpEvt = (events||[]).some(function(e){ return e && e.type === 'mvp'; });
+      if (!hasMvpEvt) _fullEntry(mvpTeam, mvp).mvp++;
+    }
+    entry.p = {};
+    Object.keys(full).forEach(function(k){ entry.p[k] = _pmCompactStat(full[k]); });
+  }
+
+  /* Suma la tabla permanente ENCIMA de un bucket/pjBucket recién
+     escaneado en vivo por `rebuildPlayerStatsStore`. Llamado desde ahí
+     mismo, justo antes de `_persistBucket` — ver el hook feature-detected
+     unas líneas más arriba en ese archivo. */
+  window._pmMergeTallyInto = function(bucketId, bucket, pjBucket){
+    if (!bucket || !pjBucket || !TALLY_KEY[bucketId]) return;
+    var tally = _pmLoad(bucketId);
+    var names = tally.names || {};
+    var matches = tally.matches || {};
+    Object.keys(matches).forEach(function(mk){
+      var m = matches[mk];
+      if (!m) return;
+      (m.t||[]).forEach(function(tn){ if (tn) pjBucket[tn] = (pjBucket[tn]||0) + 1; });
+      if (m.p) Object.keys(m.p).forEach(function(pk){
+        var src = _pmExpandStat(m.p[pk] || {});
+        if (!bucket[pk]) bucket[pk] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,pj:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+        var d = bucket[pk];
+        d.gol      = (d.gol     ||0) + src.gol;
+        d.pen      = (d.pen     ||0) + src.pen;
+        d.fk       = (d.fk      ||0) + src.fk;
+        d.mvp      = (d.mvp     ||0) + src.mvp;
+        d.ta       = (d.ta      ||0) + src.ta;
+        d.tr       = (d.tr      ||0) + src.tr;
+        d.imbat    = (d.imbat   ||0) + src.imbat;
+        d.penSaved = (d.penSaved||0) + src.penSaved;
+        d.penProv  = (d.penProv ||0) + src.penProv;
+        d.penFall  = (d.penFall ||0) + src.penFall;
+        d.propia   = (d.propia  ||0) + src.propia;
+        if (!d.team)   d.team   = names[pk.split('::')[0]] || '';
+        if (!d.player) d.player = names[pk] || '';
+      });
+    });
+  };
+
+  /* ── Detección de humanidad — MISMO criterio en los 3 detectores
+     canónicos del proyecto (MISTERS_REGISTRY + humanEmoji por comp),
+     unidos por OR: cualquiera que diga "humano" basta para NO tocar el
+     partido. Sin nombre de alguno de los 2 lados → conservador, no se
+     toca (no se puede verificar con certeza). ── */
+  function _pmIsHumanTeam(name, compKey){
+    if (!name) return true;
+    try { if (window._isHumanClubCanonico && window._isHumanClubCanonico(name)) return true; } catch(_){}
+    try { if (window._esSelHumana && window._esSelHumana(name)) return true; } catch(_){}
+    try { if (typeof window.isHumanInComp === 'function' && window.isHumanInComp(name, compKey)) return true; } catch(_){}
+    return false;
+  }
+  function _pmIsIAvsIA(teamA, teamB, compKey){
+    if (!teamA || !teamB) return false;
+    return !_pmIsHumanTeam(teamA, compKey) && !_pmIsHumanTeam(teamB, compKey);
+  }
+
+  /* ── Jornada/ronda 100% completa — mismo criterio (fixtures reales,
+     no solo lo que ya haya en `results`) que `_groupsDone`/`_roundDone`
+     de más arriba en este archivo, pero con granularidad de UNA sola
+     jornada/ronda (no "el torneo entero"). ── */
+  function _pmGroupJornadaDone(cfg, g, j){
+    var gf = cfg.groupFixtures || {};
+    var fix = gf[g];
+    if (!fix || !fix[j] || !fix[j].length) return false;
+    var res = cfg.results || {};
+    for (var m = 0; m < fix[j].length; m++){
+      var r = res['g'+g+'_'+j+'_'+m];
+      if (!(r && r.played)) return false;
+    }
+    return true;
+  }
+  function _pmLeagueJornadaDone(cfg, j){
+    var fx = cfg.fixture || [];
+    var jor = fx[j];
+    if (!jor || !jor.length) return false;
+    var res = cfg.results || {};
+    for (var m = 0; m < jor.length; m++){
+      var r = res[j+'_'+m];
+      if (!(r && r.played)) return false;
+    }
+    return true;
+  }
+  function _pmKoRoundDone(cfg, r){
+    var kb = cfg.koBracket || [];
+    var b = kb[r];
+    if (!b || b.length < 2) return false;
+    var res = cfg.results || {};
+    for (var i=0;i+1<b.length;i+=2){
+      if (!((res['ko_'+r+'_'+(i/2)]||{}).played)) return false;
+    }
+    return true;
+  }
+
+  /* ── Barrido de UN cfg de torneo (tour_<id>_v1) ──
+     Recorre `cfg.results`, recorta cada partido IA-vs-IA cuya jornada/
+     ronda esté 100% completa y aún tenga acta sin recortar. Devuelve
+     `true` si mutó el cfg (para que el caller lo persista). */
+  function _pmSweepTourCfg(id, cfg){
+    if (!cfg || !cfg.results || typeof cfg.results !== 'object') return false;
+    var isMundialCfg = (cfg.id === 'mundial');
+    var idStr = String(cfg.id || id || '');
+    var isSelCfg = /^(spv|sfn)\d+$/.test(idStr) || cfg.format === 'mundial-48';
+    var bucketId = isMundialCfg ? 'mundial' : (isSelCfg ? 'sel' : 'torneos');
+    var compKey  = isMundialCfg ? 'mundial' : (isSelCfg ? 'sel' : 'torneo');
+    var teams = cfg.teams || [];
+    /* Índice matchKey → {a,b} para resolver home/away cuando el result
+       no los trae (partidos antiguos guardados solo con el marcador). */
+    var idx = {};
+    try {
+      var fc = cfg.formatConfig || {};
+      var pg = fc.perGroup || 4;
+      var gf = cfg.groupFixtures || {};
+      Object.keys(gf).forEach(function(gk){
+        var g = parseInt(gk, 10); if (isNaN(g)) return;
+        var slice = teams.slice(g*pg, g*pg+pg);
+        var fix = gf[gk] || [];
+        for (var j = 0; j < fix.length; j++) for (var m = 0; m < fix[j].length; m++){
+          var pr = fix[j][m]; if (!pr) continue;
+          idx['g'+g+'_'+j+'_'+m] = { a: slice[pr.home] && slice[pr.home].name, b: slice[pr.away] && slice[pr.away].name };
+        }
+      });
+      var lfx = cfg.fixture || [];
+      for (var lj = 0; lj < lfx.length; lj++){
+        var ljor = lfx[lj]; if (!ljor) continue;
+        for (var lm = 0; lm < ljor.length; lm++){
+          var lpr = ljor[lm]; if (!lpr) continue;
+          idx[lj+'_'+lm] = { a: teams[lpr.home] && teams[lpr.home].name, b: teams[lpr.away] && teams[lpr.away].name };
+        }
+      }
+      var kb = cfg.koBracket || [];
+      for (var r0 = 0; r0 < kb.length; r0++){
+        var rt = kb[r0] || [];
+        for (var ii = 0; ii+1 < rt.length; ii += 2){
+          idx['ko_'+r0+'_'+(ii/2)] = { a: rt[ii] && rt[ii].name, b: rt[ii+1] && rt[ii+1].name };
+        }
+      }
+    } catch(_){}
+
+    var tally = _pmLoad(bucketId);
+    var touchedTally = false, touchedCfg = false;
+    var res = cfg.results;
+    Object.keys(res).forEach(function(mk){
+      if (/\|L[12]$/.test(mk)) return;   /* legs intermedios de KO a doble partido */
+      var r = res[mk];
+      if (!r || !r.played || !Array.isArray(r.events) || !r.events.length || r.trimmedAt) return;
+      var done = false;
+      var mG = /^g(\d+)_(\d+)_(\d+)$/.exec(mk);
+      var mK = /^ko_(\d+)_(\d+)$/.exec(mk);
+      if (mG) done = _pmGroupJornadaDone(cfg, parseInt(mG[1],10), parseInt(mG[2],10));
+      else if (mK) done = _pmKoRoundDone(cfg, parseInt(mK[1],10));
+      else {
+        var mL = /^(\d+)_(\d+)$/.exec(mk);
+        if (mL) done = _pmLeagueJornadaDone(cfg, parseInt(mL[1],10));
+      }
+      if (!done) return;
+      var info = idx[mk] || {};
+      var tA = r.home || info.a || '';
+      var tB = r.away || info.b || '';
+      if (!_pmIsIAvsIA(tA, tB, compKey)) return;
+      var dedupKey = _pmDedupKey(id, mk, tA, tB);
+      if (!tally.matches[dedupKey]) {
+        var entry = {};
+        _pmAccumulateEvents(entry, tally, tA, tB, r.events, r.mvp, r.mvpTeam, false);
+        tally.matches[dedupKey] = entry;
+        touchedTally = true;
+      }
+      delete r.events;
+      delete r.mvp;
+      delete r.mvpTeam;
+      r.trimmedAt = Date.now();
+      touchedCfg = true;
+    });
+    if (touchedTally) _pmSave(bucketId, tally);
+    return touchedCfg;
+  }
+
+  /* ── Barrido completo de TODOS los `tour_*_v1` presentes localmente. ── */
+  window._pmSweepAllTours = function(){
+    var changedIds = [];
+    try {
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++){
+        var k = localStorage.key(i);
+        if (k && /^tour_.+_v1$/.test(k)) keys.push(k);
+      }
+      keys.forEach(function(k){
+        var id = k.replace(/^tour_/, '').replace(/_v1$/, '');
+        var raw = localStorage.getItem(k);
+        if (!raw) return;
+        var cfg;
+        try { cfg = JSON.parse(raw); } catch(_){ return; }
+        if (!cfg) return;
+        var changed = false;
+        try { changed = _pmSweepTourCfg(id, cfg); } catch(_){}
+        if (changed) {
+          changedIds.push(id);
+          try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg); } catch(_){}
+          try { if (window._TOUR_CACHE) window._TOUR_CACHE[id] = cfg; } catch(_){}
+        }
+      });
+    } catch(_){}
+    return changedIds;
+  };
+
+  /* ── Barrido de la Copa Intercontinental (`inter_state_v1`) ──
+     8 equipos · Cuartos→Semis→Final · partido ÚNICO por cruce (sin ida/
+     vuelta, a diferencia de la Copa del Rey — nunca hay ambigüedad de
+     qué leg cuenta). `s.sorteo[phase]` es un array de partidos; una FASE
+     completa (todos `played`) es la "eliminatoria" a efectos de esta
+     regla. La persistencia es un simple `_lsSetSafe('inter_state_v1',…)`
+     — `inter_state_v1` viaja por el polling genérico de `SYNC_KEYS`
+     (`part2/misc_body_2.html`, cada 3 s) hacia `_STATE_BRACKET_KEYS` en
+     el servidor, que YA respeta `trimmedAt` (mismo prerrequisito que
+     protege torneos/sel/mundial) — no hace falta un push explícito
+     aquí, escribir localStorage basta. */
+  function _pmSweepInterState(){
+    var raw = null;
+    try { raw = localStorage.getItem('inter_state_v1'); } catch(_){}
+    if (!raw) return false;
+    var s;
+    try { s = JSON.parse(raw); } catch(_){ return false; }
+    if (!s || !s.sorteo || typeof s.sorteo !== 'object') return false;
+    var PHASES = ['q', 's', 'f'];
+    var tally = _pmLoad('inter');
+    var touchedTally = false, touchedCfg = false;
+    PHASES.forEach(function(phase){
+      var ms = s.sorteo[phase];
+      if (!Array.isArray(ms) || !ms.length) return;
+      var done = true;
+      for (var i = 0; i < ms.length; i++){ if (!ms[i] || !ms[i].played) { done = false; break; } }
+      if (!done) return;
+      ms.forEach(function(m, idx){
+        if (!m || !m.played || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
+        var tA = m.home || '', tB = m.away || '';
+        if (!_pmIsIAvsIA(tA, tB, 'inter')) return;
+        var dedupKey = _pmDedupKey('inter', phase + '_' + idx, tA, tB);
+        if (!tally.matches[dedupKey]) {
+          var entry = {};
+          _pmAccumulateEvents(entry, tally, tA, tB, m.events, m.mvp, m.mvpTeam, true);
+          tally.matches[dedupKey] = entry;
+          touchedTally = true;
+        }
+        delete m.events;
+        delete m.mvp;
+        delete m.mvpTeam;
+        m.trimmedAt = Date.now();
+        touchedCfg = true;
+      });
+    });
+    if (touchedTally) _pmSave('inter', tally);
+    if (touchedCfg) {
+      try { window._lsSetSafe('inter_state_v1', JSON.stringify(s)); } catch(_){}
+    }
+    return touchedCfg;
+  }
+  window._pmSweepInterState = _pmSweepInterState;
+
+  /* ── Disparo automático, sin botón ──
+     Boot (diferido, para no competir con la hidratación inicial) + barrido
+     periódico (cubre jornadas que se completan mientras la app sigue
+     abierta, sin que el admin tenga que recargar ni pulsar nada). */
+  try {
+    Object.keys(TALLY_KEY).forEach(function(b){ _pmHydrate(b); });
+  } catch(_){}
+  try {
+    setTimeout(function(){
+      try { window._pmSweepAllTours(); } catch(_){}
+      try { _pmSweepInterState(); } catch(_){}
+    }, 9000);
+    setInterval(function(){
+      try { window._pmSweepAllTours(); } catch(_){}
+      try { _pmSweepInterState(); } catch(_){}
+    }, 180000);
+  } catch(_){}
 })();
 </script>
 

@@ -1,5 +1,164 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El click en una fila de clasificación con `players` vacío persistía un rebuild STATS-ONLY (power:70/pos:MED para TODOS) — Real Betis, en producción (obligatorio, 2026-08-17 #3)
+
+**Bug (usuario 2026-08-17, «he metido todas las plantillas ea sport y liga
+Inglaterra, desde cpu y desde móvil y ahora al abrir la web están todas
+borradas»)**: alarma de pérdida masiva de datos. Diagnóstico en vivo
+(el sandbox de esta sesión no tiene acceso de red al servidor de
+producción, así que se guio al usuario a abrir URLs `/api/debug` y
+`/api/liga-ext/<slug>` directamente en el navegador y pegar el JSON):
+
+1. `/api/debug` confirmó backend **PostgreSQL persistente** (no SQLite
+   efímero) y que `liga_ext_inglaterra`/`liga_ext_liga-ea-sports`
+   existían con `updated_at` recientes — descartado el "reinicio de BD
+   efímera" que motivó varias secciones anteriores de este archivo.
+2. El purgador automático de "ligas fantasma"
+   (`DEAD_MERGED_LEAGUE_SLUGS`/`_purge_dead_merged_leagues`, corre en
+   cada boot del servidor) se descartó — ninguno de los 2 slugs
+   afectados coincide con esa lista.
+3. El JSON crudo de `GET /api/liga-ext/liga-ea-sports` reveló que la
+   liga **NO** estaba vacía — la mayoría de equipos (Atlético Madrid,
+   Arsenal, Athletic Club, Celta, FC Barcelona, Elche CF, Espanyol,
+   Mallorca, Osasuna, Rayo Vallecano…) tenían su plantilla real
+   intacta, con posiciones y valores variados. Pero **Real Betis**
+   tenía sus 25+ jugadores (nombres reales, incluidos porteros/
+   defensas/medios) con **TODOS** `"pos":"MED","power":70` — el MISMO
+   patrón exacto que ya se reportó para Liverpool al principio de este
+   archivo. No era un borrado — era una plantilla real APLANADA a un
+   placeholder genérico, persistida en el `main` del servidor.
+
+### Causa raíz
+
+El delegado de click sobre `.clas-row` (`document.addEventListener(
+'click', async function(ev){...})`, `misc_body_1.html`, el mismo que
+abre la plantilla desde CUALQUIERA de las 14 pantallas de
+clasificación — Liga EA Sports, Hypermotion, Primera Federación,
+Superliga, Champions/Europa/Conference grupos y playoffs) tiene un
+paso **2.c** que, cuando el equipo encontrado (`found`) tiene
+`players` VACÍO, reconstruye la plantilla probando 8 fuentes en
+cascada (Fuente A→H). Tres de ellas están **documentadas en su propio
+comentario** como "último recurso, no tenemos pos/power, usamos
+MED/70": **Fuente C** (`ef_player_stats_v1`, solo nombres+stats),
+**Fuente E** (`LIGA_PLAYER_MATCH_STORE`, nombres de eventos del acta) y
+**Fuente F** (`ef_liga38_v4`, nombres de goleadores de resultados). Si
+CUALQUIERA de estas 3 era la que encontraba algo (nombres reales del
+jugador, sin más), el bloque final del paso 2.c hacía, SIN
+distinguir la fuente:
+```js
+found.players = rebuilt;
+window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data));
+fetch('/api/liga-ext/'+slug, { method:'POST', ... });  // ¡AL SERVIDOR!
+```
+Es decir: **un simple click en la fila de la clasificación**, si en
+ESE instante `found.players` estaba momentáneamente vacío (race de
+sync entre PC y móvil — exactamente el escenario del reporte, "desde
+cpu y desde móvil"), disparaba esta reconstrucción degradada y la
+**subía directamente al servidor**, sustituyendo la plantilla real ya
+guardada (con posiciones/valores reales) por una plana con TODOS los
+jugadores a MED/70 — para SIEMPRE, hasta que el admin la re-editara.
+El comentario en la sección de `_hubRowLooksGeneric` (más abajo, sección
+"La plantilla del HUB…", 2026-07-07 #4) YA documentaba este mecanismo
+con precisión ("cuando ese rebuild corrió y se PERSISTIÓ en OTRO
+ligaExt_* donde el club tenía 0 jugadores") pero el fix de esa sección
+solo arregló la capa de DISPLAY del hub (elegir la fila correcta entre
+duplicados) — nunca se tocó el propio click handler que sigue
+pudiendo ESCRIBIR y PERSISTIR esta corrupción.
+
+### Fix — el rebuild stats-only NUNCA se persiste, dos capas
+
+**Cliente** (`misc_body_1.html`, el mismo click handler): nueva bandera
+`rebuiltGenericOnly`, sellada `true` únicamente si Fuente C, E o F fue
+la que pobló `rebuilt` (las demás — A/B/D/G/H — traen objetos de
+jugador reales desde otros documentos `ligaExt_*` o el dataset
+canónico del backend, y sí pueden persistirse como antes). Si
+`rebuiltGenericOnly` es `true`, el resultado se guarda aparte
+(`_genericRebuildFallback`) y **NUNCA** se asigna a `found.players` ni
+se persiste (ni `_lsSetSafe` ni POST al servidor) en el paso 2.c. Esto
+deja `found.players` vacío para que el paso **2.d** (promoción desde
+`liga_ext_<slug>_protected`, el snapshot monotónico que nunca encoge)
+tenga la oportunidad de restaurar la plantilla REAL si sigue ahí. Solo
+si 2.d TAMBIÉN falla en encontrar algo, un nuevo paso **2.e** usa
+`_genericRebuildFallback` como ÚLTIMO recurso — de solo DISPLAY, para
+que el admin vea al menos los nombres en vez de una plantilla vacía —
+marcado con `found._genericPlaceholder = true`, sin tocar
+`localStorage` ni el servidor en ningún punto de este camino.
+
+**Servidor** (`app.py`, `_lx_roster_is_generic` dentro de
+`_lx_merge_teams`): red de seguridad adicional, por si CUALQUIER otra
+vía (presente o futura) llega a mandar este patrón al servidor. Ya
+detectaba el placeholder "Jugador N" (bug 2026-07-29, bulk-sim); ahora
+detecta TAMBIÉN la firma "aplanada": nombres reales pero ≥90% de los
+jugadores con `power` **EXPLÍCITAMENTE** igual a 70 **Y** `pos`
+**EXPLÍCITAMENTE** igual a `'MED'` (mismo umbral que el heurístico de
+display `_hubRowLooksGeneric`, JS). Un roster así NUNCA gana la fusión
+por-equipo frente a una copia real de otro dispositivo, esté donde
+esté (old o new, cualquier `updatedAt`). **IMPORTANTE**: el chequeo
+exige que el campo esté PRESENTE con el valor exacto del placeholder —
+tratar un campo AUSENTE como equivalente (lo que sí hace el
+heurístico de JS, que es solo de display y no de persistencia) causaba
+un FALSO POSITIVO real: el propio test pre-existente
+`test_roster_generico_nunca_gana_a_real` usa jugadores reales SIN
+`pos`/`power` en absoluto (`{"name": "Kevin De Bruyne"}`), y una
+primera versión de este fix los marcaba como "aplanados" por error,
+haciendo que perdieran la fusión frente a una copia vieja — exactamente
+el tipo de pérdida de datos que este fix existe para evitar. Detectado
+y corregido ejecutando el código REAL de `_lx_merge_teams` (extraído y
+evaluado en aislado, sin Flask disponible en este sandbox) contra los
+17 casos de la suite `TestLigaExtMerge` antes de dar el fix por bueno.
+
+Tests nuevos en `tests/test_api.py::TestLigaExtMerge`:
+`test_roster_aplanado_nunca_gana_a_real`,
+`test_roster_aplanado_se_reemplaza_por_real_de_otra_grafia`,
+`test_roster_con_algunos_med_70_no_se_considera_generico` (anti-falso-
+positivo, construido para que SÍ falle si el umbral se vuelve
+demasiado agresivo).
+
+### Recuperación de los datos ya corrompidos (Real Betis y cualquier otro)
+
+Este fix es **preventivo** — no reconstruye retroactivamente lo que ya
+se sobrescribió en el `main` del servidor de producción antes de este
+commit (esta sesión no tiene acceso de red directo a esa base de
+datos). La vía de recuperación, sin que el admin tenga que hacer nada
+técnico, es: **`GET /api/liga-ext-protected/liga-ea-sports`** — el
+snapshot server-side `liga_ext_liga-ea-sports_protected` es
+MONOTÓNICO por nº de jugadores (nunca encoge salvo con `force:true`
+explícito), así que si Real Betis tenía su plantilla real ANTES de que
+esta corrupción se disparara, es la copia con más probabilidades de
+conservarla todavía. Si ese snapshot también perdió la plantilla real
+(porque el propio click handler corrompido también llegó a
+sobreescribirlo, o porque nunca llegó a sellarse con la plantilla
+completa), la única vía que queda es que el admin vuelva a pegar la
+plantilla de Real Betis desde 🖍 Edit — con este fix ya desplegado, un
+click accidental en su fila de clasificación no puede volver a
+borrarla.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un rebuild de plantilla "de último recurso" (sin
+   posición/poder reales — Fuentes C/E/F actuales, o cualquier fuente
+   NUEVA del mismo tipo que solo aporte NOMBRES) se asigne a
+   `found.players` y se persista (localStorage + POST al servidor)
+   directamente desde un click handler. Debe guardarse aparte y usarse
+   SOLO como último recurso de DISPLAY, después de agotar la promoción
+   desde `_protected` — nunca debe poder ganarle a una recuperación
+   real.
+2. **PROHIBIDO** que `_lx_roster_is_generic` (servidor) trate un campo
+   `power`/`pos` AUSENTE como equivalente al placeholder explícito
+   (70/`'MED'`). Causa falsos positivos contra rosters reales
+   incompletos/recién creados. El chequeo exige presencia + coincidencia
+   EXACTA con el valor del placeholder.
+3. **PROHIBIDO** dar por bueno un fix del merge server-side sin
+   ejecutarlo contra la suite `TestLigaExtMerge` completa (aunque el
+   sandbox no tenga Flask instalado, el código de `_lx_merge_teams` es
+   puro Python y se puede extraer y evaluar en aislado con `re` +
+   `unicodedata` como únicas dependencias). Un fix de detección de
+   "roster genérico" demasiado agresivo es tan dañino como no tener
+   ninguno — puede tirar datos reales sparse en vez de protegerlos.
+4. Toda pantalla NUEVA de clasificación que reutilice este patrón de
+   click-handler-con-rebuild-de-último-recurso hereda la protección
+   automáticamente (chokepoint único, el delegado de `.clas-row`).
+
 ## "📋 Pegar plantilla completa" (editor de club) — el diálogo OK/Cancelar tenía semántica INVERTIDA, "Cancelar" en realidad AÑADÍA en vez de no hacer nada (obligatorio, 2026-08-17)
 
 **Bug (3 fotos usuario 2026-08-17, «Liverpool»)**: el admin pega la

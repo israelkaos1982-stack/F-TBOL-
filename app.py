@@ -3302,7 +3302,45 @@ def _lx_merge_teams(old_data, new_data):
             return False
         generic_re = re.compile(r"^jugador\s*\d+$", re.IGNORECASE)
         generic_n = sum(1 for n in names if isinstance(n, str) and generic_re.match(n.strip()))
-        return generic_n >= max(1, int(len(names) * 0.8))
+        if generic_n >= max(1, int(len(names) * 0.8)):
+            return True
+        # FIRMA "APLANADA" (2026-08-17) — bug real Betis, liga-ea-sports:
+        # nombres REALES pero TODOS los jugadores con power/pos puestos
+        # EXPLÍCITAMENTE al placeholder genérico (power == 70, pos ==
+        # 'MED'). Es la firma exacta del rebuild stats-only (Fuentes
+        # C/E/F del click handler cliente,
+        # `document.addEventListener('click', ...)` en misc_body_1.html)
+        # cuando llegaba a persistirse — el cliente ya NO lo persiste
+        # desde este mismo commit, pero esta es la red de seguridad
+        # server-side por si CUALQUIER otra vía llega a mandar este
+        # patrón. IMPORTANTE: solo cuenta si el campo está PRESENTE y
+        # coincide con el valor exacto del placeholder — un jugador sin
+        # `power`/`pos` (dato real recién creado, aún sin rellenar) NO
+        # cuenta como genérico. Tratar "ausente" igual que "70"/"MED"
+        # (como sí hace el heurístico de DISPLAY `_hubRowLooksGeneric`
+        # en JS) causaba falsos positivos aquí: un roster real minimalista
+        # (sin pos/power todavía) podía perder la fusión frente a una
+        # copia vieja de OTRO dispositivo — justo lo que este backfill
+        # existe para evitar.
+        total = 0
+        flat_n = 0
+        for p in players:
+            if not isinstance(p, dict) or not p.get("name"):
+                continue
+            total += 1
+            pw_raw = p.get("power")
+            try:
+                pw = float(pw_raw) if pw_raw not in (None, "") else None
+            except (TypeError, ValueError):
+                pw = None
+            is_generic_pw = (pw == 70)
+            pos_raw = p.get("pos")
+            is_generic_pos = isinstance(pos_raw, str) and pos_raw.strip().upper() == "MED"
+            if is_generic_pw and is_generic_pos:
+                flat_n += 1
+        if total >= 2 and (flat_n / total) >= 0.9:
+            return True
+        return False
 
     best_roster_by_name = {}   # nombre canónico -> (ts, players, is_generic)
     for t in (old_teams + new_teams):

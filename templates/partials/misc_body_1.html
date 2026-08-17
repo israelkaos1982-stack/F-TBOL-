@@ -13907,6 +13907,24 @@ window._hdrCleanCache = function(){
       if (!found.players || !found.players.length) {
         var rebuilt = [];
         var seenP = Object.create(null);
+        /* GENÉRICO-SOLO (2026-08-17): true si `rebuilt` terminó
+           poblado ÚNICAMENTE por una fuente stats-only (C/E/F) que,
+           por su propio diseño, NUNCA trae posición/poder reales —
+           siempre pone `power:70, pos:'MED'` a TODOS los jugadores.
+           Confirmado en producción (Real Betis, `liga_ext_liga-ea-sports`):
+           un click en la fila de la clasificación con `found.players`
+           momentáneamente vacío (race de sync entre PC+móvil) disparaba
+           este rebuild, y el bloque de persistencia de más abajo lo
+           escribía DIRECTO al servidor — sustituyendo la plantilla real
+           ya guardada por una plana, con los nombres correctos pero
+           TODOS los jugadores a MED/70. Ver 'Reglas a respetar' en
+           CLAUDE.md, sección "Auto-rebuild-al-clicar..." */
+        var rebuiltGenericOnly = false;
+        /* Si `rebuiltGenericOnly` acaba en true, guardamos el rebuild
+           AQUÍ (nunca en `found.players`) — solo se usa como ÚLTIMO
+           recurso de DISPLAY tras el intento de recuperar de
+           `_protected` (2.d, más abajo). NUNCA se persiste. */
+        var _genericRebuildFallback = null;
 
         /* Fuente A: SQUAD_REGISTRY (memoria) */
         try {
@@ -14010,6 +14028,7 @@ window._hdrCleanCache = function(){
               });
             }
           } catch(_){}
+          if (rebuilt.length) rebuiltGenericOnly = true;
         }
 
         /* Fuente D: LA MISMA función que usa la simulación,
@@ -14100,6 +14119,7 @@ window._hdrCleanCache = function(){
               });
             });
           } catch(_){}
+          if (rebuilt.length) rebuiltGenericOnly = true;
         }
         sourceCounts.E_matchStore = rebuilt.length - sourceCounts.D_sqFrom;
 
@@ -14138,6 +14158,7 @@ window._hdrCleanCache = function(){
               });
             }
           } catch(_){}
+          if (rebuilt.length) rebuiltGenericOnly = true;
         }
         sourceCounts.F_results = rebuilt.length - sourceCounts.D_sqFrom - sourceCounts.E_matchStore;
 
@@ -14270,16 +14291,34 @@ window._hdrCleanCache = function(){
           try {
             if (typeof window._cleanSquadPlayers === 'function') rebuilt = window._cleanSquadPlayers(rebuilt);
           } catch(_){}
-          found.players = rebuilt;
-          try { window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
-          try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
-          try {
-            fetch('/api/liga-ext/'+encodeURIComponent(slug), {
-              method: 'POST',
-              headers: {'Content-Type':'application/json'},
-              body: JSON.stringify({data: data})
-            }).catch(function(){});
-          } catch(_){}
+          if (rebuiltGenericOnly) {
+            /* PROHIBIDO persistir un rebuild GENÉRICO (Fuente C/E/F:
+               solo nombres reales, `power:70/pos:'MED'` inventado para
+               TODOS). Bug confirmado en producción 2026-08-17 (Real
+               Betis, `liga_ext_liga-ea-sports`): este bloque hacía
+               `found.players = rebuilt` + `_lsSetSafe` + POST directo
+               al servidor, sustituyendo la plantilla real ya guardada
+               (con posiciones/valores reales) por una plana con TODOS
+               los jugadores a MED/70 — disparado por un simple click en
+               la fila de la clasificación si `found.players` estaba
+               momentáneamente vacío (race de sync PC↔móvil). Ahora se
+               guarda aparte y SOLO se usa como último recurso de
+               DISPLAY (ver 2.d, más abajo) si `_protected` tampoco
+               tiene nada que restaurar — nunca toca localStorage ni el
+               servidor. */
+            _genericRebuildFallback = rebuilt;
+          } else {
+            found.players = rebuilt;
+            try { window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+            try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+            try {
+              fetch('/api/liga-ext/'+encodeURIComponent(slug), {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({data: data})
+              }).catch(function(){});
+            } catch(_){}
+          }
         }
       }
 
@@ -14351,6 +14390,23 @@ window._hdrCleanCache = function(){
               }
             }
           }
+        }
+      } catch(_){}
+
+      /* 2.e) ÚLTIMO recurso — display-only, NUNCA se persiste. Si tras
+              2.c (rebuild real) y 2.d (promoción `_protected`) el
+              equipo SIGUE sin jugadores, y el único rebuild que se
+              encontró fue GENÉRICO (Fuente C/E/F, solo nombres reales
+              con power:70/pos:'MED' inventado), lo mostramos en el
+              overlay para que el admin no vea una plantilla vacía —
+              pero NUNCA se escribe en localStorage ni se sube al
+              servidor. Así el admin ve algo útil (los nombres) sin que
+              el editor pueda machacar la plantilla real de otro
+              dispositivo con datos inventados. */
+      try {
+        if ((!found.players || !found.players.length) && _genericRebuildFallback && _genericRebuildFallback.length) {
+          found.players = _genericRebuildFallback;
+          found._genericPlaceholder = true;
         }
       } catch(_){}
 

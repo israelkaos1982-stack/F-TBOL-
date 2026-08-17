@@ -3399,6 +3399,16 @@ function actaTog(matchKey) {
 
 // ── Botón CONFIGURACIÓN: cuestionario pre-partido → sanciones ──
 function mlPreviaClick(matchKey) {
+  /* Este flujo (clic directo sobre una card real del calendario) NUNCA
+     fija `window._ppPreviaTeams` — depende del DOM (`#mlw-<matchKey>`)
+     para resolver los equipos. Si un previa ANTERIOR de otra caja de
+     mister (Liga/Copa/Recopa/etc., que SÍ fija `_ppPreviaTeams`) se
+     abrió y se abandonó sin confirmar (navegación, cierre), esa
+     referencia quedaba viva — y como `_ppGetCurrentMatchTeams` prioriza
+     `_ppPreviaTeams` sobre el DOM (ver esa función), este clic heredaría
+     el equipo EQUIVOCADO. Limpiar aquí garantiza que este flujo siempre
+     resuelva por DOM, como se diseñó. */
+  window._ppPreviaTeams = null;
   if (typeof window._mlEnsureLegacyPreMatchStructure === 'function') {
     window._mlEnsureLegacyPreMatchStructure(matchKey);
   }
@@ -5935,8 +5945,34 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
   var _ppCompKey  = null;
   var _ppChecked  = {};
 
-  /* ── Helper global: obtener los 2 equipos del partido actual ── */
+  /* ── Helper global: obtener los 2 equipos del partido actual ──
+     PRIORIDAD: `window._ppPreviaTeams` (si está puesto) GANA SIEMPRE
+     sobre el lookup por DOM. Motivo (bug usuario 2026-08-17, foto
+     «Real Madrid vs Real Betis» mostrando lesionados del Atlético
+     Madrid): los openers de cada caja de mister (Liga/Copa/Recopa/SC/
+     USC/Inter/Superliga/torneo/wprevKO — TODOS excepto `mlPreviaClick`)
+     construyen el matchKey de forma AD-HOC (p.ej. `'lj'+j+'m0'`, con
+     `m0` fijo) y lo usan SOLO como `_ppMatchKey` interno — nunca crean
+     una card real `#mlw-<mk>`. El problema: `populateCalendar()`
+     (`s-calendario`, calendario GLOBAL) sí crea cards reales con el
+     MISMO patrón `'lj'+j+'m'+mi` (mi = índice real del partido dentro
+     de la jornada) para CUALQUIER equipo humano destacado — así que
+     `#mlw-lj8m0` puede existir de verdad, pero perteneciendo al
+     partido de OTRA caja de mister (el que ocupe el índice 0 de esa
+     jornada), no al que se acaba de abrir. El DOM-lookup ganaba esa
+     carrera y devolvía el equipo EQUIVOCADO, colando lesionados/
+     sancionados de un mister ajeno en la pantalla BAJAS PARA EL
+     PARTIDO de otro. `_ppPreviaTeams` se fija EXPLÍCITAMENTE por cada
+     opener justo antes de llamar a `showPrePartidoOverlay` (y se
+     limpia a `null` al confirmar/cancelar/navegar) — es SIEMPRE más
+     fiable que un id que puede colisionar con una card ajena. El
+     ÚNICO flujo que NO lo fija es `mlPreviaClick` (clic directo sobre
+     una card real del calendario) — por diseño depende del DOM, y por
+     eso limpia `window._ppPreviaTeams` a `null` en su primera línea. */
   window._ppGetCurrentMatchTeams = function() {
+    if (window._ppPreviaTeams && window._ppPreviaTeams.home && window._ppPreviaTeams.away) {
+      return { home: window._ppPreviaTeams.home, away: window._ppPreviaTeams.away };
+    }
     var mk = _ppMatchKey;
     if (!mk) return null;
     var wrap = document.getElementById('mlw-' + mk);
@@ -5946,7 +5982,6 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       var a = ((names[1]||{}).textContent||'').replace(/^[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+\s*/, '').trim();
       if (h && a) return { home: h, away: a };
     }
-    if (window._ppPreviaTeams) return { home: window._ppPreviaTeams.home, away: window._ppPreviaTeams.away };
     return null;
   };
 
@@ -7541,7 +7576,19 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       }
     };
     if (typeof window.showPrePartidoOverlay === 'function') {
-      window.showPrePartidoOverlay('lj' + j + 'm0', 'liga', 'No', duracion, isHvH);
+      /* matchKey ÚNICO por partido real (equipos incluidos), NO solo por
+         jornada: `'lj'+j+'m0'` (m0 fijo) colisionaba con la card REAL que
+         `populateCalendar()` construye para el calendario GLOBAL con el
+         MISMO patrón `'lj'+j+'m'+mi` (mi = índice real del partido dentro
+         de esa jornada) — si el índice 0 de la jornada era el partido de
+         OTRA caja de mister, `_ppGetCurrentMatchTeams` (vía DOM) devolvía
+         el equipo equivocado (bug 2026-08-17, lesionados del Atlético
+         Madrid coleándose en la caja del Real Madrid). El sufijo con los
+         nombres de equipo garantiza que esta clave nunca coincide con un
+         índice numérico puro — `_mmCalLabel` solo necesita `^lj(\d+)m`
+         para extraer la jornada, el resto del sufijo le es indiferente. */
+      function _ljSlug(s){ return String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,'').slice(0,24); }
+      window.showPrePartidoOverlay('lj' + j + 'm_' + _ljSlug(home) + '_' + _ljSlug(away), 'liga', 'No', duracion, isHvH);
     }
   };
 
@@ -11551,6 +11598,16 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
           if (ov.classList) ov.classList.remove('show');
           if (ov.style && ov.style.display && ov.style.display !== 'none') ov.style.display = 'none';
         });
+        /* Un previa abandonado sin confirmar (Liga/Copa/Recopa/SC/USC/
+           Inter/Superliga/torneo/wprevKO — cualquier caja de mister que
+           fija `window._ppPreviaTeams` antes de abrir el overlay) deja esa
+           referencia viva si el usuario navega fuera en vez de confirmar.
+           `_ppGetCurrentMatchTeams` prioriza `_ppPreviaTeams` sobre el DOM
+           (fix 2026-08-17, bug "lesionados del Atlético Madrid en la caja
+           del Real Madrid"), así que limpiarla aquí evita que un partido
+           de OTRA caja quede "recordado" en la próxima previa que se abra
+           por un flujo que no lo fija explícitamente (`mlPreviaClick`). */
+        window._ppPreviaTeams = null;
       }
       /* Garantizar SIEMPRE una pantalla activa (si por cualquier ruta
          `originalGo` no la dejó activa → no más fondo negro vacío). */

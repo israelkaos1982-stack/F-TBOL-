@@ -852,6 +852,50 @@ de pérdida que el usuario pidió evitar, y merece una entrega propia
 (un "Source 6: sc_state_v1", espejo de Source 4/5) si el usuario
 confirma que quiere que se investigue/arregle.
 
+### El BACKFILL de acta (`_tourBackfillActasFromResults`) resucitaba el acta recortada — con placeholders — en CADA render (obligatorio, 2026-08-16 #2)
+
+**Bug (fotos usuario 2026-08-16, «Mundialito» — Chelsea 1-1 LA Galaxy,
+Manchester City 1-1 Al Nassr FC, con eventos «Jugador B»/«Jugador 25»/
+«Jugador 13» pese a que el partido ya debería estar recortado)**: "siguen
+saliendo las actas de los partidos IA vs IA" — pese a que el feature de
+recorte de arriba ya estaba en producción (PR #2112 mergeada), los
+partidos IA-vs-IA de jornadas ya completadas seguían mostrando su acta
+COMPLETA, con nombres de jugador PLACEHOLDER (ni siquiera los goleadores
+reales originales).
+
+**Causa raíz**: `_tourBackfillActasFromResults` (`misc_body_1.html`) es
+un mecanismo YA EXISTENTE (2026-06-27 en adelante) pensado para
+RECONSTRUIR el acta de un partido `played:true` que se guardó
+"solo-marcador" — un estado que, hasta este feature, SOLO podía ocurrir
+por accidente (una carrera de sync, un guardado parcial). Se invoca sin
+`force` desde ~10 puntos distintos del código, en CUALQUIER render de
+una pantalla de torneo — no solo al abrir Estadísticas. El bug: esta
+función **no distinguía** "acta perdida por accidente" (hay que
+reconstruirla) de "acta recortada A PROPÓSITO" (`r.trimmedAt`, el
+propio feature de arriba) — así que en CUALQUIER render posterior a un
+recorte, veía `played:true` sin `events`, asumía que había que
+regenerarla vía `genMatchEventsEnhanced(home, away, gh, ga, null)` (con
+placeholders si la plantilla no estaba resuelta en ESE instante — de
+ahí «Jugador B»/«Jugador 25»), y **la volvía a guardar**
+(`window._tourSave(cfg.id, cfg)`) — deshaciendo el recorte en cada
+apertura de la pantalla del torneo, indefinidamente, y devolviendo
+exactamente el peso que el feature pretendía ahorrar.
+
+**Fix**: `_tourBackfillActasFromResults` añade `if (r.trimmedAt)
+return;` como PRIMER chequeo de cada partido del bucle — un partido
+recortado a propósito nunca vuelve a pasar por la regeneración. El
+resto del backfill (reconstruir un acta perdida de verdad, sin
+`trimmedAt`) sigue funcionando exactamente igual que antes. Verificado
+con un harness que extrae la función REAL del archivo y reproduce el
+escenario exacto (partido recortado → NO se toca; partido solo-marcador
+SIN recortar → SÍ se reconstruye, comportamiento preexistente intacto).
+
+Este bug **NO afecta** a la garantía de estadísticas (la tabla
+permanente ya había sumado la aportación del partido ANTES del recorte)
+— es puramente un bug de DISPLAY/persistencia: el acta detallada volvía
+a aparecer (y a pesar) aunque las cifras de Estadísticas fueran
+correctas en todo momento.
+
 ### Reglas a respetar
 
 1. **PROHIBIDO** que se recorte un partido con CUALQUIER lado humano
@@ -910,6 +954,16 @@ confirma que quiere que se investigue/arregle.
    `ef_player_stats_v1` — recortar cualquiera de las 3 sin su propia
    tabla permanente borraría estadísticas YA MOSTRADAS al usuario, que
    fue explícito en que esto "es muy importante que se sigan sumando".
+10. **PROHIBIDO** que `_tourBackfillActasFromResults` (o cualquier
+    "auto-heal"/backfill de acta futuro, de cualquier competición) trate
+    un partido con `r.trimmedAt` como una pérdida accidental que hay que
+    reconstruir. El chequeo `if (r.trimmedAt) return;` va SIEMPRE
+    PRIMERO, antes de mirar si `events` está vacío — de lo contrario
+    cualquier mecanismo de "regenerar acta perdida" (existente o nuevo)
+    deshace el recorte en el siguiente render, con nombres placeholder
+    si la plantilla no está resuelta en ese instante, y lo vuelve a
+    persistir. Toda nueva función que reconstruya un acta desde el
+    marcador hereda esta regla.
 
 ## Catálogo de balones RENOVADO — reset completo del inventario + reasignación por competición (obligatorio, 2026-08-16)
 

@@ -52,7 +52,18 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v19';
+var CACHE_HTML   = 'ftbol-html-v20';
+/* v19 → v20 (2026-08-17): fix "plantilla vacía en el móvil pese a que
+   el servidor tiene el roster real completo" (Osasuna/Athletic Club/
+   Celta, foto usuario). El click en una fila de clasificación con la
+   copia local de ESE slug no vacía pero CON este equipo concreto sin
+   jugadores no volvía a preguntar al servidor por este mismo slug —
+   solo adivinaba con fuentes secundarias (stats/registro/otros slugs)
+   y acababa mostrando "Jugador N" genérico. Nuevo paso "2.a-bis" en
+   el click handler de `.clas-row` (misc_body_1.html) refresca ESTE
+   slug del servidor ANTES de la cascada A-H. Bump obligatorio — sin
+   él, un móvil con la app ya abierta/reciente sigue con el JS viejo
+   pese a estar ya en `main`. */
 /* v9 → v10 (2026-08-15): fix de los 6 toasts sin `pointer-events:none`
    que bloqueaban los toques a las cards del menú de debajo (misma
    regla de abajo — toda edición de `misc_body_1.html` exige este

@@ -47521,9 +47521,30 @@ https://api.sofascore.app/api/v1/team/44/image
  * Mac Allister 85 F
 ### ⚽ Delanteros
  * Mohamed Salah 89 P"></textarea>
-      <div class="lext-sub">C=Capitán · F=Faltas · P=Penaltis. Si el equipo ya tiene jugadores, te preguntará si reemplazar o añadir.</div>
+      <div class="lext-sub">C=Capitán · F=Faltas · P=Penaltis. Si el equipo ya tiene jugadores, te preguntará si reemplazar o añadir. Para fichajes sueltos de verano usa <b>🆕 Fichajes de verano</b> aquí abajo — más rápido y no toca al resto de la plantilla.</div>
       <div class="lext-btn-row">
         <button class="lext-btn green" onclick="lextApplySquadPaste()">💾 Aplicar plantilla</button>
+      </div>
+    </details>
+
+    <!-- Fichajes de verano: pega SOLO los jugadores nuevos (normalmente
+         3-6 por club en una ventana real). SIEMPRE añade, NUNCA
+         reemplaza — a diferencia de "Pegar plantilla completa" no
+         necesita elegir REEMPLAZAR/AÑADIR ni pasa por el motor de
+         "carry stats" (que solo traslada bien las estadísticas por
+         nombre EXACTO y, si no, las reparte por posición/ranking —
+         arriesgado al re-pegar la plantilla entera). Aquí los
+         jugadores que ya estaban NUNCA se tocan: ni su nombre, ni su
+         posición, ni sus PJ/goles/tarjetas acumulados. -->
+    <details class="lext-details" id="lext-squad-signings-details" style="display:none;">
+      <summary>🆕 Fichajes de verano (solo añade, nunca reemplaza)</summary>
+      <div class="lext-sub" style="margin-top:4px;">Pega SOLO los fichajes nuevos — el resto de la plantilla y sus estadísticas no se tocan.</div>
+      <textarea class="lext-input" id="lext-squad-signings-ta" rows="6" style="font-family:Rajdhani,sans-serif;font-size:12px;line-height:1.45;resize:vertical;margin-top:6px;" placeholder="⚽ Delanteros
+ * Nuevo Fichaje 85
+### ⚙️ Centrocampistas
+ * Otro Fichaje 82"></textarea>
+      <div class="lext-btn-row">
+        <button class="lext-btn green" onclick="lextApplyTransferSignings()">➕ Añadir fichajes</button>
       </div>
     </details>
 
@@ -55377,6 +55398,8 @@ https://api.sofascore.app/api/v1/team/44/image
        la plantilla anterior — cada apertura empieza en limpio. */
     var _newBody = document.getElementById('lext-pl2-new-body');
     if (_newBody) _newBody.innerHTML = '';
+    var _signTa = document.getElementById('lext-squad-signings-ta');
+    if (_signTa) _signTa.value = '';
 
     /* Cabecera de stats del equipo en la competición actual + niveles
        4-ejes auto-derivados. */
@@ -55391,8 +55414,10 @@ https://api.sofascore.app/api/v1/team/44/image
        restos. */
     var _editable = !!opts.editable;
     var _pasteEl = document.getElementById('lext-squad-paste-details');
+    var _signEl  = document.getElementById('lext-squad-signings-details');
     var _addEl   = document.getElementById('lext-pl2-add-wrap');
     if (_pasteEl) _pasteEl.style.display = _editable ? '' : 'none';
+    if (_signEl)  _signEl.style.display  = _editable ? '' : 'none';
     if (_addEl)   _addEl.style.display   = _editable ? '' : 'none';
 
     try { renderSquadList(); } catch(_){}
@@ -56759,6 +56784,119 @@ https://api.sofascore.app/api/v1/team/44/image
     } else {
       _finish('replace');
     }
+  };
+
+  /* Overlay de confirmación de "🆕 Fichajes de verano" — solo 2 caminos
+     (añadir / cancelar), nunca reemplaza nada. Lista los nombres para
+     que el admin confirme de un vistazo que son los fichajes correctos
+     antes de tocar la plantilla. */
+  window._lextSquadSigningsConfirmOv = function(brandNew, alreadyThere, cb){
+    try {
+      var existing = document.getElementById('lext-signings-confirm-ov');
+      if (existing) { try { existing.remove(); } catch(_){} }
+      var ov = document.createElement('div');
+      ov.id = 'lext-signings-confirm-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:1000099;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:20px;';
+      var _list = brandNew.map(function(n){ return '<div style="padding:3px 0;">➕ ' + String(n).replace(/[<>&]/g,function(c){return {'<':'&lt;','>':'&gt;','&':'&amp;'}[c];}) + '</div>'; }).join('');
+      var _dupNote = alreadyThere.length
+        ? '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin-top:10px;line-height:1.4;">' + alreadyThere.length + ' ya estaban en la plantilla (' + alreadyThere.join(', ') + ') — solo se les actualizará el poder si el pegado es mayor, nunca su posición.</div>'
+        : '';
+      ov.innerHTML = ''
+        + '<div style="background:linear-gradient(160deg,#141414,#1c1c1c);border:2px solid rgba(60,200,120,.5);border-radius:14px;padding:22px;max-width:400px;width:100%;box-shadow:0 0 40px rgba(60,200,120,.2),0 8px 22px rgba(0,0,0,.7);text-align:center;">'
+        +   '<div style="font-family:Oswald,sans-serif;font-size:17px;letter-spacing:1.2px;color:#3cc878;margin-bottom:10px;">🆕 ' + brandNew.length + ' fichaje(s) nuevo(s)</div>'
+        +   '<div style="font-family:Rajdhani,sans-serif;font-size:13px;color:#fff;text-align:left;max-height:180px;overflow-y:auto;margin-bottom:8px;">' + (_list || '<div style="opacity:.6;">— ninguno, ver nota abajo —</div>') + '</div>'
+        +   _dupNote
+        +   '<div style="display:flex;flex-direction:column;gap:8px;margin-top:16px;">'
+        +     '<button id="lext-signings-confirm-yes" style="padding:12px;border-radius:8px;border:1px solid rgba(60,200,120,.55);background:rgba(60,200,120,.15);color:#3cc878;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;font-weight:700;cursor:pointer;">✅ AÑADIR ' + brandNew.length + ' FICHAJE(S)</button>'
+        +     '<button id="lext-signings-confirm-cancel" style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:none;color:rgba(255,255,255,.75);font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;cursor:pointer;">✖ CANCELAR</button>'
+        +   '</div>'
+        + '</div>';
+      document.body.appendChild(ov);
+      var _done = false;
+      function _resolve(ok){
+        if (_done) return;
+        _done = true;
+        try { ov.remove(); } catch(_){}
+        try { cb(ok); } catch(_){}
+      }
+      function _wireTap(el, fn){
+        if (!el) return;
+        var fired = false;
+        function go(){ if (fired) return; fired = true; fn(); }
+        el.addEventListener('click', go);
+        el.addEventListener('touchstart', go, { passive:true });
+        el.addEventListener('pointerdown', go, { passive:true });
+      }
+      _wireTap(document.getElementById('lext-signings-confirm-yes'), function(){ _resolve(true); });
+      _wireTap(document.getElementById('lext-signings-confirm-cancel'), function(){ _resolve(false); });
+      ov.addEventListener('click', function(e){ if (e.target === ov) _resolve(false); });
+    } catch(_errOv) {
+      try { cb(confirm('Añadir ' + brandNew.length + ' fichaje(s) nuevo(s) a la plantilla, sin tocar al resto. ¿Continuar?')); }
+      catch(_){ try { cb(false); } catch(__){} }
+    }
+  };
+
+  /* "🆕 Fichajes de verano" — pega SOLO los jugadores nuevos (3-6 por
+     club en una ventana real) y los AÑADE, sin más. A diferencia de
+     "Pegar plantilla completa" nunca reemplaza nada y nunca pasa por
+     `_lextCarryStatsToNewRoster` (el "carry" de estadísticas es una
+     heurística por nombre exacto → posición/ranking, pensada para un
+     REEMPLAZO total, no hace falta ni conviene para un puñado de altas:
+     aquí los jugadores que ya estaban ni se tocan ni se reevalúan). */
+  window.lextApplyTransferSignings = function(){
+    if(!CURRENT_SQUAD_TEAM){
+      alert('⚠️ No hay equipo activo. Cierra y vuelve a abrir la plantilla.');
+      return;
+    }
+    var ta = document.getElementById('lext-squad-signings-ta');
+    if(!ta) return;
+    var txt = ta.value || '';
+    var parsed = parseSquadPaste(txt);
+    if(!parsed.length){
+      alert('No he podido leer ningún jugador del texto. Comprueba que cada línea tenga «Nombre 89» al final.');
+      return;
+    }
+    var data = loadData(CURRENT_KEY);
+    var _fallbackName = '';
+    try {
+      var _titleEl = document.getElementById('lext-ov-squad-title');
+      if (_titleEl) _fallbackName = (_titleEl.textContent||'').replace(/🛡/g,'').trim();
+    } catch(_){}
+    var t = _lextFindTeamRow(data, CURRENT_SQUAD_TEAM, _fallbackName);
+    if(!t){
+      alert('⚠️ No encuentro este equipo en la liga actual. Abre 🖍 Edit y guárdalo antes de añadir fichajes.');
+      return;
+    }
+    if (t.id && t.id !== CURRENT_SQUAD_TEAM) CURRENT_SQUAD_TEAM = t.id;
+    t.players = t.players || [];
+
+    /* Desglose informativo antes de aplicar: quién es fichaje nuevo de
+       verdad vs. quién ya estaba (mismo nombre exacto — dedupe solo le
+       sube el poder si el pegado es mayor, nunca la posición). */
+    var _existingKeys = {};
+    t.players.forEach(function(p){ if (p) _existingKeys[_dedupePlayerKey(p)] = true; });
+    var _brandNew = [], _alreadyThere = [];
+    parsed.forEach(function(p){
+      if (_existingKeys[_dedupePlayerKey(p)]) _alreadyThere.push(p.name);
+      else _brandNew.push(p.name);
+    });
+
+    window._lextSquadSigningsConfirmOv(_brandNew, _alreadyThere, function(ok){
+      if (!ok) return;
+      t.players = _dedupeSquadPlayers(t.players.concat(parsed));
+      t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
+      saveData(CURRENT_KEY, data);
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
+      if(typeof window.applyEngineOverrides === 'function'){
+        try { window.applyEngineOverrides(); } catch(_){}
+      }
+      ta.value = '';
+      var d3 = document.getElementById('lext-squad-signings-details');
+      if(d3) d3.open = false;
+      renderSquadList();
+      renderTeamsList();
+      renderTable();
+    });
   };
 
   /* Muestra/oculta la rejilla de corrección manual según el toggle

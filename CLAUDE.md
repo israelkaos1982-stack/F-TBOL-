@@ -68,6 +68,56 @@ se extrajo a una función interna `_finish(mode)`.
    proyecto, migrarlo al mismo patrón de overlay de 3 botones — es un
    antipatrón, no un caso aislado.
 
+## "🆕 Fichajes de verano" — altas sueltas SIN pasar por REEMPLAZAR, para no arriesgar estadísticas acumuladas (obligatorio, 2026-08-17 #2)
+
+**Petición usuario 2026-08-17** (tras la sección anterior): con el
+diálogo REEMPLAZAR/AÑADIR ya arreglado, el usuario preguntó si
+REEMPLAZAR pierde estadísticas — sí, parcialmente: `_lextCarryStatsToNewRoster`
+traslada PJ/goles/tarjetas del jugador viejo al nuevo por **nombre
+EXACTO** primero, y si no hay coincidencia cae a un emparejamiento por
+**posición + ranking de rendimiento** (heurística que puede asignar
+las stats de un jugador que se fue a un fichaje nuevo sin relación
+real). Con ventanas de fichajes REALES (3-6 altas por club cada
+verano), re-pegar la plantilla ENTERA para meter solo unos pocos
+nuevos es la vía más arriesgada de perder/mezclar historial.
+
+### Fix — flujo dedicado que SOLO añade, nunca reemplaza ni "traslada" nada
+
+Nuevo `<details id="lext-squad-signings-details">` ("🆕 Fichajes de
+verano", `misc_body_1.html`, junto a "📋 Pegar plantilla completa",
+mismo gate `_editable` que ese bloque — solo visible desde 🖍 Edit →
+🛡): el admin pega SOLO los jugadores nuevos.
+`window.lextApplyTransferSignings()` parsea con el mismo
+`parseSquadPaste`, desglosa qué nombres son fichajes NUEVOS de verdad
+frente a los que YA estaban (mismo nombre exacto), muestra un overlay
+de confirmación (`window._lextSquadSigningsConfirmOv`, mismo patrón de
+3-botones-explícitos que `_lextSquadPasteChoiceOv` pero con solo 2
+caminos: AÑADIR / CANCELAR — sin ambigüedad posible) listando los
+nombres, y al confirmar hace `t.players =
+_dedupeSquadPlayers(t.players.concat(parsed))` **sin pasar nunca por
+`_lextCarryStatsToNewRoster`** — los jugadores que ya estaban no se
+tocan ni se reevalúan, sus PJ/goles/tarjetas quedan exactamente como
+estaban.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `lextApplyTransferSignings` llame a
+   `_lextCarryStatsToNewRoster` o a cualquier lógica de "traslado" de
+   estadísticas. Es precisamente lo que este flujo existe para evitar
+   — los jugadores existentes se conservan intactos, punto.
+2. **PROHIBIDO** que este flujo muestre el overlay REEMPLAZAR/AÑADIR
+   de `_lextSquadPasteChoiceOv`. Solo tiene 2 caminos (Añadir/Cancelar)
+   porque no hay ninguna decisión de reemplazo que tomar.
+3. Un jugador pegado aquí que YA EXISTE (mismo nombre exacto) se
+   fusiona con `_dedupeSquadPlayers` normal (sube el poder si el
+   pegado es mayor, nunca cambia posición/dorsal) — el desglose
+   "brandNew vs alreadyThere" es solo INFORMATIVO para que el admin
+   sepa qué va a pasar, no cambia el comportamiento del merge.
+4. Este bloque hereda el mismo gate `_editable` que "📋 Pegar plantilla
+   completa" (`lextOpenSquad`, `_signEl.style.display`) — nunca debe
+   quedar visible en modo lectura (abrir la plantilla desde la
+   clasificación).
+
 ## Recopa 32 equipos — remates que se quedaron del corte anterior: target de conteo "64" y picker "AÑADIR POR LIGA" sin cap de concurrencia (obligatorio, 2026-08-17)
 
 **Petición usuario 2026-08-17** ("tengo este problema / no puedo lanzar

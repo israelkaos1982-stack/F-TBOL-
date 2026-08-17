@@ -1,5 +1,73 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## "📋 Pegar plantilla completa" (editor de club) — el diálogo OK/Cancelar tenía semántica INVERTIDA, "Cancelar" en realidad AÑADÍA en vez de no hacer nada (obligatorio, 2026-08-17)
+
+**Bug (3 fotos usuario 2026-08-17, «Liverpool»)**: el admin pega la
+plantilla completa del Liverpool (37 jugadores con nombre/posición/
+poder) en "📋 Pegar plantilla completa" → "💾 Aplicar plantilla". El
+equipo ya tenía 32 jugadores, así que salía el diálogo nativo
+`confirm()`: **"OK = REEMPLAZAR toda la plantilla por los 37 pegados
+/ Cancelar = AÑADIR los 37 a los existentes"**. Tras confirmar, la
+plantilla seguía mostrando los mismos jugadores de siempre (nombres
+abreviados, posición MED y valor 70 genéricos para todos) — "sigo los
+pasos... estos no se guardan y sigue la plantilla vieja".
+
+### Causa raíz
+
+El diálogo tenía la semántica **invertida** respecto a lo que
+CUALQUIER usuario espera de un `confirm()`: "Cancelar" NO cancelaba
+nada — disparaba un AÑADIR (`t.players.concat(parsed)` +
+`_dedupeSquadPlayers`). Un admin que pulsa "Cancelar" pensando "no
+quiero arriesgarme, mejor no toco nada todavía" en realidad mezclaba
+los 37 pegados con los 32 existentes. Como `_dedupeSquadPlayers`
+deduplica por **nombre normalizado EXACTO** (`_dedupePlayerKey`), y la
+plantilla vieja tenía los nombres ABREVIADOS ("A. Isak") mientras el
+paste traía el nombre COMPLETO ("Alexander Isak"), ambas entradas NO
+colisionaban — los 32 viejos (MED/70) se quedaban **intactos y
+visibles** mientras los 37 nuevos se añadían aparte (fuera de la
+vista inmediata del admin, que esperaba ver la plantilla YA
+reemplazada). El resultado —la plantilla vieja segía ahí, sin
+cambios visibles— es EXACTAMENTE lo que el admin reportó como "no se
+guarda".
+
+### Fix — overlay propio con 3 botones EXPLÍCITOS, ninguno ambiguo
+
+`window._lextSquadPasteChoiceOv(oldCount, newCount, carryNote, cb)`
+(`misc_body_1.html`, junto a `lextApplySquadPaste`): sustituye el
+`confirm()` nativo por un overlay con **3 botones rotulados sin
+ambigüedad** — "🔁 REEMPLAZAR TODO" (borra los N actuales), "➕ AÑADIR
+A LOS EXISTENTES" (se quedan los N + se añaden los M), "✖ CANCELAR —
+no hacer nada" (Cancelar ahora SÍ no hace nada). Mismo patrón ya
+establecido en el proyecto para decisiones críticas (`_mlConfirmEnd`):
+respaldo táctil `touchstart`/`pointerdown` además de `click`, cierre
+al tocar fuera del cuadro = Cancelar, y fallback a `confirm()` nativo
+(con los 2 caminos DOCUMENTADOS en el propio texto, nunca un
+"Cancelar" silencioso) si el overlay no llegara a construirse.
+`lextApplySquadPaste` se reestructura para recibir el modo elegido de
+forma ASÍNCRONA (vía callback) en vez del valor de retorno síncrono
+de `confirm()` — la lógica de aplicar REEMPLAZAR/AÑADIR + persistir
+se extrajo a una función interna `_finish(mode)`.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un diálogo de confirmación (nativo o custom) en
+   CUALQUIER pantalla de este proyecto tenga más de 2 caminos posibles
+   mapeados a solo 2 botones OK/Cancelar de forma no obvia. Si hay 3+
+   acciones posibles (aquí: reemplazar / añadir / no hacer nada), usar
+   un overlay con 3 botones EXPLÍCITOS — nunca sobrecargar el
+   `Cancelar` nativo con una acción que NO sea "cancelar de verdad".
+2. **PROHIBIDO** que "Cancelar" (en cualquier diálogo, nativo o
+   custom) dispare una acción que MUTE datos. Cancelar significa
+   SIEMPRE "no hacer nada" — si hace falta un 2º camino además de
+   Aceptar, necesita su PROPIO botón con su propia etiqueta.
+3. **PROHIBIDO** volver al `confirm()` nativo de 2 caminos para esta
+   decisión (reemplazar/añadir la plantilla pegada). Usar
+   `window._lextSquadPasteChoiceOv`.
+4. Si en el futuro se detecta el MISMO patrón (un `confirm()` con
+   semántica ambigua u OK/Cancelar invertidos) en otra pantalla del
+   proyecto, migrarlo al mismo patrón de overlay de 3 botones — es un
+   antipatrón, no un caso aislado.
+
 ## Recopa 32 equipos — remates que se quedaron del corte anterior: target de conteo "64" y picker "AÑADIR POR LIGA" sin cap de concurrencia (obligatorio, 2026-08-17)
 
 **Petición usuario 2026-08-17** ("tengo este problema / no puedo lanzar

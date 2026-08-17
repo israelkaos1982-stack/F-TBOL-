@@ -56532,6 +56532,71 @@ https://api.sofascore.app/api/v1/team/44/image
     }
   };
 
+  /* Overlay de elección REEMPLAZAR / AÑADIR / CANCELAR para "📋 Pegar
+     plantilla completa" — sustituye al `confirm()` nativo con semántica
+     INVERTIDA (OK=REEMPLAZAR / Cancelar=AÑADIR) que causaba el bug
+     "sigo los pasos... no se guardan y sigue la plantilla vieja"
+     (2026-08-17): el admin pulsa "Cancelar" esperando que — como en
+     CUALQUIER diálogo — no pase nada, pero en realidad disparaba el
+     AÑADIR: los jugadores pegados se mezclaban con la plantilla vieja
+     (concat + dedup, que NUNCA actualiza posición/dorsal de un
+     duplicado ya existente — solo poder si es mayor y flags), dejando
+     la plantilla vieja intacta y visible mientras los nuevos quedaban
+     mezclados sin que el admin lo notara. Ahora los 3 caminos son
+     EXPLÍCITOS y Cancelar de verdad no hace nada. */
+  window._lextSquadPasteChoiceOv = function(oldCount, newCount, carryNote, cb){
+    try {
+      var existing = document.getElementById('lext-paste-choice-ov');
+      if (existing) { try { existing.remove(); } catch(_){} }
+      var ov = document.createElement('div');
+      ov.id = 'lext-paste-choice-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:1000099;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:20px;';
+      ov.innerHTML = ''
+        + '<div style="background:linear-gradient(160deg,#141414,#1c1c1c);border:2px solid rgba(240,192,64,.5);border-radius:14px;padding:22px;max-width:400px;width:100%;box-shadow:0 0 40px rgba(240,192,64,.2),0 8px 22px rgba(0,0,0,.7);text-align:center;">'
+        +   '<div style="font-family:Oswald,sans-serif;font-size:17px;letter-spacing:1.2px;color:#f0c040;margin-bottom:10px;">📋 Este equipo ya tiene ' + oldCount + ' jugadores</div>'
+        +   '<div style="font-family:Rajdhani,sans-serif;font-size:14px;color:#fff;margin-bottom:6px;line-height:1.4;">Vas a pegar ' + newCount + ' jugadores. ¿Qué quieres hacer?</div>'
+        +   (carryNote ? '<div style="font-family:Rajdhani,sans-serif;font-size:12px;color:rgba(255,255,255,.55);margin-bottom:14px;line-height:1.4;">' + carryNote + '</div>' : '<div style="margin-bottom:8px;"></div>')
+        +   '<div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">'
+        +     '<button id="lext-paste-choice-replace" style="padding:12px;border-radius:8px;border:1px solid rgba(224,60,60,.55);background:rgba(224,60,60,.15);color:#ff7070;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;font-weight:700;cursor:pointer;">🔁 REEMPLAZAR TODO<br><span style="font-size:10px;font-weight:400;letter-spacing:.5px;opacity:.85;">Borra los ' + oldCount + ' actuales y deja solo los ' + newCount + ' pegados</span></button>'
+        +     '<button id="lext-paste-choice-add" style="padding:12px;border-radius:8px;border:1px solid rgba(240,192,64,.5);background:rgba(240,192,64,.12);color:#f0c040;font-family:Oswald,sans-serif;font-size:13px;letter-spacing:1px;font-weight:700;cursor:pointer;">➕ AÑADIR A LOS EXISTENTES<br><span style="font-size:10px;font-weight:400;letter-spacing:.5px;opacity:.85;">Se quedan los ' + oldCount + ' + se añaden los ' + newCount + '</span></button>'
+        +     '<button id="lext-paste-choice-cancel" style="padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:none;color:rgba(255,255,255,.75);font-family:Oswald,sans-serif;font-size:12px;letter-spacing:1.5px;cursor:pointer;">✖ CANCELAR — no hacer nada</button>'
+        +   '</div>'
+        + '</div>';
+      document.body.appendChild(ov);
+      var _done = false;
+      function _resolve(mode){
+        if (_done) return;
+        _done = true;
+        try { ov.remove(); } catch(_){}
+        try { cb(mode); } catch(_){}
+      }
+      /* Mismo respaldo táctil que `_mlConfirmEnd` (touchstart/pointerdown
+         además del click) — un tap con la mínima ambigüedad no debe
+         dejar este diálogo sin respuesta. */
+      function _wireTap(el, fn){
+        if (!el) return;
+        var fired = false;
+        function go(){ if (fired) return; fired = true; fn(); }
+        el.addEventListener('click', go);
+        el.addEventListener('touchstart', go, { passive:true });
+        el.addEventListener('pointerdown', go, { passive:true });
+      }
+      _wireTap(document.getElementById('lext-paste-choice-replace'), function(){ _resolve('replace'); });
+      _wireTap(document.getElementById('lext-paste-choice-add'), function(){ _resolve('add'); });
+      _wireTap(document.getElementById('lext-paste-choice-cancel'), function(){ _resolve('cancel'); });
+      ov.addEventListener('click', function(e){ if (e.target === ov) _resolve('cancel'); });
+    } catch(_errOv) {
+      /* Red de seguridad: si el overlay no se pudo construir, no
+         dejamos al admin sin ninguna vía — caemos al `confirm()`
+         nativo, documentando aquí mismo los 2 caminos (nunca un
+         "Cancelar" que en realidad añade en silencio). */
+      try {
+        var _r = confirm('Este equipo ya tiene ' + oldCount + ' jugadores.\n\nAceptar = REEMPLAZAR toda la plantilla por los ' + newCount + ' pegados\nCancelar = no hacer nada');
+        cb(_r ? 'replace' : 'cancel');
+      } catch(_){ try { cb('cancel'); } catch(__){} }
+    }
+  };
+
   window.lextApplySquadPaste = function(){
     if(!CURRENT_SQUAD_TEAM){
       alert('⚠️ No hay equipo activo. Cierra y vuelve a abrir la plantilla.');
@@ -56605,15 +56670,20 @@ https://api.sofascore.app/api/v1/team/44/image
         if (typeof _pasteMetaMd.budget  === 'number') t.budget = _pasteMetaMd.budget;
       }
     } catch(_){}
-    if(t.players.length){
-      var _oldRoster = t.players.slice();
-      var _oldHadStats = _lextRosterHasStats(_oldRoster);
-      var _replaceMsg = 'Este equipo ya tiene '+t.players.length+' jugadores.\n\n'
-        + 'OK = REEMPLAZAR toda la plantilla por los '+parsed.length+' pegados'
-        + (_oldHadStats ? '\n   (los jugadores reales HEREDAN las estadísticas por posición + perfil:\n    el goleador real ⚾/🏀 se queda con los goles del slot que más marcó)' : '')
-        + '\nCancelar = AÑADIR los '+parsed.length+' a los existentes';
-      var replace = confirm(_replaceMsg);
-      if(replace){
+
+    var _oldRoster = t.players.slice();
+    var _oldHadStats = _lextRosterHasStats(_oldRoster);
+
+    /* Aplica el modo elegido (REEMPLAZAR/AÑADIR) y persiste. Extraído a
+       función propia porque el modo ya no llega como valor de retorno
+       síncrono de `confirm()` — llega vía el callback ASÍNCRONO del
+       overlay de elección de arriba. */
+    function _finish(mode){
+      if (mode === 'add') {
+        t.players = _dedupeSquadPlayers(t.players.concat(parsed));
+      } else {
+        /* 'replace' — incluye también el caso "sin plantilla previa"
+           (llega aquí directo, sin pasar por el overlay de elección). */
         /* Herencia de stats: el goleador real (⚾/🏀 + valoración alta)
            se queda con el registro del slot genérico que más marcó, etc.
            (petición usuario 2026-06-04). */
@@ -56639,47 +56709,56 @@ https://api.sofascore.app/api/v1/team/44/image
           } catch(_){}
         }
       }
-      else t.players = _dedupeSquadPlayers(t.players.concat(parsed));
-    } else {
-      t.players = parsed;
-    }
-    var _finalCount = t.players.length;
-    // NO se recalcula el poder del equipo — los valores Global/ATK/MED/DEF
-    // son los que el admin definió en el editor y se mantienen fijos.
-    t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
-    saveData(CURRENT_KEY, data);
-    /* Invalidamos la cache por si alguna fetchData async la sobrescribe
-       entre save y render — al recargar desde localStorage vemos SIEMPRE
-       lo que acabamos de guardar. */
-    try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
-    /* CRÍTICO: refrescar SQUAD_REGISTRY del motor de simulación tras
-       pegar la plantilla. Sin esto, el event picker (gen-pl-list,
-       mlShowPl_jXmY, etc.) sigue mostrando los nombres VIEJOS porque
-       sqFromRegistryFull lee de window.SQUAD_REGISTRY y nadie lo
-       actualizó tras el save. Reportado 2026-05-04: el admin renombró
-       "Giuliano" → "20. Giuliano Simeone 84" pero al añadir un evento
-       en cualquier partido la lista seguía mostrando "Giuliano". */
-    if(typeof window.applyEngineOverrides === 'function'){
-      try { window.applyEngineOverrides(); } catch(_){}
-    }
-    ta.value = '';
-    // Cerrar el details
-    var d = document.getElementById('lext-squad-paste-details');
-    if(d) d.open = false;
-    renderSquadList();
-    renderTeamsList();
-    renderTable();
-    /* Verificación post-render: si tras pintar la plantilla la fila
-       del equipo sigue saliendo vacía (p.ej. porque alguna async
-       sobrescribió localStorage), avisamos en pantalla con un alert
-       claro en vez de dejar al usuario pensando que no se guardó. */
-    try {
-      var _postData = loadData(CURRENT_KEY);
-      var _postT = _lextFindTeamRow(_postData, CURRENT_SQUAD_TEAM, _fallbackName);
-      if (!_postT || !Array.isArray(_postT.players) || !_postT.players.length) {
-        alert('⚠️ Se guardaron ' + _finalCount + ' jugadores, pero al re-leer de localStorage la plantilla aparece vacía. Esto suele ser una sincronización del servidor pisando el guardado — espera 5 s, recarga la página y vuelve a abrir el equipo. Si persiste, avisa.');
+      var _finalCount = t.players.length;
+      // NO se recalcula el poder del equipo — los valores Global/ATK/MED/DEF
+      // son los que el admin definió en el editor y se mantienen fijos.
+      t.updatedAt = Date.now();   /* sello por equipo → fusión multi-dispositivo */
+      saveData(CURRENT_KEY, data);
+      /* Invalidamos la cache por si alguna fetchData async la sobrescribe
+         entre save y render — al recargar desde localStorage vemos SIEMPRE
+         lo que acabamos de guardar. */
+      try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(CURRENT_KEY); } catch(_){}
+      /* CRÍTICO: refrescar SQUAD_REGISTRY del motor de simulación tras
+         pegar la plantilla. Sin esto, el event picker (gen-pl-list,
+         mlShowPl_jXmY, etc.) sigue mostrando los nombres VIEJOS porque
+         sqFromRegistryFull lee de window.SQUAD_REGISTRY y nadie lo
+         actualizó tras el save. Reportado 2026-05-04: el admin renombró
+         "Giuliano" → "20. Giuliano Simeone 84" pero al añadir un evento
+         en cualquier partido la lista seguía mostrando "Giuliano". */
+      if(typeof window.applyEngineOverrides === 'function'){
+        try { window.applyEngineOverrides(); } catch(_){}
       }
-    } catch(_){}
+      ta.value = '';
+      // Cerrar el details
+      var d = document.getElementById('lext-squad-paste-details');
+      if(d) d.open = false;
+      renderSquadList();
+      renderTeamsList();
+      renderTable();
+      /* Verificación post-render: si tras pintar la plantilla la fila
+         del equipo sigue saliendo vacía (p.ej. porque alguna async
+         sobrescribió localStorage), avisamos en pantalla con un alert
+         claro en vez de dejar al usuario pensando que no se guardó. */
+      try {
+        var _postData = loadData(CURRENT_KEY);
+        var _postT = _lextFindTeamRow(_postData, CURRENT_SQUAD_TEAM, _fallbackName);
+        if (!_postT || !Array.isArray(_postT.players) || !_postT.players.length) {
+          alert('⚠️ Se guardaron ' + _finalCount + ' jugadores, pero al re-leer de localStorage la plantilla aparece vacía. Esto suele ser una sincronización del servidor pisando el guardado — espera 5 s, recarga la página y vuelve a abrir el equipo. Si persiste, avisa.');
+        }
+      } catch(_){}
+    }
+
+    if (t.players.length) {
+      var _carryNote = _oldHadStats
+        ? 'Si REEMPLAZAS, los jugadores reales heredan las estadísticas por posición/perfil (el goleador real ⚾/🏀 se queda con los goles del slot que más marcó).'
+        : '';
+      window._lextSquadPasteChoiceOv(t.players.length, parsed.length, _carryNote, function(mode){
+        if (mode === 'cancel') return;   /* Cancelar de verdad no hace NADA */
+        _finish(mode);
+      });
+    } else {
+      _finish('replace');
+    }
   };
 
   /* Muestra/oculta la rejilla de corrección manual según el toggle

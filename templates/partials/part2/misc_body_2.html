@@ -17477,7 +17477,7 @@
         if (_adComp === 'liga')      _adJornada = String(_gm.j || '');
         else if (_adComp === 'copa') _adJornada = (_gm._copaRonda === 'fin' ? 'FINAL' : (_gm._copaRonda || ''));
         else if (_adComp === 'sc')   _adJornada = (_gm._scKey === 'fin' ? 'FINAL' : 'Semifinal');
-        else if (_adComp === 'recopa') _adJornada = String(_gm._recopaPhase || '').replace(/^r/i,'1/').replace('1/64','1/64').replace('1/32','Dieciseisavos').replace('1/16','Octavos').replace('1/8','Cuartos').replace('1/4','Semis');
+        else if (_adComp === 'recopa') _adJornada = ({ r32:'1/32', r16:'Octavos', r8:'Cuartos', sf:'Semifinal', fin:'FINAL' })[_gm._recopaPhase || ''] || String(_gm._recopaPhase || '');
         else if (_adComp === 'ucl' || _adComp === 'uel' || _adComp === 'uecl') _adJornada = 'Jornada ' + (_gm._eurFaseJor || '');
         window._munichDerbyAutoLog({
           comp: _adComp,

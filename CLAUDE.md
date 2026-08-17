@@ -1,5 +1,125 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Recopa 32 equipos — remates que se quedaron del corte anterior: target de conteo "64" y picker "AÑADIR POR LIGA" sin cap de concurrencia (obligatorio, 2026-08-17)
+
+**Petición usuario 2026-08-17** ("tengo este problema / no puedo lanzar
+los clubes clasificados de algunas ligas a su respectiva competición
+europea / la ronda 1/64 de Recopa sigue saliendo en los calendarios
+tanto global como Humanos, dijimos que era descanso / igual que en
+enviar competidores a Recopa siguen saliendo 64 y tienen que salir
+32"), tras la reducción de la Recopa a 32 equipos (sección de más
+abajo, 2026-08-16 #2). El calendario (`calendario.json`, `ev-122` →
+"Descanso", version 11) y el motor (`_buildPool`, `PHASES`, etc.) YA
+estaban correctos en el repo — verificado byte a byte contra
+`origin/main` tras el merge de la PR — así que si el calendario seguía
+mostrando "1/64" en el dispositivo del usuario, la causa más probable
+es un despliegue/caché desactualizado (el propio `CACHE_HTML` de
+`static/js/sw.js` sirve la página con *stale-while-revalidate* hasta
+30 min). Se investigó de todos modos por si quedaba algún residuo de
+código — y aparecieron 3 huecos REALES que sí se quedaron fuera del
+corte anterior:
+
+### 1. `_EUR_ZONE_TARGET.recopa` seguía en 64
+
+El overlay "👁 Ver / Añadir equipos por competición" (`misc_body_1.html`,
+constante `_EUR_ZONE_TARGET`) muestra, por cada zona, el conteo real vs
+el "objetivo oficial" — para Recopa ese objetivo se había quedado
+hardcodeado en `64` (el tamaño ANTES del corte), así que el admin veía
+el pool de Recopa (ya correctamente en 32 gracias a `_buildPool`) como
+"incompleto" ("X / 64" en vez de "X / 32"), sin ninguna pista de que en
+realidad ya estaba lleno. Fix: `recopa:64` → `recopa:32`.
+
+### 2. Etiqueta de ronda del auto-log de Derbys, obsoleta
+
+`_munichDerbyAutoLog` (`part2/misc_body_2.html`) etiquetaba la ronda de
+un derby de Recopa con una cadena de `.replace(...)` diseñada para el
+esquema de fases VIEJO (`r128/r64/r32/r16`→"1/64"/"Dieciseisavos"/
+"Octavos"/"Cuartos"). Con el esquema NUEVO (`r32/r16/r8/sf/fin`) esa
+cadena producía etiquetas incorrectas (`r32`→"Dieciseisavos" en vez de
+"1/32") y dejaba `sf`/`fin` SIN TRADUCIR (mostraba el código crudo
+"sf"/"fin" en el histórico de Derbys). Fix: mapa directo
+`{r32:'1/32', r16:'Octavos', r8:'Cuartos', sf:'Semifinal', fin:'FINAL'}`
+en vez de la cadena de `.replace()` heredada del esquema de 64.
+
+### 3. El picker "AÑADIR POR LIGA" se quedaba en "⏳ Cargando…" para siempre
+
+**Bug real, independiente de la Recopa** — foto usuario: 5 ligas
+(Liga EA, P. Bajos, Portugal, Suiza, Turquía) expandidas a la vez,
+TODAS congeladas en "⏳ Cargando clasificación…". `_eurPickerFetchLeague`
+(el fetch por-liga de este picker, sección "El picker 'AÑADIR POR
+LIGA'…" de más abajo) **no tenía NINGÚN límite de peticiones
+simultáneas**: al expandir varias ligas seguidas, cada una dispara su
+propio fetch a `/api/liga-ext-any/<slug>` de forma independiente, y en
+cuanto el índice compartido (`_eurEnsureLeagueIndex`) resuelve, TODAS
+las peticiones salen prácticamente a la vez. El servidor de producción
+corre con solo **2 workers gunicorn** (documentado en el propio
+comentario de `/api/liga-ext-any` en `app.py`) — varias peticiones
+simultáneas lo saturan y cada una puede agotar sus 3 reintentos sin
+llegar a responder nunca, dejando el picker "Cargando…" indefinidamente.
+Exactamente el patrón "thundering herd" que este proyecto ya prohíbe
+en otros sitios (`_eurHydrateMissingLeagues`, "secuencial + pausado,
+nunca thundering herd") — este picker se había quedado sin ese límite.
+
+**Fix — cola con cap de concurrencia + watchdog duro por liga**:
+- `_eurPickerFetchQueue`/`_eurPickerActiveFetches`/`_eurPickerCounted`/
+  `EUR_PICKER_MAX_CONCURRENT=2` + `_eurPickerPumpQueue()`: como mucho 2
+  fetches de liga EN VUELO a la vez; el resto espera en cola y se
+  dispara en cuanto se libera un hueco. `_eurPickerFetchLeague` se
+  divide en la parte SÍNCRONA (camino local, nunca pasa por la cola —
+  resuelve al instante si la liga ya está cacheada en este dispositivo)
+  y `_eurPickerFetchLeagueNow(slug)` (el fetch de red real, que SOLO
+  invoca `_eurPickerPumpQueue` — nunca se llama directamente, así el
+  cap se respeta siempre).
+- `_eurPickerArmWatchdog(slug)` / `_eurPickerClearWatchdog(slug)`: un
+  `setTimeout` de 30s por liga, armado al empezar a cargar. Si pasa ese
+  tiempo y la liga SIGUE en estado "Cargando…" (por lo que sea — cola
+  atascada, servidor saturado, un bug futuro), se fuerza un error
+  visible y accionable ("⏱️ El servidor está tardando demasiado…") en
+  vez de dejar la fila congelada para siempre. Es una red de seguridad
+  INCONDICIONAL, no depende de arreglar bien la causa raíz real.
+- `_eurPickerFinish(slug, d, customErrMsg)`: punto ÚNICO de resolución
+  (éxito, error del fetch, "liga sin datos en ningún dispositivo", o
+  timeout del watchdog) — limpia el watchdog, actualiza el display, y
+  libera el hueco de concurrencia + purga la cola SIEMPRE que la
+  resolución venga de un fetch que de verdad contaba contra el cap
+  (`_eurPickerCounted[slug]`). Es idempotente: si se llama 2 veces para
+  el mismo slug (el watchdog fuerza el error y LUEGO llega la respuesta
+  real tarde), la 2ª llamada solo actualiza el display sin volver a
+  decrementar el contador ni corromper la cola.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `_eurPickerFetchLeague` (o cualquier fetch
+   disparado por-fila desde un picker/lista interactiva de este
+   proyecto) dispare su petición de red DIRECTAMENTE sin pasar por un
+   cap de concurrencia cuando el usuario puede disparar varias filas
+   seguidas en poco tiempo. El servidor de producción tiene solo 2
+   workers — cualquier lista de "una petición por fila" nueva hereda
+   este patrón (`_eurPickerPumpQueue`/`EUR_PICKER_MAX_CONCURRENT`, o un
+   equivalente propio si vive en otra pantalla).
+2. **PROHIBIDO** quitar el watchdog de 30s (`_eurPickerArmWatchdog`).
+   Aunque se arregle la causa raíz de la saturación, el watchdog es la
+   red que garantiza que NINGUNA fila de este picker puede quedarse en
+   "Cargando…" para siempre por ningún motivo, presente o futuro.
+3. **PROHIBIDO** que `_eurPickerFinish` decremente
+   `_eurPickerActiveFetches` para un slug que nunca pasó por la cola
+   (el camino local instantáneo, o el atajo "liga sin datos en el
+   índice" — ambos resuelven SIN consumir un hueco de concurrencia). El
+   guard es `_eurPickerCounted[slug]`, nunca un decremento incondicional.
+4. Todo objetivo de conteo por zona (`_EUR_ZONE_TARGET` o equivalente
+   futuro) que dependa del tamaño de un bracket/pool DEBE actualizarse
+   en el MISMO commit que cambie ese tamaño — auditar con `grep` todo
+   número hardcodeado relacionado con la competición que se esté
+   redimensionando, no solo el motor que la construye.
+5. Si un bug reportado ya parece corregido en el código/datos del repo
+   (verificado contra `origin/main`) pero el usuario sigue viéndolo en
+   producción, sospechar primero de un despliegue/caché desactualizado
+   (`CACHE_HTML` de `static/js/sw.js`, o el propio redeploy del
+   servidor) ANTES de asumir que el fix nunca se aplicó — pero seguir
+   auditando el resto del código en busca de residuos reales (como los
+   2 primeros de esta sección), que sí pueden coexistir con un problema
+   de caché para el mismo bug reportado.
+
 ## Resto del Mundo — REDISEÑO COMPLETO: 30 equipos en 6 grupos de 5, SIN Copa, feeder de Intercontinental (1/grupo) y Mundialito (2/grupo + 4 mejores terceros) (obligatorio, 2026-08-16 #3)
 
 **Petición usuario 2026-08-16**: "vamos a modificar la liga resto del

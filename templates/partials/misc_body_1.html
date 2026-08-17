@@ -44452,7 +44452,7 @@ window._hdrCleanCache = function(){
        prevR3(directo):12 · prevR2(directo):12 · prevR1(directo, primera
        ronda, sin arrastre):24 · uel:40 (16 directos + 24 de R3+R4) ·
        uecl:40 (16 directos + 24 de R1+R2). */
-  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:12, prevR3:12, prevR2:12, prevR1:24, uel:40, uecl:40, recopa:64, inter:8 };
+  var _EUR_ZONE_TARGET = { ucl:40, uclPrev:12, prevR3:12, prevR2:12, prevR1:24, uel:40, uecl:40, recopa:32, inter:8 };
   /* Resuelve la "liga" de un nombre de equipo del pool de Recopa/
      Intercontinental para poder agruparlo en el informe igual que los
      equipos de las 6 zonas originales (que ya vienen con `.league`).
@@ -44685,27 +44685,88 @@ window._hdrCleanCache = function(){
       cb();
     });
   }
+  /* CAP de concurrencia (2026-08-17, "no puedo lanzar los clubes
+     clasificados de algunas ligas — se quedan 'Cargando clasificación'
+     para siempre"): `_eurPickerFetchLeague` no tenía NINGÚN límite de
+     peticiones simultáneas — si el admin expande varias ligas SEGUIDAS
+     (5 en la captura del usuario: Liga EA, P. Bajos, Portugal, Suiza,
+     Turquía), cada una dispara su propio fetch a
+     `/api/liga-ext-any/<slug>` de forma INDEPENDIENTE, y en cuanto el
+     índice compartido (`_eurEnsureLeagueIndex`) resuelve, las 5
+     peticiones salen PRÁCTICAMENTE A LA VEZ. El servidor de producción
+     corre con solo 2 workers gunicorn (ver comentario de
+     `/api/liga-ext-any` en `app.py`) — varias peticiones simultáneas lo
+     saturan y cada una puede agotar sus 3 reintentos sin llegar a
+     responder, dejando el picker "Cargando…" indefinidamente. Es
+     EXACTAMENTE el patrón "thundering herd" que este proyecto ya
+     prohíbe en otros sitios (`_eurHydrateMissingLeagues`, "secuencial +
+     pausado, nunca thundering herd") — este picker se había quedado sin
+     ese límite. Fix: máx. `EUR_PICKER_MAX_CONCURRENT` fetches de liga EN
+     VUELO a la vez; el resto espera en cola y se dispara en cuanto se
+     libera un hueco — MÁS un watchdog duro por liga que, pase lo que
+     pase (saturación del servidor, cola atascada, un bug futuro),
+     garantiza que ninguna fila se quede en "Cargando…" para siempre. */
+  var _eurPickerFetchQueue = [];
+  var _eurPickerActiveFetches = 0;
+  var _eurPickerCounted = {}; // slug -> true mientras cuenta contra el cap
+  var EUR_PICKER_MAX_CONCURRENT = 2;
+  function _eurPickerPumpQueue(){
+    while(_eurPickerActiveFetches < EUR_PICKER_MAX_CONCURRENT && _eurPickerFetchQueue.length){
+      var slug = _eurPickerFetchQueue.shift();
+      if(!_eurPickerLoadingBySlug[slug]) continue; // resuelto entretanto (watchdog u otro path)
+      _eurPickerActiveFetches++;
+      _eurPickerCounted[slug] = true;
+      _eurPickerFetchLeagueNow(slug);
+    }
+  }
+  var _eurPickerWatchdogs = {};
+  function _eurPickerArmWatchdog(slug){
+    _eurPickerClearWatchdog(slug);
+    _eurPickerWatchdogs[slug] = setTimeout(function(){
+      delete _eurPickerWatchdogs[slug];
+      if(!_eurPickerLoadingBySlug[slug]) return; // ya resolvió por su cuenta
+      _eurPickerFinish(slug, null, '⏱️ El servidor está tardando demasiado (puede haber varias ligas cargando a la vez). Vuelve a pulsar ✅ para reintentar.');
+    }, 30000);
+  }
+  function _eurPickerClearWatchdog(slug){
+    if(_eurPickerWatchdogs[slug]){ clearTimeout(_eurPickerWatchdogs[slug]); delete _eurPickerWatchdogs[slug]; }
+  }
+  /* Punto ÚNICO de resolución (éxito, error, o timeout del watchdog) —
+     limpia el watchdog, libera el hueco de concurrencia y sigue con la
+     cola SIEMPRE, venga de donde venga la resolución. Idempotente: si
+     se llama 2 veces para el mismo slug (p.ej. el watchdog fuerza el
+     error y LUEGO llega la respuesta real tarde), la 2ª llamada solo
+     actualiza el display — no vuelve a decrementar el contador. */
+  function _eurPickerFinish(slug, d, customErrMsg){
+    _eurPickerClearWatchdog(slug);
+    _eurPickerLoadingBySlug[slug] = false;
+    _eurPickerDataBySlug[slug] = d;
+    if(!d) _eurPickerErrorBySlug[slug] = customErrMsg || 'No se ha podido cargar esta liga (ni local ni servidor tras varios intentos). Vuelve a pulsar ✅ para reintentar.';
+    try { _eurManualOverlayRender(); }
+    catch(_e){
+      /* Si el render de la fila lanza (dato corrupto de esta liga
+         concreta), no dejar el overlay congelado en "Cargando…": se
+         muestra el error en vez de la clasificación. */
+      _eurPickerDataBySlug[slug] = null;
+      _eurPickerErrorBySlug[slug] = 'No se pudo mostrar la clasificación de esta liga (dato corrupto).';
+      try { _eurManualOverlayRender(); } catch(_e2){}
+    }
+    if(_eurPickerCounted[slug]){
+      delete _eurPickerCounted[slug];
+      _eurPickerActiveFetches = Math.max(0, _eurPickerActiveFetches - 1);
+      _eurPickerPumpQueue();
+    }
+  }
   /* Trae la clasificación de UNA liga (local → índice servidor →
      fetch con reintentos) y la guarda en `_eurPickerDataBySlug[slug]`.
-     Solo se dispara cuando el admin EXPANDE esa liga (`_eurPickerToggleLeague`). */
+     Solo se dispara cuando el admin EXPANDE esa liga (`_eurPickerToggleLeague`).
+     El camino LOCAL (ya cacheada en este dispositivo) resuelve al
+     instante y NUNCA pasa por la cola de concurrencia — solo el camino
+     de RED se encola. */
   function _eurPickerFetchLeague(slug){
     _eurPickerLoadingBySlug[slug] = true;
     _eurPickerErrorBySlug[slug] = '';
     _eurManualOverlayRender();
-    function _finish(d){
-      _eurPickerLoadingBySlug[slug] = false;
-      _eurPickerDataBySlug[slug] = d;
-      if(!d) _eurPickerErrorBySlug[slug] = 'No se ha podido cargar esta liga (ni local ni servidor tras varios intentos). Vuelve a pulsar ✅ para reintentar.';
-      try { _eurManualOverlayRender(); }
-      catch(_e){
-        /* Si el render de la fila lanza (dato corrupto de esta liga
-           concreta), no dejar el overlay congelado en "Cargando…": se
-           muestra el error en vez de la clasificación. */
-        _eurPickerDataBySlug[slug] = null;
-        _eurPickerErrorBySlug[slug] = 'No se pudo mostrar la clasificación de esta liga (dato corrupto).';
-        try { _eurManualOverlayRender(); } catch(_e2){}
-      }
-    }
     var local = null;
     try {
       var raw = localStorage.getItem('ligaExt_' + slug);
@@ -44717,7 +44778,14 @@ window._hdrCleanCache = function(){
          bug 2026-08-02 ("faltan poder añadir Liga Mixta 5-9"). */
       if(typeof window._eurBestLeagueData === 'function') local = window._eurBestLeagueData(slug, local);
     } catch(_){}
-    if(local && Array.isArray(local.teams) && local.teams.length >= 2){ _finish(local); return; }
+    if(local && Array.isArray(local.teams) && local.teams.length >= 2){ _eurPickerFinish(slug, local); return; }
+    _eurPickerArmWatchdog(slug);
+    _eurPickerFetchQueue.push(slug);
+    _eurPickerPumpQueue();
+  }
+  /* Fetch de red PROPIAMENTE DICHO — SOLO lo invoca `_eurPickerPumpQueue`
+     (nunca directamente), así el cap de concurrencia se respeta SIEMPRE. */
+  function _eurPickerFetchLeagueNow(slug){
     _eurEnsureLeagueIndex(function(){
       /* Si el índice cargó bien Y esta liga NO aparece en él, es que
          NINGÚN dispositivo tiene datos reales para ella todavía — no
@@ -44725,10 +44793,7 @@ window._hdrCleanCache = function(){
          va a ser vacío igualmente. (Si el índice no cargó, `_eurLeagueIndexSlugs`
          sigue null → no se salta nada, se intenta el fetch normal.) */
       if(_eurLeagueIndexSlugs && !_eurLeagueIndexSlugs[slug]){
-        _eurPickerLoadingBySlug[slug] = false;
-        _eurPickerDataBySlug[slug] = null;
-        _eurPickerErrorBySlug[slug] = 'Esta liga aún no tiene equipos guardados en NINGÚN dispositivo (0 equipos en el servidor). Simúlala o pega su plantilla primero en "Resto de Ligas".';
-        _eurManualOverlayRender();
+        _eurPickerFinish(slug, null, 'Esta liga aún no tiene equipos guardados en NINGÚN dispositivo (0 equipos en el servidor). Simúlala o pega su plantilla primero en "Resto de Ligas".');
         return;
       }
       /* UNA sola petición — el fallback a `_protected` (última clasificación
@@ -44741,8 +44806,8 @@ window._hdrCleanCache = function(){
          ligas nunca visitadas mientras las ya cacheadas cargaban al instante. */
       _eurFetchWithRetry('/api/liga-ext-any/' + encodeURIComponent(slug), 3, 6000).then(function(j){
         var data = j && j.data;
-        if(data && Array.isArray(data.teams) && data.teams.length >= 2){ _finish(data); }
-        else { _finish(null); }
+        if(data && Array.isArray(data.teams) && data.teams.length >= 2){ _eurPickerFinish(slug, data); }
+        else { _eurPickerFinish(slug, null); }
       });
     });
   }

@@ -13838,6 +13838,53 @@ window._hdrCleanCache = function(){
         return;
       }
 
+      /* 2.a-bis) Si `found` tiene 0 jugadores PERO `teams.length` no
+         estaba vacío (así que el fetch de "1." nunca se disparó — la
+         copia local de ESTE slug existe, solo que este equipo
+         concreto quedó con `players:[]` en ella, p.ej. stale/parcial
+         de una sesión anterior), refrescamos ESTE MISMO slug directo
+         del servidor ANTES de adivinar con las fuentes A-H de abajo.
+         Bug 2026-08-17 #4: Osasuna/Athletic Club/Celta con plantilla
+         REAL en el servidor pero vacía en la copia local del móvil —
+         la cascada A-H nunca volvía a preguntar por ESTE slug (la
+         Fuente B de abajo SALTA a propósito el slug actual, es para
+         equipos guardados por error en OTRA liga) y terminaba
+         mostrando "Jugador N" genérico sin ninguna necesidad, aunque
+         el servidor tuviera la plantilla real completa. */
+      if ((!found.players || !found.players.length) && teams.length) {
+        try {
+          var _clickToastRef = _lextClickToast('⏳ Actualizando desde el servidor…');
+          var respRef = await _lextClickFetchJson('/api/liga-ext-any/'+encodeURIComponent(slug));
+          _lextClickToastDismiss(_clickToastRef);
+          var dsRef = respRef && respRef.data;
+          if (dsRef && Array.isArray(dsRef.teams) && dsRef.teams.length) {
+            var srvMatch = null;
+            for (var _sv = 0; _sv < dsRef.teams.length && !srvMatch; _sv++) {
+              var _tv = dsRef.teams[_sv];
+              if (!_tv || !_tv.name) continue;
+              var _nv = _normForClick(_tv.name);
+              for (var _sva = 0; _sva < targets.length; _sva++) {
+                if (_nv === targets[_sva]) { srvMatch = _tv; break; }
+              }
+            }
+            if (srvMatch && Array.isArray(srvMatch.players) && srvMatch.players.length) {
+              /* El servidor tiene una plantilla más rica que la copia
+                 local para ESTE equipo — la adoptamos y la persistimos
+                 en local, sustituyendo la copia vacía/pobre. */
+              found.players = srvMatch.players;
+              if (!found.power && srvMatch.power) found.power = srvMatch.power;
+              if (!found.atk && srvMatch.atk) found.atk = srvMatch.atk;
+              if (!found.mid && srvMatch.mid) found.mid = srvMatch.mid;
+              if (!found.def && srvMatch.def) found.def = srvMatch.def;
+              if (!found.shield && srvMatch.shield) found.shield = srvMatch.shield;
+              try { window._lsSetSafe('ligaExt_'+slug, JSON.stringify(data)); } catch(_){}
+              try { if (typeof window.invalidateLigaCache === 'function') window.invalidateLigaCache(slug); } catch(_){}
+              try { if (typeof window.LIGA_CACHE !== 'undefined') window.LIGA_CACHE[slug] = data; } catch(_){}
+            }
+          }
+        } catch(_){}
+      }
+
       /* 2.b) Si `found` tiene 0 jugadores, ESCANEAMOS el resto de
               ligaExt_* del localStorage buscando el MISMO nombre con
               su array players lleno. Caso típico: el admin guardó

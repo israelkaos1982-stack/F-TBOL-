@@ -1,5 +1,81 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Plantilla VACÍA en el móvil pese a que el servidor tiene el roster real — el click handler nunca refrescaba ESE slug del servidor (obligatorio, 2026-08-17 #4)
+
+**Bug (fotos usuario 2026-08-17, tras el fix #3 de abajo ya fusionado a
+`main`)**: "metí todas las plantillas de España, Inglaterra, he podido
+jugar 2 partidos y ahora se han vuelto a borrar todas las plantillas
+incluso la de los equipos humanos". El usuario pegó el JSON crudo de
+`/api/liga-ext/liga-ea-sports` y `/api/liga-ext/inglaterra` — **el
+servidor tenía las plantillas REALES intactas** para Osasuna, Athletic
+Club, Celta, Real Betis, Real Madrid, Atlético Madrid, Arsenal, FC
+Barcelona… — ningún equipo estaba corrompido en el servidor. Pero en
+su móvil, la pantalla "PLANTILLA" de Osasuna mostraba `Jugador 1 ·
+POR`, `Jugador 13 · POR`, `Jugador 2 · DEF`… (roster genérico
+numerado) con "Máximo goleador: sin registros" pese a tener 4 PJ
+jugados, y la pantalla "Editar equipos" mostraba Athletic Club/Celta
+con `👥 0` jugadores y GLOBAL/ATAQUE/MEDIO/DEFENSA en 76/76/76/76
+(default) — **contradicción directa** con el JSON del servidor.
+
+### Causa raíz — el fetch de recuperación solo se dispara si TODO el slug está vacío
+
+El delegado de click sobre `.clas-row` (`misc_body_1.html`, el mismo
+handler del fix #3 de abajo) solo pide `/api/liga-ext-any/<slug>` al
+servidor en el paso **"1."** cuando `!teams.length` — es decir, cuando
+la copia LOCAL de `ligaExt_<slug>` en ESE dispositivo no tiene NINGÚN
+equipo. Si la copia local SÍ tiene equipos (`teams.length > 0`, el
+caso normal tras haber abierto la app antes) pero el equipo CONCRETO
+que se pulsa tiene `players:[]` en esa copia local (stale — pudo
+quedar así de una sesión/sync anterior), el paso "1." se salta por
+completo — y la cascada de reconstrucción "Fuente A→H" (2.c) que sigue
+NUNCA vuelve a preguntar al servidor por ESTE MISMO slug: la "Fuente
+B" (que sí pregunta al servidor) **salta a propósito el slug actual**
+(`if (knownSlugs[ks] === slug) continue;` — está pensada para
+equipos guardados por error en OTRA liga, no para refrescar la liga
+actual). El resultado: la cascada solo encuentra nombres+stats sin
+posición/poder real (Fuentes C/E/F, ver fix #3) y, gracias a ese
+mismo fix #3, NO se persiste — pero se sigue MOSTRANDO como último
+recurso de display (`_genericPlaceholder`), aunque el servidor tuviera
+la plantilla real completa a un solo fetch de distancia.
+
+### Fix — nuevo paso "2.a-bis": refrescar ESTE slug del servidor ANTES de adivinar
+
+Justo después de localizar `found` (y antes de la cascada A-H), si
+`found.players` está vacío **y** `teams.length` no lo estaba (la copia
+local del slug existe, solo este equipo quedó pobre), se hace UN
+fetch a `/api/liga-ext-any/<slug>` — el MISMO endpoint que el paso
+"1.", pero ahora también cubre el caso "el slug no está vacío, pero
+este equipo sí". Si el servidor trae ese equipo con `players` no
+vacío, se adopta (`found.players = srvMatch.players` + power/atk/mid/
+def/shield si faltaban) y se persiste en local (`_lsSetSafe` +
+`invalidateLigaCache` + `LIGA_CACHE`). Solo entonces, si sigue sin
+nada, se cae a la cascada A-H existente.
+
+### Bump de caché obligatorio
+
+`static/js/sw.js` → `CACHE_HTML` `v19`→`v20` (regla ya obligatoria de
+este archivo: toda edición de `misc_body_1.html` exige el bump, o el
+fix no llega a un móvil con la app ya abierta/reciente aunque esté en
+`main`).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que el fetch de recuperación de un slug al servidor
+   dependa ÚNICAMENTE de `!teams.length` (todo el slug vacío). Un
+   equipo CONCRETO con `players:[]` dentro de un slug que SÍ tiene
+   otros equipos es el mismo problema (copia local stale/parcial) y
+   necesita el mismo remedio — refrescar ESE slug del servidor.
+2. **PROHIBIDO** que la "Fuente B" (que salta el slug actual a
+   propósito) se confunda con el refresco del slug actual. Son dos
+   mecanismos DISTINTOS: Fuente B busca el equipo en OTRA liga (caso
+   "guardado por error en otro sitio"); el paso 2.a-bis refresca ESTA
+   MISMA liga desde el servidor (caso "mi copia local está desfasada").
+3. Si un bug futuro reporta "el servidor tiene la plantilla real pero
+   la app muestra genérico/vacío", comprobar PRIMERO si el fetch de
+   recuperación de ESE slug concreto se disparó — antes de asumir que
+   el servidor perdió datos (regla ya existente: pedir al usuario que
+   pegue el JSON crudo del endpoint para descartarlo, como en este caso).
+
 ## El click en una fila de clasificación con `players` vacío persistía un rebuild STATS-ONLY (power:70/pos:MED para TODOS) — Real Betis, en producción (obligatorio, 2026-08-17 #3)
 
 **Bug (usuario 2026-08-17, «he metido todas las plantillas ea sport y liga

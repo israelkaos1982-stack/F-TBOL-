@@ -33780,6 +33780,18 @@ window._hdrCleanCache = function(){
     Object.keys(cfg.results).forEach(function(mk){
       var r = cfg.results[mk]; if (!r || !r.played) return;
       if (/\|L[12]$/.test(mk)) return;
+      /* `r.trimmedAt` = acta borrada A PROPÓSITO por el recorte de
+         partidos IA-vs-IA (obligatorio, 2026-08-16 — ver sección "El
+         acta de un partido IA-vs-IA ya completado se RECORTA..." en
+         CLAUDE.md). Sin este guard, este backfill trataba un partido
+         "jugado sin acta" como una pérdida ACCIDENTAL que había que
+         regenerar — exactamente lo que el recorte deja detrás a
+         propósito — y volvía a rellenar `events`/`mvp` (con nombres
+         placeholder si la plantilla no estaba resuelta en ese instante)
+         cada vez que se abría la pantalla del torneo, deshaciendo el
+         recorte y devolviendo el peso que se acababa de ahorrar. Un
+         partido recortado se queda SIEMPRE solo con el marcador. */
+      if (r.trimmedAt) return;
       var evs = r.events || r.acta;
       var info = idx[mk] || {};
       var home = r.home || info.a, away = r.away || info.b;

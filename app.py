@@ -443,6 +443,55 @@ def _preserve_results_acta(base_res, merged_res):
                 m[f] = b[f]
 
 
+# ── Anti-resurrección del recorte de acta IA-vs-IA de Liga (2026-08-17) ──
+# El recorte automático de acta (ver CLAUDE.md, "El acta de un partido
+# IA-vs-IA ya completado se RECORTA...") sella `trimmedAt` en el partido
+# y BORRA `events`/`mvp`/`mvpTeam` — su aportación YA se sumó a la tabla
+# permanente `pm_tally_liga_v1` antes de vaciarlo, así que no hay nada
+# que perder. El problema: `merge_dict` (usado para `liga_results` dentro
+# de `competition_state`) SOLO puede COPIAR claves presentes en el lado
+# entrante — nunca puede propagar un BORRADO de campo, porque construye
+# `result = dict(base)` y solo sobreescribe las claves que `incoming` SÍ
+# trae. Si el dispositivo que acaba de recortar hace POST con
+# `{gh,ga,trimmedAt}` (sin `events`), el `result` para ese matchKey sigue
+# siendo `dict(base)` con el `events` VIEJO todavía dentro — el recorte
+# se resucita en el propio merge, ANTES incluso de que
+# `_preserve_results_acta` (que protege el caso CONTRARIO, un borrado
+# ACCIDENTAL) tenga ocasión de actuar — de hecho `_preserve_results_acta`
+# ve el acta YA presente en `merged` y no hace nada, así que no hay
+# ningún punto existente que evite esta resurrección.
+def _enforce_liga_trim(base_res, incoming_res, merged_res):
+    """Si CUALQUIERA de las 2 copias (`base_res` o `incoming_res`) trae
+    `trimmedAt` para un matchKey cuyo marcador coincide con el de
+    `merged_res`, el resultado final para ese matchKey se queda SIN acta
+    (`events`/`scorers`/`acta`/`mvp`/`mvpTeam` fuera). El recorte es
+    MONOTÓNICO — una vez que CUALQUIER dispositivo lo sella, ningún otro
+    dispositivo (que aún no lo haya visto y siga posteando su copia vieja
+    con acta completa) puede revertirlo. Esto es seguro sin necesidad de
+    comparar timestamps: la aportación de CUALQUIER copia del partido ya
+    está en la tabla permanente antes de sellar `trimmedAt` (el cliente
+    acumula y borra en la MISMA llamada), así que preferir "recortado"
+    nunca pierde ningún dato — solo evita que reaparezca el peso que el
+    feature entero existe para ahorrar."""
+    if not isinstance(merged_res, dict):
+        return
+    for src in (base_res, incoming_res):
+        if not isinstance(src, dict):
+            continue
+        for mk, r in src.items():
+            if not isinstance(r, dict) or not r.get("trimmedAt"):
+                continue
+            m = merged_res.get(mk)
+            if not isinstance(m, dict):
+                continue
+            if not _same_match_score(r, m):
+                continue
+            for f in _ACTA_FIELDS:
+                m.pop(f, None)
+            if not m.get("trimmedAt") or m["trimmedAt"] < r["trimmedAt"]:
+                m["trimmedAt"] = r["trimmedAt"]
+
+
 # Claves de `/api/state` cuyo blob es un running total / consumible
 # (HUD: 🪙 presupuesto · 💊 puntos de fisio · 💼 valoración). Para ellas
 # NO vale el field-merge recursivo de `merge_dict`: dos dispositivos
@@ -740,6 +789,17 @@ def save_global_state(new_state, replace=False):
             try:
                 _preserve_results_acta(base.get("liga_results"),
                                        merged.get("liga_results"))
+            except Exception:
+                pass
+            # Recorte de acta IA-vs-IA (obligatorio, 2026-08-17): SIEMPRE
+            # después de `_preserve_results_acta` — ese restaura un acta
+            # perdida por ACCIDENTE, esta impone lo contrario (un acta
+            # borrada A PROPÓSITO no puede resucitar). Ver
+            # `_enforce_liga_trim` arriba para el porqué del orden.
+            try:
+                _enforce_liga_trim(base.get("liga_results"),
+                                   incoming.get("liga_results"),
+                                   merged.get("liga_results"))
             except Exception:
                 pass
     row.valor_json = json.dumps(merged, ensure_ascii=False)
@@ -4489,7 +4549,7 @@ _KV_ALLOWED_EXACT = {
     # por clave de partido (nunca por recencia entera) — ver
     # `_pm_tally_merge` en sync_merge.py, dispatchado más abajo.
     "pm_tally_torneos_v1", "pm_tally_sel_v1", "pm_tally_mundial_v1",
-    "pm_tally_copa_v1", "pm_tally_inter_v1",
+    "pm_tally_copa_v1", "pm_tally_inter_v1", "pm_tally_liga_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,

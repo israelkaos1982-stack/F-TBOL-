@@ -1704,6 +1704,76 @@ class TestLigaExtMerge:
         res = self._merge(old, new)
         assert res["teams"][0]["players"] == r2
 
+    def test_roster_aplanado_nunca_gana_a_real(self):
+        # Bug real en producción 2026-08-17 (Real Betis, liga-ea-sports):
+        # un click en la fila de la clasificación con `found.players`
+        # momentáneamente vacío disparaba un rebuild stats-only (solo
+        # nombres reales, "power":70/"pos":"MED" para TODOS) que se
+        # persistía al servidor. A diferencia del roster "Jugador N" (ya
+        # cubierto), aquí los NOMBRES son reales — solo posición/poder
+        # están aplanados. Debe detectarse igual y nunca ganar a lo real.
+        real_roster = [
+            {"name": "Rui Silva", "pos": "POR", "power": 84},
+            {"name": "Marc Bartra", "pos": "DEF", "power": 82},
+            {"name": "Isco", "pos": "MED", "power": 85},
+            {"name": "Antony", "pos": "DEL", "power": 83},
+        ]
+        flattened_roster = [
+            {"name": "Rui Silva", "pos": "MED", "power": 70},
+            {"name": "Marc Bartra", "pos": "MED", "power": 70},
+            {"name": "Isco", "pos": "MED", "power": 70},
+            {"name": "Antony", "pos": "MED", "power": 70},
+        ]
+        old = {"teams": [{"id": "1", "name": "Real Betis",
+                           "players": real_roster, "updatedAt": 100}]}
+        new = {"teams": [{"id": "1", "name": "Real Betis",
+                           "players": flattened_roster, "updatedAt": 999}]}
+        res = self._merge(old, new)
+        assert res["teams"][0]["players"] == real_roster, res["teams"][0]["players"]
+
+    def test_roster_aplanado_se_reemplaza_por_real_de_otra_grafia(self):
+        real_roster = [
+            {"name": "Rui Silva", "pos": "POR", "power": 84},
+            {"name": "Marc Bartra", "pos": "DEF", "power": 82},
+        ]
+        flattened_roster = [
+            {"name": "Rui Silva", "pos": "MED", "power": 70},
+            {"name": "Marc Bartra", "pos": "MED", "power": 70},
+        ]
+        old = {"teams": [{"id": "1", "name": "Real Betis",
+                           "players": flattened_roster, "updatedAt": 500}]}
+        new = {"teams": [{"id": "2", "name": "Real Betis CF",
+                           "players": real_roster, "updatedAt": 10}]}
+        res = self._merge(old, new)
+        assert len(res["teams"]) == 1
+        assert res["teams"][0]["players"] == real_roster, res["teams"][0]["players"]
+
+    def test_roster_con_algunos_med_70_no_se_considera_generico(self):
+        # Anti-falso-positivo: un roster REAL donde solo ALGUNOS jugadores
+        # tienen genuinamente pos MED y power 70 (coincidencia legítima)
+        # NO debe tratarse como aplanado — el umbral es ≥90%. Construido
+        # para que, si el umbral estuviera mal (falso positivo), el
+        # backfill SÍ sustituiría `mixed_roster` por `other_real_roster`
+        # (la regla "real desplaza a genérico" dispararía) — así el test
+        # falla de verdad si la detección se vuelve demasiado agresiva.
+        other_real_roster = [
+            {"name": "Edgar González", "pos": "DEF", "power": 79},
+            {"name": "Nabil Fekir", "pos": "MED", "power": 84},
+        ]
+        mixed_roster = [
+            {"name": "Rui Silva", "pos": "POR", "power": 84},
+            {"name": "Marc Bartra", "pos": "DEF", "power": 82},
+            {"name": "Isco", "pos": "MED", "power": 85},
+            {"name": "Antony", "pos": "DEL", "power": 83},
+            {"name": "Un Suplente", "pos": "MED", "power": 70},
+        ]
+        old = {"teams": [{"id": "1", "name": "Real Betis",
+                           "players": other_real_roster, "updatedAt": 1}]}
+        new = {"teams": [{"id": "1", "name": "Real Betis",
+                           "players": mixed_roster, "updatedAt": 999}]}
+        res = self._merge(old, new)
+        assert res["teams"][0]["players"] == mixed_roster, res["teams"][0]["players"]
+
     def test_logo_liga_no_se_borra_por_post_vacio(self):
         # Un dispositivo que nunca puso el logo POSTea config.logo='' →
         # el servidor debe CONSERVAR el logo almacenado (identidad).

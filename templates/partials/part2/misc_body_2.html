@@ -21413,7 +21413,16 @@
       var fixedMatches = 0;
       Object.keys(results).forEach(function(key){
         var res = results[key];
-        if (!res || !Array.isArray(res.events) || !res.events.length) return;
+        /* `res.trimmedAt` = acta borrada A PROPÓSITO por el recorte de
+           partidos IA-vs-IA (obligatorio, 2026-08-17 — ver la sección
+           equivalente para Torneos/Selecciones/Mundialito en CLAUDE.md,
+           "El acta de un partido IA-vs-IA..."). El guard de `events`
+           vacío que sigue ya excluye a un partido recortado (su acta
+           no existe), pero el chequeo EXPLÍCITO va primero para que
+           ningún refactor futuro de esta condición pueda volver a
+           tratar un recorte deliberado como una pérdida accidental que
+           haya que reparar. */
+        if (!res || res.trimmedAt || !Array.isArray(res.events) || !res.events.length) return;
         /* rKey(j,home,away) = 'j|home|away' — el nombre de equipo de
            cada lado sale de la propia clave, no del evento (los eventos
            solo llevan 'a'/'b'). */

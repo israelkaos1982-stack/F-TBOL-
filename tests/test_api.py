@@ -243,6 +243,127 @@ class TestApiState:
 
 
 # ---------------------------------------------------------------------------
+# Recorte de acta IA-vs-IA de Liga EA Sports — anti-resurrección
+# (obligatorio, 2026-08-17, ver CLAUDE.md "El acta de un partido
+# IA-vs-IA..."). `merge_dict` solo puede COPIAR claves presentes en el
+# lado entrante, nunca propagar un borrado: un dispositivo que recorta
+# un partido (borra events/mvp/mvpTeam, sella trimmedAt) y hace POST
+# podía ver su recorte resucitado por el `dict(base)` interno de
+# `merge_dict` en cuanto el servidor todavía tuviera el acta completa
+# de ANTES del recorte. `_enforce_liga_trim` corrige esto en
+# `save_global_state`.
+# ---------------------------------------------------------------------------
+
+class TestLigaTrimAntiResurrection:
+
+    def test_trim_survives_merge_with_server_copy_that_still_has_acta(self, client):
+        """El escenario real: el servidor YA tiene el acta completa de un
+        partido (de una sim anterior). Un dispositivo recorta ese MISMO
+        partido (mismo marcador) y hace POST solo con `trimmedAt` — el
+        acta NO debe resucitar en el estado fusionado."""
+        mk = "5|Real Madrid|Valencia"
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {mk: {
+                "gh": 2, "ga": 1,
+                "events": [{"type": "gol", "team": "a", "player": "Mbappe"}],
+                "mvp": "Mbappe", "mvpTeam": "Real Madrid",
+            }}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        assert "events" in _json(rv)["state"]["liga_results"][mk]
+
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {mk: {
+                "gh": 2, "ga": 1, "trimmedAt": 1234567890,
+            }}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        r = _json(rv)["state"]["liga_results"][mk]
+        assert "events" not in r
+        assert "mvp" not in r
+        assert "mvpTeam" not in r
+        assert r.get("trimmedAt") == 1234567890
+        assert r.get("gh") == 2 and r.get("ga") == 1
+
+    def test_trim_wins_even_when_the_older_side_reposts_full_acta(self, client):
+        """Orden inverso: el servidor YA tiene el partido recortado (otro
+        dispositivo lo trimeó antes) y un dispositivo VIEJO (que nunca vio
+        el recorte) vuelve a postear el acta completa con el MISMO
+        marcador — el recorte sigue ganando."""
+        mk = "6|Sevilla|Betis"
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {mk: {
+                "gh": 0, "ga": 0, "trimmedAt": 999,
+            }}}}),
+            content_type="application/json",
+        )
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {mk: {
+                "gh": 0, "ga": 0,
+                "events": [{"type": "amarilla", "team": "b", "player": "X"}],
+            }}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        r = _json(rv)["state"]["liga_results"][mk]
+        assert "events" not in r
+
+    def test_accidental_loss_without_trimmedat_is_still_restored(self, client):
+        """Sigue viva la protección PREVIA (`_preserve_results_acta`): una
+        copia solo-marcador SIN `trimmedAt` (pérdida accidental, no un
+        recorte deliberado) NO debe borrar un acta ya guardada."""
+        mk = "7|Betis|Alaves"
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {mk: {
+                "gh": 3, "ga": 0,
+                "events": [{"type": "gol", "team": "a", "player": "Y"}],
+                "mvp": "Y", "mvpTeam": "Betis",
+            }}}}),
+            content_type="application/json",
+        )
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {mk: {"gh": 3, "ga": 0}}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        r = _json(rv)["state"]["liga_results"][mk]
+        assert r.get("events")
+
+    def test_different_score_is_not_treated_as_a_trim(self, client):
+        """Un marcador DISTINTO nunca es un escenario de recorte (es una
+        corrección real de resultado) — el acta nueva sobrevive aunque el
+        marcador viejo tuviera trimmedAt."""
+        mk = "9|Alaves|Girona"
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {mk: {
+                "gh": 1, "ga": 0, "trimmedAt": 900,
+            }}}}),
+            content_type="application/json",
+        )
+        client.post(
+            "/api/state",
+            data=json.dumps({"state": {"liga_results": {mk: {
+                "gh": 2, "ga": 0,
+                "events": [{"type": "gol", "team": "a", "player": "W"}],
+            }}}}),
+            content_type="application/json",
+        )
+        rv = client.get("/api/state")
+        r = _json(rv)["state"]["liga_results"][mk]
+        assert r.get("gh") == 2
+        assert r.get("events")
+
+
+# ---------------------------------------------------------------------------
 # Cursor del día del hub (liverpool_preseason_v1) — merge MONOTÓNICO
 # Bug 2026-06-05: el usuario estaba en agosto y al volver le ponía 16 jun.
 # ---------------------------------------------------------------------------

@@ -17825,6 +17825,33 @@ window._hdrCleanCache = function(){
       }
     } catch(_){}
 
+    /* TABLA PERMANENTE de Liga EA Sports (obligatorio, 2026-08-17): el
+       recorte automático de acta de partidos IA-vs-IA ya completados
+       (`pm_tally_liga_v1`, ver bloque dedicado más abajo en este
+       archivo) vacía `events` de `ef_liga38_v4[key]` DESPUÉS de sumar
+       su aportación a esa tabla — la Fuente 2 de arriba SOLO ve los
+       partidos que TODAVÍA tienen acta (los recortados no aportan nada
+       al escaneo en vivo, por diseño). Aquí se suma la tabla permanente
+       ENCIMA, ANTES de la línea "Assign PJ" (más abajo, `stats[key].pj
+       = teamPJ[teamNorm]`), para que las entradas NUEVAS que cree este
+       merge (un jugador cuyo ÚNICO partido con datos ya está recortado)
+       reciban su PJ correcto igual que el resto — a diferencia de los
+       otros 5 buckets (torneos/sel/mundial/copa/inter), que corrigen su
+       PJ más tarde en `_persistBucket` (ver esa función), el bucket
+       `liga` se persiste DIRECTO sin pasar por ahí (línea `_lsSetSafe
+       (PLAYER_STATS_KEY, ...)`), así que el orden aquí importa.
+       Pasamos un pjBucket DESECHABLE (`{}`), NUNCA `teamPJByComp.liga`:
+       el PJ por equipo de Liga YA es correcto y completo desde el
+       escaneo `_pjResults` de arriba (cuenta TODAS las claves de
+       `ef_liga38_v4`, tengan o no `events` — ver el bloque "PJ por
+       equipo desde la fuente AUTORITATIVA" más arriba) — sumarle
+       también el pjBucket de `_pmMergeTallyInto` lo duplicaría. */
+    try {
+      if (typeof window._pmMergeTallyInto === 'function') {
+        window._pmMergeTallyInto('liga', buckets.liga, {});
+      }
+    } catch(_){}
+
     /* Source 3: tour_*_v1 cfgs (Torneos de Verano + Mundialito Clubes).
        LIGA_PLAYER_MATCH_STORE no se persiste a localStorage; tras un
        page reload solo Source 1 contiene los partidos IA-vs-IA de Liga
@@ -18898,7 +18925,8 @@ window._hdrCleanCache = function(){
     sel:     'pm_tally_sel_v1',
     mundial: 'pm_tally_mundial_v1',
     copa:    'pm_tally_copa_v1',
-    inter:   'pm_tally_inter_v1'
+    inter:   'pm_tally_inter_v1',
+    liga:    'pm_tally_liga_v1'
   };
   var _cache = {};      // bucketId -> {names:{}, matches:{}, updatedAt}
   var _hydrated = {};   // bucketId -> bool
@@ -19332,6 +19360,118 @@ window._hdrCleanCache = function(){
   }
   window._pmSweepInterState = _pmSweepInterState;
 
+  /* Acumulador DEDICADO para Liga EA Sports — replica el tipo de
+     eventos EXACTO que cuenta la Fuente 2 de `rebuildPlayerStatsStore`
+     (`amarilla/roja/d-amarilla/gol/falta-gol/pen-gol/pen-parado/mvp/
+     imbat` + `sust`→playerOut, MVP tomado siempre de `r.mvp`/`r.mvpTeam`
+     sin comprobar si ya hay un evento `mvp` en la lista), DELIBERADAMENTE
+     MÁS ESTRECHO que `_pmAccumulateEvents` (que además cuenta pen-prov/
+     pen-fallo/propia/card, usados por torneos/sel/mundial/copa/inter).
+     Fuente 2 NUNCA contó esos tipos para Liga, así que un partido
+     recortado NO puede empezar a aportarlos — los números deben ser
+     IDÉNTICOS a los que el escaneo en vivo producía (regla ya existente
+     de este módulo, ahora extendida a Liga). Reutilizar
+     `_pmAccumulateEvents` aquí habría sido INCORRECTO: sumaría tipos que
+     Fuente 2 ignora, haciendo que un partido recortado muestre MÁS
+     estadísticas que uno sin recortar con el mismo acta. */
+  function _pmAccumulateLigaEvents(entry, tally, teamA, teamB, events, mvp, mvpTeam){
+    var nA = _pmNorm(teamA), nB = _pmNorm(teamB);
+    entry.t = [nA, nB];
+    if (nA && teamA && tally.names[nA] === undefined) tally.names[nA] = teamA;
+    if (nB && teamB && tally.names[nB] === undefined) tally.names[nB] = teamB;
+    var full = {};
+    function _fullEntry(team, player){
+      var tn = _pmNorm(team), pn = _pmNorm(player);
+      var key = tn + '::' + pn;
+      if (!full[key]) full[key] = {gol:0,pen:0,fk:0,mvp:0,ta:0,tr:0,penSaved:0,imbat:0,penProv:0,penFall:0,propia:0};
+      if (tally.names[key] === undefined) tally.names[key] = player;
+      return full[key];
+    }
+    (events||[]).forEach(function(ev){
+      if (!ev || ev._varAnulado) return;
+      var team = ev.team === 'a' ? teamA : (ev.team === 'b' ? teamB : '');
+      var player = typeof ev.player === 'string' ? ev.player : (Array.isArray(ev.player) ? ev.player[1] : '');
+      if (!team || !player) return;
+      var p = _fullEntry(team, player);
+      var type = ev.type || '';
+      if (type==='amarilla') p.ta++;
+      else if (type==='roja'||type==='d-amarilla') p.tr++;
+      else if (type==='gol') p.gol++;
+      else if (type==='falta-gol') p.fk++;
+      else if (type==='pen-gol') p.pen++;
+      else if (type==='pen-parado') p.penSaved++;
+      else if (type==='mvp') p.mvp++;
+      else if (type==='imbat') p.imbat++;
+      if (type==='sust' && ev.playerOut) _fullEntry(team, ev.playerOut);
+    });
+    if (mvp && mvpTeam) _fullEntry(mvpTeam, mvp).mvp++;
+    entry.p = {};
+    Object.keys(full).forEach(function(k){ entry.p[k] = _pmCompactStat(full[k]); });
+  }
+
+  /* ── Barrido de Liga EA Sports (`ef_liga38_v4`) ──
+     380 partidos/temporada (20 equipos, doble round-robin) — el mayor
+     contribuyente de peso de acta del proyecto, y el motivo original
+     de esta feature (auditoría de peso 2026-08-16). `window.LIGA_SCHEDULE`
+     es la fuente de "jornada completa": TODOS los partidos de la
+     jornada deben tener entrada en `results` — MISMO criterio que
+     `_updateLigaJornadaStatus` (`part2/misc_body_2.html`), que pinta la
+     jornada como ✅ con esa misma condición. A diferencia de los
+     resultados de torneo (`r.played`), un resultado de Liga EXISTENTE
+     ya implica jugado — no hay flag `played` separado.
+     Persistencia vía `window._ef38SetResults` (= `saveResults`, el
+     chokepoint único que además hace POST al servidor) — el servidor
+     protege el recorte contra resurrección con `_enforce_liga_trim`
+     (app.py, hermano de `_preserve_results_acta`): sin esa protección,
+     el `merge_dict` genérico de `/api/state` (que SOLO puede COPIAR
+     claves presentes, nunca borrar una ausente) resucitaría el acta
+     recién vaciada desde la copia del servidor en cuanto CUALQUIER
+     otro dispositivo hiciera un POST antes de recibir este recorte. */
+  function _pmLigaRKey(j, h, a){ return j + '|' + h + '|' + a; }
+  function _pmSweepLigaState(){
+    var schedule = window.LIGA_SCHEDULE;
+    if (!Array.isArray(schedule) || !schedule.length) return false;
+    var results = (typeof window._ef38GetResults === 'function') ? window._ef38GetResults() : null;
+    if (!results || typeof results !== 'object') return false;
+    var tally = _pmLoad('liga');
+    var touchedTally = false, touchedResults = false;
+    schedule.forEach(function(jornada, idx){
+      if (!Array.isArray(jornada) || !jornada.length) return;
+      var j = idx + 1;
+      var allDone = jornada.every(function(m){ return !!results[_pmLigaRKey(j, m[0], m[1])]; });
+      if (!allDone) return;
+      jornada.forEach(function(m){
+        if (!m || !m[0] || !m[1]) return;
+        var home = m[0], away = m[1];
+        var key = _pmLigaRKey(j, home, away);
+        var r = results[key];
+        if (!r || !Array.isArray(r.events) || !r.events.length || r.trimmedAt) return;
+        if (!_pmIsIAvsIA(home, away, 'liga')) return;
+        var dedupKey = _pmDedupKey('liga', 'j' + j, home, away);
+        if (!tally.matches[dedupKey]) {
+          var entry = {};
+          _pmAccumulateLigaEvents(entry, tally, home, away, r.events, r.mvp, r.mvpTeam);
+          tally.matches[dedupKey] = entry;
+          touchedTally = true;
+        }
+        delete r.events;
+        delete r.mvp;
+        delete r.mvpTeam;
+        r.trimmedAt = Date.now();
+        touchedResults = true;
+      });
+    });
+    if (touchedTally) _pmSave('liga', tally);
+    if (touchedResults) {
+      try {
+        if (typeof window._ef38SetResults === 'function') window._ef38SetResults(results);
+        else if (typeof window.saveResults === 'function') window.saveResults(results);
+      } catch(_){}
+    }
+    return touchedResults;
+  }
+  window._pmSweepLigaState = _pmSweepLigaState;
+
   /* ── Disparo automático, sin botón ──
      Boot (diferido, para no competir con la hidratación inicial) + barrido
      periódico (cubre jornadas que se completan mientras la app sigue
@@ -19343,10 +19483,12 @@ window._hdrCleanCache = function(){
     setTimeout(function(){
       try { window._pmSweepAllTours(); } catch(_){}
       try { _pmSweepInterState(); } catch(_){}
+      try { _pmSweepLigaState(); } catch(_){}
     }, 9000);
     setInterval(function(){
       try { window._pmSweepAllTours(); } catch(_){}
       try { _pmSweepInterState(); } catch(_){}
+      try { _pmSweepLigaState(); } catch(_){}
     }, 180000);
   } catch(_){}
 })();

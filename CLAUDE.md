@@ -790,7 +790,7 @@ resucitaría el acta que se acaba de vaciar a propósito.
 | Torneos de Verano + Selecciones + Mundialito de Clubes | `_pmSweepTourCfg`/`window._pmSweepAllTours` | `tour_<id>_v1.results` | `window._tourSave(id, cfg)` (merge-safe, respeta `trimmedAt`) |
 | Copa Intercontinental | `window._pmSweepInterState` | `inter_state_v1.sorteo.{q,s,f}` | `_lsSetSafe` local — viaja solo por el polling genérico de `SYNC_KEYS` (`part2/misc_body_2.html`) hacia `_STATE_BRACKET_KEYS` en servidor |
 | Copa del Rey | **NO implementado a propósito** — ver más abajo | — | — |
-| Liga EA Sports | **NO implementado, y NO se va a implementar sin permanente-tally propia** | `ef_liga38_v4[key].events` | — |
+| Liga EA Sports | `window._pmSweepLigaState` (obligatorio, 2026-08-17 — ver sección dedicada más abajo) | `ef_liga38_v4[key].events` | `window._ef38SetResults`/`saveResults` (POST a `/api/state`, protegido server-side por `_enforce_liga_trim`) |
 | Supercopa de España | **NO implementado** | `sc_state_v1` (sin fuente persistente de rescan siquiera hoy — ver aviso más abajo) | — |
 
 El barrido corre **100% automático, sin botón**: al boot (diferido 9s)
@@ -817,24 +817,35 @@ todavía por prudencia, para no arriesgarse a cambiar una cifra ya
 mostrada sin poder probarlo contra la app real. Queda pendiente para
 una entrega separada.
 
-### Liga EA Sports / Copa del Rey / Supercopa de España NUNCA se tocan (aviso usuario 2026-08-16)
+### Copa del Rey / Supercopa de España NUNCA se tocan — Liga EA Sports YA TIENE tabla permanente (aviso usuario 2026-08-16, actualizado 2026-08-17)
 
 **Petición usuario 2026-08-16** ("Liga Ea Sports, Copa del Rey y
 Supercopa de España las estadisticas son globales, se suman las 3
 competiciones… no quiero que al eliminar los actas de IA vs IA en
 alguna competicion, Liga, Copa, Torneo de verano etc esas estadisticas
 se eliminen de la caja estadisticas de cada Competición… eso es muy
-importante que se sigan sumando"): el barrido de este feature **NUNCA**
-ha tocado `ef_liga38_v4` (Liga EA Sports) ni `sc_state_v1` (Supercopa de
-España) — solo `tour_<id>_v1` (torneos/sel/mundial) e
-`inter_state_v1`. Copa del Rey (`copa_state_v1`) tampoco (sección de
-arriba). Esto es DELIBERADO: a diferencia de Torneos/Selecciones/
-Mundialito/Intercontinental (donde la tabla permanente se construyó
-**ANTES** de recortar nada), Liga EA Sports/Copa del Rey/Supercopa de
-España NO tienen ninguna tabla permanente equivalente — si su acta se
-recortara HOY, esas estadísticas desaparecerían de la caja combinada
+importante que se sigan sumando"): en el momento de esta petición, el
+barrido de este feature **NUNCA** había tocado `ef_liga38_v4` (Liga EA
+Sports) ni `sc_state_v1` (Supercopa de España) — solo `tour_<id>_v1`
+(torneos/sel/mundial) e `inter_state_v1`. Copa del Rey (`copa_state_v1`)
+tampoco (sección de arriba). Era DELIBERADO: a diferencia de Torneos/
+Selecciones/Mundialito/Intercontinental (donde la tabla permanente se
+construyó **ANTES** de recortar nada), ninguna de las 3 tenía una tabla
+permanente equivalente — si su acta se hubiera recortado ENTONCES, esas
+estadísticas habrían desaparecido de la caja combinada
 `ef_player_stats_v1` (Liga+Copa+Supercopa España) PARA SIEMPRE, sin
-ninguna red que las recupere.
+ninguna red que las recuperara.
+
+**⚠️ Actualización 2026-08-17 — Liga EA Sports YA NO está en esta
+lista**: se construyó `pm_tally_liga_v1` (`window._pmSweepLigaState`,
+sección dedicada más abajo), verificado con tests igual que exige la
+Regla 7 de más abajo para Copa del Rey — Liga EA Sports **SÍ** recorta
+ahora sus partidos IA-vs-IA, con la misma garantía de "nunca se pierde
+una estadística" que Torneos/Selecciones/Mundialito/Intercontinental.
+**Copa del Rey y Supercopa de España SIGUEN sin tocarse** — ninguna de
+las 2 tiene todavía su propia tabla permanente verificada (ver la
+sección de Copa del Rey más arriba, y el hallazgo de Supercopa de
+España justo debajo).
 
 **Hallazgo adicional, mismo aviso**: `buckets.sc` (Supercopa de España)
 NO tiene NINGUNA fuente de rescan persistente en
@@ -896,6 +907,95 @@ permanente ya había sumado la aportación del partido ANTES del recorte)
 a aparecer (y a pesar) aunque las cifras de Estadísticas fueran
 correctas en todo momento.
 
+### Liga EA Sports también recorta su acta IA-vs-IA — `pm_tally_liga_v1` (obligatorio, 2026-08-17)
+
+**Petición usuario 2026-08-17** (tras confirmar que Liga EA Sports/Copa
+del Rey/Supercopa de España nunca se tocaban, y tras el fix del
+backfill de arriba): "Sí, constrúyela" — construir la tabla permanente
+de Liga EA Sports para poder recortarla igual que Torneos/Selecciones/
+Mundialito/Intercontinental. Liga EA Sports es la competición que MÁS
+peso aporta de todas (**380 partidos/temporada**, 20 equipos a doble
+round-robin) — era el motivo original de la auditoría de peso que
+arrancó todo este feature.
+
+- **`window._pmSweepLigaState()`** (`misc_body_1.html`, mismo IIFE
+  `pm_tally_<familia>_v1` que el resto): la "jornada/ronda completa" de
+  Liga se mide con el MISMO criterio que ya usaba
+  `_updateLigaJornadaStatus` (`part2/misc_body_2.html`, la cabecera ✅ de
+  cada jornada) — `window.LIGA_SCHEDULE[j]` completa cuando TODOS sus
+  partidos tienen entrada en `results` (a diferencia de los `results` de
+  torneo, un resultado de Liga EXISTENTE ya implica jugado, no hay flag
+  `played` separado). Se registra en el mismo boot diferido (9 s) + barrido
+  periódico (3 min) que `_pmSweepAllTours`/`_pmSweepInterState`.
+- **`pm_tally_liga_v1`** — quinta clave de `TALLY_KEY`, mismo formato
+  compacto (`names` + `matches[dedupKey]={t,p}`) y mismo merge ADITIVO
+  server-side (`_pm_tally_merge`, ya genérico por familia — solo hizo
+  falta añadir `pm_tally_liga_v1` a `_KV_ALLOWED_EXACT` en `app.py`, el
+  dispatch `key.startswith("pm_tally_")` ya lo cubría).
+- **`_pmAccumulateLigaEvents` — acumulador DEDICADO, NO
+  `_pmAccumulateEvents`**: la Fuente 2 de `rebuildPlayerStatsStore` (el
+  escaneo en vivo de `ef_liga38_v4`) cuenta un subconjunto MÁS ESTRECHO
+  de tipos de evento que `_pmAccumulateEvents` (torneos/inter/copa) —
+  nunca contó `pen-prov`/`pen-fallo`/`propia`/`card` para Liga, y el MVP
+  se suma SIEMPRE desde `r.mvp`/`r.mvpTeam` sin comprobar si ya hay un
+  evento `mvp` en la lista (a diferencia de `_pmAccumulateEvents`, que sí
+  hace ese chequeo). Reutilizar `_pmAccumulateEvents` tal cual habría
+  violado la Regla 4 de más abajo — un partido recortado habría mostrado
+  MÁS estadísticas que uno sin recortar con el mismo acta. El nuevo
+  acumulador replica la Fuente 2 tipo a tipo.
+- **`window._pmMergeTallyInto('liga', buckets.liga, {})`** (dentro de
+  `rebuildPlayerStatsStore`): se llama con un **pjBucket DESECHABLE**
+  (`{}`), NUNCA `teamPJByComp.liga` — el PJ por equipo de Liga YA es
+  correcto y completo desde el escaneo `_pjResults` de más arriba en esa
+  misma función (cuenta TODAS las claves de `ef_liga38_v4`, tengan o no
+  `events` — es independiente del acta desde siempre); sumarle también el
+  pjBucket de `_pmMergeTallyInto` lo habría duplicado. La llamada va
+  **ANTES** de la línea "Assign PJ" (`stats[key].pj =
+  teamPJ[teamNorm]`) — a diferencia de los otros 5 buckets (cuyo PJ se
+  corrige más tarde en `_persistBucket`), el bucket `liga` se persiste
+  DIRECTO a `ef_player_stats_v1` sin pasar por ahí, así que el orden
+  importa: si el merge corriera DESPUÉS, un jugador cuyo ÚNICO partido
+  con datos ya estuviera recortado se quedaría con PJ=0 para siempre.
+
+**`_ligaBackfillActasFromResults`** (el reparador de nombres placeholder
+"Jugador A/B" DENTRO de un acta ya existente — distinto de
+`_tourBackfillActasFromResults`, que REGENERA una acta completa desde
+cero) ya estaba a salvo por construcción: su guard `!Array.isArray
+(res.events) || !res.events.length` excluye cualquier partido recortado
+(sin `events`) sin necesitar tocar nada — se añadió de todos modos un
+chequeo EXPLÍCITO `res.trimmedAt` como PRIMER check, por defensa en
+profundidad y para no depender silenciosamente de ese orden si el guard
+cambia en el futuro. **No existe ninguna función "regenerar acta de Liga
+completa desde el marcador"** análoga a `_tourBackfillActasFromResults`
+— auditado con `grep` — así que Liga NO hereda ese bug concreto por
+diseño, no por casualidad.
+
+**El riesgo REAL estaba en el servidor, no en el cliente** — `merge_dict`
+(`app.py`, el merge genérico de `/api/state`/`competition_state`) SOLO
+puede COPIAR claves presentes en el lado entrante (`result = dict(base)`
++ overlay de lo que trae `incoming`); un `delete r.events` en el cliente
+es indistinguible, para `merge_dict`, de "no tengo opinión sobre este
+campo" — así que la primera vez que el servidor fusionara el POST del
+recorte (sin `events`) con su copia base (que TODAVÍA tiene el acta
+completa de antes del recorte), el `events` viejo sobrevivía DENTRO del
+propio `merge_dict`, ANTES incluso de que `_preserve_results_acta` (que
+protege el caso CONTRARIO, una pérdida accidental) tuviera ocasión de
+actuar — de hecho la ve "ya presente" y no hace nada. Verificado
+empíricamente con un harness que extrae `merge_dict`/`_preserve_results_
+acta` REALES de `app.py`: sin fix, el acta se resucitaba en el propio
+merge. **Fix — `_enforce_liga_trim(base_res, incoming_res, merged_res)`**
+(`app.py`, hermano de `_preserve_results_acta`, llamado justo después en
+`save_global_state`): si CUALQUIERA de las 2 copias (base o incoming)
+trae `trimmedAt` para un matchKey con el MISMO marcador, el resultado
+final queda SIN acta — MONOTÓNICO, sin necesitar comparar timestamps
+(la aportación de CUALQUIER copia ya está en la tabla permanente antes
+de sellar `trimmedAt`, así que preferir "recortado" nunca pierde datos).
+Un marcador DISTINTO no se trata como recorte (es una corrección real de
+resultado, se deja a la lógica normal). Tests en
+`tests/test_api.py::TestLigaTrimAntiResurrection` (vía el cliente Flask
+real, `/api/state`) + un harness aislado que extrae `merge_dict`/
+`_preserve_results_acta`/`_enforce_liga_trim` verbatim de `app.py`.
+
 ### Reglas a respetar
 
 1. **PROHIBIDO** que se recorte un partido con CUALQUIER lado humano
@@ -915,12 +1015,18 @@ correctas en todo momento.
    persistir el estado mutado (o viceversa) — ambos pasos van juntos en
    el mismo barrido, o un fallo a mitad podría dejar un partido sin
    acta Y sin tabla permanente.
-4. **PROHIBIDO** que un accumulator nuevo (`_pmAccumulateEvents`) sume
-   un tipo de evento distinto a como lo hace `rebuildPlayerStatsStore`
-   (Source 3/4/5) para la MISMA familia — los números del partido
-   recortado deben ser IDÉNTICOS a los que el escaneo en vivo habría
-   producido, o las estadísticas cambiarían al recortar un partido
-   (inaceptable).
+4. **PROHIBIDO** que un accumulator nuevo (`_pmAccumulateEvents` para
+   torneos/sel/mundial/copa/inter, `_pmAccumulateLigaEvents` para Liga
+   EA Sports, o cualquier acumulador futuro) sume un tipo de evento
+   distinto a como lo hace `rebuildPlayerStatsStore` (Source 2/3/4/5)
+   para la MISMA familia — los números del partido recortado deben ser
+   IDÉNTICOS a los que el escaneo en vivo habría producido, o las
+   estadísticas cambiarían al recortar un partido (inaceptable).
+   **PROHIBIDO** reutilizar `_pmAccumulateEvents` para Liga EA Sports:
+   su Fuente 2 cuenta un subconjunto MÁS ESTRECHO de tipos (nunca
+   `pen-prov`/`pen-fallo`/`propia`/`card`) — necesita su PROPIO
+   acumulador (`_pmAccumulateLigaEvents`) que replique exactamente esa
+   fuente, no el genérico de las otras 5 familias.
 5. **PROHIBIDO** que `_pm_tally_merge` (servidor) una SOLO `matches` sin
    unir TAMBIÉN `names` — los `playerKey` de un `matches` recién
    llegado de OTRO dispositivo son indescifrables sin el `names` que
@@ -945,15 +1051,17 @@ correctas en todo momento.
    `_pick_result`/`_pick_match`/`bracket_state_merge`, según cuál
    aplique a esa clave).
 9. **PROHIBIDO ABSOLUTO** que cualquier código (de este feature o de
-   cualquier otro) borre/vacíe `events` de `ef_liga38_v4[key]`
-   (Liga EA Sports) o de `sc_state_v1` (Supercopa de España) — igual
-   que Copa del Rey, sin ninguna excepción, hasta que exista una tabla
-   permanente equivalente a `pm_tally_torneos_v1`/etc. QUE YA SE HAYA
-   VERIFICADO con tests (mismo patrón que exige la Regla 7 para Copa).
-   Las 3 (Liga+Copa+Supercopa España) alimentan la MISMA caja combinada
-   `ef_player_stats_v1` — recortar cualquiera de las 3 sin su propia
-   tabla permanente borraría estadísticas YA MOSTRADAS al usuario, que
-   fue explícito en que esto "es muy importante que se sigan sumando".
+   cualquier otro) borre/vacíe `events` de `sc_state_v1` (Supercopa de
+   España) — igual que Copa del Rey, sin ninguna excepción, hasta que
+   exista una tabla permanente equivalente a `pm_tally_torneos_v1`/etc.
+   QUE YA SE HAYA VERIFICADO con tests (mismo patrón que exige la Regla
+   7 para Copa). **Liga EA Sports queda EXCLUIDA de esta prohibición
+   desde 2026-08-17** (tiene su propia tabla `pm_tally_liga_v1`, ya
+   verificada — sección dedicada más arriba); Copa del Rey y Supercopa
+   de España la siguen — las 3 alimentan la MISMA caja combinada
+   `ef_player_stats_v1`, así que recortar Copa/SC sin su propia tabla
+   permanente borraría estadísticas YA MOSTRADAS al usuario, que fue
+   explícito en que esto "es muy importante que se sigan sumando".
 10. **PROHIBIDO** que `_tourBackfillActasFromResults` (o cualquier
     "auto-heal"/backfill de acta futuro, de cualquier competición) trate
     un partido con `r.trimmedAt` como una pérdida accidental que hay que
@@ -964,6 +1072,35 @@ correctas en todo momento.
     si la plantilla no está resuelta en ese instante, y lo vuelve a
     persistir. Toda nueva función que reconstruya un acta desde el
     marcador hereda esta regla.
+11. **PROHIBIDO** que un recorte NUEVO que viaje por el merge GENÉRICO
+    de `/api/state`/`competition_state` (`merge_dict`, no un
+    `_pick_result`/`bracket_state_merge`/`_pm_tally_merge` dedicado) se
+    dé por protegido sin un guard EXPLÍCITO tipo `_enforce_liga_trim`.
+    `merge_dict` SOLO puede COPIAR claves presentes en el lado entrante
+    — un campo BORRADO en el cliente (`delete r.events`) es
+    indistinguible, para `merge_dict`, de "sin opinión sobre este
+    campo", así que la copia base (que aún tiene el acta vieja) la
+    resucita SOLA, sin que ningún guard existente lo evite —
+    `_preserve_results_acta` protege el caso CONTRARIO (pérdida
+    accidental) y ve el acta "ya presente", no actúa. Verificarlo
+    SIEMPRE con un test que reproduzca el merge real (no asumir que el
+    guard de pérdida-accidental ya existente también cubre el sentido
+    inverso).
+12. **PROHIBIDO** que `window._pmMergeTallyInto('liga', buckets.liga,
+    pjBucket)` reciba `teamPJByComp.liga` como `pjBucket`. El PJ de Liga
+    YA es correcto y completo desde el escaneo `_pjResults` (cuenta
+    TODAS las claves de `ef_liga38_v4`, con o sin `events`) — pasar el
+    mapa real duplicaría el PJ de cualquier equipo con un partido
+    recortado. Se pasa SIEMPRE un objeto desechable (`{}`).
+13. **PROHIBIDO** mover la llamada a `_pmMergeTallyInto('liga', ...)`
+    DESPUÉS de la línea "Assign PJ" (`stats[key].pj =
+    teamPJ[teamNorm]`) dentro de `rebuildPlayerStatsStore`. A
+    diferencia de los otros 5 buckets (corrigen su PJ más tarde en
+    `_persistBucket`), `buckets.liga` se persiste DIRECTO a
+    `ef_player_stats_v1` sin pasar por ahí — si el merge corriera
+    después, una entrada NUEVA creada por el merge (un jugador cuyo
+    único partido con datos ya está recortado) se quedaría con PJ=0
+    para siempre.
 
 ## Catálogo de balones RENOVADO — reset completo del inventario + reasignación por competición (obligatorio, 2026-08-16)
 

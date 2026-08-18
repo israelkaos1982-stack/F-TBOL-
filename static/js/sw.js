@@ -106,7 +106,7 @@ var HTML_SWR_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutos
 
 /* Activos a pre-cachear en el install.  Actualizar ?v= aquí cuando cambien. */
 var PRECACHE = [
-  '/static/css/index.bundle.css?v=5.6',
+  '/static/css/index.bundle.css?v=5.7',
   '/static/css/goal-notification-improved.css?v=2.1',
   '/static/js/goal-notification-improved.js?v=2.0',
   '/static/js/var-system.js?v=1.0',

@@ -1524,7 +1524,6 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Girona FC':          '/static/img/escudos-1/spain_girona.football-logos.cc.svg',
     'Rayo Vallecano':     '/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg',
     'Rayo':               '/static/img/escudos-1/spain_rayo-vallecano.football-logos.cc.svg',
-    'Getafe CF':          '/static/img/escudos-1/spain_getafe.football-logos.cc.svg',
     'Mallorca':           '/static/img/escudos-1/spain_mallorca.football-logos.cc.svg',
     'Osasuna':            '/static/img/escudos-1/spain_osasuna.football-logos.cc.svg',
     'Espanyol':           '/static/img/escudos-1/spain_espanyol.football-logos.cc.svg',
@@ -1565,8 +1564,6 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Málaga':             '/static/img/escudos-2/spain_malaga.football-logos.cc.svg',
     'CD Castellón':       '/static/img/escudos-2/spain_castellon.football-logos.cc.svg',
     'Castellón':          '/static/img/escudos-2/spain_castellon.football-logos.cc.svg',
-    'UD Las Palmas':      '/static/img/escudos-2/spain_las-palmas.football-logos.cc.svg',
-    'Las Palmas':         '/static/img/escudos-2/spain_las-palmas.football-logos.cc.svg',
     'Burgos CF':          '/static/img/escudos-2/spain_burgos.football-logos.cc.svg',
     'Burgos':             '/static/img/escudos-2/spain_burgos.football-logos.cc.svg',
     'Burgos Club de Fútbol': '/static/img/escudos-2/spain_burgos.football-logos.cc.svg',
@@ -1640,7 +1637,6 @@ window.mlPenWizardCommit_j1m1=function(wiz){var now=Date.now();var min=_currentM
     'Atlético Madrileño': '/static/img/escudos-1/spain_atletico-madrid.football-logos.cc.svg',
     'At. Sanluqueño':     '/static/img/escudos-3/spain_atletico-sanluqueno.football-logos.cc.svg',
     'CE Europa':          '/static/img/escudos-3/spain_ce-europa.football-logos.cc.svg',
-    'SD Tarazona':        '/static/img/escudos-2/spain_tarazona.football-logos.cc.svg',
     'CD Teruel':          '/static/img/escudos-3/spain_teruel.football-logos.cc.svg',
     'Juventud Torremolinos': '/static/img/escudos-2/spain_juventud-torremolinos.football-logos.cc.svg',
     'Estepona':           '/static/img/escudos-fallback/estepona.svg',
@@ -12018,15 +12014,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   }
 
   function _mmFlash(type, teamName, playerName) {
-    // Goals are handled exclusively by goal-notification-improved.js
-    // The overlay is never shown for goals – only red cards use it.
+    // Goals: sin overlay visual (eliminado el sistema goal-notification-*,
+    // 2026-08-18) — solo se reproduce el sonido del gol.
     if (type === 'gol') {
-      if (typeof window.goalNotificationImproved !== 'undefined') {
-        // If the improved system is loaded, let it handle sound too.
-        // (Sound is already triggered by the caller via window.mmShowFlash path)
-      } else {
-        _mmSoundGoal();
-      }
+      _mmSoundGoal();
       return;
     }
 

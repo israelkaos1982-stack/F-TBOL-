@@ -3860,6 +3860,12 @@ DEAD_MERGED_LEAGUE_SLUGS = [
     "liga-mixta-1", "liga-mixta-2", "liga-mixta-3", "liga-mixta-4",
     "liga-mixta-5", "liga-mixta-6", "liga-mixta-7", "liga-mixta-8",
     "liga-mixta-9",
+    # "null" (2026-08-18): artefacto de guardados con slug sin fijar
+    # (`CURRENT_KEY` arrancaba en `null`), nunca fue una liga real.
+    # `saveData` bloquea escrituras NUEVAS desde 2026-08-15, pero filas
+    # ya existentes de antes de ese guard necesitan el mismo tratamiento
+    # que una liga fusionada para desaparecer de /api/liga-ext-bulk.
+    "null",
 ]
 
 

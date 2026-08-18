@@ -12014,15 +12014,10 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
   }
 
   function _mmFlash(type, teamName, playerName) {
-    // Goals are handled exclusively by goal-notification-improved.js
-    // The overlay is never shown for goals – only red cards use it.
+    // Goals: sin overlay visual (eliminado el sistema goal-notification-*,
+    // 2026-08-18) — solo se reproduce el sonido del gol.
     if (type === 'gol') {
-      if (typeof window.goalNotificationImproved !== 'undefined') {
-        // If the improved system is loaded, let it handle sound too.
-        // (Sound is already triggered by the caller via window.mmShowFlash path)
-      } else {
-        _mmSoundGoal();
-      }
+      _mmSoundGoal();
       return;
     }
 

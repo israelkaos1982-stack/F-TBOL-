@@ -5855,8 +5855,30 @@ def spa_fallback(path):
     return resp
 
 with app.app_context():
-    db.create_all()
-    get_or_create_global_state()
+    # AMBOS envueltos en try/except (2026-08-18, "la Web no funciona" —
+    # el usuario reportó la app COMPLETAMENTE inalcanzable, sin ningún
+    # error de JS/HTML detectable en el cliente). Estas 2 líneas eran
+    # las ÚNICAS de todo este bloque de arranque SIN blindar, pese a
+    # que el resto del bloque (más abajo) ya declara explícitamente la
+    # regla "envuelta en try/except para que un fallo aquí NUNCA impida
+    # arrancar el servidor". Si la BD (Postgres de Railway) no responde
+    # en el instante exacto del boot del contenedor —un blip transitorio
+    # de red, el plugin de BD arrancando un pelín más tarde que la app,
+    # credenciales rotando— `db.create_all()`/`get_or_create_global_state()`
+    # LANZABAN a nivel de MÓDULO: el objeto Flask nunca terminaba de
+    # inicializarse, gunicorn no podía levantar NINGÚN worker, y Railway
+    # servía un contenedor caído en bucle — exactamente "no carga nada",
+    # para CUALQUIER ruta, incluida `/` (que ni siquiera toca la BD:
+    # `inicio()` solo hace `render_template("index.html")`). Con el
+    # try/except, un blip de BD deja la home + los assets estáticos
+    # sirviendo con normalidad (todo el juego es client-side/localStorage
+    # primero) mientras solo fallan los endpoints `/api/*` hasta que la
+    # BD se recupere — en vez de tirar site entero.
+    try:
+        db.create_all()
+        get_or_create_global_state()
+    except Exception as _e:
+        print(f"[boot] BD no disponible al arrancar (se reintentará por petición): {_e}")
     # Cargar flags de jugadores (C/F/P/⭐/⚾) desde la BD a memoria para que
     # el motor de simulación Python los aplique desde el primer partido.
     try:

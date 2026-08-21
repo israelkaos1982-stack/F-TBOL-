@@ -52,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v20';
+var CACHE_HTML   = 'ftbol-html-v21';
 /* v19 → v20 (2026-08-17): fix "plantilla vacía en el móvil pese a que
    el servidor tiene el roster real completo" (Osasuna/Athletic Club/
    Celta, foto usuario). El click en una fila de clasificación con la

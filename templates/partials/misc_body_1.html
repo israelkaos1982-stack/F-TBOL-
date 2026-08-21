@@ -373,7 +373,15 @@ window._DEAD_MERGED_LEAGUE_SLUGS = [
   'rusia','armenia','finlandia','moldavia','azerbayan',
   'eslovaquia','irlanda','islandia',
   'liga-mixta-1','liga-mixta-2','liga-mixta-3','liga-mixta-4','liga-mixta-5',
-  'liga-mixta-6','liga-mixta-7','liga-mixta-8','liga-mixta-9'
+  'liga-mixta-6','liga-mixta-7','liga-mixta-8','liga-mixta-9',
+  /* 'null' (2026-08-18, "📊 Espacio del navegador" del usuario mostrando
+     "🏆 Liga: null (2) · 38 equipos · 20.6 KB"): NUNCA fue una liga real
+     — es el artefacto de guardados con `CURRENT_KEY` sin fijar todavía
+     (arranca en `null`) que `saveData` bloquea desde 2026-08-15 para
+     escrituras NUEVAS, pero que no tenía forma de purgarse si ya existía
+     de ANTES de ese guard. Se trata igual que las ligas fusionadas: no
+     se recupera nunca del servidor ni se muestra ninguna pantalla. */
+  'null'
 ];
 window._isDeadMergedLeagueSlug = function(slug){
   if (!slug) return false;
@@ -457,6 +465,44 @@ window._isDeadMergedLeagueSlug = function(slug){
       }
     } catch(_){}
     try { console.warn('[ligaExt] purga v13 (inmediata): ' + toRemove.length + ' claves locales, incluidas las 9 Ligas Mixtas viejas (liga-mixta-1..9) ANIQUILADAS.'); } catch(_){}
+    try { localStorage.setItem(FLAG, '1'); } catch(_){}
+  } catch(_){}
+})();
+
+/* Purga v14 — MISMO mecanismo que v12/v13, flag NUEVO (2026-08-18,
+   "📊 Espacio del navegador" del usuario: "🏆 Liga: null (2) · 38
+   equipos · 20.6 KB"). `_DEAD_MERGED_LEAGUE_SLUGS` acaba de crecer con
+   'null' — un dispositivo que ya marcó v13 como "hecho" JAMÁS habría
+   purgado `ligaExt_null`, así que se repasa el almacén ENTERO otra vez
+   con la lista ya ampliada. No-op para todo lo demás (ya purgado por
+   v12/v13); purga de verdad `ligaExt_null` (main + sus derivados). */
+(function(){
+  try {
+    var FLAG = 'ftbol_merged_leagues_purge_v14';
+    if (localStorage.getItem(FLAG)) return;
+    var toRemove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf('ligaExt_') !== 0) continue;
+      if (window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) toRemove.push(k);
+    }
+    toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+    try { if (typeof LIGA_CACHE !== 'undefined') {
+      window._DEAD_MERGED_LEAGUE_SLUGS.forEach(function(s){ delete LIGA_CACHE[s]; });
+    } } catch(_){}
+    try {
+      if (window._idbKV && typeof window._idbKV.keys === 'function') {
+        window._idbKV.keys().then(function(idbKeys){
+          (idbKeys || []).forEach(function(k){
+            if (typeof k !== 'string' || k.indexOf('ligaExt_') !== 0) return;
+            if (window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) {
+              try { window._idbKV.del(k); } catch(_){}
+            }
+          });
+        }).catch(function(){});
+      }
+    } catch(_){}
+    try { console.warn('[ligaExt] purga v14 (inmediata): ' + toRemove.length + ' claves locales, incluida ligaExt_null.'); } catch(_){}
     try { localStorage.setItem(FLAG, '1'); } catch(_){}
   } catch(_){}
 })();

@@ -52,7 +52,15 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v21';
+var CACHE_HTML   = 'ftbol-html-v22';
+/* v21 → v22 (2026-08-18): dos borrados MANUALES hechos DIRECTO en GitHub
+   por fuera de este flujo (`static/js/var-system.js` y
+   `static/img/escudos-fallback/estepona.svg`) dejaban un <script src>
+   404 y el fallback universal de escudo roto. `estepona.svg` se
+   restauró tal cual; `var-system.js` se reincorporó INLINE en
+   `templates/index.html` (mismo contenido, ya no depende de un
+   archivo aparte que se pueda volver a borrar sin querer). Bump
+   obligatorio — templates/index.html cambió. */
 /* v19 → v20 (2026-08-17): fix "plantilla vacía en el móvil pese a que
    el servidor tiene el roster real completo" (Osasuna/Athletic Club/
    Celta, foto usuario). El click en una fila de clasificación con la
@@ -107,7 +115,6 @@ var HTML_SWR_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutos
 /* Activos a pre-cachear en el install.  Actualizar ?v= aquí cuando cambien. */
 var PRECACHE = [
   '/static/css/index.bundle.css?v=5.7',
-  '/static/js/var-system.js?v=1.0',
   '/static/js/index.bundle.js?v=9.45',
   '/static/js/copa-engine.js?v=1.9',
 ];

@@ -4594,6 +4594,12 @@ _KV_ALLOWED_EXACT = {
     # `_pm_tally_merge` en sync_merge.py, dispatchado más abajo.
     "pm_tally_torneos_v1", "pm_tally_sel_v1", "pm_tally_mundial_v1",
     "pm_tally_copa_v1", "pm_tally_inter_v1", "pm_tally_liga_v1",
+    # Champions/Europa/Conference League (fase de liga + eliminatoria,
+    # ambas comparten bucket "Grupos + Playoffs" — obligatorio 2026-08-22).
+    "pm_tally_ucl_v1", "pm_tally_uel_v1", "pm_tally_uecl_v1",
+    # Recopa de Europa / Supercopa de España / Supercopa de Europa
+    # (obligatorio, 2026-08-22).
+    "pm_tally_recopa_v1", "pm_tally_sc_v1", "pm_tally_usc_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,

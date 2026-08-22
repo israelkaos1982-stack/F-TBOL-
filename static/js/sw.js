@@ -52,8 +52,8 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v29';
-/* v28 → v29 (2026-08-22): petición explícita del usuario en chat
+var CACHE_HTML   = 'ftbol-html-v30';
+/* v29 → v30 (2026-08-22): petición explícita del usuario en chat
    ("Borrar también lo acumulado") — fixup one-shot que borra PARA
    SIEMPRE el 🪙 presupuesto y el 💼 valoración ya acumulados en las 6
    cajas humanas (money/rating/moneyTarget/ratingTarget a 0 en cada
@@ -61,7 +61,7 @@ var CACHE_HTML   = 'ftbol-html-v29';
    otro dato). Corre una única vez por dispositivo
    (`ftbol_fixup_wipe_hud_money_rating_v1`). Ver CLAUDE.md, sección
    "Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas". */
-/* v27 → v28 (2026-08-22): el banner rojo "⚠️ No se pudo confirmar el
+/* v28 → v29 (2026-08-22): el banner rojo "⚠️ No se pudo confirmar el
    guardado de '<id>' en el servidor..." (`window._gmCriticalNotice`,
    disparado desde `window._tourSave`) aparecía "siempre", en pantallas
    SIN relación con el torneo que fallaba (ej. una previa de Liga EA
@@ -87,6 +87,17 @@ var CACHE_HTML   = 'ftbol-html-v29';
    usuario no disparó directamente. Ver CLAUDE.md, sección "ERROR
    CRÍTICO... sale siempre — múltiples `_tourSave` de fondo sin
    silent:true". */
+/* v27 → v28 (2026-08-22): el recorte de acta pasa de "esperar a que la
+   jornada/ronda/eliminatoria ENTERA esté completa" a "recortar cada
+   partido/leg IA-vs-IA en cuanto ÉL MISMO termine" (decisión explícita
+   del usuario vía AskUserQuestion — el gate por-jornada dejaba actas de
+   partidos ya terminados visibles indefinidamente esperando a un humano
+   lento de la misma jornada, mientras el payload del torneo seguía
+   creciendo sin límite). Afecta a TODOS los `_pmSweepXxx` de
+   `misc_body_1.html`: Torneos/Selecciones/Mundialito, Intercontinental,
+   Recopa, Supercopa España/Europa, Copa del Rey y Champions/Europa/
+   Conference (fase de liga y eliminatoria). Ver CLAUDE.md, "El recorte
+   de acta pasa a ser POR PARTIDO...". */
 /* v26 → v27 (2026-08-22): `saveData` (Resto de Ligas / Liga EA Sports /
    Hypermotion / Primera Federación) — el POST principal a
    `/api/liga-ext/<slug>` (dentro de `go()`, llamado por "Pegar

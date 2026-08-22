@@ -18941,6 +18941,15 @@ window._hdrCleanCache = function(){
        para siempre, tal y como pidió el usuario explícitamente.
      - SOLO una vez la jornada (round-robin) o eliminatoria (KO) a la que
        pertenece el partido está 100% completada — nunca a mitad.
+       ⚠️ SUPERSEDIDO (2026-08-22 #2, AskUserQuestion — el usuario
+       reportó que el gate por-jornada dejaba actas de IA-vs-IA YA
+       terminados visibles indefinidamente esperando a un humano de la
+       MISMA jornada que puede tardar días/semanas en jugar; el propio
+       payload seguía creciendo sin límite mientras tanto): la regla
+       vigente es **recorte POR PARTIDO/LEG** — cada partido/leg IA-vs-IA
+       se recorta en cuanto ÉL MISMO termina, SIN esperar a que el resto
+       de la jornada/ronda/eliminatoria/cruce se complete. `_pmIsIAvsIA`
+       sigue siendo la ÚNICA condición de guardia (regla 1, sin cambios).
      - 100% automático — sin botón, sin que ningún admin tenga que hacer
        nada (mismo principio ya exigido para la purga de ligas fantasma).
 
@@ -18991,11 +19000,22 @@ window._hdrCleanCache = function(){
       detector de humanidad (`_isHumanClubCanonico`/`_esSelHumana`/
       `isHumanInComp`) da `true` para cualquiera de los 2 lados, el
       partido NO se toca.
-   2. PROHIBIDO recortar un partido cuya jornada/ronda NO esté 100%
-      completa. Los detectores (`_pmGroupJornadaDone`/
-      `_pmLeagueJornadaDone`/`_pmKoRoundDone`) exigen que TODOS los
-      partidos de esa jornada/ronda tengan `played:true` antes de tocar
-      ninguno.
+   2. ⚠️ SUPERSEDIDA (2026-08-22 #2, decisión explícita del usuario vía
+      AskUserQuestion): YA NO es obligatorio esperar a que la jornada/
+      ronda/eliminatoria entera esté completa. El recorte es POR
+      PARTIDO/LEG — cada `_pmSweepXxx` recorta un partido en cuanto ÉL
+      MISMO cumple `played + events + !trimmedAt + _pmIsIAvsIA`, sin
+      mirar el estado de sus vecinos de jornada/ronda/cruce. PROHIBIDO
+      reintroducir un gate de "jornada/ronda/cruce 100% completo" en
+      ningún `_pmSweepXxx` — es exactamente el patrón que motivó este
+      cambio (un IA-vs-IA ya terminado se quedaba con acta visible
+      indefinidamente esperando a un humano lento de la misma jornada,
+      y el payload del torneo seguía creciendo sin límite mientras
+      tanto). La única excepción real es la Copa del Rey en rondas a
+      doble partido: ahí la IDA es la única que se TALLA (regla del
+      dedup del escaneo en vivo, sin cambios) pero cada leg (ida/vuelta/
+      desempate) se recorta independientemente en cuanto ÉL MISMO se
+      juega — tampoco espera a que el cruce completo tenga ganador.
    3. PROHIBIDO que el recorte escriba en la tabla permanente SIN
       persistir el `cfg`/estado mutado (o viceversa) — ambos pasos van
       juntos, en el mismo barrido, o un fallo a mitad podría dejar un
@@ -19273,47 +19293,12 @@ window._hdrCleanCache = function(){
     return !_pmIsHumanTeam(teamA, compKey) && !_pmIsHumanTeam(teamB, compKey);
   }
 
-  /* ── Jornada/ronda 100% completa — mismo criterio (fixtures reales,
-     no solo lo que ya haya en `results`) que `_groupsDone`/`_roundDone`
-     de más arriba en este archivo, pero con granularidad de UNA sola
-     jornada/ronda (no "el torneo entero"). ── */
-  function _pmGroupJornadaDone(cfg, g, j){
-    var gf = cfg.groupFixtures || {};
-    var fix = gf[g];
-    if (!fix || !fix[j] || !fix[j].length) return false;
-    var res = cfg.results || {};
-    for (var m = 0; m < fix[j].length; m++){
-      var r = res['g'+g+'_'+j+'_'+m];
-      if (!(r && r.played)) return false;
-    }
-    return true;
-  }
-  function _pmLeagueJornadaDone(cfg, j){
-    var fx = cfg.fixture || [];
-    var jor = fx[j];
-    if (!jor || !jor.length) return false;
-    var res = cfg.results || {};
-    for (var m = 0; m < jor.length; m++){
-      var r = res[j+'_'+m];
-      if (!(r && r.played)) return false;
-    }
-    return true;
-  }
-  function _pmKoRoundDone(cfg, r){
-    var kb = cfg.koBracket || [];
-    var b = kb[r];
-    if (!b || b.length < 2) return false;
-    var res = cfg.results || {};
-    for (var i=0;i+1<b.length;i+=2){
-      if (!((res['ko_'+r+'_'+(i/2)]||{}).played)) return false;
-    }
-    return true;
-  }
-
   /* ── Barrido de UN cfg de torneo (tour_<id>_v1) ──
-     Recorre `cfg.results`, recorta cada partido IA-vs-IA cuya jornada/
-     ronda esté 100% completa y aún tenga acta sin recortar. Devuelve
-     `true` si mutó el cfg (para que el caller lo persista). */
+     Recorre `cfg.results`, recorta cada partido IA-vs-IA en cuanto ÉL
+     MISMO está jugado (obligatorio, 2026-08-22 #2 — ya NO espera a que
+     el resto de su jornada/ronda/eliminatoria se complete) y aún tenga
+     acta sin recortar. Devuelve `true` si mutó el cfg (para que el
+     caller lo persista). */
   function _pmSweepTourCfg(id, cfg){
     if (!cfg || !cfg.results || typeof cfg.results !== 'object') return false;
     var isMundialCfg = (cfg.id === 'mundial');
@@ -19329,23 +19314,23 @@ window._hdrCleanCache = function(){
        LAZY solo al renderizar su pantalla de Liga (`_renderLeague`) — si
        este barrido corre ANTES de que el usuario abra esa pantalla en la
        sesión (arranque diferido a 9s, o el intervalo de 3 min), `cfg.fixture`
-       está vacío y `_pmLeagueJornadaDone` (que lo lee directo) devuelve
-       SIEMPRE `false` → NINGÚN partido de un torneo en formato liga se
-       recorta jamás — el JSON del torneo crece sin límite en cada jornada
-       jugada hasta que `_tourSave` empieza a agotar sus 3 reintentos por
-       tamaño/timeout. Mismo fix ya aplicado a los agregadores de
-       Estadísticas (`_tourBackfillActasFromResults`/`_mundialStatsRobustScan`,
-       ver comentario de `_tourEnsureLeagueFixture` más abajo) — aquí se
-       había quedado sin aplicar. */
+       está vacío y el índice matchKey→{home,away} de más abajo (que lo lee
+       directo) no puede resolver `home`/`away` para partidos guardados solo
+       con el marcador — `_pmIsIAvsIA('','')` es conservador (trata "sin
+       nombre" como humano) y esos partidos NUNCA se recortan aunque estén
+       jugados. Mismo fix ya aplicado a los agregadores de Estadísticas
+       (`_tourBackfillActasFromResults`/`_mundialStatsRobustScan`, ver
+       comentario de `_tourEnsureLeagueFixture` más abajo) — aquí se había
+       quedado sin aplicar. */
     if (cfg.format === 'league' && typeof window._tourEnsureLeagueFixture === 'function') {
       try { window._tourEnsureLeagueFixture(cfg, teams); } catch(_){}
     }
     /* Mismo problema, para `cfg.groupFixtures` (torneos `groups-ko`/
-       `mundial-48`/`qualifier-route`) — `_pmGroupJornadaDone` los lee
-       directo, igual que `_pmLeagueJornadaDone` con `cfg.fixture`. Mismo
-       patrón ya usado en `window._tourSaveHumanResult` (más abajo en este
-       archivo) para garantizar que los fixtures existan ANTES de que
-       cualquier consumidor (aquí, el barrido de recorte) los necesite. */
+       `mundial-48`/`qualifier-route`) — el índice de más abajo los lee
+       directo, igual que con `cfg.fixture`. Mismo patrón ya usado en
+       `window._tourSaveHumanResult` (más abajo en este archivo) para
+       garantizar que los fixtures existan ANTES de que cualquier
+       consumidor (aquí, el barrido de recorte) los necesite. */
     try {
       if (isSelCfg && typeof window._mundialGroupState === 'function' && teams.length) {
         window._mundialGroupState(cfg, teams);
@@ -19394,16 +19379,6 @@ window._hdrCleanCache = function(){
       if (/\|L[12]$/.test(mk)) return;   /* legs intermedios de KO a doble partido */
       var r = res[mk];
       if (!r || !r.played || !Array.isArray(r.events) || !r.events.length || r.trimmedAt) return;
-      var done = false;
-      var mG = /^g(\d+)_(\d+)_(\d+)$/.exec(mk);
-      var mK = /^ko_(\d+)_(\d+)$/.exec(mk);
-      if (mG) done = _pmGroupJornadaDone(cfg, parseInt(mG[1],10), parseInt(mG[2],10));
-      else if (mK) done = _pmKoRoundDone(cfg, parseInt(mK[1],10));
-      else {
-        var mL = /^(\d+)_(\d+)$/.exec(mk);
-        if (mL) done = _pmLeagueJornadaDone(cfg, parseInt(mL[1],10));
-      }
-      if (!done) return;
       var info = idx[mk] || {};
       var tA = r.home || info.a || '';
       var tB = r.away || info.b || '';
@@ -19467,9 +19442,10 @@ window._hdrCleanCache = function(){
   /* ── Barrido de la Copa Intercontinental (`inter_state_v1`) ──
      8 equipos · Cuartos→Semis→Final · partido ÚNICO por cruce (sin ida/
      vuelta, a diferencia de la Copa del Rey — nunca hay ambigüedad de
-     qué leg cuenta). `s.sorteo[phase]` es un array de partidos; una FASE
-     completa (todos `played`) es la "eliminatoria" a efectos de esta
-     regla. La persistencia es un simple `_lsSetSafe('inter_state_v1',…)`
+     qué leg cuenta). `s.sorteo[phase]` es un array de partidos; recorte
+     POR PARTIDO (obligatorio, 2026-08-22 #2): cada partido se recorta
+     en cuanto ÉL MISMO está jugado, sin esperar al resto de su fase.
+     La persistencia es un simple `_lsSetSafe('inter_state_v1',…)`
      — `inter_state_v1` viaja por el polling genérico de `SYNC_KEYS`
      (`part2/misc_body_2.html`, cada 3 s) hacia `_STATE_BRACKET_KEYS` en
      el servidor, que YA respeta `trimmedAt` (mismo prerrequisito que
@@ -19485,12 +19461,15 @@ window._hdrCleanCache = function(){
     var PHASES = ['q', 's', 'f'];
     var tally = _pmLoad('inter');
     var touchedTally = false, touchedCfg = false;
+    /* Recorte POR PARTIDO, no por fase (obligatorio, 2026-08-22 #2 —
+       decisión explícita del usuario): antes se exigía que TODOS los
+       partidos de la MISMA fase estuvieran jugados antes de recortar
+       cualquier IA-vs-IA de esa fase. Ahora cada partido se recorta en
+       cuanto ÉL MISMO está jugado — `_pmIsIAvsIA` sigue protegiendo
+       cualquier partido con humano. */
     PHASES.forEach(function(phase){
       var ms = s.sorteo[phase];
       if (!Array.isArray(ms) || !ms.length) return;
-      var done = true;
-      for (var i = 0; i < ms.length; i++){ if (!ms[i] || !ms[i].played) { done = false; break; } }
-      if (!done) return;
       ms.forEach(function(m, idx){
         if (!m || !m.played || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
         var tA = m.home || '', tB = m.away || '';
@@ -19550,9 +19529,9 @@ window._hdrCleanCache = function(){
 
   /* ── Barrido de la FASE DE LIGA de Champions/Europa/Conference
      (`ucl_phase_v1`/`uel_phase_v1`/`uecl_phase_v1`, formato Swiss —
-     `state.pairs[]` plano, cada par con `.jornada`). "Jornada completa"
-     = TODOS los pares de esa misma `.jornada` con `played:true`, mismo
-     criterio de granularidad que `_pmLeagueJornadaDone`. ── */
+     `state.pairs[]` plano, cada par con `.jornada`). Recorte POR
+     PARTIDO (obligatorio, 2026-08-22 #2): cada par se recorta en
+     cuanto ÉL MISMO está jugado, sin esperar al resto de su jornada. ── */
   var _EUR_FASE_KEY = { ucl:'ucl_phase_v1', uel:'uel_phase_v1', uecl:'uecl_phase_v1' };
   function _pmSweepEurFase(comp){
     var KEY = _EUR_FASE_KEY[comp]; if (!KEY) return false;
@@ -19564,16 +19543,18 @@ window._hdrCleanCache = function(){
     if (!state || !Array.isArray(state.pairs) || !state.pairs.length) return false;
     var tally = _pmLoad(comp);
     var touchedTally = false, touchedState = false;
-    var doneJornadas = {};
-    state.pairs.forEach(function(p){
-      var j = p && p.jornada;
-      if (j == null) return;
-      if (doneJornadas[j] === undefined) doneJornadas[j] = true;
-      if (!p.played) doneJornadas[j] = false;
-    });
+    /* Recorte POR PARTIDO, no por jornada (obligatorio, 2026-08-22 #2 —
+       decisión explícita del usuario, ver "El recorte de acta pasa a
+       ser POR PARTIDO..." en CLAUDE.md): antes se exigía que TODOS los
+       pares de la MISMA `.jornada` estuvieran jugados (incluidos los
+       partidos humanos) antes de recortar CUALQUIER IA-vs-IA de esa
+       jornada — con 6 humanos repartidos por las jornadas, eso podía
+       dejar el acta de un IA-vs-IA ya terminado visible indefinidamente
+       esperando a humanos que tardan días/semanas en jugar. Ahora cada
+       partido se recorta en cuanto ÉL MISMO está jugado — sigue
+       protegido por `_pmIsIAvsIA` (nunca toca un partido con humano). */
     state.pairs.forEach(function(p, idx){
       if (!p || !p.played || !Array.isArray(p.events) || !p.events.length || p.trimmedAt) return;
-      if (p.jornada == null || !doneJornadas[p.jornada]) return;
       var tA = p.home || '', tB = p.away || '';
       if (!_pmIsIAvsIA(tA, tB, comp)) return;
       var dedupKey = _pmDedupKey('eurfase_' + comp, 'j' + p.jornada + '_' + idx, tA, tB);
@@ -19603,10 +19584,9 @@ window._hdrCleanCache = function(){
   /* ── Barrido de la fase ELIMINATORIA de Champions/Europa/Conference
      (`<comp>_ko_state_v1` — `st.rounds.{rep,oct,qf,sf}[]` = ties con
      `.ida`/`.vta`/`.des`, `st.rounds.fin[0]` = tie con `.m` único).
-     "Ronda completa" = TODAS las eliminatorias de esa ronda con
-     `.winner` resuelto (igual granularidad por ronda que
-     `_pmSweepInterState` para Intercontinental) — solo entonces se
-     recortan SUS legs ya jugados. ── */
+     Recorte POR LEG (obligatorio, 2026-08-22 #2): cada leg se recorta
+     en cuanto ÉL MISMO está jugado, sin esperar a que el resto de la
+     eliminatoria/ronda tenga ganador resuelto. ── */
   var _EUR_KO_KEY = { ucl:'ucl_ko_state_v1', uel:'uel_ko_state_v1', uecl:'uecl_ko_state_v1' };
   function _pmSweepEurKo(comp){
     var KEY = _EUR_KO_KEY[comp]; if (!KEY) return false;
@@ -19634,11 +19614,16 @@ window._hdrCleanCache = function(){
       m.trimmedAt = Date.now();
       touchedCfg = true;
     }
+    /* Recorte POR LEG, no por ronda (obligatorio, 2026-08-22 #2 — misma
+       decisión que la fase de liga, ver arriba): antes se exigía que
+       TODAS las eliminatorias de la ronda tuvieran `.winner` resuelto
+       antes de recortar CUALQUIER leg IA-vs-IA de esa ronda. Ahora cada
+       leg se recorta en cuanto ÉL MISMO está jugado — `sweepLeg` ya
+       exige `m.played` + IA-vs-IA por su cuenta, así que no hace falta
+       esperar a que el resto de la ronda/eliminatoria se resuelva. */
     ['rep','oct','qf','sf'].forEach(function(roundKey){
       var R = s.rounds[roundKey];
       if (!Array.isArray(R) || !R.length) return;
-      var done = R.every(function(tie){ return tie && tie.winner; });
-      if (!done) return;
       R.forEach(function(tie, idx){
         if (!tie) return;
         if (tie.ida) sweepLeg(tie.ida, roundKey + '_' + idx + '_i');
@@ -19647,7 +19632,7 @@ window._hdrCleanCache = function(){
       });
     });
     var fin = s.rounds.fin && s.rounds.fin[0];
-    if (fin && fin.winner && fin.m) sweepLeg(fin.m, 'fin_0_f');
+    if (fin && fin.m) sweepLeg(fin.m, 'fin_0_f');
     if (touchedTally) _pmSave(comp, tally);
     if (touchedCfg) {
       try { window._lsSetSafe(KEY, JSON.stringify(s)); } catch(_){}
@@ -19661,9 +19646,10 @@ window._hdrCleanCache = function(){
   window._pmSweepEurKo = _pmSweepEurKo;
 
   /* ── Barrido de la RECOPA DE EUROPA (`recopa_state_v1.sorteo[phase]`,
-     un array por ronda: r32/r16/r8/sf/fin). "Ronda completa" = TODOS
-     los partidos de esa ronda con `played:true` — mismo criterio de
-     `_pmSweepInterState`. Los BYE (`__BYE__`, walkover) no generan
+     un array por ronda: r32/r16/r8/sf/fin). Recorte POR PARTIDO
+     (obligatorio, 2026-08-22 #2, mismo criterio que `_pmSweepInterState`):
+     cada partido se recorta en cuanto ÉL MISMO está jugado, sin esperar
+     al resto de su ronda. Los BYE (`__BYE__`, walkover) no generan
      acta real, así que el guard `!m.events.length` ya los descarta sin
      necesitar un check aparte. Igual que eurfase/euroko, su ÚNICA
      fuente de stats es `LIGA_PLAYER_MATCH_STORE` (Recopa NUNCA tuvo un
@@ -19678,12 +19664,15 @@ window._hdrCleanCache = function(){
     var PHASES = ['r32','r16','r8','sf','fin'];
     var tally = _pmLoad('recopa');
     var touchedTally = false, touchedCfg = false;
+    /* Recorte POR PARTIDO, no por ronda (obligatorio, 2026-08-22 #2 —
+       decisión explícita del usuario): antes se exigía que TODOS los
+       partidos de la MISMA ronda estuvieran jugados antes de recortar
+       cualquier IA-vs-IA de esa ronda. Ahora cada partido se recorta en
+       cuanto ÉL MISMO está jugado — `_pmIsIAvsIA` sigue protegiendo
+       cualquier partido con humano. */
     PHASES.forEach(function(phase){
       var ms = s.sorteo[phase];
       if (!Array.isArray(ms) || !ms.length) return;
-      var done = true;
-      for (var i = 0; i < ms.length; i++){ if (!ms[i] || !ms[i].played) { done = false; break; } }
-      if (!done) return;
       ms.forEach(function(m, idx){
         if (!m || !m.played || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
         var tA = m.home || '', tB = m.away || '';
@@ -19711,8 +19700,9 @@ window._hdrCleanCache = function(){
 
   /* ── Barrido de Supercopa de España / Supercopa de Europa
      (`sc_state_v1`/`usc_state_v1`, forma `{semis:[m0,m1], final:m}`).
-     Dos "rondas": semis (ambos partidos deben estar jugados antes de
-     tocar ninguno) y final (independiente, solo depende de sí misma).
+     Recorte POR PARTIDO (obligatorio, 2026-08-22 #2): cada semifinal y
+     la final se recortan en cuanto ELLAS MISMAS están jugadas, sin
+     esperar a la otra semifinal ni a la ronda anterior.
      Función genérica por `comp` ('sc'|'usc') — mismo shape, mismo
      `_save` (solo local, sin POST propio: viajan por el poll genérico
      `SYNC_KEYS` de `part2/misc_body_2.html`, así que basta con
@@ -19745,12 +19735,16 @@ window._hdrCleanCache = function(){
       m.trimmedAt = Date.now();
       touchedState = true;
     }
-    if (Array.isArray(s.semis) && s.semis.length === 2 &&
-        s.semis[0] && s.semis[0].played && s.semis[1] && s.semis[1].played) {
-      sweepOne(s.semis[0], 'sf_0');
-      sweepOne(s.semis[1], 'sf_1');
+    /* Recorte POR PARTIDO, no por ronda (obligatorio, 2026-08-22 #2 —
+       decisión explícita del usuario): antes se exigía que AMBAS semis
+       estuvieran jugadas antes de recortar cualquiera de las dos. Ahora
+       cada semifinal (y la final) se recorta en cuanto ELLA MISMA está
+       jugada — `sweepOne` ya exige `m.played` + IA-vs-IA por su cuenta. */
+    if (Array.isArray(s.semis) && s.semis.length === 2) {
+      if (s.semis[0]) sweepOne(s.semis[0], 'sf_0');
+      if (s.semis[1]) sweepOne(s.semis[1], 'sf_1');
     }
-    if (s.final && s.final.played) sweepOne(s.final, 'fin_0');
+    if (s.final) sweepOne(s.final, 'fin_0');
     if (touchedTally) _pmSave(comp, tally);
     if (touchedState) {
       try { window._lsSetSafe(KEY, JSON.stringify(s)); } catch(_){}
@@ -19763,10 +19757,11 @@ window._hdrCleanCache = function(){
      obligatorio, 2026-08-22. A diferencia de Recopa/Intercontinental/SC/
      USC (bracket de partido ÚNICO por cruce), la Copa tiene rondas de
      DOBLE PARTIDO (Octavos/Cuartos/Semis: `resultados[ronda+'_ida']` +
-     `'_vta'` + opcional `'_des'` si el global queda empatado). El acta
-     de un cruce se recorta SOLO cuando el cruce entero ya tiene ganador
-     (ida+vuelta jugadas y, si hiciera falta, el desempate también) —
-     nunca a mitad de eliminatoria.
+     `'_vta'` + opcional `'_des'` si el global queda empatado). Recorte
+     POR PARTIDO/LEG (obligatorio, 2026-08-22 #2 — decisión explícita
+     del usuario): cada leg (ida, vuelta, desempate) se recorta en
+     cuanto ÉL MISMO está jugado, sin esperar a los demás legs del
+     mismo cruce ni al resto de la ronda.
 
      CUÁL LEG "GANA" el recuento en vivo (verificado leyendo el código
      real antes de escribir esto, regla obligatoria de este archivo):
@@ -19813,15 +19808,6 @@ window._hdrCleanCache = function(){
      protegido por `_acta_trimmed_wins` (mismo guard genérico que usan
      `_pick_result`/`bracket_state_merge`) desde 2026-06-06, sin
      necesitar ningún cambio de servidor. */
-  function _pmCopaTieDone(ida, vta, des){
-    if (!ida || !ida.jugado || !vta || !vta.jugado) return false;
-    var totalL = Number(ida.gl||0) + Number(vta.gv||0);
-    var totalV = Number(ida.gv||0) + Number(vta.gl||0);
-    if (totalL !== totalV) return true;
-    var awayL = Number(vta.gv||0), awayV = Number(ida.gv||0);
-    if (awayL !== awayV) return true;
-    return !!(des && des.jugado);
-  }
   function _pmPushCopaState(s, tries){
     tries = (tries == null) ? 2 : tries;
     try {
@@ -19884,14 +19870,18 @@ window._hdrCleanCache = function(){
       touchedState = true;
     }
 
+    /* Recorte POR PARTIDO/LEG, no por ronda ni por cruce completo
+       (obligatorio, 2026-08-22 #2 — decisión explícita del usuario):
+       antes se exigía que TODOS los partidos de la ronda (single-leg) o
+       que el cruce ENTERO (ida+vuelta+desempate, two-leg) estuvieran
+       jugados antes de recortar nada. Ahora cada partido/leg se recorta
+       en cuanto ÉL MISMO está jugado — `tallyAndTrim`/`trimOnly` ya
+       exigen `m.jugado` por su cuenta. La IDA sigue siendo la única
+       que se TALLA (ver comentario de cabecera: es la que "gana" el
+       dedup del escaneo en vivo); vuelta/desempate solo se vacían. */
     _COPA_SINGLE_LEG.forEach(function(ronda){
       var list = resultados[ronda];
       if (!Array.isArray(list) || !list.length) return;
-      var done = true;
-      for (var i = 0; i < list.length; i++) {
-        if (!list[i] || !list[i].jugado) { done = false; break; }
-      }
-      if (!done) return;
       list.forEach(function(m, idx){
         if (!m) return;
         tallyAndTrim(m, ronda + '_' + idx, m.team_a || '', m.team_b || '');
@@ -19907,7 +19897,6 @@ window._hdrCleanCache = function(){
         if (!ida) return;
         var vta = (vtaList || [])[idx];
         var des = (desList || [])[idx];
-        if (!_pmCopaTieDone(ida, vta, des)) return;
         var tA = ida.team_a || '', tB = ida.team_b || '';
         if (!_pmIsIAvsIA(tA, tB, 'copa')) return;   /* cruce con humano: NUNCA se toca */
         tallyAndTrim(ida, ronda + '_ida_' + idx, tA, tB);
@@ -19977,11 +19966,12 @@ window._hdrCleanCache = function(){
   /* ── Barrido de Liga EA Sports (`ef_liga38_v4`) ──
      380 partidos/temporada (20 equipos, doble round-robin) — el mayor
      contribuyente de peso de acta del proyecto, y el motivo original
-     de esta feature (auditoría de peso 2026-08-16). `window.LIGA_SCHEDULE`
-     es la fuente de "jornada completa": TODOS los partidos de la
-     jornada deben tener entrada en `results` — MISMO criterio que
-     `_updateLigaJornadaStatus` (`part2/misc_body_2.html`), que pinta la
-     jornada como ✅ con esa misma condición. A diferencia de los
+     de esta feature (auditoría de peso 2026-08-16). Recorte POR
+     PARTIDO, no por jornada (obligatorio, 2026-08-22 #2 — decisión
+     explícita del usuario): antes se exigía que TODOS los partidos de
+     `window.LIGA_SCHEDULE[j]` tuvieran entrada en `results` antes de
+     recortar cualquier IA-vs-IA de esa jornada — ahora cada partido se
+     recorta en cuanto ÉL MISMO tiene resultado. A diferencia de los
      resultados de torneo (`r.played`), un resultado de Liga EXISTENTE
      ya implica jugado — no hay flag `played` separado.
      Persistencia vía `window._ef38SetResults` (= `saveResults`, el
@@ -20003,8 +19993,6 @@ window._hdrCleanCache = function(){
     schedule.forEach(function(jornada, idx){
       if (!Array.isArray(jornada) || !jornada.length) return;
       var j = idx + 1;
-      var allDone = jornada.every(function(m){ return !!results[_pmLigaRKey(j, m[0], m[1])]; });
-      if (!allDone) return;
       jornada.forEach(function(m){
         if (!m || !m[0] || !m[1]) return;
         var home = m[0], away = m[1];

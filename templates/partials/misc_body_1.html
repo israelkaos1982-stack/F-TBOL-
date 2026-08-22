@@ -18307,15 +18307,19 @@ window._hdrCleanCache = function(){
       }
     } catch(_){}
 
-    _mergeBucketInto(stats, buckets.copa);
-    _mergeBucketInto(stats, buckets.sc);
-    /* PJ del equipo en EA Sports = Liga + Copa + Supercopa España. */
-    Object.keys(teamPJByComp.copa || {}).forEach(function(tn){
-      teamPJ[tn] = (teamPJ[tn]||0) + teamPJByComp.copa[tn];
-    });
-    Object.keys(teamPJByComp.sc || {}).forEach(function(tn){
-      teamPJ[tn] = (teamPJ[tn]||0) + teamPJByComp.sc[tn];
-    });
+    /* El merge Liga+Copa+SupEsp (`_mergeBucketInto(stats, buckets.copa/sc)`
+       + la suma de PJ) se hace MÁS ABAJO, DESPUÉS de que
+       `_pmMergeTallyInto('copa'/'sc', ...)` haya restaurado la
+       aportación de los partidos YA RECORTADOS — si se hiciera aquí
+       (antes de esa restauración), un partido de Copa/Supercopa España
+       recién recortado desaparecería del TOTAL combinado de la pantalla
+       Liga EA Sports (`ef_player_stats_v1`) aunque su propia caja
+       aislada (`ef_player_stats_copa_v1`/`ef_player_stats_sc_v1`)
+       siguiera correcta — bug real descubierto 2026-08-22 al implementar
+       el recorte de Copa: `buckets.copa`/`buckets.sc` en ESTE punto solo
+       reflejan lo que Source 1/Source 5 vieron EN VIVO, nunca lo que la
+       tabla permanente ya tiene tallado. Ver el bloque homólogo justo
+       después de `window._pmMergeTallyInto('sc', ...)`. */
 
     /* Persistir cada bucket aislado a su propia clave. Estas vistas
        las lee `_lextStatsKeyForCompetition` cuando se abre la
@@ -18450,6 +18454,26 @@ window._hdrCleanCache = function(){
         window._pmMergeTallyInto('sc',      buckets.sc,      teamPJByComp.sc);
       }
     } catch(_){}
+
+    /* Merge Liga+Copa+SupEsp en el TOTAL combinado de EA Sports —
+       movido aquí (obligatorio, 2026-08-22) para que un partido de
+       Copa/Supercopa España YA RECORTADO siga contando en el total:
+       `buckets.copa`/`buckets.sc` ya incluyen, en este punto, la
+       aportación restaurada por `_pmMergeTallyInto` de arriba. Hacerlo
+       ANTES (como se hacía hasta ahora, justo tras Source 5) perdía esa
+       aportación en `ef_player_stats_v1` — las cajas AISLADAS
+       (`ef_player_stats_copa_v1`/`_sc_v1`, persistidas más abajo)
+       siempre estuvieron bien porque `_persistBucket` para esas SÍ
+       corre después del merge de la tabla permanente. */
+    _mergeBucketInto(stats, buckets.copa);
+    _mergeBucketInto(stats, buckets.sc);
+    /* PJ del equipo en EA Sports = Liga + Copa + Supercopa España. */
+    Object.keys(teamPJByComp.copa || {}).forEach(function(tn){
+      teamPJ[tn] = (teamPJ[tn]||0) + teamPJByComp.copa[tn];
+    });
+    Object.keys(teamPJByComp.sc || {}).forEach(function(tn){
+      teamPJ[tn] = (teamPJ[tn]||0) + teamPJByComp.sc[tn];
+    });
 
     /* Comps nuevas (2026-05-08): Recopa, Supercopa Europa,
        Intercontinental, Mundial Clubes, Selecciones, Amistosos.
@@ -19679,6 +19703,172 @@ window._hdrCleanCache = function(){
   }
   window._pmSweepScUsc = _pmSweepScUsc;
 
+  /* ── Barrido de la COPA DEL REY (`copa_state_v1.resultados`) ──
+     obligatorio, 2026-08-22. A diferencia de Recopa/Intercontinental/SC/
+     USC (bracket de partido ÚNICO por cruce), la Copa tiene rondas de
+     DOBLE PARTIDO (Octavos/Cuartos/Semis: `resultados[ronda+'_ida']` +
+     `'_vta'` + opcional `'_des'` si el global queda empatado). El acta
+     de un cruce se recorta SOLO cuando el cruce entero ya tiene ganador
+     (ida+vuelta jugadas y, si hiciera falta, el desempate también) —
+     nunca a mitad de eliminatoria.
+
+     CUÁL LEG "GANA" el recuento en vivo (verificado leyendo el código
+     real antes de escribir esto, regla obligatoria de este archivo):
+     `rebuildPlayerStatsStore` Source 5 dedupea por
+     `'copa|' + _mkPJ(team_a, team_b)` — una clave que NO distingue
+     ida/vuelta/desempate (mismo pareo de equipos, `_mkPJ` es simétrico)
+     y que vive en un `processedMatches` COMPARTIDO con Source 1
+     (`LIGA_PLAYER_MATCH_STORE`, misma clave `comp+'|'+_mkPJ(...)`). El
+     backend (`app.py::copa_guardar_resultado`) solo crea
+     `resultados[key_ida]`/`[key_vta]` la PRIMERA vez que se guarda un
+     partido de esa leg — como la vuelta de un cruce siempre se juega
+     DESPUÉS de la ida (nunca al revés en el flujo real de la app),
+     `key_ida` entra SIEMPRE antes que `key_vta` en el dict `resultados`
+     (Python preserva orden de inserción, JSON también) → en
+     `Object.keys(_cpRes)` la IDA se procesa primero y se lleva el
+     dedup — la VUELTA (y el desempate, si lo hay) NUNCA aportan nada al
+     escaneo en vivo hoy, aunque tengan `events` propios. Replicar
+     EXACTAMENTE ese criterio aquí: solo la IDA se TALLA (cuenta para
+     Goleadores/MVP/Tarjetas); vuelta y desempate SOLO se les vacía
+     `events` (ahorro de espacio, ya que su acta no aporta nada visible
+     hoy — ni siquiera se cuentan en absoluto), NUNCA se suman a la
+     tabla permanente (sumarlas cambiaría un número YA MOSTRADO, que es
+     precisamente lo que esta regla prohíbe).
+
+     El panel "📋 Acta del Partido" de `copa-engine.js` SÍ pinta el
+     detalle de CADA leg (ida/vuelta/desempate) por separado —
+     `_renderEventsList`/`_renderActaPanel`, distinto de Recopa/SC/USC
+     (que solo muestran marcador). Tras el recorte esas cards muestran
+     "SIN EVENTOS REGISTRADOS", igual que ya le pasa a un partido
+     recortado de Liga EA Sports (`_iaEventsHtml`) — comportamiento ya
+     aceptado por el usuario para toda esta familia de recorte
+     ("solo el marcador… nada de goleadores/tarjetas/MVP individual").
+
+     PERSISTENCIA — `copa_state_v1` NO viaja por el polling genérico
+     `SYNC_KEYS` (a diferencia de recopa/sc/usc): toda mutación real
+     pasa por los endpoints dedicados `/api/copa/guardar_resultado` /
+     `/api/copa/state_set`. El mirror local (`_lsSetSafe`) por sí solo
+     NO basta — el próximo `fetch('/api/copa/state')` (init de la
+     pantalla de Copa) traería de vuelta el acta SIN recortar del
+     servidor y deshace el ahorro. Por eso este barrido, tras mutar el
+     estado local, empuja el `copa_state` recortado al servidor vía
+     `_pmPushCopaState` (POST a `/api/copa/state_set`), que fusiona con
+     `copa_state_merge`/`_copa_pick_result` en `sync_merge.py` — YA
+     protegido por `_acta_trimmed_wins` (mismo guard genérico que usan
+     `_pick_result`/`bracket_state_merge`) desde 2026-06-06, sin
+     necesitar ningún cambio de servidor. */
+  function _pmCopaTieDone(ida, vta, des){
+    if (!ida || !ida.jugado || !vta || !vta.jugado) return false;
+    var totalL = Number(ida.gl||0) + Number(vta.gv||0);
+    var totalV = Number(ida.gv||0) + Number(vta.gl||0);
+    if (totalL !== totalV) return true;
+    var awayL = Number(vta.gv||0), awayV = Number(ida.gv||0);
+    if (awayL !== awayV) return true;
+    return !!(des && des.jugado);
+  }
+  function _pmPushCopaState(s, tries){
+    tries = (tries == null) ? 2 : tries;
+    try {
+      fetch('/api/copa/state_set', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ copa: s })
+      }).then(function(r){ return r && r.ok ? r.json() : null; })
+        .then(function(d){
+          /* Adoptar la respuesta fusionada del servidor como mirror
+             local — evita que el siguiente `copaInit()` la pise con
+             una copia stale mientras el POST estaba en vuelo. */
+          try {
+            if (d && d.copa) window._lsSetSafe('copa_state_v1', JSON.stringify(d.copa));
+          } catch(_){}
+        })
+        .catch(function(){
+          if (tries > 0) setTimeout(function(){ _pmPushCopaState(s, tries - 1); }, 2000);
+        });
+    } catch(_){
+      if (tries > 0) setTimeout(function(){ _pmPushCopaState(s, tries - 1); }, 2000);
+    }
+  }
+  var _COPA_SINGLE_LEG = ['r1', 'r2', 'r16', 'fin'];
+  var _COPA_TWO_LEG = ['oct', 'cua', 'sf'];
+  function _pmSweepCopa(){
+    var raw = null;
+    try { raw = localStorage.getItem('copa_state_v1'); } catch(_){}
+    if (!raw) return false;
+    var s;
+    try { s = JSON.parse(raw); } catch(_){ return false; }
+    var resultados = s && s.resultados;
+    if (!resultados || typeof resultados !== 'object') return false;
+    var tally = _pmLoad('copa');
+    var touchedTally = false, touchedState = false;
+
+    function tallyAndTrim(m, dedupSlot, tA, tB){
+      if (!m || !m.jugado || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
+      if (!tA || !tB) return;
+      if (!_pmIsIAvsIA(tA, tB, 'copa')) return;
+      var dedupKey = _pmDedupKey('copa', dedupSlot, tA, tB);
+      if (!tally.matches[dedupKey]) {
+        var entry = {};
+        _pmAccumulateEvents(entry, tally, tA, tB, m.events, m.mvp, m.mvpTeam, true);
+        tally.matches[dedupKey] = entry;
+        touchedTally = true;
+      }
+      _pmPurgeLiveMatchStoreEntry('copa', tA, tB);
+      delete m.events; delete m.mvp; delete m.mvpTeam;
+      m.trimmedAt = Date.now();
+      touchedState = true;
+    }
+    /* Vuelta / desempate: SOLO vaciar `events` — NUNCA sumar a la tabla
+       permanente (ver comentario de cabecera: no aportan nada al
+       escaneo en vivo hoy, sumarlas cambiaría un número ya mostrado). */
+    function trimOnly(m){
+      if (!m || !m.jugado || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
+      delete m.events; delete m.mvp; delete m.mvpTeam;
+      m.trimmedAt = Date.now();
+      touchedState = true;
+    }
+
+    _COPA_SINGLE_LEG.forEach(function(ronda){
+      var list = resultados[ronda];
+      if (!Array.isArray(list) || !list.length) return;
+      var done = true;
+      for (var i = 0; i < list.length; i++) {
+        if (!list[i] || !list[i].jugado) { done = false; break; }
+      }
+      if (!done) return;
+      list.forEach(function(m, idx){
+        if (!m) return;
+        tallyAndTrim(m, ronda + '_' + idx, m.team_a || '', m.team_b || '');
+      });
+    });
+
+    _COPA_TWO_LEG.forEach(function(ronda){
+      var idaList = resultados[ronda + '_ida'];
+      var vtaList = resultados[ronda + '_vta'];
+      var desList = resultados[ronda + '_des'];
+      if (!Array.isArray(idaList) || !idaList.length) return;
+      idaList.forEach(function(ida, idx){
+        if (!ida) return;
+        var vta = (vtaList || [])[idx];
+        var des = (desList || [])[idx];
+        if (!_pmCopaTieDone(ida, vta, des)) return;
+        var tA = ida.team_a || '', tB = ida.team_b || '';
+        if (!_pmIsIAvsIA(tA, tB, 'copa')) return;   /* cruce con humano: NUNCA se toca */
+        tallyAndTrim(ida, ronda + '_ida_' + idx, tA, tB);
+        trimOnly(vta);
+        trimOnly(des);
+      });
+    });
+
+    if (touchedTally) _pmSave('copa', tally);
+    if (touchedState) {
+      try { window._lsSetSafe('copa_state_v1', JSON.stringify(s)); } catch(_){}
+      _pmPushCopaState(s);
+    }
+    return touchedState;
+  }
+  window._pmSweepCopa = _pmSweepCopa;
+
   /* Acumulador DEDICADO para Liga EA Sports — replica el tipo de
      eventos EXACTO que cuenta la Fuente 2 de `rebuildPlayerStatsStore`
      (`amarilla/roja/d-amarilla/gol/falta-gol/pen-gol/pen-parado/mvp/
@@ -19813,6 +20003,7 @@ window._hdrCleanCache = function(){
       try { _pmSweepRecopa(); } catch(_){}
       try { _pmSweepScUsc('sc'); } catch(_){}
       try { _pmSweepScUsc('usc'); } catch(_){}
+      try { _pmSweepCopa(); } catch(_){}
     }, 9000);
     setInterval(function(){
       try { window._pmSweepAllTours(); } catch(_){}
@@ -19822,6 +20013,7 @@ window._hdrCleanCache = function(){
       try { _pmSweepRecopa(); } catch(_){}
       try { _pmSweepScUsc('sc'); } catch(_){}
       try { _pmSweepScUsc('usc'); } catch(_){}
+      try { _pmSweepCopa(); } catch(_){}
     }, 180000);
   } catch(_){}
 })();

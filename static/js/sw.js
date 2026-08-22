@@ -52,7 +52,28 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v22';
+var CACHE_HTML   = 'ftbol-html-v23';
+/* v22 → v23 (2026-08-22): la revalidación en segundo plano de SWR
+   (`_revalidateHtmlAndNotify`) re-sellaba `__ftbol_html_cached_at__`
+   con `Date.now()` en CADA pasada exitosa, aunque el contenido NO
+   hubiera cambiado. Con un dispositivo que se reabre con regularidad
+   (típico de una PWA con icono en el móvil), la ventana de frescura de
+   30 min (`HTML_SWR_MAX_AGE_MS`) se auto-renovaba indefinidamente —
+   el dispositivo podía quedar sirviendo instantáneamente-sin-tocar-red
+   de forma continua, dependiendo SOLO del aviso opt-in ("🔄 Hay una
+   versión más nueva") para enterarse de un cambio real. Fix: el sello
+   solo se refresca cuando el contenido revalidado CAMBIÓ de verdad (o
+   no había sello previo) — una revalidación exitosa con el MISMO
+   contenido ya no reinicia la cuenta. Además, `HTML_CACHE_MAX_AGE_MS`
+   (la caché de EMERGENCIA cuando la red falla del todo) sube de 10 min
+   a 6 horas: con el límite corto, un dispositivo con un blip de red
+   real contra Railway (el mismo tipo de blip que causó el bug de
+   arranque de `db.create_all()`, ver app.py) se quedaba SIN NADA que
+   servir — ni siquiera una copia algo vieja — y el navegador mostraba
+   su propio error de sin-conexión, indistinguible de "la web no
+   funciona". Con 6h, ese mismo dispositivo abre con la última copia
+   buena mientras el Service Worker sigue reintentando red en cada
+   apertura posterior. */
 /* v21 → v22 (2026-08-18): dos borrados MANUALES hechos DIRECTO en GitHub
    por fuera de este flujo (`static/js/var-system.js` y
    `static/img/escudos-fallback/estepona.svg`) dejaban un <script src>
@@ -101,7 +122,7 @@ var CACHE_HTML   = 'ftbol-html-v22';
    el límite, una copia más vieja que esto se descarta y se deja que el
    error de red se propague (el navegador muestra su propio aviso de
    sin-conexión) en vez de mostrar una app con código obsoleto/roto. */
-var HTML_CACHE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutos
+var HTML_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // 6 horas (ver nota v23 arriba)
 
 /* Ventana de frescura para SERVIR AL INSTANTE (stale-while-revalidate) sin
    esperar red. Deliberadamente MÁS CORTA que el "todo vale con tal de no
@@ -245,7 +266,7 @@ self.addEventListener('fetch', function (e) {
              `HTML_CACHE_MAX_AGE_MS`). */
           return fetch(e.request).then(function (res) {
             var resClone = (res && res.ok) ? res.clone() : null;
-            if (resClone) _storeHtmlInCache(cache, resClone);
+            if (resClone) _storeHtmlInCache(cache, resClone, true);
             return res;
           }).catch(function () {
             var fresh = cachedRes && age <= HTML_CACHE_MAX_AGE_MS;
@@ -265,14 +286,18 @@ self.addEventListener('fetch', function (e) {
   }
 });
 
-/* Guarda `res` (ya clonado por el caller) como la copia vigente de '/' +
-   su sello de "cuándo se guardó" — el ÚNICO punto que escribe en
-   CACHE_HTML, usado tanto por el camino network-first como por la
-   revalidación en segundo plano de SWR. */
-function _storeHtmlInCache(cache, resClone) {
+/* Guarda `res` (ya clonado por el caller) como la copia vigente de '/'.
+   `stampFreshness` controla si además se resella `__ftbol_html_cached_at__`
+   con `Date.now()` — el camino network-first (contenido recién
+   confirmado por la red) SIEMPRE resella; la revalidación en segundo
+   plano de SWR (ver `_revalidateHtmlAndNotify`) SOLO resella cuando el
+   contenido cambió de verdad, para no auto-renovar indefinidamente la
+   ventana de "servir sin comprobar red" en un dispositivo que se
+   reabre con regularidad pero cuyo contenido lleva rato sin cambiar. */
+function _storeHtmlInCache(cache, resClone, stampFreshness) {
   try {
     cache.put('/', resClone);
-    cache.put('/__ftbol_html_cached_at__', new Response(String(Date.now())));
+    if (stampFreshness) cache.put('/__ftbol_html_cached_at__', new Response(String(Date.now())));
   } catch (_e) {}
 }
 
@@ -295,9 +320,14 @@ function _revalidateHtmlAndNotify(cache, oldRes) {
       oldRes.text().catch(function () { return null; }),
       freshForCompare.text().catch(function () { return null; })
     ]).then(function (t) {
-      _storeHtmlInCache(cache, freshForCache);
       var oldText = t[0], newText = t[1];
       var changed = (oldText == null || newText == null) ? false : (oldText.length !== newText.length);
+      /* Siempre guardamos el body más fresco (nunca perjudica), pero SOLO
+         reseteamos el reloj de frescura de SWR si de verdad cambió — así
+         un dispositivo con revalidaciones exitosas repetidas y contenido
+         SIN cambios acaba cayendo, tras HTML_SWR_MAX_AGE_MS, al camino
+         network-first real en vez de servir instantáneo para siempre. */
+      _storeHtmlInCache(cache, freshForCache, changed);
       if (!changed) return;
       return self.clients.matchAll({ type: 'window' }).then(function (list) {
         list.forEach(function (c) {

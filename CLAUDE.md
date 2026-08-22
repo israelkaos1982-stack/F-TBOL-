@@ -1,5 +1,82 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `saveData` (Resto de Ligas / Liga EA Sports / Hypermotion / Primera Federación) — el POST principal SIN timeout dejaba "Pegar plantilla completa" colgado para siempre, en silencio (obligatorio, 2026-08-22 #5)
+
+**Bug (usuario 2026-08-22, "pego plantilla entera... al volver otro día
+o si borro datos de navegación" desaparece — Liga EA Sports,
+Hypermotion, Primera Federación y Resto de Ligas)**: el admin pega la
+plantilla completa de un equipo (`📋 Pegar plantilla completa` →
+`lextSaveTeam`), la ve guardada en el editor, pero al volver otro día o
+tras borrar datos de navegación el equipo aparece con roster genérico o
+vacío. Casi nunca sale ningún aviso de error — "a veces sale [un aviso],
+pero aleatoriamente".
+
+### Causa raíz
+
+`saveData(k,d)` (`misc_body_1.html`, el chokepoint ÚNICO de todo
+guardado de `ligaExt_<slug>`) hace el POST principal a
+`/api/liga-ext/<slug>` con reintentos ×5 y backoff — pero la función
+`go()` que dispara ese `fetch` **no tenía NINGÚN timeout**
+(`AbortController`). Si la conexión se queda COLGADA (sin error, sin
+respuesta — típico en móvil con cobertura floja o un cold-start del
+servidor), el `fetch` nunca resuelve ni rechaza → ni `.then()` ni
+`.catch()` disparan nunca → `fail()` **JAMÁS se llama** → los 5
+reintentos con backoff nunca llegan a correr → la promesa
+`window._ligaExtSavePromise[slug]` se queda **colgada para siempre, sin
+resolver**. `lextSaveTeam` SÍ tenía ya construido un sistema de aviso
+completo (`_lextShowSaveError`, banner rojo "⚠ No se pudo guardar en el
+SERVIDOR" con botón REINTENTAR) que se dispara cuando esa promesa
+resuelve a `false` — pero con la promesa colgada, ni el aviso de éxito
+ni el de error llegaban a mostrarse NUNCA: el título se quedaba
+literalmente parado en "💾 Guardando en servidor…" en silencio, y el
+admin, viendo el editor "normal", asumía que se había guardado. El
+servidor nunca recibió la plantilla — al volver otro día (hydrate desde
+servidor) o al borrar datos (sin copia local que proteja), el roster
+real desaparecía.
+
+Es la MISMA causa raíz, en un punto DISTINTO, que ya se arregló en la
+sección de arriba para `persistSharedLigaState` (resultados de partido
+de Liga EA Sports) — un `fetch` sin `AbortController` es indistinguible,
+para el código que lo llama, de una petición que va a tardar 2
+milisegundos: si nunca resuelve, ningún camino de "fallo" se dispara
+jamás.
+
+### Fix
+
+- **`go()`** (el POST principal de `saveData`): `AbortController` con
+  timeout escalado por tamaño del payload (10-30 s, mismo patrón que
+  `_tourSave`) — una conexión colgada se aborta y SÍ entra en la cadena
+  de `fail()`/reintentos.
+- **`goProt()`** (el POST al snapshot `_protected`, dentro de
+  `forceProtected`, que se dispara tras un guardado deliberado del
+  editor): mismo timeout duro (15 s) por el mismo motivo — sin él, el
+  snapshot monotónico que sobrevive a un `main` corrupto podía quedarse
+  sin actualizar indefinidamente.
+- Bump `CACHE_HTML` (`static/js/sw.js`) — regla obligatoria de este
+  archivo, sin él el fix no llega a una sesión ya abierta.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que CUALQUIER `fetch(...)` de este proyecto —
+   existente o nuevo— se quede sin `AbortController`/timeout cuando su
+   resultado alimenta una cadena de reintentos o una promesa que otro
+   código espera (`window._ligaExtSavePromise`, `_tourSave`,
+   `persistSharedLigaState`, o cualquier equivalente futuro). Sin
+   timeout, una conexión colgada (no un error — SIN RESPUESTA) dejaba
+   la promesa sin resolver PARA SIEMPRE, silenciando tanto el camino de
+   éxito como el de error.
+2. **PROHIBIDO** dar por bueno un sistema de aviso de "guardado
+   fallido" (`_lextShowSaveError`, `_gmCriticalNotice`, o cualquier
+   otro) sin verificar que el camino que lo dispara puede REALMENTE
+   resolver a `false` en un tiempo acotado. Un aviso bien construido
+   que depende de una promesa que nunca se resuelve es tan inútil como
+   no tener ningún aviso.
+3. Antes de dar por cerrado un bug de "se pierde X al volver a abrir la
+   web / al borrar datos" en CUALQUIER guardado de este proyecto,
+   auditar con `grep` si el `fetch` implicado tiene `AbortController` —
+   es el mismo patrón que ya ha costado 2 rondas de fixes en el mismo
+   día (Liga EA Sports resultados + rosters de Resto de Ligas).
+
 ## Liga EA Sports — un partido HUMANO jugado se "pierde" al reabrir la web si su POST a `/api/state` no llegó a confirmarse (obligatorio, 2026-08-22 #4)
 
 **Bug (usuario 2026-08-22, «Real Madrid 4-0 Real Betis», Liga EA Sports

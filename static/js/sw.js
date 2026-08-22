@@ -52,7 +52,20 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v26';
+var CACHE_HTML   = 'ftbol-html-v27';
+/* v26 → v27 (2026-08-22): `saveData` (Resto de Ligas / Liga EA Sports /
+   Hypermotion / Primera Federación) — el POST principal a
+   `/api/liga-ext/<slug>` (dentro de `go()`, llamado por "Pegar
+   plantilla completa" y cualquier guardado de plantilla) no tenía
+   NINGÚN timeout: una conexión colgada (sin error, sin respuesta)
+   dejaba `window._ligaExtSavePromise[slug]` sin resolver PARA SIEMPRE,
+   así que ni el aviso de éxito ni el banner rojo de error (ya
+   construido, `_lextShowSaveError`) llegaban a dispararse — el editor
+   se quedaba en "💾 Guardando en servidor…" en silencio y la
+   plantilla nunca llegaba al servidor. Fix: `AbortController` con
+   timeout escalado (10-30s) en `go()` y timeout fijo (15s) en
+   `goProt()` (POST a `_protected`). Ver CLAUDE.md, sección "el POST
+   principal SIN timeout dejaba 'Pegar plantilla completa' colgado". */
 /* v25 → v26 (2026-08-22): Liga EA Sports — un partido HUMANO (p.ej. Real
    Madrid) que terminaba de jugarse pero cuyo POST a `/api/state` no
    llegaba a confirmarse en el servidor (red floja, timeout) se

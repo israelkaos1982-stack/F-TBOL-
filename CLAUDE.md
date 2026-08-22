@@ -1,5 +1,104 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El recorte de acta pasa a ser POR PARTIDO — ya NO espera a que la jornada/ronda/eliminatoria ENTERA esté completa (obligatorio, 2026-08-22 #4) ⚠️ SUPERSEDE la regla 2 ("PROHIBIDO recortar un partido cuya jornada/ronda NO esté 100% completa") de la sección "El acta de un partido IA-vs-IA ya completado se RECORTA..." (2026-08-16, más abajo)
+
+**Petición usuario 2026-08-22** (tras el fix #3 de arriba, con foto de la
+clasificación de Champions "Fase de Grupos" — Jornada 1): el usuario
+reportó que, con la jornada 1 de Champions casi completa pero con
+**Inter vs Arsenal** (partido HUMANO) todavía sin jugar, el acta de
+CUALQUIER partido IA-vs-IA de esa misma jornada — algunos ya terminados
+desde hacía tiempo, ej. "Nottingham Forest 2-3 Olympique Lyonnais" —
+seguía mostrándose completa. El usuario, al principio, creyó que esto
+era un bug (pensaba que ya se había implementado el recorte "para todas
+las competiciones"); tras aclarar que el comportamiento observado era
+exactamente el diseñado el 2026-08-16 ("el recorte solo dispara cuando
+la jornada/ronda ENTERA — incluidos los partidos humanos — está
+100% completa"), y preguntarle explícitamente vía `AskUserQuestion` si
+quería cambiar esa regla en TODO el proyecto, el usuario respondió:
+**"Sí, recortar cada partido IA-vs-IA en cuanto termine (Recomendado)"**.
+
+### Por qué el gate por-jornada era un problema real
+
+Con hasta 7 misters humanos repartidos por las jornadas/rondas de cada
+competición (Liga EA Sports, Copa del Rey, Champions/Europa/Conference
+—fase de liga Swiss y eliminatoria—, Recopa, Supercopa de España/Europa,
+Copa Intercontinental, Torneos de Verano/Selecciones/Mundialito), **un
+solo humano lento** en CUALQUIER jornada/ronda/eliminatoria bloqueaba el
+recorte de TODOS los demás partidos IA-vs-IA de esa misma jornada —
+indefinidamente, hasta que ese humano jugara. El acta completa de esos
+partidos (goleadores/tarjetas/MVP/eventos) seguía pesando en el JSON del
+torneo mientras tanto, exactamente el problema de peso/timeout que este
+feature entero (2026-08-16) se creó para resolver.
+
+### Fix — recorte POR PARTIDO/LEG en los 8 barridos existentes
+
+Cada `_pmSweepXxx` (`misc_body_1.html`) deja de exigir que TODOS los
+partidos de la jornada/ronda/eliminatoria tengan `played:true`/`.winner`
+antes de tocar ninguno. Ahora cada partido/leg se recorta en cuanto ÉL
+MISMO cumple `played + events + !trimmedAt + IA-vs-IA` — sin mirar el
+estado de sus vecinos:
+
+- `_pmSweepTourCfg` (Torneos de Verano/Selecciones/Mundialito de
+  Clubes, `tour_<id>_v1`): se eliminaron `_pmGroupJornadaDone`/
+  `_pmLeagueJornadaDone`/`_pmKoRoundDone` (quedaron sin ningún caller
+  tras quitar el gate) y su llamada en el bucle principal.
+- `_pmSweepInterState` (Copa Intercontinental, `inter_state_v1`): se
+  eliminó el `done = ms.every(played)` por fase.
+- `_pmSweepRecopa` (Recopa de Europa, `recopa_state_v1`): mismo fix.
+- `_pmSweepScUsc` (Supercopa de España/Europa, `sc_state_v1`/
+  `usc_state_v1`): se eliminó la exigencia de que AMBAS semifinales
+  estuvieran jugadas antes de recortar cualquiera de las dos — cada
+  semifinal (y la final) se recorta independientemente.
+- `_pmSweepEurFase` (Champions/Europa/Conference · fase de liga Swiss,
+  `<comp>_phase_v1`): ya se había arreglado en el fix #2 de esta misma
+  sesión (comentario "Recorte POR PARTIDO, no por jornada" ya presente).
+- `_pmSweepEurKo` (Champions/Europa/Conference · eliminatoria,
+  `<comp>_ko_state_v1`): ya arreglado en el mismo fix #2 — cada leg
+  (ida/vuelta/desempate/final) se recorta independientemente, sin
+  esperar a que la eliminatoria tenga `.winner`.
+- `_pmSweepLigaState` (Liga EA Sports, `ef_liga38_v4`): se eliminó
+  `allDone = jornada.every(...)` — cada partido de
+  `window.LIGA_SCHEDULE[j]` se recorta en cuanto tiene entrada en
+  `results`, sin esperar al resto de la jornada.
+- `_pmSweepCopa` (Copa del Rey, `copa_state_v1`): se eliminó el `done`
+  por ronda en las rondas a partido único (r1/r2/r16/fin) **y** la
+  función `_pmCopaTieDone` (exigía que el cruce ENTERO —ida+vuelta+
+  desempate— tuviera ganador) en las rondas a doble partido (Octavos/
+  Cuartos/Semis). Cada leg se recorta independientemente en cuanto ÉL
+  MISMO se juega — la IDA sigue siendo la ÚNICA que se TALLA (regla sin
+  cambios: es la que "gana" el dedup del escaneo en vivo, ver comentario
+  de cabecera de `_pmSweepCopa`); vuelta/desempate solo se vacían.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir un gate de "jornada/ronda/eliminatoria/
+   cruce 100% completa" en NINGÚN `_pmSweepXxx`, existente o futuro. El
+   recorte es SIEMPRE por partido/leg individual.
+2. **PROHIBIDO** debilitar la ÚNICA guardia real que queda:
+   `_pmIsIAvsIA` (vía `_pmIsHumanTeam`, OR de `_isHumanClubCanonico`/
+   `_esSelHumana`/`isHumanInComp`, conservador — si no puede identificar
+   con certeza alguno de los 2 lados, NO se toca). Esta regla (Regla 1
+   de la sección 2026-08-16) sigue intacta y es la ÚNICA condición que
+   puede impedir un recorte.
+3. **PROHIBIDO** que la Copa del Rey (única familia con rondas a doble
+   partido) vuelva a exigir que el cruce ENTERO tenga ganador antes de
+   recortar cualquier leg. La IDA se talla y recorta en cuanto ella
+   misma se juega; vuelta/desempate se recortan (sin tallar) en cuanto
+   ellos mismos se juegan — independientemente entre sí.
+4. Toda competición NUEVA con acta hereda automáticamente el recorte
+   por-partido en cuanto se añada su propio `_pmSweepXxx` (regla 6 de la
+   sección 2026-08-16, sin cambios) — el patrón correcto es SIEMPRE
+   "¿este partido/leg concreto está jugado y es IA-vs-IA?", nunca
+   "¿está completa la agrupación a la que pertenece?".
+5. Esta sección **SUPERSEDE** la Regla 2 de "El acta de un partido
+   IA-vs-IA ya completado se RECORTA a una tabla permanente..."
+   (2026-08-16, más abajo) — esa sección se conserva como registro
+   histórico de por qué existe el mecanismo, pero su Regla 2 (esperar a
+   la jornada/ronda completa) ya NO aplica. El resto de esa sección
+   (garantía de no pérdida de estadísticas, formato compacto de la
+   tabla, protección anti-resurrección, Reglas 1/3/4/5/6/7) sigue
+   vigente sin cambios.
+
 ## `saveData` (Resto de Ligas / Liga EA Sports / Hypermotion / Primera Federación) — el POST principal SIN timeout dejaba "Pegar plantilla completa" colgado para siempre, en silencio (obligatorio, 2026-08-22 #5)
 
 **Bug (usuario 2026-08-22, "pego plantilla entera... al volver otro día

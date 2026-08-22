@@ -19309,6 +19309,38 @@ window._hdrCleanCache = function(){
     var bucketId = isMundialCfg ? 'mundial' : (isSelCfg ? 'sel' : 'torneos');
     var compKey  = isMundialCfg ? 'mundial' : (isSelCfg ? 'sel' : 'torneo');
     var teams = cfg.teams || [];
+    /* Reconstruye `cfg.fixture` si falta (obligatorio, 2026-08-22 — bug
+       usuario: guardado de "jg" fallando con AbortError tras 3 reintentos,
+       payload cada vez más grande). Un torneo `format:'league'` (p.ej. el
+       Trofeo Joan Gamper, 63 equipos) construye `cfg.fixture` de forma
+       LAZY solo al renderizar su pantalla de Liga (`_renderLeague`) — si
+       este barrido corre ANTES de que el usuario abra esa pantalla en la
+       sesión (arranque diferido a 9s, o el intervalo de 3 min), `cfg.fixture`
+       está vacío y `_pmLeagueJornadaDone` (que lo lee directo) devuelve
+       SIEMPRE `false` → NINGÚN partido de un torneo en formato liga se
+       recorta jamás — el JSON del torneo crece sin límite en cada jornada
+       jugada hasta que `_tourSave` empieza a agotar sus 3 reintentos por
+       tamaño/timeout. Mismo fix ya aplicado a los agregadores de
+       Estadísticas (`_tourBackfillActasFromResults`/`_mundialStatsRobustScan`,
+       ver comentario de `_tourEnsureLeagueFixture` más abajo) — aquí se
+       había quedado sin aplicar. */
+    if (cfg.format === 'league' && typeof window._tourEnsureLeagueFixture === 'function') {
+      try { window._tourEnsureLeagueFixture(cfg, teams); } catch(_){}
+    }
+    /* Mismo problema, para `cfg.groupFixtures` (torneos `groups-ko`/
+       `mundial-48`/`qualifier-route`) — `_pmGroupJornadaDone` los lee
+       directo, igual que `_pmLeagueJornadaDone` con `cfg.fixture`. Mismo
+       patrón ya usado en `window._tourSaveHumanResult` (más abajo en este
+       archivo) para garantizar que los fixtures existan ANTES de que
+       cualquier consumidor (aquí, el barrido de recorte) los necesite. */
+    try {
+      if (isSelCfg && typeof window._mundialGroupState === 'function' && teams.length) {
+        window._mundialGroupState(cfg, teams);
+      } else if (!isSelCfg && cfg.format !== 'league') {
+        if (typeof window._tourEnsureGroupFixtures === 'function') window._tourEnsureGroupFixtures(cfg);
+        if (typeof window._tourEnsureRoadFixtures === 'function') window._tourEnsureRoadFixtures(cfg, id);
+      }
+    } catch(_){}
     /* Índice matchKey → {a,b} para resolver home/away cuando el result
        no los trae (partidos antiguos guardados solo con el marcador). */
     var idx = {};

@@ -4597,6 +4597,9 @@ _KV_ALLOWED_EXACT = {
     # Champions/Europa/Conference League (fase de liga + eliminatoria,
     # ambas comparten bucket "Grupos + Playoffs" — obligatorio 2026-08-22).
     "pm_tally_ucl_v1", "pm_tally_uel_v1", "pm_tally_uecl_v1",
+    # Recopa de Europa / Supercopa de España / Supercopa de Europa
+    # (obligatorio, 2026-08-22).
+    "pm_tally_recopa_v1", "pm_tally_sc_v1", "pm_tally_usc_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,

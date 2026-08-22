@@ -18440,6 +18440,14 @@ window._hdrCleanCache = function(){
         window._pmMergeTallyInto('mundial', buckets.mundial, teamPJByComp.mundial);
         window._pmMergeTallyInto('copa',    buckets.copa,    teamPJByComp.copa);
         window._pmMergeTallyInto('inter',   buckets.inter,   teamPJByComp.inter);
+        /* Recopa/Supercopa España/Supercopa Europa (obligatorio,
+           2026-08-22): igual que UCL/UEL/UECL, su ÚNICA fuente de stats
+           es `LIGA_PLAYER_MATCH_STORE` (Source 1) — sin una fuente
+           autoritativa de PJ propia, así que el `pjBucket` real (no uno
+           desechable) es el que hay que rellenar. */
+        window._pmMergeTallyInto('recopa',  buckets.recopa,  teamPJByComp.recopa);
+        window._pmMergeTallyInto('usc',     buckets.usc,     teamPJByComp.usc);
+        window._pmMergeTallyInto('sc',      buckets.sc,      teamPJByComp.sc);
       }
     } catch(_){}
 
@@ -18991,7 +18999,11 @@ window._hdrCleanCache = function(){
        Obligatorio, 2026-08-22. */
     ucl:     'pm_tally_ucl_v1',
     uel:     'pm_tally_uel_v1',
-    uecl:    'pm_tally_uecl_v1'
+    uecl:    'pm_tally_uecl_v1',
+    /* Recopa/Supercopa España/Supercopa Europa — obligatorio, 2026-08-22. */
+    recopa:  'pm_tally_recopa_v1',
+    sc:      'pm_tally_sc_v1',
+    usc:     'pm_tally_usc_v1'
   };
   var _cache = {};      // bucketId -> {names:{}, matches:{}, updatedAt}
   var _hydrated = {};   // bucketId -> bool
@@ -19568,6 +19580,105 @@ window._hdrCleanCache = function(){
   }
   window._pmSweepEurKo = _pmSweepEurKo;
 
+  /* ── Barrido de la RECOPA DE EUROPA (`recopa_state_v1.sorteo[phase]`,
+     un array por ronda: r32/r16/r8/sf/fin). "Ronda completa" = TODOS
+     los partidos de esa ronda con `played:true` — mismo criterio de
+     `_pmSweepInterState`. Los BYE (`__BYE__`, walkover) no generan
+     acta real, así que el guard `!m.events.length` ya los descarta sin
+     necesitar un check aparte. Igual que eurfase/euroko, su ÚNICA
+     fuente de stats es `LIGA_PLAYER_MATCH_STORE` (Recopa NUNCA tuvo un
+     "Source" propio de re-escaneo en vivo) — purga obligatoria. ── */
+  function _pmSweepRecopa(){
+    var raw = null;
+    try { raw = localStorage.getItem('recopa_state_v1'); } catch(_){}
+    if (!raw) return false;
+    var s;
+    try { s = JSON.parse(raw); } catch(_){ return false; }
+    if (!s || !s.sorteo || typeof s.sorteo !== 'object') return false;
+    var PHASES = ['r32','r16','r8','sf','fin'];
+    var tally = _pmLoad('recopa');
+    var touchedTally = false, touchedCfg = false;
+    PHASES.forEach(function(phase){
+      var ms = s.sorteo[phase];
+      if (!Array.isArray(ms) || !ms.length) return;
+      var done = true;
+      for (var i = 0; i < ms.length; i++){ if (!ms[i] || !ms[i].played) { done = false; break; } }
+      if (!done) return;
+      ms.forEach(function(m, idx){
+        if (!m || !m.played || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
+        var tA = m.home || '', tB = m.away || '';
+        if (!_pmIsIAvsIA(tA, tB, 'recopa')) return;
+        var dedupKey = _pmDedupKey('recopa', phase + '_' + idx, tA, tB);
+        if (!tally.matches[dedupKey]) {
+          var entry = {};
+          _pmAccumulateEvents(entry, tally, tA, tB, m.events, m.mvp, m.mvpTeam, true);
+          tally.matches[dedupKey] = entry;
+          touchedTally = true;
+        }
+        _pmPurgeLiveMatchStoreEntry('recopa', tA, tB);
+        delete m.events; delete m.mvp; delete m.mvpTeam;
+        m.trimmedAt = Date.now();
+        touchedCfg = true;
+      });
+    });
+    if (touchedTally) _pmSave('recopa', tally);
+    if (touchedCfg) {
+      try { window._lsSetSafe('recopa_state_v1', JSON.stringify(s)); } catch(_){}
+    }
+    return touchedCfg;
+  }
+  window._pmSweepRecopa = _pmSweepRecopa;
+
+  /* ── Barrido de Supercopa de España / Supercopa de Europa
+     (`sc_state_v1`/`usc_state_v1`, forma `{semis:[m0,m1], final:m}`).
+     Dos "rondas": semis (ambos partidos deben estar jugados antes de
+     tocar ninguno) y final (independiente, solo depende de sí misma).
+     Función genérica por `comp` ('sc'|'usc') — mismo shape, mismo
+     `_save` (solo local, sin POST propio: viajan por el poll genérico
+     `SYNC_KEYS` de `part2/misc_body_2.html`, así que basta con
+     `_lsSetSafe` para que se propague solo, igual que ya hace el
+     `_save` nativo de cada motor). ── */
+  var _SC_USC_KEY = { sc:'sc_state_v1', usc:'usc_state_v1' };
+  function _pmSweepScUsc(comp){
+    var KEY = _SC_USC_KEY[comp]; if (!KEY) return false;
+    var raw = null;
+    try { raw = localStorage.getItem(KEY); } catch(_){}
+    if (!raw) return false;
+    var s;
+    try { s = JSON.parse(raw); } catch(_){ return false; }
+    if (!s) return false;
+    var tally = _pmLoad(comp);
+    var touchedTally = false, touchedState = false;
+    function sweepOne(m, slotKey){
+      if (!m || !m.played || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
+      var tA = m.home || '', tB = m.away || '';
+      if (!_pmIsIAvsIA(tA, tB, comp)) return;
+      var dedupKey = _pmDedupKey(comp, slotKey, tA, tB);
+      if (!tally.matches[dedupKey]) {
+        var entry = {};
+        _pmAccumulateEvents(entry, tally, tA, tB, m.events, m.mvp, m.mvpTeam, true);
+        tally.matches[dedupKey] = entry;
+        touchedTally = true;
+      }
+      _pmPurgeLiveMatchStoreEntry(comp, tA, tB);
+      delete m.events; delete m.mvp; delete m.mvpTeam;
+      m.trimmedAt = Date.now();
+      touchedState = true;
+    }
+    if (Array.isArray(s.semis) && s.semis.length === 2 &&
+        s.semis[0] && s.semis[0].played && s.semis[1] && s.semis[1].played) {
+      sweepOne(s.semis[0], 'sf_0');
+      sweepOne(s.semis[1], 'sf_1');
+    }
+    if (s.final && s.final.played) sweepOne(s.final, 'fin_0');
+    if (touchedTally) _pmSave(comp, tally);
+    if (touchedState) {
+      try { window._lsSetSafe(KEY, JSON.stringify(s)); } catch(_){}
+    }
+    return touchedState;
+  }
+  window._pmSweepScUsc = _pmSweepScUsc;
+
   /* Acumulador DEDICADO para Liga EA Sports — replica el tipo de
      eventos EXACTO que cuenta la Fuente 2 de `rebuildPlayerStatsStore`
      (`amarilla/roja/d-amarilla/gol/falta-gol/pen-gol/pen-parado/mvp/
@@ -19699,12 +19810,18 @@ window._hdrCleanCache = function(){
       try { _pmSweepInterState(); } catch(_){}
       try { _pmSweepLigaState(); } catch(_){}
       try { _pmSweepEurAll(); } catch(_){}
+      try { _pmSweepRecopa(); } catch(_){}
+      try { _pmSweepScUsc('sc'); } catch(_){}
+      try { _pmSweepScUsc('usc'); } catch(_){}
     }, 9000);
     setInterval(function(){
       try { window._pmSweepAllTours(); } catch(_){}
       try { _pmSweepInterState(); } catch(_){}
       try { _pmSweepLigaState(); } catch(_){}
       try { _pmSweepEurAll(); } catch(_){}
+      try { _pmSweepRecopa(); } catch(_){}
+      try { _pmSweepScUsc('sc'); } catch(_){}
+      try { _pmSweepScUsc('usc'); } catch(_){}
     }, 180000);
   } catch(_){}
 })();
@@ -22234,6 +22351,21 @@ window._hdrCleanCache = function(){
       }
     }
     _save(s);
+    /* Estadísticas globales (obligatorio, 2026-08-22): ni el camino IA
+       ni el humano de Recopa llamaban NUNCA a `registrarLigaPlayerStats`
+       — la caja "Recopa · Estadísticas" llevaba vacía desde siempre
+       (mismo hueco encontrado y arreglado en Champions/Europa/Conference,
+       aquí generalizado). */
+    try {
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          match.events && match.events.length) {
+        var statsEvR = match.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mk, home, away, statsEvR, mvp || '', mvpTeam || '', 'recopa');
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     setTimeout(function(){
       if(phase === 'fin' && s.champion && typeof window._lecShowChampion === 'function'){
         try { window._lecShowChampion(s.champion); } catch(_){}
@@ -22269,6 +22401,20 @@ window._hdrCleanCache = function(){
       }
     }
     _save(s);
+    /* Estadísticas globales — mismo motivo que en `_recopaPersistAfterIa`
+       de arriba, aplicado al camino HUMANO. */
+    try {
+      var mkH = 'recopa_' + phase + '_' + idx;
+      var hNameH = home || match.home, aNameH = away || match.away;
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          match.events && match.events.length) {
+        var statsEvRH = match.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mkH, hNameH, aNameH, statsEvRH, mvp || '', mvpTeam || '', 'recopa');
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     setTimeout(function(){
       if(phase === 'fin' && s.champion && typeof window._lecShowChampion === 'function'){
         try { window._lecShowChampion(s.champion); } catch(_){}
@@ -23377,6 +23523,20 @@ window._hdrCleanCache = function(){
       }
     }
     _save(s);
+    /* Estadísticas globales (obligatorio, 2026-08-22): ni el camino IA
+       ni el humano de Supercopa de España llamaban NUNCA a
+       `registrarLigaPlayerStats` — "Supercopa España · Estadísticas"
+       llevaba vacía desde siempre (mismo hueco de Recopa/Champions). */
+    try {
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          m.events && m.events.length) {
+        var statsEvSc = m.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mk, home || m.home, away || m.away, statsEvSc, mvp || '', mvpTeam || '', 'sc');
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     if(key === 'fin'){
       var champIa2 = s.champion || _winnerOf(s.final);
       if(champIa2) _scShowChampionOv(champIa2);
@@ -23410,6 +23570,21 @@ window._hdrCleanCache = function(){
       }
     }
     _save(s);
+    /* Estadísticas globales — mismo motivo que en `_scPersistAfterIa`,
+       aplicado al camino HUMANO. Esta función no recibe mvp/mvpTeam
+       como parámetro — si el acta trae un evento `type:'mvp'` el propio
+       acumulador de Source 1 ya lo cuenta sin necesitarlo aparte. */
+    try {
+      var mkH = 'sc_' + key + '_' + idx;
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          m.events && m.events.length) {
+        var statsEvScH = m.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mkH, m.home, m.away, statsEvScH, '', '', 'sc');
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     if(key === 'fin'){
       var champHum2 = s.champion || _winnerOf(s.final);
       if(champHum2) _scShowChampionOv(champHum2);
@@ -24070,6 +24245,23 @@ window._hdrCleanCache = function(){
     m.ts = Date.now();
     if(key === 'fin'){ var champHum = _winnerOf(s.final); if(champHum){ s.champion = champHum; s.runnerUp = (champHum === s.final.home) ? s.final.away : s.final.home; } }
     _save(s);
+    /* Estadísticas globales (obligatorio, 2026-08-22): el camino IA de
+       Supercopa de Europa (`_uscPersistAfterIa`/`_uscSyncFallback`,
+       arriba) SÍ registraba — solo el camino HUMANO se había quedado
+       sin la llamada (mismo hueco de Recopa/SC/Champions). Sin
+       mvp/mvpTeam como parámetro; si el acta trae `type:'mvp'` el
+       acumulador ya lo cuenta solo. */
+    try {
+      var mkH = 'usc_' + key + '_' + idx;
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          m.events && m.events.length) {
+        var statsEvUscH = m.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mkH, m.home, m.away, statsEvUscH, '', '', 'usc');
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     if(key === 'fin'){ var champHum2 = s.champion || _winnerOf(s.final); if(champHum2) _uscShowChampionOv(champHum2); }
     _renderContent();
   };

@@ -956,6 +956,17 @@ window._showSimProgress = function(opts, onDone){
    archivo. */
 window._hdrCleanCache = function(){
   try {
+    /* Confirmación previa (petición usuario 2026-08-22): antes disparaba
+       la limpieza al instante con un solo toque — se añade un paso de
+       confirmación para evitar pulsaciones accidentales, dejando claro
+       que NO toca plantillas/equipos/jugadores/ligas/calendario/
+       torneos/trofeos/Stadium Hub, solo caché reconstruible. */
+    var _ok = window.confirm(
+      '🧹 Limpiar espacio reconstruible\n\n' +
+      'Se eliminarán cachés, snapshots y copias temporales.\n' +
+      'Los equipos, jugadores y competiciones NO se verán afectados.'
+    );
+    if (!_ok) return;
     var res = (typeof window._lsFreeReconstructibleNow === 'function')
       ? window._lsFreeReconstructibleNow()
       : {freedChars:0, freedKeys:0};
@@ -12675,30 +12686,15 @@ window._hdrCleanCache = function(){
       <div class="admin-mod-label" style="color:#ffb060;">Espacio del navegador</div>
       <div class="admin-mod-desc">Qué ocupa el localStorage · liberar espacio reconstruible</div>
     </div>
-    <!-- ── Plantillas: Restaurar / Descargar / Importar ────────────
-         Antes vivían en la pantalla "Liga EA Sports · Clasificación"
-         como una fila secundaria de botones. Cualquier toque accidental
-         desde el móvil podía disparar Restaurar (sobre-escribir desde
-         backup) o Importar (abrir el selector de fichero). Aquí, dentro
-         del Panel Admin, ya están protegidos por el PIN 747 que pide
-         goAjustes — no hace falta envolver con pG() / requireAdmin
-         porque entrar al panel ya es admin-only. -->
-    <div class="admin-module-card" style="border-color:rgba(255,60,60,.4);" onclick="window.emergencyRestoreAll&&window.emergencyRestoreAll()">
-      <span class="admin-mod-icon">🆘</span>
-      <div class="admin-mod-label" style="color:#ff7070;">Restaurar Datos</div>
-      <div class="admin-mod-desc">Recupera plantillas desde el backup local o el servidor</div>
-    </div>
-    <div class="admin-module-card" style="border-color:rgba(60,180,240,.4);" onclick="window.lextExportBackup&&window.lextExportBackup()">
-      <span class="admin-mod-icon">💾</span>
-      <div class="admin-mod-label" style="color:#60b4f0;">Descargar Backup TOTAL</div>
-      <div class="admin-mod-desc">Exporta un .json con TODO tu progreso (hub, calendario, torneos, plantillas, trofeos…)</div>
-    </div>
-    <div class="admin-module-card" style="border-color:rgba(60,200,120,.4);" onclick="document.getElementById('lext-import-file').click()">
-      <span class="admin-mod-icon">📂</span>
-      <div class="admin-mod-label" style="color:#3cc878;">Importar Backup TOTAL</div>
-      <div class="admin-mod-desc">Carga un .json y lo restaura TODO (local + servidor, gana sobre Railway)</div>
-    </div>
-    <input type="file" id="lext-import-file" accept="application/json,.json" style="display:none" onchange="window.lextImportBackup&&window.lextImportBackup(this.files[0])"/>
+    <!-- ── Restaurar Datos / Descargar Backup TOTAL / Importar Backup
+         TOTAL — ELIMINADAS del Panel Admin (petición usuario, rediseño
+         de Ajustes: "esos apartados no aportan valor a tu uso real de
+         F-TBOL"). Las funciones (`emergencyRestoreAll`/
+         `lextExportBackup`/`lextImportBackup`) se CONSERVAN definidas
+         más abajo — siguen invocables desde la consola del navegador
+         para una recuperación de emergencia — solo se retira el acceso
+         directo desde la UI. NO reintroducir estas 3 cards sin acuerdo
+         explícito del usuario. -->
   </div>
   <div class="admin-env-panel">
     <div class="admin-env-title">🌍 ENTORNO ACTUAL</div>

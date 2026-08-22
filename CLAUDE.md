@@ -1,5 +1,76 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El check "Workers Builds: ftbol" (Cloudflare) fallaba en TODA PR — integración huérfana, sin relación con el despliegue real (obligatorio, 2026-08-22 #5)
+
+**Petición usuario 2026-08-22**: "investiga el check de Cloudflare Workers
+y arréglalo" — el check `Workers Builds: ftbol` salía en rojo en TODAS
+las PRs (confirmado con la PR #2133 y la #2132, ya fusionada horas
+antes), siempre fallando de forma instantánea (`started_at ===
+completed_at`), sin importar qué cambiara el diff.
+
+### Investigación
+
+- `wrangler.jsonc` (raíz del repo) declaraba un Worker mínimo de
+  "solo-assets" (`{"assets":{"directory":"templates"}}`, sin `main`
+  script) apuntando su `$schema` a
+  `node_modules/wrangler/config-schema.json` — pero el repo **NUNCA
+  ha tenido `package.json`** (confirmado con `find . -iname
+  package.json`), así que cualquier paso de instalación de
+  dependencias del pipeline de Cloudflare Workers Builds no tiene nada
+  que instalar/ejecutar.
+- El propio `wrangler.jsonc` se coló en el historial dentro de un
+  commit (`ad0a269`) cuyo mensaje no tiene NADA que ver con Cloudflare
+  ("Elimina mensajes (bandeja ✉️) y valoración del club (💼) de las
+  cajas humanas") — nunca fue un cambio intencional documentado. Ni
+  una sola mención de "cloudflare"/"wrangler"/"workers.dev" existe en
+  todo este archivo (`CLAUDE.md`), pese a que aquí se documenta
+  obsesivamente CUALQUIER decisión de infraestructura del proyecto —
+  la firma exacta de una integración que Cloudflare auto-generó al
+  conectar el repo desde su dashboard, nunca configurada a propósito.
+- El despliegue REAL y documentado de este proyecto es **Render**
+  (`render.yaml` + `Procfile`, Flask + Gunicorn, `autoDeploy` desde
+  `main`) — un Worker de Cloudflare no tiene ningún papel en cómo esta
+  app se sirve de verdad.
+- Aunque el build hubiera podido completarse, el propio `assets.directory`
+  apuntaba a `templates/` — la carpeta de plantillas **Jinja2**
+  renderizadas por Flask en el servidor (con `{{ }}`/`{% %}` sin
+  resolver), NO archivos estáticos servibles tal cual. Un despliegue
+  "exitoso" con esa config habría servido HTML roto con la sintaxis de
+  plantilla cruda visible — nunca podría sustituir al Flask real.
+
+### Fix
+
+- Se ELIMINA `wrangler.jsonc` del repo — config huérfana, nunca
+  referenciada, arquitectónicamente incapaz de servir esta app (Flask
+  server-rendered, no un sitio estático).
+- **Límite de este fix**: el check `Workers Builds: ftbol` lo dispara
+  la integración Git de Cloudflare configurada en SU dashboard (cuenta
+  del usuario), no un workflow de este repo — borrar el archivo de
+  config es la limpieza correcta del lado del repo, pero **NO
+  garantiza que el check deje de aparecer** en las PRs, porque el
+  disparador vive fuera de este repositorio. Para eliminarlo del todo,
+  el usuario debe desconectar la integración Git del proyecto Worker
+  "ftbol" desde `dash.cloudflare.com` → Workers & Pages → ftbol →
+  Settings → Builds → Git integration → Disconnect (o borrar el propio
+  proyecto Worker "ftbol" si nunca se usó para nada real).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** reintroducir `wrangler.jsonc`/`wrangler.toml` (o
+   cualquier config de Cloudflare Workers/Pages) sin que el usuario
+   pida explícitamente un despliegue en Cloudflare — el despliegue de
+   este proyecto es SIEMPRE Render (`render.yaml`/`Procfile`).
+2. Si en el futuro el usuario SÍ quiere una integración Cloudflare
+   real, tiene que ser para servir `static/` (CSS/JS/imágenes reales)
+   nunca `templates/` (Jinja server-side) — y necesitaría su propio
+   `package.json` con `wrangler` como devDependency para que el build
+   de Cloudflare tenga algo que instalar.
+3. Un check de CI que falla IDÉNTICO e INSTANTÁNEO en PRs sin relación
+   entre sí (aquí: #2132 ya fusionada y #2133) es la señal de una
+   integración externa rota/huérfana, no de un bug del propio diff —
+   confirmarlo así (comparando contra otra PR ya fusionada) antes de
+   intentar "arreglar" el código de la PR en cuestión.
+
 ## El recorte de acta pasa a ser POR PARTIDO — ya NO espera a que la jornada/ronda/eliminatoria ENTERA esté completa (obligatorio, 2026-08-22 #4) ⚠️ SUPERSEDE la regla 2 ("PROHIBIDO recortar un partido cuya jornada/ronda NO esté 100% completa") de la sección "El acta de un partido IA-vs-IA ya completado se RECORTA..." (2026-08-16, más abajo)
 
 **Petición usuario 2026-08-22** (tras el fix #3 de arriba, con foto de la

@@ -18354,6 +18354,26 @@ window._hdrCleanCache = function(){
         try { window._lsSetSafe(key, _serialized); } catch(__){}
       }
     }
+    /* Champions/Europa/Conference (fase de liga + eliminatoria) — recorte
+       de acta (obligatorio, 2026-08-22): a diferencia de Liga EA Sports
+       (Source 2 re-escanea `ef_liga38_v4` en vivo, así que un partido
+       recortado desaparece SOLO de ahí y `_pmMergeTallyInto` rellena el
+       hueco sin duplicar), aquí el ÚNICO origen es `LIGA_PLAYER_MATCH_STORE`
+       (Source 1, arriba) — un store EN MEMORIA que `_pmSweepEurFase`/
+       `_pmSweepEurKo` PURGAN explícitamente al recortar (mismo tick, ver
+       `_pmPurgeLiveMatchStoreEntry`) para que Source 1 deje de contarlo
+       de inmediato — sin esa purga, sumar la tabla permanente ENCIMA
+       duplicaría goles/tarjetas mientras la sesión siga abierta. Al no
+       tener una fuente de PJ aparte (a diferencia de Liga, `teamPJByComp.ucl`
+       SOLO lo alimenta Source 1), el tally SÍ debe rellenar también el PJ
+       de los partidos recortados. */
+    try {
+      if (typeof window._pmMergeTallyInto === 'function') {
+        window._pmMergeTallyInto('ucl',  buckets.ucl,  teamPJByComp.ucl);
+        window._pmMergeTallyInto('uel',  buckets.uel,  teamPJByComp.uel);
+        window._pmMergeTallyInto('uecl', buckets.uecl, teamPJByComp.uecl);
+      }
+    } catch(_){}
     _persistBucket(buckets.superliga, teamPJByComp.superliga, COMP_CACHE_KEYS.superliga);
     _persistBucket(buckets.uel,       teamPJByComp.uel,       COMP_CACHE_KEYS.uel);
     _persistBucket(buckets.uecl,      teamPJByComp.uecl,      COMP_CACHE_KEYS.uecl);
@@ -18964,7 +18984,14 @@ window._hdrCleanCache = function(){
     mundial: 'pm_tally_mundial_v1',
     copa:    'pm_tally_copa_v1',
     inter:   'pm_tally_inter_v1',
-    liga:    'pm_tally_liga_v1'
+    liga:    'pm_tally_liga_v1',
+    /* Champions/Europa/Conference — fase de liga Y eliminatoria comparten
+       el MISMO bucket (igual que ya hace el dashboard de estadísticas,
+       "Grupos + Playoffs solamente" en `ef_player_stats_ucl_main_v1`).
+       Obligatorio, 2026-08-22. */
+    ucl:     'pm_tally_ucl_v1',
+    uel:     'pm_tally_uel_v1',
+    uecl:    'pm_tally_uecl_v1'
   };
   var _cache = {};      // bucketId -> {names:{}, matches:{}, updatedAt}
   var _hydrated = {};   // bucketId -> bool
@@ -19398,6 +19425,149 @@ window._hdrCleanCache = function(){
   }
   window._pmSweepInterState = _pmSweepInterState;
 
+  /* ── Purga de `LIGA_PLAYER_MATCH_STORE` al recortar (obligatorio,
+     2026-08-22) — SOLO necesaria para Champions/Europa/Conference.
+     Ese store (Source 1 de `rebuildPlayerStatsStore`, arriba en este
+     archivo) es EN MEMORIA y NUNCA se toca al vaciar `events` de
+     `ucl_phase_v1`/`<comp>_ko_state_v1` (son documentos totalmente
+     separados) — así que sin esta purga, Source 1 seguiría contando el
+     partido recortado con normalidad DURANTE el resto de la sesión (no
+     lee `trimmedAt` en absoluto) y `_pmMergeTallyInto` sumaría sus
+     goles/tarjetas/MVP POR SEGUNDA VEZ. Tras un recargo de página el
+     problema desaparecería solo (`LIGA_PLAYER_MATCH_STORE` nace vacío),
+     pero DURANTE la sesión en la que se recorta sería un duplicado
+     visible. Escanea SOLO las entradas de ESTE `comp` (filtro por
+     `|<comp>|` en la clave) y borra la que case por PAREJA de equipo
+     (en cualquier orden) — sin depender de `canonicalTeamName` (no
+     expuesta de forma fiable en `window`), compara por el `teamA`/
+     `teamB` YA normalizados que el propio store guarda. */
+  function _pmPurgeLiveMatchStoreEntry(comp, teamA, teamB){
+    try {
+      var store = window.LIGA_PLAYER_MATCH_STORE;
+      if (!store || typeof store !== 'object') return;
+      var nA = _pmNorm(teamA), nB = _pmNorm(teamB);
+      if (!nA || !nB) return;
+      Object.keys(store).forEach(function(k){
+        if (k.indexOf('|' + comp + '|') === -1) return;
+        var m = store[k]; if (!m) return;
+        var mA = _pmNorm(m.teamA||''), mB = _pmNorm(m.teamB||'');
+        if ((mA===nA && mB===nB) || (mA===nB && mB===nA)) delete store[k];
+      });
+    } catch(_){}
+  }
+
+  /* ── Barrido de la FASE DE LIGA de Champions/Europa/Conference
+     (`ucl_phase_v1`/`uel_phase_v1`/`uecl_phase_v1`, formato Swiss —
+     `state.pairs[]` plano, cada par con `.jornada`). "Jornada completa"
+     = TODOS los pares de esa misma `.jornada` con `played:true`, mismo
+     criterio de granularidad que `_pmLeagueJornadaDone`. ── */
+  var _EUR_FASE_KEY = { ucl:'ucl_phase_v1', uel:'uel_phase_v1', uecl:'uecl_phase_v1' };
+  function _pmSweepEurFase(comp){
+    var KEY = _EUR_FASE_KEY[comp]; if (!KEY) return false;
+    var raw = null;
+    try { raw = localStorage.getItem(KEY); } catch(_){}
+    if (!raw) return false;
+    var state;
+    try { state = JSON.parse(raw); } catch(_){ return false; }
+    if (!state || !Array.isArray(state.pairs) || !state.pairs.length) return false;
+    var tally = _pmLoad(comp);
+    var touchedTally = false, touchedState = false;
+    var doneJornadas = {};
+    state.pairs.forEach(function(p){
+      var j = p && p.jornada;
+      if (j == null) return;
+      if (doneJornadas[j] === undefined) doneJornadas[j] = true;
+      if (!p.played) doneJornadas[j] = false;
+    });
+    state.pairs.forEach(function(p, idx){
+      if (!p || !p.played || !Array.isArray(p.events) || !p.events.length || p.trimmedAt) return;
+      if (p.jornada == null || !doneJornadas[p.jornada]) return;
+      var tA = p.home || '', tB = p.away || '';
+      if (!_pmIsIAvsIA(tA, tB, comp)) return;
+      var dedupKey = _pmDedupKey('eurfase_' + comp, 'j' + p.jornada + '_' + idx, tA, tB);
+      if (!tally.matches[dedupKey]) {
+        var entry = {};
+        _pmAccumulateEvents(entry, tally, tA, tB, p.events, p.mvp, p.mvpTeam, true);
+        tally.matches[dedupKey] = entry;
+        touchedTally = true;
+      }
+      _pmPurgeLiveMatchStoreEntry(comp, tA, tB);
+      delete p.events; delete p.mvp; delete p.mvpTeam;
+      p.trimmedAt = Date.now();
+      touchedState = true;
+    });
+    if (touchedTally) _pmSave(comp, tally);
+    if (touchedState) {
+      try { window._lsSetSafe(KEY, JSON.stringify(state)); } catch(_){}
+      try {
+        fetch('/api/kv/' + KEY, { method:'POST', headers:{'Content-Type':'application/json'},
+          credentials:'same-origin', body: JSON.stringify({ value: state || {} }) }).catch(function(){});
+      } catch(_){}
+    }
+    return touchedState;
+  }
+  window._pmSweepEurFase = _pmSweepEurFase;
+
+  /* ── Barrido de la fase ELIMINATORIA de Champions/Europa/Conference
+     (`<comp>_ko_state_v1` — `st.rounds.{rep,oct,qf,sf}[]` = ties con
+     `.ida`/`.vta`/`.des`, `st.rounds.fin[0]` = tie con `.m` único).
+     "Ronda completa" = TODAS las eliminatorias de esa ronda con
+     `.winner` resuelto (igual granularidad por ronda que
+     `_pmSweepInterState` para Intercontinental) — solo entonces se
+     recortan SUS legs ya jugados. ── */
+  var _EUR_KO_KEY = { ucl:'ucl_ko_state_v1', uel:'uel_ko_state_v1', uecl:'uecl_ko_state_v1' };
+  function _pmSweepEurKo(comp){
+    var KEY = _EUR_KO_KEY[comp]; if (!KEY) return false;
+    var raw = null;
+    try { raw = localStorage.getItem(KEY); } catch(_){}
+    if (!raw) return false;
+    var s;
+    try { s = JSON.parse(raw); } catch(_){ return false; }
+    if (!s || !s.rounds) return false;
+    var tally = _pmLoad(comp);
+    var touchedTally = false, touchedCfg = false;
+    function sweepLeg(m, slotKey){
+      if (!m || !m.played || !Array.isArray(m.events) || !m.events.length || m.trimmedAt) return;
+      var tA = m.home || '', tB = m.away || '';
+      if (!_pmIsIAvsIA(tA, tB, comp)) return;
+      var dedupKey = _pmDedupKey('euroko_' + comp, slotKey, tA, tB);
+      if (!tally.matches[dedupKey]) {
+        var entry = {};
+        _pmAccumulateEvents(entry, tally, tA, tB, m.events, m.mvp, m.mvpTeam, true);
+        tally.matches[dedupKey] = entry;
+        touchedTally = true;
+      }
+      _pmPurgeLiveMatchStoreEntry(comp, tA, tB);
+      delete m.events; delete m.mvp; delete m.mvpTeam;
+      m.trimmedAt = Date.now();
+      touchedCfg = true;
+    }
+    ['rep','oct','qf','sf'].forEach(function(roundKey){
+      var R = s.rounds[roundKey];
+      if (!Array.isArray(R) || !R.length) return;
+      var done = R.every(function(tie){ return tie && tie.winner; });
+      if (!done) return;
+      R.forEach(function(tie, idx){
+        if (!tie) return;
+        if (tie.ida) sweepLeg(tie.ida, roundKey + '_' + idx + '_i');
+        if (tie.vta) sweepLeg(tie.vta, roundKey + '_' + idx + '_v');
+        if (tie.des) sweepLeg(tie.des, roundKey + '_' + idx + '_d');
+      });
+    });
+    var fin = s.rounds.fin && s.rounds.fin[0];
+    if (fin && fin.winner && fin.m) sweepLeg(fin.m, 'fin_0_f');
+    if (touchedTally) _pmSave(comp, tally);
+    if (touchedCfg) {
+      try { window._lsSetSafe(KEY, JSON.stringify(s)); } catch(_){}
+      try {
+        fetch('/api/kv/' + KEY, { method:'POST', headers:{'Content-Type':'application/json'},
+          credentials:'same-origin', body: JSON.stringify({ value: s || {} }) }).catch(function(){});
+      } catch(_){}
+    }
+    return touchedCfg;
+  }
+  window._pmSweepEurKo = _pmSweepEurKo;
+
   /* Acumulador DEDICADO para Liga EA Sports — replica el tipo de
      eventos EXACTO que cuenta la Fuente 2 de `rebuildPlayerStatsStore`
      (`amarilla/roja/d-amarilla/gol/falta-gol/pen-gol/pen-parado/mvp/
@@ -19517,16 +19687,24 @@ window._hdrCleanCache = function(){
   try {
     Object.keys(TALLY_KEY).forEach(function(b){ _pmHydrate(b); });
   } catch(_){}
+  function _pmSweepEurAll(){
+    ['ucl','uel','uecl'].forEach(function(c){
+      try { _pmSweepEurFase(c); } catch(_){}
+      try { _pmSweepEurKo(c); } catch(_){}
+    });
+  }
   try {
     setTimeout(function(){
       try { window._pmSweepAllTours(); } catch(_){}
       try { _pmSweepInterState(); } catch(_){}
       try { _pmSweepLigaState(); } catch(_){}
+      try { _pmSweepEurAll(); } catch(_){}
     }, 9000);
     setInterval(function(){
       try { window._pmSweepAllTours(); } catch(_){}
       try { _pmSweepInterState(); } catch(_){}
       try { _pmSweepLigaState(); } catch(_){}
+      try { _pmSweepEurAll(); } catch(_){}
     }, 180000);
   } catch(_){}
 })();

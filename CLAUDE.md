@@ -1,5 +1,88 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## El recorte de acta de un TORNEO en formato LIGA (`format:'league'`) nunca se disparaba — `cfg.fixture` lazy sin reconstruir dejaba `_pmLeagueJornadaDone` SIEMPRE en `false` (obligatorio, 2026-08-22 #3)
+
+**Bug (foto usuario 2026-08-22, «Trofeo Joan Gamper»)**: el guardado del
+torneo `jg` fallaba con el banner **«⚠️ No se pudo confirmar el
+guardado de "jg" en el servidor... [AbortError: signal is aborted
+without reason]»** tras agotar los 3 reintentos de `_tourSave` (con
+timeout ya escalado hasta 30 s). El acta de los partidos IA-vs-IA de
+jornadas YA COMPLETAS (p.ej. «Nottingham Forest 2-3 Olympique
+Lyonnais», con acta completa visible) seguía sin recortarse, así que
+el JSON de este torneo (63 equipos, formato liga) crecía sin límite
+en cada jornada jugada hasta que el guardado empezaba a agotar sus
+reintentos por tamaño/tiempo — el reintento de fondo (background
+reconciler) también estaba condenado a fallar mientras el torneo
+siguiera creciendo.
+
+### Causa raíz
+
+`_pmSweepTourCfg(id, cfg)` (el barrido que recorta actas de
+`tour_<id>_v1`, IIFE junto a `_pmSweepAllTours`, corre a los 9 s del
+arranque + cada 3 min) llama a `_pmLeagueJornadaDone(cfg, j)` para
+decidir si una jornada de un torneo `format:'league'` está 100%
+completa. Esa función lee `cfg.fixture` **directamente**
+(`var fx = cfg.fixture || []`) — pero `cfg.fixture` de un torneo en
+formato liga se construye **LAZY**, solo al renderizar la pantalla de
+Liga del torneo (`_renderLeague`, vía `_tourEnsureLeagueFixture`). Si
+el barrido corre ANTES de que el usuario abra esa pantalla en la
+sesión (el caso normal: el barrido es un timer de fondo, no depende
+de qué pantalla esté abierta), `cfg.fixture` está vacío →
+`_pmLeagueJornadaDone` devuelve **SIEMPRE `false`**, para CUALQUIER
+jornada → **NINGÚN** partido IA-vs-IA de un torneo en formato liga se
+recorta jamás en ese dispositivo, aunque haya jornadas enteras
+terminadas. El mismo hueco (agregador leyendo un fixture lazy sin
+reconstruirlo primero) ya se había detectado y arreglado para los
+agregadores de ESTADÍSTICAS (`_tourBackfillActasFromResults`/
+`_mundialStatsRobustScan`, sección "El índice key→{home,away}..." más
+abajo) — pero el barrido de RECORTE (`_pmSweepTourCfg`, añadido
+DESPUÉS, en un commit de hoy) se escribió sin ese mismo fix.
+
+### Fix
+
+`_pmSweepTourCfg` reconstruye los fixtures que necesita **ANTES** de
+evaluar cualquier jornada/ronda, con el MISMO patrón ya usado en
+`window._tourSaveHumanResult` (más abajo en el archivo):
+- `format:'league'` → `window._tourEnsureLeagueFixture(cfg, teams)`
+  (reconstruye `cfg.fixture`, determinista sobre el orden de
+  `cfg.teams` — las claves `<j>_<mi>` coinciden con las de
+  `cfg.results` ya guardadas, porque es la MISMA función que usa
+  `_renderLeague` para construirlo la primera vez).
+- `format:'mundial-48'` (Selecciones, `spv*`/`sfn*`) →
+  `window._mundialGroupState(cfg, teams)` (reconstruye
+  `cfg.groupFixtures`).
+- Resto de formatos con grupos (`groups-ko`, `qualifier-route`) →
+  `window._tourEnsureGroupFixtures(cfg)` +
+  `window._tourEnsureRoadFixtures(cfg, id)`.
+
+Con el fixture ya reconstruido, `_pmLeagueJornadaDone`/
+`_pmGroupJornadaDone` (que lo leen directo desde `cfg`, mutado en
+sitio) pueden detectar correctamente qué jornadas están completas, el
+recorte empieza a funcionar, y el JSON del torneo deja de crecer sin
+límite — el guardado vuelve a caber dentro del timeout normal.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un agregador NUEVO que lea `cfg.fixture`/
+   `cfg.groupFixtures` de un torneo (recorte de acta, estadísticas,
+   diagnóstico, o cualquier otro) los lea directo sin reconstruirlos
+   primero vía `_tourEnsureLeagueFixture`/`_tourEnsureGroupFixtures`/
+   `_tourEnsureRoadFixtures`/`_mundialGroupState` según el `format`.
+   Ambos son de construcción LAZY (solo al render de la pantalla del
+   torneo) — un agregador de fondo (timer, sin depender de qué
+   pantalla esté abierta) los verá SIEMPRE vacíos si no los reconstruye
+   él mismo primero.
+2. **PROHIBIDO** dar por bueno un fix de "el agregador X ya reconstruye
+   el fixture" sin auditar con `grep` si hay OTRO agregador (recorte,
+   stats, diagnóstico) que lea el MISMO campo (`cfg.fixture`/
+   `cfg.groupFixtures`) sin ese mismo fix — es exactamente lo que pasó
+   aquí: el fix ya existía para Estadísticas pero no para el Recorte,
+   escrito después y por separado.
+3. Si un torneo/formato NUEVO se añade con su propio tipo de fixture
+   lazy, `_pmSweepTourCfg` debe reconstruirlo igual antes de evaluar
+   `_pmGroupJornadaDone`/`_pmLeagueJornadaDone`/`_pmKoRoundDone` (o el
+   detector de completitud equivalente que se le añada).
+
 ## La "Clasificación" de UCL/UEL/UECL · Fase de Liga pintaba PTS/PJ/G/E/P/GF/GC/DG A CERO FIJO — la pantalla real nunca leía la clasificación que el motor swiss ya calculaba (obligatorio, 2026-08-22 #2)
 
 **Bug (5 fotos usuario 2026-08-22, «UCL · Fase de Grupos»)**: con

@@ -52,7 +52,13 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v24';
+var CACHE_HTML   = 'ftbol-html-v25';
+/* v24 → v25 (2026-08-22): fix del recorte de acta de torneos en formato
+   LIGA (`_pmSweepTourCfg` no reconstruía `cfg.fixture`/`groupFixtures`
+   lazy antes de evaluar jornada completa — ver CLAUDE.md, "El recorte de
+   acta de un TORNEO en formato LIGA... nunca se disparaba"). Bug
+   usuario: guardado de "jg" (Trofeo Joan Gamper) fallando con AbortError
+   por payload cada vez más grande. */
 /* v23 → v24 (2026-08-22): bump de recuperación — los 4 commits de hoy
    que arreglaron el recorte de acta + estadísticas de Champions/Europa/
    Conference/Copa del Rey/Recopa/Supercopa (702b404, c3f3f62, b752fa0,

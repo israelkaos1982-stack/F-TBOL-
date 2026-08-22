@@ -5798,13 +5798,26 @@
   function persistSharedLigaState(patch, tries) {
     if (!patch || typeof patch !== 'object') return Promise.resolve(false);
     tries = (tries == null) ? 3 : tries;
+    /* Timeout duro (2026-08-22, obligatorio — bug usuario: "el partido
+       se guarda pero al reabrir la web se ha perdido"): antes esta
+       petición no tenía NINGÚN timeout — si la conexión se quedaba
+       colgada (no error, solo sin respuesta), el `.catch()` nunca
+       disparaba y el reintento con backoff jamás llegaba a correr.
+       Con AbortController, una petición que no responde en 12s se
+       aborta y cuenta como fallo — así SÍ entra en la cadena de
+       reintentos de abajo. Mismo patrón que `_tourSave` (misc_body_1.html). */
+    var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
+    var to = ctl ? setTimeout(function(){ try { ctl.abort(); } catch(_){} }, 12000) : null;
     return fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch)
+      body: JSON.stringify(patch),
+      signal: ctl ? ctl.signal : undefined
     }).then(function(res) {
+      if (to) clearTimeout(to);
       return res.ok;
     }).catch(function() {
+      if (to) clearTimeout(to);
       return false;
     }).then(function(ok){
       /* Reintento con backoff: un POST perdido (red móvil, cold-start
@@ -5818,6 +5831,36 @@
       return new Promise(function(resolve){
         setTimeout(function(){ resolve(persistSharedLigaState(patch, tries - 1)); }, 1500);
       });
+    });
+  }
+  /* Aviso VISIBLE (con cooldown) si un guardado de Liga EA Sports agota
+     los 3 reintentos — obligatorio, 2026-08-22. Antes `saveResults`
+     llamaba a `persistSharedLigaState` en modo fire-and-forget puro: si
+     el POST fallaba del todo, el partido quedaba SOLO en local (memoria
+     + localStorage) sin que nadie se enterara — al reabrir la web, el
+     primer hydrate del servidor (que nunca recibió el partido) lo
+     mostraba como no jugado. Mismo patrón de cooldown que
+     `_tourSaveWarnShouldShow` (misc_body_1.html) para no repetir el
+     banner en cada reintento de fondo. */
+  var _LIGA_SAVE_WARN_CD_KEY = 'liga_save_warn_cd_v1';
+  function _ligaSaveWarnShouldShow(){
+    try {
+      var last = +(localStorage.getItem(_LIGA_SAVE_WARN_CD_KEY) || 0);
+      if (Date.now() - last < 180000) return false; /* 3 min */
+      localStorage.setItem(_LIGA_SAVE_WARN_CD_KEY, String(Date.now()));
+      return true;
+    } catch(_) { return true; }
+  }
+  function _ligaSaveWithWarn(patch){
+    return persistSharedLigaState(patch).then(function(ok){
+      if (!ok && _ligaSaveWarnShouldShow()) {
+        var _msg = '⚠️ No se pudo confirmar el guardado de este partido de Liga EA Sports en el servidor (red lenta o el servidor no respondió). El partido sigue guardado en ESTE dispositivo — no cierres la pestaña sin conexión, y vuelve a abrir la web cuando tengas mejor cobertura para que se reintente subir solo.';
+        try {
+          if (typeof window._gmCriticalNotice === 'function') window._gmCriticalNotice(_msg);
+          else alert(_msg);
+        } catch(_){}
+      }
+      return ok;
     });
   }
 
@@ -5859,12 +5902,59 @@
         if (!state) return;
 
         if (state.liga_results && typeof state.liga_results === 'object') {
-          sharedLigaResultsCache = state.liga_results;
+          /* UNIÓN con lo que YA sabíamos en local (obligatorio,
+             2026-08-22 — bug usuario: "el partido se guarda pero al
+             reabrir la web se ha perdido"). Antes esta línea hacía
+             `sharedLigaResultsCache = state.liga_results` a pelo — un
+             partido jugado en ESTE dispositivo cuyo POST nunca llegó a
+             confirmarse en el servidor (red floja, timeout, cualquier
+             blip) se PERDÍA en el instante en que llegaba la siguiente
+             respuesta del servidor (el poll de 5s, o el primer hydrate
+             al reabrir la web), porque el servidor nunca lo tuvo y este
+             código adoptaba su copia sin comprobar nada. Mismo patrón
+             ya arreglado para torneos en `_tourLoad` →
+             `_tourMergeMissingLocalResults` (misc_body_1.html,
+             2026-07-17): si un matchKey está `played:true` en LOCAL
+             pero ausente o no-jugado en la respuesta del servidor, se
+             recupera desde local y se re-sube para curar el servidor —
+             nunca al revés (un partido que el servidor YA tiene jugado
+             manda siempre sobre el local). */
+          var _incomingLr = state.liga_results;
+          var _recoveredLr = 0;
+          try {
+            /* `loadResults()` (no `sharedLigaResultsCache` a pelo): en
+               una carga NUEVA de la página este hydrate inicial corre
+               ANTES de que nada más haya leído `localStorage` —
+               `sharedLigaResultsCache` sigue en `null` en ese instante,
+               así que comparar contra él directamente no encontraría
+               NUNCA nada que recuperar (exactamente el caso real del
+               bug: "reabro la web" = carga nueva). `loadResults()` es
+               el getter perezoso que siembra la cache desde disco la
+               PRIMERA vez que se llama; llamarlo aquí es seguro incluso
+               si ya está poblada (no vuelve a tocar el disco). */
+            var _localLr = loadResults();
+            if (_localLr && typeof _localLr === 'object') {
+              Object.keys(_localLr).forEach(function(_mk){
+                var _lr = _localLr[_mk];
+                if (!_lr || !_lr.played) return;
+                var _sr = _incomingLr[_mk];
+                if (!_sr || !_sr.played) { _incomingLr[_mk] = _lr; _recoveredLr++; }
+              });
+            }
+          } catch(_e) {}
+          sharedLigaResultsCache = _incomingLr;
           try {
             var _lrPoll = JSON.stringify(sharedLigaResultsCache);
             if (window._lsSetSafe) window._lsSetSafe(LS_KEY, _lrPoll);
             else window._lsSetSafe(LS_KEY, _lrPoll);
           } catch (e) {}
+          /* El servidor nunca tuvo estos partidos — re-subirlos para
+             curarlo, igual que `_tourLoad` hace tras recuperar. Sin
+             esto, el próximo dispositivo (o este mismo tras otro
+             borrado de datos) volvería a perderlos. */
+          if (_recoveredLr > 0) {
+            try { _ligaSaveWithWarn({ liga_results: sharedLigaResultsCache }); } catch(_e){}
+          }
           /* Un `liga_results` recién llegado del servidor puede traer
              partidos simulados/fusionados en OTRO dispositivo cuya
              plantilla de Liga EA Sports no estaba disponible en ESE
@@ -6604,7 +6694,11 @@
        que crece hasta varios MB y costaba minutos en 4G/5G. El wrapper
        del batch hace UN solo POST al final con el resultado completo. */
     if (window._ligaBatchInProgress) return;
-    persistSharedLigaState({ liga_results: sharedLigaResultsCache });
+    /* `_ligaSaveWithWarn` (no `persistSharedLigaState` directo,
+       2026-08-22): avisa al usuario si los 3 reintentos agotan sin
+       éxito, en vez de perder el partido en silencio hasta que
+       reabra la web y descubra que "se ha perdido". */
+    _ligaSaveWithWarn({ liga_results: sharedLigaResultsCache });
   }
   /* Expuesto para que el batch wrapper pueda hacer el flush final
      sin haber expuesto persistSharedLigaState. */

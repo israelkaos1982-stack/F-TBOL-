@@ -99,6 +99,165 @@ estado de sus vecinos:
    tabla, protección anti-resurrección, Reglas 1/3/4/5/6/7) sigue
    vigente sin cambios.
 
+## `saveData` (Resto de Ligas / Liga EA Sports / Hypermotion / Primera Federación) — el POST principal SIN timeout dejaba "Pegar plantilla completa" colgado para siempre, en silencio (obligatorio, 2026-08-22 #5)
+
+**Bug (usuario 2026-08-22, "pego plantilla entera... al volver otro día
+o si borro datos de navegación" desaparece — Liga EA Sports,
+Hypermotion, Primera Federación y Resto de Ligas)**: el admin pega la
+plantilla completa de un equipo (`📋 Pegar plantilla completa` →
+`lextSaveTeam`), la ve guardada en el editor, pero al volver otro día o
+tras borrar datos de navegación el equipo aparece con roster genérico o
+vacío. Casi nunca sale ningún aviso de error — "a veces sale [un aviso],
+pero aleatoriamente".
+
+### Causa raíz
+
+`saveData(k,d)` (`misc_body_1.html`, el chokepoint ÚNICO de todo
+guardado de `ligaExt_<slug>`) hace el POST principal a
+`/api/liga-ext/<slug>` con reintentos ×5 y backoff — pero la función
+`go()` que dispara ese `fetch` **no tenía NINGÚN timeout**
+(`AbortController`). Si la conexión se queda COLGADA (sin error, sin
+respuesta — típico en móvil con cobertura floja o un cold-start del
+servidor), el `fetch` nunca resuelve ni rechaza → ni `.then()` ni
+`.catch()` disparan nunca → `fail()` **JAMÁS se llama** → los 5
+reintentos con backoff nunca llegan a correr → la promesa
+`window._ligaExtSavePromise[slug]` se queda **colgada para siempre, sin
+resolver**. `lextSaveTeam` SÍ tenía ya construido un sistema de aviso
+completo (`_lextShowSaveError`, banner rojo "⚠ No se pudo guardar en el
+SERVIDOR" con botón REINTENTAR) que se dispara cuando esa promesa
+resuelve a `false` — pero con la promesa colgada, ni el aviso de éxito
+ni el de error llegaban a mostrarse NUNCA: el título se quedaba
+literalmente parado en "💾 Guardando en servidor…" en silencio, y el
+admin, viendo el editor "normal", asumía que se había guardado. El
+servidor nunca recibió la plantilla — al volver otro día (hydrate desde
+servidor) o al borrar datos (sin copia local que proteja), el roster
+real desaparecía.
+
+Es la MISMA causa raíz, en un punto DISTINTO, que ya se arregló en la
+sección de arriba para `persistSharedLigaState` (resultados de partido
+de Liga EA Sports) — un `fetch` sin `AbortController` es indistinguible,
+para el código que lo llama, de una petición que va a tardar 2
+milisegundos: si nunca resuelve, ningún camino de "fallo" se dispara
+jamás.
+
+### Fix
+
+- **`go()`** (el POST principal de `saveData`): `AbortController` con
+  timeout escalado por tamaño del payload (10-30 s, mismo patrón que
+  `_tourSave`) — una conexión colgada se aborta y SÍ entra en la cadena
+  de `fail()`/reintentos.
+- **`goProt()`** (el POST al snapshot `_protected`, dentro de
+  `forceProtected`, que se dispara tras un guardado deliberado del
+  editor): mismo timeout duro (15 s) por el mismo motivo — sin él, el
+  snapshot monotónico que sobrevive a un `main` corrupto podía quedarse
+  sin actualizar indefinidamente.
+- Bump `CACHE_HTML` (`static/js/sw.js`) — regla obligatoria de este
+  archivo, sin él el fix no llega a una sesión ya abierta.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que CUALQUIER `fetch(...)` de este proyecto —
+   existente o nuevo— se quede sin `AbortController`/timeout cuando su
+   resultado alimenta una cadena de reintentos o una promesa que otro
+   código espera (`window._ligaExtSavePromise`, `_tourSave`,
+   `persistSharedLigaState`, o cualquier equivalente futuro). Sin
+   timeout, una conexión colgada (no un error — SIN RESPUESTA) dejaba
+   la promesa sin resolver PARA SIEMPRE, silenciando tanto el camino de
+   éxito como el de error.
+2. **PROHIBIDO** dar por bueno un sistema de aviso de "guardado
+   fallido" (`_lextShowSaveError`, `_gmCriticalNotice`, o cualquier
+   otro) sin verificar que el camino que lo dispara puede REALMENTE
+   resolver a `false` en un tiempo acotado. Un aviso bien construido
+   que depende de una promesa que nunca se resuelve es tan inútil como
+   no tener ningún aviso.
+3. Antes de dar por cerrado un bug de "se pierde X al volver a abrir la
+   web / al borrar datos" en CUALQUIER guardado de este proyecto,
+   auditar con `grep` si el `fetch` implicado tiene `AbortController` —
+   es el mismo patrón que ya ha costado 2 rondas de fixes en el mismo
+   día (Liga EA Sports resultados + rosters de Resto de Ligas).
+
+## Liga EA Sports — un partido HUMANO jugado se "pierde" al reabrir la web si su POST a `/api/state` no llegó a confirmarse (obligatorio, 2026-08-22 #4)
+
+**Bug (usuario 2026-08-22, «Real Madrid 4-0 Real Betis», Liga EA Sports
+Jornada 8)**: el usuario jugó el partido hasta el final (acta completa,
+estadísticas, MVP) y confirmó que "el partido se guarda" (la UI local
+lo muestra terminado), pero al volver a abrir la web el partido había
+desaparecido — Jornada 8 volvía a aparecer sin jugar.
+
+### Causa raíz
+
+Dos huecos combinados en `templates/partials/part2/misc_body_2.html`
+(IIFE de Liga EA Sports, `LS_KEY='ef_liga38_v4'`):
+
+1. **`saveResults(r)`** llamaba a `persistSharedLigaState({liga_results:
+   ...})` en modo fire-and-forget puro — sin comprobar el resultado, sin
+   timeout (`persistSharedLigaState` no tenía `AbortController`, así que
+   una conexión colgada —sin error, sin respuesta— nunca disparaba el
+   `.catch()` que activa los reintentos), y sin avisar al usuario si los
+   3 reintentos con backoff fallaban del todo. El partido quedaba
+   guardado SOLO en local (memoria + `localStorage`).
+2. **`hydrateLigaStateFromBackend`** (el poll de 5 s + el hydrate
+   inicial al cargar la página) hacía `sharedLigaResultsCache =
+   state.liga_results` **A PELO**, sin comparar con lo que el
+   dispositivo YA sabía. Si el POST del punto 1 nunca llegó a
+   confirmarse en el servidor, la siguiente respuesta del servidor (que
+   nunca tuvo ese partido) sobrescribía la copia local completa —
+   perdiendo el partido tanto en la MISMA sesión (poll de 5 s) como,
+   sobre todo, en la SIGUIENTE apertura de la web (el hydrate inicial
+   arranca con la copia del servidor, que nunca lo tuvo).
+
+Es el MISMO patrón ya documentado y arreglado para torneos en
+`_tourLoad` → `_tourMergeMissingLocalResults` (sección "`_tourLoad` UNE
+los partidos jugados que solo existen en LOCAL", 2026-07-17, más abajo
+en este archivo) — pero esa protección nunca se replicó para Liga EA
+Sports (`ef_liga38_v4`/`liga_results`), que tiene su propio hydrate
+independiente.
+
+### Fix
+
+- **`persistSharedLigaState`**: `AbortController` con timeout de 12 s
+  por intento (antes no tenía ninguno) — mismo patrón que `_tourSave`.
+- **`_ligaSaveWithWarn(patch)`** (nuevo, envuelve
+  `persistSharedLigaState`): si los 3 reintentos agotan sin éxito,
+  muestra un aviso VISIBLE (`window._gmCriticalNotice` o `alert`) con
+  cooldown de 3 min (`liga_save_warn_cd_v1`, mismo patrón que
+  `_tourSaveWarnShouldShow`) — el usuario deja de enterarse "cuando
+  reabre la web y ya es tarde". `saveResults` usa este wrapper en vez
+  de `persistSharedLigaState` directo.
+- **`hydrateLigaStateFromBackend`**: antes de adoptar
+  `state.liga_results`, hace UNIÓN con `loadResults()` (el getter
+  perezoso que siembra desde `localStorage` — **no** con
+  `sharedLigaResultsCache` a pelo, que en una carga NUEVA de la página
+  sigue en `null` en el instante del hydrate inicial). Un matchKey
+  `played:true` en LOCAL pero ausente o no-jugado en la respuesta del
+  servidor se recupera desde local y se re-sube (`_ligaSaveWithWarn`)
+  para curar el servidor — NUNCA al revés (un partido que el servidor
+  YA tiene jugado manda siempre).
+- Bump `CACHE_HTML` v25→v26 (`static/js/sw.js`) — regla obligatoria de
+  este archivo, sin él el fix no llega a una sesión ya abierta.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `saveResults`/`persistSharedLigaState` (o
+   cualquier guardado nuevo de Liga EA Sports) sea fire-and-forget sin
+   timeout ni aviso al usuario si falla del todo. Usar
+   `_ligaSaveWithWarn`, no `persistSharedLigaState` directo.
+2. **PROHIBIDO** que `hydrateLigaStateFromBackend` (o cualquier hydrate
+   nuevo de un estado compartido con su propio poll independiente,
+   fuera del motor `_tour*`) adopte la respuesta del servidor sin
+   comparar con lo que el dispositivo YA sabe. Un partido `played:true`
+   en local que el servidor no tiene es SIEMPRE una señal de "mi POST
+   se perdió", nunca "el servidor tiene razón, olvídalo".
+3. **PROHIBIDO** que esta comparación use `sharedLigaResultsCache`
+   directamente sin pasar por `loadResults()` primero — en la carga
+   inicial de la página esa variable está en `null`, así que comparar
+   contra ella sin sembrarla desde `localStorage` no encuentra nunca
+   nada que recuperar (justo el caso real del bug: "reabro la web").
+4. Toda competición NUEVA que tenga su PROPIO hydrate/poll independiente
+   del motor `_tour*` (en vez de vivir dentro de `tour_<id>_v1`) hereda
+   esta regla: unión con lo local antes de adoptar, re-subida si se
+   recuperó algo, aviso visible si el guardado agota reintentos.
+
 ## El recorte de acta de un TORNEO en formato LIGA (`format:'league'`) nunca se disparaba — `cfg.fixture` lazy sin reconstruir dejaba `_pmLeagueJornadaDone` SIEMPRE en `false` (obligatorio, 2026-08-22 #3)
 
 **Bug (foto usuario 2026-08-22, «Trofeo Joan Gamper»)**: el guardado del

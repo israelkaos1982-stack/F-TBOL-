@@ -52,8 +52,8 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v26';
-/* v25 → v26 (2026-08-22): el recorte de acta pasa de "esperar a que la
+var CACHE_HTML   = 'ftbol-html-v28';
+/* v27 → v28 (2026-08-22): el recorte de acta pasa de "esperar a que la
    jornada/ronda/eliminatoria ENTERA esté completa" a "recortar cada
    partido/leg IA-vs-IA en cuanto ÉL MISMO termine" (decisión explícita
    del usuario vía AskUserQuestion — el gate por-jornada dejaba actas de
@@ -64,6 +64,29 @@ var CACHE_HTML   = 'ftbol-html-v26';
    Recopa, Supercopa España/Europa, Copa del Rey y Champions/Europa/
    Conference (fase de liga y eliminatoria). Ver CLAUDE.md, "El recorte
    de acta pasa a ser POR PARTIDO...". */
+/* v26 → v27 (2026-08-22): `saveData` (Resto de Ligas / Liga EA Sports /
+   Hypermotion / Primera Federación) — el POST principal a
+   `/api/liga-ext/<slug>` (dentro de `go()`, llamado por "Pegar
+   plantilla completa" y cualquier guardado de plantilla) no tenía
+   NINGÚN timeout: una conexión colgada (sin error, sin respuesta)
+   dejaba `window._ligaExtSavePromise[slug]` sin resolver PARA SIEMPRE,
+   así que ni el aviso de éxito ni el banner rojo de error (ya
+   construido, `_lextShowSaveError`) llegaban a dispararse — el editor
+   se quedaba en "💾 Guardando en servidor…" en silencio y la
+   plantilla nunca llegaba al servidor. Fix: `AbortController` con
+   timeout escalado (10-30s) en `go()` y timeout fijo (15s) en
+   `goProt()` (POST a `_protected`). Ver CLAUDE.md, sección "el POST
+   principal SIN timeout dejaba 'Pegar plantilla completa' colgado". */
+/* v25 → v26 (2026-08-22): Liga EA Sports — un partido HUMANO (p.ej. Real
+   Madrid) que terminaba de jugarse pero cuyo POST a `/api/state` no
+   llegaba a confirmarse en el servidor (red floja, timeout) se
+   "perdía" al reabrir la web: `hydrateLigaStateFromBackend` adoptaba
+   `state.liga_results` del servidor SIN comprobar si el local tenía
+   partidos jugados que el servidor nunca recibió. Fix: unión con lo
+   local (recupera y re-sube los partidos `played:true` ausentes en la
+   respuesta del servidor, nunca al revés) + timeout/aviso visible en
+   `persistSharedLigaState`/`saveResults`. Ver CLAUDE.md, sección
+   "el partido se guarda pero al reabrir la web se ha perdido". */
 /* v24 → v25 (2026-08-22): fix del recorte de acta de torneos en formato
    LIGA (`_pmSweepTourCfg` no reconstruía `cfg.fixture`/`groupFixtures`
    lazy antes de evaluar jornada completa — ver CLAUDE.md, "El recorte de

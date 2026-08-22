@@ -51045,14 +51045,23 @@ https://api.sofascore.app/api/v1/team/44/image
           function goProt(){
             _pAttempt++;
             try {
+              /* Mismo timeout duro que `go()` de arriba — sin él una
+                 conexión colgada deja el snapshot `_protected` (la red
+                 monotónica que sobrevive a un `main` corrupto/wipeado)
+                 sin actualizar, indefinidamente, sin que el retry de 3
+                 intentos llegue nunca a correr. */
+              var _protCtl = (typeof AbortController === 'function') ? new AbortController() : null;
+              var _protTmr = _protCtl ? setTimeout(function(){ try { _protCtl.abort(); } catch(_){} }, 15000) : null;
               fetch('/api/liga-ext-protected/'+encodeURIComponent(slug), {
                 method:'POST',
                 headers:{'Content-Type':'application/json'},
                 credentials:'same-origin',
-                body:_protBody
+                body:_protBody,
+                signal: _protCtl ? _protCtl.signal : undefined
               }).then(function(r){
+                if (_protTmr) clearTimeout(_protTmr);
                 if (!r || !r.ok) { if (_pAttempt < 3) setTimeout(goProt, 500 * _pAttempt); }
-              }).catch(function(){ if (_pAttempt < 3) setTimeout(goProt, 500 * _pAttempt); });
+              }).catch(function(){ if (_protTmr) clearTimeout(_protTmr); if (_pAttempt < 3) setTimeout(goProt, 500 * _pAttempt); });
             } catch(_){}
           }
           goProt();
@@ -51073,14 +51082,39 @@ https://api.sofascore.app/api/v1/team/44/image
           if (payload == null) { resolve(false); return; }
           try {
             var _r;
+            /* Timeout duro + escalado por tamaño (obligatorio, 2026-08-22
+               — bug usuario: "pego plantilla entera... al volver otro día
+               o si borro datos de navegación" desaparece, en Liga EA
+               Sports/Hypermotion/Primera Federación/Resto de Ligas).
+               MISMA causa raíz que ya se arregló para
+               `persistSharedLigaState` (Liga EA Sports, resultados de
+               partido): este POST no tenía NINGÚN timeout — si la
+               conexión se quedaba colgada (sin error, sin respuesta;
+               típico en móvil con cobertura floja o un cold-start del
+               servidor), el fetch nunca resolvía ni rechazaba, así que
+               `fail()` JAMÁS se llamaba y los 5 reintentos con backoff de
+               abajo nunca llegaban a correr — "Pegar plantilla completa"
+               se quedaba pillado en el aire, sin avisar a nadie, hasta
+               que el usuario recargaba/borraba datos y descubría que el
+               servidor nunca había recibido la plantilla. Con
+               AbortController, una conexión colgada se aborta a los
+               10-30s (escalado por tamaño, igual que `_tourSave`) y
+               ENTRA en la cadena de reintentos — mismo patrón. */
+            var _bodyStr = JSON.stringify({data:payload});
+            var _pLen = 0;
+            try { _pLen = (typeof Blob === 'function') ? new Blob([_bodyStr]).size : _bodyStr.length; } catch(_){ _pLen = _bodyStr.length; }
+            var _saveTo = Math.max(10000, Math.min(30000, 10000 + Math.floor(_pLen / 20000) * 1000));
+            var _saveCtl = (typeof AbortController === 'function') ? new AbortController() : null;
+            var _saveTmr = _saveCtl ? setTimeout(function(){ try { _saveCtl.abort(); } catch(_){} }, _saveTo) : null;
             fetch('/api/liga-ext/'+encodeURIComponent(slug), {
               method:'POST',
               headers:{'Content-Type':'application/json'},
               credentials:'same-origin',
-              body:JSON.stringify({data:payload})
-            }).then(function(r){ _r=r; return (r && r.ok) ? r.json() : null; })
+              body:_bodyStr,
+              signal: _saveCtl ? _saveCtl.signal : undefined
+            }).then(function(r){ if (_saveTmr) clearTimeout(_saveTmr); _r=r; return (r && r.ok) ? r.json() : null; })
               .then(function(j){ if (_r && _r.ok) ok2(j); else fail(); })
-              .catch(function(){ fail(); });
+              .catch(function(){ if (_saveTmr) clearTimeout(_saveTmr); fail(); });
           } catch(_){ fail(); }
         }
         go();

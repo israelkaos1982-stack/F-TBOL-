@@ -52,7 +52,18 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v25';
+var CACHE_HTML   = 'ftbol-html-v26';
+/* v25 → v26 (2026-08-22): el recorte de acta pasa de "esperar a que la
+   jornada/ronda/eliminatoria ENTERA esté completa" a "recortar cada
+   partido/leg IA-vs-IA en cuanto ÉL MISMO termine" (decisión explícita
+   del usuario vía AskUserQuestion — el gate por-jornada dejaba actas de
+   partidos ya terminados visibles indefinidamente esperando a un humano
+   lento de la misma jornada, mientras el payload del torneo seguía
+   creciendo sin límite). Afecta a TODOS los `_pmSweepXxx` de
+   `misc_body_1.html`: Torneos/Selecciones/Mundialito, Intercontinental,
+   Recopa, Supercopa España/Europa, Copa del Rey y Champions/Europa/
+   Conference (fase de liga y eliminatoria). Ver CLAUDE.md, "El recorte
+   de acta pasa a ser POR PARTIDO...". */
 /* v24 → v25 (2026-08-22): fix del recorte de acta de torneos en formato
    LIGA (`_pmSweepTourCfg` no reconstruía `cfg.fixture`/`groupFixtures`
    lazy antes de evaluar jornada completa — ver CLAUDE.md, "El recorte de

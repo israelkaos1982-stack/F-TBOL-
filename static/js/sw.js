@@ -52,7 +52,19 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v23';
+var CACHE_HTML   = 'ftbol-html-v24';
+/* v23 → v24 (2026-08-22): bump de recuperación — los 4 commits de hoy
+   que arreglaron el recorte de acta + estadísticas de Champions/Europa/
+   Conference/Copa del Rey/Recopa/Supercopa (702b404, c3f3f62, b752fa0,
+   90fec24) tocaron `misc_body_1.html` sin bumpear este archivo, así que
+   esos fixes — y el de la clasificación de fase de liga que los
+   acompaña (buildUclGruposClas/buildUelGruposClas/buildUeclGruposClas
+   pintaban PTS/PJ a 0 fijo en vez de leer `_eurFaseComputeStandings`) —
+   se quedaron invisibles para cualquier sesión con la SWR ya cacheada.
+   Bug usuario: "Real Madrid 4-1 Juve y ese partido ni se ha subido a la
+   clasificación ni a las estadísticas" pese a que el código ya lo
+   arreglaba. Ver la regla obligatoria "El HTML principal (misc_body_1/2
+   inline) TAMBIÉN necesita bumpear CACHE_HTML..." en CLAUDE.md. */
 /* v22 → v23 (2026-08-22): la revalidación en segundo plano de SWR
    (`_revalidateHtmlAndNotify`) re-sellaba `__ftbol_html_cached_at__`
    con `Date.now()` en CADA pasada exitosa, aunque el contenido NO

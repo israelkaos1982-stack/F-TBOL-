@@ -1,5 +1,98 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## La "Clasificación" de UCL/UEL/UECL · Fase de Liga pintaba PTS/PJ/G/E/P/GF/GC/DG A CERO FIJO — la pantalla real nunca leía la clasificación que el motor swiss ya calculaba (obligatorio, 2026-08-22 #2)
+
+**Bug (5 fotos usuario 2026-08-22, «UCL · Fase de Grupos»)**: con
+Real Madrid 4-1 Juventus ya con «FIN» y acta completa, y toda una
+jornada de partidos IA-vs-IA también terminados, la pantalla
+**"UCL · Clasificación"** (`s-ucl-grupos` → 📊 Clasificación) seguía
+mostrando **TODOS los 40 equipos a 0 PTS/0 PJ** — incluidos Real
+Madrid y Juventus. La caja **"Champions · Estadísticas"** también
+mostraba «Sin datos todavía» pese al partido jugado.
+
+### Causa raíz — DOS pantallas de clasificación distintas, solo UNA se arregló
+
+El mismo día, un commit anterior (`702b404`) ya había añadido el
+cálculo REAL de la clasificación swiss (`_eurFaseComputeStandings`,
+que lee `ucl_phase_v1`/`uel_phase_v1`/`uecl_phase_v1` y sí cuenta
+correctamente los partidos jugados) — pero solo la pintaba en
+`_eurFaseRenderClas`, que escribe en el host `#ucl-p-clas` dentro de
+la pantalla **`s-ucl-previa`**. Esa pantalla es un placeholder
+MUERTO: su "Calendario" muestra 36 filas hardcodeadas
+`"Equipo N vs Por definir"` y su clasificación decía literalmente
+`"Clasificación — próximamente"` — **ningún botón de la app navega
+ahí**. La pantalla a la que el usuario SÍ navega
+(`s-ucl-grupos` → «📊 Clasificación» → `s-ucl-grupos-clas`, que llama
+a `buildUclGruposClas()`) seguía usando el código VIEJO: pintaba la
+lista de `computeUclClassified()` (el POOL de 40 equipos ya
+clasificados a la fase de liga desde sus ligas de origen — un dato
+que NUNCA cambia con los resultados) con las 8 columnas de stats
+**hardcodeadas al string `"0"`**, sin leer NUNCA `ucl_phase_v1`. Lo
+mismo, byte a byte, en `buildUelGruposClas`/`buildUeclGruposClas`.
+
+### El acompañante — `CACHE_HTML` sin bumpear en los 4 commits de hoy
+
+Además, los 4 commits de hoy que tocaron `misc_body_1.html`
+(`702b404`, `c3f3f62`, `b752fa0`, `90fec24` — recorte de acta +
+estadísticas de Champions/Europa/Conference/Copa del Rey/Recopa/
+Supercopa) **ninguno bumpeó `CACHE_HTML`** en `static/js/sw.js` (regla
+ya obligatoria, sección "El HTML principal (misc_body_1/2 inline)
+TAMBIÉN necesita bumpear `CACHE_HTML`..." más abajo). Con el Service
+Worker sirviendo HTML `stale-while-revalidate`, cualquier sesión ya
+abierta/reciente del usuario podía seguir ejecutando el JS de ANTES
+de esos 4 fixes — incluido el guardado de estadísticas de un partido
+humano de fase de liga (`_eurFaseSaveHumanResult`, que sí registra
+correctamente en `LIGA_PLAYER_MATCH_STORE`/`ef_player_stats_ucl_main_v1`
+desde `702b404`). Esto explica por qué "Champions · Estadísticas"
+seguía vacía aunque el código que la alimenta ya estuviera arreglado.
+
+### Fix
+
+- `buildUclGruposClas()`/`buildUelGruposClas()`/`buildUeclGruposClas()`
+  (`misc_body_1.html`): si la fase de liga YA se sorteó (existe
+  `<comp>_phase_v1`), usan `window._eurFaseComputeStandings(comp)`
+  (expuesto en `window` desde la IIFE swiss, junto a
+  `window._eurFaseRenderClas`) para PJ/G/E/P/GF/GC/DG/PTS reales,
+  ordenados por los mismos criterios de desempate (PTS→DG→GF→nombre)
+  que ya usa el resto del proyecto. Si NO se ha sorteado todavía, se
+  conserva el fallback antiguo (`computeUclClassified()`/etc. con
+  stats a 0 — ahí sí es cierto que "aún no ha jugado"). TA/TR/MVP/
+  Últ.5 quedan sin cambios (0/pendiente) — no hay fuente de esos datos
+  por equipo en la fase de liga todavía; queda para una entrega
+  separada si el usuario la pide.
+- `static/js/sw.js`: `CACHE_HTML` `v23`→`v24` para que los 4 fixes de
+  hoy + este mismo lleguen a cualquier sesión ya abierta.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** volver a pintar `buildUclGruposClas`/
+   `buildUelGruposClas`/`buildUeclGruposClas` (o cualquier pantalla
+   "Clasificación" NUEVA de una competición con fase de liga/grupos
+   propia) con columnas de stats hardcodeadas a `"0"`. Si existe un
+   cómputo real disponible (`_eurFaseComputeStandings` u otro), esa
+   es la fuente — el fallback a ceros es SOLO para el estado "aún no
+   sorteado".
+2. **PROHIBIDO** dar por arreglado un bug de clasificación/stats
+   comprobando solo la función que las calcula. Hay que verificar
+   TAMBIÉN que la pantalla a la que el usuario REALMENTE navega (no
+   una homónima/placeholder sin botón de acceso) sea la que consume
+   ese cálculo — auditar con `grep` todos los `id="clas-<comp>-..."`/
+   `s-<comp>-...` antes de cerrar el bug, igual que ya exige la regla
+   histórica sobre duplicados de markup del gm-modal.
+3. **PROHIBIDO** editar `misc_body_1.html`/`misc_body_2.html`/
+   `templates/index.html` sin bumpear `CACHE_HTML` en
+   `static/js/sw.js` en el MISMO commit — la regla ya obligatoria de
+   más abajo. Si se detecta que un commit reciente se saltó el bump,
+   el siguiente fix que toque esos archivos debe bumpearlo igual (es
+   un invalidador de caché completo, no un contador por commit).
+4. Si el usuario reporta un bug de una comp europea (UCL/UEL/UECL/
+   Recopa/USC/Inter) cuyo código de fondo YA parece corregido en el
+   repo (verificado contra `origin/main`), sospechar PRIMERO de
+   `CACHE_HTML` desactualizado — mismo patrón que ya documenta la
+   regla "Si un bug reportado ya parece corregido..." para el
+   `Service Worker`/`?v=` de assets estáticos, extendido aquí al HTML
+   principal inline.
+
 ## Plantilla VACÍA en el móvil pese a que el servidor tiene el roster real — el click handler nunca refrescaba ESE slug del servidor (obligatorio, 2026-08-17 #4)
 
 **Bug (fotos usuario 2026-08-17, tras el fix #3 de abajo ya fusionado a

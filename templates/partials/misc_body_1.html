@@ -39975,7 +39975,31 @@ window._hdrCleanCache = function(){
   function buildUclGruposClas(){
     var container = document.getElementById('clas-ucl-grupos-content');
     if(!container) return;
-    var classified = computeUclClassified();
+    /* Clasificación REAL (obligatorio, 2026-08-22 — bug usuario: «Real
+       Madrid 4-1 Juventus... ni se ha subido a la clasificación», toda
+       la tabla salía con PTS/PJ/etc a 0 sin importar cuántos partidos se
+       hubieran jugado). Antes esta función solo pintaba la lista de
+       equipos YA CLASIFICADOS a la fase de liga (`computeUclClassified`,
+       el POOL de 40 desde las ligas — nunca cambia con los resultados)
+       con las 8 columnas de stats hardcodeadas a "0" — el motor swiss
+       (`ucl_phase_v1`, IIFE de más abajo) SÍ calculaba la clasificación
+       real (`_eurFaseComputeStandings`), pero solo la pintaba en la
+       pantalla `s-ucl-previa` (`#ucl-p-clas`), un screen sin ningún
+       botón real que lleve ahí — la pantalla a la que SÍ navega el
+       usuario (`s-ucl-grupos` → «📊 Clasificación» → esta función) se
+       quedó sin tocar. Ahora: si la fase de liga YA se sorteó (hay
+       `ucl_phase_v1` en local), se usa la clasificación real
+       (PJ/G/E/P/GF/GC/DG/PTS ya calculados con los resultados jugados,
+       ordenada por esos mismos criterios); si NO se ha sorteado
+       todavía, se conserva el fallback antiguo — el pool de
+       `computeUclClassified()` con stats a 0 ("aún no ha jugado" es
+       cierto en ese caso). TA/TR/MVP/Últ.5 quedan igual que antes
+       (0/pendiente) — no hay una fuente de esos datos por equipo en la
+       fase de liga todavía. */
+    var standings = (typeof window._eurFaseComputeStandings === 'function')
+      ? window._eurFaseComputeStandings('ucl') : [];
+    var usingReal = standings.length > 0;
+    var classified = usingReal ? standings : computeUclClassified();
     var N = 40;
     var html = ''
       + '<div class="clas-scroll-outer">'
@@ -40006,19 +40030,29 @@ window._hdrCleanCache = function(){
       } else {
         nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
       }
+      var pts = usingReal && team ? team.pts : 0;
+      var pj  = usingReal && team ? team.pj  : 0;
+      var g   = usingReal && team ? team.g   : 0;
+      var e   = usingReal && team ? team.e   : 0;
+      var p   = usingReal && team ? team.p   : 0;
+      var gf  = usingReal && team ? team.gf  : 0;
+      var gc  = usingReal && team ? team.gc  : 0;
+      var dg  = usingReal && team ? team.dg  : 0;
+      var dgCls = dg > 0 ? 'pos' : (dg < 0 ? 'neg' : 'zer');
+      var dgFmt = dg > 0 ? ('+' + dg) : String(dg);
       html += '<div class="clas-row ' + zone + '">'
         + '<div class="clas-team-cell">'
         +   '<span class="clas-pos-n">' + i + '</span>'
         +   '<span class="clas-team-name">' + logoHtml + nameHtml + suffixHtml + '</span>'
         + '</div>'
-        + '<div class="clas-pts">0</div>'
-        + '<div class="clas-pj">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val gf">0</div>'
-        + '<div class="clas-val gc">0</div>'
-        + '<div class="clas-val dg zer">0</div>'
+        + '<div class="clas-pts">' + pts + '</div>'
+        + '<div class="clas-pj">' + pj + '</div>'
+        + '<div class="clas-val">' + g + '</div>'
+        + '<div class="clas-val">' + e + '</div>'
+        + '<div class="clas-val">' + p + '</div>'
+        + '<div class="clas-val gf">' + gf + '</div>'
+        + '<div class="clas-val gc">' + gc + '</div>'
+        + '<div class="clas-val dg ' + dgCls + '">' + dgFmt + '</div>'
         + '<div class="clas-val ta">0</div>'
         + '<div class="clas-val tr">0</div>'
         + '<div class="clas-mvp">0</div>'
@@ -41069,7 +41103,14 @@ window._hdrCleanCache = function(){
   function build(){
     var container = document.getElementById('clas-uel-grupos-content');
     if(!container) return;
-    var classified = (window.computeUelClassified && window.computeUelClassified()) || [];
+    /* Clasificación REAL (obligatorio, 2026-08-22 — mismo fix que
+       buildUclGruposClas, más arriba en este archivo: ver el comentario
+       extenso ahí). Antes esta tabla se pintaba SIEMPRE con PTS/PJ/etc a
+       0, ignorando `uel_phase_v1` por completo. */
+    var standings = (typeof window._eurFaseComputeStandings === 'function')
+      ? window._eurFaseComputeStandings('uel') : [];
+    var usingReal = standings.length > 0;
+    var classified = usingReal ? standings : ((window.computeUelClassified && window.computeUelClassified()) || []);
     var N = 40;
     var html = ''
       + '<div class="clas-scroll-outer">'
@@ -41099,19 +41140,29 @@ window._hdrCleanCache = function(){
       } else {
         nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
       }
+      var pts = usingReal && team ? team.pts : 0;
+      var pj  = usingReal && team ? team.pj  : 0;
+      var g   = usingReal && team ? team.g   : 0;
+      var e   = usingReal && team ? team.e   : 0;
+      var p   = usingReal && team ? team.p   : 0;
+      var gf  = usingReal && team ? team.gf  : 0;
+      var gc  = usingReal && team ? team.gc  : 0;
+      var dg  = usingReal && team ? team.dg  : 0;
+      var dgCls = dg > 0 ? 'pos' : (dg < 0 ? 'neg' : 'zer');
+      var dgFmt = dg > 0 ? ('+' + dg) : String(dg);
       html += '<div class="clas-row ' + zone + '">'
         + '<div class="clas-team-cell">'
         +   '<span class="clas-pos-n">' + i + '</span>'
         +   '<span class="clas-team-name">' + logoHtml + nameHtml + suffixHtml + '</span>'
         + '</div>'
-        + '<div class="clas-pts">0</div>'
-        + '<div class="clas-pj">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val gf">0</div>'
-        + '<div class="clas-val gc">0</div>'
-        + '<div class="clas-val dg zer">0</div>'
+        + '<div class="clas-pts">' + pts + '</div>'
+        + '<div class="clas-pj">' + pj + '</div>'
+        + '<div class="clas-val">' + g + '</div>'
+        + '<div class="clas-val">' + e + '</div>'
+        + '<div class="clas-val">' + p + '</div>'
+        + '<div class="clas-val gf">' + gf + '</div>'
+        + '<div class="clas-val gc">' + gc + '</div>'
+        + '<div class="clas-val dg ' + dgCls + '">' + dgFmt + '</div>'
         + '<div class="clas-val ta">0</div>'
         + '<div class="clas-val tr">0</div>'
         + '<div class="clas-mvp">0</div>'
@@ -41322,7 +41373,14 @@ window._hdrCleanCache = function(){
   function build(){
     var container = document.getElementById('clas-uecl-grupos-content');
     if(!container) return;
-    var classified = (window.computeUeclClassified && window.computeUeclClassified()) || [];
+    /* Clasificación REAL (obligatorio, 2026-08-22 — mismo fix que
+       buildUclGruposClas, más arriba en este archivo: ver el comentario
+       extenso ahí). Antes esta tabla se pintaba SIEMPRE con PTS/PJ/etc a
+       0, ignorando `uecl_phase_v1` por completo. */
+    var standings = (typeof window._eurFaseComputeStandings === 'function')
+      ? window._eurFaseComputeStandings('uecl') : [];
+    var usingReal = standings.length > 0;
+    var classified = usingReal ? standings : ((window.computeUeclClassified && window.computeUeclClassified()) || []);
     var N = 40;
     var html = ''
       + '<div class="clas-scroll-outer">'
@@ -41352,19 +41410,29 @@ window._hdrCleanCache = function(){
       } else {
         nameHtml = '<span class="clas-team-name-text" style="color:rgba(255,255,255,.35);">Por definir</span>';
       }
+      var pts = usingReal && team ? team.pts : 0;
+      var pj  = usingReal && team ? team.pj  : 0;
+      var g   = usingReal && team ? team.g   : 0;
+      var e   = usingReal && team ? team.e   : 0;
+      var p   = usingReal && team ? team.p   : 0;
+      var gf  = usingReal && team ? team.gf  : 0;
+      var gc  = usingReal && team ? team.gc  : 0;
+      var dg  = usingReal && team ? team.dg  : 0;
+      var dgCls = dg > 0 ? 'pos' : (dg < 0 ? 'neg' : 'zer');
+      var dgFmt = dg > 0 ? ('+' + dg) : String(dg);
       html += '<div class="clas-row ' + zone + '">'
         + '<div class="clas-team-cell">'
         +   '<span class="clas-pos-n">' + i + '</span>'
         +   '<span class="clas-team-name">' + logoHtml + nameHtml + suffixHtml + '</span>'
         + '</div>'
-        + '<div class="clas-pts">0</div>'
-        + '<div class="clas-pj">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val">0</div>'
-        + '<div class="clas-val gf">0</div>'
-        + '<div class="clas-val gc">0</div>'
-        + '<div class="clas-val dg zer">0</div>'
+        + '<div class="clas-pts">' + pts + '</div>'
+        + '<div class="clas-pj">' + pj + '</div>'
+        + '<div class="clas-val">' + g + '</div>'
+        + '<div class="clas-val">' + e + '</div>'
+        + '<div class="clas-val">' + p + '</div>'
+        + '<div class="clas-val gf">' + gf + '</div>'
+        + '<div class="clas-val gc">' + gc + '</div>'
+        + '<div class="clas-val dg ' + dgCls + '">' + dgFmt + '</div>'
         + '<div class="clas-val ta">0</div>'
         + '<div class="clas-val tr">0</div>'
         + '<div class="clas-mvp">0</div>'
@@ -43333,6 +43401,14 @@ window._hdrCleanCache = function(){
     host.innerHTML = html;
   }
   window._eurFaseRenderClas = _eurFaseRenderClas;
+  /* Expuesto para que `buildUclGruposClas`/`buildUelGruposClas`/
+     `buildUeclGruposClas` (otro IIFE, más arriba en este archivo — la
+     pantalla REAL "Clasificación" a la que navega el usuario desde
+     s-ucl-grupos/s-uel-grupos/s-uecl-grupos) puedan leer la clasificación
+     real de la fase de liga en vez de pintar ceros fijos (obligatorio,
+     2026-08-22 — bug usuario: «Real Madrid 4-1 Juventus... ni se ha
+     subido a la clasificación»). Ver el fix en esa función. */
+  window._eurFaseComputeStandings = _eurFaseComputeStandings;
   /* Re-render automático al saltar a las pantallas de previa. */
   (function(){
     var prevGo = window.go;

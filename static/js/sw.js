@@ -52,7 +52,33 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v27';
+var CACHE_HTML   = 'ftbol-html-v28';
+/* v27 → v28 (2026-08-22): el banner rojo "⚠️ No se pudo confirmar el
+   guardado de '<id>' en el servidor..." (`window._gmCriticalNotice`,
+   disparado desde `window._tourSave`) aparecía "siempre", en pantallas
+   SIN relación con el torneo que fallaba (ej. una previa de Liga EA
+   Sports mostrando el aviso de "sfn1") — bug reportado por el usuario
+   como "ERROR CRITICO, sale siempre". Causa: ~20 llamadas a
+   `window._tourSave(id, cfg)` disparadas por procesos AUTOMÁTICOS/DE
+   FONDO (el barrido periódico `_pmSweepAllTours` cada 3 min, la
+   construcción lazy de `groupFixtures`/`koBracket`/fixtures ROAD al
+   resolver la card del hub, el bake de alias eFootball diferido, el
+   re-empuje curativo de `_tourLoad` tras detectar un guardado stale, el
+   pago de premios diferido, y el bucle de «Reiniciar Temporada» que
+   resetea hasta ~25 slots de torneo de golpe) NO pasaban `{silent:true}`
+   — a diferencia de la única ruta ya correcta
+   (`_tourReconcileToServer`). Cualquier fallo de guardado en UNO de
+   estos procesos de fondo disparaba el mismo banner intrusivo pensado
+   solo para acciones interactivas del usuario (Sim/Draw/Reset,
+   confirmar sorteo, guardar un resultado jugado…). Fix: `{silent:true}`
+   añadido a las ~22 llamadas confirmadas como automáticas/de fondo; las
+   ~18 llamadas de clicks/confirms/prompts directos del usuario se
+   dejan SIN tocar (deben seguir avisando si fallan). El reintento/cola
+   pendiente (`_tourPendingSyncAdd`) sigue funcionando igual en ambos
+   casos — este fix solo silencia el banner INTRUSIVO para saves que el
+   usuario no disparó directamente. Ver CLAUDE.md, sección "ERROR
+   CRÍTICO... sale siempre — múltiples `_tourSave` de fondo sin
+   silent:true". */
 /* v26 → v27 (2026-08-22): `saveData` (Resto de Ligas / Liga EA Sports /
    Hypermotion / Primera Federación) — el POST principal a
    `/api/liga-ext/<slug>` (dentro de `go()`, llamado por "Pegar

@@ -1,5 +1,126 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## `window._tourSave` mostraba el banner "⚠️ ERROR CRÍTICO — no se pudo confirmar el guardado" en pantallas SIN relación, para procesos AUTOMÁTICOS/DE FONDO que el usuario nunca disparó (obligatorio, 2026-08-22 #6)
+
+**Bug (usuario 2026-08-22, foto del banner rojo referenciando "sfn1" sobre
+la pantalla de PREVIA de Liga EA Sports / Real Madrid vs Real Betis —
+"ERROR CRITICO, sale siempre / quiero que lo arregles de una vez")**:
+el banner `window._gmCriticalNotice` con el texto "⚠️ No se pudo
+confirmar el guardado de '\<id\>' en el servidor (red lenta o payload
+grande)... [AbortError...]" (disparado desde `window._tourSave`, sección
+"obligatorio, 2026-07-04" del bloque de `_tourSave`) aparecía de forma
+**recurrente e intrusiva**, en pantallas que no tenían NADA que ver con
+el torneo mencionado — el usuario estaba viendo la previa de un partido
+de **Liga EA Sports** y el banner hablaba de **"sfn1"** (un slot de
+Selecciones · Rondas Finales), demostrando que el fallo no era de la
+pantalla que el usuario tenía abierta, sino de un proceso corriendo por
+su cuenta en segundo plano.
+
+### Causa raíz
+
+`window._tourSave(id, cfg, saveOpts)` solo suprime el banner
+`window._gmCriticalNotice` cuando el caller pasa `saveOpts.silent ===
+true`. De las **40 llamadas** a `window._tourSave(...)` que existen en
+`misc_body_1.html`, solo **1** (`_tourReconcileToServer`, el
+reconciliador de fondo que ya se diseñó correctamente) pasaba
+`{silent:true}` — las **39 restantes** dejaban el 3er argumento fuera, así
+que CUALQUIER fallo de guardado en ellas mostraba el banner intrusivo,
+sin distinguir si el guardado fue disparado por un click explícito del
+usuario o por un proceso automático corriendo sin que él hiciera nada.
+
+Auditando las 39, se confirmó que **~22 son 100% automáticas/de fondo**
+— nunca las dispara un click, un `confirm()` ni un `prompt()`:
+
+1. **`_pmSweepAllTours`** — el barrido periódico (cada 3 min + 9 s tras
+   el arranque) que recorta actas de partidos IA-vs-IA completados. Es
+   el candidato más fuerte: corre SOLO, sin que el usuario abra ninguna
+   pantalla, y puede tocar CUALQUIER torneo (incluido "sfn1") en
+   cualquier momento de la sesión.
+2. **`_psAutoChainBuildMundial`/`_psEnsureMundialStateRebuilt`** —
+   auto-construcción de `groupFixtures`/`koBracket` al resolver la card
+   "Próximo partido" del hub (Mundial-48/Selecciones), documentado
+   explícitamente como "se llama al entrar a `_selPair`... sin que el
+   usuario pulse nada" y "se puede llamar en cada render sin coste".
+3. **`_tourEnsureGroupFixtures`/`_tourEnsureKoBracket`/
+   `_tourEnsureRoadFixtures`** (dentro de `_selPair`, el resolver de la
+   card del hub para Mundialito/Selecciones ROAD) — construcción LAZY de
+   fixtures/bracket disparada por el RENDER de la card, no por un click.
+4. **`_tourBackfillEfootballAlias`/`_efAliasBakeIntoTours`** — bake del
+   alias eFootball en `cfg.teams[]`, diferido con `setTimeout(...,0)` al
+   abrir la previa o al recibir la respuesta de una búsqueda en servidor.
+5. **`_tourLoad`** (2 puntos): el re-empuje curativo cuando detecta que
+   el servidor sigue "por detrás" del guardado local (`_tourRepushThrottle`,
+   con su propio cooldown de 20 s) y el rechazo+re-subida anti-clobber de
+   un re-sorteo stale — ambos corren al HIDRATAR (background refresh),
+   no al guardar algo el usuario.
+6. **`_tourDehumanizeRetired`/`_fixupUnhumanizeRubenTournamentsV1`** —
+   fixups de datos que corren en el chokepoint de lectura
+   (`_tourLoadCachedSync`) o una vez al arrancar.
+7. **`_tourBackfillActasFromResults`** — llamado en cada apertura de la
+   pantalla de Estadísticas (`_tourStatsPaint`), sin botón manual desde
+   2026-06-29 (regla ya existente "La caja `s-tour-stats` MERGEA SOLA").
+8. **La persistencia del bracket inicial** en el render de la pantalla
+   KO (`_needSaveBracket`) — "sin esto, recargar la página antes de
+   simular nada deja localStorage sin `cfg.bracket`".
+9. **`_tourMaybeCreditPrizes`** — pago de premios diferido con
+   `setTimeout(...,200)` tras guardar un resultado.
+10. **El bucle de "📅 Reiniciar Temporada"** (`_persistTourReset`) — una
+    ÚNICA acción del admin puede iterar hasta **~25 slots de torneo**
+    (`sct,pss,jg,asia,mundial,tx1..tx8,sfn1..sfn10,spv1..spv10`) en el
+    MISMO bucle; sin `silent`, un solo slot lento/con payload grande
+    (coincide con "sfn1", uno de los slots de este bucle) podía disparar
+    el banner varias veces por un único click del admin.
+
+### Fix
+
+Se añadió `{silent:true}` a las ~22 llamadas confirmadas como
+automáticas/de fondo (ver lista arriba). Las ~18 llamadas restantes —
+todas disparadas directamente desde un `addEventListener('click', ...)`,
+un `confirm()`/`prompt()`, o el auto-guardado con debounce de 600 ms
+ligado a que el usuario esté escribiendo en el editor de torneo
+(`_tourEdScheduleSave`) — se dejaron **sin tocar**: si el usuario pulsa
+"✅ CONFIRMAR Y SORTEAR", "🎮 Sim", "🔄 Recalcular estadísticas", el
+picker de un equipo, o cierra el editor tras escribir un nombre, y ESE
+guardado concreto falla, el aviso SIGUE apareciendo — es exactamente la
+acción que el usuario acaba de realizar, así que merece feedback
+inmediato.
+
+El mecanismo de reintento/cola pendiente (`_tourPendingSyncAdd`, que
+sigue subiendo el cambio en segundo plano hasta que la red lo permita)
+**no cambia en absoluto** con `silent:true` — solo se suprime el banner
+VISIBLE. Un guardado de fondo que falla sigue reintentándose igual que
+antes; simplemente ya no interrumpe al usuario en una pantalla sin
+relación con lo que está fallando.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una llamada NUEVA a `window._tourSave(id, cfg)`
+   disparada por un proceso automático (timer, render, hidratación,
+   fixup de arranque, bake/backfill diferido, o cualquier bucle que
+   itere varios torneos de golpe) omita `{silent:true}`. El patrón
+   correcto es SIEMPRE `window._tourSave(id, cfg, {silent:true})` para
+   estos casos — el banner `_gmCriticalNotice` es EXCLUSIVO de acciones
+   que el usuario acaba de disparar él mismo.
+2. **PROHIBIDO** añadir `{silent:true}` a un guardado disparado
+   DIRECTAMENTE por un click/confirm/prompt del usuario (Sim, Draw,
+   Reset, confirmar sorteo, guardar resultado jugado, editor de
+   torneo). Esos SÍ deben avisar si fallan — es la acción que el
+   usuario acaba de pedir.
+3. **PROHIBIDO** que un bucle NUEVO que reinicie/toque VARIOS slots de
+   torneo de golpe (como "Reiniciar Temporada") dispare el banner una
+   vez POR SLOT. Un único click del admin no puede convertirse en
+   hasta 25 avisos intrusivos — el guardado de cada slot dentro de ese
+   bucle es `{silent:true}`, aunque el click que lo originó sea muy
+   explícito.
+4. Antes de dar por cerrado un bug de "el banner de guardado aparece en
+   una pantalla sin relación / aparece siempre", auditar con `grep` TODAS
+   las llamadas a `window._tourSave(` (o el equivalente de cualquier
+   guardado con aviso crítico similar que se añada en el futuro, p.ej.
+   `saveData`/`persistSharedLigaState`) y clasificar cada una como
+   "click directo del usuario" (avisa) o "proceso automático/de fondo"
+   (`{silent:true}`) — no asumir que arreglar UN call site basta, como
+   ya demostró este bug con 21 call sites adicionales sin marcar.
+
 ## `saveData` (Resto de Ligas / Liga EA Sports / Hypermotion / Primera Federación) — el POST principal SIN timeout dejaba "Pegar plantilla completa" colgado para siempre, en silencio (obligatorio, 2026-08-22 #5)
 
 **Bug (usuario 2026-08-22, "pego plantilla entera... al volver otro día

@@ -7872,16 +7872,12 @@ window._hdrCleanCache = function(){
         persistFn(sim.mk, home, away, scA, scB, events, evData.mvp, evData.mvpTeam, copaET);
       }
     } catch(_){ return false; }
-    /* Stats globales para eurko (eurfase ya las registra en su persistor;
-       Recopa/SC/USC las reconstruye `rebuildPlayerStatsStore` desde su
-       estado, igual que el camino IA de iaSimLive). */
-    try {
-      if (sim.persist === 'eurko' && typeof window.registrarLigaPlayerStats === 'function' && events.length){
-        var _comp = (String(sim.mk).split('_')[1]) || 'ucl';
-        var _stEv = events.filter(function(e){ return e && !e._varAnulado; });
-        window.registrarLigaPlayerStats(sim.mk, home, away, _stEv, evData.mvp, evData.mvpTeam, _comp);
-      }
-    } catch(_){}
+    /* Stats globales: eurfase/eurko YA las registran dentro de su propio
+       persistor (`_eurFasePersistAfterIa`/`_eurKoPersistAfterIa`, ambos
+       arreglados 2026-08-22 para llamar SIEMPRE a
+       `registrarLigaPlayerStats`) — llamarlo también aquí duplicaría el
+       conteo. Recopa/SC/USC las reconstruye `rebuildPlayerStatsStore`
+       desde su propio estado, igual que el camino IA de iaSimLive. */
     try { window._bayernHudCreditMoney(-PS_PAY_SIM_COST); } catch(_){}
     return true;
   }
@@ -23045,7 +23041,7 @@ window._hdrCleanCache = function(){
         var actaEl = document.getElementById('ia-acta-' + mk);
         if(actaEl) actaEl.style.display = 'block';
         if(typeof window.iaSimLive === 'function'){
-          try { window.iaSimLive(mk, m.home, m.away, 0); return; }
+          try { window.iaSimLive(mk, m.home, m.away, 0, null, true); return; }
           catch(e){ try { console.warn('[sc] iaSimLive falló', e); } catch(_){} }
         }
         /* Fallback síncrono si iaSimLive no estuviera. */
@@ -23789,7 +23785,7 @@ window._hdrCleanCache = function(){
         var actaEl = document.getElementById('ia-acta-' + mk);
         if(actaEl) actaEl.style.display = 'block';
         if(typeof window.iaSimLive === 'function'){
-          try { window.iaSimLive(mk, m.home, m.away, 0); return; }
+          try { window.iaSimLive(mk, m.home, m.away, 0, null, true); return; }
           catch(e){ try { console.warn('[usc] iaSimLive falló', e); } catch(_){} }
         }
         if(typeof window._uscSyncFallback === 'function'){ window._uscSyncFallback(key, idx); }
@@ -42098,7 +42094,7 @@ window._hdrCleanCache = function(){
       var hEsc = String(m.home).replace(/'/g,"\\'");
       var aEsc = String(m.away).replace(/'/g,"\\'");
       btnHtml = '<button id="ia-sim-btn-' + mk + '" class="eurfase-btn-sim" '
-              + 'onclick="window.iaSimLive(\'' + mk + '\',\'' + hEsc + '\',\'' + aEsc + '\',0)">▶ SIMULAR</button>';
+              + 'onclick="window.iaSimLive(\'' + mk + '\',\'' + hEsc + '\',\'' + aEsc + '\',0,null,true)">▶ SIMULAR</button>';
     } else {
       btnHtml = '<button class="eurfase-btn-previa" '
               + 'onclick="window._eurFaseAbrirPrevia(\'' + comp + '\',' + m.jornada + ',' + m._origIdx + ')">📋 PREVIA</button>';
@@ -42617,6 +42613,29 @@ window._hdrCleanCache = function(){
     pair.mvp = mvp || '';
     pair.mvpTeam = mvpTeam || '';
     saveState(comp, state);
+    /* Estadísticas globales (obligatorio, 2026-08-22): un partido de fase
+       de liga con HUMANO nunca llegaba a la caja "Champions/Europa/
+       Conference · Estadísticas" — solo el persistor IA-vs-IA
+       (`_eurFasePersistAfterIa`, arriba) llamaba a
+       `registrarLigaPlayerStats`. Bug usuario: "Real Madrid 4-1
+       Juventus... en las estadísticas ese partido parece que no
+       existe" — Real Madrid es uno de los 6 clubes humanos canónicos,
+       así que CUALQUIER partido suyo de fase de liga pasaba SIEMPRE por
+       esta función (nunca por la IA), y sus goles/tarjetas/MVP jamás se
+       registraban. Mismo bloque, mismo `mk` (comp+jor+idx), que el
+       persistor IA. */
+    try {
+      var mk = 'eurfase_' + comp + '_' + jor + '_' + idx;
+      var hName = home || pair.home, aName = away || pair.away;
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          pair.events && pair.events.length) {
+        var statsEv = pair.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mk, hName, aName, statsEv, mvp || '', mvpTeam || '', comp);
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     setTimeout(function(){ try { renderJornada(comp, jor); } catch(_){} }, 200);
   };
 
@@ -42641,17 +42660,42 @@ window._hdrCleanCache = function(){
        25-36 → rojo (eliminados)
      El render se dispara automáticamente al entrar en s-{comp}-previa
      y al guardar resultados (tras IA o tras humano). ──────────── */
+  /* Resolutor de fila por nombre TOLERANTE (obligatorio, 2026-08-22 —
+     bug usuario: «Real Madrid 4-1 Juventus» con acta completa visible en
+     la card del partido, pero AMBOS equipos a 0 PJ/0 PTS en la
+     clasificación). `state.teams[]` y `state.pairs[].home/away` se
+     escriben JUNTOS en el sorteo, pero pueden divergir después (un
+     equipo renombrado/re-alias en el editor sin re-sortear la fase,
+     mismo patrón ya documentado en todo el proyecto — Bayern↔Liverpool,
+     etc.). Un lookup EXACTO (`byName[m.home]`) descarta el partido en
+     silencio si hay la más mínima diferencia de grafía. Se prueba
+     primero exacto y, si falla, por nombre CANÓNICO (`_canonTeamName`,
+     el mismo normalizador — acentos/mayúsculas/afijos FC-CF-CD… — que
+     usa el resto del proyecto para este tipo de bug). */
+  function _eurFaseRowByName(byName, byCanon, name){
+    if (byName[name]) return byName[name];
+    try {
+      var ck = (typeof window._canonTeamName === 'function') ? window._canonTeamName(name) : '';
+      if (ck && byCanon[ck]) return byCanon[ck];
+    } catch(_){}
+    return null;
+  }
   function _eurFaseComputeStandings(comp){
     var state = loadState(comp); if(!state) return [];
     var teams = (state.teams || []).slice();
-    var byName = {};
+    var byName = {}, byCanon = {};
     teams.forEach(function(t){
-      byName[t.name] = { name: t.name, logo: t.logo || '', league: t.league || '',
+      var row = { name: t.name, logo: t.logo || '', league: t.league || '',
         pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 };
+      byName[t.name] = row;
+      try {
+        var ck = (typeof window._canonTeamName === 'function') ? window._canonTeamName(t.name) : '';
+        if (ck && !byCanon[ck]) byCanon[ck] = row;
+      } catch(_){}
     });
     (state.pairs || []).forEach(function(m){
       if(!m || !m.played) return;
-      var H = byName[m.home], V = byName[m.away];
+      var H = _eurFaseRowByName(byName, byCanon, m.home), V = _eurFaseRowByName(byName, byCanon, m.away);
       if(!H || !V) return;
       var gh = Number(m.gh)||0, ga = Number(m.ga)||0;
       H.pj++; V.pj++;
@@ -43082,6 +43126,28 @@ window._hdrCleanCache = function(){
     m.mvp = mvp||''; m.mvpTeam = mvpTeam||'';
     if(leg==='d' || leg==='f'){ m.etGh = etGh|0; m.etGa = etGa|0; m.penWinner = penWinner || null; }
     _koAdvance(comp, st); _koSave(comp, st);
+    /* Estadísticas globales (obligatorio, 2026-08-22): la fase KO
+       (Octavos/Cuartos/Semis/Final) de Champions/Europa/Conference NUNCA
+       llamaba a `registrarLigaPlayerStats` — ni aquí (humano) ni en
+       `_eurKoPersistAfterIa` (IA) más abajo. Solo el camino de pago
+       `_psSimChargedCup` lo hacía como parche puntual para 'eurko' (su
+       propio comentario ya lo admitía: "Stats globales para eurko" —
+       nunca se llevó al persistor real). Bug usuario: Real Madrid (uno
+       de los 6 clubes humanos canónicos) jugando unos octavos/cuartos/
+       semis de Champions jamás sumaba sus goles/tarjetas/MVP a la caja
+       Estadísticas. Mismo bloque que `_eurFaseSaveHumanResult`. */
+    try {
+      var mkH = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
+      var hNameH = home || m.home, aNameH = away || m.away;
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          m.events && m.events.length) {
+        var statsEvH = m.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mkH, hNameH, aNameH, statsEvH, mvp || '', mvpTeam || '', comp);
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     setTimeout(function(){ try { _koRenderAll(comp); } catch(_){} }, 150);
   };
   window._eurKoPersistAfterIa = function(mk, home, away, scA, scB, events, mvp, mvpTeam){
@@ -43103,6 +43169,18 @@ window._hdrCleanCache = function(){
       else m.penWinner = null;
     }
     _koAdvance(comp, st); _koSave(comp, st);
+    /* Estadísticas globales — mismo motivo que en `_eurKoSaveHumanResult`
+       de arriba, aplicado al camino IA-vs-IA (botón ▶ SIMULAR). */
+    try {
+      if (typeof window.registrarLigaPlayerStats === 'function' &&
+          m.events && m.events.length) {
+        var statsEvI = m.events.filter(function(e){ return !e._varAnulado; });
+        window.registrarLigaPlayerStats(mk, home || m.home, away || m.away, statsEvI, mvp || '', mvpTeam || '', comp);
+        if (typeof window.rebuildLigaPlayerStatsFixed === 'function') {
+          setTimeout(window.rebuildLigaPlayerStatsFixed, 0);
+        }
+      }
+    } catch(_){}
     setTimeout(function(){ try { _koRenderAll(comp); } catch(_){} }, 120);
   };
 
@@ -43117,7 +43195,7 @@ window._hdrCleanCache = function(){
     if(hH || aH){ _eurKoAbrirPrevia(comp, roundKey, idx, leg, m.home, m.away); }
     else {
       var mk = 'eurko_' + comp + '_' + roundKey + '_' + idx + '_' + leg;
-      if(typeof window.iaSimLive === 'function') window.iaSimLive(mk, m.home, m.away, 0);
+      if(typeof window.iaSimLive === 'function') window.iaSimLive(mk, m.home, m.away, 0, null, true);
     }
     return true;
   };
@@ -50825,6 +50903,12 @@ https://api.sofascore.app/api/v1/team/44/image
      CADA `loadData` de una liga sin nada que recuperar. Se limpia
      solo al recargar la página (no persiste). */
   var _lextTeamFixGivenUp = {};
+  /* Espejo de `_lextTeamFixGivenUp` para el gap POR EQUIPO de arriba
+     (`_lextAnyTeamMissingRoster`): si `_protected`/snapshots tampoco
+     tienen el roster que falta (nunca se rellenó, o se perdió también
+     ahí), no tiene sentido releer y re-parsear esas copias en CADA
+     `loadData` de esa liga — se intenta una vez por slug y sesión. */
+  var _lextRosterGapGivenUp = {};
 
   /* ── REPARACIÓN vía SERVIDOR (obligatorio, 2026-08-15 #2) ──────────
      La reparación de arriba (`_lextRestoreShrunkTeamRosters`) SOLO mira
@@ -50912,11 +50996,23 @@ https://api.sofascore.app/api/v1/team/44/image
        escudos, no tocamos nada (la reconciliación más fina la hace
        fetchData con el servidor). */
     var needResults = !(Array.isArray(data.results) && data.results.length);
-    var needRoster = !_lextHasRosterOrShield(data);
+    /* `_lextHasRosterOrShield` es documento-ENTERO (¿hay roster en
+       ALGUNA parte?); `_lextAnyTeamMissingRoster` es por-equipo (¿algún
+       equipo CONCRETO se quedó sin roster, aunque el resto del documento
+       esté sano?). Hace falta el OR de los dos — si solo miráramos el
+       primero, un documento de 20 equipos con 19 sanos y 1 vacío nunca
+       dispararía el backfill para ese único equipo (2026-08-22, "guardo
+       la plantilla y vuelve a salir Jugador A/B/C"). El gap por-equipo
+       se throttlea igual que `needTeamFix` (`_lextRosterGapGivenUp`)
+       para no releer `_protected`/snapshots en CADA render si ya se
+       comprobó esta sesión que ahí tampoco hay nada que recuperar. */
+    var needRosterGap = !_lextRosterGapGivenUp[k] && _lextAnyTeamMissingRoster(data);
+    var needRoster = !_lextHasRosterOrShield(data) || needRosterGap;
     var needTeamFix = !_lextTeamFixGivenUp[k] && _lextAnyTeamSuspiciouslyShrunk(data);
     if (!needResults && !needRoster && !needTeamFix) return false;
     var restored = false;
     var teamFixChanged = false;
+    var rosterGapChanged = false;
     try {
       var srcs = [];
       try {
@@ -50936,12 +51032,24 @@ https://api.sofascore.app/api/v1/team/44/image
       } catch(_){}
       for (var i = 0; i < srcs.length; i++) {
         try { if (_lextBackfillResults(data, srcs[i])) restored = true; } catch(_){}
-        try { if (needRoster && _lextBackfillRoster(data, srcs[i])) restored = true; } catch(_){}
+        try { if (needRoster && _lextBackfillRoster(data, srcs[i])) { restored = true; rosterGapChanged = true; } } catch(_){}
         try { if (needRoster && _lextBackfillShields(data, srcs[i])) restored = true; } catch(_){}
         try { if (needRoster && _lextBackfillAlias(data, srcs[i])) restored = true; } catch(_){}
         try { if (needTeamFix && _lextRestoreShrunkTeamRosters(data, srcs[i])) { restored = true; teamFixChanged = true; } } catch(_){}
       }
       if (needTeamFix && !teamFixChanged) _lextTeamFixGivenUp[k] = true;
+      /* Si el gap por-equipo seguía activo (algún equipo sin roster) y
+         NINGUNA fuente local aportó nada para él, no queda nada más que
+         encontrar en local — no volver a intentarlo esta sesión. Si
+         `_lextAnyTeamMissingRoster` sigue siendo true tras el intento
+         (el equipo sigue vacío) pero `_lextBackfillRoster` no cambió
+         nada, es que ni `_protected` ni los snapshots tienen ESE equipo
+         — dar por perdido el intento LOCAL (el editor puede seguir
+         cayendo a `_lextEnsureDefaultRoster` como último recurso, o el
+         admin puede pegar la plantilla a mano). */
+      if (needRosterGap && !rosterGapChanged && _lextAnyTeamMissingRoster(data)) {
+        _lextRosterGapGivenUp[k] = true;
+      }
       if (restored) {
         try { console.warn('[ligaExt] '+k+': clasificación del main vacía — restaurada desde copia durable local ('+((data.results&&data.results.length)||0)+' resultados).'); } catch(_){}
       }
@@ -58517,6 +58625,32 @@ https://api.sofascore.app/api/v1/team/44/image
     return false;
   }
   window._lextHasRosterOrShield = _lextHasRosterOrShield;
+  /* ¿Hay AL MENOS UN equipo del documento sin plantilla? (2026-08-22)
+     Distinto de `_lextHasRosterOrShield` (documento-ENTERO): en una liga
+     grande (Liga EA Sports, 20 equipos) basta con que UN SOLO equipo se
+     quede con `players:[]` (guardado a medias, race de sync, o la propia
+     `renderSquadList` cayendo a su seed genérico) para que el resto del
+     documento SIGA teniendo roster de sobra — `_lextHasRosterOrShield`
+     da `true` (hay OTROS equipos con plantilla) y el backfill desde
+     `_protected`/snapshots de `_lextRecoverResultsFromBackups` nunca
+     llega a intentarse PARA ESE equipo, aunque su copia protegida SÍ
+     tenga la plantilla real. Bug: "guardo la plantilla y vuelve a salir
+     Jugador A/B/C" — el admin edita y guarda bien, pero en cuanto algo
+     (una hidratación de fondo, el propio seed de `renderSquadList`) deja
+     a ESE equipo con `players` vacío, nadie vuelve a intentar recuperarlo
+     desde la copia local durable — el editor cae directo al roster
+     genérico de 30 "Jugador N" y lo PERSISTE. */
+  function _lextAnyTeamMissingRoster(d){
+    try {
+      if (!d || !Array.isArray(d.teams)) return false;
+      for (var i = 0; i < d.teams.length; i++) {
+        var t = d.teams[i];
+        if (t && (!Array.isArray(t.players) || !t.players.length)) return true;
+      }
+    } catch(_){}
+    return false;
+  }
+  window._lextAnyTeamMissingRoster = _lextAnyTeamMissingRoster;
   function _lextIdbTopupIfEmpty(slug){
     try {
       if (!window._idbKV || typeof window._idbKV.get !== 'function') return;

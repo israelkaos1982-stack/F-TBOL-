@@ -69872,6 +69872,51 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   try { window._bayernHudOnHydrate(_bayernHudMigrateTarget); } catch(_){}
 
+  /* ── FIXUP ONE-SHOT (obligatorio, 2026-08-22): borra PARA SIEMPRE el
+     🪙 presupuesto y el 💼 valoración YA ACUMULADOS en las 6 cajas
+     humanas (petición explícita del usuario en chat, "limpiar bien la
+     web" → "Borrar también lo acumulado", tras confirmarlo de forma
+     inequívoca vía AskUserQuestion). Usa `_bayernHudMerge` — fusión POR
+     CAMPO, nunca reemplazo total — para poner `money`/`rating`/
+     `moneyTarget`/`ratingTarget` a 0 en CADA uno de los 6 hubs, SIN
+     tocar `pi` (💊 puntos de fisio, que el usuario NO pidió borrar) ni
+     ningún otro campo del override. El merge va AUTORITATIVO
+     (force+authoritative=true — el MISMO mecanismo que ya usan "✅
+     Guardar" / "♻ Restablecer" / "📅 Reiniciar Temporada"): el 0 GANA
+     la fusión del servidor (sellado con el reloj del propio servidor,
+     con bump de `rev`) y se propaga de verdad a los demás dispositivos,
+     no se queda solo en éste — mismo patrón ya probado en
+     `_retroEarningsApply` (loop de `setActiveHub` + merge autoritativo
+     + restaurar el hub original al terminar).
+
+     Corre UNA SOLA VEZ por dispositivo (flag persistido
+     `ftbol_fixup_wipe_hud_money_rating_v1`) — NUNCA se repite, o el
+     🪙/💼 no podría volver a acumularse nunca más tras este momento
+     (rompería el juego para siempre, no solo limpiaría lo viejo). */
+  function _fixupWipeHudMoneyRatingForeverV1(){
+    try {
+      if (localStorage.getItem('ftbol_fixup_wipe_hud_money_rating_v1') === '1') return;
+      var _misters = window._MISTERS_HUMANOS || [];
+      if (!_misters.length || typeof window.setActiveHub !== 'function'
+          || typeof window._bayernHudMerge !== 'function') return;
+      var _originalHub = null;
+      try { _originalHub = window._activeHub && window._activeHub().id; } catch(_){}
+      _misters.forEach(function(m){
+        try {
+          window.setActiveHub(m.id);
+          window._bayernHudMerge({ money: 0, rating: 0, moneyTarget: 0, ratingTarget: 0 }, true, true);
+        } catch(err){ try { console.warn('[hud-wipe] fallo en hub', m.id, err); } catch(_){} }
+      });
+      try { if (_originalHub) window.setActiveHub(_originalHub); } catch(_){}
+      try { if (typeof window._bayernHudReapply === 'function') window._bayernHudReapply(); } catch(_){}
+      localStorage.setItem('ftbol_fixup_wipe_hud_money_rating_v1', '1');
+    } catch(_){}
+  }
+  /* Diferido 3s: da tiempo a que `setActiveHub`/`MISTERS_HUMANOS` (IIFE
+     anterior) y el resto de este IIFE (KEY/save/load/_bayernHudMerge)
+     terminen de inicializarse antes de recorrer los 6 hubs. */
+  setTimeout(_fixupWipeHudMoneyRatingForeverV1, 3000);
+
   try {
     window.addEventListener('hubchange', function(){
       try { KEY = window._hubKey('bayern_hud_overrides_v1'); } catch(_){}

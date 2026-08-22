@@ -52,7 +52,15 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v28';
+var CACHE_HTML   = 'ftbol-html-v29';
+/* v28 → v29 (2026-08-22): petición explícita del usuario en chat
+   ("Borrar también lo acumulado") — fixup one-shot que borra PARA
+   SIEMPRE el 🪙 presupuesto y el 💼 valoración ya acumulados en las 6
+   cajas humanas (money/rating/moneyTarget/ratingTarget a 0 en cada
+   hub, vía merge autoritativo — NO toca 💊 puntos de fisio ni ningún
+   otro dato). Corre una única vez por dispositivo
+   (`ftbol_fixup_wipe_hud_money_rating_v1`). Ver CLAUDE.md, sección
+   "Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas". */
 /* v27 → v28 (2026-08-22): el banner rojo "⚠️ No se pudo confirmar el
    guardado de '<id>' en el servidor..." (`window._gmCriticalNotice`,
    disparado desde `window._tourSave`) aparecía "siempre", en pantallas

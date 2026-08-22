@@ -1,5 +1,115 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas — petición explícita del usuario (obligatorio, 2026-08-22 #7)
+
+**Petición usuario 2026-08-22** ("lo que quiero es limpiar bien la
+web / la simulación que teníamos ia vs ia se ha eliminado en todos
+los torneos por completo? / los actas de todos los partidos ia vs ia
+se ha eliminado por completo? / la puntuacion que había en cada caja
+humana de 💼 se ha eliminado por completo? / quiero que lo
+aniquiladores para siempre, del codigo y la web").
+
+### Investigación previa — la simulación IA vs IA y las actas NO se tocan
+
+Se auditó primero si el sistema de simulación IA vs IA / actas seguía
+existiendo, ANTES de asumir que había que eliminar algo:
+
+- **`iaSimLive`** (la función histórica con el cronómetro "1 minuto de
+  juego = 1 segundo real") — se revisaron TODOS sus call sites
+  (`grep`, `copa-engine.js` + `misc_body_1.html` + `misc_body_2.html`):
+  **ya pasan `instant=true` en TODOS los sitios**, sin excepción. Esto
+  ya estaba resuelto por la sección "Excepción explícita — modo
+  INSTANTÁNEO de `iaSimLive`..." (2026-08-10, más abajo). No hace
+  falta tocar nada — el cronómetro animado ya no existe en ninguna
+  competición.
+- Las competiciones que nunca pasaron por `iaSimLive` (Champions/
+  Europa/Conference, Torneos de Verano, Selecciones/Mundial 2032,
+  Mundialito, Superliga) resuelven sus partidos IA-vs-IA de forma
+  headless desde siempre (`_tourSimMatch`/`_tourSimLeagueMatch`/
+  `_psSimChargedCup`) — nunca tuvieron cronómetro animado.
+- **Las actas (goleadores/tarjetas/MVP/eventos)** de los partidos IA vs
+  IA se siguen generando y persistiendo exactamente igual —
+  `genMatchEventsEnhanced` corre igual en modo instantáneo, solo
+  cambia que no se anima progresivamente.
+- **Conclusión, confirmada con el usuario vía `AskUserQuestion`**: NI
+  la simulación IA vs IA NI las actas se tocan — el usuario, tras la
+  aclaración ("te estás liando" — su pregunta original sobre "la
+  simulación de 1 minuto" se refería al cronómetro YA eliminado en
+  2026-08-10, no al motor de resultados), confirmó explícitamente
+  **conservar el historial** de partidos ya jugados y no tocar el
+  motor de simulación en absoluto.
+
+### Lo único que SÍ se elimina — el 🪙/💼 ya acumulado en las 6 cajas humanas
+
+El usuario confirmó explícitamente ("Borrar también lo acumulado") que
+quiere el **🪙 presupuesto** y el **💼 valoración** YA ACUMULADOS en
+las 6 cajas de mister humano (`window._MISTERS_HUMANOS`: Toñín/
+Liverpool, Álvaro/Arsenal, Acsa/Real Madrid, Isra/Atlético Madrid,
+Ángel/FC Barcelona, Izan/PSG — Rubén/Inter ya no cuenta, retirado
+2026-08-02) puestos a **CERO PARA SIEMPRE**, no solo dejar de generar
+más a partir de ahora.
+
+**NO se toca `💊 puntos de fisio`** (`o.pi`) — el usuario no lo pidió
+en ningún momento; su pregunta y confirmación fueron específicamente
+sobre "la puntuación... de 💼" (y, al agrupar la pregunta, 🪙
+presupuesto). `💊` sigue exactamente igual que antes.
+
+### Fix — fixup one-shot con merge AUTORITATIVO por campo, en los 6 hubs
+
+`_fixupWipeHudMoneyRatingForeverV1()` (`misc_body_1.html`, dentro del
+IIFE del HUD, junto a `_bayernHudMigrateTarget`): recorre los 6
+misters de `window._MISTERS_HUMANOS`, para cada uno hace
+`window.setActiveHub(m.id)` (reasigna `KEY`/`COOKIE_KEY`/`IDB_ROW_ID`/
+`KV_URL` del hub — mismo patrón ya probado en `_retroEarningsApply`) y
+llama `window._bayernHudMerge({money:0, rating:0, moneyTarget:0,
+ratingTarget:0}, true, true)` — fusión **POR CAMPO** (no reemplazo
+total, así `pi` sobrevive intacto), **AUTORITATIVA** (mismo mecanismo
+que "✅ Guardar"/"♻ Restablecer"/"📅 Reiniciar Temporada": el 0 gana
+SIEMPRE la fusión del servidor, sellado con el reloj del propio
+servidor + bump de `rev`, así que se propaga de verdad a los demás
+dispositivos del parque de 6 móviles + PC, no se queda solo en el que
+ejecuta el fixup). Al terminar, restaura el hub que el usuario tenía
+activo (`setActiveHub(_originalHub)`).
+
+Corre **UNA SOLA VEZ por dispositivo** (flag
+`ftbol_fixup_wipe_hud_money_rating_v1`, diferido 3 s tras el arranque
+para dar tiempo a que `setActiveHub`/`MISTERS_HUMANOS` estén listos) —
+**NUNCA vuelve a ejecutarse**: si volviera a correr en cada boot, el
+🪙/💼 jamás podría volver a acumularse (rompería el juego para
+siempre, no solo limpiaría lo viejo).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** interpretar "aniquilar/eliminar la simulación IA vs
+   IA" o "las actas" de un usuario sin verificar PRIMERO qué existe
+   realmente en el código (aquí, ambas cosas YA estaban en el estado
+   deseado — el cronómetro animado se eliminó en 2026-08-10, las actas
+   nunca se tocaron). Investigar y responder con evidencia concreta
+   ANTES de proponer o ejecutar un cambio destructivo — no asumir que
+   una pregunta ambigua sobre "¿se ha eliminado X?" significa "elimina
+   X ahora".
+2. **PROHIBIDO** tomar una acción destructiva e irreversible sobre
+   datos de producción (borrar 🪙/💼/plantillas/actas/lo que sea) sin
+   antes usar `AskUserQuestion` para confirmar el alcance EXACTO,
+   cuando la petición es ambigua o contradice reglas de preservación
+   de datos ya establecidas en este archivo. Aquí la petición inicial
+   ("aniquiladores para siempre, del codigo y la web") podía leerse
+   como "borrar TODO el motor de simulación" — confirmar el alcance
+   real evitó una destrucción catastrófica no deseada.
+3. **PROHIBIDO** que `_fixupWipeHudMoneyRatingForeverV1` (o cualquier
+   fixup equivalente que se añada en el futuro para este mismo tipo de
+   petición) toque `pi` (💊) — el usuario NUNCA pidió borrarlo. Si en
+   el futuro SÍ lo pide explícitamente, se añade `pi:0` al patch del
+   merge — nunca se usa un reemplazo total del override que lo borre
+   como efecto colateral.
+4. **PROHIBIDO** que este fixup (o uno similar) se dispare más de una
+   vez por dispositivo. Es un borrado PERMANENTE, no una limpieza
+   periódica — el flag de una sola ejecución es obligatorio.
+5. Si el usuario añade un 7º mister humano en el futuro (o reactiva a
+   Rubén/Inter), este fixup YA NO le afecta (corrió una sola vez sobre
+   los 6 de ese momento) — no hace falta ni se debe re-ejecutar para
+   cubrir altas posteriores.
+
 ## `window._tourSave` mostraba el banner "⚠️ ERROR CRÍTICO — no se pudo confirmar el guardado" en pantallas SIN relación, para procesos AUTOMÁTICOS/DE FONDO que el usuario nunca disparó (obligatorio, 2026-08-22 #6)
 
 **Bug (usuario 2026-08-22, foto del banner rojo referenciando "sfn1" sobre

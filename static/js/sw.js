@@ -52,7 +52,17 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v25';
+var CACHE_HTML   = 'ftbol-html-v26';
+/* v25 → v26 (2026-08-22): Liga EA Sports — un partido HUMANO (p.ej. Real
+   Madrid) que terminaba de jugarse pero cuyo POST a `/api/state` no
+   llegaba a confirmarse en el servidor (red floja, timeout) se
+   "perdía" al reabrir la web: `hydrateLigaStateFromBackend` adoptaba
+   `state.liga_results` del servidor SIN comprobar si el local tenía
+   partidos jugados que el servidor nunca recibió. Fix: unión con lo
+   local (recupera y re-sube los partidos `played:true` ausentes en la
+   respuesta del servidor, nunca al revés) + timeout/aviso visible en
+   `persistSharedLigaState`/`saveResults`. Ver CLAUDE.md, sección
+   "el partido se guarda pero al reabrir la web se ha perdido". */
 /* v24 → v25 (2026-08-22): fix del recorte de acta de torneos en formato
    LIGA (`_pmSweepTourCfg` no reconstruía `cfg.fixture`/`groupFixtures`
    lazy antes de evaluar jornada completa — ver CLAUDE.md, "El recorte de

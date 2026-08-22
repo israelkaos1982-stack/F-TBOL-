@@ -1,5 +1,87 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Liga EA Sports — un partido HUMANO jugado se "pierde" al reabrir la web si su POST a `/api/state` no llegó a confirmarse (obligatorio, 2026-08-22 #4)
+
+**Bug (usuario 2026-08-22, «Real Madrid 4-0 Real Betis», Liga EA Sports
+Jornada 8)**: el usuario jugó el partido hasta el final (acta completa,
+estadísticas, MVP) y confirmó que "el partido se guarda" (la UI local
+lo muestra terminado), pero al volver a abrir la web el partido había
+desaparecido — Jornada 8 volvía a aparecer sin jugar.
+
+### Causa raíz
+
+Dos huecos combinados en `templates/partials/part2/misc_body_2.html`
+(IIFE de Liga EA Sports, `LS_KEY='ef_liga38_v4'`):
+
+1. **`saveResults(r)`** llamaba a `persistSharedLigaState({liga_results:
+   ...})` en modo fire-and-forget puro — sin comprobar el resultado, sin
+   timeout (`persistSharedLigaState` no tenía `AbortController`, así que
+   una conexión colgada —sin error, sin respuesta— nunca disparaba el
+   `.catch()` que activa los reintentos), y sin avisar al usuario si los
+   3 reintentos con backoff fallaban del todo. El partido quedaba
+   guardado SOLO en local (memoria + `localStorage`).
+2. **`hydrateLigaStateFromBackend`** (el poll de 5 s + el hydrate
+   inicial al cargar la página) hacía `sharedLigaResultsCache =
+   state.liga_results` **A PELO**, sin comparar con lo que el
+   dispositivo YA sabía. Si el POST del punto 1 nunca llegó a
+   confirmarse en el servidor, la siguiente respuesta del servidor (que
+   nunca tuvo ese partido) sobrescribía la copia local completa —
+   perdiendo el partido tanto en la MISMA sesión (poll de 5 s) como,
+   sobre todo, en la SIGUIENTE apertura de la web (el hydrate inicial
+   arranca con la copia del servidor, que nunca lo tuvo).
+
+Es el MISMO patrón ya documentado y arreglado para torneos en
+`_tourLoad` → `_tourMergeMissingLocalResults` (sección "`_tourLoad` UNE
+los partidos jugados que solo existen en LOCAL", 2026-07-17, más abajo
+en este archivo) — pero esa protección nunca se replicó para Liga EA
+Sports (`ef_liga38_v4`/`liga_results`), que tiene su propio hydrate
+independiente.
+
+### Fix
+
+- **`persistSharedLigaState`**: `AbortController` con timeout de 12 s
+  por intento (antes no tenía ninguno) — mismo patrón que `_tourSave`.
+- **`_ligaSaveWithWarn(patch)`** (nuevo, envuelve
+  `persistSharedLigaState`): si los 3 reintentos agotan sin éxito,
+  muestra un aviso VISIBLE (`window._gmCriticalNotice` o `alert`) con
+  cooldown de 3 min (`liga_save_warn_cd_v1`, mismo patrón que
+  `_tourSaveWarnShouldShow`) — el usuario deja de enterarse "cuando
+  reabre la web y ya es tarde". `saveResults` usa este wrapper en vez
+  de `persistSharedLigaState` directo.
+- **`hydrateLigaStateFromBackend`**: antes de adoptar
+  `state.liga_results`, hace UNIÓN con `loadResults()` (el getter
+  perezoso que siembra desde `localStorage` — **no** con
+  `sharedLigaResultsCache` a pelo, que en una carga NUEVA de la página
+  sigue en `null` en el instante del hydrate inicial). Un matchKey
+  `played:true` en LOCAL pero ausente o no-jugado en la respuesta del
+  servidor se recupera desde local y se re-sube (`_ligaSaveWithWarn`)
+  para curar el servidor — NUNCA al revés (un partido que el servidor
+  YA tiene jugado manda siempre).
+- Bump `CACHE_HTML` v25→v26 (`static/js/sw.js`) — regla obligatoria de
+  este archivo, sin él el fix no llega a una sesión ya abierta.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que `saveResults`/`persistSharedLigaState` (o
+   cualquier guardado nuevo de Liga EA Sports) sea fire-and-forget sin
+   timeout ni aviso al usuario si falla del todo. Usar
+   `_ligaSaveWithWarn`, no `persistSharedLigaState` directo.
+2. **PROHIBIDO** que `hydrateLigaStateFromBackend` (o cualquier hydrate
+   nuevo de un estado compartido con su propio poll independiente,
+   fuera del motor `_tour*`) adopte la respuesta del servidor sin
+   comparar con lo que el dispositivo YA sabe. Un partido `played:true`
+   en local que el servidor no tiene es SIEMPRE una señal de "mi POST
+   se perdió", nunca "el servidor tiene razón, olvídalo".
+3. **PROHIBIDO** que esta comparación use `sharedLigaResultsCache`
+   directamente sin pasar por `loadResults()` primero — en la carga
+   inicial de la página esa variable está en `null`, así que comparar
+   contra ella sin sembrarla desde `localStorage` no encuentra nunca
+   nada que recuperar (justo el caso real del bug: "reabro la web").
+4. Toda competición NUEVA que tenga su PROPIO hydrate/poll independiente
+   del motor `_tour*` (en vez de vivir dentro de `tour_<id>_v1`) hereda
+   esta regla: unión con lo local antes de adoptar, re-subida si se
+   recuperó algo, aviso visible si el guardado agota reintentos.
+
 ## El recorte de acta de un TORNEO en formato LIGA (`format:'league'`) nunca se disparaba — `cfg.fixture` lazy sin reconstruir dejaba `_pmLeagueJornadaDone` SIEMPRE en `false` (obligatorio, 2026-08-22 #3)
 
 **Bug (foto usuario 2026-08-22, «Trofeo Joan Gamper»)**: el guardado del

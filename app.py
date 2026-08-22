@@ -5735,6 +5735,40 @@ def api_debug():
             })
     except Exception:
         pass
+    # Diagnóstico de TAMAÑO — las 25 filas más pesadas de todo GlobalState
+    # (bytes UTF-8 de valor_json), con aviso si alguna se acerca o supera
+    # el límite de _KV_MAX_BYTES (2 MB) que aplica a todo guardado nuevo.
+    # Objetivo: ver de un vistazo si queda algún `tour_*`/`liga_ext_*` ya
+    # inflado desde ANTES de que existiera ese límite (guardados legacy no
+    # pasan por el chequeo de tamaño, así que pueden seguir viviendo en la
+    # base de datos aunque hoy ya no se puedan volver a escribir así).
+    biggest_rows = []
+    try:
+        near_limit = int(_KV_MAX_BYTES * 0.5)
+        rows_all = GlobalState.query.with_entities(
+            GlobalState.clave, GlobalState.valor_json, GlobalState.updated_at
+        ).all()
+        sized = []
+        for clave, valor_json, updated_at in rows_all:
+            try:
+                nbytes = len((valor_json or "").encode("utf-8"))
+            except Exception:
+                nbytes = 0
+            sized.append((nbytes, clave, updated_at))
+        sized.sort(key=lambda t: t[0], reverse=True)
+        for nbytes, clave, updated_at in sized[:25]:
+            flag = "🔴 SUPERA el límite de guardado (2 MB)" if nbytes > _KV_MAX_BYTES else (
+                "⚠️ cerca del límite" if nbytes > near_limit else ""
+            )
+            biggest_rows.append({
+                "clave": clave,
+                "bytes": nbytes,
+                "mb": round(nbytes / 1048576, 3),
+                "updated_at": updated_at or "",
+                "aviso": flag,
+            })
+    except Exception as e:
+        biggest_rows = [{"error": str(e)}]
     return jsonify({
         "ok": True,
         "backend": backend,
@@ -5748,6 +5782,8 @@ def api_debug():
             "eventos_rows": eventos_rows,
         },
         "ligas_ext": ligas_ext,
+        "biggest_rows": biggest_rows,
+        "kv_max_bytes": _KV_MAX_BYTES,
         "database_url_env_set": bool(os.environ.get("DATABASE_URL")),
     })
 

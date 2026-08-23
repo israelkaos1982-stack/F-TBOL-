@@ -52,8 +52,8 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v31';
-/* v30 → v31 (2026-08-22, CORRECCIÓN URGENTE): la v30 tenía un fixup
+var CACHE_HTML   = 'ftbol-html-v32';
+/* v31 → v32 (2026-08-22, CORRECCIÓN URGENTE): la v30 tenía un fixup
    one-shot que borraba PARA SIEMPRE tanto el 💼 valoración COMO el 🪙
    presupuesto de las 6 cajas humanas — pero el usuario JAMÁS pidió
    borrar el 🪙, solo el 💼. Fue un error de interpretación (una
@@ -64,6 +64,11 @@ var CACHE_HTML   = 'ftbol-html-v31';
    YA lo corrieron con la v30 no lo repitan) ahora SOLO toca
    `rating`/`ratingTarget` — nunca `money`/`moneyTarget`. Ver CLAUDE.md,
    sección "Borrado PERMANENTE del 🪙/💼..." (corrección añadida ahí). */
+/* v30 → v31 (2026-08-23): caja de Estadísticas de Champions/Europa/
+   Conference — `_renderUclStats`/`_renderUelStats`/`_renderUeclStats`
+   ahora disparan `syncLigaEaPlayerStats()` al pintar (mismo patrón que
+   Recopa/USC/Inter), para que la aportación de un partido recortado
+   llegue a la pantalla sin depender de una acción no relacionada. */
 /* v29 → v30 (2026-08-22): petición explícita del usuario en chat
    ("Borrar también lo acumulado") — fixup one-shot que borra PARA
    SIEMPRE el 🪙 presupuesto y el 💼 valoración ya acumulados en las 6

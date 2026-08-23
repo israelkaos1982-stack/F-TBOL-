@@ -74,7 +74,7 @@ pantalla de Estadísticas primero, antes que cualquier otra pantalla".
    + `syncLigaEaPlayerStats()` diferido + re-pintar, igual que
    Champions/Europa/Conference desde este fix.
 
-## Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas — petición explícita del usuario (obligatorio, 2026-08-22 #8)
+## Borrado PERMANENTE del 💼 acumulado de las 6 cajas humanas — petición explícita del usuario (obligatorio, 2026-08-22 #8, CORREGIDO #9 — ⚠️ el 🪙 NUNCA debió tocarse, ver corrección al final)
 
 **Petición usuario 2026-08-22** ("lo que quiero es limpiar bien la
 web / la simulación que teníamos ia vs ia se ha eliminado en todos
@@ -113,20 +113,20 @@ existiendo, ANTES de asumir que había que eliminar algo:
   **conservar el historial** de partidos ya jugados y no tocar el
   motor de simulación en absoluto.
 
-### Lo único que SÍ se elimina — el 🪙/💼 ya acumulado en las 6 cajas humanas
+### Lo único que SÍ se elimina — el 💼 ya acumulado en las 6 cajas humanas
 
-El usuario confirmó explícitamente ("Borrar también lo acumulado") que
-quiere el **🪙 presupuesto** y el **💼 valoración** YA ACUMULADOS en
-las 6 cajas de mister humano (`window._MISTERS_HUMANOS`: Toñín/
-Liverpool, Álvaro/Arsenal, Acsa/Real Madrid, Isra/Atlético Madrid,
-Ángel/FC Barcelona, Izan/PSG — Rubén/Inter ya no cuenta, retirado
-2026-08-02) puestos a **CERO PARA SIEMPRE**, no solo dejar de generar
-más a partir de ahora.
+El usuario pidió borrar el **💼 valoración** YA ACUMULADO en las 6
+cajas de mister humano (`window._MISTERS_HUMANOS`: Toñín/Liverpool,
+Álvaro/Arsenal, Acsa/Real Madrid, Isra/Atlético Madrid, Ángel/FC
+Barcelona, Izan/PSG — Rubén/Inter ya no cuenta, retirado 2026-08-02)
+puesto a **CERO PARA SIEMPRE**, no solo dejar de generar más a partir
+de ahora.
 
 **NO se toca `💊 puntos de fisio`** (`o.pi`) — el usuario no lo pidió
-en ningún momento; su pregunta y confirmación fueron específicamente
-sobre "la puntuación... de 💼" (y, al agrupar la pregunta, 🪙
-presupuesto). `💊` sigue exactamente igual que antes.
+en ningún momento. **NO se toca `🪙 presupuesto`** (`o.money`/
+`o.moneyTarget`) — el usuario TAMPOCO lo pidió; ver la corrección al
+final de esta sección sobre por qué la primera versión de este fixup
+sí lo tocó por error.
 
 ### Fix — fixup one-shot con merge AUTORITATIVO por campo, en los 6 hubs
 
@@ -135,22 +135,57 @@ IIFE del HUD, junto a `_bayernHudMigrateTarget`): recorre los 6
 misters de `window._MISTERS_HUMANOS`, para cada uno hace
 `window.setActiveHub(m.id)` (reasigna `KEY`/`COOKIE_KEY`/`IDB_ROW_ID`/
 `KV_URL` del hub — mismo patrón ya probado en `_retroEarningsApply`) y
-llama `window._bayernHudMerge({money:0, rating:0, moneyTarget:0,
-ratingTarget:0}, true, true)` — fusión **POR CAMPO** (no reemplazo
-total, así `pi` sobrevive intacto), **AUTORITATIVA** (mismo mecanismo
-que "✅ Guardar"/"♻ Restablecer"/"📅 Reiniciar Temporada": el 0 gana
-SIEMPRE la fusión del servidor, sellado con el reloj del propio
-servidor + bump de `rev`, así que se propaga de verdad a los demás
-dispositivos del parque de 6 móviles + PC, no se queda solo en el que
-ejecuta el fixup). Al terminar, restaura el hub que el usuario tenía
-activo (`setActiveHub(_originalHub)`).
+llama `window._bayernHudMerge({rating:0, ratingTarget:0}, true, true)`
+— fusión **POR CAMPO** (no reemplazo total, así `pi` y `money`
+sobreviven intactos), **AUTORITATIVA** (mismo mecanismo que "✅
+Guardar"/"♻ Restablecer"/"📅 Reiniciar Temporada": el 0 gana SIEMPRE la
+fusión del servidor, sellado con el reloj del propio servidor + bump
+de `rev`, así que se propaga de verdad a los demás dispositivos del
+parque de 6 móviles + PC, no se queda solo en el que ejecuta el
+fixup). Al terminar, restaura el hub que el usuario tenía activo
+(`setActiveHub(_originalHub)`).
 
 Corre **UNA SOLA VEZ por dispositivo** (flag
 `ftbol_fixup_wipe_hud_money_rating_v1`, diferido 3 s tras el arranque
 para dar tiempo a que `setActiveHub`/`MISTERS_HUMANOS` estén listos) —
 **NUNCA vuelve a ejecutarse**: si volviera a correr en cada boot, el
-🪙/💼 jamás podría volver a acumularse (rompería el juego para
-siempre, no solo limpiaría lo viejo).
+💼 jamás podría volver a acumularse (rompería el juego para siempre,
+no solo limpiaría lo viejo).
+
+### ⚠️ CORRECCIÓN URGENTE (2026-08-22 #9) — la 1ª versión de este fixup borró también el 🪙, SIN autorización del usuario
+
+La primera versión de `_fixupWipeHudMoneyRatingForeverV1` (desplegada
+como parte de esta misma sección, #8) llamaba al merge con
+`{money:0, rating:0, moneyTarget:0, ratingTarget:0}` — es decir, además
+de 💼 (lo único que el usuario pidió), **también ponía a 0 el 🪙
+presupuesto**. Esto fue un ERROR de Claude, no una petición del
+usuario: la pregunta de aclaración usada para confirmar el alcance
+(vía `AskUserQuestion`) agrupó "🪙+💼" bajo una sola etiqueta
+("💼 (valoración/presupuesto)") como si fueran el mismo concepto — no
+lo son, son 2 campos completamente separados del HUD
+(`o.money`/`o.moneyTarget` vs `o.rating`/`o.ratingTarget`). El usuario
+NUNCA mencionó ni preguntó por el 🪙 en su petición original ("la
+puntuacion que había en cada caja humana de 💼") — su respuesta
+"Borrar también lo acumulado" confirmaba la pregunta TAL COMO se le
+planteó, mal agrupada, no una decisión independiente sobre el 🪙. El
+usuario lo señaló explícitamente y con razón: *"el 🪙 jamás te he dicho
+que lo borres, porque has hecho algo que no te he perdido"*.
+
+**Fix de la corrección**: el patch del merge se reduce a
+`{rating:0, ratingTarget:0}` — el 🪙 queda excluido para SIEMPRE de
+este fixup. El flag de una sola ejecución **NO se renombra** (sigue
+siendo `ftbol_fixup_wipe_hud_money_rating_v1`) para que los
+dispositivos que YA corrieron la versión vieja no vuelvan a ejecutar el
+fixup — pero eso significa que, en cualquier dispositivo donde la
+versión vieja ya corrió (y su POST autoritativo llegó a confirmarse en
+el servidor), **el valor de 🪙 anterior al borrado es irrecuperable por
+código**: el merge autoritativo con bump de `rev` está DISEÑADO para
+ganar sobre cualquier valor previo/viejo en cualquier dispositivo, y no
+existe ningún snapshot/histórico de este campo del HUD (a diferencia
+del sistema `ligaExt_*`, que sí tiene snapshots `_protected`). La única
+vía de recuperación, si el usuario recuerda las cifras de 🪙 que tenía
+cada una de las 6 cajas, es reintroducirlas a mano vía el editor
+"✅ Guardar" del HUD de cada caja.
 
 ### Reglas a respetar
 
@@ -169,13 +204,23 @@ siempre, no solo limpiaría lo viejo).
    de datos ya establecidas en este archivo. Aquí la petición inicial
    ("aniquiladores para siempre, del codigo y la web") podía leerse
    como "borrar TODO el motor de simulación" — confirmar el alcance
-   real evitó una destrucción catastrófica no deseada.
+   real evitó una destrucción catastrófica no deseada EN ESE PUNTO,
+   pero (ver regla 6) el propio mecanismo de confirmación falló después
+   por otro motivo.
 3. **PROHIBIDO** que `_fixupWipeHudMoneyRatingForeverV1` (o cualquier
    fixup equivalente que se añada en el futuro para este mismo tipo de
    petición) toque `pi` (💊) — el usuario NUNCA pidió borrarlo. Si en
    el futuro SÍ lo pide explícitamente, se añade `pi:0` al patch del
    merge — nunca se usa un reemplazo total del override que lo borre
    como efecto colateral.
+3b. **PROHIBIDO ABSOLUTO** que este fixup (o cualquier fixup nuevo que
+   toque el HUD) incluya `money`/`moneyTarget` (🪙) en su patch. El
+   usuario JAMÁS lo autorizó — la inclusión en la v1 de este fixup fue
+   un error de Claude (ver corrección arriba), no una petición real.
+   Si el usuario pide explícitamente borrar el 🪙 en el futuro, debe
+   ser una petición NUEVA y SEPARADA sobre 🪙 específicamente — nunca
+   inferida de una respuesta a una pregunta que mencione 💼 (o
+   cualquier otro campo) agrupado con 🪙.
 4. **PROHIBIDO** que este fixup (o uno similar) se dispare más de una
    vez por dispositivo. Es un borrado PERMANENTE, no una limpieza
    periódica — el flag de una sola ejecución es obligatorio.
@@ -183,6 +228,18 @@ siempre, no solo limpiaría lo viejo).
    Rubén/Inter), este fixup YA NO le afecta (corrió una sola vez sobre
    los 6 de ese momento) — no hace falta ni se debe re-ejecutar para
    cubrir altas posteriores.
+6. **PROHIBIDO ABSOLUTO** que una pregunta de `AskUserQuestion` (u
+   otra forma de confirmación) usada para autorizar un borrado
+   destructivo IRREVERSIBLE agrupe DOS O MÁS campos/conceptos
+   DISTINTOS del juego bajo una sola etiqueta o una sola pregunta
+   (p. ej. "💼 (valoración/presupuesto)" quiso decir 💼+🪙 a la vez).
+   Cada campo que se vaya a borrar de forma irreversible necesita su
+   PROPIA pregunta explícita, con su propio emoji/nombre exacto, para
+   que la respuesta del usuario autorice EXACTAMENTE lo que él cree que
+   está autorizando — nunca más de lo que pidió. Antes de ejecutar
+   cualquier borrado irreversible, releer la petición ORIGINAL del
+   usuario (no solo la pregunta de aclaración que tú mismo redactaste)
+   y verificar que el campo que vas a tocar aparece ahí explícitamente.
 
 ## `window._tourSave` mostraba el banner "⚠️ ERROR CRÍTICO — no se pudo confirmar el guardado" en pantallas SIN relación, para procesos AUTOMÁTICOS/DE FONDO que el usuario nunca disparó (obligatorio, 2026-08-22 #6)
 

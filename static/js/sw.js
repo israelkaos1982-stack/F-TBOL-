@@ -52,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v30';
+var CACHE_HTML   = 'ftbol-html-v31';
 /* v29 → v30 (2026-08-22): petición explícita del usuario en chat
    ("Borrar también lo acumulado") — fixup one-shot que borra PARA
    SIEMPRE el 🪙 presupuesto y el 💼 valoración ya acumulados en las 6

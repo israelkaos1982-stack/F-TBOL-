@@ -2453,6 +2453,25 @@
     if (typeof window._lextBuildCompStatsDashboard === 'function') {
       window._lextBuildCompStatsDashboard('ucl-stats-dashboard', 'ef_player_stats_ucl_main_v1');
     }
+    /* PROHIBIDO quitar (obligatorio, 2026-08-23): sin este refresco
+       diferido, esta pantalla SOLO pinta lo que YA hubiera en
+       `ef_player_stats_ucl_main_v1` — nunca dispara el rebuild que
+       fusiona la tabla permanente `pm_tally_ucl_v1` (la que alimentan
+       `_pmSweepEurFase('ucl')`/`_pmSweepEurKo('ucl')` al recortar un
+       acta). Ver sección "Champions/Europa/Conference · Estadísticas
+       no sumaba…" en CLAUDE.md. Mismo patrón que ya usa `STATS_SCREENS`
+       (Recopa/USC/Inter) más arriba en este archivo: pintar YA desde
+       cache (nunca bloquea) + reconstruir diferido + re-pintar. */
+    if (typeof window.syncLigaEaPlayerStats === 'function') {
+      setTimeout(function(){
+        try { window.syncLigaEaPlayerStats(); } catch(_){}
+        try {
+          if (typeof window._lextBuildCompStatsDashboard === 'function') {
+            window._lextBuildCompStatsDashboard('ucl-stats-dashboard', 'ef_player_stats_ucl_main_v1');
+          }
+        } catch(_){}
+      }, 0);
+    }
   }
   window._renderUclStats = _renderUclStats;
   /* Diferido a un macrotask separado (2026-07-29, mismo motivo que el
@@ -2514,6 +2533,19 @@
     if (typeof window._lextBuildCompStatsDashboard === 'function') {
       window._lextBuildCompStatsDashboard('uel-stats-dashboard', 'ef_player_stats_uel_v1');
     }
+    /* PROHIBIDO quitar (obligatorio, 2026-08-23) — mismo motivo que
+       `_renderUclStats`: sin esto, el recorte de acta de Europa League
+       (`pm_tally_uel_v1`) nunca llega a esta caja. */
+    if (typeof window.syncLigaEaPlayerStats === 'function') {
+      setTimeout(function(){
+        try { window.syncLigaEaPlayerStats(); } catch(_){}
+        try {
+          if (typeof window._lextBuildCompStatsDashboard === 'function') {
+            window._lextBuildCompStatsDashboard('uel-stats-dashboard', 'ef_player_stats_uel_v1');
+          }
+        } catch(_){}
+      }, 0);
+    }
   }
   window._renderUelStats = _renderUelStats;
   /* Diferido a un macrotask separado (2026-07-29, mismo motivo) + gate
@@ -2573,6 +2605,19 @@
   function _renderUeclStats(){
     if (typeof window._lextBuildCompStatsDashboard === 'function') {
       window._lextBuildCompStatsDashboard('uecl-stats-dashboard', 'ef_player_stats_uecl_v1');
+    }
+    /* PROHIBIDO quitar (obligatorio, 2026-08-23) — mismo motivo que
+       `_renderUclStats`: sin esto, el recorte de acta de Conference
+       League (`pm_tally_uecl_v1`) nunca llega a esta caja. */
+    if (typeof window.syncLigaEaPlayerStats === 'function') {
+      setTimeout(function(){
+        try { window.syncLigaEaPlayerStats(); } catch(_){}
+        try {
+          if (typeof window._lextBuildCompStatsDashboard === 'function') {
+            window._lextBuildCompStatsDashboard('uecl-stats-dashboard', 'ef_player_stats_uecl_v1');
+          }
+        } catch(_){}
+      }, 0);
     }
   }
   window._renderUeclStats = _renderUeclStats;

@@ -6805,7 +6805,10 @@ window._hdrCleanCache = function(){
         }
       }
       if (changed){
-        try { if (typeof window._tourSave === 'function') window._tourSave(tourId, cfg); } catch(_){}
+        /* silent:true (2026-08-22): _psAutoChainBuildMundial se llama
+           «al entrar a _selPair» (ver doc arriba) — disparado por el
+           render de la card del hub, no por una acción del usuario. */
+        try { if (typeof window._tourSave === 'function') window._tourSave(tourId, cfg, {silent:true}); } catch(_){}
       }
     } catch(_){}
     return changed;
@@ -7054,7 +7057,10 @@ window._hdrCleanCache = function(){
             window._mundialGroupState(_gfCfg, _gfCfg.teams || []);
             var _nowFx = !!(_gfCfg.groupFixtures && Object.keys(_gfCfg.groupFixtures).length);
             if (!_hadFx && _nowFx && typeof window._tourSave === 'function'){
-              try { window._tourSave(_mCfgs[_gfi].id, _gfCfg); } catch(_){}
+              /* silent:true (2026-08-22): construcción lazy de
+                 groupFixtures disparada al resolver la card del hub,
+                 no por una acción del usuario. */
+              try { window._tourSave(_mCfgs[_gfi].id, _gfCfg, {silent:true}); } catch(_){}
             }
           } catch(_){}
         }
@@ -8702,7 +8708,10 @@ window._hdrCleanCache = function(){
             var _nowFx = !!(c.groupFixtures && Object.keys(c.groupFixtures).length);
             if (!_hadFx && _nowFx){
               changed = true;
-              if (typeof window._tourSave === 'function'){ try { window._tourSave(k, c); } catch(_){} }
+              /* silent:true (2026-08-22): _psEnsureMundialStateRebuilt
+                 corre en CADA render (auto-heal del watchdog), sin
+                 click del usuario — ver doc de la función arriba. */
+              if (typeof window._tourSave === 'function'){ try { window._tourSave(k, c, {silent:true}); } catch(_){} }
             }
           } catch(_){}
         }
@@ -9261,7 +9270,9 @@ window._hdrCleanCache = function(){
           if (typeof window._tourEnsureGroupFixtures === 'function'){
             var _builtGf = window._tourEnsureGroupFixtures(cfg);
             if (_builtGf && typeof window._tourSave === 'function'){
-              try { window._tourSave(tid, cfg); } catch(_){}
+              /* silent:true (2026-08-22): construcción lazy de
+                 groupFixtures al resolver la card del hub, sin click. */
+              try { window._tourSave(tid, cfg, {silent:true}); } catch(_){}
             }
           }
         } catch(_){}
@@ -9277,7 +9288,9 @@ window._hdrCleanCache = function(){
           if (typeof window._tourEnsureKoBracket === 'function'){
             var _builtKo = window._tourEnsureKoBracket(cfg, tid);
             if (_builtKo && typeof window._tourSave === 'function'){
-              try { window._tourSave(tid, cfg); } catch(_){}
+              /* silent:true (2026-08-22): construcción lazy del bracket
+                 KO al resolver la card del hub, sin click del usuario. */
+              try { window._tourSave(tid, cfg, {silent:true}); } catch(_){}
             }
           }
         } catch(_){}
@@ -19407,7 +19420,18 @@ window._hdrCleanCache = function(){
         try { changed = _pmSweepTourCfg(id, cfg); } catch(_){}
         if (changed) {
           changedIds.push(id);
-          try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg); } catch(_){}
+          /* silent:true (obligatorio, 2026-08-22 — bug usuario: "ERROR
+             CRÍTICO, sale siempre", banner de "sfn1" apareciendo en
+             pantallas sin ninguna relación). Este barrido corre SOLO en
+             segundo plano (9s tras el arranque + cada 3 min) — nunca es
+             una acción del usuario, así que un fallo de guardado NUNCA
+             debe interrumpirle con el modal crítico. El reintento
+             automático (cola `tour_pending_sync_v1` + reconciliador) ya
+             se dispara igual, silencioso o no — lo único que cambiaba
+             era si se lo enseñábamos al usuario. Mismo patrón que
+             `_tourReconcileToServer` (única llamada que ya lo hacía
+             bien antes de este fix). */
+          try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg, {silent:true}); } catch(_){}
           try { if (window._TOUR_CACHE) window._TOUR_CACHE[id] = cfg; } catch(_){}
         }
       });
@@ -27755,10 +27779,13 @@ window._hdrCleanCache = function(){
       cfg.koBracket = null;
       cfg.koCurrentRound = 0;
       cfg._prizesPaid = false;
-      /* Persistir el reparto corregido (durable + cross-device). */
+      /* Persistir el reparto corregido (durable + cross-device).
+         silent:true (2026-08-22): auto-migración disparada al CARGAR el
+         cfg, no una acción del usuario — nunca debe mostrar el modal
+         crítico si falla (el reintento de fondo sigue igual). */
       try {
         if (cfg.id && typeof window._tourSave === 'function') {
-          Promise.resolve().then(function(){ try { window._tourSave(cfg.id, cfg); } catch(_){} });
+          Promise.resolve().then(function(){ try { window._tourSave(cfg.id, cfg, {silent:true}); } catch(_){} });
         }
       } catch(_){}
     } catch(_){}
@@ -27943,7 +27970,9 @@ window._hdrCleanCache = function(){
         try {
           if (typeof window._tourSave === 'function' && cfg.id){
             var _id = cfg.id;
-            setTimeout(function(){ try { window._tourSave(_id, cfg); } catch(_){} }, 0);
+            /* silent:true (2026-08-22): bake de alias diferido al
+               abrir la previa, sin acción del usuario. */
+            setTimeout(function(){ try { window._tourSave(_id, cfg, {silent:true}); } catch(_){} }, 0);
           }
         } catch(_){}
         /* El alias recién baked debe verse YA en esta misma sesión. */
@@ -27985,7 +28014,9 @@ window._hdrCleanCache = function(){
             }
             if (changed && typeof window._tourSave === 'function' && cfg.id){
               var _id = cfg.id;
-              setTimeout(function(){ try { window._tourSave(_id, cfg); } catch(_){} }, 0);
+              /* silent:true (2026-08-22): bake de alias resuelto por
+                 servidor, disparado en segundo plano sin click. */
+              setTimeout(function(){ try { window._tourSave(_id, cfg, {silent:true}); } catch(_){} }, 0);
             }
           } catch(_){}
         });
@@ -28119,7 +28150,10 @@ window._hdrCleanCache = function(){
     if (changed) {
       try { cfg.updatedAt = new Date().toISOString(); } catch(_){}
       try { window._lsSetSafe(_key(cfg.id || ''), JSON.stringify(cfg)); } catch(_){}
-      try { if (typeof window._tourSave === 'function' && cfg.id) window._tourSave(cfg.id, cfg); } catch(_){}
+      /* silent:true (2026-08-22): corre en CADA lectura de un torneo
+         (chokepoint `_tourLoadCachedSync`), nunca por acción directa
+         del usuario — nunca debe mostrar el modal crítico si falla. */
+      try { if (typeof window._tourSave === 'function' && cfg.id) window._tourSave(cfg.id, cfg, {silent:true}); } catch(_){}
     }
     return changed;
   }
@@ -28275,7 +28309,11 @@ window._hdrCleanCache = function(){
               var _rpNow = Date.now();
               if (!window._tourRepushThrottle[_rpKey] || (_rpNow - window._tourRepushThrottle[_rpKey]) > 20000) {
                 window._tourRepushThrottle[_rpKey] = _rpNow;
-                if (typeof window._tourSave === 'function') window._tourSave(id, localCfg || cfg);
+                /* silent:true (2026-08-22): re-empuje de fondo al abrir
+                   la pantalla, no una acción directa del usuario — el
+                   aviso de guardado fallido ya lo mostró _tourSave en
+                   su primer intento (con su propio cooldown de 3 min). */
+                if (typeof window._tourSave === 'function') window._tourSave(id, localCfg || cfg, {silent:true});
               }
             } catch(_){}
             return localCfg || cfg;
@@ -28297,7 +28335,10 @@ window._hdrCleanCache = function(){
                 var _lReset = (+localCfg.resetAt) || 0, _sReset = (+cfg.resetAt) || 0;
                 if (_sReset <= _lReset
                     && _tourCfgPlayedCount(localCfg) > _tourCfgPlayedCount(cfg)) {
-                  try { if (typeof window._tourSave === 'function') window._tourSave(id, localCfg); } catch(_){}
+                  /* silent:true (2026-08-22): re-subida automática para
+                     curar el servidor tras un re-sorteo stale, disparada
+                     al hidratar, no por click del usuario. */
+                  try { if (typeof window._tourSave === 'function') window._tourSave(id, localCfg, {silent:true}); } catch(_){}
                   return localCfg;
                 }
               }
@@ -28339,7 +28380,12 @@ window._hdrCleanCache = function(){
           try { window._lsSetSafe(_key(id), JSON.stringify(cfg)); } catch(_){}
           try { window._TOUR_CACHE = window._TOUR_CACHE || {}; window._TOUR_CACHE[id] = cfg; } catch(_){}
           if (_recoveredMissing > 0) {
-            try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg); } catch(_){}
+            /* silent:true (2026-08-22): re-empuje automático de un
+               `_tourLoad` normal (abrir/hidratar el torneo), no una
+               acción del usuario — nunca debe mostrar el modal crítico
+               si falla (si no confirma, el próximo `_tourLoad` lo
+               vuelve a intentar solo). */
+            try { if (typeof window._tourSave === 'function') window._tourSave(id, cfg, {silent:true}); } catch(_){}
           }
           /* Baked-in del alias de eFootball (identidad, viaja con la cfg):
              tras adoptar la cfg del servidor, resuelve desde el cache local
@@ -32213,10 +32259,12 @@ window._hdrCleanCache = function(){
     if (anyChange) {
       try { console.warn('[tour] ko-2leg lazy-aggregated saves stale (bracket recuperado).'); } catch(_){}
       /* Persistir el cfg recuperado: si no, el siguiente reload vuelve
-         a leer los |L1+|L2 del disco y el bracket sigue bloqueado. */
+         a leer los |L1+|L2 del disco y el bracket sigue bloqueado.
+         silent:true (2026-08-22): recuperación automática al LEER el
+         cfg, no una acción del usuario. */
       try {
         if (cfg.id && typeof window._tourSave === 'function') {
-          window._tourSave(cfg.id, cfg);
+          window._tourSave(cfg.id, cfg, {silent:true});
         }
       } catch(_){}
     }
@@ -32483,7 +32531,9 @@ window._hdrCleanCache = function(){
          recargar la página antes de simular nada deja localStorage sin
          cfg.bracket y `_realPair` del hub cae al "Sin partido". */
       if (_needSaveBracket && typeof window._tourSave === 'function'){
-        try { Promise.resolve(window._tourSave(id, cfg)).catch(function(){}); } catch(_){}
+        /* silent:true (2026-08-22): persistencia del bracket inicial
+           disparada al RENDERIZAR la pantalla, no por click. */
+        try { Promise.resolve(window._tourSave(id, cfg, {silent:true})).catch(function(){}); } catch(_){}
       }
     } else if (cfg.format === 'league') {
       /* Panel de estadísticas INLINE encima de la clasificación, del
@@ -33252,7 +33302,9 @@ window._hdrCleanCache = function(){
            juega N rivales distintos, sin repetir. */
         if (fc.swissRounds && fc.swissRounds < _gFix.length) _gFix = _gFix.slice(0, fc.swissRounds);
         cfg.groupFixtures[g] = _gFix;
-        try { window._tourSave(tourId, cfg); } catch(_){}
+        /* silent:true (2026-08-22): reconstrucción de fixture disparada
+           al RENDERIZAR la pantalla, no por acción del usuario. */
+        try { window._tourSave(tourId, cfg, {silent:true}); } catch(_){}
       }
       if (typeof cfg.currentJornadaByGroup[g] !== 'number') cfg.currentJornadaByGroup[g] = 0;
       var fix = cfg.groupFixtures[g];
@@ -33261,7 +33313,7 @@ window._hdrCleanCache = function(){
       if ((typeof _tvBoardOf === 'function') && _tvBoardOf(tourId) !== 'verano'
           && _selArrangeHumanByesLast(cfg, g, slice)) {
         fix = cfg.groupFixtures[g];
-        try { window._tourSave(tourId, cfg); } catch(_){}
+        try { window._tourSave(tourId, cfg, {silent:true}); } catch(_){}
       }
       var rows = _tourComputeStandings(slice, fix, cfg.results, gKey, fc.tieBreak);
       var prog = _tourFixtureProgress(fix, cfg.results, gKey);
@@ -33538,8 +33590,12 @@ window._hdrCleanCache = function(){
       html += _selGroupCardHtml(cfg, tourId, g, slice, fix, rows, prog, gKey, advancePerGroup);
     }
     /* Persistir la reordenación de byes del humano (una sola vez; el
-       helper es idempotente, así que no re-guarda en renders siguientes). */
-    if (_selByesFixed) { try { window._tourSave(tourId, cfg); } catch(_){} }
+       helper es idempotente, así que no re-guarda en renders siguientes).
+       silent:true (2026-08-22): dispara en CADA RENDER de la pantalla
+       (qualifier-route, formato de Selecciones tipo "sfn*"/"spv*"), no
+       por acción directa del usuario — nunca debe interrumpir con el
+       modal crítico. */
+    if (_selByesFixed) { try { window._tourSave(tourId, cfg, {silent:true}); } catch(_){} }
     /* ── Sección RAMIFICACIÓN ── */
     var targetId = fc.targetTour || '';
     var targetCfg = null;
@@ -34761,7 +34817,14 @@ window._hdrCleanCache = function(){
         }
       }
     });
-    if (changed) { try { if (typeof window._tourSave === 'function') window._tourSave(cfg.id, cfg); } catch(_){} }
+    /* silent:true (2026-08-22): esta función corre SOLA en cada apertura
+       de la pantalla de Estadísticas (`_tourStatsPaint`, con `force`),
+       nunca por acción directa del usuario de "guardar algo" — no debe
+       mostrar el modal crítico si falla. Es la misma familia de bug que
+       la del barrido de recorte de arriba: un banner "ERROR CRÍTICO"
+       apareciendo en pantallas sin relación, disparado por un proceso
+       de fondo que el usuario ni sabe que existe. */
+    if (changed) { try { if (typeof window._tourSave === 'function') window._tourSave(cfg.id, cfg, {silent:true}); } catch(_){} }
     return changed;
   }
   /* Escaneo ROBUSTO de stats del Mundial 2032 (2026-06-01). Resuelve el
@@ -35682,7 +35745,9 @@ window._hdrCleanCache = function(){
       window._lsSetSafe(_key(tourId), JSON.stringify(cfg));
     } catch(_){}
     if (typeof window._tourSave === 'function') {
-      try { window._tourSave(tourId, cfg); } catch(_){}
+      /* silent:true (2026-08-22): _tourMaybeCreditPrizes corre en un
+         setTimeout diferido tras guardar un resultado, sin click. */
+      try { window._tourSave(tourId, cfg, {silent:true}); } catch(_){}
     }
   }
 
@@ -36651,7 +36716,9 @@ window._hdrCleanCache = function(){
         if (_selArrangeHumanByesLast(cfg, g, slice)) changed = true;
       }
       if (changed && tourId && typeof window._tourSave === 'function') {
-        try { window._tourSave(tourId, cfg); } catch(_){}
+        /* silent:true (2026-08-22): _tourEnsureRoadFixtures se llama
+           al resolver la card del hub, sin acción del usuario. */
+        try { window._tourSave(tourId, cfg, {silent:true}); } catch(_){}
       }
       return changed;
     } catch(_){ return false; }
@@ -59862,7 +59929,9 @@ https://api.sofascore.app/api/v1/team/44/image
             window._TOUR_CACHE = window._TOUR_CACHE || {};
             window._TOUR_CACHE[cfg.id || k.replace(/^tour_/,'').replace(/_v1$/,'')] = cfg;
           } catch(_){}
-          try { if (typeof window._tourSave === 'function' && cfg.id) window._tourSave(cfg.id, cfg); } catch(_){}
+          /* silent:true (2026-08-22): fixup automático de un solo uso al
+             arrancar, no una acción del usuario. */
+          try { if (typeof window._tourSave === 'function' && cfg.id) window._tourSave(cfg.id, cfg, {silent:true}); } catch(_){}
           try { console.warn('[torneos] Inter/Portugal des-humanizados en ' + k); } catch(_){}
         }
       }
@@ -69208,7 +69277,13 @@ https://api.sofascore.app/api/v1/team/44/image
       try { if (window._TOUR_CACHE) window._TOUR_CACHE[sid] = cfg; } catch(_){}
       try {
         if (typeof window._tourSave === 'function') {
-          Promise.resolve(window._tourSave(sid, cfg)).catch(function(){});
+          /* silent:true (2026-08-22): «Reiniciar Temporada» resetea
+             hasta ~25 slots de torneo (sct/pss/jg/asia/mundial/tx1-8/
+             sfn1-10/spv1-10) en UN SOLO bucle — sin silent, un slot
+             lento/con payload grande (p.ej. "sfn1") podía disparar el
+             banner crítico ⚠️ repetidamente en pantallas sin relación
+             con el reset, para UNA sola acción del admin. */
+          Promise.resolve(window._tourSave(sid, cfg, {silent:true})).catch(function(){});
         }
       } catch(_){}
     }
@@ -69784,6 +69859,51 @@ https://api.sofascore.app/api/v1/team/44/image
     } catch(_){}
   }
   try { window._bayernHudOnHydrate(_bayernHudMigrateTarget); } catch(_){}
+
+  /* ── FIXUP ONE-SHOT (obligatorio, 2026-08-22): borra PARA SIEMPRE el
+     🪙 presupuesto y el 💼 valoración YA ACUMULADOS en las 6 cajas
+     humanas (petición explícita del usuario en chat, "limpiar bien la
+     web" → "Borrar también lo acumulado", tras confirmarlo de forma
+     inequívoca vía AskUserQuestion). Usa `_bayernHudMerge` — fusión POR
+     CAMPO, nunca reemplazo total — para poner `money`/`rating`/
+     `moneyTarget`/`ratingTarget` a 0 en CADA uno de los 6 hubs, SIN
+     tocar `pi` (💊 puntos de fisio, que el usuario NO pidió borrar) ni
+     ningún otro campo del override. El merge va AUTORITATIVO
+     (force+authoritative=true — el MISMO mecanismo que ya usan "✅
+     Guardar" / "♻ Restablecer" / "📅 Reiniciar Temporada"): el 0 GANA
+     la fusión del servidor (sellado con el reloj del propio servidor,
+     con bump de `rev`) y se propaga de verdad a los demás dispositivos,
+     no se queda solo en éste — mismo patrón ya probado en
+     `_retroEarningsApply` (loop de `setActiveHub` + merge autoritativo
+     + restaurar el hub original al terminar).
+
+     Corre UNA SOLA VEZ por dispositivo (flag persistido
+     `ftbol_fixup_wipe_hud_money_rating_v1`) — NUNCA se repite, o el
+     🪙/💼 no podría volver a acumularse nunca más tras este momento
+     (rompería el juego para siempre, no solo limpiaría lo viejo). */
+  function _fixupWipeHudMoneyRatingForeverV1(){
+    try {
+      if (localStorage.getItem('ftbol_fixup_wipe_hud_money_rating_v1') === '1') return;
+      var _misters = window._MISTERS_HUMANOS || [];
+      if (!_misters.length || typeof window.setActiveHub !== 'function'
+          || typeof window._bayernHudMerge !== 'function') return;
+      var _originalHub = null;
+      try { _originalHub = window._activeHub && window._activeHub().id; } catch(_){}
+      _misters.forEach(function(m){
+        try {
+          window.setActiveHub(m.id);
+          window._bayernHudMerge({ money: 0, rating: 0, moneyTarget: 0, ratingTarget: 0 }, true, true);
+        } catch(err){ try { console.warn('[hud-wipe] fallo en hub', m.id, err); } catch(_){} }
+      });
+      try { if (_originalHub) window.setActiveHub(_originalHub); } catch(_){}
+      try { if (typeof window._bayernHudReapply === 'function') window._bayernHudReapply(); } catch(_){}
+      localStorage.setItem('ftbol_fixup_wipe_hud_money_rating_v1', '1');
+    } catch(_){}
+  }
+  /* Diferido 3s: da tiempo a que `setActiveHub`/`MISTERS_HUMANOS` (IIFE
+     anterior) y el resto de este IIFE (KEY/save/load/_bayernHudMerge)
+     terminen de inicializarse antes de recorrer los 6 hubs. */
+  setTimeout(_fixupWipeHudMoneyRatingForeverV1, 3000);
 
   try {
     window.addEventListener('hubchange', function(){

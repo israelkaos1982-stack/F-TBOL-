@@ -1,6 +1,237 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
-## El check "Workers Builds: ftbol" (Cloudflare) fallaba en TODA PR — integración huérfana, sin relación con el despliegue real (obligatorio, 2026-08-22 #5)
+## Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas — petición explícita del usuario (obligatorio, 2026-08-22 #8)
+
+**Petición usuario 2026-08-22** ("lo que quiero es limpiar bien la
+web / la simulación que teníamos ia vs ia se ha eliminado en todos
+los torneos por completo? / los actas de todos los partidos ia vs ia
+se ha eliminado por completo? / la puntuacion que había en cada caja
+humana de 💼 se ha eliminado por completo? / quiero que lo
+aniquiladores para siempre, del codigo y la web").
+
+### Investigación previa — la simulación IA vs IA y las actas NO se tocan
+
+Se auditó primero si el sistema de simulación IA vs IA / actas seguía
+existiendo, ANTES de asumir que había que eliminar algo:
+
+- **`iaSimLive`** (la función histórica con el cronómetro "1 minuto de
+  juego = 1 segundo real") — se revisaron TODOS sus call sites
+  (`grep`, `copa-engine.js` + `misc_body_1.html` + `misc_body_2.html`):
+  **ya pasan `instant=true` en TODOS los sitios**, sin excepción. Esto
+  ya estaba resuelto por la sección "Excepción explícita — modo
+  INSTANTÁNEO de `iaSimLive`..." (2026-08-10, más abajo). No hace
+  falta tocar nada — el cronómetro animado ya no existe en ninguna
+  competición.
+- Las competiciones que nunca pasaron por `iaSimLive` (Champions/
+  Europa/Conference, Torneos de Verano, Selecciones/Mundial 2032,
+  Mundialito, Superliga) resuelven sus partidos IA-vs-IA de forma
+  headless desde siempre (`_tourSimMatch`/`_tourSimLeagueMatch`/
+  `_psSimChargedCup`) — nunca tuvieron cronómetro animado.
+- **Las actas (goleadores/tarjetas/MVP/eventos)** de los partidos IA vs
+  IA se siguen generando y persistiendo exactamente igual —
+  `genMatchEventsEnhanced` corre igual en modo instantáneo, solo
+  cambia que no se anima progresivamente.
+- **Conclusión, confirmada con el usuario vía `AskUserQuestion`**: NI
+  la simulación IA vs IA NI las actas se tocan — el usuario, tras la
+  aclaración ("te estás liando" — su pregunta original sobre "la
+  simulación de 1 minuto" se refería al cronómetro YA eliminado en
+  2026-08-10, no al motor de resultados), confirmó explícitamente
+  **conservar el historial** de partidos ya jugados y no tocar el
+  motor de simulación en absoluto.
+
+### Lo único que SÍ se elimina — el 🪙/💼 ya acumulado en las 6 cajas humanas
+
+El usuario confirmó explícitamente ("Borrar también lo acumulado") que
+quiere el **🪙 presupuesto** y el **💼 valoración** YA ACUMULADOS en
+las 6 cajas de mister humano (`window._MISTERS_HUMANOS`: Toñín/
+Liverpool, Álvaro/Arsenal, Acsa/Real Madrid, Isra/Atlético Madrid,
+Ángel/FC Barcelona, Izan/PSG — Rubén/Inter ya no cuenta, retirado
+2026-08-02) puestos a **CERO PARA SIEMPRE**, no solo dejar de generar
+más a partir de ahora.
+
+**NO se toca `💊 puntos de fisio`** (`o.pi`) — el usuario no lo pidió
+en ningún momento; su pregunta y confirmación fueron específicamente
+sobre "la puntuación... de 💼" (y, al agrupar la pregunta, 🪙
+presupuesto). `💊` sigue exactamente igual que antes.
+
+### Fix — fixup one-shot con merge AUTORITATIVO por campo, en los 6 hubs
+
+`_fixupWipeHudMoneyRatingForeverV1()` (`misc_body_1.html`, dentro del
+IIFE del HUD, junto a `_bayernHudMigrateTarget`): recorre los 6
+misters de `window._MISTERS_HUMANOS`, para cada uno hace
+`window.setActiveHub(m.id)` (reasigna `KEY`/`COOKIE_KEY`/`IDB_ROW_ID`/
+`KV_URL` del hub — mismo patrón ya probado en `_retroEarningsApply`) y
+llama `window._bayernHudMerge({money:0, rating:0, moneyTarget:0,
+ratingTarget:0}, true, true)` — fusión **POR CAMPO** (no reemplazo
+total, así `pi` sobrevive intacto), **AUTORITATIVA** (mismo mecanismo
+que "✅ Guardar"/"♻ Restablecer"/"📅 Reiniciar Temporada": el 0 gana
+SIEMPRE la fusión del servidor, sellado con el reloj del propio
+servidor + bump de `rev`, así que se propaga de verdad a los demás
+dispositivos del parque de 6 móviles + PC, no se queda solo en el que
+ejecuta el fixup). Al terminar, restaura el hub que el usuario tenía
+activo (`setActiveHub(_originalHub)`).
+
+Corre **UNA SOLA VEZ por dispositivo** (flag
+`ftbol_fixup_wipe_hud_money_rating_v1`, diferido 3 s tras el arranque
+para dar tiempo a que `setActiveHub`/`MISTERS_HUMANOS` estén listos) —
+**NUNCA vuelve a ejecutarse**: si volviera a correr en cada boot, el
+🪙/💼 jamás podría volver a acumularse (rompería el juego para
+siempre, no solo limpiaría lo viejo).
+
+### Reglas a respetar
+
+1. **PROHIBIDO** interpretar "aniquilar/eliminar la simulación IA vs
+   IA" o "las actas" de un usuario sin verificar PRIMERO qué existe
+   realmente en el código (aquí, ambas cosas YA estaban en el estado
+   deseado — el cronómetro animado se eliminó en 2026-08-10, las actas
+   nunca se tocaron). Investigar y responder con evidencia concreta
+   ANTES de proponer o ejecutar un cambio destructivo — no asumir que
+   una pregunta ambigua sobre "¿se ha eliminado X?" significa "elimina
+   X ahora".
+2. **PROHIBIDO** tomar una acción destructiva e irreversible sobre
+   datos de producción (borrar 🪙/💼/plantillas/actas/lo que sea) sin
+   antes usar `AskUserQuestion` para confirmar el alcance EXACTO,
+   cuando la petición es ambigua o contradice reglas de preservación
+   de datos ya establecidas en este archivo. Aquí la petición inicial
+   ("aniquiladores para siempre, del codigo y la web") podía leerse
+   como "borrar TODO el motor de simulación" — confirmar el alcance
+   real evitó una destrucción catastrófica no deseada.
+3. **PROHIBIDO** que `_fixupWipeHudMoneyRatingForeverV1` (o cualquier
+   fixup equivalente que se añada en el futuro para este mismo tipo de
+   petición) toque `pi` (💊) — el usuario NUNCA pidió borrarlo. Si en
+   el futuro SÍ lo pide explícitamente, se añade `pi:0` al patch del
+   merge — nunca se usa un reemplazo total del override que lo borre
+   como efecto colateral.
+4. **PROHIBIDO** que este fixup (o uno similar) se dispare más de una
+   vez por dispositivo. Es un borrado PERMANENTE, no una limpieza
+   periódica — el flag de una sola ejecución es obligatorio.
+5. Si el usuario añade un 7º mister humano en el futuro (o reactiva a
+   Rubén/Inter), este fixup YA NO le afecta (corrió una sola vez sobre
+   los 6 de ese momento) — no hace falta ni se debe re-ejecutar para
+   cubrir altas posteriores.
+
+## `window._tourSave` mostraba el banner "⚠️ ERROR CRÍTICO — no se pudo confirmar el guardado" en pantallas SIN relación, para procesos AUTOMÁTICOS/DE FONDO que el usuario nunca disparó (obligatorio, 2026-08-22 #6)
+
+**Bug (usuario 2026-08-22, foto del banner rojo referenciando "sfn1" sobre
+la pantalla de PREVIA de Liga EA Sports / Real Madrid vs Real Betis —
+"ERROR CRITICO, sale siempre / quiero que lo arregles de una vez")**:
+el banner `window._gmCriticalNotice` con el texto "⚠️ No se pudo
+confirmar el guardado de '\<id\>' en el servidor (red lenta o payload
+grande)... [AbortError...]" (disparado desde `window._tourSave`, sección
+"obligatorio, 2026-07-04" del bloque de `_tourSave`) aparecía de forma
+**recurrente e intrusiva**, en pantallas que no tenían NADA que ver con
+el torneo mencionado — el usuario estaba viendo la previa de un partido
+de **Liga EA Sports** y el banner hablaba de **"sfn1"** (un slot de
+Selecciones · Rondas Finales), demostrando que el fallo no era de la
+pantalla que el usuario tenía abierta, sino de un proceso corriendo por
+su cuenta en segundo plano.
+
+### Causa raíz
+
+`window._tourSave(id, cfg, saveOpts)` solo suprime el banner
+`window._gmCriticalNotice` cuando el caller pasa `saveOpts.silent ===
+true`. De las **40 llamadas** a `window._tourSave(...)` que existen en
+`misc_body_1.html`, solo **1** (`_tourReconcileToServer`, el
+reconciliador de fondo que ya se diseñó correctamente) pasaba
+`{silent:true}` — las **39 restantes** dejaban el 3er argumento fuera, así
+que CUALQUIER fallo de guardado en ellas mostraba el banner intrusivo,
+sin distinguir si el guardado fue disparado por un click explícito del
+usuario o por un proceso automático corriendo sin que él hiciera nada.
+
+Auditando las 39, se confirmó que **~22 son 100% automáticas/de fondo**
+— nunca las dispara un click, un `confirm()` ni un `prompt()`:
+
+1. **`_pmSweepAllTours`** — el barrido periódico (cada 3 min + 9 s tras
+   el arranque) que recorta actas de partidos IA-vs-IA completados. Es
+   el candidato más fuerte: corre SOLO, sin que el usuario abra ninguna
+   pantalla, y puede tocar CUALQUIER torneo (incluido "sfn1") en
+   cualquier momento de la sesión.
+2. **`_psAutoChainBuildMundial`/`_psEnsureMundialStateRebuilt`** —
+   auto-construcción de `groupFixtures`/`koBracket` al resolver la card
+   "Próximo partido" del hub (Mundial-48/Selecciones), documentado
+   explícitamente como "se llama al entrar a `_selPair`... sin que el
+   usuario pulse nada" y "se puede llamar en cada render sin coste".
+3. **`_tourEnsureGroupFixtures`/`_tourEnsureKoBracket`/
+   `_tourEnsureRoadFixtures`** (dentro de `_selPair`, el resolver de la
+   card del hub para Mundialito/Selecciones ROAD) — construcción LAZY de
+   fixtures/bracket disparada por el RENDER de la card, no por un click.
+4. **`_tourBackfillEfootballAlias`/`_efAliasBakeIntoTours`** — bake del
+   alias eFootball en `cfg.teams[]`, diferido con `setTimeout(...,0)` al
+   abrir la previa o al recibir la respuesta de una búsqueda en servidor.
+5. **`_tourLoad`** (2 puntos): el re-empuje curativo cuando detecta que
+   el servidor sigue "por detrás" del guardado local (`_tourRepushThrottle`,
+   con su propio cooldown de 20 s) y el rechazo+re-subida anti-clobber de
+   un re-sorteo stale — ambos corren al HIDRATAR (background refresh),
+   no al guardar algo el usuario.
+6. **`_tourDehumanizeRetired`/`_fixupUnhumanizeRubenTournamentsV1`** —
+   fixups de datos que corren en el chokepoint de lectura
+   (`_tourLoadCachedSync`) o una vez al arrancar.
+7. **`_tourBackfillActasFromResults`** — llamado en cada apertura de la
+   pantalla de Estadísticas (`_tourStatsPaint`), sin botón manual desde
+   2026-06-29 (regla ya existente "La caja `s-tour-stats` MERGEA SOLA").
+8. **La persistencia del bracket inicial** en el render de la pantalla
+   KO (`_needSaveBracket`) — "sin esto, recargar la página antes de
+   simular nada deja localStorage sin `cfg.bracket`".
+9. **`_tourMaybeCreditPrizes`** — pago de premios diferido con
+   `setTimeout(...,200)` tras guardar un resultado.
+10. **El bucle de "📅 Reiniciar Temporada"** (`_persistTourReset`) — una
+    ÚNICA acción del admin puede iterar hasta **~25 slots de torneo**
+    (`sct,pss,jg,asia,mundial,tx1..tx8,sfn1..sfn10,spv1..spv10`) en el
+    MISMO bucle; sin `silent`, un solo slot lento/con payload grande
+    (coincide con "sfn1", uno de los slots de este bucle) podía disparar
+    el banner varias veces por un único click del admin.
+
+### Fix
+
+Se añadió `{silent:true}` a las ~22 llamadas confirmadas como
+automáticas/de fondo (ver lista arriba). Las ~18 llamadas restantes —
+todas disparadas directamente desde un `addEventListener('click', ...)`,
+un `confirm()`/`prompt()`, o el auto-guardado con debounce de 600 ms
+ligado a que el usuario esté escribiendo en el editor de torneo
+(`_tourEdScheduleSave`) — se dejaron **sin tocar**: si el usuario pulsa
+"✅ CONFIRMAR Y SORTEAR", "🎮 Sim", "🔄 Recalcular estadísticas", el
+picker de un equipo, o cierra el editor tras escribir un nombre, y ESE
+guardado concreto falla, el aviso SIGUE apareciendo — es exactamente la
+acción que el usuario acaba de realizar, así que merece feedback
+inmediato.
+
+El mecanismo de reintento/cola pendiente (`_tourPendingSyncAdd`, que
+sigue subiendo el cambio en segundo plano hasta que la red lo permita)
+**no cambia en absoluto** con `silent:true` — solo se suprime el banner
+VISIBLE. Un guardado de fondo que falla sigue reintentándose igual que
+antes; simplemente ya no interrumpe al usuario en una pantalla sin
+relación con lo que está fallando.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una llamada NUEVA a `window._tourSave(id, cfg)`
+   disparada por un proceso automático (timer, render, hidratación,
+   fixup de arranque, bake/backfill diferido, o cualquier bucle que
+   itere varios torneos de golpe) omita `{silent:true}`. El patrón
+   correcto es SIEMPRE `window._tourSave(id, cfg, {silent:true})` para
+   estos casos — el banner `_gmCriticalNotice` es EXCLUSIVO de acciones
+   que el usuario acaba de disparar él mismo.
+2. **PROHIBIDO** añadir `{silent:true}` a un guardado disparado
+   DIRECTAMENTE por un click/confirm/prompt del usuario (Sim, Draw,
+   Reset, confirmar sorteo, guardar resultado jugado, editor de
+   torneo). Esos SÍ deben avisar si fallan — es la acción que el
+   usuario acaba de pedir.
+3. **PROHIBIDO** que un bucle NUEVO que reinicie/toque VARIOS slots de
+   torneo de golpe (como "Reiniciar Temporada") dispare el banner una
+   vez POR SLOT. Un único click del admin no puede convertirse en
+   hasta 25 avisos intrusivos — el guardado de cada slot dentro de ese
+   bucle es `{silent:true}`, aunque el click que lo originó sea muy
+   explícito.
+4. Antes de dar por cerrado un bug de "el banner de guardado aparece en
+   una pantalla sin relación / aparece siempre", auditar con `grep` TODAS
+   las llamadas a `window._tourSave(` (o el equivalente de cualquier
+   guardado con aviso crítico similar que se añada en el futuro, p.ej.
+   `saveData`/`persistSharedLigaState`) y clasificar cada una como
+   "click directo del usuario" (avisa) o "proceso automático/de fondo"
+   (`{silent:true}`) — no asumir que arreglar UN call site basta, como
+   ya demostró este bug con 21 call sites adicionales sin marcar.
+
+## El check "Workers Builds: ftbol" (Cloudflare) fallaba en TODA PR — integración huérfana, sin relación con el despliegue real (obligatorio, 2026-08-22 #7)
 
 **Petición usuario 2026-08-22**: "investiga el check de Cloudflare Workers
 y arréglalo" — el check `Workers Builds: ftbol` salía en rojo en TODAS

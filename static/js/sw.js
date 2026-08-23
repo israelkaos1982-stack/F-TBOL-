@@ -52,7 +52,41 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v28';
+var CACHE_HTML   = 'ftbol-html-v30';
+/* v29 → v30 (2026-08-22): petición explícita del usuario en chat
+   ("Borrar también lo acumulado") — fixup one-shot que borra PARA
+   SIEMPRE el 🪙 presupuesto y el 💼 valoración ya acumulados en las 6
+   cajas humanas (money/rating/moneyTarget/ratingTarget a 0 en cada
+   hub, vía merge autoritativo — NO toca 💊 puntos de fisio ni ningún
+   otro dato). Corre una única vez por dispositivo
+   (`ftbol_fixup_wipe_hud_money_rating_v1`). Ver CLAUDE.md, sección
+   "Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas". */
+/* v28 → v29 (2026-08-22): el banner rojo "⚠️ No se pudo confirmar el
+   guardado de '<id>' en el servidor..." (`window._gmCriticalNotice`,
+   disparado desde `window._tourSave`) aparecía "siempre", en pantallas
+   SIN relación con el torneo que fallaba (ej. una previa de Liga EA
+   Sports mostrando el aviso de "sfn1") — bug reportado por el usuario
+   como "ERROR CRITICO, sale siempre". Causa: ~20 llamadas a
+   `window._tourSave(id, cfg)` disparadas por procesos AUTOMÁTICOS/DE
+   FONDO (el barrido periódico `_pmSweepAllTours` cada 3 min, la
+   construcción lazy de `groupFixtures`/`koBracket`/fixtures ROAD al
+   resolver la card del hub, el bake de alias eFootball diferido, el
+   re-empuje curativo de `_tourLoad` tras detectar un guardado stale, el
+   pago de premios diferido, y el bucle de «Reiniciar Temporada» que
+   resetea hasta ~25 slots de torneo de golpe) NO pasaban `{silent:true}`
+   — a diferencia de la única ruta ya correcta
+   (`_tourReconcileToServer`). Cualquier fallo de guardado en UNO de
+   estos procesos de fondo disparaba el mismo banner intrusivo pensado
+   solo para acciones interactivas del usuario (Sim/Draw/Reset,
+   confirmar sorteo, guardar un resultado jugado…). Fix: `{silent:true}`
+   añadido a las ~22 llamadas confirmadas como automáticas/de fondo; las
+   ~18 llamadas de clicks/confirms/prompts directos del usuario se
+   dejan SIN tocar (deben seguir avisando si fallan). El reintento/cola
+   pendiente (`_tourPendingSyncAdd`) sigue funcionando igual en ambos
+   casos — este fix solo silencia el banner INTRUSIVO para saves que el
+   usuario no disparó directamente. Ver CLAUDE.md, sección "ERROR
+   CRÍTICO... sale siempre — múltiples `_tourSave` de fondo sin
+   silent:true". */
 /* v27 → v28 (2026-08-22): el recorte de acta pasa de "esperar a que la
    jornada/ronda/eliminatoria ENTERA esté completa" a "recortar cada
    partido/leg IA-vs-IA en cuanto ÉL MISMO termine" (decisión explícita

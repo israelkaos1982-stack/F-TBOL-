@@ -69860,15 +69860,14 @@ https://api.sofascore.app/api/v1/team/44/image
   }
   try { window._bayernHudOnHydrate(_bayernHudMigrateTarget); } catch(_){}
 
-  /* ── FIXUP ONE-SHOT (obligatorio, 2026-08-22): borra PARA SIEMPRE el
-     🪙 presupuesto y el 💼 valoración YA ACUMULADOS en las 6 cajas
+  /* ── FIXUP ONE-SHOT (obligatorio, 2026-08-22 #8, CORREGIDO 2026-08-22 #9):
+     borra PARA SIEMPRE el 💼 valoración YA ACUMULADO en las 6 cajas
      humanas (petición explícita del usuario en chat, "limpiar bien la
-     web" → "Borrar también lo acumulado", tras confirmarlo de forma
-     inequívoca vía AskUserQuestion). Usa `_bayernHudMerge` — fusión POR
-     CAMPO, nunca reemplazo total — para poner `money`/`rating`/
-     `moneyTarget`/`ratingTarget` a 0 en CADA uno de los 6 hubs, SIN
-     tocar `pi` (💊 puntos de fisio, que el usuario NO pidió borrar) ni
-     ningún otro campo del override. El merge va AUTORITATIVO
+     web" → "Borrar también lo acumulado", tras confirmarlo vía
+     AskUserQuestion). Usa `_bayernHudMerge` — fusión POR CAMPO, nunca
+     reemplazo total — para poner `rating`/`ratingTarget` a 0 en CADA
+     uno de los 6 hubs, SIN tocar `pi` (💊 puntos de fisio) ni ningún
+     otro campo del override. El merge va AUTORITATIVO
      (force+authoritative=true — el MISMO mecanismo que ya usan "✅
      Guardar" / "♻ Restablecer" / "📅 Reiniciar Temporada"): el 0 GANA
      la fusión del servidor (sellado con el reloj del propio servidor,
@@ -69877,10 +69876,29 @@ https://api.sofascore.app/api/v1/team/44/image
      `_retroEarningsApply` (loop de `setActiveHub` + merge autoritativo
      + restaurar el hub original al terminar).
 
+     ⚠️ CORRECCIÓN 2026-08-22 #9 — REGRESIÓN GRAVE, LEER ANTES DE TOCAR:
+     la primera versión de este fixup (#8) borraba TAMBIÉN `money`/
+     `moneyTarget` (🪙 presupuesto) — el usuario JAMÁS pidió eso. Solo
+     pidió borrar 💼 (valoración); 🪙 nunca formó parte de su petición
+     real, y su confirmación ("Borrar también lo acumulado") respondía a
+     una pregunta de aclaración que YO redacté mal, agrupando 🪙+💼 como
+     si fueran una sola cosa ("💼 (valoración/presupuesto)"). El usuario
+     lo señaló explícitamente y con razón: "el 🪙 jamás te he dicho que
+     lo borres". CORREGIDO: el patch YA NO toca `money`/`moneyTarget`
+     bajo ninguna circunstancia — SOLO `rating`/`ratingTarget`.
+     PROHIBIDO volver a añadir `money`/`moneyTarget` a este patch sin
+     una petición NUEVA, EXPLÍCITA y SEPARADA del usuario sobre 🪙
+     específicamente — nunca inferida de una pregunta que mencione 💼.
+
      Corre UNA SOLA VEZ por dispositivo (flag persistido
      `ftbol_fixup_wipe_hud_money_rating_v1`) — NUNCA se repite, o el
-     🪙/💼 no podría volver a acumularse nunca más tras este momento
-     (rompería el juego para siempre, no solo limpiaría lo viejo). */
+     💼 no podría volver a acumularse nunca más tras este momento
+     (rompería el juego para siempre, no solo limpiaría lo viejo). El
+     nombre del flag se conserva tal cual (no se renombra) para que los
+     dispositivos que YA lo ejecutaron con la versión vieja (que sí tocó
+     🪙) no vuelvan a correr el fixup — no arreglaría el 🪙 ya perdido
+     (el merge autoritativo con bump de `rev` no deja rastro del valor
+     previo) y solo añadiría trabajo redundante. */
   function _fixupWipeHudMoneyRatingForeverV1(){
     try {
       if (localStorage.getItem('ftbol_fixup_wipe_hud_money_rating_v1') === '1') return;
@@ -69892,7 +69910,7 @@ https://api.sofascore.app/api/v1/team/44/image
       _misters.forEach(function(m){
         try {
           window.setActiveHub(m.id);
-          window._bayernHudMerge({ money: 0, rating: 0, moneyTarget: 0, ratingTarget: 0 }, true, true);
+          window._bayernHudMerge({ rating: 0, ratingTarget: 0 }, true, true);
         } catch(err){ try { console.warn('[hud-wipe] fallo en hub', m.id, err); } catch(_){} }
       });
       try { if (_originalHub) window.setActiveHub(_originalHub); } catch(_){}

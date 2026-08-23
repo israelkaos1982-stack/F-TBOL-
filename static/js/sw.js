@@ -52,7 +52,18 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v30';
+var CACHE_HTML   = 'ftbol-html-v31';
+/* v30 → v31 (2026-08-22, CORRECCIÓN URGENTE): la v30 tenía un fixup
+   one-shot que borraba PARA SIEMPRE tanto el 💼 valoración COMO el 🪙
+   presupuesto de las 6 cajas humanas — pero el usuario JAMÁS pidió
+   borrar el 🪙, solo el 💼. Fue un error de interpretación (una
+   pregunta de aclaración mal redactada que agrupó ambos conceptos como
+   si fueran uno). El usuario lo señaló explícitamente ("el 🪙 jamás te
+   he dicho que lo borres"). Corregido: el fixup (mismo flag
+   `ftbol_fixup_wipe_hud_money_rating_v1`, para que los dispositivos que
+   YA lo corrieron con la v30 no lo repitan) ahora SOLO toca
+   `rating`/`ratingTarget` — nunca `money`/`moneyTarget`. Ver CLAUDE.md,
+   sección "Borrado PERMANENTE del 🪙/💼..." (corrección añadida ahí). */
 /* v29 → v30 (2026-08-22): petición explícita del usuario en chat
    ("Borrar también lo acumulado") — fixup one-shot que borra PARA
    SIEMPRE el 🪙 presupuesto y el 💼 valoración ya acumulados en las 6
@@ -60,7 +71,9 @@ var CACHE_HTML   = 'ftbol-html-v30';
    hub, vía merge autoritativo — NO toca 💊 puntos de fisio ni ningún
    otro dato). Corre una única vez por dispositivo
    (`ftbol_fixup_wipe_hud_money_rating_v1`). Ver CLAUDE.md, sección
-   "Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas". */
+   "Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas".
+   ⚠️ SUPERSEDIDO por v31 (arriba) — esta versión tocaba 🪙 sin
+   autorización del usuario. Se conserva como registro histórico. */
 /* v28 → v29 (2026-08-22): el banner rojo "⚠️ No se pudo confirmar el
    guardado de '<id>' en el servidor..." (`window._gmCriticalNotice`,
    disparado desde `window._tourSave`) aparecía "siempre", en pantallas

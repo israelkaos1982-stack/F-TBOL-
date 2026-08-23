@@ -52,7 +52,27 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v32';
+var CACHE_HTML   = 'ftbol-html-v33';
+/* v32 → v33 (2026-08-23, bug real crítico): un guardado de plantilla
+   (`saveData`, Resto de Ligas/Liga EA Sports) cuyos 5 reintentos al
+   servidor fallaban TODOS (red caída de verdad, confirmado en vivo con
+   un usuario cuyo propio móvil no conseguía ni cargar la web) dejaba el
+   slug marcado "pendiente de confirmar" PARA SIEMPRE — nada lo limpiaba
+   salvo un guardado posterior que sí confirmara. Ese pendiente se
+   re-sembraba con `Date.now()` en CADA carga de página (pareciendo
+   "recién editado" siempre), así que el anti-wipe de `fetchData`
+   conservaba la copia LOCAL sin excepción — aunque fuera una plantilla
+   vacía/degradada por el mismo corte de red, y aunque el SERVIDOR
+   tuviera la plantilla real completa (verificado con
+   `/api/liga-ext/liga-ea-sports`: el Real Madrid seguía con sus 26
+   jugadores reales en el servidor). El dispositivo quedaba atascado con
+   la copia mala PARA SIEMPRE, sin arreglarse solo. Fix: el pendiente
+   ahora guarda su timestamp REAL (no se re-sembra a "ahora" en cada
+   carga) y, pasadas 2h sin confirmar, deja de bloquear la adopción de
+   una copia del servidor — el resto del anti-wipe (que SÍ compara
+   riqueza real, no solo "hay algo pendiente") sigue protegiendo
+   cualquier edición local genuinamente más rica. Ver CLAUDE.md, sección
+   "Plantillas atascadas para siempre tras un fallo de red sostenido". */
 /* v31 → v32 (2026-08-22, CORRECCIÓN URGENTE): la v30 tenía un fixup
    one-shot que borraba PARA SIEMPRE tanto el 💼 valoración COMO el 🪙
    presupuesto de las 6 cajas humanas — pero el usuario JAMÁS pidió

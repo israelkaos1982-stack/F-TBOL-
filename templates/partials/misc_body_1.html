@@ -51234,22 +51234,54 @@ https://api.sofascore.app/api/v1/team/44/image
      Además, en pagehide/visibilitychange mandamos un sendBeacon
      best-effort por si la liga es pequeña y cabe (<64 KB). */
   var _LIGAEXT_PENDING_KEY = 'liga_ext_pending_v1';
+  /* Umbral de "pendiente abandonado" (obligatorio, 2026-08-23): ver
+     `_ligaExtPendingMap` más abajo — un guardado cuyos 5 reintentos
+     fallan TODOS (red caída de verdad, no solo lenta) dejaba el slug
+     marcado `pending` PARA SIEMPRE, sin que nada lo desmarcara nunca.
+     Pasadas 2 horas sin confirmar, se deja de tratar como "edición en
+     curso" (deja de bloquear la adopción de una copia del servidor). */
+  var _LIGAEXT_PENDING_STALE_MS = 2 * 60 * 60 * 1000;
+  /* Mapa persistido `slug → timestamp del primer intento sin confirmar`
+     (antes era solo un array de slugs, sin fecha — no se podía saber
+     cuánto llevaba pendiente). Formato legacy (array plano) se migra
+     a timestamp `1` (= "abandonado desde siempre", fuerza el umbral de
+     arriba de inmediato) para que los dispositivos que YA se quedaron
+     atascados con el bug viejo se destraben en cuanto reciban este fix,
+     sin tener que esperar 2h más. */
+  function _ligaExtPendingMap(){
+    try {
+      var r = localStorage.getItem(_LIGAEXT_PENDING_KEY);
+      if (r) {
+        var a = JSON.parse(r);
+        if (Array.isArray(a)) {
+          var m = {};
+          a.forEach(function(s){ if (s) m[s] = 1; });
+          return m;
+        }
+        if (a && typeof a === 'object') return a;
+      }
+    } catch(_){}
+    return {};
+  }
   function _ligaExtPendingSet(){
-    try { var r = localStorage.getItem(_LIGAEXT_PENDING_KEY); if (r){ var a = JSON.parse(r); if (Array.isArray(a)) return a; } } catch(_){}
-    return [];
+    try { return Object.keys(_ligaExtPendingMap()); } catch(_){ return []; }
   }
   window._ligaExtMarkPending = function(slug){
     if (!slug) return;
     try {
-      var s = _ligaExtPendingSet();
-      if (s.indexOf(slug) === -1) { s.push(slug); window._lsSetSafe(_LIGAEXT_PENDING_KEY, JSON.stringify(s)); }
+      var m = _ligaExtPendingMap();
+      if (!m[slug]) { m[slug] = Date.now(); window._lsSetSafe(_LIGAEXT_PENDING_KEY, JSON.stringify(m)); }
     } catch(_){}
   };
   window._ligaExtClearPending = function(slug){
     try {
-      var s = _ligaExtPendingSet().filter(function(x){ return x !== slug; });
-      if (s.length) window._lsSetSafe(_LIGAEXT_PENDING_KEY, JSON.stringify(s));
-      else localStorage.removeItem(_LIGAEXT_PENDING_KEY);
+      var m = _ligaExtPendingMap();
+      if (m[slug]) {
+        delete m[slug];
+        var keys = Object.keys(m);
+        if (keys.length) window._lsSetSafe(_LIGAEXT_PENDING_KEY, JSON.stringify(m));
+        else localStorage.removeItem(_LIGAEXT_PENDING_KEY);
+      }
     } catch(_){}
   };
   /* ── RE-HIDRATAR EL GUARD "DIRTY" TRAS UN RELOAD ─────────────────
@@ -51269,18 +51301,21 @@ https://api.sofascore.app/api/v1/team/44/image
           (se perdió en el reload) → ACEPTA el server VIEJO y pisa el
           local NUEVO. → "emerge la plantilla anterior".
 
-     El set persistido `liga_ext_pending_v1` SÍ sobrevive al reload y
-     contiene el slug mientras el POST de ESTE dispositivo no haya
-     confirmado. Re-sembramos `LIGA_LOCAL_DIRTY_AT` desde ese set,
-     SÍNCRONO en el parseo del IIFE (antes de que cualquier fetchData
-     se dispare por navegación/DOMContentLoaded). Así la rama
+     El mapa persistido `liga_ext_pending_v1` SÍ sobrevive al reload y
+     contiene el slug + timestamp del primer intento sin confirmar de
+     ESTE dispositivo. Re-sembramos `LIGA_LOCAL_DIRTY_AT` desde ese
+     timestamp real (NUNCA con `Date.now()` — eso lo dejaba pareciendo
+     "recién editado" en cada carga, para siempre, ver bug 2026-08-23
+     más abajo), SÍNCRONO en el parseo del IIFE (antes de que cualquier
+     fetchData se dispare por navegación/DOMContentLoaded). Así la rama
      `localDirty` —ya probada— de fetchData conserva el local y lo
      re-sube hasta que el server confirma (lo que limpia el pending
      Y el dirty). No se toca la precedencia de loadData ni la lógica
      de quota / _protected / snapshots. */
   try {
-    _ligaExtPendingSet().forEach(function(slug){
-      if (slug && !LIGA_LOCAL_DIRTY_AT[slug]) LIGA_LOCAL_DIRTY_AT[slug] = Date.now();
+    var _ligaExtPendingBootMap = _ligaExtPendingMap();
+    Object.keys(_ligaExtPendingBootMap).forEach(function(slug){
+      if (slug && !LIGA_LOCAL_DIRTY_AT[slug]) LIGA_LOCAL_DIRTY_AT[slug] = _ligaExtPendingBootMap[slug] || 1;
     });
   } catch(_){}
   /* Boot re-push: re-empuja al server lo que quedó pendiente. Espera
@@ -52099,10 +52134,40 @@ https://api.sofascore.app/api/v1/team/44/image
            un reload y la re-hidratación de arriba no llegara a tiempo).
            El pending solo se borra cuando el POST confirma, así que
            esto NO bloquea updates legítimos de otros dispositivos más
-           allá de esa ventana corta. */
-        var _slugPending = false;
-        try { _slugPending = _ligaExtPendingSet().indexOf(k) !== -1; } catch(_){}
-        var localDirty = !!LIGA_LOCAL_DIRTY_AT[k] || _slugPending;
+           allá de esa ventana corta.
+
+           ESCAPE POR ANTIGÜEDAD (obligatorio, 2026-08-23): "esa ventana
+           corta" solo era corta si el POST llegaba a confirmar en algún
+           momento. `go()` (el POST del guardado, más abajo en este
+           IIFE) reintenta 5 veces con backoff y, si LAS 5 fallan (red
+           realmente caída, no solo lenta — confirmado con un usuario
+           real: el propio dispositivo no conseguía ni cargar la web),
+           `fail()` se rinde SIN limpiar nunca el pending — solo
+           `ok2()` (éxito) lo limpia. El slug se quedaba marcado
+           `pending`/`dirty` PARA SIEMPRE: cada carga de página lo
+           re-sembraba (antes con `Date.now()`, pareciendo "recién
+           editado" en cada boot) y el anti-wipe de abajo conservaba SIN
+           EXCEPCIÓN la copia LOCAL —aunque fuera una plantilla
+           degradada/vacía por el mismo motivo de red— rechazando para
+           siempre la copia del servidor, aunque esta fuera
+           objetivamente más rica. Bug real: plantilla de Liga EA
+           Sports pegada y confirmada por el servidor (verificado en
+           `/api/liga-ext/liga-ea-sports`, jugadores reales completos)
+           pero el móvil seguía mostrando "Sin jugadores"/roster
+           genérico para TODOS los clubs humanos, sin arreglarse nunca
+           solo. Con el timestamp REAL (no re-sembrado a `Date.now()`,
+           ver arriba), un pending de más de `_LIGAEXT_PENDING_STALE_MS`
+           (2h) deja de contar como "edición en curso" — el resto del
+           anti-wipe (teamsWipe/playersWipe/perTeamWipe/resultsWipe)
+           sigue intacto y sigue protegiendo una copia local que
+           REALMENTE sea más rica que la del servidor. */
+        var _slugPending = false, _slugPendingStale = false;
+        try {
+          var _pendingAt = LIGA_LOCAL_DIRTY_AT[k] || 0;
+          _slugPending = _pendingAt > 0 || _ligaExtPendingSet().indexOf(k) !== -1;
+          if (_pendingAt > 0 && (Date.now() - _pendingAt) > _LIGAEXT_PENDING_STALE_MS) _slugPendingStale = true;
+        } catch(_){}
+        var localDirty = (!!LIGA_LOCAL_DIRTY_AT[k] || _slugPending) && !_slugPendingStale;
         /* resultsWipe: el local YA tiene resultados de simulación y el
            servidor devuelve results vacío (p.ej. ligas pre-seed como
            Montenegro / N. Irlanda simuladas en bulk — el bulk sim no
@@ -68833,7 +68898,15 @@ https://api.sofascore.app/api/v1/team/44/image
       var pending = {};
       try {
         var raw = localStorage.getItem('liga_ext_pending_v1');
-        if (raw) { var a = JSON.parse(raw); if (Array.isArray(a)) a.forEach(function(s){ if (s) pending[s] = 1; }); }
+        if (raw) {
+          var a = JSON.parse(raw);
+          /* Formato legacy (array de slugs) o el nuevo mapa slug→timestamp
+             (2026-08-23, ver `_ligaExtPendingMap` en el IIFE de saveData/
+             fetchData) — este botón vive en OTRO <script>, sin acceso a
+             ese helper privado, así que soporta AMBOS formatos aquí. */
+          if (Array.isArray(a)) { a.forEach(function(s){ if (s) pending[s] = 1; }); }
+          else if (a && typeof a === 'object') { Object.keys(a).forEach(function(s){ pending[s] = 1; }); }
+        }
       } catch(_){}
       function _slugOf(kk){
         var s = kk.replace(/^ligaExt_/, '');

@@ -1,5 +1,91 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## Plantillas atascadas para siempre tras un fallo de red sostenido — el guard "pendiente de confirmar" nunca caducaba (obligatorio, 2026-08-23)
+
+**Bug (usuario 2026-08-23, «Real Madrid», y confirmado extensible a
+"todas las plantillas atascadas")**: el usuario pegó la plantilla real
+del Real Madrid, y al día siguiente volvía a salir vacía/genérica
+("Jugador 1/13/25..."), pese a reintentar (borrar caché, etc.). Se
+verificó en vivo pidiendo al usuario que abriera
+`/api/liga-ext/liga-ea-sports` directamente: **el servidor SÍ tenía la
+plantilla real completa** (26 jugadores del Real Madrid, incluidos
+Courtois/Bellingham/Mbappé). El problema estaba 100% en el cliente —
+concretamente, el propio dispositivo del usuario dio errores de red
+reales (`ERR_CONNECTION_ABORTED`/`ERR_NAME_NOT_RESOLVED`) al intentar
+cargar páginas en esa misma sesión, confirmando una conexión
+inestable en ese momento.
+
+### Causa raíz
+
+`saveData` (`misc_body_1.html`) marca cada slug editado como
+"pendiente de confirmar" (`window._ligaExtMarkPending`, persistido en
+`liga_ext_pending_v1`) y lo desmarca SOLO en `ok2()` (éxito del POST).
+Su función `go()` reintenta el POST 5 veces con backoff, pero si **las
+5** fallan (red caída de verdad, no solo lenta), `fail()` se rinde
+(`resolve(false)`) **sin limpiar nunca el pending**. Nada más en el
+proyecto lo limpiaba tampoco.
+
+Con el slug atascado en `pending`:
+1. `fetchData` trata cualquier slug pendiente como `localDirty` — un
+   guard que hace que el anti-wipe **conserve la copia LOCAL sin
+   excepción**, precisamente para no perder una edición en curso.
+2. Pero el timestamp de ese pending (`LIGA_LOCAL_DIRTY_AT[k]`) se
+   **re-sembraba con `Date.now()` en CADA carga de página** — así que
+   aunque llevara días atascado, siempre parecía "recién editado ahora
+   mismo" y el guard nunca caducaba.
+3. Resultado: un dispositivo cuya red falló durante UN guardado (o una
+   racha de guardados, típico de "todas las plantillas atascadas")
+   quedaba **permanentemente incapaz de adoptar la copia del servidor**
+   para esos slugs — aunque el servidor tuviera la plantilla real
+   completa, como se confirmó aquí. El resto del anti-wipe
+   (`teamsWipe`/`playersWipe`/`perTeamWipe`/`resultsWipe`, que SÍ
+   comparan riqueza real) no bloqueaba nada por sí solos — era el flag
+   `localDirty`, huérfano de una edición que nunca llegó a confirmarse,
+   el que bloqueaba todo indefinidamente.
+
+### Fix
+
+- `liga_ext_pending_v1` pasa de array plano (`[slug,...]`) a mapa
+  `{slug: timestamp del primer intento sin confirmar}`
+  (`_ligaExtPendingMap`, con migración automática del formato legacy —
+  las entradas viejas sin timestamp se tratan como "abandonadas desde
+  siempre" para que los dispositivos YA atascados con el bug se
+  destraben en cuanto reciban este fix, sin esperar).
+- El re-sembrado de `LIGA_LOCAL_DIRTY_AT[slug]` al arrancar usa el
+  timestamp REAL persistido, nunca `Date.now()`.
+- **Escape por antigüedad**: si un pending lleva más de
+  `_LIGAEXT_PENDING_STALE_MS` (2 horas) sin confirmar, deja de contar
+  como `localDirty` — el resto del anti-wipe (que sí compara riqueza
+  real local-vs-servidor) sigue intacto y sigue protegiendo cualquier
+  edición local genuinamente más rica que la del servidor.
+- `window._adminClearLocalCache` (botón "🧹 Limpiar caché local") leía
+  `liga_ext_pending_v1` directamente asumiendo el formato array viejo,
+  en OTRO `<script>` sin acceso al helper privado — se actualizó para
+  soportar ambos formatos.
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que un guard de "edición pendiente de confirmar"
+   (`liga_ext_pending_v1` o cualquier equivalente futuro) se re-siembre
+   con `Date.now()` en cada carga de página. Debe persistir y reusar el
+   timestamp REAL del primer intento fallido — si no, nunca se puede
+   distinguir "recién editado" de "lleva días sin confirmar", y el
+   guard se vuelve permanente por accidente.
+2. **PROHIBIDO** que `fail()` (o cualquier ruta de "agotados los
+   reintentos" de un guardado con guard de pendiente) deje el slug
+   marcado para siempre sin ningún mecanismo de caducidad. Todo guard
+   de este tipo necesita un umbral de antigüedad que lo desactive
+   cuando ya no representa una edición en curso real.
+3. **PROHIBIDO** bajar `_LIGAEXT_PENDING_STALE_MS` por debajo de un
+   margen holgado para conexiones lentas/intermitentes (no solo caídas)
+   — 2h ya es generoso para cualquier corte temporal legítimo sin dejar
+   a un usuario con mala cobertura atascado un día entero.
+4. Antes de asumir que "el servidor perdió los datos" en un reporte de
+   "la plantilla desapareció", pedir al usuario el JSON crudo del
+   endpoint (`/api/liga-ext/<slug>`) para descartarlo — en este caso el
+   servidor SIEMPRE tuvo los datos correctos; el bug era puramente de
+   qué copia decide adoptar el cliente.
+
 ## "Champions · Estadísticas" (y Europa/Conference) nunca sumaban lo recortado — la pantalla solo pintaba el cache, nunca disparaba el rebuild (obligatorio, 2026-08-23)
 
 **Bug (3 fotos usuario 2026-08-23, «Champions»)**: tras el fix del

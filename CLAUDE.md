@@ -1,5 +1,79 @@
 # CLAUDE.md — Reglas obligatorias del proyecto F-TBOL
 
+## "Champions · Estadísticas" (y Europa/Conference) nunca sumaban lo recortado — la pantalla solo pintaba el cache, nunca disparaba el rebuild (obligatorio, 2026-08-23)
+
+**Bug (3 fotos usuario 2026-08-23, «Champions»)**: tras el fix del
+recorte por-partido (sección "El recorte de acta pasa a ser POR
+PARTIDO..." más abajo), el usuario reportó dos síntomas ligados: (1)
+el acta de un partido IA-vs-IA ya recortado se ve "sin eventos" (el
+comportamiento DISEÑADO — el recorte deja el marcador y vacía el
+acta), pero (2) **las estadísticas de esos partidos no se sumaban a
+la caja "Champions · Estadísticas"** — justo lo que el mecanismo de
+"tabla permanente" (`pm_tally_ucl_v1`) existe para garantizar que
+NUNCA pase.
+
+### Causa raíz — nada disparaba el rebuild al abrir la pantalla
+
+`rebuildPlayerStatsStore()` (`misc_body_1.html`, expuesta como
+`window.syncLigaEaPlayerStats`) es la ÚNICA función que fusiona la
+tabla permanente (`_pmMergeTallyInto('ucl', buckets.ucl,
+teamPJByComp.ucl)`, línea ~18389) encima del escaneo en vivo y
+**persiste** el resultado en `ef_player_stats_ucl_main_v1`/
+`ef_player_stats_uel_v1`/`ef_player_stats_uecl_v1` — las claves que
+`_renderUclStats`/`_renderUelStats`/`_renderUeclStats`
+(`part2/misc_body_2.html`) leen con
+`window._lextBuildCompStatsDashboard(rootId, statsKey)`.
+
+El problema: esa función **solo lee** `localStorage.getItem(statsKey)`
+— NUNCA llama a `syncLigaEaPlayerStats()` por sí sola (ver
+`window._lextBuildCompStatsDashboard`, `misc_body_1.html` ~17521). Y
+los 3 renderers de Champions/Europa/Conference (a diferencia de
+`STATS_SCREENS` — Recopa/USC/Inter, que SÍ envuelven su render en un
+`syncLigaEaPlayerStats()` diferido, ver comentario "TRIGGER ROBUSTO
+2026-06-09" en `misc_body_1.html`) **nunca disparaban ese rebuild**:
+solo pintaban directamente desde el cache, tanto en su boot
+(`DOMContentLoaded`) como en su `MutationObserver` de "pantalla
+activa". Si nada MÁS de la sesión había llamado a
+`syncLigaEaPlayerStats()` antes (p.ej. abrir la plantilla del hub o
+Premios, que sí lo disparan por su cuenta), la caja de Estadísticas de
+Champions/Europa/Conference se quedaba mostrando el cache tal cual
+estuviera — sin la aportación de ningún partido recién recortado, ni
+de ningún partido nuevo en general.
+
+### Fix
+
+`_renderUclStats`/`_renderUelStats`/`_renderUeclStats`
+(`part2/misc_body_2.html`) adoptan el MISMO patrón que ya usa
+`STATS_SCREENS._renderOne` (`misc_body_1.html`): (1) pintan YA desde
+el cache tal cual esté (nunca bloquea — la caja jamás se queda en
+blanco), y (2) diferido a `setTimeout(0)`, llaman a
+`window.syncLigaEaPlayerStats()` y vuelven a pintar con los datos
+frescos. Esto cubre TANTO el caso de esta sesión (recién recortado,
+sin que nada más dispare el rebuild) COMO el caso general de "abro la
+pantalla de Estadísticas primero, antes que cualquier otra pantalla".
+
+### Reglas a respetar
+
+1. **PROHIBIDO** que una pantalla de Estadísticas nueva (o ya
+   existente) llame a `window._lextBuildCompStatsDashboard(rootId,
+   statsKey)` SIN encadenar un `syncLigaEaPlayerStats()` diferido +
+   re-pintado. Esa función SOLO lee el cache tal cual esté —
+   corresponde al CALLER disparar el rebuild, nunca se asume que
+   "alguna otra pantalla ya lo hizo" (regla generalizada a partir de
+   este bug: 2 de las 3 familias de renderers ya lo hacían —
+   `STATS_SCREENS` y `s-liga-stats`/`s-torneos-stats`/`s-mundial-stats`
+   con sus propios rebuilds — pero Champions/Europa/Conference se
+   quedaron fuera).
+2. **PROHIBIDO** hacer el `syncLigaEaPlayerStats()` SÍNCRONO antes del
+   primer pintado (bloquea el hilo con muchos partidos acumulados —
+   regla ya existente, sección "Caja 'Torneos de Verano ·
+   Estadísticas'" más abajo). Va SIEMPRE diferido a `setTimeout(0)`,
+   después de un primer pintado inmediato desde cache.
+3. Toda competición NUEVA con su propia pantalla de Estadísticas
+   dedicada (no dentro de `STATS_SCREENS`) hereda esta regla: pintar YA
+   + `syncLigaEaPlayerStats()` diferido + re-pintar, igual que
+   Champions/Europa/Conference desde este fix.
+
 ## Borrado PERMANENTE del 🪙/💼 acumulado de las 6 cajas humanas — petición explícita del usuario (obligatorio, 2026-08-22 #8)
 
 **Petición usuario 2026-08-22** ("lo que quiero es limpiar bien la

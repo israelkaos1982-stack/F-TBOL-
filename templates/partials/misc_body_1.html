@@ -53956,6 +53956,145 @@ https://api.sofascore.app/api/v1/team/44/image
     else doDelete();
   };
 
+  /* ── Vaciado masivo de plantilla: borra TODOS los equipos de una liga
+     de un golpe (limpieza 2026-08-24, "vaciar plantillas de las ligas
+     IA para reducir el peso de la web"). Reutiliza el MISMO mecanismo
+     anti-resurrección que `lextDeleteTeam` (`deletedTeamNames[]` por
+     nombre normalizado) para que ningún camino (fetchData con estado
+     stale, hidratación desde SQUAD_REGISTRY, sync desde otra liga)
+     pueda re-inyectar un equipo ya vaciado. Toma `slug` como parámetro
+     explícito (no depende de `CURRENT_KEY`) para poder invocarse en
+     bucle sobre muchas ligas sin tener cada una abierta en pantalla.
+     No pide confirmación — el caller decide su propio gate/confirm si
+     hace falta. Devuelve `true` si vació algo, `false` si la liga ya
+     estaba vacía o no existía. */
+  window.lextWipeLeagueRoster = function(slug){
+    if (!slug) return false;
+    var data = loadData(slug);
+    if (!data || !Array.isArray(data.teams) || !data.teams.length) return false;
+    if (!Array.isArray(data.deletedTeamNames)) data.deletedTeamNames = [];
+    var wipedNames = [];
+    data.teams.forEach(function(t){
+      if (!t || !t.name) return;
+      wipedNames.push(t.name);
+      var nk = _lextNormName(t.name);
+      if (nk && data.deletedTeamNames.indexOf(nk) < 0) data.deletedTeamNames.push(nk);
+    });
+    data.teams = [];
+    data.results = [];
+    saveData(slug, data);
+    /* Purga SQUAD_REGISTRY de todos los equipos vaciados (mismo patrón
+       que `lextDeleteTeam`, generalizado a la liga entera) — sin esto
+       podían quedar huérfanos/stale ahí hasta el próximo boot. */
+    try {
+      if (window.SQUAD_REGISTRY) {
+        wipedNames.forEach(function(nm){ delete window.SQUAD_REGISTRY[nm]; });
+      }
+    } catch(_){}
+    if (typeof window.applyEngineOverrides === 'function') {
+      try { window.applyEngineOverrides(); } catch(_){}
+    }
+    if (CURRENT_KEY === slug) {
+      try { renderTeamsList(); } catch(_){}
+      try { renderTable(); } catch(_){}
+    }
+    return true;
+  };
+
+  /* ── FIXUP ONE-SHOT (obligatorio, 2026-08-24): vacía PARA SIEMPRE la
+     plantilla de las ~20 ligas que el usuario pidió dejar sin equipos IA
+     para reducir el peso de la web (petición explícita, plan aprobado
+     "Limpieza mayor: borrar Recopa + vaciar plantillas + arreglar
+     Estadísticas combinadas"). Corre UNA sola vez por dispositivo — el
+     código ya deja de auto-sembrar estas ligas (Stage 2:
+     `_EXTRA_LEAGUE_SEEDS`/`RESTO_MUNDO_TEAMS` con `teams:[]`), así que
+     este fixup es SOLO para limpiar los datos YA guardados en cada
+     dispositivo/servidor antes de este deploy — nunca se repite ni hace
+     falta que se repita.
+
+     Alcance EXACTO (ver CLAUDE.md / plan aprobado — nada más, nada
+     menos):
+       · Liga EA Sports, Liga Hypermotion, Primera Federación.
+       · Las 17 ligas de "Resto de Ligas" (10 países + 6 Ligas Mixtas +
+         Resto del Mundo).
+       · Copa del Rey NO necesita nada — comparte roster con Liga EA
+         Sports, vacía sola al vaciar `liga-ea-sports`.
+       · Los inyectores manuales "EA Sports → Europa"
+         (`manual_ea_<slug>_v1`) de las 11 zonas — quedarían apuntando a
+         equipos ya borrados si no se limpian a la vez.
+       · Supercopa de España (`sc_state_v1`) y Supercopa de Europa
+         (`usc_state_v1`) — sus 4 equipos se eligen A MANO desde las
+         ligas de arriba en el momento del sorteo; con esas ligas
+         vacías, el bracket ya guardado quedaría con equipos fantasma
+         si no se resetea también.
+
+     PROHIBIDO añadir más slugs a esta lista sin una petición nueva y
+     explícita del usuario — el alcance es el del plan aprobado, no "de
+     paso ya que estamos". PROHIBIDO que este fixup vuelva a correr tras
+     su primera ejecución (dejaría inútil cualquier plantilla nueva que
+     el admin pegue después). */
+  function _fixupWipeAllRostersForCleanupV1(){
+    try {
+      if (localStorage.getItem('ftbol_fixup_wipe_all_rosters_v1') === '1') return;
+      if (typeof window.lextWipeLeagueRoster !== 'function') return;
+      var LEAGUE_SLUGS = [
+        'liga-ea-sports', 'liga-hypermotion', 'liga-primera-federacion',
+        'inglaterra', 'italia', 'francia', 'portugal', 'p-bajos', 'belgica',
+        'turquia', 'dinamarca', 'suiza', 'escocia',
+        'germanika', 'hellas-slavia', 'danubio-nordica', 'adriatico-oriental',
+        'balkanica', 'eurasia', 'resto-mundo'
+      ];
+      LEAGUE_SLUGS.forEach(function(slug){
+        try { window.lextWipeLeagueRoster(slug); } catch(err){ try { console.warn('[wipe-fixup] fallo en liga', slug, err); } catch(_){} }
+      });
+      /* Inyectores "EA Sports → Europa" — mismo formato/clave que usa
+         ese módulo (`manual_ea_<slug>_v1` = {teams:[], ts}), replicado
+         aquí porque `_save`/`_key` de ese IIFE son privados (no
+         expuestos en window). */
+      var MEA_SLUGS = ['ucl','uclPrev','prevR3','prevR2','prevR1','uel','uecl',
+        'supercopa','intercontinental','superliga','verano'];
+      MEA_SLUGS.forEach(function(slug){
+        var key = 'manual_ea_' + slug + '_v1';
+        try {
+          var payload = JSON.stringify({ teams: [], ts: Date.now() });
+          if (typeof window._lsSetSafe === 'function') window._lsSetSafe(key, payload);
+          else localStorage.setItem(key, payload);
+        } catch(_){}
+        try {
+          fetch('/api/kv/' + key, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            credentials:'same-origin',
+            body: JSON.stringify({ value: { teams:[], ts:Date.now() } })
+          }).catch(function(){});
+        } catch(_){}
+      });
+      /* Supercopa de España / Supercopa de Europa — mismo reset que sus
+         propios botones "♻️ Res" (`_scReset`/`_uscReset`), pero sin el
+         confirm() (este fixup corre en silencio, sin interacción) y
+         empujando también el borrado al servidor (esas 2 claves viajan
+         por `/api/state.competition_state`, igual que las de
+         `_resetEuropePoolFeeders`). */
+      ['sc_state_v1', 'usc_state_v1'].forEach(function(key){
+        try { localStorage.removeItem(key); } catch(_){}
+      });
+      try {
+        fetch('/api/state', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          body: JSON.stringify({ competition_state: { sc_state_v1:'', usc_state_v1:'' } })
+        }).catch(function(){});
+      } catch(_){}
+      try { if (typeof window._renderBanner === 'function') window._renderBanner(); } catch(_){}
+      localStorage.setItem('ftbol_fixup_wipe_all_rosters_v1', '1');
+    } catch(_){}
+  }
+  /* Diferido 5s: da tiempo a que `loadData`/`saveData`/`applyEngineOverrides`
+     y el resto de IIFEs de arranque (SQUAD_REGISTRY, ligas auto-sembradas)
+     terminen de inicializarse antes de vaciar nada. */
+  setTimeout(_fixupWipeAllRostersForCleanupV1, 5000);
+
   /* ── Bulk add: pega N nombres (1 por línea), crea N equipos IA con
      valores por defecto. El admin los edita uno a uno después si quiere
      afinar poderes/estadio/escudo/plantilla. Útil para rellenar ligas
@@ -57417,44 +57556,7 @@ https://api.sofascore.app/api/v1/team/44/image
      que el resto del catálogo (sin `fict` = nombre real licenciado).
      Ningún grupo repite país (verificado 14 "países" — 13 parejas +
      Arabia Saudita×4 — repartidos sin colisión, snake por poder). */
-  var RESTO_MUNDO_TEAMS = [
-    /* ── GRUPO 1 — Arabia Saudita / EE.UU / Chile / Qatar / Malasia ── */
-    {name:'Al Hilal SFC',       group:1, power:82, atk:83, mid:82, def:81},                                       /* YA existía */
-    {name:'Inter Miami CF',     group:1, fict:'Miami BP', alias:'🇺🇸 Miami BP - Inter Miami CF - 1ª 👕 ⭐⭐⭐🌗', power:78, atk:79, mid:78, def:77}, /* YA existía */
-    {name:'Colo-Colo',          group:1, fict:'Santiago B', alias:'🇨🇱 Santiago B - Colo-Colo - 1ª 👕 ⭐⭐⭐½', power:76, atk:76, mid:76, def:76},
-    {name:'Al Sadd SC',         group:1, power:74, atk:74, mid:74, def:74},                                       /* YA existía */
-    {name:'Johor Darul Ta\'zim',group:1, power:73, atk:73, mid:73, def:73},
-    /* ── GRUPO 2 — Arabia Saudita / EE.UU / Chile / Qatar / Malasia ── */
-    {name:'Al Nassr FC',        group:2, power:81, atk:82, mid:81, def:80},                                       /* YA existía */
-    {name:'Universidad de Chile',group:2, fict:'Concepción AA', alias:'🇨🇱 Concepción AA - Universidad de Chile - 1ª 👕 ⭐⭐⭐', power:75, atk:75, mid:75, def:75},
-    {name:'Nashville SC',       group:2, fict:'Nashville AY', alias:'🇺🇸 Nashville AY - Nashville SC - 1ª 👕 ⭐⭐⭐', power:73, atk:73, mid:73, def:73},
-    {name:'Al Duhail SC',       group:2, power:72, atk:72, mid:72, def:72},                                       /* YA existía */
-    {name:'Kuching City',       group:2, power:68, atk:68, mid:68, def:68},
-    /* ── GRUPO 3 — Arabia Saudita / México / EAU / Tailandia / Marruecos ── */
-    {name:'Al Ittihad Club',    group:3, power:80, atk:80, mid:80, def:80},                                       /* YA existía */
-    {name:'Al-Ahli Club',       group:3, power:78, atk:79, mid:78, def:77},
-    {name:'Club América',       group:3, power:77, atk:77, mid:77, def:77},                                       /* YA existía */
-    {name:'Buriram United',     group:3, power:74, atk:75, mid:74, def:73},
-    {name:'RS Berkane',         group:3, power:73, atk:73, mid:73, def:73},
-    /* ── GRUPO 4 — Arabia Saudita / México / EAU / Tailandia / Marruecos ── */
-    {name:'Al Ahli Saudi FC',   group:4, power:79, atk:79, mid:79, def:79},                                       /* YA existía */
-    {name:'Tigres UANL',        group:4, power:76, atk:76, mid:76, def:76},                                       /* YA existía */
-    {name:'Al Wahda',           group:4, power:73, atk:73, mid:73, def:73},
-    {name:'Port FC',            group:4, power:71, atk:71, mid:71, def:71},
-    {name:'MAS Fez',            group:4, power:70, atk:70, mid:70, def:70},
-    /* ── GRUPO 5 — Brasil / Argentina / Corea / Japón / Colombia ── */
-    {name:'SE Palmeiras',       group:5, power:81, atk:81, mid:81, def:81},                                       /* YA existía */
-    {name:'CA Boca Juniors',    group:5, power:80, atk:80, mid:80, def:80},                                       /* YA existía */
-    {name:'Ulsan HD',           group:5, power:77, atk:78, mid:77, def:76},
-    {name:'FC Machida Zelvia',  group:5, power:74, atk:74, mid:74, def:74},
-    {name:'Independiente Medellín',group:5, fict:'Medellín RA', alias:'🇨🇴 Medellín RA - Independiente Medellín - 1ª 👕 ⭐⭐⭐', power:74, atk:74, mid:74, def:74},
-    /* ── GRUPO 6 — Brasil / Argentina / Corea / Japón / Colombia ── */
-    {name:'CR Flamengo',        group:6, power:81, atk:82, mid:81, def:80},                                       /* YA existía */
-    {name:'CA River Plate',     group:6, power:80, atk:81, mid:80, def:79},                                       /* YA existía */
-    {name:'FC Seoul',           group:6, power:74, atk:74, mid:74, def:74},
-    {name:'Kashiwa Reysol',     group:6, power:73, atk:73, mid:73, def:73},
-    {name:'América de Cali',    group:6, fict:'Cali R', alias:'🇨🇴 Cali R - América de Cali - 1ª 👕 ⭐⭐⭐', power:73, atk:73, mid:73, def:73}
-  ];
+  var RESTO_MUNDO_TEAMS = [];
   /* ── Resolución FICT → NOMBRE REAL (2026-06-03) ─────────────────────
      Petición usuario: en el Mundialito de Clubes algunos equipos
      sudamericanos salían con el ALIAS eFootball corto como nombre
@@ -59012,140 +59114,22 @@ https://api.sofascore.app/api/v1/team/44/image
        Previa. Sin escudo (el admin los añade desde el editor; cae al
        placeholder de iniciales mientras tanto). */
     'germanika': {
-      teams: [
-        {name:'Bayern München',       power:86, atk:86, mid:86, def:86},
-        {name:'Borussia Dortmund',    power:83, atk:83, mid:83, def:83},
-        {name:'RB Leipzig',           power:80, atk:80, mid:80, def:80},
-        {name:'Bayer Leverkusen',     power:78, atk:78, mid:78, def:78},
-        {name:'Eintracht Frankfurt',  power:75, atk:75, mid:75, def:75},
-        {name:'VfB Stuttgart',        power:72, atk:72, mid:72, def:72},
-        {name:'Crvena Zvezda',        power:69, atk:69, mid:69, def:69},
-        {name:'Partizan Belgrade',    power:67, atk:67, mid:67, def:67},
-        {name:'Vojvodina Novi Sad',   power:65, atk:65, mid:65, def:65},
-        {name:'FCSB',                 power:63, atk:63, mid:63, def:63},
-        {name:'Farul Constanța',      power:61, atk:61, mid:61, def:61},
-        {name:'FK Valmiera',          power:59, atk:59, mid:59, def:59},
-        {name:'Víkingur',             power:57, atk:57, mid:57, def:57},
-        {name:'FK Mornar',            power:56, atk:56, mid:56, def:56},
-        {name:'Petrovac',             power:55, atk:55, mid:55, def:55},
-        {name:'Mondorf',              power:54, atk:54, mid:54, def:54},
-        {name:'Maxline Vitebsk',      power:53, atk:53, mid:53, def:53},
-        {name:'Tre Fiori',            power:52, atk:52, mid:52, def:52},
-        {name:"Connah's Quay",        power:51, atk:51, mid:51, def:51},
-        {name:'UE Santa Coloma',      power:50, atk:50, mid:50, def:50}
-      ]
+      teams: []
     },
     'hellas-slavia': {
-      teams: [
-        {name:'PAOK',                   power:80, atk:80, mid:80, def:80},
-        {name:'Olympiacos',             power:78, atk:78, mid:78, def:78},
-        {name:'Panathinaikos',          power:76, atk:76, mid:76, def:76},
-        {name:'AEK Athens',             power:74, atk:74, mid:74, def:74},
-        {name:'Levadiakos',             power:72, atk:72, mid:72, def:72},
-        {name:'Sparta Praha',           power:70, atk:70, mid:70, def:70},
-        {name:'Slavia Praha',           power:69, atk:69, mid:69, def:69},
-        {name:'Jablonec',               power:67, atk:67, mid:67, def:67},
-        {name:'Hradec Králové',         power:65, atk:65, mid:65, def:65},
-        {name:'Iberia',                 power:64, atk:64, mid:64, def:64},
-        {name:'Dila',                   power:62, atk:62, mid:62, def:62},
-        {name:'Viking',                 power:61, atk:61, mid:61, def:61},
-        {name:'FK Bodø/Glimt',          power:60, atk:60, mid:60, def:60},
-        {name:'Tromsø',                 power:58, atk:58, mid:58, def:58},
-        {name:'SK Brann',               power:57, atk:57, mid:57, def:57},
-        {name:'Lech Poznań',            power:56, atk:56, mid:56, def:56},
-        {name:'Górnik',                 power:55, atk:55, mid:55, def:55},
-        {name:'Jagiellonia Białystok',  power:54, atk:54, mid:54, def:54},
-        {name:'Legia Warszawa',         power:53, atk:53, mid:53, def:53},
-        {name:'GKS Katowice',           power:52, atk:52, mid:52, def:52}
-      ]
+      teams: []
     },
     'danubio-nordica': {
-      teams: [
-        {name:'Sturm Graz',          power:75, atk:75, mid:75, def:75},
-        {name:'Rapid Wien',          power:73, atk:73, mid:73, def:73},
-        {name:'Austria Wien',        power:71, atk:71, mid:71, def:71},
-        {name:'SV Ried',             power:69, atk:69, mid:69, def:69},
-        {name:'TSV Hartberg',        power:67, atk:67, mid:67, def:67},
-        {name:'Omonia Nicosia',      power:66, atk:66, mid:66, def:66},
-        {name:'AEK Larnaca',         power:64, atk:64, mid:64, def:64},
-        {name:'APOEL Nicosia',       power:63, atk:63, mid:63, def:63},
-        {name:'Aris Limassol',       power:61, atk:61, mid:61, def:61},
-        {name:"St. Joseph's",        power:60, atk:60, mid:60, def:60},
-        {name:'Carrick Rangers',     power:58, atk:58, mid:58, def:58},
-        {name:'Portadown FC',        power:57, atk:57, mid:57, def:57},
-        {name:'Hammarby IF',         power:56, atk:56, mid:56, def:56},
-        {name:'Djurgårdens IF',      power:55, atk:55, mid:55, def:55},
-        {name:'GAIS',                power:54, atk:54, mid:54, def:54},
-        {name:'Mjällby AIF',         power:53, atk:53, mid:53, def:53},
-        {name:'KF Vllaznia',         power:52, atk:52, mid:52, def:52},
-        {name:'KF Teuta',            power:51, atk:51, mid:51, def:51}
-      ]
+      teams: []
     },
     'adriatico-oriental': {
-      teams: [
-        {name:'Dinamo Zagreb',        power:77, atk:77, mid:77, def:77},
-        {name:'Hajduk Split',         power:75, atk:75, mid:75, def:75},
-        {name:'HNK Rijeka',           power:73, atk:73, mid:73, def:73},
-        {name:'NK Varaždin',          power:71, atk:71, mid:71, def:71},
-        {name:'Shkëndija Tetovo',     power:70, atk:70, mid:70, def:70},
-        {name:'FC Vardar Skopje',     power:68, atk:68, mid:68, def:68},
-        {name:'Hapoel Beer Sheva',    power:67, atk:67, mid:67, def:67},
-        {name:'Maccabi Haifa',        power:66, atk:66, mid:66, def:66},
-        {name:'Maccabi Tel Aviv',     power:65, atk:65, mid:65, def:65},
-        {name:'Hapoel Tel Aviv',      power:64, atk:64, mid:64, def:64},
-        {name:'Dynamo Kyiv',          power:63, atk:63, mid:63, def:63},
-        {name:'Shakhtar Donetsk',     power:62, atk:62, mid:62, def:62},
-        {name:'Polissya Zhytomyr',    power:61, atk:61, mid:61, def:61},
-        {name:'Ferencvárosi TC',      power:60, atk:60, mid:60, def:60},
-        {name:'Debreceni VSC',        power:59, atk:59, mid:59, def:59},
-        {name:'Vasas FC',             power:58, atk:58, mid:58, def:58},
-        {name:'FC Flora Tallinn',     power:57, atk:57, mid:57, def:57},
-        {name:'Trans Narva',          power:56, atk:56, mid:56, def:56}
-      ]
+      teams: []
     },
     'balkanica': {
-      teams: [
-        {name:'CSKA Sofia',            power:74, atk:74, mid:74, def:74},
-        {name:'Ludogorets Razgrad',    power:72, atk:72, mid:72, def:72},
-        {name:'Levski Sofia',          power:70, atk:70, mid:70, def:70},
-        {name:'Cherno More Varna',     power:68, atk:68, mid:68, def:68},
-        {name:'FK Velez Mostar',       power:66, atk:66, mid:66, def:66},
-        {name:'Borac Banja Luka',      power:65, atk:65, mid:65, def:65},
-        {name:'NK Olimpija Ljubljana', power:64, atk:64, mid:64, def:64},
-        {name:'NS Mura',               power:63, atk:63, mid:63, def:63},
-        {name:'NK Maribor',            power:62, atk:62, mid:62, def:62},
-        {name:'Koper',                 power:61, atk:61, mid:61, def:61},
-        {name:'FC Kairat Almaty',      power:60, atk:60, mid:60, def:60},
-        {name:'FC Drita',              power:59, atk:59, mid:59, def:59},
-        {name:'FC Ballkani',           power:58, atk:58, mid:58, def:58},
-        {name:'Floriana FC',           power:57, atk:57, mid:57, def:57},
-        {name:'FK Žalgiris Kaunas',    power:56, atk:56, mid:56, def:56},
-        {name:'Derry City',            power:55, atk:55, mid:55, def:55},
-        {name:'Shamrock Rovers',       power:54, atk:54, mid:54, def:54},
-        {name:'KF Vllaznia',           power:53, atk:53, mid:53, def:53}
-      ]
+      teams: []
     },
     'eurasia': {
-      teams: [
-        {name:'CSKA Moscow',        power:79, atk:79, mid:79, def:79},
-        {name:'Rubin Kazan',        power:77, atk:77, mid:77, def:77},
-        {name:'Lokomotiv Moscow',   power:75, atk:75, mid:75, def:75},
-        {name:'Spartak Moscow',     power:73, atk:73, mid:73, def:73},
-        {name:'FK Krasnodar',       power:71, atk:71, mid:71, def:71},
-        {name:'Qarabağ',            power:69, atk:69, mid:69, def:69},
-        {name:'Turan Tovuz',        power:67, atk:67, mid:67, def:67},
-        {name:'Sabah Baku',         power:65, atk:65, mid:65, def:65},
-        {name:'Sheriff Tiraspol',   power:64, atk:64, mid:64, def:64},
-        {name:'CS Petrocub',        power:63, atk:63, mid:63, def:63},
-        {name:'Ararat-Armenia FC',  power:62, atk:62, mid:62, def:62},
-        {name:'Ilves Tampere',      power:61, atk:61, mid:61, def:61},
-        {name:'HJK Helsinki',       power:60, atk:60, mid:60, def:60},
-        {name:'MSK Žilina',         power:59, atk:59, mid:59, def:59},
-        {name:'KFC Komarno',        power:58, atk:58, mid:58, def:58},
-        {name:'Vikingur Reykjavik', power:57, atk:57, mid:57, def:57},
-        {name:'FH Hafnarfjörður',   power:56, atk:56, mid:56, def:56},
-        {name:'Shamrock Rovers',    power:55, atk:55, mid:55, def:55}
-      ]
+      teams: []
     }
   };
   function _ensureExtraLeagueSeed(slug){

@@ -51190,21 +51190,29 @@ https://api.sofascore.app/api/v1/team/44/image
     try{
       /* Backup en server — sólo si hay jugadores, para no
          sobrescribir un backup válido con un d vacío accidental.
-         Doble vía:
-           1. /api/liga-ext/<slug>_backup  — legacy, ghost-slug.
-           2. /api/liga-ext-protected/<slug>  — endpoint dedicado
-              MONOTÓNICO (rechaza payloads con menos jugadores que
-              el actual; ver app.py). Red de seguridad fuerte contra
-              "ediciones perdidas tras reload". */
+         Una sola vía: /api/liga-ext-protected/<slug> — endpoint
+         dedicado MONOTÓNICO (rechaza payloads con menos jugadores
+         que el actual; ver app.py). Red de seguridad fuerte contra
+         "ediciones perdidas tras reload".
+
+         ELIMINADO (obligatorio, 2026-08-24 — "la mayor investigación
+         de la web"): existía una 2ª vía, `POST /api/liga-ext/<slug>_backup`
+         — el propio comentario de este bloque la marcaba como "legacy,
+         ghost-slug" desde hace tiempo, pero el código SEGUÍA
+         disparándola en CADA saveData (cada guardado de plantilla,
+         cada simulación, en los 7 dispositivos), creando una fila
+         NUEVA-o-actualizada `liga_ext_<slug>_backup` en la base de
+         datos del servidor para SIEMPRE — sin ningún mecanismo que la
+         podara. Confirmado en vivo vía `/api/debug`: filas `_backup`
+         con `updated_at` del MISMO DÍA, pese a que la documentación de
+         este archivo decía "_backup se eliminó (2026-05-02)" (esa
+         limpieza solo tocó la escritura LOCAL en localStorage — la
+         escritura al SERVIDOR nunca se quitó). Su contenido está 100%
+         cubierto por `_protected` (misma liga, mismo momento, con la
+         ventaja de ser monotónico) — no aporta ninguna protección que
+         `_protected` no dé ya. Quitarla no pierde ningún dato: solo
+         detiene el crecimiento sin límite de la base de datos. */
       if (_countPlayers(d) > 0) {
-        try{
-          fetch('/api/liga-ext/'+encodeURIComponent(k+'_backup'), {
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            credentials:'same-origin',
-            body:JSON.stringify({data:d})
-          }).catch(function(){});
-        }catch(_){}
         try{
           fetch('/api/liga-ext-protected/'+encodeURIComponent(k), {
             method:'POST',

@@ -52,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v33';
+var CACHE_HTML   = 'ftbol-html-v37';
 /* v32 → v33 (2026-08-23, bug real crítico): un guardado de plantilla
    (`saveData`, Resto de Ligas/Liga EA Sports) cuyos 5 reintentos al
    servidor fallaban TODOS (red caída de verdad, confirmado en vivo con
@@ -260,7 +260,7 @@ var HTML_SWR_MAX_AGE_MS = 30 * 60 * 1000; // 30 minutos
 /* Activos a pre-cachear en el install.  Actualizar ?v= aquí cuando cambien. */
 var PRECACHE = [
   '/static/css/index.bundle.css?v=5.7',
-  '/static/js/index.bundle.js?v=9.45',
+  '/static/js/index.bundle.js?v=9.47',
   '/static/js/copa-engine.js?v=1.9',
 ];
 

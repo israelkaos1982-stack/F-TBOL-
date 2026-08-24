@@ -360,8 +360,8 @@ DEFAULT_GLOBAL_STATE = {
     #   - wprev_to_conference_v1    (24 → UECL, Previa R1+R2 perdedores)
     #   - bayern_calendar_comps_v1, bayern_calendar_title_v1, bayern_cal_v2
     #                               (preferencias y eventos del calendario humano)
-    #   - sc_state_v1, usc_state_v1, recopa_state_v1
-    #                               (Supercopas / Recopa)
+    #   - sc_state_v1, usc_state_v1
+    #                               (Supercopas)
     #   - mundial_state_v1, mundialito_state_v1
     #   - seleccion_state_v1, selecciones_state_v1
     #   - ucl_ko_state_v1, uel_ko_state_v1, uecl_ko_state_v1
@@ -570,7 +570,6 @@ _STATE_BRACKET_KEYS = {
     "wprev_state_v1",     # Previa Champions
     "sc_state_v1",        # Supercopa de España
     "usc_state_v1",       # Supercopa de Europa
-    "recopa_state_v1",    # Recopa de Europa
     "ucl_ko_state_v1",    # Champions — fase eliminatoria
     "uel_ko_state_v1",    # Europa League — fase eliminatoria
     "uecl_ko_state_v1",   # Conference League — fase eliminatoria
@@ -769,7 +768,7 @@ def save_global_state(new_state, replace=False):
                         merged_comp[ck] = _cursor_winner(
                             base_comp.get(ck), inc_comp.get(ck))
                     elif ck in _STATE_BRACKET_KEYS:
-                        # Bracket/fixtures de Recopa/SC/USC/UCL-KO/UEL-KO/
+                        # Bracket/fixtures de SC/USC/UCL-KO/UEL-KO/
                         # UECL-KO/Previa Champions: UNIÓN por partido, nunca
                         # sobreescritura ciega (ver `_STATE_BRACKET_KEYS`).
                         # `competition_state[ck]` es SIEMPRE un JSON string
@@ -2983,8 +2982,6 @@ _AGENDA_ICON_CLASS_MAP = {
     "🔵": "ag-eur",
     "🌍": "ag-sel",
     "🤝": "ag-amist",
-    "🟤": "ag-recopa",
-    "🔴": "ag-recopa",
     "🟡": "ag-inter",
     "🌐": "ag-inter",
     "🌞": "ag-torneo",
@@ -4439,7 +4436,7 @@ def api_liga_ext_restore(slug):
 #                            todas las 51 ligas están terminadas)
 #   - manual_ea_<slug>_v1   con slug ∈ {ucl, uclPrev, prevR3, prevR2,
 #                                       prevR1, uel, uecl,
-#                                       recopa, supercopa,
+#                                       supercopa,
 #                                       intercontinental, superliga,
 #                                       verano}
 #   - tour_<slug>_v1        config editable de cada torneo de verano
@@ -4560,17 +4557,6 @@ _KV_ALLOWED_EXACT = {
     # caché; el server es la fuente de verdad para que la edición viaje a
     # los 6 móviles + PC y sobreviva al borrado de datos (2026-07-10).
     "season_label_v1",
-    # Flags de Subcampeón/Semifinalistas por copa nacional, para el pool
-    # de la Recopa de Europa (2026-08-01, bug "no se guardan los cambios
-    # de qué equipos van a la Recopa"). ANTES vivían en
-    # `ligaExt_<slug>.config.recopaSubcampeon/recopaSemis` — dentro del
-    # documento GIGANTE de la liga, cuya sync/anti-wipe (fetchData) nunca
-    # protege `config` (solo hace backfill de logo/cupLogo): un GET que
-    # resolvía con la copia del servidor anterior al POST del toggle
-    # pisaba `data.config` entero en silencio, y el toggle "volvía a 0
-    # solo" sin que el admin tocara nada. Ahora viven en su PROPIA fila
-    # KV, objeto `{<slug>: {sub, semis}}`, inmune a esa maquinaria.
-    "recopa_copa_flags_v1",
     # Marca de qué cajas de mister ya recibieron el recálculo RETROACTIVO
     # de ganancias por partido (2026-07-29, botón admin "💰 Ganancias
     # históricas", acción ÚNICA por hub). localStorage es solo caché; el
@@ -4597,9 +4583,8 @@ _KV_ALLOWED_EXACT = {
     # Champions/Europa/Conference League (fase de liga + eliminatoria,
     # ambas comparten bucket "Grupos + Playoffs" — obligatorio 2026-08-22).
     "pm_tally_ucl_v1", "pm_tally_uel_v1", "pm_tally_uecl_v1",
-    # Recopa de Europa / Supercopa de España / Supercopa de Europa
-    # (obligatorio, 2026-08-22).
-    "pm_tally_recopa_v1", "pm_tally_sc_v1", "pm_tally_usc_v1",
+    # Supercopa de España / Supercopa de Europa (obligatorio, 2026-08-22).
+    "pm_tally_sc_v1", "pm_tally_usc_v1",
 }
 # Claves baja/sanción que se fusionan por RECENCIA en el server (espejo
 # del cliente `_kvBlobSync`): el blob con `updatedAt` mayor gana entero,
@@ -4640,10 +4625,6 @@ _KV_RECENCY_BLOB_KEYS = {
     # Etiqueta de temporada de la cabecera del home: la última edición del
     # admin gana entera (va `authoritative` → sella reloj del server).
     "season_label_v1",
-    # Flags de Subcampeón/Semifinalistas por copa (Recopa de Europa): el
-    # blob con `updatedAt` mayor gana ENTERO — un toggle recién pulsado
-    # nunca lo pisa un POST stale de otro dispositivo/pestaña.
-    "recopa_copa_flags_v1",
     # Marca de qué cajas de mister ya recibieron el recálculo retroactivo
     # de ganancias por partido: el blob con `updatedAt` mayor gana entero.
     "retro_earnings_applied_v1",
@@ -4654,7 +4635,7 @@ _KV_RECENCY_BLOB_KEYS = {
 }
 _KV_ALLOWED_REGEX = re.compile(
     r"^("
-    r"manual_ea_(ucl|uclPrev|prevR3|prevR2|prevR1|uel|uecl|recopa|supercopa|intercontinental|superliga|verano)"
+    r"manual_ea_(ucl|uclPrev|prevR3|prevR2|prevR1|uel|uecl|supercopa|intercontinental|superliga|verano)"
     # tx1..tx8 = 8 huecos pre-cableados para torneos añadidos por el admin.
     # spv1..spv10 / sfn1..sfn10 = Rondas Previas / Finales de Selecciones
     # (mismo motor de torneos; sync server para que el Mundial creado en
@@ -4770,12 +4751,12 @@ def _safe_json_load(s):
 _EUR_MANUAL_EXTRA_ZONES = (
     "ucl", "uclPrev", "prevR3", "prevR2", "prevR1", "uel", "uecl",
     # Extendido 2026-07-07: el admin puede añadir equipos a mano también a
-    # Recopa, Supercopa de Europa, Intercontinental y Mundialito de Clubes
+    # Supercopa de Europa, Intercontinental y Mundialito de Clubes
     # desde el mismo overlay "Equipos por competición". Debe ir SIEMPRE
     # sincronizada con `EUR_MANUAL_ZONES` del cliente (misc_body_1.html) —
     # si una zona nueva falta aquí, el merge aditivo la descarta en
     # silencio en cada guardado (ver CLAUDE.md).
-    "recopa", "usc", "inter", "mundial",
+    "usc", "inter", "mundial",
 )
 
 

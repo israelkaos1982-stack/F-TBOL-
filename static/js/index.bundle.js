@@ -2351,9 +2351,24 @@ var STAT_CLASS_MAP = {
      acta, que es lo que el usuario ve al abrir el partido. Para casos
      donde dos variantes del mismo jugador (p.ej. "Iago Aspas" vs
      "I. Aspas") aparecen en matches distintos, priorizamos la versión
-     más larga del nombre como etiqueta final.  */
+     más larga del nombre como etiqueta final.
+
+     FIX (2026-08-24, bug real encontrado en la limpieza de Recopa): esta
+     función iteraba el store ENTERO sin filtrar por competición, pese a
+     que la propia cabecera de la pantalla dice "Suma Liga + Copa +
+     Supercopa" — cualquier partido de OTRA competición (Champions,
+     Europa, torneos, selecciones…) que hubiera llamado a
+     `registrarLigaPlayerStats(...)` se colaba igual en este dashboard.
+     Se reutiliza `window._inferMatchCompetition` (definido en
+     `misc_body_1.html`, la MISMA función que usa `rebuildPlayerStatsStore`
+     para repartir eventos en buckets por competición) para quedarnos
+     SOLO con los matchKeys de 'liga'/'copa'/'sc' (Supercopa de España) —
+     exactamente lo que la cabecera promete. PROHIBIDO quitar este filtro
+     o ampliarlo a más competiciones sin que la cabecera de la pantalla
+     también lo diga. */
   function collectLigaPlayerStatsFromStore(){
     var store = window.LIGA_PLAYER_MATCH_STORE || {};
+    var LIGA_STATS_COMPS = { liga:1, copa:1, sc:1 };
     var byKey = {}; // teamCanon::nameNorm → {team,name,stats}
     function _norm(s){
       return String(s||'')
@@ -2387,6 +2402,9 @@ var STAT_CLASS_MAP = {
     }
     Object.keys(store).forEach(function(matchKey){
       var match = store[matchKey]; if(!match) return;
+      var comp = (typeof window._inferMatchCompetition === 'function')
+        ? window._inferMatchCompetition(matchKey) : 'liga';
+      if(!LIGA_STATS_COMPS[comp]) return;
       var tA = match.teamA || '', tB = match.teamB || '';
       (match.evts || []).forEach(function(ev){
         if(!ev) return;
@@ -2497,15 +2515,18 @@ var STAT_CLASS_MAP = {
 
     LIGA_STAT_CATEGORIES.forEach(function(cat){
       var allRows = topPlayersByStat(players, cat.key, 9999);
-      var top = allRows.slice(0, 6);
-      var rest = allRows.slice(6);
+      /* Tope 6→30 (2026-08-24, plan de limpieza): mismo cambio que
+         `_lextStatsDashHtml` en misc_body_1.html — el usuario pidió
+         ver el top-30 de cada estadística, no solo el top-6. */
+      var top = allRows.slice(0, 30);
+      var rest = allRows.slice(30);
       html += '<div class="liga-stat-card"><div class="liga-stat-head"><div class="liga-stat-ico">' + cat.icon + '</div><div class="liga-stat-title">' + cat.title + '</div></div><div class="liga-stat-body">';
       if(!allRows.length){
         html += '<div class="liga-stat-empty">Sin datos todavía</div>';
       } else {
         html += renderRows(top, 1);
         if(rest.length){
-          html += '<details class="liga-stat-more"><summary>Ver todos (' + allRows.length + ')</summary><div class="liga-stat-more-list">' + renderRows(rest, 7) + '</div></details>';
+          html += '<details class="liga-stat-more"><summary>Ver todos (' + allRows.length + ')</summary><div class="liga-stat-more-list">' + renderRows(rest, 31) + '</div></details>';
         }
       }
       html += '</div></div>';

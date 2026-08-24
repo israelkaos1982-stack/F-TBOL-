@@ -17400,8 +17400,10 @@ window._hdrCleanCache = function(){
     var html = '';
     COMP_STATS_CATEGORIES.forEach(function(cat){
       var allRows = _topBy(cat.key);
-      var top  = allRows.slice(0, 6);
-      var rest = allRows.slice(6);
+      /* Tope 6→30 (2026-08-24, plan de limpieza): el usuario pidió ver
+         el top-30 de cada estadística, no solo el top-6. */
+      var top  = allRows.slice(0, 30);
+      var rest = allRows.slice(30);
       html += '<div class="liga-stat-card">'
            +    '<div class="liga-stat-head">'
            +      '<div class="liga-stat-ico">' + cat.icon + '</div>'
@@ -17415,7 +17417,7 @@ window._hdrCleanCache = function(){
         if (rest.length) {
           html += '<details class="liga-stat-more">'
                +    '<summary>Ver todos (' + allRows.length + ')</summary>'
-               +    '<div class="liga-stat-more-list">' + _renderRows(rest, 7) + '</div>'
+               +    '<div class="liga-stat-more-list">' + _renderRows(rest, 31) + '</div>'
                +  '</details>';
         }
       }
@@ -65729,8 +65731,8 @@ https://api.sofascore.app/api/v1/team/44/image
   /* Detección heurística: el equipo está en una competición si su
      nombre (cualquier alias normalizado) aparece dentro del JSON raw
      de los stores asociados. Más barato que parsear estructuras y
-     suficiente porque las claves son específicas (recopa_state_v1,
-     usc_state_v1, etc.) — un alias que matchee aquí es prácticamente
+     suficiente porque las claves son específicas (usc_state_v1,
+     inter_state_v1, etc.) — un alias que matchee aquí es prácticamente
      siempre presencia real. */
   function _rawContainsAlias(raw, aliases){
     if (!raw) return false;

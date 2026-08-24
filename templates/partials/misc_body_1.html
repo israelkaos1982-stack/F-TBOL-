@@ -16263,6 +16263,44 @@ window._hdrCleanCache = function(){
     _lastAppliedHash = ''; /* (variable conservada por compatibilidad
                               con código que la inspeccione externamente) */
 
+    // ── 1-3: TEAM_RATINGS + SQUAD_REGISTRY + LIGA_SCHEDULE desde el
+    //    bridge de Liga EA — extraído a `_applyLigaEaBridgeToEngine`
+    //    (obligatorio, 2026-08-24) para reutilizarlo desde
+    //    `_prewarmEngineOverridesChunked` sin duplicar la lógica.
+    _applyLigaEaBridgeToEngine(bridge);
+
+    // ── 4. Importar equipos de OTRAS ligas al motor ──────────────
+    // Hypermotion, Primera Federación y las 51 ligas externas
+    // viven cada una en su propio `ligaExt_<slug>`. Sin este paso,
+    // `sqFromRegistry('Racing')` o `sqFromRegistry('Manchester City')`
+    // caía al placeholder "Jugador A/B" cuando el admin intentaba
+    // jugar un amistoso con un equipo de Hypermotion, Primera Fed o
+    // cualquier otra liga creada en el editor. Ahora poblamos
+    // SQUAD_REGISTRY + TEAM_RATINGS para TODOS los equipos creados,
+    // no solo los 20 de Liga EA.
+    _importOtherLeaguesIntoEngine();
+
+    // ── 5. Refrescar escudos y clasificación ─────────────────────
+    if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
+
+    // ── 6. Refrescar cachés del picker en partidos j1m* del bundle ─
+    // Los matches j1m1..j1m10 del bundle inicializan _sqA_jXmY /
+    // _sqB_jXmY UNA SOLA VEZ via IIFE al cargar la página. Tras un
+    // rename/paste de plantilla, esas cachés quedan stale aunque
+    // SQUAD_REGISTRY ya esté actualizado. Mutamos cada array EN
+    // SITIO (sin reasignar) para que la closure original las vea.
+    _lextRefreshJ1Pickers();
+  }
+
+  /* Pasos 1-3 de `_applyEngineOverridesBody` (TEAM_RATINGS +
+     SQUAD_REGISTRY + LIGA_SCHEDULE desde el bridge de Liga EA) —
+     extraído a función propia (obligatorio, 2026-08-24) para poder
+     reutilizarlo desde `_prewarmEngineOverridesChunked` (precalentado
+     de arranque no bloqueante, ver más abajo) sin duplicar la lógica
+     en 2 sitios que puedan desincronizarse. Comportamiento IDÉNTICO al
+     que tenía inline — solo movido de sitio, ni una línea de lógica
+     cambiada. */
+  function _applyLigaEaBridgeToEngine(bridge){
     // ── 1. TEAM_RATINGS ──────────────────────────────────────────
     if(window.TEAM_RATINGS){
       Object.keys(bridge.ratings).forEach(function(name){
@@ -16335,28 +16373,6 @@ window._hdrCleanCache = function(){
         if(typeof window.populateLigaCal === 'function') window.populateLigaCal();
       }
     }
-
-    // ── 4. Importar equipos de OTRAS ligas al motor ──────────────
-    // Hypermotion, Primera Federación y las 51 ligas externas
-    // viven cada una en su propio `ligaExt_<slug>`. Sin este paso,
-    // `sqFromRegistry('Racing')` o `sqFromRegistry('Manchester City')`
-    // caía al placeholder "Jugador A/B" cuando el admin intentaba
-    // jugar un amistoso con un equipo de Hypermotion, Primera Fed o
-    // cualquier otra liga creada en el editor. Ahora poblamos
-    // SQUAD_REGISTRY + TEAM_RATINGS para TODOS los equipos creados,
-    // no solo los 20 de Liga EA.
-    _importOtherLeaguesIntoEngine();
-
-    // ── 5. Refrescar escudos y clasificación ─────────────────────
-    if(typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields();
-
-    // ── 6. Refrescar cachés del picker en partidos j1m* del bundle ─
-    // Los matches j1m1..j1m10 del bundle inicializan _sqA_jXmY /
-    // _sqB_jXmY UNA SOLA VEZ via IIFE al cargar la página. Tras un
-    // rename/paste de plantilla, esas cachés quedan stale aunque
-    // SQUAD_REGISTRY ya esté actualizado. Mutamos cada array EN
-    // SITIO (sin reasignar) para que la closure original las vea.
-    _lextRefreshJ1Pickers();
   }
 
   /* Reconstruye `window._sqA_jXmY` / `window._sqB_jXmY` (cachés que
@@ -16787,32 +16803,14 @@ window._hdrCleanCache = function(){
     setTimeout(_wrapSqFromRegistry, 200);
   }
 
-  function _importOtherLeaguesIntoEngine(){
-    /* Cache por hash: si el contenido de ligaExt_* no ha cambiado
-       desde la última vez, saltamos el parseo de ~50 JSONs grandes
-       (~4 MB). Hash = key + length + checksum rápido (suma de char
-       codes en muestras espaciadas) — sensible a renames/edits sin
-       parsear el JSON entero. saveData también invalida este hash
-       directamente para no depender solo del hash. */
-    var hashParts = [];
-    /* Hash POR LIGA (obligatorio, 2026-08-24 — "la mayor investigación
-       de la web"): además del hash agregado (arriba, decide si hay
-       ALGO que rehacer), guardamos el hash de CADA liga por separado
-       para poder saltarnos, una a una, las que NO cambiaron desde el
-       último pase — ver uso más abajo. Antes, editar UN jugador de UNA
-       liga invalidaba el hash agregado entero y forzaba un
-       `JSON.parse` + procesado COMPLETO de las ~54 ligas de golpe
-       (varios MB, síncrono, en el hilo principal) — confirmado como la
-       causa más probable de "la web va lenta hasta que antes del
-       minuto funciona" en dispositivos con muchas ligas cargadas
-       (ver /api/debug del usuario: ~50 ligas de 130-300 KB cada una).
-       Con el cache por liga, ese mismo edit solo reprocesa la liga que
-       de verdad cambió — el resto conserva su aportación ya escrita en
-       TEAM_RATINGS/SQUAD_REGISTRY/TEAM_STADIUMS/_LIGA_EA_TEAM_STATS de
-       la pasada anterior (esos mapas son asignaciones por nombre, no
-       acumulaciones — si el JSON de una liga no cambió, lo que ya se
-       escribió para ella sigue siendo correcto). */
+  /* Enumera las claves candidatas `ligaExt_*` + su hash individual
+     BARATO (length+checksum, SIN JSON.parse) — compartido por la
+     versión síncrona y la troceada de más abajo para no duplicar el
+     filtro/hash en 2 sitios que puedan desincronizarse. */
+  function _importCollectLeagueHashes(){
+    var keys = [];
     var perLeagueHash = {};
+    var hashParts = [];
     try {
       for (var hi = 0; hi < localStorage.length; hi++) {
         var hk = localStorage.key(hi);
@@ -16831,164 +16829,240 @@ window._hdrCleanCache = function(){
         var _plh = hk + ':' + hraw.length + ':' + cs;
         perLeagueHash[hk] = _plh;
         hashParts.push(_plh);
+        keys.push(hk);
       }
       hashParts.sort();
     } catch(_){}
-    var newHash = hashParts.join('|');
-    if (window.__importLeaguesHash === newHash) {
+    return { keys: keys, perLeagueHash: perLeagueHash, aggregateHash: hashParts.join('|') };
+  }
+
+  var _IMPORT_POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
+  var _IMPORT_POS_HEADER = { P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS' };
+  var _IMPORT_POS_ORDER = ['P','D','M','F'];
+
+  /* Procesa UNA liga (JSON.parse + volcado a TEAM_RATINGS/SQUAD_REGISTRY/
+     TEAM_STADIUMS/_LIGA_EA_TEAM_STATS) — el trabajo caro por-liga,
+     extraído a función propia (obligatorio, 2026-08-24) para que lo
+     compartan `_importOtherLeaguesIntoEngine` (síncrona) y
+     `_importOtherLeaguesIntoEngineChunked` (troceada, solo arranque).
+     NUNCA duplicar este cuerpo en 2 sitios — mismo team-building que
+     el resto del motor. Comportamiento IDÉNTICO al que tenía inline. */
+  function _importOneLeagueTeams(key, perLeagueHash){
+    try {
+      /* Salta esta liga por completo (sin leer ni parsear su JSON)
+         si su hash individual no cambió desde el último pase con
+         éxito — su aportación anterior a los mapas globales sigue
+         vigente. */
+      var _thisHash = perLeagueHash[key];
+      if (_thisHash && window.__importLeaguesPerLeagueCache[key] === _thisHash) return;
+      var raw = localStorage.getItem(key);
+      if (!raw) return;
+      var data;
+      try { data = JSON.parse(raw); } catch(_e){ return; }
+      if (!data || !Array.isArray(data.teams)) return;
+      data.teams.forEach(function(t){
+        if (!t || !t.name) return;
+        var name = String(t.name).trim();
+        if (!name) return;
+        /* TEAM_RATINGS: solo lo seteamos si el motor aún no tiene
+           una entrada para este equipo, para no pisar ratings
+           hardcodeados (Liga EA, selecciones, etc.). */
+        if (window.TEAM_RATINGS && !window.TEAM_RATINGS[name]){
+          var pw = Math.max(1, Math.min(99, Number(t.power) || Number(t.media) || 70));
+          var shield = t.shield ? String(t.shield) : '';
+          window.TEAM_RATINGS[name] = shield ? {media: pw, shield: shield} : pw;
+        }
+        /* Propagar stats del equipo (atk/mid/def/aggressiveness) al
+           sidecar global para que el motor de cualquier liga pueda
+           leer ATK vs DEF real en lugar de tirar de power global. */
+        try {
+          window._LIGA_EA_TEAM_STATS = window._LIGA_EA_TEAM_STATS || {};
+          var _statExt = {
+            power: Math.max(1, Math.min(99, Number(t.power)||75)),
+            atk:   Math.max(1, Math.min(99, Number(t.atk) ||Number(t.power)||75)),
+            mid:   Math.max(1, Math.min(99, Number(t.mid) ||Number(t.power)||75)),
+            def:   Math.max(1, Math.min(99, Number(t.def) ||Number(t.power)||75)),
+            aggressiveness: Math.max(1, Math.min(99, Number(t.aggressiveness) || 50))
+          };
+          /* No pisar si ya había una entrada (Liga EA manda sobre
+             las demás ligas cuando un equipo comparte nombre). */
+          if (!window._LIGA_EA_TEAM_STATS[name]) {
+            window._LIGA_EA_TEAM_STATS[name] = _statExt;
+            _namesForAlias(name).forEach(function(al){
+              if (!window._LIGA_EA_TEAM_STATS[al]) {
+                window._LIGA_EA_TEAM_STATS[al] = _statExt;
+              }
+            });
+          }
+        } catch(_){}
+        /* TEAM_STADIUMS: el estadio guardado por el admin en el
+           editor de su liga es la fuente de verdad — DEBE pisar
+           el mapeo hardcoded de index.bundle.js. Antes había un
+           guard `!window.TEAM_STADIUMS[name]` que conservaba los
+           defaults: si el admin cambiaba At. Sanluqueño de
+           "ESTADIO URBANO CALDEIRA" (default) a "Sports Park"
+           (su elección), `getTeamStadium` seguía devolviendo el
+           default y la previa pintaba el equivocado.
+           Petición usuario 2026-05-05: el admin manda. */
+        try {
+          window.TEAM_STADIUMS = window.TEAM_STADIUMS || {};
+          var _stad = (t && t.stadium) ? String(t.stadium).trim() : '';
+          if (_stad) {
+            window.TEAM_STADIUMS[name] = _stad;
+            _namesForAlias(name).forEach(function(al){
+              window.TEAM_STADIUMS[al] = _stad;
+            });
+          }
+        } catch(_){}
+        /* SQUAD_REGISTRY: solo pisamos si traemos jugadores de
+           verdad (si no, respetamos lo que tenga el bundle o lo
+           que hayan puesto otros pipelines). */
+        if (!Array.isArray(t.players) || !t.players.length) return;
+        var byPos = {P:[], D:[], M:[], F:[]};
+        t.players.forEach(function(p){
+          var simPos = _IMPORT_POS_MAP[p.pos] || 'M';
+          byPos[simPos].push(p);
+        });
+        /* Auto-numerar dorsales cuando el admin no los asignó —
+           mismo flujo que ligaEaBuildEngineOverrides. Sin esto los
+           jugadores aparecían sin dorsal en el event picker
+           (reportado 2026-05-07). */
+        var DEFAULT_NUMS_OL = {
+          P: [1, 13, 25, 12, 31],
+          D: [2, 3, 4, 5, 15, 16, 22, 24, 23, 18, 26],
+          M: [6, 8, 10, 14, 17, 19, 20, 21, 27, 28],
+          F: [7, 9, 11, 29, 30, 32, 33]
+        };
+        var usedNumsOL = {};
+        Object.keys(byPos).forEach(function(simPos){
+          byPos[simPos].forEach(function(p){
+            var n = Number(p.num);
+            if (n > 0 && !usedNumsOL[n]) usedNumsOL[n] = true;
+          });
+        });
+        function _nextFreeNumOL(simPos){
+          var pool = DEFAULT_NUMS_OL[simPos] || [];
+          for (var i = 0; i < pool.length; i++) {
+            if (!usedNumsOL[pool[i]]) { usedNumsOL[pool[i]] = true; return pool[i]; }
+          }
+          for (var n = 1; n <= 99; n++) {
+            if (!usedNumsOL[n]) { usedNumsOL[n] = true; return n; }
+          }
+          return 99;
+        }
+        var simSquad = [];
+        _IMPORT_POS_ORDER.forEach(function(simPos){
+          var pool = byPos[simPos];
+          if (!pool.length) return;
+          pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
+          simSquad.push({h: _IMPORT_POS_HEADER[simPos]});
+          pool.forEach(function(p){
+            var pw = Math.max(1, Math.min(99, Number(p.power)||70));
+            var num = (Number(p.num) > 0) ? Number(p.num) : _nextFreeNumOL(simPos);
+            /* Flags a sidecar (C/F/P/⭐/⚾) — mismo formato que Liga EA. */
+            if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal || p.natGoalPro){
+              var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
+              fmap[name + '::' + String(p.name||'')] = {
+                captain:    !!p.captain,
+                freeKick:   !!p.freeKick,
+                penalty:    !!p.penalty,
+                elite:      !!p.elite,
+                natGoal:    !!p.natGoal,
+                natGoalPro: !!p.natGoalPro
+              };
+            }
+            /* ⭐ / ⚾ / 🏀 como propiedades del array para los scorers. */
+            var entry = [String(num), String(p.name || '?'), pw];
+            if (p.elite)      entry.elite      = true;
+            if (p.natGoal)    entry.natGoal    = true;
+            if (p.natGoalPro) entry.natGoalPro = true;
+            simSquad.push(entry);
+          });
+        });
+        if (window.SQUAD_REGISTRY) window.SQUAD_REGISTRY[name] = simSquad;
+      });
+      /* Liga procesada con éxito — sella su hash individual para que
+         el próximo pase (tras editar OTRA liga cualquiera) pueda
+         saltársela por completo. */
+      if (_thisHash) window.__importLeaguesPerLeagueCache[key] = _thisHash;
+    } catch(_){}
+  }
+
+  function _importOtherLeaguesIntoEngine(){
+    /* Cache por hash: si el contenido de ligaExt_* no ha cambiado
+       desde la última vez, saltamos el parseo de ~50 JSONs grandes
+       (~4 MB). Hash = key + length + checksum rápido (suma de char
+       codes en muestras espaciadas) — sensible a renames/edits sin
+       parsear el JSON entero. saveData también invalida este hash
+       directamente para no depender solo del hash.
+
+       Hash POR LIGA: además del hash agregado (decide si hay ALGO que
+       rehacer), `_importCollectLeagueHashes` guarda el hash de CADA
+       liga por separado para poder saltarnos, una a una, las que NO
+       cambiaron desde el último pase — ver `_importOneLeagueTeams`.
+       Antes, editar UN jugador de UNA liga invalidaba el hash agregado
+       entero y forzaba un `JSON.parse` + procesado COMPLETO de las
+       ~54 ligas de golpe (varios MB, síncrono, en el hilo principal).
+       Con el cache por liga, ese mismo edit solo reprocesa la liga que
+       de verdad cambió. */
+    var collected = _importCollectLeagueHashes();
+    if (window.__importLeaguesHash === collected.aggregateHash) {
       return; /* nada cambió, ni siquiera liga a liga */
     }
-    window.__importLeaguesHash = newHash;
+    window.__importLeaguesHash = collected.aggregateHash;
     window.__importLeaguesPerLeagueCache = window.__importLeaguesPerLeagueCache || {};
-    var POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
-    var POS_HEADER = { P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS' };
-    var POS_ORDER = ['P','D','M','F'];
-    try {
-      for (var i = 0; i < localStorage.length; i++) {
-        var key = localStorage.key(i);
-        if (!key || key.indexOf('ligaExt_') !== 0) continue;
-        if (key === 'ligaExt_liga-ea-sports') continue;   /* ya lo hizo el bridge */
-        if (key.indexOf('_backup') !== -1) continue;
-        if (key.indexOf('_snap_') !== -1) continue;
-        if (key.indexOf('_protected') !== -1) continue;
-        /* Salta esta liga por completo (sin leer ni parsear su JSON)
-           si su hash individual no cambió desde el último pase con
-           éxito — su aportación anterior a los mapas globales sigue
-           vigente. */
-        var _thisHash = perLeagueHash[key];
-        if (_thisHash && window.__importLeaguesPerLeagueCache[key] === _thisHash) continue;
-        var raw = localStorage.getItem(key);
-        if (!raw) continue;
-        var data;
-        try { data = JSON.parse(raw); } catch(_e){ continue; }
-        if (!data || !Array.isArray(data.teams)) continue;
-        data.teams.forEach(function(t){
-          if (!t || !t.name) return;
-          var name = String(t.name).trim();
-          if (!name) return;
-          /* TEAM_RATINGS: solo lo seteamos si el motor aún no tiene
-             una entrada para este equipo, para no pisar ratings
-             hardcodeados (Liga EA, selecciones, etc.). */
-          if (window.TEAM_RATINGS && !window.TEAM_RATINGS[name]){
-            var pw = Math.max(1, Math.min(99, Number(t.power) || Number(t.media) || 70));
-            var shield = t.shield ? String(t.shield) : '';
-            window.TEAM_RATINGS[name] = shield ? {media: pw, shield: shield} : pw;
-          }
-          /* Propagar stats del equipo (atk/mid/def/aggressiveness) al
-             sidecar global para que el motor de cualquier liga pueda
-             leer ATK vs DEF real en lugar de tirar de power global. */
-          try {
-            window._LIGA_EA_TEAM_STATS = window._LIGA_EA_TEAM_STATS || {};
-            var _statExt = {
-              power: Math.max(1, Math.min(99, Number(t.power)||75)),
-              atk:   Math.max(1, Math.min(99, Number(t.atk) ||Number(t.power)||75)),
-              mid:   Math.max(1, Math.min(99, Number(t.mid) ||Number(t.power)||75)),
-              def:   Math.max(1, Math.min(99, Number(t.def) ||Number(t.power)||75)),
-              aggressiveness: Math.max(1, Math.min(99, Number(t.aggressiveness) || 50))
-            };
-            /* No pisar si ya había una entrada (Liga EA manda sobre
-               las demás ligas cuando un equipo comparte nombre). */
-            if (!window._LIGA_EA_TEAM_STATS[name]) {
-              window._LIGA_EA_TEAM_STATS[name] = _statExt;
-              _namesForAlias(name).forEach(function(al){
-                if (!window._LIGA_EA_TEAM_STATS[al]) {
-                  window._LIGA_EA_TEAM_STATS[al] = _statExt;
-                }
-              });
-            }
-          } catch(_){}
-          /* TEAM_STADIUMS: el estadio guardado por el admin en el
-             editor de su liga es la fuente de verdad — DEBE pisar
-             el mapeo hardcoded de index.bundle.js. Antes había un
-             guard `!window.TEAM_STADIUMS[name]` que conservaba los
-             defaults: si el admin cambiaba At. Sanluqueño de
-             "ESTADIO URBANO CALDEIRA" (default) a "Sports Park"
-             (su elección), `getTeamStadium` seguía devolviendo el
-             default y la previa pintaba el equivocado.
-             Petición usuario 2026-05-05: el admin manda. */
-          try {
-            window.TEAM_STADIUMS = window.TEAM_STADIUMS || {};
-            var _stad = (t && t.stadium) ? String(t.stadium).trim() : '';
-            if (_stad) {
-              window.TEAM_STADIUMS[name] = _stad;
-              _namesForAlias(name).forEach(function(al){
-                window.TEAM_STADIUMS[al] = _stad;
-              });
-            }
-          } catch(_){}
-          /* SQUAD_REGISTRY: solo pisamos si traemos jugadores de
-             verdad (si no, respetamos lo que tenga el bundle o lo
-             que hayan puesto otros pipelines). */
-          if (!Array.isArray(t.players) || !t.players.length) return;
-          var byPos = {P:[], D:[], M:[], F:[]};
-          t.players.forEach(function(p){
-            var simPos = POS_MAP[p.pos] || 'M';
-            byPos[simPos].push(p);
-          });
-          /* Auto-numerar dorsales cuando el admin no los asignó —
-             mismo flujo que ligaEaBuildEngineOverrides. Sin esto los
-             jugadores aparecían sin dorsal en el event picker
-             (reportado 2026-05-07). */
-          var DEFAULT_NUMS_OL = {
-            P: [1, 13, 25, 12, 31],
-            D: [2, 3, 4, 5, 15, 16, 22, 24, 23, 18, 26],
-            M: [6, 8, 10, 14, 17, 19, 20, 21, 27, 28],
-            F: [7, 9, 11, 29, 30, 32, 33]
-          };
-          var usedNumsOL = {};
-          Object.keys(byPos).forEach(function(simPos){
-            byPos[simPos].forEach(function(p){
-              var n = Number(p.num);
-              if (n > 0 && !usedNumsOL[n]) usedNumsOL[n] = true;
-            });
-          });
-          function _nextFreeNumOL(simPos){
-            var pool = DEFAULT_NUMS_OL[simPos] || [];
-            for (var i = 0; i < pool.length; i++) {
-              if (!usedNumsOL[pool[i]]) { usedNumsOL[pool[i]] = true; return pool[i]; }
-            }
-            for (var n = 1; n <= 99; n++) {
-              if (!usedNumsOL[n]) { usedNumsOL[n] = true; return n; }
-            }
-            return 99;
-          }
-          var simSquad = [];
-          POS_ORDER.forEach(function(simPos){
-            var pool = byPos[simPos];
-            if (!pool.length) return;
-            pool.sort(function(a,b){ return (Number(b.power)||0) - (Number(a.power)||0); });
-            simSquad.push({h: POS_HEADER[simPos]});
-            pool.forEach(function(p){
-              var pw = Math.max(1, Math.min(99, Number(p.power)||70));
-              var num = (Number(p.num) > 0) ? Number(p.num) : _nextFreeNumOL(simPos);
-              /* Flags a sidecar (C/F/P/⭐/⚾) — mismo formato que Liga EA. */
-              if (p.captain || p.freeKick || p.penalty || p.elite || p.natGoal || p.natGoalPro){
-                var fmap = window._LIGA_EA_PLAYER_FLAGS = window._LIGA_EA_PLAYER_FLAGS || {};
-                fmap[name + '::' + String(p.name||'')] = {
-                  captain:    !!p.captain,
-                  freeKick:   !!p.freeKick,
-                  penalty:    !!p.penalty,
-                  elite:      !!p.elite,
-                  natGoal:    !!p.natGoal,
-                  natGoalPro: !!p.natGoalPro
-                };
-              }
-              /* ⭐ / ⚾ / 🏀 como propiedades del array para los scorers. */
-              var entry = [String(num), String(p.name || '?'), pw];
-              if (p.elite)      entry.elite      = true;
-              if (p.natGoal)    entry.natGoal    = true;
-              if (p.natGoalPro) entry.natGoalPro = true;
-              simSquad.push(entry);
-            });
-          });
-          if (window.SQUAD_REGISTRY) window.SQUAD_REGISTRY[name] = simSquad;
-        });
-        /* Liga procesada con éxito — sella su hash individual para que
-           el próximo pase (tras editar OTRA liga cualquiera) pueda
-           saltársela por completo. */
-        if (_thisHash) window.__importLeaguesPerLeagueCache[key] = _thisHash;
+    collected.keys.forEach(function(key){
+      _importOneLeagueTeams(key, collected.perLeagueHash);
+    });
+  }
+
+  /* Variante TROCEADA de `_importOtherLeaguesIntoEngine` — SOLO para el
+     precalentado de arranque (`_prewarmEngineOverridesChunked`, más
+     abajo). Mismo resultado final, mismo cache por-liga, pero procesa
+     las ligas en tandas cediendo el hilo con `setTimeout(fn,0)` entre
+     cada una, en vez de parsear/volcar TODAS de un tirón, síncrono, sin
+     ceder el control ni una vez.
+
+     CAUSA RAÍZ que esto arregla (obligatorio, 2026-08-24 — "el menú se
+     pinta bien pero pulsar cualquier caja congela la web por
+     completo", reportado como roto desde hace más de 2 semanas):
+     `applyEngineOverrides()` se disparaba SÍNCRONO a los 200ms/1500ms
+     de cargar la página (`initOverrides`, más abajo), y su parte más
+     cara es exactamente este bucle — con ~50 ligas reales de
+     130-300 KB cada una, la PRIMERA pasada de la sesión (cache
+     por-liga todavía en frío) puede tardar decenas de segundos de un
+     tirón. Cualquier tap durante esa ventana queda en cola detrás del
+     hilo principal ocupado, sin ninguna reacción visible — indistinguible
+     de "la web está congelada", aunque el menú ya llevara segundos
+     pintado en pantalla.
+
+     `batchSize` ligas por tick (ver default en la llamada). `onDone`
+     se llama SIEMPRE al terminar, incluso si no había nada que hacer
+     (hash agregado sin cambios). */
+  function _importOtherLeaguesIntoEngineChunked(onDone, batchSize){
+    var collected = _importCollectLeagueHashes();
+    if (window.__importLeaguesHash === collected.aggregateHash) {
+      if (typeof onDone === 'function') onDone();
+      return;
+    }
+    window.__importLeaguesHash = collected.aggregateHash;
+    window.__importLeaguesPerLeagueCache = window.__importLeaguesPerLeagueCache || {};
+    var keys = collected.keys;
+    var perLeagueHash = collected.perLeagueHash;
+    var idx = 0;
+    var n = Math.max(1, batchSize || 3);
+    function _step(){
+      var end = Math.min(keys.length, idx + n);
+      for (; idx < end; idx++) {
+        _importOneLeagueTeams(keys[idx], perLeagueHash);
       }
-    } catch(_){}
+      if (idx < keys.length) {
+        setTimeout(_step, 0);
+      } else if (typeof onDone === 'function') {
+        onDone();
+      }
+    }
+    _step();
   }
 
   /* One-shot cleanup: borra cualquier entrada de SQUAD_REGISTRY que
@@ -17017,6 +17091,53 @@ window._hdrCleanCache = function(){
   // Exponer para que lextSaveTeam pueda llamarlo tras guardar
   window.applyEngineOverrides = applyEngineOverrides;
 
+  /* Precalentado de arranque — NO BLOQUEANTE (obligatorio, 2026-08-24).
+     Mismo resultado final que `applyEngineOverrides()` (rellena
+     TEAM_RATINGS/SQUAD_REGISTRY/TEAM_STADIUMS/_LIGA_EA_TEAM_STATS +
+     refresca escudos/pickers), pero con el paso caro
+     (`_importOtherLeaguesIntoEngine`, el escaneo de ~50 `ligaExt_*`)
+     troceado vía `_importOtherLeaguesIntoEngineChunked` en vez de
+     síncrono de un tirón — ver el comentario largo en esa función para
+     la causa raíz exacta del "congelamiento total al tocar cualquier
+     caja del menú" que este cambio arregla.
+
+     Mantiene el MISMO guard `window._engineOverridesRunning` que
+     `applyEngineOverrides()`, activo durante TODO el precalentado (no
+     solo el primer tick): cualquier llamada síncrona a
+     `applyEngineOverrides()` que dispare una navegación REAL del
+     usuario mientras el precalentado sigue en curso es, por diseño,
+     un no-op instantáneo (el guard la corta antes de tocar nada) —
+     nunca vuelve a bloquear el hilo. Los datos de las ligas que aún
+     falten por precalentar llegan solos en cuanto el precalentado las
+     alcance, o los completa la PRÓXIMA llamada síncrona real (que a
+     esas alturas casi siempre encuentra el cache por-liga ya caliente
+     y devuelve casi al instante). Mismo patrón de reparación
+     "backfill de actas" del `finally` de `applyEngineOverrides` al
+     terminar. */
+  function _prewarmEngineOverridesChunked(){
+    if (window._engineOverridesRunning) return;
+    if (typeof window.ligaEaBuildEngineOverrides !== 'function') return;
+    window._engineOverridesRunning = true;
+    function _finishPrewarm(){
+      try { if (typeof window.refreshLigaEaShields === 'function') window.refreshLigaEaShields(); } catch(_){}
+      try { _lextRefreshJ1Pickers(); } catch(_){}
+      try { if (typeof window._ligaBackfillActasFromResults === 'function') window._ligaBackfillActasFromResults(); } catch(_){}
+      window._engineOverridesRunning = false;
+    }
+    try {
+      var bridge = window.ligaEaBuildEngineOverrides();
+      if (!bridge || bridge.meta.teamsCount === 0) {
+        _importOtherLeaguesIntoEngineChunked(_finishPrewarm);
+        return;
+      }
+      _lastAppliedHash = '';
+      _applyLigaEaBridgeToEngine(bridge);
+      _importOtherLeaguesIntoEngineChunked(_finishPrewarm);
+    } catch(_){
+      window._engineOverridesRunning = false;
+    }
+  }
+
   // Aplicar en DOMContentLoaded con retardo (el bundle necesita haber
   // definido TEAM_RATINGS, SQUAD_REGISTRY, etc.)
   // IMPORTANTE: NO usar setInterval — un tick periódico puede
@@ -17033,9 +17154,19 @@ window._hdrCleanCache = function(){
        Cascada conservadora: 200 ms para que el primer pintado tenga
        datos frescos; 1500 ms para cubrir bundles que tardan más. SIN
        el 2400 ms previo (causaba el bug "el nombre de la plantilla
-       cambia 2 s después de abrirla"). 2026-05-08. */
-    setTimeout(applyEngineOverrides, 200);
-    setTimeout(applyEngineOverrides, 1500);
+       cambia 2 s después de abrirla"). 2026-05-08.
+
+       PROHIBIDO (2026-08-24) volver a llamar aquí a
+       `applyEngineOverrides` DIRECTO — su paso más caro es síncrono y
+       bloquea el hilo principal decenas de segundos con datos reales
+       de ~50 ligas, causando un "congelamiento total" indistinguible
+       de que la web no responde a ningún tap. Usar SIEMPRE
+       `_prewarmEngineOverridesChunked` para las llamadas de ARRANQUE —
+       el resto de call sites de `applyEngineOverrides` (tras guardar
+       en el editor, etc.) siguen síncronos sin cambios, porque para
+       entonces el cache por-liga ya está caliente y son rápidos. */
+    setTimeout(_prewarmEngineOverridesChunked, 200);
+    setTimeout(_prewarmEngineOverridesChunked, 1500);
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', initOverrides);

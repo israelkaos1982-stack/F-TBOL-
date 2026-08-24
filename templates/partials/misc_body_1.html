@@ -16841,6 +16841,24 @@ window._hdrCleanCache = function(){
        parsear el JSON entero. saveData también invalida este hash
        directamente para no depender solo del hash. */
     var hashParts = [];
+    /* Hash POR LIGA (obligatorio, 2026-08-24 — "la mayor investigación
+       de la web"): además del hash agregado (arriba, decide si hay
+       ALGO que rehacer), guardamos el hash de CADA liga por separado
+       para poder saltarnos, una a una, las que NO cambiaron desde el
+       último pase — ver uso más abajo. Antes, editar UN jugador de UNA
+       liga invalidaba el hash agregado entero y forzaba un
+       `JSON.parse` + procesado COMPLETO de las ~54 ligas de golpe
+       (varios MB, síncrono, en el hilo principal) — confirmado como la
+       causa más probable de "la web va lenta hasta que antes del
+       minuto funciona" en dispositivos con muchas ligas cargadas
+       (ver /api/debug del usuario: ~50 ligas de 130-300 KB cada una).
+       Con el cache por liga, ese mismo edit solo reprocesa la liga que
+       de verdad cambió — el resto conserva su aportación ya escrita en
+       TEAM_RATINGS/SQUAD_REGISTRY/TEAM_STADIUMS/_LIGA_EA_TEAM_STATS de
+       la pasada anterior (esos mapas son asignaciones por nombre, no
+       acumulaciones — si el JSON de una liga no cambió, lo que ya se
+       escribió para ella sigue siendo correcto). */
+    var perLeagueHash = {};
     try {
       for (var hi = 0; hi < localStorage.length; hi++) {
         var hk = localStorage.key(hi);
@@ -16856,15 +16874,18 @@ window._hdrCleanCache = function(){
            length similar pero distinto contenido). */
         var cs = 0, step = Math.max(1, Math.floor(hraw.length / 16));
         for (var hcs = 0; hcs < hraw.length; hcs += step) cs = (cs + hraw.charCodeAt(hcs)) | 0;
-        hashParts.push(hk + ':' + hraw.length + ':' + cs);
+        var _plh = hk + ':' + hraw.length + ':' + cs;
+        perLeagueHash[hk] = _plh;
+        hashParts.push(_plh);
       }
       hashParts.sort();
     } catch(_){}
     var newHash = hashParts.join('|');
     if (window.__importLeaguesHash === newHash) {
-      return; /* nada cambió */
+      return; /* nada cambió, ni siquiera liga a liga */
     }
     window.__importLeaguesHash = newHash;
+    window.__importLeaguesPerLeagueCache = window.__importLeaguesPerLeagueCache || {};
     var POS_MAP = { POR:'P', DEF:'D', MED:'M', DEL:'F' };
     var POS_HEADER = { P:'🧤 PORTEROS', D:'🛡 DEFENSAS', M:'⚙️ MEDIOS', F:'⚡ DELANTEROS' };
     var POS_ORDER = ['P','D','M','F'];
@@ -16876,6 +16897,12 @@ window._hdrCleanCache = function(){
         if (key.indexOf('_backup') !== -1) continue;
         if (key.indexOf('_snap_') !== -1) continue;
         if (key.indexOf('_protected') !== -1) continue;
+        /* Salta esta liga por completo (sin leer ni parsear su JSON)
+           si su hash individual no cambió desde el último pase con
+           éxito — su aportación anterior a los mapas globales sigue
+           vigente. */
+        var _thisHash = perLeagueHash[key];
+        if (_thisHash && window.__importLeaguesPerLeagueCache[key] === _thisHash) continue;
         var raw = localStorage.getItem(key);
         if (!raw) continue;
         var data;
@@ -17002,6 +17029,10 @@ window._hdrCleanCache = function(){
           });
           if (window.SQUAD_REGISTRY) window.SQUAD_REGISTRY[name] = simSquad;
         });
+        /* Liga procesada con éxito — sella su hash individual para que
+           el próximo pase (tras editar OTRA liga cualquiera) pueda
+           saltársela por completo. */
+        if (_thisHash) window.__importLeaguesPerLeagueCache[key] = _thisHash;
       }
     } catch(_){}
   }

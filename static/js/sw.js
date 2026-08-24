@@ -52,7 +52,7 @@ var CACHE_STATIC = 'ftbol-static-v1';
    próximo `activate` (el handler ya borra cualquier caché fuera de
    `keep`). Ver además el límite de antigüedad `HTML_CACHE_MAX_AGE_MS`
    más abajo — el bump por sí solo no evita que vuelva a pasar. */
-var CACHE_HTML   = 'ftbol-html-v38';
+var CACHE_HTML   = 'ftbol-html-v39';
 /* v32 → v33 (2026-08-23, bug real crítico): un guardado de plantilla
    (`saveData`, Resto de Ligas/Liga EA Sports) cuyos 5 reintentos al
    servidor fallaban TODOS (red caída de verdad, confirmado en vivo con

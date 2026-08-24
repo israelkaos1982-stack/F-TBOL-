@@ -54149,10 +54149,35 @@ https://api.sofascore.app/api/v1/team/44/image
       _stepLeague(0);
     } catch(_){}
   }
-  /* Diferido 5s: da tiempo a que `loadData`/`saveData`/`applyEngineOverrides`
-     y el resto de IIFEs de arranque (SQUAD_REGISTRY, ligas auto-sembradas)
-     terminen de inicializarse antes de vaciar nada. */
-  setTimeout(_fixupWipeAllRostersForCleanupV1, 5000);
+  /* ⚠️ DESACTIVADO DE EMERGENCIA (2026-08-24, mismo día — 2ª corrección
+     urgente sobre este mismo fixup): el arreglo anterior (skipEngineSync +
+     setTimeout encadenado) solo resolvía el bloqueo del HILO PRINCIPAL del
+     navegador. Pero `saveData()` (llamada dentro de cada
+     `lextWipeLeagueRoster`) es FIRE-AND-FORGET — dispara su POST de red y
+     retorna al instante, SIN esperar respuesta — así que el `setTimeout(fn,0)`
+     entre ligas avanza a la siguiente casi de inmediato, y las 20 llamadas a
+     `saveData` acaban lanzando su POST principal (`/api/liga-ext/<slug>`,
+     hasta 5 reintentos con backoff, timeout 10-30s por intento) casi todas
+     en la MISMA ventana de tiempo — hasta ~100 peticiones de red en ráfaga.
+     El servidor de producción corre con SOLO 2 workers gunicorn
+     (`render.yaml`/`Procfile`, `--workers 2`) — esa ráfaga satura los 2
+     workers durante varios MINUTOS, y CUALQUIER otra petición (incluida la
+     de abrir cualquier pantalla del propio usuario) queda en cola detrás.
+     Reportado en producción: "cada caja tarda 40 segundos en abrir" —
+     server-side, no un bug de una pantalla concreta.
+
+     El vaciado de plantillas es limpieza cosmética (reducir peso), NO vale
+     ni un minuto de indisponibilidad del servidor. Se desactiva el
+     disparo automático hasta que se implemente correctamente (limitar a 1
+     petición de red en vuelo a la vez — mismo patrón `EUR_PICKER_MAX_CONCURRENT`
+     que ya usa el picker "AÑADIR POR LIGA" precisamente por esta misma
+     limitación de 2 workers — y/o mover el vaciado al servidor en un único
+     endpoint admin en vez de 20 POSTs por dispositivo). La función
+     `lextWipeLeagueRoster`/`_fixupWipeAllRostersForCleanupV1` se dejan
+     DEFINIDAS (no se borran) para poder retomarlas con ese fix, pero
+     NINGÚN código debe volver a dispararlas automáticamente en el arranque
+     sin antes resolver el problema de concurrencia de red descrito aquí.
+  setTimeout(_fixupWipeAllRostersForCleanupV1, 5000); */
 
   /* ── Bulk add: pega N nombres (1 por línea), crea N equipos IA con
      valores por defecto. El admin los edita uno a uno después si quiere

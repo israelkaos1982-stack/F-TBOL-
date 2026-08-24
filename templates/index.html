@@ -289,6 +289,114 @@
       }).catch(function(){});
     }
   </script>
+  <script>
+    /* ── WATCHDOG DE NAVEGACIÓN LENTA/COLGADA (obligatorio, 2026-08-24
+       — "la mayor investigación de la web de la historia") ───────────
+       El usuario reportó la web sin responder al tocar una caja del
+       menú (ESPAÑA) durante más de un minuto seguido, reproducible
+       incluso en una pestaña de incógnito recién abierta (sin caché ni
+       datos locales) — descarta un problema de caché/conexión puntual
+       de un solo dispositivo.
+
+       La investigación encontró que `window.go` — la función que
+       cambia de pantalla, la que corre en CADA toque de CUALQUIER
+       caja/botón "Volver" de toda la web — está RE-ENVUELTA más de 40
+       veces en distintos puntos de `misc_body_1.html`/
+       `misc_body_2.html`/`index.bundle.js`, acumuladas a lo largo de
+       meses de fixes independientes, cada uno "capturando" el `go` del
+       momento y poniendo el suyo encima. Un comentario de una sesión
+       anterior (`misc_body_1.html`, guard `__single_active_screen_guard`)
+       ya señalaba esto como frágil: "`index.bundle.js` declara
+       `function go(id)`... esa declaración hoisted sobreescribe
+       `window.go` y rompe la cadena de wraps... hay 8+ redefiniciones
+       de `window.go` en bundle.js, cualquiera podría dejar dos screens
+       en `.active`". Es la arquitectura MÁS probable detrás de
+       navegaciones que no responden — pero sin un navegador en vivo NO
+       se puede perfilar/reproducir el cuelgue exacto desde este
+       entorno de desarrollo.
+
+       En vez de seguir adivinando a ciegas, este bloque añade una RED
+       DE SEGURIDAD real: si tocar una caja tarda de forma anómala en
+       completar la navegación, se avisa con un botón para recargar —
+       en vez de dejar al usuario mirando una pantalla muerta sin
+       ninguna pista, como ha estado pasando. Es puramente ADITIVO:
+       mide tiempos con un `setTimeout` alrededor de la llamada real a
+       `go()`, nunca cambia su comportamiento en el caso normal
+       (rápido) — el banner y el log solo se activan si algo tarda de
+       verdad. También dejamos un log local (`go_perf_log_v1`, últimas
+       20 navegaciones lentas) volcable con `window._dumpGoPerfLog()`
+       en consola, para poder diagnosticar con datos reales la próxima
+       vez que esto se reproduzca, en vez de con capturas de pantalla y
+       la hora del reloj. */
+    (function(){
+      function _installGoWatchdog(){
+        try {
+          if (typeof window.go !== 'function' || window.go._slowWatchdog) return;
+          var _finalGo = window.go;
+          var _pending = null;
+          function _showSlowBanner(){
+            try {
+              if (document.getElementById('go-slow-banner')) return;
+              var b = document.createElement('div');
+              b.id = 'go-slow-banner';
+              b.style.cssText = 'position:fixed;left:10px;right:10px;top:calc(10px + env(safe-area-inset-top,0px));z-index:2147483000;'
+                + 'background:linear-gradient(160deg,#2a1a06,#201205);border:1px solid rgba(255,180,90,.65);'
+                + 'border-radius:10px;padding:12px 14px;font-family:Oswald,Rajdhani,sans-serif;color:#ffeadd;'
+                + 'box-shadow:0 4px 20px rgba(0,0,0,.5);display:flex;align-items:center;gap:10px;'
+                + 'justify-content:space-between;animation:goSlowIn .25s ease-out;';
+              b.innerHTML = '<style>@keyframes goSlowIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}</style>'
+                + '<span style="font-size:12.5px;line-height:1.35;">⏳ Esto está tardando más de lo normal. Si la pantalla no responde, recarga.</span>'
+                + '<button id="go-slow-btn" style="flex:none;background:rgba(255,180,90,.22);border:1px solid rgba(255,180,90,.7);'
+                + 'color:#ffe0bf;border-radius:8px;padding:9px 12px;font-family:Oswald,sans-serif;font-size:12px;'
+                + 'letter-spacing:1px;cursor:pointer;white-space:nowrap;">RECARGAR</button>';
+              document.body.appendChild(b);
+              var btn = document.getElementById('go-slow-btn');
+              if (btn) btn.onclick = function(){ try { window.location.reload(); } catch(_){} };
+            } catch(_){}
+          }
+          function _logSlow(targetId, ms){
+            try {
+              var raw = localStorage.getItem('go_perf_log_v1');
+              var arr = raw ? JSON.parse(raw) : [];
+              if (!Array.isArray(arr)) arr = [];
+              arr.push({ id: targetId, ms: Math.round(ms), ts: Date.now() });
+              if (arr.length > 20) arr = arr.slice(arr.length - 20);
+              localStorage.setItem('go_perf_log_v1', JSON.stringify(arr));
+            } catch(_){}
+          }
+          window.go = function(id){
+            var t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            if (_pending) { try { clearTimeout(_pending); } catch(_){} _pending = null; }
+            _pending = setTimeout(function(){ _pending = null; _showSlowBanner(); }, 6000);
+            try {
+              return _finalGo.apply(this, arguments);
+            } finally {
+              if (_pending) { try { clearTimeout(_pending); } catch(_){} _pending = null; }
+              var t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+              var elapsed = t1 - t0;
+              if (elapsed > 1200) _logSlow(id, elapsed);
+            }
+          };
+          window.go._slowWatchdog = true;
+        } catch(_){}
+      }
+      /* Se instala tras 'load' (+ margen de 800ms) para envolver el
+         `window.go` YA COMPLETAMENTE ASENTADO — después de que los 40+
+         wraps de los 3 archivos hayan terminado de instalarse. Envolver
+         antes capturaría una versión intermedia y quedaría por debajo
+         (no por encima) de wraps posteriores. */
+      window.addEventListener('load', function(){ setTimeout(_installGoWatchdog, 800); });
+      if (document.readyState === 'complete') setTimeout(_installGoWatchdog, 800);
+    })();
+    window._dumpGoPerfLog = function(){
+      try {
+        var raw = localStorage.getItem('go_perf_log_v1');
+        var arr = raw ? JSON.parse(raw) : [];
+        console.log('[go_perf_log] últimas navegaciones lentas (>1.2s):', arr);
+        return arr;
+      } catch(_){ return []; }
+    };
+  </script>
 
   <!-- ═══ localForage (rama test-localforage — FASE 2, migración quirúrgica) ═══
        Auditoría previa (Fase 1) en esta misma rama: de las claves pedidas

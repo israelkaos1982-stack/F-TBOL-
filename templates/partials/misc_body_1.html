@@ -53970,8 +53970,9 @@ https://api.sofascore.app/api/v1/team/44/image
      No pide confirmación — el caller decide su propio gate/confirm si
      hace falta. Devuelve `true` si vació algo, `false` si la liga ya
      estaba vacía o no existía. */
-  window.lextWipeLeagueRoster = function(slug){
+  window.lextWipeLeagueRoster = function(slug, opts){
     if (!slug) return false;
+    opts = opts || {};
     var data = loadData(slug);
     if (!data || !Array.isArray(data.teams) || !data.teams.length) return false;
     if (!Array.isArray(data.deletedTeamNames)) data.deletedTeamNames = [];
@@ -53993,7 +53994,18 @@ https://api.sofascore.app/api/v1/team/44/image
         wipedNames.forEach(function(nm){ delete window.SQUAD_REGISTRY[nm]; });
       }
     } catch(_){}
-    if (typeof window.applyEngineOverrides === 'function') {
+    /* `applyEngineOverrides()` NUNCA se salta en el uso normal (un admin
+       vaciando UNA liga desde el editor) — pero es una función CARA
+       (recorre TODAS las `ligaExt_*` cacheadas, `_importOtherLeaguesIntoEngine`,
+       refresca escudos/pickers). `opts.skipEngineSync` existe para un
+       caller que va a vaciar MUCHAS ligas SEGUIDAS (p.ej. un fixup de
+       arranque) — ese caller la salta aquí y la llama UNA sola vez al
+       final del lote. Sin este flag, un bucle de 20 ligas dispara 20
+       rescans completos en el mismo tick y bloquea el hilo principal
+       varios segundos/minutos — el usuario ve la web "pintada" pero sin
+       responder a ningún toque (bug real 2026-08-24, reportado en
+       producción justo tras desplegar el fixup de vaciado masivo). */
+    if (!opts.skipEngineSync && typeof window.applyEngineOverrides === 'function') {
       try { window.applyEngineOverrides(); } catch(_){}
     }
     if (CURRENT_KEY === slug) {
@@ -54034,7 +54046,35 @@ https://api.sofascore.app/api/v1/team/44/image
      explícita del usuario — el alcance es el del plan aprobado, no "de
      paso ya que estamos". PROHIBIDO que este fixup vuelva a correr tras
      su primera ejecución (dejaría inútil cualquier plantilla nueva que
-     el admin pegue después). */
+     el admin pegue después).
+
+     ⚠️ CORRECCIÓN URGENTE (2026-08-24, mismo día — regresión grave en
+     PRODUCCIÓN): la 1ª versión de este fixup llamaba a
+     `lextWipeLeagueRoster(slug)` en un `forEach` — 20 ligas SEGUIDAS,
+     en el MISMO tick de JS, sin ceder el hilo entre una y otra. Cada
+     llamada, a su vez, disparaba `applyEngineOverrides()` (función CARA:
+     recorre TODAS las `ligaExt_*` cacheadas, `_importOtherLeaguesIntoEngine`,
+     refresca escudos/pickers) — así que el fixup hacía **20 rescans
+     completos del proyecto en un solo tick**. Resultado reportado por el
+     usuario en producción minutos después de desplegarse: la web
+     "pintaba" el menú principal con normalidad (el HTML/CSS ya estaba
+     en pantalla) pero **no respondía a ningún toque** — exactamente el
+     patrón "hilo principal bloqueado" ya documentado en este archivo
+     para otros bugs históricos (`applyEngineOverrides ⇄
+     sqFromRegistryFull`, 2026-07-29). Como el flag de completado
+     (`ftbol_fixup_wipe_all_rosters_v1`) solo se escribía al FINAL de
+     todo el trabajo, un usuario que recargara la página a mitad del
+     bloqueo volvía a disparar el mismo bloqueo desde cero — "haga lo
+     que haga sigue sin abrir".
+
+     FIX: el vaciado de las 20 ligas se hace SECUENCIAL y DIFERIDO (una
+     liga por `setTimeout`, cediendo el hilo entre cada una) y con
+     `skipEngineSync:true` en CADA llamada — `applyEngineOverrides()` se
+     llama UNA SOLA VEZ, al terminar TODO el lote (ligas + inyectores +
+     Supercopas), justo antes de marcar el flag de completado. PROHIBIDO
+     volver a un `forEach` sin diferir ni a llamar
+     `applyEngineOverrides()` más de una vez en este fixup — es la causa
+     raíz exacta de la regresión que motivó esta corrección. */
   function _fixupWipeAllRostersForCleanupV1(){
     try {
       if (localStorage.getItem('ftbol_fixup_wipe_all_rosters_v1') === '1') return;
@@ -54046,50 +54086,67 @@ https://api.sofascore.app/api/v1/team/44/image
         'germanika', 'hellas-slavia', 'danubio-nordica', 'adriatico-oriental',
         'balkanica', 'eurasia', 'resto-mundo'
       ];
-      LEAGUE_SLUGS.forEach(function(slug){
-        try { window.lextWipeLeagueRoster(slug); } catch(err){ try { console.warn('[wipe-fixup] fallo en liga', slug, err); } catch(_){} }
-      });
-      /* Inyectores "EA Sports → Europa" — mismo formato/clave que usa
-         ese módulo (`manual_ea_<slug>_v1` = {teams:[], ts}), replicado
-         aquí porque `_save`/`_key` de ese IIFE son privados (no
-         expuestos en window). */
       var MEA_SLUGS = ['ucl','uclPrev','prevR3','prevR2','prevR1','uel','uecl',
         'supercopa','intercontinental','superliga','verano'];
-      MEA_SLUGS.forEach(function(slug){
-        var key = 'manual_ea_' + slug + '_v1';
+
+      function _finish(){
+        /* Inyectores "EA Sports → Europa" — mismo formato/clave que usa
+           ese módulo (`manual_ea_<slug>_v1` = {teams:[], ts}), replicado
+           aquí porque `_save`/`_key` de ese IIFE son privados (no
+           expuestos en window). Operación LIGERA (solo localStorage +
+           un fetch fire-and-forget cada una, sin rescans) — no necesita
+           diferirse liga a liga como el bucle de arriba. */
+        MEA_SLUGS.forEach(function(slug){
+          var key = 'manual_ea_' + slug + '_v1';
+          try {
+            var payload = JSON.stringify({ teams: [], ts: Date.now() });
+            if (typeof window._lsSetSafe === 'function') window._lsSetSafe(key, payload);
+            else localStorage.setItem(key, payload);
+          } catch(_){}
+          try {
+            fetch('/api/kv/' + key, {
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              credentials:'same-origin',
+              body: JSON.stringify({ value: { teams:[], ts:Date.now() } })
+            }).catch(function(){});
+          } catch(_){}
+        });
+        /* Supercopa de España / Supercopa de Europa — mismo reset que sus
+           propios botones "♻️ Res" (`_scReset`/`_uscReset`), pero sin el
+           confirm() (este fixup corre en silencio, sin interacción) y
+           empujando también el borrado al servidor (esas 2 claves viajan
+           por `/api/state.competition_state`, igual que las de
+           `_resetEuropePoolFeeders`). */
+        ['sc_state_v1', 'usc_state_v1'].forEach(function(key){
+          try { localStorage.removeItem(key); } catch(_){}
+        });
         try {
-          var payload = JSON.stringify({ teams: [], ts: Date.now() });
-          if (typeof window._lsSetSafe === 'function') window._lsSetSafe(key, payload);
-          else localStorage.setItem(key, payload);
-        } catch(_){}
-        try {
-          fetch('/api/kv/' + key, {
+          fetch('/api/state', {
             method:'POST',
             headers:{'Content-Type':'application/json'},
             credentials:'same-origin',
-            body: JSON.stringify({ value: { teams:[], ts:Date.now() } })
+            body: JSON.stringify({ competition_state: { sc_state_v1:'', usc_state_v1:'' } })
           }).catch(function(){});
         } catch(_){}
-      });
-      /* Supercopa de España / Supercopa de Europa — mismo reset que sus
-         propios botones "♻️ Res" (`_scReset`/`_uscReset`), pero sin el
-         confirm() (este fixup corre en silencio, sin interacción) y
-         empujando también el borrado al servidor (esas 2 claves viajan
-         por `/api/state.competition_state`, igual que las de
-         `_resetEuropePoolFeeders`). */
-      ['sc_state_v1', 'usc_state_v1'].forEach(function(key){
-        try { localStorage.removeItem(key); } catch(_){}
-      });
-      try {
-        fetch('/api/state', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          credentials:'same-origin',
-          body: JSON.stringify({ competition_state: { sc_state_v1:'', usc_state_v1:'' } })
-        }).catch(function(){});
-      } catch(_){}
-      try { if (typeof window._renderBanner === 'function') window._renderBanner(); } catch(_){}
-      localStorage.setItem('ftbol_fixup_wipe_all_rosters_v1', '1');
+        /* UN SOLO rescan del motor, tras vaciar TODAS las ligas del lote
+           — nunca uno por liga (ver corrección de arriba). */
+        if (typeof window.applyEngineOverrides === 'function') {
+          try { window.applyEngineOverrides(); } catch(_){}
+        }
+        try { if (typeof window._renderBanner === 'function') window._renderBanner(); } catch(_){}
+        try { localStorage.setItem('ftbol_fixup_wipe_all_rosters_v1', '1'); } catch(_){}
+      }
+
+      /* Procesa una liga por tick, cediendo el hilo (setTimeout 0) entre
+         cada una — nunca las 20 en un solo `forEach` síncrono. */
+      function _stepLeague(i){
+        if (i >= LEAGUE_SLUGS.length) { _finish(); return; }
+        try { window.lextWipeLeagueRoster(LEAGUE_SLUGS[i], { skipEngineSync:true }); }
+        catch(err){ try { console.warn('[wipe-fixup] fallo en liga', LEAGUE_SLUGS[i], err); } catch(_){} }
+        setTimeout(function(){ _stepLeague(i + 1); }, 0);
+      }
+      _stepLeague(0);
     } catch(_){}
   }
   /* Diferido 5s: da tiempo a que `loadData`/`saveData`/`applyEngineOverrides`

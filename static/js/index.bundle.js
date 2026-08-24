@@ -3424,7 +3424,6 @@ function mlPreviaClick(matchKey) {
       else if (jid === 'uel-fin')              compKey = 'uel-fin';
       else if (jid === 'uecl-fin')             compKey = 'uecl-fin';
       else if (jid === 'cal-inter-f')          compKey = 'inter-fin';
-      else if (jid === 'cal-rec-fin')          compKey = 'recopa-fin';
       else if (jid === 'cal-eu-fin')           compKey = 'eur-fin';
       else if (jid === 'sc-semis')             compKey = 'sc';
       else if (jid.startsWith('cal-sc-'))      compKey = 'sc';
@@ -3438,7 +3437,6 @@ function mlPreviaClick(matchKey) {
       else if (jid.startsWith('uecl-'))        compKey = 'uecl';
       else if (jid.startsWith('cal-sl'))       compKey = 'superliga';
       else if (jid.startsWith('cal-inter-'))   compKey = 'inter';
-      else if (jid.startsWith('cal-rec-'))     compKey = 'recopa';
       else if (jid.startsWith('cal-eu-g'))     compKey = 'eur-grupo';
       else if (jid.startsWith('cal-eu-'))      compKey = 'eur-ko';
       else if (jid.startsWith('cal-ams'))      compKey = 'amistoso';
@@ -3455,7 +3453,7 @@ function mlPreviaClick(matchKey) {
   if (isHvH && sinProrrogaComp.indexOf(compKey) === -1) {
     prorroga = 'Sí';
   } else {
-    var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin','recopa','recopa-fin','eur-ko','eur-fin','sel','sel-fin'];
+    var conProrroga = ['copa','copa-fin','sc','sc-final','usc','usc-fin','inter','inter-fin','ucl-fin','uel-fin','uecl-fin','eur-ko','eur-fin','sel','sel-fin'];
     prorroga = (conProrroga.indexOf(compKey) !== -1) ? 'Sí' : 'No';
   }
   // Duración real según spec (_MATCH_RULE): HvH=16.5 min, HvIA=13.5 min.
@@ -5225,8 +5223,6 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
     'inter':      { label:'Copa Intercontinental',     ciclo:3, esFinal:false },
     'inter-fin':  { label:'Intercontinental · Final',  ciclo:3, esFinal:true  },
     /* Añadidos 2026-05-23 para que toda comp "no de verano" acumule */
-    'recopa':     { label:'Recopa',                    ciclo:3, esFinal:false },
-    'recopa-fin': { label:'Recopa · Final',            ciclo:3, esFinal:true  },
     'mundial':    { label:'Mundialito de Clubes',      ciclo:3, esFinal:false },
     'mundial-fin':{ label:'Mundialito · Final',        ciclo:3, esFinal:true  },
     'eur-grupo':  { label:'Fase de grupos europea',    ciclo:3, esFinal:false },
@@ -6502,8 +6498,6 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'uecl-fin':   "F5N5000-TL",
       'inter':      "eFootball Origin",
       'inter-fin':  "eFootball Origin",
-      'recopa':     "eFootball Contact 27",
-      'recopa-fin': "eFootball Contact 27",
       'eur-grupo':  "PARADISE Morado",
       'eur-ko':     "PARADISE Morado",
       'eur-fin':    "PARADISE Morado",
@@ -6542,7 +6536,6 @@ document.addEventListener("DOMContentLoaded",rebuildLigaStats);
       'ucl':'champions','ucl-fin':'champions',
       'uel':'uel','uel-fin':'uel',
       'uecl':'uecl','uecl-fin':'uecl',
-      'recopa':'recopa','recopa-fin':'recopa',
       'usc':'usc','usc-fin':'usc',
       'inter':'intercontinental','inter-fin':'intercontinental',
       'sel':'selecciones','sel-fin':'selecciones',
@@ -12486,22 +12479,6 @@ console.log('[eFootball] Sistema de Bajas + Sincronización de Plantillas + ET S
           }
         }
       } catch(_){}
-    }
-    /* Recopa de Europa: matchKey `recopa_<phase>_<idx>`. Mapeamos cada
-       ronda del bracket (32 equipos desde 2026-08-16, arranca en 1/32
-       — sin ronda 1/64) a la fila EXACTA del calendario (calendario.json
-       → SSR). Sin esto la previa de un partido de Recopa caía a HOY +
-       "recopa" sin fecha real. 2026-06-02, reducido 2026-08-16. */
-    var rm = String(matchKey || '').match(/^recopa_([a-z0-9]+)_\d+$/i);
-    if (rm) {
-      var RECOPA_RD = {
-        r32: 'Recopa Europa — 1/32',
-        r16: 'Recopa Europa — Octavos',
-        r8:  'Recopa Europa — Cuartos',
-        sf:  'Recopa Europa — Semis',
-        fin: 'FINAL RECOPA'
-      };
-      if (RECOPA_RD[rm[1].toLowerCase()]) return RECOPA_RD[rm[1].toLowerCase()];
     }
     /* Copa Intercontinental: matchKey `inter_<phase>_<idx>` (q/s/f).
        Mapeamos cada ronda a la fila EXACTA del calendario para que la

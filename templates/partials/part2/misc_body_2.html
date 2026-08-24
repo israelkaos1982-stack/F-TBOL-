@@ -1881,7 +1881,6 @@
       'uel-fin': { main:'#ffa050', accent:'#ffd9b0', bg1:'rgba(65,30,5,.78)',  bg2:'rgba(25,10,2,.96)',   glow:'rgba(255,140,0,.70)'   },
       uecl:      { main:'#7df0a0', accent:'#caffd6', bg1:'rgba(5,55,30,.78)',  bg2:'rgba(2,20,12,.96)',   glow:'rgba(95,224,138,.70)'  },
       'uecl-fin':{ main:'#7df0a0', accent:'#caffd6', bg1:'rgba(5,55,30,.78)',  bg2:'rgba(2,20,12,.96)',   glow:'rgba(95,224,138,.70)'  },
-      recopa:    { main:'#ff80b0', accent:'#ffd0e0', bg1:'rgba(60,10,30,.78)', bg2:'rgba(25,3,12,.96)',   glow:'rgba(255,95,176,.65)'  },
       usc:       { main:'#a0e0ff', accent:'#e0f4ff', bg1:'rgba(15,40,55,.78)', bg2:'rgba(5,15,22,.96)',   glow:'rgba(160,224,255,.65)' },
       'usc-fin': { main:'#a0e0ff', accent:'#e0f4ff', bg1:'rgba(15,40,55,.78)', bg2:'rgba(5,15,22,.96)',   glow:'rgba(160,224,255,.65)' },
       inter:     { main:'#ffd700', accent:'#ffeb80', bg1:'rgba(70,50,5,.78)',  bg2:'rgba(25,18,2,.96)',   glow:'rgba(255,215,0,.75)'   },
@@ -9675,7 +9674,6 @@
     ueclGroup:  { v:9,  e:3, g:1, i:2, mvp:2 },
     ueclKo:     { v:12, e:4, g:2, i:3, mvp:3 },
     usc:        { v:13, e:5, g:2, i:4, mvp:4 },
-    recopa:     { v:11, e:4, g:1, i:3, mvp:3 },
     inter:      { v:14, e:5, g:2, i:4, mvp:4 },
     mundialito: { v:13, e:5, g:2, i:5, mvp:4 },
     superliga:  { v:8,  e:3, g:1, i:3, mvp:2 },
@@ -9714,7 +9712,6 @@
       if (comp === 'copa' || comp === 'copa-fin') return 'copa';
       if (comp === 'sc' || comp === 'sc-final') return 'sc';
       if (comp === 'usc' || comp === 'usc-fin') return 'usc';
-      if (comp === 'recopa') return 'recopa';
       if (comp === 'inter') return 'inter';
       if (comp === 'superliga') return 'superliga';
       if (comp === 'sel') return 'selQual';
@@ -11934,9 +11931,6 @@
       ronda = (c === 'sc-final' || opts.copaRonda === 'fin') ? 'Final' : (c === 'sc-semis' ? 'Semis' : '');
     } else if (c === 'usc' || c === 'supercopa-europa' || c === 'super-cup') {
       icon = '🏆'; label = 'Supercopa Europa';
-    } else if (c === 'recopa') {
-      icon = '🏆'; label = 'Recopa Europa';
-      ronda = _copaRonda();
     } else if (c === 'intercontinental' || c === 'mundial-corto' || c.indexOf('intercontinental') !== -1) {
       icon = '🏆'; label = 'Intercontinental';
     } else if (c === 'liga' || c.indexOf('liga ea') !== -1 || c.indexOf('hypermotion') !== -1 || c.indexOf('primera federacion') !== -1 || c.indexOf('primera fed') !== -1 || c === 'liga-ea-sports') {
@@ -14116,7 +14110,7 @@
       var _isCopaSL = (!!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin')
                     && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin' || !!_gm._copaDesempate);
       var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
-      var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
+      var _isInterSL = !!_gm._isInter || _gm.comp === 'inter';
       /* Eliminatorias europeas: SOLO desempate ('d') y FINAL ('f') son a
          partido único con prórroga+penaltis; ida/vuelta no. 2026-06-09. */
       var _isEurKoSL = !!_gm._isEurKo && (_gm._eurKoRound === 'fin' || _gm._eurKoLeg === 'd');
@@ -14158,7 +14152,7 @@
       var _shouldForceET =
            (_isCopaSL && _scoreTied)
         || (_isScSL && _scoreTied)
-        || (_isRecopaSL && _scoreTied)
+        || (_isInterSL && _scoreTied)
         || (_isAmsElim && _scoreTied)
         || (_isAmsDobleVuelta && _amsDobleTied)
         || (_isEurKoSL && _scoreTied)
@@ -16371,9 +16365,9 @@
                   && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin' || !!_gm._copaDesempate);
     /* Supercopa de España (sc): single-leg con ET+pen igual que Copa. */
     var _isScSL = !!_gm._isSc || !!_gm._isUsc || _gm.comp === 'sc' || _gm.comp === 'sc-final' || _gm.comp === 'usc' || _gm.comp === 'usc-fin';
-    /* Recopa de Europa: TODAS las rondas son single-leg con ET+pen.
-       Si empate al 90', prórroga; al 120' penaltis. 2026-05-06. */
-    var _isRecopaSL = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
+    /* Copa Intercontinental: single-leg con ET+pen. Si empate al 90',
+       prórroga; al 120' penaltis. 2026-05-06. */
+    var _isInterSL = !!_gm._isInter || _gm.comp === 'inter';
     /* Eliminatorias europeas: desempate + FINAL a partido único con
        ET+pen (ida/vuelta no). 2026-06-09. */
     var _isEurKoSL = !!_gm._isEurKo && (_gm._eurKoRound === 'fin' || _gm._eurKoLeg === 'd');
@@ -16415,7 +16409,7 @@
     } catch(_){}
     var _shouldForceET = (_isCopaSL && _gm.sc.a === _gm.sc.b)
                        || (_isScSL && _gm.sc.a === _gm.sc.b)
-                       || (_isRecopaSL && _gm.sc.a === _gm.sc.b)
+                       || (_isInterSL && _gm.sc.a === _gm.sc.b)
                        || (_isAmsElim && _gm.sc.a === _gm.sc.b)
                        || (_isAmsDobleVuelta && _amsDobleTied)
                        || (_isEurKoSL && _gm.sc.a === _gm.sc.b)
@@ -16655,7 +16649,7 @@
       if (typeof window._broadcastHumanMatchResult === 'function' && _gmHumanInvolved()){
         var _bmk = 'gm:' + (_gm.comp || '') + ':' + (_gm._tourId || '') + ':' +
                    (_gm._tourKey || '') + ':' +
-                   (_gm._copaRonda || _gm._scKey || _gm._recopaPhase || '') + ':' +
+                   (_gm._copaRonda || _gm._scKey || '') + ':' +
                    (_gm.j != null ? _gm.j : '') + ':' + _gm.home + '-' + _gm.away;
         window._broadcastHumanMatchResult({
           mk: _bmk,
@@ -16963,47 +16957,10 @@
           );
         }
       } catch(_e){}
-    } else if (_gm._isRecopa || _gm.comp === 'recopa') {
-      /* Recopa de Europa HvIA / HvH: persistimos en recopa_state_v1
-         vía _recopaSaveHumanResult (definido en el IIFE de s-recopa).
-         Single-leg con ET+pen — _gm.etScores y _gm.penWinner ya se
-         rellenan durante gmEndMatch tras la prórroga + penaltis. */
-      try {
-        var _rcEt = _gm.etScores || {};
-        var _rcPenWin = _gm.penWinner || null;
-        if (!_rcPenWin) {
-          var _rcPenEv = (_gm.events || []).find(function(e){ return e && (e.type === 'pen-result' || e.type === 'pen-winner'); });
-          if (_rcPenEv) _rcPenWin = _rcPenEv.team === 'a' ? 'a' : 'b';
-        } else if (_rcPenWin === _gm.home) _rcPenWin = 'a';
-        else if (_rcPenWin === _gm.away) _rcPenWin = 'b';
-        var _rcMvpEv = (_gm.events || []).find(function(e){ return e && e.type === 'mvp'; });
-        var _rcMvpName = _rcMvpEv ? (_rcMvpEv.player || _rcMvpEv.name || '') : '';
-        var _rcMvpTeam = _rcMvpEv ? (_rcMvpEv.team === 'a' ? _gm.home : (_rcMvpEv.team === 'b' ? _gm.away : '')) : '';
-        if (typeof window._recopaSaveHumanResult === 'function') {
-          window._recopaSaveHumanResult(
-            _gm._recopaPhase, _gm._recopaIdx,
-            _gm.sc.a, _gm.sc.b,
-            _rcEt.a || 0, _rcEt.b || 0,
-            _rcPenWin,
-            _gm.events || [],
-            _rcMvpName, _rcMvpTeam,
-            _gm.home, _gm.away
-          );
-        }
-        /* Sumar al store de stats de Liga EA para que goles/MVP/cards
-           cuenten en plantillas igual que Copa/SC. */
-        if (typeof window.registrarLigaPlayerStats === 'function') {
-          var _rcStatsEv = (_gm.events || []).filter(function(e){
-            return e && e.type !== 'pen-result' && !e._varAnulado;
-          });
-          var _rcMk = 'recopa_' + (_gm._recopaPhase || 'r32') + '_' + (_gm._recopaIdx || 0);
-          window.registrarLigaPlayerStats(_rcMk, _gm.home, _gm.away, _rcStatsEv, _rcMvpName, _rcMvpTeam, 'recopa');
-        }
-      } catch(_e){}
     } else if (_gm._isInter || _gm.comp === 'inter') {
       /* Copa Intercontinental HvIA / HvH: persistimos en inter_state_v1
          vía _interSaveHumanResult (IIFE de s-intercontinental). Single-leg
-         con ET+pen — mismo régimen que Recopa. Stats van a la plantilla
+         con ET+pen. Stats van a la plantilla
          vía registrarLigaPlayerStats con compKey 'inter'. */
       try {
         var _icEt = _gm.etScores || {};
@@ -17176,7 +17133,6 @@
         if      (_gm._isCopa     || _gm.comp === 'copa' || _gm.comp === 'copa-fin') _adComp = 'copa';
         else if (_gm._isSc       || _gm.comp === 'sc'   || _gm.comp === 'sc-final') _adComp = 'sc';
         else if (_gm._isUsc      || _gm.comp === 'usc'  || _gm.comp === 'usc-fin')  _adComp = 'usc';
-        else if (_gm._isRecopa   || _gm.comp === 'recopa')                          _adComp = 'recopa';
         else if (_gm._isWprev)                                                       _adComp = 'ucl';
         else if (_gm._isEurFase)                                                     _adComp = (_gm._eurFaseComp || 'ucl');
         else if (_gm._isSuperliga|| _gm.comp === 'superliga')                       _adComp = 'superliga';
@@ -17191,7 +17147,6 @@
         if (_adComp === 'liga')      _adJornada = String(_gm.j || '');
         else if (_adComp === 'copa') _adJornada = (_gm._copaRonda === 'fin' ? 'FINAL' : (_gm._copaRonda || ''));
         else if (_adComp === 'sc')   _adJornada = (_gm._scKey === 'fin' ? 'FINAL' : 'Semifinal');
-        else if (_adComp === 'recopa') _adJornada = ({ r32:'1/32', r16:'Octavos', r8:'Cuartos', sf:'Semifinal', fin:'FINAL' })[_gm._recopaPhase || ''] || String(_gm._recopaPhase || '');
         else if (_adComp === 'ucl' || _adComp === 'uel' || _adComp === 'uecl') _adJornada = 'Jornada ' + (_gm._eurFaseJor || '');
         window._munichDerbyAutoLog({
           comp: _adComp,
@@ -17651,9 +17606,6 @@
       _uscKey: _gm._uscKey,
       _uscIdx: _gm._uscIdx,
       _uscStadium: _gm._uscStadium,
-      _isRecopa: !!_gm._isRecopa,
-      _recopaPhase: _gm._recopaPhase,
-      _recopaIdx: _gm._recopaIdx,
       _isInter: !!_gm._isInter,
       _interPhase: _gm._interPhase,
       _interIdx: _gm._interIdx,
@@ -17911,9 +17863,6 @@
     _gm._uscKey = saved ? saved._uscKey : null;
     _gm._uscIdx = saved ? saved._uscIdx : null;
     _gm._uscStadium = saved ? saved._uscStadium : null;
-    _gm._isRecopa = saved ? !!saved._isRecopa : false;
-    _gm._recopaPhase = saved ? saved._recopaPhase : null;
-    _gm._recopaIdx = saved ? saved._recopaIdx : null;
     _gm._isInter = saved ? !!saved._isInter : false;
     _gm._interPhase = saved ? saved._interPhase : null;
     _gm._interIdx = saved ? saved._interIdx : null;
@@ -18075,7 +18024,7 @@
          engine de Copa al confirmar la vuelta. */
       var _isCopa = !!_gm._isCopa || _gm.comp === 'copa' || _gm.comp === 'copa-fin';
       var _isCopaSingleLeg = _isCopa && (_gm._copaRonda === 'r1' || _gm._copaRonda === 'r2' || _gm._copaRonda === 'r16' || _gm._copaRonda === 'fin' || _gm.comp === 'copa-fin' || !!_gm._copaDesempate);
-      var _isRecopaCfg = !!_gm._isRecopa || _gm.comp === 'recopa' || !!_gm._isInter || _gm.comp === 'inter';
+      var _isInterCfg = !!_gm._isInter || _gm.comp === 'inter';
       /* Supercopa España: el botón PRÓRROGA NO se muestra. El sistema
          fuerza prórroga + penaltis automáticamente cuando hay empate
          al pulsar FINALIZAR (rama _isScSL en gmEndMatch). Petición
@@ -18100,7 +18049,7 @@
          (i/v/d), igual que `_isEurKoTwoLeg`. */
       var _isWprevGroupCfg = !!_gm._isWprev;
       var _isWprevKoLeg = !!_gm._isWprevKo;
-      var _showET = ((_gm.isHvH && !_gm.noET && !_isLiga && !_isScSL && !_isRecopaCfg && !_isEurFaseCfg && !_isEurKoTwoLeg && !_isWprevGroupCfg && !_isWprevKoLeg) || _isCopaSingleLeg || _isEurKoSL);
+      var _showET = ((_gm.isHvH && !_gm.noET && !_isLiga && !_isScSL && !_isInterCfg && !_isEurFaseCfg && !_isEurKoTwoLeg && !_isWprevGroupCfg && !_isWprevKoLeg) || _isCopaSingleLeg || _isEurKoSL);
       etBtn.style.display = _showET ? '' : 'none';
       etBtn.disabled = !!_gm.etDone;
       etBtn.style.opacity = _gm.etDone ? '0.35' : '1';
@@ -18703,34 +18652,10 @@
     } catch(_){}
   };
 
-  /* Recopa de Europa HvIA / HvH: abre gm-modal con comp='recopa' y los
-     flags _isRecopa/_recopaPhase/_recopaIdx para que gmEndMatch
-     persista vía _recopaSaveHumanResult en recopa_state_v1.
-     Single-leg con ET+pen automático si empate al 90'. 2026-05-06. */
-  window.abrirRecopa = function (phase, idx, home, away) {
-    /* Humanidad POR COMPETICIÓN (2026-05-10): un equipo puede ser
-       humano en Recopa (humanIcon del editor) sin ser uno de los 5
-       canónicos de Liga EA — esHumano() a pelo lo trataba como IA.
-       Mismo patrón ya usado en abrirInter() justo debajo. */
-    var _ih = (typeof window.isHumanInComp === 'function')
-      ? function(n){ return !!window.isHumanInComp(n, 'recopa'); }
-      : function(n){ return !!esHumano(n); };
-    var isHvH = _ih(home) && _ih(away);
-    gmOpen(0, home, away, isHvH, 'recopa', false, false);
-    try {
-      if (window.__GM_LIVE) {
-        window.__GM_LIVE._isRecopa = true;
-        window.__GM_LIVE._recopaPhase = phase;
-        window.__GM_LIVE._recopaIdx = idx;
-        window.__GM_LIVE.comp = 'recopa';
-      }
-    } catch(_){}
-  };
-
   /* Copa Intercontinental HvIA / HvH: abre gm-modal con comp='inter' y
      los flags _isInter/_interPhase/_interIdx para que gmEndMatch persista
      vía _interSaveHumanResult en inter_state_v1. Single-leg con ET+pen
-     automático si empate al 90' (mismo régimen que Recopa). 2026-06-04.
+     automático si empate al 90'. 2026-06-04.
      Humanidad por-competición: en 'inter' es humano cualquier equipo con
      icono humano (isHumanInComp), no solo los 5 canónicos de Liga. */
   window.abrirInter = function (phase, idx, home, away) {
@@ -19443,21 +19368,16 @@
        (ET + pen si empate al 90'/120'). Stats van a la plantilla del
        ligaExt vía window._lecPersistAfterIa. 2026-05-06. */
     var _isLecSim = typeof mk === 'string' && mk.indexOf('lec_') === 0;
-    /* Recopa de Europa (recopa_<phase>_<idx>): TODAS las rondas son
-       single-leg con ET+pen — partido único en el campo del primer
-       equipo del sorteo, prórroga + penaltis si empate al 90'.
-       Persist vía window._recopaPersistAfterIa. 2026-05-06. */
-    var _isRecopaSim = typeof mk === 'string' && mk.indexOf('recopa_') === 0;
     /* Supercopa de Europa (usc_<sf|fin>_<idx>): single-leg con ET+pen,
        igual que SC. OJO: el prefijo es `usc_`, NO matchea `sc_` (el
        indexOf de _isScSim es 1, no 0), por eso se detecta aparte.
        2026-06-04. */
     var _isUscSim = typeof mk === 'string' && mk.indexOf('usc_') === 0;
     /* Copa Intercontinental (inter_<phase>_<idx>): bracket de 8 a partido
-       único con ET+pen, mismo régimen single-leg que Recopa. Persist vía
+       único con ET+pen, mismo régimen single-leg. Persist vía
        window._interPersistAfterIa. 2026-06-04. */
     var _isInterSim = typeof mk === 'string' && mk.indexOf('inter_') === 0;
-    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isUscSim || _isLecSim || _isRecopaSim || _isInterSim;
+    var _isCopaSingleLeg = (_copaParts && (_copaParts[1] === 'r1' || _copaParts[1] === 'r2' || _copaParts[1] === 'r16' || _copaParts[1] === 'fin')) || _isScSim || _isUscSim || _isLecSim || _isInterSim;
     var _copaET = { et_gl: 0, et_gv: 0, pen_winner: null };
 
     /* COPA SINGLE-LEG con empate previsto al 90': el partido va a
@@ -19863,9 +19783,6 @@
            ligaExt_<slug>.copa vía window._lecPersistAfterIa
            (definido en el IIFE de s-lext-copa). 2026-05-06. */
         var __isLecSimPersist = typeof mk === 'string' && mk.indexOf('lec_') === 0;
-        /* Recopa de Europa: mk con prefijo recopa_ → persistir en
-           recopa_state_v1 vía window._recopaPersistAfterIa. 2026-05-06. */
-        var __isRecopaSimPersist = typeof mk === 'string' && mk.indexOf('recopa_') === 0;
         /* Copa Intercontinental: mk con prefijo inter_ → persistir en
            inter_state_v1 vía window._interPersistAfterIa. 2026-06-04. */
         var __isInterSimPersist = typeof mk === 'string' && mk.indexOf('inter_') === 0;
@@ -19905,10 +19822,6 @@
           try {
             window._lecPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
           } catch(_e) { try { console.error('[lecSimLive persist]', _e); } catch(__){} }
-        } else if (__isRecopaSimPersist && typeof window._recopaPersistAfterIa === 'function') {
-          try {
-            window._recopaPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
-          } catch(_e) { try { console.error('[recopaSimLive persist]', _e); } catch(__){} }
         } else if (__isInterSimPersist && typeof window._interPersistAfterIa === 'function') {
           try {
             window._interPersistAfterIa(mk, home, away, scA, scB, evtData.events, evtData.mvp, evtData.mvpTeam, _copaET);
@@ -19945,8 +19858,8 @@
           if (!window._iaRunningCount) {
             if (__isCopaSim) {
               if (typeof window.copaInit === 'function') window.copaInit();
-            } else if (__isScSimPersist || __isUscSimPersist || __isLecSimPersist || __isRecopaSimPersist || __isInterSimPersist || __isEurFaseSimPersist || __isEurKoSimPersist) {
-              /* SC, USC, Lec, Recopa, Inter, EurFase y EurKo ya re-renderizan
+            } else if (__isScSimPersist || __isUscSimPersist || __isLecSimPersist || __isInterSimPersist || __isEurFaseSimPersist || __isEurKoSimPersist) {
+              /* SC, USC, Lec, Inter, EurFase y EurKo ya re-renderizan
                  dentro de su propio persistAfterIa. No tocamos la tabla
                  de Liga. */
             } else {
@@ -22792,7 +22705,6 @@
       <button type="button" class="ag-pk-b" data-val="🤝">🤝 Amistoso</button>
       <button type="button" class="ag-pk-b" data-val="🌞">🌞 Torneo Pretemporada</button>
       <button type="button" class="ag-pk-b" data-val="🔵">🔵 Previa Champions</button>
-      <button type="button" class="ag-pk-b" data-val="🟤">🟤 Recopa Europa</button>
       <button type="button" class="ag-pk-b" data-val="🟡">🟡 Intercontinental</button>
       <button type="button" class="ag-pk-b" data-val="🌐">🌐 Mundialito Clubes</button>
       <button type="button" class="ag-pk-b" data-val="🏃">🏃 Entrenamiento</button>
@@ -23211,7 +23123,6 @@
     { id:'prevch',  ico:'🟣', name:'Previa Champions',       def:false },
     { id:'uel',     ico:'🟠', name:'Europa League',          def:false },
     { id:'uecl',    ico:'🟢', name:'Conference League',      def:false },
-    { id:'recopa',  ico:'🔴', name:'Recopa de Europa',       def:false },
     { id:'sup-eur', ico:'⚫️', name:'Supercopa de Europa',    def:false },
     { id:'inter',   ico:'🟤', name:'Intercontinental',       def:false },
     { id:'mundial', ico:'🟡', name:'Mundial de Clubes',      def:false },
@@ -23246,11 +23157,9 @@
     if (/conference\s*league|UECL\b/i.test(n)) return 'uecl';
     if (/intercontinental/i.test(n)) return 'inter';
     if (/mundial.*club|club.*world/i.test(n)) return 'mundial';
-    if (/recopa/i.test(n)) return 'recopa';
     if (/\bag-liga\b/.test(c)) return 'liga';
     if (/\bag-copa\b/.test(c)) return 'copa';
     if (/\bag-eur\b/.test(c)) return 'champ';        // catch-all europeo
-    if (/\bag-recopa\b/.test(c)) return 'recopa';
     if (/\bag-inter\b/.test(c)) return 'mundial';    // catch-all clubes
     if (/\bag-torneo\b/.test(c)) return 'torneo';
     if (/\bag-amist\b/.test(c)) return 'amist';
@@ -23737,7 +23646,7 @@
   /* ── Mapeos icono↔clase para nuevas filas / edits ─────────────── */
   var ICON_TO_CLASS = {
     '⚽':'ag-liga', '🏆':'ag-copa', '🇪🇺':'ag-eur', '🔵':'ag-eur',
-    '🌍':'ag-sel',  '🤝':'ag-amist','🟤':'ag-recopa','🟡':'ag-inter',
+    '🌍':'ag-sel',  '🤝':'ag-amist','🟡':'ag-inter',
     '🌐':'ag-inter',
     '🌞':'ag-torneo','🏃':'ag-train','💤':'ag-rest'
   };
@@ -24152,7 +24061,7 @@
 
   var ICON_TO_CLASS = {
     '⚽':'ag-liga', '🏆':'ag-copa', '🇪🇺':'ag-eur', '🔵':'ag-eur',
-    '🌍':'ag-sel',  '🤝':'ag-amist','🟤':'ag-recopa','🟡':'ag-inter',
+    '🌍':'ag-sel',  '🤝':'ag-amist','🟡':'ag-inter',
     '🌐':'ag-inter',
     '🌞':'ag-torneo','🏃':'ag-train','💤':'ag-rest'
   };
@@ -29010,7 +28919,6 @@ document.addEventListener('DOMContentLoaded', function() {
     { key:'champions',     cat:'Europea 🔵',  comp:'Champions League',            id:'PARADISE_Purple_Edition',       luz:'🌙 Noche' },
     { key:'uel',           cat:'Europea 🟠',  comp:'Europa League',               id:'Resmi_Maç_Topudur',             luz:'🌙 Noche' },
     { key:'uecl',          cat:'Europea 🟢',  comp:'Conference League',           id:'F5N5000-TL',                    luz:'🌙 Noche' },
-    { key:'recopa',        cat:'Europea 🟤',  comp:'Recopa de Europa',            id:'eFootball_Contact_27',          luz:'🌙 Noche' },
     { key:'usc',           cat:'Europea 🇪🇺', comp:'Supercopa de Europa',         id:'Vantaggio_5000',                luz:'☀️ Sol'   },
     { key:'ucl-previa',    cat:'Europea 🛰',  comp:'Fase Previa Champions',       id:'PARADISE_Blue_Edition',         luz:'🌙 Noche' },
     { key:'selecciones',   cat:'Internac.',   comp:'Fase Final Selecciones',      id:'TRIONDA_PRO',                   luz:'☀️ Sol'   },
@@ -29489,7 +29397,7 @@ document.addEventListener('DOMContentLoaded', function() {
       +   '<input id="bc-name" type="text" autocomplete="off" style="width:100%;margin:3px 0 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:9px 11px;font-size:13px;box-sizing:border-box;" placeholder="Ej: Copa de la Liga">'
       +   '<label style="font-size:11px;color:rgba(255,255,255,.6);">Clave del partido (compKey)</label>'
       +   '<input id="bc-key" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" style="width:100%;margin:3px 0 2px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.20);color:#fff;border-radius:8px;padding:9px 11px;font-family:\'Courier New\',monospace;font-size:12px;box-sizing:border-box;" placeholder="ej: superliga, verano, mundialito…">'
-      +   '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:10px;">Reales: superliga · verano · mundialito · sel · inter · recopa · usc. Mismo nombre que use el torneo internamente.</div>'
+      +   '<div style="font-size:10px;color:rgba(255,255,255,.4);margin-bottom:10px;">Reales: superliga · verano · mundialito · sel · inter · usc. Mismo nombre que use el torneo internamente.</div>'
       +   '<label style="font-size:11px;color:rgba(255,255,255,.6);">Balón por defecto</label>'
       +   '<button type="button" id="bc-ball-btn" style="width:100%;margin:3px 0 4px;background:rgba(0,0,0,.45);border:1px solid rgba(80,180,255,.35);border-radius:8px;color:#a0d8ff;font-family:\'Courier New\',monospace;font-size:12px;padding:9px 11px;box-sizing:border-box;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;">'
       +     '<span id="bc-ball-label" style="flex:1;word-break:break-all;">'+_esc(pickedBall)+'</span>'
@@ -30672,7 +30580,6 @@ document.addEventListener('DOMContentLoaded', function() {
     'uel':        ['#e06000','#ffaa55','#1a0800','#0a0400'],
     'uecl':       ['#20a060','#5fe08a','#062018','#02100a'],
     'usc':        ['#888888','#cccccc','#141414','#080808'],
-    'recopa':     ['#7a3c00','#cc8040','#2a1400','#180a00'],
     'inter':      ['#bf913e','#f0c040','#201200','#100800'],
     'superliga':  ['#7e22ce','#c084fc','#15082a','#0a0414'],
     'sel':        ['#008a55','#5fe0a0','#003820','#001810'],
@@ -30695,7 +30602,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if(t.indexOf('CHAMPIONS') !== -1 || t.indexOf('UCL') !== -1) return 'ucl';
     if(t.indexOf('EUROPA LEAGUE') !== -1 || t.indexOf('UEL') !== -1) return 'uel';
     if(t.indexOf('CONFERENCE')   !== -1 || t.indexOf('UECL') !== -1) return 'uecl';
-    if(t.indexOf('RECOPA')       !== -1) return 'recopa';
     if(t.indexOf('INTERCONTI')   !== -1) return 'inter';
     if(t.indexOf('SUPERLIGA')    !== -1) return 'superliga';
     if(t.indexOf('PREVIA')       !== -1) return 'previa';
@@ -32134,7 +32040,6 @@ document.addEventListener('DOMContentLoaded', function() {
        desempate por timestamp. */
     'sc_state_v1',                   /* Supercopa de España (cuadro 8 equipos) */
     'usc_state_v1',                  /* Supercopa de Europa */
-    'recopa_state_v1',               /* Recopa */
     'mundial_state_v1',              /* Mundial de Clubes */
     'mundialito_state_v1',           /* Mundialito de Clubes (legacy) */
     'seleccion_state_v1',            /* Selecciones (singular legacy) */
@@ -32243,7 +32148,6 @@ document.addEventListener('DOMContentLoaded', function() {
           try { if(typeof window.buildUelGruposClas === 'function') window.buildUelGruposClas(); } catch(_){}
           try { if(typeof window.buildUeclGruposClas === 'function') window.buildUeclGruposClas(); } catch(_){}
           try { if(typeof window._scRender === 'function') window._scRender(); } catch(_){}
-          try { if(typeof window._recopaInit === 'function') window._recopaInit(); } catch(_){}
           try { if(typeof window._refreshChampionsDoneFlags === 'function') window._refreshChampionsDoneFlags(); } catch(_){}
           /* Si KEY_COMPS o KEY_TITLE del calendario Bayern/Liverpool
              fueron restaurados, el cache en memoria de esa IIFE está
@@ -32490,7 +32394,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .jbtn.c-ucl     .jor-date{color:#88aaff;border-color:rgba(136,170,255,.6);}
 .jbtn.c-uel     .jor-date{color:#ffaa55;border-color:rgba(255,170,85,.6);}
 .jbtn.c-uecl    .jor-date{color:#5fe08a;border-color:rgba(95,224,138,.6);}
-.jbtn.c-recopa  .jor-date{color:#ff8060;border-color:rgba(255,128,96,.6);}
 .jbtn.c-usc     .jor-date{color:#e8e8e8;border-color:rgba(232,232,232,.55);}
 .jbtn.c-inter   .jor-date{color:#f0c040;border-color:rgba(240,192,64,.6);}
 .jbtn.c-mundial .jor-date{color:#5fe0d0;border-color:rgba(95,224,208,.6);}
@@ -32506,7 +32409,7 @@ document.addEventListener('DOMContentLoaded', function() {
        · c-other (Amistosos / Torneos de verano, excluidos)
        · c-road  (Selecciones — ya tienen fecha inline en s-calendario) */
   var COMP_CLASSES = ['c-liga','c-copa','c-super','c-ucl','c-uel','c-uecl',
-                      'c-recopa','c-usc','c-inter','c-mundial','c-mundialito'];
+                      'c-usc','c-inter','c-mundial','c-mundialito'];
 
   /* Reglas de acortado del label, aplicadas siempre. */
   var TRUNC_RULES = [
@@ -32579,7 +32482,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     if (compClass === 'c-liga'){
       p.required = ['liga'];
-      p.anti = ['previa','europa','selecciones','copa','recopa','supercopa',
+      p.anti = ['previa','europa','selecciones','copa','supercopa',
                 'intercontinental','final selecciones'];
       if (jNum) p.bonus.push('j' + jNum);
     } else if (compClass === 'c-copa'){
@@ -32609,14 +32512,6 @@ document.addEventListener('DOMContentLoaded', function() {
       p.required = ['supercopa europa'];
       if (hasFin) p.bonus.push('final');
       if (hasSemis) p.bonus.push('semis');
-    } else if (compClass === 'c-recopa'){
-      p.required = ['recopa'];
-      if (has1_64) p.bonus.push('1/64');
-      if (has1_32) p.bonus.push('dieciseisavos','1/32');
-      if (hasOctavos) p.bonus.push('octavos');
-      if (hasCuartos) p.bonus.push('cuartos');
-      if (hasSemis) p.bonus.push('semis');
-      if (hasFin) p.bonus.push('final');
     } else if (compClass === 'c-inter'){
       p.required = ['intercontinental'];
       /* La agenda solo contiene cuartos/semis/final. Para Octavos
@@ -32646,18 +32541,18 @@ document.addEventListener('DOMContentLoaded', function() {
                                                   'conference';
         p.bonus = [compName, 'europa'];
         if (compClass === 'c-ucl'){
-          p.anti = ['conference','europa league','copa','supercopa','recopa',
+          p.anti = ['conference','europa league','copa','supercopa',
                     'intercontinental','selecciones','liga'];
         } else if (compClass === 'c-uel'){
-          p.anti = ['conference','champions','copa','supercopa','recopa',
+          p.anti = ['conference','champions','copa','supercopa',
                     'intercontinental','selecciones','liga'];
         } else {
-          p.anti = ['champions','europa league','copa','supercopa','recopa',
+          p.anti = ['champions','europa league','copa','supercopa',
                     'intercontinental','selecciones','liga'];
         }
       } else {
         p.required = ['europa'];
-        p.anti = ['grupo','recopa','supercopa','liga','intercontinental'];
+        p.anti = ['grupo','supercopa','liga','intercontinental'];
         if (hasIda) p.bonus.push('ida');
         if (hasVue) p.bonus.push('vuelta');
         if (hasSemis) p.bonus.push('semis');
@@ -32796,7 +32691,6 @@ document.addEventListener('DOMContentLoaded', function() {
     's-uecl-grupos':        'c-uecl',
     's-uecl-playoffs':      'c-uecl',
     's-copa':               'c-copa',
-    's-recopa':             'c-recopa',
     's-supercopa':          'c-super',
     's-usc':                'c-usc',
     's-intercontinental':   'c-inter',
@@ -33098,8 +32992,6 @@ document.addEventListener('DOMContentLoaded', function() {
 .match-live-wrap.is-comp-uel{border-color:rgba(255,170,85,.55) !important;box-shadow:0 0 22px rgba(255,150,40,.20), inset 0 0 14px rgba(255,150,40,.05);}
 /* Tema Conference (verde) */
 .match-live-wrap.is-comp-uecl{border-color:rgba(95,224,138,.55) !important;box-shadow:0 0 22px rgba(60,200,110,.20), inset 0 0 14px rgba(60,200,110,.05);}
-/* Tema Recopa (rojo terracota) */
-.match-live-wrap.is-comp-recopa{border-color:rgba(255,128,96,.55) !important;box-shadow:0 0 22px rgba(255,100,70,.18), inset 0 0 14px rgba(255,100,70,.05);}
 /* Tema Supercopa (dorado) */
 .match-live-wrap.is-comp-super,
 .match-live-wrap.is-comp-usc{border-color:rgba(240,200,64,.55) !important;box-shadow:0 0 22px rgba(240,180,40,.18), inset 0 0 14px rgba(240,180,40,.05);}
@@ -33197,7 +33089,6 @@ document.addEventListener('DOMContentLoaded', function() {
 #gm-modal.is-comp-ucl    { --comp-color:#88aaff; --comp-color-soft:rgba(60,120,255,.22);}
 #gm-modal.is-comp-uel    { --comp-color:#ffaa55; --comp-color-soft:rgba(255,150,40,.22);}
 #gm-modal.is-comp-uecl   { --comp-color:#5fe08a; --comp-color-soft:rgba(60,200,110,.22);}
-#gm-modal.is-comp-recopa { --comp-color:#ff8060; --comp-color-soft:rgba(255,100,70,.22);}
 #gm-modal.is-comp-inter  { --comp-color:#f0a040; --comp-color-soft:rgba(240,140,40,.22);}
 /* Mundial / Selecciones / torneo: violeta-morado (mismo lenguaje
    visual que la caja Estadísticas del Mundial, commit 6f4df03). */
@@ -33451,7 +33342,6 @@ document.addEventListener('DOMContentLoaded', function() {
        · liga: "j<N>m<N>" → c-liga
        · copa: "copa-<ronda>|<idx>" → c-copa
        · prevcl/ucl/uel/uecl: "ucl-..." / "uel-..." / "uecl-..." / "prev-..."
-       · recopa: "recopa-..."
        · supercopa: "sc-..."
        · usc: "usc-..."
        · inter: "inter-..."
@@ -33464,7 +33354,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (/^ucl[-|]|^prev/.test(m))  return 'ucl';
     if (/^uel[-|]/.test(m))   return 'uel';
     if (/^uecl[-|]/.test(m))  return 'uecl';
-    if (/^recopa[-|]/.test(m))return 'recopa';
     if (/^sc[-|]/.test(m))    return 'super';
     if (/^usc[-|]/.test(m))   return 'usc';
     if (/^inter[-|]/.test(m)) return 'inter';
@@ -34017,7 +33906,6 @@ document.addEventListener('DOMContentLoaded', function() {
       if (g._isCopa || g.comp === 'copa' || g.comp === 'copa-fin') return 'copa';
       if (g._isSc   || g.comp === 'sc'   || g.comp === 'sc-final') return 'super';
       if (g._isUsc  || g.comp === 'usc'  || g.comp === 'usc-fin') return 'usc';
-      if (g._isRecopa || g.comp === 'recopa') return 'recopa';
       if (g._isSuperliga || g.comp === 'superliga') return ''; /* sin tema */
       /* Comps reconocidas por g.comp explícito. Mundial (compKey 'torneo'
          del flujo _tourOpenHumanMatch para Mundial-48), Selecciones fase
@@ -34046,7 +33934,6 @@ document.addEventListener('DOMContentLoaded', function() {
       if (t.indexOf('champions') !== -1 || t.indexOf('ucl') !== -1) return 'ucl';
       if (t.indexOf('europa league') !== -1 || t.indexOf('uel') !== -1) return 'uel';
       if (t.indexOf('conference') !== -1 || t.indexOf('uecl') !== -1) return 'uecl';
-      if (t.indexOf('recopa') !== -1) return 'recopa';
       if (t.indexOf('supercopa') !== -1) return 'super';
       if (t.indexOf('inter') !== -1) return 'inter';
       if (t.indexOf('copa') !== -1) return 'copa';

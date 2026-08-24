@@ -381,7 +381,30 @@ window._DEAD_MERGED_LEAGUE_SLUGS = [
      escrituras NUEVAS, pero que no tenía forma de purgarse si ya existía
      de ANTES de ese guard. Se trata igual que las ligas fusionadas: no
      se recupera nunca del servidor ni se muestra ninguna pantalla. */
-  'null'
+  'null',
+  /* Reconstrucción mínima del proyecto (petición usuario: "elimina por
+     completo toda la web... solo deja la simulación de partidos ia vs
+     ia, y la simulación de partidos humano contra humano"): TODA
+     pantalla de navegación de estas ligas/competiciones ya se borró del
+     HTML, pero sus DATOS (roster completo, hasta 4.83 MB en total)
+     seguían vivos en localStorage y accesibles por una puerta trasera —
+     el panel Admin › "📊 Espacio del navegador" abre el editor
+     compartido `lextOpenSquad(slug)` directamente por slug, sin pasar
+     por ninguna pantalla borrada. El usuario, viendo ese panel: "es
+     increíble que pese al haber eliminado todo sigue habiendo todo
+     esto". Se tratan exactamente igual que las ligas fusionadas de
+     arriba — mismo matcher, misma purga inmediata, mismo borrado
+     permanente en servidor (`DEAD_MERGED_LEAGUE_SLUGS` en `app.py`).
+     Las 10 ligas-país "sueltas" del catálogo cerrado de Resto de Ligas: */
+  'inglaterra','italia','francia','portugal','p-bajos','belgica',
+  'turquia','dinamarca','suiza','escocia',
+  /* Las 6 "Ligas Mixtas" NUEVAS (feeder de la Previa, 2026-08-14) — no
+     confundir con las 9 viejas `liga-mixta-N` de arriba: */
+  'germanika','hellas-slavia','danubio-nordica','adriatico-oriental',
+  'balkanica','eurasia',
+  /* Resto del Mundo (sistema propio, Intercontinental/Mundialito) y las
+     2 ligas fijas que NO son Liga EA Sports: */
+  'resto-mundo','liga-hypermotion','liga-primera-federacion'
 ];
 window._isDeadMergedLeagueSlug = function(slug){
   if (!slug) return false;
@@ -503,6 +526,47 @@ window._isDeadMergedLeagueSlug = function(slug){
       }
     } catch(_){}
     try { console.warn('[ligaExt] purga v14 (inmediata): ' + toRemove.length + ' claves locales, incluida ligaExt_null.'); } catch(_){}
+    try { localStorage.setItem(FLAG, '1'); } catch(_){}
+  } catch(_){}
+})();
+
+/* Purga v15 — MISMO mecanismo que v12/v13/v14, flag NUEVO (reconstrucción
+   mínima del proyecto: "elimina por completo toda la web... solo deja la
+   simulación de partidos ia vs ia, y la simulación de partidos humano
+   contra humano"). `_DEAD_MERGED_LEAGUE_SLUGS` acaba de crecer con las
+   19 ligas de "Resto de Ligas" + Hypermotion + Primera Federación + Resto
+   del Mundo — un dispositivo que ya marcó v14 como "hecho" JAMÁS habría
+   purgado ninguna de ellas, así que se repasa el almacén ENTERO otra vez
+   con la lista ya ampliada. No-op para todo lo demás (ya purgado por
+   v12/v13/v14); purga de verdad las ~19 ligas nuevas (main + sus
+   derivados `_protected`/`_snap_*`/`_backup`). */
+(function(){
+  try {
+    var FLAG = 'ftbol_merged_leagues_purge_v15';
+    if (localStorage.getItem(FLAG)) return;
+    var toRemove = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      if (!k || k.indexOf('ligaExt_') !== 0) continue;
+      if (window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) toRemove.push(k);
+    }
+    toRemove.forEach(function(k){ try { localStorage.removeItem(k); } catch(_){} });
+    try { if (typeof LIGA_CACHE !== 'undefined') {
+      window._DEAD_MERGED_LEAGUE_SLUGS.forEach(function(s){ delete LIGA_CACHE[s]; });
+    } } catch(_){}
+    try {
+      if (window._idbKV && typeof window._idbKV.keys === 'function') {
+        window._idbKV.keys().then(function(idbKeys){
+          (idbKeys || []).forEach(function(k){
+            if (typeof k !== 'string' || k.indexOf('ligaExt_') !== 0) return;
+            if (window._isDeadMergedLeagueSlug(k.substring('ligaExt_'.length))) {
+              try { window._idbKV.del(k); } catch(_){}
+            }
+          });
+        }).catch(function(){});
+      }
+    } catch(_){}
+    try { console.warn('[ligaExt] purga v15 (inmediata): ' + toRemove.length + ' claves locales, incluidas las ligas de Resto de Ligas/Hypermotion/PrimeraFederación/RestoMundo (reconstrucción mínima).'); } catch(_){}
     try { localStorage.setItem(FLAG, '1'); } catch(_){}
   } catch(_){}
 })();

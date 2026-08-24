@@ -3863,6 +3863,24 @@ DEAD_MERGED_LEAGUE_SLUGS = [
     # ya existentes de antes de ese guard necesitan el mismo tratamiento
     # que una liga fusionada para desaparecer de /api/liga-ext-bulk.
     "null",
+    # Reconstrucción mínima del proyecto (petición usuario: "elimina por
+    # completo toda la web... solo deja la simulación de partidos ia vs
+    # ia, y la simulación de partidos humano contra humano"). Todas las
+    # pantallas de navegación de estas ligas ya se borraron del cliente,
+    # pero sus filas seguían vivas en el servidor y accesibles por una
+    # puerta trasera (el panel Admin > "Espacio del navegador" abre el
+    # editor compartido de plantilla directo por slug). Se tratan igual
+    # que las ligas fusionadas de arriba: nunca se sirven, se purgan de
+    # la base de datos para siempre. `liga-ea-sports` NUNCA entra aquí —
+    # es la única competición que sobrevive.
+    # Las 10 ligas-país "sueltas" del catálogo cerrado de Resto de Ligas:
+    "inglaterra", "italia", "francia", "portugal", "p-bajos", "belgica",
+    "turquia", "dinamarca", "suiza", "escocia",
+    # Las 6 "Ligas Mixtas" NUEVAS (feeder de la Previa, 2026-08-14):
+    "germanika", "hellas-slavia", "danubio-nordica", "adriatico-oriental",
+    "balkanica", "eurasia",
+    # Resto del Mundo + las 2 ligas fijas que NO son Liga EA Sports:
+    "resto-mundo", "liga-hypermotion", "liga-primera-federacion",
 ]
 
 

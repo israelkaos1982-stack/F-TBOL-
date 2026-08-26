@@ -5695,10 +5695,19 @@ def api_debug():
                 sanitized = scheme + "://" + user + ":***@" + host
         except Exception:
             pass
+    # No basta con mirar si el backend es Postgres: en Render, el SQLite
+    # sobre el disco persistente montado por render.yaml (ver
+    # `.render-volume-marker` y `_persistence_diagnostic()`) TAMBIÉN es
+    # durable. Reutilizamos ese diagnóstico (fuente única) en vez de
+    # repetir aquí la comprobación "backend == postgresql" a secas —
+    # eso hacía que el banner de aviso saltara en falso en Render con el
+    # disco correctamente montado, con instrucciones que además
+    # apuntaban a Railway (plataforma que este deploy ya no usa).
+    _diag = _persistence_diagnostic()
+    is_persistent = _diag.startswith("PERSISTENT")
     persistence_note = (
-        "PERSISTENTE ✅ — los datos sobreviven reinicios." if backend == "postgresql"
-        else "EFÍMERA ⚠️ — en Railway la SQLite se borra en cada deploy. "
-             "Añade el plugin Postgres para persistir datos."
+        ("PERSISTENTE ✅ — " + _diag) if is_persistent
+        else ("EFÍMERA ⚠️ — " + _diag)
     )
     # Contar filas para ver qué hay guardado.
     try:
@@ -5715,6 +5724,7 @@ def api_debug():
         return jsonify({
             "ok": False,
             "backend": backend,
+            "persistent": is_persistent,
             "db_url_sanitized": sanitized,
             "error": str(e),
         }), 500
@@ -5771,6 +5781,7 @@ def api_debug():
     return jsonify({
         "ok": True,
         "backend": backend,
+        "persistent": is_persistent,
         "db_url_sanitized": sanitized,
         "persistence": persistence_note,
         "counts": {

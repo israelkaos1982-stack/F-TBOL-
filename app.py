@@ -3981,6 +3981,34 @@ def _purge_dead_merged_leagues():
     return deleted_keys
 
 
+@app.route("/api/admin/wipe-everything", methods=["POST"])
+@admin_required
+def api_admin_wipe_everything():
+    """Borrado TOTAL e IRREVERSIBLE de todos los datos guardados en el
+    servidor (petición explícita del usuario, 2026-08-26, confirmada vía
+    AskUserQuestion antes de implementar este endpoint): TODAS las filas
+    de `GlobalState` (ligas, calendario, lesiones, sanciones, torneos,
+    HUD, trofeos, snapshots, absolutamente todo lo guardado por clave) +
+    las tablas legacy `Partido`/`Evento`. NO hay backup ni papelera — una
+    vez ejecutado, no hay forma de recuperar los datos borrados.
+
+    Es una herramienta de UN SOLO USO para esta limpieza puntual — NO
+    dejar un botón permanente en la UI que la dispare sin fricción; se
+    retira del código en cuanto el usuario confirme que ya la usó."""
+    n_global = GlobalState.query.delete()
+    n_partidos = Partido.query.delete()
+    n_eventos = Evento.query.delete()
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "deleted": {
+            "global_state_rows": n_global,
+            "partidos_rows": n_partidos,
+            "eventos_rows": n_eventos,
+        },
+    })
+
+
 @app.route("/api/admin/purge-dead-leagues", methods=["POST"])
 @admin_required
 def api_admin_purge_dead_leagues():

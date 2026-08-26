@@ -646,24 +646,6 @@ window._isDeadMergedLeagueSlug = function(slug){
   </div>
 </div>
 
-<!-- ══ MENÚ DE TRATAMIENTO RÁPIDO (inyecciones de lesionados) — fuera de cualquier
-     .screen para que (1) se pueda abrir desde la plantilla `s-bayern-plantilla`
-     pulsando un nombre lesionado, no solo desde el hub `s-munich`; y (2)
-     position:fixed se ancle al viewport (no a un `.screen` con transform de
-     la animación fadeUp, que lo dejaría centrado muy abajo). Mismo patrón
-     que `#pin-modal` justo arriba. ══ -->
-<div id="ath-med-ov" onclick="if(event.target===this)this.classList.remove('show')">
-  <div class="ath-med-box">
-    <h3 class="ath-med-title">💉 MENÚ DE TRATAMIENTO RÁPIDO</h3>
-    <p class="ath-med-help" id="ath-med-ov-help">Sin lesionados disponibles.</p>
-    <div class="ath-med-list" id="ath-med-ov-list"></div>
-    <div class="ath-med-actions">
-      <button class="ath-med-btn danger" onclick="document.getElementById('ath-med-ov').classList.remove('show')">Cancelar</button>
-      <button class="ath-med-btn" onclick="window.athApplyMedicalTreatment && window.athApplyMedicalTreatment()">Confirmar inyección</button>
-    </div>
-  </div>
-</div>
-
 <!-- ══ PIN DIGITAL 7477 — editor MANUAL de stats + bajas de la plantilla del hub
      (lápiz AZUL en #s-bayern-plantilla). Numpad propio, fuera de cualquier
      .screen para anclar position:fixed al viewport. ══ -->
@@ -1147,7 +1129,7 @@ window._hdrCleanCache = function(){
 </script>
 </div>
 <div class="menu-grid">
-<div class="menu-card full" onclick="go('s-liga-clas')" style="background:linear-gradient(135deg,#0a1a0a 0%,#124a1e 40%,#1f7a34 70%,#2ecc55 100%);height:64px;min-height:64px;max-height:64px;overflow:hidden;position:relative;box-sizing:border-box;">
+<div class="menu-card full" onclick="go('s-liverpool')" style="background:linear-gradient(135deg,#0a1a0a 0%,#124a1e 40%,#1f7a34 70%,#2ecc55 100%);height:64px;min-height:64px;max-height:64px;overflow:hidden;position:relative;box-sizing:border-box;">
 <div class="mc-main-overlay"></div>
 <div class="mc-main-content">
 <span class="mc-emoji" style="font-size:28px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.7));display:inline-block;">⚽</span><span class="mc-label" style="color:#fff!important;text-shadow:1px 1px 3px #000,0 0 10px rgba(0,0,0,.8);">LIVERPOOL</span>
@@ -7692,6 +7674,19 @@ window._hdrCleanCache = function(){
 })();
 </script>
 
+<!-- ══ LIVERPOOL — pantalla propia del club (sustituye a la antigua
+     "Simulador de partidos" / Liga EA Sports, eliminada por petición
+     del usuario 2026-08-26). Placeholder mínimo por ahora — el
+     contenido real (plantilla, calendario, próximo partido...) se
+     construye cuando el usuario lo pida. ══ -->
+<div class="screen" id="s-liverpool">
+<button class="back-btn" onclick="go('s-home')">◀ Volver</button>
+<div class="sec-hdr"><span class="sec-emoji">⚽</span><h2>Liverpool</h2></div>
+<div style="padding:32px 16px;text-align:center;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:14px;letter-spacing:.5px;line-height:1.6;">
+  Aquí construiremos tu equipo Liverpool.<br/>Dime qué quieres ver en esta pantalla.
+</div>
+</div>
+
 <!-- ══ PANTALLAS ADMIN (fuera de s-home) ══ -->
 <div class="screen" id="s-admin">
   <button class="back-btn" onclick="go('s-home')">◀ Volver</button>
@@ -7726,24 +7721,48 @@ window._hdrCleanCache = function(){
          para una recuperación de emergencia — solo se retira el acceso
          directo desde la UI. NO reintroducir estas 3 cards sin acuerdo
          explícito del usuario. -->
+    <!-- ── 🗑️ BORRAR TODO — botón TEMPORAL, un solo uso (petición usuario
+         2026-08-26, confirmada vía AskUserQuestion). Llama a
+         /api/admin/wipe-everything (borrado permanente e irreversible de
+         TODA la base de datos del servidor). Quitar esta card + el
+         endpoint en cuanto el usuario confirme que ya lo ha usado — NO es
+         una herramienta permanente del Panel Admin. -->
+    <div class="admin-module-card" style="border-color:rgba(255,80,80,.5);" onclick="window._adminWipeEverything&&window._adminWipeEverything()">
+      <span class="admin-mod-icon">🗑️</span>
+      <div class="admin-mod-label" style="color:#ff6060;">Borrar TODO para siempre</div>
+      <div class="admin-mod-desc">Elimina TODOS los datos del servidor (ligas, lesiones, calendario, todo). Irreversible.</div>
+    </div>
   </div>
+  <script>
+  window._adminWipeEverything = function(){
+    try {
+      var ok1 = window.confirm(
+        '⚠️ BORRAR TODO PARA SIEMPRE\n\n' +
+        'Esto elimina TODOS los datos guardados en el servidor: ligas, ' +
+        'plantillas, lesiones, sanciones, calendario, torneos — TODO.\n\n' +
+        'NO se puede deshacer. ¿Seguro que quieres continuar?'
+      );
+      if (!ok1) return;
+      var ok2 = window.confirm('Última confirmación: esto es PERMANENTE e IRREVERSIBLE. ¿Borro todo ahora?');
+      if (!ok2) return;
+      fetch('/api/admin/wipe-everything', { method:'POST', credentials:'same-origin' })
+        .then(function(r){ return r.json(); })
+        .then(function(j){
+          if (j && j.ok) {
+            alert('✅ Borrado completo.\n\nFilas eliminadas: ' + JSON.stringify(j.deleted, null, 2));
+            try { localStorage.clear(); } catch(_){}
+            location.reload();
+          } else {
+            alert('❌ Algo falló: ' + JSON.stringify(j));
+          }
+        })
+        .catch(function(e){ alert('❌ Error de red: ' + e); });
+    } catch(e){ alert('❌ Error: ' + e); }
+  };
+  </script>
   <div class="admin-env-panel">
     <div class="admin-env-title">🌍 ENTORNO ACTUAL</div>
     <div id="admin-env-status" style="display:flex;gap:12px;flex-wrap:wrap;padding:12px 0 4px;"></div>
-  </div>
-</div>
-<div class="screen" id="s-admin-teams">
-  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">👕</span><h2>Team Manager</h2></div>
-  <div style="padding:16px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;">
-    Módulo en construcción. Aquí podrás editar los datos de los equipos de la temporada.
-  </div>
-</div>
-<div class="screen" id="s-admin-calendar">
-  <button class="back-btn" onclick="go('s-admin')">◀ Volver</button>
-  <div class="sec-hdr"><span class="sec-emoji">📅</span><h2>Calendar</h2></div>
-  <div style="padding:16px;color:rgba(255,255,255,.55);font-family:Rajdhani,sans-serif;font-size:13px;letter-spacing:.5px;">
-    Módulo en construcción. Aquí podrás gestionar el calendario de partidos.
   </div>
 </div>
 <div class="screen" id="s-admin-stadiums">

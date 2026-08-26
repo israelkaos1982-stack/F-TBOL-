@@ -10052,7 +10052,7 @@
       if (n > 0) picks.push({ name: inp.getAttribute('data-player'), n: n, sel: inp.getAttribute('data-sel') || '' });
       total += n;
     });
-    if (total <= 0) { document.getElementById('ath-med-ov').classList.remove('show'); return; }
+    if (total <= 0) { var _ovE=document.getElementById('ath-med-ov'); if(_ovE) _ovE.classList.remove('show'); return; }
     var cur = athGetMedicalPI();
     if (total > Math.floor(cur + 1e-9)) {
       alert('PI insuficientes. Necesitas ' + total + ' PI y tienes ' + _athFmtPI(cur) + ' PI.');
@@ -10113,7 +10113,7 @@
     /* Refresca la plantilla del hub (club + selección) — el badge
        🩹 NP de Koundé (selección) debe desaparecer al curarlo. */
     try { if (typeof window.renderBayernPlantillaScreen === 'function') window.renderBayernPlantillaScreen(); } catch(e){}
-    document.getElementById('ath-med-ov').classList.remove('show');
+    var _ovE2 = document.getElementById('ath-med-ov'); if (_ovE2) _ovE2.classList.remove('show');
   };
 
   /* ── FORFEIT 5-0 por alineación ilegal ──────────────────────────

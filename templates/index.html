@@ -1187,8 +1187,9 @@
           + 'La base de datos es <b>efímera (SQLite)</b>: en cada actualización de la app se BORRA todo lo del servidor '
           + '(por eso «Resto de Ligas» aparece sin equipos aunque los tuvieras todos hechos). '
           + 'Ahora mismo el servidor guarda <b>' + nLigas + '</b> ligas / <b>' + nTeams + '</b> equipos.<br>'
-          + '<b style="color:#ffd633;">Arreglo permanente (2 min):</b> en Railway → tu proyecto → <b>+ New → Database → Add PostgreSQL</b>. '
-          + 'Railway inyecta <code>DATABASE_URL</code> automáticamente y la app pasa a Postgres persistente al re-desplegar. '
+          + '<b style="color:#ffd633;">Arreglo permanente:</b> en Render → tu servicio → <b>Disks</b>, confirma que hay un disco montado en '
+          + '<code>/opt/render/project/src/instance</code> (así lo declara <code>render.yaml</code>). Si el disco no está o se desmontó, vuelve a añadirlo '
+          + '— o, alternativamente, añade una base de datos <b>PostgreSQL</b> en Render y conecta su <code>DATABASE_URL</code> como variable de entorno. '
           + '<b>Antes de hacerlo, exporta un backup</b> desde 🖍 Editar → 💾 (por si acaso).'
           + '</div>'
           + '<button id="ephemeral-db-warning-x" aria-label="Cerrar" style="position:absolute;top:6px;right:10px;'
@@ -1214,8 +1215,13 @@
           .then(function(r){ return r.ok ? r.json() : null; })
           .then(function(j){
             if (!j) return;
-            /* Solo avisamos si NO es Postgres persistente. */
-            if (j.backend !== 'postgresql') showEphemeralBanner(j);
+            /* Solo avisamos si el servidor confirma que NO es durable
+               (ni Postgres ni SQLite sobre disco persistente — ver
+               `_persistence_diagnostic()` en app.py). Antes solo se
+               miraba `backend==='postgresql'`, lo que disparaba el
+               aviso EN FALSO en Render con el disco correctamente
+               montado (SQLite ahí también es persistente). */
+            if (j.persistent === false) showEphemeralBanner(j);
           })
           .catch(function(){});
       } catch(_){}

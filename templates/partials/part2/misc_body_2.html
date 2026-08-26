@@ -11736,9 +11736,17 @@
       }
     } catch(_){}
     /* Enlace a la web del juego — SIEMPRE en el share de INICIO de
-       partido (HvH y HvIA), petición usuario 2026-07-21. */
+       partido (HvH y HvIA), petición usuario 2026-07-21. Dinámico
+       (window.location, mismo patrón que el link de ISRAMAX justo
+       arriba) en vez de hardcodear un dominio: sobrevive a cualquier
+       migración de hosting (Railway→Render, o un dominio propio en el
+       futuro) sin volver a tocar este archivo. */
     lines.push('');
-    lines.push('🌐 https://web-production-bccc7.up.railway.app/');
+    try {
+      if (typeof window.location !== 'undefined' && window.location.host) {
+        lines.push('🌐 ' + window.location.protocol + '//' + window.location.host + '/');
+      }
+    } catch(_){}
     /* Compartir SIEMPRE al grupo del juego (regla usuario 2026-05-09). */
     _waShareToGroup(lines.join('\n'));
   };

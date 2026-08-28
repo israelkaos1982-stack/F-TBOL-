@@ -1,36 +1,5878 @@
 {
   "_meta": {
-    "descripcion": "Esqueleto del calendario. NO existe agenda global — el motor (js/calendario.js, Fase 2) filtra este array por ligaActual del mánager seleccionado + torneos KO en los que participe su club, y pinta solo eso en la columna derecha.",
+    "descripcion": "Calendario completo: Liga EA Sports a doble vuelta (20 clubes -> 38 jornadas, método del círculo) + Copa del Rey (Dieciseisavos, los 6 humanos vs 6 IA de división inferior) + Supercopa de España (Final). El motor de calendario (js/renderizadores.js) filtra por ligaActual del mánager + suma en paralelo cualquier competicion != 'liga'.",
     "partidosPorLiga": {
       "LIGA_1RFEF": 15,
       "LIGA_HYPERMOTION": 17,
       "LIGA_EA_SPORTS": 38
     },
+    "temporada": {
+      "inicio": "2027-08-15",
+      "finLiga": "2028-04-30"
+    },
     "formatoEntrada": {
       "id": "string único",
       "competicion": "string — clave que casa con data/balones.json.asignacionPorCompeticion",
-      "liga": "string — clave que casa con data/equipos_ia.json.bloques (solo para partidos de liga regular)",
-      "ronda": "string|null — solo en torneos KO (Copa del Rey, Supercopa, Champions...)",
+      "liga": "string|null — solo en partidos de liga regular, clave que casa con data/equipos_ia.json.bloques",
+      "ronda": "string|null — solo en torneos KO (Copa del Rey, Supercopa...)",
       "jornada": "number|null — solo en liga regular",
       "local": "id de equipo (data/equipos.json o data/equipos_ia.json)",
       "visitante": "id de equipo",
       "fecha": "ISO 8601",
       "jugado": "boolean — si true, la card se pinta con opacidad gris y sin botón PREVIA",
-      "resultado": { "golesLocal": "number|null", "golesVisitante": "number|null" }
+      "resultado": {
+        "golesLocal": "number|null",
+        "golesVisitante": "number|null"
+      }
+    },
+    "eliminatorias": {
+      "descripcion": "Partidos con el campo `eliminatoria: {grupoId, fase}` forman una eliminatoria a doble partido (fase 'ida'/'vuelta'). Al confirmar la vuelta, js/sistema-temporadas.js decide el ganador (global -> gol de visitante doble -> tercer partido de desempate) y, si hace falta, inyecta un partido con fase 'desempate' vía Estado.registrarPartidoGenerado (no vive en este JSON estático, se añade en caliente al estado local).",
+      "demo": "copa-semi-A: Liverpool (ida en casa) vs Arsenal (vuelta en casa) — semifinal de Copa del Rey de ejemplo, sin jugar todavía."
     }
   },
   "partidos": [
     {
-      "id": "liga-ea-j1-liv-ars",
+      "id": "liga-ea-j1-liverpool-sl-benfica",
       "competicion": "liga",
       "liga": "LIGA_EA_SPORTS",
       "ronda": null,
       "jornada": 1,
       "local": "liverpool",
-      "visitante": "arsenal",
+      "visitante": "sl-benfica",
       "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j1-arsenal-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "arsenal",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j1-real-madrid-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "real-madrid",
+      "visitante": "atalanta",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j1-atletico-madrid-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "atletico-madrid",
+      "visitante": "aston-villa",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j1-fc-barcelona-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "fc-barcelona",
+      "visitante": "newcastle-united",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j1-psg-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "psg",
+      "visitante": "napoli",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j1-manchester-city-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "manchester-city",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j1-bayern-munich-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "bayern-munich",
+      "visitante": "manchester-united",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j1-inter-milan-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "inter-milan",
+      "visitante": "chelsea",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j1-juventus-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "juventus",
+      "visitante": "ac-milan",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j2-sevilla-fc-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "sevilla-fc",
+      "visitante": "liverpool",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j2-atalanta-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "atalanta",
+      "visitante": "sl-benfica",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j2-aston-villa-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "aston-villa",
+      "visitante": "arsenal",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j2-newcastle-united-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "newcastle-united",
+      "visitante": "real-madrid",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j2-napoli-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "napoli",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j2-borussia-dortmund-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "borussia-dortmund",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j2-manchester-united-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "manchester-united",
+      "visitante": "psg",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 4
+      }
+    },
+    {
+      "id": "liga-ea-j2-chelsea-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "chelsea",
+      "visitante": "manchester-city",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j2-ac-milan-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "ac-milan",
+      "visitante": "bayern-munich",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j2-juventus-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 2,
+      "local": "juventus",
+      "visitante": "inter-milan",
+      "fecha": "2027-08-22T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j3-liverpool-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "liverpool",
+      "visitante": "atalanta",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j3-sevilla-fc-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "sevilla-fc",
+      "visitante": "aston-villa",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j3-sl-benfica-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "sl-benfica",
+      "visitante": "newcastle-united",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j3-arsenal-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "arsenal",
+      "visitante": "napoli",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j3-real-madrid-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "real-madrid",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j3-atletico-madrid-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "atletico-madrid",
+      "visitante": "manchester-united",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j3-fc-barcelona-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "fc-barcelona",
+      "visitante": "chelsea",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 4
+      }
+    },
+    {
+      "id": "liga-ea-j3-psg-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "psg",
+      "visitante": "ac-milan",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j3-manchester-city-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "manchester-city",
+      "visitante": "juventus",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j3-bayern-munich-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 3,
+      "local": "bayern-munich",
+      "visitante": "inter-milan",
+      "fecha": "2027-08-29T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j4-aston-villa-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "aston-villa",
+      "visitante": "liverpool",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j4-newcastle-united-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "newcastle-united",
+      "visitante": "atalanta",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j4-napoli-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "napoli",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j4-borussia-dortmund-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "borussia-dortmund",
+      "visitante": "sl-benfica",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j4-manchester-united-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "manchester-united",
+      "visitante": "arsenal",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j4-chelsea-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "chelsea",
+      "visitante": "real-madrid",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 4
+      }
+    },
+    {
+      "id": "liga-ea-j4-ac-milan-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "ac-milan",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j4-juventus-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "juventus",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j4-inter-milan-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "inter-milan",
+      "visitante": "psg",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j4-bayern-munich-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 4,
+      "local": "bayern-munich",
+      "visitante": "manchester-city",
+      "fecha": "2027-09-05T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j5-liverpool-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "liverpool",
+      "visitante": "newcastle-united",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j5-aston-villa-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "aston-villa",
+      "visitante": "napoli",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j5-atalanta-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "atalanta",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j5-sevilla-fc-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "sevilla-fc",
+      "visitante": "manchester-united",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j5-sl-benfica-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "sl-benfica",
+      "visitante": "chelsea",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j5-arsenal-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "arsenal",
+      "visitante": "ac-milan",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j5-real-madrid-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "real-madrid",
+      "visitante": "juventus",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j5-atletico-madrid-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "atletico-madrid",
+      "visitante": "inter-milan",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j5-fc-barcelona-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "fc-barcelona",
+      "visitante": "bayern-munich",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j5-psg-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 5,
+      "local": "psg",
+      "visitante": "manchester-city",
+      "fecha": "2027-09-12T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j6-napoli-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "napoli",
+      "visitante": "liverpool",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j6-borussia-dortmund-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "borussia-dortmund",
+      "visitante": "newcastle-united",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j6-manchester-united-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "manchester-united",
+      "visitante": "aston-villa",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j6-chelsea-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "chelsea",
+      "visitante": "atalanta",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j6-ac-milan-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "ac-milan",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 4
+      }
+    },
+    {
+      "id": "liga-ea-j6-juventus-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "juventus",
+      "visitante": "sl-benfica",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j6-inter-milan-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "inter-milan",
+      "visitante": "arsenal",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j6-bayern-munich-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "bayern-munich",
+      "visitante": "real-madrid",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j6-manchester-city-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "manchester-city",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j6-psg-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 6,
+      "local": "psg",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-09-19T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j7-liverpool-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "liverpool",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j7-napoli-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "napoli",
+      "visitante": "manchester-united",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j7-newcastle-united-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "newcastle-united",
+      "visitante": "chelsea",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j7-aston-villa-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "aston-villa",
+      "visitante": "ac-milan",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 4
+      }
+    },
+    {
+      "id": "liga-ea-j7-atalanta-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "atalanta",
+      "visitante": "juventus",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j7-sevilla-fc-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "sevilla-fc",
+      "visitante": "inter-milan",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j7-sl-benfica-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "sl-benfica",
+      "visitante": "bayern-munich",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 4
+      }
+    },
+    {
+      "id": "liga-ea-j7-arsenal-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "arsenal",
+      "visitante": "manchester-city",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j7-real-madrid-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "real-madrid",
+      "visitante": "psg",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j7-atletico-madrid-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 7,
+      "local": "atletico-madrid",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-09-26T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j8-manchester-united-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "manchester-united",
+      "visitante": "liverpool",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j8-chelsea-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "chelsea",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j8-ac-milan-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "ac-milan",
+      "visitante": "napoli",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j8-juventus-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "juventus",
+      "visitante": "newcastle-united",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j8-inter-milan-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "inter-milan",
+      "visitante": "aston-villa",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j8-bayern-munich-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "bayern-munich",
+      "visitante": "atalanta",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j8-manchester-city-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "manchester-city",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j8-psg-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "psg",
+      "visitante": "sl-benfica",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j8-fc-barcelona-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "fc-barcelona",
+      "visitante": "arsenal",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j8-atletico-madrid-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 8,
+      "local": "atletico-madrid",
+      "visitante": "real-madrid",
+      "fecha": "2027-10-03T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j9-liverpool-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "liverpool",
+      "visitante": "chelsea",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j9-manchester-united-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "manchester-united",
+      "visitante": "ac-milan",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j9-borussia-dortmund-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "borussia-dortmund",
+      "visitante": "juventus",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j9-napoli-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "napoli",
+      "visitante": "inter-milan",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j9-newcastle-united-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "newcastle-united",
+      "visitante": "bayern-munich",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j9-aston-villa-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "aston-villa",
+      "visitante": "manchester-city",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j9-atalanta-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "atalanta",
+      "visitante": "psg",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j9-sevilla-fc-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "sevilla-fc",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j9-sl-benfica-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "sl-benfica",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 0,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j9-arsenal-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 9,
+      "local": "arsenal",
+      "visitante": "real-madrid",
+      "fecha": "2027-10-10T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j10-ac-milan-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "ac-milan",
+      "visitante": "liverpool",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 2
+      }
+    },
+    {
+      "id": "liga-ea-j10-juventus-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "juventus",
+      "visitante": "chelsea",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j10-inter-milan-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "inter-milan",
+      "visitante": "manchester-united",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j10-bayern-munich-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "bayern-munich",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j10-manchester-city-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "manchester-city",
+      "visitante": "napoli",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j10-psg-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "psg",
+      "visitante": "newcastle-united",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "liga-ea-j10-fc-barcelona-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "fc-barcelona",
+      "visitante": "aston-villa",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 4
+      }
+    },
+    {
+      "id": "liga-ea-j10-atletico-madrid-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "atletico-madrid",
+      "visitante": "atalanta",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 1,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j10-real-madrid-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "real-madrid",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "liga-ea-j10-arsenal-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 10,
+      "local": "arsenal",
+      "visitante": "sl-benfica",
+      "fecha": "2027-10-17T20:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 4,
+        "golesVisitante": 3
+      }
+    },
+    {
+      "id": "liga-ea-j11-liverpool-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "liverpool",
+      "visitante": "juventus",
+      "fecha": "2027-10-24T20:00:00Z",
       "jugado": false,
-      "resultado": { "golesLocal": null, "golesVisitante": null }
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-ac-milan-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "ac-milan",
+      "visitante": "inter-milan",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-chelsea-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "chelsea",
+      "visitante": "bayern-munich",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-manchester-united-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "manchester-united",
+      "visitante": "manchester-city",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-borussia-dortmund-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "borussia-dortmund",
+      "visitante": "psg",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-napoli-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "napoli",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-newcastle-united-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "newcastle-united",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-aston-villa-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "aston-villa",
+      "visitante": "real-madrid",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-atalanta-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "atalanta",
+      "visitante": "arsenal",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j11-sevilla-fc-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 11,
+      "local": "sevilla-fc",
+      "visitante": "sl-benfica",
+      "fecha": "2027-10-24T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-inter-milan-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "inter-milan",
+      "visitante": "liverpool",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-bayern-munich-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "bayern-munich",
+      "visitante": "juventus",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-manchester-city-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "manchester-city",
+      "visitante": "ac-milan",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-psg-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "psg",
+      "visitante": "chelsea",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-fc-barcelona-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "fc-barcelona",
+      "visitante": "manchester-united",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-atletico-madrid-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "atletico-madrid",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-real-madrid-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "real-madrid",
+      "visitante": "napoli",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-arsenal-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "arsenal",
+      "visitante": "newcastle-united",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-sl-benfica-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "sl-benfica",
+      "visitante": "aston-villa",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j12-sevilla-fc-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 12,
+      "local": "sevilla-fc",
+      "visitante": "atalanta",
+      "fecha": "2027-10-31T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-liverpool-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "liverpool",
+      "visitante": "bayern-munich",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-inter-milan-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "inter-milan",
+      "visitante": "manchester-city",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-juventus-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "juventus",
+      "visitante": "psg",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-ac-milan-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "ac-milan",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-chelsea-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "chelsea",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-manchester-united-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "manchester-united",
+      "visitante": "real-madrid",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-borussia-dortmund-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "borussia-dortmund",
+      "visitante": "arsenal",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-napoli-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "napoli",
+      "visitante": "sl-benfica",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-newcastle-united-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "newcastle-united",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j13-aston-villa-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 13,
+      "local": "aston-villa",
+      "visitante": "atalanta",
+      "fecha": "2027-11-07T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-manchester-city-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "manchester-city",
+      "visitante": "liverpool",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-psg-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "psg",
+      "visitante": "bayern-munich",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-fc-barcelona-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "fc-barcelona",
+      "visitante": "inter-milan",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-atletico-madrid-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "atletico-madrid",
+      "visitante": "juventus",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-real-madrid-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "real-madrid",
+      "visitante": "ac-milan",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-arsenal-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "arsenal",
+      "visitante": "chelsea",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-sl-benfica-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "sl-benfica",
+      "visitante": "manchester-united",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-sevilla-fc-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "sevilla-fc",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-atalanta-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "atalanta",
+      "visitante": "napoli",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j14-aston-villa-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 14,
+      "local": "aston-villa",
+      "visitante": "newcastle-united",
+      "fecha": "2027-11-14T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-liverpool-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "liverpool",
+      "visitante": "psg",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-manchester-city-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "manchester-city",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-bayern-munich-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "bayern-munich",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-inter-milan-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "inter-milan",
+      "visitante": "real-madrid",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-juventus-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "juventus",
+      "visitante": "arsenal",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-ac-milan-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "ac-milan",
+      "visitante": "sl-benfica",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-chelsea-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "chelsea",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-manchester-united-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "manchester-united",
+      "visitante": "atalanta",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-borussia-dortmund-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "borussia-dortmund",
+      "visitante": "aston-villa",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j15-napoli-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 15,
+      "local": "napoli",
+      "visitante": "newcastle-united",
+      "fecha": "2027-11-21T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-fc-barcelona-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "fc-barcelona",
+      "visitante": "liverpool",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-atletico-madrid-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "atletico-madrid",
+      "visitante": "psg",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-real-madrid-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "real-madrid",
+      "visitante": "manchester-city",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-arsenal-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "arsenal",
+      "visitante": "bayern-munich",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-sl-benfica-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "sl-benfica",
+      "visitante": "inter-milan",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-sevilla-fc-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "sevilla-fc",
+      "visitante": "juventus",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-atalanta-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "atalanta",
+      "visitante": "ac-milan",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-aston-villa-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "aston-villa",
+      "visitante": "chelsea",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-newcastle-united-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "newcastle-united",
+      "visitante": "manchester-united",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j16-napoli-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 16,
+      "local": "napoli",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-11-28T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-liverpool-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "liverpool",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-fc-barcelona-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "fc-barcelona",
+      "visitante": "real-madrid",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-psg-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "psg",
+      "visitante": "arsenal",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-manchester-city-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "manchester-city",
+      "visitante": "sl-benfica",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-bayern-munich-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "bayern-munich",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-inter-milan-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "inter-milan",
+      "visitante": "atalanta",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-juventus-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "juventus",
+      "visitante": "aston-villa",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-ac-milan-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "ac-milan",
+      "visitante": "newcastle-united",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-chelsea-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "chelsea",
+      "visitante": "napoli",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j17-manchester-united-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 17,
+      "local": "manchester-united",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-12-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-real-madrid-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "real-madrid",
+      "visitante": "liverpool",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-arsenal-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "arsenal",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-sl-benfica-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "sl-benfica",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-sevilla-fc-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "sevilla-fc",
+      "visitante": "psg",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-atalanta-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "atalanta",
+      "visitante": "manchester-city",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-aston-villa-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "aston-villa",
+      "visitante": "bayern-munich",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-newcastle-united-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "newcastle-united",
+      "visitante": "inter-milan",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-napoli-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "napoli",
+      "visitante": "juventus",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-borussia-dortmund-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "borussia-dortmund",
+      "visitante": "ac-milan",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j18-manchester-united-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 18,
+      "local": "manchester-united",
+      "visitante": "chelsea",
+      "fecha": "2027-12-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-liverpool-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "liverpool",
+      "visitante": "arsenal",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-real-madrid-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "real-madrid",
+      "visitante": "sl-benfica",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-atletico-madrid-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "atletico-madrid",
+      "visitante": "sevilla-fc",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-fc-barcelona-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "fc-barcelona",
+      "visitante": "atalanta",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-psg-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "psg",
+      "visitante": "aston-villa",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-manchester-city-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "manchester-city",
+      "visitante": "newcastle-united",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-bayern-munich-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "bayern-munich",
+      "visitante": "napoli",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-inter-milan-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "inter-milan",
+      "visitante": "borussia-dortmund",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-juventus-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "juventus",
+      "visitante": "manchester-united",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j19-ac-milan-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 19,
+      "local": "ac-milan",
+      "visitante": "chelsea",
+      "fecha": "2027-12-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-sl-benfica-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "sl-benfica",
+      "visitante": "liverpool",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-sevilla-fc-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "sevilla-fc",
+      "visitante": "arsenal",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-atalanta-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "atalanta",
+      "visitante": "real-madrid",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-aston-villa-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "aston-villa",
+      "visitante": "atletico-madrid",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-newcastle-united-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "newcastle-united",
+      "visitante": "fc-barcelona",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-napoli-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "napoli",
+      "visitante": "psg",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-borussia-dortmund-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "borussia-dortmund",
+      "visitante": "manchester-city",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-manchester-united-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "manchester-united",
+      "visitante": "bayern-munich",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-chelsea-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "chelsea",
+      "visitante": "inter-milan",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j20-ac-milan-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 20,
+      "local": "ac-milan",
+      "visitante": "juventus",
+      "fecha": "2027-12-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-liverpool-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "liverpool",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-sl-benfica-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "sl-benfica",
+      "visitante": "atalanta",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-arsenal-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "arsenal",
+      "visitante": "aston-villa",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-real-madrid-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "real-madrid",
+      "visitante": "newcastle-united",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-atletico-madrid-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "atletico-madrid",
+      "visitante": "napoli",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-fc-barcelona-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "fc-barcelona",
+      "visitante": "borussia-dortmund",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-psg-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "psg",
+      "visitante": "manchester-united",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-manchester-city-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "manchester-city",
+      "visitante": "chelsea",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-bayern-munich-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "bayern-munich",
+      "visitante": "ac-milan",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j21-inter-milan-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 21,
+      "local": "inter-milan",
+      "visitante": "juventus",
+      "fecha": "2028-01-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-atalanta-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "atalanta",
+      "visitante": "liverpool",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-aston-villa-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "aston-villa",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-newcastle-united-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "newcastle-united",
+      "visitante": "sl-benfica",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-napoli-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "napoli",
+      "visitante": "arsenal",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-borussia-dortmund-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "borussia-dortmund",
+      "visitante": "real-madrid",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-manchester-united-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "manchester-united",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-chelsea-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "chelsea",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-ac-milan-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "ac-milan",
+      "visitante": "psg",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-juventus-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "juventus",
+      "visitante": "manchester-city",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j22-inter-milan-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 22,
+      "local": "inter-milan",
+      "visitante": "bayern-munich",
+      "fecha": "2028-01-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-liverpool-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "liverpool",
+      "visitante": "aston-villa",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-atalanta-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "atalanta",
+      "visitante": "newcastle-united",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-sevilla-fc-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "sevilla-fc",
+      "visitante": "napoli",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-sl-benfica-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "sl-benfica",
+      "visitante": "borussia-dortmund",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-arsenal-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "arsenal",
+      "visitante": "manchester-united",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-real-madrid-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "real-madrid",
+      "visitante": "chelsea",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-atletico-madrid-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "atletico-madrid",
+      "visitante": "ac-milan",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-fc-barcelona-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "fc-barcelona",
+      "visitante": "juventus",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-psg-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "psg",
+      "visitante": "inter-milan",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j23-manchester-city-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 23,
+      "local": "manchester-city",
+      "visitante": "bayern-munich",
+      "fecha": "2028-01-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-newcastle-united-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "newcastle-united",
+      "visitante": "liverpool",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-napoli-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "napoli",
+      "visitante": "aston-villa",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-borussia-dortmund-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "borussia-dortmund",
+      "visitante": "atalanta",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-manchester-united-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "manchester-united",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-chelsea-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "chelsea",
+      "visitante": "sl-benfica",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-ac-milan-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "ac-milan",
+      "visitante": "arsenal",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-juventus-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "juventus",
+      "visitante": "real-madrid",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-inter-milan-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "inter-milan",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-bayern-munich-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "bayern-munich",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j24-manchester-city-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 24,
+      "local": "manchester-city",
+      "visitante": "psg",
+      "fecha": "2028-01-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-liverpool-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "liverpool",
+      "visitante": "napoli",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-newcastle-united-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "newcastle-united",
+      "visitante": "borussia-dortmund",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-aston-villa-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "aston-villa",
+      "visitante": "manchester-united",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-atalanta-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "atalanta",
+      "visitante": "chelsea",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-sevilla-fc-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "sevilla-fc",
+      "visitante": "ac-milan",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-sl-benfica-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "sl-benfica",
+      "visitante": "juventus",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-arsenal-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "arsenal",
+      "visitante": "inter-milan",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-real-madrid-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "real-madrid",
+      "visitante": "bayern-munich",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-atletico-madrid-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "atletico-madrid",
+      "visitante": "manchester-city",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j25-fc-barcelona-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 25,
+      "local": "fc-barcelona",
+      "visitante": "psg",
+      "fecha": "2028-01-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-borussia-dortmund-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "borussia-dortmund",
+      "visitante": "liverpool",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-manchester-united-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "manchester-united",
+      "visitante": "napoli",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-chelsea-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "chelsea",
+      "visitante": "newcastle-united",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-ac-milan-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "ac-milan",
+      "visitante": "aston-villa",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-juventus-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "juventus",
+      "visitante": "atalanta",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-inter-milan-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "inter-milan",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-bayern-munich-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "bayern-munich",
+      "visitante": "sl-benfica",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-manchester-city-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "manchester-city",
+      "visitante": "arsenal",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-psg-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "psg",
+      "visitante": "real-madrid",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j26-fc-barcelona-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 26,
+      "local": "fc-barcelona",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-02-06T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-liverpool-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "liverpool",
+      "visitante": "manchester-united",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-borussia-dortmund-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "borussia-dortmund",
+      "visitante": "chelsea",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-napoli-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "napoli",
+      "visitante": "ac-milan",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-newcastle-united-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "newcastle-united",
+      "visitante": "juventus",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-aston-villa-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "aston-villa",
+      "visitante": "inter-milan",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-atalanta-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "atalanta",
+      "visitante": "bayern-munich",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-sevilla-fc-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "sevilla-fc",
+      "visitante": "manchester-city",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-sl-benfica-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "sl-benfica",
+      "visitante": "psg",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-arsenal-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "arsenal",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j27-real-madrid-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 27,
+      "local": "real-madrid",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-02-13T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-chelsea-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "chelsea",
+      "visitante": "liverpool",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-ac-milan-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "ac-milan",
+      "visitante": "manchester-united",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-juventus-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "juventus",
+      "visitante": "borussia-dortmund",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-inter-milan-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "inter-milan",
+      "visitante": "napoli",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-bayern-munich-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "bayern-munich",
+      "visitante": "newcastle-united",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-manchester-city-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "manchester-city",
+      "visitante": "aston-villa",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-psg-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "psg",
+      "visitante": "atalanta",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-fc-barcelona-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "fc-barcelona",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-atletico-madrid-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "atletico-madrid",
+      "visitante": "sl-benfica",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j28-real-madrid-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 28,
+      "local": "real-madrid",
+      "visitante": "arsenal",
+      "fecha": "2028-02-20T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-liverpool-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "liverpool",
+      "visitante": "ac-milan",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-chelsea-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "chelsea",
+      "visitante": "juventus",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-manchester-united-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "manchester-united",
+      "visitante": "inter-milan",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-borussia-dortmund-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "borussia-dortmund",
+      "visitante": "bayern-munich",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-napoli-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "napoli",
+      "visitante": "manchester-city",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-newcastle-united-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "newcastle-united",
+      "visitante": "psg",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-aston-villa-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "aston-villa",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-atalanta-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "atalanta",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-sevilla-fc-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "sevilla-fc",
+      "visitante": "real-madrid",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j29-sl-benfica-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 29,
+      "local": "sl-benfica",
+      "visitante": "arsenal",
+      "fecha": "2028-02-27T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-juventus-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "juventus",
+      "visitante": "liverpool",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-inter-milan-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "inter-milan",
+      "visitante": "ac-milan",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-bayern-munich-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "bayern-munich",
+      "visitante": "chelsea",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-manchester-city-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "manchester-city",
+      "visitante": "manchester-united",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-psg-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "psg",
+      "visitante": "borussia-dortmund",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-fc-barcelona-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "fc-barcelona",
+      "visitante": "napoli",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-atletico-madrid-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "atletico-madrid",
+      "visitante": "newcastle-united",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-real-madrid-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "real-madrid",
+      "visitante": "aston-villa",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-arsenal-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "arsenal",
+      "visitante": "atalanta",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j30-sl-benfica-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 30,
+      "local": "sl-benfica",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-03-05T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-liverpool-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "liverpool",
+      "visitante": "inter-milan",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-juventus-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "juventus",
+      "visitante": "bayern-munich",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-ac-milan-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "ac-milan",
+      "visitante": "manchester-city",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-chelsea-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "chelsea",
+      "visitante": "psg",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-manchester-united-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "manchester-united",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-borussia-dortmund-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "borussia-dortmund",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-napoli-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "napoli",
+      "visitante": "real-madrid",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-newcastle-united-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "newcastle-united",
+      "visitante": "arsenal",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-aston-villa-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "aston-villa",
+      "visitante": "sl-benfica",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j31-atalanta-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 31,
+      "local": "atalanta",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-03-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-bayern-munich-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "bayern-munich",
+      "visitante": "liverpool",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-manchester-city-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "manchester-city",
+      "visitante": "inter-milan",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-psg-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "psg",
+      "visitante": "juventus",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-fc-barcelona-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "fc-barcelona",
+      "visitante": "ac-milan",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-atletico-madrid-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "atletico-madrid",
+      "visitante": "chelsea",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-real-madrid-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "real-madrid",
+      "visitante": "manchester-united",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-arsenal-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "arsenal",
+      "visitante": "borussia-dortmund",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-sl-benfica-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "sl-benfica",
+      "visitante": "napoli",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-sevilla-fc-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "sevilla-fc",
+      "visitante": "newcastle-united",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j32-atalanta-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 32,
+      "local": "atalanta",
+      "visitante": "aston-villa",
+      "fecha": "2028-03-19T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-liverpool-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "liverpool",
+      "visitante": "manchester-city",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-bayern-munich-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "bayern-munich",
+      "visitante": "psg",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-inter-milan-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "inter-milan",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-juventus-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "juventus",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-ac-milan-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "ac-milan",
+      "visitante": "real-madrid",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-chelsea-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "chelsea",
+      "visitante": "arsenal",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-manchester-united-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "manchester-united",
+      "visitante": "sl-benfica",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-borussia-dortmund-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "borussia-dortmund",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-napoli-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "napoli",
+      "visitante": "atalanta",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j33-newcastle-united-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 33,
+      "local": "newcastle-united",
+      "visitante": "aston-villa",
+      "fecha": "2028-03-26T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-psg-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "psg",
+      "visitante": "liverpool",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-fc-barcelona-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "fc-barcelona",
+      "visitante": "manchester-city",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-atletico-madrid-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "atletico-madrid",
+      "visitante": "bayern-munich",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-real-madrid-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "real-madrid",
+      "visitante": "inter-milan",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-arsenal-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "arsenal",
+      "visitante": "juventus",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-sl-benfica-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "sl-benfica",
+      "visitante": "ac-milan",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-sevilla-fc-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "sevilla-fc",
+      "visitante": "chelsea",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-atalanta-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "atalanta",
+      "visitante": "manchester-united",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-aston-villa-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "aston-villa",
+      "visitante": "borussia-dortmund",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j34-newcastle-united-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 34,
+      "local": "newcastle-united",
+      "visitante": "napoli",
+      "fecha": "2028-04-02T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-liverpool-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "liverpool",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-psg-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "psg",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-manchester-city-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "manchester-city",
+      "visitante": "real-madrid",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-bayern-munich-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "bayern-munich",
+      "visitante": "arsenal",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-inter-milan-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "inter-milan",
+      "visitante": "sl-benfica",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-juventus-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "juventus",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-ac-milan-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "ac-milan",
+      "visitante": "atalanta",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-chelsea-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "chelsea",
+      "visitante": "aston-villa",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-manchester-united-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "manchester-united",
+      "visitante": "newcastle-united",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j35-borussia-dortmund-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 35,
+      "local": "borussia-dortmund",
+      "visitante": "napoli",
+      "fecha": "2028-04-09T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-atletico-madrid-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "atletico-madrid",
+      "visitante": "liverpool",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-real-madrid-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "real-madrid",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-arsenal-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "arsenal",
+      "visitante": "psg",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-sl-benfica-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "sl-benfica",
+      "visitante": "manchester-city",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-sevilla-fc-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "sevilla-fc",
+      "visitante": "bayern-munich",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-atalanta-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "atalanta",
+      "visitante": "inter-milan",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-aston-villa-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "aston-villa",
+      "visitante": "juventus",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-newcastle-united-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "newcastle-united",
+      "visitante": "ac-milan",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-napoli-chelsea",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "napoli",
+      "visitante": "chelsea",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j36-borussia-dortmund-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 36,
+      "local": "borussia-dortmund",
+      "visitante": "manchester-united",
+      "fecha": "2028-04-16T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-liverpool-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "liverpool",
+      "visitante": "real-madrid",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-atletico-madrid-arsenal",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "atletico-madrid",
+      "visitante": "arsenal",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-fc-barcelona-sl-benfica",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "fc-barcelona",
+      "visitante": "sl-benfica",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-psg-sevilla-fc",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "psg",
+      "visitante": "sevilla-fc",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-manchester-city-atalanta",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "manchester-city",
+      "visitante": "atalanta",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-bayern-munich-aston-villa",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "bayern-munich",
+      "visitante": "aston-villa",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-inter-milan-newcastle-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "inter-milan",
+      "visitante": "newcastle-united",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-juventus-napoli",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "juventus",
+      "visitante": "napoli",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-ac-milan-borussia-dortmund",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "ac-milan",
+      "visitante": "borussia-dortmund",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j37-chelsea-manchester-united",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 37,
+      "local": "chelsea",
+      "visitante": "manchester-united",
+      "fecha": "2028-04-23T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-arsenal-liverpool",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "arsenal",
+      "visitante": "liverpool",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-sl-benfica-real-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "sl-benfica",
+      "visitante": "real-madrid",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-sevilla-fc-atletico-madrid",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "sevilla-fc",
+      "visitante": "atletico-madrid",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-atalanta-fc-barcelona",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "atalanta",
+      "visitante": "fc-barcelona",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-aston-villa-psg",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "aston-villa",
+      "visitante": "psg",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-newcastle-united-manchester-city",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "newcastle-united",
+      "visitante": "manchester-city",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-napoli-bayern-munich",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "napoli",
+      "visitante": "bayern-munich",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-borussia-dortmund-inter-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "borussia-dortmund",
+      "visitante": "inter-milan",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-manchester-united-juventus",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "manchester-united",
+      "visitante": "juventus",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "liga-ea-j38-chelsea-ac-milan",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 38,
+      "local": "chelsea",
+      "visitante": "ac-milan",
+      "fecha": "2028-04-30T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "copa-16avos-liverpool-girona-fc",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Dieciseisavos",
+      "jornada": null,
+      "local": "liverpool",
+      "visitante": "girona-fc",
+      "fecha": "2027-09-01T21:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 0
+      }
+    },
+    {
+      "id": "copa-16avos-arsenal-real-oviedo",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Dieciseisavos",
+      "jornada": null,
+      "local": "arsenal",
+      "visitante": "real-oviedo",
+      "fecha": "2027-09-01T21:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 2,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "copa-16avos-real-madrid-sd-eibar",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Dieciseisavos",
+      "jornada": null,
+      "local": "real-madrid",
+      "visitante": "sd-eibar",
+      "fecha": "2027-09-01T21:00:00Z",
+      "jugado": true,
+      "resultado": {
+        "golesLocal": 3,
+        "golesVisitante": 1
+      }
+    },
+    {
+      "id": "copa-16avos-atletico-madrid-cd-castellon",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Dieciseisavos",
+      "jornada": null,
+      "local": "atletico-madrid",
+      "visitante": "cd-castellon",
+      "fecha": "2027-09-01T21:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "copa-16avos-fc-barcelona-cd-tenerife",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Dieciseisavos",
+      "jornada": null,
+      "local": "fc-barcelona",
+      "visitante": "cd-tenerife",
+      "fecha": "2027-09-01T21:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "copa-16avos-psg-ud-almeria",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Dieciseisavos",
+      "jornada": null,
+      "local": "psg",
+      "visitante": "ud-almeria",
+      "fecha": "2027-09-01T21:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "supercopa-final-real-madrid-liverpool",
+      "competicion": "supercopa",
+      "liga": null,
+      "ronda": "Final",
+      "jornada": null,
+      "local": "real-madrid",
+      "visitante": "liverpool",
+      "fecha": "2028-01-12T20:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      }
+    },
+    {
+      "id": "copa-semi-A-liverpool-arsenal",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Semifinal",
+      "jornada": null,
+      "local": "liverpool",
+      "visitante": "arsenal",
+      "fecha": "2027-11-10T21:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      },
+      "eliminatoria": {
+        "grupoId": "copa-semi-A",
+        "fase": "ida"
+      }
+    },
+    {
+      "id": "copa-semi-A-arsenal-liverpool",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Semifinal",
+      "jornada": null,
+      "local": "arsenal",
+      "visitante": "liverpool",
+      "fecha": "2027-11-24T21:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      },
+      "eliminatoria": {
+        "grupoId": "copa-semi-A",
+        "fase": "vuelta"
+      }
     }
   ]
 }

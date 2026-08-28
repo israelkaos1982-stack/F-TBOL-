@@ -1,15 +1,12 @@
 /* ============================================================
-   balones.js — Inventario y asignación dinámica de balones
-   FASE 1: el catálogo (17 modelos) y la asignación por
-   competición ya viven en data/balones.json.
-   FASE 2 (pendiente):
-     - window.Balones.resolverParaPartido(compKey) -> devuelve
-       { balon, comp, clima } desde
-       data/balones.json.asignacionPorCompeticion.
-     - Pintar el icono climático-horario (☀️ / 🌙 / ❄️) junto al
-       nombre del balón en la previa de cada partido.
+   balones.js — (histórico) inventario y asignación de balones
+   FASE 2: la resolución del balón por partido (incluida la
+   regla especial de nieve -> eFootball™ MAX VIS 27) vive dentro
+   de js/renderizadores.js (función interna resolverBalonPartido,
+   invocada por calcularClimaDinamicoPartido / abrirPreviaPartido).
+   Este archivo se conserva vacío por compatibilidad de rutas
+   con index.html — no ejecuta ninguna lógica.
    ============================================================ */
 (function () {
   "use strict";
-  // Intencionalmente vacío en Fase 1.
 })();

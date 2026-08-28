@@ -1,224 +1,189 @@
 {
   "_meta": {
-    "descripcion": "30 estadios oficiales ordenados de menor a mayor capacidad. El nivel del club (valoracionPoder, 50-98) determina qué estadio se le asigna vía interpolación lineal correlativa — sin excepciones.",
-    "algoritmo": "nivel(i) = round(50 + i * (98-50) / 29)  |  capacidad(i) = round(8000 + i * (105000-8000) / 29)  para i = 0..29 (orden 1..30)",
-    "anclas": {
-      "nivel50": "Sports Park — 8.000 aforo — categoría Barrio (orden 1)",
-      "nivel98": "eFootball™ Stadium — 105.000 aforo — categoría Élite (orden 30)"
-    },
-    "pendiente": "Los 28 nombres intermedios son PLACEHOLDER (\"Estadio Nivel N\"). Sustituir por la lista oficial real de 30 estadios en la Fase 2 — el algoritmo de normalización ya es correcto y no cambia al renombrarlos.",
-    "resolverNivel": "Dado un valoracionPoder de equipo (50-98), el estadio asignado es el de 'nivel' más cercano en este array (ver js/estadios.js, Fase 2)."
+    "descripcion": "30 estadios oficiales reales, ordenados de menor a mayor capacidad. El nivel de poder del equipo (50-98) se mapea DIRECTAMENTE al índice del array (0-29) — no se guarda un campo 'nivel' redundante por estadio.",
+    "algoritmo": "idx = round((valoracionPoder - 50) / (98 - 50) * 29), con valoracionPoder clamped a [50, 98]. idx=0 -> Sports Park (nivel 50). idx=29 -> eFootball™ Stadium (nivel 98). Implementado en js/renderizadores.js::obtenerEstadioCorrelativoAjustado.",
+    "categorias": "BARRIO < 20.000 · REGIONAL 20.000-55.000 · ÉLITE > 55.000 (con las 2 excepciones explícitas de la lista oficial: Johan Cruijff ArenA a 54.990 y el resto por encima, marcadas ÉLITE por diseño)."
   },
   "estadios": [
     {
-      "orden": 1,
+      "id": "sports-park",
       "nombre": "Sports Park",
-      "nivel": 50,
       "capacidad": 8000,
-      "categoria": "Barrio"
+      "categoria": "BARRIO"
     },
     {
-      "orden": 2,
-      "nombre": "Estadio Nivel 2 (pendiente de nombre oficial)",
-      "nivel": 52,
-      "capacidad": 11345,
-      "categoria": "Barrio"
+      "id": "coliseo-de-los-deportes",
+      "nombre": "Coliseo de los Deportes",
+      "capacidad": 12000,
+      "categoria": "BARRIO"
     },
     {
-      "orden": 3,
-      "nombre": "Estadio Nivel 3 (pendiente de nombre oficial)",
-      "nivel": 53,
-      "capacidad": 14690,
-      "categoria": "Barrio"
+      "id": "stadio-orione",
+      "nombre": "Stadio Orione",
+      "capacidad": 15000,
+      "categoria": "BARRIO"
     },
     {
-      "orden": 4,
-      "nombre": "Estadio Nivel 4 (pendiente de nombre oficial)",
-      "nivel": 55,
-      "capacidad": 18034,
-      "categoria": "Barrio"
+      "id": "estadio-urbano-caldeira",
+      "nombre": "Estádio Urbano Caldeira",
+      "capacidad": 16798,
+      "categoria": "BARRIO"
     },
     {
-      "orden": 5,
-      "nombre": "Estadio Nivel 5 (pendiente de nombre oficial)",
-      "nivel": 57,
-      "capacidad": 21379,
-      "categoria": "Barrio"
+      "id": "burg-stadion",
+      "nombre": "Burg Stadion",
+      "capacidad": 18000,
+      "categoria": "BARRIO"
     },
     {
-      "orden": 6,
-      "nombre": "Estadio Nivel 6 (pendiente de nombre oficial)",
-      "nivel": 58,
-      "capacidad": 24724,
-      "categoria": "Barrio"
+      "id": "estadio-do-escorpiao",
+      "nombre": "Estádio do Escorpião",
+      "capacidad": 20000,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 7,
-      "nombre": "Estadio Nivel 7 (pendiente de nombre oficial)",
-      "nivel": 60,
-      "capacidad": 28069,
-      "categoria": "Modesto"
+      "id": "estadio-del-martingal",
+      "nombre": "Estadio del Martingal",
+      "capacidad": 22000,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 8,
-      "nombre": "Estadio Nivel 8 (pendiente de nombre oficial)",
-      "nivel": 62,
-      "capacidad": 31414,
-      "categoria": "Modesto"
+      "id": "estadio-del-nuevo-triunfo",
+      "nombre": "Estadio del Nuevo Triunfo",
+      "capacidad": 25000,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 9,
-      "nombre": "Estadio Nivel 9 (pendiente de nombre oficial)",
-      "nivel": 63,
-      "capacidad": 34759,
-      "categoria": "Modesto"
+      "id": "rose-park-stadium",
+      "nombre": "Rose Park Stadium",
+      "capacidad": 30000,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 10,
-      "nombre": "Estadio Nivel 10 (pendiente de nombre oficial)",
-      "nivel": 65,
-      "capacidad": 38103,
-      "categoria": "Modesto"
+      "id": "estadio-banorte",
+      "nombre": "Estadio Banorte",
+      "capacidad": 45000,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 11,
-      "nombre": "Estadio Nivel 11 (pendiente de nombre oficial)",
-      "nivel": 67,
-      "capacidad": 41448,
-      "categoria": "Regional"
+      "id": "neo-quimica-arena",
+      "nombre": "Neo Química Arena",
+      "capacidad": 49205,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 12,
-      "nombre": "Estadio Nivel 12 (pendiente de nombre oficial)",
-      "nivel": 68,
-      "capacidad": 44793,
-      "categoria": "Regional"
+      "id": "estadio-akron",
+      "nombre": "Estadio AKRON",
+      "capacidad": 49850,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 13,
-      "nombre": "Estadio Nivel 13 (pendiente de nombre oficial)",
-      "nivel": 70,
-      "capacidad": 48138,
-      "categoria": "Regional"
+      "id": "estadio-beira-rio",
+      "nombre": "Estádio Beira-Rio",
+      "capacidad": 50128,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 14,
-      "nombre": "Estadio Nivel 14 (pendiente de nombre oficial)",
-      "nivel": 72,
-      "capacidad": 51483,
-      "categoria": "Regional"
+      "id": "el-volcan",
+      "nombre": "El Volcán",
+      "capacidad": 51349,
+      "categoria": "REGIONAL"
     },
     {
-      "orden": 15,
-      "nombre": "Estadio Nivel 15 (pendiente de nombre oficial)",
-      "nivel": 73,
-      "capacidad": 54828,
-      "categoria": "Regional"
+      "id": "johan-cruijff-arena",
+      "nombre": "Johan Cruijff ArenA",
+      "capacidad": 54990,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 16,
-      "nombre": "Estadio Nivel 16 (pendiente de nombre oficial)",
-      "nivel": 75,
-      "capacidad": 58172,
-      "categoria": "Nacional"
+      "id": "la-bombonera",
+      "nombre": "La Bombonera",
+      "capacidad": 57395,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 17,
-      "nombre": "Estadio Nivel 17 (pendiente de nombre oficial)",
-      "nivel": 76,
-      "capacidad": 61517,
-      "categoria": "Nacional"
+      "id": "emirates-stadium",
+      "nombre": "Emirates Stadium",
+      "capacidad": 60704,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 18,
-      "nombre": "Estadio Nivel 18 (pendiente de nombre oficial)",
-      "nivel": 78,
-      "capacidad": 64862,
-      "categoria": "Nacional"
+      "id": "new-balance-arena",
+      "nombre": "New Balance Arena",
+      "capacidad": 61000,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 19,
-      "nombre": "Estadio Nivel 19 (pendiente de nombre oficial)",
-      "nivel": 80,
-      "capacidad": 68207,
-      "categoria": "Nacional"
+      "id": "saitama-2002",
+      "nombre": "Saitama 2002",
+      "capacidad": 63700,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 20,
-      "nombre": "Estadio Nivel 20 (pendiente de nombre oficial)",
-      "nivel": 81,
-      "capacidad": 71552,
-      "categoria": "Nacional"
+      "id": "morumbis",
+      "nombre": "MorumbIS",
+      "capacidad": 67052,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 21,
-      "nombre": "Estadio Nivel 21 (pendiente de nombre oficial)",
-      "nivel": 83,
-      "capacidad": 74897,
-      "categoria": "Internacional"
+      "id": "olimpico-universitario",
+      "nombre": "Olímpico Universitario",
+      "capacidad": 72449,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 22,
-      "nombre": "Estadio Nivel 22 (pendiente de nombre oficial)",
-      "nivel": 85,
-      "capacidad": 78241,
-      "categoria": "Internacional"
+      "id": "stadio-olimpico",
+      "nombre": "Stadio Olimpico",
+      "capacidad": 72698,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 23,
-      "nombre": "Estadio Nivel 23 (pendiente de nombre oficial)",
-      "nivel": 86,
-      "capacidad": 81586,
-      "categoria": "Internacional"
+      "id": "old-trafford",
+      "nombre": "Old Trafford",
+      "capacidad": 74140,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 24,
-      "nombre": "Estadio Nivel 24 (pendiente de nombre oficial)",
-      "nivel": 88,
-      "capacidad": 84931,
-      "categoria": "Internacional"
+      "id": "san-siro",
+      "nombre": "San Siro",
+      "capacidad": 75923,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 25,
-      "nombre": "Estadio Nivel 25 (pendiente de nombre oficial)",
-      "nivel": 90,
-      "capacidad": 88276,
-      "categoria": "Internacional"
+      "id": "giuseppe-meazza",
+      "nombre": "Giuseppe Meazza",
+      "capacidad": 75923,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 26,
-      "nombre": "Estadio Nivel 26 (pendiente de nombre oficial)",
-      "nivel": 91,
-      "capacidad": 91621,
-      "categoria": "Élite"
+      "id": "signal-iduna-park",
+      "nombre": "Signal Iduna Park",
+      "capacidad": 81365,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 27,
-      "nombre": "Estadio Nivel 27 (pendiente de nombre oficial)",
-      "nivel": 93,
-      "capacidad": 94966,
-      "categoria": "Élite"
+      "id": "mas-monumental",
+      "nombre": "Más Monumental",
+      "capacidad": 84567,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 28,
-      "nombre": "Estadio Nivel 28 (pendiente de nombre oficial)",
-      "nivel": 95,
-      "capacidad": 98310,
-      "categoria": "Élite"
+      "id": "wembley",
+      "nombre": "Wembley",
+      "capacidad": 90000,
+      "categoria": "ÉLITE"
     },
     {
-      "orden": 29,
-      "nombre": "Estadio Nivel 29 (pendiente de nombre oficial)",
-      "nivel": 96,
-      "capacidad": 101655,
-      "categoria": "Élite"
-    },
-    {
-      "orden": 30,
-      "nombre": "eFootball™ Stadium",
-      "nivel": 98,
+      "id": "spotify-camp-nou",
+      "nombre": "Spotify Camp Nou",
       "capacidad": 105000,
-      "categoria": "Élite"
+      "categoria": "ÉLITE"
+    },
+    {
+      "id": "efootball-stadium",
+      "nombre": "eFootball™ Stadium",
+      "capacidad": 105000,
+      "categoria": "ÉLITE"
     }
   ]
 }

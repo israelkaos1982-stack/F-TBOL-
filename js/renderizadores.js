@@ -307,6 +307,14 @@
           frag.appendChild(construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas));
         });
         contenedor.appendChild(frag);
+
+        // Scroll inteligente: deja el visor centrado en el primer partido
+        // SIN jugar (el "actual"), en vez de arrancar siempre desde J1.
+        // Deferido un frame para que el layout ya esté asentado.
+        requestAnimationFrame(function () {
+          var actual = contenedor.querySelector(".match-card:not(.is-played)");
+          if (actual) actual.scrollIntoView({ block: "center" });
+        });
       })
       .catch(function (err) {
         contenedor.innerHTML = "";
@@ -422,11 +430,13 @@
           grupo.appendChild(titulo);
 
           deEstaPos.forEach(function (j) {
+            var tieneNombre = !!(j.nombre && j.nombre.trim());
             var fila = document.createElement("div");
             fila.className = "plantilla-jugador";
             fila.innerHTML =
               '<span class="plantilla-dorsal">' + j.dorsal + "</span>" +
-              '<span class="plantilla-nombre">' + j.nombre + "</span>" +
+              '<span class="plantilla-nombre' + (tieneNombre ? "" : " plantilla-nombre--vacio") + '">' +
+              (tieneNombre ? j.nombre : "— sin asignar —") + "</span>" +
               '<span class="plantilla-posicion">' + j.posicion + "</span>";
             grupo.appendChild(fila);
           });
@@ -441,6 +451,18 @@
         contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar la plantilla."));
         console.error("[renderizadores] renderizarPlantillaClub:", err);
       });
+  }
+
+  // Placeholder plano para los botones del menú del club que todavía no
+  // existen como subsistema real en este simulador ligero (Títulos,
+  // Derbys, Objetivos, Liga 1ªREF, Copa del Rey, Superliga pertenecen a
+  // OTRA app mucho más grande — no se inventan datos falsos aquí).
+  function renderizarProximamente(contenedorId, etiqueta) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML =
+      '<div class="club-modal-proximamente">🚧 ' + etiqueta + " todavía no está disponible en esta versión ligera.<br>" +
+      "Se irá añadiendo en próximas fases.</div>";
   }
 
   // ============================================================
@@ -638,6 +660,7 @@
     calcularClimaDinamicoPartido: calcularClimaDinamicoPartido,
     generarCalendarioLateralDerecho: generarCalendarioLateralDerecho,
     renderizarPlantillaClub: renderizarPlantillaClub,
+    renderizarProximamente: renderizarProximamente,
     renderizarAdminCalendario: renderizarAdminCalendario,
     renderizarAdminEstadios: renderizarAdminEstadios,
     renderizarAdminBalones: renderizarAdminBalones,

@@ -229,6 +229,10 @@ button { font-family: inherit; cursor: pointer; }
   border-color: rgba(255, 255, 255, 0.18);
   box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
 }
+.team-box--active {
+  border-color: var(--neon);
+  box-shadow: var(--neon-glow), 0 14px 30px rgba(0, 0, 0, 0.45);
+}
 
 /* franja diagonal negro -> color primario, estilo eFootball */
 .team-box::before {
@@ -357,6 +361,10 @@ button { font-family: inherit; cursor: pointer; }
 .escudo--lg { width: 84px; height: 84px; min-width: 84px; border-radius: 14px; }
 .escudo--lg .escudo-siglas { font-size: 18px; }
 
+/* Tamaño pequeño para las tarjetas de partido del calendario */
+.escudo--sm { width: 30px; height: 30px; min-width: 30px; border-radius: 7px; }
+.escudo--sm .escudo-siglas { font-size: 9px; }
+
 /* ---------- 7. COLUMNA DERECHA — CALENDARIO VERTICAL ---------- */
 #calendar-column {
   grid-area: calendar;
@@ -466,7 +474,113 @@ button { font-family: inherit; cursor: pointer; }
 }
 .match-card.is-played .match-card-btn { display: none; }
 
-/* ---------- 8. UTILIDADES ---------- */
+/* ---------- 8. PANTALLA DE PREVIA — overlay (Fase 2) ---------- */
+.previa-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(5, 5, 7, 0.72);
+  backdrop-filter: blur(6px);
+}
+.previa-overlay[hidden] { display: none; }
+
+.previa-card {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  padding: 26px 22px 22px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+}
+
+.previa-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--text-hi);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.previa-close:hover { border-color: var(--accent-2); color: var(--accent-2); }
+
+.previa-comp {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  margin-bottom: 14px;
+}
+
+.previa-teams {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.previa-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.previa-team-nombre {
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text-hi);
+}
+.previa-marcador {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--neon);
+  text-shadow: var(--neon-glow);
+  white-space: nowrap;
+}
+
+.previa-info-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.previa-info-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+.previa-info-item dt { color: var(--text-lo); font-weight: 700; margin: 0; }
+.previa-info-item dd { margin: 0; color: var(--text-hi); font-weight: 600; text-align: right; }
+.previa-balon-forzado {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 10px;
+  font-weight: 800;
+  color: #7fd3ff;
+}
+
+/* ---------- 9. UTILIDADES ---------- */
 .visually-hidden {
   position: absolute !important;
   width: 1px; height: 1px;

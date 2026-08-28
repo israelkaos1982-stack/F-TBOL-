@@ -37,14 +37,43 @@
     box.classList.add("team-box--active");
   }
 
-  function mostrarClubTab(tab) {
-    document.querySelectorAll(".club-tab").forEach(function (btn) {
-      btn.classList.toggle("is-active", btn.dataset.clubTab === tab);
-    });
-    var panelCal = document.getElementById("club-tab-calendario");
-    var panelPla = document.getElementById("club-tab-plantilla");
-    if (panelCal) panelCal.hidden = tab !== "calendario";
-    if (panelPla) panelPla.hidden = tab !== "plantilla";
+  // ---------- Menú del club (columna izquierda, siempre visible) ----------
+  // Plantilla abre datos reales; el resto son subsistemas de OTRA app
+  // (Títulos/Derbys/Objetivos/Liga 1ªREF/Copa del Rey/Superliga) que este
+  // simulador ligero todavía no implementa — se muestra un aviso honesto
+  // en vez de inventar datos falsos.
+  var CLUB_MENU_VISTAS = {
+    titulos: "🏆 Títulos",
+    derbys: "⚔️ Derbys",
+    objetivos: "🎯 Objetivos",
+    plantilla: "👕 Plantilla",
+    liga1ref: "🔹 Liga 1ª REF",
+    copadelrey: "🔹 Copa del Rey",
+    superliga: "🍇 Superliga"
+  };
+
+  function abrirModalClub(vista) {
+    var etiqueta = CLUB_MENU_VISTAS[vista];
+    var ov = document.getElementById("club-modal-overlay");
+    var titulo = document.getElementById("club-modal-title");
+    var body = document.getElementById("club-modal-body");
+    if (!etiqueta || !ov || !titulo || !body || !window.Renderizadores) return;
+
+    titulo.textContent = etiqueta;
+    ov.hidden = false;
+
+    if (vista === "plantilla") {
+      body.innerHTML = '<div id="plantilla-content"></div>';
+      window.Renderizadores.renderizarPlantillaClub(window._idManagerActivo);
+    } else {
+      body.innerHTML = '<div id="club-modal-vista"></div>';
+      window.Renderizadores.renderizarProximamente("club-modal-vista", etiqueta);
+    }
+  }
+
+  function cerrarModalClub() {
+    var ov = document.getElementById("club-modal-overlay");
+    if (ov) ov.hidden = true;
   }
 
   function abrirClub(teamId, box) {
@@ -66,12 +95,9 @@
       if (typeof window.Renderizadores.generarCalendarioLateralDerecho === "function") {
         window.Renderizadores.generarCalendarioLateralDerecho(teamId);
       }
-      if (typeof window.Renderizadores.renderizarPlantillaClub === "function") {
-        window.Renderizadores.renderizarPlantillaClub(teamId);
-      }
     }
 
-    mostrarClubTab("calendario");
+    cerrarModalClub();
     mostrarPantalla("club");
   }
 
@@ -80,6 +106,7 @@
     document.querySelectorAll(".team-box").forEach(function (b) {
       b.classList.remove("team-box--active");
     });
+    cerrarModalClub();
     mostrarPantalla("inicio");
   }
 
@@ -233,17 +260,35 @@
     var btnSalir = document.getElementById("club-salir");
     if (btnSalir) btnSalir.addEventListener("click", salirDelClub);
 
+    var clubMenu = document.getElementById("club-menu");
+    if (clubMenu) {
+      clubMenu.addEventListener("click", function (ev) {
+        var btn = ev.target.closest(".club-menu-btn[data-club-vista]");
+        if (!btn) return;
+        abrirModalClub(btn.dataset.clubVista);
+      });
+    }
+
+    var btnModalClose = document.getElementById("club-modal-close");
+    if (btnModalClose) btnModalClose.addEventListener("click", cerrarModalClub);
+
+    var modalOv = document.getElementById("club-modal-overlay");
+    if (modalOv) {
+      modalOv.addEventListener("click", function (ev) {
+        if (ev.target === modalOv) cerrarModalClub();
+      });
+    }
+
     document.addEventListener("click", function (ev) {
       if (ev.target && ev.target.id === "admin-detalle-close") {
         cerrarVistaAdmin();
-        return;
       }
-      var tabBtn = ev.target.closest && ev.target.closest(".club-tab[data-club-tab]");
-      if (tabBtn) mostrarClubTab(tabBtn.dataset.clubTab);
     });
 
     document.addEventListener("keydown", function (ev) {
-      if (ev.key === "Escape") cerrarCandadoAdmin();
+      if (ev.key !== "Escape") return;
+      cerrarCandadoAdmin();
+      cerrarModalClub();
     });
   });
 })();

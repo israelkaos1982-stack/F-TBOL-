@@ -191,14 +191,21 @@
     </div>
   </header>
 
-  <nav class="club-tabs">
-    <button type="button" class="club-tab is-active" data-club-tab="calendario">🗓️ Calendario</button>
-    <button type="button" class="club-tab" data-club-tab="plantilla">👕 Plantilla</button>
-  </nav>
+  <!-- Maquetación plana de 2 columnas SIEMPRE visibles a la vez (menú a
+       la izquierda, calendario a la derecha) — sin pestañas, sin
+       sombras/degradados/animaciones pesadas. -->
+  <div class="club-layout">
+    <nav class="club-menu" id="club-menu">
+      <button type="button" class="club-menu-btn club-menu-btn--dark" data-club-vista="titulos">🏆<br>Títulos</button>
+      <button type="button" class="club-menu-btn club-menu-btn--dark" data-club-vista="derbys">⚔️<br>Derbys</button>
+      <button type="button" class="club-menu-btn club-menu-btn--dark" data-club-vista="objetivos">🎯<br>Objetivos</button>
+      <button type="button" class="club-menu-btn club-menu-btn--green" data-club-vista="plantilla">👕<br>Plantilla</button>
+      <button type="button" class="club-menu-btn club-menu-btn--blue" data-club-vista="liga1ref">🔹<br>Liga 1ªREF</button>
+      <button type="button" class="club-menu-btn club-menu-btn--blue" data-club-vista="copadelrey">🔹<br>Copa Rey</button>
+      <button type="button" class="club-menu-btn club-menu-btn--blue" data-club-vista="superliga">🍇<br>Superliga</button>
+    </nav>
 
-  <div class="pantalla-body pantalla-body--club">
-
-    <div class="club-tab-panel" id="club-tab-calendario">
+    <div class="club-calendar-col">
       <div class="calendar-header">
         <span class="calendar-title">Calendario</span>
         <span class="calendar-badge" id="calendar-liga-badge">—</span>
@@ -210,13 +217,21 @@
         </div>
       </div>
     </div>
-
-    <div class="club-tab-panel" id="club-tab-plantilla" hidden>
-      <div id="plantilla-content"></div>
-    </div>
-
   </div>
 </section>
+
+<!-- Modal genérico del menú del club: Plantilla (real) + Títulos/Derbys/
+     Objetivos/Liga 1ªREF/Copa del Rey/Superliga (no implementadas en este
+     simulador ligero — placeholder "Próximamente", sin datos inventados). -->
+<div class="club-modal-overlay" id="club-modal-overlay" hidden>
+  <div class="club-modal-card">
+    <div class="club-modal-header">
+      <span class="club-modal-title" id="club-modal-title">—</span>
+      <button type="button" class="club-modal-close" id="club-modal-close">✕</button>
+    </div>
+    <div class="club-modal-body" id="club-modal-body"></div>
+  </div>
+</div>
 
 <!-- ============ PANTALLA DE PREVIA — estadio · clima · balón (Fase 2) ============ -->
 <div id="previa-overlay" class="previa-overlay" hidden>

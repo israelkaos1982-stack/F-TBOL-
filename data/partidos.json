@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "descripcion": "Esqueleto del calendario. NO existe agenda global — el motor (js/calendario.js, Fase 2) filtra este array por ligaActual del mánager seleccionado + torneos KO en los que participe su club, y pinta solo eso en la columna derecha.",
+    "partidosPorLiga": {
+      "LIGA_1RFEF": 15,
+      "LIGA_HYPERMOTION": 17,
+      "LIGA_EA_SPORTS": 38
+    },
+    "formatoEntrada": {
+      "id": "string único",
+      "competicion": "string — clave que casa con data/balones.json.asignacionPorCompeticion",
+      "liga": "string — clave que casa con data/equipos_ia.json.bloques (solo para partidos de liga regular)",
+      "ronda": "string|null — solo en torneos KO (Copa del Rey, Supercopa, Champions...)",
+      "jornada": "number|null — solo en liga regular",
+      "local": "id de equipo (data/equipos.json o data/equipos_ia.json)",
+      "visitante": "id de equipo",
+      "fecha": "ISO 8601",
+      "jugado": "boolean — si true, la card se pinta con opacidad gris y sin botón PREVIA",
+      "resultado": { "golesLocal": "number|null", "golesVisitante": "number|null" }
+    }
+  },
+  "partidos": [
+    {
+      "id": "liga-ea-j1-liv-ars",
+      "competicion": "liga",
+      "liga": "LIGA_EA_SPORTS",
+      "ronda": null,
+      "jornada": 1,
+      "local": "liverpool",
+      "visitante": "arsenal",
+      "fecha": "2027-08-15T20:00:00Z",
+      "jugado": false,
+      "resultado": { "golesLocal": null, "golesVisitante": null }
+    }
+  ]
+}

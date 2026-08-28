@@ -1,0 +1,476 @@
+/* ============================================================
+   eFOOTBALL · Temporada 7 — Fase 1
+   Diseño deportivo neón · 0 KB de imágenes externas
+   Todo escudo, badge y textura se dibuja en CSS puro.
+   ============================================================ */
+
+/* ---------- 1. RESET + TOKENS ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+:root {
+  --bg-0: #0a0a0c;
+  --bg-1: #101114;
+  --bg-2: #17181d;
+  --bg-3: #1f2127;
+  --line: rgba(255, 255, 255, 0.08);
+  --text-hi: #f3f5f7;
+  --text-lo: #9aa0ac;
+
+  --neon: #39ff6a;
+  --neon-soft: rgba(57, 255, 106, 0.35);
+  --neon-glow: 0 0 12px rgba(57, 255, 106, 0.55), 0 0 28px rgba(57, 255, 106, 0.25);
+
+  --accent-2: #ff3b5c;
+  --accent-2-glow: 0 0 12px rgba(255, 59, 92, 0.5), 0 0 28px rgba(255, 59, 92, 0.22);
+
+  --radius-s: 8px;
+  --radius-m: 14px;
+  --radius-l: 20px;
+
+  --font-display: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+
+  --col-nav: 260px;
+  --col-cal: 300px;
+}
+
+body {
+  background: var(--bg-0);
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(57, 255, 106, 0.06), transparent 45%),
+    radial-gradient(circle at 100% 100%, rgba(255, 59, 92, 0.05), transparent 40%);
+  color: var(--text-hi);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #2a2d35; }
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
+
+/* ---------- 2. GRID MAESTRO — 3 COLUMNAS ---------- */
+/* Mobile-first: una sola columna apilada. A partir de 960px, 3 columnas. */
+#app-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "nav"
+    "main"
+    "calendar";
+  min-height: 100vh;
+  gap: 0;
+}
+
+@media (min-width: 960px) {
+  #app-grid {
+    grid-template-columns: var(--col-nav) 1fr var(--col-cal);
+    grid-template-areas: "nav main calendar";
+    align-items: start;
+  }
+}
+
+/* ---------- 3. COLUMNA IZQUIERDA — MENÚ eFOOTBALL ---------- */
+#nav-menu {
+  grid-area: nav;
+  background: linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  border-right: 1px solid var(--line);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+@media (min-width: 960px) {
+  #nav-menu { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.brand-mark {
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.5px;
+  color: var(--neon);
+  text-shadow: var(--neon-glow);
+}
+.brand-sub {
+  font-size: 11px;
+  color: var(--text-lo);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+.nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: var(--radius-s);
+  color: var(--text-lo);
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.nav-item .nav-icon { font-size: 16px; width: 18px; text-align: center; }
+.nav-item:hover {
+  color: var(--text-hi);
+  background: var(--bg-2);
+  border-color: var(--line);
+}
+.nav-item.active {
+  color: var(--neon);
+  background: rgba(57, 255, 106, 0.08);
+  border-color: var(--neon-soft);
+  box-shadow: inset 0 0 0 1px rgba(57, 255, 106, 0.12);
+}
+
+/* Panel de control antiborrado — vive en la barra lateral */
+.control-panel {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.control-panel-title {
+  font-size: 11px;
+  color: var(--text-lo);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 2px;
+}
+.btn-ghost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text-lo);
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.btn-ghost:hover { color: var(--text-hi); border-color: var(--neon-soft); }
+.btn-ghost[disabled] { opacity: 0.5; cursor: not-allowed; }
+.control-panel-hint { font-size: 11px; color: var(--text-lo); opacity: 0.7; line-height: 1.4; }
+
+/* ---------- 4. COLUMNA CENTRAL — CONTENIDO DINÁMICO ---------- */
+#main-content {
+  grid-area: main;
+  padding: 22px 18px 60px;
+  min-width: 0;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-lo);
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-title::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--line), transparent);
+}
+
+/* Rejilla de las 6 cajas humanas */
+.team-select-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 560px) {
+  .team-select-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (min-width: 1180px) {
+  .team-select-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ---------- 5. CAJA HUMANA — DEGRADADO DEPORTIVO INCLINADO ---------- */
+.team-box {
+  --primary: #39ff6a;
+  --secondary: #101114;
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  overflow: hidden;
+  min-height: 128px;
+  background: var(--bg-2);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.team-box:hover {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* franja diagonal negro -> color primario, estilo eFootball */
+.team-box::before {
+  content: "";
+  position: absolute;
+  inset: -20% -10%;
+  background: linear-gradient(100deg, var(--bg-1) 0%, var(--bg-1) 38%, var(--primary) 132%);
+  transform: skewX(-8deg);
+}
+/* brillo diagonal sutil encima */
+.team-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0.08) 0%, transparent 30%);
+  pointer-events: none;
+}
+
+.team-box-inner {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 100%;
+  padding: 18px;
+}
+
+.team-box-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.team-box-club {
+  font-size: 17px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.team-box-mister {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.78);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.team-box-league {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  margin-top: 2px;
+}
+
+.team-box-cta {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  z-index: 2;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.85);
+  text-transform: uppercase;
+}
+
+/* ---------- 6. ESCUDOS CSS — 0 KB, DOS FORMATOS ---------- */
+.escudo {
+  --primary: #39ff6a;
+  --secondary: #101114;
+  position: relative;
+  width: 58px;
+  height: 58px;
+  min-width: 58px;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--secondary);
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+.escudo-siglas {
+  position: relative;
+  z-index: 5;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  color: #fff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+}
+
+/* Formato "Rayas" — barras verticales estilo Betis/Atlético, escudo completo */
+.escudo--rayas {
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--primary) 0px,
+    var(--primary) 10px,
+    var(--secondary) 10px,
+    var(--secondary) 20px
+  );
+}
+
+/* Formato "Villarreal" — rombo interior rotado 45º con barras verticales */
+.escudo--rombo::before {
+  content: "";
+  position: absolute;
+  width: 72%;
+  height: 72%;
+  background-color: var(--secondary);
+  background-image: repeating-linear-gradient(
+    90deg,
+    var(--primary) 0px,
+    var(--primary) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  transform: rotate(45deg);
+  z-index: 1;
+}
+
+/* Tamaño grande para cabeceras/detalle de plantilla */
+.escudo--lg { width: 84px; height: 84px; min-width: 84px; border-radius: 14px; }
+.escudo--lg .escudo-siglas { font-size: 18px; }
+
+/* ---------- 7. COLUMNA DERECHA — CALENDARIO VERTICAL ---------- */
+#calendar-column {
+  grid-area: calendar;
+  background: linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  border-left: 1px solid var(--line);
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+@media (min-width: 960px) {
+  #calendar-column { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.calendar-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-lo);
+}
+.calendar-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(57, 255, 106, 0.1);
+  color: var(--neon);
+  border: 1px solid var(--neon-soft);
+}
+
+#calendar-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+/* estado vacío — nadie seleccionado todavía */
+.calendar-empty {
+  text-align: center;
+  padding: 40px 12px;
+  color: var(--text-lo);
+  font-size: 13px;
+  line-height: 1.6;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-m);
+}
+.calendar-empty-icon { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.6; }
+
+/* card de partido — plantilla visual (poblada por js/calendario.js en Fase 2) */
+.match-card {
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  border-radius: var(--radius-m);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.15s ease;
+}
+.match-card:hover { border-color: rgba(255, 255, 255, 0.16); }
+
+.match-card-comp {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+.match-card-teams {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.match-card-vs { color: var(--text-lo); font-size: 11px; font-weight: 800; }
+.match-card-date { font-size: 11px; color: var(--text-lo); }
+
+.match-card-btn {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 6px 12px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--neon-soft);
+  background: rgba(57, 255, 106, 0.08);
+  color: var(--neon);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Partido ya jugado — opacidad gris automática, botón PREVIA oculto (regla obligatoria) */
+.match-card.is-played {
+  opacity: 0.45;
+  filter: grayscale(0.6);
+}
+.match-card.is-played .match-card-btn { display: none; }
+
+/* ---------- 8. UTILIDADES ---------- */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

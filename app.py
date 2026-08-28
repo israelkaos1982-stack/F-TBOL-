@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, jsonify, abort, session, make_response
+from flask import Flask, render_template, redirect, url_for, request, jsonify, abort, session, make_response, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_compress import Compress
 import random
@@ -5825,20 +5825,71 @@ def api_debug():
         "database_url_env_set": bool(os.environ.get("DATABASE_URL")),
     })
 
+# El Service Worker de la app ANTIGUA se registraba con scope "/" — puede
+# seguir vivo en cualquier navegador que ya haya visitado el sitio antes de
+# esta sustitución, e interceptar TODAS las peticiones (incluidas las del
+# simulador nuevo) sirviendo la app vieja desde su caché, sin tocar nunca la
+# red. Por eso "RECARGAR" no bastaba: el propio Service Worker es lo que
+# decidía qué servir. En vez del sw.js viejo, /sw.js ahora sirve un
+# "kill switch" — se auto-desregistra, borra TODAS sus cachés y fuerza a
+# recargar cada pestaña abierta, para que cualquier instalación existente se
+# limpie sola en la próxima visita. El simulador nuevo NO usa Service
+# Worker — no hace falta registrar uno nuevo tras esta limpieza.
+_SW_KILL_SWITCH = """
+self.addEventListener('install', function () { self.skipWaiting(); });
+self.addEventListener('activate', function (event) {
+  event.waitUntil(
+    caches.keys()
+      .then(function (keys) { return Promise.all(keys.map(function (k) { return caches.delete(k); })); })
+      .then(function () { return self.registration.unregister(); })
+      .then(function () { return self.clients.matchAll({ type: 'window' }); })
+      .then(function (clients) {
+        clients.forEach(function (client) { client.navigate(client.url); });
+      })
+  );
+});
+"""
+
+
 @app.route("/sw.js")
 def service_worker():
-    sw_path = os.path.join(app.static_folder, 'js', 'sw.js')
-    with open(sw_path, 'r', encoding='utf-8') as f:
-        content = f.read()
-    resp = make_response(content)
+    resp = make_response(_SW_KILL_SWITCH)
     resp.headers['Content-Type'] = 'application/javascript; charset=utf-8'
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     resp.headers['Service-Worker-Allowed'] = '/'
     return resp
 
+# ── eFOOTBALL TEMPORADA 7 — simulador nuevo (sustituye a la app antigua) ──
+# Sustituye por completo a la SPA vieja (`templates/index.html`, la app
+# Flask masiva documentada en CLAUDE.md) como puerta de entrada del sitio.
+# Es un build 100% estático (index.html + css/ + js/ + data/ en la RAÍZ del
+# repo, sin Jinja) — `send_from_directory` lo sirve tal cual, del disco,
+# nunca `render_template` (ese solo busca dentro de `templates/`).
+_NEW_SIM_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+
+def _new_sim_static(subdir, filename):
+    return send_from_directory(os.path.join(_NEW_SIM_ROOT, subdir), filename)
+
+
+@app.route("/css/<path:filename>")
+def nueva_temporada_css(filename):
+    return _new_sim_static("css", filename)
+
+
+@app.route("/js/<path:filename>")
+def nueva_temporada_js(filename):
+    return _new_sim_static("js", filename)
+
+
+@app.route("/data/<path:filename>")
+def nueva_temporada_data(filename):
+    return _new_sim_static("data", filename)
+
+
 @app.route("/")
 def inicio():
-    resp = make_response(render_template("index.html"))
+    resp = make_response(send_from_directory(_NEW_SIM_ROOT, "index.html"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
@@ -5921,14 +5972,22 @@ def reiniciar():
 def spa_fallback(path):
     if path.startswith("api/"):
         abort(404)
-    # CRÍTICO 2026-05-18: este catch-all sirve la SPA en CUALQUIER ruta
-    # (p.ej. /ligas/inglaterra). Antes NO mandaba cabeceras no-cache,
-    # así que el navegador/CDN servía un index.html CACHEADO con el JS
-    # VIEJO — ninguno de los fixes (watchdog, tope round-robin, sello
-    # _sanV…) llegaba al usuario y la sim seguía "rota" idéntica. El
-    # index.html incrusta server-side misc_body_1/2, así que DEBE ir
-    # siempre fresco.
-    resp = make_response(render_template("index.html"))
+    # Defensa en profundidad (2026-08-28, sustitución por el simulador
+    # nuevo): las rutas dedicadas de arriba (/css, /js, /data) YA deberían
+    # ganarle a este catch-all por especificidad de Werkzeug, pero como
+    # este sandbox no tiene forma de levantar Flask real para verificarlo
+    # en vivo, este guard garantiza igual el resultado correcto — nunca
+    # devolver HTML cuando el navegador pide un asset del simulador nuevo.
+    if path.startswith("css/"):
+        return _new_sim_static("css", path[len("css/"):])
+    if path.startswith("js/"):
+        return _new_sim_static("js", path[len("js/"):])
+    if path.startswith("data/"):
+        return _new_sim_static("data", path[len("data/"):])
+    # Cualquier otra ruta suelta (bookmarks viejos, navegación directa a
+    # una URL de la SPA antigua, typos) también aterriza en el simulador
+    # nuevo — es la única puerta de entrada del sitio ahora.
+    resp = make_response(send_from_directory(_NEW_SIM_ROOT, "index.html"))
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"

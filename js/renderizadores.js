@@ -381,6 +381,234 @@
     if (ov) ov.hidden = true;
   }
 
+  // ============================================================
+  // 4. PANTALLA DE CLUB — PLANTILLA (roster agrupado por posición)
+  // ============================================================
+  var ORDEN_POSICIONES = ["POR", "DEF", "MED", "DEL"];
+  var LABEL_POSICION = { POR: "Porteros", DEF: "Defensas", MED: "Centrocampistas", DEL: "Delanteros" };
+
+  function renderizarPlantillaClub(idEquipoHumanoActivo) {
+    var contenedor = document.getElementById("plantilla-content");
+    if (!contenedor) return;
+
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando plantilla…"));
+
+    cargarTodo()
+      .then(function (datos) {
+        contenedor.innerHTML = "";
+        var jugadores = (datos.jugadores.jugadores || []).filter(function (j) {
+          return j.equipoId === idEquipoHumanoActivo;
+        });
+
+        if (!jugadores.length) {
+          contenedor.appendChild(nodoEstado("👕", "Todavía no hay jugadores cargados para este club."));
+          return;
+        }
+
+        var frag = document.createDocumentFragment();
+        ORDEN_POSICIONES.forEach(function (pos) {
+          var deEstaPos = jugadores
+            .filter(function (j) { return j.posicion === pos; })
+            .sort(function (a, b) { return a.dorsal - b.dorsal; });
+          if (!deEstaPos.length) return;
+
+          var grupo = document.createElement("div");
+          grupo.className = "plantilla-grupo";
+
+          var titulo = document.createElement("div");
+          titulo.className = "plantilla-grupo-titulo";
+          titulo.textContent = (LABEL_POSICION[pos] || pos) + " · " + deEstaPos.length;
+          grupo.appendChild(titulo);
+
+          deEstaPos.forEach(function (j) {
+            var fila = document.createElement("div");
+            fila.className = "plantilla-jugador";
+            fila.innerHTML =
+              '<span class="plantilla-dorsal">' + j.dorsal + "</span>" +
+              '<span class="plantilla-nombre">' + j.nombre + "</span>" +
+              '<span class="plantilla-posicion">' + j.posicion + "</span>";
+            grupo.appendChild(fila);
+          });
+
+          frag.appendChild(grupo);
+        });
+
+        contenedor.appendChild(frag);
+      })
+      .catch(function (err) {
+        contenedor.innerHTML = "";
+        contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar la plantilla."));
+        console.error("[renderizadores] renderizarPlantillaClub:", err);
+      });
+  }
+
+  // ============================================================
+  // 5. PANEL ADMIN — Calendar / Stadium Hub / Ball Storage / Espacio
+  // ============================================================
+
+  // "Calendar" del Panel Admin: TODOS los partidos de la temporada, de
+  // TODAS las competiciones y los 6 clubes juntos, de solo lectura — a
+  // diferencia del calendario de cada club (que filtra por su equipo),
+  // esto es para que el admin repase la temporada entera de un vistazo.
+  function renderizarAdminCalendario(contenedorId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando calendario completo…"));
+
+    cargarTodo()
+      .then(function (datos) {
+        contenedor.innerHTML = "";
+        var todos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : (datos.partidos.partidos || []);
+        todos = todos.slice().sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+
+        if (!todos.length) {
+          contenedor.appendChild(nodoEstado("🗓️", "No hay partidos programados."));
+          return;
+        }
+
+        var frag = document.createDocumentFragment();
+        todos.forEach(function (p) {
+          var local = buscarEquipoPorId(p.local, datos);
+          var visitante = buscarEquipoPorId(p.visitante, datos);
+          if (!local || !visitante) return;
+
+          var card = document.createElement("div");
+          card.className = "match-card" + (p.jugado ? " is-played" : "");
+
+          var compLabel = COMP_LABEL[p.competicion] || p.competicion;
+          var etiquetaRonda = p.ronda ? " · " + p.ronda : (p.jornada ? " · J" + p.jornada : "");
+          var marcador = p.jugado && p.resultado ? (p.resultado.golesLocal + " - " + p.resultado.golesVisitante) : "VS";
+
+          card.innerHTML =
+            '<div class="match-card-comp">' + compLabel + etiquetaRonda + "</div>" +
+            '<div class="match-card-teams">' +
+            crearEscudoHTML(local, "escudo--sm") +
+            '<span class="match-card-vs">' + marcador + "</span>" +
+            crearEscudoHTML(visitante, "escudo--sm") +
+            "</div>" +
+            '<div class="match-card-date">🗓️ ' + formatFecha(p.fecha) + "</div>";
+          frag.appendChild(card);
+        });
+        contenedor.appendChild(frag);
+      })
+      .catch(function (err) {
+        contenedor.innerHTML = "";
+        contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar el calendario."));
+        console.error("[renderizadores] renderizarAdminCalendario:", err);
+      });
+  }
+
+  // "Stadium Hub": los 30 estadios ordenados por aforo.
+  function renderizarAdminEstadios(contenedorId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      var lista = (datos.estadios.estadios || []).slice().sort(function (a, b) { return a.capacidad - b.capacidad; });
+      var frag = document.createDocumentFragment();
+      lista.forEach(function (e) {
+        var fila = document.createElement("div");
+        fila.className = "admin-list-item";
+        fila.innerHTML =
+          '<div class="admin-list-item-main">' +
+          '<span class="admin-list-item-title">' + e.nombre + "</span>" +
+          '<span class="admin-list-item-sub">' + e.categoria + "</span>" +
+          "</div>" +
+          '<span class="admin-list-item-value">' + e.capacidad.toLocaleString("es-ES") + " esp.</span>";
+        frag.appendChild(fila);
+      });
+      contenedor.appendChild(frag);
+    }).catch(function (err) {
+      contenedor.innerHTML = "";
+      contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar Stadium Hub."));
+      console.error("[renderizadores] renderizarAdminEstadios:", err);
+    });
+  }
+
+  // "Ball Storage": los balones del inventario + a qué competición está
+  // asignado cada uno (búsqueda inversa sobre asignacionPorCompeticion).
+  function renderizarAdminBalones(contenedorId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+      var asign = datos.balones.asignacionPorCompeticion || {};
+      var compsPorBalon = {};
+      Object.keys(asign).forEach(function (compKey) {
+        var a = asign[compKey];
+        if (!compsPorBalon[a.balonId]) compsPorBalon[a.balonId] = [];
+        compsPorBalon[a.balonId].push(a.comp || compKey);
+      });
+
+      var lista = datos.balones.balones || [];
+      var frag = document.createDocumentFragment();
+      lista.forEach(function (b) {
+        var comps = compsPorBalon[b.id];
+        var fila = document.createElement("div");
+        fila.className = "admin-list-item";
+        fila.innerHTML =
+          '<div class="admin-list-item-main">' +
+          '<span class="admin-list-item-title">' + b.nombre + "</span>" +
+          '<span class="admin-list-item-sub">' + (comps ? comps.join(" · ") : "Sin asignar") + "</span>" +
+          "</div>";
+        frag.appendChild(fila);
+      });
+      contenedor.appendChild(frag);
+    }).catch(function (err) {
+      contenedor.innerHTML = "";
+      contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar Ball Storage."));
+      console.error("[renderizadores] renderizarAdminBalones:", err);
+    });
+  }
+
+  // "Espacio del navegador": tamaño real del progreso guardado en
+  // localStorage (la única clave que usa este simulador).
+  function renderizarAdminEspacio(contenedorId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+
+    var raw = "";
+    try { raw = localStorage.getItem("ef7_estado_liga_v1") || ""; } catch (err) { /* localStorage no disponible */ }
+    var bytes = new Blob([raw]).size;
+    var kb = (bytes / 1024).toFixed(2);
+
+    var estado = window.Estado ? window.Estado.cargarEstado() : { resultados: {}, partidosGenerados: {} };
+    var nPartidos = Object.keys(estado.resultados || {}).length;
+    var nGenerados = Object.keys(estado.partidosGenerados || {}).length;
+
+    var filas = [
+      { titulo: "Progreso guardado", sub: "clave ef7_estado_liga_v1", valor: kb + " KB" },
+      { titulo: "Partidos confirmados", sub: "resultados guardados", valor: String(nPartidos) },
+      { titulo: "Partidos de desempate generados", sub: "terceros partidos de eliminatoria", valor: String(nGenerados) }
+    ];
+
+    var frag = document.createDocumentFragment();
+    filas.forEach(function (f) {
+      var fila = document.createElement("div");
+      fila.className = "admin-list-item";
+      fila.innerHTML =
+        '<div class="admin-list-item-main">' +
+        '<span class="admin-list-item-title">' + f.titulo + "</span>" +
+        '<span class="admin-list-item-sub">' + f.sub + "</span>" +
+        "</div>" +
+        '<span class="admin-list-item-value">' + f.valor + "</span>";
+      frag.appendChild(fila);
+    });
+    contenedor.appendChild(frag);
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent = "Los navegadores modernos permiten varios MB por sitio — muy por encima de lo que este progreso puede llegar a pesar.";
+    contenedor.appendChild(nota);
+  }
+
   // ---------- Delegación de eventos ----------
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest && ev.target.closest(".match-card-btn");
@@ -409,6 +637,11 @@
     obtenerEstadioCorrelativoAjustado: obtenerEstadioCorrelativoAjustado,
     calcularClimaDinamicoPartido: calcularClimaDinamicoPartido,
     generarCalendarioLateralDerecho: generarCalendarioLateralDerecho,
+    renderizarPlantillaClub: renderizarPlantillaClub,
+    renderizarAdminCalendario: renderizarAdminCalendario,
+    renderizarAdminEstadios: renderizarAdminEstadios,
+    renderizarAdminBalones: renderizarAdminBalones,
+    renderizarAdminEspacio: renderizarAdminEspacio,
     abrirPreviaPartido: abrirPreviaPartido,
     cerrarPreviaPartido: cerrarPreviaPartido,
     cargarTodo: cargarTodo,

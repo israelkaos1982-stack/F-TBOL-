@@ -1,7 +1,14 @@
 /* ============================================================
-   eFOOTBALL · Temporada 7 — Fase 1
+   eFOOTBALL · Temporada 7 — Fase 4
    Diseño deportivo neón · 0 KB de imágenes externas
    Todo escudo, badge y textura se dibuja en CSS puro.
+
+   NAVEGACIÓN — Pantallas Completas Independientes (obligatorio):
+   Inicio (6 cajas) / Panel Admin (candado) / Club activo (Plantilla·
+   Calendario) son 3 vistas mutuamente excluyentes a pantalla completa
+   (.screen), NUNCA 3 columnas visibles a la vez. Esto es justamente lo
+   que evita el "amontonado en una tira vertical" en móvil — no hay
+   ningún grid de 3 columnas que colapsar.
    ============================================================ */
 
 /* ---------- 1. RESET + TOKENS ---------- */
@@ -30,9 +37,6 @@ html, body { margin: 0; padding: 0; }
 
   --font-display: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-body: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
-
-  --col-nav: 260px;
-  --col-cal: 300px;
 }
 
 body {
@@ -54,48 +58,47 @@ body {
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; }
 
-/* ---------- 2. GRID MAESTRO — 3 COLUMNAS ---------- */
-/* Mobile-first: una sola columna apilada. A partir de 960px, 3 columnas. */
-#app-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "nav"
-    "main"
-    "calendar";
-  min-height: 100vh;
-  gap: 0;
-}
-
-@media (min-width: 960px) {
-  #app-grid {
-    grid-template-columns: var(--col-nav) 1fr var(--col-cal);
-    grid-template-areas: "nav main calendar";
-    align-items: start;
-  }
-}
-
-/* ---------- 3. COLUMNA IZQUIERDA — MENÚ eFOOTBALL ---------- */
-#nav-menu {
-  grid-area: nav;
-  background: linear-gradient(180deg, var(--bg-1), var(--bg-0));
-  border-right: 1px solid var(--line);
-  padding: 18px 14px;
+/* ---------- 2. PANTALLAS A TAMAÑO COMPLETO ---------- */
+/* Cada .screen ocupa la pantalla ENTERA (min-height:100vh) y son
+   mutuamente excluyentes vía el atributo [hidden] — nunca conviven 2 a
+   la vez. Layout interno: header fijo arriba + cuerpo con su propio
+   scroll (nunca la página entera hace scroll, solo .pantalla-body). */
+.screen {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  min-height: 100vh;
+}
+.screen[hidden] { display: none; }
+
+.pantalla-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, var(--bg-1), var(--bg-0));
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.pantalla-header--inicio { justify-content: space-between; }
+.pantalla-header-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-hi);
 }
 
-@media (min-width: 960px) {
-  #nav-menu { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.pantalla-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 16px 60px;
 }
 
 .brand {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 4px 6px 14px;
-  border-bottom: 1px solid var(--line);
 }
 .brand-mark {
   font-weight: 900;
@@ -111,74 +114,35 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 1.5px;
 }
 
-.nav-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 11px 12px;
-  border-radius: var(--radius-s);
-  color: var(--text-lo);
-  font-size: 14px;
-  font-weight: 600;
-  border: 1px solid transparent;
-  background: transparent;
-  width: 100%;
-  text-align: left;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-}
-.nav-item .nav-icon { font-size: 16px; width: 18px; text-align: center; }
-.nav-item:hover {
-  color: var(--text-hi);
+/* Engranaje — abre el Panel Admin (candado 747) */
+.btn-gear {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
   background: var(--bg-2);
-  border-color: var(--line);
-}
-.nav-item.active {
-  color: var(--neon);
-  background: rgba(57, 255, 106, 0.08);
-  border-color: var(--neon-soft);
-  box-shadow: inset 0 0 0 1px rgba(57, 255, 106, 0.12);
-}
-
-/* Panel de control antiborrado — vive en la barra lateral */
-.control-panel {
-  margin-top: auto;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.control-panel-title {
-  font-size: 11px;
-  color: var(--text-lo);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-bottom: 2px;
-}
-.btn-ghost {
+  color: var(--text-hi);
+  font-size: 18px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  justify-content: center;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.btn-gear:hover { border-color: var(--neon-soft); transform: rotate(25deg); }
+
+/* Botón "← Volver" / "← Salir" en la cabecera de una pantalla */
+.btn-volver {
+  padding: 8px 12px;
   border-radius: var(--radius-s);
   border: 1px solid var(--line);
   background: var(--bg-2);
   color: var(--text-lo);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
   transition: border-color 0.15s ease, color 0.15s ease;
 }
-.btn-ghost:hover { color: var(--text-hi); border-color: var(--neon-soft); }
-.btn-ghost[disabled] { opacity: 0.5; cursor: not-allowed; }
-.control-panel-hint { font-size: 11px; color: var(--text-lo); opacity: 0.7; line-height: 1.4; }
-
-/* ---------- 4. COLUMNA CENTRAL — CONTENIDO DINÁMICO ---------- */
-#main-content {
-  grid-area: main;
-  padding: 22px 18px 60px;
-  min-width: 0;
-}
+.btn-volver:hover { color: var(--text-hi); border-color: var(--neon-soft); }
 
 .section-title {
   font-size: 12px;
@@ -211,7 +175,7 @@ button { font-family: inherit; cursor: pointer; }
   .team-select-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
-/* ---------- 5. CAJA HUMANA — DEGRADADO DEPORTIVO INCLINADO ---------- */
+/* ---------- 3. CAJA HUMANA — DEGRADADO DEPORTIVO INCLINADO ---------- */
 .team-box {
   --primary: #39ff6a;
   --secondary: #101114;
@@ -298,7 +262,7 @@ button { font-family: inherit; cursor: pointer; }
   text-transform: uppercase;
 }
 
-/* ---------- 6. ESCUDOS CSS — 0 KB, DOS FORMATOS ---------- */
+/* ---------- 4. ESCUDOS CSS — 0 KB, DOS FORMATOS ---------- */
 .escudo {
   --primary: #39ff6a;
   --secondary: #101114;
@@ -391,25 +355,262 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 50%;
 }
 
-/* ---------- 7. COLUMNA DERECHA — CALENDARIO VERTICAL ---------- */
-#calendar-column {
-  grid-area: calendar;
-  background: linear-gradient(180deg, var(--bg-1), var(--bg-0));
-  border-left: 1px solid var(--line);
-  padding: 18px 14px;
-  display: flex;
-  flex-direction: column;
+/* ---------- 5. PANEL ADMIN — candado 747, tarjetas de herramientas ---------- */
+.admin-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
+  margin-bottom: 20px;
 }
-@media (min-width: 960px) {
-  #calendar-column { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+@media (min-width: 560px) {
+  .admin-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
+.admin-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 22px 10px;
+  border-radius: var(--radius-m);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text-hi);
+  transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+.admin-card:hover {
+  border-color: var(--neon-soft);
+  background: var(--bg-3);
+  transform: translateY(-2px);
+}
+.admin-card-icon { font-size: 26px; }
+.admin-card-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  text-align: center;
+  line-height: 1.3;
+}
+
+.admin-card--danger { border-color: rgba(255, 59, 92, 0.3); }
+.admin-card--danger:hover { border-color: var(--accent-2); background: rgba(255, 59, 92, 0.08); }
+.admin-card--danger .admin-card-label { color: var(--accent-2); }
+
+.admin-detalle {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--bg-2);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+.admin-detalle[hidden] { display: none; }
+
+.admin-detalle-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+.admin-detalle-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-lo);
+}
+.admin-detalle-close {
+  border: none;
+  background: transparent;
+  color: var(--text-lo);
+  font-size: 12px;
+  font-weight: 700;
+}
+.admin-detalle-close:hover { color: var(--accent-2); }
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.admin-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.admin-list-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.admin-list-item-title { font-weight: 700; color: var(--text-hi); }
+.admin-list-item-sub { font-size: 11px; color: var(--text-lo); }
+.admin-list-item-value {
+  font-weight: 800;
+  color: var(--neon);
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.admin-list--calendario { gap: 10px; }
+.admin-list--calendario .match-card { max-width: none; }
+
+.admin-nota {
+  font-size: 12px;
+  color: var(--text-lo);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.control-panel--admin {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.control-panel-title {
+  font-size: 11px;
+  color: var(--text-lo);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 2px;
+}
+.btn-ghost {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text-lo);
+  font-size: 13px;
+  font-weight: 600;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.btn-ghost:hover { color: var(--text-hi); border-color: var(--neon-soft); }
+.btn-ghost[disabled] { opacity: 0.5; cursor: not-allowed; }
+.control-panel-hint { font-size: 11px; color: var(--text-lo); opacity: 0.7; line-height: 1.4; }
+
+/* ---------- 5b. MODAL — candado del Panel Admin ---------- */
+.password-card { max-width: 320px; text-align: center; }
+.password-title { font-size: 17px; font-weight: 900; margin: 4px 0 4px; }
+.password-sub { font-size: 12px; color: var(--text-lo); margin: 0 0 16px; }
+.password-input {
+  width: 100%;
+  text-align: center;
+  letter-spacing: 6px;
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 10px;
+}
+.password-error { color: var(--accent-2); font-size: 12px; font-weight: 700; margin: -2px 0 10px; }
+.password-error[hidden] { display: none; }
+
+/* ---------- 6. CLUB ACTIVO — cabecera + tabs Plantilla/Calendario ---------- */
+.club-header-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.club-escudo-slot { display: flex; }
+.club-header-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.club-header-nombre {
+  font-size: 14px;
+  font-weight: 900;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.club-header-mister {
+  font-size: 11px;
+  color: var(--text-lo);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.club-tabs {
+  display: flex;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+.club-tab {
+  flex: 1;
+  padding: 13px 8px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-lo);
+  font-size: 13px;
+  font-weight: 800;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.club-tab:hover { color: var(--text-hi); }
+.club-tab.is-active { color: var(--neon); border-bottom-color: var(--neon); }
+
+.pantalla-body--club { padding: 0; }
+.club-tab-panel { padding: 18px 16px 60px; }
+.club-tab-panel[hidden] { display: none; }
+
+/* ---------- 6b. PLANTILLA — roster agrupado por posición ---------- */
+.plantilla-grupo { margin-bottom: 20px; }
+.plantilla-grupo-titulo {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-lo);
+  margin: 0 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.plantilla-jugador {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.plantilla-jugador:last-child { border-bottom: none; }
+.plantilla-dorsal {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-hi);
+}
+.plantilla-nombre { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--text-hi); }
+.plantilla-posicion {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-lo);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ---------- 7. CALENDARIO — jornadas del club activo ---------- */
 .calendar-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding-bottom: 10px;
+  margin-bottom: 12px;
   border-bottom: 1px solid var(--line);
 }
 .calendar-title {
@@ -448,7 +649,7 @@ button { font-family: inherit; cursor: pointer; }
 }
 .calendar-empty-icon { font-size: 26px; display: block; margin-bottom: 8px; opacity: 0.6; }
 
-/* card de partido — plantilla visual (poblada por js/calendario.js en Fase 2) */
+/* card de partido */
 .match-card {
   border: 1px solid var(--line);
   background: var(--bg-2);

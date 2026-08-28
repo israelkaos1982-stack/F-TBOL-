@@ -163,15 +163,28 @@
     return null;
   }
 
+  // Escudo de CUALQUIER equipo (humano o IA), listo para calendario/previa/
+  // acta en vivo. Los 6 humanos (identificados por tener `mister` —
+  // exclusivo de data/equipos.json) conservan sus siglas dentro del blasón
+  // hasta que tengan escudo real (pendiente, decisión del usuario). Los
+  // equipos IA (300+) NUNCA llevan texto — solo la forma geométrica limpia
+  // con acabado premium (ver .escudo--ia en css/estilos.css).
   function crearEscudoHTML(equipo, claseTamano) {
-    if (!equipo) return '<div class="escudo ' + claseTamano + '"><span class="escudo-siglas">?</span></div>';
+    if (!equipo) return '<div class="escudo escudo--ia ' + claseTamano + '"></div>';
+
+    var esHumano = !!equipo.mister;
     var formato = equipo.escudoFormato === "rombo" ? "escudo--rombo" : "escudo--rayas";
     var style = "--primary:" + (equipo.colorPrimario || "#39ff6a") + "; --secondary:" + (equipo.colorSecundario || "#101114") + ";";
-    return (
-      '<div class="escudo ' + formato + " " + claseTamano + '" style="' + style + '">' +
-      '<span class="escudo-siglas">' + (equipo.siglas || "") + "</span>" +
-      "</div>"
-    );
+
+    if (esHumano) {
+      return (
+        '<div class="escudo ' + formato + " " + claseTamano + '" style="' + style + '">' +
+        '<span class="escudo-siglas">' + (equipo.siglas || "") + "</span>" +
+        "</div>"
+      );
+    }
+
+    return '<div class="escudo escudo--ia ' + formato + " " + claseTamano + '" style="' + style + '"></div>';
   }
 
   var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];

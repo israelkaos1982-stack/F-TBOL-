@@ -357,6 +357,25 @@ button { font-family: inherit; cursor: pointer; }
   z-index: 1;
 }
 
+/* Escudos IA (300+) — SIN texto interno, solo la forma geométrica limpia
+   con acabado premium: insignia circular, brillo neón exterior y un
+   sutil degradado radial de cristal por encima del patrón (rayas/rombo)
+   para que se lean como logotipos modernos, no como parches planos. */
+.escudo--ia {
+  border-radius: 50%;
+  filter: drop-shadow(0 0 5px var(--primary)) drop-shadow(0 0 1px rgba(255, 255, 255, 0.4));
+}
+.escudo--ia::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.5), transparent 58%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+  pointer-events: none;
+}
+
 /* Tamaño grande para cabeceras/detalle de plantilla */
 .escudo--lg { width: 84px; height: 84px; min-width: 84px; border-radius: 14px; }
 .escudo--lg .escudo-siglas { font-size: 18px; }
@@ -364,6 +383,13 @@ button { font-family: inherit; cursor: pointer; }
 /* Tamaño pequeño para las tarjetas de partido del calendario */
 .escudo--sm { width: 30px; height: 30px; min-width: 30px; border-radius: 7px; }
 .escudo--sm .escudo-siglas { font-size: 9px; }
+
+/* Los escudos IA se mantienen circulares en CUALQUIER tamaño — selector
+   compuesto (mayor especificidad) para ganar siempre a .escudo--lg/--sm. */
+.escudo--ia.escudo--lg,
+.escudo--ia.escudo--sm {
+  border-radius: 50%;
+}
 
 /* ---------- 7. COLUMNA DERECHA — CALENDARIO VERTICAL ---------- */
 #calendar-column {

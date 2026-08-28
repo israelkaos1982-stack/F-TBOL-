@@ -146,6 +146,19 @@
     return porComp;
   }
 
+  // Wipe total — Panel Admin, "🗑️ Borrar TODO". Vuelve al estado de
+  // fábrica (data/*.json sin ninguna capa local encima). El propio
+  // caller (js/main.js) pide confirmación explícita antes de llamar.
+  function borrarTodo() {
+    _estado = estadoPorDefecto();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      console.error("[estado] no se pudo borrar localStorage:", err);
+    }
+    return true;
+  }
+
   // ---------- Backup (panel antiborrado) ----------
   function exportarEstadoCrudo() {
     return JSON.parse(JSON.stringify(cargarEstado()));
@@ -169,6 +182,7 @@
     calcularClasificacion: calcularClasificacion,
     calcularEstadisticasJugador: calcularEstadisticasJugador,
     exportarEstadoCrudo: exportarEstadoCrudo,
-    importarEstadoCrudo: importarEstadoCrudo
+    importarEstadoCrudo: importarEstadoCrudo,
+    borrarTodo: borrarTodo
   };
 })();

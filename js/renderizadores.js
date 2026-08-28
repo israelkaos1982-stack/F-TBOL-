@@ -11,7 +11,8 @@
     equiposIA: "data/equipos_ia.json",
     estadios: "data/estadios.json",
     balones: "data/balones.json",
-    partidos: "data/partidos.json"
+    partidos: "data/partidos.json",
+    jugadores: "data/jugadores.json"
   };
 
   var TOTAL_JORNADAS_POR_LIGA = {
@@ -43,9 +44,10 @@
       cargarJSON(DATA_URLS.equiposIA),
       cargarJSON(DATA_URLS.estadios),
       cargarJSON(DATA_URLS.balones),
-      cargarJSON(DATA_URLS.partidos)
+      cargarJSON(DATA_URLS.partidos),
+      cargarJSON(DATA_URLS.jugadores)
     ]).then(function (r) {
-      var datos = { equipos: r[0], equiposIA: r[1], estadios: r[2], balones: r[3], partidos: r[4] };
+      var datos = { equipos: r[0], equiposIA: r[1], estadios: r[2], balones: r[3], partidos: r[4], jugadores: r[5] };
       _estadiosLista = datos.estadios.estadios || [];
       return datos;
     });
@@ -236,6 +238,10 @@
     var badge = document.getElementById("calendar-liga-badge");
     if (!contenedor) return;
 
+    // Recuerda qué mánager está activo — lo usan js/acta.js y
+    // js/sistema-temporadas.js para re-pintar tras confirmar un partido.
+    window._idManagerActivo = idEquipoHumanoActivo;
+
     // Destruye datos cruzados del mánager anterior antes de redibujar.
     contenedor.innerHTML = "";
     contenedor.appendChild(nodoEstado("⏳", "Cargando calendario…"));
@@ -255,7 +261,14 @@
 
         if (badge) badge.textContent = (ligaActual || "").replace(/_/g, " ");
 
-        var partidosDelClub = (datos.partidos.partidos || []).filter(function (p) {
+        // Vista fusionada: partidos base + confirmados/generados en
+        // caliente (Estado) — así un partido recién jugado se pinta gris
+        // al instante, sin recargar la página.
+        var todosLosPartidos = window.Estado
+          ? window.Estado.listarPartidosResueltos(datos)
+          : (datos.partidos.partidos || []);
+
+        var partidosDelClub = todosLosPartidos.filter(function (p) {
           var esSuyo = p.local === idEquipoHumanoActivo || p.visitante === idEquipoHumanoActivo;
           if (!esSuyo) return false;
           // Liga regular: solo la liga actual del mánager.
@@ -341,6 +354,12 @@
     document.getElementById("previa-balon").innerHTML =
       balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">❄️ forzado por nieve</span>' : "");
 
+    var btnEmpezar = document.getElementById("previa-empezar");
+    if (btnEmpezar) {
+      btnEmpezar.hidden = !!partido.jugado;
+      btnEmpezar.dataset.partidoId = partido.id;
+    }
+
     ov.hidden = false;
   }
 
@@ -356,6 +375,13 @@
 
     if (ev.target.id === "previa-close" || ev.target.id === "previa-overlay") {
       cerrarPreviaPartido();
+      return;
+    }
+
+    var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
+    if (btnEmpezar && window.Acta && _ultimoContexto) {
+      cerrarPreviaPartido();
+      window.Acta.iniciarPartidoEnVivo(btnEmpezar.dataset.partidoId, _ultimoContexto);
     }
   });
   document.addEventListener("keydown", function (ev) {
@@ -363,6 +389,9 @@
   });
 
   // ---------- API pública ----------
+  // (buscarEquipoPorId, crearEscudoHTML, formatFecha, COMP_LABEL y
+  // TOTAL_JORNADAS_POR_LIGA se exponen para que js/acta.js y
+  // js/sistema-temporadas.js no dupliquen esta lógica.)
   window.Renderizadores = {
     obtenerEstadioCorrelativoAjustado: obtenerEstadioCorrelativoAjustado,
     calcularClimaDinamicoPartido: calcularClimaDinamicoPartido,
@@ -370,6 +399,10 @@
     abrirPreviaPartido: abrirPreviaPartido,
     cerrarPreviaPartido: cerrarPreviaPartido,
     cargarTodo: cargarTodo,
-    buscarEquipoPorId: buscarEquipoPorId
+    buscarEquipoPorId: buscarEquipoPorId,
+    crearEscudoHTML: crearEscudoHTML,
+    formatFecha: formatFecha,
+    COMP_LABEL: COMP_LABEL,
+    TOTAL_JORNADAS_POR_LIGA: TOTAL_JORNADAS_POR_LIGA
   };
 })();

@@ -27,13 +27,13 @@
       <li><button class="nav-item" data-view="balones"><span class="nav-icon">⚽</span> Balones</button></li>
     </ul>
 
-    <!-- Panel de control antiborrado (sin backend) — Fase 2 conecta la lógica -->
+    <!-- Panel de control antiborrado (sin backend) -->
     <div class="control-panel">
       <div class="control-panel-title">Panel de control</div>
-      <button class="btn-ghost" id="btn-exportar" disabled title="Disponible en la Fase 2">
+      <button class="btn-ghost" id="btn-exportar">
         <span>💾</span> Exportar progreso
       </button>
-      <button class="btn-ghost" id="btn-importar" disabled title="Disponible en la Fase 2">
+      <button class="btn-ghost" id="btn-importar">
         <span>📂</span> Importar progreso
       </button>
       <input type="file" id="input-importar" accept="application/json" class="visually-hidden">
@@ -176,11 +176,85 @@
       <div class="previa-info-item"><dt>🌦️ Clima</dt><dd id="previa-clima">—</dd></div>
       <div class="previa-info-item"><dt>⚽ Balón</dt><dd id="previa-balon">—</dd></div>
     </dl>
+
+    <button type="button" class="btn-confirmar" id="previa-empezar" hidden>▶ Empezar partido</button>
   </div>
 </div>
 
-<!-- Motor JS — Fase 2: lógica de estadios, clima y calendario ya implementada -->
+<!-- ============ PANTALLA EN VIVO — acta del partido (Fase 3) ============ -->
+<div id="partido-live-overlay" class="previa-overlay" hidden>
+  <div class="live-card">
+    <button type="button" class="previa-close" id="live-close" aria-label="Cerrar">✕</button>
+
+    <div class="previa-comp" id="live-comp">—</div>
+
+    <div class="previa-teams">
+      <div class="previa-team" id="live-team-local"></div>
+      <div class="previa-marcador" id="live-marcador">0 - 0</div>
+      <div class="previa-team" id="live-team-visitante"></div>
+    </div>
+
+    <!-- VISTA A: registrar eventos -->
+    <div id="live-entrada">
+      <div class="live-form-row">
+        <label class="live-label">Minuto
+          <select id="live-minuto" class="live-select"></select>
+        </label>
+        <div class="live-equipo-toggle" id="live-equipo-toggle">
+          <button type="button" class="live-toggle-btn is-active" data-lado="local">Local</button>
+          <button type="button" class="live-toggle-btn" data-lado="visitante">Visitante</button>
+        </div>
+      </div>
+
+      <div class="live-form-row" id="live-jugador-row">
+        <label class="live-label live-label--full">Jugador
+          <select id="live-jugador" class="live-select live-select--full"></select>
+        </label>
+      </div>
+
+      <div class="live-eventos-grid">
+        <button type="button" class="live-evt-btn" data-tipo="GOL">⚽ Gol</button>
+        <button type="button" class="live-evt-btn" data-tipo="AUTOGOL">🥅 Autogol</button>
+        <button type="button" class="live-evt-btn" data-tipo="GOL_FAV_FALTA">🎯 Gol de falta</button>
+        <button type="button" class="live-evt-btn" data-tipo="PENALTI_GOL">🟢 Penalti anotado</button>
+        <button type="button" class="live-evt-btn" data-tipo="PENALTI_FALLADO">🔴 Penalti fallado</button>
+        <button type="button" class="live-evt-btn" data-tipo="AMARILLA">🟨 Amarilla</button>
+        <button type="button" class="live-evt-btn" data-tipo="ROJA">🟥 Roja</button>
+        <button type="button" class="live-evt-btn" data-tipo="MVP">⭐ MVP</button>
+      </div>
+
+      <div class="live-acta-lista" id="live-acta-lista">
+        <div class="live-acta-vacia">Todavía no hay eventos registrados.</div>
+      </div>
+
+      <div class="live-footer">
+        <button type="button" class="btn-ghost" id="live-cancelar">✖ Cancelar</button>
+        <button type="button" class="btn-confirmar" id="live-confirmar">✅ Confirmar partido</button>
+      </div>
+    </div>
+
+    <!-- VISTA B: resumen post-partido -->
+    <div id="live-resumen" hidden>
+      <p class="live-resumen-texto" id="live-resumen-texto"></p>
+      <div id="live-resumen-eliminatoria"></div>
+      <div id="live-resumen-clasificacion"></div>
+
+      <div class="live-footer">
+        <button type="button" class="btn-whatsapp" id="live-whatsapp">📲 Compartir en WhatsApp</button>
+      </div>
+      <p class="live-backup-hint">💾 No olvides exportar tu progreso desde el panel de control.</p>
+      <div class="live-footer">
+        <button type="button" class="btn-ghost" id="live-cerrar-resumen">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Motor JS -->
+<script src="js/estado.js" defer></script>
 <script src="js/renderizadores.js" defer></script>
+<script src="js/sistema-temporadas.js" defer></script>
+<script src="js/acta.js" defer></script>
 <script src="js/estadios.js" defer></script>
 <script src="js/balones.js" defer></script>
 <script src="js/escudos.js" defer></script>

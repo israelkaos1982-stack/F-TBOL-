@@ -24,6 +24,10 @@
         "golesLocal": "number|null",
         "golesVisitante": "number|null"
       }
+    },
+    "eliminatorias": {
+      "descripcion": "Partidos con el campo `eliminatoria: {grupoId, fase}` forman una eliminatoria a doble partido (fase 'ida'/'vuelta'). Al confirmar la vuelta, js/sistema-temporadas.js decide el ganador (global -> gol de visitante doble -> tercer partido de desempate) y, si hace falta, inyecta un partido con fase 'desempate' vía Estado.registrarPartidoGenerado (no vive en este JSON estático, se añade en caliente al estado local).",
+      "demo": "copa-semi-A: Liverpool (ida en casa) vs Arsenal (vuelta en casa) — semifinal de Copa del Rey de ejemplo, sin jugar todavía."
     }
   },
   "partidos": [
@@ -5830,6 +5834,44 @@
       "resultado": {
         "golesLocal": null,
         "golesVisitante": null
+      }
+    },
+    {
+      "id": "copa-semi-A-liverpool-arsenal",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Semifinal",
+      "jornada": null,
+      "local": "liverpool",
+      "visitante": "arsenal",
+      "fecha": "2027-11-10T21:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      },
+      "eliminatoria": {
+        "grupoId": "copa-semi-A",
+        "fase": "ida"
+      }
+    },
+    {
+      "id": "copa-semi-A-arsenal-liverpool",
+      "competicion": "copa",
+      "liga": null,
+      "ronda": "Semifinal",
+      "jornada": null,
+      "local": "arsenal",
+      "visitante": "liverpool",
+      "fecha": "2027-11-24T21:00:00Z",
+      "jugado": false,
+      "resultado": {
+        "golesLocal": null,
+        "golesVisitante": null
+      },
+      "eliminatoria": {
+        "grupoId": "copa-semi-A",
+        "fase": "vuelta"
       }
     }
   ]

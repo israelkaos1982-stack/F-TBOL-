@@ -14,7 +14,10 @@
   <header class="pantalla-header pantalla-header--inicio">
     <div class="brand">
       <span class="brand-mark">eFOOTBALL</span>
-      <span class="brand-sub">Temp. 7</span>
+      <button type="button" class="brand-sub brand-sub--editable" id="btn-editar-temporada" title="Editar temporada">
+        <span id="brand-sub-label">Temporada 7</span>
+        <span class="brand-sub-pencil">✏️</span>
+      </button>
     </div>
     <button type="button" class="btn-gear" id="btn-abrir-admin" aria-label="Panel Admin">⚙️</button>
   </header>
@@ -22,98 +25,14 @@
   <div class="pantalla-body">
     <h2 class="section-title">Selecciona tu caja</h2>
 
+    <!-- Las 6 cajas se pintan en JS desde data/equipos.json (escudo real,
+         mánager, selección) — ver Renderizadores.renderizarInicioEquipos
+         en js/renderizadores.js, llamada desde js/main.js al arrancar. -->
     <div class="team-select-grid" id="team-select-grid">
-
-      <!-- Liverpool · Toñín -->
-      <button class="team-box" data-team-id="liverpool" style="--primary:#c8102e; --secondary:#f6eb61;">
-        <div class="team-box-inner">
-          <div class="escudo escudo--rayas" style="--primary:#c8102e; --secondary:#f6eb61;">
-            <span class="escudo-siglas">LIV</span>
-          </div>
-          <div class="team-box-meta">
-            <span class="team-box-club">Liverpool</span>
-            <span class="team-box-mister">Toñín</span>
-            <span class="team-box-league">Liga EA Sports</span>
-          </div>
-        </div>
-        <span class="team-box-cta">Entrar ▶</span>
-      </button>
-
-      <!-- Arsenal · Álvaro -->
-      <button class="team-box" data-team-id="arsenal" style="--primary:#ef0107; --secondary:#063672;">
-        <div class="team-box-inner">
-          <div class="escudo escudo--rombo" style="--primary:#ef0107; --secondary:#063672;">
-            <span class="escudo-siglas">ARS</span>
-          </div>
-          <div class="team-box-meta">
-            <span class="team-box-club">Arsenal</span>
-            <span class="team-box-mister">Álvaro</span>
-            <span class="team-box-league">Liga EA Sports</span>
-          </div>
-        </div>
-        <span class="team-box-cta">Entrar ▶</span>
-      </button>
-
-      <!-- Real Madrid · Acsa -->
-      <button class="team-box" data-team-id="real-madrid" style="--primary:#febe10; --secondary:#112546;">
-        <div class="team-box-inner">
-          <div class="escudo escudo--rayas" style="--primary:#febe10; --secondary:#112546;">
-            <span class="escudo-siglas">RMA</span>
-          </div>
-          <div class="team-box-meta">
-            <span class="team-box-club">Real Madrid</span>
-            <span class="team-box-mister">Acsa</span>
-            <span class="team-box-league">Liga EA Sports</span>
-          </div>
-        </div>
-        <span class="team-box-cta">Entrar ▶</span>
-      </button>
-
-      <!-- Atlético Madrid · Isra -->
-      <button class="team-box" data-team-id="atletico-madrid" style="--primary:#cb3524; --secondary:#192c5b;">
-        <div class="team-box-inner">
-          <div class="escudo escudo--rombo" style="--primary:#cb3524; --secondary:#192c5b;">
-            <span class="escudo-siglas">ATM</span>
-          </div>
-          <div class="team-box-meta">
-            <span class="team-box-club">Atlético Madrid</span>
-            <span class="team-box-mister">Isra</span>
-            <span class="team-box-league">Liga EA Sports</span>
-          </div>
-        </div>
-        <span class="team-box-cta">Entrar ▶</span>
-      </button>
-
-      <!-- FC Barcelona · Ángel -->
-      <button class="team-box" data-team-id="fc-barcelona" style="--primary:#004d98; --secondary:#a50044;">
-        <div class="team-box-inner">
-          <div class="escudo escudo--rayas" style="--primary:#004d98; --secondary:#a50044;">
-            <span class="escudo-siglas">FCB</span>
-          </div>
-          <div class="team-box-meta">
-            <span class="team-box-club">FC Barcelona</span>
-            <span class="team-box-mister">Ángel</span>
-            <span class="team-box-league">Liga EA Sports</span>
-          </div>
-        </div>
-        <span class="team-box-cta">Entrar ▶</span>
-      </button>
-
-      <!-- PSG · Izan -->
-      <button class="team-box" data-team-id="psg" style="--primary:#0052b4; --secondary:#e30613;">
-        <div class="team-box-inner">
-          <div class="escudo escudo--rombo" style="--primary:#0052b4; --secondary:#e30613;">
-            <span class="escudo-siglas">PSG</span>
-          </div>
-          <div class="team-box-meta">
-            <span class="team-box-club">PSG</span>
-            <span class="team-box-mister">Izan</span>
-            <span class="team-box-league">Liga EA Sports</span>
-          </div>
-        </div>
-        <span class="team-box-cta">Entrar ▶</span>
-      </button>
-
+      <div class="calendar-empty" id="inicio-cargando">
+        <span class="calendar-empty-icon">⏳</span>
+        Cargando equipos…
+      </div>
     </div>
   </div>
 </section>

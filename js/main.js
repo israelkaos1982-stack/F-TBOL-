@@ -164,11 +164,14 @@
     }
   };
 
+  var _adminVistaActual = null;
+
   function abrirVistaAdmin(vista) {
     var detalle = document.getElementById("admin-detalle");
     var def = ADMIN_VISTAS[vista];
     if (!detalle || !def || !window.Renderizadores) return;
 
+    _adminVistaActual = vista;
     detalle.innerHTML =
       '<div class="admin-detalle-header">' +
       '<span class="admin-detalle-title">' + def.titulo + "</span>" +
@@ -180,7 +183,70 @@
     detalle.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  // Re-pinta la vista admin abierta (Stadium Hub / Ball Storage) tras
+  // añadir/editar/borrar — mismo id de contenedor, sin cerrar el panel.
+  function repintarVistaAdminActual() {
+    var def = _adminVistaActual && ADMIN_VISTAS[_adminVistaActual];
+    if (def) def.render("admin-detalle-contenido");
+  }
+
+  // ---------- Stadium Hub / Ball Storage editables ----------
+  // window.prompt() por simplicidad (coherente con el resto de acciones
+  // de admin de esta app, que ya usan confirm()/prompt() nativos en vez
+  // de formularios propios) — sin él no hace falta CSS/JS extra para un
+  // modal de edición de 2-3 campos.
+  function anadirEstadioPrompt() {
+    if (!window.Estado) return;
+    var nombre = window.prompt("Nombre del estadio:");
+    if (nombre === null || !nombre.trim()) return;
+    var capacidad = window.prompt("Aforo (nº de espectadores):", "40000");
+    if (capacidad === null) return;
+    var cats = window.Estado.CATEGORIAS_ESTADIO || [];
+    var categoria = window.prompt("Categoría (" + cats.join(" / ") + "):", cats[0] || "");
+    if (categoria === null) categoria = cats[0] || "";
+    window.Estado.anadirEstadio(nombre, capacidad, categoria);
+    repintarVistaAdminActual();
+  }
+  function editarEstadioPrompt(id, nombreActual, capacidadActual, categoriaActual) {
+    if (!window.Estado) return;
+    var nombre = window.prompt("Nombre del estadio:", nombreActual);
+    if (nombre === null || !nombre.trim()) return;
+    var capacidad = window.prompt("Aforo:", String(capacidadActual));
+    if (capacidad === null) return;
+    var categoria = window.prompt("Categoría:", categoriaActual);
+    if (categoria === null) categoria = categoriaActual;
+    window.Estado.editarEstadio(id, nombre, capacidad, categoria);
+    repintarVistaAdminActual();
+  }
+  function borrarEstadioPrompt(id, nombre) {
+    if (!window.Estado) return;
+    if (!window.confirm('¿Borrar el estadio "' + nombre + '"?')) return;
+    window.Estado.borrarEstadio(id);
+    repintarVistaAdminActual();
+  }
+  function anadirBalonPrompt() {
+    if (!window.Estado) return;
+    var nombre = window.prompt("Nombre del balón:");
+    if (nombre === null || !nombre.trim()) return;
+    window.Estado.anadirBalon(nombre);
+    repintarVistaAdminActual();
+  }
+  function editarBalonPrompt(id, nombreActual) {
+    if (!window.Estado) return;
+    var nombre = window.prompt("Nombre del balón:", nombreActual);
+    if (nombre === null || !nombre.trim()) return;
+    window.Estado.editarBalon(id, nombre);
+    repintarVistaAdminActual();
+  }
+  function borrarBalonPrompt(id, nombre) {
+    if (!window.Estado) return;
+    if (!window.confirm('¿Borrar el balón "' + nombre + '"?')) return;
+    window.Estado.borrarBalon(id);
+    repintarVistaAdminActual();
+  }
+
   function cerrarVistaAdmin() {
+    _adminVistaActual = null;
     var detalle = document.getElementById("admin-detalle");
     if (detalle) {
       detalle.hidden = true;
@@ -201,8 +267,27 @@
     salirDelClub();
   }
 
+  // ---------- Temporada editable (arriba del Inicio) ----------
+  function editarTemporada() {
+    if (!window.Estado) return;
+    var actual = window.Estado.obtenerTemporada();
+    var nueva = window.prompt("Nombre de la temporada:", actual);
+    if (nueva === null) return; // cancelado
+    if (!nueva.trim()) return;
+    window.Estado.guardarTemporada(nueva);
+    if (window.Renderizadores) window.Renderizadores.pintarTemporada();
+  }
+
   // ---------- Wiring ----------
   document.addEventListener("DOMContentLoaded", function () {
+    if (window.Renderizadores) {
+      window.Renderizadores.renderizarInicioEquipos();
+      window.Renderizadores.pintarTemporada();
+    }
+
+    var btnTemporada = document.getElementById("btn-editar-temporada");
+    if (btnTemporada) btnTemporada.addEventListener("click", editarTemporada);
+
     var grid = document.getElementById("team-select-grid");
     if (grid) {
       grid.addEventListener("click", function (ev) {
@@ -282,6 +367,22 @@
     document.addEventListener("click", function (ev) {
       if (ev.target && ev.target.id === "admin-detalle-close") {
         cerrarVistaAdmin();
+        return;
+      }
+
+      // Stadium Hub / Ball Storage editables — delegado ÚNICO y estable
+      // (document), así el re-pintado tras cada acción nunca acumula
+      // listeners sobre el contenedor que se regenera en cada render.
+      var accionBtn = ev.target.closest && ev.target.closest("[data-accion]");
+      if (!accionBtn) return;
+      var d = accionBtn.dataset;
+      switch (d.accion) {
+        case "anadir-estadio": anadirEstadioPrompt(); break;
+        case "editar-estadio": editarEstadioPrompt(d.id, d.nombre, d.capacidad, d.categoria); break;
+        case "borrar-estadio": borrarEstadioPrompt(d.id, d.nombre); break;
+        case "anadir-balon": anadirBalonPrompt(); break;
+        case "editar-balon": editarBalonPrompt(d.id, d.nombre); break;
+        case "borrar-balon": borrarBalonPrompt(d.id, d.nombre); break;
       }
     });
 

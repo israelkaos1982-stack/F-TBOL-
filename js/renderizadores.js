@@ -47,7 +47,26 @@
       cargarJSON(DATA_URLS.partidos),
       cargarJSON(DATA_URLS.jugadores)
     ]).then(function (r) {
-      var datos = { equipos: r[0], equiposIA: r[1], estadios: r[2], balones: r[3], partidos: r[4], jugadores: r[5] };
+      // r[2]/r[3] son las respuestas CACHEADAS de cargarJSON (misma
+      // referencia en cada llamada a cargarTodo) — NUNCA se mutan
+      // directamente, se copian antes de fusionar el overlay de
+      // balones/estadios (js/estado.js), o el overlay se aplicaría
+      // dos veces (duplicando los "añadidos") en la siguiente llamada.
+      var estadiosBase = r[2].estadios || [];
+      var balonesBase = r[3].balones || [];
+      var estadiosFusion = (window.Estado && window.Estado.fusionarEstadios)
+        ? window.Estado.fusionarEstadios(estadiosBase) : estadiosBase;
+      var balonesFusion = (window.Estado && window.Estado.fusionarBalones)
+        ? window.Estado.fusionarBalones(balonesBase) : balonesBase;
+
+      var datos = {
+        equipos: r[0],
+        equiposIA: r[1],
+        estadios: Object.assign({}, r[2], { estadios: estadiosFusion }),
+        balones: Object.assign({}, r[3], { balones: balonesFusion }),
+        partidos: r[4],
+        jugadores: r[5]
+      };
       _estadiosLista = datos.estadios.estadios || [];
       return datos;
     });
@@ -163,14 +182,23 @@
     return null;
   }
 
-  // Escudo de CUALQUIER equipo (humano o IA), listo para calendario/previa/
-  // acta en vivo. Los 6 humanos (identificados por tener `mister` —
-  // exclusivo de data/equipos.json) conservan sus siglas dentro del blasón
-  // hasta que tengan escudo real (pendiente, decisión del usuario). Los
-  // equipos IA (300+) NUNCA llevan texto — solo la forma geométrica limpia
-  // con acabado premium (ver .escudo--ia en css/estilos.css).
+  // Escudo de CUALQUIER equipo (humano o IA), listo para Inicio/calendario/
+  // previa/acta en vivo. Si el equipo trae `crest` (URL real — 5 de los 6
+  // humanos reusan los SVG que ya sirve la app Flask hermana en
+  // /static/img/escudos-*/, cero KB nuevos), se pinta la imagen real sobre
+  // un fondo claro para que se lea con contraste. Sin `crest` (PSG, y los
+  // 300+ equipos IA) cae al blasón CSS de siempre — nunca se rompe nada
+  // para un equipo sin imagen todavía.
   function crearEscudoHTML(equipo, claseTamano) {
     if (!equipo) return '<div class="escudo escudo--ia ' + claseTamano + '"></div>';
+
+    if (equipo.crest) {
+      return (
+        '<div class="escudo escudo--real ' + claseTamano + '">' +
+        '<img src="' + equipo.crest + '" alt="' + (equipo.nombre || "") + '" loading="lazy">' +
+        "</div>"
+      );
+    }
 
     var esHumano = !!equipo.mister;
     var formato = equipo.escudoFormato === "rombo" ? "escudo--rombo" : "escudo--rayas";
@@ -185,6 +213,60 @@
     }
 
     return '<div class="escudo escudo--ia ' + formato + " " + claseTamano + '" style="' + style + '"></div>';
+  }
+
+  // ============================================================
+  // PANTALLA DE INICIO — las 6 cajas humanas (fuente única: data/equipos.json)
+  // ============================================================
+  // Se renderizan en JS (no hardcodeadas en index.html) para que el escudo
+  // real, el mánager, su selección y su emoji salgan SIEMPRE del mismo
+  // sitio que usa el resto de la app (calendario, previa, club activo) —
+  // cero riesgo de que el Inicio se desincronice de esos datos.
+  function renderizarInicioEquipos() {
+    var grid = document.getElementById("team-select-grid");
+    if (!grid) return;
+
+    cargarTodo().then(function (datos) {
+      var frag = document.createDocumentFragment();
+      (datos.equipos.equipos || []).forEach(function (eq) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "team-box";
+        btn.dataset.teamId = eq.id;
+        btn.style.setProperty("--primary", eq.colorPrimario || "#39ff6a");
+        btn.style.setProperty("--secondary", eq.colorSecundario || "#101114");
+
+        var ghost = eq.crest
+          ? '<img class="team-box-crest-ghost" src="' + eq.crest + '" alt="" aria-hidden="true">'
+          : "";
+        var misterLinea = [eq.misterEmoji, eq.mister, eq.banderaSeleccion].filter(Boolean).join(" ");
+
+        btn.innerHTML =
+          ghost +
+          '<div class="team-box-inner">' +
+          crearEscudoHTML(eq, "escudo--lg") +
+          '<div class="team-box-meta">' +
+          '<span class="team-box-club">' + eq.nombre + "</span>" +
+          '<span class="team-box-mister">' + misterLinea + "</span>" +
+          "</div>" +
+          "</div>";
+
+        frag.appendChild(btn);
+      });
+      grid.innerHTML = "";
+      grid.appendChild(frag);
+    }).catch(function (err) {
+      grid.innerHTML = "";
+      grid.appendChild(nodoEstado("⚠️", "No se pudieron cargar los equipos."));
+      console.error("[renderizadores] renderizarInicioEquipos:", err);
+    });
+  }
+
+  // "Temporada N" editable — pinta el valor guardado (o el de fábrica) en
+  // el header del Inicio.
+  function pintarTemporada() {
+    var label = document.getElementById("brand-sub-label");
+    if (label && window.Estado) label.textContent = window.Estado.obtenerTemporada();
   }
 
   var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
@@ -204,6 +286,14 @@
   // 3. CALENDARIO LATERAL DERECHO
   // ============================================================
   var _ultimoContexto = null; // { datos, equipo, totalJornadas, partidosPorId }
+
+  // Escapa texto ESCRITO POR EL ADMIN (nombre de estadio/balón/jugador vía
+  // prompt()) antes de interpolarlo en innerHTML — evita que un nombre con
+  // "<"/">" rompa el markup o inyecte HTML.
+  var _escapeMap = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  function escapeHTML(str) {
+    return String(str == null ? "" : str).replace(/[&<>"']/g, function (c) { return _escapeMap[c]; });
+  }
 
   function nodoEstado(icono, texto) {
     var div = document.createElement("div");
@@ -436,7 +526,7 @@
             fila.innerHTML =
               '<span class="plantilla-dorsal">' + j.dorsal + "</span>" +
               '<span class="plantilla-nombre' + (tieneNombre ? "" : " plantilla-nombre--vacio") + '">' +
-              (tieneNombre ? j.nombre : "— sin asignar —") + "</span>" +
+              (tieneNombre ? escapeHTML(j.nombre) : "— sin asignar —") + "</span>" +
               '<span class="plantilla-posicion">' + j.posicion + "</span>";
             grupo.appendChild(fila);
           });
@@ -473,6 +563,8 @@
   // TODAS las competiciones y los 6 clubes juntos, de solo lectura — a
   // diferencia del calendario de cada club (que filtra por su equipo),
   // esto es para que el admin repase la temporada entera de un vistazo.
+  // Agrupado por FECHA (con cabecera propia) — un dump plano de 380+
+  // partidos sin agrupar era ilegible.
   function renderizarAdminCalendario(contenedorId) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -490,28 +582,52 @@
           return;
         }
 
-        var frag = document.createDocumentFragment();
+        // Agrupa por el día (ignora la hora) preservando el orden cronológico.
+        var grupos = [];
+        var indicePorDia = {};
         todos.forEach(function (p) {
-          var local = buscarEquipoPorId(p.local, datos);
-          var visitante = buscarEquipoPorId(p.visitante, datos);
-          if (!local || !visitante) return;
+          var dia = (p.fecha || "").slice(0, 10);
+          if (!indicePorDia.hasOwnProperty(dia)) {
+            indicePorDia[dia] = grupos.length;
+            grupos.push({ dia: dia, partidos: [] });
+          }
+          grupos[indicePorDia[dia]].partidos.push(p);
+        });
 
-          var card = document.createElement("div");
-          card.className = "match-card" + (p.jugado ? " is-played" : "");
+        var frag = document.createDocumentFragment();
+        grupos.forEach(function (g) {
+          var jugados = g.partidos.filter(function (p) { return p.jugado; }).length;
+          var cab = document.createElement("div");
+          cab.className = "admin-calendario-fecha";
+          cab.innerHTML =
+            '<span class="admin-calendario-fecha-dia">🗓️ ' + formatFecha(g.partidos[0].fecha) + "</span>" +
+            '<span class="admin-calendario-fecha-cont">' + jugados + "/" + g.partidos.length + " jugados</span>";
+          frag.appendChild(cab);
 
-          var compLabel = COMP_LABEL[p.competicion] || p.competicion;
-          var etiquetaRonda = p.ronda ? " · " + p.ronda : (p.jornada ? " · J" + p.jornada : "");
-          var marcador = p.jugado && p.resultado ? (p.resultado.golesLocal + " - " + p.resultado.golesVisitante) : "VS";
+          var fila = document.createElement("div");
+          fila.className = "admin-calendario-fecha-partidos";
+          g.partidos.forEach(function (p) {
+            var local = buscarEquipoPorId(p.local, datos);
+            var visitante = buscarEquipoPorId(p.visitante, datos);
+            if (!local || !visitante) return;
 
-          card.innerHTML =
-            '<div class="match-card-comp">' + compLabel + etiquetaRonda + "</div>" +
-            '<div class="match-card-teams">' +
-            crearEscudoHTML(local, "escudo--sm") +
-            '<span class="match-card-vs">' + marcador + "</span>" +
-            crearEscudoHTML(visitante, "escudo--sm") +
-            "</div>" +
-            '<div class="match-card-date">🗓️ ' + formatFecha(p.fecha) + "</div>";
-          frag.appendChild(card);
+            var card = document.createElement("div");
+            card.className = "match-card" + (p.jugado ? " is-played" : "");
+
+            var compLabel = COMP_LABEL[p.competicion] || p.competicion;
+            var etiquetaRonda = p.ronda ? " · " + p.ronda : (p.jornada ? " · J" + p.jornada : "");
+            var marcador = p.jugado && p.resultado ? (p.resultado.golesLocal + " - " + p.resultado.golesVisitante) : "VS";
+
+            card.innerHTML =
+              '<div class="match-card-comp">' + compLabel + etiquetaRonda + "</div>" +
+              '<div class="match-card-teams">' +
+              crearEscudoHTML(local, "escudo--sm") +
+              '<span class="match-card-vs">' + marcador + "</span>" +
+              crearEscudoHTML(visitante, "escudo--sm") +
+              "</div>";
+            fila.appendChild(card);
+          });
+          frag.appendChild(fila);
         });
         contenedor.appendChild(frag);
       })
@@ -522,7 +638,11 @@
       });
   }
 
-  // "Stadium Hub": los 30 estadios ordenados por aforo.
+  // "Stadium Hub": los 30 estadios ordenados por aforo — EDITABLE. Solo
+  // pinta markup con data-accion/data-id; el CLIC lo gestiona un único
+  // delegado en js/main.js (evita acumular listeners al re-pintar tras
+  // cada edición). El id "custom-estadio-…" identifica los añadidos a
+  // mano frente a los del seed data/estadios.json.
   function renderizarAdminEstadios(contenedorId) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -530,6 +650,14 @@
 
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
+
+      var btnAdd = document.createElement("button");
+      btnAdd.type = "button";
+      btnAdd.className = "admin-list-add-btn";
+      btnAdd.dataset.accion = "anadir-estadio";
+      btnAdd.textContent = "➕ Añadir estadio";
+      contenedor.appendChild(btnAdd);
+
       var lista = (datos.estadios.estadios || []).slice().sort(function (a, b) { return a.capacidad - b.capacidad; });
       var frag = document.createDocumentFragment();
       lista.forEach(function (e) {
@@ -537,13 +665,22 @@
         fila.className = "admin-list-item";
         fila.innerHTML =
           '<div class="admin-list-item-main">' +
-          '<span class="admin-list-item-title">' + e.nombre + "</span>" +
-          '<span class="admin-list-item-sub">' + e.categoria + "</span>" +
+          '<span class="admin-list-item-title">' + escapeHTML(e.nombre) + "</span>" +
+          '<span class="admin-list-item-sub">' + escapeHTML(e.categoria) + "</span>" +
           "</div>" +
-          '<span class="admin-list-item-value">' + e.capacidad.toLocaleString("es-ES") + " esp.</span>";
+          '<span class="admin-list-item-value">' + Number(e.capacidad || 0).toLocaleString("es-ES") + " esp.</span>" +
+          '<div class="admin-list-item-actions">' +
+          '<button type="button" class="admin-list-item-btn" data-accion="editar-estadio" data-id="' + e.id +
+          '" data-nombre="' + escapeHTML(e.nombre) + '" data-capacidad="' + Number(e.capacidad || 0) +
+          '" data-categoria="' + escapeHTML(e.categoria) + '" aria-label="Editar">✏️</button>' +
+          '<button type="button" class="admin-list-item-btn admin-list-item-btn--danger" data-accion="borrar-estadio" data-id="' + e.id +
+          '" data-nombre="' + escapeHTML(e.nombre) + '" aria-label="Borrar">🗑️</button>' +
+          "</div>";
         frag.appendChild(fila);
       });
       contenedor.appendChild(frag);
+
+      if (!lista.length) contenedor.appendChild(nodoEstado("🏟️", "No hay estadios."));
     }).catch(function (err) {
       contenedor.innerHTML = "";
       contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar Stadium Hub."));
@@ -552,7 +689,8 @@
   }
 
   // "Ball Storage": los balones del inventario + a qué competición está
-  // asignado cada uno (búsqueda inversa sobre asignacionPorCompeticion).
+  // asignado cada uno (búsqueda inversa sobre asignacionPorCompeticion) —
+  // EDITABLE, mismo patrón declarativo que renderizarAdminEstadios.
   function renderizarAdminBalones(contenedorId) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -560,6 +698,14 @@
 
     cargarTodo().then(function (datos) {
       contenedor.innerHTML = "";
+
+      var btnAdd = document.createElement("button");
+      btnAdd.type = "button";
+      btnAdd.className = "admin-list-add-btn";
+      btnAdd.dataset.accion = "anadir-balon";
+      btnAdd.textContent = "➕ Añadir balón";
+      contenedor.appendChild(btnAdd);
+
       var asign = datos.balones.asignacionPorCompeticion || {};
       var compsPorBalon = {};
       Object.keys(asign).forEach(function (compKey) {
@@ -576,12 +722,20 @@
         fila.className = "admin-list-item";
         fila.innerHTML =
           '<div class="admin-list-item-main">' +
-          '<span class="admin-list-item-title">' + b.nombre + "</span>" +
-          '<span class="admin-list-item-sub">' + (comps ? comps.join(" · ") : "Sin asignar") + "</span>" +
+          '<span class="admin-list-item-title">' + escapeHTML(b.nombre) + "</span>" +
+          '<span class="admin-list-item-sub">' + (comps ? escapeHTML(comps.join(" · ")) : "Sin asignar") + "</span>" +
+          "</div>" +
+          '<div class="admin-list-item-actions">' +
+          '<button type="button" class="admin-list-item-btn" data-accion="editar-balon" data-id="' + b.id +
+          '" data-nombre="' + escapeHTML(b.nombre) + '" aria-label="Editar">✏️</button>' +
+          '<button type="button" class="admin-list-item-btn admin-list-item-btn--danger" data-accion="borrar-balon" data-id="' + b.id +
+          '" data-nombre="' + escapeHTML(b.nombre) + '" aria-label="Borrar">🗑️</button>' +
           "</div>";
         frag.appendChild(fila);
       });
       contenedor.appendChild(frag);
+
+      if (!lista.length) contenedor.appendChild(nodoEstado("⚽", "No hay balones."));
     }).catch(function (err) {
       contenedor.innerHTML = "";
       contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar Ball Storage."));
@@ -658,6 +812,8 @@
   window.Renderizadores = {
     obtenerEstadioCorrelativoAjustado: obtenerEstadioCorrelativoAjustado,
     calcularClimaDinamicoPartido: calcularClimaDinamicoPartido,
+    renderizarInicioEquipos: renderizarInicioEquipos,
+    pintarTemporada: pintarTemporada,
     generarCalendarioLateralDerecho: generarCalendarioLateralDerecho,
     renderizarPlantillaClub: renderizarPlantillaClub,
     renderizarProximamente: renderizarProximamente,

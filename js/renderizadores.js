@@ -482,16 +482,24 @@
     return items;
   }
 
-  // La fusión: texto pegado (solo IA) + los 6 humanos con sus propios
-  // partidos de Liga ya jugados dentro de la app (Estado.calcularClasificacion
-  // sobre la liga ACTUAL de cada club — hoy "LIGA_EA_SPORTS" para los 6,
-  // pero se lee de equipo.ligaActual para que siga funcionando si algún
-  // club cambia de liga más adelante). Un humano NUNCA sale del texto
-  // pegado — si el admin escribe su nombre ahí por error, esa línea se
-  // descarta; su fila sale SIEMPRE de sus propios partidos (una sola
-  // fuente de verdad por equipo).
+  // PSG no juega en la Liga 1ª REF (Primera RFEF) — ni siquiera en España,
+  // juega en Francia. Es el único de los 6 humanos fuera de esta liga; si
+  // en el futuro se añade otro club humano de fuera de España, su id va
+  // aquí también.
+  var LIGA1REF_HUMANOS_EXCLUIDOS = ["psg"];
+
+  // La fusión: texto pegado (solo IA) + los clubes humanos que SÍ juegan
+  // esta liga, con sus propios partidos de Liga ya jugados dentro de la
+  // app (Estado.calcularClasificacion sobre la liga ACTUAL de cada club —
+  // hoy "LIGA_EA_SPORTS", pero se lee de equipo.ligaActual para que siga
+  // funcionando si algún club cambia de liga más adelante). Un humano
+  // NUNCA sale del texto pegado — si el admin escribe su nombre ahí por
+  // error, esa línea se descarta; su fila sale SIEMPRE de sus propios
+  // partidos (una sola fuente de verdad por equipo).
   function calcularLiga1RefCombinada(datos) {
-    var equiposHumanos = datos.equipos.equipos || [];
+    var equiposHumanos = (datos.equipos.equipos || []).filter(function (e) {
+      return LIGA1REF_HUMANOS_EXCLUIDOS.indexOf(e.id) === -1;
+    });
     var filas = [];
 
     var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
@@ -530,14 +538,17 @@
     return filas;
   }
 
-  // Zona de ascenso/descenso por POSICIÓN ABSOLUTA (petición usuario: liga
-  // de 12 equipos exactos) — nunca relativa al nº de filas ya pegadas, así
-  // una tabla a medio rellenar ya muestra bien las 2 primeras zonas.
-  function _liga1RefZona(pos) {
+  // Zona de ascenso/descenso por POSICIÓN ABSOLUTA — el ascenso (1-4) y la
+  // promoción de ascenso (5) siempre son los mismos puestos por arriba; el
+  // descenso y su promoción se cuentan desde ABAJO de la tabla (últimos 4
+  // puestos descenso directo, el 5º empezando por el final promoción de
+  // descenso), para que sigan siendo correctos aunque cambie el nº total
+  // de equipos (hoy 16: 11 IA reales + 5 humanos, PSG no juega esta liga).
+  function _liga1RefZona(pos, total) {
     if (pos <= 4) return "ascenso";
     if (pos === 5) return "promo-ascenso";
-    if (pos >= 9 && pos <= 11) return "descenso";
-    if (pos === 12) return "promo-descenso";
+    if (total && pos === total - 4) return "promo-descenso";
+    if (total && pos > total - 4) return "descenso";
     return "";
   }
 
@@ -578,7 +589,7 @@
       filas.forEach(function (f, i) {
         var pos = i + 1;
         var dg = f.gf - f.gc;
-        var zona = _liga1RefZona(pos);
+        var zona = _liga1RefZona(pos, filas.length);
         var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
         if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
 

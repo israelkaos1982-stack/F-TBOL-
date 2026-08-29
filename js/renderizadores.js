@@ -101,6 +101,20 @@
     return _estadiosLista[idx];
   }
 
+  // Estadio REAL fijo de un equipo (campo "estadioId" en data/equipos.json,
+  // referencia a data/estadios.json.estadios[].id) — usado por los 6 clubes
+  // humanos. Si el equipo no tiene estadioId, o el id ya no existe en la
+  // lista (p. ej. lo borró el admin desde el Stadium Hub), cae al algoritmo
+  // correlativo de siempre. La IA nunca tiene estadioId, así que sigue
+  // resolviendo igual que hasta ahora.
+  function obtenerEstadioDelEquipo(equipo) {
+    if (equipo && equipo.estadioId && _estadiosLista && _estadiosLista.length) {
+      var fijo = _estadiosLista.find(function (e) { return e.id === equipo.estadioId; });
+      if (fijo) return fijo;
+    }
+    return obtenerEstadioCorrelativoAjustado(equipo ? equipo.valoracionPoder : null);
+  }
+
   // ============================================================
   // 2. MOTOR CLIMATOLÓGICO ESTACIONAL
   // ============================================================
@@ -966,7 +980,7 @@
 
     var clima = calcularClimaParaPartido(partido, totalJornadas, inicioMs, finMs);
     var balon = resolverBalonPartido(partido.competicion, clima, datos.balones);
-    var estadio = obtenerEstadioCorrelativoAjustado(local.valoracionPoder);
+    var estadio = obtenerEstadioDelEquipo(local);
 
     var ov = document.getElementById("previa-overlay");
     if (!ov) return;
@@ -1487,6 +1501,7 @@
   // js/sistema-temporadas.js no dupliquen esta lógica.)
   window.Renderizadores = {
     obtenerEstadioCorrelativoAjustado: obtenerEstadioCorrelativoAjustado,
+    obtenerEstadioDelEquipo: obtenerEstadioDelEquipo,
     calcularClimaDinamicoPartido: calcularClimaDinamicoPartido,
     renderizarInicioEquipos: renderizarInicioEquipos,
     pintarTemporada: pintarTemporada,

@@ -410,10 +410,27 @@
     return _sinteticosExtra[id];
   }
 
-  function _etiquetaCortaEquipo(equipo) {
+  // Nombre COMPLETO bajo el escudo (petición usuario) — si no cabe en el
+  // ancho de la tarjeta, se acorta con sentido común: abrevia la PRIMERA
+  // palabra a su inicial + "." (p.ej. "Cultural Leonesa" -> "C.Leonesa"),
+  // y si con eso sigue sin caber (nombre de una sola palabra muy larga, o
+  // muchas palabras), corta con puntos suspensivos como último recurso.
+  var MAX_LEN_NOMBRE_TARJETA = 15;
+  function _abreviarNombre(nombre, maxLen) {
+    var n = String(nombre || "").trim();
+    if (!n) return "";
+    if (n.length <= maxLen) return n;
+    var partes = n.split(/\s+/);
+    if (partes.length > 1) {
+      var abrev = partes[0].charAt(0).toUpperCase() + "." + partes.slice(1).join(" ");
+      if (abrev.length <= maxLen) return abrev;
+      return abrev.slice(0, Math.max(1, maxLen - 1)) + "…";
+    }
+    return n.slice(0, Math.max(1, maxLen - 1)) + "…";
+  }
+  function _nombreCortoEquipo(equipo) {
     if (!equipo) return "";
-    if (equipo.siglas) return equipo.siglas;
-    return (equipo.nombre || "").split(/\s+/)[0] || "";
+    return _abreviarNombre(equipo.nombre || equipo.siglas || "", MAX_LEN_NOMBRE_TARJETA);
   }
 
   function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga) {
@@ -432,29 +449,26 @@
     var compLabel = COMP_LABEL[partido.competicion] || partido.competicion;
     var etiquetaRonda = partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · J" + partido.jornada : "");
 
-    var marcador = "VS";
-    if (partido.jugado && partido.resultado) {
-      marcador = partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante;
-    }
-
-    // Los partidos EXTRA (calendario en texto) llevan `_fechaTexto` en vez
-    // de una `fecha` ISO real — se muestra el texto tal cual, nunca se
-    // pasa por formatFecha (que asume fecha parseable).
-    var fechaMostrada = partido._fechaTexto !== undefined
-      ? (partido._fechaTexto || "Fecha por confirmar")
-      : formatFecha(partido.fecha);
+    // Centro de la fila de escudos: el marcador si ya se jugó, si no el
+    // botón PREVIA (sustituye a la fila de fecha/"vs" de antes — a
+    // petición explícita del usuario, sin icono para que quepa siempre
+    // entre los 2 escudos).
+    var centroFila1 = (partido.jugado && partido.resultado)
+      ? '<span class="match-card-marcador">' + partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + "</span>"
+      : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>';
 
     card.innerHTML =
       '<div class="match-card-comp">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
-      '<div class="match-card-teams">' +
-      '<div class="match-card-team">' + crearEscudoHTML(local, "escudo--sm") +
-      '<span class="match-card-team-label">' + escapeHTML(_etiquetaCortaEquipo(local)) + "</span></div>" +
-      '<span class="match-card-vs">' + marcador + "</span>" +
-      '<div class="match-card-team">' + crearEscudoHTML(visitante, "escudo--sm") +
-      '<span class="match-card-team-label">' + escapeHTML(_etiquetaCortaEquipo(visitante)) + "</span></div>" +
+      '<div class="match-card-row1">' +
+      crearEscudoHTML(local, "escudo--sm") +
+      centroFila1 +
+      crearEscudoHTML(visitante, "escudo--sm") +
       "</div>" +
-      '<div class="match-card-date">🗓️ ' + escapeHTML(fechaMostrada) + "</div>" +
-      '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">👁 Previa</button>';
+      '<div class="match-card-row2">' +
+      '<span class="match-card-nombre match-card-nombre--local">' + escapeHTML(_nombreCortoEquipo(local)) + "</span>" +
+      '<span class="match-card-vs-sep">vs</span>' +
+      '<span class="match-card-nombre match-card-nombre--visitante">' + escapeHTML(_nombreCortoEquipo(visitante)) + "</span>" +
+      "</div>";
 
     return card;
   }

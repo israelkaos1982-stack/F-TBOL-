@@ -725,9 +725,9 @@ button { font-family: inherit; cursor: pointer; }
   padding: 10px 4px;
   color: #fff;
 }
-.club-menu-btn-icon { font-size: 16px; line-height: 1; }
+.club-menu-btn-icon { font-size: 17px; line-height: 1; }
 .club-menu-btn-label {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 1.25;
   text-align: center;
@@ -915,7 +915,7 @@ button { font-family: inherit; cursor: pointer; }
   border-left: 3px solid rgba(var(--club-primary-rgb, 57, 255, 106), 0.55);
   background: var(--bg-2);
   border-radius: var(--radius-m);
-  padding: 12px;
+  padding: 10px 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -924,63 +924,92 @@ button { font-family: inherit; cursor: pointer; }
 .match-card:hover { border-color: rgba(255, 255, 255, 0.16); }
 
 .match-card-comp {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 1px;
   text-transform: uppercase;
+  text-align: center;
   color: var(--accent-2);
 }
 
-/* Fila 1 — escudo · PREVIA/marcador · escudo. Sin fecha (ahorra texto y
-   espacio, a petición explícita del usuario — la fecha real solo se ve ya
-   al abrir la Previa). */
-.match-card-row1 {
+/* Fila única — bloque LOCAL (escudo + nombre completo, "cuadrado" — ambos
+   agrupados y alineados entre sí) · centro (PREVIA/marcador + "vs") ·
+   bloque VISITANTE. Sin fecha (ahorra texto y espacio, a petición
+   explícita del usuario — la fecha real solo se ve ya al abrir la
+   Previa). Cada bloque de equipo lleva su PROPIO color de fondo (a partir
+   de --team-color, el colorPrimario real del equipo, puesto inline por
+   construirTarjetaPartido) a muy baja opacidad — 0 KB extra, ya sale del
+   mismo dato que colorea su escudo. */
+.match-card-teams {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 2px;
 }
-.match-card-marcador {
-  flex-shrink: 0;
-  font-size: 14px;
-  font-weight: 800;
-  color: var(--text-hi);
-}
-.match-card-btn {
-  flex-shrink: 0;
-  padding: 5px 10px;
+.match-card-team {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px;
   border-radius: var(--radius-s);
-  border: 1px solid var(--neon-soft);
-  background: rgba(57, 255, 106, 0.08);
-  color: var(--neon);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  overflow: hidden;
 }
+.match-card-team::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--team-color, transparent);
+  opacity: 0.12;
+  z-index: 0;
+}
+.match-card-team > * { position: relative; z-index: 1; }
 
-/* Fila 2 — nombre completo (acortado con sentido común si no cabe) ·
-   "vs" · nombre completo. */
-.match-card-row2 {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
+/* El local hugea hacia el centro (pegado al bloque de en medio) y el
+   visitante hace lo mismo desde el otro lado — así el nombre de cada
+   equipo queda siempre "pegado a vs", con su escudo alineado justo
+   encima (cuadrado, nunca desparejado). */
+.match-card-team--local { align-items: flex-end; }
+.match-card-team--visitante { align-items: flex-start; }
+
+.match-card-nombre {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
   font-weight: 700;
   color: var(--text-hi);
 }
-.match-card-nombre {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+.match-card-center {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.match-card-marcador {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-hi);
+}
+.match-card-btn {
+  padding: 4px 6px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--neon-soft);
+  background: rgba(57, 255, 106, 0.08);
+  color: var(--neon);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
   white-space: nowrap;
 }
-.match-card-nombre--local { text-align: left; }
-.match-card-nombre--visitante { text-align: right; }
 .match-card-vs-sep {
-  flex-shrink: 0;
   color: var(--text-lo);
   font-size: 10px;
   font-weight: 800;
@@ -989,7 +1018,7 @@ button { font-family: inherit; cursor: pointer; }
 
 /* Partido ya jugado — opacidad plana (sin filtros pesados). El botón
    PREVIA ni siquiera se pinta para un partido jugado (lo sustituye el
-   marcador en la fila 1, ver construirTarjetaPartido), así que no hace
+   marcador en el centro, ver construirTarjetaPartido), así que no hace
    falta ninguna regla que lo oculte aquí. */
 .match-card.is-played { opacity: 0.4; }
 
@@ -1061,6 +1090,10 @@ button { font-family: inherit; cursor: pointer; }
   min-width: 0;
 }
 .previa-team-nombre {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 13px;
   font-weight: 800;
   text-align: center;
@@ -1089,8 +1122,18 @@ button { font-family: inherit; cursor: pointer; }
   gap: 10px;
   font-size: 13px;
 }
-.previa-info-item dt { color: var(--text-lo); font-weight: 700; margin: 0; }
-.previa-info-item dd { margin: 0; color: var(--text-hi); font-weight: 600; text-align: right; }
+.previa-info-item dt { flex-shrink: 0; color: var(--text-lo); font-weight: 700; margin: 0; }
+.previa-info-item dd {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  color: var(--text-hi);
+  font-weight: 600;
+  text-align: right;
+}
 .previa-balon-forzado {
   display: inline-block;
   margin-left: 4px;

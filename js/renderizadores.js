@@ -433,6 +433,54 @@
     return _abreviarNombre(equipo.nombre || equipo.siglas || "", MAX_LEN_NOMBRE_TARJETA);
   }
 
+  // Segunda pasada, YA en el DOM: el bloque de cada equipo (escudo + nombre
+  // apilados) es más estrecho que la mitad de la tarjeta, así que un
+  // nombre que "cabía" según la heurística de longitud de arriba puede
+  // seguir desbordando en píxeles reales según el ancho de pantalla. Se
+  // detecta con el propio recorte del navegador (scrollWidth > clientWidth,
+  // fiable con white-space:nowrap + overflow:hidden ya puestos en CSS) y
+  // solo entonces se re-abrevia más corto — nunca se acorta un nombre que
+  // sí cabe.
+  function _ajustarNombresQueNoQuepan(contenedor) {
+    var nombres = contenedor.querySelectorAll(".match-card-nombre");
+    for (var i = 0; i < nombres.length; i++) {
+      var el = nombres[i];
+      if (el.scrollWidth <= el.clientWidth + 1) continue;
+
+      // 1er intento: la abreviatura normal (inicial + "." + resto).
+      var texto = _abreviarNombre(el.textContent, 11);
+      el.textContent = texto;
+
+      // Si ni así cabe (pantalla muy estrecha, nombre largo de verdad),
+      // se recorta carácter a carácter con "…" hasta que quepa DE VERDAD
+      // — comprobado contra el ancho real (scrollWidth vs clientWidth),
+      // nunca una longitud adivinada. Así funciona igual sin importar el
+      // tamaño de pantalla o la fuente del dispositivo.
+      var guard = 0;
+      while (el.scrollWidth > el.clientWidth + 1 && texto.length > 3 && guard < 20) {
+        texto = texto.slice(0, -2) + "…";
+        el.textContent = texto;
+        guard++;
+      }
+    }
+  }
+
+  // Solo se acepta como color inline un hex de verdad (#rgb / #rrggbb) —
+  // todo lo demás (dato ausente/raro) cae a "transparent" para que el
+  // ::before de fondo del bloque de equipo simplemente no pinte nada.
+  function _colorInlineSeguro(hex) {
+    return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(String(hex || "")) ? hex : "transparent";
+  }
+
+  function _bloqueEquipoHTML(equipo, ladoClase) {
+    return (
+      '<div class="match-card-team ' + ladoClase + '" style="--team-color:' + _colorInlineSeguro(equipo && equipo.colorPrimario) + ';">' +
+      crearEscudoHTML(equipo, "escudo--sm") +
+      '<span class="match-card-nombre">' + escapeHTML(_nombreCortoEquipo(equipo)) + "</span>" +
+      "</div>"
+    );
+  }
+
   function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga) {
     var esLocal = partido.local === idActivo;
     var rivalId = esLocal ? partido.visitante : partido.local;
@@ -449,25 +497,19 @@
     var compLabel = COMP_LABEL[partido.competicion] || partido.competicion;
     var etiquetaRonda = partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · J" + partido.jornada : "");
 
-    // Centro de la fila de escudos: el marcador si ya se jugó, si no el
-    // botón PREVIA (sustituye a la fila de fecha/"vs" de antes — a
-    // petición explícita del usuario, sin icono para que quepa siempre
-    // entre los 2 escudos).
-    var centroFila1 = (partido.jugado && partido.resultado)
+    // Centro — el marcador si ya se jugó, si no el botón PREVIA (sin
+    // icono, para que quepa siempre entre los 2 bloques de equipo), más
+    // el separador "vs" debajo, entre medias de los 2 nombres.
+    var centroTop = (partido.jugado && partido.resultado)
       ? '<span class="match-card-marcador">' + partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante + "</span>"
       : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>';
 
     card.innerHTML =
       '<div class="match-card-comp">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
-      '<div class="match-card-row1">' +
-      crearEscudoHTML(local, "escudo--sm") +
-      centroFila1 +
-      crearEscudoHTML(visitante, "escudo--sm") +
-      "</div>" +
-      '<div class="match-card-row2">' +
-      '<span class="match-card-nombre match-card-nombre--local">' + escapeHTML(_nombreCortoEquipo(local)) + "</span>" +
-      '<span class="match-card-vs-sep">vs</span>' +
-      '<span class="match-card-nombre match-card-nombre--visitante">' + escapeHTML(_nombreCortoEquipo(visitante)) + "</span>" +
+      '<div class="match-card-teams">' +
+      _bloqueEquipoHTML(local, "match-card-team--local") +
+      '<div class="match-card-center">' + centroTop + '<span class="match-card-vs-sep">vs</span></div>' +
+      _bloqueEquipoHTML(visitante, "match-card-team--visitante") +
       "</div>";
 
     return card;
@@ -565,10 +607,17 @@
         });
         contenedor.appendChild(frag);
 
-        // Scroll inteligente: deja el visor centrado en el primer partido
-        // SIN jugar (el "actual"), en vez de arrancar siempre desde J1.
-        // Deferido un frame para que el layout ya esté asentado.
+        // Scroll inteligente + acortado por ancho REAL — deferidos al mismo
+        // frame, para que el layout ya esté asentado. El acortado por
+        // longitud de `_nombreCortoEquipo` es solo una primera pasada
+        // barata (evita nombres kilométricos); el bloque de cada equipo
+        // ahora es más estrecho que antes (comparte columna con su
+        // escudo), así que un nombre "corto" según esa heurística puede
+        // seguir sin caber en píxeles reales — se detecta con
+        // scrollWidth > clientWidth (el propio navegador ya sabe si
+        // recortó el texto) y se re-abrevia con más margen.
         requestAnimationFrame(function () {
+          _ajustarNombresQueNoQuepan(contenedor);
           var actual = contenedor.querySelector(".match-card:not(.is-played)");
           if (actual) actual.scrollIntoView({ block: "center" });
         });
@@ -620,12 +669,8 @@
       (COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · Jornada " + partido.jornada : ""));
 
-    document.getElementById("previa-fecha").textContent = partido._fechaTexto !== undefined
-      ? (partido._fechaTexto || "Fecha por confirmar")
-      : formatFecha(partido.fecha);
-
     document.getElementById("previa-estadio").textContent = estadio
-      ? estadio.nombre + " — " + estadio.capacidad.toLocaleString("es-ES") + " esp. — " + estadio.categoria
+      ? estadio.nombre
       : "Estadio no disponible";
 
     document.getElementById("previa-clima").textContent =

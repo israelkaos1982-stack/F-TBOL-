@@ -109,12 +109,14 @@
     //    la Fase 1, CSS .match-card.is-played).
     window.Estado.registrarResultadoPartido(idPartido, golesL, golesV, actaTemporal);
 
-    // B) Clasificación de la liga: Estado.calcularClasificacion() la
-    //    recalcula en caliente a partir de TODOS los partidos jugados —
-    //    en cuanto el resultado queda registrado (paso A) ya la refleja,
-    //    sin mantener un contador aparte que se pueda desincronizar.
+    // B) Clasificación de la liga: calcularClasificacionCombinada() la
+    //    recalcula en caliente — parte de la tabla BASE que el admin pega
+    //    para los equipos IA (no hay motor de simulación IA-vs-IA) y le
+    //    suma encima TODOS los partidos de los 6 humanos ya jugados; en
+    //    cuanto el resultado queda registrado (paso A) ya la refleja, sin
+    //    mantener un contador aparte que se pueda desincronizar.
     var clasificacion = ctx.partido.competicion === "liga"
-      ? window.Estado.calcularClasificacion(ctx.datos, ctx.partido.liga)
+      ? window.Renderizadores.calcularClasificacionCombinada(ctx.datos, ctx.partido.liga)
       : null;
 
     // C) Fichas de jugadores humanos: mismo principio. Se ignoran los
@@ -300,14 +302,32 @@
     _partidoActivo = null;
   }
 
-  function renderTablaClasificacionMini(clasificacion, datos) {
+  // idsPartido: ids de los 2 equipos del partido recién confirmado — con
+  // la clasificación ahora completa (20 equipos, base IA + humanos, ver
+  // calcularClasificacionCombinada) el club que acaba de jugar puede caer
+  // fuera del top 6 real de la liga. Si eso pasa, su fila se añade debajo
+  // con su posición REAL en vez de desaparecer del resumen.
+  function renderTablaClasificacionMini(clasificacion, datos, idsPartido) {
     if (!clasificacion || !clasificacion.length) return "";
-    var filas = clasificacion.slice(0, 6).map(function (fila, i) {
-      var eq = window.Renderizadores.buscarEquipoPorId(fila.equipoId, datos);
-      var nombre = eq ? eq.nombre : fila.equipoId;
-      return '<tr><td>' + (i + 1) + '</td><td>' + nombre + '</td><td>' + fila.pj + '</td>' +
-        '<td>' + fila.gf + '-' + fila.gc + '</td><td><strong>' + fila.pts + '</strong></td></tr>';
-    }).join("");
+    idsPartido = idsPartido || [];
+
+    function fila(f, posReal) {
+      var eq = window.Renderizadores.buscarEquipoPorId(f.equipoId, datos);
+      var nombre = eq ? eq.nombre : f.equipoId;
+      var destacada = idsPartido.indexOf(f.equipoId) !== -1;
+      return '<tr' + (destacada ? ' class="live-clasificacion-destacada"' : "") + '><td>' + posReal + '</td><td>' + nombre + '</td><td>' + f.pj + '</td>' +
+        '<td>' + f.gf + '-' + f.gc + '</td><td><strong>' + f.pts + '</strong></td></tr>';
+    }
+
+    var top = clasificacion.slice(0, 6);
+    var filas = top.map(function (f, i) { return fila(f, i + 1); }).join("");
+
+    clasificacion.forEach(function (f, i) {
+      if (i < 6) return; // ya está arriba
+      if (idsPartido.indexOf(f.equipoId) === -1) return;
+      filas += fila(f, i + 1);
+    });
+
     return (
       '<table class="live-clasificacion"><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>GF-GC</th><th>Pts</th></tr></thead>' +
       "<tbody>" + filas + "</tbody></table>"
@@ -358,7 +378,11 @@
       _partidoActivo.local.nombre + " " + resultado.golesL + " - " + resultado.golesV + " " + _partidoActivo.visitante.nombre;
 
     document.getElementById("live-resumen-eliminatoria").innerHTML = textoEliminatoria(resultado.eliminatoria, _partidoActivo.datos);
-    document.getElementById("live-resumen-clasificacion").innerHTML = renderTablaClasificacionMini(resultado.clasificacion, _partidoActivo.datos);
+    document.getElementById("live-resumen-clasificacion").innerHTML = renderTablaClasificacionMini(
+      resultado.clasificacion,
+      _partidoActivo.datos,
+      [_partidoActivo.local.id, _partidoActivo.visitante.id]
+    );
 
     document.getElementById("live-entrada").hidden = true;
     document.getElementById("live-resumen").hidden = false;

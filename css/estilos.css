@@ -113,6 +113,19 @@ button { font-family: inherit; cursor: pointer; }
   text-transform: uppercase;
   letter-spacing: 1.5px;
 }
+/* "Temporada N" editable — pulsar abre un cuadro simple para renombrarla */
+.brand-sub--editable {
+  border: none;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: var(--radius-s);
+}
+.brand-sub--editable:hover { background: var(--bg-2); }
+.brand-sub-pencil { font-size: 10px; opacity: 0.75; }
 
 /* Engranaje — abre el Panel Admin (candado 747) */
 .btn-gear {
@@ -198,68 +211,54 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: var(--neon-glow), 0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
-/* franja diagonal negro -> color primario, estilo eFootball */
+/* Fondo — degradado vertical plano del color del club (sustituye la franja
+   diagonal anterior; más parecido a la referencia real de la app hermana). */
 .team-box::before {
   content: "";
   position: absolute;
-  inset: -20% -10%;
-  background: linear-gradient(100deg, var(--bg-1) 0%, var(--bg-1) 38%, var(--primary) 132%);
-  transform: skewX(-8deg);
-}
-/* brillo diagonal sutil encima */
-.team-box::after {
-  content: "";
-  position: absolute;
   inset: 0;
-  background: linear-gradient(115deg, rgba(255, 255, 255, 0.08) 0%, transparent 30%);
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 55%, var(--primary) 145%);
+}
+/* Escudo GIGANTE muy tenue, sangrando por el borde derecho — puro
+   adorno decorativo (imagen real cuando existe; si no, se omite del DOM
+   directamente, sin fallback CSS aquí). */
+.team-box-crest-ghost {
+  position: absolute;
+  top: 50%;
+  right: -12%;
+  width: 62%;
+  max-width: 220px;
+  transform: translateY(-50%);
+  opacity: 0.14;
+  filter: brightness(0) invert(1);
   pointer-events: none;
+  z-index: 1;
 }
 
 .team-box-inner {
   position: relative;
   z-index: 2;
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
+  align-items: center;
+  gap: 16px;
   height: 100%;
-  padding: 18px;
+  padding: 18px 20px;
 }
 
-.team-box-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding-top: 2px; }
+.team-box-meta { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .team-box-club {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 900;
+  letter-spacing: 0.4px;
   line-height: 1.2;
   color: #fff;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  text-transform: uppercase;
 }
 .team-box-mister {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.78);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-.team-box-league {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-  margin-top: 2px;
-}
-
-.team-box-cta {
-  position: absolute;
-  right: 16px;
-  bottom: 14px;
-  z-index: 2;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.85);
-  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
 }
 
 /* ---------- 4. ESCUDOS CSS — 0 KB, DOS FORMATOS ---------- */
@@ -354,6 +353,17 @@ button { font-family: inherit; cursor: pointer; }
 .escudo--ia.escudo--sm {
   border-radius: 50%;
 }
+
+/* Escudo REAL (imagen) — fondo claro para que el logo (casi siempre con
+   transparencia) se lea con contraste sobre las cajas oscuras. */
+.escudo--real {
+  background: rgba(255, 255, 255, 0.94);
+  padding: 6px;
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+.escudo--real img { width: 100%; height: 100%; object-fit: contain; }
 
 /* ---------- 5. PANEL ADMIN — candado 747, tarjetas de herramientas ---------- */
 .admin-grid {
@@ -462,6 +472,64 @@ button { font-family: inherit; cursor: pointer; }
 
 .admin-list--calendario { gap: 10px; }
 .admin-list--calendario .match-card { max-width: none; }
+
+/* Calendar del Panel Admin — cabecera por FECHA (antes era un dump plano
+   de 380+ partidos sin agrupar). */
+.admin-calendario-fecha {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 2px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.admin-calendario-fecha:first-child { padding-top: 0; }
+.admin-calendario-fecha-dia {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-hi);
+}
+.admin-calendario-fecha-cont { font-size: 10px; font-weight: 700; color: var(--neon); white-space: nowrap; }
+.admin-calendario-fecha-partidos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+/* Filas editables — Stadium Hub / Ball Storage */
+.admin-list-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.admin-list-item-btn {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text-hi);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.admin-list-item-btn--danger { color: var(--accent-2); border-color: rgba(255, 59, 92, 0.35); }
+.admin-list-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  border-radius: var(--radius-s);
+  border: 1px dashed var(--neon-soft);
+  background: rgba(57, 255, 106, 0.06);
+  color: var(--neon);
+  font-size: 13px;
+  font-weight: 800;
+}
 
 .admin-nota {
   font-size: 12px;

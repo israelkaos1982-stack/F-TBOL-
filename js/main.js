@@ -82,6 +82,9 @@
     } else if (vista === "clasificacion") {
       body.innerHTML = '<div id="clasificacion-content"></div>';
       window.Renderizadores.renderizarClasificacionClub(clubId, "clasificacion-content");
+    } else if (vista === "liga1ref") {
+      body.innerHTML = '<div id="liga1ref-content"></div>';
+      window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
     } else {
       body.innerHTML = '<div id="club-modal-vista"></div>';
       window.Renderizadores.renderizarProximamente("club-modal-vista", etiqueta);
@@ -215,6 +218,28 @@
   }
   function cancelarClasificacionBase() {
     cerrarModalClub();
+  }
+
+  // ---------- Liga 1ª REF — clasificación única (edición INLINE, PIN 646) ----------
+  // A diferencia del resto de editores del candado 646 (que viven en el
+  // "✏️ Editar menú" aparte), este se abre desde un ✏️ pequeño DENTRO de
+  // la propia pantalla de clasificación — Guardar/Cancelar vuelven a la
+  // tabla en el MISMO contenedor, sin cerrar el modal.
+  function editarLiga1RefInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(CLUB_EDIT_PASSWORD, function () {
+      var cont = document.getElementById("liga1ref-content");
+      if (cont) window.Renderizadores.pintarEditorLiga1Ref(cont, clubId);
+    }, "🔒 Editar clasificación", "PIN de administrador (646)");
+  }
+  function guardarLiga1Ref(clubId) {
+    var ta = document.getElementById("liga1ref-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarLiga1RefTexto(ta.value);
+    window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
+  }
+  function cancelarLiga1Ref(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
   }
 
   function salirDelClub() {
@@ -582,6 +607,9 @@
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
         case "guardar-clasificacion-base": guardarClasificacionBase(d.clubId, d.ligaKey); break;
         case "cancelar-clasificacion-base": cancelarClasificacionBase(); break;
+        case "editar-liga1ref-inline": editarLiga1RefInline(d.clubId); break;
+        case "guardar-liga1ref": guardarLiga1Ref(d.clubId); break;
+        case "cancelar-liga1ref": cancelarLiga1Ref(d.clubId); break;
       }
     });
 

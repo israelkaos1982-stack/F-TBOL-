@@ -364,6 +364,50 @@
     }
   }
 
+  // ---------- Liga 1ª REF — clasificación ÚNICA, pegada en texto (candado 646) ----------
+  // Competición aparte de la Liga EA Sports de cada club (ninguno de los 6
+  // humanos juega en ella todavía) — tabla de 12 equipos con ascenso a
+  // Hypermotion / descenso a 2ª REF. Es UNA sola tabla global (no por club,
+  // no por liga): las 6 cajas la ven exactamente igual, se edita desde
+  // dentro de la propia pantalla "🔹 Liga 1ª REF" (✏️ arriba a la derecha,
+  // PIN 646) — ver js/renderizadores.js::parsearLiga1RefTexto/
+  // renderizarLiga1RefClasificacion/pintarEditorLiga1Ref.
+  // Formato de línea: "Pos Nombre Pts PJ PE PP G+ G- DG" (separado por
+  // espacios, tal cual se copia de otra tabla — Pos y DG son opcionales,
+  // el motor los ignora/recalcula). Sembrada con la clasificación real que
+  // dio el usuario al pedir esta pantalla, para que no arranque vacía.
+  var LIGA1REF_TEXTO_KEY = "ef7_liga1ref_clasificacion_v1";
+  var LIGA1REF_TEXTO_DEFECTO = [
+    "1    Real Zaragoza        9   3   0   0   10  0   10",
+    "2    SD Huesca            6   3   0   1   5   2   3",
+    "3    CD Tenerife          6   2   0   0   3   0   3",
+    "4    CD Mirandés          6   3   0   1   3   3   0",
+    "5    Cultural Leonesa     4   3   1   1   3   2   1",
+    "6    Real Sociedad B      4   3   1   1   4   4   0",
+    "7    FC Andorra           3   2   0   1   3   3   0",
+    "8    AD Ceuta FC          2   3   2   1   1   6   -5",
+    "9    CE Sabadell          1   3   1   2   2   5   -3",
+    "10   Celta Fortuna        1   3   1   2   0   4   -4",
+    "11   CD Eldense           0   2   0   2   0   5   -5"
+  ].join("\n");
+  function obtenerLiga1RefTexto() {
+    try {
+      var v = localStorage.getItem(LIGA1REF_TEXTO_KEY);
+      return v !== null ? v : LIGA1REF_TEXTO_DEFECTO;
+    } catch (err) {
+      return LIGA1REF_TEXTO_DEFECTO;
+    }
+  }
+  function guardarLiga1RefTexto(texto) {
+    try {
+      localStorage.setItem(LIGA1REF_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación de 1ª REF:", err);
+      return false;
+    }
+  }
+
   // ---------- Clasificación — tabla BASE de los equipos IA (texto libre por liga) ----------
   // Este simulador NO simula los partidos IA-vs-IA (decisión explícita del
   // usuario: nada de motor de simulación) — esos resultados los lleva el
@@ -561,6 +605,8 @@
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
     obtenerClasificacionBaseTexto: obtenerClasificacionBaseTexto,
     guardarClasificacionBaseTexto: guardarClasificacionBaseTexto,
+    obtenerLiga1RefTexto: obtenerLiga1RefTexto,
+    guardarLiga1RefTexto: guardarLiga1RefTexto,
     fusionarBalones: fusionarBalones,
     fusionarEstadios: fusionarEstadios,
     anadirBalon: anadirBalon,

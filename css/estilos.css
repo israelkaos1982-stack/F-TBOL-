@@ -237,18 +237,40 @@ button { font-family: inherit; cursor: pointer; }
 }
 /* Escudo GIGANTE muy tenue, sangrando por el borde derecho — puro
    adorno decorativo (imagen real cuando existe; si no, se omite del DOM
-   directamente, sin fallback CSS aquí). */
+   directamente, sin fallback CSS aquí).
+
+   El wrapper lleva un vignette radial OSCURO propio, separado del
+   filtro blanco de la <img> — si el fondo oscuro viviera DENTRO del
+   elemento filtrado, "brightness(0) invert(1)" también lo invertiría a
+   blanco (perdiendo el contraste que se necesita). Sin este vignette,
+   escudos de un club con colorPrimario muy rojo/saturado (Arsenal,
+   Atlético) quedaban prácticamente invisibles: un blanco translúcido
+   sobre un rojo saturado apenas cambia de luminosidad. El vignette
+   garantiza un fondo oscuro consistente para que la silueta blanca
+   resalte SIEMPRE, sea cual sea el color de fondo de esa caja. */
+.team-box-crest-ghost-wrap {
+  position: absolute;
+  top: 50%;
+  right: -10%;
+  width: 60%;
+  max-width: 210px;
+  height: 78%;
+  transform: translateY(-50%);
+  z-index: 1;
+  overflow: hidden;
+  border-radius: 50%;
+  background: radial-gradient(circle at 58% 50%, rgba(0, 0, 0, 0.15), transparent 72%);
+  pointer-events: none;
+}
 .team-box-crest-ghost {
   position: absolute;
   top: 50%;
-  right: -12%;
-  width: 62%;
-  max-width: 220px;
-  transform: translateY(-50%);
-  opacity: 0.14;
+  left: 50%;
+  width: 150%;
+  height: auto;
+  transform: translate(-50%, -50%);
+  opacity: 0.26;
   filter: brightness(0) invert(1);
-  pointer-events: none;
-  z-index: 1;
 }
 
 .team-box-inner {

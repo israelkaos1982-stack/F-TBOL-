@@ -249,8 +249,11 @@
         btn.style.setProperty("--primary", eq.colorPrimario || "#39ff6a");
         btn.style.setProperty("--secondary", eq.colorSecundario || "#101114");
 
+        // El wrapper lleva su PROPIO vignette oscuro (fuera del filtro
+        // blanco de la img) — ver comentario en css/estilos.css junto a
+        // .team-box-crest-ghost-wrap sobre por qué hace falta.
         var ghost = eq.crest
-          ? '<img class="team-box-crest-ghost" src="' + eq.crest + '" alt="" aria-hidden="true">'
+          ? '<div class="team-box-crest-ghost-wrap"><img class="team-box-crest-ghost" src="' + eq.crest + '" alt="" aria-hidden="true"></div>'
           : "";
         // Sin la bandera de selección (petición usuario) — solo emoji + mister.
         var misterLinea = [eq.misterEmoji, eq.mister].filter(Boolean).join(" ");

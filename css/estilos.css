@@ -930,54 +930,68 @@ button { font-family: inherit; cursor: pointer; }
   text-transform: uppercase;
   color: var(--accent-2);
 }
-.match-card-teams {
+
+/* Fila 1 — escudo · PREVIA/marcador · escudo. Sin fecha (ahorra texto y
+   espacio, a petición explícita del usuario — la fecha real solo se ve ya
+   al abrir la Previa). */
+.match-card-row1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
 }
-.match-card-team {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-}
-.match-card-team-label {
-  font-size: 9px;
+.match-card-marcador {
+  flex-shrink: 0;
+  font-size: 14px;
   font-weight: 800;
-  color: var(--text-lo);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  max-width: 74px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--text-hi);
 }
-.match-card-vs { color: var(--text-lo); font-size: 11px; font-weight: 800; flex-shrink: 0; }
-.match-card-date { font-size: 11px; color: var(--text-lo); }
-
 .match-card-btn {
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 6px 12px;
+  flex-shrink: 0;
+  padding: 5px 10px;
   border-radius: var(--radius-s);
   border: 1px solid var(--neon-soft);
   background: rgba(57, 255, 106, 0.08);
   color: var(--neon);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
-/* Partido ya jugado — opacidad plana (sin filtros pesados), botón PREVIA
-   oculto (regla obligatoria). */
+/* Fila 2 — nombre completo (acortado con sentido común si no cabe) ·
+   "vs" · nombre completo. */
+.match-card-row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-hi);
+}
+.match-card-nombre {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match-card-nombre--local { text-align: left; }
+.match-card-nombre--visitante { text-align: right; }
+.match-card-vs-sep {
+  flex-shrink: 0;
+  color: var(--text-lo);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+/* Partido ya jugado — opacidad plana (sin filtros pesados). El botón
+   PREVIA ni siquiera se pinta para un partido jugado (lo sustituye el
+   marcador en la fila 1, ver construirTarjetaPartido), así que no hace
+   falta ninguna regla que lo oculte aquí. */
 .match-card.is-played { opacity: 0.4; }
-.match-card.is-played .match-card-btn { display: none; }
 
 /* ---------- 8. PANTALLA DE PREVIA — overlay (Fase 2) ---------- */
 .previa-overlay {

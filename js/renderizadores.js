@@ -343,11 +343,15 @@
   //
   // Formato de línea (una por partido), documentado también en el propio
   // editor: "Competición - Ronda - Rival [- Fecha]". El rival puede llevar
-  // el resultado ya jugado pegado al final entre paréntesis: "(2-1)".
-  // El club activo SIEMPRE se pinta como LOCAL aquí — este cajón no
-  // modela visitante (para eso está el calendario real de
-  // data/partidos.json, que sí tiene local/visitante explícitos y lo
-  // edita Claude directamente cuando se le pasa la lista).
+  // el resultado ya jugado pegado al final entre paréntesis: "(2-1)" —
+  // SIEMPRE el gol del club activo primero, el del rival segundo, juegue
+  // en casa o fuera (así no hay que pensar en local/visitante al escribir
+  // el marcador, solo en "cuántos hicimos nosotros / ellos").
+  //
+  // El club activo juega en CASA por defecto, salvo que el rival venga
+  // escrito como "Rival vs Club" (en vez de "Club vs Rival" — el orden
+  // decide quién es local) o lleve la marca explícita "(visitante)" al
+  // final (sin "vs": solo el nombre del rival + esa marca).
   function _normNombre(s) {
     return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   }
@@ -368,35 +372,45 @@
       var fecha = partes.length > 3 ? partes.slice(3).join(" - ").trim() : "";
       if (!competicion || !ronda) return;
 
-      var golesLocal = null, golesVisitante = null, jugado = false;
+      // Marcador ya jugado: SIEMPRE (goles del club activo - goles del
+      // rival), en ese orden, sea cual sea el lado en el que jugó.
+      var golesClub = null, golesRival = null, jugado = false;
       var mScore = rivalCrudo.match(/\(\s*(\d+)\s*-\s*(\d+)\s*\)\s*$/);
       if (mScore) {
-        golesLocal = Number(mScore[1]);
-        golesVisitante = Number(mScore[2]);
+        golesClub = Number(mScore[1]);
+        golesRival = Number(mScore[2]);
         jugado = true;
         rivalCrudo = rivalCrudo.slice(0, mScore.index).trim();
       }
+
+      // Marca explícita "(visitante)"/"(local)" al final — cubre el caso
+      // sin "vs" (solo el nombre suelto del rival) y sirve de confirmación
+      // redundante cuando sí hay "vs".
+      var esVisitante = false;
+      var mMarca = rivalCrudo.match(/\(\s*(visitante|local)\s*\)\s*$/i);
+      if (mMarca) {
+        esVisitante = /visitante/i.test(mMarca[1]);
+        rivalCrudo = rivalCrudo.slice(0, mMarca.index).trim();
+      }
       if (!rivalCrudo) return;
 
-      // Red de seguridad: si en vez del nombre SUELTO del rival se pega la
-      // línea completa "Equipo A vs Equipo B" (típico al copiar tal cual un
-      // calendario ya armado en otro sitio), el texto entero se quedaba
-      // como "rival" — y como contenía el nombre del propio club activo,
-      // el buscador lo encontraba A ÉL MISMO y montaba un partido
-      // "Liverpool vs Liverpool". Si aparece un " vs " separando 2
-      // nombres, nos quedamos con el lado que NO es el club activo. Esto
-      // NO añade soporte de visitante (esta caja siempre juega en casa,
-      // ver comentario de cabecera) — solo evita el auto-emparejamiento.
+      // "Equipo A vs Equipo B": el orden decide quién es local (A) y quién
+      // visitante (B) — miramos cuál de los 2 es el club activo para saber
+      // en qué lado juega, y el OTRO lado es el rival de verdad a resolver.
+      // Antes esto solo evitaba el auto-emparejamiento "Liverpool vs
+      // Liverpool" (si se pegaba la línea entera en vez del rival suelto);
+      // ahora ADEMÁS decide casa/fuera con el mismo patrón.
       var mVs = rivalCrudo.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
       if (mVs && clubNorm) {
         var ladoA = _normNombre(mVs[1]), ladoB = _normNombre(mVs[2]);
         var aEsClub = ladoA.indexOf(clubNorm) !== -1 || clubNorm.indexOf(ladoA) !== -1;
         var bEsClub = ladoB.indexOf(clubNorm) !== -1 || clubNorm.indexOf(ladoB) !== -1;
-        if (aEsClub && !bEsClub) rivalCrudo = mVs[2].trim();
-        else if (bEsClub && !aEsClub) rivalCrudo = mVs[1].trim();
+        if (aEsClub && !bEsClub) { rivalCrudo = mVs[2].trim(); esVisitante = false; }
+        else if (bEsClub && !aEsClub) { rivalCrudo = mVs[1].trim(); esVisitante = true; }
         // si ninguno de los 2 lados es el club activo (o lo son ambos, con
         // nombres muy cortos), no tocamos nada — mejor un rival sintético
-        // (ver resolverRivalPorNombre) que adivinar mal cuál es cuál.
+        // (ver resolverRivalPorNombre) que adivinar mal cuál es cuál; se
+        // respeta lo que ya se supiera por la marca (visitante)/(local).
       }
 
       items.push({
@@ -406,8 +420,9 @@
         rivalNombre: rivalCrudo,
         fecha: fecha,
         jugado: jugado,
-        golesLocal: golesLocal,
-        golesVisitante: golesVisitante
+        esVisitante: esVisitante,
+        golesClub: golesClub,
+        golesRival: golesRival
       });
     });
     return items;
@@ -854,19 +869,24 @@
         var ahoraMs = Date.now();
         var partidosExtra = parsearPartidosExtraTexto(textoExtra, equipo.nombre).map(function (ex, i) {
           var rival = resolverRivalPorNombre(ex.rivalNombre, datos);
+          // ex.esVisitante decide qué id va en local/visitante; el marcador
+          // (siempre guardado como "club-rival") se remapea al mismo orden.
           return {
             id: ex.id,
             competicion: ex.competicion,
             ronda: ex.ronda,
             jornada: null,
-            local: idEquipoHumanoActivo,
-            visitante: rival.id,
+            local: ex.esVisitante ? rival.id : idEquipoHumanoActivo,
+            visitante: ex.esVisitante ? idEquipoHumanoActivo : rival.id,
             fecha: null,
             _fechaTexto: ex.fecha,
             _fechaFallbackMs: ahoraMs + i * 86400000,
             _soloInformativo: true,
             jugado: ex.jugado,
-            resultado: ex.jugado ? { golesLocal: ex.golesLocal, golesVisitante: ex.golesVisitante } : null
+            resultado: ex.jugado ? {
+              golesLocal: ex.esVisitante ? ex.golesRival : ex.golesClub,
+              golesVisitante: ex.esVisitante ? ex.golesClub : ex.golesRival
+            } : null
           };
         });
         partidosDelClub = partidosDelClub.concat(partidosExtra);
@@ -1077,17 +1097,20 @@
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
-      "Una línea por partido: «Competición - Ronda - Rival». Puedes añadir " +
-      "la fecha al final («... - Rival - 15 sep») y, si ya se jugó, el " +
-      "resultado pegado al rival: «Rival (2-1)». Se suma al calendario de " +
-      "la derecha sin tocar los partidos ya programados.";
+      "Una línea por partido: «Competición - Ronda - Rival». Por defecto juegas " +
+      "en casa; para jugar fuera escribe «Rival vs Tu Equipo» (en vez de «Tu " +
+      "Equipo vs Rival») o añade «(visitante)» al final. Puedes añadir la fecha " +
+      "(«... - Rival - 15 sep») y, si ya se jugó, el resultado pegado al rival — " +
+      "SIEMPRE tu gol primero, el del rival segundo, juegues en casa o fuera: " +
+      "«Rival (2-1)». Se suma al calendario de la derecha sin tocar los partidos " +
+      "ya programados.";
     contenedor.appendChild(nota);
 
     var textarea = document.createElement("textarea");
     textarea.id = "calendario-extra-club-textarea";
     textarea.className = "admin-roadmap-textarea";
     textarea.rows = 10;
-    textarea.placeholder = "Champions League - Jornada 1 - Bayern Munich - 15 sep\nCopa del Rey - Octavos - Real Sociedad (3-1)";
+    textarea.placeholder = "Champions League - Jornada 1 - Bayern Munich - 15 sep\nCopa del Rey - Octavos - Real Sociedad (3-1)\nLiga - Jornada 3 - Real Zaragoza vs Tu Equipo";
     textarea.value = window.Estado ? window.Estado.obtenerCalendarioExtraTexto(clubId) : "";
     contenedor.appendChild(textarea);
 

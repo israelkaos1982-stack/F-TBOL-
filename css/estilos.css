@@ -695,13 +695,13 @@ button { font-family: inherit; cursor: pointer; }
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 92px 1fr;
+  grid-template-columns: 112px 1fr;
 }
 .club-menu {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 8px;
+  padding: 10px 6px;
   background: var(--bg-1);
   border-right: 1px solid var(--line);
   /* El calendario es mucho más alto que el menú y la página entera hace
@@ -718,19 +718,19 @@ button { font-family: inherit; cursor: pointer; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   border: 1px solid rgba(var(--club-primary-rgb, 57, 255, 106), 0.4);
   border-radius: var(--radius-m);
   background: var(--bg-2);
   box-shadow:
     0 0 8px rgba(var(--club-primary-rgb, 57, 255, 106), 0.28),
     0 0 18px rgba(var(--club-primary-rgb, 57, 255, 106), 0.12);
-  padding: 10px 4px;
+  padding: 12px 4px;
   color: #fff;
 }
-.club-menu-btn-icon { font-size: 17px; line-height: 1; }
+.club-menu-btn-icon { font-size: 20px; line-height: 1; }
 .club-menu-btn-label {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 800;
   line-height: 1.25;
   text-align: center;
@@ -767,13 +767,14 @@ button { font-family: inherit; cursor: pointer; }
   color: var(--neon);
 }
 
-/* Padding derecho MÍNIMO a propósito — el calendario se desplaza al
-   máximo hacia la derecha (petición usuario) para que el nombre del
-   equipo visitante quede casi pegado al borde real de la pantalla. */
+/* Padding lateral recortado (izq. y der.) — es el margen "de sobra" que
+   señaló el usuario; se libera para que el menú de la izquierda (92px ->
+   112px) tenga sitio para cajas/texto/icono más grandes sin que el
+   calendario se sienta apretado. */
 .club-calendar-col {
   min-width: 0;
   overflow-y: auto;
-  padding: 14px 3px 60px 10px;
+  padding: 14px 6px 60px 6px;
 }
 
 /* ---------- 6c. MODAL del menú — Plantilla / Próximamente ---------- */
@@ -936,7 +937,7 @@ button { font-family: inherit; cursor: pointer; }
   border-left: 3px solid rgba(var(--club-primary-rgb, 57, 255, 106), 0.55);
   background: var(--bg-2);
   border-radius: var(--radius-m);
-  padding: 10px 6px 10px 8px;
+  padding: 10px 6px;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -989,14 +990,14 @@ button { font-family: inherit; cursor: pointer; }
 }
 .match-card-team > * { position: relative; z-index: 1; }
 
-/* El local hugea hacia el borde IZQUIERDO y el visitante hacia el borde
-   DERECHO (petición usuario: que el nombre del visitante casi toque el
-   final físico de la pantalla) — escudo y nombre siguen alineados entre
-   sí dentro de su propio bloque (cuadrado, nunca desparejado), solo que
-   ahora el bloque entero se desplaza al extremo exterior en vez de
-   hacia el centro. */
-.match-card-team--local { align-items: flex-start; }
-.match-card-team--visitante { align-items: flex-end; }
+/* El local hugea hacia el centro (pegado al bloque de en medio) y el
+   visitante hace lo mismo desde el otro lado — así el nombre de cada
+   equipo queda "pegado a vs", con su escudo alineado justo encima
+   (cuadrado, nunca desparejado). Se probó a pegar cada bloque al borde
+   exterior de la pantalla (petición de una sesión anterior) pero el
+   usuario confirmó que quedaba mal — esta es la posición buena. */
+.match-card-team--local { align-items: flex-end; }
+.match-card-team--visitante { align-items: flex-start; }
 
 .match-card-nombre {
   max-width: 100%;

@@ -433,116 +433,22 @@
   }
 
   // ============================================================
-  // 3c-bis. CLASIFICACIÓN — tabla base IA (texto) + partidos humanos
+  // 3c-ter. LIGA 1ª REF — "la batidora": base IA (texto) + partidos humanos
   // ============================================================
-  // No hay motor de simulación IA-vs-IA (decisión explícita del usuario):
-  // el admin lleva esos resultados fuera de la web y pega aquí el
-  // snapshot agregado de cada equipo IA. `calcularClasificacionCombinada`
-  // la fusiona con los partidos que los 6 humanos ya tienen registrados
-  // en la app (Estado.calcularClasificacion, 100% real, sin texto pegado)
-  // para pintar la tabla completa de la liga.
+  // Los equipos IA de esta competición son los REALES que da el usuario
+  // (Real Zaragoza, SD Huesca...) — NUNCA se inventan ni se simulan sus
+  // partidos entre sí; su snapshot agregado se pega tal cual se copia de
+  // otra tabla: "Pos Nombre Pts PJ PE PP G+ G- DG", separado por ESPACIOS
+  // (no por " - "), así que el nombre del equipo puede llevar varias
+  // palabras — se identifica cogiendo, desde el FINAL de la línea, la
+  // tanda de números consecutivos (hasta 7 — Pts/PJ/PE/PP/G+/G- y, si
+  // está, DG, que se ignora: el DG se recalcula SIEMPRE como G+ - G-) y
+  // tratando el primer token que quede como Pos si también es numérico.
   //
-  // Formato de línea (una por equipo IA), documentado en el propio editor:
-  // "Equipo - PJ - PG - PE - PP - G+ - G-". Los puntos NUNCA se escriben a
-  // mano — el motor los calcula siempre como PG×3+PE, para que no puedan
-  // descuadrar con el resto de la tabla.
-  function parsearClasificacionBaseTexto(texto) {
-    var items = [];
-    (texto || "").split("\n").forEach(function (linea) {
-      var l = linea.trim();
-      if (!l) return;
-      l = l.replace(/^\d+[.)]\s*/, "");
-
-      var partes = l.split(/\s+-\s+/);
-      if (partes.length < 7) return; // Equipo - PJ - PG - PE - PP - G+ - G-
-
-      var nombre = partes[0].trim();
-      var pj = Number(partes[1]), pg = Number(partes[2]), pe = Number(partes[3]),
-          pp = Number(partes[4]), gf = Number(partes[5]), gc = Number(partes[6]);
-      if (!nombre) return;
-      if ([pj, pg, pe, pp, gf, gc].some(function (n) { return isNaN(n); })) return;
-
-      items.push({ nombre: nombre, pj: pj, pg: pg, pe: pe, pp: pp, gf: gf, gc: gc });
-    });
-    return items;
-  }
-
-  // Mismo criterio de match (exacto -> substring) que resolverRivalPorNombre,
-  // pero restringido al pool de equipos IA de la liga (nunca a los 6
-  // humanos — su fila jamás sale del texto pegado).
-  function _resolverEquipoClasificacionPorNombre(nombre, poolIA) {
-    var norm = _normNombre(nombre);
-    var exacto = poolIA.find(function (e) { return _normNombre(e.nombre) === norm; });
-    if (exacto) return exacto;
-    return poolIA.find(function (e) {
-      var n = _normNombre(e.nombre);
-      return norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1);
-    }) || null;
-  }
-
-  function calcularClasificacionCombinada(datos, ligaKey) {
-    var equiposHumanos = (datos.equipos.equipos || []).filter(function (e) { return e.ligaActual === ligaKey; });
-    var idsHumanos = {};
-    equiposHumanos.forEach(function (e) { idsHumanos[e.id] = true; });
-
-    var poolIA = ((datos.equiposIA.bloques || {})[ligaKey] || {}).equipos || [];
-
-    var tabla = {};
-    function filaVacia(id, nombre) {
-      return { equipoId: id, equipoNombre: nombre, pj: 0, pg: 0, pe: 0, pp: 0, gf: 0, gc: 0, pts: 0 };
-    }
-    // Semilla: TODOS los equipos de la liga aparecen siempre, aunque
-    // todavía no tengan ni un partido — es la clasificación completa,
-    // no solo "los equipos con datos".
-    equiposHumanos.forEach(function (e) { tabla[e.id] = filaVacia(e.id, e.nombre); });
-    poolIA.forEach(function (e) { tabla[e.id] = filaVacia(e.id, e.nombre); });
-
-    // 1) Base pegada a mano por el admin — solo alimenta a los equipos IA.
-    var textoBase = window.Estado ? window.Estado.obtenerClasificacionBaseTexto(ligaKey) : "";
-    parsearClasificacionBaseTexto(textoBase).forEach(function (f) {
-      var equipo = _resolverEquipoClasificacionPorNombre(f.nombre, poolIA);
-      if (!equipo || idsHumanos[equipo.id]) return;
-      var fila = tabla[equipo.id] || (tabla[equipo.id] = filaVacia(equipo.id, equipo.nombre));
-      fila.pj += f.pj; fila.pg += f.pg; fila.pe += f.pe; fila.pp += f.pp;
-      fila.gf += f.gf; fila.gc += f.gc;
-      fila.pts += f.pg * 3 + f.pe;
-    });
-
-    // 2) Partidos de liga ya jugados por los 6 humanos DENTRO de la app —
-    //    se suman encima, nunca sustituyen (Estado.calcularClasificacion
-    //    ya es 100% real: recorre solo partidos confirmados).
-    var humanos = window.Estado ? window.Estado.calcularClasificacion(datos, ligaKey) : [];
-    humanos.forEach(function (h) {
-      var fila = tabla[h.equipoId];
-      if (!fila) return; // no debería pasar — ya sembrado arriba
-      fila.pj += h.pj; fila.pg += h.pg; fila.pe += h.pe; fila.pp += h.pp;
-      fila.gf += h.gf; fila.gc += h.gc;
-      fila.pts += h.pts;
-    });
-
-    var lista = Object.keys(tabla).map(function (id) { return tabla[id]; });
-    lista.forEach(function (f) { f.esHumano = !!idsHumanos[f.equipoId]; });
-    lista.sort(function (a, b) {
-      if (b.pts !== a.pts) return b.pts - a.pts;
-      var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
-      if (dgB !== dgA) return dgB - dgA;
-      if (b.gf !== a.gf) return b.gf - a.gf;
-      return a.equipoNombre.localeCompare(b.equipoNombre);
-    });
-    return lista;
-  }
-
-  // ============================================================
-  // 3c-ter. LIGA 1ª REF — clasificación ÚNICA (ascenso/descenso)
-  // ============================================================
-  // Competición aparte de LIGA_EA_SPORTS: 12 equipos, ninguno humano
-  // todavía. Se pega tal cual se copia de otra tabla ("Pos Nombre Pts PJ
-  // PE PP G+ G- DG", separado por ESPACIOS, no por " - "), así que el
-  // nombre del equipo puede llevar varias palabras — se identifica
-  // cogiendo, desde el FINAL de la línea, la tanda de números
-  // consecutivos (hasta 7 — Pts/PJ/PE/PP/G+/G- y, si está, DG, que se
-  // ignora: el DG se recalcula SIEMPRE como G+ - G-) y tratando el
-  // primer token que quede como Pos si también es numérico.
+  // Los 6 clubes humanos SIEMPRE aparecen (aunque todavía no hayan
+  // jugado nada) con SUS PROPIOS partidos de Liga ya registrados en la
+  // app (calcularLiga1RefCombinada) — nunca desde el texto pegado, ni
+  // aunque el admin escriba su nombre por error ahí (se ignora).
   function parsearLiga1RefTexto(texto) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
@@ -576,6 +482,54 @@
     return items;
   }
 
+  // La fusión: texto pegado (solo IA) + los 6 humanos con sus propios
+  // partidos de Liga ya jugados dentro de la app (Estado.calcularClasificacion
+  // sobre la liga ACTUAL de cada club — hoy "LIGA_EA_SPORTS" para los 6,
+  // pero se lee de equipo.ligaActual para que siga funcionando si algún
+  // club cambia de liga más adelante). Un humano NUNCA sale del texto
+  // pegado — si el admin escribe su nombre ahí por error, esa línea se
+  // descarta; su fila sale SIEMPRE de sus propios partidos (una sola
+  // fuente de verdad por equipo).
+  function calcularLiga1RefCombinada(datos) {
+    var equiposHumanos = datos.equipos.equipos || [];
+    var filas = [];
+
+    var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
+    parsearLiga1RefTexto(texto).forEach(function (f) {
+      var norm = _normNombre(f.nombre);
+      var esHumano = equiposHumanos.some(function (e) {
+        var n = _normNombre(e.nombre);
+        return n === norm || (norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1));
+      });
+      if (esHumano) return; // su fila la aporta el bloque de abajo, nunca el texto
+      filas.push({
+        nombre: f.nombre, nombreMostrado: f.nombre, equipoId: null,
+        pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+      });
+    });
+
+    equiposHumanos.forEach(function (e) {
+      var propia = window.Estado ? window.Estado.calcularClasificacion(datos, e.ligaActual) : [];
+      var fila = propia.find(function (r) { return r.equipoId === e.id; });
+      filas.push({
+        nombre: e.nombre,
+        nombreMostrado: (e.misterEmoji || "") + e.nombre,
+        equipoId: e.id,
+        pts: fila ? fila.pts : 0, pj: fila ? fila.pj : 0, pe: fila ? fila.pe : 0,
+        pp: fila ? fila.pp : 0, gf: fila ? fila.gf : 0, gc: fila ? fila.gc : 0
+      });
+    });
+
+    filas.sort(function (a, b) {
+      if (b.pts !== a.pts) return b.pts - a.pts;
+      var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+      if (dgB !== dgA) return dgB - dgA;
+      if (b.gf !== a.gf) return b.gf - a.gf;
+      return a.nombre.localeCompare(b.nombre);
+    });
+    return filas;
+  }
+
   // Zona de ascenso/descenso por POSICIÓN ABSOLUTA (petición usuario: liga
   // de 12 equipos exactos) — nunca relativa al nº de filas ya pegadas, así
   // una tabla a medio rellenar ya muestra bien las 2 primeras zonas.
@@ -605,29 +559,7 @@
         (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
       contenedor.appendChild(header);
 
-      var equiposHumanos = datos.equipos.equipos || [];
-      var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
-      var filas = parsearLiga1RefTexto(texto).map(function (f) {
-        var norm = _normNombre(f.nombre);
-        var humano = equiposHumanos.find(function (e) {
-          var n = _normNombre(e.nombre);
-          return n === norm || (norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1));
-        });
-        return {
-          nombre: f.nombre,
-          nombreMostrado: humano ? ((humano.misterEmoji || "") + humano.nombre) : f.nombre,
-          equipoId: humano ? humano.id : null,
-          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
-        };
-      });
-
-      filas.sort(function (a, b) {
-        if (b.pts !== a.pts) return b.pts - a.pts;
-        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
-        if (dgB !== dgA) return dgB - dgA;
-        if (b.gf !== a.gf) return b.gf - a.gf;
-        return a.nombre.localeCompare(b.nombre);
-      });
+      var filas = calcularLiga1RefCombinada(datos);
 
       if (!filas.length) {
         contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadirla."));
@@ -1194,123 +1126,10 @@
       });
   }
 
-  // ============================================================
-  // 4b. PANTALLA DE CLUB — CLASIFICACIÓN (tabla base IA + humanos)
-  // ============================================================
-  function renderizarClasificacionClub(idEquipoHumanoActivo, contenedorId) {
-    var contenedor = document.getElementById(contenedorId);
-    if (!contenedor) return;
-
-    contenedor.innerHTML = "";
-    contenedor.appendChild(nodoEstado("⏳", "Cargando clasificación…"));
-
-    cargarTodo()
-      .then(function (datos) {
-        contenedor.innerHTML = "";
-        var equipo = buscarEquipoPorId(idEquipoHumanoActivo, datos);
-        var ligaKey = equipo ? equipo.ligaActual : "LIGA_EA_SPORTS";
-        var tabla = calcularClasificacionCombinada(datos, ligaKey);
-
-        if (!tabla.length) {
-          contenedor.appendChild(nodoEstado("📊", "Todavía no hay equipos en esta liga."));
-          return;
-        }
-
-        var nota = document.createElement("p");
-        nota.className = "admin-nota clasificacion-nota";
-        nota.textContent =
-          "Los equipos IA salen del texto que pegues con 🖍 (candado 646). " +
-          "Los 6 clubes humanos se calculan solos con sus propios partidos ya jugados.";
-        contenedor.appendChild(nota);
-
-        var wrap = document.createElement("div");
-        wrap.className = "clasificacion-wrap";
-
-        var tablaEl = document.createElement("table");
-        tablaEl.className = "clasificacion-tabla";
-        tablaEl.innerHTML =
-          "<thead><tr>" +
-          "<th>#</th><th>Equipo</th><th>PJ</th><th>PG</th><th>PE</th><th>PP</th>" +
-          "<th>G+</th><th>G-</th><th>DG</th><th>Pts</th>" +
-          "</tr></thead>";
-
-        var tbody = document.createElement("tbody");
-        tabla.forEach(function (f, i) {
-          var dg = f.gf - f.gc;
-          var claseFila = "clasificacion-fila";
-          if (f.equipoId === idEquipoHumanoActivo) claseFila += " clasificacion-fila--activo";
-          else if (f.esHumano) claseFila += " clasificacion-fila--humano";
-
-          var tr = document.createElement("tr");
-          tr.className = claseFila;
-          tr.innerHTML =
-            '<td class="clasificacion-pos">' + (i + 1) + "</td>" +
-            '<td class="clasificacion-equipo">' + escapeHTML(f.equipoNombre) +
-            (f.equipoId === idEquipoHumanoActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
-            "<td>" + f.pj + "</td><td>" + f.pg + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
-            "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
-            "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>" +
-            '<td class="clasificacion-pts">' + f.pts + "</td>";
-          tbody.appendChild(tr);
-        });
-        tablaEl.appendChild(tbody);
-        wrap.appendChild(tablaEl);
-        contenedor.appendChild(wrap);
-      })
-      .catch(function (err) {
-        contenedor.innerHTML = "";
-        contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar la clasificación."));
-        console.error("[renderizadores] renderizarClasificacionClub:", err);
-      });
-  }
-
-  // Editor (candado 646) de la tabla BASE de los equipos IA — UNA sola
-  // tabla por liga (no por club), aunque se abra desde el menú de una
-  // caja concreta. Mismo patrón que pintarEditorCalendarioExtraClub
-  // (nota + textarea + Guardar/Cancelar), envuelto en cargarTodo() para
-  // resolver primero a qué liga pertenece el club activo.
-  function pintarEditorClasificacionBase(clubId, contenedor) {
-    contenedor.innerHTML = "";
-    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
-
-    cargarTodo().then(function (datos) {
-      var equipo = buscarEquipoPorId(clubId, datos);
-      var ligaKey = equipo ? equipo.ligaActual : "LIGA_EA_SPORTS";
-      contenedor.innerHTML = "";
-
-      var nota = document.createElement("p");
-      nota.className = "admin-nota";
-      nota.textContent =
-        "Una línea por equipo IA: «Equipo - PJ - PG - PE - PP - G+ - G-» " +
-        "(los puntos se calculan solos, no se escriben). Es la clasificación " +
-        "que llevas fuera de la web para los rivales IA — se pega UNA VEZ " +
-        "para toda la liga (la ven las 6 cajas) y los partidos que jueguen " +
-        "los equipos humanos se suman encima automáticamente, sin tocar " +
-        "nunca este texto.";
-      contenedor.appendChild(nota);
-
-      var textarea = document.createElement("textarea");
-      textarea.id = "clasificacion-base-textarea";
-      textarea.className = "admin-roadmap-textarea";
-      textarea.rows = 12;
-      textarea.placeholder = "Manchester City - 12 - 9 - 2 - 1 - 28 - 10\nBorussia Dortmund - 12 - 6 - 3 - 3 - 20 - 15";
-      textarea.value = window.Estado ? window.Estado.obtenerClasificacionBaseTexto(ligaKey) : "";
-      contenedor.appendChild(textarea);
-
-      var acciones = document.createElement("div");
-      acciones.className = "admin-roadmap-editor-acciones";
-      acciones.innerHTML =
-        '<button type="button" class="btn-ghost" data-accion="cancelar-clasificacion-base" data-club-id="' + clubId + '">✕ Cancelar</button>' +
-        '<button type="button" class="admin-list-add-btn" data-accion="guardar-clasificacion-base" data-club-id="' + clubId +
-        '" data-liga-key="' + ligaKey + '">💾 Guardar</button>';
-      contenedor.appendChild(acciones);
-    });
-  }
-
   // Placeholder plano para los botones del menú del club que todavía no
   // existen como subsistema real en este simulador ligero (Títulos,
-  // Derbys, Objetivos, Liga 1ªREF, Copa del Rey, Superliga pertenecen a
-  // OTRA app mucho más grande — no se inventan datos falsos aquí).
+  // Derbys, Objetivos, Copa del Rey, Superliga pertenecen a OTRA app
+  // mucho más grande — no se inventan datos falsos aquí).
   function renderizarProximamente(contenedorId, etiqueta) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -1618,13 +1437,10 @@
     parsearPartidosExtraTexto: parsearPartidosExtraTexto,
     resolverRivalPorNombre: resolverRivalPorNombre,
     renderizarPlantillaClub: renderizarPlantillaClub,
-    renderizarClasificacionClub: renderizarClasificacionClub,
-    pintarEditorClasificacionBase: pintarEditorClasificacionBase,
-    calcularClasificacionCombinada: calcularClasificacionCombinada,
-    parsearClasificacionBaseTexto: parsearClasificacionBaseTexto,
     renderizarLiga1RefClasificacion: renderizarLiga1RefClasificacion,
     pintarEditorLiga1Ref: pintarEditorLiga1Ref,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
+    calcularLiga1RefCombinada: calcularLiga1RefCombinada,
     renderizarProximamente: renderizarProximamente,
     renderizarAdminCalendario: renderizarAdminCalendario,
     parsearCalendarioCompeticiones: parsearCalendarioCompeticiones,

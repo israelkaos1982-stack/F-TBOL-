@@ -79,6 +79,9 @@
     if (vista === "plantilla") {
       body.innerHTML = '<div id="plantilla-content"></div>';
       window.Renderizadores.renderizarPlantillaClub(clubId);
+    } else if (vista === "clasificacion") {
+      body.innerHTML = '<div id="clasificacion-content"></div>';
+      window.Renderizadores.renderizarClasificacionClub(clubId, "clasificacion-content");
     } else {
       body.innerHTML = '<div id="club-modal-vista"></div>';
       window.Renderizadores.renderizarProximamente("club-modal-vista", etiqueta);
@@ -142,6 +145,7 @@
       '<div class="editor-club-tabs">' +
       '<button type="button" class="editor-club-tab is-active" data-accion="editor-club-tab" data-tab="menu" data-club-id="' + clubId + '">📋 Menú</button>' +
       '<button type="button" class="editor-club-tab" data-accion="editor-club-tab" data-tab="calendario" data-club-id="' + clubId + '">🗓️ Calendario extra</button>' +
+      '<button type="button" class="editor-club-tab" data-accion="editor-club-tab" data-tab="clasificacion" data-club-id="' + clubId + '">📊 Clasificación IA</button>' +
       "</div>" +
       '<div id="editor-club-contenido"></div>';
     ov.hidden = false;
@@ -156,6 +160,7 @@
     var contenido = document.getElementById("editor-club-contenido");
     if (!contenido || !window.Renderizadores) return;
     if (tab === "calendario") window.Renderizadores.pintarEditorCalendarioExtraClub(clubId, contenido);
+    else if (tab === "clasificacion") window.Renderizadores.pintarEditorClasificacionBase(clubId, contenido);
     else window.Renderizadores.pintarEditorMenuClub(clubId, contenido);
   }
 
@@ -198,6 +203,17 @@
     if (window.Renderizadores) window.Renderizadores.generarCalendarioLateralDerecho(clubId);
   }
   function cancelarCalendarioExtraClub() {
+    cerrarModalClub();
+  }
+
+  // ---------- Clasificación — tabla base IA (candado 646) ----------
+  function guardarClasificacionBase(clubId, ligaKey) {
+    var ta = document.getElementById("clasificacion-base-textarea");
+    if (!ta || !window.Estado) return;
+    window.Estado.guardarClasificacionBaseTexto(ligaKey, ta.value);
+    cerrarModalClub();
+  }
+  function cancelarClasificacionBase() {
     cerrarModalClub();
   }
 
@@ -564,6 +580,8 @@
         case "borrar-tarjeta-menu-club": borrarTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
         case "guardar-calendario-extra-club": guardarCalendarioExtraClub(d.clubId); break;
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
+        case "guardar-clasificacion-base": guardarClasificacionBase(d.clubId, d.ligaKey); break;
+        case "cancelar-clasificacion-base": cancelarClasificacionBase(); break;
       }
     });
 

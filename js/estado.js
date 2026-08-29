@@ -259,6 +259,7 @@
     { id: "derbys", icono: "⚔️", etiqueta: "Derbys" },
     { id: "objetivos", icono: "🎯", etiqueta: "Objetivos" },
     { id: "plantilla", icono: "👕", etiqueta: "Plantilla" },
+    { id: "clasificacion", icono: "📊", etiqueta: "Clasificación" },
     { id: "liga1ref", icono: "🔹", etiqueta: "Liga 1ª REF" },
     { id: "copadelrey", icono: "🔹", etiqueta: "Copa del Rey" },
     { id: "superliga", icono: "🍇", etiqueta: "Superliga" },
@@ -359,6 +360,37 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar el calendario extra del club:", err);
+      return false;
+    }
+  }
+
+  // ---------- Clasificación — tabla BASE de los equipos IA (texto libre por liga) ----------
+  // Este simulador NO simula los partidos IA-vs-IA (decisión explícita del
+  // usuario: nada de motor de simulación) — esos resultados los lleva el
+  // admin fuera de la web y pega aquí el snapshot agregado de cada equipo
+  // IA (PJ/PG/PE/PP/GF/GC). Es UNA SOLA tabla por liga (no por club: los 6
+  // humanos comparten la misma liga y ven la misma base). La Clasificación
+  // final se calcula sumando esta base + los partidos de los humanos ya
+  // registrados en la app (ver
+  // js/renderizadores.js::calcularClasificacionCombinada) — un club
+  // humano NUNCA se alimenta de este texto, aunque el admin pegue una
+  // línea con su nombre por error: su fila sale siempre de sus propios
+  // partidos jugados (una sola fuente de verdad por equipo).
+  function _clasificacionBaseKey(ligaKey) { return "ef7_clasificacion_base_v1_" + ligaKey; }
+  function obtenerClasificacionBaseTexto(ligaKey) {
+    try {
+      var v = localStorage.getItem(_clasificacionBaseKey(ligaKey));
+      return v !== null ? v : "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarClasificacionBaseTexto(ligaKey, texto) {
+    try {
+      localStorage.setItem(_clasificacionBaseKey(ligaKey), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la clasificación base:", err);
       return false;
     }
   }
@@ -527,6 +559,8 @@
     borrarTarjetaMenuClub: borrarTarjetaMenuClub,
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
+    obtenerClasificacionBaseTexto: obtenerClasificacionBaseTexto,
+    guardarClasificacionBaseTexto: guardarClasificacionBaseTexto,
     fusionarBalones: fusionarBalones,
     fusionarEstadios: fusionarEstadios,
     anadirBalon: anadirBalon,

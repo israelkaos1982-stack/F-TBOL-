@@ -922,6 +922,61 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 0.5px;
 }
 
+/* ---------- 6c. CLASIFICACIÓN — tabla base IA (texto) + humanos ---------- */
+.clasificacion-nota { margin-bottom: 12px; }
+.clasificacion-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.clasificacion-tabla {
+  width: 100%;
+  min-width: 460px;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.clasificacion-tabla th, .clasificacion-tabla td {
+  padding: 7px 6px;
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.clasificacion-tabla th {
+  color: var(--text-lo);
+  font-weight: 800;
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.4px;
+}
+.clasificacion-pos { color: var(--text-lo); font-weight: 700; }
+.clasificacion-equipo {
+  text-align: left;
+  font-weight: 700;
+  color: var(--text-hi);
+  white-space: normal;
+  min-width: 130px;
+}
+.clasificacion-pts { font-weight: 900; color: var(--text-hi); }
+.clasificacion-fila--humano { background: var(--bg-3); }
+.clasificacion-fila--activo {
+  background: rgba(57, 255, 106, 0.1);
+}
+.clasificacion-fila--activo .clasificacion-equipo,
+.clasificacion-fila--activo .clasificacion-pts { color: var(--neon); }
+.clasificacion-tag {
+  display: inline-block;
+  font-size: 8.5px;
+  font-weight: 900;
+  color: var(--bg-0);
+  background: var(--neon);
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-left: 4px;
+  vertical-align: middle;
+  letter-spacing: 0.3px;
+}
+
+/* Fila destacada del resumen post-partido (live-clasificacion) cuando el
+   club recién jugado no entra en el top 6 real de la liga. */
+.live-clasificacion-destacada { background: rgba(57, 255, 106, 0.1); }
+.live-clasificacion-destacada td:nth-child(2) { color: var(--neon); }
+
 /* ---------- 7. CALENDARIO — jornadas del club activo ---------- */
 .calendar-header {
   display: flex;

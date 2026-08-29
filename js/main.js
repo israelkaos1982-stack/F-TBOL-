@@ -147,7 +147,7 @@
   // ---------- Pantalla 2: Panel Admin ----------
   var ADMIN_VISTAS = {
     calendario: {
-      titulo: "🗓️ Calendar — temporada completa",
+      titulo: "🗓️ Calendario de competiciones",
       render: function (id) { window.Renderizadores.renderizarAdminCalendario(id); }
     },
     estadios: {
@@ -243,6 +243,30 @@
     if (!window.confirm('¿Borrar el balón "' + nombre + '"?')) return;
     window.Estado.borrarBalon(id);
     repintarVistaAdminActual();
+  }
+
+  // ---------- Calendario de competiciones (roadmap editable) ----------
+  // Toggle in-place entre el roadmap de lectura y un textarea de edición,
+  // dentro del MISMO contenedor "admin-detalle-contenido" — sin volver a
+  // pedir datos (data/*.json), esto es puro texto en localStorage.
+  function abrirEditorCalendarioComp() {
+    var contenedor = document.getElementById("admin-detalle-contenido");
+    if (!contenedor || !window.Renderizadores) return;
+    window.Renderizadores.pintarEditorCalendario(contenedor);
+    var ta = document.getElementById("calendario-comp-textarea");
+    if (ta) ta.focus();
+  }
+  function cancelarEditorCalendarioComp() {
+    var contenedor = document.getElementById("admin-detalle-contenido");
+    if (!contenedor || !window.Renderizadores) return;
+    window.Renderizadores.pintarRoadmapCalendario(contenedor);
+  }
+  function guardarCalendarioComp() {
+    var ta = document.getElementById("calendario-comp-textarea");
+    var contenedor = document.getElementById("admin-detalle-contenido");
+    if (!ta || !contenedor || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarCalendarioTexto(ta.value);
+    window.Renderizadores.pintarRoadmapCalendario(contenedor);
   }
 
   function cerrarVistaAdmin() {
@@ -383,6 +407,9 @@
         case "anadir-balon": anadirBalonPrompt(); break;
         case "editar-balon": editarBalonPrompt(d.id, d.nombre); break;
         case "borrar-balon": borrarBalonPrompt(d.id, d.nombre); break;
+        case "editar-calendario-comp": abrirEditorCalendarioComp(); break;
+        case "cancelar-calendario-comp": cancelarEditorCalendarioComp(); break;
+        case "guardar-calendario-comp": guardarCalendarioComp(); break;
       }
     });
 

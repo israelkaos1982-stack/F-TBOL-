@@ -563,79 +563,112 @@
   // TODAS las competiciones y los 6 clubes juntos, de solo lectura — a
   // diferencia del calendario de cada club (que filtra por su equipo),
   // esto es para que el admin repase la temporada entera de un vistazo.
-  // Agrupado por FECHA (con cabecera propia) — un dump plano de 380+
-  // partidos sin agrupar era ilegible.
+  // NO es el calendario de partidos (eso vive en data/partidos.json, con
+  // fecha real, y ya se ve en el calendario de cada club). Esto es un
+  // ROADMAP de texto libre editado a mano por el admin: el ORDEN en que
+  // se suceden las jornadas/rondas de cada competición, SIN fecha
+  // asignada — exactamente lo que pidió el usuario tras ver que el
+  // calendario admin mostraba partidos de equipo en vez de competiciones.
+  //
+  // Formato de una línea: "N. <emoji> <Competición> - <Ronda>" (el
+  // número y el " - " son opcionales; si faltan, se numera correlativo y
+  // toda la línea se trata como una sola etiqueta).
+  var EMOJI_INICIAL_RE = /^((?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\uFE0F|\u200D)+)\s*/u;
+  function parsearCalendarioCompeticiones(texto) {
+    var items = [];
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+
+      var mNum = l.match(/^(\d+)[.)]\s*(.*)$/);
+      var numero = mNum ? mNum[1] : String(items.length + 1);
+      var resto = (mNum ? mNum[2] : l).trim();
+      if (!resto) return;
+
+      var emoji = "";
+      var mEmoji = resto.match(EMOJI_INICIAL_RE);
+      if (mEmoji) {
+        emoji = mEmoji[1];
+        resto = resto.slice(mEmoji[0].length).trim();
+      }
+
+      var partes = resto.split(/\s+-\s+/);
+      var competicion = (partes[0] || resto).trim();
+      var ronda = partes.length > 1 ? partes.slice(1).join(" - ").trim() : "";
+
+      items.push({ numero: numero, emoji: emoji, competicion: competicion, ronda: ronda });
+    });
+    return items;
+  }
+
+  function _pintarRoadmapCalendario(contenedor) {
+    contenedor.innerHTML = "";
+
+    var btnEditar = document.createElement("button");
+    btnEditar.type = "button";
+    btnEditar.className = "admin-list-add-btn";
+    btnEditar.dataset.accion = "editar-calendario-comp";
+    btnEditar.textContent = "✏️ Editar calendario";
+    contenedor.appendChild(btnEditar);
+
+    var texto = window.Estado ? window.Estado.obtenerCalendarioTexto() : "";
+    var items = parsearCalendarioCompeticiones(texto);
+
+    if (!items.length) {
+      contenedor.appendChild(nodoEstado("🗓️", "Todavía no hay calendario de competiciones. Pulsa «Editar calendario» para pegarlo."));
+      return;
+    }
+
+    var lista = document.createElement("div");
+    lista.className = "admin-roadmap";
+    items.forEach(function (it) {
+      var fila = document.createElement("div");
+      fila.className = "admin-roadmap-item";
+      fila.innerHTML =
+        '<span class="admin-roadmap-num">' + escapeHTML(it.numero) + "</span>" +
+        '<div class="admin-roadmap-body">' +
+        '<span class="admin-roadmap-comp">' + (it.emoji ? escapeHTML(it.emoji) + " " : "") + escapeHTML(it.competicion) + "</span>" +
+        (it.ronda ? '<span class="admin-roadmap-ronda">' + escapeHTML(it.ronda) + "</span>" : "") +
+        "</div>";
+      lista.appendChild(fila);
+    });
+    contenedor.appendChild(lista);
+  }
+
+  function _pintarEditorCalendario(contenedor) {
+    contenedor.innerHTML = "";
+    var texto = window.Estado ? window.Estado.obtenerCalendarioTexto() : "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Una línea por jornada/ronda, en el orden en que se juegan. Formato: " +
+      "«N. emoji Competición - Ronda» (el número es opcional, se renumera solo).";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "calendario-comp-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.value = texto;
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-calendario-comp">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-calendario-comp">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
+  // Vista pública — arranca en modo lectura (roadmap). El toggle a modo
+  // edición y el guardado los gestiona el delegado de clicks de
+  // js/main.js (data-accion="editar-calendario-comp"/"guardar-…"/
+  // "cancelar-…"), que vuelve a llamar a estas dos pintoras.
   function renderizarAdminCalendario(contenedorId) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
-    contenedor.innerHTML = "";
-    contenedor.appendChild(nodoEstado("⏳", "Cargando calendario completo…"));
-
-    cargarTodo()
-      .then(function (datos) {
-        contenedor.innerHTML = "";
-        var todos = window.Estado ? window.Estado.listarPartidosResueltos(datos) : (datos.partidos.partidos || []);
-        todos = todos.slice().sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
-
-        if (!todos.length) {
-          contenedor.appendChild(nodoEstado("🗓️", "No hay partidos programados."));
-          return;
-        }
-
-        // Agrupa por el día (ignora la hora) preservando el orden cronológico.
-        var grupos = [];
-        var indicePorDia = {};
-        todos.forEach(function (p) {
-          var dia = (p.fecha || "").slice(0, 10);
-          if (!indicePorDia.hasOwnProperty(dia)) {
-            indicePorDia[dia] = grupos.length;
-            grupos.push({ dia: dia, partidos: [] });
-          }
-          grupos[indicePorDia[dia]].partidos.push(p);
-        });
-
-        var frag = document.createDocumentFragment();
-        grupos.forEach(function (g) {
-          var jugados = g.partidos.filter(function (p) { return p.jugado; }).length;
-          var cab = document.createElement("div");
-          cab.className = "admin-calendario-fecha";
-          cab.innerHTML =
-            '<span class="admin-calendario-fecha-dia">🗓️ ' + formatFecha(g.partidos[0].fecha) + "</span>" +
-            '<span class="admin-calendario-fecha-cont">' + jugados + "/" + g.partidos.length + " jugados</span>";
-          frag.appendChild(cab);
-
-          var fila = document.createElement("div");
-          fila.className = "admin-calendario-fecha-partidos";
-          g.partidos.forEach(function (p) {
-            var local = buscarEquipoPorId(p.local, datos);
-            var visitante = buscarEquipoPorId(p.visitante, datos);
-            if (!local || !visitante) return;
-
-            var card = document.createElement("div");
-            card.className = "match-card" + (p.jugado ? " is-played" : "");
-
-            var compLabel = COMP_LABEL[p.competicion] || p.competicion;
-            var etiquetaRonda = p.ronda ? " · " + p.ronda : (p.jornada ? " · J" + p.jornada : "");
-            var marcador = p.jugado && p.resultado ? (p.resultado.golesLocal + " - " + p.resultado.golesVisitante) : "VS";
-
-            card.innerHTML =
-              '<div class="match-card-comp">' + compLabel + etiquetaRonda + "</div>" +
-              '<div class="match-card-teams">' +
-              crearEscudoHTML(local, "escudo--sm") +
-              '<span class="match-card-vs">' + marcador + "</span>" +
-              crearEscudoHTML(visitante, "escudo--sm") +
-              "</div>";
-            fila.appendChild(card);
-          });
-          frag.appendChild(fila);
-        });
-        contenedor.appendChild(frag);
-      })
-      .catch(function (err) {
-        contenedor.innerHTML = "";
-        contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar el calendario."));
-        console.error("[renderizadores] renderizarAdminCalendario:", err);
-      });
+    _pintarRoadmapCalendario(contenedor);
   }
 
   // "Stadium Hub": los 30 estadios ordenados por aforo — EDITABLE. Solo
@@ -818,6 +851,9 @@
     renderizarPlantillaClub: renderizarPlantillaClub,
     renderizarProximamente: renderizarProximamente,
     renderizarAdminCalendario: renderizarAdminCalendario,
+    parsearCalendarioCompeticiones: parsearCalendarioCompeticiones,
+    pintarRoadmapCalendario: _pintarRoadmapCalendario,
+    pintarEditorCalendario: _pintarEditorCalendario,
     renderizarAdminEstadios: renderizarAdminEstadios,
     renderizarAdminBalones: renderizarAdminBalones,
     renderizarAdminEspacio: renderizarAdminEspacio,

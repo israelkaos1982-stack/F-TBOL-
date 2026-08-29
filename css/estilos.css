@@ -538,6 +538,75 @@ button { font-family: inherit; cursor: pointer; }
   margin: 0 0 12px;
 }
 
+/* ---------- Calendario de COMPETICIONES — roadmap SIN fecha, editable ----------
+   No es el calendario de partidos (con fecha real, vive en cada club).
+   Es una lista de texto libre pegada por el admin — orden de jornadas/
+   rondas de cada competición — pintada como línea de tiempo numerada. */
+.admin-roadmap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding-left: 28px;
+}
+.admin-roadmap::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 13px;
+  width: 1px;
+  background: var(--line);
+}
+.admin-roadmap-item {
+  position: relative;
+  padding: 5px 0;
+}
+.admin-roadmap-num {
+  position: absolute;
+  left: -28px;
+  top: 5px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-hi);
+}
+.admin-roadmap-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: var(--radius-s);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+}
+.admin-roadmap-comp { font-size: 13px; font-weight: 800; color: var(--text-hi); }
+.admin-roadmap-ronda { font-size: 11px; color: var(--text-lo); }
+
+.admin-roadmap-textarea {
+  width: 100%;
+  min-height: 260px;
+  padding: 10px 12px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
+  color: var(--text-hi);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+.admin-roadmap-editor-acciones { display: flex; gap: 8px; margin-top: 10px; }
+.admin-roadmap-editor-acciones .admin-list-add-btn,
+.admin-roadmap-editor-acciones .btn-ghost { flex: 1; margin-bottom: 0; }
+
 .control-panel {
   display: flex;
   flex-direction: column;

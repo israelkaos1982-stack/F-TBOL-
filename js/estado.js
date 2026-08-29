@@ -448,6 +448,36 @@
     return lista;
   }
 
+  // ---------- Plantilla (nombres reales de jugadores) por club ----------
+  // data/jugadores.json trae el esqueleto FIJO (id/equipoId/posicion/
+  // dorsal) sin nombre — cada mánager rellena el nombre real de SU
+  // plantilla desde el editor del club (candado 646, pestaña "👕
+  // Plantilla"). Se guarda como mapa { jugadorId: nombre } por club
+  // (overlay puro — nunca se toca data/jugadores.json), mismo criterio
+  // que balones/estadios pero namespaced por club como el calendario
+  // extra. `obtenerNombresPlantilla` alimenta tanto la pantalla
+  // "Plantilla" (solo lectura) como el picker de Lesionados/Sancionados
+  // de la previa — una única fuente de nombres para todo el club.
+  function _plantillaKey(clubId) { return "ef7_plantilla_v1_" + clubId; }
+  function obtenerNombresPlantilla(clubId) {
+    try {
+      var raw = localStorage.getItem(_plantillaKey(clubId));
+      var mapa = raw ? JSON.parse(raw) : {};
+      return mapa && typeof mapa === "object" ? mapa : {};
+    } catch (err) {
+      return {};
+    }
+  }
+  function guardarNombresPlantilla(clubId, mapa) {
+    try {
+      localStorage.setItem(_plantillaKey(clubId), JSON.stringify(mapa || {}));
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la plantilla del club:", err);
+      return false;
+    }
+  }
+
   // ---------- Liga 1ª REF — tabla BASE de los equipos IA, pegada en texto (candado 646) ----------
   // Este simulador NO simula los partidos IA-vs-IA — el admin lleva esos
   // resultados fuera de la web y pega aquí el snapshot agregado de cada
@@ -670,6 +700,8 @@
     obtenerListaJugadores: obtenerListaJugadores,
     agregarJugadorALista: agregarJugadorALista,
     quitarJugadorDeLista: quitarJugadorDeLista,
+    obtenerNombresPlantilla: obtenerNombresPlantilla,
+    guardarNombresPlantilla: guardarNombresPlantilla,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,
     guardarLiga1RefTexto: guardarLiga1RefTexto,
     fusionarBalones: fusionarBalones,

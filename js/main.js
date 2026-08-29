@@ -145,6 +145,7 @@
       '<div class="editor-club-tabs">' +
       '<button type="button" class="editor-club-tab is-active" data-accion="editor-club-tab" data-tab="menu" data-club-id="' + clubId + '">📋 Menú</button>' +
       '<button type="button" class="editor-club-tab" data-accion="editor-club-tab" data-tab="calendario" data-club-id="' + clubId + '">🗓️ Calendario extra</button>' +
+      '<button type="button" class="editor-club-tab" data-accion="editor-club-tab" data-tab="plantilla" data-club-id="' + clubId + '">👕 Plantilla</button>' +
       "</div>" +
       '<div id="editor-club-contenido"></div>';
     ov.hidden = false;
@@ -159,6 +160,7 @@
     var contenido = document.getElementById("editor-club-contenido");
     if (!contenido || !window.Renderizadores) return;
     if (tab === "calendario") window.Renderizadores.pintarEditorCalendarioExtraClub(clubId, contenido);
+    else if (tab === "plantilla") window.Renderizadores.pintarEditorPlantillaClub(clubId, contenido);
     else window.Renderizadores.pintarEditorMenuClub(clubId, contenido);
   }
 
@@ -216,6 +218,21 @@
     if (window.Renderizadores) window.Renderizadores.generarCalendarioLateralDerecho(clubId);
   }
   function cancelarCalendarioExtraClub() {
+    cerrarModalClub();
+  }
+
+  // ---------- Plantilla (nombres reales de jugadores) del club (candado 646) ----------
+  function guardarPlantillaClub(clubId) {
+    var ta = document.getElementById("plantilla-club-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Renderizadores.cargarTodo().then(function (datos) {
+      var jugadores = window.Renderizadores.obtenerJugadoresClub(clubId, datos);
+      var mapa = window.Renderizadores.parsearPlantillaTexto(ta.value, jugadores);
+      window.Estado.guardarNombresPlantilla(clubId, mapa);
+      cerrarModalClub();
+    });
+  }
+  function cancelarPlantillaClub() {
     cerrarModalClub();
   }
 
@@ -606,6 +623,8 @@
         case "borrar-tarjeta-menu-club": borrarTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
         case "guardar-calendario-extra-club": guardarCalendarioExtraClub(d.clubId); break;
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
+        case "guardar-plantilla-club": guardarPlantillaClub(d.clubId); break;
+        case "cancelar-plantilla-club": cancelarPlantillaClub(); break;
         case "editar-liga1ref-inline": editarLiga1RefInline(d.clubId); break;
         case "guardar-liga1ref": guardarLiga1Ref(d.clubId); break;
         case "cancelar-liga1ref": cancelarLiga1Ref(d.clubId); break;

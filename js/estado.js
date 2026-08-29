@@ -169,6 +169,56 @@
     }
   }
 
+  // ---------- Calendario de COMPETICIONES (roadmap editable, SIN fecha) ----------
+  // No es el calendario de partidos (eso vive en data/partidos.json y ya
+  // se ve bien en el calendario de cada club, con fecha real). Esto es
+  // una lista de texto libre que el admin pega/edita — el ORDEN en que se
+  // suceden las jornadas/rondas de cada competición, sin fecha asignada
+  // (ver js/renderizadores.js::parsearCalendarioCompeticiones para el
+  // parser y el render "tipo roadmap").
+  var CALENDARIO_TEXTO_KEY = "ef7_calendario_competiciones_v1";
+  var CALENDARIO_TEXTO_DEFECTO = [
+    "1. 🇪🇸 1ª REF - 1ªJornada de Liga",
+    "2. 🇪🇸 1ª REF - 2ªJornada de Liga",
+    "3. 🇪🇸 1ª REF - 3ªJornada de Liga",
+    "4. 🏆 Copa del Rey - 1/64 de Final",
+    "5. 🇪🇸 1ª REF - 4ªJornada de Liga",
+    "6. 🇪🇸 1ª REF - 5ªJornada de Liga",
+    "7. 🏆 Copa del Rey - 1/16 de Final",
+    "8. 🇪🇸 1ª REF - 6ªJornada de Liga",
+    "9. 🇪🇸 1ª REF - 7ªJornada de Liga",
+    "10. 🏆 Copa del Rey - Octavos de Final",
+    "11. 🇪🇸 1ª REF - 8ªJornada de Liga",
+    "12. 🇪🇸 1ª REF - 9ªJornada de Liga",
+    "13. 🏆 Copa del Rey - Cuartos de Final",
+    "14. 🇪🇸 1ª REF - 10ªJornada de Liga",
+    "15. 🇪🇸 1ª REF - 11ªJornada de Liga",
+    "16. 🏆 Copa del Rey - Ida de Semifinal",
+    "17. 🇪🇸 1ª REF - 12ªJornada de Liga",
+    "18. 🇪🇸 1ª REF - 13ªJornada de Liga",
+    "19. 🏆 Copa del Rey - Vuelta de Semifinal",
+    "20. 🇪🇸 1ª REF - 14ªJornada de Liga",
+    "21. 🇪🇸 1ª REF - 15ªJornada de Liga",
+    "22. 🏆 Copa del Rey - Final"
+  ].join("\n");
+  function obtenerCalendarioTexto() {
+    try {
+      var v = localStorage.getItem(CALENDARIO_TEXTO_KEY);
+      return v !== null ? v : CALENDARIO_TEXTO_DEFECTO;
+    } catch (err) {
+      return CALENDARIO_TEXTO_DEFECTO;
+    }
+  }
+  function guardarCalendarioTexto(texto) {
+    try {
+      localStorage.setItem(CALENDARIO_TEXTO_KEY, texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el calendario de competiciones:", err);
+      return false;
+    }
+  }
+
   // ---------- Balones y estadios EDITABLES (overlay sobre el seed) ----------
   // data/balones.json y data/estadios.json son el estado de fábrica —
   // añadir/editar/borrar nunca los toca. Se guarda solo la DIFERENCIA
@@ -323,6 +373,8 @@
     borrarTodo: borrarTodo,
     obtenerTemporada: obtenerTemporada,
     guardarTemporada: guardarTemporada,
+    obtenerCalendarioTexto: obtenerCalendarioTexto,
+    guardarCalendarioTexto: guardarCalendarioTexto,
     fusionarBalones: fusionarBalones,
     fusionarEstadios: fusionarEstadios,
     anadirBalon: anadirBalon,

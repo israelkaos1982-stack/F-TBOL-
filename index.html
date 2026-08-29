@@ -89,8 +89,8 @@
 <div id="admin-password-overlay" class="previa-overlay" hidden>
   <div class="previa-card password-card">
     <button type="button" class="previa-close" id="password-close" aria-label="Cerrar">✕</button>
-    <p class="password-title">🔒 Panel Admin</p>
-    <p class="password-sub">Introduce la contraseña para continuar.</p>
+    <p class="password-title" id="password-title">🔒 Panel Admin</p>
+    <p class="password-sub" id="password-sub">Introduce la contraseña para continuar.</p>
     <input type="password" inputmode="numeric" maxlength="8" id="password-input" class="live-select live-select--full password-input" placeholder="Contraseña" autocomplete="off">
     <p class="password-error" id="password-error" hidden>❌ Contraseña incorrecta.</p>
     <button type="button" class="btn-confirmar" id="password-submit">Entrar</button>
@@ -107,22 +107,17 @@
         <span class="club-header-nombre" id="club-nombre">—</span>
         <span class="club-header-mister" id="club-mister">—</span>
       </div>
+      <button type="button" class="club-header-editar" id="btn-editar-club-menu" title="Editar menú del club" aria-label="Editar menú del club">✏️</button>
     </div>
   </header>
 
   <!-- Maquetación plana de 2 columnas SIEMPRE visibles a la vez (menú a
        la izquierda, calendario a la derecha) — sin pestañas, sin
-       sombras/degradados/animaciones pesadas. -->
+       sombras/degradados/animaciones pesadas. Las tarjetas del menú se
+       pintan en JS (js/renderizadores.js::renderizarMenuClub) desde el
+       orden guardado de CADA caja — editable detrás del candado 646. -->
   <div class="club-layout">
-    <nav class="club-menu" id="club-menu">
-      <button type="button" class="club-menu-btn club-menu-btn--dark" data-club-vista="titulos">🏆<br>Títulos</button>
-      <button type="button" class="club-menu-btn club-menu-btn--dark" data-club-vista="derbys">⚔️<br>Derbys</button>
-      <button type="button" class="club-menu-btn club-menu-btn--dark" data-club-vista="objetivos">🎯<br>Objetivos</button>
-      <button type="button" class="club-menu-btn club-menu-btn--green" data-club-vista="plantilla">👕<br>Plantilla</button>
-      <button type="button" class="club-menu-btn club-menu-btn--blue" data-club-vista="liga1ref">🔹<br>Liga 1ªREF</button>
-      <button type="button" class="club-menu-btn club-menu-btn--blue" data-club-vista="copadelrey">🔹<br>Copa Rey</button>
-      <button type="button" class="club-menu-btn club-menu-btn--blue" data-club-vista="superliga">🍇<br>Superliga</button>
-    </nav>
+    <nav class="club-menu" id="club-menu"></nav>
 
     <div class="club-calendar-col">
       <div class="calendar-header">
@@ -139,9 +134,12 @@
   </div>
 </section>
 
-<!-- Modal genérico del menú del club: Plantilla (real) + Títulos/Derbys/
-     Objetivos/Liga 1ªREF/Copa del Rey/Superliga (no implementadas en este
-     simulador ligero — placeholder "Próximamente", sin datos inventados). -->
+<!-- Modal genérico del menú del club: Plantilla (real) + el resto de
+     tarjetas del menú (de fábrica o añadidas por el admin), no
+     implementadas todavía en este simulador ligero — placeholder
+     "Próximamente", sin datos inventados. Reutilizado también por el
+     editor del menú (candado 646, dos pestañas Menú/Calendario extra) —
+     ver js/main.js::abrirEditorClub. -->
 <div class="club-modal-overlay" id="club-modal-overlay" hidden>
   <div class="club-modal-card">
     <div class="club-modal-header">

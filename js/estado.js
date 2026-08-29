@@ -219,6 +219,121 @@
     }
   }
 
+  // ---------- Menú del club (izquierda) — orden + tarjetas personalizadas ----------
+  // Cada una de las 6 cajas humanas tiene su PROPIO menú (candado 646,
+  // editable): las 8 tarjetas de fábrica se pueden REORDENAR (nunca
+  // borrar) y el admin puede añadir tarjetas de competición nuevas (esas
+  // sí se pueden borrar). Se guarda solo el ORDEN + lo añadido — nunca se
+  // toca ninguna seed estática, mismo principio que balones/estadios.
+  var MENU_CLUB_BUILTIN = [
+    { id: "titulos", icono: "🏆", etiqueta: "Títulos" },
+    { id: "derbys", icono: "⚔️", etiqueta: "Derbys" },
+    { id: "objetivos", icono: "🎯", etiqueta: "Objetivos" },
+    { id: "plantilla", icono: "👕", etiqueta: "Plantilla" },
+    { id: "liga1ref", icono: "🔹", etiqueta: "Liga 1ª REF" },
+    { id: "copadelrey", icono: "🔹", etiqueta: "Copa del Rey" },
+    { id: "superliga", icono: "🍇", etiqueta: "Superliga" },
+    { id: "supercopaespana", icono: "🏅", etiqueta: "Supercopa España" }
+  ];
+  function _menuClubIdsBuiltin() { return MENU_CLUB_BUILTIN.map(function (c) { return c.id; }); }
+  function _menuClubKey(clubId) { return "ef7_club_menu_v1_" + clubId; }
+  function _cargarMenuClub(clubId) {
+    try {
+      var raw = localStorage.getItem(_menuClubKey(clubId));
+      var ov = raw ? JSON.parse(raw) : null;
+      if (!ov) return { orden: _menuClubIdsBuiltin(), personalizadas: {} };
+      if (!ov.orden) ov.orden = _menuClubIdsBuiltin();
+      if (!ov.personalizadas) ov.personalizadas = {};
+      return ov;
+    } catch (err) {
+      return { orden: _menuClubIdsBuiltin(), personalizadas: {} };
+    }
+  }
+  function _guardarMenuClub(clubId, ov) {
+    try {
+      localStorage.setItem(_menuClubKey(clubId), JSON.stringify(ov));
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el menú del club:", err);
+      return false;
+    }
+  }
+  function obtenerMenuClub(clubId) {
+    var ov = _cargarMenuClub(clubId);
+    var builtinPorId = {};
+    MENU_CLUB_BUILTIN.forEach(function (c) { builtinPorId[c.id] = c; });
+
+    var orden = ov.orden.slice();
+    // Cualquier tarjeta de fábrica NUEVA (añadida en una versión futura de
+    // la app) que el admin todavía no tenga en su orden guardado se añade
+    // al final automáticamente — nunca desaparece solo por haber editado
+    // el menú antes de que esa tarjeta existiera.
+    MENU_CLUB_BUILTIN.forEach(function (c) {
+      if (orden.indexOf(c.id) === -1) orden.push(c.id);
+    });
+
+    return orden.map(function (id) {
+      if (builtinPorId[id]) return Object.assign({ esCustom: false }, builtinPorId[id]);
+      var custom = ov.personalizadas[id];
+      if (!custom) return null;
+      return Object.assign({ esCustom: true, id: id }, custom);
+    }).filter(Boolean);
+  }
+  function anadirTarjetaMenuClub(clubId, icono, etiqueta) {
+    if (!etiqueta || !etiqueta.trim()) return null;
+    var ov = _cargarMenuClub(clubId);
+    var id = "custom-menu-" + Date.now();
+    ov.personalizadas[id] = { icono: (icono || "⭐").trim(), etiqueta: etiqueta.trim() };
+    ov.orden.push(id);
+    return _guardarMenuClub(clubId, ov) ? id : null;
+  }
+  function moverTarjetaMenuClub(clubId, id, direccion) {
+    var ov = _cargarMenuClub(clubId);
+    MENU_CLUB_BUILTIN.forEach(function (c) { if (ov.orden.indexOf(c.id) === -1) ov.orden.push(c.id); });
+    var idx = ov.orden.indexOf(id);
+    if (idx === -1) return false;
+    var destino = idx + direccion;
+    if (destino < 0 || destino >= ov.orden.length) return false;
+    var tmp = ov.orden[idx];
+    ov.orden[idx] = ov.orden[destino];
+    ov.orden[destino] = tmp;
+    return _guardarMenuClub(clubId, ov);
+  }
+  function borrarTarjetaMenuClub(clubId, id) {
+    if (!_esIdCustom(id) || id.indexOf("custom-menu-") !== 0) return false; // solo tarjetas añadidas por el admin
+    var ov = _cargarMenuClub(clubId);
+    ov.orden = ov.orden.filter(function (x) { return x !== id; });
+    delete ov.personalizadas[id];
+    return _guardarMenuClub(clubId, ov);
+  }
+
+  // ---------- Calendario EXTRA por club (partidos añadidos a mano, en texto) ----------
+  // data/partidos.json ya trae el calendario real completo de Liga + Copa
+  // + Supercopa para los 6 humanos — esto es SOLO para sumar partidos que
+  // ese fixture estático no cubre todavía (una ronda de Champions/Europa
+  // League recién sorteada, un amistoso...): cada caja pega su propio
+  // texto y se fusiona en el calendario de la derecha (ver
+  // js/renderizadores.js::parsearPartidosExtraTexto +
+  // generarCalendarioLateralDerecho).
+  function _calendarioExtraKey(clubId) { return "ef7_club_calendario_extra_v1_" + clubId; }
+  function obtenerCalendarioExtraTexto(clubId) {
+    try {
+      var v = localStorage.getItem(_calendarioExtraKey(clubId));
+      return v !== null ? v : "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarCalendarioExtraTexto(clubId, texto) {
+    try {
+      localStorage.setItem(_calendarioExtraKey(clubId), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el calendario extra del club:", err);
+      return false;
+    }
+  }
+
   // ---------- Balones y estadios EDITABLES (overlay sobre el seed) ----------
   // data/balones.json y data/estadios.json son el estado de fábrica —
   // añadir/editar/borrar nunca los toca. Se guarda solo la DIFERENCIA
@@ -375,6 +490,12 @@
     guardarTemporada: guardarTemporada,
     obtenerCalendarioTexto: obtenerCalendarioTexto,
     guardarCalendarioTexto: guardarCalendarioTexto,
+    obtenerMenuClub: obtenerMenuClub,
+    anadirTarjetaMenuClub: anadirTarjetaMenuClub,
+    moverTarjetaMenuClub: moverTarjetaMenuClub,
+    borrarTarjetaMenuClub: borrarTarjetaMenuClub,
+    obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
+    guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
     fusionarBalones: fusionarBalones,
     fusionarEstadios: fusionarEstadios,
     anadirBalon: anadirBalon,

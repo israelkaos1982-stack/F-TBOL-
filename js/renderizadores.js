@@ -170,6 +170,12 @@
   // ============================================================
   // Helpers de equipo / escudo / fecha
   // ============================================================
+  // Registro de rivales SINTÉTICOS resueltos al fusionar el calendario
+  // EXTRA en texto de cada club (ver resolverRivalPorNombre / sección 3b
+  // más abajo) — nunca persiste en ningún JSON, se reconstruye en cada
+  // generarCalendarioLateralDerecho.
+  var _sinteticosExtra = {};
+
   function buscarEquipoPorId(id, datos) {
     var humano = (datos.equipos.equipos || []).find(function (e) { return e.id === id; });
     if (humano) return humano;
@@ -179,6 +185,7 @@
       var found = (bloques[key].equipos || []).find(function (e) { return e.id === id; });
       if (found) return found;
     }
+    if (_sinteticosExtra[id]) return _sinteticosExtra[id];
     return null;
   }
 
@@ -200,7 +207,10 @@
       );
     }
 
-    var esHumano = !!equipo.mister;
+    // mostrarSiglas: exclusivo de los rivales SINTÉTICOS del calendario
+    // extra en texto (ver resolverRivalPorNombre) — nunca lo llevan los
+    // equipos IA reales del catálogo, así que su blasón sigue igual.
+    var esHumano = !!equipo.mister || !!equipo.mostrarSiglas;
     var formato = equipo.escudoFormato === "rombo" ? "escudo--rombo" : "escudo--rayas";
     var style = "--primary:" + (equipo.colorPrimario || "#39ff6a") + "; --secondary:" + (equipo.colorSecundario || "#101114") + ";";
 
@@ -302,6 +312,110 @@
     return div;
   }
 
+  // ---------- 3b. Calendario EXTRA de cada club (texto libre -> partidos) ----------
+  // data/partidos.json ya trae Liga+Copa+Supercopa reales de los 6 humanos.
+  // Esto es SOLO para que cada caja pueda sumar partidos que ese fixture
+  // estático todavía no cubre (una ronda de Champions/Europa League recién
+  // sorteada, un amistoso...) pegando texto — se fusionan en el MISMO
+  // calendario de la derecha, con el MISMO estilo de tarjeta.
+  //
+  // Formato de línea (una por partido), documentado también en el propio
+  // editor: "Competición - Ronda - Rival [- Fecha]". El rival puede llevar
+  // el resultado ya jugado pegado al final entre paréntesis: "(2-1)".
+  function _normNombre(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  }
+  function parsearPartidosExtraTexto(texto) {
+    var items = [];
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      l = l.replace(/^\d+[.)]\s*/, ""); // número de lista inicial opcional, cosmético
+
+      var partes = l.split(/\s+-\s+/);
+      if (partes.length < 3) return; // hace falta Competición - Ronda - Rival como mínimo
+
+      var competicion = partes[0].trim();
+      var ronda = partes[1].trim();
+      var rivalCrudo = partes[2].trim();
+      var fecha = partes.length > 3 ? partes.slice(3).join(" - ").trim() : "";
+      if (!competicion || !ronda) return;
+
+      var golesLocal = null, golesVisitante = null, jugado = false;
+      var mScore = rivalCrudo.match(/\(\s*(\d+)\s*-\s*(\d+)\s*\)\s*$/);
+      if (mScore) {
+        golesLocal = Number(mScore[1]);
+        golesVisitante = Number(mScore[2]);
+        jugado = true;
+        rivalCrudo = rivalCrudo.slice(0, mScore.index).trim();
+      }
+      if (!rivalCrudo) return;
+
+      items.push({
+        id: "extra-" + items.length + "-" + _normNombre(rivalCrudo).replace(/[^a-z0-9]+/g, "-"),
+        competicion: competicion,
+        ronda: ronda,
+        rivalNombre: rivalCrudo,
+        fecha: fecha,
+        jugado: jugado,
+        golesLocal: golesLocal,
+        golesVisitante: golesVisitante
+      });
+    });
+    return items;
+  }
+
+  var _COLORES_SINTETICOS = ["#e6484f", "#3ba7ff", "#ffb020", "#8b5cf6", "#2bbf7a", "#ff7ab8", "#54c7d0", "#c9a24b"];
+  function _colorSintetico(nombre) {
+    var h = 0;
+    for (var i = 0; i < nombre.length; i++) h = (h * 31 + nombre.charCodeAt(i)) >>> 0;
+    return _COLORES_SINTETICOS[h % _COLORES_SINTETICOS.length];
+  }
+
+  // Busca el rival tecleado en texto libre dentro de los catálogos reales
+  // (los 6 humanos + los 300+ equipos IA). Si no se encuentra (nombre que
+  // no existe en ningún JSON — un rival de una competición que este
+  // simulador aún no modela), se crea un equipo SINTÉTICO de solo-lectura
+  // con un color hash + siglas de sus iniciales, así el partido igual se
+  // pinta con un escudo reconocible — nunca se persiste ni rompe nada.
+  function resolverRivalPorNombre(nombre, datos) {
+    var norm = _normNombre(nombre);
+    var candidatos = (datos.equipos.equipos || []).slice();
+    var bloques = datos.equiposIA.bloques || {};
+    Object.keys(bloques).forEach(function (k) {
+      candidatos = candidatos.concat(bloques[k].equipos || []);
+    });
+
+    var exacto = candidatos.find(function (e) { return _normNombre(e.nombre) === norm; });
+    if (exacto) return exacto;
+    var parcial = candidatos.find(function (e) {
+      var n = _normNombre(e.nombre);
+      return norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1);
+    });
+    if (parcial) return parcial;
+
+    var id = "extra-rival-" + norm.replace(/[^a-z0-9]+/g, "-");
+    if (!_sinteticosExtra[id]) {
+      var siglas = (nombre.match(/\b[a-zA-Z0-9]/g) || []).slice(0, 3).join("").toUpperCase() || "?";
+      _sinteticosExtra[id] = {
+        id: id,
+        nombre: nombre,
+        siglas: siglas,
+        colorPrimario: _colorSintetico(nombre),
+        colorSecundario: "#101114",
+        escudoFormato: "rombo",
+        mostrarSiglas: true
+      };
+    }
+    return _sinteticosExtra[id];
+  }
+
+  function _etiquetaCortaEquipo(equipo) {
+    if (!equipo) return "";
+    if (equipo.siglas) return equipo.siglas;
+    return (equipo.nombre || "").split(/\s+/)[0] || "";
+  }
+
   function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga) {
     var esLocal = partido.local === idActivo;
     var rivalId = esLocal ? partido.visitante : partido.local;
@@ -323,14 +437,23 @@
       marcador = partido.resultado.golesLocal + " - " + partido.resultado.golesVisitante;
     }
 
+    // Los partidos EXTRA (calendario en texto) llevan `_fechaTexto` en vez
+    // de una `fecha` ISO real — se muestra el texto tal cual, nunca se
+    // pasa por formatFecha (que asume fecha parseable).
+    var fechaMostrada = partido._fechaTexto !== undefined
+      ? (partido._fechaTexto || "Fecha por confirmar")
+      : formatFecha(partido.fecha);
+
     card.innerHTML =
-      '<div class="match-card-comp">' + compLabel + etiquetaRonda + "</div>" +
+      '<div class="match-card-comp">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
       '<div class="match-card-teams">' +
-      crearEscudoHTML(local, "escudo--sm") +
+      '<div class="match-card-team">' + crearEscudoHTML(local, "escudo--sm") +
+      '<span class="match-card-team-label">' + escapeHTML(_etiquetaCortaEquipo(local)) + "</span></div>" +
       '<span class="match-card-vs">' + marcador + "</span>" +
-      crearEscudoHTML(visitante, "escudo--sm") +
+      '<div class="match-card-team">' + crearEscudoHTML(visitante, "escudo--sm") +
+      '<span class="match-card-team-label">' + escapeHTML(_etiquetaCortaEquipo(visitante)) + "</span></div>" +
       "</div>" +
-      '<div class="match-card-date">🗓️ ' + formatFecha(partido.fecha) + "</div>" +
+      '<div class="match-card-date">🗓️ ' + escapeHTML(fechaMostrada) + "</div>" +
       '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">👁 Previa</button>';
 
     return card;
@@ -380,12 +503,42 @@
           return true;
         });
 
+        // Calendario EXTRA del club (texto libre pegado por el admin) —
+        // se fusiona en la MISMA lista, con el MISMO estilo de tarjeta.
+        // Reset del registro de rivales sintéticos antes de resolverlos
+        // de nuevo (evita acumular entradas de sesiones anteriores).
+        _sinteticosExtra = {};
+        var textoExtra = window.Estado ? window.Estado.obtenerCalendarioExtraTexto(idEquipoHumanoActivo) : "";
+        var ahoraMs = Date.now();
+        var partidosExtra = parsearPartidosExtraTexto(textoExtra).map(function (ex, i) {
+          var rival = resolverRivalPorNombre(ex.rivalNombre, datos);
+          return {
+            id: ex.id,
+            competicion: ex.competicion,
+            ronda: ex.ronda,
+            jornada: null,
+            local: idEquipoHumanoActivo,
+            visitante: rival.id,
+            fecha: null,
+            _fechaTexto: ex.fecha,
+            _fechaFallbackMs: ahoraMs + i * 86400000,
+            _soloInformativo: true,
+            jugado: ex.jugado,
+            resultado: ex.jugado ? { golesLocal: ex.golesLocal, golesVisitante: ex.golesVisitante } : null
+          };
+        });
+        partidosDelClub = partidosDelClub.concat(partidosExtra);
+
         if (!partidosDelClub.length) {
           contenedor.appendChild(nodoEstado("🗓️", "Este equipo todavía no tiene partidos programados."));
           return;
         }
 
-        partidosDelClub.sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); });
+        partidosDelClub.sort(function (a, b) {
+          var ta = a.fecha ? new Date(a.fecha).getTime() : (a._fechaFallbackMs || 0);
+          var tb = b.fecha ? new Date(b.fecha).getTime() : (b._fechaFallbackMs || 0);
+          return ta - tb;
+        });
 
         var partidosPorId = {};
         partidosDelClub.forEach(function (p) { partidosPorId[p.id] = p; });
@@ -453,7 +606,9 @@
       (COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · Jornada " + partido.jornada : ""));
 
-    document.getElementById("previa-fecha").textContent = formatFecha(partido.fecha);
+    document.getElementById("previa-fecha").textContent = partido._fechaTexto !== undefined
+      ? (partido._fechaTexto || "Fecha por confirmar")
+      : formatFecha(partido.fecha);
 
     document.getElementById("previa-estadio").textContent = estadio
       ? estadio.nombre + " — " + estadio.capacidad.toLocaleString("es-ES") + " esp. — " + estadio.categoria
@@ -465,9 +620,13 @@
     document.getElementById("previa-balon").innerHTML =
       balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">❄️ forzado por nieve</span>' : "");
 
+    // Los partidos EXTRA (texto libre) son SOLO INFORMATIVOS — no hay
+    // roster resuelto para un rival sintético, así que no se pueden jugar
+    // en vivo. Se sigue mostrando el resto de la previa (estadio/clima/
+    // balón) tal cual, solo se oculta "Empezar partido".
     var btnEmpezar = document.getElementById("previa-empezar");
     if (btnEmpezar) {
-      btnEmpezar.hidden = !!partido.jugado;
+      btnEmpezar.hidden = !!partido.jugado || !!partido._soloInformativo;
       btnEmpezar.dataset.partidoId = partido.id;
     }
 
@@ -477,6 +636,114 @@
   function cerrarPreviaPartido() {
     var ov = document.getElementById("previa-overlay");
     if (ov) ov.hidden = true;
+  }
+
+  // ============================================================
+  // 3c. MENÚ DEL CLUB — columna izquierda (JS-rendered, editable 646)
+  // ============================================================
+  // Pinta las tarjetas del menú de la izquierda para el club activo, en
+  // el orden que el propio admin de esa caja haya guardado (o el de
+  // fábrica). El color de las tarjetas sale de --club-primary/-secondary,
+  // ya puestas en .club-layout por js/main.js al abrir la caja — así
+  // cada club se ve con SUS colores sin que este render necesite
+  // conocerlos.
+  function renderizarMenuClub(clubId, contenedorId) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor || !window.Estado) return;
+
+    var tarjetas = window.Estado.obtenerMenuClub(clubId);
+    contenedor.innerHTML = "";
+    var frag = document.createDocumentFragment();
+    tarjetas.forEach(function (t) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "club-menu-btn";
+      btn.dataset.clubVista = t.id;
+      btn.innerHTML =
+        '<span class="club-menu-btn-icon">' + t.icono + "</span>" +
+        '<span class="club-menu-btn-label">' + escapeHTML(t.etiqueta) + "</span>";
+      frag.appendChild(btn);
+    });
+    contenedor.appendChild(frag);
+  }
+
+  // Editor (candado 646) — lista reordenable de tarjetas + alta de
+  // competiciones nuevas. Las de fábrica se pueden mover pero no borrar;
+  // las añadidas por el admin llevan su propio 🗑️. Reutiliza el MISMO
+  // markup .admin-list-item que Stadium Hub/Ball Storage.
+  function pintarEditorMenuClub(clubId, contenedor) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Mueve las tarjetas arriba/abajo con las flechas. Las de fábrica solo " +
+      "se reordenan; las que añadas tú también se pueden borrar.";
+    contenedor.appendChild(nota);
+
+    var btnAdd = document.createElement("button");
+    btnAdd.type = "button";
+    btnAdd.className = "admin-list-add-btn";
+    btnAdd.dataset.accion = "anadir-tarjeta-menu-club";
+    btnAdd.dataset.clubId = clubId;
+    btnAdd.textContent = "➕ Añadir competición";
+    contenedor.appendChild(btnAdd);
+
+    var tarjetas = window.Estado ? window.Estado.obtenerMenuClub(clubId) : [];
+    var frag = document.createDocumentFragment();
+    tarjetas.forEach(function (t, i) {
+      var fila = document.createElement("div");
+      fila.className = "admin-list-item";
+      fila.innerHTML =
+        '<div class="admin-list-item-main">' +
+        '<span class="admin-list-item-title">' + escapeHTML(t.icono) + " " + escapeHTML(t.etiqueta) + "</span>" +
+        '<span class="admin-list-item-sub">' + (t.esCustom ? "Añadida por ti" : "De fábrica") + "</span>" +
+        "</div>" +
+        '<div class="admin-list-item-actions">' +
+        '<button type="button" class="admin-list-item-btn" data-accion="mover-tarjeta-menu-club" data-club-id="' + clubId +
+        '" data-id="' + t.id + '" data-direccion="-1"' + (i === 0 ? " disabled" : "") + ' aria-label="Subir">▲</button>' +
+        '<button type="button" class="admin-list-item-btn" data-accion="mover-tarjeta-menu-club" data-club-id="' + clubId +
+        '" data-id="' + t.id + '" data-direccion="1"' + (i === tarjetas.length - 1 ? " disabled" : "") + ' aria-label="Bajar">▼</button>' +
+        (t.esCustom
+          ? '<button type="button" class="admin-list-item-btn admin-list-item-btn--danger" data-accion="borrar-tarjeta-menu-club" data-club-id="' + clubId +
+            '" data-id="' + t.id + '" data-nombre="' + escapeHTML(t.etiqueta) + '" aria-label="Borrar">🗑️</button>'
+          : "") +
+        "</div>";
+      frag.appendChild(fila);
+    });
+    contenedor.appendChild(frag);
+  }
+
+  // Editor del calendario EXTRA de un club concreto — mismo patrón que el
+  // roadmap del Panel Admin (textarea con el texto crudo + Guardar/Cancelar),
+  // pero namespaced por club y con formato de línea distinto (rival +
+  // fecha/resultado opcionales, ver parsearPartidosExtraTexto).
+  function pintarEditorCalendarioExtraClub(clubId, contenedor) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Una línea por partido: «Competición - Ronda - Rival». Puedes añadir " +
+      "la fecha al final («... - Rival - 15 sep») y, si ya se jugó, el " +
+      "resultado pegado al rival: «Rival (2-1)». Se suma al calendario de " +
+      "la derecha sin tocar los partidos ya programados.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "calendario-extra-club-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 10;
+    textarea.placeholder = "Champions League - Jornada 1 - Bayern Munich - 15 sep\nCopa del Rey - Octavos - Real Sociedad (3-1)";
+    textarea.value = window.Estado ? window.Estado.obtenerCalendarioExtraTexto(clubId) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-calendario-extra-club" data-club-id="' + clubId + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-calendario-extra-club" data-club-id="' + clubId + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
   }
 
   // ============================================================
@@ -848,6 +1115,11 @@
     renderizarInicioEquipos: renderizarInicioEquipos,
     pintarTemporada: pintarTemporada,
     generarCalendarioLateralDerecho: generarCalendarioLateralDerecho,
+    renderizarMenuClub: renderizarMenuClub,
+    pintarEditorMenuClub: pintarEditorMenuClub,
+    pintarEditorCalendarioExtraClub: pintarEditorCalendarioExtraClub,
+    parsearPartidosExtraTexto: parsearPartidosExtraTexto,
+    resolverRivalPorNombre: resolverRivalPorNombre,
     renderizarPlantillaClub: renderizarPlantillaClub,
     renderizarProximamente: renderizarProximamente,
     renderizarAdminCalendario: renderizarAdminCalendario,

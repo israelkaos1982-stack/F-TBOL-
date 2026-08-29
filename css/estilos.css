@@ -675,23 +675,30 @@ button { font-family: inherit; cursor: pointer; }
 }
 
 /* Maquetación PLANA de 2 columnas fijas — menú (izquierda) y calendario
-   (derecha) conviven SIEMPRE juntos en pantalla, también en móvil, tal
-   como pide el Excel de referencia. Ojo: esto vive DENTRO de la pantalla
-   #screen-club, que ya es una vista a pantalla completa aislada de Inicio
-   (petición 2026 "Pantallas Completas Independientes") — no reintroduce
-   el problema original de las 6 cajas + calendario amontonados, porque
-   aquí solo compiten un menú angosto de botones y el propio calendario.
-   Sin sombras, sin degradados, sin filtros ni transiciones — solo color
-   plano, para mantener el consumo de RAM/CPU al mínimo. */
+   (derecha) conviven SIEMPRE juntos en pantalla, también en móvil. Ojo:
+   esto vive DENTRO de la pantalla #screen-club, que ya es una vista a
+   pantalla completa aislada de Inicio (petición 2026 "Pantallas Completas
+   Independientes") — no reintroduce el problema original de las 6 cajas +
+   calendario amontonados, porque aquí solo compiten un menú angosto de
+   botones y el propio calendario.
+
+   Tema de color POR CLUB — cada caja se ve con los colores de SU escudo:
+   js/main.js fija --club-primary/--club-secondary (+ el desglose RGB para
+   poder darles opacidad sin color-mix(), que no está en todos los móviles)
+   en #screen-club al abrir la caja; el resto de este bloque solo los LEE.
+   El "glow" es el MISMO truco ya usado en .team-box--active/--neon-glow —
+   box-shadow de 2 capas, sin filtros ni animaciones pesadas. */
 .club-layout {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 84px 1fr;
+  grid-template-columns: 92px 1fr;
 }
 .club-menu {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+  padding: 10px 8px;
   background: var(--bg-1);
   border-right: 1px solid var(--line);
   /* El calendario es mucho más alto que el menú y la página entera hace
@@ -704,18 +711,58 @@ button { font-family: inherit; cursor: pointer; }
   align-self: start;
 }
 .club-menu-btn {
-  border: none;
-  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 1px solid rgba(var(--club-primary-rgb, 57, 255, 106), 0.4);
+  border-radius: var(--radius-m);
+  background: var(--bg-2);
+  box-shadow:
+    0 0 8px rgba(var(--club-primary-rgb, 57, 255, 106), 0.28),
+    0 0 18px rgba(var(--club-primary-rgb, 57, 255, 106), 0.12);
   padding: 10px 4px;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.35;
-  text-align: center;
   color: #fff;
 }
-.club-menu-btn--dark { background: #181818; }
-.club-menu-btn--green { background: #123a22; }
-.club-menu-btn--blue { background: #123049; }
+.club-menu-btn-icon { font-size: 16px; line-height: 1; }
+.club-menu-btn-label {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  letter-spacing: 0.2px;
+}
+
+.club-header-editar {
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-3);
+  color: var(--text-hi);
+  font-size: 13px;
+}
+
+/* Editor del menú (candado 646) — dos pestañas dentro del modal genérico */
+.editor-club-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.editor-club-tab {
+  flex: 1;
+  padding: 8px 6px;
+  border-radius: var(--radius-s);
+  border: 1px solid var(--line);
+  background: var(--bg-1);
+  color: var(--text-lo);
+  font-size: 11px;
+  font-weight: 800;
+}
+.editor-club-tab.is-active {
+  border-color: var(--neon-soft);
+  background: rgba(57, 255, 106, 0.08);
+  color: var(--neon);
+}
 
 .club-calendar-col {
   min-width: 0;
@@ -865,6 +912,7 @@ button { font-family: inherit; cursor: pointer; }
 /* card de partido */
 .match-card {
   border: 1px solid var(--line);
+  border-left: 3px solid rgba(var(--club-primary-rgb, 57, 255, 106), 0.55);
   background: var(--bg-2);
   border-radius: var(--radius-m);
   padding: 12px;
@@ -890,7 +938,26 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 13px;
   font-weight: 700;
 }
-.match-card-vs { color: var(--text-lo); font-size: 11px; font-weight: 800; }
+.match-card-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.match-card-team-label {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--text-lo);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  max-width: 74px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.match-card-vs { color: var(--text-lo); font-size: 11px; font-weight: 800; flex-shrink: 0; }
 .match-card-date { font-size: 11px; color: var(--text-lo); }
 
 .match-card-btn {

@@ -239,23 +239,15 @@
     cargarTodo().then(function (datos) {
       var frag = document.createDocumentFragment();
 
-      // Las 6 cajas comparten SIEMPRE el mismo degradado de fondo — el
-      // del Liverpool (rojo/dorado) — a petición del usuario. El escudo
-      // de cada club sigue siendo el suyo propio (crearEscudoHTML pone
-      // su color inline en el propio nodo del escudo, un scope de CSS
-      // distinto al del fondo de la caja), así que esto NO afecta a la
-      // identidad visual de cada equipo, solo al fondo de su tarjeta.
-      var liverpoolRef = (datos.equipos.equipos || []).find(function (e) { return e.id === "liverpool"; });
-      var fondoPrimary = (liverpoolRef && liverpoolRef.colorPrimario) || "#c8102e";
-      var fondoSecondary = (liverpoolRef && liverpoolRef.colorSecundario) || "#f6eb61";
-
       (datos.equipos.equipos || []).forEach(function (eq) {
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "team-box";
         btn.dataset.teamId = eq.id;
-        btn.style.setProperty("--primary", fondoPrimary);
-        btn.style.setProperty("--secondary", fondoSecondary);
+        // Cada caja lleva el degradado de SU PROPIO club (colorPrimario/
+        // colorSecundario de data/equipos.json) — no un color compartido.
+        btn.style.setProperty("--primary", eq.colorPrimario || "#39ff6a");
+        btn.style.setProperty("--secondary", eq.colorSecundario || "#101114");
 
         var ghost = eq.crest
           ? '<img class="team-box-crest-ghost" src="' + eq.crest + '" alt="" aria-hidden="true">'

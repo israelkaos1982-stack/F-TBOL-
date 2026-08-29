@@ -31,6 +31,22 @@ html, body { margin: 0; padding: 0; }
   --accent-2: #ff3b5c;
   --accent-2-glow: 0 0 12px rgba(255, 59, 92, 0.5), 0 0 28px rgba(255, 59, 92, 0.22);
 
+  /* Granate — "partido perdido". Deliberadamente distinto del rojo/
+     naranja de los propios escudos (Liverpool #c8102e, Arsenal #ef0107,
+     Atlético #cb3524) para que el borde de resultado nunca se confunda
+     con el color del propio equipo. */
+  --wine: #c2185b;
+
+  /* Azul — resalta la tarjeta del "próximo partido a jugar". Distinto
+     del granate de arriba para no mezclar ambos significados. */
+  --info: #3ba7ff;
+  --info-glow: 0 0 10px rgba(59, 167, 255, 0.5), 0 0 22px rgba(59, 167, 255, 0.22);
+
+  /* Dorado — etiqueta de la Copa del Rey, para distinguirla de un
+     vistazo del rojo de Liga. */
+  --gold: #f1c40f;
+  --gold-glow: 0 0 8px rgba(241, 196, 15, 0.45);
+
   --radius-s: 8px;
   --radius-m: 14px;
   --radius-l: 20px;
@@ -952,7 +968,18 @@ button { font-family: inherit; cursor: pointer; }
   text-transform: uppercase;
   text-align: center;
   color: var(--accent-2);
+  /* Mismo truco de nitidez que el resto de textos con glow del proyecto
+     (ver --neon-glow más arriba) — sin esto, "LIGA J5" se veía borrosa
+     en pantallas pequeñas al ser tan chica y en mayúsculas. */
+  text-shadow: var(--accent-2-glow);
 }
+/* Copa del Rey en dorado, para diferenciarla de Liga a golpe de vista.
+   El resto de competiciones (Supercopa, Champions, Europa League,
+   Conference League, Recopa, Supercopa de Europa) + cualquier nombre
+   libre tecleado en el calendario extra de un club caen en un tono
+   neutro común — no hacía falta inventar un color por cada una. */
+.match-card-comp.comp-copa { color: var(--gold); text-shadow: var(--gold-glow); }
+.match-card-comp.comp-otro { color: var(--text-lo); text-shadow: none; }
 
 /* Fila única — bloque LOCAL (escudo + nombre completo, "cuadrado" — ambos
    agrupados y alineados entre sí) · centro (PREVIA/marcador + "vs") ·
@@ -1045,6 +1072,34 @@ button { font-family: inherit; cursor: pointer; }
    marcador en el centro, ver construirTarjetaPartido), así que no hace
    falta ninguna regla que lo oculte aquí. */
 .match-card.is-played { opacity: 0.4; }
+
+/* Borde de resultado — un partido YA JUGADO del club activo cuenta lo
+   que pasó de un vistazo, sin tener que leer el marcador: ganado
+   (verde, el mismo tono ya usado en el resto de acciones positivas),
+   empatado (gris neutro) o perdido (granate — ver --wine más arriba).
+   Reemplaza tanto el borde general como la franja lateral (que por
+   defecto es el color del propio club) — en un partido jugado esa
+   franja pasa a contar el resultado, que es la información que más
+   importa ahí. */
+/* Selector compuesto (".match-card.match-card--X", no solo ".match-card--X")
+   a propósito: ".match-card:hover" de arriba tiene la MISMA especificidad
+   que un único ".match-card--X" (2 selectores simples), así que sin este
+   refuerzo el borde de resultado desaparecería en cuanto el dedo/cursor
+   pasara por encima de la tarjeta — justo la información que no debe
+   ocultarse nunca. */
+.match-card.match-card--gano { border-color: rgba(57, 255, 106, 0.4); border-left-color: var(--neon); }
+.match-card.match-card--empate { border-color: rgba(154, 160, 172, 0.4); border-left-color: var(--text-lo); }
+.match-card.match-card--perdio { border-color: rgba(194, 24, 91, 0.45); border-left-color: var(--wine); }
+
+/* Próximo partido a jugar (el primer pendiente del calendario) — se
+   resalta con un borde + brillo suave en azul para que destaque de un
+   vistazo entre el resto de tarjetas sin jugar. Azul a propósito, para
+   no confundirlo con el granate de "perdido" de arriba. */
+.match-card.match-card--siguiente {
+  border-color: var(--info);
+  border-left-color: var(--info);
+  box-shadow: var(--info-glow);
+}
 
 /* ---------- 8. PANTALLA DE PREVIA — overlay (Fase 2) ---------- */
 .previa-overlay {

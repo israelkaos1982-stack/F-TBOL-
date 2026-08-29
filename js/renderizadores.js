@@ -292,6 +292,21 @@
     recopa: "Recopa de Europa", usc: "Supercopa de Europa"
   };
 
+  // Color de la etiqueta de competición — Liga (rojo, por defecto — sin
+  // clase extra) y Copa (dorado) se diferencian a golpe de vista, tal
+  // como se pidió; el resto de competiciones conocidas + cualquier
+  // nombre libre tecleado por el admin (calendario extra) caen en un
+  // tono neutro común ("comp-otro") en vez de inventar un color para
+  // cada una. Ver reglas .match-card-comp* en css/estilos.css.
+  var COMP_CLASE = {
+    liga: "", copa: "comp-copa", supercopa: "comp-otro",
+    champions: "comp-otro", uel: "comp-otro", uecl: "comp-otro",
+    recopa: "comp-otro", usc: "comp-otro"
+  };
+  function _claseComp(competicion) {
+    return COMP_CLASE.hasOwnProperty(competicion) ? COMP_CLASE[competicion] : "comp-otro";
+  }
+
   // ============================================================
   // 3. CALENDARIO LATERAL DERECHO
   // ============================================================
@@ -481,7 +496,7 @@
     );
   }
 
-  function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga) {
+  function construirTarjetaPartido(partido, idActivo, datos, totalJornadasLiga, esSiguiente) {
     var esLocal = partido.local === idActivo;
     var rivalId = esLocal ? partido.visitante : partido.local;
     var rival = buscarEquipoPorId(rivalId, datos);
@@ -491,10 +506,25 @@
     var visitante = esLocal ? rival : activo;
 
     var card = document.createElement("div");
-    card.className = "match-card" + (partido.jugado ? " is-played" : "");
+
+    // Borde de resultado (solo si ya se jugó, comparando el marcador
+    // desde el punto de vista del club activo — no importa si jugó de
+    // local o visitante) + resalte del "próximo partido a jugar" (el
+    // primer pendiente del calendario, calculado una vez en
+    // generarCalendarioLateralDerecho y pasado aquí como flag).
+    var claseResultado = "";
+    if (partido.jugado && partido.resultado) {
+      var golesActivo = esLocal ? partido.resultado.golesLocal : partido.resultado.golesVisitante;
+      var golesRival = esLocal ? partido.resultado.golesVisitante : partido.resultado.golesLocal;
+      claseResultado = golesActivo > golesRival ? " match-card--gano"
+        : (golesActivo === golesRival ? " match-card--empate" : " match-card--perdio");
+    }
+
+    card.className = "match-card" + (partido.jugado ? " is-played" : "") + claseResultado + (esSiguiente ? " match-card--siguiente" : "");
     card.dataset.partidoId = partido.id;
 
     var compLabel = COMP_LABEL[partido.competicion] || partido.competicion;
+    var claseComp = _claseComp(partido.competicion);
     var etiquetaRonda = partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · J" + partido.jornada : "");
 
     // Centro — el marcador si ya se jugó, si no el botón PREVIA (sin
@@ -505,7 +535,7 @@
       : '<button type="button" class="match-card-btn" data-partido-id="' + partido.id + '">PREVIA</button>';
 
     card.innerHTML =
-      '<div class="match-card-comp">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
+      '<div class="match-card-comp' + (claseComp ? " " + claseComp : "") + '">' + escapeHTML(compLabel + etiquetaRonda) + "</div>" +
       '<div class="match-card-teams">' +
       _bloqueEquipoHTML(local, "match-card-team--local") +
       '<div class="match-card-center">' + centroTop + '<span class="match-card-vs-sep">vs</span></div>' +
@@ -605,9 +635,17 @@
 
         _ultimoContexto = { datos: datos, equipo: equipo, totalJornadas: totalJornadas, partidosPorId: partidosPorId };
 
+        // El primer partido sin jugar de la lista (ya ordenada por fecha)
+        // es "el próximo" — se resalta con su propia clase para que
+        // destaque de un vistazo cuál toca jugar ahora.
+        var idSiguiente = null;
+        for (var i = 0; i < partidosDelClub.length; i++) {
+          if (!partidosDelClub[i].jugado) { idSiguiente = partidosDelClub[i].id; break; }
+        }
+
         var frag = document.createDocumentFragment();
         partidosDelClub.forEach(function (p) {
-          frag.appendChild(construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas));
+          frag.appendChild(construirTarjetaPartido(p, idEquipoHumanoActivo, datos, totalJornadas, p.id === idSiguiente));
         });
         contenedor.appendChild(frag);
 

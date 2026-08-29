@@ -170,6 +170,9 @@
       <div class="previa-info-item"><dt>🏟️ Estadio</dt><dd id="previa-estadio">—</dd></div>
       <div class="previa-info-item"><dt>🌦️ Clima</dt><dd id="previa-clima">—</dd></div>
       <div class="previa-info-item"><dt>⚽ Balón</dt><dd id="previa-balon">—</dd></div>
+      <div class="previa-info-item"><dt>⏱️ Tiempo</dt><dd id="previa-tiempo">—</dd></div>
+      <div class="previa-info-item"><dt>🤖 Nivel</dt><dd id="previa-nivel">—</dd></div>
+      <div class="previa-info-item"><dt>🔋 Forma</dt><dd id="previa-forma">—</dd></div>
     </dl>
 
     <button type="button" class="btn-confirmar" id="previa-empezar" hidden>▶ Empezar partido</button>
@@ -191,6 +194,26 @@
 
     <!-- VISTA A: registrar eventos -->
     <div id="live-entrada">
+      <div class="live-separador"></div>
+
+      <div class="live-lista-block">
+        <div class="live-lista-header">
+          <span class="live-lista-title">🚑 Lesionados</span>
+          <button type="button" class="live-lista-add" id="live-lesionado-add">➕ Añadir</button>
+        </div>
+        <div class="live-acta-lista live-lista-jugadores" id="live-lesionados-lista"></div>
+      </div>
+
+      <div class="live-lista-block">
+        <div class="live-lista-header">
+          <span class="live-lista-title">🟨 Sancionados</span>
+          <button type="button" class="live-lista-add" id="live-sancionado-add">➕ Añadir</button>
+        </div>
+        <div class="live-acta-lista live-lista-jugadores" id="live-sancionados-lista"></div>
+      </div>
+
+      <div id="live-formato-box"></div>
+
       <div class="live-form-row">
         <label class="live-label">Minuto
           <select id="live-minuto" class="live-select"></select>
@@ -200,6 +223,8 @@
           <button type="button" class="live-toggle-btn" data-lado="visitante">Visitante</button>
         </div>
       </div>
+
+      <button type="button" class="btn-descanso" id="live-descanso">🛌 Descanso</button>
 
       <div class="live-form-row" id="live-jugador-row">
         <label class="live-label live-label--full">Jugador
@@ -216,6 +241,10 @@
         <button type="button" class="live-evt-btn" data-tipo="AMARILLA">🟨 Amarilla</button>
         <button type="button" class="live-evt-btn" data-tipo="ROJA">🟥 Roja</button>
         <button type="button" class="live-evt-btn" data-tipo="MVP">⭐ MVP</button>
+      </div>
+
+      <div id="live-tanda-info" class="live-tanda-info" hidden>
+        🎯 Tanda de penaltis: <strong id="live-tanda-marcador">0 - 0</strong>
       </div>
 
       <div class="live-acta-lista" id="live-acta-lista">

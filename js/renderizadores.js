@@ -1130,8 +1130,9 @@
     var nota = document.createElement("p");
     nota.className = "admin-nota";
     nota.textContent =
-      "Mueve las tarjetas arriba/abajo con las flechas. Las de fábrica solo " +
-      "se reordenan; las que añadas tú también se pueden borrar.";
+      "Mueve las tarjetas arriba/abajo con las flechas y edita su nombre/icono " +
+      "con ✏️ — incluidas las de fábrica (↺ las devuelve a su nombre/icono " +
+      "original). Las de fábrica no se pueden borrar; las que añadas tú sí.";
     contenedor.appendChild(nota);
 
     var btnAdd = document.createElement("button");
@@ -1145,18 +1146,26 @@
     var tarjetas = window.Estado ? window.Estado.obtenerMenuClub(clubId) : [];
     var frag = document.createDocumentFragment();
     tarjetas.forEach(function (t, i) {
+      var subEtiqueta = t.esCustom ? "Añadida por ti" : (t.esFabricaEditada ? "De fábrica (editada)" : "De fábrica");
       var fila = document.createElement("div");
       fila.className = "admin-list-item";
       fila.innerHTML =
         '<div class="admin-list-item-main">' +
         '<span class="admin-list-item-title">' + escapeHTML(t.icono) + " " + escapeHTML(t.etiqueta) + "</span>" +
-        '<span class="admin-list-item-sub">' + (t.esCustom ? "Añadida por ti" : "De fábrica") + "</span>" +
+        '<span class="admin-list-item-sub">' + subEtiqueta + "</span>" +
         "</div>" +
         '<div class="admin-list-item-actions">' +
         '<button type="button" class="admin-list-item-btn" data-accion="mover-tarjeta-menu-club" data-club-id="' + clubId +
         '" data-id="' + t.id + '" data-direccion="-1"' + (i === 0 ? " disabled" : "") + ' aria-label="Subir">▲</button>' +
         '<button type="button" class="admin-list-item-btn" data-accion="mover-tarjeta-menu-club" data-club-id="' + clubId +
         '" data-id="' + t.id + '" data-direccion="1"' + (i === tarjetas.length - 1 ? " disabled" : "") + ' aria-label="Bajar">▼</button>' +
+        '<button type="button" class="admin-list-item-btn" data-accion="editar-tarjeta-menu-club" data-club-id="' + clubId +
+        '" data-id="' + t.id + '" data-icono="' + escapeHTML(t.icono) + '" data-etiqueta="' + escapeHTML(t.etiqueta) +
+        '" aria-label="Editar">✏️</button>' +
+        (t.esFabricaEditada
+          ? '<button type="button" class="admin-list-item-btn" data-accion="restablecer-tarjeta-menu-club" data-club-id="' + clubId +
+            '" data-id="' + t.id + '" data-nombre="' + escapeHTML(t.etiqueta) + '" aria-label="Restablecer de fábrica">↺</button>'
+          : "") +
         (t.esCustom
           ? '<button type="button" class="admin-list-item-btn admin-list-item-btn--danger" data-accion="borrar-tarjeta-menu-club" data-club-id="' + clubId +
             '" data-id="' + t.id + '" data-nombre="' + escapeHTML(t.etiqueta) + '" aria-label="Borrar">🗑️</button>'

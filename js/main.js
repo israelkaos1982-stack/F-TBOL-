@@ -185,6 +185,21 @@
     window.Estado.moverTarjetaMenuClub(clubId, id, Number(direccion));
     repintarMenuClub(clubId);
   }
+  function editarTarjetaMenuClubPrompt(clubId, id, iconoActual, etiquetaActual) {
+    if (!window.Estado) return;
+    var etiqueta = window.prompt("Nombre de la competición:", etiquetaActual);
+    if (etiqueta === null || !etiqueta.trim()) return;
+    var icono = window.prompt("Icono/emoji:", iconoActual);
+    if (icono === null) icono = iconoActual;
+    window.Estado.editarTarjetaMenuClub(clubId, id, icono, etiqueta);
+    repintarMenuClub(clubId);
+  }
+  function restablecerTarjetaMenuClubPrompt(clubId, id, nombre) {
+    if (!window.Estado) return;
+    if (!window.confirm('¿Restablecer "' + nombre + '" a su nombre e icono de fábrica?')) return;
+    window.Estado.restablecerTarjetaMenuClub(clubId, id);
+    repintarMenuClub(clubId);
+  }
   function borrarTarjetaMenuClubPrompt(clubId, id, nombre) {
     if (!window.Estado) return;
     if (!window.confirm('¿Borrar la tarjeta "' + nombre + '" del menú?')) return;
@@ -586,6 +601,8 @@
         case "editor-club-tab": cambiarTabEditorClub(d.clubId, d.tab, accionBtn); break;
         case "anadir-tarjeta-menu-club": anadirTarjetaMenuClubPrompt(d.clubId); break;
         case "mover-tarjeta-menu-club": moverTarjetaMenuClub(d.clubId, d.id, d.direccion); break;
+        case "editar-tarjeta-menu-club": editarTarjetaMenuClubPrompt(d.clubId, d.id, d.icono, d.etiqueta); break;
+        case "restablecer-tarjeta-menu-club": restablecerTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
         case "borrar-tarjeta-menu-club": borrarTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
         case "guardar-calendario-extra-club": guardarCalendarioExtraClub(d.clubId); break;
         case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;

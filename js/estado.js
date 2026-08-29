@@ -270,12 +270,13 @@
     try {
       var raw = localStorage.getItem(_menuClubKey(clubId));
       var ov = raw ? JSON.parse(raw) : null;
-      if (!ov) return { orden: _menuClubIdsBuiltin(), personalizadas: {} };
+      if (!ov) return { orden: _menuClubIdsBuiltin(), personalizadas: {}, overridesFabrica: {} };
       if (!ov.orden) ov.orden = _menuClubIdsBuiltin();
       if (!ov.personalizadas) ov.personalizadas = {};
+      if (!ov.overridesFabrica) ov.overridesFabrica = {};
       return ov;
     } catch (err) {
-      return { orden: _menuClubIdsBuiltin(), personalizadas: {} };
+      return { orden: _menuClubIdsBuiltin(), personalizadas: {}, overridesFabrica: {} };
     }
   }
   function _guardarMenuClub(clubId, ov) {
@@ -302,7 +303,14 @@
     });
 
     return orden.map(function (id) {
-      if (builtinPorId[id]) return Object.assign({ esCustom: false }, builtinPorId[id]);
+      if (builtinPorId[id]) {
+        var override = ov.overridesFabrica[id];
+        return Object.assign(
+          { esCustom: false, esFabricaEditada: !!override },
+          builtinPorId[id],
+          override || {}
+        );
+      }
       var custom = ov.personalizadas[id];
       if (!custom) return null;
       return Object.assign({ esCustom: true, id: id }, custom);
@@ -315,6 +323,32 @@
     ov.personalizadas[id] = { icono: (icono || "⭐").trim(), etiqueta: etiqueta.trim() };
     ov.orden.push(id);
     return _guardarMenuClub(clubId, ov) ? id : null;
+  }
+  // Renombra/re-icona CUALQUIER tarjeta del menú, de fábrica o añadida por
+  // el admin. Las de fábrica se guardan como override (nunca se toca
+  // MENU_CLUB_BUILTIN — el nombre/icono "de verdad" sigue disponible para
+  // restablecerTarjetaMenuClub); las custom se editan directamente porque
+  // su único origen de datos YA es `personalizadas`.
+  function editarTarjetaMenuClub(clubId, id, icono, etiqueta) {
+    if (!etiqueta || !etiqueta.trim()) return false;
+    var ov = _cargarMenuClub(clubId);
+    var valor = { icono: (icono || "⭐").trim(), etiqueta: etiqueta.trim() };
+    if (_menuClubIdsBuiltin().indexOf(id) !== -1) {
+      ov.overridesFabrica[id] = valor;
+    } else if (ov.personalizadas[id]) {
+      ov.personalizadas[id] = valor;
+    } else {
+      return false;
+    }
+    return _guardarMenuClub(clubId, ov);
+  }
+  // Solo aplica a tarjetas de fábrica editadas — vuelve a su nombre/icono
+  // original sin afectar a su posición en el orden.
+  function restablecerTarjetaMenuClub(clubId, id) {
+    var ov = _cargarMenuClub(clubId);
+    if (!ov.overridesFabrica[id]) return false;
+    delete ov.overridesFabrica[id];
+    return _guardarMenuClub(clubId, ov);
   }
   function moverTarjetaMenuClub(clubId, id, direccion) {
     var ov = _cargarMenuClub(clubId);
@@ -575,6 +609,8 @@
     guardarCalendarioTexto: guardarCalendarioTexto,
     obtenerMenuClub: obtenerMenuClub,
     anadirTarjetaMenuClub: anadirTarjetaMenuClub,
+    editarTarjetaMenuClub: editarTarjetaMenuClub,
+    restablecerTarjetaMenuClub: restablecerTarjetaMenuClub,
     moverTarjetaMenuClub: moverTarjetaMenuClub,
     borrarTarjetaMenuClub: borrarTarjetaMenuClub,
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,

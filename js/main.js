@@ -430,6 +430,20 @@
     if (window.Renderizadores) window.Renderizadores.pintarTemporada();
   }
 
+  // ---------- Nombre de la liga principal editable (badge del calendario) ----------
+  // Compartido por los 6 clubes humanos (todos juegan la misma liga) — se
+  // edita una vez y se ve en todas las cajas, igual que la Temporada.
+  function editarNombreLiga() {
+    if (!window.Estado) return;
+    var actual = window.Estado.obtenerNombreLiga();
+    var nueva = window.prompt("Nombre de la liga principal:", actual);
+    if (nueva === null) return; // cancelado
+    if (!nueva.trim()) return;
+    window.Estado.guardarNombreLiga(nueva);
+    var badge = document.getElementById("calendar-liga-badge");
+    if (badge) badge.textContent = nueva.trim();
+  }
+
   // ---------- Wiring ----------
   document.addEventListener("DOMContentLoaded", function () {
     if (window.Renderizadores) {
@@ -439,6 +453,9 @@
 
     var btnTemporada = document.getElementById("btn-editar-temporada");
     if (btnTemporada) btnTemporada.addEventListener("click", editarTemporada);
+
+    var btnLigaNombre = document.getElementById("btn-editar-liga-nombre");
+    if (btnLigaNombre) btnLigaNombre.addEventListener("click", editarNombreLiga);
 
     var grid = document.getElementById("team-select-grid");
     if (grid) {

@@ -541,7 +541,11 @@
         var ligaActual = equipo.ligaActual;
         var totalJornadas = TOTAL_JORNADAS_POR_LIGA[ligaActual] || 38;
 
-        if (badge) badge.textContent = (ligaActual || "").replace(/_/g, " ");
+        if (badge) {
+          badge.textContent = (ligaActual === "LIGA_EA_SPORTS" && window.Estado && window.Estado.obtenerNombreLiga)
+            ? window.Estado.obtenerNombreLiga()
+            : (ligaActual || "").replace(/_/g, " ");
+        }
 
         // Vista fusionada: partidos base + confirmados/generados en
         // caliente (Estado) — así un partido recién jugado se pinta gris

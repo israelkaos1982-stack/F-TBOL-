@@ -169,6 +169,35 @@
     }
   }
 
+  // ---------- Nombre de la LIGA principal (editable) ----------
+  // El badge del calendario ("LIGA_EA_SPORTS" -> "LIGA EA SPORTS") venía
+  // derivado a pelo de la clave interna de data/equipos_ia.json — un
+  // resto del primer mock del proyecto. La liga real de estos 6 clubes es
+  // "1ª REF" (así la llama ya el propio roadmap de arriba, "🇪🇸 1ª REF -
+  // 1ªJornada de Liga"); el admin la deja como quiera desde el lápiz
+  // junto al badge del calendario (js/main.js::editarNombreLiga).
+  var LIGA_NOMBRE_KEY = "ef7_liga_principal_nombre_v1";
+  var LIGA_NOMBRE_DEFECTO = "1ª REF";
+  function obtenerNombreLiga() {
+    try {
+      var v = localStorage.getItem(LIGA_NOMBRE_KEY);
+      return v && v.trim() ? v : LIGA_NOMBRE_DEFECTO;
+    } catch (err) {
+      return LIGA_NOMBRE_DEFECTO;
+    }
+  }
+  function guardarNombreLiga(valor) {
+    var limpio = (valor || "").trim();
+    if (!limpio) return false;
+    try {
+      localStorage.setItem(LIGA_NOMBRE_KEY, limpio);
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar el nombre de la liga:", err);
+      return false;
+    }
+  }
+
   // ---------- Calendario de COMPETICIONES (roadmap editable, SIN fecha) ----------
   // No es el calendario de partidos (eso vive en data/partidos.json y ya
   // se ve bien en el calendario de cada club, con fecha real). Esto es
@@ -488,6 +517,8 @@
     borrarTodo: borrarTodo,
     obtenerTemporada: obtenerTemporada,
     guardarTemporada: guardarTemporada,
+    obtenerNombreLiga: obtenerNombreLiga,
+    guardarNombreLiga: guardarNombreLiga,
     obtenerCalendarioTexto: obtenerCalendarioTexto,
     guardarCalendarioTexto: guardarCalendarioTexto,
     obtenerMenuClub: obtenerMenuClub,

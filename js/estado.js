@@ -61,6 +61,16 @@
     return guardarEstado();
   }
 
+  // Resultado confirmado en vivo para UN partido, tal cual lo guardó
+  // registrarResultadoPartido — lo usa generarCalendarioLateralDerecho
+  // para superponerlo sobre un partido de "Calendario extra" (que se
+  // reconstruye desde texto en cada render y, si no, perdería el
+  // resultado de una simulación en vivo en el siguiente repintado).
+  function obtenerResultadoOverride(partidoId) {
+    var e = cargarEstado();
+    return e.resultados[partidoId] || null;
+  }
+
   function registrarPartidoGenerado(partido) {
     var e = cargarEstado();
     e.partidosGenerados[partido.id] = partido;
@@ -594,6 +604,7 @@
     cargarEstado: cargarEstado,
     guardarEstado: guardarEstado,
     registrarResultadoPartido: registrarResultadoPartido,
+    obtenerResultadoOverride: obtenerResultadoOverride,
     registrarPartidoGenerado: registrarPartidoGenerado,
     listarPartidosResueltos: listarPartidosResueltos,
     calcularClasificacion: calcularClasificacion,

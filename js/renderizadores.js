@@ -367,6 +367,15 @@
     return div;
   }
 
+  // Hash determinista simple (mismo texto -> mismo número, siempre) — lo
+  // reutilizan el id estable de "Calendario extra", el color del escudo
+  // sintético y el valoracionPoder sintético, sin duplicar el bucle 3 veces.
+  function _hashStr(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+    return h;
+  }
+
   // ---------- 3b. Calendario EXTRA de cada club (texto libre -> partidos) ----------
   // data/partidos.json ya trae Liga+Copa+Supercopa reales de los 6 humanos.
   // Esto es SOLO para que cada caja pueda sumar partidos que ese fixture
@@ -391,6 +400,7 @@
   function parsearPartidosExtraTexto(texto, nombreClubActivo) {
     var clubNorm = _normNombre(nombreClubActivo || "");
     var items = [];
+    var idsVistos = {}; // desambigua el raro caso de 2 líneas con la MISMA competición+ronda+rival (ida/vuelta sin distinguir en el texto)
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
       if (!l) return;
@@ -446,8 +456,19 @@
         // respeta lo que ya se supiera por la marca (visitante)/(local).
       }
 
+      // Id ESTABLE (competición+ronda+rival, sin la posición en la lista):
+      // reordenar/añadir líneas en el texto no le cambia el id a un partido
+      // ya existente, así un resultado confirmado en vivo (ver
+      // Estado.registrarResultadoPartido) no se queda huérfano al re-parsear.
+      // Si 2 líneas comparten exactamente competición+ronda+rival (p.ej.
+      // ida/vuelta sin distinguirlo en la "ronda") se desambiguan por orden
+      // de aparición para que nunca colisionen entre sí.
+      var idBase = "extra-" + _hashStr(_normNombre(competicion) + "|" + _normNombre(ronda) + "|" + _normNombre(rivalCrudo)).toString(36);
+      idsVistos[idBase] = (idsVistos[idBase] || 0) + 1;
+      var idFinal = idsVistos[idBase] > 1 ? idBase + "-" + idsVistos[idBase] : idBase;
+
       items.push({
-        id: "extra-" + items.length + "-" + _normNombre(rivalCrudo).replace(/[^a-z0-9]+/g, "-"),
+        id: idFinal,
         competicion: competicion,
         ronda: ronda,
         rivalNombre: rivalCrudo,
@@ -463,9 +484,7 @@
 
   var _COLORES_SINTETICOS = ["#e6484f", "#3ba7ff", "#ffb020", "#8b5cf6", "#2bbf7a", "#ff7ab8", "#54c7d0", "#c9a24b"];
   function _colorSintetico(nombre) {
-    var h = 0;
-    for (var i = 0; i < nombre.length; i++) h = (h * 31 + nombre.charCodeAt(i)) >>> 0;
-    return _COLORES_SINTETICOS[h % _COLORES_SINTETICOS.length];
+    return _COLORES_SINTETICOS[_hashStr(nombre) % _COLORES_SINTETICOS.length];
   }
 
   // valoracionPoder determinista (mismo nombre -> mismo poder siempre) pero
@@ -475,10 +494,8 @@
   // mínimo — sin necesidad de tocar el algoritmo correlativo de siempre.
   function _poderSinteticoPorLiga(nombre, ligaContexto) {
     var rango = _PODER_RANGO_POR_LIGA[ligaContexto] || _PODER_RANGO_POR_LIGA.LIGA_HYPERMOTION;
-    var h = 0;
-    for (var i = 0; i < nombre.length; i++) h = (h * 31 + nombre.charCodeAt(i)) >>> 0;
     var span = rango[1] - rango[0];
-    return rango[0] + (span > 0 ? h % (span + 1) : 0);
+    return rango[0] + (span > 0 ? _hashStr(nombre) % (span + 1) : 0);
   }
 
   function _buscarRivalReal(norm) {
@@ -951,7 +968,7 @@
           var rival = resolverRivalPorNombre(ex.rivalNombre, datos, equipo.ligaActual);
           // ex.esVisitante decide qué id va en local/visitante; el marcador
           // (siempre guardado como "club-rival") se remapea al mismo orden.
-          return {
+          var p = {
             id: ex.id,
             competicion: ex.competicion,
             ronda: ex.ronda,
@@ -961,13 +978,25 @@
             fecha: null,
             _fechaTexto: ex.fecha,
             _fechaFallbackMs: ahoraMs + i * 86400000,
-            _soloInformativo: true,
             jugado: ex.jugado,
             resultado: ex.jugado ? {
               golesLocal: ex.esVisitante ? ex.golesRival : ex.golesClub,
               golesVisitante: ex.esVisitante ? ex.golesClub : ex.golesRival
             } : null
           };
+          // Si el admin ya lo jugó EN VIVO desde "▶ Empezar partido" (en vez
+          // de escribir el marcador a mano en el texto), ese resultado
+          // confirmado (Estado.registrarResultadoPartido) manda sobre lo que
+          // diga el texto — mismo criterio de superposición que
+          // Estado.listarPartidosResueltos usa para los partidos base.
+          var override = window.Estado && window.Estado.obtenerResultadoOverride
+            ? window.Estado.obtenerResultadoOverride(ex.id) : null;
+          if (override) {
+            p.jugado = override.jugado;
+            p.resultado = { golesLocal: override.golesLocal, golesVisitante: override.golesVisitante };
+            p.eventos = override.eventos;
+          }
+          return p;
         });
         partidosDelClub = partidosDelClub.concat(partidosExtra);
 
@@ -1073,13 +1102,14 @@
     document.getElementById("previa-balon").innerHTML =
       balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">❄️ forzado por nieve</span>' : "");
 
-    // Los partidos EXTRA (texto libre) son SOLO INFORMATIVOS — no hay
-    // roster resuelto para un rival sintético, así que no se pueden jugar
-    // en vivo. Se sigue mostrando el resto de la previa (estadio/clima/
-    // balón) tal cual, solo se oculta "Empezar partido".
+    // El motor en vivo (js/acta.js) nunca necesitó el roster del rival —
+    // el desplegable de jugador solo se muestra para el lado HUMANO
+    // (poblarSelectJugador), así que un rival sin roster (cualquier
+    // "Calendario extra": real o sintético) se juega en vivo exactamente
+    // igual que uno del fixture base. Solo se oculta si ya está jugado.
     var btnEmpezar = document.getElementById("previa-empezar");
     if (btnEmpezar) {
-      btnEmpezar.hidden = !!partido.jugado || !!partido._soloInformativo;
+      btnEmpezar.hidden = !!partido.jugado;
       btnEmpezar.dataset.partidoId = partido.id;
     }
 

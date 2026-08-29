@@ -407,6 +407,47 @@
     }
   }
 
+  // ---------- Lesionados / sancionados por club (Fase 4) ----------
+  // Igual que el calendario extra: una lista de texto libre POR CLUB
+  // (el mánager de cada caja lleva la suya, independiente de con quién
+  // juegue cada partido), persistida en su propia clave localStorage.
+  // "tipo" es "lesionados" o "sancionados" — mismas 3 funciones sirven
+  // para ambas listas, sin duplicar código.
+  function _listaJugadoresKey(clubId, tipo) { return "ef7_club_" + tipo + "_v1_" + clubId; }
+  function obtenerListaJugadores(clubId, tipo) {
+    try {
+      var raw = localStorage.getItem(_listaJugadoresKey(clubId, tipo));
+      var lista = raw ? JSON.parse(raw) : [];
+      return Array.isArray(lista) ? lista : [];
+    } catch (err) {
+      return [];
+    }
+  }
+  function _guardarListaJugadores(clubId, tipo, lista) {
+    try {
+      localStorage.setItem(_listaJugadoresKey(clubId, tipo), JSON.stringify(lista));
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la lista de " + tipo + " del club:", err);
+      return false;
+    }
+  }
+  function agregarJugadorALista(clubId, tipo, nombre) {
+    nombre = String(nombre || "").trim();
+    var lista = obtenerListaJugadores(clubId, tipo);
+    if (!nombre) return lista;
+    lista.push(nombre);
+    _guardarListaJugadores(clubId, tipo, lista);
+    return lista;
+  }
+  function quitarJugadorDeLista(clubId, tipo, indice) {
+    var lista = obtenerListaJugadores(clubId, tipo);
+    if (indice < 0 || indice >= lista.length) return lista;
+    lista.splice(indice, 1);
+    _guardarListaJugadores(clubId, tipo, lista);
+    return lista;
+  }
+
   // ---------- Liga 1ª REF — tabla BASE de los equipos IA, pegada en texto (candado 646) ----------
   // Este simulador NO simula los partidos IA-vs-IA — el admin lleva esos
   // resultados fuera de la web y pega aquí el snapshot agregado de cada
@@ -626,6 +667,9 @@
     borrarTarjetaMenuClub: borrarTarjetaMenuClub,
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
+    obtenerListaJugadores: obtenerListaJugadores,
+    agregarJugadorALista: agregarJugadorALista,
+    quitarJugadorDeLista: quitarJugadorDeLista,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,
     guardarLiga1RefTexto: guardarLiga1RefTexto,
     fusionarBalones: fusionarBalones,

@@ -168,31 +168,114 @@
   // ============================================================
   // PANTALLA EN VIVO — wiring de la UI (formulario de eventos + acta)
   // ============================================================
-  var _partidoActivo = null; // { partido, local, visitante, datos, lado }
+  var _partidoActivo = null; // { partido, local, visitante, datos, lado, modo, prorroga }
   var _ultimoResumen = null;
 
   function esEquipoHumano(equipoId, datos) {
     return (datos.equipos.equipos || []).some(function (e) { return e.id === equipoId; });
   }
 
+  // Texto ESCRITO POR EL ADMIN (prompt() de lesionados/sancionados) —
+  // se escapa antes de interpolar en innerHTML, mismo criterio que
+  // js/renderizadores.js::escapeHTML.
+  var _escapeMap = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+  function escapeHTML(str) {
+    return String(str == null ? "" : str).replace(/[&<>"']/g, function (c) { return _escapeMap[c]; });
+  }
+
+  // Minuto: 5' a 95' SIEMPRE (los 90-95 representan el descuento). Solo
+  // en modo "eliminatoria-unica" con la casilla "Activar Prórroga y
+  // Penaltis" marcada se añaden 100'-120' + la opción de Tanda — Liga e
+  // Ida y Vuelta nunca la muestran (esas eliminatorias se deciden por
+  // el global de ida+vuelta, no en este partido suelto).
   function poblarSelectMinuto() {
     var sel = document.getElementById("live-minuto");
-    if (!sel) return;
+    if (!sel || !_partidoActivo) return;
     sel.innerHTML = "";
-    for (var m = 5; m <= 90; m += 5) {
+    for (var m = 5; m <= 95; m += 5) {
       var op = document.createElement("option");
       op.value = String(m);
       op.textContent = m + "'";
       if (m === 45) op.selected = true;
       sel.appendChild(op);
     }
-    // Opción especial: penaltis de la tanda de un tercer partido 0-0.
-    // No suman al marcador (calcularMarcadorDesdeActa los ignora) —
-    // solo los lee sistema-temporadas.js para decidir el ganador.
-    var opTanda = document.createElement("option");
-    opTanda.value = MINUTO_TANDA;
-    opTanda.textContent = "🎯 Tanda de penaltis";
-    sel.appendChild(opTanda);
+
+    var permiteProrroga = _partidoActivo.modo === "eliminatoria-unica" && _partidoActivo.prorroga;
+    if (permiteProrroga) {
+      for (var e = 100; e <= 120; e += 5) {
+        var opE = document.createElement("option");
+        opE.value = String(e);
+        opE.textContent = e + "' (prórroga)";
+        sel.appendChild(opE);
+      }
+      // Opción especial: penaltis de la tanda. No suman al marcador
+      // (calcularMarcadorDesdeActa los ignora) — solo los lee
+      // sistema-temporadas.js para decidir el ganador de la eliminatoria.
+      var opTanda = document.createElement("option");
+      opTanda.value = MINUTO_TANDA;
+      opTanda.textContent = "🎯 Tanda de penaltis";
+      sel.appendChild(opTanda);
+    }
+
+    actualizarTandaInfo();
+  }
+
+  // Caja "🎯 Tanda de penaltis: X - Y" — oculta salvo que el admin haya
+  // seleccionado esa opción del minuto, o ya haya penaltis registrados
+  // en la tanda (para que no desaparezca si vuelve a cambiar el minuto).
+  function actualizarTandaInfo() {
+    var box = document.getElementById("live-tanda-info");
+    var marcador = document.getElementById("live-tanda-marcador");
+    if (!box || !marcador || !_partidoActivo) return;
+    var minutoSel = document.getElementById("live-minuto");
+    var enModoTanda = !!(minutoSel && minutoSel.value === MINUTO_TANDA);
+    var penL = actaTemporal.filter(function (e) { return e.tipo === "PENALTI_GOL" && e.minuto === MINUTO_TANDA && e.equipo_id === _partidoActivo.local.id; }).length;
+    var penV = actaTemporal.filter(function (e) { return e.tipo === "PENALTI_GOL" && e.minuto === MINUTO_TANDA && e.equipo_id === _partidoActivo.visitante.id; }).length;
+    box.hidden = !(enModoTanda || (penL + penV) > 0);
+    marcador.textContent = penL + " - " + penV;
+  }
+
+  // Casilla "Activar Prórroga y Penaltis" (solo eliminatoria única) /
+  // aviso informativo de "gol de fuera cuenta doble" (solo ida y
+  // vuelta) — Liga no muestra ninguna caja. El modo "desempate" (tercer
+  // partido) cae dentro de eliminatoria-unica a propósito.
+  function renderFormatoBox() {
+    var box = document.getElementById("live-formato-box");
+    if (!box || !_partidoActivo) return;
+    var modo = _partidoActivo.modo;
+    if (modo === "eliminatoria-unica") {
+      box.innerHTML =
+        '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle"' +
+        (_partidoActivo.prorroga ? " checked" : "") +
+        '><span>Activar Prórroga y Penaltis</span></label>' +
+        '<p class="live-formato-hint">⏱️ Actívala si el partido termina empatado en el 90\' — habilita los minutos de prórroga (95\'-120\') y la tanda de penaltis.</p>';
+    } else if (modo === "ida-vuelta") {
+      box.innerHTML =
+        '<p class="live-eliminatoria live-eliminatoria--pendiente">🔁 Partido de ida y vuelta — recuerda que <strong>el gol marcado fuera de casa cuenta doble</strong> en caso de empate global. (Solo informativo, no afecta a este marcador.)</p>';
+    } else {
+      box.innerHTML = "";
+    }
+  }
+
+  // Listas de lesionados/sancionados del club GESTIONADO (persisten por
+  // club, no por partido — sobreviven al recargar y a cambiar de rival).
+  function _filaJugadorLista(nombre, tipo, indice) {
+    return (
+      '<div class="live-acta-item"><span class="live-acta-jugador">' + escapeHTML(nombre) + "</span>" +
+      '<button type="button" class="live-acta-del" data-tipo-lista="' + tipo + '" data-indice="' + indice + '" aria-label="Quitar">✕</button></div>'
+    );
+  }
+  function _renderListaJugadores(tipo, contId, vacioTxt) {
+    var cont = document.getElementById(contId);
+    if (!cont || !window._idManagerActivo || !window.Estado) return;
+    var lista = window.Estado.obtenerListaJugadores(window._idManagerActivo, tipo);
+    cont.innerHTML = lista.length
+      ? lista.map(function (nombre, i) { return _filaJugadorLista(nombre, tipo, i); }).join("")
+      : '<div class="live-acta-vacia">' + vacioTxt + "</div>";
+  }
+  function renderListasJugadores() {
+    _renderListaJugadores("lesionados", "live-lesionados-lista", "Sin lesionados registrados.");
+    _renderListaJugadores("sancionados", "live-sancionados-lista", "Sin sancionados registrados.");
   }
 
   function poblarSelectJugador() {
@@ -236,6 +319,7 @@
       vacio.className = "live-acta-vacia";
       vacio.textContent = "Todavía no hay eventos registrados.";
       cont.appendChild(vacio);
+      actualizarTandaInfo();
       return;
     }
 
@@ -254,6 +338,8 @@
         '<button type="button" class="live-acta-del" data-id-evento="' + ev.id_evento + '" aria-label="Eliminar evento">✕</button>';
       cont.appendChild(fila);
     });
+
+    actualizarTandaInfo();
   }
 
   function pintarMarcadorEnVivo() {
@@ -272,9 +358,10 @@
     if (!local || !visitante) return;
 
     actaTemporal = [];
-    _partidoActivo = { partido: partido, local: local, visitante: visitante, datos: datos, lado: "local" };
-
     var R = window.Renderizadores;
+    var modo = R.detectarModoPartido ? R.detectarModoPartido(partido) : "eliminatoria-unica";
+    _partidoActivo = { partido: partido, local: local, visitante: visitante, datos: datos, lado: "local", modo: modo, prorroga: false };
+
     document.getElementById("live-comp").textContent =
       (R.COMP_LABEL[partido.competicion] || partido.competicion) +
       (partido.ronda ? " · " + partido.ronda : (partido.jornada ? " · Jornada " + partido.jornada : ""));
@@ -284,6 +371,8 @@
     document.getElementById("live-team-visitante").innerHTML =
       R.crearEscudoHTML(visitante, "escudo--lg") + '<span class="previa-team-nombre">' + visitante.nombre + "</span>";
 
+    renderFormatoBox();
+    renderListasJugadores();
     poblarSelectMinuto();
     seleccionarLado("local");
     pintarActaLista();
@@ -426,9 +515,31 @@
 
     var delBtn = ev.target.closest && ev.target.closest(".live-acta-del");
     if (delBtn) {
-      eliminarEventoDeActa(delBtn.dataset.idEvento);
-      pintarActaLista();
-      pintarMarcadorEnVivo();
+      if (delBtn.dataset.idEvento) {
+        eliminarEventoDeActa(delBtn.dataset.idEvento);
+        pintarActaLista();
+        pintarMarcadorEnVivo();
+      } else if (delBtn.dataset.tipoLista && window._idManagerActivo && window.Estado) {
+        window.Estado.quitarJugadorDeLista(window._idManagerActivo, delBtn.dataset.tipoLista, Number(delBtn.dataset.indice));
+        renderListasJugadores();
+      }
+      return;
+    }
+
+    if (ev.target.id === "live-lesionado-add" || ev.target.id === "live-sancionado-add") {
+      var tipoLista = ev.target.id === "live-lesionado-add" ? "lesionados" : "sancionados";
+      var nombreJugador = window.prompt(
+        tipoLista === "lesionados" ? "Nombre del jugador lesionado:" : "Nombre del jugador sancionado:"
+      );
+      if (nombreJugador && nombreJugador.trim() && window._idManagerActivo && window.Estado) {
+        window.Estado.agregarJugadorALista(window._idManagerActivo, tipoLista, nombreJugador.trim());
+        renderListasJugadores();
+      }
+      return;
+    }
+
+    if (ev.target.id === "live-descanso") {
+      window.alert("🛌 Descanso — haz una captura del marcador actual antes de continuar la 2ª parte.");
       return;
     }
 
@@ -450,6 +561,20 @@
     if (ev.target.id === "live-cerrar-resumen") {
       document.getElementById("partido-live-overlay").hidden = true;
       _ultimoResumen = null;
+      return;
+    }
+  });
+
+  // Minuto (mostrar/ocultar la caja de tanda al vuelo) + casilla de
+  // Prórroga y Penaltis (regenera el rango de minutos del select).
+  document.addEventListener("change", function (ev) {
+    if (ev.target.id === "live-minuto") {
+      actualizarTandaInfo();
+      return;
+    }
+    if (ev.target.id === "live-prorroga-toggle" && _partidoActivo) {
+      _partidoActivo.prorroga = !!ev.target.checked;
+      poblarSelectMinuto();
       return;
     }
   });

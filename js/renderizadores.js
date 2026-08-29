@@ -1053,6 +1053,59 @@
   }
 
   // ============================================================
+  // FORMA / NIVEL / TIEMPO — datos "de referencia" del partido en la
+  // PANTALLA DE PREVIA (Fase 4). Es una tabla FIJA, editable solo por
+  // código (nunca desde la UI) — mismo criterio que estadio/balón fijo.
+  // ============================================================
+  var _NIVEL_LEYENDA_ID = "atletico-madrid"; // único club humano en nivel "Leyenda"
+  var _FORMA_POR_CLUB = {
+    liverpool: { icono: "⬇️", label: "En bajón" },
+    arsenal: { icono: "↘️", label: "Irregular" },
+    "real-madrid": { icono: "🎲", label: "Impredecible" },
+    "atletico-madrid": { icono: "↗️", label: "En racha" },
+    "fc-barcelona": { icono: "⬆️", label: "Gran momento" },
+    psg: { icono: "➡️", label: "Estable" }
+  };
+  function _esClubHumano(id, datos) {
+    return (datos.equipos.equipos || []).some(function (e) { return e.id === id; });
+  }
+
+  // Determina qué lado del partido es "el equipo gestionado" (la caja
+  // humana cuyo calendario está abierto) y cuál es "el rival" — Tiempo,
+  // Nivel y Forma se calculan SIEMPRE en función del gestionado, sea
+  // local o visitante en ESTE partido concreto.
+  function _resolverGestionadoYRival(local, visitante, contexto) {
+    var managedId = contexto && contexto.equipo ? contexto.equipo.id : null;
+    if (visitante.id === managedId) return { managed: visitante, rival: local };
+    return { managed: local, rival: visitante }; // default: cubre el caso normal + cualquier id inesperado
+  }
+
+  function _calcularMetaPartido(local, visitante, datos, contexto) {
+    var par = _resolverGestionadoYRival(local, visitante, contexto);
+    var rivalEsHumano = _esClubHumano(par.rival.id, datos);
+    var forma = _FORMA_POR_CLUB[par.managed.id];
+    return {
+      tiempo: rivalEsHumano ? "10 min" : "8 min",
+      nivel: par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack",
+      forma: rivalEsHumano ? "🎲 Impredecible" : (forma ? forma.icono + " " + forma.label : "➡️ Estable")
+    };
+  }
+
+  // Modo de la eliminatoria, deducido del texto libre que el admin
+  // escribe en "Calendario extra" (competición/ronda) o, si algún día
+  // vuelve a poblarse data/partidos.json con el campo `eliminatoria` de
+  // sistema-temporadas.js, de ese campo. El modo "desempate" (tercer
+  // partido 0-0) cae dentro de "eliminatoria-unica" a propósito — ya
+  // resuelve sus penaltis leyendo el acta (ver sistema-temporadas.js).
+  function detectarModoPartido(partido) {
+    if (partido.competicion && _normNombre(partido.competicion) === "liga") return "liga";
+    if (partido.eliminatoria && (partido.eliminatoria.fase === "ida" || partido.eliminatoria.fase === "vuelta")) return "ida-vuelta";
+    var rondaNorm = _normNombre(partido.ronda || "");
+    if (/\bida\b/.test(rondaNorm) || /\bvuelta\b/.test(rondaNorm) || /\bvta\b/.test(rondaNorm)) return "ida-vuelta";
+    return "eliminatoria-unica";
+  }
+
+  // ============================================================
   // PANTALLA DE PREVIA — estadio + clima + balón calculados en vivo
   // ============================================================
   function abrirPreviaPartido(partidoId) {
@@ -1101,6 +1154,11 @@
 
     document.getElementById("previa-balon").innerHTML =
       balon.nombre + (balon.forzadoPorNieve ? ' <span class="previa-balon-forzado">❄️ forzado por nieve</span>' : "");
+
+    var metaPartido = _calcularMetaPartido(local, visitante, datos, _ultimoContexto);
+    document.getElementById("previa-tiempo").textContent = metaPartido.tiempo;
+    document.getElementById("previa-nivel").textContent = metaPartido.nivel;
+    document.getElementById("previa-forma").textContent = metaPartido.forma;
 
     // El motor en vivo (js/acta.js) nunca necesitó el roster del rival —
     // el desplegable de jugador solo se muestra para el lado HUMANO
@@ -1631,6 +1689,7 @@
     renderizarAdminEspacio: renderizarAdminEspacio,
     abrirPreviaPartido: abrirPreviaPartido,
     cerrarPreviaPartido: cerrarPreviaPartido,
+    detectarModoPartido: detectarModoPartido,
     cargarTodo: cargarTodo,
     buscarEquipoPorId: buscarEquipoPorId,
     crearEscudoHTML: crearEscudoHTML,

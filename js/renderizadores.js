@@ -183,6 +183,37 @@
   // sea cual sea la competición.
   var BALON_NIEVE_ID = "efootball-max-vis-27";
 
+  // "Competición - Ronda - Rival" de Calendario extra es texto LIBRE que
+  // teclea el admin ("Liga", "Champions League", "Copa del Rey"...) — casi
+  // nunca coincide EXACTO con el compKey interno de
+  // data/balones.json.asignacionPorCompeticion ("liga", "champions", "uel"...).
+  // Este alias normaliza las etiquetas más habituales a su compKey real,
+  // para que el balón asignado a esa competición SIEMPRE se resuelva, no
+  // solo cuando el admin teclea la clave interna a pelo.
+  var _BALON_COMP_ALIAS = {
+    liga: "liga",
+    copa: "copa", "copa del rey": "copa",
+    supercopa: "supercopa", "supercopa de espana": "supercopa", "super copa de espana": "supercopa",
+    champions: "champions", "champions league": "champions", "uefa champions league": "champions", ucl: "champions",
+    uel: "uel", "europa league": "uel", "uefa europa league": "uel",
+    uecl: "uecl", "conference league": "uecl", "uefa conference league": "uecl",
+    recopa: "recopa", "recopa de europa": "recopa",
+    usc: "usc", "supercopa de europa": "usc", "super copa de europa": "usc",
+    "ucl-previa": "ucl-previa", previa: "ucl-previa", "previa champions": "ucl-previa", "fase previa champions": "ucl-previa",
+    selecciones: "selecciones", "fase final selecciones": "selecciones", mundial: "selecciones",
+    "sel-clasif": "sel-clasif", "clasificacion selecciones": "sel-clasif",
+    intercontinental: "intercontinental", "copa intercontinental": "intercontinental",
+    clasif: "clasif", clasificatorias: "clasif", repesca: "clasif",
+    amistosos: "amistosos", amistoso: "amistosos",
+    superliga: "superliga",
+    verano: "verano", "torneos de verano": "verano",
+    mundialito: "mundialito", "mundialito de clubes": "mundialito"
+  };
+  function _resolverCompKeyBalon(compKeyCrudo) {
+    var norm = _normNombre(compKeyCrudo || "");
+    return _BALON_COMP_ALIAS.hasOwnProperty(norm) ? _BALON_COMP_ALIAS[norm] : compKeyCrudo;
+  }
+
   function resolverBalonPartido(compKey, climaResultado, balonesData) {
     var catalogo = {};
     (balonesData.balones || []).forEach(function (b) { catalogo[b.id] = b.nombre; });
@@ -195,7 +226,7 @@
       };
     }
 
-    var asign = (balonesData.asignacionPorCompeticion || {})[compKey];
+    var asign = (balonesData.asignacionPorCompeticion || {})[_resolverCompKeyBalon(compKey)];
     if (!asign) return { id: null, nombre: "Balón oficial", forzadoPorNieve: false };
     return { id: asign.balonId, nombre: catalogo[asign.balonId] || asign.balonId, forzadoPorNieve: false };
   }
@@ -1105,6 +1136,30 @@
     return "eliminatoria-unica";
   }
 
+  // Listas de 🚑 Lesionados / 🟨 Sancionados del club GESTIONADO (persisten
+  // por club en localStorage, no por partido concreto — sobreviven al
+  // recargar y a cambiar de rival). Viven en la PREVIA (pantalla
+  // informativa), no en la pantalla en vivo — se consultan ANTES de
+  // empezar el partido.
+  function _filaJugadorLista(nombre, tipo, indice) {
+    return (
+      '<div class="live-acta-item"><span class="live-acta-jugador">' + escapeHTML(nombre) + "</span>" +
+      '<button type="button" class="live-acta-del" data-tipo-lista="' + tipo + '" data-indice="' + indice + '" aria-label="Quitar">✕</button></div>'
+    );
+  }
+  function _renderListaJugadores(tipo, contId, vacioTxt) {
+    var cont = document.getElementById(contId);
+    if (!cont || !window._idManagerActivo || !window.Estado) return;
+    var lista = window.Estado.obtenerListaJugadores(window._idManagerActivo, tipo);
+    cont.innerHTML = lista.length
+      ? lista.map(function (nombre, i) { return _filaJugadorLista(nombre, tipo, i); }).join("")
+      : '<div class="live-acta-vacia">' + vacioTxt + "</div>";
+  }
+  function renderListasJugadores() {
+    _renderListaJugadores("lesionados", "previa-lesionados-lista", "Sin lesionados registrados.");
+    _renderListaJugadores("sancionados", "previa-sancionados-lista", "Sin sancionados registrados.");
+  }
+
   // ============================================================
   // PANTALLA DE PREVIA — estadio + clima + balón calculados en vivo
   // ============================================================
@@ -1159,6 +1214,8 @@
     document.getElementById("previa-tiempo").textContent = metaPartido.tiempo;
     document.getElementById("previa-nivel").textContent = metaPartido.nivel;
     document.getElementById("previa-forma").textContent = metaPartido.forma;
+
+    renderListasJugadores();
 
     // El motor en vivo (js/acta.js) nunca necesitó el roster del rival —
     // el desplegable de jugador solo se muestra para el lado HUMANO
@@ -1652,6 +1709,26 @@
     if (btnEmpezar && window.Acta && _ultimoContexto) {
       cerrarPreviaPartido();
       window.Acta.iniciarPartidoEnVivo(btnEmpezar.dataset.partidoId, _ultimoContexto);
+      return;
+    }
+
+    if (ev.target.id === "previa-lesionado-add" || ev.target.id === "previa-sancionado-add") {
+      var tipoLista = ev.target.id === "previa-lesionado-add" ? "lesionados" : "sancionados";
+      var nombreJugador = window.prompt(
+        tipoLista === "lesionados" ? "Nombre del jugador lesionado:" : "Nombre del jugador sancionado:"
+      );
+      if (nombreJugador && nombreJugador.trim() && window._idManagerActivo && window.Estado) {
+        window.Estado.agregarJugadorALista(window._idManagerActivo, tipoLista, nombreJugador.trim());
+        renderListasJugadores();
+      }
+      return;
+    }
+
+    var delBtnLista = ev.target.closest && ev.target.closest(".live-acta-del[data-tipo-lista]");
+    if (delBtnLista && window._idManagerActivo && window.Estado) {
+      window.Estado.quitarJugadorDeLista(window._idManagerActivo, delBtnLista.dataset.tipoLista, Number(delBtnLista.dataset.indice));
+      renderListasJugadores();
+      return;
     }
   });
   document.addEventListener("keydown", function (ev) {

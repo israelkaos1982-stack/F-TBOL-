@@ -212,7 +212,7 @@ button { font-family: inherit; cursor: pointer; }
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
   overflow: hidden;
-  min-height: 128px;
+  min-height: 92px;
   background: var(--bg-2);
   cursor: pointer;
   transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
@@ -256,25 +256,39 @@ button { font-family: inherit; cursor: pointer; }
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   height: 100%;
-  padding: 18px 20px;
+  padding: 12px 16px;
 }
 
-.team-box-meta { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+/* Nombre del club + mánager EN LA MISMA LÍNEA (petición usuario) — antes
+   iban apilados en 2 líneas, lo que hacía la caja más alta de lo
+   necesario. Todo el bloque recorta con "…" si no cabe en una línea,
+   en vez de partirse en 2 — mismo criterio que el resto del proyecto
+   para texto que puede desbordar (ver .match-card-nombre). */
+.team-box-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
 .team-box-club {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 900;
   letter-spacing: 0.4px;
-  line-height: 1.2;
   color: #fff;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
   text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .team-box-mister {
   font-size: 13px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.82);
+  flex-shrink: 0;
 }
 
 /* ---------- 4. ESCUDOS CSS — 0 KB, DOS FORMATOS ---------- */

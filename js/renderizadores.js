@@ -238,18 +238,30 @@
 
     cargarTodo().then(function (datos) {
       var frag = document.createDocumentFragment();
+
+      // Las 6 cajas comparten SIEMPRE el mismo degradado de fondo — el
+      // del Liverpool (rojo/dorado) — a petición del usuario. El escudo
+      // de cada club sigue siendo el suyo propio (crearEscudoHTML pone
+      // su color inline en el propio nodo del escudo, un scope de CSS
+      // distinto al del fondo de la caja), así que esto NO afecta a la
+      // identidad visual de cada equipo, solo al fondo de su tarjeta.
+      var liverpoolRef = (datos.equipos.equipos || []).find(function (e) { return e.id === "liverpool"; });
+      var fondoPrimary = (liverpoolRef && liverpoolRef.colorPrimario) || "#c8102e";
+      var fondoSecondary = (liverpoolRef && liverpoolRef.colorSecundario) || "#f6eb61";
+
       (datos.equipos.equipos || []).forEach(function (eq) {
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "team-box";
         btn.dataset.teamId = eq.id;
-        btn.style.setProperty("--primary", eq.colorPrimario || "#39ff6a");
-        btn.style.setProperty("--secondary", eq.colorSecundario || "#101114");
+        btn.style.setProperty("--primary", fondoPrimary);
+        btn.style.setProperty("--secondary", fondoSecondary);
 
         var ghost = eq.crest
           ? '<img class="team-box-crest-ghost" src="' + eq.crest + '" alt="" aria-hidden="true">'
           : "";
-        var misterLinea = [eq.misterEmoji, eq.mister, eq.banderaSeleccion].filter(Boolean).join(" ");
+        // Sin la bandera de selección (petición usuario) — solo emoji + mister.
+        var misterLinea = [eq.misterEmoji, eq.mister].filter(Boolean).join(" ");
 
         btn.innerHTML =
           ghost +
@@ -257,7 +269,7 @@
           crearEscudoHTML(eq, "escudo--lg") +
           '<div class="team-box-meta">' +
           '<span class="team-box-club">' + eq.nombre + "</span>" +
-          '<span class="team-box-mister">' + misterLinea + "</span>" +
+          (misterLinea ? '<span class="team-box-mister">· ' + misterLinea + "</span>" : "") +
           "</div>" +
           "</div>";
 

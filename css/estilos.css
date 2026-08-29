@@ -384,17 +384,16 @@ button { font-family: inherit; cursor: pointer; }
   border-radius: 50%;
 }
 
-/* Escudo REAL (imagen) — fondo claro para que el logo (casi siempre con
-   transparencia) se lea con contraste sobre las cajas oscuras. */
-/* Sin padding — el escudo real ocupa TODA la caja (petición usuario: "el
-   escudo entero que ocupe el fondo blanco de su propio escudo"). El fondo
-   claro se queda solo para dar contraste donde el PNG/SVG tenga
-   transparencia; ya no hay un margen artificial que lo encoja. */
+/* Escudo REAL (imagen) — SIN fondo blanco (petición usuario, revierte un
+   fondo claro que se puso antes): las 5 imágenes son PNG con canal alfa
+   real (verificado byte a byte — color type RGBA), así que se leen bien
+   con transparencia directamente sobre el degradado/fondo oscuro de la
+   caja, sin ninguna tarjeta blanca detrás. */
 .escudo--real {
-  background: rgba(255, 255, 255, 0.94);
+  background: transparent;
   box-shadow:
     0 3px 10px rgba(0, 0, 0, 0.45),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 .escudo--real img { width: 100%; height: 100%; object-fit: contain; }
 

@@ -259,7 +259,6 @@
     { id: "derbys", icono: "⚔️", etiqueta: "Derbys" },
     { id: "objetivos", icono: "🎯", etiqueta: "Objetivos" },
     { id: "plantilla", icono: "👕", etiqueta: "Plantilla" },
-    { id: "clasificacion", icono: "📊", etiqueta: "Clasificación" },
     { id: "liga1ref", icono: "🔹", etiqueta: "Liga 1ª REF" },
     { id: "copadelrey", icono: "🔹", etiqueta: "Copa del Rey" },
     { id: "superliga", icono: "🍇", etiqueta: "Superliga" },
@@ -364,13 +363,21 @@
     }
   }
 
-  // ---------- Liga 1ª REF — clasificación ÚNICA, pegada en texto (candado 646) ----------
-  // Competición aparte de la Liga EA Sports de cada club (ninguno de los 6
-  // humanos juega en ella todavía) — tabla de 12 equipos con ascenso a
-  // Hypermotion / descenso a 2ª REF. Es UNA sola tabla global (no por club,
-  // no por liga): las 6 cajas la ven exactamente igual, se edita desde
-  // dentro de la propia pantalla "🔹 Liga 1ª REF" (✏️ arriba a la derecha,
-  // PIN 646) — ver js/renderizadores.js::parsearLiga1RefTexto/
+  // ---------- Liga 1ª REF — tabla BASE de los equipos IA, pegada en texto (candado 646) ----------
+  // Este simulador NO simula los partidos IA-vs-IA — el admin lleva esos
+  // resultados fuera de la web y pega aquí el snapshot agregado de cada
+  // equipo IA REAL (los que el propio usuario dio: Real Zaragoza, SD
+  // Huesca...). Es UNA sola tabla global (no por club): las 6 cajas parten
+  // de la MISMA base. La clasificación final que se ve en pantalla suma
+  // esta base + los partidos de LIGA que cada uno de los 6 humanos ya
+  // tiene jugados en su propio calendario dentro de la app — "la
+  // batidora" (ver js/renderizadores.js::calcularLiga1RefCombinada). Un
+  // club humano NUNCA se alimenta de este texto (aunque el admin pegue su
+  // nombre por error, se ignora): su fila sale SIEMPRE de sus propios
+  // partidos jugados, para que solo haya una fuente de verdad por equipo.
+  // Se edita desde dentro de la propia pantalla "🔹 Liga 1ª REF" (✏️
+  // arriba a la derecha, PIN 646) — ver
+  // js/renderizadores.js::parsearLiga1RefTexto/
   // renderizarLiga1RefClasificacion/pintarEditorLiga1Ref.
   // Formato de línea: "Pos Nombre Pts PJ PE PP G+ G- DG" (separado por
   // espacios, tal cual se copia de otra tabla — Pos y DG son opcionales,
@@ -404,37 +411,6 @@
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la clasificación de 1ª REF:", err);
-      return false;
-    }
-  }
-
-  // ---------- Clasificación — tabla BASE de los equipos IA (texto libre por liga) ----------
-  // Este simulador NO simula los partidos IA-vs-IA (decisión explícita del
-  // usuario: nada de motor de simulación) — esos resultados los lleva el
-  // admin fuera de la web y pega aquí el snapshot agregado de cada equipo
-  // IA (PJ/PG/PE/PP/GF/GC). Es UNA SOLA tabla por liga (no por club: los 6
-  // humanos comparten la misma liga y ven la misma base). La Clasificación
-  // final se calcula sumando esta base + los partidos de los humanos ya
-  // registrados en la app (ver
-  // js/renderizadores.js::calcularClasificacionCombinada) — un club
-  // humano NUNCA se alimenta de este texto, aunque el admin pegue una
-  // línea con su nombre por error: su fila sale siempre de sus propios
-  // partidos jugados (una sola fuente de verdad por equipo).
-  function _clasificacionBaseKey(ligaKey) { return "ef7_clasificacion_base_v1_" + ligaKey; }
-  function obtenerClasificacionBaseTexto(ligaKey) {
-    try {
-      var v = localStorage.getItem(_clasificacionBaseKey(ligaKey));
-      return v !== null ? v : "";
-    } catch (err) {
-      return "";
-    }
-  }
-  function guardarClasificacionBaseTexto(ligaKey, texto) {
-    try {
-      localStorage.setItem(_clasificacionBaseKey(ligaKey), texto || "");
-      return true;
-    } catch (err) {
-      console.error("[estado] no se pudo guardar la clasificación base:", err);
       return false;
     }
   }
@@ -603,8 +579,6 @@
     borrarTarjetaMenuClub: borrarTarjetaMenuClub,
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
-    obtenerClasificacionBaseTexto: obtenerClasificacionBaseTexto,
-    guardarClasificacionBaseTexto: guardarClasificacionBaseTexto,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,
     guardarLiga1RefTexto: guardarLiga1RefTexto,
     fusionarBalones: fusionarBalones,

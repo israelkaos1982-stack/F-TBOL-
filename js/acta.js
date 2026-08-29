@@ -109,14 +109,12 @@
     //    la Fase 1, CSS .match-card.is-played).
     window.Estado.registrarResultadoPartido(idPartido, golesL, golesV, actaTemporal);
 
-    // B) Clasificación de la liga: calcularClasificacionCombinada() la
-    //    recalcula en caliente — parte de la tabla BASE que el admin pega
-    //    para los equipos IA (no hay motor de simulación IA-vs-IA) y le
-    //    suma encima TODOS los partidos de los 6 humanos ya jugados; en
-    //    cuanto el resultado queda registrado (paso A) ya la refleja, sin
-    //    mantener un contador aparte que se pueda desincronizar.
+    // B) Clasificación de la liga: Estado.calcularClasificacion() la
+    //    recalcula en caliente a partir de TODOS los partidos jugados —
+    //    en cuanto el resultado queda registrado (paso A) ya la refleja,
+    //    sin mantener un contador aparte que se pueda desincronizar.
     var clasificacion = ctx.partido.competicion === "liga"
-      ? window.Renderizadores.calcularClasificacionCombinada(ctx.datos, ctx.partido.liga)
+      ? window.Estado.calcularClasificacion(ctx.datos, ctx.partido.liga)
       : null;
 
     // C) Fichas de jugadores humanos: mismo principio. Se ignoran los
@@ -302,11 +300,9 @@
     _partidoActivo = null;
   }
 
-  // idsPartido: ids de los 2 equipos del partido recién confirmado — con
-  // la clasificación ahora completa (20 equipos, base IA + humanos, ver
-  // calcularClasificacionCombinada) el club que acaba de jugar puede caer
-  // fuera del top 6 real de la liga. Si eso pasa, su fila se añade debajo
-  // con su posición REAL en vez de desaparecer del resumen.
+  // idsPartido: ids de los 2 equipos del partido recién confirmado. Si el
+  // club que acaba de jugar cae fuera del top 6 mostrado, su fila se añade
+  // debajo con su posición REAL en vez de desaparecer del resumen.
   function renderTablaClasificacionMini(clasificacion, datos, idsPartido) {
     if (!clasificacion || !clasificacion.length) return "";
     idsPartido = idsPartido || [];

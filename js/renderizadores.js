@@ -532,6 +532,182 @@
     return lista;
   }
 
+  // ============================================================
+  // 3c-ter. LIGA 1ª REF — clasificación ÚNICA (ascenso/descenso)
+  // ============================================================
+  // Competición aparte de LIGA_EA_SPORTS: 12 equipos, ninguno humano
+  // todavía. Se pega tal cual se copia de otra tabla ("Pos Nombre Pts PJ
+  // PE PP G+ G- DG", separado por ESPACIOS, no por " - "), así que el
+  // nombre del equipo puede llevar varias palabras — se identifica
+  // cogiendo, desde el FINAL de la línea, la tanda de números
+  // consecutivos (hasta 7 — Pts/PJ/PE/PP/G+/G- y, si está, DG, que se
+  // ignora: el DG se recalcula SIEMPRE como G+ - G-) y tratando el
+  // primer token que quede como Pos si también es numérico.
+  function parsearLiga1RefTexto(texto) {
+    var items = [];
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var tokens = l.split(/\s+/);
+      if (tokens.length < 7) return; // Nombre + al menos 6 números
+
+      var fin = tokens.length;
+      var numerosFinales = [];
+      while (fin > 0 && numerosFinales.length < 7 && /^-?\d+$/.test(tokens[fin - 1])) {
+        numerosFinales.unshift(tokens[fin - 1]);
+        fin--;
+      }
+      if (numerosFinales.length < 6) return; // hacen falta Pts/PJ/PE/PP/G+/G-
+
+      var numeros = numerosFinales.slice(0, 6).map(Number); // descarta un 7º (DG)
+      var inicio = 0;
+      if (fin > 0 && /^\d+$/.test(tokens[0])) inicio = 1; // Pos inicial opcional
+
+      var nombre = tokens.slice(inicio, fin).join(" ").trim();
+      if (!nombre) return;
+      if (numeros.some(function (n) { return isNaN(n); })) return;
+
+      items.push({
+        nombre: nombre,
+        pts: numeros[0], pj: numeros[1], pe: numeros[2], pp: numeros[3],
+        gf: numeros[4], gc: numeros[5]
+      });
+    });
+    return items;
+  }
+
+  // Zona de ascenso/descenso por POSICIÓN ABSOLUTA (petición usuario: liga
+  // de 12 equipos exactos) — nunca relativa al nº de filas ya pegadas, así
+  // una tabla a medio rellenar ya muestra bien las 2 primeras zonas.
+  function _liga1RefZona(pos) {
+    if (pos <= 4) return "ascenso";
+    if (pos === 5) return "promo-ascenso";
+    if (pos >= 9 && pos <= 11) return "descenso";
+    if (pos === 12) return "promo-descenso";
+    return "";
+  }
+
+  function renderizarLiga1RefClasificacion(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      var tituloTxt = (window.Estado ? window.Estado.obtenerNombreLiga() : "1ª REF").toUpperCase();
+      header.innerHTML =
+        '<span class="liga1ref-titulo">' + escapeHTML(tituloTxt) + "</span>" +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-liga1ref-inline" data-club-id="' +
+        (idClubActivo || "") + '" aria-label="Editar clasificación">✏️</button>';
+      contenedor.appendChild(header);
+
+      var equiposHumanos = datos.equipos.equipos || [];
+      var texto = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
+      var filas = parsearLiga1RefTexto(texto).map(function (f) {
+        var norm = _normNombre(f.nombre);
+        var humano = equiposHumanos.find(function (e) {
+          var n = _normNombre(e.nombre);
+          return n === norm || (norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1));
+        });
+        return {
+          nombre: f.nombre,
+          nombreMostrado: humano ? ((humano.misterEmoji || "") + humano.nombre) : f.nombre,
+          equipoId: humano ? humano.id : null,
+          pts: f.pts, pj: f.pj, pe: f.pe, pp: f.pp, gf: f.gf, gc: f.gc
+        };
+      });
+
+      filas.sort(function (a, b) {
+        if (b.pts !== a.pts) return b.pts - a.pts;
+        var dgA = a.gf - a.gc, dgB = b.gf - b.gc;
+        if (dgB !== dgA) return dgB - dgA;
+        if (b.gf !== a.gf) return b.gf - a.gf;
+        return a.nombre.localeCompare(b.nombre);
+      });
+
+      if (!filas.length) {
+        contenedor.appendChild(nodoEstado("📊", "Todavía no hay clasificación pegada. Pulsa ✏️ (PIN 646) para añadirla."));
+        return;
+      }
+
+      var wrap = document.createElement("div");
+      wrap.className = "clasificacion-wrap";
+      var tablaEl = document.createElement("table");
+      tablaEl.className = "clasificacion-tabla liga1ref-tabla";
+      tablaEl.innerHTML =
+        "<thead><tr><th>#</th><th>Equipo</th><th>Pts</th><th>PJ</th><th>PE</th><th>PP</th>" +
+        "<th>G+</th><th>G-</th><th>DG</th></tr></thead>";
+      var tbody = document.createElement("tbody");
+
+      filas.forEach(function (f, i) {
+        var pos = i + 1;
+        var dg = f.gf - f.gc;
+        var zona = _liga1RefZona(pos);
+        var claseFila = "clasificacion-fila" + (zona ? " liga1ref-zona-" + zona : "");
+        if (f.equipoId && f.equipoId === idClubActivo) claseFila += " clasificacion-fila--activo";
+
+        var tr = document.createElement("tr");
+        tr.className = claseFila;
+        tr.innerHTML =
+          '<td class="clasificacion-pos">' + pos + "</td>" +
+          '<td class="clasificacion-equipo">' + escapeHTML(f.nombreMostrado) +
+          (f.equipoId && f.equipoId === idClubActivo ? ' <span class="clasificacion-tag">TÚ</span>' : "") + "</td>" +
+          '<td class="clasificacion-pts">' + f.pts + "</td>" +
+          "<td>" + f.pj + "</td><td>" + f.pe + "</td><td>" + f.pp + "</td>" +
+          "<td>" + f.gf + "</td><td>" + f.gc + "</td>" +
+          "<td>" + (dg > 0 ? "+" + dg : dg) + "</td>";
+        tbody.appendChild(tr);
+      });
+      tablaEl.appendChild(tbody);
+      wrap.appendChild(tablaEl);
+      contenedor.appendChild(wrap);
+
+      var leyenda = document.createElement("div");
+      leyenda.className = "liga1ref-leyenda";
+      leyenda.innerHTML =
+        '<span class="liga1ref-leyenda-item"><i class="liga1ref-swatch liga1ref-swatch--ascenso"></i>Asciende a Hypermotion</span>' +
+        '<span class="liga1ref-leyenda-item"><i class="liga1ref-swatch liga1ref-swatch--promo-ascenso"></i>Promoción de ascenso</span>' +
+        '<span class="liga1ref-leyenda-item"><i class="liga1ref-swatch liga1ref-swatch--descenso"></i>Desciende a 2ª REF</span>' +
+        '<span class="liga1ref-leyenda-item"><i class="liga1ref-swatch liga1ref-swatch--promo-descenso"></i>Promoción de descenso</span>';
+      contenedor.appendChild(leyenda);
+    });
+  }
+
+  // Editor inline (PIN 646, ✏️ dentro de la propia pantalla) — pinta
+  // DENTRO del mismo contenedor que la tabla, así Guardar/Cancelar pueden
+  // volver a la vista de clasificación sin cerrar el modal entero.
+  function pintarEditorLiga1Ref(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega la tabla completa, una línea por equipo: «Pos Nombre Pts PJ PE PP " +
+      "G+ G- DG» separado por espacios, tal cual se copia de otro sitio (Pos y " +
+      "DG son opcionales, se recalculan solos). Es una clasificación ÚNICA — " +
+      "la ven las 6 cajas igual.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "liga1ref-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "1  Real Zaragoza  9  3  0  0  10  0  10\n2  SD Huesca      6  3  0  1  5   2   3";
+    textarea.value = window.Estado ? window.Estado.obtenerLiga1RefTexto() : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-liga1ref" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-liga1ref" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
   // Nombre COMPLETO bajo el escudo (petición usuario) — si no cabe en el
   // ancho de la tarjeta, se acorta con sentido común: abrevia la PRIMERA
   // palabra a su inicial + "." (p.ej. "Cultural Leonesa" -> "C.Leonesa"),
@@ -1446,6 +1622,9 @@
     pintarEditorClasificacionBase: pintarEditorClasificacionBase,
     calcularClasificacionCombinada: calcularClasificacionCombinada,
     parsearClasificacionBaseTexto: parsearClasificacionBaseTexto,
+    renderizarLiga1RefClasificacion: renderizarLiga1RefClasificacion,
+    pintarEditorLiga1Ref: pintarEditorLiga1Ref,
+    parsearLiga1RefTexto: parsearLiga1RefTexto,
     renderizarProximamente: renderizarProximamente,
     renderizarAdminCalendario: renderizarAdminCalendario,
     parsearCalendarioCompeticiones: parsearCalendarioCompeticiones,

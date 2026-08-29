@@ -47,6 +47,10 @@ html, body { margin: 0; padding: 0; }
   --gold: #f1c40f;
   --gold-glow: 0 0 8px rgba(241, 196, 15, 0.45);
 
+  /* Marrón — zona de "promoción de descenso" de Liga 1ª REF. Distinto del
+     rojo (descenso directo) para que no se confundan de un vistazo. */
+  --brown: #a8714a;
+
   --radius-s: 8px;
   --radius-m: 14px;
   --radius-l: 20px;
@@ -976,6 +980,78 @@ button { font-family: inherit; cursor: pointer; }
    club recién jugado no entra en el top 6 real de la liga. */
 .live-clasificacion-destacada { background: rgba(57, 255, 106, 0.1); }
 .live-clasificacion-destacada td:nth-child(2) { color: var(--neon); }
+
+/* ---------- 6d. LIGA 1ª REF — clasificación única (ascenso/descenso) ---------- */
+.liga1ref-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.liga1ref-titulo {
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  color: var(--text-hi);
+}
+.liga1ref-editar-btn {
+  border: 1px solid var(--line);
+  background: var(--bg-3);
+  color: var(--text-hi);
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 50%;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.liga1ref-tabla { min-width: 380px; }
+
+/* Zonas por posición ABSOLUTA (liga de 12 equipos): 1-4 ascenso directo,
+   5 promoción de ascenso, 9-11 descenso directo, 12 promoción de descenso.
+   Va DESPUÉS de .clasificacion-fila--activo a propósito — si el club activo
+   cae en una zona de color, la zona manda (es la info más relevante). */
+.liga1ref-zona-ascenso { background: rgba(57, 255, 106, 0.12); }
+.liga1ref-zona-ascenso .clasificacion-pos,
+.liga1ref-zona-ascenso .clasificacion-equipo,
+.liga1ref-zona-ascenso .clasificacion-pts { color: var(--neon); }
+
+.liga1ref-zona-promo-ascenso { background: rgba(241, 196, 15, 0.12); }
+.liga1ref-zona-promo-ascenso .clasificacion-pos,
+.liga1ref-zona-promo-ascenso .clasificacion-equipo,
+.liga1ref-zona-promo-ascenso .clasificacion-pts { color: var(--gold); }
+
+.liga1ref-zona-descenso { background: rgba(194, 24, 91, 0.12); }
+.liga1ref-zona-descenso .clasificacion-pos,
+.liga1ref-zona-descenso .clasificacion-equipo,
+.liga1ref-zona-descenso .clasificacion-pts { color: var(--wine); }
+
+.liga1ref-zona-promo-descenso { background: rgba(168, 113, 74, 0.18); }
+.liga1ref-zona-promo-descenso .clasificacion-pos,
+.liga1ref-zona-promo-descenso .clasificacion-equipo,
+.liga1ref-zona-promo-descenso .clasificacion-pts { color: var(--brown); }
+
+.liga1ref-leyenda {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+  font-size: 10.5px;
+  color: var(--text-lo);
+}
+.liga1ref-leyenda-item { display: flex; align-items: center; gap: 7px; }
+.liga1ref-swatch {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.liga1ref-swatch--ascenso { background: var(--neon); }
+.liga1ref-swatch--promo-ascenso { background: var(--gold); }
+.liga1ref-swatch--descenso { background: var(--wine); }
+.liga1ref-swatch--promo-descenso { background: var(--brown); }
 
 /* ---------- 7. CALENDARIO — jornadas del club activo ---------- */
 .calendar-header {

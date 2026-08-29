@@ -1,0 +1,539 @@
+{
+  "_meta": {
+    "descripcion": "Identidad visual (siglas/colores/formato) y valoracionPoder de rivales REALES de 1ª RFEF, Hypermotion y LaLiga que el admin escribe en 'Calendario extra' pero que no viven como equipo IA completo en data/equipos_ia.json (no simulamos su liga entera, solo sus cruces contra un club humano). resolverRivalPorNombre (js/renderizadores.js) los consulta ANTES de caer al escudo genérico hash-color; si el nombre tecleado no está aquí, se genera un escudo sintético con valoracionPoder derivado de equipo.ligaActual del club humano (así ese rival desconocido aún cae en el estadio correcto por categoria: 1ª RFEF -> BARRIO, Hypermotion -> REGIONAL, LIGA_EA_SPORTS -> ÉLITE). Colores/formato son aproximación best-effort a la equipación real (0 KB de imágenes, mismo motor CSS de dos formatos que el resto del proyecto) — el admin puede editarlos si no le convencen.",
+    "valoracionPoder": "Escala 50-98, correlativa con data/estadios.json. 50-57 ~ estadios BARRIO (1ª RFEF), 58-72 ~ REGIONAL (Hypermotion), 76-98 ~ ÉLITE (LaLiga)."
+  },
+  "rivales": [
+    {
+      "clave": "athletic club",
+      "nombre": "Athletic Club",
+      "siglas": "ATH",
+      "colorPrimario": "#EE2523",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 90
+    },
+    {
+      "clave": "celta",
+      "nombre": "Celta",
+      "siglas": "CEL",
+      "colorPrimario": "#86C5F1",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 82
+    },
+    {
+      "clave": "deportivo alaves",
+      "nombre": "Deportivo Alavés",
+      "siglas": "ALA",
+      "colorPrimario": "#1560AA",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 79
+    },
+    {
+      "clave": "elche",
+      "nombre": "Elche",
+      "siglas": "ELX",
+      "colorPrimario": "#00A650",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 78
+    },
+    {
+      "clave": "espanyol",
+      "nombre": "Espanyol",
+      "siglas": "ESP",
+      "colorPrimario": "#0A4C94",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 80
+    },
+    {
+      "clave": "getafe",
+      "nombre": "Getafe",
+      "siglas": "GET",
+      "colorPrimario": "#005CA9",
+      "colorSecundario": "#002147",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 78
+    },
+    {
+      "clave": "girona fc",
+      "nombre": "Girona FC",
+      "siglas": "GIR",
+      "colorPrimario": "#CD2534",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 81
+    },
+    {
+      "clave": "leganes",
+      "nombre": "Leganés",
+      "siglas": "LEG",
+      "colorPrimario": "#0033A0",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 77
+    },
+    {
+      "clave": "levante",
+      "nombre": "Levante",
+      "siglas": "LEV",
+      "colorPrimario": "#00529F",
+      "colorSecundario": "#7A1F3D",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 79
+    },
+    {
+      "clave": "mallorca",
+      "nombre": "Mallorca",
+      "siglas": "MLL",
+      "colorPrimario": "#E2001A",
+      "colorSecundario": "#000000",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 80
+    },
+    {
+      "clave": "osasuna",
+      "nombre": "Osasuna",
+      "siglas": "OSA",
+      "colorPrimario": "#D2122E",
+      "colorSecundario": "#002F6C",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 81
+    },
+    {
+      "clave": "rc deportivo",
+      "nombre": "RC Deportivo",
+      "siglas": "DEP",
+      "colorPrimario": "#0F5FAB",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 76
+    },
+    {
+      "clave": "rayo vallecano",
+      "nombre": "Rayo Vallecano",
+      "siglas": "RAY",
+      "colorPrimario": "#E2001A",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 78
+    },
+    {
+      "clave": "real betis",
+      "nombre": "Real Betis",
+      "siglas": "BET",
+      "colorPrimario": "#00954C",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 83
+    },
+    {
+      "clave": "real sociedad",
+      "nombre": "Real Sociedad",
+      "siglas": "RSO",
+      "colorPrimario": "#0068A8",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 85
+    },
+    {
+      "clave": "sevilla",
+      "nombre": "Sevilla",
+      "siglas": "SEV",
+      "colorPrimario": "#D2001C",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 86
+    },
+    {
+      "clave": "valencia",
+      "nombre": "Valencia",
+      "siglas": "VAL",
+      "colorPrimario": "#F4A11C",
+      "colorSecundario": "#000000",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 85
+    },
+    {
+      "clave": "villarreal",
+      "nombre": "Villarreal",
+      "siglas": "VIL",
+      "colorPrimario": "#FFE667",
+      "colorSecundario": "#003DA5",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 87
+    },
+    {
+      "clave": "malaga",
+      "nombre": "Málaga",
+      "siglas": "MAL",
+      "colorPrimario": "#1D3461",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 77
+    },
+    {
+      "clave": "real zaragoza",
+      "nombre": "Real Zaragoza",
+      "siglas": "ZAR",
+      "colorPrimario": "#0C2340",
+      "colorSecundario": "#FFC72C",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 70
+    },
+    {
+      "clave": "real sporting",
+      "nombre": "Real Sporting",
+      "siglas": "SPG",
+      "colorPrimario": "#E30613",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 71
+    },
+    {
+      "clave": "cd castellon",
+      "nombre": "CD Castellón",
+      "siglas": "CAS",
+      "colorPrimario": "#F7941D",
+      "colorSecundario": "#000000",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 66
+    },
+    {
+      "clave": "almeria",
+      "nombre": "Almería",
+      "siglas": "ALM",
+      "colorPrimario": "#ED1C24",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 69
+    },
+    {
+      "clave": "cordoba cf",
+      "nombre": "Córdoba CF",
+      "siglas": "COR",
+      "colorPrimario": "#0055A4",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 65
+    },
+    {
+      "clave": "burgos cf",
+      "nombre": "Burgos CF",
+      "siglas": "BUR",
+      "colorPrimario": "#1A1A1A",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 63
+    },
+    {
+      "clave": "eibar",
+      "nombre": "Eibar",
+      "siglas": "EIB",
+      "colorPrimario": "#002D62",
+      "colorSecundario": "#ED1C24",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 68
+    },
+    {
+      "clave": "cadiz",
+      "nombre": "Cádiz",
+      "siglas": "CAD",
+      "colorPrimario": "#FCD116",
+      "colorSecundario": "#0033A0",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 70
+    },
+    {
+      "clave": "real oviedo",
+      "nombre": "Real Oviedo",
+      "siglas": "OVI",
+      "colorPrimario": "#0B4EA2",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 67
+    },
+    {
+      "clave": "real valladolid",
+      "nombre": "Real Valladolid",
+      "siglas": "VLL",
+      "colorPrimario": "#6E2585",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 69
+    },
+    {
+      "clave": "albacete",
+      "nombre": "Albacete",
+      "siglas": "ALB",
+      "colorPrimario": "#DA291C",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 62
+    },
+    {
+      "clave": "huesca",
+      "nombre": "Huesca",
+      "siglas": "HUE",
+      "colorPrimario": "#00AEEF",
+      "colorSecundario": "#1B1464",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 61
+    },
+    {
+      "clave": "mirandes",
+      "nombre": "Mirandés",
+      "siglas": "MIR",
+      "colorPrimario": "#D32F2F",
+      "colorSecundario": "#000000",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 60
+    },
+    {
+      "clave": "sabadell",
+      "nombre": "Sabadell",
+      "siglas": "SAB",
+      "colorPrimario": "#005BAC",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 59
+    },
+    {
+      "clave": "tenerife",
+      "nombre": "Tenerife",
+      "siglas": "TEN",
+      "colorPrimario": "#0072BC",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 64
+    },
+    {
+      "clave": "ud las palmas",
+      "nombre": "UD Las Palmas",
+      "siglas": "LPA",
+      "colorPrimario": "#FFE100",
+      "colorSecundario": "#0033A0",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 72
+    },
+    {
+      "clave": "hercules",
+      "nombre": "Hércules",
+      "siglas": "HER",
+      "colorPrimario": "#0057B7",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 58
+    },
+    {
+      "clave": "granada",
+      "nombre": "Granada",
+      "siglas": "GRA",
+      "colorPrimario": "#C60C30",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 66
+    },
+    {
+      "clave": "racing",
+      "nombre": "Racing",
+      "siglas": "RAC",
+      "colorPrimario": "#007A3D",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 61
+    },
+    {
+      "clave": "celta fortuna",
+      "nombre": "Celta Fortuna",
+      "siglas": "CFO",
+      "colorPrimario": "#86C5F1",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 51
+    },
+    {
+      "clave": "ceuta",
+      "nombre": "Ceuta",
+      "siglas": "CEU",
+      "colorPrimario": "#0057B7",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 53
+    },
+    {
+      "clave": "cultural leonesa",
+      "nombre": "Cultural Leonesa",
+      "siglas": "CUL",
+      "colorPrimario": "#003DA5",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 54
+    },
+    {
+      "clave": "eldense",
+      "nombre": "Eldense",
+      "siglas": "ELD",
+      "colorPrimario": "#6B1F3A",
+      "colorSecundario": "#003DA5",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 52
+    },
+    {
+      "clave": "fc andorra",
+      "nombre": "FC Andorra",
+      "siglas": "AND",
+      "colorPrimario": "#003DA5",
+      "colorSecundario": "#FFD100",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 55
+    },
+    {
+      "clave": "real sociedad b",
+      "nombre": "Real Sociedad B",
+      "siglas": "RSB",
+      "colorPrimario": "#0068A8",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 50
+    },
+    {
+      "clave": "villarreal b",
+      "nombre": "Villarreal B",
+      "siglas": "VLB",
+      "colorPrimario": "#FFE667",
+      "colorSecundario": "#003DA5",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 56
+    },
+    {
+      "clave": "ce europa",
+      "nombre": "CE Europa",
+      "siglas": "EUR",
+      "colorPrimario": "#003DA5",
+      "colorSecundario": "#FFD100",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 50
+    },
+    {
+      "clave": "fc cartagena",
+      "nombre": "FC Cartagena",
+      "siglas": "CTG",
+      "colorPrimario": "#1A1A1A",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 57
+    },
+    {
+      "clave": "ponferradina",
+      "nombre": "Ponferradina",
+      "siglas": "PFR",
+      "colorPrimario": "#6B1F3A",
+      "colorSecundario": "#003DA5",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 56
+    },
+    {
+      "clave": "ad merida",
+      "nombre": "AD Mérida",
+      "siglas": "MER",
+      "colorPrimario": "#2E8B57",
+      "colorSecundario": "#000000",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 51
+    },
+    {
+      "clave": "algeciras cf",
+      "nombre": "Algeciras CF",
+      "siglas": "ALG",
+      "colorPrimario": "#D32F2F",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 52
+    },
+    {
+      "clave": "atletico madrileno",
+      "nombre": "Atlético Madrileño",
+      "siglas": "ATB",
+      "colorPrimario": "#CB3524",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 55
+    },
+    {
+      "clave": "cd lugo",
+      "nombre": "CD Lugo",
+      "siglas": "LUG",
+      "colorPrimario": "#6B1F3A",
+      "colorSecundario": "#87CEEB",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 54
+    },
+    {
+      "clave": "rm castilla",
+      "nombre": "RM Castilla",
+      "siglas": "CAT",
+      "colorPrimario": "#FEBE10",
+      "colorSecundario": "#112546",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 57
+    },
+    {
+      "clave": "real murcia",
+      "nombre": "Real Murcia",
+      "siglas": "MUR",
+      "colorPrimario": "#6B1F3A",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 53
+    },
+    {
+      "clave": "barakaldo",
+      "nombre": "Barakaldo",
+      "siglas": "BAR",
+      "colorPrimario": "#FFD100",
+      "colorSecundario": "#000000",
+      "escudoFormato": "rayas",
+      "valoracionPoder": 50
+    },
+    {
+      "clave": "pontevedra",
+      "nombre": "Pontevedra",
+      "siglas": "PON",
+      "colorPrimario": "#6B1F3A",
+      "colorSecundario": "#0033A0",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 51
+    },
+    {
+      "clave": "antequera cf",
+      "nombre": "Antequera CF",
+      "siglas": "ANT",
+      "colorPrimario": "#2E8B57",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 50
+    },
+    {
+      "clave": "unionistas cf",
+      "nombre": "Unionistas CF",
+      "siglas": "UNI",
+      "colorPrimario": "#C9A227",
+      "colorSecundario": "#000000",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 52
+    },
+    {
+      "clave": "zamora cf",
+      "nombre": "Zamora CF",
+      "siglas": "ZAM",
+      "colorPrimario": "#D32F2F",
+      "colorSecundario": "#FFFFFF",
+      "escudoFormato": "rombo",
+      "valoracionPoder": 51
+    }
+  ]
+}

@@ -12,7 +12,19 @@
     estadios: "data/estadios.json",
     balones: "data/balones.json",
     partidos: "data/partidos.json",
-    jugadores: "data/jugadores.json"
+    jugadores: "data/jugadores.json",
+    rivalesReales: "data/rivales_reales.json"
+  };
+
+  // Rango de valoracionPoder (correlativo con data/estadios.json) por liga —
+  // usado como fallback cuando un rival tecleado en "Calendario extra" no
+  // está ni en los catálogos reales ni en data/rivales_reales.json. Así un
+  // rival de 1ª RFEF nunca cae en un estadio ÉLITE ni al revés, aunque su
+  // nombre sea totalmente desconocido para la app.
+  var _PODER_RANGO_POR_LIGA = {
+    LIGA_1RFEF: [50, 57], // BARRIO
+    LIGA_HYPERMOTION: [58, 72], // REGIONAL
+    LIGA_EA_SPORTS: [76, 92] // ÉLITE
   };
 
   var TOTAL_JORNADAS_POR_LIGA = {
@@ -37,6 +49,7 @@
   }
 
   var _estadiosLista = null; // caché síncrona para obtenerEstadioCorrelativoAjustado
+  var _rivalesRealesMap = null; // caché síncrona clave normalizada -> ficha, para resolverRivalPorNombre
 
   function cargarTodo() {
     return Promise.all([
@@ -45,7 +58,8 @@
       cargarJSON(DATA_URLS.estadios),
       cargarJSON(DATA_URLS.balones),
       cargarJSON(DATA_URLS.partidos),
-      cargarJSON(DATA_URLS.jugadores)
+      cargarJSON(DATA_URLS.jugadores),
+      cargarJSON(DATA_URLS.rivalesReales)
     ]).then(function (r) {
       // r[2]/r[3] son las respuestas CACHEADAS de cargarJSON (misma
       // referencia en cada llamada a cargarTodo) — NUNCA se mutan
@@ -65,9 +79,14 @@
         estadios: Object.assign({}, r[2], { estadios: estadiosFusion }),
         balones: Object.assign({}, r[3], { balones: balonesFusion }),
         partidos: r[4],
-        jugadores: r[5]
+        jugadores: r[5],
+        rivalesReales: r[6]
       };
       _estadiosLista = datos.estadios.estadios || [];
+      _rivalesRealesMap = {};
+      (datos.rivalesReales.rivales || []).forEach(function (r2) {
+        _rivalesRealesMap[r2.clave] = r2;
+      });
       return datos;
     });
   }
@@ -449,13 +468,45 @@
     return _COLORES_SINTETICOS[h % _COLORES_SINTETICOS.length];
   }
 
-  // Busca el rival tecleado en texto libre dentro de los catálogos reales
-  // (los 6 humanos + los 300+ equipos IA). Si no se encuentra (nombre que
-  // no existe en ningún JSON — un rival de una competición que este
-  // simulador aún no modela), se crea un equipo SINTÉTICO de solo-lectura
-  // con un color hash + siglas de sus iniciales, así el partido igual se
-  // pinta con un escudo reconocible — nunca se persiste ni rompe nada.
-  function resolverRivalPorNombre(nombre, datos) {
+  // valoracionPoder determinista (mismo nombre -> mismo poder siempre) pero
+  // repartido dentro del rango [min, max] de la liga de contexto, para que
+  // un rival genérico no reconocido en absoluto siga cayendo en el estadio
+  // "de su categoría" (ver _PODER_RANGO_POR_LIGA) en vez de siempre el
+  // mínimo — sin necesidad de tocar el algoritmo correlativo de siempre.
+  function _poderSinteticoPorLiga(nombre, ligaContexto) {
+    var rango = _PODER_RANGO_POR_LIGA[ligaContexto] || _PODER_RANGO_POR_LIGA.LIGA_HYPERMOTION;
+    var h = 0;
+    for (var i = 0; i < nombre.length; i++) h = (h * 31 + nombre.charCodeAt(i)) >>> 0;
+    var span = rango[1] - rango[0];
+    return rango[0] + (span > 0 ? h % (span + 1) : 0);
+  }
+
+  function _buscarRivalReal(norm) {
+    if (!_rivalesRealesMap) return null;
+    if (_rivalesRealesMap[norm]) return _rivalesRealesMap[norm];
+    var claves = Object.keys(_rivalesRealesMap);
+    for (var i = 0; i < claves.length; i++) {
+      var k = claves[i];
+      if (norm.length > 2 && (k.indexOf(norm) !== -1 || norm.indexOf(k) !== -1)) return _rivalesRealesMap[k];
+    }
+    return null;
+  }
+
+  // Busca el rival tecleado en texto libre, en 3 pasadas:
+  // 1) catálogos reales (los 6 humanos + los 300+ equipos IA) — match exacto.
+  // 2) catálogos reales — match parcial (substring en cualquier dirección).
+  // 3) data/rivales_reales.json — clubes reales de 1ª RFEF/Hypermotion/LaLiga
+  //    que no viven como equipo IA completo (no simulamos su liga entera,
+  //    solo aparecen como rival puntual de un club humano) pero sí tienen
+  //    su identidad visual (colores/formato/siglas) y estadio correctos.
+  // Si NINGUNA pasada encuentra nada (nombre de una competición que este
+  // simulador aún no modela en absoluto), se crea un equipo SINTÉTICO de
+  // solo-lectura con un color hash + siglas de sus iniciales — el partido
+  // igual se pinta con un escudo reconocible, y con un valoracionPoder
+  // acorde a `ligaContexto` (la liga actual del club humano cuyo calendario
+  // se está resolviendo) para que caiga en un estadio de su categoría en
+  // vez de siempre el mismo. Nada de esto se persiste ni rompe nada.
+  function resolverRivalPorNombre(nombre, datos, ligaContexto) {
     var norm = _normNombre(nombre);
     var candidatos = (datos.equipos.equipos || []).slice();
     var bloques = datos.equiposIA.bloques || {};
@@ -473,16 +524,31 @@
 
     var id = "extra-rival-" + norm.replace(/[^a-z0-9]+/g, "-");
     if (!_sinteticosExtra[id]) {
-      var siglas = (nombre.match(/\b[a-zA-Z0-9]/g) || []).slice(0, 3).join("").toUpperCase() || "?";
-      _sinteticosExtra[id] = {
-        id: id,
-        nombre: nombre,
-        siglas: siglas,
-        colorPrimario: _colorSintetico(nombre),
-        colorSecundario: "#101114",
-        escudoFormato: "rombo",
-        mostrarSiglas: true
-      };
+      var real = _buscarRivalReal(norm);
+      if (real) {
+        _sinteticosExtra[id] = {
+          id: id,
+          nombre: nombre,
+          siglas: real.siglas,
+          colorPrimario: real.colorPrimario,
+          colorSecundario: real.colorSecundario,
+          escudoFormato: real.escudoFormato,
+          valoracionPoder: real.valoracionPoder,
+          mostrarSiglas: true
+        };
+      } else {
+        var siglas = (nombre.match(/\b[a-zA-Z0-9]/g) || []).slice(0, 3).join("").toUpperCase() || "?";
+        _sinteticosExtra[id] = {
+          id: id,
+          nombre: nombre,
+          siglas: siglas,
+          colorPrimario: _colorSintetico(nombre),
+          colorSecundario: "#101114",
+          escudoFormato: "rombo",
+          valoracionPoder: _poderSinteticoPorLiga(nombre, ligaContexto),
+          mostrarSiglas: true
+        };
+      }
     }
     return _sinteticosExtra[id];
   }
@@ -882,7 +948,7 @@
         var textoExtra = window.Estado ? window.Estado.obtenerCalendarioExtraTexto(idEquipoHumanoActivo) : "";
         var ahoraMs = Date.now();
         var partidosExtra = parsearPartidosExtraTexto(textoExtra, equipo.nombre).map(function (ex, i) {
-          var rival = resolverRivalPorNombre(ex.rivalNombre, datos);
+          var rival = resolverRivalPorNombre(ex.rivalNombre, datos, equipo.ligaActual);
           // ex.esVisitante decide qué id va en local/visitante; el marcador
           // (siempre guardado como "club-rival") se remapea al mismo orden.
           return {

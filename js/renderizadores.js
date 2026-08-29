@@ -344,10 +344,15 @@
   // Formato de línea (una por partido), documentado también en el propio
   // editor: "Competición - Ronda - Rival [- Fecha]". El rival puede llevar
   // el resultado ya jugado pegado al final entre paréntesis: "(2-1)".
+  // El club activo SIEMPRE se pinta como LOCAL aquí — este cajón no
+  // modela visitante (para eso está el calendario real de
+  // data/partidos.json, que sí tiene local/visitante explícitos y lo
+  // edita Claude directamente cuando se le pasa la lista).
   function _normNombre(s) {
     return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
   }
-  function parsearPartidosExtraTexto(texto) {
+  function parsearPartidosExtraTexto(texto, nombreClubActivo) {
+    var clubNorm = _normNombre(nombreClubActivo || "");
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
       var l = linea.trim();
@@ -372,6 +377,27 @@
         rivalCrudo = rivalCrudo.slice(0, mScore.index).trim();
       }
       if (!rivalCrudo) return;
+
+      // Red de seguridad: si en vez del nombre SUELTO del rival se pega la
+      // línea completa "Equipo A vs Equipo B" (típico al copiar tal cual un
+      // calendario ya armado en otro sitio), el texto entero se quedaba
+      // como "rival" — y como contenía el nombre del propio club activo,
+      // el buscador lo encontraba A ÉL MISMO y montaba un partido
+      // "Liverpool vs Liverpool". Si aparece un " vs " separando 2
+      // nombres, nos quedamos con el lado que NO es el club activo. Esto
+      // NO añade soporte de visitante (esta caja siempre juega en casa,
+      // ver comentario de cabecera) — solo evita el auto-emparejamiento.
+      var mVs = rivalCrudo.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
+      if (mVs && clubNorm) {
+        var ladoA = _normNombre(mVs[1]), ladoB = _normNombre(mVs[2]);
+        var aEsClub = ladoA.indexOf(clubNorm) !== -1 || clubNorm.indexOf(ladoA) !== -1;
+        var bEsClub = ladoB.indexOf(clubNorm) !== -1 || clubNorm.indexOf(ladoB) !== -1;
+        if (aEsClub && !bEsClub) rivalCrudo = mVs[2].trim();
+        else if (bEsClub && !aEsClub) rivalCrudo = mVs[1].trim();
+        // si ninguno de los 2 lados es el club activo (o lo son ambos, con
+        // nombres muy cortos), no tocamos nada — mejor un rival sintético
+        // (ver resolverRivalPorNombre) que adivinar mal cuál es cuál.
+      }
 
       items.push({
         id: "extra-" + items.length + "-" + _normNombre(rivalCrudo).replace(/[^a-z0-9]+/g, "-"),
@@ -826,7 +852,7 @@
         _sinteticosExtra = {};
         var textoExtra = window.Estado ? window.Estado.obtenerCalendarioExtraTexto(idEquipoHumanoActivo) : "";
         var ahoraMs = Date.now();
-        var partidosExtra = parsearPartidosExtraTexto(textoExtra).map(function (ex, i) {
+        var partidosExtra = parsearPartidosExtraTexto(textoExtra, equipo.nombre).map(function (ex, i) {
           var rival = resolverRivalPorNombre(ex.rivalNombre, datos);
           return {
             id: ex.id,

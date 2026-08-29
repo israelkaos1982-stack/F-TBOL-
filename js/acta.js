@@ -175,14 +175,6 @@
     return (datos.equipos.equipos || []).some(function (e) { return e.id === equipoId; });
   }
 
-  // Texto ESCRITO POR EL ADMIN (prompt() de lesionados/sancionados) —
-  // se escapa antes de interpolar en innerHTML, mismo criterio que
-  // js/renderizadores.js::escapeHTML.
-  var _escapeMap = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-  function escapeHTML(str) {
-    return String(str == null ? "" : str).replace(/[&<>"']/g, function (c) { return _escapeMap[c]; });
-  }
-
   // Minuto: 5' a 95' SIEMPRE (los 90-95 representan el descuento). Solo
   // en modo "eliminatoria-unica" con la casilla "Activar Prórroga y
   // Penaltis" marcada se añaden 100'-120' + la opción de Tanda — Liga e
@@ -255,27 +247,6 @@
     } else {
       box.innerHTML = "";
     }
-  }
-
-  // Listas de lesionados/sancionados del club GESTIONADO (persisten por
-  // club, no por partido — sobreviven al recargar y a cambiar de rival).
-  function _filaJugadorLista(nombre, tipo, indice) {
-    return (
-      '<div class="live-acta-item"><span class="live-acta-jugador">' + escapeHTML(nombre) + "</span>" +
-      '<button type="button" class="live-acta-del" data-tipo-lista="' + tipo + '" data-indice="' + indice + '" aria-label="Quitar">✕</button></div>'
-    );
-  }
-  function _renderListaJugadores(tipo, contId, vacioTxt) {
-    var cont = document.getElementById(contId);
-    if (!cont || !window._idManagerActivo || !window.Estado) return;
-    var lista = window.Estado.obtenerListaJugadores(window._idManagerActivo, tipo);
-    cont.innerHTML = lista.length
-      ? lista.map(function (nombre, i) { return _filaJugadorLista(nombre, tipo, i); }).join("")
-      : '<div class="live-acta-vacia">' + vacioTxt + "</div>";
-  }
-  function renderListasJugadores() {
-    _renderListaJugadores("lesionados", "live-lesionados-lista", "Sin lesionados registrados.");
-    _renderListaJugadores("sancionados", "live-sancionados-lista", "Sin sancionados registrados.");
   }
 
   function poblarSelectJugador() {
@@ -371,8 +342,15 @@
     document.getElementById("live-team-visitante").innerHTML =
       R.crearEscudoHTML(visitante, "escudo--lg") + '<span class="previa-team-nombre">' + visitante.nombre + "</span>";
 
+    // El toggle "¿a qué equipo le añado el evento?" muestra el NOMBRE
+    // real de cada equipo (no "Local"/"Visitante" genérico) — con un
+    // borde resaltado (CSS .live-toggle-btn.is-active) se entiende de
+    // un vistazo a quién se le está registrando el evento.
+    document.querySelectorAll("#live-equipo-toggle .live-toggle-btn").forEach(function (btn) {
+      btn.textContent = btn.dataset.lado === "local" ? local.nombre : visitante.nombre;
+    });
+
     renderFormatoBox();
-    renderListasJugadores();
     poblarSelectMinuto();
     seleccionarLado("local");
     pintarActaLista();
@@ -514,27 +492,10 @@
     }
 
     var delBtn = ev.target.closest && ev.target.closest(".live-acta-del");
-    if (delBtn) {
-      if (delBtn.dataset.idEvento) {
-        eliminarEventoDeActa(delBtn.dataset.idEvento);
-        pintarActaLista();
-        pintarMarcadorEnVivo();
-      } else if (delBtn.dataset.tipoLista && window._idManagerActivo && window.Estado) {
-        window.Estado.quitarJugadorDeLista(window._idManagerActivo, delBtn.dataset.tipoLista, Number(delBtn.dataset.indice));
-        renderListasJugadores();
-      }
-      return;
-    }
-
-    if (ev.target.id === "live-lesionado-add" || ev.target.id === "live-sancionado-add") {
-      var tipoLista = ev.target.id === "live-lesionado-add" ? "lesionados" : "sancionados";
-      var nombreJugador = window.prompt(
-        tipoLista === "lesionados" ? "Nombre del jugador lesionado:" : "Nombre del jugador sancionado:"
-      );
-      if (nombreJugador && nombreJugador.trim() && window._idManagerActivo && window.Estado) {
-        window.Estado.agregarJugadorALista(window._idManagerActivo, tipoLista, nombreJugador.trim());
-        renderListasJugadores();
-      }
+    if (delBtn && delBtn.dataset.idEvento) {
+      eliminarEventoDeActa(delBtn.dataset.idEvento);
+      pintarActaLista();
+      pintarMarcadorEnVivo();
       return;
     }
 

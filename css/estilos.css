@@ -1477,18 +1477,32 @@ button { font-family: inherit; cursor: pointer; }
 }
 .live-toggle-btn {
   flex: 1;
+  min-width: 0;
   padding: 9px 8px;
-  border: none;
+  border: 1px solid transparent;
   background: var(--bg-3);
   color: var(--text-lo);
   font-size: 12px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .live-toggle-btn.is-active {
   background: rgba(57, 255, 106, 0.16);
   color: var(--neon);
+  border-color: var(--neon);
+}
+
+/* Fila de selección de equipo a pantalla completa — muestra el NOMBRE
+   real de cada equipo (no "Local"/"Visitante" genérico) para que se
+   entienda de un vistazo a quién se le registra el evento. */
+.live-equipo-toggle--full {
+  width: 100%;
+  flex: none;
+  margin: 0 0 10px;
 }
 
 /* ---------- 8c-bis. PANTALLA EN VIVO — Fase 4: separador, lesionados/
@@ -1555,6 +1569,15 @@ button { font-family: inherit; cursor: pointer; }
   margin: 0 0 10px;
 }
 .btn-descanso:hover { background: rgba(255, 149, 0, 0.24); }
+/* Variante compacta: comparte fila con el Minuto (en el sitio donde
+   antes iba el toggle Local/Visitante). */
+.btn-descanso--inline {
+  display: block;
+  width: auto;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  margin: 0;
+}
 
 .live-tanda-info {
   text-align: center;

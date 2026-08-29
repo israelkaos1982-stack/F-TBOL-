@@ -19,6 +19,10 @@
   "use strict";
 
   var ADMIN_PASSWORD = "747";
+  // Candado del menú de CADA caja humana (añadir/reordenar/borrar
+  // competiciones, pegar el calendario extra en texto) — password propia,
+  // distinta de la del Panel Admin.
+  var CLUB_EDIT_PASSWORD = "646";
 
   // ---------- Gestor de pantallas ----------
   var PANTALLAS = ["inicio", "admin", "club"];
@@ -27,6 +31,16 @@
       var el = document.getElementById("screen-" + n);
       if (el) el.hidden = n !== nombre;
     });
+  }
+
+  // "#c8102e" -> "200, 16, 46" — para poder usar rgba(var(--x-rgb), N) en
+  // CSS sin depender de color-mix() (no está en todos los móviles).
+  function _hexToRgbParts(hex) {
+    var h = String(hex || "").replace("#", "");
+    if (h.length === 3) h = h.split("").map(function (c) { return c + c; }).join("");
+    var num = parseInt(h, 16);
+    if (isNaN(num) || h.length !== 6) return "57, 255, 106";
+    return ((num >> 16) & 255) + ", " + ((num >> 8) & 255) + ", " + (num & 255);
   }
 
   // ---------- Pantalla 1: Inicio -> entrar a un club ----------
@@ -38,33 +52,33 @@
   }
 
   // ---------- Menú del club (columna izquierda, siempre visible) ----------
-  // Plantilla abre datos reales; el resto son subsistemas de OTRA app
-  // (Títulos/Derbys/Objetivos/Liga 1ªREF/Copa del Rey/Superliga) que este
+  // Las tarjetas (orden + etiqueta + icono) salen de Estado.obtenerMenuClub
+  // — cada caja humana tiene la suya, editable detrás del candado 646
+  // (ver abrirCandadoEditorClub más abajo). Plantilla abre datos reales;
+  // el resto (de fábrica o añadidas por el admin) son subsistemas que este
   // simulador ligero todavía no implementa — se muestra un aviso honesto
   // en vez de inventar datos falsos.
-  var CLUB_MENU_VISTAS = {
-    titulos: "🏆 Títulos",
-    derbys: "⚔️ Derbys",
-    objetivos: "🎯 Objetivos",
-    plantilla: "👕 Plantilla",
-    liga1ref: "🔹 Liga 1ª REF",
-    copadelrey: "🔹 Copa del Rey",
-    superliga: "🍇 Superliga"
-  };
-
   function abrirModalClub(vista) {
-    var etiqueta = CLUB_MENU_VISTAS[vista];
+    var clubId = window._idManagerActivo;
+    if (!clubId || !window.Estado) return;
+    var tarjetas = window.Estado.obtenerMenuClub(clubId);
+    var def = null;
+    for (var i = 0; i < tarjetas.length; i++) {
+      if (tarjetas[i].id === vista) { def = tarjetas[i]; break; }
+    }
+    var etiqueta = def ? (def.icono + " " + def.etiqueta) : vista;
+
     var ov = document.getElementById("club-modal-overlay");
     var titulo = document.getElementById("club-modal-title");
     var body = document.getElementById("club-modal-body");
-    if (!etiqueta || !ov || !titulo || !body || !window.Renderizadores) return;
+    if (!ov || !titulo || !body || !window.Renderizadores) return;
 
     titulo.textContent = etiqueta;
     ov.hidden = false;
 
     if (vista === "plantilla") {
       body.innerHTML = '<div id="plantilla-content"></div>';
-      window.Renderizadores.renderizarPlantillaClub(window._idManagerActivo);
+      window.Renderizadores.renderizarPlantillaClub(clubId);
     } else {
       body.innerHTML = '<div id="club-modal-vista"></div>';
       window.Renderizadores.renderizarProximamente("club-modal-vista", etiqueta);
@@ -90,15 +104,101 @@
         if (escudoSlot) escudoSlot.innerHTML = window.Renderizadores.crearEscudoHTML(equipo, "escudo--sm");
         if (nombreEl) nombreEl.textContent = equipo.nombre || "—";
         if (misterEl) misterEl.textContent = equipo.mister || "—";
+
+        // Tema de color del club — cada caja se ve con SUS colores (menú +
+        // calendario), leídos directamente de data/equipos.json. Se fija
+        // en la pantalla entera para que TODO lo de dentro (menú, cards
+        // de partido) herede la misma pareja de colores sin recalcularla.
+        var pantalla = document.getElementById("screen-club");
+        if (pantalla) {
+          var primario = equipo.colorPrimario || "#39ff6a";
+          pantalla.style.setProperty("--club-primary", primario);
+          pantalla.style.setProperty("--club-secondary", equipo.colorSecundario || "#101114");
+          pantalla.style.setProperty("--club-primary-rgb", _hexToRgbParts(primario));
+        }
       });
 
       if (typeof window.Renderizadores.generarCalendarioLateralDerecho === "function") {
         window.Renderizadores.generarCalendarioLateralDerecho(teamId);
       }
+      if (typeof window.Renderizadores.renderizarMenuClub === "function") {
+        window.Renderizadores.renderizarMenuClub(teamId, "club-menu");
+      }
     }
 
     cerrarModalClub();
     mostrarPantalla("club");
+  }
+
+  // ---------- Editor del menú del club (candado 646) ----------
+  function abrirEditorClub(clubId) {
+    var ov = document.getElementById("club-modal-overlay");
+    var titulo = document.getElementById("club-modal-title");
+    var body = document.getElementById("club-modal-body");
+    if (!ov || !titulo || !body || !window.Renderizadores) return;
+
+    titulo.textContent = "✏️ Editar menú";
+    body.innerHTML =
+      '<div class="editor-club-tabs">' +
+      '<button type="button" class="editor-club-tab is-active" data-accion="editor-club-tab" data-tab="menu" data-club-id="' + clubId + '">📋 Menú</button>' +
+      '<button type="button" class="editor-club-tab" data-accion="editor-club-tab" data-tab="calendario" data-club-id="' + clubId + '">🗓️ Calendario extra</button>' +
+      "</div>" +
+      '<div id="editor-club-contenido"></div>';
+    ov.hidden = false;
+    window.Renderizadores.pintarEditorMenuClub(clubId, document.getElementById("editor-club-contenido"));
+  }
+
+  function cambiarTabEditorClub(clubId, tab, btnEl) {
+    var tabs = document.querySelectorAll(".editor-club-tab");
+    for (var i = 0; i < tabs.length; i++) tabs[i].classList.remove("is-active");
+    if (btnEl) btnEl.classList.add("is-active");
+
+    var contenido = document.getElementById("editor-club-contenido");
+    if (!contenido || !window.Renderizadores) return;
+    if (tab === "calendario") window.Renderizadores.pintarEditorCalendarioExtraClub(clubId, contenido);
+    else window.Renderizadores.pintarEditorMenuClub(clubId, contenido);
+  }
+
+  // Re-pinta el editor de tarjetas Y el menú real de la izquierda tras
+  // añadir/mover/borrar — el admin ve el cambio reflejado al instante en
+  // ambos sitios sin cerrar el modal.
+  function repintarMenuClub(clubId) {
+    var contenido = document.getElementById("editor-club-contenido");
+    if (contenido && window.Renderizadores) window.Renderizadores.pintarEditorMenuClub(clubId, contenido);
+    if (window.Renderizadores) window.Renderizadores.renderizarMenuClub(clubId, "club-menu");
+  }
+
+  function anadirTarjetaMenuClubPrompt(clubId) {
+    if (!window.Estado) return;
+    var etiqueta = window.prompt("Nombre de la nueva competición:");
+    if (etiqueta === null || !etiqueta.trim()) return;
+    var icono = window.prompt("Icono/emoji (opcional):", "⭐");
+    if (icono === null) icono = "⭐";
+    window.Estado.anadirTarjetaMenuClub(clubId, icono, etiqueta);
+    repintarMenuClub(clubId);
+  }
+  function moverTarjetaMenuClub(clubId, id, direccion) {
+    if (!window.Estado) return;
+    window.Estado.moverTarjetaMenuClub(clubId, id, Number(direccion));
+    repintarMenuClub(clubId);
+  }
+  function borrarTarjetaMenuClubPrompt(clubId, id, nombre) {
+    if (!window.Estado) return;
+    if (!window.confirm('¿Borrar la tarjeta "' + nombre + '" del menú?')) return;
+    window.Estado.borrarTarjetaMenuClub(clubId, id);
+    repintarMenuClub(clubId);
+  }
+
+  // ---------- Calendario EXTRA del club (candado 646) ----------
+  function guardarCalendarioExtraClub(clubId) {
+    var ta = document.getElementById("calendario-extra-club-textarea");
+    if (!ta || !window.Estado) return;
+    window.Estado.guardarCalendarioExtraTexto(clubId, ta.value);
+    cerrarModalClub();
+    if (window.Renderizadores) window.Renderizadores.generarCalendarioLateralDerecho(clubId);
+  }
+  function cancelarCalendarioExtraClub() {
+    cerrarModalClub();
   }
 
   function salirDelClub() {
@@ -110,38 +210,66 @@
     mostrarPantalla("inicio");
   }
 
-  // ---------- Candado del Panel Admin (747) ----------
-  function abrirCandadoAdmin() {
+  // ---------- Candado genérico (Panel Admin 747 · Editor de club 646) ----------
+  // Un ÚNICO overlay reutilizado para ambos candados: guarda qué password
+  // se espera y qué hacer al acertarla, así cada caja humana puede tener
+  // su propio candado (646) sin duplicar el markup ni el flujo del Panel
+  // Admin (747).
+  var _candadoEsperado = null;
+  var _candadoOnOk = null;
+
+  function abrirCandado(passwordEsperada, onOk, titulo, subtitulo) {
     var ov = document.getElementById("admin-password-overlay");
     var input = document.getElementById("password-input");
     var error = document.getElementById("password-error");
+    var tituloEl = document.getElementById("password-title");
+    var subEl = document.getElementById("password-sub");
+    _candadoEsperado = passwordEsperada;
+    _candadoOnOk = onOk;
+    if (tituloEl && titulo) tituloEl.textContent = titulo;
+    if (subEl && subtitulo) subEl.textContent = subtitulo;
     if (error) error.hidden = true;
     if (input) input.value = "";
     if (ov) ov.hidden = false;
     if (input) input.focus();
   }
 
-  function cerrarCandadoAdmin() {
+  function cerrarCandado() {
     var ov = document.getElementById("admin-password-overlay");
     var input = document.getElementById("password-input");
     var error = document.getElementById("password-error");
     if (ov) ov.hidden = true;
     if (input) input.value = "";
     if (error) error.hidden = true;
+    _candadoEsperado = null;
+    _candadoOnOk = null;
   }
 
-  function comprobarCandadoAdmin() {
+  function comprobarCandado() {
     var input = document.getElementById("password-input");
     var error = document.getElementById("password-error");
     if (!input) return;
-    if (input.value === ADMIN_PASSWORD) {
-      cerrarCandadoAdmin();
-      mostrarPantalla("admin");
+    if (input.value === _candadoEsperado) {
+      var onOk = _candadoOnOk;
+      cerrarCandado();
+      if (onOk) onOk();
     } else {
       if (error) error.hidden = false;
       input.value = "";
       input.focus();
     }
+  }
+
+  function abrirCandadoAdmin() {
+    abrirCandado(ADMIN_PASSWORD, function () { mostrarPantalla("admin"); },
+      "🔒 Panel Admin", "Introduce la contraseña para continuar.");
+  }
+
+  function abrirCandadoEditorClub() {
+    var clubId = window._idManagerActivo;
+    if (!clubId) return;
+    abrirCandado(CLUB_EDIT_PASSWORD, function () { abrirEditorClub(clubId); },
+      "🔒 Editar menú del club", "Introduce la contraseña para editar este club.");
   }
 
   // ---------- Pantalla 2: Panel Admin ----------
@@ -326,23 +454,26 @@
     var btnGear = document.getElementById("btn-abrir-admin");
     if (btnGear) btnGear.addEventListener("click", abrirCandadoAdmin);
 
+    var btnEditarClub = document.getElementById("btn-editar-club-menu");
+    if (btnEditarClub) btnEditarClub.addEventListener("click", abrirCandadoEditorClub);
+
     var btnPassSubmit = document.getElementById("password-submit");
-    if (btnPassSubmit) btnPassSubmit.addEventListener("click", comprobarCandadoAdmin);
+    if (btnPassSubmit) btnPassSubmit.addEventListener("click", comprobarCandado);
 
     var inputPass = document.getElementById("password-input");
     if (inputPass) {
       inputPass.addEventListener("keydown", function (ev) {
-        if (ev.key === "Enter") comprobarCandadoAdmin();
+        if (ev.key === "Enter") comprobarCandado();
       });
     }
 
     var btnPassClose = document.getElementById("password-close");
-    if (btnPassClose) btnPassClose.addEventListener("click", cerrarCandadoAdmin);
+    if (btnPassClose) btnPassClose.addEventListener("click", cerrarCandado);
 
     var ovPass = document.getElementById("admin-password-overlay");
     if (ovPass) {
       ovPass.addEventListener("click", function (ev) {
-        if (ev.target === ovPass) cerrarCandadoAdmin();
+        if (ev.target === ovPass) cerrarCandado();
       });
     }
 
@@ -410,12 +541,18 @@
         case "editar-calendario-comp": abrirEditorCalendarioComp(); break;
         case "cancelar-calendario-comp": cancelarEditorCalendarioComp(); break;
         case "guardar-calendario-comp": guardarCalendarioComp(); break;
+        case "editor-club-tab": cambiarTabEditorClub(d.clubId, d.tab, accionBtn); break;
+        case "anadir-tarjeta-menu-club": anadirTarjetaMenuClubPrompt(d.clubId); break;
+        case "mover-tarjeta-menu-club": moverTarjetaMenuClub(d.clubId, d.id, d.direccion); break;
+        case "borrar-tarjeta-menu-club": borrarTarjetaMenuClubPrompt(d.clubId, d.id, d.nombre); break;
+        case "guardar-calendario-extra-club": guardarCalendarioExtraClub(d.clubId); break;
+        case "cancelar-calendario-extra-club": cancelarCalendarioExtraClub(); break;
       }
     });
 
     document.addEventListener("keydown", function (ev) {
       if (ev.key !== "Escape") return;
-      cerrarCandadoAdmin();
+      cerrarCandado();
       cerrarModalClub();
     });
   });

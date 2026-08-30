@@ -313,7 +313,9 @@
     var m = document.getElementById("live-marcador");
     if (!m || !_partidoActivo) return;
     var r = calcularMarcadorDesdeActa(_partidoActivo.local.id, _partidoActivo.visitante.id);
-    m.textContent = r.golesLocal + " - " + r.golesVisitante;
+    // Formato compacto "0-1" (sin espacios, petición usuario) — así cabe
+    // de sobra entre los 2 escudos sin empujarlos ni cortar el nombre.
+    m.textContent = r.golesLocal + "-" + r.golesVisitante;
   }
 
   function iniciarPartidoEnVivo(partidoId, ultimoContexto) {
@@ -427,13 +429,18 @@
   function confirmarPartido() {
     if (!_partidoActivo) return;
 
-    // Recordatorio de MVP — solo si nadie lo ha marcado todavía (no
-    // bloquea de verdad: cancelable, por si el admin de verdad no quiere
-    // elegir MVP en este partido).
+    // El MVP es OBLIGATORIO antes de finalizar — si nadie lo ha marcado
+    // todavía, avisamos claramente y volvemos a la MISMA pantalla de
+    // registro de eventos para que lo elija (nunca "confirmar de todas
+    // formas": ese mensaje generaba confusión — petición usuario). La
+    // captura para el WhatsApp ya NO se pide aquí — se pide en el
+    // resumen final, una vez el partido está confirmado (ver el aviso
+    // fijo de #live-resumen en index.html).
     var tieneMvp = actaTemporal.some(function (e) { return e.tipo === "MVP"; });
-    if (!tieneMvp && !window.confirm("⭐ Todavía no has elegido el MVP del partido. ¿Confirmar de todas formas?")) return;
-
-    window.alert("📸 Vas a FINALIZAR el partido, haz una captura para el Grupo WhatsApp LIGA.");
+    if (!tieneMvp) {
+      window.alert("⭐ Tienes que elegir el MVP del partido antes de finalizar.");
+      return;
+    }
 
     var r = calcularMarcadorDesdeActa(_partidoActivo.local.id, _partidoActivo.visitante.id);
     var resultado = finalizarYSubirPartido(_partidoActivo.partido.id, r.golesLocal, r.golesVisitante);
@@ -449,9 +456,6 @@
       localEsHumano: localEsHumano,
       visitanteEsHumano: visitanteEsHumano
     };
-
-    document.getElementById("live-resumen-texto").textContent =
-      _partidoActivo.local.nombre + " " + resultado.golesL + " - " + resultado.golesV + " " + _partidoActivo.visitante.nombre;
 
     document.getElementById("live-resumen-eliminatoria").innerHTML = textoEliminatoria(resultado.eliminatoria, _partidoActivo.datos);
     document.getElementById("live-resumen-clasificacion").innerHTML = renderTablaClasificacionMini(

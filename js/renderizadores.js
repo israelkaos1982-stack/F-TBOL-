@@ -212,8 +212,32 @@
     verano: "verano", "torneos de verano": "verano",
     mundialito: "mundialito", "mundialito de clubes": "mundialito"
   };
+  // Emoji/símbolos decorativos que el admin puede haber tecleado delante
+  // de una competición en el "Calendario extra" ("🇪🇸 Liga", "🏆 Copa del
+  // Rey"...) — sin quitarlos, el match EXACTO contra _BALON_COMP_ALIAS
+  // falla y esa competición se queda sin balón asignado ni color de card
+  // (cae siempre a "comp-otro" gris). Cubre banderas (regional indicators),
+  // emoticonos, pictogramas, símbolos varios y el selector de variación
+  // emoji (U+FE0F) que WhatsApp/teclados suelen pegar detrás del glifo.
+  var _EMOJI_RE = /[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}️‍]/gu;
+  // Normalización SOLO para resolver el compKey (balón + color de card) —
+  // deliberadamente DISTINTA de _normNombre (esa alimenta el ID estable de
+  // cada partido del calendario extra vía _hashStr; si le quitáramos los
+  // emoji ahí, el id de un partido YA jugado con emoji delante cambiaría y
+  // su resultado guardado quedaría huérfano). Aquí no hay ese riesgo — solo
+  // decide QUÉ color/balón usar, nunca identidad de partido.
+  function _normCompKey(s) {
+    return String(s || "")
+      .replace(_EMOJI_RE, "")
+      .replace(/[️‍]/g, "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
   function _resolverCompKeyBalon(compKeyCrudo) {
-    var norm = _normNombre(compKeyCrudo || "");
+    var norm = _normCompKey(compKeyCrudo || "");
     return _BALON_COMP_ALIAS.hasOwnProperty(norm) ? _BALON_COMP_ALIAS[norm] : compKeyCrudo;
   }
 

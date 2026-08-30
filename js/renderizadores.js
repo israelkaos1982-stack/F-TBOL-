@@ -621,10 +621,39 @@
     return null;
   }
 
-  // Busca el rival tecleado en texto libre, en 3 pasadas:
-  // 1) catálogos reales (los 6 humanos + los 300+ equipos IA) — match exacto.
-  // 2) catálogos reales — match parcial (substring en cualquier dirección).
-  // 3) data/rivales_reales.json — clubes reales de 1ª RFEF/Hypermotion/LaLiga
+  // Abreviaturas conocidas de los 6 clubes HUMANOS (los únicos con
+  // "Calendario extra" propio, ver estado.js::_partidosExtraDeTodosLosClubes)
+  // — cubre lo que el admin puede escribir al pegar el texto de UN club
+  // sobre el rival humano ("At. Madrid" en vez de "Atlético Madrid"), que
+  // el match exacto/parcial de abajo NO reconoce: el punto rompe cualquier
+  // substring contra "atletico madrid". Sin esto, la abreviatura no
+  // encuentra al club real y crea un rival SINTÉTICO con id distinto —
+  // ese mismo partido humano-vs-humano puede acabar duplicado (2 ids
+  // distintos para el mismo enfrentamiento, y el nombre corto/genérico se
+  // queda pegado en el calendario para siempre en vez del nombre largo
+  // real). Lista CERRADA y explícita (nunca fuzzy genérico contra los 20
+  // equipos IA / data/rivales_reales.json) para no arriesgarse a
+  // emparejar con el club equivocado — verificado sin colisiones contra
+  // ambos catálogos (incluida "Atlético Madrileño", el filial real, que
+  // NUNCA se abrevia igual que el primer equipo).
+  var _ALIAS_CLUBES_HUMANOS = {
+    liverpool: ["liverpool", "lfc"],
+    arsenal: ["arsenal", "arsenal fc"],
+    "real-madrid": ["real madrid", "r madrid"],
+    "atletico-madrid": ["atletico madrid", "atletico de madrid", "at madrid", "atleti"],
+    "fc-barcelona": ["fc barcelona", "barcelona", "barca", "barça"],
+    psg: ["psg", "paris saint germain", "paris sg"]
+  };
+  function _normSinPuntuacion(s) {
+    return _normNombre(s).replace(/[.,]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  // Busca el rival tecleado en texto libre, en 4 pasadas:
+  // 1) catálogos reales (los 6 humanos + los equipos IA) — match exacto.
+  // 2) alias conocidos de los 6 humanos (abreviaturas, ver arriba) —
+  //    SIEMPRE resuelve al club real, nunca a un sintético.
+  // 3) catálogos reales — match parcial (substring en cualquier dirección).
+  // 4) data/rivales_reales.json — clubes reales de 1ª RFEF/Hypermotion/LaLiga
   //    que no viven como equipo IA completo (no simulamos su liga entera,
   //    solo aparecen como rival puntual de un club humano) pero sí tienen
   //    su identidad visual (colores/formato/siglas) y estadio correctos.
@@ -645,6 +674,18 @@
 
     var exacto = candidatos.find(function (e) { return _normNombre(e.nombre) === norm; });
     if (exacto) return exacto;
+
+    var normSinPunto = _normSinPuntuacion(nombre);
+    var aliasId = null;
+    Object.keys(_ALIAS_CLUBES_HUMANOS).some(function (id) {
+      if (_ALIAS_CLUBES_HUMANOS[id].indexOf(normSinPunto) !== -1) { aliasId = id; return true; }
+      return false;
+    });
+    if (aliasId) {
+      var porAlias = candidatos.find(function (e) { return e.id === aliasId; });
+      if (porAlias) return porAlias;
+    }
+
     var parcial = candidatos.find(function (e) {
       var n = _normNombre(e.nombre);
       return norm.length > 2 && (n.indexOf(norm) !== -1 || norm.indexOf(n) !== -1);

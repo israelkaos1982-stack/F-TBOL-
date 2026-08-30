@@ -1518,21 +1518,21 @@ button { font-family: inherit; cursor: pointer; }
 }
 /* Tiempo · Nivel · Forma — una sola fila horizontal, sin etiqueta de
    texto (solo emoji + valor corto, ya lo trae el propio nodo desde JS,
-   ver _calcularMetaPartido en js/renderizadores.js). */
+   ver _calcularMetaPartido en js/renderizadores.js). Los 3 grupos van
+   juntos, centrados, con 1 espacio entre ellos — no repartidos a lo
+   ancho de toda la fila (petición usuario: nada de huecos grandes). */
 .previa-meta-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
   margin: 10px 0 0;
   padding-top: 10px;
   border-top: 1px solid var(--line);
 }
 .previa-meta-item {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
   white-space: nowrap;
   text-align: center;
   font-size: 13px;

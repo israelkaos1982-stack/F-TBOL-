@@ -1588,8 +1588,8 @@
     liverpool: { icono: "⬇️", label: "En bajón" },
     arsenal: { icono: "↘️", label: "Irregular" },
     "real-madrid": { icono: "🎲", label: "Impredecible" },
-    "atletico-madrid": { icono: "↗️", label: "En racha" },
-    "fc-barcelona": { icono: "⬆️", label: "Gran momento" },
+    "atletico-madrid": { icono: "🎲", label: "Impredecible" },
+    "fc-barcelona": { icono: "↘️", label: "Irregular" },
     psg: { icono: "➡️", label: "Estable" }
   };
   function _esClubHumano(id, datos) {
@@ -1609,15 +1609,20 @@
   // Los 3 valores ya llevan el emoji horneado dentro del string (sin
   // etiqueta de texto ni palabra descriptiva — petición usuario: solo
   // emoji + valor corto, en una línea horizontal única en la previa).
+  // Forma SIEMPRE muestra 2 lados: "Tu" (el gestionado, humano — 🎲
+  // fijo, imposible de predecir sea quien sea el rival) y "Rival" (el
+  // icono fijo de _FORMA_POR_CLUB para el club gestionado, el mismo
+  // esté quien esté al otro lado — petición usuario: deja de depender
+  // de si el rival es humano o IA).
   function _calcularMetaPartido(local, visitante, datos, contexto) {
     var par = _resolverGestionadoYRival(local, visitante, contexto);
     var rivalEsHumano = _esClubHumano(par.rival.id, datos);
     var forma = _FORMA_POR_CLUB[par.managed.id];
-    var formaIcono = rivalEsHumano ? "🎲" : (forma ? forma.icono : "➡️");
+    var formaIconoRival = forma ? forma.icono : "➡️";
     return {
       tiempo: "⏱️" + (rivalEsHumano ? "10 min" : "8 min"),
       nivel: "🤖" + (par.managed.id === _NIVEL_LEYENDA_ID ? "Leyenda" : "Crack"),
-      forma: "🔋" + formaIcono
+      forma: "🔋Tu🎲-" + formaIconoRival + "Rival"
     };
   }
 

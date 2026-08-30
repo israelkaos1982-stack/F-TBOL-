@@ -259,19 +259,32 @@ button { font-family: inherit; cursor: pointer; }
   background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 45%, var(--primary) 100%);
 }
 
-/* Atlético Madrid — franjas rojo/blanco ALTERNAS (petición usuario, "un
-   degradado que alterne entre rojo y blanco, las franjas del escudo").
-   El degradado liso de 3 paradas de arriba no sirve aquí: interpolar
-   --bg-1 (casi negro) contra blanco puro es una rampa de GRIS, así que
-   la caja se veía "genérica" en vez de con la identidad del escudo —
-   las franjas SÍ la transmiten, y de paso evitan ese tramo gris del todo. */
+/* Atlético Madrid — degradado normal rojo→azul (colores REALES del club,
+   ver CAJA_INICIO_COLORES en js/renderizadores.js) con solo 2 franjas
+   blancas en diagonal, encajadas como acento en el extremo derecho del
+   todo (petición usuario, 2ª iteración: la 1ª versión cubría TODA la
+   caja de franjas rojo/blanco y el nombre del club quedaba ilegible
+   encima — "ese degradado hace que ni se vea"). El 0%-82% es el MISMO
+   degradado de 3 paradas de arriba (rojo del club → --bg-1 → azul del
+   club) sin tocar — ahí va el nombre, legible. Del 82% al 100% se
+   insertan 2 paradas duras de blanco (86-90% y 94-98%) sobre el azul,
+   simulando la última pareja de franjas del escudo sin necesitar una
+   2ª capa de fondo ni repeating-linear-gradient. */
 .team-box[data-team-id="atletico-madrid"]::before {
-  background: repeating-linear-gradient(
+  background: linear-gradient(
     135deg,
-    var(--secondary) 0px,
-    var(--secondary) 24px,
-    #ffffff 24px,
-    #ffffff 32px
+    var(--secondary) 0%,
+    var(--bg-1) 45%,
+    var(--primary) 82%,
+    var(--primary) 86%,
+    #ffffff 86%,
+    #ffffff 90%,
+    var(--primary) 90%,
+    var(--primary) 94%,
+    #ffffff 94%,
+    #ffffff 98%,
+    var(--primary) 98%,
+    var(--primary) 100%
   );
 }
 

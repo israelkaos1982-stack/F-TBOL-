@@ -338,13 +338,19 @@
   // escudo real): Arsenal y Real Madrid pasan a un 2º tono DENTRO de la
   // familia de color del club (nunca blanco) para que la caja entera se
   // lea con su color — rojo vibrante → burdeos (Arsenal), púrpura
-  // heráldico → dorado del monograma (Real Madrid). Atlético SÍ pide
-  // blanco explícitamente ("degradado que alterne entre rojo y blanco,
-  // las franjas del escudo") — para eso no vale el degradado liso de 3
-  // paradas (recae en el mismo gris), así que tiene su propio
-  // `.team-box[data-team-id="atletico-madrid"]::before` con franjas
-  // repetidas rojo/blanco en css/estilos.css — `primario` se deja aquí
-  // solo como fallback por si ese override desaparece.
+  // heráldico → dorado del monograma (Real Madrid).
+  //
+  // Atlético Madrid tuvo una 1ª versión con franjas rojo/blanco
+  // ALTERNAS cubriendo TODA la caja — el usuario la rechazó ("ese
+  // degradado hace que ni se vea", el nombre del club quedaba ilegible
+  // encima de tantas franjas). Ahora `secundario`/`primario` son el rojo
+  // y el azul marino REALES del club (mismos valores que
+  // colorPrimario/colorSecundario en data/equipos.json) en un degradado
+  // normal — las franjas blancas se reducen a solo 2, encajadas como
+  // acento en el extremo derecho del todo (ver
+  // `.team-box[data-team-id="atletico-madrid"]::before` en
+  // css/estilos.css), dejando el resto de la caja (donde va el nombre)
+  // como un degradado liso rojo→azul, legible.
   //
   // Liverpool (escudo monocromático, sin más colores que sacar de él):
   // `secundario` (0%, lado del texto) es el rojo carmesí REAL del
@@ -355,7 +361,7 @@
   // (0 KB — solo 2 valores hex, igual que el resto de este mapa).
   var CAJA_INICIO_COLORES = {
     arsenal: { primario: "#7a1024", secundario: "#ef0107" },
-    "atletico-madrid": { primario: "#ffffff", secundario: "#cb3524" },
+    "atletico-madrid": { primario: "#192c5b", secundario: "#cb3524" },
     "real-madrid": { primario: "#e3b13c", secundario: "#5b2c8c" },
     liverpool: { primario: "#170406", secundario: "#c8102e" }
   };

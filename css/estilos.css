@@ -867,48 +867,65 @@ button { font-family: inherit; cursor: pointer; }
   line-height: 1.6;
 }
 
-/* ---------- 6b. PLANTILLA — roster agrupado por posición ---------- */
+/* ---------- 6b. PLANTILLA — roster agrupado por posición, con stats ----------
+   Sin el círculo de posición-en-lista de antes (más espacio): cada grupo
+   lleva su propia leyenda de 4 iconos (🧤/⚽ + ⭐ + 🟨 + 🟥) alineada en
+   grid con las 4 celdas numéricas de cada fila — mismas columnas en la
+   cabecera y en las filas para que quede como una mini-tabla. */
 .plantilla-grupo { margin-bottom: 20px; }
 .plantilla-grupo-titulo {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--text-lo);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin: 0 0 6px;
   padding-bottom: 6px;
   border-bottom: 1px solid var(--line);
 }
+.plantilla-grupo-nombre {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-lo);
+}
+.plantilla-grupo-iconos {
+  display: grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 4px;
+  font-size: 12px;
+  text-align: center;
+  flex: 0 0 auto;
+}
 .plantilla-jugador {
-  display: flex;
+  display: grid;
+  grid-template-columns: 24px 1fr repeat(4, 22px);
   align-items: center;
-  gap: 10px;
-  padding: 9px 4px;
+  gap: 4px;
+  padding: 8px 4px;
   border-bottom: 1px solid var(--line);
 }
 .plantilla-jugador:last-child { border-bottom: none; }
 .plantilla-dorsal {
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-3);
-  border: 1px solid var(--line);
   font-size: 11px;
   font-weight: 800;
-  color: var(--text-hi);
-}
-.plantilla-nombre { flex: 1; min-width: 0; font-size: 13px; font-weight: 700; color: var(--text-hi); }
-.plantilla-nombre--vacio { color: var(--text-lo); font-weight: 500; font-style: italic; }
-.plantilla-posicion {
-  font-size: 10px;
-  font-weight: 800;
   color: var(--text-lo);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  text-align: center;
+}
+.plantilla-nombre {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.plantilla-stat {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--text-hi);
+  text-align: center;
 }
 
 /* ---------- 6c. CLASIFICACIÓN — tabla compartida (usada por Liga 1ª REF) ---------- */

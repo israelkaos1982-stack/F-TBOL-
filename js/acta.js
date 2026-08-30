@@ -120,8 +120,9 @@
     // C) Fichas de jugadores humanos: mismo principio. Se ignoran los
     //    eventos de la IA (es_humano:false) por diseño — sus jugadores
     //    genéricos no tienen ficha ni historial persistido (0 KB extra).
-    //    Estado.calcularEstadisticasJugador() ya solo cuenta es_humano:true
-    //    al leer los eventos que acabamos de guardar en el paso A.
+    //    Renderizadores.calcularStatsRosterClub() ya solo cuenta
+    //    es_humano:true al leer los eventos que acabamos de guardar en
+    //    el paso A — la Plantilla y Liga 1ª REF quedan al día solas.
 
     // D) Vaciar RAM — el acta temporal queda a cero para el siguiente partido.
     var actaCerrada = actaTemporal.slice();
@@ -262,7 +263,7 @@
     sel.innerHTML = "";
     if (!esHumano) return;
 
-    var jugadores = (_partidoActivo.datos.jugadores.jugadores || []).filter(function (j) { return j.equipoId === equipo.id; });
+    var jugadores = window.Renderizadores.obtenerJugadoresClub(equipo.id);
     jugadores.forEach(function (j) {
       var op = document.createElement("option");
       op.value = j.id;

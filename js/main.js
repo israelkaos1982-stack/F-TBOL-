@@ -224,16 +224,12 @@
     cerrarModalClub();
   }
 
-  // ---------- Plantilla (nombres reales de jugadores) del club (candado 646) ----------
+  // ---------- Plantilla (roster real) del club (candado 646) ----------
   function guardarPlantillaClub(clubId) {
     var ta = document.getElementById("plantilla-club-textarea");
-    if (!ta || !window.Estado || !window.Renderizadores) return;
-    window.Renderizadores.cargarTodo().then(function (datos) {
-      var jugadores = window.Renderizadores.obtenerJugadoresClub(clubId, datos);
-      var mapa = window.Renderizadores.parsearPlantillaTexto(ta.value, jugadores);
-      window.Estado.guardarNombresPlantilla(clubId, mapa);
-      cerrarModalClub();
-    });
+    if (!ta || !window.Estado) return;
+    window.Estado.guardarRosterTexto(clubId, ta.value);
+    cerrarModalClub();
   }
   function cancelarPlantillaClub() {
     cerrarModalClub();

@@ -6,7 +6,7 @@
      screen-inicio  -> las 6 cajas humanas + engranaje
      screen-admin   -> Calendar / Stadium Hub / Ball Storage /
                        Espacio del navegador / Borrar TODO,
-                       detrás del candado 747
+                       detrás del candado 646
      screen-club    -> cabecera del mánager activo + tabs
                        Calendario / Plantilla + botón Salir
 
@@ -18,11 +18,11 @@
 (function () {
   "use strict";
 
-  var ADMIN_PASSWORD = "747";
-  // Candado del menú de CADA caja humana (añadir/reordenar/borrar
-  // competiciones, pegar el calendario extra en texto) — password propia,
-  // distinta de la del Panel Admin.
-  var CLUB_EDIT_PASSWORD = "646";
+  // Contraseña ÚNICA de administrador — antes había 2 candados distintos
+  // (747 para el Panel Admin, 646 para el resto: editor de club,
+  // sancionados, quitar lesionados/sancionados...). Petición usuario:
+  // unificar todos los candados de la web en uno solo (646).
+  var ADMIN_PASSWORD = "646";
 
   // ---------- Gestor de pantallas ----------
   var PANTALLAS = ["inicio", "admin", "club"];
@@ -242,7 +242,7 @@
   // tabla en el MISMO contenedor, sin cerrar el modal.
   function editarLiga1RefInline(clubId) {
     if (!window.Renderizadores) return;
-    abrirCandado(CLUB_EDIT_PASSWORD, function () {
+    abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("liga1ref-content");
       if (cont) window.Renderizadores.pintarEditorLiga1Ref(cont, clubId);
     }, "🔒 Editar clasificación", "PIN de administrador (646)");
@@ -266,7 +266,7 @@
   }
   function editarLiga1RefStatInline(clubId, categoria) {
     if (!window.Renderizadores) return;
-    abrirCandado(CLUB_EDIT_PASSWORD, function () {
+    abrirCandado(ADMIN_PASSWORD, function () {
       var cont = document.getElementById("liga1ref-content");
       if (cont) window.Renderizadores.pintarEditorLiga1RefStat(cont, clubId, categoria);
     }, "🔒 Editar estadística", "PIN de administrador (646)");
@@ -310,11 +310,11 @@
     mostrarPantalla("inicio");
   }
 
-  // ---------- Candado genérico (Panel Admin 747 · Editor de club 646) ----------
-  // Un ÚNICO overlay reutilizado para ambos candados: guarda qué password
-  // se espera y qué hacer al acertarla, así cada caja humana puede tener
-  // su propio candado (646) sin duplicar el markup ni el flujo del Panel
-  // Admin (747).
+  // ---------- Candado genérico (contraseña única 646) ----------
+  // Un ÚNICO overlay reutilizado por TODOS los candados del proyecto
+  // (Panel Admin, editor de cada caja humana, sancionar, quitar
+  // lesionados/sancionados...): guarda qué password se espera y qué
+  // hacer al acertarla.
   var _candadoEsperado = null;
   var _candadoOnOk = null;
 
@@ -368,13 +368,13 @@
   function abrirCandadoEditorClub() {
     var clubId = window._idManagerActivo;
     if (!clubId) return;
-    abrirCandado(CLUB_EDIT_PASSWORD, function () { abrirEditorClub(clubId); },
+    abrirCandado(ADMIN_PASSWORD, function () { abrirEditorClub(clubId); },
       "🔒 Editar menú del club", "Introduce la contraseña para editar este club.");
   }
 
   // Reutilizable desde CUALQUIER otro módulo (renderizadores.js: Sancionados
   // solo-admin, quitar Lesionados/Sancionados solo-admin) — mismo overlay/
-  // candado de siempre (747), 0 KB nuevos, solo un punto de entrada público.
+  // candado de siempre (646), 0 KB nuevos, solo un punto de entrada público.
   function pedirPinAdmin(onOk, titulo, subtitulo) {
     abrirCandado(ADMIN_PASSWORD, onOk,
       titulo || "🔒 Acción de administrador",
@@ -540,16 +540,21 @@
     if (window.Renderizadores) window.Renderizadores.pintarTemporada();
   }
 
-  // ---------- Nombre de la liga principal editable (badge del calendario) ----------
-  // Compartido por los 6 clubes humanos (todos juegan la misma liga) — se
-  // edita una vez y se ve en todas las cajas, igual que la Temporada.
+  // ---------- Nombre de la liga — editable pulsando el propio badge ----------
+  // Cada club humano tiene SU PROPIA liga (nombre distinto por club, ver
+  // js/estado.js::obtenerNombreLiga/guardarNombreLiga) — al ascender o
+  // descender de división, o cuando un club juega su liga real (p.ej. el
+  // PSG en la Ligue 1), cada caja necesita su propio nombre, no uno
+  // compartido por los 6. Se pulsa directamente el badge del calendario
+  // (ya no hay lápiz aparte al lado).
   function editarNombreLiga() {
-    if (!window.Estado) return;
-    var actual = window.Estado.obtenerNombreLiga();
-    var nueva = window.prompt("Nombre de la liga principal:", actual);
+    var clubId = window._idManagerActivo;
+    if (!clubId || !window.Estado) return;
+    var actual = window.Estado.obtenerNombreLiga(clubId);
+    var nueva = window.prompt("Nombre de la liga de este club:", actual);
     if (nueva === null) return; // cancelado
     if (!nueva.trim()) return;
-    window.Estado.guardarNombreLiga(nueva);
+    window.Estado.guardarNombreLiga(clubId, nueva);
     var badge = document.getElementById("calendar-liga-badge");
     if (badge) badge.textContent = nueva.trim();
   }
@@ -564,7 +569,7 @@
     var btnTemporada = document.getElementById("btn-editar-temporada");
     if (btnTemporada) btnTemporada.addEventListener("click", editarTemporada);
 
-    var btnLigaNombre = document.getElementById("btn-editar-liga-nombre");
+    var btnLigaNombre = document.getElementById("calendar-liga-badge");
     if (btnLigaNombre) btnLigaNombre.addEventListener("click", editarNombreLiga);
 
     var grid = document.getElementById("team-select-grid");

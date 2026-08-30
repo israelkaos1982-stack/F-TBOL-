@@ -552,6 +552,35 @@
     }
   }
 
+  // Quita el marcador "(N-M)" pegado al rival en CADA línea del
+  // Calendario extra de este club — vuelve esas líneas a "sin jugar" sin
+  // borrar la línea entera (conserva competición/ronda/rival/fecha).
+  // Complementa a reiniciarResultadoPartido: ese solo borra un resultado
+  // CONFIRMADO EN VIVO desde la app (Estado.registrarResultadoPartido) —
+  // un partido tecleado por el admin YA CON el marcador en el propio
+  // texto (ver js/renderizadores.js::parsearPartidosExtraTexto, "Rival
+  // (2-1)") nunca pasa por ahí, así que sin esto el botón de reinicio
+  // individual no tenía ningún efecto sobre ellos: el texto seguía
+  // trayendo el marcador y el partido volvía a salir "jugado" en el
+  // siguiente repintado. Devuelve el nº de líneas a las que se les quitó
+  // el marcador (0 si no había ninguna, y en ese caso no toca el guardado).
+  function reiniciarCalendarioExtraJugados(clubId) {
+    var texto = obtenerCalendarioExtraTexto(clubId);
+    if (!texto) return 0;
+    var n = 0;
+    var limpio = texto
+      .split("\n")
+      .map(function (linea) {
+        var sinMarcador = linea.replace(/\s*\(\s*\d+\s*-\s*\d+\s*\)/, "");
+        if (sinMarcador !== linea) n++;
+        return sinMarcador;
+      })
+      .join("\n");
+    if (!n) return 0;
+    guardarCalendarioExtraTexto(clubId, limpio);
+    return n;
+  }
+
   // ---------- Títulos ganados por club (Sala de Títulos) ----------
   // Igual que el calendario extra: texto libre POR CLUB, una línea por
   // trofeo ganado ("Liga - 2032"), que js/renderizadores.js resuelve
@@ -957,6 +986,7 @@
     borrarTarjetaMenuClub: borrarTarjetaMenuClub,
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
+    reiniciarCalendarioExtraJugados: reiniciarCalendarioExtraJugados,
     obtenerTitulosTexto: obtenerTitulosTexto,
     guardarTitulosTexto: guardarTitulosTexto,
     obtenerListaJugadores: obtenerListaJugadores,

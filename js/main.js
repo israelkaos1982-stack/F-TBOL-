@@ -559,6 +559,29 @@
     if (badge) badge.textContent = nueva.trim();
   }
 
+  // ---------- Reiniciar TODOS los partidos del club activo (solo admin) ----------
+  // Botón "🔄 Reiniciar" de la cabecera del calendario — vuelve a "sin
+  // jugar" cada partido ya jugado de la caja abierta (Liga + Copa +
+  // cualquier otra competición en paralelo), conservando el resto del
+  // calendario (rivales, fechas, competiciones) intacto. Gateado por PIN
+  // + confirmación explícita: es destructivo y afecta a todos los
+  // partidos jugados del club, no a uno solo (ver el marcador-botón de
+  // cada partido para reiniciarlos de uno en uno).
+  function reiniciarTodosPartidosClub() {
+    var clubId = window._idManagerActivo;
+    if (!clubId || !window.Renderizadores) return;
+    pedirPinAdmin(function () {
+      var ok = window.confirm(
+        "⚠️ Esto reinicia a CERO todos los partidos ya jugados de este club (Liga, Copa y cualquier otra competición en curso).\n\n" +
+        "El calendario en sí (rivales, fechas, competiciones) NO se toca — solo se borran los resultados. Esta acción NO se puede deshacer.\n\n" +
+        "¿Seguro que quieres continuar?"
+      );
+      if (!ok) return;
+      var n = window.Renderizadores.reiniciarTodosPartidosClub(clubId);
+      alert(n ? "✅ " + n + " partido(s) reiniciado(s)." : "No había ningún partido jugado que reiniciar.");
+    }, "🔒 Reiniciar partidos del club", "Solo el administrador puede reiniciar todos los partidos jugados.");
+  }
+
   // ---------- Wiring ----------
   document.addEventListener("DOMContentLoaded", function () {
     if (window.Renderizadores) {
@@ -571,6 +594,9 @@
 
     var btnLigaNombre = document.getElementById("calendar-liga-badge");
     if (btnLigaNombre) btnLigaNombre.addEventListener("click", editarNombreLiga);
+
+    var btnResetPartidos = document.getElementById("calendar-reset-btn");
+    if (btnResetPartidos) btnResetPartidos.addEventListener("click", reiniciarTodosPartidosClub);
 
     var grid = document.getElementById("team-select-grid");
     if (grid) {

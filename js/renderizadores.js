@@ -1680,6 +1680,38 @@
       });
   }
 
+  // Reinicia a "sin jugar" TODOS los partidos ya jugados del club cuyo
+  // calendario está abierto ahora mismo (los mismos que pinta la pantalla
+  // — Liga de su división actual + el resto de competiciones en
+  // paralelo). Un solo botón para no tener que pulsar el marcador de
+  // cada partido uno a uno tras una tanda de pruebas. Cubre las 2 formas
+  // en que un partido puede quedar "jugado":
+  //  1) confirmado EN VIVO desde la app (Estado.registrarResultadoPartido)
+  //     -> reiniciarResultadoPartido, uno por partido.
+  //  2) tecleado por el admin con el marcador ya puesto en el propio
+  //     texto de "Calendario extra" ("Rival (2-1)") -> el 1) por sí solo
+  //     NO hace nada aquí (nunca hubo override que borrar), así que
+  //     además se limpia el marcador del propio texto.
+  // Requiere que el calendario de ESE club ya esté pintado en pantalla
+  // (usa _ultimoContexto.partidosPorId) — es lo normal, el botón vive en
+  // la cabecera del propio calendario. Devuelve el nº de partidos que
+  // quedaron reiniciados (0 si no había ninguno jugado).
+  function reiniciarTodosPartidosClub(clubId) {
+    if (!clubId || !window.Estado) return 0;
+    var n = 0;
+    if (_ultimoContexto && _ultimoContexto.equipo && _ultimoContexto.equipo.id === clubId) {
+      var partidosPorId = _ultimoContexto.partidosPorId || {};
+      Object.keys(partidosPorId).forEach(function (id) {
+        if (!partidosPorId[id].jugado) return;
+        n++;
+        window.Estado.reiniciarResultadoPartido(id);
+      });
+    }
+    n += window.Estado.reiniciarCalendarioExtraJugados(clubId);
+    generarCalendarioLateralDerecho(clubId);
+    return n;
+  }
+
   // ============================================================
   // FORMA / NIVEL / TIEMPO — datos "de referencia" del partido en la
   // PANTALLA DE PREVIA (Fase 4). Es una tabla FIJA, editable solo por
@@ -2632,6 +2664,7 @@
     renderizarInicioEquipos: renderizarInicioEquipos,
     pintarTemporada: pintarTemporada,
     generarCalendarioLateralDerecho: generarCalendarioLateralDerecho,
+    reiniciarTodosPartidosClub: reiniciarTodosPartidosClub,
     renderizarMenuClub: renderizarMenuClub,
     pintarEditorMenuClub: pintarEditorMenuClub,
     pintarEditorCalendarioExtraClub: pintarEditorCalendarioExtraClub,

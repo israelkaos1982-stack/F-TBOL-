@@ -644,9 +644,38 @@
     return _guardarOverlay(ESTADIOS_KEY, ov);
   }
 
-  // Wipe total — Panel Admin, "🗑️ Borrar TODO". Vuelve al estado de
-  // fábrica (data/*.json sin ninguna capa local encima). El propio
-  // caller (js/main.js) pide confirmación explícita antes de llamar.
+  // Todas las claves de esta app en localStorage empiezan por "ef7_" —
+  // resultados (STORAGE_KEY), temporada, nombre de liga, calendario
+  // admin, menú/calendario extra/lesionados/sancionados/plantilla de
+  // CADA club, Liga 1ª REF y los overlays de balones/estadios. Barrer
+  // por prefijo (en vez de mantener una lista de claves a mano) es lo
+  // que garantiza que "Borrar TODO" y el backup de "Exportar/Importar
+  // progreso" cubran SIEMPRE el 100% de los datos reales de la app,
+  // incluida cualquier clave NUEVA que se añada en el futuro sin tener
+  // que acordarse de tocar este bloque.
+  var PREFIJO_CLAVES = "ef7_";
+  function _clavesDeLaApp() {
+    var claves = [];
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(PREFIJO_CLAVES) === 0) claves.push(k);
+      }
+    } catch (err) {
+      console.error("[estado] no se pudo listar localStorage:", err);
+    }
+    return claves;
+  }
+
+  // Wipe total — Panel Admin, "🗑️ Borrar TODO". Alcance DELIBERADAMENTE
+  // ESTRECHO (el propio texto de confirmación en js/main.js lo promete
+  // así): solo borra resultados/actas/terceros partidos de desempate
+  // (STORAGE_KEY). Las 6 plantillas, el calendario extra de cada club,
+  // los iconos del menú, Lesionados/Sancionados, Liga 1ª REF y los
+  // balones/estadios editados NUNCA se tocan aquí — eso es edición del
+  // admin, no "progreso de partidos jugados". `_clavesDeLaApp()` solo
+  // se usa para el backup completo (exportar/importar), no para este
+  // borrado — son alcances distintos a propósito.
   function borrarTodo() {
     _estado = estadoPorDefecto();
     try {
@@ -658,11 +687,47 @@
   }
 
   // ---------- Backup (panel antiborrado) ----------
+  // El progreso REAL de la app vive repartido en muchas claves de
+  // localStorage (resultados, el calendario de CADA club, los iconos
+  // del menú, la plantilla, lesionados/sancionados, balones/estadios
+  // editados, el nombre de la liga...). Exportar solo el blob de
+  // resultados (como hacía la versión antigua de esta función) dejaba
+  // fuera casi todo eso — al importar en otro dispositivo, o tras
+  // borrar datos de navegación, los calendarios y los iconos seguían
+  // perdidos, aunque el import "funcionara" (partidos jugados sí
+  // volvían, todo lo demás no). El backup ahora es un volcado COMPLETO
+  // de toda clave "ef7_*", así cubre siempre el 100% — y, sin backend
+  // real, es también la única forma de pasar el progreso de un
+  // dispositivo a otro: exportar en uno, mandar el archivo (WhatsApp,
+  // email...) e importar en el otro.
+  var FORMATO_BACKUP_COMPLETO = "ef7-backup-v2";
   function exportarEstadoCrudo() {
-    return JSON.parse(JSON.stringify(cargarEstado()));
+    var claves = {};
+    _clavesDeLaApp().forEach(function (k) { claves[k] = localStorage.getItem(k); });
+    return { formato: FORMATO_BACKUP_COMPLETO, claves: claves };
   }
   function importarEstadoCrudo(obj) {
     if (!obj || typeof obj !== "object") throw new Error("Copia de seguridad inválida");
+
+    // Formato NUEVO (v2) — volcado completo de todas las claves ef7_*.
+    if (obj.formato === FORMATO_BACKUP_COMPLETO && obj.claves && typeof obj.claves === "object") {
+      var huboAlgo = false;
+      Object.keys(obj.claves).forEach(function (key) {
+        if (key.indexOf(PREFIJO_CLAVES) !== 0) return; // nunca escribas nada ajeno a esta app
+        try {
+          localStorage.setItem(key, obj.claves[key]);
+          huboAlgo = true;
+        } catch (err) {
+          console.error("[estado] no se pudo restaurar la clave " + key + ":", err);
+        }
+      });
+      _estado = null; // fuerza a releer desde localStorage en el próximo cargarEstado()
+      return huboAlgo;
+    }
+
+    // Formato VIEJO (backups guardados ANTES de este fix, solo traían
+    // resultados/partidosGenerados) — se sigue aceptando para no
+    // invalidar copias de seguridad ya hechas por el usuario.
     _estado = {
       version: obj.version || 1,
       resultados: obj.resultados || {},

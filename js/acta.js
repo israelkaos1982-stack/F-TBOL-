@@ -228,6 +228,13 @@
     marcador.textContent = penL + " - " + penV;
   }
 
+  // Mismo orden/etiquetas que la pantalla "Plantilla" (Renderizadores) —
+  // agrupar por posición en vez de una lista plana ordenada solo por
+  // dorsal: con plantillas de 20+ jugadores, encontrar uno a mano en una
+  // lista sin ordenar era lento (petición usuario).
+  var POSICIONES_ORDEN = ["POR", "DEF", "MED", "DEL"];
+  var POSICIONES_LABEL = { POR: "Porteros", DEF: "Defensas", MED: "Centrocampistas", DEL: "Delanteros" };
+
   function poblarSelectJugador() {
     var sel = document.getElementById("live-jugador");
     var fila = document.getElementById("live-jugador-row");
@@ -242,11 +249,18 @@
     if (!esHumano) return;
 
     var jugadores = window.Renderizadores.obtenerJugadoresClub(equipo.id);
-    jugadores.forEach(function (j) {
-      var op = document.createElement("option");
-      op.value = j.id;
-      op.textContent = "#" + j.dorsal + " " + j.nombre + " (" + j.posicion + ")";
-      sel.appendChild(op);
+    POSICIONES_ORDEN.forEach(function (pos) {
+      var deEstaPos = jugadores.filter(function (j) { return j.posicion === pos; });
+      if (!deEstaPos.length) return;
+      var grupo = document.createElement("optgroup");
+      grupo.label = POSICIONES_LABEL[pos];
+      deEstaPos.forEach(function (j) {
+        var op = document.createElement("option");
+        op.value = j.id;
+        op.textContent = "#" + j.dorsal + " " + j.nombre;
+        grupo.appendChild(op);
+      });
+      sel.appendChild(grupo);
     });
   }
 
@@ -329,16 +343,17 @@
     // evento?" (antes había una fila de botones Local/Visitante aparte,
     // duplicando el nombre que ya se ve debajo del escudo) — con borde
     // resaltado (CSS .live-team-nombre.is-active) se entiende de un
-    // vistazo a quién se le está registrando el evento. Debajo, su
-    // propio mini-acta (ver pintarActaLista).
+    // vistazo a quién se le está registrando el evento. El escudo/nombre
+    // quedan FIJOS (nunca se mueven al añadir eventos): la mini-acta de
+    // cada equipo vive en su propio contenedor, ya existente en el HTML,
+    // debajo de una barra separadora — ver #live-acta-local/visitante en
+    // index.html y pintarActaLista() más abajo.
     document.getElementById("live-team-local").innerHTML =
       R.crearEscudoHTML(local, "escudo--lg") +
-      '<button type="button" class="live-team-nombre" data-lado="local">' + local.nombre + "</button>" +
-      '<div class="live-acta-mini" id="live-acta-local"></div>';
+      '<button type="button" class="live-team-nombre" data-lado="local">' + local.nombre + "</button>";
     document.getElementById("live-team-visitante").innerHTML =
       R.crearEscudoHTML(visitante, "escudo--lg") +
-      '<button type="button" class="live-team-nombre" data-lado="visitante">' + visitante.nombre + "</button>" +
-      '<div class="live-acta-mini" id="live-acta-visitante"></div>';
+      '<button type="button" class="live-team-nombre" data-lado="visitante">' + visitante.nombre + "</button>";
 
     poblarSelectMinuto();
     seleccionarLado("local");
@@ -482,7 +497,7 @@
       if (esHumano && jugadorSel && jugadorSel.value) {
         jugadorId = jugadorSel.value;
         var opt = jugadorSel.options[jugadorSel.selectedIndex];
-        jugadorNombre = opt ? opt.textContent.replace(/^#\d+\s/, "").replace(/\s\([A-Z]+\)$/, "") : null;
+        jugadorNombre = opt ? opt.textContent.replace(/^#\d+\s/, "") : null;
       }
       agregarEventoActa({
         tipo: evtBtn.dataset.tipo,

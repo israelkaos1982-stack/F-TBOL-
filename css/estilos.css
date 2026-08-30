@@ -1497,10 +1497,22 @@ button { font-family: inherit; cursor: pointer; }
 }
 .previa-overlay[hidden] { display: none; }
 
+/* El candado admin/club (#admin-password-overlay) reutiliza esta misma
+   clase .previa-overlay — sin un z-index propio quedaba PINTADO DEBAJO
+   de la previa/pantalla en vivo cuando se abre encima de ellas (mismo
+   z-index, y va antes en el DOM): el teclado numérico aparecía pero la
+   tarjeta con el título/campo/botón quedaba invisible detrás, así que
+   pulsar no parecía hacer nada (bug real: quitar lesionado/sancionado
+   con PIN, foto usuario). Un ID con más especificidad que la clase
+   basta para ganar siempre, sin tocar el resto de overlays. */
+#admin-password-overlay { z-index: 200; }
+
 .previa-card {
   position: relative;
   width: 100%;
   max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
   background: linear-gradient(180deg, var(--bg-2), var(--bg-1));
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
@@ -1567,12 +1579,19 @@ button { font-family: inherit; cursor: pointer; }
   text-shadow: var(--neon-glow);
   white-space: nowrap;
 }
-/* La pantalla EN VIVO es la que de verdad necesita un marcador
-   llamativo (foto usuario) — la previa (VS / marcador ya jugado) se
-   queda en el tamaño de siempre. Mismo verde+glow, solo más grande. */
+/* El marcador EN VIVO ya NO va encajado ENTRE los 2 escudos (eso
+   estrujaba el ancho disponible para el nombre del equipo, cortándolo
+   — foto usuario) — va SOLO, en su propia fila, arriba del todo: más
+   grande y llamativo, y libera toda la fila de abajo para los nombres
+   completos. Ver el markup nuevo de #partido-live-overlay en index.html. */
 #live-marcador {
+  text-align: center;
   font-size: 34px;
+  font-weight: 900;
   letter-spacing: 0.5px;
+  color: var(--neon);
+  text-shadow: var(--neon-glow);
+  margin-bottom: 12px;
 }
 
 .previa-info-grid {
@@ -1605,14 +1624,15 @@ button { font-family: inherit; cursor: pointer; }
 /* Tiempo · Nivel · Forma — una sola fila horizontal, sin etiqueta de
    texto (solo emoji + valor corto, ya lo trae el propio nodo desde JS,
    ver _calcularMetaPartido en js/renderizadores.js). Los 3 grupos van
-   juntos, centrados, con 1 espacio entre ellos — no repartidos a lo
-   ancho de toda la fila (petición usuario: nada de huecos grandes). */
+   centrados, con más separación entre ellos y en gris (petición
+   usuario) en vez de blanco — para que no compitan visualmente con el
+   marcador/nombres de equipo. */
 .previa-meta-row {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 16px;
   margin: 10px 0 0;
   padding-top: 10px;
   border-top: 1px solid var(--line);
@@ -1623,7 +1643,7 @@ button { font-family: inherit; cursor: pointer; }
   text-align: center;
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-hi);
+  color: var(--text-lo);
 }
 .previa-balon-forzado {
   display: inline-block;
@@ -1718,12 +1738,15 @@ button { font-family: inherit; cursor: pointer; }
    (Local/Visitante) duplicando el nombre que ya se ve aquí; ahora se
    pulsa directamente y el borde verde indica cuál está activo.
    Sustituye a .previa-team-nombre SOLO en la pantalla en vivo (la
-   previa sigue con el <span> de siempre, no interactivo). */
+   previa sigue con el <span> de siempre, no interactivo). Con el
+   marcador ya fuera de esta fila (ver #live-marcador) hay ancho de
+   sobra, pero se permite el salto de línea igualmente para GARANTIZAR
+   que el nombre nunca se corte (petición usuario), en vez de recortar
+   con "…". */
 .live-team-nombre {
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
   font-size: 12px;
   font-weight: 800;
   text-align: center;
@@ -1737,6 +1760,33 @@ button { font-family: inherit; cursor: pointer; }
   background: rgba(57, 255, 106, 0.16);
   color: var(--neon);
   border-color: var(--neon);
+}
+
+/* Fila de escudos+nombres de la pantalla EN VIVO: top-aligned (nunca
+   centrado verticalmente) para que ambos escudos queden SIEMPRE a la
+   misma altura — antes, al vivir la mini-acta dentro de esta misma
+   columna, el equipo con más eventos "empujaba" su propia columna a
+   ser más alta y el centrado vertical de la fila lo desplazaba hacia
+   arriba respecto al otro equipo (bug: "el escudo se va desplazando",
+   foto usuario). Ahora la mini-acta vive FUERA, en .live-acta-row. */
+.live-teams-row { align-items: flex-start; }
+
+.live-acta-sep {
+  border-top: 1px solid var(--line);
+  margin: 2px 0 8px;
+}
+
+/* Mini-acta de cada equipo, en su PROPIA fila (nunca dentro de la fila
+   de escudos/nombres) — así añadir eventos jamás mueve el escudo. */
+.live-acta-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.live-acta-row .live-acta-mini {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
 }
 
 /* ---------- 8c-bis. PANTALLA EN VIVO — Fase 4: separador, lesionados/
@@ -1789,22 +1839,18 @@ button { font-family: inherit; cursor: pointer; }
   padding: 5px 12px;
 }
 
+/* Azul clarito (petición usuario) — mismo tono ya usado en el proyecto
+   para "❄️ forzado por nieve" (.previa-balon-forzado), sin var nueva. */
 .live-checkbox-row {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
   font-weight: 700;
-  color: var(--text-hi);
-  margin: 4px 0 6px;
+  color: #7fd3ff;
+  margin: 4px 0 10px;
 }
 .live-checkbox-row input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--neon); }
-.live-formato-hint {
-  font-size: 11px;
-  color: var(--text-lo);
-  margin: 0 0 12px;
-  line-height: 1.4;
-}
 
 .live-tanda-info {
   text-align: center;
@@ -1872,14 +1918,16 @@ button { font-family: inherit; cursor: pointer; }
 }
 .live-acta-mini-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
   font-size: 10px;
   color: var(--text-lo);
 }
 .live-acta-mini-min { color: var(--neon); font-weight: 800; flex: 0 0 auto; }
 .live-acta-mini-tipo { flex: 0 0 auto; }
-.live-acta-mini-jugador { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Sin recorte: el minuto+icono+jugador tienen que verse ENTEROS
+   (petición usuario) — se permite el salto de línea en vez de "…". */
+.live-acta-mini-jugador { flex: 1; min-width: 0; white-space: normal; word-break: break-word; }
 .live-acta-mini-del {
   flex: 0 0 auto;
   width: 16px;

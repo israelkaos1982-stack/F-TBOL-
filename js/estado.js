@@ -417,6 +417,31 @@
     }
   }
 
+  // ---------- Títulos ganados por club (Sala de Títulos) ----------
+  // Igual que el calendario extra: texto libre POR CLUB, una línea por
+  // trofeo ganado ("Liga - 2032"), que js/renderizadores.js resuelve
+  // contra el catálogo cerrado data/titulos.json (ver
+  // parsearTitulosTexto/renderizarTitulos). Sin imágenes — cada trofeo
+  // se pinta con su icono+color del catálogo, 0 KB por título.
+  function _titulosKey(clubId) { return "ef7_club_titulos_v1_" + clubId; }
+  function obtenerTitulosTexto(clubId) {
+    try {
+      var v = localStorage.getItem(_titulosKey(clubId));
+      return v !== null ? v : "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarTitulosTexto(clubId, texto) {
+    try {
+      localStorage.setItem(_titulosKey(clubId), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar los títulos del club:", err);
+      return false;
+    }
+  }
+
   // ---------- Lesionados / sancionados por club (Fase 4) ----------
   // Igual que el calendario extra: una lista de texto libre POR CLUB
   // (el mánager de cada caja lleva la suya, independiente de con quién
@@ -798,6 +823,8 @@
     borrarTarjetaMenuClub: borrarTarjetaMenuClub,
     obtenerCalendarioExtraTexto: obtenerCalendarioExtraTexto,
     guardarCalendarioExtraTexto: guardarCalendarioExtraTexto,
+    obtenerTitulosTexto: obtenerTitulosTexto,
+    guardarTitulosTexto: guardarTitulosTexto,
     obtenerListaJugadores: obtenerListaJugadores,
     agregarJugadorALista: agregarJugadorALista,
     quitarJugadorDeLista: quitarJugadorDeLista,

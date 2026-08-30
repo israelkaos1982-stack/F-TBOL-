@@ -1682,6 +1682,20 @@
     };
   }
 
+  // Fase (ida/vuelta) de una eliminatoria a doble partido — null en Liga
+  // y en eliminatorias a partido único. La prórroga SOLO puede decidirse
+  // en el partido que cierra la eliminatoria: la vuelta (o el partido
+  // único). La ida nunca la necesita.
+  function _faseIdaVuelta(partido) {
+    if (partido.eliminatoria && (partido.eliminatoria.fase === "ida" || partido.eliminatoria.fase === "vuelta")) {
+      return partido.eliminatoria.fase;
+    }
+    var rondaNorm = _normNombre(partido.ronda || "");
+    if (/\bvuelta\b/.test(rondaNorm) || /\bvta\b/.test(rondaNorm)) return "vuelta";
+    if (/\bida\b/.test(rondaNorm)) return "ida";
+    return null;
+  }
+
   // Modo de la eliminatoria, deducido del texto libre que el admin
   // escribe en "Calendario extra" (competición/ronda) o, si algún día
   // vuelve a poblarse data/partidos.json con el campo `eliminatoria` de
@@ -1690,9 +1704,7 @@
   // resuelve sus penaltis leyendo el acta (ver sistema-temporadas.js).
   function detectarModoPartido(partido) {
     if (partido.competicion && _normNombre(partido.competicion) === "liga") return "liga";
-    if (partido.eliminatoria && (partido.eliminatoria.fase === "ida" || partido.eliminatoria.fase === "vuelta")) return "ida-vuelta";
-    var rondaNorm = _normNombre(partido.ronda || "");
-    if (/\bida\b/.test(rondaNorm) || /\bvuelta\b/.test(rondaNorm) || /\bvta\b/.test(rondaNorm)) return "ida-vuelta";
+    if (_faseIdaVuelta(partido)) return "ida-vuelta";
     return "eliminatoria-unica";
   }
 
@@ -1720,26 +1732,35 @@
     _renderListaJugadores("sancionados", "previa-sancionados-lista", "Sin sancionados registrados.");
   }
 
-  // Casilla "Activar Prórroga y Penaltis" (solo eliminatoria única) /
-  // aviso informativo de "gol de fuera cuenta doble" (solo ida y
-  // vuelta) — Liga no muestra ninguna caja. El modo "desempate" (tercer
-  // partido) cae dentro de eliminatoria-unica a propósito. Vive AQUÍ (la
-  // PREVIA, antes de empezar) y no en la pantalla en vivo — el checkbox
-  // se decide de antemano; js/acta.js solo lee su `.checked` al arrancar
-  // el partido (mismo id `live-prorroga-toggle`, el DOM sobrevive porque
-  // la previa se OCULTA, no se destruye, al pulsar "▶ Empezar partido").
+  // Casilla "Activar Prórroga y Penaltis": eliminatoria a partido único
+  // (Copa, tercer partido de desempate...) o VUELTA de una eliminatoria a
+  // doble partido (Semis de Copa, Playoffs europeos...) — es el único
+  // partido que puede decidir la eliminatoria, así que es el único que
+  // puede necesitar prórroga. La IDA nunca la muestra (solo el aviso
+  // informativo del gol de visitante). Liga no muestra ninguna caja.
+  // Vive AQUÍ (la PREVIA, antes de empezar) y no en la pantalla en vivo —
+  // el checkbox se decide de antemano; js/acta.js solo lee su `.checked`
+  // al arrancar el partido (mismo id `live-prorroga-toggle`, el DOM
+  // sobrevive porque la previa se OCULTA, no se destruye, al pulsar
+  // "▶ Empezar partido"). Sin texto largo debajo — solo la etiqueta, en
+  // azul clarito (petición usuario: el aviso tapaba la ✕ y el botón de
+  // Empezar, sin scroll para llegar a ellos).
   function _renderFormatoBoxPrevia(partido) {
     var box = document.getElementById("previa-formato-box");
     if (!box) return;
     var modo = detectarModoPartido(partido);
+    var checkboxHtml =
+      '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle">' +
+      '<span>Activar Prórroga y Penaltis</span></label>';
     if (modo === "eliminatoria-unica") {
+      box.innerHTML = checkboxHtml;
+    } else if (modo === "ida-vuelta" && _faseIdaVuelta(partido) === "vuelta") {
       box.innerHTML =
-        '<label class="live-checkbox-row"><input type="checkbox" id="live-prorroga-toggle">' +
-        '<span>Activar Prórroga y Penaltis</span></label>' +
-        '<p class="live-formato-hint">⏱️ Actívala si el partido termina empatado en el 90\' — habilita los minutos de prórroga (95\'-120\') y la tanda de penaltis.</p>';
+        '<p class="live-eliminatoria live-eliminatoria--pendiente">🔁 Vuelta — el gol marcado fuera cuenta doble en caso de empate global.</p>' +
+        checkboxHtml;
     } else if (modo === "ida-vuelta") {
       box.innerHTML =
-        '<p class="live-eliminatoria live-eliminatoria--pendiente">🔁 Partido de ida y vuelta — recuerda que <strong>el gol marcado fuera de casa cuenta doble</strong> en caso de empate global. (Solo informativo, no afecta a este marcador.)</p>';
+        '<p class="live-eliminatoria live-eliminatoria--pendiente">🔁 Ida — el gol marcado fuera cuenta doble en caso de empate global en la vuelta. (Solo informativo, no afecta a este marcador.)</p>';
     } else {
       box.innerHTML = "";
     }
@@ -1812,6 +1833,11 @@
     if (btnEmpezar) {
       btnEmpezar.hidden = !!partido.jugado;
       btnEmpezar.dataset.partidoId = partido.id;
+      // Se reinicia el flujo de "captura antes de empezar" en cada
+      // apertura de previa (misma pantalla reutilizada para partidos
+      // distintos) — ver el 1er click de #previa-empezar más abajo.
+      btnEmpezar.dataset.armado = "";
+      btnEmpezar.textContent = "▶ Empezar partido";
     }
 
     ov.hidden = false;
@@ -2467,9 +2493,21 @@
       return;
     }
 
+    // 1er toque: solo avisa (📸) y NO sale de la previa — así el usuario
+    // puede hacer la captura de la propia pantalla que está viendo antes
+    // de que cambie. 2º toque (botón ya "armado"): ahí sí arranca el
+    // partido en vivo. Se rearma en cada apertura de previa (ver
+    // abrirPreviaPartido más arriba).
     var btnEmpezar = ev.target.closest && ev.target.closest("#previa-empezar");
     if (btnEmpezar && window.Acta && _ultimoContexto) {
-      window.alert("📸 Vas a INICIAR el partido, haz una captura para el Grupo WhatsApp LIGA.");
+      if (!btnEmpezar.dataset.armado) {
+        window.alert("📸 Vas a INICIAR el partido, haz una captura para el Grupo WhatsApp LIGA.");
+        btnEmpezar.dataset.armado = "1";
+        btnEmpezar.textContent = "✅ Ya hice la captura — Empezar";
+        return;
+      }
+      btnEmpezar.dataset.armado = "";
+      btnEmpezar.textContent = "▶ Empezar partido";
       cerrarPreviaPartido();
       window.Acta.iniciarPartidoEnVivo(btnEmpezar.dataset.partidoId, _ultimoContexto);
       return;

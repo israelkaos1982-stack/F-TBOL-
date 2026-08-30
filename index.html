@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>eFOOTBALL · Temporada 7</title>
 <meta name="description" content="Simulador mánager eFOOTBALL — Temporada 7. 6 mánagers, 0 KB de imágenes externas.">
-<link rel="stylesheet" href="css/estilos.css?v=21">
+<link rel="stylesheet" href="css/estilos.css?v=22">
 </head>
 <body>
 
@@ -181,10 +181,12 @@
       <span class="previa-meta-item" id="previa-forma">—</span>
     </div>
 
-    <!-- "Activar Prórroga y Penaltis" (solo eliminatorias a partido único)
-         vive AQUÍ, no en la pantalla en vivo — se decide ANTES de empezar
-         el partido. Lo rellena abrirPreviaPartido() en js/renderizadores.js;
-         js/acta.js lee su checkbox (si existe) al arrancar el partido. -->
+    <!-- "Activar Prórroga y Penaltis" (eliminatorias a partido único, o
+         la VUELTA de una eliminatoria a doble partido — la ida nunca la
+         necesita) vive AQUÍ, no en la pantalla en vivo — se decide ANTES
+         de empezar el partido. Lo rellena abrirPreviaPartido() en
+         js/renderizadores.js; js/acta.js lee su checkbox (si existe) al
+         arrancar el partido. -->
     <div id="previa-formato-box"></div>
 
     <div class="live-separador"></div>
@@ -216,10 +218,23 @@
 
     <div class="previa-comp" id="live-comp">—</div>
 
-    <div class="previa-teams">
+    <!-- El marcador va SOLO, arriba del todo — así los 2 equipos tienen
+         toda la fila para ellos y el nombre completo nunca se corta.
+         Escudo+nombre quedan FIJOS: la mini-acta de cada equipo vive
+         DEBAJO de la barra separadora, en su propia fila, para que
+         añadir eventos nunca desplace los escudos (ver js/acta.js). -->
+    <div id="live-marcador">0 - 0</div>
+
+    <div class="previa-teams live-teams-row">
       <div class="previa-team" id="live-team-local"></div>
-      <div class="previa-marcador" id="live-marcador">0 - 0</div>
       <div class="previa-team" id="live-team-visitante"></div>
+    </div>
+
+    <div class="live-acta-sep"></div>
+
+    <div class="live-acta-row">
+      <div class="live-acta-mini" id="live-acta-local"></div>
+      <div class="live-acta-mini" id="live-acta-visitante"></div>
     </div>
 
     <!-- VISTA A: registrar eventos -->
@@ -284,17 +299,17 @@
      viejo" en producción pese al fix ya mergeado). Al tocar CUALQUIERA
      de estos .js, sube el número de esta MISMA versión en TODOS los
      tags a la vez (no hace falta subir cada uno por separado). -->
-<script src="js/estado.js?v=21" defer></script>
-<script src="js/sync.js?v=21" defer></script>
-<script src="js/renderizadores.js?v=21" defer></script>
-<script src="js/sistema-temporadas.js?v=21" defer></script>
-<script src="js/acta.js?v=21" defer></script>
-<script src="js/estadios.js?v=21" defer></script>
-<script src="js/balones.js?v=21" defer></script>
-<script src="js/escudos.js?v=21" defer></script>
-<script src="js/calendario.js?v=21" defer></script>
-<script src="js/persistencia.js?v=21" defer></script>
-<script src="js/main.js?v=21" defer></script>
+<script src="js/estado.js?v=22" defer></script>
+<script src="js/sync.js?v=22" defer></script>
+<script src="js/renderizadores.js?v=22" defer></script>
+<script src="js/sistema-temporadas.js?v=22" defer></script>
+<script src="js/acta.js?v=22" defer></script>
+<script src="js/estadios.js?v=22" defer></script>
+<script src="js/balones.js?v=22" defer></script>
+<script src="js/escudos.js?v=22" defer></script>
+<script src="js/calendario.js?v=22" defer></script>
+<script src="js/persistencia.js?v=22" defer></script>
+<script src="js/main.js?v=22" defer></script>
 
 </body>
 </html>

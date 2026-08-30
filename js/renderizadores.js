@@ -194,6 +194,8 @@
     liga: "liga",
     copa: "copa", "copa del rey": "copa",
     supercopa: "supercopa", "supercopa de espana": "supercopa", "super copa de espana": "supercopa",
+    promocion: "promocion", "promocion de ascenso": "promocion", "promocion de descenso": "promocion",
+    "promocion ascenso": "promocion", "promocion descenso": "promocion",
     champions: "champions", "champions league": "champions", "uefa champions league": "champions", ucl: "champions",
     uel: "uel", "europa league": "uel", "uefa europa league": "uel",
     uecl: "uecl", "conference league": "uecl", "uefa conference league": "uecl",
@@ -260,8 +262,13 @@
   // ============================================================
   // Registro de rivales SINTÉTICOS resueltos al fusionar el calendario
   // EXTRA en texto de cada club (ver resolverRivalPorNombre / sección 3b
-  // más abajo) — nunca persiste en ningún JSON, se reconstruye en cada
-  // generarCalendarioLateralDerecho.
+  // más abajo) — nunca persiste en ningún JSON, se repuebla en cada
+  // llamada a Estado.listarPartidosResueltos() (que resuelve el
+  // Calendario extra de los 6 humanos, no solo el que se esté pintando
+  // ahora mismo — ver estado.js::_partidosExtraDeTodosLosClubes), así
+  // que buscarEquipoPorId() siempre encuentra el rival sintético que
+  // necesite, venga la llamada del calendario, la clasificación o
+  // cualquier estadística.
   var _sinteticosExtra = {};
 
   function buscarEquipoPorId(id, datos) {
@@ -1546,9 +1553,15 @@
             : (ligaActual || "").replace(/_/g, " ");
         }
 
-        // Vista fusionada: partidos base + confirmados/generados en
-        // caliente (Estado) — así un partido recién jugado se pinta gris
-        // al instante, sin recargar la página.
+        // Vista fusionada: partidos base (data/partidos.json) + Calendario
+        // extra en texto de LOS 6 CLUBES humanos + confirmados/generados en
+        // caliente (Estado) — así un partido recién jugado se pinta gris al
+        // instante, sin recargar la página. Estado.listarPartidosResueltos
+        // YA incluye el Calendario extra de cada club (ver
+        // estado.js::_partidosExtraDeTodosLosClubes) — no hace falta
+        // volver a parsearlo/resolverlo aquí, filtrar por "es de este
+        // club" ya basta, y así la clasificación/estadísticas ven
+        // EXACTAMENTE los mismos partidos que pinta esta pantalla.
         var todosLosPartidos = window.Estado
           ? window.Estado.listarPartidosResueltos(datos)
           : (datos.partidos.partidos || []);
@@ -1561,49 +1574,6 @@
           if (p.competicion === "liga") return p.liga === ligaActual;
           return true;
         });
-
-        // Calendario EXTRA del club (texto libre pegado por el admin) —
-        // se fusiona en la MISMA lista, con el MISMO estilo de tarjeta.
-        // Reset del registro de rivales sintéticos antes de resolverlos
-        // de nuevo (evita acumular entradas de sesiones anteriores).
-        _sinteticosExtra = {};
-        var textoExtra = window.Estado ? window.Estado.obtenerCalendarioExtraTexto(idEquipoHumanoActivo) : "";
-        var ahoraMs = Date.now();
-        var partidosExtra = parsearPartidosExtraTexto(textoExtra, equipo.nombre).map(function (ex, i) {
-          var rival = resolverRivalPorNombre(ex.rivalNombre, datos, equipo.ligaActual);
-          // ex.esVisitante decide qué id va en local/visitante; el marcador
-          // (siempre guardado como "club-rival") se remapea al mismo orden.
-          var p = {
-            id: ex.id,
-            competicion: ex.competicion,
-            ronda: ex.ronda,
-            jornada: null,
-            local: ex.esVisitante ? rival.id : idEquipoHumanoActivo,
-            visitante: ex.esVisitante ? idEquipoHumanoActivo : rival.id,
-            fecha: null,
-            _fechaTexto: ex.fecha,
-            _fechaFallbackMs: ahoraMs + i * 86400000,
-            jugado: ex.jugado,
-            resultado: ex.jugado ? {
-              golesLocal: ex.esVisitante ? ex.golesRival : ex.golesClub,
-              golesVisitante: ex.esVisitante ? ex.golesClub : ex.golesRival
-            } : null
-          };
-          // Si el admin ya lo jugó EN VIVO desde "▶ Empezar partido" (en vez
-          // de escribir el marcador a mano en el texto), ese resultado
-          // confirmado (Estado.registrarResultadoPartido) manda sobre lo que
-          // diga el texto — mismo criterio de superposición que
-          // Estado.listarPartidosResueltos usa para los partidos base.
-          var override = window.Estado && window.Estado.obtenerResultadoOverride
-            ? window.Estado.obtenerResultadoOverride(ex.id) : null;
-          if (override) {
-            p.jugado = override.jugado;
-            p.resultado = { golesLocal: override.golesLocal, golesVisitante: override.golesVisitante };
-            p.eventos = override.eventos;
-          }
-          return p;
-        });
-        partidosDelClub = partidosDelClub.concat(partidosExtra);
 
         if (!partidosDelClub.length) {
           contenedor.appendChild(nodoEstado("🗓️", "Este equipo todavía no tiene partidos programados."));
@@ -2518,6 +2488,7 @@
     pintarEditorCalendarioExtraClub: pintarEditorCalendarioExtraClub,
     parsearPartidosExtraTexto: parsearPartidosExtraTexto,
     resolverRivalPorNombre: resolverRivalPorNombre,
+    resolverCompKeyPartido: _resolverCompKeyBalon,
     renderizarPlantillaClub: renderizarPlantillaClub,
     obtenerJugadoresClub: obtenerJugadoresClub,
     parsearRosterTexto: parsearRosterTexto,

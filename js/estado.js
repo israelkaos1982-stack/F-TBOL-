@@ -87,15 +87,69 @@
     return guardarEstado();
   }
 
-  // Vista fusionada: partidos base (data/partidos.json) + generados
-  // (terceros partidos de desempate), con el resultado local superpuesto
-  // si existe. Es la ÚNICA fuente de verdad que debe leer cualquier
-  // pantalla (calendario, clasificación, estadísticas de jugador).
+  // "Calendario extra" de CADA club humano (texto libre pegado por el
+  // admin — competiciones que data/partidos.json todavía no cubre, ver
+  // js/renderizadores.js::parsearPartidosExtraTexto) convertido a objetos
+  // de partido PLANOS, con la MISMA forma que data/partidos.json — para
+  // que listarPartidosResueltos() sea la ÚNICA fuente que necesitan
+  // calcularClasificacion/calcularLiga1RefStatsHumanos/calcularStatsRosterClub,
+  // sin que ninguno tenga que saber que ese texto existe. `competicion` se
+  // normaliza al mismo compKey interno ("liga"/"copa"/"supercopa"...) que
+  // ya usa la propia card del calendario (resolverCompKeyPartido, alias de
+  // js/renderizadores.js::_resolverCompKeyBalon) — así "Liga"/"🇪🇸 Liga"/
+  // "LIGA" tecleado por el admin siempre cuadra con el `=== "liga"` que
+  // usa calcularClasificacion. 0 KB de datos nuevos: reutiliza el mismo
+  // texto que ya pega el admin, solo lo hace VISIBLE a los agregadores que
+  // antes no llegaban a verlo — es la causa raíz de que la clasificación/
+  // los 15 mejores/la Plantilla se quedaran a 0 pese a partidos jugados.
+  function _partidosExtraDeTodosLosClubes(datos) {
+    var R = window.Renderizadores;
+    if (!R || !R.parsearPartidosExtraTexto || !R.resolverRivalPorNombre) return [];
+    var resolverCompKey = R.resolverCompKeyPartido || function (c) { return c; };
+    var ahoraMs = Date.now();
+    var out = [];
+    (datos.equipos.equipos || []).forEach(function (club) {
+      var texto = obtenerCalendarioExtraTexto(club.id);
+      R.parsearPartidosExtraTexto(texto, club.nombre).forEach(function (ex, i) {
+        var rival = R.resolverRivalPorNombre(ex.rivalNombre, datos, club.ligaActual);
+        var compKey = resolverCompKey(ex.competicion);
+        out.push({
+          id: ex.id,
+          competicion: compKey,
+          liga: compKey === "liga" ? club.ligaActual : null,
+          ronda: ex.ronda,
+          jornada: null,
+          local: ex.esVisitante ? rival.id : club.id,
+          visitante: ex.esVisitante ? club.id : rival.id,
+          fecha: null,
+          _fechaTexto: ex.fecha,
+          // Mismo fallback que usaba generarCalendarioLateralDerecho antes de
+          // esta unificación: "ahora" + i días, i = orden dentro del texto de
+          // ESTE club — solo importa el orden RELATIVO entre sus propios
+          // partidos sin fecha real, nunca se compara entre clubes distintos.
+          _fechaFallbackMs: ahoraMs + i * 86400000,
+          jugado: ex.jugado,
+          resultado: ex.jugado ? {
+            golesLocal: ex.esVisitante ? ex.golesRival : ex.golesClub,
+            golesVisitante: ex.esVisitante ? ex.golesClub : ex.golesRival
+          } : null
+        });
+      });
+    });
+    return out;
+  }
+
+  // Vista fusionada: partidos base (data/partidos.json) + Calendario extra
+  // de los 6 clubes humanos + generados (terceros partidos de desempate),
+  // con el resultado local superpuesto si existe. Es la ÚNICA fuente de
+  // verdad que debe leer cualquier pantalla (calendario, clasificación,
+  // estadísticas de jugador).
   function listarPartidosResueltos(datos) {
     var e = cargarEstado();
     var base = (datos.partidos.partidos || []).slice();
+    var extra = _partidosExtraDeTodosLosClubes(datos);
     var generados = Object.keys(e.partidosGenerados).map(function (id) { return e.partidosGenerados[id]; });
-    var todos = base.concat(generados);
+    var todos = base.concat(extra).concat(generados);
 
     return todos.map(function (p) {
       var override = e.resultados[p.id];
@@ -376,13 +430,19 @@
   }
 
   // ---------- Calendario EXTRA por club (partidos añadidos a mano, en texto) ----------
-  // data/partidos.json ya trae el calendario real completo de Liga + Copa
-  // + Supercopa para los 6 humanos — esto es SOLO para sumar partidos que
-  // ese fixture estático no cubre todavía (una ronda de Champions/Europa
-  // League recién sorteada, un amistoso...): cada caja pega su propio
-  // texto y se fusiona en el calendario de la derecha (ver
+  // data/partidos.json es el fixture ESTÁTICO real (Liga + Copa +
+  // Supercopa...) — hoy sigue vacío (nadie lo ha rellenado todavía), así
+  // que en la práctica esto es la ÚNICA fuente del calendario de los 6
+  // humanos: cada caja pega su propio texto ("Competición - Ronda -
+  // Rival") y se fusiona en el calendario de la derecha (ver
   // js/renderizadores.js::parsearPartidosExtraTexto +
-  // generarCalendarioLateralDerecho).
+  // generarCalendarioLateralDerecho) — y, vía
+  // _partidosExtraDeTodosLosClubes() más abajo, TAMBIÉN en
+  // listarPartidosResueltos(), para que la clasificación, los rankings de
+  // Liga 1ª REF y las estadísticas de la Plantilla vean estos partidos
+  // exactamente igual que si vinieran de data/partidos.json. Cuando algún
+  // día ese fixture estático se rellene con datos reales, ambas fuentes
+  // conviven sin más — cada partido con su propio id nunca colisiona.
   function _calendarioExtraKey(clubId) { return "ef7_club_calendario_extra_v1_" + clubId; }
   function obtenerCalendarioExtraTexto(clubId) {
     try {

@@ -2555,7 +2555,7 @@
     }
 
     // Lesionados: ➕ Añadir sigue abierto a cualquiera (como hasta ahora).
-    // Sancionados: ➕ Añadir es EXCLUSIVO del administrador (PIN 747) — el
+    // Sancionados: ➕ Añadir es EXCLUSIVO del administrador (PIN 646) — el
     // usuario pidió que solo él pueda marcar sanciones.
     if (ev.target.id === "previa-lesionado-add") {
       _abrirPickerJugadorLista("lesionados");

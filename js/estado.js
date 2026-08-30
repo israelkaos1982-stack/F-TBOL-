@@ -540,6 +540,31 @@
     }
   }
 
+  // ---------- Liga 1ª REF — Pichichi/MVP/Tarjetas/Zamora (candado 646) ----------
+  // Mismo criterio que la tabla de arriba (texto libre, sin IDs) pero con
+  // UNA clave por categoría en vez de 5 claves+funciones sueltas — ver
+  // js/renderizadores.js::parsearLiga1RefStatTexto/
+  // calcularLiga1RefStatsCombinado/renderizarLiga1RefStatDetalle.
+  function _liga1RefStatKey(categoria) {
+    return "ef7_liga1ref_stat_" + categoria + "_v1";
+  }
+  function obtenerLiga1RefStatTexto(categoria) {
+    try {
+      return localStorage.getItem(_liga1RefStatKey(categoria)) || "";
+    } catch (err) {
+      return "";
+    }
+  }
+  function guardarLiga1RefStatTexto(categoria, texto) {
+    try {
+      localStorage.setItem(_liga1RefStatKey(categoria), texto || "");
+      return true;
+    } catch (err) {
+      console.error("[estado] no se pudo guardar la estadística " + categoria + " de 1ª REF:", err);
+      return false;
+    }
+  }
+
   // ---------- Balones y estadios EDITABLES (overlay sobre el seed) ----------
   // data/balones.json y data/estadios.json son el estado de fábrica —
   // añadir/editar/borrar nunca los toca. Se guarda solo la DIFERENCIA
@@ -780,6 +805,8 @@
     guardarNombresPlantilla: guardarNombresPlantilla,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,
     guardarLiga1RefTexto: guardarLiga1RefTexto,
+    obtenerLiga1RefStatTexto: obtenerLiga1RefStatTexto,
+    guardarLiga1RefStatTexto: guardarLiga1RefStatTexto,
     fusionarBalones: fusionarBalones,
     fusionarEstadios: fusionarEstadios,
     anadirBalon: anadirBalon,

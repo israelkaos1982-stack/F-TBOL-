@@ -26,6 +26,16 @@
 
   var _estado = null;
 
+  // Fuerza a releer el blob de resultados desde localStorage en la
+  // próxima llamada a cargarEstado() — necesario cuando js/sync.js
+  // escribe una copia nueva de STORAGE_KEY directamente en
+  // localStorage (llegada de otro dispositivo): sin esto, el _estado
+  // cacheado en memoria seguiría siendo el viejo hasta recargar la
+  // página.
+  function invalidarCache() {
+    _estado = null;
+  }
+
   function cargarEstado() {
     if (_estado) return _estado;
     try {
@@ -738,6 +748,7 @@
 
   window.Estado = {
     cargarEstado: cargarEstado,
+    invalidarCache: invalidarCache,
     guardarEstado: guardarEstado,
     registrarResultadoPartido: registrarResultadoPartido,
     obtenerResultadoOverride: obtenerResultadoOverride,

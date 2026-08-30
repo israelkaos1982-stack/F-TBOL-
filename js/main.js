@@ -118,6 +118,11 @@
           pantalla.style.setProperty("--club-primary", primario);
           pantalla.style.setProperty("--club-secondary", equipo.colorSecundario || "#101114");
           pantalla.style.setProperty("--club-primary-rgb", _hexToRgbParts(primario));
+          // FC Barcelona: su propio azul de club deja el resalte azul de
+          // "próximo partido" (--info, ver .match-card--siguiente en
+          // css/estilos.css) invisible/redundante — solo para esta caja
+          // pasa a rosa (--info-barca), vía esta clase.
+          pantalla.classList.toggle("is-club-fc-barcelona", teamId === "fc-barcelona");
         }
       });
 

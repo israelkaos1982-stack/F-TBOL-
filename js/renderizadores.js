@@ -296,6 +296,22 @@
   // real, el mánager, su selección y su emoji salgan SIEMPRE del mismo
   // sitio que usa el resto de la app (calendario, previa, club activo) —
   // cero riesgo de que el Inicio se desincronice de esos datos.
+  // Degradado de la caja de Inicio — DISTINTO de colorPrimario/
+  // colorSecundario (que visten TODA la pantalla del club activo: menú,
+  // cards de partido…, ver js/main.js::abrirClub). El usuario pidió una
+  // combinación concreta por caja, pensada solo para esta rejilla, que no
+  // siempre coincide con el tema real del club (p.ej. Real Madrid en
+  // blanco+morado) — así que vive en su propio mapa, sin tocar el tema
+  // compartido. `secundario` cae en el lado del texto (0%, más oscuro
+  // para que el nombre en blanco se lea bien); `primario` es el color que
+  // asoma limpio en la esquina opuesta.
+  var CAJA_INICIO_COLORES = {
+    arsenal: { primario: "#ffffff", secundario: "#ef0107" },
+    "atletico-madrid": { primario: "#ffffff", secundario: "#cb3524" },
+    "real-madrid": { primario: "#ffffff", secundario: "#5b2c8c" },
+    liverpool: { primario: "#2b0a10", secundario: "#7a0d1f" }
+  };
+
   function renderizarInicioEquipos() {
     var grid = document.getElementById("team-select-grid");
     if (!grid) return;
@@ -308,22 +324,15 @@
         btn.type = "button";
         btn.className = "team-box";
         btn.dataset.teamId = eq.id;
-        // Cada caja lleva el degradado de SU PROPIO club (colorPrimario/
-        // colorSecundario de data/equipos.json) — no un color compartido.
-        btn.style.setProperty("--primary", eq.colorPrimario || "#39ff6a");
-        btn.style.setProperty("--secondary", eq.colorSecundario || "#101114");
+        var cajaColor = CAJA_INICIO_COLORES[eq.id] ||
+          { primario: eq.colorPrimario || "#39ff6a", secundario: eq.colorSecundario || "#101114" };
+        btn.style.setProperty("--primary", cajaColor.primario);
+        btn.style.setProperty("--secondary", cajaColor.secundario);
 
-        // El wrapper lleva su PROPIO vignette oscuro (fuera del filtro
-        // blanco de la img) — ver comentario en css/estilos.css junto a
-        // .team-box-crest-ghost-wrap sobre por qué hace falta.
-        var ghost = eq.crest
-          ? '<div class="team-box-crest-ghost-wrap"><img class="team-box-crest-ghost" src="' + eq.crest + '" alt="" aria-hidden="true"></div>'
-          : "";
         // Sin la bandera de selección (petición usuario) — solo emoji + mister.
         var misterLinea = [eq.misterEmoji, eq.mister].filter(Boolean).join(" ");
 
         btn.innerHTML =
-          ghost +
           '<div class="team-box-inner">' +
           crearEscudoHTML(eq, "escudo--lg") +
           '<div class="team-box-meta">' +

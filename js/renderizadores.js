@@ -13,7 +13,8 @@
     balones: "data/balones.json",
     partidos: "data/partidos.json",
     jugadores: "data/jugadores.json",
-    rivalesReales: "data/rivales_reales.json"
+    rivalesReales: "data/rivales_reales.json",
+    titulos: "data/titulos.json"
   };
 
   // Rango de valoracionPoder (correlativo con data/estadios.json) por liga —
@@ -59,7 +60,8 @@
       cargarJSON(DATA_URLS.balones),
       cargarJSON(DATA_URLS.partidos),
       cargarJSON(DATA_URLS.jugadores),
-      cargarJSON(DATA_URLS.rivalesReales)
+      cargarJSON(DATA_URLS.rivalesReales),
+      cargarJSON(DATA_URLS.titulos)
     ]).then(function (r) {
       // r[2]/r[3] son las respuestas CACHEADAS de cargarJSON (misma
       // referencia en cada llamada a cargarTodo) — NUNCA se mutan
@@ -80,7 +82,8 @@
         balones: Object.assign({}, r[3], { balones: balonesFusion }),
         partidos: r[4],
         jugadores: r[5],
-        rivalesReales: r[6]
+        rivalesReales: r[6],
+        titulos: r[7]
       };
       _estadiosLista = datos.estadios.estadios || [];
       _rivalesRealesMap = {};
@@ -1071,6 +1074,142 @@
     contenedor.appendChild(acciones);
   }
 
+  // ============================================================
+  // SALA DE TÍTULOS — catálogo cerrado (data/titulos.json). SIN
+  // imágenes: cada trofeo es un icono (emoji) + su propio color de
+  // fondo (ver .trofeo-card en css/estilos.css), 0 KB por trofeo —
+  // mismo principio "0 KB de imágenes externas" que los escudos.
+  // Cada caja añade lo ganado como texto libre (Estado.obtenerTitulosTexto/
+  // guardarTitulosTexto), una línea por trofeo: "Trofeo - Temporada".
+  // ============================================================
+  var TITULOS_CATEGORIA_LABEL = { club: "🏆 Clubes", individual: "🥇 Individuales", seleccion: "🌍 Selecciones" };
+  var TITULOS_CATEGORIA_ORDEN = ["club", "individual", "seleccion"];
+
+  function _titulosCatalogoIndexado(datos) {
+    var lista = (datos.titulos && datos.titulos.titulos) || [];
+    var porId = {}, porNombre = {};
+    lista.forEach(function (t) {
+      porId[t.id] = t;
+      porNombre[_normNombre(t.nombre)] = t;
+    });
+    return { porId: porId, porNombre: porNombre };
+  }
+
+  // Resuelve el trofeo tecleado por el admin contra el catálogo: id
+  // exacto -> nombre exacto (normalizado) -> substring en cualquier
+  // dirección (mismo criterio de tolerancia que resolverRivalPorNombre,
+  // más arriba). Un match exacto SIEMPRE gana antes de caer al
+  // substring, para que "Mundial" no se confunda con "Mundialito de
+  // Clubes" ni "Liga" con "Liga Francia".
+  function _resolverTitulo(nombreCrudo, indice) {
+    if (indice.porId[nombreCrudo]) return indice.porId[nombreCrudo];
+    var norm = _normNombre(nombreCrudo);
+    if (indice.porNombre[norm]) return indice.porNombre[norm];
+    var claves = Object.keys(indice.porNombre);
+    for (var i = 0; i < claves.length; i++) {
+      var k = claves[i];
+      if (norm.length > 2 && (k.indexOf(norm) !== -1 || norm.indexOf(k) !== -1)) return indice.porNombre[k];
+    }
+    return null;
+  }
+
+  // "Trofeo - Temporada" por línea. Una línea que no case con NINGÚN
+  // trofeo del catálogo cerrado se ignora en silencio (mismo criterio
+  // que parsearPartidosExtraTexto) — nunca se inventa un trofeo nuevo.
+  function parsearTitulosTexto(texto, indice) {
+    var items = [];
+    (texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      l = l.replace(/^\d+[.)]\s*/, "");
+      var partes = l.split(/\s+-\s+/);
+      var nombreCrudo = partes[0].trim();
+      if (!nombreCrudo) return;
+      var temporada = partes.length > 1 ? partes[1].trim() : "";
+      var trofeo = _resolverTitulo(nombreCrudo, indice);
+      if (!trofeo) return;
+      items.push({ id: trofeo.id, nombre: trofeo.nombre, icono: trofeo.icono, color: trofeo.color, categoria: trofeo.categoria, temporada: temporada });
+    });
+    return items;
+  }
+
+  function _trofeoCardHtml(t) {
+    return (
+      '<div class="trofeo-card" style="--trofeo-color:' + _colorInlineSeguro(t.color) + ';">' +
+      '<span class="trofeo-icono">' + t.icono + "</span>" +
+      '<span class="trofeo-nombre">' + escapeHTML(t.nombre) + "</span>" +
+      (t.temporada ? '<span class="trofeo-temporada">' + escapeHTML(t.temporada) + "</span>" : "") +
+      "</div>"
+    );
+  }
+
+  function renderizarTitulos(contenedorId, idClubActivo) {
+    var contenedor = document.getElementById(contenedorId);
+    if (!contenedor) return;
+    contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
+
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
+
+      var header = document.createElement("div");
+      header.className = "liga1ref-header";
+      header.innerHTML =
+        '<span class="liga1ref-leyenda-mini">Trofeos conseguidos como entrenador</span>' +
+        '<button type="button" class="liga1ref-editar-btn" data-accion="editar-titulos-inline" data-club-id="' +
+        (idClubActivo || "") + '" aria-label="Editar títulos">✏️</button>';
+      contenedor.appendChild(header);
+
+      var indice = _titulosCatalogoIndexado(datos);
+      var texto = window.Estado ? window.Estado.obtenerTitulosTexto(idClubActivo) : "";
+      var ganados = parsearTitulosTexto(texto, indice);
+
+      if (!ganados.length) {
+        contenedor.appendChild(nodoEstado("🏆", "Sin títulos todavía. Pulsa ✏️ (PIN 646) para añadir los que has ganado."));
+        return;
+      }
+
+      TITULOS_CATEGORIA_ORDEN.forEach(function (cat) {
+        var deEstaCategoria = ganados.filter(function (g) { return g.categoria === cat; });
+        if (!deEstaCategoria.length) return;
+        var bloque = document.createElement("div");
+        bloque.className = "titulos-bloque";
+        bloque.innerHTML =
+          '<p class="titulos-bloque-titulo">' + TITULOS_CATEGORIA_LABEL[cat] + "</p>" +
+          '<div class="titulos-grid">' + deEstaCategoria.map(_trofeoCardHtml).join("") + "</div>";
+        contenedor.appendChild(bloque);
+      });
+    });
+  }
+
+  // Editor inline (PIN 646) — mismo patrón exacto que pintarEditorLiga1Ref.
+  function pintarEditorTitulos(contenedor, idClubActivo) {
+    contenedor.innerHTML = "";
+
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Pega los títulos ganados, uno por línea: «Trofeo - Temporada» (p.ej. «Liga - 2032», " +
+      "«Champions - 2033», «Pichichi Liga - 2032»). El nombre debe parecerse al del catálogo " +
+      "cerrado de trofeos — si no lo reconoce, esa línea se ignora sin romper el resto.";
+    contenedor.appendChild(nota);
+
+    var textarea = document.createElement("textarea");
+    textarea.id = "titulos-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 14;
+    textarea.placeholder = "Liga - 2032\nCopa del Rey - 2032\nChampions - 2033\nPichichi Liga - 2032\nBalón de Oro - 2033";
+    textarea.value = window.Estado ? window.Estado.obtenerTitulosTexto(idClubActivo) : "";
+    contenedor.appendChild(textarea);
+
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-titulos" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-titulos" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
+  }
+
   // Nombre COMPLETO bajo el escudo (petición usuario) — si no cabe en el
   // ancho de la tarjeta, se acorta con sentido común: abrevia la PRIMERA
   // palabra a su inicial + "." (p.ej. "Cultural Leonesa" -> "C.Leonesa"),
@@ -1821,9 +1960,10 @@
   }
 
   // Placeholder plano para los botones del menú del club que todavía no
-  // existen como subsistema real en este simulador ligero (Títulos,
-  // Derbys, Objetivos, Copa del Rey, Superliga pertenecen a OTRA app
-  // mucho más grande — no se inventan datos falsos aquí).
+  // existen como subsistema real en este simulador ligero (Derbys,
+  // Objetivos, Copa del Rey, Superliga pertenecen a OTRA app mucho más
+  // grande — no se inventan datos falsos aquí). Títulos ya SÍ es real
+  // (ver renderizarTitulos, catálogo cerrado data/titulos.json).
   function renderizarProximamente(contenedorId, etiqueta) {
     var contenedor = document.getElementById(contenedorId);
     if (!contenedor) return;
@@ -2169,6 +2309,9 @@
     pintarEditorLiga1RefStat: pintarEditorLiga1RefStat,
     parsearLiga1RefTexto: parsearLiga1RefTexto,
     calcularLiga1RefCombinada: calcularLiga1RefCombinada,
+    renderizarTitulos: renderizarTitulos,
+    pintarEditorTitulos: pintarEditorTitulos,
+    parsearTitulosTexto: parsearTitulosTexto,
     renderizarProximamente: renderizarProximamente,
     renderizarAdminCalendario: renderizarAdminCalendario,
     parsearCalendarioCompeticiones: parsearCalendarioCompeticiones,

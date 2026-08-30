@@ -82,6 +82,9 @@
     } else if (vista === "liga1ref") {
       body.innerHTML = '<div id="liga1ref-content"></div>';
       window.Renderizadores.renderizarLiga1RefClasificacion("liga1ref-content", clubId);
+    } else if (vista === "titulos") {
+      body.innerHTML = '<div id="titulos-content"></div>';
+      window.Renderizadores.renderizarTitulos("titulos-content", clubId);
     } else {
       body.innerHTML = '<div id="club-modal-vista"></div>';
       window.Renderizadores.renderizarProximamente("club-modal-vista", etiqueta);
@@ -285,6 +288,24 @@
   }
   function cancelarLiga1RefStat(clubId, categoria) {
     if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
+  }
+
+  // ---------- Sala de Títulos (mismo patrón exacto que Liga 1ª REF) ----------
+  function editarTitulosInline(clubId) {
+    if (!window.Renderizadores) return;
+    abrirCandado(CLUB_EDIT_PASSWORD, function () {
+      var cont = document.getElementById("titulos-content");
+      if (cont) window.Renderizadores.pintarEditorTitulos(cont, clubId);
+    }, "🔒 Editar títulos", "PIN de administrador (646)");
+  }
+  function guardarTitulos(clubId) {
+    var ta = document.getElementById("titulos-textarea");
+    if (!ta || !window.Estado || !window.Renderizadores) return;
+    window.Estado.guardarTitulosTexto(clubId, ta.value);
+    window.Renderizadores.renderizarTitulos("titulos-content", clubId);
+  }
+  function cancelarTitulos(clubId) {
+    if (window.Renderizadores) window.Renderizadores.renderizarTitulos("titulos-content", clubId);
   }
 
   function salirDelClub() {
@@ -662,6 +683,9 @@
         case "editar-liga1ref-stat-inline": editarLiga1RefStatInline(d.clubId, d.categoria); break;
         case "guardar-liga1ref-stat": guardarLiga1RefStat(d.clubId, d.categoria); break;
         case "cancelar-liga1ref-stat": cancelarLiga1RefStat(d.clubId, d.categoria); break;
+        case "editar-titulos-inline": editarTitulosInline(d.clubId); break;
+        case "guardar-titulos": guardarTitulos(d.clubId); break;
+        case "cancelar-titulos": cancelarTitulos(d.clubId); break;
       }
     });
 

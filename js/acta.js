@@ -373,36 +373,6 @@
     _partidoActivo = null;
   }
 
-  // idsPartido: ids de los 2 equipos del partido recién confirmado. Si el
-  // club que acaba de jugar cae fuera del top 6 mostrado, su fila se añade
-  // debajo con su posición REAL en vez de desaparecer del resumen.
-  function renderTablaClasificacionMini(clasificacion, datos, idsPartido) {
-    if (!clasificacion || !clasificacion.length) return "";
-    idsPartido = idsPartido || [];
-
-    function fila(f, posReal) {
-      var eq = window.Renderizadores.buscarEquipoPorId(f.equipoId, datos);
-      var nombre = eq ? eq.nombre : f.equipoId;
-      var destacada = idsPartido.indexOf(f.equipoId) !== -1;
-      return '<tr' + (destacada ? ' class="live-clasificacion-destacada"' : "") + '><td>' + posReal + '</td><td>' + nombre + '</td><td>' + f.pj + '</td>' +
-        '<td>' + f.gf + '-' + f.gc + '</td><td><strong>' + f.pts + '</strong></td></tr>';
-    }
-
-    var top = clasificacion.slice(0, 6);
-    var filas = top.map(function (f, i) { return fila(f, i + 1); }).join("");
-
-    clasificacion.forEach(function (f, i) {
-      if (i < 6) return; // ya está arriba
-      if (idsPartido.indexOf(f.equipoId) === -1) return;
-      filas += fila(f, i + 1);
-    });
-
-    return (
-      '<table class="live-clasificacion"><thead><tr><th>#</th><th>Equipo</th><th>PJ</th><th>GF-GC</th><th>Pts</th></tr></thead>' +
-      "<tbody>" + filas + "</tbody></table>"
-    );
-  }
-
   function textoEliminatoria(res, datos) {
     if (!res) return "";
     if (res.pendiente) {
@@ -458,11 +428,6 @@
     };
 
     document.getElementById("live-resumen-eliminatoria").innerHTML = textoEliminatoria(resultado.eliminatoria, _partidoActivo.datos);
-    document.getElementById("live-resumen-clasificacion").innerHTML = renderTablaClasificacionMini(
-      resultado.clasificacion,
-      _partidoActivo.datos,
-      [_partidoActivo.local.id, _partidoActivo.visitante.id]
-    );
 
     document.getElementById("live-entrada").hidden = true;
     document.getElementById("live-resumen").hidden = false;

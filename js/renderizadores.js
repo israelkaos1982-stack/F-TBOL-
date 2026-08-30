@@ -670,9 +670,12 @@
       var tokens = l.split(/\s+/);
       if (tokens.length < 7) return; // Nombre + al menos 6 números
 
+      // DG (la última columna, que se descarta) puede venir con signo
+      // explícito en ambos sentidos: "+4" en las filas positivas, "-2"
+      // en las negativas, o "0" sin signo — el regex acepta los 3.
       var fin = tokens.length;
       var numerosFinales = [];
-      while (fin > 0 && numerosFinales.length < 7 && /^-?\d+$/.test(tokens[fin - 1])) {
+      while (fin > 0 && numerosFinales.length < 7 && /^[+-]?\d+$/.test(tokens[fin - 1])) {
         numerosFinales.unshift(tokens[fin - 1]);
         fin--;
       }

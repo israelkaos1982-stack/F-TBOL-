@@ -102,7 +102,7 @@
   // texto que ya pega el admin, solo lo hace VISIBLE a los agregadores que
   // antes no llegaban a verlo — es la causa raíz de que la clasificación/
   // los 15 mejores/la Plantilla se quedaran a 0 pese a partidos jugados.
-  function _partidosExtraDeTodosLosClubes(datos) {
+  function _partidosExtraDeTodosLosClubes(datos, resultadosEnVivo) {
     var R = window.Renderizadores;
     if (!R || !R.parsearPartidosExtraTexto || !R.resolverRivalPorNombre) return [];
     var resolverCompKey = R.resolverCompKeyPartido || function (c) { return c; };
@@ -128,6 +128,9 @@
           // ESTE club — solo importa el orden RELATIVO entre sus propios
           // partidos sin fecha real, nunca se compara entre clubes distintos.
           _fechaFallbackMs: ahoraMs + i * 86400000,
+          // Solo para _deduplicarExtraHumanoVsHumano — se quita antes de
+          // devolver la lista (mismo shape que data/partidos.json siempre).
+          _origenClubId: club.id,
           jugado: ex.jugado,
           resultado: ex.jugado ? {
             golesLocal: ex.esVisitante ? ex.golesRival : ex.golesClub,
@@ -136,7 +139,80 @@
         });
       });
     });
-    return out;
+    return _deduplicarExtraHumanoVsHumano(out, resultadosEnVivo || {});
+  }
+
+  function _normTxtExtra(s) {
+    return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+  }
+
+  // BUG REAL (2026, fotos de calendarios humanos con partidos duplicados):
+  // un partido HUMANO vs HUMANO puede quedar escrito DOS VECES en el
+  // "Calendario extra" — el admin pega la línea de ESE partido en el
+  // texto de AMBOS clubes (cada uno "desde su propio lado"), sin saber
+  // que el otro club también la tiene. Como el id de cada línea sale del
+  // hash del texto de CADA club (que nombra al rival de forma distinta:
+  // "Liverpool" desde el texto de Real Madrid, "Real Madrid" desde el de
+  // Liverpool), el bucle de arriba genera 2 partidos SINTÉTICOS con id
+  // distinto para el MISMO partido real — ambos sobreviven en
+  // listarPartidosResueltos() y se cuentan 2 veces: en el calendario de
+  // los 2 clubes, y también en clasificación/estadísticas (que leen la
+  // misma lista). Nunca pasa con un rival IA porque solo un club (el
+  // humano) tiene texto — el rival IA no puede "duplicarlo por su lado".
+  //
+  // Se colapsan a UNO cuando 2 CLUBES DISTINTOS describen el mismo
+  // partido: misma competición + misma ronda (normalizadas) + el MISMO
+  // PAR de equipos, sin importar quién es local o quién visitante (el
+  // admin pudo escribirlo con la localía al revés en cada texto). Si es
+  // el MISMO club el que repite la línea (p.ej. ida y vuelta de una
+  // eliminatoria sin distinguirlo en el texto de la ronda — el propio
+  // parsearPartidosExtraTexto ya contempla y soporta ese caso vía
+  // idsVistos) NO se toca: ambas líneas se conservan, es intencional.
+  //
+  // Prioridad al elegir cuál de los 2 duplicados sobrevive: (1) el que
+  // ya tenga un resultado registrado EN VIVO desde la app
+  // (Estado.registrarResultadoPartido) — CRÍTICO: nunca se descarta un
+  // partido que el usuario ya jugó, o "revertiría" a sin jugar; (2) el
+  // que ya traiga marcador escrito a mano en el propio texto; (3) el
+  // primero que aparezca.
+  function _deduplicarExtraHumanoVsHumano(items, resultadosEnVivo) {
+    function prioridad(p) {
+      if (resultadosEnVivo[p.id]) return 2;
+      if (p.jugado) return 1;
+      return 0;
+    }
+    var vistoPorClave = {};
+    var out = [];
+    items.forEach(function (p) {
+      var par = [p.local, p.visitante].slice().sort().join("|");
+      var clave = _normTxtExtra(p.competicion) + "|" + _normTxtExtra(p.ronda) + "|" + par;
+      var registro = vistoPorClave[clave];
+      if (!registro) {
+        registro = { partido: p, clubes: {} };
+        registro.clubes[p._origenClubId] = true;
+        vistoPorClave[clave] = registro;
+        out.push(p);
+        return;
+      }
+      if (registro.clubes[p._origenClubId]) {
+        // Repetición intencional del MISMO club (ida/vuelta sin
+        // distinguir en la ronda) — se conservan las 2 líneas.
+        out.push(p);
+        return;
+      }
+      registro.clubes[p._origenClubId] = true;
+      if (prioridad(p) > prioridad(registro.partido)) {
+        var idx = out.indexOf(registro.partido);
+        if (idx !== -1) out[idx] = p;
+        registro.partido = p;
+      }
+      // Si no gana prioridad, se descarta en silencio: es el duplicado.
+    });
+    return out.map(function (p) {
+      var copia = {};
+      for (var k in p) if (p.hasOwnProperty(k) && k !== "_origenClubId") copia[k] = p[k];
+      return copia;
+    });
   }
 
   // Vista fusionada: partidos base (data/partidos.json) + Calendario extra
@@ -147,7 +223,7 @@
   function listarPartidosResueltos(datos) {
     var e = cargarEstado();
     var base = (datos.partidos.partidos || []).slice();
-    var extra = _partidosExtraDeTodosLosClubes(datos);
+    var extra = _partidosExtraDeTodosLosClubes(datos, e.resultados);
     var generados = Object.keys(e.partidosGenerados).map(function (id) { return e.partidosGenerados[id]; });
     var todos = base.concat(extra).concat(generados);
 

@@ -1005,11 +1005,6 @@ button { font-family: inherit; cursor: pointer; }
   letter-spacing: 0.3px;
 }
 
-/* Fila destacada del resumen post-partido (live-clasificacion) cuando el
-   club recién jugado no entra en el top 6 real de la liga. */
-.live-clasificacion-destacada { background: rgba(57, 255, 106, 0.1); }
-.live-clasificacion-destacada td:nth-child(2) { color: var(--neon); }
-
 /* ---------- 6d. LIGA 1ª REF — clasificación única (ascenso/descenso) ---------- */
 .liga1ref-header {
   display: flex;
@@ -1560,12 +1555,19 @@ button { font-family: inherit; cursor: pointer; }
   text-align: center;
   color: var(--text-hi);
 }
+/* Insignia del marcador — fondo negro, número verde más grande (petición
+   usuario, foto de referencia): entra de sobra entre los 2 escudos, no
+   hace falta separarlo a su propia fila. */
 .previa-marcador {
-  font-size: 20px;
+  font-size: 26px;
   font-weight: 900;
   color: var(--neon);
   text-shadow: var(--neon-glow);
   white-space: nowrap;
+  background: var(--bg-1);
+  border: 1px solid var(--neon-soft);
+  border-radius: var(--radius-s);
+  padding: 4px 14px;
 }
 .previa-info-grid {
   display: grid;
@@ -1867,16 +1869,22 @@ button { font-family: inherit; cursor: pointer; }
 .live-evt-btn--descanso:hover { border-color: #ff9500; }
 
 /* Mini-acta POR EQUIPO — debajo de su propio escudo/nombre (ver
-   .live-team-nombre) en vez de una lista única al final: así una
-   captura de pantalla cabe siempre entera (marcador + equipos +
-   eventos), sin depender de cuántos eventos lleve el partido. */
+   .live-team-nombre) en vez de una lista única al final. SIN tope de
+   altura: un tope con scroll propio (versión anterior, max-height:90px)
+   reservaba su propio hueco de scrollbar en cuanto el acta lo superaba
+   (a partir de 5-6 eventos) — eso estrechaba el ancho disponible para
+   ".live-acta-mini-jugador" justo lo suficiente para que un nombre que
+   antes cabía en una línea pasara a partirse en 2 (bug: "en la previa
+   caben pero al finalizar se parten en 2 líneas" — foto usuario). Con
+   la lista creciendo libre, TODOS los eventos (sean 5 o 20) quedan
+   visibles sin recortar ni partir nombres — si el partido acumula
+   muchos, es la tarjeta entera (.live-card) la que scrollea, nunca esta
+   lista por separado. */
 .live-acta-mini {
   display: flex;
   flex-direction: column;
   gap: 2px;
   width: 100%;
-  max-height: 90px;
-  overflow-y: auto;
   margin-top: 4px;
 }
 .live-acta-mini-item {
@@ -1962,7 +1970,7 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 13px;
   font-weight: 800;
   color: #7fd3ff;
-  margin: 4px 0 14px;
+  margin: 14px 0 0;
 }
 .live-eliminatoria {
   font-size: 12px;
@@ -1973,27 +1981,6 @@ button { font-family: inherit; cursor: pointer; }
 }
 .live-eliminatoria--decidida { background: rgba(57, 255, 106, 0.1); border: 1px solid var(--neon-soft); color: var(--text-hi); }
 .live-eliminatoria--pendiente { background: rgba(255, 184, 80, 0.1); border: 1px solid rgba(255, 184, 80, 0.4); color: var(--text-hi); }
-
-.live-clasificacion {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 11px;
-  margin-bottom: 14px;
-}
-.live-clasificacion th, .live-clasificacion td {
-  padding: 6px 6px;
-  text-align: center;
-  border-bottom: 1px solid var(--line);
-}
-.live-clasificacion th { color: var(--text-lo); font-weight: 700; text-transform: uppercase; font-size: 10px; }
-.live-clasificacion td:nth-child(2) { text-align: left; font-weight: 700; color: var(--text-hi); }
-
-.live-backup-hint {
-  text-align: center;
-  font-size: 11px;
-  color: var(--text-lo);
-  margin: 10px 0 0;
-}
 
 /* ---------- 9. UTILIDADES ---------- */
 .visually-hidden {

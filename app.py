@@ -5872,6 +5872,79 @@ def _new_sim_static(subdir, filename):
     return send_from_directory(os.path.join(_NEW_SIM_ROOT, subdir), filename)
 
 
+# ── Sync entre dispositivos del simulador nuevo (Fase 5) ──
+# Sin esto, el progreso vive SOLO en el localStorage de CADA móvil —
+# ningún dato viaja entre los 6 dispositivos (foto usuario: "es como
+# que se guarda solo en mi móvil"). Reutiliza la MISMA tabla
+# `GlobalState` (Postgres persistente) que ya usa el resto del
+# proyecto, pero con rutas PROPIAS e independientes de
+# `_KV_ALLOWED_EXACT`/`_KV_RECENCY_BLOB_KEYS`/`api_kv_get`/`api_kv_set`
+# (esas están muy afinadas para las claves de la app legacy — mezclar
+# las claves "ef7_*" ahí arriesgaría disparar uno de esos merges
+# especiales por accidente).
+#
+# UNA FILA POR CLAVE "ef7_*" (nunca un blob único): así dos admins
+# editando clubes DISTINTOS a la vez (p. ej. el calendario de Liverpool
+# y el de Real Madrid) nunca se pisan entre sí — cada clave gana por el
+# último POST que la toque, igual que el resto de claves KV "simples"
+# de este archivo que no necesitan una fusión más fina. El cliente
+# (js/sync.js) hace bulk GET/POST de todas las claves de golpe en vez
+# de una petición por clave — evita tanto el "thundering herd" de N
+# peticiones simultáneas como tener que enumerar de antemano qué claves
+# existen (una clave nueva, p. ej. de un club añadido en el futuro,
+# queda cubierta sola).
+_EF7_KEY_PREFIX = "ef7_"
+
+
+def _ef7_key_is_valid(key):
+    return isinstance(key, str) and key.startswith(_EF7_KEY_PREFIX) and 0 < len(key) < 200
+
+
+@app.route("/api/ef7/state", methods=["GET"])
+def api_ef7_state_get():
+    filas = GlobalState.query.filter(GlobalState.clave.like(_EF7_KEY_PREFIX + "%")).all()
+    claves = {}
+    actualizados = {}
+    for f in filas:
+        try:
+            claves[f.clave] = json.loads(f.valor_json) if f.valor_json else None
+        except Exception:
+            continue
+        actualizados[f.clave] = f.updated_at or ""
+    resp = jsonify({"ok": True, "claves": claves, "updated_at": actualizados})
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
+@app.route("/api/ef7/state", methods=["POST"])
+def api_ef7_state_post():
+    body = request.get_json(silent=True) or {}
+    entrantes = body.get("claves")
+    if not isinstance(entrantes, dict):
+        return jsonify({"ok": False, "error": "falta `claves`"}), 400
+    now = utc_now_iso()
+    guardadas = []
+    for key, value in entrantes.items():
+        if not _ef7_key_is_valid(key):
+            continue
+        try:
+            payload = json.dumps(value, ensure_ascii=False)
+        except (TypeError, ValueError):
+            continue
+        if len(payload.encode("utf-8")) > _KV_MAX_BYTES:
+            continue
+        row = GlobalState.query.filter_by(clave=key).first()
+        if row:
+            row.valor_json = payload
+            row.updated_at = now
+        else:
+            db.session.add(GlobalState(clave=key, valor_json=payload, updated_at=now))
+        guardadas.append(key)
+    if guardadas:
+        db.session.commit()
+    return jsonify({"ok": True, "guardadas": guardadas, "updated_at": now})
+
+
 @app.route("/css/<path:filename>")
 def nueva_temporada_css(filename):
     return _new_sim_static("css", filename)

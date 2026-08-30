@@ -636,5 +636,17 @@
       cerrarCandado();
       cerrarModalClub();
     });
+
+    // js/sync.js avisa con este evento cuando trae datos NUEVOS de otro
+    // dispositivo (calendario extra, iconos del menú...) mientras el
+    // usuario tenía la app abierta. Refresca lo que esté visible ahora
+    // mismo — sin esto, el cambio solo se vería al recargar la página.
+    document.addEventListener("ef7-sync-actualizado", function () {
+      var screenClub = document.getElementById("screen-club");
+      if (screenClub && !screenClub.hidden && window._idManagerActivo && window.Renderizadores) {
+        window.Renderizadores.generarCalendarioLateralDerecho(window._idManagerActivo);
+        window.Renderizadores.renderizarMenuClub(window._idManagerActivo, "club-menu");
+      }
+    });
   });
 })();

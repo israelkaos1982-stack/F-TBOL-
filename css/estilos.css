@@ -1567,6 +1567,13 @@ button { font-family: inherit; cursor: pointer; }
   text-shadow: var(--neon-glow);
   white-space: nowrap;
 }
+/* La pantalla EN VIVO es la que de verdad necesita un marcador
+   llamativo (foto usuario) — la previa (VS / marcador ya jugado) se
+   queda en el tamaño de siempre. Mismo verde+glow, solo más grande. */
+#live-marcador {
+  font-size: 34px;
+  letter-spacing: 0.5px;
+}
 
 .previa-info-grid {
   display: grid;
@@ -1706,41 +1713,30 @@ button { font-family: inherit; cursor: pointer; }
 }
 .live-select--full { width: 100%; }
 
-.live-equipo-toggle {
-  display: flex;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-s);
-  overflow: hidden;
-  flex: 1;
-}
-.live-toggle-btn {
-  flex: 1;
-  min-width: 0;
-  padding: 9px 8px;
-  border: 1px solid transparent;
-  background: var(--bg-3);
-  color: var(--text-lo);
-  font-size: 12px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+/* El NOMBRE del equipo, debajo de su escudo, ES el selector de "¿a qué
+   equipo le añado el evento?" — antes había una fila de botones aparte
+   (Local/Visitante) duplicando el nombre que ya se ve aquí; ahora se
+   pulsa directamente y el borde verde indica cuál está activo.
+   Sustituye a .previa-team-nombre SOLO en la pantalla en vivo (la
+   previa sigue con el <span> de siempre, no interactivo). */
+.live-team-nombre {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text-lo);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  padding: 6px 10px;
 }
-.live-toggle-btn.is-active {
+.live-team-nombre.is-active {
   background: rgba(57, 255, 106, 0.16);
   color: var(--neon);
   border-color: var(--neon);
-}
-
-/* Fila de selección de equipo a pantalla completa — muestra el NOMBRE
-   real de cada equipo (no "Local"/"Visitante" genérico) para que se
-   entienda de un vistazo a quién se le registra el evento. */
-.live-equipo-toggle--full {
-  width: 100%;
-  flex: none;
-  margin: 0 0 10px;
 }
 
 /* ---------- 8c-bis. PANTALLA EN VIVO — Fase 4: separador, lesionados/
@@ -1810,29 +1806,6 @@ button { font-family: inherit; cursor: pointer; }
   line-height: 1.4;
 }
 
-.btn-descanso {
-  display: block;
-  width: 100%;
-  padding: 9px 10px;
-  border-radius: var(--radius-s);
-  border: 1px solid rgba(255, 149, 0, 0.5);
-  background: rgba(255, 149, 0, 0.14);
-  color: #ff9500;
-  font-size: 12px;
-  font-weight: 800;
-  margin: 0 0 10px;
-}
-.btn-descanso:hover { background: rgba(255, 149, 0, 0.24); }
-/* Variante compacta: comparte fila con el Minuto (en el sitio donde
-   antes iba el toggle Local/Visitante). */
-.btn-descanso--inline {
-  display: block;
-  width: auto;
-  flex: 0 0 auto;
-  white-space: nowrap;
-  margin: 0;
-}
-
 .live-tanda-info {
   text-align: center;
   font-size: 13px;
@@ -1845,28 +1818,81 @@ button { font-family: inherit; cursor: pointer; }
   background: rgba(255, 184, 80, 0.1);
 }
 
+/* 3x3 fijo "como videojuego" — 8 eventos + Descanso como 9ª caja (ver
+   .live-evt-btn--descanso), icono grande arriba + etiqueta corta debajo
+   (más pequeñas que antes para que quepan las 9 sin desbordar). */
 .live-eventos-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
   margin: 14px 0;
 }
-@media (min-width: 420px) {
-  .live-eventos-grid { grid-template-columns: repeat(4, 1fr); }
-}
 .live-evt-btn {
-  padding: 10px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 2px;
   border-radius: var(--radius-s);
   border: 1px solid var(--line);
   background: var(--bg-3);
   color: var(--text-hi);
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 18px;
   text-align: center;
   transition: border-color 0.15s ease, transform 0.1s ease;
 }
+.live-evt-btn span {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: var(--text-lo);
+}
 .live-evt-btn:hover { border-color: var(--neon-soft); transform: translateY(-1px); }
 .live-evt-btn:active { transform: translateY(0); }
+.live-evt-btn--descanso {
+  border-color: rgba(255, 149, 0, 0.5);
+  background: rgba(255, 149, 0, 0.14);
+}
+.live-evt-btn--descanso span { color: #ff9500; }
+.live-evt-btn--descanso:hover { border-color: #ff9500; }
+
+/* Mini-acta POR EQUIPO — debajo de su propio escudo/nombre (ver
+   .live-team-nombre) en vez de una lista única al final: así una
+   captura de pantalla cabe siempre entera (marcador + equipos +
+   eventos), sin depender de cuántos eventos lleve el partido. */
+.live-acta-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  max-height: 90px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+.live-acta-mini-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--text-lo);
+}
+.live-acta-mini-min { color: var(--neon); font-weight: 800; flex: 0 0 auto; }
+.live-acta-mini-tipo { flex: 0 0 auto; }
+.live-acta-mini-jugador { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-acta-mini-del {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--accent-2);
+  font-size: 9px;
+  line-height: 1;
+  padding: 0;
+}
+.live-acta-mini-del:hover { background: rgba(255, 59, 92, 0.14); }
 
 .live-acta-lista {
   display: flex;
@@ -1894,8 +1920,6 @@ button { font-family: inherit; cursor: pointer; }
   background: var(--bg-2);
   font-size: 12px;
 }
-.live-acta-min { color: var(--neon); font-weight: 800; min-width: 28px; }
-.live-acta-tipo { font-weight: 700; white-space: nowrap; }
 .live-acta-jugador { flex: 1; min-width: 0; color: var(--text-lo); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .live-acta-jugador em { color: var(--text-lo); font-style: normal; opacity: 0.7; }
 .live-acta-del {

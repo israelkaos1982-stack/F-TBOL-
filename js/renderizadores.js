@@ -1103,32 +1103,53 @@
   // imágenes: cada trofeo es un icono (emoji) + su propio color de
   // fondo (ver .trofeo-card en css/estilos.css), 0 KB por trofeo —
   // mismo principio "0 KB de imágenes externas" que los escudos.
-  // Cada caja añade lo ganado como texto libre (Estado.obtenerTitulosTexto/
-  // guardarTitulosTexto), una línea por trofeo: "Trofeo - Temporada".
+  //
+  // El editor (pintarEditorTitulos) PRE-RELLENA el textarea con los 33
+  // trofeos del catálogo completo, uno por línea "Nombre - N" (N=veces
+  // ganado, 0 si nunca) — el admin SOLO edita el número, nunca teclea
+  // un nombre de trofeo a mano (evita typos que no casen con el
+  // catálogo). Con 0 el trofeo NO aparece en la Sala; con 1 o más sí,
+  // mostrando el nº de veces ganado en grande junto al icono.
+  // Persistencia (Estado.obtenerTitulosTexto/guardarTitulosTexto) sigue
+  // siendo el mismo texto libre de siempre — el formato "Nombre - N" es
+  // compatible con datos ya guardados (un nº ya es lo que se guardaba).
   // ============================================================
   var TITULOS_CATEGORIA_LABEL = { club: "🏆 Clubes", individual: "🥇 Individuales", seleccion: "🌍 Selecciones" };
   var TITULOS_CATEGORIA_ORDEN = ["club", "individual", "seleccion"];
 
+  // Palabras de enlace que el admin puede omitir/añadir sin querer decir
+  // otro trofeo distinto ("Supercopa España" == "Supercopa de España").
+  var _CONECTORES_TITULO = { de: 1, del: 1, la: 1, el: 1, los: 1, las: 1 };
+  function _tokensSinConectores(s) {
+    return _normNombre(s).split(/\s+/).filter(function (w) { return w && !_CONECTORES_TITULO[w]; }).join(" ");
+  }
+
   function _titulosCatalogoIndexado(datos) {
     var lista = (datos.titulos && datos.titulos.titulos) || [];
-    var porId = {}, porNombre = {};
+    var porId = {}, porNombre = {}, porTokens = {};
     lista.forEach(function (t) {
       porId[t.id] = t;
       porNombre[_normNombre(t.nombre)] = t;
+      porTokens[_tokensSinConectores(t.nombre)] = t;
     });
-    return { porId: porId, porNombre: porNombre };
+    return { porId: porId, porNombre: porNombre, porTokens: porTokens };
   }
 
   // Resuelve el trofeo tecleado por el admin contra el catálogo: id
-  // exacto -> nombre exacto (normalizado) -> substring en cualquier
-  // dirección (mismo criterio de tolerancia que resolverRivalPorNombre,
-  // más arriba). Un match exacto SIEMPRE gana antes de caer al
-  // substring, para que "Mundial" no se confunda con "Mundialito de
-  // Clubes" ni "Liga" con "Liga Francia".
+  // exacto -> nombre exacto (normalizado) -> mismas palabras SIN contar
+  // conectores de/del/la/el/los/las ("Supercopa España" == "Supercopa de
+  // España", "Copa Rey" == "Copa del Rey" — cubre además el dato YA
+  // GUARDADO en producción antes de este cambio, que no llevaba "de") ->
+  // substring en cualquier dirección (mismo criterio de tolerancia que
+  // resolverRivalPorNombre, más arriba). Cada pasada más laxa SOLO se
+  // intenta si la anterior no encontró nada, para que "Mundial" no se
+  // confunda con "Mundialito de Clubes" ni "Liga" con "Liga Francia".
   function _resolverTitulo(nombreCrudo, indice) {
     if (indice.porId[nombreCrudo]) return indice.porId[nombreCrudo];
     var norm = _normNombre(nombreCrudo);
     if (indice.porNombre[norm]) return indice.porNombre[norm];
+    var tokens = _tokensSinConectores(nombreCrudo);
+    if (indice.porTokens[tokens]) return indice.porTokens[tokens];
     var claves = Object.keys(indice.porNombre);
     for (var i = 0; i < claves.length; i++) {
       var k = claves[i];
@@ -1137,9 +1158,15 @@
     return null;
   }
 
-  // "Trofeo - Temporada" por línea. Una línea que no case con NINGÚN
-  // trofeo del catálogo cerrado se ignora en silencio (mismo criterio
-  // que parsearPartidosExtraTexto) — nunca se inventa un trofeo nuevo.
+  // "Nombre - N" por línea (N = veces ganado). Una línea SIN "- N" es
+  // una cabecera/comentario del pre-relleno (ver
+  // _construirTextoEdicionTitulos) — se ignora ANTES de intentar
+  // resolverla contra el catálogo, así una cabecera como "🏆 Clubes"
+  // nunca puede colar por substring contra un trofeo real (p.ej.
+  // "Mundialito de Clubes"). N=0 (o no numérico) tampoco emerge — solo
+  // 1 o más. Una línea que no case con NINGÚN trofeo del catálogo
+  // cerrado se ignora en silencio (mismo criterio que
+  // parsearPartidosExtraTexto) — nunca se inventa un trofeo nuevo.
   function parsearTitulosTexto(texto, indice) {
     var items = [];
     (texto || "").split("\n").forEach(function (linea) {
@@ -1147,12 +1174,14 @@
       if (!l) return;
       l = l.replace(/^\d+[.)]\s*/, "");
       var partes = l.split(/\s+-\s+/);
+      if (partes.length < 2) return;
       var nombreCrudo = partes[0].trim();
       if (!nombreCrudo) return;
-      var temporada = partes.length > 1 ? partes[1].trim() : "";
+      var veces = parseInt(partes[1].trim(), 10);
+      if (!veces || veces < 1) return;
       var trofeo = _resolverTitulo(nombreCrudo, indice);
       if (!trofeo) return;
-      items.push({ id: trofeo.id, nombre: trofeo.nombre, icono: trofeo.icono, color: trofeo.color, categoria: trofeo.categoria, temporada: temporada });
+      items.push({ id: trofeo.id, nombre: trofeo.nombre, icono: trofeo.icono, color: trofeo.color, categoria: trofeo.categoria, veces: veces });
     });
     return items;
   }
@@ -1160,9 +1189,11 @@
   function _trofeoCardHtml(t) {
     return (
       '<div class="trofeo-card" style="--trofeo-color:' + _colorInlineSeguro(t.color) + ';">' +
+      '<span class="trofeo-icono-wrap">' +
+      '<span class="trofeo-veces">' + t.veces + "</span>" +
       '<span class="trofeo-icono">' + t.icono + "</span>" +
+      "</span>" +
       '<span class="trofeo-nombre">' + escapeHTML(t.nombre) + "</span>" +
-      (t.temporada ? '<span class="trofeo-temporada">' + escapeHTML(t.temporada) + "</span>" : "") +
       "</div>"
     );
   }
@@ -1189,7 +1220,7 @@
       var ganados = parsearTitulosTexto(texto, indice);
 
       if (!ganados.length) {
-        contenedor.appendChild(nodoEstado("🏆", "Sin títulos todavía. Pulsa ✏️ (PIN 646) para añadir los que has ganado."));
+        contenedor.appendChild(nodoEstado("🏆", "Sin títulos todavía. Pulsa ✏️ para poner a cuántos ganaste cada uno."));
         return;
       }
 
@@ -1206,32 +1237,70 @@
     });
   }
 
-  // Editor inline (PIN 646) — mismo patrón exacto que pintarEditorLiga1Ref.
+  // Construye el pre-relleno del editor: TODOS los trofeos del catálogo
+  // cerrado, uno por línea "Nombre - N" (N = veces ya guardadas para ese
+  // trofeo, si no 0), agrupados por categoría con una línea de cabecera
+  // SIN "-" (nunca puede confundirse con un dato real — ver el guard
+  // `partes.length < 2` de parsearTitulosTexto). El admin solo cambia
+  // el número tras el guion; nunca teclea un nombre de trofeo a mano.
+  function _construirTextoEdicionTitulos(datos, textoGuardado) {
+    var indice = _titulosCatalogoIndexado(datos);
+    var yaGanados = {};
+    parsearTitulosTexto(textoGuardado, indice).forEach(function (g) { yaGanados[g.id] = g.veces; });
+
+    var catalogo = (datos.titulos && datos.titulos.titulos) || [];
+    var porCategoria = {};
+    catalogo.forEach(function (t) {
+      (porCategoria[t.categoria] = porCategoria[t.categoria] || []).push(t);
+    });
+
+    var lineas = [];
+    TITULOS_CATEGORIA_ORDEN.forEach(function (cat) {
+      var lista = porCategoria[cat] || [];
+      if (!lista.length) return;
+      if (lineas.length) lineas.push("");
+      lineas.push(TITULOS_CATEGORIA_LABEL[cat]);
+      lista.forEach(function (t) {
+        lineas.push(t.nombre + " - " + (yaGanados[t.id] || 0));
+      });
+    });
+    return lineas.join("\n");
+  }
+
+  // Editor inline, sin PIN — el admin solo puede tocar el número de un
+  // catálogo CERRADO ya pre-rellenado (no hay nombre libre que teclear
+  // mal ni trofeo inventado posible), así que no hace falta protegerlo
+  // como el resto de editores de texto libre.
   function pintarEditorTitulos(contenedor, idClubActivo) {
     contenedor.innerHTML = "";
+    contenedor.appendChild(nodoEstado("⏳", "Cargando…"));
 
-    var nota = document.createElement("p");
-    nota.className = "admin-nota";
-    nota.textContent =
-      "Pega los títulos ganados, uno por línea: «Trofeo - Temporada» (p.ej. «Liga - 2032», " +
-      "«Champions - 2033», «Pichichi Liga - 2032»). El nombre debe parecerse al del catálogo " +
-      "cerrado de trofeos — si no lo reconoce, esa línea se ignora sin romper el resto.";
-    contenedor.appendChild(nota);
+    cargarTodo().then(function (datos) {
+      contenedor.innerHTML = "";
 
-    var textarea = document.createElement("textarea");
-    textarea.id = "titulos-textarea";
-    textarea.className = "admin-roadmap-textarea";
-    textarea.rows = 14;
-    textarea.placeholder = "Liga - 2032\nCopa del Rey - 2032\nChampions - 2033\nPichichi Liga - 2032\nBalón de Oro - 2033";
-    textarea.value = window.Estado ? window.Estado.obtenerTitulosTexto(idClubActivo) : "";
-    contenedor.appendChild(textarea);
+      var nota = document.createElement("p");
+      nota.className = "admin-nota";
+      nota.textContent =
+        "Ahí abajo están TODOS los trofeos posibles, cada uno con su número a 0. Solo tienes " +
+        "que cambiar el número de los que hayas ganado (cuántas veces) — con 0 no aparece en tu " +
+        "Sala de Títulos, con 1 o más sí.";
+      contenedor.appendChild(nota);
 
-    var acciones = document.createElement("div");
-    acciones.className = "admin-roadmap-editor-acciones";
-    acciones.innerHTML =
-      '<button type="button" class="btn-ghost" data-accion="cancelar-titulos" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
-      '<button type="button" class="admin-list-add-btn" data-accion="guardar-titulos" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
-    contenedor.appendChild(acciones);
+      var textoGuardado = window.Estado ? window.Estado.obtenerTitulosTexto(idClubActivo) : "";
+      var textarea = document.createElement("textarea");
+      textarea.id = "titulos-textarea";
+      textarea.className = "admin-roadmap-textarea";
+      textarea.rows = 26;
+      textarea.value = _construirTextoEdicionTitulos(datos, textoGuardado);
+      contenedor.appendChild(textarea);
+
+      var acciones = document.createElement("div");
+      acciones.className = "admin-roadmap-editor-acciones";
+      acciones.innerHTML =
+        '<button type="button" class="btn-ghost" data-accion="cancelar-titulos" data-club-id="' + (idClubActivo || "") + '">✕ Cancelar</button>' +
+        '<button type="button" class="admin-list-add-btn" data-accion="guardar-titulos" data-club-id="' + (idClubActivo || "") + '">💾 Guardar</button>';
+      contenedor.appendChild(acciones);
+    });
   }
 
   // Nombre COMPLETO bajo el escudo (petición usuario) — si no cabe en el

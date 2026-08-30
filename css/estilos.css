@@ -1094,8 +1094,8 @@ button { font-family: inherit; cursor: pointer; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  padding: 12px 6px 8px;
+  gap: 4px;
+  padding: 14px 6px 10px;
   border: 1px solid var(--line);
   border-top: 3px solid var(--trofeo-color, var(--text-lo));
   border-radius: var(--radius-s);
@@ -1107,14 +1107,31 @@ button { font-family: inherit; cursor: pointer; }
   position: absolute;
   inset: 0;
   background: var(--trofeo-color, transparent);
-  opacity: 0.1;
+  opacity: 0.12;
   z-index: 0;
 }
 .trofeo-card > * { position: relative; z-index: 1; }
+/* Nº de veces ganado, en grande, junto al icono ("1🏆") — cada trofeo
+   con el color de SU propia competición (ver data/titulos.json.color,
+   misma paleta que las cards del calendario por competición), no el
+   color del club, para que ningún trofeo se confunda con otro. */
+.trofeo-icono-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+}
+.trofeo-veces {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--trofeo-color, var(--text-hi));
+  text-shadow: 0 0 10px var(--trofeo-color, transparent);
+}
 .trofeo-icono {
   font-size: 26px;
   line-height: 1;
-  filter: drop-shadow(0 0 6px rgba(var(--club-primary-rgb, 57, 255, 106), 0.25));
+  filter: drop-shadow(0 0 6px var(--trofeo-color, rgba(255, 255, 255, 0.25)));
 }
 .trofeo-nombre {
   font-size: 10px;
@@ -1122,12 +1139,6 @@ button { font-family: inherit; cursor: pointer; }
   text-align: center;
   color: var(--text-hi);
   line-height: 1.25;
-}
-.trofeo-temporada {
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--trofeo-color, var(--text-lo));
-  letter-spacing: 0.2px;
 }
 
 /* ---------- 7. CALENDARIO — jornadas del club activo ---------- */

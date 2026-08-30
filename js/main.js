@@ -290,13 +290,15 @@
     if (window.Renderizadores) window.Renderizadores.renderizarLiga1RefStatDetalle("liga1ref-content", clubId, categoria);
   }
 
-  // ---------- Sala de Títulos (mismo patrón exacto que Liga 1ª REF) ----------
+  // ---------- Sala de Títulos ----------
+  // Sin PIN (petición usuario): el catálogo de trofeos es CERRADO y el
+  // editor viene pre-relleno con los 33 — el admin solo cambia números,
+  // no puede teclear ni inventar un trofeo nuevo, así que no hace falta
+  // la misma protección que el resto de editores de texto libre.
   function editarTitulosInline(clubId) {
     if (!window.Renderizadores) return;
-    abrirCandado(CLUB_EDIT_PASSWORD, function () {
-      var cont = document.getElementById("titulos-content");
-      if (cont) window.Renderizadores.pintarEditorTitulos(cont, clubId);
-    }, "🔒 Editar títulos", "PIN de administrador (646)");
+    var cont = document.getElementById("titulos-content");
+    if (cont) window.Renderizadores.pintarEditorTitulos(cont, clubId);
   }
   function guardarTitulos(clubId) {
     var ta = document.getElementById("titulos-textarea");

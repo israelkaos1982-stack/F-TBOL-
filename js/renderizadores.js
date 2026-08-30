@@ -1145,6 +1145,9 @@
   // ============================================================
   var TITULOS_CATEGORIA_LABEL = { club: "🏆 Clubes", individual: "🥇 Individuales", seleccion: "🌍 Selecciones" };
   var TITULOS_CATEGORIA_ORDEN = ["club", "individual", "seleccion"];
+  // Orden del resumen de arriba — distinto al de los estantes de abajo
+  // (petición usuario: "Clubes - Selección - Individuales").
+  var TITULOS_RESUMEN_ORDEN = ["club", "seleccion", "individual"];
 
   // Palabras de enlace que el admin puede omitir/añadir sin querer decir
   // otro trofeo distinto ("Supercopa España" == "Supercopa de España").
@@ -1247,6 +1250,19 @@
       var indice = _titulosCatalogoIndexado(datos);
       var texto = window.Estado ? window.Estado.obtenerTitulosTexto(idClubActivo) : "";
       var ganados = parsearTitulosTexto(texto, indice);
+
+      // Resumen — nº TOTAL de títulos ganados por estante (suma de veces,
+      // no nº de trofeos distintos): "3 títulos de Champions+Copa+Kao Cup"
+      // cuenta 3, no 1. Siempre visible, incluso en 0 (petición usuario,
+      // "arriba el número total Clubes - Selección - Individuales").
+      var totales = { club: 0, individual: 0, seleccion: 0 };
+      ganados.forEach(function (g) { totales[g.categoria] = (totales[g.categoria] || 0) + g.veces; });
+      var resumen = document.createElement("div");
+      resumen.className = "titulos-resumen";
+      resumen.innerHTML = TITULOS_RESUMEN_ORDEN.map(function (cat) {
+        return '<span class="titulos-resumen-item"><b>' + totales[cat] + "</b> " + TITULOS_CATEGORIA_LABEL[cat] + "</span>";
+      }).join("");
+      contenedor.appendChild(resumen);
 
       if (!ganados.length) {
         contenedor.appendChild(nodoEstado("🏆", "Sin títulos todavía. Pulsa ✏️ para poner a cuántos ganaste cada uno."));

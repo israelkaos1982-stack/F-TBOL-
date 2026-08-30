@@ -12,7 +12,6 @@
     estadios: "data/estadios.json",
     balones: "data/balones.json",
     partidos: "data/partidos.json",
-    jugadores: "data/jugadores.json",
     rivalesReales: "data/rivales_reales.json",
     titulos: "data/titulos.json"
   };
@@ -59,7 +58,6 @@
       cargarJSON(DATA_URLS.estadios),
       cargarJSON(DATA_URLS.balones),
       cargarJSON(DATA_URLS.partidos),
-      cargarJSON(DATA_URLS.jugadores),
       cargarJSON(DATA_URLS.rivalesReales),
       cargarJSON(DATA_URLS.titulos)
     ]).then(function (r) {
@@ -81,9 +79,8 @@
         estadios: Object.assign({}, r[2], { estadios: estadiosFusion }),
         balones: Object.assign({}, r[3], { balones: balonesFusion }),
         partidos: r[4],
-        jugadores: r[5],
-        rivalesReales: r[6],
-        titulos: r[7]
+        rivalesReales: r[5],
+        titulos: r[6]
       };
       _estadiosLista = datos.estadios.estadios || [];
       _rivalesRealesMap = {};
@@ -824,21 +821,20 @@
   }
 
   // El portero "titular" de un club humano a efectos de Zamora: el
-  // primero (por dorsal) de su plantilla con posición POR y nombre ya
-  // puesto. Sin plantilla de porteros rellena todavía, ese club
-  // simplemente no aporta Zamora automática (nunca se inventa un nombre).
-  function _liga1RefPorteroPrincipal(clubId, datos) {
-    var porteros = obtenerJugadoresClub(clubId, datos).filter(function (j) {
-      return j.posicion === "POR" && j.nombre;
-    });
-    return porteros.length ? porteros[0] : null;
+  // primero (por dorsal) de su plantilla con posición POR. Sin plantilla
+  // de porteros todavía, ese club simplemente no aporta Zamora automática
+  // (nunca se inventa un nombre). Mismo criterio que usa la Plantilla
+  // para atribuir las porterías imbatidas — ver _porteroPrincipalClub,
+  // más abajo (se define después pero es la MISMA función, reutilizada).
+  function _liga1RefPorteroPrincipal(clubId) {
+    return _porteroPrincipalClub(clubId);
   }
 
   // Recorre, para cada club humano de esta liga, sus propios partidos de
   // Liga ya jugados (misma fuente que la clasificación) y suma goles/MVP/
   // amarillas/rojas por jugador (solo eventos es_humano:true — los de la
-  // IA no tienen ficha real, igual que en Estado.calcularEstadisticasJugador)
-  // + porterías a 0 del equipo, atribuidas a su portero principal.
+  // IA no tienen ficha real, igual que en calcularStatsRosterClub, más
+  // abajo) + porterías a 0 del equipo, atribuidas a su portero principal.
   function calcularLiga1RefStatsHumanos(datos) {
     var acumulado = { pichichi: {}, mvp: {}, amarillas: {}, rojas: {}, zamora: {} };
     var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
@@ -850,8 +846,8 @@
 
     _liga1RefEquiposHumanos(datos).forEach(function (e) {
       var nombresPorId = {};
-      obtenerJugadoresClub(e.id, datos).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
-      var portero = _liga1RefPorteroPrincipal(e.id, datos);
+      obtenerJugadoresClub(e.id).forEach(function (j) { nombresPorId[j.id] = j.nombre; });
+      var portero = _liga1RefPorteroPrincipal(e.id);
 
       // SOLO los partidos donde ESTE club es local o visitante — sin este
       // filtro, con varios humanos en la MISMA liga (todos comparten
@@ -1864,24 +1860,107 @@
   // ============================================================
   var ORDEN_POSICIONES = ["POR", "DEF", "MED", "DEL"];
   var LABEL_POSICION = { POR: "Porteros", DEF: "Defensas", MED: "Centrocampistas", DEL: "Delanteros" };
+  // Columna de estadística "principal" de cada grupo — porteros suman
+  // porterías imbatidas (🧤), el resto suma goles (⚽) — + MVP/amarilla/
+  // roja, iguales para las 4 posiciones. Ver calcularStatsRosterClub.
+  var ICONOS_STAT_POSICION = {
+    POR: ["🧤", "⭐", "🟨", "🟥"],
+    DEF: ["⚽", "⭐", "🟨", "🟥"],
+    MED: ["⚽", "⭐", "🟨", "🟥"],
+    DEL: ["⚽", "⭐", "🟨", "🟥"]
+  };
+  var _ROSTER_POS_MAP = { por: "POR", def: "DEF", med: "MED", del: "DEL" };
 
-  // Jugadores REALES de un club, con el nombre ya fusionado desde el
-  // overlay editable (window.Estado.obtenerNombresPlantilla) — el
-  // esqueleto (id/dorsal/posición) sigue viniendo SIEMPRE de
-  // data/jugadores.json, nunca se inventa ni se borra ningún jugador
-  // aquí. Fuente ÚNICA para la pantalla "Plantilla" (solo lectura), el
-  // editor de plantilla (candado 646) y el picker de Lesionados/
-  // Sancionados de la previa — los 3 muestran siempre los mismos nombres.
-  function obtenerJugadoresClub(clubId, datos) {
-    if (!datos || !datos.jugadores) return [];
-    var overlay = window.Estado ? window.Estado.obtenerNombresPlantilla(clubId) : {};
-    return (datos.jugadores.jugadores || [])
-      .filter(function (j) { return j.equipoId === clubId; })
-      .map(function (j) {
-        var nombre = (overlay[j.id] || j.nombre || "").trim();
-        return { id: j.id, dorsal: j.dorsal, posicion: j.posicion, nombre: nombre };
-      })
-      .sort(function (a, b) { return a.dorsal - b.dorsal; });
+  // Parsea el texto libre pegado por el admin (una línea por jugador):
+  // "#<dorsal> <Nombre> (Por|Def|Med|Del)", con un emoji delante opcional
+  // y puramente decorativo (🧤 en los porteros del ejemplo del usuario,
+  // ignorado al parsear — la posición SIEMPRE sale del paréntesis final).
+  // Sin esqueleto fijo detrás: el nº de jugadores por posición es el que
+  // traiga el texto pegado. Una línea que no case con el formato, o un
+  // dorsal repetido, se ignora en silencio — mismo criterio que el resto
+  // de parsers de texto libre de esta app (Calendario extra, Títulos).
+  function parsearRosterTexto(texto, clubId) {
+    var items = [];
+    var vistos = {};
+    String(texto || "").split("\n").forEach(function (linea) {
+      var l = linea.trim();
+      if (!l) return;
+      var m = l.match(/#\s*(\d+)\s+(.+?)\s*\(\s*(por|def|med|del)\s*\)\s*$/i);
+      if (!m) return;
+      var dorsal = Number(m[1]);
+      var nombre = m[2].trim();
+      var posicion = _ROSTER_POS_MAP[m[3].toLowerCase()];
+      if (!nombre || !posicion || vistos[dorsal]) return;
+      vistos[dorsal] = true;
+      items.push({ id: clubId + "-" + dorsal, dorsal: dorsal, nombre: nombre, posicion: posicion });
+    });
+    items.sort(function (a, b) { return a.dorsal - b.dorsal; });
+    return items;
+  }
+
+  // Plantilla REAL de un club — fuente ÚNICA para la pantalla "Plantilla"
+  // (solo lectura), el editor (candado 646), el selector de jugador del
+  // acta en vivo (js/acta.js) y el picker de Lesionados/Sancionados de
+  // la previa: los 4 leen siempre el mismo texto libre pegado por el
+  // admin (window.Estado.obtenerRosterTexto/guardarRosterTexto).
+  function obtenerJugadoresClub(clubId) {
+    var texto = window.Estado ? window.Estado.obtenerRosterTexto(clubId) : "";
+    return parsearRosterTexto(texto, clubId);
+  }
+
+  // El portero "titular" a efectos de porterías imbatidas: el primero
+  // (por dorsal) de la plantilla con posición POR. Sin plantilla de
+  // porteros todavía, ese club simplemente no aporta ninguna — nunca se
+  // inventa un nombre. Mismo criterio ya usado para la Zamora de Liga
+  // 1ª REF (ver _liga1RefPorteroPrincipal, más abajo).
+  function _porteroPrincipalClub(clubId) {
+    var porteros = obtenerJugadoresClub(clubId).filter(function (j) { return j.posicion === "POR"; });
+    return porteros.length ? porteros[0] : null;
+  }
+
+  // Estadísticas de CADA jugador de la plantilla, sumadas de TODOS los
+  // partidos ya jugados de CUALQUIER competición (Liga + Copa + lo que
+  // sea) — no por separado. Misma fuente que Liga 1ª REF
+  // (window.Estado.listarPartidosResueltos), filtrada a los eventos
+  // es_humano:true de ESTE club — un partido HvH trae eventos de ambos
+  // lados, cada club solo suma los suyos (equipo_id). Las porterías
+  // imbatidas se atribuyen SIEMPRE al portero principal del club (no hay
+  // forma de saber quién jugó cada partido concreto sin añadir un evento
+  // manual nuevo) — mismo criterio que la Zamora de Liga 1ª REF.
+  function calcularStatsRosterClub(clubId, datos) {
+    var stats = {};
+    function fila(id) {
+      if (!stats[id]) stats[id] = { goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0 };
+      return stats[id];
+    }
+    var ES_GOL = { GOL: 1, GOL_FAV_FALTA: 1, PENALTI_GOL: 1 };
+    var partidos = (window.Estado ? window.Estado.listarPartidosResueltos(datos) : []).filter(function (p) {
+      return p.jugado && (p.local === clubId || p.visitante === clubId);
+    });
+
+    partidos.forEach(function (p) {
+      (p.eventos || []).forEach(function (ev) {
+        if (!ev.es_humano || !ev.jugador_id || ev.equipo_id !== clubId) return;
+        var f = fila(ev.jugador_id);
+        if (ES_GOL[ev.tipo]) f.goles++;
+        else if (ev.tipo === "MVP") f.mvp++;
+        else if (ev.tipo === "AMARILLA") f.amarillas++;
+        else if (ev.tipo === "ROJA") f.rojas++;
+      });
+    });
+
+    var portero = _porteroPrincipalClub(clubId);
+    if (portero) {
+      var f2 = fila(portero.id);
+      partidos.forEach(function (p) {
+        if (!p.resultado) return;
+        var encajados = p.local === clubId ? p.resultado.golesVisitante
+          : p.visitante === clubId ? p.resultado.golesLocal : null;
+        if (encajados === 0) f2.porteriaImbatida++;
+      });
+    }
+
+    return stats;
   }
 
   function renderizarPlantillaClub(idEquipoHumanoActivo) {
@@ -1894,37 +1973,46 @@
     cargarTodo()
       .then(function (datos) {
         contenedor.innerHTML = "";
-        var jugadores = obtenerJugadoresClub(idEquipoHumanoActivo, datos);
+        var jugadores = obtenerJugadoresClub(idEquipoHumanoActivo);
 
         if (!jugadores.length) {
-          contenedor.appendChild(nodoEstado("👕", "Todavía no hay jugadores cargados para este club."));
+          contenedor.appendChild(nodoEstado("👕", "Todavía no hay plantilla. Pulsa ✏️ Editar menú → 👕 Plantilla para pegarla."));
           return;
+        }
+
+        var stats = calcularStatsRosterClub(idEquipoHumanoActivo, datos);
+        function statsDe(j) {
+          return stats[j.id] || { goles: 0, amarillas: 0, rojas: 0, mvp: 0, porteriaImbatida: 0 };
         }
 
         var frag = document.createDocumentFragment();
         ORDEN_POSICIONES.forEach(function (pos) {
-          var deEstaPos = jugadores
-            .filter(function (j) { return j.posicion === pos; })
-            .sort(function (a, b) { return a.dorsal - b.dorsal; });
+          var deEstaPos = jugadores.filter(function (j) { return j.posicion === pos; });
           if (!deEstaPos.length) return;
 
+          var iconos = ICONOS_STAT_POSICION[pos] || ["⚽", "⭐", "🟨", "🟥"];
           var grupo = document.createElement("div");
           grupo.className = "plantilla-grupo";
 
           var titulo = document.createElement("div");
           titulo.className = "plantilla-grupo-titulo";
-          titulo.textContent = (LABEL_POSICION[pos] || pos) + " · " + deEstaPos.length;
+          titulo.innerHTML =
+            '<span class="plantilla-grupo-nombre">' + (LABEL_POSICION[pos] || pos) + " · " + deEstaPos.length + "</span>" +
+            '<span class="plantilla-grupo-iconos"><span>' + iconos.join("</span><span>") + "</span></span>";
           grupo.appendChild(titulo);
 
           deEstaPos.forEach(function (j) {
-            var tieneNombre = !!(j.nombre && j.nombre.trim());
+            var s = statsDe(j);
+            var principal = pos === "POR" ? s.porteriaImbatida : s.goles;
             var fila = document.createElement("div");
             fila.className = "plantilla-jugador";
             fila.innerHTML =
               '<span class="plantilla-dorsal">' + j.dorsal + "</span>" +
-              '<span class="plantilla-nombre' + (tieneNombre ? "" : " plantilla-nombre--vacio") + '">' +
-              (tieneNombre ? escapeHTML(j.nombre) : "— sin asignar —") + "</span>" +
-              '<span class="plantilla-posicion">' + j.posicion + "</span>";
+              '<span class="plantilla-nombre">' + escapeHTML(j.nombre) + "</span>" +
+              '<span class="plantilla-stat">' + principal + "</span>" +
+              '<span class="plantilla-stat">' + s.mvp + "</span>" +
+              '<span class="plantilla-stat">' + s.amarillas + "</span>" +
+              '<span class="plantilla-stat">' + s.rojas + "</span>";
             grupo.appendChild(fila);
           });
 
@@ -1940,80 +2028,38 @@
       });
   }
 
-  // Editor de la PLANTILLA (nombres reales) de un club — mismo patrón que
-  // el calendario extra: textarea con una línea por jugador, formato
-  // "Dorsal - Nombre". El esqueleto (dorsal/posición) siempre sale de
-  // data/jugadores.json — este editor SOLO guarda el nombre por dorsal,
-  // nunca añade ni borra jugadores. Los 20 dorsales del club ya salen
-  // prerellenados (con el nombre actual o vacío) para que sea "rellenar
-  // huecos", no "adivinar el formato".
+  // Editor de la PLANTILLA — un único textarea con la plantilla real
+  // ENTERA del club (mismo patrón que Calendario extra/Títulos: texto
+  // libre, se guarda tal cual, se reinterpreta con parsearRosterTexto en
+  // cada render). El admin pega/edita la lista completa de golpe — no
+  // hay huecos fijos que rellenar, el nº de jugadores por posición sale
+  // de lo que traiga el texto.
   function pintarEditorPlantillaClub(clubId, contenedor) {
     contenedor.innerHTML = "";
-    contenedor.appendChild(nodoEstado("⏳", "Cargando plantilla…"));
 
-    cargarTodo()
-      .then(function (datos) {
-        contenedor.innerHTML = "";
-        var jugadores = obtenerJugadoresClub(clubId, datos);
+    var nota = document.createElement("p");
+    nota.className = "admin-nota";
+    nota.textContent =
+      "Una línea por jugador: «#Dorsal Nombre (Posición)» — Posición es Por/Def/Med/Del. " +
+      "Pega la plantilla real completa; estos jugadores son los que aparecen en la Plantilla " +
+      "del club, en el selector de jugador del acta en vivo y al elegir a quién dar de baja " +
+      "por lesión o sanción.";
+    contenedor.appendChild(nota);
 
-        if (!jugadores.length) {
-          contenedor.appendChild(nodoEstado("👕", "Este club no tiene jugadores en data/jugadores.json."));
-          return;
-        }
+    var textarea = document.createElement("textarea");
+    textarea.id = "plantilla-club-textarea";
+    textarea.className = "admin-roadmap-textarea";
+    textarea.rows = 22;
+    textarea.placeholder = "🧤#1 Alisson (Por)\n#4 V. Van Dijk (Def)\n#8 D. Szoboszlai (Med)\n#9 Alexander Isak (Del)";
+    textarea.value = window.Estado ? window.Estado.obtenerRosterTexto(clubId) : "";
+    contenedor.appendChild(textarea);
 
-        var nota = document.createElement("p");
-        nota.className = "admin-nota";
-        nota.textContent =
-          "Una línea por jugador: «Dorsal - Nombre» (el dorsal ya viene fijado por " +
-          "posición, solo escribe el nombre real detrás). Estos nombres son los que " +
-          "aparecen en la Plantilla del club y al elegir un jugador para Lesionados " +
-          "o Sancionados desde la previa del partido.";
-        contenedor.appendChild(nota);
-
-        var textarea = document.createElement("textarea");
-        textarea.id = "plantilla-club-textarea";
-        textarea.className = "admin-roadmap-textarea";
-        textarea.rows = Math.max(10, jugadores.length);
-        textarea.placeholder = "1 - Alisson Becker\n4 - Virgil van Dijk";
-        textarea.value = jugadores
-          .map(function (j) { return j.dorsal + " - " + (j.nombre || ""); })
-          .join("\n");
-        contenedor.appendChild(textarea);
-
-        var acciones = document.createElement("div");
-        acciones.className = "admin-roadmap-editor-acciones";
-        acciones.innerHTML =
-          '<button type="button" class="btn-ghost" data-accion="cancelar-plantilla-club" data-club-id="' + clubId + '">✕ Cancelar</button>' +
-          '<button type="button" class="admin-list-add-btn" data-accion="guardar-plantilla-club" data-club-id="' + clubId + '">💾 Guardar</button>';
-        contenedor.appendChild(acciones);
-      })
-      .catch(function (err) {
-        contenedor.innerHTML = "";
-        contenedor.appendChild(nodoEstado("⚠️", "No se pudo cargar la plantilla."));
-        console.error("[renderizadores] pintarEditorPlantillaClub:", err);
-      });
-  }
-
-  // Parsea el textarea del editor de plantilla: "Dorsal - Nombre" (el
-  // separador "-"/"."/":" es opcional, también admite "12 Nombre" tal
-  // cual). Empareja por DORSAL contra la lista de jugadores REAL de ese
-  // club — una línea con un dorsal que no exista en el club se ignora en
-  // silencio (mismo criterio de tolerancia que el resto de parsers de
-  // texto libre de esta app). Una línea sin nombre detrás del dorsal
-  // deja ese jugador SIN nombre (vuelve a "— sin asignar —").
-  function parsearPlantillaTexto(texto, jugadores) {
-    var porDorsal = {};
-    (jugadores || []).forEach(function (j) { porDorsal[j.dorsal] = j.id; });
-    var mapa = {};
-    String(texto || "").split("\n").forEach(function (linea) {
-      var m = linea.match(/^\s*(\d+)\s*[-.:]?\s*(.*)$/);
-      if (!m) return;
-      var dorsal = Number(m[1]);
-      var nombre = m[2].trim();
-      var id = porDorsal[dorsal];
-      if (id && nombre) mapa[id] = nombre;
-    });
-    return mapa;
+    var acciones = document.createElement("div");
+    acciones.className = "admin-roadmap-editor-acciones";
+    acciones.innerHTML =
+      '<button type="button" class="btn-ghost" data-accion="cancelar-plantilla-club" data-club-id="' + clubId + '">✕ Cancelar</button>' +
+      '<button type="button" class="admin-list-add-btn" data-accion="guardar-plantilla-club" data-club-id="' + clubId + '">💾 Guardar</button>';
+    contenedor.appendChild(acciones);
   }
 
   // Picker de jugador REAL (reemplaza el window.prompt() de texto libre)
@@ -2021,26 +2067,22 @@
   // DENTRO del propio contenedor de la lista — reutiliza `.live-select`
   // (0 KB de CSS nuevo salvo el layout de la fila) y desaparece solo al
   // confirmar/cancelar porque `renderListasJugadores()` vuelve a pintar
-  // el contenido real de la lista encima. Si el club aún no tiene ningún
-  // nombre en su Plantilla, los jugadores igualmente aparecen como
-  // "Dorsal N" — nunca bloquea el flujo por falta de datos, solo anima a
-  // rellenar la Plantilla desde ✏️ Editar menú.
+  // el contenido real de la lista encima.
   function _abrirPickerJugadorLista(tipoLista) {
     var contId = tipoLista === "lesionados" ? "previa-lesionados-lista" : "previa-sancionados-lista";
     var cont = document.getElementById(contId);
     if (!cont || !window._idManagerActivo || !_ultimoContexto) return;
 
-    var jugadores = obtenerJugadoresClub(window._idManagerActivo, _ultimoContexto.datos);
+    var jugadores = obtenerJugadoresClub(window._idManagerActivo);
     if (!jugadores.length) {
-      window.alert("Este club no tiene jugadores en data/jugadores.json.");
+      window.alert("Este club todavía no tiene plantilla. Pégala desde ✏️ Editar menú → 👕 Plantilla.");
       return;
     }
 
     var opciones = jugadores
       .map(function (j) {
-        var valor = j.nombre || ("Dorsal " + j.dorsal);
-        var etiqueta = j.dorsal + " · " + (j.nombre || "sin nombre — añádelo en ✏️ Editar menú → 👕 Plantilla");
-        return '<option value="' + escapeHTML(valor) + '">' + escapeHTML(etiqueta) + "</option>";
+        var etiqueta = j.dorsal + " · " + j.nombre;
+        return '<option value="' + escapeHTML(j.nombre) + '">' + escapeHTML(etiqueta) + "</option>";
       })
       .join("");
 
@@ -2394,8 +2436,9 @@
     resolverRivalPorNombre: resolverRivalPorNombre,
     renderizarPlantillaClub: renderizarPlantillaClub,
     obtenerJugadoresClub: obtenerJugadoresClub,
+    parsearRosterTexto: parsearRosterTexto,
+    calcularStatsRosterClub: calcularStatsRosterClub,
     pintarEditorPlantillaClub: pintarEditorPlantillaClub,
-    parsearPlantillaTexto: parsearPlantillaTexto,
     renderizarLiga1RefClasificacion: renderizarLiga1RefClasificacion,
     pintarEditorLiga1Ref: pintarEditorLiga1Ref,
     renderizarLiga1RefStatDetalle: renderizarLiga1RefStatDetalle,

@@ -142,29 +142,14 @@
     return lista;
   }
 
-  // ---------- Estadísticas de jugador HUMANO (calculadas en caliente) ----------
-  // Los eventos de la IA (es_humano:false) se ignoran a propósito — sus
-  // jugadores genéricos no tienen ficha en data/jugadores.json ni se
-  // persiste ningún histórico suyo (0 KB extra, regla de Fase 1).
-  function calcularEstadisticasJugador(datos, jugadorId) {
-    var partidos = listarPartidosResueltos(datos).filter(function (p) { return p.jugado && p.eventos; });
-    var porComp = {};
-    function comp(c) {
-      if (!porComp[c]) porComp[c] = { goles: 0, amarillas: 0, rojas: 0, mvp: 0 };
-      return porComp[c];
-    }
-    partidos.forEach(function (p) {
-      (p.eventos || []).forEach(function (ev) {
-        if (!ev.es_humano || ev.jugador_id !== jugadorId) return;
-        var c = comp(p.competicion);
-        if (ev.tipo === "GOL" || ev.tipo === "GOL_FAV_FALTA" || ev.tipo === "PENALTI_GOL") c.goles++;
-        else if (ev.tipo === "AMARILLA") c.amarillas++;
-        else if (ev.tipo === "ROJA") c.rojas++;
-        else if (ev.tipo === "MVP") c.mvp++;
-      });
-    });
-    return porComp;
-  }
+  // Nota: las estadísticas por jugador (goles/amarillas/rojas/MVP) NUNCA
+  // se guardan aparte — se recalculan en caliente escaneando los eventos
+  // ya persistidos de listarPartidosResueltos(). Los eventos de la IA
+  // (es_humano:false) se ignoran a propósito — sus jugadores genéricos no
+  // tienen ficha ni histórico persistido (0 KB extra, regla de Fase 1).
+  // Ver js/renderizadores.js::calcularStatsRosterClub (Plantilla) y
+  // ::calcularLiga1RefStatsHumanos (ranking Liga 1ª REF) — los 2
+  // agregadores reales de este dato, ambos leyendo la MISMA fuente.
 
   // ---------- "Temporada N" editable (etiqueta libre arriba del Inicio) ----------
   var TEMPORADA_KEY = "ef7_temporada_v1";
@@ -483,29 +468,28 @@
     return lista;
   }
 
-  // ---------- Plantilla (nombres reales de jugadores) por club ----------
-  // data/jugadores.json trae el esqueleto FIJO (id/equipoId/posicion/
-  // dorsal) sin nombre — cada mánager rellena el nombre real de SU
-  // plantilla desde el editor del club (candado 646, pestaña "👕
-  // Plantilla"). Se guarda como mapa { jugadorId: nombre } por club
-  // (overlay puro — nunca se toca data/jugadores.json), mismo criterio
-  // que balones/estadios pero namespaced por club como el calendario
-  // extra. `obtenerNombresPlantilla` alimenta tanto la pantalla
-  // "Plantilla" (solo lectura) como el picker de Lesionados/Sancionados
-  // de la previa — una única fuente de nombres para todo el club.
-  function _plantillaKey(clubId) { return "ef7_plantilla_v1_" + clubId; }
-  function obtenerNombresPlantilla(clubId) {
+  // ---------- Plantilla (roster real) por club ----------
+  // Texto libre, una línea por jugador — mismo patrón que el calendario
+  // extra o los títulos: cada mánager pega su plantilla real completa
+  // (dorsal + nombre + posición) desde el editor del club (candado 646,
+  // pestaña "👕 Plantilla"). js/renderizadores.js::parsearRosterTexto la
+  // interpreta; NO hay ningún esqueleto fijo detrás — el nº de jugadores
+  // por posición es el que traiga el texto pegado, ni más ni menos.
+  // `obtenerRosterTexto` alimenta la pantalla "Plantilla" (solo lectura),
+  // el picker de Lesionados/Sancionados de la previa y el selector de
+  // jugador del acta en vivo — una única fuente de la plantilla real.
+  function _rosterKey(clubId) { return "ef7_roster_v1_" + clubId; }
+  function obtenerRosterTexto(clubId) {
     try {
-      var raw = localStorage.getItem(_plantillaKey(clubId));
-      var mapa = raw ? JSON.parse(raw) : {};
-      return mapa && typeof mapa === "object" ? mapa : {};
+      var v = localStorage.getItem(_rosterKey(clubId));
+      return v !== null ? v : "";
     } catch (err) {
-      return {};
+      return "";
     }
   }
-  function guardarNombresPlantilla(clubId, mapa) {
+  function guardarRosterTexto(clubId, texto) {
     try {
-      localStorage.setItem(_plantillaKey(clubId), JSON.stringify(mapa || {}));
+      localStorage.setItem(_rosterKey(clubId), texto || "");
       return true;
     } catch (err) {
       console.error("[estado] no se pudo guardar la plantilla del club:", err);
@@ -805,7 +789,6 @@
     registrarPartidoGenerado: registrarPartidoGenerado,
     listarPartidosResueltos: listarPartidosResueltos,
     calcularClasificacion: calcularClasificacion,
-    calcularEstadisticasJugador: calcularEstadisticasJugador,
     exportarEstadoCrudo: exportarEstadoCrudo,
     importarEstadoCrudo: importarEstadoCrudo,
     borrarTodo: borrarTodo,
@@ -828,8 +811,8 @@
     obtenerListaJugadores: obtenerListaJugadores,
     agregarJugadorALista: agregarJugadorALista,
     quitarJugadorDeLista: quitarJugadorDeLista,
-    obtenerNombresPlantilla: obtenerNombresPlantilla,
-    guardarNombresPlantilla: guardarNombresPlantilla,
+    obtenerRosterTexto: obtenerRosterTexto,
+    guardarRosterTexto: guardarRosterTexto,
     obtenerLiga1RefTexto: obtenerLiga1RefTexto,
     guardarLiga1RefTexto: guardarLiga1RefTexto,
     obtenerLiga1RefStatTexto: obtenerLiga1RefStatTexto,

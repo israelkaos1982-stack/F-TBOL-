@@ -231,50 +231,18 @@ button { font-family: inherit; cursor: pointer; }
   box-shadow: var(--neon-glow), 0 14px 30px rgba(0, 0, 0, 0.45);
 }
 
-/* Fondo — degradado vertical plano del color del club (sustituye la franja
-   diagonal anterior; más parecido a la referencia real de la app hermana). */
+/* Fondo — degradado diagonal con los 2 colores REALES de la caja (ver
+   CAJA_INICIO_COLORES en js/renderizadores.js). El stop de --primary
+   llega hasta el 100% (antes se pasaba a 145%, así que el color nunca
+   se veía puro dentro de la caja — quedaba siempre camino de --bg-1,
+   "apenas tenía que ver con el escudo"). Sin marca de agua de escudo
+   encima (petición usuario) — el degradado solo es lo que identifica la
+   caja. */
 .team-box::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 55%, var(--primary) 145%);
-}
-/* Escudo GIGANTE muy tenue, sangrando por el borde derecho — puro
-   adorno decorativo (imagen real cuando existe; si no, se omite del DOM
-   directamente, sin fallback CSS aquí).
-
-   El wrapper lleva un vignette radial OSCURO propio, separado del
-   filtro blanco de la <img> — si el fondo oscuro viviera DENTRO del
-   elemento filtrado, "brightness(0) invert(1)" también lo invertiría a
-   blanco (perdiendo el contraste que se necesita). Sin este vignette,
-   escudos de un club con colorPrimario muy rojo/saturado (Arsenal,
-   Atlético) quedaban prácticamente invisibles: un blanco translúcido
-   sobre un rojo saturado apenas cambia de luminosidad. El vignette
-   garantiza un fondo oscuro consistente para que la silueta blanca
-   resalte SIEMPRE, sea cual sea el color de fondo de esa caja. */
-.team-box-crest-ghost-wrap {
-  position: absolute;
-  top: 50%;
-  right: -10%;
-  width: 60%;
-  max-width: 210px;
-  height: 78%;
-  transform: translateY(-50%);
-  z-index: 1;
-  overflow: hidden;
-  border-radius: 50%;
-  background: radial-gradient(circle at 58% 50%, rgba(0, 0, 0, 0.15), transparent 72%);
-  pointer-events: none;
-}
-.team-box-crest-ghost {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 150%;
-  height: auto;
-  transform: translate(-50%, -50%);
-  opacity: 0.26;
-  filter: brightness(0) invert(1);
+  background: linear-gradient(135deg, var(--secondary) 0%, var(--bg-1) 45%, var(--primary) 100%);
 }
 
 .team-box-inner {
@@ -300,10 +268,13 @@ button { font-family: inherit; cursor: pointer; }
   overflow: hidden;
   white-space: nowrap;
 }
+/* 13px es el tamaño más grande que deja caber "Atlético Madrid" y "FC
+   Barcelona" enteros (sin "…") en el ancho normal de un móvil — mismo
+   tamaño para las 6 cajas, ninguna va más grande que las demás. */
 .team-box-club {
-  font-size: 17px;
+  font-size: 13px;
   font-weight: 900;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.2px;
   color: #fff;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.55);
   text-transform: uppercase;
